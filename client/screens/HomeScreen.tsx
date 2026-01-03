@@ -4,46 +4,44 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useNavigation } from "@react-navigation/native";
-import { useQuery } from "@tanstack/react-query";
 import { Image } from "expo-image";
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
-import { Spacing, BorderRadius, Brand, Typography, Colors, getVibeScoreGradient } from "@/constants/theme";
+import { Spacing, BorderRadius, Brand, Typography, Colors } from "@/constants/theme";
 import ThemedText from "@/components/ThemedText";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const CARD_WIDTH = (SCREEN_WIDTH - Spacing.lg * 2 - Spacing.md) / 2;
-const CARD_HEIGHT = CARD_WIDTH * 1.4;
 
-const VIBE_CATEGORIES = [
-  { id: "all", label: "전체", icon: "grid" },
-  { id: "dreamy", label: "몽환적인", icon: "cloud" },
-  { id: "hip", label: "힙한", icon: "zap" },
-  { id: "classic", label: "클래식", icon: "award" },
-  { id: "romantic", label: "로맨틱", icon: "heart" },
-  { id: "adventure", label: "모험적인", icon: "compass" },
+const RECENT_TRIPS = [
+  { 
+    id: 1, 
+    title: "파리 3일 여행", 
+    destination: "파리, 프랑스", 
+    dates: "2024.12.24 - 12.26",
+    image: "https://images.unsplash.com/photo-1502602898657-3e91760cbb34",
+    vibeScore: 9.2,
+    status: "completed"
+  },
+  { 
+    id: 2, 
+    title: "도쿄 맛집 투어", 
+    destination: "도쿄, 일본", 
+    dates: "2025.01.15 - 01.18",
+    image: "https://images.unsplash.com/photo-1540959733332-eab4deabeeaf",
+    vibeScore: 8.7,
+    status: "upcoming"
+  },
 ];
 
-const SAMPLE_DESTINATIONS = [
-  { id: 1, name: "도쿄", country: "일본", image: "https://images.unsplash.com/photo-1540959733332-eab4deabeeaf", score: 8.7, tags: ["힙한", "맛집"] },
-  { id: 2, name: "파리", country: "프랑스", image: "https://images.unsplash.com/photo-1502602898657-3e91760cbb34", score: 9.2, tags: ["로맨틱", "클래식"] },
-  { id: 3, name: "바르셀로나", country: "스페인", image: "https://images.unsplash.com/photo-1583422409516-2895a77efded", score: 8.4, tags: ["모험적인", "맛집"] },
-  { id: 4, name: "뉴욕", country: "미국", image: "https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9", score: 8.9, tags: ["힙한", "럭셔리"] },
-  { id: 5, name: "교토", country: "일본", image: "https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e", score: 9.1, tags: ["클래식", "평화로운"] },
-  { id: 6, name: "런던", country: "영국", image: "https://images.unsplash.com/photo-1513635269975-59663e0ac1ad", score: 8.5, tags: ["클래식", "힙한"] },
+const POPULAR_DESTINATIONS = [
+  { id: 1, name: "파리", country: "프랑스", image: "https://images.unsplash.com/photo-1502602898657-3e91760cbb34", score: 9.2 },
+  { id: 2, name: "도쿄", country: "일본", image: "https://images.unsplash.com/photo-1540959733332-eab4deabeeaf", score: 8.7 },
+  { id: 3, name: "바르셀로나", country: "스페인", image: "https://images.unsplash.com/photo-1583422409516-2895a77efded", score: 8.4 },
+  { id: 4, name: "뉴욕", country: "미국", image: "https://images.unsplash.com/photo-1496442226666-8d4d0e62e6e9", score: 8.9 },
 ];
-
-interface DestinationType {
-  id: number;
-  name: string;
-  country: string;
-  image: string;
-  score: number;
-  tags: string[];
-}
 
 export default function HomeScreen() {
   const colorScheme = useColorScheme();
@@ -52,109 +50,82 @@ export default function HomeScreen() {
   const headerHeight = useHeaderHeight();
   const tabBarHeight = useBottomTabBarHeight();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const [selectedVibe, setSelectedVibe] = useState("all");
-  const [searchQuery, setSearchQuery] = useState("");
-
-  const { data: cities } = useQuery({
-    queryKey: ["/api/cities"],
-  });
-
-  const filteredDestinations = SAMPLE_DESTINATIONS.filter(dest => {
-    if (selectedVibe === "all") return true;
-    const vibeMap: Record<string, string[]> = {
-      dreamy: ["몽환적인"],
-      hip: ["힙한"],
-      classic: ["클래식"],
-      romantic: ["로맨틱"],
-      adventure: ["모험적인"],
-    };
-    return dest.tags.some(tag => vibeMap[selectedVibe]?.includes(tag));
-  });
-
-  const renderDestinationCard = ({ item }: { item: DestinationType }) => {
-    const vibeGradient = getVibeScoreGradient(item.score);
-    
-    return (
-      <Pressable
-        onPress={() => navigation.navigate("DestinationDetail", { placeId: item.id })}
-        style={({ pressed }) => [
-          styles.card,
-          pressed && styles.cardPressed,
-        ]}
-      >
-        <Image
-          source={{ uri: item.image }}
-          style={styles.cardImage}
-          contentFit="cover"
-        />
-        <LinearGradient
-          colors={["transparent", "rgba(0,0,0,0.7)"]}
-          style={styles.cardGradient}
-        />
-        
-        <LinearGradient
-          colors={vibeGradient as [string, string]}
-          style={styles.vibeScore}
-        >
-          <Text style={styles.vibeScoreText}>{item.score.toFixed(1)}</Text>
-        </LinearGradient>
-
-        <View style={styles.cardContent}>
-          <Text style={styles.cardTitle}>{item.name}</Text>
-          <Text style={styles.cardSubtitle}>{item.country}</Text>
-        </View>
-      </Pressable>
-    );
-  };
 
   const renderHeader = () => (
     <View style={styles.headerContainer}>
-      <View style={[styles.searchContainer, { backgroundColor: theme.backgroundDefault }]}>
-        <Feather name="search" size={20} color={theme.textTertiary} />
-        <TextInput
-          style={[styles.searchInput, { color: theme.text }]}
-          placeholder="어디로 떠나볼까요?"
-          placeholderTextColor={theme.textTertiary}
-          value={searchQuery}
-          onChangeText={setSearchQuery}
-        />
-        <Pressable style={[styles.filterButton, { backgroundColor: `${Brand.primary}15` }]}>
-          <Feather name="sliders" size={18} color={Brand.primary} />
-        </Pressable>
-      </View>
-
-      <FlatList
-        horizontal
-        data={VIBE_CATEGORIES}
-        keyExtractor={(item) => item.id}
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.vibeChipsContainer}
-        renderItem={({ item }) => (
+      <LinearGradient
+        colors={Brand.gradient as [string, string]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.heroCard}
+      >
+        <View style={styles.heroContent}>
+          <Text style={styles.heroTitle}>VibeTrip</Text>
+          <Text style={styles.heroSubtitle}>
+            당신만을 위한{"\n"}초개인화 AI 여행 에이전트
+          </Text>
           <Pressable
-            onPress={() => setSelectedVibe(item.id)}
-            style={[
-              styles.vibeChip,
-              { backgroundColor: selectedVibe === item.id ? Brand.primary : theme.backgroundDefault },
-            ]}
+            style={styles.heroButton}
+            onPress={() => navigation.navigate("PlanModal")}
           >
-            <Feather
-              name={item.icon as any}
-              size={16}
-              color={selectedVibe === item.id ? "#FFFFFF" : theme.textSecondary}
-            />
-            <Text
-              style={[
-                styles.vibeChipText,
-                { color: selectedVibe === item.id ? "#FFFFFF" : theme.textSecondary },
-              ]}
-            >
-              {item.label}
-            </Text>
+            <Text style={styles.heroButtonText}>새 여정 시작하기</Text>
+            <Feather name="arrow-right" size={18} color={Brand.primary} />
           </Pressable>
-        )}
-      />
+        </View>
+        <View style={styles.heroIconContainer}>
+          <Feather name="navigation" size={80} color="rgba(255,255,255,0.2)" />
+        </View>
+      </LinearGradient>
 
-      <ThemedText style={styles.sectionTitle}>인기 여행지</ThemedText>
+      {RECENT_TRIPS.length > 0 ? (
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <ThemedText style={styles.sectionTitle}>나의 여정</ThemedText>
+            <Pressable>
+              <ThemedText style={[styles.sectionLink, { color: Brand.primary }]}>전체 보기</ThemedText>
+            </Pressable>
+          </View>
+          <FlatList
+            horizontal
+            data={RECENT_TRIPS}
+            keyExtractor={(item) => item.id.toString()}
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.tripListContainer}
+            renderItem={({ item }) => (
+              <Pressable style={[styles.tripCard, { backgroundColor: theme.backgroundDefault }]}>
+                <Image
+                  source={{ uri: item.image }}
+                  style={styles.tripCardImage}
+                  contentFit="cover"
+                />
+                <View style={styles.tripCardContent}>
+                  <Text style={[styles.tripCardTitle, { color: theme.text }]}>{item.title}</Text>
+                  <Text style={[styles.tripCardSubtitle, { color: theme.textSecondary }]}>{item.dates}</Text>
+                  <View style={styles.tripCardBadge}>
+                    <LinearGradient
+                      colors={Brand.gradient as [string, string]}
+                      style={styles.vibeScoreBadge}
+                    >
+                      <Text style={styles.vibeScoreText}>{item.vibeScore}</Text>
+                    </LinearGradient>
+                    <Text style={[styles.tripStatus, { 
+                      color: item.status === "upcoming" ? Brand.primary : theme.textTertiary 
+                    }]}>
+                      {item.status === "upcoming" ? "예정됨" : "완료"}
+                    </Text>
+                  </View>
+                </View>
+              </Pressable>
+            )}
+          />
+        </View>
+      ) : null}
+
+      <View style={styles.section}>
+        <View style={styles.sectionHeader}>
+          <ThemedText style={styles.sectionTitle}>인기 여행지</ThemedText>
+        </View>
+      </View>
     </View>
   );
 
@@ -164,89 +135,174 @@ export default function HomeScreen() {
       contentContainerStyle={{
         paddingTop: headerHeight + Spacing.lg,
         paddingBottom: tabBarHeight + Spacing.xl + 60,
-        paddingHorizontal: Spacing.lg,
       }}
       scrollIndicatorInsets={{ bottom: insets.bottom }}
       ListHeaderComponent={renderHeader}
-      data={filteredDestinations}
+      data={POPULAR_DESTINATIONS}
       numColumns={2}
-      columnWrapperStyle={styles.row}
+      columnWrapperStyle={styles.destinationRow}
       keyExtractor={(item) => item.id.toString()}
-      renderItem={renderDestinationCard}
+      renderItem={({ item }) => (
+        <Pressable
+          onPress={() => navigation.navigate("DestinationDetail", { placeId: item.id })}
+          style={({ pressed }) => [
+            styles.destinationCard,
+            pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] },
+          ]}
+        >
+          <Image
+            source={{ uri: item.image }}
+            style={styles.destinationImage}
+            contentFit="cover"
+          />
+          <LinearGradient
+            colors={["transparent", "rgba(0,0,0,0.7)"]}
+            style={styles.destinationGradient}
+          />
+          <LinearGradient
+            colors={Brand.gradient as [string, string]}
+            style={styles.destinationScore}
+          >
+            <Text style={styles.destinationScoreText}>{item.score}</Text>
+          </LinearGradient>
+          <View style={styles.destinationContent}>
+            <Text style={styles.destinationName}>{item.name}</Text>
+            <Text style={styles.destinationCountry}>{item.country}</Text>
+          </View>
+        </Pressable>
+      )}
     />
   );
 }
 
+const CARD_WIDTH = (SCREEN_WIDTH - Spacing.lg * 3) / 2;
+
 const styles = StyleSheet.create({
   headerContainer: {
-    marginBottom: Spacing.lg,
+    paddingHorizontal: Spacing.lg,
   },
-  searchContainer: {
+  heroCard: {
+    borderRadius: BorderRadius.xl,
+    padding: Spacing.xl,
+    marginBottom: Spacing.xl,
+    minHeight: 180,
+    flexDirection: "row",
+    overflow: "hidden",
+  },
+  heroContent: {
+    flex: 1,
+  },
+  heroTitle: {
+    ...Typography.display,
+    color: "#FFFFFF",
+    marginBottom: Spacing.sm,
+  },
+  heroSubtitle: {
+    ...Typography.body,
+    color: "rgba(255,255,255,0.9)",
+    marginBottom: Spacing.lg,
+    lineHeight: 24,
+  },
+  heroButton: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: Spacing.md,
-    height: Spacing.inputHeight,
-    borderRadius: BorderRadius.sm,
-    marginBottom: Spacing.lg,
-  },
-  searchInput: {
-    flex: 1,
-    marginLeft: Spacing.sm,
-    ...Typography.body,
-  },
-  filterButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  vibeChipsContainer: {
-    paddingBottom: Spacing.lg,
+    backgroundColor: "#FFFFFF",
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+    borderRadius: BorderRadius.full,
+    alignSelf: "flex-start",
     gap: Spacing.sm,
   },
-  vibeChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.full,
-    marginRight: Spacing.sm,
-    gap: Spacing.xs,
-  },
-  vibeChipText: {
+  heroButtonText: {
     ...Typography.label,
+    color: Brand.primary,
+    fontWeight: "700",
+  },
+  heroIconContainer: {
+    position: "absolute",
+    right: -20,
+    bottom: -20,
+    opacity: 0.5,
+  },
+  section: {
+    marginBottom: Spacing.xl,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: Spacing.md,
   },
   sectionTitle: {
     ...Typography.h2,
-    marginBottom: Spacing.md,
   },
-  row: {
-    justifyContent: "space-between",
-    marginBottom: Spacing.md,
+  sectionLink: {
+    ...Typography.label,
   },
-  card: {
-    width: CARD_WIDTH,
-    height: CARD_HEIGHT,
+  tripListContainer: {
+    gap: Spacing.md,
+  },
+  tripCard: {
+    width: 260,
     borderRadius: BorderRadius.md,
     overflow: "hidden",
   },
-  cardPressed: {
-    transform: [{ scale: 0.98 }],
-    opacity: 0.95,
+  tripCardImage: {
+    width: "100%",
+    height: 120,
   },
-  cardImage: {
+  tripCardContent: {
+    padding: Spacing.md,
+  },
+  tripCardTitle: {
+    ...Typography.h3,
+    marginBottom: 2,
+  },
+  tripCardSubtitle: {
+    ...Typography.caption,
+    marginBottom: Spacing.sm,
+  },
+  tripCardBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
+  vibeScoreBadge: {
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 2,
+    borderRadius: BorderRadius.xs,
+  },
+  vibeScoreText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  tripStatus: {
+    ...Typography.caption,
+  },
+  destinationRow: {
+    justifyContent: "space-between",
+    paddingHorizontal: Spacing.lg,
+    marginBottom: Spacing.md,
+  },
+  destinationCard: {
+    width: CARD_WIDTH,
+    height: CARD_WIDTH * 1.3,
+    borderRadius: BorderRadius.md,
+    overflow: "hidden",
+  },
+  destinationImage: {
     width: "100%",
     height: "100%",
   },
-  cardGradient: {
+  destinationGradient: {
     position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
     height: 100,
   },
-  vibeScore: {
+  destinationScore: {
     position: "absolute",
     top: Spacing.sm,
     right: Spacing.sm,
@@ -256,24 +312,24 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  vibeScoreText: {
+  destinationScoreText: {
     color: "#FFFFFF",
     fontWeight: "700",
     fontSize: 14,
   },
-  cardContent: {
+  destinationContent: {
     position: "absolute",
     bottom: 0,
     left: 0,
     right: 0,
     padding: Spacing.md,
   },
-  cardTitle: {
+  destinationName: {
     ...Typography.h3,
     color: "#FFFFFF",
     marginBottom: 2,
   },
-  cardSubtitle: {
+  destinationCountry: {
     ...Typography.caption,
     color: "rgba(255,255,255,0.8)",
   },
