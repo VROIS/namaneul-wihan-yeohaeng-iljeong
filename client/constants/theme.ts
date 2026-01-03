@@ -166,15 +166,19 @@ export const Fonts = Platform.select({
 });
 
 export function getVibeScoreColor(score: number): string {
-  if (score >= 8) return Brand.primary;
-  if (score >= 5) return Brand.luxuryGold;
+  if (score >= 24) return Brand.primary;
+  if (score >= 15) return Brand.luxuryGold;
   return "#9CA3AF";
 }
 
 export function getVibeScoreGradient(score: number): string[] {
-  if (score >= 8) return Brand.gradient;
-  if (score >= 5) return ["#F59E0B", "#FBBF24"];
+  if (score >= 24) return Brand.gradient;
+  if (score >= 15) return ["#F59E0B", "#FBBF24"];
   return ["#9CA3AF", "#D1D5DB"];
+}
+
+export function normalizeScoreForDisplay(rawScore: number, maxScore: number = 30): number {
+  return Math.min(10, (rawScore / maxScore) * 10);
 }
 
 export function getPersonaColor(persona: "luxury" | "comfort"): string {

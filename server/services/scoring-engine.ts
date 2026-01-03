@@ -58,19 +58,19 @@ export class ScoringEngine {
 
     realityPenalty = Math.min(realityPenalty, 5);
 
-    let baseScore: number;
+    let finalScore: number;
     if (place.type === "restaurant" && tasteVerifyScore !== null) {
-      baseScore = (vibeScore * 0.2) + (buzzScore * 0.3) + (tasteVerifyScore * 0.5);
+      finalScore = (vibeScore + buzzScore + tasteVerifyScore) - realityPenalty;
     } else {
-      baseScore = (vibeScore * 0.5) + (buzzScore * 0.5);
+      finalScore = (vibeScore + buzzScore) - realityPenalty;
     }
 
-    const finalScore = Math.max(0, Math.min(10, baseScore - realityPenalty));
+    finalScore = Math.max(0, finalScore);
 
     let tier: number;
-    if (finalScore >= 8) {
+    if (finalScore >= 24) {
       tier = 1;
-    } else if (finalScore >= 5) {
+    } else if (finalScore >= 15) {
       tier = 2;
     } else {
       tier = 3;
