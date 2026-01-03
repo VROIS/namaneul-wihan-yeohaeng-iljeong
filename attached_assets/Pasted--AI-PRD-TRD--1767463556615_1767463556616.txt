@@ -1,0 +1,102 @@
+지금까지의 논의와 소스 자료를 바탕으로, 귀하의 **'초개인화 AI 여행 에이전트 앱'** 개발을 위한 **제품 요구 사항 정의서(PRD)**와 **기술 요구 사항 정의서(TRD)** 초안을 작성해 드립니다.
+
+이 문서는 개발팀이나 협력사(또는 AI 코딩 도구)에 전달하여 프로젝트를 즉시 착수할 수 있도록 구조화되었습니다.
+
+---
+
+# 📄 제품 요구 사항 정의서 (PRD: Product Requirements Document)
+
+## 1. 프로젝트 개요 (Project Overview)
+*   **제품명 (가칭):** VibeTrip (The Handheld AI Guide)
+*   **비전:** "이질적인 데이터(감성 Vibe + 실시간 현실 Reality)를 통합하여, 탐색부터 예약까지 원스톱으로 해결하는 초개인화 여행 에이전트"
+*   **핵심 가치:** 사용자의 막연한 감성(Vibe)을 논리적인 동선(Reality)으로 변환하고, 예약/결제 자동화로 실행(Action)까지 책임짐.
+
+## 2. 타겟 사용자 및 페르소나 (Target Audience)
+소스에 기반한 주요 사용자 그룹:
+1.  **경험 사치 추구형 (MZ세대/VIP):** "돈으로 시간을 산다." 최단 이동(택시), 포토제닉한 힙플레이스, 럭셔리 경험 중시.
+2.  **합리적 안정 추구형 (50대/가족):** "실패 없는 편안함." 철저한 동선 계획, 안전(치안/파업), 검증된 미식, 체력 안배 중시.
+
+## 3. 핵심 기능 명세 (Core Features)
+
+### A. 초개인화 여정 생성 (Hyper-Personalized Itinerary)
+*   **Vibe Scoring:** 이미지와 리뷰를 분석하여 장소의 '감성 점수' 산출 (예: 몽환적인, 힙한, 클래식한).
+*   **Real-time Reality Check:** 날씨, 파업, 시위 정보를 실시간 반영하여 접근 불가능한 장소 자동 제외 및 페널티 부여.
+*   **Trend Matching:** 사용자 국적/연령대에 따라 가중치 자동 조절 (예: 한국인 50대 → 안전/미식 가중치↑).
+
+### B. 동선 최적화 및 시각화 (Route Optimization)
+*   **Time vs. Money 로직:** '합리적 여행(대중교통)'과 '편한 여행(우버/택시)' 옵션에 따른 경로 및 비용 산출.
+*   **Dynamic Mapping:** Google Maps 위에 Vibe 마커와 최적 경로 오버레이.
+
+### C. 리얼 숏폼 미리보기 (Real-Vibe Preview)
+*   **기능:** 생성된 일정의 주요 장소를 실제 공개된 고품질 영상/사진으로 조합하여 15~30초 숏폼으로 자동 재생.
+*   **목적:** 인위적인 AI 생성 이미지가 아닌, 실제 현장감을 제공하여 사용자 신뢰도 및 구매 욕구 증대.
+
+### D. 예약 및 결제 자동화 (End-to-End Automation)
+*   **Agent Action:** 최적화된 항공/숙소/투어 상품을 AI가 선정하고, 앱 이탈 없이 결제까지 완료.
+
+---
+
+# 🛠️ 기술 요구 사항 정의서 (TRD: Technical Requirements Document)
+
+## 1. 시스템 아키텍처 (System Architecture)
+앱은 크게 4계층으로 구성되며, **"Google Maps는 도구(Canvas), Gemini는 엔진(Engine)"**의 역할을 수행합니다.
+
+### A. 프론트엔드 (Client Layer)
+*   **기술 스택:** React Native (추천) 또는 Flutter.
+*   **주요 라이브러리:** Google Maps Mobile SDK (지도 시각화), Video Player (숏폼 재생).
+*   **UI/UX:** Vibe 중심의 마커 디자인 및 동선 오버레이.
+
+### B. 백엔드 (Core Service Layer)
+*   **언어/프레임워크:** Python (FastAPI 또는 Django) - AI 라이브러리 호환성 및 데이터 처리 용이성.
+*   **API Gateway:** 클라이언트 요청 분산 및 인증 관리.
+
+### C. 데이터 및 AI 파이프라인 (Data & AI Pipeline)
+*   **Vibe Processor (Gemini Vision):** 수집된 사진의 구도, 조명, 감성 분석 -> `Visual_Score` 추출.
+*   **Buzz Calculator (Gemini Text):** 리뷰 텍스트에서 '현지인 비율', '대기 시간' 추출 -> `Local_Buzz` 추출.
+*   **Scoring Engine:** `Final_Score` = (Vibe + Buzz) - (Reality Penalty) 계산 로직 수행.
+
+### D. 데이터베이스 (Database)
+*   **Vector DB (Pinecone/Weaviate):** 이미지/텍스트 벡터화 저장 (감성 검색용).
+*   **NoSQL (MongoDB/Firestore):** 크롤링된 비정형 데이터(리뷰 원문) 저장.
+*   **RDBMS (PostgreSQL):** 사용자 정보, 예약/결제 트랜잭션 관리.
+
+## 2. 주요 API 및 통합 전략 (Integration Strategy)
+
+### A. Google Maps Platform & Gemini API
+*   **Places API:** 장소 기본 정보 (영업시간, 위치).
+*   **Routes API (Distance Matrix):** 실시간 이동 시간 및 거리 계산 (교통체증 반영).
+*   **Gemini Pro Vision:** 이미지 분석 및 Vibe 태깅.
+*   **Gemini Pro:** 복잡한 자연어 쿼리 처리 및 텍스트 요약.
+
+### B. 미디어 생성 및 처리
+*   **Source Fetcher:** Google Images API, Flickr API, YouTube Data API를 통해 '상업적 이용 가능'한 실제 고화질 콘텐츠 검색.
+*   **Media Processing:** FFmpeg 또는 AWS MediaConvert를 사용하여 수집된 클립을 숏폼(9:16)으로 자동 편집 및 트랜스코딩.
+
+### C. 예약 및 결제 (Payment & Booking)
+*   **Payment Gateway:** Stripe 또는 Adyen (글로벌 결제 및 토큰화 보안).
+*   **Supplier API:** Amadeus/Sabre (항공/호텔 GDS), 또는 OTA 제휴 API (Agoda/Viator 등) 연동.
+
+## 3. 데이터 희소 지역 대응 전략 (Scalability)
+*   **Tier 1 (데이터 풍부):** 전체 로직(Vibe+Reality) 100% 가동.
+*   **Tier 2/3 (데이터 희소):**
+    *   **AI 추론:** Gemini Vision으로 거리뷰/위성사진을 분석하여 Vibe 점수 추정.
+    *   **프록시 데이터:** 주변 상권 밀집도를 통해 대기 시간 및 혼잡도 예측.
+
+## 4. 보안 및 규정 준수 (Security)
+*   **개인정보:** GDPR(유럽) 및 개인정보보호법(한국) 준수.
+*   **결제 보안:** PCI-DSS 준수 (PG사 위임 처리).
+
+---
+
+# 📅 개발 로드맵 요약 (Development Roadmap)
+소스을 참고한 단계별 접근입니다.
+
+1.  **Phase 1 (MVP - 핵심 로직 검증):**
+    *   타겟: 파리, 도쿄 등 Tier 1 도시.
+    *   기능: Vibe 점수 산출, 기본 동선 최적화, Google Maps 연동.
+2.  **Phase 2 (미디어 & 자동화):**
+    *   기능: 실제 영상 기반 숏폼 자동 생성, 실시간 Reality Check(파업/날씨) 연동.
+3.  **Phase 3 (수익화 & 확장):**
+    *   기능: 예약/결제 자동화 모듈 탑재, Tier 2/3 지역 AI 추론 로직 적용.
+
+이 문서는 귀하의 아이디어를 개발자가 이해할 수 있는 구체적인 언어로 변환한 것입니다. 이 내용을 바탕으로 개발팀과 소통하시면, "기존 시장에 없는 유일무이한 앱"을 현실화할 수 있습니다.
