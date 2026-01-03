@@ -7,6 +7,7 @@ import { vibeProcessor } from "./services/vibe-processor";
 import { tasteVerifier } from "./services/taste-verifier";
 import { routeOptimizer } from "./services/route-optimizer";
 import { scoringEngine } from "./services/scoring-engine";
+import { itineraryGenerator } from "./services/itinerary-generator";
 import { registerChatRoutes } from "./replit_integrations/chat";
 import { registerImageRoutes } from "./replit_integrations/image";
 
@@ -188,6 +189,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching reality checks:", error);
       res.status(500).json({ error: "Failed to fetch reality checks" });
+    }
+  });
+
+  // Itinerary generation
+  app.post("/api/routes/generate", async (req, res) => {
+    try {
+      const formData = req.body;
+      
+      if (!formData.destination || !formData.startDate || !formData.endDate) {
+        return res.status(400).json({ 
+          error: "destination, startDate, endDate are required" 
+        });
+      }
+      
+      const itinerary = await itineraryGenerator.generate(formData);
+      res.json(itinerary);
+    } catch (error) {
+      console.error("Error generating itinerary:", error);
+      res.status(500).json({ error: "Failed to generate itinerary" });
     }
   });
 
