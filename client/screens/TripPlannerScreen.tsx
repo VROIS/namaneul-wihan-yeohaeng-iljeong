@@ -21,11 +21,18 @@ import { Brand, Colors, Spacing, BorderRadius } from "@/constants/theme";
 import {
   TripFormData,
   Vibe,
+  TravelPace,
+  MobilityStyle,
+  TravelStyle,
   VIBE_OPTIONS,
   COMPANION_OPTIONS,
   CURATION_FOCUS_OPTIONS,
+  TRAVEL_STYLE_OPTIONS,
+  TRAVEL_PACE_OPTIONS,
+  MOBILITY_STYLE_OPTIONS,
   Itinerary,
 } from "@/types/trip";
+import { calculateVibeWeights, formatVibeWeightsSummary, getVibeLabel } from "@/utils/vibeCalculator";
 
 let DateTimePicker: any = null;
 if (Platform.OS !== "web") {
@@ -95,8 +102,10 @@ export default function TripPlannerScreen() {
     startTime: "09:00",
     endDate: formatDate(new Date(Date.now() + 2 * 24 * 60 * 60 * 1000)),
     endTime: "21:00",
-    vibes: ["Culture", "Foodie"],
-    travelStyle: "Comfortable",
+    vibes: ["Healing", "Foodie"],
+    travelStyle: "Reasonable",
+    travelPace: "Relaxed",
+    mobilityStyle: "WalkMore",
   });
 
   useEffect(() => {
@@ -183,6 +192,8 @@ export default function TripPlannerScreen() {
     setScreen("Loading");
     setLoadingStep(0);
 
+    const vibeWeights = calculateVibeWeights(formData.vibes, formData.curationFocus);
+
     const interval = setInterval(() => {
       setLoadingStep(s => (s < 3 ? s + 1 : s));
     }, 2000);
@@ -194,6 +205,7 @@ export default function TripPlannerScreen() {
         destination: formData.destination,
         startDate: formData.startDate,
         endDate: formData.endDate,
+        vibeWeights,
         days: [
           {
             day: 1,
@@ -212,6 +224,7 @@ export default function TripPlannerScreen() {
                 sourceType: "Google",
                 personaFitReason: "가족 모두가 즐길 수 있는 대표 관광지",
                 tags: ["랜드마크", "포토스팟"],
+                vibeTags: ["Hotspot"],
                 realityCheck: { weather: "Sunny", crowd: "Medium", status: "Open" },
                 image: "",
                 priceEstimate: "약 25유로/인",
@@ -229,6 +242,7 @@ export default function TripPlannerScreen() {
                 sourceType: "Google",
                 personaFitReason: "역사와 문화를 체험할 수 있는 명소",
                 tags: ["역사", "건축"],
+                vibeTags: ["Culture"],
                 realityCheck: { weather: "Sunny", crowd: "Low", status: "Open" },
                 image: "",
                 priceEstimate: "약 13유로/인",
@@ -252,6 +266,7 @@ export default function TripPlannerScreen() {
                 sourceType: "Google",
                 personaFitReason: "문화/예술 Vibe에 완벽한 선택",
                 tags: ["예술", "박물관"],
+                vibeTags: ["Culture", "Healing"],
                 realityCheck: { weather: "Cloudy", crowd: "High", status: "Open" },
                 image: "",
                 priceEstimate: "약 17유로/인",
@@ -383,6 +398,13 @@ export default function TripPlannerScreen() {
     );
   };
 
+  const renderSectionHeader = (title: string, subtitle: string) => (
+    <View style={styles.sectionHeader}>
+      <Text style={[styles.sectionTitle, { color: theme.text }]}>{title}</Text>
+      <Text style={[styles.sectionSubtitle, { color: theme.textSecondary }]}>{subtitle}</Text>
+    </View>
+  );
+
   const renderInput = () => (
     <ScrollView
       style={styles.scrollView}
@@ -448,6 +470,7 @@ export default function TripPlannerScreen() {
       </View>
 
       <View style={styles.section}>
+        {renderSectionHeader("누구랑", "함께할 사람을 선택하세요")}
         <View style={styles.iconGrid}>
           {COMPANION_OPTIONS.map(option => {
             const isSelected = formData.companionType === option.id;
@@ -475,6 +498,7 @@ export default function TripPlannerScreen() {
       </View>
 
       <View style={styles.section}>
+        {renderSectionHeader("누구를 위한", "누구 중심으로 일정을 짤까요?")}
         <View style={styles.iconGrid}>
           {CURATION_FOCUS_OPTIONS.map(option => {
             const isSelected = formData.curationFocus === option.id;
@@ -502,6 +526,7 @@ export default function TripPlannerScreen() {
       </View>
 
       <View style={styles.section}>
+        {renderSectionHeader("무엇을", "원하는 여행 스타일 (최대 3개)")}
         <View style={styles.vibeGrid}>
           {VIBE_OPTIONS.map(vibe => {
             const isSelected = formData.vibes.includes(vibe.id);
@@ -521,6 +546,90 @@ export default function TripPlannerScreen() {
                 />
                 <Text style={[styles.vibeText, { color: isSelected ? "#FFFFFF" : theme.textSecondary }]}>
                   {vibe.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        {renderSectionHeader("여행 스타일", "일정 밀도를 선택하세요")}
+        <View style={styles.toggleRow}>
+          {TRAVEL_PACE_OPTIONS.map(option => {
+            const isSelected = formData.travelPace === option.id;
+            return (
+              <Pressable
+                key={option.id}
+                style={[
+                  styles.toggleButton,
+                  { backgroundColor: isSelected ? Brand.primary : theme.backgroundDefault },
+                ]}
+                onPress={() => setFormData(prev => ({ ...prev, travelPace: option.id }))}
+              >
+                <Feather
+                  name={option.icon as any}
+                  size={20}
+                  color={isSelected ? "#FFFFFF" : theme.textSecondary}
+                />
+                <Text style={[styles.toggleText, { color: isSelected ? "#FFFFFF" : theme.textSecondary }]}>
+                  {option.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        {renderSectionHeader("예산", "여행 예산 수준을 선택하세요")}
+        <View style={styles.iconGrid}>
+          {TRAVEL_STYLE_OPTIONS.map(option => {
+            const isSelected = formData.travelStyle === option.id;
+            return (
+              <Pressable
+                key={option.id}
+                style={[
+                  styles.iconButton,
+                  { backgroundColor: isSelected ? Brand.primary : theme.backgroundDefault },
+                ]}
+                onPress={() => setFormData(prev => ({ ...prev, travelStyle: option.id }))}
+              >
+                <Feather
+                  name={option.icon as any}
+                  size={24}
+                  color={isSelected ? "#FFFFFF" : theme.textSecondary}
+                />
+                <Text style={[styles.iconLabel, { color: isSelected ? "#FFFFFF" : theme.textSecondary }]}>
+                  {option.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+
+      <View style={styles.section}>
+        {renderSectionHeader("이동 스타일", "이동 방식을 선택하세요")}
+        <View style={styles.toggleRow}>
+          {MOBILITY_STYLE_OPTIONS.map(option => {
+            const isSelected = formData.mobilityStyle === option.id;
+            return (
+              <Pressable
+                key={option.id}
+                style={[
+                  styles.toggleButton,
+                  { backgroundColor: isSelected ? Brand.primary : theme.backgroundDefault },
+                ]}
+                onPress={() => setFormData(prev => ({ ...prev, mobilityStyle: option.id }))}
+              >
+                <Feather
+                  name={option.icon as any}
+                  size={20}
+                  color={isSelected ? "#FFFFFF" : theme.textSecondary}
+                />
+                <Text style={[styles.toggleText, { color: isSelected ? "#FFFFFF" : theme.textSecondary }]}>
+                  {option.label}
                 </Text>
               </Pressable>
             );
@@ -582,6 +691,15 @@ export default function TripPlannerScreen() {
           </Text>
         </View>
 
+        {itinerary.vibeWeights && itinerary.vibeWeights.length > 0 ? (
+          <View style={[styles.vibeWeightsSummary, { backgroundColor: `${Brand.primary}10` }]}>
+            <Feather name="target" size={16} color={Brand.primary} />
+            <Text style={[styles.vibeWeightsSummaryText, { color: Brand.primary }]}>
+              {formatVibeWeightsSummary(itinerary.vibeWeights)}
+            </Text>
+          </View>
+        ) : null}
+
         <View style={styles.dayTabsContainer}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dayTabs}>
             {itinerary.days.map((day, idx) => (
@@ -635,6 +753,17 @@ export default function TripPlannerScreen() {
                       {place.startTime} - {place.endTime}
                     </Text>
                   </View>
+                  {place.vibeTags && place.vibeTags.length > 0 ? (
+                    <View style={styles.vibeTagsRow}>
+                      {place.vibeTags.map(tag => (
+                        <View key={tag} style={[styles.vibeTag, { backgroundColor: `${Brand.primary}15` }]}>
+                          <Text style={[styles.vibeTagText, { color: Brand.primary }]}>
+                            {getVibeLabel(tag)}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
                   <Text style={[styles.placeReason, { color: theme.textSecondary }]} numberOfLines={2}>
                     {place.personaFitReason}
                   </Text>
@@ -664,6 +793,9 @@ const styles = StyleSheet.create({
   closeButton: { width: 44, height: 44, justifyContent: "center", alignItems: "center", marginRight: Spacing.sm },
   title: { fontSize: 28, fontWeight: "900", letterSpacing: -0.5 },
   section: { marginBottom: Spacing.lg },
+  sectionHeader: { marginBottom: Spacing.sm },
+  sectionTitle: { fontSize: 16, fontWeight: "800", marginBottom: 2 },
+  sectionSubtitle: { fontSize: 12, fontWeight: "500" },
   inputBox: {
     flexDirection: "row",
     alignItems: "center",
@@ -702,6 +834,17 @@ const styles = StyleSheet.create({
     gap: Spacing.xs,
   },
   vibeText: { fontSize: 12, fontWeight: "600" },
+  toggleRow: { flexDirection: "row", gap: Spacing.sm },
+  toggleButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.md,
+    gap: Spacing.sm,
+  },
+  toggleText: { fontSize: 14, fontWeight: "700" },
   generateButton: { borderRadius: BorderRadius.xl, overflow: "hidden", marginTop: Spacing.lg },
   generateGradient: { flexDirection: "row", paddingVertical: Spacing.lg, justifyContent: "center", alignItems: "center", gap: Spacing.sm },
   generateText: { color: "#FFFFFF", fontSize: 18, fontWeight: "800" },
@@ -729,6 +872,8 @@ const styles = StyleSheet.create({
   resultTitle: { fontSize: 18, fontWeight: "800" },
   mapPlaceholder: { height: 200, justifyContent: "center", alignItems: "center", marginHorizontal: Spacing.lg, borderRadius: BorderRadius.lg, marginBottom: Spacing.md },
   mapPlaceholderText: { fontSize: 14, fontWeight: "600", marginTop: Spacing.sm },
+  vibeWeightsSummary: { flexDirection: "row", alignItems: "center", gap: Spacing.sm, marginHorizontal: Spacing.lg, padding: Spacing.md, borderRadius: BorderRadius.md, marginBottom: Spacing.md },
+  vibeWeightsSummaryText: { fontSize: 13, fontWeight: "700" },
   dayTabsContainer: { paddingVertical: Spacing.sm },
   dayTabs: { paddingHorizontal: Spacing.lg, gap: Spacing.sm },
   dayTab: { paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm, borderRadius: BorderRadius.full },
@@ -749,5 +894,8 @@ const styles = StyleSheet.create({
   scoreText: { fontSize: 12, fontWeight: "800" },
   placeTimeRow: { flexDirection: "row", alignItems: "center", gap: Spacing.xs, marginBottom: Spacing.xs },
   placeTimeText: { fontSize: 12, fontWeight: "600" },
+  vibeTagsRow: { flexDirection: "row", flexWrap: "wrap", gap: Spacing.xs, marginBottom: Spacing.xs },
+  vibeTag: { paddingHorizontal: Spacing.sm, paddingVertical: 2, borderRadius: BorderRadius.xs },
+  vibeTagText: { fontSize: 10, fontWeight: "700" },
   placeReason: { fontSize: 13, lineHeight: 18 },
 });

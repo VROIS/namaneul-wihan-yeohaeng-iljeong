@@ -1,6 +1,10 @@
-export type Vibe = 'Healing' | 'Adventure' | 'CityPop' | 'Foodie' | 'Romantic' | 'Culture';
+export type Vibe = 'Healing' | 'Adventure' | 'Hotspot' | 'Foodie' | 'Romantic' | 'Culture';
 
-export type TravelStyle = 'Luxury' | 'Reasonable' | 'Economic' | 'Comfortable';
+export type TravelStyle = 'Luxury' | 'Premium' | 'Reasonable' | 'Economic';
+
+export type TravelPace = 'Packed' | 'Relaxed';
+
+export type MobilityStyle = 'WalkMore' | 'Minimal';
 
 export type CompanionType = 'Single' | 'Couple' | 'Family' | 'Group';
 
@@ -25,6 +29,8 @@ export interface TripFormData {
   endTime: string;
   vibes: Vibe[];
   travelStyle: TravelStyle;
+  travelPace: TravelPace;
+  mobilityStyle: MobilityStyle;
 }
 
 export interface Place {
@@ -40,6 +46,7 @@ export interface Place {
   sourceType: string;
   personaFitReason: string;
   tags: string[];
+  vibeTags?: Vibe[];
   realityCheck: {
     weather: 'Sunny' | 'Cloudy' | 'Rainy';
     crowd: 'Low' | 'Medium' | 'High';
@@ -56,28 +63,45 @@ export interface DayPlan {
   summary: string;
 }
 
+export interface VibeWeight {
+  vibe: Vibe;
+  weight: number;
+  percentage: number;
+}
+
 export interface Itinerary {
   title: string;
   destination: string;
   startDate: string;
   endDate: string;
   days: DayPlan[];
+  vibeWeights?: VibeWeight[];
 }
 
-export const VIBE_OPTIONS: { id: Vibe; label: string; icon: string }[] = [
-  { id: 'Healing', label: '힐링', icon: 'heart' },
-  { id: 'Adventure', label: '모험', icon: 'compass' },
-  { id: 'CityPop', label: '시티팝', icon: 'home' },
-  { id: 'Foodie', label: '미식', icon: 'coffee' },
-  { id: 'Romantic', label: '로맨틱', icon: 'heart' },
-  { id: 'Culture', label: '문화/예술', icon: 'book-open' },
+export const VIBE_OPTIONS: { id: Vibe; label: string; icon: string; baseWeight: number }[] = [
+  { id: 'Healing', label: '힐링', icon: 'heart', baseWeight: 35 },
+  { id: 'Adventure', label: '모험', icon: 'compass', baseWeight: 10 },
+  { id: 'Hotspot', label: '핫스팟', icon: 'trending-up', baseWeight: 15 },
+  { id: 'Foodie', label: '미식', icon: 'coffee', baseWeight: 25 },
+  { id: 'Romantic', label: '로맨틱', icon: 'heart', baseWeight: 5 },
+  { id: 'Culture', label: '문화/예술', icon: 'book-open', baseWeight: 10 },
 ];
 
-export const TRAVEL_STYLE_OPTIONS: { id: TravelStyle; label: string; description: string; icon: string }[] = [
-  { id: 'Luxury', label: '럭셔리', description: '시간 절약, 포토제닉, 프리미엄', icon: 'star' },
-  { id: 'Reasonable', label: '합리적', description: '가성비 좋은 선택', icon: 'thumbs-up' },
-  { id: 'Economic', label: '경제적', description: '예산 중심 여행', icon: 'dollar-sign' },
-  { id: 'Comfortable', label: '편안함', description: '안전 우선, 검증된 맛집', icon: 'shield' },
+export const TRAVEL_STYLE_OPTIONS: { id: TravelStyle; label: string; icon: string }[] = [
+  { id: 'Luxury', label: '럭셔리', icon: 'star' },
+  { id: 'Premium', label: '프리미엄', icon: 'award' },
+  { id: 'Reasonable', label: '합리적', icon: 'thumbs-up' },
+  { id: 'Economic', label: '경제적', icon: 'dollar-sign' },
+];
+
+export const TRAVEL_PACE_OPTIONS: { id: TravelPace; label: string; icon: string }[] = [
+  { id: 'Packed', label: '빡빡하게', icon: 'zap' },
+  { id: 'Relaxed', label: '여유롭게', icon: 'sun' },
+];
+
+export const MOBILITY_STYLE_OPTIONS: { id: MobilityStyle; label: string; icon: string }[] = [
+  { id: 'WalkMore', label: '많이 걷기', icon: 'map' },
+  { id: 'Minimal', label: '이동 최소화', icon: 'home' },
 ];
 
 export const COMPANION_OPTIONS: { id: CompanionType; label: string; icon: string }[] = [
