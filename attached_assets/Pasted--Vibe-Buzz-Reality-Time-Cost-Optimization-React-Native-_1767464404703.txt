@@ -1,0 +1,70 @@
+지금까지 논의한 방대한 로직(Vibe, Buzz, Reality, Time/Cost Optimization)을 **크로스 플랫폼 네이티브 앱(React Native 또는 Flutter)**으로 구현하기 위한 시스템 아키텍처와 데이터 워크플로우를 설계해 드립니다.
+이 설계의 핵심은 **"이질적인 데이터(감성+실시간+정보)의 수집 및 통합"**을 얼마나 효율적으로 자동화하느냐에 있습니다.
+📱 1. 시스템 아키텍처 (System Architecture)
+앱은 크게 클라이언트(프론트엔드), API 게이트웨이, 핵심 백엔드(마이크로서비스), 데이터/AI 파이프라인의 4계층으로 구성됩니다.
+A. 프론트엔드 (Client Layer) - 크로스 플랫폼
+기술 스택: React Native (추천: 방대한 라이브러리, 빠른 개발) 또는 Flutter (고성능 UI 렌더링).
+주요 모듈:
+Interactive Map: Google Maps SDK 기반, 커스텀 마커(Vibe/맛집) 및 동선 오버레이.
+Dream Studio: 사용자 사진 업로드, AI 합성 결과 뷰어, 전후 비교 슬라이더.
+Shorts Player: 숏폼 영상 자동 재생 플레이어 (캐싱 최적화 필수).
+Smart Chatbot: Gemini 기반 여행 비서 (자연어 음성/텍스트 입력).
+B. 백엔드 및 AI 파이프라인 (Core Service Layer)
+이 앱의 '두뇌'입니다. 데이터 수집부터 점수 산정까지 담당합니다.
+데이터 수집 엔진 (The Crawler & Fetcher)
+역할: 전 세계 데이터를 긁어옵니다.
+SNS Scraper: 인스타그램/틱톡 해시태그, 위치 태그 크롤링 (이미지, 텍스트, 좋아요 수).
+Real-time Fetcher: 날씨 API, 교통 API(GTFS), 뉴스 RSS, 구글 트렌드 API 호출.
+Official API Connector: 구글 맵(리뷰, 영업시간), OTA(호텔/항공 가격) API 연동.
+AI 분석 및 가공 엔진 (The Vibe Processor)
+기술 스택: Python (FastAPI/Django), Gemini API (Vision & Text).
+Vibe Analyzer: 수집된 사진을 Gemini Vision에 보내 Vibe_Score, Composition, Lighting 점수 추출.
+Buzz Calculator: 리뷰 수, 언급량, 셀럽 데이터를 종합해 Popularity_Score 산출.
+Reality Check: 실시간 파업/날씨 정보를 바탕으로 Penalty_Score 계산.
+추천 및 최적화 엔진 (The Architect)
+Route Optimizer: Google Distance Matrix API + 자체 알고리즘(시간 vs 돈)으로 경로 최적화.
+Dynamic Packaging: 항공+숙소+투어 조합 최적화 및 예약 자동화 에이전트.
+C. 데이터베이스 (Data Layer)
+Vector DB (Pinecone/Weaviate): '감성(Vibe)' 검색을 위해 이미지와 리뷰 텍스트를 벡터화하여 저장 (예: "몽환적인 핑크빛 카페" 검색 시 매칭).
+NoSQL (MongoDB/Firestore): 비정형 데이터(리뷰 원문, 크롤링 데이터) 저장.
+RDBMS (PostgreSQL): 사용자 정보, 예약 내역, 결제 데이터 등 정형 데이터 저장.
+🔄 2. 핵심 데이터 워크플로우 (Data Workflow)
+가장 중요한 **'정보 수집부터 앱 표출까지'**의 흐름입니다.
+워크플로우 1: 핫스팟 데이터 수집 및 점수화 (비동기 처리)
+Trigger (배치 작업): 매일 밤 또는 주간 단위로 특정 도시(예: 파리)의 데이터 업데이트 시작.
+Data Ingestion (수집):
+Instagram/TikTok에서 #ParisTravel 등 키워드로 인기 게시물 크롤링.
+Google Maps API로 해당 장소의 최신 리뷰 수, 평점 수집.
+AI Processing (Gemini 분석):
+이미지: "이 사진의 구도, 색감, 조명 점수를 매겨줘." -> Visual_Score 저장.
+텍스트: "이 리뷰에서 '대기 시간', '현지인 비율' 정보를 추출해줘." -> Local_Buzz 저장.
+Scoring & Ranking:
+Final_Score 계산 로직 수행.
+Tier 1~3 등급 분류 후 DB 업데이트.
+워크플로우 2: 실시간 여정 생성 (사용자 요청 시)
+User Input: 사용자 프로필(50대, 가족, 편한 여행), 날짜, 도시 입력.
+Real-time Check:
+Weather API & News API 호출 -> "내일 파리 비 옴, 지하철 파업 없음."
+DB에서 Final_Score 높은 장소 중 날씨 페널티 없는 곳 필터링.
+Optimization:
+'편한 여행' 선택 시 -> 우버 API 호출하여 이동 비용/시간 계산.
+동선 알고리즘 가동 -> 최적 루트 생성.
+Media Generation:
+선택된 장소들의 공개 숏폼 영상 URL 매핑.
+사용자에게 최종 일정표(Map + Video + Time/Cost) 전송.
+워크플로우 3: 예약 및 결제 자동화 (End-to-End)
+Booking Request: 사용자가 "이 일정대로 예약해줘" 클릭.
+Agent Action:
+AI 에이전트가 항공/호텔/투어 API에 접속하여 재고 확인.
+예약 가능 시, PG사(Stripe 등)를 통해 사용자 결제 진행.
+Confirmation: 예약 확정 바우처를 앱 내 '내 여행' 탭에 저장 및 동선에 연동.
+📝 3. 개발 로드맵 및 핵심 구현 문서 (Markdown)
+이 내용을 개발팀(또는 LLM)에게 전달하기 위한 기능 명세서 초안입니다.
+Project_Architecture
+12월 15일 오후 11:43
+열기
+💡 개발 팁 (성공을 위한 조언)
+데이터 희소 지역(Tier 3)부터 시작하지 마십시오. 파리, 도쿄, 뉴욕 등 데이터가 넘쳐나는 Tier 1 도시 3~5곳을 타겟으로 베타 버전을 완성하여 로직을 검증하세요.
+이미지 저작권 이슈: 숏폼이나 이미지 제공 시, 인스타그램 임베드(Embed) 방식을 활용하거나, Unsplash/Pexels 등 상업적 무료 이미지를 1차적으로 매칭하는 것이 안전합니다.
+API 비용 관리: Google Maps API와 LLM API 호출은 비용이 듭니다. 캐싱(Caching) 전략을 적극적으로 사용하여, 한 번 계산된 경로와 점수는 일정 기간(예: 24시간) 동안 재사용해야 합니다.
+이 아키텍처와 워크플로우를 기반으로 개발팀과 소통하시면, 막연했던 아이디어가 실체 있는 프로덕트로 빠르게 구체화될 것입니다.
