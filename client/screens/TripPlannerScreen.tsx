@@ -264,34 +264,77 @@ export default function TripPlannerScreen() {
     }, 6000);
   };
 
+  const generateDateOptions = () => {
+    const options: string[] = [];
+    const today = new Date();
+    for (let i = 0; i < 365; i++) {
+      const d = new Date(today.getTime() + i * 24 * 60 * 60 * 1000);
+      options.push(formatDate(d));
+    }
+    return options;
+  };
+
+  const generateTimeOptions = () => {
+    const options: string[] = [];
+    for (let h = 0; h < 24; h++) {
+      for (let m = 0; m < 60; m += 30) {
+        options.push(`${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`);
+      }
+    }
+    return options;
+  };
+
   const renderWebInputModal = () => {
     if (!showWebInput) return null;
     const isDate = showWebInput === "startDate" || showWebInput === "endDate";
     const title = showWebInput === "startDate" ? "시작일" : showWebInput === "endDate" ? "종료일" : showWebInput === "startTime" ? "시작 시간" : "종료 시간";
     const currentValue = showWebInput === "startDate" ? formData.startDate : showWebInput === "endDate" ? formData.endDate : showWebInput === "startTime" ? formData.startTime : formData.endTime;
+    const options = isDate ? generateDateOptions() : generateTimeOptions();
 
     return (
       <Modal visible transparent animationType="fade">
-        <View style={styles.pickerModalOverlay}>
-          <View style={[styles.webInputModal, { backgroundColor: theme.backgroundRoot }]}>
-            <Text style={[styles.webInputTitle, { color: theme.text }]}>{title}</Text>
-            <TextInput
-              style={[styles.webInputField, { color: theme.text, borderColor: theme.border }]}
-              value={currentValue}
-              onChangeText={handleWebInputChange}
-              placeholder={isDate ? "YYYY-MM-DD" : "HH:MM"}
-              placeholderTextColor={theme.textTertiary}
-              keyboardType={isDate ? "default" : "default"}
-              autoFocus
-            />
-            <Pressable
-              style={[styles.webInputButton, { backgroundColor: Brand.primary }]}
-              onPress={() => setShowWebInput(null)}
-            >
-              <Text style={styles.webInputButtonText}>확인</Text>
-            </Pressable>
+        <Pressable style={styles.pickerModalOverlay} onPress={() => setShowWebInput(null)}>
+          <View style={[styles.webPickerModal, { backgroundColor: theme.backgroundRoot }]}>
+            <View style={styles.webPickerHeader}>
+              <Pressable onPress={() => setShowWebInput(null)}>
+                <Text style={[styles.pickerCancel, { color: theme.textSecondary }]}>취소</Text>
+              </Pressable>
+              <Text style={[styles.pickerTitle, { color: theme.text }]}>{title}</Text>
+              <Pressable onPress={() => setShowWebInput(null)}>
+                <Text style={[styles.pickerConfirm, { color: Brand.primary }]}>확인</Text>
+              </Pressable>
+            </View>
+            <ScrollView style={styles.webPickerScroll} showsVerticalScrollIndicator={false}>
+              {options.map(option => {
+                const isSelected = option === currentValue;
+                return (
+                  <Pressable
+                    key={option}
+                    style={[
+                      styles.webPickerOption,
+                      isSelected && { backgroundColor: `${Brand.primary}15` },
+                    ]}
+                    onPress={() => {
+                      handleWebInputChange(option);
+                      setShowWebInput(null);
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.webPickerOptionText,
+                        { color: isSelected ? Brand.primary : theme.text },
+                        isSelected && { fontWeight: "700" },
+                      ]}
+                    >
+                      {option}
+                    </Text>
+                    {isSelected ? <Feather name="check" size={20} color={Brand.primary} /> : null}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
           </View>
-        </View>
+        </Pressable>
       </Modal>
     );
   };
@@ -668,11 +711,11 @@ const styles = StyleSheet.create({
   pickerCancel: { fontSize: 16, fontWeight: "600" },
   pickerTitle: { fontSize: 16, fontWeight: "700" },
   pickerConfirm: { fontSize: 16, fontWeight: "700" },
-  webInputModal: { position: "absolute", bottom: 0, left: 0, right: 0, padding: Spacing.xl, borderTopLeftRadius: BorderRadius.xl, borderTopRightRadius: BorderRadius.xl },
-  webInputTitle: { fontSize: 18, fontWeight: "700", marginBottom: Spacing.md, textAlign: "center" },
-  webInputField: { fontSize: 18, fontWeight: "600", padding: Spacing.md, borderWidth: 1, borderRadius: BorderRadius.md, marginBottom: Spacing.lg, textAlign: "center" },
-  webInputButton: { paddingVertical: Spacing.md, borderRadius: BorderRadius.md, alignItems: "center" },
-  webInputButtonText: { color: "#FFFFFF", fontSize: 16, fontWeight: "700" },
+  webPickerModal: { position: "absolute", bottom: 0, left: 0, right: 0, maxHeight: "70%", borderTopLeftRadius: BorderRadius.xl, borderTopRightRadius: BorderRadius.xl },
+  webPickerHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: Spacing.lg, borderBottomWidth: 1, borderBottomColor: "#E5E7EB" },
+  webPickerScroll: { maxHeight: 350 },
+  webPickerOption: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: Spacing.md, paddingHorizontal: Spacing.lg, borderBottomWidth: 1, borderBottomColor: "#F3F4F6" },
+  webPickerOptionText: { fontSize: 16, fontWeight: "500" },
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center", padding: Spacing.xl },
   loadingIconBox: { width: 96, height: 96, borderRadius: 32, justifyContent: "center", alignItems: "center", marginBottom: Spacing.xl },
   spinnerRing: { position: "absolute", width: 96, height: 96, borderRadius: 32, borderWidth: 4, borderTopColor: "transparent" },
