@@ -33,6 +33,7 @@ import {
   Itinerary,
 } from "@/types/trip";
 import { calculateVibeWeights, formatVibeWeightsSummary, getVibeLabel } from "@/utils/vibeCalculator";
+import { apiRequest } from "@/lib/query-client";
 
 let DateTimePicker: any = null;
 if (Platform.OS !== "web") {
@@ -192,14 +193,32 @@ export default function TripPlannerScreen() {
     setScreen("Loading");
     setLoadingStep(0);
 
-    const vibeWeights = calculateVibeWeights(formData.vibes, formData.curationFocus);
-
     const interval = setInterval(() => {
       setLoadingStep(s => (s < 3 ? s + 1 : s));
     }, 2000);
 
-    setTimeout(() => {
+    try {
+      const response = await apiRequest("POST", "/api/routes/generate", formData);
+      const result = await response.json();
+      
       clearInterval(interval);
+      
+      const vibeWeights = calculateVibeWeights(formData.vibes, formData.curationFocus);
+      
+      setItinerary({
+        title: result.title || `${formData.destination} 여행`,
+        destination: result.destination || formData.destination,
+        startDate: result.startDate || formData.startDate,
+        endDate: result.endDate || formData.endDate,
+        vibeWeights: result.vibeWeights || vibeWeights,
+        days: result.days || [],
+      });
+      setScreen("Result");
+    } catch (error) {
+      clearInterval(interval);
+      console.error("Failed to generate itinerary:", error);
+      
+      const vibeWeights = calculateVibeWeights(formData.vibes, formData.curationFocus);
       setItinerary({
         title: `${formData.destination} 여행`,
         destination: formData.destination,
@@ -209,74 +228,13 @@ export default function TripPlannerScreen() {
         days: [
           {
             day: 1,
-            summary: "도착 후 시내 중심부 탐방. 파리의 상징적인 랜드마크를 둘러봅니다.",
-            places: [
-              {
-                id: "1",
-                name: "에펠탑",
-                description: "파리의 상징",
-                startTime: formData.startTime,
-                endTime: "11:00",
-                lat: 48.8584,
-                lng: 2.2945,
-                vibeScore: 95,
-                confidenceScore: 98,
-                sourceType: "Google",
-                personaFitReason: "가족 모두가 즐길 수 있는 대표 관광지",
-                tags: ["랜드마크", "포토스팟"],
-                vibeTags: ["Hotspot"],
-                realityCheck: { weather: "Sunny", crowd: "Medium", status: "Open" },
-                image: "",
-                priceEstimate: "약 25유로/인",
-              },
-              {
-                id: "2",
-                name: "개선문",
-                description: "나폴레옹의 승리를 기념",
-                startTime: "12:00",
-                endTime: "13:30",
-                lat: 48.8738,
-                lng: 2.2950,
-                vibeScore: 88,
-                confidenceScore: 95,
-                sourceType: "Google",
-                personaFitReason: "역사와 문화를 체험할 수 있는 명소",
-                tags: ["역사", "건축"],
-                vibeTags: ["Culture"],
-                realityCheck: { weather: "Sunny", crowd: "Low", status: "Open" },
-                image: "",
-                priceEstimate: "약 13유로/인",
-              },
-            ],
-          },
-          {
-            day: 2,
-            summary: "예술과 미식의 하루. 루브르 박물관과 현지 맛집 탐방.",
-            places: [
-              {
-                id: "3",
-                name: "루브르 박물관",
-                description: "세계 최대 규모의 박물관",
-                startTime: "10:00",
-                endTime: formData.endTime,
-                lat: 48.8606,
-                lng: 2.3376,
-                vibeScore: 98,
-                confidenceScore: 99,
-                sourceType: "Google",
-                personaFitReason: "문화/예술 Vibe에 완벽한 선택",
-                tags: ["예술", "박물관"],
-                vibeTags: ["Culture", "Healing"],
-                realityCheck: { weather: "Cloudy", crowd: "High", status: "Open" },
-                image: "",
-                priceEstimate: "약 17유로/인",
-              },
-            ],
+            summary: "API 연결 오류 - 기본 일정으로 표시됩니다",
+            places: [],
           },
         ],
       });
       setScreen("Result");
-    }, 6000);
+    }
   };
 
   const generateDateOptions = () => {
