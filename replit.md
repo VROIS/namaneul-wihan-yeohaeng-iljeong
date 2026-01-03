@@ -42,6 +42,12 @@ VibeTrip is a hyper-personalized AI travel agent Expo mobile app that transforms
 - `GOOGLE_MAPS_API_KEY` - For Google Places and Routes API
 - `OPENWEATHER_API_KEY` - For weather data
 
+## 프로젝트 문서
+- `docs/PRD.md` - 제품 요구사항 정의서
+- `docs/TRD.md` - 기술 요구사항 정의서
+- `docs/TASK.md` - 개발 태스크 및 로드맵
+- `docs/USER_INPUT.md` - 사용자 입력 요소 정의
+
 ## Design Guidelines
 See `design_guidelines.md` for complete design system including:
 - Purple-pink gradient primary colors
