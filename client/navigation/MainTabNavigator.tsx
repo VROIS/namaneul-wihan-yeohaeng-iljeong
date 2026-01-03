@@ -39,7 +39,7 @@ function FABButton() {
       ]}
     >
       <Pressable
-        onPress={() => navigation.navigate("PlanModal")}
+        onPress={() => navigation.navigate("TripPlanner")}
         style={({ pressed }) => [
           styles.fab,
           pressed && styles.fabPressed,
