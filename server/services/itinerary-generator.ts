@@ -281,7 +281,7 @@ ${formData.destination}의 실제 유명한 장소들을 추천해주세요. 최
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-3.0-flash",
+      model: "gemini-3-flash-preview",
       contents: [{ role: "user", parts: [{ text: prompt }] }],
     });
 

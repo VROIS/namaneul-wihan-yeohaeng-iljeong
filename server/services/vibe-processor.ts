@@ -57,7 +57,7 @@ JSON 형식으로만 응답해주세요:
 
     try {
       const response = await ai.models.generateContent({
-        model: "gemini-3.0-flash",
+        model: "gemini-3-flash-preview",
         contents: [
           {
             role: "user",
