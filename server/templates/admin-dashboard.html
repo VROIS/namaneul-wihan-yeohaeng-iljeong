@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>VibeTrip Admin Dashboard</title>
+  <title>VibeTrip 관리자 대시보드</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
@@ -262,44 +262,44 @@
     <header>
       <div class="logo">
         <h1>Vibe<span>Trip</span></h1>
-        <span style="color: #6b7280; font-size: 14px;">Admin Dashboard</span>
+        <span style="color: #6b7280; font-size: 14px;">관리자 대시보드</span>
       </div>
-      <div id="system-status" class="status-badge status-ok">System OK</div>
+      <div id="system-status" class="status-badge status-ok">시스템 정상</div>
     </header>
     
     <div class="tabs">
-      <button class="tab active" data-tab="overview">Overview</button>
-      <button class="tab" data-tab="sources">Data Sources</button>
-      <button class="tab" data-tab="api">API Status</button>
-      <button class="tab" data-tab="logs">Sync Logs</button>
+      <button class="tab active" data-tab="overview">현황</button>
+      <button class="tab" data-tab="sources">데이터 소스</button>
+      <button class="tab" data-tab="api">API 상태</button>
+      <button class="tab" data-tab="logs">동기화 로그</button>
     </div>
     
     <div id="tab-overview" class="tab-content">
       <div class="grid">
         <div class="card">
-          <h2>Data Overview</h2>
+          <h2>데이터 현황</h2>
           <div class="stat-grid">
             <div class="stat-item">
               <div class="stat-value" id="stat-cities">-</div>
-              <div class="stat-label">Cities</div>
+              <div class="stat-label">도시</div>
             </div>
             <div class="stat-item">
               <div class="stat-value" id="stat-places">-</div>
-              <div class="stat-label">Places</div>
+              <div class="stat-label">장소</div>
             </div>
             <div class="stat-item">
               <div class="stat-value" id="stat-channels">-</div>
-              <div class="stat-label">YouTube Channels</div>
+              <div class="stat-label">유튜브 채널</div>
             </div>
             <div class="stat-item">
               <div class="stat-value" id="stat-blogs">-</div>
-              <div class="stat-label">Blog Sources</div>
+              <div class="stat-label">블로그 소스</div>
             </div>
           </div>
         </div>
         
         <div class="card">
-          <h2>Data Freshness</h2>
+          <h2>데이터 신선도</h2>
           <div id="freshness-bar" class="freshness-bar"></div>
           <div id="freshness-legend" class="freshness-legend"></div>
         </div>
@@ -307,16 +307,16 @@
       
       <div class="grid">
         <div class="card">
-          <h2>API Services</h2>
+          <h2>API 서비스</h2>
           <div id="api-services" class="service-list">
-            <div class="loading"><div class="spinner"></div>Loading...</div>
+            <div class="loading"><div class="spinner"></div>로딩 중...</div>
           </div>
         </div>
         
         <div class="card">
-          <h2>Recent Syncs</h2>
+          <h2>최근 동기화</h2>
           <div id="recent-syncs" class="sync-logs">
-            <div class="loading"><div class="spinner"></div>Loading...</div>
+            <div class="loading"><div class="spinner"></div>로딩 중...</div>
           </div>
         </div>
       </div>
@@ -325,43 +325,43 @@
     <div id="tab-sources" class="tab-content" style="display: none;">
       <div class="grid">
         <div class="card">
-          <h2>YouTube Channels</h2>
-          <button class="btn btn-primary btn-sm" onclick="toggleForm('yt-form')" style="margin-bottom: 16px;">+ Add Channel</button>
+          <h2>유튜브 채널</h2>
+          <button class="btn btn-primary btn-sm" onclick="toggleForm('yt-form')" style="margin-bottom: 16px;">+ 채널 추가</button>
           <div id="yt-form" class="add-form">
-            <input type="text" id="yt-channel-id" placeholder="Channel ID (e.g., UC...)">
-            <input type="text" id="yt-channel-name" placeholder="Channel Name">
+            <input type="text" id="yt-channel-id" placeholder="채널 ID (예: UC...)">
+            <input type="text" id="yt-channel-name" placeholder="채널 이름">
             <select id="yt-category">
-              <option value="">Select Category</option>
-              <option value="food">Food</option>
-              <option value="travel">Travel</option>
-              <option value="lifestyle">Lifestyle</option>
+              <option value="">카테고리 선택</option>
+              <option value="food">맛집</option>
+              <option value="travel">여행</option>
+              <option value="lifestyle">라이프스타일</option>
             </select>
-            <input type="number" id="yt-trust" placeholder="Trust Weight (0.1 - 2.0)" step="0.1" min="0.1" max="2">
-            <button class="btn btn-primary" onclick="addYoutubeChannel()">Add</button>
+            <input type="number" id="yt-trust" placeholder="신뢰도 가중치 (0.1 - 2.0)" step="0.1" min="0.1" max="2">
+            <button class="btn btn-primary" onclick="addYoutubeChannel()">추가</button>
           </div>
           <div id="youtube-channels" class="channel-list">
-            <div class="loading"><div class="spinner"></div>Loading...</div>
+            <div class="loading"><div class="spinner"></div>로딩 중...</div>
           </div>
         </div>
         
         <div class="card">
-          <h2>Blog Sources</h2>
-          <button class="btn btn-primary btn-sm" onclick="toggleForm('blog-form')" style="margin-bottom: 16px;">+ Add Source</button>
+          <h2>블로그 소스</h2>
+          <button class="btn btn-primary btn-sm" onclick="toggleForm('blog-form')" style="margin-bottom: 16px;">+ 소스 추가</button>
           <div id="blog-form" class="add-form">
             <select id="blog-platform">
-              <option value="">Select Platform</option>
-              <option value="naver">Naver Blog</option>
-              <option value="tistory">Tistory</option>
-              <option value="michelin">Michelin Guide</option>
-              <option value="tripadvisor">TripAdvisor</option>
+              <option value="">플랫폼 선택</option>
+              <option value="naver">네이버 블로그</option>
+              <option value="tistory">티스토리</option>
+              <option value="michelin">미쉐린 가이드</option>
+              <option value="tripadvisor">트립어드바이저</option>
             </select>
-            <input type="text" id="blog-name" placeholder="Source Name">
-            <input type="url" id="blog-url" placeholder="Source URL">
-            <input type="number" id="blog-trust" placeholder="Trust Weight (0.1 - 2.0)" step="0.1" min="0.1" max="2">
-            <button class="btn btn-primary" onclick="addBlogSource()">Add</button>
+            <input type="text" id="blog-name" placeholder="소스 이름">
+            <input type="url" id="blog-url" placeholder="소스 URL">
+            <input type="number" id="blog-trust" placeholder="신뢰도 가중치 (0.1 - 2.0)" step="0.1" min="0.1" max="2">
+            <button class="btn btn-primary" onclick="addBlogSource()">추가</button>
           </div>
           <div id="blog-sources" class="channel-list">
-            <div class="loading"><div class="spinner"></div>Loading...</div>
+            <div class="loading"><div class="spinner"></div>로딩 중...</div>
           </div>
         </div>
       </div>
@@ -369,21 +369,21 @@
     
     <div id="tab-api" class="tab-content" style="display: none;">
       <div class="card">
-        <h2>API Configuration Status</h2>
+        <h2>API 설정 상태</h2>
         <div style="margin-bottom: 20px;">
-          <button class="btn btn-primary" onclick="initApiServices()">Initialize Services</button>
+          <button class="btn btn-primary" onclick="initApiServices()">서비스 초기화</button>
         </div>
         <div id="api-detail" class="service-list">
-          <div class="loading"><div class="spinner"></div>Loading...</div>
+          <div class="loading"><div class="spinner"></div>로딩 중...</div>
         </div>
       </div>
     </div>
     
     <div id="tab-logs" class="tab-content" style="display: none;">
       <div class="card">
-        <h2>Sync History</h2>
+        <h2>동기화 히스토리</h2>
         <div id="sync-history" class="sync-logs" style="max-height: 500px;">
-          <div class="loading"><div class="spinner"></div>Loading...</div>
+          <div class="loading"><div class="spinner"></div>로딩 중...</div>
         </div>
       </div>
     </div>
@@ -391,6 +391,22 @@
   
   <script>
     const API_BASE = '/api/admin';
+    
+    const STATUS_MAP = {
+      'success': '성공',
+      'error': '오류',
+      'pending': '진행중',
+      'partial': '부분성공'
+    };
+    
+    const SERVICE_MAP = {
+      'Google Places API': 'Google Places API',
+      'Google Maps API': 'Google Maps API',
+      'OpenWeather API': 'OpenWeather API',
+      'YouTube Data API': 'YouTube Data API',
+      'Exchange Rate API': '환율 API',
+      'Gemini AI': 'Gemini AI'
+    };
     
     document.querySelectorAll('.tab').forEach(tab => {
       tab.addEventListener('click', () => {
@@ -444,19 +460,19 @@
             <span class="service-name">${s.displayName}</span>
             <span class="service-status ${s.isConfigured ? 'active' : 'inactive'}"></span>
           </div>
-        `).join('') : '<div class="empty-state">No services configured. <a href="#" onclick="initApiServices()">Initialize</a></div>';
+        `).join('') : '<div class="empty-state">서비스가 설정되지 않았습니다. <a href="#" onclick="initApiServices()">초기화하기</a></div>';
         
         const syncsEl = document.getElementById('recent-syncs');
         syncsEl.innerHTML = dash.recentSyncs.length ? dash.recentSyncs.map(s => `
           <div class="log-item">
             <span>${s.entityType}</span>
-            <span class="log-status ${s.status}">${s.status}</span>
+            <span class="log-status ${s.status}">${STATUS_MAP[s.status] || s.status}</span>
             <span class="log-time">${new Date(s.startedAt).toLocaleString('ko-KR')}</span>
           </div>
-        `).join('') : '<div class="empty-state">No recent syncs</div>';
+        `).join('') : '<div class="empty-state">최근 동기화 기록이 없습니다</div>';
         
       } catch (err) {
-        console.error('Dashboard load error:', err);
+        console.error('대시보드 로드 오류:', err);
       }
     }
     
@@ -469,6 +485,13 @@
         const channels = await ytRes.json();
         const blogs = await blogRes.json();
         
+        const CATEGORY_MAP = {
+          'food': '맛집',
+          'travel': '여행',
+          'lifestyle': '라이프스타일',
+          'Uncategorized': '미분류'
+        };
+        
         const ytEl = document.getElementById('youtube-channels');
         ytEl.innerHTML = channels.length ? channels.map(c => `
           <div class="channel-item">
@@ -476,12 +499,19 @@
               <div class="channel-thumb"></div>
               <div>
                 <div class="channel-name">${c.channelName}</div>
-                <span class="channel-category">${c.category || 'Uncategorized'}</span>
+                <span class="channel-category">${CATEGORY_MAP[c.category] || c.category || '미분류'}</span>
               </div>
             </div>
             <span class="trust-weight">${c.trustWeight.toFixed(1)}</span>
           </div>
-        `).join('') : '<div class="empty-state">No channels added yet</div>';
+        `).join('') : '<div class="empty-state">등록된 채널이 없습니다</div>';
+        
+        const PLATFORM_MAP = {
+          'naver': '네이버 블로그',
+          'tistory': '티스토리',
+          'michelin': '미쉐린 가이드',
+          'tripadvisor': '트립어드바이저'
+        };
         
         const blogEl = document.getElementById('blog-sources');
         blogEl.innerHTML = blogs.length ? blogs.map(b => `
@@ -489,15 +519,15 @@
             <div class="channel-info">
               <div>
                 <div class="channel-name">${b.sourceName}</div>
-                <span class="channel-category">${b.platform}</span>
+                <span class="channel-category">${PLATFORM_MAP[b.platform] || b.platform}</span>
               </div>
             </div>
             <span class="trust-weight">${b.trustWeight.toFixed(1)}</span>
           </div>
-        `).join('') : '<div class="empty-state">No blog sources added yet</div>';
+        `).join('') : '<div class="empty-state">등록된 블로그 소스가 없습니다</div>';
         
       } catch (err) {
-        console.error('Sources load error:', err);
+        console.error('소스 로드 오류:', err);
       }
     }
     
@@ -506,10 +536,17 @@
         const res = await fetch(`${API_BASE}/api-services`);
         const data = await res.json();
         
+        const ENV_MAP = {
+          'GOOGLE_MAPS_API_KEY': 'Google Maps API 키',
+          'OPENWEATHER_API_KEY': 'OpenWeather API 키',
+          'YOUTUBE_DATA_API_KEY': 'YouTube Data API 키',
+          'EXCHANGE_RATE_API_KEY': '환율 API 키'
+        };
+        
         const el = document.getElementById('api-detail');
         const envItems = Object.entries(data.envStatus).map(([key, val]) => `
           <div class="service-item">
-            <span class="service-name">${key.replace(/_/g, ' ')}</span>
+            <span class="service-name">${ENV_MAP[key] || key}</span>
             <span class="service-status ${val ? 'active' : 'inactive'}"></span>
           </div>
         `).join('');
@@ -519,7 +556,7 @@
             <span class="service-name">${s.displayName}</span>
             <div style="display: flex; gap: 12px; align-items: center;">
               <span style="font-size: 12px; color: #6b7280;">
-                ${s.dailyCallCount || 0}/${s.dailyQuota || '∞'} daily
+                ${s.dailyCallCount || 0}/${s.dailyQuota || '무제한'} 일일
               </span>
               <span class="service-status ${s.isConfigured ? 'active' : 'inactive'}"></span>
             </div>
@@ -528,16 +565,16 @@
         
         el.innerHTML = `
           <div style="margin-bottom: 20px;">
-            <h3 style="font-size: 14px; color: #a78bfa; margin-bottom: 12px;">Environment Variables</h3>
+            <h3 style="font-size: 14px; color: #a78bfa; margin-bottom: 12px;">환경 변수</h3>
             ${envItems}
           </div>
           <div>
-            <h3 style="font-size: 14px; color: #a78bfa; margin-bottom: 12px;">Service Status</h3>
-            ${serviceItems || '<div class="empty-state">No services initialized</div>'}
+            <h3 style="font-size: 14px; color: #a78bfa; margin-bottom: 12px;">서비스 상태</h3>
+            ${serviceItems || '<div class="empty-state">초기화된 서비스가 없습니다</div>'}
           </div>
         `;
       } catch (err) {
-        console.error('API detail load error:', err);
+        console.error('API 상세 로드 오류:', err);
       }
     }
     
@@ -550,13 +587,13 @@
         el.innerHTML = logs.length ? logs.map(l => `
           <div class="log-item">
             <span>${l.entityType} ${l.entityId ? `#${l.entityId}` : ''}</span>
-            <span class="log-status ${l.status}">${l.status}</span>
-            <span style="color: #6b7280;">${l.itemsProcessed || 0} items</span>
+            <span class="log-status ${l.status}">${STATUS_MAP[l.status] || l.status}</span>
+            <span style="color: #6b7280;">${l.itemsProcessed || 0}개 처리</span>
             <span class="log-time">${new Date(l.startedAt).toLocaleString('ko-KR')}</span>
           </div>
-        `).join('') : '<div class="empty-state">No sync logs yet</div>';
+        `).join('') : '<div class="empty-state">동기화 로그가 없습니다</div>';
       } catch (err) {
-        console.error('Logs load error:', err);
+        console.error('로그 로드 오류:', err);
       }
     }
     
@@ -564,11 +601,11 @@
       try {
         await fetch(`${API_BASE}/api-services/init`, { method: 'POST' });
         await fetch(`${API_BASE}/schedules/init`, { method: 'POST' });
-        alert('Services initialized!');
+        alert('서비스가 초기화되었습니다!');
         loadDashboard();
         loadApiDetail();
       } catch (err) {
-        alert('Failed to initialize services');
+        alert('서비스 초기화에 실패했습니다');
       }
     }
     
@@ -585,7 +622,7 @@
       };
       
       if (!data.channelId || !data.channelName) {
-        alert('Channel ID and Name are required');
+        alert('채널 ID와 이름은 필수입니다');
         return;
       }
       
@@ -600,10 +637,10 @@
           loadSources();
         } else {
           const err = await res.json();
-          alert(err.error || 'Failed to add channel');
+          alert(err.error || '채널 추가에 실패했습니다');
         }
       } catch (err) {
-        alert('Failed to add channel');
+        alert('채널 추가에 실패했습니다');
       }
     }
     
@@ -616,7 +653,7 @@
       };
       
       if (!data.platform || !data.sourceName) {
-        alert('Platform and Name are required');
+        alert('플랫폼과 이름은 필수입니다');
         return;
       }
       
@@ -631,10 +668,10 @@
           loadSources();
         } else {
           const err = await res.json();
-          alert(err.error || 'Failed to add source');
+          alert(err.error || '소스 추가에 실패했습니다');
         }
       } catch (err) {
-        alert('Failed to add source');
+        alert('소스 추가에 실패했습니다');
       }
     }
     
