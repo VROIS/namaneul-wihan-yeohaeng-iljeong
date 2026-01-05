@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   StyleSheet,
@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from "react-native-maps";
 import { Brand, Colors, Spacing, BorderRadius } from "@/constants/theme";
 import {
   TripFormData,
@@ -642,12 +643,61 @@ export default function TripPlannerScreen() {
           </Pressable>
         </View>
 
-        <View style={[styles.mapPlaceholder, { backgroundColor: theme.backgroundSecondary }]}>
-          <Feather name="map" size={48} color={theme.textTertiary} />
-          <Text style={[styles.mapPlaceholderText, { color: theme.textTertiary }]}>
-            {itinerary.startDate} - {itinerary.endDate}
-          </Text>
-        </View>
+        {currentDay.places.length > 0 && currentDay.places[0].lat ? (
+          <View style={styles.mapContainer}>
+            <MapView
+              style={styles.map}
+              provider={PROVIDER_DEFAULT}
+              initialRegion={{
+                latitude: currentDay.places[0].lat,
+                longitude: currentDay.places[0].lng,
+                latitudeDelta: 0.05,
+                longitudeDelta: 0.05,
+              }}
+              region={{
+                latitude: currentDay.places.reduce((sum, p) => sum + (p.lat || 0), 0) / currentDay.places.length,
+                longitude: currentDay.places.reduce((sum, p) => sum + (p.lng || 0), 0) / currentDay.places.length,
+                latitudeDelta: 0.08,
+                longitudeDelta: 0.08,
+              }}
+            >
+              {currentDay.places.map((place, index) => (
+                place.lat && place.lng ? (
+                  <Marker
+                    key={place.id}
+                    coordinate={{ latitude: place.lat, longitude: place.lng }}
+                    title={place.name}
+                    description={place.startTime + " - " + place.endTime}
+                  >
+                    <View style={[styles.markerContainer, { backgroundColor: Brand.primary }]}>
+                      <Text style={styles.markerText}>{index + 1}</Text>
+                    </View>
+                  </Marker>
+                ) : null
+              ))}
+              {currentDay.places.length > 1 ? (
+                <Polyline
+                  coordinates={currentDay.places
+                    .filter(p => p.lat && p.lng)
+                    .map(p => ({ latitude: p.lat!, longitude: p.lng! }))}
+                  strokeColor={Brand.primary}
+                  strokeWidth={3}
+                  lineDashPattern={[10, 5]}
+                />
+              ) : null}
+            </MapView>
+            <View style={styles.mapDateOverlay}>
+              <Text style={styles.mapDateText}>{itinerary.startDate} - {itinerary.endDate}</Text>
+            </View>
+          </View>
+        ) : (
+          <View style={[styles.mapPlaceholder, { backgroundColor: theme.backgroundSecondary }]}>
+            <Feather name="map" size={48} color={theme.textTertiary} />
+            <Text style={[styles.mapPlaceholderText, { color: theme.textTertiary }]}>
+              {itinerary.startDate} - {itinerary.endDate}
+            </Text>
+          </View>
+        )}
 
         {itinerary.vibeWeights && itinerary.vibeWeights.length > 0 ? (
           <View style={[styles.vibeWeightsSummary, { backgroundColor: `${Brand.primary}10` }]}>
@@ -828,6 +878,12 @@ const styles = StyleSheet.create({
   resultHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: Spacing.lg, paddingBottom: Spacing.sm },
   headerButton: { width: 44, height: 44, justifyContent: "center", alignItems: "center" },
   resultTitle: { fontSize: 18, fontWeight: "800" },
+  mapContainer: { height: 200, marginHorizontal: Spacing.lg, borderRadius: BorderRadius.lg, marginBottom: Spacing.md, overflow: "hidden", position: "relative" },
+  map: { flex: 1, borderRadius: BorderRadius.lg },
+  markerContainer: { width: 28, height: 28, borderRadius: 14, justifyContent: "center", alignItems: "center", borderWidth: 2, borderColor: "#FFFFFF" },
+  markerText: { color: "#FFFFFF", fontSize: 12, fontWeight: "800" },
+  mapDateOverlay: { position: "absolute", bottom: Spacing.sm, left: Spacing.sm, backgroundColor: "rgba(0,0,0,0.6)", paddingHorizontal: Spacing.sm, paddingVertical: 4, borderRadius: BorderRadius.xs },
+  mapDateText: { color: "#FFFFFF", fontSize: 12, fontWeight: "600" },
   mapPlaceholder: { height: 200, justifyContent: "center", alignItems: "center", marginHorizontal: Spacing.lg, borderRadius: BorderRadius.lg, marginBottom: Spacing.md },
   mapPlaceholderText: { fontSize: 14, fontWeight: "600", marginTop: Spacing.sm },
   vibeWeightsSummary: { flexDirection: "row", alignItems: "center", gap: Spacing.sm, marginHorizontal: Spacing.lg, padding: Spacing.md, borderRadius: BorderRadius.md, marginBottom: Spacing.md },
