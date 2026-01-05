@@ -209,6 +209,110 @@ export const dataSyncLog = pgTable("data_sync_log", {
   completedAt: timestamp("completed_at"),
 });
 
+// ========================================
+// 관리자 대시보드 테이블
+// ========================================
+
+// API 서비스 상태 추적
+export const apiServiceStatus = pgTable("api_service_status", {
+  id: serial("id").primaryKey(),
+  serviceName: text("service_name").notNull().unique(),
+  displayName: text("display_name").notNull(),
+  isConfigured: boolean("is_configured").default(false),
+  isActive: boolean("is_active").default(true),
+  lastCallAt: timestamp("last_call_at"),
+  lastSuccessAt: timestamp("last_success_at"),
+  lastErrorAt: timestamp("last_error_at"),
+  lastErrorMessage: text("last_error_message"),
+  dailyCallCount: integer("daily_call_count").default(0),
+  dailyQuota: integer("daily_quota"),
+  monthlyCallCount: integer("monthly_call_count").default(0),
+  monthlyQuota: integer("monthly_quota"),
+  quotaResetAt: timestamp("quota_reset_at"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+// YouTube 검증 채널 (화이트리스트)
+export const youtubeChannels = pgTable("youtube_channels", {
+  id: serial("id").primaryKey(),
+  channelId: text("channel_id").notNull().unique(),
+  channelName: text("channel_name").notNull(),
+  channelUrl: text("channel_url"),
+  thumbnailUrl: text("thumbnail_url"),
+  subscriberCount: integer("subscriber_count"),
+  videoCount: integer("video_count"),
+  category: text("category"),
+  trustWeight: real("trust_weight").default(1.0),
+  isActive: boolean("is_active").default(true),
+  lastVideoSyncAt: timestamp("last_video_sync_at"),
+  totalVideosSynced: integer("total_videos_synced").default(0),
+  totalPlacesMentioned: integer("total_places_mentioned").default(0),
+  addedBy: text("added_by"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+// YouTube 영상 데이터
+export const youtubeVideos = pgTable("youtube_videos", {
+  id: serial("id").primaryKey(),
+  channelId: integer("channel_id").notNull().references(() => youtubeChannels.id, { onDelete: "cascade" }),
+  videoId: text("video_id").notNull().unique(),
+  title: text("title").notNull(),
+  description: text("description"),
+  publishedAt: timestamp("published_at"),
+  duration: integer("duration"),
+  viewCount: integer("view_count"),
+  likeCount: integer("like_count"),
+  thumbnailUrl: text("thumbnail_url"),
+  hasTranscript: boolean("has_transcript").default(false),
+  transcriptText: text("transcript_text"),
+  extractedPlaces: jsonb("extracted_places").$type<string[]>(),
+  isProcessed: boolean("is_processed").default(false),
+  fetchedAt: timestamp("fetched_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+// 블로그 소스 (화이트리스트)
+export const blogSources = pgTable("blog_sources", {
+  id: serial("id").primaryKey(),
+  platform: text("platform").notNull(),
+  sourceName: text("source_name").notNull(),
+  sourceUrl: text("source_url"),
+  authorName: text("author_name"),
+  category: text("category"),
+  language: text("language").default("ko"),
+  trustWeight: real("trust_weight").default(1.0),
+  isActive: boolean("is_active").default(true),
+  lastSyncAt: timestamp("last_sync_at"),
+  totalPostsSynced: integer("total_posts_synced").default(0),
+  addedBy: text("added_by"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+// 환율 캐시
+export const exchangeRates = pgTable("exchange_rates", {
+  id: serial("id").primaryKey(),
+  baseCurrency: text("base_currency").notNull().default("KRW"),
+  targetCurrency: text("target_currency").notNull(),
+  rate: real("rate").notNull(),
+  fetchedAt: timestamp("fetched_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+// 데이터 수집 스케줄
+export const dataCollectionSchedule = pgTable("data_collection_schedule", {
+  id: serial("id").primaryKey(),
+  taskName: text("task_name").notNull().unique(),
+  description: text("description"),
+  cronExpression: text("cron_expression").notNull(),
+  isEnabled: boolean("is_enabled").default(true),
+  lastRunAt: timestamp("last_run_at"),
+  lastStatus: text("last_status"),
+  lastDurationMs: integer("last_duration_ms"),
+  nextRunAt: timestamp("next_run_at"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
 // Relations
 export const citiesRelations = relations(cities, ({ many }) => ({
   places: many(places),
@@ -314,6 +418,14 @@ export type InsertItinerary = z.infer<typeof insertItinerarySchema>;
 export type ItineraryItem = typeof itineraryItems.$inferSelect;
 export type RouteCache = typeof routeCache.$inferSelect;
 export type DataSyncLog = typeof dataSyncLog.$inferSelect;
+
+// Admin Dashboard Types
+export type ApiServiceStatus = typeof apiServiceStatus.$inferSelect;
+export type YoutubeChannel = typeof youtubeChannels.$inferSelect;
+export type YoutubeVideo = typeof youtubeVideos.$inferSelect;
+export type BlogSource = typeof blogSources.$inferSelect;
+export type ExchangeRate = typeof exchangeRates.$inferSelect;
+export type DataCollectionSchedule = typeof dataCollectionSchedule.$inferSelect;
 
 // Re-export chat models
 export * from "./models/chat";

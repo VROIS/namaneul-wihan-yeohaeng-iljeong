@@ -10,6 +10,7 @@ import { scoringEngine } from "./services/scoring-engine";
 import { itineraryGenerator } from "./services/itinerary-generator";
 import { registerChatRoutes } from "./replit_integrations/chat";
 import { registerImageRoutes } from "./replit_integrations/image";
+import { registerAdminRoutes } from "./admin-routes";
 
 const BRAND_PRIMARY = "#6366F1";
 
@@ -70,6 +71,7 @@ init();
 export async function registerRoutes(app: Express): Promise<Server> {
   registerChatRoutes(app);
   registerImageRoutes(app);
+  registerAdminRoutes(app);
 
   // Cities
   app.get("/api/cities", async (req, res) => {
