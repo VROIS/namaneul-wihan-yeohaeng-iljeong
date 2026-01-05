@@ -17,7 +17,17 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import MapView, { Marker, Polyline, PROVIDER_DEFAULT } from "react-native-maps";
+let MapView: any = null;
+let Marker: any = null;
+let Polyline: any = null;
+let PROVIDER_DEFAULT: any = null;
+if (Platform.OS !== "web") {
+  const maps = require("react-native-maps");
+  MapView = maps.default;
+  Marker = maps.Marker;
+  Polyline = maps.Polyline;
+  PROVIDER_DEFAULT = maps.PROVIDER_DEFAULT;
+}
 import { Brand, Colors, Spacing, BorderRadius } from "@/constants/theme";
 import {
   TripFormData,
@@ -643,7 +653,7 @@ export default function TripPlannerScreen() {
           </Pressable>
         </View>
 
-        {currentDay.places.length > 0 && currentDay.places[0].lat ? (
+        {Platform.OS !== "web" && MapView && currentDay.places.length > 0 && currentDay.places[0].lat ? (
           <View style={styles.mapContainer}>
             <MapView
               style={styles.map}
@@ -694,7 +704,7 @@ export default function TripPlannerScreen() {
           <View style={[styles.mapPlaceholder, { backgroundColor: theme.backgroundSecondary }]}>
             <Feather name="map" size={48} color={theme.textTertiary} />
             <Text style={[styles.mapPlaceholderText, { color: theme.textTertiary }]}>
-              {itinerary.startDate} - {itinerary.endDate}
+              {Platform.OS === "web" ? "Expo Go에서 지도 확인" : itinerary.startDate + " - " + itinerary.endDate}
             </Text>
           </View>
         )}
