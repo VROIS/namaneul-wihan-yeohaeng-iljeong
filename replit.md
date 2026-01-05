@@ -57,6 +57,13 @@ See `design_guidelines.md` for complete design system including:
 - Vibe score badges (purple 8+, orange 5-7, gray <5)
 
 ## Recent Changes
+- 2026-01-05: TASK.md 대폭 확장 (문서 작업)
+  - **1.1.1 목적지 입력 시스템**: 경로 빌더 UX (Google Maps 스타일), 인터랙티브 지도 선택, AI 경로 추천
+  - **목적지 유형 확장**: 단일 도시, 국가 일주, 다국가 투어, 지역 투어 지원
+  - **환율 시스템**: 실시간 환율, KRW 디폴트, 150+ 통화 지원, 일별 예산 환산
+  - **1.4.1 경쟁사 Gap 분석**: VibeTrip 3대 차별화 포인트 정의
+  - **데이터 신선도 경고**: 수집 시점 표시, 30일 경과 시 경고, 사용자 재수집 요청 기능
+  - **블로그 소스 DB 스키마**: blog_sources 테이블, trust_weight 가중치 시스템
 - 2026-01-03: Backend API connection for itinerary generation
   - Upgraded all Gemini models to gemini-3.0-flash (latest)
   - Created /api/routes/generate endpoint for personalized itinerary generation
