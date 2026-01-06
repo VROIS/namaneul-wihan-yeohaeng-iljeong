@@ -496,6 +496,141 @@ export function registerAdminRoutes(app: Express) {
   });
 
   // ========================================
+  // 유튜브 채널 동기화
+  // ========================================
+  
+  app.post("/api/admin/sync/youtube", async (req, res) => {
+    try {
+      const { youtubeFetcher } = await import("./services/youtube-fetcher");
+      
+      if (!youtubeFetcher.isConfigured()) {
+        res.status(400).json({ 
+          error: "YouTube API 키가 설정되지 않았습니다", 
+          needsKey: true,
+          instructions: "Google Cloud Console에서 YouTube Data API v3를 활성화하고 API 키를 발급받으세요."
+        });
+        return;
+      }
+      
+      const result = await youtubeFetcher.syncAllChannels();
+      
+      await db.insert(dataSyncLog).values({
+        entityType: "youtube_channels",
+        source: "youtube",
+        status: result.totalFailed === 0 ? "success" : "partial",
+        itemsProcessed: result.totalSynced,
+        itemsFailed: result.totalFailed,
+        completedAt: new Date(),
+      });
+      
+      res.json({ 
+        message: "유튜브 채널 동기화 완료",
+        ...result 
+      });
+    } catch (error) {
+      console.error("Error syncing YouTube:", error);
+      res.status(500).json({ error: "유튜브 동기화 실패", details: String(error) });
+    }
+  });
+
+  // ========================================
+  // 환율 동기화
+  // ========================================
+  
+  app.post("/api/admin/sync/exchange-rates", async (req, res) => {
+    try {
+      const { exchangeRateFetcher } = await import("./services/exchange-rate");
+      
+      const result = await exchangeRateFetcher.syncExchangeRates();
+      
+      await db.insert(dataSyncLog).values({
+        entityType: "exchange_rates",
+        source: "frankfurter",
+        status: "success",
+        itemsProcessed: result.synced,
+        completedAt: new Date(),
+      });
+      
+      res.json({ 
+        message: "환율 동기화 완료",
+        ...result 
+      });
+    } catch (error) {
+      console.error("Error syncing exchange rates:", error);
+      res.status(500).json({ error: "환율 동기화 실패", details: String(error) });
+    }
+  });
+
+  // ========================================
+  // Google Places 동기화
+  // ========================================
+  
+  app.post("/api/admin/sync/places/:cityId", async (req, res) => {
+    try {
+      const cityId = parseInt(req.params.cityId);
+      const [city] = await db.select().from(cities).where(eq(cities.id, cityId));
+      
+      if (!city) {
+        res.status(404).json({ error: "도시를 찾을 수 없습니다" });
+        return;
+      }
+      
+      const { googlePlacesFetcher } = await import("./services/google-places");
+      
+      const result = await googlePlacesFetcher.syncCityPlaces(
+        cityId,
+        city.latitude,
+        city.longitude,
+        ["restaurant", "attraction"]
+      );
+      
+      res.json({ 
+        message: `${city.name} 장소 동기화 완료`,
+        city: city.name,
+        ...result 
+      });
+    } catch (error) {
+      console.error("Error syncing places:", error);
+      res.status(500).json({ error: "장소 동기화 실패", details: String(error) });
+    }
+  });
+
+  // ========================================
+  // API 상태 확인
+  // ========================================
+  
+  app.get("/api/admin/api-status", async (req, res) => {
+    try {
+      const googleMapsKey = process.env.Google_maps_api_key || process.env.GOOGLE_MAPS_API_KEY;
+      const youtubeKey = process.env.YOUTUBE_API_KEY;
+      const geminiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY;
+      
+      const status = {
+        googlePlaces: {
+          configured: !!googleMapsKey,
+          message: googleMapsKey ? "설정됨" : "Google Cloud Console에서 Places API 활성화 필요"
+        },
+        youtube: {
+          configured: !!youtubeKey,
+          message: youtubeKey ? "설정됨" : "YOUTUBE_API_KEY 환경변수 필요 (Google Cloud Console에서 발급)"
+        },
+        gemini: {
+          configured: !!geminiKey,
+          message: geminiKey ? "설정됨 (Replit AI 통합)" : "Replit AI 통합 필요"
+        },
+        exchangeRate: {
+          configured: true,
+          message: "무료 API 사용 (API 키 불필요)"
+        }
+      };
+      
+      res.json(status);
+    } catch (error) {
+      res.status(500).json({ error: "API 상태 확인 실패" });
+    }
+  });
+
+  // ========================================
   // 기본 데이터 시드 (디폴트 채널/소스)
   // ========================================
   

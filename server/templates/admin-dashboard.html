@@ -380,6 +380,17 @@
           <div class="loading"><div class="spinner"></div>로딩 중...</div>
         </div>
       </div>
+      
+      <div class="card" style="margin-top: 20px;">
+        <h2>데이터 수집</h2>
+        <div id="api-real-status" style="margin-bottom: 16px; font-size: 14px; color: #9ca3af;"></div>
+        <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+          <button class="btn btn-primary" onclick="syncExchangeRates()">환율 동기화</button>
+          <button class="btn btn-secondary" onclick="syncYouTube()">유튜브 동기화</button>
+          <button class="btn btn-secondary" onclick="syncPlaces()">장소 동기화 (서울)</button>
+        </div>
+        <div id="sync-result" style="margin-top: 16px; font-size: 14px;"></div>
+      </div>
     </div>
     
     <div id="tab-logs" class="tab-content" style="display: none;">
@@ -425,7 +436,7 @@
       switch(tab) {
         case 'overview': loadDashboard(); break;
         case 'sources': loadSources(); break;
-        case 'api': loadApiDetail(); break;
+        case 'api': loadApiDetail(); loadApiRealStatus(); break;
         case 'logs': loadLogs(); break;
       }
     }
@@ -632,6 +643,82 @@
         loadDashboard();
       } catch (err) {
         alert('도시 데이터 입력에 실패했습니다');
+      }
+    }
+    
+    async function syncExchangeRates() {
+      const resultEl = document.getElementById('sync-result');
+      resultEl.innerHTML = '<span style="color: #f59e0b;">환율 동기화 중...</span>';
+      try {
+        const res = await fetch(`${API_BASE}/sync/exchange-rates`, { method: 'POST' });
+        const data = await res.json();
+        if (res.ok) {
+          resultEl.innerHTML = `<span style="color: #22c55e;">환율 동기화 완료! ${data.synced}개 통화 업데이트됨</span>`;
+          loadDashboard();
+          loadLogs();
+        } else {
+          resultEl.innerHTML = `<span style="color: #ef4444;">오류: ${data.error}</span>`;
+        }
+      } catch (err) {
+        resultEl.innerHTML = '<span style="color: #ef4444;">환율 동기화에 실패했습니다</span>';
+      }
+    }
+    
+    async function syncYouTube() {
+      const resultEl = document.getElementById('sync-result');
+      resultEl.innerHTML = '<span style="color: #f59e0b;">유튜브 동기화 중... (시간이 걸릴 수 있습니다)</span>';
+      try {
+        const res = await fetch(`${API_BASE}/sync/youtube`, { method: 'POST' });
+        const data = await res.json();
+        if (res.ok) {
+          resultEl.innerHTML = `<span style="color: #22c55e;">유튜브 동기화 완료! ${data.channelsSynced}개 채널, ${data.totalSynced}개 영상</span>`;
+          loadSources();
+          loadLogs();
+        } else {
+          if (data.needsKey) {
+            resultEl.innerHTML = `<span style="color: #ef4444;">YouTube API 키 필요<br><small>${data.instructions}</small></span>`;
+          } else {
+            resultEl.innerHTML = `<span style="color: #ef4444;">오류: ${data.error}</span>`;
+          }
+        }
+      } catch (err) {
+        resultEl.innerHTML = '<span style="color: #ef4444;">유튜브 동기화에 실패했습니다</span>';
+      }
+    }
+    
+    async function syncPlaces() {
+      const resultEl = document.getElementById('sync-result');
+      resultEl.innerHTML = '<span style="color: #f59e0b;">장소 동기화 중... (서울)</span>';
+      try {
+        const res = await fetch(`${API_BASE}/sync/places/1`, { method: 'POST' });
+        const data = await res.json();
+        if (res.ok) {
+          resultEl.innerHTML = `<span style="color: #22c55e;">${data.message} - ${data.synced}개 장소 수집됨</span>`;
+          loadDashboard();
+          loadLogs();
+        } else {
+          resultEl.innerHTML = `<span style="color: #ef4444;">오류: ${data.error}</span>`;
+        }
+      } catch (err) {
+        resultEl.innerHTML = '<span style="color: #ef4444;">장소 동기화에 실패했습니다</span>';
+      }
+    }
+    
+    async function loadApiRealStatus() {
+      try {
+        const res = await fetch(`${API_BASE}/api-status`);
+        const status = await res.json();
+        const el = document.getElementById('api-real-status');
+        el.innerHTML = `
+          <div style="display: grid; gap: 8px;">
+            <div>Google Places: <span style="color: ${status.googlePlaces.configured ? '#22c55e' : '#f59e0b'}">${status.googlePlaces.message}</span></div>
+            <div>YouTube: <span style="color: ${status.youtube.configured ? '#22c55e' : '#f59e0b'}">${status.youtube.message}</span></div>
+            <div>Gemini AI: <span style="color: ${status.gemini.configured ? '#22c55e' : '#f59e0b'}">${status.gemini.message}</span></div>
+            <div>환율: <span style="color: ${status.exchangeRate.configured ? '#22c55e' : '#f59e0b'}">${status.exchangeRate.message}</span></div>
+          </div>
+        `;
+      } catch (err) {
+        console.error('API 상태 로드 오류:', err);
       }
     }
     
