@@ -472,13 +472,29 @@ export async function generateItinerary(formData: TripFormData) {
     formData.travelStyle || 'Reasonable'
   );
   
+  console.log(`[Itinerary] Required places: ${requiredPlaceCount} for ${dayCount} days`);
+  
   if (places.length < requiredPlaceCount) {
     const aiPlaces = await generatePlacesWithGemini(formData, vibeWeights, requiredPlaceCount);
+    console.log(`[Itinerary] Google: ${places.length}, Gemini: ${aiPlaces.length}`);
     places = [...places, ...aiPlaces];
   }
   
+  // If still not enough places, generate more in batches
+  let attempts = 0;
+  while (places.length < requiredPlaceCount && attempts < 2) {
+    attempts++;
+    console.log(`[Itinerary] Not enough places (${places.length}/${requiredPlaceCount}), generating more...`);
+    const morePlaces = await generatePlacesWithGemini(formData, vibeWeights, requiredPlaceCount - places.length + 5);
+    places = [...places, ...morePlaces];
+  }
+  
+  console.log(`[Itinerary] Total places: ${places.length}`);
+  
   places = places.sort((a, b) => b.vibeScore - a.vibeScore).slice(0, requiredPlaceCount + 5);
   const schedule = distributePlacesToSlots(places, vibeWeights, dayCount, formData.travelPace);
+  
+  console.log(`[Itinerary] Schedule entries: ${schedule.length}`);
   
   const days: { day: number; places: any[]; city: string; summary: string }[] = [];
   
