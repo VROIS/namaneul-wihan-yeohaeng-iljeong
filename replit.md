@@ -71,6 +71,13 @@ See `design_guidelines.md` for complete design system including:
 - Vibe score badges (purple 8+, orange 5-7, gray <5)
 
 ## Recent Changes
+- 2026-01-06 02:30 KST: 장기 여행 일정 생성 시스템 완성
+  - **경로 최적화**: 지리적 그룹핑 + Nearest-neighbor 알고리즘으로 도시별 연속 일정 배치
+  - **장기 여행 지원**: 10일, 11일, 30일 등 장기 여행 완전 지원 (Day 탭 무제한)
+  - **장소 생성 개선**: Gemini 장소 부족 시 자동 재시도 메커니즘 추가
+  - **Day 탭 UI**: 각 일차에 도시명 표시 (Day 1 파리)
+  - **타입 확장**: Place, DayPlan에 city, region 필드 추가
+  - **디버깅 로그**: 날짜 계산, 장소 생성 추적 로그 추가
 - 2026-01-06: 기본 데이터 시드 시스템 추가
   - **시드 API**: `/api/admin/seed/defaults` (유튜브 채널 10개, 블로그 소스 8개), `/api/admin/seed/cities` (도시 15개)
   - **대시보드 버튼**: API 설정 탭에 "기본 데이터 입력", "기본 도시 입력" 버튼 추가
