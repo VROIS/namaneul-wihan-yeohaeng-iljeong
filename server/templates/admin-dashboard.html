@@ -561,41 +561,40 @@
     
     async function loadApiDetail() {
       try {
-        const res = await fetch(`${API_BASE}/api-services`);
+        const [res, apiStatusRes] = await Promise.all([
+          fetch(`${API_BASE}/api-services`),
+          fetch(`${API_BASE}/api-status`)
+        ]);
         const data = await res.json();
+        const apiStatus = await apiStatusRes.json();
         
-        const ENV_MAP = {
-          'GOOGLE_MAPS_API_KEY': 'Google Maps API 키',
-          'OPENWEATHER_API_KEY': 'OpenWeather API 키',
-          'YOUTUBE_DATA_API_KEY': 'YouTube Data API 키',
-          'EXCHANGE_RATE_API_KEY': '환율 API 키'
+        const realStatusMap = {
+          'Exchange Rate API': apiStatus.exchangeRate?.configured,
+          'YouTube Data API': apiStatus.youtube?.configured,
+          'Gemini AI': apiStatus.gemini?.configured,
+          'Google Maps API': apiStatus.googlePlaces?.configured,
+          'Google Places API': apiStatus.googlePlaces?.configured,
+          'OpenWeather API': false
         };
         
         const el = document.getElementById('api-detail');
-        const envItems = Object.entries(data.envStatus).map(([key, val]) => `
-          <div class="service-item">
-            <span class="service-name">${ENV_MAP[key] || key}</span>
-            <span class="service-status ${val ? 'active' : 'inactive'}"></span>
-          </div>
-        `).join('');
         
-        const serviceItems = data.services.map(s => `
-          <div class="service-item">
-            <span class="service-name">${s.displayName}</span>
-            <div style="display: flex; gap: 12px; align-items: center;">
-              <span style="font-size: 12px; color: #6b7280;">
-                ${s.dailyCallCount || 0}/${s.dailyQuota || '무제한'} 일일
-              </span>
-              <span class="service-status ${s.isConfigured ? 'active' : 'unconfigured'}"></span>
+        const serviceItems = data.services.map(s => {
+          const isActive = realStatusMap[s.displayName] ?? s.isConfigured;
+          return `
+            <div class="service-item">
+              <span class="service-name">${s.displayName}</span>
+              <div style="display: flex; gap: 12px; align-items: center;">
+                <span style="font-size: 12px; color: #6b7280;">
+                  ${s.dailyCallCount || 0}/${s.dailyQuota || '무제한'} 일일
+                </span>
+                <span class="service-status ${isActive ? 'active' : 'unconfigured'}"></span>
+              </div>
             </div>
-          </div>
-        `).join('');
+          `;
+        }).join('');
         
         el.innerHTML = `
-          <div style="margin-bottom: 20px;">
-            <h3 style="font-size: 14px; color: #a78bfa; margin-bottom: 12px;">환경 변수</h3>
-            ${envItems}
-          </div>
           <div>
             <h3 style="font-size: 14px; color: #a78bfa; margin-bottom: 12px;">서비스 상태</h3>
             ${serviceItems || '<div class="empty-state">초기화된 서비스가 없습니다</div>'}
