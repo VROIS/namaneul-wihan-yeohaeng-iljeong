@@ -494,4 +494,123 @@ export function registerAdminRoutes(app: Express) {
       res.status(500).json({ error: "Failed to trigger sync" });
     }
   });
+
+  // ========================================
+  // 기본 데이터 시드 (디폴트 채널/소스)
+  // ========================================
+  
+  app.post("/api/admin/seed/defaults", async (req, res) => {
+    try {
+      const defaultYoutubeChannels = [
+        { channelId: "UCyn-K7rZLXjGl7VXGweIlcA", channelName: "먹보형제", category: "food", trustWeight: 1.8 },
+        { channelId: "UCCgR5yXXzF-4T1hTkM_oLFA", channelName: "곱창막창대창", category: "food", trustWeight: 1.7 },
+        { channelId: "UCZQ1_FVU_Yt0YBryqN6Mvqg", channelName: "아리랑TV 투어", category: "travel", trustWeight: 1.6 },
+        { channelId: "UCw_QDRF9lQvd_wXKfnsJIVQ", channelName: "여행에 미치다", category: "travel", trustWeight: 1.8 },
+        { channelId: "UCGrJqBQRypR7BMVp7lwnUUQ", channelName: "스트릿푸드파이터", category: "food", trustWeight: 2.0 },
+        { channelId: "UCRlMaLNkpn1gYVgF-4H8jXw", channelName: "테이스티로드", category: "food", trustWeight: 1.5 },
+        { channelId: "UClRNDVO8093rmRTtLe4GEPw", channelName: "랜선 라이프", category: "lifestyle", trustWeight: 1.4 },
+        { channelId: "UCsJ6RuBiTVLvNWb56-wr_aQ", channelName: "빠니보틀", category: "travel", trustWeight: 1.9 },
+        { channelId: "UCqy2Dq3xDPVhXKSIw2WaZGQ", channelName: "트래블튜브", category: "travel", trustWeight: 1.6 },
+        { channelId: "UCKOlD8_hKxoKC6hWlPckIlw", channelName: "원지의 하루", category: "lifestyle", trustWeight: 1.5 },
+      ];
+      
+      const defaultBlogSources = [
+        { platform: "michelin", sourceName: "미쉐린 가이드 서울", sourceUrl: "https://guide.michelin.com/kr/ko/seoul-region/seoul", category: "food", trustWeight: 2.0, language: "ko" },
+        { platform: "michelin", sourceName: "미쉐린 가이드 도쿄", sourceUrl: "https://guide.michelin.com/jp/en/tokyo-region/tokyo", category: "food", trustWeight: 2.0, language: "ja" },
+        { platform: "michelin", sourceName: "미쉐린 가이드 파리", sourceUrl: "https://guide.michelin.com/fr/en/paris-region/paris", category: "food", trustWeight: 2.0, language: "fr" },
+        { platform: "tripadvisor", sourceName: "트립어드바이저 아시아", sourceUrl: "https://www.tripadvisor.com/", category: "travel", trustWeight: 1.5, language: "en" },
+        { platform: "tripadvisor", sourceName: "트립어드바이저 유럽", sourceUrl: "https://www.tripadvisor.com/", category: "travel", trustWeight: 1.5, language: "en" },
+        { platform: "naver", sourceName: "네이버 맛집 랭킹", sourceUrl: "https://map.naver.com/", category: "food", trustWeight: 1.3, language: "ko" },
+        { platform: "naver", sourceName: "네이버 여행 플러스", sourceUrl: "https://m.blog.naver.com/", category: "travel", trustWeight: 1.2, language: "ko" },
+        { platform: "tistory", sourceName: "티스토리 여행 카테고리", sourceUrl: "https://www.tistory.com/", category: "travel", trustWeight: 1.0, language: "ko" },
+      ];
+      
+      let channelsAdded = 0;
+      let sourcesAdded = 0;
+      
+      for (const channel of defaultYoutubeChannels) {
+        try {
+          await db
+            .insert(youtubeChannels)
+            .values({
+              channelId: channel.channelId,
+              channelName: channel.channelName,
+              channelUrl: `https://www.youtube.com/channel/${channel.channelId}`,
+              category: channel.category,
+              trustWeight: channel.trustWeight,
+            })
+            .onConflictDoNothing();
+          channelsAdded++;
+        } catch (e) {
+        }
+      }
+      
+      for (const source of defaultBlogSources) {
+        try {
+          await db
+            .insert(blogSources)
+            .values(source)
+            .onConflictDoNothing();
+          sourcesAdded++;
+        } catch (e) {
+        }
+      }
+      
+      res.json({ 
+        message: "기본 데이터가 추가되었습니다",
+        channelsAdded,
+        sourcesAdded
+      });
+    } catch (error) {
+      console.error("Error seeding defaults:", error);
+      res.status(500).json({ error: "Failed to seed default data" });
+    }
+  });
+
+  // ========================================
+  // 기본 도시 데이터 시드
+  // ========================================
+  
+  app.post("/api/admin/seed/cities", async (req, res) => {
+    try {
+      const defaultCities = [
+        { name: "서울", country: "대한민국", countryCode: "KR", latitude: 37.5665, longitude: 126.9780, timezone: "Asia/Seoul", primaryLanguage: "ko" },
+        { name: "도쿄", country: "일본", countryCode: "JP", latitude: 35.6762, longitude: 139.6503, timezone: "Asia/Tokyo", primaryLanguage: "ja" },
+        { name: "오사카", country: "일본", countryCode: "JP", latitude: 34.6937, longitude: 135.5023, timezone: "Asia/Tokyo", primaryLanguage: "ja" },
+        { name: "파리", country: "프랑스", countryCode: "FR", latitude: 48.8566, longitude: 2.3522, timezone: "Europe/Paris", primaryLanguage: "fr" },
+        { name: "로마", country: "이탈리아", countryCode: "IT", latitude: 41.9028, longitude: 12.4964, timezone: "Europe/Rome", primaryLanguage: "it" },
+        { name: "피렌체", country: "이탈리아", countryCode: "IT", latitude: 43.7696, longitude: 11.2558, timezone: "Europe/Rome", primaryLanguage: "it" },
+        { name: "베니스", country: "이탈리아", countryCode: "IT", latitude: 45.4408, longitude: 12.3155, timezone: "Europe/Rome", primaryLanguage: "it" },
+        { name: "바르셀로나", country: "스페인", countryCode: "ES", latitude: 41.3851, longitude: 2.1734, timezone: "Europe/Madrid", primaryLanguage: "es" },
+        { name: "런던", country: "영국", countryCode: "GB", latitude: 51.5074, longitude: -0.1278, timezone: "Europe/London", primaryLanguage: "en" },
+        { name: "뉴욕", country: "미국", countryCode: "US", latitude: 40.7128, longitude: -74.0060, timezone: "America/New_York", primaryLanguage: "en" },
+        { name: "방콕", country: "태국", countryCode: "TH", latitude: 13.7563, longitude: 100.5018, timezone: "Asia/Bangkok", primaryLanguage: "th" },
+        { name: "싱가포르", country: "싱가포르", countryCode: "SG", latitude: 1.3521, longitude: 103.8198, timezone: "Asia/Singapore", primaryLanguage: "en" },
+        { name: "홍콩", country: "홍콩", countryCode: "HK", latitude: 22.3193, longitude: 114.1694, timezone: "Asia/Hong_Kong", primaryLanguage: "zh" },
+        { name: "다낭", country: "베트남", countryCode: "VN", latitude: 16.0544, longitude: 108.2022, timezone: "Asia/Ho_Chi_Minh", primaryLanguage: "vi" },
+        { name: "하노이", country: "베트남", countryCode: "VN", latitude: 21.0285, longitude: 105.8542, timezone: "Asia/Ho_Chi_Minh", primaryLanguage: "vi" },
+      ];
+      
+      let citiesAdded = 0;
+      
+      for (const city of defaultCities) {
+        try {
+          await db
+            .insert(cities)
+            .values(city)
+            .onConflictDoNothing();
+          citiesAdded++;
+        } catch (e) {
+        }
+      }
+      
+      res.json({ 
+        message: "기본 도시 데이터가 추가되었습니다",
+        citiesAdded
+      });
+    } catch (error) {
+      console.error("Error seeding cities:", error);
+      res.status(500).json({ error: "Failed to seed city data" });
+    }
+  });
 }
