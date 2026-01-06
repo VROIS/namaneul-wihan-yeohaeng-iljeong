@@ -369,13 +369,15 @@ function distributePlacesToSlots(
 }
 
 export async function generateItinerary(formData: TripFormData) {
-  const vibeWeights = calculateVibeWeights(formData.vibes, formData.curationFocus);
+  const vibes = formData.vibes || ['Foodie', 'Culture', 'Healing'];
+  const curationFocus = formData.curationFocus || 'Everyone';
+  const vibeWeights = calculateVibeWeights(vibes, curationFocus);
   
   let places = await searchGooglePlaces(
     formData.destination,
     formData.destinationCoords,
-    formData.vibes,
-    formData.travelStyle
+    vibes,
+    formData.travelStyle || 'Reasonable'
   );
   
   if (places.length < 8) {
