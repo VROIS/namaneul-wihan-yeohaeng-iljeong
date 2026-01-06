@@ -242,7 +242,8 @@ function getPriceEstimate(priceLevel: number | undefined, travelStyle: TravelSty
 
 async function generatePlacesWithGemini(
   formData: TripFormData,
-  vibeWeights: { vibe: Vibe; weight: number; percentage: number }[]
+  vibeWeights: { vibe: Vibe; weight: number; percentage: number }[],
+  requiredPlaceCount: number = 12
 ): Promise<PlaceResult[]> {
   const vibeDescription = vibeWeights
     .map(v => `${v.vibe}(${v.percentage}%)`)
@@ -277,7 +278,7 @@ async function generatePlacesWithGemini(
   ]
 }
 
-${formData.destination}의 실제 유명한 장소들을 추천해주세요. 최소 8개 장소를 추천해주세요.`;
+${formData.destination}의 실제 유명한 장소들을 추천해주세요. 정확히 ${requiredPlaceCount}개 장소를 추천해주세요. 반드시 ${requiredPlaceCount}개 모두 제공해야 합니다.`;
 
   try {
     const response = await ai.models.generateContent({
@@ -373,6 +374,10 @@ export async function generateItinerary(formData: TripFormData) {
   const curationFocus = formData.curationFocus || 'Everyone';
   const vibeWeights = calculateVibeWeights(vibes, curationFocus);
   
+  const dayCount = calculateDayCount(formData.startDate, formData.endDate);
+  const slotsPerDay = (formData.travelPace || 'Relaxed') === 'Packed' ? 4 : 3;
+  const requiredPlaceCount = dayCount * slotsPerDay + 4;
+  
   let places = await searchGooglePlaces(
     formData.destination,
     formData.destinationCoords,
@@ -380,14 +385,12 @@ export async function generateItinerary(formData: TripFormData) {
     formData.travelStyle || 'Reasonable'
   );
   
-  if (places.length < 8) {
-    const aiPlaces = await generatePlacesWithGemini(formData, vibeWeights);
+  if (places.length < requiredPlaceCount) {
+    const aiPlaces = await generatePlacesWithGemini(formData, vibeWeights, requiredPlaceCount);
     places = [...places, ...aiPlaces];
   }
   
-  places = places.sort((a, b) => b.vibeScore - a.vibeScore).slice(0, 20);
-  
-  const dayCount = calculateDayCount(formData.startDate, formData.endDate);
+  places = places.sort((a, b) => b.vibeScore - a.vibeScore).slice(0, requiredPlaceCount + 5);
   const schedule = distributePlacesToSlots(places, vibeWeights, dayCount, formData.travelPace);
   
   const days: { day: number; places: any[]; summary: string }[] = [];
