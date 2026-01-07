@@ -212,6 +212,159 @@ export function registerAdminRoutes(app: Express) {
   });
 
   // ========================================
+  // API 실시간 연결 상태 확인 (Health Check)
+  // ========================================
+  
+  app.get("/api/admin/api-services/health", async (req, res) => {
+    try {
+      const healthResults: Record<string, {
+        connected: boolean;
+        latency: number | null;
+        error: string | null;
+        lastChecked: string;
+      }> = {};
+
+      const checkWithTimeout = async (
+        name: string,
+        checkFn: () => Promise<void>,
+        timeoutMs: number = 5000
+      ) => {
+        const start = Date.now();
+        try {
+          await Promise.race([
+            checkFn(),
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error("Timeout")), timeoutMs)
+            )
+          ]);
+          healthResults[name] = {
+            connected: true,
+            latency: Date.now() - start,
+            error: null,
+            lastChecked: new Date().toISOString()
+          };
+        } catch (err: any) {
+          healthResults[name] = {
+            connected: false,
+            latency: null,
+            error: err.message || "Connection failed",
+            lastChecked: new Date().toISOString()
+          };
+        }
+      };
+
+      // Google Maps API 테스트
+      const googleMapsKey = process.env.Google_maps_api_key || process.env.GOOGLE_MAPS_API_KEY;
+      if (googleMapsKey) {
+        await checkWithTimeout("google_maps", async () => {
+          const response = await fetch(
+            `https://maps.googleapis.com/maps/api/geocode/json?address=Seoul&key=${googleMapsKey}`
+          );
+          const data = await response.json();
+          if (data.status === "REQUEST_DENIED") {
+            throw new Error(data.error_message || "API key invalid");
+          }
+        });
+        // Google Places는 같은 키 사용
+        healthResults["google_places"] = { ...healthResults["google_maps"] };
+      } else {
+        healthResults["google_maps"] = { connected: false, latency: null, error: "API key not configured", lastChecked: new Date().toISOString() };
+        healthResults["google_places"] = { connected: false, latency: null, error: "API key not configured", lastChecked: new Date().toISOString() };
+      }
+
+      // YouTube Data API 테스트
+      const youtubeKey = process.env.YOUTUBE_API_KEY;
+      if (youtubeKey) {
+        await checkWithTimeout("youtube_data", async () => {
+          const response = await fetch(
+            `https://www.googleapis.com/youtube/v3/videos?part=id&id=dQw4w9WgXcQ&key=${youtubeKey}`
+          );
+          const data = await response.json();
+          if (data.error) {
+            throw new Error(data.error.message || "API error");
+          }
+        });
+      } else {
+        healthResults["youtube_data"] = { connected: false, latency: null, error: "API key not configured", lastChecked: new Date().toISOString() };
+      }
+
+      // OpenWeather API 테스트
+      const weatherKey = process.env.OPENWEATHER_API_KEY;
+      if (weatherKey) {
+        await checkWithTimeout("openweather", async () => {
+          const response = await fetch(
+            `https://api.openweathermap.org/data/2.5/weather?q=Seoul&appid=${weatherKey}`
+          );
+          const data = await response.json();
+          if (data.cod && data.cod !== 200 && data.cod !== "200") {
+            throw new Error(data.message || "API error");
+          }
+        });
+      } else {
+        healthResults["openweather"] = { connected: false, latency: null, error: "API key not configured", lastChecked: new Date().toISOString() };
+      }
+
+      // Gemini AI 테스트
+      const geminiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY;
+      const geminiBaseUrl = process.env.AI_INTEGRATIONS_GEMINI_BASE_URL;
+      if (geminiKey && geminiBaseUrl) {
+        await checkWithTimeout("gemini", async () => {
+          const response = await fetch(
+            `${geminiBaseUrl}/models/gemini-2.0-flash:generateContent`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "Authorization": `Bearer ${geminiKey}`
+              },
+              body: JSON.stringify({
+                contents: [{ parts: [{ text: "Hi" }] }]
+              })
+            }
+          );
+          if (!response.ok) {
+            const data = await response.json();
+            throw new Error(data.error?.message || `HTTP ${response.status}`);
+          }
+        });
+      } else {
+        healthResults["gemini"] = { connected: false, latency: null, error: "API key not configured", lastChecked: new Date().toISOString() };
+      }
+
+      // Exchange Rate API 테스트 (무료 API)
+      await checkWithTimeout("exchange_rate", async () => {
+        const response = await fetch(
+          "https://api.exchangerate-api.com/v4/latest/USD"
+        );
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+      });
+
+      // DB에 상태 업데이트
+      for (const [serviceName, health] of Object.entries(healthResults)) {
+        await db
+          .update(apiServiceStatus)
+          .set({
+            lastCallAt: new Date(),
+            lastSuccessAt: health.connected ? new Date() : undefined,
+            lastErrorAt: health.connected ? undefined : new Date(),
+            lastErrorMessage: health.error,
+          })
+          .where(eq(apiServiceStatus.serviceName, serviceName));
+      }
+
+      res.json({
+        timestamp: new Date().toISOString(),
+        services: healthResults
+      });
+    } catch (error) {
+      console.error("Health check error:", error);
+      res.status(500).json({ error: "Health check failed" });
+    }
+  });
+
+  // ========================================
   // YouTube 채널 관리
   // ========================================
   

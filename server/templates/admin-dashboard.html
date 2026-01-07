@@ -447,14 +447,13 @@
     
     async function loadDashboard() {
       try {
-        const [dashRes, freshnessRes, apiServicesRes] = await Promise.all([
+        // 먼저 기본 대시보드 데이터 로드
+        const [dashRes, freshnessRes] = await Promise.all([
           fetch(`${API_BASE}/dashboard`),
-          fetch(`${API_BASE}/data-freshness`),
-          fetch(`${API_BASE}/api-services`)
+          fetch(`${API_BASE}/data-freshness`)
         ]);
         const dash = await dashRes.json();
         const freshness = await freshnessRes.json();
-        const apiServicesData = await apiServicesRes.json();
         
         document.getElementById('stat-cities').textContent = dash.overview.cities;
         document.getElementById('stat-places').textContent = dash.overview.places;
@@ -474,15 +473,37 @@
           `<div class="legend-item"><span class="legend-dot" style="background: ${val.color}"></span>${val.label}: ${val.count}</div>`
         ).join('');
         
-        const services = apiServicesData.services || [];
-        updateSystemStatus(services);
-        
+        // 실시간 API 연결 상태 확인 (실제 ping)
         const servicesEl = document.getElementById('api-services');
+        servicesEl.innerHTML = '<div style="text-align: center; padding: 12px; color: #f59e0b;">연결 확인 중...</div>';
+        
+        const healthRes = await fetch(`${API_BASE}/api-services/health`);
+        const healthData = await healthRes.json();
+        
+        const serviceNames = {
+          'google_places': 'Google Places API',
+          'google_maps': 'Google Maps API',
+          'openweather': 'OpenWeather API',
+          'youtube_data': 'YouTube Data API',
+          'exchange_rate': 'Exchange Rate API',
+          'gemini': 'Gemini AI'
+        };
+        
+        const services = Object.entries(healthData.services || {}).map(([name, health]) => ({
+          serviceName: name,
+          displayName: serviceNames[name] || name,
+          isConnected: health.connected,
+          latency: health.latency,
+          error: health.error
+        }));
+        
+        updateSystemStatusFromHealth(services);
+        
         servicesEl.innerHTML = services.length ? services.map(s => {
-          const statusClass = getServiceStatusClass(s);
-          const statusTooltip = s.healthStatus ? s.healthStatus.message : '';
+          const statusClass = s.isConnected ? 'active' : (s.error === 'API key not configured' ? 'unconfigured' : 'inactive');
+          const tooltip = s.isConnected ? `연결됨 (${s.latency}ms)` : (s.error || '연결 실패');
           return `
-            <div class="service-item" title="${statusTooltip}">
+            <div class="service-item" title="${tooltip}">
               <span class="service-name">${s.displayName}</span>
               <span class="service-status ${statusClass}"></span>
             </div>
@@ -548,6 +569,31 @@
       }
     }
     
+    function updateSystemStatusFromHealth(services) {
+      const statusEl = document.getElementById('system-status');
+      
+      if (!services || services.length === 0) {
+        statusEl.textContent = '연결 오류';
+        statusEl.className = 'status-badge status-error';
+        return;
+      }
+      
+      const connectedCount = services.filter(s => s.isConnected).length;
+      const unconfiguredCount = services.filter(s => s.error === 'API key not configured').length;
+      const errorCount = services.filter(s => !s.isConnected && s.error !== 'API key not configured').length;
+      
+      if (errorCount > 0) {
+        statusEl.textContent = `연결 오류 (${errorCount}개)`;
+        statusEl.className = 'status-badge status-error';
+      } else if (unconfiguredCount > 0) {
+        statusEl.textContent = `일부 미설정 (${unconfiguredCount}개)`;
+        statusEl.className = 'status-badge status-warn';
+      } else {
+        statusEl.textContent = `모두 연결됨 (${connectedCount}개)`;
+        statusEl.className = 'status-badge status-ok';
+      }
+    }
+    
     async function loadSources() {
       try {
         const [ytRes, blogRes] = await Promise.all([
@@ -605,48 +651,65 @@
     
     async function loadApiDetail() {
       try {
-        const res = await fetch(`${API_BASE}/api-services`);
-        const data = await res.json();
-        const services = data.services || [];
-        
-        updateSystemStatus(services);
-        
         const el = document.getElementById('api-detail');
+        el.innerHTML = '<div style="text-align: center; padding: 20px; color: #f59e0b;">실시간 연결 상태 확인 중...</div>';
+        
+        // 실시간 health check API 호출
+        const healthRes = await fetch(`${API_BASE}/api-services/health`);
+        const healthData = await healthRes.json();
+        
+        const serviceNames = {
+          'google_places': 'Google Places API',
+          'google_maps': 'Google Maps API',
+          'openweather': 'OpenWeather API',
+          'youtube_data': 'YouTube Data API',
+          'exchange_rate': 'Exchange Rate API',
+          'gemini': 'Gemini AI'
+        };
+        
+        const services = Object.entries(healthData.services || {}).map(([name, health]) => ({
+          serviceName: name,
+          displayName: serviceNames[name] || name,
+          isConnected: health.connected,
+          latency: health.latency,
+          error: health.error,
+          lastChecked: health.lastChecked
+        }));
+        
+        updateSystemStatusFromHealth(services);
         
         const serviceItems = services.map(s => {
-          const statusClass = getServiceStatusClass(s);
-          const statusLabel = getStatusLabel(s);
-          const lastCall = s.healthStatus?.lastCall ? new Date(s.healthStatus.lastCall).toLocaleString('ko-KR') : '없음';
-          const errorMsg = s.healthStatus?.errorMessage || '';
+          const statusClass = s.isConnected ? 'active' : (s.error === 'API key not configured' ? 'unconfigured' : 'inactive');
+          const statusLabel = s.isConnected ? '연결됨' : (s.error === 'API key not configured' ? '키 미설정' : '연결 오류');
+          const lastChecked = s.lastChecked ? new Date(s.lastChecked).toLocaleString('ko-KR') : '-';
           
           return `
             <div class="service-item" style="flex-direction: column; align-items: stretch; gap: 8px;">
               <div style="display: flex; justify-content: space-between; align-items: center;">
                 <span class="service-name">${s.displayName}</span>
                 <div style="display: flex; gap: 12px; align-items: center;">
-                  <span style="font-size: 12px; color: #6b7280;">
-                    ${s.dailyCallCount || 0}/${s.dailyQuota || '무제한'} 일일
-                  </span>
+                  ${s.isConnected ? `<span style="font-size: 12px; color: #22c55e;">${s.latency}ms</span>` : ''}
                   <span class="service-status ${statusClass}" title="${statusLabel}"></span>
                 </div>
               </div>
               <div style="font-size: 11px; color: #6b7280; display: flex; justify-content: space-between;">
-                <span>상태: ${statusLabel}</span>
-                <span>마지막 호출: ${lastCall}</span>
+                <span>상태: <span style="color: ${s.isConnected ? '#22c55e' : '#ef4444'}">${statusLabel}</span></span>
+                <span>확인 시간: ${lastChecked}</span>
               </div>
-              ${errorMsg ? `<div style="font-size: 11px; color: #ef4444;">오류: ${errorMsg}</div>` : ''}
+              ${s.error && s.error !== 'API key not configured' ? `<div style="font-size: 11px; color: #ef4444;">오류: ${s.error}</div>` : ''}
             </div>
           `;
         }).join('');
         
         el.innerHTML = `
           <div>
-            <h3 style="font-size: 14px; color: #a78bfa; margin-bottom: 12px;">서비스 상태</h3>
-            ${serviceItems || '<div class="empty-state">초기화된 서비스가 없습니다</div>'}
+            <h3 style="font-size: 14px; color: #a78bfa; margin-bottom: 12px;">서비스 상태 (실시간)</h3>
+            ${serviceItems || '<div class="empty-state">서비스가 없습니다</div>'}
           </div>
         `;
       } catch (err) {
         console.error('API 상세 로드 오류:', err);
+        document.getElementById('api-detail').innerHTML = '<div style="color: #ef4444;">상태 확인 실패</div>';
       }
     }
     
