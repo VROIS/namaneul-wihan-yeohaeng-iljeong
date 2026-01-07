@@ -89,7 +89,7 @@ export function registerAdminRoutes(app: Express) {
         switch (serviceName) {
           case "google_places":
           case "google_maps":
-            return !!process.env.GOOGLE_MAPS_API_KEY;
+            return !!(process.env.Google_maps_api_key || process.env.GOOGLE_MAPS_API_KEY);
           case "openweather":
             return !!process.env.OPENWEATHER_API_KEY;
           case "youtube_data":
@@ -110,7 +110,7 @@ export function registerAdminRoutes(app: Express) {
       }));
       
       const envStatus = {
-        GOOGLE_MAPS_API_KEY: !!process.env.GOOGLE_MAPS_API_KEY,
+        GOOGLE_MAPS_API_KEY: !!(process.env.Google_maps_api_key || process.env.GOOGLE_MAPS_API_KEY),
         OPENWEATHER_API_KEY: !!process.env.OPENWEATHER_API_KEY,
         YOUTUBE_API_KEY: !!process.env.YOUTUBE_API_KEY,
         EXCHANGE_RATE_API_KEY: true,
@@ -181,7 +181,7 @@ export function registerAdminRoutes(app: Express) {
           switch (service.serviceName) {
             case "google_places":
             case "google_maps":
-              return !!process.env.GOOGLE_MAPS_API_KEY;
+              return !!(process.env.Google_maps_api_key || process.env.GOOGLE_MAPS_API_KEY);
             case "openweather":
               return !!process.env.OPENWEATHER_API_KEY;
             case "youtube_data":
