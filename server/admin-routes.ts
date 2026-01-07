@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { db } from "./db";
 import path from "path";
 import fs from "fs";
+import { GoogleGenAI } from "@google/genai";
 import { 
   apiServiceStatus, 
   youtubeChannels, 
@@ -304,28 +305,19 @@ export function registerAdminRoutes(app: Express) {
         healthResults["openweather"] = { connected: false, latency: null, error: "API key not configured", lastChecked: new Date().toISOString() };
       }
 
-      // Gemini AI 테스트
+      // Gemini AI 테스트 (SDK 방식)
       const geminiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY;
       const geminiBaseUrl = process.env.AI_INTEGRATIONS_GEMINI_BASE_URL;
       if (geminiKey && geminiBaseUrl) {
         await checkWithTimeout("gemini", async () => {
-          const response = await fetch(
-            `${geminiBaseUrl}/models/gemini-3-flash-preview:generateContent`,
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                "Authorization": `Bearer ${geminiKey}`
-              },
-              body: JSON.stringify({
-                contents: [{ parts: [{ text: "Hi" }] }]
-              })
-            }
-          );
-          if (!response.ok) {
-            const data = await response.json();
-            throw new Error(data.error?.message || `HTTP ${response.status}`);
-          }
+          const ai = new GoogleGenAI({
+            apiKey: geminiKey,
+            httpOptions: { apiVersion: "", baseUrl: geminiBaseUrl }
+          });
+          await ai.models.generateContent({
+            model: "gemini-3-flash-preview",
+            contents: [{ role: "user", parts: [{ text: "ping" }] }],
+          });
         });
       } else {
         healthResults["gemini"] = { connected: false, latency: null, error: "API key not configured", lastChecked: new Date().toISOString() };
