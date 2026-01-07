@@ -127,33 +127,42 @@ export function registerAdminRoutes(app: Express) {
   function getServiceHealthStatus(service: typeof apiServiceStatus.$inferSelect): {
     status: "healthy" | "warning" | "error" | "unknown";
     message: string;
+    lastCall: string | null;
+    errorMessage: string | null;
   } {
+    const lastCall = service.lastCallAt ? new Date(service.lastCallAt).toISOString() : null;
+    const errorMessage = service.lastErrorMessage || null;
+    
     if (!service.lastCallAt) {
-      return { status: "unknown", message: "아직 호출되지 않음" };
+      return { status: "unknown", message: "아직 호출되지 않음", lastCall, errorMessage };
     }
     
     if (service.lastErrorAt && service.lastSuccessAt) {
       if (new Date(service.lastErrorAt) > new Date(service.lastSuccessAt)) {
         return { 
           status: "error", 
-          message: service.lastErrorMessage || "마지막 호출 실패" 
+          message: service.lastErrorMessage || "마지막 호출 실패",
+          lastCall,
+          errorMessage
         };
       }
     } else if (service.lastErrorAt && !service.lastSuccessAt) {
       return { 
         status: "error", 
-        message: service.lastErrorMessage || "마지막 호출 실패" 
+        message: service.lastErrorMessage || "마지막 호출 실패",
+        lastCall,
+        errorMessage
       };
     }
     
-    const lastCall = new Date(service.lastCallAt);
-    const hoursSinceLastCall = (Date.now() - lastCall.getTime()) / (1000 * 60 * 60);
+    const lastCallDate = new Date(service.lastCallAt);
+    const hoursSinceLastCall = (Date.now() - lastCallDate.getTime()) / (1000 * 60 * 60);
     
     if (hoursSinceLastCall > 24) {
-      return { status: "warning", message: `${Math.floor(hoursSinceLastCall)}시간 전 마지막 호출` };
+      return { status: "warning", message: `${Math.floor(hoursSinceLastCall)}시간 전 마지막 호출`, lastCall, errorMessage };
     }
     
-    return { status: "healthy", message: "정상 작동 중" };
+    return { status: "healthy", message: "정상 작동 중", lastCall, errorMessage };
   }
   
   app.post("/api/admin/api-services/init", async (req, res) => {
