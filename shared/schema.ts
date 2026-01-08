@@ -347,6 +347,57 @@ export const blogSources = pgTable("blog_sources", {
   updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
+// Instagram 해시태그 추적
+export const instagramHashtags = pgTable("instagram_hashtags", {
+  id: serial("id").primaryKey(),
+  hashtag: text("hashtag").notNull().unique(),
+  postCount: integer("post_count"),
+  avgLikes: integer("avg_likes"),
+  avgComments: integer("avg_comments"),
+  topPostUrls: jsonb("top_post_urls").$type<string[]>(),
+  linkedPlaceId: integer("linked_place_id").references(() => places.id, { onDelete: "set null" }),
+  linkedCityId: integer("linked_city_id").references(() => cities.id, { onDelete: "set null" }),
+  category: text("category"),
+  isActive: boolean("is_active").default(true),
+  lastSyncAt: timestamp("last_sync_at"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+// Instagram 위치 태그 추적
+export const instagramLocations = pgTable("instagram_locations", {
+  id: serial("id").primaryKey(),
+  locationId: text("location_id").notNull().unique(),
+  locationName: text("location_name").notNull(),
+  latitude: real("latitude"),
+  longitude: real("longitude"),
+  postCount: integer("post_count"),
+  topPostUrls: jsonb("top_post_urls").$type<string[]>(),
+  linkedPlaceId: integer("linked_place_id").references(() => places.id, { onDelete: "set null" }),
+  linkedCityId: integer("linked_city_id").references(() => cities.id, { onDelete: "set null" }),
+  isActive: boolean("is_active").default(true),
+  lastSyncAt: timestamp("last_sync_at"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+// Instagram 수집된 사진 (Gemini Vision 분석용)
+export const instagramPhotos = pgTable("instagram_photos", {
+  id: serial("id").primaryKey(),
+  hashtagId: integer("hashtag_id").references(() => instagramHashtags.id, { onDelete: "cascade" }),
+  locationId: integer("location_id").references(() => instagramLocations.id, { onDelete: "cascade" }),
+  postUrl: text("post_url").notNull().unique(),
+  imageUrl: text("image_url"),
+  caption: text("caption"),
+  likeCount: integer("like_count"),
+  commentCount: integer("comment_count"),
+  postedAt: timestamp("posted_at"),
+  vibeScore: real("vibe_score"),
+  vibeKeywords: jsonb("vibe_keywords").$type<string[]>(),
+  isAnalyzed: boolean("is_analyzed").default(false),
+  fetchedAt: timestamp("fetched_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
 // 환율 캐시
 export const exchangeRates = pgTable("exchange_rates", {
   id: serial("id").primaryKey(),
