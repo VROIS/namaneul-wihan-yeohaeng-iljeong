@@ -333,6 +333,21 @@ export const youtubeVideos = pgTable("youtube_videos", {
   fetchedAt: timestamp("fetched_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
+// YouTube 영상-장소 매핑 (타임스탬프 포함)
+export const youtubePlaceMentions = pgTable("youtube_place_mentions", {
+  id: serial("id").primaryKey(),
+  videoId: integer("video_id").notNull().references(() => youtubeVideos.id, { onDelete: "cascade" }),
+  placeId: integer("place_id").references(() => places.id, { onDelete: "set null" }),
+  placeName: text("place_name").notNull(),
+  cityName: text("city_name"),
+  timestampStart: integer("timestamp_start"),
+  timestampEnd: integer("timestamp_end"),
+  sentiment: text("sentiment"),
+  summary: text("summary"),
+  confidence: real("confidence"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
 // 블로그 소스 (화이트리스트)
 export const blogSources = pgTable("blog_sources", {
   id: serial("id").primaryKey(),
@@ -535,6 +550,7 @@ export type DataSyncLog = typeof dataSyncLog.$inferSelect;
 export type ApiServiceStatus = typeof apiServiceStatus.$inferSelect;
 export type YoutubeChannel = typeof youtubeChannels.$inferSelect;
 export type YoutubeVideo = typeof youtubeVideos.$inferSelect;
+export type YoutubePlaceMention = typeof youtubePlaceMentions.$inferSelect;
 export type BlogSource = typeof blogSources.$inferSelect;
 export type ExchangeRate = typeof exchangeRates.$inferSelect;
 export type DataCollectionSchedule = typeof dataCollectionSchedule.$inferSelect;
