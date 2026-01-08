@@ -71,6 +71,12 @@ See `design_guidelines.md` for complete design system including:
 - Vibe score badges (purple 8+, orange 5-7, gray <5)
 
 ## Recent Changes
+- 2026-01-08: YouTube 크롤러 및 3AM KST 자동 수집 시스템 구현
+  - **youtube_place_mentions 테이블**: 영상-장소 매핑 (타임스탬프, 감성분석, 신뢰도)
+  - **YouTube 크롤러**: YouTube Data API v3 + Gemini 장소 추출
+  - **자동 스케줄러**: node-cron으로 3AM KST 자동 수집 (youtube, instagram, exchange_rate)
+  - **Admin API 추가**: `/api/admin/youtube/stats`, `/api/admin/youtube/sync/channel/:id`
+  - **Dashboard 개선**: YouTube 영상 수, 장소 매핑 수 표시
 - 2026-01-08: Admin Dashboard 데이터 소스 통합 현황판 구현
   - **통합 현황판**: Google Places, Instagram, YouTube, 네이버 블로그 상태를 한 화면에서 확인
   - **상태 표시**: 소스별 상태(활성/대기), 수집량, 마지막 동기화 시간
