@@ -380,6 +380,7 @@
           <button class="btn btn-primary" onclick="initApiServices()">서비스 초기화</button>
           <button class="btn btn-secondary" onclick="seedDefaultData()">기본 데이터 입력</button>
           <button class="btn btn-secondary" onclick="seedCities()">기본 도시 입력</button>
+          <button class="btn btn-secondary" onclick="seedInstagramHashtags()">기본 해시태그 입력</button>
         </div>
         <div id="api-detail" class="service-list">
           <div class="loading"><div class="spinner"></div>로딩 중...</div>
@@ -851,6 +852,18 @@
         loadDashboard();
       } catch (err) {
         alert('도시 데이터 입력에 실패했습니다');
+      }
+    }
+    
+    async function seedInstagramHashtags() {
+      try {
+        const res = await fetch(`${API_BASE}/seed/instagram`, { method: 'POST' });
+        const data = await res.json();
+        alert(`기본 해시태그 입력 완료!\n해시태그: ${data.hashtagsAdded}개`);
+        loadInstagramData();
+        loadDashboard();
+      } catch (err) {
+        alert('해시태그 입력에 실패했습니다');
       }
     }
     
