@@ -8,21 +8,111 @@ interface GooglePlaceResult {
   id: string;
   displayName: { text: string; languageCode: string };
   formattedAddress?: string;
+  shortFormattedAddress?: string;
   location: { latitude: number; longitude: number };
   rating?: number;
   userRatingCount?: number;
   priceLevel?: string;
   types?: string[];
-  photos?: Array<{ name: string; widthPx: number; heightPx: number }>;
-  regularOpeningHours?: { weekdayDescriptions: string[] };
+  primaryType?: string;
+  primaryTypeDisplayName?: { text: string; languageCode: string };
+  
+  photos?: Array<{ 
+    name: string; 
+    widthPx: number; 
+    heightPx: number;
+    authorAttributions?: Array<{ displayName: string; uri: string }>;
+  }>;
+  
+  regularOpeningHours?: { 
+    weekdayDescriptions: string[];
+    openNow?: boolean;
+    periods?: Array<{
+      open: { day: number; hour: number; minute: number };
+      close?: { day: number; hour: number; minute: number };
+    }>;
+  };
+  currentOpeningHours?: {
+    openNow?: boolean;
+    weekdayDescriptions?: string[];
+  };
+  
   reviews?: Array<{
     name: string;
     rating: number;
     text?: { text: string; languageCode: string };
-    authorAttribution?: { displayName: string };
+    originalText?: { text: string; languageCode: string };
+    authorAttribution?: { displayName: string; uri?: string; photoUri?: string };
     publishTime?: string;
+    relativePublishTimeDescription?: string;
   }>;
-  primaryType?: string;
+  
+  websiteUri?: string;
+  googleMapsUri?: string;
+  internationalPhoneNumber?: string;
+  nationalPhoneNumber?: string;
+  
+  editorialSummary?: { text: string; languageCode: string };
+  
+  businessStatus?: string;
+  utcOffsetMinutes?: number;
+  
+  delivery?: boolean;
+  dineIn?: boolean;
+  takeout?: boolean;
+  curbsidePickup?: boolean;
+  reservable?: boolean;
+  
+  servesBeer?: boolean;
+  servesWine?: boolean;
+  servesBreakfast?: boolean;
+  servesBrunch?: boolean;
+  servesLunch?: boolean;
+  servesDinner?: boolean;
+  servesVegetarianFood?: boolean;
+  servesCoffee?: boolean;
+  servesDessert?: boolean;
+  
+  goodForChildren?: boolean;
+  goodForGroups?: boolean;
+  goodForWatchingSports?: boolean;
+  
+  liveMusic?: boolean;
+  outdoorSeating?: boolean;
+  restroom?: boolean;
+  menuForChildren?: boolean;
+  allowsDogs?: boolean;
+  
+  accessibilityOptions?: {
+    wheelchairAccessibleParking?: boolean;
+    wheelchairAccessibleEntrance?: boolean;
+    wheelchairAccessibleRestroom?: boolean;
+    wheelchairAccessibleSeating?: boolean;
+  };
+  
+  parkingOptions?: {
+    freeParkingLot?: boolean;
+    paidParkingLot?: boolean;
+    freeStreetParking?: boolean;
+    paidStreetParking?: boolean;
+    valetParking?: boolean;
+    freeGarageParking?: boolean;
+    paidGarageParking?: boolean;
+  };
+  
+  paymentOptions?: {
+    acceptsCreditCards?: boolean;
+    acceptsDebitCards?: boolean;
+    acceptsCashOnly?: boolean;
+    acceptsNfc?: boolean;
+  };
+  
+  priceRange?: {
+    startPrice?: { currencyCode: string; units: string };
+    endPrice?: { currencyCode: string; units: string };
+  };
+  
+  attributions?: Array<{ provider: string; providerUri: string }>;
 }
 
 interface SearchNearbyResponse {
@@ -94,14 +184,49 @@ export class GooglePlacesFetcher {
       "places.id",
       "places.displayName",
       "places.formattedAddress",
+      "places.shortFormattedAddress",
       "places.location",
       "places.rating",
       "places.userRatingCount",
       "places.priceLevel",
       "places.types",
+      "places.primaryType",
+      "places.primaryTypeDisplayName",
       "places.photos",
       "places.regularOpeningHours",
-      "places.primaryType",
+      "places.currentOpeningHours",
+      "places.websiteUri",
+      "places.googleMapsUri",
+      "places.internationalPhoneNumber",
+      "places.nationalPhoneNumber",
+      "places.editorialSummary",
+      "places.businessStatus",
+      "places.utcOffsetMinutes",
+      "places.delivery",
+      "places.dineIn",
+      "places.takeout",
+      "places.curbsidePickup",
+      "places.reservable",
+      "places.servesBeer",
+      "places.servesWine",
+      "places.servesBreakfast",
+      "places.servesBrunch",
+      "places.servesLunch",
+      "places.servesDinner",
+      "places.servesVegetarianFood",
+      "places.servesCoffee",
+      "places.servesDessert",
+      "places.goodForChildren",
+      "places.goodForGroups",
+      "places.goodForWatchingSports",
+      "places.liveMusic",
+      "places.outdoorSeating",
+      "places.restroom",
+      "places.menuForChildren",
+      "places.allowsDogs",
+      "places.accessibilityOptions",
+      "places.parkingOptions",
+      "places.paymentOptions",
     ].join(",");
 
     const response = await this.makeRequest<SearchNearbyResponse>(
@@ -123,15 +248,52 @@ export class GooglePlacesFetcher {
       "id",
       "displayName",
       "formattedAddress",
+      "shortFormattedAddress",
       "location",
       "rating",
       "userRatingCount",
       "priceLevel",
       "types",
+      "primaryType",
+      "primaryTypeDisplayName",
       "photos",
       "regularOpeningHours",
+      "currentOpeningHours",
       "reviews",
-      "primaryType",
+      "websiteUri",
+      "googleMapsUri",
+      "internationalPhoneNumber",
+      "nationalPhoneNumber",
+      "editorialSummary",
+      "businessStatus",
+      "utcOffsetMinutes",
+      "delivery",
+      "dineIn",
+      "takeout",
+      "curbsidePickup",
+      "reservable",
+      "servesBeer",
+      "servesWine",
+      "servesBreakfast",
+      "servesBrunch",
+      "servesLunch",
+      "servesDinner",
+      "servesVegetarianFood",
+      "servesCoffee",
+      "servesDessert",
+      "goodForChildren",
+      "goodForGroups",
+      "goodForWatchingSports",
+      "liveMusic",
+      "outdoorSeating",
+      "restroom",
+      "menuForChildren",
+      "allowsDogs",
+      "accessibilityOptions",
+      "parkingOptions",
+      "paymentOptions",
+      "priceRange",
+      "attributions",
     ].join(",");
 
     return this.makeRequest<PlaceDetailsResponse>(
