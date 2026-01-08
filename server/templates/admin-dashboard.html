@@ -356,7 +356,7 @@
           <div id="source-youtube" class="source-row" style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr; gap: 12px; padding: 12px 16px; background: rgba(255,255,255,0.03); border-radius: 10px; align-items: center;">
             <div><span style="color: #ff0000;">●</span> YouTube</div>
             <div style="text-align: center;"><span id="youtube-status" class="status-badge status-warn">대기</span></div>
-            <div style="text-align: center;" id="youtube-count">- 채널</div>
+            <div style="text-align: center;" id="youtube-count">- 채널<br><small id="youtube-videos" style="color: #9ca3af;">- 영상</small><br><small id="youtube-places" style="color: #22c55e;">- 장소</small></div>
             <div style="text-align: center; font-size: 12px;" id="youtube-sync">-</div>
             <div style="text-align: center;"><button class="btn btn-sm btn-secondary" onclick="syncYouTube()">동기화</button></div>
           </div>
@@ -749,8 +749,10 @@
         document.getElementById('instagram-status').textContent = data.instagram?.status || '대기';
         document.getElementById('instagram-status').className = `status-badge ${data.instagram?.status === '활성' ? 'status-ok' : 'status-warn'}`;
         
-        // YouTube
-        document.getElementById('youtube-count').textContent = `${data.youtube?.count || 0} 채널`;
+        // YouTube - 채널, 영상, 장소 매핑 수 표시
+        document.getElementById('youtube-count').innerHTML = `${data.youtube?.count || 0} 채널`;
+        document.getElementById('youtube-videos').textContent = `${data.youtube?.videos || 0} 영상`;
+        document.getElementById('youtube-places').textContent = `${data.youtube?.placeMentions || 0} 장소`;
         document.getElementById('youtube-sync').textContent = data.youtube?.lastSync || '-';
         document.getElementById('youtube-status').textContent = data.youtube?.status || '대기';
         document.getElementById('youtube-status').className = `status-badge ${data.youtube?.status === '활성' ? 'status-ok' : 'status-warn'}`;

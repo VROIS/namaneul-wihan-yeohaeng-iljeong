@@ -7,6 +7,7 @@ import {
   apiServiceStatus, 
   youtubeChannels, 
   youtubeVideos,
+  youtubePlaceMentions,
   blogSources, 
   exchangeRates,
   dataCollectionSchedule,
@@ -689,6 +690,8 @@ export function registerAdminRoutes(app: Express) {
       
       // YouTube
       const [youtubeCount] = await db.select({ count: count() }).from(youtubeChannels).where(eq(youtubeChannels.isActive, true));
+      const [youtubeVideoCount] = await db.select({ count: count() }).from(youtubeVideos);
+      const [youtubePlaceCount] = await db.select({ count: count() }).from(youtubePlaceMentions);
       const [youtubeLastSync] = await db.select({ lastSync: youtubeChannels.lastVideoSyncAt })
         .from(youtubeChannels)
         .orderBy(desc(youtubeChannels.lastVideoSyncAt))
@@ -714,6 +717,8 @@ export function registerAdminRoutes(app: Express) {
         },
         youtube: {
           count: youtubeCount.count || 0,
+          videos: youtubeVideoCount.count || 0,
+          placeMentions: youtubePlaceCount.count || 0,
           status: youtubeCount.count > 0 ? '활성' : '대기',
           lastSync: formatDate(youtubeLastSync?.lastSync || null)
         },
