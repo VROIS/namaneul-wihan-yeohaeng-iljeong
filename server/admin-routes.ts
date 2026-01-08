@@ -14,8 +14,12 @@ import {
   cities,
   places,
   placeDataSources,
-  reviews
+  reviews,
+  instagramHashtags,
+  instagramLocations,
+  instagramPhotos
 } from "../shared/schema";
+import { instagramCrawler } from "./services/instagram-crawler";
 import { eq, desc, sql, count, and, gte } from "drizzle-orm";
 
 export function registerAdminRoutes(app: Express) {
@@ -970,6 +974,198 @@ export function registerAdminRoutes(app: Express) {
     } catch (error) {
       console.error("Error seeding cities:", error);
       res.status(500).json({ error: "Failed to seed city data" });
+    }
+  });
+
+  // ========================================
+  // Instagram 해시태그 관리
+  // ========================================
+
+  app.get("/api/admin/instagram/hashtags", async (req, res) => {
+    try {
+      const hashtags = await db
+        .select()
+        .from(instagramHashtags)
+        .orderBy(desc(instagramHashtags.postCount));
+      res.json(hashtags);
+    } catch (error) {
+      console.error("Error fetching hashtags:", error);
+      res.status(500).json({ error: "Failed to fetch hashtags" });
+    }
+  });
+
+  app.post("/api/admin/instagram/hashtags", async (req, res) => {
+    try {
+      const { hashtag, category, linkedPlaceId, linkedCityId } = req.body;
+      
+      if (!hashtag) {
+        return res.status(400).json({ error: "Hashtag is required" });
+      }
+
+      const cleanHashtag = hashtag.startsWith("#") ? hashtag : `#${hashtag}`;
+
+      const [newHashtag] = await db
+        .insert(instagramHashtags)
+        .values({
+          hashtag: cleanHashtag,
+          category,
+          linkedPlaceId,
+          linkedCityId,
+        })
+        .returning();
+
+      res.json(newHashtag);
+    } catch (error) {
+      console.error("Error adding hashtag:", error);
+      res.status(500).json({ error: "Failed to add hashtag" });
+    }
+  });
+
+  app.delete("/api/admin/instagram/hashtags/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await db.delete(instagramHashtags).where(eq(instagramHashtags.id, id));
+      res.json({ message: "Hashtag deleted" });
+    } catch (error) {
+      console.error("Error deleting hashtag:", error);
+      res.status(500).json({ error: "Failed to delete hashtag" });
+    }
+  });
+
+  app.post("/api/admin/instagram/hashtags/:id/sync", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const result = await instagramCrawler.syncHashtag(id);
+      res.json(result);
+    } catch (error) {
+      console.error("Error syncing hashtag:", error);
+      res.status(500).json({ error: "Failed to sync hashtag" });
+    }
+  });
+
+  // ========================================
+  // Instagram 위치 관리
+  // ========================================
+
+  app.get("/api/admin/instagram/locations", async (req, res) => {
+    try {
+      const locations = await db
+        .select()
+        .from(instagramLocations)
+        .orderBy(desc(instagramLocations.postCount));
+      res.json(locations);
+    } catch (error) {
+      console.error("Error fetching locations:", error);
+      res.status(500).json({ error: "Failed to fetch locations" });
+    }
+  });
+
+  app.post("/api/admin/instagram/locations", async (req, res) => {
+    try {
+      const { locationId, locationName, linkedPlaceId, linkedCityId } = req.body;
+      
+      if (!locationId || !locationName) {
+        return res.status(400).json({ error: "Location ID and name are required" });
+      }
+
+      const [newLocation] = await db
+        .insert(instagramLocations)
+        .values({
+          locationId,
+          locationName,
+          linkedPlaceId,
+          linkedCityId,
+        })
+        .returning();
+
+      res.json(newLocation);
+    } catch (error) {
+      console.error("Error adding location:", error);
+      res.status(500).json({ error: "Failed to add location" });
+    }
+  });
+
+  app.delete("/api/admin/instagram/locations/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      await db.delete(instagramLocations).where(eq(instagramLocations.id, id));
+      res.json({ message: "Location deleted" });
+    } catch (error) {
+      console.error("Error deleting location:", error);
+      res.status(500).json({ error: "Failed to delete location" });
+    }
+  });
+
+  app.post("/api/admin/instagram/locations/:id/sync", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const result = await instagramCrawler.syncLocation(id);
+      res.json(result);
+    } catch (error) {
+      console.error("Error syncing location:", error);
+      res.status(500).json({ error: "Failed to sync location" });
+    }
+  });
+
+  // ========================================
+  // Instagram 전체 동기화
+  // ========================================
+
+  app.post("/api/admin/instagram/sync-all", async (req, res) => {
+    try {
+      const [hashtagResult, locationResult] = await Promise.all([
+        instagramCrawler.syncAllHashtags(),
+        instagramCrawler.syncAllLocations(),
+      ]);
+
+      res.json({
+        hashtags: hashtagResult,
+        locations: locationResult,
+      });
+    } catch (error) {
+      console.error("Error syncing all Instagram data:", error);
+      res.status(500).json({ error: "Failed to sync Instagram data" });
+    }
+  });
+
+  app.get("/api/admin/instagram/stats", async (req, res) => {
+    try {
+      const stats = await instagramCrawler.getStats();
+      res.json(stats);
+    } catch (error) {
+      console.error("Error fetching Instagram stats:", error);
+      res.status(500).json({ error: "Failed to fetch stats" });
+    }
+  });
+
+  // 기본 인스타그램 해시태그 시드
+  app.post("/api/admin/instagram/seed", async (req, res) => {
+    try {
+      const defaultHashtags = [
+        { hashtag: "#에펠탑", category: "landmark" },
+        { hashtag: "#파리여행", category: "travel" },
+        { hashtag: "#도쿄여행", category: "travel" },
+        { hashtag: "#오사카맛집", category: "food" },
+        { hashtag: "#방콕여행", category: "travel" },
+        { hashtag: "#성수동카페", category: "cafe" },
+        { hashtag: "#제주도여행", category: "travel" },
+        { hashtag: "#뉴욕여행", category: "travel" },
+        { hashtag: "#로마여행", category: "travel" },
+        { hashtag: "#런던여행", category: "travel" },
+      ];
+
+      let added = 0;
+      for (const tag of defaultHashtags) {
+        try {
+          await db.insert(instagramHashtags).values(tag).onConflictDoNothing();
+          added++;
+        } catch (e) {}
+      }
+
+      res.json({ message: "기본 해시태그가 추가되었습니다", added });
+    } catch (error) {
+      console.error("Error seeding hashtags:", error);
+      res.status(500).json({ error: "Failed to seed hashtags" });
     }
   });
 }
