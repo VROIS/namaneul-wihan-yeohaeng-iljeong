@@ -1,207 +1,31 @@
 # VibeTrip - AI Travel Agent App
 
 ## Overview
-VibeTrip is a hyper-personalized AI travel agent Expo mobile app that transforms user emotions (Vibe) into optimized itineraries. The app analyzes destinations using multi-source data and Gemini Vision for intelligent recommendations.
-
-## Current State
-- **Backend**: Complete data pipeline with Google Places, Weather, Vibe Processing, Taste Verification, Route Optimization, and Scoring services
-- **Frontend**: VibeTrip UI with 4-tab navigation (Discover, Map, Plan FAB, Profile), iOS 26 liquid glass design
-
-## Core Algorithm
-**Final Score = (Vibe + Buzz + Taste) - Reality Penalty**
-
-### Score Components
-- **Vibe Score** (0-10): Gemini Vision analysis of photos for visual appeal, composition, lighting
-- **Buzz Score** (0-10): Multi-source popularity (Google, TripAdvisor, review volume)
-- **Taste Verify Score** (0-10): Original Taste Verification using language-based authenticity
-  - W1 (50%): Originator language reviews (Korean for Korean food, etc.)
-  - W2 (30%): Expert/Michelin ratings
-  - W3 (20%): Global average ratings
-- **Reality Penalty** (0-5): Weather, safety, crowd conditions
-
-### Persona System
-- **Luxury** (gold accent): Time-saving, photogenic, premium experiences
-- **Comfort** (blue accent): Safety-first, verified dining, energy conservation
-
-## Tech Stack
-- **Frontend**: Expo (React Native), React Navigation 7, TanStack Query
-- **Backend**: Express, TypeScript, Drizzle ORM
-- **Database**: PostgreSQL (Neon)
-- **AI**: Gemini 3.0 Flash via Replit AI Integrations
-
-## API Endpoints
-- `GET /api/cities` - List all cities
-- `GET /api/cities/:id/places` - Get places in a city
-- `GET /api/cities/:id/recommendations` - AI-powered recommendations
-- `POST /api/sync/city/:id/places` - Sync Google Places data
-- `POST /api/sync/city/:id/scores` - Calculate all scores
-- `POST /api/routes/generate` - Generate personalized itinerary from form data
-- `POST /api/routes/optimize` - Optimize travel route
-- `GET /api/health` - Health check
-
-### Admin Dashboard Endpoints
-- `GET /admin` - Admin Dashboard UI
-- `GET /api/admin/dashboard` - Dashboard overview
-- `GET /api/admin/api-services` - API service status
-- `POST /api/admin/api-services/init` - Initialize API services
-- `GET /api/admin/youtube-channels` - YouTube channel whitelist
-- `POST /api/admin/youtube-channels` - Add YouTube channel
-- `GET /api/admin/blog-sources` - Blog source whitelist
-- `POST /api/admin/blog-sources` - Add blog source
-- `GET /api/admin/data-freshness` - Data freshness report
-- `GET /api/admin/sync-logs` - Sync history
-- `POST /api/admin/seed/defaults` - Seed default YouTube channels and blog sources
-- `POST /api/admin/seed/cities` - Seed default cities (15 popular destinations)
-
-## Required API Keys (Optional)
-- `GOOGLE_MAPS_API_KEY` - For Google Places and Routes API
-- `OPENWEATHER_API_KEY` - For weather data
-
-## 프로젝트 문서
-- `docs/PRD.md` - 제품 요구사항 정의서
-- `docs/TRD.md` - 기술 요구사항 정의서
-- `docs/TASK.md` - 개발 태스크 및 로드맵
-- `docs/USER_INPUT.md` - 사용자 입력 요소 정의
-
-## Design Guidelines
-See `design_guidelines.md` for complete design system including:
-- Purple-pink gradient primary colors
-- iOS 26 liquid glass effects
-- 4-tab bottom navigation with FAB
-- Vibe score badges (purple 8+, orange 5-7, gray <5)
-
-## Recent Changes
-- 2026-01-08: Gemini AI 통합 수정 완료
-  - **중요 수정**: Replit AI Integrations 호환 클라이언트 설정
-    - `httpOptions.apiVersion: ""` 필수 설정 적용
-    - 모든 크롤러가 `server/replit_integrations/image/client.ts`의 `ai` 객체 사용
-  - **가격 크롤러 작동 확인**: 경복궁 3,000원, N서울타워 14,110-24,986원 등 실제 가격 수집
-  - **날씨 크롤러 작동 확인**: 6일 예보 + Reality Penalty 계산 완료
-  - **지원 모델**: gemini-2.5-flash, gemini-2.5-pro, gemini-2.5-flash-image
-- 2026-01-08: 네이버 블로그 및 날씨 크롤러 구현
-  - **네이버 블로그 크롤러**: Naver Search API + Gemini 폴백
-    - naver_blog_posts 테이블: 도시/장소별 블로그 분석
-    - 감성 분석: positive/neutral/negative
-    - 장소/키워드 자동 추출 (Gemini)
-  - **날씨 크롤러**: OpenWeather API + Gemini 폴백
-    - weather_forecast 테이블: 5일 예보
-    - Reality Penalty 자동 계산 (비/온도/바람)
-  - **스케줄러 업데이트**: 
-    - 네이버 블로그: 4:15 AM KST
-    - 날씨: 4:30 AM KST
-  - **Admin API 추가**:
-    - `/api/admin/naver-blog/stats`, `/api/admin/naver-blog/sync/city/:id`
-    - `/api/admin/weather/stats`, `/api/admin/weather/city/:id`
-- 2026-01-08: 가격 정보 로우 데이터 수집 시스템 구현
-  - **place_prices 테이블**: 다중 소스 가격 로우 데이터 저장
-    - priceType: entrance_fee, meal_average, activity, transport, ticket
-    - source: google_places, gemini_search, klook, viator, official_website
-    - 통화별 가격 범위 (priceLow, priceHigh, priceAverage)
-  - **가격 수집 서비스**: price-crawler.ts
-    - Google Places price_level 변환 (1-4 → 현지 통화 범위)
-    - Gemini Web Search로 입장료/식사비 실시간 검색
-    - 24시간 캐시 & 신뢰도 점수 (0-1)
-  - **스케줄러 통합**: 3:45 AM KST 자동 수집
-  - **Admin API 추가**:
-    - `GET /api/admin/prices/stats` - 가격 통계
-    - `GET /api/admin/prices/place/:id` - 장소별 가격 정보
-    - `POST /api/admin/prices/sync/city/:id` - 도시별 수집
-    - `POST /api/admin/prices/sync/all` - 전체 수집
-- 2026-01-08: YouTube 크롤러 및 3AM KST 자동 수집 시스템 구현
-  - **youtube_place_mentions 테이블**: 영상-장소 매핑 (타임스탬프, 감성분석, 신뢰도)
-  - **YouTube 크롤러**: YouTube Data API v3 + Gemini 장소 추출
-  - **자동 스케줄러**: node-cron으로 3AM KST 자동 수집 (youtube, instagram, exchange_rate)
-  - **Admin API 추가**: `/api/admin/youtube/stats`, `/api/admin/youtube/sync/channel/:id`
-  - **Dashboard 개선**: YouTube 영상 수, 장소 매핑 수 표시
-- 2026-01-08: Admin Dashboard 데이터 소스 통합 현황판 구현
-  - **통합 현황판**: Google Places, Instagram, YouTube, 네이버 블로그 상태를 한 화면에서 확인
-  - **상태 표시**: 소스별 상태(활성/대기), 수집량, 마지막 동기화 시간
-  - **통합 API**: `/api/admin/data-sources/status` 엔드포인트 추가
-  - **UI 개선**: Instagram 탭 제거, 데이터 소스 탭에 모든 기능 통합
-  - **Instagram 관리**: 해시태그/위치 태그 관리 기능 데이터 소스 탭에 포함
-- 2026-01-08: 사진 데이터 자동 수집 시스템 완성
-  - **Google Places 사진 확장**: 최대 10장, 1200px 고해상도로 수집
-  - **Instagram 자동 수집**: 장소 생성 시 해시태그 자동 생성 & 데이터 수집
-    - 장소명, 도시+유형 기반 해시태그 자동 생성 (최대 8개)
-    - 해시태그별 게시물 수, 사진 URL 자동 수집
-  - **places 테이블 확장**: instagramPhotoUrls, instagramHashtags, instagramPostCount 필드 추가
-  - **Admin API 추가**:
-    - `POST /api/admin/instagram/collect/place/:id` - 장소별 Instagram 수집
-    - `POST /api/admin/instagram/collect/city/:id` - 도시별 모든 장소 수집
-    - `GET /api/admin/places/:id/instagram` - 장소 사진 현황 조회
-  - **서비스 파일**: server/services/instagram-auto-collector.ts 신규 생성
-- 2026-01-08: Instagram 데이터 → VIBE 점수 연동 완료
-  - **Buzz Score 반영**: Instagram 해시태그 게시물 수 25% 가중치
-    - popularityScore = reviewVolume(30%) + rating(30%) + sourceCount(15%) + **instagram(25%)**
-    - trendingScore: 최근 7일 내 10만+ 게시물 해시태그 → 7점 (기본 5점)
-    - localBuzzScore: 한국어 해시태그 존재 시 → 7점 (기본 5점)
-  - **Vibe Score 반영**: Instagram 사진 Gemini Vision 분석
-    - Google Photos (최대 2장) + Instagram Photos (최대 1장) 조합
-  - **해시태그 매칭**: 장소명/한국어명으로 관련 해시태그 자동 검색
-- 2026-01-08: Instagram 데이터 수집 시스템 완성
-  - DB 스키마: instagram_hashtags, instagram_locations, instagram_photos
-  - 크롤러: 해시태그/위치 게시물 수 수집, 3초 rate limiting
-  - Admin Dashboard: Instagram 탭 추가 (해시태그/위치 CRUD)
-- 2026-01-08: 기본 데이터 자동 시드 시스템 구현
-  - **서버 시작 시 자동 시드**: 테이블이 비어있으면 기본 데이터 자동 입력
-    - Instagram 해시태그 32개 (파리, 도쿄, 오사카, 서울, 로마, 방콕, 뉴욕 등)
-    - 도시 13개 (인기 여행지)
-    - YouTube 채널 5개 (성시경, 백종원, 빠니보틀 등)
-  - **Admin Dashboard 버튼**: "기본 해시태그 입력" 버튼 추가
-  - **시드 API**: `/api/admin/seed/instagram` 엔드포인트 추가
-- 2026-01-06 02:30 KST: 장기 여행 일정 생성 시스템 완성
-  - **경로 최적화**: 지리적 그룹핑 + Nearest-neighbor 알고리즘으로 도시별 연속 일정 배치
-  - **장기 여행 지원**: 10일, 11일, 30일 등 장기 여행 완전 지원 (Day 탭 무제한)
-  - **장소 생성 개선**: Gemini 장소 부족 시 자동 재시도 메커니즘 추가
-  - **Day 탭 UI**: 각 일차에 도시명 표시 (Day 1 파리)
-  - **타입 확장**: Place, DayPlan에 city, region 필드 추가
-  - **디버깅 로그**: 날짜 계산, 장소 생성 추적 로그 추가
-- 2026-01-06: 기본 데이터 시드 시스템 추가
-  - **시드 API**: `/api/admin/seed/defaults` (유튜브 채널 10개, 블로그 소스 8개), `/api/admin/seed/cities` (도시 15개)
-  - **대시보드 버튼**: API 설정 탭에 "기본 데이터 입력", "기본 도시 입력" 버튼 추가
-  - **기본 채널**: 스트릿푸드파이터(2.0), 빠니보틀(1.9), 여행에미치다(1.8), 먹보형제(1.8) 등
-  - **기본 도시**: 서울, 도쿄, 오사카, 파리, 로마, 방콕, 뉴욕 등 15개 인기 여행지
-- 2026-01-05: Admin Dashboard 구현 완료
-  - **DB 스키마 추가**: apiServiceStatus, youtubeChannels, youtubeVideos, blogSources, exchangeRates, dataCollectionSchedule
-  - **관리자 API**: 대시보드 현황, API 서비스 관리, YouTube/블로그 화이트리스트, 데이터 신선도 추적
-  - **관리자 UI**: `/admin` 경로에서 접근 가능한 웹 대시보드 (서버 포트 5000)
-  - **API 서비스 초기화**: Google Places, Maps, OpenWeather, YouTube, Exchange Rate, Gemini 상태 추적
-- 2026-01-05: TASK.md 1.2.1, 1.3.1, 1.4.0 상세 계획 추가
-  - **1.2.1 Vibe Score 표시**: 점수 배지 UI, 상세 뷰, 홈 화면 Vibe 입력 (5시간)
-  - **1.3.1 성능 최적화**: React.memo, FlatList 최적화, expo-image, 페이지네이션 (5시간)
-  - **1.4.0 데이터 연동**: API 키 설정, 캐싱, 폴백 로직, 실제 데이터 전환 (7시간)
-- 2026-01-05: TASK.md 대폭 확장 (문서 작업)
-  - **1.1.1 목적지 입력 시스템**: 경로 빌더 UX (Google Maps 스타일), 인터랙티브 지도 선택, AI 경로 추천 (9시간)
-  - **목적지 유형 확장**: 단일 도시, 국가 일주, 다국가 투어, 지역 투어 지원
-  - **환율 시스템**: 실시간 환율, KRW 디폴트, 150+ 통화 지원, 일별 예산 환산
-  - **1.4.1 경쟁사 Gap 분석**: VibeTrip 3대 차별화 포인트 정의
-  - **데이터 신선도 경고**: 수집 시점 표시, 30일 경과 시 경고, 사용자 재수집 요청 기능
-  - **블로그 소스 DB 스키마**: blog_sources 테이블, trust_weight 가중치 시스템
-- 2026-01-03: Backend API connection for itinerary generation
-  - Upgraded all Gemini models to gemini-3.0-flash (latest)
-  - Created /api/routes/generate endpoint for personalized itinerary generation
-  - Implemented itinerary-generator.ts service with:
-    - Google Places API integration (with Gemini fallback)
-    - Slot-based scheduling (morning/lunch/afternoon/evening)
-    - Vibe weight calculation with protagonist adjustments
-  - Connected TripPlannerScreen to real API (replaced mock data)
-- 2026-01-03: Fixed "Invalid hook call" error on web platform
-  - Replaced custom useTheme hook with direct useColorScheme usage across all components
-  - Updated ThemedText, ThemedView, Button, Card, all screen components
-  - Fixed web compatibility issues with React Navigation
-- 2026-01-03: Initial data pipeline and UI implementation
-  - Database schema with 15+ tables
-  - All core services (Google Places, Weather, Vibe, Taste, Route, Scoring)
-  - VibeTrip UI with Discover, Map, Plan, Profile screens
-  - App icon generated with purple-pink gradient
-
-## Technical Notes
-- **IMPORTANT**: Do not use custom useTheme hook on web platform - causes "Invalid hook call" error
-- Use `useColorScheme` from 'react-native' directly with `Colors[colorScheme ?? "light"]` pattern
-- Shadow styles deprecated on web - use boxShadow instead
-- props.pointerEvents deprecated - use style.pointerEvents instead
+VibeTrip is a hyper-personalized AI travel agent Expo mobile app that transforms user emotions (Vibe) into optimized itineraries. It analyzes destinations using multi-source data and Gemini Vision for intelligent recommendations, aiming to provide a unique and tailored travel planning experience. The core algorithm calculates a "Final Score" based on Vibe, Buzz, Taste, and a Reality Penalty, ensuring relevant and enjoyable recommendations.
 
 ## User Preferences
 - Korean language interface
 - Mobile-first design
 - Data-first architecture (3+ sources per category)
+
+## System Architecture
+VibeTrip is built as an Expo (React Native) mobile application with a React Navigation 7 and TanStack Query frontend. The backend uses Express and TypeScript with Drizzle ORM and PostgreSQL (Neon) for the database. AI capabilities are powered by Gemini 3.0 Flash via Replit AI Integrations.
+
+The core recommendation engine relies on a proprietary scoring system: `Final Score = (Vibe + Buzz + Taste) - Reality Penalty`.
+- **Vibe Score**: Uses Gemini Vision for visual appeal analysis of photos.
+- **Buzz Score**: Aggregates popularity from multiple sources (Google, TripAdvisor).
+- **Taste Verify Score**: An original algorithm based on language-based authenticity from reviews, expert ratings, and global averages.
+- **Reality Penalty**: Adjusts scores based on real-world factors like weather, safety, and crowd conditions.
+
+The application also features a persona system (e.g., Luxury, Comfort) to tailor recommendations further, with corresponding UI accents.
+
+UI/UX design adheres to a specific system including a purple-pink gradient, iOS 26 liquid glass effects, a 4-tab bottom navigation with a Floating Action Button (FAB), and color-coded Vibe score badges.
+
+The backend provides a comprehensive set of API endpoints for managing cities, places, recommendations, itinerary generation, and optimization. An Admin Dashboard is available for managing API services, data sources (YouTube, blogs), data freshness, sync logs, and seeding default data.
+
+## External Dependencies
+- **AI**: Gemini 3.0 Flash (via Replit AI Integrations)
+- **Mapping & Places**: Google Maps API, Google Places API
+- **Weather**: OpenWeather API
+- **Database**: PostgreSQL (Neon)
+- **Data Sources**: TripAdvisor, Klook, Viator, Naver Search API, YouTube Data API v3
