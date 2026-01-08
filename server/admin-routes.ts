@@ -779,9 +779,9 @@ export function registerAdminRoutes(app: Express) {
   
   app.post("/api/admin/sync/youtube", async (req, res) => {
     try {
-      const { youtubeFetcher } = await import("./services/youtube-fetcher");
+      const { youtubeCrawler } = await import("./services/youtube-crawler");
       
-      if (!youtubeFetcher.isConfigured()) {
+      if (!process.env.YOUTUBE_API_KEY) {
         res.status(400).json({ 
           error: "YouTube API 키가 설정되지 않았습니다", 
           needsKey: true,
@@ -790,24 +790,58 @@ export function registerAdminRoutes(app: Express) {
         return;
       }
       
-      const result = await youtubeFetcher.syncAllChannels();
+      const result = await youtubeCrawler.syncAllChannels();
       
       await db.insert(dataSyncLog).values({
         entityType: "youtube_channels",
         source: "youtube",
-        status: result.totalFailed === 0 ? "success" : "partial",
-        itemsProcessed: result.totalSynced,
-        itemsFailed: result.totalFailed,
+        status: result.errors.length === 0 ? "success" : "partial",
+        itemsProcessed: result.totalVideos,
+        itemsFailed: result.errors.length,
         completedAt: new Date(),
       });
       
       res.json({ 
         message: "유튜브 채널 동기화 완료",
-        ...result 
+        videosAdded: result.totalVideos,
+        placesExtracted: result.totalPlaces,
+        errors: result.errors
       });
     } catch (error) {
       console.error("Error syncing YouTube:", error);
       res.status(500).json({ error: "유튜브 동기화 실패", details: String(error) });
+    }
+  });
+
+  app.get("/api/admin/youtube/stats", async (req, res) => {
+    try {
+      const { youtubeCrawler } = await import("./services/youtube-crawler");
+      const stats = await youtubeCrawler.getStats();
+      res.json(stats);
+    } catch (error) {
+      console.error("Error getting YouTube stats:", error);
+      res.status(500).json({ error: "통계 조회 실패" });
+    }
+  });
+
+  app.post("/api/admin/youtube/sync/channel/:id", async (req, res) => {
+    try {
+      const channelId = parseInt(req.params.id);
+      const { youtubeCrawler } = await import("./services/youtube-crawler");
+      
+      if (!process.env.YOUTUBE_API_KEY) {
+        res.status(400).json({ error: "YouTube API 키가 설정되지 않았습니다" });
+        return;
+      }
+      
+      const result = await youtubeCrawler.syncChannelVideos(channelId, 10);
+      res.json({
+        message: "채널 동기화 완료",
+        ...result
+      });
+    } catch (error) {
+      console.error("Error syncing channel:", error);
+      res.status(500).json({ error: "채널 동기화 실패" });
     }
   });
 

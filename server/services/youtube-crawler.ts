@@ -82,14 +82,14 @@ export class YouTubeCrawler {
         return result;
       }
 
-      if (!channel.youtubeChannelId) {
+      if (!channel.channelId) {
         result.errors.push(`Channel ${channel.channelName} has no YouTube channel ID`);
         return result;
       }
 
       console.log(`[YouTube] Syncing channel: ${channel.channelName}`);
 
-      const videos = await this.fetchChannelVideos(channel.youtubeChannelId, maxVideos);
+      const videos = await this.fetchChannelVideos(channel.channelId, maxVideos);
       console.log(`[YouTube] Found ${videos.length} videos`);
 
       for (const video of videos) {
