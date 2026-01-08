@@ -71,6 +71,18 @@ See `design_guidelines.md` for complete design system including:
 - Vibe score badges (purple 8+, orange 5-7, gray <5)
 
 ## Recent Changes
+- 2026-01-08: Instagram 데이터 → VIBE 점수 연동 완료
+  - **Buzz Score 반영**: Instagram 해시태그 게시물 수 25% 가중치
+    - popularityScore = reviewVolume(30%) + rating(30%) + sourceCount(15%) + **instagram(25%)**
+    - trendingScore: 최근 7일 내 10만+ 게시물 해시태그 → 7점 (기본 5점)
+    - localBuzzScore: 한국어 해시태그 존재 시 → 7점 (기본 5점)
+  - **Vibe Score 반영**: Instagram 사진 Gemini Vision 분석
+    - Google Photos (최대 2장) + Instagram Photos (최대 1장) 조합
+  - **해시태그 매칭**: 장소명/한국어명으로 관련 해시태그 자동 검색
+- 2026-01-08: Instagram 데이터 수집 시스템 완성
+  - DB 스키마: instagram_hashtags, instagram_locations, instagram_photos
+  - 크롤러: 해시태그/위치 게시물 수 수집, 3초 rate limiting
+  - Admin Dashboard: Instagram 탭 추가 (해시태그/위치 CRUD)
 - 2026-01-06 02:30 KST: 장기 여행 일정 생성 시스템 완성
   - **경로 최적화**: 지리적 그룹핑 + Nearest-neighbor 알고리즘으로 도시별 연속 일정 배치
   - **장기 여행 지원**: 10일, 11일, 30일 등 장기 여행 완전 지원 (Day 탭 무제한)

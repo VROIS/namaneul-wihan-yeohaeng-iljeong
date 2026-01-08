@@ -79,7 +79,7 @@ export class ScoringEngine {
     await storage.updatePlaceScores(placeId, {
       vibeScore,
       buzzScore,
-      tasteVerifyScore,
+      tasteVerifyScore: tasteVerifyScore ?? undefined,
       realityPenalty,
       finalScore,
       tier,

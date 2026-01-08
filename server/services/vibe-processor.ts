@@ -171,7 +171,7 @@ JSON 형식으로만 응답해주세요:
     try {
       // 장소명으로 관련 해시태그 검색
       const placeName = place.name.toLowerCase();
-      const placeNameKo = place.nameKorean?.toLowerCase() || '';
+      const placeNameKo = ((place as any).nameKorean?.toLowerCase() || '') as string;
       
       // 해시태그에서 장소명이 포함된 것들 찾기
       const relatedHashtags = await db.select()
@@ -282,7 +282,7 @@ JSON 형식으로만 응답해주세요:
   private async getInstagramPhotosForPlace(place: Place): Promise<string[]> {
     try {
       const placeName = place.name.toLowerCase();
-      const placeNameKo = place.nameKorean?.toLowerCase() || '';
+      const placeNameKo = ((place as any).nameKorean?.toLowerCase() || '') as string;
       
       // 장소와 관련된 해시태그 찾기
       const relatedHashtags = await db.select()
@@ -308,7 +308,7 @@ JSON 형식으로만 응답해주세요:
         )
         .limit(3);
 
-      return photos.map(p => p.photoUrl).filter((url): url is string => !!url);
+      return photos.map(p => p.imageUrl).filter((url): url is string => !!url);
     } catch (error) {
       console.error('Failed to get Instagram photos for place:', error);
       return [];
