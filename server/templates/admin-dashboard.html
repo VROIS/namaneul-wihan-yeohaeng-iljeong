@@ -275,6 +275,7 @@
     <div class="tabs">
       <button class="tab active" data-tab="overview">현황</button>
       <button class="tab" data-tab="sources">데이터 소스</button>
+      <button class="tab" data-tab="instagram">Instagram</button>
       <button class="tab" data-tab="api">API 상태</button>
       <button class="tab" data-tab="logs">동기화 로그</button>
     </div>
@@ -405,6 +406,75 @@
         </div>
       </div>
     </div>
+
+    <div id="tab-instagram" class="tab-content" style="display: none;">
+      <div class="grid">
+        <div class="card">
+          <h2>Instagram 현황</h2>
+          <div id="instagram-stats" class="stat-grid">
+            <div class="stat-item">
+              <div class="stat-value" id="stat-hashtags">-</div>
+              <div class="stat-label">해시태그</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value" id="stat-locations">-</div>
+              <div class="stat-label">위치 태그</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value" id="stat-photos">-</div>
+              <div class="stat-label">수집 사진</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value" id="stat-ig-sync">-</div>
+              <div class="stat-label">마지막 동기화</div>
+            </div>
+          </div>
+          <div style="margin-top: 16px; display: flex; gap: 12px;">
+            <button class="btn btn-primary" onclick="seedInstagramData()">기본 해시태그 추가</button>
+            <button class="btn btn-secondary" onclick="syncAllInstagram()">전체 동기화</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid" style="margin-top: 20px;">
+        <div class="card">
+          <h2>해시태그 관리</h2>
+          <div style="margin-bottom: 12px;">
+            <button class="btn btn-sm btn-primary" onclick="toggleForm('hashtag-form')">+ 해시태그 추가</button>
+          </div>
+          <div id="hashtag-form" class="add-form">
+            <input type="text" id="new-hashtag" placeholder="#에펠탑 (해시태그)">
+            <select id="hashtag-category">
+              <option value="">카테고리 선택</option>
+              <option value="travel">여행</option>
+              <option value="food">맛집</option>
+              <option value="cafe">카페</option>
+              <option value="landmark">랜드마크</option>
+              <option value="hotel">호텔</option>
+            </select>
+            <button class="btn btn-primary" onclick="addHashtag()">추가</button>
+          </div>
+          <div id="hashtag-list" class="service-list" style="max-height: 300px; overflow-y: auto;">
+            <div class="loading"><div class="spinner"></div>로딩 중...</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>위치 태그 관리</h2>
+          <div style="margin-bottom: 12px;">
+            <button class="btn btn-sm btn-primary" onclick="toggleForm('location-form')">+ 위치 추가</button>
+          </div>
+          <div id="location-form" class="add-form">
+            <input type="text" id="new-location-id" placeholder="Instagram Location ID (숫자)">
+            <input type="text" id="new-location-name" placeholder="위치 이름 (예: Eiffel Tower)">
+            <button class="btn btn-primary" onclick="addLocation()">추가</button>
+          </div>
+          <div id="location-list" class="service-list" style="max-height: 300px; overflow-y: auto;">
+            <div class="loading"><div class="spinner"></div>로딩 중...</div>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
   
   <script>
@@ -440,6 +510,7 @@
       switch(tab) {
         case 'overview': loadDashboard(); break;
         case 'sources': loadSources(); break;
+        case 'instagram': loadInstagram(); break;
         case 'api': loadApiDetail(); loadApiRealStatus(); break;
         case 'logs': loadLogs(); break;
       }
@@ -862,6 +933,193 @@
     
     function toggleForm(id) {
       document.getElementById(id).classList.toggle('active');
+    }
+
+    async function loadInstagram() {
+      try {
+        const [statsRes, hashtagsRes, locationsRes] = await Promise.all([
+          fetch(`${API_BASE}/instagram/stats`),
+          fetch(`${API_BASE}/instagram/hashtags`),
+          fetch(`${API_BASE}/instagram/locations`)
+        ]);
+        
+        const stats = await statsRes.json();
+        const hashtags = await hashtagsRes.json();
+        const locations = await locationsRes.json();
+        
+        document.getElementById('stat-hashtags').textContent = stats.totalHashtags;
+        document.getElementById('stat-locations').textContent = stats.totalLocations;
+        document.getElementById('stat-photos').textContent = stats.totalPhotos;
+        document.getElementById('stat-ig-sync').textContent = stats.lastSyncAt 
+          ? new Date(stats.lastSyncAt).toLocaleDateString('ko-KR')
+          : '-';
+        
+        const hashtagList = document.getElementById('hashtag-list');
+        hashtagList.innerHTML = hashtags.length ? hashtags.map(h => `
+          <div class="service-item">
+            <div>
+              <span style="font-weight: 600;">${h.hashtag}</span>
+              <span style="color: #6b7280; font-size: 12px; margin-left: 8px;">
+                ${h.postCount ? h.postCount.toLocaleString() + '개' : '미수집'}
+              </span>
+              ${h.category ? `<span style="color: #a78bfa; font-size: 11px; margin-left: 8px;">${h.category}</span>` : ''}
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn btn-sm btn-secondary" onclick="syncHashtag(${h.id})">동기화</button>
+              <button class="btn btn-sm" style="background: rgba(239,68,68,0.2); color: #ef4444;" onclick="deleteHashtag(${h.id})">삭제</button>
+            </div>
+          </div>
+        `).join('') : '<div class="empty-state">등록된 해시태그가 없습니다</div>';
+        
+        const locationList = document.getElementById('location-list');
+        locationList.innerHTML = locations.length ? locations.map(l => `
+          <div class="service-item">
+            <div>
+              <span style="font-weight: 600;">${l.locationName}</span>
+              <span style="color: #6b7280; font-size: 12px; margin-left: 8px;">
+                ${l.postCount ? l.postCount.toLocaleString() + '개' : '미수집'}
+              </span>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <button class="btn btn-sm btn-secondary" onclick="syncLocation(${l.id})">동기화</button>
+              <button class="btn btn-sm" style="background: rgba(239,68,68,0.2); color: #ef4444;" onclick="deleteLocation(${l.id})">삭제</button>
+            </div>
+          </div>
+        `).join('') : '<div class="empty-state">등록된 위치가 없습니다</div>';
+        
+      } catch (err) {
+        console.error('Instagram 데이터 로드 오류:', err);
+      }
+    }
+    
+    async function addHashtag() {
+      const hashtag = document.getElementById('new-hashtag').value;
+      const category = document.getElementById('hashtag-category').value;
+      
+      if (!hashtag) {
+        alert('해시태그를 입력하세요');
+        return;
+      }
+      
+      try {
+        const res = await fetch(`${API_BASE}/instagram/hashtags`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ hashtag, category })
+        });
+        if (res.ok) {
+          document.getElementById('new-hashtag').value = '';
+          toggleForm('hashtag-form');
+          loadInstagram();
+        } else {
+          const err = await res.json();
+          alert(err.error || '추가에 실패했습니다');
+        }
+      } catch (err) {
+        alert('추가에 실패했습니다');
+      }
+    }
+    
+    async function deleteHashtag(id) {
+      if (!confirm('이 해시태그를 삭제하시겠습니까?')) return;
+      try {
+        await fetch(`${API_BASE}/instagram/hashtags/${id}`, { method: 'DELETE' });
+        loadInstagram();
+      } catch (err) {
+        alert('삭제에 실패했습니다');
+      }
+    }
+    
+    async function syncHashtag(id) {
+      try {
+        const res = await fetch(`${API_BASE}/instagram/hashtags/${id}/sync`, { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+          alert(`동기화 완료: ${data.postCount?.toLocaleString() || 0}개 게시물`);
+          loadInstagram();
+        } else {
+          alert('동기화 실패 (Instagram 접근 제한 가능)');
+        }
+      } catch (err) {
+        alert('동기화에 실패했습니다');
+      }
+    }
+    
+    async function addLocation() {
+      const locationId = document.getElementById('new-location-id').value;
+      const locationName = document.getElementById('new-location-name').value;
+      
+      if (!locationId || !locationName) {
+        alert('위치 ID와 이름을 입력하세요');
+        return;
+      }
+      
+      try {
+        const res = await fetch(`${API_BASE}/instagram/locations`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ locationId, locationName })
+        });
+        if (res.ok) {
+          document.getElementById('new-location-id').value = '';
+          document.getElementById('new-location-name').value = '';
+          toggleForm('location-form');
+          loadInstagram();
+        } else {
+          const err = await res.json();
+          alert(err.error || '추가에 실패했습니다');
+        }
+      } catch (err) {
+        alert('추가에 실패했습니다');
+      }
+    }
+    
+    async function deleteLocation(id) {
+      if (!confirm('이 위치를 삭제하시겠습니까?')) return;
+      try {
+        await fetch(`${API_BASE}/instagram/locations/${id}`, { method: 'DELETE' });
+        loadInstagram();
+      } catch (err) {
+        alert('삭제에 실패했습니다');
+      }
+    }
+    
+    async function syncLocation(id) {
+      try {
+        const res = await fetch(`${API_BASE}/instagram/locations/${id}/sync`, { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+          alert(`동기화 완료: ${data.postCount?.toLocaleString() || 0}개 게시물`);
+          loadInstagram();
+        } else {
+          alert('동기화 실패 (Instagram 접근 제한 가능)');
+        }
+      } catch (err) {
+        alert('동기화에 실패했습니다');
+      }
+    }
+    
+    async function seedInstagramData() {
+      try {
+        const res = await fetch(`${API_BASE}/instagram/seed`, { method: 'POST' });
+        const data = await res.json();
+        alert(data.message);
+        loadInstagram();
+      } catch (err) {
+        alert('기본 데이터 추가에 실패했습니다');
+      }
+    }
+    
+    async function syncAllInstagram() {
+      if (!confirm('전체 Instagram 데이터를 동기화하시겠습니까? (시간이 걸릴 수 있습니다)')) return;
+      try {
+        const res = await fetch(`${API_BASE}/instagram/sync-all`, { method: 'POST' });
+        const data = await res.json();
+        alert(`동기화 완료:\n해시태그: ${data.hashtags.synced}개 성공, ${data.hashtags.failed}개 실패\n위치: ${data.locations.synced}개 성공, ${data.locations.failed}개 실패`);
+        loadInstagram();
+      } catch (err) {
+        alert('전체 동기화에 실패했습니다');
+      }
     }
     
     async function addYoutubeChannel() {
