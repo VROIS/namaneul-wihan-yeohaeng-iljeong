@@ -402,9 +402,13 @@ export class GooglePlacesFetcher {
       placeId,
       source: "google",
       sourceId: googlePlace.id,
+      sourceUrl: googlePlace.googleMapsUri ?? null,
       rating: googlePlace.rating ?? null,
       reviewCount: googlePlace.userRatingCount ?? null,
       priceLevel: googlePlace.priceLevel ? priceLevelMap[googlePlace.priceLevel] : null,
+      rankingInCategory: null,
+      isMichelinStar: false,
+      michelinType: null,
       rawData: googlePlace as any,
     });
 

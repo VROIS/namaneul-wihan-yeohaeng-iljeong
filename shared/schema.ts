@@ -320,6 +320,7 @@ export const youtubeVideos = pgTable("youtube_videos", {
   duration: integer("duration"),
   viewCount: integer("view_count"),
   likeCount: integer("like_count"),
+  commentCount: integer("comment_count"),
   thumbnailUrl: text("thumbnail_url"),
   hasTranscript: boolean("has_transcript").default(false),
   transcriptText: text("transcript_text"),

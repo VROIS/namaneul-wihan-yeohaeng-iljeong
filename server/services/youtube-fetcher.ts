@@ -43,6 +43,41 @@ interface YouTubeChannelResponse {
   }>;
 }
 
+interface YouTubeVideoDetailsResponse {
+  items: Array<{
+    id: string;
+    snippet: {
+      title: string;
+      description: string;
+      publishedAt: string;
+      channelId: string;
+      channelTitle: string;
+      thumbnails: {
+        default?: { url: string };
+        medium?: { url: string };
+        high?: { url: string };
+        maxres?: { url: string };
+      };
+      tags?: string[];
+      categoryId?: string;
+      defaultLanguage?: string;
+      defaultAudioLanguage?: string;
+    };
+    contentDetails: {
+      duration: string;
+      dimension: string;
+      definition: string;
+      caption: string;
+    };
+    statistics: {
+      viewCount: string;
+      likeCount: string;
+      favoriteCount: string;
+      commentCount: string;
+    };
+  }>;
+}
+
 export class YouTubeFetcher {
   private apiKey: string;
 
@@ -52,6 +87,15 @@ export class YouTubeFetcher {
 
   isConfigured(): boolean {
     return !!this.apiKey;
+  }
+
+  private parseDuration(isoDuration: string): number {
+    const match = isoDuration.match(/PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?/);
+    if (!match) return 0;
+    const hours = parseInt(match[1] || "0");
+    const minutes = parseInt(match[2] || "0");
+    const seconds = parseInt(match[3] || "0");
+    return hours * 3600 + minutes * 60 + seconds;
   }
 
   private async makeRequest<T>(endpoint: string, params: Record<string, string>): Promise<T> {
@@ -149,6 +193,39 @@ export class YouTubeFetcher {
     }
   }
 
+  async getVideoDetails(videoIds: string[]): Promise<Map<string, {
+    viewCount: number;
+    likeCount: number;
+    commentCount: number;
+    duration: string;
+    tags?: string[];
+  }>> {
+    const result = new Map();
+    
+    if (videoIds.length === 0) return result;
+    
+    try {
+      const response = await this.makeRequest<YouTubeVideoDetailsResponse>("videos", {
+        part: "snippet,statistics,contentDetails",
+        id: videoIds.join(","),
+      });
+
+      for (const item of response.items || []) {
+        result.set(item.id, {
+          viewCount: parseInt(item.statistics.viewCount) || 0,
+          likeCount: parseInt(item.statistics.likeCount) || 0,
+          commentCount: parseInt(item.statistics.commentCount) || 0,
+          duration: item.contentDetails.duration,
+          tags: item.snippet.tags,
+        });
+      }
+    } catch (error) {
+      console.error(`Failed to get video details:`, error);
+    }
+    
+    return result;
+  }
+
   async syncChannelVideos(channelDbId: number): Promise<{ synced: number; failed: number }> {
     const [channel] = await db
       .select()
@@ -175,26 +252,47 @@ export class YouTubeFetcher {
 
     const videos = await this.searchChannelVideos(channel.channelId, undefined, 20);
     
+    const videoIds = videos.map(v => v.id.videoId);
+    const videoDetails = await this.getVideoDetails(videoIds);
+    
     let synced = 0;
     let failed = 0;
 
     for (const video of videos) {
       try {
+        const details = videoDetails.get(video.id.videoId);
+        
         const existingVideo = await db
           .select()
           .from(youtubeVideos)
           .where(eq(youtubeVideos.videoId, video.id.videoId))
           .limit(1);
 
+        const videoData = {
+          channelId: channelDbId,
+          videoId: video.id.videoId,
+          title: video.snippet.title,
+          description: video.snippet.description.substring(0, 2000),
+          thumbnailUrl: video.snippet.thumbnails.high?.url || video.snippet.thumbnails.medium?.url || "",
+          publishedAt: new Date(video.snippet.publishedAt),
+          viewCount: details?.viewCount ?? null,
+          likeCount: details?.likeCount ?? null,
+          commentCount: details?.commentCount ?? null,
+          duration: details?.duration ? this.parseDuration(details.duration) : null,
+        };
+
         if (existingVideo.length === 0) {
-          await db.insert(youtubeVideos).values({
-            channelId: channelDbId,
-            videoId: video.id.videoId,
-            title: video.snippet.title,
-            description: video.snippet.description.substring(0, 2000),
-            thumbnailUrl: video.snippet.thumbnails.high?.url || video.snippet.thumbnails.medium?.url || "",
-            publishedAt: new Date(video.snippet.publishedAt),
-          });
+          await db.insert(youtubeVideos).values(videoData);
+        } else {
+          await db
+            .update(youtubeVideos)
+            .set({
+              viewCount: videoData.viewCount,
+              likeCount: videoData.likeCount,
+              commentCount: videoData.commentCount,
+              duration: videoData.duration,
+            })
+            .where(eq(youtubeVideos.videoId, video.id.videoId));
         }
         synced++;
       } catch (error) {
