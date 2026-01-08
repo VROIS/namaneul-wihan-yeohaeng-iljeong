@@ -495,6 +495,50 @@ export const placePrices = pgTable("place_prices", {
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
+// 네이버 블로그 포스트
+export const naverBlogPosts = pgTable("naver_blog_posts", {
+  id: serial("id").primaryKey(),
+  placeId: integer("place_id").references(() => places.id, { onDelete: "cascade" }),
+  cityId: integer("city_id").references(() => cities.id, { onDelete: "cascade" }),
+  bloggerName: text("blogger_name"),
+  bloggerUrl: text("blogger_url"),
+  postTitle: text("post_title").notNull(),
+  postUrl: text("post_url").notNull().unique(),
+  postDate: timestamp("post_date"),
+  description: text("description"),
+  thumbnailUrl: text("thumbnail_url"),
+  extractedPlaces: jsonb("extracted_places").$type<{
+    placeName: string;
+    sentiment: "positive" | "neutral" | "negative";
+    keywords: string[];
+    rating?: number;
+  }[]>(),
+  sentimentScore: real("sentiment_score"),
+  trustWeight: real("trust_weight").default(0.5),
+  isProcessed: boolean("is_processed").default(false),
+  fetchedAt: timestamp("fetched_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+// 날씨 예보 캐시
+export const weatherForecast = pgTable("weather_forecast", {
+  id: serial("id").primaryKey(),
+  cityId: integer("city_id").references(() => cities.id, { onDelete: "cascade" }),
+  forecastDate: timestamp("forecast_date").notNull(),
+  tempMin: real("temp_min"),
+  tempMax: real("temp_max"),
+  humidity: integer("humidity"),
+  weatherMain: text("weather_main"),
+  weatherDescription: text("weather_description"),
+  weatherIcon: text("weather_icon"),
+  windSpeed: real("wind_speed"),
+  rainProbability: real("rain_probability"),
+  uvIndex: real("uv_index"),
+  airQualityIndex: integer("air_quality_index"),
+  realityPenalty: real("reality_penalty"),
+  fetchedAt: timestamp("fetched_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
 // 데이터 수집 스케줄
 export const dataCollectionSchedule = pgTable("data_collection_schedule", {
   id: serial("id").primaryKey(),
@@ -626,6 +670,8 @@ export type DataCollectionSchedule = typeof dataCollectionSchedule.$inferSelect;
 export type CrisisAlert = typeof crisisAlerts.$inferSelect;
 export type GeminiWebSearchCache = typeof geminiWebSearchCache.$inferSelect;
 export type PlacePrice = typeof placePrices.$inferSelect;
+export type NaverBlogPost = typeof naverBlogPosts.$inferSelect;
+export type WeatherForecast = typeof weatherForecast.$inferSelect;
 
 // Re-export chat models
 export * from "./models/chat";

@@ -43,8 +43,10 @@ export class DataScheduler {
     this.scheduleTask("instagram_sync", "30 18 * * *");
     this.scheduleTask("price_sync", "45 18 * * *");
     this.scheduleTask("crisis_sync", "0 19 * * *");
+    this.scheduleTask("naver_blog_sync", "15 19 * * *");
+    this.scheduleTask("weather_sync", "30 19 * * *");
     this.scheduleTask("exchange_rate_sync", "0 0 * * *");
-    console.log("[Scheduler] Default tasks scheduled (3AM, 3:30AM, 3:45AM, 4AM KST = 18:00, 18:30, 18:45, 19:00 UTC)");
+    console.log("[Scheduler] Default tasks scheduled (3AM-4:30AM KST)");
   }
 
   private scheduleTask(taskName: string, cronExpression: string): void {
@@ -91,6 +93,12 @@ export class DataScheduler {
           break;
         case "crisis_sync":
           result = await this.runCrisisSync();
+          break;
+        case "naver_blog_sync":
+          result = await this.runNaverBlogSync();
+          break;
+        case "weather_sync":
+          result = await this.runWeatherSync();
           break;
         case "exchange_rate_sync":
           result = await this.runExchangeRateSync();
@@ -196,6 +204,34 @@ export class DataScheduler {
     }
   }
 
+  private async runNaverBlogSync(): Promise<{ success: boolean; itemsProcessed: number; errors: string[] }> {
+    try {
+      const { crawlAllBlogs } = await import("./naver-blog-crawler");
+      const result = await crawlAllBlogs();
+      return {
+        success: result.success,
+        itemsProcessed: result.totalPosts,
+        errors: [],
+      };
+    } catch (error: any) {
+      return { success: false, itemsProcessed: 0, errors: [error.message] };
+    }
+  }
+
+  private async runWeatherSync(): Promise<{ success: boolean; itemsProcessed: number; errors: string[] }> {
+    try {
+      const { syncAllCitiesWeather } = await import("./weather-crawler");
+      const result = await syncAllCitiesWeather();
+      return {
+        success: result.success,
+        itemsProcessed: result.citiesSynced,
+        errors: [],
+      };
+    } catch (error: any) {
+      return { success: false, itemsProcessed: 0, errors: [error.message] };
+    }
+  }
+
   async runNow(taskName: string): Promise<{ success: boolean; message: string }> {
     console.log(`[Scheduler] Manual trigger for task: ${taskName}`);
     try {
@@ -220,6 +256,8 @@ export class DataScheduler {
         instagram_sync: "매일 03:30 KST",
         price_sync: "매일 03:45 KST",
         crisis_sync: "매일 04:00 KST",
+        naver_blog_sync: "매일 04:15 KST",
+        weather_sync: "매일 04:30 KST",
         exchange_rate_sync: "매일 09:00 KST",
       };
       return {

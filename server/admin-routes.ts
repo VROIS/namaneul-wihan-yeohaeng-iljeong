@@ -21,7 +21,9 @@ import {
   instagramPhotos,
   crisisAlerts,
   geminiWebSearchCache,
-  placePrices
+  placePrices,
+  naverBlogPosts,
+  weatherForecast
 } from "../shared/schema";
 import { instagramCrawler } from "./services/instagram-crawler";
 import { eq, desc, sql, count, and, gte } from "drizzle-orm";
@@ -1670,6 +1672,118 @@ export function registerAdminRoutes(app: Express) {
     } catch (error) {
       console.error("Error syncing all prices:", error);
       res.status(500).json({ error: "Failed to sync all prices" });
+    }
+  });
+
+  // ========================================
+  // 네이버 블로그 API
+  // ========================================
+
+  app.get("/api/admin/naver-blog/stats", async (req, res) => {
+    try {
+      const { getBlogStats } = await import("./services/naver-blog-crawler");
+      const stats = await getBlogStats();
+      res.json(stats);
+    } catch (error) {
+      console.error("Error fetching blog stats:", error);
+      res.status(500).json({ error: "Failed to fetch blog stats" });
+    }
+  });
+
+  app.get("/api/admin/naver-blog/city/:cityId/insights", async (req, res) => {
+    try {
+      const cityId = parseInt(req.params.cityId);
+      const { getCityBlogInsights } = await import("./services/naver-blog-crawler");
+      const insights = await getCityBlogInsights(cityId);
+      res.json(insights);
+    } catch (error) {
+      console.error("Error fetching city blog insights:", error);
+      res.status(500).json({ error: "Failed to fetch city blog insights" });
+    }
+  });
+
+  app.post("/api/admin/naver-blog/sync/city/:cityId", async (req, res) => {
+    try {
+      const cityId = parseInt(req.params.cityId);
+      const { crawlBlogsForCity } = await import("./services/naver-blog-crawler");
+      const result = await crawlBlogsForCity(cityId);
+      res.json({
+        message: "네이버 블로그 수집 완료",
+        ...result
+      });
+    } catch (error) {
+      console.error("Error syncing city blogs:", error);
+      res.status(500).json({ error: "Failed to sync city blogs" });
+    }
+  });
+
+  app.post("/api/admin/naver-blog/sync/all", async (req, res) => {
+    try {
+      const { crawlAllBlogs } = await import("./services/naver-blog-crawler");
+      const result = await crawlAllBlogs();
+      res.json({
+        message: "전체 블로그 수집 완료",
+        ...result
+      });
+    } catch (error) {
+      console.error("Error syncing all blogs:", error);
+      res.status(500).json({ error: "Failed to sync all blogs" });
+    }
+  });
+
+  // ========================================
+  // 날씨 API
+  // ========================================
+
+  app.get("/api/admin/weather/stats", async (req, res) => {
+    try {
+      const { getWeatherStats } = await import("./services/weather-crawler");
+      const stats = await getWeatherStats();
+      res.json(stats);
+    } catch (error) {
+      console.error("Error fetching weather stats:", error);
+      res.status(500).json({ error: "Failed to fetch weather stats" });
+    }
+  });
+
+  app.get("/api/admin/weather/city/:cityId", async (req, res) => {
+    try {
+      const cityId = parseInt(req.params.cityId);
+      const { getCityWeather } = await import("./services/weather-crawler");
+      const weather = await getCityWeather(cityId);
+      res.json(weather);
+    } catch (error) {
+      console.error("Error fetching city weather:", error);
+      res.status(500).json({ error: "Failed to fetch city weather" });
+    }
+  });
+
+  app.post("/api/admin/weather/sync/city/:cityId", async (req, res) => {
+    try {
+      const cityId = parseInt(req.params.cityId);
+      const { fetchWeatherForCity } = await import("./services/weather-crawler");
+      const result = await fetchWeatherForCity(cityId);
+      res.json({
+        message: "날씨 정보 수집 완료",
+        ...result
+      });
+    } catch (error) {
+      console.error("Error syncing city weather:", error);
+      res.status(500).json({ error: "Failed to sync city weather" });
+    }
+  });
+
+  app.post("/api/admin/weather/sync/all", async (req, res) => {
+    try {
+      const { syncAllCitiesWeather } = await import("./services/weather-crawler");
+      const result = await syncAllCitiesWeather();
+      res.json({
+        message: "전체 날씨 정보 수집 완료",
+        ...result
+      });
+    } catch (error) {
+      console.error("Error syncing all weather:", error);
+      res.status(500).json({ error: "Failed to sync all weather" });
     }
   });
 }
