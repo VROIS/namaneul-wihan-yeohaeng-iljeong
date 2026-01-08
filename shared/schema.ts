@@ -105,6 +105,10 @@ export const places = pgTable("places", {
     acceptsNfc?: boolean;
   }>(),
   
+  instagramPhotoUrls: jsonb("instagram_photo_urls").$type<string[]>().default([]),
+  instagramHashtags: jsonb("instagram_hashtags").$type<string[]>().default([]),
+  instagramPostCount: integer("instagram_post_count").default(0),
+  
   vibeScore: real("vibe_score"),
   buzzScore: real("buzz_score"),
   tasteVerifyScore: real("taste_verify_score"),

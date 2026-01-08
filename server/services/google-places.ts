@@ -432,7 +432,24 @@ export class GooglePlacesFetcher {
       }
     }
 
+    this.scheduleInstagramCollection(placeId);
+
     return placeId;
+  }
+
+  private async scheduleInstagramCollection(placeId: number): Promise<void> {
+    try {
+      const { instagramAutoCollector } = await import("./instagram-auto-collector");
+      setTimeout(async () => {
+        try {
+          await instagramAutoCollector.collectForPlace(placeId);
+        } catch (error) {
+          console.error(`[Instagram Auto] Failed to collect for place ${placeId}:`, error);
+        }
+      }, 100);
+    } catch (error) {
+      console.error(`[Instagram Auto] Failed to import collector:`, error);
+    }
   }
 
   async syncCityPlaces(
