@@ -275,7 +275,6 @@
     <div class="tabs">
       <button class="tab active" data-tab="overview">현황</button>
       <button class="tab" data-tab="sources">데이터 소스</button>
-      <button class="tab" data-tab="instagram">Instagram</button>
       <button class="tab" data-tab="api">API 상태</button>
       <button class="tab" data-tab="logs">동기화 로그</button>
     </div>
@@ -329,6 +328,48 @@
     </div>
     
     <div id="tab-sources" class="tab-content" style="display: none;">
+      <div class="card" style="margin-bottom: 20px;">
+        <h2>데이터 소스 통합 현황</h2>
+        <p style="font-size: 12px; color: #9ca3af; margin-bottom: 16px;">모든 데이터 소스의 수집 현황을 한눈에 확인하세요. 자동 수집: 매일 3AM KST</p>
+        <div id="unified-sources" style="display: grid; gap: 12px;">
+          <div class="source-row" style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr; gap: 12px; padding: 12px 16px; background: rgba(255,255,255,0.03); border-radius: 10px; align-items: center;">
+            <div style="font-weight: 600; color: #a78bfa;">소스</div>
+            <div style="text-align: center; font-weight: 600; color: #a78bfa;">상태</div>
+            <div style="text-align: center; font-weight: 600; color: #a78bfa;">수집량</div>
+            <div style="text-align: center; font-weight: 600; color: #a78bfa;">마지막 동기화</div>
+            <div style="text-align: center; font-weight: 600; color: #a78bfa;">액션</div>
+          </div>
+          <div id="source-google" class="source-row" style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr; gap: 12px; padding: 12px 16px; background: rgba(255,255,255,0.03); border-radius: 10px; align-items: center;">
+            <div><span style="color: #4285f4;">●</span> Google Places</div>
+            <div style="text-align: center;"><span id="google-status" class="status-badge status-ok">활성</span></div>
+            <div style="text-align: center;" id="google-count">- 장소</div>
+            <div style="text-align: center; font-size: 12px;" id="google-sync">-</div>
+            <div style="text-align: center;"><button class="btn btn-sm btn-secondary" onclick="syncGooglePlaces()">동기화</button></div>
+          </div>
+          <div id="source-instagram" class="source-row" style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr; gap: 12px; padding: 12px 16px; background: rgba(255,255,255,0.03); border-radius: 10px; align-items: center;">
+            <div><span style="color: #e1306c;">●</span> Instagram</div>
+            <div style="text-align: center;"><span id="instagram-status" class="status-badge status-ok">활성</span></div>
+            <div style="text-align: center;" id="instagram-count">- 해시태그</div>
+            <div style="text-align: center; font-size: 12px;" id="instagram-sync">-</div>
+            <div style="text-align: center;"><button class="btn btn-sm btn-secondary" onclick="syncAllInstagram()">동기화</button></div>
+          </div>
+          <div id="source-youtube" class="source-row" style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr; gap: 12px; padding: 12px 16px; background: rgba(255,255,255,0.03); border-radius: 10px; align-items: center;">
+            <div><span style="color: #ff0000;">●</span> YouTube</div>
+            <div style="text-align: center;"><span id="youtube-status" class="status-badge status-warn">대기</span></div>
+            <div style="text-align: center;" id="youtube-count">- 채널</div>
+            <div style="text-align: center; font-size: 12px;" id="youtube-sync">-</div>
+            <div style="text-align: center;"><button class="btn btn-sm btn-secondary" onclick="syncYouTube()">동기화</button></div>
+          </div>
+          <div id="source-naver" class="source-row" style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr; gap: 12px; padding: 12px 16px; background: rgba(255,255,255,0.03); border-radius: 10px; align-items: center;">
+            <div><span style="color: #03c75a;">●</span> 네이버 블로그</div>
+            <div style="text-align: center;"><span id="naver-status" class="status-badge status-warn">대기</span></div>
+            <div style="text-align: center;" id="naver-count">- 소스</div>
+            <div style="text-align: center; font-size: 12px;" id="naver-sync">-</div>
+            <div style="text-align: center;"><button class="btn btn-sm btn-secondary" onclick="syncNaverBlogs()">동기화</button></div>
+          </div>
+        </div>
+      </div>
+      
       <div class="grid">
         <div class="card">
           <h2>유튜브 채널</h2>
@@ -371,6 +412,45 @@
           </div>
         </div>
       </div>
+      
+      <div class="grid" style="margin-top: 20px;">
+        <div class="card">
+          <h2>Instagram 해시태그</h2>
+          <div style="margin-bottom: 12px;">
+            <button class="btn btn-sm btn-primary" onclick="toggleForm('hashtag-form-sources')">+ 해시태그 추가</button>
+            <button class="btn btn-sm btn-secondary" onclick="seedInstagramData()">기본 추가</button>
+          </div>
+          <div id="hashtag-form-sources" class="add-form">
+            <input type="text" id="new-hashtag-sources" placeholder="#에펠탑 (해시태그)">
+            <select id="hashtag-category-sources">
+              <option value="">카테고리</option>
+              <option value="travel">여행</option>
+              <option value="food">맛집</option>
+              <option value="cafe">카페</option>
+              <option value="landmark">랜드마크</option>
+            </select>
+            <button class="btn btn-primary" onclick="addHashtagFromSources()">추가</button>
+          </div>
+          <div id="hashtag-list-sources" class="service-list" style="max-height: 250px; overflow-y: auto;">
+            <div class="loading"><div class="spinner"></div>로딩 중...</div>
+          </div>
+        </div>
+        
+        <div class="card">
+          <h2>Instagram 위치 태그</h2>
+          <div style="margin-bottom: 12px;">
+            <button class="btn btn-sm btn-primary" onclick="toggleForm('location-form-sources')">+ 위치 추가</button>
+          </div>
+          <div id="location-form-sources" class="add-form">
+            <input type="text" id="new-location-id-sources" placeholder="Location ID">
+            <input type="text" id="new-location-name-sources" placeholder="위치 이름">
+            <button class="btn btn-primary" onclick="addLocationFromSources()">추가</button>
+          </div>
+          <div id="location-list-sources" class="service-list" style="max-height: 250px; overflow-y: auto;">
+            <div class="loading"><div class="spinner"></div>로딩 중...</div>
+          </div>
+        </div>
+      </div>
     </div>
     
     <div id="tab-api" class="tab-content" style="display: none;">
@@ -408,74 +488,6 @@
       </div>
     </div>
 
-    <div id="tab-instagram" class="tab-content" style="display: none;">
-      <div class="grid">
-        <div class="card">
-          <h2>Instagram 현황</h2>
-          <div id="instagram-stats" class="stat-grid">
-            <div class="stat-item">
-              <div class="stat-value" id="stat-hashtags">-</div>
-              <div class="stat-label">해시태그</div>
-            </div>
-            <div class="stat-item">
-              <div class="stat-value" id="stat-locations">-</div>
-              <div class="stat-label">위치 태그</div>
-            </div>
-            <div class="stat-item">
-              <div class="stat-value" id="stat-photos">-</div>
-              <div class="stat-label">수집 사진</div>
-            </div>
-            <div class="stat-item">
-              <div class="stat-value" id="stat-ig-sync">-</div>
-              <div class="stat-label">마지막 동기화</div>
-            </div>
-          </div>
-          <div style="margin-top: 16px; display: flex; gap: 12px;">
-            <button class="btn btn-primary" onclick="seedInstagramData()">기본 해시태그 추가</button>
-            <button class="btn btn-secondary" onclick="syncAllInstagram()">전체 동기화</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="grid" style="margin-top: 20px;">
-        <div class="card">
-          <h2>해시태그 관리</h2>
-          <div style="margin-bottom: 12px;">
-            <button class="btn btn-sm btn-primary" onclick="toggleForm('hashtag-form')">+ 해시태그 추가</button>
-          </div>
-          <div id="hashtag-form" class="add-form">
-            <input type="text" id="new-hashtag" placeholder="#에펠탑 (해시태그)">
-            <select id="hashtag-category">
-              <option value="">카테고리 선택</option>
-              <option value="travel">여행</option>
-              <option value="food">맛집</option>
-              <option value="cafe">카페</option>
-              <option value="landmark">랜드마크</option>
-              <option value="hotel">호텔</option>
-            </select>
-            <button class="btn btn-primary" onclick="addHashtag()">추가</button>
-          </div>
-          <div id="hashtag-list" class="service-list" style="max-height: 300px; overflow-y: auto;">
-            <div class="loading"><div class="spinner"></div>로딩 중...</div>
-          </div>
-        </div>
-
-        <div class="card">
-          <h2>위치 태그 관리</h2>
-          <div style="margin-bottom: 12px;">
-            <button class="btn btn-sm btn-primary" onclick="toggleForm('location-form')">+ 위치 추가</button>
-          </div>
-          <div id="location-form" class="add-form">
-            <input type="text" id="new-location-id" placeholder="Instagram Location ID (숫자)">
-            <input type="text" id="new-location-name" placeholder="위치 이름 (예: Eiffel Tower)">
-            <button class="btn btn-primary" onclick="addLocation()">추가</button>
-          </div>
-          <div id="location-list" class="service-list" style="max-height: 300px; overflow-y: auto;">
-            <div class="loading"><div class="spinner"></div>로딩 중...</div>
-          </div>
-        </div>
-      </div>
-    </div>
   </div>
   
   <script>
@@ -510,8 +522,7 @@
     async function loadTabData(tab) {
       switch(tab) {
         case 'overview': loadDashboard(); break;
-        case 'sources': loadSources(); break;
-        case 'instagram': loadInstagram(); break;
+        case 'sources': loadSources(); loadUnifiedSourcesStatus(); break;
         case 'api': loadApiDetail(); loadApiRealStatus(); break;
         case 'logs': loadLogs(); break;
       }
@@ -719,6 +730,114 @@
       } catch (err) {
         console.error('소스 로드 오류:', err);
       }
+    }
+    
+    async function loadUnifiedSourcesStatus() {
+      try {
+        const res = await fetch(`${API_BASE}/data-sources/status`);
+        const data = await res.json();
+        
+        // Google Places
+        document.getElementById('google-count').textContent = `${data.google?.count || 0} 장소`;
+        document.getElementById('google-sync').textContent = data.google?.lastSync || '-';
+        document.getElementById('google-status').textContent = data.google?.status || '대기';
+        document.getElementById('google-status').className = `status-badge ${data.google?.status === '활성' ? 'status-ok' : 'status-warn'}`;
+        
+        // Instagram
+        document.getElementById('instagram-count').textContent = `${data.instagram?.count || 0} 해시태그`;
+        document.getElementById('instagram-sync').textContent = data.instagram?.lastSync || '-';
+        document.getElementById('instagram-status').textContent = data.instagram?.status || '대기';
+        document.getElementById('instagram-status').className = `status-badge ${data.instagram?.status === '활성' ? 'status-ok' : 'status-warn'}`;
+        
+        // YouTube
+        document.getElementById('youtube-count').textContent = `${data.youtube?.count || 0} 채널`;
+        document.getElementById('youtube-sync').textContent = data.youtube?.lastSync || '-';
+        document.getElementById('youtube-status').textContent = data.youtube?.status || '대기';
+        document.getElementById('youtube-status').className = `status-badge ${data.youtube?.status === '활성' ? 'status-ok' : 'status-warn'}`;
+        
+        // Naver
+        document.getElementById('naver-count').textContent = `${data.naver?.count || 0} 소스`;
+        document.getElementById('naver-sync').textContent = data.naver?.lastSync || '-';
+        document.getElementById('naver-status').textContent = data.naver?.status || '대기';
+        document.getElementById('naver-status').className = `status-badge ${data.naver?.status === '활성' ? 'status-ok' : 'status-warn'}`;
+        
+        // Load hashtags and locations for sources tab
+        loadSourcesInstagramData();
+      } catch (err) {
+        console.error('통합 소스 상태 로드 오류:', err);
+      }
+    }
+    
+    async function loadSourcesInstagramData() {
+      try {
+        const [hashtagsRes, locationsRes] = await Promise.all([
+          fetch(`${API_BASE}/instagram/hashtags`),
+          fetch(`${API_BASE}/instagram/locations`)
+        ]);
+        const hashtags = await hashtagsRes.json();
+        const locations = await locationsRes.json();
+        
+        const hashtagEl = document.getElementById('hashtag-list-sources');
+        hashtagEl.innerHTML = hashtags.length ? hashtags.slice(0, 20).map(h => `
+          <div class="service-item">
+            <span>${h.hashtag}</span>
+            <span style="font-size: 12px; color: #9ca3af;">${h.postCount ? h.postCount.toLocaleString() + '개' : '-'}</span>
+          </div>
+        `).join('') : '<div class="empty-state">해시태그가 없습니다</div>';
+        
+        const locationEl = document.getElementById('location-list-sources');
+        locationEl.innerHTML = locations.length ? locations.slice(0, 20).map(l => `
+          <div class="service-item">
+            <span>${l.locationName}</span>
+            <span style="font-size: 12px; color: #9ca3af;">${l.postCount ? l.postCount.toLocaleString() + '개' : '-'}</span>
+          </div>
+        `).join('') : '<div class="empty-state">위치 태그가 없습니다</div>';
+      } catch (err) {
+        console.error('Instagram 데이터 로드 오류:', err);
+      }
+    }
+    
+    async function addHashtagFromSources() {
+      const hashtag = document.getElementById('new-hashtag-sources').value;
+      const category = document.getElementById('hashtag-category-sources').value;
+      if (!hashtag) { alert('해시태그를 입력하세요'); return; }
+      try {
+        await fetch(`${API_BASE}/instagram/hashtags`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ hashtag, category })
+        });
+        document.getElementById('new-hashtag-sources').value = '';
+        loadSourcesInstagramData();
+      } catch (err) { alert('추가 실패'); }
+    }
+    
+    async function addLocationFromSources() {
+      const locationId = document.getElementById('new-location-id-sources').value;
+      const locationName = document.getElementById('new-location-name-sources').value;
+      if (!locationId || !locationName) { alert('모든 필드를 입력하세요'); return; }
+      try {
+        await fetch(`${API_BASE}/instagram/locations`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ locationId, locationName })
+        });
+        document.getElementById('new-location-id-sources').value = '';
+        document.getElementById('new-location-name-sources').value = '';
+        loadSourcesInstagramData();
+      } catch (err) { alert('추가 실패'); }
+    }
+    
+    async function syncGooglePlaces() {
+      alert('Google Places 동기화가 시작됩니다. 시간이 걸릴 수 있습니다.');
+      try {
+        await fetch('/api/sync/city/1/places', { method: 'POST' });
+        loadUnifiedSourcesStatus();
+      } catch (err) { alert('동기화 실패'); }
+    }
+    
+    async function syncNaverBlogs() {
+      alert('네이버 블로그 크롤러가 준비 중입니다.');
     }
     
     async function loadApiDetail() {

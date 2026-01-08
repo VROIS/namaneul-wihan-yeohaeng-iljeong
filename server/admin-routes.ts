@@ -666,6 +666,70 @@ export function registerAdminRoutes(app: Express) {
   });
 
   // ========================================
+  // 통합 데이터 소스 현황
+  // ========================================
+  
+  app.get("/api/admin/data-sources/status", async (req, res) => {
+    try {
+      const formatDate = (d: Date | null) => d ? new Date(d).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-';
+      
+      // Google Places
+      const [googlePlaces] = await db.select({ count: count() }).from(places);
+      const [googleLastSync] = await db.select({ lastSync: places.lastDataSync })
+        .from(places)
+        .orderBy(desc(places.lastDataSync))
+        .limit(1);
+      
+      // Instagram
+      const [instagramTags] = await db.select({ count: count() }).from(instagramHashtags);
+      const [instagramLastSync] = await db.select({ lastSync: instagramHashtags.lastSyncAt })
+        .from(instagramHashtags)
+        .orderBy(desc(instagramHashtags.lastSyncAt))
+        .limit(1);
+      
+      // YouTube
+      const [youtubeCount] = await db.select({ count: count() }).from(youtubeChannels).where(eq(youtubeChannels.isActive, true));
+      const [youtubeLastSync] = await db.select({ lastSync: youtubeChannels.lastVideoSyncAt })
+        .from(youtubeChannels)
+        .orderBy(desc(youtubeChannels.lastVideoSyncAt))
+        .limit(1);
+      
+      // Naver Blog
+      const [naverCount] = await db.select({ count: count() }).from(blogSources).where(eq(blogSources.isActive, true));
+      const [naverLastSync] = await db.select({ lastSync: blogSources.lastSyncAt })
+        .from(blogSources)
+        .orderBy(desc(blogSources.lastSyncAt))
+        .limit(1);
+      
+      res.json({
+        google: {
+          count: googlePlaces.count || 0,
+          status: googlePlaces.count > 0 ? '활성' : '대기',
+          lastSync: formatDate(googleLastSync?.lastSync || null)
+        },
+        instagram: {
+          count: instagramTags.count || 0,
+          status: instagramTags.count > 0 ? '활성' : '대기',
+          lastSync: formatDate(instagramLastSync?.lastSync || null)
+        },
+        youtube: {
+          count: youtubeCount.count || 0,
+          status: youtubeCount.count > 0 ? '활성' : '대기',
+          lastSync: formatDate(youtubeLastSync?.lastSync || null)
+        },
+        naver: {
+          count: naverCount.count || 0,
+          status: naverCount.count > 0 ? '활성' : '대기',
+          lastSync: formatDate(naverLastSync?.lastSync || null)
+        }
+      });
+    } catch (error) {
+      console.error("Error fetching data sources status:", error);
+      res.status(500).json({ error: "Failed to fetch data sources status" });
+    }
+  });
+
+  // ========================================
   // 동기화 로그
   // ========================================
   

@@ -71,6 +71,12 @@ See `design_guidelines.md` for complete design system including:
 - Vibe score badges (purple 8+, orange 5-7, gray <5)
 
 ## Recent Changes
+- 2026-01-08: Admin Dashboard 데이터 소스 통합 현황판 구현
+  - **통합 현황판**: Google Places, Instagram, YouTube, 네이버 블로그 상태를 한 화면에서 확인
+  - **상태 표시**: 소스별 상태(활성/대기), 수집량, 마지막 동기화 시간
+  - **통합 API**: `/api/admin/data-sources/status` 엔드포인트 추가
+  - **UI 개선**: Instagram 탭 제거, 데이터 소스 탭에 모든 기능 통합
+  - **Instagram 관리**: 해시태그/위치 태그 관리 기능 데이터 소스 탭에 포함
 - 2026-01-08: 사진 데이터 자동 수집 시스템 완성
   - **Google Places 사진 확장**: 최대 10장, 1200px 고해상도로 수집
   - **Instagram 자동 수집**: 장소 생성 시 해시태그 자동 생성 & 데이터 수집
