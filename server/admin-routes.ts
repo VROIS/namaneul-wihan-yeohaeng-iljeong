@@ -18,7 +18,9 @@ import {
   reviews,
   instagramHashtags,
   instagramLocations,
-  instagramPhotos
+  instagramPhotos,
+  crisisAlerts,
+  geminiWebSearchCache
 } from "../shared/schema";
 import { instagramCrawler } from "./services/instagram-crawler";
 import { eq, desc, sql, count, and, gte } from "drizzle-orm";
@@ -704,6 +706,21 @@ export function registerAdminRoutes(app: Express) {
         .orderBy(desc(blogSources.lastSyncAt))
         .limit(1);
       
+      // Crisis Alerts
+      const [crisisTotal] = await db.select({ count: count() }).from(crisisAlerts);
+      const [crisisActive] = await db.select({ count: count() }).from(crisisAlerts).where(eq(crisisAlerts.isActive, true));
+      const [crisisLastSync] = await db.select({ lastSync: crisisAlerts.fetchedAt })
+        .from(crisisAlerts)
+        .orderBy(desc(crisisAlerts.fetchedAt))
+        .limit(1);
+      
+      // Web Search Cache
+      const [webSearchTotal] = await db.select({ count: count() }).from(geminiWebSearchCache);
+      const [webSearchLastSync] = await db.select({ lastSync: geminiWebSearchCache.fetchedAt })
+        .from(geminiWebSearchCache)
+        .orderBy(desc(geminiWebSearchCache.fetchedAt))
+        .limit(1);
+      
       res.json({
         google: {
           count: googlePlaces.count || 0,
@@ -726,6 +743,17 @@ export function registerAdminRoutes(app: Express) {
           count: naverCount.count || 0,
           status: naverCount.count > 0 ? '활성' : '대기',
           lastSync: formatDate(naverLastSync?.lastSync || null)
+        },
+        crisis: {
+          total: crisisTotal.count || 0,
+          active: crisisActive.count || 0,
+          status: crisisActive.count > 0 ? '활성' : '정상',
+          lastSync: formatDate(crisisLastSync?.lastSync || null)
+        },
+        webSearch: {
+          count: webSearchTotal.count || 0,
+          status: webSearchTotal.count > 0 ? '활성' : '대기',
+          lastSync: formatDate(webSearchLastSync?.lastSync || null)
         }
       });
     } catch (error) {
@@ -1483,6 +1511,108 @@ export function registerAdminRoutes(app: Express) {
     } catch (error) {
       console.error("Error fetching place Instagram data:", error);
       res.status(500).json({ error: "Failed to fetch place Instagram data" });
+    }
+  });
+
+  // ========================================
+  // 위기 정보 API (Crisis Alerts)
+  // ========================================
+  
+  app.get("/api/admin/crisis/stats", async (req, res) => {
+    try {
+      const { getCrisisStats } = await import("./services/crisis-crawler");
+      const stats = await getCrisisStats();
+      res.json(stats);
+    } catch (error) {
+      console.error("Error fetching crisis stats:", error);
+      res.status(500).json({ error: "Failed to fetch crisis stats" });
+    }
+  });
+
+  app.get("/api/admin/crisis/alerts", async (req, res) => {
+    try {
+      const { getActiveCrisisAlerts } = await import("./services/crisis-crawler");
+      const cityId = req.query.cityId ? parseInt(req.query.cityId as string) : undefined;
+      const alerts = await getActiveCrisisAlerts(cityId);
+      res.json(alerts);
+    } catch (error) {
+      console.error("Error fetching crisis alerts:", error);
+      res.status(500).json({ error: "Failed to fetch crisis alerts" });
+    }
+  });
+
+  app.post("/api/admin/crisis/sync", async (req, res) => {
+    try {
+      const { crawlCrisisAlerts } = await import("./services/crisis-crawler");
+      const cityId = req.body.cityId ? parseInt(req.body.cityId) : undefined;
+      const result = await crawlCrisisAlerts(cityId);
+      res.json({
+        message: "위기 정보 수집 완료",
+        ...result
+      });
+    } catch (error) {
+      console.error("Error syncing crisis alerts:", error);
+      res.status(500).json({ error: "Failed to sync crisis alerts" });
+    }
+  });
+
+  // ========================================
+  // Gemini Web Search API (미슐랭/TripAdvisor)
+  // ========================================
+
+  app.get("/api/admin/websearch/stats", async (req, res) => {
+    try {
+      const { getWebSearchStats } = await import("./services/gemini-web-search");
+      const stats = await getWebSearchStats();
+      res.json(stats);
+    } catch (error) {
+      console.error("Error fetching web search stats:", error);
+      res.status(500).json({ error: "Failed to fetch web search stats" });
+    }
+  });
+
+  app.post("/api/admin/websearch/enrich/:placeId", async (req, res) => {
+    try {
+      const placeId = parseInt(req.params.placeId);
+      const { enrichPlaceWithWebData } = await import("./services/gemini-web-search");
+      const result = await enrichPlaceWithWebData(placeId);
+      res.json({
+        message: "웹 검색 데이터 보강 완료",
+        ...result
+      });
+    } catch (error) {
+      console.error("Error enriching place with web data:", error);
+      res.status(500).json({ error: "Failed to enrich place with web data" });
+    }
+  });
+
+  app.post("/api/admin/websearch/michelin", async (req, res) => {
+    try {
+      const { placeName, cityName, placeId } = req.body;
+      if (!placeName || !cityName) {
+        return res.status(400).json({ error: "placeName and cityName are required" });
+      }
+      const { searchMichelinInfo } = await import("./services/gemini-web-search");
+      const result = await searchMichelinInfo(placeName, cityName, placeId);
+      res.json(result);
+    } catch (error) {
+      console.error("Error searching Michelin info:", error);
+      res.status(500).json({ error: "Failed to search Michelin info" });
+    }
+  });
+
+  app.post("/api/admin/websearch/tripadvisor", async (req, res) => {
+    try {
+      const { placeName, cityName, placeId } = req.body;
+      if (!placeName || !cityName) {
+        return res.status(400).json({ error: "placeName and cityName are required" });
+      }
+      const { searchTripAdvisorInfo } = await import("./services/gemini-web-search");
+      const result = await searchTripAdvisorInfo(placeName, cityName, placeId);
+      res.json(result);
+    } catch (error) {
+      console.error("Error searching TripAdvisor info:", error);
+      res.status(500).json({ error: "Failed to search TripAdvisor info" });
     }
   });
 }
