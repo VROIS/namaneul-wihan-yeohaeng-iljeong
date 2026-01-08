@@ -234,8 +234,16 @@ function setupErrorHandler(app: express.Application) {
       host: "0.0.0.0",
       reusePort: true,
     },
-    () => {
+    async () => {
       log(`express server serving on port ${port}`);
+
+      try {
+        const { dataScheduler } = await import("./services/data-scheduler");
+        await dataScheduler.initialize();
+        log("[Server] Data collection scheduler initialized");
+      } catch (error) {
+        log("[Server] Failed to initialize scheduler:", error);
+      }
     },
   );
 })();

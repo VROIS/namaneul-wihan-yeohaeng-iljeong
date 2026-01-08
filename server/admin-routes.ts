@@ -874,6 +874,33 @@ export function registerAdminRoutes(app: Express) {
   });
 
   // ========================================
+  // 스케줄러 상태 및 수동 실행
+  // ========================================
+  
+  app.get("/api/admin/scheduler/status", async (req, res) => {
+    try {
+      const { dataScheduler } = await import("./services/data-scheduler");
+      const status = dataScheduler.getStatus();
+      res.json(status);
+    } catch (error) {
+      console.error("Error getting scheduler status:", error);
+      res.status(500).json({ error: "스케줄러 상태 조회 실패" });
+    }
+  });
+
+  app.post("/api/admin/scheduler/run/:taskName", async (req, res) => {
+    try {
+      const { taskName } = req.params;
+      const { dataScheduler } = await import("./services/data-scheduler");
+      const result = await dataScheduler.runNow(taskName);
+      res.json(result);
+    } catch (error) {
+      console.error("Error running scheduler task:", error);
+      res.status(500).json({ error: "스케줄러 태스크 실행 실패" });
+    }
+  });
+
+  // ========================================
   // Google Places 동기화
   // ========================================
   
