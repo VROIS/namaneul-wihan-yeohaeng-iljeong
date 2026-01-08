@@ -326,8 +326,8 @@ export class GooglePlacesFetcher {
       PRICE_LEVEL_VERY_EXPENSIVE: 4,
     };
 
-    const photoUrls = googlePlace.photos?.slice(0, 5).map(p => 
-      `https://places.googleapis.com/v1/${p.name}/media?maxWidthPx=800&key=${this.apiKey}`
+    const photoUrls = googlePlace.photos?.slice(0, 10).map(p => 
+      `https://places.googleapis.com/v1/${p.name}/media?maxWidthPx=1200&key=${this.apiKey}`
     ) || [];
 
     const openingHours: Record<string, string> = {};
