@@ -469,6 +469,32 @@ export const geminiWebSearchCache = pgTable("gemini_web_search_cache", {
   fetchedAt: timestamp("fetched_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
+// 가격 정보 로우 데이터 (다중 소스)
+export const placePrices = pgTable("place_prices", {
+  id: serial("id").primaryKey(),
+  placeId: integer("place_id").references(() => places.id, { onDelete: "cascade" }),
+  cityId: integer("city_id").references(() => cities.id, { onDelete: "cascade" }),
+  priceType: text("price_type").notNull(), // entrance_fee, meal_average, activity, transport, ticket
+  source: text("source").notNull(), // google_places, gemini_search, klook, viator, official_website
+  priceLow: real("price_low"), // 최저 가격
+  priceHigh: real("price_high"), // 최고 가격
+  priceAverage: real("price_average"), // 평균 가격
+  currency: text("currency").notNull().default("KRW"),
+  priceLabel: text("price_label"), // "성인 기준", "2인 기준" 등
+  sourceUrl: text("source_url"), // 원본 URL
+  rawData: jsonb("raw_data").$type<{
+    googlePriceLevel?: number;
+    klookProductId?: string;
+    viatorProductId?: string;
+    extractedText?: string;
+  }>(),
+  confidenceScore: real("confidence_score"), // 0-1 신뢰도
+  isVerified: boolean("is_verified").default(false),
+  expiresAt: timestamp("expires_at"), // 캐시 만료
+  fetchedAt: timestamp("fetched_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
 // 데이터 수집 스케줄
 export const dataCollectionSchedule = pgTable("data_collection_schedule", {
   id: serial("id").primaryKey(),
@@ -599,6 +625,7 @@ export type ExchangeRate = typeof exchangeRates.$inferSelect;
 export type DataCollectionSchedule = typeof dataCollectionSchedule.$inferSelect;
 export type CrisisAlert = typeof crisisAlerts.$inferSelect;
 export type GeminiWebSearchCache = typeof geminiWebSearchCache.$inferSelect;
+export type PlacePrice = typeof placePrices.$inferSelect;
 
 // Re-export chat models
 export * from "./models/chat";
