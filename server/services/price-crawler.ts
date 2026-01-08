@@ -15,6 +15,8 @@ interface PriceData {
   rawData?: Record<string, any>;
 }
 
+const GEMINI_MODEL = "gemini-3-flash-preview";
+
 async function extractPriceWithGemini(
   placeName: string,
   placeType: string,
@@ -34,7 +36,7 @@ async function extractPriceWithGemini(
     }
     
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
+      model: GEMINI_MODEL,
       contents: `Search the web and find the current price for: ${query}
 
 Respond in JSON format:
@@ -78,6 +80,135 @@ If no price found, set found: false. Always use the local currency of the destin
   }
   
   return null;
+}
+
+async function extractKlookViatorPrice(
+  placeName: string,
+  cityName: string,
+  countryName: string = ""
+): Promise<PriceData | null> {
+  try {
+    const { ai } = await import("../replit_integrations/image/client");
+    
+    const response = await ai.models.generateContent({
+      model: GEMINI_MODEL,
+      contents: `Search for tour packages on Klook and Viator for: "${placeName}" in ${cityName} ${countryName}
+
+Find:
+1. Klook tour prices for this attraction/activity
+2. Viator tour prices for this attraction/activity
+3. GetYourGuide prices if available
+
+Return JSON:
+{
+  "found": true/false,
+  "klook": {
+    "tourName": "투어 이름",
+    "priceLow": number,
+    "priceHigh": number,
+    "currency": "KRW/USD/EUR",
+    "url": "klook.com/..."
+  },
+  "viator": {
+    "tourName": "투어 이름",
+    "priceLow": number,
+    "priceHigh": number,
+    "currency": "KRW/USD/EUR",
+    "url": "viator.com/..."
+  },
+  "bestPrice": {
+    "source": "klook" or "viator",
+    "price": number,
+    "currency": "KRW/USD/EUR"
+  },
+  "confidence": 0.0-1.0
+}
+
+Return found: false if no tour packages exist for this place.`,
+      config: {
+        tools: [{ googleSearch: {} }],
+      },
+    });
+
+    const text = response.text || "";
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      if (parsed.found && parsed.bestPrice) {
+        const klookPrice = parsed.klook?.priceLow;
+        const viatorPrice = parsed.viator?.priceLow;
+        
+        return {
+          priceLow: Math.min(klookPrice || Infinity, viatorPrice || Infinity) === Infinity 
+            ? parsed.bestPrice.price 
+            : Math.min(klookPrice || Infinity, viatorPrice || Infinity),
+          priceHigh: Math.max(
+            parsed.klook?.priceHigh || 0, 
+            parsed.viator?.priceHigh || 0
+          ) || parsed.bestPrice.price,
+          priceAverage: parsed.bestPrice.price,
+          currency: parsed.bestPrice.currency || "USD",
+          priceLabel: "투어 패키지 (Klook/Viator)",
+          sourceUrl: parsed.klook?.url || parsed.viator?.url,
+          confidenceScore: parsed.confidence || 0.7,
+          rawData: { 
+            klook: parsed.klook,
+            viator: parsed.viator,
+            extractedText: text.slice(0, 500) 
+          },
+        };
+      }
+    }
+  } catch (error) {
+    console.error("[PriceCrawler] Klook/Viator extraction error:", error);
+  }
+  
+  return null;
+}
+
+async function collectKlookViatorPrice(
+  placeId: number,
+  cityId: number,
+  placeName: string,
+  cityName: string,
+  countryName: string = ""
+): Promise<void> {
+  const existingPrice = await db.select()
+    .from(placePrices)
+    .where(and(
+      eq(placePrices.placeId, placeId),
+      eq(placePrices.source, "klook_viator"),
+      eq(placePrices.priceType, "tour_package"),
+      gte(placePrices.fetchedAt, new Date(Date.now() - CACHE_DURATION_HOURS * 60 * 60 * 1000))
+    ))
+    .limit(1);
+
+  if (existingPrice.length > 0) {
+    console.log(`[PriceCrawler] Klook/Viator cache hit for ${placeName}`);
+    return;
+  }
+
+  const priceData = await extractKlookViatorPrice(placeName, cityName, countryName);
+  
+  if (priceData) {
+    await db.insert(placePrices).values({
+      placeId,
+      cityId,
+      priceType: "tour_package",
+      source: "klook_viator",
+      priceLow: priceData.priceLow,
+      priceHigh: priceData.priceHigh,
+      priceAverage: priceData.priceAverage,
+      currency: priceData.currency,
+      priceLabel: priceData.priceLabel,
+      sourceUrl: priceData.sourceUrl,
+      confidenceScore: priceData.confidenceScore,
+      rawData: priceData.rawData,
+      expiresAt: new Date(Date.now() + CACHE_DURATION_HOURS * 60 * 60 * 1000),
+    });
+    
+    console.log(`[PriceCrawler] Klook/Viator tour for ${placeName}: ${priceData.priceLow}-${priceData.priceHigh} ${priceData.currency}`);
+  }
 }
 
 function convertGooglePriceLevel(
@@ -233,14 +364,24 @@ export async function crawlPricesForCity(cityId: number): Promise<{ success: boo
           place.id, cityId, place.name, place.type, city.name, "entrance_fee"
         );
         pricesCollected++;
+        
+        await collectKlookViatorPrice(
+          place.id, cityId, place.name, city.name, city.country || ""
+        );
+        pricesCollected++;
       } else if (place.type === "restaurant" || place.type === "cafe") {
         await collectPriceFromGemini(
           place.id, cityId, place.name, place.type, city.name, "meal_average"
         );
         pricesCollected++;
+      } else if (place.type === "activity" || place.type === "tour") {
+        await collectKlookViatorPrice(
+          place.id, cityId, place.name, city.name, city.country || ""
+        );
+        pricesCollected++;
       }
 
-      await new Promise(r => setTimeout(r, 500));
+      await new Promise(r => setTimeout(r, 800));
     } catch (error) {
       console.error(`[PriceCrawler] Error collecting price for ${place.name}:`, error);
     }
