@@ -539,6 +539,31 @@ export const weatherForecast = pgTable("weather_forecast", {
   fetchedAt: timestamp("fetched_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
+// TripAdvisor 데이터 (Gemini Search 수집)
+export const tripAdvisorData = pgTable("tripadvisor_data", {
+  id: serial("id").primaryKey(),
+  placeId: integer("place_id").references(() => places.id, { onDelete: "cascade" }),
+  cityId: integer("city_id").references(() => cities.id, { onDelete: "cascade" }),
+  tripAdvisorRating: real("tripadvisor_rating"), // 1-5
+  tripAdvisorReviewCount: integer("tripadvisor_review_count"),
+  tripAdvisorRanking: integer("tripadvisor_ranking"), // 순위
+  tripAdvisorRankingTotal: integer("tripadvisor_ranking_total"), // 전체 수
+  tripAdvisorCategory: text("tripadvisor_category"), // 카테고리 (e.g., "서울 관광지")
+  tripAdvisorUrl: text("tripadvisor_url"),
+  excellentReviews: integer("excellent_reviews"), // 5점 리뷰 수
+  veryGoodReviews: integer("very_good_reviews"), // 4점 리뷰 수
+  averageReviews: integer("average_reviews"), // 3점 리뷰 수
+  poorReviews: integer("poor_reviews"), // 2점 리뷰 수
+  terribleReviews: integer("terrible_reviews"), // 1점 리뷰 수
+  recentReviewSummary: text("recent_review_summary"), // 최근 리뷰 요약
+  travelersChoiceAward: boolean("travelers_choice_award").default(false),
+  rawData: jsonb("raw_data"),
+  confidenceScore: real("confidence_score"), // 0-1
+  expiresAt: timestamp("expires_at"),
+  fetchedAt: timestamp("fetched_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
 // 데이터 수집 스케줄
 export const dataCollectionSchedule = pgTable("data_collection_schedule", {
   id: serial("id").primaryKey(),
