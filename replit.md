@@ -71,6 +71,20 @@ See `design_guidelines.md` for complete design system including:
 - Vibe score badges (purple 8+, orange 5-7, gray <5)
 
 ## Recent Changes
+- 2026-01-08: 네이버 블로그 및 날씨 크롤러 구현
+  - **네이버 블로그 크롤러**: Naver Search API + Gemini 폴백
+    - naver_blog_posts 테이블: 도시/장소별 블로그 분석
+    - 감성 분석: positive/neutral/negative
+    - 장소/키워드 자동 추출 (Gemini)
+  - **날씨 크롤러**: OpenWeather API + Gemini 폴백
+    - weather_forecast 테이블: 5일 예보
+    - Reality Penalty 자동 계산 (비/온도/바람)
+  - **스케줄러 업데이트**: 
+    - 네이버 블로그: 4:15 AM KST
+    - 날씨: 4:30 AM KST
+  - **Admin API 추가**:
+    - `/api/admin/naver-blog/stats`, `/api/admin/naver-blog/sync/city/:id`
+    - `/api/admin/weather/stats`, `/api/admin/weather/city/:id`
 - 2026-01-08: 가격 정보 로우 데이터 수집 시스템 구현
   - **place_prices 테이블**: 다중 소스 가격 로우 데이터 저장
     - priceType: entrance_fee, meal_average, activity, transport, ticket
