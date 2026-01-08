@@ -44,11 +44,67 @@ export const places = pgTable("places", {
   cuisineType: text("cuisine_type"),
   cuisineOriginCountry: text("cuisine_origin_country"),
   address: text("address"),
+  shortAddress: text("short_address"),
   latitude: real("latitude").notNull(),
   longitude: real("longitude").notNull(),
   priceLevel: integer("price_level"),
   photoUrls: jsonb("photo_urls").$type<string[]>().default([]),
   openingHours: jsonb("opening_hours").$type<Record<string, string>>(),
+  
+  websiteUri: text("website_uri"),
+  googleMapsUri: text("google_maps_uri"),
+  phoneNumber: text("phone_number"),
+  editorialSummary: text("editorial_summary"),
+  businessStatus: text("business_status"),
+  
+  userRatingCount: integer("user_rating_count"),
+  
+  delivery: boolean("delivery"),
+  dineIn: boolean("dine_in"),
+  takeout: boolean("takeout"),
+  curbsidePickup: boolean("curbside_pickup"),
+  reservable: boolean("reservable"),
+  
+  servesBeer: boolean("serves_beer"),
+  servesWine: boolean("serves_wine"),
+  servesBreakfast: boolean("serves_breakfast"),
+  servesBrunch: boolean("serves_brunch"),
+  servesLunch: boolean("serves_lunch"),
+  servesDinner: boolean("serves_dinner"),
+  servesVegetarianFood: boolean("serves_vegetarian_food"),
+  servesCoffee: boolean("serves_coffee"),
+  servesDessert: boolean("serves_dessert"),
+  
+  goodForChildren: boolean("good_for_children"),
+  goodForGroups: boolean("good_for_groups"),
+  goodForWatchingSports: boolean("good_for_watching_sports"),
+  
+  liveMusic: boolean("live_music"),
+  outdoorSeating: boolean("outdoor_seating"),
+  restroom: boolean("restroom"),
+  menuForChildren: boolean("menu_for_children"),
+  allowsDogs: boolean("allows_dogs"),
+  
+  accessibilityOptions: jsonb("accessibility_options").$type<{
+    wheelchairAccessibleParking?: boolean;
+    wheelchairAccessibleEntrance?: boolean;
+    wheelchairAccessibleRestroom?: boolean;
+    wheelchairAccessibleSeating?: boolean;
+  }>(),
+  parkingOptions: jsonb("parking_options").$type<{
+    freeParkingLot?: boolean;
+    paidParkingLot?: boolean;
+    freeStreetParking?: boolean;
+    paidStreetParking?: boolean;
+    valetParking?: boolean;
+  }>(),
+  paymentOptions: jsonb("payment_options").$type<{
+    acceptsCreditCards?: boolean;
+    acceptsDebitCards?: boolean;
+    acceptsCashOnly?: boolean;
+    acceptsNfc?: boolean;
+  }>(),
+  
   vibeScore: real("vibe_score"),
   buzzScore: real("buzz_score"),
   tasteVerifyScore: real("taste_verify_score"),

@@ -342,11 +342,51 @@ export class GooglePlacesFetcher {
       name: googlePlace.displayName.text,
       type: placeType,
       address: googlePlace.formattedAddress,
+      shortAddress: googlePlace.shortFormattedAddress,
       latitude: googlePlace.location.latitude,
       longitude: googlePlace.location.longitude,
       priceLevel: googlePlace.priceLevel ? priceLevelMap[googlePlace.priceLevel] : undefined,
       photoUrls,
       openingHours: Object.keys(openingHours).length > 0 ? openingHours : undefined,
+      
+      websiteUri: googlePlace.websiteUri,
+      googleMapsUri: googlePlace.googleMapsUri,
+      phoneNumber: googlePlace.internationalPhoneNumber || googlePlace.nationalPhoneNumber,
+      editorialSummary: googlePlace.editorialSummary?.text,
+      businessStatus: googlePlace.businessStatus,
+      
+      userRatingCount: googlePlace.userRatingCount,
+      
+      delivery: googlePlace.delivery,
+      dineIn: googlePlace.dineIn,
+      takeout: googlePlace.takeout,
+      curbsidePickup: googlePlace.curbsidePickup,
+      reservable: googlePlace.reservable,
+      
+      servesBeer: googlePlace.servesBeer,
+      servesWine: googlePlace.servesWine,
+      servesBreakfast: googlePlace.servesBreakfast,
+      servesBrunch: googlePlace.servesBrunch,
+      servesLunch: googlePlace.servesLunch,
+      servesDinner: googlePlace.servesDinner,
+      servesVegetarianFood: googlePlace.servesVegetarianFood,
+      servesCoffee: googlePlace.servesCoffee,
+      servesDessert: googlePlace.servesDessert,
+      
+      goodForChildren: googlePlace.goodForChildren,
+      goodForGroups: googlePlace.goodForGroups,
+      goodForWatchingSports: googlePlace.goodForWatchingSports,
+      
+      liveMusic: googlePlace.liveMusic,
+      outdoorSeating: googlePlace.outdoorSeating,
+      restroom: googlePlace.restroom,
+      menuForChildren: googlePlace.menuForChildren,
+      allowsDogs: googlePlace.allowsDogs,
+      
+      accessibilityOptions: googlePlace.accessibilityOptions,
+      parkingOptions: googlePlace.parkingOptions,
+      paymentOptions: googlePlace.paymentOptions,
+      
       lastDataSync: new Date(),
     };
 
@@ -362,9 +402,9 @@ export class GooglePlacesFetcher {
       placeId,
       source: "google",
       sourceId: googlePlace.id,
-      rating: googlePlace.rating,
-      reviewCount: googlePlace.userRatingCount,
-      priceLevel: googlePlace.priceLevel ? priceLevelMap[googlePlace.priceLevel] : undefined,
+      rating: googlePlace.rating ?? null,
+      reviewCount: googlePlace.userRatingCount ?? null,
+      priceLevel: googlePlace.priceLevel ? priceLevelMap[googlePlace.priceLevel] : null,
       rawData: googlePlace as any,
     });
 
