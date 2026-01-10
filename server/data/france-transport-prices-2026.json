@@ -212,8 +212,8 @@
         "id": "km_rate_long",
         "name": "거리당 요율 (300km 이상)",
         "vehicle": "세단",
-        "priceLow": 0.70,
-        "priceHigh": 0.70,
+        "priceLow": 0.7,
+        "priceHigh": 0.7,
         "unit": "km",
         "features": ["왕복 회송 비용 포함"],
         "guideVerified": true
@@ -285,8 +285,8 @@
         "id": "guide_meal",
         "name": "가이드 식대",
         "vehicle": null,
-        "priceLow": 21.10,
-        "priceHigh": 21.10,
+        "priceLow": 21.1,
+        "priceHigh": 21.1,
         "unit": "끼니당",
         "features": ["지방 출장 시 표준"],
         "guideVerified": true
@@ -295,8 +295,8 @@
         "id": "guide_accommodation",
         "name": "가이드 숙박비",
         "vehicle": null,
-        "priceLow": 75.60,
-        "priceHigh": 75.60,
+        "priceLow": 75.6,
+        "priceHigh": 75.6,
         "unit": "1박당",
         "features": ["지방 출장 시 표준"],
         "guideVerified": true
