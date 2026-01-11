@@ -865,9 +865,10 @@
     
     async function loadSources() {
       try {
+        const t = Date.now();
         const [ytRes, blogRes] = await Promise.all([
-          fetch(`${API_BASE}/youtube-channels`),
-          fetch(`${API_BASE}/blog-sources`)
+          fetch(`${API_BASE}/youtube-channels?t=${t}`, { cache: 'no-store' }),
+          fetch(`${API_BASE}/blog-sources?t=${t}`, { cache: 'no-store' })
         ]);
         const channels = await ytRes.json();
         const blogs = await blogRes.json();
@@ -1509,21 +1510,30 @@
     }
     
     // YouTube 채널 수정/삭제
-    function editYoutubeChannel(channel) {
+    async function editYoutubeChannel(channel) {
       const newName = prompt('채널명 수정:', channel.channelName);
-      if (!newName || newName === channel.channelName) return;
+      if (newName === null) return; // 취소됨
       
       const newTrust = prompt('신뢰도 (0.1~2.0):', channel.trustWeight);
+      if (newTrust === null) return; // 취소됨
+      
+      const finalName = newName.trim() || channel.channelName;
       const trustVal = parseFloat(newTrust) || channel.trustWeight;
       
-      fetch(`${API_BASE}/youtube-channels/${channel.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ channelName: newName, trustWeight: trustVal })
-      }).then(res => {
-        if (res.ok) loadSources();
-        else alert('수정에 실패했습니다');
-      }).catch(() => alert('수정 중 오류'));
+      try {
+        const res = await fetch(`${API_BASE}/youtube-channels/${channel.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ channelName: finalName, trustWeight: trustVal })
+        });
+        if (res.ok) {
+          await loadSources();
+        } else {
+          alert('수정에 실패했습니다');
+        }
+      } catch (err) {
+        alert('수정 중 오류');
+      }
     }
     
     async function deleteYoutubeChannel(id, name) {
@@ -1538,21 +1548,30 @@
     }
     
     // 블로그 소스 수정/삭제
-    function editBlogSource(blog) {
+    async function editBlogSource(blog) {
       const newName = prompt('소스명 수정:', blog.sourceName);
-      if (!newName || newName === blog.sourceName) return;
+      if (newName === null) return; // 취소됨
       
       const newTrust = prompt('신뢰도 (0.1~2.0):', blog.trustWeight);
+      if (newTrust === null) return; // 취소됨
+      
+      const finalName = newName.trim() || blog.sourceName;
       const trustVal = parseFloat(newTrust) || blog.trustWeight;
       
-      fetch(`${API_BASE}/blog-sources/${blog.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sourceName: newName, trustWeight: trustVal })
-      }).then(res => {
-        if (res.ok) loadSources();
-        else alert('수정에 실패했습니다');
-      }).catch(() => alert('수정 중 오류'));
+      try {
+        const res = await fetch(`${API_BASE}/blog-sources/${blog.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sourceName: finalName, trustWeight: trustVal })
+        });
+        if (res.ok) {
+          await loadSources();
+        } else {
+          alert('수정에 실패했습니다');
+        }
+      } catch (err) {
+        alert('수정 중 오류');
+      }
     }
     
     async function deleteBlogSource(id, name) {

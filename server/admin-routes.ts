@@ -548,11 +548,12 @@ export function registerAdminRoutes(app: Express) {
   app.patch("/api/admin/youtube-channels/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      const { isActive, trustWeight, category } = req.body;
+      const { channelName, isActive, trustWeight, category } = req.body;
       
       const [channel] = await db
         .update(youtubeChannels)
         .set({
+          ...(channelName !== undefined && { channelName }),
           ...(isActive !== undefined && { isActive }),
           ...(trustWeight !== undefined && { trustWeight }),
           ...(category !== undefined && { category }),
@@ -627,11 +628,12 @@ export function registerAdminRoutes(app: Express) {
   app.patch("/api/admin/blog-sources/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      const { isActive, trustWeight, category } = req.body;
+      const { sourceName, isActive, trustWeight, category } = req.body;
       
       const [source] = await db
         .update(blogSources)
         .set({
+          ...(sourceName !== undefined && { sourceName }),
           ...(isActive !== undefined && { isActive }),
           ...(trustWeight !== undefined && { trustWeight }),
           ...(category !== undefined && { category }),
