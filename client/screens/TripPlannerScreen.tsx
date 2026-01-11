@@ -519,6 +519,9 @@ export default function TripPlannerScreen() {
         <View style={styles.vibeGrid}>
           {VIBE_OPTIONS.map(vibe => {
             const isSelected = formData.vibes.includes(vibe.id);
+            const selectionIndex = formData.vibes.indexOf(vibe.id);
+            const priorityLabels = ["(최우선)", "(우선)", "(반영)"];
+            const priorityLabel = selectionIndex >= 0 ? priorityLabels[selectionIndex] : "";
             return (
               <Pressable
                 key={vibe.id}
@@ -534,7 +537,7 @@ export default function TripPlannerScreen() {
                   color={isSelected ? "#FFFFFF" : theme.textSecondary}
                 />
                 <Text style={[styles.vibeText, { color: isSelected ? "#FFFFFF" : theme.textSecondary }]}>
-                  {vibe.label}
+                  {vibe.label}{priorityLabel}
                 </Text>
               </Pressable>
             );
