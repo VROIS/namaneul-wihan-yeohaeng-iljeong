@@ -39,7 +39,15 @@ The application also features a persona system (e.g., Luxury, Comfort) to tailor
 
 UI/UX design adheres to a specific system including Gemini Blue (#4285F4) primary color, iOS 26 liquid glass effects with transparent glass-style tab bar, and a 4-tab bottom navigation. The app uses a "Value First" approach where TripPlannerScreen is the first screen - users can input trip preferences without login, authentication only required when clicking "일정 생성" button.
 
-The backend provides a comprehensive set of API endpoints for managing cities, places, recommendations, itinerary generation, and optimization. An Admin Dashboard is available for managing API services, data sources (YouTube, blogs), data freshness, sync logs, and seeding default data.
+The backend provides a comprehensive set of API endpoints for managing cities, places, recommendations, itinerary generation, and optimization. An Admin Dashboard is available for managing API services, data sources (YouTube, blogs), data freshness, sync logs, guide prices, and verification requests.
+
+### 전문가 검증 시스템
+사용자가 AI 생성 일정을 파리 현지 35년 경력 가이드에게 검증 요청할 수 있는 기능:
+- **verification_requests 테이블**: 검증 요청 저장 (itineraryData, userMessage, status, adminComment)
+- **상태 흐름**: pending → in_review → verified/rejected
+- **프론트엔드**: 일정 결과 화면 하단 "현지 전문가 검증" 버튼 → 모달 폼
+- **Admin Dashboard**: "검증 요청" 탭에서 요청 관리, 상태 변경, 코멘트 작성
+- **마케팅 퍼널**: 무료 AI 일정 → 검증 요청 → 가이드 서비스 연결
 
 ## External Dependencies
 - **AI**: Gemini 3.0 Flash (via Replit AI Integrations)
