@@ -11,8 +11,11 @@ import {
   type ItineraryItem,
   type RouteCache,
   type DataSyncLog,
+  type GuidePrice,
+  type PlacePrice,
   users, cities, places, placeDataSources, reviews, vibeAnalysis,
-  realityChecks, weatherCache, itineraries, itineraryItems, routeCache, dataSyncLog
+  realityChecks, weatherCache, itineraries, itineraryItems, routeCache, dataSyncLog,
+  guidePrices, placePrices
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, gte, lte, sql } from "drizzle-orm";
@@ -292,6 +295,43 @@ export class DatabaseStorage implements IStorage {
   async logDataSync(log: Omit<DataSyncLog, "id" | "startedAt">): Promise<DataSyncLog> {
     const [newLog] = await db.insert(dataSyncLog).values(log).returning();
     return newLog;
+  }
+
+  // Guide Prices
+  async getGuidePrices(): Promise<GuidePrice[]> {
+    return db.select().from(guidePrices).where(eq(guidePrices.isActive, true));
+  }
+
+  async getGuidePriceByType(serviceType: string): Promise<GuidePrice | undefined> {
+    const [price] = await db.select().from(guidePrices)
+      .where(and(eq(guidePrices.serviceType, serviceType), eq(guidePrices.isActive, true)));
+    return price || undefined;
+  }
+
+  async upsertGuidePrice(data: Omit<GuidePrice, "id" | "createdAt">): Promise<GuidePrice> {
+    const existing = await this.getGuidePriceByType(data.serviceType);
+    
+    if (existing) {
+      const [updated] = await db.update(guidePrices)
+        .set({ ...data, lastUpdated: new Date() })
+        .where(eq(guidePrices.id, existing.id))
+        .returning();
+      return updated;
+    }
+    
+    const [created] = await db.insert(guidePrices).values(data).returning();
+    return created;
+  }
+
+  // Place Prices
+  async getPlacePrice(placeId: number, priceType: string): Promise<PlacePrice | undefined> {
+    const [price] = await db.select().from(placePrices)
+      .where(and(eq(placePrices.placeId, placeId), eq(placePrices.priceType, priceType)));
+    return price || undefined;
+  }
+
+  async getPlacePrices(placeId: number): Promise<PlacePrice[]> {
+    return db.select().from(placePrices).where(eq(placePrices.placeId, placeId));
   }
 }
 

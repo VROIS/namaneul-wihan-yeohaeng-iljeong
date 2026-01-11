@@ -8,6 +8,10 @@ export type MobilityStyle = 'WalkMore' | 'Moderate' | 'Minimal';
 
 export type CompanionType = 'Single' | 'Couple' | 'Family' | 'Group';
 
+export type MealLevel = 'Michelin' | 'Trendy' | 'Local' | 'Budget';
+
+export type GuideOption = 'None' | 'Walking' | 'Sedan' | 'VIP';
+
 export type CurationFocus = 'Kids' | 'Parents' | 'Everyone' | 'Self';
 
 export interface CompanionDetail {
@@ -31,6 +35,8 @@ export interface TripFormData {
   travelStyle: TravelStyle;
   travelPace: TravelPace;
   mobilityStyle: MobilityStyle;
+  mealLevel: MealLevel;
+  guideOption: GuideOption;
 }
 
 export interface Place {
@@ -121,4 +127,18 @@ export const CURATION_FOCUS_OPTIONS: { id: CurationFocus; label: string; icon: s
   { id: 'Parents', label: '부모님', icon: 'heart' },
   { id: 'Everyone', label: '모두', icon: 'users' },
   { id: 'Self', label: '나', icon: 'user' },
+];
+
+export const MEAL_LEVEL_OPTIONS: { id: MealLevel; label: string; icon: string; pricePerMeal: number; description: string }[] = [
+  { id: 'Michelin', label: '미슐랭급', icon: 'star', pricePerMeal: 100, description: '미슐랭 1~3스타' },
+  { id: 'Trendy', label: '트렌디', icon: 'trending-up', pricePerMeal: 50, description: '인스타 핫플' },
+  { id: 'Local', label: '현지맛집', icon: 'map-pin', pricePerMeal: 30, description: '로컬 추천' },
+  { id: 'Budget', label: '간편식', icon: 'coffee', pricePerMeal: 10, description: '스트리트푸드' },
+];
+
+export const GUIDE_OPTION_OPTIONS: { id: GuideOption; label: string; icon: string; pricePerDay: number; description: string; editable: boolean }[] = [
+  { id: 'None', label: '없음 (자유)', icon: 'compass', pricePerDay: 0, description: '직접 이동', editable: false },
+  { id: 'Walking', label: '워킹 가이드', icon: 'map', pricePerDay: 420, description: '반일 도보 투어', editable: true },
+  { id: 'Sedan', label: '세단 가이드', icon: 'navigation', pricePerDay: 600, description: '전일 차량+가이드', editable: true },
+  { id: 'VIP', label: 'VIP 전담', icon: 'award', pricePerDay: 1015, description: '최상위 VIP 서비스', editable: true },
 ];

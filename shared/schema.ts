@@ -520,6 +520,24 @@ export const naverBlogPosts = pgTable("naver_blog_posts", {
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
+// 가이드 서비스 가격 (Admin에서 수정 가능)
+export const guidePrices = pgTable("guide_prices", {
+  id: serial("id").primaryKey(),
+  serviceType: text("service_type").notNull(), // walking, sedan, vip, airport_transfer
+  serviceName: text("service_name").notNull(),
+  pricePerDay: real("price_per_day"), // 일일 가격 (EUR)
+  priceLow: real("price_low"), // 최저가
+  priceHigh: real("price_high"), // 최고가
+  currency: text("currency").notNull().default("EUR"),
+  unit: text("unit").notNull().default("day"), // day, trip, hour
+  description: text("description"),
+  features: jsonb("features").$type<string[]>().default([]),
+  isActive: boolean("is_active").default(true),
+  source: text("source").default("guide_verified"), // guide_verified = 35년 경력 가이드 데이터
+  lastUpdated: timestamp("last_updated").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
 // 날씨 예보 캐시
 export const weatherForecast = pgTable("weather_forecast", {
   id: serial("id").primaryKey(),
@@ -697,6 +715,7 @@ export type GeminiWebSearchCache = typeof geminiWebSearchCache.$inferSelect;
 export type PlacePrice = typeof placePrices.$inferSelect;
 export type NaverBlogPost = typeof naverBlogPosts.$inferSelect;
 export type WeatherForecast = typeof weatherForecast.$inferSelect;
+export type GuidePrice = typeof guidePrices.$inferSelect;
 
 // Re-export chat models
 export * from "./models/chat";
