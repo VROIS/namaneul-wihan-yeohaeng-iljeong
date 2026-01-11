@@ -97,9 +97,6 @@ export default function TripPlannerScreen() {
   const [tempDate, setTempDate] = useState(new Date());
   const [showWebInput, setShowWebInput] = useState<PickerMode>(null);
   const [pendingGenerate, setPendingGenerate] = useState(false);
-  const [showVerificationModal, setShowVerificationModal] = useState(false);
-  const [verificationMessage, setVerificationMessage] = useState("");
-  const [verificationSubmitting, setVerificationSubmitting] = useState(false);
 
   const [formData, setFormData] = useState<TripFormData>({
     birthDate: "1985-06-15",
@@ -649,111 +646,6 @@ export default function TripPlannerScreen() {
     </ScrollView>
   );
 
-  const handleSubmitVerification = async () => {
-    if (!itinerary) return;
-    
-    setVerificationSubmitting(true);
-    try {
-      const userId = `user_${Date.now()}`;
-      const response = await apiRequest("POST", "/api/verification/request", {
-        userId,
-        itineraryData: itinerary,
-        userMessage: verificationMessage || null,
-      });
-      
-      const result = await response.json();
-      if (result.success) {
-        setShowVerificationModal(false);
-        setVerificationMessage("");
-        Alert.alert(
-          "검증 요청 완료",
-          "현지 전문가가 일정을 검토한 후 알려드리겠습니다. 검토 결과는 마이페이지에서 확인하실 수 있습니다.",
-          [{ text: "확인" }]
-        );
-      }
-    } catch (error) {
-      console.error("Verification request error:", error);
-      Alert.alert("오류", "요청 처리 중 문제가 발생했습니다. 다시 시도해 주세요.");
-    } finally {
-      setVerificationSubmitting(false);
-    }
-  };
-
-  const renderVerificationModal = () => (
-    <Modal
-      visible={showVerificationModal}
-      animationType="slide"
-      transparent
-      onRequestClose={() => setShowVerificationModal(false)}
-    >
-      <View style={styles.modalOverlay}>
-        <View style={[styles.verificationModalContent, { backgroundColor: theme.backgroundRoot }]}>
-          <View style={styles.verificationModalHeader}>
-            <Text style={[styles.verificationModalTitle, { color: theme.text }]}>현지 전문가 검증</Text>
-            <Pressable onPress={() => setShowVerificationModal(false)} style={styles.modalCloseBtn}>
-              <Feather name="x" size={24} color={theme.textSecondary} />
-            </Pressable>
-          </View>
-          
-          <ScrollView style={styles.verificationModalBody} showsVerticalScrollIndicator={false}>
-            <View style={[styles.verificationInfoBox, { backgroundColor: `${Brand.primary}10` }]}>
-              <Feather name="info" size={18} color={Brand.primary} />
-              <Text style={[styles.verificationInfoText, { color: theme.textSecondary }]}>
-                파리 현지 35년 경력 가이드가 AI 생성 일정을 검토하고, 개선점과 현지 팁을 알려드립니다.
-              </Text>
-            </View>
-
-            <View style={styles.verificationFormSection}>
-              <Text style={[styles.verificationLabel, { color: theme.text }]}>일정 요약</Text>
-              <View style={[styles.verificationSummaryBox, { backgroundColor: theme.backgroundSecondary }]}>
-                <Text style={[styles.verificationSummaryText, { color: theme.text }]}>
-                  {itinerary?.destination} | {itinerary?.days?.length || 0}일
-                </Text>
-                <Text style={[styles.verificationSummarySubtext, { color: theme.textSecondary }]}>
-                  {itinerary?.startDate} ~ {itinerary?.endDate}
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.verificationFormSection}>
-              <Text style={[styles.verificationLabel, { color: theme.text }]}>전문가에게 남기는 한마디 (선택)</Text>
-              <TextInput
-                style={[styles.verificationTextInput, { 
-                  backgroundColor: theme.backgroundSecondary, 
-                  color: theme.text,
-                  borderColor: theme.border,
-                }]}
-                placeholder="궁금한 점이나 요청사항을 적어주세요"
-                placeholderTextColor={theme.textTertiary}
-                value={verificationMessage}
-                onChangeText={setVerificationMessage}
-                multiline
-                numberOfLines={3}
-              />
-            </View>
-          </ScrollView>
-
-          <View style={[styles.verificationModalFooter, { borderTopColor: theme.border }]}>
-            <Pressable
-              style={[styles.verificationSubmitBtn, { backgroundColor: Brand.primary }]}
-              onPress={handleSubmitVerification}
-              disabled={verificationSubmitting}
-            >
-              {verificationSubmitting ? (
-                <Text style={styles.verificationSubmitText}>처리 중...</Text>
-              ) : (
-                <>
-                  <Feather name="send" size={18} color="#FFFFFF" />
-                  <Text style={styles.verificationSubmitText}>검증 요청하기</Text>
-                </>
-              )}
-            </Pressable>
-          </View>
-        </View>
-      </View>
-    </Modal>
-  );
-
   const renderLoading = () => (
     <View style={[styles.loadingContainer, { backgroundColor: theme.backgroundRoot }]}>
       <View style={[styles.loadingIconBox, { backgroundColor: `${Brand.primary}15` }]}>
@@ -848,12 +740,14 @@ export default function TripPlannerScreen() {
           contentContainerStyle={{ paddingBottom: insets.bottom + Spacing.xl }}
           showsVerticalScrollIndicator={false}
         >
-          {currentDay?.summary ? (
-            <View style={[styles.summaryBox, { backgroundColor: Brand.primary }]}>
-              <Feather name="zap" size={16} color="#FFFFFF" />
-              <Text style={styles.summaryText}>{currentDay.summary}</Text>
-            </View>
-          ) : null}
+          <Pressable 
+            style={[styles.summaryBox, { backgroundColor: Brand.primary }]}
+            onPress={() => navigation.navigate("VerificationRequest", { itinerary })}
+          >
+            <Feather name="check-circle" size={16} color="#FFFFFF" />
+            <Text style={styles.summaryText}>현지 전문가 검증 요청</Text>
+            <Feather name="chevron-right" size={16} color="rgba(255,255,255,0.7)" />
+          </Pressable>
 
           <View style={styles.placesList}>
             {places.map((place, index) => (
@@ -898,24 +792,7 @@ export default function TripPlannerScreen() {
             ))}
           </View>
 
-          <View style={styles.verificationSection}>
-            <Pressable
-              style={[styles.verificationButton, { backgroundColor: theme.backgroundDefault, borderColor: Brand.primary }]}
-              onPress={() => setShowVerificationModal(true)}
-            >
-              <Feather name="check-circle" size={20} color={Brand.primary} />
-              <View style={styles.verificationButtonText}>
-                <Text style={[styles.verificationTitle, { color: theme.text }]}>현지 전문가 검증</Text>
-                <Text style={[styles.verificationSubtitle, { color: theme.textSecondary }]}>
-                  파리 현지 가이드가 일정을 검토해 드립니다
-                </Text>
-              </View>
-              <Feather name="chevron-right" size={20} color={theme.textSecondary} />
-            </Pressable>
-          </View>
         </ScrollView>
-
-        {renderVerificationModal()}
       </View>
     );
   };
@@ -1045,26 +922,4 @@ const styles = StyleSheet.create({
   vibeTag: { paddingHorizontal: Spacing.sm, paddingVertical: 2, borderRadius: BorderRadius.xs },
   vibeTagText: { fontSize: 10, fontWeight: "700" },
   placeReason: { fontSize: 13, lineHeight: 18 },
-  verificationSection: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg, paddingBottom: Spacing.xl },
-  verificationButton: { flexDirection: "row", alignItems: "center", padding: Spacing.md, borderRadius: BorderRadius.md, borderWidth: 1.5, gap: Spacing.sm },
-  verificationButtonText: { flex: 1 },
-  verificationTitle: { fontSize: 15, fontWeight: "700" },
-  verificationSubtitle: { fontSize: 12, fontWeight: "500", marginTop: 2 },
-  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
-  verificationModalContent: { maxHeight: "85%", borderTopLeftRadius: BorderRadius.xl, borderTopRightRadius: BorderRadius.xl },
-  verificationModalHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", padding: Spacing.lg, borderBottomWidth: 1, borderBottomColor: "#E5E7EB" },
-  verificationModalTitle: { fontSize: 18, fontWeight: "800" },
-  modalCloseBtn: { padding: Spacing.xs },
-  verificationModalBody: { padding: Spacing.lg },
-  verificationInfoBox: { flexDirection: "row", alignItems: "flex-start", gap: Spacing.sm, padding: Spacing.md, borderRadius: BorderRadius.md, marginBottom: Spacing.lg },
-  verificationInfoText: { flex: 1, fontSize: 13, lineHeight: 20 },
-  verificationFormSection: { marginBottom: Spacing.lg },
-  verificationLabel: { fontSize: 14, fontWeight: "700", marginBottom: Spacing.sm },
-  verificationSummaryBox: { padding: Spacing.md, borderRadius: BorderRadius.md },
-  verificationSummaryText: { fontSize: 15, fontWeight: "700" },
-  verificationSummarySubtext: { fontSize: 12, marginTop: 4 },
-  verificationTextInput: { padding: Spacing.md, borderRadius: BorderRadius.md, borderWidth: 1, fontSize: 14, minHeight: 80, textAlignVertical: "top" },
-  verificationModalFooter: { padding: Spacing.lg, borderTopWidth: 1 },
-  verificationSubmitBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: Spacing.sm, padding: Spacing.md, borderRadius: BorderRadius.md },
-  verificationSubmitText: { color: "#FFFFFF", fontSize: 16, fontWeight: "700" },
 });

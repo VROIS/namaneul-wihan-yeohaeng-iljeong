@@ -4,12 +4,15 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import MainTabNavigator from "@/navigation/MainTabNavigator";
 import DestinationDetailScreen from "@/screens/DestinationDetailScreen";
 import OnboardingScreen from "@/screens/OnboardingScreen";
+import VerificationRequestScreen from "@/screens/VerificationRequestScreen";
 import { Colors } from "@/constants/theme";
+import { Itinerary } from "@/types/trip";
 
 export type RootStackParamList = {
   Main: undefined;
   Onboarding: undefined;
   DestinationDetail: { placeId: number };
+  VerificationRequest: { itinerary: Itinerary };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -59,6 +62,14 @@ export default function RootStackNavigator() {
         component={DestinationDetailScreen}
         options={{
           presentation: "modal",
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        name="VerificationRequest"
+        component={VerificationRequestScreen}
+        options={{
+          presentation: "card",
           headerShown: false,
         }}
       />
