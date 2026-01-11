@@ -149,7 +149,8 @@ export class ScoringEngine {
   }
   
   /**
-   * Vibe Match 계산: 사용자 선택 Vibe와 장소 vibeKeywords 매칭률
+   * Vibe Match 계산: 사용자 선택 순서 기반 가중치로 장소 매칭률 계산
+   * 선택 순서: 1개(100%), 2개(60/40), 3개(50/30/20)
    * 반환값: 0.5 ~ 1.5 (배수)
    */
   private calculateVibeMatch(place: Place, userVibes: Vibe[]): number {
@@ -158,16 +159,21 @@ export class ScoringEngine {
     const placeKeywords = (place.vibeKeywords as string[]) || [];
     if (placeKeywords.length === 0) return 1.0;
     
-    // 사용자 선택 Vibe의 가중치 합계
-    const totalWeight = userVibes.reduce((sum, vibe) => sum + VIBE_BASE_WEIGHTS[vibe], 0);
+    const PRIORITY_WEIGHTS: Record<number, number[]> = {
+      1: [1.0],
+      2: [0.6, 0.4],
+      3: [0.5, 0.3, 0.2],
+    };
+    
+    const weights = PRIORITY_WEIGHTS[userVibes.length] || [0.5, 0.3, 0.2];
     
     let matchScore = 0;
     
-    for (const vibe of userVibes) {
-      const vibeWeight = VIBE_BASE_WEIGHTS[vibe] / totalWeight; // 정규화된 가중치
+    for (let i = 0; i < userVibes.length; i++) {
+      const vibe = userVibes[i];
+      const vibeWeight = weights[i];
       const vibeKeywords = VIBE_KEYWORD_MAP[vibe];
       
-      // 장소 키워드와 Vibe 키워드 매칭
       const matches = placeKeywords.filter(keyword => 
         vibeKeywords.some(vk => keyword.toLowerCase().includes(vk.toLowerCase()))
       );
@@ -176,7 +182,6 @@ export class ScoringEngine {
       matchScore += vibeWeight * matchRate;
     }
     
-    // 0.5 ~ 1.5 범위로 변환 (기본 1.0, 매칭률에 따라 ±0.5)
     const vibeMatch = 1.0 + (matchScore - 0.5);
     return Math.min(1.5, Math.max(0.5, vibeMatch));
   }

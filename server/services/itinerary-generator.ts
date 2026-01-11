@@ -84,22 +84,18 @@ const PROTAGONIST_ADJUSTMENTS: Record<CurationFocus, Partial<Record<Vibe, number
 function calculateVibeWeights(selectedVibes: Vibe[], protagonist: CurationFocus) {
   if (selectedVibes.length === 0) return [];
   
-  const adjustments = PROTAGONIST_ADJUSTMENTS[protagonist];
+  const PRIORITY_WEIGHTS: Record<number, number[]> = {
+    1: [100],
+    2: [60, 40],
+    3: [50, 30, 20],
+  };
   
-  const adjustedWeights = selectedVibes.map(vibe => {
-    let weight = BASE_WEIGHTS[vibe];
-    if (adjustments[vibe]) {
-      weight += adjustments[vibe]!;
-    }
-    return { vibe, weight: Math.max(0, weight) };
-  });
-
-  const totalWeight = adjustedWeights.reduce((sum, v) => sum + v.weight, 0);
-
-  return adjustedWeights.map(({ vibe, weight }) => ({
+  const weights = PRIORITY_WEIGHTS[selectedVibes.length] || [50, 30, 20];
+  
+  return selectedVibes.map((vibe, index) => ({
     vibe,
-    weight: weight / totalWeight,
-    percentage: Math.round((weight / totalWeight) * 100),
+    weight: weights[index] / 100,
+    percentage: weights[index],
   }));
 }
 
