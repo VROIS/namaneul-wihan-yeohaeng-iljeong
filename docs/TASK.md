@@ -51,15 +51,94 @@
 
 > ⚠️ **A-3 Instagram 제외 사유**: Meta 로그인 정책 변경으로 헤드리스 크롤링 불가 (2024년 이후 차단)
 
-#### Phase B: 스코어링 엔진 (생각하는 뇌)
+#### Phase B: 스코어링 엔진 (생각하는 뇌) 🔄 진행중
+
+##### 📐 핵심 공식
+```
+Personalized Score = Base Score × Vibe Match + Companion Bonus + Style Bonus - Reality Penalty
+
+Base Score = (Vibe + Buzz + Taste) / 3  →  0~10점
+Vibe Match = 사용자 Vibe ↔ 장소 Vibe 매칭  →  0.5~1.5 (배수)
+Companion Bonus = 동반자 타입 매칭  →  0~2점
+Style Bonus = 예산 스타일 매칭  →  0~1점
+Reality Penalty = 날씨+혼잡도+운영상태  →  0~5점 (차감)
+Final Score = min(10, max(0, Personalized Score))
+```
+
+##### 💰 1. 예산 매핑 (travelStyle → priceLevel)
+| travelStyle | priceLevel | 설명 | 가격대 예시 |
+|-------------|-----------|------|------------|
+| Luxury | 4 | 최고급 | 미슐랭, 5성호텔, €100+ |
+| Premium | 3 | 고급 | 트렌디 레스토랑, 4성호텔, €50-100 |
+| Reasonable | 2 | 합리적 | 현지인 맛집, 3성호텔, €20-50 |
+| Economic | 1 | 경제적 | 가성비, 호스텔, €10-20 |
+
+**Style Bonus**: 일치 +1.0, 차이1 +0.5, 차이2+ +0
+
+##### ⚡ 2. 페이스 매핑 (travelPace → placesPerDay)
+| travelPace | placesPerDay | 구성 | 시간배분 |
+|------------|-------------|------|----------|
+| Packed | 5-6곳 | 관광3 + 점심1 + 카페1 + 저녁1 | 2시간/장소 |
+| Normal ★신규 | 4곳 | 관광2 + 점심1 + 저녁1 | 3시간/장소 |
+| Relaxed | 2-3곳 | 관광1 + 점심1 + 저녁1 | 4시간/장소 |
+
+##### 🚶 3. 이동 스타일 (mobilityStyle → 거리/교통)
+| mobilityStyle | radiusKm | transport | 특징 |
+|---------------|----------|-----------|------|
+| WalkMore | 2km | 대중교통만 | 걷기 중심, 지역 밀착 |
+| Moderate ★신규 | 3km | 택시/대중교통 | 균형잡힌 이동 |
+| Minimal | 5km+ | VIP 전용차량+가이드 | 편안함 우선 |
+
+##### 🎨 4. Vibe 가중치 (baseWeight 기준)
+| Vibe | 한글 | baseWeight | 선택시 가중치 계산 |
+|------|------|-----------|------------------|
+| Healing | 힐링 | 35 | weight / Σ(선택 weights) |
+| Foodie | 미식 | 25 | 예: Foodie+Culture 선택 → 25/(25+10)=0.71 |
+| Hotspot | 핫스팟 | 15 | |
+| Adventure | 모험 | 10 | |
+| Culture | 문화/예술 | 10 | |
+| Romantic | 로맨틱 | 5 | |
+
+**Vibe Match 배수**: 1.0 + (매칭률 - 0.5) → 0.5~1.5
+
+##### 👥 5. 동반자 보너스 (Companion Bonus)
+| companionType | 인원 | 매칭 조건 | 보너스 |
+|---------------|------|----------|--------|
+| Single | 1명 | 혼밥OK, 1인석, 바(bar) | +1.5 |
+| Couple | 2명 | 로맨틱, 야경, 분위기 | +2.0 |
+| Family | 3-7명 | goodForChildren, 넓은공간 | +1.5 |
+| Group | 7명+ | 단체석, 예약가능, 프라이빗룸 | +1.0 |
+
+##### ⚠️ 6. Reality Penalty
+| 요소 | 패널티 | 조건 |
+|------|--------|------|
+| 날씨 | 0~2점 | 비/눈/폭염 |
+| 혼잡도 | 0~1.5점 | 피크타임, 주말 |
+| 운영상태 | 0~1.5점 | 휴무, 파업, 공사 |
+
+##### 📱 7. 로딩 화면 시각화 (UX 개선)
+```
+┌─────────────────────────────────────────┐
+│   🧠 맞춤 일정 분석 중...                │
+│   ✅ 예산 분석: Premium → priceLevel 3   │
+│   ✅ Vibe 가중치: Foodie 0.71            │
+│   🔄 동반자 최적화: Couple → 로맨틱 우선  │
+│   📊 현재 분석 점수: 8.72                │
+└─────────────────────────────────────────┘
+```
+
+##### 📋 구현 작업 목록
 | 순서 | 작업 | 상태 | 예상시간 |
 |------|------|------|----------|
-| B-1 | Vibe Score 계산 (Gemini Vision 분석) | ⬜ | 2시간 |
-| B-2 | Buzz Score 계산 (Google+TripAdvisor+블로그) | ⬜ | 2시간 |
-| B-3 | Taste Score 계산 (원어민 리뷰, 미슐랭) | ⬜ | 2시간 |
-| B-4 | Reality Penalty 적용 (날씨, 혼잡도, 파업) | ⬜ | 1시간 |
-| B-5 | 최종 점수 계산 → places 테이블 업데이트 | ⬜ | 1시간 |
-| B-6 | 점수 재계산 스케줄러 | ⬜ | 30분 |
+| B-1 | trip.ts에 travelPace 'Normal', mobilityStyle 'Moderate' 추가 | ⬜ | 15분 |
+| B-2 | TripPlannerScreen UI에 3단계 선택 버튼 추가 | ⬜ | 30분 |
+| B-3 | userPreferences JSON 변환 함수 (priceLevel, placesPerDay, radiusKm) | ⬜ | 30분 |
+| B-4 | Vibe Match 점수 계산 로직 (사용자 vibes ↔ 장소 vibeKeywords) | ⬜ | 1시간 |
+| B-5 | Companion Bonus 로직 (장소 속성 매칭) | ⬜ | 30분 |
+| B-6 | Style Bonus 로직 (priceLevel 매칭) | ⬜ | 30분 |
+| B-7 | 로딩 화면 개선 - 단계별 분석 시각화 + 소수점 점수 | ⬜ | 1시간 |
+| B-8 | itinerary-generator.ts Gemini 프롬프트 개선 (JSON 구조 활용) | ⬜ | 1시간 |
+| B-9 | 통합 테스트 | ⬜ | 30분 |
 
 #### Phase C: 관제 현황판 강화 ✅ 완료
 | 순서 | 작업 | 상태 | 예상시간 |
