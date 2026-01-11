@@ -528,13 +528,19 @@
 
     <div id="tab-guide-prices" class="tab-content" style="display: none;">
       <div class="card">
-        <h2>가이드 가격 관리</h2>
-        <p style="color: #9ca3af; font-size: 14px; margin-bottom: 20px;">35년차 파리 가이드 현장 데이터 기반 가격표 (2026년)</p>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+          <div>
+            <h2 style="margin-bottom: 4px;">가이드 가격 관리</h2>
+            <p style="color: #9ca3af; font-size: 14px;">35년차 파리 가이드 현장 데이터 기반 가격표 (2026년)</p>
+          </div>
+          <button class="btn btn-primary" onclick="openAddModal()">+ 새 서비스 추가</button>
+        </div>
         <div id="guide-prices-list" style="display: flex; flex-direction: column; gap: 12px;">
           <div class="loading"><div class="spinner"></div>로딩 중...</div>
         </div>
       </div>
       
+      <!-- 수정 모달 -->
       <div id="guide-price-edit-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center;">
         <div class="card" style="width: 90%; max-width: 500px; margin: auto;">
           <h2>가격 수정</h2>
@@ -565,6 +571,61 @@
             <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 8px;">
               <button type="button" class="btn btn-secondary" onclick="closeEditModal()">취소</button>
               <button type="submit" class="btn btn-primary">저장</button>
+            </div>
+          </form>
+        </div>
+      </div>
+      
+      <!-- 추가 모달 -->
+      <div id="guide-price-add-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center;">
+        <div class="card" style="width: 90%; max-width: 500px; margin: auto;">
+          <h2>새 서비스 추가</h2>
+          <form id="guide-price-add-form" style="display: flex; flex-direction: column; gap: 16px;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <div>
+                <label style="font-size: 12px; color: #9ca3af; display: block; margin-bottom: 4px;">서비스 유형 (영문)</label>
+                <input type="text" id="add-service-type" class="form-input" placeholder="예: night_tour" required>
+              </div>
+              <div>
+                <label style="font-size: 12px; color: #9ca3af; display: block; margin-bottom: 4px;">서비스명 (표시용)</label>
+                <input type="text" id="add-service-name" class="form-input" placeholder="예: 야간 투어" required>
+              </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+              <div>
+                <label style="font-size: 12px; color: #9ca3af; display: block; margin-bottom: 4px;">기본 가격 (€)</label>
+                <input type="number" id="add-price-per-day" class="form-input" placeholder="일당/회당">
+              </div>
+              <div>
+                <label style="font-size: 12px; color: #9ca3af; display: block; margin-bottom: 4px;">최저가 (€)</label>
+                <input type="number" id="add-price-low" class="form-input" placeholder="범위 최저">
+              </div>
+              <div>
+                <label style="font-size: 12px; color: #9ca3af; display: block; margin-bottom: 4px;">최고가 (€)</label>
+                <input type="number" id="add-price-high" class="form-input" placeholder="범위 최고">
+              </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <div>
+                <label style="font-size: 12px; color: #9ca3af; display: block; margin-bottom: 4px;">단위</label>
+                <select id="add-unit" class="form-input">
+                  <option value="day">일당 (/일)</option>
+                  <option value="trip">회당 (/회)</option>
+                  <option value="hour">시간당 (/시간)</option>
+                </select>
+              </div>
+              <div>
+                <label style="font-size: 12px; color: #9ca3af; display: block; margin-bottom: 4px;">설명</label>
+                <input type="text" id="add-description" class="form-input" placeholder="간단한 설명">
+              </div>
+            </div>
+            <div>
+              <label style="font-size: 12px; color: #9ca3af; display: block; margin-bottom: 4px;">특징 (쉼표로 구분)</label>
+              <input type="text" id="add-features" class="form-input" placeholder="예: 픽업 포함, 입장권 포함, 식사 포함">
+            </div>
+            <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 8px;">
+              <button type="button" class="btn btn-secondary" onclick="closeAddModal()">취소</button>
+              <button type="submit" class="btn btn-primary">추가</button>
             </div>
           </form>
         </div>
@@ -1464,10 +1525,12 @@
           return;
         }
         
+        const unitLabels = { day: '/일', trip: '/회', hour: '/시간' };
         container.innerHTML = prices.map(p => `
-          <div class="service-item" style="display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 16px;">
+          <div class="service-item" style="display: grid; grid-template-columns: 1fr auto auto auto; align-items: center; gap: 12px;">
             <div>
               <div style="font-weight: 600; font-size: 15px;">${p.serviceName}</div>
+              <div style="font-size: 11px; color: #6b7280;">${p.serviceType}</div>
               <div style="font-size: 12px; color: #9ca3af; margin-top: 2px;">${p.description || ''}</div>
               <div style="font-size: 11px; color: #6b7280; margin-top: 4px;">
                 ${p.features ? p.features.map(f => `<span style="background: rgba(255,255,255,0.05); padding: 2px 8px; border-radius: 4px; margin-right: 4px;">${f}</span>`).join('') : ''}
@@ -1477,9 +1540,10 @@
               <div style="font-size: 20px; font-weight: 700; color: #a78bfa;">
                 ${p.pricePerDay ? `€${p.pricePerDay}` : `€${p.priceLow}~${p.priceHigh}`}
               </div>
-              <div style="font-size: 11px; color: #6b7280;">${p.unit === 'day' ? '/일' : '/회'}</div>
+              <div style="font-size: 11px; color: #6b7280;">${unitLabels[p.unit] || p.unit}</div>
             </div>
             <button class="btn btn-secondary" onclick='openEditModal(${JSON.stringify(p)})' style="padding: 8px 16px;">수정</button>
+            <button class="btn" style="padding: 8px 12px; background: rgba(239,68,68,0.2); color: #ef4444;" onclick="deleteGuidePrice(${p.id}, '${p.serviceName.replace(/'/g, "\\'")}')">삭제</button>
           </div>
         `).join('');
       } catch (err) {
@@ -1527,6 +1591,71 @@
         alert('저장 중 오류: ' + err.message);
       }
     });
+    
+    function openAddModal() {
+      document.getElementById('add-service-type').value = '';
+      document.getElementById('add-service-name').value = '';
+      document.getElementById('add-price-per-day').value = '';
+      document.getElementById('add-price-low').value = '';
+      document.getElementById('add-price-high').value = '';
+      document.getElementById('add-unit').value = 'day';
+      document.getElementById('add-description').value = '';
+      document.getElementById('add-features').value = '';
+      document.getElementById('guide-price-add-modal').style.display = 'flex';
+    }
+    
+    function closeAddModal() {
+      document.getElementById('guide-price-add-modal').style.display = 'none';
+    }
+    
+    document.getElementById('guide-price-add-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const featuresStr = document.getElementById('add-features').value;
+      const features = featuresStr ? featuresStr.split(',').map(f => f.trim()).filter(f => f) : [];
+      
+      const data = {
+        serviceType: document.getElementById('add-service-type').value,
+        serviceName: document.getElementById('add-service-name').value,
+        pricePerDay: parseFloat(document.getElementById('add-price-per-day').value) || null,
+        priceLow: parseFloat(document.getElementById('add-price-low').value) || null,
+        priceHigh: parseFloat(document.getElementById('add-price-high').value) || null,
+        unit: document.getElementById('add-unit').value,
+        description: document.getElementById('add-description').value,
+        features
+      };
+      
+      try {
+        const res = await fetch(`${API_BASE}/guide-prices`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        if (res.ok) {
+          closeAddModal();
+          loadGuidePrices();
+        } else {
+          const err = await res.json();
+          alert(err.error || '추가에 실패했습니다');
+        }
+      } catch (err) {
+        alert('추가 중 오류: ' + err.message);
+      }
+    });
+    
+    async function deleteGuidePrice(id, name) {
+      if (!confirm(`"${name}" 서비스를 삭제하시겠습니까?`)) return;
+      
+      try {
+        const res = await fetch(`${API_BASE}/guide-prices/${id}`, { method: 'DELETE' });
+        if (res.ok) {
+          loadGuidePrices();
+        } else {
+          alert('삭제에 실패했습니다');
+        }
+      } catch (err) {
+        alert('삭제 중 오류: ' + err.message);
+      }
+    }
     
     async function seedGuidePrices() {
       try {
