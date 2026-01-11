@@ -2076,4 +2076,122 @@ export function registerAdminRoutes(app: Express) {
       res.status(500).json({ error: "Failed to get transport suggestion" });
     }
   });
+
+  // ========================================
+  // 가이드 가격 관리 API (Admin에서 수정 가능)
+  // ========================================
+  
+  app.get("/api/admin/guide-prices", async (req, res) => {
+    try {
+      const { guidePrices } = await import("../shared/schema");
+      const prices = await db.select().from(guidePrices);
+      res.json(prices);
+    } catch (error) {
+      console.error("Error fetching guide prices:", error);
+      res.status(500).json({ error: "Failed to fetch guide prices" });
+    }
+  });
+
+  app.put("/api/admin/guide-prices/:id", async (req, res) => {
+    try {
+      const { guidePrices } = await import("../shared/schema");
+      const id = parseInt(req.params.id);
+      const { pricePerDay, priceLow, priceHigh, description, features } = req.body;
+      
+      const [updated] = await db.update(guidePrices)
+        .set({ 
+          pricePerDay, 
+          priceLow, 
+          priceHigh,
+          description,
+          features,
+          lastUpdated: new Date()
+        })
+        .where(eq(guidePrices.id, id))
+        .returning();
+      
+      if (!updated) {
+        return res.status(404).json({ error: "Guide price not found" });
+      }
+      
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating guide price:", error);
+      res.status(500).json({ error: "Failed to update guide price" });
+    }
+  });
+
+  app.post("/api/admin/guide-prices/seed", async (req, res) => {
+    try {
+      const { guidePrices } = await import("../shared/schema");
+      
+      const seedData = [
+        { serviceType: 'walking', serviceName: '워킹 가이드 (반일)', pricePerDay: 420, priceLow: 420, priceHigh: 420, unit: 'day', description: '시내/박물관 워킹 투어', features: ['공인 가이드', '차량 미포함'] },
+        { serviceType: 'sedan', serviceName: '세단 가이드 (전일)', pricePerDay: 600, priceLow: 600, priceHigh: 600, unit: 'day', description: '비즈니스 세단 + 가이드', features: ['E-Class', '8-10시간', '주행거리 포함'] },
+        { serviceType: 'vip', serviceName: 'VIP 전담 (전일)', pricePerDay: 1015, priceLow: 880, priceHigh: 1015, unit: 'day', description: '최상위 VIP 밴 서비스', features: ['럭셔리 미니밴', '의전 서비스', '전담 가이드'] },
+        { serviceType: 'airport_sedan', serviceName: '공항 픽업 (비즈니스 세단)', pricePerDay: null, priceLow: 117, priceHigh: 152, unit: 'trip', description: 'CDG 공항 픽업', features: ['60분 대기 무료', '피켓 마중'] },
+        { serviceType: 'airport_vip', serviceName: '공항 픽업 (럭셔리 세단)', pricePerDay: null, priceLow: 234, priceHigh: 480, unit: 'trip', description: 'CDG VIP 픽업', features: ['S-Class', 'VIP 서비스'] },
+      ];
+      
+      for (const data of seedData) {
+        await db.insert(guidePrices).values({
+          ...data,
+          currency: 'EUR',
+          isActive: true,
+          source: 'guide_verified',
+        }).onConflictDoNothing();
+      }
+      
+      const allPrices = await db.select().from(guidePrices);
+      res.json({ success: true, count: allPrices.length, prices: allPrices });
+    } catch (error) {
+      console.error("Error seeding guide prices:", error);
+      res.status(500).json({ error: "Failed to seed guide prices" });
+    }
+  });
+
+  // ========================================
+  // 예산 계산 API
+  // ========================================
+  
+  app.post("/api/budget/calculate", async (req, res) => {
+    try {
+      const { budgetCalculator } = await import("./services/budget-calculator");
+      const { days, companionCount, mealLevel, guideOption, mobilityStyle, mealsPerDay = 2, placeIds } = req.body;
+      
+      const result = await budgetCalculator.calculateBudget({
+        days,
+        companionCount,
+        mealLevel,
+        guideOption,
+        mobilityStyle,
+        mealsPerDay,
+        placeIds,
+      });
+      
+      res.json(result);
+    } catch (error) {
+      console.error("Error calculating budget:", error);
+      res.status(500).json({ error: "Failed to calculate budget" });
+    }
+  });
+
+  app.post("/api/budget/quick-estimate", async (req, res) => {
+    try {
+      const { budgetCalculator } = await import("./services/budget-calculator");
+      const { days, companionCount, mealLevel, guideOption } = req.body;
+      
+      const result = await budgetCalculator.estimateQuickBudget(
+        days,
+        companionCount,
+        mealLevel,
+        guideOption
+      );
+      
+      res.json(result);
+    } catch (error) {
+      console.error("Error estimating budget:", error);
+      res.status(500).json({ error: "Failed to estimate budget" });
+    }
+  });
 }
