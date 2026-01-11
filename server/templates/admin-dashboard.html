@@ -277,6 +277,7 @@
       <button class="tab" data-tab="sources">데이터 소스</button>
       <button class="tab" data-tab="api">API 상태</button>
       <button class="tab" data-tab="logs">동기화 로그</button>
+      <button class="tab" data-tab="guide-prices">가이드 가격</button>
     </div>
     
     <div id="tab-overview" class="tab-content">
@@ -525,6 +526,51 @@
       </div>
     </div>
 
+    <div id="tab-guide-prices" class="tab-content" style="display: none;">
+      <div class="card">
+        <h2>가이드 가격 관리</h2>
+        <p style="color: #9ca3af; font-size: 14px; margin-bottom: 20px;">35년차 파리 가이드 현장 데이터 기반 가격표 (2026년)</p>
+        <div id="guide-prices-list" style="display: flex; flex-direction: column; gap: 12px;">
+          <div class="loading"><div class="spinner"></div>로딩 중...</div>
+        </div>
+      </div>
+      
+      <div id="guide-price-edit-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center;">
+        <div class="card" style="width: 90%; max-width: 500px; margin: auto;">
+          <h2>가격 수정</h2>
+          <form id="guide-price-form" style="display: flex; flex-direction: column; gap: 16px;">
+            <input type="hidden" id="edit-price-id">
+            <div>
+              <label style="font-size: 12px; color: #9ca3af; display: block; margin-bottom: 4px;">서비스명</label>
+              <div id="edit-service-name" style="font-size: 16px; font-weight: 600;"></div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
+              <div>
+                <label style="font-size: 12px; color: #9ca3af; display: block; margin-bottom: 4px;">기본 가격</label>
+                <input type="number" id="edit-price-per-day" class="form-input" placeholder="€">
+              </div>
+              <div>
+                <label style="font-size: 12px; color: #9ca3af; display: block; margin-bottom: 4px;">최저가</label>
+                <input type="number" id="edit-price-low" class="form-input" placeholder="€">
+              </div>
+              <div>
+                <label style="font-size: 12px; color: #9ca3af; display: block; margin-bottom: 4px;">최고가</label>
+                <input type="number" id="edit-price-high" class="form-input" placeholder="€">
+              </div>
+            </div>
+            <div>
+              <label style="font-size: 12px; color: #9ca3af; display: block; margin-bottom: 4px;">설명</label>
+              <input type="text" id="edit-description" class="form-input" placeholder="서비스 설명">
+            </div>
+            <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 8px;">
+              <button type="button" class="btn btn-secondary" onclick="closeEditModal()">취소</button>
+              <button type="submit" class="btn btn-primary">저장</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
   </div>
   
   <script>
@@ -562,6 +608,7 @@
         case 'sources': loadSources(); loadUnifiedSourcesStatus(); break;
         case 'api': loadApiDetail(); loadApiRealStatus(); break;
         case 'logs': loadLogs(); break;
+        case 'guide-prices': loadGuidePrices(); break;
       }
     }
     
@@ -1397,6 +1444,99 @@
     }
     
     loadDashboard();
+    
+    // 가이드 가격 관련 함수
+    async function loadGuidePrices() {
+      const container = document.getElementById('guide-prices-list');
+      try {
+        const res = await fetch(`${API_BASE}/guide-prices`);
+        const prices = await res.json();
+        
+        if (prices.length === 0) {
+          container.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: #6b7280;">
+              <p>가격 데이터가 없습니다</p>
+              <button class="btn btn-primary" onclick="seedGuidePrices()" style="margin-top: 16px;">기본 가격 입력</button>
+            </div>`;
+          return;
+        }
+        
+        container.innerHTML = prices.map(p => `
+          <div class="service-item" style="display: grid; grid-template-columns: 1fr auto auto; align-items: center; gap: 16px;">
+            <div>
+              <div style="font-weight: 600; font-size: 15px;">${p.serviceName}</div>
+              <div style="font-size: 12px; color: #9ca3af; margin-top: 2px;">${p.description || ''}</div>
+              <div style="font-size: 11px; color: #6b7280; margin-top: 4px;">
+                ${p.features ? p.features.map(f => `<span style="background: rgba(255,255,255,0.05); padding: 2px 8px; border-radius: 4px; margin-right: 4px;">${f}</span>`).join('') : ''}
+              </div>
+            </div>
+            <div style="text-align: right;">
+              <div style="font-size: 20px; font-weight: 700; color: #a78bfa;">
+                ${p.pricePerDay ? `€${p.pricePerDay}` : `€${p.priceLow}~${p.priceHigh}`}
+              </div>
+              <div style="font-size: 11px; color: #6b7280;">${p.unit === 'day' ? '/일' : '/회'}</div>
+            </div>
+            <button class="btn btn-secondary" onclick='openEditModal(${JSON.stringify(p)})' style="padding: 8px 16px;">수정</button>
+          </div>
+        `).join('');
+      } catch (err) {
+        container.innerHTML = `<div style="color: #ef4444;">가격 로딩 실패: ${err.message}</div>`;
+      }
+    }
+    
+    function openEditModal(price) {
+      document.getElementById('edit-price-id').value = price.id;
+      document.getElementById('edit-service-name').textContent = price.serviceName;
+      document.getElementById('edit-price-per-day').value = price.pricePerDay || '';
+      document.getElementById('edit-price-low').value = price.priceLow || '';
+      document.getElementById('edit-price-high').value = price.priceHigh || '';
+      document.getElementById('edit-description').value = price.description || '';
+      document.getElementById('guide-price-edit-modal').style.display = 'flex';
+    }
+    
+    function closeEditModal() {
+      document.getElementById('guide-price-edit-modal').style.display = 'none';
+    }
+    
+    document.getElementById('guide-price-form').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const id = document.getElementById('edit-price-id').value;
+      const data = {
+        pricePerDay: parseFloat(document.getElementById('edit-price-per-day').value) || null,
+        priceLow: parseFloat(document.getElementById('edit-price-low').value) || null,
+        priceHigh: parseFloat(document.getElementById('edit-price-high').value) || null,
+        description: document.getElementById('edit-description').value
+      };
+      
+      try {
+        const res = await fetch(`${API_BASE}/guide-prices/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
+        });
+        if (res.ok) {
+          closeEditModal();
+          loadGuidePrices();
+        } else {
+          alert('저장에 실패했습니다');
+        }
+      } catch (err) {
+        alert('저장 중 오류: ' + err.message);
+      }
+    });
+    
+    async function seedGuidePrices() {
+      try {
+        const res = await fetch(`${API_BASE}/guide-prices/seed`, { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+          alert(`${data.count}개 가격 데이터가 입력되었습니다`);
+          loadGuidePrices();
+        }
+      } catch (err) {
+        alert('시드 데이터 입력 실패');
+      }
+    }
     
     let autoRefreshInterval = null;
     let lastUpdateTime = new Date();
