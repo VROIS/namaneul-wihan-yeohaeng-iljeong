@@ -12,8 +12,8 @@ import { registerChatRoutes } from "./replit_integrations/chat";
 import { registerImageRoutes } from "./replit_integrations/image";
 import { registerAdminRoutes } from "./admin-routes";
 import { db } from "./db";
-import { instagramHashtags, cities, youtubeChannels } from "../shared/schema";
-import { count } from "drizzle-orm";
+import { instagramHashtags, cities, youtubeChannels, verificationRequests } from "../shared/schema";
+import { count, eq, desc } from "drizzle-orm";
 
 const BRAND_PRIMARY = "#6366F1";
 
@@ -410,6 +410,92 @@ export async function registerRoutes(app: Express): Promise<Server> {
         gemini: !!process.env.AI_INTEGRATIONS_GEMINI_API_KEY,
       }
     });
+  });
+
+  // Verification Request APIs
+  app.post("/api/verification/request", async (req, res) => {
+    try {
+      const { userId, itineraryData, userMessage, preferredDate, contactEmail, contactKakao } = req.body;
+      
+      if (!userId || !itineraryData) {
+        return res.status(400).json({ error: "userId and itineraryData are required" });
+      }
+      
+      const [request] = await db.insert(verificationRequests).values({
+        itineraryId: itineraryData.id || 0,
+        userId,
+        itineraryData,
+        userMessage,
+        preferredDate: preferredDate ? new Date(preferredDate) : null,
+        contactEmail,
+        contactKakao,
+        status: "pending",
+      }).returning();
+      
+      res.json({ success: true, requestId: request.id });
+    } catch (error) {
+      console.error("Error creating verification request:", error);
+      res.status(500).json({ error: "Failed to create verification request" });
+    }
+  });
+
+  app.get("/api/verification/requests", async (req, res) => {
+    try {
+      const { userId, status } = req.query;
+      
+      let query = db.select().from(verificationRequests);
+      
+      if (userId) {
+        query = query.where(eq(verificationRequests.userId, userId as string));
+      }
+      
+      const requests = await query.orderBy(desc(verificationRequests.createdAt));
+      res.json(requests);
+    } catch (error) {
+      console.error("Error fetching verification requests:", error);
+      res.status(500).json({ error: "Failed to fetch verification requests" });
+    }
+  });
+
+  app.get("/api/verification/requests/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const [request] = await db.select().from(verificationRequests).where(eq(verificationRequests.id, parseInt(id)));
+      
+      if (!request) {
+        return res.status(404).json({ error: "Verification request not found" });
+      }
+      
+      res.json(request);
+    } catch (error) {
+      console.error("Error fetching verification request:", error);
+      res.status(500).json({ error: "Failed to fetch verification request" });
+    }
+  });
+
+  app.patch("/api/verification/requests/:id", async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { status, adminComment, placeRatings } = req.body;
+      
+      const updateData: any = { updatedAt: new Date() };
+      if (status) updateData.status = status;
+      if (adminComment !== undefined) updateData.adminComment = adminComment;
+      if (placeRatings) updateData.placeRatings = placeRatings;
+      if (status === "verified" || status === "rejected") {
+        updateData.reviewedAt = new Date();
+      }
+      
+      const [updated] = await db.update(verificationRequests)
+        .set(updateData)
+        .where(eq(verificationRequests.id, parseInt(id)))
+        .returning();
+      
+      res.json(updated);
+    } catch (error) {
+      console.error("Error updating verification request:", error);
+      res.status(500).json({ error: "Failed to update verification request" });
+    }
   });
 
   const httpServer = createServer(app);
