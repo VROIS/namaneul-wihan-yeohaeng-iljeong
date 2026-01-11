@@ -14,7 +14,252 @@ interface FinalScoreComponents {
   tier: number;
 }
 
+type Vibe = 'Healing' | 'Adventure' | 'Hotspot' | 'Foodie' | 'Romantic' | 'Culture';
+type TravelStyle = 'Luxury' | 'Premium' | 'Reasonable' | 'Economic';
+type CompanionType = 'Single' | 'Couple' | 'Family' | 'Group';
+
+interface UserPreferences {
+  vibes: Vibe[];
+  travelStyle: TravelStyle;
+  companionType: CompanionType;
+  companionCount: number;
+}
+
+interface PersonalizedScoreResult {
+  baseScore: number;
+  vibeMatch: number;
+  companionBonus: number;
+  styleBonus: number;
+  realityPenalty: number;
+  personalizedScore: number;
+  breakdown: {
+    step: string;
+    value: number | string;
+    description: string;
+  }[];
+}
+
+const VIBE_BASE_WEIGHTS: Record<Vibe, number> = {
+  Healing: 35,
+  Foodie: 25,
+  Hotspot: 15,
+  Adventure: 10,
+  Culture: 10,
+  Romantic: 5,
+};
+
+const VIBE_KEYWORD_MAP: Record<Vibe, string[]> = {
+  Healing: ['힐링', '평화로운', 'peaceful', 'relaxing', 'healing', '조용한', 'quiet', '자연', 'nature'],
+  Foodie: ['맛집', '미식', 'foodie', 'gourmet', 'restaurant', '음식', 'food', '현지음식', 'local food'],
+  Hotspot: ['핫스팟', 'hotspot', 'trending', '인스타', 'instagram', '인기', 'popular', 'hot'],
+  Adventure: ['모험', 'adventure', '액티비티', 'activity', '스릴', 'thrill', '익스트림', 'extreme'],
+  Culture: ['문화', 'culture', '예술', 'art', '역사', 'history', '박물관', 'museum', '갤러리', 'gallery'],
+  Romantic: ['로맨틱', 'romantic', '야경', 'night view', '분위기', 'atmosphere', '데이트', 'date'],
+};
+
+const COMPANION_KEYWORDS: Record<CompanionType, string[]> = {
+  Single: ['혼밥', 'solo', '1인석', 'bar', '바', '카페', 'cafe'],
+  Couple: ['로맨틱', 'romantic', '야경', 'night view', '분위기', 'atmosphere', '데이트', 'date'],
+  Family: ['가족', 'family', '아이', 'kids', 'children', '넓은', 'spacious', 'goodForChildren'],
+  Group: ['단체', 'group', '예약', 'reservation', '프라이빗', 'private', '파티', 'party'],
+};
+
+const STYLE_PRICE_LEVEL: Record<TravelStyle, number> = {
+  Luxury: 4,
+  Premium: 3,
+  Reasonable: 2,
+  Economic: 1,
+};
+
 export class ScoringEngine {
+  
+  /**
+   * 사용자 취향 기반 개인화 점수 계산
+   * Personalized Score = Base Score × Vibe Match + Companion Bonus + Style Bonus - Reality Penalty
+   */
+  calculatePersonalizedScore(
+    place: Place,
+    userPreferences: UserPreferences,
+    realityPenalty: number = 0
+  ): PersonalizedScoreResult {
+    const breakdown: PersonalizedScoreResult['breakdown'] = [];
+    
+    // 1. Base Score 계산 (0~10점)
+    const vibeScore = place.vibeScore || 5;
+    const buzzScore = place.buzzScore || 5;
+    const tasteScore = place.tasteVerifyScore || 5;
+    const baseScore = Number(((vibeScore + buzzScore + tasteScore) / 3).toFixed(2));
+    
+    breakdown.push({
+      step: '기본 점수',
+      value: baseScore,
+      description: `(Vibe ${vibeScore} + Buzz ${buzzScore} + Taste ${tasteScore}) / 3`,
+    });
+    
+    // 2. Vibe Match 계산 (0.5~1.5 배수)
+    const vibeMatch = this.calculateVibeMatch(place, userPreferences.vibes);
+    breakdown.push({
+      step: 'Vibe 매칭',
+      value: `×${vibeMatch.toFixed(2)}`,
+      description: userPreferences.vibes.join(', ') + ' 선호',
+    });
+    
+    // 3. Companion Bonus 계산 (0~2점)
+    const companionBonus = this.calculateCompanionBonus(place, userPreferences.companionType);
+    breakdown.push({
+      step: '동반자 보너스',
+      value: `+${companionBonus.toFixed(1)}`,
+      description: `${userPreferences.companionType} 타입`,
+    });
+    
+    // 4. Style Bonus 계산 (0~1점)
+    const styleBonus = this.calculateStyleBonus(place, userPreferences.travelStyle);
+    breakdown.push({
+      step: '스타일 보너스',
+      value: `+${styleBonus.toFixed(1)}`,
+      description: `${userPreferences.travelStyle} 스타일`,
+    });
+    
+    // 5. Reality Penalty 적용 (0~5점 차감)
+    breakdown.push({
+      step: '현실 패널티',
+      value: `-${realityPenalty.toFixed(1)}`,
+      description: '날씨/혼잡도/운영상태',
+    });
+    
+    // 최종 점수 계산
+    let personalizedScore = (baseScore * vibeMatch) + companionBonus + styleBonus - realityPenalty;
+    personalizedScore = Math.min(10, Math.max(0, Number(personalizedScore.toFixed(2))));
+    
+    breakdown.push({
+      step: '최종 점수',
+      value: personalizedScore,
+      description: `${baseScore} × ${vibeMatch.toFixed(2)} + ${companionBonus.toFixed(1)} + ${styleBonus.toFixed(1)} - ${realityPenalty.toFixed(1)}`,
+    });
+    
+    return {
+      baseScore,
+      vibeMatch,
+      companionBonus,
+      styleBonus,
+      realityPenalty,
+      personalizedScore,
+      breakdown,
+    };
+  }
+  
+  /**
+   * Vibe Match 계산: 사용자 선택 Vibe와 장소 vibeKeywords 매칭률
+   * 반환값: 0.5 ~ 1.5 (배수)
+   */
+  private calculateVibeMatch(place: Place, userVibes: Vibe[]): number {
+    if (userVibes.length === 0) return 1.0;
+    
+    const placeKeywords = (place.vibeKeywords as string[]) || [];
+    if (placeKeywords.length === 0) return 1.0;
+    
+    // 사용자 선택 Vibe의 가중치 합계
+    const totalWeight = userVibes.reduce((sum, vibe) => sum + VIBE_BASE_WEIGHTS[vibe], 0);
+    
+    let matchScore = 0;
+    
+    for (const vibe of userVibes) {
+      const vibeWeight = VIBE_BASE_WEIGHTS[vibe] / totalWeight; // 정규화된 가중치
+      const vibeKeywords = VIBE_KEYWORD_MAP[vibe];
+      
+      // 장소 키워드와 Vibe 키워드 매칭
+      const matches = placeKeywords.filter(keyword => 
+        vibeKeywords.some(vk => keyword.toLowerCase().includes(vk.toLowerCase()))
+      );
+      
+      const matchRate = matches.length > 0 ? Math.min(1, matches.length / 2) : 0;
+      matchScore += vibeWeight * matchRate;
+    }
+    
+    // 0.5 ~ 1.5 범위로 변환 (기본 1.0, 매칭률에 따라 ±0.5)
+    const vibeMatch = 1.0 + (matchScore - 0.5);
+    return Math.min(1.5, Math.max(0.5, vibeMatch));
+  }
+  
+  /**
+   * Companion Bonus 계산: 동반자 타입에 맞는 장소 속성 매칭
+   * 반환값: 0 ~ 2점
+   */
+  private calculateCompanionBonus(place: Place, companionType: CompanionType): number {
+    const placeKeywords = (place.vibeKeywords as string[]) || [];
+    const targetKeywords = COMPANION_KEYWORDS[companionType];
+    
+    // 장소 속성 확인
+    const goodForChildren = (place as any).goodForChildren || false;
+    const goodForGroups = (place as any).goodForGroups || false;
+    const reservable = (place as any).reservable || false;
+    
+    let bonus = 0;
+    
+    // 키워드 매칭 보너스
+    const matches = placeKeywords.filter(keyword =>
+      targetKeywords.some(tk => keyword.toLowerCase().includes(tk.toLowerCase()))
+    );
+    
+    if (matches.length > 0) {
+      bonus += Math.min(1.0, matches.length * 0.5);
+    }
+    
+    // 동반자 타입별 추가 보너스
+    switch (companionType) {
+      case 'Single':
+        if (!reservable) bonus += 0.5; // 예약 불필요 = 혼밥 친화
+        break;
+      case 'Couple':
+        if (matches.length >= 2) bonus += 1.0; // 로맨틱 키워드 다수
+        break;
+      case 'Family':
+        if (goodForChildren) bonus += 1.5;
+        break;
+      case 'Group':
+        if (goodForGroups) bonus += 0.5;
+        if (reservable) bonus += 0.5;
+        break;
+    }
+    
+    return Math.min(2.0, bonus);
+  }
+  
+  /**
+   * Style Bonus 계산: 예산 스타일과 장소 가격대 매칭
+   * 반환값: 0 ~ 1점
+   */
+  private calculateStyleBonus(place: Place, travelStyle: TravelStyle): number {
+    const userPriceLevel = STYLE_PRICE_LEVEL[travelStyle];
+    const placePriceLevel = place.priceLevel || 2; // 기본값 2 (Reasonable)
+    
+    const difference = Math.abs(userPriceLevel - placePriceLevel);
+    
+    if (difference === 0) return 1.0;
+    if (difference === 1) return 0.5;
+    return 0;
+  }
+  
+  /**
+   * 여러 장소를 개인화 점수로 정렬
+   */
+  rankPlacesByPreference(
+    places: Place[],
+    userPreferences: UserPreferences,
+    realityPenalty: number = 0
+  ): Array<Place & { personalizedScore: number; scoreBreakdown: PersonalizedScoreResult['breakdown'] }> {
+    return places
+      .map(place => {
+        const result = this.calculatePersonalizedScore(place, userPreferences, realityPenalty);
+        return {
+          ...place,
+          personalizedScore: result.personalizedScore,
+          scoreBreakdown: result.breakdown,
+        };
+      })
+      .sort((a, b) => b.personalizedScore - a.personalizedScore);
+  }
+
   async calculateFinalScore(placeId: number): Promise<FinalScoreComponents> {
     const place = await storage.getPlace(placeId);
     if (!place) {

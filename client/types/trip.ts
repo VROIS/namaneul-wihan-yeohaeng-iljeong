@@ -2,9 +2,9 @@ export type Vibe = 'Healing' | 'Adventure' | 'Hotspot' | 'Foodie' | 'Romantic' |
 
 export type TravelStyle = 'Luxury' | 'Premium' | 'Reasonable' | 'Economic';
 
-export type TravelPace = 'Packed' | 'Relaxed';
+export type TravelPace = 'Packed' | 'Normal' | 'Relaxed';
 
-export type MobilityStyle = 'WalkMore' | 'Minimal';
+export type MobilityStyle = 'WalkMore' | 'Moderate' | 'Minimal';
 
 export type CompanionType = 'Single' | 'Couple' | 'Family' | 'Group';
 
@@ -90,21 +90,23 @@ export const VIBE_OPTIONS: { id: Vibe; label: string; icon: string; baseWeight: 
   { id: 'Culture', label: '문화/예술', icon: 'book-open', baseWeight: 10 },
 ];
 
-export const TRAVEL_STYLE_OPTIONS: { id: TravelStyle; label: string; icon: string }[] = [
-  { id: 'Luxury', label: '럭셔리', icon: 'star' },
-  { id: 'Premium', label: '프리미엄', icon: 'award' },
-  { id: 'Reasonable', label: '합리적', icon: 'thumbs-up' },
-  { id: 'Economic', label: '경제적', icon: 'dollar-sign' },
+export const TRAVEL_STYLE_OPTIONS: { id: TravelStyle; label: string; icon: string; priceLevel: number; transport: string; dining: string; guide: string; placesPerDay: number }[] = [
+  { id: 'Luxury', label: '럭셔리', icon: 'star', priceLevel: 4, transport: 'VIP 전용차량', dining: '미슐랭급', guide: '전담 가이드 동행', placesPerDay: 2 },
+  { id: 'Premium', label: '프리미엄', icon: 'award', priceLevel: 3, transport: '고급 세단', dining: '트렌디 레스토랑', guide: '세단 가이드', placesPerDay: 3 },
+  { id: 'Reasonable', label: '합리적', icon: 'thumbs-up', priceLevel: 2, transport: '우버+대중교통', dining: '현지인 맛집', guide: '워킹 가이드', placesPerDay: 4 },
+  { id: 'Economic', label: '경제적', icon: 'dollar-sign', priceLevel: 1, transport: '대중교통', dining: '스트리트푸드', guide: '없음 (자유)', placesPerDay: 6 },
 ];
 
-export const TRAVEL_PACE_OPTIONS: { id: TravelPace; label: string; icon: string }[] = [
-  { id: 'Packed', label: '빡빡하게', icon: 'zap' },
-  { id: 'Relaxed', label: '여유롭게', icon: 'sun' },
+export const TRAVEL_PACE_OPTIONS: { id: TravelPace; label: string; icon: string; placesPerDay: number; description: string }[] = [
+  { id: 'Packed', label: '빡빡하게', icon: 'zap', placesPerDay: 6, description: '관광3 + 점심1 + 카페1 + 저녁1' },
+  { id: 'Normal', label: '보통', icon: 'clock', placesPerDay: 4, description: '관광2 + 점심1 + 저녁1' },
+  { id: 'Relaxed', label: '여유롭게', icon: 'sun', placesPerDay: 3, description: '관광1 + 점심1 + 저녁1' },
 ];
 
-export const MOBILITY_STYLE_OPTIONS: { id: MobilityStyle; label: string; icon: string }[] = [
-  { id: 'WalkMore', label: '많이 걷기', icon: 'map' },
-  { id: 'Minimal', label: '이동 최소화', icon: 'home' },
+export const MOBILITY_STYLE_OPTIONS: { id: MobilityStyle; label: string; icon: string; radiusKm: number; transport: string }[] = [
+  { id: 'WalkMore', label: '많이 걷기', icon: 'map', radiusKm: 2, transport: '대중교통' },
+  { id: 'Moderate', label: '적당히', icon: 'navigation', radiusKm: 3, transport: '택시/대중교통' },
+  { id: 'Minimal', label: '이동 최소화', icon: 'home', radiusKm: 5, transport: 'VIP 전용차량' },
 ];
 
 export const COMPANION_OPTIONS: { id: CompanionType; label: string; icon: string }[] = [
