@@ -280,6 +280,13 @@
     </div>
     
     <div id="tab-overview" class="tab-content">
+      <div id="alerts-container" style="margin-bottom: 20px; display: none;">
+        <div class="card" style="border: 1px solid rgba(245, 158, 11, 0.3); background: rgba(245, 158, 11, 0.05);">
+          <h2 style="color: #f59e0b;">품질 알림</h2>
+          <div id="quality-alerts" style="display: flex; flex-direction: column; gap: 8px;"></div>
+        </div>
+      </div>
+      
       <div class="grid">
         <div class="card">
           <h2>데이터 현황</h2>
@@ -304,9 +311,39 @@
         </div>
         
         <div class="card">
+          <h2>수집 통계</h2>
+          <div class="stat-grid">
+            <div class="stat-item">
+              <div class="stat-value" id="stat-videos" style="color: #ff0000;">-</div>
+              <div class="stat-label">YouTube 영상</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value" id="stat-blog-posts" style="color: #03c75a;">-</div>
+              <div class="stat-label">블로그 포스트</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value" id="stat-place-mentions" style="color: #a78bfa;">-</div>
+              <div class="stat-label">장소 언급</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value" id="stat-syncs-today" style="color: #22c55e;">-</div>
+              <div class="stat-label">오늘 동기화</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="grid">
+        <div class="card">
           <h2>데이터 신선도</h2>
           <div id="freshness-bar" class="freshness-bar"></div>
           <div id="freshness-legend" class="freshness-legend"></div>
+        </div>
+        
+        <div class="card">
+          <h2>주간 동기화 추이</h2>
+          <div id="weekly-chart" style="display: flex; align-items: flex-end; justify-content: space-around; height: 100px; gap: 8px;"></div>
+          <div id="weekly-labels" style="display: flex; justify-content: space-around; font-size: 11px; color: #6b7280; margin-top: 8px;"></div>
         </div>
       </div>
       
@@ -530,18 +567,59 @@
     
     async function loadDashboard() {
       try {
-        // 먼저 기본 대시보드 데이터 로드
-        const [dashRes, freshnessRes] = await Promise.all([
+        const [dashRes, freshnessRes, statsRes, alertsRes] = await Promise.all([
           fetch(`${API_BASE}/dashboard`),
-          fetch(`${API_BASE}/data-freshness`)
+          fetch(`${API_BASE}/data-freshness`),
+          fetch(`${API_BASE}/collection-stats`),
+          fetch(`${API_BASE}/data-quality/alerts`)
         ]);
         const dash = await dashRes.json();
         const freshness = await freshnessRes.json();
+        const stats = await statsRes.json();
+        const alertsData = await alertsRes.json();
         
         document.getElementById('stat-cities').textContent = dash.overview.cities;
         document.getElementById('stat-places').textContent = dash.overview.places;
         document.getElementById('stat-channels').textContent = dash.overview.youtubeChannels;
         document.getElementById('stat-blogs').textContent = dash.overview.blogSources;
+        
+        document.getElementById('stat-videos').textContent = stats.totals.youtubeVideos;
+        document.getElementById('stat-blog-posts').textContent = stats.totals.blogPosts;
+        document.getElementById('stat-place-mentions').textContent = stats.totals.placeMentions;
+        document.getElementById('stat-syncs-today').textContent = stats.syncs.today;
+        
+        const alertsContainer = document.getElementById('alerts-container');
+        const alertsEl = document.getElementById('quality-alerts');
+        if (alertsData.alerts && alertsData.alerts.length > 0) {
+          alertsContainer.style.display = 'block';
+          alertsEl.innerHTML = alertsData.alerts.map(a => {
+            const iconMap = { error: '🔴', warning: '🟡', info: '🔵' };
+            return `<div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; background: rgba(255,255,255,0.03); border-radius: 8px;">
+              <span>${iconMap[a.severity] || ''} ${a.message}</span>
+              <span style="font-size: 12px; color: #9ca3af;">${a.action || ''}</span>
+            </div>`;
+          }).join('');
+        } else {
+          alertsContainer.style.display = 'none';
+        }
+        
+        const chartEl = document.getElementById('weekly-chart');
+        const labelsEl = document.getElementById('weekly-labels');
+        if (stats.dailyStats && stats.dailyStats.length > 0) {
+          const maxTotal = Math.max(...stats.dailyStats.map(d => d.total || 1));
+          chartEl.innerHTML = stats.dailyStats.map(d => {
+            const height = Math.max(10, (d.total / maxTotal) * 80);
+            const successPct = d.total > 0 ? (d.success / d.total) * 100 : 100;
+            return `<div style="display: flex; flex-direction: column; align-items: center; gap: 4px;">
+              <div style="width: 24px; height: ${height}px; background: linear-gradient(to top, #22c55e ${successPct}%, #ef4444 ${successPct}%); border-radius: 4px;" title="성공: ${d.success}, 실패: ${d.failed}"></div>
+              <span style="font-size: 10px; color: #9ca3af;">${d.total}</span>
+            </div>`;
+          }).join('');
+          labelsEl.innerHTML = stats.dailyStats.map(d => {
+            const date = new Date(d.date);
+            return `<span>${date.getMonth()+1}/${date.getDate()}</span>`;
+          }).join('');
+        }
         
         const bar = document.getElementById('freshness-bar');
         const legend = document.getElementById('freshness-legend');

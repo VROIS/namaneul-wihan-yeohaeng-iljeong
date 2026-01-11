@@ -89,6 +89,139 @@ export function registerAdminRoutes(app: Express) {
   });
 
   // ========================================
+  // 데이터 품질 알림 API
+  // ========================================
+  
+  app.get("/api/admin/data-quality/alerts", async (req, res) => {
+    try {
+      const alerts: Array<{ type: string; severity: string; message: string; action?: string }> = [];
+      const now = new Date();
+      const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+      const [
+        failedSyncsToday,
+        staleYoutubeChannels,
+        inactiveApiServices,
+        emptyPlacesCount
+      ] = await Promise.all([
+        db.select({ count: count() }).from(dataSyncLog)
+          .where(and(eq(dataSyncLog.status, "failed"), gte(dataSyncLog.startedAt, oneDayAgo))),
+        db.select({ count: count() }).from(youtubeChannels)
+          .where(and(eq(youtubeChannels.isActive, true), sql`${youtubeChannels.lastVideoSyncAt} < ${sevenDaysAgo} OR ${youtubeChannels.lastVideoSyncAt} IS NULL`)),
+        db.select({ count: count() }).from(apiServiceStatus)
+          .where(eq(apiServiceStatus.isActive, false)),
+        db.select({ count: count() }).from(places)
+          .where(sql`${places.userRatingCount} IS NULL OR ${places.userRatingCount} = 0`)
+      ]);
+
+      if (failedSyncsToday[0]?.count > 0) {
+        alerts.push({
+          type: "sync_failure",
+          severity: "warning",
+          message: `오늘 ${failedSyncsToday[0].count}개 동기화 작업이 실패했습니다`,
+          action: "동기화 로그 확인"
+        });
+      }
+
+      if (staleYoutubeChannels[0]?.count > 3) {
+        alerts.push({
+          type: "stale_data",
+          severity: "info",
+          message: `${staleYoutubeChannels[0].count}개 YouTube 채널이 7일 이상 동기화되지 않았습니다`,
+          action: "YouTube 동기화 실행"
+        });
+      }
+
+      if (inactiveApiServices[0]?.count > 0) {
+        alerts.push({
+          type: "api_inactive",
+          severity: "error",
+          message: `${inactiveApiServices[0].count}개 API 서비스가 비활성 상태입니다`,
+          action: "API 설정 확인"
+        });
+      }
+
+      if (emptyPlacesCount[0]?.count > 5) {
+        alerts.push({
+          type: "incomplete_data",
+          severity: "info",
+          message: `${emptyPlacesCount[0].count}개 장소에 평점 데이터가 없습니다`,
+          action: "TripAdvisor 동기화 실행"
+        });
+      }
+
+      res.json({
+        alerts,
+        totalAlerts: alerts.length,
+        criticalCount: alerts.filter(a => a.severity === "error").length,
+        warningCount: alerts.filter(a => a.severity === "warning").length,
+        infoCount: alerts.filter(a => a.severity === "info").length
+      });
+    } catch (error) {
+      console.error("Data quality alerts error:", error);
+      res.status(500).json({ error: "Failed to fetch data quality alerts" });
+    }
+  });
+
+  // ========================================
+  // 수집 통계 API
+  // ========================================
+  
+  app.get("/api/admin/collection-stats", async (req, res) => {
+    try {
+      const now = new Date();
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const weekStart = new Date(todayStart.getTime() - 6 * 24 * 60 * 60 * 1000);
+
+      const [
+        videoCount,
+        blogPostCount,
+        exchangeRateCount,
+        placeMentionCount,
+        todaySyncs,
+        weekSyncs
+      ] = await Promise.all([
+        db.select({ count: count() }).from(youtubeVideos),
+        db.select({ count: count() }).from(naverBlogPosts),
+        db.select({ count: count() }).from(exchangeRates),
+        db.select({ count: count() }).from(youtubePlaceMentions),
+        db.select({ count: count() }).from(dataSyncLog).where(gte(dataSyncLog.startedAt, todayStart)),
+        db.select({ count: count() }).from(dataSyncLog).where(gte(dataSyncLog.startedAt, weekStart))
+      ]);
+
+      const dailyStats = await db
+        .select({
+          date: sql<string>`DATE(${dataSyncLog.startedAt})`,
+          total: count(),
+          success: sql<number>`COUNT(*) FILTER (WHERE ${dataSyncLog.status} = 'success')`,
+          failed: sql<number>`COUNT(*) FILTER (WHERE ${dataSyncLog.status} = 'failed')`
+        })
+        .from(dataSyncLog)
+        .where(gte(dataSyncLog.startedAt, weekStart))
+        .groupBy(sql`DATE(${dataSyncLog.startedAt})`)
+        .orderBy(sql`DATE(${dataSyncLog.startedAt})`);
+
+      res.json({
+        totals: {
+          youtubeVideos: videoCount[0]?.count || 0,
+          blogPosts: blogPostCount[0]?.count || 0,
+          exchangeRates: exchangeRateCount[0]?.count || 0,
+          placeMentions: placeMentionCount[0]?.count || 0
+        },
+        syncs: {
+          today: todaySyncs[0]?.count || 0,
+          thisWeek: weekSyncs[0]?.count || 0
+        },
+        dailyStats
+      });
+    } catch (error) {
+      console.error("Collection stats error:", error);
+      res.status(500).json({ error: "Failed to fetch collection stats" });
+    }
+  });
+
+  // ========================================
   // API 서비스 상태
   // ========================================
   
