@@ -1449,8 +1449,11 @@
     async function loadGuidePrices() {
       const container = document.getElementById('guide-prices-list');
       try {
-        const res = await fetch(`${API_BASE}/guide-prices`);
+        const res = await fetch(`${API_BASE}/guide-prices?t=${Date.now()}`, {
+          cache: 'no-store'
+        });
         const prices = await res.json();
+        prices.sort((a, b) => a.id - b.id);
         
         if (prices.length === 0) {
           container.innerHTML = `
