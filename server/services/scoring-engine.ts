@@ -17,18 +17,20 @@ interface FinalScoreComponents {
 type Vibe = 'Healing' | 'Adventure' | 'Hotspot' | 'Foodie' | 'Romantic' | 'Culture';
 type TravelStyle = 'Luxury' | 'Premium' | 'Reasonable' | 'Economic';
 type CompanionType = 'Single' | 'Couple' | 'Family' | 'Group';
+type CurationFocus = 'Kids' | 'Parents' | 'Everyone' | 'Self';
 
 interface UserPreferences {
   vibes: Vibe[];
   travelStyle: TravelStyle;
   companionType: CompanionType;
   companionCount: number;
+  curationFocus: CurationFocus;
 }
 
 interface PersonalizedScoreResult {
   baseScore: number;
+  curationFocusMatch: number;
   vibeMatch: number;
-  companionBonus: number;
   styleBonus: number;
   realityPenalty: number;
   personalizedScore: number;
@@ -38,6 +40,38 @@ interface PersonalizedScoreResult {
     description: string;
   }[];
 }
+
+const CURATION_FOCUS_CRITERIA: Record<CurationFocus, {
+  positive: string[];
+  negative: string[];
+  placeAttributes: string[];
+  description: string;
+}> = {
+  Kids: {
+    positive: ['아이', 'kids', 'children', 'family', '가족', '놀이', 'play', '체험', 'interactive', '교육', 'educational'],
+    negative: ['바', 'bar', '술', 'alcohol', 'wine', '나이트', 'night', 'club', '위험', 'dangerous', '성인', 'adult'],
+    placeAttributes: ['goodForChildren'],
+    description: '아이 친화적 (안전, 재미, 체험)',
+  },
+  Parents: {
+    positive: ['편안', 'comfortable', '접근성', 'accessible', '휴식', 'rest', '좌석', 'seating', '넓은', 'spacious', '조용', 'quiet', '화장실', 'restroom'],
+    negative: ['계단', 'stairs', '도보', 'walking', '줄서기', 'queue', '대기', 'wait', '혼잡', 'crowded', '좁은', 'narrow'],
+    placeAttributes: ['wheelchairAccessible', 'restroom'],
+    description: '부모님 친화적 (접근성, 편안함)',
+  },
+  Everyone: {
+    positive: ['가족', 'family', '모두', 'everyone', '다양', 'variety', '넓은', 'spacious'],
+    negative: [],
+    placeAttributes: ['goodForGroups'],
+    description: '모든 연령대 적합',
+  },
+  Self: {
+    positive: ['혼자', 'solo', '1인', 'single', '자유', 'free', '개인', 'personal'],
+    negative: [],
+    placeAttributes: [],
+    description: '나 혼자 여행',
+  },
+};
 
 const VIBE_BASE_WEIGHTS: Record<Vibe, number> = {
   Healing: 35,
@@ -75,7 +109,8 @@ export class ScoringEngine {
   
   /**
    * 사용자 취향 기반 개인화 점수 계산
-   * Personalized Score = Base Score × Vibe Match + Companion Bonus + Style Bonus - Reality Penalty
+   * 새 공식: Final = Base × CurationFocusMatch × VibeMatch + StyleBonus - RealityPenalty
+   * CurationFocus(누구를 위한)가 1순위, Vibe(무엇을)가 2순위
    */
   calculatePersonalizedScore(
     place: Place,
@@ -96,20 +131,22 @@ export class ScoringEngine {
       description: `(Vibe ${vibeScore} + Buzz ${buzzScore} + Taste ${tasteScore}) / 3`,
     });
     
-    // 2. Vibe Match 계산 (0.5~1.5 배수)
-    const vibeMatch = this.calculateVibeMatch(place, userPreferences.vibes);
+    // 2. Curation Focus Match 계산 (0.3~1.5 배수) - 1순위!
+    const curationFocus = userPreferences.curationFocus || 'Everyone';
+    const curationFocusMatch = this.calculateCurationFocusMatch(place, curationFocus);
+    const focusLabel = CURATION_FOCUS_CRITERIA[curationFocus]?.description || curationFocus;
     breakdown.push({
-      step: 'Vibe 매칭',
-      value: `×${vibeMatch.toFixed(2)}`,
-      description: userPreferences.vibes.join(', ') + ' 선호',
+      step: '🥇 누구를 위한',
+      value: `×${curationFocusMatch.toFixed(2)}`,
+      description: focusLabel,
     });
     
-    // 3. Companion Bonus 계산 (0~2점)
-    const companionBonus = this.calculateCompanionBonus(place, userPreferences.companionType);
+    // 3. Vibe Match 계산 (0.5~1.5 배수) - 2순위
+    const vibeMatch = this.calculateVibeMatch(place, userPreferences.vibes);
     breakdown.push({
-      step: '동반자 보너스',
-      value: `+${companionBonus.toFixed(1)}`,
-      description: `${userPreferences.companionType} 타입`,
+      step: '🥈 Vibe 매칭',
+      value: `×${vibeMatch.toFixed(2)}`,
+      description: userPreferences.vibes.join(', ') + ' 선호',
     });
     
     // 4. Style Bonus 계산 (0~1점)
@@ -127,25 +164,71 @@ export class ScoringEngine {
       description: '날씨/혼잡도/운영상태',
     });
     
-    // 최종 점수 계산
-    let personalizedScore = (baseScore * vibeMatch) + companionBonus + styleBonus - realityPenalty;
+    // 최종 점수 계산: Base × CurationFocus × Vibe + Style - Penalty
+    let personalizedScore = (baseScore * curationFocusMatch * vibeMatch) + styleBonus - realityPenalty;
     personalizedScore = Math.min(10, Math.max(0, Number(personalizedScore.toFixed(2))));
     
     breakdown.push({
       step: '최종 점수',
       value: personalizedScore,
-      description: `${baseScore} × ${vibeMatch.toFixed(2)} + ${companionBonus.toFixed(1)} + ${styleBonus.toFixed(1)} - ${realityPenalty.toFixed(1)}`,
+      description: `${baseScore} × ${curationFocusMatch.toFixed(2)} × ${vibeMatch.toFixed(2)} + ${styleBonus.toFixed(1)} - ${realityPenalty.toFixed(1)}`,
     });
     
     return {
       baseScore,
+      curationFocusMatch,
       vibeMatch,
-      companionBonus,
       styleBonus,
       realityPenalty,
       personalizedScore,
       breakdown,
     };
+  }
+  
+  /**
+   * Curation Focus Match 계산: "누구를 위한" 장소 적합성
+   * 부정적 키워드 매칭 시 강력한 패널티 (0.3)
+   * 긍정적 키워드 매칭 시 보너스 (최대 1.5)
+   * 반환값: 0.3 ~ 1.5 (배수)
+   */
+  private calculateCurationFocusMatch(place: Place, focus: CurationFocus): number {
+    if (focus === 'Self' || focus === 'Everyone') return 1.0;
+    
+    const criteria = CURATION_FOCUS_CRITERIA[focus];
+    const placeKeywords = (place.vibeKeywords as string[]) || [];
+    const placeData = place as any;
+    
+    // 부정적 키워드 체크 - 하나라도 매칭되면 강력 패널티
+    for (const keyword of placeKeywords) {
+      const hasNegative = criteria.negative.some(neg => 
+        keyword.toLowerCase().includes(neg.toLowerCase())
+      );
+      if (hasNegative) {
+        return 0.3; // 강력 패널티: 70% 감점
+      }
+    }
+    
+    // 장소 속성 체크 (goodForChildren, wheelchairAccessible 등)
+    let attributeBonus = 0;
+    for (const attr of criteria.placeAttributes) {
+      if (placeData[attr] === true) {
+        attributeBonus += 0.2;
+      }
+    }
+    
+    // 긍정적 키워드 매칭
+    let positiveMatches = 0;
+    for (const keyword of placeKeywords) {
+      const hasPositive = criteria.positive.some(pos => 
+        keyword.toLowerCase().includes(pos.toLowerCase())
+      );
+      if (hasPositive) positiveMatches++;
+    }
+    
+    const positiveBonus = Math.min(0.3, positiveMatches * 0.1);
+    
+    // 최종: 기본 1.0 + 속성 보너스 + 긍정 보너스 (최대 1.5)
+    return Math.min(1.5, 1.0 + attributeBonus + positiveBonus);
   }
   
   /**
