@@ -1,4 +1,5 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { Platform } from "react-native";
 
 /**
  * Gets the base URL for the Express API server (e.g., "http://localhost:3000")
@@ -7,13 +8,33 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
 export function getApiUrl(): string {
   let host = process.env.EXPO_PUBLIC_DOMAIN;
 
-  if (!host) {
-    throw new Error("EXPO_PUBLIC_DOMAIN is not set");
+  // 환경변수가 설정되어 있으면 사용
+  if (host) {
+    // http:// 또는 https://가 포함되어 있으면 그대로 사용
+    if (host.startsWith("http://") || host.startsWith("https://")) {
+      return host;
+    }
+
+    // Replit 환경 (https://)
+    if (host.includes("replit") || host.includes("repl.co")) {
+      return `https://${host}`;
+    }
+
+    // 로컬 환경 (http://)
+    return `http://${host}`;
   }
 
-  let url = new URL(`https://${host}`);
-
-  return url.href;
+  // 환경변수가 없으면 플랫폼에 따라 자동 설정
+  // 웹 브라우저: localhost 사용
+  // 모바일 기기: 네트워크 IP 사용 (같은 WiFi 필요)
+  if (Platform.OS === "web") {
+    return "http://localhost:8082";
+  } else {
+    // 모바일 기기에서는 네트워크 IP 사용
+    // 기본값: 192.168.1.23 (개발 환경에서 수정 필요)
+    // 또는 환경변수로 설정: EXPO_PUBLIC_DOMAIN=192.168.1.23:8082
+    return "http://192.168.1.23:8082";
+  }
 }
 
 async function throwIfResNotOk(res: Response) {

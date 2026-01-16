@@ -4,6 +4,22 @@ import { eq, desc, and, gte } from "drizzle-orm";
 
 const CACHE_DURATION_HOURS = 24;
 
+// 🔒 인코딩 무결성 검증 함수
+function hasBrokenEncoding(str: string | null | undefined): boolean {
+  if (!str) return false;
+  // UTF-8 깨짐 패턴 감지
+  return /[ÃÂìíëâêîÐ]/.test(str);
+}
+
+function sanitizeText(str: string | null | undefined): string | null {
+  if (!str) return null;
+  if (hasBrokenEncoding(str)) {
+    console.warn("[NaverBlog] 깨진 인코딩 감지, 데이터 제외");
+    return null;
+  }
+  return str.trim();
+}
+
 interface NaverBlogSearchResult {
   title: string;
   link: string;
@@ -186,14 +202,25 @@ export async function crawlBlogsForCity(cityId: number): Promise<{
             )
           : null;
 
+        // 🔒 저장 전 인코딩 검증
+        const cleanTitle = sanitizeText(post.title.replace(/<[^>]*>/g, ""));
+        const cleanDescription = sanitizeText(post.description.replace(/<[^>]*>/g, ""));
+        const cleanBloggerName = sanitizeText(post.bloggername);
+        
+        // 깨진 데이터가 있으면 저장하지 않음
+        if (!cleanTitle || !cleanDescription) {
+          console.warn("[NaverBlog] 깨진 데이터 건너뜀:", post.link);
+          continue;
+        }
+
         await db.insert(naverBlogPosts).values({
           cityId,
-          bloggerName: post.bloggername,
+          bloggerName: cleanBloggerName,
           bloggerUrl: post.bloggerlink,
-          postTitle: post.title.replace(/<[^>]*>/g, ""),
+          postTitle: cleanTitle,
           postUrl: post.link,
           postDate,
-          description: post.description.replace(/<[^>]*>/g, ""),
+          description: cleanDescription,
           extractedPlaces: extractedPlaces,
           sentimentScore,
           isProcessed: extractedPlaces.length > 0,

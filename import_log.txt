@@ -1,0 +1,4 @@
+Connecting to Supabase...
+Connected successfully!
+Reading SQL file: C:\Users\SY Lee\.cursor\namaneul-wihan-yeohaeng-iljeong\backup_clean.sql
+Total lines: 4641

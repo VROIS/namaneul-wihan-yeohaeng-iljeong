@@ -257,18 +257,100 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/routes/generate", async (req, res) => {
     try {
       const formData = req.body;
-      
+
       if (!formData.destination || !formData.startDate || !formData.endDate) {
-        return res.status(400).json({ 
-          error: "destination, startDate, endDate are required" 
+        return res.status(400).json({
+          error: "destination, startDate, endDate are required"
         });
       }
-      
+
       const itinerary = await itineraryGenerator.generate(formData);
       res.json(itinerary);
     } catch (error) {
       console.error("Error generating itinerary:", error);
       res.status(500).json({ error: "Failed to generate itinerary" });
+    }
+  });
+
+  // ========================================
+  // 💰 예산 계산 API (TravelStyle 기반)
+  // ========================================
+  
+  // 빠른 예산 미리보기 (버튼 선택시 실시간 표시)
+  app.post("/api/budget/preview", async (req, res) => {
+    try {
+      const { getQuickBudgetPreview } = await import("./services/budget-calculator");
+      const { travelStyle, companionCount, dayCount, hoursPerDay } = req.body;
+      
+      const preview = await getQuickBudgetPreview(
+        travelStyle || 'Reasonable',
+        companionCount || 2,
+        dayCount || 1,
+        hoursPerDay || 8
+      );
+      
+      res.json(preview);
+    } catch (error) {
+      console.error("Error calculating budget preview:", error);
+      res.status(500).json({ error: "Failed to calculate budget preview" });
+    }
+  });
+  
+  // 상세 예산 계산 (일정 생성 후)
+  app.post("/api/budget/calculate", async (req, res) => {
+    try {
+      const { calculateTravelBudget } = await import("./services/budget-calculator");
+      const {
+        travelStyle,
+        companionType,
+        companionCount,
+        mobilityStyle,
+        dayCount,
+        hoursPerDay,
+        mealsPerDay,
+        places,
+      } = req.body;
+      
+      const result = await calculateTravelBudget({
+        travelStyle: travelStyle || 'Reasonable',
+        companionType: companionType || 'Couple',
+        companionCount: companionCount || 2,
+        mobilityStyle: mobilityStyle || 'Moderate',
+        dayCount: dayCount || 1,
+        hoursPerDay: hoursPerDay || 8,
+        mealsPerDay: mealsPerDay || 2,
+        places: places || [],
+      });
+      
+      res.json(result);
+    } catch (error) {
+      console.error("Error calculating budget:", error);
+      res.status(500).json({ error: "Failed to calculate budget" });
+    }
+  });
+  
+  // TravelStyle별 비용 비교 (4가지 모두 표시)
+  app.post("/api/budget/compare", async (req, res) => {
+    try {
+      const { getQuickBudgetPreview } = await import("./services/budget-calculator");
+      const { companionCount, dayCount, hoursPerDay } = req.body;
+      
+      const styles = ['Luxury', 'Premium', 'Reasonable', 'Economic'] as const;
+      const comparisons = await Promise.all(
+        styles.map(async (style) => ({
+          style,
+          ...await getQuickBudgetPreview(style, companionCount || 2, dayCount || 1, hoursPerDay || 8)
+        }))
+      );
+      
+      res.json({
+        comparisons,
+        currency: 'EUR',
+        note: '합리적/경제적 선택시에도 프리미엄 가이드 서비스 옵션 확인 가능',
+      });
+    } catch (error) {
+      console.error("Error comparing budgets:", error);
+      res.status(500).json({ error: "Failed to compare budgets" });
     }
   });
 

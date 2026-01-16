@@ -1,0 +1,39 @@
+Parsing SQL file...
+Found 32 tables
+Connecting...
+Connected!
+
+  api_service_status: 7/7 rows ✓
+  blog_sources: 32/32 rows ✓
+  cities: 15/15 rows ✓
+  conversations: 0 rows
+  crisis_alerts: 0 rows
+  data_collection_schedule: 6/6 rows ✓
+  data_sync_log: 55/55 rows ✓
+  exchange_rates: 30/30 rows ✓
+  gemini_web_search_cache: 0 rows
+  guide_prices: 6/6 rows ✓
+  instagram_hashtags: 74/74 rows ✓
+  instagram_locations: 0 rows
+  instagram_photos: 0 rows
+  itineraries: 0 rows
+  itinerary_items: 0 rows
+  messages: 0 rows
+  naver_blog_posts: 811/811 rows ✓
+  place_data_sources: 18/20 rows ✓
+  place_prices: 1/96 rows ✓
+  places: 20/20 rows ✓
+  reality_checks: 0 rows
+  reviews: 300/300 rows ✓
+  route_cache: 0 rows
+  tripadvisor_data: 20/20 rows ✓
+  users: 0 rows
+  verification_requests: 0 rows
+  vibe_analysis: 0 rows
+  weather_cache: 32/32 rows ✓
+  weather_forecast: 192/192 rows ✓
+  youtube_channels: 21/21 rows ✓
+  youtube_place_mentions: 121/121 rows ✓
+  youtube_videos: 91/91 rows ✓
+
+✅ Done! Total: 1852 rows

@@ -1,18 +1,97 @@
 import { GoogleGenAI } from "@google/genai";
+import { 
+  getKoreanSentimentForCity, 
+  formatSentimentForPrompt,
+  KoreanSentimentData 
+} from "./korean-sentiment-service";
+import { 
+  generateProtagonistSentence, 
+  generatePromptContext 
+} from "./protagonist-generator";
 
-const ai = new GoogleGenAI({
-  apiKey: process.env.AI_INTEGRATIONS_GEMINI_API_KEY,
-  httpOptions: {
-    apiVersion: "",
-    baseUrl: process.env.AI_INTEGRATIONS_GEMINI_BASE_URL,
-  },
-});
+// Lazy initialization - DB에서 API 키 로드 후 사용
+let ai: GoogleGenAI | null = null;
+
+function getAI(): GoogleGenAI {
+  if (!ai) {
+    const apiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY || process.env.GEMINI_API_KEY || process.env.API_KEY || '';
+    const baseUrl = process.env.AI_INTEGRATIONS_GEMINI_BASE_URL;
+    ai = new GoogleGenAI({
+      apiKey,
+      ...(baseUrl ? {
+        httpOptions: {
+          apiVersion: "",
+          baseUrl,
+        },
+      } : {}),
+    });
+  }
+  return ai;
+}
 
 type Vibe = 'Healing' | 'Adventure' | 'Hotspot' | 'Foodie' | 'Romantic' | 'Culture';
 type TravelStyle = 'Luxury' | 'Premium' | 'Reasonable' | 'Economic';
-type TravelPace = 'Packed' | 'Relaxed';
-type MobilityStyle = 'WalkMore' | 'Minimal';
+// 여행 밀도: 빡빡하게(Packed) | 보통(Normal) | 여유롭게(Relaxed)
+// ⚠️ 프론트엔드 기준 'Normal' 사용 (Moderate 아님)
+type TravelPace = 'Packed' | 'Normal' | 'Relaxed';
+type MobilityStyle = 'WalkMore' | 'Moderate' | 'Minimal';
 type CurationFocus = 'Kids' | 'Parents' | 'Everyone' | 'Self';
+
+// ===== 사용자 시간 기반 슬롯 생성 로직 =====
+// 핵심 규칙:
+// 1. 사용자 출발시간/종료시간 = 절대 우선
+// 2. 여행 밀도에 따라 슬롯 수 자동 계산
+// 3. 2일 이상: 첫날(출발시간~21:00), 중간(09:00~21:00 풀타임), 마지막(09:00~종료시간)
+interface PaceConfig {
+  slotDurationMinutes: number;  // 슬롯 당 소요시간 (이동시간 포함)
+  maxSlotsPerDay: number;       // 하루 최대 슬롯 수 (풀타임 12시간 기준)
+}
+
+const PACE_CONFIG: Record<TravelPace, PaceConfig> = {
+  Packed: {
+    slotDurationMinutes: 90,    // 1시간 30분
+    maxSlotsPerDay: 8,          // 12h ÷ 1.5h = 8곳
+  },
+  Normal: {
+    slotDurationMinutes: 120,   // 2시간
+    maxSlotsPerDay: 6,          // 12h ÷ 2h = 6곳
+  },
+  Relaxed: {
+    slotDurationMinutes: 150,   // 2시간 30분
+    maxSlotsPerDay: 4,          // 12h ÷ 2.5h ≈ 4곳
+  },
+};
+
+// 기본 시작/종료 시간 (중간 날짜용)
+const DEFAULT_START_TIME = '09:00';
+const DEFAULT_END_TIME = '21:00';
+
+/**
+ * 가용 시간으로 슬롯 수 계산
+ * @param startTime 시작시간 (HH:MM)
+ * @param endTime 종료시간 (HH:MM)
+ * @param pace 여행 밀도
+ * @returns 슬롯 수
+ */
+function calculateSlotsForDay(
+  startTime: string,
+  endTime: string,
+  pace: TravelPace
+): number {
+  const config = PACE_CONFIG[pace];
+  
+  const [startH, startM] = startTime.split(':').map(Number);
+  const [endH, endM] = endTime.split(':').map(Number);
+  
+  const startMinutes = startH * 60 + startM;
+  const endMinutes = endH * 60 + endM;
+  const availableMinutes = endMinutes - startMinutes;
+  
+  if (availableMinutes <= 0) return 0;
+  
+  const slots = Math.floor(availableMinutes / config.slotDurationMinutes);
+  return Math.min(slots, config.maxSlotsPerDay);
+}
 
 interface TripFormData {
   birthDate: string;
@@ -58,12 +137,22 @@ interface TimeSlot {
   vibeAffinity: Vibe[];
 }
 
-const TIME_SLOTS: TimeSlot[] = [
-  { slot: 'morning', startTime: '09:00', endTime: '12:00', vibeAffinity: ['Healing', 'Culture', 'Adventure'] },
-  { slot: 'lunch', startTime: '12:00', endTime: '14:00', vibeAffinity: ['Foodie'] },
-  { slot: 'afternoon', startTime: '14:00', endTime: '18:00', vibeAffinity: ['Hotspot', 'Culture', 'Adventure', 'Healing'] },
-  { slot: 'evening', startTime: '18:00', endTime: '21:00', vibeAffinity: ['Foodie', 'Romantic'] },
-];
+// 시간대별 Vibe 친화도 (슬롯 타입 판단용)
+const SLOT_VIBE_AFFINITY: Record<'morning' | 'lunch' | 'afternoon' | 'evening', Vibe[]> = {
+  morning: ['Healing', 'Culture', 'Adventure'],
+  lunch: ['Foodie'],
+  afternoon: ['Hotspot', 'Culture', 'Adventure', 'Healing'],
+  evening: ['Foodie', 'Romantic'],
+};
+
+/**
+ * 분(minutes)을 HH:MM 형식으로 변환
+ */
+function minutesToTime(minutes: number): string {
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  return `${String(Math.min(23, hours)).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+}
 
 const BASE_WEIGHTS: Record<Vibe, number> = {
   Healing: 35,
@@ -192,11 +281,45 @@ function getPlaceTypesForVibes(vibes: Vibe[]): string[] {
   return Array.from(types);
 }
 
-function calculatePlaceVibeScore(place: any, vibes: Vibe[]): number {
+/**
+ * 장소의 Vibe 점수 계산
+ * 
+ * 🎯 가중치 적용 로직:
+ * - 사용자가 선택한 vibes와 장소의 vibeTags 매칭도 반영
+ * - 선택 순서에 따라 가중치: 1순위(50%) > 2순위(30%) > 3순위(20%)
+ * - 2개 선택시: 60% : 40%
+ */
+function calculatePlaceVibeScore(
+  place: any, 
+  vibes: Vibe[],
+  vibeWeights?: { vibe: Vibe; weight: number; percentage: number }[]
+): number {
   const rating = place.rating || 3;
   const reviewCount = place.userRatingCount || 0;
   const reviewBonus = Math.min(2, Math.log10(reviewCount + 1) * 0.5);
-  return Math.min(10, rating * 1.5 + reviewBonus);
+  
+  // 기본 점수 (평점 기반)
+  let baseScore = Math.min(8, rating * 1.2 + reviewBonus);
+  
+  // 🎯 Vibe 매칭 보너스 (사용자 선택 가중치 적용)
+  const placeVibes = mapPlaceTypesToVibes(place.types || []);
+  let vibeMatchBonus = 0;
+  
+  if (vibeWeights && vibeWeights.length > 0) {
+    // 가중치 기반 매칭
+    for (const vw of vibeWeights) {
+      if (placeVibes.includes(vw.vibe)) {
+        // 매칭되면 가중치만큼 보너스 (최대 2점)
+        vibeMatchBonus += (vw.weight * 2);
+      }
+    }
+  } else if (vibes.length > 0) {
+    // 가중치 없으면 단순 매칭 (fallback)
+    const matchCount = vibes.filter(v => placeVibes.includes(v)).length;
+    vibeMatchBonus = Math.min(2, matchCount * 0.7);
+  }
+  
+  return Math.min(10, baseScore + vibeMatchBonus);
 }
 
 function getPersonaFitReason(placeTypes: string[], vibes: Vibe[]): string {
@@ -241,40 +364,91 @@ function getPriceEstimate(priceLevel: number | undefined, travelStyle: TravelSty
 async function generatePlacesWithGemini(
   formData: TripFormData,
   vibeWeights: { vibe: Vibe; weight: number; percentage: number }[],
-  requiredPlaceCount: number = 12
+  requiredPlaceCount: number = 12,
+  koreanSentiment?: KoreanSentimentData
 ): Promise<PlaceResult[]> {
   const vibeDescription = vibeWeights
     .map(v => `${v.vibe}(${v.percentage}%)`)
     .join(', ');
 
+  // 여행 페이스 한글 변환
+  const paceKorean = formData.travelPace === 'Packed' ? '빡빡하게' 
+    : formData.travelPace === 'Moderate' ? '적당히' 
+    : '여유롭게';
+  
+  // 페이스 설정
+  const paceConfig = PACE_CONFIG[formData.travelPace || 'Moderate'];
+  
+  // 한국 감성 데이터 섹션 (있으면 추가)
+  const sentimentSection = koreanSentiment
+    ? formatSentimentForPrompt(koreanSentiment, formData.destination)
+    : '';
+
+  // ===== 🎯 주인공 컨텍스트 생성 (가중치 1순위) =====
+  const protagonistContext = generatePromptContext({
+    curationFocus: (formData.curationFocus as any) || 'Everyone',
+    companionType: (formData.companionType as any) || 'Couple',
+    companionCount: formData.companionCount || 2,
+    companionAges: formData.companionAges,
+    vibes: vibeWeights.map(v => v.vibe),
+    destination: formData.destination,
+  });
+  
+  // 주인공 문장 (로그 및 저장용)
+  const protagonistInfo = generateProtagonistSentence({
+    curationFocus: (formData.curationFocus as any) || 'Everyone',
+    companionType: (formData.companionType as any) || 'Couple',
+    companionCount: formData.companionCount || 2,
+    companionAges: formData.companionAges,
+    vibes: vibeWeights.map(v => v.vibe),
+    destination: formData.destination,
+  });
+  
+  console.log(`[Itinerary] 🎯 주인공: ${protagonistInfo.sentence}`);
+
   const prompt = `당신은 전문 여행 플래너입니다. 다음 조건에 맞는 ${formData.destination} 여행지를 추천해주세요.
 
-조건:
-- 바이브: ${vibeDescription}
+${protagonistContext}
+
+【사용자 여행 조건】
+- 바이브 선호: ${vibeDescription}
 - 여행 스타일: ${formData.travelStyle}
-- 여행 페이스: ${formData.travelPace === 'Packed' ? '빡빡하게' : '여유롭게'}
+- 여행 밀도: ${paceKorean} (하루 ${paceConfig.maxSlotsPerDay}곳, ${paceConfig.slotDurationMinutes}분 간격)
 - 이동 스타일: ${formData.mobilityStyle === 'WalkMore' ? '많이 걷기' : '이동 최소화'}
 - 동행: ${formData.companionType}, ${formData.companionCount}명
-- 큐레이션 포커스: ${formData.curationFocus}
 
-중요한 동선 최적화 규칙:
-1. 같은 도시/지역의 장소들을 연속 일자에 배치할 수 있도록 그룹핑해주세요
-2. 도시 간 이동이 필요한 경우, 인접한 도시끼리 묶어주세요
-3. 각 장소에 반드시 city(도시명)와 region(지역/구역) 정보를 포함해주세요
+${sentimentSection}
 
-각 시간대별 장소를 추천해주세요 (아침/점심/오후/저녁).
-실제 존재하는 장소만 추천하고, 각 장소에 대해 다음 정보를 JSON으로 제공해주세요:
+【중요한 추천 기준 - 5단계 가중치】
+1. ⭐ 주인공 (위 "일정 생성의 주인공" 섹션 최우선 반영)
+2. 누구랑 (동행 타입에 맞는 장소 우선)
+3. 바이브 선호 (사용자가 선택한 취향 반영)
+4. 예산 수준 (${formData.travelStyle})
+5. 실제 정보 (영업 중인 곳, 리뷰 좋은 곳)
 
+【동선 최적화 규칙】
+1. 같은 도시/지역의 장소들을 연속 일자에 배치할 수 있도록 그룹핑
+2. 도시 간 이동이 필요한 경우, 인접한 도시끼리 묶기
+3. 각 장소에 반드시 city(도시명)와 region(지역/구역) 정보 포함
+4. 오전-점심-오후-저녁 시간대에 맞는 장소 배치 (식당은 점심/저녁에)
+
+【한국인 선호도 반영】
+한국인 여행자들이 많이 가고, SNS에서 인기 있는 장소를 우선 추천해주세요.
+${koreanSentiment?.instagram.trendingHashtags.length ? `인기 해시태그: ${koreanSentiment.instagram.trendingHashtags.slice(0, 3).join(', ')}` : ''}
+${koreanSentiment?.naverBlog.keywords.length ? `자주 언급 키워드: ${koreanSentiment.naverBlog.keywords.slice(0, 3).join(', ')}` : ''}
+
+JSON 응답 형식:
 {
   "places": [
     {
       "name": "장소명",
-      "description": "간단한 설명",
+      "description": "간단한 설명 (한국인에게 인기인 이유 포함)",
       "city": "도시명 (예: 파리, 니스, 리옹)",
       "region": "지역/구역 (예: 마레지구, 몽마르뜨, 샹젤리제)",
       "lat": 위도,
       "lng": 경도,
       "vibeScore": 1-10 점수,
+      "koreanPopularity": 1-10 (한국인 인기도),
       "tags": ["태그1", "태그2"],
       "vibeTags": ["Healing", "Foodie" 등 해당되는 Vibe],
       "recommendedTime": "morning|lunch|afternoon|evening",
@@ -287,7 +461,7 @@ ${formData.destination}의 실제 유명한 장소들을 추천해주세요. 정
 도시별로 균형있게 분배하고, 각 도시 내에서는 지역별로 묶어주세요.`;
 
   try {
-    const response = await ai.models.generateContent({
+    const response = await getAI().models.generateContent({
       model: "gemini-3-flash-preview",
       contents: [{ role: "user", parts: [{ text: prompt }] }],
     });
@@ -397,74 +571,74 @@ function optimizeCityOrder(cityGroups: Map<string, PlaceResult[]>): string[] {
   return ordered;
 }
 
-function distributePlacesToSlots(
-  places: PlaceResult[],
-  vibeWeights: { vibe: Vibe; weight: number; percentage: number }[],
-  dayCount: number,
-  travelPace: TravelPace
-): { day: number; slot: string; place: PlaceResult; startTime: string; endTime: string }[] {
-  const slotsPerDay = travelPace === 'Packed' ? 4 : 3;
-  const schedule: { day: number; slot: string; place: PlaceResult; startTime: string; endTime: string }[] = [];
-  
-  const cityGroups = groupPlacesByCity(places);
-  const orderedCities = optimizeCityOrder(cityGroups);
-  
-  const totalPlaces = places.length;
-  const placesPerDay = Math.ceil(totalPlaces / dayCount);
-  
-  const orderedPlaces: PlaceResult[] = [];
-  for (const city of orderedCities) {
-    const cityPlaces = cityGroups.get(city) || [];
-    cityPlaces.sort((a, b) => b.vibeScore - a.vibeScore);
-    orderedPlaces.push(...cityPlaces);
-  }
-  
-  let placeIndex = 0;
-  
-  for (let day = 1; day <= dayCount; day++) {
-    const daySlots = TIME_SLOTS.slice(0, slotsPerDay);
-    
-    for (const slot of daySlots) {
-      if (placeIndex >= orderedPlaces.length) break;
-      
-      const currentCity = orderedPlaces[placeIndex]?.city;
-      
-      const matchingPlace = orderedPlaces.slice(placeIndex).find((p) => {
-        const sameCity = p.city === currentCity;
-        const hasRecommendedTime = (p as any).recommendedTime === slot.slot;
-        const hasVibeAffinity = p.vibeTags.some(v => slot.vibeAffinity.includes(v));
-        return sameCity && (hasRecommendedTime || hasVibeAffinity);
-      });
-      
-      const place = matchingPlace || orderedPlaces[placeIndex];
-      
-      schedule.push({
-        day,
-        slot: slot.slot,
-        place,
-        startTime: slot.startTime,
-        endTime: slot.endTime,
-      });
-      
-      const usedIndex = orderedPlaces.indexOf(place);
-      if (usedIndex > -1) {
-        orderedPlaces.splice(usedIndex, 1);
-      }
-    }
-  }
-  
-  return schedule;
-}
-
 export async function generateItinerary(formData: TripFormData) {
   const vibes = formData.vibes || ['Foodie', 'Culture', 'Healing'];
   const curationFocus = formData.curationFocus || 'Everyone';
   const vibeWeights = calculateVibeWeights(vibes, curationFocus);
   
-  const dayCount = calculateDayCount(formData.startDate, formData.endDate);
-  const slotsPerDay = (formData.travelPace || 'Relaxed') === 'Packed' ? 4 : 3;
-  const requiredPlaceCount = dayCount * slotsPerDay + 4;
+  // 여행 밀도 기본값: Normal (보통) - 프론트엔드 기준
+  // Moderate도 Normal로 처리 (하위 호환)
+  let travelPace: TravelPace = (formData.travelPace as TravelPace) || 'Normal';
+  if (travelPace === 'Moderate' as any) travelPace = 'Normal';
   
+  const paceConfig = PACE_CONFIG[travelPace];
+  const dayCount = calculateDayCount(formData.startDate, formData.endDate);
+  
+  // ===== 사용자 시간 기반 슬롯 계산 =====
+  const userStartTime = formData.startTime || DEFAULT_START_TIME;
+  const userEndTime = formData.endTime || DEFAULT_END_TIME;
+  
+  // 일별 슬롯 수 계산
+  const daySlotsConfig: { day: number; startTime: string; endTime: string; slots: number }[] = [];
+  let totalRequiredPlaces = 0;
+  
+  for (let d = 1; d <= dayCount; d++) {
+    let dayStart: string;
+    let dayEnd: string;
+    
+    if (dayCount === 1) {
+      // 당일치기: 사용자 출발~종료시간 그대로
+      dayStart = userStartTime;
+      dayEnd = userEndTime;
+    } else if (d === 1) {
+      // 첫날: 사용자 출발시간 ~ 21:00
+      dayStart = userStartTime;
+      dayEnd = DEFAULT_END_TIME;
+    } else if (d === dayCount) {
+      // 마지막날: 09:00 ~ 사용자 종료시간
+      dayStart = DEFAULT_START_TIME;
+      dayEnd = userEndTime;
+    } else {
+      // 중간날: 09:00 ~ 21:00 풀타임
+      dayStart = DEFAULT_START_TIME;
+      dayEnd = DEFAULT_END_TIME;
+    }
+    
+    const slots = calculateSlotsForDay(dayStart, dayEnd, travelPace);
+    daySlotsConfig.push({ day: d, startTime: dayStart, endTime: dayEnd, slots });
+    totalRequiredPlaces += slots;
+  }
+  
+  const requiredPlaceCount = totalRequiredPlaces + 4; // 여유분
+  
+  console.log(`[Itinerary] ===== 일정 생성 시작 =====`);
+  console.log(`[Itinerary] 여행 밀도: ${travelPace} (슬롯 간격: ${paceConfig.slotDurationMinutes}분)`);
+  console.log(`[Itinerary] 사용자 시간: ${userStartTime} ~ ${userEndTime}`);
+  console.log(`[Itinerary] 총 ${dayCount}일, 필요 장소: ${totalRequiredPlaces}곳`);
+  daySlotsConfig.forEach(d => {
+    console.log(`[Itinerary]   Day ${d.day}: ${d.startTime}~${d.endTime} → ${d.slots}곳`);
+  });
+  
+  // ===== 한국 감성 데이터 로드 (캐시 우선) =====
+  let koreanSentiment: KoreanSentimentData | undefined;
+  try {
+    koreanSentiment = await getKoreanSentimentForCity(formData.destination, vibes);
+    console.log(`[Itinerary] 한국 감성 보너스: +${koreanSentiment.totalBonus.toFixed(2)}`);
+  } catch (error) {
+    console.warn('[Itinerary] 한국 감성 데이터 로드 실패:', error);
+  }
+  
+  // Google Places API로 기본 장소 검색
   let places = await searchGooglePlaces(
     formData.destination,
     formData.destinationCoords,
@@ -472,33 +646,44 @@ export async function generateItinerary(formData: TripFormData) {
     formData.travelStyle || 'Reasonable'
   );
   
-  console.log(`[Itinerary] Required places: ${requiredPlaceCount} for ${dayCount} days`);
-  
+  // Gemini AI로 추가 장소 추천 (한국 감성 데이터 포함)
   if (places.length < requiredPlaceCount) {
-    const aiPlaces = await generatePlacesWithGemini(formData, vibeWeights, requiredPlaceCount);
-    console.log(`[Itinerary] Google: ${places.length}, Gemini: ${aiPlaces.length}`);
+    const aiPlaces = await generatePlacesWithGemini(formData, vibeWeights, requiredPlaceCount, koreanSentiment);
+    console.log(`[Itinerary] Google: ${places.length}곳, Gemini: ${aiPlaces.length}곳`);
     places = [...places, ...aiPlaces];
   }
   
-  // If still not enough places, generate more in batches
+  // 부족하면 추가 생성
   let attempts = 0;
   while (places.length < requiredPlaceCount && attempts < 2) {
     attempts++;
-    console.log(`[Itinerary] Not enough places (${places.length}/${requiredPlaceCount}), generating more...`);
-    const morePlaces = await generatePlacesWithGemini(formData, vibeWeights, requiredPlaceCount - places.length + 5);
+    console.log(`[Itinerary] 장소 부족 (${places.length}/${requiredPlaceCount}), 추가 생성 중...`);
+    const morePlaces = await generatePlacesWithGemini(formData, vibeWeights, requiredPlaceCount - places.length + 5, koreanSentiment);
     places = [...places, ...morePlaces];
   }
   
-  console.log(`[Itinerary] Total places: ${places.length}`);
+  console.log(`[Itinerary] 총 수집 장소: ${places.length}곳`);
+  
+  // 한국 감성 보너스 적용하여 정렬
+  if (koreanSentiment) {
+    places = places.map(p => ({
+      ...p,
+      vibeScore: p.vibeScore + (koreanSentiment?.totalBonus || 0)
+    }));
+  }
   
   places = places.sort((a, b) => b.vibeScore - a.vibeScore).slice(0, requiredPlaceCount + 5);
-  const schedule = distributePlacesToSlots(places, vibeWeights, dayCount, formData.travelPace);
   
-  console.log(`[Itinerary] Schedule entries: ${schedule.length}`);
+  // ===== 사용자 시간 기반 동적 슬롯 분배 =====
+  const schedule = distributePlacesWithUserTime(places, daySlotsConfig, travelPace);
   
-  const days: { day: number; places: any[]; city: string; summary: string }[] = [];
+  console.log(`[Itinerary] 최종 일정: ${schedule.length}개 슬롯`);
+  
+  // Days 배열 생성
+  const days: { day: number; places: any[]; city: string; summary: string; startTime: string; endTime: string }[] = [];
   
   for (let d = 1; d <= dayCount; d++) {
+    const dayConfig = daySlotsConfig.find(c => c.day === d)!;
     const dayPlaces = schedule
       .filter(s => s.day === d)
       .map(s => ({
@@ -528,25 +713,102 @@ export async function generateItinerary(formData: TripFormData) {
       places: dayPlaces,
       city: cityLabel,
       summary: `${cityLabel} - ${topVibes.join(' & ')} 중심의 하루`,
+      startTime: dayConfig.startTime,
+      endTime: dayConfig.endTime,
     });
   }
+  
+  // 여행 밀도 라벨
+  const paceLabel = travelPace === 'Packed' ? '빡빡하게' 
+    : travelPace === 'Normal' ? '보통' 
+    : '여유롭게';
   
   return {
     title: `${formData.destination} ${dayCount}일 여행`,
     destination: formData.destination,
     startDate: formData.startDate,
     endDate: formData.endDate,
+    startTime: userStartTime,
+    endTime: userEndTime,
     days,
     vibeWeights,
+    koreanSentimentBonus: koreanSentiment?.totalBonus || 0,
     metadata: {
       travelStyle: formData.travelStyle,
-      travelPace: formData.travelPace,
+      travelPace: travelPace,
+      travelPaceLabel: paceLabel,
+      slotDurationMinutes: paceConfig.slotDurationMinutes,
+      totalPlaces: schedule.length,
       mobilityStyle: formData.mobilityStyle,
       companionType: formData.companionType,
       curationFocus: formData.curationFocus,
       generatedAt: new Date().toISOString(),
+      koreanSentimentApplied: !!koreanSentiment,
     },
   };
+}
+
+/**
+ * 사용자 시간 기반으로 장소를 슬롯에 분배
+ */
+function distributePlacesWithUserTime(
+  places: PlaceResult[],
+  daySlotsConfig: { day: number; startTime: string; endTime: string; slots: number }[],
+  travelPace: TravelPace
+): { day: number; slot: string; place: PlaceResult; startTime: string; endTime: string }[] {
+  const schedule: { day: number; slot: string; place: PlaceResult; startTime: string; endTime: string }[] = [];
+  const paceConfig = PACE_CONFIG[travelPace];
+  
+  // 도시별 그룹핑 및 순서 최적화
+  const cityGroups = groupPlacesByCity(places);
+  const orderedCities = optimizeCityOrder(cityGroups);
+  
+  const orderedPlaces: PlaceResult[] = [];
+  for (const city of orderedCities) {
+    const cityPlaces = cityGroups.get(city) || [];
+    cityPlaces.sort((a, b) => b.vibeScore - a.vibeScore);
+    orderedPlaces.push(...cityPlaces);
+  }
+  
+  let placeIndex = 0;
+  
+  for (const dayConfig of daySlotsConfig) {
+    const { day, startTime, slots } = dayConfig;
+    
+    // 해당 일자의 시간 슬롯 생성
+    const [startH, startM] = startTime.split(':').map(Number);
+    let currentMinutes = startH * 60 + startM;
+    
+    for (let slotIdx = 0; slotIdx < slots; slotIdx++) {
+      if (placeIndex >= orderedPlaces.length) break;
+      
+      const slotStart = minutesToTime(currentMinutes);
+      currentMinutes += paceConfig.slotDurationMinutes;
+      const slotEnd = minutesToTime(currentMinutes);
+      
+      // 슬롯 타입 결정 (시간대 기반)
+      const slotHour = parseInt(slotStart.split(':')[0]);
+      let slotType: 'morning' | 'lunch' | 'afternoon' | 'evening';
+      if (slotHour < 12) slotType = 'morning';
+      else if (slotHour < 14) slotType = 'lunch';
+      else if (slotHour < 18) slotType = 'afternoon';
+      else slotType = 'evening';
+      
+      const place = orderedPlaces[placeIndex];
+      
+      schedule.push({
+        day,
+        slot: slotType,
+        place,
+        startTime: slotStart,
+        endTime: slotEnd,
+      });
+      
+      placeIndex++;
+    }
+  }
+  
+  return schedule;
 }
 
 export const itineraryGenerator = {

@@ -39,6 +39,7 @@ import { apiRequest } from "@/lib/query-client";
 import { InteractiveMap } from "@/components/InteractiveMap";
 import { isAuthenticated } from "@/lib/auth";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
+import { useMapToggle } from "@/contexts/MapToggleContext";
 
 let DateTimePicker: any = null;
 if (Platform.OS !== "web") {
@@ -97,6 +98,7 @@ export default function TripPlannerScreen() {
   const [tempDate, setTempDate] = useState(new Date());
   const [showWebInput, setShowWebInput] = useState<PickerMode>(null);
   const [pendingGenerate, setPendingGenerate] = useState(false);
+  const { showMap } = useMapToggle();  // 🗺️ 지도 토글 (Context에서 가져옴)
 
   const [formData, setFormData] = useState<TripFormData>({
     birthDate: "1985-06-15",
@@ -195,7 +197,56 @@ export default function TripPlannerScreen() {
     }
   };
 
+  // 🚨 위기 정보 체크 및 팝업 표시
+  const checkCrisisAlerts = async (): Promise<{ hasAlerts: boolean; shouldProceed: boolean }> => {
+    try {
+      const response = await apiRequest("GET", `/api/trip-alerts?city=${encodeURIComponent(formData.destination)}&startDate=${formData.startDate}&endDate=${formData.endDate}`);
+      const data = await response.json();
+      
+      if (data.hasAlerts && data.alerts?.length > 0) {
+        const highSeverityAlerts = data.alerts.filter((a: any) => a.severity >= 7);
+        const alertMessages = data.alerts.slice(0, 3).map((a: any) => 
+          `• ${a.titleKo || a.title} (${a.date})`
+        ).join('\n');
+        
+        return new Promise((resolve) => {
+          if (data.highSeverity) {
+            // 심각한 위기 정보 - 경고 팝업
+            Alert.alert(
+              "⚠️ 여행 주의 정보",
+              `${formData.destination}에 ${data.alertCount}개의 주의사항이 있습니다:\n\n${alertMessages}\n\n${data.summary}\n\n일정을 계속 생성하시겠습니까?`,
+              [
+                { text: "취소", style: "cancel", onPress: () => resolve({ hasAlerts: true, shouldProceed: false }) },
+                { text: "계속 생성", onPress: () => resolve({ hasAlerts: true, shouldProceed: true }) }
+              ]
+            );
+          } else {
+            // 일반 알림 정보 - 알림 팝업
+            Alert.alert(
+              "📢 참고 정보",
+              `${formData.destination}에 참고할 정보가 있습니다:\n\n${alertMessages}`,
+              [
+                { text: "확인 후 생성", onPress: () => resolve({ hasAlerts: true, shouldProceed: true }) }
+              ]
+            );
+          }
+        });
+      }
+      
+      return { hasAlerts: false, shouldProceed: true };
+    } catch (error) {
+      console.log("[TripPlanner] Crisis check failed, proceeding anyway:", error);
+      return { hasAlerts: false, shouldProceed: true };
+    }
+  };
+
   const executeGenerate = async () => {
+    // 🚨 1. 위기 정보 체크 (일정 생성 전)
+    const crisisCheck = await checkCrisisAlerts();
+    if (!crisisCheck.shouldProceed) {
+      return; // 사용자가 취소함
+    }
+
     setScreen("Loading");
     setLoadingStep(0);
 
@@ -206,14 +257,14 @@ export default function TripPlannerScreen() {
     try {
       const response = await apiRequest("POST", "/api/routes/generate", formData);
       const result = await response.json();
-      
+
       console.log("[TripPlanner] API response days count:", result.days?.length);
       console.log("[TripPlanner] Days:", result.days?.map((d: any) => ({ day: d.day, city: d.city, placesCount: d.places?.length })));
-      
+
       clearInterval(interval);
-      
+
       const vibeWeights = calculateVibeWeights(formData.vibes, formData.curationFocus);
-      
+
       setItinerary({
         title: result.title || `${formData.destination} 여행`,
         destination: result.destination || formData.destination,
@@ -221,12 +272,14 @@ export default function TripPlannerScreen() {
         endDate: result.endDate || formData.endDate,
         vibeWeights: result.vibeWeights || vibeWeights,
         days: result.days || [],
+        // 🚨 위기 정보 포함
+        crisisAlerts: crisisCheck.hasAlerts ? result.crisisAlerts : undefined,
       });
       setScreen("Result");
     } catch (error) {
       clearInterval(interval);
       console.error("Failed to generate itinerary:", error);
-      
+
       const vibeWeights = calculateVibeWeights(formData.vibes, formData.curationFocus);
       setItinerary({
         title: `${formData.destination} 여행`,
@@ -471,7 +524,12 @@ export default function TripPlannerScreen() {
                   styles.iconButton,
                   { backgroundColor: isSelected ? Brand.primary : theme.backgroundDefault },
                 ]}
-                onPress={() => setFormData(prev => ({ ...prev, companionType: option.id }))}
+                onPress={() => setFormData(prev => ({ 
+                  ...prev, 
+                  companionType: option.id,
+                  companionCount: option.defaultCount,
+                  transportType: option.transportType,
+                }))}
               >
                 <Feather
                   name={option.icon as any}
@@ -678,38 +736,82 @@ export default function TripPlannerScreen() {
           </Pressable>
         </View>
 
-        <View style={styles.mapSection}>
-          <View style={[styles.mapDateRow, { backgroundColor: theme.backgroundSecondary }]}>
+        {/* 📊 요약 섹션 1: 날짜 + 장소수 + 총예산 */}
+        <View style={[styles.tripSummaryRow, { backgroundColor: theme.backgroundSecondary }]}>
+          <View style={styles.tripSummaryItem}>
             <Feather name="calendar" size={14} color={theme.textSecondary} />
-            <Text style={[styles.mapDateText, { color: theme.textSecondary }]}>
-              {itinerary.startDate} - {itinerary.endDate}
-            </Text>
-            <Text style={[styles.mapPlaceCount, { color: theme.textTertiary }]}>
-              {places.length}개 장소
+            <Text style={[styles.tripSummaryText, { color: theme.text }]}>
+              {itinerary.startDate} ~ {itinerary.endDate}
             </Text>
           </View>
-          <InteractiveMap
-            places={places.map(p => ({
-              id: p.id,
-              name: p.name,
-              lat: p.lat,
-              lng: p.lng,
-              vibeScore: p.vibeScore,
-              startTime: p.startTime,
-              endTime: p.endTime,
-            }))}
-            height={200}
-          />
+          <View style={styles.tripSummaryItem}>
+            <Feather name="map-pin" size={14} color={theme.textSecondary} />
+            <Text style={[styles.tripSummaryText, { color: theme.text }]}>
+              {(itinerary.days || []).reduce((sum, d) => sum + (d.places?.length || 0), 0)}개 장소
+            </Text>
+          </View>
+          {itinerary.budget?.totals?.grandTotal && (
+            <View style={styles.tripSummaryItem}>
+              <Feather name="credit-card" size={14} color={Brand.primary} />
+              <Text style={[styles.tripSummaryText, { color: Brand.primary, fontWeight: "700" }]}>
+                €{itinerary.budget.totals.grandTotal.toLocaleString()}
+              </Text>
+            </View>
+          )}
         </View>
 
-        {itinerary.vibeWeights && itinerary.vibeWeights.length > 0 ? (
+        {/* 📊 요약 섹션 2: 누구랑 + 바이브 + 예산 + 이동스타일 */}
+        <View style={[styles.tripOptionsRow, { backgroundColor: theme.backgroundDefault }]}>
+          {itinerary.companionType && (
+            <View style={[styles.tripOptionBadge, { backgroundColor: `${Brand.primary}15` }]}>
+              <Text style={[styles.tripOptionText, { color: Brand.primary }]}>
+                👨‍👩‍👧‍👦 {itinerary.companionType}
+              </Text>
+            </View>
+          )}
+          {itinerary.travelStyle && (
+            <View style={[styles.tripOptionBadge, { backgroundColor: `${Brand.primary}15` }]}>
+              <Text style={[styles.tripOptionText, { color: Brand.primary }]}>
+                💰 {itinerary.travelStyle}
+              </Text>
+            </View>
+          )}
+          {itinerary.mobilityStyle && (
+            <View style={[styles.tripOptionBadge, { backgroundColor: `${Brand.primary}15` }]}>
+              <Text style={[styles.tripOptionText, { color: Brand.primary }]}>
+                🚶 {itinerary.mobilityStyle}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* 🎯 바이브 가중치 요약 */}
+        {itinerary.vibeWeights && itinerary.vibeWeights.length > 0 && (
           <View style={[styles.vibeWeightsSummary, { backgroundColor: `${Brand.primary}10` }]}>
             <Feather name="target" size={16} color={Brand.primary} />
             <Text style={[styles.vibeWeightsSummaryText, { color: Brand.primary }]}>
               {formatVibeWeightsSummary(itinerary.vibeWeights)}
             </Text>
           </View>
-        ) : null}
+        )}
+
+        {/* 🗺️ 지도 섹션 - showMap 토글에 따라 표시/숨김 */}
+        {showMap && (
+          <View style={styles.mapSection}>
+            <InteractiveMap
+              places={places.map(p => ({
+                id: p.id,
+                name: p.name,
+                lat: p.lat,
+                lng: p.lng,
+                vibeScore: p.vibeScore,
+                startTime: p.startTime,
+                endTime: p.endTime,
+              }))}
+              height={Math.min(220, Dimensions.get('window').height * 0.25)}
+            />
+          </View>
+        )}
 
         <View style={styles.dayTabsContainer}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dayTabs}>
@@ -750,46 +852,86 @@ export default function TripPlannerScreen() {
           </Pressable>
 
           <View style={styles.placesList}>
-            {places.map((place, index) => (
-              <View key={place.id} style={styles.placeItem}>
-                <View style={styles.timelineLeft}>
-                  <View style={[styles.placeNumber, { backgroundColor: Brand.primary }]}>
-                    <Text style={styles.placeNumberText}>{index + 1}</Text>
-                  </View>
-                  {index < places.length - 1 ? (
-                    <View style={[styles.timelineLine, { backgroundColor: theme.border }]} />
-                  ) : null}
-                </View>
-                <View style={[styles.placeCard, { backgroundColor: theme.backgroundDefault }]}>
-                  <View style={styles.placeHeader}>
-                    <Text style={[styles.placeName, { color: theme.text }]}>{place.name}</Text>
-                    <View style={[styles.scoreBadge, { backgroundColor: `${Brand.primary}20` }]}>
-                      <Text style={[styles.scoreText, { color: Brand.primary }]}>{place.vibeScore}</Text>
+            {places.map((place, index) => {
+              // 별점 계산 (vibeScore 10점 만점 → 5점 만점)
+              const starRating = Math.min(5, Math.max(0, Math.round((place.vibeScore || 0) / 2)));
+              const stars = "⭐".repeat(starRating) + "☆".repeat(5 - starRating);
+              
+              // 식사 여부 판단
+              const isMeal = place.name?.includes("점심") || place.name?.includes("저녁") || 
+                             place.name?.includes("아침") || place.name?.includes("식사") ||
+                             place.name?.includes("카페") || place.name?.includes("레스토랑");
+              
+              return (
+                <View key={place.id} style={styles.placeItem}>
+                  {/* 타임라인 좌측 */}
+                  <View style={styles.timelineLeft}>
+                    <View style={[styles.placeNumber, { backgroundColor: isMeal ? "#F59E0B" : Brand.primary }]}>
+                      <Text style={styles.placeNumberText}>{index + 1}</Text>
                     </View>
+                    {index < places.length - 1 && (
+                      <View style={[styles.timelineLine, { backgroundColor: theme.border }]} />
+                    )}
                   </View>
-                  <View style={styles.placeTimeRow}>
-                    <Feather name="clock" size={14} color={theme.textSecondary} />
-                    <Text style={[styles.placeTimeText, { color: theme.textSecondary }]}>
-                      {place.startTime} - {place.endTime}
-                    </Text>
-                  </View>
-                  {place.vibeTags && place.vibeTags.length > 0 ? (
-                    <View style={styles.vibeTagsRow}>
-                      {place.vibeTags.map(tag => (
-                        <View key={tag} style={[styles.vibeTag, { backgroundColor: `${Brand.primary}15` }]}>
-                          <Text style={[styles.vibeTagText, { color: Brand.primary }]}>
-                            {getVibeLabel(tag)}
+                  
+                  {/* 장소 카드 */}
+                  <View style={[styles.placeCard, { backgroundColor: theme.backgroundDefault }]}>
+                    <View style={styles.placeCardContent}>
+                      {/* 썸네일 이미지 */}
+                      {place.image ? (
+                        <View style={styles.placeThumbnail}>
+                          <View style={[styles.placeThumbnailPlaceholder, { backgroundColor: theme.backgroundSecondary }]}>
+                            <Feather name={isMeal ? "coffee" : "camera"} size={20} color={theme.textTertiary} />
+                          </View>
+                        </View>
+                      ) : (
+                        <View style={styles.placeThumbnail}>
+                          <View style={[styles.placeThumbnailPlaceholder, { backgroundColor: theme.backgroundSecondary }]}>
+                            <Feather name={isMeal ? "coffee" : "map-pin"} size={20} color={theme.textTertiary} />
+                          </View>
+                        </View>
+                      )}
+                      
+                      {/* 장소 정보 */}
+                      <View style={styles.placeInfo}>
+                        {/* 장소명 + 별점 */}
+                        <View style={styles.placeHeader}>
+                          <Text style={[styles.placeName, { color: theme.text }]} numberOfLines={1}>
+                            {isMeal ? "🍽️ " : ""}{place.name}
                           </Text>
                         </View>
-                      ))}
+                        
+                        {/* 별점 표시 */}
+                        <Text style={styles.placeStars}>{stars}</Text>
+                        
+                        {/* 시간 */}
+                        <View style={styles.placeTimeRow}>
+                          <Feather name="clock" size={12} color={theme.textSecondary} />
+                          <Text style={[styles.placeTimeText, { color: theme.textSecondary }]}>
+                            {place.startTime} - {place.endTime}
+                          </Text>
+                        </View>
+                        
+                        {/* 가격 정보 */}
+                        <View style={styles.placePriceRow}>
+                          <Feather name={isMeal ? "credit-card" : "tag"} size={12} color={Brand.primary} />
+                          <Text style={[styles.placePriceText, { color: Brand.primary }]}>
+                            {isMeal ? "💰 식사" : "🎫 입장료"}: {place.priceEstimate || "정보 없음"}
+                          </Text>
+                        </View>
+                        
+                        {/* 설명 (있을 경우) */}
+                        {place.personaFitReason && (
+                          <Text style={[styles.placeReason, { color: theme.textSecondary }]} numberOfLines={2}>
+                            {place.personaFitReason}
+                          </Text>
+                        )}
+                      </View>
                     </View>
-                  ) : null}
-                  <Text style={[styles.placeReason, { color: theme.textSecondary }]} numberOfLines={2}>
-                    {place.personaFitReason}
-                  </Text>
+                  </View>
                 </View>
-              </View>
-            ))}
+              );
+            })}
           </View>
 
         </ScrollView>
@@ -887,39 +1029,173 @@ const styles = StyleSheet.create({
   loadingIcon: { position: "absolute" },
   loadingTitle: { fontSize: 24, fontWeight: "900", marginBottom: Spacing.xs },
   loadingMessage: { fontSize: 14, fontWeight: "600" },
+  // ═══════════════════════════════════════════════════════════════════════════
+  // 📱 여정표 출력 화면 스타일 (모바일 최적화)
+  // ═══════════════════════════════════════════════════════════════════════════
   resultContainer: { flex: 1 },
-  resultHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: Spacing.lg, paddingBottom: Spacing.sm },
-  headerButton: { width: 44, height: 44, justifyContent: "center", alignItems: "center" },
-  resultTitle: { fontSize: 18, fontWeight: "800" },
-  mapSection: { marginBottom: Spacing.md },
-  mapDateRow: { flexDirection: "row", alignItems: "center", gap: Spacing.sm, marginHorizontal: Spacing.lg, padding: Spacing.sm, borderRadius: BorderRadius.md, marginBottom: Spacing.sm },
-  mapDateText: { fontSize: 13, fontWeight: "600" },
-  mapPlaceCount: { fontSize: 12, fontWeight: "500", marginLeft: "auto" },
-  vibeWeightsSummary: { flexDirection: "row", alignItems: "center", gap: Spacing.sm, marginHorizontal: Spacing.lg, padding: Spacing.md, borderRadius: BorderRadius.md, marginBottom: Spacing.md },
-  vibeWeightsSummaryText: { fontSize: 13, fontWeight: "700" },
+  resultHeader: { 
+    flexDirection: "row", 
+    alignItems: "center", 
+    justifyContent: "space-between", 
+    paddingHorizontal: Spacing.md, 
+    paddingBottom: Spacing.md,
+    minHeight: 56, // 모바일 터치 영역 확보
+  },
+  headerButton: { width: 48, height: 48, justifyContent: "center", alignItems: "center" },
+  resultTitle: { fontSize: 20, fontWeight: "800" }, // 18 → 20
+  
+  // 📊 요약 섹션 1: 날짜 + 장소수 + 총예산
+  tripSummaryRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginHorizontal: Spacing.md,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    borderRadius: BorderRadius.md,
+    marginBottom: Spacing.sm,
+  },
+  tripSummaryItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  tripSummaryText: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
+
+  // 📊 요약 섹션 2: 누구랑 + 바이브 + 예산 + 이동스타일
+  tripOptionsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: Spacing.sm,
+    marginHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    marginBottom: Spacing.sm,
+  },
+  tripOptionBadge: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
+    borderRadius: BorderRadius.full,
+  },
+  tripOptionText: {
+    fontSize: 12,
+    fontWeight: "600",
+  },
+
+  // 🗺️ 지도 섹션
+  mapSection: { 
+    marginHorizontal: Spacing.md,
+    marginBottom: Spacing.md,
+    borderRadius: BorderRadius.md,
+    overflow: "hidden",
+  },
+  
+  // 🎯 Vibe 가중치 요약
+  vibeWeightsSummary: { 
+    flexDirection: "row", 
+    alignItems: "center", 
+    gap: Spacing.sm, 
+    marginHorizontal: Spacing.md, 
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.lg, 
+    borderRadius: BorderRadius.md, 
+    marginBottom: Spacing.md 
+  },
+  vibeWeightsSummaryText: { fontSize: 14, fontWeight: "700" }, // 13 → 14
+  
+  // 📅 일자 탭
   dayTabsContainer: { paddingVertical: Spacing.sm },
-  dayTabs: { paddingHorizontal: Spacing.lg, gap: Spacing.sm },
-  dayTab: { paddingHorizontal: Spacing.lg, paddingVertical: Spacing.sm, borderRadius: BorderRadius.full },
-  dayTabText: { fontSize: 13, fontWeight: "700" },
-  dayTabCity: { fontSize: 10, marginTop: 2 },
+  dayTabs: { paddingHorizontal: Spacing.md, gap: Spacing.sm },
+  dayTab: { 
+    paddingHorizontal: Spacing.lg, 
+    paddingVertical: Spacing.md, // sm → md (더 큰 터치 영역)
+    borderRadius: BorderRadius.full,
+    minWidth: 70, // 최소 너비 보장
+    alignItems: "center",
+  },
+  dayTabText: { fontSize: 14, fontWeight: "700" }, // 13 → 14
+  dayTabCity: { fontSize: 11, marginTop: 2 }, // 10 → 11
+  
+  // 📜 스크롤 영역
   resultScrollView: { flex: 1 },
-  summaryBox: { flexDirection: "row", alignItems: "center", gap: Spacing.sm, marginHorizontal: Spacing.lg, padding: Spacing.md, borderRadius: BorderRadius.md, marginBottom: Spacing.lg },
-  summaryText: { flex: 1, fontSize: 13, fontWeight: "600", color: "#FFFFFF", lineHeight: 20 },
-  placesList: { paddingHorizontal: Spacing.lg },
-  placeItem: { flexDirection: "row", marginBottom: Spacing.lg },
-  timelineLeft: { width: 40, alignItems: "center" },
-  placeNumber: { width: 32, height: 32, borderRadius: 16, justifyContent: "center", alignItems: "center" },
-  placeNumberText: { color: "#FFFFFF", fontSize: 14, fontWeight: "800" },
+  
+  // ✅ CTA 버튼
+  summaryBox: { 
+    flexDirection: "row", 
+    alignItems: "center", 
+    gap: Spacing.sm, 
+    marginHorizontal: Spacing.md, 
+    paddingVertical: Spacing.lg, // md → lg
+    paddingHorizontal: Spacing.lg,
+    borderRadius: BorderRadius.lg, // md → lg
+    marginBottom: Spacing.lg 
+  },
+  summaryText: { flex: 1, fontSize: 15, fontWeight: "700", color: "#FFFFFF", lineHeight: 22 }, // 13 → 15
+  
+  // 📍 장소 목록
+  placesList: { paddingHorizontal: Spacing.md },
+  placeItem: { flexDirection: "row", marginBottom: Spacing.xl }, // lg → xl (더 넓은 간격)
+  
+  // 🔢 타임라인 (좌측 번호)
+  timelineLeft: { width: 44, alignItems: "center" }, // 40 → 44
+  placeNumber: { 
+    width: 36, 
+    height: 36, 
+    borderRadius: 18, 
+    justifyContent: "center", 
+    alignItems: "center" 
+  }, // 32 → 36
+  placeNumberText: { color: "#FFFFFF", fontSize: 15, fontWeight: "800" }, // 14 → 15
   timelineLine: { flex: 1, width: 2, marginVertical: Spacing.xs },
-  placeCard: { flex: 1, padding: Spacing.md, borderRadius: BorderRadius.md, marginLeft: Spacing.sm },
-  placeHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: Spacing.xs },
-  placeName: { fontSize: 16, fontWeight: "800" },
-  scoreBadge: { paddingHorizontal: Spacing.sm, paddingVertical: 2, borderRadius: BorderRadius.xs },
-  scoreText: { fontSize: 12, fontWeight: "800" },
-  placeTimeRow: { flexDirection: "row", alignItems: "center", gap: Spacing.xs, marginBottom: Spacing.xs },
-  placeTimeText: { fontSize: 12, fontWeight: "600" },
-  vibeTagsRow: { flexDirection: "row", flexWrap: "wrap", gap: Spacing.xs, marginBottom: Spacing.xs },
-  vibeTag: { paddingHorizontal: Spacing.sm, paddingVertical: 2, borderRadius: BorderRadius.xs },
-  vibeTagText: { fontSize: 10, fontWeight: "700" },
-  placeReason: { fontSize: 13, lineHeight: 18 },
+  
+  // 🏷️ 장소 카드
+  placeCard: { 
+    flex: 1, 
+    paddingVertical: Spacing.lg, // md → lg
+    paddingHorizontal: Spacing.lg,
+    borderRadius: BorderRadius.lg, // md → lg
+    marginLeft: Spacing.sm 
+  },
+  placeHeader: { 
+    flexDirection: "row", 
+    justifyContent: "space-between", 
+    alignItems: "center", 
+    marginBottom: Spacing.sm // xs → sm
+  },
+  placeName: { fontSize: 18, fontWeight: "800", flex: 1 }, // 16 → 18
+  scoreBadge: { 
+    paddingHorizontal: Spacing.md, // sm → md
+    paddingVertical: 4, // 2 → 4
+    borderRadius: BorderRadius.sm, // xs → sm
+    marginLeft: Spacing.sm,
+  },
+  scoreText: { fontSize: 14, fontWeight: "800" }, // 12 → 14
+  
+  // 🕐 시간
+  placeTimeRow: { 
+    flexDirection: "row", 
+    alignItems: "center", 
+    gap: Spacing.sm, // xs → sm
+    marginBottom: Spacing.sm // xs → sm
+  },
+  placeTimeText: { fontSize: 14, fontWeight: "600" }, // 12 → 14
+  
+  // 🏷️ Vibe 태그
+  vibeTagsRow: { 
+    flexDirection: "row", 
+    flexWrap: "wrap", 
+    gap: Spacing.sm, // xs → sm
+    marginBottom: Spacing.sm // xs → sm
+  },
+  vibeTag: { 
+    paddingHorizontal: Spacing.md, // sm → md
+    paddingVertical: 4, // 2 → 4
+    borderRadius: BorderRadius.sm // xs → sm
+  },
+  vibeTagText: { fontSize: 12, fontWeight: "700" }, // 10 → 12
+  
+  // 📝 장소 설명
+  placeReason: { fontSize: 14, lineHeight: 20 }, // 13/18 → 14/20
 });

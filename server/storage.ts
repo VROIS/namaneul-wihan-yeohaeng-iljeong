@@ -17,8 +17,16 @@ import {
   realityChecks, weatherCache, itineraries, itineraryItems, routeCache, dataSyncLog,
   guidePrices, placePrices
 } from "@shared/schema";
-import { db } from "./db";
+import { db, isDatabaseConnected } from "./db";
 import { eq, desc, and, gte, lte, sql } from "drizzle-orm";
+
+// DB 연결 없을 때 사용할 헬퍼 함수
+function requireDb() {
+  if (!isDatabaseConnected() || !db) {
+    throw new Error("DB 연결이 필요합니다. DATABASE_URL을 설정하세요.");
+  }
+  return db;
+}
 
 export interface IStorage {
   // Users

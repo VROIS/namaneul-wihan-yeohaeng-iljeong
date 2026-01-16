@@ -1,8 +1,11 @@
+import "dotenv/config";
 import express from "express";
 import type { Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import * as fs from "fs";
 import * as path from "path";
+import { db, isDatabaseConnected } from "./db";
+import { apiKeys } from "../shared/schema";
 
 const app = express();
 const log = console.log;
@@ -17,6 +20,7 @@ function setupCors(app: express.Application) {
   app.use((req, res, next) => {
     const origins = new Set<string>();
 
+    // Replit 환경
     if (process.env.REPLIT_DEV_DOMAIN) {
       origins.add(`https://${process.env.REPLIT_DEV_DOMAIN}`);
     }
@@ -26,6 +30,14 @@ function setupCors(app: express.Application) {
         origins.add(`https://${d.trim()}`);
       });
     }
+
+    // 로컬 개발 환경
+    origins.add("http://localhost:8081");
+    origins.add("http://localhost:19006");
+    origins.add("http://localhost:19000");
+    origins.add("http://127.0.0.1:8081");
+    origins.add("http://127.0.0.1:19006");
+    origins.add("http://127.0.0.1:19000");
 
     const origin = req.header("origin");
 
@@ -39,10 +51,40 @@ function setupCors(app: express.Application) {
       res.header("Access-Control-Allow-Credentials", "true");
     }
 
+    // 로컬 개발 환경에서는 모든 origin 허용 (개발 편의)
+    // 모바일 기기에서 접속할 때 origin이 없을 수 있음
+    if (process.env.NODE_ENV === "development") {
+      if (!origin) {
+        res.header("Access-Control-Allow-Origin", "*");
+      } else if (!origins.has(origin)) {
+        // 개발 환경에서는 알 수 없는 origin도 허용 (모바일 기기 대응)
+        res.header("Access-Control-Allow-Origin", origin);
+        res.header(
+          "Access-Control-Allow-Methods",
+          "GET, POST, PUT, DELETE, OPTIONS",
+        );
+        res.header("Access-Control-Allow-Headers", "Content-Type");
+        res.header("Access-Control-Allow-Credentials", "true");
+      }
+    }
+
     if (req.method === "OPTIONS") {
       return res.sendStatus(200);
     }
 
+    next();
+  });
+}
+
+// JSON 응답에 UTF-8 charset 설정
+function setupCharset(app: express.Application) {
+  app.use((req, res, next) => {
+    // JSON 응답시 charset=utf-8 자동 추가
+    const originalJson = res.json.bind(res);
+    res.json = (body) => {
+      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      return originalJson(body);
+    };
     next();
   });
 }
@@ -185,6 +227,7 @@ function setupErrorHandler(app: express.Application) {
 
 (async () => {
   setupCors(app);
+  setupCharset(app);
   setupBodyParsing(app);
   setupRequestLogging(app);
 
@@ -194,15 +237,46 @@ function setupErrorHandler(app: express.Application) {
 
   setupErrorHandler(app);
 
-  const port = parseInt(process.env.PORT || "5000", 10);
+  const port = parseInt(process.env.PORT || "8082", 10);
+  
+  server.on('error', (err: NodeJS.ErrnoException) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`❌ Port ${port} is already in use. Please stop the other process or use a different port.`);
+      console.error(`   Try: netstat -ano | findstr :${port} to find the process`);
+      process.exit(1);
+    } else {
+      console.error('❌ Server error:', err);
+      process.exit(1);
+    }
+  });
+  
   server.listen(
-    {
-      port,
-      host: "0.0.0.0",
-      reusePort: true,
-    },
+    port,
+    "0.0.0.0",
     async () => {
       log(`express server serving on port ${port}`);
+
+      // DB에서 API 키 로드
+      try {
+        if (isDatabaseConnected() && db) {
+          const keys = await db.select().from(apiKeys);
+          let loadedCount = 0;
+          for (const key of keys) {
+            if (key.keyValue && key.keyValue.trim() !== '' && key.isActive) {
+              process.env[key.keyName] = key.keyValue;
+              // Gemini 키는 추가 매핑 (원본 Replit 코드는 API_KEY 사용)
+              if (key.keyName === 'GEMINI_API_KEY') {
+                process.env.AI_INTEGRATIONS_GEMINI_API_KEY = key.keyValue;
+                process.env.API_KEY = key.keyValue; // 원본 Replit 코드 호환
+              }
+              loadedCount++;
+            }
+          }
+          log(`[Server] ✅ Loaded ${loadedCount} API keys from database`);
+        }
+      } catch (error) {
+        log("[Server] Failed to load API keys from database:", error);
+      }
 
       try {
         const { dataScheduler } = await import("./services/data-scheduler");

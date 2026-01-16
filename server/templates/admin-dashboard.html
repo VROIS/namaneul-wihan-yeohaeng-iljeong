@@ -146,10 +146,25 @@
     }
     .channel-info { display: flex; align-items: center; gap: 10px; }
     .channel-thumb {
-      width: 32px;
-      height: 32px;
+      width: 12px;
+      height: 12px;
       border-radius: 50%;
-      background: rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.2);
+      border: 2px solid rgba(255,255,255,0.1);
+    }
+    .channel-thumb.sync-active {
+      background: #10b981;
+      border-color: rgba(16,185,129,0.3);
+      box-shadow: 0 0 8px rgba(16,185,129,0.5);
+    }
+    .channel-thumb.sync-stale {
+      background: #f59e0b;
+      border-color: rgba(245,158,11,0.3);
+      box-shadow: 0 0 8px rgba(245,158,11,0.5);
+    }
+    .channel-thumb.sync-none {
+      background: rgba(107,114,128,0.5);
+      border-color: rgba(107,114,128,0.3);
     }
     .channel-name { font-size: 14px; }
     .channel-category {
@@ -228,18 +243,20 @@
     
     .tabs {
       display: flex;
+      flex-wrap: wrap;
       gap: 8px;
       margin-bottom: 20px;
     }
     .tab {
-      padding: 10px 20px;
+      padding: 8px 12px;
       background: rgba(255,255,255,0.05);
       border: none;
       border-radius: 8px;
       color: #9ca3af;
       cursor: pointer;
-      font-size: 14px;
+      font-size: 13px;
       transition: all 0.2s;
+      white-space: nowrap;
     }
     .tab.active {
       background: linear-gradient(135deg, #6366f1, #a78bfa);
@@ -257,6 +274,83 @@
       margin: 0 auto 16px;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
+    
+    /* 📱 반응형 스타일 */
+    @media (max-width: 768px) {
+      body { padding: 10px; }
+      .container { max-width: 100%; }
+      
+      header {
+        flex-direction: column;
+        gap: 12px;
+        padding: 16px;
+        text-align: center;
+      }
+      .logo h1 { font-size: 20px; }
+      
+      .tabs {
+        justify-content: center;
+        gap: 6px;
+      }
+      .tab {
+        padding: 6px 10px;
+        font-size: 11px;
+      }
+      
+      .grid {
+        grid-template-columns: 1fr;
+        gap: 12px;
+      }
+      
+      .card {
+        padding: 16px;
+      }
+      .card h2 {
+        font-size: 14px;
+      }
+      
+      .stat-grid {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 8px;
+      }
+      .stat-value {
+        font-size: 24px;
+      }
+      .stat-label {
+        font-size: 10px;
+      }
+      
+      .btn {
+        padding: 8px 12px;
+        font-size: 12px;
+      }
+      
+      .service-item {
+        flex-direction: column;
+        gap: 8px;
+        text-align: center;
+      }
+      
+      .form-input, select {
+        width: 100%;
+        min-width: unset !important;
+      }
+    }
+    
+    @media (max-width: 480px) {
+      .tabs {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .tab {
+        text-align: center;
+        padding: 10px;
+      }
+      
+      .stat-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
   </style>
 </head>
 <body>
@@ -278,10 +372,37 @@
       <button class="tab" data-tab="api">API 상태</button>
       <button class="tab" data-tab="logs">동기화 로그</button>
       <button class="tab" data-tab="guide-prices">가이드 가격</button>
+      <button class="tab" data-tab="crisis-alerts">🚨 위기 정보</button>
       <button class="tab" data-tab="verifications">검증 요청</button>
     </div>
     
     <div id="tab-overview" class="tab-content">
+      <!-- 🎯 실시간 관제탑 요약 카드 -->
+      <div id="control-tower-summary" class="card" style="margin-bottom: 20px; background: linear-gradient(135deg, rgba(99,102,241,0.15), rgba(167,139,250,0.1)); border: 1px solid rgba(167,139,250,0.3);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+          <h2 style="color: #a78bfa; margin: 0;">🎯 실시간 관제탑</h2>
+          <span id="control-tower-time" style="font-size: 12px; color: #6b7280;">업데이트: -</span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;">
+          <div style="text-align: center; padding: 16px; background: rgba(255,255,255,0.03); border-radius: 12px;">
+            <div id="ct-syncs-today" style="font-size: 28px; font-weight: 700; color: #22c55e;">-</div>
+            <div style="font-size: 12px; color: #9ca3af;">오늘 동기화</div>
+          </div>
+          <div style="text-align: center; padding: 16px; background: rgba(255,255,255,0.03); border-radius: 12px;">
+            <div id="ct-success-rate" style="font-size: 28px; font-weight: 700; color: #3b82f6;">-</div>
+            <div style="font-size: 12px; color: #9ca3af;">성공률</div>
+          </div>
+          <div style="text-align: center; padding: 16px; background: rgba(255,255,255,0.03); border-radius: 12px;">
+            <div id="ct-api-status" style="font-size: 28px; font-weight: 700; color: #f59e0b;">-</div>
+            <div style="font-size: 12px; color: #9ca3af;">API 연결</div>
+          </div>
+          <div style="text-align: center; padding: 16px; background: rgba(255,255,255,0.03); border-radius: 12px;">
+            <div id="ct-cache-total" style="font-size: 28px; font-weight: 700; color: #a78bfa;">-</div>
+            <div style="font-size: 12px; color: #9ca3af;">캐시 데이터</div>
+          </div>
+        </div>
+      </div>
+
       <div id="alerts-container" style="margin-bottom: 20px; display: none;">
         <div class="card" style="border: 1px solid rgba(245, 158, 11, 0.3); background: rgba(245, 158, 11, 0.05);">
           <h2 style="color: #f59e0b;">품질 알림</h2>
@@ -364,6 +485,201 @@
           </div>
         </div>
       </div>
+
+      <!-- 🎯 스케줄러 실시간 현황 -->
+      <div class="card" style="margin-top: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+          <h2 style="margin: 0;">⏰ 스케줄러 현황</h2>
+          <span id="scheduler-status" class="status-badge status-ok">실행 중</span>
+        </div>
+        <div id="scheduler-tasks" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px;">
+          <div class="loading"><div class="spinner"></div>로딩 중...</div>
+        </div>
+      </div>
+
+      <!-- 🎯 추가 데이터 수집기 현황 -->
+      <div class="grid" style="margin-top: 20px;">
+        <div class="card">
+          <h2>📊 일정 생성 통계</h2>
+          <div id="itinerary-stats" style="display: flex; flex-direction: column; gap: 12px;">
+            <div style="display: flex; justify-content: space-around;">
+              <div style="text-align: center;">
+                <div id="itinerary-today" style="font-size: 28px; font-weight: 700; color: #22c55e;">-</div>
+                <div style="font-size: 12px; color: #9ca3af;">오늘</div>
+              </div>
+              <div style="text-align: center;">
+                <div id="itinerary-week" style="font-size: 28px; font-weight: 700; color: #3b82f6;">-</div>
+                <div style="font-size: 12px; color: #9ca3af;">이번 주</div>
+              </div>
+              <div style="text-align: center;">
+                <div id="itinerary-total" style="font-size: 28px; font-weight: 700; color: #a78bfa;">-</div>
+                <div style="font-size: 12px; color: #9ca3af;">전체</div>
+              </div>
+            </div>
+            <div id="itinerary-top-cities" style="font-size: 12px; color: #6b7280; text-align: center;"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>🛣️ 경로 캐시 현황</h2>
+          <div id="route-cache-stats" style="display: flex; flex-direction: column; gap: 12px;">
+            <div style="display: flex; justify-content: space-around;">
+              <div style="text-align: center;">
+                <div id="route-total" style="font-size: 28px; font-weight: 700; color: #22c55e;">-</div>
+                <div style="font-size: 12px; color: #9ca3af;">전체 경로</div>
+              </div>
+              <div style="text-align: center;">
+                <div id="route-week" style="font-size: 28px; font-weight: 700; color: #3b82f6;">-</div>
+                <div style="font-size: 12px; color: #9ca3af;">최근 7일</div>
+              </div>
+            </div>
+            <div id="route-by-mode" style="display: flex; justify-content: center; gap: 16px; flex-wrap: wrap;"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h2>🔥 혼잡도 분석</h2>
+          <div style="display: flex; flex-direction: column; gap: 12px;">
+            <div style="display: flex; justify-content: space-around;">
+              <div style="text-align: center;">
+                <div id="popularity-total" style="font-size: 28px; font-weight: 700; color: #f59e0b;">-</div>
+                <div style="font-size: 12px; color: #9ca3af;">캐시된 장소</div>
+              </div>
+              <div style="text-align: center;">
+                <div id="popularity-24h" style="font-size: 28px; font-weight: 700; color: #22c55e;">-</div>
+                <div style="font-size: 12px; color: #9ca3af;">최근 24시간</div>
+              </div>
+            </div>
+            <div style="text-align: center; font-size: 12px; color: #6b7280;">
+              혼잡도 정보는 Gemini AI + 휴리스틱으로 추정
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 🇰🇷 한국 감성 데이터 소스 현황 (Vibe 추천 핵심) -->
+      <div class="card" style="margin-top: 20px; background: linear-gradient(135deg, rgba(225,48,108,0.1), rgba(99,102,241,0.1)); border: 1px solid rgba(225,48,108,0.3);">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+          <h2 style="color: #e1306c; margin: 0;">🇰🇷 한국 감성 데이터 (Vibe 추천 소스)</h2>
+          <span style="font-size: 11px; color: #6b7280;">누구랑 → <span style="color: #e1306c; font-weight: 600;">취향 선택</span> 시 활용</span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;">
+          <!-- Instagram -->
+          <div style="padding: 20px; background: rgba(225,48,108,0.1); border-radius: 12px; border: 1px solid rgba(225,48,108,0.2);">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+              <span style="font-size: 20px;">📸</span>
+              <span style="font-weight: 600; color: #e1306c;">Instagram</span>
+              <span style="font-size: 11px; background: rgba(225,48,108,0.2); color: #e1306c; padding: 2px 8px; border-radius: 10px; margin-left: auto;">우선순위 1</span>
+            </div>
+            <div style="display: flex; justify-content: space-around; margin-bottom: 12px;">
+              <div style="text-align: center;">
+                <div id="kr-insta-hashtags" style="font-size: 24px; font-weight: 700; color: #e1306c;">-</div>
+                <div style="font-size: 11px; color: #9ca3af;">해시태그</div>
+              </div>
+              <div style="text-align: center;">
+                <div id="kr-insta-posts" style="font-size: 24px; font-weight: 700; color: #e1306c;">-</div>
+                <div style="font-size: 11px; color: #9ca3af;">총 게시물</div>
+              </div>
+              <div style="text-align: center;">
+                <div id="kr-insta-photos" style="font-size: 24px; font-weight: 700; color: #e1306c;">-</div>
+                <div style="font-size: 11px; color: #9ca3af;">수집 사진</div>
+              </div>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span id="kr-insta-sync" style="font-size: 11px; color: #6b7280;">마지막 동기화: -</span>
+              <button class="btn btn-sm" style="background: rgba(225,48,108,0.2); color: #e1306c; border: 1px solid rgba(225,48,108,0.3);" onclick="syncKoreanInstagram()">동기화</button>
+            </div>
+          </div>
+
+          <!-- Naver Blog -->
+          <div style="padding: 20px; background: rgba(3,199,90,0.1); border-radius: 12px; border: 1px solid rgba(3,199,90,0.2);">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+              <span style="font-size: 20px;">📝</span>
+              <span style="font-weight: 600; color: #03c75a;">네이버 블로그</span>
+              <span style="font-size: 11px; background: rgba(3,199,90,0.2); color: #03c75a; padding: 2px 8px; border-radius: 10px; margin-left: auto;">우선순위 2</span>
+            </div>
+            <div style="display: flex; justify-content: space-around; margin-bottom: 12px;">
+              <div style="text-align: center;">
+                <div id="kr-naver-posts" style="font-size: 24px; font-weight: 700; color: #03c75a;">-</div>
+                <div style="font-size: 11px; color: #9ca3af;">블로그 포스트</div>
+              </div>
+              <div style="text-align: center;">
+                <div id="kr-naver-places" style="font-size: 24px; font-weight: 700; color: #03c75a;">-</div>
+                <div style="font-size: 11px; color: #9ca3af;">장소 연결</div>
+              </div>
+              <div style="text-align: center;">
+                <div id="kr-naver-sentiment" style="font-size: 24px; font-weight: 700; color: #03c75a;">-</div>
+                <div style="font-size: 11px; color: #9ca3af;">긍정 비율</div>
+              </div>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span id="kr-naver-sync" style="font-size: 11px; color: #6b7280;">마지막 동기화: -</span>
+              <button class="btn btn-sm" style="background: rgba(3,199,90,0.2); color: #03c75a; border: 1px solid rgba(3,199,90,0.3);" onclick="syncKoreanNaverBlog()">동기화</button>
+            </div>
+          </div>
+
+          <!-- YouTube -->
+          <div style="padding: 20px; background: rgba(255,0,0,0.1); border-radius: 12px; border: 1px solid rgba(255,0,0,0.2);">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+              <span style="font-size: 20px;">🎬</span>
+              <span style="font-weight: 600; color: #ff0000;">YouTube</span>
+              <span style="font-size: 11px; background: rgba(255,0,0,0.2); color: #ff0000; padding: 2px 8px; border-radius: 10px; margin-left: auto;">우선순위 3</span>
+            </div>
+            <div style="display: flex; justify-content: space-around; margin-bottom: 12px;">
+              <div style="text-align: center;">
+                <div id="kr-youtube-channels" style="font-size: 24px; font-weight: 700; color: #ff0000;">-</div>
+                <div style="font-size: 11px; color: #9ca3af;">채널</div>
+              </div>
+              <div style="text-align: center;">
+                <div id="kr-youtube-videos" style="font-size: 24px; font-weight: 700; color: #ff0000;">-</div>
+                <div style="font-size: 11px; color: #9ca3af;">영상</div>
+              </div>
+              <div style="text-align: center;">
+                <div id="kr-youtube-mentions" style="font-size: 24px; font-weight: 700; color: #ff0000;">-</div>
+                <div style="font-size: 11px; color: #9ca3af;">장소 언급</div>
+              </div>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span id="kr-youtube-sync" style="font-size: 11px; color: #6b7280;">마지막 동기화: -</span>
+              <button class="btn btn-sm" style="background: rgba(255,0,0,0.2); color: #ff0000; border: 1px solid rgba(255,0,0,0.3);" onclick="syncKoreanYouTube()">동기화</button>
+            </div>
+          </div>
+        </div>
+        <!-- 유럽 30개 도시 캐시 상태 및 전체 동기화 -->
+        <div style="margin-top: 16px; padding: 16px; background: linear-gradient(135deg, rgba(99,102,241,0.1), rgba(139,92,246,0.1)); border-radius: 12px; border: 1px solid rgba(99,102,241,0.3);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <span style="font-size: 18px;">🇪🇺</span>
+              <span style="font-weight: 600; color: #a78bfa;">유럽 30개 대표 도시 감성 데이터</span>
+            </div>
+            <button class="btn btn-sm" style="background: linear-gradient(135deg, #6366f1, #8b5cf6); color: white; border: none; padding: 8px 16px; font-weight: 600;" onclick="syncAllKoreanSentiment()">🔄 전체 동기화</button>
+          </div>
+          <div style="display: flex; justify-content: space-around; text-align: center;">
+            <div>
+              <div id="cache-total" style="font-size: 24px; font-weight: 700; color: #a78bfa;">-</div>
+              <div style="font-size: 11px; color: #9ca3af;">캐시된 도시</div>
+            </div>
+            <div>
+              <div id="cache-valid" style="font-size: 24px; font-weight: 700; color: #10b981;">-</div>
+              <div style="font-size: 11px; color: #9ca3af;">유효 (7일 이내)</div>
+            </div>
+            <div>
+              <div id="cache-expired" style="font-size: 24px; font-weight: 700; color: #f59e0b;">-</div>
+              <div style="font-size: 11px; color: #9ca3af;">만료됨</div>
+            </div>
+            <div>
+              <div id="cache-coverage" style="font-size: 24px; font-weight: 700; color: #6366f1;">-</div>
+              <div style="font-size: 11px; color: #9ca3af;">커버리지</div>
+            </div>
+          </div>
+        </div>
+        <div style="margin-top: 12px; padding: 12px; background: rgba(255,255,255,0.03); border-radius: 8px; text-align: center;">
+          <span style="font-size: 12px; color: #9ca3af;">💡 이 데이터는 사용자가 <span style="color: #a78bfa; font-weight: 600;">로맨틱/핫스팟/미식</span> 등 취향을 선택할 때 Gemini AI가 참고하는 <span style="color: #e1306c; font-weight: 600;">한국인 감성 가중치</span> 소스입니다.</span>
+          <div style="margin-top: 8px; font-size: 11px; color: #6b7280;">
+            파리, 로마, 바르셀로나, 런던, 프라하, 암스테르담, 비엔나, 부다페스트, 두브로브니크 등 유럽 30개 도시
+          </div>
+        </div>
+      </div>
     </div>
     
     <div id="tab-sources" class="tab-content" style="display: none;">
@@ -405,6 +721,27 @@
             <div style="text-align: center;" id="naver-count">- 소스</div>
             <div style="text-align: center; font-size: 12px;" id="naver-sync">-</div>
             <div style="text-align: center;"><button class="btn btn-sm btn-secondary" onclick="syncNaverBlogs()">동기화</button></div>
+          </div>
+          <div id="source-tistory" class="source-row" style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr; gap: 12px; padding: 12px 16px; background: rgba(255,255,255,0.03); border-radius: 10px; align-items: center;">
+            <div><span style="color: #f97316;">●</span> 티스토리 블로그</div>
+            <div style="text-align: center;"><span id="tistory-status" class="status-badge status-warn">대기</span></div>
+            <div style="text-align: center;" id="tistory-count">- 포스트</div>
+            <div style="text-align: center; font-size: 12px;" id="tistory-sync">-</div>
+            <div style="text-align: center;"><button class="btn btn-sm btn-secondary" onclick="syncTistory()">동기화</button></div>
+          </div>
+          <div id="source-popularity" class="source-row" style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr; gap: 12px; padding: 12px 16px; background: rgba(255,255,255,0.03); border-radius: 10px; align-items: center;">
+            <div><span style="color: #f59e0b;">●</span> 혼잡도 분석 (Gemini)</div>
+            <div style="text-align: center;"><span id="popularity-status" class="status-badge status-warn">대기</span></div>
+            <div style="text-align: center;" id="popularity-count">- 장소</div>
+            <div style="text-align: center; font-size: 12px;" id="popularity-sync">실시간</div>
+            <div style="text-align: center;"><span style="font-size: 11px; color: #6b7280;">자동</span></div>
+          </div>
+          <div id="source-routes" class="source-row" style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr; gap: 12px; padding: 12px 16px; background: rgba(255,255,255,0.03); border-radius: 10px; align-items: center;">
+            <div><span style="color: #3b82f6;">●</span> 경로/교통비 (Google Routes)</div>
+            <div style="text-align: center;"><span id="routes-status" class="status-badge status-warn">대기</span></div>
+            <div style="text-align: center;" id="routes-count">- 경로</div>
+            <div style="text-align: center; font-size: 12px;" id="routes-sync">실시간</div>
+            <div style="text-align: center;"><span style="font-size: 11px; color: #6b7280;">자동</span></div>
           </div>
         </div>
       </div>
@@ -452,47 +789,76 @@
         </div>
       </div>
       
-      <div class="grid" style="margin-top: 20px;">
-        <div class="card">
-          <h2>Instagram 해시태그</h2>
-          <div style="margin-bottom: 12px;">
-            <button class="btn btn-sm btn-primary" onclick="toggleForm('hashtag-form-sources')">+ 해시태그 추가</button>
-            <button class="btn btn-sm btn-secondary" onclick="seedInstagramData()">기본 추가</button>
-          </div>
-          <div id="hashtag-form-sources" class="add-form">
-            <input type="text" id="new-hashtag-sources" placeholder="#에펠탑 (해시태그)">
-            <select id="hashtag-category-sources">
-              <option value="">카테고리</option>
-              <option value="travel">여행</option>
-              <option value="food">맛집</option>
-              <option value="cafe">카페</option>
-              <option value="landmark">랜드마크</option>
-            </select>
-            <button class="btn btn-primary" onclick="addHashtagFromSources()">추가</button>
-          </div>
-          <div id="hashtag-list-sources" class="service-list" style="max-height: 250px; overflow-y: auto;">
-            <div class="loading"><div class="spinner"></div>로딩 중...</div>
+      <!-- Instagram 수동 관리 섹션 - Gemini 자동화로 대체됨 (숨김) -->
+      <div class="card" style="margin-top: 20px; background: linear-gradient(135deg, rgba(225,48,108,0.1), rgba(99,102,241,0.1)); border: 1px solid rgba(225,48,108,0.2);">
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+          <span style="font-size: 24px;">📸</span>
+          <div>
+            <h2 style="margin: 0; color: #e1306c;">Instagram 데이터 (자동화)</h2>
+            <p style="margin: 4px 0 0; font-size: 12px; color: #9ca3af;">수동 추가 불필요 - Gemini AI가 일정 생성 시 자동 수집</p>
           </div>
         </div>
-        
-        <div class="card">
-          <h2>Instagram 위치 태그</h2>
-          <div style="margin-bottom: 12px;">
-            <button class="btn btn-sm btn-primary" onclick="toggleForm('location-form-sources')">+ 위치 추가</button>
-          </div>
-          <div id="location-form-sources" class="add-form">
-            <input type="text" id="new-location-id-sources" placeholder="Location ID">
-            <input type="text" id="new-location-name-sources" placeholder="위치 이름">
-            <button class="btn btn-primary" onclick="addLocationFromSources()">추가</button>
-          </div>
-          <div id="location-list-sources" class="service-list" style="max-height: 250px; overflow-y: auto;">
-            <div class="loading"><div class="spinner"></div>로딩 중...</div>
-          </div>
+        <div style="padding: 16px; background: rgba(0,0,0,0.2); border-radius: 8px;">
+          <p style="color: #d1d5db; font-size: 14px; margin: 0 0 12px;">
+            🇪🇺 <strong style="color: #a78bfa;">유럽 30개 대표 도시</strong>의 Instagram 트렌드 데이터는 
+            <strong style="color: #10b981;">Gemini AI Web Search</strong>를 통해 자동으로 수집됩니다.
+          </p>
+          <ul style="color: #9ca3af; font-size: 13px; margin: 0; padding-left: 20px;">
+            <li>일정 생성 요청 시 → 해당 도시의 한국 감성 데이터 자동 조회</li>
+            <li>조회된 데이터는 <strong style="color: #f59e0b;">7일간 캐시</strong>되어 재사용</li>
+            <li>수동 동기화: 위의 "🔄 전체 동기화" 버튼 사용</li>
+          </ul>
+        </div>
+        <div style="margin-top: 12px; padding: 12px; background: rgba(16,185,129,0.1); border-radius: 8px; border: 1px solid rgba(16,185,129,0.2);">
+          <span style="font-size: 12px; color: #10b981;">✅ Meta API 정책 변경으로 직접 크롤링 불가 → Gemini 기반 자동화로 대체됨</span>
         </div>
       </div>
     </div>
     
     <div id="tab-api" class="tab-content" style="display: none;">
+      <!-- API 키 관리 섹션 (새로 추가) -->
+      <div class="card" style="margin-bottom: 20px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+          <div>
+            <h2 style="margin-bottom: 4px;">🔑 API 키 관리</h2>
+            <p style="color: #9ca3af; font-size: 14px;">API 키를 입력하면 즉시 반영됩니다. 서버 재시작 없이 바로 사용 가능합니다.</p>
+          </div>
+          <button class="btn btn-primary" onclick="openAddApiKeyModal()">+ 새 API 키 추가</button>
+        </div>
+        <div id="api-keys-list" style="display: flex; flex-direction: column; gap: 12px;">
+          <div class="loading"><div class="spinner"></div>로딩 중...</div>
+        </div>
+      </div>
+      
+      <!-- 새 API 키 추가 모달 -->
+      <div id="add-api-key-modal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center;">
+        <div class="card" style="width: 90%; max-width: 500px; margin: auto;">
+          <h2>새 API 키 추가</h2>
+          <form id="add-api-key-form" style="display: flex; flex-direction: column; gap: 16px;">
+            <div>
+              <label style="font-size: 12px; color: #9ca3af; display: block; margin-bottom: 4px;">키 이름 (영문, 대문자)</label>
+              <input type="text" id="new-key-name" class="form-input" placeholder="예: CUSTOM_API_KEY" required pattern="[A-Z_]+" style="text-transform: uppercase;">
+            </div>
+            <div>
+              <label style="font-size: 12px; color: #9ca3af; display: block; margin-bottom: 4px;">표시 이름</label>
+              <input type="text" id="new-key-display-name" class="form-input" placeholder="예: Custom API" required>
+            </div>
+            <div>
+              <label style="font-size: 12px; color: #9ca3af; display: block; margin-bottom: 4px;">설명 (선택)</label>
+              <input type="text" id="new-key-description" class="form-input" placeholder="예: 어디서 발급받는지 등">
+            </div>
+            <div>
+              <label style="font-size: 12px; color: #9ca3af; display: block; margin-bottom: 4px;">API 키 값</label>
+              <input type="password" id="new-key-value" class="form-input" placeholder="API 키 입력" required>
+            </div>
+            <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 8px;">
+              <button type="button" class="btn btn-secondary" onclick="closeAddApiKeyModal()">취소</button>
+              <button type="submit" class="btn btn-primary">추가</button>
+            </div>
+          </form>
+        </div>
+      </div>
+      
       <div class="card">
         <h2>API 설정 상태</h2>
         <div style="margin-bottom: 20px; display: flex; gap: 12px; flex-wrap: wrap;">
@@ -528,11 +894,205 @@
     </div>
 
     <div id="tab-guide-prices" class="tab-content" style="display: none;">
-      <div class="card">
+      <!-- 💰 시간당 가격 계산기 (핵심 마케팅 도구) -->
+      <div class="card" style="background: linear-gradient(135deg, rgba(59,130,246,0.1) 0%, rgba(16,185,129,0.1) 100%); border: 1px solid rgba(59,130,246,0.3);">
+        <h2 style="margin-bottom: 4px;">💰 시간당 가격 계산기</h2>
+        <p style="color: #9ca3af; font-size: 14px; margin-bottom: 20px;">고객 일정에 자동 적용되는 가격 수식 (4시간 최소 ~ 10시간)</p>
+        
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;">
+          <!-- 세단 (1-4인) -->
+          <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 16px; border: 1px solid rgba(255,255,255,0.1);">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+              <span style="font-size: 24px;">🚗</span>
+              <div>
+                <div style="font-weight: 600;">세단 (1-4인)</div>
+                <div style="font-size: 12px; color: #9ca3af;">E-Class / 비즈니스 세단</div>
+              </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <div>
+                <label style="font-size: 11px; color: #9ca3af; display: block; margin-bottom: 4px;">기본요금 (4h)</label>
+                <div style="position: relative;">
+                  <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #9ca3af;">€</span>
+                  <input type="number" id="sedan-base-price" class="form-input" style="padding-left: 28px;" value="240" onchange="updatePriceFormula()">
+                </div>
+              </div>
+              <div>
+                <label style="font-size: 11px; color: #9ca3af; display: block; margin-bottom: 4px;">시간당 추가</label>
+                <div style="position: relative;">
+                  <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #9ca3af;">€</span>
+                  <input type="number" id="sedan-hourly-price" class="form-input" style="padding-left: 28px;" value="60" onchange="updatePriceFormula()">
+                </div>
+              </div>
+            </div>
+            <div style="margin-top: 12px; padding: 8px; background: rgba(59,130,246,0.1); border-radius: 8px; font-size: 13px;">
+              <span style="color: #60a5fa;">8시간 전일:</span> 
+              <span id="sedan-8h-total" style="font-weight: 700; color: #fff;">€480</span>
+            </div>
+          </div>
+          
+          <!-- 밴 (5-7인) -->
+          <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 16px; border: 1px solid rgba(255,255,255,0.1);">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+              <span style="font-size: 24px;">🚐</span>
+              <div>
+                <div style="font-weight: 600;">밴 (5-7인)</div>
+                <div style="font-size: 12px; color: #9ca3af;">V-Class / 럭셔리 밴</div>
+              </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <div>
+                <label style="font-size: 11px; color: #9ca3af; display: block; margin-bottom: 4px;">기본요금 (4h)</label>
+                <div style="position: relative;">
+                  <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #9ca3af;">€</span>
+                  <input type="number" id="van-base-price" class="form-input" style="padding-left: 28px;" value="320" onchange="updatePriceFormula()">
+                </div>
+              </div>
+              <div>
+                <label style="font-size: 11px; color: #9ca3af; display: block; margin-bottom: 4px;">시간당 추가</label>
+                <div style="position: relative;">
+                  <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #9ca3af;">€</span>
+                  <input type="number" id="van-hourly-price" class="form-input" style="padding-left: 28px;" value="80" onchange="updatePriceFormula()">
+                </div>
+              </div>
+            </div>
+            <div style="margin-top: 12px; padding: 8px; background: rgba(59,130,246,0.1); border-radius: 8px; font-size: 13px;">
+              <span style="color: #60a5fa;">8시간 전일:</span> 
+              <span id="van-8h-total" style="font-weight: 700; color: #fff;">€640</span>
+            </div>
+          </div>
+          
+          <!-- 미니버스 (8인+) -->
+          <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 16px; border: 1px solid rgba(255,255,255,0.1);">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+              <span style="font-size: 24px;">🚌</span>
+              <div>
+                <div style="font-weight: 600;">미니버스 (8인+)</div>
+                <div style="font-size: 12px; color: #9ca3af;">16-19인 미니버스</div>
+              </div>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+              <div>
+                <label style="font-size: 11px; color: #9ca3af; display: block; margin-bottom: 4px;">기본요금 (4h)</label>
+                <div style="position: relative;">
+                  <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #9ca3af;">€</span>
+                  <input type="number" id="minibus-base-price" class="form-input" style="padding-left: 28px;" value="400" onchange="updatePriceFormula()">
+                </div>
+              </div>
+              <div>
+                <label style="font-size: 11px; color: #9ca3af; display: block; margin-bottom: 4px;">시간당 추가</label>
+                <div style="position: relative;">
+                  <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #9ca3af;">€</span>
+                  <input type="number" id="minibus-hourly-price" class="form-input" style="padding-left: 28px;" value="100" onchange="updatePriceFormula()">
+                </div>
+              </div>
+            </div>
+            <div style="margin-top: 12px; padding: 8px; background: rgba(59,130,246,0.1); border-radius: 8px; font-size: 13px;">
+              <span style="color: #60a5fa;">8시간 전일:</span> 
+              <span id="minibus-8h-total" style="font-weight: 700; color: #fff;">€800</span>
+            </div>
+          </div>
+          
+          <!-- 가이드 온리 -->
+          <div style="background: rgba(255,255,255,0.05); border-radius: 12px; padding: 16px; border: 1px solid rgba(255,255,255,0.1);">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+              <span style="font-size: 24px;">👤</span>
+              <div>
+                <div style="font-weight: 600;">가이드 온리</div>
+                <div style="font-size: 12px; color: #9ca3af;">차량 없이 가이드만</div>
+              </div>
+            </div>
+            <div>
+              <label style="font-size: 11px; color: #9ca3af; display: block; margin-bottom: 4px;">시간당</label>
+              <div style="position: relative;">
+                <span style="position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #9ca3af;">€</span>
+                <input type="number" id="guide-only-hourly" class="form-input" style="padding-left: 28px;" value="50" onchange="updatePriceFormula()">
+              </div>
+            </div>
+            <div style="margin-top: 12px; padding: 8px; background: rgba(16,185,129,0.1); border-radius: 8px; font-size: 13px;">
+              <span style="color: #34d399;">8시간 전일:</span> 
+              <span id="guide-only-8h-total" style="font-weight: 700; color: #fff;">€400</span>
+            </div>
+          </div>
+        </div>
+        
+        <div style="margin-top: 20px; display: flex; gap: 12px;">
+          <button class="btn btn-primary" onclick="saveHourlyPrices()">💾 가격 저장</button>
+          <button class="btn btn-secondary" onclick="loadHourlyPrices()">🔄 DB에서 불러오기</button>
+        </div>
+      </div>
+      
+      <!-- 🆚 우버/택시 비교표 (고객 설득용) -->
+      <div class="card" style="margin-top: 20px;">
+        <h2 style="margin-bottom: 4px;">🆚 경쟁사 비교표 (8시간 전일 기준)</h2>
+        <p style="color: #9ca3af; font-size: 14px; margin-bottom: 20px;">고객 일정표에 자동으로 비교되어 표시됩니다</p>
+        
+        <div style="overflow-x: auto;">
+          <table style="width: 100%; border-collapse: collapse; font-size: 14px;">
+            <thead>
+              <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+                <th style="text-align: left; padding: 12px 8px; color: #9ca3af;">서비스</th>
+                <th style="text-align: right; padding: 12px 8px; color: #9ca3af;">세단 (1-4인)</th>
+                <th style="text-align: right; padding: 12px 8px; color: #9ca3af;">밴 (5-7인)</th>
+                <th style="text-align: left; padding: 12px 8px; color: #9ca3af;">비고</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style="border-bottom: 1px solid rgba(255,255,255,0.05); background: rgba(16,185,129,0.1);">
+                <td style="padding: 12px 8px;"><strong>✅ 가이드 서비스</strong></td>
+                <td style="text-align: right; padding: 12px 8px;"><strong id="compare-sedan">€480</strong></td>
+                <td style="text-align: right; padding: 12px 8px;"><strong id="compare-van">€640</strong></td>
+                <td style="padding: 12px 8px; font-size: 12px; color: #34d399;">가이드 포함, 전일 대기, 주차비 포함</td>
+              </tr>
+              <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                <td style="padding: 12px 8px;">🚕 우버 블랙</td>
+                <td style="text-align: right; padding: 12px 8px;">
+                  <input type="text" id="uber-black-sedan" class="form-input" style="width: 100px; text-align: right;" value="€450~550" onchange="updateComparisonNote()">
+                </td>
+                <td style="text-align: right; padding: 12px 8px;">
+                  <input type="text" id="uber-black-van" class="form-input" style="width: 100px; text-align: right;" value="€600~750" onchange="updateComparisonNote()">
+                </td>
+                <td style="padding: 12px 8px; font-size: 12px; color: #f59e0b;">호출마다 대기, 가이드 없음, 서지 변동</td>
+              </tr>
+              <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                <td style="padding: 12px 8px;">🚕 우버 X</td>
+                <td style="text-align: right; padding: 12px 8px;">
+                  <input type="text" id="uber-x-sedan" class="form-input" style="width: 100px; text-align: right;" value="€280~350" onchange="updateComparisonNote()">
+                </td>
+                <td style="text-align: right; padding: 12px 8px; color: #6b7280;">해당 없음</td>
+                <td style="padding: 12px 8px; font-size: 12px; color: #ef4444;">경유지 추가시 급증, 가이드 없음</td>
+              </tr>
+              <tr>
+                <td style="padding: 12px 8px;">🚖 G7 택시</td>
+                <td style="text-align: right; padding: 12px 8px;">
+                  <input type="text" id="taxi-sedan" class="form-input" style="width: 100px; text-align: right;" value="€320~400" onchange="updateComparisonNote()">
+                </td>
+                <td style="text-align: right; padding: 12px 8px;">
+                  <input type="text" id="taxi-van" class="form-input" style="width: 100px; text-align: right;" value="€450~550" onchange="updateComparisonNote()">
+                </td>
+                <td style="padding: 12px 8px; font-size: 12px; color: #60a5fa;">버스 전용차로 이용 가능</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        
+        <div style="margin-top: 16px; padding: 12px; background: rgba(16,185,129,0.1); border-radius: 8px; border-left: 4px solid #10b981;">
+          <div style="font-weight: 600; color: #34d399; margin-bottom: 4px;">💡 고객에게 보여줄 메시지</div>
+          <textarea id="comparison-marketing-note" class="form-input" style="width: 100%; min-height: 60px; resize: vertical;" 
+            placeholder="예: 가이드 서비스가 우버 대비 최대 €170 절약! + 전문 가이드 동행으로 시간 효율 2배 ↑">가이드 서비스가 우버 블랙 대비 최대 €170 절약! 전문 가이드 동행으로 시간 효율 2배 ↑ 전일 대기로 호출 스트레스 없음</textarea>
+        </div>
+        
+        <div style="margin-top: 16px;">
+          <button class="btn btn-primary" onclick="saveComparisonPrices()">💾 비교표 저장</button>
+        </div>
+      </div>
+      
+      <!-- 기존 가이드 가격 리스트 -->
+      <div class="card" style="margin-top: 20px;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
           <div>
-            <h2 style="margin-bottom: 4px;">가이드 가격 관리</h2>
-            <p style="color: #9ca3af; font-size: 14px;">35년차 파리 가이드 현장 데이터 기반 가격표 (2026년)</p>
+            <h2 style="margin-bottom: 4px;">📋 전체 가격표</h2>
+            <p style="color: #9ca3af; font-size: 14px;">35년차 파리 가이드 현장 데이터 기반 (2026년)</p>
           </div>
           <button class="btn btn-primary" onclick="openAddModal()">+ 새 서비스 추가</button>
         </div>
@@ -633,6 +1193,66 @@
       </div>
     </div>
 
+    <!-- 🚨 위기 정보 탭 (GDELT + Gemini) -->
+    <div id="tab-crisis-alerts" class="tab-content" style="display: none;">
+      <div class="card">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+          <div>
+            <h2 style="margin-bottom: 4px;">🚨 위기 정보 관리 (GDELT + Gemini)</h2>
+            <p style="color: #9ca3af; font-size: 14px;">파업, 시위, 교통 장애, 기상 경보 등 여행 영향 정보</p>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button class="btn btn-primary" onclick="collectCrisisAlerts()">🔄 지금 수집</button>
+            <button class="btn btn-secondary" onclick="loadCrisisAlerts()">새로고침</button>
+          </div>
+        </div>
+        
+        <!-- 통계 카드 -->
+        <div class="stat-grid" style="margin-bottom: 20px;">
+          <div class="stat-item">
+            <div class="stat-value" id="crisis-total">0</div>
+            <div class="stat-label">총 알림</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value" id="crisis-active">0</div>
+            <div class="stat-label">활성 알림</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value" id="crisis-strike">0</div>
+            <div class="stat-label">파업</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-value" id="crisis-protest">0</div>
+            <div class="stat-label">시위</div>
+          </div>
+        </div>
+        
+        <!-- 필터 -->
+        <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+          <select id="crisis-city-filter" class="form-input" style="min-width: 120px;" onchange="loadCrisisAlerts()">
+            <option value="">전체 도시</option>
+            <option value="Paris">파리</option>
+            <option value="London">런던</option>
+            <option value="Rome">로마</option>
+            <option value="Barcelona">바르셀로나</option>
+          </select>
+          <select id="crisis-type-filter" class="form-input" style="min-width: 120px;" onchange="loadCrisisAlerts()">
+            <option value="">전체 유형</option>
+            <option value="strike">파업</option>
+            <option value="protest">시위</option>
+            <option value="traffic">교통장애</option>
+            <option value="weather">기상경보</option>
+            <option value="security">보안</option>
+          </select>
+        </div>
+        
+        <!-- 알림 목록 -->
+        <div id="crisis-alerts-list" style="display: flex; flex-direction: column; gap: 12px;">
+          <div class="loading"><div class="spinner"></div>로딩 중...</div>
+        </div>
+      </div>
+    </div>
+
     <div id="tab-verifications" class="tab-content" style="display: none;">
       <div class="card">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
@@ -688,6 +1308,21 @@
       'Gemini AI': 'Gemini AI'
     };
     
+    // 상대 시간 포맷 함수
+    function formatRelativeTime(date) {
+      const now = new Date();
+      const diff = now - new Date(date);
+      const minutes = Math.floor(diff / (1000 * 60));
+      const hours = Math.floor(diff / (1000 * 60 * 60));
+      const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+      
+      if (minutes < 60) return `${minutes}분 전`;
+      if (hours < 24) return `${hours}시간 전`;
+      if (days < 7) return `${days}일 전`;
+      if (days < 30) return `${Math.floor(days / 7)}주 전`;
+      return `${Math.floor(days / 30)}개월 전`;
+    }
+    
     document.querySelectorAll('.tab').forEach(tab => {
       tab.addEventListener('click', () => {
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -702,25 +1337,35 @@
       switch(tab) {
         case 'overview': loadDashboard(); break;
         case 'sources': loadSources(); loadUnifiedSourcesStatus(); break;
-        case 'api': loadApiDetail(); loadApiRealStatus(); break;
+        case 'api': loadApiKeys(); loadApiDetail(); loadApiRealStatus(); break;
         case 'logs': loadLogs(); break;
         case 'guide-prices': loadGuidePrices(); break;
+        case 'crisis-alerts': loadCrisisAlerts(); break;
         case 'verifications': loadVerifications(); break;
       }
     }
     
     async function loadDashboard() {
       try {
-        const [dashRes, freshnessRes, statsRes, alertsRes] = await Promise.all([
+        const [dashRes, freshnessRes, statsRes, alertsRes, controlTowerRes] = await Promise.all([
           fetch(`${API_BASE}/dashboard`),
           fetch(`${API_BASE}/data-freshness`),
           fetch(`${API_BASE}/collection-stats`),
-          fetch(`${API_BASE}/data-quality/alerts`)
+          fetch(`${API_BASE}/data-quality/alerts`),
+          fetch(`${API_BASE}/control-tower/summary`)
         ]);
         const dash = await dashRes.json();
         const freshness = await freshnessRes.json();
         const stats = await statsRes.json();
         const alertsData = await alertsRes.json();
+        const controlTower = await controlTowerRes.json();
+        
+        // 🎯 관제탑 요약 업데이트
+        document.getElementById('ct-syncs-today').textContent = controlTower.dataCollection?.todaySyncs || 0;
+        document.getElementById('ct-success-rate').textContent = `${controlTower.dataCollection?.successRate || 100}%`;
+        document.getElementById('ct-api-status').textContent = `${controlTower.apiConnections?.connected || 0}/${controlTower.apiConnections?.total || 0}`;
+        document.getElementById('ct-cache-total').textContent = (controlTower.caches?.webSearch || 0) + (controlTower.caches?.routes || 0);
+        document.getElementById('control-tower-time').textContent = `업데이트: ${new Date().toLocaleTimeString('ko-KR')}`;
         
         document.getElementById('stat-cities').textContent = dash.overview.cities;
         document.getElementById('stat-places').textContent = dash.overview.places;
@@ -824,12 +1469,252 @@
           </div>
         `).join('') : '<div class="empty-state">최근 동기화 기록이 없습니다</div>';
         
+        // 🎯 추가 데이터 로드 (스케줄러, 일정, 경로, 혼잡도)
+        await loadSchedulerStatus();
+        await loadItineraryStats();
+        await loadRouteCacheStats();
+        await loadPopularityStats();
+        await loadKoreanSentimentData();
+        
       } catch (err) {
         console.error('대시보드 로드 오류:', err);
         updateSystemStatus([]);
       }
     }
     
+    // 🎯 스케줄러 실시간 현황
+    async function loadSchedulerStatus() {
+      try {
+        const res = await fetch(`${API_BASE}/scheduler/realtime-status`);
+        const data = await res.json();
+        
+        const statusEl = document.getElementById('scheduler-status');
+        statusEl.textContent = data.isRunning ? '실행 중' : '중지됨';
+        statusEl.className = `status-badge ${data.isRunning ? 'status-ok' : 'status-error'}`;
+        
+        const tasksEl = document.getElementById('scheduler-tasks');
+        const statusColors = {
+          'success': '#22c55e',
+          'failed': '#ef4444',
+          'running': '#f59e0b',
+          'never': '#6b7280'
+        };
+        
+        tasksEl.innerHTML = data.taskStatuses.map(task => `
+          <div style="padding: 12px; background: rgba(255,255,255,0.03); border-radius: 8px; border-left: 3px solid ${statusColors[task.lastStatus] || '#6b7280'};">
+            <div style="font-size: 13px; font-weight: 600; margin-bottom: 4px;">${task.taskName.replace(/_/g, ' ')}</div>
+            <div style="font-size: 11px; color: #9ca3af;">${task.nextRun}</div>
+            <div style="font-size: 10px; color: ${statusColors[task.lastStatus]}; margin-top: 4px;">
+              ${task.lastRunAt ? `마지막: ${new Date(task.lastRunAt).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}` : '아직 실행 안됨'}
+              ${task.lastProcessed > 0 ? ` (${task.lastProcessed}건)` : ''}
+            </div>
+          </div>
+        `).join('');
+      } catch (err) {
+        console.error('스케줄러 상태 로드 오류:', err);
+      }
+    }
+    
+    // 🎯 일정 생성 통계
+    async function loadItineraryStats() {
+      try {
+        const res = await fetch(`${API_BASE}/itinerary/stats`);
+        const data = await res.json();
+        
+        document.getElementById('itinerary-today').textContent = data.today || 0;
+        document.getElementById('itinerary-week').textContent = data.thisWeek || 0;
+        document.getElementById('itinerary-total').textContent = data.total || 0;
+        
+        if (data.topCities && data.topCities.length > 0) {
+          document.getElementById('itinerary-top-cities').textContent = 
+            `인기 도시: ${data.topCities.map(c => `${c.cityName}(${c.count})`).join(', ')}`;
+        }
+      } catch (err) {
+        console.error('일정 통계 로드 오류:', err);
+      }
+    }
+    
+    // 🎯 경로 캐시 통계
+    async function loadRouteCacheStats() {
+      try {
+        const res = await fetch(`${API_BASE}/route-cache/stats`);
+        const data = await res.json();
+        
+        document.getElementById('route-total').textContent = data.totalCached || 0;
+        document.getElementById('route-week').textContent = data.last7Days || 0;
+        
+        const modeLabels = { 'DRIVE': '🚗', 'TRANSIT': '🚇', 'WALK': '🚶', 'BICYCLE': '🚴' };
+        const byModeEl = document.getElementById('route-by-mode');
+        if (data.byTravelMode) {
+          byModeEl.innerHTML = Object.entries(data.byTravelMode).map(([mode, count]) => 
+            `<span style="font-size: 12px;">${modeLabels[mode] || mode}: ${count}</span>`
+          ).join('');
+        }
+        
+        // 데이터 소스 탭 업데이트
+        document.getElementById('routes-count').textContent = `${data.totalCached || 0} 경로`;
+        document.getElementById('routes-status').textContent = data.status;
+        document.getElementById('routes-status').className = `status-badge ${data.status === '활성' ? 'status-ok' : 'status-warn'}`;
+      } catch (err) {
+        console.error('경로 캐시 통계 로드 오류:', err);
+      }
+    }
+    
+    // 🎯 혼잡도 분석 통계
+    async function loadPopularityStats() {
+      try {
+        const res = await fetch(`${API_BASE}/popularity/stats`);
+        const data = await res.json();
+
+        document.getElementById('popularity-total').textContent = data.totalCached || 0;
+        document.getElementById('popularity-24h').textContent = data.last24Hours || 0;
+
+        // 데이터 소스 탭 업데이트
+        document.getElementById('popularity-count').textContent = `${data.totalCached || 0} 장소`;
+        document.getElementById('popularity-status').textContent = data.status;
+        document.getElementById('popularity-status').className = `status-badge ${data.status === '활성' ? 'status-ok' : 'status-warn'}`;
+      } catch (err) {
+        console.error('혼잡도 통계 로드 오류:', err);
+      }
+    }
+
+    // 🇰🇷 한국 감성 데이터 로드 (Instagram, 네이버, YouTube)
+    async function loadKoreanSentimentData() {
+      try {
+        const [instaRes, naverRes, youtubeRes, cacheRes] = await Promise.all([
+          fetch(`${API_BASE}/instagram/stats`),
+          fetch(`${API_BASE}/korean-sentiment/naver`),
+          fetch(`${API_BASE}/korean-sentiment/youtube`),
+          fetch(`${API_BASE}/korean-sentiment/cache-status`)
+        ]);
+        
+        // 캐시 상태 업데이트
+        if (cacheRes.ok) {
+          const cacheData = await cacheRes.json();
+          document.getElementById('cache-total').textContent = cacheData.totalCached || 0;
+          document.getElementById('cache-valid').textContent = cacheData.validCount || 0;
+          document.getElementById('cache-expired').textContent = cacheData.expiredCount || 0;
+          const coverage = cacheData.europeCitiesTotal > 0 
+            ? Math.round((cacheData.europeCitiesCovered / cacheData.europeCitiesTotal) * 100) 
+            : 0;
+          document.getElementById('cache-coverage').textContent = `${coverage}%`;
+        }
+        
+        // Instagram
+        const instaData = await instaRes.json();
+        document.getElementById('kr-insta-hashtags').textContent = instaData.totalHashtags || 0;
+        document.getElementById('kr-insta-photos').textContent = instaData.totalPhotos || 0;
+        
+        // 게시물 수는 해시태그별 합산 (API에서 제공 필요)
+        const totalPostCount = instaData.totalPosts || '-';
+        document.getElementById('kr-insta-posts').textContent = typeof totalPostCount === 'number' ? 
+          (totalPostCount > 1000000 ? `${(totalPostCount/1000000).toFixed(1)}M` : 
+           totalPostCount > 1000 ? `${(totalPostCount/1000).toFixed(1)}K` : totalPostCount) : totalPostCount;
+        
+        document.getElementById('kr-insta-sync').textContent = instaData.lastSyncAt ? 
+          `마지막 동기화: ${new Date(instaData.lastSyncAt).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}` : '마지막 동기화: -';
+
+        // 네이버 블로그
+        if (naverRes.ok) {
+          const naverData = await naverRes.json();
+          document.getElementById('kr-naver-posts').textContent = naverData.totalPosts || 0;
+          document.getElementById('kr-naver-places').textContent = naverData.linkedPlaces || 0;
+          document.getElementById('kr-naver-sentiment').textContent = naverData.positiveSentimentRatio ? 
+            `${naverData.positiveSentimentRatio}%` : '-';
+          document.getElementById('kr-naver-sync').textContent = naverData.lastSyncAt ? 
+            `마지막 동기화: ${new Date(naverData.lastSyncAt).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}` : '마지막 동기화: -';
+        }
+
+        // YouTube
+        if (youtubeRes.ok) {
+          const youtubeData = await youtubeRes.json();
+          document.getElementById('kr-youtube-channels').textContent = youtubeData.totalChannels || 0;
+          document.getElementById('kr-youtube-videos').textContent = youtubeData.totalVideos || 0;
+          document.getElementById('kr-youtube-mentions').textContent = youtubeData.totalMentions || 0;
+          document.getElementById('kr-youtube-sync').textContent = youtubeData.lastSyncAt ? 
+            `마지막 동기화: ${new Date(youtubeData.lastSyncAt).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}` : '마지막 동기화: -';
+        }
+      } catch (err) {
+        console.error('한국 감성 데이터 로드 오류:', err);
+      }
+    }
+
+    // 🇰🇷 한국 감성 데이터 동기화 함수들 (Gemini Web Search 기반)
+    // 유럽 30개 대표 도시 기본 탑재
+    async function syncKoreanInstagram() {
+      if (!confirm('📸 Instagram 감성 데이터를 유럽 30개 도시에서 수집합니다.\n(Gemini AI 기반, 약 1-2분 소요)')) return;
+      try {
+        const btn = event.target;
+        btn.disabled = true;
+        btn.textContent = '동기화 중...';
+        
+        const res = await fetch(`${API_BASE}/korean-sentiment/sync-instagram`, { method: 'POST' });
+        const data = await res.json();
+        
+        alert(`✅ Instagram 동기화 완료!\n\n• 수집 도시: ${data.synced || 0}개\n• 총 예상 게시물: ${(data.totalPosts || 0).toLocaleString()}개\n\n상위 결과:\n${data.results?.slice(0,3).map(r => `- ${r.city}: ${r.hashtags?.join(', ') || '없음'}`).join('\n') || '없음'}`);
+        loadKoreanSentimentData();
+      } catch (err) {
+        alert('❌ 동기화 실패: ' + err.message);
+      } finally {
+        event.target.disabled = false;
+        event.target.textContent = '동기화';
+      }
+    }
+
+    async function syncKoreanNaverBlog() {
+      if (!confirm('📝 네이버 블로그 감성 데이터를 유럽 30개 도시에서 수집합니다.\n(Gemini AI 기반, 약 1-2분 소요)')) return;
+      try {
+        const btn = event.target;
+        btn.disabled = true;
+        btn.textContent = '동기화 중...';
+        
+        const res = await fetch(`${API_BASE}/korean-sentiment/sync-naver`, { method: 'POST' });
+        const data = await res.json();
+        
+        alert(`✅ 네이버 블로그 동기화 완료!\n\n• 수집 도시: ${data.synced || 0}개\n\n상위 결과:\n${data.results?.slice(0,3).map(r => `- ${r.city}: ${r.sentiment} (${r.keywords?.slice(0,3).join(', ') || '없음'})`).join('\n') || '없음'}`);
+        loadKoreanSentimentData();
+      } catch (err) {
+        alert('❌ 동기화 실패: ' + err.message);
+      } finally {
+        event.target.disabled = false;
+        event.target.textContent = '동기화';
+      }
+    }
+
+    async function syncKoreanYouTube() {
+      if (!confirm('🎬 YouTube 감성 데이터를 유럽 30개 도시에서 수집합니다.\n(Gemini AI 기반, 약 1-2분 소요)')) return;
+      try {
+        const btn = event.target;
+        btn.disabled = true;
+        btn.textContent = '동기화 중...';
+        
+        const res = await fetch(`${API_BASE}/korean-sentiment/sync-youtube`, { method: 'POST' });
+        const data = await res.json();
+        
+        alert(`✅ YouTube 동기화 완료!\n\n• 수집 도시: ${data.synced || 0}개\n\n상위 결과:\n${data.results?.slice(0,3).map(r => `- ${r.city}: ${r.videoCount}개 영상 (${r.channels?.slice(0,2).join(', ') || '없음'})`).join('\n') || '없음'}`);
+        loadKoreanSentimentData();
+      } catch (err) {
+        alert('❌ 동기화 실패: ' + err.message);
+      } finally {
+        event.target.disabled = false;
+        event.target.textContent = '동기화';
+      }
+    }
+    
+    // 전체 유럽 30개 도시 일괄 동기화
+    async function syncAllKoreanSentiment() {
+      if (!confirm('🇪🇺 유럽 30개 대표 도시의 한국 감성 데이터를 일괄 수집합니다.\n(Gemini AI 기반, 약 5-10분 소요)\n\n계속하시겠습니까?')) return;
+      try {
+        const res = await fetch(`${API_BASE}/korean-sentiment/sync-all`, { method: 'POST' });
+        const data = await res.json();
+        
+        alert(`✅ 전체 동기화 완료!\n\n• 총 도시: ${data.totalCities}개\n• 성공: ${data.success}개\n• 실패: ${data.errors}개\n\n데이터가 캐시에 저장되어 7일간 유효합니다.`);
+        loadKoreanSentimentData();
+      } catch (err) {
+        alert('❌ 동기화 실패: ' + err.message);
+      }
+    }
+
     function getServiceStatusClass(service) {
       if (!service.isConfigured) {
         return 'unconfigured';
@@ -917,20 +1802,47 @@
         };
         
         const ytEl = document.getElementById('youtube-channels');
-        ytEl.innerHTML = channels.length ? channels.map(c => `
+        const now = new Date();
+        const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        
+        ytEl.innerHTML = channels.length ? channels.map(c => {
+          // 동기화 상태 결정
+          let syncClass = 'sync-none';
+          let syncTitle = '동기화 안 됨';
+          
+          if (c.lastVideoSyncAt) {
+            const lastSync = new Date(c.lastVideoSyncAt);
+            if (lastSync > sevenDaysAgo) {
+              syncClass = 'sync-active';
+              syncTitle = `활성 (${formatRelativeTime(lastSync)})`;
+            } else if (lastSync > thirtyDaysAgo) {
+              syncClass = 'sync-stale';
+              syncTitle = `오래됨 (${formatRelativeTime(lastSync)})`;
+            } else {
+              syncTitle = `만료 (${formatRelativeTime(lastSync)})`;
+            }
+          }
+          
+          // 동기화된 영상/장소 수
+          const videoCount = c.totalVideosSynced || 0;
+          const placeCount = c.totalPlacesMentioned || 0;
+          
+          return `
           <div class="channel-item" style="display: grid; grid-template-columns: 1fr auto auto auto; align-items: center; gap: 8px;">
             <div class="channel-info">
-              <div class="channel-thumb"></div>
+              <div class="channel-thumb ${syncClass}" title="${syncTitle}"></div>
               <div>
                 <div class="channel-name">${c.channelName}</div>
                 <span class="channel-category">${CATEGORY_MAP[c.category] || c.category || '미분류'}</span>
+                ${videoCount > 0 ? `<span style="font-size: 10px; color: #6b7280; margin-left: 8px;">${videoCount}영상 / ${placeCount}장소</span>` : ''}
               </div>
             </div>
             <span class="trust-weight">${c.trustWeight.toFixed(1)}</span>
             <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 12px;" onclick='editYoutubeChannel(${JSON.stringify(c)})'>수정</button>
             <button class="btn" style="padding: 4px 10px; font-size: 12px; background: rgba(239,68,68,0.2); color: #ef4444;" onclick="deleteYoutubeChannel(${c.id}, '${c.channelName.replace(/'/g, "\\'")}')">삭제</button>
           </div>
-        `).join('') : '<div class="empty-state">등록된 채널이 없습니다</div>';
+        `}).join('') : '<div class="empty-state">등록된 채널이 없습니다</div>';
         
         const PLATFORM_MAP = {
           'naver': '네이버 블로그',
@@ -940,19 +1852,41 @@
         };
         
         const blogEl = document.getElementById('blog-sources');
-        blogEl.innerHTML = blogs.length ? blogs.map(b => `
+        blogEl.innerHTML = blogs.length ? blogs.map(b => {
+          // 블로그 소스 동기화 상태 결정
+          let syncClass = 'sync-none';
+          let syncTitle = '동기화 안 됨';
+          
+          if (b.lastCrawledAt) {
+            const lastSync = new Date(b.lastCrawledAt);
+            if (lastSync > sevenDaysAgo) {
+              syncClass = 'sync-active';
+              syncTitle = `활성 (${formatRelativeTime(lastSync)})`;
+            } else if (lastSync > thirtyDaysAgo) {
+              syncClass = 'sync-stale';
+              syncTitle = `오래됨 (${formatRelativeTime(lastSync)})`;
+            } else {
+              syncTitle = `만료 (${formatRelativeTime(lastSync)})`;
+            }
+          }
+          
+          const postCount = b.totalPostsCrawled || 0;
+          
+          return `
           <div class="channel-item" style="display: grid; grid-template-columns: 1fr auto auto auto; align-items: center; gap: 8px;">
             <div class="channel-info">
+              <div class="channel-thumb ${syncClass}" title="${syncTitle}"></div>
               <div>
                 <div class="channel-name">${b.sourceName}</div>
                 <span class="channel-category">${PLATFORM_MAP[b.platform] || b.platform}</span>
+                ${postCount > 0 ? `<span style="font-size: 10px; color: #6b7280; margin-left: 8px;">${postCount}개 포스트</span>` : ''}
               </div>
             </div>
             <span class="trust-weight">${b.trustWeight.toFixed(1)}</span>
             <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 12px;" onclick='editBlogSource(${JSON.stringify(b)})'>수정</button>
             <button class="btn" style="padding: 4px 10px; font-size: 12px; background: rgba(239,68,68,0.2); color: #ef4444;" onclick="deleteBlogSource(${b.id}, '${b.sourceName.replace(/'/g, "\\'")}')">삭제</button>
           </div>
-        `).join('') : '<div class="empty-state">등록된 블로그 소스가 없습니다</div>';
+        `}).join('') : '<div class="empty-state">등록된 블로그 소스가 없습니다</div>';
         
       } catch (err) {
         console.error('소스 로드 오류:', err);
@@ -992,6 +1926,11 @@
         
         // Load hashtags and locations for sources tab
         loadSourcesInstagramData();
+        
+        // 새로 추가된 소스들 로드
+        loadTistoryStatus();
+        loadRouteCacheStats();
+        loadPopularityStats();
       } catch (err) {
         console.error('통합 소스 상태 로드 오류:', err);
       }
@@ -1066,7 +2005,46 @@
     }
     
     async function syncNaverBlogs() {
-      alert('네이버 블로그 크롤러가 준비 중입니다.');
+      const resultEl = document.getElementById('sync-result');
+      if (resultEl) resultEl.innerHTML = '<span style="color: #f59e0b;">네이버 블로그 동기화 중...</span>';
+      try {
+        const res = await fetch(`${API_BASE}/naver-blog/sync/all`, { method: 'POST' });
+        const data = await res.json();
+        if (resultEl) resultEl.innerHTML = `<span style="color: #22c55e;">완료! ${data.totalPosts || 0}개 포스트 수집</span>`;
+        loadUnifiedSourcesStatus();
+      } catch (err) {
+        if (resultEl) resultEl.innerHTML = '<span style="color: #ef4444;">동기화 실패</span>';
+      }
+    }
+    
+    async function syncTistory() {
+      const resultEl = document.getElementById('sync-result');
+      if (resultEl) resultEl.innerHTML = '<span style="color: #f59e0b;">티스토리 동기화 중...</span>';
+      try {
+        const res = await fetch(`${API_BASE}/tistory/sync`, { method: 'POST' });
+        const data = await res.json();
+        if (resultEl) resultEl.innerHTML = `<span style="color: #22c55e;">완료! ${data.totalPosts || 0}개 포스트, ${data.totalPlaces || 0}개 장소 수집</span>`;
+        loadUnifiedSourcesStatus();
+        loadTistoryStatus();
+      } catch (err) {
+        if (resultEl) resultEl.innerHTML = '<span style="color: #ef4444;">티스토리 동기화 실패</span>';
+      }
+    }
+    
+    async function loadTistoryStatus() {
+      try {
+        const res = await fetch(`${API_BASE}/tistory/stats`);
+        const data = await res.json();
+        
+        document.getElementById('tistory-count').textContent = `${data.totalPosts || 0} 포스트`;
+        document.getElementById('tistory-status').textContent = data.status;
+        document.getElementById('tistory-status').className = `status-badge ${data.status === '활성' ? 'status-ok' : 'status-warn'}`;
+        document.getElementById('tistory-sync').textContent = data.lastSync 
+          ? new Date(data.lastSync).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })
+          : '-';
+      } catch (err) {
+        console.error('티스토리 상태 로드 오류:', err);
+      }
     }
     
     async function loadApiDetail() {
@@ -1623,6 +2601,186 @@
     
     loadDashboard();
     
+    // ========================================
+    // API 키 관리 함수
+    // ========================================
+    
+    async function loadApiKeys() {
+      const container = document.getElementById('api-keys-list');
+      try {
+        const res = await fetch(`${API_BASE}/api-keys`);
+        const keys = await res.json();
+        
+        container.innerHTML = keys.map(key => `
+          <div class="service-item" style="flex-direction: column; align-items: stretch;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <div>
+                <strong style="font-size: 14px;">${key.displayName}</strong>
+                <span style="font-size: 12px; color: #9ca3af; margin-left: 8px;">${key.keyName}</span>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                ${key.hasValue 
+                  ? `<span class="status-badge status-ok" style="font-size: 11px;">설정됨</span>` 
+                  : `<span class="status-badge status-warn" style="font-size: 11px;">미설정</span>`
+                }
+                ${key.lastTestResult === 'success' 
+                  ? `<span style="color: #22c55e; font-size: 11px;">✓ 테스트 통과</span>` 
+                  : key.lastTestResult === 'failed' 
+                    ? `<span style="color: #ef4444; font-size: 11px;">✗ 테스트 실패</span>`
+                    : ''
+                }
+              </div>
+            </div>
+            <div style="font-size: 12px; color: #6b7280; margin-bottom: 8px;">${key.description || ''}</div>
+            <div style="display: flex; gap: 8px;">
+              <input type="password" id="key-input-${key.keyName}" class="form-input" 
+                     style="flex: 1; font-size: 13px;" 
+                     placeholder="${key.hasValue ? key.keyValue : 'API 키를 입력하세요...'}"
+                     value="">
+              <button class="btn btn-primary" style="font-size: 12px; padding: 6px 12px;" 
+                      onclick="saveApiKey('${key.keyName}')">저장</button>
+              <button class="btn btn-secondary" style="font-size: 12px; padding: 6px 12px;" 
+                      onclick="testApiKey('${key.keyName}')">테스트</button>
+            </div>
+            <div id="key-result-${key.keyName}" style="margin-top: 8px; padding: 8px 12px; border-radius: 6px; font-size: 12px; min-height: 20px; background: rgba(255,255,255,0.03);"></div>
+          </div>
+        `).join('');
+      } catch (err) {
+        container.innerHTML = '<div style="color: #ef4444;">API 키 목록을 불러올 수 없습니다</div>';
+      }
+    }
+    
+    async function saveApiKey(keyName) {
+      const input = document.getElementById(`key-input-${keyName}`);
+      const resultEl = document.getElementById(`key-result-${keyName}`);
+      const keyValue = input.value.trim();
+      
+      if (!keyValue) {
+        resultEl.innerHTML = '<span style="color: #f59e0b;">⚠️ API 키를 입력해주세요</span>';
+        resultEl.style.background = 'rgba(245, 158, 11, 0.1)';
+        return;
+      }
+      
+      resultEl.innerHTML = '<span style="color: #f59e0b;">⏳ 저장 중...</span>';
+      resultEl.style.background = 'rgba(245, 158, 11, 0.1)';
+      
+      try {
+        const res = await fetch(`${API_BASE}/api-keys/${keyName}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ keyValue })
+        });
+        const data = await res.json();
+        
+        if (res.ok) {
+          resultEl.innerHTML = '<span style="color: #22c55e; font-weight: 600;">✅ 저장 완료! 즉시 반영되었습니다.</span>';
+          resultEl.style.background = 'rgba(34, 197, 94, 0.15)';
+          input.value = '';
+          setTimeout(() => {
+            loadApiKeys();
+            loadApiRealStatus();
+          }, 1000);
+        } else {
+          resultEl.innerHTML = `<span style="color: #ef4444;">❌ 오류: ${data.error}</span>`;
+          resultEl.style.background = 'rgba(239, 68, 68, 0.1)';
+        }
+      } catch (err) {
+        resultEl.innerHTML = '<span style="color: #ef4444;">❌ 저장에 실패했습니다</span>';
+        resultEl.style.background = 'rgba(239, 68, 68, 0.1)';
+      }
+    }
+    
+    async function testApiKey(keyName) {
+      const resultEl = document.getElementById(`key-result-${keyName}`);
+      
+      // 키가 저장되어 있는지 확인
+      const input = document.getElementById(`key-input-${keyName}`);
+      const hasValue = input.value.trim() || input.placeholder.includes('...');
+      
+      if (!hasValue) {
+        resultEl.innerHTML = '<span style="color: #f59e0b;">⚠️ 먼저 API 키를 저장해주세요</span>';
+        resultEl.style.background = 'rgba(245, 158, 11, 0.1)';
+        return;
+      }
+      
+      resultEl.innerHTML = '<span style="color: #f59e0b;">⏳ API 연결 테스트 중...</span>';
+      resultEl.style.background = 'rgba(245, 158, 11, 0.1)';
+      
+      try {
+        const res = await fetch(`${API_BASE}/api-keys/${keyName}/test`, {
+          method: 'POST'
+        });
+        const data = await res.json();
+        
+        if (data.success) {
+          resultEl.innerHTML = `<span style="color: #22c55e; font-weight: 600;">✅ 테스트 성공! ${data.message}</span>`;
+          resultEl.style.background = 'rgba(34, 197, 94, 0.15)';
+        } else {
+          resultEl.innerHTML = `<span style="color: #ef4444;">❌ 테스트 실패: ${data.message}</span>`;
+          resultEl.style.background = 'rgba(239, 68, 68, 0.1)';
+        }
+        
+        setTimeout(loadApiKeys, 1500);
+      } catch (err) {
+        resultEl.innerHTML = '<span style="color: #ef4444;">❌ 테스트 중 오류가 발생했습니다</span>';
+        resultEl.style.background = 'rgba(239, 68, 68, 0.1)';
+      }
+    }
+    
+    function openAddApiKeyModal() {
+      document.getElementById('add-api-key-modal').style.display = 'flex';
+      document.getElementById('new-key-name').value = '';
+      document.getElementById('new-key-display-name').value = '';
+      document.getElementById('new-key-description').value = '';
+      document.getElementById('new-key-value').value = '';
+    }
+    
+    function closeAddApiKeyModal() {
+      document.getElementById('add-api-key-modal').style.display = 'none';
+    }
+    
+    // 새 API 키 추가 폼 제출
+    document.addEventListener('DOMContentLoaded', () => {
+      const form = document.getElementById('add-api-key-form');
+      if (form) {
+        form.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const keyName = document.getElementById('new-key-name').value.trim().toUpperCase();
+          const displayName = document.getElementById('new-key-display-name').value.trim();
+          const description = document.getElementById('new-key-description').value.trim();
+          const keyValue = document.getElementById('new-key-value').value.trim();
+          
+          if (!keyName || !displayName || !keyValue) {
+            alert('필수 항목을 모두 입력해주세요');
+            return;
+          }
+          
+          try {
+            // DB에 새 키 추가
+            const res = await fetch(`${API_BASE}/api-keys`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ keyName, displayName, description, keyValue })
+            });
+            
+            const data = await res.json();
+            
+            if (res.ok) {
+              alert('✅ API 키가 추가되었습니다!');
+              closeAddApiKeyModal();
+              loadApiKeys();
+              loadApiRealStatus();
+            } else {
+              alert(data.error || 'API 키 추가에 실패했습니다');
+            }
+          } catch (err) {
+            alert('API 키 추가 중 오류가 발생했습니다');
+            console.error(err);
+          }
+        });
+      }
+    });
+    
     // 가이드 가격 관련 함수
     async function loadGuidePrices() {
       const container = document.getElementById('guide-prices-list');
@@ -1787,6 +2945,179 @@
       }
     }
     
+    // ========================================
+    // 💰 시간당 가격 계산 함수
+    // ========================================
+    
+    function updatePriceFormula() {
+      // 세단 8시간 계산
+      const sedanBase = parseFloat(document.getElementById('sedan-base-price').value) || 240;
+      const sedanHourly = parseFloat(document.getElementById('sedan-hourly-price').value) || 60;
+      const sedan8h = sedanBase + (4 * sedanHourly); // 기본 4h + 추가 4h
+      document.getElementById('sedan-8h-total').textContent = `€${sedan8h}`;
+      document.getElementById('compare-sedan').textContent = `€${sedan8h}`;
+      
+      // 밴 8시간 계산
+      const vanBase = parseFloat(document.getElementById('van-base-price').value) || 320;
+      const vanHourly = parseFloat(document.getElementById('van-hourly-price').value) || 80;
+      const van8h = vanBase + (4 * vanHourly);
+      document.getElementById('van-8h-total').textContent = `€${van8h}`;
+      document.getElementById('compare-van').textContent = `€${van8h}`;
+      
+      // 미니버스 8시간 계산
+      const minibusBase = parseFloat(document.getElementById('minibus-base-price').value) || 400;
+      const minibusHourly = parseFloat(document.getElementById('minibus-hourly-price').value) || 100;
+      const minibus8h = minibusBase + (4 * minibusHourly);
+      document.getElementById('minibus-8h-total').textContent = `€${minibus8h}`;
+      
+      // 가이드 온리 8시간 계산
+      const guideHourly = parseFloat(document.getElementById('guide-only-hourly').value) || 50;
+      const guide8h = guideHourly * 8;
+      document.getElementById('guide-only-8h-total').textContent = `€${guide8h}`;
+      
+      updateComparisonNote();
+    }
+    
+    function updateComparisonNote() {
+      const sedan8h = parseFloat(document.getElementById('compare-sedan').textContent.replace('€', ''));
+      const uberBlackSedan = document.getElementById('uber-black-sedan').value;
+      
+      // 우버 블랙 최고가 추출 (예: "€450~550" → 550)
+      const uberHighMatch = uberBlackSedan.match(/(\d+)$/);
+      const uberHigh = uberHighMatch ? parseInt(uberHighMatch[1]) : 550;
+      
+      const savings = uberHigh - sedan8h;
+      if (savings > 0) {
+        const noteEl = document.getElementById('comparison-marketing-note');
+        if (noteEl && !noteEl.dataset.userEdited) {
+          noteEl.value = `가이드 서비스가 우버 블랙 대비 최대 €${savings} 절약! 전문 가이드 동행으로 시간 효율 2배 ↑ 전일 대기로 호출 스트레스 없음`;
+        }
+      }
+    }
+    
+    async function saveHourlyPrices() {
+      const hourlyPrices = {
+        sedan: {
+          basePrice4h: parseFloat(document.getElementById('sedan-base-price').value) || 240,
+          pricePerHour: parseFloat(document.getElementById('sedan-hourly-price').value) || 60,
+          minPassengers: 1,
+          maxPassengers: 4
+        },
+        van: {
+          basePrice4h: parseFloat(document.getElementById('van-base-price').value) || 320,
+          pricePerHour: parseFloat(document.getElementById('van-hourly-price').value) || 80,
+          minPassengers: 5,
+          maxPassengers: 7
+        },
+        minibus: {
+          basePrice4h: parseFloat(document.getElementById('minibus-base-price').value) || 400,
+          pricePerHour: parseFloat(document.getElementById('minibus-hourly-price').value) || 100,
+          minPassengers: 8,
+          maxPassengers: 20
+        },
+        guide_only: {
+          basePrice4h: 0,
+          pricePerHour: parseFloat(document.getElementById('guide-only-hourly').value) || 50,
+          minPassengers: 1,
+          maxPassengers: 20
+        }
+      };
+      
+      // 비교표 데이터
+      const comparison = {
+        uberBlack: {
+          sedan: document.getElementById('uber-black-sedan').value,
+          van: document.getElementById('uber-black-van').value
+        },
+        uberX: {
+          sedan: document.getElementById('uber-x-sedan').value
+        },
+        taxi: {
+          sedan: document.getElementById('taxi-sedan').value,
+          van: document.getElementById('taxi-van').value
+        },
+        marketingNote: document.getElementById('comparison-marketing-note').value
+      };
+      
+      try {
+        const res = await fetch(`${API_BASE}/guide-prices/hourly`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ hourlyPrices, comparison })
+        });
+        
+        if (res.ok) {
+          const data = await res.json();
+          alert('✅ 시간당 가격이 저장되었습니다!');
+          loadGuidePrices();
+        } else {
+          const err = await res.json();
+          alert('저장 실패: ' + (err.error || '알 수 없는 오류'));
+        }
+      } catch (err) {
+        alert('저장 중 오류: ' + err.message);
+      }
+    }
+    
+    async function loadHourlyPrices() {
+      try {
+        const res = await fetch(`${API_BASE}/guide-prices/hourly`);
+        if (!res.ok) return;
+        
+        const data = await res.json();
+        
+        if (data.sedan) {
+          document.getElementById('sedan-base-price').value = data.sedan.basePrice4h || 240;
+          document.getElementById('sedan-hourly-price').value = data.sedan.pricePerHour || 60;
+        }
+        if (data.van) {
+          document.getElementById('van-base-price').value = data.van.basePrice4h || 320;
+          document.getElementById('van-hourly-price').value = data.van.pricePerHour || 80;
+        }
+        if (data.minibus) {
+          document.getElementById('minibus-base-price').value = data.minibus.basePrice4h || 400;
+          document.getElementById('minibus-hourly-price').value = data.minibus.pricePerHour || 100;
+        }
+        if (data.guide_only) {
+          document.getElementById('guide-only-hourly').value = data.guide_only.pricePerHour || 50;
+        }
+        
+        // 비교표 로드
+        if (data.comparison) {
+          if (data.comparison.uberBlack) {
+            document.getElementById('uber-black-sedan').value = data.comparison.uberBlack.sedan || '€450~550';
+            document.getElementById('uber-black-van').value = data.comparison.uberBlack.van || '€600~750';
+          }
+          if (data.comparison.uberX) {
+            document.getElementById('uber-x-sedan').value = data.comparison.uberX.sedan || '€280~350';
+          }
+          if (data.comparison.taxi) {
+            document.getElementById('taxi-sedan').value = data.comparison.taxi.sedan || '€320~400';
+            document.getElementById('taxi-van').value = data.comparison.taxi.van || '€450~550';
+          }
+          if (data.comparison.marketingNote) {
+            document.getElementById('comparison-marketing-note').value = data.comparison.marketingNote;
+            document.getElementById('comparison-marketing-note').dataset.userEdited = 'true';
+          }
+        }
+        
+        updatePriceFormula();
+      } catch (err) {
+        console.error('시간당 가격 로드 실패:', err);
+      }
+    }
+    
+    async function saveComparisonPrices() {
+      await saveHourlyPrices(); // 같은 API 사용
+    }
+    
+    // 가이드 가격 탭 로드시 시간당 가격도 로드
+    const originalLoadGuidePrices = loadGuidePrices;
+    loadGuidePrices = async function() {
+      await originalLoadGuidePrices();
+      await loadHourlyPrices();
+    };
+    
     let autoRefreshInterval = null;
     let lastUpdateTime = new Date();
     
@@ -1835,6 +3166,136 @@
       'verified': { label: '완료', color: '#22c55e', bg: 'rgba(34,197,94,0.2)' },
       'rejected': { label: '거절', color: '#ef4444', bg: 'rgba(239,68,68,0.2)' }
     };
+    
+    // =============================================
+    // 🚨 위기 정보 관리 (GDELT + Gemini)
+    // =============================================
+    
+    const CRISIS_TYPE_MAP = {
+      'strike': { label: '파업', icon: '🪧', color: '#ef4444' },
+      'protest': { label: '시위', icon: '📢', color: '#f59e0b' },
+      'traffic': { label: '교통', icon: '🚗', color: '#3b82f6' },
+      'weather': { label: '기상', icon: '⛈️', color: '#06b6d4' },
+      'security': { label: '보안', icon: '🚨', color: '#dc2626' }
+    };
+    
+    async function loadCrisisAlerts() {
+      const container = document.getElementById('crisis-alerts-list');
+      const cityFilter = document.getElementById('crisis-city-filter').value;
+      const typeFilter = document.getElementById('crisis-type-filter').value;
+      
+      try {
+        let url = '/api/admin/crisis-alerts';
+        const params = new URLSearchParams();
+        if (cityFilter) params.set('city', cityFilter);
+        if (typeFilter) params.set('type', typeFilter);
+        if (params.toString()) url += `?${params.toString()}`;
+        
+        const res = await fetch(url);
+        const data = await res.json();
+        
+        // 통계 업데이트
+        document.getElementById('crisis-total').textContent = data.stats?.totalAlerts || 0;
+        document.getElementById('crisis-active').textContent = data.stats?.activeAlerts || 0;
+        document.getElementById('crisis-strike').textContent = data.stats?.byType?.strike || 0;
+        document.getElementById('crisis-protest').textContent = data.stats?.byType?.protest || 0;
+        
+        const alerts = data.alerts || [];
+        
+        if (alerts.length === 0) {
+          container.innerHTML = `
+            <div style="text-align: center; padding: 40px; color: #6b7280;">
+              <p>🎉 현재 활성화된 위기 정보가 없습니다</p>
+              <p style="font-size: 14px; margin-top: 8px;">여행하기 좋은 날씨입니다!</p>
+            </div>`;
+          return;
+        }
+        
+        container.innerHTML = alerts.map(alert => {
+          const typeInfo = CRISIS_TYPE_MAP[alert.type] || CRISIS_TYPE_MAP.security;
+          const severityColor = alert.severity >= 7 ? '#ef4444' : alert.severity >= 4 ? '#f59e0b' : '#22c55e';
+          
+          return `
+            <div class="service-item" style="display: grid; grid-template-columns: auto 1fr auto; align-items: start; gap: 16px; padding: 16px;">
+              <div style="font-size: 32px;">${typeInfo.icon}</div>
+              <div>
+                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                  <span style="font-weight: 700; font-size: 16px;">${alert.titleKo || alert.title}</span>
+                  <span style="padding: 2px 8px; border-radius: 8px; font-size: 11px; background: rgba(255,255,255,0.1); color: ${typeInfo.color};">${typeInfo.label}</span>
+                </div>
+                <div style="color: #9ca3af; font-size: 13px; margin-bottom: 8px;">
+                  📍 ${alert.city} | 📅 ${alert.date}${alert.endDate ? ` ~ ${alert.endDate}` : ''}
+                </div>
+                <div style="color: #d1d5db; font-size: 13px; margin-bottom: 8px;">
+                  ${alert.description || ''}
+                </div>
+                ${alert.affected && alert.affected.length > 0 ? `
+                  <div style="display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 8px;">
+                    ${alert.affected.map(a => `<span style="padding: 2px 8px; border-radius: 6px; font-size: 11px; background: rgba(239,68,68,0.2); color: #fca5a5;">${a}</span>`).join('')}
+                  </div>
+                ` : ''}
+                <div style="background: rgba(34,197,94,0.1); padding: 8px 12px; border-radius: 8px; color: #86efac; font-size: 13px;">
+                  💡 ${alert.recommendationKo || alert.recommendation || '가이드 서비스 이용을 권장합니다'}
+                </div>
+              </div>
+              <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 8px;">
+                <div style="padding: 4px 12px; border-radius: 8px; font-size: 12px; font-weight: 700; background: ${severityColor}20; color: ${severityColor};">
+                  심각도 ${alert.severity}/10
+                </div>
+                <button class="btn btn-secondary" style="font-size: 12px; padding: 4px 12px;" onclick="deactivateCrisisAlert(${alert.id})">비활성화</button>
+              </div>
+            </div>`;
+        }).join('');
+        
+      } catch (err) {
+        console.error('위기 정보 로드 오류:', err);
+        container.innerHTML = `<div style="color: #ef4444; text-align: center; padding: 20px;">로드 실패: ${err.message}</div>`;
+      }
+    }
+    
+    async function collectCrisisAlerts() {
+      try {
+        const btn = event.target;
+        btn.disabled = true;
+        btn.textContent = '수집 중...';
+        
+        const res = await fetch('/api/admin/crisis-alerts/collect', { method: 'POST' });
+        const result = await res.json();
+        
+        if (result.success) {
+          alert(`✅ 수집 완료!\n기사: ${result.totalArticles}개\n알림: ${result.totalAlerts}개\n저장: ${result.savedAlerts}개`);
+          loadCrisisAlerts();
+        } else {
+          alert('❌ 수집 실패: ' + (result.error || '알 수 없는 오류'));
+        }
+      } catch (err) {
+        alert('❌ 수집 오류: ' + err.message);
+      } finally {
+        event.target.disabled = false;
+        event.target.textContent = '🔄 지금 수집';
+      }
+    }
+    
+    async function deactivateCrisisAlert(alertId) {
+      if (!confirm('이 알림을 비활성화하시겠습니까?')) return;
+      
+      try {
+        const res = await fetch(`/api/admin/crisis-alerts/${alertId}/deactivate`, { method: 'POST' });
+        const result = await res.json();
+        
+        if (result.success) {
+          loadCrisisAlerts();
+        } else {
+          alert('❌ 비활성화 실패');
+        }
+      } catch (err) {
+        alert('❌ 오류: ' + err.message);
+      }
+    }
+    
+    // =============================================
+    // 검증 요청 관리
+    // =============================================
     
     async function loadVerifications() {
       const container = document.getElementById('verifications-list');

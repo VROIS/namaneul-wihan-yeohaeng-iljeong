@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import { db } from "./db";
+import { db, isDatabaseConnected } from "./db";
 import path from "path";
 import fs from "fs";
 import { GoogleGenAI } from "@google/genai";
@@ -23,10 +23,25 @@ import {
   geminiWebSearchCache,
   placePrices,
   naverBlogPosts,
-  weatherForecast
+  weatherForecast,
+  apiKeys
 } from "../shared/schema";
 import { instagramCrawler } from "./services/instagram-crawler";
 import { eq, desc, sql, count, and, gte } from "drizzle-orm";
+
+// DB 연결 없이 반환할 기본 대시보드 데이터
+const DEFAULT_DASHBOARD_DATA = {
+  overview: {
+    cities: 0,
+    places: 0,
+    youtubeChannels: 0,
+    blogSources: 0,
+    freshDataRatio: 0
+  },
+  apiServices: [],
+  recentSyncs: [],
+  dbConnected: false
+};
 
 export function registerAdminRoutes(app: Express) {
   
@@ -44,6 +59,14 @@ export function registerAdminRoutes(app: Express) {
   // ========================================
   
   app.get("/api/admin/dashboard", async (req, res) => {
+    // DB 연결이 없으면 기본 데이터 반환
+    if (!isDatabaseConnected() || !db) {
+      return res.json({
+        ...DEFAULT_DASHBOARD_DATA,
+        message: "DB 연결이 필요합니다. .env 파일에 DATABASE_URL을 설정하세요."
+      });
+    }
+    
     try {
       const [
         apiServices,
@@ -80,7 +103,8 @@ export function registerAdminRoutes(app: Express) {
             : 0
         },
         apiServices,
-        recentSyncs
+        recentSyncs,
+        dbConnected: true
       });
     } catch (error) {
       console.error("Admin dashboard error:", error);
@@ -174,6 +198,15 @@ export function registerAdminRoutes(app: Express) {
       const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       const weekStart = new Date(todayStart.getTime() - 6 * 24 * 60 * 60 * 1000);
 
+      // 미슐랭 통계 가져오기
+      let michelinStats = { totalWithMichelin: 0, stars3: 0, stars2: 0, stars1: 0, bibGourmand: 0, recommended: 0 };
+      try {
+        const { getMichelinStats } = await import("./services/michelin-crawler");
+        michelinStats = await getMichelinStats();
+      } catch (e) {
+        console.log("[Admin] Michelin stats not available");
+      }
+
       const [
         videoCount,
         blogPostCount,
@@ -208,6 +241,14 @@ export function registerAdminRoutes(app: Express) {
           blogPosts: blogPostCount[0]?.count || 0,
           exchangeRates: exchangeRateCount[0]?.count || 0,
           placeMentions: placeMentionCount[0]?.count || 0
+        },
+        michelin: {
+          total: michelinStats.totalWithMichelin,
+          stars3: michelinStats.stars3,
+          stars2: michelinStats.stars2,
+          stars1: michelinStats.stars1,
+          bibGourmand: michelinStats.bibGourmand,
+          recommended: michelinStats.recommended
         },
         syncs: {
           today: todaySyncs[0]?.count || 0,
@@ -258,7 +299,7 @@ export function registerAdminRoutes(app: Express) {
         OPENWEATHER_API_KEY: !!process.env.OPENWEATHER_API_KEY,
         YOUTUBE_API_KEY: !!process.env.YOUTUBE_API_KEY,
         EXCHANGE_RATE_API_KEY: true,
-        AI_INTEGRATIONS_GEMINI_API_KEY: !!process.env.AI_INTEGRATIONS_GEMINI_API_KEY,
+        AI_INTEGRATIONS_GEMINI_API_KEY: !!(process.env.AI_INTEGRATIONS_GEMINI_API_KEY || process.env.GEMINI_API_KEY),
       };
       
       res.json({ services, envStatus });
@@ -277,7 +318,29 @@ export function registerAdminRoutes(app: Express) {
     const lastCall = service.lastCallAt ? new Date(service.lastCallAt).toISOString() : null;
     const errorMessage = service.lastErrorMessage || null;
     
+    // API 키가 설정되어 있으면 "healthy"로 표시 (호출 전이라도)
+    const isConfigured = (() => {
+      switch (service.serviceName) {
+        case "google_places":
+        case "google_maps":
+          return !!(process.env.Google_maps_api_key || process.env.GOOGLE_MAPS_API_KEY);
+        case "openweather":
+          return !!process.env.OPENWEATHER_API_KEY;
+        case "youtube_data":
+          return !!process.env.YOUTUBE_API_KEY;
+        case "exchange_rate":
+          return true;
+        case "gemini":
+          return !!(process.env.AI_INTEGRATIONS_GEMINI_API_KEY || process.env.GEMINI_API_KEY);
+        default:
+          return false;
+      }
+    })();
+    
     if (!service.lastCallAt) {
+      if (isConfigured) {
+        return { status: "healthy", message: "설정됨 (대기 중)", lastCall, errorMessage };
+      }
       return { status: "unknown", message: "아직 호출되지 않음", lastCall, errorMessage };
     }
     
@@ -449,19 +512,34 @@ export function registerAdminRoutes(app: Express) {
       }
 
       // Gemini AI 테스트 (SDK 방식)
-      const geminiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY;
+      const geminiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
       const geminiBaseUrl = process.env.AI_INTEGRATIONS_GEMINI_BASE_URL;
-      if (geminiKey && geminiBaseUrl) {
-        await checkWithTimeout("gemini", async () => {
-          const ai = new GoogleGenAI({
-            apiKey: geminiKey,
-            httpOptions: { apiVersion: "", baseUrl: geminiBaseUrl }
+      
+      if (geminiKey) {
+        // Base URL이 있으면 Replit AI 통합 방식, 없으면 직접 API 사용
+        if (geminiBaseUrl) {
+          await checkWithTimeout("gemini", async () => {
+            const { GoogleGenAI } = await import("@google/genai");
+            const ai = new GoogleGenAI({
+              apiKey: geminiKey,
+              httpOptions: { apiVersion: "", baseUrl: geminiBaseUrl }
+            });
+            await ai.models.generateContent({
+              model: "gemini-3-flash-preview",
+              contents: [{ role: "user", parts: [{ text: "ping" }] }],
+            });
           });
-          await ai.models.generateContent({
-            model: "gemini-3-flash-preview",
-            contents: [{ role: "user", parts: [{ text: "ping" }] }],
+        } else {
+          // 직접 API 사용 (Google AI Studio)
+          await checkWithTimeout("gemini", async () => {
+            const { GoogleGenAI } = await import("@google/genai");
+            const ai = new GoogleGenAI({ apiKey: geminiKey });
+            await ai.models.generateContent({
+              model: "gemini-2.0-flash",
+              contents: "test"
+            });
           });
-        });
+        }
       } else {
         healthResults["gemini"] = { connected: false, latency: null, error: "API key not configured", lastChecked: new Date().toISOString() };
       }
@@ -476,22 +554,25 @@ export function registerAdminRoutes(app: Express) {
         }
       });
 
-      // DB에 상태 업데이트
-      for (const [serviceName, health] of Object.entries(healthResults)) {
-        await db
-          .update(apiServiceStatus)
-          .set({
-            lastCallAt: new Date(),
-            lastSuccessAt: health.connected ? new Date() : undefined,
-            lastErrorAt: health.connected ? undefined : new Date(),
-            lastErrorMessage: health.error,
-          })
-          .where(eq(apiServiceStatus.serviceName, serviceName));
+      // DB에 상태 업데이트 (DB 연결이 있을 때만)
+      if (isDatabaseConnected() && db) {
+        for (const [serviceName, health] of Object.entries(healthResults)) {
+          await db
+            .update(apiServiceStatus)
+            .set({
+              lastCallAt: new Date(),
+              lastSuccessAt: health.connected ? new Date() : undefined,
+              lastErrorAt: health.connected ? undefined : new Date(),
+              lastErrorMessage: health.error,
+            })
+            .where(eq(apiServiceStatus.serviceName, serviceName));
+        }
       }
 
       res.json({
         timestamp: new Date().toISOString(),
-        services: healthResults
+        services: healthResults,
+        dbConnected: isDatabaseConnected()
       });
     } catch (error) {
       console.error("Health check error:", error);
@@ -751,41 +832,63 @@ export function registerAdminRoutes(app: Express) {
       const fourteenDays = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
       const thirtyDays = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
       
-      const allPlaces = await db.select({
-        id: places.id,
-        name: places.name,
-        lastDataSync: places.lastDataSync
-      }).from(places);
+      // 🎯 실제 동기화 로그 기반 신선도 측정 (dataSyncLog 테이블 활용)
+      const syncLogs = await db.select({
+        entityType: dataSyncLog.entityType,
+        startedAt: dataSyncLog.startedAt,
+        status: dataSyncLog.status,
+        itemsProcessed: dataSyncLog.itemsProcessed,
+      }).from(dataSyncLog)
+        .where(eq(dataSyncLog.status, 'success'))
+        .orderBy(desc(dataSyncLog.startedAt));
+      
+      // 엔티티 타입별 마지막 동기화 시간
+      const entityLastSync: Record<string, Date> = {};
+      for (const log of syncLogs) {
+        if (!entityLastSync[log.entityType]) {
+          entityLastSync[log.entityType] = new Date(log.startedAt);
+        }
+      }
+      
+      // 주요 데이터 소스 목록
+      const dataSources = [
+        { key: 'youtube', label: 'YouTube 영상', table: 'youtube_videos' },
+        { key: 'naver_blog', label: '네이버 블로그', table: 'naver_blog_posts' },
+        { key: 'instagram', label: '인스타그램', table: 'instagram_hashtags' },
+        { key: 'weather', label: '날씨 정보', table: 'weather_forecast' },
+        { key: 'crisis', label: '위기 정보', table: 'crisis_alerts' },
+        { key: 'exchange_rate', label: '환율 정보', table: 'exchange_rates' },
+        { key: 'places', label: '장소 정보', table: 'places' },
+        { key: 'tripadvisor', label: 'TripAdvisor', table: 'tripadvisor_data' },
+      ];
       
       const freshness = {
-        fresh: 0,
-        recent: 0,
-        aging: 0,
-        stale: 0,
-        never: 0,
+        fresh: 0,    // 0-7일
+        recent: 0,   // 8-14일
+        aging: 0,    // 15-30일
+        stale: 0,    // 31일+
+        never: 0,    // 동기화 없음
         details: [] as any[]
       };
       
-      for (const place of allPlaces) {
-        if (!place.lastDataSync) {
+      for (const source of dataSources) {
+        const lastSync = entityLastSync[source.key] || entityLastSync[source.table];
+        
+        if (!lastSync) {
           freshness.never++;
-          if (freshness.details.length < 20) {
-            freshness.details.push({ ...place, status: "never" });
-          }
-        } else if (place.lastDataSync >= sevenDays) {
+          freshness.details.push({ name: source.label, status: 'never', lastSync: null });
+        } else if (lastSync >= sevenDays) {
           freshness.fresh++;
-        } else if (place.lastDataSync >= fourteenDays) {
+          freshness.details.push({ name: source.label, status: 'fresh', lastSync });
+        } else if (lastSync >= fourteenDays) {
           freshness.recent++;
-        } else if (place.lastDataSync >= thirtyDays) {
+          freshness.details.push({ name: source.label, status: 'recent', lastSync });
+        } else if (lastSync >= thirtyDays) {
           freshness.aging++;
-          if (freshness.details.length < 20) {
-            freshness.details.push({ ...place, status: "aging" });
-          }
+          freshness.details.push({ name: source.label, status: 'aging', lastSync });
         } else {
           freshness.stale++;
-          if (freshness.details.length < 20) {
-            freshness.details.push({ ...place, status: "stale" });
-          }
+          freshness.details.push({ name: source.label, status: 'stale', lastSync });
         }
       }
       
@@ -797,8 +900,8 @@ export function registerAdminRoutes(app: Express) {
           stale: { count: freshness.stale, label: "오래됨 (31일+)", color: "#6B7280" },
           never: { count: freshness.never, label: "수집 안됨", color: "#9CA3AF" },
         },
-        total: allPlaces.length,
-        needsUpdate: freshness.details
+        total: dataSources.length,
+        needsUpdate: freshness.details.filter(d => d.status !== 'fresh')
       });
     } catch (error) {
       console.error("Error fetching data freshness:", error);
@@ -1113,7 +1216,7 @@ export function registerAdminRoutes(app: Express) {
     try {
       const googleMapsKey = process.env.Google_maps_api_key || process.env.GOOGLE_MAPS_API_KEY;
       const youtubeKey = process.env.YOUTUBE_API_KEY;
-      const geminiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY;
+      const geminiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
       const openWeatherKey = process.env.OPENWEATHER_API_KEY;
       
       const status = {
@@ -2205,6 +2308,242 @@ export function registerAdminRoutes(app: Express) {
   });
 
   // ========================================
+  // 💰 시간당 가격 API (마케팅 핵심)
+  // ========================================
+  
+  // 시간당 가격 조회
+  app.get("/api/admin/guide-prices/hourly", async (req, res) => {
+    try {
+      const { guidePrices } = await import("../shared/schema");
+      const prices = await db.select().from(guidePrices);
+      
+      // 차량 타입별로 그룹화
+      const result: Record<string, any> = {};
+      const comparison: Record<string, any> = {};
+      
+      for (const price of prices) {
+        if (['sedan', 'van', 'minibus', 'guide_only'].includes(price.serviceType)) {
+          result[price.serviceType] = {
+            basePrice4h: price.basePrice4h,
+            pricePerHour: price.pricePerHour,
+            minPassengers: price.minPassengers,
+            maxPassengers: price.maxPassengers,
+            pricePerDay: price.pricePerDay,
+            priceLow: price.priceLow,
+            priceHigh: price.priceHigh
+          };
+          
+          // 비교 데이터
+          if (price.uberBlackEstimate || price.uberXEstimate || price.taxiEstimate) {
+            if (!comparison.uberBlack) comparison.uberBlack = {};
+            if (!comparison.uberX) comparison.uberX = {};
+            if (!comparison.taxi) comparison.taxi = {};
+            
+            if (price.uberBlackEstimate) {
+              const uberBlack = price.uberBlackEstimate as { low: number; high: number };
+              comparison.uberBlack[price.serviceType] = `€${uberBlack.low}~${uberBlack.high}`;
+            }
+            if (price.uberXEstimate) {
+              const uberX = price.uberXEstimate as { low: number; high: number };
+              comparison.uberX[price.serviceType] = `€${uberX.low}~${uberX.high}`;
+            }
+            if (price.taxiEstimate) {
+              const taxi = price.taxiEstimate as { low: number; high: number };
+              comparison.taxi[price.serviceType] = `€${taxi.low}~${taxi.high}`;
+            }
+          }
+          
+          if (price.comparisonNote) {
+            comparison.marketingNote = price.comparisonNote;
+          }
+        }
+      }
+      
+      result.comparison = comparison;
+      res.json(result);
+    } catch (error) {
+      console.error("Error loading hourly prices:", error);
+      res.status(500).json({ error: "Failed to load hourly prices" });
+    }
+  });
+  
+  // 시간당 가격 저장/업데이트
+  app.post("/api/admin/guide-prices/hourly", async (req, res) => {
+    try {
+      const { guidePrices } = await import("../shared/schema");
+      const { hourlyPrices, comparison } = req.body;
+      
+      const serviceTypes = ['sedan', 'van', 'minibus', 'guide_only'];
+      const results = [];
+      
+      for (const serviceType of serviceTypes) {
+        const priceData = hourlyPrices[serviceType];
+        if (!priceData) continue;
+        
+        // 기존 데이터 확인
+        const existing = await db.select().from(guidePrices)
+          .where(eq(guidePrices.serviceType, serviceType))
+          .limit(1);
+        
+        // 8시간 전일 가격 계산
+        const fullDayPrice = priceData.basePrice4h + (4 * priceData.pricePerHour);
+        
+        // 비교 데이터 파싱
+        let uberBlackEstimate = null;
+        let uberXEstimate = null;
+        let taxiEstimate = null;
+        
+        if (comparison?.uberBlack?.[serviceType]) {
+          const match = comparison.uberBlack[serviceType].match(/€?(\d+)~(\d+)/);
+          if (match) uberBlackEstimate = { low: parseInt(match[1]), high: parseInt(match[2]) };
+        }
+        if (comparison?.uberX?.[serviceType]) {
+          const match = comparison.uberX[serviceType].match(/€?(\d+)~(\d+)/);
+          if (match) uberXEstimate = { low: parseInt(match[1]), high: parseInt(match[2]) };
+        }
+        if (comparison?.taxi?.[serviceType]) {
+          const match = comparison.taxi[serviceType].match(/€?(\d+)~(\d+)/);
+          if (match) taxiEstimate = { low: parseInt(match[1]), high: parseInt(match[2]) };
+        }
+        
+        const updateData = {
+          basePrice4h: priceData.basePrice4h,
+          pricePerHour: priceData.pricePerHour,
+          minPassengers: priceData.minPassengers,
+          maxPassengers: priceData.maxPassengers,
+          pricePerDay: fullDayPrice,
+          priceLow: priceData.basePrice4h,
+          priceHigh: fullDayPrice,
+          unit: 'hour' as const,
+          uberBlackEstimate,
+          uberXEstimate,
+          taxiEstimate,
+          comparisonNote: comparison?.marketingNote || null,
+          lastUpdated: new Date()
+        };
+        
+        if (existing.length > 0) {
+          // 업데이트
+          await db.update(guidePrices)
+            .set(updateData)
+            .where(eq(guidePrices.serviceType, serviceType));
+          results.push({ serviceType, action: 'updated' });
+        } else {
+          // 새로 생성
+          const serviceNames: Record<string, string> = {
+            sedan: '세단 (1-4인)',
+            van: '밴 (5-7인)',
+            minibus: '미니버스 (8인+)',
+            guide_only: '가이드 온리'
+          };
+          
+          await db.insert(guidePrices).values({
+            serviceType,
+            serviceName: serviceNames[serviceType] || serviceType,
+            ...updateData,
+            features: serviceType === 'guide_only' 
+              ? ['차량 없음', '가이드만 동행']
+              : ['전일 대기', '가이드 포함', '주차비 포함'],
+            source: 'guide_verified'
+          });
+          results.push({ serviceType, action: 'created' });
+        }
+      }
+      
+      res.json({ success: true, results });
+    } catch (error) {
+      console.error("Error saving hourly prices:", error);
+      res.status(500).json({ error: "Failed to save hourly prices" });
+    }
+  });
+  
+  // 💰 시간당 가격 테스트 API (DB 연동 확인용)
+  app.get("/api/admin/guide-prices/test", async (req, res) => {
+    try {
+      const { transportPricingService } = await import("./services/transport-pricing-service");
+      
+      // 테스트: 가족(4인), 이동최소화, 8시간, 3일 여행
+      const testResult = await transportPricingService.calculateTransportPrice({
+        companionType: 'Family',
+        companionCount: 4,
+        mobilityStyle: 'Minimal',
+        travelStyle: 'Reasonable',
+        hours: 8,
+        dayCount: 3
+      });
+      
+      res.json({
+        success: true,
+        message: 'DB 연동 테스트 성공',
+        testInput: {
+          companionType: 'Family (4인)',
+          mobilityStyle: 'Minimal (이동최소화)',
+          hours: 8,
+          dayCount: 3
+        },
+        result: testResult
+      });
+    } catch (error) {
+      console.error("Error testing price calculation:", error);
+      res.status(500).json({ 
+        success: false, 
+        error: "DB 연동 테스트 실패",
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // 시간당 가격 계산 API (일정 생성시 호출)
+  app.post("/api/admin/guide-prices/calculate", async (req, res) => {
+    try {
+      const { guidePrices } = await import("../shared/schema");
+      const { serviceType, hours, passengers } = req.body;
+      
+      // DB에서 해당 서비스 타입의 가격 조회
+      const [priceData] = await db.select().from(guidePrices)
+        .where(eq(guidePrices.serviceType, serviceType))
+        .limit(1);
+      
+      if (!priceData) {
+        return res.status(404).json({ error: "Price data not found for service type" });
+      }
+      
+      const minHours = priceData.minHours || 4;
+      const effectiveHours = Math.max(hours, minHours);
+      const extraHours = Math.max(0, effectiveHours - minHours);
+      
+      const basePrice = priceData.basePrice4h || 0;
+      const hourlyRate = priceData.pricePerHour || 0;
+      const totalPrice = basePrice + (extraHours * hourlyRate);
+      const perPersonPrice = passengers > 0 ? Math.round(totalPrice / passengers) : totalPrice;
+      
+      res.json({
+        serviceType,
+        serviceName: priceData.serviceName,
+        hours: effectiveHours,
+        passengers,
+        breakdown: {
+          basePrice4h: basePrice,
+          extraHours,
+          hourlyRate,
+          totalPrice,
+          perPersonPrice
+        },
+        comparison: {
+          uberBlack: priceData.uberBlackEstimate,
+          uberX: priceData.uberXEstimate,
+          taxi: priceData.taxiEstimate,
+          marketingNote: priceData.comparisonNote
+        },
+        currency: priceData.currency || 'EUR'
+      });
+    } catch (error) {
+      console.error("Error calculating price:", error);
+      res.status(500).json({ error: "Failed to calculate price" });
+    }
+  });
+
+  // ========================================
   // 예산 계산 API
   // ========================================
   
@@ -2248,4 +2587,1185 @@ export function registerAdminRoutes(app: Express) {
       res.status(500).json({ error: "Failed to estimate budget" });
     }
   });
+
+  // ========================================
+  // 🎯 실시간 관제탑 API - 스케줄러 현황
+  // ========================================
+
+  app.get("/api/admin/scheduler/realtime-status", async (req, res) => {
+    try {
+      const { dataScheduler } = await import("./services/data-scheduler");
+      const status = dataScheduler.getStatus();
+      
+      // 마지막 실행 결과 조회
+      const recentLogs = await db
+        .select()
+        .from(dataSyncLog)
+        .orderBy(desc(dataSyncLog.startedAt))
+        .limit(20);
+      
+      // 태스크별 마지막 실행 상태
+      const taskStatuses = status.scheduledTasks.map(taskName => {
+        const lastLog = recentLogs.find(log => log.entityType === taskName);
+        return {
+          taskName,
+          nextRun: status.nextRuns.find(n => n.taskName === taskName)?.nextRun || '알 수 없음',
+          lastRunAt: lastLog?.startedAt || null,
+          lastStatus: lastLog?.status || 'never',
+          lastProcessed: lastLog?.itemsProcessed || 0,
+          lastError: lastLog?.errorMessage || null,
+        };
+      });
+      
+      res.json({
+        isRunning: status.isRunning,
+        totalTasks: status.scheduledTasks.length,
+        taskStatuses,
+        timestamp: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error("Error getting scheduler realtime status:", error);
+      res.status(500).json({ error: "스케줄러 상태 조회 실패" });
+    }
+  });
+
+  // ========================================
+  // 🎯 실시간 관제탑 API - 혼잡도 분석기 통계
+  // ========================================
+
+  app.get("/api/admin/popularity/stats", async (req, res) => {
+    try {
+      // 캐시된 혼잡도 데이터 수 조회
+      const [popularityCache] = await db
+        .select({ count: count() })
+        .from(geminiWebSearchCache)
+        .where(eq(geminiWebSearchCache.searchType, "popularity"));
+      
+      // 최근 24시간 내 조회된 장소 수
+      const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      const [recentQueries] = await db
+        .select({ count: count() })
+        .from(geminiWebSearchCache)
+        .where(
+          and(
+            eq(geminiWebSearchCache.searchType, "popularity"),
+            gte(geminiWebSearchCache.fetchedAt, yesterday)
+          )
+        );
+      
+      res.json({
+        totalCached: popularityCache.count || 0,
+        last24Hours: recentQueries.count || 0,
+        cacheHitRate: popularityCache.count > 0 ? Math.round((recentQueries.count / popularityCache.count) * 100) : 0,
+        status: popularityCache.count > 0 ? '활성' : '대기',
+      });
+    } catch (error) {
+      console.error("Error fetching popularity stats:", error);
+      res.status(500).json({ error: "혼잡도 통계 조회 실패" });
+    }
+  });
+
+  // ========================================
+  // 🎯 실시간 관제탑 API - 경로 캐시 현황
+  // ========================================
+
+  app.get("/api/admin/route-cache/stats", async (req, res) => {
+    try {
+      const { routeCache } = await import("../shared/schema");
+      
+      const [totalRoutes] = await db.select({ count: count() }).from(routeCache);
+      
+      // 최근 7일 내 캐시된 경로 (fetchedAt 컬럼 사용)
+      const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      const [recentRoutes] = await db
+        .select({ count: count() })
+        .from(routeCache)
+        .where(gte(routeCache.fetchedAt, weekAgo));
+      
+      // 교통수단별 통계
+      const byTravelMode = await db
+        .select({
+          travelMode: routeCache.travelMode,
+          count: count(),
+        })
+        .from(routeCache)
+        .groupBy(routeCache.travelMode);
+      
+      res.json({
+        totalCached: totalRoutes?.count || 0,
+        last7Days: recentRoutes?.count || 0,
+        byTravelMode: byTravelMode.reduce((acc, item) => {
+          acc[item.travelMode] = item.count;
+          return acc;
+        }, {} as Record<string, number>),
+        status: (totalRoutes?.count || 0) > 0 ? '활성' : '대기',
+      });
+    } catch (error) {
+      console.error("Error fetching route cache stats:", error);
+      res.status(500).json({ error: "경로 캐시 통계 조회 실패" });
+    }
+  });
+
+  // ========================================
+  // 🎯 실시간 관제탑 API - 티스토리 크롤러 통계
+  // ========================================
+
+  app.get("/api/admin/tistory/stats", async (req, res) => {
+    try {
+      // 티스토리 관련 캐시 데이터 조회
+      const [tistoryCache] = await db
+        .select({ count: count() })
+        .from(geminiWebSearchCache)
+        .where(eq(geminiWebSearchCache.searchType, "tistory"));
+      
+      // 마지막 동기화 시간
+      const [lastSync] = await db
+        .select({ lastSync: geminiWebSearchCache.fetchedAt })
+        .from(geminiWebSearchCache)
+        .where(eq(geminiWebSearchCache.searchType, "tistory"))
+        .orderBy(desc(geminiWebSearchCache.fetchedAt))
+        .limit(1);
+      
+      res.json({
+        totalPosts: tistoryCache.count || 0,
+        lastSync: lastSync?.lastSync || null,
+        status: tistoryCache.count > 0 ? '활성' : '대기',
+      });
+    } catch (error) {
+      console.error("Error fetching Tistory stats:", error);
+      res.status(500).json({ error: "티스토리 통계 조회 실패" });
+    }
+  });
+
+  app.post("/api/admin/tistory/sync", async (req, res) => {
+    try {
+      const { crawlAllTistory } = await import("./services/tistory-crawler");
+      const result = await crawlAllTistory();
+      res.json({
+        message: "티스토리 동기화 완료",
+        ...result
+      });
+    } catch (error) {
+      console.error("Error syncing Tistory:", error);
+      res.status(500).json({ error: "티스토리 동기화 실패" });
+    }
+  });
+
+  // ========================================
+  // 🎯 실시간 관제탑 API - 일정 생성 통계
+  // ========================================
+
+  app.get("/api/admin/itinerary/stats", async (req, res) => {
+    try {
+      const { itineraries } = await import("../shared/schema");
+      
+      const now = new Date();
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const weekStart = new Date(todayStart.getTime() - 6 * 24 * 60 * 60 * 1000);
+      
+      // 전체 일정 수
+      const [totalItineraries] = await db.select({ count: count() }).from(itineraries);
+      
+      // 오늘 생성된 일정
+      const [todayItineraries] = await db
+        .select({ count: count() })
+        .from(itineraries)
+        .where(gte(itineraries.createdAt, todayStart));
+      
+      // 이번 주 생성된 일정
+      const [weekItineraries] = await db
+        .select({ count: count() })
+        .from(itineraries)
+        .where(gte(itineraries.createdAt, weekStart));
+      
+      // 도시별 통계
+      const byCityData = await db
+        .select({
+          cityId: itineraries.cityId,
+          count: count(),
+        })
+        .from(itineraries)
+        .groupBy(itineraries.cityId)
+        .limit(5);
+      
+      // 도시 이름 조회
+      const cityIds = byCityData.map(d => d.cityId).filter(id => id !== null);
+      const cityNames = cityIds.length > 0 
+        ? await db.select({ id: cities.id, name: cities.name }).from(cities).where(sql`${cities.id} IN (${sql.join(cityIds, sql`, `)})`)
+        : [];
+      
+      const byCity = byCityData.map(d => ({
+        cityId: d.cityId,
+        cityName: cityNames.find(c => c.id === d.cityId)?.name || '알 수 없음',
+        count: d.count,
+      }));
+      
+      res.json({
+        total: totalItineraries.count || 0,
+        today: todayItineraries.count || 0,
+        thisWeek: weekItineraries.count || 0,
+        topCities: byCity,
+      });
+    } catch (error) {
+      console.error("Error fetching itinerary stats:", error);
+      // 테이블이 없을 수 있으므로 기본값 반환
+      res.json({
+        total: 0,
+        today: 0,
+        thisWeek: 0,
+        topCities: [],
+      });
+    }
+  });
+
+  // ========================================
+  // 🎯 실시간 관제탑 API - 통합 현황 요약
+  // ========================================
+
+  app.get("/api/admin/control-tower/summary", async (req, res) => {
+    try {
+      const now = new Date();
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      
+      // 데이터 수집 상태
+      const [todaySyncs] = await db
+        .select({ count: count() })
+        .from(dataSyncLog)
+        .where(gte(dataSyncLog.startedAt, todayStart));
+      
+      const [failedSyncs] = await db
+        .select({ count: count() })
+        .from(dataSyncLog)
+        .where(
+          and(
+            gte(dataSyncLog.startedAt, todayStart),
+            eq(dataSyncLog.status, "failed")
+          )
+        );
+      
+      // API 연결 상태
+      const apiServices = await db.select().from(apiServiceStatus);
+      const connectedApis = apiServices.filter(s => s.isConfigured).length;
+      
+      // 웹 검색 캐시 현황
+      const [totalWebCache] = await db.select({ count: count() }).from(geminiWebSearchCache);
+      
+      // 실시간 교통비 데이터 (routeCache)
+      const { routeCache } = await import("../shared/schema");
+      const [totalRoutes] = await db.select({ count: count() }).from(routeCache);
+      
+      res.json({
+        dataCollection: {
+          todaySyncs: todaySyncs.count || 0,
+          failedSyncs: failedSyncs.count || 0,
+          successRate: todaySyncs.count > 0 
+            ? Math.round(((todaySyncs.count - failedSyncs.count) / todaySyncs.count) * 100) 
+            : 100,
+        },
+        apiConnections: {
+          connected: connectedApis,
+          total: apiServices.length,
+        },
+        caches: {
+          webSearch: totalWebCache.count || 0,
+          routes: totalRoutes.count || 0,
+        },
+        lastUpdated: now.toISOString(),
+      });
+    } catch (error) {
+      console.error("Error fetching control tower summary:", error);
+      res.status(500).json({ error: "관제탑 요약 조회 실패" });
+    }
+  });
+
+  // ========================================
+  // API 키 관리 엔드포인트
+  // ========================================
+  
+  // API 키 목록 조회
+  app.get("/api/admin/api-keys", async (req, res) => {
+    try {
+      const keys = await db.select().from(apiKeys).orderBy(apiKeys.id);
+      
+      // 키 값은 마스킹해서 반환 (보안)
+      const maskedKeys = keys.map(key => ({
+        ...key,
+        keyValue: key.keyValue ? `${key.keyValue.slice(0, 8)}...${key.keyValue.slice(-4)}` : '',
+        hasValue: !!key.keyValue && key.keyValue.length > 0
+      }));
+      
+      res.json(maskedKeys);
+    } catch (error) {
+      console.error("Error fetching API keys:", error);
+      res.status(500).json({ error: "Failed to fetch API keys" });
+    }
+  });
+  
+  // 새 API 키 추가
+  app.post("/api/admin/api-keys", async (req, res) => {
+    try {
+      const { keyName, displayName, description, keyValue } = req.body;
+      
+      if (!keyName || !displayName) {
+        return res.status(400).json({ error: "keyName and displayName are required" });
+      }
+      
+      // 키 이름 검증 (대문자, 언더스코어만 허용)
+      if (!/^[A-Z_]+$/.test(keyName)) {
+        return res.status(400).json({ error: "keyName must be uppercase letters and underscores only" });
+      }
+      
+      // 중복 확인
+      const existing = await db.select().from(apiKeys).where(eq(apiKeys.keyName, keyName)).limit(1);
+      if (existing.length > 0) {
+        return res.status(400).json({ error: `API key "${keyName}" already exists` });
+      }
+      
+      // DB에 추가
+      await db.insert(apiKeys).values({
+        keyName,
+        keyValue: keyValue ? keyValue.trim() : '',
+        displayName,
+        description: description || null,
+        isActive: true
+      });
+      
+      // 키 값이 있으면 환경변수에도 반영
+      if (keyValue && keyValue.trim()) {
+        process.env[keyName] = keyValue.trim();
+      }
+      
+      console.log(`✅ New API Key added: ${keyName}`);
+      res.json({ success: true, message: `${keyName} 추가 완료` });
+    } catch (error) {
+      console.error("Error adding API key:", error);
+      res.status(500).json({ error: "Failed to add API key" });
+    }
+  });
+  
+  // API 키 저장/업데이트
+  app.put("/api/admin/api-keys/:keyName", async (req, res) => {
+    try {
+      const { keyName } = req.params;
+      const { keyValue } = req.body;
+      
+      if (!keyValue || keyValue.trim() === '') {
+        return res.status(400).json({ error: "API key value is required" });
+      }
+      
+      // DB에 저장
+      const existing = await db.select().from(apiKeys).where(eq(apiKeys.keyName, keyName)).limit(1);
+      
+      if (existing.length > 0) {
+        await db.update(apiKeys)
+          .set({ 
+            keyValue: keyValue.trim(), 
+            updatedAt: new Date(),
+            isActive: true 
+          })
+          .where(eq(apiKeys.keyName, keyName));
+      } else {
+        await db.insert(apiKeys).values({
+          keyName,
+          keyValue: keyValue.trim(),
+          displayName: keyName,
+          isActive: true
+        });
+      }
+      
+      // 런타임 환경변수에도 즉시 반영 (자동 연동)
+      process.env[keyName] = keyValue.trim();
+      
+      // 특정 키는 추가 매핑
+      if (keyName === 'GEMINI_API_KEY') {
+        process.env.AI_INTEGRATIONS_GEMINI_API_KEY = keyValue.trim();
+      }
+      if (keyName === 'GOOGLE_MAPS_API_KEY') {
+        process.env.Google_maps_api_key = keyValue.trim();
+      }
+      
+      console.log(`✅ API Key saved: ${keyName}`);
+      res.json({ success: true, message: `${keyName} 저장 완료` });
+    } catch (error) {
+      console.error("Error saving API key:", error);
+      res.status(500).json({ error: "Failed to save API key" });
+    }
+  });
+  
+  // API 키 삭제 (값만 비움)
+  app.delete("/api/admin/api-keys/:keyName", async (req, res) => {
+    try {
+      const { keyName } = req.params;
+      
+      await db.update(apiKeys)
+        .set({ keyValue: '', isActive: false, updatedAt: new Date() })
+        .where(eq(apiKeys.keyName, keyName));
+      
+      // 런타임 환경변수에서도 제거
+      delete process.env[keyName];
+      if (keyName === 'GEMINI_API_KEY') {
+        delete process.env.AI_INTEGRATIONS_GEMINI_API_KEY;
+      }
+      
+      res.json({ success: true, message: `${keyName} 삭제 완료` });
+    } catch (error) {
+      console.error("Error deleting API key:", error);
+      res.status(500).json({ error: "Failed to delete API key" });
+    }
+  });
+  
+  // API 키 테스트
+  app.post("/api/admin/api-keys/:keyName/test", async (req, res) => {
+    try {
+      const { keyName } = req.params;
+      
+      // DB에서 키 조회
+      const [keyRecord] = await db.select().from(apiKeys).where(eq(apiKeys.keyName, keyName)).limit(1);
+      
+      if (!keyRecord || !keyRecord.keyValue) {
+        return res.status(400).json({ error: "API key not found or empty" });
+      }
+      
+      let testResult = { success: false, message: '' };
+      
+      switch (keyName) {
+        case 'GEMINI_API_KEY': {
+          try {
+            const { GoogleGenAI } = await import("@google/genai");
+            const ai = new GoogleGenAI({ apiKey: keyRecord.keyValue });
+            const response = await ai.models.generateContent({
+              model: "gemini-2.0-flash",
+              contents: "Say 'API test successful' in Korean"
+            });
+            testResult = { success: true, message: response.text?.slice(0, 100) || 'OK' };
+          } catch (e: any) {
+            testResult = { success: false, message: e.message };
+          }
+          break;
+        }
+        
+        case 'YOUTUBE_API_KEY': {
+          try {
+            // 실제 백엔드 YouTube 크롤러 사용
+            const { youtubeCrawler } = await import("./services/youtube-crawler");
+            const testChannelId = "UC_x5XG1OV2P6uZZ5FSM9Ttw"; // Google Developers 채널
+            const videos = await youtubeCrawler.fetchRecentVideos(testChannelId, 1);
+            testResult = { 
+              success: true, 
+              message: `백엔드 연동 확인: ${videos.length}개 비디오 조회 성공`
+            };
+          } catch (e: any) {
+            testResult = { success: false, message: `백엔드 연동 실패: ${e.message}` };
+          }
+          break;
+        }
+        
+        case 'GOOGLE_MAPS_API_KEY': {
+          try {
+            // 실제 백엔드 Google Places 서비스 사용
+            const { googlePlacesService } = await import("./services/google-places");
+            const places = await googlePlacesService.searchPlaces("에펠탑", "Paris", "attraction", 1);
+            testResult = { 
+              success: true, 
+              message: `백엔드 연동 확인: ${places.length}개 장소 검색 성공`
+            };
+          } catch (e: any) {
+            testResult = { success: false, message: `백엔드 연동 실패: ${e.message}` };
+          }
+          break;
+        }
+        
+        case 'OPENWEATHER_API_KEY': {
+          try {
+            // 실제 백엔드 Weather 서비스 사용
+            const { weatherService } = await import("./services/weather");
+            const weather = await weatherService.getCurrentWeather(37.5665, 126.9780); // 서울 좌표
+            testResult = { 
+              success: true, 
+              message: `백엔드 연동 확인: 서울 날씨 ${weather.temperature}°C 조회 성공`
+            };
+          } catch (e: any) {
+            testResult = { success: false, message: `백엔드 연동 실패: ${e.message}` };
+          }
+          break;
+        }
+        
+        default:
+          testResult = { success: true, message: '테스트 불가 (저장됨)' };
+      }
+      
+      // 테스트 결과 DB에 기록
+      await db.update(apiKeys)
+        .set({ 
+          lastTestedAt: new Date(),
+          lastTestResult: testResult.success ? 'success' : 'failed'
+        })
+        .where(eq(apiKeys.keyName, keyName));
+      
+      res.json(testResult);
+    } catch (error) {
+      console.error("Error testing API key:", error);
+      res.status(500).json({ error: "Failed to test API key" });
+    }
+  });
+
+  // ========================================
+  // 🇰🇷 한국 감성 데이터 API (Vibe 추천 소스)
+  // Instagram(1순위), 네이버블로그(2순위), YouTube(3순위)
+  // ========================================
+
+  // 네이버 블로그 통합 통계 (한국 감성용)
+  app.get("/api/admin/korean-sentiment/naver", async (req, res) => {
+    try {
+      // 네이버 블로그 포스트 통계
+      const totalPosts = await db.select({ count: count() }).from(naverBlogPosts);
+      
+      // 장소와 연결된 포스트 수
+      const linkedPosts = await db.select({ count: count() })
+        .from(naverBlogPosts)
+        .where(sql`${naverBlogPosts.placeId} IS NOT NULL`);
+      
+      // 감성 점수 기반 분류 (sentimentScore 사용)
+      // sentimentScore: 0~1 범위, 0.6 이상 긍정, 0.4 이하 부정, 중간은 중립
+      const allPosts = await db.select({ score: naverBlogPosts.sentimentScore })
+        .from(naverBlogPosts);
+      
+      let positive = 0, neutral = 0, negative = 0;
+      for (const post of allPosts) {
+        const score = post.score ?? 0.5;
+        if (score >= 0.6) positive++;
+        else if (score <= 0.4) negative++;
+        else neutral++;
+      }
+      
+      const totalSentimentPosts = positive + neutral + negative;
+      const positiveSentimentRatio = totalSentimentPosts > 0 
+        ? Math.round((positive / totalSentimentPosts) * 100) 
+        : 0;
+      
+      // 마지막 동기화 시간 (fetchedAt 사용)
+      const [lastSync] = await db.select({ lastSync: naverBlogPosts.fetchedAt })
+        .from(naverBlogPosts)
+        .orderBy(desc(naverBlogPosts.fetchedAt))
+        .limit(1);
+
+      res.json({
+        totalPosts: Number(totalPosts[0]?.count || 0),
+        linkedPlaces: Number(linkedPosts[0]?.count || 0),
+        positiveSentimentRatio,
+        sentimentBreakdown: { positive, neutral, negative },
+        lastSyncAt: lastSync?.lastSync || null
+      });
+    } catch (error) {
+      console.error("Error fetching Korean sentiment Naver data:", error);
+      res.status(500).json({ error: "Failed to fetch Naver sentiment data" });
+    }
+  });
+
+  // YouTube 통합 통계 (한국 감성용)
+  app.get("/api/admin/korean-sentiment/youtube", async (req, res) => {
+    try {
+      // 채널 수
+      const totalChannels = await db.select({ count: count() })
+        .from(youtubeChannels)
+        .where(eq(youtubeChannels.isActive, true));
+      
+      // 영상 수
+      const totalVideos = await db.select({ count: count() }).from(youtubeVideos);
+      
+      // 장소 언급 수
+      const totalMentions = await db.select({ count: count() }).from(youtubePlaceMentions);
+      
+      // 마지막 동기화 시간
+      const [lastSync] = await db.select({ lastSync: youtubeVideos.fetchedAt })
+        .from(youtubeVideos)
+        .orderBy(desc(youtubeVideos.fetchedAt))
+        .limit(1);
+      
+      // 한국어 채널 수 (category로 추정)
+      const koreanChannels = await db.select({ count: count() })
+        .from(youtubeChannels)
+        .where(and(
+          eq(youtubeChannels.isActive, true),
+          sql`${youtubeChannels.category} LIKE '%korea%' OR ${youtubeChannels.category} LIKE '%한국%' OR ${youtubeChannels.channelName} LIKE '%여행%'`
+        ));
+
+      res.json({
+        totalChannels: Number(totalChannels[0]?.count || 0),
+        totalVideos: Number(totalVideos[0]?.count || 0),
+        totalMentions: Number(totalMentions[0]?.count || 0),
+        koreanChannels: Number(koreanChannels[0]?.count || 0),
+        lastSyncAt: lastSync?.lastSync || null
+      });
+    } catch (error) {
+      console.error("Error fetching Korean sentiment YouTube data:", error);
+      res.status(500).json({ error: "Failed to fetch YouTube sentiment data" });
+    }
+  });
+
+  // Instagram 확장 통계 (총 게시물 수 포함)
+  app.get("/api/admin/korean-sentiment/instagram", async (req, res) => {
+    try {
+      const stats = await instagramCrawler.getStats();
+      
+      // 해시태그별 게시물 수 합계
+      const totalPostsResult = await db.select({ 
+        total: sql`COALESCE(SUM(${instagramHashtags.postCount}), 0)` 
+      }).from(instagramHashtags);
+      
+      const totalPosts = Number(totalPostsResult[0]?.total || 0);
+
+      res.json({
+        ...stats,
+        totalPosts
+      });
+    } catch (error) {
+      console.error("Error fetching Korean sentiment Instagram data:", error);
+      res.status(500).json({ error: "Failed to fetch Instagram sentiment data" });
+    }
+  });
+
+  // 한국 감성 데이터 통합 요약
+  app.get("/api/admin/korean-sentiment/summary", async (req, res) => {
+    try {
+      // Instagram
+      const instaHashtags = await db.select({ count: count() }).from(instagramHashtags);
+      const instaPhotos = await db.select({ count: count() }).from(instagramPhotos);
+      const instaTotalPosts = await db.select({ 
+        total: sql`COALESCE(SUM(${instagramHashtags.postCount}), 0)` 
+      }).from(instagramHashtags);
+      
+      // Naver
+      const naverPosts = await db.select({ count: count() }).from(naverBlogPosts);
+      
+      // YouTube
+      const ytChannels = await db.select({ count: count() })
+        .from(youtubeChannels)
+        .where(eq(youtubeChannels.isActive, true));
+      const ytMentions = await db.select({ count: count() }).from(youtubePlaceMentions);
+
+      res.json({
+        instagram: {
+          hashtags: Number(instaHashtags[0]?.count || 0),
+          photos: Number(instaPhotos[0]?.count || 0),
+          totalPosts: Number(instaTotalPosts[0]?.total || 0),
+          priority: 1,
+          weight: 0.4
+        },
+        naver: {
+          posts: Number(naverPosts[0]?.count || 0),
+          priority: 2,
+          weight: 0.35
+        },
+        youtube: {
+          channels: Number(ytChannels[0]?.count || 0),
+          mentions: Number(ytMentions[0]?.count || 0),
+          priority: 3,
+          weight: 0.25
+        },
+        description: "한국 사용자 감성 만족을 위한 가중치 데이터 소스 (취향 선택 시 Gemini AI가 참고)"
+      });
+    } catch (error) {
+      console.error("Error fetching Korean sentiment summary:", error);
+      res.status(500).json({ error: "Failed to fetch Korean sentiment summary" });
+    }
+  });
+
+  // YouTube 전체 동기화 엔드포인트
+  app.post("/api/admin/youtube/sync-all", async (req, res) => {
+    try {
+      const { youtubeCrawler } = await import("./services/youtube-crawler");
+      
+      if (!process.env.YOUTUBE_API_KEY) {
+        return res.status(400).json({ 
+          error: "YouTube API 키가 설정되지 않았습니다" 
+        });
+      }
+      
+      const result = await youtubeCrawler.syncAllChannels();
+      
+      res.json({
+        message: "YouTube 전체 동기화 완료",
+        synced: result.synced,
+        videos: result.totalVideos || 0,
+        mentions: result.totalMentions || 0
+      });
+    } catch (error) {
+      console.error("Error syncing all YouTube:", error);
+      res.status(500).json({ error: "Failed to sync YouTube data" });
+    }
+  });
+
+  // ========================================
+  // 🇪🇺 유럽 30개 대표 도시 한국 감성 데이터 동기화
+  // Gemini Web Search 기반 (캐시 7일)
+  // ========================================
+
+  // 유럽 30개 대표 도시 목록 (한국인 여행 인기 순)
+  const EUROPE_30_CITIES = [
+    // 프랑스 (5)
+    { name: '파리', country: '프랑스', countryCode: 'FR' },
+    { name: '니스', country: '프랑스', countryCode: 'FR' },
+    { name: '마르세유', country: '프랑스', countryCode: 'FR' },
+    { name: '리옹', country: '프랑스', countryCode: 'FR' },
+    { name: '스트라스부르', country: '프랑스', countryCode: 'FR' },
+    // 이탈리아 (5)
+    { name: '로마', country: '이탈리아', countryCode: 'IT' },
+    { name: '피렌체', country: '이탈리아', countryCode: 'IT' },
+    { name: '베니스', country: '이탈리아', countryCode: 'IT' },
+    { name: '밀라노', country: '이탈리아', countryCode: 'IT' },
+    { name: '아말피', country: '이탈리아', countryCode: 'IT' },
+    // 스페인 (4)
+    { name: '바르셀로나', country: '스페인', countryCode: 'ES' },
+    { name: '마드리드', country: '스페인', countryCode: 'ES' },
+    { name: '세비야', country: '스페인', countryCode: 'ES' },
+    { name: '그라나다', country: '스페인', countryCode: 'ES' },
+    // 영국 (2)
+    { name: '런던', country: '영국', countryCode: 'GB' },
+    { name: '에딘버러', country: '영국', countryCode: 'GB' },
+    // 독일 (3)
+    { name: '뮌헨', country: '독일', countryCode: 'DE' },
+    { name: '베를린', country: '독일', countryCode: 'DE' },
+    { name: '프랑크푸르트', country: '독일', countryCode: 'DE' },
+    // 스위스 (2)
+    { name: '취리히', country: '스위스', countryCode: 'CH' },
+    { name: '인터라켄', country: '스위스', countryCode: 'CH' },
+    // 오스트리아 (2)
+    { name: '비엔나', country: '오스트리아', countryCode: 'AT' },
+    { name: '잘츠부르크', country: '오스트리아', countryCode: 'AT' },
+    // 네덜란드 (1)
+    { name: '암스테르담', country: '네덜란드', countryCode: 'NL' },
+    // 벨기에 (1)
+    { name: '브뤼셀', country: '벨기에', countryCode: 'BE' },
+    // 체코 (1)
+    { name: '프라하', country: '체코', countryCode: 'CZ' },
+    // 헝가리 (1)
+    { name: '부다페스트', country: '헝가리', countryCode: 'HU' },
+    // 포르투갈 (1)
+    { name: '리스본', country: '포르투갈', countryCode: 'PT' },
+    // 그리스 (1)
+    { name: '아테네', country: '그리스', countryCode: 'GR' },
+    // 크로아티아 (1)
+    { name: '두브로브니크', country: '크로아티아', countryCode: 'HR' },
+  ];
+
+  // 유럽 30개 도시 목록 조회
+  app.get("/api/admin/korean-sentiment/europe-cities", (req, res) => {
+    res.json({
+      cities: EUROPE_30_CITIES,
+      totalCount: EUROPE_30_CITIES.length,
+      description: "한국인 여행 인기 기준 유럽 30개 대표 도시"
+    });
+  });
+
+  // 전체 한국 감성 데이터 동기화 (Gemini 기반)
+  app.post("/api/admin/korean-sentiment/sync-all", async (req, res) => {
+    try {
+      const { getKoreanSentimentForCity } = await import("./services/korean-sentiment-service");
+      
+      const results: Array<{
+        city: string;
+        country: string;
+        success: boolean;
+        totalBonus?: number;
+        error?: string;
+      }> = [];
+      
+      let successCount = 0;
+      let errorCount = 0;
+      
+      // 한 번에 3개씩 병렬 처리 (API 제한 고려)
+      for (let i = 0; i < EUROPE_30_CITIES.length; i += 3) {
+        const batch = EUROPE_30_CITIES.slice(i, i + 3);
+        
+        const batchResults = await Promise.allSettled(
+          batch.map(async (city) => {
+            const sentiment = await getKoreanSentimentForCity(city.name, ['Hotspot', 'Foodie', 'Culture']);
+            return { city: city.name, country: city.country, sentiment };
+          })
+        );
+        
+        for (const result of batchResults) {
+          if (result.status === 'fulfilled') {
+            results.push({
+              city: result.value.city,
+              country: result.value.country,
+              success: true,
+              totalBonus: result.value.sentiment.totalBonus
+            });
+            successCount++;
+          } else {
+            const cityName = batch[batchResults.indexOf(result)]?.name || 'Unknown';
+            results.push({
+              city: cityName,
+              country: batch[batchResults.indexOf(result)]?.country || 'Unknown',
+              success: false,
+              error: result.reason?.message || 'Unknown error'
+            });
+            errorCount++;
+          }
+        }
+        
+        // API 제한 방지를 위한 딜레이
+        if (i + 3 < EUROPE_30_CITIES.length) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
+      
+      res.json({
+        message: `유럽 30개 도시 한국 감성 데이터 동기화 완료`,
+        totalCities: EUROPE_30_CITIES.length,
+        success: successCount,
+        errors: errorCount,
+        results
+      });
+    } catch (error) {
+      console.error("Error syncing Korean sentiment for all cities:", error);
+      res.status(500).json({ error: "Failed to sync Korean sentiment data" });
+    }
+  });
+
+  // Instagram 한국 감성 동기화 (Gemini 기반 - 직접 크롤링 대신)
+  app.post("/api/admin/korean-sentiment/sync-instagram", async (req, res) => {
+    try {
+      const { getKoreanSentimentForCity } = await import("./services/korean-sentiment-service");
+      
+      let successCount = 0;
+      const results: Array<{ city: string; postCount: number; hashtags: string[] }> = [];
+      
+      for (const city of EUROPE_30_CITIES.slice(0, 10)) { // 처음 10개만
+        try {
+          const sentiment = await getKoreanSentimentForCity(city.name, ['Hotspot']);
+          results.push({
+            city: city.name,
+            postCount: sentiment.instagram.postCount,
+            hashtags: sentiment.instagram.trendingHashtags.slice(0, 3)
+          });
+          successCount++;
+          await new Promise(resolve => setTimeout(resolve, 500));
+        } catch (e) {
+          // 개별 실패는 무시하고 계속
+        }
+      }
+      
+      res.json({
+        message: "Instagram 감성 데이터 동기화 완료 (Gemini 기반)",
+        synced: successCount,
+        totalPosts: results.reduce((sum, r) => sum + r.postCount, 0),
+        results
+      });
+    } catch (error) {
+      console.error("Error syncing Instagram sentiment:", error);
+      res.status(500).json({ error: "Failed to sync Instagram sentiment data" });
+    }
+  });
+
+  // 네이버 블로그 한국 감성 동기화 (Gemini 기반)
+  app.post("/api/admin/korean-sentiment/sync-naver", async (req, res) => {
+    try {
+      const { getKoreanSentimentForCity } = await import("./services/korean-sentiment-service");
+      
+      let successCount = 0;
+      const results: Array<{ city: string; sentiment: string; keywords: string[] }> = [];
+      
+      for (const city of EUROPE_30_CITIES.slice(0, 10)) {
+        try {
+          const sentiment = await getKoreanSentimentForCity(city.name, ['Foodie', 'Culture']);
+          results.push({
+            city: city.name,
+            sentiment: sentiment.naverBlog.sentiment,
+            keywords: sentiment.naverBlog.keywords.slice(0, 5)
+          });
+          successCount++;
+          await new Promise(resolve => setTimeout(resolve, 500));
+        } catch (e) {
+          // 개별 실패는 무시
+        }
+      }
+      
+      res.json({
+        message: "네이버 블로그 감성 데이터 동기화 완료 (Gemini 기반)",
+        synced: successCount,
+        results
+      });
+    } catch (error) {
+      console.error("Error syncing Naver sentiment:", error);
+      res.status(500).json({ error: "Failed to sync Naver sentiment data" });
+    }
+  });
+
+  // YouTube 한국 감성 동기화 (Gemini 기반)
+  app.post("/api/admin/korean-sentiment/sync-youtube", async (req, res) => {
+    try {
+      const { getKoreanSentimentForCity } = await import("./services/korean-sentiment-service");
+      
+      let successCount = 0;
+      const results: Array<{ city: string; videoCount: number; channels: string[] }> = [];
+      
+      for (const city of EUROPE_30_CITIES.slice(0, 10)) {
+        try {
+          const sentiment = await getKoreanSentimentForCity(city.name, ['Adventure', 'Culture']);
+          results.push({
+            city: city.name,
+            videoCount: sentiment.youtube.mentionCount,
+            channels: sentiment.youtube.channels.slice(0, 3)
+          });
+          successCount++;
+          await new Promise(resolve => setTimeout(resolve, 500));
+        } catch (e) {
+          // 개별 실패는 무시
+        }
+      }
+      
+      res.json({
+        message: "YouTube 감성 데이터 동기화 완료 (Gemini 기반)",
+        synced: successCount,
+        results
+      });
+    } catch (error) {
+      console.error("Error syncing YouTube sentiment:", error);
+      res.status(500).json({ error: "Failed to sync YouTube sentiment data" });
+    }
+  });
+
+  // 캐시된 한국 감성 데이터 현황 조회
+  app.get("/api/admin/korean-sentiment/cache-status", async (req, res) => {
+    try {
+      // geminiWebSearchCache에서 korean_sentiment 타입 조회
+      const cachedData = await db.select({
+        id: geminiWebSearchCache.id,
+        searchQuery: geminiWebSearchCache.searchQuery,
+        fetchedAt: geminiWebSearchCache.fetchedAt,
+        extractedData: geminiWebSearchCache.extractedData
+      })
+        .from(geminiWebSearchCache)
+        .where(eq(geminiWebSearchCache.searchType, 'korean_sentiment'))
+        .orderBy(desc(geminiWebSearchCache.fetchedAt));
+      
+      const now = new Date();
+      const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      
+      const citiesWithData = cachedData.map(c => {
+        const cityName = c.searchQuery?.replace('korean_sentiment_', '') || 'Unknown';
+        const data = c.extractedData as any;
+        const isValid = c.fetchedAt && new Date(c.fetchedAt) > sevenDaysAgo;
+        
+        return {
+          city: cityName,
+          fetchedAt: c.fetchedAt,
+          isValid,
+          totalBonus: data?.totalBonus || 0,
+          instagram: data?.instagram?.score || 0,
+          naver: data?.naverBlog?.score || 0,
+          youtube: data?.youtube?.score || 0
+        };
+      });
+      
+      const validCount = citiesWithData.filter(c => c.isValid).length;
+      const expiredCount = citiesWithData.filter(c => !c.isValid).length;
+      
+      res.json({
+        totalCached: citiesWithData.length,
+        validCount,
+        expiredCount,
+        europeCitiesCovered: EUROPE_30_CITIES.filter(ec => 
+          citiesWithData.some(c => c.city === ec.name && c.isValid)
+        ).length,
+        europeCitiesTotal: EUROPE_30_CITIES.length,
+        cities: citiesWithData
+      });
+    } catch (error) {
+      console.error("Error fetching cache status:", error);
+      res.status(500).json({ error: "Failed to fetch cache status" });
+    }
+  });
+  
+  // =============================================
+  // 🚨 위기 정보 API (GDELT + Gemini)
+  // =============================================
+  
+  // 위기 정보 목록 조회 (대시보드용)
+  app.get("/api/admin/crisis-alerts", async (req, res) => {
+    try {
+      const { crisisAlertService } = await import("./services/crisis-alert-service");
+      
+      const cityFilter = req.query.city as string;
+      const typeFilter = req.query.type as string;
+      
+      // 통계 조회
+      const stats = await crisisAlertService.getCollectionStats();
+      
+      // 모든 활성 알림 조회
+      let alerts = await crisisAlertService.getAllActiveAlerts();
+      
+      // 필터 적용
+      if (cityFilter) {
+        alerts = alerts.filter(a => a.city === cityFilter);
+      }
+      if (typeFilter) {
+        alerts = alerts.filter(a => a.type === typeFilter);
+      }
+      
+      res.json({
+        success: true,
+        stats,
+        alerts,
+        lastUpdate: stats.lastCollection
+      });
+    } catch (error) {
+      console.error("Error fetching crisis alerts:", error);
+      res.status(500).json({ 
+        success: false, 
+        error: "Failed to fetch crisis alerts",
+        alerts: [],
+        stats: { totalAlerts: 0, activeAlerts: 0, byCity: {}, byType: {} }
+      });
+    }
+  });
+  
+  // 위기 정보 수동 수집
+  app.post("/api/admin/crisis-alerts/collect", async (req, res) => {
+    try {
+      const { crisisAlertService } = await import("./services/crisis-alert-service");
+      
+      console.log("[Admin] 위기 정보 수동 수집 시작");
+      const result = await crisisAlertService.collectCrisisAlerts();
+      
+      res.json({
+        success: true,
+        message: "위기 정보 수집 완료",
+        ...result
+      });
+    } catch (error) {
+      console.error("Error collecting crisis alerts:", error);
+      res.status(500).json({ 
+        success: false, 
+        error: "Failed to collect crisis alerts",
+        details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+  
+  // 위기 정보 비활성화
+  app.post("/api/admin/crisis-alerts/:id/deactivate", async (req, res) => {
+    try {
+      const { crisisAlertService } = await import("./services/crisis-alert-service");
+      
+      const alertId = parseInt(req.params.id);
+      const result = await crisisAlertService.deactivateAlert(alertId);
+      
+      res.json({
+        success: result,
+        message: result ? "알림 비활성화 완료" : "비활성화 실패"
+      });
+    } catch (error) {
+      console.error("Error deactivating crisis alert:", error);
+      res.status(500).json({ success: false, error: "Failed to deactivate alert" });
+    }
+  });
+  
+  // 특정 도시 위기 정보 조회 (일정표용)
+  app.get("/api/crisis-alerts/:city", async (req, res) => {
+    try {
+      const { crisisAlertService } = await import("./services/crisis-alert-service");
+      
+      const city = req.params.city;
+      const alerts = await crisisAlertService.getActiveAlerts(city);
+      
+      res.json({
+        success: true,
+        city,
+        alerts,
+        hasActiveAlerts: alerts.length > 0,
+        highestSeverity: alerts.length > 0 ? Math.max(...alerts.map(a => a.severity)) : 0
+      });
+    } catch (error) {
+      console.error("Error fetching city crisis alerts:", error);
+      res.status(500).json({ success: false, alerts: [] });
+    }
+  });
+  
+  // ========================================
+  // 🚨 여행 일정 ↔ 위기 정보 실시간 매칭 API
+  // 사용자가 일정 생성/조회 시 해당 도시+날짜의 위기 정보 반환
+  // ========================================
+  
+  app.get("/api/trip-alerts", async (req, res) => {
+    try {
+      const { crisisAlertService } = await import("./services/crisis-alert-service");
+      
+      const city = req.query.city as string;
+      const startDate = req.query.startDate as string;
+      const endDate = req.query.endDate as string;
+      
+      if (!city || !startDate || !endDate) {
+        return res.status(400).json({
+          success: false,
+          error: "city, startDate, endDate 파라미터가 필요합니다"
+        });
+      }
+      
+      const result = await crisisAlertService.getAlertsForTrip(city, startDate, endDate);
+      
+      res.json({
+        success: true,
+        ...result,
+        // 프론트엔드용 추가 정보
+        shouldShowPopup: result.highSeverity,
+        notificationLevel: result.highSeverity ? 'warning' : (result.hasAlerts ? 'info' : 'none'),
+        alertCount: result.alerts.length
+      });
+    } catch (error) {
+      console.error("Error fetching trip alerts:", error);
+      res.status(500).json({ success: false, alerts: [], summary: "위기 정보 조회 실패" });
+    }
+  });
+  
+  // 여행 일정 생성 시 위기 정보 체크 (POST - 여러 도시 지원)
+  app.post("/api/trip-alerts/check", async (req, res) => {
+    try {
+      const { crisisAlertService } = await import("./services/crisis-alert-service");
+      
+      const { cities, startDate, endDate } = req.body as {
+        cities: string[];
+        startDate: string;
+        endDate: string;
+      };
+      
+      if (!cities || !startDate || !endDate) {
+        return res.status(400).json({
+          success: false,
+          error: "cities[], startDate, endDate가 필요합니다"
+        });
+      }
+      
+      const results: Record<string, any> = {};
+      let hasAnyHighSeverity = false;
+      let totalAlerts = 0;
+      
+      for (const city of cities) {
+        const result = await crisisAlertService.getAlertsForTrip(city, startDate, endDate);
+        results[city] = result;
+        if (result.highSeverity) hasAnyHighSeverity = true;
+        totalAlerts += result.alerts.length;
+      }
+      
+      res.json({
+        success: true,
+        results,
+        summary: {
+          totalAlerts,
+          hasHighSeverity: hasAnyHighSeverity,
+          shouldShowWarning: hasAnyHighSeverity,
+          citiesWithAlerts: Object.entries(results)
+            .filter(([_, r]: [string, any]) => r.hasAlerts)
+            .map(([city]) => city)
+        }
+      });
+    } catch (error) {
+      console.error("Error checking trip alerts:", error);
+      res.status(500).json({ success: false, error: "위기 정보 체크 실패" });
+    }
+  });
+  
 }

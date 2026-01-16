@@ -1,0 +1,32 @@
+# VibeTrip 환경변수 설정 가이드
+
+## 1단계: .env 파일 생성
+
+프로젝트 폴더에 ".env" 파일을 생성하세요.
+(파일 탐색기에서 새 텍스트 파일 만들기 → 이름을 ".env"로 변경)
+
+## 2단계: DATABASE_URL 입력
+
+.env 파일에 다음 내용을 입력하세요:
+
+DATABASE_URL=여기에_Neon_연결문자열_붙여넣기
+
+## DATABASE_URL 찾는 방법
+
+1. Neon 대시보드 접속: https://console.neon.tech/
+2. 프로젝트 선택
+3. "Connection string" 복사
+4. .env 파일에 붙여넣기
+
+예시:
+DATABASE_URL=postgresql://user:pass@ep-xxx.neon.tech/dbname?sslmode=require
+
+## 3단계: 서버 재시작
+
+1. 모든 검은 창 닫기
+2. start-app.bat 다시 실행
+
+## 확인 방법
+
+브라우저에서 http://localhost:5000/admin 접속
+→ 실제 데이터가 표시되면 연결 성공!

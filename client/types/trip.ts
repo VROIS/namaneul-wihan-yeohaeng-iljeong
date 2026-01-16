@@ -6,7 +6,9 @@ export type TravelPace = 'Packed' | 'Normal' | 'Relaxed';
 
 export type MobilityStyle = 'WalkMore' | 'Moderate' | 'Minimal';
 
-export type CompanionType = 'Single' | 'Couple' | 'Family' | 'Group';
+// 누구랑 = 비용 계산의 핵심 로우데이터
+// 혼자(1명), 커플(2명), 가족(3-4명), 대가족(5-7명), 친구들(8명+)
+export type CompanionType = 'Single' | 'Couple' | 'Family' | 'ExtendedFamily' | 'Group';
 
 export type MealLevel = 'Michelin' | 'Trendy' | 'Local' | 'Budget';
 
@@ -35,8 +37,10 @@ export interface TripFormData {
   travelStyle: TravelStyle;
   travelPace: TravelPace;
   mobilityStyle: MobilityStyle;
-  mealLevel: MealLevel;
-  guideOption: GuideOption;
+  mealLevel?: MealLevel;
+  guideOption?: GuideOption;
+  // 교통편 자동 확정 (CompanionType에 따라 자동 설정)
+  transportType?: 'sedan' | 'van' | 'minibus';
 }
 
 export interface Place {
@@ -78,6 +82,22 @@ export interface VibeWeight {
   percentage: number;
 }
 
+// 🚨 위기 정보 타입
+export interface CrisisAlert {
+  id: number;
+  type: 'strike' | 'protest' | 'traffic' | 'weather' | 'security';
+  title: string;
+  titleKo: string;
+  description: string;
+  date: string;
+  endDate?: string;
+  city: string;
+  affected: string[];
+  severity: number; // 1-10
+  recommendation: string;
+  recommendationKo: string;
+}
+
 export interface Itinerary {
   title: string;
   destination: string;
@@ -85,6 +105,8 @@ export interface Itinerary {
   endDate: string;
   days: DayPlan[];
   vibeWeights?: VibeWeight[];
+  // 🚨 위기 정보 (여행 기간 중 해당 도시의 알림)
+  crisisAlerts?: CrisisAlert[];
 }
 
 export const VIBE_OPTIONS: { id: Vibe; label: string; icon: string; baseWeight: number }[] = [
@@ -96,11 +118,23 @@ export const VIBE_OPTIONS: { id: Vibe; label: string; icon: string; baseWeight: 
   { id: 'Culture', label: '문화/예술', icon: 'book-open', baseWeight: 10 },
 ];
 
-export const TRAVEL_STYLE_OPTIONS: { id: TravelStyle; label: string; icon: string; priceLevel: number; transport: string; dining: string; guide: string; placesPerDay: number }[] = [
-  { id: 'Luxury', label: '럭셔리', icon: 'star', priceLevel: 4, transport: 'VIP 전용차량', dining: '미슐랭급', guide: '전담 가이드 동행', placesPerDay: 2 },
-  { id: 'Premium', label: '프리미엄', icon: 'award', priceLevel: 3, transport: '고급 세단', dining: '트렌디 레스토랑', guide: '세단 가이드', placesPerDay: 3 },
-  { id: 'Reasonable', label: '합리적', icon: 'thumbs-up', priceLevel: 2, transport: '우버+대중교통', dining: '현지인 맛집', guide: '워킹 가이드', placesPerDay: 4 },
-  { id: 'Economic', label: '경제적', icon: 'dollar-sign', priceLevel: 1, transport: '대중교통', dining: '스트리트푸드', guide: '없음 (자유)', placesPerDay: 6 },
+// 여행 스타일 = Premium/Luxury 선택시 가이드 가격 포함 (마케팅 접점)
+// ⚠️ mobilityStyle=Minimal과 중복 적용 안 됨 (동일 가격 1회만 스며듦)
+export const TRAVEL_STYLE_OPTIONS: { 
+  id: TravelStyle; 
+  label: string; 
+  icon: string; 
+  priceLevel: number; 
+  transport: string; 
+  dining: string; 
+  guide: string; 
+  placesPerDay: number;
+  includesGuidePrice: boolean;  // 가이드 가격 포함 여부
+}[] = [
+  { id: 'Luxury', label: '럭셔리', icon: 'star', priceLevel: 4, transport: 'VIP 전용차량', dining: '미슐랭급', guide: '전담 가이드 동행', placesPerDay: 2, includesGuidePrice: true },
+  { id: 'Premium', label: '프리미엄', icon: 'award', priceLevel: 3, transport: '고급 세단', dining: '트렌디 레스토랑', guide: '세단 가이드', placesPerDay: 3, includesGuidePrice: true },
+  { id: 'Reasonable', label: '합리적', icon: 'thumbs-up', priceLevel: 2, transport: '우버+대중교통', dining: '현지인 맛집', guide: '워킹 가이드', placesPerDay: 4, includesGuidePrice: false },
+  { id: 'Economic', label: '경제적', icon: 'dollar-sign', priceLevel: 1, transport: '대중교통', dining: '스트리트푸드', guide: '없음 (자유)', placesPerDay: 6, includesGuidePrice: false },
 ];
 
 export const TRAVEL_PACE_OPTIONS: { id: TravelPace; label: string; icon: string; placesPerDay: number; description: string }[] = [
@@ -109,17 +143,42 @@ export const TRAVEL_PACE_OPTIONS: { id: TravelPace; label: string; icon: string;
   { id: 'Relaxed', label: '여유롭게', icon: 'sun', placesPerDay: 3, description: '관광1 + 점심1 + 저녁1' },
 ];
 
-export const MOBILITY_STYLE_OPTIONS: { id: MobilityStyle; label: string; icon: string; radiusKm: number; transport: string }[] = [
-  { id: 'WalkMore', label: '많이 걷기', icon: 'map', radiusKm: 2, transport: '대중교통' },
-  { id: 'Moderate', label: '적당히', icon: 'navigation', radiusKm: 3, transport: '택시/대중교통' },
-  { id: 'Minimal', label: '이동 최소화', icon: 'home', radiusKm: 5, transport: 'VIP 전용차량' },
+// 8️⃣ 이동 스타일 = 교통비 원칙 결정
+// WalkMore/Moderate → Google Maps API 실시간 가격
+// Minimal → 드라이빙 가이드 가격표 적용 (마케팅 접점)
+export const MOBILITY_STYLE_OPTIONS: { 
+  id: MobilityStyle; 
+  label: string; 
+  icon: string; 
+  radiusKm: number; 
+  transport: string;
+  priceSource: 'google_api' | 'guide_price';
+  description: string;
+}[] = [
+  { id: 'WalkMore', label: '많이 걷기', icon: 'map', radiusKm: 2, transport: '대중교통만', priceSource: 'google_api', description: '실시간 대중교통 요금' },
+  { id: 'Moderate', label: '적당히', icon: 'navigation', radiusKm: 3, transport: '대중교통+우버', priceSource: 'google_api', description: '실시간 우버/대중교통 요금' },
+  { id: 'Minimal', label: '이동 최소화', icon: 'home', radiusKm: 5, transport: '드라이빙 가이드', priceSource: 'guide_price', description: '전용 차량 가이드 서비스' },
 ];
 
-export const COMPANION_OPTIONS: { id: CompanionType; label: string; icon: string }[] = [
-  { id: 'Single', label: '혼자', icon: 'user' },
-  { id: 'Couple', label: '커플', icon: 'heart' },
-  { id: 'Family', label: '가족', icon: 'users' },
-  { id: 'Group', label: '친구들', icon: 'users' },
+// 누구랑 → 인원 수 + 교통편 자동 확정의 핵심
+// 프리미엄/럭셔리 선택시: 
+//   혼자~가족(1-4명) → 가이드 승용차
+//   대가족(5-7명) → 밴 가이드
+//   친구들(8명+) → 미니버스
+export const COMPANION_OPTIONS: { 
+  id: CompanionType; 
+  label: string; 
+  icon: string; 
+  minCount: number; 
+  maxCount: number; 
+  defaultCount: number;
+  transportType: 'sedan' | 'van' | 'minibus';
+}[] = [
+  { id: 'Single', label: '혼자', icon: 'user', minCount: 1, maxCount: 1, defaultCount: 1, transportType: 'sedan' },
+  { id: 'Couple', label: '커플', icon: 'heart', minCount: 2, maxCount: 2, defaultCount: 2, transportType: 'sedan' },
+  { id: 'Family', label: '가족', icon: 'users', minCount: 3, maxCount: 4, defaultCount: 4, transportType: 'sedan' },
+  { id: 'ExtendedFamily', label: '대가족', icon: 'home', minCount: 5, maxCount: 7, defaultCount: 6, transportType: 'van' },
+  { id: 'Group', label: '친구들', icon: 'users', minCount: 8, maxCount: 20, defaultCount: 10, transportType: 'minibus' },
 ];
 
 export const CURATION_FOCUS_OPTIONS: { id: CurationFocus; label: string; icon: string }[] = [

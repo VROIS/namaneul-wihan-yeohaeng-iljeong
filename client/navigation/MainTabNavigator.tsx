@@ -1,34 +1,37 @@
 import React from "react";
-import { View, StyleSheet, Platform, useColorScheme } from "react-native";
+import { StyleSheet, Platform, useColorScheme, View } from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Feather } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
+import { useNavigation } from "@react-navigation/native";
 
 import { Brand, Colors } from "@/constants/theme";
 import TripPlannerScreen from "@/screens/TripPlannerScreen";
-import MapScreen from "@/screens/MapScreen";
 import ProfileScreen from "@/screens/ProfileScreen";
 import AdminScreen from "@/screens/AdminScreen";
+import VerificationRequestScreen from "@/screens/VerificationRequestScreen";
+import { useMapToggle } from "@/contexts/MapToggleContext";
 
 export type MainTabParamList = {
   Home: undefined;
   Map: undefined;
-  Plan: undefined;
-  Admin: undefined;
+  Verify: undefined;  // 검증 센터 (센터 위치)
   Profile: undefined;
+  Admin: undefined;
 };
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
-function EmptyPlaceholder() {
+// 🗺️ 지도 토글용 더미 컴포넌트 (실제로 화면 이동 안함)
+function MapTogglePlaceholder() {
   return <View style={{ flex: 1 }} />;
 }
-
 
 export default function MainTabNavigator() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
   const theme = Colors[colorScheme ?? "light"];
+  const { showMap, toggleMap } = useMapToggle();
 
   const getTabBarIcon = (routeName: string, color: string, focused: boolean) => {
     let iconName: keyof typeof Feather.glyphMap;
@@ -40,11 +43,14 @@ export default function MainTabNavigator() {
       case "Map":
         iconName = "map";
         break;
-      case "Admin":
-        iconName = "settings";
+      case "Verify":
+        iconName = "check-circle";  // ✅ 전문가 검증
         break;
       case "Profile":
         iconName = "user";
+        break;
+      case "Admin":
+        iconName = "settings";
         break;
       default:
         iconName = "circle";
@@ -93,6 +99,7 @@ export default function MainTabNavigator() {
           headerTitleAlign: "center",
         })}
       >
+        {/* 📋 일정 (메인) */}
         <Tab.Screen
           name="Home"
           component={TripPlannerScreen}
@@ -101,40 +108,54 @@ export default function MainTabNavigator() {
             headerShown: false,
           }}
         />
+        {/* 🗺️ 지도 토글 버튼 (화면 이동 없이 일정표 내 지도 표시/숨김) */}
         <Tab.Screen
           name="Map"
-          component={MapScreen}
+          component={MapTogglePlaceholder}
           options={{
             tabBarLabel: "지도",
-            headerTitle: "지도",
-          }}
-        />
-        <Tab.Screen
-          name="Plan"
-          component={EmptyPlaceholder}
-          options={{
-            tabBarButton: () => null,
+            headerShown: false,
+            // 지도 활성화 상태에 따라 아이콘 색상 변경
+            tabBarIcon: ({ focused }) => (
+              <Feather 
+                name={showMap ? "x" : "map"} 
+                size={24} 
+                color={showMap ? Brand.primary : theme.textTertiary} 
+              />
+            ),
           }}
           listeners={{
             tabPress: (e) => {
-              e.preventDefault();
+              e.preventDefault();  // 화면 이동 방지
+              toggleMap();         // 지도 토글
             },
           }}
         />
+        {/* ✅ 전문가 검증 (센터) */}
         <Tab.Screen
-          name="Admin"
-          component={AdminScreen}
+          name="Verify"
+          component={VerificationRequestScreen}
           options={{
-            tabBarLabel: "설정",
-            headerTitle: "관리자",
+            tabBarLabel: "전문가",
+            headerTitle: "전문가 검증",
           }}
         />
+        {/* 👤 프로필 */}
         <Tab.Screen
           name="Profile"
           component={ProfileScreen}
           options={{
             tabBarLabel: "프로필",
             headerTitle: "프로필",
+          }}
+        />
+        {/* ⚙️ 설정 (관리자) */}
+        <Tab.Screen
+          name="Admin"
+          component={AdminScreen}
+          options={{
+            tabBarLabel: "설정",
+            headerTitle: "관리자",
           }}
         />
       </Tab.Navigator>

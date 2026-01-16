@@ -10,6 +10,12 @@ interface RouteStep {
   travelMode: string;
 }
 
+interface TransitFare {
+  currencyCode: string;
+  units: string;
+  nanos?: number;
+}
+
 interface RouteResult {
   originPlaceId: number;
   destinationPlaceId: number;
@@ -18,6 +24,7 @@ interface RouteResult {
   durationSeconds: number;
   durationInTraffic?: number;
   estimatedCost: number;
+  transitFare?: TransitFare;  // Google API 실시간 요금
   polyline?: string;
   steps?: RouteStep[];
 }
@@ -30,10 +37,20 @@ interface OptimizedItinerary {
   orderedPlaceIds: number[];
 }
 
+// 유럽 기준 교통비 (EUR)
 const COST_PER_KM: Record<string, number> = {
   DRIVE: 0.5,
-  TAXI: 1.5,
-  TRANSIT: 0.1,
+  TAXI: 2.0,        // 유럽 택시 기본 km당
+  TRANSIT: 0.15,    // 지하철/버스 평균
+  WALK: 0,
+  BICYCLE: 0,
+};
+
+// 교통 기본요금 (EUR)
+const BASE_FARE: Record<string, number> = {
+  DRIVE: 0,
+  TAXI: 4.0,        // 유럽 택시 기본료
+  TRANSIT: 2.0,     // 1회권 평균
   WALK: 0,
   BICYCLE: 0,
 };
@@ -44,6 +61,17 @@ const AVERAGE_SPEED_KMH: Record<string, number> = {
   TRANSIT: 20,
   WALK: 5,
   BICYCLE: 15,
+};
+
+// 도시별 교통비 조정 계수
+const CITY_COST_MULTIPLIER: Record<string, number> = {
+  paris: 1.2,
+  london: 1.5,
+  tokyo: 1.0,
+  seoul: 0.8,
+  rome: 1.0,
+  barcelona: 0.9,
+  default: 1.0,
 };
 
 export class RouteOptimizer {
@@ -73,16 +101,94 @@ export class RouteOptimizer {
     return Math.round(distanceMeters / speedMs);
   }
 
-  private estimateCost(distanceMeters: number, travelMode: string): number {
+  private estimateCost(distanceMeters: number, travelMode: string, cityName?: string): number {
     const distanceKm = distanceMeters / 1000;
     const costPerKm = COST_PER_KM[travelMode] || 0;
+    const baseFare = BASE_FARE[travelMode] || 0;
+    const multiplier = CITY_COST_MULTIPLIER[cityName?.toLowerCase() || "default"] || 1.0;
     
-    if (travelMode === "TAXI") {
-      const baseFare = 4.0;
-      return baseFare + (distanceKm * costPerKm);
+    let cost = baseFare + (distanceKm * costPerKm);
+    
+    // 택시 야간 할증 (20% 추가, 실제로는 시간 기반 계산 필요)
+    // if (travelMode === "TAXI" && isNightTime) cost *= 1.2;
+    
+    return cost * multiplier;
+  }
+
+  /**
+   * 실시간 교통 상황을 고려한 소요시간 계산
+   */
+  async getRouteWithTraffic(
+    originPlace: Place,
+    destinationPlace: Place,
+    travelMode: "DRIVE" | "TRANSIT" | "WALK" | "BICYCLE" | "TAXI" = "TRANSIT",
+    departureTime?: Date
+  ): Promise<RouteResult & { durationWithTraffic?: number; trafficCondition?: string }> {
+    const baseRoute = await this.getRoute(originPlace, destinationPlace, travelMode);
+    
+    if (!this.apiKey || travelMode === "WALK" || travelMode === "BICYCLE") {
+      return baseRoute;
     }
-    
-    return distanceKm * costPerKm;
+
+    try {
+      const actualMode = travelMode === "TAXI" ? "DRIVE" : travelMode;
+      const departure = departureTime || new Date();
+      
+      const response = await fetch("https://routes.googleapis.com/directions/v2:computeRoutes", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Goog-Api-Key": this.apiKey,
+          "X-Goog-FieldMask": "routes.duration,routes.staticDuration,routes.distanceMeters,routes.travelAdvisory",
+        },
+        body: JSON.stringify({
+          origin: {
+            location: {
+              latLng: { latitude: originPlace.latitude, longitude: originPlace.longitude },
+            },
+          },
+          destination: {
+            location: {
+              latLng: { latitude: destinationPlace.latitude, longitude: destinationPlace.longitude },
+            },
+          },
+          travelMode: actualMode,
+          routingPreference: actualMode === "DRIVE" ? "TRAFFIC_AWARE" : undefined,
+          departureTime: departure.toISOString(),
+        }),
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const route = data.routes?.[0];
+        
+        if (route) {
+          const staticDuration = parseInt(route.staticDuration?.replace("s", "") || "0");
+          const durationWithTraffic = parseInt(route.duration?.replace("s", "") || "0");
+          
+          // 교통 상황 분석
+          let trafficCondition = "normal";
+          if (durationWithTraffic > staticDuration * 1.5) {
+            trafficCondition = "heavy";
+          } else if (durationWithTraffic > staticDuration * 1.2) {
+            trafficCondition = "moderate";
+          } else if (durationWithTraffic < staticDuration * 0.9) {
+            trafficCondition = "light";
+          }
+
+          return {
+            ...baseRoute,
+            durationInTraffic: durationWithTraffic,
+            durationWithTraffic,
+            trafficCondition,
+          };
+        }
+      }
+    } catch (error) {
+      console.error("Traffic-aware routing error:", error);
+    }
+
+    return baseRoute;
   }
 
   async getRoute(
@@ -114,12 +220,17 @@ export class RouteOptimizer {
 
     if (this.apiKey) {
       try {
+        // TRANSIT 모드일 때는 실시간 요금 정보 요청
+        const fieldMask = actualMode === "TRANSIT"
+          ? "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs.steps,routes.travelAdvisory.transitFare"
+          : "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs.steps";
+
         const response = await fetch("https://routes.googleapis.com/directions/v2:computeRoutes", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             "X-Goog-Api-Key": this.apiKey,
-            "X-Goog-FieldMask": "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs.steps",
+            "X-Goog-FieldMask": fieldMask,
           },
           body: JSON.stringify({
             origin: {
@@ -144,7 +255,18 @@ export class RouteOptimizer {
           if (route) {
             const distanceMeters = route.distanceMeters || 0;
             const durationSeconds = parseInt(route.duration?.replace("s", "") || "0");
-            const estimatedCost = this.estimateCost(distanceMeters, travelMode);
+            
+            // Google API에서 실시간 요금 가져오기 (TRANSIT 모드)
+            const transitFare = route.travelAdvisory?.transitFare as TransitFare | undefined;
+            
+            // 실시간 요금이 있으면 사용, 없으면 추정
+            let estimatedCost: number;
+            if (transitFare && transitFare.units) {
+              estimatedCost = parseFloat(transitFare.units) + (transitFare.nanos ? transitFare.nanos / 1e9 : 0);
+              console.log(`[RouteOptimizer] Real-time transit fare: ${estimatedCost} ${transitFare.currencyCode}`);
+            } else {
+              estimatedCost = this.estimateCost(distanceMeters, travelMode);
+            }
 
             const result: RouteResult = {
               originPlaceId: originPlace.id,
@@ -153,6 +275,7 @@ export class RouteOptimizer {
               distanceMeters,
               durationSeconds,
               estimatedCost,
+              transitFare,
               polyline: route.polyline?.encodedPolyline,
             };
 

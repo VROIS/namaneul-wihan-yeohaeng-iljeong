@@ -1,0 +1,4 @@
+Parsing SQL file...
+Total lines: 4641
+Found 32 tables to import
+

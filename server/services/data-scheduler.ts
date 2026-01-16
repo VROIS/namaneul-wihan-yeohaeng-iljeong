@@ -36,18 +36,52 @@ export class DataScheduler {
 
     this.isRunning = true;
     console.log("[Scheduler] Data collection scheduler initialized");
+    
+    // 🚨 서버 시작 시 위기 정보 즉시 수집 (1분 후)
+    setTimeout(async () => {
+      console.log("[Scheduler] 🚨 서버 시작 - 위기 정보 즉시 수집 시작...");
+      await this.executeTask("crisis_sync");
+    }, 60000); // 1분 후 실행 (API 키 로드 대기)
   }
 
   private scheduleDefaultTasks(): void {
-    this.scheduleTask("youtube_sync", "0 18 * * *");
-    this.scheduleTask("instagram_sync", "30 18 * * *");
-    this.scheduleTask("price_sync", "45 18 * * *");
-    this.scheduleTask("crisis_sync", "0 19 * * *");
-    this.scheduleTask("naver_blog_sync", "15 19 * * *");
-    this.scheduleTask("weather_sync", "30 19 * * *");
-    this.scheduleTask("tripadvisor_sync", "45 19 * * *");
-    this.scheduleTask("exchange_rate_sync", "0 0 * * *");
-    console.log("[Scheduler] Default tasks scheduled (3AM-5AM KST)");
+    // ============================================
+    // 📅 자동 수집 스케줄 (KST 기준)
+    // ============================================
+    
+    // 🌤️ 날씨: 매 시간 (실시간성 중요)
+    this.scheduleTask("weather_sync", "0 * * * *");         // 매 시간 정각
+    
+    // 💱 환율: 하루 3번 (오전/오후/저녁)
+    this.scheduleTask("exchange_rate_sync", "0 0,8,16 * * *"); // 09:00, 17:00, 01:00 KST
+    
+    // 🚨 위기 정보: 30분마다 (실시간성 매우 중요!)
+    this.scheduleTask("crisis_sync", "*/30 * * * *");       // 매 30분
+    
+    // 📺 YouTube: 하루 2번
+    this.scheduleTask("youtube_sync", "0 3,15 * * *");      // 12:00, 00:00 KST
+    
+    // 📝 블로그: 하루 2번
+    this.scheduleTask("naver_blog_sync", "30 3,15 * * *");  // 12:30, 00:30 KST
+    this.scheduleTask("tistory_sync", "45 3,15 * * *");     // 12:45, 00:45 KST
+    
+    // 📸 인스타그램: 하루 2번
+    this.scheduleTask("instagram_sync", "0 4,16 * * *");    // 13:00, 01:00 KST
+    
+    // 🍽️ 미쉐린/TripAdvisor: 하루 1번 (새벽)
+    this.scheduleTask("michelin_sync", "0 19 * * *");       // 04:00 KST
+    this.scheduleTask("tripadvisor_sync", "30 19 * * *");   // 04:30 KST
+    
+    // 💰 가격: 하루 2번
+    this.scheduleTask("price_sync", "0 5,17 * * *");        // 14:00, 02:00 KST
+    
+    console.log("[Scheduler] ✅ 자동 수집 스케줄 설정 완료:");
+    console.log("  - 날씨: 매 시간");
+    console.log("  - 환율: 하루 3번");
+    console.log("  - 위기 정보: 6시간마다");
+    console.log("  - YouTube/블로그: 하루 2번");
+    console.log("  - 인스타그램: 하루 2번");
+    console.log("  - 미쉐린/TripAdvisor: 하루 1번");
   }
 
   private scheduleTask(taskName: string, cronExpression: string): void {
@@ -104,8 +138,14 @@ export class DataScheduler {
         case "tripadvisor_sync":
           result = await this.runTripAdvisorSync();
           break;
+        case "michelin_sync":
+          result = await this.runMichelinSync();
+          break;
         case "exchange_rate_sync":
           result = await this.runExchangeRateSync();
+          break;
+        case "tistory_sync":
+          result = await this.runTistorySync();
           break;
         default:
           console.warn(`[Scheduler] Unknown task: ${taskName}`);
@@ -182,14 +222,22 @@ export class DataScheduler {
 
   private async runCrisisSync(): Promise<{ success: boolean; itemsProcessed: number; errors: string[] }> {
     try {
-      const { crawlCrisisAlerts } = await import("./crisis-crawler");
-      const result = await crawlCrisisAlerts();
+      const { crisisAlertService } = await import("./crisis-alert-service");
+      
+      // 1. 만료된 알림 자동 정리 (DB 폭발 방지)
+      const cleanup = await crisisAlertService.cleanupExpiredAlerts();
+      console.log(`[CrisisSync] 🧹 정리: ${cleanup.deleted}개 삭제`);
+      
+      // 2. 새로운 GDELT + Gemini 기반 위기 정보 수집
+      const result = await crisisAlertService.collectCrisisAlerts();
+      
       return {
-        success: result.success,
-        itemsProcessed: result.alertsCreated,
+        success: true,
+        itemsProcessed: result.savedAlerts,
         errors: [],
       };
     } catch (error: any) {
+      console.error("[CrisisSync] 위기 정보 수집 실패:", error);
       return { success: false, itemsProcessed: 0, errors: [error.message] };
     }
   }
@@ -250,6 +298,34 @@ export class DataScheduler {
     }
   }
 
+  private async runMichelinSync(): Promise<{ success: boolean; itemsProcessed: number; errors: string[] }> {
+    try {
+      const { crawlAllMichelin } = await import("./michelin-crawler");
+      const result = await crawlAllMichelin();
+      return {
+        success: result.success,
+        itemsProcessed: result.totalCollected,
+        errors: [],
+      };
+    } catch (error: any) {
+      return { success: false, itemsProcessed: 0, errors: [error.message] };
+    }
+  }
+
+  private async runTistorySync(): Promise<{ success: boolean; itemsProcessed: number; errors: string[] }> {
+    try {
+      const { crawlAllTistory } = await import("./tistory-crawler");
+      const result = await crawlAllTistory();
+      return {
+        success: result.success,
+        itemsProcessed: result.totalPosts + result.totalPlaces,
+        errors: [],
+      };
+    } catch (error: any) {
+      return { success: false, itemsProcessed: 0, errors: [error.message] };
+    }
+  }
+
   async runNow(taskName: string): Promise<{ success: boolean; message: string }> {
     console.log(`[Scheduler] Manual trigger for task: ${taskName}`);
     try {
@@ -272,9 +348,11 @@ export class DataScheduler {
       const expressions: { [key: string]: string } = {
         youtube_sync: "매일 03:00 KST",
         instagram_sync: "매일 03:30 KST",
+        michelin_sync: "매일 03:40 KST",
         price_sync: "매일 03:45 KST",
         crisis_sync: "매일 04:00 KST",
         naver_blog_sync: "매일 04:15 KST",
+        tistory_sync: "매일 04:20 KST",
         weather_sync: "매일 04:30 KST",
         tripadvisor_sync: "매일 04:45 KST",
         exchange_rate_sync: "매일 09:00 KST",

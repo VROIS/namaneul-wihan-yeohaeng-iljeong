@@ -165,16 +165,39 @@ export const Fonts = Platform.select({
   },
 });
 
+// Vibe Score 색상 (10점 만점 기준)
 export function getVibeScoreColor(score: number): string {
-  if (score >= 24) return Brand.primary;
-  if (score >= 15) return Brand.luxuryGold;
-  return "#9CA3AF";
+  if (score >= 8.0) return "#8B5CF6"; // 보라색 - Excellent
+  if (score >= 5.0) return "#F97316"; // 주황색 - Good
+  return "#6B7280"; // 회색 - Average
 }
 
+// Vibe Score 그라데이션 (10점 만점 기준)
 export function getVibeScoreGradient(score: number): string[] {
-  if (score >= 24) return Brand.gradient;
-  if (score >= 15) return ["#F59E0B", "#FBBF24"];
-  return ["#9CA3AF", "#D1D5DB"];
+  if (score >= 8.0) return ["#8B5CF6", "#A78BFA"]; // 보라색 그라데이션 - Excellent
+  if (score >= 5.0) return ["#F97316", "#FB923C"]; // 주황색 그라데이션 - Good
+  return ["#6B7280", "#9CA3AF"]; // 회색 그라데이션 - Average
+}
+
+// Vibe Score 레벨 (10점 만점 기준)
+export function getVibeScoreLevel(score: number): "excellent" | "good" | "average" {
+  if (score >= 8.0) return "excellent";
+  if (score >= 5.0) return "good";
+  return "average";
+}
+
+// Vibe Score 레벨 라벨
+export function getVibeScoreLabel(score: number): string {
+  if (score >= 8.0) return "Excellent";
+  if (score >= 5.0) return "Good";
+  return "Average";
+}
+
+// Vibe Score 레벨 라벨 (한국어)
+export function getVibeScoreLabelKo(score: number): string {
+  if (score >= 8.0) return "우수";
+  if (score >= 5.0) return "양호";
+  return "보통";
 }
 
 export function normalizeScoreForDisplay(rawScore: number, maxScore: number = 30): number {
