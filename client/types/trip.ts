@@ -67,6 +67,23 @@ export interface Place {
   };
   image: string;
   priceEstimate: string;
+  // 💰 실시간 가격 정보 (백엔드에서 계산)
+  entranceFee?: number;        // 1인당 입장료 (EUR)
+  entranceFeeTotal?: number;   // 인원수 × 입장료
+  isMeal?: boolean;            // 식사 장소 여부
+  mealPrice?: number;          // 식사 예상 가격
+}
+
+// 🚇 이동 구간 정보
+export interface TransitInfo {
+  from: string;
+  to: string;
+  mode: 'walk' | 'metro' | 'bus' | 'uber' | 'taxi' | 'guide';
+  modeLabel: string;           // "지하철", "도보", "우버" 등
+  duration: number;            // 분 단위
+  durationText: string;        // "15분"
+  cost: number;                // 1인당 비용
+  costTotal: number;           // 인원수 × 비용
 }
 
 export interface DayPlan {
@@ -98,6 +115,16 @@ export interface CrisisAlert {
   recommendationKo: string;
 }
 
+// 💰 전체 예산 정보
+export interface BudgetTotals {
+  transport: number;
+  meals: number;
+  entranceFees: number;
+  grandTotal: number;
+  perPerson: number;
+  perDay: number;
+}
+
 export interface Itinerary {
   title: string;
   destination: string;
@@ -107,6 +134,17 @@ export interface Itinerary {
   vibeWeights?: VibeWeight[];
   // 🚨 위기 정보 (여행 기간 중 해당 도시의 알림)
   crisisAlerts?: CrisisAlert[];
+  // 💰 예산 정보
+  budget?: {
+    travelStyle: TravelStyle;
+    dailyBreakdowns: DailyBudgetBreakdown[];
+    totals: BudgetTotals;
+  };
+  // 📋 여행 설정 요약
+  companionType?: string;
+  companionCount?: number;
+  travelStyle?: TravelStyle;
+  mobilityStyle?: MobilityStyle;
 }
 
 export const VIBE_OPTIONS: { id: Vibe; label: string; icon: string; baseWeight: number }[] = [

@@ -760,40 +760,18 @@ export default function TripPlannerScreen() {
           )}
         </View>
 
-        {/* 📊 요약 섹션 2: 누구랑 + 바이브 + 예산 + 이동스타일 */}
-        <View style={[styles.tripOptionsRow, { backgroundColor: theme.backgroundDefault }]}>
-          {itinerary.companionType && (
-            <View style={[styles.tripOptionBadge, { backgroundColor: `${Brand.primary}15` }]}>
-              <Text style={[styles.tripOptionText, { color: Brand.primary }]}>
-                👨‍👩‍👧‍👦 {itinerary.companionType}
-              </Text>
-            </View>
-          )}
-          {itinerary.travelStyle && (
-            <View style={[styles.tripOptionBadge, { backgroundColor: `${Brand.primary}15` }]}>
-              <Text style={[styles.tripOptionText, { color: Brand.primary }]}>
-                💰 {itinerary.travelStyle}
-              </Text>
-            </View>
-          )}
-          {itinerary.mobilityStyle && (
-            <View style={[styles.tripOptionBadge, { backgroundColor: `${Brand.primary}15` }]}>
-              <Text style={[styles.tripOptionText, { color: Brand.primary }]}>
-                🚶 {itinerary.mobilityStyle}
-              </Text>
-            </View>
-          )}
+        {/* 📊 요약 섹션 2: "누구를 위한 X 여행" */}
+        <View style={[styles.tripOptionsRow, { backgroundColor: `${Brand.primary}08` }]}>
+          <Text style={[styles.tripDescriptionText, { color: theme.text }]}>
+            {(() => {
+              // 누구를 위한
+              const companion = itinerary.companionType || "나";
+              // 바이브에서 주요 2개 추출
+              const vibes = itinerary.vibeWeights?.slice(0, 2).map(v => getVibeLabel(v.vibe)).join("과 ") || "힐링";
+              return `👨‍👩‍👧‍👦 ${companion}을 위한 ${vibes} 여행`;
+            })()}
+          </Text>
         </View>
-
-        {/* 🎯 바이브 가중치 요약 */}
-        {itinerary.vibeWeights && itinerary.vibeWeights.length > 0 && (
-          <View style={[styles.vibeWeightsSummary, { backgroundColor: `${Brand.primary}10` }]}>
-            <Feather name="target" size={16} color={Brand.primary} />
-            <Text style={[styles.vibeWeightsSummaryText, { color: Brand.primary }]}>
-              {formatVibeWeightsSummary(itinerary.vibeWeights)}
-            </Text>
-          </View>
-        )}
 
         {/* 🗺️ 지도 섹션 - showMap 토글에 따라 표시/숨김 */}
         {showMap && (
@@ -839,17 +817,10 @@ export default function TripPlannerScreen() {
 
         <ScrollView
           style={styles.resultScrollView}
-          contentContainerStyle={{ paddingBottom: insets.bottom + Spacing.xl }}
+          contentContainerStyle={{ paddingBottom: insets.bottom + Spacing.lg }}
           showsVerticalScrollIndicator={false}
         >
-          <Pressable 
-            style={[styles.summaryBox, { backgroundColor: Brand.primary }]}
-            onPress={() => navigation.navigate("VerificationRequest", { itinerary })}
-          >
-            <Feather name="check-circle" size={16} color="#FFFFFF" />
-            <Text style={styles.summaryText}>현지 전문가 검증 요청</Text>
-            <Feather name="chevron-right" size={16} color="rgba(255,255,255,0.7)" />
-          </Pressable>
+          {/* CTA 버튼 삭제됨 - 하단 탭 "전문가"로 이동 */}
 
           <View style={styles.placesList}>
             {places.map((place, index) => {
@@ -857,82 +828,152 @@ export default function TripPlannerScreen() {
               const starRating = Math.min(5, Math.max(0, Math.round((place.vibeScore || 0) / 2)));
               const stars = "⭐".repeat(starRating) + "☆".repeat(5 - starRating);
               
-              // 식사 여부 판단
-              const isMeal = place.name?.includes("점심") || place.name?.includes("저녁") || 
+              // 식사 여부 판단 (백엔드에서 isMeal 제공 또는 이름으로 판단)
+              const isMeal = place.isMeal || place.name?.includes("점심") || place.name?.includes("저녁") || 
                              place.name?.includes("아침") || place.name?.includes("식사") ||
                              place.name?.includes("카페") || place.name?.includes("레스토랑");
               
+              // 이동 구간 정보 (백엔드에서 제공)
+              const dayTransits = currentDay?.transit?.transits || [];
+              const transitInfo = dayTransits[index]; // index번째 장소에서 다음 장소로의 이동
+              const hasTransit = index < places.length - 1;
+              
+              // 인원수 (itinerary에서 가져오기)
+              const companionCount = itinerary.companionCount || 1;
+              
+              // 가격 정보
+              const entranceFee = place.entranceFee || 0;
+              const entranceFeeTotal = place.entranceFeeTotal || (entranceFee * companionCount);
+              
               return (
-                <View key={place.id} style={styles.placeItem}>
-                  {/* 타임라인 좌측 */}
-                  <View style={styles.timelineLeft}>
-                    <View style={[styles.placeNumber, { backgroundColor: isMeal ? "#F59E0B" : Brand.primary }]}>
-                      <Text style={styles.placeNumberText}>{index + 1}</Text>
-                    </View>
-                    {index < places.length - 1 && (
-                      <View style={[styles.timelineLine, { backgroundColor: theme.border }]} />
-                    )}
-                  </View>
-                  
+                <View key={place.id}>
                   {/* 장소 카드 */}
-                  <View style={[styles.placeCard, { backgroundColor: theme.backgroundDefault }]}>
-                    <View style={styles.placeCardContent}>
-                      {/* 썸네일 이미지 */}
-                      {place.image ? (
-                        <View style={styles.placeThumbnail}>
-                          <View style={[styles.placeThumbnailPlaceholder, { backgroundColor: theme.backgroundSecondary }]}>
-                            <Feather name={isMeal ? "coffee" : "camera"} size={20} color={theme.textTertiary} />
-                          </View>
-                        </View>
-                      ) : (
+                  <View style={styles.placeItem}>
+                    {/* 타임라인 좌측 */}
+                    <View style={styles.timelineLeft}>
+                      <View style={[styles.placeNumber, { backgroundColor: isMeal ? "#F59E0B" : Brand.primary }]}>
+                        <Text style={styles.placeNumberText}>{index + 1}</Text>
+                      </View>
+                      {hasTransit && (
+                        <View style={[styles.timelineLine, { backgroundColor: theme.border }]} />
+                      )}
+                    </View>
+                    
+                    {/* 장소 카드 */}
+                    <View style={[styles.placeCard, { backgroundColor: theme.backgroundDefault }]}>
+                      <View style={styles.placeCardContent}>
+                        {/* 썸네일 이미지 */}
                         <View style={styles.placeThumbnail}>
                           <View style={[styles.placeThumbnailPlaceholder, { backgroundColor: theme.backgroundSecondary }]}>
                             <Feather name={isMeal ? "coffee" : "map-pin"} size={20} color={theme.textTertiary} />
                           </View>
                         </View>
-                      )}
-                      
-                      {/* 장소 정보 */}
-                      <View style={styles.placeInfo}>
-                        {/* 장소명 + 별점 */}
-                        <View style={styles.placeHeader}>
-                          <Text style={[styles.placeName, { color: theme.text }]} numberOfLines={1}>
-                            {isMeal ? "🍽️ " : ""}{place.name}
-                          </Text>
+                        
+                        {/* 장소 정보 */}
+                        <View style={styles.placeInfo}>
+                          {/* 장소명 */}
+                          <View style={styles.placeHeader}>
+                            <Text style={[styles.placeName, { color: theme.text }]} numberOfLines={1}>
+                              {isMeal ? "🍽️ " : ""}{place.name}
+                            </Text>
+                          </View>
+                          
+                          {/* 별점 표시 */}
+                          <Text style={styles.placeStars}>{stars}</Text>
+                          
+                          {/* 시간 */}
+                          <View style={styles.placeTimeRow}>
+                            <Feather name="clock" size={12} color={theme.textSecondary} />
+                            <Text style={[styles.placeTimeText, { color: theme.textSecondary }]}>
+                              {place.startTime} - {place.endTime}
+                            </Text>
+                          </View>
+                          
+                          {/* 가격 정보 - 실시간 데이터 */}
+                          <View style={styles.placePriceRow}>
+                            <Feather name={isMeal ? "credit-card" : "tag"} size={12} color={Brand.primary} />
+                            <Text style={[styles.placePriceText, { color: Brand.primary }]}>
+                              {isMeal 
+                                ? `💰 식사: €${place.mealPrice || itinerary.budget?.dailyBreakdowns?.[activeDay]?.meals || '??'}`
+                                : entranceFee > 0 
+                                  ? `🎫 €${entranceFee} × ${companionCount}인 = €${entranceFeeTotal.toFixed(2)}`
+                                  : `🎫 ${place.priceEstimate || '무료'}`
+                              }
+                            </Text>
+                          </View>
+                          
+                          {/* 설명 (있을 경우) */}
+                          {place.personaFitReason && (
+                            <Text style={[styles.placeReason, { color: theme.textSecondary }]} numberOfLines={2}>
+                              {place.personaFitReason}
+                            </Text>
+                          )}
                         </View>
-                        
-                        {/* 별점 표시 */}
-                        <Text style={styles.placeStars}>{stars}</Text>
-                        
-                        {/* 시간 */}
-                        <View style={styles.placeTimeRow}>
-                          <Feather name="clock" size={12} color={theme.textSecondary} />
-                          <Text style={[styles.placeTimeText, { color: theme.textSecondary }]}>
-                            {place.startTime} - {place.endTime}
-                          </Text>
-                        </View>
-                        
-                        {/* 가격 정보 */}
-                        <View style={styles.placePriceRow}>
-                          <Feather name={isMeal ? "credit-card" : "tag"} size={12} color={Brand.primary} />
-                          <Text style={[styles.placePriceText, { color: Brand.primary }]}>
-                            {isMeal ? "💰 식사" : "🎫 입장료"}: {place.priceEstimate || "정보 없음"}
-                          </Text>
-                        </View>
-                        
-                        {/* 설명 (있을 경우) */}
-                        {place.personaFitReason && (
-                          <Text style={[styles.placeReason, { color: theme.textSecondary }]} numberOfLines={2}>
-                            {place.personaFitReason}
-                          </Text>
-                        )}
                       </View>
                     </View>
                   </View>
+                  
+                  {/* 🚇 이동 구간 표시 - 실시간 데이터 */}
+                  {hasTransit && (
+                    <View style={styles.transitSection}>
+                      <View style={[styles.transitLine, { backgroundColor: theme.border }]} />
+                      <View style={[styles.transitCard, { backgroundColor: theme.backgroundSecondary }]}>
+                        <Feather name="navigation" size={14} color={theme.textSecondary} />
+                        <Text style={[styles.transitText, { color: theme.textSecondary }]}>
+                          {transitInfo 
+                            ? `${transitInfo.modeLabel === 'metro' ? '🚇' : transitInfo.modeLabel === 'walk' ? '🚶' : '🚗'} ${transitInfo.modeLabel || '이동'} ${transitInfo.durationText || '??분'} · €${transitInfo.cost?.toFixed(2) || '0'} × ${companionCount}인 = €${transitInfo.costTotal?.toFixed(2) || '0'}`
+                            : `🚶 이동 정보 로딩 중...`
+                          }
+                        </Text>
+                      </View>
+                      <View style={[styles.transitLine, { backgroundColor: theme.border }]} />
+                    </View>
+                  )}
                 </View>
               );
             })}
           </View>
+          
+          {/* 📊 일별 합계 섹션 - 실시간 데이터 */}
+          {(() => {
+            const dayBudget = currentDay?.budget || itinerary.budget?.dailyBreakdowns?.[activeDay];
+            return (
+              <View style={[styles.dailyTotalSection, { backgroundColor: theme.backgroundSecondary }]}>
+                <Text style={[styles.dailyTotalTitle, { color: theme.text }]}>
+                  📊 {activeDay + 1}일차 합계
+                </Text>
+                <View style={styles.dailyTotalRow}>
+                  <View style={styles.dailyTotalItem}>
+                    <Text style={[styles.dailyTotalLabel, { color: theme.textSecondary }]}>🎫 입장료</Text>
+                    <Text style={[styles.dailyTotalValue, { color: theme.text }]}>
+                      €{dayBudget?.entranceFees?.toFixed(2) || '0'}
+                    </Text>
+                  </View>
+                  <View style={styles.dailyTotalItem}>
+                    <Text style={[styles.dailyTotalLabel, { color: theme.textSecondary }]}>🍽️ 식사</Text>
+                    <Text style={[styles.dailyTotalValue, { color: theme.text }]}>
+                      €{dayBudget?.meals?.toFixed(2) || '0'}
+                    </Text>
+                  </View>
+                  <View style={styles.dailyTotalItem}>
+                    <Text style={[styles.dailyTotalLabel, { color: theme.textSecondary }]}>🚇 교통비</Text>
+                    <Text style={[styles.dailyTotalValue, { color: theme.text }]}>
+                      €{dayBudget?.transport?.toFixed(2) || '0'}
+                    </Text>
+                  </View>
+                </View>
+                <View style={[styles.dailyTotalGrand, { borderTopColor: theme.border }]}>
+                  <Text style={[styles.dailyTotalGrandLabel, { color: theme.text }]}>💰 일 합계</Text>
+                  <Text style={[styles.dailyTotalGrandValue, { color: Brand.primary }]}>
+                    €{dayBudget?.subtotal?.toFixed(2) || '0'}
+                  </Text>
+                  <Text style={[styles.dailyTotalPerPerson, { color: theme.textSecondary }]}>
+                    (1인당 €{dayBudget?.perPerson?.toFixed(2) || '0'})
+                  </Text>
+                </View>
+              </View>
+            );
+          })()}
 
         </ScrollView>
       </View>
@@ -1049,65 +1090,71 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    marginHorizontal: Spacing.md,
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.lg,
-    borderRadius: BorderRadius.md,
-    marginBottom: Spacing.sm,
+    marginHorizontal: Spacing.sm,
+    paddingVertical: Spacing.xs,
+    paddingHorizontal: Spacing.sm,
+    borderRadius: BorderRadius.sm,
+    marginBottom: 4,
   },
   tripSummaryItem: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
+    gap: 4,
   },
   tripSummaryText: {
-    fontSize: 13,
-    fontWeight: "600",
-  },
-
-  // 📊 요약 섹션 2: 누구랑 + 바이브 + 예산 + 이동스타일
-  tripOptionsRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: Spacing.sm,
-    marginHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    marginBottom: Spacing.sm,
-  },
-  tripOptionBadge: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 6,
-    borderRadius: BorderRadius.full,
-  },
-  tripOptionText: {
     fontSize: 12,
     fontWeight: "600",
   },
 
+  // 📊 요약 섹션 2: 누구를 위한 X 여행
+  tripOptionsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 4,
+    marginHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    marginBottom: 4,
+  },
+  tripOptionBadge: {
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.full,
+  },
+  tripOptionText: {
+    fontSize: 11,
+    fontWeight: "600",
+  },
+  tripDescriptionText: {
+    fontSize: 14,
+    fontWeight: "700",
+    textAlign: "center",
+    flex: 1,
+  },
+
   // 🗺️ 지도 섹션
   mapSection: { 
-    marginHorizontal: Spacing.md,
-    marginBottom: Spacing.md,
-    borderRadius: BorderRadius.md,
+    marginHorizontal: Spacing.sm,
+    marginBottom: Spacing.xs,
+    borderRadius: BorderRadius.sm,
     overflow: "hidden",
   },
   
-  // 🎯 Vibe 가중치 요약
+  // 🎯 Vibe 가중치 요약 (삭제 - tripOptionsRow로 통합)
   vibeWeightsSummary: { 
     flexDirection: "row", 
     alignItems: "center", 
-    gap: Spacing.sm, 
-    marginHorizontal: Spacing.md, 
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.lg, 
-    borderRadius: BorderRadius.md, 
-    marginBottom: Spacing.md 
+    gap: 4, 
+    marginHorizontal: Spacing.sm, 
+    paddingVertical: 4,
+    paddingHorizontal: Spacing.sm, 
+    borderRadius: BorderRadius.sm, 
+    marginBottom: 4 
   },
-  vibeWeightsSummaryText: { fontSize: 14, fontWeight: "700" }, // 13 → 14
+  vibeWeightsSummaryText: { fontSize: 12, fontWeight: "600" },
   
   // 📅 일자 탭
-  dayTabsContainer: { paddingVertical: Spacing.sm },
-  dayTabs: { paddingHorizontal: Spacing.md, gap: Spacing.sm },
+  dayTabsContainer: { paddingVertical: 4 },
+  dayTabs: { paddingHorizontal: Spacing.sm, gap: 4 },
   dayTab: { 
     paddingHorizontal: Spacing.lg, 
     paddingVertical: Spacing.md, // sm → md (더 큰 터치 영역)
@@ -1135,8 +1182,8 @@ const styles = StyleSheet.create({
   summaryText: { flex: 1, fontSize: 15, fontWeight: "700", color: "#FFFFFF", lineHeight: 22 }, // 13 → 15
   
   // 📍 장소 목록
-  placesList: { paddingHorizontal: Spacing.md },
-  placeItem: { flexDirection: "row", marginBottom: Spacing.xl }, // lg → xl (더 넓은 간격)
+  placesList: { paddingHorizontal: Spacing.sm },
+  placeItem: { flexDirection: "row", marginBottom: Spacing.sm }, // 간격 최소화
   
   // 🔢 타임라인 (좌측 번호)
   timelineLeft: { width: 44, alignItems: "center" }, // 40 → 44
@@ -1153,10 +1200,10 @@ const styles = StyleSheet.create({
   // 🏷️ 장소 카드
   placeCard: { 
     flex: 1, 
-    paddingVertical: Spacing.lg, // md → lg
-    paddingHorizontal: Spacing.lg,
-    borderRadius: BorderRadius.lg, // md → lg
-    marginLeft: Spacing.sm 
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.sm,
+    borderRadius: BorderRadius.md,
+    marginLeft: 4 
   },
   placeHeader: { 
     flexDirection: "row", 
@@ -1180,7 +1227,25 @@ const styles = StyleSheet.create({
     gap: Spacing.sm, // xs → sm
     marginBottom: Spacing.sm // xs → sm
   },
-  placeTimeText: { fontSize: 14, fontWeight: "600" }, // 12 → 14
+  placeTimeText: { fontSize: 14, fontWeight: "600" },
+  
+  // ⭐ 별점
+  placeStars: {
+    fontSize: 12,
+    marginBottom: Spacing.xs,
+  },
+  
+  // 💰 가격
+  placePriceRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
+    marginBottom: Spacing.xs,
+  },
+  placePriceText: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
   
   // 🏷️ Vibe 태그
   vibeTagsRow: { 
@@ -1198,4 +1263,81 @@ const styles = StyleSheet.create({
   
   // 📝 장소 설명
   placeReason: { fontSize: 14, lineHeight: 20 }, // 13/18 → 14/20
+  
+  // 🚇 이동 구간
+  transitSection: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginLeft: 20,
+    marginBottom: Spacing.md,
+  },
+  transitLine: {
+    width: 2,
+    height: 20,
+  },
+  transitCard: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.md,
+    marginHorizontal: Spacing.sm,
+  },
+  transitText: {
+    fontSize: 13,
+    fontWeight: "500",
+  },
+  
+  // 📊 일별 합계
+  dailyTotalSection: {
+    marginHorizontal: Spacing.md,
+    marginTop: Spacing.lg,
+    marginBottom: Spacing.xl,
+    paddingVertical: Spacing.lg,
+    paddingHorizontal: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+  },
+  dailyTotalTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    marginBottom: Spacing.md,
+  },
+  dailyTotalRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginBottom: Spacing.md,
+  },
+  dailyTotalItem: {
+    alignItems: "center",
+    flex: 1,
+  },
+  dailyTotalLabel: {
+    fontSize: 12,
+    marginBottom: 4,
+  },
+  dailyTotalValue: {
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  dailyTotalGrand: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.sm,
+    paddingTop: Spacing.md,
+    borderTopWidth: 1,
+  },
+  dailyTotalGrandLabel: {
+    fontSize: 15,
+    fontWeight: "700",
+  },
+  dailyTotalGrandValue: {
+    fontSize: 20,
+    fontWeight: "800",
+  },
+  dailyTotalPerPerson: {
+    fontSize: 13,
+  },
 });

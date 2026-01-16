@@ -8,6 +8,7 @@ import {
   generateProtagonistSentence, 
   generatePromptContext 
 } from "./protagonist-generator";
+import { routeOptimizer } from "./route-optimizer";
 
 // Lazy initialization - DB에서 API 키 로드 후 사용
 let ai: GoogleGenAI | null = null;
@@ -45,6 +46,18 @@ type CurationFocus = 'Kids' | 'Parents' | 'Everyone' | 'Self';
 interface PaceConfig {
   slotDurationMinutes: number;  // 슬롯 당 소요시간 (이동시간 포함)
   maxSlotsPerDay: number;       // 하루 최대 슬롯 수 (풀타임 12시간 기준)
+}
+
+// === 인원수 계산 (companionType 기반) ===
+function getCompanionCount(companionType: string): number {
+  const mapping: Record<string, number> = {
+    Single: 1,
+    Couple: 2,
+    Family: 4,
+    ExtendedFamily: 8,  // 대가족 8명 (밴)
+    Group: 10,          // 친구 10명 (미니버스)
+  };
+  return mapping[companionType] || 1;
 }
 
 const PACE_CONFIG: Record<TravelPace, PaceConfig> = {
@@ -682,6 +695,14 @@ export async function generateItinerary(formData: TripFormData) {
   // Days 배열 생성
   const days: { day: number; places: any[]; city: string; summary: string; startTime: string; endTime: string }[] = [];
   
+  // 인원수 계산 (companionType 기반)
+  const companionCount = getCompanionCount(formData.companionType || 'Solo');
+  
+  // 이동 수단 결정 (mobilityStyle 기반)
+  const travelMode = formData.mobilityStyle === 'WalkMore' ? 'WALK' as const
+    : formData.mobilityStyle === 'Minimal' ? 'DRIVE' as const
+    : 'TRANSIT' as const;
+  
   for (let d = 1; d <= dayCount; d++) {
     const dayConfig = daySlotsConfig.find(c => c.day === d)!;
     const dayPlaces = schedule
@@ -696,6 +717,63 @@ export async function generateItinerary(formData: TripFormData) {
           status: 'Open' as const,
         },
       }));
+    
+    // 🚇 이동 구간 정보 계산
+    const transits: {
+      from: string;
+      to: string;
+      mode: string;
+      modeLabel: string;
+      duration: number;
+      durationText: string;
+      distance: number;
+      cost: number;
+      costTotal: number;
+    }[] = [];
+    
+    for (let i = 0; i < dayPlaces.length - 1; i++) {
+      const fromPlace = dayPlaces[i];
+      const toPlace = dayPlaces[i + 1];
+      
+      try {
+        // routeOptimizer로 실제 경로 계산
+        const route = await routeOptimizer.getRoute(
+          { id: fromPlace.id, lat: fromPlace.lat, lng: fromPlace.lng, name: fromPlace.name },
+          { id: toPlace.id, lat: toPlace.lat, lng: toPlace.lng, name: toPlace.name },
+          travelMode
+        );
+        
+        const durationMinutes = Math.round(route.durationSeconds / 60);
+        const costPerPerson = route.estimatedCost;
+        
+        transits.push({
+          from: fromPlace.name,
+          to: toPlace.name,
+          mode: travelMode.toLowerCase(),
+          modeLabel: travelMode === 'WALK' ? '도보' 
+            : travelMode === 'TRANSIT' ? '지하철' 
+            : '차량',
+          duration: durationMinutes,
+          durationText: `${durationMinutes}분`,
+          distance: route.distanceMeters,
+          cost: Math.round(costPerPerson * 100) / 100,
+          costTotal: Math.round(costPerPerson * companionCount * 100) / 100,
+        });
+      } catch (error) {
+        // 경로 계산 실패 시 기본값
+        transits.push({
+          from: fromPlace.name,
+          to: toPlace.name,
+          mode: 'walk',
+          modeLabel: '이동',
+          duration: 15,
+          durationText: '약 15분',
+          distance: 1000,
+          cost: 0,
+          costTotal: 0,
+        });
+      }
+    }
     
     const topVibes = dayPlaces
       .flatMap(p => p.vibeTags)
@@ -715,6 +793,11 @@ export async function generateItinerary(formData: TripFormData) {
       summary: `${cityLabel} - ${topVibes.join(' & ')} 중심의 하루`,
       startTime: dayConfig.startTime,
       endTime: dayConfig.endTime,
+      transit: {
+        transits,
+        totalDuration: transits.reduce((sum, t) => sum + t.duration, 0),
+        totalCost: transits.reduce((sum, t) => sum + t.costTotal, 0),
+      },
     });
   }
   
@@ -733,6 +816,11 @@ export async function generateItinerary(formData: TripFormData) {
     days,
     vibeWeights,
     koreanSentimentBonus: koreanSentiment?.totalBonus || 0,
+    // 📋 여행 설정 (프론트엔드에서 사용)
+    companionType: formData.companionType,
+    companionCount,
+    travelStyle: formData.travelStyle,
+    mobilityStyle: formData.mobilityStyle,
     metadata: {
       travelStyle: formData.travelStyle,
       travelPace: travelPace,
@@ -741,6 +829,7 @@ export async function generateItinerary(formData: TripFormData) {
       totalPlaces: schedule.length,
       mobilityStyle: formData.mobilityStyle,
       companionType: formData.companionType,
+      companionCount,
       curationFocus: formData.curationFocus,
       generatedAt: new Date().toISOString(),
       koreanSentimentApplied: !!koreanSentiment,
