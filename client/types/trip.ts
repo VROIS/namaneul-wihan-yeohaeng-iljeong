@@ -72,6 +72,10 @@ export interface Place {
   entranceFeeTotal?: number;   // 인원수 × 입장료
   isMeal?: boolean;            // 식사 장소 여부
   mealPrice?: number;          // 식사 예상 가격
+  // 🍽️ 식사 슬롯 정보 (점심/저녁 강제 배치)
+  isMealSlot?: boolean;        // 점심/저녁 슬롯 여부
+  mealType?: 'lunch' | 'dinner'; // 식사 종류
+  mealPriceLabel?: string;     // "€30 내외" 등
 }
 
 // 🚇 이동 구간 정보

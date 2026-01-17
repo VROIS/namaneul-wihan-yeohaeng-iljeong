@@ -33,6 +33,7 @@ import {
   TRAVEL_PACE_OPTIONS,
   MOBILITY_STYLE_OPTIONS,
   Itinerary,
+  CrisisAlert,
 } from "@/types/trip";
 import { calculateVibeWeights, formatVibeWeightsSummary, getVibeLabel } from "@/utils/vibeCalculator";
 import { apiRequest } from "@/lib/query-client";
@@ -82,6 +83,74 @@ function parseTime(timeStr: string): Date {
   date.setHours(hours, minutes, 0, 0);
   return date;
 }
+
+// 🚨 위기 경보 깜박이는 배너 컴포넌트
+function CrisisAlertBanner({ alerts, onPress }: { alerts: CrisisAlert[]; onPress: () => void }) {
+  const pulseAnim = React.useRef(new Animated.Value(1)).current;
+  
+  React.useEffect(() => {
+    const pulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 0.4,
+          duration: 600,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 600,
+          easing: Easing.inOut(Easing.ease),
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    pulse.start();
+    return () => pulse.stop();
+  }, [pulseAnim]);
+  
+  const highSeverity = alerts.some(a => a.severity >= 7);
+  const bgColor = highSeverity ? "#DC2626" : "#F59E0B";
+  
+  return (
+    <Pressable onPress={onPress}>
+      <Animated.View 
+        style={[
+          crisisStyles.banner,
+          { backgroundColor: bgColor, opacity: pulseAnim }
+        ]}
+      >
+        <Feather name="alert-triangle" size={18} color="#FFFFFF" />
+        <Text style={crisisStyles.bannerText}>
+          {highSeverity ? "⚠️ 주의!" : "📢 참고"} {alerts.length}개 여행 정보
+        </Text>
+        <Feather name="chevron-right" size={18} color="#FFFFFF" />
+      </Animated.View>
+    </Pressable>
+  );
+}
+
+const crisisStyles = StyleSheet.create({
+  banner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    marginHorizontal: 12,
+    marginTop: 8,
+    marginBottom: 4,
+    borderRadius: 8,
+    gap: 8,
+  },
+  bannerText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "700",
+    flex: 1,
+    textAlign: "center",
+  },
+});
 
 export default function TripPlannerScreen() {
   const colorScheme = useColorScheme();
@@ -736,6 +805,23 @@ export default function TripPlannerScreen() {
           </Pressable>
         </View>
 
+        {/* 🚨 위기 경보 배너 - 깜박이는 표시 */}
+        {itinerary.crisisAlerts && itinerary.crisisAlerts.length > 0 && (
+          <CrisisAlertBanner 
+            alerts={itinerary.crisisAlerts} 
+            onPress={() => {
+              const alertMessages = itinerary.crisisAlerts!.slice(0, 5).map((a) => 
+                `• ${a.titleKo || a.title}\n  ${a.date}${a.endDate ? ` ~ ${a.endDate}` : ''}\n  ${a.recommendationKo || a.recommendation}`
+              ).join('\n\n');
+              Alert.alert(
+                `⚠️ ${itinerary.destination} 여행 주의 정보`,
+                `${itinerary.crisisAlerts!.length}개의 주의사항:\n\n${alertMessages}`,
+                [{ text: "확인", style: "default" }]
+              );
+            }}
+          />
+        )}
+
         {/* 📊 요약 섹션 1: 날짜 + 장소수 + 총예산 */}
         <View style={[styles.tripSummaryRow, { backgroundColor: theme.backgroundSecondary }]}>
           <View style={styles.tripSummaryItem}>
@@ -760,17 +846,43 @@ export default function TripPlannerScreen() {
           )}
         </View>
 
-        {/* 📊 요약 섹션 2: "누구를 위한 X 여행" */}
+        {/* 📊 요약 섹션 2: "누구를 위한 X 여행" + 예상 비용 */}
         <View style={[styles.tripOptionsRow, { backgroundColor: `${Brand.primary}08` }]}>
-          <Text style={[styles.tripDescriptionText, { color: theme.text }]}>
-            {(() => {
-              // 누구를 위한
-              const companion = itinerary.companionType || "나";
-              // 바이브에서 주요 2개 추출
-              const vibes = itinerary.vibeWeights?.slice(0, 2).map(v => getVibeLabel(v.vibe)).join("과 ") || "힐링";
-              return `👨‍👩‍👧‍👦 ${companion}을 위한 ${vibes} 여행`;
-            })()}
-          </Text>
+          <View style={styles.tripDescriptionContainer}>
+            <Text style={[styles.tripDescriptionText, { color: theme.text }]}>
+              {(() => {
+                // 누구를 위한
+                const companion = itinerary.companionType || "나";
+                // 바이브에서 주요 2개 추출
+                const vibes = itinerary.vibeWeights?.slice(0, 2).map(v => getVibeLabel(v.vibe)).join("과 ") || "힐링";
+                return `👨‍👩‍👧‍👦 ${companion}을 위한 ${vibes} 여행`;
+              })()}
+            </Text>
+            {/* 💰 예상 비용 표시 */}
+            <View style={styles.estimatedCostBadge}>
+              <Text style={styles.estimatedCostText}>
+                {(() => {
+                  // 예산 계산: 일별 합계가 있으면 사용, 없으면 추정
+                  const budget = itinerary.budget;
+                  if (budget?.totals?.grandTotal) {
+                    return `예상 €${budget.totals.grandTotal.toLocaleString()}`;
+                  }
+                  // 간단 추정: 일수 × TravelStyle별 기준
+                  const dayCount = itinerary.days?.length || 1;
+                  const styleMultiplier = {
+                    Luxury: 400,
+                    Premium: 250,
+                    Reasonable: 150,
+                    Economic: 80,
+                  };
+                  const perDay = styleMultiplier[itinerary.travelStyle as keyof typeof styleMultiplier] || 150;
+                  const companionCount = itinerary.companionCount || 1;
+                  const estimated = dayCount * perDay * companionCount;
+                  return `예상 €${estimated.toLocaleString()}`;
+                })()}
+              </Text>
+            </View>
+          </View>
         </View>
 
         {/* 🗺️ 지도 섹션 - showMap 토글에 따라 표시/숨김 */}
@@ -1128,7 +1240,24 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "700",
     textAlign: "center",
-    flex: 1,
+  },
+  tripDescriptionContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    flexWrap: "wrap",
+  },
+  estimatedCostBadge: {
+    backgroundColor: "#FF6B35",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  estimatedCostText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontWeight: "700",
   },
 
   // 🗺️ 지도 섹션

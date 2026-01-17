@@ -75,6 +75,41 @@ const PACE_CONFIG: Record<TravelPace, PaceConfig> = {
   },
 };
 
+// ===== 식사 슬롯 필수 포함 설정 =====
+// 점심(12:00~14:00), 저녁(18:00~20:00)은 무조건 식당 배치
+// 아침은 제외 (호텔 조식 등 가정)
+interface MealSlotConfig {
+  type: 'lunch' | 'dinner';
+  startHour: number;
+  endHour: number;
+}
+
+const MEAL_SLOTS: MealSlotConfig[] = [
+  { type: 'lunch', startHour: 12, endHour: 14 },
+  { type: 'dinner', startHour: 18, endHour: 20 },
+];
+
+// TravelStyle별 식사 예산 (1인 기준, EUR)
+const MEAL_BUDGET: Record<TravelStyle, { min: number; max: number; label: string }> = {
+  Economic: { min: 8, max: 15, label: '€10 내외' },
+  Reasonable: { min: 20, max: 40, label: '€30 내외' },
+  Premium: { min: 40, max: 70, label: '€50 내외' },
+  Luxury: { min: 60, max: 100, label: '€70 내외' },
+};
+
+/**
+ * 장소가 식당/카페인지 확인
+ */
+function isFoodPlace(place: PlaceResult): boolean {
+  const foodTags = ['restaurant', 'cafe', 'bakery', 'food', 'bar', 'bistro', 'brasserie'];
+  const hasFoodieVibe = place.vibeTags?.includes('Foodie');
+  const hasFoodTag = place.tags?.some(t => foodTags.includes(t.toLowerCase()));
+  const hasFoodType = place.placeTypes?.some(t => foodTags.includes(t.toLowerCase()));
+  const nameHasFood = /레스토랑|식당|카페|비스트로|브라세리|restaurant|cafe|bistro/i.test(place.name);
+  
+  return hasFoodieVibe || hasFoodTag || hasFoodType || nameHasFood;
+}
+
 // 기본 시작/종료 시간 (중간 날짜용)
 const DEFAULT_START_TIME = '09:00';
 const DEFAULT_END_TIME = '21:00';
@@ -470,6 +505,11 @@ JSON 응답 형식:
   ]
 }
 
+【🍽️ 식사 장소 필수 포함】
+- 전체 장소 중 최소 40%는 식당/카페/레스토랑으로 포함해주세요
+- 점심/저녁용 식당은 반드시 "Foodie" vibeTags에 포함
+- 현지인과 한국인 모두에게 인기 있는 맛집 우선
+
 ${formData.destination}의 실제 유명한 장소들을 추천해주세요. 정확히 ${requiredPlaceCount}개 장소를 추천해주세요. 
 도시별로 균형있게 분배하고, 각 도시 내에서는 지역별로 묶어주세요.`;
 
@@ -687,8 +727,8 @@ export async function generateItinerary(formData: TripFormData) {
   
   places = places.sort((a, b) => b.vibeScore - a.vibeScore).slice(0, requiredPlaceCount + 5);
   
-  // ===== 사용자 시간 기반 동적 슬롯 분배 =====
-  const schedule = distributePlacesWithUserTime(places, daySlotsConfig, travelPace);
+  // ===== 사용자 시간 기반 동적 슬롯 분배 (식사 슬롯 강제 포함) =====
+  const schedule = distributePlacesWithUserTime(places, daySlotsConfig, travelPace, formData.travelStyle || 'Reasonable');
   
   console.log(`[Itinerary] 최종 일정: ${schedule.length}개 슬롯`);
   
@@ -703,6 +743,9 @@ export async function generateItinerary(formData: TripFormData) {
     : formData.mobilityStyle === 'Minimal' ? 'DRIVE' as const
     : 'TRANSIT' as const;
   
+  // 식사 예산 정보
+  const mealBudget = MEAL_BUDGET[formData.travelStyle || 'Reasonable'];
+  
   for (let d = 1; d <= dayCount; d++) {
     const dayConfig = daySlotsConfig.find(c => c.day === d)!;
     const dayPlaces = schedule
@@ -711,6 +754,11 @@ export async function generateItinerary(formData: TripFormData) {
         ...s.place,
         startTime: s.startTime,
         endTime: s.endTime,
+        // 🍽️ 식사 슬롯 정보 추가
+        isMealSlot: s.isMealSlot,
+        mealType: s.mealType,
+        mealPrice: s.isMealSlot ? Math.round((mealBudget.min + mealBudget.max) / 2) : undefined,
+        mealPriceLabel: s.isMealSlot ? mealBudget.label : undefined,
         realityCheck: {
           weather: 'Sunny' as const,
           crowd: 'Medium' as const,
@@ -839,41 +887,71 @@ export async function generateItinerary(formData: TripFormData) {
 
 /**
  * 사용자 시간 기반으로 장소를 슬롯에 분배
+ * 🍽️ 점심/저녁 슬롯은 반드시 식당 배치 (핵심 로직)
  */
 function distributePlacesWithUserTime(
   places: PlaceResult[],
   daySlotsConfig: { day: number; startTime: string; endTime: string; slots: number }[],
-  travelPace: TravelPace
-): { day: number; slot: string; place: PlaceResult; startTime: string; endTime: string }[] {
-  const schedule: { day: number; slot: string; place: PlaceResult; startTime: string; endTime: string }[] = [];
+  travelPace: TravelPace,
+  travelStyle: TravelStyle = 'Reasonable'
+): { day: number; slot: string; place: PlaceResult; startTime: string; endTime: string; isMealSlot: boolean; mealType?: 'lunch' | 'dinner' }[] {
+  const schedule: { day: number; slot: string; place: PlaceResult; startTime: string; endTime: string; isMealSlot: boolean; mealType?: 'lunch' | 'dinner' }[] = [];
   const paceConfig = PACE_CONFIG[travelPace];
   
-  // 도시별 그룹핑 및 순서 최적화
-  const cityGroups = groupPlacesByCity(places);
+  // 🍽️ 식당/카페 장소 분리
+  const foodPlaces = places.filter(p => isFoodPlace(p));
+  const nonFoodPlaces = places.filter(p => !isFoodPlace(p));
+  
+  console.log(`[Itinerary] 🍽️ 식사 장소: ${foodPlaces.length}곳, 일반 장소: ${nonFoodPlaces.length}곳`);
+  
+  // 도시별 그룹핑 및 순서 최적화 (일반 장소)
+  const cityGroups = groupPlacesByCity(nonFoodPlaces);
   const orderedCities = optimizeCityOrder(cityGroups);
   
-  const orderedPlaces: PlaceResult[] = [];
+  const orderedNonFoodPlaces: PlaceResult[] = [];
   for (const city of orderedCities) {
     const cityPlaces = cityGroups.get(city) || [];
     cityPlaces.sort((a, b) => b.vibeScore - a.vibeScore);
-    orderedPlaces.push(...cityPlaces);
+    orderedNonFoodPlaces.push(...cityPlaces);
   }
   
-  let placeIndex = 0;
+  // 식당도 도시별 그룹핑
+  const foodCityGroups = groupPlacesByCity(foodPlaces);
+  const orderedFoodPlaces: PlaceResult[] = [];
+  for (const city of orderedCities) {
+    const cityFoodPlaces = foodCityGroups.get(city) || [];
+    cityFoodPlaces.sort((a, b) => b.vibeScore - a.vibeScore);
+    orderedFoodPlaces.push(...cityFoodPlaces);
+  }
+  // 나머지 도시 식당 추가
+  for (const [city, cityFoodPlaces] of foodCityGroups) {
+    if (!orderedCities.includes(city)) {
+      cityFoodPlaces.sort((a, b) => b.vibeScore - a.vibeScore);
+      orderedFoodPlaces.push(...cityFoodPlaces);
+    }
+  }
+  
+  let nonFoodIndex = 0;
+  let foodIndex = 0;
+  
+  // 식사 예산 정보
+  const mealBudget = MEAL_BUDGET[travelStyle];
   
   for (const dayConfig of daySlotsConfig) {
-    const { day, startTime, slots } = dayConfig;
+    const { day, startTime, endTime, slots } = dayConfig;
     
     // 해당 일자의 시간 슬롯 생성
     const [startH, startM] = startTime.split(':').map(Number);
-    let currentMinutes = startH * 60 + startM;
+    const [endH, endM] = endTime.split(':').map(Number);
+    const dayStartMinutes = startH * 60 + startM;
+    const dayEndMinutes = endH * 60 + endM;
+    
+    let currentMinutes = dayStartMinutes;
     
     for (let slotIdx = 0; slotIdx < slots; slotIdx++) {
-      if (placeIndex >= orderedPlaces.length) break;
-      
       const slotStart = minutesToTime(currentMinutes);
       currentMinutes += paceConfig.slotDurationMinutes;
-      const slotEnd = minutesToTime(currentMinutes);
+      const slotEnd = minutesToTime(Math.min(currentMinutes, dayEndMinutes));
       
       // 슬롯 타입 결정 (시간대 기반)
       const slotHour = parseInt(slotStart.split(':')[0]);
@@ -883,19 +961,53 @@ function distributePlacesWithUserTime(
       else if (slotHour < 18) slotType = 'afternoon';
       else slotType = 'evening';
       
-      const place = orderedPlaces[placeIndex];
+      // 🍽️ 점심/저녁 슬롯인지 확인
+      let isMealSlot = false;
+      let mealType: 'lunch' | 'dinner' | undefined;
+      
+      for (const meal of MEAL_SLOTS) {
+        if (slotHour >= meal.startHour && slotHour < meal.endHour) {
+          isMealSlot = true;
+          mealType = meal.type;
+          break;
+        }
+      }
+      
+      let selectedPlace: PlaceResult;
+      
+      if (isMealSlot && foodIndex < orderedFoodPlaces.length) {
+        // 🍽️ 식사 슬롯: 식당 배치
+        selectedPlace = orderedFoodPlaces[foodIndex];
+        foodIndex++;
+        console.log(`[Itinerary] Day ${day} ${mealType}: ${selectedPlace.name} (${mealBudget.label})`);
+      } else if (nonFoodIndex < orderedNonFoodPlaces.length) {
+        // 일반 슬롯: 일반 장소 배치
+        selectedPlace = orderedNonFoodPlaces[nonFoodIndex];
+        nonFoodIndex++;
+      } else if (foodIndex < orderedFoodPlaces.length) {
+        // 일반 장소 소진 시 식당도 사용
+        selectedPlace = orderedFoodPlaces[foodIndex];
+        foodIndex++;
+      } else {
+        // 모든 장소 소진
+        break;
+      }
       
       schedule.push({
         day,
         slot: slotType,
-        place,
+        place: selectedPlace,
         startTime: slotStart,
         endTime: slotEnd,
+        isMealSlot,
+        mealType,
       });
-      
-      placeIndex++;
     }
   }
+  
+  // 식사 슬롯 통계
+  const mealSlots = schedule.filter(s => s.isMealSlot);
+  console.log(`[Itinerary] 🍽️ 총 식사 슬롯: ${mealSlots.length}개 (점심: ${mealSlots.filter(s => s.mealType === 'lunch').length}, 저녁: ${mealSlots.filter(s => s.mealType === 'dinner').length})`);
   
   return schedule;
 }
