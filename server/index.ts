@@ -33,11 +33,14 @@ function setupCors(app: express.Application) {
 
     // 로컬 개발 환경
     origins.add("http://localhost:8081");
+    origins.add("http://localhost:8082");
     origins.add("http://localhost:19006");
     origins.add("http://localhost:19000");
     origins.add("http://127.0.0.1:8081");
+    origins.add("http://127.0.0.1:8082");
     origins.add("http://127.0.0.1:19006");
     origins.add("http://127.0.0.1:19000");
+    origins.add("http://192.168.1.23:8082");
 
     const origin = req.header("origin");
 
@@ -194,9 +197,11 @@ function configureExpoAndLanding(app: express.Application) {
   const distPath = path.resolve(process.cwd(), "dist");
   if (fs.existsSync(distPath)) {
     app.use(express.static(distPath));
-    // SPA 라우팅: 모든 경로에서 index.html 반환
+    // SPA 라우팅: 모든 경로에서 index.html 반환 (단, /admin, /api 제외)
     app.get("*", (req, res, next) => {
       if (req.path.startsWith("/api")) return next();
+      if (req.path.startsWith("/admin")) return next();
+      if (req.path === "/test-video") return next();
       const indexPath = path.join(distPath, "index.html");
       if (fs.existsSync(indexPath)) {
         return res.sendFile(indexPath);
@@ -236,13 +241,12 @@ function setupErrorHandler(app: express.Application) {
   setupRequestLogging(app);
 
   configureExpoAndLanding(app);
-
   const server = await registerRoutes(app);
 
   setupErrorHandler(app);
 
   const port = parseInt(process.env.PORT || "8082", 10);
-  
+
   server.on('error', (err: NodeJS.ErrnoException) => {
     if (err.code === 'EADDRINUSE') {
       console.error(`❌ Port ${port} is already in use. Please stop the other process or use a different port.`);
@@ -253,7 +257,7 @@ function setupErrorHandler(app: express.Application) {
       process.exit(1);
     }
   });
-  
+
   server.listen(
     port,
     "0.0.0.0",

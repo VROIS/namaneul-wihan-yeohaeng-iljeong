@@ -178,20 +178,9 @@ interface PlaceResult {
   region?: string;
 }
 
-interface TimeSlot {
-  slot: 'morning' | 'lunch' | 'afternoon' | 'evening';
-  startTime: string;
-  endTime: string;
-  vibeAffinity: Vibe[];
-}
-
-// 시간대별 Vibe 친화도 (슬롯 타입 판단용)
-const SLOT_VIBE_AFFINITY: Record<'morning' | 'lunch' | 'afternoon' | 'evening', Vibe[]> = {
-  morning: ['Healing', 'Culture', 'Adventure'],
-  lunch: ['Foodie'],
-  afternoon: ['Hotspot', 'Culture', 'Adventure', 'Healing'],
-  evening: ['Foodie', 'Romantic'],
-};
+// 시간대별 Vibe 친화도 (향후 고급 슬롯 매칭에 사용 예정)
+// interface TimeSlot { slot: 'morning' | 'lunch' | 'afternoon' | 'evening'; startTime: string; endTime: string; vibeAffinity: Vibe[]; }
+// const SLOT_VIBE_AFFINITY = { morning: ['Healing', 'Culture', 'Adventure'], lunch: ['Foodie'], afternoon: ['Hotspot', 'Culture', 'Adventure', 'Healing'], evening: ['Foodie', 'Romantic'] };
 
 /**
  * 분(minutes)을 HH:MM 형식으로 변환
@@ -202,21 +191,9 @@ function minutesToTime(minutes: number): string {
   return `${String(Math.min(23, hours)).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
 }
 
-const BASE_WEIGHTS: Record<Vibe, number> = {
-  Healing: 35,
-  Foodie: 25,
-  Hotspot: 15,
-  Culture: 10,
-  Adventure: 10,
-  Romantic: 5,
-};
-
-const PROTAGONIST_ADJUSTMENTS: Record<CurationFocus, Partial<Record<Vibe, number>>> = {
-  Kids: { Adventure: 10, Healing: -5, Culture: -5 },
-  Parents: { Culture: 10, Healing: 5, Adventure: -10 },
-  Everyone: {},
-  Self: {},
-};
+// 🎯 Vibe 기본 가중치 (향후 확장용, 현재 calculateVibeWeights에서 사용)
+// const BASE_WEIGHTS: Record<Vibe, number> = { Healing: 35, Foodie: 25, Hotspot: 15, Culture: 10, Adventure: 10, Romantic: 5 };
+// const PROTAGONIST_ADJUSTMENTS - 향후 고급 개인화에 사용 예정
 
 function calculateVibeWeights(selectedVibes: Vibe[], protagonist: CurationFocus) {
   if (selectedVibes.length === 0) return [];
@@ -419,13 +396,13 @@ async function generatePlacesWithGemini(
     .map(v => `${v.vibe}(${v.percentage}%)`)
     .join(', ');
 
-  // 여행 페이스 한글 변환
+  // 여행 페이스 한글 변환 (프론트엔드 기준 Normal 사용)
   const paceKorean = formData.travelPace === 'Packed' ? '빡빡하게' 
-    : formData.travelPace === 'Moderate' ? '적당히' 
+    : formData.travelPace === 'Normal' ? '보통' 
     : '여유롭게';
   
-  // 페이스 설정
-  const paceConfig = PACE_CONFIG[formData.travelPace || 'Moderate'];
+  // 페이스 설정 (프론트엔드 기준 Normal)
+  const paceConfig = PACE_CONFIG[formData.travelPace || 'Normal'];
   
   // 한국 감성 데이터 섹션 (있으면 추가)
   const sentimentSection = koreanSentiment
@@ -433,6 +410,7 @@ async function generatePlacesWithGemini(
     : '';
 
   // ===== 🎯 주인공 컨텍스트 생성 (가중치 1순위) =====
+  // birthDate: 사용자 본인 생년월일 → 가족 연령 추정에 활용
   const protagonistContext = generatePromptContext({
     curationFocus: (formData.curationFocus as any) || 'Everyone',
     companionType: (formData.companionType as any) || 'Couple',
@@ -440,6 +418,7 @@ async function generatePlacesWithGemini(
     companionAges: formData.companionAges,
     vibes: vibeWeights.map(v => v.vibe),
     destination: formData.destination,
+    birthDate: formData.birthDate,  // 🎯 사용자 연령 → Gemini 프롬프트
   });
   
   // 주인공 문장 (로그 및 저장용)
@@ -450,6 +429,7 @@ async function generatePlacesWithGemini(
     companionAges: formData.companionAges,
     vibes: vibeWeights.map(v => v.vibe),
     destination: formData.destination,
+    birthDate: formData.birthDate,  // 🎯 사용자 연령
   });
   
   console.log(`[Itinerary] 🎯 주인공: ${protagonistInfo.sentence}`);
@@ -937,8 +917,44 @@ function distributePlacesWithUserTime(
   // 식사 예산 정보
   const mealBudget = MEAL_BUDGET[travelStyle];
   
+  // 🍽️ 필요한 식사 슬롯 수 계산 (점심 + 저녁 × 일수)
+  const requiredMealSlots = daySlotsConfig.length * 2; // 매일 점심 + 저녁
+  
+  // 식당 부족 시 기본 식당 생성
+  if (orderedFoodPlaces.length < requiredMealSlots) {
+    const shortage = requiredMealSlots - orderedFoodPlaces.length;
+    console.log(`[Itinerary] ⚠️ 식당 부족 (${orderedFoodPlaces.length}/${requiredMealSlots}), ${shortage}개 기본 식당 생성`);
+    
+    for (let i = 0; i < shortage; i++) {
+      const mealType = i % 2 === 0 ? '점심' : '저녁';
+      const defaultRestaurant: PlaceResult = {
+        id: `default-meal-${Date.now()}-${i}`,
+        name: `${mealType} 식사 추천`,
+        description: `현지 인기 ${mealType === '점심' ? '레스토랑' : '저녁 식당'} - ${mealBudget.label} 예산`,
+        lat: orderedNonFoodPlaces[0]?.lat || 0,
+        lng: orderedNonFoodPlaces[0]?.lng || 0,
+        vibeScore: 7,
+        confidenceScore: 6,
+        sourceType: 'Default',
+        personaFitReason: `${mealBudget.label} 예산에 맞는 현지 맛집`,
+        tags: ['restaurant', 'food'],
+        vibeTags: ['Foodie'],
+        image: '',
+        priceEstimate: mealBudget.label,
+        placeTypes: ['restaurant'],
+        city: orderedNonFoodPlaces[0]?.city,
+        region: orderedNonFoodPlaces[0]?.region,
+      };
+      orderedFoodPlaces.push(defaultRestaurant);
+    }
+  }
+  
   for (const dayConfig of daySlotsConfig) {
     const { day, startTime, endTime, slots } = dayConfig;
+    
+    // 🍽️ 하루에 점심/저녁 각 1개씩만 (이미 배치되면 false)
+    let lunchAssigned = false;
+    let dinnerAssigned = false;
     
     // 해당 일자의 시간 슬롯 생성
     const [startH, startM] = startTime.split(':').map(Number);
@@ -961,16 +977,21 @@ function distributePlacesWithUserTime(
       else if (slotHour < 18) slotType = 'afternoon';
       else slotType = 'evening';
       
-      // 🍽️ 점심/저녁 슬롯인지 확인
+      // 🍽️ 점심/저녁 슬롯인지 확인 (하루에 각 1개씩만!)
       let isMealSlot = false;
       let mealType: 'lunch' | 'dinner' | undefined;
       
-      for (const meal of MEAL_SLOTS) {
-        if (slotHour >= meal.startHour && slotHour < meal.endHour) {
-          isMealSlot = true;
-          mealType = meal.type;
-          break;
-        }
+      // 점심: 12:00~14:00 범위에서 첫 번째 슬롯만
+      if (slotHour >= 12 && slotHour < 14 && !lunchAssigned) {
+        isMealSlot = true;
+        mealType = 'lunch';
+        lunchAssigned = true;
+      }
+      // 저녁: 18:00~20:00 범위에서 첫 번째 슬롯만
+      else if (slotHour >= 18 && slotHour < 20 && !dinnerAssigned) {
+        isMealSlot = true;
+        mealType = 'dinner';
+        dinnerAssigned = true;
       }
       
       let selectedPlace: PlaceResult;

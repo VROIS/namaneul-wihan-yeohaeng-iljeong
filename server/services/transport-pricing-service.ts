@@ -26,8 +26,9 @@
  */
 
 import { db } from '../db';
-import { guidePrices, geminiWebSearchCache } from '../../shared/schema';
-import { eq, and } from 'drizzle-orm';
+import { guidePrices } from '../../shared/schema';
+// geminiWebSearchCache, and - 미사용 제거
+import { eq } from 'drizzle-orm';
 
 // === 타입 정의 ===
 type TransportType = 'sedan' | 'van' | 'minibus' | 'guide_only';

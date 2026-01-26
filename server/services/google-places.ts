@@ -1,7 +1,11 @@
 import { storage } from "../storage";
 import type { InsertPlace, PlaceDataSource } from "@shared/schema";
 
-const GOOGLE_MAPS_API_KEY = process.env.Google_maps_api_key || process.env.GOOGLE_MAPS_API_KEY;
+// 🎯 동적으로 API 키 가져오기 (DB에서 로드 후 process.env에 설정됨)
+function getGoogleMapsApiKey(): string {
+  return process.env.Google_maps_api_key || process.env.GOOGLE_MAPS_API_KEY || "";
+}
+
 const GOOGLE_PLACES_BASE_URL = "https://places.googleapis.com/v1/places";
 
 interface GooglePlaceResult {
@@ -123,17 +127,21 @@ interface SearchNearbyResponse {
 interface PlaceDetailsResponse extends GooglePlaceResult {}
 
 export class GooglePlacesFetcher {
-  private apiKey: string;
+  // 🎯 API 키를 동적으로 가져옴 (DB에서 로드 후 사용 가능)
+  private getApiKey(): string {
+    return getGoogleMapsApiKey();
+  }
 
   constructor() {
-    this.apiKey = GOOGLE_MAPS_API_KEY || "";
-    if (!this.apiKey) {
+    // 초기화 시점에 경고만 출력 (실제 사용 시 다시 확인)
+    if (!this.getApiKey()) {
       console.warn("GOOGLE_MAPS_API_KEY is not set. Google Places API will not work.");
     }
   }
 
   private async makeRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    if (!this.apiKey) {
+    const apiKey = this.getApiKey();
+    if (!apiKey) {
       throw new Error("Google Maps API key is not configured");
     }
 
@@ -141,7 +149,7 @@ export class GooglePlacesFetcher {
       ...options,
       headers: {
         "Content-Type": "application/json",
-        "X-Goog-Api-Key": this.apiKey,
+        "X-Goog-Api-Key": apiKey,
         ...options.headers,
       },
     });
@@ -308,7 +316,7 @@ export class GooglePlacesFetcher {
   }
 
   async getPhotoUrl(photoName: string, maxWidth: number = 400): Promise<string> {
-    return `https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=${maxWidth}&key=${this.apiKey}`;
+    return `https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=${maxWidth}&key=${this.getApiKey()}`;
   }
 
   async fetchAndStorePlace(
@@ -327,7 +335,7 @@ export class GooglePlacesFetcher {
     };
 
     const photoUrls = googlePlace.photos?.slice(0, 10).map(p => 
-      `https://places.googleapis.com/v1/${p.name}/media?maxWidthPx=1200&key=${this.apiKey}`
+      `https://places.googleapis.com/v1/${p.name}/media?maxWidthPx=1200&key=${this.getApiKey()}`
     ) || [];
 
     const openingHours: Record<string, string> = {};

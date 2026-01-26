@@ -13,6 +13,7 @@ import {
   Modal,
   Platform,
   Alert,
+  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
@@ -38,7 +39,7 @@ import {
 import { calculateVibeWeights, formatVibeWeightsSummary, getVibeLabel } from "@/utils/vibeCalculator";
 import { apiRequest } from "@/lib/query-client";
 import { InteractiveMap } from "@/components/InteractiveMap";
-import { isAuthenticated } from "@/lib/auth";
+import { isAuthenticated, getUserData, UserData } from "@/lib/auth";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { useMapToggle } from "@/contexts/MapToggleContext";
 
@@ -87,7 +88,7 @@ function parseTime(timeStr: string): Date {
 // 🚨 위기 경보 깜박이는 배너 컴포넌트
 function CrisisAlertBanner({ alerts, onPress }: { alerts: CrisisAlert[]; onPress: () => void }) {
   const pulseAnim = React.useRef(new Animated.Value(1)).current;
-  
+
   React.useEffect(() => {
     const pulse = Animated.loop(
       Animated.sequence([
@@ -108,13 +109,13 @@ function CrisisAlertBanner({ alerts, onPress }: { alerts: CrisisAlert[]; onPress
     pulse.start();
     return () => pulse.stop();
   }, [pulseAnim]);
-  
+
   const highSeverity = alerts.some(a => a.severity >= 7);
   const bgColor = highSeverity ? "#DC2626" : "#F59E0B";
-  
+
   return (
     <Pressable onPress={onPress}>
-      <Animated.View 
+      <Animated.View
         style={[
           crisisStyles.banner,
           { backgroundColor: bgColor, opacity: pulseAnim }
@@ -162,15 +163,23 @@ export default function TripPlannerScreen() {
   const [loadingStep, setLoadingStep] = useState(0);
   const [activeDay, setActiveDay] = useState(0);
   const [itinerary, setItinerary] = useState<Itinerary | null>(null);
-  const spinValue = new Animated.Value(0);
+  // ✅ 수정: spinValue를 useRef로 관리 (렌더링마다 재생성 방지)
+  const spinValue = React.useRef(new Animated.Value(0)).current;
   const [pickerMode, setPickerMode] = useState<PickerMode>(null);
   const [tempDate, setTempDate] = useState(new Date());
   const [showWebInput, setShowWebInput] = useState<PickerMode>(null);
   const [pendingGenerate, setPendingGenerate] = useState(false);
   const { showMap } = useMapToggle();  // 🗺️ 지도 토글 (Context에서 가져옴)
 
+  // 💾 일정 저장 상태
+  const [isSaving, setIsSaving] = useState(false);
+  const [savedItineraryId, setSavedItineraryId] = useState<number | null>(null);
+
+  // 🎯 로그인된 사용자 정보 (birthDate 포함)
+  const [currentUser, setCurrentUser] = useState<UserData | null>(null);
+
   const [formData, setFormData] = useState<TripFormData>({
-    birthDate: "1985-06-15",
+    birthDate: "1985-03-15",  // 🔧 테스트용 기본값 (로그인 시 덮어씀)
     companionType: "Family",
     companionCount: 4,
     companionAges: "55, 59",
@@ -181,10 +190,46 @@ export default function TripPlannerScreen() {
     endDate: formatDate(new Date(Date.now() + 2 * 24 * 60 * 60 * 1000)),
     endTime: "21:00",
     vibes: ["Healing", "Foodie"],
-    travelStyle: "Reasonable",
+    travelStyle: "comfort",  // DB enum: luxury, comfort (소문자)
     travelPace: "Relaxed",
     mobilityStyle: "WalkMore",
   });
+
+  // 🎯 로그인된 사용자 정보 로드 → formData.birthDate 자동 설정
+  // 🔧 테스트용: 로그인 없이도 기본값 설정
+  useEffect(() => {
+    const loadUserData = async () => {
+      const userData = await getUserData();
+      if (userData) {
+        setCurrentUser(userData);
+        // birthDate를 사용자 정보에서 가져와 formData에 반영
+        setFormData(prev => ({
+          ...prev,
+          birthDate: userData.birthDate || prev.birthDate,
+        }));
+        console.log(`[TripPlanner] 🎯 사용자 정보 로드: ${userData.name}, birthDate=${userData.birthDate}`);
+      } else {
+        // 🔧 테스트용: 로그인 없이 기본 admin 사용자 설정
+        const testUser: UserData = {
+          id: "admin",
+          name: "테스트 사용자",
+          email: "admin@test.com",
+          birthDate: "1985-03-15", // 기본 생년월일
+          ageGroup: "30대",
+          provider: "test",
+          language: "ko",
+          createdAt: new Date().toISOString(),
+        };
+        setCurrentUser(testUser);
+        setFormData(prev => ({
+          ...prev,
+          birthDate: testUser.birthDate,
+        }));
+        console.log(`[TripPlanner] 🔧 테스트 모드: admin 사용자 자동 설정, birthDate=${testUser.birthDate}`);
+      }
+    };
+    loadUserData();
+  }, []);
 
   useEffect(() => {
     if (screen === "Loading") {
@@ -271,13 +316,13 @@ export default function TripPlannerScreen() {
     try {
       const response = await apiRequest("GET", `/api/trip-alerts?city=${encodeURIComponent(formData.destination)}&startDate=${formData.startDate}&endDate=${formData.endDate}`);
       const data = await response.json();
-      
+
       if (data.hasAlerts && data.alerts?.length > 0) {
         const highSeverityAlerts = data.alerts.filter((a: any) => a.severity >= 7);
-        const alertMessages = data.alerts.slice(0, 3).map((a: any) => 
+        const alertMessages = data.alerts.slice(0, 3).map((a: any) =>
           `• ${a.titleKo || a.title} (${a.date})`
         ).join('\n');
-        
+
         return new Promise((resolve) => {
           if (data.highSeverity) {
             // 심각한 위기 정보 - 경고 팝업
@@ -301,7 +346,7 @@ export default function TripPlannerScreen() {
           }
         });
       }
-      
+
       return { hasAlerts: false, shouldProceed: true };
     } catch (error) {
       console.log("[TripPlanner] Crisis check failed, proceeding anyway:", error);
@@ -324,7 +369,15 @@ export default function TripPlannerScreen() {
     }, 2000);
 
     try {
-      const response = await apiRequest("POST", "/api/routes/generate", formData);
+      // 🎯 사용자 ID 포함 → 백엔드에서 birthDate 조회
+      const requestData = {
+        ...formData,
+        userId: currentUser?.id,  // DB에서 사용자 정보 조회용
+      };
+
+      console.log(`[TripPlanner] 🎯 일정 생성 요청: userId=${currentUser?.id}, birthDate=${formData.birthDate}`);
+
+      const response = await apiRequest("POST", "/api/routes/generate", requestData);
       const result = await response.json();
 
       console.log("[TripPlanner] API response days count:", result.days?.length);
@@ -375,6 +428,54 @@ export default function TripPlannerScreen() {
     } else {
       setPendingGenerate(true);
       navigation.navigate("Onboarding");
+    }
+  };
+
+  // 💾 일정 저장 함수
+  const handleSaveItinerary = async () => {
+    if (!itinerary) {
+      Alert.alert("오류", "저장할 일정이 없습니다.");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      // 일정 데이터 구성 (🔧 로그인 제거: admin 고정)
+      // 🔧 travelStyle을 DB enum에 맞게 소문자로 변환 (luxury, comfort)
+      const saveData = {
+        userId: "admin", // 서버에서 강제로 admin으로 처리됨
+        cityId: 1, // TODO: 도시 ID 동적 매핑
+        title: `${itinerary.destination} 여행`,
+        startDate: itinerary.startDate,
+        endDate: itinerary.endDate,
+        travelStyle: (formData.travelStyle || "comfort").toLowerCase(), // DB enum: luxury, comfort
+        curationFocus: formData.curationFocus,
+        companionType: formData.companionType,
+        companionCount: formData.companionCount,
+        companionAges: formData.companionAges,
+        vibes: formData.vibes,
+        travelPace: formData.travelPace,
+        mobilityStyle: formData.mobilityStyle,
+        status: "saved",
+      };
+
+      const response = await apiRequest("POST", "/api/itineraries", saveData);
+      const saved = await response.json();
+
+      if (saved.id) {
+        setSavedItineraryId(saved.id);
+        Alert.alert(
+          "저장 완료! ✅",
+          `일정이 저장되었습니다.\n\n프로필 > 나의 여정에서 확인하고\n영상을 생성할 수 있어요!`,
+          [{ text: "확인", style: "default" }]
+        );
+        console.log(`[TripPlanner] 💾 일정 저장 완료: id=${saved.id}`);
+      }
+    } catch (error) {
+      console.error("[TripPlanner] 저장 오류:", error);
+      Alert.alert("저장 실패", "일정 저장 중 오류가 발생했습니다.");
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -593,8 +694,8 @@ export default function TripPlannerScreen() {
                   styles.iconButton,
                   { backgroundColor: isSelected ? Brand.primary : theme.backgroundDefault },
                 ]}
-                onPress={() => setFormData(prev => ({ 
-                  ...prev, 
+                onPress={() => setFormData(prev => ({
+                  ...prev,
                   companionType: option.id,
                   companionCount: option.defaultCount,
                   transportType: option.transportType,
@@ -800,17 +901,32 @@ export default function TripPlannerScreen() {
             <Feather name="arrow-left" size={24} color={theme.text} />
           </Pressable>
           <Text style={[styles.resultTitle, { color: theme.text }]}>{itinerary.destination}</Text>
-          <Pressable style={styles.headerButton}>
-            <Feather name="share" size={22} color={theme.text} />
+          <Pressable 
+            style={[
+              styles.headerButton,
+              savedItineraryId && { backgroundColor: "#22c55e" }
+            ]}
+            onPress={handleSaveItinerary}
+            disabled={isSaving || !!savedItineraryId}
+          >
+            {isSaving ? (
+              <ActivityIndicator size="small" color={theme.text} />
+            ) : (
+              <Feather 
+                name={savedItineraryId ? "check" : "save"} 
+                size={22} 
+                color={savedItineraryId ? "#FFFFFF" : theme.text} 
+              />
+            )}
           </Pressable>
         </View>
 
         {/* 🚨 위기 경보 배너 - 깜박이는 표시 */}
         {itinerary.crisisAlerts && itinerary.crisisAlerts.length > 0 && (
-          <CrisisAlertBanner 
-            alerts={itinerary.crisisAlerts} 
+          <CrisisAlertBanner
+            alerts={itinerary.crisisAlerts}
             onPress={() => {
-              const alertMessages = itinerary.crisisAlerts!.slice(0, 5).map((a) => 
+              const alertMessages = itinerary.crisisAlerts!.slice(0, 5).map((a) =>
                 `• ${a.titleKo || a.title}\n  ${a.date}${a.endDate ? ` ~ ${a.endDate}` : ''}\n  ${a.recommendationKo || a.recommendation}`
               ).join('\n\n');
               Alert.alert(
@@ -851,11 +967,33 @@ export default function TripPlannerScreen() {
           <View style={styles.tripDescriptionContainer}>
             <Text style={[styles.tripDescriptionText, { color: theme.text }]}>
               {(() => {
-                // 누구를 위한
-                const companion = itinerary.companionType || "나";
+                // 🎯 누구를 위한 (curationFocus 기반)
+                const focusLabels: Record<string, string> = {
+                  Kids: "아이",
+                  Parents: "부모님",
+                  Everyone: "모두",
+                  Self: "나",
+                };
+                const curationFocus = (itinerary as any).metadata?.curationFocus || formData.curationFocus || "Everyone";
+                const focusLabel = focusLabels[curationFocus] || "모두";
+
+                // 누구랑 (companionType 기반)
+                const companionLabels: Record<string, string> = {
+                  Single: "혼자",
+                  Couple: "커플",
+                  Family: "가족",
+                  ExtendedFamily: "대가족",
+                  Group: "친구들",
+                };
+                const companionType = itinerary.companionType || formData.companionType || "Couple";
+                const companionLabel = companionLabels[companionType] || "가족";
+
                 // 바이브에서 주요 2개 추출
-                const vibes = itinerary.vibeWeights?.slice(0, 2).map(v => getVibeLabel(v.vibe)).join("과 ") || "힐링";
-                return `👨‍👩‍👧‍👦 ${companion}을 위한 ${vibes} 여행`;
+                const vibes = itinerary.vibeWeights?.slice(0, 2).map(v => getVibeLabel(v.vibe)).join(" & ") || "힐링";
+
+                // 예: "👨‍👩‍👧‍👦 가족(4명)의 부모님을 위한 힐링 & 미식 여행"
+                const count = itinerary.companionCount || formData.companionCount || 2;
+                return `👨‍👩‍👧‍👦 ${companionLabel}(${count}명)의 ${focusLabel}을 위한 ${vibes} 여행`;
               })()}
             </Text>
             {/* 💰 예상 비용 표시 */}
@@ -939,60 +1077,64 @@ export default function TripPlannerScreen() {
               // 별점 계산 (vibeScore 10점 만점 → 5점 만점)
               const starRating = Math.min(5, Math.max(0, Math.round((place.vibeScore || 0) / 2)));
               const stars = "⭐".repeat(starRating) + "☆".repeat(5 - starRating);
-              
-              // 식사 여부 판단 (백엔드에서 isMeal 제공 또는 이름으로 판단)
-              const isMeal = place.isMeal || place.name?.includes("점심") || place.name?.includes("저녁") || 
-                             place.name?.includes("아침") || place.name?.includes("식사") ||
-                             place.name?.includes("카페") || place.name?.includes("레스토랑");
-              
+
+              // 🍽️ 식사 슬롯 여부 (백엔드에서 isMealSlot 제공 - 1순위)
+              const isMealSlot = place.isMealSlot === true;
+              const mealType = place.mealType; // 'lunch' | 'dinner'
+
+              // 식사 여부 (isMealSlot 또는 이름으로 판단)
+              const isMeal = isMealSlot || place.isMeal || place.name?.includes("점심") || place.name?.includes("저녁") ||
+                place.name?.includes("아침") || place.name?.includes("식사") ||
+                place.name?.includes("카페") || place.name?.includes("레스토랑");
+
               // 이동 구간 정보 (백엔드에서 제공)
               const dayTransits = currentDay?.transit?.transits || [];
               const transitInfo = dayTransits[index]; // index번째 장소에서 다음 장소로의 이동
               const hasTransit = index < places.length - 1;
-              
+
               // 인원수 (itinerary에서 가져오기)
               const companionCount = itinerary.companionCount || 1;
-              
+
               // 가격 정보
               const entranceFee = place.entranceFee || 0;
               const entranceFeeTotal = place.entranceFeeTotal || (entranceFee * companionCount);
-              
+
               return (
                 <View key={place.id}>
                   {/* 장소 카드 */}
                   <View style={styles.placeItem}>
-                    {/* 타임라인 좌측 */}
+                    {/* 타임라인 좌측 - 🍽️ 식사 슬롯은 주황색 강조 */}
                     <View style={styles.timelineLeft}>
-                      <View style={[styles.placeNumber, { backgroundColor: isMeal ? "#F59E0B" : Brand.primary }]}>
+                      <View style={[styles.placeNumber, { backgroundColor: isMealSlot ? "#FF6B35" : isMeal ? "#FFA500" : Brand.primary }]}>
                         <Text style={styles.placeNumberText}>{index + 1}</Text>
                       </View>
                       {hasTransit && (
                         <View style={[styles.timelineLine, { backgroundColor: theme.border }]} />
                       )}
                     </View>
-                    
+
                     {/* 장소 카드 */}
-                    <View style={[styles.placeCard, { backgroundColor: theme.backgroundDefault }]}>
+                    <View style={[styles.placeCard, { backgroundColor: theme.backgroundDefault, borderLeftWidth: isMealSlot ? 3 : 0, borderLeftColor: "#FF6B35" }]}>
                       <View style={styles.placeCardContent}>
                         {/* 썸네일 이미지 */}
                         <View style={styles.placeThumbnail}>
-                          <View style={[styles.placeThumbnailPlaceholder, { backgroundColor: theme.backgroundSecondary }]}>
-                            <Feather name={isMeal ? "coffee" : "map-pin"} size={20} color={theme.textTertiary} />
+                          <View style={[styles.placeThumbnailPlaceholder, { backgroundColor: isMealSlot ? "#FFF5F0" : theme.backgroundSecondary }]}>
+                            <Feather name={isMealSlot || isMeal ? "coffee" : "map-pin"} size={20} color={isMealSlot ? "#FF6B35" : theme.textTertiary} />
                           </View>
                         </View>
-                        
+
                         {/* 장소 정보 */}
                         <View style={styles.placeInfo}>
-                          {/* 장소명 */}
+                          {/* 장소명 + 식사 타입 뱃지 */}
                           <View style={styles.placeHeader}>
                             <Text style={[styles.placeName, { color: theme.text }]} numberOfLines={1}>
-                              {isMeal ? "🍽️ " : ""}{place.name}
+                              {isMealSlot ? (mealType === 'lunch' ? "🍽️ [점심] " : "🍽️ [저녁] ") : isMeal ? "🍽️ " : ""}{place.name}
                             </Text>
                           </View>
-                          
+
                           {/* 별점 표시 */}
                           <Text style={styles.placeStars}>{stars}</Text>
-                          
+
                           {/* 시간 */}
                           <View style={styles.placeTimeRow}>
                             <Feather name="clock" size={12} color={theme.textSecondary} />
@@ -1000,20 +1142,20 @@ export default function TripPlannerScreen() {
                               {place.startTime} - {place.endTime}
                             </Text>
                           </View>
-                          
+
                           {/* 가격 정보 - 실시간 데이터 */}
                           <View style={styles.placePriceRow}>
                             <Feather name={isMeal ? "credit-card" : "tag"} size={12} color={Brand.primary} />
                             <Text style={[styles.placePriceText, { color: Brand.primary }]}>
-                              {isMeal 
+                              {isMeal
                                 ? `💰 식사: €${place.mealPrice || itinerary.budget?.dailyBreakdowns?.[activeDay]?.meals || '??'}`
-                                : entranceFee > 0 
+                                : entranceFee > 0
                                   ? `🎫 €${entranceFee} × ${companionCount}인 = €${entranceFeeTotal.toFixed(2)}`
                                   : `🎫 ${place.priceEstimate || '무료'}`
                               }
                             </Text>
                           </View>
-                          
+
                           {/* 설명 (있을 경우) */}
                           {place.personaFitReason && (
                             <Text style={[styles.placeReason, { color: theme.textSecondary }]} numberOfLines={2}>
@@ -1024,7 +1166,7 @@ export default function TripPlannerScreen() {
                       </View>
                     </View>
                   </View>
-                  
+
                   {/* 🚇 이동 구간 표시 - 실시간 데이터 */}
                   {hasTransit && (
                     <View style={styles.transitSection}>
@@ -1032,7 +1174,7 @@ export default function TripPlannerScreen() {
                       <View style={[styles.transitCard, { backgroundColor: theme.backgroundSecondary }]}>
                         <Feather name="navigation" size={14} color={theme.textSecondary} />
                         <Text style={[styles.transitText, { color: theme.textSecondary }]}>
-                          {transitInfo 
+                          {transitInfo
                             ? `${transitInfo.modeLabel === 'metro' ? '🚇' : transitInfo.modeLabel === 'walk' ? '🚶' : '🚗'} ${transitInfo.modeLabel || '이동'} ${transitInfo.durationText || '??분'} · €${transitInfo.cost?.toFixed(2) || '0'} × ${companionCount}인 = €${transitInfo.costTotal?.toFixed(2) || '0'}`
                             : `🚶 이동 정보 로딩 중...`
                           }
@@ -1045,7 +1187,7 @@ export default function TripPlannerScreen() {
               );
             })}
           </View>
-          
+
           {/* 📊 일별 합계 섹션 - 실시간 데이터 */}
           {(() => {
             const dayBudget = currentDay?.budget || itinerary.budget?.dailyBreakdowns?.[activeDay];
@@ -1186,17 +1328,17 @@ const styles = StyleSheet.create({
   // 📱 여정표 출력 화면 스타일 (모바일 최적화)
   // ═══════════════════════════════════════════════════════════════════════════
   resultContainer: { flex: 1 },
-  resultHeader: { 
-    flexDirection: "row", 
-    alignItems: "center", 
-    justifyContent: "space-between", 
-    paddingHorizontal: Spacing.md, 
+  resultHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: Spacing.md,
     paddingBottom: Spacing.md,
     minHeight: 56, // 모바일 터치 영역 확보
   },
   headerButton: { width: 48, height: 48, justifyContent: "center", alignItems: "center" },
   resultTitle: { fontSize: 20, fontWeight: "800" }, // 18 → 20
-  
+
   // 📊 요약 섹션 1: 날짜 + 장소수 + 총예산
   tripSummaryRow: {
     flexDirection: "row",
@@ -1261,31 +1403,31 @@ const styles = StyleSheet.create({
   },
 
   // 🗺️ 지도 섹션
-  mapSection: { 
+  mapSection: {
     marginHorizontal: Spacing.sm,
     marginBottom: Spacing.xs,
     borderRadius: BorderRadius.sm,
     overflow: "hidden",
   },
-  
+
   // 🎯 Vibe 가중치 요약 (삭제 - tripOptionsRow로 통합)
-  vibeWeightsSummary: { 
-    flexDirection: "row", 
-    alignItems: "center", 
-    gap: 4, 
-    marginHorizontal: Spacing.sm, 
+  vibeWeightsSummary: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    marginHorizontal: Spacing.sm,
     paddingVertical: 4,
-    paddingHorizontal: Spacing.sm, 
-    borderRadius: BorderRadius.sm, 
-    marginBottom: 4 
+    paddingHorizontal: Spacing.sm,
+    borderRadius: BorderRadius.sm,
+    marginBottom: 4
   },
   vibeWeightsSummaryText: { fontSize: 12, fontWeight: "600" },
-  
+
   // 📅 일자 탭
   dayTabsContainer: { paddingVertical: 4 },
   dayTabs: { paddingHorizontal: Spacing.sm, gap: 4 },
-  dayTab: { 
-    paddingHorizontal: Spacing.lg, 
+  dayTab: {
+    paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.md, // sm → md (더 큰 터치 영역)
     borderRadius: BorderRadius.full,
     minWidth: 70, // 최소 너비 보장
@@ -1293,77 +1435,77 @@ const styles = StyleSheet.create({
   },
   dayTabText: { fontSize: 14, fontWeight: "700" }, // 13 → 14
   dayTabCity: { fontSize: 11, marginTop: 2 }, // 10 → 11
-  
+
   // 📜 스크롤 영역
   resultScrollView: { flex: 1 },
-  
+
   // ✅ CTA 버튼
-  summaryBox: { 
-    flexDirection: "row", 
-    alignItems: "center", 
-    gap: Spacing.sm, 
-    marginHorizontal: Spacing.md, 
+  summaryBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    marginHorizontal: Spacing.md,
     paddingVertical: Spacing.lg, // md → lg
     paddingHorizontal: Spacing.lg,
     borderRadius: BorderRadius.lg, // md → lg
-    marginBottom: Spacing.lg 
+    marginBottom: Spacing.lg
   },
   summaryText: { flex: 1, fontSize: 15, fontWeight: "700", color: "#FFFFFF", lineHeight: 22 }, // 13 → 15
-  
+
   // 📍 장소 목록
   placesList: { paddingHorizontal: Spacing.sm },
   placeItem: { flexDirection: "row", marginBottom: Spacing.sm }, // 간격 최소화
-  
+
   // 🔢 타임라인 (좌측 번호)
   timelineLeft: { width: 44, alignItems: "center" }, // 40 → 44
-  placeNumber: { 
-    width: 36, 
-    height: 36, 
-    borderRadius: 18, 
-    justifyContent: "center", 
-    alignItems: "center" 
+  placeNumber: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: "center",
+    alignItems: "center"
   }, // 32 → 36
   placeNumberText: { color: "#FFFFFF", fontSize: 15, fontWeight: "800" }, // 14 → 15
   timelineLine: { flex: 1, width: 2, marginVertical: Spacing.xs },
-  
+
   // 🏷️ 장소 카드
-  placeCard: { 
-    flex: 1, 
+  placeCard: {
+    flex: 1,
     paddingVertical: Spacing.sm,
     paddingHorizontal: Spacing.sm,
     borderRadius: BorderRadius.md,
-    marginLeft: 4 
+    marginLeft: 4
   },
-  placeHeader: { 
-    flexDirection: "row", 
-    justifyContent: "space-between", 
-    alignItems: "center", 
+  placeHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: Spacing.sm // xs → sm
   },
   placeName: { fontSize: 18, fontWeight: "800", flex: 1 }, // 16 → 18
-  scoreBadge: { 
+  scoreBadge: {
     paddingHorizontal: Spacing.md, // sm → md
     paddingVertical: 4, // 2 → 4
     borderRadius: BorderRadius.sm, // xs → sm
     marginLeft: Spacing.sm,
   },
   scoreText: { fontSize: 14, fontWeight: "800" }, // 12 → 14
-  
+
   // 🕐 시간
-  placeTimeRow: { 
-    flexDirection: "row", 
-    alignItems: "center", 
+  placeTimeRow: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: Spacing.sm, // xs → sm
     marginBottom: Spacing.sm // xs → sm
   },
   placeTimeText: { fontSize: 14, fontWeight: "600" },
-  
+
   // ⭐ 별점
   placeStars: {
     fontSize: 12,
     marginBottom: Spacing.xs,
   },
-  
+
   // 💰 가격
   placePriceRow: {
     flexDirection: "row",
@@ -1375,24 +1517,24 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
   },
-  
+
   // 🏷️ Vibe 태그
-  vibeTagsRow: { 
-    flexDirection: "row", 
-    flexWrap: "wrap", 
+  vibeTagsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: Spacing.sm, // xs → sm
     marginBottom: Spacing.sm // xs → sm
   },
-  vibeTag: { 
+  vibeTag: {
     paddingHorizontal: Spacing.md, // sm → md
     paddingVertical: 4, // 2 → 4
     borderRadius: BorderRadius.sm // xs → sm
   },
   vibeTagText: { fontSize: 12, fontWeight: "700" }, // 10 → 12
-  
+
   // 📝 장소 설명
   placeReason: { fontSize: 14, lineHeight: 20 }, // 13/18 → 14/20
-  
+
   // 🚇 이동 구간
   transitSection: {
     flexDirection: "row",
@@ -1418,7 +1560,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "500",
   },
-  
+
   // 📊 일별 합계
   dailyTotalSection: {
     marginHorizontal: Spacing.md,
@@ -1468,5 +1610,32 @@ const styles = StyleSheet.create({
   },
   dailyTotalPerPerson: {
     fontSize: 13,
+  },
+  // 💾 저장 버튼 스타일
+  saveButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Brand.primary,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: BorderRadius.md,
+    gap: Spacing.sm,
+  },
+  saveButtonSaved: {
+    backgroundColor: "#22c55e",
+  },
+  saveButtonDisabled: {
+    opacity: 0.6,
+  },
+  saveButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  saveHint: {
+    fontSize: 12,
+    textAlign: "center",
+    marginTop: Spacing.sm,
   },
 });

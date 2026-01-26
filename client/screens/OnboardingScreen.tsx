@@ -178,6 +178,9 @@ export default function OnboardingScreen() {
             <Text style={[styles.label, { color: theme.textSecondary, marginTop: Spacing.xl }]}>
               생년월일
             </Text>
+            <Text style={[styles.birthDateHint, { color: theme.textTertiary }]}>
+              실제 생년월일을 입력하시면 가족 맞춤 일정을 드려요
+            </Text>
             <View style={styles.dateInputRow}>
               <View style={[styles.dateInputBox, { backgroundColor: theme.backgroundDefault, borderColor: dateError ? "#EF4444" : theme.border }]}>
                 <TextInput
@@ -363,6 +366,12 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginBottom: Spacing.sm,
     marginLeft: Spacing.xs,
+  },
+  birthDateHint: {
+    fontSize: 12,
+    marginBottom: Spacing.sm,
+    marginLeft: Spacing.xs,
+    fontStyle: "italic",
   },
   selector: {
     flexDirection: "row",

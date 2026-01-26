@@ -9,7 +9,8 @@
  */
 
 import { db } from "../db";
-import { geminiWebSearchCache, places, cities, naverBlogPosts, youtubePlaceMentions, instagramHashtags } from "@shared/schema";
+import { geminiWebSearchCache, cities, naverBlogPosts, youtubePlaceMentions, instagramHashtags } from "@shared/schema";
+// places import 제거 - 현재 미사용
 import { eq, and, gte, desc, sql } from "drizzle-orm";
 import { GoogleGenAI } from "@google/genai";
 

@@ -1,7 +1,10 @@
 import { storage } from "../storage";
 import type { Place, RouteCache } from "@shared/schema";
 
-const GOOGLE_MAPS_API_KEY = process.env.Google_maps_api_key || process.env.GOOGLE_MAPS_API_KEY;
+// 🎯 동적으로 API 키 가져오기 (DB에서 로드 후 process.env에 설정됨)
+function getGoogleMapsApiKey(): string {
+  return process.env.Google_maps_api_key || process.env.GOOGLE_MAPS_API_KEY || "";
+}
 
 interface RouteStep {
   distance: number;
@@ -75,11 +78,14 @@ const CITY_COST_MULTIPLIER: Record<string, number> = {
 };
 
 export class RouteOptimizer {
-  private apiKey: string;
+  // 🎯 API 키를 동적으로 가져옴 (DB에서 로드 후 사용 가능)
+  private getApiKey(): string {
+    return getGoogleMapsApiKey();
+  }
 
   constructor() {
-    this.apiKey = GOOGLE_MAPS_API_KEY || "";
-    if (!this.apiKey) {
+    // 초기화 시점에 경고만 출력 (실제 사용 시 다시 확인)
+    if (!this.getApiKey()) {
       console.warn("GOOGLE_MAPS_API_KEY is not set. Route optimization will use estimated calculations.");
     }
   }
@@ -126,7 +132,8 @@ export class RouteOptimizer {
   ): Promise<RouteResult & { durationWithTraffic?: number; trafficCondition?: string }> {
     const baseRoute = await this.getRoute(originPlace, destinationPlace, travelMode);
     
-    if (!this.apiKey || travelMode === "WALK" || travelMode === "BICYCLE") {
+    const apiKey = this.getApiKey();
+    if (!apiKey || travelMode === "WALK" || travelMode === "BICYCLE") {
       return baseRoute;
     }
 
@@ -138,7 +145,7 @@ export class RouteOptimizer {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "X-Goog-Api-Key": this.apiKey,
+          "X-Goog-Api-Key": apiKey,
           "X-Goog-FieldMask": "routes.duration,routes.staticDuration,routes.distanceMeters,routes.travelAdvisory",
         },
         body: JSON.stringify({
@@ -218,7 +225,8 @@ export class RouteOptimizer {
       }
     }
 
-    if (this.apiKey) {
+    const apiKey = this.getApiKey();
+    if (apiKey) {
       try {
         // TRANSIT 모드일 때는 실시간 요금 정보 요청
         const fieldMask = actualMode === "TRANSIT"
@@ -229,7 +237,7 @@ export class RouteOptimizer {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            "X-Goog-Api-Key": this.apiKey,
+            "X-Goog-Api-Key": apiKey,
             "X-Goog-FieldMask": fieldMask,
           },
           body: JSON.stringify({

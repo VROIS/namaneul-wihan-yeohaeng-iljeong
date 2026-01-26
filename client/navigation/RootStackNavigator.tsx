@@ -5,6 +5,7 @@ import MainTabNavigator from "@/navigation/MainTabNavigator";
 import DestinationDetailScreen from "@/screens/DestinationDetailScreen";
 import OnboardingScreen from "@/screens/OnboardingScreen";
 import VerificationRequestScreen from "@/screens/VerificationRequestScreen";
+import SavedTripDetailScreen from "@/screens/SavedTripDetailScreen";
 import { Colors } from "@/constants/theme";
 import { Itinerary } from "@/types/trip";
 
@@ -13,6 +14,7 @@ export type RootStackParamList = {
   Onboarding: undefined;
   DestinationDetail: { placeId: number };
   VerificationRequest: { itinerary: Itinerary };
+  SavedTripDetail: { itineraryId: number };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -68,6 +70,14 @@ export default function RootStackNavigator() {
       <Stack.Screen
         name="VerificationRequest"
         component={VerificationRequestScreen}
+        options={{
+          presentation: "card",
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        name="SavedTripDetail"
+        component={SavedTripDetailScreen}
         options={{
           presentation: "card",
           headerShown: false,

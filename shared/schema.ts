@@ -16,23 +16,27 @@ export const users = pgTable("users", {
   displayName: text("display_name"),
   persona: personaTypeEnum("persona").default("comfort"),
   preferredLanguage: text("preferred_language").default("ko"),
-  
+
+  // === 사용자 연령 정보 (가족 구성 추정용) ===
+  // 생년월일: "1985-06-15" 형태
+  birthDate: text("birth_date"),
+
   // === 취향 저장 (마케팅 활용 + 영상 시나리오) ===
   // 최대 3개, 순서 중요: ["Romantic", "Foodie", "Culture"]
   preferredVibes: jsonb("preferred_vibes").$type<string[]>().default([]),
-  
+
   // 자주 선택하는 동행 타입
   preferredCompanionType: text("preferred_companion_type"),
-  
+
   // 선호 여행 스타일
   preferredTravelStyle: text("preferred_travel_style"),
-  
+
   // 마케팅 동의
   marketingConsent: boolean("marketing_consent").default(false),
-  
+
   // 마지막 취향 업데이트 시간
   vibesUpdatedAt: timestamp("vibes_updated_at"),
-  
+
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
@@ -67,21 +71,21 @@ export const places = pgTable("places", {
   priceLevel: integer("price_level"),
   photoUrls: jsonb("photo_urls").$type<string[]>().default([]),
   openingHours: jsonb("opening_hours").$type<Record<string, string>>(),
-  
+
   websiteUri: text("website_uri"),
   googleMapsUri: text("google_maps_uri"),
   phoneNumber: text("phone_number"),
   editorialSummary: text("editorial_summary"),
   businessStatus: text("business_status"),
-  
+
   userRatingCount: integer("user_rating_count"),
-  
+
   delivery: boolean("delivery"),
   dineIn: boolean("dine_in"),
   takeout: boolean("takeout"),
   curbsidePickup: boolean("curbside_pickup"),
   reservable: boolean("reservable"),
-  
+
   servesBeer: boolean("serves_beer"),
   servesWine: boolean("serves_wine"),
   servesBreakfast: boolean("serves_breakfast"),
@@ -91,17 +95,17 @@ export const places = pgTable("places", {
   servesVegetarianFood: boolean("serves_vegetarian_food"),
   servesCoffee: boolean("serves_coffee"),
   servesDessert: boolean("serves_dessert"),
-  
+
   goodForChildren: boolean("good_for_children"),
   goodForGroups: boolean("good_for_groups"),
   goodForWatchingSports: boolean("good_for_watching_sports"),
-  
+
   liveMusic: boolean("live_music"),
   outdoorSeating: boolean("outdoor_seating"),
   restroom: boolean("restroom"),
   menuForChildren: boolean("menu_for_children"),
   allowsDogs: boolean("allows_dogs"),
-  
+
   accessibilityOptions: jsonb("accessibility_options").$type<{
     wheelchairAccessibleParking?: boolean;
     wheelchairAccessibleEntrance?: boolean;
@@ -121,11 +125,11 @@ export const places = pgTable("places", {
     acceptsCashOnly?: boolean;
     acceptsNfc?: boolean;
   }>(),
-  
+
   instagramPhotoUrls: jsonb("instagram_photo_urls").$type<string[]>().default([]),
   instagramHashtags: jsonb("instagram_hashtags").$type<string[]>().default([]),
   instagramPostCount: integer("instagram_post_count").default(0),
-  
+
   vibeScore: real("vibe_score"),
   buzzScore: real("buzz_score"),
   tasteVerifyScore: real("taste_verify_score"),
@@ -237,7 +241,7 @@ export const itineraries = pgTable("itineraries", {
   totalCost: real("total_cost"),
   totalDuration: integer("total_duration"),
   status: text("status").default("draft"),
-  
+
   // === 일정 생성 핵심 데이터 (2026-01-14 추가) ===
   // 🎯 누구를 위한 (curationFocus) - Gemini 프롬프트 가중치 1순위
   // 일정 생성의 주인공 결정 + 추후 미리보기 영상의 주인공
@@ -249,11 +253,16 @@ export const itineraries = pgTable("itineraries", {
   travelPace: text("travel_pace").default("Normal"),         // Packed, Normal, Relaxed
   mobilityStyle: text("mobility_style").default("Moderate"), // WalkMore, Moderate, Minimal
   mealLevel: text("meal_level").default("Local"),            // Michelin, Trendy, Local, Budget
-  
+
   // 주인공 문장 (Gemini 프롬프트용 자동 생성)
   // 예: "5살 아이를 동반한 한국인 가족의 로맨틱 파리 여행"
   protagonistSentence: text("protagonist_sentence"),
-  
+
+  // Output Video Generation Status (Seedance)
+  videoTaskId: text("video_task_id"),
+  videoStatus: text("video_status"), // pending, processing, succeeded, failed
+  videoUrl: text("video_url"), // Final MP4 URL
+
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
   updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
@@ -465,45 +474,45 @@ export const exchangeRates = pgTable("exchange_rates", {
 export const crisisAlerts = pgTable("crisis_alerts", {
   id: serial("id").primaryKey(),
   cityId: integer("city_id").references(() => cities.id, { onDelete: "cascade" }),
-  
+
   // === 도시 정보 (직접 저장) ===
   city: text("city").notNull().default("Paris"),  // Paris, London, Rome 등
   countryCode: text("country_code"),
-  
+
   // === 위기 유형 ===
   // strike: 파업, protest: 시위, traffic: 교통장애, weather: 기상경보, security: 보안
   type: text("type").notNull().default("strike"),
   alertType: text("alert_type"), // 하위호환 (deprecated)
-  
+
   // === 제목/설명 (다국어) ===
   title: text("title").notNull(),
   titleKo: text("title_ko"),  // 한글 제목
   description: text("description"),
-  
+
   // === 날짜 ===
   date: text("date").notNull(),  // YYYY-MM-DD (발생일)
   endDate: text("end_date"),     // YYYY-MM-DD (종료일)
   startDate: timestamp("start_date"),  // 하위호환
-  
+
   // === 영향/심각도 ===
   affected: jsonb("affected").$type<string[]>().default([]),  // ["metro", "RER", "bus"]
   affectedAreas: jsonb("affected_areas").$type<string[]>().default([]),  // 하위호환
   severity: integer("severity").notNull().default(5), // 1-10 (10이 가장 심각)
   impactScore: real("impact_score"), // 하위호환
-  
+
   // === 여행자 조언 (다국어) ===
   recommendation: text("recommendation"),     // 영문 조언
   recommendationKo: text("recommendation_ko"), // 한글 조언
-  
+
   // === 소스 정보 ===
   source: text("source").default("GDELT + Gemini"),  // 수집 소스
   sourceName: text("source_name"),  // 하위호환
   sourceUrl: text("source_url"),
   geminiAnalysis: text("gemini_analysis"),
-  
+
   // === 상태 ===
   isActive: boolean("is_active").default(true),
-  
+
   // === 타임스탬프 ===
   fetchedAt: timestamp("fetched_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
@@ -588,17 +597,17 @@ export const guidePrices = pgTable("guide_prices", {
   id: serial("id").primaryKey(),
   serviceType: text("service_type").notNull(), // sedan, van, minibus, guide_only, airport_transfer
   serviceName: text("service_name").notNull(),
-  
+
   // === 시간당 가격 계산 필드 (NEW) ===
   basePrice4h: real("base_price_4h"),        // 기본요금 (4시간 최소)
   pricePerHour: real("price_per_hour"),      // 시간당 추가 요금
   minHours: real("min_hours").default(4),    // 최소 시간 (기본 4시간)
   maxHours: real("max_hours").default(10),   // 최대 시간 (기본 10시간)
-  
+
   // === 인원 범위 ===
   minPassengers: integer("min_passengers").default(1),  // 최소 인원
   maxPassengers: integer("max_passengers").default(4),  // 최대 인원
-  
+
   // === 기존 필드 (하위 호환) ===
   pricePerDay: real("price_per_day"),        // 일일 가격 (EUR) - deprecated
   priceLow: real("price_low"),               // 최저가
@@ -607,13 +616,13 @@ export const guidePrices = pgTable("guide_prices", {
   unit: text("unit").notNull().default("hour"), // hour, day, trip
   description: text("description"),
   features: jsonb("features").$type<string[]>().default([]),
-  
+
   // === 우버/택시 비교용 ===
   uberBlackEstimate: jsonb("uber_black_estimate").$type<{ low: number; high: number }>(),
   uberXEstimate: jsonb("uber_x_estimate").$type<{ low: number; high: number }>(),
   taxiEstimate: jsonb("taxi_estimate").$type<{ low: number; high: number }>(),
   comparisonNote: text("comparison_note"),   // 비교 설명 (마케팅용)
-  
+
   isActive: boolean("is_active").default(true),
   source: text("source").default("guide_verified"), // guide_verified = 35년 경력 가이드 데이터
   lastUpdated: timestamp("last_updated").default(sql`CURRENT_TIMESTAMP`).notNull(),

@@ -22,7 +22,8 @@
 
 import { db } from '../db';
 import { guidePrices, geminiWebSearchCache } from '../../shared/schema';
-import { eq, and } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
+// 'and' import 제거 - 현재 미사용
 import { transportPricingService, round2 } from './transport-pricing-service';
 
 // === 타입 정의 ===

@@ -22,7 +22,7 @@ export interface CompanionDetail {
 }
 
 export interface TripFormData {
-  birthDate: string;
+  birthDate: string;           // 🎯 사용자 본인 생년월일 (로그인 필수 - 가족 연령 추정용)
   companionType: CompanionType;
   companionCount: number;
   companionAges: string;
@@ -41,6 +41,8 @@ export interface TripFormData {
   guideOption?: GuideOption;
   // 교통편 자동 확정 (CompanionType에 따라 자동 설정)
   transportType?: 'sedan' | 'van' | 'minibus';
+  // 🎯 API 요청 시 사용자 정보 (백엔드에서 DB 조회용)
+  userId?: string;
 }
 
 export interface Place {

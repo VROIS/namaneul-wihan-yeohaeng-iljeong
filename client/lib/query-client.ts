@@ -1,5 +1,5 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
-import { Platform } from "react-native";
+// Platform import 제거 - 현재 미사용
 
 /**
  * Gets the base URL for the Express API server (e.g., "http://localhost:3000")
@@ -24,9 +24,8 @@ export function getApiUrl(): string {
     return `http://${host}`;
   }
 
-  // 배포된 Render 서버 사용 (기본값)
-  // 로컬 개발시: EXPO_PUBLIC_DOMAIN=localhost:8082
-  return "https://nubi-4w9y.onrender.com";
+  // 로컬 개발 서버 사용
+  return "http://192.168.1.23:8082";
 }
 
 async function throwIfResNotOk(res: Response) {

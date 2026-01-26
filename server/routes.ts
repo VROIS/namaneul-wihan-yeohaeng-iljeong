@@ -8,12 +8,18 @@ import { tasteVerifier } from "./services/taste-verifier";
 import { routeOptimizer } from "./services/route-optimizer";
 import { scoringEngine } from "./services/scoring-engine";
 import { itineraryGenerator } from "./services/itinerary-generator";
+import { createVideoGenerationTask, getVideoGenerationTask } from "./services/seedance-video-generator";
+import { generateVideoPrompts, generateSingleScenePrompt, type VideoPromptData } from "./services/scene-prompt-generator";
+import { generateSceneDialogue } from "./services/video-dialogue-generator";
+import { runVideoGenerationPipeline } from "./services/video-pipeline";
+import { getTestVideoHtml } from "./test-video-ui";
 import { registerChatRoutes } from "./replit_integrations/chat";
 import { registerImageRoutes } from "./replit_integrations/image";
 import { registerAdminRoutes } from "./admin-routes";
 import { db } from "./db";
-import { instagramHashtags, cities, youtubeChannels, verificationRequests } from "../shared/schema";
+import { instagramHashtags, cities, youtubeChannels, verificationRequests, itineraries } from "../shared/schema";
 import { count, eq, desc } from "drizzle-orm";
+import { users } from "../shared/schema";
 
 const BRAND_PRIMARY = "#6366F1";
 
@@ -129,10 +135,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!place) {
         return res.status(404).json({ error: "Place not found" });
       }
-      
+
       const dataSources = await storage.getPlaceDataSources(place.id);
       const vibeAnalysis = await storage.getVibeAnalysis(place.id);
-      
+
       res.json({ ...place, dataSources, vibeAnalysis });
     } catch (error) {
       console.error("Error fetching place:", error);
@@ -147,14 +153,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const type = (req.query.type as string) || "restaurant";
       const limit = parseInt(req.query.limit as string) || 10;
       const persona = (req.query.persona as "luxury" | "comfort") || "comfort";
-      
+
       const recommendations = await scoringEngine.getTopRecommendations(
         cityId,
         type as any,
         limit,
         persona
       );
-      
+
       res.json(recommendations);
     } catch (error) {
       console.error("Error fetching recommendations:", error);
@@ -167,11 +173,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const cityId = parseInt(req.params.cityId);
       const city = await storage.getCity(cityId);
-      
+
       if (!city) {
         return res.status(404).json({ error: "City not found" });
       }
-      
+
       const types = req.body.types || ["restaurant", "attraction"];
       const result = await googlePlacesFetcher.syncCityPlaces(
         cityId,
@@ -179,7 +185,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         city.longitude,
         types
       );
-      
+
       res.json({ message: "Sync completed", ...result });
     } catch (error) {
       console.error("Error syncing places:", error);
@@ -225,11 +231,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const cityId = parseInt(req.params.cityId);
       const weather = await weatherFetcher.getWeatherForCity(cityId);
-      
+
       if (!weather) {
         return res.status(404).json({ error: "Weather data not available" });
       }
-      
+
       res.json({
         ...weather,
         description: weatherFetcher.getWeatherDescription(weather.weatherCondition || ""),
@@ -264,7 +270,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const itinerary = await itineraryGenerator.generate(formData);
+      // 🎯 사용자 정보 DB에서 조회 (birthDate 필수 - 로그인시 입력됨)
+      let enrichedFormData = { ...formData };
+
+      if (formData.userId) {
+        try {
+          const [user] = await db.select({
+            birthDate: users.birthDate,
+            displayName: users.displayName,
+            preferredVibes: users.preferredVibes,
+          }).from(users).where(eq(users.id, formData.userId));
+
+          if (user) {
+            // DB에서 가져온 사용자 정보 병합
+            enrichedFormData = {
+              ...formData,
+              birthDate: user.birthDate,  // 🎯 핵심: 가족 연령 추정용
+              userDisplayName: user.displayName,
+              // preferredVibes는 프론트에서 선택한 vibes 우선
+            };
+
+            console.log(`[Routes] 🎯 사용자 정보 조회 완료: userId=${formData.userId}, birthDate=${user.birthDate}`);
+          }
+        } catch (userError) {
+          console.warn("[Routes] 사용자 정보 조회 실패 (계속 진행):", userError);
+        }
+      }
+
+      const itinerary = await itineraryGenerator.generate(enrichedFormData);
       res.json(itinerary);
     } catch (error) {
       console.error("Error generating itinerary:", error);
@@ -275,27 +308,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ========================================
   // 💰 예산 계산 API (TravelStyle 기반)
   // ========================================
-  
+
   // 빠른 예산 미리보기 (버튼 선택시 실시간 표시)
   app.post("/api/budget/preview", async (req, res) => {
     try {
       const { getQuickBudgetPreview } = await import("./services/budget-calculator");
       const { travelStyle, companionCount, dayCount, hoursPerDay } = req.body;
-      
+
       const preview = await getQuickBudgetPreview(
         travelStyle || 'Reasonable',
         companionCount || 2,
         dayCount || 1,
         hoursPerDay || 8
       );
-      
+
       res.json(preview);
     } catch (error) {
       console.error("Error calculating budget preview:", error);
       res.status(500).json({ error: "Failed to calculate budget preview" });
     }
   });
-  
+
   // 상세 예산 계산 (일정 생성 후)
   app.post("/api/budget/calculate", async (req, res) => {
     try {
@@ -310,7 +343,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         mealsPerDay,
         places,
       } = req.body;
-      
+
       const result = await calculateTravelBudget({
         travelStyle: travelStyle || 'Reasonable',
         companionType: companionType || 'Couple',
@@ -321,20 +354,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         mealsPerDay: mealsPerDay || 2,
         places: places || [],
       });
-      
+
       res.json(result);
     } catch (error) {
       console.error("Error calculating budget:", error);
       res.status(500).json({ error: "Failed to calculate budget" });
     }
   });
-  
+
   // TravelStyle별 비용 비교 (4가지 모두 표시)
   app.post("/api/budget/compare", async (req, res) => {
     try {
       const { getQuickBudgetPreview } = await import("./services/budget-calculator");
       const { companionCount, dayCount, hoursPerDay } = req.body;
-      
+
       const styles = ['Luxury', 'Premium', 'Reasonable', 'Economic'] as const;
       const comparisons = await Promise.all(
         styles.map(async (style) => ({
@@ -342,7 +375,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ...await getQuickBudgetPreview(style, companionCount || 2, dayCount || 1, hoursPerDay || 8)
         }))
       );
-      
+
       res.json({
         comparisons,
         currency: 'EUR',
@@ -358,22 +391,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/routes/optimize", async (req, res) => {
     try {
       const { placeIds, travelMode = "TRANSIT" } = req.body;
-      
+
       if (!placeIds || !Array.isArray(placeIds) || placeIds.length === 0) {
         return res.status(400).json({ error: "placeIds array is required" });
       }
-      
+
       const places = await Promise.all(
         placeIds.map((id: number) => storage.getPlace(id))
       );
-      
+
       const validPlaces = places.filter(Boolean);
       if (validPlaces.length === 0) {
         return res.status(404).json({ error: "No valid places found" });
       }
-      
+
       const result = await routeOptimizer.optimizeRoute(validPlaces as any[], travelMode);
-      
+
       res.json({
         ...result,
         formattedDuration: routeOptimizer.formatDuration(result.totalDurationSeconds),
@@ -388,18 +421,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/routes/compare", async (req, res) => {
     try {
       const { placeIds } = req.body;
-      
+
       if (!placeIds || !Array.isArray(placeIds) || placeIds.length === 0) {
         return res.status(400).json({ error: "placeIds array is required" });
       }
-      
+
       const places = await Promise.all(
         placeIds.map((id: number) => storage.getPlace(id))
       );
-      
+
       const validPlaces = places.filter(Boolean);
       const comparison = await routeOptimizer.compareTransportModes(validPlaces as any[]);
-      
+
       const formattedComparison: Record<string, any> = {};
       for (const [mode, result] of Object.entries(comparison)) {
         formattedComparison[mode] = {
@@ -408,7 +441,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           formattedDistance: routeOptimizer.formatDistance(result.totalDistanceMeters),
         };
       }
-      
+
       res.json(formattedComparison);
     } catch (error) {
       console.error("Error comparing routes:", error);
@@ -433,7 +466,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!itinerary) {
         return res.status(404).json({ error: "Itinerary not found" });
       }
-      
+
       const items = await storage.getItineraryItems(itinerary.id);
       const itemsWithPlaces = await Promise.all(
         items.map(async (item) => {
@@ -441,7 +474,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return { ...item, place };
         })
       );
-      
+
       res.json({ ...itinerary, items: itemsWithPlaces });
     } catch (error) {
       console.error("Error fetching itinerary:", error);
@@ -451,11 +484,573 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/itineraries", async (req, res) => {
     try {
-      const itinerary = await storage.createItinerary(req.body);
+      // 🔧 로그인 제거: userId를 'admin'으로 고정
+      const userId = "admin";
+      
+      // admin 사용자 존재 확인 (없으면 자동 생성)
+      const existingUser = await storage.getUser(userId);
+      if (!existingUser) {
+        console.log(`[Itinerary] Admin user not found, creating...`);
+        await storage.createUser({
+          username: "admin",
+          password: "admin",
+          displayName: "관리자"
+        });
+        console.log(`[Itinerary] Admin user created`);
+      }
+      
+      // 날짜 문자열을 Date 객체로 변환
+      const itineraryData = {
+        ...req.body,
+        userId: userId, // 강제로 admin
+        startDate: req.body.startDate ? new Date(req.body.startDate) : new Date(),
+        endDate: req.body.endDate ? new Date(req.body.endDate) : new Date(),
+      };
+      
+      console.log(`[Itinerary] Creating for admin user...`);
+      const itinerary = await storage.createItinerary(itineraryData);
+      console.log(`[Itinerary] Created successfully: id=${itinerary.id}`);
       res.status(201).json(itinerary);
+    } catch (error: any) {
+      console.error("Error creating itinerary:", error?.message || error);
+      console.error("Stack:", error?.stack);
+      res.status(500).json({ error: "Failed to create itinerary", details: error?.message });
+    }
+  });
+
+  // 테스트 UI 서빙
+  app.get("/test-video", (req, res) => {
+    res.send(getTestVideoHtml());
+  });
+
+  // ========================================
+  // 🎥 Seedance 비디오 생성 API (Seedance 1.5 Pro)
+  // ========================================
+
+  // 🎬 영상 프롬프트 미리보기 API (Gemini로 장면별 대사/프롬프트 생성)
+  app.get("/api/itineraries/:id/video/prompts", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const itinerary = await storage.getItinerary(id);
+
+      if (!itinerary) {
+        return res.status(404).json({ error: "Itinerary not found" });
+      }
+
+      // 일정표 아이템 조회
+      const items = await storage.getItineraryItems(id);
+      const city = await storage.getCity(itinerary.cityId);
+
+      // VideoPromptData 생성을 위한 데이터 구성
+      const itineraryData = {
+        id: itinerary.id,
+        destination: city?.name || 'Paris',
+        startDate: itinerary.startDate?.toString() || new Date().toISOString(),
+        endDate: itinerary.endDate?.toString() || new Date().toISOString(),
+        curationFocus: (itinerary.curationFocus as any) || 'Everyone',
+        companionType: itinerary.companionType || 'Family',
+        companionCount: itinerary.companionCount || 4,
+        companionAges: itinerary.companionAges || undefined,
+        vibes: itinerary.vibes || ['Family', 'Culture'],
+        travelPace: (itinerary.travelPace as any) || 'Normal',
+        travelStyle: (itinerary.travelStyle as any) || 'Reasonable',
+        mobilityStyle: (itinerary.mobilityStyle as any) || 'Moderate',
+        userBirthDate: itinerary.userBirthDate || undefined,
+        userGender: (itinerary.userGender as any) || 'M',
+        items: items.map(item => ({
+          day: item.day,
+          slotNumber: item.slotNumber,
+          placeName: item.placeName || '장소',
+          placeType: item.type || 'attraction',
+          startTime: item.startTime || '09:00',
+          endTime: item.endTime || '10:00',
+          description: item.description || ''
+        }))
+      };
+
+      console.log(`[Video Prompts] Generating prompts for itinerary #${id}...`);
+
+      const videoPrompts = await generateVideoPrompts(itineraryData);
+
+      res.json({
+        success: true,
+        data: videoPrompts,
+        message: `${videoPrompts.dayCount}일 여행에 대한 영상 프롬프트가 생성되었습니다.`
+      });
+
     } catch (error) {
-      console.error("Error creating itinerary:", error);
-      res.status(500).json({ error: "Failed to create itinerary" });
+      console.error("Error generating video prompts:", error);
+      res.status(500).json({ error: "Failed to generate video prompts" });
+    }
+  });
+
+  // 🎬 단일 장면 프롬프트 테스트 API
+  app.post("/api/video/test-prompt", async (req, res) => {
+    try {
+      const { placeName, curationFocus, vibes, destination } = req.body;
+
+      if (!placeName) {
+        return res.status(400).json({ error: "placeName is required" });
+      }
+
+      const scenePrompt = await generateSingleScenePrompt(
+        placeName,
+        curationFocus || 'Kids',
+        vibes || ['Family', 'Culture'],
+        destination || 'Paris'
+      );
+
+      res.json({
+        success: true,
+        data: scenePrompt
+      });
+
+    } catch (error) {
+      console.error("Error generating test prompt:", error);
+      res.status(500).json({ error: "Failed to generate test prompt" });
+    }
+  });
+
+  // 🎬 영상 생성 시작 (기존 API 개선 - scene-prompt-generator 연동)
+  app.post("/api/itineraries/:id/video/generate", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const itinerary = await storage.getItinerary(id);
+
+      if (!itinerary) {
+        return res.status(404).json({ error: "Itinerary not found" });
+      }
+
+      // 일정표 아이템 조회
+      const items = await storage.getItineraryItems(id);
+      const city = await storage.getCity(itinerary.cityId);
+
+      // 🎬 scene-prompt-generator를 사용하여 표준화된 프롬프트 생성
+      const itineraryData = {
+        id: itinerary.id,
+        destination: city?.name || 'Paris',
+        startDate: itinerary.startDate?.toString() || new Date().toISOString(),
+        endDate: itinerary.endDate?.toString() || new Date().toISOString(),
+        curationFocus: (itinerary.curationFocus as any) || 'Everyone',
+        companionType: itinerary.companionType || 'Family',
+        companionCount: itinerary.companionCount || 4,
+        companionAges: itinerary.companionAges || undefined,
+        vibes: itinerary.vibes || ['Family', 'Culture'],
+        travelPace: (itinerary.travelPace as any) || 'Normal',
+        travelStyle: (itinerary.travelStyle as any) || 'Reasonable',
+        mobilityStyle: (itinerary.mobilityStyle as any) || 'Moderate',
+        userBirthDate: itinerary.userBirthDate || undefined,
+        userGender: (itinerary.userGender as any) || 'M',
+        items: items.map(item => ({
+          day: item.day,
+          slotNumber: item.slotNumber,
+          placeName: item.placeName || '장소',
+          placeType: item.type || 'attraction',
+          startTime: item.startTime || '09:00',
+          endTime: item.endTime || '10:00',
+          description: item.description || ''
+        }))
+      };
+
+      console.log(`[Video] Generating video prompts for itinerary #${id}...`);
+
+      // Gemini로 장면별 프롬프트 생성
+      const videoPrompts = await generateVideoPrompts(itineraryData);
+
+      // ⏱️ travelPace에 따른 클립 설정
+      // Relaxed: 4장면 x 15초 = 60초
+      // Normal: 6장면 x 10초 = 60초  
+      // Packed: 8장면 x 8초 = 64초
+      const clipConfig: Record<string, { clips: number; duration: number }> = {
+        Relaxed: { clips: 4, duration: 15 },
+        Normal: { clips: 6, duration: 10 },
+        Packed: { clips: 8, duration: 8 }
+      };
+      const config = clipConfig[itineraryData.travelPace] || clipConfig.Normal;
+      
+      // 모든 장면 수집 (일별로 펼치기)
+      const allScenes: Array<{ prompt: string; dialogue: any; mood: string }> = [];
+      for (const day of videoPrompts.days) {
+        for (const scene of day.scenes) {
+          allScenes.push(scene);
+        }
+      }
+
+      // 필요한 장면 수만큼 자르기 (travelPace에 따라)
+      const scenesToGenerate = allScenes.slice(0, config.clips);
+      
+      if (scenesToGenerate.length === 0) {
+        return res.status(400).json({ error: "No scenes available to generate video" });
+      }
+
+      console.log(`[Video] 🎬 다중 장면 순차 생성 시작: ${scenesToGenerate.length}개 장면, 각 ${config.duration}초`);
+
+      // DB 상태 업데이트 (processing)
+      await db.update(itineraries)
+        .set({
+          videoStatus: "processing"
+        })
+        .where(eq(itineraries.id, id));
+
+      // 클라이언트에 즉시 응답 (비동기 처리)
+      res.json({
+        success: true,
+        status: "processing",
+        totalScenes: scenesToGenerate.length,
+        clipDuration: config.duration,
+        estimatedTime: `약 ${Math.ceil(scenesToGenerate.length * 30 / 60)}분`,
+        videoPrompts: videoPrompts,
+        message: `영상 생성이 시작되었습니다. ${scenesToGenerate.length}개 장면 순차 생성 중...`
+      });
+
+      // 🔄 백그라운드에서 순차 생성 (응답 후 처리)
+      (async () => {
+        const taskIds: string[] = [];
+        const videoUrls: string[] = [];
+        let hasError = false;
+
+        for (let i = 0; i < scenesToGenerate.length; i++) {
+          const scene = scenesToGenerate[i];
+          
+          // 프롬프트에 한국어 대사 포함
+          const fullPrompt = `${scene.prompt}
+The main character says in Korean: "${scene.dialogue.protagonist}"
+Studio Ghibli animation style, warm colors, soft lighting.
+High quality, 4k, professional animation.`;
+
+          console.log(`[Video] 📹 장면 ${i + 1}/${scenesToGenerate.length} 생성 시작...`);
+
+          try {
+            const result = await createVideoGenerationTask({
+              prompt: fullPrompt,
+              duration: 60, // 🎬 강제 60초 (1분)
+              aspectRatio: "9:16",
+              modelId: "seedance-1-5-pro-251215"
+            });
+
+            if (result.success && result.taskId) {
+              taskIds.push(result.taskId);
+              console.log(`[Video] ✅ 장면 ${i + 1} Task 생성: ${result.taskId}`);
+              
+              // 장면별 완료 대기 (폴링)
+              let attempts = 0;
+              const maxAttempts = 60; // 최대 5분 대기
+              
+              while (attempts < maxAttempts) {
+                await new Promise(resolve => setTimeout(resolve, 5000)); // 5초 대기
+                
+                const status = await getVideoGenerationTask(result.taskId);
+                console.log(`[Video] 장면 ${i + 1} 상태: ${status.status}`);
+                
+                if (status.status === 'Succeed' && status.videoUrl) {
+                  videoUrls.push(status.videoUrl);
+                  console.log(`[Video] ✅ 장면 ${i + 1} 완료: ${status.videoUrl}`);
+                  break;
+                } else if (status.status === 'Failed') {
+                  console.error(`[Video] ❌ 장면 ${i + 1} 실패`);
+                  hasError = true;
+                  break;
+                }
+                attempts++;
+              }
+              
+              if (attempts >= maxAttempts) {
+                console.error(`[Video] ⏰ 장면 ${i + 1} 타임아웃`);
+                hasError = true;
+              }
+            } else {
+              console.error(`[Video] ❌ 장면 ${i + 1} Task 생성 실패`);
+              hasError = true;
+            }
+          } catch (error) {
+            console.error(`[Video] ❌ 장면 ${i + 1} 오류:`, error);
+            hasError = true;
+          }
+
+          // 에러 발생 시 중단
+          if (hasError) break;
+
+          // Rate limit 방지: 다음 장면 생성 전 2초 대기
+          if (i < scenesToGenerate.length - 1) {
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
+        }
+
+        // 최종 결과 DB 업데이트
+        if (videoUrls.length > 0) {
+          // 첫 번째 영상 URL을 대표로 저장 (추후 합성 영상으로 교체)
+          await db.update(itineraries)
+            .set({
+              videoTaskId: taskIds.join(','),
+              videoStatus: hasError ? "partial" : "succeeded",
+              videoUrl: videoUrls[0] // 대표 영상
+            })
+            .where(eq(itineraries.id, id));
+          
+          console.log(`[Video] 🎉 전체 영상 생성 완료: ${videoUrls.length}/${scenesToGenerate.length} 성공`);
+        } else {
+          await db.update(itineraries)
+            .set({
+              videoStatus: "failed"
+            })
+            .where(eq(itineraries.id, id));
+          
+          console.error(`[Video] ❌ 전체 영상 생성 실패`);
+        }
+      })();
+
+    } catch (error) {
+      console.error("Error starting video generation:", error);
+      res.status(500).json({ error: "Failed to start video generation" });
+    }
+  });
+
+  // ========================================
+  // 🎬 임시 테스트용 영상 생성 API (DB 저장 없음)
+  // ========================================
+  
+  /**
+   * POST /api/video/generate-direct
+   * 
+   * 일정 데이터를 직접 Body로 받아서 영상 프롬프트 생성 + Seedance 호출
+   * DB 저장 로직 확정 전에 영상 파이프라인을 테스트할 수 있는 임시 API
+   * 
+   * Request Body 예시:
+   * {
+   *   "destination": "파리, 프랑스",
+   *   "startDate": "2026-02-01",
+   *   "endDate": "2026-02-03",
+   *   "curationFocus": "Kids",
+   *   "companionType": "Family",
+   *   "companionCount": 4,
+   *   "vibes": ["Healing", "Foodie"],
+   *   "travelPace": "Normal",
+   *   "travelStyle": "Reasonable",
+   *   "mobilityStyle": "Moderate",
+   *   "userBirthDate": "1985-06-15",
+   *   "userGender": "M",
+   *   "items": [
+   *     { "day": 1, "slotNumber": 1, "placeName": "에펠탑", "placeType": "landmark", "startTime": "09:00", "endTime": "11:00" },
+   *     { "day": 1, "slotNumber": 2, "placeName": "루브르 박물관", "placeType": "museum", "startTime": "11:30", "endTime": "14:00" }
+   *   ]
+   * }
+   */
+  app.post("/api/video/generate-direct", async (req, res) => {
+    try {
+      const {
+        destination,
+        startDate,
+        endDate,
+        curationFocus = 'Everyone',
+        companionType = 'Family',
+        companionCount = 2,
+        vibes = ['Family', 'Culture'],
+        travelPace = 'Normal',
+        travelStyle = 'Reasonable',
+        mobilityStyle = 'Moderate',
+        userBirthDate,
+        userGender = 'M',
+        items = []
+      } = req.body;
+
+      // 필수 필드 검증
+      if (!destination) {
+        return res.status(400).json({ error: "destination is required" });
+      }
+      if (!items || !Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({ error: "items array is required and must not be empty" });
+      }
+
+      console.log(`[Video Direct] 직접 영상 생성 요청: ${destination}, ${items.length}개 장소`);
+
+      // VideoPromptData용 일정 데이터 구성 (DB 없이 직접 생성)
+      const itineraryData = {
+        id: 0, // 임시 ID (DB 저장 안 함)
+        destination,
+        startDate: startDate || new Date().toISOString().split('T')[0],
+        endDate: endDate || new Date().toISOString().split('T')[0],
+        curationFocus: curationFocus as 'Kids' | 'Parents' | 'Self' | 'Everyone',
+        companionType,
+        companionCount,
+        companionAges: undefined,
+        vibes,
+        travelPace: travelPace as 'Relaxed' | 'Normal' | 'Packed',
+        travelStyle: travelStyle as 'Luxury' | 'Premium' | 'Reasonable' | 'Economic',
+        mobilityStyle: mobilityStyle as 'Minimal' | 'Moderate' | 'WalkMore',
+        userBirthDate,
+        userGender: userGender as 'M' | 'F',
+        items: items.map((item: any, index: number) => ({
+          day: item.day || 1,
+          slotNumber: item.slotNumber || index + 1,
+          placeName: item.placeName || `장소 ${index + 1}`,
+          placeType: item.placeType || 'attraction',
+          startTime: item.startTime || '09:00',
+          endTime: item.endTime || '10:00',
+          description: item.description || ''
+        }))
+      };
+
+      console.log(`[Video Direct] Gemini로 영상 프롬프트 생성 중...`);
+
+      // 1. Gemini로 장면별 프롬프트 생성
+      const videoPrompts = await generateVideoPrompts(itineraryData);
+
+      console.log(`[Video Direct] 프롬프트 생성 완료: ${videoPrompts.dayCount}일, ${videoPrompts.days.reduce((sum, d) => sum + d.scenes.length, 0)}개 장면`);
+
+      // 2. 첫 번째 장면으로 Seedance 영상 생성 (MVP)
+      const firstScene = videoPrompts.days[0]?.scenes[0];
+
+      if (!firstScene) {
+        return res.status(400).json({ error: "No scenes available to generate video" });
+      }
+
+      // 프롬프트에 한국어 대사 포함
+      const fullPrompt = `${firstScene.prompt}
+The main character says in Korean: "${firstScene.dialogue.protagonist}"
+Studio Ghibli animation style, warm colors, soft lighting, joyful expressions.
+High quality, 4k, professional animation.`;
+
+      console.log(`[Video Direct] Seedance 영상 생성 시작: ${fullPrompt.substring(0, 100)}...`);
+
+      // 3. Seedance 비동기 작업 생성
+      const result = await createVideoGenerationTask({
+        prompt: fullPrompt,
+        duration: 60, // 🎬 강제 60초 (1분)
+        aspectRatio: "9:16",
+        modelId: "seedance-1-5-pro-251215"
+      });
+
+      if (!result.success || !result.taskId) {
+        console.error(`[Video Direct] Seedance 영상 생성 실패:`, result.error);
+        return res.status(500).json({
+          success: false,
+          error: "Failed to start video generation",
+          details: result.error,
+          videoPrompts // 프롬프트는 반환 (디버깅용)
+        });
+      }
+
+      console.log(`[Video Direct] Seedance 작업 생성 완료: taskId=${result.taskId}`);
+
+      // 4. 성공 응답 (DB 저장 없음)
+      res.json({
+        success: true,
+        taskId: result.taskId,
+        status: "pending",
+        videoPrompts,
+        message: `영상 생성이 시작되었습니다. 주인공: ${videoPrompts.protagonist.type} (${videoPrompts.protagonist.age}세)`,
+        note: "⚠️ 이 API는 테스트용입니다. 결과는 DB에 저장되지 않습니다. GET /api/video/task/:taskId로 상태를 확인하세요."
+      });
+
+    } catch (error) {
+      console.error("[Video Direct] Error:", error);
+      res.status(500).json({ error: "Failed to generate video", details: String(error) });
+    }
+  });
+
+  // 🎬 Seedance 작업 상태 조회 (DB 없이)
+  app.get("/api/video/task/:taskId", async (req, res) => {
+    try {
+      const { taskId } = req.params;
+
+      if (!taskId) {
+        return res.status(400).json({ error: "taskId is required" });
+      }
+
+      console.log(`[Video Task] 상태 조회: ${taskId}`);
+
+      const taskStatus = await getVideoGenerationTask(taskId);
+
+      if (!taskStatus) {
+        return res.status(404).json({ error: "Task not found or API error" });
+      }
+
+      res.json({
+        success: true,
+        ...taskStatus
+      });
+
+    } catch (error) {
+      console.error("[Video Task] Error:", error);
+      res.status(500).json({ error: "Failed to get task status", details: String(error) });
+    }
+  });
+
+  app.get("/api/itineraries/:id/video", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const itinerary = await storage.getItinerary(id);
+
+      if (!itinerary) {
+        return res.status(404).json({ error: "Itinerary not found" });
+      }
+
+      // 영상 생성을 요청한 적이 없는 경우
+      if (!itinerary.videoTaskId && !itinerary.videoStatus) {
+        return res.json({ status: "not_started", videoUrl: null });
+      }
+
+      // processing 상태 (다중 장면 백그라운드 생성 중)
+      if (itinerary.videoStatus === "processing") {
+        return res.json({
+          status: "processing",
+          videoUrl: null,
+          message: "영상 생성 중... (여러 장면을 순차 생성합니다)"
+        });
+      }
+
+      // 완료, 부분 완료, 실패 상태
+      if (itinerary.videoStatus === "succeeded" || 
+          itinerary.videoStatus === "partial" || 
+          itinerary.videoStatus === "failed") {
+        return res.json({
+          status: itinerary.videoStatus,
+          videoUrl: itinerary.videoUrl,
+          taskId: itinerary.videoTaskId
+        });
+      }
+
+      // pending 상태 (기존 단일 장면 호환)
+      if (itinerary.videoTaskId && !itinerary.videoTaskId.includes(',')) {
+        const taskStatus = await getVideoGenerationTask(itinerary.videoTaskId);
+
+        if (taskStatus) {
+          if (taskStatus.status === 'Succeed' && taskStatus.videoUrl) {
+            await db.update(itineraries)
+              .set({
+                videoStatus: "succeeded",
+                videoUrl: taskStatus.videoUrl
+              })
+              .where(eq(itineraries.id, id));
+
+            return res.json({
+              status: "succeeded",
+              videoUrl: taskStatus.videoUrl,
+              taskId: itinerary.videoTaskId
+            });
+          } else if (taskStatus.status === 'Failed') {
+            await db.update(itineraries)
+              .set({ videoStatus: "failed" })
+              .where(eq(itineraries.id, id));
+
+            return res.json({
+              status: "failed",
+              videoUrl: null,
+              taskId: itinerary.videoTaskId
+            });
+          }
+        }
+      }
+
+      res.json({
+        status: itinerary.videoStatus || "pending",
+        videoUrl: itinerary.videoUrl,
+        taskId: itinerary.videoTaskId
+      });
+
+    } catch (error) {
+      console.error("Error fetching video status:", error);
+      res.status(500).json({ error: "Failed to fetch video status" });
     }
   });
 
@@ -463,28 +1058,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/map/html", (req, res) => {
     const { places } = req.body;
     const apiKey = process.env.Google_maps_api_key || process.env.GOOGLE_MAPS_API_KEY || "";
-    
+
     if (!apiKey) {
       return res.status(400).json({ error: "Google Maps API key not configured" });
     }
-    
+
     if (!places || !Array.isArray(places) || places.length === 0) {
       return res.json({ html: getEmptyMapHtml() });
     }
-    
+
     const validPlaces = places.filter((p: any) => p.lat && p.lng);
     if (validPlaces.length === 0) {
       return res.json({ html: getEmptyMapHtml() });
     }
-    
+
     const html = generateMapHtml(validPlaces, apiKey);
     res.json({ html });
   });
 
   // Health check
   app.get("/api/health", (req, res) => {
-    res.json({ 
-      status: "ok", 
+    res.json({
+      status: "ok",
       timestamp: new Date().toISOString(),
       services: {
         googlePlaces: !!(process.env.Google_maps_api_key || process.env.GOOGLE_MAPS_API_KEY),
@@ -498,11 +1093,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/verification/request", async (req, res) => {
     try {
       const { userId, itineraryData, userMessage, preferredDate, contactEmail, contactKakao } = req.body;
-      
+
       if (!userId || !itineraryData) {
         return res.status(400).json({ error: "userId and itineraryData are required" });
       }
-      
+
       const [request] = await db.insert(verificationRequests).values({
         itineraryId: itineraryData.id || 0,
         userId,
@@ -513,7 +1108,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         contactKakao,
         status: "pending",
       }).returning();
-      
+
       res.json({ success: true, requestId: request.id });
     } catch (error) {
       console.error("Error creating verification request:", error);
@@ -524,13 +1119,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/verification/requests", async (req, res) => {
     try {
       const { userId, status } = req.query;
-      
+
       let query = db.select().from(verificationRequests);
-      
+
       if (userId) {
         query = query.where(eq(verificationRequests.userId, userId as string));
       }
-      
+
       const requests = await query.orderBy(desc(verificationRequests.createdAt));
       res.json(requests);
     } catch (error) {
@@ -543,11 +1138,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const [request] = await db.select().from(verificationRequests).where(eq(verificationRequests.id, parseInt(id)));
-      
+
       if (!request) {
         return res.status(404).json({ error: "Verification request not found" });
       }
-      
+
       res.json(request);
     } catch (error) {
       console.error("Error fetching verification request:", error);
@@ -559,7 +1154,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const { status, adminComment, placeRatings } = req.body;
-      
+
       const updateData: any = { updatedAt: new Date() };
       if (status) updateData.status = status;
       if (adminComment !== undefined) updateData.adminComment = adminComment;
@@ -567,12 +1162,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (status === "verified" || status === "rejected") {
         updateData.reviewedAt = new Date();
       }
-      
+
       const [updated] = await db.update(verificationRequests)
         .set(updateData)
         .where(eq(verificationRequests.id, parseInt(id)))
         .returning();
-      
+
       res.json(updated);
     } catch (error) {
       console.error("Error updating verification request:", error);
@@ -581,10 +1176,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   const httpServer = createServer(app);
-  
+
   // 서버 시작 시 기본 데이터 자동 시드
   autoSeedDefaultData();
-  
+
   return httpServer;
 }
 
@@ -597,7 +1192,7 @@ async function autoSeedDefaultData() {
       await seedDefaultInstagramHashtags();
       console.log('[AutoSeed] Instagram 해시태그 시드 완료');
     }
-    
+
     // 도시 테이블이 비어있으면 자동 시드
     const [cityCount] = await db.select({ count: count() }).from(cities);
     if (cityCount.count === 0) {
@@ -605,7 +1200,7 @@ async function autoSeedDefaultData() {
       await seedDefaultCities();
       console.log('[AutoSeed] 도시 시드 완료');
     }
-    
+
     // YouTube 채널 테이블이 비어있으면 자동 시드
     const [channelCount] = await db.select({ count: count() }).from(youtubeChannels);
     if (channelCount.count === 0) {
@@ -653,11 +1248,11 @@ async function seedDefaultInstagramHashtags() {
     { hashtag: "#다낭여행", category: "travel" },
     { hashtag: "#하노이여행", category: "travel" },
   ];
-  
+
   for (const tag of defaultHashtags) {
     try {
       await db.insert(instagramHashtags).values(tag).onConflictDoNothing();
-    } catch (e) {}
+    } catch (e) { }
   }
 }
 
@@ -677,11 +1272,11 @@ async function seedDefaultCities() {
     { name: "다낭", country: "베트남", countryCode: "VN", latitude: 16.0544, longitude: 108.2022, timezone: "Asia/Ho_Chi_Minh", primaryLanguage: "vi" },
     { name: "하노이", country: "베트남", countryCode: "VN", latitude: 21.0285, longitude: 105.8542, timezone: "Asia/Ho_Chi_Minh", primaryLanguage: "vi" },
   ];
-  
+
   for (const city of defaultCities) {
     try {
       await db.insert(cities).values(city).onConflictDoNothing();
-    } catch (e) {}
+    } catch (e) { }
   }
 }
 
@@ -693,10 +1288,10 @@ async function seedDefaultYouTubeChannels() {
     { channelId: "UCsJ6RuBiTVLvNWb56-wr_aQ", channelName: "빠니보틀", channelUrl: "https://www.youtube.com/@ppanibottle", category: "travel", trustWeight: 1.9 },
     { channelId: "UC_PARIS_OINOJA", channelName: "파리외노자", channelUrl: "https://www.youtube.com/@parisnoja", category: "travel", trustWeight: 1.9 },
   ];
-  
+
   for (const channel of defaultChannels) {
     try {
       await db.insert(youtubeChannels).values(channel).onConflictDoNothing();
-    } catch (e) {}
+    } catch (e) { }
   }
 }
