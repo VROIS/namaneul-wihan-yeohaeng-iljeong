@@ -160,3 +160,31 @@ http://localhost:8082
 | F7 | 60대+ | 여 | ✅ | `char_f7_graceful_60s_*.png` |
 
 **총 생성: 10/14명 (71%)**
+
+---
+
+## 🎬 세션 완료 정보 (2026-01-26 10:20)
+
+### Git 커밋
+- **커밋 해시**: `9cefa83`, `2fe20a6`
+- **브랜치**: `main`
+- **원격 저장소**: `https://github.com/VROIS/namaneul-wihan-yeohaeng-iljeong.git`
+- **변경 통계**: 40개 파일, +5,745줄, -338줄, 21개 신규 파일
+
+### 로컬 백업
+- **경로**: `C:\Users\SY Lee\Documents\NUBI_Backup_20260126_022318`
+- **포함**: 전체 docs/ 폴더 + SavedTripDetailScreen.tsx
+
+### 테스트 시나리오
+1. 일정 생성 (약 30초) → 2. 저장 버튼 클릭 → 3. 프로필 > 나의 여정 확인  
+4. 일정 카드 클릭 → 5. AI 영상 만들기 (약 4분) → 6. 영상 재생/저장
+
+### 알려진 제약
+- **Seedance**: ModelNotOpen 상태 (활성화 대기)
+- **Expo 빌드**: 코드 수정 시 `npx expo export --platform web` 필요
+- **로그인**: 현재 admin 고정 (테스트용)
+
+### 다음 작업자 안내
+**즉시 실행**: `npx expo export --platform web && npm run server:dev`  
+**테스트**: `http://localhost:8082`  
+**문서**: `docs/PHASE_E_*.md` 참조
