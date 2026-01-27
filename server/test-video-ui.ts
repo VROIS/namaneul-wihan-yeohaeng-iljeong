@@ -1,5 +1,5 @@
 
-export function getTestVideoHtml() {
+export function getTestVideoHtml(): string {
     return `
 <!DOCTYPE html>
 <html lang="ko">
@@ -34,7 +34,7 @@ export function getTestVideoHtml() {
         
         <div class="input-group">
             <label for="itineraryId">일정 ID (Itinerary ID)</label>
-            <input type="number" id="itineraryId" value="1" placeholder="DB에 존재하는 일정 ID 입력">
+            <input type="number" id="itineraryId" value="5" placeholder="DB에 존재하는 일정 ID 입력">
         </div>
 
         <button id="generateBtn" onclick="startGeneration()">영상 생성 요청</button>
@@ -76,9 +76,16 @@ export function getTestVideoHtml() {
                 const data = await res.json();
 
                 if (data.success) {
-                    log(\`요청 성공! Task ID: \${data.taskId}\`);
-                    statusBadge.innerText = 'PENDING';
+                    log(`요청 성공! 상태: ${ data.status } `);
+                    statusBadge.innerText = data.status.toUpperCase();
                     statusBadge.className = 'status-badge status-pending';
+                    
+                    // 메시지 표시
+                    if (data.message) {
+                        document.getElementById('message').innerText = data.message;
+                        log(data.message);
+                    }
+                    
                     startPolling(id);
                 } else {
                     throw new Error(data.error || 'Unknown error');
@@ -128,6 +135,9 @@ export function getTestVideoHtml() {
                     } else {
                         // pending or processing
                          statusBadge.className = 'status-badge status-processing';
+                         if (data.message) {
+                            document.getElementById('message').innerText = data.message;
+                         }
                     }
                 } catch (err) {
                     console.error(err);

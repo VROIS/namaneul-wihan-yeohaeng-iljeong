@@ -486,7 +486,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       // 🔧 로그인 제거: userId를 'admin'으로 고정
       const userId = "admin";
-      
+
       // admin 사용자 존재 확인 (없으면 자동 생성)
       const existingUser = await storage.getUser(userId);
       if (!existingUser) {
@@ -498,15 +498,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
         console.log(`[Itinerary] Admin user created`);
       }
-      
+
       // 날짜 문자열을 Date 객체로 변환
+      // travelStyle을 DB persona_type enum으로 매핑 (대문자 → 소문자)
+      const styleToPersonaType: Record<string, string> = {
+        'Luxury': 'luxury',
+        'Premium': 'comfort',
+        'Reasonable': 'comfort',
+        'Economic': 'comfort', // 🩹 [2026-01-26] DB Enum 불일치 방지 (economic -> comfort)
+        'luxury': 'luxury',
+        'comfort': 'comfort',
+        'economic': 'comfort', // 🩹 [2026-01-26] DB Enum 불일치 방지
+      };
+
       const itineraryData = {
         ...req.body,
         userId: userId, // 강제로 admin
         startDate: req.body.startDate ? new Date(req.body.startDate) : new Date(),
         endDate: req.body.endDate ? new Date(req.body.endDate) : new Date(),
+        personaType: styleToPersonaType[req.body.travelStyle] || 'comfort', // 소문자 매핑
+        // 🩹 [2026-01-26] raw_data 저장 (없으면 빈 객체)
+        rawData: req.body.rawData || {},
       };
-      
+
       console.log(`[Itinerary] Creating for admin user...`);
       const itinerary = await storage.createItinerary(itineraryData);
       console.log(`[Itinerary] Created successfully: id=${itinerary.id}`);
@@ -622,8 +636,43 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // 일정표 아이템 조회
-      const items = await storage.getItineraryItems(id);
+      // 🩹 [2026-01-26] rawData(JSONB) 우선 사용 (생성 당시의 모든 정보 보존)
+      const rawData = itinerary.rawData as any;
+      let itineraryItems: any[] = [];
+
+      if (rawData && rawData.days && Array.isArray(rawData.days)) {
+        // rawData에서 items 추출
+        console.log(`[Video] 🎯 저장된 rawData 사용 (원본 장소 정보 복원)`);
+        itineraryItems = rawData.days.flatMap((day: any) =>
+          day.places.map((place: any, index: number) => ({
+            day: day.day,
+            slotNumber: index + 1,
+            placeName: place.name,
+            placeType: place.placeTypes?.[0] || 'attraction',
+            startTime: place.startTime || '09:00',
+            endTime: place.endTime || '10:00',
+            description: place.description || ''
+          }))
+        );
+      } else {
+        // 기존 items 조회
+        const dbItems = await storage.getItineraryItems(id);
+        itineraryItems = dbItems;
+      }
+
       const city = await storage.getCity(itinerary.cityId);
+
+      // 🔧 일정 아이템이 없으면 기본 더미 데이터 생성 (테스트용)
+      const defaultItems = itineraryItems.length > 0 ? itineraryItems : [
+        { day: 1, slotNumber: 1, placeName: '에펠탑', type: 'landmark', startTime: '09:00', endTime: '10:30', description: '파리의 상징' },
+        { day: 1, slotNumber: 2, placeName: '루브르 박물관', type: 'museum', startTime: '11:00', endTime: '13:00', description: '세계 최대 미술관' },
+        { day: 1, slotNumber: 3, placeName: '카페 마를리', type: 'restaurant', startTime: '13:30', endTime: '14:30', description: '루브르 레스토랑' },
+        { day: 1, slotNumber: 4, placeName: '샹젤리제 거리', type: 'attraction', startTime: '15:00', endTime: '17:00', description: '유명한 쇼핑가' },
+        { day: 1, slotNumber: 5, placeName: '개선문', type: 'landmark', startTime: '17:30', endTime: '18:30', description: '나폴레옹 승전 기념' },
+        { day: 1, slotNumber: 6, placeName: '세느강 유람선', type: 'attraction', startTime: '19:00', endTime: '20:30', description: '야경 크루즈' },
+      ];
+
+      console.log(`[Video] 아이템 수: ${defaultItems.length}개 (출처: ${rawData?.days ? 'rawData' : 'DB Items'})`);
 
       // 🎬 scene-prompt-generator를 사용하여 표준화된 프롬프트 생성
       const itineraryData = {
@@ -641,11 +690,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         mobilityStyle: (itinerary.mobilityStyle as any) || 'Moderate',
         userBirthDate: itinerary.userBirthDate || undefined,
         userGender: (itinerary.userGender as any) || 'M',
-        items: items.map(item => ({
+        items: defaultItems.map((item: any) => ({
           day: item.day,
           slotNumber: item.slotNumber,
           placeName: item.placeName || '장소',
-          placeType: item.type || 'attraction',
+          placeType: item.placeType || item.type || 'attraction', // type도 허용
           startTime: item.startTime || '09:00',
           endTime: item.endTime || '10:00',
           description: item.description || ''
@@ -667,7 +716,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         Packed: { clips: 8, duration: 8 }
       };
       const config = clipConfig[itineraryData.travelPace] || clipConfig.Normal;
-      
+
       // 모든 장면 수집 (일별로 펼치기)
       const allScenes: Array<{ prompt: string; dialogue: any; mood: string }> = [];
       for (const day of videoPrompts.days) {
@@ -678,7 +727,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // 필요한 장면 수만큼 자르기 (travelPace에 따라)
       const scenesToGenerate = allScenes.slice(0, config.clips);
-      
+
       if (scenesToGenerate.length === 0) {
         return res.status(400).json({ error: "No scenes available to generate video" });
       }
@@ -711,7 +760,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         for (let i = 0; i < scenesToGenerate.length; i++) {
           const scene = scenesToGenerate[i];
-          
+
           // 프롬프트에 한국어 대사 포함
           const fullPrompt = `${scene.prompt}
 The main character says in Korean: "${scene.dialogue.protagonist}"
@@ -725,23 +774,23 @@ High quality, 4k, professional animation.`;
               prompt: fullPrompt,
               duration: 60, // 🎬 강제 60초 (1분)
               aspectRatio: "9:16",
-              modelId: "seedance-1-5-pro-251215"
+              // modelId 제거 (잘못된 ID 사용 방지)
             });
 
             if (result.success && result.taskId) {
               taskIds.push(result.taskId);
               console.log(`[Video] ✅ 장면 ${i + 1} Task 생성: ${result.taskId}`);
-              
+
               // 장면별 완료 대기 (폴링)
               let attempts = 0;
               const maxAttempts = 60; // 최대 5분 대기
-              
+
               while (attempts < maxAttempts) {
                 await new Promise(resolve => setTimeout(resolve, 5000)); // 5초 대기
-                
+
                 const status = await getVideoGenerationTask(result.taskId);
                 console.log(`[Video] 장면 ${i + 1} 상태: ${status.status}`);
-                
+
                 if (status.status === 'Succeed' && status.videoUrl) {
                   videoUrls.push(status.videoUrl);
                   console.log(`[Video] ✅ 장면 ${i + 1} 완료: ${status.videoUrl}`);
@@ -753,7 +802,7 @@ High quality, 4k, professional animation.`;
                 }
                 attempts++;
               }
-              
+
               if (attempts >= maxAttempts) {
                 console.error(`[Video] ⏰ 장면 ${i + 1} 타임아웃`);
                 hasError = true;
@@ -786,7 +835,7 @@ High quality, 4k, professional animation.`;
               videoUrl: videoUrls[0] // 대표 영상
             })
             .where(eq(itineraries.id, id));
-          
+
           console.log(`[Video] 🎉 전체 영상 생성 완료: ${videoUrls.length}/${scenesToGenerate.length} 성공`);
         } else {
           await db.update(itineraries)
@@ -794,7 +843,7 @@ High quality, 4k, professional animation.`;
               videoStatus: "failed"
             })
             .where(eq(itineraries.id, id));
-          
+
           console.error(`[Video] ❌ 전체 영상 생성 실패`);
         }
       })();
@@ -808,7 +857,7 @@ High quality, 4k, professional animation.`;
   // ========================================
   // 🎬 임시 테스트용 영상 생성 API (DB 저장 없음)
   // ========================================
-  
+
   /**
    * POST /api/video/generate-direct
    * 
@@ -1000,9 +1049,9 @@ High quality, 4k, professional animation.`;
       }
 
       // 완료, 부분 완료, 실패 상태
-      if (itinerary.videoStatus === "succeeded" || 
-          itinerary.videoStatus === "partial" || 
-          itinerary.videoStatus === "failed") {
+      if (itinerary.videoStatus === "succeeded" ||
+        itinerary.videoStatus === "partial" ||
+        itinerary.videoStatus === "failed") {
         return res.json({
           status: itinerary.videoStatus,
           videoUrl: itinerary.videoUrl,

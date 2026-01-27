@@ -457,6 +457,8 @@ export default function TripPlannerScreen() {
         travelPace: formData.travelPace,
         mobilityStyle: formData.mobilityStyle,
         status: "saved",
+        // 🩹 [2026-01-26] 영상 생성을 위한 원본 데이터 전체 저장
+        rawData: itinerary,
       };
 
       const response = await apiRequest("POST", "/api/itineraries", saveData);
@@ -901,7 +903,7 @@ export default function TripPlannerScreen() {
             <Feather name="arrow-left" size={24} color={theme.text} />
           </Pressable>
           <Text style={[styles.resultTitle, { color: theme.text }]}>{itinerary.destination}</Text>
-          <Pressable 
+          <Pressable
             style={[
               styles.headerButton,
               savedItineraryId && { backgroundColor: "#22c55e" }
@@ -912,10 +914,10 @@ export default function TripPlannerScreen() {
             {isSaving ? (
               <ActivityIndicator size="small" color={theme.text} />
             ) : (
-              <Feather 
-                name={savedItineraryId ? "check" : "save"} 
-                size={22} 
-                color={savedItineraryId ? "#FFFFFF" : theme.text} 
+              <Feather
+                name={savedItineraryId ? "check" : "save"}
+                size={22}
+                color={savedItineraryId ? "#FFFFFF" : theme.text}
               />
             )}
           </Pressable>

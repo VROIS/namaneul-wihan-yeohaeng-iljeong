@@ -123,6 +123,13 @@ export async function createVideoGenerationTask(
     const startTime = Date.now();
 
     try {
+        // 🔧 Mock 모드 (false = 실제 API 호출, true = 테스트용 mock URL)
+        const USE_MOCK = process.env.USE_MOCK_SEEDANCE === 'true'; // 기본값: false (실제 API 사용)
+        if (USE_MOCK) {
+            console.log("[Seedance] Mock mode enabled - returning test video URL");
+            return generateMockResponse(input);
+        }
+
         const credentials = await getBytePlusCredentials();
 
         if (!credentials) {
@@ -131,8 +138,7 @@ export async function createVideoGenerationTask(
         }
 
         // 요청 본문 구성 (문서 기반)
-        const requestBody = {
-            model: input.modelId || SEEDANCE_MODEL_ID, // 입력된 모델 ID 우선 사용
+        const requestBody: any = {
             content: [
                 {
                     type: "text",
@@ -141,9 +147,17 @@ export async function createVideoGenerationTask(
             ],
             resolution: "720p", // Seedance 1.5 pro default
             ratio: input.aspectRatio || "9:16",
-            duration: input.duration || 5,
+            duration: input.duration || 5, // 5 또는 10초 권장됨 (60초는 너무 길 수 있음)
             generate_audio: true, // 오디오 생성 활성화
         };
+
+        // 모델 ID가 명시적으로 제공된 경우에만 추가
+        if (input.modelId) {
+            requestBody.model = input.modelId;
+        } else if (SEEDANCE_MODEL_ID && SEEDANCE_MODEL_ID !== "seedance-1-5-pro-251215") {
+            // 기본 모델 ID가 유효한 값으로 변경된 경우에만 추가
+            requestBody.model = SEEDANCE_MODEL_ID;
+        }
 
         // 이미지 입력이 있는 경우 (Image-to-Video)
         if (input.imageUrl) {

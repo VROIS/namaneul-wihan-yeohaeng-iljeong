@@ -5,7 +5,7 @@ import { z } from "zod";
 
 // Enums
 export const placeTypeEnum = pgEnum("place_type", ["restaurant", "attraction", "hotel", "cafe", "landmark"]);
-export const personaTypeEnum = pgEnum("persona_type", ["luxury", "comfort"]);
+export const personaTypeEnum = pgEnum("persona_type", ["luxury", "comfort", "economic"]);
 export const dataSourceEnum = pgEnum("data_source", ["google", "tripadvisor", "yelp", "foursquare", "michelin", "viator"]);
 
 // Users table
@@ -262,6 +262,10 @@ export const itineraries = pgTable("itineraries", {
   videoTaskId: text("video_task_id"),
   videoStatus: text("video_status"), // pending, processing, succeeded, failed
   videoUrl: text("video_url"), // Final MP4 URL
+
+  // 🩹 [2026-01-26] 일정 생성 원본 데이터 저장 (영상 생성 시 재사용)
+  // items 테이블 대신 이 JSON을 사용하여 장소 목록을 복원함
+  rawData: jsonb("raw_data").$type<object>().default({}),
 
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
   updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
