@@ -1,16 +1,9 @@
 
 import * as dotenv from "dotenv";
-import path from "path";
 import pg from "pg";
 
-// .env 로드
-const envPath = path.join("C:/Users/SY Lee/.cursor/namaneul-wihan-yeohaeng-iljeong", ".env");
-const result = dotenv.config({ path: envPath });
-
-if (result.error) {
-    console.error("❌ .env 파일 로드 실패:", result.error);
-    process.exit(1);
-}
+// .env 로드 (프로젝트 루트 기준)
+dotenv.config();
 
 const { Pool } = pg;
 

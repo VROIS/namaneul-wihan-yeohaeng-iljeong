@@ -1,11 +1,9 @@
 
 import * as dotenv from "dotenv";
-import path from "path";
 import pg from "pg";
 
-// .env 로드
-const envPath = path.join("C:/Users/SY Lee/.cursor/namaneul-wihan-yeohaeng-iljeong", ".env");
-dotenv.config({ path: envPath });
+// .env 로드 (프로젝트 루트 기준)
+dotenv.config();
 
 const { Pool } = pg;
 

@@ -772,9 +772,8 @@ High quality, 4k, professional animation.`;
           try {
             const result = await createVideoGenerationTask({
               prompt: fullPrompt,
-              duration: 60, // 🎬 강제 60초 (1분)
+              duration: config.duration, // travelPace에 따른 클립 길이 (8-15초)
               aspectRatio: "9:16",
-              // modelId 제거 (잘못된 ID 사용 방지)
             });
 
             if (result.success && result.taskId) {
