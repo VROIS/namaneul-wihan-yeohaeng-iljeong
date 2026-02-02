@@ -161,7 +161,7 @@ interface TransportPriceResult {
 /**
  * 소숫점 2자리 반올림
  */
-function round2(num: number): number {
+export function round2(num: number): number {
   return Math.round(num * 100) / 100;
 }
 

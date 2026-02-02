@@ -76,7 +76,7 @@ export function getTestVideoHtml(): string {
                 const data = await res.json();
 
                 if (data.success) {
-                    log(`요청 성공! 상태: ${ data.status } `);
+                    log('요청 성공! 상태: ' + data.status);
                     statusBadge.innerText = data.status.toUpperCase();
                     statusBadge.className = 'status-badge status-pending';
                     

@@ -1,7 +1,8 @@
 {
-  "name": "my-app",
+  "name": "nubi-app",
   "main": "client/index.js",
   "version": "1.0.0",
+  "type": "module",
   "scripts": {
     "dev": "tsx server/index.ts",
     "dev:server": "tsx server/index.ts",
@@ -11,6 +12,8 @@
     "expo:static:build": "node scripts/build.js",
     "server:build": "esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=server_dist",
     "server:prod": "NODE_ENV=production node server_dist/index.js",
+    "build": "npm run server:build && npx expo export --platform web",
+    "start": "node server_dist/index.js",
     "db:push": "drizzle-kit push",
     "lint": "npx expo lint",
     "lint:fix": "npx expo lint --fix",
@@ -80,6 +83,7 @@
     "@types/react": "~19.1.0",
     "babel-plugin-module-resolver": "^5.0.2",
     "drizzle-kit": "^0.31.4",
+    "esbuild": "^0.24.2",
     "eslint": "^9.25.0",
     "eslint-config-expo": "~10.0.0",
     "eslint-config-prettier": "^10.1.8",
