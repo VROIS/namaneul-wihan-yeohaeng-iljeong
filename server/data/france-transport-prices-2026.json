@@ -1,0 +1,409 @@
+{
+  "version": "2026",
+  "lastUpdated": "2026-01-08",
+  "validUntil": "2026-12-31",
+  "currency": "EUR",
+  "source": "파리 35년차 한국인 가이드 현장 데이터",
+  "notes": {
+    "fixedPricing": "2026년 시장 표준은 고정 가격제가 주류",
+    "zfeRegulation": "파리 도심 진입 차량은 Euro 6 친환경 기준 필수",
+    "driverLaw": "버스 기사 4.5시간 운전 후 45분 휴식 법적 강제",
+    "budgetTip": "환율 변동 고려하여 10% 예비비 책정 권장"
+  },
+  "guideServices": {
+    "airportTransfer": [
+      {
+        "id": "cdg_taxi",
+        "name": "파리 공항 픽업 (CDG) - 일반 택시/VTC",
+        "vehicle": "일반 택시/VTC",
+        "priceLow": 50,
+        "priceHigh": 65,
+        "unit": "편도",
+        "features": ["강북/강남 구역별 고정 요금"],
+        "guideVerified": true
+      },
+      {
+        "id": "cdg_business_sedan",
+        "name": "파리 공항 픽업 (CDG) - 비즈니스 세단",
+        "vehicle": "E-Class",
+        "priceLow": 117,
+        "priceHigh": 152,
+        "unit": "편도",
+        "features": ["60분 대기 무료", "수하물 서비스", "피켓 마중"],
+        "guideVerified": true
+      },
+      {
+        "id": "cdg_luxury_sedan",
+        "name": "파리 공항 픽업 (CDG) - 럭셔리 세단",
+        "vehicle": "S-Class",
+        "priceLow": 234,
+        "priceHigh": 480,
+        "unit": "편도",
+        "features": ["최상위 의전 등급", "VIP 서비스"],
+        "guideVerified": true
+      },
+      {
+        "id": "cdg_private_van",
+        "name": "파리 공항 픽업 (CDG) - 프라이빗 밴",
+        "vehicle": "밴 4-7인",
+        "priceLow": 117,
+        "priceHigh": 149,
+        "unit": "편도",
+        "features": ["그룹형", "디즈니랜드 이동 가능"],
+        "guideVerified": true
+      },
+      {
+        "id": "train_meet_greet",
+        "name": "기차역 트랜스퍼 - Meet & Greet",
+        "vehicle": "세단",
+        "priceLow": 90,
+        "priceHigh": 90,
+        "unit": "편도",
+        "features": ["플랫폼 픽업 포함"],
+        "guideVerified": true
+      },
+      {
+        "id": "train_business_van",
+        "name": "기차역 트랜스퍼 - 비즈니스 밴",
+        "vehicle": "밴",
+        "priceLow": 140,
+        "priceHigh": 140,
+        "unit": "편도",
+        "features": ["환승 연계 이동"],
+        "guideVerified": true
+      },
+      {
+        "id": "airport_shuttle",
+        "name": "공공/공유 이동",
+        "vehicle": "공항 셔틀/버스",
+        "priceLow": 6,
+        "priceHigh": 40,
+        "unit": "편도",
+        "features": ["루아시버스", "공유 미니버스"],
+        "guideVerified": true
+      }
+    ],
+    "vehicleCharter": [
+      {
+        "id": "half_day_sedan",
+        "name": "반일 투어 (4시간) - 표준 세단",
+        "vehicle": "표준 세단",
+        "priceLow": 340,
+        "priceHigh": 340,
+        "unit": "4시간",
+        "features": ["100-200km 주행 포함", "기사 대기 포함"],
+        "guideVerified": true
+      },
+      {
+        "id": "half_day_van",
+        "name": "반일 투어 (4시간) - 비즈니스 밴",
+        "vehicle": "V-Class",
+        "priceLow": 390,
+        "priceHigh": 420,
+        "unit": "4시간",
+        "features": ["소규모 그룹 최적화"],
+        "guideVerified": true
+      },
+      {
+        "id": "full_day_business",
+        "name": "전일 투어 (8-10시간) - 비즈니스 세단",
+        "vehicle": "E-Class",
+        "priceLow": 600,
+        "priceHigh": 600,
+        "unit": "8-10시간",
+        "features": ["쇼핑", "비즈니스 미팅용"],
+        "guideVerified": true
+      },
+      {
+        "id": "full_day_premium",
+        "name": "전일 투어 (8-10시간) - 프리미엄 세단",
+        "vehicle": "S-Class",
+        "priceLow": 880,
+        "priceHigh": 880,
+        "unit": "8-10시간",
+        "features": ["VIP 의전 서비스 포함"],
+        "guideVerified": true
+      },
+      {
+        "id": "full_day_luxury_van",
+        "name": "전일 투어 (8-10시간) - 럭셔리 미니밴",
+        "vehicle": "VIP 미니밴",
+        "priceLow": 1015,
+        "priceHigh": 1015,
+        "unit": "8-10시간",
+        "features": ["최상위 밴 서비스"],
+        "guideVerified": true
+      },
+      {
+        "id": "hourly_extra",
+        "name": "시간당 추가 요금",
+        "vehicle": "차량 등급별 상이",
+        "priceLow": 70,
+        "priceHigh": 110,
+        "unit": "시간",
+        "features": ["초과 시간 적용"],
+        "guideVerified": true
+      }
+    ],
+    "busCharter": [
+      {
+        "id": "minibus_half",
+        "name": "미니버스 반일 (16-19인)",
+        "vehicle": "미니버스 16-19인",
+        "priceLow": 484,
+        "priceHigh": 484,
+        "unit": "반일",
+        "features": ["소수 정예 단체"],
+        "guideVerified": true
+      },
+      {
+        "id": "minibus_full",
+        "name": "미니버스 전일 (16-19인)",
+        "vehicle": "미니버스 16-19인",
+        "priceLow": 800,
+        "priceHigh": 800,
+        "unit": "전일",
+        "features": ["소수 정예 단체"],
+        "guideVerified": true
+      },
+      {
+        "id": "midbus_full",
+        "name": "중형 버스 전일 (21-25인)",
+        "vehicle": "중형 버스 21-25인",
+        "priceLow": 750,
+        "priceHigh": 1250,
+        "unit": "10시간",
+        "features": ["한국인 투어 주력 차종"],
+        "guideVerified": true
+      },
+      {
+        "id": "coach_full",
+        "name": "대형 코치 전일 (45-55인)",
+        "vehicle": "대형 코치 45-55인",
+        "priceLow": 750,
+        "priceHigh": 900,
+        "unit": "10시간",
+        "features": ["Euro 6 친환경 차량 필수"],
+        "guideVerified": true
+      },
+      {
+        "id": "xlcoach_full",
+        "name": "초대형 코치 전일 (60인+)",
+        "vehicle": "초대형 코치 60인+",
+        "priceLow": 800,
+        "priceHigh": 1100,
+        "unit": "전일",
+        "features": ["MICE/대규모 행사용"],
+        "guideVerified": true
+      }
+    ],
+    "longDistance": [
+      {
+        "id": "km_rate_short",
+        "name": "거리당 요율 (300km 이하)",
+        "vehicle": "세단",
+        "priceLow": 0.75,
+        "priceHigh": 0.75,
+        "unit": "km",
+        "features": ["왕복 회송 비용 포함"],
+        "guideVerified": true
+      },
+      {
+        "id": "km_rate_long",
+        "name": "거리당 요율 (300km 이상)",
+        "vehicle": "세단",
+        "priceLow": 0.7,
+        "priceHigh": 0.7,
+        "unit": "km",
+        "features": ["왕복 회송 비용 포함"],
+        "guideVerified": true
+      },
+      {
+        "id": "paris_brussels",
+        "name": "파리 ↔ 브뤼셀 (벨기에)",
+        "vehicle": "세단",
+        "priceLow": 528,
+        "priceHigh": 528,
+        "unit": "편도 약 3.5시간",
+        "features": ["VAT 및 역외 공급 규정 확인 필요"],
+        "guideVerified": true
+      },
+      {
+        "id": "paris_geneva",
+        "name": "파리 ↔ 제네바 (스위스)",
+        "vehicle": "세단",
+        "priceLow": 1150,
+        "priceHigh": 1150,
+        "unit": "편도 약 6시간",
+        "features": ["통행권(Vignette) 및 세관 절차 포함"],
+        "guideVerified": true
+      }
+    ],
+    "guideServices": [
+      {
+        "id": "group_guide_walking",
+        "name": "한국인 가이드 (그룹) - 워킹 투어",
+        "vehicle": null,
+        "priceLow": 35000,
+        "priceHigh": 149000,
+        "currency": "KRW",
+        "unit": "1인당",
+        "features": ["시내/박물관 워킹 투어"],
+        "guideVerified": true
+      },
+      {
+        "id": "private_guide_half",
+        "name": "프라이빗 단독 가이드 - 반일",
+        "vehicle": null,
+        "priceLow": 420,
+        "priceHigh": 420,
+        "unit": "반일",
+        "features": ["차량 미포함 순수 가이드비", "공인 가이드"],
+        "guideVerified": true
+      },
+      {
+        "id": "private_guide_full",
+        "name": "프라이빗 단독 가이드 - 전일",
+        "vehicle": null,
+        "priceLow": 720,
+        "priceHigh": 950,
+        "unit": "전일",
+        "features": ["차량 미포함 순수 가이드비", "공인 가이드"],
+        "guideVerified": true
+      },
+      {
+        "id": "vehicle_guide_package",
+        "name": "차량+가이드 통합 전일 패키지",
+        "vehicle": "차량 포함",
+        "priceLow": 1000,
+        "priceHigh": 1500,
+        "unit": "전일",
+        "features": ["차량 대절비 + 가이드 수당"],
+        "guideVerified": true
+      },
+      {
+        "id": "guide_meal",
+        "name": "가이드 식대",
+        "vehicle": null,
+        "priceLow": 21.1,
+        "priceHigh": 21.1,
+        "unit": "끼니당",
+        "features": ["지방 출장 시 표준"],
+        "guideVerified": true
+      },
+      {
+        "id": "guide_accommodation",
+        "name": "가이드 숙박비",
+        "vehicle": null,
+        "priceLow": 75.6,
+        "priceHigh": 75.6,
+        "unit": "1박당",
+        "features": ["지방 출장 시 표준"],
+        "guideVerified": true
+      },
+      {
+        "id": "tip",
+        "name": "팁 (권장)",
+        "vehicle": null,
+        "priceLow": 2,
+        "priceHigh": 5,
+        "unit": "%",
+        "features": ["의무 아님", "서비스 만족 시 지불"],
+        "guideVerified": true
+      }
+    ]
+  },
+  "rideshareComparison": [
+    {
+      "id": "airport_transfer",
+      "category": "공항 이동",
+      "service": "파리 공항 픽업 (CDG 기준)",
+      "guideService": {
+        "priceLow": 117,
+        "priceHigh": 152,
+        "priceType": "고정가",
+        "vehicle": "비즈니스 세단"
+      },
+      "rideshare": {
+        "priceLow": 45,
+        "priceHigh": 85,
+        "priceType": "변동가",
+        "apps": ["UberX", "Bolt"],
+        "surgeMultiplier": 2
+      },
+      "comparison": "앱: 저렴하지만 피크 타임에 2배 이상 폭등 가능. 전용 차선 이용 불가.",
+      "guideRecommendation": "첫날 도착 시 프리미엄 권장 (피로도 감소)"
+    },
+    {
+      "id": "half_day_tour",
+      "category": "단거리 투어",
+      "service": "반일 투어 (4시간)",
+      "guideService": {
+        "priceLow": 340,
+        "priceHigh": 420,
+        "priceType": "고정가",
+        "features": ["기사 대기 포함"]
+      },
+      "rideshare": {
+        "priceLow": 180,
+        "priceHigh": 260,
+        "priceType": "단순 이동 합산"
+      },
+      "comparison": "전문: 명소 대기 및 동선 최적화 가능. 앱: 장소마다 새로 호출해야 하는 번거로움.",
+      "guideRecommendation": "3곳 이상 방문 시 전문 차량 대절 권장"
+    },
+    {
+      "id": "full_day_charter",
+      "category": "일일 대절",
+      "service": "전일 투어 (8-10시간)",
+      "guideService": {
+        "priceLow": 600,
+        "priceHigh": 880,
+        "priceType": "고정가",
+        "features": ["주행거리 포함"]
+      },
+      "rideshare": {
+        "priceLow": 450,
+        "priceHigh": 650,
+        "priceType": "호출 반복 시"
+      },
+      "comparison": "전문: 이동량이 많을수록 유리 (고정가). 앱: 호출 대기 시간 및 취소 리스크 존재.",
+      "guideRecommendation": "VIP 고객 또는 5곳 이상 일정 시 필수"
+    },
+    {
+      "id": "long_distance",
+      "category": "장거리 이동",
+      "service": "파리 ↔ 브뤼셀 (편도)",
+      "guideService": {
+        "priceLow": 528,
+        "priceHigh": 528,
+        "priceType": "확정"
+      },
+      "rideshare": {
+        "priceLow": 550,
+        "priceHigh": 700,
+        "priceType": "장거리 할증 적용"
+      },
+      "comparison": "전문: 국가 간 이동 시 추가 비용 없음. 앱: 장거리 수락 드라이버가 적어 배차 어려움.",
+      "guideRecommendation": "국가 간 이동은 전문 업체 필수"
+    },
+    {
+      "id": "special_service",
+      "category": "특수 서비스",
+      "service": "수하물 / Meet & Greet",
+      "guideService": {
+        "priceLow": 0,
+        "priceHigh": 0,
+        "priceType": "기본 포함",
+        "features": ["피켓 서비스"]
+      },
+      "rideshare": {
+        "priceLow": null,
+        "priceHigh": null,
+        "priceType": "불가능"
+      },
+      "comparison": "전문: 공항 게이트 앞 마중 서비스 제공. 앱: 직접 찾아가기만 가능.",
+      "guideRecommendation": "VIP 고객 필수 서비스"
+    }
+  ]
+}

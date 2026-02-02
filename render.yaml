@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: nubi-api
+    runtime: node
+    plan: free
+    buildCommand: npm install && npx expo export --platform web
+    startCommand: npx tsx server/index.ts
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATABASE_URL
+        sync: false
