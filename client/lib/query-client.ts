@@ -6,6 +6,14 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
  * @returns {string} The API base URL
  */
 export function getApiUrl(): string {
+  // 웹 환경에서는 상대 경로 사용 (같은 도메인에서 서비스됨)
+  if (typeof window !== "undefined" && window.location) {
+    // 프로덕션 배포 환경: 상대 경로 사용
+    if (window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
+      return "";
+    }
+  }
+
   let host = process.env.EXPO_PUBLIC_DOMAIN;
 
   // 환경변수가 설정되어 있으면 사용
