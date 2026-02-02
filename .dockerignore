@@ -1,0 +1,11 @@
+node_modules
+.git
+.gitignore
+.env
+.env.*
+dist
+server_dist
+*.md
+*.log
+.expo
+.cache
