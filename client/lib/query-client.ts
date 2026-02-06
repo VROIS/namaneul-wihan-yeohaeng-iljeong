@@ -6,11 +6,11 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
  * @returns {string} The API base URL
  */
 export function getApiUrl(): string {
-  // 웹 환경에서는 상대 경로 사용 (같은 도메인에서 서비스됨)
+  // 웹 환경에서는 같은 도메인 origin 사용
   if (typeof window !== "undefined" && window.location) {
-    // 프로덕션 배포 환경: 상대 경로 사용
+    // 프로덕션 배포 환경: window.location.origin 사용 (빈 문자열은 URL 생성 에러 발생)
     if (window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1") {
-      return "";
+      return window.location.origin; // 예: "https://legal-dannye-dbstour-4e6b86d5.koyeb.app"
     }
   }
 
