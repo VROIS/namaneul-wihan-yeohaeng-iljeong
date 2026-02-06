@@ -195,10 +195,24 @@ export class DataScheduler {
   private async runInstagramSync(): Promise<{ success: boolean; itemsProcessed: number; errors: string[] }> {
     try {
       const { instagramCrawler } = await import("./instagram-crawler");
-      const result = await instagramCrawler.syncAllHashtags();
+      
+      // 해시태그 동기화
+      const hashtagResult = await instagramCrawler.syncAllHashtags();
+      console.log(`[Scheduler] Instagram 해시태그 동기화: ${hashtagResult.synced}개`);
+      
+      // 위치 동기화도 함께 실행
+      let locationSynced = 0;
+      try {
+        const locationResult = await instagramCrawler.syncAllLocations();
+        locationSynced = locationResult.synced;
+        console.log(`[Scheduler] Instagram 위치 동기화: ${locationSynced}개`);
+      } catch (locError) {
+        console.warn("[Scheduler] Instagram 위치 동기화 실패:", locError);
+      }
+      
       return {
         success: true,
-        itemsProcessed: result.synced,
+        itemsProcessed: hashtagResult.synced + locationSynced,
         errors: [],
       };
     } catch (error: any) {

@@ -72,23 +72,30 @@ async function searchNaverBlog(query: string): Promise<NaverBlogSearchResult[]> 
 
 async function searchBlogWithGemini(query: string): Promise<NaverBlogSearchResult[]> {
   try {
-    const { ai } = await import("../replit_integrations/image/client");
+    const apiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY || process.env.GEMINI_API_KEY || '';
+    if (!apiKey) {
+      console.error("[NaverBlog] Gemini API 키 없음 - 블로그 검색 불가");
+      return [];
+    }
+    
+    const { GoogleGenAI } = await import("@google/genai");
+    const ai = new GoogleGenAI({ apiKey });
 
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `Search for Korean travel blog posts about: ${query}
+      contents: `한국인 여행 블로그에서 "${query}" 관련 글을 찾아주세요.
 
-Find recent blog posts from Korean travelers. Return JSON array:
+최근 한국인 여행자들이 작성한 블로그 글을 검색합니다. JSON 배열로 반환:
 [{
   "title": "블로그 제목",
-  "link": "URL",
-  "description": "요약 (200자)",
+  "link": "https://blog.naver.com/...",
+  "description": "글 요약 (200자)",
   "bloggername": "블로거명",
   "bloggerlink": "블로그 홈 URL",
   "postdate": "20260108"
 }]
 
-Return up to 10 results. If no results, return empty array [].`,
+최대 10개. 결과 없으면 빈 배열 [] 반환.`,
       config: {
         tools: [{ googleSearch: {} }],
       },
@@ -97,7 +104,9 @@ Return up to 10 results. If no results, return empty array [].`,
     const text = response.text || "";
     const jsonMatch = text.match(/\[[\s\S]*\]/);
     if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
+      const results = JSON.parse(jsonMatch[0]);
+      console.log(`[NaverBlog] Gemini에서 ${results.length}개 블로그 글 검색 완료`);
+      return results;
     }
   } catch (error) {
     console.error("[NaverBlog] Gemini search error:", error);
@@ -112,7 +121,11 @@ async function extractPlacesFromBlog(
   cityName: string
 ): Promise<{ places: ExtractedPlace[]; sentimentScore: number }> {
   try {
-    const { ai } = await import("../replit_integrations/image/client");
+    const apiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY || process.env.GEMINI_API_KEY || '';
+    if (!apiKey) return { places: [], sentimentScore: 0.5 };
+    
+    const { GoogleGenAI } = await import("@google/genai");
+    const ai = new GoogleGenAI({ apiKey });
 
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",

@@ -81,7 +81,33 @@ export class InstagramCrawler {
         }
       }
 
-      return { postCount };
+      // topPosts 추출 시도 - Gemini로 인기 게시물 정보 검색
+      let topPosts: HashtagData['topPosts'] = undefined;
+      try {
+        const apiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY || process.env.GEMINI_API_KEY || '';
+        if (apiKey && postCount > 0) {
+          const { GoogleGenAI } = await import("@google/genai");
+          const ai = new GoogleGenAI({ apiKey });
+          const searchResponse = await ai.models.generateContent({
+            model: "gemini-3-flash-preview",
+            contents: `인스타그램 해시태그 #${cleanHashtag} 의 인기 게시물 정보를 찾아주세요.
+한국인 여행자들이 올린 인기 게시물 5개의 정보를 JSON 배열로 반환:
+[{"url":"https://www.instagram.com/p/...","caption":"게시물 설명","likeCount":500}]
+결과 없으면 빈 배열 [] 반환.`,
+            config: { tools: [{ googleSearch: {} }] },
+          });
+          const searchText = searchResponse.text || '';
+          const jsonMatch = searchText.match(/\[[\s\S]*\]/);
+          if (jsonMatch) {
+            topPosts = JSON.parse(jsonMatch[0]);
+            console.log(`[Instagram] #${cleanHashtag}: ${topPosts?.length || 0}개 인기 게시물 검색`);
+          }
+        }
+      } catch (topPostError) {
+        console.warn(`[Instagram] topPosts 검색 실패 (${cleanHashtag}):`, topPostError);
+      }
+
+      return { postCount, topPosts };
     } catch (error) {
       console.error(`Failed to fetch hashtag ${hashtag}:`, error);
       return null;
