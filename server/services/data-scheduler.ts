@@ -75,6 +75,15 @@ export class DataScheduler {
     // 💰 가격: 하루 2번
     this.scheduleTask("price_sync", "0 5,17 * * *");        // 14:00, 02:00 KST
     
+    // 🇰🇷 한국 플랫폼 (마이리얼트립/클룩/트립닷컴): 하루 1번
+    this.scheduleTask("korean_platform_sync", "0 20 * * *"); // 05:00 KST
+    
+    // 📦 패키지 투어 검증 (하나투어/모두투어 등): 하루 1번
+    this.scheduleTask("package_tour_sync", "30 20 * * *");   // 05:30 KST
+    
+    // 📸 포토스팟 점수 계산: 하루 1번
+    this.scheduleTask("photospot_sync", "0 21 * * *");       // 06:00 KST
+    
     console.log("[Scheduler] ✅ 자동 수집 스케줄 설정 완료:");
     console.log("  - 날씨: 매 시간");
     console.log("  - 환율: 하루 3번");
@@ -82,6 +91,9 @@ export class DataScheduler {
     console.log("  - YouTube/블로그: 하루 2번");
     console.log("  - 인스타그램: 하루 2번");
     console.log("  - 미쉐린/TripAdvisor: 하루 1번");
+    console.log("  - 한국 플랫폼: 하루 1번");
+    console.log("  - 패키지 투어 검증: 하루 1번");
+    console.log("  - 포토스팟 점수: 하루 1번");
   }
 
   private scheduleTask(taskName: string, cronExpression: string): void {
@@ -146,6 +158,15 @@ export class DataScheduler {
           break;
         case "tistory_sync":
           result = await this.runTistorySync();
+          break;
+        case "korean_platform_sync":
+          result = await this.runKoreanPlatformSync();
+          break;
+        case "package_tour_sync":
+          result = await this.runPackageTourSync();
+          break;
+        case "photospot_sync":
+          result = await this.runPhotospotSync();
           break;
         default:
           console.warn(`[Scheduler] Unknown task: ${taskName}`);
@@ -333,6 +354,48 @@ export class DataScheduler {
       return {
         success: result.success,
         itemsProcessed: result.totalPosts + result.totalPlaces,
+        errors: [],
+      };
+    } catch (error: any) {
+      return { success: false, itemsProcessed: 0, errors: [error.message] };
+    }
+  }
+
+  private async runKoreanPlatformSync(): Promise<{ success: boolean; itemsProcessed: number; errors: string[] }> {
+    try {
+      const { crawlAllKoreanPlatforms } = await import("./korean-platform-crawler");
+      const result = await crawlAllKoreanPlatforms();
+      return {
+        success: result.success,
+        itemsProcessed: result.totalCollected,
+        errors: [],
+      };
+    } catch (error: any) {
+      return { success: false, itemsProcessed: 0, errors: [error.message] };
+    }
+  }
+
+  private async runPackageTourSync(): Promise<{ success: boolean; itemsProcessed: number; errors: string[] }> {
+    try {
+      const { validateAllPackageTours } = await import("./package-tour-validator");
+      const result = await validateAllPackageTours();
+      return {
+        success: result.success,
+        itemsProcessed: result.totalValidated,
+        errors: [],
+      };
+    } catch (error: any) {
+      return { success: false, itemsProcessed: 0, errors: [error.message] };
+    }
+  }
+
+  private async runPhotospotSync(): Promise<{ success: boolean; itemsProcessed: number; errors: string[] }> {
+    try {
+      const { scoreAllPhotospots } = await import("./photospot-scorer");
+      const result = await scoreAllPhotospots();
+      return {
+        success: result.success,
+        itemsProcessed: result.totalScored,
         errors: [],
       };
     } catch (error: any) {

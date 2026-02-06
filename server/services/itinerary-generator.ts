@@ -10,7 +10,7 @@ import {
 } from "./protagonist-generator";
 import { routeOptimizer } from "./route-optimizer";
 import { db } from "../db";
-import { places, instagramHashtags, youtubePlaceMentions, naverBlogPosts, cities, tripAdvisorData, placePrices } from "@shared/schema";
+import { places, instagramHashtags, youtubePlaceMentions, naverBlogPosts, cities, tripAdvisorData, placePrices, reviews, geminiWebSearchCache } from "@shared/schema";
 import { eq, sql, ilike, and, desc } from "drizzle-orm";
 
 // Lazy initialization - DB에서 API 키 로드 후 사용
@@ -113,6 +113,105 @@ function isFoodPlace(place: PlaceResult): boolean {
   return hasFoodieVibe || hasFoodTag || hasFoodType || nameHasFood;
 }
 
+// ===== 식당 전용 점수 계산 (Phase 1-4) =====
+// 우선순위: 리뷰수(40%) > 한국인리뷰(25%) > 인스타(15%) > 유튜브(10%) > 블로그(10%)
+async function calculateRestaurantScore(place: PlaceResult): Promise<number> {
+  try {
+    if (!db) return place.vibeScore; // DB 미연결시 기존 점수 사용
+
+    // 1. 리뷰 수 점수 (40%) - Google Places 리뷰 수
+    let reviewCountScore = 0;
+    const placeMatch = await db.select({
+      userRatingCount: places.userRatingCount,
+      googlePlaceId: places.googlePlaceId,
+      id: places.id,
+    })
+      .from(places)
+      .where(ilike(places.name, `%${place.name}%`))
+      .limit(1);
+
+    let dbPlaceId: number | null = null;
+    if (placeMatch.length > 0) {
+      dbPlaceId = placeMatch[0].id;
+      const ratingCount = placeMatch[0].userRatingCount || 0;
+      // log 스케일: 100리뷰=6.6, 1000리뷰=10, 10000리뷰=10
+      reviewCountScore = Math.min(10, Math.log10(ratingCount + 1) * 3.3);
+    }
+
+    // 2. 한국인 리뷰 점수 (25%) - reviews 테이블에서 한국어 리뷰 확인
+    let koreanReviewScore = 0;
+    if (dbPlaceId) {
+      const koreanReviews = await db.select({
+        count: sql<number>`count(*)`,
+        avgRating: sql<number>`avg(${reviews.rating})`,
+      })
+        .from(reviews)
+        .where(and(
+          eq(reviews.placeId, dbPlaceId),
+          eq(reviews.language, 'ko')
+        ));
+
+      if (koreanReviews.length > 0 && Number(koreanReviews[0].count) > 0) {
+        const count = Number(koreanReviews[0].count);
+        const avgRating = Number(koreanReviews[0].avgRating) || 3.5;
+        // 한국어 리뷰 1개=5점, 3개=8점, 5개이상=10점 + 평점 보너스
+        koreanReviewScore = Math.min(10, count * 2.5 + (avgRating - 3) * 1.5);
+      }
+    }
+
+    // 3. 인스타그램 점수 (15%) - 기존 koreanPopularityScore에서 추출
+    const instaScore = Math.min(10, (place.koreanPopularityScore || 0) * 1.5);
+
+    // 4. 유튜브 점수 (10%) - 유튜브 언급 확인
+    let youtubeScore = 0;
+    if (dbPlaceId) {
+      const ytData = await db.select({
+        count: sql<number>`count(*)`,
+      })
+        .from(youtubePlaceMentions)
+        .where(eq(youtubePlaceMentions.placeId, dbPlaceId));
+
+      if (ytData.length > 0 && Number(ytData[0].count) > 0) {
+        youtubeScore = Math.min(10, Number(ytData[0].count) * 3);
+      }
+    }
+
+    // 5. 블로그 점수 (10%) - 네이버 블로그 언급
+    let blogScore = 0;
+    if (dbPlaceId) {
+      const blogData = await db.select({
+        count: sql<number>`count(*)`,
+      })
+        .from(naverBlogPosts)
+        .where(eq(naverBlogPosts.placeId, dbPlaceId));
+
+      if (blogData.length > 0 && Number(blogData[0].count) > 0) {
+        blogScore = Math.min(10, Number(blogData[0].count) * 2);
+      }
+    }
+
+    // 가중 합산
+    const finalScore = (reviewCountScore * 0.40) +
+                       (koreanReviewScore * 0.25) +
+                       (instaScore * 0.15) +
+                       (youtubeScore * 0.10) +
+                       (blogScore * 0.10);
+
+    if (finalScore > 0) {
+      console.log(
+        `[Restaurant] ${place.name}: 리뷰수=${reviewCountScore.toFixed(1)}(40%) ` +
+        `한국리뷰=${koreanReviewScore.toFixed(1)}(25%) 인스타=${instaScore.toFixed(1)}(15%) ` +
+        `유튜브=${youtubeScore.toFixed(1)}(10%) 블로그=${blogScore.toFixed(1)}(10%) → ${finalScore.toFixed(2)}`
+      );
+    }
+
+    return Math.max(finalScore, place.vibeScore * 0.5); // 최소한 vibeScore의 50%는 보장
+  } catch (error) {
+    console.warn(`[Restaurant] ${place.name} 점수 계산 실패:`, error);
+    return place.vibeScore; // 에러시 기존 점수
+  }
+}
+
 // 기본 시작/종료 시간 (중간 날짜용)
 const DEFAULT_START_TIME = '09:00';
 const DEFAULT_END_TIME = '21:00';
@@ -190,6 +289,18 @@ interface PlaceResult {
   // 실제 가격 추정 (EUR)
   estimatedPriceEur?: number;       // 입장료 또는 식사 평균 가격
   priceSource?: string;             // 가격 출처
+  // Phase 1-3: 포토스팟 점수 (0-10)
+  photoSpotScore?: number;
+  photoTip?: string;
+  bestPhotoTime?: string;
+  // Phase 1-2: 패키지 투어 검증
+  isPackageTourIncluded?: boolean;
+  packageMentionCount?: number;
+  // Phase 1-5: 최종 종합 점수
+  finalScore?: number;
+  // Phase 1-6: 선정 이유 + 신뢰도
+  selectionReasons?: string[];        // 최소 2개 선정 이유
+  confidenceLevel?: 'high' | 'medium' | 'low' | 'minimal'; // 데이터 신뢰도
 }
 
 // 시간대별 Vibe 친화도 (향후 고급 슬롯 매칭에 사용 예정)
@@ -642,6 +753,399 @@ async function enrichPlacesWithTripAdvisorAndPrices(
     console.error('[TripAdvisor/Price] 보강 실패:', error);
     return placesArr;
   }
+}
+
+/**
+ * Phase 1-5: 포토스팟 + 패키지 투어 데이터로 장소 보강
+ * DB의 geminiWebSearchCache 테이블에서 searchType = "photospot" / "package_tour" 조회
+ */
+async function enrichPlacesWithPhotoAndTour(
+  placesArr: PlaceResult[],
+  cityName: string
+): Promise<PlaceResult[]> {
+  if (!db) {
+    console.log('[Photo/Tour] DB 미연결 - 보강 생략');
+    return placesArr;
+  }
+
+  try {
+    const cityMatch = await db.select({ id: cities.id })
+      .from(cities)
+      .where(ilike(cities.name, `%${cityName}%`))
+      .limit(1);
+
+    if (cityMatch.length === 0) return placesArr;
+    const cityId = cityMatch[0].id;
+
+    // DB 장소 목록 (이름 매칭용)
+    const dbPlaces = await db.select({ id: places.id, name: places.name, googlePlaceId: places.googlePlaceId })
+      .from(places)
+      .where(eq(places.cityId, cityId));
+
+    const placeIdByName = new Map<string, number>();
+    for (const p of dbPlaces) {
+      placeIdByName.set(p.name.toLowerCase(), p.id);
+      if (p.googlePlaceId) placeIdByName.set(p.googlePlaceId, p.id);
+    }
+
+    // 포토스팟 데이터 일괄 조회 (searchType = "photospot")
+    const photospotData = await db.select({
+      placeId: geminiWebSearchCache.placeId,
+      extractedData: geminiWebSearchCache.extractedData,
+      confidenceScore: geminiWebSearchCache.confidenceScore,
+    })
+      .from(geminiWebSearchCache)
+      .where(and(
+        eq(geminiWebSearchCache.cityId, cityId),
+        eq(geminiWebSearchCache.searchType, 'photospot')
+      ));
+
+    // 패키지 투어 데이터 일괄 조회 (searchType = "package_tour")
+    const packageTourData = await db.select({
+      placeId: geminiWebSearchCache.placeId,
+      extractedData: geminiWebSearchCache.extractedData,
+      confidenceScore: geminiWebSearchCache.confidenceScore,
+    })
+      .from(geminiWebSearchCache)
+      .where(and(
+        eq(geminiWebSearchCache.cityId, cityId),
+        eq(geminiWebSearchCache.searchType, 'package_tour')
+      ));
+
+    // 맵 생성
+    const photospotMap = new Map<number, { score: number; photoTip?: string; bestTime?: string }>();
+    for (const ps of photospotData) {
+      if (ps.placeId) {
+        const data = ps.extractedData as any;
+        photospotMap.set(ps.placeId, {
+          score: data?.combinedScore || data?.photoSpotScore || (ps.confidenceScore || 0) * 10,
+          photoTip: data?.photoTip,
+          bestTime: data?.bestTime,
+        });
+      }
+    }
+
+    const packageTourMap = new Map<number, { included: boolean; mentionCount: number }>();
+    for (const pt of packageTourData) {
+      if (pt.placeId) {
+        const data = pt.extractedData as any;
+        packageTourMap.set(pt.placeId, {
+          included: data?.isPackageTourIncluded || false,
+          mentionCount: data?.packageMentionCount || 0,
+        });
+      }
+    }
+
+    let photoMatched = 0;
+    let tourMatched = 0;
+
+    const enriched = placesArr.map(place => {
+      const dbPlaceId = placeIdByName.get(place.name.toLowerCase()) || placeIdByName.get(place.id);
+      if (!dbPlaceId) return place;
+
+      const updates: Partial<PlaceResult> = {};
+
+      const photo = photospotMap.get(dbPlaceId);
+      if (photo) {
+        updates.photoSpotScore = Math.min(10, photo.score);
+        updates.photoTip = photo.photoTip;
+        updates.bestPhotoTime = photo.bestTime;
+        photoMatched++;
+      }
+
+      const tour = packageTourMap.get(dbPlaceId);
+      if (tour) {
+        updates.isPackageTourIncluded = tour.included;
+        updates.packageMentionCount = tour.mentionCount;
+        tourMatched++;
+      }
+
+      return { ...place, ...updates };
+    });
+
+    console.log(`[Photo/Tour] 보강 완료: 포토스팟 ${photoMatched}곳, 패키지투어 ${tourMatched}곳 매칭`);
+    return enriched;
+  } catch (error) {
+    console.error('[Photo/Tour] 보강 실패:', error);
+    return placesArr;
+  }
+}
+
+// ===== Phase 1-7: 바이브별 동적 가중치 매트릭스 =====
+// 각 바이브가 선택되었을 때 6요소의 비중이 달라짐
+// [koreanPop, photoSpot, verifiedFame, vibe, value, practical]
+const VIBE_WEIGHT_MATRIX: Record<Vibe, [number, number, number, number, number, number]> = {
+  Hotspot:   [0.20, 0.35, 0.10, 0.15, 0.10, 0.10], // 포토스팟 최우선
+  Romantic:  [0.25, 0.30, 0.10, 0.20, 0.08, 0.07], // 포토+분위기 감성
+  Culture:   [0.15, 0.15, 0.30, 0.15, 0.15, 0.10], // 유명세(패키지/TA) 최우선
+  Foodie:    [0.20, 0.10, 0.15, 0.10, 0.20, 0.25], // 가성비+실용(리뷰수) 우선
+  Healing:   [0.10, 0.20, 0.10, 0.35, 0.10, 0.15], // 분위기(AI평가) 최우선
+  Adventure: [0.15, 0.15, 0.15, 0.25, 0.15, 0.15], // 균등+분위기 약간 높음
+};
+
+// ===== 데이터 등급별 보정 매트릭스 =====
+// 데이터 부족시 한국 데이터 의존도를 낮추고 AI/Google 의존도를 높임
+// [koreanPop, photoSpot, verifiedFame, vibe, value, practical]
+type DataGrade = 'A' | 'B' | 'C' | 'D';
+const DATA_GRADE_ADJUSTMENT: Record<DataGrade, [number, number, number, number, number, number]> = {
+  A: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0], // 데이터 풍부: 원래 가중치 그대로
+  B: [0.7, 0.8, 1.0, 1.3, 0.9, 1.2], // 데이터 보통: 한국 데이터↓, AI↑
+  C: [0.3, 0.4, 0.8, 2.0, 0.5, 1.8], // 데이터 부족: AI+Google 크게 의존
+  D: [0.1, 0.1, 0.5, 2.5, 0.3, 2.2], // 데이터 없음: 거의 AI+Google만
+};
+
+/**
+ * Phase 1-7: 데이터 등급 판단
+ * 전체 장소 목록에서 한국 데이터가 얼마나 채워져 있는지 측정
+ */
+function detectDataGrade(placesArr: PlaceResult[]): DataGrade {
+  if (placesArr.length === 0) return 'D';
+
+  let hasKoreanPop = 0;
+  let hasPhotoSpot = 0;
+  let hasVerifiedFame = 0;
+  let hasPrice = 0;
+
+  for (const p of placesArr) {
+    if (p.koreanPopularityScore && p.koreanPopularityScore > 0) hasKoreanPop++;
+    if (p.photoSpotScore && p.photoSpotScore > 0) hasPhotoSpot++;
+    if (p.isPackageTourIncluded || (p.tripAdvisorRating && p.tripAdvisorRating > 0)) hasVerifiedFame++;
+    if (p.estimatedPriceEur && p.estimatedPriceEur > 0) hasPrice++;
+  }
+
+  const total = placesArr.length;
+  const koreanRatio = hasKoreanPop / total;
+  const photoRatio = hasPhotoSpot / total;
+  const fameRatio = hasVerifiedFame / total;
+  const priceRatio = hasPrice / total;
+  const avgCoverage = (koreanRatio + photoRatio + fameRatio + priceRatio) / 4;
+
+  if (avgCoverage >= 0.4) return 'A'; // 40%+ 데이터 커버리지
+  if (avgCoverage >= 0.2) return 'B'; // 20%+
+  if (avgCoverage >= 0.05) return 'C'; // 5%+
+  return 'D'; // 거의 없음
+}
+
+/**
+ * Phase 1-7: 바이브 기반 동적 가중치 계산
+ * 사용자 선택 바이브 + 데이터 등급을 조합하여 최종 가중치 산출
+ * 
+ * @param vibes 사용자 선택 바이브 (1~3개, 순서 = 우선순위)
+ * @param dataGrade 목적지의 데이터 밀도 등급
+ * @returns 6요소 가중치 배열 (합계 = 1.0)
+ */
+function calculateDynamicWeights(
+  vibes: Vibe[],
+  dataGrade: DataGrade
+): { koreanPop: number; photoSpot: number; verifiedFame: number; vibe: number; value: number; practical: number } {
+  // 1. 바이브 가중치 블렌딩 (선택 순서에 따른 우선순위)
+  const VIBE_PRIORITY: Record<number, number[]> = {
+    1: [1.0],
+    2: [0.60, 0.40],
+    3: [0.50, 0.30, 0.20],
+  };
+  const priorities = VIBE_PRIORITY[vibes.length] || [0.50, 0.30, 0.20];
+
+  // 블렌딩된 가중치 초기화
+  let blended: [number, number, number, number, number, number] = [0, 0, 0, 0, 0, 0];
+
+  for (let i = 0; i < vibes.length && i < 3; i++) {
+    const vibeMatrix = VIBE_WEIGHT_MATRIX[vibes[i]];
+    const priority = priorities[i];
+    for (let j = 0; j < 6; j++) {
+      blended[j] += vibeMatrix[j] * priority;
+    }
+  }
+
+  // 2. 데이터 등급 보정 적용
+  const adjustment = DATA_GRADE_ADJUSTMENT[dataGrade];
+  for (let j = 0; j < 6; j++) {
+    blended[j] *= adjustment[j];
+  }
+
+  // 3. 정규화 (합계 = 1.0)
+  const sum = blended.reduce((a, b) => a + b, 0);
+  if (sum > 0) {
+    for (let j = 0; j < 6; j++) {
+      blended[j] /= sum;
+    }
+  }
+
+  return {
+    koreanPop: blended[0],
+    photoSpot: blended[1],
+    verifiedFame: blended[2],
+    vibe: blended[3],
+    value: blended[4],
+    practical: blended[5],
+  };
+}
+
+/**
+ * Phase 1-5+1-7: 최종 종합 점수 계산 (동적 6요소 공식)
+ * 
+ * 기존 고정 공식 → 바이브+데이터 등급에 따라 가중치가 자동 조정
+ * 
+ * 예시:
+ *   Hotspot + A등급 → 포토35% > 한국인기20% > 분위기15% > ...
+ *   Healing + C등급 → 분위기70% > 실용27% > ... (한국데이터 거의 무시)
+ */
+function calculateFinalScore(
+  place: PlaceResult,
+  weights: { koreanPop: number; photoSpot: number; verifiedFame: number; vibe: number; value: number; practical: number }
+): number {
+  // 1. 한국인 인기도 - enrichPlacesWithKoreanPopularity에서 계산됨
+  const koreanPop = Math.min(10, place.koreanPopularityScore || 0);
+
+  // 2. 포토스팟 점수 - enrichPlacesWithPhotoAndTour에서 세팅됨
+  const photoSpot = Math.min(10, place.photoSpotScore || 0);
+
+  // 3. 검증된 유명세 - 패키지 투어 + TripAdvisor
+  let verifiedFame = 0;
+  if (place.isPackageTourIncluded) {
+    verifiedFame += Math.min(5, 3 + (place.packageMentionCount || 0));
+  }
+  if (place.tripAdvisorRating) {
+    verifiedFame += place.tripAdvisorRating;
+  }
+  verifiedFame = Math.min(10, verifiedFame);
+
+  // 4. 분위기 점수 - Gemini AI + Google 평점 기반
+  const vibe = Math.min(10, place.vibeScore || 0);
+
+  // 5. 가성비 점수
+  let valueScore = 5;
+  if (place.estimatedPriceEur !== undefined && place.estimatedPriceEur > 0) {
+    valueScore = Math.max(2, 10 - Math.log10(place.estimatedPriceEur + 1) * 4);
+    if (place.tripAdvisorRating && place.tripAdvisorRating >= 4.0 && place.estimatedPriceEur < 30) {
+      valueScore = Math.min(10, valueScore + 2);
+    }
+  }
+
+  // 6. 실용성 점수
+  let practicalScore = 3;
+  if (place.tripAdvisorReviewCount) {
+    practicalScore = Math.min(10, Math.log10(place.tripAdvisorReviewCount + 1) * 3.3);
+  }
+  if (koreanPop > 3) {
+    practicalScore = Math.min(10, practicalScore + 1.5);
+  }
+
+  // ===== 동적 가중치 합산 =====
+  const finalScore = 
+    (koreanPop * weights.koreanPop) +
+    (photoSpot * weights.photoSpot) +
+    (verifiedFame * weights.verifiedFame) +
+    (vibe * weights.vibe) +
+    (valueScore * weights.value) +
+    (practicalScore * weights.practical);
+
+  return Math.min(10, finalScore);
+}
+
+/**
+ * Phase 1-6: 선정 이유 생성 (최소 2개) + 신뢰도 레벨 판단
+ * 데이터 기반 이유 → AI 기반 이유 → 실용적 이유 순으로 채움
+ */
+function generateSelectionReasons(place: PlaceResult): { reasons: string[]; confidence: 'high' | 'medium' | 'low' | 'minimal' } {
+  const reasons: string[] = [];
+  let dataPoints = 0; // 보유 데이터 수 (신뢰도 판단용)
+
+  // ===== 데이터 기반 이유 (가장 강력) =====
+
+  // 한국인 인기도
+  if (place.koreanPopularityScore && place.koreanPopularityScore > 3) {
+    reasons.push(`한국인 인기도 상위 (점수 ${place.koreanPopularityScore.toFixed(1)}/10)`);
+    dataPoints += 2;
+  } else if (place.koreanPopularityScore && place.koreanPopularityScore > 0) {
+    reasons.push(`한국 여행자 언급 확인됨`);
+    dataPoints += 1;
+  }
+
+  // 포토스팟
+  if (place.photoSpotScore && place.photoSpotScore > 5) {
+    reasons.push(`인기 포토스팟 (점수 ${place.photoSpotScore.toFixed(1)}/10)`);
+    dataPoints += 1;
+  }
+  if (place.photoTip) {
+    reasons.push(`촬영 팁: ${place.photoTip}`);
+  }
+
+  // 패키지 투어 포함
+  if (place.isPackageTourIncluded) {
+    const mentionTxt = place.packageMentionCount && place.packageMentionCount > 1 
+      ? ` (${place.packageMentionCount}개 여행사 포함)` : '';
+    reasons.push(`한국 패키지 투어 포함 장소${mentionTxt}`);
+    dataPoints += 2;
+  }
+
+  // TripAdvisor
+  if (place.tripAdvisorRating && place.tripAdvisorRating >= 4.0) {
+    const reviewTxt = place.tripAdvisorReviewCount 
+      ? ` (리뷰 ${place.tripAdvisorReviewCount.toLocaleString()}개)` : '';
+    reasons.push(`TripAdvisor ${place.tripAdvisorRating.toFixed(1)}점${reviewTxt}`);
+    dataPoints += 1;
+  }
+  if (place.tripAdvisorRanking) {
+    reasons.push(`TripAdvisor ${place.tripAdvisorRanking}`);
+    dataPoints += 1;
+  }
+
+  // 가격 정보
+  if (place.estimatedPriceEur !== undefined && place.priceSource) {
+    const sourceLabel = place.priceSource === 'myrealtrip' ? '마이리얼트립'
+      : place.priceSource === 'klook' ? '클룩'
+      : place.priceSource === 'tripdotcom' ? '트립닷컴'
+      : place.priceSource;
+    reasons.push(`${sourceLabel} 기준 약 €${Math.round(place.estimatedPriceEur)}`);
+    dataPoints += 1;
+  }
+
+  // ===== AI/분위기 기반 이유 =====
+  if (place.personaFitReason && reasons.length < 4) {
+    reasons.push(place.personaFitReason);
+  }
+
+  // 바이브 태그 기반
+  if (place.vibeTags && place.vibeTags.length > 0 && reasons.length < 4) {
+    const vibeLabels: Record<string, string> = {
+      Healing: '힐링', Adventure: '모험', Hotspot: '핫플',
+      Foodie: '미식', Romantic: '로맨틱', Culture: '문화'
+    };
+    const tags = place.vibeTags.map(v => vibeLabels[v] || v).join(', ');
+    reasons.push(`${tags} 분위기 매칭`);
+  }
+
+  // ===== 최소 2개 보장 (부족하면 실용적 이유 추가) =====
+  if (reasons.length < 2) {
+    if (place.vibeScore > 5) {
+      reasons.push(`AI 분위기 분석 높은 평가 (${place.vibeScore.toFixed(1)}/10)`);
+    }
+    if (reasons.length < 2 && place.description) {
+      reasons.push(place.description.length > 60 ? place.description.substring(0, 57) + '...' : place.description);
+    }
+    if (reasons.length < 2) {
+      reasons.push('여행 동선 최적화 기반 선정');
+    }
+  }
+
+  // ===== 신뢰도 레벨 =====
+  // high: 3개 이상 데이터 소스 + 한국 인기도 있음
+  // medium: 2개 데이터 소스 또는 TripAdvisor 데이터 있음
+  // low: 1개 데이터 소스
+  // minimal: 데이터 없음, AI 추천만
+  let confidence: 'high' | 'medium' | 'low' | 'minimal';
+  if (dataPoints >= 4 && place.koreanPopularityScore && place.koreanPopularityScore > 2) {
+    confidence = 'high';
+  } else if (dataPoints >= 2) {
+    confidence = 'medium';
+  } else if (dataPoints >= 1) {
+    confidence = 'low';
+  } else {
+    confidence = 'minimal';
+  }
+
+  return { reasons: reasons.slice(0, 5), confidence }; // 최대 5개
 }
 
 function getPlaceTypesForVibes(vibes: Vibe[]): string[] {
@@ -1216,6 +1720,9 @@ export async function generateItinerary(formData: TripFormData) {
   // DB에 수집된 TripAdvisor 평점/리뷰 수 + 실제 가격 정보를 장소에 추가
   placesArr = await enrichPlacesWithTripAdvisorAndPrices(placesArr, formData.destination);
   
+  // ===== Phase 1-5: 포토스팟 + 패키지 투어 데이터 보강 =====
+  placesArr = await enrichPlacesWithPhotoAndTour(placesArr, formData.destination);
+  
   // 기존 한국 감성 보너스도 vibeScore에 반영 (Gemini 데이터 보조 활용)
   if (koreanSentiment) {
     placesArr = placesArr.map(p => ({
@@ -1224,23 +1731,36 @@ export async function generateItinerary(formData: TripFormData) {
     }));
   }
   
-  // ===== 최종 정렬: vibeScore(35%) + koreanPopularityScore(55%) + TripAdvisor(10%) =====
-  // 한국인 인기도가 최우선 → TripAdvisor 리뷰 수가 보조 신뢰도 지표
-  placesArr = placesArr.sort((a, b) => {
-    const taBonus = (score: PlaceResult) => {
-      if (!score.tripAdvisorRating || !score.tripAdvisorReviewCount) return 0;
-      // TripAdvisor 평점(1-5) → 0-10 스케일 + 리뷰 수 보너스
-      return (score.tripAdvisorRating * 2) * 0.7 + Math.min(2, Math.log10(score.tripAdvisorReviewCount + 1) * 0.5);
+  // ===== Phase 1-7: 데이터 등급 판단 + 바이브 기반 동적 가중치 =====
+  const dataGrade = detectDataGrade(placesArr);
+  const dynamicWeights = calculateDynamicWeights(vibes, dataGrade);
+  
+  console.log(`[Itinerary] 데이터 등급: ${dataGrade} | 바이브: ${vibes.join(',')}`);
+  console.log(`[Itinerary] 동적 가중치: 한국인기=${(dynamicWeights.koreanPop * 100).toFixed(0)}% 포토=${(dynamicWeights.photoSpot * 100).toFixed(0)}% 유명세=${(dynamicWeights.verifiedFame * 100).toFixed(0)}% 분위기=${(dynamicWeights.vibe * 100).toFixed(0)}% 가성비=${(dynamicWeights.value * 100).toFixed(0)}% 실용=${(dynamicWeights.practical * 100).toFixed(0)}%`);
+  
+  // ===== Phase 1-5+1-7: 최종 정렬 - 동적 6요소 공식 =====
+  // Phase 1-6: 선정 이유 + 신뢰도도 함께 계산
+  placesArr = placesArr.map(p => {
+    const { reasons, confidence } = generateSelectionReasons(p);
+    return {
+      ...p,
+      finalScore: calculateFinalScore(p, dynamicWeights),
+      selectionReasons: reasons,
+      confidenceLevel: confidence,
     };
-    const scoreA = (a.vibeScore * 0.35) + (a.koreanPopularityScore * 0.55) + (taBonus(a) * 0.10);
-    const scoreB = (b.vibeScore * 0.35) + (b.koreanPopularityScore * 0.55) + (taBonus(b) * 0.10);
-    return scoreB - scoreA;
+  }).sort((a, b) => {
+    return (b.finalScore || 0) - (a.finalScore || 0);
   }).slice(0, requiredPlaceCount + 5);
   
-  console.log(`[Itinerary] 최종 정렬 완료 (vibeScore 35% + koreanPopularity 55% + TripAdvisor 10%)`);
+  // 상위 5개 장소 점수 로그
+  const top5 = placesArr.slice(0, 5);
+  console.log(`[Itinerary] 최종 정렬 완료 (동적 6요소: 바이브=${vibes.join('+')} × 데이터등급=${dataGrade})`);
+  top5.forEach((p, i) => {
+    console.log(`[Itinerary]   #${i + 1} ${p.name}: finalScore=${(p.finalScore || 0).toFixed(2)} (인기=${(p.koreanPopularityScore || 0).toFixed(1)}, 포토=${(p.photoSpotScore || 0).toFixed(1)}, vibe=${p.vibeScore.toFixed(1)})`);
+  });
   
   // ===== 사용자 시간 기반 동적 슬롯 분배 (식사 슬롯 강제 포함) =====
-  const schedule = distributePlacesWithUserTime(placesArr, daySlotsConfig, travelPace, formData.travelStyle || 'Reasonable');
+  const schedule = await distributePlacesWithUserTime(placesArr, daySlotsConfig, travelPace, formData.travelStyle || 'Reasonable');
   
   console.log(`[Itinerary] 최종 일정: ${schedule.length}개 슬롯`);
   
@@ -1278,6 +1798,17 @@ export async function generateItinerary(formData: TripFormData) {
         // 실제 가격 정보
         estimatedPriceEur: s.place.estimatedPriceEur,
         priceSource: s.place.priceSource,
+        // Phase 1-5: 종합 점수
+        finalScore: s.place.finalScore,
+        // Phase 1-3: 포토스팟 정보
+        photoSpotScore: s.place.photoSpotScore,
+        photoTip: s.place.photoTip,
+        bestPhotoTime: s.place.bestPhotoTime,
+        // Phase 1-2: 패키지 투어 포함 여부
+        isPackageTourIncluded: s.place.isPackageTourIncluded,
+        // Phase 1-6: 선정 이유 + 신뢰도
+        selectionReasons: s.place.selectionReasons || [],
+        confidenceLevel: s.place.confidenceLevel || 'minimal',
         realityCheck: {
           weather: 'Sunny' as const,
           crowd: 'Medium' as const,
@@ -1408,12 +1939,12 @@ export async function generateItinerary(formData: TripFormData) {
  * 사용자 시간 기반으로 장소를 슬롯에 분배
  * 🍽️ 점심/저녁 슬롯은 반드시 식당 배치 (핵심 로직)
  */
-function distributePlacesWithUserTime(
+async function distributePlacesWithUserTime(
   places: PlaceResult[],
   daySlotsConfig: { day: number; startTime: string; endTime: string; slots: number }[],
   travelPace: TravelPace,
   travelStyle: TravelStyle = 'Reasonable'
-): { day: number; slot: string; place: PlaceResult; startTime: string; endTime: string; isMealSlot: boolean; mealType?: 'lunch' | 'dinner' }[] {
+): Promise<{ day: number; slot: string; place: PlaceResult; startTime: string; endTime: string; isMealSlot: boolean; mealType?: 'lunch' | 'dinner' }[]> {
   const schedule: { day: number; slot: string; place: PlaceResult; startTime: string; endTime: string; isMealSlot: boolean; mealType?: 'lunch' | 'dinner' }[] = [];
   const paceConfig = PACE_CONFIG[travelPace];
   
@@ -1434,18 +1965,35 @@ function distributePlacesWithUserTime(
     orderedNonFoodPlaces.push(...cityPlaces);
   }
   
-  // 식당도 도시별 그룹핑
-  const foodCityGroups = groupPlacesByCity(foodPlaces);
+  // 🍽️ Phase 1-4: 식당 전용 점수 계산 + 정렬
+  // 기존 vibeScore 대신 restaurantScore 사용
+  // 우선순위: 리뷰수(40%) > 한국인리뷰(25%) > 인스타(15%) > 유튜브(10%) > 블로그(10%)
+  const foodWithScores: { place: PlaceResult; restaurantScore: number }[] = [];
+  for (const fp of foodPlaces) {
+    const score = await calculateRestaurantScore(fp);
+    foodWithScores.push({ place: fp, restaurantScore: score });
+  }
+  // restaurantScore 내림차순 정렬
+  foodWithScores.sort((a, b) => b.restaurantScore - a.restaurantScore);
+  
+  console.log(`[Itinerary] 🍽️ 식당 점수 계산 완료 (상위: ${foodWithScores.slice(0, 3).map(f => `${f.place.name}=${f.restaurantScore.toFixed(1)}`).join(', ')})`);
+
+  // 도시별 그룹핑 (이미 점수순 정렬됨)
+  const foodCityGroups = groupPlacesByCity(foodWithScores.map(f => f.place));
   const orderedFoodPlaces: PlaceResult[] = [];
+  
+  // 점수순 정렬된 식당을 도시별로 분배하되 점수순 유지
+  const foodScoreMap = new Map(foodWithScores.map(f => [f.place.id, f.restaurantScore]));
+  
   for (const city of orderedCities) {
     const cityFoodPlaces = foodCityGroups.get(city) || [];
-    cityFoodPlaces.sort((a, b) => b.vibeScore - a.vibeScore);
+    cityFoodPlaces.sort((a, b) => (foodScoreMap.get(b.id) || 0) - (foodScoreMap.get(a.id) || 0));
     orderedFoodPlaces.push(...cityFoodPlaces);
   }
   // 나머지 도시 식당 추가
   for (const [city, cityFoodPlaces] of foodCityGroups) {
     if (!orderedCities.includes(city)) {
-      cityFoodPlaces.sort((a, b) => b.vibeScore - a.vibeScore);
+      cityFoodPlaces.sort((a, b) => (foodScoreMap.get(b.id) || 0) - (foodScoreMap.get(a.id) || 0));
       orderedFoodPlaces.push(...cityFoodPlaces);
     }
   }

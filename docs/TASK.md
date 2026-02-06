@@ -39,6 +39,27 @@
 
 ## 3. 일일 작업 기록
 
+### 2026-02-07 (금) - 일정 생성 알고리즘 고도화 Phase 1
+
+| # | 작업 | 상태 | 카테고리 | 변경 파일 |
+|---|------|------|----------|-----------|
+| 1 | **한국 플랫폼 크롤러 신규** (마이리얼트립/클룩/트립닷컴 가격+리뷰) | 완료 | 크롤러 | `korean-platform-crawler.ts` (신규) |
+| 2 | 스케줄러에 korean_platform_sync 추가 (매일 05:00 KST) | 완료 | 스케줄 | `data-scheduler.ts` |
+| 3 | 관리자 API 4개 추가 (stats/sync/city/place) | 완료 | API | `admin-routes.ts` |
+| 4 | **패키지 투어 검증 신규** (하나투어/모두투어/참좋은여행/노랑풍선) | 완료 | 크롤러 | `package-tour-validator.ts` (신규) |
+| 5 | 스케줄러에 package_tour_sync 추가 (매일 05:30 KST) | 완료 | 스케줄 | `data-scheduler.ts` |
+| 6 | 패키지 투어 관리자 API 4개 추가 | 완료 | API | `admin-routes.ts` |
+| 7 | **포토스팟 점수 신규** (Instagram40%+Google30%+Gemini30%) | 완료 | 크롤러 | `photospot-scorer.ts` (신규) |
+| 8 | 스케줄러에 photospot_sync 추가 (매일 06:00 KST) | 완료 | 스케줄 | `data-scheduler.ts` |
+| 9 | 포토스팟 관리자 API 4개 추가 | 완료 | API | `admin-routes.ts` |
+| 10 | **식당 선정 로직 강화** (리뷰수40%+한국리뷰25%+인스타15%+유튜브10%+블로그10%) | 완료 | 알고리즘 | `itinerary-generator.ts` |
+| 11 | **최종 6요소 정렬 공식** (한국인기30%+포토20%+유명세15%+분위기15%+가성비10%+실용10%) | 완료 | 알고리즘 | `itinerary-generator.ts` |
+| 12 | 포토스팟+패키지투어 DB 데이터 파이프라인 연결 (`enrichPlacesWithPhotoAndTour`) | 완료 | 파이프라인 | `itinerary-generator.ts` |
+| 13 | **선정 이유 최소 2개 + 신뢰도 표시** (`generateSelectionReasons`) | 완료 | 알고리즘 | `itinerary-generator.ts` |
+| 14 | 슬롯 데이터에 finalScore/photoTip/selectionReasons/confidenceLevel 전달 | 완료 | API응답 | `itinerary-generator.ts` |
+| 15 | **바이브별 동적 가중치 매트릭스** (6바이브 × 6요소 가중치 자동 조정) | 완료 | 알고리즘 | `itinerary-generator.ts` |
+| 16 | **데이터 적응형 보정** (A/B/C/D 등급 자동 판단 → 가중치 재분배) | 완료 | 알고리즘 | `itinerary-generator.ts` |
+
 ### 2026-02-06 (목) - 관제탑 구축 Day 2
 
 | # | 작업 | 상태 | 카테고리 | 변경 파일 |

@@ -2101,6 +2101,168 @@ export function registerAdminRoutes(app: Express) {
   });
 
   // ========================================
+  // 🇰🇷 한국 플랫폼 크롤러 API (마이리얼트립/클룩/트립닷컴)
+  // ========================================
+
+  app.get("/api/admin/korean-platforms/stats", async (req, res) => {
+    try {
+      const { getKoreanPlatformStats } = await import("./services/korean-platform-crawler");
+      const stats = await getKoreanPlatformStats();
+      res.json(stats);
+    } catch (error) {
+      console.error("Error getting Korean platform stats:", error);
+      res.status(500).json({ error: "한국 플랫폼 통계 조회 실패" });
+    }
+  });
+
+  app.post("/api/admin/korean-platforms/sync/city/:cityId", async (req, res) => {
+    try {
+      const cityId = parseInt(req.params.cityId);
+      const { crawlKoreanPlatformsForCity } = await import("./services/korean-platform-crawler");
+      const result = await crawlKoreanPlatformsForCity(cityId);
+      res.json({
+        message: "한국 플랫폼 데이터 수집 완료",
+        ...result
+      });
+    } catch (error) {
+      console.error("Error syncing Korean platforms for city:", error);
+      res.status(500).json({ error: "한국 플랫폼 수집 실패" });
+    }
+  });
+
+  app.post("/api/admin/korean-platforms/sync/all", async (req, res) => {
+    try {
+      const { crawlAllKoreanPlatforms } = await import("./services/korean-platform-crawler");
+      const result = await crawlAllKoreanPlatforms();
+      res.json({
+        message: "전체 한국 플랫폼 데이터 수집 완료",
+        ...result
+      });
+    } catch (error) {
+      console.error("Error syncing all Korean platforms:", error);
+      res.status(500).json({ error: "전체 한국 플랫폼 수집 실패" });
+    }
+  });
+
+  app.get("/api/admin/korean-platforms/place/:placeId", async (req, res) => {
+    try {
+      const placeId = parseInt(req.params.placeId);
+      const { getPlaceKoreanPlatformPrices } = await import("./services/korean-platform-crawler");
+      const result = await getPlaceKoreanPlatformPrices(placeId);
+      res.json(result);
+    } catch (error) {
+      console.error("Error getting Korean platform prices:", error);
+      res.status(500).json({ error: "한국 플랫폼 가격 조회 실패" });
+    }
+  });
+
+  // ========================================
+  // 📸 포토스팟 점수 API (Instagram+Google+Gemini)
+  // ========================================
+
+  app.get("/api/admin/photospot/stats", async (req, res) => {
+    try {
+      const { getPhotospotStats } = await import("./services/photospot-scorer");
+      const stats = await getPhotospotStats();
+      res.json(stats);
+    } catch (error) {
+      console.error("Error getting photospot stats:", error);
+      res.status(500).json({ error: "포토스팟 통계 조회 실패" });
+    }
+  });
+
+  app.post("/api/admin/photospot/score/city/:cityId", async (req, res) => {
+    try {
+      const cityId = parseInt(req.params.cityId);
+      const { scorePhotospotsForCity } = await import("./services/photospot-scorer");
+      const result = await scorePhotospotsForCity(cityId);
+      res.json({ message: "포토스팟 점수 계산 완료", ...result });
+    } catch (error) {
+      console.error("Error scoring photospots:", error);
+      res.status(500).json({ error: "포토스팟 점수 계산 실패" });
+    }
+  });
+
+  app.post("/api/admin/photospot/score/all", async (req, res) => {
+    try {
+      const { scoreAllPhotospots } = await import("./services/photospot-scorer");
+      const result = await scoreAllPhotospots();
+      res.json({ message: "전체 포토스팟 점수 계산 완료", ...result });
+    } catch (error) {
+      console.error("Error scoring all photospots:", error);
+      res.status(500).json({ error: "전체 포토스팟 점수 계산 실패" });
+    }
+  });
+
+  app.get("/api/admin/photospot/place/:placeId", async (req, res) => {
+    try {
+      const placeId = parseInt(req.params.placeId);
+      const { getPlacePhotospotScore } = await import("./services/photospot-scorer");
+      const result = await getPlacePhotospotScore(placeId);
+      res.json(result || { totalScore: 0, isPhotoSpot: false });
+    } catch (error) {
+      console.error("Error getting photospot score:", error);
+      res.status(500).json({ error: "포토스팟 점수 조회 실패" });
+    }
+  });
+
+  // ========================================
+  // 📦 패키지 투어 검증 API (하나투어/모두투어/참좋은여행/노랑풍선)
+  // ========================================
+
+  app.get("/api/admin/package-tour/stats", async (req, res) => {
+    try {
+      const { getPackageTourStats } = await import("./services/package-tour-validator");
+      const stats = await getPackageTourStats();
+      res.json(stats);
+    } catch (error) {
+      console.error("Error getting package tour stats:", error);
+      res.status(500).json({ error: "패키지 투어 통계 조회 실패" });
+    }
+  });
+
+  app.post("/api/admin/package-tour/validate/city/:cityId", async (req, res) => {
+    try {
+      const cityId = parseInt(req.params.cityId);
+      const { validatePackageToursForCity } = await import("./services/package-tour-validator");
+      const result = await validatePackageToursForCity(cityId);
+      res.json({
+        message: "패키지 투어 검증 완료",
+        ...result
+      });
+    } catch (error) {
+      console.error("Error validating package tours for city:", error);
+      res.status(500).json({ error: "패키지 투어 검증 실패" });
+    }
+  });
+
+  app.post("/api/admin/package-tour/validate/all", async (req, res) => {
+    try {
+      const { validateAllPackageTours } = await import("./services/package-tour-validator");
+      const result = await validateAllPackageTours();
+      res.json({
+        message: "전체 패키지 투어 검증 완료",
+        ...result
+      });
+    } catch (error) {
+      console.error("Error validating all package tours:", error);
+      res.status(500).json({ error: "전체 패키지 투어 검증 실패" });
+    }
+  });
+
+  app.get("/api/admin/package-tour/place/:placeId", async (req, res) => {
+    try {
+      const placeId = parseInt(req.params.placeId);
+      const { getPlacePackageTourStatus } = await import("./services/package-tour-validator");
+      const result = await getPlacePackageTourStatus(placeId);
+      res.json(result || { isPackageTourIncluded: false, packageMentionCount: 0, mentionedBy: [] });
+    } catch (error) {
+      console.error("Error getting package tour status:", error);
+      res.status(500).json({ error: "패키지 투어 상태 조회 실패" });
+    }
+  });
+
+  // ========================================
   // 프랑스 교통 비용 API (가이드 검증 데이터)
   // ========================================
 
