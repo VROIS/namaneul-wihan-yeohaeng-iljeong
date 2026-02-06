@@ -6,6 +6,7 @@ import DestinationDetailScreen from "@/screens/DestinationDetailScreen";
 import OnboardingScreen from "@/screens/OnboardingScreen";
 import VerificationRequestScreen from "@/screens/VerificationRequestScreen";
 import SavedTripDetailScreen from "@/screens/SavedTripDetailScreen";
+import AdminScreen from "@/screens/AdminScreen";
 import { Colors } from "@/constants/theme";
 import { Itinerary } from "@/types/trip";
 
@@ -15,6 +16,7 @@ export type RootStackParamList = {
   DestinationDetail: { placeId: number };
   VerificationRequest: { itinerary: Itinerary };
   SavedTripDetail: { itineraryId: number };
+  AdminModal: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -81,6 +83,16 @@ export default function RootStackNavigator() {
         options={{
           presentation: "card",
           headerShown: false,
+        }}
+      />
+      {/* 관리자 대시보드 (전체화면 모달) */}
+      <Stack.Screen
+        name="AdminModal"
+        component={AdminScreen}
+        options={{
+          presentation: "fullScreenModal",
+          headerShown: false,
+          animation: "slide_from_bottom",
         }}
       />
     </Stack.Navigator>

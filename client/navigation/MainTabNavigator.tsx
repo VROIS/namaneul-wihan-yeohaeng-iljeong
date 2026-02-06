@@ -4,13 +4,14 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { Feather } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
 import { Brand, Colors } from "@/constants/theme";
 import TripPlannerScreen from "@/screens/TripPlannerScreen";
 import ProfileScreen from "@/screens/ProfileScreen";
-import AdminScreen from "@/screens/AdminScreen";
 import VerificationRequestScreen from "@/screens/VerificationRequestScreen";
 import { useMapToggle } from "@/contexts/MapToggleContext";
+import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 export type MainTabParamList = {
   Home: undefined;
@@ -27,11 +28,17 @@ function MapTogglePlaceholder() {
   return <View style={{ flex: 1 }} />;
 }
 
+// ⚙️ 관리자 더미 컴포넌트 (실제로는 모달로 열림)
+function AdminPlaceholder() {
+  return <View style={{ flex: 1 }} />;
+}
+
 export default function MainTabNavigator() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
   const theme = Colors[colorScheme ?? "light"];
   const { showMap, toggleMap } = useMapToggle();
+  const rootNavigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   const getTabBarIcon = (routeName: string, color: string, focused: boolean) => {
     let iconName: keyof typeof Feather.glyphMap;
@@ -149,13 +156,19 @@ export default function MainTabNavigator() {
             headerTitle: "프로필",
           }}
         />
-        {/* ⚙️ 설정 (관리자) */}
+        {/* ⚙️ 설정 (관리자) - 클릭 시 모달로 열림 */}
         <Tab.Screen
           name="Admin"
-          component={AdminScreen}
+          component={AdminPlaceholder}
           options={{
             tabBarLabel: "설정",
-            headerTitle: "관리자",
+            headerShown: false,
+          }}
+          listeners={{
+            tabPress: (e) => {
+              e.preventDefault();
+              rootNavigation.navigate("AdminModal");
+            },
           }}
         />
       </Tab.Navigator>
