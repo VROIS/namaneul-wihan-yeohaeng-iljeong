@@ -20,17 +20,6 @@ function setupCors(app: express.Application) {
   app.use((req, res, next) => {
     const origins = new Set<string>();
 
-    // Replit 환경
-    if (process.env.REPLIT_DEV_DOMAIN) {
-      origins.add(`https://${process.env.REPLIT_DEV_DOMAIN}`);
-    }
-
-    if (process.env.REPLIT_DOMAINS) {
-      process.env.REPLIT_DOMAINS.split(",").forEach((d) => {
-        origins.add(`https://${d.trim()}`);
-      });
-    }
-
     // 로컬 개발 환경
     origins.add("http://localhost:8081");
     origins.add("http://localhost:8082");
@@ -282,10 +271,9 @@ function setupErrorHandler(app: express.Application) {
           for (const key of keys) {
             if (key.keyValue && key.keyValue.trim() !== '' && key.isActive) {
               process.env[key.keyName] = key.keyValue;
-              // Gemini 키는 추가 매핑 (원본 Replit 코드는 API_KEY 사용)
+              // Gemini 키 추가 매핑
               if (key.keyName === 'GEMINI_API_KEY') {
                 process.env.AI_INTEGRATIONS_GEMINI_API_KEY = key.keyValue;
-                process.env.API_KEY = key.keyValue; // 원본 Replit 코드 호환
               }
               loadedCount++;
             }

@@ -12,7 +12,7 @@ if (!process.env.DATABASE_URL) {
   console.warn(
     "⚠️  DATABASE_URL이 설정되지 않았습니다.",
     "\n   DB 연동 기능이 비활성화됩니다.",
-    "\n   Neon DB 연결을 위해 .env 파일에 DATABASE_URL을 설정하세요.",
+    "\n   Supabase PostgreSQL 연결을 위해 .env 파일에 DATABASE_URL을 설정하세요.",
   );
 } else {
   try {

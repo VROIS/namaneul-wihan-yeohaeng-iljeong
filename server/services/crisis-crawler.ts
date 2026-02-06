@@ -42,7 +42,7 @@ async function analyzeWithGemini(articles: { title: string; description?: string
     const articlesText = articles.map(a => `- ${a.title} (${a.source})`).join("\n");
     
     const response = await ai.models.generateContent({
-      model: "gemini-3.0-flash-preview",
+      model: "gemini-3-flash-preview",
       contents: `You are a travel safety analyst. Analyze these news articles about ${cityName} and assess the travel risk.
 
 Articles:

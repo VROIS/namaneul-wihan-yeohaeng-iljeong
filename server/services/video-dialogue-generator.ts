@@ -129,7 +129,7 @@ ${input.vibes.join(", ")}
 4. 영상 프롬프트는 반드시 영어로, 상세하게`;
 
         const response = await ai.models.generateContent({
-            model: "gemini-2.0-flash",
+            model: "gemini-3-flash-preview",
             contents: systemPrompt,
         });
 

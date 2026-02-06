@@ -156,7 +156,7 @@ JSON 배열로 답해주세요. 여행에 영향 없는 뉴스는 제외:
 여행에 영향 없으면 빈 배열 []을 반환하세요.`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash-exp',
+      model: 'gemini-3-flash-preview',
       contents: prompt,
     });
     

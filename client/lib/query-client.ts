@@ -23,11 +23,6 @@ export function getApiUrl(): string {
       return host;
     }
 
-    // Replit 환경 (https://)
-    if (host.includes("replit") || host.includes("repl.co")) {
-      return `https://${host}`;
-    }
-
     // 로컬 환경 (http://)
     return `http://${host}`;
   }

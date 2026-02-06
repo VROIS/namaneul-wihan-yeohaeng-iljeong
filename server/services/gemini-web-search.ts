@@ -58,7 +58,7 @@ Return JSON with:
     }
     
     const response = await ai.models.generateContent({
-      model: "gemini-3.0-flash-preview",
+      model: "gemini-3-flash-preview",
       contents: `${systemPrompt}\n\nSearch query: ${query}`,
       config: {
         tools: [{ googleSearch: {} }]

@@ -143,7 +143,7 @@ async function searchEntranceFeeWithGemini(placeName: string, destination: strin
 JSON 형식으로만 답해주세요: {"entranceFee": 숫자 또는 null, "source": "출처"}`;
     
     const response = await ai.models.generateContent({
-      model: 'gemini-2.0-flash-exp',
+      model: 'gemini-3-flash-preview',
       contents: prompt,
     });
     

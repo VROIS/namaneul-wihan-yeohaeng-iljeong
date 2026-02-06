@@ -13,8 +13,6 @@ import { generateVideoPrompts, generateSingleScenePrompt, type VideoPromptData }
 import { generateSceneDialogue } from "./services/video-dialogue-generator";
 import { runVideoGenerationPipeline } from "./services/video-pipeline";
 import { getTestVideoHtml } from "./test-video-ui";
-import { registerChatRoutes } from "./replit_integrations/chat";
-import { registerImageRoutes } from "./replit_integrations/image";
 import { registerAdminRoutes } from "./admin-routes";
 import { db } from "./db";
 import { instagramHashtags, cities, youtubeChannels, verificationRequests, itineraries } from "../shared/schema";
@@ -78,8 +76,6 @@ init();
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
-  registerChatRoutes(app);
-  registerImageRoutes(app);
   registerAdminRoutes(app);
 
   // Cities

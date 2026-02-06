@@ -9,13 +9,14 @@ import {
 } from "@shared/schema";
 import { eq, desc, and, sql } from "drizzle-orm";
 
-const ai = new GoogleGenAI({
-  apiKey: process.env.AI_INTEGRATIONS_GEMINI_API_KEY,
-  httpOptions: {
-    apiVersion: "",
-    baseUrl: process.env.AI_INTEGRATIONS_GEMINI_BASE_URL,
-  },
-});
+// Gemini AI를 동적으로 초기화 (DB에서 키 로드 후 사용 가능하도록)
+function getGeminiAI(): GoogleGenAI {
+  const apiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY || process.env.GEMINI_API_KEY || '';
+  if (!apiKey) {
+    throw new Error('[YouTube] Gemini API 키가 없습니다. 관리자 대시보드에서 GEMINI_API_KEY를 설정해주세요.');
+  }
+  return new GoogleGenAI({ apiKey });
+}
 
 interface YouTubeVideoItem {
   id: { videoId: string };
@@ -68,12 +69,14 @@ interface TranscriptSegment {
 }
 
 export class YouTubeCrawler {
-  private apiKey: string;
+  // API 키를 동적으로 가져옴 (DB에서 로드 후 process.env에 설정됨)
+  private get apiKey(): string {
+    return process.env.YOUTUBE_API_KEY || "";
+  }
 
   constructor() {
-    this.apiKey = process.env.YOUTUBE_API_KEY || "";
     if (!this.apiKey) {
-      console.warn("YOUTUBE_API_KEY not configured");
+      console.warn("[YouTube] YOUTUBE_API_KEY not configured - will retry when DB keys are loaded");
     }
   }
 
@@ -244,11 +247,17 @@ export class YouTubeCrawler {
   }> {
     const result = { totalVideos: 0, totalPlaces: 0, errors: [] as string[] };
 
+    if (!this.apiKey) {
+      console.error("[YouTube] YOUTUBE_API_KEY 미설정 - 동기화 건너뜀. 관리자 대시보드에서 키를 설정하세요.");
+      result.errors.push("YOUTUBE_API_KEY not configured");
+      return result;
+    }
+
     const channels = await db.query.youtubeChannels.findMany({
       where: eq(youtubeChannels.isActive, true),
     });
 
-    console.log(`[YouTube] Syncing ${channels.length} active channels`);
+    console.log(`[YouTube] Syncing ${channels.length} active channels (API key: ${this.apiKey.substring(0, 6)}...)`);
 
     for (const channel of channels) {
       const channelResult = await this.syncChannelVideos(channel.id, 5);
@@ -471,6 +480,7 @@ JSON 배열 형식으로만 응답해주세요:
 - 장소가 없으면 빈 배열 []을 반환하세요`;
 
     try {
+      const ai = getGeminiAI();
       const response = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
         contents: [{ role: "user", parts: [{ text: prompt }] }],

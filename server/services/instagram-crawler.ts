@@ -156,7 +156,7 @@ export class InstagramCrawler {
     }
   }
 
-  async syncHashtag(hashtagDbId: number): Promise<{ success: boolean; postCount?: number }> {
+  async syncHashtag(hashtagDbId: number): Promise<{ success: boolean; postCount?: number; photosSaved?: number }> {
     const [hashtag] = await db
       .select()
       .from(instagramHashtags)
@@ -178,9 +178,40 @@ export class InstagramCrawler {
         })
         .where(eq(instagramHashtags.id, hashtagDbId));
 
+      // topPosts가 있으면 instagramPhotos 테이블에 저장
+      let photosSaved = 0;
+      if (data.topPosts && data.topPosts.length > 0) {
+        for (const post of data.topPosts) {
+          try {
+            if (!post.url) continue;
+            
+            // 중복 체크
+            const existing = await db
+              .select()
+              .from(instagramPhotos)
+              .where(eq(instagramPhotos.postUrl, post.url))
+              .limit(1);
+            
+            if (existing.length > 0) continue;
+            
+            await db.insert(instagramPhotos).values({
+              hashtagId: hashtagDbId,
+              postUrl: post.url,
+              imageUrl: post.imageUrl || null,
+              likeCount: post.likeCount || 0,
+              caption: post.caption || null,
+            });
+            photosSaved++;
+          } catch (photoErr) {
+            console.warn(`[Instagram] 사진 저장 실패 (${post.url}):`, photoErr);
+          }
+        }
+        console.log(`[Instagram] #${hashtag.hashtag}: ${photosSaved}개 사진 저장됨`);
+      }
+
       await this.updateApiStatus("instagram_crawler", true);
       
-      return { success: true, postCount: data.postCount };
+      return { success: true, postCount: data.postCount, photosSaved };
     }
 
     await this.updateApiStatus("instagram_crawler", false, "Failed to fetch hashtag data");

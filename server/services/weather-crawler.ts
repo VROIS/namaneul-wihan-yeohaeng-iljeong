@@ -154,7 +154,13 @@ async function fetchWeatherWithGemini(
   lon: number
 ): Promise<{ success: boolean; forecastDays: number; currentCondition?: string }> {
   try {
-    const { ai } = await import("../replit_integrations/image/client");
+    const apiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY || process.env.GEMINI_API_KEY || '';
+    if (!apiKey) {
+      console.error("[Weather] Gemini API 키 없음 - fallback 불가");
+      return { success: false, forecastDays: 0 };
+    }
+    const { GoogleGenAI } = await import("@google/genai");
+    const ai = new GoogleGenAI({ apiKey });
 
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",

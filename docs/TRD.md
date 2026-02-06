@@ -59,7 +59,7 @@
 
 | 타입 | 기술 | 용도 |
 |------|------|------|
-| **RDBMS** | PostgreSQL (Neon) | 사용자, 예약, 트랜잭션 |
+| **RDBMS** | PostgreSQL (Supabase) | 사용자, 예약, 트랜잭션 |
 | **Vector DB** | (향후) Pinecone/Weaviate | 감성 검색 |
 | **Cache** | (향후) Redis | API 응답 캐싱 |
 

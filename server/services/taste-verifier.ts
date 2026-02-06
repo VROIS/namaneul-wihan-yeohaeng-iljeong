@@ -2,13 +2,12 @@ import { GoogleGenAI } from "@google/genai";
 import { storage } from "../storage";
 import type { Place, Review } from "@shared/schema";
 
-const ai = new GoogleGenAI({
-  apiKey: process.env.AI_INTEGRATIONS_GEMINI_API_KEY,
-  httpOptions: {
-    apiVersion: "",
-    baseUrl: process.env.AI_INTEGRATIONS_GEMINI_BASE_URL,
-  },
-});
+// Gemini AI를 동적으로 초기화 (DB에서 키 로드 후 사용 가능하도록)
+function getAI(): GoogleGenAI {
+  const apiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY || process.env.GEMINI_API_KEY || '';
+  if (!apiKey) throw new Error('[TasteVerifier] Gemini API 키가 없습니다.');
+  return new GoogleGenAI({ apiKey });
+}
 
 interface LanguageAnalysisResult {
   language: string;
@@ -63,7 +62,7 @@ Respond in JSON format only:
 }`;
 
     try {
-      const response = await ai.models.generateContent({
+      const response = await getAI().models.generateContent({
         model: "gemini-3-flash-preview",
         contents: [{ role: "user", parts: [{ text: prompt }] }],
       });

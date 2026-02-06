@@ -39,7 +39,7 @@
 
 ## 3. 일일 작업 기록
 
-### 2026-02-06 (목)
+### 2026-02-06 (목) - 관제탑 구축 Day 2
 
 | # | 작업 | 상태 | 카테고리 | 변경 파일 |
 |---|------|------|----------|-----------|
@@ -52,6 +52,14 @@
 | 7 | 설정 탭 → 모달로 전환 (tabPress 리스너) | 완료 | 네비게이션 | `MainTabNavigator.tsx` |
 | 8 | 웹에서 iframe으로 대시보드 직접 표시 | 완료 | 프론트 | `AdminScreen.tsx` |
 | 9 | TASK.md 통합 관리 문서로 리팩토링 | 완료 | 문서 | `docs/TASK.md` |
+| 10 | 관리자 대시보드 JS 에러 수정 (event.target/null) | 완료 | 대시보드 | `admin-dashboard.html` |
+| 11 | **전체 대시보드 버튼-API 연결 감사** | 완료 | 관제탑 | 50+버튼, 60+API 교차점검 |
+| 12 | Instagram: topPosts → instagramPhotos 저장 로직 | 완료 | 크롤러 | `instagram-crawler.ts` |
+| 13 | YouTube: API키 동적 로드 (getter) | 완료 | 크롤러 | `youtube-crawler.ts` |
+| 14 | syncGooglePlaces 경로 불일치 수정 | 완료 | 대시보드 | `admin-dashboard.html` |
+| 15 | Replit 의존성 제거 (4개 크롤러) | 완료 | 크롤러 | `weather/tripadvisor/price/michelin-crawler.ts` |
+| 16 | Gemini AI 동적 초기화 (5개 서비스) | 완료 | 크롤러 | `youtube/vibe/taste-verifier.ts` |
+| 17 | **Gemini 3.0 모델 전체 통일** | 완료 | AI | 전체 서비스 `gemini-3-flash-preview` |
 
 ### 2026-02-02 (일)
 
@@ -200,7 +208,7 @@
 | 백엔드 | Express + TypeScript | API 서버 |
 | 데이터베이스 | PostgreSQL (Supabase) | 데이터 저장 |
 | ORM | Drizzle ORM | DB 쿼리 |
-| AI | Gemini 2.5 Flash | 일정 생성/분석 |
+| AI | Gemini 3.0 Flash (gemini-3-flash-preview) | 일정 생성/분석 |
 | 영상 | Seedance 1.5 Pro + Remotion | 감동 영상 |
 | 빌드 | esbuild (CJS) | 서버 번들링 |
 | 배포 | Koyeb (Docker) | 무료 호스팅 |

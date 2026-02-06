@@ -641,7 +641,7 @@
             </div>
             <div style="display: flex; justify-content: space-between; align-items: center;">
               <span id="kr-youtube-sync" style="font-size: 11px; color: #6b7280;">마지막 동기화: -</span>
-              <button class="btn btn-sm" style="background: rgba(255,0,0,0.2); color: #ff0000; border: 1px solid rgba(255,0,0,0.3);" onclick="syncKoreanYouTube()">동기화</button>
+              <button class="btn btn-sm" style="background: rgba(255,0,0,0.2); color: #ff0000; border: 1px solid rgba(255,0,0,0.3);" onclick="syncKoreanYouTube(this)">동기화</button>
             </div>
           </div>
         </div>
@@ -1489,8 +1489,10 @@
         const data = await res.json();
         
         const statusEl = document.getElementById('scheduler-status');
-        statusEl.textContent = data.isRunning ? '실행 중' : '중지됨';
-        statusEl.className = `status-badge ${data.isRunning ? 'status-ok' : 'status-error'}`;
+        if (statusEl) {
+          statusEl.textContent = data.isRunning ? '실행 중' : '중지됨';
+          statusEl.className = `status-badge ${data.isRunning ? 'status-ok' : 'status-error'}`;
+        }
         
         const tasksEl = document.getElementById('scheduler-tasks');
         const statusColors = {
@@ -1500,16 +1502,18 @@
           'never': '#6b7280'
         };
         
-        tasksEl.innerHTML = data.taskStatuses.map(task => `
-          <div style="padding: 12px; background: rgba(255,255,255,0.03); border-radius: 8px; border-left: 3px solid ${statusColors[task.lastStatus] || '#6b7280'};">
-            <div style="font-size: 13px; font-weight: 600; margin-bottom: 4px;">${task.taskName.replace(/_/g, ' ')}</div>
-            <div style="font-size: 11px; color: #9ca3af;">${task.nextRun}</div>
-            <div style="font-size: 10px; color: ${statusColors[task.lastStatus]}; margin-top: 4px;">
-              ${task.lastRunAt ? `마지막: ${new Date(task.lastRunAt).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}` : '아직 실행 안됨'}
-              ${task.lastProcessed > 0 ? ` (${task.lastProcessed}건)` : ''}
+        if (tasksEl && data.taskStatuses) {
+          tasksEl.innerHTML = data.taskStatuses.map(task => `
+            <div style="padding: 12px; background: rgba(255,255,255,0.03); border-radius: 8px; border-left: 3px solid ${statusColors[task.lastStatus] || '#6b7280'};">
+              <div style="font-size: 13px; font-weight: 600; margin-bottom: 4px;">${task.taskName.replace(/_/g, ' ')}</div>
+              <div style="font-size: 11px; color: #9ca3af;">${task.nextRun}</div>
+              <div style="font-size: 10px; color: ${statusColors[task.lastStatus]}; margin-top: 4px;">
+                ${task.lastRunAt ? `마지막: ${new Date(task.lastRunAt).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}` : '아직 실행 안됨'}
+                ${task.lastProcessed > 0 ? ` (${task.lastProcessed}건)` : ''}
+              </div>
             </div>
-          </div>
-        `).join('');
+          `).join('');
+        }
       } catch (err) {
         console.error('스케줄러 상태 로드 오류:', err);
       }
@@ -1521,13 +1525,16 @@
         const res = await fetch(`${API_BASE}/itinerary/stats`);
         const data = await res.json();
         
-        document.getElementById('itinerary-today').textContent = data.today || 0;
-        document.getElementById('itinerary-week').textContent = data.thisWeek || 0;
-        document.getElementById('itinerary-total').textContent = data.total || 0;
+        const todayEl = document.getElementById('itinerary-today');
+        const weekEl = document.getElementById('itinerary-week');
+        const totalEl = document.getElementById('itinerary-total');
+        const topEl = document.getElementById('itinerary-top-cities');
+        if (todayEl) todayEl.textContent = data.today || 0;
+        if (weekEl) weekEl.textContent = data.thisWeek || 0;
+        if (totalEl) totalEl.textContent = data.total || 0;
         
-        if (data.topCities && data.topCities.length > 0) {
-          document.getElementById('itinerary-top-cities').textContent = 
-            `인기 도시: ${data.topCities.map(c => `${c.cityName}(${c.count})`).join(', ')}`;
+        if (topEl && data.topCities && data.topCities.length > 0) {
+          topEl.textContent = `인기 도시: ${data.topCities.map(c => `${c.cityName}(${c.count})`).join(', ')}`;
         }
       } catch (err) {
         console.error('일정 통계 로드 오류:', err);
@@ -1540,21 +1547,27 @@
         const res = await fetch(`${API_BASE}/route-cache/stats`);
         const data = await res.json();
         
-        document.getElementById('route-total').textContent = data.totalCached || 0;
-        document.getElementById('route-week').textContent = data.last7Days || 0;
+        const totalEl = document.getElementById('route-total');
+        const weekEl = document.getElementById('route-week');
+        if (totalEl) totalEl.textContent = data.totalCached || 0;
+        if (weekEl) weekEl.textContent = data.last7Days || 0;
         
         const modeLabels = { 'DRIVE': '🚗', 'TRANSIT': '🚇', 'WALK': '🚶', 'BICYCLE': '🚴' };
         const byModeEl = document.getElementById('route-by-mode');
-        if (data.byTravelMode) {
+        if (byModeEl && data.byTravelMode) {
           byModeEl.innerHTML = Object.entries(data.byTravelMode).map(([mode, count]) => 
             `<span style="font-size: 12px;">${modeLabels[mode] || mode}: ${count}</span>`
           ).join('');
         }
         
         // 데이터 소스 탭 업데이트
-        document.getElementById('routes-count').textContent = `${data.totalCached || 0} 경로`;
-        document.getElementById('routes-status').textContent = data.status;
-        document.getElementById('routes-status').className = `status-badge ${data.status === '활성' ? 'status-ok' : 'status-warn'}`;
+        const rcEl = document.getElementById('routes-count');
+        const rsEl = document.getElementById('routes-status');
+        if (rcEl) rcEl.textContent = `${data.totalCached || 0} 경로`;
+        if (rsEl) {
+          rsEl.textContent = data.status;
+          rsEl.className = `status-badge ${data.status === '활성' ? 'status-ok' : 'status-warn'}`;
+        }
       } catch (err) {
         console.error('경로 캐시 통계 로드 오류:', err);
       }
@@ -1566,13 +1579,19 @@
         const res = await fetch(`${API_BASE}/popularity/stats`);
         const data = await res.json();
 
-        document.getElementById('popularity-total').textContent = data.totalCached || 0;
-        document.getElementById('popularity-24h').textContent = data.last24Hours || 0;
+        const ptEl = document.getElementById('popularity-total');
+        const p24El = document.getElementById('popularity-24h');
+        if (ptEl) ptEl.textContent = data.totalCached || 0;
+        if (p24El) p24El.textContent = data.last24Hours || 0;
 
         // 데이터 소스 탭 업데이트
-        document.getElementById('popularity-count').textContent = `${data.totalCached || 0} 장소`;
-        document.getElementById('popularity-status').textContent = data.status;
-        document.getElementById('popularity-status').className = `status-badge ${data.status === '활성' ? 'status-ok' : 'status-warn'}`;
+        const pcEl = document.getElementById('popularity-count');
+        const psEl = document.getElementById('popularity-status');
+        if (pcEl) pcEl.textContent = `${data.totalCached || 0} 장소`;
+        if (psEl) {
+          psEl.textContent = data.status;
+          psEl.className = `status-badge ${data.status === '활성' ? 'status-ok' : 'status-warn'}`;
+        }
       } catch (err) {
         console.error('혼잡도 통계 로드 오류:', err);
       }
@@ -1588,50 +1607,66 @@
           fetch(`${API_BASE}/korean-sentiment/cache-status`)
         ]);
         
-        // 캐시 상태 업데이트
+        // 캐시 상태 업데이트 (안전한 null 체크)
         if (cacheRes.ok) {
           const cacheData = await cacheRes.json();
-          document.getElementById('cache-total').textContent = cacheData.totalCached || 0;
-          document.getElementById('cache-valid').textContent = cacheData.validCount || 0;
-          document.getElementById('cache-expired').textContent = cacheData.expiredCount || 0;
+          const ctEl = document.getElementById('cache-total');
+          const cvEl = document.getElementById('cache-valid');
+          const ceEl = document.getElementById('cache-expired');
+          const ccEl = document.getElementById('cache-coverage');
+          if (ctEl) ctEl.textContent = cacheData.totalCached || 0;
+          if (cvEl) cvEl.textContent = cacheData.validCount || 0;
+          if (ceEl) ceEl.textContent = cacheData.expiredCount || 0;
           const coverage = cacheData.europeCitiesTotal > 0 
             ? Math.round((cacheData.europeCitiesCovered / cacheData.europeCitiesTotal) * 100) 
             : 0;
-          document.getElementById('cache-coverage').textContent = `${coverage}%`;
+          if (ccEl) ccEl.textContent = `${coverage}%`;
         }
         
-        // Instagram
+        // Instagram (안전한 null 체크)
         const instaData = await instaRes.json();
-        document.getElementById('kr-insta-hashtags').textContent = instaData.totalHashtags || 0;
-        document.getElementById('kr-insta-photos').textContent = instaData.totalPhotos || 0;
+        const ihEl = document.getElementById('kr-insta-hashtags');
+        const ipEl = document.getElementById('kr-insta-photos');
+        const ipostEl = document.getElementById('kr-insta-posts');
+        const isyncEl = document.getElementById('kr-insta-sync');
+        if (ihEl) ihEl.textContent = instaData.totalHashtags || 0;
+        if (ipEl) ipEl.textContent = instaData.totalPhotos || 0;
         
-        // 게시물 수는 해시태그별 합산 (API에서 제공 필요)
+        // 게시물 수는 해시태그별 합산
         const totalPostCount = instaData.totalPosts || '-';
-        document.getElementById('kr-insta-posts').textContent = typeof totalPostCount === 'number' ? 
+        if (ipostEl) ipostEl.textContent = typeof totalPostCount === 'number' ? 
           (totalPostCount > 1000000 ? `${(totalPostCount/1000000).toFixed(1)}M` : 
            totalPostCount > 1000 ? `${(totalPostCount/1000).toFixed(1)}K` : totalPostCount) : totalPostCount;
         
-        document.getElementById('kr-insta-sync').textContent = instaData.lastSyncAt ? 
+        if (isyncEl) isyncEl.textContent = instaData.lastSyncAt ? 
           `마지막 동기화: ${new Date(instaData.lastSyncAt).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}` : '마지막 동기화: -';
 
-        // 네이버 블로그
+        // 네이버 블로그 (안전한 null 체크)
         if (naverRes.ok) {
           const naverData = await naverRes.json();
-          document.getElementById('kr-naver-posts').textContent = naverData.totalPosts || 0;
-          document.getElementById('kr-naver-places').textContent = naverData.linkedPlaces || 0;
-          document.getElementById('kr-naver-sentiment').textContent = naverData.positiveSentimentRatio ? 
+          const npEl = document.getElementById('kr-naver-posts');
+          const nplEl = document.getElementById('kr-naver-places');
+          const nsEl = document.getElementById('kr-naver-sentiment');
+          const nsynEl = document.getElementById('kr-naver-sync');
+          if (npEl) npEl.textContent = naverData.totalPosts || 0;
+          if (nplEl) nplEl.textContent = naverData.linkedPlaces || 0;
+          if (nsEl) nsEl.textContent = naverData.positiveSentimentRatio ? 
             `${naverData.positiveSentimentRatio}%` : '-';
-          document.getElementById('kr-naver-sync').textContent = naverData.lastSyncAt ? 
+          if (nsynEl) nsynEl.textContent = naverData.lastSyncAt ? 
             `마지막 동기화: ${new Date(naverData.lastSyncAt).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}` : '마지막 동기화: -';
         }
 
-        // YouTube
+        // YouTube (안전한 null 체크)
         if (youtubeRes.ok) {
           const youtubeData = await youtubeRes.json();
-          document.getElementById('kr-youtube-channels').textContent = youtubeData.totalChannels || 0;
-          document.getElementById('kr-youtube-videos').textContent = youtubeData.totalVideos || 0;
-          document.getElementById('kr-youtube-mentions').textContent = youtubeData.totalMentions || 0;
-          document.getElementById('kr-youtube-sync').textContent = youtubeData.lastSyncAt ? 
+          const ycEl = document.getElementById('kr-youtube-channels');
+          const yvEl = document.getElementById('kr-youtube-videos');
+          const ymEl = document.getElementById('kr-youtube-mentions');
+          const ysEl = document.getElementById('kr-youtube-sync');
+          if (ycEl) ycEl.textContent = youtubeData.totalChannels || 0;
+          if (yvEl) yvEl.textContent = youtubeData.totalVideos || 0;
+          if (ymEl) ymEl.textContent = youtubeData.totalMentions || 0;
+          if (ysEl) ysEl.textContent = youtubeData.lastSyncAt ? 
             `마지막 동기화: ${new Date(youtubeData.lastSyncAt).toLocaleString('ko-KR', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}` : '마지막 동기화: -';
         }
       } catch (err) {
@@ -1677,12 +1712,11 @@
       }
     }
 
-    async function syncKoreanYouTube() {
+    async function syncKoreanYouTube(btnEl) {
       if (!confirm('🎬 YouTube 감성 데이터를 유럽 30개 도시에서 수집합니다.\n(Gemini AI 기반, 약 1-2분 소요)')) return;
+      const btn = btnEl || document.querySelector('[onclick*="syncKoreanYouTube"]');
       try {
-        const btn = event.target;
-        btn.disabled = true;
-        btn.textContent = '동기화 중...';
+        if (btn) { btn.disabled = true; btn.textContent = '동기화 중...'; }
         
         const res = await fetch(`${API_BASE}/korean-sentiment/sync-youtube`, { method: 'POST' });
         const data = await res.json();
@@ -1692,8 +1726,7 @@
       } catch (err) {
         alert('❌ 동기화 실패: ' + err.message);
       } finally {
-        event.target.disabled = false;
-        event.target.textContent = '동기화';
+        if (btn) { btn.disabled = false; btn.textContent = '동기화'; }
       }
     }
     
@@ -2017,7 +2050,7 @@
     async function syncGooglePlaces() {
       alert('Google Places 동기화가 시작됩니다. 시간이 걸릴 수 있습니다.');
       try {
-        await fetch('/api/sync/city/1/places', { method: 'POST' });
+        await fetch(`${API_BASE}/sync/places/1`, { method: 'POST' });
         loadUnifiedSourcesStatus();
       } catch (err) { alert('동기화 실패'); }
     }
@@ -2054,10 +2087,15 @@
         const res = await fetch(`${API_BASE}/tistory/stats`);
         const data = await res.json();
         
-        document.getElementById('tistory-count').textContent = `${data.totalPosts || 0} 포스트`;
-        document.getElementById('tistory-status').textContent = data.status;
-        document.getElementById('tistory-status').className = `status-badge ${data.status === '활성' ? 'status-ok' : 'status-warn'}`;
-        document.getElementById('tistory-sync').textContent = data.lastSync 
+        const tcEl = document.getElementById('tistory-count');
+        const tsEl = document.getElementById('tistory-status');
+        const tsynEl = document.getElementById('tistory-sync');
+        if (tcEl) tcEl.textContent = `${data.totalPosts || 0} 포스트`;
+        if (tsEl) {
+          tsEl.textContent = data.status;
+          tsEl.className = `status-badge ${data.status === '활성' ? 'status-ok' : 'status-warn'}`;
+        }
+        if (tsynEl) tsynEl.textContent = data.lastSync 
           ? new Date(data.lastSync).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })
           : '-';
       } catch (err) {
@@ -2068,6 +2106,7 @@
     async function loadApiDetail() {
       try {
         const el = document.getElementById('api-detail');
+        if (!el) return;
         el.innerHTML = '<div style="text-align: center; padding: 20px; color: #f59e0b;">실시간 연결 상태 확인 중...</div>';
         
         // 실시간 health check API 호출
@@ -2125,7 +2164,8 @@
         `;
       } catch (err) {
         console.error('API 상세 로드 오류:', err);
-        document.getElementById('api-detail').innerHTML = '<div style="color: #ef4444;">상태 확인 실패</div>';
+        const errEl = document.getElementById('api-detail');
+        if (errEl) errEl.innerHTML = '<div style="color: #ef4444;">상태 확인 실패</div>';
       }
     }
     

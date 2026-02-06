@@ -522,33 +522,17 @@ export function registerAdminRoutes(app: Express) {
 
       // Gemini AI 테스트 (SDK 방식)
       const geminiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
-      const geminiBaseUrl = process.env.AI_INTEGRATIONS_GEMINI_BASE_URL;
       
       if (geminiKey) {
-        // Base URL이 있으면 Replit AI 통합 방식, 없으면 직접 API 사용
-        if (geminiBaseUrl) {
-          await checkWithTimeout("gemini", async () => {
-            const { GoogleGenAI } = await import("@google/genai");
-            const ai = new GoogleGenAI({
-              apiKey: geminiKey,
-              httpOptions: { apiVersion: "", baseUrl: geminiBaseUrl }
-            });
-            await ai.models.generateContent({
-              model: "gemini-3-flash-preview",
-              contents: [{ role: "user", parts: [{ text: "ping" }] }],
-            });
+        // Google AI Studio 직접 API 사용
+        await checkWithTimeout("gemini", async () => {
+          const { GoogleGenAI } = await import("@google/genai");
+          const ai = new GoogleGenAI({ apiKey: geminiKey });
+          await ai.models.generateContent({
+            model: "gemini-3-flash-preview",
+            contents: "test"
           });
-        } else {
-          // 직접 API 사용 (Google AI Studio)
-          await checkWithTimeout("gemini", async () => {
-            const { GoogleGenAI } = await import("@google/genai");
-            const ai = new GoogleGenAI({ apiKey: geminiKey });
-            await ai.models.generateContent({
-              model: "gemini-2.0-flash",
-              contents: "test"
-            });
-          });
-        }
+        });
       } else {
         healthResults["gemini"] = { connected: false, latency: null, error: "API key not configured", lastChecked: new Date().toISOString() };
       }
@@ -1239,7 +1223,7 @@ export function registerAdminRoutes(app: Express) {
         },
         gemini: {
           configured: !!geminiKey,
-          message: geminiKey ? "설정됨 (Replit AI 통합)" : "Replit AI 통합 필요"
+          message: geminiKey ? "설정됨" : "GEMINI_API_KEY 설정 필요"
         },
         exchangeRate: {
           configured: true,
@@ -3043,7 +3027,7 @@ export function registerAdminRoutes(app: Express) {
             const { GoogleGenAI } = await import("@google/genai");
             const ai = new GoogleGenAI({ apiKey: keyRecord.keyValue });
             const response = await ai.models.generateContent({
-              model: "gemini-2.0-flash",
+              model: "gemini-3-flash-preview",
               contents: "Say 'API test successful' in Korean"
             });
             testResult = { success: true, message: response.text?.slice(0, 100) || 'OK' };

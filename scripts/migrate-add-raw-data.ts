@@ -20,7 +20,7 @@ async function addRawDataColumn() {
 
     const pool = new Pool({
         connectionString: process.env.DATABASE_URL,
-        ssl: { rejectUnauthorized: false } // Supabase/Neon 등 클라우드 DB용
+        ssl: { rejectUnauthorized: false } // Supabase 클라우드 DB용
     });
 
     try {
