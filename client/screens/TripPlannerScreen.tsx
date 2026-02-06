@@ -14,6 +14,8 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
+  Image,
+  Linking,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
@@ -1115,14 +1117,37 @@ export default function TripPlannerScreen() {
                       )}
                     </View>
 
-                    {/* 장소 카드 */}
-                    <View style={[styles.placeCard, { backgroundColor: theme.backgroundDefault, borderLeftWidth: isMealSlot ? 3 : 0, borderLeftColor: "#FF6B35" }]}>
+                    {/* 장소 카드 - 클릭 시 구글맵 열기 */}
+                    <Pressable 
+                      style={[styles.placeCard, { backgroundColor: theme.backgroundDefault, borderLeftWidth: isMealSlot ? 3 : 0, borderLeftColor: "#FF6B35" }]}
+                      onPress={() => {
+                        const mapsUrl = place.googleMapsUrl;
+                        if (mapsUrl) {
+                          Linking.openURL(mapsUrl).catch(() => {
+                            // 구글맵 URL 실패 시 좌표 기반 fallback
+                            if (place.lat && place.lng) {
+                              Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${place.lat},${place.lng}`);
+                            }
+                          });
+                        } else if (place.lat && place.lng) {
+                          Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${place.lat},${place.lng}&query_place_id=${place.id || ''}`);
+                        }
+                      }}
+                    >
                       <View style={styles.placeCardContent}>
-                        {/* 썸네일 이미지 */}
+                        {/* 썸네일 이미지 - 실제 Google Places 사진 또는 fallback 아이콘 */}
                         <View style={styles.placeThumbnail}>
-                          <View style={[styles.placeThumbnailPlaceholder, { backgroundColor: isMealSlot ? "#FFF5F0" : theme.backgroundSecondary }]}>
-                            <Feather name={isMealSlot || isMeal ? "coffee" : "map-pin"} size={20} color={isMealSlot ? "#FF6B35" : theme.textTertiary} />
-                          </View>
+                          {place.image ? (
+                            <Image 
+                              source={{ uri: place.image }} 
+                              style={styles.placeThumbnailImage}
+                              resizeMode="cover"
+                            />
+                          ) : (
+                            <View style={[styles.placeThumbnailPlaceholder, { backgroundColor: isMealSlot ? "#FFF5F0" : theme.backgroundSecondary }]}>
+                              <Feather name={isMealSlot || isMeal ? "coffee" : "map-pin"} size={20} color={isMealSlot ? "#FF6B35" : theme.textTertiary} />
+                            </View>
+                          )}
                         </View>
 
                         {/* 장소 정보 */}
@@ -1164,9 +1189,19 @@ export default function TripPlannerScreen() {
                               {place.personaFitReason}
                             </Text>
                           )}
+
+                          {/* 구글맵 바로가기 힌트 */}
+                          {(place.googleMapsUrl || (place.lat && place.lng)) && (
+                            <View style={styles.googleMapsHint}>
+                              <Feather name="external-link" size={10} color={Brand.primary} />
+                              <Text style={[styles.googleMapsHintText, { color: Brand.primary }]}>
+                                Google Maps 열기
+                              </Text>
+                            </View>
+                          )}
                         </View>
                       </View>
-                    </View>
+                    </Pressable>
                   </View>
 
                   {/* 🚇 이동 구간 표시 - 실시간 데이터 */}
@@ -1536,6 +1571,46 @@ const styles = StyleSheet.create({
 
   // 📝 장소 설명
   placeReason: { fontSize: 14, lineHeight: 20 }, // 13/18 → 14/20
+
+  // 🖼️ 장소 카드 내부 레이아웃
+  placeCardContent: {
+    flexDirection: "row" as const,
+    alignItems: "flex-start" as const,
+  },
+  placeThumbnail: {
+    width: 56,
+    height: 56,
+    borderRadius: BorderRadius.sm,
+    overflow: "hidden" as const,
+    marginRight: Spacing.sm,
+  },
+  placeThumbnailImage: {
+    width: 56,
+    height: 56,
+    borderRadius: BorderRadius.sm,
+  },
+  placeThumbnailPlaceholder: {
+    width: 56,
+    height: 56,
+    borderRadius: BorderRadius.sm,
+    justifyContent: "center" as const,
+    alignItems: "center" as const,
+  },
+  placeInfo: {
+    flex: 1,
+  },
+
+  // 🗺️ 구글맵 바로가기 힌트
+  googleMapsHint: {
+    flexDirection: "row" as const,
+    alignItems: "center" as const,
+    gap: 4,
+    marginTop: 4,
+  },
+  googleMapsHintText: {
+    fontSize: 11,
+    fontWeight: "600" as const,
+  },
 
   // 🚇 이동 구간
   transitSection: {

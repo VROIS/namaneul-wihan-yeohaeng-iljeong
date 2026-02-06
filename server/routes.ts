@@ -299,9 +299,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const itinerary = await itineraryGenerator.generate(enrichedFormData);
       res.json(itinerary);
-    } catch (error) {
-      console.error("Error generating itinerary:", error);
-      res.status(500).json({ error: "Failed to generate itinerary" });
+    } catch (error: any) {
+      console.error("Error generating itinerary:", error?.message || error);
+      
+      // API 키 누락 에러 구분
+      if (error?.message?.includes('API') || error?.message?.includes('키')) {
+        res.status(503).json({ 
+          error: "AI 서비스 연결 오류", 
+          detail: error.message,
+          suggestion: "관리자 대시보드에서 API 키를 확인해주세요."
+        });
+      } else {
+        res.status(500).json({ 
+          error: "일정 생성 실패",
+          detail: process.env.NODE_ENV === 'development' ? error?.message : undefined,
+        });
+      }
     }
   });
 

@@ -9,13 +9,25 @@ import {
   generatePromptContext 
 } from "./protagonist-generator";
 import { routeOptimizer } from "./route-optimizer";
+import { db } from "../db";
+import { places, instagramHashtags, youtubePlaceMentions, naverBlogPosts, cities } from "@shared/schema";
+import { eq, sql, ilike, and } from "drizzle-orm";
 
 // Lazy initialization - DB에서 API 키 로드 후 사용
 let ai: GoogleGenAI | null = null;
 
+function getGeminiApiKey(): string {
+  return process.env.AI_INTEGRATIONS_GEMINI_API_KEY || process.env.GEMINI_API_KEY || process.env.API_KEY || '';
+}
+
 function getAI(): GoogleGenAI {
   if (!ai) {
-    const apiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY || process.env.GEMINI_API_KEY || process.env.API_KEY || '';
+    const apiKey = getGeminiApiKey();
+    if (!apiKey) {
+      console.error('[Itinerary] ❌ Gemini API 키가 설정되지 않았습니다!');
+      console.error('[Itinerary] 확인할 환경변수: AI_INTEGRATIONS_GEMINI_API_KEY, GEMINI_API_KEY, API_KEY');
+      throw new Error('Gemini API 키가 없습니다. 관리자 대시보드에서 API 키를 설정해주세요.');
+    }
     const baseUrl = process.env.AI_INTEGRATIONS_GEMINI_BASE_URL;
     ai = new GoogleGenAI({
       apiKey,
@@ -26,6 +38,7 @@ function getAI(): GoogleGenAI {
         },
       } : {}),
     });
+    console.log(`[Itinerary] ✅ Gemini AI 초기화 완료 (키 길이: ${apiKey.length}자)`);
   }
   return ai;
 }
@@ -176,6 +189,10 @@ interface PlaceResult {
   placeTypes: string[];
   city?: string;
   region?: string;
+  // Phase 1: 한국인 인기도 점수 (인스타45% + 유튜브30% + 블로그25%)
+  koreanPopularityScore: number;
+  // Phase 4: 구글맵 직접 링크
+  googleMapsUrl: string;
 }
 
 // 시간대별 Vibe 친화도 (향후 고급 슬롯 매칭에 사용 예정)
@@ -249,7 +266,7 @@ async function searchGooglePlaces(
         headers: {
           "Content-Type": "application/json",
           "X-Goog-Api-Key": apiKey,
-          "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.location,places.types,places.rating,places.userRatingCount,places.priceLevel,places.photos",
+          "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.location,places.types,places.rating,places.userRatingCount,places.priceLevel,places.photos,places.googleMapsUri",
         },
         body: JSON.stringify(requestBody),
       });
@@ -275,6 +292,8 @@ async function searchGooglePlaces(
                 : "",
               priceEstimate: getPriceEstimate(place.priceLevel, travelStyle),
               placeTypes: place.types || [],
+              koreanPopularityScore: 0, // 이후 enrichPlacesWithKoreanPopularity에서 계산
+              googleMapsUrl: place.googleMapsUri || "", // Phase 4: 구글맵 직접 링크
             });
           }
         }
@@ -285,6 +304,211 @@ async function searchGooglePlaces(
   }
 
   return results;
+}
+
+// ===== Phase 1: 한국인 인기도 점수 계산 (DB 수집 데이터 직접 활용) =====
+// 우선순위: 인스타그램(45%) > 유튜브 언급(30%) > 네이버 블로그(25%)
+
+/**
+ * 장소별 한국인 인기도 점수를 DB 수집 데이터로 계산
+ * Google Places 검색 결과의 장소명/ID를 DB places 테이블과 매칭 후
+ * instagram_hashtags, youtube_place_mentions, naver_blog_posts 데이터 조회
+ * 
+ * @returns 0~10 범위의 한국인 인기도 점수
+ */
+async function calculateKoreanPopularity(
+  placeName: string,
+  googlePlaceId: string,
+  cityName: string
+): Promise<number> {
+  if (!db) {
+    console.log('[KoreanPopularity] DB 미연결 - 점수 0 반환');
+    return 0;
+  }
+
+  try {
+    // 1. DB places 테이블에서 매칭 시도 (googlePlaceId 우선, 이름 fallback)
+    let matchedPlaceId: number | null = null;
+    let matchedCityId: number | null = null;
+
+    // googlePlaceId로 정확한 매칭 시도
+    if (googlePlaceId) {
+      const exactMatch = await db.select({ id: places.id, cityId: places.cityId })
+        .from(places)
+        .where(eq(places.googlePlaceId, googlePlaceId))
+        .limit(1);
+      
+      if (exactMatch.length > 0) {
+        matchedPlaceId = exactMatch[0].id;
+        matchedCityId = exactMatch[0].cityId;
+      }
+    }
+
+    // googlePlaceId 매칭 실패 시 이름으로 fuzzy 매칭
+    if (!matchedPlaceId) {
+      const nameMatch = await db.select({ id: places.id, cityId: places.cityId })
+        .from(places)
+        .where(ilike(places.name, `%${placeName}%`))
+        .limit(1);
+      
+      if (nameMatch.length > 0) {
+        matchedPlaceId = nameMatch[0].id;
+        matchedCityId = nameMatch[0].cityId;
+      }
+    }
+
+    // 도시 ID 조회 (cityName으로)
+    if (!matchedCityId) {
+      const cityMatch = await db.select({ id: cities.id })
+        .from(cities)
+        .where(ilike(cities.name, `%${cityName}%`))
+        .limit(1);
+      
+      if (cityMatch.length > 0) {
+        matchedCityId = cityMatch[0].id;
+      }
+    }
+
+    // ===== 1순위: 인스타그램 점수 (45%) =====
+    let instaScore = 0;
+    if (matchedPlaceId) {
+      const instaData = await db.select({
+        postCount: instagramHashtags.postCount,
+        avgLikes: instagramHashtags.avgLikes,
+      })
+        .from(instagramHashtags)
+        .where(eq(instagramHashtags.linkedPlaceId, matchedPlaceId))
+        .limit(5);
+
+      if (instaData.length > 0) {
+        const totalPosts = instaData.reduce((sum, d) => sum + (d.postCount || 0), 0);
+        const avgLikes = instaData.reduce((sum, d) => sum + (d.avgLikes || 0), 0) / instaData.length;
+        // 게시물 수 log 스케일 (1000개 이상이면 만점에 가까움)
+        const postScore = Math.min(10, Math.log10(totalPosts + 1) * 3.3);
+        // 좋아요 보너스 (평균 100개 이상이면 보너스)
+        const likeBonus = Math.min(2, Math.log10(avgLikes + 1) * 0.5);
+        instaScore = Math.min(10, postScore + likeBonus);
+      }
+    }
+    // 도시 레벨 인스타 데이터도 fallback
+    if (instaScore === 0 && matchedCityId) {
+      const cityInsta = await db.select({
+        postCount: instagramHashtags.postCount,
+      })
+        .from(instagramHashtags)
+        .where(eq(instagramHashtags.linkedCityId, matchedCityId))
+        .limit(10);
+
+      if (cityInsta.length > 0) {
+        const totalPosts = cityInsta.reduce((sum, d) => sum + (d.postCount || 0), 0);
+        // 도시 레벨이므로 약한 가중치 (해당 장소 직접 데이터 아님)
+        instaScore = Math.min(5, Math.log10(totalPosts + 1) * 1.5);
+      }
+    }
+
+    // ===== 2순위: 유튜브 언급 점수 (30%) =====
+    let youtubeScore = 0;
+    if (matchedPlaceId) {
+      const ytData = await db.select({
+        count: sql<number>`count(*)`,
+        avgConfidence: sql<number>`avg(${youtubePlaceMentions.confidence})`,
+      })
+        .from(youtubePlaceMentions)
+        .where(eq(youtubePlaceMentions.placeId, matchedPlaceId));
+
+      if (ytData.length > 0 && ytData[0].count > 0) {
+        const mentionCount = Number(ytData[0].count);
+        const avgConf = Number(ytData[0].avgConfidence) || 0.5;
+        // 언급 횟수 기반 (3회 이상이면 높은 점수)
+        youtubeScore = Math.min(10, mentionCount * 2 * avgConf);
+      }
+    }
+    // placeName으로 직접 매칭 시도 (DB에 장소 미등록이어도 언급은 있을 수 있음)
+    if (youtubeScore === 0) {
+      const ytNameMatch = await db.select({
+        count: sql<number>`count(*)`,
+      })
+        .from(youtubePlaceMentions)
+        .where(ilike(youtubePlaceMentions.placeName, `%${placeName}%`));
+
+      if (ytNameMatch.length > 0 && Number(ytNameMatch[0].count) > 0) {
+        youtubeScore = Math.min(7, Number(ytNameMatch[0].count) * 1.5);
+      }
+    }
+
+    // ===== 3순위: 네이버 블로그 점수 (25%) =====
+    let blogScore = 0;
+    if (matchedPlaceId) {
+      const blogData = await db.select({
+        count: sql<number>`count(*)`,
+        avgSentiment: sql<number>`avg(${naverBlogPosts.sentimentScore})`,
+      })
+        .from(naverBlogPosts)
+        .where(eq(naverBlogPosts.placeId, matchedPlaceId));
+
+      if (blogData.length > 0 && Number(blogData[0].count) > 0) {
+        const postCount = Number(blogData[0].count);
+        const avgSentiment = Number(blogData[0].avgSentiment) || 0.5;
+        // 글 수 기반 (5개 이상이면 높은 점수)
+        const countScore = Math.min(7, postCount * 1.5);
+        // 감성 보너스 (긍정적이면 추가 점수)
+        const sentimentBonus = avgSentiment > 0.7 ? 3 : avgSentiment > 0.5 ? 1.5 : 0;
+        blogScore = Math.min(10, countScore + sentimentBonus);
+      }
+    }
+    // 도시+장소명으로 extractedPlaces에서 검색 (블로그에 장소명 언급 여부)
+    if (blogScore === 0 && matchedCityId) {
+      const blogNameMatch = await db.select({
+        count: sql<number>`count(*)`,
+      })
+        .from(naverBlogPosts)
+        .where(and(
+          eq(naverBlogPosts.cityId, matchedCityId),
+          sql`${naverBlogPosts.postTitle} ILIKE ${`%${placeName}%`}`
+        ));
+
+      if (blogNameMatch.length > 0 && Number(blogNameMatch[0].count) > 0) {
+        blogScore = Math.min(5, Number(blogNameMatch[0].count) * 1.0);
+      }
+    }
+
+    // ===== 최종 가중치 합산 (0-10) =====
+    const finalScore = (instaScore * 0.45) + (youtubeScore * 0.30) + (blogScore * 0.25);
+    
+    if (finalScore > 0) {
+      console.log(`[KoreanPopularity] ${placeName}: 인스타=${instaScore.toFixed(1)}(45%) 유튜브=${youtubeScore.toFixed(1)}(30%) 블로그=${blogScore.toFixed(1)}(25%) → 최종=${finalScore.toFixed(2)}`);
+    }
+
+    return Math.min(10, finalScore);
+  } catch (error) {
+    console.error(`[KoreanPopularity] ${placeName} 점수 계산 실패:`, error);
+    return 0;
+  }
+}
+
+/**
+ * 여러 장소에 대해 한국인 인기도 점수를 일괄 계산
+ */
+async function enrichPlacesWithKoreanPopularity(
+  placesArr: PlaceResult[],
+  cityName: string
+): Promise<PlaceResult[]> {
+  console.log(`[KoreanPopularity] ${placesArr.length}개 장소 한국인 인기도 계산 시작...`);
+  
+  const enriched = await Promise.all(
+    placesArr.map(async (place) => {
+      const koreanScore = await calculateKoreanPopularity(place.name, place.id, cityName);
+      return {
+        ...place,
+        koreanPopularityScore: koreanScore,
+      };
+    })
+  );
+
+  const withScore = enriched.filter(p => p.koreanPopularityScore > 0);
+  console.log(`[KoreanPopularity] 완료: ${withScore.length}/${placesArr.length}곳에 한국인 인기도 데이터 있음`);
+  
+  return enriched;
 }
 
 function getPlaceTypesForVibes(vibes: Vibe[]): string[] {
@@ -386,6 +610,103 @@ function getPriceEstimate(priceLevel: number | undefined, travelStyle: TravelSty
   return priceLabels[Math.min(4, Math.max(0, estimatedLevel))] || '보통';
 }
 
+/**
+ * DB 수집 데이터에서 한국인 인기 장소 목록을 가져와 프롬프트에 주입
+ * → AI가 "추측"이 아닌 "실제 데이터 기반"으로 장소를 추천하게 함
+ */
+async function getKoreanPopularPlacesForPrompt(cityName: string): Promise<string> {
+  if (!db) return '';
+  
+  try {
+    // 도시 ID 조회
+    const cityMatch = await db.select({ id: cities.id })
+      .from(cities)
+      .where(ilike(cities.name, `%${cityName}%`))
+      .limit(1);
+    
+    if (cityMatch.length === 0) return '';
+    const cityId = cityMatch[0].id;
+    
+    // 1. 인스타그램 인기 해시태그 (게시물 수 순)
+    const popularHashtags = await db.select({
+      hashtag: instagramHashtags.hashtag,
+      postCount: instagramHashtags.postCount,
+    })
+      .from(instagramHashtags)
+      .where(eq(instagramHashtags.linkedCityId, cityId))
+      .orderBy(sql`${instagramHashtags.postCount} DESC NULLS LAST`)
+      .limit(10);
+    
+    // 2. 유튜브에서 언급된 장소 (언급 횟수 순)
+    const popularYtPlaces = await db.select({
+      placeName: youtubePlaceMentions.placeName,
+      count: sql<number>`count(*)`,
+    })
+      .from(youtubePlaceMentions)
+      .where(ilike(youtubePlaceMentions.cityName, `%${cityName}%`))
+      .groupBy(youtubePlaceMentions.placeName)
+      .orderBy(sql`count(*) DESC`)
+      .limit(10);
+    
+    // 3. 네이버 블로그에서 언급된 장소 (글 수 순)
+    const popularBlogPlaces = await db.select({
+      postTitle: naverBlogPosts.postTitle,
+      sentimentScore: naverBlogPosts.sentimentScore,
+    })
+      .from(naverBlogPosts)
+      .where(eq(naverBlogPosts.cityId, cityId))
+      .orderBy(sql`${naverBlogPosts.sentimentScore} DESC NULLS LAST`)
+      .limit(10);
+    
+    // 4. DB에 등록된 고평점 장소 (finalScore 순)
+    const topDbPlaces = await db.select({
+      name: places.name,
+      type: places.type,
+      finalScore: places.finalScore,
+      userRatingCount: places.userRatingCount,
+      googleMapsUri: places.googleMapsUri,
+    })
+      .from(places)
+      .where(eq(places.cityId, cityId))
+      .orderBy(sql`${places.finalScore} DESC NULLS LAST`)
+      .limit(15);
+    
+    // 프롬프트 섹션 생성
+    const sections: string[] = [];
+    
+    if (popularHashtags.length > 0) {
+      sections.push(`📸 인스타그램 인기 (게시물 수 기준):\n${popularHashtags.map(h => `  - ${h.hashtag} (${h.postCount?.toLocaleString() || '?'}개)`).join('\n')}`);
+    }
+    
+    if (popularYtPlaces.length > 0) {
+      sections.push(`🎬 유튜브 한국인 언급 장소:\n${popularYtPlaces.map(p => `  - ${p.placeName} (${p.count}회 언급)`).join('\n')}`);
+    }
+    
+    if (popularBlogPlaces.length > 0) {
+      const blogKeywords = popularBlogPlaces.map(b => b.postTitle).slice(0, 5);
+      sections.push(`📝 네이버 블로그 인기 키워드:\n${blogKeywords.map(t => `  - "${t}"`).join('\n')}`);
+    }
+    
+    if (topDbPlaces.length > 0) {
+      sections.push(`⭐ DB 등록 한국인 인기 장소 (점수순):\n${topDbPlaces.map(p => `  - ${p.name} (${p.type}, 리뷰 ${p.userRatingCount || 0}개, 점수 ${p.finalScore?.toFixed(1) || '?'})`).join('\n')}`);
+    }
+    
+    if (sections.length === 0) return '';
+    
+    console.log(`[Itinerary] 📊 DB 수집 데이터 ${sections.length}개 섹션을 프롬프트에 주입`);
+    
+    return `\n【📊 실제 수집 데이터 기반 한국인 인기 장소 (반드시 우선 반영)】
+아래는 인스타그램, 유튜브, 네이버 블로그에서 실제 수집된 한국인 인기 데이터입니다.
+이 데이터에 나온 장소를 최우선으로 포함하고, 추가 장소는 이 패턴에 맞게 추천하세요.
+
+${sections.join('\n\n')}
+`;
+  } catch (error) {
+    console.error('[Itinerary] DB 인기 장소 조회 실패:', error);
+    return '';
+  }
+}
+
 async function generatePlacesWithGemini(
   formData: TripFormData,
   vibeWeights: { vibe: Vibe; weight: number; percentage: number }[],
@@ -408,6 +729,9 @@ async function generatePlacesWithGemini(
   const sentimentSection = koreanSentiment
     ? formatSentimentForPrompt(koreanSentiment, formData.destination)
     : '';
+  
+  // ===== 📊 DB 수집 데이터 기반 인기 장소를 프롬프트에 주입 =====
+  const dbPopularitySection = await getKoreanPopularPlacesForPrompt(formData.destination);
 
   // ===== 🎯 주인공 컨텍스트 생성 (가중치 1순위) =====
   // birthDate: 사용자 본인 생년월일 → 가족 연령 추정에 활용
@@ -460,30 +784,41 @@ ${sentimentSection}
 3. 각 장소에 반드시 city(도시명)와 region(지역/구역) 정보 포함
 4. 오전-점심-오후-저녁 시간대에 맞는 장소 배치 (식당은 점심/저녁에)
 
-【한국인 선호도 반영】
-한국인 여행자들이 많이 가고, SNS에서 인기 있는 장소를 우선 추천해주세요.
+【한국인 선호도 반영 - 최우선 규칙】
+한국인 여행자들이 실제로 많이 방문하고, SNS에서 인기 있는 장소를 최우선으로 추천해주세요.
 ${koreanSentiment?.instagram.trendingHashtags.length ? `인기 해시태그: ${koreanSentiment.instagram.trendingHashtags.slice(0, 3).join(', ')}` : ''}
 ${koreanSentiment?.naverBlog.keywords.length ? `자주 언급 키워드: ${koreanSentiment.naverBlog.keywords.slice(0, 3).join(', ')}` : ''}
+${dbPopularitySection}
 
-JSON 응답 형식:
+【⚠️ 반드시 아래 JSON 형식으로만 응답하세요. 다른 텍스트 없이 JSON만 출력하세요.】
+
+JSON 응답 형식 (엄격히 준수):
 {
   "places": [
     {
-      "name": "장소명",
-      "description": "간단한 설명 (한국인에게 인기인 이유 포함)",
-      "city": "도시명 (예: 파리, 니스, 리옹)",
-      "region": "지역/구역 (예: 마레지구, 몽마르뜨, 샹젤리제)",
-      "lat": 위도,
-      "lng": 경도,
-      "vibeScore": 1-10 점수,
-      "koreanPopularity": 1-10 (한국인 인기도),
-      "tags": ["태그1", "태그2"],
-      "vibeTags": ["Healing", "Foodie" 등 해당되는 Vibe],
-      "recommendedTime": "morning|lunch|afternoon|evening",
-      "priceEstimate": "가격대 설명"
+      "name": "실제 존재하는 장소의 정확한 이름 (구글맵 검색 가능해야 함)",
+      "description": "한국인에게 인기인 구체적 이유 (예: 인스타 핫플, 유튜브 ○○채널 추천, 리뷰 1000+개)",
+      "city": "도시명",
+      "region": "지역/구역",
+      "lat": 48.8584,
+      "lng": 2.2945,
+      "vibeScore": 8,
+      "koreanPopularity": 9,
+      "tags": ["restaurant", "landmark"],
+      "vibeTags": ["Foodie", "Culture"],
+      "recommendedTime": "morning",
+      "priceEstimate": "€20-30"
     }
   ]
 }
+
+필수 규칙:
+- name: 반드시 실제 존재하는 장소명 (가상 장소 금지)
+- lat/lng: 반드시 실제 좌표 (0이면 안 됨)
+- vibeScore: 1~10 정수
+- vibeTags: 반드시 ["Healing","Adventure","Hotspot","Foodie","Romantic","Culture"] 중에서만 선택
+- recommendedTime: 반드시 "morning"|"lunch"|"afternoon"|"evening" 중 하나
+- 식당은 vibeTags에 반드시 "Foodie" 포함
 
 【🍽️ 식사 장소 필수 포함】
 - 전체 장소 중 최소 40%는 식당/카페/레스토랑으로 포함해주세요
@@ -494,38 +829,81 @@ ${formData.destination}의 실제 유명한 장소들을 추천해주세요. 정
 도시별로 균형있게 분배하고, 각 도시 내에서는 지역별로 묶어주세요.`;
 
   try {
+    // API 키 존재 확인
+    const apiKey = getGeminiApiKey();
+    if (!apiKey) {
+      console.error('[Itinerary] ❌ Gemini API 키 없음 - AI 장소 생성 불가');
+      throw new Error('GEMINI_API_KEY_MISSING');
+    }
+
+    console.log(`[Itinerary] 🤖 Gemini에 ${requiredPlaceCount}개 장소 요청 중...`);
+    
     const response = await getAI().models.generateContent({
       model: "gemini-3-flash-preview",
       contents: [{ role: "user", parts: [{ text: prompt }] }],
     });
 
     const text = response.text || "";
+    console.log(`[Itinerary] 🤖 Gemini 응답 수신 (${text.length}자)`);
+    
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     
     if (jsonMatch) {
       const result = JSON.parse(jsonMatch[0]);
-      return (result.places || []).map((place: any, index: number) => ({
-        id: `gemini-${Date.now()}-${index}`,
-        name: place.name,
-        description: place.description,
-        lat: place.lat || 0,
-        lng: place.lng || 0,
-        vibeScore: place.vibeScore || 7,
-        confidenceScore: 7,
-        sourceType: "Gemini AI",
-        personaFitReason: place.personaFitReason || "AI가 추천한 장소",
-        tags: place.tags || [],
-        vibeTags: place.vibeTags || [],
-        image: "",
-        priceEstimate: place.priceEstimate || "보통",
-        placeTypes: [],
-        recommendedTime: place.recommendedTime,
-        city: place.city || formData.destination,
-        region: place.region || "",
-      }));
+      const placesRaw = result.places || [];
+      
+      if (placesRaw.length === 0) {
+        console.warn('[Itinerary] ⚠️ Gemini가 장소를 0개 반환함');
+      } else {
+        console.log(`[Itinerary] ✅ Gemini가 ${placesRaw.length}개 장소 반환`);
+      }
+      
+      // JSON 스키마 검증 - 각 장소에 필수 필드가 있는지 확인
+      return placesRaw
+        .filter((place: any) => {
+          if (!place.name) {
+            console.warn('[Itinerary] ⚠️ 이름 없는 장소 제외:', place);
+            return false;
+          }
+          if (!place.lat || !place.lng) {
+            console.warn(`[Itinerary] ⚠️ 좌표 없는 장소: ${place.name} (lat=${place.lat}, lng=${place.lng})`);
+            // 좌표 없어도 일단 포함 (0,0으로 대체)
+          }
+          return true;
+        })
+        .map((place: any, index: number) => ({
+          id: `gemini-${Date.now()}-${index}`,
+          name: place.name,
+          description: place.description || '',
+          lat: place.lat || 0,
+          lng: place.lng || 0,
+          vibeScore: Math.min(10, Math.max(1, place.vibeScore || 7)),
+          confidenceScore: 7,
+          sourceType: "Gemini AI",
+          personaFitReason: place.personaFitReason || place.description || "AI가 추천한 장소",
+          tags: Array.isArray(place.tags) ? place.tags : [],
+          vibeTags: Array.isArray(place.vibeTags) ? place.vibeTags.filter((v: string) => 
+            ['Healing', 'Adventure', 'Hotspot', 'Foodie', 'Romantic', 'Culture'].includes(v)
+          ) : [],
+          image: "",
+          priceEstimate: place.priceEstimate || "보통",
+          placeTypes: [],
+          recommendedTime: place.recommendedTime,
+          city: place.city || formData.destination,
+          region: place.region || "",
+          koreanPopularityScore: 0, // 이후 enrichPlacesWithKoreanPopularity에서 계산
+          googleMapsUrl: "", // Gemini 장소는 Google Maps URI 없음
+        }));
+    } else {
+      console.error('[Itinerary] ❌ Gemini 응답에서 JSON을 찾을 수 없음');
+      console.error('[Itinerary] 응답 내용 (첫 500자):', text.slice(0, 500));
     }
-  } catch (error) {
-    console.error("Failed to generate places with Gemini:", error);
+  } catch (error: any) {
+    if (error.message === 'GEMINI_API_KEY_MISSING') {
+      throw error; // API 키 없는 에러는 상위로 전파
+    }
+    console.error("[Itinerary] ❌ Gemini 장소 생성 실패:", error?.message || error);
+    console.error("[Itinerary] 에러 상세:", error?.status || 'N/A', error?.statusText || 'N/A');
   }
 
   return [];
@@ -672,7 +1050,7 @@ export async function generateItinerary(formData: TripFormData) {
   }
   
   // Google Places API로 기본 장소 검색
-  let places = await searchGooglePlaces(
+  let placesArr = await searchGooglePlaces(
     formData.destination,
     formData.destinationCoords,
     vibes,
@@ -680,35 +1058,47 @@ export async function generateItinerary(formData: TripFormData) {
   );
   
   // Gemini AI로 추가 장소 추천 (한국 감성 데이터 포함)
-  if (places.length < requiredPlaceCount) {
+  if (placesArr.length < requiredPlaceCount) {
     const aiPlaces = await generatePlacesWithGemini(formData, vibeWeights, requiredPlaceCount, koreanSentiment);
-    console.log(`[Itinerary] Google: ${places.length}곳, Gemini: ${aiPlaces.length}곳`);
-    places = [...places, ...aiPlaces];
+    console.log(`[Itinerary] Google: ${placesArr.length}곳, Gemini: ${aiPlaces.length}곳`);
+    placesArr = [...placesArr, ...aiPlaces];
   }
   
   // 부족하면 추가 생성
   let attempts = 0;
-  while (places.length < requiredPlaceCount && attempts < 2) {
+  while (placesArr.length < requiredPlaceCount && attempts < 2) {
     attempts++;
-    console.log(`[Itinerary] 장소 부족 (${places.length}/${requiredPlaceCount}), 추가 생성 중...`);
-    const morePlaces = await generatePlacesWithGemini(formData, vibeWeights, requiredPlaceCount - places.length + 5, koreanSentiment);
-    places = [...places, ...morePlaces];
+    console.log(`[Itinerary] 장소 부족 (${placesArr.length}/${requiredPlaceCount}), 추가 생성 중...`);
+    const morePlaces = await generatePlacesWithGemini(formData, vibeWeights, requiredPlaceCount - placesArr.length + 5, koreanSentiment);
+    placesArr = [...placesArr, ...morePlaces];
   }
   
-  console.log(`[Itinerary] 총 수집 장소: ${places.length}곳`);
+  console.log(`[Itinerary] 총 수집 장소: ${placesArr.length}곳`);
   
-  // 한국 감성 보너스 적용하여 정렬
+  // ===== Phase 1: 한국인 인기도 점수 계산 (DB 수집 데이터 직접 활용) =====
+  // 기존: Gemini 추측 기반 일괄 보너스 → 변경: 장소별 인스타/유튜브/블로그 DB 데이터 기반
+  placesArr = await enrichPlacesWithKoreanPopularity(placesArr, formData.destination);
+  
+  // 기존 한국 감성 보너스도 vibeScore에 반영 (Gemini 데이터 보조 활용)
   if (koreanSentiment) {
-    places = places.map(p => ({
+    placesArr = placesArr.map(p => ({
       ...p,
-      vibeScore: p.vibeScore + (koreanSentiment?.totalBonus || 0)
+      vibeScore: p.vibeScore + (koreanSentiment?.totalBonus || 0) * 0.3, // 보조 역할로 축소
     }));
   }
   
-  places = places.sort((a, b) => b.vibeScore - a.vibeScore).slice(0, requiredPlaceCount + 5);
+  // ===== 최종 정렬: vibeScore(40%) + koreanPopularityScore(60%) =====
+  // 한국인 인기도가 최우선 → DB에 데이터가 있는 장소가 상위로
+  placesArr = placesArr.sort((a, b) => {
+    const scoreA = (a.vibeScore * 0.4) + (a.koreanPopularityScore * 0.6);
+    const scoreB = (b.vibeScore * 0.4) + (b.koreanPopularityScore * 0.6);
+    return scoreB - scoreA;
+  }).slice(0, requiredPlaceCount + 5);
+  
+  console.log(`[Itinerary] 최종 정렬 완료 (vibeScore 40% + koreanPopularity 60%)`);
   
   // ===== 사용자 시간 기반 동적 슬롯 분배 (식사 슬롯 강제 포함) =====
-  const schedule = distributePlacesWithUserTime(places, daySlotsConfig, travelPace, formData.travelStyle || 'Reasonable');
+  const schedule = distributePlacesWithUserTime(placesArr, daySlotsConfig, travelPace, formData.travelStyle || 'Reasonable');
   
   console.log(`[Itinerary] 최종 일정: ${schedule.length}개 슬롯`);
   
@@ -944,6 +1334,8 @@ function distributePlacesWithUserTime(
         placeTypes: ['restaurant'],
         city: orderedNonFoodPlaces[0]?.city,
         region: orderedNonFoodPlaces[0]?.region,
+        koreanPopularityScore: 0,
+        googleMapsUrl: '',
       };
       orderedFoodPlaces.push(defaultRestaurant);
     }

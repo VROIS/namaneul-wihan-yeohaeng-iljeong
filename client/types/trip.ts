@@ -78,6 +78,10 @@ export interface Place {
   isMealSlot?: boolean;        // 점심/저녁 슬롯 여부
   mealType?: 'lunch' | 'dinner'; // 식사 종류
   mealPriceLabel?: string;     // "€30 내외" 등
+  // Phase 1: 한국인 인기도 점수
+  koreanPopularityScore?: number;
+  // Phase 4: 구글맵 직접 링크 (클릭 시 구글맵 열기)
+  googleMapsUrl?: string;
 }
 
 // 🚇 이동 구간 정보
