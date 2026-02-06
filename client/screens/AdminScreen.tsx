@@ -124,7 +124,7 @@ export default function AdminScreen() {
     );
   }
 
-  // 인증 완료 후: 관리자 대시보드
+  // 인증 완료 후: 관리자 대시보드 (웹에서는 iframe 사용)
   if (Platform.OS === "web") {
     return (
       <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
@@ -135,23 +135,25 @@ export default function AdminScreen() {
             onPress={handleClose}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Feather name="x" size={24} color={theme.text} />
+            <Feather name="x" size={24} color="#FFFFFF" />
           </TouchableOpacity>
-          <ThemedText style={styles.headerTitle}>관리자 대시보드</ThemedText>
+          <ThemedText style={[styles.headerTitle, { color: "#FFFFFF" }]}>
+            관리자 대시보드
+          </ThemedText>
           <View style={{ width: 40 }} />
         </View>
 
-        <View style={{ flex: 1, paddingHorizontal: Spacing.lg }}>
-          <ThemedText style={styles.subtitle}>
-            웹에서는 새 탭에서 열어주세요
-          </ThemedText>
-          <ThemedText
-            style={[styles.link, { color: Brand.primary }]}
-            onPress={() => window.open(adminUrl, "_blank")}
-          >
-            {adminUrl}
-          </ThemedText>
-        </View>
+        {/* iframe으로 관리자 대시보드 직접 표시 */}
+        <iframe
+          src={adminUrl}
+          style={{
+            flex: 1,
+            width: "100%",
+            height: "100%",
+            border: "none",
+          } as any}
+          title="Admin Dashboard"
+        />
       </View>
     );
   }
