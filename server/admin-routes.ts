@@ -1080,6 +1080,32 @@ export function registerAdminRoutes(app: Express) {
     }
   });
 
+  // YouTube 영상 재처리 리셋 (isProcessed를 false로 리셋하여 장소 추출 재시도)
+  app.post("/api/admin/youtube/reset-processing", async (req, res) => {
+    try {
+      const result = await db
+        .update(youtubeVideos)
+        .set({ isProcessed: false })
+        .where(eq(youtubeVideos.isProcessed, true));
+      
+      const resetCount = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(youtubeVideos)
+        .where(eq(youtubeVideos.isProcessed, false));
+      
+      console.log(`[YouTube] 영상 재처리 리셋: ${resetCount[0]?.count || 0}개 영상`);
+      
+      res.json({ 
+        message: "YouTube 영상 재처리 리셋 완료",
+        resetCount: Number(resetCount[0]?.count) || 0,
+        instruction: "이제 YouTube 동기화를 실행하면 모든 영상에서 장소를 다시 추출합니다."
+      });
+    } catch (error) {
+      console.error("Error resetting YouTube processing:", error);
+      res.status(500).json({ error: "리셋 실패", details: String(error) });
+    }
+  });
+
   app.get("/api/admin/youtube/stats", async (req, res) => {
     try {
       const { youtubeCrawler } = await import("./services/youtube-crawler");

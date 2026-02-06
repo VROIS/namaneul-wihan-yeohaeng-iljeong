@@ -123,13 +123,15 @@ export class YouTubeCrawler {
             console.log(`[YouTube] 미처리 영상 재시도: ${existingVideo.title}`);
             try {
               const transcript = await this.fetchTranscript(video.id);
+              
+              // 자막 + 제목 + 설명으로 장소 추출 (자막 없어도 제목/설명으로 시도)
               const places = await this.extractPlacesWithGemini(
                 existingVideo.title,
                 existingVideo.description || '',
                 transcript
               );
               
-              console.log(`[YouTube] 재처리 결과: ${places.length}개 장소 추출`);
+              console.log(`[YouTube] 재처리 결과: ${places.length}개 장소 추출 (자막: ${transcript.length}세그먼트)`);
               
               for (const place of places) {
                 await db.insert(youtubePlaceMentions).values({
@@ -145,14 +147,19 @@ export class YouTubeCrawler {
                 result.placesExtracted++;
               }
               
-              // 장소 추출 성공 또는 자막 없는 경우 처리 완료 표시
-              await db
-                .update(youtubeVideos)
-                .set({
-                  isProcessed: true,
-                  extractedPlaces: places.map((p) => p.placeName),
-                })
-                .where(eq(youtubeVideos.id, existingVideo.id));
+              // 장소를 1개 이상 추출했을 때만 처리 완료로 표시
+              // 자막도 없고 장소도 못 찾으면 다음에 다시 시도
+              if (places.length > 0) {
+                await db
+                  .update(youtubeVideos)
+                  .set({
+                    isProcessed: true,
+                    extractedPlaces: places.map((p) => p.placeName),
+                  })
+                  .where(eq(youtubeVideos.id, existingVideo.id));
+              } else {
+                console.log(`[YouTube] ${existingVideo.title}: 장소 미발견, 다음 동기화에서 재시도`);
+              }
               
               await this.delay(1000);
             } catch (retryError: any) {

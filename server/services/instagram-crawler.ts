@@ -48,68 +48,90 @@ export class InstagramCrawler {
     await this.rateLimit();
     
     const cleanHashtag = hashtag.replace(/^#/, "");
-    const url = `https://www.instagram.com/explore/tags/${encodeURIComponent(cleanHashtag)}/`;
     
+    // Gemini 웹검색을 기본 수집 방법으로 사용 (인스타그램 직접 스크랩은 차단됨)
     try {
-      const response = await fetch(url, {
-        headers: {
-          "User-Agent": USER_AGENT,
-          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-          "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
-        },
-      });
-
-      if (!response.ok) {
-        console.error(`Instagram hashtag fetch failed: ${response.status}`);
+      const apiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY || process.env.GEMINI_API_KEY || '';
+      if (!apiKey) {
+        console.error(`[Instagram] Gemini API 키 없음 - #${cleanHashtag} 건너뜀`);
         return null;
       }
 
-      const html = await response.text();
+      const { GoogleGenAI } = await import("@google/genai");
+      const ai = new GoogleGenAI({ apiKey });
       
-      const postCountMatch = html.match(/"edge_hashtag_to_media":{"count":(\d+)/);
-      const postCount = postCountMatch ? parseInt(postCountMatch[1]) : 0;
+      const searchResponse = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: `인스타그램에서 해시태그 #${cleanHashtag} 에 대한 정보를 검색해주세요.
 
-      if (postCount === 0) {
-        const altMatch = html.match(/(\d{1,3}(?:,\d{3})*(?:\.\d+)?[KMB]?)\s*(?:posts|게시물)/i);
-        if (altMatch) {
-          const countStr = altMatch[1].replace(/,/g, "");
-          let count = parseFloat(countStr);
-          if (countStr.includes("K")) count *= 1000;
-          if (countStr.includes("M")) count *= 1000000;
-          if (countStr.includes("B")) count *= 1000000000;
-          return { postCount: Math.floor(count) };
+다음 형식의 JSON으로 응답해주세요:
+{
+  "postCount": 예상 게시물 수 (숫자),
+  "topPosts": [
+    {
+      "url": "https://www.instagram.com/p/게시물ID/",
+      "caption": "게시물 설명 (한국어 여행 관련)",
+      "likeCount": 좋아요 수,
+      "imageUrl": "이미지 URL (있으면)"
+    }
+  ]
+}
+
+요구사항:
+- 한국인 여행자들이 많이 사용하는 해시태그 기준으로 검색
+- 인기 게시물 최대 5개 정보 포함
+- postCount는 실제 검색 결과 기반 추정치
+- 결과를 찾을 수 없으면 {"postCount": 0, "topPosts": []} 반환
+- 반드시 유효한 JSON만 반환하세요`,
+        config: { tools: [{ googleSearch: {} }] },
+      });
+
+      const searchText = searchResponse.text || '';
+      console.log(`[Instagram] #${cleanHashtag} Gemini 응답 길이: ${searchText.length}`);
+      
+      // JSON 파싱 시도
+      const jsonMatch = searchText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try {
+          const parsed = JSON.parse(jsonMatch[0]);
+          const postCount = parsed.postCount || 0;
+          const topPosts = parsed.topPosts || [];
+          
+          console.log(`[Instagram] #${cleanHashtag}: postCount=${postCount}, topPosts=${topPosts.length}개`);
+          return { postCount, topPosts };
+        } catch (parseErr) {
+          console.warn(`[Instagram] JSON 파싱 실패 (${cleanHashtag}):`, parseErr);
         }
       }
 
-      // topPosts 추출 시도 - Gemini로 인기 게시물 정보 검색
-      let topPosts: HashtagData['topPosts'] = undefined;
-      try {
-        const apiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY || process.env.GEMINI_API_KEY || '';
-        if (apiKey && postCount > 0) {
-          const { GoogleGenAI } = await import("@google/genai");
-          const ai = new GoogleGenAI({ apiKey });
-          const searchResponse = await ai.models.generateContent({
-            model: "gemini-3-flash-preview",
-            contents: `인스타그램 해시태그 #${cleanHashtag} 의 인기 게시물 정보를 찾아주세요.
-한국인 여행자들이 올린 인기 게시물 5개의 정보를 JSON 배열로 반환:
-[{"url":"https://www.instagram.com/p/...","caption":"게시물 설명","likeCount":500}]
-결과 없으면 빈 배열 [] 반환.`,
-            config: { tools: [{ googleSearch: {} }] },
-          });
-          const searchText = searchResponse.text || '';
-          const jsonMatch = searchText.match(/\[[\s\S]*\]/);
-          if (jsonMatch) {
-            topPosts = JSON.parse(jsonMatch[0]);
-            console.log(`[Instagram] #${cleanHashtag}: ${topPosts?.length || 0}개 인기 게시물 검색`);
-          }
+      // JSON 파싱 실패시 배열만이라도 시도
+      const arrayMatch = searchText.match(/\[[\s\S]*\]/);
+      if (arrayMatch) {
+        try {
+          const topPosts = JSON.parse(arrayMatch[0]);
+          console.log(`[Instagram] #${cleanHashtag}: 배열 파싱 성공, ${topPosts.length}개 게시물`);
+          return { postCount: topPosts.length * 1000, topPosts };
+        } catch (arrErr) {
+          console.warn(`[Instagram] 배열 파싱도 실패 (${cleanHashtag})`);
         }
-      } catch (topPostError) {
-        console.warn(`[Instagram] topPosts 검색 실패 (${cleanHashtag}):`, topPostError);
       }
 
-      return { postCount, topPosts };
+      // 최소한 postCount라도 추정
+      const numberMatch = searchText.match(/(\d{1,3}(?:,\d{3})*(?:\.\d+)?)\s*(?:만|천|백만|K|M|개|posts|게시물)/);
+      if (numberMatch) {
+        let count = parseFloat(numberMatch[1].replace(/,/g, ""));
+        if (searchText.includes("만")) count *= 10000;
+        if (searchText.includes("천")) count *= 1000;
+        if (searchText.includes("백만") || searchText.includes("M")) count *= 1000000;
+        if (searchText.includes("K")) count *= 1000;
+        console.log(`[Instagram] #${cleanHashtag}: 텍스트에서 postCount 추정 = ${count}`);
+        return { postCount: Math.floor(count) };
+      }
+
+      console.log(`[Instagram] #${cleanHashtag}: 유효한 데이터 없음`);
+      return { postCount: 0 };
     } catch (error) {
-      console.error(`Failed to fetch hashtag ${hashtag}:`, error);
+      console.error(`[Instagram] #${cleanHashtag} 수집 실패:`, error);
       return null;
     }
   }
