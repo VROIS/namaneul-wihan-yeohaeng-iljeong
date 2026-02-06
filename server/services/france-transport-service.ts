@@ -57,7 +57,20 @@ let cachedData: FranceTransportData | null = null;
 function loadTransportData(): FranceTransportData {
   if (cachedData) return cachedData;
 
-  const dataPath = path.join(__dirname, "../data/france-transport-prices-2026.json");
+  // 여러 경로에서 데이터 파일 검색 (개발 환경 + 빌드된 환경 모두 지원)
+  const possiblePaths = [
+    path.join(__dirname, "../data/france-transport-prices-2026.json"),
+    path.join(process.cwd(), "server/data/france-transport-prices-2026.json"),
+    path.join(process.cwd(), "server_dist/data/france-transport-prices-2026.json"),
+  ];
+  
+  const dataPath = possiblePaths.find(p => fs.existsSync(p));
+  
+  if (!dataPath) {
+    console.error("[Transport] Data file not found. Searched:", possiblePaths);
+    throw new Error("France transport data file not found");
+  }
+  
   const rawData = fs.readFileSync(dataPath, "utf-8");
   cachedData = JSON.parse(rawData);
   return cachedData!;

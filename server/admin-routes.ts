@@ -46,11 +46,20 @@ const DEFAULT_DASHBOARD_DATA = {
 export function registerAdminRoutes(app: Express) {
   
   app.get("/admin", (req, res) => {
-    const templatePath = path.join(__dirname, "templates", "admin-dashboard.html");
-    if (fs.existsSync(templatePath)) {
+    // 여러 경로에서 템플릿 검색 (개발 환경 + 빌드된 환경 모두 지원)
+    const possiblePaths = [
+      path.join(__dirname, "templates", "admin-dashboard.html"),
+      path.join(process.cwd(), "server", "templates", "admin-dashboard.html"),
+      path.join(process.cwd(), "server_dist", "templates", "admin-dashboard.html"),
+    ];
+    
+    const templatePath = possiblePaths.find(p => fs.existsSync(p));
+    
+    if (templatePath) {
       res.sendFile(templatePath);
     } else {
-      res.status(404).send("Admin dashboard not found");
+      console.error("[Admin] Template not found. Searched paths:", possiblePaths);
+      res.status(404).send("Admin dashboard not found. Searched: " + possiblePaths.join(", "));
     }
   });
   

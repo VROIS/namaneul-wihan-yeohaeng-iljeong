@@ -42,6 +42,9 @@ function setupCors(app: express.Application) {
     origins.add("http://127.0.0.1:19000");
     origins.add("http://192.168.1.23:8082");
 
+    // Koyeb 배포 환경
+    origins.add("https://legal-dannye-dbstour-4e6b86d5.koyeb.app");
+
     const origin = req.header("origin");
 
     if (origin && origins.has(origin)) {
@@ -52,6 +55,13 @@ function setupCors(app: express.Application) {
       );
       res.header("Access-Control-Allow-Headers", "Content-Type");
       res.header("Access-Control-Allow-Credentials", "true");
+    }
+
+    // 프로덕션: 같은 도메인 요청 허용 (origin이 없는 경우)
+    if (process.env.NODE_ENV === "production" && !origin) {
+      res.header("Access-Control-Allow-Origin", "*");
+      res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+      res.header("Access-Control-Allow-Headers", "Content-Type");
     }
 
     // 로컬 개발 환경에서는 모든 origin 허용 (개발 편의)

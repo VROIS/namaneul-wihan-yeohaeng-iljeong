@@ -32,6 +32,14 @@ RUN npm ci --omit=dev
 COPY --from=builder /app/server_dist ./server_dist
 COPY --from=builder /app/dist ./dist
 
+# 서버 템플릿 파일 복사 (관리자 대시보드 HTML 등)
+COPY --from=builder /app/server/templates ./server_dist/templates
+COPY --from=builder /app/server/templates ./server/templates
+
+# 서버 데이터 파일 복사 (교통 요금 데이터 등)
+COPY --from=builder /app/server/data ./server_dist/data
+COPY --from=builder /app/server/data ./server/data
+
 # 환경 변수
 ENV NODE_ENV=production
 ENV PORT=8000
