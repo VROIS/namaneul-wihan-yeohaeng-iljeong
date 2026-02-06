@@ -10,8 +10,8 @@ import {
 } from "./protagonist-generator";
 import { routeOptimizer } from "./route-optimizer";
 import { db } from "../db";
-import { places, instagramHashtags, youtubePlaceMentions, naverBlogPosts, cities } from "@shared/schema";
-import { eq, sql, ilike, and } from "drizzle-orm";
+import { places, instagramHashtags, youtubePlaceMentions, naverBlogPosts, cities, tripAdvisorData, placePrices } from "@shared/schema";
+import { eq, sql, ilike, and, desc } from "drizzle-orm";
 
 // Lazy initialization - DB에서 API 키 로드 후 사용
 let ai: GoogleGenAI | null = null;
@@ -183,6 +183,13 @@ interface PlaceResult {
   koreanPopularityScore: number;
   // Phase 4: 구글맵 직접 링크
   googleMapsUrl: string;
+  // TripAdvisor 데이터 (DB에서 가져옴)
+  tripAdvisorRating?: number;       // 1.0-5.0
+  tripAdvisorReviewCount?: number;  // 총 리뷰 수
+  tripAdvisorRanking?: string;      // "#5 of 1203"
+  // 실제 가격 추정 (EUR)
+  estimatedPriceEur?: number;       // 입장료 또는 식사 평균 가격
+  priceSource?: string;             // 가격 출처
 }
 
 // 시간대별 Vibe 친화도 (향후 고급 슬롯 매칭에 사용 예정)
@@ -499,6 +506,142 @@ async function enrichPlacesWithKoreanPopularity(
   console.log(`[KoreanPopularity] 완료: ${withScore.length}/${placesArr.length}곳에 한국인 인기도 데이터 있음`);
   
   return enriched;
+}
+
+// ===== TripAdvisor 데이터 + 실제 가격 정보 통합 =====
+
+/**
+ * DB에서 장소 이름 매칭으로 TripAdvisor 데이터와 가격 정보를 가져옴
+ * → 일정표에 실제 평점, 리뷰 수, 예상 가격을 표시
+ */
+async function enrichPlacesWithTripAdvisorAndPrices(
+  placesArr: PlaceResult[],
+  cityName: string
+): Promise<PlaceResult[]> {
+  if (!db) {
+    console.log('[TripAdvisor/Price] DB 미연결 - 보강 생략');
+    return placesArr;
+  }
+
+  try {
+    // 도시 ID 찾기
+    const cityMatch = await db.select({ id: cities.id })
+      .from(cities)
+      .where(ilike(cities.name, `%${cityName}%`))
+      .limit(1);
+
+    if (cityMatch.length === 0) {
+      console.log(`[TripAdvisor/Price] 도시 "${cityName}" 미발견`);
+      return placesArr;
+    }
+    const cityId = cityMatch[0].id;
+
+    // TripAdvisor 데이터 일괄 조회
+    const taData = await db.select({
+      placeId: tripAdvisorData.placeId,
+      rating: tripAdvisorData.tripAdvisorRating,
+      reviewCount: tripAdvisorData.tripAdvisorReviewCount,
+      ranking: tripAdvisorData.tripAdvisorRanking,
+      rankingTotal: tripAdvisorData.tripAdvisorRankingTotal,
+    })
+    .from(tripAdvisorData)
+    .where(eq(tripAdvisorData.cityId, cityId));
+
+    // 가격 데이터 일괄 조회
+    const priceData = await db.select({
+      placeId: placePrices.placeId,
+      priceType: placePrices.priceType,
+      priceAverage: placePrices.priceAverage,
+      priceLow: placePrices.priceLow,
+      priceHigh: placePrices.priceHigh,
+      currency: placePrices.currency,
+      source: placePrices.source,
+    })
+    .from(placePrices)
+    .where(eq(placePrices.cityId, cityId));
+
+    // DB 장소 목록 (이름으로 매칭)
+    const dbPlaces = await db.select({ id: places.id, name: places.name, googlePlaceId: places.googlePlaceId })
+      .from(places)
+      .where(eq(places.cityId, cityId));
+
+    // 이름 기반 매칭 맵 생성
+    const placeIdByName = new Map<string, number>();
+    for (const p of dbPlaces) {
+      placeIdByName.set(p.name.toLowerCase(), p.id);
+      if (p.googlePlaceId) {
+        placeIdByName.set(p.googlePlaceId, p.id);
+      }
+    }
+
+    // TripAdvisor 맵 (placeId → data)
+    const taMap = new Map<number, { rating: number; reviewCount: number; rankingStr: string }>();
+    for (const ta of taData) {
+      if (ta.placeId && ta.rating) {
+        taMap.set(ta.placeId, {
+          rating: ta.rating,
+          reviewCount: ta.reviewCount || 0,
+          rankingStr: ta.ranking && ta.rankingTotal ? `#${ta.ranking} of ${ta.rankingTotal}` : '',
+        });
+      }
+    }
+
+    // 가격 맵 (placeId → price)
+    const priceMap = new Map<number, { avgPrice: number; source: string; currency: string }>();
+    for (const pr of priceData) {
+      if (pr.placeId && pr.priceAverage) {
+        priceMap.set(pr.placeId, {
+          avgPrice: pr.priceAverage,
+          source: pr.source,
+          currency: pr.currency,
+        });
+      }
+    }
+
+    let taMatched = 0;
+    let priceMatched = 0;
+
+    const enriched = placesArr.map(place => {
+      // 이름으로 DB placeId 찾기
+      const dbPlaceId = placeIdByName.get(place.name.toLowerCase()) || placeIdByName.get(place.id);
+
+      if (!dbPlaceId) return place;
+
+      const ta = taMap.get(dbPlaceId);
+      const price = priceMap.get(dbPlaceId);
+
+      const updates: Partial<PlaceResult> = {};
+
+      if (ta) {
+        updates.tripAdvisorRating = ta.rating;
+        updates.tripAdvisorReviewCount = ta.reviewCount;
+        updates.tripAdvisorRanking = ta.rankingStr;
+        // TripAdvisor 리뷰 수가 많으면 vibeScore 보너스 (신뢰도 높은 장소)
+        const reviewBonus = Math.min(1.5, Math.log10(ta.reviewCount + 1) * 0.3);
+        updates.vibeScore = Math.min(10, place.vibeScore + reviewBonus);
+        taMatched++;
+      }
+
+      if (price) {
+        updates.estimatedPriceEur = price.avgPrice;
+        updates.priceSource = price.source;
+        // 실제 가격이 있으면 priceEstimate 업데이트
+        const priceLabel = price.currency === 'EUR' 
+          ? `€${Math.round(price.avgPrice)}` 
+          : `${Math.round(price.avgPrice)} ${price.currency}`;
+        updates.priceEstimate = priceLabel;
+        priceMatched++;
+      }
+
+      return { ...place, ...updates };
+    });
+
+    console.log(`[TripAdvisor/Price] 보강 완료: TripAdvisor ${taMatched}곳, 가격 ${priceMatched}곳 매칭`);
+    return enriched;
+  } catch (error) {
+    console.error('[TripAdvisor/Price] 보강 실패:', error);
+    return placesArr;
+  }
 }
 
 function getPlaceTypesForVibes(vibes: Vibe[]): string[] {
@@ -1069,6 +1212,10 @@ export async function generateItinerary(formData: TripFormData) {
   // 기존: Gemini 추측 기반 일괄 보너스 → 변경: 장소별 인스타/유튜브/블로그 DB 데이터 기반
   placesArr = await enrichPlacesWithKoreanPopularity(placesArr, formData.destination);
   
+  // ===== Phase 1.5: TripAdvisor + 가격 데이터 통합 =====
+  // DB에 수집된 TripAdvisor 평점/리뷰 수 + 실제 가격 정보를 장소에 추가
+  placesArr = await enrichPlacesWithTripAdvisorAndPrices(placesArr, formData.destination);
+  
   // 기존 한국 감성 보너스도 vibeScore에 반영 (Gemini 데이터 보조 활용)
   if (koreanSentiment) {
     placesArr = placesArr.map(p => ({
@@ -1077,15 +1224,20 @@ export async function generateItinerary(formData: TripFormData) {
     }));
   }
   
-  // ===== 최종 정렬: vibeScore(40%) + koreanPopularityScore(60%) =====
-  // 한국인 인기도가 최우선 → DB에 데이터가 있는 장소가 상위로
+  // ===== 최종 정렬: vibeScore(35%) + koreanPopularityScore(55%) + TripAdvisor(10%) =====
+  // 한국인 인기도가 최우선 → TripAdvisor 리뷰 수가 보조 신뢰도 지표
   placesArr = placesArr.sort((a, b) => {
-    const scoreA = (a.vibeScore * 0.4) + (a.koreanPopularityScore * 0.6);
-    const scoreB = (b.vibeScore * 0.4) + (b.koreanPopularityScore * 0.6);
+    const taBonus = (score: PlaceResult) => {
+      if (!score.tripAdvisorRating || !score.tripAdvisorReviewCount) return 0;
+      // TripAdvisor 평점(1-5) → 0-10 스케일 + 리뷰 수 보너스
+      return (score.tripAdvisorRating * 2) * 0.7 + Math.min(2, Math.log10(score.tripAdvisorReviewCount + 1) * 0.5);
+    };
+    const scoreA = (a.vibeScore * 0.35) + (a.koreanPopularityScore * 0.55) + (taBonus(a) * 0.10);
+    const scoreB = (b.vibeScore * 0.35) + (b.koreanPopularityScore * 0.55) + (taBonus(b) * 0.10);
     return scoreB - scoreA;
   }).slice(0, requiredPlaceCount + 5);
   
-  console.log(`[Itinerary] 최종 정렬 완료 (vibeScore 40% + koreanPopularity 60%)`);
+  console.log(`[Itinerary] 최종 정렬 완료 (vibeScore 35% + koreanPopularity 55% + TripAdvisor 10%)`);
   
   // ===== 사용자 시간 기반 동적 슬롯 분배 (식사 슬롯 강제 포함) =====
   const schedule = distributePlacesWithUserTime(placesArr, daySlotsConfig, travelPace, formData.travelStyle || 'Reasonable');
@@ -1119,6 +1271,13 @@ export async function generateItinerary(formData: TripFormData) {
         mealType: s.mealType,
         mealPrice: s.isMealSlot ? Math.round((mealBudget.min + mealBudget.max) / 2) : undefined,
         mealPriceLabel: s.isMealSlot ? mealBudget.label : undefined,
+        // TripAdvisor 데이터 (프론트엔드 표시용)
+        tripAdvisorRating: s.place.tripAdvisorRating,
+        tripAdvisorReviewCount: s.place.tripAdvisorReviewCount,
+        tripAdvisorRanking: s.place.tripAdvisorRanking,
+        // 실제 가격 정보
+        estimatedPriceEur: s.place.estimatedPriceEur,
+        priceSource: s.place.priceSource,
         realityCheck: {
           weather: 'Sunny' as const,
           crowd: 'Medium' as const,

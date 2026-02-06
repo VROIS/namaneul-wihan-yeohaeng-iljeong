@@ -1997,20 +1997,24 @@
         const locations = await locationsRes.json();
         
         const hashtagEl = document.getElementById('hashtag-list-sources');
-        hashtagEl.innerHTML = hashtags.length ? hashtags.slice(0, 20).map(h => `
-          <div class="service-item">
-            <span>${h.hashtag}</span>
-            <span style="font-size: 12px; color: #9ca3af;">${h.postCount ? h.postCount.toLocaleString() + '개' : '-'}</span>
-          </div>
-        `).join('') : '<div class="empty-state">해시태그가 없습니다</div>';
+        if (hashtagEl) {
+          hashtagEl.innerHTML = (Array.isArray(hashtags) && hashtags.length) ? hashtags.slice(0, 20).map(h => `
+            <div class="service-item">
+              <span>${h.hashtag}</span>
+              <span style="font-size: 12px; color: #9ca3af;">${h.postCount ? h.postCount.toLocaleString() + '개' : '-'}</span>
+            </div>
+          `).join('') : '<div class="empty-state">해시태그가 없습니다</div>';
+        }
         
         const locationEl = document.getElementById('location-list-sources');
-        locationEl.innerHTML = locations.length ? locations.slice(0, 20).map(l => `
-          <div class="service-item">
-            <span>${l.locationName}</span>
-            <span style="font-size: 12px; color: #9ca3af;">${l.postCount ? l.postCount.toLocaleString() + '개' : '-'}</span>
-          </div>
-        `).join('') : '<div class="empty-state">위치 태그가 없습니다</div>';
+        if (locationEl) {
+          locationEl.innerHTML = (Array.isArray(locations) && locations.length) ? locations.slice(0, 20).map(l => `
+            <div class="service-item">
+              <span>${l.locationName}</span>
+              <span style="font-size: 12px; color: #9ca3af;">${l.postCount ? l.postCount.toLocaleString() + '개' : '-'}</span>
+            </div>
+          `).join('') : '<div class="empty-state">위치 태그가 없습니다</div>';
+        }
       } catch (err) {
         console.error('Instagram 데이터 로드 오류:', err);
       }
@@ -2344,45 +2348,53 @@
         const hashtags = await hashtagsRes.json();
         const locations = await locationsRes.json();
         
-        document.getElementById('stat-hashtags').textContent = stats.totalHashtags;
-        document.getElementById('stat-locations').textContent = stats.totalLocations;
-        document.getElementById('stat-photos').textContent = stats.totalPhotos;
-        document.getElementById('stat-ig-sync').textContent = stats.lastSyncAt 
+        const statHashtags = document.getElementById('stat-hashtags');
+        if (statHashtags) statHashtags.textContent = stats.totalHashtags;
+        const statLocations = document.getElementById('stat-locations');
+        if (statLocations) statLocations.textContent = stats.totalLocations;
+        const statPhotos = document.getElementById('stat-photos');
+        if (statPhotos) statPhotos.textContent = stats.totalPhotos;
+        const statSync = document.getElementById('stat-ig-sync');
+        if (statSync) statSync.textContent = stats.lastSyncAt 
           ? new Date(stats.lastSyncAt).toLocaleDateString('ko-KR')
           : '-';
         
         const hashtagList = document.getElementById('hashtag-list');
-        hashtagList.innerHTML = hashtags.length ? hashtags.map(h => `
-          <div class="service-item">
-            <div>
-              <span style="font-weight: 600;">${h.hashtag}</span>
-              <span style="color: #6b7280; font-size: 12px; margin-left: 8px;">
-                ${h.postCount ? h.postCount.toLocaleString() + '개' : '미수집'}
-              </span>
-              ${h.category ? `<span style="color: #a78bfa; font-size: 11px; margin-left: 8px;">${h.category}</span>` : ''}
+        if (hashtagList) {
+          hashtagList.innerHTML = (Array.isArray(hashtags) && hashtags.length) ? hashtags.map(h => `
+            <div class="service-item">
+              <div>
+                <span style="font-weight: 600;">${h.hashtag}</span>
+                <span style="color: #6b7280; font-size: 12px; margin-left: 8px;">
+                  ${h.postCount ? h.postCount.toLocaleString() + '개' : '미수집'}
+                </span>
+                ${h.category ? `<span style="color: #a78bfa; font-size: 11px; margin-left: 8px;">${h.category}</span>` : ''}
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <button class="btn btn-sm btn-secondary" onclick="syncHashtag(${h.id})">동기화</button>
+                <button class="btn btn-sm" style="background: rgba(239,68,68,0.2); color: #ef4444;" onclick="deleteHashtag(${h.id})">삭제</button>
+              </div>
             </div>
-            <div style="display: flex; gap: 8px;">
-              <button class="btn btn-sm btn-secondary" onclick="syncHashtag(${h.id})">동기화</button>
-              <button class="btn btn-sm" style="background: rgba(239,68,68,0.2); color: #ef4444;" onclick="deleteHashtag(${h.id})">삭제</button>
-            </div>
-          </div>
-        `).join('') : '<div class="empty-state">등록된 해시태그가 없습니다</div>';
+          `).join('') : '<div class="empty-state">등록된 해시태그가 없습니다</div>';
+        }
         
         const locationList = document.getElementById('location-list');
-        locationList.innerHTML = locations.length ? locations.map(l => `
-          <div class="service-item">
-            <div>
-              <span style="font-weight: 600;">${l.locationName}</span>
-              <span style="color: #6b7280; font-size: 12px; margin-left: 8px;">
-                ${l.postCount ? l.postCount.toLocaleString() + '개' : '미수집'}
-              </span>
+        if (locationList) {
+          locationList.innerHTML = (Array.isArray(locations) && locations.length) ? locations.map(l => `
+            <div class="service-item">
+              <div>
+                <span style="font-weight: 600;">${l.locationName}</span>
+                <span style="color: #6b7280; font-size: 12px; margin-left: 8px;">
+                  ${l.postCount ? l.postCount.toLocaleString() + '개' : '미수집'}
+                </span>
+              </div>
+              <div style="display: flex; gap: 8px;">
+                <button class="btn btn-sm btn-secondary" onclick="syncLocation(${l.id})">동기화</button>
+                <button class="btn btn-sm" style="background: rgba(239,68,68,0.2); color: #ef4444;" onclick="deleteLocation(${l.id})">삭제</button>
+              </div>
             </div>
-            <div style="display: flex; gap: 8px;">
-              <button class="btn btn-sm btn-secondary" onclick="syncLocation(${l.id})">동기화</button>
-              <button class="btn btn-sm" style="background: rgba(239,68,68,0.2); color: #ef4444;" onclick="deleteLocation(${l.id})">삭제</button>
-            </div>
-          </div>
-        `).join('') : '<div class="empty-state">등록된 위치가 없습니다</div>';
+          `).join('') : '<div class="empty-state">등록된 위치가 없습니다</div>';
+        }
         
       } catch (err) {
         console.error('Instagram 데이터 로드 오류:', err);
