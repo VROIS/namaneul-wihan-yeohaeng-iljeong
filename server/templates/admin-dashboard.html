@@ -587,7 +587,7 @@
             </div>
             <div style="display: flex; justify-content: space-between; align-items: center;">
               <span id="kr-insta-sync" style="font-size: 11px; color: #6b7280;">마지막 동기화: -</span>
-              <button class="btn btn-sm" style="background: rgba(225,48,108,0.2); color: #e1306c; border: 1px solid rgba(225,48,108,0.3);" onclick="syncKoreanInstagram()">동기화</button>
+              <button class="btn btn-sm" style="background: rgba(225,48,108,0.2); color: #e1306c; border: 1px solid rgba(225,48,108,0.3);" onclick="syncKoreanInstagram(this)">동기화</button>
             </div>
           </div>
 
@@ -614,7 +614,7 @@
             </div>
             <div style="display: flex; justify-content: space-between; align-items: center;">
               <span id="kr-naver-sync" style="font-size: 11px; color: #6b7280;">마지막 동기화: -</span>
-              <button class="btn btn-sm" style="background: rgba(3,199,90,0.2); color: #03c75a; border: 1px solid rgba(3,199,90,0.3);" onclick="syncKoreanNaverBlog()">동기화</button>
+              <button class="btn btn-sm" style="background: rgba(3,199,90,0.2); color: #03c75a; border: 1px solid rgba(3,199,90,0.3);" onclick="syncKoreanNaverBlog(this)">동기화</button>
             </div>
           </div>
 
@@ -1641,12 +1641,11 @@
 
     // 🇰🇷 한국 감성 데이터 동기화 함수들 (Gemini Web Search 기반)
     // 유럽 30개 대표 도시 기본 탑재
-    async function syncKoreanInstagram() {
+    async function syncKoreanInstagram(btnEl) {
       if (!confirm('📸 Instagram 감성 데이터를 유럽 30개 도시에서 수집합니다.\n(Gemini AI 기반, 약 1-2분 소요)')) return;
+      const btn = btnEl || document.querySelector('[onclick*="syncKoreanInstagram"]');
       try {
-        const btn = event.target;
-        btn.disabled = true;
-        btn.textContent = '동기화 중...';
+        if (btn) { btn.disabled = true; btn.textContent = '동기화 중...'; }
         
         const res = await fetch(`${API_BASE}/korean-sentiment/sync-instagram`, { method: 'POST' });
         const data = await res.json();
@@ -1656,17 +1655,15 @@
       } catch (err) {
         alert('❌ 동기화 실패: ' + err.message);
       } finally {
-        event.target.disabled = false;
-        event.target.textContent = '동기화';
+        if (btn) { btn.disabled = false; btn.textContent = '동기화'; }
       }
     }
 
-    async function syncKoreanNaverBlog() {
+    async function syncKoreanNaverBlog(btnEl) {
       if (!confirm('📝 네이버 블로그 감성 데이터를 유럽 30개 도시에서 수집합니다.\n(Gemini AI 기반, 약 1-2분 소요)')) return;
+      const btn = btnEl || document.querySelector('[onclick*="syncKoreanNaverBlog"]');
       try {
-        const btn = event.target;
-        btn.disabled = true;
-        btn.textContent = '동기화 중...';
+        if (btn) { btn.disabled = true; btn.textContent = '동기화 중...'; }
         
         const res = await fetch(`${API_BASE}/korean-sentiment/sync-naver`, { method: 'POST' });
         const data = await res.json();
@@ -1676,8 +1673,7 @@
       } catch (err) {
         alert('❌ 동기화 실패: ' + err.message);
       } finally {
-        event.target.disabled = false;
-        event.target.textContent = '동기화';
+        if (btn) { btn.disabled = false; btn.textContent = '동기화'; }
       }
     }
 
@@ -1898,31 +1894,53 @@
         const res = await fetch(`${API_BASE}/data-sources/status`);
         const data = await res.json();
         
-        // Google Places
-        document.getElementById('google-count').textContent = `${data.google?.count || 0} 장소`;
-        document.getElementById('google-sync').textContent = data.google?.lastSync || '-';
-        document.getElementById('google-status').textContent = data.google?.status || '대기';
-        document.getElementById('google-status').className = `status-badge ${data.google?.status === '활성' ? 'status-ok' : 'status-warn'}`;
+        // Google Places (요소가 없을 수 있으므로 안전하게 처리)
+        const gCount = document.getElementById('google-count');
+        const gSync = document.getElementById('google-sync');
+        const gStatus = document.getElementById('google-status');
+        if (gCount) gCount.textContent = `${data.google?.count || 0} 장소`;
+        if (gSync) gSync.textContent = data.google?.lastSync || '-';
+        if (gStatus) {
+          gStatus.textContent = data.google?.status || '대기';
+          gStatus.className = `status-badge ${data.google?.status === '활성' ? 'status-ok' : 'status-warn'}`;
+        }
         
-        // Instagram
-        document.getElementById('instagram-count').textContent = `${data.instagram?.count || 0} 해시태그`;
-        document.getElementById('instagram-sync').textContent = data.instagram?.lastSync || '-';
-        document.getElementById('instagram-status').textContent = data.instagram?.status || '대기';
-        document.getElementById('instagram-status').className = `status-badge ${data.instagram?.status === '활성' ? 'status-ok' : 'status-warn'}`;
+        // Instagram (요소가 없을 수 있으므로 안전하게 처리)
+        const iCount = document.getElementById('instagram-count');
+        const iSync = document.getElementById('instagram-sync');
+        const iStatus = document.getElementById('instagram-status');
+        if (iCount) iCount.textContent = `${data.instagram?.count || 0} 해시태그`;
+        if (iSync) iSync.textContent = data.instagram?.lastSync || '-';
+        if (iStatus) {
+          iStatus.textContent = data.instagram?.status || '대기';
+          iStatus.className = `status-badge ${data.instagram?.status === '활성' ? 'status-ok' : 'status-warn'}`;
+        }
         
-        // YouTube - 채널, 영상, 장소 매핑 수 표시
-        document.getElementById('youtube-count').innerHTML = `${data.youtube?.count || 0} 채널`;
-        document.getElementById('youtube-videos').textContent = `${data.youtube?.videos || 0} 영상`;
-        document.getElementById('youtube-places').textContent = `${data.youtube?.placeMentions || 0} 장소`;
-        document.getElementById('youtube-sync').textContent = data.youtube?.lastSync || '-';
-        document.getElementById('youtube-status').textContent = data.youtube?.status || '대기';
-        document.getElementById('youtube-status').className = `status-badge ${data.youtube?.status === '활성' ? 'status-ok' : 'status-warn'}`;
+        // YouTube - 채널, 영상, 장소 매핑 수 표시 (요소가 없을 수 있으므로 안전하게 처리)
+        const ytCount = document.getElementById('youtube-count');
+        const ytVideos = document.getElementById('youtube-videos');
+        const ytPlaces = document.getElementById('youtube-places');
+        const ytSync = document.getElementById('youtube-sync');
+        const ytStatus = document.getElementById('youtube-status');
+        if (ytCount) ytCount.innerHTML = `${data.youtube?.count || 0} 채널`;
+        if (ytVideos) ytVideos.textContent = `${data.youtube?.videos || 0} 영상`;
+        if (ytPlaces) ytPlaces.textContent = `${data.youtube?.placeMentions || 0} 장소`;
+        if (ytSync) ytSync.textContent = data.youtube?.lastSync || '-';
+        if (ytStatus) {
+          ytStatus.textContent = data.youtube?.status || '대기';
+          ytStatus.className = `status-badge ${data.youtube?.status === '활성' ? 'status-ok' : 'status-warn'}`;
+        }
         
-        // Naver
-        document.getElementById('naver-count').textContent = `${data.naver?.count || 0} 소스`;
-        document.getElementById('naver-sync').textContent = data.naver?.lastSync || '-';
-        document.getElementById('naver-status').textContent = data.naver?.status || '대기';
-        document.getElementById('naver-status').className = `status-badge ${data.naver?.status === '활성' ? 'status-ok' : 'status-warn'}`;
+        // Naver (요소가 없을 수 있으므로 안전하게 처리)
+        const nCount = document.getElementById('naver-count');
+        const nSync = document.getElementById('naver-sync');
+        const nStatus = document.getElementById('naver-status');
+        if (nCount) nCount.textContent = `${data.naver?.count || 0} 소스`;
+        if (nSync) nSync.textContent = data.naver?.lastSync || '-';
+        if (nStatus) {
+          nStatus.textContent = data.naver?.status || '대기';
+          nStatus.className = `status-badge ${data.naver?.status === '활성' ? 'status-ok' : 'status-warn'}`;
+        }
         
         // Load hashtags and locations for sources tab
         loadSourcesInstagramData();
