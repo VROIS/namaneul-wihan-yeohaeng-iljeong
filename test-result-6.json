@@ -1,0 +1,1045 @@
+﻿{
+    "title":  "íŒŒë¦¬ 3일 여행",
+    "destination":  "íŒŒë¦¬",
+    "startDate":  "2026-03-10",
+    "endDate":  "2026-03-12",
+    "startTime":  "09:00",
+    "endTime":  "21:00",
+    "days":  [
+                 {
+                     "day":  1,
+                     "places":  [
+                                    {
+                                        "id":  "gemini-1770484192876-5",
+                                        "name":  "Trocadéro",
+                                        "description":  "에펠탑을 가장 아름답게 조망할 수 있는 명당으로, #에펠탑뷰 해시태그의 성지이자 한국인 스냅 촬영 1순위 장소입니다.",
+                                        "lat":  48.8616,
+                                        "lng":  2.2893,
+                                        "vibeScore":  10.5475,
+                                        "confidenceScore":  7,
+                                        "sourceType":  "Gemini AI",
+                                        "personaFitReason":  "에펠탑을 가장 아름답게 조망할 수 있는 명당으로, #에펠탑뷰 해시태그의 성지이자 한국인 스냅 촬영 1순위 장소입니다.",
+                                        "tags":  [
+                                                     "landmark",
+                                                     "viewpoint"
+                                                 ],
+                                        "vibeTags":  [
+                                                         "Romantic",
+                                                         "Hotspot"
+                                                     ],
+                                        "image":  "",
+                                        "priceEstimate":  "€0",
+                                        "placeTypes":  [
+
+                                                       ],
+                                        "recommendedTime":  "morning",
+                                        "city":  "Paris",
+                                        "region":  "16th Arr.",
+                                        "koreanPopularityScore":  0,
+                                        "googleMapsUrl":  "",
+                                        "finalScore":  5.993456415050245,
+                                        "selectionReasons":  [
+                                                                 "에펠탑을 가장 아름답게 조망할 수 있는 명당으로, #에펠탑뷰 해시태그의 성지이자 한국인 스냅 촬영 1순위 장소입니다.",
+                                                                 "로맨틱, 핫플 분위기 매칭"
+                                                             ],
+                                        "confidenceLevel":  "minimal",
+                                        "startTime":  "09:00",
+                                        "endTime":  "11:00",
+                                        "isMealSlot":  false,
+                                        "realityCheck":  {
+                                                             "weather":  "Unknown",
+                                                             "crowd":  "Medium",
+                                                             "status":  "Open"
+                                                         }
+                                    },
+                                    {
+                                        "id":  "gemini-1770484192876-10",
+                                        "name":  "Musée d\u0027Orsay",
+                                        "description":  "기차역을 개조한 미술관으로, 시계탑 인생샷 포인트가 매우 유명합니다. 한국인 도슨트 투어 참여율이 높은 곳입니다.",
+                                        "lat":  48.8599,
+                                        "lng":  2.3265,
+                                        "vibeScore":  9.5475,
+                                        "confidenceScore":  7,
+                                        "sourceType":  "Gemini AI",
+                                        "personaFitReason":  "기차역을 개조한 미술관으로, 시계탑 인생샷 포인트가 매우 유명합니다. 한국인 도슨트 투어 참여율이 높은 곳입니다.",
+                                        "tags":  [
+                                                     "museum",
+                                                     "art"
+                                                 ],
+                                        "vibeTags":  [
+                                                         "Culture",
+                                                         "Hotspot"
+                                                     ],
+                                        "image":  "",
+                                        "priceEstimate":  "€16-20",
+                                        "placeTypes":  [
+
+                                                       ],
+                                        "recommendedTime":  "morning",
+                                        "city":  "Paris",
+                                        "region":  "7th Arr.",
+                                        "koreanPopularityScore":  4.5,
+                                        "googleMapsUrl":  "",
+                                        "finalScore":  6.4504557139518575,
+                                        "selectionReasons":  [
+                                                                 "한국인 인기도 상위 (점수 4.5/10)",
+                                                                 "기차역을 개조한 미술관으로, 시계탑 인생샷 포인트가 매우 유명합니다. 한국인 도슨트 투어 참여율이 높은 곳입니다.",
+                                                                 "문화, 핫플 분위기 매칭"
+                                                             ],
+                                        "confidenceLevel":  "medium",
+                                        "startTime":  "11:00",
+                                        "endTime":  "13:00",
+                                        "isMealSlot":  false,
+                                        "realityCheck":  {
+                                                             "weather":  "Unknown",
+                                                             "crowd":  "Medium",
+                                                             "status":  "Open"
+                                                         }
+                                    },
+                                    {
+                                        "id":  "gemini-1770484192876-1",
+                                        "name":  "Le Meurice Alain Ducasse",
+                                        "description":  "미슐랭 2스타를 보유한 파리 최고의 다이닝으로, 한국인 프리미엄 여행자들 사이에서 베르사유 궁전 같은 화려한 인테리어로 유명합니다.",
+                                        "lat":  48.8651,
+                                        "lng":  2.3276,
+                                        "vibeScore":  10.5475,
+                                        "confidenceScore":  7,
+                                        "sourceType":  "Gemini AI",
+                                        "personaFitReason":  "미슐랭 2스타를 보유한 파리 최고의 다이닝으로, 한국인 프리미엄 여행자들 사이에서 베르사유 궁전 같은 화려한 인테리어로 유명합니다.",
+                                        "tags":  [
+                                                     "restaurant",
+                                                     "michelin"
+                                                 ],
+                                        "vibeTags":  [
+                                                         "Foodie",
+                                                         "Romantic"
+                                                     ],
+                                        "image":  "",
+                                        "priceEstimate":  "€150-300",
+                                        "placeTypes":  [
+
+                                                       ],
+                                        "recommendedTime":  "lunch",
+                                        "city":  "Paris",
+                                        "region":  "1st Arr.",
+                                        "koreanPopularityScore":  0,
+                                        "googleMapsUrl":  "",
+                                        "finalScore":  5.993456415050245,
+                                        "selectionReasons":  [
+                                                                 "미슐랭 2스타를 보유한 파리 최고의 다이닝으로, 한국인 프리미엄 여행자들 사이에서 베르사유 궁전 같은 화려한 인테리어로 유명합니다.",
+                                                                 "미식, 로맨틱 분위기 매칭"
+                                                             ],
+                                        "confidenceLevel":  "minimal",
+                                        "startTime":  "13:00",
+                                        "endTime":  "15:00",
+                                        "isMealSlot":  true,
+                                        "mealType":  "lunch",
+                                        "mealPrice":  55,
+                                        "mealPriceLabel":  "€50 내외",
+                                        "realityCheck":  {
+                                                             "weather":  "Unknown",
+                                                             "crowd":  "Medium",
+                                                             "status":  "Open"
+                                                         }
+                                    },
+                                    {
+                                        "id":  "gemini-1770484192876-21",
+                                        "name":  "Sainte-Chapelle",
+                                        "description":  "황홀한 스테인드글라스로 유명한 성당입니다. 햇살이 비칠 때의 내부 모습은 파리에서 가장 로맨틱한 순간 중 하나로 꼽힙니다.",
+                                        "lat":  48.8554,
+                                        "lng":  2.345,
+                                        "vibeScore":  9.5475,
+                                        "confidenceScore":  7,
+                                        "sourceType":  "Gemini AI",
+                                        "personaFitReason":  "황홀한 스테인드글라스로 유명한 성당입니다. 햇살이 비칠 때의 내부 모습은 파리에서 가장 로맨틱한 순간 중 하나로 꼽힙니다.",
+                                        "tags":  [
+                                                     "church",
+                                                     "landmark"
+                                                 ],
+                                        "vibeTags":  [
+                                                         "Culture",
+                                                         "Romantic"
+                                                     ],
+                                        "image":  "",
+                                        "priceEstimate":  "€11-15",
+                                        "placeTypes":  [
+
+                                                       ],
+                                        "recommendedTime":  "morning",
+                                        "city":  "Paris",
+                                        "region":  "4th Arr.",
+                                        "koreanPopularityScore":  4.5,
+                                        "googleMapsUrl":  "",
+                                        "finalScore":  6.4504557139518575,
+                                        "selectionReasons":  [
+                                                                 "한국인 인기도 상위 (점수 4.5/10)",
+                                                                 "황홀한 스테인드글라스로 유명한 성당입니다. 햇살이 비칠 때의 내부 모습은 파리에서 가장 로맨틱한 순간 중 하나로 꼽힙니다.",
+                                                                 "문화, 로맨틱 분위기 매칭"
+                                                             ],
+                                        "confidenceLevel":  "medium",
+                                        "startTime":  "15:00",
+                                        "endTime":  "17:00",
+                                        "isMealSlot":  false,
+                                        "realityCheck":  {
+                                                             "weather":  "Unknown",
+                                                             "crowd":  "Medium",
+                                                             "status":  "Open"
+                                                         }
+                                    },
+                                    {
+                                        "id":  "gemini-1770484192876-11",
+                                        "name":  "Arc de Triomphe",
+                                        "description":  "파리의 상징적인 랜드마크로 전망대에서 내려다보는 샤를 드골 광장의 12개 도로는 장관입니다. 야경 명소로 강력 추천합니다.",
+                                        "lat":  48.8738,
+                                        "lng":  2.295,
+                                        "vibeScore":  9.5475,
+                                        "confidenceScore":  7,
+                                        "sourceType":  "Gemini AI",
+                                        "personaFitReason":  "파리의 상징적인 랜드마크로 전망대에서 내려다보는 샤를 드골 광장의 12개 도로는 장관입니다. 야경 명소로 강력 추천합니다.",
+                                        "tags":  [
+                                                     "landmark",
+                                                     "viewpoint"
+                                                 ],
+                                        "vibeTags":  [
+                                                         "Culture",
+                                                         "Hotspot"
+                                                     ],
+                                        "image":  "",
+                                        "priceEstimate":  "€13-15",
+                                        "placeTypes":  [
+
+                                                       ],
+                                        "recommendedTime":  "evening",
+                                        "city":  "Paris",
+                                        "region":  "8th Arr.",
+                                        "koreanPopularityScore":  2.25,
+                                        "googleMapsUrl":  "",
+                                        "finalScore":  5.842428137415283,
+                                        "selectionReasons":  [
+                                                                 "한국 여행자 언급 확인됨",
+                                                                 "파리의 상징적인 랜드마크로 전망대에서 내려다보는 샤를 드골 광장의 12개 도로는 장관입니다. 야경 명소로 강력 추천합니다.",
+                                                                 "문화, 핫플 분위기 매칭"
+                                                             ],
+                                        "confidenceLevel":  "low",
+                                        "startTime":  "17:00",
+                                        "endTime":  "19:00",
+                                        "isMealSlot":  false,
+                                        "realityCheck":  {
+                                                             "weather":  "Unknown",
+                                                             "crowd":  "Medium",
+                                                             "status":  "Open"
+                                                         }
+                                    },
+                                    {
+                                        "id":  "gemini-1770484192876-6",
+                                        "name":  "Girafe Paris",
+                                        "description":  "에펠탑이 정면으로 보이는 테라스석으로 유명한 해산물 레스토랑입니다. 예약이 어렵지만 한국인들에게 가장 핫한 로맨틱 식당입니다.",
+                                        "lat":  48.8624,
+                                        "lng":  2.2883,
+                                        "vibeScore":  10.5475,
+                                        "confidenceScore":  7,
+                                        "sourceType":  "Gemini AI",
+                                        "personaFitReason":  "에펠탑이 정면으로 보이는 테라스석으로 유명한 해산물 레스토랑입니다. 예약이 어렵지만 한국인들에게 가장 핫한 로맨틱 식당입니다.",
+                                        "tags":  [
+                                                     "restaurant",
+                                                     "seafood"
+                                                 ],
+                                        "vibeTags":  [
+                                                         "Foodie",
+                                                         "Romantic"
+                                                     ],
+                                        "image":  "",
+                                        "priceEstimate":  "€100-200",
+                                        "placeTypes":  [
+
+                                                       ],
+                                        "recommendedTime":  "evening",
+                                        "city":  "Paris",
+                                        "region":  "16th Arr.",
+                                        "koreanPopularityScore":  0,
+                                        "googleMapsUrl":  "",
+                                        "finalScore":  5.993456415050245,
+                                        "selectionReasons":  [
+                                                                 "에펠탑이 정면으로 보이는 테라스석으로 유명한 해산물 레스토랑입니다. 예약이 어렵지만 한국인들에게 가장 핫한 로맨틱 식당입니다.",
+                                                                 "미식, 로맨틱 분위기 매칭"
+                                                             ],
+                                        "confidenceLevel":  "minimal",
+                                        "startTime":  "19:00",
+                                        "endTime":  "21:00",
+                                        "isMealSlot":  true,
+                                        "mealType":  "dinner",
+                                        "mealPrice":  55,
+                                        "mealPriceLabel":  "€50 내외",
+                                        "realityCheck":  {
+                                                             "weather":  "Unknown",
+                                                             "crowd":  "Medium",
+                                                             "status":  "Open"
+                                                         }
+                                    }
+                                ],
+                     "city":  "Paris",
+                     "summary":  "Paris - Romantic \u0026 Hotspot 중심의 하루",
+                     "startTime":  "09:00",
+                     "endTime":  "21:00",
+                     "transit":  {
+                                     "transits":  [
+                                                      {
+                                                          "from":  "Trocadéro",
+                                                          "to":  "Musée d\u0027Orsay",
+                                                          "mode":  "walk",
+                                                          "modeLabel":  "이동",
+                                                          "duration":  15,
+                                                          "durationText":  "약 15분",
+                                                          "distance":  1000,
+                                                          "cost":  0,
+                                                          "costTotal":  0
+                                                      },
+                                                      {
+                                                          "from":  "Musée d\u0027Orsay",
+                                                          "to":  "Le Meurice Alain Ducasse",
+                                                          "mode":  "walk",
+                                                          "modeLabel":  "이동",
+                                                          "duration":  15,
+                                                          "durationText":  "약 15분",
+                                                          "distance":  1000,
+                                                          "cost":  0,
+                                                          "costTotal":  0
+                                                      },
+                                                      {
+                                                          "from":  "Le Meurice Alain Ducasse",
+                                                          "to":  "Sainte-Chapelle",
+                                                          "mode":  "walk",
+                                                          "modeLabel":  "이동",
+                                                          "duration":  15,
+                                                          "durationText":  "약 15분",
+                                                          "distance":  1000,
+                                                          "cost":  0,
+                                                          "costTotal":  0
+                                                      },
+                                                      {
+                                                          "from":  "Sainte-Chapelle",
+                                                          "to":  "Arc de Triomphe",
+                                                          "mode":  "walk",
+                                                          "modeLabel":  "이동",
+                                                          "duration":  15,
+                                                          "durationText":  "약 15분",
+                                                          "distance":  1000,
+                                                          "cost":  0,
+                                                          "costTotal":  0
+                                                      },
+                                                      {
+                                                          "from":  "Arc de Triomphe",
+                                                          "to":  "Girafe Paris",
+                                                          "mode":  "walk",
+                                                          "modeLabel":  "이동",
+                                                          "duration":  15,
+                                                          "durationText":  "약 15분",
+                                                          "distance":  1000,
+                                                          "cost":  0,
+                                                          "costTotal":  0
+                                                      }
+                                                  ],
+                                     "totalDuration":  75,
+                                     "totalCost":  0
+                                 }
+                 },
+                 {
+                     "day":  2,
+                     "places":  [
+                                    {
+                                        "id":  "gemini-1770484192876-0",
+                                        "name":  "Musée du Louvre",
+                                        "description":  "세계 최대의 박물관으로 한국인 필수 코스입니다. 루브르 피라미드 앞에서의 커플 스냅 촬영은 인스타그램 베스트 컷으로 꼽힙니다.",
+                                        "lat":  48.8606,
+                                        "lng":  2.3376,
+                                        "vibeScore":  9.5475,
+                                        "confidenceScore":  7,
+                                        "sourceType":  "Gemini AI",
+                                        "personaFitReason":  "세계 최대의 박물관으로 한국인 필수 코스입니다. 루브르 피라미드 앞에서의 커플 스냅 촬영은 인스타그램 베스트 컷으로 꼽힙니다.",
+                                        "tags":  [
+                                                     "museum",
+                                                     "landmark"
+                                                 ],
+                                        "vibeTags":  [
+                                                         "Culture",
+                                                         "Romantic"
+                                                     ],
+                                        "image":  "",
+                                        "priceEstimate":  "€17-25",
+                                        "placeTypes":  [
+
+                                                       ],
+                                        "recommendedTime":  "morning",
+                                        "city":  "Paris",
+                                        "region":  "1st Arr.",
+                                        "koreanPopularityScore":  0,
+                                        "googleMapsUrl":  "",
+                                        "finalScore":  5.781958401495675,
+                                        "selectionReasons":  [
+                                                                 "세계 최대의 박물관으로 한국인 필수 코스입니다. 루브르 피라미드 앞에서의 커플 스냅 촬영은 인스타그램 베스트 컷으로 꼽힙니다.",
+                                                                 "문화, 로맨틱 분위기 매칭"
+                                                             ],
+                                        "confidenceLevel":  "minimal",
+                                        "startTime":  "09:00",
+                                        "endTime":  "11:00",
+                                        "isMealSlot":  false,
+                                        "realityCheck":  {
+                                                             "weather":  "Unknown",
+                                                             "crowd":  "Medium",
+                                                             "status":  "Open"
+                                                         }
+                                    },
+                                    {
+                                        "id":  "gemini-1770484192876-4",
+                                        "name":  "Palais-Royal",
+                                        "description":  "흑백 줄무늬 기둥(부렌의 기둥)에서 찍는 커플 스냅이 한국인들에게 큰 인기를 끌고 있는 모던하고 우아한 장소입니다.",
+                                        "lat":  48.8638,
+                                        "lng":  2.3371,
+                                        "vibeScore":  9.5475,
+                                        "confidenceScore":  7,
+                                        "sourceType":  "Gemini AI",
+                                        "personaFitReason":  "흑백 줄무늬 기둥(부렌의 기둥)에서 찍는 커플 스냅이 한국인들에게 큰 인기를 끌고 있는 모던하고 우아한 장소입니다.",
+                                        "tags":  [
+                                                     "landmark",
+                                                     "art"
+                                                 ],
+                                        "vibeTags":  [
+                                                         "Hotspot",
+                                                         "Romantic"
+                                                     ],
+                                        "image":  "",
+                                        "priceEstimate":  "€0",
+                                        "placeTypes":  [
+
+                                                       ],
+                                        "recommendedTime":  "morning",
+                                        "city":  "Paris",
+                                        "region":  "1st Arr.",
+                                        "koreanPopularityScore":  0,
+                                        "googleMapsUrl":  "",
+                                        "finalScore":  5.781958401495675,
+                                        "selectionReasons":  [
+                                                                 "흑백 줄무늬 기둥(부렌의 기둥)에서 찍는 커플 스냅이 한국인들에게 큰 인기를 끌고 있는 모던하고 우아한 장소입니다.",
+                                                                 "핫플, 로맨틱 분위기 매칭"
+                                                             ],
+                                        "confidenceLevel":  "minimal",
+                                        "startTime":  "11:00",
+                                        "endTime":  "13:00",
+                                        "isMealSlot":  false,
+                                        "realityCheck":  {
+                                                             "weather":  "Unknown",
+                                                             "crowd":  "Medium",
+                                                             "status":  "Open"
+                                                         }
+                                    },
+                                    {
+                                        "id":  "gemini-1770484192876-12",
+                                        "name":  "Le Cinq",
+                                        "description":  "포시즌스 조지 V 호텔 내 미슐랭 3스타 레스토랑입니다. 파리 미식 여행의 정점으로 통하며 최상의 서비스와 로맨틱함을 제공합니다.",
+                                        "lat":  48.8687,
+                                        "lng":  2.3004,
+                                        "vibeScore":  10.5475,
+                                        "confidenceScore":  7,
+                                        "sourceType":  "Gemini AI",
+                                        "personaFitReason":  "포시즌스 조지 V 호텔 내 미슐랭 3스타 레스토랑입니다. 파리 미식 여행의 정점으로 통하며 최상의 서비스와 로맨틱함을 제공합니다.",
+                                        "tags":  [
+                                                     "restaurant",
+                                                     "michelin"
+                                                 ],
+                                        "vibeTags":  [
+                                                         "Foodie",
+                                                         "Romantic"
+                                                     ],
+                                        "image":  "",
+                                        "priceEstimate":  "€200-400",
+                                        "placeTypes":  [
+
+                                                       ],
+                                        "recommendedTime":  "evening",
+                                        "city":  "Paris",
+                                        "region":  "8th Arr.",
+                                        "koreanPopularityScore":  0,
+                                        "googleMapsUrl":  "",
+                                        "finalScore":  5.993456415050245,
+                                        "selectionReasons":  [
+                                                                 "포시즌스 조지 V 호텔 내 미슐랭 3스타 레스토랑입니다. 파리 미식 여행의 정점으로 통하며 최상의 서비스와 로맨틱함을 제공합니다.",
+                                                                 "미식, 로맨틱 분위기 매칭"
+                                                             ],
+                                        "confidenceLevel":  "minimal",
+                                        "startTime":  "13:00",
+                                        "endTime":  "15:00",
+                                        "isMealSlot":  true,
+                                        "mealType":  "lunch",
+                                        "mealPrice":  55,
+                                        "mealPriceLabel":  "€50 내외",
+                                        "realityCheck":  {
+                                                             "weather":  "Unknown",
+                                                             "crowd":  "Medium",
+                                                             "status":  "Open"
+                                                         }
+                                    },
+                                    {
+                                        "id":  "gemini-1770484192876-7",
+                                        "name":  "Champ de Mars",
+                                        "description":  "에펠탑 앞 잔디밭에서 돗자리를 펴고 와인을 마시는 \u0027피크닉 갬성\u0027을 즐길 수 있어 유튜브 원지의하루 등에서도 추천된 곳입니다.",
+                                        "lat":  48.8556,
+                                        "lng":  2.2986,
+                                        "vibeScore":  9.5475,
+                                        "confidenceScore":  7,
+                                        "sourceType":  "Gemini AI",
+                                        "personaFitReason":  "에펠탑 앞 잔디밭에서 돗자리를 펴고 와인을 마시는 \u0027피크닉 갬성\u0027을 즐길 수 있어 유튜브 원지의하루 등에서도 추천된 곳입니다.",
+                                        "tags":  [
+                                                     "park",
+                                                     "picnic"
+                                                 ],
+                                        "vibeTags":  [
+                                                         "Healing",
+                                                         "Romantic"
+                                                     ],
+                                        "image":  "",
+                                        "priceEstimate":  "€0",
+                                        "placeTypes":  [
+
+                                                       ],
+                                        "recommendedTime":  "afternoon",
+                                        "city":  "Paris",
+                                        "region":  "7th Arr.",
+                                        "koreanPopularityScore":  0,
+                                        "googleMapsUrl":  "",
+                                        "finalScore":  5.781958401495675,
+                                        "selectionReasons":  [
+                                                                 "에펠탑 앞 잔디밭에서 돗자리를 펴고 와인을 마시는 \u0027피크닉 갬성\u0027을 즐길 수 있어 유튜브 원지의하루 등에서도 추천된 곳입니다.",
+                                                                 "힐링, 로맨틱 분위기 매칭"
+                                                             ],
+                                        "confidenceLevel":  "minimal",
+                                        "startTime":  "15:00",
+                                        "endTime":  "17:00",
+                                        "isMealSlot":  false,
+                                        "realityCheck":  {
+                                                             "weather":  "Unknown",
+                                                             "crowd":  "Medium",
+                                                             "status":  "Open"
+                                                         }
+                                    },
+                                    {
+                                        "id":  "gemini-1770484192876-17",
+                                        "name":  "Sacré-Cœur Basilica",
+                                        "description":  "몽마르트르 언덕의 하얀 성당으로 파리 시내를 한눈에 볼 수 있습니다. 일몰 시간에 커플들이 가장 많이 모이는 곳입니다.",
+                                        "lat":  48.8867,
+                                        "lng":  2.3431,
+                                        "vibeScore":  9.5475,
+                                        "confidenceScore":  7,
+                                        "sourceType":  "Gemini AI",
+                                        "personaFitReason":  "몽마르트르 언덕의 하얀 성당으로 파리 시내를 한눈에 볼 수 있습니다. 일몰 시간에 커플들이 가장 많이 모이는 곳입니다.",
+                                        "tags":  [
+                                                     "church",
+                                                     "landmark"
+                                                 ],
+                                        "vibeTags":  [
+                                                         "Romantic",
+                                                         "Culture"
+                                                     ],
+                                        "image":  "",
+                                        "priceEstimate":  "€0",
+                                        "placeTypes":  [
+
+                                                       ],
+                                        "recommendedTime":  "evening",
+                                        "city":  "Paris",
+                                        "region":  "18th Arr.",
+                                        "koreanPopularityScore":  0,
+                                        "googleMapsUrl":  "",
+                                        "finalScore":  5.781958401495675,
+                                        "selectionReasons":  [
+                                                                 "몽마르트르 언덕의 하얀 성당으로 파리 시내를 한눈에 볼 수 있습니다. 일몰 시간에 커플들이 가장 많이 모이는 곳입니다.",
+                                                                 "로맨틱, 문화 분위기 매칭"
+                                                             ],
+                                        "confidenceLevel":  "minimal",
+                                        "startTime":  "17:00",
+                                        "endTime":  "19:00",
+                                        "isMealSlot":  false,
+                                        "realityCheck":  {
+                                                             "weather":  "Unknown",
+                                                             "crowd":  "Medium",
+                                                             "status":  "Open"
+                                                         }
+                                    },
+                                    {
+                                        "id":  "gemini-1770484192876-24",
+                                        "name":  "L\u0027Ambroisie",
+                                        "description":  "미슐랭 3스타를 수십 년간 유지한 전설적인 레스토랑입니다. 마레 지구에 위치하며 가장 격식 있고 우아한 미식 경험을 제공합니다.",
+                                        "lat":  48.8552,
+                                        "lng":  2.3653,
+                                        "vibeScore":  10.5475,
+                                        "confidenceScore":  7,
+                                        "sourceType":  "Gemini AI",
+                                        "personaFitReason":  "미슐랭 3스타를 수십 년간 유지한 전설적인 레스토랑입니다. 마레 지구에 위치하며 가장 격식 있고 우아한 미식 경험을 제공합니다.",
+                                        "tags":  [
+                                                     "restaurant",
+                                                     "michelin"
+                                                 ],
+                                        "vibeTags":  [
+                                                         "Foodie",
+                                                         "Romantic"
+                                                     ],
+                                        "image":  "",
+                                        "priceEstimate":  "€300-500",
+                                        "placeTypes":  [
+
+                                                       ],
+                                        "recommendedTime":  "evening",
+                                        "city":  "Paris",
+                                        "region":  "4th Arr.",
+                                        "koreanPopularityScore":  0,
+                                        "googleMapsUrl":  "",
+                                        "finalScore":  5.993456415050245,
+                                        "selectionReasons":  [
+                                                                 "미슐랭 3스타를 수십 년간 유지한 전설적인 레스토랑입니다. 마레 지구에 위치하며 가장 격식 있고 우아한 미식 경험을 제공합니다.",
+                                                                 "미식, 로맨틱 분위기 매칭"
+                                                             ],
+                                        "confidenceLevel":  "minimal",
+                                        "startTime":  "19:00",
+                                        "endTime":  "21:00",
+                                        "isMealSlot":  true,
+                                        "mealType":  "dinner",
+                                        "mealPrice":  55,
+                                        "mealPriceLabel":  "€50 내외",
+                                        "realityCheck":  {
+                                                             "weather":  "Unknown",
+                                                             "crowd":  "Medium",
+                                                             "status":  "Open"
+                                                         }
+                                    }
+                                ],
+                     "city":  "Paris",
+                     "summary":  "Paris - Culture \u0026 Romantic 중심의 하루",
+                     "startTime":  "09:00",
+                     "endTime":  "21:00",
+                     "transit":  {
+                                     "transits":  [
+                                                      {
+                                                          "from":  "Musée du Louvre",
+                                                          "to":  "Palais-Royal",
+                                                          "mode":  "walk",
+                                                          "modeLabel":  "이동",
+                                                          "duration":  15,
+                                                          "durationText":  "약 15분",
+                                                          "distance":  1000,
+                                                          "cost":  0,
+                                                          "costTotal":  0
+                                                      },
+                                                      {
+                                                          "from":  "Palais-Royal",
+                                                          "to":  "Le Cinq",
+                                                          "mode":  "walk",
+                                                          "modeLabel":  "이동",
+                                                          "duration":  15,
+                                                          "durationText":  "약 15분",
+                                                          "distance":  1000,
+                                                          "cost":  0,
+                                                          "costTotal":  0
+                                                      },
+                                                      {
+                                                          "from":  "Le Cinq",
+                                                          "to":  "Champ de Mars",
+                                                          "mode":  "walk",
+                                                          "modeLabel":  "이동",
+                                                          "duration":  15,
+                                                          "durationText":  "약 15분",
+                                                          "distance":  1000,
+                                                          "cost":  0,
+                                                          "costTotal":  0
+                                                      },
+                                                      {
+                                                          "from":  "Champ de Mars",
+                                                          "to":  "Sacré-Cœur Basilica",
+                                                          "mode":  "walk",
+                                                          "modeLabel":  "이동",
+                                                          "duration":  15,
+                                                          "durationText":  "약 15분",
+                                                          "distance":  1000,
+                                                          "cost":  0,
+                                                          "costTotal":  0
+                                                      },
+                                                      {
+                                                          "from":  "Sacré-Cœur Basilica",
+                                                          "to":  "L\u0027Ambroisie",
+                                                          "mode":  "walk",
+                                                          "modeLabel":  "이동",
+                                                          "duration":  15,
+                                                          "durationText":  "약 15분",
+                                                          "distance":  1000,
+                                                          "cost":  0,
+                                                          "costTotal":  0
+                                                      }
+                                                  ],
+                                     "totalDuration":  75,
+                                     "totalCost":  0
+                                 }
+                 },
+                 {
+                     "day":  3,
+                     "places":  [
+                                    {
+                                        "id":  "gemini-1770484192876-2",
+                                        "name":  "Jardin des Tuileries",
+                                        "description":  "파리에서 가장 로맨틱한 정원으로, 초록색 철제 의자에 앉아 휴식을 취하는 모습이 유튜브 브이로그에 자주 등장합니다.",
+                                        "lat":  48.8635,
+                                        "lng":  2.3275,
+                                        "vibeScore":  8.5475,
+                                        "confidenceScore":  7,
+                                        "sourceType":  "Gemini AI",
+                                        "personaFitReason":  "파리에서 가장 로맨틱한 정원으로, 초록색 철제 의자에 앉아 휴식을 취하는 모습이 유튜브 브이로그에 자주 등장합니다.",
+                                        "tags":  [
+                                                     "park",
+                                                     "landmark"
+                                                 ],
+                                        "vibeTags":  [
+                                                         "Healing",
+                                                         "Romantic"
+                                                     ],
+                                        "image":  "",
+                                        "priceEstimate":  "€0",
+                                        "placeTypes":  [
+
+                                                       ],
+                                        "recommendedTime":  "afternoon",
+                                        "city":  "Paris",
+                                        "region":  "1st Arr.",
+                                        "koreanPopularityScore":  0,
+                                        "googleMapsUrl":  "",
+                                        "finalScore":  5.314559476513203,
+                                        "selectionReasons":  [
+                                                                 "파리에서 가장 로맨틱한 정원으로, 초록색 철제 의자에 앉아 휴식을 취하는 모습이 유튜브 브이로그에 자주 등장합니다.",
+                                                                 "힐링, 로맨틱 분위기 매칭"
+                                                             ],
+                                        "confidenceLevel":  "minimal",
+                                        "startTime":  "09:00",
+                                        "endTime":  "11:00",
+                                        "isMealSlot":  false,
+                                        "realityCheck":  {
+                                                             "weather":  "Unknown",
+                                                             "crowd":  "Medium",
+                                                             "status":  "Open"
+                                                         }
+                                    },
+                                    {
+                                        "id":  "gemini-1770484192876-18",
+                                        "name":  "Place du Tertre",
+                                        "description":  "화가들의 거리로 유명하며 파리의 예술적 바이브를 가장 잘 느낄 수 있습니다. 초상화를 그려보는 추억을 만들기에 좋습니다.",
+                                        "lat":  48.8865,
+                                        "lng":  2.3408,
+                                        "vibeScore":  8.5475,
+                                        "confidenceScore":  7,
+                                        "sourceType":  "Gemini AI",
+                                        "personaFitReason":  "화가들의 거리로 유명하며 파리의 예술적 바이브를 가장 잘 느낄 수 있습니다. 초상화를 그려보는 추억을 만들기에 좋습니다.",
+                                        "tags":  [
+                                                     "square",
+                                                     "art"
+                                                 ],
+                                        "vibeTags":  [
+                                                         "Culture",
+                                                         "Hotspot"
+                                                     ],
+                                        "image":  "",
+                                        "priceEstimate":  "€0-50",
+                                        "placeTypes":  [
+
+                                                       ],
+                                        "recommendedTime":  "morning",
+                                        "city":  "Paris",
+                                        "region":  "18th Arr.",
+                                        "koreanPopularityScore":  0,
+                                        "googleMapsUrl":  "",
+                                        "finalScore":  5.314559476513203,
+                                        "selectionReasons":  [
+                                                                 "화가들의 거리로 유명하며 파리의 예술적 바이브를 가장 잘 느낄 수 있습니다. 초상화를 그려보는 추억을 만들기에 좋습니다.",
+                                                                 "문화, 핫플 분위기 매칭"
+                                                             ],
+                                        "confidenceLevel":  "minimal",
+                                        "startTime":  "11:00",
+                                        "endTime":  "13:00",
+                                        "isMealSlot":  false,
+                                        "realityCheck":  {
+                                                             "weather":  "Unknown",
+                                                             "crowd":  "Medium",
+                                                             "status":  "Open"
+                                                         }
+                                    },
+                                    {
+                                        "id":  "gemini-1770484192876-8",
+                                        "name":  "Bateaux Parisiens",
+                                        "description":  "센강을 따라 유람하며 코스 요리를 즐기는 디너 크루즈입니다. 로맨틱한 분위기와 야경 덕분에 커플 여행객 선호도가 매우 높습니다.",
+                                        "lat":  48.8596,
+                                        "lng":  2.2924,
+                                        "vibeScore":  9.5475,
+                                        "confidenceScore":  7,
+                                        "sourceType":  "Gemini AI",
+                                        "personaFitReason":  "센강을 따라 유람하며 코스 요리를 즐기는 디너 크루즈입니다. 로맨틱한 분위기와 야경 덕분에 커플 여행객 선호도가 매우 높습니다.",
+                                        "tags":  [
+                                                     "cruise",
+                                                     "restaurant"
+                                                 ],
+                                        "vibeTags":  [
+                                                         "Foodie",
+                                                         "Romantic"
+                                                     ],
+                                        "image":  "",
+                                        "priceEstimate":  "€100-150",
+                                        "placeTypes":  [
+
+                                                       ],
+                                        "recommendedTime":  "evening",
+                                        "city":  "Paris",
+                                        "region":  "7th Arr.",
+                                        "koreanPopularityScore":  0,
+                                        "googleMapsUrl":  "",
+                                        "finalScore":  5.781958401495675,
+                                        "selectionReasons":  [
+                                                                 "센강을 따라 유람하며 코스 요리를 즐기는 디너 크루즈입니다. 로맨틱한 분위기와 야경 덕분에 커플 여행객 선호도가 매우 높습니다.",
+                                                                 "미식, 로맨틱 분위기 매칭"
+                                                             ],
+                                        "confidenceLevel":  "minimal",
+                                        "startTime":  "13:00",
+                                        "endTime":  "15:00",
+                                        "isMealSlot":  true,
+                                        "mealType":  "lunch",
+                                        "mealPrice":  55,
+                                        "mealPriceLabel":  "€50 내외",
+                                        "realityCheck":  {
+                                                             "weather":  "Unknown",
+                                                             "crowd":  "Medium",
+                                                             "status":  "Open"
+                                                         }
+                                    },
+                                    {
+                                        "id":  "gemini-1770484192876-22",
+                                        "name":  "Place des Vosges",
+                                        "description":  "마레 지구에서 가장 아름다운 광장으로, 대칭 구조의 건물들이 고급스러운 분위기를 자아내며 현지인들에게도 인기인 피크닉 장소입니다.",
+                                        "lat":  48.8555,
+                                        "lng":  2.3655,
+                                        "vibeScore":  8.5475,
+                                        "confidenceScore":  7,
+                                        "sourceType":  "Gemini AI",
+                                        "personaFitReason":  "마레 지구에서 가장 아름다운 광장으로, 대칭 구조의 건물들이 고급스러운 분위기를 자아내며 현지인들에게도 인기인 피크닉 장소입니다.",
+                                        "tags":  [
+                                                     "square",
+                                                     "park"
+                                                 ],
+                                        "vibeTags":  [
+                                                         "Healing",
+                                                         "Romantic"
+                                                     ],
+                                        "image":  "",
+                                        "priceEstimate":  "€0",
+                                        "placeTypes":  [
+
+                                                       ],
+                                        "recommendedTime":  "afternoon",
+                                        "city":  "Paris",
+                                        "region":  "4th Arr.",
+                                        "koreanPopularityScore":  0,
+                                        "googleMapsUrl":  "",
+                                        "finalScore":  5.314559476513203,
+                                        "selectionReasons":  [
+                                                                 "마레 지구에서 가장 아름다운 광장으로, 대칭 구조의 건물들이 고급스러운 분위기를 자아내며 현지인들에게도 인기인 피크닉 장소입니다.",
+                                                                 "힐링, 로맨틱 분위기 매칭"
+                                                             ],
+                                        "confidenceLevel":  "minimal",
+                                        "startTime":  "15:00",
+                                        "endTime":  "17:00",
+                                        "isMealSlot":  false,
+                                        "realityCheck":  {
+                                                             "weather":  "Unknown",
+                                                             "crowd":  "Medium",
+                                                             "status":  "Open"
+                                                         }
+                                    },
+                                    {
+                                        "id":  "gemini-1770484192876-25",
+                                        "name":  "Shakespeare and Company",
+                                        "description":  "파리의 고전적인 분위기를 담은 영문 서점으로, 헤밍웨이의 자취를 느낄 수 있어 감성적인 사진을 남기기 좋습니다.",
+                                        "lat":  48.8525,
+                                        "lng":  2.3471,
+                                        "vibeScore":  8.5475,
+                                        "confidenceScore":  7,
+                                        "sourceType":  "Gemini AI",
+                                        "personaFitReason":  "파리의 고전적인 분위기를 담은 영문 서점으로, 헤밍웨이의 자취를 느낄 수 있어 감성적인 사진을 남기기 좋습니다.",
+                                        "tags":  [
+                                                     "bookstore",
+                                                     "historic"
+                                                 ],
+                                        "vibeTags":  [
+                                                         "Culture",
+                                                         "Hotspot"
+                                                     ],
+                                        "image":  "",
+                                        "priceEstimate":  "€0-30",
+                                        "placeTypes":  [
+
+                                                       ],
+                                        "recommendedTime":  "morning",
+                                        "city":  "Paris",
+                                        "region":  "5th Arr.",
+                                        "koreanPopularityScore":  0,
+                                        "googleMapsUrl":  "",
+                                        "finalScore":  5.314559476513203,
+                                        "selectionReasons":  [
+                                                                 "파리의 고전적인 분위기를 담은 영문 서점으로, 헤밍웨이의 자취를 느낄 수 있어 감성적인 사진을 남기기 좋습니다.",
+                                                                 "문화, 핫플 분위기 매칭"
+                                                             ],
+                                        "confidenceLevel":  "minimal",
+                                        "startTime":  "17:00",
+                                        "endTime":  "19:00",
+                                        "isMealSlot":  false,
+                                        "realityCheck":  {
+                                                             "weather":  "Unknown",
+                                                             "crowd":  "Medium",
+                                                             "status":  "Open"
+                                                         }
+                                    },
+                                    {
+                                        "id":  "gemini-1770484192876-9",
+                                        "name":  "La Bauhinia at Shangri-La",
+                                        "description":  "샹그릴라 호텔 내 위치한 고급 레스토랑으로, 애프터눈 티와 우아한 런치가 한국인 프리미엄 여행객들에게 인기입니다.",
+                                        "lat":  48.8635,
+                                        "lng":  2.2934,
+                                        "vibeScore":  9.5475,
+                                        "confidenceScore":  7,
+                                        "sourceType":  "Gemini AI",
+                                        "personaFitReason":  "샹그릴라 호텔 내 위치한 고급 레스토랑으로, 애프터눈 티와 우아한 런치가 한국인 프리미엄 여행객들에게 인기입니다.",
+                                        "tags":  [
+                                                     "restaurant",
+                                                     "hotel"
+                                                 ],
+                                        "vibeTags":  [
+                                                         "Foodie",
+                                                         "Romantic"
+                                                     ],
+                                        "image":  "",
+                                        "priceEstimate":  "€80-150",
+                                        "placeTypes":  [
+
+                                                       ],
+                                        "recommendedTime":  "lunch",
+                                        "city":  "Paris",
+                                        "region":  "16th Arr.",
+                                        "koreanPopularityScore":  0,
+                                        "googleMapsUrl":  "",
+                                        "finalScore":  5.781958401495675,
+                                        "selectionReasons":  [
+                                                                 "샹그릴라 호텔 내 위치한 고급 레스토랑으로, 애프터눈 티와 우아한 런치가 한국인 프리미엄 여행객들에게 인기입니다.",
+                                                                 "미식, 로맨틱 분위기 매칭"
+                                                             ],
+                                        "confidenceLevel":  "minimal",
+                                        "startTime":  "19:00",
+                                        "endTime":  "21:00",
+                                        "isMealSlot":  true,
+                                        "mealType":  "dinner",
+                                        "mealPrice":  55,
+                                        "mealPriceLabel":  "€50 내외",
+                                        "realityCheck":  {
+                                                             "weather":  "Unknown",
+                                                             "crowd":  "Medium",
+                                                             "status":  "Open"
+                                                         }
+                                    }
+                                ],
+                     "city":  "Paris",
+                     "summary":  "Paris - Healing \u0026 Romantic 중심의 하루",
+                     "startTime":  "09:00",
+                     "endTime":  "21:00",
+                     "transit":  {
+                                     "transits":  [
+                                                      {
+                                                          "from":  "Jardin des Tuileries",
+                                                          "to":  "Place du Tertre",
+                                                          "mode":  "walk",
+                                                          "modeLabel":  "이동",
+                                                          "duration":  15,
+                                                          "durationText":  "약 15분",
+                                                          "distance":  1000,
+                                                          "cost":  0,
+                                                          "costTotal":  0
+                                                      },
+                                                      {
+                                                          "from":  "Place du Tertre",
+                                                          "to":  "Bateaux Parisiens",
+                                                          "mode":  "walk",
+                                                          "modeLabel":  "이동",
+                                                          "duration":  15,
+                                                          "durationText":  "약 15분",
+                                                          "distance":  1000,
+                                                          "cost":  0,
+                                                          "costTotal":  0
+                                                      },
+                                                      {
+                                                          "from":  "Bateaux Parisiens",
+                                                          "to":  "Place des Vosges",
+                                                          "mode":  "walk",
+                                                          "modeLabel":  "이동",
+                                                          "duration":  15,
+                                                          "durationText":  "약 15분",
+                                                          "distance":  1000,
+                                                          "cost":  0,
+                                                          "costTotal":  0
+                                                      },
+                                                      {
+                                                          "from":  "Place des Vosges",
+                                                          "to":  "Shakespeare and Company",
+                                                          "mode":  "walk",
+                                                          "modeLabel":  "이동",
+                                                          "duration":  15,
+                                                          "durationText":  "약 15분",
+                                                          "distance":  1000,
+                                                          "cost":  0,
+                                                          "costTotal":  0
+                                                      },
+                                                      {
+                                                          "from":  "Shakespeare and Company",
+                                                          "to":  "La Bauhinia at Shangri-La",
+                                                          "mode":  "walk",
+                                                          "modeLabel":  "이동",
+                                                          "duration":  15,
+                                                          "durationText":  "약 15분",
+                                                          "distance":  1000,
+                                                          "cost":  0,
+                                                          "costTotal":  0
+                                                      }
+                                                  ],
+                                     "totalDuration":  75,
+                                     "totalCost":  0
+                                 }
+                 }
+             ],
+    "vibeWeights":  [
+                        {
+                            "vibe":  "Romantic",
+                            "weight":  0.6,
+                            "percentage":  60
+                        },
+                        {
+                            "vibe":  "Foodie",
+                            "weight":  0.4,
+                            "percentage":  40
+                        }
+                    ],
+    "koreanSentimentBonus":  1.825,
+    "companionType":  "Couple",
+    "companionCount":  2,
+    "travelStyle":  "Premium",
+    "mobilityStyle":  "Moderate",
+    "metadata":  {
+                     "travelStyle":  "Premium",
+                     "travelPace":  "Normal",
+                     "travelPaceLabel":  "보통",
+                     "slotDurationMinutes":  120,
+                     "totalPlaces":  18,
+                     "mobilityStyle":  "Moderate",
+                     "companionType":  "Couple",
+                     "companionCount":  2,
+                     "curationFocus":  "Self",
+                     "generatedAt":  "2026-02-07T17:09:53.550Z",
+                     "koreanSentimentApplied":  true
+                 }
+}

@@ -43,6 +43,11 @@ export interface TripFormData {
   transportType?: 'sedan' | 'van' | 'minibus';
   // 🎯 API 요청 시 사용자 정보 (백엔드에서 DB 조회용)
   userId?: string;
+  // 🏨 숙소 정보 (선택적 — 입력화면에서 설정, 초행자는 결과화면에서 설정 가능)
+  accommodationName?: string;         // 숙소 이름 (ex: "Hotel Le Marais")
+  accommodationAddress?: string;      // 숙소 주소
+  accommodationCoords?: { lat: number; lng: number };  // 숙소 GPS 좌표
+  accommodationPlaceId?: string;      // Google Place ID (재검색용)
 }
 
 export interface Place {
@@ -96,11 +101,25 @@ export interface TransitInfo {
   costTotal: number;           // 인원수 × 비용
 }
 
+// 🏨 Day별 숙소 설정 (이동형 여행: 결과화면에서 Day별 개별 설정)
+export interface DayAccommodation {
+  day: number;
+  name: string;
+  address: string;
+  coords: { lat: number; lng: number };
+  placeId?: string;  // Google Place ID
+}
+
 export interface DayPlan {
   day: number;
   places: Place[];
   city?: string;
   summary: string;
+  // 🏨 해당 Day의 숙소 정보 (출발/복귀 기준점)
+  accommodation?: DayAccommodation;
+  // 🚶 숙소→첫장소, 마지막장소→숙소 이동정보
+  departureTransit?: TransitInfo;   // 숙소 → 첫 관광지
+  returnTransit?: TransitInfo;      // 마지막 관광지 → 숙소
 }
 
 export interface VibeWeight {
@@ -155,6 +174,13 @@ export interface Itinerary {
   companionCount?: number;
   travelStyle?: TravelStyle;
   mobilityStyle?: MobilityStyle;
+  // 🏨 숙소 정보 (공통 숙소 or Day별 개별 숙소)
+  accommodation?: {
+    name: string;
+    address: string;
+    coords: { lat: number; lng: number };
+  };
+  dayAccommodations?: DayAccommodation[];  // Day별 개별 숙소 (이동형 여행)
 }
 
 export const VIBE_OPTIONS: { id: Vibe; label: string; icon: string; baseWeight: number }[] = [

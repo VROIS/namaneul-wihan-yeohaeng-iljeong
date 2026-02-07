@@ -1,0 +1,945 @@
+﻿{
+    "title":  "Paris 3일 여행",
+    "destination":  "Paris",
+    "startDate":  "2026-03-15",
+    "endDate":  "2026-03-17",
+    "startTime":  "09:00",
+    "endTime":  "18:00",
+    "days":  [
+                 {
+                     "day":  1,
+                     "places":  [
+                                    {
+                                        "id":  "gemini-1770500836787-8",
+                                        "name":  "Musée d\u0027Orsay",
+                                        "description":  "기차역을 개조한 미술관으로 동선이 편리합니다. 고흐, 밀레 등 한국인이 사랑하는 화가의 작품이 많아 가족 단위 도슨트 투어로 인기가 많습니다.",
+                                        "lat":  48.86,
+                                        "lng":  2.32656,
+                                        "vibeScore":  9.5475,
+                                        "confidenceScore":  7,
+                                        "sourceType":  "Gemini AI + DB Enriched",
+                                        "personaFitReason":  "기차역을 개조한 미술관으로 동선이 편리합니다. 고흐, 밀레 등 한국인이 사랑하는 화가의 작품이 많아 가족 단위 도슨트 투어로 인기가 많습니다.",
+                                        "tags":  [
+                                                     "museum",
+                                                     "art"
+                                                 ],
+                                        "vibeTags":  [
+                                                         "Culture",
+                                                         "Healing"
+                                                     ],
+                                        "image":  "https://places.googleapis.com/v1/places/ChIJG5Qwtitu5kcR2CNEsYy9cdA/photos/AcnlKN2BJHs_Ve4pt4F1w7mhyP7sSf8fpaA83zApR8q4TMKt2mXasUcMlsgMqSCt0hje9LH93Soibgvv4gWBvRIl8s8B9DNZIEVYY_F204-2X6Pyvgl11m4bI8qb5c1rrsAkM_9lEilRkaBdlDc6PZoGyco2GffccRc9GRlEdFY8HfIkDVxZey8eoxuGDbWUNiUpTM-KznFI7ybyvY2tGNn0oXKW6F8s-KeuPQj_Ls6cdlN_a3wInb9jB9PWU7tkSkeoLTaiMyql1Yn1BgdS7m8Jy-IU0M3e9s-khDe4AMQO5wH6KYYtg5cgiWw4tlvXMyfiVLJTiUGHxgM29h-IZ4TWaAV_cxcDUVvWXj_qV0Jj0BlV7QBOYXe0rcWl4fETVkPTd-ghnUi8Etw9clPx70HHKZdBtfm3m517FkzDIcng1rMY8rfX/media?maxWidthPx=1200\u0026key=AIzaSyBRfDSQVziEASpsVXKdh6rqmxRvVYc-TO4",
+                                        "priceEstimate":  "€16-20",
+                                        "placeTypes":  [
+
+                                                       ],
+                                        "recommendedTime":  "morning",
+                                        "city":  "Paris",
+                                        "region":  "7th Arr.",
+                                        "koreanPopularityScore":  4.5,
+                                        "googleMapsUrl":  "https://maps.google.com/?cid=15019994644224418776\u0026g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
+                                        "finalScore":  3.979969325153374,
+                                        "selectionReasons":  [
+                                                                 "한국 여행자 인기 (SNS 종합 4.5/10)",
+                                                                 "기차역을 개조한 미술관으로 동선이 편리합니다. 고흐, 밀레 등 한국인이 사랑하는 화가의 작품이 많아 가족 단위 도슨트 투어로 인기가 많습니다.",
+                                                                 "문화, 힐링 분위기 매칭"
+                                                             ],
+                                        "confidenceLevel":  "medium",
+                                        "startTime":  "09:00",
+                                        "endTime":  "11:00",
+                                        "isMealSlot":  false,
+                                        "realityCheck":  {
+                                                             "weather":  "Unknown",
+                                                             "crowd":  "Medium",
+                                                             "status":  "Open"
+                                                         }
+                                    },
+                                    {
+                                        "id":  "gemini-1770500836787-21",
+                                        "name":  "Palais Garnier",
+                                        "description":  "오페라 유령의 배경이자 화려함의 극치를 보여주는 오페라 하우스. 내부 화려한 장식은 아이들에게는 동화 속 궁전 같고 어르신들께는 잊지 못할 볼거리입니다.",
+                                        "lat":  48.872,
+                                        "lng":  2.3316,
+                                        "vibeScore":  9.5475,
+                                        "confidenceScore":  7,
+                                        "sourceType":  "Gemini AI + DB Enriched",
+                                        "personaFitReason":  "오페라 유령의 배경이자 화려함의 극치를 보여주는 오페라 하우스. 내부 화려한 장식은 아이들에게는 동화 속 궁전 같고 어르신들께는 잊지 못할 볼거리입니다.",
+                                        "tags":  [
+                                                     "landmark",
+                                                     "theatre"
+                                                 ],
+                                        "vibeTags":  [
+                                                         "Culture",
+                                                         "Hotspot"
+                                                     ],
+                                        "image":  "https://places.googleapis.com/v1/places/ChIJOYNm1DBu5kcRZwdtKBzyq6k/photos/AcnlKN2CD-TUAv85spnx6rjbWhF5nisyXQ2cT8aEwCVD7V5TO8Tzj9mNkRkloamh1kt5Rko6GdOKHcQDO_sc04jJQ46YfUFymzrL610uWORrDOscY-Apo7mA4VAJ3FdxxODDiHpT488LbZyAe9vyVDMrO82iBTp5XajTBfpGcoFNFIS-O-MdAjRxx-W33U_19mGYFw56v_GhLYqegf-D5eQ6FUKVD9bsUUjtg-nMfYaoFaqEZH8TLViH0p7mKERrt2w89bk3pLQJmECFZ7VRmjTt6trnpG-kU4veHRGE-0_7wp-9NCsTUQqIxFCED7HPKH7BWmjWIvXmbKddT-RUeq1me5Co7PeuH0XUcD01al18FTeQX4n2Pfg8nHf0dxLiE5elISL1_xPEiP4ZCXwA8TDW82s9NNoiM1WHBZPCX7WwyHzqdEc/media?maxWidthPx=1200\u0026key=AIzaSyBRfDSQVziEASpsVXKdh6rqmxRvVYc-TO4",
+                                        "priceEstimate":  "€12-15",
+                                        "placeTypes":  [
+
+                                                       ],
+                                        "recommendedTime":  "afternoon",
+                                        "city":  "Paris",
+                                        "region":  "9th Arr.",
+                                        "koreanPopularityScore":  4.5,
+                                        "googleMapsUrl":  "https://maps.google.com/?cid=12226131816178583399\u0026g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
+                                        "finalScore":  3.979969325153374,
+                                        "selectionReasons":  [
+                                                                 "한국 여행자 인기 (SNS 종합 4.5/10)",
+                                                                 "오페라 유령의 배경이자 화려함의 극치를 보여주는 오페라 하우스. 내부 화려한 장식은 아이들에게는 동화 속 궁전 같고 어르신들께는 잊지 못할 볼거리입니다.",
+                                                                 "문화, 핫플 분위기 매칭"
+                                                             ],
+                                        "confidenceLevel":  "medium",
+                                        "startTime":  "11:00",
+                                        "endTime":  "13:00",
+                                        "isMealSlot":  false,
+                                        "realityCheck":  {
+                                                             "weather":  "Unknown",
+                                                             "crowd":  "Medium",
+                                                             "status":  "Open"
+                                                         }
+                                    },
+                                    {
+                                        "id":  "gemini-1770500836787-24",
+                                        "name":  "Cédric Grolet Opéra",
+                                        "description":  "세계 최고의 파티시에 세드릭 그롤레의 베이커리. \u0027빠니보틀\u0027 등 유튜버들이 극찬한 과일 디저트는 예약이 필수일 정도로 인기인 파리 최고의 디저트 핫플입니다.",
+                                        "lat":  48.8681,
+                                        "lng":  2.3344,
+                                        "vibeScore":  9.5475,
+                                        "confidenceScore":  7,
+                                        "sourceType":  "Gemini AI (New)",
+                                        "personaFitReason":  "세계 최고의 파티시에 세드릭 그롤레의 베이커리. \u0027빠니보틀\u0027 등 유튜버들이 극찬한 과일 디저트는 예약이 필수일 정도로 인기인 파리 최고의 디저트 핫플입니다.",
+                                        "tags":  [
+                                                     "bakery",
+                                                     "dessert"
+                                                 ],
+                                        "vibeTags":  [
+                                                         "Foodie",
+                                                         "Hotspot"
+                                                     ],
+                                        "image":  "",
+                                        "priceEstimate":  "€10-20",
+                                        "placeTypes":  [
+
+                                                       ],
+                                        "recommendedTime":  "morning",
+                                        "city":  "Paris",
+                                        "region":  "2nd Arr.",
+                                        "koreanPopularityScore":  2.25,
+                                        "googleMapsUrl":  "",
+                                        "finalScore":  3.3403987730061346,
+                                        "selectionReasons":  [
+                                                                 "한국 여행자 언급 확인됨",
+                                                                 "세계 최고의 파티시에 세드릭 그롤레의 베이커리. \u0027빠니보틀\u0027 등 유튜버들이 극찬한 과일 디저트는 예약이 필수일 정도로 인기인 파리 최고의 디저트 핫플입니다.",
+                                                                 "미식, 핫플 분위기 매칭"
+                                                             ],
+                                        "confidenceLevel":  "low",
+                                        "startTime":  "13:00",
+                                        "endTime":  "15:00",
+                                        "isMealSlot":  true,
+                                        "mealType":  "lunch",
+                                        "mealPrice":  21,
+                                        "mealPriceLabel":  "€21 이내",
+                                        "realityCheck":  {
+                                                             "weather":  "Unknown",
+                                                             "crowd":  "Medium",
+                                                             "status":  "Open"
+                                                         }
+                                    },
+                                    {
+                                        "id":  "gemini-1770500836787-6",
+                                        "name":  "Tuileries Garden",
+                                        "description":  "루브르와 콩코르드 광장 사이의 정원. 초록색 철제 의자에 앉아 에펠탑 피크닉 감성을 느끼기 좋으며, 아이들이 탈 수 있는 트램펄린과 놀이터가 있습니다.",
+                                        "lat":  48.8635,
+                                        "lng":  2.32749,
+                                        "vibeScore":  8.5475,
+                                        "confidenceScore":  7,
+                                        "sourceType":  "Gemini AI + DB Enriched",
+                                        "personaFitReason":  "루브르와 콩코르드 광장 사이의 정원. 초록색 철제 의자에 앉아 에펠탑 피크닉 감성을 느끼기 좋으며, 아이들이 탈 수 있는 트램펄린과 놀이터가 있습니다.",
+                                        "tags":  [
+                                                     "park",
+                                                     "garden"
+                                                 ],
+                                        "vibeTags":  [
+                                                         "Healing",
+                                                         "Hotspot"
+                                                     ],
+                                        "image":  "https://places.googleapis.com/v1/places/ChIJAQAAMCxu5kcRx--_4QnbGcI/photos/AcnlKN2gh8iSoJt4zlKX1YTMhjFf4AyTJ5fshXO3ycfOR2GmlBegY6vjEDZCYipMKW4WJixVgg_hIt-zj3nTcJgBCG45zCX_q3sd5TUO7U4sn9zgM66bkokDP2BO8FHlJzibAY_hdwFlKmtkEMxS2SlXX1swOy8ioFjOggUt2jIiCS0P040tIuctgHS8zyTIJFH5MhT42PaqWj6R7mj6gQw0KOFaJchladjnxzmMCp40_tptAsBHtmWqAo2ZBO5soASf3h-TN5QcTei5RhMNV09xoZUesDKOL-DNeCenzFm3bfBfj0BYt--AWqPeATc9iaFEgLygEO3uoWiZo30tOReVEjqAP8POKwq7SZrnD9ng5H_b2J2YdEfPjTkGw3VzO1_clh21uwN9hs6ayMVRc0MPmJkHJAIhUyw62qs5Z6RucfM/media?maxWidthPx=1200\u0026key=AIzaSyBRfDSQVziEASpsVXKdh6rqmxRvVYc-TO4",
+                                        "priceEstimate":  "€0",
+                                        "placeTypes":  [
+
+                                                       ],
+                                        "recommendedTime":  "afternoon",
+                                        "city":  "Paris",
+                                        "region":  "1st Arr.",
+                                        "koreanPopularityScore":  4.5,
+                                        "googleMapsUrl":  "https://maps.google.com/?cid=13986450953264426951\u0026g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
+                                        "finalScore":  3.8204601226993864,
+                                        "selectionReasons":  [
+                                                                 "한국 여행자 인기 (SNS 종합 4.5/10)",
+                                                                 "루브르와 콩코르드 광장 사이의 정원. 초록색 철제 의자에 앉아 에펠탑 피크닉 감성을 느끼기 좋으며, 아이들이 탈 수 있는 트램펄린과 놀이터가 있습니다.",
+                                                                 "힐링, 핫플 분위기 매칭"
+                                                             ],
+                                        "confidenceLevel":  "medium",
+                                        "startTime":  "15:00",
+                                        "endTime":  "17:00",
+                                        "isMealSlot":  false,
+                                        "realityCheck":  {
+                                                             "weather":  "Unknown",
+                                                             "crowd":  "Medium",
+                                                             "status":  "Open"
+                                                         }
+                                    },
+                                    {
+                                        "id":  "gemini-1770500836787-14",
+                                        "name":  "Merci",
+                                        "description":  "한국인 여행자들의 마레지구 필수 쇼핑 코스. 에코백과 팔찌가 기념품으로 인기이며, 매장 내 카페와 빈티지한 분위기가 인스타 감성을 자극합니다.",
+                                        "lat":  48.8607,
+                                        "lng":  2.36683,
+                                        "vibeScore":  8.5475,
+                                        "confidenceScore":  7,
+                                        "sourceType":  "Gemini AI + DB Enriched",
+                                        "personaFitReason":  "한국인 여행자들의 마레지구 필수 쇼핑 코스. 에코백과 팔찌가 기념품으로 인기이며, 매장 내 카페와 빈티지한 분위기가 인스타 감성을 자극합니다.",
+                                        "tags":  [
+                                                     "shopping",
+                                                     "concept_store"
+                                                 ],
+                                        "vibeTags":  [
+                                                         "Hotspot",
+                                                         "Culture"
+                                                     ],
+                                        "image":  "https://places.googleapis.com/v1/places/ChIJDSzfrABu5kcRJTf3iV__JCg/photos/AcnlKN1bRHGsnxkGJ-8g2rZ-yXouWPmCNZa5S3EnqGFgACKgjmOCPMQ9rpH7m59YCWEEVwMmLNf52DNeBzKfGRWC_5yu0oemEs42YfTGeXW9gSkyTr-7DW0j9yspRtxrhujfOUIo-uM-CnOLx8orhW9Q-oCNA16Ya1rYTU_JZQwwBcZ34dsrhbtCpArCDxUnphFYurY3LyOYJyfwAXV91xkXdHXnc1WdIeeprE98cjrGLWJvh7H06T-vt2fsvK1pKf-p0vIoafMu2V_hoy3VLgb1NY24pr3RW5xH_FY34Cdb21nPYF44AijcTBC6jzlmtLjb9PVgGWbuXRERQUZmUxEhxgsxkeQFDS-hc4K49pFlxZFLw9p5R3Mdj4AXxqFYNju98t0zcPYvAdv5W1jEFS2B3JlQCKzse2Q1JFgCH61_EoQmfV2k/media?maxWidthPx=1200\u0026key=AIzaSyBRfDSQVziEASpsVXKdh6rqmxRvVYc-TO4",
+                                        "priceEstimate":  "€20-50",
+                                        "placeTypes":  [
+
+                                                       ],
+                                        "recommendedTime":  "afternoon",
+                                        "city":  "Paris",
+                                        "region":  "3rd Arr.",
+                                        "koreanPopularityScore":  4.5,
+                                        "googleMapsUrl":  "https://maps.google.com/?cid=2892717646480357157\u0026g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
+                                        "finalScore":  3.8204601226993864,
+                                        "selectionReasons":  [
+                                                                 "한국 여행자 인기 (SNS 종합 4.5/10)",
+                                                                 "한국인 여행자들의 마레지구 필수 쇼핑 코스. 에코백과 팔찌가 기념품으로 인기이며, 매장 내 카페와 빈티지한 분위기가 인스타 감성을 자극합니다.",
+                                                                 "핫플, 문화 분위기 매칭"
+                                                             ],
+                                        "confidenceLevel":  "medium",
+                                        "startTime":  "17:00",
+                                        "endTime":  "19:00",
+                                        "isMealSlot":  false,
+                                        "realityCheck":  {
+                                                             "weather":  "Unknown",
+                                                             "crowd":  "Medium",
+                                                             "status":  "Open"
+                                                         }
+                                    },
+                                    {
+                                        "id":  "gemini-1770500836787-15",
+                                        "name":  "Breizh Café",
+                                        "description":  "프랑스 전통 크레페와 갈레트 맛집. 마레지구에서 가장 인기 있는 곳으로 식사용 짭짤한 갈레트는 부모님도 맛있게 드실 수 있는 별미입니다.",
+                                        "lat":  48.8596,
+                                        "lng":  2.3618,
+                                        "vibeScore":  8.5475,
+                                        "confidenceScore":  7,
+                                        "sourceType":  "Gemini AI (New)",
+                                        "personaFitReason":  "프랑스 전통 크레페와 갈레트 맛집. 마레지구에서 가장 인기 있는 곳으로 식사용 짭짤한 갈레트는 부모님도 맛있게 드실 수 있는 별미입니다.",
+                                        "tags":  [
+                                                     "restaurant",
+                                                     "cafe"
+                                                 ],
+                                        "vibeTags":  [
+                                                         "Foodie"
+                                                     ],
+                                        "image":  "",
+                                        "priceEstimate":  "€15-25",
+                                        "placeTypes":  [
+
+                                                       ],
+                                        "recommendedTime":  "lunch",
+                                        "city":  "Paris",
+                                        "region":  "3rd Arr.",
+                                        "koreanPopularityScore":  2.25,
+                                        "googleMapsUrl":  "",
+                                        "finalScore":  3.180889570552147,
+                                        "selectionReasons":  [
+                                                                 "한국 여행자 언급 확인됨",
+                                                                 "프랑스 전통 크레페와 갈레트 맛집. 마레지구에서 가장 인기 있는 곳으로 식사용 짭짤한 갈레트는 부모님도 맛있게 드실 수 있는 별미입니다.",
+                                                                 "미식 분위기 매칭"
+                                                             ],
+                                        "confidenceLevel":  "low",
+                                        "startTime":  "19:00",
+                                        "endTime":  "21:00",
+                                        "isMealSlot":  true,
+                                        "mealType":  "dinner",
+                                        "mealPrice":  39,
+                                        "mealPriceLabel":  "€39 이내",
+                                        "realityCheck":  {
+                                                             "weather":  "Unknown",
+                                                             "crowd":  "Medium",
+                                                             "status":  "Open"
+                                                         }
+                                    }
+                                ],
+                     "city":  "Paris",
+                     "summary":  "Paris - Culture \u0026 Healing 중심의 하루",
+                     "startTime":  "09:00",
+                     "endTime":  "21:00",
+                     "transit":  {
+                                     "transits":  [
+                                                      {
+                                                          "from":  "Musée d\u0027Orsay",
+                                                          "to":  "Palais Garnier",
+                                                          "mode":  "walk",
+                                                          "modeLabel":  "이동",
+                                                          "duration":  15,
+                                                          "durationText":  "약 15분",
+                                                          "distance":  1000,
+                                                          "cost":  0,
+                                                          "costTotal":  0
+                                                      },
+                                                      {
+                                                          "from":  "Palais Garnier",
+                                                          "to":  "Cédric Grolet Opéra",
+                                                          "mode":  "walk",
+                                                          "modeLabel":  "이동",
+                                                          "duration":  15,
+                                                          "durationText":  "약 15분",
+                                                          "distance":  1000,
+                                                          "cost":  0,
+                                                          "costTotal":  0
+                                                      },
+                                                      {
+                                                          "from":  "Cédric Grolet Opéra",
+                                                          "to":  "Tuileries Garden",
+                                                          "mode":  "walk",
+                                                          "modeLabel":  "이동",
+                                                          "duration":  15,
+                                                          "durationText":  "약 15분",
+                                                          "distance":  1000,
+                                                          "cost":  0,
+                                                          "costTotal":  0
+                                                      },
+                                                      {
+                                                          "from":  "Tuileries Garden",
+                                                          "to":  "Merci",
+                                                          "mode":  "walk",
+                                                          "modeLabel":  "이동",
+                                                          "duration":  15,
+                                                          "durationText":  "약 15분",
+                                                          "distance":  1000,
+                                                          "cost":  0,
+                                                          "costTotal":  0
+                                                      },
+                                                      {
+                                                          "from":  "Merci",
+                                                          "to":  "Breizh Café",
+                                                          "mode":  "walk",
+                                                          "modeLabel":  "이동",
+                                                          "duration":  15,
+                                                          "durationText":  "약 15분",
+                                                          "distance":  1000,
+                                                          "cost":  0,
+                                                          "costTotal":  0
+                                                      }
+                                                  ],
+                                     "totalDuration":  75,
+                                     "totalCost":  0
+                                 }
+                 },
+                 {
+                     "day":  2,
+                     "places":  [
+                                    {
+                                        "id":  "gemini-1770500836787-0",
+                                        "name":  "Eiffel Tower",
+                                        "description":  "파리의 상징이자 인스타그램 1순위 명소. 어르신들은 엘리베이터로 편하게 전망을 감상할 수 있고, 아이들은 넓은 잔디밭에서 뛰어놀기 좋습니다. #파리여행 필수 코스.",
+                                        "lat":  48.8584,
+                                        "lng":  2.29448,
+                                        "vibeScore":  10.5475,
+                                        "confidenceScore":  7,
+                                        "sourceType":  "Gemini AI + DB Enriched",
+                                        "personaFitReason":  "파리의 상징이자 인스타그램 1순위 명소. 어르신들은 엘리베이터로 편하게 전망을 감상할 수 있고, 아이들은 넓은 잔디밭에서 뛰어놀기 좋습니다. #파리여행 필수 코스.",
+                                        "tags":  [
+                                                     "landmark",
+                                                     "viewpoint"
+                                                 ],
+                                        "vibeTags":  [
+                                                         "Hotspot",
+                                                         "Culture"
+                                                     ],
+                                        "image":  "https://places.googleapis.com/v1/places/ChIJLU7jZClu5kcR4PcOOO6p3I0/photos/AcnlKN3Qp49HOYBJnccVyxThvGlSCrH0dggVKAvbUlP5KgdRJxllEy502pP-3lkdN8pl-9LC7WBce34eC0zcj_krw01DybROWbkynvyENLbxImCAumZeSMMubP2_YXVCiWvnCDL_Jw0bQsnDOvXMjpfMPwo8TePYpOf4EAErsuRkxm7VbsC3JoOgEBM6HemzOIertidtWxfeVYp4gBi3zAC7iS_km_R2XYil6-gt6Q6710WUkLKrAWU6iVyMbo860fzQSVnOXej3iK0xJLpidT_HJ7Q8X85GZsycYWYdZBrlfmOEUlKvCf58has6ZiXm0yvBc-f-oRyk_ZNyckxN_IYnxVjmsiWjiZ388Py_8sGU6i_jiJbaCCB7uFTM6UHR6egW5LKj8gYr_z6M4djBOZ2WRSNClSUa_Z2Lgmhn8RzkM7dg4_lo/media?maxWidthPx=1200\u0026key=AIzaSyBRfDSQVziEASpsVXKdh6rqmxRvVYc-TO4",
+                                        "priceEstimate":  "€20-30",
+                                        "placeTypes":  [
+
+                                                       ],
+                                        "recommendedTime":  "morning",
+                                        "city":  "Paris",
+                                        "region":  "7th Arr.",
+                                        "koreanPopularityScore":  2.25,
+                                        "googleMapsUrl":  "https://maps.google.com/?cid=10222232094831998944\u0026g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
+                                        "finalScore":  3.4125766871165646,
+                                        "selectionReasons":  [
+                                                                 "한국 여행자 언급 확인됨",
+                                                                 "파리의 상징이자 인스타그램 1순위 명소. 어르신들은 엘리베이터로 편하게 전망을 감상할 수 있고, 아이들은 넓은 잔디밭에서 뛰어놀기 좋습니다. #파리여행 필수 코스.",
+                                                                 "핫플, 문화 분위기 매칭"
+                                                             ],
+                                        "confidenceLevel":  "low",
+                                        "startTime":  "09:00",
+                                        "endTime":  "11:00",
+                                        "isMealSlot":  false,
+                                        "realityCheck":  {
+                                                             "weather":  "Unknown",
+                                                             "crowd":  "Medium",
+                                                             "status":  "Open"
+                                                         }
+                                    },
+                                    {
+                                        "id":  "gemini-1770500836787-4",
+                                        "name":  "Louvre Museum",
+                                        "description":  "세계 최대 규모의 박물관. 뮤지엄패스 필수 코스이며, 아이들을 위해 \u0027모나리자\u0027 중심의 짧은 동선을 추천합니다. 입구의 유리 피라미드는 인스타 핫플입니다.",
+                                        "lat":  48.8606,
+                                        "lng":  2.33764,
+                                        "vibeScore":  10.5475,
+                                        "confidenceScore":  7,
+                                        "sourceType":  "Gemini AI + DB Enriched",
+                                        "personaFitReason":  "세계 최대 규모의 박물관. 뮤지엄패스 필수 코스이며, 아이들을 위해 \u0027모나리자\u0027 중심의 짧은 동선을 추천합니다. 입구의 유리 피라미드는 인스타 핫플입니다.",
+                                        "tags":  [
+                                                     "museum",
+                                                     "landmark"
+                                                 ],
+                                        "vibeTags":  [
+                                                         "Culture",
+                                                         "Hotspot"
+                                                     ],
+                                        "image":  "https://places.googleapis.com/v1/places/ChIJD3uTd9hx5kcR1IQvGfr8dbk/photos/AcnlKN1YraHTecfGVKbrR6RpVNT1UB5HJ3eds8V_JPassD_EP8v88sCgoJYYQ5kXUSBsGPW5x8KwuGXWLy5ghybhHIIw8rE2HYfs-HLSLn-qQugbjucNi2-CwGpix4YfaU93RV30mBZmcR0NKW5qG0pgv8aF8f__45YFrIwPJJtWzhjqiwwMRZAQRioYD-6Wsy7wHBGFbjsBuFTq2NAEhujO9VO9gyHJfVAYTJwCp6EY7ZHiqCpMLD9K0jAjVvNnIIJ5i8qN4bgO_1THXvtBotvCRoNeYtGeyelZSaW6XmPV8pMeR5GsHUd2TInuipln-tTnirwi07IGd1l7xSQEczIY28YrtLCFDxYeRqysImIkqP4nWX-psnPq7Ui5Njstj_UMICXoKhSWnHXc1tMFMBWUZFqyaGy2ChWj2DN82bmvSfTcxzCs/media?maxWidthPx=1200\u0026key=AIzaSyBRfDSQVziEASpsVXKdh6rqmxRvVYc-TO4",
+                                        "priceEstimate":  "€17-25",
+                                        "placeTypes":  [
+
+                                                       ],
+                                        "recommendedTime":  "morning",
+                                        "city":  "Paris",
+                                        "region":  "1st Arr.",
+                                        "koreanPopularityScore":  2.25,
+                                        "googleMapsUrl":  "https://maps.google.com/?cid=13363865620386383060\u0026g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
+                                        "finalScore":  3.4125766871165646,
+                                        "selectionReasons":  [
+                                                                 "한국 여행자 언급 확인됨",
+                                                                 "세계 최대 규모의 박물관. 뮤지엄패스 필수 코스이며, 아이들을 위해 \u0027모나리자\u0027 중심의 짧은 동선을 추천합니다. 입구의 유리 피라미드는 인스타 핫플입니다.",
+                                                                 "문화, 핫플 분위기 매칭"
+                                                             ],
+                                        "confidenceLevel":  "low",
+                                        "startTime":  "11:00",
+                                        "endTime":  "13:00",
+                                        "isMealSlot":  false,
+                                        "realityCheck":  {
+                                                             "weather":  "Unknown",
+                                                             "crowd":  "Medium",
+                                                             "status":  "Open"
+                                                         }
+                                    },
+                                    {
+                                        "id":  "gemini-1770500836787-5",
+                                        "name":  "Café Marly",
+                                        "description":  "루브르 피라미드를 정면으로 보며 식사할 수 있는 최고의 뷰 맛집. 가격대는 있지만 가족들과 특별한 추억을 남기기에 좋습니다.",
+                                        "lat":  48.8617,
+                                        "lng":  2.33599,
+                                        "vibeScore":  9.5475,
+                                        "confidenceScore":  7,
+                                        "sourceType":  "Gemini AI + DB Enriched",
+                                        "personaFitReason":  "루브르 피라미드를 정면으로 보며 식사할 수 있는 최고의 뷰 맛집. 가격대는 있지만 가족들과 특별한 추억을 남기기에 좋습니다.",
+                                        "tags":  [
+                                                     "restaurant",
+                                                     "cafe"
+                                                 ],
+                                        "vibeTags":  [
+                                                         "Foodie",
+                                                         "Hotspot"
+                                                     ],
+                                        "image":  "https://places.googleapis.com/v1/places/ChIJw4rTzyVu5kcRabdrxQ12FOk/photos/AcnlKN0tIFcbWZtHpVaFe3alJhJ29pDNuPltHp-Tyr2WP64gD7dwLPDqdBBNk-6ONotk-926WNFbHRR-9uIIRuZq15-kqkbzJAUWt4czh9DT8hwUg52oz2M2BSXyKD6HQlg3eNIho7EB7KT26L1RitZvG9ZmH-M0c0mU53T2MlJhKZWESnHwhBv-nwd9WqUKfdYoAVx1ls_SgXgl93ToebPnB2wfyn8Fu9OMJhtmd-2_X5SjAlF1q0B76onPJSqA7oud9I6AnTjj8-_687gqNtQnLAkoF6vHliReMvoW0fwhaix0QQ/media?maxWidthPx=1200\u0026key=AIzaSyBRfDSQVziEASpsVXKdh6rqmxRvVYc-TO4",
+                                        "priceEstimate":  "€40-60",
+                                        "placeTypes":  [
+
+                                                       ],
+                                        "recommendedTime":  "lunch",
+                                        "city":  "Paris",
+                                        "region":  "1st Arr.",
+                                        "koreanPopularityScore":  4.5,
+                                        "googleMapsUrl":  "https://maps.google.com/?cid=16795178711890245481\u0026g_mp=CiVnb29nbGUubWFwcy5wbGFjZXMudjEuUGxhY2VzLkdldFBsYWNlEAIYBCAA",
+                                        "finalScore":  3.979969325153374,
+                                        "selectionReasons":  [
+                                                                 "한국 여행자 인기 (SNS 종합 4.5/10)",
+                                                                 "루브르 피라미드를 정면으로 보며 식사할 수 있는 최고의 뷰 맛집. 가격대는 있지만 가족들과 특별한 추억을 남기기에 좋습니다.",
+                                                                 "미식, 핫플 분위기 매칭"
+                                                             ],
+                                        "confidenceLevel":  "medium",
+                                        "startTime":  "13:00",
+                                        "endTime":  "15:00",
+                                        "isMealSlot":  true,
+                                        "mealType":  "lunch",
+                                        "mealPrice":  21,
+                                        "mealPriceLabel":  "€21 이내",
+                                        "realityCheck":  {
+                                                             "weather":  "Unknown",
+                                                             "crowd":  "Medium",
+                                                             "status":  "Open"
+                                                         }
+                                    },
+                                    {
+                                        "id":  "gemini-1770500836787-1",
+                                        "name":  "Trocadéro Gardens",
+                                        "description":  "에펠탑이 가장 잘 보이는 포토존. 네이버 블로그와 인스타에서 에펠탑 스냅 촬영지로 유명합니다. 경사가 완만해 가족 산책로로 최적입니다.",
+                                        "lat":  48.8616,
+                                        "lng":  2.2893,
+                                        "vibeScore":  9.5475,
+                                        "confidenceScore":  7,
+                                        "sourceType":  "Gemini AI (New)",
+                                        "personaFitReason":  "에펠탑이 가장 잘 보이는 포토존. 네이버 블로그와 인스타에서 에펠탑 스냅 촬영지로 유명합니다. 경사가 완만해 가족 산책로로 최적입니다.",
+                                        "tags":  [
+                                                     "park",
+                                                     "photo"
+                                                 ],
+                                        "vibeTags":  [
+                                                         "Healing",
+                                                         "Hotspot"
+                                                     ],
+                                        "image":  "",
+                                        "priceEstimate":  "€0",
+                                        "placeTypes":  [
+
+                                                       ],
+                                        "recommendedTime":  "morning",
+                                        "city":  "Paris",
+                                        "region":  "16th Arr.",
+                                        "koreanPopularityScore":  2.25,
+                                        "googleMapsUrl":  "",
+                                        "finalScore":  3.3403987730061346,
+                                        "selectionReasons":  [
+                                                                 "한국 여행자 언급 확인됨",
+                                                                 "에펠탑이 가장 잘 보이는 포토존. 네이버 블로그와 인스타에서 에펠탑 스냅 촬영지로 유명합니다. 경사가 완만해 가족 산책로로 최적입니다.",
+                                                                 "힐링, 핫플 분위기 매칭"
+                                                             ],
+                                        "confidenceLevel":  "low",
+                                        "startTime":  "15:00",
+                                        "endTime":  "17:00",
+                                        "isMealSlot":  false,
+                                        "realityCheck":  {
+                                                             "weather":  "Unknown",
+                                                             "crowd":  "Medium",
+                                                             "status":  "Open"
+                                                         }
+                                    },
+                                    {
+                                        "id":  "gemini-1770500836787-3",
+                                        "name":  "Bateaux Parisiens",
+                                        "description":  "에펠탑 바로 옆에서 탑승하는 유람선. 다리가 아픈 어르신들과 아이들에게 편안하게 파리 주요 명소를 보여줄 수 있는 \u0027원지의하루\u0027 추천 코스.",
+                                        "lat":  48.8596,
+                                        "lng":  2.2926,
+                                        "vibeScore":  9.5475,
+                                        "confidenceScore":  7,
+                                        "sourceType":  "Gemini AI + DB Enriched",
+                                        "personaFitReason":  "에펠탑 바로 옆에서 탑승하는 유람선. 다리가 아픈 어르신들과 아이들에게 편안하게 파리 주요 명소를 보여줄 수 있는 \u0027원지의하루\u0027 추천 코스.",
+                                        "tags":  [
+                                                     "activity",
+                                                     "river_cruise"
+                                                 ],
+                                        "vibeTags":  [
+                                                         "Culture",
+                                                         "Healing"
+                                                     ],
+                                        "image":  "",
+                                        "priceEstimate":  "€15-20",
+                                        "placeTypes":  [
+
+                                                       ],
+                                        "recommendedTime":  "evening",
+                                        "city":  "Paris",
+                                        "region":  "7th Arr.",
+                                        "koreanPopularityScore":  2.25,
+                                        "googleMapsUrl":  "",
+                                        "finalScore":  3.3403987730061346,
+                                        "selectionReasons":  [
+                                                                 "한국 여행자 언급 확인됨",
+                                                                 "에펠탑 바로 옆에서 탑승하는 유람선. 다리가 아픈 어르신들과 아이들에게 편안하게 파리 주요 명소를 보여줄 수 있는 \u0027원지의하루\u0027 추천 코스.",
+                                                                 "문화, 힐링 분위기 매칭"
+                                                             ],
+                                        "confidenceLevel":  "low",
+                                        "startTime":  "17:00",
+                                        "endTime":  "19:00",
+                                        "isMealSlot":  false,
+                                        "realityCheck":  {
+                                                             "weather":  "Unknown",
+                                                             "crowd":  "Medium",
+                                                             "status":  "Open"
+                                                         }
+                                    },
+                                    {
+                                        "id":  "gemini-1770500836787-2",
+                                        "name":  "Les Cocottes de Christian Constant",
+                                        "description":  "스타 셰프의 요리를 합리적인 가격에 즐길 수 있는 곳. 무쇠 냄비 요리로 유명하며, 자극적이지 않아 아이와 부모님 입맛에 모두 맞습니다.",
+                                        "lat":  48.8575,
+                                        "lng":  2.3023,
+                                        "vibeScore":  8.5475,
+                                        "confidenceScore":  7,
+                                        "sourceType":  "Gemini AI (New)",
+                                        "personaFitReason":  "스타 셰프의 요리를 합리적인 가격에 즐길 수 있는 곳. 무쇠 냄비 요리로 유명하며, 자극적이지 않아 아이와 부모님 입맛에 모두 맞습니다.",
+                                        "tags":  [
+                                                     "restaurant",
+                                                     "french"
+                                                 ],
+                                        "vibeTags":  [
+                                                         "Foodie"
+                                                     ],
+                                        "image":  "",
+                                        "priceEstimate":  "€30-50",
+                                        "placeTypes":  [
+
+                                                       ],
+                                        "recommendedTime":  "lunch",
+                                        "city":  "Paris",
+                                        "region":  "7th Arr.",
+                                        "koreanPopularityScore":  2.25,
+                                        "googleMapsUrl":  "",
+                                        "finalScore":  3.180889570552147,
+                                        "selectionReasons":  [
+                                                                 "한국 여행자 언급 확인됨",
+                                                                 "스타 셰프의 요리를 합리적인 가격에 즐길 수 있는 곳. 무쇠 냄비 요리로 유명하며, 자극적이지 않아 아이와 부모님 입맛에 모두 맞습니다.",
+                                                                 "미식 분위기 매칭"
+                                                             ],
+                                        "confidenceLevel":  "low",
+                                        "startTime":  "19:00",
+                                        "endTime":  "21:00",
+                                        "isMealSlot":  true,
+                                        "mealType":  "dinner",
+                                        "mealPrice":  39,
+                                        "mealPriceLabel":  "€39 이내",
+                                        "realityCheck":  {
+                                                             "weather":  "Unknown",
+                                                             "crowd":  "Medium",
+                                                             "status":  "Open"
+                                                         }
+                                    }
+                                ],
+                     "city":  "Paris",
+                     "summary":  "Paris - Hotspot \u0026 Culture 중심의 하루",
+                     "startTime":  "09:00",
+                     "endTime":  "21:00",
+                     "transit":  {
+                                     "transits":  [
+                                                      {
+                                                          "from":  "Eiffel Tower",
+                                                          "to":  "Louvre Museum",
+                                                          "mode":  "walk",
+                                                          "modeLabel":  "이동",
+                                                          "duration":  15,
+                                                          "durationText":  "약 15분",
+                                                          "distance":  1000,
+                                                          "cost":  0,
+                                                          "costTotal":  0
+                                                      },
+                                                      {
+                                                          "from":  "Louvre Museum",
+                                                          "to":  "Café Marly",
+                                                          "mode":  "walk",
+                                                          "modeLabel":  "이동",
+                                                          "duration":  15,
+                                                          "durationText":  "약 15분",
+                                                          "distance":  1000,
+                                                          "cost":  0,
+                                                          "costTotal":  0
+                                                      },
+                                                      {
+                                                          "from":  "Café Marly",
+                                                          "to":  "Trocadéro Gardens",
+                                                          "mode":  "walk",
+                                                          "modeLabel":  "이동",
+                                                          "duration":  15,
+                                                          "durationText":  "약 15분",
+                                                          "distance":  1000,
+                                                          "cost":  0,
+                                                          "costTotal":  0
+                                                      },
+                                                      {
+                                                          "from":  "Trocadéro Gardens",
+                                                          "to":  "Bateaux Parisiens",
+                                                          "mode":  "walk",
+                                                          "modeLabel":  "이동",
+                                                          "duration":  15,
+                                                          "durationText":  "약 15분",
+                                                          "distance":  1000,
+                                                          "cost":  0,
+                                                          "costTotal":  0
+                                                      },
+                                                      {
+                                                          "from":  "Bateaux Parisiens",
+                                                          "to":  "Les Cocottes de Christian Constant",
+                                                          "mode":  "walk",
+                                                          "modeLabel":  "이동",
+                                                          "duration":  15,
+                                                          "durationText":  "약 15분",
+                                                          "distance":  1000,
+                                                          "cost":  0,
+                                                          "costTotal":  0
+                                                      }
+                                                  ],
+                                     "totalDuration":  75,
+                                     "totalCost":  0
+                                 }
+                 },
+                 {
+                     "day":  3,
+                     "places":  [
+                                    {
+                                        "id":  "gemini-1770500836787-10",
+                                        "name":  "Luxembourg Gardens",
+                                        "description":  "파리에서 가장 아름다운 정원. 아이들은 돛단배 띄우기 체험을 할 수 있고, 어르신들은 벤치에서 휴식하기 좋습니다. #유럽여행 감성 가득한 곳.",
+                                        "lat":  48.8462,
+                                        "lng":  2.3371,
+                                        "vibeScore":  9.5475,
+                                        "confidenceScore":  7,
+                                        "sourceType":  "Gemini AI (New)",
+                                        "personaFitReason":  "파리에서 가장 아름다운 정원. 아이들은 돛단배 띄우기 체험을 할 수 있고, 어르신들은 벤치에서 휴식하기 좋습니다. #유럽여행 감성 가득한 곳.",
+                                        "tags":  [
+                                                     "park",
+                                                     "garden"
+                                                 ],
+                                        "vibeTags":  [
+                                                         "Healing",
+                                                         "Romantic"
+                                                     ],
+                                        "image":  "",
+                                        "priceEstimate":  "€0",
+                                        "placeTypes":  [
+
+                                                       ],
+                                        "recommendedTime":  "afternoon",
+                                        "city":  "Paris",
+                                        "region":  "6th Arr.",
+                                        "koreanPopularityScore":  2.25,
+                                        "googleMapsUrl":  "",
+                                        "finalScore":  3.3403987730061346,
+                                        "selectionReasons":  [
+                                                                 "한국 여행자 언급 확인됨",
+                                                                 "파리에서 가장 아름다운 정원. 아이들은 돛단배 띄우기 체험을 할 수 있고, 어르신들은 벤치에서 휴식하기 좋습니다. #유럽여행 감성 가득한 곳.",
+                                                                 "힐링, 로맨틱 분위기 매칭"
+                                                             ],
+                                        "confidenceLevel":  "low",
+                                        "startTime":  "09:00",
+                                        "endTime":  "11:00",
+                                        "isMealSlot":  false,
+                                        "realityCheck":  {
+                                                             "weather":  "Unknown",
+                                                             "crowd":  "Medium",
+                                                             "status":  "Open"
+                                                         }
+                                    },
+                                    {
+                                        "id":  "gemini-1770500836787-12",
+                                        "name":  "Place des Vosges",
+                                        "description":  "마레지구의 중심이자 파리에서 가장 오래된 광장. 대칭적인 건물 구조가 아름다워 사진 찍기 좋으며 현지인들의 여유를 느낄 수 있습니다.",
+                                        "lat":  48.8555,
+                                        "lng":  2.3615,
+                                        "vibeScore":  9.5475,
+                                        "confidenceScore":  7,
+                                        "sourceType":  "Gemini AI + DB Enriched",
+                                        "personaFitReason":  "마레지구의 중심이자 파리에서 가장 오래된 광장. 대칭적인 건물 구조가 아름다워 사진 찍기 좋으며 현지인들의 여유를 느낄 수 있습니다.",
+                                        "tags":  [
+                                                     "landmark",
+                                                     "park"
+                                                 ],
+                                        "vibeTags":  [
+                                                         "Culture",
+                                                         "Healing"
+                                                     ],
+                                        "image":  "",
+                                        "priceEstimate":  "€0",
+                                        "placeTypes":  [
+
+                                                       ],
+                                        "recommendedTime":  "morning",
+                                        "city":  "Paris",
+                                        "region":  "4th Arr.",
+                                        "koreanPopularityScore":  2.25,
+                                        "googleMapsUrl":  "",
+                                        "finalScore":  3.3403987730061346,
+                                        "selectionReasons":  [
+                                                                 "한국 여행자 언급 확인됨",
+                                                                 "마레지구의 중심이자 파리에서 가장 오래된 광장. 대칭적인 건물 구조가 아름다워 사진 찍기 좋으며 현지인들의 여유를 느낄 수 있습니다.",
+                                                                 "문화, 힐링 분위기 매칭"
+                                                             ],
+                                        "confidenceLevel":  "low",
+                                        "startTime":  "11:00",
+                                        "endTime":  "13:00",
+                                        "isMealSlot":  false,
+                                        "realityCheck":  {
+                                                             "weather":  "Unknown",
+                                                             "crowd":  "Medium",
+                                                             "status":  "Open"
+                                                         }
+                                    },
+                                    {
+                                        "id":  "gemini-1770500836787-13",
+                                        "name":  "L\u0027As du Fallafel",
+                                        "description":  "마레지구 쇼핑 중 간편하게 먹기 좋은 팔라펠 맛집. 줄은 길지만 회전율이 빨라 가족 여행객에게 효율적인 \u0027Reasonable\u0027한 선택지입니다.",
+                                        "lat":  48.8575,
+                                        "lng":  2.3591,
+                                        "vibeScore":  8.5475,
+                                        "confidenceScore":  7,
+                                        "sourceType":  "Gemini AI (New)",
+                                        "personaFitReason":  "마레지구 쇼핑 중 간편하게 먹기 좋은 팔라펠 맛집. 줄은 길지만 회전율이 빨라 가족 여행객에게 효율적인 \u0027Reasonable\u0027한 선택지입니다.",
+                                        "tags":  [
+                                                     "restaurant",
+                                                     "street_food"
+                                                 ],
+                                        "vibeTags":  [
+                                                         "Foodie",
+                                                         "Hotspot"
+                                                     ],
+                                        "image":  "",
+                                        "priceEstimate":  "€10-15",
+                                        "placeTypes":  [
+
+                                                       ],
+                                        "recommendedTime":  "lunch",
+                                        "city":  "Paris",
+                                        "region":  "4th Arr.",
+                                        "koreanPopularityScore":  2.25,
+                                        "googleMapsUrl":  "",
+                                        "finalScore":  3.180889570552147,
+                                        "selectionReasons":  [
+                                                                 "한국 여행자 언급 확인됨",
+                                                                 "마레지구 쇼핑 중 간편하게 먹기 좋은 팔라펠 맛집. 줄은 길지만 회전율이 빨라 가족 여행객에게 효율적인 \u0027Reasonable\u0027한 선택지입니다.",
+                                                                 "미식, 핫플 분위기 매칭"
+                                                             ],
+                                        "confidenceLevel":  "low",
+                                        "startTime":  "13:00",
+                                        "endTime":  "15:00",
+                                        "isMealSlot":  true,
+                                        "mealType":  "lunch",
+                                        "mealPrice":  21,
+                                        "mealPriceLabel":  "€21 이내",
+                                        "realityCheck":  {
+                                                             "weather":  "Unknown",
+                                                             "crowd":  "Medium",
+                                                             "status":  "Open"
+                                                         }
+                                    },
+                                    {
+                                        "id":  "gemini-1770500836787-16",
+                                        "name":  "Sacré-Cœur Basilica",
+                                        "description":  "파리 시내를 한눈에 조망할 수 있는 몽마르뜨 언덕의 성당. 푸니쿨라(케이블카)를 이용하면 어르신들도 힘들이지 않고 올라갈 수 있습니다.",
+                                        "lat":  48.8867,
+                                        "lng":  2.3431,
+                                        "vibeScore":  9.5475,
+                                        "confidenceScore":  7,
+                                        "sourceType":  "Gemini AI (New)",
+                                        "personaFitReason":  "파리 시내를 한눈에 조망할 수 있는 몽마르뜨 언덕의 성당. 푸니쿨라(케이블카)를 이용하면 어르신들도 힘들이지 않고 올라갈 수 있습니다.",
+                                        "tags":  [
+                                                     "landmark",
+                                                     "church"
+                                                 ],
+                                        "vibeTags":  [
+                                                         "Culture",
+                                                         "Hotspot"
+                                                     ],
+                                        "image":  "",
+                                        "priceEstimate":  "€0",
+                                        "placeTypes":  [
+
+                                                       ],
+                                        "recommendedTime":  "morning",
+                                        "city":  "Paris",
+                                        "region":  "18th Arr.",
+                                        "koreanPopularityScore":  2.25,
+                                        "googleMapsUrl":  "",
+                                        "finalScore":  3.3403987730061346,
+                                        "selectionReasons":  [
+                                                                 "한국 여행자 언급 확인됨",
+                                                                 "파리 시내를 한눈에 조망할 수 있는 몽마르뜨 언덕의 성당. 푸니쿨라(케이블카)를 이용하면 어르신들도 힘들이지 않고 올라갈 수 있습니다.",
+                                                                 "문화, 핫플 분위기 매칭"
+                                                             ],
+                                        "confidenceLevel":  "low",
+                                        "startTime":  "15:00",
+                                        "endTime":  "17:00",
+                                        "isMealSlot":  false,
+                                        "realityCheck":  {
+                                                             "weather":  "Unknown",
+                                                             "crowd":  "Medium",
+                                                             "status":  "Open"
+                                                         }
+                                    }
+                                ],
+                     "city":  "Paris",
+                     "summary":  "Paris - Healing \u0026 Romantic 중심의 하루",
+                     "startTime":  "09:00",
+                     "endTime":  "18:00",
+                     "transit":  {
+                                     "transits":  [
+                                                      {
+                                                          "from":  "Luxembourg Gardens",
+                                                          "to":  "Place des Vosges",
+                                                          "mode":  "walk",
+                                                          "modeLabel":  "이동",
+                                                          "duration":  15,
+                                                          "durationText":  "약 15분",
+                                                          "distance":  1000,
+                                                          "cost":  0,
+                                                          "costTotal":  0
+                                                      },
+                                                      {
+                                                          "from":  "Place des Vosges",
+                                                          "to":  "L\u0027As du Fallafel",
+                                                          "mode":  "walk",
+                                                          "modeLabel":  "이동",
+                                                          "duration":  15,
+                                                          "durationText":  "약 15분",
+                                                          "distance":  1000,
+                                                          "cost":  0,
+                                                          "costTotal":  0
+                                                      },
+                                                      {
+                                                          "from":  "L\u0027As du Fallafel",
+                                                          "to":  "Sacré-Cœur Basilica",
+                                                          "mode":  "walk",
+                                                          "modeLabel":  "이동",
+                                                          "duration":  15,
+                                                          "durationText":  "약 15분",
+                                                          "distance":  1000,
+                                                          "cost":  0,
+                                                          "costTotal":  0
+                                                      }
+                                                  ],
+                                     "totalDuration":  45,
+                                     "totalCost":  0
+                                 }
+                 }
+             ],
+    "vibeWeights":  [
+                        {
+                            "vibe":  "Foodie",
+                            "weight":  0.6,
+                            "percentage":  60
+                        },
+                        {
+                            "vibe":  "Culture",
+                            "weight":  0.4,
+                            "percentage":  40
+                        }
+                    ],
+    "koreanSentimentBonus":  1.825,
+    "companionType":  "Family",
+    "companionCount":  4,
+    "travelStyle":  "Reasonable",
+    "mobilityStyle":  "Moderate",
+    "metadata":  {
+                     "travelStyle":  "Reasonable",
+                     "travelPace":  "Normal",
+                     "travelPaceLabel":  "보통",
+                     "slotDurationMinutes":  120,
+                     "totalPlaces":  16,
+                     "mobilityStyle":  "Moderate",
+                     "companionType":  "Family",
+                     "companionCount":  4,
+                     "curationFocus":  "Everyone",
+                     "generatedAt":  "2026-02-07T21:47:18.252Z",
+                     "koreanSentimentApplied":  true
+                 }
+}

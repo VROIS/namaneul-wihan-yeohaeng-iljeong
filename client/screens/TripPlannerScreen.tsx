@@ -29,6 +29,7 @@ import {
   TravelPace,
   MobilityStyle,
   TravelStyle,
+  DayAccommodation,
   VIBE_OPTIONS,
   COMPANION_OPTIONS,
   CURATION_FOCUS_OPTIONS,
@@ -41,6 +42,7 @@ import {
 import { calculateVibeWeights, formatVibeWeightsSummary, getVibeLabel } from "@/utils/vibeCalculator";
 import { apiRequest } from "@/lib/query-client";
 import { InteractiveMap } from "@/components/InteractiveMap";
+import { PlaceAutocomplete, PlaceSelection } from "@/components/PlaceAutocomplete";
 import { isAuthenticated, getUserData, UserData } from "@/lib/auth";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { useMapToggle } from "@/contexts/MapToggleContext";
@@ -177,6 +179,11 @@ export default function TripPlannerScreen() {
   const [isSaving, setIsSaving] = useState(false);
   const [savedItineraryId, setSavedItineraryId] = useState<number | null>(null);
 
+  // 🏨 Day별 숙소 설정 상태
+  const [dayAccommodations, setDayAccommodations] = useState<DayAccommodation[]>([]);
+  const [hotelModalDay, setHotelModalDay] = useState<number | null>(null);  // 숙소 설정 모달이 열린 Day
+  const [isReoptimizing, setIsReoptimizing] = useState(false);
+
   // 🎯 로그인된 사용자 정보 (birthDate 포함)
   const [currentUser, setCurrentUser] = useState<UserData | null>(null);
 
@@ -258,6 +265,66 @@ export default function TripPlannerScreen() {
         ? prev.vibes.filter(v => v !== vibe)
         : [...prev.vibes, vibe].slice(-3),
     }));
+  };
+
+  // 🏨 Day별 숙소 설정 → 동선 재최적화
+  const handleSetDayAccommodation = async (day: number, place: PlaceSelection) => {
+    const newAccom: DayAccommodation = {
+      day,
+      name: place.name,
+      address: place.address,
+      coords: place.coords,
+      placeId: place.placeId,
+    };
+
+    // Day별 숙소 배열 업데이트
+    setDayAccommodations(prev => {
+      const filtered = prev.filter(a => a.day !== day);
+      return [...filtered, newAccom];
+    });
+
+    // 서버에 동선 재최적화 요청
+    if (itinerary && place.coords.lat && place.coords.lng) {
+      setIsReoptimizing(true);
+      try {
+        const currentDay = itinerary.days?.find(d => d.day === day);
+        if (currentDay) {
+          const response = await apiRequest("POST", "/api/routes/regenerate-day", {
+            day,
+            accommodationCoords: place.coords,
+            places: currentDay.places,
+            formData,
+          });
+          const result = await response.json();
+
+          // itinerary의 해당 Day 업데이트
+          setItinerary(prev => {
+            if (!prev) return prev;
+            const updatedDays = prev.days.map(d => {
+              if (d.day === day) {
+                return {
+                  ...d,
+                  places: result.places || d.places,
+                  accommodation: newAccom,
+                  departureTransit: result.departureTransit,
+                  returnTransit: result.returnTransit,
+                  transit: result.transit || d.transit,
+                };
+              }
+              return d;
+            });
+            return { ...prev, days: updatedDays };
+          });
+        }
+      } catch (error) {
+        console.error("[TripPlanner] Day 재최적화 실패:", error);
+        Alert.alert("알림", "동선 재최적화에 실패했습니다. 숙소 정보는 저장되었습니다.");
+      } finally {
+        setIsReoptimizing(false);
+      }
+    }
+
+    setHotelModalDay(null);
   };
 
   const openPicker = (mode: PickerMode) => {
@@ -638,17 +705,71 @@ export default function TripPlannerScreen() {
         <Text style={[styles.title, { color: theme.text }]}>VibeTrip</Text>
       </View>
 
-      <View style={styles.section}>
-        <View style={[styles.inputBox, { backgroundColor: theme.backgroundDefault }]}>
-          <Feather name="map-pin" size={20} color={Brand.primary} />
-          <TextInput
-            style={[styles.textInput, { color: theme.text }]}
-            value={formData.destination}
-            onChangeText={text => setFormData(prev => ({ ...prev, destination: text }))}
-            placeholder="목적지"
-            placeholderTextColor={theme.textTertiary}
-          />
-        </View>
+      {/* 🗺️ 목적지 (Google Places Autocomplete - 도시 검색) */}
+      <View style={[styles.section, { zIndex: 20 }]}>
+        <PlaceAutocomplete
+          placeholder="목적지 (도시명)"
+          value={formData.destination}
+          icon="map-pin"
+          types="(cities)"
+          theme={theme}
+          zIndex={20}
+          onSelect={(place: PlaceSelection) => {
+            setFormData(prev => ({
+              ...prev,
+              destination: place.name,
+              destinationCoords: place.coords,
+            }));
+          }}
+          onClear={() => {
+            setFormData(prev => ({
+              ...prev,
+              destination: '',
+              destinationCoords: undefined,
+              // 목적지 초기화시 숙소도 초기화
+              accommodationName: undefined,
+              accommodationAddress: undefined,
+              accommodationCoords: undefined,
+              accommodationPlaceId: undefined,
+            }));
+          }}
+        />
+      </View>
+
+      {/* 🏨 숙소 (선택적 — 초행자는 나중에 결과화면에서 설정 가능) */}
+      <View style={[styles.section, { zIndex: 15 }]}>
+        <PlaceAutocomplete
+          placeholder="숙소 주소 (선택)"
+          value={formData.accommodationName || ''}
+          icon="home"
+          types="lodging|establishment"
+          theme={theme}
+          zIndex={15}
+          disabled={!formData.destination}
+          locationBias={formData.destinationCoords
+            ? `${formData.destinationCoords.lat},${formData.destinationCoords.lng}`
+            : undefined}
+          radiusBias="30000"
+          helperText="아직 숙소를 안 정했다면 비워두세요. 일정 생성 후에도 설정 가능합니다."
+          onSelect={(place: PlaceSelection) => {
+            setFormData(prev => ({
+              ...prev,
+              accommodationName: place.name,
+              accommodationAddress: place.address,
+              accommodationCoords: place.coords,
+              accommodationPlaceId: place.placeId,
+            }));
+          }}
+          onClear={() => {
+            setFormData(prev => ({
+              ...prev,
+              accommodationName: undefined,
+              accommodationAddress: undefined,
+              accommodationCoords: undefined,
+              accommodationPlaceId: undefined,
+            }));
+          }}
+        />
       </View>
 
       <View style={styles.section}>
@@ -1074,7 +1195,45 @@ export default function TripPlannerScreen() {
           contentContainerStyle={{ paddingBottom: insets.bottom + Spacing.lg }}
           showsVerticalScrollIndicator={false}
         >
-          {/* CTA 버튼 삭제됨 - 하단 탭 "전문가"로 이동 */}
+          {/* 🏨 Day별 숙소 정보 + 출발 안내 */}
+          <View style={[styles.accommodationBar, { backgroundColor: `${Brand.primary}08`, borderColor: `${Brand.primary}20` }]}>
+            <View style={styles.accommodationInfo}>
+              <Feather name="home" size={16} color={Brand.primary} />
+              <Text style={[styles.accommodationText, { color: theme.text }]} numberOfLines={1}>
+                {(() => {
+                  const dayAccom = dayAccommodations.find(a => a.day === currentDay?.day);
+                  const generalAccom = currentDay?.accommodation;
+                  if (dayAccom) return `출발: ${dayAccom.name}`;
+                  if (generalAccom?.name) return `출발: ${generalAccom.name}`;
+                  return `출발: ${itinerary.destination} 도심 기준`;
+                })()}
+              </Text>
+              {currentDay?.departureTransit && (
+                <Text style={[styles.accommodationTransit, { color: theme.textSecondary }]}>
+                  → {currentDay.departureTransit.durationText}
+                </Text>
+              )}
+            </View>
+            <Pressable
+              style={[styles.accommodationButton, { backgroundColor: Brand.primary }]}
+              onPress={() => setHotelModalDay(currentDay?.day || 1)}
+            >
+              <Feather name="edit-2" size={12} color="#FFFFFF" />
+              <Text style={styles.accommodationButtonText}>
+                {dayAccommodations.find(a => a.day === currentDay?.day) || currentDay?.accommodation ? '변경' : '숙소 설정'}
+              </Text>
+            </Pressable>
+          </View>
+
+          {/* 재최적화 중 로딩 */}
+          {isReoptimizing && (
+            <View style={[styles.reoptimizeBar, { backgroundColor: `${Brand.primary}10` }]}>
+              <ActivityIndicator size="small" color={Brand.primary} />
+              <Text style={[styles.reoptimizeText, { color: Brand.primary }]}>
+                숙소 기준 동선 재최적화 중...
+              </Text>
+            </View>
+          )}
 
           <View style={styles.placesList}>
             {places.map((place, index) => {
@@ -1225,6 +1384,18 @@ export default function TripPlannerScreen() {
             })}
           </View>
 
+          {/* 🏨 숙소 복귀 정보 */}
+          {currentDay?.returnTransit && (
+            <View style={[styles.accommodationBar, { backgroundColor: `${Brand.primary}05`, borderColor: `${Brand.primary}15`, marginTop: 8 }]}>
+              <View style={styles.accommodationInfo}>
+                <Feather name="arrow-left" size={14} color={theme.textSecondary} />
+                <Text style={[styles.accommodationTransit, { color: theme.textSecondary }]}>
+                  {currentDay.returnTransit.from} → 🏨 숙소 복귀 ({currentDay.returnTransit.durationText})
+                </Text>
+              </View>
+            </View>
+          )}
+
           {/* 📊 일별 합계 섹션 - 실시간 데이터 */}
           {(() => {
             const dayBudget = currentDay?.budget || itinerary.budget?.dailyBreakdowns?.[activeDay];
@@ -1266,7 +1437,79 @@ export default function TripPlannerScreen() {
             );
           })()}
 
+          {/* 🏨 전문가 연결 CTA (숙소 미설정 시) */}
+          {!dayAccommodations.find(a => a.day === currentDay?.day) && !currentDay?.accommodation && (
+            <Pressable
+              style={[styles.expertCta, { backgroundColor: `${Brand.primary}10`, borderColor: `${Brand.primary}30` }]}
+              onPress={() => {
+                // 전문가 탭으로 이동 (향후 구현)
+                Alert.alert(
+                  "현지 전문가 상담",
+                  "이 일정에 최적인 숙소 지역을 현지 전문가가 추천해드립니다.\n\n드라이빙 가이드 예약 시 숙소 추천이 포함됩니다.",
+                  [
+                    { text: "나중에", style: "cancel" },
+                    { text: "전문가 상담", onPress: () => console.log("[TripPlanner] Expert CTA pressed") },
+                  ]
+                );
+              }}
+            >
+              <Feather name="message-circle" size={18} color={Brand.primary} />
+              <View style={styles.expertCtaContent}>
+                <Text style={[styles.expertCtaTitle, { color: Brand.primary }]}>
+                  이 일정에 최적인 숙소는?
+                </Text>
+                <Text style={[styles.expertCtaSubtitle, { color: theme.textSecondary }]}>
+                  현지 전문가에게 맞춤 숙소 추천 받기
+                </Text>
+              </View>
+              <Feather name="chevron-right" size={18} color={Brand.primary} />
+            </Pressable>
+          )}
+
         </ScrollView>
+
+        {/* 🏨 숙소 설정 모달 */}
+        <Modal
+          visible={hotelModalDay !== null}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={() => setHotelModalDay(null)}
+        >
+          <View style={styles.hotelModalOverlay}>
+            <View style={[styles.hotelModalContent, { backgroundColor: theme.background }]}>
+              <View style={styles.hotelModalHeader}>
+                <Text style={[styles.hotelModalTitle, { color: theme.text }]}>
+                  Day {hotelModalDay} 숙소 설정
+                </Text>
+                <Pressable onPress={() => setHotelModalDay(null)}>
+                  <Feather name="x" size={24} color={theme.text} />
+                </Pressable>
+              </View>
+              <Text style={[styles.hotelModalSubtitle, { color: theme.textSecondary }]}>
+                숙소를 설정하면 이 날의 동선이 자동으로 최적화됩니다
+              </Text>
+              <View style={{ zIndex: 100, marginTop: 16 }}>
+                <PlaceAutocomplete
+                  placeholder="호텔, 에어비앤비 등 검색"
+                  value=""
+                  icon="home"
+                  types="lodging|establishment"
+                  theme={theme}
+                  zIndex={100}
+                  locationBias={formData.destinationCoords
+                    ? `${formData.destinationCoords.lat},${formData.destinationCoords.lng}`
+                    : undefined}
+                  radiusBias="30000"
+                  onSelect={(place: PlaceSelection) => {
+                    if (hotelModalDay) {
+                      handleSetDayAccommodation(hotelModalDay, place);
+                    }
+                  }}
+                />
+              </View>
+            </View>
+          </View>
+        </Modal>
       </View>
     );
   };
@@ -1714,5 +1957,107 @@ const styles = StyleSheet.create({
     fontSize: 12,
     textAlign: "center",
     marginTop: Spacing.sm,
+  },
+  // 🏨 숙소 바
+  accommodationBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    marginHorizontal: 12,
+    marginTop: 4,
+    borderRadius: BorderRadius.sm,
+    borderWidth: 1,
+  },
+  accommodationInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flex: 1,
+  },
+  accommodationText: {
+    fontSize: 13,
+    fontWeight: "600",
+    flex: 1,
+  },
+  accommodationTransit: {
+    fontSize: 12,
+  },
+  accommodationButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: BorderRadius.sm,
+    gap: 4,
+  },
+  accommodationButtonText: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontWeight: "700",
+  },
+  // 재최적화 로딩
+  reoptimizeBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 8,
+    marginHorizontal: 12,
+    marginTop: 4,
+    borderRadius: BorderRadius.sm,
+    gap: 8,
+  },
+  reoptimizeText: {
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  // 전문가 CTA
+  expertCta: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginHorizontal: 12,
+    marginTop: 12,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    gap: 12,
+  },
+  expertCtaContent: {
+    flex: 1,
+  },
+  expertCtaTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  expertCtaSubtitle: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  // 숙소 모달
+  hotelModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
+  },
+  hotelModalContent: {
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 24,
+    minHeight: 300,
+  },
+  hotelModalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 4,
+  },
+  hotelModalTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+  },
+  hotelModalSubtitle: {
+    fontSize: 13,
   },
 });
