@@ -14,38 +14,90 @@
 | 항목 | 내용 |
 |------|------|
 | **마지막 작업일** | 2026-02-07 (토) |
-| **마지막 작업 내용** | 일정생성 파이프라인 진단 완료 + 시딩 시스템 정밀 분석 완료 |
-| **다음 해야 할 작업** | 아래 "다음 작업 상세" 참조 |
-| **환경 상태** | node_modules 설치 완료, Cursor 최적화 완료(.cursorignore+settings), Koyeb 배포 운영 중 |
-| **개발 프로세스** | 로컬호스트 미사용. 코드수정 → Git 커밋 → Koyeb 자동배포 → Supabase DB 활용 |
-| **주의사항** | 핵심 파일 수정 시 반드시 사용자 확인 요청. .cursorrules의 세션 프로토콜 준수 |
+| **마지막 작업 내용** | 1차 목표 플랜 확정 + 실행 착수 (한국인 선호 스코어링 강화부터) |
+| **다음 해야 할 작업** | 아래 "1차 목표 실행 플랜" 참조 |
+| **환경 상태** | node_modules 설치 완료, Cursor 최적화 완료, Koyeb 배포 운영 중 |
+| **개발 프로세스** | 로컬호스트 미사용. 코드수정 → Git 커밋(cursor-dev) → Koyeb 자동배포 → Supabase DB |
+| **주의사항** | 핵심 파일 수정 시 사용자 확인. 이 플랜의 순서와 산출물 목표를 반드시 준수 |
 | **현재 브랜치** | cursor-dev |
+| **참조 플랜 파일** | .cursor/plans/nubi_1차_목표_실행_8b72390e.plan.md |
 
-### 이번 세션에서 완료한 작업
-1. Cursor 환경 최적화 완료 (.cursorrules 프로토콜, .cursorignore, settings.json, npm install)
-2. 스코어링 점수표 전체 확인 완료 (6바이브x6요소 매트릭스 코드에 존재 확인)
-3. 일정생성 파이프라인 진단 완료 - "API 우선, DB 보강" 구조임을 확인
-4. 시딩 시스템 정밀 분석 완료 - 장소당 45개 필드, 사진 13장, 연쇄 크롤러 구조 파악
+### 1차 목표 실행 플랜 (사용자 확정, 2026-02-07)
 
-### 다음 작업 상세 (사용자 확인 완료, 우선순위 순)
-1. **[최우선] place-seeder.ts 개선** - 도시별 즉시 연쇄 크롤러 실행 (현재는 전체 시딩 완료 후에만 실행)
-2. **[최우선] itinerary-generator.ts 개선** - DB 우선 조회 로직 추가 (현재는 매번 Google API 호출)
-   - 시딩된 도시는 DB에서 장소 로드 → 부족할 때만 API 호출 → AI 비용 절감
-3. **[높음] 날씨/위기 실제 데이터 연동** - 현재 하드코딩된 Reality Check를 실제 수집 데이터로 교체
-4. **[높음] 여정+예산 병렬 처리** - Promise.all 적용
-5. **[높음] 식사 슬롯 필수 포함** - 점심/저녁 무조건 포함
+> **목표: 앱스토어 배포 수준의 일정표 생성 + 비용계산 + UI/UX + 수익화(가이드예약)**
+> **순서: 백엔드 로직 확정 → 프론트엔드 UI 개편 → 수익화 연동**
 
-### 핵심 발견사항 (다음 AI 참고)
-- 시딩은 14개 크롤러 자동 가동 중 (1단계 성공)
-- 시딩 진행상황 확인: GET /api/admin/seed/places/status
-- 현재 파이프라인 문제: DB에 시딩된 데이터 있어도 매번 Google/Gemini API 호출 (비용 낭비)
-- Google 평점이 places 테이블에 미저장 (place_data_sources에만 있음)
-- 연쇄 크롤러가 전체 시딩 완료 후에만 실행됨 (도시별 즉시 실행으로 변경 필요)
+#### 스트림 1: 일정생성 로직 확정 (백엔드)
+
+| # | 작업 | 상태 | 핵심 변경 파일 | 산출물 목표 |
+|---|------|------|--------------|------------|
+| 1-2 | 한국인 선호 최우선 정렬 강화 | 진행중 | itinerary-generator.ts (L119-214, L428-596) | Instagram/YouTube/Blog 최신+최다 가중치 1.5x, 식당 리뷰수 50%, 한국어 구글리뷰 30% |
+| 1-3 | 동선 최적화 (하루 내 장소 순서) | 대기 | itinerary-generator.ts, route-optimizer.ts | 출발지(숙소) → nearest-neighbor 정렬 → Google Routes API 실제 경로 |
+| 1-4 | 장소 대표 이미지 확보 | 대기 | itinerary-generator.ts | Google사진 > 인스타 > 블로그 > Wikimedia > placeholder (빈페이지 불가) |
+| 1-5 | 식사 슬롯 모든 날 강제 | 대기 | itinerary-generator.ts (L2312-2340) | 점심/저녁 반드시 포함, 데이터 없으면 placeholder 생성 |
+
+#### 스트림 2: 일정표 신뢰도 강화 (백엔드+프론트)
+
+| # | 작업 | 상태 | 핵심 변경 파일 | 산출물 목표 |
+|---|------|------|--------------|------------|
+| 2-1 | 선정 최우선이유 1개 표시 | 대기 | itinerary-generator.ts | "2025년3월 비밀이야 유튜브언급" 형식 구체적 근거 |
+| 2-2 | 상단 여행요약 섹션 (수식 노출) | 대기 | TripPlannerScreen.tsx | 가중치 수식, 인당비용(원화), 날씨/위기 → 지도 토글 전환 |
+| 2-3 | 로딩 페이지 실시간 계산과정 | 대기 | TripPlannerScreen.tsx | 8-10단계 메시지 + 실제 숫자 (23곳 추천 완료 등) |
+
+#### 스트림 3: 비용계산 로직 완성 (백엔드)
+
+| # | 작업 | 상태 | 핵심 변경 파일 | 산출물 목표 |
+|---|------|------|--------------|------------|
+| 3-1 | 인당 비용 표시 | 대기 | transport-pricing-service.ts | "가족 4명 기준 1인당 EUR" 명시 |
+| 3-2 | 대중교통 실시간 요금 | 대기 | transport-pricing-service.ts | Google Routes transitFare + Uber/Bolt 병렬 표시 |
+| 3-3 | 입장료 수집 강화 | 대기 | price-crawler.ts, itinerary-generator.ts | 실제 데이터 우선, 없으면 추정 최대값, 무료=명시 |
+| 3-4 | 럭셔리/프리미엄 가이드 비용 | 대기 | transport-pricing-service.ts | basePrice4h + extraHours*hourlyRate / 인원 |
+| 3-5 | 식사비 최대값 적용 | 대기 | itinerary-generator.ts | 구글맵 추정치 최대값 우선 (20-30유로면 30유로) |
+
+#### 스트림 4: 전체 UI/UX 개편 (프론트엔드)
+
+| # | 작업 | 상태 | 핵심 변경 파일 | 산출물 목표 |
+|---|------|------|--------------|------------|
+| 4-1 | 긴 한 페이지 구조 | 대기 | TripPlannerScreen.tsx | 일별 탭 제거, 모든 날 세로 나열 |
+| 4-3 | 출발지 설정 (숙소/지도) | 대기 | TripPlannerScreen.tsx, trip.ts | 지도 핀/주소 검색으로 동선 최적화 시작점 |
+| 4-4 | 하단 푸터 5탭 개편 | 대기 | MainTabNavigator.tsx | 일정/지도(토글)/전문가(애니메이션)/프로필/설정 |
+| 4-5 | 슬롯 색상 구분 | 대기 | TripPlannerScreen.tsx | 관광(파랑)/점심(주황)/저녁(빨강)/이동(회색) |
+
+#### 스트림 5: 수익화 기초
+
+| # | 작업 | 상태 | 핵심 변경 파일 | 산출물 목표 |
+|---|------|------|--------------|------------|
+| 5-1 | 드라이빙 가이드 예약+결제 | 대기 | 신규: GuideBookingScreen.tsx, booking-routes.ts | 앱 내 예약 → Stripe/인앱결제 → 알림 |
+
+### 이전 세션 완료 사항 (참고용)
+1. Cursor 환경 최적화 완료 (.cursorrules, .cursorignore, settings.json)
+2. 스코어링 6바이브x6요소 매트릭스 코드 존재 확인
+3. Gemini-first + DB-Enrich 파이프라인 구축 완료 (좌표 기반 도시 매칭)
+4. 시딩 시스템 정밀 분석 완료 - 14개 크롤러 자동 가동 중
+5. place-seeder.ts 도시별 즉시 연쇄 크롤러 실행으로 개선 완료
+6. google-places.ts에서 rating → buzzScore 저장 추가 완료
+7. 날씨/위기 실제 데이터 연동 완료 (weatherCache, crisisAlerts)
+
+### 핵심 코드 구조 (후임 AI 필독)
+- **itinerary-generator.ts**: 스코어링 엔진 + Gemini 파이프라인 + 식사/동선/비용 전체 로직
+  - L82-102: MEAL_SLOTS, MEAL_BUDGET 설정
+  - L119-214: calculateRestaurantScore() - 식당 점수 (리뷰수40%+한국리뷰25%+인스타15%+유튜브10%+블로그10%)
+  - L428-596: calculateKoreanPopularity() - 한국인 인기도 (인스타45%+유튜브30%+블로그25%)
+  - L875-983: VIBE_WEIGHT_MATRIX, DATA_GRADE_ADJUSTMENT - 동적 가중치
+  - L1052-1103: calculateFinalScore() - 최종 점수 = 6요소 가중합
+  - L1408-1575: enrichPlacesWithDBData() - Gemini 추천 → DB 보강 (좌표 기반 매칭)
+  - L1577-1777: generatePlacesWithGemini() - Gemini 3.0 Flash 장소 추천
+  - L1815-1850: optimizeCityOrder() - 도시간 nearest-neighbor
+  - L2243-2424: 슬롯 배치 + 식사 슬롯 할당
+- **transport-pricing-service.ts**: 교통비 산정 (WalkMore=대중교통, Moderate=대중교통+Uber, Minimal=가이드)
+- **route-optimizer.ts**: Google Routes API 연동, 경로 캐싱, 동선 최적화
+- **TripPlannerScreen.tsx**: 전체 프론트엔드 (입력폼 + 결과 + 로딩)
 
 ### 알려진 이슈
 - Seedance 영상 모델: ModelNotOpen 상태 (활성화 대기 중)
 - 나머지 캐릭터 4명 미생성 (M5, M6, F4, F6)
 - 사진 URL에 Google API 키 노출 (향후 개선)
+- transport-pricing-service.ts에 파리 요금 하드코딩 (도시별 실시간 요금으로 교체 필요)
 
 ---
 

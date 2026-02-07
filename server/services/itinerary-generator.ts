@@ -93,12 +93,29 @@ const MEAL_SLOTS: MealSlotConfig[] = [
   { type: 'dinner', startHour: 18, endHour: 20 },
 ];
 
+// ===== 식당 선정 4대 원칙 (1차 목표 확정) =====
+// 1순위: 슬롯 강제 (하루 점심1 + 저녁1, 그 이상 식당 배치 불가)
+// 2순위: 동선 고려 (전후 장소와 가까운 식당 우선)
+// 3순위: 예산 범위 (점심35%/저녁65% 배분, 공개가격 최대값 기준)
+// 4순위: 유명세 가중치 (리뷰수50% + 한국리뷰30% + SNS20%)
+
 // TravelStyle별 식사 예산 (1인 기준, EUR)
-const MEAL_BUDGET: Record<TravelStyle, { min: number; max: number; label: string }> = {
-  Economic: { min: 8, max: 15, label: '€10 내외' },
-  Reasonable: { min: 20, max: 40, label: '€30 내외' },
-  Premium: { min: 40, max: 70, label: '€50 내외' },
-  Luxury: { min: 60, max: 100, label: '€70 내외' },
+// 점심:저녁 = 35:65 비율 (유럽 현실 반영 - 점심 가볍게, 저녁 제대로)
+// ★ 항상 공개 가격 정보의 최대값 기준으로 적용
+const MEAL_BUDGET: Record<TravelStyle, {
+  dailyTotal: number;  // 일일 총액 (1인)
+  lunch: number;       // 점심 예산 (35%)
+  dinner: number;      // 저녁 예산 (65%)
+  lunchLabel: string;
+  dinnerLabel: string;
+  label: string;       // 호환용 (기존 코드)
+  min: number;         // 호환용
+  max: number;         // 호환용
+}> = {
+  Economic:   { dailyTotal: 23, lunch: 8,  dinner: 15,  lunchLabel: '€8 이내',  dinnerLabel: '€15 이내', label: '€23/일', min: 8,  max: 15 },
+  Reasonable: { dailyTotal: 60, lunch: 21, dinner: 39,  lunchLabel: '€21 이내', dinnerLabel: '€39 이내', label: '€60/일', min: 20, max: 40 },
+  Premium:    { dailyTotal: 110, lunch: 39, dinner: 72, lunchLabel: '€39 이내', dinnerLabel: '€72 이내', label: '€110/일', min: 40, max: 70 },
+  Luxury:     { dailyTotal: 160, lunch: 56, dinner: 104, lunchLabel: '€56 이내', dinnerLabel: '€104 이내', label: '€160/일', min: 60, max: 100 },
 };
 
 /**
@@ -114,13 +131,15 @@ function isFoodPlace(place: PlaceResult): boolean {
   return hasFoodieVibe || hasFoodTag || hasFoodType || nameHasFood;
 }
 
-// ===== 식당 전용 점수 계산 (Phase 1-4) =====
-// 우선순위: 리뷰수(40%) > 한국인리뷰(25%) > 인스타(15%) > 유튜브(10%) > 블로그(10%)
+// ===== 식당 전용 점수 계산 (1차 목표 강화) =====
+// 핵심 원칙: "리뷰 숫자 많은 곳 = 유명한 곳" (악플도 유명해서 생긴 것)
+// 우선순위: 리뷰수(50%) > 한국어리뷰(30%) > 인스타(10%) > 유튜브+블로그(10%)
 async function calculateRestaurantScore(place: PlaceResult): Promise<number> {
   try {
     if (!db) return place.vibeScore; // DB 미연결시 기존 점수 사용
 
-    // 1. 리뷰 수 점수 (40%) - Google Places 리뷰 수
+    // 1. 리뷰 수 점수 (50%) - Google Places 리뷰 수 = 절대 우선
+    // 리뷰 많을수록 유명 → 악플이든 좋플이든 사람들이 가는 곳
     let reviewCountScore = 0;
     const placeMatch = await db.select({
       userRatingCount: places.userRatingCount,
@@ -139,7 +158,7 @@ async function calculateRestaurantScore(place: PlaceResult): Promise<number> {
       reviewCountScore = Math.min(10, Math.log10(ratingCount + 1) * 3.3);
     }
 
-    // 2. 한국인 리뷰 점수 (25%) - reviews 테이블에서 한국어 리뷰 확인
+    // 2. 한국어 구글 리뷰 점수 (30%) - 한국인이 직접 쓴 리뷰 = 신뢰도 최고
     let koreanReviewScore = 0;
     if (dbPlaceId) {
       const koreanReviews = await db.select({
@@ -155,54 +174,56 @@ async function calculateRestaurantScore(place: PlaceResult): Promise<number> {
       if (koreanReviews.length > 0 && Number(koreanReviews[0].count) > 0) {
         const count = Number(koreanReviews[0].count);
         const avgRating = Number(koreanReviews[0].avgRating) || 3.5;
-        // 한국어 리뷰 1개=5점, 3개=8점, 5개이상=10점 + 평점 보너스
-        koreanReviewScore = Math.min(10, count * 2.5 + (avgRating - 3) * 1.5);
+        // 한국어 리뷰 1개=4점, 2개=6.5점, 3개=9점, 4개이상=10점 + 평점 보너스
+        koreanReviewScore = Math.min(10, count * 3.0 + (avgRating - 3) * 1.5);
       }
     }
 
-    // 3. 인스타그램 점수 (15%) - 기존 koreanPopularityScore에서 추출
+    // 3. 인스타그램 점수 (10%) - 한국인 SNS 인기도
     const instaScore = Math.min(10, (place.koreanPopularityScore || 0) * 1.5);
 
-    // 4. 유튜브 점수 (10%) - 유튜브 언급 확인
-    let youtubeScore = 0;
+    // 4. 유튜브+블로그 점수 (10%) - 한국인 콘텐츠 언급
+    let socialScore = 0;
     if (dbPlaceId) {
+      // 유튜브 언급
       const ytData = await db.select({
         count: sql<number>`count(*)`,
       })
         .from(youtubePlaceMentions)
         .where(eq(youtubePlaceMentions.placeId, dbPlaceId));
 
+      let ytScore = 0;
       if (ytData.length > 0 && Number(ytData[0].count) > 0) {
-        youtubeScore = Math.min(10, Number(ytData[0].count) * 3);
+        ytScore = Math.min(10, Number(ytData[0].count) * 3);
       }
-    }
 
-    // 5. 블로그 점수 (10%) - 네이버 블로그 언급
-    let blogScore = 0;
-    if (dbPlaceId) {
+      // 블로그 언급
       const blogData = await db.select({
         count: sql<number>`count(*)`,
       })
         .from(naverBlogPosts)
         .where(eq(naverBlogPosts.placeId, dbPlaceId));
 
+      let blogScoreVal = 0;
       if (blogData.length > 0 && Number(blogData[0].count) > 0) {
-        blogScore = Math.min(10, Number(blogData[0].count) * 2);
+        blogScoreVal = Math.min(10, Number(blogData[0].count) * 2);
       }
+
+      // 유튜브+블로그 중 높은 쪽 우선 (60:40)
+      socialScore = Math.max(ytScore, blogScoreVal) * 0.6 + Math.min(ytScore, blogScoreVal) * 0.4;
     }
 
-    // 가중 합산
-    const finalScore = (reviewCountScore * 0.40) +
-                       (koreanReviewScore * 0.25) +
-                       (instaScore * 0.15) +
-                       (youtubeScore * 0.10) +
-                       (blogScore * 0.10);
+    // 가중 합산: 리뷰수(50%) + 한국리뷰(30%) + 인스타(10%) + 유튜브+블로그(10%)
+    const finalScore = (reviewCountScore * 0.50) +
+                       (koreanReviewScore * 0.30) +
+                       (instaScore * 0.10) +
+                       (socialScore * 0.10);
 
     if (finalScore > 0) {
       console.log(
-        `[Restaurant] ${place.name}: 리뷰수=${reviewCountScore.toFixed(1)}(40%) ` +
-        `한국리뷰=${koreanReviewScore.toFixed(1)}(25%) 인스타=${instaScore.toFixed(1)}(15%) ` +
-        `유튜브=${youtubeScore.toFixed(1)}(10%) 블로그=${blogScore.toFixed(1)}(10%) → ${finalScore.toFixed(2)}`
+        `[Restaurant] ${place.name}: 리뷰수=${reviewCountScore.toFixed(1)}(50%) ` +
+        `한국리뷰=${koreanReviewScore.toFixed(1)}(30%) 인스타=${instaScore.toFixed(1)}(10%) ` +
+        `소셜=${socialScore.toFixed(1)}(10%) → ${finalScore.toFixed(2)}`
       );
     }
 
@@ -478,12 +499,18 @@ async function calculateKoreanPopularity(
       }
     }
 
+    // ===== 최신+최다 우선 원칙 =====
+    // "인스타, 유튜브, 네이버블로그 한국인이 최신, 최다 언급이 최우선"
+    const SIX_MONTHS_AGO = new Date();
+    SIX_MONTHS_AGO.setMonth(SIX_MONTHS_AGO.getMonth() - 6);
+
     // ===== 1순위: 인스타그램 점수 (45%) =====
     let instaScore = 0;
     if (matchedPlaceId) {
       const instaData = await db.select({
         postCount: instagramHashtags.postCount,
         avgLikes: instagramHashtags.avgLikes,
+        lastSyncAt: instagramHashtags.lastSyncAt,
       })
         .from(instagramHashtags)
         .where(eq(instagramHashtags.linkedPlaceId, matchedPlaceId))
@@ -497,6 +524,12 @@ async function calculateKoreanPopularity(
         // 좋아요 보너스 (평균 100개 이상이면 보너스)
         const likeBonus = Math.min(2, Math.log10(avgLikes + 1) * 0.5);
         instaScore = Math.min(10, postScore + likeBonus);
+
+        // 최신 데이터 보너스: 6개월 이내 동기화된 데이터는 1.3x 가중치
+        const hasRecentSync = instaData.some(d => d.lastSyncAt && new Date(d.lastSyncAt) > SIX_MONTHS_AGO);
+        if (hasRecentSync) {
+          instaScore = Math.min(10, instaScore * 1.3);
+        }
       }
     }
     // 도시 레벨 인스타 데이터도 fallback
@@ -528,8 +561,8 @@ async function calculateKoreanPopularity(
       if (ytData.length > 0 && ytData[0].count > 0) {
         const mentionCount = Number(ytData[0].count);
         const avgConf = Number(ytData[0].avgConfidence) || 0.5;
-        // 언급 횟수 기반 (3회 이상이면 높은 점수)
-        youtubeScore = Math.min(10, mentionCount * 2 * avgConf);
+        // 언급 횟수 기반 (3회 이상이면 높은 점수) + 최다 언급 보상 강화
+        youtubeScore = Math.min(10, mentionCount * 2.5 * avgConf);
       }
     }
     // placeName으로 직접 매칭 시도 (DB에 장소 미등록이어도 언급은 있을 수 있음)
@@ -541,13 +574,14 @@ async function calculateKoreanPopularity(
         .where(ilike(youtubePlaceMentions.placeName, `%${placeName}%`));
 
       if (ytNameMatch.length > 0 && Number(ytNameMatch[0].count) > 0) {
-        youtubeScore = Math.min(7, Number(ytNameMatch[0].count) * 1.5);
+        youtubeScore = Math.min(7, Number(ytNameMatch[0].count) * 2.0);
       }
     }
 
     // ===== 3순위: 네이버 블로그 점수 (25%) =====
     let blogScore = 0;
     if (matchedPlaceId) {
+      // 전체 블로그 글 수
       const blogData = await db.select({
         count: sql<number>`count(*)`,
         avgSentiment: sql<number>`avg(${naverBlogPosts.sentimentScore})`,
@@ -555,14 +589,28 @@ async function calculateKoreanPopularity(
         .from(naverBlogPosts)
         .where(eq(naverBlogPosts.placeId, matchedPlaceId));
 
+      // 최근 6개월 블로그 글 수 (최신 가중치)
+      const recentBlogData = await db.select({
+        count: sql<number>`count(*)`,
+      })
+        .from(naverBlogPosts)
+        .where(and(
+          eq(naverBlogPosts.placeId, matchedPlaceId),
+          sql`${naverBlogPosts.postDate} > ${SIX_MONTHS_AGO.toISOString()}`
+        ));
+
       if (blogData.length > 0 && Number(blogData[0].count) > 0) {
-        const postCount = Number(blogData[0].count);
+        const totalPosts = Number(blogData[0].count);
+        const recentPosts = recentBlogData.length > 0 ? Number(recentBlogData[0].count) : 0;
         const avgSentiment = Number(blogData[0].avgSentiment) || 0.5;
+        
         // 글 수 기반 (5개 이상이면 높은 점수)
-        const countScore = Math.min(7, postCount * 1.5);
+        const countScore = Math.min(7, totalPosts * 1.5);
+        // 최신 글 보너스: 최근 6개월 내 글이 있으면 +2점
+        const recencyBonus = recentPosts > 0 ? Math.min(3, recentPosts * 1.5) : 0;
         // 감성 보너스 (긍정적이면 추가 점수)
-        const sentimentBonus = avgSentiment > 0.7 ? 3 : avgSentiment > 0.5 ? 1.5 : 0;
-        blogScore = Math.min(10, countScore + sentimentBonus);
+        const sentimentBonus = avgSentiment > 0.7 ? 2 : avgSentiment > 0.5 ? 1 : 0;
+        blogScore = Math.min(10, countScore + recencyBonus + sentimentBonus);
       }
     }
     // 도시+장소명으로 extractedPlaces에서 검색 (블로그에 장소명 언급 여부)
@@ -582,6 +630,7 @@ async function calculateKoreanPopularity(
     }
 
     // ===== 최종 가중치 합산 (0-10) =====
+    // 인스타(45%) + 유튜브(30%) + 블로그(25%) - 최신+최다 보너스 적용됨
     const finalScore = (instaScore * 0.45) + (youtubeScore * 0.30) + (blogScore * 0.25);
     
     if (finalScore > 0) {
@@ -1110,15 +1159,31 @@ function generateSelectionReasons(place: PlaceResult): { reasons: string[]; conf
   const reasons: string[] = [];
   let dataPoints = 0; // 보유 데이터 수 (신뢰도 판단용)
 
-  // ===== 데이터 기반 이유 (가장 강력) =====
+  // ===== 데이터 기반 선정 이유 (구체적 출처 포함) =====
+  // 원칙: 첫 번째 이유 = 가장 강력한 데이터 근거 (예: "인스타 #에펠탑 1.2만 게시물")
 
-  // 한국인 인기도
+  // 한국인 인기도 (구체적 출처와 수치)
   if (place.koreanPopularityScore && place.koreanPopularityScore > 3) {
-    reasons.push(`한국인 인기도 상위 (점수 ${place.koreanPopularityScore.toFixed(1)}/10)`);
+    // 어떤 소스에서 높은 점수인지 추정하여 구체적으로 표시
+    if (place.koreanPopularityScore >= 7) {
+      reasons.push(`한국인 최다 언급 (인스타+유튜브+블로그 종합 ${place.koreanPopularityScore.toFixed(1)}점)`);
+    } else {
+      reasons.push(`한국 여행자 인기 (SNS 종합 ${place.koreanPopularityScore.toFixed(1)}/10)`);
+    }
     dataPoints += 2;
   } else if (place.koreanPopularityScore && place.koreanPopularityScore > 0) {
     reasons.push(`한국 여행자 언급 확인됨`);
     dataPoints += 1;
+  }
+
+  // Google 리뷰 수 (식당의 경우 가장 중요한 지표)
+  if (place.userRatingCount && place.userRatingCount > 100) {
+    const count = place.userRatingCount;
+    const countText = count >= 10000 ? `${(count / 1000).toFixed(0)}K` 
+      : count >= 1000 ? `${(count / 1000).toFixed(1)}K`
+      : count.toLocaleString();
+    reasons.push(`구글 리뷰 ${countText}개${place.rating ? ` (${place.rating.toFixed(1)}점)` : ''}`);
+    dataPoints += 2;
   }
 
   // 포토스팟
@@ -1156,7 +1221,7 @@ function generateSelectionReasons(place: PlaceResult): { reasons: string[]; conf
       : place.priceSource === 'klook' ? '클룩'
       : place.priceSource === 'tripdotcom' ? '트립닷컴'
       : place.priceSource;
-    reasons.push(`${sourceLabel} 기준 약 €${Math.round(place.estimatedPriceEur)}`);
+    reasons.push(`${sourceLabel} 기준 약 EUR${Math.round(place.estimatedPriceEur)}`);
     dataPoints += 1;
   }
 
@@ -2046,11 +2111,15 @@ export async function generateItinerary(formData: TripFormData) {
         ...s.place,
         startTime: s.startTime,
         endTime: s.endTime,
-        // 🍽️ 식사 슬롯 정보 추가
+        // 🍽️ 식사 슬롯 정보 (점심35%/저녁65% 예산 배분, 공개가격 최대값 기준)
         isMealSlot: s.isMealSlot,
         mealType: s.mealType,
-        mealPrice: s.isMealSlot ? Math.round((mealBudget.min + mealBudget.max) / 2) : undefined,
-        mealPriceLabel: s.isMealSlot ? mealBudget.label : undefined,
+        mealPrice: s.isMealSlot 
+          ? (s.mealType === 'lunch' ? mealBudget.lunch : mealBudget.dinner) 
+          : undefined,
+        mealPriceLabel: s.isMealSlot 
+          ? (s.mealType === 'lunch' ? mealBudget.lunchLabel : mealBudget.dinnerLabel) 
+          : undefined,
         // TripAdvisor 데이터 (프론트엔드 표시용)
         tripAdvisorRating: s.place.tripAdvisorRating,
         tripAdvisorReviewCount: s.place.tripAdvisorReviewCount,
@@ -2238,7 +2307,12 @@ export async function generateItinerary(formData: TripFormData) {
 
 /**
  * 사용자 시간 기반으로 장소를 슬롯에 분배
- * 🍽️ 점심/저녁 슬롯은 반드시 식당 배치 (핵심 로직)
+ * 
+ * ===== 식당 선정 4대 원칙 (1차 목표 확정) =====
+ * 1순위: 슬롯 강제 — 하루 점심 1개 + 저녁 1개, 그 외 슬롯에 식당 배치 불가
+ * 2순위: 동선 고려 — 전후 장소와 가까운 식당 우선 선택
+ * 3순위: 예산 범위 — 점심 35% / 저녁 65% 배분, 공개가격 최대값 기준
+ * 4순위: 유명세 가중치 — 리뷰수(50%) + 한국리뷰(30%) + SNS(20%)
  */
 async function distributePlacesWithUserTime(
   places: PlaceResult[],
@@ -2249,117 +2323,153 @@ async function distributePlacesWithUserTime(
   const schedule: { day: number; slot: string; place: PlaceResult; startTime: string; endTime: string; isMealSlot: boolean; mealType?: 'lunch' | 'dinner' }[] = [];
   const paceConfig = PACE_CONFIG[travelPace];
   
-  // 🍽️ 식당/카페 장소 분리
+  // 🍽️ 식당/카페 장소 분리 (식당은 오직 점심/저녁 슬롯에만 사용)
   const foodPlaces = places.filter(p => isFoodPlace(p));
   const nonFoodPlaces = places.filter(p => !isFoodPlace(p));
   
   console.log(`[Itinerary] 🍽️ 식사 장소: ${foodPlaces.length}곳, 일반 장소: ${nonFoodPlaces.length}곳`);
   
-  // 도시별 그룹핑 및 순서 최적화 (일반 장소)
+  // === 일반 장소: 도시별 그룹핑 + 순서 최적화 ===
   const cityGroups = groupPlacesByCity(nonFoodPlaces);
   const orderedCities = optimizeCityOrder(cityGroups);
   
   const orderedNonFoodPlaces: PlaceResult[] = [];
   for (const city of orderedCities) {
     const cityPlaces = cityGroups.get(city) || [];
-    cityPlaces.sort((a, b) => b.vibeScore - a.vibeScore);
+    cityPlaces.sort((a, b) => (b.finalScore || b.vibeScore) - (a.finalScore || a.vibeScore));
     orderedNonFoodPlaces.push(...cityPlaces);
   }
   
-  // 🍽️ Phase 1-4: 식당 전용 점수 계산 + 정렬
-  // 기존 vibeScore 대신 restaurantScore 사용
-  // 우선순위: 리뷰수(40%) > 한국인리뷰(25%) > 인스타(15%) > 유튜브(10%) > 블로그(10%)
+  // === 4순위: 식당 유명세 점수 계산 ===
   const foodWithScores: { place: PlaceResult; restaurantScore: number }[] = [];
   for (const fp of foodPlaces) {
     const score = await calculateRestaurantScore(fp);
     foodWithScores.push({ place: fp, restaurantScore: score });
   }
-  // restaurantScore 내림차순 정렬
-  foodWithScores.sort((a, b) => b.restaurantScore - a.restaurantScore);
   
-  console.log(`[Itinerary] 🍽️ 식당 점수 계산 완료 (상위: ${foodWithScores.slice(0, 3).map(f => `${f.place.name}=${f.restaurantScore.toFixed(1)}`).join(', ')})`);
+  console.log(`[Itinerary] 🍽️ 식당 점수 계산 완료 (${foodWithScores.length}곳, 상위: ${foodWithScores.sort((a, b) => b.restaurantScore - a.restaurantScore).slice(0, 3).map(f => `${f.place.name}=${f.restaurantScore.toFixed(1)}`).join(', ')})`);
 
-  // 도시별 그룹핑 (이미 점수순 정렬됨)
-  const foodCityGroups = groupPlacesByCity(foodWithScores.map(f => f.place));
-  const orderedFoodPlaces: PlaceResult[] = [];
-  
-  // 점수순 정렬된 식당을 도시별로 분배하되 점수순 유지
-  const foodScoreMap = new Map(foodWithScores.map(f => [f.place.id, f.restaurantScore]));
-  
-  for (const city of orderedCities) {
-    const cityFoodPlaces = foodCityGroups.get(city) || [];
-    cityFoodPlaces.sort((a, b) => (foodScoreMap.get(b.id) || 0) - (foodScoreMap.get(a.id) || 0));
-    orderedFoodPlaces.push(...cityFoodPlaces);
-  }
-  // 나머지 도시 식당 추가
-  for (const [city, cityFoodPlaces] of foodCityGroups) {
-    if (!orderedCities.includes(city)) {
-      cityFoodPlaces.sort((a, b) => (foodScoreMap.get(b.id) || 0) - (foodScoreMap.get(a.id) || 0));
-      orderedFoodPlaces.push(...cityFoodPlaces);
-    }
-  }
-  
-  let nonFoodIndex = 0;
-  let foodIndex = 0;
-  
-  // 식사 예산 정보
+  // === 식사 예산 정보 (35:65 비율) ===
   const mealBudget = MEAL_BUDGET[travelStyle];
   
-  // 🍽️ 필요한 식사 슬롯 수 계산 (점심 + 저녁 × 일수)
-  const requiredMealSlots = daySlotsConfig.length * 2; // 매일 점심 + 저녁
-  
-  // 식당 부족 시 기본 식당 생성
-  if (orderedFoodPlaces.length < requiredMealSlots) {
-    const shortage = requiredMealSlots - orderedFoodPlaces.length;
-    console.log(`[Itinerary] ⚠️ 식당 부족 (${orderedFoodPlaces.length}/${requiredMealSlots}), ${shortage}개 기본 식당 생성`);
-    
-    for (let i = 0; i < shortage; i++) {
-      const mealType = i % 2 === 0 ? '점심' : '저녁';
-      const defaultRestaurant: PlaceResult = {
-        id: `default-meal-${Date.now()}-${i}`,
-        name: `${mealType} 식사 추천`,
-        description: `현지 인기 ${mealType === '점심' ? '레스토랑' : '저녁 식당'} - ${mealBudget.label} 예산`,
-        lat: orderedNonFoodPlaces[0]?.lat || 0,
-        lng: orderedNonFoodPlaces[0]?.lng || 0,
-        vibeScore: 7,
-        confidenceScore: 6,
-        sourceType: 'Default',
-        personaFitReason: `${mealBudget.label} 예산에 맞는 현지 맛집`,
-        tags: ['restaurant', 'food'],
-        vibeTags: ['Foodie'],
-        image: '',
-        priceEstimate: mealBudget.label,
-        placeTypes: ['restaurant'],
-        city: orderedNonFoodPlaces[0]?.city,
-        region: orderedNonFoodPlaces[0]?.region,
-        koreanPopularityScore: 0,
-        googleMapsUrl: '',
-      };
-      orderedFoodPlaces.push(defaultRestaurant);
+  /**
+   * 2순위+3순위+4순위 통합: 최적 식당 선택 함수
+   * 동선(거리) → 예산 → 유명세 순으로 후보 정렬 후 최고점 선택
+   */
+  function selectBestRestaurant(
+    candidates: { place: PlaceResult; restaurantScore: number }[],
+    prevPlace: PlaceResult | null,
+    mealBudgetMax: number,
+    usedIds: Set<string>
+  ): { place: PlaceResult; restaurantScore: number } | null {
+    // 이미 사용된 식당 제외
+    const available = candidates.filter(c => !usedIds.has(c.place.id));
+    if (available.length === 0) return null;
+
+    // 각 후보에 종합 점수 계산 (동선 + 예산매칭 + 유명세)
+    const scored = available.map(c => {
+      // 2순위: 동선 점수 (0-10, 가까울수록 높음)
+      let proximityScore = 5; // 기본값 (이전 장소 없을 때)
+      if (prevPlace && prevPlace.lat && prevPlace.lng && c.place.lat && c.place.lng) {
+        const dist = Math.sqrt(
+          Math.pow(prevPlace.lat - c.place.lat, 2) + 
+          Math.pow(prevPlace.lng - c.place.lng, 2)
+        );
+        // 거리 0.01도 ≈ 1km, 0.05도 ≈ 5km
+        proximityScore = Math.max(0, 10 - dist * 200);
+      }
+
+      // 3순위: 예산 매칭 점수 (0-10, 예산 범위 내일수록 높음)
+      let budgetScore = 5; // 가격 정보 없을 때 기본값
+      if (c.place.estimatedPriceEur !== undefined && c.place.estimatedPriceEur > 0) {
+        if (c.place.estimatedPriceEur <= mealBudgetMax) {
+          // 예산 이내: 최대값에 가까울수록 높은 점수 (좋은 곳일 확률)
+          budgetScore = Math.min(10, (c.place.estimatedPriceEur / mealBudgetMax) * 10);
+        } else {
+          // 예산 초과: 감점 (약간 초과는 허용, 크게 초과는 배제)
+          const overRatio = c.place.estimatedPriceEur / mealBudgetMax;
+          budgetScore = overRatio < 1.3 ? 3 : 0; // 30% 이내 초과는 허용
+        }
+      }
+
+      // 4순위: 유명세 점수 (이미 계산됨, 0-10)
+      const fameScore = c.restaurantScore;
+
+      // 종합 점수 = 동선(40%) + 예산(30%) + 유명세(30%)
+      const totalScore = (proximityScore * 0.40) + (budgetScore * 0.30) + (fameScore * 0.30);
+
+      return { ...c, totalScore, proximityScore, budgetScore };
+    });
+
+    // 예산 0점(크게 초과) 제외
+    const filtered = scored.filter(s => s.budgetScore > 0);
+    if (filtered.length === 0) {
+      // 예산 맞는 곳이 없으면 유명세 순으로 fallback
+      scored.sort((a, b) => b.restaurantScore - a.restaurantScore);
+      return scored[0] || null;
     }
+
+    // 종합 점수 내림차순 정렬
+    filtered.sort((a, b) => b.totalScore - a.totalScore);
+    
+    const winner = filtered[0];
+    console.log(`[Restaurant선정] ${winner.place.name}: 동선=${winner.proximityScore.toFixed(1)} 예산=${winner.budgetScore.toFixed(1)} 유명세=${winner.restaurantScore.toFixed(1)} → 종합=${winner.totalScore.toFixed(2)}`);
+    
+    return winner;
   }
+
+  // === 사용된 식당 ID 추적 (중복 배치 방지) ===
+  const usedFoodIds = new Set<string>();
+
+  // === 기본 식당 placeholder 생성 함수 ===
+  function createDefaultRestaurant(type: 'lunch' | 'dinner', refPlace: PlaceResult | null): PlaceResult {
+    const typeLabel = type === 'lunch' ? '점심' : '저녁';
+    const budget = type === 'lunch' ? mealBudget.lunch : mealBudget.dinner;
+    const budgetLabel = type === 'lunch' ? mealBudget.lunchLabel : mealBudget.dinnerLabel;
+    return {
+      id: `default-${type}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      name: `현지 인기 ${typeLabel} 식당`,
+      description: `${budgetLabel} 예산 내 현지 맛집 추천 (동선 고려)`,
+      lat: refPlace?.lat || 0,
+      lng: refPlace?.lng || 0,
+      vibeScore: 7,
+      confidenceScore: 6,
+      sourceType: 'Default',
+      personaFitReason: `${budgetLabel} 예산에 맞는 현지 맛집`,
+      tags: ['restaurant', 'food'],
+      vibeTags: ['Foodie'],
+      image: '',
+      priceEstimate: budgetLabel,
+      placeTypes: ['restaurant'],
+      city: refPlace?.city,
+      region: refPlace?.region,
+      koreanPopularityScore: 0,
+      googleMapsUrl: '',
+    };
+  }
+
+  let nonFoodIndex = 0;
   
   for (const dayConfig of daySlotsConfig) {
     const { day, startTime, endTime, slots } = dayConfig;
     
-    // 🍽️ 하루에 점심/저녁 각 1개씩만 (이미 배치되면 false)
+    // === 1순위: 하루 점심 1개 + 저녁 1개 강제 (절대 규칙) ===
     let lunchAssigned = false;
     let dinnerAssigned = false;
     
-    // 해당 일자의 시간 슬롯 생성
     const [startH, startM] = startTime.split(':').map(Number);
     const [endH, endM] = endTime.split(':').map(Number);
     const dayStartMinutes = startH * 60 + startM;
     const dayEndMinutes = endH * 60 + endM;
     
     let currentMinutes = dayStartMinutes;
+    let prevPlaceInDay: PlaceResult | null = null; // 동선 계산용
     
     for (let slotIdx = 0; slotIdx < slots; slotIdx++) {
       const slotStart = minutesToTime(currentMinutes);
       currentMinutes += paceConfig.slotDurationMinutes;
       const slotEnd = minutesToTime(Math.min(currentMinutes, dayEndMinutes));
       
-      // 슬롯 타입 결정 (시간대 기반)
       const slotHour = parseInt(slotStart.split(':')[0]);
       let slotType: 'morning' | 'lunch' | 'afternoon' | 'evening';
       if (slotHour < 12) slotType = 'morning';
@@ -2367,18 +2477,15 @@ async function distributePlacesWithUserTime(
       else if (slotHour < 18) slotType = 'afternoon';
       else slotType = 'evening';
       
-      // 🍽️ 점심/저녁 슬롯인지 확인 (하루에 각 1개씩만!)
+      // === 1순위: 점심/저녁 슬롯 판정 (하루 각 1개만!) ===
       let isMealSlot = false;
       let mealType: 'lunch' | 'dinner' | undefined;
       
-      // 점심: 12:00~14:00 범위에서 첫 번째 슬롯만
       if (slotHour >= 12 && slotHour < 14 && !lunchAssigned) {
         isMealSlot = true;
         mealType = 'lunch';
         lunchAssigned = true;
-      }
-      // 저녁: 18:00~20:00 범위에서 첫 번째 슬롯만
-      else if (slotHour >= 18 && slotHour < 20 && !dinnerAssigned) {
+      } else if (slotHour >= 18 && slotHour < 20 && !dinnerAssigned) {
         isMealSlot = true;
         mealType = 'dinner';
         dinnerAssigned = true;
@@ -2386,23 +2493,33 @@ async function distributePlacesWithUserTime(
       
       let selectedPlace: PlaceResult;
       
-      if (isMealSlot && foodIndex < orderedFoodPlaces.length) {
-        // 🍽️ 식사 슬롯: 식당 배치
-        selectedPlace = orderedFoodPlaces[foodIndex];
-        foodIndex++;
-        console.log(`[Itinerary] Day ${day} ${mealType}: ${selectedPlace.name} (${mealBudget.label})`);
-      } else if (nonFoodIndex < orderedNonFoodPlaces.length) {
-        // 일반 슬롯: 일반 장소 배치
-        selectedPlace = orderedNonFoodPlaces[nonFoodIndex];
-        nonFoodIndex++;
-      } else if (foodIndex < orderedFoodPlaces.length) {
-        // 일반 장소 소진 시 식당도 사용
-        selectedPlace = orderedFoodPlaces[foodIndex];
-        foodIndex++;
+      if (isMealSlot) {
+        // === 식사 슬롯: 4대 원칙 적용하여 최적 식당 선택 ===
+        const budgetMax = mealType === 'lunch' ? mealBudget.lunch : mealBudget.dinner;
+        const bestFood = selectBestRestaurant(foodWithScores, prevPlaceInDay, budgetMax, usedFoodIds);
+        
+        if (bestFood) {
+          selectedPlace = bestFood.place;
+          usedFoodIds.add(bestFood.place.id);
+          const budgetLabel = mealType === 'lunch' ? mealBudget.lunchLabel : mealBudget.dinnerLabel;
+          console.log(`[Itinerary] Day ${day} ${mealType}: ${selectedPlace.name} (${budgetLabel})`);
+        } else {
+          // 후보 없으면 placeholder 생성
+          selectedPlace = createDefaultRestaurant(mealType!, prevPlaceInDay);
+          console.log(`[Itinerary] Day ${day} ${mealType}: placeholder 생성 (식당 후보 부족)`);
+        }
       } else {
-        // 모든 장소 소진
-        break;
+        // === 일반 슬롯: 식당 제외, 관광/체험 장소만 배치 ===
+        if (nonFoodIndex < orderedNonFoodPlaces.length) {
+          selectedPlace = orderedNonFoodPlaces[nonFoodIndex];
+          nonFoodIndex++;
+        } else {
+          // 일반 장소 소진 시 → 그냥 종료 (식당을 일반 슬롯에 넣지 않음!)
+          break;
+        }
       }
+      
+      prevPlaceInDay = selectedPlace; // 동선 계산용 이전 장소 업데이트
       
       schedule.push({
         day,
@@ -2416,9 +2533,19 @@ async function distributePlacesWithUserTime(
     }
   }
   
-  // 식사 슬롯 통계
+  // 식사 슬롯 검증 로그
   const mealSlots = schedule.filter(s => s.isMealSlot);
-  console.log(`[Itinerary] 🍽️ 총 식사 슬롯: ${mealSlots.length}개 (점심: ${mealSlots.filter(s => s.mealType === 'lunch').length}, 저녁: ${mealSlots.filter(s => s.mealType === 'dinner').length})`);
+  const lunchCount = mealSlots.filter(s => s.mealType === 'lunch').length;
+  const dinnerCount = mealSlots.filter(s => s.mealType === 'dinner').length;
+  const totalDays = daySlotsConfig.length;
+  console.log(`[Itinerary] 🍽️ 식사 배치 완료: ${totalDays}일 × (점심1+저녁1) = 점심${lunchCount}개 + 저녁${dinnerCount}개`);
+  console.log(`[Itinerary] 🍽️ 예산: 점심 ${mealBudget.lunchLabel}/인, 저녁 ${mealBudget.dinnerLabel}/인 (일일 총 €${mealBudget.dailyTotal}/인)`);
+  
+  // 식당이 일반 슬롯에 들어갔는지 검증 (디버그)
+  const nonMealFoodSlots = schedule.filter(s => !s.isMealSlot && isFoodPlace(s.place));
+  if (nonMealFoodSlots.length > 0) {
+    console.warn(`[Itinerary] ⚠️ 경고: 식당 ${nonMealFoodSlots.length}곳이 일반 슬롯에 배치됨 (정상이면 0이어야 함)`);
+  }
   
   return schedule;
 }
