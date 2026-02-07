@@ -1419,60 +1419,48 @@ async function enrichPlacesWithDBData(
   let geminiOnlyCount = 0;
   
   if (!db) {
-    console.error('[Enrich] DB 연결 없음!');
     return { places: geminiPlaces, dbEnrichedCount: 0, newlySavedCount: 0, geminiOnlyCount: geminiPlaces.length };
   }
   
-  // 인코딩 복원 함수: UTF-8 바이트가 Latin-1로 잘못 해석된 경우 역변환
-  function fixKoreanEncoding(str: string): string {
-    try {
-      const latin1Buf = Buffer.from(str, 'latin1');
-      const utf8Str = latin1Buf.toString('utf-8');
-      // 한글이 포함되어 있으면 복원 성공
-      if (/[\uAC00-\uD7AF\u3131-\u3163]/.test(utf8Str)) {
-        return utf8Str;
-      }
-    } catch (e) {}
-    return str; // 이미 정상이면 그대로 반환
-  }
-  
-  // 1. destination 인코딩 복원
-  const fixedDestination = fixKoreanEncoding(destination);
-  const destinationClean = fixedDestination.split(',')[0].trim();
-  console.log(`[Enrich] === 시작: ${geminiPlaces.length}곳, raw="${Buffer.from(destination).toString('hex')}", fixed="${destinationClean}" ===`);
-  
+  // 1. 도시 찾기 - 좌표 기반 매칭 (인코딩 이슈 완전 우회!)
+  //    Gemini 추천 장소의 좌표로 가장 가까운 DB 도시를 찾음
   let cityId: number | null = null;
   
   try {
-    // 모든 도시 로드 → JS에서 비교 (SQL 인코딩 이슈 완전 우회)
-    const allCities = await db.select({ id: cities.id, name: cities.name }).from(cities);
-    console.log(`[Enrich] 도시 ${allCities.length}개 로드`);
+    const allCities = await db.select().from(cities);
+    console.log(`[Enrich] 도시 ${allCities.length}개 로드, 좌표 기반 매칭 시작`);
     
-    // 매칭 시도 (인코딩 복원된 문자열로)
-    let match = allCities.find(c => c.name === destinationClean);
+    // Gemini 장소들의 평균 좌표 계산
+    const validPlaces = geminiPlaces.filter(p => p.lat && p.lng && p.lat !== 0 && p.lng !== 0);
+    if (validPlaces.length === 0) {
+      console.log(`[Enrich] 좌표 있는 장소 없음, 보강 불가`);
+      return { places: geminiPlaces, dbEnrichedCount: 0, newlySavedCount: 0, geminiOnlyCount: geminiPlaces.length };
+    }
     
-    // includes 매칭
-    if (!match) {
-      match = allCities.find(c => 
-        c.name.includes(destinationClean) || destinationClean.includes(c.name)
+    const avgLat = validPlaces.reduce((sum, p) => sum + p.lat, 0) / validPlaces.length;
+    const avgLng = validPlaces.reduce((sum, p) => sum + p.lng, 0) / validPlaces.length;
+    console.log(`[Enrich] 장소 평균 좌표: lat=${avgLat.toFixed(4)}, lng=${avgLng.toFixed(4)}`);
+    
+    // 가장 가까운 도시 찾기 (거리 계산)
+    let closestCity: typeof allCities[0] | null = null;
+    let closestDist = Infinity;
+    
+    for (const city of allCities) {
+      const dist = Math.sqrt(
+        Math.pow(city.latitude - avgLat, 2) + Math.pow(city.longitude - avgLng, 2)
       );
+      if (dist < closestDist) {
+        closestDist = dist;
+        closestCity = city;
+      }
     }
     
-    // 각 도시명도 인코딩 복원하여 비교
-    if (!match) {
-      match = allCities.find(c => {
-        const fixedCityName = fixKoreanEncoding(c.name);
-        return fixedCityName === destinationClean || fixedCityName.includes(destinationClean) || destinationClean.includes(fixedCityName);
-      });
-    }
-    
-    if (match) {
-      cityId = match.id;
-      console.log(`[Enrich] ✅ 도시 매칭: "${match.name}" (ID: ${cityId})`);
+    // 50km 이내 (약 0.5도)만 매칭 허용
+    if (closestCity && closestDist < 0.5) {
+      cityId = closestCity.id;
+      console.log(`[Enrich] ✅ 좌표 매칭: ${closestCity.name} (ID: ${cityId}, 거리: ${(closestDist * 111).toFixed(1)}km)`);
     } else {
-      const destHex = Buffer.from(destination).toString('hex');
-      const cityHex = allCities.length > 0 ? Buffer.from(allCities[0].name).toString('hex') : 'none';
-      console.log(`[Enrich] ❌ 미매칭 - dest hex: ${destHex}, city[0] hex: ${cityHex}, fixed: "${destinationClean}"`);
+      console.log(`[Enrich] ❌ 가까운 도시 없음 (최근접: ${closestCity?.name}, ${(closestDist * 111).toFixed(1)}km)`);
       return { places: geminiPlaces, dbEnrichedCount: 0, newlySavedCount: 0, geminiOnlyCount: geminiPlaces.length };
     }
   } catch (error: any) {
