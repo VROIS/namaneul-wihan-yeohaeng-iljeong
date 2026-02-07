@@ -1,6 +1,6 @@
 # NUBI 프로젝트 통합 태스크 관리
 
-> **최종 업데이트: 2026-02-07 (토)**
+> **최종 업데이트: 2026-02-08 (일)**
 > **관리 방식: 이 파일 하나로 모든 작업/계획/이력 통합 관리**
 > **참조 문서: PRD.md, TRD.md, NUBI_WHITEPAPER.md (핵심 설계 - 수정 금지)**
 
@@ -13,14 +13,14 @@
 
 | 항목 | 내용 |
 |------|------|
-| **마지막 작업일** | 2026-02-07 (토) |
-| **마지막 작업 내용** | 1차 목표 플랜 확정 + 실행 착수 (한국인 선호 스코어링 강화부터) |
-| **다음 해야 할 작업** | 아래 "1차 목표 실행 플랜" 참조 |
+| **마지막 작업일** | 2026-02-08 (일) |
+| **마지막 작업 내용** | 1-2 한국인 선호 1.5x 완료 + 1-3 동선 최적화 완료 + 숙소 설정 완료 → 커밋·배포 완료 |
+| **다음 해야 할 작업** | 1-4 장소 대표 이미지 확보 → 2-2 여행요약 → 3-1~3-5 비용계산 |
 | **환경 상태** | node_modules 설치 완료, Cursor 최적화 완료, Koyeb 배포 운영 중 |
 | **개발 프로세스** | 로컬호스트 미사용. 코드수정 → Git 커밋(cursor-dev) → Koyeb 자동배포 → Supabase DB |
 | **주의사항** | 핵심 파일 수정 시 사용자 확인. 이 플랜의 순서와 산출물 목표를 반드시 준수 |
 | **현재 브랜치** | cursor-dev |
-| **참조 플랜 파일** | .cursor/plans/nubi_1차_목표_실행_8b72390e.plan.md |
+| **최근 커밋** | `e9be58f` feat: route optimization + accommodation + Korean scoring 1.5x |
 
 ### 1차 목표 실행 플랜 (사용자 확정, 2026-02-07)
 
@@ -31,16 +31,16 @@
 
 | # | 작업 | 상태 | 핵심 변경 파일 | 산출물 목표 |
 |---|------|------|--------------|------------|
-| 1-2 | 한국인 선호 최우선 정렬 강화 | 진행중 | itinerary-generator.ts (L119-214, L428-596) | Instagram/YouTube/Blog 최신+최다 가중치 1.5x, 식당 리뷰수 50%, 한국어 구글리뷰 30% |
-| 1-3 | 동선 최적화 (하루 내 장소 순서) | 대기 | itinerary-generator.ts, route-optimizer.ts | 출발지(숙소) → nearest-neighbor 정렬 → Google Routes API 실제 경로 |
+| 1-2 | 한국인 선호 최우선 정렬 강화 | **완료** | itinerary-generator.ts (L119-220, L560-766) | 식당 리뷰수50%+한국리뷰30%+SNS20%, 인스타/유튜브/블로그 최신 1.5x 가중치 |
+| 1-3 | 동선 최적화 (하루 내 장소 순서) | **완료** | itinerary-generator.ts, route-optimizer.ts | 숙소 기반 nearest-neighbor+2-opt 원형 경로, Day별 재최적화 |
 | 1-4 | 장소 대표 이미지 확보 | 대기 | itinerary-generator.ts | Google사진 > 인스타 > 블로그 > Wikimedia > placeholder (빈페이지 불가) |
-| 1-5 | 식사 슬롯 모든 날 강제 | 대기 | itinerary-generator.ts (L2312-2340) | 점심/저녁 반드시 포함, 데이터 없으면 placeholder 생성 |
+| 1-5 | 식사 슬롯 모든 날 강제 | **완료** | itinerary-generator.ts (L82-119) | 점심1+저녁1 강제, 식당 선정 4대원칙 (슬롯강제/동선/예산/유명세) |
 
 #### 스트림 2: 일정표 신뢰도 강화 (백엔드+프론트)
 
 | # | 작업 | 상태 | 핵심 변경 파일 | 산출물 목표 |
 |---|------|------|--------------|------------|
-| 2-1 | 선정 최우선이유 1개 표시 | 대기 | itinerary-generator.ts | "2025년3월 비밀이야 유튜브언급" 형식 구체적 근거 |
+| 2-1 | 선정 최우선이유 1개 표시 | **완료** | itinerary-generator.ts (L1279-1370) | 구체적 데이터 근거 (리뷰수, SNS 점수, 포토스팟, 패키지투어 등) |
 | 2-2 | 상단 여행요약 섹션 (수식 노출) | 대기 | TripPlannerScreen.tsx | 가중치 수식, 인당비용(원화), 날씨/위기 → 지도 토글 전환 |
 | 2-3 | 로딩 페이지 실시간 계산과정 | 대기 | TripPlannerScreen.tsx | 8-10단계 메시지 + 실제 숫자 (23곳 추천 완료 등) |
 
@@ -59,7 +59,7 @@
 | # | 작업 | 상태 | 핵심 변경 파일 | 산출물 목표 |
 |---|------|------|--------------|------------|
 | 4-1 | 긴 한 페이지 구조 | 대기 | TripPlannerScreen.tsx | 일별 탭 제거, 모든 날 세로 나열 |
-| 4-3 | 출발지 설정 (숙소/지도) | 대기 | TripPlannerScreen.tsx, trip.ts | 지도 핀/주소 검색으로 동선 최적화 시작점 |
+| 4-3 | 출발지 설정 (숙소/지도) | **완료** | TripPlannerScreen.tsx, trip.ts, PlaceAutocomplete.tsx | 숙소 Google Autocomplete + 서버 프록시 + Day별 변경/재최적화 |
 | 4-4 | 하단 푸터 5탭 개편 | 대기 | MainTabNavigator.tsx | 일정/지도(토글)/전문가(애니메이션)/프로필/설정 |
 | 4-5 | 슬롯 색상 구분 | 대기 | TripPlannerScreen.tsx | 관광(파랑)/점심(주황)/저녁(빨강)/이동(회색) |
 
@@ -69,29 +69,44 @@
 |---|------|------|--------------|------------|
 | 5-1 | 드라이빙 가이드 예약+결제 | 대기 | 신규: GuideBookingScreen.tsx, booking-routes.ts | 앱 내 예약 → Stripe/인앱결제 → 알림 |
 
-### 이전 세션 완료 사항 (참고용)
-1. Cursor 환경 최적화 완료 (.cursorrules, .cursorignore, settings.json)
-2. 스코어링 6바이브x6요소 매트릭스 코드 존재 확인
-3. Gemini-first + DB-Enrich 파이프라인 구축 완료 (좌표 기반 도시 매칭)
-4. 시딩 시스템 정밀 분석 완료 - 14개 크롤러 자동 가동 중
-5. place-seeder.ts 도시별 즉시 연쇄 크롤러 실행으로 개선 완료
-6. google-places.ts에서 rating → buzzScore 저장 추가 완료
-7. 날씨/위기 실제 데이터 연동 완료 (weatherCache, crisisAlerts)
+### 완료된 작업 요약 (2026-02-08 기준)
+
+**백엔드 로직 (스트림 1)**
+1. 식당 선정 4대 원칙: 슬롯강제(점심1+저녁1) → 동선 → 예산(점심35%/저녁65%) → 유명세(리뷰50%+한국리뷰30%+SNS20%)
+2. 한국인 선호 인스타(45%)+유튜브(30%)+블로그(25%), 최신 6개월 데이터 1.5x 가중치
+3. 동선 최적화: 숙소→nearest-neighbor+2-opt→숙소 원형 경로, departureTransit/returnTransit 계산
+4. 숙소 좌표 우선순위: Day별 개별숙소 → 공통숙소 → 도심좌표 → 첫장소
+5. Day별 재최적화 API (`/api/routes/regenerate-day`)
+
+**프론트엔드 (스트림 2, 4)**
+6. 선정 이유: 데이터 기반 구체적 근거 (리뷰수 K, SNS 점수, 포토스팟 등)
+7. 목적지 입력: Google Places Autocomplete (서버 프록시로 API 키 보호)
+8. 숙소 입력: 목적지 선택 후 활성화, lodging 타입 검색, 좌표 자동 확보
+9. 결과 화면: 숙소 정보 바 + 변경 버튼 + 재최적화 로딩 + 복귀 이동시간
+
+**환경/인프라**
+10. Cursor 환경 최적화 (.cursorrules, .cursorignore, settings.json)
+11. Gemini-first + DB-Enrich 파이프라인 (좌표 기반 도시 매칭)
+12. 14개 크롤러 자동 가동 (인스타/유튜브/블로그/미쉐린/TA/가격/포토/투어/한국플랫폼)
+13. 날씨/위기 실제 데이터 연동 (weatherCache, crisisAlerts)
+14. 바이브별 동적 가중치 매트릭스 (6바이브×6요소) + 데이터 등급 보정 (A/B/C/D)
 
 ### 핵심 코드 구조 (후임 AI 필독)
 - **itinerary-generator.ts**: 스코어링 엔진 + Gemini 파이프라인 + 식사/동선/비용 전체 로직
-  - L82-102: MEAL_SLOTS, MEAL_BUDGET 설정
-  - L119-214: calculateRestaurantScore() - 식당 점수 (리뷰수40%+한국리뷰25%+인스타15%+유튜브10%+블로그10%)
-  - L428-596: calculateKoreanPopularity() - 한국인 인기도 (인스타45%+유튜브30%+블로그25%)
-  - L875-983: VIBE_WEIGHT_MATRIX, DATA_GRADE_ADJUSTMENT - 동적 가중치
-  - L1052-1103: calculateFinalScore() - 최종 점수 = 6요소 가중합
-  - L1408-1575: enrichPlacesWithDBData() - Gemini 추천 → DB 보강 (좌표 기반 매칭)
-  - L1577-1777: generatePlacesWithGemini() - Gemini 3.0 Flash 장소 추천
-  - L1815-1850: optimizeCityOrder() - 도시간 nearest-neighbor
-  - L2243-2424: 슬롯 배치 + 식사 슬롯 할당
+  - L82-119: MEAL_SLOTS, MEAL_BUDGET 설정, 식당 선정 4대 원칙
+  - L134-220: calculateRestaurantScore() - 식당 점수 (리뷰수50%+한국리뷰30%+인스타10%+유튜브+블로그10%)
+  - L560-766: calculateKoreanPopularity() - 한국인 인기도 (인스타45%+유튜브30%+블로그25%, 최신 1.5x)
+  - L1045-1066: VIBE_WEIGHT_MATRIX, DATA_GRADE_ADJUSTMENT - 동적 가중치
+  - L1222-1273: calculateFinalScore() - 최종 점수 = 동적 6요소 가중합
+  - L1279-1370: generateSelectionReasons() - 선정 이유 생성 (데이터 기반 구체적 근거)
+  - L1763-1950: generatePlacesWithGemini() - Gemini 3.0 Flash 장소 추천
+  - L2038-2440: generateItinerary() - 메인 파이프라인 (숙소 기반 동선 최적화 포함)
+  - L2795-2935: regenerateDay() - Day별 숙소 변경 시 동선 재최적화
+- **route-optimizer.ts**: Google Routes API 연동, nearest-neighbor+2-opt, 경로 캐싱
 - **transport-pricing-service.ts**: 교통비 산정 (WalkMore=대중교통, Moderate=대중교통+Uber, Minimal=가이드)
-- **route-optimizer.ts**: Google Routes API 연동, 경로 캐싱, 동선 최적화
-- **TripPlannerScreen.tsx**: 전체 프론트엔드 (입력폼 + 결과 + 로딩)
+- **TripPlannerScreen.tsx**: 전체 프론트엔드 (입력폼 + 결과 + 로딩 + 숙소 설정/변경)
+- **PlaceAutocomplete.tsx**: Google Places Autocomplete (서버 프록시, API 키 보호)
+- **server/routes.ts**: `/api/places/autocomplete`, `/api/places/details` 프록시 API
 
 ### 알려진 이슈
 - Seedance 영상 모델: ModelNotOpen 상태 (활성화 대기 중)
@@ -138,6 +153,21 @@
 ---
 
 ## 3. 일일 작업 기록
+
+### 2026-02-08 (일) - 동선 최적화 + 숙소 설정 + 한국인 선호 1.5x
+
+| # | 작업 | 상태 | 카테고리 | 변경 파일 |
+|---|------|------|----------|-----------|
+| 1 | **숙소 입력 UI** (Google Places Autocomplete + 서버 프록시) | 완료 | 프론트 | `PlaceAutocomplete.tsx` (신규), `TripPlannerScreen.tsx` |
+| 2 | **목적지 입력 Autocomplete** (도시 검색 + 좌표 자동 확보) | 완료 | 프론트 | `TripPlannerScreen.tsx` |
+| 3 | **TripFormData 숙소 필드 확장** (name/address/coords/placeId) | 완료 | 타입 | `client/types/trip.ts` |
+| 4 | **서버 프록시 API** (`/api/places/autocomplete`, `/api/places/details`) | 완료 | 서버 | `server/routes.ts` |
+| 5 | **동선 최적화** (숙소 기반 nearest-neighbor+2-opt 원형 경로) | 완료 | 알고리즘 | `itinerary-generator.ts` |
+| 6 | **Day별 재최적화** (숙소 변경 시 해당 Day 자동 재배열) | 완료 | 알고리즘 | `itinerary-generator.ts` |
+| 7 | **결과 화면 숙소 표시** (숙소 바 + 변경 + 재최적화 로딩 + 복귀 이동시간) | 완료 | 프론트 | `TripPlannerScreen.tsx` |
+| 8 | **한국인 선호 최신 가중치 1.5x** (인스타/유튜브/블로그 6개월 이내 데이터) | 완료 | 알고리즘 | `itinerary-generator.ts` |
+| 9 | TASK.md 전체 정리 (완료/미완료 구분, 플랜 통합) | 완료 | 문서 | `docs/TASK.md` |
+| 10 | .cursor/plans/ 임시 파일 57개 정리 | 완료 | 정리 | `.cursor/plans/` |
 
 ### 2026-02-07 (금) - 장소 시딩 시스템 + 알고리즘 Phase 1
 
@@ -249,7 +279,7 @@
 
 ## 4. 미완료 / 진행 예정 작업
 
-### 우선순위: 높음 (1차 목표 - 데이터 자산 확보)
+### 우선순위: 높음 (1차 목표 실행 플랜 연계)
 
 | # | 작업 | 상태 | 카테고리 | 비고 |
 |---|------|------|----------|------|
@@ -258,10 +288,8 @@
 | 3 | **장소 시딩 3차: 유럽 30개 도시** | 대기 | 시딩 | 2차 완료 후 자동 이어서 |
 | 4 | 실제 사용자 테스트 (60초 영상 생성) | 대기 | 영상 | Seedance 모델 활성화 필요 |
 | 5 | 여정 생성 + 예산 병렬 처리 | 미착수 | 성능 | Promise.all 적용 |
-| 6 | 요약 섹션 예상 비용 표시 | 미착수 | 프론트 | "힐링과 미식 여행 · 예상 €1,250" |
-| 7 | 교통비 로직 수정 (가이드 비용 비교) | 미착수 | 서버 | 마케팅 포인트 |
-| 8 | 식사 슬롯 필수 포함 | 미착수 | AI | 점심/저녁 무조건 포함 |
-| 9 | 위기 경보 깜박이는 경고 | 미착수 | 프론트 | 상단 경고 아이콘 |
+| 6 | ~~식사 슬롯 필수 포함~~ | **완료** | AI | 점심1+저녁1 강제, 4대 원칙 적용 |
+| 7 | 위기 경보 깜박이는 경고 | 미착수 | 프론트 | 상단 경고 아이콘 |
 
 ### 우선순위: 중간
 
@@ -403,6 +431,7 @@ Reality Penalty (0-5) : 날씨, 안전, 혼잡도 패널티
 
 | 날짜 | 변경 내용 | 작업자 |
 |------|-----------|--------|
+| 2026-02-08 | 동선최적화+숙소설정 완료, 한국인선호 1.5x, TASK.md 전체정리, 플랜 임시파일 정리 | Cursor AI |
 | 2026-02-07 | 장소 시딩 시스템 구축 + 프랑스 30개 도시 추가 + 시딩 현황 섹션 추가 | Cursor AI |
 | 2026-02-06 | TASK.md 통합 관리 문서로 리팩토링 | Cursor AI |
 | 2026-01-27 | Phase E 영상 디버깅 기록 | Cursor AI |
