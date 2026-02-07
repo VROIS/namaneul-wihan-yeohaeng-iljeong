@@ -1,0 +1,24 @@
+﻿# Cursor indexing exclude list
+# Prevents Cursor from reading unnecessary files (performance optimization)
+
+# Dependencies (tens of thousands of files)
+node_modules/
+
+# Build outputs
+dist-server/
+dist/
+
+# Git internals
+.git/
+
+# Log files
+*.log
+
+# Attached assets (images/text - not code)
+attached_assets/
+
+# One-time scripts
+scripts/
+
+# Reference code
+reference/

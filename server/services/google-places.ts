@@ -364,6 +364,7 @@ export class GooglePlacesFetcher {
       businessStatus: googlePlace.businessStatus,
       
       userRatingCount: googlePlace.userRatingCount,
+      buzzScore: googlePlace.rating ? Math.min(10, googlePlace.rating * 2) : undefined,
       
       delivery: googlePlace.delivery,
       dineIn: googlePlace.dineIn,

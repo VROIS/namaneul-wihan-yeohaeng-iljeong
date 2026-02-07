@@ -10,6 +10,7 @@ web-build/
 
 # Server build output
 server_dist/
+dist-server/
 expo-env.d.ts
 
 # Native

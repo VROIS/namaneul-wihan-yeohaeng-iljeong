@@ -11,7 +11,7 @@ import {
 import { routeOptimizer } from "./route-optimizer";
 import { storage } from "../storage";
 import { db } from "../db";
-import { places, instagramHashtags, youtubePlaceMentions, naverBlogPosts, cities, tripAdvisorData, placePrices, reviews, geminiWebSearchCache } from "@shared/schema";
+import { places, instagramHashtags, youtubePlaceMentions, naverBlogPosts, cities, tripAdvisorData, placePrices, reviews, geminiWebSearchCache, weatherCache, crisisAlerts } from "@shared/schema";
 import { eq, sql, ilike, and, desc } from "drizzle-orm";
 
 // Lazy initialization - DB에서 API 키 로드 후 사용
@@ -983,6 +983,64 @@ function calculateDynamicWeights(
 }
 
 /**
+ * Reality Check: 실제 수집된 날씨/위기 데이터 조회
+ * 하드코딩 제거 → Supabase DB의 weatherCache + crisisAlerts 활용
+ */
+async function getRealityCheckForCity(destination: string): Promise<{ weather: string; crowd: string; status: string }> {
+  try {
+    // 도시 찾기
+    const cityRows = await db.select().from(cities)
+      .where(eq(cities.name, destination))
+      .limit(1);
+    
+    if (cityRows.length === 0) {
+      return { weather: 'Unknown', crowd: 'Medium', status: 'Open' };
+    }
+    const cityId = cityRows[0].id;
+
+    // 1. 최신 날씨 데이터 조회
+    let weatherStatus = 'Sunny';
+    const latestWeather = await db.select().from(weatherCache)
+      .where(eq(weatherCache.cityId, cityId))
+      .orderBy(desc(weatherCache.fetchedAt))
+      .limit(1);
+    
+    if (latestWeather.length > 0) {
+      const w = latestWeather[0];
+      const condition = (w.weatherCondition || '').toLowerCase();
+      if (condition.includes('rain') || condition.includes('drizzle')) weatherStatus = 'Rainy';
+      else if (condition.includes('snow')) weatherStatus = 'Snowy';
+      else if (condition.includes('cloud')) weatherStatus = 'Cloudy';
+      else if (condition.includes('thunder') || condition.includes('storm')) weatherStatus = 'Stormy';
+      else if (w.temperature && w.temperature > 35) weatherStatus = 'Hot';
+      else if (w.temperature && w.temperature < 0) weatherStatus = 'Cold';
+      else weatherStatus = 'Sunny';
+    }
+
+    // 2. 활성 위기 정보 조회
+    let crisisStatus = 'Open';
+    const activeCrisis = await db.select().from(crisisAlerts)
+      .where(and(
+        eq(crisisAlerts.cityId, cityId),
+        eq(crisisAlerts.isActive, true)
+      ))
+      .orderBy(desc(crisisAlerts.severity))
+      .limit(1);
+    
+    if (activeCrisis.length > 0 && activeCrisis[0].severity >= 7) {
+      crisisStatus = 'Warning';
+    } else if (activeCrisis.length > 0) {
+      crisisStatus = 'Caution';
+    }
+
+    return { weather: weatherStatus, crowd: 'Medium', status: crisisStatus };
+  } catch (error) {
+    console.warn('[RealityCheck] DB 조회 실패, 기본값 반환:', error);
+    return { weather: 'Unknown', crowd: 'Medium', status: 'Open' };
+  }
+}
+
+/**
  * Phase 1-5+1-7: 최종 종합 점수 계산 (동적 6요소 공식)
  * 
  * 기존 고정 공식 → 바이브+데이터 등급에 따라 가중치가 자동 조정
@@ -1687,18 +1745,82 @@ export async function generateItinerary(formData: TripFormData) {
     console.warn('[Itinerary] 한국 감성 데이터 로드 실패:', error);
   }
   
-  // Google Places API로 기본 장소 검색
-  let placesArr = await searchGooglePlaces(
-    formData.destination,
-    formData.destinationCoords,
-    vibes,
-    formData.travelStyle || 'Reasonable'
-  );
+  // ===== DB 우선 조회: 시딩된 장소 데이터 먼저 활용 (API 비용 절감) =====
+  let placesArr: PlaceResult[] = [];
+  let dbPlacesUsed = 0;
   
-  // Gemini AI로 추가 장소 추천 (한국 감성 데이터 포함)
+  try {
+    // 1. 도시 ID 찾기
+    const cityRows = await db.select().from(cities)
+      .where(eq(cities.name, formData.destination))
+      .limit(1);
+    
+    if (cityRows.length > 0) {
+      const cityId = cityRows[0].id;
+      // 2. DB에서 시딩된 장소 조회 (finalScore 또는 buzzScore가 있는 것 우선)
+      const dbPlaces = await db.select().from(places)
+        .where(eq(places.cityId, cityId))
+        .orderBy(sql`COALESCE(final_score, buzz_score, 0) DESC`)
+        .limit(requiredPlaceCount * 3); // 충분히 많이 가져와서 필터링
+      
+      if (dbPlaces.length > 0) {
+        // DB 장소를 PlaceResult 형태로 변환
+        placesArr = dbPlaces.map(p => ({
+          id: p.googlePlaceId || `db-${p.id}`,
+          name: p.name,
+          address: p.address || '',
+          latitude: p.latitude,
+          longitude: p.longitude,
+          rating: p.buzzScore ? p.buzzScore / 2 : undefined, // buzzScore(0-10) → rating(0-5)
+          userRatingCount: p.userRatingCount || 0,
+          priceLevel: p.priceLevel || 2,
+          types: p.vibeKeywords || [],
+          photoUrls: p.photoUrls || [],
+          editorialSummary: p.editorialSummary || '',
+          vibeScore: p.vibeScore || 0,
+          buzzScore: p.buzzScore || 0,
+          tasteVerifyScore: p.tasteVerifyScore || 0,
+          finalScore: p.finalScore || 0,
+          vibeKeywords: p.vibeKeywords || [],
+          sourceType: 'DB (Pre-seeded)',
+          // 속성 정보
+          goodForChildren: p.goodForChildren || false,
+          goodForGroups: p.goodForGroups || false,
+          outdoorSeating: p.outdoorSeating || false,
+          reservable: p.reservable || false,
+          dineIn: p.dineIn || false,
+          openingHours: p.openingHours as Record<string, string> || {},
+        }));
+        dbPlacesUsed = placesArr.length;
+        console.log(`[Itinerary] ✅ DB 우선 조회: ${dbPlacesUsed}곳 로드 (API 호출 절감!)`);
+      }
+    }
+  } catch (dbError) {
+    console.warn('[Itinerary] DB 우선 조회 실패, Google API로 대체:', dbError);
+  }
+  
+  // DB 장소가 부족할 때만 외부 API 호출 (비용 절감 핵심)
+  if (placesArr.length < requiredPlaceCount) {
+    console.log(`[Itinerary] DB ${placesArr.length}곳 < 필요 ${requiredPlaceCount}곳 → Google API 보충`);
+    const googlePlaces = await searchGooglePlaces(
+      formData.destination,
+      formData.destinationCoords,
+      vibes,
+      formData.travelStyle || 'Reasonable'
+    );
+    // 중복 제거 후 합치기
+    const existingNames = new Set(placesArr.map(p => p.name.toLowerCase()));
+    const newGooglePlaces = googlePlaces.filter(p => !existingNames.has(p.name.toLowerCase()));
+    placesArr = [...placesArr, ...newGooglePlaces];
+    console.log(`[Itinerary] DB: ${dbPlacesUsed}곳 + Google: ${newGooglePlaces.length}곳 = 총 ${placesArr.length}곳`);
+  } else {
+    console.log(`[Itinerary] ✅ DB 데이터만으로 충분! (${placesArr.length}곳) - Google API 호출 생략`);
+  }
+  
+  // Gemini AI로 추가 장소 추천 (DB+Google이 부족할 때만)
   if (placesArr.length < requiredPlaceCount) {
     const aiPlaces = await generatePlacesWithGemini(formData, vibeWeights, requiredPlaceCount, koreanSentiment);
-    console.log(`[Itinerary] Google: ${placesArr.length}곳, Gemini: ${aiPlaces.length}곳`);
+    console.log(`[Itinerary] DB+Google: ${placesArr.length}곳, Gemini 보충: ${aiPlaces.length}곳`);
     placesArr = [...placesArr, ...aiPlaces];
   }
   
@@ -1810,11 +1932,7 @@ export async function generateItinerary(formData: TripFormData) {
         // Phase 1-6: 선정 이유 + 신뢰도
         selectionReasons: s.place.selectionReasons || [],
         confidenceLevel: s.place.confidenceLevel || 'minimal',
-        realityCheck: {
-          weather: 'Sunny' as const,
-          crowd: 'Medium' as const,
-          status: 'Open' as const,
-        },
+        realityCheck: await getRealityCheckForCity(formData.destination),
       }));
     
     // 🚇 이동 구간 정보 계산

@@ -402,9 +402,19 @@ export class PlaceSeeder {
           citiesProcessed++;
           this.progress.completed++;
           
-          console.log(`[PlaceSeeder] === [${this.progress.completed}/${this.progress.total}] ${city.name} 완료 (${seedResult.seeded}개) - 즉시 다음 도시로 ===`);
+          console.log(`[PlaceSeeder] === [${this.progress.completed}/${this.progress.total}] ${city.name} 시딩 완료 (${seedResult.seeded}개) ===`);
           
-          // 1차 목표: 장소 데이터 빠르게 확보 (크롤러 연쇄는 전체 시딩 완료 후)
+          // 2단계: 즉시 연쇄 크롤러 실행 (도시별 - 시딩 직후 바로 보강)
+          if (seedResult.seeded > 0) {
+            console.log(`[PlaceSeeder] 🔄 ${city.name} - 연쇄 크롤러 즉시 시작...`);
+            try {
+              await this.runChainedCrawlers(city.id, city.name);
+              console.log(`[PlaceSeeder] ✅ ${city.name} - 시딩+크롤러 완전 완료!`);
+            } catch (crawlError: any) {
+              console.warn(`[PlaceSeeder] ${city.name} 크롤러 일부 실패 (시딩은 성공):`, crawlError.message);
+            }
+          }
+          
           await delay(500);
           
         } catch (error: any) {
@@ -413,26 +423,8 @@ export class PlaceSeeder {
         }
       }
 
-      // ★ 1차 목표 달성: 모든 도시 장소 시딩 완료!
-      console.log(`\n[PlaceSeeder] ★★★ 전체 시딩 완료: ${citiesProcessed}개 도시, ${totalSeeded}개 장소 ★★★`);
-      
-      // 2차: 시딩 완료된 도시들에 대해 크롤러 연쇄 실행 (백그라운드)
-      if (totalSeeded > 0) {
-        console.log(`[PlaceSeeder] 🔄 크롤러 연쇄 실행 시작 (시딩 완료 도시 대상)...`);
-        const allCitiesForCrawl = await db.select().from(cities);
-        for (const city of allCitiesForCrawl) {
-          try {
-            const cityPlaces = await storage.getPlacesByCity(city.id);
-            if (cityPlaces.length > 0) {
-              await this.runChainedCrawlers(city.id, city.name);
-              await delay(1000);
-            }
-          } catch (e: any) {
-            console.warn(`[PlaceSeeder] ${city.name} 크롤러 실패:`, e.message);
-          }
-        }
-        console.log(`[PlaceSeeder] 🔄 크롤러 연쇄 실행 완료`);
-      }
+      // ★ 전체 완료!
+      console.log(`\n[PlaceSeeder] ★★★ 전체 시딩+크롤러 완료: ${citiesProcessed}개 도시, ${totalSeeded}개 장소 ★★★`);
 
     } finally {
       this.isRunning = false;
