@@ -1418,49 +1418,60 @@ async function enrichPlacesWithDBData(
   let newlySavedCount = 0;
   let geminiOnlyCount = 0;
   
-  console.log(`[Enrich] === 시작: ${geminiPlaces.length}곳, destination="${destination}" ===`);
-  console.log(`[Enrich] db 상태: ${db ? 'connected' : 'NULL!'}`);
+  console.log(`[Enrich] === 시작: ${geminiPlaces.length}곳 ===`);
   
   if (!db) {
-    console.error('[Enrich] ❌ DB 연결 없음! Gemini 원본 유지');
+    console.error('[Enrich] DB 연결 없음! Gemini 원본 유지');
     return { places: geminiPlaces, dbEnrichedCount: 0, newlySavedCount: 0, geminiOnlyCount: geminiPlaces.length };
   }
   
-  // 1. 도시 ID 찾기
+  // 1. 도시 ID 찾기 (인코딩 이슈 우회: 모든 도시를 가져와서 JS에서 비교)
   const destinationClean = destination.split(',')[0].trim();
   let cityId: number | null = null;
   
   try {
-    console.log(`[Enrich] 1단계: 도시 검색 "${destination}" (clean: "${destinationClean}")`);
+    // 인코딩 문제 우회: SQL 비교 대신 JS에서 비교 (HTTP 요청 인코딩 ≠ DB 인코딩 이슈)
+    const allCities = await db.select({ id: cities.id, name: cities.name }).from(cities);
+    console.log(`[Enrich] 전체 도시 ${allCities.length}개 로드 (JS 매칭)`);
     
-    let cityRows = await db.select().from(cities)
-      .where(eq(cities.name, destination))
-      .limit(1);
-    console.log(`[Enrich] 정확 매칭 결과: ${cityRows.length}건`);
+    // 방법 1: 정확 매칭
+    let match = allCities.find(c => c.name === destination || c.name === destinationClean);
     
-    if (cityRows.length === 0 && destinationClean !== destination) {
-      cityRows = await db.select().from(cities)
-        .where(eq(cities.name, destinationClean))
-        .limit(1);
-      console.log(`[Enrich] 부분 매칭 결과: ${cityRows.length}건`);
+    // 방법 2: includes 매칭 (부분 문자열)
+    if (!match) {
+      match = allCities.find(c => 
+        c.name.includes(destinationClean) || destinationClean.includes(c.name)
+      );
     }
     
-    if (cityRows.length === 0) {
-      cityRows = await db.select().from(cities)
-        .where(sql`${cities.name} ILIKE ${'%' + destinationClean + '%'}`)
-        .limit(1);
-      console.log(`[Enrich] ILIKE 매칭 결과: ${cityRows.length}건`);
+    // 방법 3: Buffer 바이트 비교 (인코딩 정규화)
+    if (!match) {
+      const destBytes = Buffer.from(destinationClean, 'utf-8').toString('utf-8');
+      match = allCities.find(c => {
+        const cityBytes = Buffer.from(c.name, 'utf-8').toString('utf-8');
+        return cityBytes === destBytes || cityBytes.includes(destBytes) || destBytes.includes(cityBytes);
+      });
     }
     
-    if (cityRows.length > 0) {
-      cityId = cityRows[0].id;
-      console.log(`[Enrich] ✅ 도시 매칭 성공: "${destinationClean}" → ${cityRows[0].name} (ID: ${cityId})`);
+    // 방법 4: 유니코드 정규화 (NFC vs NFD)
+    if (!match) {
+      const destNFC = destinationClean.normalize('NFC');
+      match = allCities.find(c => c.name.normalize('NFC') === destNFC);
+    }
+    
+    if (match) {
+      cityId = match.id;
+      console.log(`[Enrich] ✅ 도시 매칭 성공: "${match.name}" (ID: ${cityId})`);
     } else {
-      console.log(`[Enrich] ❌ 도시 "${destinationClean}" DB 미등록 - Gemini 원본 유지`);
+      // 디버깅: 인코딩 바이트 출력
+      const destHex = Buffer.from(destinationClean).toString('hex');
+      const sampleHex = allCities.length > 0 ? Buffer.from(allCities[0].name).toString('hex') : 'none';
+      console.log(`[Enrich] ❌ 도시 미매칭 - dest bytes: ${destHex}, sample city bytes: ${sampleHex}`);
+      console.log(`[Enrich] 도시 목록 (처음5개): ${allCities.slice(0, 5).map(c => c.name).join(', ')}`);
       return { places: geminiPlaces, dbEnrichedCount: 0, newlySavedCount: 0, geminiOnlyCount: geminiPlaces.length };
     }
   } catch (error: any) {
-    console.error('[Enrich] ❌ 도시 검색 에러:', error.message);
+    console.error('[Enrich] 도시 검색 에러:', error.message);
     return { places: geminiPlaces, dbEnrichedCount: 0, newlySavedCount: 0, geminiOnlyCount: geminiPlaces.length };
   }
   
