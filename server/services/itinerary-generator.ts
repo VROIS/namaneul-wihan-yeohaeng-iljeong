@@ -1403,6 +1403,152 @@ ${sections.join('\n\n')}
   }
 }
 
+// ===== 🔗 Gemini 추천 장소에 DB 데이터 보강 + 미등록 장소 자동 수집/저장 =====
+// 핵심: Gemini = 추천 브레인, DB = 근거 자료. 두 역할을 결합하는 함수
+async function enrichPlacesWithDBData(
+  geminiPlaces: PlaceResult[],
+  destination: string
+): Promise<{
+  places: PlaceResult[];
+  dbEnrichedCount: number;
+  newlySavedCount: number;
+  geminiOnlyCount: number;
+}> {
+  let dbEnrichedCount = 0;
+  let newlySavedCount = 0;
+  let geminiOnlyCount = 0;
+  
+  // 1. 도시 ID 찾기
+  const destinationClean = destination.split(',')[0].trim();
+  let cityId: number | null = null;
+  
+  try {
+    let cityRows = await db!.select().from(cities)
+      .where(eq(cities.name, destination))
+      .limit(1);
+    
+    if (cityRows.length === 0 && destinationClean !== destination) {
+      cityRows = await db!.select().from(cities)
+        .where(eq(cities.name, destinationClean))
+        .limit(1);
+    }
+    
+    if (cityRows.length === 0) {
+      cityRows = await db!.select().from(cities)
+        .where(sql`${cities.name} ILIKE ${'%' + destinationClean + '%'}`)
+        .limit(1);
+    }
+    
+    if (cityRows.length > 0) {
+      cityId = cityRows[0].id;
+      console.log(`[Enrich] 도시 매칭: "${destinationClean}" → ${cityRows[0].name} (ID: ${cityId})`);
+    } else {
+      console.log(`[Enrich] 도시 "${destinationClean}" DB 미등록 - 보강 불가 (Gemini 원본 유지)`);
+      return { places: geminiPlaces, dbEnrichedCount: 0, newlySavedCount: 0, geminiOnlyCount: geminiPlaces.length };
+    }
+  } catch (error) {
+    console.warn('[Enrich] 도시 검색 실패:', error);
+    return { places: geminiPlaces, dbEnrichedCount: 0, newlySavedCount: 0, geminiOnlyCount: geminiPlaces.length };
+  }
+  
+  // 2. 해당 도시의 모든 DB 장소를 한 번에 로드 (N+1 쿼리 방지)
+  let dbPlacesMap = new Map<string, typeof places.$inferSelect>();
+  try {
+    const dbPlaces = await db!.select().from(places)
+      .where(eq(places.cityId, cityId));
+    
+    for (const p of dbPlaces) {
+      dbPlacesMap.set(p.name.toLowerCase(), p);
+      // 영어 이름도 매핑 (googlePlaceId가 있으면)
+      if (p.googlePlaceId) {
+        dbPlacesMap.set(p.googlePlaceId.toLowerCase(), p);
+      }
+    }
+    console.log(`[Enrich] DB 장소 로드: ${dbPlaces.length}곳 (매칭 준비)`);
+  } catch (error) {
+    console.warn('[Enrich] DB 장소 로드 실패:', error);
+    return { places: geminiPlaces, dbEnrichedCount: 0, newlySavedCount: 0, geminiOnlyCount: geminiPlaces.length };
+  }
+  
+  // 3. 각 Gemini 추천 장소에 대해 DB 데이터 보강
+  const enrichedPlaces: PlaceResult[] = [];
+  
+  for (const place of geminiPlaces) {
+    const nameLower = place.name.toLowerCase();
+    
+    // DB에서 이름으로 검색 (정확 매칭 → 부분 매칭)
+    let dbMatch = dbPlacesMap.get(nameLower);
+    
+    // 부분 매칭 시도 (Gemini가 "Café de Flore"라 했는데 DB에 "Cafe de Flore"로 있을 수 있음)
+    if (!dbMatch) {
+      for (const [key, val] of dbPlacesMap) {
+        if (key.includes(nameLower) || nameLower.includes(key)) {
+          dbMatch = val;
+          break;
+        }
+      }
+    }
+    
+    if (dbMatch) {
+      // ✅ DB 매칭 성공 → Gemini 추천 + DB raw data 보강
+      dbEnrichedCount++;
+      enrichedPlaces.push({
+        ...place,  // Gemini의 AI 추천 이유, 설명 유지 (차별화 포인트)
+        sourceType: 'Gemini AI + DB Enriched',
+        // DB에서 보강하는 데이터 (Gemini가 모르는 실제 데이터)
+        image: (dbMatch.photoUrls && dbMatch.photoUrls.length > 0) ? dbMatch.photoUrls[0] : place.image,
+        vibeScore: dbMatch.vibeScore || place.vibeScore,
+        finalScore: dbMatch.finalScore || place.finalScore || 0,
+        confidenceScore: Math.max(place.confidenceScore, dbMatch.buzzScore ? Math.min(10, dbMatch.buzzScore) : 0),
+        googleMapsUrl: dbMatch.googleMapsUri || place.googleMapsUrl,
+        // DB의 검증된 좌표로 교체 (Gemini 좌표가 부정확할 수 있음)
+        lat: dbMatch.latitude || place.lat,
+        lng: dbMatch.longitude || place.lng,
+        // 선정 이유에 DB 보강 표시 추가
+        selectionReasons: [
+          ...(place.selectionReasons || []),
+          `📊 DB 검증 완료 (buzzScore: ${(dbMatch.buzzScore || 0).toFixed(1)}, vibeScore: ${(dbMatch.vibeScore || 0).toFixed(1)})`,
+        ],
+        confidenceLevel: (dbMatch.finalScore && dbMatch.finalScore > 5) ? 'high' as const :
+                        (dbMatch.buzzScore && dbMatch.buzzScore > 3) ? 'medium' as const :
+                        place.confidenceLevel || 'low' as const,
+      });
+    } else {
+      // ❌ DB 미등록 → Gemini 원본 유지 + 백그라운드로 DB에 자동 저장
+      geminiOnlyCount++;
+      enrichedPlaces.push({
+        ...place,
+        sourceType: 'Gemini AI (New)',
+      });
+      
+      // 🆕 DB에 새 장소 자동 저장 (향후 크롤러가 보강할 기초 데이터)
+      try {
+        await db!.insert(places).values({
+          cityId: cityId,
+          name: place.name,
+          type: place.tags?.includes('restaurant') ? 'restaurant' as const :
+                place.tags?.includes('cafe') ? 'cafe' as const :
+                place.tags?.includes('landmark') ? 'landmark' as const :
+                'attraction' as const,
+          latitude: place.lat,
+          longitude: place.lng,
+          editorialSummary: place.description || place.personaFitReason,
+          vibeKeywords: place.vibeTags || place.tags || [],
+          vibeScore: place.vibeScore || 0,
+          buzzScore: (place as any).buzzScore || 0,
+        }).onConflictDoNothing();
+        newlySavedCount++;
+        console.log(`[Enrich] 🆕 DB 신규 저장: ${place.name}`);
+      } catch (saveError) {
+        // 저장 실패해도 추천은 유지 (조용히 넘어감)
+        console.warn(`[Enrich] DB 저장 실패 (${place.name}):`, saveError);
+      }
+    }
+  }
+  
+  return { places: enrichedPlaces, dbEnrichedCount, newlySavedCount, geminiOnlyCount };
+}
+
 async function generatePlacesWithGemini(
   formData: TripFormData,
   vibeWeights: { vibe: Vibe; weight: number; percentage: number }[],
@@ -1745,116 +1891,49 @@ export async function generateItinerary(formData: TripFormData) {
     console.warn('[Itinerary] 한국 감성 데이터 로드 실패:', error);
   }
   
-  // ===== DB 우선 조회: 시딩된 장소 데이터 먼저 활용 (API 비용 절감) =====
-  let placesArr: PlaceResult[] = [];
-  let dbPlacesUsed = 0;
+  // ===== 🎯 새 파이프라인: Gemini 추천 우선 → DB 데이터 보강 → 미등록 자동 수집 =====
+  // 핵심 전략: Gemini = 브레인(AI 추천), DB = 근거자료(점수/사진/리뷰 보강)
   
-  try {
-    // 1. 도시 ID 찾기 (정확한 매칭 → 부분 매칭 순서로 시도)
-    const destinationClean = formData.destination.split(',')[0].trim(); // "파리, 프랑스" → "파리"
-    console.log(`[Itinerary] DB 조회 시도: "${formData.destination}" → 검색어: "${destinationClean}"`);
-    
-    let cityRows = await db.select().from(cities)
-      .where(eq(cities.name, formData.destination))
-      .limit(1);
-    
-    // 정확한 매칭 실패 시 쉼표 앞 부분으로 재시도
-    if (cityRows.length === 0 && destinationClean !== formData.destination) {
-      cityRows = await db.select().from(cities)
-        .where(eq(cities.name, destinationClean))
-        .limit(1);
-      if (cityRows.length > 0) {
-        console.log(`[Itinerary] 부분 매칭 성공: "${destinationClean}" → 도시 ID: ${cityRows[0].id}`);
-      }
-    }
-    
-    // 그래도 실패 시 ILIKE 검색
-    if (cityRows.length === 0) {
-      cityRows = await db.select().from(cities)
-        .where(sql`${cities.name} ILIKE ${'%' + destinationClean + '%'}`)
-        .limit(1);
-      if (cityRows.length > 0) {
-        console.log(`[Itinerary] ILIKE 매칭 성공: "${destinationClean}" → ${cityRows[0].name} (ID: ${cityRows[0].id})`);
-      }
-    }
-    
-    if (cityRows.length > 0) {
-      const cityId = cityRows[0].id;
-      // 2. DB에서 시딩된 장소 조회 (finalScore 또는 buzzScore가 있는 것 우선)
-      const dbPlaces = await db.select().from(places)
-        .where(eq(places.cityId, cityId))
-        .orderBy(sql`COALESCE(final_score, buzz_score, 0) DESC`)
-        .limit(requiredPlaceCount * 3); // 충분히 많이 가져와서 필터링
-      
-      if (dbPlaces.length > 0) {
-        // DB 장소를 PlaceResult 형태로 변환 (PlaceResult 인터페이스 필수 필드 모두 포함)
-        placesArr = dbPlaces.map(p => ({
-          id: p.googlePlaceId || `db-${p.id}`,
-          name: p.name,
-          description: p.editorialSummary || p.name,
-          lat: p.latitude,
-          lng: p.longitude,
-          vibeScore: p.vibeScore || 0,
-          confidenceScore: p.buzzScore ? Math.min(10, p.buzzScore) : 3,
-          sourceType: 'DB (Pre-seeded)',
-          personaFitReason: p.editorialSummary || `${p.name} - DB 시딩 데이터`,
-          tags: p.vibeKeywords || [],
-          vibeTags: (p.vibeKeywords || []).filter((v: string) => 
-            ['Healing', 'Adventure', 'Hotspot', 'Foodie', 'Romantic', 'Culture'].includes(v)
-          ) as Vibe[],
-          image: (p.photoUrls && p.photoUrls.length > 0) ? p.photoUrls[0] : '',
-          priceEstimate: p.priceLevel ? `€${'€'.repeat(p.priceLevel)}` : '€€',
-          placeTypes: p.vibeKeywords || [],
-          koreanPopularityScore: 0, // 별도 테이블에서 계산됨 (인스타+유튜브+블로그)
-          googleMapsUrl: p.googleMapsUri || (p.googlePlaceId ? `https://www.google.com/maps/place/?q=place_id:${p.googlePlaceId}` : ''),
-          // 선택적 필드
-          finalScore: p.finalScore || 0,
-          buzzScore: p.buzzScore || 0,
-          selectionReasons: [`DB 시딩 데이터 (점수: ${(p.finalScore || p.buzzScore || 0).toFixed(1)})`],
-          confidenceLevel: (p.finalScore && p.finalScore > 5) ? 'high' as const : 
-                          (p.buzzScore && p.buzzScore > 3) ? 'medium' as const : 'low' as const,
-        }));
-        dbPlacesUsed = placesArr.length;
-        console.log(`[Itinerary] ✅ DB 우선 조회: ${dbPlacesUsed}곳 로드 (API 호출 절감!)`);
-      }
-    }
-  } catch (dbError) {
-    console.warn('[Itinerary] DB 우선 조회 실패, Google API로 대체:', dbError);
-  }
+  console.log(`[Itinerary] ===== 1단계: Gemini 3.0 Flash AI 추천 시작 =====`);
   
-  // DB 장소가 부족할 때만 외부 API 호출 (비용 절감 핵심)
+  // Step 1: Gemini AI가 먼저 장소를 추천 (차별화 포인트 = AI 개인화 추천)
+  let placesArr = await generatePlacesWithGemini(formData, vibeWeights, requiredPlaceCount + 5, koreanSentiment);
+  console.log(`[Itinerary] 🤖 Gemini 추천 완료: ${placesArr.length}곳`);
+  
+  // Google API 보충 (Gemini 결과가 부족할 때만)
   if (placesArr.length < requiredPlaceCount) {
-    console.log(`[Itinerary] DB ${placesArr.length}곳 < 필요 ${requiredPlaceCount}곳 → Google API 보충`);
+    console.log(`[Itinerary] Gemini ${placesArr.length}곳 < 필요 ${requiredPlaceCount}곳 → Google API 보충`);
     const googlePlaces = await searchGooglePlaces(
       formData.destination,
       formData.destinationCoords,
       vibes,
       formData.travelStyle || 'Reasonable'
     );
-    // 중복 제거 후 합치기
     const existingNames = new Set(placesArr.map(p => p.name.toLowerCase()));
     const newGooglePlaces = googlePlaces.filter(p => !existingNames.has(p.name.toLowerCase()));
     placesArr = [...placesArr, ...newGooglePlaces];
-    console.log(`[Itinerary] DB: ${dbPlacesUsed}곳 + Google: ${newGooglePlaces.length}곳 = 총 ${placesArr.length}곳`);
-  } else {
-    console.log(`[Itinerary] ✅ DB 데이터만으로 충분! (${placesArr.length}곳) - Google API 호출 생략`);
   }
   
-  // Gemini AI로 추가 장소 추천 (DB+Google이 부족할 때만)
-  if (placesArr.length < requiredPlaceCount) {
-    const aiPlaces = await generatePlacesWithGemini(formData, vibeWeights, requiredPlaceCount, koreanSentiment);
-    console.log(`[Itinerary] DB+Google: ${placesArr.length}곳, Gemini 보충: ${aiPlaces.length}곳`);
-    placesArr = [...placesArr, ...aiPlaces];
-  }
-  
-  // 부족하면 추가 생성
+  // 부족하면 Gemini 재시도
   let attempts = 0;
   while (placesArr.length < requiredPlaceCount && attempts < 2) {
     attempts++;
-    console.log(`[Itinerary] 장소 부족 (${placesArr.length}/${requiredPlaceCount}), 추가 생성 중...`);
+    console.log(`[Itinerary] 장소 부족 (${placesArr.length}/${requiredPlaceCount}), Gemini 추가 요청 중...`);
     const morePlaces = await generatePlacesWithGemini(formData, vibeWeights, requiredPlaceCount - placesArr.length + 5, koreanSentiment);
-    placesArr = [...placesArr, ...morePlaces];
+    const existingNames = new Set(placesArr.map(p => p.name.toLowerCase()));
+    const uniqueMore = morePlaces.filter(p => !existingNames.has(p.name.toLowerCase()));
+    placesArr = [...placesArr, ...uniqueMore];
   }
+  
+  // Step 2: Gemini 추천 장소에 우리 DB 데이터 보강 (+ 미등록 장소 자동 수집/저장)
+  console.log(`[Itinerary] ===== 2단계: DB 데이터 보강 + 미등록 장소 자동 수집 =====`);
+  const enrichResult = await enrichPlacesWithDBData(placesArr, formData.destination);
+  placesArr = enrichResult.places;
+  
+  console.log(`[Itinerary] 🎯 최종 결과: 총 ${placesArr.length}곳`);
+  console.log(`[Itinerary]   ├─ DB 매칭 보강: ${enrichResult.dbEnrichedCount}곳 (점수/사진/리뷰 삽입)`);
+  console.log(`[Itinerary]   ├─ 신규 DB 저장: ${enrichResult.newlySavedCount}곳 (DB 자동 성장!)`);
+  console.log(`[Itinerary]   └─ Gemini 원본 유지: ${enrichResult.geminiOnlyCount}곳`);
   
   console.log(`[Itinerary] 총 수집 장소: ${placesArr.length}곳`);
   
