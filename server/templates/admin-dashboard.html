@@ -699,7 +699,7 @@
             <div style="text-align: center;"><span id="google-status" class="status-badge status-ok">활성</span></div>
             <div style="text-align: center;" id="google-count">- 장소</div>
             <div style="text-align: center; font-size: 12px;" id="google-sync">-</div>
-            <div style="text-align: center;"><button class="btn btn-sm btn-secondary" onclick="syncGooglePlaces()">동기화</button></div>
+            <div style="text-align: center;"><button class="btn btn-sm btn-secondary" onclick="syncGooglePlaces()">바이브 시딩</button></div>
           </div>
           <div id="source-instagram" class="source-row" style="display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr; gap: 12px; padding: 12px 16px; background: rgba(255,255,255,0.03); border-radius: 10px; align-items: center;">
             <div><span style="color: #e1306c;">●</span> Instagram</div>
@@ -2052,11 +2052,29 @@
     }
     
     async function syncGooglePlaces() {
-      alert('Google Places 동기화가 시작됩니다. 시간이 걸릴 수 있습니다.');
+      // 먼저 시딩 현황 조회
       try {
-        await fetch(`${API_BASE}/sync/places/1`, { method: 'POST' });
+        const statusRes = await fetch(`${API_BASE}/seed/places/status`);
+        const status = await statusRes.json();
+        const msg = `🌱 장소 시딩 현황\n\n` +
+          `• 전체 도시: ${status.totalCities || 0}개\n` +
+          `• 시딩 완료: ${status.seededCities || 0}개\n` +
+          `• 대기 중: ${status.pendingCities || 0}개\n` +
+          `• DB 장소 수: ${status.totalPlaces || 0}개\n` +
+          `${status.isRunning ? `\n⏳ 현재 진행 중: ${status.currentCity} (${status.progress?.completed || 0}/${status.progress?.total || 0})\n` : ''}` +
+          `\n전체 미시딩 도시 바이브 시딩을 시작하시겠습니까?\n(백그라운드 실행, 도시당 약 2-5분 소요)`;
+        
+        if (!confirm(msg)) return;
+      } catch (e) {
+        if (!confirm('장소 바이브 시딩을 시작하시겠습니까?\n(백그라운드 실행, 시간이 오래 걸릴 수 있습니다)')) return;
+      }
+      
+      try {
+        const res = await fetch(`${API_BASE}/seed/places/all`, { method: 'POST' });
+        const data = await res.json();
+        alert(`✅ ${data.message || '시딩 시작됨'}\n\n터미널 로그에서 [PlaceSeeder] 진행 상황을 확인하세요.`);
         loadUnifiedSourcesStatus();
-      } catch (err) { alert('동기화 실패'); }
+      } catch (err) { alert('❌ 시딩 시작 실패: ' + err.message); }
     }
     
     async function syncNaverBlogs() {

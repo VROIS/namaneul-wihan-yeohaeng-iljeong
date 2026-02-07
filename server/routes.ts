@@ -1315,6 +1315,7 @@ async function seedDefaultInstagramHashtags() {
 
 async function seedDefaultCities() {
   const defaultCities = [
+    // ===== 기존 아시아/미주 13개 =====
     { name: "서울", country: "대한민국", countryCode: "KR", latitude: 37.5665, longitude: 126.9780, timezone: "Asia/Seoul", primaryLanguage: "ko" },
     { name: "도쿄", country: "일본", countryCode: "JP", latitude: 35.6762, longitude: 139.6503, timezone: "Asia/Tokyo", primaryLanguage: "ja" },
     { name: "오사카", country: "일본", countryCode: "JP", latitude: 34.6937, longitude: 135.5023, timezone: "Asia/Tokyo", primaryLanguage: "ja" },
@@ -1328,6 +1329,86 @@ async function seedDefaultCities() {
     { name: "홍콩", country: "홍콩", countryCode: "HK", latitude: 22.3193, longitude: 114.1694, timezone: "Asia/Hong_Kong", primaryLanguage: "zh" },
     { name: "다낭", country: "베트남", countryCode: "VN", latitude: 16.0544, longitude: 108.2022, timezone: "Asia/Ho_Chi_Minh", primaryLanguage: "vi" },
     { name: "하노이", country: "베트남", countryCode: "VN", latitude: 21.0285, longitude: 105.8542, timezone: "Asia/Ho_Chi_Minh", primaryLanguage: "vi" },
+    
+    // ===== 유럽 30개 도시 (1차 목표) =====
+    // 이탈리아
+    { name: "밀라노", country: "이탈리아", countryCode: "IT", latitude: 45.4642, longitude: 9.1900, timezone: "Europe/Rome", primaryLanguage: "it" },
+    { name: "피렌체", country: "이탈리아", countryCode: "IT", latitude: 43.7696, longitude: 11.2558, timezone: "Europe/Rome", primaryLanguage: "it" },
+    { name: "베니스", country: "이탈리아", countryCode: "IT", latitude: 45.4408, longitude: 12.3155, timezone: "Europe/Rome", primaryLanguage: "it" },
+    { name: "나폴리", country: "이탈리아", countryCode: "IT", latitude: 40.8518, longitude: 14.2681, timezone: "Europe/Rome", primaryLanguage: "it" },
+    // 프랑스 (30개 관광도시 - 1차 목표)
+    { name: "니스", country: "프랑스", countryCode: "FR", latitude: 43.7102, longitude: 7.2620, timezone: "Europe/Paris", primaryLanguage: "fr" },
+    { name: "리옹", country: "프랑스", countryCode: "FR", latitude: 45.7640, longitude: 4.8357, timezone: "Europe/Paris", primaryLanguage: "fr" },
+    { name: "마르세유", country: "프랑스", countryCode: "FR", latitude: 43.2965, longitude: 5.3698, timezone: "Europe/Paris", primaryLanguage: "fr" },
+    { name: "보르도", country: "프랑스", countryCode: "FR", latitude: 44.8378, longitude: -0.5792, timezone: "Europe/Paris", primaryLanguage: "fr" },
+    { name: "스트라스부르", country: "프랑스", countryCode: "FR", latitude: 48.5734, longitude: 7.7521, timezone: "Europe/Paris", primaryLanguage: "fr" },
+    { name: "툴루즈", country: "프랑스", countryCode: "FR", latitude: 43.6047, longitude: 1.4442, timezone: "Europe/Paris", primaryLanguage: "fr" },
+    { name: "몽펠리에", country: "프랑스", countryCode: "FR", latitude: 43.6108, longitude: 3.8767, timezone: "Europe/Paris", primaryLanguage: "fr" },
+    { name: "낭트", country: "프랑스", countryCode: "FR", latitude: 47.2184, longitude: -1.5536, timezone: "Europe/Paris", primaryLanguage: "fr" },
+    { name: "칸", country: "프랑스", countryCode: "FR", latitude: 43.5528, longitude: 7.0174, timezone: "Europe/Paris", primaryLanguage: "fr" },
+    { name: "아비뇽", country: "프랑스", countryCode: "FR", latitude: 43.9493, longitude: 4.8055, timezone: "Europe/Paris", primaryLanguage: "fr" },
+    { name: "엑상프로방스", country: "프랑스", countryCode: "FR", latitude: 43.5297, longitude: 5.4474, timezone: "Europe/Paris", primaryLanguage: "fr" },
+    { name: "콜마르", country: "프랑스", countryCode: "FR", latitude: 48.0794, longitude: 7.3558, timezone: "Europe/Paris", primaryLanguage: "fr" },
+    { name: "앙시", country: "프랑스", countryCode: "FR", latitude: 45.8992, longitude: 6.1294, timezone: "Europe/Paris", primaryLanguage: "fr" },
+    { name: "디종", country: "프랑스", countryCode: "FR", latitude: 47.3220, longitude: 5.0415, timezone: "Europe/Paris", primaryLanguage: "fr" },
+    { name: "루앙", country: "프랑스", countryCode: "FR", latitude: 49.4432, longitude: 1.0993, timezone: "Europe/Paris", primaryLanguage: "fr" },
+    { name: "릴", country: "프랑스", countryCode: "FR", latitude: 50.6292, longitude: 3.0573, timezone: "Europe/Paris", primaryLanguage: "fr" },
+    { name: "렌", country: "프랑스", countryCode: "FR", latitude: 48.1173, longitude: -1.6778, timezone: "Europe/Paris", primaryLanguage: "fr" },
+    { name: "카르카손", country: "프랑스", countryCode: "FR", latitude: 43.2130, longitude: 2.3491, timezone: "Europe/Paris", primaryLanguage: "fr" },
+    { name: "비아리츠", country: "프랑스", countryCode: "FR", latitude: 43.4832, longitude: -1.5586, timezone: "Europe/Paris", primaryLanguage: "fr" },
+    { name: "생말로", country: "프랑스", countryCode: "FR", latitude: 48.6493, longitude: -2.0007, timezone: "Europe/Paris", primaryLanguage: "fr" },
+    { name: "샤모니", country: "프랑스", countryCode: "FR", latitude: 45.9237, longitude: 6.8694, timezone: "Europe/Paris", primaryLanguage: "fr" },
+    { name: "아를", country: "프랑스", countryCode: "FR", latitude: 43.6767, longitude: 4.6278, timezone: "Europe/Paris", primaryLanguage: "fr" },
+    { name: "생트로페", country: "프랑스", countryCode: "FR", latitude: 43.2727, longitude: 6.6406, timezone: "Europe/Paris", primaryLanguage: "fr" },
+    { name: "베르사유", country: "프랑스", countryCode: "FR", latitude: 48.8014, longitude: 2.1301, timezone: "Europe/Paris", primaryLanguage: "fr" },
+    { name: "그르노블", country: "프랑스", countryCode: "FR", latitude: 45.1885, longitude: 5.7245, timezone: "Europe/Paris", primaryLanguage: "fr" },
+    { name: "랭스", country: "프랑스", countryCode: "FR", latitude: 49.2583, longitude: 4.0317, timezone: "Europe/Paris", primaryLanguage: "fr" },
+    { name: "안티브", country: "프랑스", countryCode: "FR", latitude: 43.5808, longitude: 7.1239, timezone: "Europe/Paris", primaryLanguage: "fr" },
+    { name: "망통", country: "프랑스", countryCode: "FR", latitude: 43.7764, longitude: 7.5048, timezone: "Europe/Paris", primaryLanguage: "fr" },
+    { name: "투르", country: "프랑스", countryCode: "FR", latitude: 47.3941, longitude: 0.6848, timezone: "Europe/Paris", primaryLanguage: "fr" },
+    // 스페인
+    { name: "마드리드", country: "스페인", countryCode: "ES", latitude: 40.4168, longitude: -3.7038, timezone: "Europe/Madrid", primaryLanguage: "es" },
+    { name: "세비야", country: "스페인", countryCode: "ES", latitude: 37.3891, longitude: -5.9845, timezone: "Europe/Madrid", primaryLanguage: "es" },
+    // 독일
+    { name: "베를린", country: "독일", countryCode: "DE", latitude: 52.5200, longitude: 13.4050, timezone: "Europe/Berlin", primaryLanguage: "de" },
+    { name: "뮌헨", country: "독일", countryCode: "DE", latitude: 48.1351, longitude: 11.5820, timezone: "Europe/Berlin", primaryLanguage: "de" },
+    // 오스트리아
+    { name: "빈", country: "오스트리아", countryCode: "AT", latitude: 48.2082, longitude: 16.3738, timezone: "Europe/Vienna", primaryLanguage: "de" },
+    { name: "잘츠부르크", country: "오스트리아", countryCode: "AT", latitude: 47.8095, longitude: 13.0550, timezone: "Europe/Vienna", primaryLanguage: "de" },
+    // 스위스
+    { name: "취리히", country: "스위스", countryCode: "CH", latitude: 47.3769, longitude: 8.5417, timezone: "Europe/Zurich", primaryLanguage: "de" },
+    { name: "인터라켄", country: "스위스", countryCode: "CH", latitude: 46.6863, longitude: 7.8632, timezone: "Europe/Zurich", primaryLanguage: "de" },
+    { name: "루체른", country: "스위스", countryCode: "CH", latitude: 47.0502, longitude: 8.3093, timezone: "Europe/Zurich", primaryLanguage: "de" },
+    // 네덜란드
+    { name: "암스테르담", country: "네덜란드", countryCode: "NL", latitude: 52.3676, longitude: 4.9041, timezone: "Europe/Amsterdam", primaryLanguage: "nl" },
+    // 체코
+    { name: "프라하", country: "체코", countryCode: "CZ", latitude: 50.0755, longitude: 14.4378, timezone: "Europe/Prague", primaryLanguage: "cs" },
+    // 포르투갈
+    { name: "리스본", country: "포르투갈", countryCode: "PT", latitude: 38.7223, longitude: -9.1393, timezone: "Europe/Lisbon", primaryLanguage: "pt" },
+    { name: "포르투", country: "포르투갈", countryCode: "PT", latitude: 41.1579, longitude: -8.6291, timezone: "Europe/Lisbon", primaryLanguage: "pt" },
+    // 그리스
+    { name: "아테네", country: "그리스", countryCode: "GR", latitude: 37.9838, longitude: 23.7275, timezone: "Europe/Athens", primaryLanguage: "el" },
+    { name: "산토리니", country: "그리스", countryCode: "GR", latitude: 36.3932, longitude: 25.4615, timezone: "Europe/Athens", primaryLanguage: "el" },
+    // 터키
+    { name: "이스탄불", country: "터키", countryCode: "TR", latitude: 41.0082, longitude: 28.9784, timezone: "Europe/Istanbul", primaryLanguage: "tr" },
+    // 크로아티아
+    { name: "두브로브니크", country: "크로아티아", countryCode: "HR", latitude: 42.6507, longitude: 18.0944, timezone: "Europe/Zagreb", primaryLanguage: "hr" },
+    // 헝가리
+    { name: "부다페스트", country: "헝가리", countryCode: "HU", latitude: 47.4979, longitude: 19.0402, timezone: "Europe/Budapest", primaryLanguage: "hu" },
+    // 영국
+    { name: "에든버러", country: "영국", countryCode: "GB", latitude: 55.9533, longitude: -3.1883, timezone: "Europe/London", primaryLanguage: "en" },
+    // 벨기에
+    { name: "브뤼셀", country: "벨기에", countryCode: "BE", latitude: 50.8503, longitude: 4.3517, timezone: "Europe/Brussels", primaryLanguage: "fr" },
+    // 덴마크
+    { name: "코펜하겐", country: "덴마크", countryCode: "DK", latitude: 55.6761, longitude: 12.5683, timezone: "Europe/Copenhagen", primaryLanguage: "da" },
+    // 스웨덴
+    { name: "스톡홀름", country: "스웨덴", countryCode: "SE", latitude: 59.3293, longitude: 18.0686, timezone: "Europe/Stockholm", primaryLanguage: "sv" },
+    // 핀란드
+    { name: "헬싱키", country: "핀란드", countryCode: "FI", latitude: 60.1699, longitude: 24.9384, timezone: "Europe/Helsinki", primaryLanguage: "fi" },
+    // 모나코
+    { name: "모나코", country: "모나코", countryCode: "MC", latitude: 43.7384, longitude: 7.4246, timezone: "Europe/Monaco", primaryLanguage: "fr" },
+    // 폴란드
+    { name: "바르샤바", country: "폴란드", countryCode: "PL", latitude: 52.2297, longitude: 21.0122, timezone: "Europe/Warsaw", primaryLanguage: "pl" },
   ];
 
   for (const city of defaultCities) {

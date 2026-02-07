@@ -1268,6 +1268,77 @@ export function registerAdminRoutes(app: Express) {
   });
 
   // ========================================
+  // 장소 시딩 API (Place Seeder)
+  // ========================================
+
+  // 단일 도시 시딩
+  app.post("/api/admin/seed/places/city", async (req, res) => {
+    try {
+      const { cityId } = req.body;
+      if (!cityId) {
+        return res.json({ success: false, error: "cityId 필요" });
+      }
+      const { placeSeeder } = await import("./services/place-seeder");
+      // 비동기 실행 (즉시 응답 반환)
+      placeSeeder.seedCityPlaces(cityId).then(result => {
+        console.log(`[Admin] 도시 ${cityId} 시딩 완료: ${result.seeded}개`);
+      }).catch(err => {
+        console.error(`[Admin] 도시 ${cityId} 시딩 실패:`, err);
+      });
+      res.json({ success: true, message: `도시 ${cityId} 시딩 시작됨 (백그라운드 실행)` });
+    } catch (error: any) {
+      res.json({ success: false, error: error.message });
+    }
+  });
+
+  // 다중 도시 시딩 (연쇄 실행)
+  app.post("/api/admin/seed/places/batch", async (req, res) => {
+    try {
+      const { cityIds } = req.body;
+      if (!cityIds || !Array.isArray(cityIds)) {
+        return res.json({ success: false, error: "cityIds 배열 필요" });
+      }
+      const { placeSeeder } = await import("./services/place-seeder");
+      // 비동기 실행 (즉시 응답 반환)
+      placeSeeder.seedBatchCities(cityIds).then(result => {
+        console.log(`[Admin] 배치 시딩 완료: ${result.citiesProcessed}개 도시, ${result.totalSeeded}개 장소`);
+      }).catch(err => {
+        console.error(`[Admin] 배치 시딩 실패:`, err);
+      });
+      res.json({ success: true, message: `${cityIds.length}개 도시 시딩 시작됨 (백그라운드 연쇄 실행)` });
+    } catch (error: any) {
+      res.json({ success: false, error: error.message });
+    }
+  });
+
+  // 전체 미시딩 도시 자동 시딩 (1차 목표까지 쉬지 않고)
+  app.post("/api/admin/seed/places/all", async (req, res) => {
+    try {
+      const { placeSeeder } = await import("./services/place-seeder");
+      // 비동기 실행 (즉시 응답 반환)
+      placeSeeder.seedAllPendingCities().then(result => {
+        console.log(`[Admin] 전체 시딩 완료: ${result.citiesProcessed}개 도시, ${result.totalSeeded}개 장소`);
+      }).catch(err => {
+        console.error(`[Admin] 전체 시딩 실패:`, err);
+      });
+      res.json({ success: true, message: "전체 미시딩 도시 시딩 시작됨 (백그라운드 연쇄 실행)" });
+    } catch (error: any) {
+      res.json({ success: false, error: error.message });
+    }
+  });
+
+  // 시딩 현황 조회
+  app.get("/api/admin/seed/places/status", async (req, res) => {
+    try {
+      const { placeSeeder } = await import("./services/place-seeder");
+      const status = await placeSeeder.getSeedingStatus();
+      res.json({ success: true, ...status });
+    } catch (error: any) {
+      res.json({ success: false, error: error.message });
+    }
+  });
+
+  // ========================================
   // 기본 데이터 시드 (디폴트 채널/소스)
   // ========================================
   

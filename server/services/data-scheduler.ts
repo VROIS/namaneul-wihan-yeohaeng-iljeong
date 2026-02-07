@@ -42,6 +42,12 @@ export class DataScheduler {
       console.log("[Scheduler] 🚨 서버 시작 - 위기 정보 즉시 수집 시작...");
       await this.executeTask("crisis_sync");
     }, 60000); // 1분 후 실행 (API 키 로드 대기)
+    
+    // 🌱 서버 시작 2분 후 장소 시딩 즉시 시작 (미시딩 도시 연쇄 처리)
+    setTimeout(async () => {
+      console.log("[Scheduler] 🌱 서버 시작 - 장소 시딩 연쇄 실행 시작...");
+      await this.executeTask("place_seed_sync");
+    }, 120000); // 2분 후 실행
   }
 
   private scheduleDefaultTasks(): void {
@@ -84,6 +90,9 @@ export class DataScheduler {
     // 📸 포토스팟 점수 계산: 하루 1번
     this.scheduleTask("photospot_sync", "0 21 * * *");       // 06:00 KST
     
+    // 🌱 장소 시딩: 6시간마다 (미시딩 도시 연쇄 처리)
+    this.scheduleTask("place_seed_sync", "0 */6 * * *");     // 6시간마다
+    
     console.log("[Scheduler] ✅ 자동 수집 스케줄 설정 완료:");
     console.log("  - 날씨: 매 시간");
     console.log("  - 환율: 하루 3번");
@@ -94,6 +103,7 @@ export class DataScheduler {
     console.log("  - 한국 플랫폼: 하루 1번");
     console.log("  - 패키지 투어 검증: 하루 1번");
     console.log("  - 포토스팟 점수: 하루 1번");
+    console.log("  - 🌱 장소 시딩: 6시간마다 (연쇄 실행)");
   }
 
   private scheduleTask(taskName: string, cronExpression: string): void {
@@ -167,6 +177,9 @@ export class DataScheduler {
           break;
         case "photospot_sync":
           result = await this.runPhotospotSync();
+          break;
+        case "place_seed_sync":
+          result = await this.runPlaceSeedSync();
           break;
         default:
           console.warn(`[Scheduler] Unknown task: ${taskName}`);
@@ -403,6 +416,20 @@ export class DataScheduler {
     }
   }
 
+  private async runPlaceSeedSync(): Promise<{ success: boolean; itemsProcessed: number; errors: string[] }> {
+    try {
+      const { placeSeeder } = await import("./place-seeder");
+      const result = await placeSeeder.seedAllPendingCities();
+      return {
+        success: true,
+        itemsProcessed: result.totalSeeded,
+        errors: [],
+      };
+    } catch (error: any) {
+      return { success: false, itemsProcessed: 0, errors: [error.message] };
+    }
+  }
+
   async runNow(taskName: string): Promise<{ success: boolean; message: string }> {
     console.log(`[Scheduler] Manual trigger for task: ${taskName}`);
     try {
@@ -433,6 +460,7 @@ export class DataScheduler {
         weather_sync: "매일 04:30 KST",
         tripadvisor_sync: "매일 04:45 KST",
         exchange_rate_sync: "매일 09:00 KST",
+        place_seed_sync: "6시간마다 (연쇄 실행)",
       };
       return {
         taskName,

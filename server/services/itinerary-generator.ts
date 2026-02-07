@@ -9,6 +9,7 @@ import {
   generatePromptContext 
 } from "./protagonist-generator";
 import { routeOptimizer } from "./route-optimizer";
+import { storage } from "../storage";
 import { db } from "../db";
 import { places, instagramHashtags, youtubePlaceMentions, naverBlogPosts, cities, tripAdvisorData, placePrices, reviews, geminiWebSearchCache } from "@shared/schema";
 import { eq, sql, ilike, and, desc } from "drizzle-orm";
@@ -1904,6 +1905,51 @@ export async function generateItinerary(formData: TripFormData) {
     : travelPace === 'Normal' ? '보통' 
     : '여유롭게';
   
+  // ===== 자동 저장: Google Places 결과를 DB에 백그라운드 저장 =====
+  // 일정 생성시 가져온 장소 중 DB에 없는 것을 자동으로 places 테이블에 저장
+  // 응답 속도에 영향 없도록 setTimeout으로 비동기 처리
+  const placesToSave = placesArr.filter(p => p.sourceType === "Google Places" && p.id);
+  if (placesToSave.length > 0) {
+    const destCity = formData.destination;
+    setTimeout(async () => {
+      try {
+        const cityRecord = await db.select().from(cities)
+          .where(ilike(cities.name, `%${destCity}%`))
+          .then(r => r[0]);
+        
+        if (!cityRecord) return;
+        
+        let saved = 0;
+        for (const place of placesToSave) {
+          try {
+            const existing = await storage.getPlaceByGoogleId(place.id);
+            if (!existing) {
+              await storage.createPlace({
+                cityId: cityRecord.id,
+                googlePlaceId: place.id,
+                name: place.name,
+                type: place.placeTypes?.includes("restaurant") ? "restaurant" : 
+                      place.placeTypes?.includes("cafe") ? "cafe" : "attraction",
+                address: place.description,
+                latitude: place.lat,
+                longitude: place.lng,
+                photoUrls: place.image ? [place.image] : [],
+                vibeKeywords: place.vibeTags || [],
+                lastDataSync: new Date(),
+              });
+              saved++;
+            }
+          } catch (e) { /* 중복 등 무시 */ }
+        }
+        if (saved > 0) {
+          console.log(`[Itinerary AutoSave] ${destCity}: ${saved}/${placesToSave.length}개 장소 DB 저장`);
+        }
+      } catch (e) {
+        console.warn("[Itinerary AutoSave] 자동 저장 실패:", e);
+      }
+    }, 100);
+  }
+
   return {
     title: `${formData.destination} ${dayCount}일 여행`,
     destination: formData.destination,
