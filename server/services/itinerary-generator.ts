@@ -1750,10 +1750,33 @@ export async function generateItinerary(formData: TripFormData) {
   let dbPlacesUsed = 0;
   
   try {
-    // 1. 도시 ID 찾기
-    const cityRows = await db.select().from(cities)
+    // 1. 도시 ID 찾기 (정확한 매칭 → 부분 매칭 순서로 시도)
+    const destinationClean = formData.destination.split(',')[0].trim(); // "파리, 프랑스" → "파리"
+    console.log(`[Itinerary] DB 조회 시도: "${formData.destination}" → 검색어: "${destinationClean}"`);
+    
+    let cityRows = await db.select().from(cities)
       .where(eq(cities.name, formData.destination))
       .limit(1);
+    
+    // 정확한 매칭 실패 시 쉼표 앞 부분으로 재시도
+    if (cityRows.length === 0 && destinationClean !== formData.destination) {
+      cityRows = await db.select().from(cities)
+        .where(eq(cities.name, destinationClean))
+        .limit(1);
+      if (cityRows.length > 0) {
+        console.log(`[Itinerary] 부분 매칭 성공: "${destinationClean}" → 도시 ID: ${cityRows[0].id}`);
+      }
+    }
+    
+    // 그래도 실패 시 ILIKE 검색
+    if (cityRows.length === 0) {
+      cityRows = await db.select().from(cities)
+        .where(sql`${cities.name} ILIKE ${'%' + destinationClean + '%'}`)
+        .limit(1);
+      if (cityRows.length > 0) {
+        console.log(`[Itinerary] ILIKE 매칭 성공: "${destinationClean}" → ${cityRows[0].name} (ID: ${cityRows[0].id})`);
+      }
+    }
     
     if (cityRows.length > 0) {
       const cityId = cityRows[0].id;
@@ -1764,32 +1787,32 @@ export async function generateItinerary(formData: TripFormData) {
         .limit(requiredPlaceCount * 3); // 충분히 많이 가져와서 필터링
       
       if (dbPlaces.length > 0) {
-        // DB 장소를 PlaceResult 형태로 변환
+        // DB 장소를 PlaceResult 형태로 변환 (PlaceResult 인터페이스 필수 필드 모두 포함)
         placesArr = dbPlaces.map(p => ({
           id: p.googlePlaceId || `db-${p.id}`,
           name: p.name,
-          address: p.address || '',
-          latitude: p.latitude,
-          longitude: p.longitude,
-          rating: p.buzzScore ? p.buzzScore / 2 : undefined, // buzzScore(0-10) → rating(0-5)
-          userRatingCount: p.userRatingCount || 0,
-          priceLevel: p.priceLevel || 2,
-          types: p.vibeKeywords || [],
-          photoUrls: p.photoUrls || [],
-          editorialSummary: p.editorialSummary || '',
+          description: p.editorialSummary || p.name,
+          lat: p.latitude,
+          lng: p.longitude,
           vibeScore: p.vibeScore || 0,
-          buzzScore: p.buzzScore || 0,
-          tasteVerifyScore: p.tasteVerifyScore || 0,
-          finalScore: p.finalScore || 0,
-          vibeKeywords: p.vibeKeywords || [],
+          confidenceScore: p.buzzScore ? Math.min(10, p.buzzScore) : 3,
           sourceType: 'DB (Pre-seeded)',
-          // 속성 정보
-          goodForChildren: p.goodForChildren || false,
-          goodForGroups: p.goodForGroups || false,
-          outdoorSeating: p.outdoorSeating || false,
-          reservable: p.reservable || false,
-          dineIn: p.dineIn || false,
-          openingHours: p.openingHours as Record<string, string> || {},
+          personaFitReason: p.editorialSummary || `${p.name} - DB 시딩 데이터`,
+          tags: p.vibeKeywords || [],
+          vibeTags: (p.vibeKeywords || []).filter((v: string) => 
+            ['Healing', 'Adventure', 'Hotspot', 'Foodie', 'Romantic', 'Culture'].includes(v)
+          ) as Vibe[],
+          image: (p.photoUrls && p.photoUrls.length > 0) ? p.photoUrls[0] : '',
+          priceEstimate: p.priceLevel ? `€${'€'.repeat(p.priceLevel)}` : '€€',
+          placeTypes: p.vibeKeywords || [],
+          koreanPopularityScore: 0, // 별도 테이블에서 계산됨 (인스타+유튜브+블로그)
+          googleMapsUrl: p.googleMapsUri || (p.googlePlaceId ? `https://www.google.com/maps/place/?q=place_id:${p.googlePlaceId}` : ''),
+          // 선택적 필드
+          finalScore: p.finalScore || 0,
+          buzzScore: p.buzzScore || 0,
+          selectionReasons: [`DB 시딩 데이터 (점수: ${(p.finalScore || p.buzzScore || 0).toFixed(1)})`],
+          confidenceLevel: (p.finalScore && p.finalScore > 5) ? 'high' as const : 
+                          (p.buzzScore && p.buzzScore > 3) ? 'medium' as const : 'low' as const,
         }));
         dbPlacesUsed = placesArr.length;
         console.log(`[Itinerary] ✅ DB 우선 조회: ${dbPlacesUsed}곳 로드 (API 호출 절감!)`);
@@ -1901,6 +1924,9 @@ export async function generateItinerary(formData: TripFormData) {
   // 식사 예산 정보
   const mealBudget = MEAL_BUDGET[formData.travelStyle || 'Reasonable'];
   
+  // 실시간 날씨/위기 데이터 미리 조회 (한 번만 호출하여 전 장소에 공유)
+  const realityCheck = await getRealityCheckForCity(formData.destination);
+  
   for (let d = 1; d <= dayCount; d++) {
     const dayConfig = daySlotsConfig.find(c => c.day === d)!;
     const dayPlaces = schedule
@@ -1932,7 +1958,7 @@ export async function generateItinerary(formData: TripFormData) {
         // Phase 1-6: 선정 이유 + 신뢰도
         selectionReasons: s.place.selectionReasons || [],
         confidenceLevel: s.place.confidenceLevel || 'minimal',
-        realityCheck: await getRealityCheckForCity(formData.destination),
+        realityCheck,
       }));
     
     // 🚇 이동 구간 정보 계산
