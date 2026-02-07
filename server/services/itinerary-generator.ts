@@ -1418,59 +1418,76 @@ async function enrichPlacesWithDBData(
   let newlySavedCount = 0;
   let geminiOnlyCount = 0;
   
+  console.log(`[Enrich] === 시작: ${geminiPlaces.length}곳, destination="${destination}" ===`);
+  console.log(`[Enrich] db 상태: ${db ? 'connected' : 'NULL!'}`);
+  
+  if (!db) {
+    console.error('[Enrich] ❌ DB 연결 없음! Gemini 원본 유지');
+    return { places: geminiPlaces, dbEnrichedCount: 0, newlySavedCount: 0, geminiOnlyCount: geminiPlaces.length };
+  }
+  
   // 1. 도시 ID 찾기
   const destinationClean = destination.split(',')[0].trim();
   let cityId: number | null = null;
   
   try {
-    let cityRows = await db!.select().from(cities)
+    console.log(`[Enrich] 1단계: 도시 검색 "${destination}" (clean: "${destinationClean}")`);
+    
+    let cityRows = await db.select().from(cities)
       .where(eq(cities.name, destination))
       .limit(1);
+    console.log(`[Enrich] 정확 매칭 결과: ${cityRows.length}건`);
     
     if (cityRows.length === 0 && destinationClean !== destination) {
-      cityRows = await db!.select().from(cities)
+      cityRows = await db.select().from(cities)
         .where(eq(cities.name, destinationClean))
         .limit(1);
+      console.log(`[Enrich] 부분 매칭 결과: ${cityRows.length}건`);
     }
     
     if (cityRows.length === 0) {
-      cityRows = await db!.select().from(cities)
+      cityRows = await db.select().from(cities)
         .where(sql`${cities.name} ILIKE ${'%' + destinationClean + '%'}`)
         .limit(1);
+      console.log(`[Enrich] ILIKE 매칭 결과: ${cityRows.length}건`);
     }
     
     if (cityRows.length > 0) {
       cityId = cityRows[0].id;
-      console.log(`[Enrich] 도시 매칭: "${destinationClean}" → ${cityRows[0].name} (ID: ${cityId})`);
+      console.log(`[Enrich] ✅ 도시 매칭 성공: "${destinationClean}" → ${cityRows[0].name} (ID: ${cityId})`);
     } else {
-      console.log(`[Enrich] 도시 "${destinationClean}" DB 미등록 - 보강 불가 (Gemini 원본 유지)`);
+      console.log(`[Enrich] ❌ 도시 "${destinationClean}" DB 미등록 - Gemini 원본 유지`);
       return { places: geminiPlaces, dbEnrichedCount: 0, newlySavedCount: 0, geminiOnlyCount: geminiPlaces.length };
     }
-  } catch (error) {
-    console.warn('[Enrich] 도시 검색 실패:', error);
+  } catch (error: any) {
+    console.error('[Enrich] ❌ 도시 검색 에러:', error.message);
     return { places: geminiPlaces, dbEnrichedCount: 0, newlySavedCount: 0, geminiOnlyCount: geminiPlaces.length };
   }
   
   // 2. 해당 도시의 모든 DB 장소를 한 번에 로드 (N+1 쿼리 방지)
   let dbPlacesMap = new Map<string, typeof places.$inferSelect>();
   try {
-    const dbPlaces = await db!.select().from(places)
-      .where(eq(places.cityId, cityId));
+    console.log(`[Enrich] 2단계: 도시 ID ${cityId}의 장소 로드 중...`);
+    const dbPlaces = await db.select().from(places)
+      .where(eq(places.cityId, cityId!));
     
     for (const p of dbPlaces) {
       dbPlacesMap.set(p.name.toLowerCase(), p);
-      // 영어 이름도 매핑 (googlePlaceId가 있으면)
       if (p.googlePlaceId) {
         dbPlacesMap.set(p.googlePlaceId.toLowerCase(), p);
       }
     }
-    console.log(`[Enrich] DB 장소 로드: ${dbPlaces.length}곳 (매칭 준비)`);
-  } catch (error) {
-    console.warn('[Enrich] DB 장소 로드 실패:', error);
+    console.log(`[Enrich] ✅ DB 장소 로드: ${dbPlaces.length}곳 (매칭 키: ${dbPlacesMap.size}개)`);
+    // 처음 5개 DB 장소 이름 출력 (디버깅용)
+    const sampleNames = dbPlaces.slice(0, 5).map(p => p.name);
+    console.log(`[Enrich] DB 장소 샘플: ${sampleNames.join(', ')}`);
+  } catch (error: any) {
+    console.error('[Enrich] ❌ DB 장소 로드 에러:', error.message);
     return { places: geminiPlaces, dbEnrichedCount: 0, newlySavedCount: 0, geminiOnlyCount: geminiPlaces.length };
   }
   
   // 3. 각 Gemini 추천 장소에 대해 DB 데이터 보강
+  console.log(`[Enrich] 3단계: ${geminiPlaces.length}곳 매칭 시작...`);
   const enrichedPlaces: PlaceResult[] = [];
   
   for (const place of geminiPlaces) {
@@ -1478,16 +1495,20 @@ async function enrichPlacesWithDBData(
     
     // DB에서 이름으로 검색 (정확 매칭 → 부분 매칭)
     let dbMatch = dbPlacesMap.get(nameLower);
+    let matchType = dbMatch ? 'exact' : 'none';
     
-    // 부분 매칭 시도 (Gemini가 "Café de Flore"라 했는데 DB에 "Cafe de Flore"로 있을 수 있음)
+    // 부분 매칭 시도
     if (!dbMatch) {
       for (const [key, val] of dbPlacesMap) {
         if (key.includes(nameLower) || nameLower.includes(key)) {
           dbMatch = val;
+          matchType = 'partial';
           break;
         }
       }
     }
+    
+    console.log(`[Enrich] "${place.name}" → ${dbMatch ? `✅ ${matchType} (DB: ${dbMatch.name})` : '❌ 미등록'}`);
     
     if (dbMatch) {
       // ✅ DB 매칭 성공 → Gemini 추천 + DB raw data 보강
@@ -1927,13 +1948,20 @@ export async function generateItinerary(formData: TripFormData) {
   
   // Step 2: Gemini 추천 장소에 우리 DB 데이터 보강 (+ 미등록 장소 자동 수집/저장)
   console.log(`[Itinerary] ===== 2단계: DB 데이터 보강 + 미등록 장소 자동 수집 =====`);
-  const enrichResult = await enrichPlacesWithDBData(placesArr, formData.destination);
-  placesArr = enrichResult.places;
+  console.log(`[Itinerary] enrichPlacesWithDBData 호출 전: ${placesArr.length}곳, destination="${formData.destination}"`);
   
-  console.log(`[Itinerary] 🎯 최종 결과: 총 ${placesArr.length}곳`);
-  console.log(`[Itinerary]   ├─ DB 매칭 보강: ${enrichResult.dbEnrichedCount}곳 (점수/사진/리뷰 삽입)`);
-  console.log(`[Itinerary]   ├─ 신규 DB 저장: ${enrichResult.newlySavedCount}곳 (DB 자동 성장!)`);
-  console.log(`[Itinerary]   └─ Gemini 원본 유지: ${enrichResult.geminiOnlyCount}곳`);
+  try {
+    const enrichResult = await enrichPlacesWithDBData(placesArr, formData.destination);
+    placesArr = enrichResult.places;
+    
+    console.log(`[Itinerary] 🎯 최종 결과: 총 ${placesArr.length}곳`);
+    console.log(`[Itinerary]   ├─ DB 매칭 보강: ${enrichResult.dbEnrichedCount}곳 (점수/사진/리뷰 삽입)`);
+    console.log(`[Itinerary]   ├─ 신규 DB 저장: ${enrichResult.newlySavedCount}곳 (DB 자동 성장!)`);
+    console.log(`[Itinerary]   └─ Gemini 원본 유지: ${enrichResult.geminiOnlyCount}곳`);
+  } catch (enrichError: any) {
+    console.error(`[Itinerary] ❌ enrichPlacesWithDBData 에러:`, enrichError.message, enrichError.stack);
+    console.log(`[Itinerary] Gemini 원본 유지 (${placesArr.length}곳)`);
+  }
   
   console.log(`[Itinerary] 총 수집 장소: ${placesArr.length}곳`);
   
