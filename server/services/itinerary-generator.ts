@@ -1418,56 +1418,61 @@ async function enrichPlacesWithDBData(
   let newlySavedCount = 0;
   let geminiOnlyCount = 0;
   
-  console.log(`[Enrich] === 시작: ${geminiPlaces.length}곳 ===`);
-  
   if (!db) {
-    console.error('[Enrich] DB 연결 없음! Gemini 원본 유지');
+    console.error('[Enrich] DB 연결 없음!');
     return { places: geminiPlaces, dbEnrichedCount: 0, newlySavedCount: 0, geminiOnlyCount: geminiPlaces.length };
   }
   
-  // 1. 도시 ID 찾기 (인코딩 이슈 우회: 모든 도시를 가져와서 JS에서 비교)
-  const destinationClean = destination.split(',')[0].trim();
+  // 인코딩 복원 함수: UTF-8 바이트가 Latin-1로 잘못 해석된 경우 역변환
+  function fixKoreanEncoding(str: string): string {
+    try {
+      const latin1Buf = Buffer.from(str, 'latin1');
+      const utf8Str = latin1Buf.toString('utf-8');
+      // 한글이 포함되어 있으면 복원 성공
+      if (/[\uAC00-\uD7AF\u3131-\u3163]/.test(utf8Str)) {
+        return utf8Str;
+      }
+    } catch (e) {}
+    return str; // 이미 정상이면 그대로 반환
+  }
+  
+  // 1. destination 인코딩 복원
+  const fixedDestination = fixKoreanEncoding(destination);
+  const destinationClean = fixedDestination.split(',')[0].trim();
+  console.log(`[Enrich] === 시작: ${geminiPlaces.length}곳, raw="${Buffer.from(destination).toString('hex')}", fixed="${destinationClean}" ===`);
+  
   let cityId: number | null = null;
   
   try {
-    // 인코딩 문제 우회: SQL 비교 대신 JS에서 비교 (HTTP 요청 인코딩 ≠ DB 인코딩 이슈)
+    // 모든 도시 로드 → JS에서 비교 (SQL 인코딩 이슈 완전 우회)
     const allCities = await db.select({ id: cities.id, name: cities.name }).from(cities);
-    console.log(`[Enrich] 전체 도시 ${allCities.length}개 로드 (JS 매칭)`);
+    console.log(`[Enrich] 도시 ${allCities.length}개 로드`);
     
-    // 방법 1: 정확 매칭
-    let match = allCities.find(c => c.name === destination || c.name === destinationClean);
+    // 매칭 시도 (인코딩 복원된 문자열로)
+    let match = allCities.find(c => c.name === destinationClean);
     
-    // 방법 2: includes 매칭 (부분 문자열)
+    // includes 매칭
     if (!match) {
       match = allCities.find(c => 
         c.name.includes(destinationClean) || destinationClean.includes(c.name)
       );
     }
     
-    // 방법 3: Buffer 바이트 비교 (인코딩 정규화)
+    // 각 도시명도 인코딩 복원하여 비교
     if (!match) {
-      const destBytes = Buffer.from(destinationClean, 'utf-8').toString('utf-8');
       match = allCities.find(c => {
-        const cityBytes = Buffer.from(c.name, 'utf-8').toString('utf-8');
-        return cityBytes === destBytes || cityBytes.includes(destBytes) || destBytes.includes(cityBytes);
+        const fixedCityName = fixKoreanEncoding(c.name);
+        return fixedCityName === destinationClean || fixedCityName.includes(destinationClean) || destinationClean.includes(fixedCityName);
       });
-    }
-    
-    // 방법 4: 유니코드 정규화 (NFC vs NFD)
-    if (!match) {
-      const destNFC = destinationClean.normalize('NFC');
-      match = allCities.find(c => c.name.normalize('NFC') === destNFC);
     }
     
     if (match) {
       cityId = match.id;
-      console.log(`[Enrich] ✅ 도시 매칭 성공: "${match.name}" (ID: ${cityId})`);
+      console.log(`[Enrich] ✅ 도시 매칭: "${match.name}" (ID: ${cityId})`);
     } else {
-      // 디버깅: 인코딩 바이트 출력
-      const destHex = Buffer.from(destinationClean).toString('hex');
-      const sampleHex = allCities.length > 0 ? Buffer.from(allCities[0].name).toString('hex') : 'none';
-      console.log(`[Enrich] ❌ 도시 미매칭 - dest bytes: ${destHex}, sample city bytes: ${sampleHex}`);
-      console.log(`[Enrich] 도시 목록 (처음5개): ${allCities.slice(0, 5).map(c => c.name).join(', ')}`);
+      const destHex = Buffer.from(destination).toString('hex');
+      const cityHex = allCities.length > 0 ? Buffer.from(allCities[0].name).toString('hex') : 'none';
+      console.log(`[Enrich] ❌ 미매칭 - dest hex: ${destHex}, city[0] hex: ${cityHex}, fixed: "${destinationClean}"`);
       return { places: geminiPlaces, dbEnrichedCount: 0, newlySavedCount: 0, geminiOnlyCount: geminiPlaces.length };
     }
   } catch (error: any) {
