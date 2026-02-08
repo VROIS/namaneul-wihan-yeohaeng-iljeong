@@ -79,9 +79,27 @@ export async function preloadCityData(
       }
     }
 
-    // 2. 해당 도시의 모든 장소 사전 로드 (name + aliases + googlePlaceId 모두 키로)
+    // 2. 해당 도시의 모든 장소 사전 로드 (rating 컬럼 제외 - Supabase 미존재)
     if (cityId) {
-      const dbPlaces = await db.select().from(places)
+      const dbPlaces = await db.select({
+        id: places.id,
+        name: places.name,
+        displayNameKo: places.displayNameKo,
+        aliases: places.aliases,
+        type: places.type,
+        latitude: places.latitude,
+        longitude: places.longitude,
+        googlePlaceId: places.googlePlaceId,
+        googleMapsUri: places.googleMapsUri,
+        photoUrls: places.photoUrls,
+        vibeScore: places.vibeScore,
+        buzzScore: places.buzzScore,
+        finalScore: places.finalScore,
+        editorialSummary: places.editorialSummary,
+        userRatingCount: places.userRatingCount,
+        vibeKeywords: places.vibeKeywords,
+        cityId: places.cityId,
+      }).from(places)
         .where(eq(places.cityId, cityId));
 
       for (const p of dbPlaces) {

@@ -111,7 +111,7 @@ Example: {"places":[{"name":"Eiffel Tower","reason":"파리 필수 랜드마크,
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       config: {
         temperature: 0.7,
-        maxOutputTokens: 1024,
+        maxOutputTokens: 2048,
       },
     });
 
