@@ -308,7 +308,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else {
         res.status(500).json({ 
           error: "일정 생성 실패",
-          detail: process.env.NODE_ENV === 'development' ? error?.message : undefined,
+          detail: error?.message || 'Unknown error',
+          stack: (error?.stack || '').substring(0, 300),
         });
       }
     }
