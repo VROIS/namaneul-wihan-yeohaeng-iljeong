@@ -2082,38 +2082,10 @@ export const _enrichmentPipeline = {
     const vibes = formData.vibes || ['Foodie', 'Culture', 'Healing'];
     const { daySlotsConfig, travelPace, requiredPlaceCount, koreanSentiment } = skeleton;
 
-    // ===== 병렬 enrichment (속도 최적화: 순차 → 병렬 + 3초 타임아웃) =====
-    const enrichStart = Date.now();
-    
-    // 타임아웃 헬퍼: 1.5초 안에 안 끝나면 원본 반환 (속도 최우선)
-    const withTimeout = <T>(promise: Promise<T>, fallback: T, label: string, ms = 1500): Promise<T> =>
-      Promise.race([
-        promise.then(result => { console.log(`[Enrichment] ${label} 완료 (${Date.now() - enrichStart}ms)`); return result; }),
-        new Promise<T>((resolve) => setTimeout(() => { console.warn(`[Enrichment] ${label} 타임아웃 (${ms}ms) → 스킵`); resolve(fallback); }, ms)),
-      ]).catch(err => { console.warn(`[Enrichment] ${label} 실패:`, err?.message); return fallback; });
-
-    const [koreanResult, taResult, photoResult] = await Promise.all([
-      withTimeout(enrichPlacesWithKoreanPopularity(placesArr, formData.destination), placesArr, 'KoreanPopularity'),
-      withTimeout(enrichPlacesWithTripAdvisorAndPrices(placesArr, formData.destination), placesArr, 'TripAdvisor'),
-      withTimeout(enrichPlacesWithPhotoAndTour(placesArr, formData.destination), placesArr, 'PhotoTour'),
-    ]);
-
-    // 병렬 결과 병합: 각 enrichment에서 추가된 필드를 원본에 합침
-    placesArr = placesArr.map((place, idx) => ({
-      ...place,
-      koreanPopularityScore: koreanResult[idx]?.koreanPopularityScore ?? place.koreanPopularityScore ?? 0,
-      tripAdvisorRating: taResult[idx]?.tripAdvisorRating ?? place.tripAdvisorRating,
-      tripAdvisorReviewCount: taResult[idx]?.tripAdvisorReviewCount ?? place.tripAdvisorReviewCount,
-      tripAdvisorRanking: taResult[idx]?.tripAdvisorRanking ?? place.tripAdvisorRanking,
-      estimatedPriceEur: taResult[idx]?.estimatedPriceEur ?? place.estimatedPriceEur,
-      priceSource: taResult[idx]?.priceSource ?? place.priceSource,
-      photoSpotScore: photoResult[idx]?.photoSpotScore ?? place.photoSpotScore,
-      photoTip: photoResult[idx]?.photoTip ?? place.photoTip,
-      bestPhotoTime: photoResult[idx]?.bestPhotoTime ?? place.bestPhotoTime,
-      isPackageTourIncluded: photoResult[idx]?.isPackageTourIncluded ?? place.isPackageTourIncluded,
-    }));
-
-    console.log(`[AG3] Enrichment 병렬 완료: ${Date.now() - enrichStart}ms`);
+    // ===== Enrichment 스킵 (속도 최우선: AG3 matchPlacesWithDB에서 이미 DB 데이터 보강됨) =====
+    // 한국인 인기도, TripAdvisor, 포토스팟은 DB 시딩 데이터에서 가져옴 (별도 쿼리 불필요)
+    // 향후 DB 시딩 완료 후 다시 활성화 가능
+    console.log(`[AG3] Enrichment 스킵 (속도 우선, DB 보강 데이터 사용)`);
 
     // 한국 감성 보너스 반영
     if (koreanSentiment) {
