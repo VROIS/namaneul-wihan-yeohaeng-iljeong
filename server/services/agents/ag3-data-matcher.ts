@@ -1,23 +1,28 @@
 /**
  * AG3: Data Matcher & Scorer (데이터 매칭/확정)
+ * 🔗 Agent Protocol v1.0: 번역기 역할
+ * 
  * 소요: 1~2초
  * 
  * 역할:
- * 1. AG3-pre: AG2 대기 중 해당 도시 DB 장소 사전 로드 (병렬)
- * 2. AG2 추천 장소를 DB places 테이블과 이름 매칭
+ * 1. AG3-pre: findCityUnified로 도시 매칭 + DB 장소 사전 로드 (병렬)
+ * 2. AG2 추천 장소명(영어) → DB 매칭 (aliases 포함)
  * 3. 매칭 성공 → DB 데이터(좌표, 사진, 리뷰, 점수, 가격) 삽입
- * 4. 매칭 실패 → Google Places API 수집 → DB 저장 (다음번 활용)
+ * 4. 매칭 실패 → Google Places API → gid 획득 → DB 저장 + 별칭 자동 학습
  * 5. 한국인 인기도, TripAdvisor, 포토스팟 점수 계산
  * 6. 동적 가중치 기반 최종 점수 산출
  * 7. 슬롯별 장소 확정 + 동선 최적화
+ * 
+ * 핵심: AG3 이후 모든 장소는 googlePlaceId(gid)로 식별
  * 
  * 의존: itinerary-generator.ts의 enrichment 함수들 사용
  */
 
 import { db } from '../../db';
 import { places, cities } from '@shared/schema';
-import { eq, ilike } from 'drizzle-orm';
+import { eq, ilike, sql } from 'drizzle-orm';
 import type { AG1Output, AG3PreOutput, AG3Output, PlaceResult, ScheduleSlot } from './types';
+import { findCityUnified, addPlaceAlias, type CityResolveResult } from '../city-resolver';
 
 // Google Places API 키
 function getGoogleMapsApiKey(): string {
@@ -26,6 +31,7 @@ function getGoogleMapsApiKey(): string {
 
 /**
  * AG3-pre: 도시 DB 데이터 사전 로드
+ * 🔗 Agent Protocol v1.0: findCityUnified로 도시 매칭 (영어/한국어/별칭 모두 OK)
  * AG2(Gemini)와 병렬 실행하여 대기시간 활용
  */
 export async function preloadCityData(
@@ -40,64 +46,69 @@ export async function preloadCityData(
   }
 
   try {
-    // 1. 도시 찾기 (좌표 기반 or 이름 기반)
-    let cityId: number | null = null;
+    // 1. 🔗 통합 도시 검색 (영어 "Paris" → 한국어 "파리" DB 모두 매칭)
+    const cityResult = await findCityUnified(destination);
+    let cityId: number | null = cityResult?.cityId || null;
     const dbPlacesMap = new Map<string, any>();
 
-    // 이름 기반 매칭 먼저 시도
-    const cityMatch = await db.select().from(cities)
-      .where(ilike(cities.name, `%${destination}%`))
-      .limit(1);
+    // 도시 미발견 시 좌표 기반 fallback
+    if (!cityId && geminiPlaces && geminiPlaces.length > 0) {
+      const validPlaces = geminiPlaces.filter(p => p.lat && p.lng && p.lat !== 0);
+      if (validPlaces.length > 0) {
+        const avgLat = validPlaces.reduce((s, p) => s + p.lat, 0) / validPlaces.length;
+        const avgLng = validPlaces.reduce((s, p) => s + p.lng, 0) / validPlaces.length;
 
-    if (cityMatch.length > 0) {
-      cityId = cityMatch[0].id;
-    } else {
-      // 좌표 기반 매칭 (Gemini 장소가 있으면)
-      if (geminiPlaces && geminiPlaces.length > 0) {
-        const validPlaces = geminiPlaces.filter(p => p.lat && p.lng && p.lat !== 0);
-        if (validPlaces.length > 0) {
-          const avgLat = validPlaces.reduce((s, p) => s + p.lat, 0) / validPlaces.length;
-          const avgLng = validPlaces.reduce((s, p) => s + p.lng, 0) / validPlaces.length;
+        const allCities = await db.select().from(cities);
+        let closestCity: typeof allCities[0] | null = null;
+        let closestDist = Infinity;
 
-          const allCities = await db.select().from(cities);
-          let closestCity: typeof allCities[0] | null = null;
-          let closestDist = Infinity;
-
-          for (const city of allCities) {
-            const dist = Math.sqrt(
-              Math.pow(city.latitude - avgLat, 2) + Math.pow(city.longitude - avgLng, 2)
-            );
-            if (dist < closestDist) {
-              closestDist = dist;
-              closestCity = city;
-            }
+        for (const city of allCities) {
+          const dist = Math.sqrt(
+            Math.pow(city.latitude - avgLat, 2) + Math.pow(city.longitude - avgLng, 2)
+          );
+          if (dist < closestDist) {
+            closestDist = dist;
+            closestCity = city;
           }
+        }
 
-          if (closestCity && closestDist < 0.5) {
-            cityId = closestCity.id;
-          }
+        if (closestCity && closestDist < 0.5) {
+          cityId = closestCity.id;
+          console.log(`[AG3-pre] 📍 좌표 기반 매칭: "${destination}" → ${closestCity.name} (거리: ${closestDist.toFixed(3)})`);
         }
       }
     }
 
-    // 2. 해당 도시의 모든 장소 사전 로드
+    // 2. 해당 도시의 모든 장소 사전 로드 (name + aliases + googlePlaceId 모두 키로)
     if (cityId) {
       const dbPlaces = await db.select().from(places)
         .where(eq(places.cityId, cityId));
 
       for (const p of dbPlaces) {
+        // name 키 (소문자)
         dbPlacesMap.set(p.name.toLowerCase(), p);
+        // googlePlaceId 키
         if (p.googlePlaceId) {
           dbPlacesMap.set(p.googlePlaceId.toLowerCase(), p);
         }
+        // displayNameKo 키 (한국어)
+        if ((p as any).displayNameKo) {
+          dbPlacesMap.set((p as any).displayNameKo.toLowerCase(), p);
+        }
+        // aliases 키 (별칭 배열)
+        const placeAliases: string[] = (p as any).aliases || [];
+        for (const alias of placeAliases) {
+          if (alias) dbPlacesMap.set(alias.toLowerCase(), p);
+        }
       }
 
-      console.log(`[AG3-pre] ✅ 도시 "${destination}" (ID: ${cityId}) 장소 ${dbPlaces.length}곳 사전 로드 (${Date.now() - _t0}ms)`);
+      const cityLabel = cityResult ? `${cityResult.name}/${cityResult.nameEn}` : destination;
+      console.log(`[AG3-pre] ✅ 도시 "${cityLabel}" (ID: ${cityId}) 장소 ${dbPlaces.length}곳 사전 로드, 매칭키 ${dbPlacesMap.size}개 (${Date.now() - _t0}ms)`);
     } else {
       console.log(`[AG3-pre] ⚠️ 도시 "${destination}" 미발견 (${Date.now() - _t0}ms)`);
     }
 
-    return { cityId, dbPlacesMap, cityName: destination };
+    return { cityId, dbPlacesMap, cityName: cityResult?.nameEn || destination };
   } catch (error) {
     console.error('[AG3-pre] DB 사전 로드 실패:', error);
     return { cityId: null, dbPlacesMap: new Map(), cityName: destination };
@@ -219,9 +230,14 @@ export async function matchPlacesWithDB(
     }
 
     if (dbMatch) {
-      // ✅ DB 매칭 성공 → DB 데이터로 보강
+      // ✅ DB 매칭 성공 → DB 데이터로 보강 + 🔗 별칭 자동 학습
       matched++;
       
+      // 별칭 자동 학습: AG2가 준 이름이 DB name과 다르면 aliases에 추가
+      if (dbMatch.id && nameLower !== dbMatch.name.toLowerCase()) {
+        addPlaceAlias(dbMatch.id, place.name).catch(() => {});
+      }
+
       // DB에서 가져올 수 있는 모든 필수 데이터 활용
       const dbRating = dbMatch.rating ?? 0;
       const dbReviewCount = dbMatch.userRatingCount ?? 0;
@@ -250,10 +266,32 @@ export async function matchPlacesWithDB(
           place.confidenceLevel || 'low' as const,
       });
     } else if (!place.lat || !place.lng || place.lat === 0 || place.lng === 0) {
-      // ❌ DB 미등록 + 좌표 없음 → Google Places API로 좌표 확보
+      // ❌ DB 미등록 + 좌표 없음 → Google Places API로 좌표 + gid 확보
       const googleResult = await searchPlaceByName(place.name, cityName);
       if (googleResult) {
         googleFetched++;
+
+        // 🔗 gid 획득 후 DB에서 역매칭 시도 (이미 다른 이름으로 저장되어 있을 수 있음)
+        if (googleResult.googlePlaceId && dbPlacesMap.size > 0) {
+          const gidMatch = dbPlacesMap.get(googleResult.googlePlaceId.toLowerCase());
+          if (gidMatch) {
+            console.log(`[AG3] 🔗 gid 역매칭 성공: "${place.name}" → DB "${gidMatch.name}" (gid: ${googleResult.googlePlaceId.slice(0, 20)}...)`);
+            // 별칭 자동 학습
+            if (gidMatch.id) addPlaceAlias(gidMatch.id, place.name).catch(() => {});
+            matched++;
+            enriched.push({
+              ...place,
+              sourceType: 'Gemini AI + DB Enriched (gid)',
+              lat: gidMatch.latitude || googleResult.lat,
+              lng: gidMatch.longitude || googleResult.lng,
+              image: (gidMatch.photoUrls?.length > 0) ? gidMatch.photoUrls[0] : googleResult.photoUrl || place.image,
+              googleMapsUrl: gidMatch.googleMapsUri || googleResult.googleMapsUri || place.googleMapsUrl,
+              confidenceScore: Math.max(place.confidenceScore, gidMatch.rating ? gidMatch.rating * 2 : 5),
+            });
+            continue;
+          }
+        }
+
         enriched.push({
           ...place,
           sourceType: 'Gemini AI + Google Places',
@@ -263,7 +301,7 @@ export async function matchPlacesWithDB(
           googleMapsUrl: googleResult.googleMapsUri || place.googleMapsUrl,
           confidenceScore: Math.max(place.confidenceScore, googleResult.rating ? googleResult.rating * 2 : 5),
         });
-        console.log(`[AG3] 🔍 Google Places 확보: ${place.name} (${googleResult.lat.toFixed(4)}, ${googleResult.lng.toFixed(4)})`);
+        console.log(`[AG3] 🔍 Google Places 확보: ${place.name} (gid: ${googleResult.googlePlaceId?.slice(0, 20) || 'none'})`);
       } else {
         unmatchedCount++;
         enriched.push({
@@ -302,7 +340,7 @@ export async function saveNewPlacesToDB(
   );
   if (toSave.length === 0) return;
 
-  // 백그라운드 저장 (응답 속도에 영향 없음)
+  // 🔗 백그라운드 저장 (응답 속도에 영향 없음, aliases 포함)
   setTimeout(async () => {
     let saved = 0;
     for (const place of toSave) {
@@ -310,9 +348,14 @@ export async function saveNewPlacesToDB(
       if (!place.lat || !place.lng || place.lat === 0 || place.lng === 0) continue;
 
       try {
+        // 🔗 Agent Protocol: aliases에 원래 이름 저장 (다음번 매칭용)
+        const aliases: string[] = [];
+        if (place.name) aliases.push(place.name);
+
         await db!.insert(places).values({
           cityId: cityId,
           name: place.name,
+          aliases: aliases,
           type: place.tags?.includes('restaurant') ? 'restaurant' as const :
             place.tags?.includes('cafe') ? 'cafe' as const :
             place.tags?.includes('landmark') ? 'landmark' as const :
@@ -332,7 +375,7 @@ export async function saveNewPlacesToDB(
       }
     }
     if (saved > 0) {
-      console.log(`[AG3] 🆕 ${saved}곳 DB 자동 저장 (다음번 활용)`);
+      console.log(`[AG3] 🆕 ${saved}곳 DB 자동 저장 (aliases 포함, 다음번 활용)`);
     }
   }, 100);
 }

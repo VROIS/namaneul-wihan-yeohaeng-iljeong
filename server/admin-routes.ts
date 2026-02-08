@@ -3553,52 +3553,52 @@ export function registerAdminRoutes(app: Express) {
   // Gemini Web Search 기반 (캐시 7일)
   // ========================================
 
-  // 유럽 30개 대표 도시 목록 (한국인 여행 인기 순)
+  // 🔗 Agent Protocol v1.0: 유럽 30개 도시 (한국어 + 영어 + 현지명)
   const EUROPE_30_CITIES = [
     // 프랑스 (5)
-    { name: '파리', country: '프랑스', countryCode: 'FR' },
-    { name: '니스', country: '프랑스', countryCode: 'FR' },
-    { name: '마르세유', country: '프랑스', countryCode: 'FR' },
-    { name: '리옹', country: '프랑스', countryCode: 'FR' },
-    { name: '스트라스부르', country: '프랑스', countryCode: 'FR' },
+    { name: '파리', nameEn: 'Paris', nameLocal: 'Paris', country: '프랑스', countryCode: 'FR' },
+    { name: '니스', nameEn: 'Nice', nameLocal: 'Nice', country: '프랑스', countryCode: 'FR' },
+    { name: '마르세유', nameEn: 'Marseille', nameLocal: 'Marseille', country: '프랑스', countryCode: 'FR' },
+    { name: '리옹', nameEn: 'Lyon', nameLocal: 'Lyon', country: '프랑스', countryCode: 'FR' },
+    { name: '스트라스부르', nameEn: 'Strasbourg', nameLocal: 'Strasbourg', country: '프랑스', countryCode: 'FR' },
     // 이탈리아 (5)
-    { name: '로마', country: '이탈리아', countryCode: 'IT' },
-    { name: '피렌체', country: '이탈리아', countryCode: 'IT' },
-    { name: '베니스', country: '이탈리아', countryCode: 'IT' },
-    { name: '밀라노', country: '이탈리아', countryCode: 'IT' },
-    { name: '아말피', country: '이탈리아', countryCode: 'IT' },
+    { name: '로마', nameEn: 'Rome', nameLocal: 'Roma', country: '이탈리아', countryCode: 'IT' },
+    { name: '피렌체', nameEn: 'Florence', nameLocal: 'Firenze', country: '이탈리아', countryCode: 'IT' },
+    { name: '베니스', nameEn: 'Venice', nameLocal: 'Venezia', country: '이탈리아', countryCode: 'IT' },
+    { name: '밀라노', nameEn: 'Milan', nameLocal: 'Milano', country: '이탈리아', countryCode: 'IT' },
+    { name: '아말피', nameEn: 'Amalfi', nameLocal: 'Amalfi', country: '이탈리아', countryCode: 'IT' },
     // 스페인 (4)
-    { name: '바르셀로나', country: '스페인', countryCode: 'ES' },
-    { name: '마드리드', country: '스페인', countryCode: 'ES' },
-    { name: '세비야', country: '스페인', countryCode: 'ES' },
-    { name: '그라나다', country: '스페인', countryCode: 'ES' },
+    { name: '바르셀로나', nameEn: 'Barcelona', nameLocal: 'Barcelona', country: '스페인', countryCode: 'ES' },
+    { name: '마드리드', nameEn: 'Madrid', nameLocal: 'Madrid', country: '스페인', countryCode: 'ES' },
+    { name: '세비야', nameEn: 'Seville', nameLocal: 'Sevilla', country: '스페인', countryCode: 'ES' },
+    { name: '그라나다', nameEn: 'Granada', nameLocal: 'Granada', country: '스페인', countryCode: 'ES' },
     // 영국 (2)
-    { name: '런던', country: '영국', countryCode: 'GB' },
-    { name: '에딘버러', country: '영국', countryCode: 'GB' },
+    { name: '런던', nameEn: 'London', nameLocal: 'London', country: '영국', countryCode: 'GB' },
+    { name: '에딘버러', nameEn: 'Edinburgh', nameLocal: 'Edinburgh', country: '영국', countryCode: 'GB' },
     // 독일 (3)
-    { name: '뮌헨', country: '독일', countryCode: 'DE' },
-    { name: '베를린', country: '독일', countryCode: 'DE' },
-    { name: '프랑크푸르트', country: '독일', countryCode: 'DE' },
+    { name: '뮌헨', nameEn: 'Munich', nameLocal: 'München', country: '독일', countryCode: 'DE' },
+    { name: '베를린', nameEn: 'Berlin', nameLocal: 'Berlin', country: '독일', countryCode: 'DE' },
+    { name: '프랑크푸르트', nameEn: 'Frankfurt', nameLocal: 'Frankfurt', country: '독일', countryCode: 'DE' },
     // 스위스 (2)
-    { name: '취리히', country: '스위스', countryCode: 'CH' },
-    { name: '인터라켄', country: '스위스', countryCode: 'CH' },
+    { name: '취리히', nameEn: 'Zurich', nameLocal: 'Zürich', country: '스위스', countryCode: 'CH' },
+    { name: '인터라켄', nameEn: 'Interlaken', nameLocal: 'Interlaken', country: '스위스', countryCode: 'CH' },
     // 오스트리아 (2)
-    { name: '비엔나', country: '오스트리아', countryCode: 'AT' },
-    { name: '잘츠부르크', country: '오스트리아', countryCode: 'AT' },
+    { name: '비엔나', nameEn: 'Vienna', nameLocal: 'Wien', country: '오스트리아', countryCode: 'AT' },
+    { name: '잘츠부르크', nameEn: 'Salzburg', nameLocal: 'Salzburg', country: '오스트리아', countryCode: 'AT' },
     // 네덜란드 (1)
-    { name: '암스테르담', country: '네덜란드', countryCode: 'NL' },
+    { name: '암스테르담', nameEn: 'Amsterdam', nameLocal: 'Amsterdam', country: '네덜란드', countryCode: 'NL' },
     // 벨기에 (1)
-    { name: '브뤼셀', country: '벨기에', countryCode: 'BE' },
+    { name: '브뤼셀', nameEn: 'Brussels', nameLocal: 'Bruxelles', country: '벨기에', countryCode: 'BE' },
     // 체코 (1)
-    { name: '프라하', country: '체코', countryCode: 'CZ' },
+    { name: '프라하', nameEn: 'Prague', nameLocal: 'Praha', country: '체코', countryCode: 'CZ' },
     // 헝가리 (1)
-    { name: '부다페스트', country: '헝가리', countryCode: 'HU' },
+    { name: '부다페스트', nameEn: 'Budapest', nameLocal: 'Budapest', country: '헝가리', countryCode: 'HU' },
     // 포르투갈 (1)
-    { name: '리스본', country: '포르투갈', countryCode: 'PT' },
+    { name: '리스본', nameEn: 'Lisbon', nameLocal: 'Lisboa', country: '포르투갈', countryCode: 'PT' },
     // 그리스 (1)
-    { name: '아테네', country: '그리스', countryCode: 'GR' },
+    { name: '아테네', nameEn: 'Athens', nameLocal: 'Αθήνα', country: '그리스', countryCode: 'GR' },
     // 크로아티아 (1)
-    { name: '두브로브니크', country: '크로아티아', countryCode: 'HR' },
+    { name: '두브로브니크', nameEn: 'Dubrovnik', nameLocal: 'Dubrovnik', country: '크로아티아', countryCode: 'HR' },
   ];
 
   // 유럽 30개 도시 목록 조회

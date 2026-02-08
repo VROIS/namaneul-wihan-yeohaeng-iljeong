@@ -295,14 +295,12 @@ export async function getKoreanSentimentForCity(
   console.log(`[KoreanSentiment] No cache found, fetching from Gemini...`);
   const sentimentData = await fetchSentimentWithGemini(cityName, vibes);
 
-  // 3. cityId 조회
+  // 3. cityId 조회 (🔗 Agent Protocol: findCityUnified 사용)
   let cityId: number | null = null;
   try {
-    const [city] = await db.select({ id: cities.id })
-      .from(cities)
-      .where(eq(cities.name, cityName))
-      .limit(1);
-    cityId = city?.id || null;
+    const { findCityUnified } = await import('./city-resolver');
+    const cityResult = await findCityUnified(cityName);
+    cityId = cityResult?.cityId || null;
   } catch (e) {
     // cityId 조회 실패해도 계속 진행
   }

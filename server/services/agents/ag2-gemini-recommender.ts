@@ -89,35 +89,33 @@ export async function generateRecommendations(skeleton: AG1Output): Promise<Plac
 
   console.log(`[AG2] 🎯 주인공: ${protagonistInfo.sentence}`);
 
-  // ===== 간소화된 프롬프트 (핵심 최적화) =====
-  // 기존: 2000자+ 프롬프트, 5000자+ 응답 (27개 장소 × 10필드)
-  // 변경: 500자 프롬프트, 1000자 응답 (장소명 + 한줄이유만)
+  // ===== 🔗 Agent Protocol v1.0: 영어 공식명 강제 프롬프트 =====
+  // AG2 → AG3 통신: 구글맵 검색 가능한 영어 공식 명칭으로 전달
   const slotCount = requiredPlaceCount;
   const foodCount = Math.ceil(slotCount * 0.4); // 40% 식당
   const activityCount = slotCount - foodCount;
 
-  const prompt = `${formData.destination} 여행지를 추천해주세요.
+  const prompt = `Recommend ${slotCount} places in ${formData.destination} for a trip.
 
 ${protagonistContext}
 
-【조건】바이브: ${vibeDescription} | 스타일: ${formData.travelStyle} | 밀도: ${paceKorean} | 동행: ${formData.companionType} ${formData.companionCount}명
+【Conditions】Vibes: ${vibeDescription} | Style: ${formData.travelStyle} | Pace: ${paceKorean} | Group: ${formData.companionType} ${formData.companionCount}pax
 ${sentimentSection ? `\n${sentimentSection}\n` : ''}
-【한국인 선호 필수】한국인이 SNS에서 많이 공유하고 실제 방문하는 장소를 최우선으로 추천하세요.
+【CRITICAL】Prioritize places popular among Korean tourists (high Google review count, Instagram-famous, YouTube/blog featured).
 
-【요청】
-1. 관광/체험 장소 ${activityCount}곳 (실제 존재하는 장소만)
-2. 식당/카페 ${foodCount}곳 (현지인+한국인 인기 맛집)
+【Request】
+1. ${activityCount} attractions/experiences (real places only)
+2. ${foodCount} restaurants/cafes (popular with locals + Korean tourists)
+3. For meals: suggest 2-3 candidates each for lunch and dinner slots
 
-각 장소에: 정확한 장소명, 한줄 추천이유, 도시명, 추천시간대(morning/lunch/afternoon/evening), 식당여부
+⚠️ RESPOND WITH ONLY THIS JSON:
+{"places":[{"name":"EXACT Google Maps searchable name in ENGLISH","reason":"1-line reason in Korean","city":"${formData.destination}","time":"morning","isFood":false}]}
 
-⚠️ 아래 JSON만 응답하세요:
-{"places":[{"name":"정확한 장소명","reason":"한줄 추천이유","city":"도시명","time":"morning","isFood":false}]}
-
-필수 규칙:
-- name: 구글맵에서 검색 가능한 실제 장소명
-- isFood: 식당/카페는 true
-- 도시별 균형 분배
-- 정확히 ${slotCount}곳 추천`;
+MANDATORY RULES:
+- name: MUST be the official English name searchable on Google Maps (e.g. "Eiffel Tower" not "에펠탑")
+- isFood: true for restaurants/cafes
+- Exactly ${slotCount} places
+- NO markdown, NO explanation, ONLY the JSON object`;
 
   try {
     console.log(`[AG2] 🤖 Gemini에 ${slotCount}곳 요청 (간소화 프롬프트 ${prompt.length}자)...`);
@@ -140,7 +138,20 @@ ${sentimentSection ? `\n${sentimentSection}\n` : ''}
       return [];
     }
 
-    const result = JSON.parse(jsonMatch[0]);
+    // 🔗 JSON 잘림 복구 로직 (Gemini 응답이 잘릴 때 대비)
+    let result: any;
+    try {
+      result = JSON.parse(jsonMatch[0]);
+    } catch (parseError) {
+      console.warn('[AG2] ⚠️ JSON 파싱 오류, 복구 시도...');
+      result = repairTruncatedJSON(jsonMatch[0]);
+      if (!result) {
+        console.error('[AG2] ❌ JSON 복구 실패:', (parseError as Error).message);
+        return [];
+      }
+      console.log(`[AG2] ✅ JSON 복구 성공: ${result.places?.length || 0}곳`);
+    }
+
     const placesRaw = result.places || [];
 
     if (placesRaw.length === 0) {
@@ -178,5 +189,58 @@ ${sentimentSection ? `\n${sentimentSection}\n` : ''}
     if (error.message === 'GEMINI_API_KEY_MISSING') throw error;
     console.error("[AG2] ❌ Gemini 실패:", error?.message || error);
     return [];
+  }
+}
+
+/**
+ * 잘린 JSON 복구 함수
+ * Gemini가 maxOutputTokens에 의해 잘린 JSON을 최대한 복구
+ * 
+ * 예: {"places":[{"name":"A","reason":"B"},{"name":"C","rea
+ * → {"places":[{"name":"A","reason":"B"}]}  (완성된 항목만 추출)
+ */
+function repairTruncatedJSON(broken: string): { places: any[] } | null {
+  try {
+    // places 배열 시작 위치 찾기
+    const arrStart = broken.indexOf('[');
+    if (arrStart === -1) return null;
+
+    // 마지막 완전한 객체 끝 위치 찾기 (마지막 "}," 또는 "}")
+    let lastCompleteIdx = -1;
+    let braceDepth = 0;
+    let inString = false;
+    let escapeNext = false;
+
+    for (let i = arrStart + 1; i < broken.length; i++) {
+      const ch = broken[i];
+
+      if (escapeNext) { escapeNext = false; continue; }
+      if (ch === '\\') { escapeNext = true; continue; }
+      if (ch === '"') { inString = !inString; continue; }
+      if (inString) continue;
+
+      if (ch === '{') braceDepth++;
+      if (ch === '}') {
+        braceDepth--;
+        if (braceDepth === 0) {
+          lastCompleteIdx = i;
+        }
+      }
+    }
+
+    if (lastCompleteIdx === -1) return null;
+
+    // 완전한 부분만 추출하여 재조립
+    const repaired = broken.substring(0, lastCompleteIdx + 1) + ']}';
+
+    try {
+      return JSON.parse(repaired);
+    } catch {
+      // 한 번 더 시도: 마지막 쉼표 제거
+      const cleaned = repaired.replace(/,\s*\]/, ']');
+      return JSON.parse(cleaned);
+    }
+  } catch {
+    return null;
   }
 }

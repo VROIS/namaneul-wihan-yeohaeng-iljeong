@@ -289,7 +289,7 @@ export async function finalizeItinerary(
     companionCount,
     travelStyle: formData.travelStyle,
     mobilityStyle: formData.mobilityStyle,
-    // 총 비용 요약
+    // 총 비용 요약 (백엔드 형식)
     totalCost: {
       totalEur: Math.round(totalTripCostEur * 100) / 100,
       totalKrw: totalTripCostKrw,
@@ -297,6 +297,26 @@ export async function finalizeItinerary(
       perPersonKrw: totalPerPersonKrw,
       eurToKrwRate: eurToKrw,
       currency: 'EUR',
+    },
+    // 🔗 프론트엔드 호환 예산 필드 (client/types/trip.ts의 Itinerary.budget와 매칭)
+    budget: {
+      travelStyle: formData.travelStyle || 'Reasonable',
+      dailyBreakdowns: days.map((day: any) => ({
+        day: day.day,
+        transport: day.dailyCost?.transportEur || 0,
+        meals: day.dailyCost?.mealEur || 0,
+        entranceFees: day.dailyCost?.entranceEur || 0,
+        subtotal: day.dailyCost?.totalEur || 0,
+        perPerson: day.dailyCost?.perPersonEur || 0,
+      })),
+      totals: {
+        transport: days.reduce((sum: number, d: any) => sum + (d.dailyCost?.transportEur || 0), 0),
+        meals: days.reduce((sum: number, d: any) => sum + (d.dailyCost?.mealEur || 0), 0),
+        entranceFees: days.reduce((sum: number, d: any) => sum + (d.dailyCost?.entranceEur || 0), 0),
+        grandTotal: Math.round(totalTripCostEur * 100) / 100,
+        perPerson: totalPerPersonEur,
+        perDay: dayCount > 0 ? Math.round(totalTripCostEur / dayCount * 100) / 100 : 0,
+      },
     },
     // 날씨/위기 경보
     realityCheck,

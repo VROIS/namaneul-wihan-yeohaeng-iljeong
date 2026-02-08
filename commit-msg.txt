@@ -1,0 +1,8 @@
+fix: 일정표 빈 places 치명적 버그 수정
+
+- isFoodPlace()에서 vibeTags=['Foodie']만으로 식당 판정하던 버그 제거
+  (사용자가 Foodie vibe 선택 시 모든 장소가 식당으로 분류됨)
+- distributePlacesWithUserTime()의 break→continue 변경
+  (일반 장소 소진 시 전체 Day 루프가 종료되어 schedule 0개 반환)
+- 일반 장소 부족 시 남은 식당을 대체 배치하는 폴백 추가
+- 디버그 로그 강화: 분류 결과 상세 출력

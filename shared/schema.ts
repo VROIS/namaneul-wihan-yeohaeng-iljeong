@@ -41,9 +41,14 @@ export const users = pgTable("users", {
 });
 
 // Cities/Destinations
+// 🔗 Agent Protocol v1.0: 도시 식별 규약
+// name=한국어, nameEn=영어(매칭키), nameLocal=현지명, aliases=별칭배열
 export const cities = pgTable("cities", {
   id: serial("id").primaryKey(),
-  name: text("name").notNull(),
+  name: text("name").notNull(),                    // 한국어 표시명 (예: "파리")
+  nameEn: text("name_en"),                         // 영어 공식명 (매칭 키, 예: "Paris")
+  nameLocal: text("name_local"),                   // 현지 공식명 (예: "Paris", "Roma", "München")
+  aliases: jsonb("aliases").$type<string[]>().default([]),  // 별칭 배열 (예: ["巴黎","パリ"])
   country: text("country").notNull(),
   countryCode: text("country_code").notNull(),
   latitude: real("latitude").notNull(),
@@ -56,11 +61,15 @@ export const cities = pgTable("cities", {
 });
 
 // Places (restaurants, attractions, etc.)
+// 🔗 Agent Protocol v1.0: 장소 식별 규약
+// googlePlaceId=글로벌유일키(바코드), name=Google공식명, displayNameKo=한국어표시명, aliases=별칭배열
 export const places = pgTable("places", {
   id: serial("id").primaryKey(),
   cityId: integer("city_id").notNull().references(() => cities.id, { onDelete: "cascade" }),
   googlePlaceId: text("google_place_id").unique(),
-  name: text("name").notNull(),
+  name: text("name").notNull(),                    // Google Places 공식명 (예: "Tour Eiffel")
+  displayNameKo: text("display_name_ko"),          // 한국어 표시명 (예: "에펠탑")
+  aliases: jsonb("aliases").$type<string[]>().default([]),  // 별칭 배열 (예: ["에펠탑","Eiffel Tower"])
   type: placeTypeEnum("type").notNull(),
   cuisineType: text("cuisine_type"),
   cuisineOriginCountry: text("cuisine_origin_country"),

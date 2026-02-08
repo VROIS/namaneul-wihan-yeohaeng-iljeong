@@ -42,7 +42,7 @@ export default function PlanModalScreen() {
     endDate: "",
     endTime: "21:00",
     vibes: [],
-    travelStyle: "Comfortable",
+    travelStyle: "Reasonable",
   });
 
   const currentStepIndex = STEPS.indexOf(currentStep);

@@ -16,52 +16,25 @@ import { cities, places, dataSyncLog } from "@shared/schema";
 import { eq, sql, count, and, isNull, isNotNull } from "drizzle-orm";
 
 // ============================================
-// 바이브별 Google Places 타입 매핑
+// 🔥 최적화된 검색 카테고리 (중복 제거, 인기순 상위)
+// 기존: 6카테고리 x 5타입 = 30회 API 호출
+// 개선: 4카테고리 x 고유타입 = 4회 API 호출 → 비용 87% 절감
+// Google Places rankPreference: "POPULARITY" → 리뷰 많은 순 정렬
 // ============================================
-const VIBE_SEARCH_CONFIG: Record<string, { types: string[]; placeType: "restaurant" | "attraction" | "cafe" | "hotel" | "landmark" }[]> = {
-  Hotspot: [
-    { types: ["night_club"], placeType: "attraction" },
-    { types: ["bar"], placeType: "attraction" },
-    { types: ["shopping_mall"], placeType: "attraction" },
-    { types: ["landmark"], placeType: "landmark" },
-    { types: ["tourist_attraction"], placeType: "attraction" },
-  ],
-  Foodie: [
-    { types: ["restaurant"], placeType: "restaurant" },
-    { types: ["cafe"], placeType: "cafe" },
-    { types: ["bakery"], placeType: "restaurant" },
-    { types: ["meal_delivery"], placeType: "restaurant" },
-    { types: ["food"], placeType: "restaurant" },
-  ],
-  Culture: [
-    { types: ["museum"], placeType: "attraction" },
-    { types: ["art_gallery"], placeType: "attraction" },
-    { types: ["library"], placeType: "attraction" },
-    { types: ["historical_landmark"], placeType: "landmark" },
-    { types: ["church"], placeType: "landmark" },
-  ],
-  Healing: [
-    { types: ["spa"], placeType: "attraction" },
-    { types: ["park"], placeType: "attraction" },
-    { types: ["natural_feature"], placeType: "attraction" },
-    { types: ["botanical_garden"], placeType: "attraction" },
-    { types: ["campground"], placeType: "attraction" },
-  ],
-  Adventure: [
-    { types: ["tourist_attraction"], placeType: "attraction" },
-    { types: ["hiking_area"], placeType: "attraction" },
-    { types: ["amusement_park"], placeType: "attraction" },
-    { types: ["zoo"], placeType: "attraction" },
-    { types: ["aquarium"], placeType: "attraction" },
-  ],
-  Romantic: [
-    { types: ["restaurant"], placeType: "restaurant" },
-    { types: ["park"], placeType: "attraction" },
-    { types: ["museum"], placeType: "attraction" },
-    { types: ["art_gallery"], placeType: "attraction" },
-    { types: ["performing_arts_theater"], placeType: "attraction" },
-  ],
-};
+const SEARCH_CATEGORIES: { 
+  category: string; 
+  placeType: "restaurant" | "attraction" | "cafe" | "hotel" | "landmark";
+  vibeKeywords: string[];
+}[] = [
+  // 관광지/랜드마크/문화 (인기순 상위 20개 → 에펠탑, 루브르 같은 곳이 자동으로 먼저 옴)
+  { category: "attraction", placeType: "attraction", vibeKeywords: ["Hotspot", "Culture", "Adventure"] },
+  // 레스토랑/맛집 (리뷰 많은 순 상위 20개 → 현지인/관광객 검증 맛집)
+  { category: "restaurant", placeType: "restaurant", vibeKeywords: ["Foodie"] },
+  // 카페/베이커리 (리뷰 많은 순 상위 20개)
+  { category: "cafe", placeType: "cafe", vibeKeywords: ["Foodie", "Healing"] },
+  // 호텔/숙소 (리뷰 많은 순 상위 20개 → 숙소 위치 파악용)
+  { category: "hotel", placeType: "hotel", vibeKeywords: ["Healing", "Romantic"] },
+];
 
 // ============================================
 // Wikimedia Commons API (무료)
@@ -175,7 +148,9 @@ export class PlaceSeeder {
   private progress: { total: number; completed: number; current: string } = { total: 0, completed: 0, current: "" };
 
   /**
-   * 단일 도시 시딩: Google Places + Wikimedia + OpenTripMap
+   * 단일 도시 시딩: Google Places (인기순) + Wikimedia + OpenTripMap
+   * 🔥 최적화: 4카테고리만 검색, rankPreference: POPULARITY로 리뷰 많은 순
+   * 🔗 규약: googlePlaceId + displayNameKo + aliases 저장
    */
   async seedCityPlaces(cityId: number): Promise<{ success: boolean; seeded: number; skipped: number; errors: string[] }> {
     const city = await db.select().from(cities).where(eq(cities.id, cityId)).then(r => r[0]);
@@ -183,7 +158,7 @@ export class PlaceSeeder {
       return { success: false, seeded: 0, skipped: 0, errors: [`도시 ID ${cityId} 없음`] };
     }
 
-    console.log(`\n[PlaceSeeder] ===== ${city.name} (${city.country}) 시딩 시작 =====`);
+    console.log(`\n[PlaceSeeder] ===== ${city.name} (${(city as any).nameEn || city.name}, ${city.country}) 시딩 시작 =====`);
     this.currentCity = city.name;
     
     let totalSeeded = 0;
@@ -191,95 +166,105 @@ export class PlaceSeeder {
     const errors: string[] = [];
     const seenGoogleIds = new Set<string>();
 
-    // 6개 바이브별 검색
-    for (const [vibe, searches] of Object.entries(VIBE_SEARCH_CONFIG)) {
-      console.log(`[PlaceSeeder] ${city.name} - ${vibe} 카테고리 검색 중...`);
+    // 🔥 4개 카테고리 검색 (기존 30회 → 4회 API 호출)
+    for (const searchCat of SEARCH_CATEGORIES) {
+      console.log(`[PlaceSeeder] ${city.name} - [${searchCat.category}] 인기순 검색 중...`);
       
-      for (const search of searches) {
-        try {
-          // Google Places Nearby Search
-          const googlePlaces = await googlePlacesFetcher.searchNearby(
-            city.latitude,
-            city.longitude,
-            search.placeType === "landmark" ? "attraction" : search.placeType,
-            8000 // 8km 반경
-          );
+      try {
+        // Google Places Nearby Search (rankPreference: POPULARITY = 리뷰 많은 순)
+        const googlePlaces = await googlePlacesFetcher.searchNearby(
+          city.latitude,
+          city.longitude,
+          searchCat.placeType === "landmark" ? "attraction" : searchCat.placeType,
+          10000 // 10km 반경 (대도시 커버)
+        );
+        
+        console.log(`[PlaceSeeder]   ${searchCat.category}: ${googlePlaces.length}개 발견 (인기순 정렬)`);
+        
+        // 리뷰수 기준 상위만 처리 (이미 POPULARITY 정렬됨)
+        for (const gPlace of googlePlaces) {
+          // 중복 스킵 (googlePlaceId 기준)
+          if (seenGoogleIds.has(gPlace.id)) {
+            totalSkipped++;
+            continue;
+          }
+          seenGoogleIds.add(gPlace.id);
           
-          console.log(`[PlaceSeeder]   ${vibe}/${search.types[0]}: ${googlePlaces.length}개 발견`);
-          
-          for (const gPlace of googlePlaces) {
-            // 중복 스킵
-            if (seenGoogleIds.has(gPlace.id)) {
-              totalSkipped++;
-              continue;
-            }
-            seenGoogleIds.add(gPlace.id);
-            
-            // DB에 이미 있는지 확인
-            const existing = await storage.getPlaceByGoogleId(gPlace.id);
-            if (existing) {
-              // 이미 있으면 vibeKeywords만 업데이트
+          // DB에 이미 있는지 확인
+          const existing = await storage.getPlaceByGoogleId(gPlace.id);
+          if (existing) {
+            // 이미 있으면 vibeKeywords만 업데이트 + 규약 필드 보강
+            for (const vibe of searchCat.vibeKeywords) {
               await this.updateVibeKeywords(existing.id, vibe);
-              totalSkipped++;
-              continue;
             }
-            
-            try {
-              // Google Places 상세 정보 가져오기
-              const details = await googlePlacesFetcher.getPlaceDetails(gPlace.id);
-              
-              // DB에 저장 (기존 fetchAndStorePlace 활용)
-              const placeId = await googlePlacesFetcher.fetchAndStorePlace(
-                details,
-                cityId,
-                search.placeType
-              );
-              
-              // vibeKeywords 업데이트
-              await this.updateVibeKeywords(placeId, vibe);
-              
-              // Wikimedia 사진 보강 (무료)
-              try {
-                const wikiPhotos = await fetchWikimediaPhotos(
-                  gPlace.location.latitude,
-                  gPlace.location.longitude,
-                  3
-                );
-                if (wikiPhotos.length > 0) {
-                  await this.appendPhotoUrls(placeId, wikiPhotos);
-                }
-              } catch (e) { /* 무시 - 보조 데이터 */ }
-              
-              // OpenTripMap 설명 보강 (무료)
-              try {
-                const description = await fetchOpenTripMapDescription(
-                  gPlace.location.latitude,
-                  gPlace.location.longitude,
-                  gPlace.displayName?.text || ""
-                );
-                if (description) {
-                  await this.updateDescription(placeId, description);
-                }
-              } catch (e) { /* 무시 - 보조 데이터 */ }
-              
-              totalSeeded++;
-              
-              // Rate limit 방지
-              await delay(200);
-              
-            } catch (error: any) {
-              errors.push(`${gPlace.displayName?.text || gPlace.id}: ${error.message}`);
-              console.warn(`[PlaceSeeder]   실패: ${gPlace.displayName?.text}`, error.message);
-            }
+            // 🔗 기존 데이터에 displayNameKo/aliases 없으면 보강
+            await this.ensureProtocolFields(existing.id, gPlace);
+            totalSkipped++;
+            continue;
           }
           
-          // 검색 간 딜레이
-          await delay(300);
-          
-        } catch (error: any) {
-          errors.push(`${vibe}/${search.types[0]}: ${error.message}`);
-          console.warn(`[PlaceSeeder]   검색 실패: ${vibe}/${search.types[0]}`, error.message);
+          try {
+            // Google Places 상세 정보 가져오기
+            const details = await googlePlacesFetcher.getPlaceDetails(gPlace.id);
+            
+            // DB에 저장 (fetchAndStorePlace에서 displayNameKo, aliases 자동 생성)
+            const placeId = await googlePlacesFetcher.fetchAndStorePlace(
+              details,
+              cityId,
+              searchCat.placeType
+            );
+            
+            // vibeKeywords 업데이트
+            for (const vibe of searchCat.vibeKeywords) {
+              await this.updateVibeKeywords(placeId, vibe);
+            }
+            
+            // Wikimedia 사진 보강 (무료)
+            try {
+              const wikiPhotos = await fetchWikimediaPhotos(
+                gPlace.location.latitude,
+                gPlace.location.longitude,
+                3
+              );
+              if (wikiPhotos.length > 0) {
+                await this.appendPhotoUrls(placeId, wikiPhotos);
+              }
+            } catch (e) { /* 무시 - 보조 데이터 */ }
+            
+            // OpenTripMap 설명 보강 (무료)
+            try {
+              const description = await fetchOpenTripMapDescription(
+                gPlace.location.latitude,
+                gPlace.location.longitude,
+                gPlace.displayName?.text || ""
+              );
+              if (description) {
+                await this.updateDescription(placeId, description);
+              }
+            } catch (e) { /* 무시 - 보조 데이터 */ }
+            
+            totalSeeded++;
+            
+            // 리뷰수 로깅 (유명세 확인)
+            const reviewCount = gPlace.userRatingCount || 0;
+            const rating = gPlace.rating || 0;
+            console.log(`[PlaceSeeder]   + ${gPlace.displayName?.text} (★${rating} / ${reviewCount.toLocaleString()}리뷰)`);
+            
+            // Rate limit 방지
+            await delay(200);
+            
+          } catch (error: any) {
+            errors.push(`${gPlace.displayName?.text || gPlace.id}: ${error.message}`);
+            console.warn(`[PlaceSeeder]   실패: ${gPlace.displayName?.text}`, error.message);
+          }
         }
+        
+        // 카테고리 간 딜레이
+        await delay(500);
+        
+      } catch (error: any) {
+        errors.push(`${searchCat.category}: ${error.message}`);
+        console.warn(`[PlaceSeeder]   검색 실패: ${searchCat.category}`, error.message);
       }
     }
 
@@ -295,7 +280,8 @@ export class PlaceSeeder {
       errorMessage: errors.length > 0 ? errors.slice(0, 5).join("; ") : null,
     });
 
-    console.log(`[PlaceSeeder] ===== ${city.name} 시딩 완료: ${totalSeeded}개 저장, ${totalSkipped}개 스킵, ${errors.length}개 오류 =====\n`);
+    console.log(`[PlaceSeeder] ===== ${city.name} 시딩 완료: ${totalSeeded}개 저장, ${totalSkipped}개 기존, ${errors.length}개 오류 =====`);
+    console.log(`[PlaceSeeder]   API 호출: 4회 Nearby + ${totalSeeded}회 Details = ${4 + totalSeeded}회 (기존 대비 ~87% 절감)\n`);
     
     return { success: true, seeded: totalSeeded, skipped: totalSkipped, errors };
   }
@@ -509,6 +495,41 @@ export class PlaceSeeder {
     }
 
     console.log(`[PlaceSeeder] ${cityName} - 크롤러 연쇄 실행 완료`);
+  }
+
+  /**
+   * 🔗 규약 필드 보강: 기존 장소에 displayNameKo, aliases가 없으면 추가
+   */
+  private async ensureProtocolFields(placeId: number, gPlace: any): Promise<void> {
+    try {
+      const [place] = await db.select({ 
+        displayNameKo: places.displayNameKo, 
+        aliases: places.aliases,
+        name: places.name 
+      }).from(places).where(eq(places.id, placeId));
+      
+      if (!place) return;
+      
+      const updates: any = {};
+      
+      // displayNameKo가 비어있고 Google 이름에 한국어가 있으면 설정
+      if (!place.displayNameKo) {
+        const rawName = gPlace.displayName?.text || "";
+        if (/[가-힣]/.test(rawName)) {
+          updates.displayNameKo = rawName;
+        }
+      }
+      
+      // aliases가 비어있으면 초기화
+      if (!place.aliases || (Array.isArray(place.aliases) && place.aliases.length === 0)) {
+        updates.aliases = [];
+      }
+      
+      if (Object.keys(updates).length > 0) {
+        updates.updatedAt = new Date();
+        await db.update(places).set(updates).where(eq(places.id, placeId));
+      }
+    } catch (e) { /* 무시 */ }
   }
 
   /**

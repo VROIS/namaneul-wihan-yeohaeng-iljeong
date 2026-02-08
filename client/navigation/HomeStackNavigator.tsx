@@ -1,6 +1,6 @@
 import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import HomeScreen from "@/screens/HomeScreen";
+import TripPlannerScreen from "@/screens/TripPlannerScreen";
 import { HeaderTitle } from "@/components/HeaderTitle";
 import { useScreenOptions } from "@/hooks/useScreenOptions";
 
@@ -17,7 +17,7 @@ export default function HomeStackNavigator() {
     <Stack.Navigator screenOptions={screenOptions}>
       <Stack.Screen
         name="Home"
-        component={HomeScreen}
+        component={TripPlannerScreen}
         options={{
           headerTitle: () => <HeaderTitle title="VibeTrip" showIcon />,
         }}

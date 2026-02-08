@@ -610,15 +610,12 @@ async function calculateKoreanPopularity(
       }
     }
 
-    // 도시 ID 조회 (cityName으로)
+    // 🔗 Agent Protocol: findCityUnified로 도시 검색
     if (!matchedCityId) {
-      const cityMatch = await db.select({ id: cities.id })
-        .from(cities)
-        .where(ilike(cities.name, `%${cityName}%`))
-        .limit(1);
-      
-      if (cityMatch.length > 0) {
-        matchedCityId = cityMatch[0].id;
+      const { findCityUnified } = await import('./city-resolver');
+      const cityResult = await findCityUnified(cityName);
+      if (cityResult) {
+        matchedCityId = cityResult.cityId;
       }
     }
 
@@ -825,17 +822,15 @@ async function enrichPlacesWithTripAdvisorAndPrices(
   }
 
   try {
-    // 도시 ID 찾기
-    const cityMatch = await db.select({ id: cities.id })
-      .from(cities)
-      .where(ilike(cities.name, `%${cityName}%`))
-      .limit(1);
+    // 🔗 Agent Protocol: findCityUnified로 도시 검색
+    const { findCityUnified } = await import('./city-resolver');
+    const cityResult = await findCityUnified(cityName);
 
-    if (cityMatch.length === 0) {
+    if (!cityResult) {
       console.log(`[TripAdvisor/Price] 도시 "${cityName}" 미발견`);
       return placesArr;
     }
-    const cityId = cityMatch[0].id;
+    const cityId = cityResult.cityId;
 
     // TripAdvisor 데이터 일괄 조회
     const taData = await db.select({
@@ -959,13 +954,12 @@ async function enrichPlacesWithPhotoAndTour(
   }
 
   try {
-    const cityMatch = await db.select({ id: cities.id })
-      .from(cities)
-      .where(ilike(cities.name, `%${cityName}%`))
-      .limit(1);
+    // 🔗 Agent Protocol: findCityUnified로 도시 검색
+    const { findCityUnified } = await import('./city-resolver');
+    const cityResult = await findCityUnified(cityName);
 
-    if (cityMatch.length === 0) return placesArr;
-    const cityId = cityMatch[0].id;
+    if (!cityResult) return placesArr;
+    const cityId = cityResult.cityId;
 
     // DB 장소 목록 (이름 매칭용)
     const dbPlaces = await db.select({ id: places.id, name: places.name, googlePlaceId: places.googlePlaceId })
@@ -1178,14 +1172,14 @@ function calculateDynamicWeights(
 async function getRealityCheckForCity(destination: string): Promise<{ weather: string; crowd: string; status: string }> {
   try {
     // 도시 찾기
-    const cityRows = await db.select().from(cities)
-      .where(eq(cities.name, destination))
-      .limit(1);
+    // 🔗 Agent Protocol: findCityUnified로 도시 검색
+    const { findCityUnified } = await import('./city-resolver');
+    const cityResult = await findCityUnified(destination);
     
-    if (cityRows.length === 0) {
+    if (!cityResult) {
       return { weather: 'Unknown', crowd: 'Medium', status: 'Open' };
     }
-    const cityId = cityRows[0].id;
+    const cityId = cityResult.cityId;
 
     // 1. 최신 날씨 데이터 조회
     let weatherStatus = 'Sunny';
@@ -1519,14 +1513,12 @@ async function getKoreanPopularPlacesForPrompt(cityName: string): Promise<string
   if (!db) return '';
   
   try {
-    // 도시 ID 조회
-    const cityMatch = await db.select({ id: cities.id })
-      .from(cities)
-      .where(ilike(cities.name, `%${cityName}%`))
-      .limit(1);
+    // 🔗 Agent Protocol: findCityUnified로 도시 검색
+    const { findCityUnified } = await import('./city-resolver');
+    const cityResult2 = await findCityUnified(cityName);
     
-    if (cityMatch.length === 0) return '';
-    const cityId = cityMatch[0].id;
+    if (!cityResult2) return '';
+    const cityId = cityResult2.cityId;
     
     // 1. 인스타그램 인기 해시태그 (게시물 수 순)
     const popularHashtags = await db.select({

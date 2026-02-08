@@ -240,6 +240,7 @@ export class GooglePlacesFetcher {
     const requestBody = {
       includedTypes,
       maxResultCount: 20,
+      rankPreference: "POPULARITY",  // 🔥 구글 리뷰 많은 순 (인기순) 정렬
       locationRestriction: {
         circle: {
           center: { latitude, longitude },
@@ -347,10 +348,21 @@ export class GooglePlacesFetcher {
       openingHours[days[i]] = desc;
     });
 
+    // 🔗 규약: 한국어 표시명 생성 (Google displayName이 영어면 그대로, 한국어면 displayNameKo로)
+    const rawName = googlePlace.displayName.text;
+    const langCode = googlePlace.displayName.languageCode || "";
+    const isKorean = langCode === "ko" || /[가-힣]/.test(rawName);
+    const displayNameKo = isKorean ? rawName : undefined;
+    // aliases: 원본명을 별칭으로 저장 (추후 AG3 자동 학습으로 확장됨)
+    const aliases: string[] = [];
+    if (displayNameKo && displayNameKo !== rawName) aliases.push(displayNameKo);
+
     const placeData: InsertPlace = {
       cityId,
       googlePlaceId: googlePlace.id,
-      name: googlePlace.displayName.text,
+      name: rawName,
+      displayNameKo,                   // 🔗 한국어 표시명 (규약)
+      aliases,                          // 🔗 별칭 배열 (규약)
       type: placeType,
       address: googlePlace.formattedAddress,
       shortAddress: googlePlace.shortFormattedAddress,

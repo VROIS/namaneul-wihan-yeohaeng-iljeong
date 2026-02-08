@@ -144,6 +144,16 @@ export interface CrisisAlert {
   recommendationKo: string;
 }
 
+// 💰 일별 예산 상세
+export interface DailyBudgetBreakdown {
+  day: number;
+  transport: number;
+  meals: number;
+  entranceFees: number;
+  subtotal: number;
+  perPerson: number;
+}
+
 // 💰 전체 예산 정보
 export interface BudgetTotals {
   transport: number;

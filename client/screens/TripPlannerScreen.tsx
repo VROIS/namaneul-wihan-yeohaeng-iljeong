@@ -199,7 +199,7 @@ export default function TripPlannerScreen() {
     endDate: formatDate(new Date(Date.now() + 2 * 24 * 60 * 60 * 1000)),
     endTime: "21:00",
     vibes: ["Healing", "Foodie"],
-    travelStyle: "comfort",  // DB enum: luxury, comfort (소문자)
+    travelStyle: "Reasonable",  // 기본값
     travelPace: "Relaxed",
     mobilityStyle: "WalkMore",
   });
@@ -225,7 +225,7 @@ export default function TripPlannerScreen() {
           email: "admin@test.com",
           birthDate: "1985-03-15", // 기본 생년월일
           ageGroup: "30대",
-          provider: "test",
+          provider: "kakao",
           language: "ko",
           createdAt: new Date().toISOString(),
         };
