@@ -1,0 +1,17 @@
+{
+  "birthDate": "1985-03-15",
+  "companionType": "Couple",
+  "companionCount": 2,
+  "companionAges": "",
+  "curationFocus": "Self",
+  "destination": "Paris",
+  "startDate": "2026-05-01",
+  "startTime": "09:00",
+  "endDate": "2026-05-01",
+  "endTime": "21:00",
+  "vibes": ["Romantic", "Foodie"],
+  "travelStyle": "Reasonable",
+  "travelPace": "Normal",
+  "mobilityStyle": "WalkMore",
+  "userId": "test-user-123"
+}

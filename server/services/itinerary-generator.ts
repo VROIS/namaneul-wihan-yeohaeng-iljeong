@@ -2082,14 +2082,38 @@ export const _enrichmentPipeline = {
     const vibes = formData.vibes || ['Foodie', 'Culture', 'Healing'];
     const { daySlotsConfig, travelPace, requiredPlaceCount, koreanSentiment } = skeleton;
 
-    // Phase 1: 한국인 인기도
-    placesArr = await enrichPlacesWithKoreanPopularity(placesArr, formData.destination);
+    // ===== 병렬 enrichment (속도 최적화: 순차 → 병렬 + 3초 타임아웃) =====
+    const enrichStart = Date.now();
+    
+    // 타임아웃 헬퍼: 3초 안에 안 끝나면 원본 반환
+    const withTimeout = <T>(promise: Promise<T>, fallback: T, label: string, ms = 3000): Promise<T> =>
+      Promise.race([
+        promise.then(result => { console.log(`[Enrichment] ${label} 완료 (${Date.now() - enrichStart}ms)`); return result; }),
+        new Promise<T>((resolve) => setTimeout(() => { console.warn(`[Enrichment] ${label} 타임아웃 (${ms}ms) → 스킵`); resolve(fallback); }, ms)),
+      ]).catch(err => { console.warn(`[Enrichment] ${label} 실패:`, err?.message); return fallback; });
 
-    // Phase 1.5: TripAdvisor + 가격
-    placesArr = await enrichPlacesWithTripAdvisorAndPrices(placesArr, formData.destination);
+    const [koreanResult, taResult, photoResult] = await Promise.all([
+      withTimeout(enrichPlacesWithKoreanPopularity(placesArr, formData.destination), placesArr, 'KoreanPopularity'),
+      withTimeout(enrichPlacesWithTripAdvisorAndPrices(placesArr, formData.destination), placesArr, 'TripAdvisor'),
+      withTimeout(enrichPlacesWithPhotoAndTour(placesArr, formData.destination), placesArr, 'PhotoTour'),
+    ]);
 
-    // Phase 1-5: 포토스팟 + 패키지 투어
-    placesArr = await enrichPlacesWithPhotoAndTour(placesArr, formData.destination);
+    // 병렬 결과 병합: 각 enrichment에서 추가된 필드를 원본에 합침
+    placesArr = placesArr.map((place, idx) => ({
+      ...place,
+      koreanPopularityScore: koreanResult[idx]?.koreanPopularityScore ?? place.koreanPopularityScore ?? 0,
+      tripAdvisorRating: taResult[idx]?.tripAdvisorRating ?? place.tripAdvisorRating,
+      tripAdvisorReviewCount: taResult[idx]?.tripAdvisorReviewCount ?? place.tripAdvisorReviewCount,
+      tripAdvisorRanking: taResult[idx]?.tripAdvisorRanking ?? place.tripAdvisorRanking,
+      estimatedPriceEur: taResult[idx]?.estimatedPriceEur ?? place.estimatedPriceEur,
+      priceSource: taResult[idx]?.priceSource ?? place.priceSource,
+      photoSpotScore: photoResult[idx]?.photoSpotScore ?? place.photoSpotScore,
+      photoTip: photoResult[idx]?.photoTip ?? place.photoTip,
+      bestPhotoTime: photoResult[idx]?.bestPhotoTime ?? place.bestPhotoTime,
+      isPackageTourIncluded: photoResult[idx]?.isPackageTourIncluded ?? place.isPackageTourIncluded,
+    }));
+
+    console.log(`[AG3] Enrichment 병렬 완료: ${Date.now() - enrichStart}ms`);
 
     // 한국 감성 보너스 반영
     if (koreanSentiment) {
