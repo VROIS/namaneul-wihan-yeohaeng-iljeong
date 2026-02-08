@@ -2769,8 +2769,8 @@ async function distributePlacesWithUserTime(
         }
       } else {
         // === 일반 슬롯: 식당 제외, 관광/체험 장소만 배치 ===
-        if (nonFoodIndex < orderedNonFoodPlaces.length) {
-          selectedPlace = orderedNonFoodPlaces[nonFoodIndex];
+        if (nonFoodIndex < sortedNonFoodPlaces.length) {
+          selectedPlace = sortedNonFoodPlaces[nonFoodIndex];
           nonFoodIndex++;
         } else {
           // 일반 장소 소진 시 → 그냥 종료 (식당을 일반 슬롯에 넣지 않음!)
