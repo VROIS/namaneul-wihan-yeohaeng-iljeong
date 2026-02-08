@@ -133,106 +133,23 @@ function isFoodPlace(place: PlaceResult): boolean {
   return hasFoodTag || hasFoodType || nameHasFood;
 }
 
-// ===== 식당 전용 점수 계산 (1차 목표 강화) =====
-// 핵심 원칙: "리뷰 숫자 많은 곳 = 유명한 곳" (악플도 유명해서 생긴 것)
-// 우선순위: 리뷰수(50%) > 한국어리뷰(30%) > 인스타(10%) > 유튜브+블로그(10%)
+// ===== 식당 전용 점수 계산 (속도 최적화: DB 쿼리 최소화) =====
+// AG3 matchPlacesWithDB에서 이미 DB 데이터를 보강했으므로 place 객체의 기존 데이터 활용
+// DB 쿼리 0회 → 즉시 반환
 async function calculateRestaurantScore(place: PlaceResult): Promise<number> {
   try {
-    if (!db) return place.vibeScore; // DB 미연결시 기존 점수 사용
-
-    // 1. 리뷰 수 점수 (50%) - Google Places 리뷰 수 = 절대 우선
-    // 리뷰 많을수록 유명 → 악플이든 좋플이든 사람들이 가는 곳
-    let reviewCountScore = 0;
-    const placeMatch = await db.select({
-      userRatingCount: places.userRatingCount,
-      googlePlaceId: places.googlePlaceId,
-      id: places.id,
-    })
-      .from(places)
-      .where(ilike(places.name, `%${place.name}%`))
-      .limit(1);
-
-    let dbPlaceId: number | null = null;
-    if (placeMatch.length > 0) {
-      dbPlaceId = placeMatch[0].id;
-      const ratingCount = placeMatch[0].userRatingCount || 0;
-      // log 스케일: 100리뷰=6.6, 1000리뷰=10, 10000리뷰=10
-      reviewCountScore = Math.min(10, Math.log10(ratingCount + 1) * 3.3);
-    }
-
-    // 2. 한국어 구글 리뷰 점수 (30%) - 한국인이 직접 쓴 리뷰 = 신뢰도 최고
-    let koreanReviewScore = 0;
-    if (dbPlaceId) {
-      const koreanReviews = await db.select({
-        count: sql<number>`count(*)`,
-        avgRating: sql<number>`avg(${reviews.rating})`,
-      })
-        .from(reviews)
-        .where(and(
-          eq(reviews.placeId, dbPlaceId),
-          eq(reviews.language, 'ko')
-        ));
-
-      if (koreanReviews.length > 0 && Number(koreanReviews[0].count) > 0) {
-        const count = Number(koreanReviews[0].count);
-        const avgRating = Number(koreanReviews[0].avgRating) || 3.5;
-        // 한국어 리뷰 1개=4점, 2개=6.5점, 3개=9점, 4개이상=10점 + 평점 보너스
-        koreanReviewScore = Math.min(10, count * 3.0 + (avgRating - 3) * 1.5);
-      }
-    }
-
-    // 3. 인스타그램 점수 (10%) - 한국인 SNS 인기도
-    const instaScore = Math.min(10, (place.koreanPopularityScore || 0) * 1.5);
-
-    // 4. 유튜브+블로그 점수 (10%) - 한국인 콘텐츠 언급
-    let socialScore = 0;
-    if (dbPlaceId) {
-      // 유튜브 언급
-      const ytData = await db.select({
-        count: sql<number>`count(*)`,
-      })
-        .from(youtubePlaceMentions)
-        .where(eq(youtubePlaceMentions.placeId, dbPlaceId));
-
-      let ytScore = 0;
-      if (ytData.length > 0 && Number(ytData[0].count) > 0) {
-        ytScore = Math.min(10, Number(ytData[0].count) * 3);
-      }
-
-      // 블로그 언급
-      const blogData = await db.select({
-        count: sql<number>`count(*)`,
-      })
-        .from(naverBlogPosts)
-        .where(eq(naverBlogPosts.placeId, dbPlaceId));
-
-      let blogScoreVal = 0;
-      if (blogData.length > 0 && Number(blogData[0].count) > 0) {
-        blogScoreVal = Math.min(10, Number(blogData[0].count) * 2);
-      }
-
-      // 유튜브+블로그 중 높은 쪽 우선 (60:40)
-      socialScore = Math.max(ytScore, blogScoreVal) * 0.6 + Math.min(ytScore, blogScoreVal) * 0.4;
-    }
-
-    // 가중 합산: 리뷰수(50%) + 한국리뷰(30%) + 인스타(10%) + 유튜브+블로그(10%)
-    const finalScore = (reviewCountScore * 0.50) +
-                       (koreanReviewScore * 0.30) +
-                       (instaScore * 0.10) +
-                       (socialScore * 0.10);
-
-    if (finalScore > 0) {
-      console.log(
-        `[Restaurant] ${place.name}: 리뷰수=${reviewCountScore.toFixed(1)}(50%) ` +
-        `한국리뷰=${koreanReviewScore.toFixed(1)}(30%) 인스타=${instaScore.toFixed(1)}(10%) ` +
-        `소셜=${socialScore.toFixed(1)}(10%) → ${finalScore.toFixed(2)}`
-      );
-    }
-
-    return Math.max(finalScore, place.vibeScore * 0.5); // 최소한 vibeScore의 50%는 보장
+    // AG3에서 이미 보강된 데이터 활용 (DB 쿼리 불필요)
+    const confidenceScore = place.confidenceScore || 0;
+    const vibeScore = place.vibeScore || 0;
+    const koreanPopularity = place.koreanPopularityScore || 0;
+    const finalScore = place.finalScore || 0;
+    
+    // 간단 점수: 기존 보강 데이터 기반
+    const score = (confidenceScore * 0.4) + (vibeScore * 0.3) + (koreanPopularity * 0.2) + (finalScore * 0.1);
+    return Math.min(10, Math.max(0, score));
   } catch (error) {
     console.warn(`[Restaurant] ${place.name} 점수 계산 실패:`, error);
-    return place.vibeScore; // 에러시 기존 점수
+    return place.vibeScore || 5;
   }
 }
 

@@ -238,16 +238,18 @@ export async function matchPlacesWithDB(
 
   if (googleNeeded.length > 0) {
     const _gt0 = Date.now();
-    const googlePromises = googleNeeded.map(r =>
+    // 최대 3곳만 Google API 호출 (비용+속도 제한), 2초 타임아웃
+    const limitedGoogle = googleNeeded.slice(0, 3);
+    const googlePromises = limitedGoogle.map(r =>
       Promise.race([
         searchPlaceByName(r.place.name, cityName),
-        new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000)), // 5초 타임아웃
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000)), // 2초 타임아웃
       ]).then(result => {
         if (result) googleResults.set(r.place.name, result);
       }).catch(() => {})
     );
     await Promise.all(googlePromises);
-    console.log(`[AG3] Google Places 병렬 완료 (${Date.now() - _gt0}ms): ${googleResults.size}/${googleNeeded.length}곳 확보`);
+    console.log(`[AG3] Google Places 병렬 완료 (${Date.now() - _gt0}ms): ${googleResults.size}/${limitedGoogle.length}곳 확보 (총 필요: ${googleNeeded.length})`);
   }
 
   // === 3단계: 결과 조합 ===
