@@ -123,12 +123,14 @@ const MEAL_BUDGET: Record<TravelStyle, {
  */
 function isFoodPlace(place: PlaceResult): boolean {
   const foodTags = ['restaurant', 'cafe', 'bakery', 'food', 'bar', 'bistro', 'brasserie'];
-  const hasFoodieVibe = place.vibeTags?.includes('Foodie');
+  // ⚠️ vibeTags에 'Foodie'만 있는 것으로 식당 판단 금지! 
+  // AG2가 vibes에 Foodie 포함 시 관광지에도 Foodie 태그 부여 가능 → 모든 장소가 식당으로 분류되는 버그
+  // 대신 tags, placeTypes, 이름으로만 판단 (더 정확)
   const hasFoodTag = place.tags?.some(t => foodTags.includes(t.toLowerCase()));
   const hasFoodType = place.placeTypes?.some(t => foodTags.includes(t.toLowerCase()));
-  const nameHasFood = /레스토랑|식당|카페|비스트로|브라세리|restaurant|cafe|bistro/i.test(place.name);
+  const nameHasFood = /레스토랑|식당|카페|비스트로|브라세리|restaurant|cafe|bistro|boulangerie|pâtisserie/i.test(place.name);
   
-  return hasFoodieVibe || hasFoodTag || hasFoodType || nameHasFood;
+  return hasFoodTag || hasFoodType || nameHasFood;
 }
 
 // ===== 식당 전용 점수 계산 (1차 목표 강화) =====
@@ -2210,7 +2212,16 @@ async function distributePlacesWithUserTime(
   const foodPlaces = places.filter(p => isFoodPlace(p));
   const nonFoodPlaces = places.filter(p => !isFoodPlace(p));
   
-  console.log(`[Itinerary] 🍽️ 식사 장소: ${foodPlaces.length}곳, 일반 장소: ${nonFoodPlaces.length}곳`);
+  console.log(`[Itinerary] 🍽️ 식사 장소: ${foodPlaces.length}곳, 일반 장소: ${nonFoodPlaces.length}곳 (총 ${places.length}곳)`);
+  if (foodPlaces.length > 0) {
+    console.log(`[Itinerary]   식당 목록: ${foodPlaces.map(p => `${p.name}(tags:${p.tags?.join(',')||'없음'})`).join(', ')}`);
+  }
+  if (nonFoodPlaces.length === 0) {
+    console.error(`[Itinerary] ❌ 일반 장소 0곳! 전체 장소 태그 점검:`);
+    places.forEach(p => {
+      console.log(`  - ${p.name}: tags=${JSON.stringify(p.tags)}, placeTypes=${JSON.stringify(p.placeTypes)}, vibeTags=${JSON.stringify(p.vibeTags)}`);
+    });
+  }
   
   // === 일반 장소: 점수 순 정렬 (동선 최적화는 일별 배분 후 적용) ===
   const sortedNonFoodPlaces = [...nonFoodPlaces].sort(
@@ -2386,13 +2397,24 @@ async function distributePlacesWithUserTime(
           console.log(`[Itinerary] Day ${day} ${mealType}: placeholder 생성 (식당 후보 부족)`);
         }
       } else {
-        // === 일반 슬롯: 식당 제외, 관광/체험 장소만 배치 ===
+        // === 일반 슬롯: 관광/체험 장소 배치 ===
         if (nonFoodIndex < sortedNonFoodPlaces.length) {
           selectedPlace = sortedNonFoodPlaces[nonFoodIndex];
           nonFoodIndex++;
         } else {
-          // 일반 장소 소진 시 → 그냥 종료 (식당을 일반 슬롯에 넣지 않음!)
-          break;
+          // 🔧 FIX: 일반 장소 소진 → 남은 식당을 일반 슬롯에도 배치 (break 제거!)
+          // 이전에는 break로 전체 Day가 빈 채로 종료되는 치명적 버그 있었음
+          const remainingFood = foodWithScores.filter(f => !usedFoodIds.has(f.place.id));
+          if (remainingFood.length > 0) {
+            const fallback = remainingFood.sort((a, b) => b.restaurantScore - a.restaurantScore)[0];
+            selectedPlace = fallback.place;
+            usedFoodIds.add(fallback.place.id);
+            console.log(`[Itinerary] Day ${day} slot ${slotIdx}: 일반 장소 소진 → 식당 대체: ${selectedPlace.name}`);
+          } else {
+            // 모든 장소 소진 → 이 Day 나머지 슬롯 건너뛰기 (continue, NOT break!)
+            console.log(`[Itinerary] Day ${day} slot ${slotIdx}: 모든 장소 소진, 남은 슬롯 스킵`);
+            continue;
+          }
         }
       }
       
@@ -2421,7 +2443,7 @@ async function distributePlacesWithUserTime(
   // 식당이 일반 슬롯에 들어갔는지 검증 (디버그)
   const nonMealFoodSlots = schedule.filter(s => !s.isMealSlot && isFoodPlace(s.place));
   if (nonMealFoodSlots.length > 0) {
-    console.warn(`[Itinerary] ⚠️ 경고: 식당 ${nonMealFoodSlots.length}곳이 일반 슬롯에 배치됨 (정상이면 0이어야 함)`);
+    console.log(`[Itinerary] ℹ️ 식당 ${nonMealFoodSlots.length}곳이 일반 슬롯에 대체 배치됨 (일반 장소 부족 시 정상)`);
   }
   
   return schedule;
