@@ -95,27 +95,9 @@ export async function generateRecommendations(skeleton: AG1Output): Promise<Plac
   const foodCount = Math.ceil(slotCount * 0.4); // 40% 식당
   const activityCount = slotCount - foodCount;
 
-  const prompt = `Recommend ${slotCount} places in ${formData.destination} for a trip.
-
-${protagonistContext}
-
-【Conditions】Vibes: ${vibeDescription} | Style: ${formData.travelStyle} | Pace: ${paceKorean} | Group: ${formData.companionType} ${formData.companionCount}pax
-${sentimentSection ? `\n${sentimentSection}\n` : ''}
-【CRITICAL】Prioritize places popular among Korean tourists (high Google review count, Instagram-famous, YouTube/blog featured).
-
-【Request】
-1. ${activityCount} attractions/experiences (real places only)
-2. ${foodCount} restaurants/cafes (popular with locals + Korean tourists)
-3. For meals: suggest 2-3 candidates each for lunch and dinner slots
-
-⚠️ RESPOND WITH ONLY THIS JSON:
-{"places":[{"name":"EXACT Google Maps searchable name in ENGLISH","reason":"1-line reason in Korean","city":"${formData.destination}","time":"morning","isFood":false}]}
-
-MANDATORY RULES:
-- name: MUST be the official English name searchable on Google Maps (e.g. "Eiffel Tower" not "에펠탑")
-- isFood: true for restaurants/cafes
-- Exactly ${slotCount} places
-- NO markdown, NO explanation, ONLY the JSON object`;
+  const prompt = `${slotCount} places in ${formData.destination}. Vibes:${vibeDescription}. ${formData.companionType} ${formData.companionCount}pax. ${activityCount} attractions + ${foodCount} restaurants. Korean tourists priority.
+ONLY JSON: {"places":[{"name":"English Google Maps name","reason":"Korean 1-line","isFood":false}]}
+Rules: name=official English, isFood=true for food, exactly ${slotCount}`;
 
   try {
     console.log(`[AG2] 🤖 Gemini에 ${slotCount}곳 요청 (간소화 프롬프트 ${prompt.length}자)...`);
@@ -125,7 +107,7 @@ MANDATORY RULES:
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       config: {
         temperature: 0.7,
-        maxOutputTokens: 2048,
+        maxOutputTokens: 1024,
       },
     });
 

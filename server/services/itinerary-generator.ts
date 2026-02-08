@@ -2085,8 +2085,8 @@ export const _enrichmentPipeline = {
     // ===== 병렬 enrichment (속도 최적화: 순차 → 병렬 + 3초 타임아웃) =====
     const enrichStart = Date.now();
     
-    // 타임아웃 헬퍼: 3초 안에 안 끝나면 원본 반환
-    const withTimeout = <T>(promise: Promise<T>, fallback: T, label: string, ms = 3000): Promise<T> =>
+    // 타임아웃 헬퍼: 1.5초 안에 안 끝나면 원본 반환 (속도 최우선)
+    const withTimeout = <T>(promise: Promise<T>, fallback: T, label: string, ms = 1500): Promise<T> =>
       Promise.race([
         promise.then(result => { console.log(`[Enrichment] ${label} 완료 (${Date.now() - enrichStart}ms)`); return result; }),
         new Promise<T>((resolve) => setTimeout(() => { console.warn(`[Enrichment] ${label} 타임아웃 (${ms}ms) → 스킵`); resolve(fallback); }, ms)),
