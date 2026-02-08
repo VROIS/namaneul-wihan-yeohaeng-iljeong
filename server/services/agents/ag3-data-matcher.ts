@@ -176,12 +176,15 @@ export async function matchPlacesWithDB(
   preloaded: AG3PreOutput
 ): Promise<PlaceResult[]> {
   const { dbPlacesMap, cityName } = preloaded;
+  const _t0 = Date.now();
 
   let matched = 0;
   let googleFetched = 0;
   let unmatchedCount = 0;
 
-  const enriched: PlaceResult[] = [];
+  // === 1단계: DB 매칭 (동기, 빠름) ===
+  type MatchResult = { place: PlaceResult; dbMatch: any | null; needsGoogle: boolean };
+  const matchResults: MatchResult[] = [];
 
   for (const place of geminiPlaces) {
     const nameLower = place.name.toLowerCase().trim();
@@ -199,25 +202,19 @@ export async function matchPlacesWithDB(
       }
     }
 
-    // 3. 💰 Fuzzy 매칭 (비용 절감: DB 매칭률 극대화)
-    // "Eiffel Tower" vs "Tour Eiffel", 공백/특수문자 무시, 단어 순서 무관
+    // 3. Fuzzy 매칭
     if (!dbMatch && dbPlacesMap.size > 0) {
       const nameWords = nameLower.replace(/[^a-z0-9가-힣\s]/gi, '').split(/\s+/).filter(w => w.length > 2);
       let bestScore = 0;
       let bestMatch: any = undefined;
 
       for (const [key, val] of dbPlacesMap) {
-        // Google Place ID는 스킵 (이름 비교만)
         if (key.startsWith('chij') || key.startsWith('place')) continue;
-
         const keyWords = key.replace(/[^a-z0-9가-힣\s]/gi, '').split(/\s+/).filter(w => w.length > 2);
         if (keyWords.length === 0) continue;
-
-        // 공통 단어 수 계산
         const commonWords = nameWords.filter(w => keyWords.some(kw => kw.includes(w) || w.includes(kw)));
         const score = commonWords.length / Math.max(nameWords.length, keyWords.length);
-
-        if (score > bestScore && score >= 0.5) { // 50% 이상 단어 일치
+        if (score > bestScore && score >= 0.5) {
           bestScore = score;
           bestMatch = val;
         }
@@ -225,28 +222,52 @@ export async function matchPlacesWithDB(
 
       if (bestMatch) {
         dbMatch = bestMatch;
-        console.log(`[AG3] 🔗 Fuzzy 매칭: "${place.name}" → "${bestMatch.name}" (score: ${bestScore.toFixed(2)})`);
+        console.log(`[AG3] 🔗 Fuzzy: "${place.name}" → "${bestMatch.name}" (${bestScore.toFixed(2)})`);
       }
     }
 
+    const needsGoogle = !dbMatch && (!place.lat || !place.lng || place.lat === 0 || place.lng === 0);
+    matchResults.push({ place, dbMatch: dbMatch || null, needsGoogle });
+  }
+
+  console.log(`[AG3] DB 매칭 완료 (${Date.now() - _t0}ms): ${matchResults.filter(r => r.dbMatch).length}곳 매칭, ${matchResults.filter(r => r.needsGoogle).length}곳 Google 필요`);
+
+  // === 2단계: Google Places API 병렬 호출 (최대 5개 동시, 5초 타임아웃) ===
+  const googleNeeded = matchResults.filter(r => r.needsGoogle);
+  const googleResults = new Map<string, any>();
+
+  if (googleNeeded.length > 0) {
+    const _gt0 = Date.now();
+    const googlePromises = googleNeeded.map(r =>
+      Promise.race([
+        searchPlaceByName(r.place.name, cityName),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000)), // 5초 타임아웃
+      ]).then(result => {
+        if (result) googleResults.set(r.place.name, result);
+      }).catch(() => {})
+    );
+    await Promise.all(googlePromises);
+    console.log(`[AG3] Google Places 병렬 완료 (${Date.now() - _gt0}ms): ${googleResults.size}/${googleNeeded.length}곳 확보`);
+  }
+
+  // === 3단계: 결과 조합 ===
+  const enriched: PlaceResult[] = [];
+
+  for (const { place, dbMatch, needsGoogle } of matchResults) {
+    const nameLower = place.name.toLowerCase().trim();
+
     if (dbMatch) {
-      // ✅ DB 매칭 성공 → DB 데이터로 보강 + 🔗 별칭 자동 학습
       matched++;
-      
-      // 별칭 자동 학습: AG2가 준 이름이 DB name과 다르면 aliases에 추가
       if (dbMatch.id && nameLower !== dbMatch.name.toLowerCase()) {
         addPlaceAlias(dbMatch.id, place.name).catch(() => {});
       }
-
-      // DB에서 가져올 수 있는 모든 필수 데이터 활용
       const dbRating = dbMatch.rating ?? 0;
       const dbReviewCount = dbMatch.userRatingCount ?? 0;
-      const dbDescription = dbMatch.editorialSummary || place.description;
       
       enriched.push({
         ...place,
         sourceType: 'Gemini AI + DB Enriched',
-        description: dbDescription,
+        description: dbMatch.editorialSummary || place.description,
         image: (dbMatch.photoUrls?.length > 0) ? dbMatch.photoUrls[0] : place.image,
         vibeScore: dbMatch.vibeScore || place.vibeScore,
         finalScore: dbMatch.finalScore || place.finalScore || 0,
@@ -265,18 +286,16 @@ export async function matchPlacesWithDB(
           (dbMatch.buzzScore && dbMatch.buzzScore > 3) ? 'medium' as const :
           place.confidenceLevel || 'low' as const,
       });
-    } else if (!place.lat || !place.lng || place.lat === 0 || place.lng === 0) {
-      // ❌ DB 미등록 + 좌표 없음 → Google Places API로 좌표 + gid 확보
-      const googleResult = await searchPlaceByName(place.name, cityName);
+    } else if (needsGoogle) {
+      const googleResult = googleResults.get(place.name);
       if (googleResult) {
         googleFetched++;
 
-        // 🔗 gid 획득 후 DB에서 역매칭 시도 (이미 다른 이름으로 저장되어 있을 수 있음)
+        // gid 역매칭 시도
         if (googleResult.googlePlaceId && dbPlacesMap.size > 0) {
           const gidMatch = dbPlacesMap.get(googleResult.googlePlaceId.toLowerCase());
           if (gidMatch) {
-            console.log(`[AG3] 🔗 gid 역매칭 성공: "${place.name}" → DB "${gidMatch.name}" (gid: ${googleResult.googlePlaceId.slice(0, 20)}...)`);
-            // 별칭 자동 학습
+            console.log(`[AG3] 🔗 gid 역매칭: "${place.name}" → "${gidMatch.name}"`);
             if (gidMatch.id) addPlaceAlias(gidMatch.id, place.name).catch(() => {});
             matched++;
             enriched.push({
@@ -301,25 +320,17 @@ export async function matchPlacesWithDB(
           googleMapsUrl: googleResult.googleMapsUri || place.googleMapsUrl,
           confidenceScore: Math.max(place.confidenceScore, googleResult.rating ? googleResult.rating * 2 : 5),
         });
-        console.log(`[AG3] 🔍 Google Places 확보: ${place.name} (gid: ${googleResult.googlePlaceId?.slice(0, 20) || 'none'})`);
       } else {
         unmatchedCount++;
-        enriched.push({
-          ...place,
-          sourceType: 'Gemini AI (New)',
-        });
+        enriched.push({ ...place, sourceType: 'Gemini AI (New)' });
       }
     } else {
-      // DB 미등록이지만 좌표는 있음 → Gemini 원본 유지
       unmatchedCount++;
-      enriched.push({
-        ...place,
-        sourceType: 'Gemini AI (New)',
-      });
+      enriched.push({ ...place, sourceType: 'Gemini AI (New)' });
     }
   }
 
-  console.log(`[AG3] DB 매칭 완료: ${matched}곳 DB보강, ${googleFetched}곳 Google확보, ${unmatchedCount}곳 원본`);
+  console.log(`[AG3] 최종: ${matched}곳 DB, ${googleFetched}곳 Google, ${unmatchedCount}곳 원본 (${Date.now() - _t0}ms)`);
   return enriched;
 }
 
