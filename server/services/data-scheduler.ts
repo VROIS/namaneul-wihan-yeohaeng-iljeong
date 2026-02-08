@@ -96,6 +96,9 @@ export class DataScheduler {
     // 📸 포토스팟 점수 계산: 하루 1번
     this.scheduleTask("photospot_sync", "0 21 * * *");       // 06:00 KST
     
+    // 🎯 점수 집계: 하루 1번 (모든 크롤러 완료 후)
+    this.scheduleTask("score_aggregation", "0 22 * * *");    // 07:00 KST (모든 크롤러 끝난 후)
+    
     // 🌱 장소 시딩: ⛔ 비용 보호로 차단 (Google Places API 폭탄 주범)
     // this.scheduleTask("place_seed_sync", "0 */6 * * *");
     
@@ -109,6 +112,7 @@ export class DataScheduler {
     console.log("  - 한국 플랫폼: 하루 1번");
     console.log("  - 패키지 투어 검증: 하루 1번");
     console.log("  - 포토스팟 점수: 하루 1번");
+    console.log("  - 🎯 점수 집계: 하루 1번 (07:00 KST)");
     console.log("  - ⛔ 장소 시딩: 차단됨 (Google Places API 비용 보호)");
   }
 
@@ -186,6 +190,9 @@ export class DataScheduler {
           break;
         case "place_seed_sync":
           result = await this.runPlaceSeedSync();
+          break;
+        case "score_aggregation":
+          result = await this.runScoreAggregation();
           break;
         default:
           console.warn(`[Scheduler] Unknown task: ${taskName}`);
@@ -416,6 +423,20 @@ export class DataScheduler {
         success: result.success,
         itemsProcessed: result.totalScored,
         errors: [],
+      };
+    } catch (error: any) {
+      return { success: false, itemsProcessed: 0, errors: [error.message] };
+    }
+  }
+
+  private async runScoreAggregation(): Promise<{ success: boolean; itemsProcessed: number; errors: string[] }> {
+    try {
+      const { aggregateAllScores } = await import("./score-aggregator");
+      const result = await aggregateAllScores();
+      return {
+        success: result.success,
+        itemsProcessed: result.updated,
+        errors: result.errors,
       };
     } catch (error: any) {
       return { success: false, itemsProcessed: 0, errors: [error.message] };

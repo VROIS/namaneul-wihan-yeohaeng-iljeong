@@ -221,21 +221,31 @@ export async function matchPlacesWithDB(
     if (dbMatch) {
       // ✅ DB 매칭 성공 → DB 데이터로 보강
       matched++;
+      
+      // DB에서 가져올 수 있는 모든 필수 데이터 활용
+      const dbRating = dbMatch.rating ?? 0;
+      const dbReviewCount = dbMatch.userRatingCount ?? 0;
+      const dbDescription = dbMatch.editorialSummary || place.description;
+      
       enriched.push({
         ...place,
         sourceType: 'Gemini AI + DB Enriched',
+        description: dbDescription,
         image: (dbMatch.photoUrls?.length > 0) ? dbMatch.photoUrls[0] : place.image,
         vibeScore: dbMatch.vibeScore || place.vibeScore,
         finalScore: dbMatch.finalScore || place.finalScore || 0,
-        confidenceScore: Math.max(place.confidenceScore, dbMatch.buzzScore ? Math.min(10, dbMatch.buzzScore) : 0),
+        confidenceScore: Math.max(place.confidenceScore, dbRating ? dbRating * 2 : (dbMatch.buzzScore ? Math.min(10, dbMatch.buzzScore) : 0)),
         googleMapsUrl: dbMatch.googleMapsUri || place.googleMapsUrl,
         lat: dbMatch.latitude || place.lat,
         lng: dbMatch.longitude || place.lng,
         selectionReasons: [
           ...(place.selectionReasons || []),
-          `📊 DB 검증 완료 (buzzScore: ${(dbMatch.buzzScore || 0).toFixed(1)})`,
+          dbRating > 0 
+            ? `⭐ Google ${dbRating.toFixed(1)}점 (${dbReviewCount.toLocaleString()}리뷰) | DB 검증` 
+            : `📊 DB 검증 완료 (buzzScore: ${(dbMatch.buzzScore || 0).toFixed(1)})`,
         ],
         confidenceLevel: (dbMatch.finalScore && dbMatch.finalScore > 5) ? 'high' as const :
+          (dbRating >= 4.0) ? 'high' as const :
           (dbMatch.buzzScore && dbMatch.buzzScore > 3) ? 'medium' as const :
           place.confidenceLevel || 'low' as const,
       });

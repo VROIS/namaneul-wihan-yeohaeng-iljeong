@@ -1,0 +1,21 @@
+feat: score aggregation pipeline + AG3 DB enrichment enhancement
+
+[Score Aggregator] (NEW: score-aggregator.ts)
+- Central pipeline to aggregate all crawler data into places table
+- buzzScore: Google(40%) + TripAdvisor(30%) + Instagram(20%) + Reviews(10%)
+- vibeScore: Gemini Vision analysis average
+- tasteVerifyScore: originator language review based
+- finalScore: (vibe + buzz + taste) / count - realityPenalty
+- tier: 1(best) to 5(lowest) based on finalScore
+- Runs daily at 07:00 KST after all crawlers complete
+
+[AG3 Enhancement]
+- Now uses rating, editorialSummary from DB for enrichment
+- Shows Google rating + review count in selection reasons
+- Better confidence level calculation using DB rating
+
+[Data Scheduler]
+- Added score_aggregation task (daily 07:00 KST)
+- Scheduler switch case added for score_aggregation
+
+[Build] esbuild 4.0MB bundle - 0 errors
