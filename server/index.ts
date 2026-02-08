@@ -285,9 +285,12 @@ function setupErrorHandler(app: express.Application) {
       }
 
       try {
-        const { dataScheduler } = await import("./services/data-scheduler");
-        await dataScheduler.initialize();
-        log("[Server] Data collection scheduler initialized");
+        // 🚨 [긴급 차단] 2026-02-08: 자동 크롤러 요금 폭탄 방지
+        // 14개 크롤러가 Gemini API + Google Places API를 자동 호출하여 과금 발생
+        // 필요시 선별적으로 활성화할 것
+        // const { dataScheduler } = await import("./services/data-scheduler");
+        // await dataScheduler.initialize();
+        log("[Server] ⚠️ Data scheduler DISABLED (billing protection)");
       } catch (error) {
         log("[Server] Failed to initialize scheduler:", error);
       }
