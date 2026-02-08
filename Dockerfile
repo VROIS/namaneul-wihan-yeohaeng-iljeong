@@ -13,6 +13,10 @@ RUN npm ci
 # 소스 코드 복사
 COPY . .
 
+# Git commit hash를 환경변수로 설정 (배포 버전 추적용)
+ARG COMMIT_HASH=unknown
+ENV COMMIT_HASH=${COMMIT_HASH}
+
 # 서버 빌드 (esbuild)
 RUN npm run server:build
 
@@ -43,6 +47,8 @@ COPY --from=builder /app/server/data ./server/data
 # 환경 변수
 ENV NODE_ENV=production
 ENV PORT=8000
+ARG COMMIT_HASH=unknown
+ENV COMMIT_HASH=${COMMIT_HASH}
 
 # 포트 노출
 EXPOSE 8000

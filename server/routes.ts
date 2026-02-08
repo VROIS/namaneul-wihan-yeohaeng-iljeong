@@ -16,7 +16,7 @@ import { getTestVideoHtml } from "./test-video-ui";
 import { registerAdminRoutes } from "./admin-routes";
 import { db } from "./db";
 import { instagramHashtags, cities, youtubeChannels, verificationRequests, itineraries } from "../shared/schema";
-import { count, eq, desc } from "drizzle-orm";
+import { count, eq, desc, sql } from "drizzle-orm";
 import { users } from "../shared/schema";
 
 const BRAND_PRIMARY = "#6366F1";
@@ -349,11 +349,47 @@ export async function registerRoutes(app: Express): Promise<Server> {
         destinationCoords: { lat: 48.8566, lng: 2.3522 },
       };
       
-      steps.push(`[${Date.now() - start}ms] Calling generateItinerary...`);
+      steps.push(`[${Date.now() - start}ms] Calling generateItinerary (4+1 Agent Pipeline)...`);
       const result = await itineraryGenerator.generate(testFormData);
-      steps.push(`[${Date.now() - start}ms] SUCCESS - days: ${result?.days?.length}, places: ${result?.days?.[0]?.places?.length}`);
       
-      res.json({ status: "ok", steps, totalMs: Date.now() - start });
+      const totalMs = Date.now() - start;
+      const dayCount = result?.days?.length || 0;
+      const placeCount = result?.days?.reduce((sum: number, d: any) => sum + (d?.places?.length || 0), 0) || 0;
+      
+      steps.push(`[${totalMs}ms] SUCCESS - ${dayCount}일 ${placeCount}곳`);
+      
+      // 파이프라인 단계별 타이밍 추출
+      const pipelineTimings = result?.metadata?._timings || {};
+      const pipelineTotal = result?.metadata?._totalMs || totalMs;
+      
+      res.json({ 
+        status: "ok", 
+        steps, 
+        totalMs,
+        pipeline: {
+          version: result?.metadata?._pipelineVersion || 'unknown',
+          totalMs: pipelineTotal,
+          stages: {
+            AG1_skeleton: pipelineTimings['AG1_skeleton'] || 0,
+            AG2_AG3pre_parallel: pipelineTimings['AG2_AG3pre_parallel'] 
+              ? pipelineTimings['AG2_AG3pre_parallel'] - (pipelineTimings['AG1_skeleton'] || 0) : 0,
+            AG3_matchScore: pipelineTimings['AG3_matchScore'] 
+              ? pipelineTimings['AG3_matchScore'] - (pipelineTimings['AG2_AG3pre_parallel'] || 0) : 0,
+            AG4_finalize: pipelineTimings['AG4_finalize'] 
+              ? pipelineTimings['AG4_finalize'] - (pipelineTimings['AG3_matchScore'] || 0) : 0,
+          },
+          summary: `AG1:${pipelineTimings['AG1_skeleton'] || '?'}ms → AG2+3pre:${pipelineTimings['AG2_AG3pre_parallel'] ? pipelineTimings['AG2_AG3pre_parallel'] - (pipelineTimings['AG1_skeleton'] || 0) : '?'}ms → AG3:${pipelineTimings['AG3_matchScore'] ? pipelineTimings['AG3_matchScore'] - (pipelineTimings['AG2_AG3pre_parallel'] || 0) : '?'}ms → AG4:${pipelineTimings['AG4_finalize'] ? pipelineTimings['AG4_finalize'] - (pipelineTimings['AG3_matchScore'] || 0) : '?'}ms = 총 ${pipelineTotal}ms`
+        },
+        result: {
+          days: dayCount,
+          totalPlaces: placeCount,
+          placeSample: result?.days?.[0]?.places?.slice(0, 3)?.map((p: any) => ({
+            name: p.name,
+            source: p.sourceType,
+            score: p.finalScore,
+          })) || [],
+        }
+      });
     } catch (error: any) {
       steps.push(`[${Date.now() - start}ms] ERROR: ${error?.message}`);
       steps.push(`[${Date.now() - start}ms] Stack: ${(error?.stack || '').substring(0, 500)}`);
@@ -1304,7 +1340,7 @@ High quality, 4k, professional animation.`;
   app.get("/api/health", (req, res) => {
     res.json({
       status: "ok",
-      version: "cursor-dev-74f2ffb",
+      version: `cursor-dev-${process.env.COMMIT_HASH || "local"}`,
       timestamp: new Date().toISOString(),
       services: {
         googlePlaces: !!(process.env.Google_maps_api_key || process.env.GOOGLE_MAPS_API_KEY),
