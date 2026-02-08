@@ -2053,6 +2053,10 @@ function optimizeCityOrder(cityGroups: Map<string, PlaceResult[]>): string[] {
 }
 
 export async function generateItinerary(formData: TripFormData) {
+  const _t0 = Date.now();
+  const _timings: Record<string, number> = {};
+  const _mark = (label: string) => { _timings[label] = Date.now() - _t0; };
+
   const vibes = formData.vibes || ['Foodie', 'Culture', 'Healing'];
   const curationFocus = formData.curationFocus || 'Everyone';
   const vibeWeights = calculateVibeWeights(vibes, curationFocus);
@@ -2122,10 +2126,12 @@ export async function generateItinerary(formData: TripFormData) {
   // ===== 🎯 새 파이프라인: Gemini 추천 우선 → DB 데이터 보강 → 미등록 자동 수집 =====
   // 핵심 전략: Gemini = 브레인(AI 추천), DB = 근거자료(점수/사진/리뷰 보강)
   
+  _mark('0_setup');
   console.log(`[Itinerary] ===== 1단계: Gemini 3.0 Flash AI 추천 시작 =====`);
   
   // Step 1: Gemini AI가 먼저 장소를 추천 (차별화 포인트 = AI 개인화 추천)
   let placesArr = await generatePlacesWithGemini(formData, vibeWeights, requiredPlaceCount + 5, koreanSentiment);
+  _mark('1_gemini');
   console.log(`[Itinerary] 🤖 Gemini 추천 완료: ${placesArr.length}곳`);
   
   // Google API 보충 (Gemini 결과가 부족할 때만)
@@ -2172,14 +2178,17 @@ export async function generateItinerary(formData: TripFormData) {
   
   console.log(`[Itinerary] 총 수집 장소: ${placesArr.length}곳`);
   
+  _mark('2_dbEnrich');
   // ===== Phase 1: 한국인 인기도 점수 계산 (DB 수집 데이터 직접 활용) =====
   // 기존: Gemini 추측 기반 일괄 보너스 → 변경: 장소별 인스타/유튜브/블로그 DB 데이터 기반
   placesArr = await enrichPlacesWithKoreanPopularity(placesArr, formData.destination);
   
+  _mark('3_koreanPop');
   // ===== Phase 1.5: TripAdvisor + 가격 데이터 통합 =====
   // DB에 수집된 TripAdvisor 평점/리뷰 수 + 실제 가격 정보를 장소에 추가
   placesArr = await enrichPlacesWithTripAdvisorAndPrices(placesArr, formData.destination);
   
+  _mark('4_tripadvisor');
   // ===== Phase 1-5: 포토스팟 + 패키지 투어 데이터 보강 =====
   placesArr = await enrichPlacesWithPhotoAndTour(placesArr, formData.destination);
   
@@ -2219,9 +2228,11 @@ export async function generateItinerary(formData: TripFormData) {
     console.log(`[Itinerary]   #${i + 1} ${p.name}: finalScore=${(p.finalScore || 0).toFixed(2)} (인기=${(p.koreanPopularityScore || 0).toFixed(1)}, 포토=${(p.photoSpotScore || 0).toFixed(1)}, vibe=${p.vibeScore.toFixed(1)})`);
   });
   
+  _mark('5_photoTour');
   // ===== 사용자 시간 기반 동적 슬롯 분배 (식사 슬롯 강제 포함) =====
   const schedule = await distributePlacesWithUserTime(placesArr, daySlotsConfig, travelPace, formData.travelStyle || 'Reasonable');
   
+  _mark('6_distribute');
   console.log(`[Itinerary] 최종 일정: ${schedule.length}개 슬롯`);
   
   // 🏨 숙소 좌표 기반 동선 최적화 (nearest-neighbor + 2-opt, 원형 경로)
@@ -2489,6 +2500,8 @@ export async function generateItinerary(formData: TripFormData) {
     });
   }
   
+  _mark('7_routeTransit');
+
   // 여행 밀도 라벨
   const paceLabel = travelPace === 'Packed' ? '빡빡하게' 
     : travelPace === 'Normal' ? '보통' 
@@ -2566,6 +2579,8 @@ export async function generateItinerary(formData: TripFormData) {
       curationFocus: formData.curationFocus,
       generatedAt: new Date().toISOString(),
       koreanSentimentApplied: !!koreanSentiment,
+      _timings,
+      _totalMs: Date.now() - _t0,
     },
   };
 }
