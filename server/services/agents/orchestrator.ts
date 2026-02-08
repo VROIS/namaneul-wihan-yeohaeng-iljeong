@@ -92,6 +92,19 @@ export async function runPipeline(formData: TripFormData): Promise<any> {
 
   _mark('AG3_matchScore');
   console.log(`[Pipeline] AG3 완료 (${_timings['AG3_matchScore']}ms): ${schedule.length}슬롯 확정`);
+  
+  // 🔍 디버그: schedule 상세 로깅
+  if (schedule.length === 0) {
+    console.error(`[Pipeline] ❌ schedule이 비었습니다!`);
+    console.error(`[Pipeline] ❌ scoredPlaces: ${placesArr.length}곳`);
+    console.error(`[Pipeline] ❌ daySlotsConfig: ${JSON.stringify(skeleton.daySlotsConfig)}`);
+  } else {
+    const dayBreakdown = skeleton.daySlotsConfig.map(d => {
+      const daySlots = schedule.filter(s => s.day === d.day);
+      return `Day${d.day}: ${daySlots.length}슬롯 (${daySlots.filter(s => s.isMealSlot).length}식사)`;
+    });
+    console.log(`[Pipeline] 📊 슬롯 배분: ${dayBreakdown.join(', ')}`);
+  }
 
   // 미등록 장소 백그라운드 저장
   saveNewPlacesToDB(placesArr, preloaded.cityId);

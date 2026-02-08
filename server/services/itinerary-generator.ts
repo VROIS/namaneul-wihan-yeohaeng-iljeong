@@ -2129,11 +2129,36 @@ export const _enrichmentPipeline = {
     });
 
     // 슬롯 분배
+    console.log(`[AG3] 슬롯 분배 시작: ${placesArr.length}곳 → ${daySlotsConfig.length}일 (pace: ${travelPace})`);
+    console.log(`[AG3] 식당: ${placesArr.filter(p => isFoodPlace(p)).length}곳, 일반: ${placesArr.filter(p => !isFoodPlace(p)).length}곳`);
+    
     const schedule = await distributePlacesWithUserTime(
       placesArr, daySlotsConfig, travelPace, formData.travelStyle || 'Reasonable'
     );
 
     console.log(`[AG3] 슬롯 분배 완료: ${schedule.length}개`);
+    if (schedule.length === 0) {
+      console.error(`[AG3] ❌ 슬롯 분배 결과 0개! placesArr: ${placesArr.length}곳, daySlotsConfig: ${JSON.stringify(daySlotsConfig)}`);
+      // 비상 조치: 식당 태그 관계없이 모든 장소를 균등 분배
+      console.log(`[AG3] 🚨 비상 분배 실행...`);
+      let emergencySlotIdx = 0;
+      for (const dayConfig of daySlotsConfig) {
+        for (let i = 0; i < dayConfig.slots && emergencySlotIdx < placesArr.length; i++) {
+          const place = placesArr[emergencySlotIdx++];
+          const startH = parseInt(dayConfig.startTime.split(':')[0]) + i * 2;
+          schedule.push({
+            day: dayConfig.day,
+            slot: startH < 12 ? 'morning' : startH < 14 ? 'lunch' : startH < 18 ? 'afternoon' : 'evening',
+            place,
+            startTime: `${startH.toString().padStart(2, '0')}:00`,
+            endTime: `${(startH + 2).toString().padStart(2, '0')}:00`,
+            isMealSlot: false,
+            mealType: undefined,
+          });
+        }
+      }
+      console.log(`[AG3] 🚨 비상 분배 결과: ${schedule.length}개`);
+    }
 
     // 동선 최적화
     const dayCount = daySlotsConfig.length;

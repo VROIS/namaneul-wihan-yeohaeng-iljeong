@@ -294,6 +294,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const itinerary = await itineraryGenerator.generate(enrichedFormData);
+      
+      // 🔍 디버그: places 비어있는 문제 추적
+      const debugInfo = {
+        daysCount: itinerary?.days?.length || 0,
+        placesPerDay: itinerary?.days?.map((d: any) => ({
+          day: d.day,
+          placesCount: d.places?.length || 0,
+          placeNames: d.places?.slice(0, 3).map((p: any) => p.name) || [],
+        })) || [],
+        totalPlaces: itinerary?.metadata?.totalPlaces || 0,
+        pipelineVersion: itinerary?.metadata?._pipelineVersion || 'unknown',
+        totalMs: itinerary?.metadata?._totalMs || 0,
+      };
+      console.log(`[Routes] 📊 일정 생성 완료:`, JSON.stringify(debugInfo));
+      
+      // places가 전부 비어있으면 경고
+      const totalPlacesInDays = debugInfo.placesPerDay.reduce((sum: number, d: any) => sum + d.placesCount, 0);
+      if (totalPlacesInDays === 0) {
+        console.error(`[Routes] ❌ 경고: 모든 day의 places가 비어있습니다! schedule이 비었을 수 있음`);
+      }
+      
       res.json(itinerary);
     } catch (error: any) {
       console.error("Error generating itinerary:", error?.message || error);
