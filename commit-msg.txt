@@ -1,0 +1,7 @@
+fix: sql import missing + pipeline timing in test endpoint
+
+- Fix ReferenceError: sql is not defined (missing drizzle-orm import in routes.ts)
+- Enhanced /api/debug/generate-test to return pipeline stage timings
+  (AG1 skeleton, AG2+AG3pre parallel, AG3 match/score, AG4 finalize)
+- Dynamic version string using COMMIT_HASH env var
+- Dockerfile: pass COMMIT_HASH build arg for version tracking

@@ -13,9 +13,9 @@
 
 | 항목 | 내용 |
 |------|------|
-| **마지막 작업일** | 2026-02-08 (일) 오후 |
-| **마지막 작업 내용** | **DB 자산 확보 작업 진행 중** — 스키마 rating 필드 추가, place_seed 저장 버그 수정 (진행 중) |
-| **다음 해야 할 작업** | **아래 "DB 자산 확보 체크리스트" 이어서 진행** |
+| **마지막 작업일** | 2026-02-08 (일) 저녁 |
+| **마지막 작업 내용** | **DB 자산 확보 + 점수 집계 + 배포 + 일정 생성 테스트 완료** |
+| **다음 해야 할 작업** | AG2 Gemini 속도 최적화(12초→5초), AG3 DB 매칭률 개선, DB 마이그레이션 |
 | **환경 상태** | node_modules 설치 완료, Cursor 최적화 완료, Koyeb 배포 운영 중 |
 | **개발 프로세스** | 로컬호스트 미사용. 코드수정 → Git 커밋(cursor-dev) → Koyeb 자동배포 → Supabase DB |
 | **주의사항** | ⚠️ Google Maps API 요금 폭탄 발생 이력 있음. place_seed_sync 크롤러는 차단 상태. API 호출 최소화 필수 |
@@ -34,9 +34,26 @@
 | 3 | **fetchAndStorePlace() 매핑 보강** | ✅ 완료 | `rating`, `editorialSummary`, `websiteUri`, `phoneNumber` 저장 + 기존 장소 업데이트 로직 추가 |
 | 4 | **storage.ts updatePlaceData() 추가** | ✅ 완료 | 기존 장소의 핵심 필드 업데이트 함수 (인터페이스+구현) |
 | 5 | **DB 마이그레이션 (rating 컬럼)** | ❌ 미완료 | Supabase에서 `ALTER TABLE places ADD COLUMN rating REAL;` 실행 필요 |
-| 6 | **크롤러→places B등급 필드 업데이트 연결** | ❌ 미완료 | 각 크롤러(TripAdvisor, 미쉐린, 가격 등)가 places 테이블 직접 업데이트하도록 |
-| 7 | **finalScore/tier 계산 파이프라인** | ❌ 미완료 | vibeScore+buzzScore+tasteVerifyScore → finalScore, tier 자동 계산 |
-| 8 | **AG3 DB 우선 활용 확인** | ❌ 미완료 | ag3-data-matcher.ts가 보강된 DB 데이터 제대로 사용하는지 검증 |
+| 6 | **점수 집계 파이프라인** | ✅ 완료 | `score-aggregator.ts` — 전 크롤러 데이터 → places 테이블 buzzScore/vibeScore/finalScore/tier 집계. 매일 07:00 KST 자동 실행 |
+| 7 | **AG3 DB 우선 활용 보강** | ✅ 완료 | rating, editorialSummary 활용 추가, confidenceLevel 개선, 선정이유에 Google 평점 표시 |
+| 8 | **sql import 버그 수정** | ✅ 완료 | routes.ts에서 drizzle-orm의 sql 미 import → ReferenceError 해결 |
+| 9 | **배포 + 일정 생성 테스트** | ✅ 완료 | 아래 "성능 테스트 결과" 참조 |
+
+#### 성능 테스트 결과 (2026-02-08 실제 배포 서버, Paris 1일)
+
+| 단계 | 소요시간 | 목표 | 판정 |
+|------|----------|------|------|
+| AG1 (뼈대 설계) | **251ms** | 300ms | ✅ 달성 |
+| AG2+AG3-pre (Gemini+DB 병렬) | **12,151ms** | 5,000~8,000ms | ⚠️ 미달 (Gemini 응답 느림) |
+| AG3 (매칭/점수/확정) | **4,222ms** | 1,000~2,000ms | ⚠️ 미달 (DB 매칭 0건→Google API) |
+| AG4 (실시간 완성) | **1,293ms** | 1,000~2,000ms | ✅ 달성 |
+| **총합** | **17,917ms** | **8,000~12,000ms** | ⚠️ 18초 (목표 대비 +6초) |
+| **이전 대비** | 40초 → 18초 | - | ✅ 55% 단축 |
+
+#### 성능 병목 원인 분석
+1. **AG2 (12초)**: Koyeb 무료 티어 네트워크 지연 + Gemini 모델 응답 시간. 프롬프트는 이미 500자로 축소 완료
+2. **AG3 (4초)**: DB 매칭 0건 → Google Places Text Search API 호출 × 4곳. Paris DB에 장소 있지만 한국어/영어 이름 불일치로 매칭 실패
+3. **해결 방향**: AG2 응답에 영문 장소명 강제, DB에 alias(별칭) 필드 추가, Gemini 모델 변경 검토
 
 #### 핵심 변경 파일 (이 커밋)
 - `shared/schema.ts`: rating 필드 추가 (L81)
