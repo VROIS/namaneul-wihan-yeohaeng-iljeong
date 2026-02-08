@@ -58,20 +58,26 @@ export async function runPipeline(formData: TripFormData): Promise<any> {
   _mark('AG2_AG3pre_parallel');
   console.log(`[Pipeline] AG2+AG3pre 완료 (${_timings['AG2_AG3pre_parallel']}ms): Gemini ${geminiPlaces.length}곳, DB ${preloaded.dbPlacesMap.size}키`);
 
-  // Gemini 결과가 부족하면 보충
+  // Gemini 결과가 부족하면 보충 (실제 슬롯 수 기준으로 판단)
   let placesArr = geminiPlaces;
-  if (placesArr.length < skeleton.requiredPlaceCount) {
-    console.log(`[Pipeline] Gemini ${placesArr.length}곳 < 필요 ${skeleton.requiredPlaceCount}곳 → 보충 시도`);
-    // Gemini 재시도 (한 번만)
+  const actualSlotsNeeded = skeleton.totalRequiredPlaces; // 실제 필요 슬롯 (여유분 제외)
+  if (placesArr.length < actualSlotsNeeded) {
+    console.log(`[Pipeline] Gemini ${placesArr.length}곳 < 실제필요 ${actualSlotsNeeded}곳 → 보충 시도 (7초 소요)`);
+    // Gemini 재시도 (한 번만, 타임아웃 8초)
     try {
-      const morePlaces = await generateRecommendations(skeleton);
+      const morePlaces = await Promise.race([
+        generateRecommendations(skeleton),
+        new Promise<PlaceResult[]>((_, reject) => setTimeout(() => reject(new Error('보충 타임아웃')), 8000)),
+      ]);
       const existingNames = new Set(placesArr.map(p => p.name.toLowerCase()));
       const unique = morePlaces.filter(p => !existingNames.has(p.name.toLowerCase()));
       placesArr = [...placesArr, ...unique];
       console.log(`[Pipeline] 보충 후: ${placesArr.length}곳`);
     } catch (e) {
-      console.warn('[Pipeline] 보충 실패:', e);
+      console.warn('[Pipeline] 보충 스킵 (이미 충분하거나 타임아웃):', (e as Error).message);
     }
+  } else {
+    console.log(`[Pipeline] ✅ Gemini ${placesArr.length}곳 ≥ 필요 ${actualSlotsNeeded}곳, 보충 불필요`);
   }
 
   // ===== AG3: 매칭/점수/확정 (1~2초) =====
