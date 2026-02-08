@@ -315,6 +315,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // 🔧 진단용: 일정 생성 단계별 타임아웃 확인
+  app.get("/api/debug/generate-test", async (req, res) => {
+    const steps: string[] = [];
+    const start = Date.now();
+    try {
+      steps.push(`[${Date.now() - start}ms] Start`);
+      
+      // Gemini API 키 확인
+      const geminiKey = process.env.GEMINI_API_KEY;
+      steps.push(`[${Date.now() - start}ms] Gemini key: ${geminiKey ? 'present (' + geminiKey.substring(0, 8) + '...)' : 'MISSING'}`);
+      
+      // DB 연결 확인
+      const cityCheck = await db.select({ count: sql<number>`count(*)` }).from(cities);
+      steps.push(`[${Date.now() - start}ms] DB OK - cities: ${cityCheck[0]?.count}`);
+      
+      // 간단한 일정 생성 테스트
+      const testFormData = {
+        destination: "Paris",
+        startDate: "2026-03-01",
+        endDate: "2026-03-01",
+        vibes: ["Foodie"] as any,
+        curationFocus: "Everyone" as any,
+        companionType: "Single",
+        companionCount: 1,
+        travelStyle: "Reasonable" as any,
+        mobilityStyle: "Moderate" as any,
+        travelPace: "Normal" as any,
+        birthDate: "1990-01-01",
+        companionAges: "",
+        startTime: "10:00",
+        endTime: "18:00",
+        destinationCoords: { lat: 48.8566, lng: 2.3522 },
+      };
+      
+      steps.push(`[${Date.now() - start}ms] Calling generateItinerary...`);
+      const result = await itineraryGenerator.generate(testFormData);
+      steps.push(`[${Date.now() - start}ms] SUCCESS - days: ${result?.days?.length}, places: ${result?.days?.[0]?.places?.length}`);
+      
+      res.json({ status: "ok", steps, totalMs: Date.now() - start });
+    } catch (error: any) {
+      steps.push(`[${Date.now() - start}ms] ERROR: ${error?.message}`);
+      steps.push(`[${Date.now() - start}ms] Stack: ${(error?.stack || '').substring(0, 500)}`);
+      res.json({ status: "error", steps, totalMs: Date.now() - start });
+    }
+  });
+
   // ========================================
   // 🏨 장소 검색 프록시 API (Google Places Autocomplete)
   // API 키를 서버에서만 사용 — 클라이언트 노출 방지
