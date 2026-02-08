@@ -107,16 +107,22 @@ Example: {"places":[{"name":"Eiffel Tower","reason":"파리 필수 랜드마크,
     console.log(`[AG2] 🤖 Gemini에 ${slotCount}곳 요청 (간소화 프롬프트 ${prompt.length}자)...`);
 
     const response = await getAI().models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.0-flash",
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       config: {
         temperature: 0.7,
-        maxOutputTokens: 2048,
+        maxOutputTokens: 4096,
+        responseMimeType: "application/json",
       },
     });
 
+    // 디버그: 응답 상세 정보 로깅
+    const finishReason = (response as any).candidates?.[0]?.finishReason || 'unknown';
     const text = response.text || "";
-    console.log(`[AG2] 🤖 Gemini 응답 수신 (${text.length}자, ${Date.now() - _t0}ms)`);
+    console.log(`[AG2] 🤖 Gemini 응답 수신 (${text.length}자, finishReason=${finishReason}, ${Date.now() - _t0}ms)`);
+    if (text.length < 200) {
+      console.log(`[AG2] 🔍 짧은 응답 전문: ${text}`);
+    }
 
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
