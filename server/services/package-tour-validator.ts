@@ -12,6 +12,8 @@
 import { db } from "../db";
 import { geminiWebSearchCache, places, cities } from "../../shared/schema";
 import { eq, and, gte, desc } from "drizzle-orm";
+import { getSearchTools } from "./gemini-search-limiter";
+import { safeParseJSON, safeNumber, safeConfidence, safeDbOperation } from "./crawler-utils";
 
 const GEMINI_MODEL = "gemini-3-flash-preview";
 const CACHE_DURATION_HOURS = 48; // 패키지 상품은 자주 안 바뀜
@@ -41,48 +43,36 @@ async function checkPackageTourWithGemini(
     const { GoogleGenAI } = await import("@google/genai");
     const ai = new GoogleGenAI({ apiKey });
 
+    // 💰 프롬프트 최적화: samplePackage 제거, 프롬프트 간결화 (토큰 절약)
     const response = await ai.models.generateContent({
       model: GEMINI_MODEL,
-      contents: `한국 패키지 여행사(하나투어, 모두투어, 참좋은여행, 노랑풍선)의 ${cityName} ${countryName} 패키지 여행 상품에 "${placeName}"이 포함되어 있는지 검색해주세요.
-
-다음 JSON으로 응답해주세요:
+      contents: `한국 여행사(하나투어,모두투어,참좋은여행,노랑풍선) ${cityName} ${countryName} 패키지에 "${placeName}" 포함 여부 검색.
+JSON 반환:
 {
-  "found": true 또는 false,
-  "isPackageTourIncluded": true 또는 false,
-  "packageMentionCount": 몇 개 여행사 패키지에 이 장소가 포함되는지 (숫자, 0-4),
-  "mentionedBy": ["하나투어", "모두투어"] (포함된 여행사 이름 배열),
-  "samplePackage": "패키지 상품명 예시 (있으면)",
-  "confidence": 0.0~1.0 (정보 신뢰도)
+  "found": true/false,
+  "isPackageTourIncluded": true/false,
+  "packageMentionCount": 0-4,
+  "mentionedBy": ["여행사명"],
+  "confidence": 0.0-1.0
 }
-
-요구사항:
-- 4개 여행사(하나투어, 모두투어, 참좋은여행, 노랑풍선)를 모두 확인
-- 해당 도시 패키지에 이 장소가 일정에 포함되는지 확인
-- 포함되면 isPackageTourIncluded: true
-- 정보를 찾을 수 없으면 {"found": false, "isPackageTourIncluded": false, "packageMentionCount": 0, "mentionedBy": [], "samplePackage": null, "confidence": 0.3} 반환
-- 반드시 유효한 JSON만 반환`,
+없으면 found:false. 유효한 JSON만 반환.`,
       config: {
-        tools: [{ googleSearch: {} }],
+        tools: getSearchTools("package-tour"),
       },
     });
 
     const text = response.text || "";
     const jsonMatch = text.match(/\{[\s\S]*\}/);
 
-    if (jsonMatch) {
-      try {
-        const parsed = JSON.parse(jsonMatch[0]);
-
-        return {
-          isPackageTourIncluded: parsed.isPackageTourIncluded || false,
-          packageMentionCount: parsed.packageMentionCount || 0,
-          mentionedBy: Array.isArray(parsed.mentionedBy) ? parsed.mentionedBy : [],
-          samplePackage: parsed.samplePackage || null,
-          confidence: parsed.confidence || 0.5,
-        };
-      } catch (parseErr) {
-        console.warn(`[PackageTour] JSON 파싱 실패 (${placeName}):`, parseErr);
-      }
+    const parsed = safeParseJSON<any>(text, `PackageTour-${placeName}`);
+    if (parsed) {
+      return {
+        isPackageTourIncluded: parsed.isPackageTourIncluded === true,
+        packageMentionCount: safeNumber(parsed.packageMentionCount, 0, 0, 4) ?? 0,
+        mentionedBy: Array.isArray(parsed.mentionedBy) ? parsed.mentionedBy.filter((s: any) => typeof s === 'string') : [],
+        samplePackage: null,
+        confidence: safeConfidence(parsed.confidence, 0.5),
+      };
     }
 
     console.log(`[PackageTour] ${placeName}: 유효한 응답 없음`);

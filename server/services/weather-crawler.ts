@@ -1,6 +1,7 @@
 import { db } from "../db";
 import { weatherForecast, weatherCache, cities, places } from "../../shared/schema";
 import { eq, and, gte, desc } from "drizzle-orm";
+import { getSearchTools } from "./gemini-search-limiter";
 
 const OPENWEATHER_API_KEY = process.env.OPENWEATHER_API_KEY;
 const CACHE_DURATION_HOURS = 6;
@@ -184,7 +185,7 @@ Return JSON:
   ]
 }`,
       config: {
-        tools: [{ googleSearch: {} }],
+        tools: getSearchTools("weather"),
       },
     });
 

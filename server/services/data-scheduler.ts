@@ -16,6 +16,13 @@ export class DataScheduler {
   private tasks: Map<string, CronTask> = new Map();
   private isRunning: boolean = false;
 
+  // 💰 [비용 보호] Google Places API 폭탄 방지 - place_seed_sync 차단
+  // 이 크롤러만 Google Places API를 직접 호출하여 월 $1,000+ 과금 유발
+  // 나머지 13개 크롤러는 Gemini/무료 API만 사용하므로 안전
+  private static readonly BLOCKED_TASKS: Set<string> = new Set([
+    "place_seed_sync", // Google Places API 직접 호출 → $1,000+ 폭탄 주범
+  ]);
+
   async initialize(): Promise<void> {
     if (this.isRunning) {
       console.log("[Scheduler] Already running");
@@ -23,12 +30,17 @@ export class DataScheduler {
     }
 
     console.log("[Scheduler] Initializing data collection scheduler");
+    console.log(`[Scheduler] 🚫 차단된 크롤러: ${[...DataScheduler.BLOCKED_TASKS].join(", ")}`);
 
     const schedules = await db.query.dataCollectionSchedule.findMany({
       where: eq(dataCollectionSchedule.isEnabled, true),
     });
 
     for (const schedule of schedules) {
+      if (DataScheduler.BLOCKED_TASKS.has(schedule.taskName)) {
+        console.log(`[Scheduler] ⛔ ${schedule.taskName} - 비용 보호로 차단됨`);
+        continue;
+      }
       this.scheduleTask(schedule.taskName, schedule.cronExpression);
     }
 
@@ -42,12 +54,6 @@ export class DataScheduler {
       console.log("[Scheduler] 🚨 서버 시작 - 위기 정보 즉시 수집 시작...");
       await this.executeTask("crisis_sync");
     }, 60000); // 1분 후 실행 (API 키 로드 대기)
-    
-    // 🌱 서버 시작 2분 후 장소 시딩 즉시 시작 (미시딩 도시 연쇄 처리)
-    setTimeout(async () => {
-      console.log("[Scheduler] 🌱 서버 시작 - 장소 시딩 연쇄 실행 시작...");
-      await this.executeTask("place_seed_sync");
-    }, 120000); // 2분 후 실행
   }
 
   private scheduleDefaultTasks(): void {
@@ -90,20 +96,20 @@ export class DataScheduler {
     // 📸 포토스팟 점수 계산: 하루 1번
     this.scheduleTask("photospot_sync", "0 21 * * *");       // 06:00 KST
     
-    // 🌱 장소 시딩: 6시간마다 (미시딩 도시 연쇄 처리)
-    this.scheduleTask("place_seed_sync", "0 */6 * * *");     // 6시간마다
+    // 🌱 장소 시딩: ⛔ 비용 보호로 차단 (Google Places API 폭탄 주범)
+    // this.scheduleTask("place_seed_sync", "0 */6 * * *");
     
     console.log("[Scheduler] ✅ 자동 수집 스케줄 설정 완료:");
     console.log("  - 날씨: 매 시간");
     console.log("  - 환율: 하루 3번");
-    console.log("  - 위기 정보: 6시간마다");
+    console.log("  - 위기 정보: 30분마다");
     console.log("  - YouTube/블로그: 하루 2번");
     console.log("  - 인스타그램: 하루 2번");
     console.log("  - 미쉐린/TripAdvisor: 하루 1번");
     console.log("  - 한국 플랫폼: 하루 1번");
     console.log("  - 패키지 투어 검증: 하루 1번");
     console.log("  - 포토스팟 점수: 하루 1번");
-    console.log("  - 🌱 장소 시딩: 6시간마다 (연쇄 실행)");
+    console.log("  - ⛔ 장소 시딩: 차단됨 (Google Places API 비용 보호)");
   }
 
   private scheduleTask(taskName: string, cronExpression: string): void {
@@ -431,6 +437,12 @@ export class DataScheduler {
   }
 
   async runNow(taskName: string): Promise<{ success: boolean; message: string }> {
+    // 💰 차단된 크롤러는 수동 실행도 차단
+    if (DataScheduler.BLOCKED_TASKS.has(taskName)) {
+      console.warn(`[Scheduler] ⛔ ${taskName} 수동 실행 차단됨 (비용 보호)`);
+      return { success: false, message: `${taskName}은 비용 보호로 차단되었습니다. BLOCKED_TASKS에서 제거 후 실행하세요.` };
+    }
+    
     console.log(`[Scheduler] Manual trigger for task: ${taskName}`);
     try {
       await this.executeTask(taskName);

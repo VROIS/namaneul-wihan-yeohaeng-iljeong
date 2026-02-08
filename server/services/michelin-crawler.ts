@@ -1,6 +1,8 @@
 import { db } from "../db";
 import { places, placeDataSources, cities } from "../../shared/schema";
 import { eq, and, gte, desc, isNull, or } from "drizzle-orm";
+import { getSearchTools } from "./gemini-search-limiter";
+import { safeParseJSON, safeString, safeConfidence, safeDbOperation } from "./crawler-utils";
 
 const GEMINI_MODEL = "gemini-3-flash-preview";
 const CACHE_DURATION_HOURS = 168; // 7일 (미슐랭 데이터는 자주 변하지 않음)
@@ -31,51 +33,41 @@ async function searchMichelinWithGemini(
     const { GoogleGenAI } = await import("@google/genai");
     const ai = new GoogleGenAI({ apiKey });
     
+    // 💰 프롬프트 최적화: description, url 제거 (토큰 절약)
     const response = await ai.models.generateContent({
       model: GEMINI_MODEL,
-      contents: `Search Michelin Guide for "${placeName}" in ${cityName} ${countryName}.
-
-Find and extract Michelin Guide information for this ${placeType}:
-1. Michelin rating (3-star, 2-star, 1-star, Bib Gourmand, Michelin Recommended)
-2. Cuisine type
-3. Price range (€, €€, €€€, €€€€)
-4. Brief description from Michelin
-5. Official Michelin Guide URL if available
-
+      contents: `Search Michelin Guide for "${placeName}" in ${cityName} ${countryName} (${placeType}).
 Return JSON:
 {
   "found": true/false,
-  "michelinRating": "1스타" | "2스타" | "3스타" | "빕구르망" | "추천" | null,
-  "michelinType": "star" | "bib_gourmand" | "recommended" | null,
+  "michelinRating": "1스타"|"2스타"|"3스타"|"빕구르망"|"추천"|null,
+  "michelinType": "star"|"bib_gourmand"|"recommended"|null,
   "cuisineType": "French Contemporary",
   "priceRange": "€€€",
-  "description": "미슐랭 가이드의 설명 요약 (한국어로)",
-  "url": "https://guide.michelin.com/...",
   "confidence": 0.0-1.0
 }
-
-Return found: false if not found in Michelin Guide.`,
+Return found: false if not found.`,
       config: {
-        tools: [{ googleSearch: {} }],
+        tools: getSearchTools("michelin"),
       },
     });
 
     const text = response.text || "";
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]);
-      if (parsed.found && (parsed.michelinRating || parsed.michelinType)) {
-        return {
-          found: true,
-          michelinRating: parsed.michelinRating,
-          michelinType: parsed.michelinType,
-          cuisineType: parsed.cuisineType,
-          priceRange: parsed.priceRange,
-          description: parsed.description,
-          url: parsed.url,
-          confidence: parsed.confidence || 0.7,
-        };
-      }
+    const parsed = safeParseJSON<any>(text, "Michelin");
+    if (parsed && parsed.found && (parsed.michelinRating || parsed.michelinType)) {
+      // 미쉐린 등급 유효성 검증
+      const validRatings = ["1스타", "2스타", "3스타", "빕구르망", "추천"];
+      const validTypes = ["star", "bib_gourmand", "recommended"];
+      return {
+        found: true,
+        michelinRating: validRatings.includes(parsed.michelinRating) ? parsed.michelinRating : null,
+        michelinType: validTypes.includes(parsed.michelinType) ? parsed.michelinType : null,
+        cuisineType: safeString(parsed.cuisineType, null, 100),
+        priceRange: safeString(parsed.priceRange, null, 10),
+        description: null,
+        url: null,
+        confidence: safeConfidence(parsed.confidence, 0.7),
+      };
     }
   } catch (error) {
     console.error("[MichelinCrawler] Gemini search error:", error);

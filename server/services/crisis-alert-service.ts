@@ -15,7 +15,7 @@
 
 import { db } from '../db';
 import { crisisAlerts } from '../../shared/schema';
-import { eq, and, gte, desc } from 'drizzle-orm';
+import { eq, and, gte, desc, sql } from 'drizzle-orm';
 
 // === 타입 정의 ===
 type CrisisType = 'strike' | 'protest' | 'traffic' | 'weather' | 'security';
@@ -164,7 +164,13 @@ JSON 배열로 답해주세요. 여행에 영향 없는 뉴스는 제외:
     const jsonMatch = text.match(/\[[\s\S]*\]/);
     
     if (jsonMatch) {
-      const alerts: CrisisAlert[] = JSON.parse(jsonMatch[0]);
+      let alerts: CrisisAlert[];
+      try {
+        alerts = JSON.parse(jsonMatch[0]);
+      } catch (parseError) {
+        console.error(`[CrisisAlert] JSON 파싱 실패: ${city}`, parseError);
+        return [];
+      }
       
       // 도시 및 소스 정보 추가
       return alerts.map(alert => ({

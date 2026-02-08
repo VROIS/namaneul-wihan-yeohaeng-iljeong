@@ -13,6 +13,8 @@
 import { db } from "../db";
 import { geminiWebSearchCache, places, cities, instagramHashtags } from "../../shared/schema";
 import { eq, and, gte, desc, ilike } from "drizzle-orm";
+import { getSearchTools } from "./gemini-search-limiter";
+import { safeParseJSON, safeNumber, safeConfidence, safeDbOperation } from "./crawler-utils";
 
 const GEMINI_MODEL = "gemini-3-flash-preview";
 const CACHE_DURATION_HOURS = 48;
@@ -118,49 +120,34 @@ async function evaluatePhotospotWithGemini(
     const { GoogleGenAI } = await import("@google/genai");
     const ai = new GoogleGenAI({ apiKey });
 
+    // 💰 프롬프트 최적화: photoTip, reasons 제거 (토큰 절약)
     const response = await ai.models.generateContent({
       model: GEMINI_MODEL,
-      contents: `"${placeName}" (${cityName})이 한국인 여행자에게 포토스팟/인생샷 명소인지 평가해주세요.
-
-한국인 인스타그램, 블로그, 유튜브에서 이 장소의 사진 촬영 인기도를 검색하고 평가해주세요.
-
-다음 JSON으로 응답:
+      contents: `"${placeName}" (${cityName}) 한국인 포토스팟 평가.
+JSON 반환:
 {
-  "score": 0~10 (한국인 포토스팟 점수, 10이 최고),
-  "isPhotoSpot": true 또는 false,
-  "photoTip": "인생샷 촬영 팁 (한국어, 1문장)",
-  "bestTime": "추천 촬영 시간대 (예: 일몰, 오전, 야경)",
-  "reasons": "왜 포토스팟인지 간단 설명",
+  "score": 0~10,
+  "isPhotoSpot": true/false,
+  "bestTime": "추천 촬영 시간대",
   "confidence": 0.0~1.0
 }
-
-평가 기준:
-- 한국인이 인스타/블로그에 사진을 많이 올리는 곳인가
-- 한국인 사이에서 "인생샷 명소"로 알려진 곳인가
-- 배경이 예쁘고 사진이 잘 나오는 곳인가
-- 정보 없으면 score: 3, isPhotoSpot: false 로 반환
-- 반드시 유효한 JSON만 반환`,
+정보 없으면 score:3, isPhotoSpot:false. 유효한 JSON만 반환.`,
       config: {
-        tools: [{ googleSearch: {} }],
+        tools: getSearchTools("photospot"),
       },
     });
 
     const text = response.text || "";
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    const parsed = safeParseJSON<any>(text, `PhotoSpot-${placeName}`);
 
-    if (jsonMatch) {
-      try {
-        const parsed = JSON.parse(jsonMatch[0]);
-        return {
-          score: Math.min(10, Math.max(0, parsed.score || 3)),
-          isPhotoSpot: parsed.isPhotoSpot || false,
-          photoTip: parsed.photoTip || null,
-          bestTime: parsed.bestTime || null,
-          confidence: parsed.confidence || 0.5,
-        };
-      } catch (parseErr) {
-        console.warn(`[PhotoSpot] JSON 파싱 실패 (${placeName}):`, parseErr);
-      }
+    if (parsed) {
+      return {
+        score: safeNumber(parsed.score, 3, 0, 10) ?? 3,
+        isPhotoSpot: parsed.isPhotoSpot === true,
+        photoTip: null,
+        bestTime: parsed.bestTime || null,
+        confidence: safeConfidence(parsed.confidence, 0.5),
+      };
     }
 
     return null;

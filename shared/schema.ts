@@ -78,6 +78,7 @@ export const places = pgTable("places", {
   editorialSummary: text("editorial_summary"),
   businessStatus: text("business_status"),
 
+  rating: real("rating"), // Google Places API 평점 (1.0~5.0)
   userRatingCount: integer("user_rating_count"),
 
   delivery: boolean("delivery"),

@@ -1,6 +1,8 @@
 import { db } from "../db";
 import { instagramHashtags, instagramLocations, instagramPhotos, apiServiceStatus } from "@shared/schema";
 import { eq } from "drizzle-orm";
+import { getSearchTools } from "./gemini-search-limiter";
+import { safeParseJSON, safeNumber } from "./crawler-utils";
 
 const USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
@@ -60,48 +62,30 @@ export class InstagramCrawler {
       const { GoogleGenAI } = await import("@google/genai");
       const ai = new GoogleGenAI({ apiKey });
       
+      // 💰 프롬프트 최적화: topPosts 최소화 (caption, likeCount, imageUrl 제거)
       const searchResponse = await ai.models.generateContent({
         model: "gemini-3-flash-preview",
-        contents: `인스타그램에서 해시태그 #${cleanHashtag} 에 대한 정보를 검색해주세요.
-
-다음 형식의 JSON으로 응답해주세요:
+        contents: `인스타그램 #${cleanHashtag} 검색.
+JSON 반환:
 {
-  "postCount": 예상 게시물 수 (숫자),
-  "topPosts": [
-    {
-      "url": "https://www.instagram.com/p/게시물ID/",
-      "caption": "게시물 설명 (한국어 여행 관련)",
-      "likeCount": 좋아요 수,
-      "imageUrl": "이미지 URL (있으면)"
-    }
-  ]
+  "postCount": 예상 게시물 수,
+  "topPosts": [{"url": "https://www.instagram.com/p/ID/"}]
 }
-
-요구사항:
-- 한국인 여행자들이 많이 사용하는 해시태그 기준으로 검색
-- 인기 게시물 최대 5개 정보 포함
-- postCount는 실제 검색 결과 기반 추정치
-- 결과를 찾을 수 없으면 {"postCount": 0, "topPosts": []} 반환
-- 반드시 유효한 JSON만 반환하세요`,
-        config: { tools: [{ googleSearch: {} }] },
+최대 3개. 없으면 {"postCount":0,"topPosts":[]}. 유효한 JSON만 반환.`,
+        config: { tools: getSearchTools("instagram") },
       });
 
       const searchText = searchResponse.text || '';
       console.log(`[Instagram] #${cleanHashtag} Gemini 응답 길이: ${searchText.length}`);
       
-      // JSON 파싱 시도
-      const jsonMatch = searchText.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        try {
-          const parsed = JSON.parse(jsonMatch[0]);
-          const postCount = parsed.postCount || 0;
-          const topPosts = parsed.topPosts || [];
-          
-          console.log(`[Instagram] #${cleanHashtag}: postCount=${postCount}, topPosts=${topPosts.length}개`);
-          return { postCount, topPosts };
-        } catch (parseErr) {
-          console.warn(`[Instagram] JSON 파싱 실패 (${cleanHashtag}):`, parseErr);
-        }
+      // JSON 파싱 시도 (안전 파싱)
+      const parsed = safeParseJSON<any>(searchText, `Instagram-#${cleanHashtag}`);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        const postCount = safeNumber(parsed.postCount, 0, 0) ?? 0;
+        const topPosts = Array.isArray(parsed.topPosts) ? parsed.topPosts : [];
+        
+        console.log(`[Instagram] #${cleanHashtag}: postCount=${postCount}, topPosts=${topPosts.length}개`);
+        return { postCount, topPosts };
       }
 
       // JSON 파싱 실패시 배열만이라도 시도

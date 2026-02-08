@@ -1,6 +1,8 @@
 import { db } from "../db";
 import { naverBlogPosts, cities, places } from "../../shared/schema";
 import { eq, desc, and, gte } from "drizzle-orm";
+import { getSearchTools } from "./gemini-search-limiter";
+import { safeParseJSON, safeDbOperation } from "./crawler-utils";
 
 const CACHE_DURATION_HOURS = 24;
 
@@ -81,30 +83,20 @@ async function searchBlogWithGemini(query: string): Promise<NaverBlogSearchResul
     const { GoogleGenAI } = await import("@google/genai");
     const ai = new GoogleGenAI({ apiKey });
 
+    // 💰 프롬프트 최적화: bloggername, bloggerlink, postdate 제거, 5개로 축소
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: `한국인 여행 블로그에서 "${query}" 관련 글을 찾아주세요.
-
-최근 한국인 여행자들이 작성한 블로그 글을 검색합니다. JSON 배열로 반환:
-[{
-  "title": "블로그 제목",
-  "link": "https://blog.naver.com/...",
-  "description": "글 요약 (200자)",
-  "bloggername": "블로거명",
-  "bloggerlink": "블로그 홈 URL",
-  "postdate": "20260108"
-}]
-
-최대 10개. 결과 없으면 빈 배열 [] 반환.`,
+      contents: `한국인 여행 블로그 "${query}" 검색. JSON 배열 반환:
+[{"title":"블로그 제목","link":"URL","description":"요약 100자"}]
+최대 5개. 없으면 [].`,
       config: {
-        tools: [{ googleSearch: {} }],
+        tools: getSearchTools("naver-blog"),
       },
     });
 
     const text = response.text || "";
-    const jsonMatch = text.match(/\[[\s\S]*\]/);
-    if (jsonMatch) {
-      const results = JSON.parse(jsonMatch[0]);
+    const results = safeParseJSON<any[]>(text, "NaverBlog");
+    if (Array.isArray(results) && results.length > 0) {
       console.log(`[NaverBlog] Gemini에서 ${results.length}개 블로그 글 검색 완료`);
       return results;
     }

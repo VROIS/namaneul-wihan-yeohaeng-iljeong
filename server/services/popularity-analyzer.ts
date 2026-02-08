@@ -9,6 +9,8 @@ import { GoogleGenAI } from "@google/genai";
 import { db } from "../db";
 import { places, cities, geminiWebSearchCache } from "@shared/schema";
 import { eq, and, gte } from "drizzle-orm";
+import { getSearchTools } from "./gemini-search-limiter";
+import { safeParseJSON, safeDbOperation } from "./crawler-utils";
 
 // Lazy initialization
 let ai: GoogleGenAI | null = null;
@@ -124,52 +126,35 @@ async function getPopularityFromGemini(
   placeType: string
 ): Promise<PopularityData | null> {
   try {
+    // 💰 프롬프트 최적화: waitTimeEstimate, weekendDifference, seasonalNote 제거
     const response = await getAI().models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: [{ role: "user", parts: [{ text: `당신은 여행 전문가입니다. "${placeName}" (${cityName}, ${placeType})의 방문 혼잡도 정보를 알려주세요.
-
-JSON 형식으로 응답해주세요:
+      contents: [{ role: "user", parts: [{ text: `"${placeName}" (${cityName}, ${placeType}) 혼잡도.
+JSON 반환:
 {
-  "hourlyPattern": {
-    "9": "low",
-    "10": "moderate",
-    "11": "moderate",
-    "12": "high",
-    "13": "high",
-    "14": "moderate",
-    "15": "moderate",
-    "16": "high",
-    "17": "high",
-    "18": "moderate"
-  },
-  "bestVisitTimes": ["개장 직후 오전 9시", "점심시간 이후 오후 2시"],
-  "avoidTimes": ["점심시간 12-13시", "주말 오후"],
-  "waitTimeEstimate": "성수기 30-60분 대기",
-  "weekendDifference": "주말 2배 혼잡",
-  "seasonalNote": "여름 성수기 가장 혼잡"
+  "hourlyPattern": {"9":"low","10":"moderate","12":"high","14":"moderate","17":"high"},
+  "bestVisitTimes": ["오전 9시"],
+  "avoidTimes": ["점심 12-13시"]
 }
-
-가능한 정보만 포함하고, 모르는 경우 해당 필드 생략.
-crowdLevel 값: "low", "moderate", "high", "very_high"` }] }],
+crowdLevel: "low","moderate","high","very_high". 모르면 생략.` }] }],
       config: {
-        tools: [{ googleSearch: {} }],
+        tools: getSearchTools("popularity"),
       },
     });
 
     const text = response.text || "";
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    const parsed = safeParseJSON<any>(text, "PopularityAnalyzer");
 
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]);
+    if (parsed) {
       const now = new Date();
-      const currentHour = now.getHours();
+      const currentHour = String(now.getHours());
       
       return {
         currentCrowdLevel: parsed.hourlyPattern?.[currentHour] || "moderate",
         hourlyPattern: parsed.hourlyPattern || {},
-        bestVisitTimes: parsed.bestVisitTimes || [],
-        avoidTimes: parsed.avoidTimes || [],
-        waitTimeEstimate: parsed.waitTimeEstimate,
+        bestVisitTimes: Array.isArray(parsed.bestVisitTimes) ? parsed.bestVisitTimes : [],
+        avoidTimes: Array.isArray(parsed.avoidTimes) ? parsed.avoidTimes : [],
+        waitTimeEstimate: null,
         confidenceScore: 0.7,
         lastUpdated: now,
       };
@@ -229,7 +214,7 @@ export async function getPlacePopularity(
   const baseCrowdLevel = estimateBaseCrowdLevel(
     placeData.type,
     placeData.userRatingCount || 0,
-    (placeData.vibeScore || 0) / 2, // vibeScore는 0-10이므로 평점으로 변환
+    Math.min(5, (placeData.rating || placeData.vibeScore || 0) / (placeData.vibeScore ? 2 : 1)), // rating 우선, vibeScore는 0-10→0-5 변환
     currentHour
   );
 
@@ -249,16 +234,21 @@ export async function getPlacePopularity(
     lastUpdated: now,
   };
 
-  // 캐시 저장
-  await db.insert(geminiWebSearchCache).values({
-    placeId,
-    searchQuery: cacheKey,
-    searchType: "popularity",
-    rawResult: { source: geminiData ? "gemini" : "estimated" },
-    extractedData: popularityData as any,
-    confidenceScore: popularityData.confidenceScore,
-    expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
-  });
+  // 캐시 저장 (cityId 포함 + 에러 핸들링)
+  await safeDbOperation(
+    () => db.insert(geminiWebSearchCache).values({
+      placeId,
+      cityId: placeData.cityId, // 💰 누락 수정: cityId 추가
+      searchQuery: cacheKey,
+      searchType: "popularity",
+      rawResult: { source: geminiData ? "gemini" : "estimated" },
+      extractedData: popularityData as any,
+      confidenceScore: popularityData.confidenceScore,
+      expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    }),
+    "PopularityAnalyzer",
+    `cache save placeId=${placeId}`
+  );
 
   return popularityData;
 }

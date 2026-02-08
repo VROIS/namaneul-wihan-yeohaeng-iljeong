@@ -42,6 +42,7 @@ export interface IStorage {
   getPlaceByGoogleId(googlePlaceId: string): Promise<Place | undefined>;
   createPlace(place: InsertPlace): Promise<Place>;
   updatePlaceScores(id: number, scores: { vibeScore?: number; buzzScore?: number; tasteVerifyScore?: number; realityPenalty?: number; finalScore?: number; tier?: number }): Promise<Place | undefined>;
+  updatePlaceData(id: number, data: Partial<InsertPlace>): Promise<Place | undefined>;
   getTopPlaces(cityId: number, type: string, limit?: number): Promise<Place[]>;
   
   // Place Data Sources
@@ -146,6 +147,20 @@ export class DatabaseStorage implements IStorage {
 
   async updatePlaceScores(id: number, scores: { vibeScore?: number; buzzScore?: number; tasteVerifyScore?: number; realityPenalty?: number; finalScore?: number; tier?: number }): Promise<Place | undefined> {
     const [place] = await db.update(places).set({ ...scores, updatedAt: new Date() }).where(eq(places.id, id)).returning();
+    return place || undefined;
+  }
+
+  async updatePlaceData(id: number, data: Partial<InsertPlace>): Promise<Place | undefined> {
+    // undefined 값 제거 (null은 유지 — 명시적으로 null로 설정 가능)
+    const cleanData: Record<string, any> = {};
+    for (const [key, value] of Object.entries(data)) {
+      if (value !== undefined) {
+        cleanData[key] = value;
+      }
+    }
+    if (Object.keys(cleanData).length === 0) return undefined;
+    cleanData.updatedAt = new Date();
+    const [place] = await db.update(places).set(cleanData).where(eq(places.id, id)).returning();
     return place || undefined;
   }
 

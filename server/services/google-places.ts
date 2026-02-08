@@ -8,6 +8,50 @@ function getGoogleMapsApiKey(): string {
 
 const GOOGLE_PLACES_BASE_URL = "https://places.googleapis.com/v1/places";
 
+// 💰 일일 API 호출 제한 안전장치 (요금 폭탄 방지)
+const DAILY_API_LIMIT = 500; // 무료 티어 범위 내 (Pro: 5,000/월 → ~166/일)
+const apiCallTracker = {
+  date: new Date().toDateString(),
+  count: 0,
+  blocked: 0,
+  
+  canMakeRequest(): boolean {
+    const today = new Date().toDateString();
+    if (this.date !== today) {
+      // 날짜가 바뀌면 카운터 리셋
+      console.log(`[Places API] 일일 카운터 리셋: 어제 ${this.count}건 사용, ${this.blocked}건 차단`);
+      this.date = today;
+      this.count = 0;
+      this.blocked = 0;
+    }
+    return this.count < DAILY_API_LIMIT;
+  },
+  
+  recordCall(): void {
+    this.count++;
+    if (this.count % 50 === 0) {
+      console.log(`[Places API] 일일 사용량: ${this.count}/${DAILY_API_LIMIT} (${Math.round(this.count / DAILY_API_LIMIT * 100)}%)`);
+    }
+  },
+  
+  recordBlocked(): void {
+    this.blocked++;
+    if (this.blocked === 1 || this.blocked % 10 === 0) {
+      console.warn(`⚠️ [Places API] 일일 한도 초과! ${this.count}/${DAILY_API_LIMIT} 도달. ${this.blocked}건 차단됨.`);
+    }
+  },
+  
+  getStatus() {
+    return {
+      date: this.date,
+      used: this.count,
+      limit: DAILY_API_LIMIT,
+      blocked: this.blocked,
+      remaining: Math.max(0, DAILY_API_LIMIT - this.count),
+    };
+  }
+};
+
 interface GooglePlaceResult {
   id: string;
   displayName: { text: string; languageCode: string };
@@ -145,6 +189,17 @@ export class GooglePlacesFetcher {
       throw new Error("Google Maps API key is not configured");
     }
 
+    // 💰 일일 한도 체크 (요금 폭탄 방지)
+    if (!apiCallTracker.canMakeRequest()) {
+      apiCallTracker.recordBlocked();
+      throw new Error(
+        `[BILLING PROTECTION] 일일 Places API 한도 초과 (${DAILY_API_LIMIT}건). ` +
+        `오늘 ${apiCallTracker.getStatus().blocked}건 차단됨. 내일 자동 리셋됩니다.`
+      );
+    }
+
+    apiCallTracker.recordCall();
+
     const response = await fetch(endpoint, {
       ...options,
       headers: {
@@ -160,6 +215,11 @@ export class GooglePlacesFetcher {
     }
 
     return response.json();
+  }
+
+  // 외부에서 API 사용 현황 조회 가능
+  getApiUsageStatus() {
+    return apiCallTracker.getStatus();
   }
 
   async searchNearby(
@@ -188,6 +248,9 @@ export class GooglePlacesFetcher {
       },
     };
 
+    // 💰 비용 최적화: Enterprise 등급 필드만 유지 (Atmosphere 필드 26개 제거)
+    // Before: 45개 필드 → Enterprise+Atmosphere ($40/1K) = €1,001 폭탄 원인
+    // After:  13개 필드 → Enterprise ($35/1K), 실제로는 DB 우선 매칭으로 거의 호출 안 함
     const fieldMask = [
       "places.id",
       "places.displayName",
@@ -196,45 +259,12 @@ export class GooglePlacesFetcher {
       "places.location",
       "places.rating",
       "places.userRatingCount",
-      "places.priceLevel",
       "places.types",
       "places.primaryType",
       "places.primaryTypeDisplayName",
       "places.photos",
-      "places.regularOpeningHours",
-      "places.currentOpeningHours",
-      "places.websiteUri",
       "places.googleMapsUri",
-      "places.internationalPhoneNumber",
-      "places.nationalPhoneNumber",
-      "places.editorialSummary",
       "places.businessStatus",
-      "places.utcOffsetMinutes",
-      "places.delivery",
-      "places.dineIn",
-      "places.takeout",
-      "places.curbsidePickup",
-      "places.reservable",
-      "places.servesBeer",
-      "places.servesWine",
-      "places.servesBreakfast",
-      "places.servesBrunch",
-      "places.servesLunch",
-      "places.servesDinner",
-      "places.servesVegetarianFood",
-      "places.servesCoffee",
-      "places.servesDessert",
-      "places.goodForChildren",
-      "places.goodForGroups",
-      "places.goodForWatchingSports",
-      "places.liveMusic",
-      "places.outdoorSeating",
-      "places.restroom",
-      "places.menuForChildren",
-      "places.allowsDogs",
-      "places.accessibilityOptions",
-      "places.parkingOptions",
-      "places.paymentOptions",
     ].join(",");
 
     const response = await this.makeRequest<SearchNearbyResponse>(
@@ -252,6 +282,9 @@ export class GooglePlacesFetcher {
   }
 
   async getPlaceDetails(placeId: string): Promise<GooglePlaceResult> {
+    // 💰 비용 최적화: Enterprise 등급 필드만 유지 (Atmosphere 필드 26개 제거)
+    // Before: 48개 필드 → Enterprise+Atmosphere ($40/1K)
+    // After:  15개 필드 → Enterprise ($35/1K), reviews는 한국어 리뷰 분석에 필요하므로 유지
     const fieldMask = [
       "id",
       "displayName",
@@ -266,42 +299,12 @@ export class GooglePlacesFetcher {
       "primaryTypeDisplayName",
       "photos",
       "regularOpeningHours",
-      "currentOpeningHours",
       "reviews",
-      "websiteUri",
       "googleMapsUri",
-      "internationalPhoneNumber",
-      "nationalPhoneNumber",
-      "editorialSummary",
       "businessStatus",
-      "utcOffsetMinutes",
-      "delivery",
-      "dineIn",
-      "takeout",
-      "curbsidePickup",
-      "reservable",
-      "servesBeer",
-      "servesWine",
-      "servesBreakfast",
-      "servesBrunch",
-      "servesLunch",
-      "servesDinner",
-      "servesVegetarianFood",
-      "servesCoffee",
-      "servesDessert",
-      "goodForChildren",
-      "goodForGroups",
-      "goodForWatchingSports",
-      "liveMusic",
-      "outdoorSeating",
-      "restroom",
-      "menuForChildren",
-      "allowsDogs",
-      "accessibilityOptions",
-      "parkingOptions",
-      "paymentOptions",
-      "priceRange",
-      "attributions",
+      "editorialSummary",    // 장소 설명 (Basic 등급, 추가 비용 없음)
+      "websiteUri",          // 웹사이트 (Basic 등급, 추가 비용 없음)
+      "internationalPhoneNumber", // 전화번호 (Basic 등급, 추가 비용 없음)
     ].join(",");
 
     return this.makeRequest<PlaceDetailsResponse>(
@@ -357,44 +360,19 @@ export class GooglePlacesFetcher {
       photoUrls,
       openingHours: Object.keys(openingHours).length > 0 ? openingHours : undefined,
       
-      websiteUri: googlePlace.websiteUri,
+      // ✅ 이전에 누락되었던 필수 필드들 (Basic 등급, 추가 비용 없음)
+      rating: googlePlace.rating ?? undefined,
+      websiteUri: googlePlace.websiteUri ?? undefined,
       googleMapsUri: googlePlace.googleMapsUri,
-      phoneNumber: googlePlace.internationalPhoneNumber || googlePlace.nationalPhoneNumber,
-      editorialSummary: googlePlace.editorialSummary?.text,
+      phoneNumber: (googlePlace as any).internationalPhoneNumber ?? undefined,
+      editorialSummary: (googlePlace as any).editorialSummary?.text ?? undefined,
       businessStatus: googlePlace.businessStatus,
       
       userRatingCount: googlePlace.userRatingCount,
       buzzScore: googlePlace.rating ? Math.min(10, googlePlace.rating * 2) : undefined,
       
-      delivery: googlePlace.delivery,
-      dineIn: googlePlace.dineIn,
-      takeout: googlePlace.takeout,
-      curbsidePickup: googlePlace.curbsidePickup,
-      reservable: googlePlace.reservable,
-      
-      servesBeer: googlePlace.servesBeer,
-      servesWine: googlePlace.servesWine,
-      servesBreakfast: googlePlace.servesBreakfast,
-      servesBrunch: googlePlace.servesBrunch,
-      servesLunch: googlePlace.servesLunch,
-      servesDinner: googlePlace.servesDinner,
-      servesVegetarianFood: googlePlace.servesVegetarianFood,
-      servesCoffee: googlePlace.servesCoffee,
-      servesDessert: googlePlace.servesDessert,
-      
-      goodForChildren: googlePlace.goodForChildren,
-      goodForGroups: googlePlace.goodForGroups,
-      goodForWatchingSports: googlePlace.goodForWatchingSports,
-      
-      liveMusic: googlePlace.liveMusic,
-      outdoorSeating: googlePlace.outdoorSeating,
-      restroom: googlePlace.restroom,
-      menuForChildren: googlePlace.menuForChildren,
-      allowsDogs: googlePlace.allowsDogs,
-      
-      accessibilityOptions: googlePlace.accessibilityOptions,
-      parkingOptions: googlePlace.parkingOptions,
-      paymentOptions: googlePlace.paymentOptions,
+      // 💰 Atmosphere 필드는 비용 최적화로 더 이상 요청하지 않음 (€1,001 폭탄 방지)
+      // DB에 이미 있는 기존 데이터는 보존됨, 새 장소에는 null로 저장
       
       lastDataSync: new Date(),
     };
@@ -402,6 +380,26 @@ export class GooglePlacesFetcher {
     let placeId: number;
     if (existingPlace) {
       placeId = existingPlace.id;
+      // ✅ 기존 장소도 최신 데이터로 업데이트 (이전에는 건너뛰었음)
+      try {
+        await storage.updatePlaceData(placeId, {
+          rating: placeData.rating,
+          userRatingCount: placeData.userRatingCount,
+          googleMapsUri: placeData.googleMapsUri,
+          editorialSummary: placeData.editorialSummary,
+          websiteUri: placeData.websiteUri,
+          phoneNumber: placeData.phoneNumber,
+          photoUrls: placeData.photoUrls,
+          openingHours: placeData.openingHours,
+          priceLevel: placeData.priceLevel,
+          businessStatus: placeData.businessStatus,
+          buzzScore: placeData.buzzScore,
+          lastDataSync: placeData.lastDataSync,
+        });
+        console.log(`[Places] 기존 장소 업데이트: ${placeData.name} (id: ${placeId})`);
+      } catch (e) {
+        console.error(`[Places] 기존 장소 업데이트 실패: ${placeData.name}`, e);
+      }
     } else {
       const newPlace = await storage.createPlace(placeData);
       placeId = newPlace.id;

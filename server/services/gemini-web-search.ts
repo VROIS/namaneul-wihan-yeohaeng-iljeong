@@ -1,6 +1,7 @@
 import { db } from "../db";
 import { geminiWebSearchCache, places, cities } from "../../shared/schema";
 import { eq, and, gte, or } from "drizzle-orm";
+import { getSearchTools } from "./gemini-search-limiter";
 
 interface WebSearchResult {
   michelinStars?: number;
@@ -61,7 +62,7 @@ Return JSON with:
       model: "gemini-3-flash-preview",
       contents: `${systemPrompt}\n\nSearch query: ${query}`,
       config: {
-        tools: [{ googleSearch: {} }]
+        tools: getSearchTools("gemini-web-search")
       }
     });
     

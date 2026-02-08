@@ -13,14 +13,44 @@
 
 | 항목 | 내용 |
 |------|------|
-| **마지막 작업일** | 2026-02-08 (일) |
-| **마지막 작업 내용** | 1-2 한국인 선호 1.5x 완료 + 1-3 동선 최적화 완료 + 숙소 설정 완료 → 커밋·배포 완료 |
-| **다음 해야 할 작업** | 1-4 장소 대표 이미지 확보 → 2-2 여행요약 → 3-1~3-5 비용계산 |
+| **마지막 작업일** | 2026-02-08 (일) 오후 |
+| **마지막 작업 내용** | **DB 자산 확보 작업 진행 중** — 스키마 rating 필드 추가, place_seed 저장 버그 수정 (진행 중) |
+| **다음 해야 할 작업** | **아래 "DB 자산 확보 체크리스트" 이어서 진행** |
 | **환경 상태** | node_modules 설치 완료, Cursor 최적화 완료, Koyeb 배포 운영 중 |
 | **개발 프로세스** | 로컬호스트 미사용. 코드수정 → Git 커밋(cursor-dev) → Koyeb 자동배포 → Supabase DB |
-| **주의사항** | 핵심 파일 수정 시 사용자 확인. 이 플랜의 순서와 산출물 목표를 반드시 준수 |
+| **주의사항** | ⚠️ Google Maps API 요금 폭탄 발생 이력 있음. place_seed_sync 크롤러는 차단 상태. API 호출 최소화 필수 |
 | **현재 브랜치** | cursor-dev |
-| **최근 커밋** | `e9be58f` feat: route optimization + accommodation + Korean scoring 1.5x |
+| **최근 커밋** | 이 커밋 참조 (DB 자산 확보 1단계) |
+
+### ⚡ DB 자산 확보 체크리스트 (후임 AI 필독, 순서대로 진행)
+
+> **배경**: €1,001 Google API 요금 발생 후 비용 최적화 완료. 그런데 수집한 데이터가 DB에 제대로 저장 안 되는 심각한 문제 발견.
+> **목표**: 크롤러→DB 파이프라인 수정하여 "최소 필수 자산" 확보. 이 데이터를 AG3이 활용하도록 연결.
+
+| # | 작업 | 상태 | 설명 |
+|---|------|------|------|
+| 1 | **스키마 rating 필드 추가** | ✅ 완료 | `shared/schema.ts` places 테이블에 `rating: real("rating")` 추가 |
+| 2 | **getPlaceDetails() 필드마스크 보강** | ✅ 완료 | `editorialSummary`, `websiteUri`, `internationalPhoneNumber` 추가 (Basic 등급, 추가 비용 없음) |
+| 3 | **fetchAndStorePlace() 매핑 보강** | ✅ 완료 | `rating`, `editorialSummary`, `websiteUri`, `phoneNumber` 저장 + 기존 장소 업데이트 로직 추가 |
+| 4 | **storage.ts updatePlaceData() 추가** | ✅ 완료 | 기존 장소의 핵심 필드 업데이트 함수 (인터페이스+구현) |
+| 5 | **DB 마이그레이션 (rating 컬럼)** | ❌ 미완료 | Supabase에서 `ALTER TABLE places ADD COLUMN rating REAL;` 실행 필요 |
+| 6 | **크롤러→places B등급 필드 업데이트 연결** | ❌ 미완료 | 각 크롤러(TripAdvisor, 미쉐린, 가격 등)가 places 테이블 직접 업데이트하도록 |
+| 7 | **finalScore/tier 계산 파이프라인** | ❌ 미완료 | vibeScore+buzzScore+tasteVerifyScore → finalScore, tier 자동 계산 |
+| 8 | **AG3 DB 우선 활용 확인** | ❌ 미완료 | ag3-data-matcher.ts가 보강된 DB 데이터 제대로 사용하는지 검증 |
+
+#### 핵심 변경 파일 (이 커밋)
+- `shared/schema.ts`: rating 필드 추가 (L81)
+- `server/services/google-places.ts`: 필드마스크 3개 추가 + fetchAndStorePlace() 매핑 보강 + 기존 장소 업데이트
+- `server/storage.ts`: updatePlaceData() 인터페이스+구현 추가
+
+#### 이전 긴급 대응 (이 커밋에 포함)
+- `server/index.ts`: dataScheduler 복원 (place_seed_sync만 차단)
+- `server/services/data-scheduler.ts`: BLOCKED_TASKS로 place_seed_sync 차단
+- `server/services/google-places.ts`: 일일 API 500건 제한, Atmosphere 26개 필드 제거
+- `server/services/gemini-search-limiter.ts`: 신규 — Gemini Google Search 일일 160건 제한
+- `server/services/crawler-utils.ts`: 신규 — safeParseJSON, safePrice 등 안전 유틸
+- 12개 크롤러: Gemini Search 리미터 + crawler-utils 통합 + 프롬프트 최적화
+- `server/services/crisis-alert-service.ts`: sql import 누락 수정
 
 ### 1차 목표 실행 플랜 (사용자 확정, 2026-02-07)
 
@@ -91,19 +121,220 @@
 13. 날씨/위기 실제 데이터 연동 (weatherCache, crisisAlerts)
 14. 바이브별 동적 가중치 매트릭스 (6바이브×6요소) + 데이터 등급 보정 (A/B/C/D)
 
+### [긴급] 4+1 에이전트 파이프라인 아키텍처 (일정 생성 속도 최적화)
+
+> **배경**: 현재 일정 생성 40초 중 Gemini AI 호출이 39초(96.5%) 차지 → 사용자 이탈 심각
+> **목표**: 40초 → 8~12초 (70% 단축)
+> **핵심**: Gemini 단일 거대 호출을 4+1 전문 에이전트 파이프라인으로 분해
+
+#### 파이프라인 흐름
+
+```
+사용자 입력
+    ↓
+[AG1: 뼈대 설계자] ─── 0.3초
+    ↓
+    ├──→ [AG2: Gemini 최소 추천] ─── 5~8초 (병렬)
+    ├──→ [AG3-pre: DB 로우데이터 사전 로드] ─── 0.5초 (병렬)
+    ↓
+[AG3: 매칭/점수/확정] ─── 1~2초
+    ↓
+[AG4: 실시간 완성] ─── 1~2초
+    ↓
+완성된 일정표 (8~12초)
+
+── 온디맨드 (요청 시만) ──
+[AG5: 영상 프롬프트 전문가] ← 사용자 "영상 만들기" 버튼
+```
+
+#### AG1: Skeleton Builder (뼈대 설계자)
+- **소요**: 0.2~0.5초 (AI 호출 없음, 순수 계산)
+- 사용자 입력 파싱 (vibes, pace, style, dates, companion 등)
+- 일별 슬롯 수 계산 + 역할 배정 (morning_activity, lunch, afternoon_activity, cafe, dinner, evening_activity)
+- AG2에 전달할 최적 프롬프트 구성 (역할별 최소한의 질문)
+- 출력: 일정표 뼈대 JSON + Gemini 프롬프트
+
+#### AG2: Gemini Creative Recommender (AI 최소 추천)
+- **소요**: 5~8초 (현재 39초 대비 80% 감소)
+- 현재: "27개 장소 전부 추천해줘" (거대 프롬프트 2000자+, 거대 응답 5000자+)
+- 변경: "역할별 2~3곳 이름만 추천" (간결 프롬프트 500자, 응답 1000자)
+- Gemini에게 요청하는 정보: **장소명 + 한줄 이유** (좌표/점수는 AG3 처리)
+- 핵심: Gemini의 창의적 추천 능력은 유지하되, 작업량만 최소화
+- AG3-pre와 **병렬 실행** (Promise.all)
+
+#### AG3: Data Matcher & Scorer (데이터 매칭/확정)
+- **소요**: 1~2초
+- AG3-pre(병렬): AG2 대기 중 해당 도시 DB 장소 40~45개 미리 메모리 로드
+- AG2 추천 장소를 DB places 테이블과 이름 매칭
+- 매칭 성공: DB 로우데이터 (좌표, 사진, 리뷰수, 점수, 가격 등) 삽입
+- 매칭 실패: Google Places API 수집 → DB 저장 (다음번 활용)
+- 한국인 인기도 점수 계산 (인스타/유튜브/블로그)
+- calculateFinalScore()로 가중치 기반 최종 점수 산출
+- 슬롯별 최고 점수 장소 1개 확정 + 동선 최적화 (nearest-neighbor+2-opt)
+
+#### AG4: Real-time Finalizer (실시간 완성)
+- **소요**: 1~2초
+- 구간별 교통비 + 일일 비용 합계
+- 날씨 정보 (weatherCache)
+- 위기 경보 (crisisAlerts)
+- 환율 정보
+- 실시간 이동 시간 (Google Directions 또는 직선거리 추정)
+- 최종 JSON 검증 + 응답 반환
+
+#### AG5: Video Prompt Expert (영상 프롬프트 전문가) — 온디맨드
+- 일정 생성 시 **절대 실행 안 함** (속도 영향 0)
+- 사용자 "영상 만들기" 버튼 시에만 작동
+- DB에 저장된 완성 일정에서 장소별 정보 추출
+- 각 장소의 분위기, 시간대, 동행 정보 기반 영상 프롬프트 생성
+- 기존 scene-prompt-generator.ts 활용
+
+#### AG4 비용 계산 헌법 (확정, 2026-02-08)
+
+> **대원칙: 모든 비용은 실제/실시간 가격 최우선 (사용자 신뢰도)**
+> **표시: EUR + KRW 병기 (€60 / ₩82,000), 일일/인당 기준**
+
+##### 1. 교통비 매트릭스 (mobilityStyle × travelStyle)
+
+```
+가이드 기본 고객 (핵심 매출층):
+  Premium (어떤 mobilityStyle이든) → 가이드 기본, Uber Comfort 비교
+  Luxury (어떤 mobilityStyle이든)  → 가이드 기본, Uber Black 비교
+  Minimal (어떤 travelStyle이든)   → 가이드 기본, Uber 비교
+
+대중교통 기본 고객 (전환 유도):
+  Economic + WalkMore  → 대중교통(카르네 최저가) + 가이드 추천 배너
+  Economic + Moderate  → 대중교통 + UberX 비교 + 가이드 추천 배너
+  Reasonable + WalkMore → 대중교통(최적패스) + 가이드 추천 배너
+  Reasonable + Moderate → 대중교통 + UberX 비교 + 가이드 추천 배너
+```
+
+##### 2. 구간별 이동 판단
+
+```
+Google Routes API로 도보 시간 계산
+  → 10분 이내: 도보 €0 (모든 mobilityStyle 공통)
+  → 10분 초과: 위 매트릭스에 따라 교통수단 결정
+  → Uber 횟수 = 도보 10분 초과 구간 수 (동선에서 자동 계산)
+```
+
+##### 3. 가이드 요금 (DB: guide_prices)
+
+```
+[시내/근교] 반일 기본 + 시간당 추가, 왕복 200km 기준
+  세단(1-4명):    기본 4시간 €240 + 추가 시간당 €60
+  밴(5-7명):      기본 4시간 €320 + 추가 시간당 €80
+  미니버스(8+명):  기본 4시간 €400 + 추가 시간당 €100
+
+[지방] 일일 고정 요금 (도시 간 이동 시 자동 적용)
+  세단:    €720 (€480 + €240)
+  밴:      €990 (€660 + €330)
+  미니버스: €1,200 (€800 + €400)
+
+인당 = 일일 요금 ÷ 인원수
+판단: 같은 도시 내 → 시내, 다른 도시 이동 → 지방
+```
+
+##### 4. Uber 요금 (실시간, travelStyle별 등급)
+
+```
+Economic/Reasonable → UberX (base €2.50 + km×€1.05 + 분×€0.35, 최소 €7)
+Premium             → Uber Comfort (base €4.00 + km×€1.45 + 분×€0.45, 최소 €10)
+Luxury              → Uber Black (base €7.00 + km×€2.05 + 분×€0.55, 최소 €20)
+
+차량: 4명이하 UberX/Comfort/Black, 5명+ UberXL(밴) 요금
+Uber가 가이드보다 싸더라도 실제 가격 그대로 표시 (신뢰도)
+가이드 장점으로 전환 유도: 한국어 소통, 대기시간 0, 짐 보관, 가이드 해설
+```
+
+##### 5. 대중교통 (Google Routes 실시간)
+
+```
+요금 소스: Google Routes API transitFare (실시간 실제 요금)
+최적 패스 자동 선택:
+  1일: 개별 vs 나비고 일일권 비교
+  2~4일: 나비고 일일권
+  5일+: 나비고 주간권
+인당: 각자 티켓 (× 인원수)
+```
+
+##### 6. 식사비 (travelStyle별)
+
+```
+Economic:   €23/일 (점심 €8, 저녁 €15)
+Reasonable: €60/일 (점심 €21, 저녁 €39)
+Premium:    €110/일 (점심 €39, 저녁 €72)
+Luxury:     €160/일 (점심 €56, 저녁 €104)
+
+배분: 점심 35% / 저녁 65%
+DB에 실제 가격(estimatedPriceEur) 있으면 실제 가격 우선
+```
+
+##### 7. 입장료/액티비티 (통합 필드: entranceFee)
+
+```
+데이터 소스 우선순위:
+  1순위: DB 시딩 데이터 (공식 홈페이지)
+  2순위: 마이리얼트립 가격
+  3순위: 트립닷컴 가격
+  4순위: 클룩 가격
+  5순위: 타입별 기본값 (museum €15, landmark €12, park €0, church €5)
+
+표시: 범위 → 최대값 (€15~25 → €25), 무료 → €0
+포함: 입장료 + 전망대 + 크루즈 + 체험 = 모두 entranceFee
+```
+
+##### 8. 일일/총 합계
+
+```
+일일 총비용 = 식사비(점심+저녁) + 교통비(전 구간 합) + 입장료(전 장소 합)
+인당 일일비용 = 일일 총비용 ÷ 인원수
+총 여행비용 = Σ(일일 총비용)
+인당 총비용 = 총 여행비용 ÷ 인원수
+환율: EUR + KRW 병기 (exchange-rate.ts, 실시간 Frankfurter API)
+```
+
+#### 성능 비교
+
+| 단계 | 현재 구조 | 4+1 에이전트 |
+|------|-----------|-------------|
+| 초기 설정 | 0.1초 | AG1: 0.3초 |
+| Gemini 호출 | **39초** (27곳 전체) | AG2: **5~8초** (역할별 2~3곳명만) |
+| DB 보강 | 0.6초 | AG3: 1~2초 (매칭+확정+동선) |
+| 점수/정렬 | 0.6초 | AG3에 포함 |
+| 비용/교통 | 0.3초 | AG4: 1~2초 (날씨/환율 추가) |
+| **합계** | **~40초** | **~8~12초** |
+
+#### 핵심 변경 파일 (구현 완료)
+- `server/services/agents/` 디렉토리 신규 생성 (6개 파일)
+  - `types.ts`: 공통 타입 + 상수 (PlaceResult, AG1Output, AG3Output, PACE_CONFIG 등)
+  - `ag1-skeleton-builder.ts`: buildSkeleton() — 사용자 입력→뼈대 (0.2~0.5초)
+  - `ag2-gemini-recommender.ts`: generateRecommendations() — 간소화 Gemini (5~8초)
+  - `ag3-data-matcher.ts`: preloadCityData()+matchPlacesWithDB()+saveNewPlacesToDB()
+  - `ag4-realtime-finalizer.ts`: finalizeItinerary() — 이동/비용/환율/검증 (1~2초)
+  - `orchestrator.ts`: runPipeline() — AG1→AG2||AG3pre→AG3→AG4 순차/병렬
+- `server/services/itinerary-generator.ts`: generateItinerary()→orchestrator 위임, `_enrichmentPipeline` 래퍼 노출
+
 ### 핵심 코드 구조 (후임 AI 필독)
-- **itinerary-generator.ts**: 스코어링 엔진 + Gemini 파이프라인 + 식사/동선/비용 전체 로직
-  - L82-119: MEAL_SLOTS, MEAL_BUDGET 설정, 식당 선정 4대 원칙
-  - L134-220: calculateRestaurantScore() - 식당 점수 (리뷰수50%+한국리뷰30%+인스타10%+유튜브+블로그10%)
-  - L560-766: calculateKoreanPopularity() - 한국인 인기도 (인스타45%+유튜브30%+블로그25%, 최신 1.5x)
-  - L1045-1066: VIBE_WEIGHT_MATRIX, DATA_GRADE_ADJUSTMENT - 동적 가중치
-  - L1222-1273: calculateFinalScore() - 최종 점수 = 동적 6요소 가중합
-  - L1279-1370: generateSelectionReasons() - 선정 이유 생성 (데이터 기반 구체적 근거)
-  - L1763-1950: generatePlacesWithGemini() - Gemini 3.0 Flash 장소 추천
-  - L2038-2440: generateItinerary() - 메인 파이프라인 (숙소 기반 동선 최적화 포함)
-  - L2795-2935: regenerateDay() - Day별 숙소 변경 시 동선 재최적화
+
+**🔥 4+1 에이전트 파이프라인 (v2, 2026-02-08 구현)**
+- **agents/orchestrator.ts**: 메인 파이프라인 (AG1→AG2||AG3pre→AG3→AG4)
+- **agents/ag1-skeleton-builder.ts**: 뼈대 설계 (0.2~0.5초, AI 호출 없음)
+  - 사용자 입력 파싱, 슬롯 계산, 한국 감성 로드
+- **agents/ag2-gemini-recommender.ts**: Gemini 최소 추천 (5~8초)
+  - 프롬프트 80% 축소 (2000자→500자), 장소명+이유만 요청
+- **agents/ag3-data-matcher.ts**: 데이터 매칭/확정 (1~2초)
+  - DB 사전 로드 (AG2와 병렬), 이름 매칭, Google Places API 좌표 확보
+- **agents/ag4-realtime-finalizer.ts**: 실시간 완성 (1~2초)
+  - 교통비, 환율(EUR↔KRW), 일일 비용 합계, 좌표 검증
+- **agents/types.ts**: 공통 타입 (PlaceResult, AG1Output, AG3Output, 상수)
+
+**레거시 (agents 파이프라인에서 활용)**
+- **itinerary-generator.ts**: 기존 스코어링/enrichment 함수 보유, `_enrichmentPipeline` 래퍼로 AG3에 노출
+  - `generateItinerary()` → orchestrator.runPipeline() 위임
+  - `_enrichmentPipeline.runFullEnrichment()` → 한국인기도/TripAdvisor/포토스팟/점수/슬롯배분/동선최적화
 - **route-optimizer.ts**: Google Routes API 연동, nearest-neighbor+2-opt, 경로 캐싱
 - **transport-pricing-service.ts**: 교통비 산정 (WalkMore=대중교통, Moderate=대중교통+Uber, Minimal=가이드)
+- **exchange-rate.ts**: Frankfurter API 환율 (KRW↔EUR 등), DB 캐싱
 - **TripPlannerScreen.tsx**: 전체 프론트엔드 (입력폼 + 결과 + 로딩 + 숙소 설정/변경)
 - **PlaceAutocomplete.tsx**: Google Places Autocomplete (서버 프록시, API 키 보호)
 - **server/routes.ts**: `/api/places/autocomplete`, `/api/places/details` 프록시 API
@@ -154,7 +385,7 @@
 
 ## 3. 일일 작업 기록
 
-### 2026-02-08 (일) - 동선 최적화 + 숙소 설정 + 한국인 선호 1.5x
+### 2026-02-08 (일) - 4+1 에이전트 파이프라인 구현 + 동선 최적화
 
 | # | 작업 | 상태 | 카테고리 | 변경 파일 |
 |---|------|------|----------|-----------|
@@ -168,6 +399,14 @@
 | 8 | **한국인 선호 최신 가중치 1.5x** (인스타/유튜브/블로그 6개월 이내 데이터) | 완료 | 알고리즘 | `itinerary-generator.ts` |
 | 9 | TASK.md 전체 정리 (완료/미완료 구분, 플랜 통합) | 완료 | 문서 | `docs/TASK.md` |
 | 10 | .cursor/plans/ 임시 파일 57개 정리 | 완료 | 정리 | `.cursor/plans/` |
+| 11 | **[핵심] AG1 뼈대 설계자 구현** (사용자 입력 파싱, 슬롯 계산, 감성 로드) | 완료 | 성능 | `agents/ag1-skeleton-builder.ts` (신규) |
+| 12 | **[핵심] AG2 Gemini 최소 추천 구현** (프롬프트 80% 축소, 장소명+이유만) | 완료 | 성능 | `agents/ag2-gemini-recommender.ts` (신규) |
+| 13 | **[핵심] AG3 데이터 매칭/확정 구현** (DB 사전로드, 이름매칭, Google Places 좌표확보) | 완료 | 성능 | `agents/ag3-data-matcher.ts` (신규) |
+| 14 | **[핵심] AG4 실시간 완성 구현** (교통비, 환율, 비용합계, 좌표검증, JSON완성) | 완료 | 성능 | `agents/ag4-realtime-finalizer.ts` (신규) |
+| 15 | **[핵심] 오케스트레이터 구현** (AG1→AG2+AG3pre 병렬→AG3→AG4 순차) | 완료 | 성능 | `agents/orchestrator.ts` (신규) |
+| 16 | **공통 타입 정의** (PlaceResult, AG1Output, AG3Output, 상수 등) | 완료 | 타입 | `agents/types.ts` (신규) |
+| 17 | **itinerary-generator.ts 리팩토링** (오케스트레이터 위임 + enrichment 래퍼 노출) | 완료 | 성능 | `itinerary-generator.ts` |
+| 18 | **서버 빌드 검증** (esbuild 번들 721kb, 에러 0) | 완료 | 검증 | `server_dist/index.js` |
 
 ### 2026-02-07 (금) - 장소 시딩 시스템 + 알고리즘 Phase 1
 
@@ -431,6 +670,8 @@ Reality Penalty (0-5) : 날씨, 안전, 혼잡도 패널티
 
 | 날짜 | 변경 내용 | 작업자 |
 |------|-----------|--------|
+| 2026-02-08 | **4+1 에이전트 파이프라인 구현 완료** (AG1~AG4+오케스트레이터, Gemini 80% 축소, 환율/비용/검증 추가) | Cursor AI |
+| 2026-02-08 | 성능 분석(Gemini 39초 병목 확인) + 4+1 에이전트 파이프라인 아키텍처 설계 | Cursor AI |
 | 2026-02-08 | 동선최적화+숙소설정 완료, 한국인선호 1.5x, TASK.md 전체정리, 플랜 임시파일 정리 | Cursor AI |
 | 2026-02-07 | 장소 시딩 시스템 구축 + 프랑스 30개 도시 추가 + 시딩 현황 섹션 추가 | Cursor AI |
 | 2026-02-06 | TASK.md 통합 관리 문서로 리팩토링 | Cursor AI |

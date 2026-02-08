@@ -1,6 +1,8 @@
 import { db } from "../db";
 import { tripAdvisorData, places, cities } from "../../shared/schema";
 import { eq, and, gte, desc } from "drizzle-orm";
+import { getSearchTools } from "./gemini-search-limiter";
+import { safeParseJSON, safeNumber, safeRating, safeConfidence, safeString, safeDbOperation } from "./crawler-utils";
 
 const GEMINI_MODEL = "gemini-3-flash-preview";
 const CACHE_DURATION_HOURS = 48;
@@ -34,18 +36,10 @@ async function searchTripAdvisorWithGemini(
     const { GoogleGenAI } = await import("@google/genai");
     const ai = new GoogleGenAI({ apiKey });
     
+    // 💰 프롬프트 최적화: reviewBreakdown, recentReviewSummary 제거 (토큰 절약)
     const response = await ai.models.generateContent({
       model: GEMINI_MODEL,
       contents: `Search TripAdvisor for "${placeName}" in ${cityName} ${countryName}.
-
-Find and extract:
-1. TripAdvisor rating (1.0-5.0)
-2. Total review count
-3. Ranking in the city (e.g., "#5 of 1,203 things to do in Seoul")
-4. Review breakdown (Excellent, Very Good, Average, Poor, Terrible)
-5. Recent review summary
-6. Travelers' Choice Award status
-
 Return JSON:
 {
   "found": true/false,
@@ -54,47 +48,34 @@ Return JSON:
   "ranking": 5,
   "rankingTotal": 1203,
   "category": "서울의 관광명소",
-  "url": "tripadvisor.com/...",
-  "reviewBreakdown": {
-    "excellent": 8000,
-    "veryGood": 3000,
-    "average": 1000,
-    "poor": 200,
-    "terrible": 145
-  },
-  "recentReviewSummary": "방문객들은 경복궁의 아름다운 건축과 역사적 가치를 높이 평가합니다...",
   "travelersChoiceAward": true,
   "confidence": 0.0-1.0
 }
-
-Return found: false if place not found on TripAdvisor.`,
+Return found: false if not found.`,
       config: {
-        tools: [{ googleSearch: {} }],
+        tools: getSearchTools("tripadvisor"),
       },
     });
 
     const text = response.text || "";
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]);
-      if (parsed.found && parsed.rating) {
-        return {
-          rating: parsed.rating,
-          reviewCount: parsed.reviewCount || 0,
-          ranking: parsed.ranking,
-          rankingTotal: parsed.rankingTotal,
-          category: parsed.category,
-          url: parsed.url,
-          excellentReviews: parsed.reviewBreakdown?.excellent,
-          veryGoodReviews: parsed.reviewBreakdown?.veryGood,
-          averageReviews: parsed.reviewBreakdown?.average,
-          poorReviews: parsed.reviewBreakdown?.poor,
-          terribleReviews: parsed.reviewBreakdown?.terrible,
-          recentReviewSummary: parsed.recentReviewSummary,
-          travelersChoiceAward: parsed.travelersChoiceAward || false,
-          confidence: parsed.confidence || 0.7,
-        };
-      }
+    const parsed = safeParseJSON<any>(text, "TripAdvisor");
+    if (parsed && parsed.found && parsed.rating) {
+      return {
+        rating: safeRating(parsed.rating, 5) ?? 0,
+        reviewCount: safeNumber(parsed.reviewCount, 0, 0) ?? 0,
+        ranking: safeNumber(parsed.ranking, null, 1),
+        rankingTotal: safeNumber(parsed.rankingTotal, null, 1),
+        category: safeString(parsed.category),
+        url: null,
+        excellentReviews: null,
+        veryGoodReviews: null,
+        averageReviews: null,
+        poorReviews: null,
+        terribleReviews: null,
+        recentReviewSummary: null,
+        travelersChoiceAward: parsed.travelersChoiceAward === true,
+        confidence: safeConfidence(parsed.confidence, 0.7),
+      };
     }
   } catch (error) {
     console.error("[TripAdvisorCrawler] Gemini search error:", error);
@@ -127,29 +108,35 @@ async function collectTripAdvisorData(
   const result = await searchTripAdvisorWithGemini(placeName, placeType, cityName, countryName);
   
   if (result) {
-    await db.insert(tripAdvisorData).values({
-      placeId,
-      cityId,
-      tripAdvisorRating: result.rating,
-      tripAdvisorReviewCount: result.reviewCount,
-      tripAdvisorRanking: result.ranking,
-      tripAdvisorRankingTotal: result.rankingTotal,
-      tripAdvisorCategory: result.category,
-      tripAdvisorUrl: result.url,
-      excellentReviews: result.excellentReviews,
-      veryGoodReviews: result.veryGoodReviews,
-      averageReviews: result.averageReviews,
-      poorReviews: result.poorReviews,
-      terribleReviews: result.terribleReviews,
-      recentReviewSummary: result.recentReviewSummary,
-      travelersChoiceAward: result.travelersChoiceAward,
-      confidenceScore: result.confidence,
-      rawData: { extractedAt: new Date().toISOString() },
-      expiresAt: new Date(Date.now() + CACHE_DURATION_HOURS * 60 * 60 * 1000),
-    });
+    const saved = await safeDbOperation(
+      () => db.insert(tripAdvisorData).values({
+        placeId,
+        cityId,
+        tripAdvisorRating: result.rating,
+        tripAdvisorReviewCount: result.reviewCount,
+        tripAdvisorRanking: result.ranking,
+        tripAdvisorRankingTotal: result.rankingTotal,
+        tripAdvisorCategory: result.category,
+        tripAdvisorUrl: result.url,
+        excellentReviews: result.excellentReviews,
+        veryGoodReviews: result.veryGoodReviews,
+        averageReviews: result.averageReviews,
+        poorReviews: result.poorReviews,
+        terribleReviews: result.terribleReviews,
+        recentReviewSummary: result.recentReviewSummary,
+        travelersChoiceAward: result.travelersChoiceAward,
+        confidenceScore: result.confidence,
+        rawData: { extractedAt: new Date().toISOString() },
+        expiresAt: new Date(Date.now() + CACHE_DURATION_HOURS * 60 * 60 * 1000),
+      }),
+      "TripAdvisorCrawler",
+      placeName
+    );
     
-    console.log(`[TripAdvisorCrawler] Collected ${placeName}: ${result.rating}/5 (${result.reviewCount} reviews)`);
-    return true;
+    if (saved) {
+      console.log(`[TripAdvisorCrawler] ✅ ${placeName}: ${result.rating}/5 (${result.reviewCount} reviews)`);
+      return true;
+    }
   }
   
   return false;

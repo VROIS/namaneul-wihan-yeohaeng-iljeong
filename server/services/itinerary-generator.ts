@@ -2052,538 +2052,116 @@ function optimizeCityOrder(cityGroups: Map<string, PlaceResult[]>): string[] {
   return ordered;
 }
 
+/**
+ * ===== 4+1 에이전트 파이프라인 오케스트레이터 =====
+ * 
+ * 기존 모놀리식 generateItinerary()를 대체
+ * AG1(뼈대) → AG2(Gemini)||AG3pre(DB) → AG3(매칭) → AG4(실시간)
+ * 
+ * 목표: 40초 → 8~12초 (Gemini 프롬프트 간소화 + 병렬화)
+ */
 export async function generateItinerary(formData: TripFormData) {
-  const _t0 = Date.now();
-  const _timings: Record<string, number> = {};
-  const _mark = (label: string) => { _timings[label] = Date.now() - _t0; };
-
-  const vibes = formData.vibes || ['Foodie', 'Culture', 'Healing'];
-  const curationFocus = formData.curationFocus || 'Everyone';
-  const vibeWeights = calculateVibeWeights(vibes, curationFocus);
-  
-  // 여행 밀도 기본값: Normal (보통) - 프론트엔드 기준
-  // Moderate도 Normal로 처리 (하위 호환)
-  let travelPace: TravelPace = (formData.travelPace as TravelPace) || 'Normal';
-  if (travelPace === 'Moderate' as any) travelPace = 'Normal';
-  
-  const paceConfig = PACE_CONFIG[travelPace];
-  const dayCount = calculateDayCount(formData.startDate, formData.endDate);
-  
-  // ===== 사용자 시간 기반 슬롯 계산 =====
-  const userStartTime = formData.startTime || DEFAULT_START_TIME;
-  const userEndTime = formData.endTime || DEFAULT_END_TIME;
-  
-  // 일별 슬롯 수 계산
-  const daySlotsConfig: { day: number; startTime: string; endTime: string; slots: number }[] = [];
-  let totalRequiredPlaces = 0;
-  
-  for (let d = 1; d <= dayCount; d++) {
-    let dayStart: string;
-    let dayEnd: string;
-    
-    if (dayCount === 1) {
-      // 당일치기: 사용자 출발~종료시간 그대로
-      dayStart = userStartTime;
-      dayEnd = userEndTime;
-    } else if (d === 1) {
-      // 첫날: 사용자 출발시간 ~ 21:00
-      dayStart = userStartTime;
-      dayEnd = DEFAULT_END_TIME;
-    } else if (d === dayCount) {
-      // 마지막날: 09:00 ~ 사용자 종료시간
-      dayStart = DEFAULT_START_TIME;
-      dayEnd = userEndTime;
-    } else {
-      // 중간날: 09:00 ~ 21:00 풀타임
-      dayStart = DEFAULT_START_TIME;
-      dayEnd = DEFAULT_END_TIME;
-    }
-    
-    const slots = calculateSlotsForDay(dayStart, dayEnd, travelPace);
-    daySlotsConfig.push({ day: d, startTime: dayStart, endTime: dayEnd, slots });
-    totalRequiredPlaces += slots;
-  }
-  
-  const requiredPlaceCount = totalRequiredPlaces + 4; // 여유분
-  
-  console.log(`[Itinerary] ===== 일정 생성 시작 =====`);
-  console.log(`[Itinerary] 여행 밀도: ${travelPace} (슬롯 간격: ${paceConfig.slotDurationMinutes}분)`);
-  console.log(`[Itinerary] 사용자 시간: ${userStartTime} ~ ${userEndTime}`);
-  console.log(`[Itinerary] 총 ${dayCount}일, 필요 장소: ${totalRequiredPlaces}곳`);
-  daySlotsConfig.forEach(d => {
-    console.log(`[Itinerary]   Day ${d.day}: ${d.startTime}~${d.endTime} → ${d.slots}곳`);
-  });
-  
-  // ===== 한국 감성 데이터 로드 (캐시 우선) =====
-  let koreanSentiment: KoreanSentimentData | undefined;
-  try {
-    koreanSentiment = await getKoreanSentimentForCity(formData.destination, vibes);
-    console.log(`[Itinerary] 한국 감성 보너스: +${koreanSentiment.totalBonus.toFixed(2)}`);
-  } catch (error) {
-    console.warn('[Itinerary] 한국 감성 데이터 로드 실패:', error);
-  }
-  
-  // ===== 🎯 새 파이프라인: Gemini 추천 우선 → DB 데이터 보강 → 미등록 자동 수집 =====
-  // 핵심 전략: Gemini = 브레인(AI 추천), DB = 근거자료(점수/사진/리뷰 보강)
-  
-  _mark('0_setup');
-  console.log(`[Itinerary] ===== 1단계: Gemini 3.0 Flash AI 추천 시작 =====`);
-  
-  // Step 1: Gemini AI가 먼저 장소를 추천 (차별화 포인트 = AI 개인화 추천)
-  let placesArr = await generatePlacesWithGemini(formData, vibeWeights, requiredPlaceCount + 5, koreanSentiment);
-  _mark('1_gemini');
-  console.log(`[Itinerary] 🤖 Gemini 추천 완료: ${placesArr.length}곳`);
-  
-  // Google API 보충 (Gemini 결과가 부족할 때만)
-  if (placesArr.length < requiredPlaceCount) {
-    console.log(`[Itinerary] Gemini ${placesArr.length}곳 < 필요 ${requiredPlaceCount}곳 → Google API 보충`);
-    const googlePlaces = await searchGooglePlaces(
-      formData.destination,
-      formData.destinationCoords,
-      vibes,
-      formData.travelStyle || 'Reasonable'
-    );
-    const existingNames = new Set(placesArr.map(p => p.name.toLowerCase()));
-    const newGooglePlaces = googlePlaces.filter(p => !existingNames.has(p.name.toLowerCase()));
-    placesArr = [...placesArr, ...newGooglePlaces];
-  }
-  
-  // 부족하면 Gemini 재시도
-  let attempts = 0;
-  while (placesArr.length < requiredPlaceCount && attempts < 2) {
-    attempts++;
-    console.log(`[Itinerary] 장소 부족 (${placesArr.length}/${requiredPlaceCount}), Gemini 추가 요청 중...`);
-    const morePlaces = await generatePlacesWithGemini(formData, vibeWeights, requiredPlaceCount - placesArr.length + 5, koreanSentiment);
-    const existingNames = new Set(placesArr.map(p => p.name.toLowerCase()));
-    const uniqueMore = morePlaces.filter(p => !existingNames.has(p.name.toLowerCase()));
-    placesArr = [...placesArr, ...uniqueMore];
-  }
-  
-  // Step 2: Gemini 추천 장소에 우리 DB 데이터 보강 (+ 미등록 장소 자동 수집/저장)
-  console.log(`[Itinerary] ===== 2단계: DB 데이터 보강 + 미등록 장소 자동 수집 =====`);
-  console.log(`[Itinerary] enrichPlacesWithDBData 호출 전: ${placesArr.length}곳, destination="${formData.destination}"`);
-  
-  try {
-    const enrichResult = await enrichPlacesWithDBData(placesArr, formData.destination);
-    placesArr = enrichResult.places;
-    
-    console.log(`[Itinerary] 🎯 최종 결과: 총 ${placesArr.length}곳`);
-    console.log(`[Itinerary]   ├─ DB 매칭 보강: ${enrichResult.dbEnrichedCount}곳 (점수/사진/리뷰 삽입)`);
-    console.log(`[Itinerary]   ├─ 신규 DB 저장: ${enrichResult.newlySavedCount}곳 (DB 자동 성장!)`);
-    console.log(`[Itinerary]   └─ Gemini 원본 유지: ${enrichResult.geminiOnlyCount}곳`);
-  } catch (enrichError: any) {
-    console.error(`[Itinerary] ❌ enrichPlacesWithDBData 에러:`, enrichError.message, enrichError.stack);
-    console.log(`[Itinerary] Gemini 원본 유지 (${placesArr.length}곳)`);
-  }
-  
-  console.log(`[Itinerary] 총 수집 장소: ${placesArr.length}곳`);
-  
-  _mark('2_dbEnrich');
-  // ===== Phase 1: 한국인 인기도 점수 계산 (DB 수집 데이터 직접 활용) =====
-  // 기존: Gemini 추측 기반 일괄 보너스 → 변경: 장소별 인스타/유튜브/블로그 DB 데이터 기반
-  placesArr = await enrichPlacesWithKoreanPopularity(placesArr, formData.destination);
-  
-  _mark('3_koreanPop');
-  // ===== Phase 1.5: TripAdvisor + 가격 데이터 통합 =====
-  // DB에 수집된 TripAdvisor 평점/리뷰 수 + 실제 가격 정보를 장소에 추가
-  placesArr = await enrichPlacesWithTripAdvisorAndPrices(placesArr, formData.destination);
-  
-  _mark('4_tripadvisor');
-  // ===== Phase 1-5: 포토스팟 + 패키지 투어 데이터 보강 =====
-  placesArr = await enrichPlacesWithPhotoAndTour(placesArr, formData.destination);
-  
-  // 기존 한국 감성 보너스도 vibeScore에 반영 (Gemini 데이터 보조 활용)
-  if (koreanSentiment) {
-    placesArr = placesArr.map(p => ({
-      ...p,
-      vibeScore: p.vibeScore + (koreanSentiment?.totalBonus || 0) * 0.3, // 보조 역할로 축소
-    }));
-  }
-  
-  // ===== Phase 1-7: 데이터 등급 판단 + 바이브 기반 동적 가중치 =====
-  const dataGrade = detectDataGrade(placesArr);
-  const dynamicWeights = calculateDynamicWeights(vibes, dataGrade);
-  
-  console.log(`[Itinerary] 데이터 등급: ${dataGrade} | 바이브: ${vibes.join(',')}`);
-  console.log(`[Itinerary] 동적 가중치: 한국인기=${(dynamicWeights.koreanPop * 100).toFixed(0)}% 포토=${(dynamicWeights.photoSpot * 100).toFixed(0)}% 유명세=${(dynamicWeights.verifiedFame * 100).toFixed(0)}% 분위기=${(dynamicWeights.vibe * 100).toFixed(0)}% 가성비=${(dynamicWeights.value * 100).toFixed(0)}% 실용=${(dynamicWeights.practical * 100).toFixed(0)}%`);
-  
-  // ===== Phase 1-5+1-7: 최종 정렬 - 동적 6요소 공식 =====
-  // Phase 1-6: 선정 이유 + 신뢰도도 함께 계산
-  placesArr = placesArr.map(p => {
-    const { reasons, confidence } = generateSelectionReasons(p);
-    return {
-      ...p,
-      finalScore: calculateFinalScore(p, dynamicWeights),
-      selectionReasons: reasons,
-      confidenceLevel: confidence,
-    };
-  }).sort((a, b) => {
-    return (b.finalScore || 0) - (a.finalScore || 0);
-  }).slice(0, requiredPlaceCount + 5);
-  
-  // 상위 5개 장소 점수 로그
-  const top5 = placesArr.slice(0, 5);
-  console.log(`[Itinerary] 최종 정렬 완료 (동적 6요소: 바이브=${vibes.join('+')} × 데이터등급=${dataGrade})`);
-  top5.forEach((p, i) => {
-    console.log(`[Itinerary]   #${i + 1} ${p.name}: finalScore=${(p.finalScore || 0).toFixed(2)} (인기=${(p.koreanPopularityScore || 0).toFixed(1)}, 포토=${(p.photoSpotScore || 0).toFixed(1)}, vibe=${p.vibeScore.toFixed(1)})`);
-  });
-  
-  _mark('5_photoTour');
-  // ===== 사용자 시간 기반 동적 슬롯 분배 (식사 슬롯 강제 포함) =====
-  const schedule = await distributePlacesWithUserTime(placesArr, daySlotsConfig, travelPace, formData.travelStyle || 'Reasonable');
-  
-  _mark('6_distribute');
-  console.log(`[Itinerary] 최종 일정: ${schedule.length}개 슬롯`);
-  
-  // 🏨 숙소 좌표 기반 동선 최적화 (nearest-neighbor + 2-opt, 원형 경로)
-  // 각 Day 내 관광 슬롯을 숙소→...→숙소 원형으로 재배열
-  for (let d = 1; d <= dayCount; d++) {
-    const daySlots = schedule.filter(s => s.day === d);
-    const nonMealPlaces = daySlots.filter(s => !s.isMealSlot).map(s => s.place);
-    
-    if (nonMealPlaces.length > 2) {
-      // Day별 숙소 좌표 결정
-      const dayAccom = formData.dayAccommodations?.find(a => a.day === d);
-      const depCoords = dayAccom?.coords || formData.accommodationCoords || formData.destinationCoords;
-      
-      const optimized = optimizeDayRoute(nonMealPlaces, depCoords);
-      
-      // 최적화된 순서를 schedule에 반영
-      let optIdx = 0;
-      for (const slot of daySlots) {
-        if (!slot.isMealSlot && optIdx < optimized.length) {
-          slot.place = optimized[optIdx];
-          optIdx++;
-        }
-      }
-    }
-  }
-  
-  // Days 배열 생성
-  const days: { day: number; places: any[]; city: string; summary: string; startTime: string; endTime: string }[] = [];
-  
-  // 인원수 계산 (companionType 기반)
-  const companionCount = getCompanionCount(formData.companionType || 'Solo');
-  
-  // 이동 수단 결정 (mobilityStyle 기반)
-  const travelMode = formData.mobilityStyle === 'WalkMore' ? 'WALK' as const
-    : formData.mobilityStyle === 'Minimal' ? 'DRIVE' as const
-    : 'TRANSIT' as const;
-  
-  // 식사 예산 정보
-  const mealBudget = MEAL_BUDGET[formData.travelStyle || 'Reasonable'];
-  
-  // 실시간 날씨/위기 데이터 미리 조회 (한 번만 호출하여 전 장소에 공유)
-  const realityCheck = await getRealityCheckForCity(formData.destination);
-  
-  for (let d = 1; d <= dayCount; d++) {
-    const dayConfig = daySlotsConfig.find(c => c.day === d)!;
-    const dayPlaces = schedule
-      .filter(s => s.day === d)
-      .map(s => ({
-        ...s.place,
-        startTime: s.startTime,
-        endTime: s.endTime,
-        // 🍽️ 식사 슬롯 정보 (점심35%/저녁65% 예산 배분, 공개가격 최대값 기준)
-        isMealSlot: s.isMealSlot,
-        mealType: s.mealType,
-        mealPrice: s.isMealSlot 
-          ? (s.mealType === 'lunch' ? mealBudget.lunch : mealBudget.dinner) 
-          : undefined,
-        mealPriceLabel: s.isMealSlot 
-          ? (s.mealType === 'lunch' ? mealBudget.lunchLabel : mealBudget.dinnerLabel) 
-          : undefined,
-        // TripAdvisor 데이터 (프론트엔드 표시용)
-        tripAdvisorRating: s.place.tripAdvisorRating,
-        tripAdvisorReviewCount: s.place.tripAdvisorReviewCount,
-        tripAdvisorRanking: s.place.tripAdvisorRanking,
-        // 실제 가격 정보
-        estimatedPriceEur: s.place.estimatedPriceEur,
-        priceSource: s.place.priceSource,
-        // Phase 1-5: 종합 점수
-        finalScore: s.place.finalScore,
-        // Phase 1-3: 포토스팟 정보
-        photoSpotScore: s.place.photoSpotScore,
-        photoTip: s.place.photoTip,
-        bestPhotoTime: s.place.bestPhotoTime,
-        // Phase 1-2: 패키지 투어 포함 여부
-        isPackageTourIncluded: s.place.isPackageTourIncluded,
-        // Phase 1-6: 선정 이유 + 신뢰도
-        selectionReasons: s.place.selectionReasons || [],
-        confidenceLevel: s.place.confidenceLevel || 'minimal',
-        realityCheck,
-      }));
-    
-    // 🏨 해당 Day의 숙소(출발/복귀) 좌표 결정
-    // 우선순위: 1) Day별 개별 숙소 → 2) 공통 숙소 → 3) 도심 좌표 → 4) 첫 장소
-    const dayAccommodation = formData.dayAccommodations?.find(a => a.day === d);
-    let accommodationCoords: { lat: number; lng: number } | undefined;
-    let accommodationName = '';
-    let accommodationAddress = '';
-
-    if (dayAccommodation?.coords?.lat && dayAccommodation?.coords?.lng) {
-      accommodationCoords = dayAccommodation.coords;
-      accommodationName = dayAccommodation.name;
-      accommodationAddress = dayAccommodation.address;
-    } else if (formData.accommodationCoords?.lat && formData.accommodationCoords?.lng) {
-      accommodationCoords = formData.accommodationCoords;
-      accommodationName = formData.accommodationName || '숙소';
-      accommodationAddress = formData.accommodationAddress || '';
-    } else if (formData.destinationCoords?.lat && formData.destinationCoords?.lng) {
-      accommodationCoords = formData.destinationCoords;
-      accommodationName = `${formData.destination} 도심`;
-      accommodationAddress = '';
-    } else if (dayPlaces.length > 0) {
-      accommodationCoords = { lat: dayPlaces[0].lat, lng: dayPlaces[0].lng };
-      accommodationName = '도심 기준';
-      accommodationAddress = '';
-    }
-
-    // 🚇 이동 구간 정보 계산
-    const transits: {
-      from: string;
-      to: string;
-      mode: string;
-      modeLabel: string;
-      duration: number;
-      durationText: string;
-      distance: number;
-      cost: number;
-      costTotal: number;
-    }[] = [];
-
-    // 🏨→첫장소: 숙소 출발 이동시간 (실제 Google Routes API)
-    let departureTransit: typeof transits[0] | undefined;
-    if (accommodationCoords && dayPlaces.length > 0) {
-      try {
-        const route = await routeOptimizer.getRoute(
-          { id: 'accommodation', lat: accommodationCoords.lat, lng: accommodationCoords.lng, name: accommodationName },
-          { id: dayPlaces[0].id, lat: dayPlaces[0].lat, lng: dayPlaces[0].lng, name: dayPlaces[0].name },
-          travelMode
-        );
-        const durationMinutes = Math.round(route.durationSeconds / 60);
-        departureTransit = {
-          from: `🏨 ${accommodationName}`,
-          to: dayPlaces[0].name,
-          mode: travelMode.toLowerCase(),
-          modeLabel: travelMode === 'WALK' ? '도보' : travelMode === 'TRANSIT' ? '지하철' : '차량',
-          duration: durationMinutes,
-          durationText: `${durationMinutes}분`,
-          distance: route.distanceMeters,
-          cost: Math.round(route.estimatedCost * 100) / 100,
-          costTotal: Math.round(route.estimatedCost * companionCount * 100) / 100,
-        };
-      } catch {
-        departureTransit = {
-          from: `🏨 ${accommodationName}`,
-          to: dayPlaces[0].name,
-          mode: 'walk', modeLabel: '이동', duration: 20, durationText: '약 20분',
-          distance: 2000, cost: 0, costTotal: 0,
-        };
-      }
-    }
-    
-    // 장소 간 이동시간
-    for (let i = 0; i < dayPlaces.length - 1; i++) {
-      const fromPlace = dayPlaces[i];
-      const toPlace = dayPlaces[i + 1];
-      
-      try {
-        const route = await routeOptimizer.getRoute(
-          { id: fromPlace.id, lat: fromPlace.lat, lng: fromPlace.lng, name: fromPlace.name },
-          { id: toPlace.id, lat: toPlace.lat, lng: toPlace.lng, name: toPlace.name },
-          travelMode
-        );
-        
-        const durationMinutes = Math.round(route.durationSeconds / 60);
-        const costPerPerson = route.estimatedCost;
-        
-        transits.push({
-          from: fromPlace.name,
-          to: toPlace.name,
-          mode: travelMode.toLowerCase(),
-          modeLabel: travelMode === 'WALK' ? '도보' 
-            : travelMode === 'TRANSIT' ? '지하철' 
-            : '차량',
-          duration: durationMinutes,
-          durationText: `${durationMinutes}분`,
-          distance: route.distanceMeters,
-          cost: Math.round(costPerPerson * 100) / 100,
-          costTotal: Math.round(costPerPerson * companionCount * 100) / 100,
-        });
-      } catch (error) {
-        transits.push({
-          from: fromPlace.name,
-          to: toPlace.name,
-          mode: 'walk',
-          modeLabel: '이동',
-          duration: 15,
-          durationText: '약 15분',
-          distance: 1000,
-          cost: 0,
-          costTotal: 0,
-        });
-      }
-    }
-
-    // 마지막장소→🏨: 숙소 복귀 이동시간 (실제 Google Routes API)
-    let returnTransit: typeof transits[0] | undefined;
-    if (accommodationCoords && dayPlaces.length > 0) {
-      const lastPlace = dayPlaces[dayPlaces.length - 1];
-      try {
-        const route = await routeOptimizer.getRoute(
-          { id: lastPlace.id, lat: lastPlace.lat, lng: lastPlace.lng, name: lastPlace.name },
-          { id: 'accommodation', lat: accommodationCoords.lat, lng: accommodationCoords.lng, name: accommodationName },
-          travelMode
-        );
-        const durationMinutes = Math.round(route.durationSeconds / 60);
-        returnTransit = {
-          from: lastPlace.name,
-          to: `🏨 ${accommodationName}`,
-          mode: travelMode.toLowerCase(),
-          modeLabel: travelMode === 'WALK' ? '도보' : travelMode === 'TRANSIT' ? '지하철' : '차량',
-          duration: durationMinutes,
-          durationText: `${durationMinutes}분`,
-          distance: route.distanceMeters,
-          cost: Math.round(route.estimatedCost * 100) / 100,
-          costTotal: Math.round(route.estimatedCost * companionCount * 100) / 100,
-        };
-      } catch {
-        returnTransit = {
-          from: lastPlace.name,
-          to: `🏨 ${accommodationName}`,
-          mode: 'walk', modeLabel: '이동', duration: 20, durationText: '약 20분',
-          distance: 2000, cost: 0, costTotal: 0,
-        };
-      }
-    }
-    
-    const topVibes = dayPlaces
-      .flatMap(p => p.vibeTags)
-      .filter((v, i, arr) => arr.indexOf(v) === i)
-      .slice(0, 2);
-    
-    const dayCities = dayPlaces
-      .map(p => p.city)
-      .filter((c, i, arr) => c && arr.indexOf(c) === i);
-    
-    const cityLabel = dayCities.length > 0 ? dayCities.join(', ') : formData.destination;
-
-    // 전체 이동 정보 (숙소 출발/복귀 포함)
-    const allTransits = [
-      ...(departureTransit ? [departureTransit] : []),
-      ...transits,
-      ...(returnTransit ? [returnTransit] : []),
-    ];
-    
-    days.push({
-      day: d,
-      places: dayPlaces,
-      city: cityLabel,
-      summary: `${cityLabel} - ${topVibes.join(' & ')} 중심의 하루`,
-      startTime: dayConfig.startTime,
-      endTime: dayConfig.endTime,
-      // 🏨 숙소 정보
-      accommodation: accommodationCoords ? {
-        day: d,
-        name: accommodationName,
-        address: accommodationAddress,
-        coords: accommodationCoords,
-      } : undefined,
-      departureTransit,
-      returnTransit,
-      transit: {
-        transits: allTransits,
-        totalDuration: allTransits.reduce((sum, t) => sum + t.duration, 0),
-        totalCost: allTransits.reduce((sum, t) => sum + t.costTotal, 0),
-      },
-    });
-  }
-  
-  _mark('7_routeTransit');
-
-  // 여행 밀도 라벨
-  const paceLabel = travelPace === 'Packed' ? '빡빡하게' 
-    : travelPace === 'Normal' ? '보통' 
-    : '여유롭게';
-  
-  // ===== 자동 저장: Google Places 결과를 DB에 백그라운드 저장 =====
-  // 일정 생성시 가져온 장소 중 DB에 없는 것을 자동으로 places 테이블에 저장
-  // 응답 속도에 영향 없도록 setTimeout으로 비동기 처리
-  const placesToSave = placesArr.filter(p => p.sourceType === "Google Places" && p.id);
-  if (placesToSave.length > 0) {
-    const destCity = formData.destination;
-    setTimeout(async () => {
-      try {
-        const cityRecord = await db.select().from(cities)
-          .where(ilike(cities.name, `%${destCity}%`))
-          .then(r => r[0]);
-        
-        if (!cityRecord) return;
-        
-        let saved = 0;
-        for (const place of placesToSave) {
-          try {
-            const existing = await storage.getPlaceByGoogleId(place.id);
-            if (!existing) {
-              await storage.createPlace({
-                cityId: cityRecord.id,
-                googlePlaceId: place.id,
-                name: place.name,
-                type: place.placeTypes?.includes("restaurant") ? "restaurant" : 
-                      place.placeTypes?.includes("cafe") ? "cafe" : "attraction",
-                address: place.description,
-                latitude: place.lat,
-                longitude: place.lng,
-                photoUrls: place.image ? [place.image] : [],
-                vibeKeywords: place.vibeTags || [],
-                lastDataSync: new Date(),
-              });
-              saved++;
-            }
-          } catch (e) { /* 중복 등 무시 */ }
-        }
-        if (saved > 0) {
-          console.log(`[Itinerary AutoSave] ${destCity}: ${saved}/${placesToSave.length}개 장소 DB 저장`);
-        }
-      } catch (e) {
-        console.warn("[Itinerary AutoSave] 자동 저장 실패:", e);
-      }
-    }, 100);
-  }
-
-  return {
-    title: `${formData.destination} ${dayCount}일 여행`,
-    destination: formData.destination,
-    startDate: formData.startDate,
-    endDate: formData.endDate,
-    startTime: userStartTime,
-    endTime: userEndTime,
-    days,
-    vibeWeights,
-    koreanSentimentBonus: koreanSentiment?.totalBonus || 0,
-    // 📋 여행 설정 (프론트엔드에서 사용)
-    companionType: formData.companionType,
-    companionCount,
-    travelStyle: formData.travelStyle,
-    mobilityStyle: formData.mobilityStyle,
-    metadata: {
-      travelStyle: formData.travelStyle,
-      travelPace: travelPace,
-      travelPaceLabel: paceLabel,
-      slotDurationMinutes: paceConfig.slotDurationMinutes,
-      totalPlaces: schedule.length,
-      mobilityStyle: formData.mobilityStyle,
-      companionType: formData.companionType,
-      companionCount,
-      curationFocus: formData.curationFocus,
-      generatedAt: new Date().toISOString(),
-      koreanSentimentApplied: !!koreanSentiment,
-      _timings,
-      _totalMs: Date.now() - _t0,
-    },
-  };
+  // 새 파이프라인 호출 (순환 참조 방지를 위해 동적 import)
+  const { runPipeline } = await import('./agents/orchestrator');
+  return runPipeline(formData as any);
 }
+
+/**
+ * ===== AG3용 enrichment 파이프라인 내보내기 =====
+ * 오케스트레이터에서 기존 enrichment 함수들을 호출하기 위한 래퍼
+ */
+export const _enrichmentPipeline = {
+  async runFullEnrichment(
+    placesArr: PlaceResult[],
+    formData: TripFormData,
+    skeleton: {
+      daySlotsConfig: { day: number; startTime: string; endTime: string; slots: number }[];
+      travelPace: TravelPace;
+      requiredPlaceCount: number;
+      koreanSentiment?: KoreanSentimentData;
+    }
+  ): Promise<{
+    scoredPlaces: PlaceResult[];
+    schedule: { day: number; slot: string; place: PlaceResult; startTime: string; endTime: string; isMealSlot: boolean; mealType?: 'lunch' | 'dinner' }[];
+    realityCheck: { weather: string; crowd: string; status: string };
+  }> {
+    const vibes = formData.vibes || ['Foodie', 'Culture', 'Healing'];
+    const { daySlotsConfig, travelPace, requiredPlaceCount, koreanSentiment } = skeleton;
+
+    // Phase 1: 한국인 인기도
+    placesArr = await enrichPlacesWithKoreanPopularity(placesArr, formData.destination);
+
+    // Phase 1.5: TripAdvisor + 가격
+    placesArr = await enrichPlacesWithTripAdvisorAndPrices(placesArr, formData.destination);
+
+    // Phase 1-5: 포토스팟 + 패키지 투어
+    placesArr = await enrichPlacesWithPhotoAndTour(placesArr, formData.destination);
+
+    // 한국 감성 보너스 반영
+    if (koreanSentiment) {
+      placesArr = placesArr.map(p => ({
+        ...p,
+        vibeScore: p.vibeScore + (koreanSentiment?.totalBonus || 0) * 0.3,
+      }));
+    }
+
+    // Phase 1-7: 데이터 등급 + 동적 가중치
+    const dataGrade = detectDataGrade(placesArr);
+    const dynamicWeights = calculateDynamicWeights(vibes as Vibe[], dataGrade);
+
+    console.log(`[AG3] 데이터 등급: ${dataGrade} | 바이브: ${vibes.join(',')}`);
+
+    // 최종 점수 계산 + 정렬
+    placesArr = placesArr.map(p => {
+      const { reasons, confidence } = generateSelectionReasons(p);
+      return {
+        ...p,
+        finalScore: calculateFinalScore(p, dynamicWeights),
+        selectionReasons: reasons,
+        confidenceLevel: confidence,
+      };
+    }).sort((a, b) => (b.finalScore || 0) - (a.finalScore || 0))
+      .slice(0, requiredPlaceCount + 5);
+
+    // 상위 5개 로그
+    placesArr.slice(0, 5).forEach((p, i) => {
+      console.log(`[AG3]   #${i + 1} ${p.name}: finalScore=${(p.finalScore || 0).toFixed(2)}`);
+    });
+
+    // 슬롯 분배
+    const schedule = await distributePlacesWithUserTime(
+      placesArr, daySlotsConfig, travelPace, formData.travelStyle || 'Reasonable'
+    );
+
+    console.log(`[AG3] 슬롯 분배 완료: ${schedule.length}개`);
+
+    // 동선 최적화
+    const dayCount = daySlotsConfig.length;
+    for (let d = 1; d <= dayCount; d++) {
+      const daySlots = schedule.filter(s => s.day === d);
+      const nonMealPlaces = daySlots.filter(s => !s.isMealSlot).map(s => s.place);
+
+      if (nonMealPlaces.length > 2) {
+        const dayAccom = formData.dayAccommodations?.find(a => a.day === d);
+        const depCoords = dayAccom?.coords || formData.accommodationCoords || formData.destinationCoords;
+        const optimized = optimizeDayRoute(nonMealPlaces, depCoords);
+
+        let optIdx = 0;
+        for (const slot of daySlots) {
+          if (!slot.isMealSlot && optIdx < optimized.length) {
+            slot.place = optimized[optIdx];
+            optIdx++;
+          }
+        }
+      }
+    }
+
+    // 날씨/위기 데이터
+    const realityCheck = await getRealityCheckForCity(formData.destination);
+
+    return { scoredPlaces: placesArr, schedule, realityCheck };
+  },
+};
 
 /**
  * 사용자 시간 기반으로 장소를 슬롯에 분배

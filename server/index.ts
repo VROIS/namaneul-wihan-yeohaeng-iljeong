@@ -285,12 +285,13 @@ function setupErrorHandler(app: express.Application) {
       }
 
       try {
-        // 🚨 [긴급 차단] 2026-02-08: 자동 크롤러 요금 폭탄 방지
-        // 14개 크롤러가 Gemini API + Google Places API를 자동 호출하여 과금 발생
-        // 필요시 선별적으로 활성화할 것
-        // const { dataScheduler } = await import("./services/data-scheduler");
-        // await dataScheduler.initialize();
-        log("[Server] ⚠️ Data scheduler DISABLED (billing protection)");
+        // ✅ [2026-02-08] 스케줄러 복구 - 비용 보호 적용 완료:
+        // - place_seed_sync만 차단 (Google Places API 폭탄 주범)
+        // - Gemini Google Search 일일 160건 제한 (무료 범위 유지)
+        // - 나머지 13개 크롤러는 안전하게 운영
+        const { dataScheduler } = await import("./services/data-scheduler");
+        await dataScheduler.initialize();
+        log("[Server] ✅ Data scheduler initialized (place_seed_sync blocked for billing protection)");
       } catch (error) {
         log("[Server] Failed to initialize scheduler:", error);
       }

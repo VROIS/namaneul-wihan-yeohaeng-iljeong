@@ -1,6 +1,8 @@
 import { db } from "../db";
 import { placePrices, places, cities } from "../../shared/schema";
 import { eq, and, gte, desc } from "drizzle-orm";
+import { getSearchTools } from "./gemini-search-limiter";
+import { safeParseJSON, safePrice, safeCurrency, safeConfidence, safeString, safeDbOperation } from "./crawler-utils";
 
 const CACHE_DURATION_HOURS = 24;
 
@@ -55,28 +57,27 @@ Respond in JSON format:
 
 If no price found, set found: false. Always use the local currency of the destination.`,
       config: {
-        tools: [{ googleSearch: {} }],
+        tools: getSearchTools("price-crawler"),
       },
     });
 
     const text = response.text || "";
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]);
-      if (parsed.found) {
-        return {
-          priceLow: parsed.priceLow,
-          priceHigh: parsed.priceHigh,
-          priceAverage: parsed.priceLow && parsed.priceHigh 
-            ? (parsed.priceLow + parsed.priceHigh) / 2 
-            : parsed.priceLow,
-          currency: parsed.currency || "KRW",
-          priceLabel: parsed.priceLabel,
-          sourceUrl: parsed.sourceUrl,
-          confidenceScore: parsed.confidence || 0.5,
-          rawData: { extractedText: text.slice(0, 500) },
-        };
-      }
+    const parsed = safeParseJSON<any>(text, "PriceCrawler");
+    if (parsed && parsed.found) {
+      const priceLow = safePrice(parsed.priceLow);
+      const priceHigh = safePrice(parsed.priceHigh);
+      return {
+        priceLow: priceLow,
+        priceHigh: priceHigh,
+        priceAverage: priceLow !== null && priceHigh !== null
+          ? (priceLow + priceHigh) / 2
+          : priceLow,
+        currency: safeCurrency(parsed.currency, "KRW"),
+        priceLabel: safeString(parsed.priceLabel),
+        sourceUrl: safeString(parsed.sourceUrl),
+        confidenceScore: safeConfidence(parsed.confidence, 0.5),
+        rawData: { extractedText: text.slice(0, 500) },
+      };
     }
   } catch (error) {
     console.error("[PriceCrawler] Gemini price extraction error:", error);
@@ -132,31 +133,27 @@ Return JSON:
 
 Return found: false if no tour packages exist for this place.`,
       config: {
-        tools: [{ googleSearch: {} }],
+        tools: getSearchTools("price-crawler"),
       },
     });
 
     const text = response.text || "";
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]);
-      if (parsed.found && parsed.bestPrice) {
-        const klookPrice = parsed.klook?.priceLow;
-        const viatorPrice = parsed.viator?.priceLow;
-        
+    const parsed = safeParseJSON<any>(text, "PriceCrawler-KlookViator");
+    if (parsed && parsed.found) {
+      const klookPrice = safePrice(parsed.klook?.priceLow);
+      const viatorPrice = safePrice(parsed.viator?.priceLow);
+      const bestPrice = safePrice(parsed.bestPrice?.price);
+      const finalPrice = klookPrice ?? viatorPrice ?? bestPrice;
+      
+      if (finalPrice !== null) {
         return {
-          priceLow: Math.min(klookPrice || Infinity, viatorPrice || Infinity) === Infinity 
-            ? parsed.bestPrice.price 
-            : Math.min(klookPrice || Infinity, viatorPrice || Infinity),
-          priceHigh: Math.max(
-            parsed.klook?.priceHigh || 0, 
-            parsed.viator?.priceHigh || 0
-          ) || parsed.bestPrice.price,
-          priceAverage: parsed.bestPrice.price,
-          currency: parsed.bestPrice.currency || "USD",
+          priceLow: finalPrice,
+          priceHigh: safePrice(parsed.klook?.priceHigh) ?? safePrice(parsed.viator?.priceHigh) ?? finalPrice,
+          priceAverage: bestPrice ?? finalPrice,
+          currency: safeCurrency(parsed.bestPrice?.currency, "USD"),
           priceLabel: "투어 패키지 (Klook/Viator)",
-          sourceUrl: parsed.klook?.url || parsed.viator?.url,
-          confidenceScore: parsed.confidence || 0.7,
+          sourceUrl: safeString(parsed.klook?.url || parsed.viator?.url),
+          confidenceScore: safeConfidence(parsed.confidence, 0.7),
           rawData: { 
             klook: parsed.klook,
             viator: parsed.viator,
@@ -197,21 +194,25 @@ async function collectKlookViatorPrice(
   const priceData = await extractKlookViatorPrice(placeName, cityName, countryName);
   
   if (priceData) {
-    await db.insert(placePrices).values({
-      placeId,
-      cityId,
-      priceType: "tour_package",
-      source: "klook_viator",
-      priceLow: priceData.priceLow,
-      priceHigh: priceData.priceHigh,
-      priceAverage: priceData.priceAverage,
-      currency: priceData.currency,
-      priceLabel: priceData.priceLabel,
-      sourceUrl: priceData.sourceUrl,
-      confidenceScore: priceData.confidenceScore,
-      rawData: priceData.rawData,
-      expiresAt: new Date(Date.now() + CACHE_DURATION_HOURS * 60 * 60 * 1000),
-    });
+    await safeDbOperation(
+      () => db.insert(placePrices).values({
+        placeId,
+        cityId,
+        priceType: "tour_package",
+        source: "klook_viator",
+        priceLow: priceData.priceLow,
+        priceHigh: priceData.priceHigh,
+        priceAverage: priceData.priceAverage,
+        currency: priceData.currency,
+        priceLabel: priceData.priceLabel,
+        sourceUrl: priceData.sourceUrl,
+        confidenceScore: priceData.confidenceScore,
+        rawData: priceData.rawData,
+        expiresAt: new Date(Date.now() + CACHE_DURATION_HOURS * 60 * 60 * 1000),
+      }),
+      "PriceCrawler",
+      `Klook/Viator ${placeName}`
+    );
     
     console.log(`[PriceCrawler] Klook/Viator tour for ${placeName}: ${priceData.priceLow}-${priceData.priceHigh} ${priceData.currency}`);
   }

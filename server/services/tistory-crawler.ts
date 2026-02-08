@@ -6,6 +6,8 @@ import { GoogleGenAI } from "@google/genai";
 import { db } from "../db";
 import { cities, places, geminiWebSearchCache } from "@shared/schema";
 import { eq, and, gte, desc } from "drizzle-orm";
+import { getSearchTools } from "./gemini-search-limiter";
+import { safeParseJSON, safeDbOperation } from "./crawler-utils";
 
 // Lazy initialization
 let ai: GoogleGenAI | null = null;
@@ -53,57 +55,28 @@ async function searchTistoryBlogs(query: string, city: string): Promise<TistoryS
   try {
     const searchQuery = `site:tistory.com ${city} ${query} 여행 후기`;
     
+    // 💰 프롬프트 최적화: extractedPlaces 제거(DB 중복), posts 5개로 축소, 필드 최소화
     const response = await getAI().models.generateContent({
       model: "gemini-3-flash-preview",
-      contents: [{ role: "user", parts: [{ text: `당신은 한국 여행 블로그 분석 전문가입니다.
-
-다음 검색어로 티스토리 블로그를 검색하고, 여행 정보를 추출해주세요:
-"${searchQuery}"
-
-응답을 다음 JSON 형식으로 제공해주세요:
+      contents: [{ role: "user", parts: [{ text: `티스토리 블로그 검색: "${searchQuery}"
+JSON 반환:
 {
-  "posts": [
-    {
-      "title": "블로그 포스트 제목",
-      "url": "https://xxx.tistory.com/xxx",
-      "description": "포스트 요약 (200자 이내)",
-      "blogName": "블로그 이름",
-      "postDate": "2025-01-01"
-    }
-  ],
-  "extractedPlaces": [
-    {
-      "placeName": "장소명 (원어 포함)",
-      "placeType": "restaurant|cafe|attraction|hotel|other",
-      "address": "주소 (가능한 경우)",
-      "sentiment": "positive|neutral|negative",
-      "rating": 8.5,
-      "priceInfo": "가격 정보 (예: 1인 30유로)",
-      "tips": ["팁1", "팁2"],
-      "keywords": ["분위기", "맛", "서비스"]
-    }
-  ],
+  "posts": [{"title":"제목","url":"URL","description":"요약 100자"}],
   "confidenceScore": 0.8
 }
-
-중요:
-- 실제 존재하는 티스토리 블로그 포스트만 포함해주세요
-- 최근 2년 이내 포스트 우선
-- 최대 10개 포스트, 최대 20개 장소
-- 정보가 없으면 빈 배열 반환` }] }],
+최대 5개. 없으면 빈 배열.` }] }],
       config: {
-        tools: [{ googleSearch: {} }],
+        tools: getSearchTools("tistory"),
       },
     });
 
     const text = response.text || "";
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    const parsed = safeParseJSON<any>(text, "TistoryCrawler-search");
     
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]);
+    if (parsed) {
       return {
-        posts: parsed.posts || [],
-        extractedPlaces: parsed.extractedPlaces || [],
+        posts: Array.isArray(parsed.posts) ? parsed.posts : [],
+        extractedPlaces: [], // DB에 이미 있는 데이터와 중복 방지
         confidenceScore: parsed.confidenceScore || 0.5,
       };
     }
@@ -173,7 +146,7 @@ JSON 형식으로 응답해주세요:
 
 최대 5개 리뷰, 실제 블로그 포스트만 포함해주세요.` }] }],
       config: {
-        tools: [{ googleSearch: {} }],
+        tools: getSearchTools("tistory"),
       },
     });
 

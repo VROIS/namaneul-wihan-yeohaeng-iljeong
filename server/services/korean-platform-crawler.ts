@@ -11,6 +11,8 @@
 import { db } from "../db";
 import { placePrices, places, cities } from "../../shared/schema";
 import { eq, and, gte, desc } from "drizzle-orm";
+import { getSearchTools } from "./gemini-search-limiter";
+import { safeParseJSON, safePrice, safeNumber, safeRating, safeCurrency, safeConfidence, safeString, safeDbOperation } from "./crawler-utils";
 
 const GEMINI_MODEL = "gemini-3-flash-preview";
 const CACHE_DURATION_HOURS = 24;
@@ -91,31 +93,28 @@ async function searchPlatformWithGemini(
 - 상품이 없으면 {"found": false} 반환
 - 반드시 유효한 JSON만 반환`,
       config: {
-        tools: [{ googleSearch: {} }],
+        tools: getSearchTools("korean-platform"),
       },
     });
 
     const text = response.text || "";
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    const parsed = safeParseJSON<any>(text, `KoreanPlatform-${platform.name}`);
     
-    if (jsonMatch) {
-      try {
-        const parsed = JSON.parse(jsonMatch[0]);
-        
-        if (parsed.found && (parsed.price || parsed.reviewCount)) {
-          return {
-            platform: platform.id,
-            price: parsed.price || null,
-            currency: parsed.currency || "KRW",
-            reviewCount: parsed.reviewCount || 0,
-            rating: parsed.rating || null,
-            productName: parsed.productName || null,
-            url: parsed.url || null,
-            confidence: parsed.confidence || 0.5,
-          };
-        }
-      } catch (parseErr) {
-        console.warn(`[KoreanPlatform] JSON 파싱 실패 (${platform.name}, ${placeName}):`, parseErr);
+    if (parsed && parsed.found) {
+      const price = safePrice(parsed.price);
+      const reviewCount = safeNumber(parsed.reviewCount, 0, 0);
+      // price가 0이어도 유효 (무료 입장), reviewCount만 있어도 유효
+      if (price !== null || (reviewCount !== null && reviewCount > 0)) {
+        return {
+          platform: platform.id,
+          price: price,
+          currency: safeCurrency(parsed.currency, "KRW"),
+          reviewCount: reviewCount ?? 0,
+          rating: safeRating(parsed.rating, 5),
+          productName: safeString(parsed.productName, null, 200),
+          url: safeString(parsed.url),
+          confidence: safeConfidence(parsed.confidence, 0.5),
+        };
       }
     }
 
