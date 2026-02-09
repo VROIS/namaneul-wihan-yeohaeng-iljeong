@@ -13,15 +13,15 @@
 
 | 항목 | 내용 |
 |------|------|
-| **마지막 작업일** | 2026-02-09 (월) 새벽~오전 |
-| **마지막 작업 내용** | **nubiReason 차별화 선정이유 구현 + 우버블랙 시간제 비교 전면 교체** |
-| **다음 해야 할 작업** | **city_transport_fares 테이블 생성 → 60개 도시 교통요금 수집 → 프론트엔드 nubiReason 표시** |
-| **환경 상태** | node_modules 설치 완료, 로컬 빌드+테스트 통과 (esbuild CJS 750kb) |
-| **개발 프로세스** | 로컬 테스트 우선. 내부 로직 완벽히 → 이후 배포 |
-| **주의사항** | ⚠️ Google Maps API 키 미설정 (이동거리 추정치), Atmosphere 필드 제거 완료 |
+| **마지막 작업일** | 2026-02-09 (일) 오후 |
+| **마지막 작업 내용** | **place-linker + 10개 크롤러 연쇄 파이프라인 구현 + 파리 크롤링 실행** |
+| **다음 해야 할 작업** | **파리 크롤링 결과 확인 → 일정생성 테스트 → 프론트엔드 nubiReason 표시** |
+| **환경 상태** | node_modules 설치 완료, esbuild CJS 빌드 (4MB) |
+| **개발 프로세스** | 구현→기입→내부테스트→커밋배포→사용자입력2개테스트→결과보고 |
+| **주의사항** | ⚠️ Google Places SearchNearby 일일 500회 제한 (오늘 소진). 내일 리셋 후 파리 나머지 시딩 |
 | **현재 브랜치** | cursor-dev |
 | **참조 규약** | `docs/AGENT_PROTOCOL.md` (에이전트 간 통신 프로토콜, googlePlaceId 기반) |
-| **핵심 아키텍처 변경** | 4-Agent 순차 → **Pipeline V3 (2단계 병렬)** 로 교체 완료 |
+| **핵심 아키텍처 변경** | Pipeline V3 + **시드 파이프라인 (시딩→10개크롤러→place-linker→점수집계)** |
 
 ### ⚡ 지금 해야 할 일 (최우선, 순서대로)
 
@@ -36,7 +36,7 @@
 | 5 | **transport-pricing-service 하드코딩→DB 조회 변경** | 예정 | 파리 하드코딩 제거, 도시별 DB 조회로 전환 |
 | 6 | **주 1회 교통요금 자동 업데이트 스케줄러** | 예정 | data-scheduler에 transport_fare_sync 추가 |
 | 7 | **미등록 도시: 실시간 API → DB 캐시** | 예정 | 첫 요청시 Gemini로 조회 → DB 저장 → 이후 캐시 |
-| 8 | **🔥 한국인 선호 데이터 매칭 서비스 (place-linker)** | 최우선 | 아래 '한국인 선호 데이터 파이프라인' 참조 |
+| 8 | ~~**🔥 한국인 선호 데이터 매칭 서비스 (place-linker)**~~ | ✅ 완료 | `place-linker.ts` 구현 + 10개 크롤러 연쇄 + 자동 스케줄러 |
 | 9 | **프론트엔드 nubiReason + 교통비 표시 구현** | 예정 | nubiReason 크게/진하게 + A/B 교통비 분기 표시 |
 | 10 | **가이드 예약 유도 폼** | 예정 | 업셀 클릭시 장점 설명 + 예약 폼 |
 
@@ -63,16 +63,16 @@
 | 9 | **트립닷컴** | 개인여행앱 상위 3위 | 인기 상품, 리뷰 수, 평점 |
 | 10 | **클룩** | 개인여행앱 상위 3위 | 인기 상품, 리뷰 수, 평점 |
 
-#### 🔗 현재 문제: placeId 매칭 끊김
+#### ✅ 해결: place-linker로 placeId 매칭 자동화 (2026-02-09 완료)
 
 ```
-크롤러가 수집한 "에펠탑" (텍스트)
-        ↓ ❌ 여기가 끊김!
-places 테이블의 "Eiffel Tower" (id: 123, aliases: ["에펠탑"])
-        ↓
-calculateKoreanPopularity에서 placeId=123 조회
-        ↓
-인기도 점수 산출 → nubiReason 생성
+[1] Place Seeder: Google Places API → places 테이블에 시드 (일일 2도시)
+[2] 10개 크롤러 연쇄 실행 (시딩 직후 자동):
+    A그룹 (placeId 자동): TripAdvisor, Michelin, 가격, 포토스팟, 한국플랫폼, 패키지투어
+    B그룹 (placeName 기반): Instagram auto-collector, Naver Blog, Tistory
+[3] Place Linker: B그룹 placeName → places.placeId 퍼지 매칭
+[4] Score Aggregation: buzzScore/finalScore 재계산
+→ calculateKoreanPopularity → nubiReason 자동 생성
 ```
 
 | 크롤러 | 데이터 수집 | placeId 매칭 | 결과 |

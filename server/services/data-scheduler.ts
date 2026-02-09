@@ -16,11 +16,12 @@ export class DataScheduler {
   private tasks: Map<string, CronTask> = new Map();
   private isRunning: boolean = false;
 
-  // 💰 [비용 보호] Google Places API 폭탄 방지 - place_seed_sync 차단
-  // 이 크롤러만 Google Places API를 직접 호출하여 월 $1,000+ 과금 유발
-  // 나머지 13개 크롤러는 Gemini/무료 API만 사용하므로 안전
+  // 💰 [비용 관리] place_seed_sync는 일일 도시 수 제한으로 비용 보호
+  // 도시당 ~$1.89 (Google Places API) → $200/월 무료 크레딧 내 운영
+  // 하루 2도시 × 30일 = $113/월 (안전)
   private static readonly BLOCKED_TASKS: Set<string> = new Set([
-    "place_seed_sync", // Google Places API 직접 호출 → $1,000+ 폭탄 주범
+    // place_seed_sync 차단 해제 (2026-02-09): 일일 2도시 제한으로 안전하게 운영
+    // 다시 차단하려면: BLOCKED_TASKS.add("place_seed_sync")
   ]);
 
   async initialize(): Promise<void> {
@@ -99,8 +100,11 @@ export class DataScheduler {
     // 🎯 점수 집계: 하루 1번 (모든 크롤러 완료 후)
     this.scheduleTask("score_aggregation", "0 22 * * *");    // 07:00 KST (모든 크롤러 끝난 후)
     
-    // 🌱 장소 시딩: ⛔ 비용 보호로 차단 (Google Places API 폭탄 주범)
-    // this.scheduleTask("place_seed_sync", "0 */6 * * *");
+    // 🌱 장소 시딩: 매일 새벽 1회 (일일 2도시 제한, $200/월 무료 내 안전)
+    this.scheduleTask("place_seed_sync", "0 18 * * *");  // KST 03:00
+    
+    // 🔗 Place Linker: 크롤러 데이터 placeId 매칭 (점수 집계 30분 전)
+    this.scheduleTask("place_link_sync", "30 21 * * *");  // KST 06:30
     
     console.log("[Scheduler] ✅ 자동 수집 스케줄 설정 완료:");
     console.log("  - 날씨: 매 시간");
@@ -112,8 +116,9 @@ export class DataScheduler {
     console.log("  - 한국 플랫폼: 하루 1번");
     console.log("  - 패키지 투어 검증: 하루 1번");
     console.log("  - 포토스팟 점수: 하루 1번");
-    console.log("  - 🎯 점수 집계: 하루 1번 (07:00 KST)");
-    console.log("  - ⛔ 장소 시딩: 차단됨 (Google Places API 비용 보호)");
+    console.log("  - 🌱 장소 시딩: 매일 03:00 KST (일일 2도시)");
+    console.log("  - 🔗 Place Linker: 매일 06:30 KST");
+    console.log("  - 🎯 점수 집계: 매일 07:00 KST");
   }
 
   private scheduleTask(taskName: string, cronExpression: string): void {
@@ -190,6 +195,9 @@ export class DataScheduler {
           break;
         case "place_seed_sync":
           result = await this.runPlaceSeedSync();
+          break;
+        case "place_link_sync":
+          result = await this.runPlaceLinkSync();
           break;
         case "score_aggregation":
           result = await this.runScoreAggregation();
@@ -444,12 +452,28 @@ export class DataScheduler {
   }
 
   private async runPlaceSeedSync(): Promise<{ success: boolean; itemsProcessed: number; errors: string[] }> {
+    // 💰 일일 최대 2도시 제한 (Google Places API $200/월 무료 내 안전)
+    const DAILY_CITY_LIMIT = 2;
     try {
       const { placeSeeder } = await import("./place-seeder");
-      const result = await placeSeeder.seedAllPendingCities();
+      const result = await placeSeeder.seedAllPendingCities(DAILY_CITY_LIMIT);
       return {
         success: true,
         itemsProcessed: result.totalSeeded,
+        errors: [],
+      };
+    } catch (error: any) {
+      return { success: false, itemsProcessed: 0, errors: [error.message] };
+    }
+  }
+
+  private async runPlaceLinkSync(): Promise<{ success: boolean; itemsProcessed: number; errors: string[] }> {
+    try {
+      const { linkAllPendingData } = await import("./place-linker");
+      const result = await linkAllPendingData();
+      return {
+        success: true,
+        itemsProcessed: result.totalLinked,
         errors: [],
       };
     } catch (error: any) {

@@ -87,7 +87,8 @@ export const places = pgTable("places", {
   editorialSummary: text("editorial_summary"),
   businessStatus: text("business_status"),
 
-  rating: real("rating"), // Google Places API 평점 (1.0~5.0)
+  // rating 컬럼은 실제 DB에서 삭제됨 → buzzScore(=rating*2, 0~10)로 대체
+  // rating: real("rating"),
   userRatingCount: integer("user_rating_count"),
 
   delivery: boolean("delivery"),

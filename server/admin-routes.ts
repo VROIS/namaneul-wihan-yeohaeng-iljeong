@@ -1338,6 +1338,33 @@ export function registerAdminRoutes(app: Express) {
     }
   });
 
+  // 도시별 10개 크롤러 연쇄 실행 (시딩 없이 기존 장소 대상)
+  app.post("/api/admin/crawl/city", async (req, res) => {
+    try {
+      const { cityId } = req.body;
+      if (!cityId) return res.status(400).json({ success: false, error: "cityId 필요" });
+      const { placeSeeder } = await import("./services/place-seeder");
+      res.json({ success: true, message: `도시 ${cityId} 크롤러 연쇄 실행 시작 (백그라운드)` });
+      placeSeeder.runChainedCrawlers(cityId, `city-${cityId}`).then(() => {
+        console.log(`[Admin] 도시 ${cityId} 크롤러 완료`);
+      }).catch(e => console.error(`[Admin] 크롤러 실패:`, e));
+    } catch (error: any) {
+      res.json({ success: false, error: error.message });
+    }
+  });
+
+  // Place Linker 수동 실행
+  app.post("/api/admin/place-linker/run", async (req, res) => {
+    try {
+      const { cityId } = req.body;
+      const { linkAllPendingData, linkDataForCity } = await import("./services/place-linker");
+      const result = cityId ? await linkDataForCity(cityId) : await linkAllPendingData();
+      res.json({ success: true, ...result });
+    } catch (error: any) {
+      res.json({ success: false, error: error.message });
+    }
+  });
+
   // ========================================
   // 기본 데이터 시드 (디폴트 채널/소스)
   // ========================================

@@ -46,7 +46,6 @@ export async function aggregateAllScores(): Promise<AggregationResult> {
     const allPlaces = await db!.select({
       id: places.id,
       name: places.name,
-      rating: places.rating,
       userRatingCount: places.userRatingCount,
       vibeScore: places.vibeScore,
       buzzScore: places.buzzScore,
@@ -102,8 +101,9 @@ export async function aggregateAllScores(): Promise<AggregationResult> {
  */
 async function calculatePlaceScores(placeId: number) {
   // 1. Google Places 기본 데이터 (places 테이블에서)
+  // rating 컬럼 삭제됨 → buzzScore로 대체 (buzzScore = rating * 2, 0~10 범위)
   const [placeData] = await db!.select({
-    rating: places.rating,
+    buzzScore: places.buzzScore,
     userRatingCount: places.userRatingCount,
     realityPenalty: places.realityPenalty,
     vibeScore: places.vibeScore,
@@ -154,9 +154,9 @@ async function calculatePlaceScores(placeId: number) {
   let buzzScore = 0;
   let buzzComponents = 0;
 
-  // Google component (0-10)
-  if (placeData?.rating) {
-    buzzScore += (placeData.rating / 5) * 10 * 0.4;
+  // Google component (0-10): buzzScore는 이미 0~10 범위
+  if (placeData?.buzzScore) {
+    buzzScore += placeData.buzzScore * 0.4;
     buzzComponents += 0.4;
   }
 

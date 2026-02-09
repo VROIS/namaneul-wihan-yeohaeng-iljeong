@@ -229,7 +229,7 @@ export class GooglePlacesFetcher {
     radiusMeters: number = 5000
   ): Promise<GooglePlaceResult[]> {
     const typeMap: Record<string, string[]> = {
-      restaurant: ["restaurant", "food"],
+      restaurant: ["restaurant"],  // "food"는 Places API(New)에서 미지원
       attraction: ["tourist_attraction", "museum", "art_gallery", "park", "church", "historical_landmark"],
       cafe: ["cafe", "coffee_shop"],
       hotel: ["hotel", "lodging"],
@@ -373,7 +373,7 @@ export class GooglePlacesFetcher {
       openingHours: Object.keys(openingHours).length > 0 ? openingHours : undefined,
       
       // ✅ 이전에 누락되었던 필수 필드들 (Basic 등급, 추가 비용 없음)
-      rating: googlePlace.rating ?? undefined,
+      // rating 컬럼은 실제 DB에서 삭제됨 → buzzScore로 대체
       websiteUri: googlePlace.websiteUri ?? undefined,
       googleMapsUri: googlePlace.googleMapsUri,
       phoneNumber: (googlePlace as any).internationalPhoneNumber ?? undefined,
@@ -395,7 +395,6 @@ export class GooglePlacesFetcher {
       // ✅ 기존 장소도 최신 데이터로 업데이트 (이전에는 건너뛰었음)
       try {
         await storage.updatePlaceData(placeId, {
-          rating: placeData.rating,
           userRatingCount: placeData.userRatingCount,
           googleMapsUri: placeData.googleMapsUri,
           editorialSummary: placeData.editorialSummary,

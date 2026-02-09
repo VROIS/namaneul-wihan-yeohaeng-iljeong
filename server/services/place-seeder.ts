@@ -316,7 +316,7 @@ export class PlaceSeeder {
    * 시딩 안 된 도시 자동 처리 (연쇄 실행)
    * - 시딩 완료 후 기존 크롤러도 연쇄 실행
    */
-  async seedAllPendingCities(): Promise<{ totalSeeded: number; citiesProcessed: number }> {
+  async seedAllPendingCities(maxCities?: number): Promise<{ totalSeeded: number; citiesProcessed: number }> {
     if (this.isRunning) {
       console.log("[PlaceSeeder] 이미 시딩 진행 중...");
       return { totalSeeded: 0, citiesProcessed: 0 };
@@ -376,7 +376,12 @@ export class PlaceSeeder {
       console.log(`  3순위 유럽30: ${euroPending.length > 0 ? euroPending.length + "개 대기" : "✅ 완료"}`);
       console.log(`  총 대기: ${pendingCities.length}개`);
 
-      for (const city of pendingCities) {
+      const citiesToProcess = maxCities ? pendingCities.slice(0, maxCities) : pendingCities;
+      if (maxCities) {
+        console.log(`[PlaceSeeder] 📌 일일 제한: ${maxCities}개 도시 (총 ${pendingCities.length}개 대기 중 ${citiesToProcess.length}개 처리)`);
+      }
+
+      for (const city of citiesToProcess) {
         this.progress.current = city.name;
         console.log(`\n[PlaceSeeder] === [${this.progress.completed + 1}/${this.progress.total}] ${city.name} 시작 ===`);
         
@@ -420,81 +425,152 @@ export class PlaceSeeder {
   }
 
   /**
-   * 시딩 완료된 도시에 대해 기존 크롤러 연쇄 실행
-   * TripAdvisor -> Michelin -> 가격 -> 포토스팟 -> 한국플랫폼 -> 패키지투어
+   * 시딩 완료된 도시에 대해 10개 크롤러 + place-linker + score 집계 연쇄 실행
+   * 
+   * A그룹 (placeId 직접 확보): TripAdvisor, Michelin, 가격, 포토스팟, 한국플랫폼, 패키지투어
+   * B그룹 (place-linker 필요): Instagram auto-collector, YouTube, Naver Blog, Tistory
+   * 마무리: Place Linker → Score Aggregation
    */
-  private async runChainedCrawlers(cityId: number, cityName: string): Promise<void> {
-    console.log(`[PlaceSeeder] ${cityName} - 크롤러 연쇄 실행 시작...`);
+  async runChainedCrawlers(cityId: number, cityName: string): Promise<void> {
+    console.log(`\n[Crawlers] ============================`);
+    console.log(`[Crawlers] ${cityName} (id:${cityId}) - 10개 크롤러 연쇄 실행`);
+    console.log(`[Crawlers] ============================`);
     
-    // 해당 도시의 장소 수 확인
     const cityPlaces = await storage.getPlacesByCity(cityId);
     if (cityPlaces.length === 0) {
-      console.log(`[PlaceSeeder] ${cityName} - 장소 없음, 크롤러 스킵`);
+      console.log(`[Crawlers] ${cityName} - 장소 없음, 스킵`);
       return;
     }
-    
-    console.log(`[PlaceSeeder] ${cityName} - ${cityPlaces.length}개 장소에 대해 크롤러 실행`);
+    console.log(`[Crawlers] ${cityName} - ${cityPlaces.length}개 장소 대상\n`);
 
-    // 1. TripAdvisor
+    // ═══════════════════════════════════════
+    // A그룹: places.id 기반 직접 크롤링
+    // ═══════════════════════════════════════
+
+    // 1. TripAdvisor (평점/리뷰/순위)
     try {
       const { crawlTripAdvisorForCity } = await import("./tripadvisor-crawler");
       const result = await crawlTripAdvisorForCity(cityId);
-      console.log(`[PlaceSeeder]   ✓ TripAdvisor: ${result?.collected || 0}개 처리`);
+      console.log(`[Crawlers] ✅ 1/10 TripAdvisor: ${result?.collected || 0}개`);
     } catch (e: any) {
-      console.warn(`[PlaceSeeder]   ✗ TripAdvisor 실패:`, e.message);
+      console.warn(`[Crawlers] ❌ 1/10 TripAdvisor:`, e.message);
     }
     await delay(1000);
 
-    // 2. Michelin (레스토랑/카페만)
+    // 2. Michelin (레스토랑 등급)
     try {
       const { crawlMichelinForCity } = await import("./michelin-crawler");
       const result = await crawlMichelinForCity(cityId);
-      console.log(`[PlaceSeeder]   ✓ Michelin: ${result?.collected || 0}개 처리`);
+      console.log(`[Crawlers] ✅ 2/10 Michelin: ${result?.collected || 0}개`);
     } catch (e: any) {
-      console.warn(`[PlaceSeeder]   ✗ Michelin 실패:`, e.message);
+      console.warn(`[Crawlers] ❌ 2/10 Michelin:`, e.message);
     }
     await delay(1000);
 
-    // 3. 가격 크롤러
+    // 3. 가격 (입장료/식사비)
     try {
       const { crawlPricesForCity } = await import("./price-crawler");
       const result = await crawlPricesForCity(cityId);
-      console.log(`[PlaceSeeder]   ✓ 가격: ${result?.pricesCollected || 0}개 처리`);
+      console.log(`[Crawlers] ✅ 3/10 가격: ${result?.pricesCollected || 0}개`);
     } catch (e: any) {
-      console.warn(`[PlaceSeeder]   ✗ 가격 크롤러 실패:`, e.message);
+      console.warn(`[Crawlers] ❌ 3/10 가격:`, e.message);
     }
     await delay(1000);
 
-    // 4. 포토스팟
-    try {
-      const { scorePhotospotsForCity } = await import("./photospot-scorer");
-      const result = await scorePhotospotsForCity(cityId);
-      console.log(`[PlaceSeeder]   ✓ 포토스팟: ${result?.scored || 0}개 처리`);
-    } catch (e: any) {
-      console.warn(`[PlaceSeeder]   ✗ 포토스팟 실패:`, e.message);
-    }
-    await delay(1000);
-
-    // 5. 한국 플랫폼
+    // 4. 한국플랫폼 (마이리얼트립/클룩/트립닷컴)
     try {
       const { crawlKoreanPlatformsForCity } = await import("./korean-platform-crawler");
       const result = await crawlKoreanPlatformsForCity(cityId);
-      console.log(`[PlaceSeeder]   ✓ 한국플랫폼: ${result?.collected || 0}개 처리`);
+      console.log(`[Crawlers] ✅ 4/10 한국플랫폼: ${result?.collected || 0}개`);
     } catch (e: any) {
-      console.warn(`[PlaceSeeder]   ✗ 한국플랫폼 실패:`, e.message);
+      console.warn(`[Crawlers] ❌ 4/10 한국플랫폼:`, e.message);
     }
     await delay(1000);
 
-    // 6. 패키지 투어
+    // 5. 패키지투어 (하나/모두투어 포함 여부)
     try {
       const { validatePackageToursForCity } = await import("./package-tour-validator");
       const result = await validatePackageToursForCity(cityId);
-      console.log(`[PlaceSeeder]   ✓ 패키지투어: ${result?.validated || 0}개 처리`);
+      console.log(`[Crawlers] ✅ 5/10 패키지투어: ${result?.validated || 0}개`);
     } catch (e: any) {
-      console.warn(`[PlaceSeeder]   ✗ 패키지투어 실패:`, e.message);
+      console.warn(`[Crawlers] ❌ 5/10 패키지투어:`, e.message);
+    }
+    await delay(1000);
+
+    // 6. 포토스팟 (사진 점수)
+    try {
+      const { scorePhotospotsForCity } = await import("./photospot-scorer");
+      const result = await scorePhotospotsForCity(cityId);
+      console.log(`[Crawlers] ✅ 6/10 포토스팟: ${result?.scored || 0}개`);
+    } catch (e: any) {
+      console.warn(`[Crawlers] ❌ 6/10 포토스팟:`, e.message);
+    }
+    await delay(1000);
+
+    // ═══════════════════════════════════════
+    // B그룹: 한국인 선호 데이터 (placeId 자동연결)
+    // ═══════════════════════════════════════
+
+    // 7. Instagram (auto-collector: 장소별 해시태그 생성 + 수집 + placeId 연결)
+    try {
+      const { instagramAutoCollector } = await import("./instagram-auto-collector");
+      const result = await instagramAutoCollector.collectForCity(cityId);
+      console.log(`[Crawlers] ✅ 7/10 Instagram: ${result.placesProcessed}개 장소, ${result.totalPostCount.toLocaleString()} 포스트`);
+    } catch (e: any) {
+      console.warn(`[Crawlers] ❌ 7/10 Instagram:`, e.message);
+    }
+    await delay(1000);
+
+    // 8. Naver Blog (도시 키워드 검색)
+    try {
+      const { crawlBlogsForCity } = await import("./naver-blog-crawler");
+      const result = await crawlBlogsForCity(cityId);
+      console.log(`[Crawlers] ✅ 8/10 Naver Blog: ${result?.postsCollected || 0}개 포스트`);
+    } catch (e: any) {
+      console.warn(`[Crawlers] ❌ 8/10 Naver Blog:`, e.message);
+    }
+    await delay(1000);
+
+    // 9. Tistory (도시 키워드 검색)
+    try {
+      const { crawlTistoryForCity } = await import("./tistory-crawler");
+      const result = await crawlTistoryForCity(cityId);
+      console.log(`[Crawlers] ✅ 9/10 Tistory: ${result?.totalPosts || 0}개 포스트`);
+    } catch (e: any) {
+      console.warn(`[Crawlers] ❌ 9/10 Tistory:`, e.message);
+    }
+    await delay(1000);
+
+    // 10. YouTube (등록된 채널에서 도시 관련 장소 추출 - 전체 sync 아님, 비용 절감)
+    // YouTube는 채널 기반이라 도시별 실행이 아닌 전체 sync
+    // → 여기서는 스킵, 스케줄러의 youtube_sync에 위임
+    console.log(`[Crawlers] ⏩ 10/10 YouTube: 스케줄러 위임 (채널 기반)`);
+
+    // ═══════════════════════════════════════
+    // 마무리: Place Linker + Score Aggregation
+    // ═══════════════════════════════════════
+
+    // Place Linker: B그룹 데이터의 placeName → placeId 매칭
+    try {
+      const { linkDataForCity } = await import("./place-linker");
+      const linkResult = await linkDataForCity(cityId);
+      console.log(`[Crawlers] 🔗 Place Linker: ${linkResult.linked}개 연결, ${linkResult.unmatched}개 미매칭`);
+    } catch (e: any) {
+      console.warn(`[Crawlers] ❌ Place Linker:`, e.message);
     }
 
-    console.log(`[PlaceSeeder] ${cityName} - 크롤러 연쇄 실행 완료`);
+    // Score Aggregation: buzzScore/finalScore 재계산
+    try {
+      const { aggregateAllScores } = await import("./score-aggregator");
+      const result = await aggregateAllScores();
+      console.log(`[Crawlers] 🎯 Score Aggregation: ${result.updated}개 장소 점수 업데이트`);
+    } catch (e: any) {
+      console.warn(`[Crawlers] ❌ Score Aggregation:`, e.message);
+    }
+
+    console.log(`\n[Crawlers] ============================`);
+    console.log(`[Crawlers] ${cityName} - 전체 크롤러 완료!`);
+    console.log(`[Crawlers] ============================\n`);
   }
 
   /**
