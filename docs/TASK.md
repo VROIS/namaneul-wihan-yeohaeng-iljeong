@@ -77,10 +77,16 @@
 
 | 크롤러 | 데이터 수집 | placeId 매칭 | 결과 |
 |--------|-----------|-------------|------|
-| 유튜브 | ✅ 대사에서 장소명 추출 | ❌ placeId 안 넣음 | 인기도 0점 |
-| 블로그 | ✅ 제목/내용에서 장소명 추출 | ❌ placeId 안 넣음 | 인기도 0점 |
-| 인스타 | ✅ 해시태그 수 수집 | ❌ linkedPlaceId 안 넣음 | 도시 fallback만 |
-| 패키지 | ✅ Gemini 검색 | ✅ placeId 정상 | 데이터 부족 |
+| 유튜브 | ✅ 대사에서 장소명 추출 | ✅ place-linker 자동 매칭 | 인기도 반영 |
+| 블로그 | ✅ 제목/내용에서 장소명 추출 | ✅ place-linker 자동 매칭 | 인기도 반영 |
+| 인스타 | ✅ 해시태그 수 수집 | ✅ auto-collector + place-linker | 인기도 반영 |
+| 패키지 | ✅ Gemini 검색 | ✅ placeId 정상 | 정상 |
+| TripAdvisor | ✅ 평점/리뷰/순위 | ✅ placeId 직접 | 정상 |
+| Michelin | ✅ 등급 | ✅ placeId 직접 | 정상 |
+| 가격 | ✅ 입장료/식사비 | ✅ placeId 직접 | 정상 |
+| 포토스팟 | ✅ 사진 점수 | ✅ placeId 직접 | 정상 |
+| 한국플랫폼 | ✅ 마이리얼/클룩/트립닷컴 | ✅ placeId 직접 | 정상 |
+| Tistory | ✅ 블로그 크롤링 | ✅ place-linker 자동 매칭 | 인기도 반영 |
 
 #### 🛠️ 해결: place-linker 서비스 구현
 
@@ -956,10 +962,72 @@ Reality Penalty (0-5) : 날씨, 안전, 혼잡도 패널티
 
 ---
 
+## 🔧 후임자 운영 가이드 (2026-02-09 작성)
+
+### 일상 운영 (자동화됨, 모니터링만 필요)
+
+| 시간 (KST) | 작업 | 비고 |
+|------------|------|------|
+| 03:00 | place_seed_sync | 일일 2도시 자동 시딩 + 10개 크롤러 연쇄 |
+| 06:30 | place_link_sync | B그룹 크롤러 placeName → placeId 매칭 |
+| 07:00 | score_aggregation | buzzScore/finalScore 재계산 |
+| 매 시간 | weather_sync | 날씨 업데이트 |
+| 06:00/18:00 | youtube/blog/tistory | 한국 여행 유튜버 + 블로그 동기화 |
+| 07:00/19:00 | instagram | 해시태그/위치 수집 |
+
+### 수동 명령어
+
+```bash
+# 1. 특정 도시 크롤러 수동 실행
+curl -X POST http://localhost:8082/api/admin/crawl/city -H "Content-Type: application/json" -d '{"cityId": 19}'
+
+# 2. Place Linker 수동 실행
+curl -X POST http://localhost:8082/api/admin/place-linker/run -H "Content-Type: application/json" -d '{}'
+
+# 3. 특정 도시 시딩
+curl -X POST http://localhost:8082/api/admin/seed/places/city -H "Content-Type: application/json" -d '{"cityId": 19}'
+
+# 4. 시딩 현황 조회
+curl http://localhost:8082/api/admin/seed/places/status
+
+# 5. 일정 생성 테스트
+curl -X POST http://localhost:8082/api/routes/generate -H "Content-Type: application/json" -d '{"destination":"paris","startDate":"2026-03-01","endDate":"2026-03-05","travelers":4,"travelStyle":"Luxury","companionType":"Family","vibes":["Culture","Foodie","Romantic"],"travelPace":"Normal","mobilityStyle":"Minimal"}'
+```
+
+### 핵심 파일 구조
+
+| 파일 | 역할 |
+|------|------|
+| `server/services/agents/pipeline-v3.ts` | 일정 생성 메인 파이프라인 (Gemini → DB 보강) |
+| `server/services/place-seeder.ts` | 도시별 장소 시딩 + 10개 크롤러 연쇄 실행 |
+| `server/services/place-linker.ts` | 크롤러 데이터 placeId 매칭 (YouTube/Blog/Instagram) |
+| `server/services/data-scheduler.ts` | 모든 자동 스케줄 관리 |
+| `server/services/transport-pricing-service.ts` | 교통비 A/B 카테고리 + 우버블랙 비교 |
+| `server/services/score-aggregator.ts` | buzzScore/finalScore 집계 |
+| `server/services/itinerary-generator.ts` | 일정 생성 오케스트레이터 |
+| `shared/schema.ts` | DB 스키마 정의 (Drizzle ORM) |
+| `server/admin-routes.ts` | 관리자 API 엔드포인트 |
+
+### 비용 관리
+
+| 항목 | 한도 | 현재 사용 |
+|------|------|----------|
+| Google Places API | $200/월 무료 | 도시당 ~$1.89 × 2도시/일 |
+| Gemini 2.0 Flash | 무료 (RPD 1500) | 일정생성 + 크롤러 |
+| Supabase PostgreSQL | Free tier | 500MB |
+
+### 테스트 결과 (2026-02-09)
+
+| 테스트 | 입력 | 결과 | 소요시간 |
+|--------|------|------|----------|
+| A (가이드) | 4인가족/Luxury/파리5일 | 30곳, €135/인/일, 우버비교 포함 | 34초 |
+| B (대중교통) | 2인커플/Reasonable/파리3일 | 16곳, €23/인/일, 업셀 €270/일 | 20초 |
+
 ## 변경 이력
 
 | 날짜 | 변경 내용 | 작업자 |
 |------|-----------|--------|
+| 2026-02-09 오후 | **place-linker + 10개 크롤러 파이프라인 + 자동 스케줄러 + 테스트 통과** (place-linker.ts 신규, runChainedCrawlers 10개 확장, place_seed_sync 해제, JSON 파싱 강화, travelStyle 정규화) | Cursor AI |
 | 2026-02-09 새벽 | **Pipeline V3 (2단계) 구현 + 교통비 카테고리 A/B + OTA 방식 1인1일 비용** (4-Agent→2-Step 전환, transport-pricing-service 전면 리팩토링, 가이드 구간 "전용차량이동", 대중교통 상세+업셀, 가용시간 자동계산, 지방이동 50% 할증) | Cursor AI |
 | 2026-02-08 야간 | **에이전트 통합 규약 + DB 확장 + 71개 도시 + 시더 최적화** (AGENT_PROTOCOL.md, nameEn/aliases 마이그레이션, 프랑스28+유럽4 추가, POPULARITY 정렬, 87% 비용 절감) | Cursor AI |
 | 2026-02-08 | **4+1 에이전트 파이프라인 구현 완료** (AG1~AG4+오케스트레이터, Gemini 80% 축소, 환율/비용/검증 추가) | Cursor AI |
