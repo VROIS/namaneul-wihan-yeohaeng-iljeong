@@ -98,8 +98,12 @@ export interface PlaceResult {
   isPackageTourIncluded?: boolean;
   packageMentionCount?: number;
   finalScore?: number;
+  buzzScore?: number;
+  userRatingCount?: number;
   selectionReasons?: string[];
   confidenceLevel?: 'high' | 'medium' | 'low' | 'minimal';
+  // ⭐ 차별화 선정이유 (우리 데이터 기반, 프론트엔드에서 크게/진하게 표시)
+  nubiReason?: string | null;
 }
 
 // ===== 상수 =====

@@ -1964,17 +1964,17 @@ function optimizeCityOrder(cityGroups: Map<string, PlaceResult[]>): string[] {
 }
 
 /**
- * ===== 4+1 에이전트 파이프라인 오케스트레이터 =====
+ * ===== Pipeline V3: 2단계 파이프라인 진입점 =====
  * 
- * 기존 모놀리식 generateItinerary()를 대체
- * AG1(뼈대) → AG2(Gemini)||AG3pre(DB) → AG3(매칭) → AG4(실시간)
+ * Step 1: Gemini 완전 일정 생성 (일차별/동선별, 3~5초)
+ * Step 2: 데이터 채우기 (DB매칭+enrichment+실시간, 2~4초 병렬)
  * 
- * 목표: 40초 → 8~12초 (Gemini 프롬프트 간소화 + 병렬화)
+ * 기존 4-Agent 순차 12~18초 → 2단계 병렬 5~9초
  */
 export async function generateItinerary(formData: TripFormData) {
-  // 새 파이프라인 호출 (순환 참조 방지를 위해 동적 import)
-  const { runPipeline } = await import('./agents/orchestrator');
-  return runPipeline(formData as any);
+  // Pipeline V3 호출 (순환 참조 방지를 위해 동적 import)
+  const { runPipelineV3 } = await import('./agents/pipeline-v3');
+  return runPipelineV3(formData as any);
 }
 
 /**
@@ -2215,16 +2215,31 @@ async function distributePlacesWithUserTime(
   const usedFoodIds = new Set<string>();
 
   // === 기본 식당 placeholder 생성 함수 ===
+  // ⚠️ 좌표: refPlace가 없거나 좌표가 0,0이면 같은 Day의 다른 장소 좌표 사용 (10875분 버그 방지)
   function createDefaultRestaurant(type: 'lunch' | 'dinner', refPlace: PlaceResult | null): PlaceResult {
     const typeLabel = type === 'lunch' ? '점심' : '저녁';
     const budget = type === 'lunch' ? mealBudget.lunch : mealBudget.dinner;
     const budgetLabel = type === 'lunch' ? mealBudget.lunchLabel : mealBudget.dinnerLabel;
+    // 좌표 결정: refPlace → 전체 장소 중 유효 좌표 → 기본값(파리 중심)
+    let fallbackLat = 48.8566;
+    let fallbackLng = 2.3522;
+    if (refPlace && refPlace.lat !== 0 && refPlace.lng !== 0) {
+      fallbackLat = refPlace.lat;
+      fallbackLng = refPlace.lng;
+    } else {
+      // 모든 장소 중 유효 좌표 찾기
+      const anyValid = places.find(p => p.lat !== 0 && p.lng !== 0);
+      if (anyValid) {
+        fallbackLat = anyValid.lat;
+        fallbackLng = anyValid.lng;
+      }
+    }
     return {
       id: `default-${type}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       name: `현지 인기 ${typeLabel} 식당`,
       description: `${budgetLabel} 예산 내 현지 맛집 추천 (동선 고려)`,
-      lat: refPlace?.lat || 0,
-      lng: refPlace?.lng || 0,
+      lat: fallbackLat,
+      lng: fallbackLng,
       vibeScore: 7,
       confidenceScore: 6,
       sourceType: 'Default',
@@ -2238,6 +2253,7 @@ async function distributePlacesWithUserTime(
       region: refPlace?.region,
       koreanPopularityScore: 0,
       googleMapsUrl: '',
+      estimatedPriceEur: budget, // 식사 예산을 입장료 대신 가격으로 설정
     };
   }
 
@@ -2263,22 +2279,34 @@ async function distributePlacesWithUserTime(
       currentMinutes += paceConfig.slotDurationMinutes;
       const slotEnd = minutesToTime(Math.min(currentMinutes, dayEndMinutes));
       
+      const slotStartMinutes = currentMinutes - paceConfig.slotDurationMinutes;
+      const slotEndMinutes = currentMinutes;
+      const slotMidMinutes = Math.round((slotStartMinutes + slotEndMinutes) / 2);
+      const slotMidHour = slotMidMinutes / 60;
       const slotHour = parseInt(slotStart.split(':')[0]);
+      
       let slotType: 'morning' | 'lunch' | 'afternoon' | 'evening';
-      if (slotHour < 12) slotType = 'morning';
-      else if (slotHour < 14) slotType = 'lunch';
-      else if (slotHour < 18) slotType = 'afternoon';
+      if (slotMidHour < 12) slotType = 'morning';
+      else if (slotMidHour < 14.5) slotType = 'lunch';
+      else if (slotMidHour < 18) slotType = 'afternoon';
       else slotType = 'evening';
       
       // === 1순위: 점심/저녁 슬롯 판정 (하루 각 1개만!) ===
+      // 핵심: 슬롯이 식사 시간대(점심 11:30~14:00, 저녁 17:30~20:30)와 겹치면 식사 슬롯
       let isMealSlot = false;
       let mealType: 'lunch' | 'dinner' | undefined;
       
-      if (slotHour >= 12 && slotHour < 14 && !lunchAssigned) {
+      const lunchWindowStart = 11.5 * 60; // 11:30
+      const lunchWindowEnd = 14 * 60;     // 14:00
+      const dinnerWindowStart = 17.5 * 60; // 17:30
+      const dinnerWindowEnd = 20.5 * 60;   // 20:30
+      
+      // 슬롯 중간 시점이 식사 창에 포함되면 식사 슬롯
+      if (slotMidMinutes >= lunchWindowStart && slotMidMinutes <= lunchWindowEnd && !lunchAssigned) {
         isMealSlot = true;
         mealType = 'lunch';
         lunchAssigned = true;
-      } else if (slotHour >= 18 && slotHour < 20 && !dinnerAssigned) {
+      } else if (slotMidMinutes >= dinnerWindowStart && slotMidMinutes <= dinnerWindowEnd && !dinnerAssigned) {
         isMealSlot = true;
         mealType = 'dinner';
         dinnerAssigned = true;
@@ -2494,4 +2522,14 @@ async function regenerateDay(params: {
 export const itineraryGenerator = {
   generate: generateItinerary,
   regenerateDay,
+};
+
+// ===== Pipeline V3용 개별 Enrichment 함수 내보내기 =====
+// 크롤러 데이터(naverBlogPosts, tripAdvisorData, placePrices 등)를
+// places 배열에 통합하는 핵심 함수들
+export const enrichmentFunctions = {
+  enrichPlacesWithKoreanPopularity,
+  enrichPlacesWithTripAdvisorAndPrices,
+  enrichPlacesWithPhotoAndTour,
+  getRealityCheckForCity,
 };

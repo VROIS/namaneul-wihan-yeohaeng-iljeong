@@ -99,6 +99,8 @@ export async function preloadCityData(
         userRatingCount: places.userRatingCount,
         vibeKeywords: places.vibeKeywords,
         cityId: places.cityId,
+        priceLevel: places.priceLevel,
+        address: places.address,
       }).from(places)
         .where(eq(places.cityId, cityId));
 
@@ -281,7 +283,9 @@ export async function matchPlacesWithDB(
       if (dbMatch.id && nameLower !== dbMatch.name.toLowerCase()) {
         addPlaceAlias(dbMatch.id, place.name).catch(() => {});
       }
-      const dbRating = dbMatch.rating ?? 0;
+      // rating 컬럼은 DB에서 제외됨 → buzzScore/finalScore 기반 신뢰도 산출
+      const dbBuzz = dbMatch.buzzScore ?? 0;
+      const dbFinal = dbMatch.finalScore ?? 0;
       const dbReviewCount = dbMatch.userRatingCount ?? 0;
       
       enriched.push({
@@ -290,20 +294,21 @@ export async function matchPlacesWithDB(
         description: dbMatch.editorialSummary || place.description,
         image: (dbMatch.photoUrls?.length > 0) ? dbMatch.photoUrls[0] : place.image,
         vibeScore: dbMatch.vibeScore || place.vibeScore,
-        finalScore: dbMatch.finalScore || place.finalScore || 0,
-        confidenceScore: Math.max(place.confidenceScore, dbRating ? dbRating * 2 : (dbMatch.buzzScore ? Math.min(10, dbMatch.buzzScore) : 0)),
+        finalScore: dbFinal || place.finalScore || 0,
+        buzzScore: dbBuzz,
+        userRatingCount: dbReviewCount,
+        confidenceScore: Math.max(place.confidenceScore, dbBuzz ? Math.min(10, dbBuzz) : 0),
         googleMapsUrl: dbMatch.googleMapsUri || place.googleMapsUrl,
         lat: dbMatch.latitude || place.lat,
         lng: dbMatch.longitude || place.lng,
         selectionReasons: [
           ...(place.selectionReasons || []),
-          dbRating > 0 
-            ? `⭐ Google ${dbRating.toFixed(1)}점 (${dbReviewCount.toLocaleString()}리뷰) | DB 검증` 
-            : `📊 DB 검증 완료 (buzzScore: ${(dbMatch.buzzScore || 0).toFixed(1)})`,
+          dbFinal > 0
+            ? `📊 Nubi 점수 ${dbFinal.toFixed(1)} (buzz: ${dbBuzz.toFixed(1)}, 리뷰 ${dbReviewCount.toLocaleString()}개) | DB 검증`
+            : `📊 DB 검증 완료 (buzzScore: ${dbBuzz.toFixed(1)})`,
         ],
-        confidenceLevel: (dbMatch.finalScore && dbMatch.finalScore > 5) ? 'high' as const :
-          (dbRating >= 4.0) ? 'high' as const :
-          (dbMatch.buzzScore && dbMatch.buzzScore > 3) ? 'medium' as const :
+        confidenceLevel: (dbFinal > 5) ? 'high' as const :
+          (dbBuzz > 3) ? 'medium' as const :
           place.confidenceLevel || 'low' as const,
       });
     } else if (needsGoogle) {
@@ -325,7 +330,11 @@ export async function matchPlacesWithDB(
               lng: gidMatch.longitude || googleResult.lng,
               image: (gidMatch.photoUrls?.length > 0) ? gidMatch.photoUrls[0] : googleResult.photoUrl || place.image,
               googleMapsUrl: gidMatch.googleMapsUri || googleResult.googleMapsUri || place.googleMapsUrl,
-              confidenceScore: Math.max(place.confidenceScore, gidMatch.rating ? gidMatch.rating * 2 : 5),
+              confidenceScore: Math.max(place.confidenceScore, gidMatch.buzzScore ? Math.min(10, gidMatch.buzzScore) : 5),
+              // ⭐ DB + Google 데이터 모두 활용
+              buzzScore: gidMatch.buzzScore ?? 0,
+              userRatingCount: gidMatch.userRatingCount || googleResult.userRatingCount || 0,
+              finalScore: gidMatch.finalScore ?? 0,
             });
             continue;
           }
@@ -339,6 +348,8 @@ export async function matchPlacesWithDB(
           image: googleResult.photoUrl || place.image,
           googleMapsUrl: googleResult.googleMapsUri || place.googleMapsUrl,
           confidenceScore: Math.max(place.confidenceScore, googleResult.rating ? googleResult.rating * 2 : 5),
+          // ⭐ Google Places에서 가져온 리뷰 수 → nubiReason 생성에 활용
+          userRatingCount: googleResult.userRatingCount || 0,
         });
       } else {
         unmatchedCount++;

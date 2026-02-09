@@ -204,31 +204,56 @@ export class RouteOptimizer {
     travelMode: "DRIVE" | "TRANSIT" | "WALK" | "BICYCLE" | "TAXI" = "TRANSIT"
   ): Promise<RouteResult> {
     const actualMode = travelMode === "TAXI" ? "DRIVE" : travelMode;
+    const fromName = originPlace.name || 'unknown';
+    const toName = destinationPlace.name || 'unknown';
 
-    const cached = await storage.getRouteCache(originPlace.id, destinationPlace.id, travelMode);
-    if (cached) {
-      const cacheAge = Date.now() - new Date(cached.fetchedAt).getTime();
-      const ONE_DAY = 24 * 60 * 60 * 1000;
-      
-      if (cacheAge < ONE_DAY) {
-        return {
-          originPlaceId: originPlace.id,
-          destinationPlaceId: destinationPlace.id,
-          travelMode,
-          distanceMeters: cached.distanceMeters || 0,
-          durationSeconds: cached.durationSeconds || 0,
-          durationInTraffic: cached.durationInTraffic || undefined,
-          estimatedCost: cached.estimatedCost || 0,
-          polyline: cached.polyline || undefined,
-          steps: cached.steps as RouteStep[] || undefined,
-        };
-      }
+    // ===== 좌표 유효성 검증 (0,0 좌표 방지) =====
+    const isValidCoord = (lat: number, lng: number) => 
+      lat !== 0 && lng !== 0 && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
+
+    if (!isValidCoord(originPlace.latitude, originPlace.longitude) || 
+        !isValidCoord(destinationPlace.latitude, destinationPlace.longitude)) {
+      console.warn(`[Route] ⚠️ 무효 좌표 감지: ${fromName}(${originPlace.latitude},${originPlace.longitude}) → ${toName}(${destinationPlace.latitude},${destinationPlace.longitude})`);
+      // 무효 좌표: 도보 10분/0.5km 기본값 반환 (10,875분 버그 방지)
+      return {
+        originPlaceId: originPlace.id,
+        destinationPlaceId: destinationPlace.id,
+        travelMode,
+        distanceMeters: 500,
+        durationSeconds: 600,
+        estimatedCost: 0,
+      };
     }
 
+    // ===== 캐시 확인 =====
+    try {
+      const cached = await storage.getRouteCache(originPlace.id, destinationPlace.id, travelMode);
+      if (cached) {
+        const cacheAge = Date.now() - new Date(cached.fetchedAt).getTime();
+        const ONE_DAY = 24 * 60 * 60 * 1000;
+        
+        if (cacheAge < ONE_DAY && cached.durationSeconds > 0) {
+          return {
+            originPlaceId: originPlace.id,
+            destinationPlaceId: destinationPlace.id,
+            travelMode,
+            distanceMeters: cached.distanceMeters || 0,
+            durationSeconds: cached.durationSeconds || 0,
+            durationInTraffic: cached.durationInTraffic || undefined,
+            estimatedCost: cached.estimatedCost || 0,
+            polyline: cached.polyline || undefined,
+            steps: cached.steps as RouteStep[] || undefined,
+          };
+        }
+      }
+    } catch (cacheErr) {
+      // 캐시 실패는 무시하고 API 호출로 진행
+    }
+
+    // ===== Google Routes API 호출 (핵심 동선 최적화) =====
     const apiKey = this.getApiKey();
     if (apiKey) {
       try {
-        // TRANSIT 모드일 때는 실시간 요금 정보 요청
         const fieldMask = actualMode === "TRANSIT"
           ? "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs.steps,routes.travelAdvisory.transitFare"
           : "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs.steps";
@@ -264,17 +289,16 @@ export class RouteOptimizer {
             const distanceMeters = route.distanceMeters || 0;
             const durationSeconds = parseInt(route.duration?.replace("s", "") || "0");
             
-            // Google API에서 실시간 요금 가져오기 (TRANSIT 모드)
             const transitFare = route.travelAdvisory?.transitFare as TransitFare | undefined;
             
-            // 실시간 요금이 있으면 사용, 없으면 추정
             let estimatedCost: number;
             if (transitFare && transitFare.units) {
               estimatedCost = parseFloat(transitFare.units) + (transitFare.nanos ? transitFare.nanos / 1e9 : 0);
-              console.log(`[RouteOptimizer] Real-time transit fare: ${estimatedCost} ${transitFare.currencyCode}`);
             } else {
               estimatedCost = this.estimateCost(distanceMeters, travelMode);
             }
+
+            console.log(`[Route] ✅ Google API: ${fromName} → ${toName} | ${Math.round(durationSeconds/60)}분 ${Math.round(distanceMeters/1000*10)/10}km €${estimatedCost.toFixed(2)} (${actualMode})`);
 
             const result: RouteResult = {
               originPlaceId: originPlace.id,
@@ -287,26 +311,36 @@ export class RouteOptimizer {
               polyline: route.polyline?.encodedPolyline,
             };
 
-            await storage.upsertRouteCache({
-              originPlaceId: originPlace.id,
-              destinationPlaceId: destinationPlace.id,
-              travelMode,
-              distanceMeters,
-              durationSeconds,
-              durationInTraffic: null,
-              estimatedCost,
-              polyline: route.polyline?.encodedPolyline,
-              steps: null,
-            });
+            try {
+              await storage.upsertRouteCache({
+                originPlaceId: originPlace.id,
+                destinationPlaceId: destinationPlace.id,
+                travelMode,
+                distanceMeters,
+                durationSeconds,
+                durationInTraffic: null,
+                estimatedCost,
+                polyline: route.polyline?.encodedPolyline,
+                steps: null,
+              });
+            } catch {}
 
             return result;
+          } else {
+            console.warn(`[Route] ⚠️ Google API 응답에 routes 없음: ${fromName} → ${toName}`);
           }
+        } else {
+          const errText = await response.text().catch(() => '');
+          console.error(`[Route] ❌ Google Routes API ${response.status}: ${fromName} → ${toName} | ${errText.slice(0, 200)}`);
         }
-      } catch (error) {
-        console.error("Google Routes API error:", error);
+      } catch (error: any) {
+        console.error(`[Route] ❌ Google Routes API 네트워크 오류: ${fromName} → ${toName} | ${error?.message}`);
       }
+    } else {
+      console.warn(`[Route] ⚠️ API 키 없음 - 추정 계산 사용: ${fromName} → ${toName}`);
     }
 
+    // ===== Fallback: Haversine 추정 (API 실패 시) =====
     const distanceMeters = this.calculateDistance(
       originPlace.latitude, originPlace.longitude,
       destinationPlace.latitude, destinationPlace.longitude
@@ -314,26 +348,33 @@ export class RouteOptimizer {
     const durationSeconds = this.estimateDuration(distanceMeters, travelMode);
     const estimatedCost = this.estimateCost(distanceMeters, travelMode);
 
+    // 최대 이동시간 제한 (120분 = 7200초, 도시 내 이동 현실 반영)
+    const cappedDuration = Math.min(durationSeconds, 7200);
+    
+    console.log(`[Route] 📐 추정: ${fromName} → ${toName} | ${Math.round(cappedDuration/60)}분 ${Math.round(distanceMeters/1000*10)/10}km €${estimatedCost.toFixed(2)} (${actualMode})`);
+
     const result: RouteResult = {
       originPlaceId: originPlace.id,
       destinationPlaceId: destinationPlace.id,
       travelMode,
       distanceMeters: Math.round(distanceMeters),
-      durationSeconds,
+      durationSeconds: cappedDuration,
       estimatedCost: Math.round(estimatedCost * 100) / 100,
     };
 
-    await storage.upsertRouteCache({
-      originPlaceId: originPlace.id,
-      destinationPlaceId: destinationPlace.id,
-      travelMode,
-      distanceMeters: result.distanceMeters,
-      durationSeconds: result.durationSeconds,
-      durationInTraffic: null,
-      estimatedCost: result.estimatedCost,
-      polyline: null,
-      steps: null,
-    });
+    try {
+      await storage.upsertRouteCache({
+        originPlaceId: originPlace.id,
+        destinationPlaceId: destinationPlace.id,
+        travelMode,
+        distanceMeters: result.distanceMeters,
+        durationSeconds: result.durationSeconds,
+        durationInTraffic: null,
+        estimatedCost: result.estimatedCost,
+        polyline: null,
+        steps: null,
+      });
+    } catch {}
 
     return result;
   }

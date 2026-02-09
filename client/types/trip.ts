@@ -87,6 +87,10 @@ export interface Place {
   koreanPopularityScore?: number;
   // Phase 4: 구글맵 직접 링크 (클릭 시 구글맵 열기)
   googleMapsUrl?: string;
+  // ⭐ 차별화 선정이유: Nubi 데이터 기반 (크게/진하게 표시)
+  nubiReason?: string | null;
+  // Gemini AI 요약 추천 설명 (보통 글씨)
+  geminiReason?: string;
 }
 
 // 🚇 이동 구간 정보
