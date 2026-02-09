@@ -193,7 +193,7 @@ export default function TripPlannerScreen() {
     companionCount: 4,
     companionAges: "55, 59",
     curationFocus: "Everyone",
-    destination: "파리, 프랑스",
+    destination: "Paris",
     startDate: formatDate(new Date()),
     startTime: "09:00",
     endDate: formatDate(new Date(Date.now() + 2 * 24 * 60 * 60 * 1000)),

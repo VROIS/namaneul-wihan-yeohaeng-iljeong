@@ -134,7 +134,14 @@ export interface CityResolveResult {
 export async function findCityUnified(input: string): Promise<CityResolveResult | null> {
   if (!db || !input) return null;
 
-  const inputLower = input.trim().toLowerCase();
+  // ===== 전처리: "파리, 프랑스" → "파리", "Paris, France" → "Paris" =====
+  let cleaned = input.trim();
+  if (cleaned.includes(',')) {
+    cleaned = cleaned.split(',')[0].trim();
+    console.log(`[CityResolver] 전처리: "${input}" → "${cleaned}"`);
+  }
+
+  const inputLower = cleaned.toLowerCase();
 
   try {
     // ===== 1단계: DB에서 직접 검색 (nameEn, name, nameLocal) =====

@@ -548,8 +548,13 @@ async function step2_enrichAndBuild(
     const dayPlaces = dayScheduleItems.map(s => {
       const enrichedPlace = finalPlaceMap.get(s.placeId) || matchedMap.get(s.placeId)!;
       const isMeal = s.gPlace.type === 'lunch' || s.gPlace.type === 'dinner';
+      // 프론트 전달 시 불필요한 0값 필드 제거 (React Native에서 {0}이 "0" 텍스트로 표시되는 문제 방지)
+      const { finalScore, buzzScore, ...safePlace } = enrichedPlace as any;
       return {
-        ...enrichedPlace,
+        ...safePlace,
+        // 0이 아닌 경우만 포함
+        ...(finalScore ? { finalScore } : {}),
+        ...(buzzScore ? { buzzScore } : {}),
         // Gemini가 정한 시간
         startTime: s.gPlace.startTime,
         endTime: s.gPlace.endTime,
@@ -1046,18 +1051,44 @@ async function calcTransit(
   const fromId = typeof from.id === 'number' ? from.id : Math.abs(hashCode(from.id || from.name || fromName));
   const toId = typeof to.id === 'number' ? to.id : Math.abs(hashCode(to.id || to.name || ''));
 
+  // 좌표 유효성 검사 — 무효 좌표(0,0)면 추정값 반환
+  if (!from.lat || !from.lng || !to.lat || !to.lng) {
+    return {
+      from: from.name || fromName, to: to.name || '',
+      mode: travelMode === 'DRIVE' ? 'guide' : 'walk',
+      modeLabel: travelMode === 'DRIVE' ? '차량이동' : '도보',
+      duration: 15, durationText: '약 15분', distance: 2000, cost: 0, costTotal: 0,
+    };
+  }
+
   try {
+    // WalkMore 모드: 직선 2km 이상이면 자동으로 TRANSIT 전환
+    let actualMode = travelMode;
+    if (travelMode === 'WALK' && from.lat && to.lat) {
+      const R = 6371000;
+      const dLat = (to.lat - from.lat) * Math.PI / 180;
+      const dLng = (to.lng - from.lng) * Math.PI / 180;
+      const a = Math.sin(dLat/2)**2 + Math.cos(from.lat*Math.PI/180)*Math.cos(to.lat*Math.PI/180)*Math.sin(dLng/2)**2;
+      const straightDist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      if (straightDist > 1500) {
+        actualMode = 'TRANSIT';
+      }
+    }
+
     const route = await routeOptimizer.getRoute(
       { id: fromId, latitude: from.lat, longitude: from.lng, name: fromName } as any,
       { id: toId, latitude: to.lat, longitude: to.lng, name: to.name } as any,
-      travelMode,
+      actualMode,
     );
     const durationMinutes = Math.round(route.durationSeconds / 60);
+    const modeLabel = actualMode === 'WALK' ? '도보'
+      : actualMode === 'TRANSIT' ? '지하철/버스'
+      : '차량';
     return {
       from: from.name || fromName,
       to: to.name || '',
-      mode: travelMode.toLowerCase(),
-      modeLabel: travelMode === 'WALK' ? '도보' : travelMode === 'TRANSIT' ? '지하철' : '차량',
+      mode: actualMode.toLowerCase(),
+      modeLabel,
       duration: durationMinutes,
       durationText: `${durationMinutes}분`,
       distance: route.distanceMeters,
