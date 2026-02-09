@@ -36,6 +36,16 @@ import { db } from '../../db';
 import { exchangeRates } from '@shared/schema';
 import { eq, and } from 'drizzle-orm';
 
+// ===== TravelStyle 정규화 (소문자→표준형) =====
+function normalizeTravelStyle(style?: string): TravelStyle {
+  if (!style) return 'Reasonable';
+  const map: Record<string, TravelStyle> = {
+    luxury: 'Luxury', premium: 'Premium', reasonable: 'Reasonable', economic: 'Economic',
+    Luxury: 'Luxury', Premium: 'Premium', Reasonable: 'Reasonable', Economic: 'Economic',
+  };
+  return map[style] || 'Reasonable';
+}
+
 // ===== Gemini 초기화 =====
 let ai: GoogleGenAI | null = null;
 
@@ -159,7 +169,7 @@ async function step1_geminiItinerary(
   vibeWeights: VibeWeight[],
 ): Promise<GeminiDay[]> {
   const _t0 = Date.now();
-  const mealBudget = MEAL_BUDGET[formData.travelStyle || 'Reasonable'];
+  const mealBudget = MEAL_BUDGET[normalizeTravelStyle(formData.travelStyle)];
 
   // ===== 사용자 입력 9가지를 자연어로 상세 평문화 =====
 
@@ -291,7 +301,7 @@ JSON만 응답하세요 (마크다운/설명 없이):
       },
     });
 
-    const text = response.text || "";
+    let text = response.text || "";
     const finishReason = (response as any).candidates?.[0]?.finishReason || 'unknown';
     console.log(`[V3-Step1] 🤖 응답 수신 (${text.length}자, finish=${finishReason}, ${Date.now() - _t0}ms)`);
 
@@ -299,17 +309,27 @@ JSON만 응답하세요 (마크다운/설명 없이):
       console.warn(`[V3-Step1] ⚠️ 짧은 응답: ${text}`);
     }
 
+    // ── Markdown code fence 제거 ──
+    // Gemini가 ```json ... ``` 으로 감싸서 응답하는 경우 처리
+    text = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      console.error('[V3-Step1] ❌ JSON 파싱 실패');
+      console.error('[V3-Step1] ❌ JSON 블록 없음');
+      console.error('[V3-Step1] 원문 앞 200자:', text.substring(0, 200));
       return [];
     }
 
     let result: any;
     try {
       result = JSON.parse(jsonMatch[0]);
-    } catch {
-      console.warn('[V3-Step1] ⚠️ JSON 파싱 오류, 복구 시도...');
+    } catch (parseErr: any) {
+      console.warn(`[V3-Step1] ⚠️ JSON 파싱 오류 (${parseErr.message}), 복구 시도...`);
+      // 디버그: 파싱 실패 위치 근처 출력
+      const pos = parseInt(String(parseErr.message).match(/position (\d+)/)?.[1] || '0');
+      if (pos > 0) {
+        console.warn(`[V3-Step1] 오류 위치 주변: ...${jsonMatch[0].substring(Math.max(0, pos - 50), pos + 50)}...`);
+      }
       result = repairTruncatedJSON(jsonMatch[0]);
       if (!result) {
         console.error('[V3-Step1] ❌ JSON 복구 실패');
@@ -494,7 +514,7 @@ async function step2_enrichAndBuild(
   }
 
   // ── 2e. 일별 스케줄 구성 + 이동시간 계산 ──
-  const mealBudget = MEAL_BUDGET[formData.travelStyle || 'Reasonable'];
+  const mealBudget = MEAL_BUDGET[normalizeTravelStyle(formData.travelStyle)];
   const travelMode = formData.mobilityStyle === 'WalkMore' ? 'WALK' as const
     : formData.mobilityStyle === 'Minimal' ? 'DRIVE' as const
     : 'TRANSIT' as const;
