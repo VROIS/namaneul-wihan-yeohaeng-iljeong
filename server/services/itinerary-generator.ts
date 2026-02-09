@@ -836,11 +836,25 @@ async function enrichPlacesWithTripAdvisorAndPrices(
       }
 
       if (price) {
-        updates.estimatedPriceEur = price.avgPrice;
+        // 통화 변환: EUR가 아니면 EUR로 변환
+        let priceInEur = price.avgPrice;
+        if (price.currency === 'KRW') {
+          priceInEur = price.avgPrice / 1450; // KRW → EUR 근사 환율
+        } else if (price.currency === 'USD') {
+          priceInEur = price.avgPrice * 0.92;  // USD → EUR 근사 환율
+        } else if (price.currency === 'GBP') {
+          priceInEur = price.avgPrice * 1.16;  // GBP → EUR 근사 환율
+        }
+        // 비정상 가격 필터 (1인 입장료 €500 초과는 오류로 간주)
+        if (priceInEur > 500) {
+          console.warn(`[Price] ⚠️ 비정상 가격 무시: ${price.avgPrice} ${price.currency} → €${priceInEur.toFixed(0)}`);
+          priceInEur = 0;
+        }
+        updates.estimatedPriceEur = Math.round(priceInEur * 100) / 100;
         updates.priceSource = price.source;
         // 실제 가격이 있으면 priceEstimate 업데이트
-        const priceLabel = price.currency === 'EUR' 
-          ? `€${Math.round(price.avgPrice)}` 
+        const priceLabel = priceInEur > 0
+          ? `€${Math.round(priceInEur)}`
           : `${Math.round(price.avgPrice)} ${price.currency}`;
         updates.priceEstimate = priceLabel;
         priceMatched++;

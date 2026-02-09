@@ -745,8 +745,13 @@ async function step2_enrichAndBuild(
     // ── 일일 비용 계산 (1인 기준) ──
     const mealCostEur = dayPlaces.reduce((sum: number, p: any) =>
       p.isMealSlot && p.mealPrice ? sum + p.mealPrice : sum, 0);
-    const entranceFeesEur = dayPlaces.reduce((sum: number, p: any) =>
-      !p.isMealSlot && p.estimatedPriceEur && p.estimatedPriceEur > 0 ? sum + p.estimatedPriceEur : sum, 0);
+    const entranceFeesEur = dayPlaces.reduce((sum: number, p: any) => {
+      // 식사 슬롯 제외, 비정상 가격(€500 초과) 필터
+      if (!p.isMealSlot && p.estimatedPriceEur && p.estimatedPriceEur > 0 && p.estimatedPriceEur < 500) {
+        return sum + p.estimatedPriceEur;
+      }
+      return sum;
+    }, 0);
 
     // 1인 1일 비용 합산 (식사 + 입장료는 이미 1인 기준)
     const mealPerPerson = mealCostEur;  // Gemini가 1인 기준 추천

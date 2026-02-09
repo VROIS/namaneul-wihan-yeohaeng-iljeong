@@ -1336,9 +1336,11 @@ export default function TripPlannerScreen() {
                             <Text style={[styles.placePriceText, { color: Brand.primary }]}>
                               {isMeal
                                 ? `💰 식사: €${place.mealPrice || '??'}`
-                                : (place as any).estimatedPriceEur > 0
+                                : (place as any).estimatedPriceEur > 0 && (place as any).estimatedPriceEur < 500
                                   ? `🎫 €${(place as any).estimatedPriceEur}`
-                                  : `🎫 ${place.priceEstimate || '무료'}`
+                                  : entranceFee > 0 && entranceFee < 500
+                                    ? `🎫 €${entranceFee}`
+                                    : `🎫 ${place.priceEstimate || '무료'}`
                               }
                             </Text>
                           </View>
