@@ -1077,14 +1077,21 @@ export default function TripPlannerScreen() {
               {(itinerary.days || []).reduce((sum, d) => sum + (d.places?.length || 0), 0)}개 장소
             </Text>
           </View>
-          {itinerary.budget?.totals?.grandTotal && (
-            <View style={styles.tripSummaryItem}>
-              <Feather name="credit-card" size={14} color={Brand.primary} />
-              <Text style={[styles.tripSummaryText, { color: Brand.primary, fontWeight: "700" }]}>
-                €{itinerary.budget.totals.grandTotal.toLocaleString()}
-              </Text>
-            </View>
-          )}
+          {(() => {
+            // 일별 dailyCost 합산으로 총 비용 계산
+            const totalPerPerson = (itinerary.days || []).reduce((sum: number, d: any) => sum + (d.dailyCost?.perPersonEur || 0), 0);
+            if (totalPerPerson > 0) {
+              return (
+                <View style={styles.tripSummaryItem}>
+                  <Feather name="credit-card" size={14} color={Brand.primary} />
+                  <Text style={[styles.tripSummaryText, { color: Brand.primary, fontWeight: "700" }]}>
+                    1인 €{totalPerPerson.toFixed(0)}
+                  </Text>
+                </View>
+              );
+            }
+            return null;
+          })()}
         </View>
 
         {/* 📊 요약 섹션 2: "누구를 위한 X 여행" + 예상 비용 */}
@@ -1121,27 +1128,18 @@ export default function TripPlannerScreen() {
                 return `👨‍👩‍👧‍👦 ${companionLabel}(${count}명)의 ${focusLabel}을 위한 ${vibes} 여행`;
               })()}
             </Text>
-            {/* 💰 예상 비용 표시 */}
+            {/* 💰 예상 비용 표시 (1인 기준, 일별 합산) */}
             <View style={styles.estimatedCostBadge}>
               <Text style={styles.estimatedCostText}>
                 {(() => {
-                  // 예산 계산: 일별 합계가 있으면 사용, 없으면 추정
-                  const budget = itinerary.budget;
-                  if (budget?.totals?.grandTotal) {
-                    return `예상 €${budget.totals.grandTotal.toLocaleString()}`;
+                  const totalPerPerson = (itinerary.days || []).reduce((sum: number, d: any) => sum + (d.dailyCost?.perPersonEur || 0), 0);
+                  if (totalPerPerson > 0) {
+                    return `1인 €${totalPerPerson.toFixed(0)} (${(itinerary.days || []).length}일)`;
                   }
-                  // 간단 추정: 일수 × TravelStyle별 기준
                   const dayCount = itinerary.days?.length || 1;
-                  const styleMultiplier = {
-                    Luxury: 400,
-                    Premium: 250,
-                    Reasonable: 150,
-                    Economic: 80,
-                  };
-                  const perDay = styleMultiplier[itinerary.travelStyle as keyof typeof styleMultiplier] || 150;
-                  const companionCount = itinerary.companionCount || 1;
-                  const estimated = dayCount * perDay * companionCount;
-                  return `예상 €${estimated.toLocaleString()}`;
+                  const styleMultiplier: Record<string, number> = { Luxury: 400, Premium: 250, Reasonable: 150, Economic: 80 };
+                  const perDay = styleMultiplier[itinerary.travelStyle || 'Reasonable'] || 150;
+                  return `예상 1인 €${(dayCount * perDay).toLocaleString()}`;
                 })()}
               </Text>
             </View>
@@ -1311,15 +1309,18 @@ export default function TripPlannerScreen() {
 
                         {/* 장소 정보 */}
                         <View style={styles.placeInfo}>
-                          {/* 장소명 + 식사 타입 뱃지 */}
+                          {/* 장소명: 한국어명 (영문명) */}
                           <View style={styles.placeHeader}>
                             <Text style={[styles.placeName, { color: theme.text }]} numberOfLines={1}>
-                              {isMealSlot ? (mealType === 'lunch' ? "🍽️ [점심] " : "🍽️ [저녁] ") : isMeal ? "🍽️ " : ""}{place.name}
+                              {isMealSlot ? (mealType === 'lunch' ? "🍽️ [점심] " : "🍽️ [저녁] ") : isMeal ? "🍽️ " : ""}{(place as any).nameKo || place.name}
                             </Text>
                           </View>
+                          {(place as any).nameKo && (place as any).nameKo !== place.name && (
+                            <Text style={{ fontSize: 11, color: theme.textTertiary, marginBottom: 2 }}>{place.name}</Text>
+                          )}
 
-                          {/* 별점 표시 */}
-                          <Text style={styles.placeStars}>{stars}</Text>
+                          {/* 별점 표시 (vibeScore 0이면 숨김) */}
+                          {starRating > 0 && <Text style={styles.placeStars}>{stars}</Text>}
 
                           {/* 시간 */}
                           <View style={styles.placeTimeRow}>
@@ -1329,23 +1330,32 @@ export default function TripPlannerScreen() {
                             </Text>
                           </View>
 
-                          {/* 가격 정보 - 실시간 데이터 */}
+                          {/* 가격 정보 */}
                           <View style={styles.placePriceRow}>
                             <Feather name={isMeal ? "credit-card" : "tag"} size={12} color={Brand.primary} />
                             <Text style={[styles.placePriceText, { color: Brand.primary }]}>
                               {isMeal
-                                ? `💰 식사: €${place.mealPrice || itinerary.budget?.dailyBreakdowns?.[activeDay]?.meals || '??'}`
-                                : entranceFee > 0
-                                  ? `🎫 €${entranceFee} × ${companionCount}인 = €${entranceFeeTotal.toFixed(2)}`
+                                ? `💰 식사: €${place.mealPrice || '??'}`
+                                : (place as any).estimatedPriceEur > 0
+                                  ? `🎫 €${(place as any).estimatedPriceEur}`
                                   : `🎫 ${place.priceEstimate || '무료'}`
                               }
                             </Text>
                           </View>
 
-                          {/* 설명 (있을 경우) */}
-                          {place.personaFitReason && (
+                          {/* ⭐ 선정이유 (nubiReason) — 가장 중요한 차별화 포인트 */}
+                          {(place as any).nubiReason && (place as any).nubiReason !== 'Nubi AI 데이터 검증 추천' && (
+                            <View style={{ backgroundColor: '#FFF8E1', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, marginTop: 4, alignSelf: 'flex-start' }}>
+                              <Text style={{ fontSize: 12, fontWeight: '700', color: '#E65100' }}>
+                                ⭐ {(place as any).nubiReason}
+                              </Text>
+                            </View>
+                          )}
+
+                          {/* 설명 */}
+                          {((place as any).geminiReason || place.personaFitReason) && (
                             <Text style={[styles.placeReason, { color: theme.textSecondary }]} numberOfLines={2}>
-                              {place.personaFitReason}
+                              {(place as any).geminiReason || place.personaFitReason}
                             </Text>
                           )}
 
@@ -1363,17 +1373,26 @@ export default function TripPlannerScreen() {
                     </Pressable>
                   </View>
 
-                  {/* 🚇 이동 구간 표시 - 실시간 데이터 */}
-                  {hasTransit && (
+                  {/* 🚇 이동 구간 표시 */}
+                  {hasTransit && transitInfo && (
                     <View style={styles.transitSection}>
                       <View style={[styles.transitLine, { backgroundColor: theme.border }]} />
                       <View style={[styles.transitCard, { backgroundColor: theme.backgroundSecondary }]}>
                         <Feather name="navigation" size={14} color={theme.textSecondary} />
                         <Text style={[styles.transitText, { color: theme.textSecondary }]}>
-                          {transitInfo
-                            ? `${transitInfo.modeLabel === 'metro' ? '🚇' : transitInfo.modeLabel === 'walk' ? '🚶' : '🚗'} ${transitInfo.modeLabel || '이동'} ${transitInfo.durationText || '??분'} · €${transitInfo.cost?.toFixed(2) || '0'} × ${companionCount}인 = €${transitInfo.costTotal?.toFixed(2) || '0'}`
-                            : `🚶 이동 정보 로딩 중...`
-                          }
+                          {(() => {
+                            const mode = transitInfo.mode || transitInfo.modeLabel || 'walk';
+                            const icon = mode === 'guide' ? '🚗' : mode === 'metro' ? '🚇' : mode === 'bus' ? '🚌' : '🚶';
+                            const label = mode === 'guide' ? '전용차량이동' : transitInfo.modeLabel || '도보';
+                            const dur = transitInfo.durationText || `${transitInfo.duration || 0}분`;
+                            const dist = transitInfo.distance ? `${(transitInfo.distance / 1000).toFixed(1)}km` : '';
+                            // A타입(가이드): 구간 비용 안 보여줌 / B타입: 구간별 실제 비용
+                            if (mode === 'guide') {
+                              return `${icon} ${label} ${dur}${dist ? ` · ${dist}` : ''}`;
+                            }
+                            const cost = transitInfo.cost || 0;
+                            return `${icon} ${label} ${dur}${dist ? ` · ${dist}` : ''}${cost > 0 ? ` · €${cost.toFixed(2)}` : ''}`;
+                          })()}
                         </Text>
                       </View>
                       <View style={[styles.transitLine, { backgroundColor: theme.border }]} />
@@ -1396,41 +1415,63 @@ export default function TripPlannerScreen() {
             </View>
           )}
 
-          {/* 📊 일별 합계 섹션 - 실시간 데이터 */}
+          {/* 📊 일별 합계 섹션 + 교통비 카테고리 표시 */}
           {(() => {
-            const dayBudget = currentDay?.budget || itinerary.budget?.dailyBreakdowns?.[activeDay];
+            // 백엔드 dailyCost에서 직접 읽기
+            const dc = (currentDay as any)?.dailyCost;
+            const td = (currentDay as any)?.transportDisplay;
+            const entranceEur = dc?.breakdown?.entranceEur || 0;
+            const mealEur = dc?.breakdown?.mealEur || 0;
+            const transportEur = dc?.breakdown?.transportEur || 0;
+            const totalEur = dc?.perPersonEur || (entranceEur + mealEur + transportEur);
             return (
               <View style={[styles.dailyTotalSection, { backgroundColor: theme.backgroundSecondary }]}>
+                {/* 교통비 카테고리 표시 (A/B 분기) */}
+                {td && (
+                  <View style={{ backgroundColor: td.category === 'guide' ? '#E3F2FD' : '#E8F5E9', borderRadius: 8, padding: 10, marginBottom: 10 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: td.category === 'guide' ? '#1565C0' : '#2E7D32', marginBottom: 4 }}>
+                      {td.category === 'guide' ? '🚗 드라이빙 가이드' : '🚇 대중교통'} · 1인 €{td.perPersonPerDay}/일
+                    </Text>
+                    {td.category === 'guide' && td.uberBlackComparison && (
+                      <Text style={{ fontSize: 11, color: '#666' }}>
+                        vs 우버블랙 시간제 1인 €{td.uberBlackComparison.perPersonPerDay}/일
+                      </Text>
+                    )}
+                    {td.category === 'transit' && td.guideUpsell && (
+                      <Text style={{ fontSize: 11, color: '#666' }}>
+                        💡 드라이빙 가이드 이용시 1인 €{td.guideUpsell.perPersonPerDay}/일
+                      </Text>
+                    )}
+                  </View>
+                )}
+
                 <Text style={[styles.dailyTotalTitle, { color: theme.text }]}>
-                  📊 {activeDay + 1}일차 합계
+                  📊 {activeDay + 1}일차 합계 (1인)
                 </Text>
                 <View style={styles.dailyTotalRow}>
                   <View style={styles.dailyTotalItem}>
                     <Text style={[styles.dailyTotalLabel, { color: theme.textSecondary }]}>🎫 입장료</Text>
                     <Text style={[styles.dailyTotalValue, { color: theme.text }]}>
-                      €{dayBudget?.entranceFees?.toFixed(2) || '0'}
+                      €{entranceEur.toFixed(1)}
                     </Text>
                   </View>
                   <View style={styles.dailyTotalItem}>
                     <Text style={[styles.dailyTotalLabel, { color: theme.textSecondary }]}>🍽️ 식사</Text>
                     <Text style={[styles.dailyTotalValue, { color: theme.text }]}>
-                      €{dayBudget?.meals?.toFixed(2) || '0'}
+                      €{mealEur.toFixed(1)}
                     </Text>
                   </View>
                   <View style={styles.dailyTotalItem}>
                     <Text style={[styles.dailyTotalLabel, { color: theme.textSecondary }]}>🚇 교통비</Text>
                     <Text style={[styles.dailyTotalValue, { color: theme.text }]}>
-                      €{dayBudget?.transport?.toFixed(2) || '0'}
+                      €{transportEur.toFixed(1)}
                     </Text>
                   </View>
                 </View>
                 <View style={[styles.dailyTotalGrand, { borderTopColor: theme.border }]}>
-                  <Text style={[styles.dailyTotalGrandLabel, { color: theme.text }]}>💰 일 합계</Text>
+                  <Text style={[styles.dailyTotalGrandLabel, { color: theme.text }]}>💰 1인 일 합계</Text>
                   <Text style={[styles.dailyTotalGrandValue, { color: Brand.primary }]}>
-                    €{dayBudget?.subtotal?.toFixed(2) || '0'}
-                  </Text>
-                  <Text style={[styles.dailyTotalPerPerson, { color: theme.textSecondary }]}>
-                    (1인당 €{dayBudget?.perPerson?.toFixed(2) || '0'})
+                    €{totalEur.toFixed(1)}
                   </Text>
                 </View>
               </View>

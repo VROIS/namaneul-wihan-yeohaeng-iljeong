@@ -250,11 +250,29 @@ async function step1_geminiItinerary(
     : formData.travelPace === 'Relaxed' ? '여유롭게 (장소당 150분, 느긋하게)'
     : '보통 속도 (장소당 120분)';
 
-  // 일별 요구사항
+  // 일별 요구사항 (식사 시간 제약 자동 계산)
   const dayRequirements = daySlotsConfig.map(d => {
-    const mealCount = d.slots >= 4 ? 2 : d.slots >= 2 ? 1 : 0;
-    const activityCount = d.slots - mealCount;
-    return `Day ${d.day}: ${d.startTime} 출발 ~ ${d.endTime} 마무리, 총 ${d.slots}곳 (관광 ${activityCount} + 식사 ${mealCount})`;
+    const startH = parseInt(d.startTime.split(':')[0]);
+    const endH = parseInt(d.endTime.split(':')[0]);
+    // 점심: 가용시간에 12:00~13:30 포함되면
+    const hasLunchWindow = startH <= 12 && endH >= 13;
+    // 저녁: 가용시간에 18:30~20:00 포함되면
+    const hasDinnerWindow = startH <= 18 && endH >= 20;
+    const mealCount = (hasLunchWindow ? 1 : 0) + (hasDinnerWindow ? 1 : 0);
+    const activityCount = Math.max(0, d.slots - mealCount);
+
+    let mealNote = '';
+    if (hasLunchWindow && hasDinnerWindow) {
+      mealNote = '점심 12:00~13:30 사이 배치, 저녁 18:30~20:00 사이 배치';
+    } else if (hasLunchWindow) {
+      mealNote = '점심 12:00~13:30 사이 배치 (저녁 시간 없음)';
+    } else if (hasDinnerWindow) {
+      mealNote = '저녁 18:30~20:00 사이 배치 (점심 시간 없음)';
+    } else {
+      mealNote = '식사 시간 범위 밖 — 카페/간식만';
+    }
+
+    return `Day ${d.day}: ${d.startTime} 출발 ~ ${d.endTime} 마무리, 총 ${d.slots}곳 (관광 ${activityCount} + 식사 ${mealCount}) → ${mealNote}`;
   }).join('\n');
 
   // ===== 자연어 프롬프트 조합 =====
@@ -276,7 +294,7 @@ ${dayRequirements}
 
 [필수 규칙]
 1. 장소명은 반드시 Google Maps에서 검색 가능한 영어 공식명 사용
-2. 매일 점심(type:"lunch") 1곳 + 저녁(type:"dinner") 1곳 필수 포함
+2. 식사 배치: 점심(type:"lunch")은 반드시 12:00~13:30에, 저녁(type:"dinner")은 18:30~20:00에 시작해야 함. 해당 시간대가 가용시간에 없으면 그 식사는 생략. 점심→저녁 간격 최소 4시간
 3. 동선 최적화: 가까운 장소끼리 묶고, 왔다갔다 하지 않게 순서 배치
 4. 시간은 현실적으로 (겹치지 않게, 이동시간 고려)
 5. estimatedCostEur = 1인당 입장료(EUR). 무료면 0, 식당은 1인 식사비
@@ -970,7 +988,7 @@ function generateNubiReason(place: any): string | null {
     reasons.push({ priority: 65, text: `구글 리뷰 ${reviewCount.toLocaleString()}개 — 세계적 명소` });
   } else if (reviewCount >= 1000) {
     reasons.push({ priority: 60, text: `구글 리뷰 ${reviewCount.toLocaleString()}개 — 검증된 인기` });
-  } else if (reviewCount >= 100) {
+  } else if (reviewCount >= 50) {
     reasons.push({ priority: 50, text: `구글 리뷰 ${reviewCount.toLocaleString()}개` });
   }
 
