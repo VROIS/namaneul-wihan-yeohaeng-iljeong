@@ -159,9 +159,10 @@ export function shouldApplyGuidePrice(
   mobilityStyle: MobilityStyle,
   travelStyle: TravelStyle,
 ): boolean {
-  return mobilityStyle === 'Minimal'
-    || travelStyle === 'Premium'
-    || travelStyle === 'Luxury';
+  const ms = (mobilityStyle || '').toLowerCase();
+  const ts = (travelStyle || '').toLowerCase();
+  return ms === 'minimal' || ms === 'drivemore'
+    || ts === 'premium' || ts === 'luxury';
 }
 
 // ===================================================================

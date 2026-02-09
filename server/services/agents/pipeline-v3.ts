@@ -533,8 +533,10 @@ async function step2_enrichAndBuild(
 
   // ── 2e. 일별 스케줄 구성 + 이동시간 계산 ──
   const mealBudget = MEAL_BUDGET[normalizeTravelStyle(formData.travelStyle)];
-  const travelMode = formData.mobilityStyle === 'WalkMore' ? 'WALK' as const
-    : formData.mobilityStyle === 'Minimal' ? 'DRIVE' as const
+  // 교통 카테고리에 따라 이동 모드 결정
+  // A카테고리(가이드) → DRIVE, B카테고리(대중교통) → TRANSIT/WALK
+  const travelMode = isGuideCategory ? 'DRIVE' as const
+    : formData.mobilityStyle === 'WalkMore' ? 'WALK' as const
     : 'TRANSIT' as const;
 
   const days: any[] = [];
@@ -1083,11 +1085,11 @@ async function calcTransit(
     const durationMinutes = Math.round(route.durationSeconds / 60);
     const modeLabel = actualMode === 'WALK' ? '도보'
       : actualMode === 'TRANSIT' ? '지하철/버스'
-      : '차량';
+      : '전용차량이동';
     return {
       from: from.name || fromName,
       to: to.name || '',
-      mode: actualMode.toLowerCase(),
+      mode: actualMode === 'DRIVE' ? 'guide' : actualMode.toLowerCase(),
       modeLabel,
       duration: durationMinutes,
       durationText: `${durationMinutes}분`,
