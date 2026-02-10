@@ -77,14 +77,14 @@ ${celebList}
   "confidence": 0.0-1.0
 }`;
 
+    // Google Search 한도 있으면 사용, 없으면 Gemini 자체 지식으로 검색
+    // 유명 장소(에펠탑, 루브르 등)는 Gemini 지식만으로도 셀럽 방문 정보 보유
     const tools = getSearchTools("celebrity_tracker");
 
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: prompt,
-      config: {
-        tools: tools,
-      },
+      config: tools ? { tools } : {},
     });
 
     const text = response.text || "";

@@ -940,13 +940,14 @@ async function enrichPlacesWithPhotoAndTour(
       }
     }
 
-    const packageTourMap = new Map<number, { included: boolean; mentionCount: number }>();
+    const packageTourMap = new Map<number, { included: boolean; mentionCount: number; mentionedBy: string[] }>();
     for (const pt of packageTourData) {
       if (pt.placeId) {
         const data = pt.extractedData as any;
         packageTourMap.set(pt.placeId, {
           included: data?.isPackageTourIncluded || false,
           mentionCount: data?.packageMentionCount || 0,
+          mentionedBy: Array.isArray(data?.mentionedBy) ? data.mentionedBy : [],
         });
       }
     }
@@ -972,6 +973,7 @@ async function enrichPlacesWithPhotoAndTour(
       if (tour) {
         updates.isPackageTourIncluded = tour.included;
         updates.packageMentionCount = tour.mentionCount;
+        (updates as any).packageMentionedBy = tour.mentionedBy;
         tourMatched++;
       }
 
