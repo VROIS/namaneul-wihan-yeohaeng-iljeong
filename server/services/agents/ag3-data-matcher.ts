@@ -24,7 +24,9 @@ import { eq, ilike, sql } from 'drizzle-orm';
 import type { AG1Output, AG3PreOutput, AG3Output, PlaceResult, ScheduleSlot } from './types';
 import { findCityUnified, addPlaceAlias, type CityResolveResult } from '../city-resolver';
 
-// Google Places API 키
+// Google Places API 키 + 💰 비용 보호
+import { apiCallTracker } from '../google-places';
+
 function getGoogleMapsApiKey(): string {
   return process.env.Google_maps_api_key || process.env.GOOGLE_MAPS_API_KEY || '';
 }
@@ -145,6 +147,14 @@ async function searchPlaceByName(
 ): Promise<{ lat: number; lng: number; photoUrl: string; googleMapsUri: string; googlePlaceId: string; rating?: number; userRatingCount?: number } | null> {
   const apiKey = getGoogleMapsApiKey();
   if (!apiKey) return null;
+
+  // 💰 비용 보호: 일일 Places API 한도 체크 (google-places.ts와 공유)
+  if (!apiCallTracker.canMakeRequest()) {
+    apiCallTracker.recordBlocked();
+    console.warn(`[AG3] ⚠️ Places API 일일 한도 초과 — ${placeName} 건너뜀`);
+    return null;
+  }
+  apiCallTracker.recordCall();
 
   try {
     const response = await fetch('https://places.googleapis.com/v1/places:searchText', {

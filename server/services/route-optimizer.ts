@@ -6,6 +6,45 @@ function getGoogleMapsApiKey(): string {
   return process.env.Google_maps_api_key || process.env.GOOGLE_MAPS_API_KEY || "";
 }
 
+// 💰 Routes API 일일 호출 제한 (요금 폭탄 방지)
+// Routes API: $5/1,000건 (Basic) ~ $10/1,000건 (Advanced)
+// 하루 1,000건 = 최대 $10/일 → 월 $300 → 안전 범위 내
+const ROUTES_DAILY_LIMIT = 1000;
+const routeCallTracker = {
+  date: new Date().toDateString(),
+  count: 0,
+  blocked: 0,
+
+  canMakeRequest(): boolean {
+    const today = new Date().toDateString();
+    if (this.date !== today) {
+      console.log(`[Routes API] 일일 카운터 리셋: 어제 ${this.count}건 사용, ${this.blocked}건 차단`);
+      this.date = today;
+      this.count = 0;
+      this.blocked = 0;
+    }
+    return this.count < ROUTES_DAILY_LIMIT;
+  },
+
+  recordCall(): void {
+    this.count++;
+    if (this.count % 100 === 0) {
+      console.log(`[Routes API] 일일 사용량: ${this.count}/${ROUTES_DAILY_LIMIT}`);
+    }
+  },
+
+  recordBlocked(): void {
+    this.blocked++;
+    if (this.blocked === 1 || this.blocked % 20 === 0) {
+      console.warn(`⚠️ [Routes API] 일일 한도 초과! ${this.count}/${ROUTES_DAILY_LIMIT} 도달. ${this.blocked}건 차단됨.`);
+    }
+  },
+
+  getStatus() {
+    return { date: this.date, used: this.count, limit: ROUTES_DAILY_LIMIT, blocked: this.blocked };
+  }
+};
+
 interface RouteStep {
   distance: number;
   duration: number;
@@ -137,6 +176,13 @@ export class RouteOptimizer {
       return baseRoute;
     }
 
+    // 💰 일일 호출 제한 체크
+    if (!routeCallTracker.canMakeRequest()) {
+      routeCallTracker.recordBlocked();
+      return baseRoute;
+    }
+    routeCallTracker.recordCall();
+
     try {
       const actualMode = travelMode === "TAXI" ? "DRIVE" : travelMode;
       const departure = departureTime || new Date();
@@ -253,6 +299,14 @@ export class RouteOptimizer {
     // ===== Google Routes API 호출 (핵심 동선 최적화) =====
     const apiKey = this.getApiKey();
     if (apiKey) {
+      // 💰 일일 호출 제한 체크
+      if (!routeCallTracker.canMakeRequest()) {
+        routeCallTracker.recordBlocked();
+        // 한도 초과 시 추정값 반환 (API 호출 없이)
+        return this.estimateRoute(originPlace, destinationPlace, travelMode);
+      }
+      routeCallTracker.recordCall();
+
       try {
         const fieldMask = actualMode === "TRANSIT"
           ? "routes.duration,routes.distanceMeters,routes.polyline.encodedPolyline,routes.legs.steps,routes.travelAdvisory.transitFare"
@@ -377,6 +431,17 @@ export class RouteOptimizer {
     } catch {}
 
     return result;
+  }
+
+  /** 💰 API 한도 초과 시 Haversine 추정값 반환 (과금 없음) */
+  private estimateRoute(origin: Place, dest: Place, mode: string): RouteResult {
+    const distanceMeters = this.calculateDistance(origin.latitude, origin.longitude, dest.latitude, dest.longitude);
+    const durationSeconds = Math.min(this.estimateDuration(distanceMeters, mode), 7200);
+    const estimatedCost = this.estimateCost(distanceMeters, mode);
+    return {
+      originPlaceId: origin.id, destinationPlaceId: dest.id, travelMode: mode,
+      distanceMeters: Math.round(distanceMeters), durationSeconds, estimatedCost: Math.round(estimatedCost * 100) / 100,
+    };
   }
 
   async optimizeRoute(

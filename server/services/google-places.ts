@@ -9,8 +9,10 @@ function getGoogleMapsApiKey(): string {
 const GOOGLE_PLACES_BASE_URL = "https://places.googleapis.com/v1/places";
 
 // 💰 일일 API 호출 제한 안전장치 (요금 폭탄 방지)
-const DAILY_API_LIMIT = 500; // 무료 티어 범위 내 (Pro: 5,000/월 → ~166/일)
-const apiCallTracker = {
+// ⚠️ 모든 Google Places API 호출은 반드시 이 tracker를 거쳐야 함!
+// ag3-data-matcher.ts, route-optimizer.ts 등에서도 import하여 사용
+export const DAILY_API_LIMIT = 500; // 무료 티어 범위 내 (Pro: 5,000/월 → ~166/일)
+export const apiCallTracker = {
   date: new Date().toDateString(),
   count: 0,
   blocked: 0,
