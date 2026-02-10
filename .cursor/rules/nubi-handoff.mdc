@@ -11,10 +11,10 @@ alwaysApply: true
 
 | 항목 | 내용 |
 |------|------|
-| 마지막 작업 | 문서 체계화 (.cursor/rules/ 9개 파일 + TASK.md 슬림화) |
-| 다음 할 일 | Google API 건강체크 수정 → Place Seed 파리 시딩 → 프론트엔드 nubiReason 표시 |
+| 마지막 작업 | 일정 검증(90%+) + AG2 반경100km 구현 → 커밋·푸시·배포본 실제 테스트 완료 (파리 200, 3일 18곳) |
+| 다음 할 일 | 건강체크 API 수정 → city_transport_fares → 프론트엔드 nubiReason |
 | 브랜치 | cursor-dev |
-| 배포 상태 | Koyeb 정상 (200 OK) |
+| 배포 상태 | Koyeb 정상 (200 OK). 커밋·푸시 시 자동 배포. |
 
 ## 긴급 이슈
 - **Google Maps/Places API 대시보드 빨간불**: 건강체크가 Geocoding API 테스트 → 실제 사용 API(Places New/Routes)와 다름
