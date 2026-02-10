@@ -1,0 +1,43 @@
+---
+description: NUBI 프론트엔드 규칙 - React Native Expo 개발 가이드
+alwaysApply: true
+---
+
+# 프론트엔드 개발 규칙
+
+## 기술 스택
+- **React Native (Expo)** — 웹/iOS/Android 동시 지원
+- **네비게이션**: React Navigation (Stack + Bottom Tab)
+- **API 통신**: fetch → 배포 URL 상대 경로
+
+## 핵심 화면
+| 화면 | 파일 | 역할 |
+|------|------|------|
+| 일정 생성 | `TripPlannerScreen.tsx` | 입력폼 + 결과 표시 + 로딩 (메인 화면) |
+| 관리자 | `AdminScreen.tsx` | 대시보드 iframe + 비밀번호 인증 |
+| 프로필 | `ProfileScreen.tsx` | 나의 여정/영상 |
+| 저장된 일정 | `SavedTripDetailScreen.tsx` | 일정 상세 + 영상 |
+
+## 컴포넌트
+- `PlaceAutocomplete.tsx` — Google Places Autocomplete (서버 프록시)
+- `MainTabNavigator.tsx` — 하단 5탭
+
+## UI 규칙
+1. **기존 UI 요소 최대 활용** (불필요한 새 컴포넌트 생성 금지)
+2. **0값 표시 방지**: finalScore, buzzScore 등 0이면 숨김
+3. **빈 페이지 절대 불가**: 이미지, 이유, 가격 모두 채움
+4. **구글맵 클릭 시**: 구글맵 앱 열기 (deep link)
+
+## Pipeline V3 응답→프론트 매핑 (해야 할 작업)
+- `nubiReason` → 선정이유 (크게/진하게 표시, 절대 빈 값 불가)
+- `dailyCost` → 1인/일 비용 (카테고리 A/B 분기)
+- `transit` → 구간별 이동 (A: "전용차량이동", B: 상세 노선)
+- `photoUrl` → 장소 대표 이미지
+- `nameKo` → 한국어 장소명
+
+## 진행 예정 UI 작업
+1. 긴 한 페이지 구조 (일별 탭 제거, 모든 날 세로 나열)
+2. nubiReason + 교통비 A/B 분기 표시
+3. 로딩 페이지 실시간 계산과정 표시
+4. 슬롯 색상 구분 (관광 파랑/점심 주황/저녁 빨강/이동 회색)
+5. 하단 5탭 개편 (일정/지도 토글/전문가/프로필/설정)

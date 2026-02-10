@@ -1,0 +1,44 @@
+---
+description: NUBI DB 스키마 보호 규칙 - 변경 시 반드시 확인
+alwaysApply: true
+---
+
+# DB 스키마 규칙
+
+> **shared/schema.ts 수정 시 반드시 사용자 확인 필요**
+> 잘못된 스키마 변경 → 데이터 손실 + 배포 실패
+
+## 핵심 테이블
+| 테이블 | 역할 | 주요 필드 |
+|--------|------|----------|
+| `cities` | 71개 도시 | name, nameEn, nameLocal, aliases, countryCode |
+| `places` | 1,669개 장소 | googlePlaceId, name, displayNameKo, aliases, cityId, buzzScore, finalScore |
+| `youtubeChannels` | 18개 채널 | channelId, channelName, isActive |
+| `youtubeVideos` | 영상 | videoId, channelId, isProcessed |
+| `youtubePlaceMentions` | 장소 언급 | videoId, placeName, placeId, sentiment |
+| `naverBlogPosts` | 블로그 글 | postTitle, cityId, placeId, sentimentScore |
+| `instagramHashtags` | 해시태그 | hashtag, postCount, linkedPlaceId |
+| `instagramPhotos` | 사진 | hashtagId, photoUrl, likeCount |
+| `tripAdvisorData` | TA 데이터 | placeId, rating, reviewCount, ranking |
+| `placePrices` | 가격 | placeId, priceType, priceEur, source |
+| `placeDataSources` | 미슐랭 등 | placeId, sourceType, data |
+| `guidePrices` | 가이드 요금 | vehicleType, basePriceEur, hourlyRateEur |
+| `routeCache` | 경로 캐시 | originId, destId, travelMode, durationSeconds |
+| `weatherCache` | 날씨 캐시 | cityId, forecastDate, tempMax, condition |
+| `crisisAlerts` | 위기 경보 | cityId, alertType, severity, isActive |
+| `exchangeRates` | 환율 | fromCurrency, toCurrency, rate |
+| `dataSyncLog` | 동기화 로그 | entityType, status, itemsProcessed |
+| `apiServiceStatus` | API 상태 | serviceName, isConfigured, dailyCallCount |
+| `geminiWebSearchCache` | Gemini 캐시 | queryHash, result, cachedAt |
+
+## 스키마 변경 체크리스트
+1. Supabase에서 마이그레이션 SQL 먼저 실행
+2. shared/schema.ts에 Drizzle 스키마 반영
+3. 관련 서비스 파일에서 새 필드 사용 코드 추가
+4. 빌드 테스트 (esbuild)
+5. 배포 후 DB 연결 확인
+
+## 장소 식별 규약 (googlePlaceId 기반)
+- `googlePlaceId` = 전 세계 유일 식별자 (바코드)
+- 모든 에이전트/크롤러는 placeId로 데이터 연결
+- 매칭 우선순위: googlePlaceId → name → aliases → fuzzy → Google API

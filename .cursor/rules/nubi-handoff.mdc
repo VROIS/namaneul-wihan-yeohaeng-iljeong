@@ -1,0 +1,32 @@
+---
+description: NUBI 현재 진행 상태 - AI 인수인계 (매 세션 종료 시 업데이트)
+alwaysApply: true
+---
+
+# NUBI 인수인계 현황
+
+> **이 파일은 매 세션 종료/중단 시 반드시 업데이트할 것**
+
+## 현재 상태 (2026-02-10)
+
+| 항목 | 내용 |
+|------|------|
+| 마지막 작업 | 문서 체계화 (.cursor/rules/ 9개 파일 + TASK.md 슬림화) |
+| 다음 할 일 | Google API 건강체크 수정 → Place Seed 파리 시딩 → 프론트엔드 nubiReason 표시 |
+| 브랜치 | cursor-dev |
+| 배포 상태 | Koyeb 정상 (200 OK) |
+
+## 긴급 이슈
+- **Google Maps/Places API 대시보드 빨간불**: 건강체크가 Geocoding API 테스트 → 실제 사용 API(Places New/Routes)와 다름
+- **Place Seed 0/71 도시**: 공식 시딩 완료된 도시 없음 (places 1,669개는 초기 데이터)
+- **API 비용 보호 적용 완료**: Places 500/일, Routes 1000/일, Gemini Search 160/일
+
+## 최우선 작업 (순서대로)
+1. 건강체크 API 수정 (Geocoding → Places API New 테스트)
+2. city_transport_fares DB 테이블 생성 + 교통 요금 수집
+3. 프론트엔드: nubiReason 표시 + 교통비 A/B 분기 + Pipeline V3 응답 매핑
+4. 프론트엔드: 긴 한 페이지 구조 + 로딩 계산과정 표시
+
+## 수집된 데이터 현황
+- 도시 71개, 장소 1,669개, 블로그 1,239개, 인스타 해시태그 3,327개
+- YouTube 18채널/54영상/23언급, 미슐랭 33개, 웹캐시 6,703개

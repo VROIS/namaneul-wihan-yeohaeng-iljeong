@@ -1,0 +1,60 @@
+---
+description: NUBI 크롤러/서비스 25개 역할 + 실행 순서 + 비용 한도
+alwaysApply: true
+---
+
+# 크롤러 & 서비스 전체 맵
+
+## 데이터 수집 크롤러 (10개) — 전부 Gemini 3.0 Flash 사용
+| 크롤러 | 수집 대상 | 외부 API | DB 테이블 | 스케줄 |
+|--------|----------|---------|----------|--------|
+| youtube-crawler | 18채널 영상→장소 추출 | YouTube Data API + Gemini | youtubeVideos, youtubePlaceMentions | 매일 2회 |
+| instagram-crawler | 해시태그/위치 게시물 수 | Gemini 웹검색 | instagramHashtags, instagramPhotos | 매일 2회 |
+| naver-blog-crawler | 네이버 블로그 여행글 | Naver API + Gemini | naverBlogPosts | 매일 2회 |
+| tistory-crawler | 티스토리 여행 리뷰 | Gemini 웹검색 | geminiWebSearchCache | 매일 2회 |
+| tripadvisor-crawler | 평점/리뷰/순위 | Gemini 웹검색 | tripAdvisorData | 매일 1회 |
+| michelin-crawler | 미슐랭 등급 | Gemini 웹검색 | placeDataSources | 매일 1회 |
+| price-crawler | 입장료/식사비 | Gemini 웹검색 | placePrices | 매일 2회 |
+| korean-platform-crawler | 마이리얼트립/클룩/트립닷컴 | Gemini 웹검색 | placePrices | 매일 1회 |
+| package-tour-validator | 패키지투어 포함 여부 | Gemini 웹검색 | geminiWebSearchCache | 매일 1회 |
+| photospot-scorer | 포토스팟 점수 | Gemini 웹검색 + 인스타 | geminiWebSearchCache | 매일 1회 |
+
+## 핵심 인프라 서비스 (8개)
+| 서비스 | 역할 | 외부 API | 비용 보호 |
+|--------|------|---------|----------|
+| place-seeder | 도시별 Google Places 시딩 + 10개 크롤러 연쇄 | Google Places API (New) | 일 500건, 일 2도시 |
+| place-linker | 크롤러 placeName → placeId 퍼지 매칭 | 없음 (DB only) | - |
+| score-aggregator | buzzScore/finalScore 재계산 | 없음 (DB only) | - |
+| data-scheduler | cron 스케줄러 (16개 작업 관리) | 없음 | BLOCKED_TASKS로 차단 가능 |
+| google-places | Places API 호출 + apiCallTracker | Google Places API (New) | **일 500건** (초과시 차단) |
+| route-optimizer | Routes API + 경로 캐싱 | Google Routes API | **일 1,000건** (초과시 Haversine 추정) |
+| city-resolver | 도시명 다국어→cityId 매칭 | 없음 (DB only) | - |
+| gemini-search-limiter | Gemini 웹검색 일일 한도 추적 | 없음 (트래커) | **일 160건** (5000/월÷31) |
+
+## 일정 생성 파이프라인 (7개)
+| 서비스 | 역할 | 비고 |
+|--------|------|------|
+| agents/pipeline-v3 | Step1(Gemini일정) + Step2(데이터보강) | **현행 메인** |
+| agents/ag3-data-matcher | DB 매칭 + Google Places 좌표 | Step2에서 호출 |
+| agents/types | 공통 타입/상수 (PlaceResult, MEAL_BUDGET 등) | |
+| itinerary-generator | Pipeline V3 위임 + enrichment export | |
+| transport-pricing-service | 교통비 A/B 카테고리 + 우버블랙 비교 | |
+| korean-sentiment-service | 한국인 감성 데이터 (인스타/블로그/유튜브) | |
+| exchange-rate | 환율 Frankfurter API (무료) | |
+
+## 시딩→크롤링 연쇄 파이프라인
+```
+place-seeder (일 2도시)
+  → [A그룹] TripAdvisor, Michelin, 가격, 포토스팟, 한국플랫폼, 패키지투어
+  → [B그룹] Instagram auto-collector, Naver Blog, Tistory
+  → place-linker (B그룹 placeName → placeId 매칭)
+  → score-aggregator (buzzScore/finalScore 재계산)
+```
+
+## 비용 한도 요약
+| API | 일일 한도 | 초과 시 |
+|-----|----------|--------|
+| Google Places API | 500건 | 요청 차단, null 반환 |
+| Google Routes API | 1,000건 | Haversine 추정값 반환 |
+| Gemini Google Search | 160건 | 캐시 반환 또는 스킵 |
+| Place Seeding | 2도시 | 다음날로 연기 |

@@ -1,0 +1,38 @@
+---
+description: NUBI 백엔드 개발 규칙 - DB 인코딩, API 구조, 서비스 패턴
+alwaysApply: true
+---
+
+# 백엔드 개발 규칙
+
+## DB 인코딩 (한국어 깨짐 방지)
+- DB 연결 시 UTF-8 강제: `server/db.ts` → `options: "-c client_encoding=UTF8"`
+- 저장 전 `hasBrokenEncoding()` 검증 (server/utils/db-encoding.ts)
+- 깨진 데이터 감지 시 저장 거부 + 로그 기록
+
+## API 엔드포인트 구조
+- 일정 생성: `POST /api/routes/generate`
+- 관리자: `GET/POST /api/admin/*` (admin-routes.ts, 3900줄+)
+- 장소 검색: `GET /api/places/autocomplete`, `GET /api/places/details`
+- 경로 재최적화: `POST /api/routes/regenerate-day`
+
+## 서비스 패턴
+- 모든 크롤러는 `data-scheduler.ts`에 cron 등록
+- 외부 API 호출 시 반드시 비용 트래커 사용 (nubi-cost-protection.mdc 참조)
+- Gemini 모델: `gemini-3-flash-preview` 통일 (전 서비스)
+- Gemini 초기화: 동적 (API 키 DB에서 런타임 로드)
+
+## 빌드
+- **빌드 도구**: esbuild (CJS 포맷)
+- **번들 크기**: ~4MB (server_dist/index.js)
+- **Docker**: Koyeb 배포 (Dockerfile 존재)
+
+## 관리자 대시보드
+- HTML 기반: `server/templates/admin-dashboard.html`
+- 모든 버튼은 실제 API 연결 (목업/더미 금지)
+- API 키: Supabase DB `api_keys` 테이블에서 런타임 로드
+
+## 도시명 매칭 (city-resolver.ts)
+- `findCityUnified()`: 영어/한국어/현지어/별칭 전부 매칭
+- 전처리: "파리, 프랑스" → "파리" (쉼표 뒤 국가명 제거)
+- 우선순위: nameEn → name(한국어) → nameLocal → aliases → 좌표 최근접

@@ -1,0 +1,51 @@
+---
+description: NUBI 아키텍처 개요 - 핵심 파일 맵 + Pipeline V3 구조
+alwaysApply: true
+---
+
+# NUBI 아키텍처
+
+## Pipeline V3 (현행, 2단계 병렬)
+```
+사용자 입력 (9가지: 목적지/날짜/동행/바이브/예산/이동방식/속도/큐레이션/생년월일)
+    ↓
+[Step 1] Gemini 완전 일정 생성 (병렬)
+  ├── Gemini 3.0 Flash: 자연어 프롬프트 → 완전한 일정 JSON
+  ├── DB 사전 로드: places 테이블 미리 로드
+  └── 한국 감성: 나버블/유튜브/인스타 점수
+    ↓
+[Step 2] 데이터 보강 + 비용 산정 (전부 병렬)
+  ├── DB 매칭 → 좌표, 사진, 점수
+  ├── nubiReason 생성 (차별화 선정이유)
+  ├── 교통비: 카테고리 A(가이드) / B(대중교통) 분기
+  ├── 환율/날씨/위기 실시간
+  └── 비용: 모두 1인 1일 기준 (OTA 방식)
+```
+
+## 핵심 파일 맵 (10개)
+
+| 파일 | 역할 |
+|------|------|
+| `server/services/agents/pipeline-v3.ts` | 일정 생성 메인 (Step1+Step2) |
+| `server/services/agents/ag3-data-matcher.ts` | DB 매칭 + Google Places 좌표 |
+| `server/services/itinerary-generator.ts` | Pipeline V3 위임 + enrichment export |
+| `server/services/transport-pricing-service.ts` | 교통비 A/B 카테고리 분기 |
+| `server/services/place-seeder.ts` | 도시별 시딩 + 10개 크롤러 연쇄 |
+| `server/services/place-linker.ts` | 크롤러 데이터 → placeId 매칭 |
+| `server/services/data-scheduler.ts` | cron 스케줄러 (16개 작업) |
+| `server/services/score-aggregator.ts` | buzzScore/finalScore 집계 |
+| `shared/schema.ts` | DB 스키마 (Drizzle ORM) |
+| `client/screens/TripPlannerScreen.tsx` | 메인 프론트엔드 화면 |
+
+## 교통비 A/B 카테고리 (마케팅 핵심)
+- **A (가이드)**: Premium/Luxury/Minimal → "전용차량이동" + 우버블랙 시간제 비교
+- **B (대중교통)**: WalkMore/Moderate + Economic/Reasonable → 상세 표시 + 가이드 업셀
+
+## 레거시 (미사용, 참고용 보존)
+- `agents/orchestrator.ts`, `ag1-skeleton-builder.ts`, `ag2-gemini-recommender.ts`, `ag4-realtime-finalizer.ts`
+
+## 기술 스택
+- **프론트**: React Native (Expo) — 웹/iOS/Android
+- **백엔드**: Express + TypeScript → esbuild CJS → Koyeb Docker
+- **DB**: Supabase PostgreSQL + Drizzle ORM
+- **AI**: Gemini 3.0 Flash (gemini-3-flash-preview) — 일정생성 + 전 크롤러 통일

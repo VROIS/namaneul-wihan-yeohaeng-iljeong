@@ -1,0 +1,46 @@
+---
+description: NUBI API 비용 보호 규칙 - 요금 폭탄 방지
+alwaysApply: true
+---
+
+# API 비용 보호 규칙
+
+> **배경**: 2026-02-07~08 Google Maps API 요금 €1,171 폭탄 발생
+> **원인**: ag3-data-matcher.ts가 apiCallTracker 없이 Places API 직접 호출
+> **대응**: 전 API에 일일 한도 + 트래커 적용 완료
+
+## 비용 보호 체계
+
+### 1. Google Places API (google-places.ts)
+- **한도**: 일 500건 (`DAILY_API_LIMIT = 500`)
+- **트래커**: `apiCallTracker` (export됨, 다른 서비스에서 공유)
+- **초과 시**: `canMakeRequest()` false → null 반환, `recordBlocked()` 기록
+- **사용처**: google-places.ts, ag3-data-matcher.ts, place-seeder.ts
+
+### 2. Google Routes API (route-optimizer.ts)
+- **한도**: 일 1,000건 (`ROUTES_DAILY_LIMIT = 1000`)
+- **트래커**: `routeCallTracker` (내부)
+- **초과 시**: `estimateRoute()` Haversine 추정값 반환 (과금 없음)
+- **사용처**: route-optimizer.ts (getRoute, getRouteWithTraffic)
+
+### 3. Gemini Google Search (gemini-search-limiter.ts)
+- **한도**: 일 160건 (월 5,000건 ÷ 31일)
+- **사용처**: 10개 크롤러 전부 이 리미터 거쳐 호출
+- **초과 시**: 캐시 반환 또는 스킵
+
+### 4. Place Seeding (place-seeder.ts)
+- **한도**: 일 2도시 (`DAILY_CITY_LIMIT = 2`)
+- **도시당 비용**: ~$1.89 (Google Places 4카테고리 × Nearby Search)
+- **월 예상**: ~$113 (Google $200/월 무료 크레딧 범위 내)
+
+## 절대 금지 규칙
+1. **apiCallTracker 없이 Google Places API 직접 호출 금지**
+2. **routeCallTracker 없이 Google Routes API 직접 호출 금지**
+3. **gemini-search-limiter 없이 Gemini 웹검색 호출 금지**
+4. **새 외부 API 추가 시 반드시 일일 한도 트래커 구현**
+5. **batch 처리 시 Promise.all 동시 호출 수 5건 이내**
+
+## 비용 모니터링
+- 관리자 대시보드: `/api/admin/api-services` (일일 호출 수 확인)
+- 건강 체크: `/api/admin/api-services/health` (API 연결 상태)
+- 대시보드 데이터 수집 섹션: 크롤러별 마지막 실행/성공/실패 확인

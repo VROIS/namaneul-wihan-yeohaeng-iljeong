@@ -33,8 +33,9 @@ import {
   type TransportPricingResult, type GuidePriceResult, type TransitPriceResult, type UberBlackComparison,
 } from '../transport-pricing-service';
 import { db } from '../../db';
-import { exchangeRates } from '@shared/schema';
-import { eq, and } from 'drizzle-orm';
+import { exchangeRates, youtubePlaceMentions, youtubeVideos, youtubeChannels, naverBlogPosts, placePrices, places } from '@shared/schema';
+import { eq, and, ilike, sql, desc } from 'drizzle-orm';
+import { findCelebrityVisitsForPlaces, type CelebrityVisit } from '../celebrity-tracker';
 
 // ===== TravelStyle 정규화 (소문자→표준형) =====
 function normalizeTravelStyle(style?: string): TravelStyle {
@@ -489,8 +490,19 @@ async function step2_enrichAndBuild(
     console.log(`[V3-Step2] 💰 교통비: 카테고리 ${transportPrice.category} | 1인/일 €${transportPrice.perPersonPerDay}`);
   }
 
-  // ── 2d. Enrichment 결과 병합 + nubiReason 생성 ──
-  const finalPlaces = matchedPlaces.map((p, i) => {
+  // ── 2d. Enrichment 결과 병합 + 셀럽 방문 검색 + nubiReason 생성 ──
+
+  // 🌟 셀럽 TOP 10 방문 흔적 검색 (Gemini 웹검색, 병렬)
+  const celebrityVisits = await findCelebrityVisitsForPlaces(
+    matchedPlaces.map(p => ({ id: p.id, name: p.name })),
+    preloaded.cityName,
+  ).catch(err => {
+    console.warn('[V3] 셀럽 검색 실패, 건너뜀:', err);
+    return new Map<string, CelebrityVisit>();
+  });
+
+  // 각 장소별 nubiReason 데이터 수집 (DB 조회 포함, 병렬)
+  const finalPlaces = await Promise.all(matchedPlaces.map(async (p, i) => {
     const kr = enrichedKorean[i];
     const ta = enrichedTA[i];
     const ph = enrichedPhoto[i];
@@ -513,17 +525,22 @@ async function step2_enrichAndBuild(
       bestPhotoTime: ph?.bestPhotoTime ?? p.bestPhotoTime,
       isPackageTourIncluded: ph?.isPackageTourIncluded ?? p.isPackageTourIncluded,
       packageMentionCount: ph?.packageMentionCount ?? p.packageMentionCount,
+      packageMentionedBy: (ph as any)?.packageMentionedBy,
       // 한국 감성 보너스
       ...(koreanSentiment ? {
         vibeScore: Math.min(10, (Math.max(p.vibeScore, ta?.vibeScore ?? 0)) + (koreanSentiment.totalBonus || 0) * 0.3),
       } : {}),
     };
 
-    // ⭐ nubiReason: 우리 데이터 기반 차별화 선정이유 1줄 (가장 강력한 것 1개)
-    merged.nubiReason = generateNubiReason(merged);
+    // ⭐ nubiReason: 순차 검색 — 찾으면 멈추고 구체적 이름+날짜 표시
+    merged.nubiReason = await generateNubiReasonV2(
+      p.id, p.name, preloaded.cityName,
+      celebrityVisits.get(p.id) || null,
+      merged,
+    );
 
     return merged;
-  });
+  }));
 
   // 최종 장소 맵
   const finalPlaceMap = new Map<string, PlaceResult>();
@@ -935,88 +952,185 @@ async function step2_enrichAndBuild(
 // =====================================================
 
 /**
- * ⭐ nubiReason 생성: 우리 데이터에서 가장 강력한 선정이유 1줄 추출
+ * ⭐ nubiReason V2: 순차 검색 — 위에서부터 찾으면 멈추고 "구체적 이름+날짜" 표시
  * 
- * 우선순위 (가장 차별화되는 데이터부터):
- * 1. 한국인 인기도 높으면 → "한국인 선호 TOP" (인스타/유튜브/블로그 종합)
- * 2. 패키지투어 포함 → "하나투어 등 패키지 필수코스"
- * 3. 포토스팟 점수 높으면 → "인스타 인기 포토스팟"
- * 4. TripAdvisor 상위 → "트립어드바이저 파리 3위"
- * 5. 구글 리뷰 많으면 → "구글 리뷰 1,500개 - 현지 유명"
- * 6. DB 검증 점수 → "Nubi 검증 점수 8.2"
- * 7. 없으면 → null (Gemini reason만 표시)
+ * 우선순위 (키워드 검색처럼 위에서 순서대로):
+ * 1순위: 셀럽 TOP 10 방문 → "제니(BLACKPINK) 24년 9월 게시"
+ * 2순위: 유튜버 18인 언급 → "빠니보틀 24년 11월 소개"
+ * 3순위: 네이버 블로그   → "네이버 블로그 890건"
+ * 4순위: 패키지투어 4사  → "하나투어·모두투어 필수코스"
+ * 5순위: 여행앱 TOP 3   → "마이리얼트립 4.8점 (320건)"
+ * 6순위: 구글 리뷰       → "구글 리뷰 284,095개"
+ * 
+ * 이 문구 = 앱의 광고 카피 = 핵심 차별화
  */
-function generateNubiReason(place: any): string | null {
-  const reasons: { priority: number; text: string }[] = [];
+async function generateNubiReasonV2(
+  placeId: string,
+  placeName: string,
+  cityName: string,
+  celebrityVisit: CelebrityVisit | null,
+  mergedData: any,
+): Promise<string> {
+  try {
+    // ── 1순위: 셀럽 방문 흔적 ──
+    if (celebrityVisit && celebrityVisit.found) {
+      const group = celebrityVisit.celebrityGroup ? `(${celebrityVisit.celebrityGroup})` : '';
+      return `${celebrityVisit.celebrityName}${group} ${celebrityVisit.date} 게시`;
+    }
 
-  // 1순위: 한국인 인기도 (인스타+유튜브+블로그 종합)
-  const krScore = place.koreanPopularityScore || 0;
-  if (krScore >= 7) {
-    reasons.push({ priority: 100, text: `한국인 선호 TOP (인기도 ${krScore.toFixed(1)})` });
-  } else if (krScore >= 4) {
-    reasons.push({ priority: 80, text: `한국인 인기 (인기도 ${krScore.toFixed(1)})` });
-  }
+    // ── 2순위: 유튜버 18인 언급 (DB에서 채널명 포함 조회) ──
+    if (db) {
+      try {
+        const ytMention = await db.select({
+          channelName: youtubeChannels.channelName,
+          publishedAt: youtubeVideos.publishedAt,
+          confidence: youtubePlaceMentions.confidence,
+        })
+          .from(youtubePlaceMentions)
+          .innerJoin(youtubeVideos, eq(youtubePlaceMentions.videoId, youtubeVideos.id))
+          .innerJoin(youtubeChannels, eq(youtubeVideos.channelId, youtubeChannels.id))
+          .where(ilike(youtubePlaceMentions.placeName, `%${placeName}%`))
+          .orderBy(desc(youtubeChannels.trustWeight))
+          .limit(1);
 
-  // 2순위: 패키지투어 포함 (하나투어/모두투어 등)
-  if (place.isPackageTourIncluded) {
-    const mentionCount = place.packageMentionCount || 0;
-    reasons.push({
-      priority: 90,
-      text: mentionCount > 3
-        ? `한국 패키지투어 ${mentionCount}곳에서 필수코스`
-        : '한국 패키지투어 필수코스',
-    });
-  }
+        if (ytMention.length > 0 && ytMention[0].channelName) {
+          const dateStr = ytMention[0].publishedAt
+            ? formatKoreanDate(new Date(ytMention[0].publishedAt))
+            : '';
+          return `${ytMention[0].channelName} ${dateStr} 소개`.trim();
+        }
+      } catch (e) {
+        // YouTube 조회 실패 → 다음 순위로
+      }
+    }
 
-  // 3순위: 포토스팟 (인스타 사진 핫플)
-  const photoScore = place.photoSpotScore || 0;
-  if (photoScore >= 7) {
-    reasons.push({
-      priority: 85,
-      text: place.photoTip
-        ? `인스타 인기 포토스팟 — ${place.photoTip}`
-        : '인스타 인기 포토스팟',
-    });
-  }
+    // ── 3순위: 네이버 블로그 건수 + 키워드 ──
+    if (db) {
+      try {
+        // places 테이블에서 placeId 매칭
+        let dbPlaceId: number | null = null;
+        const placeMatch = await db.select({ id: places.id })
+          .from(places)
+          .where(ilike(places.name, `%${placeName}%`))
+          .limit(1);
+        if (placeMatch.length > 0) dbPlaceId = placeMatch[0].id;
 
-  // 4순위: TripAdvisor 순위
-  const taReviewCount = place.tripAdvisorReviewCount || 0;
-  const taRanking = place.tripAdvisorRanking;
-  if (taRanking && taReviewCount > 0) {
-    reasons.push({
-      priority: 75,
-      text: `트립어드바이저 ${taRanking} (리뷰 ${taReviewCount.toLocaleString()}개)`,
-    });
-  } else if (taReviewCount >= 500) {
-    reasons.push({
-      priority: 70,
-      text: `트립어드바이저 리뷰 ${taReviewCount.toLocaleString()}개`,
-    });
-  }
+        if (dbPlaceId) {
+          const blogCount = await db.select({
+            count: sql<number>`count(*)`,
+          })
+            .from(naverBlogPosts)
+            .where(eq(naverBlogPosts.placeId, dbPlaceId));
 
-  // 5순위: 구글 리뷰 수 (유명세 = 리뷰 수, 평점보다 리뷰수가 중요)
-  const reviewCount = place.userRatingCount || 0;
-  if (reviewCount >= 10000) {
-    reasons.push({ priority: 65, text: `구글 리뷰 ${reviewCount.toLocaleString()}개 — 세계적 명소` });
-  } else if (reviewCount >= 1000) {
-    reasons.push({ priority: 60, text: `구글 리뷰 ${reviewCount.toLocaleString()}개 — 검증된 인기` });
-  } else if (reviewCount >= 50) {
-    reasons.push({ priority: 50, text: `구글 리뷰 ${reviewCount.toLocaleString()}개` });
-  }
+          const count = Number(blogCount[0]?.count || 0);
+          if (count > 0) {
+            return `네이버 블로그 ${count.toLocaleString()}건`;
+          }
+        }
 
-  // 6순위: Nubi 종합 점수
-  const finalScore = place.finalScore || 0;
-  if (finalScore >= 7 && reasons.length === 0) {
-    reasons.push({ priority: 40, text: `Nubi 추천 점수 ${finalScore.toFixed(1)}` });
-  }
+        // placeId 매칭 실패 시 도시+장소명으로 검색
+        const { findCityUnified } = await import('../city-resolver');
+        const cityResult = await findCityUnified(cityName);
+        if (cityResult) {
+          const blogNameCount = await db.select({
+            count: sql<number>`count(*)`,
+          })
+            .from(naverBlogPosts)
+            .where(and(
+              eq(naverBlogPosts.cityId, cityResult.cityId),
+              sql`${naverBlogPosts.postTitle} ILIKE ${`%${placeName}%`}`,
+            ));
 
-  // 가장 우선순위 높은 이유 1개만 반환 (반드시 1줄은 있어야 함)
-  if (reasons.length === 0) {
-    // 7순위 fallback: 절대 빈 값 없이 최소한 Gemini AI 추천이라도 표시
-    return 'Nubi AI 데이터 검증 추천';
+          const count = Number(blogNameCount[0]?.count || 0);
+          if (count > 0) {
+            return `네이버 블로그 ${count.toLocaleString()}건`;
+          }
+        }
+      } catch (e) {
+        // 블로그 조회 실패 → 다음 순위로
+      }
+    }
+
+    // ── 4순위: 패키지투어 (하나투어/모두투어 등) ──
+    if (mergedData.isPackageTourIncluded) {
+      const mentionedBy = mergedData.packageMentionedBy;
+      if (Array.isArray(mentionedBy) && mentionedBy.length > 0) {
+        return `${mentionedBy.slice(0, 2).join('·')} 필수코스`;
+      }
+      return '한국 패키지투어 필수코스';
+    }
+
+    // ── 5순위: 여행앱 (마이리얼트립/클룩/트립닷컴) ──
+    if (db) {
+      try {
+        let dbPlaceId: number | null = null;
+        const placeMatch = await db.select({ id: places.id })
+          .from(places)
+          .where(ilike(places.name, `%${placeName}%`))
+          .limit(1);
+        if (placeMatch.length > 0) dbPlaceId = placeMatch[0].id;
+
+        if (dbPlaceId) {
+          const appData = await db.select({
+            source: placePrices.source,
+            rawData: placePrices.rawData,
+          })
+            .from(placePrices)
+            .where(and(
+              eq(placePrices.placeId, dbPlaceId),
+              sql`${placePrices.source} IN ('myrealtrip', 'klook', 'tripdotcom')`,
+            ))
+            .limit(1);
+
+          if (appData.length > 0) {
+            const APP_NAMES: Record<string, string> = {
+              myrealtrip: '마이리얼트립',
+              klook: '클룩',
+              tripdotcom: '트립닷컴',
+            };
+            const raw = appData[0].rawData as any;
+            const appName = APP_NAMES[appData[0].source] || appData[0].source;
+            if (raw?.rating) {
+              const reviewCount = raw.reviewCount ? ` (${Number(raw.reviewCount).toLocaleString()}건)` : '';
+              return `${appName} ${raw.rating}점${reviewCount}`;
+            }
+            if (raw?.productName) {
+              return `${appName} 인기 상품`;
+            }
+          }
+        }
+      } catch (e) {
+        // 여행앱 조회 실패 → 다음 순위로
+      }
+    }
+
+    // ── 6순위 (최종): 구글 리뷰 수 ──
+    const reviewCount = mergedData.userRatingCount || 0;
+    if (reviewCount >= 10000) {
+      return `구글 리뷰 ${reviewCount.toLocaleString()}개`;
+    } else if (reviewCount >= 1000) {
+      return `구글 리뷰 ${reviewCount.toLocaleString()}개`;
+    } else if (reviewCount >= 50) {
+      return `구글 리뷰 ${reviewCount.toLocaleString()}개`;
+    }
+
+    // 모든 순위에서 못 찾은 경우
+    return '데이터 수집 중';
+  } catch (error) {
+    console.warn(`[NubiReason] ${placeName} 생성 실패:`, error);
+    return '데이터 수집 중';
   }
-  reasons.sort((a, b) => b.priority - a.priority);
-  return reasons[0].text;
+}
+
+/** 날짜를 "24년 9월" 형태로 변환 */
+function formatKoreanDate(date: Date): string {
+  try {
+    const y = date.getFullYear() % 100;
+    const m = date.getMonth() + 1;
+    return `${y}년 ${m}월`;
+  } catch {
+    return '';
+  }
 }
 
 /** Enrichment 함수 동적 import (순환 참조 방지) */
