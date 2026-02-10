@@ -116,6 +116,8 @@ ${celebList}
  * 여러 장소에 대해 셀럽 방문 정보를 일괄 검색
  * 일정표의 장소들(보통 10~20개)에 대해 병렬로 실행
  * 
+ * ⚡ 성능 최적화: 주요 명소 5곳만 검색 (전체 타임아웃 30초)
+ * 
  * @returns Map<placeId, CelebrityVisit>
  */
 export async function findCelebrityVisitsForPlaces(
@@ -126,24 +128,38 @@ export async function findCelebrityVisitsForPlaces(
 
   const results = new Map<string, CelebrityVisit>();
 
-  // 병렬 실행 (최대 3개씩 배치로 Gemini 부하 분산)
-  const BATCH_SIZE = 3;
-  for (let i = 0; i < places.length; i += BATCH_SIZE) {
-    const batch = places.slice(i, i + BATCH_SIZE);
-    const batchResults = await Promise.all(
-      batch.map(async (place) => {
-        const visit = await findCelebrityVisitForPlace(place.name, cityName);
-        return { placeId: place.id, visit };
-      })
-    );
+  // ⚡ 성능: 전체 타임아웃 30초 (Koyeb 게이트웨이 100초 내 완료 보장)
+  const TOTAL_TIMEOUT = 30000;
+  const startTime = Date.now();
 
-    for (const { placeId, visit } of batchResults) {
-      if (visit) {
-        results.set(placeId, visit);
-      }
+  // 주요 장소만 선별 (최대 5곳 — 식사 제외, 관광지 우선)
+  const targetPlaces = places
+    .filter(p => !p.name.toLowerCase().includes('restaurant') && !p.name.toLowerCase().includes('café'))
+    .slice(0, 5);
+
+  if (targetPlaces.length === 0) {
+    console.log('[Celebrity] 검색 대상 장소 없음, 건너뜀');
+    return results;
+  }
+
+  // 전체 5곳을 동시 병렬 실행 (각 장소에 개별 타임아웃)
+  const batchResults = await Promise.all(
+    targetPlaces.map(async (place) => {
+      // 개별 장소 타임아웃 8초
+      const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 8000));
+      const searchPromise = findCelebrityVisitForPlace(place.name, cityName);
+      const visit = await Promise.race([searchPromise, timeoutPromise]);
+      return { placeId: place.id, visit };
+    })
+  );
+
+  for (const { placeId, visit } of batchResults) {
+    if (visit) {
+      results.set(placeId, visit);
     }
   }
 
-  console.log(`[Celebrity] 🌟 완료: ${results.size}/${places.length}곳에서 셀럽 방문 흔적 발견`);
+  const elapsed = Date.now() - startTime;
+  console.log(`[Celebrity] 🌟 완료 (${elapsed}ms): ${results.size}/${targetPlaces.length}곳에서 셀럽 방문 흔적 발견`);
   return results;
 }
