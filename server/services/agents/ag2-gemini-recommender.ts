@@ -107,7 +107,7 @@ Example: {"places":[{"name":"Eiffel Tower","reason":"파리 필수 랜드마크,
     console.log(`[AG2] 🤖 Gemini에 ${slotCount}곳 요청 (간소화 프롬프트 ${prompt.length}자)...`);
 
     const response = await getAI().models.generateContent({
-      model: "gemini-2.0-flash",
+      model: "gemini-3-flash-preview",
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       config: {
         temperature: 0.7,
