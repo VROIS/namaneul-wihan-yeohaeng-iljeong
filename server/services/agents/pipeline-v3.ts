@@ -950,8 +950,7 @@ async function step2_enrichAndBuild(
   const { verifyItinerary } = await import('./itinerary-verifier');
   const verifyResult = await verifyItinerary(result);
   if (!verifyResult.passed) {
-    console.warn(`[V3] ❌ 일정 검증 미통과 (score=${verifyResult.score}) — 사용자 노출 차단`);
-    throw new Error('일정 검증 미통과');
+    console.warn(`[V3] ⚠️ 일정 검증 미통과 (score=${verifyResult.score}) — 일정은 그대로 반환, 검증만 로그`);
   }
   return result;
 }

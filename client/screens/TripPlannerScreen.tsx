@@ -467,26 +467,17 @@ export default function TripPlannerScreen() {
         crisisAlerts: crisisCheck.hasAlerts ? result.crisisAlerts : undefined,
       });
       setScreen("Result");
-    } catch (error) {
+    } catch (error: any) {
       clearInterval(interval);
       console.error("Failed to generate itinerary:", error);
 
-      const vibeWeights = calculateVibeWeights(formData.vibes, formData.curationFocus);
-      setItinerary({
-        title: `${formData.destination} 여행`,
-        destination: formData.destination,
-        startDate: formData.startDate,
-        endDate: formData.endDate,
-        vibeWeights,
-        days: [
-          {
-            day: 1,
-            summary: "API 연결 오류 - 기본 일정으로 표시됩니다",
-            places: [],
-          },
-        ],
-      });
-      setScreen("Result");
+      const message = error?.message || "일정 생성에 실패했습니다.";
+      Alert.alert(
+        "일정 생성 실패",
+        message.includes("일정 검증") ? "일정 검증 기준 미달. 다시 시도해 주세요." : "다시 시도해 주세요.",
+        [{ text: "확인" }]
+      );
+      setScreen("Input");
     }
   };
 
