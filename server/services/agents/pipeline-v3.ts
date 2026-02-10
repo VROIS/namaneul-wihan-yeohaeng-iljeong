@@ -886,7 +886,8 @@ async function step2_enrichAndBuild(
     }
   })() : null;
 
-  return {
+  // ── 최종 일정 검증 (90% 이상만 프론트 전송) ──
+  const result = {
     title: `${formData.destination} ${dayCount}일 여행`,
     destination: formData.destination,
     startDate: formData.startDate,
@@ -945,6 +946,14 @@ async function step2_enrichAndBuild(
       pipelineVersion: 'v3-2step',
     },
   };
+
+  const { verifyItinerary } = await import('./itinerary-verifier');
+  const verifyResult = await verifyItinerary(result);
+  if (!verifyResult.passed) {
+    console.warn(`[V3] ❌ 일정 검증 미통과 (score=${verifyResult.score}) — 사용자 노출 차단`);
+    throw new Error('일정 검증 미통과');
+  }
+  return result;
 }
 
 // =====================================================

@@ -36,6 +36,13 @@ const SEARCH_CATEGORIES: {
   { category: "hotel", placeType: "hotel", vibeKeywords: ["Healing", "Romantic"] },
 ];
 
+const TARGET_PLACES_PER_CATEGORY = 30;
+const DAILY_NEW_PLACES_CAP = 30;
+const ACTIVE_CATEGORY_INDICES = [0, 1, 2]; // attraction, restaurant, cafe (숙소 제외)
+const PARIS_FIRST_NAME = "파리";
+/** 전 도시 공통: 도시+근교 기초 수집 범위 (도심 기준 반경 100km) */
+const CITY_SEARCH_RADIUS_METERS = 100000;
+
 // ============================================
 // Wikimedia Commons API (무료)
 // ============================================
@@ -147,6 +154,125 @@ export class PlaceSeeder {
   private currentCity: string = "";
   private progress: { total: number; completed: number; current: string } = { total: 0, completed: 0, current: "" };
 
+  /** 도시별 4대분류 건수 (attraction=landmark 포함, restaurant, cafe, hotel) */
+  async getCityPlaceCountsByCategory(cityId: number): Promise<{ attraction: number; restaurant: number; cafe: number; hotel: number; total: number }> {
+    const rows = await db.select({ type: places.type, cnt: count() })
+      .from(places)
+      .where(eq(places.cityId, cityId))
+      .groupBy(places.type);
+    const map = new Map(rows.map(r => [r.type, Number(r.cnt)]));
+    const attraction = (map.get("attraction") || 0) + (map.get("landmark") || 0);
+    return {
+      attraction,
+      restaurant: map.get("restaurant") || 0,
+      cafe: map.get("cafe") || 0,
+      hotel: map.get("hotel") || 0,
+      total: attraction + (map.get("restaurant") || 0) + (map.get("cafe") || 0) + (map.get("hotel") || 0),
+    };
+  }
+
+  /**
+   * 1일 1카테고리만 시딩, 최대 maxNewPlaces건 (일일 한도 준수)
+   */
+  async seedCityPlacesOneCategory(
+    cityId: number,
+    categoryIndex: number,
+    maxNewPlaces: number
+  ): Promise<{ seeded: number; skipped: number; errors: string[] }> {
+    const { apiCallTracker } = await import("./google-places");
+    const city = await db.select().from(cities).where(eq(cities.id, cityId)).then(r => r[0]);
+    if (!city) return { seeded: 0, skipped: 0, errors: ["도시 없음"] };
+    const searchCat = SEARCH_CATEGORIES[categoryIndex];
+    if (!searchCat) return { seeded: 0, skipped: 0, errors: ["카테고리 인덱스 오류"] };
+
+    this.currentCity = city.name;
+    let seeded = 0;
+    let skipped = 0;
+    const errors: string[] = [];
+
+    if (!apiCallTracker.canMakeRequest()) {
+      console.log("[PlaceSeeder] 일일 API 한도 도달 — 시딩 건너뜀");
+      return { seeded: 0, skipped: 0, errors: ["일일 한도 도달"] };
+    }
+
+    try {
+      const googlePlaces = await googlePlacesFetcher.searchNearby(
+        city.latitude,
+        city.longitude,
+        searchCat.placeType === "landmark" ? "attraction" : searchCat.placeType,
+        CITY_SEARCH_RADIUS_METERS
+      );
+
+      for (const gPlace of googlePlaces) {
+        if (seeded >= maxNewPlaces) break;
+        if (!apiCallTracker.canMakeRequest()) break;
+
+        const existing = await storage.getPlaceByGoogleId(gPlace.id);
+        if (existing) {
+          skipped++;
+          continue;
+        }
+
+        try {
+          const details = await googlePlacesFetcher.getPlaceDetails(gPlace.id);
+          const placeId = await googlePlacesFetcher.fetchAndStorePlace(details, cityId, searchCat.placeType);
+          for (const vibe of searchCat.vibeKeywords) await this.updateVibeKeywords(placeId, vibe);
+          seeded++;
+          console.log(`[PlaceSeeder]   + ${details.displayName?.text || gPlace.id} (${seeded}/${maxNewPlaces})`);
+          await delay(200);
+        } catch (e: any) {
+          errors.push(`${gPlace.displayName?.text || gPlace.id}: ${e.message}`);
+        }
+      }
+    } catch (e: any) {
+      errors.push(`${searchCat.category}: ${e.message}`);
+    }
+
+    return { seeded, skipped, errors };
+  }
+
+  /**
+   * 파리 우선, 1일 1카테고리·최대 30건. 채울 카테고리 없으면 다음 도시로.
+   */
+  async seedPriorityCityByCategory(): Promise<{ cityName: string; category: string; seeded: number; linked: number }> {
+    if (this.isRunning) return { cityName: "", category: "", seeded: 0, linked: 0 };
+    const paris = await db.select().from(cities).where(eq(cities.name, PARIS_FIRST_NAME)).then(r => r[0]);
+    if (!paris) {
+      console.log("[PlaceSeeder] 파리 도시 없음 — seedAllPendingCities로 진행");
+      const r = await this.seedAllPendingCities(1);
+      return { cityName: "pending", category: "", seeded: r.totalSeeded, linked: 0 };
+    }
+
+    const counts = await this.getCityPlaceCountsByCategory(paris.id);
+    const categoryOrder: (keyof typeof counts)[] = ["attraction", "restaurant", "cafe"];
+    const dayIndex = Math.floor(Date.now() / (24 * 60 * 60 * 1000)) % 3;
+    const catKey = categoryOrder[dayIndex];
+    const catIndex = catKey === "attraction" ? 0 : catKey === "restaurant" ? 1 : 2;
+    const current = counts[catKey];
+    const need = Math.max(0, TARGET_PLACES_PER_CATEGORY - current);
+    if (need === 0) {
+      console.log(`[PlaceSeeder] 파리 [${catKey}] 이미 ${current}건 — 오늘 시딩 스킵`);
+      return { cityName: paris.name, category: catKey, seeded: 0, linked: 0 };
+    }
+
+    this.isRunning = true;
+    const toSeed = Math.min(need, DAILY_NEW_PLACES_CAP);
+    console.log(`[PlaceSeeder] 파리 [${catKey}] ${current}→${TARGET_PLACES_PER_CATEGORY} (오늘 +${toSeed}건)`);
+    try {
+      const result = await this.seedCityPlacesOneCategory(paris.id, catIndex, toSeed);
+      let linked = 0;
+      if (result.seeded > 0) {
+        const { linkDataForCity } = await import("./place-linker");
+        const linkResult = await linkDataForCity(paris.id);
+        linked = linkResult.linked;
+        await this.runChainedCrawlers(paris.id, paris.name);
+      }
+      return { cityName: paris.name, category: catKey, seeded: result.seeded, linked };
+    } finally {
+      this.isRunning = false;
+    }
+  }
+
   /**
    * 단일 도시 시딩: Google Places (인기순) + Wikimedia + OpenTripMap
    * 🔥 최적화: 4카테고리만 검색, rankPreference: POPULARITY로 리뷰 많은 순
@@ -176,7 +302,7 @@ export class PlaceSeeder {
           city.latitude,
           city.longitude,
           searchCat.placeType === "landmark" ? "attraction" : searchCat.placeType,
-          10000 // 10km 반경 (대도시 커버)
+          CITY_SEARCH_RADIUS_METERS // 전 도시 공통 도시+근교 100km
         );
         
         console.log(`[PlaceSeeder]   ${searchCat.category}: ${googlePlaces.length}개 발견 (인기순 정렬)`);
@@ -247,8 +373,7 @@ export class PlaceSeeder {
             
             // 리뷰수 로깅 (유명세 확인)
             const reviewCount = gPlace.userRatingCount || 0;
-            const rating = gPlace.rating || 0;
-            console.log(`[PlaceSeeder]   + ${gPlace.displayName?.text} (★${rating} / ${reviewCount.toLocaleString()}리뷰)`);
+            console.log(`[PlaceSeeder]   + ${gPlace.displayName?.text} (${reviewCount.toLocaleString()}리뷰)`);
             
             // Rate limit 방지
             await delay(200);

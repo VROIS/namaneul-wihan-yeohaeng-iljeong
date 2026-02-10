@@ -95,13 +95,15 @@ export async function generateRecommendations(skeleton: AG1Output): Promise<Plac
   const foodCount = Math.ceil(slotCount * 0.4); // 40% 식당
   const activityCount = slotCount - foodCount;
 
+  // 🔗 사용자 입력 도시 반경 100km 내외: Place Seed·AG3 매칭 범위와 동일하게 제한
   const prompt = `Recommend exactly ${slotCount} real places in ${formData.destination} for Korean tourists.
+Important: Only recommend places within about 100km radius of the destination city (city center + suburbs). This matches our data coverage.
 Need: ${activityCount} attractions + ${foodCount} restaurants/cafes. Vibes: ${vibeDescription}. Group: ${formData.companionType} ${formData.companionCount}pax.
 
 Respond ONLY with this JSON (no markdown):
 {"places":[{"name":"Official English name on Google Maps","reason":"Korean 1-line reason","isFood":false}]}
 
-Example: {"places":[{"name":"Eiffel Tower","reason":"파리 필수 랜드마크, 야경 명소","isFood":false},{"name":"Le Bouillon Chartier","reason":"100년 전통 파리 맛집, 가성비 최고","isFood":true}]}`;
+Example (Paris): {"places":[{"name":"Eiffel Tower","reason":"파리 필수 랜드마크, 야경 명소","isFood":false},{"name":"Le Bouillon Chartier","reason":"100년 전통 파리 맛집, 가성비 최고","isFood":true}]}`;
 
   try {
     console.log(`[AG2] 🤖 Gemini에 ${slotCount}곳 요청 (간소화 프롬프트 ${prompt.length}자)...`);
