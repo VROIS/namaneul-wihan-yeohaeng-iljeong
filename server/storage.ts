@@ -151,6 +151,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updatePlaceData(id: number, data: Partial<InsertPlace>): Promise<Place | undefined> {
+    if (data == null || typeof data !== "object") return undefined;
     // undefined 값 제거 (null은 유지 — 명시적으로 null로 설정 가능)
     const cleanData: Record<string, any> = {};
     for (const [key, value] of Object.entries(data)) {

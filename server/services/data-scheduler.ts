@@ -506,11 +506,11 @@ export class DataScheduler {
   private async runPlaceSeedSync(): Promise<{ success: boolean; itemsProcessed: number; errors: string[] }> {
     try {
       const { placeSeeder } = await import("./place-seeder");
-      // 파리 우선: 1일 1카테고리·최대 30건 (무료 한도 내)
       const result = await placeSeeder.seedPriorityCityByCategory();
       return { success: true, itemsProcessed: result.seeded + result.linked, errors: [] };
     } catch (error: any) {
-      return { success: false, itemsProcessed: 0, errors: [error.message] };
+      console.error("[Scheduler] place_seed_sync 스택:", error?.stack || error);
+      return { success: false, itemsProcessed: 0, errors: [error?.message || String(error)] };
     }
   }
 

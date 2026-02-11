@@ -64,8 +64,8 @@ async function fetchWikimediaPhotos(lat: number, lng: number, limit: number = 5)
     if (!imgResponse.ok) return [];
     
     const imgData = await imgResponse.json();
-    const imagePages = imgData?.query?.pages || {};
-    
+    const imagePages = imgData?.query?.pages;
+    if (imagePages == null || typeof imagePages !== "object") return [];
     const urls: string[] = [];
     for (const pageId of Object.keys(imagePages)) {
       const imageInfo = imagePages[pageId]?.imageinfo?.[0];
@@ -391,7 +391,7 @@ export class PlaceSeeder {
   async seedPriorityCityByCategory(): Promise<{ cityName: string; category: string; seeded: number; linked: number }> {
     if (this.isRunning) return { cityName: "", category: "", seeded: 0, linked: 0 };
 
-    const FRANCE_29 = ["니스", "리옹", "마르세유", "보르도", "스트라스부르", "툴루즈", "몽펠리에", "낭트", "칸", "아비뇽", "엑상프로방스", "콜마르", "앙시", "디종", "루앙", "릴", "렌", "카르카손", "비아리츠", "생말로", "샤모니", "아를", "생트로페", "베르사유", "그르노블", "랭스", "안티브", "망통", "투르"];
+    const FRANCE_29: string[] = ["니스", "리옹", "마르세유", "보르도", "스트라스부르", "툴루즈", "몽펠리에", "낭트", "칸", "아비뇽", "엑상프로방스", "콜마르", "앙시", "디종", "루앙", "릴", "렌", "카르카손", "비아리츠", "생말로", "샤모니", "아를", "생트로페", "베르사유", "그르노블", "랭스", "안티브", "망통", "투르"];
     const EUROPE_30 = ["로마", "피렌체", "베니스", "밀라노", "아말피", "바르셀로나", "마드리드", "세비야", "그라나다", "런던", "에딘버러", "뮌헨", "베를린", "프랑크푸르트", "취리히", "인터라켄", "비엔나", "잘츠부르크", "암스테르담", "브뤼셀", "프라하", "부다페스트", "리스본", "아테네", "두브로브니크"];
     const categoryOrder = ["attraction", "restaurant", "healing", "adventure", "hotspot"] as const;
     const dayIndex = Math.floor(Date.now() / (24 * 60 * 60 * 1000)) % 5;
@@ -399,15 +399,18 @@ export class PlaceSeeder {
     const catIndex = categoryOrder.indexOf(catKey);
 
     const allCities = await db.select().from(cities);
+    if (!Array.isArray(allCities)) {
+      throw new Error(`db.select(cities) 비정상 반환: ${typeof allCities}`);
+    }
     const cityOrder: typeof allCities = [];
-    const paris = allCities.find(c => c.name === PARIS_FIRST_NAME);
+    const paris = allCities.find((c: { name?: string | null }) => (c?.name ?? "") === PARIS_FIRST_NAME);
     if (paris) cityOrder.push(paris);
     for (const n of FRANCE_29) {
-      const c = allCities.find(x => x.name === n);
+      const c = allCities.find((x: { name?: string | null }) => (x?.name ?? "") === n);
       if (c) cityOrder.push(c);
     }
     for (const n of EUROPE_30) {
-      const c = allCities.find(x => x.name === n);
+      const c = allCities.find((x: { name?: string | null }) => (x?.name ?? "") === n);
       if (c) cityOrder.push(c);
     }
 
