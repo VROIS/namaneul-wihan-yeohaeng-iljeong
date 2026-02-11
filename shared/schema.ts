@@ -148,6 +148,8 @@ export const places = pgTable("places", {
   finalScore: real("final_score"),
   tier: integer("tier"),
   vibeKeywords: jsonb("vibe_keywords").$type<string[]>().default([]),
+  /** 시딩 카테고리: 명소(attraction), 맛집(restaurant), 힐링(healing), 모험(adventure), 핫스팟(hotspot). 1일 1카테고리·도시별 카운트용 */
+  seedCategory: text("seed_category"),
   isVerified: boolean("is_verified").default(false),
   lastDataSync: timestamp("last_data_sync"),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
@@ -318,6 +320,8 @@ export const dataSyncLog = pgTable("data_sync_log", {
   id: serial("id").primaryKey(),
   entityType: text("entity_type").notNull(),
   entityId: integer("entity_id"),
+  /** 1일 1카테고리 추적: entity_sub_type은 DB에 없으면 생략 (추후 db:push 시 추가) */
+  // entitySubType: text("entity_sub_type"),
   source: text("source"),
   status: text("status").notNull(),
   itemsProcessed: integer("items_processed").default(0),

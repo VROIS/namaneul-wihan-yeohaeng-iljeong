@@ -789,7 +789,6 @@ export class PlaceSeeder {
       await db.insert(dataSyncLog).values({
         entityType: "wikimedia_연쇄",
         entityId: cityId,
-        entitySubType: cityName,
         source: "chained_crawlers",
         status: result.errors.length === 0 ? "success" : "partial",
         itemsProcessed: result.placesProcessed,
@@ -803,7 +802,6 @@ export class PlaceSeeder {
       await db.insert(dataSyncLog).values({
         entityType: "wikimedia_연쇄",
         entityId: cityId,
-        entitySubType: cityName,
         source: "chained_crawlers",
         status: "failed",
         errorMessage: e.message,
@@ -819,7 +817,6 @@ export class PlaceSeeder {
       await db.insert(dataSyncLog).values({
         entityType: "opentripmap_연쇄",
         entityId: cityId,
-        entitySubType: cityName,
         source: "chained_crawlers",
         status: result.errors.length === 0 ? "success" : "partial",
         itemsProcessed: result.placesProcessed,
@@ -833,7 +830,6 @@ export class PlaceSeeder {
       await db.insert(dataSyncLog).values({
         entityType: "opentripmap_연쇄",
         entityId: cityId,
-        entitySubType: cityName,
         source: "chained_crawlers",
         status: "failed",
         errorMessage: e.message,
