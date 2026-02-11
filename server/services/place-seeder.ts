@@ -34,8 +34,8 @@ const SEARCH_CATEGORIES: {
 const TARGET_PLACES_PER_CATEGORY = 30;
 const DAILY_NEW_PLACES_CAP = 30;
 const PARIS_FIRST_NAME = "파리";
-/** 전 도시 공통: 도시+근교 기초 수집 범위 (도심 기준 반경 100km) */
-const CITY_SEARCH_RADIUS_METERS = 100000;
+/** 전 도시 공통: 도시+근교 기초 수집 범위. Google Places API 최대 50km. */
+const CITY_SEARCH_RADIUS_METERS = 50000;
 
 // ============================================
 // Wikimedia Commons API (무료)
@@ -414,6 +414,10 @@ export class PlaceSeeder {
     let currentCity: (typeof allCities)[0] | null = null;
     for (const c of cityOrder) {
       const counts = await this.getCityPlaceCountsByCategory(c.id);
+      if (!counts || typeof counts !== "object") {
+        console.warn(`[PlaceSeeder] getCityPlaceCountsByCategory 무효 (city ${c.id}):`, counts);
+        continue;
+      }
       const allFull = categoryOrder.every(k => (counts[k] ?? 0) >= TARGET_PLACES_PER_CATEGORY);
       if (!allFull) {
         currentCity = c;
@@ -427,6 +431,9 @@ export class PlaceSeeder {
     }
 
     const counts = await this.getCityPlaceCountsByCategory(currentCity.id);
+    if (!counts || typeof counts !== "object") {
+      throw new Error(`getCityPlaceCountsByCategory 무효 (city ${currentCity.id})`);
+    }
     const current = counts[catKey] ?? 0;
     const need = Math.max(0, TARGET_PLACES_PER_CATEGORY - current);
 

@@ -291,7 +291,7 @@ function setupErrorHandler(app: express.Application) {
         // - 나머지 13개 크롤러는 안전하게 운영
         const { dataScheduler } = await import("./services/data-scheduler");
         await dataScheduler.initialize();
-        log("[Server] ✅ Data scheduler initialized (place_seed_sync blocked for billing protection)");
+        log("[Server] ✅ Data scheduler initialized");
       } catch (error) {
         log("[Server] Failed to initialize scheduler:", error);
       }

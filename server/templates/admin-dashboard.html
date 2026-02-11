@@ -877,6 +877,8 @@
         <div id="api-real-status" style="margin-bottom: 16px; font-size: 14px; color: #9ca3af;"></div>
         <div style="display: flex; gap: 12px; flex-wrap: wrap;">
           <button class="btn btn-primary" onclick="syncExchangeRates()">환율 동기화</button>
+          <button class="btn btn-secondary" onclick="syncWikimedia()">Wikimedia 사진</button>
+          <button class="btn btn-secondary" onclick="syncOpenTripMap()">OpenTripMap 설명</button>
           <button class="btn btn-secondary" onclick="syncYouTube()">유튜브 동기화</button>
           <button class="btn btn-secondary" onclick="syncPlaces()">장소 동기화 (서울)</button>
         </div>
@@ -1294,9 +1296,10 @@
     
     const STATUS_MAP = {
       'success': '성공',
+      'partial': '부분성공',
+      'failed': '실패',
       'error': '오류',
-      'pending': '진행중',
-      'partial': '부분성공'
+      'pending': '진행중'
     };
     
     const SERVICE_MAP = {
@@ -2213,14 +2216,18 @@
         const logs = await res.json();
         
         const el = document.getElementById('sync-history');
-        el.innerHTML = logs.length ? logs.map(l => `
-          <div class="log-item">
-            <span>${l.entityType} ${l.entityId ? `#${l.entityId}` : ''}</span>
+        el.innerHTML = logs.length ? logs.map(l => {
+          const label = l.entitySubType ? `${l.entityType} ${l.entitySubType}` : `${l.entityType} ${l.entityId ? `#${l.entityId}` : ''}`;
+          const errHtml = l.status === 'failed' && l.errorMessage ? `<div style="font-size:11px;color:#f87171;margin-top:4px;word-break:break-all;width:100%" title="${String(l.errorMessage || '').replace(/"/g, '&quot;')}">${String(l.errorMessage || '').slice(0, 80)}${(l.errorMessage || '').length > 80 ? '…' : ''}</div>` : '';
+          return `
+          <div class="log-item" style="flex-wrap:wrap">
+            <span>${label}</span>
             <span class="log-status ${l.status}">${STATUS_MAP[l.status] || l.status}</span>
             <span style="color: #6b7280;">${l.itemsProcessed || 0}개 처리</span>
             <span class="log-time">${new Date(l.startedAt).toLocaleString('ko-KR')}</span>
+            ${errHtml}
           </div>
-        `).join('') : '<div class="empty-state">동기화 로그가 없습니다</div>';
+        `}).join('') : '<div class="empty-state">동기화 로그가 없습니다</div>';
       } catch (err) {
         console.error('로그 로드 오류:', err);
       }
@@ -2291,6 +2298,42 @@
       }
     }
     
+    async function syncWikimedia() {
+      const resultEl = document.getElementById('sync-result');
+      resultEl.innerHTML = '<span style="color: #f59e0b;">Wikimedia 사진 보강 중...</span>';
+      try {
+        const res = await fetch(`${API_BASE}/sync/wikimedia`, { method: 'POST' });
+        const data = await res.json();
+        if (res.ok) {
+          resultEl.innerHTML = `<span style="color: #22c55e;">Wikimedia 완료! ${data.placesProcessed}곳, ${data.photosAdded}장 추가</span>`;
+          loadDashboard();
+          loadLogs();
+        } else {
+          resultEl.innerHTML = `<span style="color: #ef4444;">오류: ${data.error}</span>`;
+        }
+      } catch (err) {
+        resultEl.innerHTML = '<span style="color: #ef4444;">Wikimedia 동기화에 실패했습니다</span>';
+      }
+    }
+    
+    async function syncOpenTripMap() {
+      const resultEl = document.getElementById('sync-result');
+      resultEl.innerHTML = '<span style="color: #f59e0b;">OpenTripMap 설명 보강 중...</span>';
+      try {
+        const res = await fetch(`${API_BASE}/sync/opentripmap`, { method: 'POST' });
+        const data = await res.json();
+        if (res.ok) {
+          resultEl.innerHTML = `<span style="color: #22c55e;">OpenTripMap 완료! ${data.placesProcessed}곳, ${data.descriptionsAdded}개 설명 추가</span>`;
+          loadDashboard();
+          loadLogs();
+        } else {
+          resultEl.innerHTML = `<span style="color: #ef4444;">오류: ${data.error}</span>`;
+        }
+      } catch (err) {
+        resultEl.innerHTML = '<span style="color: #ef4444;">OpenTripMap 동기화에 실패했습니다</span>';
+      }
+    }
+    
     async function syncYouTube() {
       const resultEl = document.getElementById('sync-result');
       resultEl.innerHTML = '<span style="color: #f59e0b;">유튜브 동기화 중... (시간이 걸릴 수 있습니다)</span>';
@@ -2343,6 +2386,8 @@
             <div>Gemini AI: <span style="color: ${status.gemini.configured ? '#22c55e' : '#f59e0b'}">${status.gemini.message}</span></div>
             <div>환율: <span style="color: ${status.exchangeRate.configured ? '#22c55e' : '#f59e0b'}">${status.exchangeRate.message}</span></div>
             <div>날씨: <span style="color: ${status.openWeather?.configured ? '#22c55e' : '#f59e0b'}">${status.openWeather?.message || '미설정'}</span></div>
+            <div>Wikimedia: <span style="color: #22c55e">${status.wikimedia?.message || '무료 (장소 사진)'}</span></div>
+            <div>OpenTripMap: <span style="color: #22c55e">${status.opentripmap?.message || '무료 (장소 설명)'}</span></div>
           </div>
         `;
       } catch (err) {

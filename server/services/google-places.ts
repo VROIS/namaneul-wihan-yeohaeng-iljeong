@@ -11,7 +11,9 @@ const GOOGLE_PLACES_BASE_URL = "https://places.googleapis.com/v1/places";
 // 💰 일일 API 호출 제한 안전장치 (요금 폭탄 방지)
 // ⚠️ 모든 Google Places API 호출은 반드시 이 tracker를 거쳐야 함!
 // ag3-data-matcher.ts, route-optimizer.ts 등에서도 import하여 사용
-export const DAILY_API_LIMIT = 500; // 무료 티어 범위 내 (Pro: 5,000/월 → ~166/일)
+// 2025.3월 기준: Place Details Enterprise 1,000건/월 무료 → 1,000/30 ≈ 33/일
+// editorialSummary(Atmosphere) 제거 시 Enterprise만 적용, 동일 무료한도
+export const DAILY_API_LIMIT = 33;
 export const apiCallTracker = {
   date: new Date().toDateString(),
   count: 0,
@@ -227,14 +229,17 @@ export class GooglePlacesFetcher {
   async searchNearby(
     latitude: number,
     longitude: number,
-    type: "restaurant" | "attraction" | "cafe" | "hotel",
+    type: "restaurant" | "attraction" | "cafe" | "hotel" | "healing" | "adventure" | "hotspot",
     radiusMeters: number = 5000
   ): Promise<GooglePlaceResult[]> {
     const typeMap: Record<string, string[]> = {
-      restaurant: ["restaurant"],  // "food"는 Places API(New)에서 미지원
-      attraction: ["tourist_attraction", "museum", "art_gallery", "park", "church", "historical_landmark"],
+      restaurant: ["restaurant"],
+      attraction: ["tourist_attraction", "museum", "art_gallery", "church", "historical_landmark"],
       cafe: ["cafe", "coffee_shop"],
       hotel: ["hotel", "lodging"],
+      healing: ["park", "spa", "natural_feature", "beach"],
+      adventure: ["tourist_attraction", "amusement_park", "zoo", "hiking_area"],
+      hotspot: ["tourist_attraction"],
     };
 
     const includedTypes = typeMap[type] || [type];
@@ -251,20 +256,15 @@ export class GooglePlacesFetcher {
       },
     };
 
-    // 💰 비용 최적화: Enterprise 등급 필드만 유지 (Atmosphere 필드 26개 제거)
-    // Before: 45개 필드 → Enterprise+Atmosphere ($40/1K) = €1,001 폭탄 원인
-    // After:  13개 필드 → Enterprise ($35/1K), 실제로는 DB 우선 매칭으로 거의 호출 안 함
+    // 💰 비용 최적화: Enterprise만 요청 (rating, shortFormattedAddress, primaryTypeDisplayName 제거)
     const fieldMask = [
       "places.id",
       "places.displayName",
       "places.formattedAddress",
-      "places.shortFormattedAddress",
       "places.location",
-      "places.rating",
       "places.userRatingCount",
       "places.types",
       "places.primaryType",
-      "places.primaryTypeDisplayName",
       "places.photos",
       "places.googleMapsUri",
       "places.businessStatus",
@@ -285,29 +285,24 @@ export class GooglePlacesFetcher {
   }
 
   async getPlaceDetails(placeId: string): Promise<GooglePlaceResult> {
-    // 💰 비용 최적화: Enterprise 등급 필드만 유지 (Atmosphere 필드 26개 제거)
-    // Before: 48개 필드 → Enterprise+Atmosphere ($40/1K)
-    // After:  15개 필드 → Enterprise ($35/1K), reviews는 한국어 리뷰 분석에 필요하므로 유지
+    // 💰 비용 최적화: Enterprise만 요청 (Atmosphere 제외)
+    // editorialSummary 제거 → OpenTripMap/Wikimedia로 대체. 무료티어(1일~33건) 내 핵심 필드만
     const fieldMask = [
       "id",
       "displayName",
       "formattedAddress",
-      "shortFormattedAddress",
       "location",
       "rating",
       "userRatingCount",
       "priceLevel",
       "types",
       "primaryType",
-      "primaryTypeDisplayName",
       "photos",
       "regularOpeningHours",
-      "reviews",
       "googleMapsUri",
       "businessStatus",
-      "editorialSummary",    // 장소 설명 (Basic 등급, 추가 비용 없음)
-      "websiteUri",          // 웹사이트 (Basic 등급, 추가 비용 없음)
-      "internationalPhoneNumber", // 전화번호 (Basic 등급, 추가 비용 없음)
+      "websiteUri",
+      "internationalPhoneNumber",
     ].join(",");
 
     return this.makeRequest<PlaceDetailsResponse>(
@@ -328,7 +323,8 @@ export class GooglePlacesFetcher {
   async fetchAndStorePlace(
     googlePlace: GooglePlaceResult,
     cityId: number,
-    placeType: "restaurant" | "attraction" | "cafe" | "hotel" | "landmark"
+    placeType: "restaurant" | "attraction" | "cafe" | "hotel" | "landmark",
+    seedCategory?: "attraction" | "restaurant" | "healing" | "adventure" | "hotspot"
   ): Promise<number> {
     const existingPlace = await storage.getPlaceByGoogleId(googlePlace.id);
     
@@ -372,7 +368,7 @@ export class GooglePlacesFetcher {
       longitude: googlePlace.location.longitude,
       priceLevel: googlePlace.priceLevel ? priceLevelMap[googlePlace.priceLevel] : undefined,
       photoUrls,
-      openingHours: Object.keys(openingHours).length > 0 ? openingHours : undefined,
+      openingHours: (openingHours && typeof openingHours === "object" && Object.keys(openingHours).length > 0) ? openingHours : undefined,
       
       // ✅ 이전에 누락되었던 필수 필드들 (Basic 등급, 추가 비용 없음)
       // rating 컬럼은 실제 DB에서 삭제됨 → buzzScore로 대체
@@ -389,6 +385,7 @@ export class GooglePlacesFetcher {
       // DB에 이미 있는 기존 데이터는 보존됨, 새 장소에는 null로 저장
       
       lastDataSync: new Date(),
+      ...(seedCategory && { seedCategory }),
     };
 
     let placeId: number;
@@ -408,6 +405,7 @@ export class GooglePlacesFetcher {
           businessStatus: placeData.businessStatus,
           buzzScore: placeData.buzzScore,
           lastDataSync: placeData.lastDataSync,
+          ...(placeData.seedCategory && { seedCategory: placeData.seedCategory }),
         });
         console.log(`[Places] 기존 장소 업데이트: ${placeData.name} (id: ${placeId})`);
       } catch (e) {
@@ -432,7 +430,8 @@ export class GooglePlacesFetcher {
       rawData: googlePlace as any,
     });
 
-    if (googlePlace.reviews) {
+    // reviews 필드 미요청으로 수집 안 함 (Atmosphere 비용 절감)
+    if (googlePlace.reviews && googlePlace.reviews.length > 0) {
       for (const review of googlePlace.reviews.slice(0, 10)) {
         if (review.text) {
           await storage.createReview({

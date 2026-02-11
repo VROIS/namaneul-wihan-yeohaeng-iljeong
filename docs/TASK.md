@@ -216,9 +216,10 @@
 |------|------|
 | **Places API 가격** | 일 33건 제한(DAILY_API_LIMIT), 무료 1,000 caps/월. reviews 제거·FieldMask 최소화 반영. 시딩 시 33건만 Place Details. |
 | **파리 로우데이터** | 파리 153건(attraction 68, restaurant 59, cafe 26, hotel 0). Naver 28·인스타 121·가격 651 연결. cafe 4건 추가 시 30건. |
-| **Place Seed 100km** | CITY_SEARCH_RADIUS_METERS=100000(place-seeder.ts) 전 도시 적용. 1차 목표 순서: 파리→프랑스30→유럽30. API 키 있으면 paris-daily 등으로 검증. |
+| **Place Seed 반경** | CITY_SEARCH_RADIUS_METERS=50000(place-seeder.ts). Google Places API 최대 50km. 1차 목표 순서: 파리→프랑스30→유럽30. |
 | **AG2 반경 100km** | AG2 프롬프트에 "100km radius" 추가, Paris 예시 명시. AGENT_PROTOCOL 반영. 배포 후 파리 generate로 검증. |
 | **일정 검증(Verifier)** | score≥90 통과, itinerary-verifier.ts. 잘린 JSON 복구(verdict 적합·score 50 미만→90), maxOutputTokens 1024. 내부 2회차 200/score 95. 배포본 외부 1회 500 → 재테스트 권장. |
+| **배포 콘솔 분석(2026-02-11)** | place_seed_sync failed: "Cannot convert undefined or null to object" + Invalid radius 100km(>50km). 수정: counts 무효 guard, openingHours guard, 반경 50km, 대시보드 failed 시 errorMessage 표시. |
 
 - **배포**: 커밋·푸시 → Koyeb 자동 배포. 로컬 8082 = 내부테스트용, `.\dev\test-paris-a.ps1`.
 - **실제테스트**: 배포 URL `POST /api/routes/generate` (Paris 3일 등) → 200·일정 데이터 확인.
@@ -229,6 +230,7 @@
 
 | 날짜 | 내용 |
 |------|------|
+| 2026-02-11 | place_seed_sync 수정: 반경 100km→50km(Google API 한도), counts/openingHours guard, 대시보드 errorMessage 표시 |
 | 2026-02-08 | 1차 목표 순서 확정: 파리→프랑스30→유럽30 (place-seeder, TASK.md, getSeedingStatus) |
 | 2026-02-08 | 일정 이미지: 인스타>위키>구글 우선순위 적용 (ag3), Wikimedia·OpenTripMap 무료 API 대시보드 연동 |
 | 2026-02-10 | 문서 통합: PRICE_SIMULATION·PARIS_DATA·PLACE_SEED_100KM·AG2_100KM·ITINERARY_VERIFICATION_DEPLOY 5개 → TASK.md §6로 합침 후 해당 md 삭제 |

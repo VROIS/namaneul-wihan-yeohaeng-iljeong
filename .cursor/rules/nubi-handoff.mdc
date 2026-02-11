@@ -7,14 +7,25 @@ alwaysApply: true
 
 > **이 파일은 매 세션 종료/중단 시 반드시 업데이트할 것**
 
-## 현재 상태 (2026-02-10)
+## 세션 시작 시 필수 (간과 금지)
+- `.cursor/rules/*.mdc` 9개 파일 **정확히 숙지 후 작업 시작**
+- `docs/TASK.md` 읽기 → §7 "새 .md 생성 금지" 확인 → 배포/테스트 결과는 TASK.md에만 요약
+- `nubi-handoff.mdc` 읽기 → 현재 상태 파악 → 이어서 진행
+
+## 자율 실행 시 DB/터미널/로컬 규칙
+- **DB·터미널·로컬 실행은 AI가 직접 수행** → 내부 테스트 후 결과 보고
+- **DB 변경 후 반드시 결과 가시화**: `npm run seed:report` 등으로 실제 DB 상태 조회 → 결과 출력/보고
+- 사용자에게 SQL/Supabase/PowerShell 등 수동 실행 요청하지 않음 (비개발자)
+- DB·코드 작업은 배포(Koyeb)와 별개로 진행 가능
+
+## 현재 상태 (2026-02-11)
 
 | 항목 | 내용 |
 |------|------|
-| 마지막 작업 | 일정 검증(90%+) + AG2 반경100km 구현 → 커밋·푸시·배포본 실제 테스트 완료 (파리 200, 3일 18곳) |
-| 다음 할 일 | 건강체크 API 수정 → city_transport_fares → 프론트엔드 nubiReason |
+| 마지막 작업 | place_seed_sync 수정: API 확인 후 "Cannot convert undefined or null to object"·Invalid radius 100km 대응. 반경 50km, counts/openingHours guard, 대시보드 errorMessage 표시. |
+| 다음 할 일 | 커밋·푸시 → 배포 후 place_seed_sync 성공 여부 확인. 건강체크 API 수정 → city_transport_fares → 프론트엔드 nubiReason. |
 | 브랜치 | cursor-dev |
-| 배포 상태 | Koyeb 정상 (200 OK). 커밋·푸시 시 자동 배포. |
+| 배포 상태 | Koyeb 커밋·푸시 반영됨. 외부 테스트 시 500 시 step2/검증 환경 확인. |
 
 ## 긴급 이슈
 - **Google Maps/Places API 대시보드 빨간불**: 건강체크가 Geocoding API 테스트 → 실제 사용 API(Places New/Routes)와 다름
@@ -27,6 +38,10 @@ alwaysApply: true
 3. 프론트엔드: nubiReason 표시 + 교통비 A/B 분기 + Pipeline V3 응답 매핑
 4. 프론트엔드: 긴 한 페이지 구조 + 로딩 계산과정 표시
 
+## 시딩 순서 vs 분류
+- **시딩 순서** (새 수집): 파리 → 프랑스(FR) → 유럽(Europe/)
+- **분류**: 비용 내고 이미 가져온 **모든 도시** 데이터 → 5카테고리로 전부 분류 (제외 없음)
+
 ## 수집된 데이터 현황
-- 도시 71개, 장소 1,669개, 블로그 1,239개, 인스타 해시태그 3,327개
+- 도시 71개, 장소 1,709개 (seed_category 5카테고리 분류 완료), 블로그 1,239개, 인스타 해시태그 3,327개
 - YouTube 18채널/54영상/23언급, 미슐랭 33개, 웹캐시 6,703개

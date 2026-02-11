@@ -239,6 +239,9 @@ export class DataScheduler {
         errorMessage: result.errors?.join("; "),
       });
 
+      if (!result.success && result.errors?.length) {
+        console.error(`[Scheduler] Task ${taskName} failed:`, result.errors.join("; "));
+      }
       console.log(`[Scheduler] Task ${taskName} completed: ${result.success ? "success" : "failed"}`);
     } catch (error: any) {
       console.error(`[Scheduler] Task ${taskName} failed:`, error);
