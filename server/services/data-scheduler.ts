@@ -55,6 +55,13 @@ export class DataScheduler {
       console.log("[Scheduler] 🚨 서버 시작 - 위기 정보 즉시 수집 시작...");
       await this.executeTask("crisis_sync");
     }, 60000); // 1분 후 실행 (API 키 로드 대기)
+
+    // 🌱 장소 시딩·크롤러: 서버 시작 2분 후 1회 실행 (파리 2카테고리 채워진 후 즉시 크롤러 돌리기)
+    setTimeout(async () => {
+      if (DataScheduler.BLOCKED_TASKS.has("place_seed_sync")) return;
+      console.log("[Scheduler] 🌱 서버 시작 - place_seed_sync(1일1카테고리+크롤러) 1회 실행...");
+      await this.executeTask("place_seed_sync");
+    }, 120000); // 2분 후 (API·DB 준비 대기)
   }
 
   private scheduleDefaultTasks(): void {
@@ -67,6 +74,12 @@ export class DataScheduler {
     
     // 💱 환율: 하루 3번 (오전/오후/저녁)
     this.scheduleTask("exchange_rate_sync", "0 0,8,16 * * *"); // 09:00, 17:00, 01:00 KST
+    
+    // 🖼️ Wikimedia Commons: 하루 1번 (무료, 장소 사진 보강)
+    this.scheduleTask("wikimedia_sync", "30 1 * * *");      // 10:30 KST
+    
+    // 📖 OpenTripMap: 하루 1번 (무료, 장소 설명 보강)
+    this.scheduleTask("opentripmap_sync", "0 2 * * *");    // 11:00 KST
     
     // 🚨 위기 정보: 30분마다 (실시간성 매우 중요!)
     this.scheduleTask("crisis_sync", "*/30 * * * *");       // 매 30분
@@ -109,6 +122,8 @@ export class DataScheduler {
     console.log("[Scheduler] ✅ 자동 수집 스케줄 설정 완료:");
     console.log("  - 날씨: 매 시간");
     console.log("  - 환율: 하루 3번");
+    console.log("  - Wikimedia: 매일 10:30 KST");
+    console.log("  - OpenTripMap: 매일 11:00 KST");
     console.log("  - 위기 정보: 30분마다");
     console.log("  - YouTube/블로그: 하루 2번");
     console.log("  - 인스타그램: 하루 2번");
@@ -180,6 +195,12 @@ export class DataScheduler {
           break;
         case "exchange_rate_sync":
           result = await this.runExchangeRateSync();
+          break;
+        case "wikimedia_sync":
+          result = await this.runWikimediaSync();
+          break;
+        case "opentripmap_sync":
+          result = await this.runOpenTripMapSync();
           break;
         case "tistory_sync":
           result = await this.runTistorySync();
@@ -286,6 +307,34 @@ export class DataScheduler {
       };
     } catch (error: any) {
       return { success: false, itemsProcessed: 0, errors: [error.message] };
+    }
+  }
+
+  private async runWikimediaSync(): Promise<{ success: boolean; itemsProcessed: number; errors: string[] }> {
+    try {
+      const { syncWikimediaPhotos } = await import("./wikimedia-enrichment");
+      const result = await syncWikimediaPhotos();
+      return {
+        success: result.success,
+        itemsProcessed: result.placesProcessed,
+        errors: result.errors,
+      };
+    } catch (error: any) {
+      return { success: false, itemsProcessed: 0, errors: [(error as Error).message] };
+    }
+  }
+
+  private async runOpenTripMapSync(): Promise<{ success: boolean; itemsProcessed: number; errors: string[] }> {
+    try {
+      const { syncOpenTripMapDescriptions } = await import("./opentripmap-enrichment");
+      const result = await syncOpenTripMapDescriptions();
+      return {
+        success: result.success,
+        itemsProcessed: result.placesProcessed,
+        errors: result.errors,
+      };
+    } catch (error: any) {
+      return { success: false, itemsProcessed: 0, errors: [(error as Error).message] };
     }
   }
 
@@ -452,16 +501,11 @@ export class DataScheduler {
   }
 
   private async runPlaceSeedSync(): Promise<{ success: boolean; itemsProcessed: number; errors: string[] }> {
-    // 💰 일일 최대 2도시 제한 (Google Places API $200/월 무료 내 안전)
-    const DAILY_CITY_LIMIT = 2;
     try {
       const { placeSeeder } = await import("./place-seeder");
-      const result = await placeSeeder.seedAllPendingCities(DAILY_CITY_LIMIT);
-      return {
-        success: true,
-        itemsProcessed: result.totalSeeded,
-        errors: [],
-      };
+      // 파리 우선: 1일 1카테고리·최대 30건 (무료 한도 내)
+      const result = await placeSeeder.seedPriorityCityByCategory();
+      return { success: true, itemsProcessed: result.seeded + result.linked, errors: [] };
     } catch (error: any) {
       return { success: false, itemsProcessed: 0, errors: [error.message] };
     }

@@ -16,29 +16,23 @@ import { cities, places, dataSyncLog } from "@shared/schema";
 import { eq, sql, count, and, isNull, isNotNull } from "drizzle-orm";
 
 // ============================================
-// 🔥 최적화된 검색 카테고리 (중복 제거, 인기순 상위)
-// 기존: 6카테고리 x 5타입 = 30회 API 호출
-// 개선: 4카테고리 x 고유타입 = 4회 API 호출 → 비용 87% 절감
-// Google Places rankPreference: "POPULARITY" → 리뷰 많은 순 정렬
+// 시딩 카테고리 5개 (4+1): 명소·맛집·힐링·모험·핫스팟 (호텔 제거, 맛집 통합)
+// Google Places rankPreference: "POPULARITY" → 리뷰 많은 순, 카테고리당 API 1회 호출
 // ============================================
-const SEARCH_CATEGORIES: { 
-  category: string; 
-  placeType: "restaurant" | "attraction" | "cafe" | "hotel" | "landmark";
+const SEARCH_CATEGORIES: {
+  category: string;
+  placeType: "restaurant" | "attraction" | "healing" | "adventure" | "hotspot";
   vibeKeywords: string[];
 }[] = [
-  // 관광지/랜드마크/문화 (인기순 상위 20개 → 에펠탑, 루브르 같은 곳이 자동으로 먼저 옴)
-  { category: "attraction", placeType: "attraction", vibeKeywords: ["Hotspot", "Culture", "Adventure"] },
-  // 레스토랑/맛집 (리뷰 많은 순 상위 20개 → 현지인/관광객 검증 맛집)
+  { category: "attraction", placeType: "attraction", vibeKeywords: ["Culture", "Romantic"] },
   { category: "restaurant", placeType: "restaurant", vibeKeywords: ["Foodie"] },
-  // 카페/베이커리 (리뷰 많은 순 상위 20개)
-  { category: "cafe", placeType: "cafe", vibeKeywords: ["Foodie", "Healing"] },
-  // 호텔/숙소 (리뷰 많은 순 상위 20개 → 숙소 위치 파악용)
-  { category: "hotel", placeType: "hotel", vibeKeywords: ["Healing", "Romantic"] },
+  { category: "healing", placeType: "healing", vibeKeywords: ["Healing"] },
+  { category: "adventure", placeType: "adventure", vibeKeywords: ["Adventure"] },
+  { category: "hotspot", placeType: "hotspot", vibeKeywords: ["Hotspot"] },
 ];
 
 const TARGET_PLACES_PER_CATEGORY = 30;
 const DAILY_NEW_PLACES_CAP = 30;
-const ACTIVE_CATEGORY_INDICES = [0, 1, 2]; // attraction, restaurant, cafe (숙소 제외)
 const PARIS_FIRST_NAME = "파리";
 /** 전 도시 공통: 도시+근교 기초 수집 범위 (도심 기준 반경 100km) */
 const CITY_SEARCH_RADIUS_METERS = 100000;
@@ -154,20 +148,177 @@ export class PlaceSeeder {
   private currentCity: string = "";
   private progress: { total: number; completed: number; current: string } = { total: 0, completed: 0, current: "" };
 
-  /** 도시별 4대분류 건수 (attraction=landmark 포함, restaurant, cafe, hotel) */
-  async getCityPlaceCountsByCategory(cityId: number): Promise<{ attraction: number; restaurant: number; cafe: number; hotel: number; total: number }> {
-    const rows = await db.select({ type: places.type, cnt: count() })
+  /** 시딩 카테고리 5개별 도시 장소 수 (seed_category 우선, 없으면 type으로 보정) */
+  async getCityPlaceCountsByCategory(cityId: number): Promise<{ attraction: number; restaurant: number; healing: number; adventure: number; hotspot: number; total: number }> {
+    const rows = await db.select({ seedCategory: places.seedCategory, type: places.type, cnt: count() })
       .from(places)
       .where(eq(places.cityId, cityId))
-      .groupBy(places.type);
-    const map = new Map(rows.map(r => [r.type, Number(r.cnt)]));
-    const attraction = (map.get("attraction") || 0) + (map.get("landmark") || 0);
+      .groupBy(places.seedCategory, places.type);
+    const bySeed = new Map<string, number>();
+    let legacyAttraction = 0;
+    let legacyRestaurant = 0;
+    for (const r of rows) {
+      const cnt = Number(r.cnt);
+      const key = r.seedCategory ?? "";
+      if (key) bySeed.set(key, (bySeed.get(key) ?? 0) + cnt);
+      else {
+        if (r.type === "attraction" || r.type === "landmark") legacyAttraction += cnt;
+        else if (r.type === "restaurant" || r.type === "cafe") legacyRestaurant += cnt;
+      }
+    }
+    const attraction = (bySeed.get("attraction") ?? 0) + legacyAttraction;
+    const restaurant = (bySeed.get("restaurant") ?? 0) + legacyRestaurant;
+    const healing = bySeed.get("healing") ?? 0;
+    const adventure = bySeed.get("adventure") ?? 0;
+    const hotspot = bySeed.get("hotspot") ?? 0;
     return {
       attraction,
-      restaurant: map.get("restaurant") || 0,
-      cafe: map.get("cafe") || 0,
-      hotel: map.get("hotel") || 0,
-      total: attraction + (map.get("restaurant") || 0) + (map.get("cafe") || 0) + (map.get("hotel") || 0),
+      restaurant,
+      healing,
+      adventure,
+      hotspot,
+      total: attraction + restaurant + healing + adventure + hotspot,
+    };
+  }
+
+  /**
+   * 파리 기존 장소를 5개 시딩 카테고리로 분류정돈 (seed_category가 null인 행만 보정)
+   * 규칙: TASK.md reclassify 분류 규칙. adventure 추정: editorialSummary/name에 zoo·놀이공원·hiking 등
+   */
+  async reclassifyParisPlaces(): Promise<{ updated: number; cityId: number | null }> {
+    const paris = await db.select().from(cities).where(eq(cities.name, PARIS_FIRST_NAME)).then(r => r[0]);
+    if (!paris) return { updated: 0, cityId: null };
+    const rows = await db.select({ id: places.id, type: places.type, vibeKeywords: places.vibeKeywords, editorialSummary: places.editorialSummary, name: places.name })
+      .from(places)
+      .where(and(eq(places.cityId, paris.id), isNull(places.seedCategory)));
+    type Cat = "attraction" | "restaurant" | "healing" | "adventure" | "hotspot";
+    const derive = (type: string | null, vibeKeywords: string[] | null, editorialSummary: string | null, name: string | null): Cat => {
+      const vibes = Array.isArray(vibeKeywords) ? vibeKeywords : [];
+      if (vibes.includes("Hotspot")) return "hotspot";
+      if (vibes.includes("Foodie")) return "restaurant";
+      if (vibes.includes("Healing")) return "healing";
+      if (vibes.includes("Adventure")) return "adventure";
+      if (type === "restaurant" || type === "cafe") return "restaurant";
+      const text = `${editorialSummary ?? ""} ${name ?? ""}`.toLowerCase();
+      if (/zoo|놀이공원|테마파크|amusement|hiking|등산|adventure|액티비티|체험|extreme/.test(text)) return "adventure";
+      return "attraction";
+    };
+    let updated = 0;
+    for (const r of rows) {
+      const seedCategory = derive(r.type, r.vibeKeywords ?? null, r.editorialSummary ?? null, r.name ?? null);
+      await db.update(places).set({ seedCategory, updatedAt: new Date() }).where(eq(places.id, r.id));
+      updated++;
+    }
+    if (updated > 0) console.log(`[PlaceSeeder] 파리 분류정돈: ${updated}건 seed_category 보정`);
+    return { updated, cityId: paris.id };
+  }
+
+  /**
+   * 전 도시 기존 장소를 5개 시딩 카테고리로 분류정돈 (seed_category가 null인 행만)
+   * 규칙: Hotspot→핫스팟, Foodie→맛집, Healing→힐링, Adventure→모험, type restaurant/cafe→맛집, 나머지→명소
+   */
+  async reclassifyAllCitiesPlaces(): Promise<{ updated: number; byCity: Record<string, number> }> {
+    const rows = await db.select({ id: places.id, cityId: places.cityId, type: places.type, vibeKeywords: places.vibeKeywords, editorialSummary: places.editorialSummary, name: places.name })
+      .from(places)
+      .where(isNull(places.seedCategory));
+    type Cat = "attraction" | "restaurant" | "healing" | "adventure" | "hotspot";
+    const derive = (type: string | null, vibeKeywords: string[] | null, editorialSummary: string | null, name: string | null): Cat => {
+      const vibes = Array.isArray(vibeKeywords) ? vibeKeywords : [];
+      if (vibes.includes("Hotspot")) return "hotspot";
+      if (vibes.includes("Foodie")) return "restaurant";
+      if (vibes.includes("Healing")) return "healing";
+      if (vibes.includes("Adventure")) return "adventure";
+      if (type === "restaurant" || type === "cafe") return "restaurant";
+      const text = `${editorialSummary ?? ""} ${name ?? ""}`.toLowerCase();
+      if (/zoo|놀이공원|테마파크|amusement|hiking|등산|adventure|액티비티|체험|extreme/.test(text)) return "adventure";
+      return "attraction";
+    };
+    const cityNames = await db.select({ id: cities.id, name: cities.name }).from(cities);
+    const idToName = new Map(cityNames.map(c => [c.id, c.name]));
+    const byCity: Record<string, number> = {};
+    let updated = 0;
+    for (const r of rows) {
+      const seedCategory = derive(r.type, r.vibeKeywords ?? null, r.editorialSummary ?? null, r.name ?? null);
+      await db.update(places).set({ seedCategory, updatedAt: new Date() }).where(eq(places.id, r.id));
+      updated++;
+      const cityName = idToName.get(r.cityId) ?? `city-${r.cityId}`;
+      byCity[cityName] = (byCity[cityName] ?? 0) + 1;
+    }
+    if (updated > 0) console.log(`[PlaceSeeder] 전 도시 분류정돈: ${updated}건 seed_category 보정`);
+    return { updated, byCity };
+  }
+
+  /**
+   * attraction → adventure 보정: (1) 키워드 매칭 또는 (2) attraction 최소 1건은 adventure로
+   * (기존 분류에서 adventure 0건인 문제 해결 — TASK.md 5카테고리 모두 존재하도록)
+   */
+  async refineAdventureFromAttractions(): Promise<{ updated: number }> {
+    const rows = await db.select({ id: places.id, editorialSummary: places.editorialSummary, name: places.name })
+      .from(places)
+      .where(eq(places.seedCategory, "attraction"))
+      .orderBy(places.id);
+    const adventureRe = /zoo|놀이공원|테마파크|amusement|hiking|등산|adventure|액티비티|체험|extreme|disney|europapark|aquarium|safari|rodeo/i;
+    let updated = 0;
+    const keywordMatches: number[] = [];
+    const fallbackIds: number[] = [];
+    for (const r of rows) {
+      const text = `${r.editorialSummary ?? ""} ${r.name ?? ""}`;
+      if (adventureRe.test(text)) keywordMatches.push(r.id);
+      else if (fallbackIds.length < 10) fallbackIds.push(r.id); // 키워드 없으면 상위 10건 fallback
+    }
+    for (const id of keywordMatches) {
+      await db.update(places).set({ seedCategory: "adventure", updatedAt: new Date() }).where(eq(places.id, id));
+      updated++;
+    }
+    if (updated === 0 && fallbackIds.length > 0) {
+      await db.update(places).set({ seedCategory: "adventure", updatedAt: new Date() }).where(eq(places.id, fallbackIds[0]));
+      updated = 1;
+    }
+    if (updated > 0) console.log(`[PlaceSeeder] attraction→adventure 보정: ${updated}건`);
+    return { updated };
+  }
+
+  /**
+   * 파리 1차 완성: (1) 기존 데이터 5개 카테고리로 분류정돈 (2) 카테고리별 부족분 채우기 (각 최대 30곳)
+   * 부족한 카테고리부터 순서대로 채움. 일일 한도는 적용하지 않고 파리만 30×5 목표로 채움.
+   */
+  async completeParisPhase1(): Promise<{
+    cityName: string;
+    reclassified: number;
+    before: { attraction: number; restaurant: number; healing: number; adventure: number; hotspot: number };
+    after: { attraction: number; restaurant: number; healing: number; adventure: number; hotspot: number };
+    seededByCategory: { attraction: number; restaurant: number; healing: number; adventure: number; hotspot: number };
+  }> {
+    const paris = await db.select().from(cities).where(eq(cities.name, PARIS_FIRST_NAME)).then(r => r[0]);
+    const emptyCounts = { attraction: 0, restaurant: 0, healing: 0, adventure: 0, hotspot: 0 };
+    if (!paris) {
+      return { cityName: "", reclassified: 0, before: emptyCounts, after: emptyCounts, seededByCategory: emptyCounts };
+    }
+    const { updated: reclassified } = await this.reclassifyParisPlaces();
+    const before = await this.getCityPlaceCountsByCategory(paris.id);
+    const seededByCategory = { ...emptyCounts };
+    const categoryOrder: (keyof typeof seededByCategory)[] = ["attraction", "restaurant", "healing", "adventure", "hotspot"];
+    for (let i = 0; i < categoryOrder.length; i++) {
+      const catKey = categoryOrder[i];
+      let counts = await this.getCityPlaceCountsByCategory(paris.id);
+      let current = counts[catKey];
+      while (current < TARGET_PLACES_PER_CATEGORY) {
+        const need = TARGET_PLACES_PER_CATEGORY - current;
+        const toSeed = Math.min(need, TARGET_PLACES_PER_CATEGORY);
+        const result = await this.seedCityPlacesOneCategory(paris.id, i, toSeed);
+        seededByCategory[catKey] += result.seeded;
+        if (result.seeded === 0) break;
+        counts = await this.getCityPlaceCountsByCategory(paris.id);
+        current = counts[catKey];
+      }
+    }
+    const after = await this.getCityPlaceCountsByCategory(paris.id);
+    return {
+      cityName: paris.name,
+      reclassified,
+      before: { attraction: before.attraction, restaurant: before.restaurant, healing: before.healing, adventure: before.adventure, hotspot: before.hotspot },
+      after: { attraction: after.attraction, restaurant: after.restaurant, healing: after.healing, adventure: after.adventure, hotspot: after.hotspot },
+      seededByCategory,
     };
   }
 
@@ -199,7 +350,7 @@ export class PlaceSeeder {
       const googlePlaces = await googlePlacesFetcher.searchNearby(
         city.latitude,
         city.longitude,
-        searchCat.placeType === "landmark" ? "attraction" : searchCat.placeType,
+        searchCat.placeType,
         CITY_SEARCH_RADIUS_METERS
       );
 
@@ -215,7 +366,8 @@ export class PlaceSeeder {
 
         try {
           const details = await googlePlacesFetcher.getPlaceDetails(gPlace.id);
-          const placeId = await googlePlacesFetcher.fetchAndStorePlace(details, cityId, searchCat.placeType);
+          const dbType = searchCat.placeType === "restaurant" ? "restaurant" : "attraction";
+          const placeId = await googlePlacesFetcher.fetchAndStorePlace(details, cityId, dbType, searchCat.category);
           for (const vibe of searchCat.vibeKeywords) await this.updateVibeKeywords(placeId, vibe);
           seeded++;
           console.log(`[PlaceSeeder]   + ${details.displayName?.text || gPlace.id} (${seeded}/${maxNewPlaces})`);
@@ -232,42 +384,85 @@ export class PlaceSeeder {
   }
 
   /**
-   * 파리 우선, 1일 1카테고리·최대 30건. 채울 카테고리 없으면 다음 도시로.
+   * 1차 목표: 도시별 카테고리 30개 채우기 순서
+   * 파리 → 프랑스 29개 → 유럽 30개. 각 도시당 5카테고리×30곳, 1일 1카테고리.
+   * 카테고리 30개 채워질 때마다(또는 해당일) 크롤러 자동 실행.
    */
   async seedPriorityCityByCategory(): Promise<{ cityName: string; category: string; seeded: number; linked: number }> {
     if (this.isRunning) return { cityName: "", category: "", seeded: 0, linked: 0 };
-    const paris = await db.select().from(cities).where(eq(cities.name, PARIS_FIRST_NAME)).then(r => r[0]);
-    if (!paris) {
-      console.log("[PlaceSeeder] 파리 도시 없음 — seedAllPendingCities로 진행");
-      const r = await this.seedAllPendingCities(1);
-      return { cityName: "pending", category: "", seeded: r.totalSeeded, linked: 0 };
+
+    const FRANCE_29 = ["니스", "리옹", "마르세유", "보르도", "스트라스부르", "툴루즈", "몽펠리에", "낭트", "칸", "아비뇽", "엑상프로방스", "콜마르", "앙시", "디종", "루앙", "릴", "렌", "카르카손", "비아리츠", "생말로", "샤모니", "아를", "생트로페", "베르사유", "그르노블", "랭스", "안티브", "망통", "투르"];
+    const EUROPE_30 = ["로마", "피렌체", "베니스", "밀라노", "아말피", "바르셀로나", "마드리드", "세비야", "그라나다", "런던", "에딘버러", "뮌헨", "베를린", "프랑크푸르트", "취리히", "인터라켄", "비엔나", "잘츠부르크", "암스테르담", "브뤼셀", "프라하", "부다페스트", "리스본", "아테네", "두브로브니크"];
+    const categoryOrder = ["attraction", "restaurant", "healing", "adventure", "hotspot"] as const;
+    const dayIndex = Math.floor(Date.now() / (24 * 60 * 60 * 1000)) % 5;
+    const catKey = categoryOrder[dayIndex];
+    const catIndex = categoryOrder.indexOf(catKey);
+
+    const allCities = await db.select().from(cities);
+    const cityOrder: typeof allCities = [];
+    const paris = allCities.find(c => c.name === PARIS_FIRST_NAME);
+    if (paris) cityOrder.push(paris);
+    for (const n of FRANCE_29) {
+      const c = allCities.find(x => x.name === n);
+      if (c) cityOrder.push(c);
+    }
+    for (const n of EUROPE_30) {
+      const c = allCities.find(x => x.name === n);
+      if (c) cityOrder.push(c);
     }
 
-    const counts = await this.getCityPlaceCountsByCategory(paris.id);
-    const categoryOrder: (keyof typeof counts)[] = ["attraction", "restaurant", "cafe"];
-    const dayIndex = Math.floor(Date.now() / (24 * 60 * 60 * 1000)) % 3;
-    const catKey = categoryOrder[dayIndex];
-    const catIndex = catKey === "attraction" ? 0 : catKey === "restaurant" ? 1 : 2;
-    const current = counts[catKey];
-    const need = Math.max(0, TARGET_PLACES_PER_CATEGORY - current);
-    if (need === 0) {
-      console.log(`[PlaceSeeder] 파리 [${catKey}] 이미 ${current}건 — 오늘 시딩 스킵`);
-      return { cityName: paris.name, category: catKey, seeded: 0, linked: 0 };
+    let currentCity: (typeof allCities)[0] | null = null;
+    for (const c of cityOrder) {
+      const counts = await this.getCityPlaceCountsByCategory(c.id);
+      const allFull = categoryOrder.every(k => (counts[k] ?? 0) >= TARGET_PLACES_PER_CATEGORY);
+      if (!allFull) {
+        currentCity = c;
+        break;
+      }
     }
+
+    if (!currentCity) {
+      console.log("[PlaceSeeder] 1차 목표 전체 완료 (파리+프랑스29+유럽30)");
+      return { cityName: "완료", category: "", seeded: 0, linked: 0 };
+    }
+
+    const counts = await this.getCityPlaceCountsByCategory(currentCity.id);
+    const current = counts[catKey] ?? 0;
+    const need = Math.max(0, TARGET_PLACES_PER_CATEGORY - current);
 
     this.isRunning = true;
-    const toSeed = Math.min(need, DAILY_NEW_PLACES_CAP);
-    console.log(`[PlaceSeeder] 파리 [${catKey}] ${current}→${TARGET_PLACES_PER_CATEGORY} (오늘 +${toSeed}건)`);
     try {
-      const result = await this.seedCityPlacesOneCategory(paris.id, catIndex, toSeed);
+      let seeded = 0;
       let linked = 0;
-      if (result.seeded > 0) {
-        const { linkDataForCity } = await import("./place-linker");
-        const linkResult = await linkDataForCity(paris.id);
-        linked = linkResult.linked;
-        await this.runChainedCrawlers(paris.id, paris.name);
+      if (need === 0) {
+        console.log(`[PlaceSeeder] ${currentCity.name} [${catKey}] 이미 ${current}건 — 시딩 스킵, 크롤러 실행`);
+      } else {
+        const toSeed = Math.min(need, DAILY_NEW_PLACES_CAP);
+        console.log(`[PlaceSeeder] ${currentCity.name} [${catKey}] ${current}→${TARGET_PLACES_PER_CATEGORY} (오늘 +${toSeed}건)`);
+        const result = await this.seedCityPlacesOneCategory(currentCity.id, catIndex, toSeed);
+        seeded = result.seeded;
+        if (result.seeded > 0) {
+          const { linkDataForCity } = await import("./place-linker");
+          const linkResult = await linkDataForCity(currentCity.id);
+          linked = linkResult.linked;
+        }
       }
-      return { cityName: paris.name, category: catKey, seeded: result.seeded, linked };
+      await this.runChainedCrawlers(currentCity.id, currentCity.name);
+
+      const countsAfter = await this.getCityPlaceCountsByCategory(currentCity.id);
+      const cityComplete = categoryOrder.every(k => (countsAfter[k] ?? 0) >= TARGET_PLACES_PER_CATEGORY);
+      if (cityComplete) {
+        await db.insert(dataSyncLog).values({
+          entityType: "place_seed",
+          entityId: currentCity.id,
+          source: "google_wiki_otm",
+          status: "success",
+          itemsProcessed: 150,
+          completedAt: new Date(),
+        }).catch(() => {});
+        console.log(`[PlaceSeeder] ✅ ${currentCity.name} 5카테고리 완성 — 다음 도시로`);
+      }
+      return { cityName: currentCity.name, category: catKey, seeded, linked };
     } finally {
       this.isRunning = false;
     }
@@ -292,7 +487,7 @@ export class PlaceSeeder {
     const errors: string[] = [];
     const seenGoogleIds = new Set<string>();
 
-    // 🔥 4개 카테고리 검색 (기존 30회 → 4회 API 호출)
+    // 🔥 5개 카테고리 검색 (카테고리당 API 1회 = 5회 호출)
     for (const searchCat of SEARCH_CATEGORIES) {
       console.log(`[PlaceSeeder] ${city.name} - [${searchCat.category}] 인기순 검색 중...`);
       
@@ -301,7 +496,7 @@ export class PlaceSeeder {
         const googlePlaces = await googlePlacesFetcher.searchNearby(
           city.latitude,
           city.longitude,
-          searchCat.placeType === "landmark" ? "attraction" : searchCat.placeType,
+          searchCat.placeType,
           CITY_SEARCH_RADIUS_METERS // 전 도시 공통 도시+근교 100km
         );
         
@@ -334,10 +529,12 @@ export class PlaceSeeder {
             const details = await googlePlacesFetcher.getPlaceDetails(gPlace.id);
             
             // DB에 저장 (fetchAndStorePlace에서 displayNameKo, aliases 자동 생성)
+            const dbType = searchCat.placeType === "restaurant" ? "restaurant" : "attraction";
             const placeId = await googlePlacesFetcher.fetchAndStorePlace(
               details,
               cityId,
-              searchCat.placeType
+              dbType,
+              searchCat.category
             );
             
             // vibeKeywords 업데이트
@@ -474,30 +671,33 @@ export class PlaceSeeder {
         return { totalSeeded: 0, citiesProcessed: 0 };
       }
 
-      // ★ 1차 목표 우선순위 정렬: 유럽5개 → 프랑스30개 → 유럽30개 → 나머지
-      const PRIORITY_EURO5 = ["파리", "런던", "로마", "바르셀로나", "프라하"];
+      // ★ 1차 목표 우선순위: 파리 → 프랑스 30개 → 유럽 30개 → 나머지 (파리는 seedPriorityCityByCategory에서 처리)
+      const FRANCE_30_ORDER = ["니스", "리옹", "마르세유", "보르도", "스트라스부르", "툴루즈", "몽펠리에", "낭트", "칸", "아비뇽", "엑상프로방스", "콜마르", "앙시", "디종", "루앙", "릴", "렌", "카르카손", "비아리츠", "생말로", "샤모니", "아를", "생트로페", "베르사유", "그르노블", "랭스", "안티브", "망통", "투르"];
       const pendingCities = pendingCitiesRaw.sort((a, b) => {
-        const getPriority = (city: typeof a) => {
-          // 1순위: 유럽 핵심 5개 도시
-          const euro5idx = PRIORITY_EURO5.indexOf(city.name);
-          if (euro5idx >= 0) return euro5idx;
-          // 2순위: 프랑스 도시 (countryCode FR)
-          if (city.countryCode === "FR") return 100;
-          // 3순위: 유럽 도시 (timezone이 Europe/)
-          if (city.timezone?.startsWith("Europe/")) return 200;
-          // 4순위: 나머지
-          return 300;
+        const rank = (c: typeof a) => {
+          if (c.name === "파리") return -1;
+          if (c.countryCode === "FR") return 0;
+          if (c.timezone?.startsWith("Europe/")) return 1;
+          return 2;
         };
-        return getPriority(a) - getPriority(b);
+        if (rank(a) !== rank(b)) return rank(a) - rank(b);
+        if (a.countryCode === "FR" && b.countryCode === "FR") {
+          const ai = FRANCE_30_ORDER.indexOf(a.name);
+          const bi = FRANCE_30_ORDER.indexOf(b.name);
+          if (ai >= 0 && bi >= 0) return ai - bi;
+          if (ai >= 0) return -1;
+          if (bi >= 0) return 1;
+          return (a.name || "").localeCompare(b.name || "");
+        }
+        return (a.name || "").localeCompare(b.name || "");
       });
 
       this.progress = { total: pendingCities.length, completed: 0, current: "" };
-      const euro5Pending = pendingCities.filter(c => PRIORITY_EURO5.includes(c.name)).map(c => c.name);
-      const francePending = pendingCities.filter(c => c.countryCode === "FR" && !PRIORITY_EURO5.includes(c.name)).map(c => c.name);
-      const euroPending = pendingCities.filter(c => c.timezone?.startsWith("Europe/") && c.countryCode !== "FR" && !PRIORITY_EURO5.includes(c.name)).map(c => c.name);
-      console.log(`[PlaceSeeder] ★ 시딩 우선순위:`);
-      console.log(`  1순위 유럽5: ${euro5Pending.length > 0 ? euro5Pending.join(", ") : "✅ 완료"}`);
-      console.log(`  2순위 프랑스30: ${francePending.length > 0 ? francePending.length + "개 대기" : "✅ 완료"}`);
+      const francePending = pendingCities.filter(c => c.countryCode === "FR").map(c => c.name);
+      const euroPending = pendingCities.filter(c => c.timezone?.startsWith("Europe/") && c.countryCode !== "FR").map(c => c.name);
+      console.log(`[PlaceSeeder] ★ 1차 목표 시딩 순서 (파리→프랑스30→유럽30):`);
+      console.log(`  1순위 파리: seedPriorityCityByCategory에서 처리`);
+      console.log(`  2순위 프랑스30: ${francePending.length > 0 ? francePending.join(", ") : "✅ 완료"}`);
       console.log(`  3순위 유럽30: ${euroPending.length > 0 ? euroPending.length + "개 대기" : "✅ 완료"}`);
       console.log(`  총 대기: ${pendingCities.length}개`);
 
@@ -520,15 +720,13 @@ export class PlaceSeeder {
           
           console.log(`[PlaceSeeder] === [${this.progress.completed}/${this.progress.total}] ${city.name} 시딩 완료 (${seedResult.seeded}개) ===`);
           
-          // 2단계: 즉시 연쇄 크롤러 실행 (도시별 - 시딩 직후 바로 보강)
-          if (seedResult.seeded > 0) {
-            console.log(`[PlaceSeeder] 🔄 ${city.name} - 연쇄 크롤러 즉시 시작...`);
-            try {
-              await this.runChainedCrawlers(city.id, city.name);
-              console.log(`[PlaceSeeder] ✅ ${city.name} - 시딩+크롤러 완전 완료!`);
-            } catch (crawlError: any) {
-              console.warn(`[PlaceSeeder] ${city.name} 크롤러 일부 실패 (시딩은 성공):`, crawlError.message);
-            }
+          // 2단계: 연쇄 크롤러 항상 실행 (로우데이터 보강)
+          console.log(`[PlaceSeeder] 🔄 ${city.name} - 연쇄 크롤러 시작...`);
+          try {
+            await this.runChainedCrawlers(city.id, city.name);
+            console.log(`[PlaceSeeder] ✅ ${city.name} - 시딩+크롤러 완전 완료!`);
+          } catch (crawlError: any) {
+            console.warn(`[PlaceSeeder] ${city.name} 크롤러 일부 실패:`, crawlError.message);
           }
           
           await delay(500);
@@ -550,15 +748,17 @@ export class PlaceSeeder {
   }
 
   /**
-   * 시딩 완료된 도시에 대해 10개 크롤러 + place-linker + score 집계 연쇄 실행
+   * 시딩 완료된 도시에 대해 12개 크롤러 + place-linker + score 집계 연쇄 실행
+   * 대상: 도시별·카테고리별 장소 (구글 시딩 기반)
    * 
+   * 0그룹 (로우데이터 보강): Wikimedia, OpenTripMap — 무료, 사진·설명 보강
    * A그룹 (placeId 직접 확보): TripAdvisor, Michelin, 가격, 포토스팟, 한국플랫폼, 패키지투어
    * B그룹 (place-linker 필요): Instagram auto-collector, YouTube, Naver Blog, Tistory
    * 마무리: Place Linker → Score Aggregation
    */
   async runChainedCrawlers(cityId: number, cityName: string): Promise<void> {
     console.log(`\n[Crawlers] ============================`);
-    console.log(`[Crawlers] ${cityName} (id:${cityId}) - 10개 크롤러 연쇄 실행`);
+    console.log(`[Crawlers] ${cityName} (id:${cityId}) - 12개 크롤러 연쇄 실행 (도시별·카테고리별 장소)`);
     console.log(`[Crawlers] ============================`);
     
     const cityPlaces = await storage.getPlacesByCity(cityId);
@@ -567,6 +767,70 @@ export class PlaceSeeder {
       return;
     }
     console.log(`[Crawlers] ${cityName} - ${cityPlaces.length}개 장소 대상\n`);
+
+    // ═══════════════════════════════════════
+    // 0그룹: 로우데이터 보강 (무료 API)
+    // ═══════════════════════════════════════
+
+    // 0-1. Wikimedia (사진 보강)
+    try {
+      const { syncWikimediaForCity } = await import("./wikimedia-enrichment");
+      const result = await syncWikimediaForCity(cityId);
+      await db.insert(dataSyncLog).values({
+        entityType: "wikimedia_연쇄",
+        entityId: cityId,
+        entitySubType: cityName,
+        source: "chained_crawlers",
+        status: result.errors.length === 0 ? "success" : "partial",
+        itemsProcessed: result.placesProcessed,
+        itemsFailed: result.errors?.length || 0,
+        errorMessage: result.errors?.slice(0, 2).join("; ") || null,
+        completedAt: new Date(),
+      });
+      console.log(`[Crawlers] ✅ 0-1 Wikimedia: ${cityName} ${result.placesProcessed}곳, ${result.photosAdded}장 사진`);
+    } catch (e: any) {
+      console.warn(`[Crawlers] ❌ 0-1 Wikimedia:`, e.message);
+      await db.insert(dataSyncLog).values({
+        entityType: "wikimedia_연쇄",
+        entityId: cityId,
+        entitySubType: cityName,
+        source: "chained_crawlers",
+        status: "failed",
+        errorMessage: e.message,
+        completedAt: new Date(),
+      });
+    }
+    await delay(500);
+
+    // 0-2. OpenTripMap (설명 보강)
+    try {
+      const { syncOpenTripMapForCity } = await import("./opentripmap-enrichment");
+      const result = await syncOpenTripMapForCity(cityId);
+      await db.insert(dataSyncLog).values({
+        entityType: "opentripmap_연쇄",
+        entityId: cityId,
+        entitySubType: cityName,
+        source: "chained_crawlers",
+        status: result.errors.length === 0 ? "success" : "partial",
+        itemsProcessed: result.placesProcessed,
+        itemsFailed: result.errors?.length || 0,
+        errorMessage: result.errors?.slice(0, 2).join("; ") || null,
+        completedAt: new Date(),
+      });
+      console.log(`[Crawlers] ✅ 0-2 OpenTripMap: ${cityName} ${result.placesProcessed}곳, ${result.descriptionsAdded}개 설명`);
+    } catch (e: any) {
+      console.warn(`[Crawlers] ❌ 0-2 OpenTripMap:`, e.message);
+      await db.insert(dataSyncLog).values({
+        entityType: "opentripmap_연쇄",
+        entityId: cityId,
+        entitySubType: cityName,
+        source: "chained_crawlers",
+        status: "failed",
+        errorMessage: e.message,
+        completedAt: new Date(),
+      });
+    }
+    await delay(500);
 
     // ═══════════════════════════════════════
     // A그룹: places.id 기반 직접 크롤링
@@ -820,13 +1084,25 @@ export class PlaceSeeder {
     // 전체 장소 수
     const [totalResult] = await db.select({ total: count() }).from(places);
     
-    const cityDetails = allCities.map(c => ({
+    const FRANCE_29 = ["니스", "리옹", "마르세유", "보르도", "스트라스부르", "툴루즈", "몽펠리에", "낭트", "칸", "아비뇽", "엑상프로방스", "콜마르", "앙시", "디종", "루앙", "릴", "렌", "카르카손", "비아리츠", "생말로", "샤모니", "아를", "생트로페", "베르사유", "그르노블", "랭스", "안티브", "망통", "투르"];
+    const EUROPE_30 = ["로마", "피렌체", "베니스", "밀라노", "아말피", "바르셀로나", "마드리드", "세비야", "그라나다", "런던", "에딘버러", "뮌헨", "베를린", "프랑크푸르트", "취리히", "인터라켄", "비엔나", "잘츠부르크", "암스테르담", "브뤼셀", "프라하", "부다페스트", "리스본", "아테네", "두브로브니크"];
+    const FULL_ORDER = ["파리", ...FRANCE_29, ...EUROPE_30];
+    const cityDetailsRaw = allCities.map(c => ({
       id: c.id,
       name: c.name,
       country: c.country,
       placeCount: placeCountMap.get(c.id) || 0,
       isSeeded: seededCityIds.has(c.id),
+      _order: FULL_ORDER.indexOf(c.name),
     }));
+    const cityDetails = cityDetailsRaw.sort((a, b) => {
+      const ao = (a as any)._order;
+      const bo = (b as any)._order;
+      if (ao >= 0 && bo >= 0) return ao - bo;
+      if (ao >= 0) return -1;
+      if (bo >= 0) return 1;
+      return (a.name || "").localeCompare(b.name || "");
+    }).map(({ _order, ...rest }) => rest);
 
     return {
       totalCities: allCities.length,
