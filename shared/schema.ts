@@ -479,6 +479,35 @@ export const instagramPhotos = pgTable("instagram_photos", {
   fetchedAt: timestamp("fetched_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
+// ===== 셀럽 성지순례 (핵심 차별화) =====
+// 20인 한국 셀럽 마스터 리스트 - Vibe 매칭용
+export const celebEvidence = pgTable("celeb_evidence", {
+  id: serial("id").primaryKey(),
+  rank: integer("rank").notNull().unique(),  // 1~20
+  name: text("name").notNull(),              // "리사"
+  instagramHandle: text("instagram_handle").notNull(),  // @lalalalisa_m
+  followerRange: text("follower_range"),     // "1억+"
+  persona: text("persona"),                  // "글로벌 1위, 방문지마다 리사 로드 형성"
+  vibes: jsonb("vibes").$type<string[]>().default([]),  // ["Hotspot","Romantic"] - 매칭용
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+// 장소별 셀럽 인스타 흔적 - 이미지 최상순위 노출용
+export const celebrityPlaceEvidence = pgTable("celebrity_place_evidence", {
+  id: serial("id").primaryKey(),
+  placeId: integer("place_id").notNull().references(() => places.id, { onDelete: "cascade" }),
+  celebId: integer("celeb_id").notNull().references(() => celebEvidence.id, { onDelete: "cascade" }),
+  imageUrl: text("image_url"),               // 🎯 최상순위 노출 이미지
+  postUrl: text("post_url"),                 // 인스타 게시물 링크
+  postedAt: text("posted_at"),               // "24년 9월"
+  caption: text("caption"),
+  likeCount: integer("like_count"),
+  fetchedAt: timestamp("fetched_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
 // 환율 캐시
 export const exchangeRates = pgTable("exchange_rates", {
   id: serial("id").primaryKey(),
@@ -557,6 +586,21 @@ export const geminiWebSearchCache = pgTable("gemini_web_search_cache", {
   isVerified: boolean("is_verified").default(false),
   expiresAt: timestamp("expires_at"),
   fetchedAt: timestamp("fetched_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
+// nubiReason 배치 수집 결과 (10곳/회 Gemini + 4단계 검증)
+export const placeNubiReasons = pgTable("place_nubi_reasons", {
+  id: serial("id").primaryKey(),
+  placeId: integer("place_id").notNull().unique().references(() => places.id, { onDelete: "cascade" }),
+  cityId: integer("city_id").notNull().references(() => cities.id, { onDelete: "cascade" }),
+  placeName: text("place_name").notNull(),
+  sourceRank: integer("source_rank").notNull(), // 1~5
+  sourceType: text("source_type").notNull(), // instagram|youtube|naver_blog|package|travel_app
+  nubiReason: text("nubi_reason").notNull(),
+  evidenceUrl: text("evidence_url"),
+  verified: boolean("verified").default(false),
+  fetchedAt: timestamp("fetched_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
 // 가격 정보 로우 데이터 (다중 소스)

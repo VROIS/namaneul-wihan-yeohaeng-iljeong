@@ -8,9 +8,14 @@ alwaysApply: true
 > **이 파일은 매 세션 종료/중단 시 반드시 업데이트할 것**
 
 ## 세션 시작 시 필수 (간과 금지)
-- `.cursor/rules/*.mdc` 9개 파일 **정확히 숙지 후 작업 시작**
+- **읽기 전에는 코드 수정·삭제·추가를 하지 않는다** (추측/추정 수정 금지)
+- `.cursor/rules/*.mdc` 10개 파일 **정확히 숙지 후 작업 시작** (nubi-verification-constitution 포함)
 - `docs/TASK.md` 읽기 → §7 "새 .md 생성 금지" 확인 → 배포/테스트 결과는 TASK.md에만 요약
 - `nubi-handoff.mdc` 읽기 → 현재 상태 파악 → 이어서 진행
+
+## 공통 목표 (모든 AI 세션 통일)
+- 사용자 입력 9가지 + birthDate 필수, companionCount/curationFocus 100% 반영 (추정 금지)
+- 성급·추정 수정 금지, 속도보다 정확성, 실전 배포용 초정밀 고도화
 
 ## 자율 실행 시 DB/터미널/로컬 규칙
 - **DB·터미널·로컬 실행은 AI가 직접 수행** → 내부 테스트 후 결과 보고
@@ -18,14 +23,14 @@ alwaysApply: true
 - 사용자에게 SQL/Supabase/PowerShell 등 수동 실행 요청하지 않음 (비개발자)
 - DB·코드 작업은 배포(Koyeb)와 별개로 진행 가능
 
-## 현재 상태 (2026-02-11)
+## 현재 상태 (2026-02-13)
 
 | 항목 | 내용 |
 |------|------|
-| 마지막 작업 | place_seed_sync 수정: API 확인 후 "Cannot convert undefined or null to object"·Invalid radius 100km 대응. 반경 50km, counts/openingHours guard, 대시보드 errorMessage 표시. |
-| 다음 할 일 | 커밋·푸시 → 배포 후 place_seed_sync 성공 여부 확인. 건강체크 API 수정 → city_transport_fares → 프론트엔드 nubiReason. |
+| 마지막 작업 | nubiReason 배치 완료. place_nubi_reasons Supabase 반영. dev/run-place-nubi-reasons-migration.ts, verify-place-nubi-reasons.ts, run-nubi-reason-collect.ts. |
+| 다음 할 일 | Gemini 할당량 복구 후 `npx tsx dev/run-nubi-reason-collect.ts` → place_nubi_reasons 데이터 수집. |
 | 브랜치 | cursor-dev |
-| 배포 상태 | Koyeb 커밋·푸시 반영됨. 외부 테스트 시 500 시 step2/검증 환경 확인. |
+| 배포 상태 | Koyeb 커밋·푸시 반영됨. |
 
 ## 긴급 이슈
 - **Google Maps/Places API 대시보드 빨간불**: 건강체크가 Geocoding API 테스트 → 실제 사용 API(Places New/Routes)와 다름

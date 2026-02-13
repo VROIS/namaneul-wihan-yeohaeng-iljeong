@@ -24,7 +24,9 @@ import {
   placePrices,
   naverBlogPosts,
   weatherForecast,
-  apiKeys
+  apiKeys,
+  celebrityPlaceEvidence,
+  celebEvidence
 } from "../shared/schema";
 import { instagramCrawler } from "./services/instagram-crawler";
 import { eq, desc, sql, count, and, gte } from "drizzle-orm";
@@ -390,6 +392,8 @@ export function registerAdminRoutes(app: Express) {
         { serviceName: "youtube_data", displayName: "YouTube Data API", dailyQuota: 10000, monthlyQuota: null },
         { serviceName: "exchange_rate", displayName: "Exchange Rate API", dailyQuota: null, monthlyQuota: 1500 },
         { serviceName: "gemini", displayName: "Gemini AI", dailyQuota: null, monthlyQuota: null },
+        { serviceName: "wikimedia_commons", displayName: "Wikimedia Commons (무료)", dailyQuota: null, monthlyQuota: null },
+        { serviceName: "opentripmap", displayName: "OpenTripMap (무료)", dailyQuota: null, monthlyQuota: null },
       ];
       
       for (const service of defaultServices) {
@@ -406,6 +410,9 @@ export function registerAdminRoutes(app: Express) {
               return true;
             case "gemini":
               return !!process.env.AI_INTEGRATIONS_GEMINI_API_KEY;
+            case "wikimedia_commons":
+            case "opentripmap":
+              return true;
             default:
               return false;
           }
@@ -1000,6 +1007,30 @@ export function registerAdminRoutes(app: Express) {
   // 동기화 로그
   // ========================================
   
+  app.get("/api/admin/celebrity-evidence/stats", async (req, res) => {
+    try {
+      if (!db) return res.json({ total: 0, celebs: 0, sample: [] });
+      const [totalRow] = await db.select({ count: count() }).from(celebrityPlaceEvidence);
+      const [celebRow] = await db.select({ count: count() }).from(celebEvidence).where(eq(celebEvidence.isActive, true));
+      const sample = await db
+        .select({
+          placeName: places.name,
+          imageUrl: celebrityPlaceEvidence.imageUrl,
+          celebName: celebEvidence.name,
+          postUrl: celebrityPlaceEvidence.postUrl
+        })
+        .from(celebrityPlaceEvidence)
+        .innerJoin(places, eq(places.id, celebrityPlaceEvidence.placeId))
+        .innerJoin(celebEvidence, eq(celebEvidence.id, celebrityPlaceEvidence.celebId))
+        .orderBy(desc(celebrityPlaceEvidence.createdAt))
+        .limit(10);
+      res.json({ total: totalRow?.count ?? 0, celebs: celebRow?.count ?? 0, sample });
+    } catch (e) {
+      console.error("[Admin] celebrity-evidence/stats:", e);
+      res.status(500).json({ error: "Failed to fetch" });
+    }
+  });
+
   app.get("/api/admin/sync-logs", async (req, res) => {
     try {
       const limit = parseInt(req.query.limit as string) || 50;
@@ -1167,6 +1198,48 @@ export function registerAdminRoutes(app: Express) {
   });
 
   // ========================================
+  // Wikimedia Commons 동기화 (무료)
+  // ========================================
+  app.post("/api/admin/sync/wikimedia", async (req, res) => {
+    try {
+      const { syncWikimediaPhotos } = await import("./services/wikimedia-enrichment");
+      const result = await syncWikimediaPhotos();
+      await db.insert(dataSyncLog).values({
+        entityType: "wikimedia_sync",
+        source: "wikimedia_commons",
+        status: result.success ? "success" : "partial",
+        itemsProcessed: result.placesProcessed,
+        completedAt: new Date(),
+        errorMessage: result.errors?.length ? result.errors.slice(0, 3).join("; ") : null,
+      });
+      res.json({ message: "Wikimedia 사진 보강 완료", ...result });
+    } catch (error: any) {
+      res.status(500).json({ error: "Wikimedia 동기화 실패", details: String(error) });
+    }
+  });
+
+  // ========================================
+  // OpenTripMap 동기화 (무료)
+  // ========================================
+  app.post("/api/admin/sync/opentripmap", async (req, res) => {
+    try {
+      const { syncOpenTripMapDescriptions } = await import("./services/opentripmap-enrichment");
+      const result = await syncOpenTripMapDescriptions();
+      await db.insert(dataSyncLog).values({
+        entityType: "opentripmap_sync",
+        source: "opentripmap",
+        status: result.success ? "success" : "partial",
+        itemsProcessed: result.placesProcessed,
+        completedAt: new Date(),
+        errorMessage: result.errors?.length ? result.errors.slice(0, 3).join("; ") : null,
+      });
+      res.json({ message: "OpenTripMap 설명 보강 완료", ...result });
+    } catch (error: any) {
+      res.status(500).json({ error: "OpenTripMap 동기화 실패", details: String(error) });
+    }
+  });
+
+  // ========================================
   // 스케줄러 상태 및 수동 실행
   // ========================================
   
@@ -1258,6 +1331,14 @@ export function registerAdminRoutes(app: Express) {
         openWeather: {
           configured: !!openWeatherKey,
           message: openWeatherKey ? "설정됨" : "OPENWEATHER_API_KEY 환경변수 필요 (openweathermap.org에서 발급)"
+        },
+        wikimedia: {
+          configured: true,
+          message: "무료 API (장소 사진 보강)"
+        },
+        opentripmap: {
+          configured: true,
+          message: "무료 API (장소 설명 보강)"
         }
       };
       
@@ -1335,6 +1416,171 @@ export function registerAdminRoutes(app: Express) {
       res.json({ success: true, ...status });
     } catch (error: any) {
       res.json({ success: false, error: error.message });
+    }
+  });
+
+  // 로우데이터 저장/가공/확보 보고 (검증용)
+  app.get("/api/admin/seed/places/report", async (req, res) => {
+    try {
+      const cityId = req.query.cityId ? parseInt(String(req.query.cityId), 10) : null;
+      const { db } = await import("./db");
+      const { places, cities, youtubePlaceMentions, naverBlogPosts, instagramHashtags, placePrices } = await import("@shared/schema");
+      const { eq, count, inArray, isNotNull, and } = await import("drizzle-orm");
+      const targetCityId = cityId ?? (await db.select({ id: cities.id }).from(cities).where(eq(cities.name, "파리")).then(r => r[0]?.id));
+      if (!targetCityId) return res.json({ success: false, error: "cityId 없음 (파리 또는 쿼리)" });
+
+      const city = await db.select().from(cities).where(eq(cities.id, targetCityId)).then(r => r[0]);
+      if (!city) return res.json({ success: false, error: "도시 없음" });
+
+      const { placeSeeder } = await import("./services/place-seeder");
+      const byCategory = await placeSeeder.getCityPlaceCountsByCategory(targetCityId);
+      const placeIds = await db.select({ id: places.id }).from(places).where(eq(places.cityId, targetCityId)).then(r => r.map(x => x.id));
+      const idList = placeIds.map(p => p.id);
+      const hasPlaces = idList.length > 0;
+
+      const [yt] = hasPlaces ? await db.select({ cnt: count() }).from(youtubePlaceMentions).where(inArray(youtubePlaceMentions.placeId, idList)) : [{ cnt: 0 }];
+      const [nb] = await db.select({ cnt: count() }).from(naverBlogPosts).where(and(eq(naverBlogPosts.cityId, targetCityId), isNotNull(naverBlogPosts.placeId)));
+      const [ig] = await db.select({ cnt: count() }).from(instagramHashtags).where(and(eq(instagramHashtags.linkedCityId, targetCityId), isNotNull(instagramHashtags.linkedPlaceId)));
+      const [pp] = hasPlaces ? await db.select({ cnt: count() }).from(placePrices).where(inArray(placePrices.placeId, idList)) : [{ cnt: 0 }];
+
+      res.json({
+        success: true,
+        city: { id: city.id, name: city.name },
+        storage: { byCategory, total: byCategory.total },
+        processing: { youtubeLinked: Number(yt?.cnt ?? 0), naverBlogLinked: Number(nb?.cnt ?? 0), instagramLinked: Number(ig?.cnt ?? 0), placePrices: Number(pp?.cnt ?? 0) },
+        target: { perCategory: 30, activeCategories: ["attraction", "restaurant", "healing", "adventure", "hotspot"] },
+      });
+    } catch (error: any) {
+      res.json({ success: false, error: error.message });
+    }
+  });
+
+  // 파리 1일 1카테고리 시딩 (수동 트리거)
+  app.post("/api/admin/seed/places/paris-daily", async (req, res) => {
+    try {
+      const { placeSeeder } = await import("./services/place-seeder");
+      const result = await placeSeeder.seedPriorityCityByCategory();
+      res.json({ success: true, ...result });
+    } catch (error: any) {
+      res.json({ success: false, error: error?.message });
+    }
+  });
+
+  // attraction→adventure 보정 (5카테고리 모두 존재하도록)
+  app.post("/api/admin/seed/refine-adventure", async (req, res) => {
+    try {
+      const { placeSeeder } = await import("./services/place-seeder");
+      const result = await placeSeeder.refineAdventureFromAttractions();
+      res.json({ success: true, ...result });
+    } catch (error: any) {
+      res.json({ success: false, error: error?.message });
+    }
+  });
+
+  // nubiReason 배치 수집 (카테고리별 30곳 → 10곳×3배치 Gemini 호출)
+  app.post("/api/admin/nubi-reason/collect", async (req, res) => {
+    try {
+      const { cityId, category } = req.body;
+      const targetCityId = cityId ?? null;
+      const targetCategory = category ?? "attraction";
+      if (!targetCityId) {
+        return res.json({ success: false, error: "cityId 필요" });
+      }
+      const {
+        collectNubiReasonsForCategory,
+        getPlaceNamesForCategory,
+      } = await import("./services/nubi-reason-batch-service");
+      const { db } = await import("./db");
+      const { cities } = await import("@shared/schema");
+      const { eq } = await import("drizzle-orm");
+      const city = await db.select().from(cities).where(eq(cities.id, targetCityId)).then((r) => r[0]);
+      if (!city) return res.json({ success: false, error: "도시 없음" });
+      const placeNames = await getPlaceNamesForCategory(targetCityId, targetCategory, 30);
+      if (placeNames.length === 0) {
+        return res.json({ success: false, error: `해당 카테고리(${targetCategory}) 장소 없음` });
+      }
+      const result = await collectNubiReasonsForCategory(targetCityId, city.name, placeNames);
+      res.json({
+        success: true,
+        cityId: targetCityId,
+        cityName: city.name,
+        category: targetCategory,
+        placeCount: placeNames.length,
+        ...result,
+      });
+    } catch (error: any) {
+      res.json({ success: false, error: error?.message });
+    }
+  });
+
+  // 전 도시 기존 장소 5개 카테고리로 분류정돈 (seed_category 보정)
+  app.post("/api/admin/seed/reclassify-all", async (req, res) => {
+    try {
+      const { placeSeeder } = await import("./services/place-seeder");
+      const result = await placeSeeder.reclassifyAllCitiesPlaces();
+      res.json({ success: true, ...result });
+    } catch (error: any) {
+      res.json({ success: false, error: error?.message });
+    }
+  });
+
+  // nubiReason 배치 수집 (10곳/회 Gemini + 4단계 검증)
+  // POST /api/admin/nubi-reasons/collect?cityId=1&category=attraction
+  app.post("/api/admin/nubi-reasons/collect", async (req, res) => {
+    try {
+      const cityId = req.query.cityId ? parseInt(String(req.query.cityId), 10) : null;
+      const category = (req.query.category as string) || "attraction";
+      if (!cityId) return res.json({ success: false, error: "cityId 쿼리 필요" });
+
+      const { db } = await import("./db");
+      const { cities } = await import("@shared/schema");
+      const { eq } = await import("drizzle-orm");
+      const city = await db.select().from(cities).where(eq(cities.id, cityId)).then((r) => r[0]);
+      if (!city) return res.json({ success: false, error: "도시 없음" });
+
+      const {
+        getPlaceNamesForCategory,
+        collectNubiReasonsForCategory,
+      } = await import("./services/nubi-reason-batch-service");
+
+      const placeNames = await getPlaceNamesForCategory(cityId, category, 30);
+      if (placeNames.length === 0) {
+        return res.json({ success: true, totalSaved: 0, totalFailed: 0, message: "해당 카테고리 장소 없음" });
+      }
+
+      const result = await collectNubiReasonsForCategory(cityId, city.name, placeNames);
+      res.json({
+        success: true,
+        cityId,
+        cityName: city.name,
+        category,
+        placeCount: placeNames.length,
+        ...result,
+      });
+    } catch (error: any) {
+      res.json({ success: false, error: error?.message });
+    }
+  });
+
+  // 파리 기존 장소 5개 카테고리로 분류정돈만 (seed_category 보정)
+  app.post("/api/admin/seed/paris-reclassify", async (req, res) => {
+    try {
+      const { placeSeeder } = await import("./services/place-seeder");
+      const result = await placeSeeder.reclassifyParisPlaces();
+      res.json({ success: true, ...result });
+    } catch (error: any) {
+      res.json({ success: false, error: error?.message });
+    }
+  });
+
+  // 파리 1차 완성: 분류정돈 + 카테고리별 부족분 채우기 (명소/맛집/힐링/모험 각 30곳)
+  app.post("/api/admin/seed/paris-phase1", async (req, res) => {
+    try {
+      const { placeSeeder } = await import("./services/place-seeder");
+      const result = await placeSeeder.completeParisPhase1();
+      res.json({ success: true, ...result });
+    } catch (error: any) {
+      res.json({ success: false, error: error?.message });
     }
   });
 

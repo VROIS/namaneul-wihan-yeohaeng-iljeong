@@ -1,8 +1,8 @@
 # NUBI 프로젝트 태스크 관리
 
-> **최종 업데이트: 2026-02-08**
+> **최종 업데이트: 2026-02-13**
 > **완료된 작업 이력: `docs/TASK_ARCHIVE.md`**
-> **AI 규칙: `.cursor/rules/*.mdc` (9개 파일, 항상 자동 적용)**
+> **AI 규칙: `.cursor/rules/*.mdc` (10개 파일, 항상 자동 적용. 검증 헌법: nubi-verification-constitution.mdc)**
 
 ---
 
@@ -12,9 +12,9 @@
 
 | 항목 | 내용 |
 |------|------|
-| **마지막 작업일** | 2026-02-08 |
-| **마지막 작업** | 일정 이미지 우선순위(인스타>위키>구글) + Wikimedia/OpenTripMap 독립 동기화 + 대시보드 |
-| **다음 할 일** | Wikimedia/OpenTripMap 연쇄 크롤러 통합 → 슬롯 필수정보 보강 → 배포 테스트 |
+| **마지막 작업일** | 2026-02-13 |
+| **마지막 작업** | nubiReason 배치 수집 구현·DB 마이그레이션·검증 완료. place_nubi_reasons 테이블 Supabase 반영. |
+| **다음 할 일** | Gemini 할당량 복구 후 `npx tsx dev/run-nubi-reason-collect.ts` → place_nubi_reasons 데이터 수집 |
 | **배포 상태** | Koyeb 정상 (200 OK). 커밋·푸시 시 자동 배포. 로컬 = 내부테스트용. |
 | **브랜치** | cursor-dev |
 
@@ -25,7 +25,7 @@
 ### 시딩 원칙 (확정)
 - **순서**: 파리 → 프랑스 29개 도시 → 유럽 30개 도시 (도시별 카테고리 30개씩 채우는 순서)
 - **분류**: 비용 내고 가져온 모든 도시 데이터 → 5카테고리로 전부 분류 (제외 없음)
-- **도시당**: 도심 반경 100km, **카테고리 5개별 구글 리뷰 상위 30곳** → 30×5 = 150장소
+- **도시당**: 도심 반경 50km (Google API 최대), **카테고리 5개별 구글 리뷰 상위 30곳** → 30×5 = 150장소
 - **1일 1카테고리**: 오늘의 카테고리(attraction→restaurant→healing→adventure→hotspot) 처리 → 시딩(필요 시) + **크롤러 자동 실행**(Wikimedia·OpenTripMap·장소매칭 등) → 프론트까지 데이터 완성
 - **5카테고리 다 30개 달성** → 다음 도시로 전환 (파리 완료 → 프랑스29 → 유럽30)
 
@@ -79,9 +79,9 @@
 **적용 (google-places.ts)**: editorialSummary·shortFormattedAddress·primaryTypeDisplayName 제거. DAILY_API_LIMIT=33 (1,000/월÷30일)
 
 ### 일정 이미지 우선순위 (ag3-data-matcher)
-- **순서**: 인스타(가장 자연스러움) > 위키메디어+구글(photoUrls) > place.image > Google API
-- **DB 컬럼**: `instagramPhotoUrls`(인스타), `photoUrls`(구글+위키메디어 append)
-- **적용**: ag3 preload 시 `instagramPhotoUrls` 조회, `resolvePlaceImage()` 로 선택
+- **순서**: 셀럽 인스타(1순위) > 인스타 > 위키메디어+구글(photoUrls) > place.image > Google API
+- **DB 컬럼**: `celebrity_place_evidence.imageUrl`(20인 셀럽), `instagramPhotoUrls`(인스타), `photoUrls`(구글+위키메디어 append)
+- **적용**: ag3 preload 시 `celebrityImageMap`·`instagramPhotoUrls` 조회, `resolvePlaceImage()` 로 선택
 
 ### 구현·DB 정리
 - place-seeder: SEARCH_CATEGORIES 5개(명소/맛집/힐링/모험/핫스팟), hotel 제거, 맛집 통합, 카테고리당 API 1회
@@ -91,14 +91,11 @@
 
 ---
 
-## 1. 오늘 작업 현황 (2026-02-08)
+## 1. 진행 중 작업
 
 | # | 작업 | 상태 | 비고 |
 |---|------|------|------|
-| 1 | 일정 이미지 우선순위 (인스타>위키>구글) | ✅ 완료 | ag3-data-matcher resolvePlaceImage, instagramPhotoUrls 조회 |
-| 2 | Wikimedia/OpenTripMap 독립 동기화 | ✅ 완료 | wikimedia-enrichment, opentripmap-enrichment, 스케줄러·대시보드 |
-| 3 | Wikimedia/OpenTripMap 연쇄 크롤러 통합 | ✅ 완료 | runChainedCrawlers 0그룹에 도시별·카테고리별 장소 대상 Wikimedia·OpenTripMap 추가 |
-| 4 | 슬롯 필수정보 보강 (검증 단계) | ❌ 미완료 | 메인 에이전트에서 누락 시 재조회·저장 |
+| 1 | 슬롯 필수정보 보강 (검증 단계) | ❌ 미완료 | 메인 에이전트에서 누락 시 재조회·저장 |
 
 ---
 
@@ -220,6 +217,10 @@
 | **AG2 반경 100km** | AG2 프롬프트에 "100km radius" 추가, Paris 예시 명시. AGENT_PROTOCOL 반영. 배포 후 파리 generate로 검증. |
 | **일정 검증(Verifier)** | score≥90 통과, itinerary-verifier.ts. 잘린 JSON 복구(verdict 적합·score 50 미만→90), maxOutputTokens 1024. 내부 2회차 200/score 95. 배포본 외부 1회 500 → 재테스트 권장. |
 | **배포 콘솔 분석(2026-02-11)** | place_seed_sync failed: "Cannot convert undefined or null to object" + Invalid radius 100km(>50km). 수정: counts 무효 guard, openingHours guard, 반경 50km, 대시보드 failed 시 errorMessage 표시. |
+| **셀럽 흔적 결과 확인** | `/admin` 대시보드 → 실시간 관제탑 "셀럽 흔적" 숫자. API: `GET /api/admin/celebrity-evidence/stats`. 터미널: `npm run report:celeb`. |
+| **시딩 1차 (2026-02-08)** | reclassifyParisPlaces 연동, maxResultCount 30, 확정 도시 목록(FRANCE_29·EUROPE_30), `npm run seed:paris-phase1`. 반경 100km→50km(Google API 한도). 파리 181건(adventure 1부족). nubiReason 4단계 검증 미구현. |
+| **nubiReason 배치 (2026-02-08)** | place_nubi_reasons 테이블, nubi-reason-batch-service.ts. 10곳/회 Gemini 호출, 4단계 검증(파싱→필드→URL→DB). API: `POST /api/admin/nubi-reason/collect` {cityId, category}. 카테고리별 30곳→10×3배치. |
+| **nubiReason 배치 완료 (2026-02-13)** | DB 마이그레이션: `npx tsx dev/run-place-nubi-reasons-migration.ts` (Supabase places FK 이슈로 FK 제외 생성). 검증: `npx tsx dev/verify-place-nubi-reasons.ts`. 수집: `npx tsx dev/run-nubi-reason-collect.ts` (DB api_keys에서 Gemini 키 로드). Supabase Table Editor에서 place_nubi_reasons 확인 가능. 현재 0건(429 할당량 소진). |
 
 - **배포**: 커밋·푸시 → Koyeb 자동 배포. 로컬 8082 = 내부테스트용, `.\dev\test-paris-a.ps1`.
 - **실제테스트**: 배포 URL `POST /api/routes/generate` (Paris 3일 등) → 200·일정 데이터 확인.
@@ -230,6 +231,9 @@
 
 | 날짜 | 내용 |
 |------|------|
+| 2026-02-13 | nubiReason 배치: place_nubi_reasons 테이블 Supabase 반영, 마이그레이션·검증·수집 스크립트(dev/). DB api_keys 로드 적용. |
+| 2026-02-13 | 검증 헌법(nubi-verification-constitution.mdc) 신규: 5대 원칙, 매의 눈·초행여행자 시점 |
+| 2026-02-13 | 문서 정리: SEED_PHASE1_RESULT → TASK.md §7 통합, 완료 항목 TASK_ARCHIVE.md 이동 |
 | 2026-02-11 | place_seed_sync 수정: 반경 100km→50km(Google API 한도), counts/openingHours guard, 대시보드 errorMessage 표시 |
 | 2026-02-08 | 1차 목표 순서 확정: 파리→프랑스30→유럽30 (place-seeder, TASK.md, getSeedingStatus) |
 | 2026-02-08 | 일정 이미지: 인스타>위키>구글 우선순위 적용 (ag3), Wikimedia·OpenTripMap 무료 API 대시보드 연동 |
