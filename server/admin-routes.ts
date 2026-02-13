@@ -46,6 +46,21 @@ const DEFAULT_DASHBOARD_DATA = {
 };
 
 export function registerAdminRoutes(app: Express) {
+  const isPausedCostCrawler = async (taskName: string): Promise<boolean> => {
+    const { DataScheduler } = await import("./services/data-scheduler");
+    return DataScheduler.isTaskDisabledByPolicy(taskName);
+  };
+
+  const rejectIfPaused = async (taskName: string, res: any): Promise<boolean> => {
+    if (await isPausedCostCrawler(taskName)) {
+      res.status(423).json({
+        success: false,
+        error: `${taskName}은(는) 비용 절감 정책으로 현재 일시 중단되었습니다.`,
+      });
+      return true;
+    }
+    return false;
+  };
   
   app.get("/admin", (req, res) => {
     // 여러 경로에서 템플릿 검색 (개발 환경 + 빌드된 환경 모두 지원)
@@ -476,19 +491,22 @@ export function registerAdminRoutes(app: Express) {
         }
       };
 
-      // Google Maps API 테스트
-      const googleMapsKey = process.env.Google_maps_api_key || process.env.GOOGLE_MAPS_API_KEY;
+      // Google Maps/Places API 테스트 (DB 키 우선 - 테스트 버튼과 동일한 키 사용)
+      let googleMapsKey = process.env.Google_maps_api_key || process.env.GOOGLE_MAPS_API_KEY;
+      if (isDatabaseConnected() && db) {
+        const [row] = await db.select({ keyValue: apiKeys.keyValue }).from(apiKeys).where(eq(apiKeys.keyName, "GOOGLE_MAPS_API_KEY")).limit(1);
+        if (row?.keyValue) googleMapsKey = row.keyValue;
+      }
       if (googleMapsKey) {
         await checkWithTimeout("google_maps", async () => {
           const response = await fetch(
-            `https://maps.googleapis.com/maps/api/geocode/json?address=Seoul&key=${googleMapsKey}`
+            `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=Paris&key=${googleMapsKey}`
           );
           const data = await response.json();
           if (data.status === "REQUEST_DENIED") {
-            throw new Error(data.error_message || "API key invalid");
+            throw new Error(data.error_message || "Places API 미활성화");
           }
         });
-        // Google Places는 같은 키 사용
         healthResults["google_places"] = { ...healthResults["google_maps"] };
       } else {
         healthResults["google_maps"] = { connected: false, latency: null, error: "API key not configured", lastChecked: new Date().toISOString() };
@@ -1053,6 +1071,7 @@ export function registerAdminRoutes(app: Express) {
   app.post("/api/admin/sync/trigger", async (req, res) => {
     try {
       const { taskName, entityId } = req.body;
+      if (taskName && (await rejectIfPaused(String(taskName), res))) return;
       
       const [log] = await db
         .insert(dataSyncLog)
@@ -1077,6 +1096,7 @@ export function registerAdminRoutes(app: Express) {
   
   app.post("/api/admin/sync/youtube", async (req, res) => {
     try {
+      if (await rejectIfPaused("youtube_sync", res)) return;
       const { youtubeCrawler } = await import("./services/youtube-crawler");
       
       if (!process.env.YOUTUBE_API_KEY) {
@@ -1150,6 +1170,7 @@ export function registerAdminRoutes(app: Express) {
 
   app.post("/api/admin/youtube/sync/channel/:id", async (req, res) => {
     try {
+      if (await rejectIfPaused("youtube_sync", res)) return;
       const channelId = parseInt(req.params.id);
       const { youtubeCrawler } = await import("./services/youtube-crawler");
       
@@ -1257,12 +1278,49 @@ export function registerAdminRoutes(app: Express) {
   app.post("/api/admin/scheduler/run/:taskName", async (req, res) => {
     try {
       const { taskName } = req.params;
+      if (await rejectIfPaused(taskName, res)) return;
       const { dataScheduler } = await import("./services/data-scheduler");
       const result = await dataScheduler.runNow(taskName);
       res.json(result);
     } catch (error) {
       console.error("Error running scheduler task:", error);
       res.status(500).json({ error: "스케줄러 태스크 실행 실패" });
+    }
+  });
+
+  // 🌱 장소 시딩 자동 실행 on/off (일정 생성용 Places API 할당량 확보)
+  app.get("/api/admin/scheduler/place-seed-toggle", async (req, res) => {
+    try {
+      const [row] = await db
+        .select({ isEnabled: dataCollectionSchedule.isEnabled })
+        .from(dataCollectionSchedule)
+        .where(eq(dataCollectionSchedule.taskName, "place_seed_sync"))
+        .limit(1);
+      res.json({ enabled: row ? row.isEnabled !== false : true });
+    } catch (error: any) {
+      res.json({ enabled: true });
+    }
+  });
+
+  app.post("/api/admin/scheduler/place-seed-toggle", async (req, res) => {
+    try {
+      const { enabled } = req.body;
+      const isEnabled = enabled === true || enabled === "true";
+      await db
+        .insert(dataCollectionSchedule)
+        .values({
+          taskName: "place_seed_sync",
+          description: "장소 시딩 (1일1카테고리, Google Places API)",
+          cronExpression: "0 18 * * *",
+          isEnabled,
+        })
+        .onConflictDoUpdate({
+          target: dataCollectionSchedule.taskName,
+          set: { isEnabled },
+        });
+      res.json({ enabled: isEnabled, message: isEnabled ? "장소 시딩 자동 실행 ON" : "장소 시딩 자동 실행 OFF (일정 생성용 할당량 확보)" });
+    } catch (error: any) {
+      res.status(500).json({ error: error?.message || "토글 실패" });
     }
   });
 
@@ -1915,6 +1973,7 @@ export function registerAdminRoutes(app: Express) {
 
   app.post("/api/admin/instagram/hashtags/:id/sync", async (req, res) => {
     try {
+      if (await rejectIfPaused("instagram_sync", res)) return;
       const id = parseInt(req.params.id);
       const result = await instagramCrawler.syncHashtag(id);
       res.json(result);
@@ -1979,6 +2038,7 @@ export function registerAdminRoutes(app: Express) {
 
   app.post("/api/admin/instagram/locations/:id/sync", async (req, res) => {
     try {
+      if (await rejectIfPaused("instagram_sync", res)) return;
       const id = parseInt(req.params.id);
       const result = await instagramCrawler.syncLocation(id);
       res.json(result);
@@ -1994,6 +2054,7 @@ export function registerAdminRoutes(app: Express) {
 
   app.post("/api/admin/instagram/sync-all", async (req, res) => {
     try {
+      if (await rejectIfPaused("instagram_sync", res)) return;
       const [hashtagResult, locationResult] = await Promise.all([
         instagramCrawler.syncAllHashtags(),
         instagramCrawler.syncAllLocations(),
@@ -2305,6 +2366,7 @@ export function registerAdminRoutes(app: Express) {
 
   app.post("/api/admin/naver-blog/sync/city/:cityId", async (req, res) => {
     try {
+      if (await rejectIfPaused("naver_blog_sync", res)) return;
       const cityId = parseInt(req.params.cityId);
       const { crawlBlogsForCity } = await import("./services/naver-blog-crawler");
       const result = await crawlBlogsForCity(cityId);
@@ -2320,6 +2382,7 @@ export function registerAdminRoutes(app: Express) {
 
   app.post("/api/admin/naver-blog/sync/all", async (req, res) => {
     try {
+      if (await rejectIfPaused("naver_blog_sync", res)) return;
       const { crawlAllBlogs } = await import("./services/naver-blog-crawler");
       const result = await crawlAllBlogs();
       res.json({
@@ -2417,6 +2480,7 @@ export function registerAdminRoutes(app: Express) {
 
   app.post("/api/admin/tripadvisor/sync/city/:cityId", async (req, res) => {
     try {
+      if (await rejectIfPaused("tripadvisor_sync", res)) return;
       const cityId = parseInt(req.params.cityId);
       const { crawlTripAdvisorForCity } = await import("./services/tripadvisor-crawler");
       const result = await crawlTripAdvisorForCity(cityId);
@@ -2432,6 +2496,7 @@ export function registerAdminRoutes(app: Express) {
 
   app.post("/api/admin/tripadvisor/sync/all", async (req, res) => {
     try {
+      if (await rejectIfPaused("tripadvisor_sync", res)) return;
       const { crawlAllTripAdvisor } = await import("./services/tripadvisor-crawler");
       const result = await crawlAllTripAdvisor();
       res.json({
@@ -3264,6 +3329,7 @@ export function registerAdminRoutes(app: Express) {
 
   app.post("/api/admin/tistory/sync", async (req, res) => {
     try {
+      if (await rejectIfPaused("tistory_sync", res)) return;
       const { crawlAllTistory } = await import("./services/tistory-crawler");
       const result = await crawlAllTistory();
       res.json({
@@ -3551,66 +3617,67 @@ export function registerAdminRoutes(app: Express) {
         return res.status(400).json({ error: "API key not found or empty" });
       }
       
+      const apiKey = keyRecord.keyValue;
       let testResult = { success: false, message: '' };
       
       switch (keyName) {
         case 'GEMINI_API_KEY': {
           try {
             const { GoogleGenAI } = await import("@google/genai");
-            const ai = new GoogleGenAI({ apiKey: keyRecord.keyValue });
+            const ai = new GoogleGenAI({ apiKey });
             const response = await ai.models.generateContent({
               model: "gemini-3-flash-preview",
               contents: "Say 'API test successful' in Korean"
             });
             testResult = { success: true, message: response.text?.slice(0, 100) || 'OK' };
           } catch (e: any) {
-            testResult = { success: false, message: e.message };
+            let msg = e?.message || String(e);
+            if (msg.includes('429') || msg.includes('RESOURCE_EXHAUSTED') || msg.includes('quota')) {
+              msg = '일일 API 할당량 초과 (Google AI Studio에서 사용량·결제 확인)';
+            } else if (msg.includes('API key') || msg.includes('401') || msg.includes('403')) {
+              msg = 'API 키가 유효하지 않거나 권한이 없습니다';
+            }
+            testResult = { success: false, message: msg };
           }
           break;
         }
         
         case 'YOUTUBE_API_KEY': {
           try {
-            // 실제 백엔드 YouTube 크롤러 사용
-            const { youtubeCrawler } = await import("./services/youtube-crawler");
-            const testChannelId = "UC_x5XG1OV2P6uZZ5FSM9Ttw"; // Google Developers 채널
-            const videos = await youtubeCrawler.fetchRecentVideos(testChannelId, 1);
-            testResult = { 
-              success: true, 
-              message: `백엔드 연동 확인: ${videos.length}개 비디오 조회 성공`
-            };
+            const url = `https://www.googleapis.com/youtube/v3/channels?part=snippet&id=UC_x5XG1OV2P6uZZ5FSM9Ttw&key=${encodeURIComponent(apiKey)}`;
+            const res = await fetch(url);
+            const data = await res.json();
+            if (data.error) throw new Error(data.error.message || 'YouTube API 오류');
+            testResult = { success: true, message: `채널 조회 성공: ${data.items?.[0]?.snippet?.title || 'OK'}` };
           } catch (e: any) {
-            testResult = { success: false, message: `백엔드 연동 실패: ${e.message}` };
+            testResult = { success: false, message: e.message };
           }
           break;
         }
         
         case 'GOOGLE_MAPS_API_KEY': {
           try {
-            // 실제 백엔드 Google Places 서비스 사용
-            const { googlePlacesService } = await import("./services/google-places");
-            const places = await googlePlacesService.searchPlaces("에펠탑", "Paris", "attraction", 1);
-            testResult = { 
-              success: true, 
-              message: `백엔드 연동 확인: ${places.length}개 장소 검색 성공`
-            };
+            const url = `https://maps.googleapis.com/maps/api/place/autocomplete/json?input=Paris&key=${encodeURIComponent(apiKey)}`;
+            const res = await fetch(url);
+            const data = await res.json();
+            if (data.status === 'REQUEST_DENIED') throw new Error(data.error_message || 'Places API 미활성화');
+            const count = data.predictions?.length ?? 0;
+            testResult = { success: true, message: `장소 자동완성 ${count}건 조회 성공 (Places API Legacy)` };
           } catch (e: any) {
-            testResult = { success: false, message: `백엔드 연동 실패: ${e.message}` };
+            testResult = { success: false, message: e.message };
           }
           break;
         }
         
         case 'OPENWEATHER_API_KEY': {
           try {
-            // 실제 백엔드 Weather 서비스 사용
-            const { weatherService } = await import("./services/weather");
-            const weather = await weatherService.getCurrentWeather(37.5665, 126.9780); // 서울 좌표
-            testResult = { 
-              success: true, 
-              message: `백엔드 연동 확인: 서울 날씨 ${weather.temperature}°C 조회 성공`
-            };
+            const url = `https://api.openweathermap.org/data/2.5/weather?lat=37.5665&lon=126.9780&appid=${encodeURIComponent(apiKey)}&units=metric`;
+            const res = await fetch(url);
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
+            testResult = { success: true, message: `서울 날씨 ${data.main?.temp}°C 조회 성공` };
           } catch (e: any) {
-            testResult = { success: false, message: `백엔드 연동 실패: ${e.message}` };
+            testResult = { success: false, message: e.message };
           }
           break;
         }
@@ -3799,6 +3866,7 @@ export function registerAdminRoutes(app: Express) {
   // YouTube 전체 동기화 엔드포인트
   app.post("/api/admin/youtube/sync-all", async (req, res) => {
     try {
+      if (await rejectIfPaused("youtube_sync", res)) return;
       const { youtubeCrawler } = await import("./services/youtube-crawler");
       
       if (!process.env.YOUTUBE_API_KEY) {
