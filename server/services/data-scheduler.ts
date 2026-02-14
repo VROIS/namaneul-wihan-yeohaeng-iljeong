@@ -22,6 +22,10 @@ export class DataScheduler {
   // ⏸️ [일시 중단] 비용 나가는 크롤러 — 삭제 아님, 추후 재활성화 가능
   // 현재 정책: 비용 유발 6개만 즉시 중단
   private static readonly PAUSED_TASKS: Set<string> = new Set([
+    "crisis_sync",          // 프론트 연결 전까지 자동 중지 (수동 실행만)
+    "place_seed_sync",      // MCP 전환 전 자동 중지 (수동 실행만)
+    "mcp_raw_stage1",       // MCP 수집은 우선 수동 실행(검증 중심)
+    "mcp_raw_stage2",       // MCP 2단계도 우선 수동 실행(검증 중심)
     "youtube_sync",         // YouTube API
     "instagram_sync",       // Meta/인스타
     "naver_blog_sync",      // 블로그 크롤러
@@ -69,6 +73,10 @@ export class DataScheduler {
     
     // 🚨 서버 시작 시 위기 정보 즉시 수집 (1분 후)
     setTimeout(async () => {
+      if (DataScheduler.isTaskDisabledByPolicy("crisis_sync")) {
+        console.log("[Scheduler] ⏸️ 서버 시작 위기 수집 스킵 (crisis_sync 정책 일시중단)");
+        return;
+      }
       console.log("[Scheduler] 🚨 서버 시작 - 위기 정보 즉시 수집 시작...");
       await this.executeTask("crisis_sync");
     }, 60000); // 1분 후 실행 (API 키 로드 대기)
@@ -95,7 +103,8 @@ export class DataScheduler {
     // ============================================
     // 📅 자동 수집 스케줄 (KST 기준)
     // ⏸️ PAUSED_TASKS에 있는 크롤러는 스케줄 안 함 (비용 절감)
-    // ✅ 유지: 날씨, 환율, 위기경보 (무료·실사긴성)
+    // ✅ 유지: 날씨, 환율
+    // ⏸️ 위기경보: 프론트 연결 전까지 자동 실행 중지, 수동 수집만
     // ============================================
     
     // 🌤️ 날씨: 매 시간 (실시간성 중요) — 유지
@@ -104,10 +113,15 @@ export class DataScheduler {
     // 💱 환율: 하루 3번 — 유지 (Frankfurter API 무료)
     this.scheduleTask("exchange_rate_sync", "0 0,8,16 * * *");
     
-    // 🚨 위기 정보: 30분마다 — 유지 (GDELT 무료 + Gemini)
-    this.scheduleTask("crisis_sync", "*/30 * * * *");
+    // 🚨 위기 정보: 30분마다 (현재 정책상 PAUSED)
+    this.scheduleTaskIfNotPaused("crisis_sync", "*/30 * * * *");
     
+    // ✅ MCP 프랑스 30 자동(1차 승인 실행): 매주 1회
+    this.scheduleTaskIfNotPaused("mcp_workflow_france_phase1", "0 2 * * 0");
+
     // ⏸️ 아래는 PAUSED (비용/크롤러 파이프라인)
+    this.scheduleTaskIfNotPaused("mcp_raw_stage1", "0 2 * * 0");
+    this.scheduleTaskIfNotPaused("mcp_raw_stage2", "30 2 * * 0");
     this.scheduleTaskIfNotPaused("wikimedia_sync", "30 1 * * *");
     this.scheduleTaskIfNotPaused("opentripmap_sync", "0 2 * * *");
     this.scheduleTaskIfNotPaused("youtube_sync", "0 3,15 * * *");
@@ -127,7 +141,7 @@ export class DataScheduler {
     console.log("[Scheduler] ✅ 스케줄 설정 완료:");
     console.log("  - 🌤️ 날씨: 매 시간");
     console.log("  - 💱 환율: 하루 3번");
-    console.log("  - 🚨 위기 정보: 30분마다");
+    console.log("  - 🚨 위기 정보: 수동 실행 (자동 중지)");
     console.log(`  - ⏸️ 일시 중단: ${DataScheduler.PAUSED_TASKS.size}개 크롤러 (재활성화: PAUSED_TASKS에서 제거)`);
   }
 
@@ -224,6 +238,15 @@ export class DataScheduler {
           break;
         case "place_link_sync":
           result = await this.runPlaceLinkSync();
+          break;
+        case "mcp_raw_stage1":
+          result = await this.runMcpRawStage1();
+          break;
+        case "mcp_raw_stage2":
+          result = await this.runMcpRawStage2();
+          break;
+        case "mcp_workflow_france_phase1":
+          result = await this.runMcpWorkflowFrancePhase1();
           break;
         case "score_aggregation":
           result = await this.runScoreAggregation();
@@ -547,6 +570,61 @@ export class DataScheduler {
     }
   }
 
+  private async runMcpRawStage1(): Promise<{ success: boolean; itemsProcessed: number; errors: string[] }> {
+    try {
+      const { runMcpRawStage1 } = await import("./mcp-raw-service");
+      const result = await runMcpRawStage1();
+      return {
+        success: result.success,
+        itemsProcessed: result.savedRows,
+        errors: result.errors,
+      };
+    } catch (error: any) {
+      return { success: false, itemsProcessed: 0, errors: [error.message] };
+    }
+  }
+
+  private async runMcpRawStage2(): Promise<{ success: boolean; itemsProcessed: number; errors: string[] }> {
+    return {
+      success: false,
+      itemsProcessed: 0,
+      errors: ["mcp_raw_stage2는 1도시+1카테고리 수동 실행 전용입니다."],
+    };
+  }
+
+  private async runMcpWorkflowFrancePhase1(): Promise<{ success: boolean; itemsProcessed: number; errors: string[] }> {
+    try {
+      const { getMcpPhaseCities } = await import("../config/mcp-raw-data-final");
+      const { runMcpWorkflowStart } = await import("./mcp-raw-service");
+      const franceCities = getMcpPhaseCities("france30");
+      if (franceCities.length === 0) {
+        return { success: false, itemsProcessed: 0, errors: ["france30 도시 목록이 비어 있습니다."] };
+      }
+
+      const startCity = franceCities[0].nameEn;
+      const endCity = franceCities[franceCities.length - 1].nameEn;
+      const now = new Date();
+      const pad = (n: number) => String(n).padStart(2, "0");
+      const runBatchId = `FR_AUTO_${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}`;
+
+      // 정책: 자동은 프랑스 30까지만 실행. 유럽 30은 별도 승인 후 수동 실행.
+      const result = await runMcpWorkflowStart({
+        startCity,
+        endCity,
+        runBatchId,
+        retryLimit: 1,
+      });
+
+      return {
+        success: result.success,
+        itemsProcessed: result.stage1Success + result.stage2Success,
+        errors: result.errors,
+      };
+    } catch (error: any) {
+      return { success: false, itemsProcessed: 0, errors: [error?.message || String(error)] };
+    }
+  }
+
   async runNow(taskName: string): Promise<{ success: boolean; message: string }> {
     if (DataScheduler.isTaskDisabledByPolicy(taskName)) {
       console.warn(`[Scheduler] ⛔ ${taskName} 수동 실행 차단됨 (정책상 중단)`);
@@ -583,6 +661,9 @@ export class DataScheduler {
         tripadvisor_sync: "매일 04:45 KST",
         exchange_rate_sync: "매일 09:00 KST",
         place_seed_sync: "6시간마다 (연쇄 실행)",
+        mcp_raw_stage1: "주 1회 (일 02:00)",
+        mcp_raw_stage2: "주 1회 (일 02:30)",
+        mcp_workflow_france_phase1: "주 1회 (일 02:00, 프랑스30 자동)",
       };
       return {
         taskName,

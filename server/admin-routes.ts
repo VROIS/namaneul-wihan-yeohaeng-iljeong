@@ -793,6 +793,7 @@ export function registerAdminRoutes(app: Express) {
   app.post("/api/admin/schedules/init", async (req, res) => {
     try {
       const defaultSchedules = [
+        { taskName: "mcp_workflow_france_phase1", description: "MCP 프랑스30 자동 배치(유럽은 승인 후 수동)", cronExpression: "0 2 * * 0" },
         { taskName: "mcp_raw_stage1", description: "MCP 1단계 로우데이터 수집", cronExpression: "0 2 * * 0" },
         { taskName: "mcp_raw_stage2", description: "MCP 2단계 한국인 인지도 보강", cronExpression: "30 2 * * 0" },
         { taskName: "youtube_sync", description: "YouTube 채널 신규 영상 수집", cronExpression: "0 3 * * *" },

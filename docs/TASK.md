@@ -153,7 +153,7 @@
 | # | 작업 | 상태 | 비고 |
 |---|------|------|------|
 | D-M1 | **place_seed_raw** 테이블 마이그레이션 | 진행 | Supabase 실제 스키마 제약(PK 누락) 보정 후 반영 |
-| D-M2 | **mcp-raw-service** (1·2단계 MCP 호출) | 진행 | 워크플로우+체크포인트 구현, 매칭 누락 2건 보완 필요 |
+| D-M2 | **mcp-raw-service** (1·2단계 MCP 호출) | 진행 | 워크플로우+체크포인트 구현, 운영 정책: 프랑스30 자동/유럽30 승인 후 수동 |
 | D-M3 | **Admin API** mcp-raw/stage1, stage2 | 완료 | runBatchId 연동 완료 |
 | D-M4 | **스케줄러** mcp_raw_stage1·2, place_seed_sync 비활성화 | 완료 | 비용 차단 정책 반영 완료 |
 | D-M5 | **대시보드** MCP 섹션, 기존 시딩·크롤러 UI 축소 | 진행 | API는 준비 완료, UI 정리 잔여 |
@@ -249,6 +249,7 @@
 
 | 날짜 | 내용 |
 |------|------|
+| 2026-02-14 | 운영정책 확정: `mcp_workflow_france_phase1`(프랑스30 자동) 활성, 유럽30은 대표 승인 후 수동 재개로 고정 |
 | 2026-02-14 | MCP 워크플로우(start/resume/status/report) 구현, data_sync_log 체크포인트 강제 기록, 파리 파일럿 실행(1차 150/150, 2차 148/150) |
 | 2026-02-08 | 파리 5카테고리 실측(report-seed-category.ts), place_seed 토글 버그 수정(행 없을 때 true). TASK §7·handoff 반영. |
 | 2026-02-13 | nubiReason 배치: place_nubi_reasons 테이블 Supabase 반영, 마이그레이션·검증·수집 스크립트(dev/). DB api_keys 로드 적용. |
