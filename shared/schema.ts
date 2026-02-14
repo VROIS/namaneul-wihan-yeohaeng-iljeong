@@ -55,6 +55,13 @@ export const cities = pgTable("cities", {
   longitude: real("longitude").notNull(),
   timezone: text("timezone"),
   primaryLanguage: text("primary_language"),
+  // MCP 고정 순위 기준(프랑스30/유럽30)
+  mcpBucket: text("mcp_bucket"), // france30 | europe30 | both
+  mcpRankFr: integer("mcp_rank_fr"), // 1~30
+  mcpRankEu: integer("mcp_rank_eu"), // 1~30
+  mcpRankBasis: text("mcp_rank_basis"), // euromonitor_un_tourism_2024_2025
+  mcpRankNote: text("mcp_rank_note"),
+  mcpRankUpdatedAt: timestamp("mcp_rank_updated_at"),
   tier: integer("tier").default(1),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
   updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
@@ -603,6 +610,27 @@ export const placeNubiReasons = pgTable("place_nubi_reasons", {
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
+// MCP 1·2단계 통합 로우데이터 (도시×카테고리 장소 + 한국인 인지도)
+export const placeSeedRaw = pgTable("place_seed_raw", {
+  id: serial("id").primaryKey(),
+  cityId: integer("city_id").notNull().references(() => cities.id, { onDelete: "cascade" }),
+  seedCategory: text("seed_category").notNull(), // attraction|restaurant|healing|adventure|hotspot
+  rank: integer("rank").notNull(),
+  nameKo: text("name_ko"),
+  nameEn: text("name_en").notNull(),
+  googleSearchNote: text("google_search_note"),
+  googleReviewCountNote: text("google_review_count_note"),
+  googleImageCountNote: text("google_image_count_note"),
+  source: text("source"),
+  // 2단계 보강
+  sourceRank: integer("source_rank"),
+  sourceType: text("source_type"), // instagram|youtube|naver_blog|package|travel_app
+  nubiReason: text("nubi_reason"),
+  evidenceUrl: text("evidence_url"),
+  evidenceVerified: boolean("evidence_verified").default(false),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
 // 가격 정보 로우 데이터 (다중 소스)
 export const placePrices = pgTable("place_prices", {
   id: serial("id").primaryKey(),
@@ -888,6 +916,7 @@ export type GeminiWebSearchCache = typeof geminiWebSearchCache.$inferSelect;
 export type PlacePrice = typeof placePrices.$inferSelect;
 export type NaverBlogPost = typeof naverBlogPosts.$inferSelect;
 export type WeatherForecast = typeof weatherForecast.$inferSelect;
+export type PlaceSeedRaw = typeof placeSeedRaw.$inferSelect;
 export type GuidePrice = typeof guidePrices.$inferSelect;
 export type VerificationRequest = typeof verificationRequests.$inferSelect;
 
