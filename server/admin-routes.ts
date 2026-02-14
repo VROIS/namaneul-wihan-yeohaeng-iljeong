@@ -793,6 +793,8 @@ export function registerAdminRoutes(app: Express) {
   app.post("/api/admin/schedules/init", async (req, res) => {
     try {
       const defaultSchedules = [
+        { taskName: "mcp_raw_stage1", description: "MCP 1단계 로우데이터 수집", cronExpression: "0 2 * * 0" },
+        { taskName: "mcp_raw_stage2", description: "MCP 2단계 한국인 인지도 보강", cronExpression: "30 2 * * 0" },
         { taskName: "youtube_sync", description: "YouTube 채널 신규 영상 수집", cronExpression: "0 3 * * *" },
         { taskName: "blog_sync", description: "블로그/미슐랭/TripAdvisor 수집", cronExpression: "15 3 * * *" },
         { taskName: "crisis_sync", description: "위기 정보 수집 (파업/시위)", cronExpression: "30 3 * * *" },
@@ -4198,6 +4200,23 @@ export function registerAdminRoutes(app: Express) {
       if (typeFilter) {
         alerts = alerts.filter(a => a.type === typeFilter);
       }
+
+      // 앱 기준 우선순위: 파리 -> 프랑스(파리 제외) -> 유럽(중복 제거)
+      const { getMcpExecutionOrder } = await import("./config/mcp-raw-data-final");
+      const ordered = getMcpExecutionOrder();
+      const orderMap = new Map<string, number>();
+      ordered.forEach((c, idx) => {
+        const keyEn = String(c.nameEn || "").trim().toLowerCase();
+        const keyKo = String(c.nameKo || "").trim().toLowerCase();
+        if (keyEn) orderMap.set(keyEn, idx);
+        if (keyKo) orderMap.set(keyKo, idx);
+      });
+      alerts = alerts.sort((a, b) => {
+        const aIdx = orderMap.get(String(a.city || "").toLowerCase()) ?? 9999;
+        const bIdx = orderMap.get(String(b.city || "").toLowerCase()) ?? 9999;
+        if (aIdx !== bIdx) return aIdx - bIdx;
+        return b.severity - a.severity;
+      });
       
       res.json({
         success: true,
@@ -4216,17 +4235,269 @@ export function registerAdminRoutes(app: Express) {
     }
   });
   
+  // MCP 최종 도시 목록 조회 (수동 검증용)
+  app.get("/api/admin/mcp-final-cities", async (req, res) => {
+    try {
+      const {
+        getMcpFinalCities,
+        getMcpExecutionOrder,
+        getMcpPhaseCities,
+        getMcpCitySourceMeta,
+      } = await import("./config/mcp-raw-data-final");
+      const cities = getMcpFinalCities();
+      const executionOrder = getMcpExecutionOrder();
+      const france30 = getMcpPhaseCities("france30");
+      const europe30 = getMcpPhaseCities("europe30");
+      const meta = getMcpCitySourceMeta();
+      res.json({
+        success: true,
+        source: meta.source,
+        sourcePath: meta.path,
+        count: cities.length,
+        franceCount: meta.franceCount,
+        europeCount: meta.europeCount,
+        distinctCount: meta.distinctCount,
+        duplicateCount: meta.duplicateCount,
+        executionOrder,
+        france30,
+        europe30,
+        cities,
+      });
+    } catch (error) {
+      console.error("Error fetching MCP final cities:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to fetch MCP final cities",
+      });
+    }
+  });
+
+  // MCP 확정 순위를 cities 컬럼으로 동기화
+  app.post("/api/admin/mcp-final-cities/sync-ranks", async (_req, res) => {
+    try {
+      const { syncMcpCityRanksToDb } = await import("./services/mcp-city-rank-sync-service");
+      const result = await syncMcpCityRanksToDb();
+      res.json({
+        success: true,
+        ...result,
+      });
+    } catch (error) {
+      console.error("Error syncing MCP city ranks:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to sync MCP city ranks",
+        details: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  // MCP 1단계 수동 실행: 확정 프롬프트 -> 도시/카테고리 순회 -> DB 정리 저장
+  app.post("/api/admin/mcp-raw/stage1", async (req, res) => {
+    try {
+      const { runMcpRawStage1 } = await import("./services/mcp-raw-service");
+      const cityId = req.body?.cityId ? Number(req.body.cityId) : undefined;
+      const category = req.body?.category as "attraction" | "restaurant" | "healing" | "adventure" | "hotspot" | undefined;
+      const runBatchId = req.body?.runBatchId ? String(req.body.runBatchId) : undefined;
+      const result = await runMcpRawStage1({ cityId, category, runBatchId });
+      res.json({
+        success: result.success,
+        stage: "stage1",
+        runBatchId: result.runBatchId,
+        citySource: result.citySource,
+        citySourcePath: result.citySourcePath,
+        processedCities: result.processedCities,
+        processedCategories: result.processedCategories,
+        savedRows: result.savedRows,
+        errors: result.errors,
+      });
+    } catch (error) {
+      console.error("Error running mcp-raw stage1:", error);
+      res.status(500).json({
+        success: false,
+        stage: "stage1",
+        error: "Failed to run mcp-raw stage1",
+        details: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  // MCP 2단계 수동 실행: 확정 도시 1개 + 카테고리 1개 단위 처리
+  app.post("/api/admin/mcp-raw/stage2", async (req, res) => {
+    try {
+      const { runMcpRawStage2 } = await import("./services/mcp-raw-service");
+      const cityId = Number(req.body?.cityId);
+      const category = req.body?.category as "attraction" | "restaurant" | "healing" | "adventure" | "hotspot" | undefined;
+      const runBatchId = req.body?.runBatchId ? String(req.body.runBatchId) : undefined;
+      if (!Number.isFinite(cityId) || cityId <= 0) {
+        return res.status(400).json({
+          success: false,
+          stage: "stage2",
+          error: "cityId는 필수입니다.",
+        });
+      }
+      if (!category) {
+        return res.status(400).json({
+          success: false,
+          stage: "stage2",
+          error: "category는 필수입니다.",
+        });
+      }
+      const result = await runMcpRawStage2({ cityId, category, runBatchId });
+      res.json({
+        success: result.success,
+        stage: "stage2",
+        runBatchId: result.runBatchId,
+        citySource: result.citySource,
+        citySourcePath: result.citySourcePath,
+        processedCityId: result.processedCityId,
+        processedCategory: result.processedCategory,
+        updatedRawRows: result.updatedRawRows,
+        savedNubiReasonRows: result.savedNubiReasonRows,
+        errors: result.errors,
+      });
+    } catch (error) {
+      console.error("Error running mcp-raw stage2:", error);
+      res.status(500).json({
+        success: false,
+        stage: "stage2",
+        error: "Failed to run mcp-raw stage2",
+        details: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  // MCP 상태 조회: 프론트 전달용
+  app.get("/api/admin/mcp-raw/status", async (req, res) => {
+    try {
+      const { getMcpRawStatus } = await import("./services/mcp-raw-service");
+      const { getMcpCitySourceMeta } = await import("./config/mcp-raw-data-final");
+      const stats = await getMcpRawStatus();
+      const source = getMcpCitySourceMeta();
+      res.json({
+        success: true,
+        citySource: source.source,
+        citySourcePath: source.path,
+        citySourceCount: source.count,
+        ...stats,
+      });
+    } catch (error) {
+      console.error("Error fetching mcp-raw status:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to fetch mcp-raw status",
+      });
+    }
+  });
+
+  // MCP 워크플로우 시작 (도시/카테고리 완전 순차)
+  app.post("/api/admin/mcp/workflow/start", async (req, res) => {
+    try {
+      const { runMcpWorkflowStart } = await import("./services/mcp-raw-service");
+      const startCity = req.body?.startCity;
+      const endCity = req.body?.endCity;
+      const runBatchId = req.body?.runBatchId ? String(req.body.runBatchId) : undefined;
+      const retryLimit = req.body?.retryLimit !== undefined ? Number(req.body.retryLimit) : undefined;
+      const result = await runMcpWorkflowStart({ startCity, endCity, runBatchId, retryLimit });
+      res.json({ success: result.success, ...result });
+    } catch (error) {
+      console.error("Error starting MCP workflow:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to start MCP workflow",
+        details: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  // MCP 워크플로우 재개 (pending/failed 재실행)
+  app.post("/api/admin/mcp/workflow/resume", async (req, res) => {
+    try {
+      const { runMcpWorkflowResume } = await import("./services/mcp-raw-service");
+      const runBatchId = req.body?.runBatchId ? String(req.body.runBatchId) : "";
+      if (!runBatchId) {
+        return res.status(400).json({
+          success: false,
+          error: "runBatchId는 필수입니다.",
+        });
+      }
+      const retryLimit = req.body?.retryLimit !== undefined ? Number(req.body.retryLimit) : undefined;
+      const startCity = req.body?.startCity;
+      const endCity = req.body?.endCity;
+      const result = await runMcpWorkflowResume({ runBatchId, retryLimit, startCity, endCity });
+      res.json({ success: result.success, ...result });
+    } catch (error) {
+      console.error("Error resuming MCP workflow:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to resume MCP workflow",
+        details: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  // MCP 워크플로우 상태 조회
+  app.get("/api/admin/mcp/workflow/status", async (req, res) => {
+    try {
+      const { getMcpWorkflowStatus } = await import("./services/mcp-raw-service");
+      const runBatchId = req.query?.runBatchId ? String(req.query.runBatchId) : "";
+      if (!runBatchId) {
+        return res.status(400).json({
+          success: false,
+          error: "runBatchId 쿼리 파라미터는 필수입니다.",
+        });
+      }
+      const status = await getMcpWorkflowStatus(runBatchId);
+      res.json({ success: true, ...status });
+    } catch (error) {
+      console.error("Error fetching MCP workflow status:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to fetch MCP workflow status",
+        details: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  // MCP 워크플로우 리포트 조회
+  app.get("/api/admin/mcp/workflow/report", async (req, res) => {
+    try {
+      const { getMcpWorkflowReport } = await import("./services/mcp-raw-service");
+      const runBatchId = req.query?.runBatchId ? String(req.query.runBatchId) : "";
+      if (!runBatchId) {
+        return res.status(400).json({
+          success: false,
+          error: "runBatchId 쿼리 파라미터는 필수입니다.",
+        });
+      }
+      const report = await getMcpWorkflowReport(runBatchId);
+      res.json({ success: true, ...report });
+    } catch (error) {
+      console.error("Error fetching MCP workflow report:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to fetch MCP workflow report",
+        details: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
   // 위기 정보 수동 수집
   app.post("/api/admin/crisis-alerts/collect", async (req, res) => {
     try {
       const { crisisAlertService } = await import("./services/crisis-alert-service");
+      const { getMcpExecutionCityNamesEn, getMcpCitySourceMeta } = await import("./config/mcp-raw-data-final");
       
       console.log("[Admin] 위기 정보 수동 수집 시작");
-      const result = await crisisAlertService.collectCrisisAlerts();
+      const targetCities = getMcpExecutionCityNamesEn();
+      const cityMeta = getMcpCitySourceMeta();
+      const result = await crisisAlertService.collectCrisisAlerts(targetCities);
       
       res.json({
         success: true,
         message: "위기 정보 수집 완료",
+        citySource: cityMeta.source,
+        cityCount: targetCities.length,
+        targetCities,
         ...result
       });
     } catch (error) {
@@ -4235,6 +4506,50 @@ export function registerAdminRoutes(app: Express) {
         success: false, 
         error: "Failed to collect crisis alerts",
         details: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // MCP 순위 동기화 상태 점검 (DB 컬럼 기준)
+  app.get("/api/admin/mcp-final-cities/rank-status", async (_req, res) => {
+    try {
+      const rows = await db.select({
+        id: cities.id,
+        nameKo: cities.name,
+        nameEn: cities.nameEn,
+        countryCode: cities.countryCode,
+        mcpBucket: cities.mcpBucket,
+        mcpRankFr: cities.mcpRankFr,
+        mcpRankEu: cities.mcpRankEu,
+        mcpRankBasis: cities.mcpRankBasis,
+        mcpRankUpdatedAt: cities.mcpRankUpdatedAt,
+      }).from(cities);
+
+      const ranked = rows
+        .filter((r) => r.mcpRankFr !== null || r.mcpRankEu !== null)
+        .sort((a, b) => {
+          const aEu = a.mcpRankEu ?? 9999;
+          const bEu = b.mcpRankEu ?? 9999;
+          if (aEu !== bEu) return aEu - bEu;
+          const aFr = a.mcpRankFr ?? 9999;
+          const bFr = b.mcpRankFr ?? 9999;
+          return aFr - bFr;
+        });
+
+      res.json({
+        success: true,
+        rankedCount: ranked.length,
+        franceCount: ranked.filter((r) => r.mcpRankFr !== null).length,
+        europeCount: ranked.filter((r) => r.mcpRankEu !== null).length,
+        bothCount: ranked.filter((r) => r.mcpRankFr !== null && r.mcpRankEu !== null).length,
+        rankedCities: ranked,
+      });
+    } catch (error) {
+      console.error("Error fetching MCP city rank status:", error);
+      res.status(500).json({
+        success: false,
+        error: "Failed to fetch MCP city rank status",
+        details: error instanceof Error ? error.message : String(error),
       });
     }
   });

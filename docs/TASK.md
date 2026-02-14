@@ -1,6 +1,6 @@
 # NUBI 프로젝트 태스크 관리
 
-> **최종 업데이트: 2026-02-13**
+> **최종 업데이트: 2026-02-14**
 > **완료된 작업 이력: `docs/TASK_ARCHIVE.md`**
 > **AI 규칙: `.cursor/rules/*.mdc` (10개 파일, 항상 자동 적용. 검증 헌법: nubi-verification-constitution.mdc)**
 
@@ -12,9 +12,9 @@
 
 | 항목 | 내용 |
 |------|------|
-| **마지막 작업일** | 2026-02-13 |
-| **마지막 작업** | nubiReason 배치 수집 구현·DB 마이그레이션·검증 완료. place_nubi_reasons 테이블 Supabase 반영. |
-| **다음 할 일** | Gemini 할당량 복구 후 `npx tsx dev/run-nubi-reason-collect.ts` → place_nubi_reasons 데이터 수집 |
+| **마지막 작업일** | 2026-02-14 |
+| **마지막 작업** | MCP 워크플로우(start/resume/status/report) + data_sync_log 체크포인트 구현. 파리 파일럿 1차 150/150, 2차 148/150 확인. |
+| **다음 할 일** | 파리 `adventure` 2건 누락 매칭 보완 후 2차 150/150 달성 및 PASS 보고 |
 | **배포 상태** | Koyeb 정상 (200 OK). 커밋·푸시 시 자동 배포. 로컬 = 내부테스트용. |
 | **브랜치** | cursor-dev |
 
@@ -87,7 +87,7 @@
 - place-seeder: SEARCH_CATEGORIES 5개(명소/맛집/힐링/모험/핫스팟), hotel 제거, 맛집 통합, 카테고리당 API 1회
 - 1일 1카테고리 추적: dataSyncLog에 entity_sub_type(또는 place_seed_batch) 검토
 - 프론트 1줄: nubiReason 생성에 필요한 크롤러·place-linker 순서 유지
-- **seed_category 분류 완료 (2026-02)**: 전 도시 1,709건 **5카테고리 모두** 보정 완료 (attraction 38, adventure 1 포함). `npm run seed:reclassify`, `npm run seed:refine-adventure`, `npm run seed:report`
+- **seed_category 분류 완료 (2026-02)**: 전 도시 1,713건 **5카테고리 모두** 보정 완료. 파리 183건: attraction 28, restaurant 80, healing 28, adventure 1, hotspot 44. `npx tsx dev/report-seed-category.ts`
 
 ---
 
@@ -146,13 +146,25 @@
 | C-1 | **가이드 예약 유도 폼** (업셀 클릭→장점+예약) | 예정 | 신규 |
 | C-2 | Stripe/인앱결제 연동 | 예정 | 신규 |
 
-### 스트림 D: 데이터 확보 (1차 목표)
+### 스트림 D: 데이터 확보 — MCP 전환 (확정)
+
+> **참조**: `docs/BACKEND_MCP_FINAL.md`
 
 | # | 작업 | 상태 | 비고 |
 |---|------|------|------|
-| D-1 | **장소 시딩 1차: 파리** (5카테고리×30곳 완성 후 다음 도시) | 진행 | seedPriorityCityByCategory, place_seed_sync |
-| D-2 | **장소 시딩 2차: 프랑스 30개 도시** | 대기 | 1차 완료 후 자동 (니스,리옹,마르세유,...) |
-| D-3 | **장소 시딩 3차: 유럽 30개 도시** | 대기 | 2차 완료 후 자동 |
+| D-M1 | **place_seed_raw** 테이블 마이그레이션 | 진행 | Supabase 실제 스키마 제약(PK 누락) 보정 후 반영 |
+| D-M2 | **mcp-raw-service** (1·2단계 MCP 호출) | 진행 | 워크플로우+체크포인트 구현, 매칭 누락 2건 보완 필요 |
+| D-M3 | **Admin API** mcp-raw/stage1, stage2 | 완료 | runBatchId 연동 완료 |
+| D-M4 | **스케줄러** mcp_raw_stage1·2, place_seed_sync 비활성화 | 완료 | 비용 차단 정책 반영 완료 |
+| D-M5 | **대시보드** MCP 섹션, 기존 시딩·크롤러 UI 축소 | 진행 | API는 준비 완료, UI 정리 잔여 |
+
+### 스트림 D (구): 기존 place-seeder (MCP 전환 시 중단)
+
+| # | 작업 | 상태 | 비고 |
+|---|------|------|------|
+| D-1 | 장소 시딩 1차: 파리 | 진행 | MCP 전환 시 place_seed_sync 중단 |
+| D-2 | 장소 시딩 2차: 프랑스 30개 | 대기 | |
+| D-3 | 장소 시딩 3차: 유럽 30개 | 대기 | |
 
 ### 스트림 E: 영상 (우선순위 낮음)
 
@@ -170,7 +182,7 @@
 | 데이터 | 수량 | 최근 동기화 |
 |--------|------|------------|
 | 도시 | 71개 | 2026-02-08 |
-| 장소 | 1,669개 | 진행 중 (시딩 0/71) |
+| 장소 | 1,713개 | 5카테고리 분류 완료 (파리 183건 등) |
 | YouTube | 18채널, 54영상, 23언급 | 2026-02-09 |
 | 네이버 블로그 | 1,239개 (14개 도시) | 2026-02-09 |
 | 인스타그램 | 해시태그 3,327, 사진 4,280 | 2026-02-09 |
@@ -202,6 +214,9 @@
 | `docs/TRD.md` | 기술 요구사항 (수정 금지) |
 | `docs/NUBI_WHITEPAPER.md` | 핵심 알고리즘 백서 (수정 금지) |
 | `docs/AGENT_PROTOCOL.md` | 에이전트 통신 규약 |
+| `docs/MCP_RAW_DATA_PROMPTS.md` | MCP 로우데이터용 프롬프트: 1단계(기본 DB)·2단계(한국인 인지도), 도시별·카테고리별 템플릿 |
+| `docs/MCP_AUTOMATION_DESIGN.md` | MCP 자동화 DB 설계 (place_seed_raw, 좌표 불필요) |
+| `docs/BACKEND_MCP_FINAL.md` | **백그라운드 확정** — MCP 기반 아키텍처, 대시보드 수정 방향 |
 
 ---
 
@@ -221,6 +236,9 @@
 | **시딩 1차 (2026-02-08)** | reclassifyParisPlaces 연동, maxResultCount 30, 확정 도시 목록(FRANCE_29·EUROPE_30), `npm run seed:paris-phase1`. 반경 100km→50km(Google API 한도). 파리 181건(adventure 1부족). nubiReason 4단계 검증 미구현. |
 | **nubiReason 배치 (2026-02-08)** | place_nubi_reasons 테이블, nubi-reason-batch-service.ts. 10곳/회 Gemini 호출, 4단계 검증(파싱→필드→URL→DB). API: `POST /api/admin/nubi-reason/collect` {cityId, category}. 카테고리별 30곳→10×3배치. |
 | **nubiReason 배치 완료 (2026-02-13)** | DB 마이그레이션: `npx tsx dev/run-place-nubi-reasons-migration.ts` (Supabase places FK 이슈로 FK 제외 생성). 검증: `npx tsx dev/verify-place-nubi-reasons.ts`. 수집: `npx tsx dev/run-nubi-reason-collect.ts` (DB api_keys에서 Gemini 키 로드). Supabase Table Editor에서 place_nubi_reasons 확인 가능. 현재 0건(429 할당량 소진). |
+| **파리 5카테고리 실측 (2026-02-08)** | `npx tsx dev/report-seed-category.ts` 실행. 파리: attraction 28, restaurant 80, healing 28, adventure 1, hotspot 44 → 총 183건. 전 도시 1,713건. |
+| **place_seed 토글 기본값 (2026-02-08)** | DB에 place_seed_sync 행 없을 때 스케줄러·API 모두 **true**(기본 ON). data-scheduler.ts `isPlaceSeedSyncEnabled()`, admin-routes GET 일치. |
+| **크롤러 일시 중단 (2026-02, 긴급)** | PAUSED_TASKS: 6개 비용 크롤러(`youtube_sync`,`instagram_sync`,`naver_blog_sync`,`tistory_sync`,`michelin_sync`,`tripadvisor_sync`) 즉시 중단. 유지: `wikimedia_sync`,`opentripmap_sync`, `weather_sync`, `exchange_rate_sync`, `crisis_sync` 및 일정 생성 연관 태스크. 수동 API 실행도 차단. |
 
 - **배포**: 커밋·푸시 → Koyeb 자동 배포. 로컬 8082 = 내부테스트용, `.\dev\test-paris-a.ps1`.
 - **실제테스트**: 배포 URL `POST /api/routes/generate` (Paris 3일 등) → 200·일정 데이터 확인.
@@ -231,7 +249,10 @@
 
 | 날짜 | 내용 |
 |------|------|
+| 2026-02-14 | MCP 워크플로우(start/resume/status/report) 구현, data_sync_log 체크포인트 강제 기록, 파리 파일럿 실행(1차 150/150, 2차 148/150) |
+| 2026-02-08 | 파리 5카테고리 실측(report-seed-category.ts), place_seed 토글 버그 수정(행 없을 때 true). TASK §7·handoff 반영. |
 | 2026-02-13 | nubiReason 배치: place_nubi_reasons 테이블 Supabase 반영, 마이그레이션·검증·수집 스크립트(dev/). DB api_keys 로드 적용. |
+| 2026-02-13 | 긴급 비용 차단: 6개 비용 크롤러(youtube/instagram/naver/tistory/michelin/tripadvisor) 자동·수동 실행 동시 차단 및 DB 스케줄 OFF 동기화. |
 | 2026-02-13 | 검증 헌법(nubi-verification-constitution.mdc) 신규: 5대 원칙, 매의 눈·초행여행자 시점 |
 | 2026-02-13 | 문서 정리: SEED_PHASE1_RESULT → TASK.md §7 통합, 완료 항목 TASK_ARCHIVE.md 이동 |
 | 2026-02-11 | place_seed_sync 수정: 반경 100km→50km(Google API 한도), counts/openingHours guard, 대시보드 errorMessage 표시 |
