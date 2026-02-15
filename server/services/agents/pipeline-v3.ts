@@ -19,7 +19,7 @@
  */
 
 import { GoogleGenAI } from "@google/genai";
-import type { TripFormData, PlaceResult, DaySlotConfig, TravelPace, VibeWeight } from './types';
+import type { TripFormData, PlaceResult, DaySlotConfig, TravelPace, VibeWeight, TravelStyle } from './types';
 import {
   PACE_CONFIG, MEAL_BUDGET, DEFAULT_START_TIME, DEFAULT_END_TIME,
   calculateDayCount, calculateSlotsForDay, getCompanionCount,
@@ -33,8 +33,8 @@ import {
   type TransportPricingResult, type GuidePriceResult, type TransitPriceResult, type UberBlackComparison,
 } from '../transport-pricing-service';
 import { db } from '../../db';
-import { exchangeRates, youtubePlaceMentions, youtubeVideos, youtubeChannels, naverBlogPosts, placePrices, places } from '@shared/schema';
-import { eq, and, ilike, sql, desc } from 'drizzle-orm';
+import { exchangeRates, youtubePlaceMentions, youtubeVideos, youtubeChannels, naverBlogPosts, placePrices, places, placeNubiReasons, placeSeedRaw } from '@shared/schema';
+import { eq, and, ilike, sql, desc, asc } from 'drizzle-orm';
 import { findCelebrityVisitsForPlaces, type CelebrityVisit } from '../celebrity-tracker';
 
 // ===== TravelStyle 정규화 (소문자→표준형) =====
@@ -249,7 +249,7 @@ async function step1_geminiItinerary(
   // 추가: 여행 밀도
   const paceKo = formData.travelPace === 'Packed' ? '빡빡하게 (장소당 90분, 알차게)'
     : formData.travelPace === 'Relaxed' ? '여유롭게 (장소당 150분, 느긋하게)'
-    : '보통 속도 (장소당 120분)';
+      : '보통 속도 (장소당 120분)';
 
   // 일별 요구사항 (식사 시간 제약 자동 계산)
   const dayRequirements = daySlotsConfig.map(d => {
@@ -276,9 +276,24 @@ async function step1_geminiItinerary(
     return `Day ${d.day}: ${d.startTime} 출발 ~ ${d.endTime} 마무리, 총 ${d.slots}곳 (관광 ${activityCount} + 식사 ${mealCount}) → ${mealNote}`;
   }).join('\n');
 
+  // 날짜를 "3월 1일" 형태로 (한국어 자연어용)
+  const formatDateShort = (d: string) => {
+    if (!d || d.length < 10) return d;
+    const [y, m, day] = d.split('-');
+    const month = parseInt(m || '0', 10);
+    const dayNum = parseInt(day || '0', 10);
+    return `${month}월 ${dayNum}일`;
+  };
+  const dateRangeText = `${startDate ? formatDateShort(startDate) : ''}부터 ${endDate ? formatDateShort(endDate) : ''}까지`;
+
+  // ===== 핵심 요청 한 문장 (자연어로 풀어쓴 사용자 의도 → Gemini 능력 가늠용) =====
+  const oneLineRequest = `${companionDesc} ${headcount}명과 ${dateRangeText} ${formData.destination} 근교 100km 내외에서, 구글맵 리뷰순으로 유명한 장소를 중심으로 ${vibeNatural}하며 역사·유적 관람하고 현지 맛집 위주로, ${mobilityDesc} ${styleDesc} 여행하는 ${dayCount}일 일정을 만들어주세요.`;
+
   // ===== 자연어 프롬프트 조합 =====
   const prompt = `당신은 한국인 관광객 전문 여행 플래너입니다.
-아래 여행자의 요구사항을 바탕으로 ${formData.destination} ${dayCount}일 완전한 일정을 만들어주세요.
+
+[핵심 요청]
+${oneLineRequest}
 
 [여행자 프로필]
 ${ageDesc ? `• ${ageDesc} 여행자가` : '• 여행자가'} ${companionDesc} ${headcount}명이 ${formData.destination}에 갑니다.
@@ -294,6 +309,7 @@ ${agesDesc ? `• ${agesDesc}` : ''}
 ${dayRequirements}
 
 [필수 규칙]
+0. 장소 범위: ${formData.destination} 도시 중심 및 근교(반경 약 100km) 내만 추천. 같은 도시권 근교 명소도 일정에 포함 가능.
 1. 장소명은 반드시 Google Maps에서 검색 가능한 영어 공식명 사용
 2. 식사 배치: 점심(type:"lunch")은 반드시 12:00~13:30에, 저녁(type:"dinner")은 18:30~20:00에 시작해야 함. 해당 시간대가 가용시간에 없으면 그 식사는 생략. 점심→저녁 간격 최소 4시간
 3. 동선 최적화: 가까운 장소끼리 묶고, 왔다갔다 하지 않게 순서 배치
@@ -554,7 +570,7 @@ async function step2_enrichAndBuild(
   // A카테고리(가이드) → DRIVE, B카테고리(대중교통) → TRANSIT/WALK
   const travelMode = isGuideCategory ? 'DRIVE' as const
     : formData.mobilityStyle === 'WalkMore' ? 'WALK' as const
-    : 'TRANSIT' as const;
+      : 'TRANSIT' as const;
 
   const days: any[] = [];
   let totalTripCostEur = 0;
@@ -564,7 +580,7 @@ async function step2_enrichAndBuild(
 
     // 이 날의 스케줄
     const dayScheduleItems = scheduleMap.filter(s => s.day === d);
-    const dayPlaces = dayScheduleItems.map(s => {
+    const dayPlaces = await Promise.all(dayScheduleItems.map(async s => {
       const enrichedPlace = finalPlaceMap.get(s.placeId) || matchedMap.get(s.placeId)!;
       const isMeal = s.gPlace.type === 'lunch' || s.gPlace.type === 'dinner';
       // 프론트 전달 시 불필요한 0값 필드 제거 (React Native에서 {0}이 "0" 텍스트로 표시되는 문제 방지)
@@ -586,6 +602,9 @@ async function step2_enrichAndBuild(
         nameKo: s.gPlace.nameKo,
         // ⭐ nubiReason: 우리 데이터 기반 차별화 선정이유 (크게/진하게 표시)
         nubiReason: enrichedPlace.nubiReason || null,
+        // ⭐ nubiReason 메타데이터 (근거 링크 + 출처 타입)
+        nubiEvidenceUrl: await getNubiEvidenceUrl(enrichedPlace.name),
+        nubiReasonSource: await getNubiSourceType(enrichedPlace.name),
         // Gemini AI 요약 (보통 글씨로 표시)
         geminiReason: s.gPlace.reason || '',
         // 부가 정보
@@ -593,7 +612,7 @@ async function step2_enrichAndBuild(
         confidenceLevel: enrichedPlace.confidenceLevel || 'medium',
         realityCheck,
       };
-    });
+    }));
 
     // 숙소 좌표 결정
     const dayAccommodation = formData.dayAccommodations?.find(a => a.day === d);
@@ -950,7 +969,8 @@ async function step2_enrichAndBuild(
   const { verifyItinerary } = await import('./itinerary-verifier');
   const verifyResult = await verifyItinerary(result);
   if (!verifyResult.passed) {
-    console.warn(`[V3] ⚠️ 일정 검증 미통과 (score=${verifyResult.score}) — 일정은 그대로 반환, 검증만 로그`);
+    console.warn(`[V3] ❌ 일정 검증 미통과 (score=${verifyResult.score}) — 사용자 노출 차단`);
+    throw new Error('일정 검증 미통과');
   }
   return result;
 }
@@ -980,19 +1000,75 @@ async function generateNubiReasonV2(
   mergedData: any,
 ): Promise<string> {
   try {
-    // ── 1순위: 셀럽 방문 흔적 ──
+    // ── 🌟 Priority 0: placeNubiReasons DB (MCP 2단계 수집 데이터 4,500건) ──
+    // DB에 있으면 0ms 즉시 반환 — API 호출 0건
+    if (db) {
+      try {
+        // 0a. placeNubiReasons 테이블 조회 (sourceRank 낮을수록 신뢰도 높음)
+        let dbPlaceId: number | null = null;
+        const placeMatch = await db.select({ id: places.id })
+          .from(places)
+          .where(ilike(places.name, `%${placeName}%`))
+          .limit(1);
+        if (placeMatch.length > 0) dbPlaceId = placeMatch[0].id;
+
+        if (dbPlaceId) {
+          const [nubiRow] = await db.select({
+            nubiReason: placeNubiReasons.nubiReason,
+            sourceType: placeNubiReasons.sourceType,
+            evidenceUrl: placeNubiReasons.evidenceUrl,
+            sourceRank: placeNubiReasons.sourceRank,
+          })
+            .from(placeNubiReasons)
+            .where(eq(placeNubiReasons.placeId, dbPlaceId))
+            .orderBy(asc(placeNubiReasons.sourceRank))
+            .limit(1);
+
+          if (nubiRow && nubiRow.nubiReason) {
+            console.log(`[NubiReason] ✅ DB hit: ${placeName} → ${nubiRow.nubiReason}`);
+            return nubiRow.nubiReason;
+          }
+        }
+
+        // 0b. place_seed_raw fallback (MCP 1단계 시딩 데이터)
+        const { findCityUnified } = await import('../city-resolver');
+        const cityResult = await findCityUnified(cityName);
+        if (cityResult) {
+          const [seedRow] = await db.select({
+            nubiReason: placeSeedRaw.nubiReason,
+          })
+            .from(placeSeedRaw)
+            .where(and(
+              eq(placeSeedRaw.cityId, cityResult.cityId),
+              ilike(placeSeedRaw.nameEn, `%${placeName}%`),
+              sql`${placeSeedRaw.nubiReason} IS NOT NULL`,
+            ))
+            .limit(1);
+
+          if (seedRow && seedRow.nubiReason) {
+            console.log(`[NubiReason] ✅ SeedRaw hit: ${placeName} → ${seedRow.nubiReason}`);
+            return seedRow.nubiReason;
+          }
+        }
+      } catch (e) {
+        // DB 조회 실패 → 기존 실시간 검색으로 fallback
+        console.warn(`[NubiReason] DB lookup failed for ${placeName}, falling back to live search`);
+      }
+    }
+
+    // ── 1순위: 셀럽 방문 흔적 (기존 실시간 검색) ──
     if (celebrityVisit && celebrityVisit.found) {
       const group = celebrityVisit.celebrityGroup ? `(${celebrityVisit.celebrityGroup})` : '';
       return `${celebrityVisit.celebrityName}${group} ${celebrityVisit.date} 게시`;
     }
 
-    // ── 2순위: 유튜버 18인 언급 (DB에서 채널명 포함 조회) ──
+    // ── 2순위: 유튜버 18인 언급 (채널명+영상제목+날짜 — 최대한 구체적으로) ──
     if (db) {
       try {
         const ytMention = await db.select({
           channelName: youtubeChannels.channelName,
+          videoTitle: youtubeVideos.title,
           publishedAt: youtubeVideos.publishedAt,
-          confidence: youtubePlaceMentions.confidence,
         })
           .from(youtubePlaceMentions)
           .innerJoin(youtubeVideos, eq(youtubePlaceMentions.videoId, youtubeVideos.id))
@@ -1005,7 +1081,11 @@ async function generateNubiReasonV2(
           const dateStr = ytMention[0].publishedAt
             ? formatKoreanDate(new Date(ytMention[0].publishedAt))
             : '';
-          return `${ytMention[0].channelName} ${dateStr} 소개`.trim();
+          const title = ytMention[0].videoTitle
+            ? (ytMention[0].videoTitle.length > 20 ? ytMention[0].videoTitle.slice(0, 20) + '…' : ytMention[0].videoTitle)
+            : '';
+          const detail = title ? ` '${title}'` : '';
+          return `${ytMention[0].channelName}${detail} ${dateStr} 소개`.trim();
         }
       } catch (e) {
         // YouTube 조회 실패 → 다음 순위로
@@ -1192,8 +1272,8 @@ async function calcTransit(
       const R = 6371000;
       const dLat = (to.lat - from.lat) * Math.PI / 180;
       const dLng = (to.lng - from.lng) * Math.PI / 180;
-      const a = Math.sin(dLat/2)**2 + Math.cos(from.lat*Math.PI/180)*Math.cos(to.lat*Math.PI/180)*Math.sin(dLng/2)**2;
-      const straightDist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      const a = Math.sin(dLat / 2) ** 2 + Math.cos(from.lat * Math.PI / 180) * Math.cos(to.lat * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+      const straightDist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
       if (straightDist > 1500) {
         actualMode = 'TRANSIT';
       }
@@ -1207,7 +1287,7 @@ async function calcTransit(
     const durationMinutes = Math.round(route.durationSeconds / 60);
     const modeLabel = actualMode === 'WALK' ? '도보'
       : actualMode === 'TRANSIT' ? '지하철/버스'
-      : '전용차량이동';
+        : '전용차량이동';
     return {
       from: from.name || fromName,
       to: to.name || '',
@@ -1285,4 +1365,34 @@ function repairTruncatedJSON(broken: string): { days: GeminiDay[] } | null {
   } catch {
     return null;
   }
+}
+
+// =====================================================
+// ⭐ nubiReason 메타데이터 헬퍼 (evidenceUrl, sourceType)
+// =====================================================
+
+/** placeNubiReasons 테이블에서 근거 URL 조회 */
+async function getNubiEvidenceUrl(placeName: string): Promise<string | null> {
+  if (!db) return null;
+  try {
+    const [match] = await db.select({ id: places.id })
+      .from(places).where(ilike(places.name, `%${placeName}%`)).limit(1);
+    if (!match) return null;
+    const [row] = await db.select({ url: placeNubiReasons.evidenceUrl })
+      .from(placeNubiReasons).where(eq(placeNubiReasons.placeId, match.id)).limit(1);
+    return row?.url || null;
+  } catch { return null; }
+}
+
+/** placeNubiReasons 테이블에서 출처 타입 조회 (instagram|youtube|naver_blog|package|travel_app) */
+async function getNubiSourceType(placeName: string): Promise<string | null> {
+  if (!db) return null;
+  try {
+    const [match] = await db.select({ id: places.id })
+      .from(places).where(ilike(places.name, `%${placeName}%`)).limit(1);
+    if (!match) return null;
+    const [row] = await db.select({ type: placeNubiReasons.sourceType })
+      .from(placeNubiReasons).where(eq(placeNubiReasons.placeId, match.id)).limit(1);
+    return row?.type || null;
+  } catch { return null; }
 }
