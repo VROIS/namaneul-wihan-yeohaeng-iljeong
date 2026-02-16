@@ -69,3 +69,6 @@ dev/
 
 # migrations meta (auto-generated)
 migrations/meta/
+
+# Cursor IDE settings
+.cursor/
