@@ -246,7 +246,7 @@ export class GooglePlacesFetcher {
 
     const requestBody = {
       includedTypes,
-      maxResultCount: 20,
+      maxResultCount: 30,  // 카테고리당 30곳 목표
       rankPreference: "POPULARITY",  // 🔥 구글 리뷰 많은 순 (인기순) 정렬
       locationRestriction: {
         circle: {

@@ -15,7 +15,8 @@
 
 import { db } from '../db';
 import { crisisAlerts } from '../../shared/schema';
-import { eq, and, gte, desc, sql } from 'drizzle-orm';
+import { eq, and, gte, desc, sql, count } from 'drizzle-orm';
+import { getMcpFinalCityNamesEn } from '../config/mcp-raw-data-final';
 
 // === 타입 정의 ===
 type CrisisType = 'strike' | 'protest' | 'traffic' | 'weather' | 'security';
@@ -51,6 +52,7 @@ interface CrisisAlert {
 
 // === GDELT API 설정 ===
 const GDELT_API_BASE = 'https://api.gdeltproject.org/api/v2/doc/doc';
+const CRISIS_ANALYSIS_MODEL = 'gemini-2.5-flash-lite';
 
 // 도시별 검색 키워드 (다국어)
 const CITY_KEYWORDS: Record<string, string[]> = {
@@ -71,40 +73,148 @@ const CITY_KEYWORDS: Record<string, string[]> = {
   ],
 };
 
-// 기본 유럽 도시 (파리 우선)
-const DEFAULT_CITIES = ['Paris', 'London', 'Rome', 'Barcelona', 'Amsterdam', 'Berlin'];
-
 /**
  * GDELT API에서 뉴스 기사 수집
  */
+async function fetchGdeltWithQuery(query: string): Promise<GdeltArticle[] | null> {
+  const url = `${GDELT_API_BASE}?query=${encodeURIComponent(query)}&mode=artlist&maxrecords=100&format=json&timespan=7d`;
+  const response = await fetch(url, {
+    headers: {
+      'User-Agent': 'NUBI-TravelApp/1.0',
+    },
+  });
+
+  if (!response.ok) {
+    console.warn(`[CrisisAlert] GDELT API 오류: ${response.status}`);
+    return [];
+  }
+
+  const text = await response.text();
+  try {
+    const data = JSON.parse(text) as { articles?: GdeltArticle[] };
+    return data.articles || [];
+  } catch {
+    // GDELT가 가끔 plain text 에러를 반환하므로 로그를 남기고 fallback 쿼리로 재시도
+    console.warn(`[CrisisAlert] GDELT JSON 파싱 실패 (응답 앞부분): ${text.slice(0, 80)}`);
+    return null;
+  }
+}
+
 async function fetchGdeltNews(city: string): Promise<GdeltArticle[]> {
   try {
     const keywords = CITY_KEYWORDS[city] || [`${city} strike`, `${city} protest`];
-    // GDELT API: OR 쿼리는 반드시 괄호()로 감싸야 함
-    const query = `(${keywords.join(' OR ')})`;
-    
-    // 최근 7일 뉴스만 검색
-    const url = `${GDELT_API_BASE}?query=${encodeURIComponent(query)}&mode=artlist&maxrecords=100&format=json&timespan=7d`;
-    
+
     console.log(`[CrisisAlert] GDELT 검색: ${city}`);
-    
-    const response = await fetch(url, {
-      headers: {
-        'User-Agent': 'NUBI-TravelApp/1.0',
-      },
-    });
-    
-    if (!response.ok) {
-      console.warn(`[CrisisAlert] GDELT API 오류: ${response.status}`);
-      return [];
-    }
-    
-    const data = await response.json();
-    return data.articles || [];
+
+    // 1차: 도시별 상세 키워드
+    const primary = await fetchGdeltWithQuery(`(${keywords.join(' OR ')})`);
+    if (primary && primary.length > 0) return primary;
+
+    // 2차: 도시 일반 키워드 (파리 등 일부 도시 JSON 에러 fallback)
+    const fallback = await fetchGdeltWithQuery(`(${city} strike OR ${city} protest OR ${city} travel alert)`);
+    if (fallback && fallback.length > 0) return fallback;
+
+    // 3차: 도시명만으로 최소 수집 시도
+    const cityOnly = await fetchGdeltWithQuery(city);
+    return cityOnly || [];
   } catch (error) {
     console.error(`[CrisisAlert] GDELT 수집 실패: ${city}`, error);
     return [];
   }
+}
+
+function parseGdeltDate(seendate?: string): string {
+  if (!seendate) return new Date().toISOString().split('T')[0];
+  const raw = String(seendate).trim();
+  if (raw.length >= 8 && /^\d{8}/.test(raw)) {
+    return `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}`;
+  }
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return new Date().toISOString().split('T')[0];
+  return parsed.toISOString().split('T')[0];
+}
+
+function buildFallbackAlerts(articles: GdeltArticle[], city: string): CrisisAlert[] {
+  const typeConfig: Array<{
+    type: CrisisType;
+    keywords: string[];
+    severity: SeverityLevel;
+    koTitle: string;
+    koAdvice: string;
+    enAdvice: string;
+  }> = [
+    {
+      type: 'strike',
+      keywords: ['strike', 'grève', 'sciopero', 'huelga'],
+      severity: 6,
+      koTitle: '파업 관련 보도',
+      koAdvice: '대중교통/공항 운영 공지를 출발 전 다시 확인하세요.',
+      enAdvice: 'Recheck transport and airport operation updates before departure.',
+    },
+    {
+      type: 'protest',
+      keywords: ['protest', 'manifestation', 'demonstration', 'riot'],
+      severity: 5,
+      koTitle: '시위 관련 보도',
+      koAdvice: '집회 지역 방문을 피하고 이동 경로를 우회하세요.',
+      enAdvice: 'Avoid demonstration areas and use alternate routes.',
+    },
+    {
+      type: 'traffic',
+      keywords: ['traffic', 'metro', 'rail', 'train', 'closure', 'airport'],
+      severity: 4,
+      koTitle: '교통 장애 관련 보도',
+      koAdvice: '이동 시간을 여유 있게 잡고 예비 교통수단을 준비하세요.',
+      enAdvice: 'Allow extra transit time and prepare backup transportation.',
+    },
+    {
+      type: 'weather',
+      keywords: ['storm', 'flood', 'snow', 'heatwave', 'weather', 'rain'],
+      severity: 5,
+      koTitle: '기상 경보 관련 보도',
+      koAdvice: '기상 변화에 따라 실외 일정을 조정하세요.',
+      enAdvice: 'Adjust outdoor activities according to weather updates.',
+    },
+    {
+      type: 'security',
+      keywords: ['terror', 'attack', 'bomb', 'security'],
+      severity: 8,
+      koTitle: '보안 이슈 관련 보도',
+      koAdvice: '현지 당국 공지와 대사관 안전 권고를 확인하세요.',
+      enAdvice: 'Follow local authority notices and embassy safety guidance.',
+    },
+  ];
+
+  const normalized = articles.slice(0, 20);
+  const results: CrisisAlert[] = [];
+  const usedTypes = new Set<CrisisType>();
+
+  for (const article of normalized) {
+    const text = `${article.title || ''}`.toLowerCase();
+    const matched = typeConfig.find(c => c.keywords.some(k => text.includes(k)));
+    if (!matched || usedTypes.has(matched.type)) continue;
+
+    usedTypes.add(matched.type);
+    results.push({
+      type: matched.type,
+      title: article.title || `${city} ${matched.koTitle}`,
+      titleKo: `${city} ${matched.koTitle}`,
+      description: article.title || `${city} crisis signal from GDELT news`,
+      date: parseGdeltDate(article.seendate),
+      city,
+      affected: [city],
+      severity: matched.severity,
+      recommendation: matched.enAdvice,
+      recommendationKo: matched.koAdvice,
+      source: 'GDELT fallback',
+      sourceUrl: article.url,
+      isActive: true,
+    });
+
+    if (results.length >= 2) break;
+  }
+
+  return results;
 }
 
 /**
@@ -156,7 +266,7 @@ JSON 배열로 답해주세요. 여행에 영향 없는 뉴스는 제외:
 여행에 영향 없으면 빈 배열 []을 반환하세요.`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: CRISIS_ANALYSIS_MODEL,
       contents: prompt,
     });
     
@@ -169,7 +279,7 @@ JSON 배열로 답해주세요. 여행에 영향 없는 뉴스는 제외:
         alerts = JSON.parse(jsonMatch[0]);
       } catch (parseError) {
         console.error(`[CrisisAlert] JSON 파싱 실패: ${city}`, parseError);
-        return [];
+        return buildFallbackAlerts(recentArticles, city);
       }
       
       // 도시 및 소스 정보 추가
@@ -180,11 +290,11 @@ JSON 배열로 답해주세요. 여행에 영향 없는 뉴스는 제외:
         isActive: true,
       }));
     }
-    
-    return [];
+
+    return buildFallbackAlerts(recentArticles, city);
   } catch (error) {
     console.error(`[CrisisAlert] Gemini 분석 실패: ${city}`, error);
-    return [];
+    return buildFallbackAlerts(articles, city);
   }
 }
 
@@ -198,34 +308,42 @@ async function saveAlertsToDB(alerts: CrisisAlert[]): Promise<number> {
   
   for (const alert of alerts) {
     try {
+      const normalizedDate = (alert.date && /^\d{4}-\d{2}-\d{2}$/.test(alert.date))
+        ? alert.date
+        : new Date().toISOString().split('T')[0];
+      const normalizedType: CrisisType = alert.type || 'security';
+      const normalizedSeverity = Math.min(10, Math.max(1, Number(alert.severity || 5))) as SeverityLevel;
+      const normalizedTitle = alert.title || `${alert.city || 'Unknown'} crisis update`;
+      const normalizedTitleKo = alert.titleKo || `${alert.city || '도시'} 위기 알림`;
+
       // 중복 체크 (같은 도시, 같은 날짜, 같은 타입)
       const existing = await db.select().from(crisisAlerts)
         .where(and(
           eq(crisisAlerts.city, alert.city),
-          eq(crisisAlerts.type, alert.type),
-          eq(crisisAlerts.date, alert.date)
+          eq(crisisAlerts.type, normalizedType),
+          eq(crisisAlerts.date, normalizedDate)
         ))
         .limit(1);
       
       if (existing.length === 0) {
         await db.insert(crisisAlerts).values({
-          type: alert.type,
-          alertType: alert.type, // 하위호환 (DB NOT NULL 제약 충족)
-          title: alert.title,
-          titleKo: alert.titleKo,
-          description: alert.description,
-          date: alert.date,
+          type: normalizedType,
+          alertType: normalizedType, // 하위호환 (DB NOT NULL 제약 충족)
+          title: normalizedTitle,
+          titleKo: normalizedTitleKo,
+          description: alert.description || normalizedTitle,
+          date: normalizedDate,
           endDate: alert.endDate || null,
           city: alert.city,
-          affected: alert.affected,
-          severity: alert.severity,
-          recommendation: alert.recommendation,
-          recommendationKo: alert.recommendationKo,
+          affected: alert.affected || [],
+          severity: normalizedSeverity,
+          recommendation: alert.recommendation || 'Check local transport and authority updates.',
+          recommendationKo: alert.recommendationKo || '현지 교통/당국 공지를 확인하세요.',
           source: alert.source,
           isActive: true,
         });
         savedCount++;
-        console.log(`[CrisisAlert] 저장: ${alert.city} - ${alert.titleKo}`);
+        console.log(`[CrisisAlert] 저장: ${alert.city} - ${normalizedTitleKo}`);
       }
     } catch (error) {
       console.error(`[CrisisAlert] DB 저장 실패:`, error);
@@ -238,7 +356,7 @@ async function saveAlertsToDB(alerts: CrisisAlert[]): Promise<number> {
 /**
  * 도시별 위기 정보 수집 (메인 함수)
  */
-export async function collectCrisisAlerts(cities: string[] = DEFAULT_CITIES): Promise<{
+export async function collectCrisisAlerts(cities: string[] = getMcpFinalCityNamesEn()): Promise<{
   totalArticles: number;
   totalAlerts: number;
   savedAlerts: number;
@@ -495,9 +613,6 @@ export async function getAlertsForTrip(
     };
   }
 }
-
-// count import 추가 필요
-import { count } from 'drizzle-orm';
 
 // Export
 export const crisisAlertService = {

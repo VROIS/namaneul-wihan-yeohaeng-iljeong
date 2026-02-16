@@ -14,6 +14,7 @@ import { storage } from "../storage";
 import { db } from "../db";
 import { cities, places, dataSyncLog } from "@shared/schema";
 import { eq, sql, count, and, isNull, isNotNull } from "drizzle-orm";
+import { getMcpFinalCityNamesKo, getMcpPrimaryCity } from "../config/mcp-raw-data-final";
 
 // ============================================
 // 시딩 카테고리 5개 (4+1): 명소·맛집·힐링·모험·핫스팟 (호텔 제거, 맛집 통합)
@@ -33,8 +34,8 @@ const SEARCH_CATEGORIES: {
 
 const TARGET_PLACES_PER_CATEGORY = 30;
 const DAILY_NEW_PLACES_CAP = 30;
-const PARIS_FIRST_NAME = "파리";
-/** 전 도시 공통: 도시+근교 기초 수집 범위. Google Places API 최대 50km. */
+const PARIS_FIRST_NAME = getMcpPrimaryCity().nameKo;
+/** 전 도시 공통: 도시+근교 기초 수집 범위. Google Places API 최대 50km */
 const CITY_SEARCH_RADIUS_METERS = 50000;
 
 // ============================================
@@ -385,14 +386,13 @@ export class PlaceSeeder {
 
   /**
    * 1차 목표: 도시별 카테고리 30개 채우기 순서
-   * 파리 → 프랑스 29개 → 유럽 30개. 각 도시당 5카테고리×30곳, 1일 1카테고리.
+   * MCP 자동화로 확정된 도시 목록 순서대로 수행. 각 도시당 5카테고리×30곳, 1일 1카테고리.
    * 카테고리 30개 채워질 때마다(또는 해당일) 크롤러 자동 실행.
    */
   async seedPriorityCityByCategory(): Promise<{ cityName: string; category: string; seeded: number; linked: number }> {
     if (this.isRunning) return { cityName: "", category: "", seeded: 0, linked: 0 };
 
-    const FRANCE_29: string[] = ["니스", "리옹", "마르세유", "보르도", "스트라스부르", "툴루즈", "몽펠리에", "낭트", "칸", "아비뇽", "엑상프로방스", "콜마르", "앙시", "디종", "루앙", "릴", "렌", "카르카손", "비아리츠", "생말로", "샤모니", "아를", "생트로페", "베르사유", "그르노블", "랭스", "안티브", "망통", "투르"];
-    const EUROPE_30 = ["로마", "피렌체", "베니스", "밀라노", "아말피", "바르셀로나", "마드리드", "세비야", "그라나다", "런던", "에딘버러", "뮌헨", "베를린", "프랑크푸르트", "취리히", "인터라켄", "비엔나", "잘츠부르크", "암스테르담", "브뤼셀", "프라하", "부다페스트", "리스본", "아테네", "두브로브니크"];
+    const targetCityNamesKo = getMcpFinalCityNamesKo();
     const categoryOrder = ["attraction", "restaurant", "healing", "adventure", "hotspot"] as const;
     const dayIndex = Math.floor(Date.now() / (24 * 60 * 60 * 1000)) % 5;
     const catKey = categoryOrder[dayIndex];
@@ -403,13 +403,7 @@ export class PlaceSeeder {
       throw new Error(`db.select(cities) 비정상 반환: ${typeof allCities}`);
     }
     const cityOrder: typeof allCities = [];
-    const paris = allCities.find((c: { name?: string | null }) => (c?.name ?? "") === PARIS_FIRST_NAME);
-    if (paris) cityOrder.push(paris);
-    for (const n of FRANCE_29) {
-      const c = allCities.find((x: { name?: string | null }) => (x?.name ?? "") === n);
-      if (c) cityOrder.push(c);
-    }
-    for (const n of EUROPE_30) {
+    for (const n of targetCityNamesKo) {
       const c = allCities.find((x: { name?: string | null }) => (x?.name ?? "") === n);
       if (c) cityOrder.push(c);
     }
@@ -429,8 +423,14 @@ export class PlaceSeeder {
     }
 
     if (!currentCity) {
-      console.log("[PlaceSeeder] 1차 목표 전체 완료 (파리+프랑스29+유럽30)");
+      console.log("[PlaceSeeder] 1차 목표 전체 완료 (MCP 최종 도시 목록)");
       return { cityName: "완료", category: "", seeded: 0, linked: 0 };
+    }
+
+    // 파리 처리 시 seed_category null인 행 먼저 분류정돈
+    if (currentCity.name === PARIS_FIRST_NAME) {
+      const { updated } = await this.reclassifyParisPlaces();
+      if (updated > 0) console.log(`[PlaceSeeder] 파리 분류정돈: ${updated}건 → 카테고리 재집계`);
     }
 
     const counts = await this.getCityPlaceCountsByCategory(currentCity.id);
@@ -778,6 +778,11 @@ export class PlaceSeeder {
     }
     console.log(`[Crawlers] ${cityName} - ${cityPlaces.length}개 장소 대상\n`);
 
+    const isPausedByPolicy = async (taskName: string): Promise<boolean> => {
+      const { DataScheduler } = await import("./data-scheduler");
+      return DataScheduler.isTaskDisabledByPolicy(taskName);
+    };
+
     // ═══════════════════════════════════════
     // 0그룹: 로우데이터 보강 (무료 API)
     // ═══════════════════════════════════════
@@ -843,22 +848,30 @@ export class PlaceSeeder {
     // ═══════════════════════════════════════
 
     // 1. TripAdvisor (평점/리뷰/순위)
-    try {
-      const { crawlTripAdvisorForCity } = await import("./tripadvisor-crawler");
-      const result = await crawlTripAdvisorForCity(cityId);
-      console.log(`[Crawlers] ✅ 1/10 TripAdvisor: ${result?.collected || 0}개`);
-    } catch (e: any) {
-      console.warn(`[Crawlers] ❌ 1/10 TripAdvisor:`, e.message);
+    if (await isPausedByPolicy("tripadvisor_sync")) {
+      console.log(`[Crawlers] ⏸️ 1/10 TripAdvisor: 정책 일시중단`);
+    } else {
+      try {
+        const { crawlTripAdvisorForCity } = await import("./tripadvisor-crawler");
+        const result = await crawlTripAdvisorForCity(cityId);
+        console.log(`[Crawlers] ✅ 1/10 TripAdvisor: ${result?.collected || 0}개`);
+      } catch (e: any) {
+        console.warn(`[Crawlers] ❌ 1/10 TripAdvisor:`, e.message);
+      }
     }
     await delay(1000);
 
     // 2. Michelin (레스토랑 등급)
-    try {
-      const { crawlMichelinForCity } = await import("./michelin-crawler");
-      const result = await crawlMichelinForCity(cityId);
-      console.log(`[Crawlers] ✅ 2/10 Michelin: ${result?.collected || 0}개`);
-    } catch (e: any) {
-      console.warn(`[Crawlers] ❌ 2/10 Michelin:`, e.message);
+    if (await isPausedByPolicy("michelin_sync")) {
+      console.log(`[Crawlers] ⏸️ 2/10 Michelin: 정책 일시중단`);
+    } else {
+      try {
+        const { crawlMichelinForCity } = await import("./michelin-crawler");
+        const result = await crawlMichelinForCity(cityId);
+        console.log(`[Crawlers] ✅ 2/10 Michelin: ${result?.collected || 0}개`);
+      } catch (e: any) {
+        console.warn(`[Crawlers] ❌ 2/10 Michelin:`, e.message);
+      }
     }
     await delay(1000);
 
@@ -907,32 +920,58 @@ export class PlaceSeeder {
     // ═══════════════════════════════════════
 
     // 7. Instagram (auto-collector: 장소별 해시태그 생성 + 수집 + placeId 연결)
-    try {
-      const { instagramAutoCollector } = await import("./instagram-auto-collector");
-      const result = await instagramAutoCollector.collectForCity(cityId);
-      console.log(`[Crawlers] ✅ 7/10 Instagram: ${result.placesProcessed}개 장소, ${result.totalPostCount.toLocaleString()} 포스트`);
-    } catch (e: any) {
-      console.warn(`[Crawlers] ❌ 7/10 Instagram:`, e.message);
+    if (await isPausedByPolicy("instagram_sync")) {
+      console.log(`[Crawlers] ⏸️ 7/10 Instagram: 정책 일시중단`);
+    } else {
+      try {
+        const { instagramAutoCollector } = await import("./instagram-auto-collector");
+        const result = await instagramAutoCollector.collectForCity(cityId);
+        console.log(`[Crawlers] ✅ 7/10 Instagram: ${result.placesProcessed}개 장소, ${result.totalPostCount.toLocaleString()} 포스트`);
+      } catch (e: any) {
+        console.warn(`[Crawlers] ❌ 7/10 Instagram:`, e.message);
+      }
+    }
+    await delay(1000);
+
+    // 7b. 셀럽 인스타 흔적 (20인 × 장소 → 이미지 최상순위 노출)
+    if (await isPausedByPolicy("instagram_sync")) {
+      console.log(`[Crawlers] ⏸️ 7b/10 셀럽 인스타: 정책 일시중단`);
+    } else {
+      try {
+        const { crawlCelebrityInstagramForCity } = await import("./instagram-celebrity-crawler");
+        const result = await crawlCelebrityInstagramForCity(cityId);
+        console.log(`[Crawlers] ✅ 7b/10 셀럽 인스타: ${result.evidenceFound}건 흔적 발견`);
+      } catch (e: any) {
+        console.warn(`[Crawlers] ❌ 7b/10 셀럽 인스타:`, e.message);
+      }
     }
     await delay(1000);
 
     // 8. Naver Blog (도시 키워드 검색)
-    try {
-      const { crawlBlogsForCity } = await import("./naver-blog-crawler");
-      const result = await crawlBlogsForCity(cityId);
-      console.log(`[Crawlers] ✅ 8/10 Naver Blog: ${result?.postsCollected || 0}개 포스트`);
-    } catch (e: any) {
-      console.warn(`[Crawlers] ❌ 8/10 Naver Blog:`, e.message);
+    if (await isPausedByPolicy("naver_blog_sync")) {
+      console.log(`[Crawlers] ⏸️ 8/10 Naver Blog: 정책 일시중단`);
+    } else {
+      try {
+        const { crawlBlogsForCity } = await import("./naver-blog-crawler");
+        const result = await crawlBlogsForCity(cityId);
+        console.log(`[Crawlers] ✅ 8/10 Naver Blog: ${result?.postsCollected || 0}개 포스트`);
+      } catch (e: any) {
+        console.warn(`[Crawlers] ❌ 8/10 Naver Blog:`, e.message);
+      }
     }
     await delay(1000);
 
     // 9. Tistory (도시 키워드 검색)
-    try {
-      const { crawlTistoryForCity } = await import("./tistory-crawler");
-      const result = await crawlTistoryForCity(cityId);
-      console.log(`[Crawlers] ✅ 9/10 Tistory: ${result?.totalPosts || 0}개 포스트`);
-    } catch (e: any) {
-      console.warn(`[Crawlers] ❌ 9/10 Tistory:`, e.message);
+    if (await isPausedByPolicy("tistory_sync")) {
+      console.log(`[Crawlers] ⏸️ 9/10 Tistory: 정책 일시중단`);
+    } else {
+      try {
+        const { crawlTistoryForCity } = await import("./tistory-crawler");
+        const result = await crawlTistoryForCity(cityId);
+        console.log(`[Crawlers] ✅ 9/10 Tistory: ${result?.totalPosts || 0}개 포스트`);
+      } catch (e: any) {
+        console.warn(`[Crawlers] ❌ 9/10 Tistory:`, e.message);
+      }
     }
     await delay(1000);
 
@@ -1090,9 +1129,7 @@ export class PlaceSeeder {
     // 전체 장소 수
     const [totalResult] = await db.select({ total: count() }).from(places);
     
-    const FRANCE_29 = ["니스", "리옹", "마르세유", "보르도", "스트라스부르", "툴루즈", "몽펠리에", "낭트", "칸", "아비뇽", "엑상프로방스", "콜마르", "앙시", "디종", "루앙", "릴", "렌", "카르카손", "비아리츠", "생말로", "샤모니", "아를", "생트로페", "베르사유", "그르노블", "랭스", "안티브", "망통", "투르"];
-    const EUROPE_30 = ["로마", "피렌체", "베니스", "밀라노", "아말피", "바르셀로나", "마드리드", "세비야", "그라나다", "런던", "에딘버러", "뮌헨", "베를린", "프랑크푸르트", "취리히", "인터라켄", "비엔나", "잘츠부르크", "암스테르담", "브뤼셀", "프라하", "부다페스트", "리스본", "아테네", "두브로브니크"];
-    const FULL_ORDER = ["파리", ...FRANCE_29, ...EUROPE_30];
+    const FULL_ORDER = getMcpFinalCityNamesKo();
     const cityDetailsRaw = allCities.map(c => ({
       id: c.id,
       name: c.name,

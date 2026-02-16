@@ -55,3 +55,17 @@ app-example
 # generated native folders
 /ios
 /android
+
+# dev scripts & test output
+dev/
+*.json
+!package.json
+!package-lock.json
+!tsconfig.json
+!tsconfig.*.json
+!app.json
+!eas.json
+!babel.config.json
+
+# migrations meta (auto-generated)
+migrations/meta/

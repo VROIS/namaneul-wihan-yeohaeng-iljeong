@@ -80,13 +80,17 @@ export function recordGoogleSearch(source: string = "unknown"): void {
   }
 }
 
+/** Search 한도에서 제외할 소스 (유료 결제·무제한 사용자가 해당) — 한도 락 해제 */
+const BYPASS_LIMIT_SOURCES = new Set(["instagram_celebrity"]);
+
 /**
  * Gemini API 호출 시 사용할 config의 tools 설정을 반환
  * Google Search 한도 내면 [{ googleSearch: {} }], 초과면 undefined
+ * BYPASS_LIMIT_SOURCES는 한도 무시하여 항상 Search 반환 (plain generate는 quota 0일 수 있음)
  */
 export function getSearchTools(source: string = "unknown"): [{ googleSearch: Record<string, never> }] | undefined {
-  if (canUseGoogleSearch(source)) {
-    recordGoogleSearch(source);
+  if (BYPASS_LIMIT_SOURCES.has(source) || canUseGoogleSearch(source)) {
+    if (!BYPASS_LIMIT_SOURCES.has(source)) recordGoogleSearch(source);
     return [{ googleSearch: {} }];
   }
   return undefined;

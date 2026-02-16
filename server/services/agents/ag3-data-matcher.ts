@@ -19,10 +19,26 @@
  */
 
 import { db } from '../../db';
-import { places, cities } from '@shared/schema';
-import { eq, ilike, sql } from 'drizzle-orm';
+import { places, cities, celebrityPlaceEvidence } from '@shared/schema';
+import { eq, ilike, sql, inArray } from 'drizzle-orm';
 import type { AG1Output, AG3PreOutput, AG3Output, PlaceResult, ScheduleSlot } from './types';
 import { findCityUnified, addPlaceAlias, type CityResolveResult } from '../city-resolver';
+
+/** 일정 이미지 우선순위: 셀럽 인스타(1순위) > 인스타 > 위키메디어+구글 > DB image > Google API */
+function resolvePlaceImage(
+  celebrityImageUrl?: string | null,
+  instagramPhotoUrls?: string[] | null,
+  photoUrls?: string[] | null,
+  ...fallbacks: (string | undefined | null)[]
+): string | undefined {
+  if (celebrityImageUrl) return celebrityImageUrl;
+  if (instagramPhotoUrls?.length) return instagramPhotoUrls[0];
+  if (photoUrls?.length) return photoUrls[0];
+  for (const f of fallbacks) {
+    if (f) return f;
+  }
+  return undefined;
+}
 
 // Google Places API 키 + 💰 비용 보호
 import { apiCallTracker } from '../google-places';
@@ -52,6 +68,7 @@ export async function preloadCityData(
     const cityResult = await findCityUnified(destination);
     let cityId: number | null = cityResult?.cityId || null;
     const dbPlacesMap = new Map<string, any>();
+    let celebrityImageMap = new Map<number, string>();
 
     // 도시 미발견 시 좌표 기반 fallback
     if (!cityId && geminiPlaces && geminiPlaces.length > 0) {
@@ -94,6 +111,7 @@ export async function preloadCityData(
         googlePlaceId: places.googlePlaceId,
         googleMapsUri: places.googleMapsUri,
         photoUrls: places.photoUrls,
+        instagramPhotoUrls: places.instagramPhotoUrls,
         vibeScore: places.vibeScore,
         buzzScore: places.buzzScore,
         finalScore: places.finalScore,
@@ -124,13 +142,40 @@ export async function preloadCityData(
         }
       }
 
+      // 셀럽 인스타 이미지 (최상순위 노출)
+      let celebrityImageMap = new Map<number, string>();
+      if (dbPlaces.length > 0 && db) {
+        try {
+          const placeIds = dbPlaces.map((p) => p.id);
+          const evidence = await db
+            .select({ placeId: celebrityPlaceEvidence.placeId, imageUrl: celebrityPlaceEvidence.imageUrl })
+            .from(celebrityPlaceEvidence)
+            .where(inArray(celebrityPlaceEvidence.placeId, placeIds));
+          for (const e of evidence) {
+            if (e.imageUrl && !celebrityImageMap.has(e.placeId)) {
+              celebrityImageMap.set(e.placeId, e.imageUrl);
+            }
+          }
+          if (celebrityImageMap.size > 0) {
+            console.log(`[AG3-pre] 🌟 셀럽 인스타 이미지 ${celebrityImageMap.size}곳`);
+          }
+        } catch (e) {
+          console.warn(`[AG3-pre] 셀럽 이미지 조회 실패:`, (e as Error)?.message);
+        }
+      }
+
       const cityLabel = cityResult ? `${cityResult.name}/${cityResult.nameEn}` : destination;
       console.log(`[AG3-pre] ✅ 도시 "${cityLabel}" (ID: ${cityId}) 장소 ${dbPlaces.length}곳 사전 로드, 매칭키 ${dbPlacesMap.size}개 (${Date.now() - _t0}ms)`);
     } else {
       console.log(`[AG3-pre] ⚠️ 도시 "${destination}" 미발견 (${Date.now() - _t0}ms)`);
     }
 
-    return { cityId, dbPlacesMap, cityName: cityResult?.nameEn || destination };
+    return {
+      cityId,
+      dbPlacesMap,
+      cityName: cityResult?.nameEn || destination,
+      celebrityImageMap,
+    };
   } catch (error) {
     console.error('[AG3-pre] DB 사전 로드 실패:', error);
     return { cityId: null, dbPlacesMap: new Map(), cityName: destination };
@@ -162,7 +207,7 @@ async function searchPlaceByName(
       headers: {
         'Content-Type': 'application/json',
         'X-Goog-Api-Key': apiKey,
-        'X-Goog-FieldMask': 'places.id,places.displayName,places.location,places.photos,places.googleMapsUri,places.rating,places.userRatingCount',
+        'X-Goog-FieldMask': 'places.id,places.displayName,places.location,places.photos,places.googleMapsUri,places.userRatingCount',
       },
       body: JSON.stringify({
         textQuery: `${placeName} ${cityName}`,
@@ -186,7 +231,6 @@ async function searchPlaceByName(
       photoUrl,
       googleMapsUri: result.googleMapsUri || '',
       googlePlaceId: result.id || '',
-      rating: result.rating,
       userRatingCount: result.userRatingCount,
     };
   } catch (error) {
@@ -205,7 +249,7 @@ export async function matchPlacesWithDB(
   geminiPlaces: PlaceResult[],
   preloaded: AG3PreOutput
 ): Promise<PlaceResult[]> {
-  const { dbPlacesMap, cityName } = preloaded;
+  const { dbPlacesMap, cityName, celebrityImageMap } = preloaded;
   const _t0 = Date.now();
 
   let matched = 0;
@@ -305,8 +349,8 @@ export async function matchPlacesWithDB(
       enriched.push({
         ...place,
         sourceType: 'Gemini AI + DB Enriched',
-        description: dbMatch.editorialSummary || place.description,
-        image: (dbMatch.photoUrls?.length > 0) ? dbMatch.photoUrls[0] : place.image,
+        description: (dbMatch.editorialSummary || place.description) ?? '',
+        image: resolvePlaceImage(celebrityImageMap?.get(dbMatch.id), dbMatch.instagramPhotoUrls, dbMatch.photoUrls, place.image) ?? place.image ?? '',
         vibeScore: dbMatch.vibeScore || place.vibeScore,
         finalScore: dbFinal || place.finalScore || 0,
         buzzScore: dbBuzz,
@@ -342,7 +386,7 @@ export async function matchPlacesWithDB(
               sourceType: 'Gemini AI + DB Enriched (gid)',
               lat: gidMatch.latitude || googleResult.lat,
               lng: gidMatch.longitude || googleResult.lng,
-              image: (gidMatch.photoUrls?.length > 0) ? gidMatch.photoUrls[0] : googleResult.photoUrl || place.image,
+              image: resolvePlaceImage(celebrityImageMap?.get(gidMatch.id), gidMatch.instagramPhotoUrls, gidMatch.photoUrls, googleResult.photoUrl, place.image) ?? place.image ?? '',
               googleMapsUrl: gidMatch.googleMapsUri || googleResult.googleMapsUri || place.googleMapsUrl,
               confidenceScore: Math.max(place.confidenceScore, gidMatch.buzzScore ? Math.min(10, gidMatch.buzzScore) : 5),
               // ⭐ DB + Google 데이터 모두 활용
@@ -361,7 +405,7 @@ export async function matchPlacesWithDB(
           lng: googleResult.lng,
           image: googleResult.photoUrl || place.image,
           googleMapsUrl: googleResult.googleMapsUri || place.googleMapsUrl,
-          confidenceScore: Math.max(place.confidenceScore, googleResult.rating ? googleResult.rating * 2 : 5),
+          confidenceScore: Math.max(place.confidenceScore, (googleResult.userRatingCount || 0) > 0 ? Math.min(10, 5 + (googleResult.userRatingCount || 0) / 500) : 5),
           // ⭐ Google Places에서 가져온 리뷰 수 → nubiReason 생성에 활용
           userRatingCount: googleResult.userRatingCount || 0,
         });

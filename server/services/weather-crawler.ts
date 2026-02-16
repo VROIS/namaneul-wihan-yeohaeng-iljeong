@@ -3,7 +3,8 @@ import { weatherForecast, weatherCache, cities, places } from "../../shared/sche
 import { eq, and, gte, desc } from "drizzle-orm";
 import { getSearchTools } from "./gemini-search-limiter";
 
-const OPENWEATHER_API_KEY = process.env.OPENWEATHER_API_KEY;
+// DB에서 런타임에 로드되는 키를 사용하기 위해 호출 시점에 읽음 (모듈 로드 시점 X)
+const getOpenWeatherKey = () => process.env.OPENWEATHER_API_KEY || "";
 const CACHE_DURATION_HOURS = 6;
 
 interface OpenWeatherResponse {
@@ -74,8 +75,9 @@ export async function fetchWeatherForCity(cityId: number): Promise<{
     return { success: false, forecastDays: 0 };
   }
 
-  if (!OPENWEATHER_API_KEY) {
-    console.log("[Weather] No API key, using Gemini fallback");
+  const apiKey = getOpenWeatherKey();
+  if (!apiKey) {
+    console.log("[Weather] No API key (DB에서 로드 확인), using Gemini fallback");
     return fetchWeatherWithGemini(cityId, city.name, city.latitude, city.longitude);
   }
 
@@ -83,7 +85,7 @@ export async function fetchWeatherForCity(cityId: number): Promise<{
     const url = new URL("https://api.openweathermap.org/data/2.5/forecast");
     url.searchParams.set("lat", city.latitude.toString());
     url.searchParams.set("lon", city.longitude.toString());
-    url.searchParams.set("appid", OPENWEATHER_API_KEY);
+    url.searchParams.set("appid", apiKey);
     url.searchParams.set("units", "metric");
 
     const response = await fetch(url.toString());

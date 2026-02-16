@@ -141,11 +141,11 @@ async function calculateRestaurantScore(place: PlaceResult): Promise<number> {
     // AG3에서 이미 보강된 데이터 활용 (DB 쿼리 불필요)
     const confidenceScore = place.confidenceScore || 0;
     const vibeScore = place.vibeScore || 0;
-    const koreanPopularity = place.koreanPopularityScore || 0;
+    // koreanPopularity 제거 (45/30/25 폐기)
     const finalScore = place.finalScore || 0;
     
     // 간단 점수: 기존 보강 데이터 기반
-    const score = (confidenceScore * 0.4) + (vibeScore * 0.3) + (koreanPopularity * 0.2) + (finalScore * 0.1);
+    const score = (confidenceScore * 0.5) + (vibeScore * 0.3) + (finalScore * 0.2);
     return Math.min(10, Math.max(0, score));
   } catch (error) {
     console.warn(`[Restaurant] ${place.name} 점수 계산 실패:`, error);
@@ -436,7 +436,7 @@ async function searchGooglePlaces(
         headers: {
           "Content-Type": "application/json",
           "X-Goog-Api-Key": apiKey,
-          "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.location,places.types,places.rating,places.userRatingCount,places.priceLevel,places.photos,places.googleMapsUri",
+          "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.location,places.types,places.userRatingCount,places.photos,places.googleMapsUri",
         },
         body: JSON.stringify(requestBody),
       });
@@ -452,7 +452,7 @@ async function searchGooglePlaces(
               lat: place.location?.latitude || 0,
               lng: place.location?.longitude || 0,
               vibeScore: calculatePlaceVibeScore(place, vibes),
-              confidenceScore: Math.min(10, (place.userRatingCount || 0) / 100 + (place.rating || 0)),
+              confidenceScore: Math.min(10, (place.userRatingCount || 0) / 100),
               sourceType: "Google Places",
               personaFitReason: getPersonaFitReason(place.types || [], vibes),
               tags: place.types?.slice(0, 3) || [],
@@ -460,7 +460,7 @@ async function searchGooglePlaces(
               image: place.photos?.[0]?.name 
                 ? `https://places.googleapis.com/v1/${place.photos[0].name}/media?maxHeightPx=400&key=${apiKey}`
                 : "",
-              priceEstimate: getPriceEstimate(place.priceLevel, travelStyle),
+              priceEstimate: getPriceEstimate(undefined, travelStyle),
               placeTypes: place.types || [],
               koreanPopularityScore: 0, // 이후 enrichPlacesWithKoreanPopularity에서 계산
               googleMapsUrl: place.googleMapsUri || "", // Phase 4: 구글맵 직접 링크
@@ -476,17 +476,14 @@ async function searchGooglePlaces(
   return results;
 }
 
-// ===== Phase 1: 한국인 인기도 점수 계산 (DB 수집 데이터 직접 활용) =====
-// 우선순위: 인스타그램(45%) > 유튜브 언급(30%) > 네이버 블로그(25%)
+// ===== Phase 1: 한국인 인기도 (45/30/25 제거) =====
+// 2026-02: 45/30/25 가중치 점수 제거. nubiReason = 4단계 검증 통과 순서로 우선노출.
+// calculateKoreanPopularity는 더 이상 사용하지 않음 (레거시 보존용)
 
 /**
- * 장소별 한국인 인기도 점수를 DB 수집 데이터로 계산
- * Google Places 검색 결과의 장소명/ID를 DB places 테이블과 매칭 후
- * instagram_hashtags, youtube_place_mentions, naver_blog_posts 데이터 조회
- * 
- * @returns 0~10 범위의 한국인 인기도 점수
+ * @deprecated 45/30/25 점수 제거. nubiReason 순차 검색이 우선노출순서.
  */
-async function calculateKoreanPopularity(
+async function _calculateKoreanPopularity_DEPRECATED(
   placeName: string,
   googlePlaceId: string,
   cityName: string
@@ -699,28 +696,15 @@ async function calculateKoreanPopularity(
 }
 
 /**
- * 여러 장소에 대해 한국인 인기도 점수를 일괄 계산
+ * 한국인 인기도 Enrichment (45/30/25 점수 제거)
+ * nubiReason이 4단계 검증 통과 순서로 우선노출하므로, 점수 계산 생략.
  */
 async function enrichPlacesWithKoreanPopularity(
   placesArr: PlaceResult[],
-  cityName: string
+  _cityName: string
 ): Promise<PlaceResult[]> {
-  console.log(`[KoreanPopularity] ${placesArr.length}개 장소 한국인 인기도 계산 시작...`);
-  
-  const enriched = await Promise.all(
-    placesArr.map(async (place) => {
-      const koreanScore = await calculateKoreanPopularity(place.name, place.id, cityName);
-      return {
-        ...place,
-        koreanPopularityScore: koreanScore,
-      };
-    })
-  );
-
-  const withScore = enriched.filter(p => p.koreanPopularityScore > 0);
-  console.log(`[KoreanPopularity] 완료: ${withScore.length}/${placesArr.length}곳에 한국인 인기도 데이터 있음`);
-  
-  return enriched;
+  console.log(`[KoreanPopularity] ${placesArr.length}개 장소 — 45/30/25 제거, nubiReason 우선노출순서 사용`);
+  return placesArr.map(p => ({ ...p, koreanPopularityScore: 0 }));
 }
 
 // ===== TripAdvisor 데이터 + 실제 가격 정보 통합 =====
@@ -1169,8 +1153,8 @@ function calculateFinalScore(
   place: PlaceResult,
   weights: { koreanPop: number; photoSpot: number; verifiedFame: number; vibe: number; value: number; practical: number }
 ): number {
-  // 1. 한국인 인기도 - enrichPlacesWithKoreanPopularity에서 계산됨
-  const koreanPop = Math.min(10, place.koreanPopularityScore || 0);
+  // 1. 한국인 인기도 — 45/30/25 제거, nubiReason 우선노출순서 사용
+  const koreanPop = 0;
 
   // 2. 포토스팟 점수 - enrichPlacesWithPhotoAndTour에서 세팅됨
   const photoSpot = Math.min(10, place.photoSpotScore || 0);
@@ -1202,9 +1186,7 @@ function calculateFinalScore(
   if (place.tripAdvisorReviewCount) {
     practicalScore = Math.min(10, Math.log10(place.tripAdvisorReviewCount + 1) * 3.3);
   }
-  if (koreanPop > 3) {
-    practicalScore = Math.min(10, practicalScore + 1.5);
-  }
+  // koreanPop 제거 (45/30/25 점수 폐기)
 
   // ===== 동적 가중치 합산 =====
   const finalScore = 
@@ -1229,19 +1211,7 @@ function generateSelectionReasons(place: PlaceResult): { reasons: string[]; conf
   // ===== 데이터 기반 선정 이유 (구체적 출처 포함) =====
   // 원칙: 첫 번째 이유 = 가장 강력한 데이터 근거 (예: "인스타 #에펠탑 1.2만 게시물")
 
-  // 한국인 인기도 (구체적 출처와 수치)
-  if (place.koreanPopularityScore && place.koreanPopularityScore > 3) {
-    // 어떤 소스에서 높은 점수인지 추정하여 구체적으로 표시
-    if (place.koreanPopularityScore >= 7) {
-      reasons.push(`한국인 최다 언급 (인스타+유튜브+블로그 종합 ${place.koreanPopularityScore.toFixed(1)}점)`);
-    } else {
-      reasons.push(`한국 여행자 인기 (SNS 종합 ${place.koreanPopularityScore.toFixed(1)}/10)`);
-    }
-    dataPoints += 2;
-  } else if (place.koreanPopularityScore && place.koreanPopularityScore > 0) {
-    reasons.push(`한국 여행자 언급 확인됨`);
-    dataPoints += 1;
-  }
+  // 한국인 인기도 (45/30/25 제거) — nubiReason에 구체적 출처 표시
 
   // Google 리뷰 수 (식당의 경우 가장 중요한 지표)
   if (place.userRatingCount && place.userRatingCount > 100) {
@@ -1326,7 +1296,7 @@ function generateSelectionReasons(place: PlaceResult): { reasons: string[]; conf
   // low: 1개 데이터 소스
   // minimal: 데이터 없음, AI 추천만
   let confidence: 'high' | 'medium' | 'low' | 'minimal';
-  if (dataPoints >= 4 && place.koreanPopularityScore && place.koreanPopularityScore > 2) {
+  if (dataPoints >= 4) {
     confidence = 'high';
   } else if (dataPoints >= 2) {
     confidence = 'medium';
@@ -1988,9 +1958,16 @@ function optimizeCityOrder(cityGroups: Map<string, PlaceResult[]>): string[] {
  * 기존 4-Agent 순차 12~18초 → 2단계 병렬 5~9초
  */
 export async function generateItinerary(formData: TripFormData) {
-  // Pipeline V3 호출 (순환 참조 방지를 위해 동적 import)
   const { runPipelineV3 } = await import('./agents/pipeline-v3');
-  return runPipelineV3(formData as any);
+  try {
+    return await runPipelineV3(formData as any);
+  } catch (err: any) {
+    if (err?.message === '일정 검증 미통과') {
+      console.warn('[generateItinerary] 검증 미통과 — 1회 재시도');
+      return await runPipelineV3(formData as any);
+    }
+    throw err;
+  }
 }
 
 /**

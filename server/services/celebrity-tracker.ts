@@ -114,9 +114,10 @@ ${celebList}
 
 /**
  * 여러 장소에 대해 셀럽 방문 정보를 일괄 검색
- * 일정표의 장소들(보통 10~20개)에 대해 병렬로 실행
  * 
- * ⚡ 성능 최적화: 주요 명소 5곳만 검색 (전체 타임아웃 30초)
+ * ⚡ V2 최적화: Google Search 1회로 여러 장소를 한꺼번에 검색
+ *   (기존: 장소당 1회씩 5회 → 현재: 1회 배치 검색)
+ *   Google Search 한도 절약 + 속도 향상
  * 
  * @returns Map<placeId, CelebrityVisit>
  */
@@ -127,14 +128,17 @@ export async function findCelebrityVisitsForPlaces(
   console.log(`[Celebrity] 🌟 ${places.length}개 장소에 대해 셀럽 TOP 10 방문 흔적 검색 시작...`);
 
   const results = new Map<string, CelebrityVisit>();
-
-  // ⚡ 성능: 전체 타임아웃 30초 (Koyeb 게이트웨이 100초 내 완료 보장)
-  const TOTAL_TIMEOUT = 30000;
   const startTime = Date.now();
 
   // 주요 장소만 선별 (최대 5곳 — 식사 제외, 관광지 우선)
   const targetPlaces = places
-    .filter(p => !p.name.toLowerCase().includes('restaurant') && !p.name.toLowerCase().includes('café'))
+    .filter(p => {
+      const lower = p.name.toLowerCase();
+      return !lower.includes('restaurant') && !lower.includes('café') 
+        && !lower.includes('cafe') && !lower.includes('bistro')
+        && !lower.includes('brasserie') && !lower.includes('walk')
+        && !lower.includes('garden') && !lower.includes('jardin');
+    })
     .slice(0, 5);
 
   if (targetPlaces.length === 0) {
@@ -142,21 +146,96 @@ export async function findCelebrityVisitsForPlaces(
     return results;
   }
 
-  // 전체 5곳을 동시 병렬 실행 (각 장소에 개별 타임아웃)
-  const batchResults = await Promise.all(
-    targetPlaces.map(async (place) => {
-      // 개별 장소 타임아웃 8초
-      const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 8000));
-      const searchPromise = findCelebrityVisitForPlace(place.name, cityName);
-      const visit = await Promise.race([searchPromise, timeoutPromise]);
-      return { placeId: place.id, visit };
-    })
-  );
+  try {
+    const { GoogleGenAI } = await import("@google/genai");
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) return results;
 
-  for (const { placeId, visit } of batchResults) {
-    if (visit) {
-      results.set(placeId, visit);
+    const ai = new GoogleGenAI({ apiKey });
+
+    const celebList = CELEB_TOP_10.map((c, i) =>
+      `${i + 1}. ${c.name} (${c.group}) @${c.handle}`
+    ).join('\n');
+
+    const placeList = targetPlaces.map((p, i) =>
+      `${i + 1}. ${p.name}`
+    ).join('\n');
+
+    // 배치 프롬프트: 한 번의 검색으로 모든 장소 × 모든 셀럽 조합 검색
+    const prompt = `아래 한국 유명 셀럽 10인 중 누구든 다음 "${cityName}" 장소들을 방문한 적이 있는지 찾아주세요.
+인스타그램 게시물, 뉴스 기사, 유튜브 영상, 블로그 등에서 방문 흔적(사진, 해시태그, 위치태그, 언급)을 검색하세요.
+
+[셀럽 10인]
+${celebList}
+
+[장소 ${targetPlaces.length}곳]
+${placeList}
+
+중요 규칙:
+- 실제로 확인된 방문만 답변 (추측 금지!)
+- 게시 날짜를 반드시 포함 ("24년 9월" 형식)
+- 각 장소에 대해 방문 확인된 셀럽이 있으면 포함
+- 방문 확인 안 된 장소는 생략
+
+반드시 아래 JSON 배열 형식으로만 답변 (마크다운 코드블록 없이):
+[
+  {
+    "placeName": "장소명 (위 목록과 정확히 동일하게)",
+    "celebrityName": "셀럽 이름",
+    "celebrityGroup": "그룹명",
+    "date": "게시 날짜 (예: 24년 9월)",
+    "evidenceType": "인스타 게시물 또는 뉴스 기사",
+    "confidence": 0.0-1.0
+  }
+]
+방문 확인된 장소가 하나도 없으면: []`;
+
+    const tools = getSearchTools("celebrity_tracker");
+
+    // 25초 타임아웃 (Google Search grounding 포함 시 충분한 시간 필요)
+    const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 25000));
+    const searchPromise = ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: prompt,
+      config: tools ? { tools } : {},
+    });
+
+    const response = await Promise.race([searchPromise, timeoutPromise]);
+    if (!response) {
+      console.log('[Celebrity] ⏱️ 배치 검색 타임아웃 (25초)');
+      return results;
     }
+
+    const text = (response as any).text || "";
+    // JSON 배열 파싱
+    const jsonMatch = text.match(/\[[\s\S]*?\]/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      if (Array.isArray(parsed)) {
+        for (const item of parsed) {
+          if (!item.placeName || !item.celebrityName || !item.date) continue;
+          // placeName으로 placeId 매칭
+          const matchedPlace = targetPlaces.find(
+            p => p.name.toLowerCase() === item.placeName.toLowerCase()
+              || p.name.toLowerCase().includes(item.placeName.toLowerCase())
+              || item.placeName.toLowerCase().includes(p.name.toLowerCase())
+          );
+          if (matchedPlace) {
+            console.log(`[Celebrity] ✅ ${matchedPlace.name}: ${item.celebrityName}(${item.celebrityGroup}) ${item.date}`);
+            results.set(matchedPlace.id, {
+              found: true,
+              celebrityName: item.celebrityName,
+              celebrityGroup: item.celebrityGroup || '',
+              date: item.date,
+              evidenceType: item.evidenceType || '인스타 게시물',
+              confidence: item.confidence || 0.7,
+            });
+          }
+        }
+      }
+    }
+  } catch (error: any) {
+    console.warn(`[Celebrity] 배치 검색 실패:`, error?.message || error);
   }
 
   const elapsed = Date.now() - startTime;

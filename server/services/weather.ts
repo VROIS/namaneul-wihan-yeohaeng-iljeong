@@ -1,7 +1,8 @@
 import { storage } from "../storage";
 import type { WeatherCache } from "@shared/schema";
 
-const OPENWEATHER_API_KEY = process.env.OPENWEATHER_API_KEY;
+// DB에서 런타임에 로드되는 키 사용 (호출 시점에 읽음)
+const getOpenWeatherKey = () => process.env.OPENWEATHER_API_KEY || "";
 const OPENWEATHER_BASE_URL = "https://api.openweathermap.org/data/2.5";
 
 interface OpenWeatherResponse {
@@ -52,13 +53,8 @@ interface ForecastResponse {
 }
 
 export class WeatherFetcher {
-  private apiKey: string;
-
-  constructor() {
-    this.apiKey = OPENWEATHER_API_KEY || "";
-    if (!this.apiKey) {
-      console.warn("OPENWEATHER_API_KEY is not set. Weather API will not work.");
-    }
+  private get apiKey() {
+    return getOpenWeatherKey();
   }
 
   private calculateWeatherPenalty(weather: OpenWeatherResponse): number {

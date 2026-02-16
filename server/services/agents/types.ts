@@ -156,6 +156,8 @@ export interface AG3PreOutput {
   cityId: number | null;
   dbPlacesMap: Map<string, any>;
   cityName: string;
+  /** placeId → 셀럽 인스타 이미지 URL (최상순위 노출) */
+  celebrityImageMap?: Map<number, string>;
 }
 
 // ===== 스케줄 슬롯 =====

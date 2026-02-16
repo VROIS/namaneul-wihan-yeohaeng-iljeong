@@ -383,7 +383,7 @@
           <h2 style="color: #a78bfa; margin: 0;">🎯 실시간 관제탑</h2>
           <span id="control-tower-time" style="font-size: 12px; color: #6b7280;">업데이트: -</span>
         </div>
-        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;">
+        <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 16px;">
           <div style="text-align: center; padding: 16px; background: rgba(255,255,255,0.03); border-radius: 12px;">
             <div id="ct-syncs-today" style="font-size: 28px; font-weight: 700; color: #22c55e;">-</div>
             <div style="font-size: 12px; color: #9ca3af;">오늘 동기화</div>
@@ -399,6 +399,10 @@
           <div style="text-align: center; padding: 16px; background: rgba(255,255,255,0.03); border-radius: 12px;">
             <div id="ct-cache-total" style="font-size: 28px; font-weight: 700; color: #a78bfa;">-</div>
             <div style="font-size: 12px; color: #9ca3af;">캐시 데이터</div>
+          </div>
+          <div style="text-align: center; padding: 16px; background: rgba(255,255,255,0.03); border-radius: 12px;">
+            <div id="ct-celeb-evidence" style="font-size: 28px; font-weight: 700; color: #ec4899;">-</div>
+            <div style="font-size: 12px; color: #9ca3af;">셀럽 흔적</div>
           </div>
         </div>
       </div>
@@ -483,6 +487,20 @@
           <div id="recent-syncs" class="sync-logs">
             <div class="loading"><div class="spinner"></div>로딩 중...</div>
           </div>
+        </div>
+      </div>
+
+      <!-- 🌱 장소 시딩 자동 실행 on/off (Places API 할당량 확보) -->
+      <div class="card" style="margin-top: 20px; background: linear-gradient(135deg, rgba(34,197,94,0.08), rgba(59,130,246,0.08)); border: 1px solid rgba(34,197,94,0.3);">
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 12px;">
+          <div>
+            <h2 style="margin: 0; color: #22c55e;">🌱 장소 시딩 자동 실행</h2>
+            <p style="margin: 8px 0 0; font-size: 12px; color: #9ca3af;">OFF 시 일정 생성용 Places API(33회/일) 할당량 확보. ON 시 1일1카테고리 시딩 자동 실행.</p>
+          </div>
+          <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+            <span id="place-seed-toggle-label" style="font-size: 14px; font-weight: 500;">-</span>
+            <input type="checkbox" id="place-seed-toggle" onchange="savePlaceSeedToggle(this.checked)" style="width: 48px; height: 24px; accent-color: #22c55e; cursor: pointer;">
+          </label>
         </div>
       </div>
 
@@ -1350,12 +1368,13 @@
     
     async function loadDashboard() {
       try {
-        const [dashRes, freshnessRes, statsRes, alertsRes, controlTowerRes] = await Promise.all([
+        const [dashRes, freshnessRes, statsRes, alertsRes, controlTowerRes, celebRes] = await Promise.all([
           fetch(`${API_BASE}/dashboard`),
           fetch(`${API_BASE}/data-freshness`),
           fetch(`${API_BASE}/collection-stats`),
           fetch(`${API_BASE}/data-quality/alerts`),
-          fetch(`${API_BASE}/control-tower/summary`)
+          fetch(`${API_BASE}/control-tower/summary`),
+          fetch(`${API_BASE}/celebrity-evidence/stats`)
         ]);
         const dash = await dashRes.json();
         const freshness = await freshnessRes.json();
@@ -1368,6 +1387,7 @@
         document.getElementById('ct-success-rate').textContent = `${controlTower.dataCollection?.successRate || 100}%`;
         document.getElementById('ct-api-status').textContent = `${controlTower.apiConnections?.connected || 0}/${controlTower.apiConnections?.total || 0}`;
         document.getElementById('ct-cache-total').textContent = (controlTower.caches?.webSearch || 0) + (controlTower.caches?.routes || 0);
+        try { const celebData = await celebRes.json(); document.getElementById('ct-celeb-evidence').textContent = celebData.total ?? '-'; } catch(_) { document.getElementById('ct-celeb-evidence').textContent = '-'; }
         document.getElementById('control-tower-time').textContent = `업데이트: ${new Date().toLocaleTimeString('ko-KR')}`;
         
         document.getElementById('stat-cities').textContent = dash.overview.cities;
@@ -1472,7 +1492,8 @@
           </div>
         `).join('') : '<div class="empty-state">최근 동기화 기록이 없습니다</div>';
         
-        // 🎯 추가 데이터 로드 (스케줄러, 일정, 경로, 혼잡도)
+        // 🎯 추가 데이터 로드 (장소시딩 토글, 스케줄러, 일정, 경로, 혼잡도)
+        await loadPlaceSeedToggle();
         await loadSchedulerStatus();
         await loadItineraryStats();
         await loadRouteCacheStats();
@@ -1485,6 +1506,33 @@
       }
     }
     
+    // 🌱 장소 시딩 자동 실행 토글
+    async function loadPlaceSeedToggle() {
+      try {
+        const res = await fetch(`${API_BASE}/scheduler/place-seed-toggle`);
+        const data = await res.json();
+        const cb = document.getElementById('place-seed-toggle');
+        const label = document.getElementById('place-seed-toggle-label');
+        if (cb && label) {
+          cb.checked = data.enabled !== false;
+          label.textContent = cb.checked ? 'ON' : 'OFF';
+        }
+      } catch (err) { console.error('place-seed-toggle 로드 오류:', err); }
+    }
+    async function savePlaceSeedToggle(enabled) {
+      try {
+        const res = await fetch(`${API_BASE}/scheduler/place-seed-toggle`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled })
+        });
+        const data = await res.json();
+        const label = document.getElementById('place-seed-toggle-label');
+        if (label) label.textContent = data.enabled ? 'ON' : 'OFF';
+        alert(data.message || (data.enabled ? '장소 시딩 자동 실행 ON' : '장소 시딩 자동 실행 OFF'));
+      } catch (err) { alert('토글 저장 실패: ' + err.message); }
+    }
+
     // 🎯 스케줄러 실시간 현황
     async function loadSchedulerStatus() {
       try {

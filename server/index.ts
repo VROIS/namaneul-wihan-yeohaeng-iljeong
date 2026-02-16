@@ -271,9 +271,12 @@ function setupErrorHandler(app: express.Application) {
           for (const key of keys) {
             if (key.keyValue && key.keyValue.trim() !== '' && key.isActive) {
               process.env[key.keyName] = key.keyValue;
-              // Gemini 키 추가 매핑
+              // 추가 매핑 (서비스별 env 변수명)
               if (key.keyName === 'GEMINI_API_KEY') {
                 process.env.AI_INTEGRATIONS_GEMINI_API_KEY = key.keyValue;
+              }
+              if (key.keyName === 'GOOGLE_MAPS_API_KEY') {
+                process.env.Google_maps_api_key = key.keyValue;
               }
               loadedCount++;
             }
