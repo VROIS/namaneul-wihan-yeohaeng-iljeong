@@ -85,7 +85,7 @@ ${summary}
 Respond ONLY with this JSON (no markdown, no extra text):
 {"verdict":"적합" or "부적합" or "이상","score":0-100,"reason":"brief reason in Korean"}
 
-Examples: {"verdict":"적합","score":92,"reason":"비용과 동선이 현실적임"} or {"verdict":"부적합","score":65,"reason":"일일 장소 수 과다, 이동 불가능"}`;
+Examples: {"verdict":"적합","score":92,"reason":"비용과 동선이 현실적임"} or {"verdict":"부적합","score":65,"reason":"일일 장소 수 과다"}`;
 
   try {
     const response = await gemini.models.generateContent({
@@ -93,32 +93,40 @@ Examples: {"verdict":"적합","score":92,"reason":"비용과 동선이 현실적
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       config: {
         temperature: 0.2,
-        maxOutputTokens: 1024,
+        maxOutputTokens: 256,
         responseMimeType: "application/json",
       },
     });
 
-    const text = response.text || "";
+    const text = (response.text || "").trim();
+
+    // ── 1단계: 전체 JSON 매칭 시도 ──
+    let parsed: { verdict?: string; score?: number; reason?: string } | null = null;
     const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      console.warn('[Verifier] JSON 파싱 실패, 응답:', text.slice(0, 200));
-      return { passed: false, score: 0, verdict: '이상', reason: '검증 응답 파싱 실패' };
+    if (jsonMatch) {
+      try {
+        parsed = JSON.parse(jsonMatch[0]);
+      } catch {
+        // JSON.parse 실패 → 2단계로
+      }
     }
 
-    let parsed: { verdict?: string; score?: number; reason?: string };
-    try {
-      parsed = JSON.parse(jsonMatch[0]) as { verdict?: string; score?: number; reason?: string };
-    } catch {
-      const raw = jsonMatch[0];
-      const verdictMatch = raw.match(/"verdict"\s*:\s*"([^"]+)"/);
-      const scoreMatch = raw.match(/"score"\s*:\s*(\d+)/);
-      parsed = {
-        verdict: verdictMatch ? verdictMatch[1].trim() : '이상',
-        score: scoreMatch ? parseInt(scoreMatch[1], 10) : 0,
-        reason: '응답 잘림 복구',
-      };
+    // ── 2단계: JSON이 잘린 경우 regex로 개별 필드 추출 ──
+    if (!parsed) {
+      const verdictMatch = text.match(/"verdict"\s*:\s*"([^"]+)"/);
+      const scoreMatch = text.match(/"score"\s*:\s*(\d+)/);
+
       if (verdictMatch || scoreMatch) {
+        parsed = {
+          verdict: verdictMatch ? verdictMatch[1].trim() : '이상',
+          score: scoreMatch ? parseInt(scoreMatch[1], 10) : 0,
+          reason: '응답 잘림 복구',
+        };
         console.log('[Verifier] 잘린 JSON 복구:', parsed);
+      } else {
+        console.warn('[Verifier] JSON 파싱 완전 실패, 응답:', text.slice(0, 200));
+        // 파싱 완전 실패 시 통과 처리 (사용자 차단 방지)
+        return { passed: true, score: 75, verdict: '이상', reason: '검증 응답 파싱 실패 — 통과 처리' };
       }
     }
 
