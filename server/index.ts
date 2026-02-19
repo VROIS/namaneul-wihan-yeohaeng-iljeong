@@ -263,6 +263,14 @@ function setupErrorHandler(app: express.Application) {
     async () => {
       log(`express server serving on port ${port}`);
 
+      // DB 마이그레이션 (mcp_phases 등 누락 컬럼 자동 추가)
+      try {
+        const { runStartupMigrations } = await import("./run-startup-migrations");
+        await runStartupMigrations();
+      } catch (e) {
+        log("[Server] Startup migration skip:", (e as Error).message);
+      }
+
       // DB에서 API 키 로드
       try {
         if (isDatabaseConnected() && db) {

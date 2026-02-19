@@ -248,6 +248,7 @@
 | **크롤러 일시 중단 (2026-02, 긴급)** | PAUSED_TASKS: 6개 비용 크롤러(`youtube_sync`,`instagram_sync`,`naver_blog_sync`,`tistory_sync`,`michelin_sync`,`tripadvisor_sync`) 즉시 중단. 유지: `wikimedia_sync`,`opentripmap_sync`, `weather_sync`, `exchange_rate_sync`, `crisis_sync` 및 일정 생성 연관 태스크. 수동 API 실행도 차단. |
 
 - **내부테스트 (2026-02-20)**: server:build OK (server_dist 972kb). lint·expo export 별도 확인.
+- **배포 mcp_phases 에러 (2026-02)**: `column "mcp_phases" does not exist` → Supabase SQL Editor에서 migrations/0006_add-mcp-bts2026-columns.sql 실행 필요. cities.mcp_phases, place_seed_raw.collection_phase·image_url 추가.
 - **배포**: 커밋·푸시 → Koyeb 자동 배포. 로컬 8082 = 내부테스트용, `.\dev\test-paris-a.ps1`.
 - **실제테스트**: 배포 URL `POST /api/routes/generate` (Paris 3일 등) → 200·일정 데이터 확인.
 
