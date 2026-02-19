@@ -84,8 +84,9 @@
 
 ### 1단계 출력 형식 (자동화 시 파싱용 가이드)
 
-- 각 카테고리별 **최대 30곳**, 순위·장소명(한국어)·장소명(영문)·구글검색 근거·구글리뷰수 근거·구글이미지수 근거·출처.
-- CSV/JSON 저장 시: `city`, `category`, `rank`, `nameKo`, `nameEn`, `googleSearchNote`, `googleReviewCountNote`, `googleImageCountNote`, `source`.
+- 각 카테고리별 **최대 30곳**, 순위·장소명(한국어)·장소명(영문)·구글검색 근거·구글리뷰수 근거·구글이미지수 근거·**imageUrl**·**priceEur**·출처.
+- CSV/JSON 저장 시: `city`, `category`, `rank`, `nameKo`, `nameEn`, `googleSearchNote`, `googleReviewCountNote`, `googleImageCountNote`, `imageUrl`, `priceEur`, `source`.
+- **imageUrl**: 대표 이미지 1개 URL (필수). **priceEur**: 입장료/식비 EUR, 0=무료 (필수).
 
 ---
 

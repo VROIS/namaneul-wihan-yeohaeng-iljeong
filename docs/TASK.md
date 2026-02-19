@@ -1,8 +1,8 @@
 # NUBI 프로젝트 태스크 관리
 
-> **최종 업데이트: 2026-02-19**
+> **최종 업데이트: 2026-02-20**
 > **완료된 작업 이력: `docs/TASK_ARCHIVE.md`**
-> **AI 규칙: `.cursor/rules/*.mdc` (10개 파일, 항상 자동 적용. 검증 헌법: nubi-verification-constitution.mdc)**
+> **AI 규칙: `.cursor/rules/*.mdc` (11개 파일, 항상 자동 적용. 검증 헌법: nubi-verification-constitution.mdc, MCP 전환: nubi-mcp-transition.mdc)**
 > **원칙: 모든 작업·변경 기록에 날짜(YYYY-MM-DD) 반드시 기입**
 
 ---
@@ -13,9 +13,9 @@
 
 | 항목 | 내용 |
 |------|------|
-| **마지막 작업일** | 2026-02-19 |
-| **마지막 작업** | **place_images 통합·품질 강화**: 56,626건 통합, img 사용 가능 URL만 선택(isUsableImageUrl), 슬롯 이미지 빈칸 방지(Google API fallback). 감사 스크립트 `dev/audit-place-images-urls.ts` |
-| **다음 할 일** | 프론트엔드 개선: nubiReason 표시 강화, 무료 장소 가격 표시 제거, 일별 탭 통합 |
+| **마지막 작업일** | 2026-02-20 |
+| **마지막 작업** | **BTS 2026 MCP 도시 수집**: bts2026 phase 34개 도시, collection_phase, image_url, priceEur. USE_MCP_RAW=true 시 MCP 검색 사용. cities-by-phase 시드, mcp-client.ts |
+| **다음 할 일** | BTS 도시 시드 후 MCP 1단계 실행 검증. USE_MCP_RAW=true + noapi-google-search-mcp 설치 필요 |
 | **배포 상태** | Koyeb 정상 (200 OK). 커밋 푸시 후 자동 배포. |
 | **브랜치** | cursor-dev |
 
@@ -151,7 +151,7 @@
 
 ### 스트림 D: 데이터 확보 — MCP 전환 (확정)
 
-> **참조**: `docs/BACKEND_MCP_FINAL.md`
+> **참조**: `docs/BACKEND_MCP_FINAL.md`, `.cursor/rules/nubi-mcp-transition.mdc`
 
 | # | 작업 | 상태 | 비고 |
 |---|------|------|------|
@@ -160,6 +160,8 @@
 | D-M3 | **Admin API** mcp-raw/stage1, stage2 | 완료 | runBatchId 연동 완료 |
 | D-M4 | **스케줄러** mcp_raw_stage1·2, place_seed_sync 비활성화 | 완료 | 비용 차단 정책 반영 완료 |
 | D-M5 | **대시보드** MCP 섹션, 기존 시딩·크롤러 UI 축소 | 진행 | API는 준비 완료, UI 정리 잔여 |
+| D-M6 | **BTS 2026 MCP 도시 수집** | 완료 (2026-02-20) | bts2026 phase 34개 도시, DRAFT_BTS2026, buildAppExecutionOrder(BTS 우선). collection_phase, image_url, priceEur. cities.mcp_phases. |
+| D-M7 | **Gemini → MCP 전환** | 완료 (2026-02-20) | mcp-client.ts, USE_MCP_RAW=true 시 1단계 MCP google_search 사용. cities-by-phase 시드 API. |
 
 ### 스트림 D (구): 기존 place-seeder (MCP 전환 시 중단)
 
@@ -212,7 +214,8 @@
 
 | 문서 | 용도 |
 |------|------|
-| `.cursor/rules/*.mdc` | AI 규칙 9개 (항상 자동 적용) |
+| `.cursor/rules/*.mdc` | AI 규칙 11개 (nubi-mcp-transition 포함, 항상 자동 적용) |
+| `.cursor/rules/nubi-mcp-transition.mdc` | MCP 전환 설계 (Gemini→Cursor MCP, 이미지·가격) |
 | `docs/TASK_ARCHIVE.md` | 완료된 작업 이력 |
 | `docs/PRD.md` | 제품 요구사항 (수정 금지) |
 | `docs/TRD.md` | 기술 요구사항 (수정 금지) |
@@ -244,6 +247,7 @@
 | **place_seed 토글 기본값 (2026-02-08)** | DB에 place_seed_sync 행 없을 때 스케줄러·API 모두 **true**(기본 ON). data-scheduler.ts `isPlaceSeedSyncEnabled()`, admin-routes GET 일치. |
 | **크롤러 일시 중단 (2026-02, 긴급)** | PAUSED_TASKS: 6개 비용 크롤러(`youtube_sync`,`instagram_sync`,`naver_blog_sync`,`tistory_sync`,`michelin_sync`,`tripadvisor_sync`) 즉시 중단. 유지: `wikimedia_sync`,`opentripmap_sync`, `weather_sync`, `exchange_rate_sync`, `crisis_sync` 및 일정 생성 연관 태스크. 수동 API 실행도 차단. |
 
+- **내부테스트 (2026-02-20)**: server:build OK (server_dist 972kb). lint·expo export 별도 확인.
 - **배포**: 커밋·푸시 → Koyeb 자동 배포. 로컬 8082 = 내부테스트용, `.\dev\test-paris-a.ps1`.
 - **실제테스트**: 배포 URL `POST /api/routes/generate` (Paris 3일 등) → 200·일정 데이터 확인.
 
@@ -253,6 +257,8 @@
 
 | 날짜 | 내용 |
 |------|------|
+| 2026-02-20 | **BTS 2026 MCP 구현 완료**: bts2026 34개 도시, mcp-client.ts, USE_MCP_RAW, cities-by-phase 시드, collection_phase, image_url. |
+| 2026-02-19 | **MCP 전환 설계**: nubi-mcp-transition.mdc 추가. Gemini→Cursor MCP(noapi-google-search-mcp) 백엔드 연결, 이미지·가격 수집 강화. |
 | 2026-02-19 | **place_images 통합·품질 강화**: place_images 테이블(56,626건) 통합, isUsableImageUrl 필터(img 불가 URL 제외), 슬롯 이미지 빈칸 방지(Google API fallback), audit-place-images-urls.ts 감사 스크립트 |
 | 2026-02-16 | **DB 감사/정리**: `place_seed_raw` 프랑스 30개 도시 4,500건 검증 완료(샤모니 추가). 미커밋 93건 파일 정리 및 `.gitignore` 강화. |
 | 2026-02-14 | 운영정책 확정: `mcp_workflow_france_phase1`(프랑스30 자동) 활성, 유럽30은 대표 승인 후 수동 재개로 고정 |

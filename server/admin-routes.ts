@@ -1800,6 +1800,58 @@ export function registerAdminRoutes(app: Express) {
     }
   });
 
+  // 범용: phase별 도시 시드 (bts2026 | france30 | europe30)
+  app.post("/api/admin/seed/cities-by-phase", async (req, res) => {
+    try {
+      const phase = req.body?.phase as "bts2026" | "france30" | "europe30";
+      if (!phase || !["bts2026", "france30", "europe30"].includes(phase)) {
+        return res.status(400).json({ error: "phase는 bts2026, france30, europe30 중 하나여야 합니다." });
+      }
+      const { getMcpPhaseCities } = await import("./config/mcp-raw-data-final");
+      const { BTS2026_CITY_COORDS } = await import("./config/bts2026-city-coords");
+      const phaseCities = getMcpPhaseCities(phase);
+      let upserted = 0;
+      for (const c of phaseCities) {
+        const coords = phase === "bts2026" ? BTS2026_CITY_COORDS[c.nameEn] : undefined;
+        const [existing] = await db
+          .select({ id: cities.id, mcpPhases: cities.mcpPhases })
+          .from(cities)
+          .where(
+            sql`LOWER(${cities.name}) = LOWER(${c.nameKo}) OR LOWER(COALESCE(${cities.nameEn}, '')) = LOWER(${c.nameEn})`
+          )
+          .limit(1);
+        const phases = (existing?.mcpPhases as string[] | null) || [];
+        if (!phases.includes(phase)) phases.push(phase);
+        if (existing) {
+          await db.update(cities).set({ mcpPhases: phases, nameEn: c.nameEn }).where(eq(cities.id, existing.id));
+          upserted++;
+          continue;
+        }
+        if (phase === "bts2026" && coords) {
+          const { country, latitude: lat, longitude: lon, timezone, primaryLanguage: lang } = coords;
+          await db.insert(cities).values({
+            name: c.nameKo,
+            nameEn: c.nameEn,
+            country,
+            countryCode: c.countryCode ?? "XX",
+            latitude: lat,
+            longitude: lon,
+            timezone,
+            primaryLanguage: lang,
+            mcpPhases: [phase],
+          });
+          upserted++;
+        } else if (phase === "bts2026" && !coords) {
+          console.warn(`[seed/cities-by-phase] bts2026 좌표 없음: ${c.nameEn}`);
+        }
+      }
+      res.json({ success: true, phase, upserted, total: phaseCities.length });
+    } catch (error) {
+      console.error("Error seeding cities by phase:", error);
+      res.status(500).json({ error: "Failed to seed cities by phase" });
+    }
+  });
+
   // ========================================
   // 기본 Instagram 해시태그 시드
   // ========================================
@@ -4247,6 +4299,7 @@ export function registerAdminRoutes(app: Express) {
       } = await import("./config/mcp-raw-data-final");
       const cities = getMcpFinalCities();
       const executionOrder = getMcpExecutionOrder();
+      const bts2026 = getMcpPhaseCities("bts2026");
       const france30 = getMcpPhaseCities("france30");
       const europe30 = getMcpPhaseCities("europe30");
       const meta = getMcpCitySourceMeta();
@@ -4255,11 +4308,13 @@ export function registerAdminRoutes(app: Express) {
         source: meta.source,
         sourcePath: meta.path,
         count: cities.length,
+        bts2026Count: meta.bts2026Count,
         franceCount: meta.franceCount,
         europeCount: meta.europeCount,
         distinctCount: meta.distinctCount,
         duplicateCount: meta.duplicateCount,
         executionOrder,
+        bts2026,
         france30,
         europe30,
         cities,
@@ -4362,6 +4417,37 @@ export function registerAdminRoutes(app: Express) {
         success: false,
         stage: "stage2",
         error: "Failed to run mcp-raw stage2",
+        details: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  // MCP 3단계 수동 실행: place_seed_raw 가격 수집 (Gemini Search)
+  app.post("/api/admin/mcp-raw/stage3", async (req, res) => {
+    try {
+      const { runMcpRawStage3 } = await import("./services/mcp-raw-service");
+      const cityId = req.body?.cityId ? Number(req.body.cityId) : undefined;
+      const category = req.body?.category as "attraction" | "restaurant" | "healing" | "adventure" | "hotspot" | undefined;
+      const runBatchId = req.body?.runBatchId ? String(req.body.runBatchId) : undefined;
+      const batchSize = req.body?.batchSize ? Number(req.body.batchSize) : 10;
+      const result = await runMcpRawStage3({ cityId, category, runBatchId, batchSize });
+      res.json({
+        success: result.success,
+        stage: "stage3",
+        runBatchId: result.runBatchId,
+        citySource: result.citySource,
+        citySourcePath: result.citySourcePath,
+        processedCities: result.processedCities,
+        processedCategories: result.processedCategories,
+        updatedRows: result.updatedRows,
+        errors: result.errors,
+      });
+    } catch (error) {
+      console.error("Error running mcp-raw stage3:", error);
+      res.status(500).json({
+        success: false,
+        stage: "stage3",
+        error: "Failed to run mcp-raw stage3",
         details: error instanceof Error ? error.message : String(error),
       });
     }

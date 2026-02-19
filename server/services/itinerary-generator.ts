@@ -11,7 +11,7 @@ import {
 import { routeOptimizer } from "./route-optimizer";
 import { storage } from "../storage";
 import { db } from "../db";
-import { places, instagramHashtags, youtubePlaceMentions, naverBlogPosts, cities, tripAdvisorData, placePrices, reviews, geminiWebSearchCache, weatherCache, crisisAlerts } from "@shared/schema";
+import { places, instagramHashtags, youtubePlaceMentions, naverBlogPosts, cities, tripAdvisorData, placePrices, placeSeedRaw, reviews, geminiWebSearchCache, weatherCache, crisisAlerts } from "@shared/schema";
 import { eq, sql, ilike, and, desc } from "drizzle-orm";
 
 // Lazy initialization - DB에서 API 키 로드 후 사용
@@ -707,11 +707,27 @@ async function enrichPlacesWithKoreanPopularity(
   return placesArr.map(p => ({ ...p, koreanPopularityScore: 0 }));
 }
 
+// ===== 무료 장소 판별 (광장·공원·핫스팟) =====
+/** 패키지 투어 가격을 무료 장소에 적용하지 않기 위한 판별 */
+function isFreePlace(place: { name?: string; nameKo?: string; placeTypes?: string[] }): boolean {
+  const text = `${place.name || ''} ${place.nameKo || ''}`.toLowerCase();
+  const freeKeywords = ['광장', '공원', '거리', 'square', 'park', 'plaza', 'place', 'viewpoint', '전망대', '산책로', 'gardens', 'garden'];
+  return freeKeywords.some(k => text.includes(k));
+}
+
+/** 패키지 투어/투어 상품 가격 소스인지 판별 (무료 장소에 적용 금지) */
+function isPackageTourPriceSource(source: string | undefined): boolean {
+  if (!source) return false;
+  const s = source.toLowerCase();
+  return ['viator', 'klook', 'tour', 'tripdotcom', 'package'].some(k => s.includes(k));
+}
+
 // ===== TripAdvisor 데이터 + 실제 가격 정보 통합 =====
 
 /**
  * DB에서 장소 이름 매칭으로 TripAdvisor 데이터와 가격 정보를 가져옴
  * → 일정표에 실제 평점, 리뷰 수, 예상 가격을 표시
+ * → 광장·공원 등 무료 장소에는 패키지 투어 가격 적용 안 함
  */
 async function enrichPlacesWithTripAdvisorAndPrices(
   placesArr: PlaceResult[],
@@ -744,7 +760,7 @@ async function enrichPlacesWithTripAdvisorAndPrices(
     .from(tripAdvisorData)
     .where(eq(tripAdvisorData.cityId, cityId));
 
-    // 가격 데이터 일괄 조회
+    // 가격 데이터 일괄 조회 (place_prices)
     const priceData = await db.select({
       placeId: placePrices.placeId,
       priceType: placePrices.priceType,
@@ -756,6 +772,24 @@ async function enrichPlacesWithTripAdvisorAndPrices(
     })
     .from(placePrices)
     .where(eq(placePrices.cityId, cityId));
+
+    // place_seed_raw 가격 fallback (이름+도시 매칭, placeId 없음)
+    const seedRawPrices = await db.select({
+      nameEn: placeSeedRaw.nameEn,
+      nameKo: placeSeedRaw.nameKo,
+      priceEur: placeSeedRaw.priceEur,
+      priceSource: placeSeedRaw.priceSource,
+    })
+    .from(placeSeedRaw)
+    .where(eq(placeSeedRaw.cityId, cityId));
+    const seedRawPriceMap = new Map<string, { priceEur: number; priceSource: string }>();
+    for (const sr of seedRawPrices) {
+      if (sr.priceEur != null) {
+        const keyEn = sr.nameEn?.toLowerCase().trim();
+        if (keyEn) seedRawPriceMap.set(keyEn, { priceEur: sr.priceEur, priceSource: sr.priceSource || 'place_seed_raw' });
+        if (sr.nameKo) seedRawPriceMap.set(sr.nameKo.toLowerCase().trim(), { priceEur: sr.priceEur, priceSource: sr.priceSource || 'place_seed_raw' });
+      }
+    }
 
     // DB 장소 목록 (이름으로 매칭)
     const dbPlaces = await db.select({ id: places.id, name: places.name, googlePlaceId: places.googlePlaceId })
@@ -797,17 +831,24 @@ async function enrichPlacesWithTripAdvisorAndPrices(
 
     let taMatched = 0;
     let priceMatched = 0;
+    let seedRawPriceMatched = 0;
 
     const enriched = placesArr.map(place => {
       // 이름으로 DB placeId 찾기
       const dbPlaceId = placeIdByName.get(place.name.toLowerCase()) || placeIdByName.get(place.id);
 
-      if (!dbPlaceId) return place;
-
-      const ta = taMap.get(dbPlaceId);
-      const price = priceMap.get(dbPlaceId);
+      const ta = dbPlaceId ? taMap.get(dbPlaceId) : undefined;
+      const price = dbPlaceId ? priceMap.get(dbPlaceId) : undefined;
 
       const updates: Partial<PlaceResult> = {};
+
+      // 광장·공원 등 무료 장소: 가격 없거나 0이면 무료로 고정
+      const freePlace = isFreePlace(place);
+      if (freePlace && !price) {
+        updates.estimatedPriceEur = 0;
+        updates.priceSource = 'free';
+        updates.priceEstimate = '무료';
+      }
 
       if (ta) {
         updates.tripAdvisorRating = ta.rating;
@@ -820,6 +861,23 @@ async function enrichPlacesWithTripAdvisorAndPrices(
       }
 
       if (price) {
+        // 광장·공원 등 무료 장소에 패키지 투어 가격 적용 금지
+        const pkgSource = isPackageTourPriceSource(price.source);
+        if (freePlace && pkgSource) {
+          updates.estimatedPriceEur = 0;
+          updates.priceSource = 'free';
+          updates.priceEstimate = '무료';
+          priceMatched++;
+          return { ...place, ...updates };
+        }
+        // 무료 장소이고 가격이 0이면 명시적으로 무료 표시
+        if (freePlace && price.avgPrice === 0) {
+          updates.estimatedPriceEur = 0;
+          updates.priceSource = 'free';
+          updates.priceEstimate = '무료';
+          priceMatched++;
+          return { ...place, ...updates };
+        }
         // 통화 변환: EUR가 아니면 EUR로 변환
         let priceInEur = price.avgPrice;
         if (price.currency === 'KRW') {
@@ -844,10 +902,30 @@ async function enrichPlacesWithTripAdvisorAndPrices(
         priceMatched++;
       }
 
+      // place_seed_raw 가격 fallback (place_prices 미매칭 시)
+      if (!updates.estimatedPriceEur && !updates.priceSource && seedRawPriceMap.size > 0) {
+        const nameLower = place.name.toLowerCase().trim();
+        let seedPrice = seedRawPriceMap.get(nameLower);
+        if (!seedPrice) {
+          for (const [key, val] of seedRawPriceMap) {
+            if (key.includes(nameLower) || nameLower.includes(key)) {
+              seedPrice = val;
+              break;
+            }
+          }
+        }
+        if (seedPrice) {
+          updates.estimatedPriceEur = seedPrice.priceEur;
+          updates.priceSource = seedPrice.priceSource;
+          updates.priceEstimate = seedPrice.priceEur > 0 ? `€${Math.round(seedPrice.priceEur)}` : '무료';
+          seedRawPriceMatched++;
+        }
+      }
+
       return { ...place, ...updates };
     });
 
-    console.log(`[TripAdvisor/Price] 보강 완료: TripAdvisor ${taMatched}곳, 가격 ${priceMatched}곳 매칭`);
+    console.log(`[TripAdvisor/Price] 보강 완료: TripAdvisor ${taMatched}곳, 가격 ${priceMatched}곳, place_seed_raw ${seedRawPriceMatched}곳 fallback`);
     return enriched;
   } catch (error) {
     console.error('[TripAdvisor/Price] 보강 실패:', error);

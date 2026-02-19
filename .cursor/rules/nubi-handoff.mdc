@@ -23,12 +23,12 @@ alwaysApply: true
 - 사용자에게 SQL/Supabase/PowerShell 등 수동 실행 요청하지 않음 (비개발자)
 - DB·코드 작업은 배포(Koyeb)와 별개로 진행 가능
 
-## 현재 상태 (2026-02-13)
+## 현재 상태 (2026-02-20)
 
 | 항목 | 내용 |
 |------|------|
-| 마지막 작업 | nubiReason 배치 완료. place_nubi_reasons Supabase 반영. dev/run-place-nubi-reasons-migration.ts, verify-place-nubi-reasons.ts, run-nubi-reason-collect.ts. |
-| 다음 할 일 | Gemini 할당량 복구 후 `npx tsx dev/run-nubi-reason-collect.ts` → place_nubi_reasons 데이터 수집. |
+| 마지막 작업 | BTS 2026 MCP 도시 수집 구현. bts2026 34개 도시, mcp-client.ts, USE_MCP_RAW, cities-by-phase 시드, collection_phase, image_url. |
+| 다음 할 일 | BTS 도시 시드(`POST /api/admin/seed/cities-by-phase` body: `{phase:"bts2026"}`) 후 MCP 1단계 실행. USE_MCP_RAW=true 필요. |
 | 브랜치 | cursor-dev |
 | 배포 상태 | Koyeb 커밋·푸시 반영됨. |
 

@@ -3,6 +3,9 @@ import { cities, placeSeedRaw, placeNubiReasons, celebEvidence, places, dataSync
 import { and, eq, gt, sql, asc } from "drizzle-orm";
 import { getSearchTools } from "./gemini-search-limiter";
 import { getMcpExecutionOrder, getMcpCitySourceMeta } from "../config/mcp-raw-data-final";
+import { getMcpClient } from "./mcp-client";
+
+const USE_MCP_RAW = process.env.USE_MCP_RAW === "true";
 
 type SeedCategory = "attraction" | "restaurant" | "healing" | "adventure" | "hotspot";
 
@@ -13,6 +16,8 @@ interface Stage1Item {
   googleSearchNote?: string;
   googleReviewCountNote?: string;
   googleImageCountNote?: string;
+  imageUrl?: string;
+  priceEur?: number;
   source?: string;
 }
 
@@ -28,10 +33,18 @@ interface Stage2RunOptions {
   runBatchId?: string;
 }
 
+interface Stage3RunOptions {
+  cityId?: number;
+  category?: SeedCategory;
+  runBatchId?: string;
+  batchSize?: number;  // 한 번에 처리할 장소 수 (기본 10)
+}
+
 interface TargetCity {
   id: number;
   nameKo: string;
   nameEn: string;
+  phase?: string; // bts2026 | france30 | europe30
 }
 
 interface Stage2Item {
@@ -79,16 +92,19 @@ function buildStage1Prompt(cityKo: string, cityEn: string, category: SeedCategor
 2) 구글 리뷰 수 (평점 아님)
 3) 구글 이미지 검색 결과 수 (인스타 아님)
 
+[필수 추가 수집]
+- 각 장소마다 **대표 이미지 URL 1개**(imageUrl)와 **입장료/식비 EUR**(priceEur, 0=무료)를 반드시 함께 수집해줘.
+
 [카테고리]
 - ${guide}
 
 [응답 형식]
 - 반드시 JSON 배열만 반환 (코드블록/설명문 금지)
 - 최대 30개
-- 필드: rank, nameKo, nameEn, googleSearchNote, googleReviewCountNote, googleImageCountNote, source
+- 필드: rank, nameKo, nameEn, googleSearchNote, googleReviewCountNote, googleImageCountNote, imageUrl, priceEur, source
 
 예시:
-[{"rank":1,"nameKo":"에펠탑","nameEn":"Eiffel Tower","googleSearchNote":"검색량 상위","googleReviewCountNote":"리뷰 약 35만+","googleImageCountNote":"이미지 결과 다수","source":"google search"}]`;
+[{"rank":1,"nameKo":"에펠탑","nameEn":"Eiffel Tower","googleSearchNote":"검색량 상위","googleReviewCountNote":"리뷰 약 35만+","googleImageCountNote":"이미지 결과 다수","imageUrl":"https://example.com/eiffel.jpg","priceEur":32,"source":"google search"}]`;
 }
 
 function extractJsonArray(text: string): any[] {
@@ -148,6 +164,9 @@ function normalizeStage1Items(items: any[]): Stage1Item[] {
     if (!nameEn) continue;
 
     seen.add(rank);
+    const priceEurRaw = item.priceEur ?? item.price_eur;
+    const priceEur = Number.isFinite(Number(priceEurRaw)) ? Number(priceEurRaw) : undefined;
+    const imageUrl = String(item.imageUrl || item.image_url || "").trim() || undefined;
     normalized.push({
       rank,
       nameKo: String(item.nameKo || "").trim() || undefined,
@@ -155,6 +174,8 @@ function normalizeStage1Items(items: any[]): Stage1Item[] {
       googleSearchNote: String(item.googleSearchNote || "").trim() || undefined,
       googleReviewCountNote: String(item.googleReviewCountNote || "").trim() || undefined,
       googleImageCountNote: String(item.googleImageCountNote || "").trim() || undefined,
+      imageUrl: imageUrl?.startsWith("http") ? imageUrl : undefined,
+      priceEur: priceEur !== undefined ? Math.max(0, priceEur) : undefined,
       source: String(item.source || "mcp_google_search").trim(),
     });
   }
@@ -199,14 +220,15 @@ async function resolveTargetCities(options: Stage1RunOptions): Promise<TargetCit
   if (!db) return [];
   const configured = getMcpExecutionOrder();
 
-  if (options.cityId) {
+    if (options.cityId) {
     const [row] = await db
       .select({ id: cities.id, nameKo: cities.name, nameEn: cities.nameEn })
       .from(cities)
       .where(eq(cities.id, options.cityId))
       .limit(1);
     if (!row) return [];
-    return [{ id: row.id, nameKo: row.nameKo, nameEn: row.nameEn || row.nameKo }];
+    const matched = configured.find((c) => (row.nameEn && c.nameEn.toLowerCase() === row.nameEn.toLowerCase()) || c.nameKo === row.nameKo);
+    return [{ id: row.id, nameKo: row.nameKo, nameEn: row.nameEn || row.nameKo, phase: matched?.phase }];
   }
 
   const results: TargetCity[] = [];
@@ -219,7 +241,7 @@ async function resolveTargetCities(options: Stage1RunOptions): Promise<TargetCit
       )
       .limit(1);
     if (row) {
-      results.push({ id: row.id, nameKo: row.nameKo, nameEn: row.nameEn || c.nameEn });
+      results.push({ id: row.id, nameKo: row.nameKo, nameEn: row.nameEn || c.nameEn, phase: c.phase });
     }
   }
   return results;
@@ -298,6 +320,89 @@ ${celebListText}
 ## 산출물
 반드시 JSON 배열만 반환 (마크다운 코드블록 없이). 필드:
 placeName, sourceRank(1~5), sourceType(instagram|youtube|naver_blog|package|travel_app), nubiReason, evidenceUrl(순수 URL), verified(boolean)`;
+}
+
+function buildStage3Prompt(cityEn: string, placeList: { nameEn: string; nameKo?: string | null }[]): string {
+  const list = placeList.map((p) => p.nameKo || p.nameEn).join(", ");
+  return `Search the web for current price (entrance fee or average meal cost) for each place in ${cityEn}.
+
+Places: ${list}
+
+Return JSON array only (no markdown). For each place:
+- placeName: exact match to input (nameEn or nameKo)
+- priceEur: number in EUR (0 if free: park, square, plaza, viewpoint, garden)
+- priceSource: "gemini_search" or "official_website" or "klook" etc
+- confidence: 0.0-1.0
+
+Free places (광장, 공원, 거리, square, park, plaza, garden) must have priceEur: 0.
+Example: [{"placeName":"Eiffel Tower","priceEur":32,"priceSource":"official_website","confidence":0.9},{"placeName":"Trocadéro","priceEur":0,"priceSource":"gemini_search","confidence":0.95}]`;
+}
+
+async function runStage3ForCityCategory(
+  city: TargetCity,
+  category: SeedCategory,
+  batchSize: number = 10
+): Promise<{ success: boolean; updatedRows: number; error?: string }> {
+  if (!db) return { success: false, updatedRows: 0, error: "DB 연결 없음" };
+  const apiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+  if (!apiKey) return { success: false, updatedRows: 0, error: "Gemini API 키 없음" };
+
+  const rows = await db
+    .select({ id: placeSeedRaw.id, nameEn: placeSeedRaw.nameEn, nameKo: placeSeedRaw.nameKo })
+    .from(placeSeedRaw)
+    .where(and(eq(placeSeedRaw.cityId, city.id), eq(placeSeedRaw.seedCategory, category)))
+    .orderBy(asc(placeSeedRaw.rank));
+
+  if (rows.length === 0) {
+    return { success: false, updatedRows: 0, error: "1단계 데이터 없음" };
+  }
+
+  let updatedRows = 0;
+  try {
+    const { GoogleGenAI } = await import("@google/genai");
+    const ai = new GoogleGenAI({ apiKey });
+    const tools = getSearchTools("mcp_raw_stage3");
+
+    for (let i = 0; i < rows.length; i += batchSize) {
+      const batch = rows.slice(i, i + batchSize);
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash-lite",
+        contents: buildStage3Prompt(city.nameEn, batch),
+        config: tools ? { tools } : {},
+      });
+      const text = (response as any).text || "";
+      const parsed = extractJsonArray(text);
+      if (!Array.isArray(parsed) || parsed.length === 0) continue;
+
+      const now = new Date();
+      for (const row of batch) {
+        const item = parsed.find(
+          (p: any) =>
+            (row.nameEn && String(p?.placeName || "").toLowerCase().includes(row.nameEn.toLowerCase())) ||
+            (row.nameKo && String(p?.placeName || "").includes(row.nameKo || "")) ||
+            (p?.placeName && row.nameEn && row.nameEn.toLowerCase().includes(String(p.placeName).toLowerCase()))
+        );
+        if (!item) continue;
+        const priceEur = typeof item?.priceEur === "number" ? item.priceEur : 0;
+        const priceSource = String(item?.priceSource || "gemini_search").slice(0, 50);
+        await db
+          .update(placeSeedRaw)
+          .set({
+            priceEur,
+            priceSource,
+            priceFetchedAt: now,
+          })
+          .where(eq(placeSeedRaw.id, row.id));
+        updatedRows++;
+      }
+      if (i + batchSize < rows.length) {
+        await new Promise((r) => setTimeout(r, 1500));
+      }
+    }
+    return { success: true, updatedRows };
+  } catch (error: any) {
+    return { success: false, updatedRows, error: error?.message || String(error) };
+  }
 }
 
 async function runStage2ForCityCategory(city: TargetCity, category: SeedCategory): Promise<{
@@ -454,6 +559,17 @@ async function runStage2ForCityCategory(city: TargetCity, category: SeedCategory
   }
 }
 
+function buildStage1SearchQuery(cityEn: string, category: SeedCategory): string {
+  const q: Record<SeedCategory, string> = {
+    attraction: "top museums landmarks tourist attractions",
+    restaurant: "best restaurants cafes dining",
+    healing: "parks spas wellness quiet spots",
+    adventure: "theme parks adventure activities zoo outdoor",
+    hotspot: "Instagram spots popular places trending",
+  };
+  return `${cityEn} ${q[category]} top 30 2024`;
+}
+
 async function runStage1ForCityCategory(city: TargetCity, category: SeedCategory): Promise<{
   success: boolean;
   saved: number;
@@ -464,18 +580,31 @@ async function runStage1ForCityCategory(city: TargetCity, category: SeedCategory
   const apiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
   if (!apiKey) return { success: false, saved: 0, error: "Gemini API 키 없음" };
 
+  let text = "";
   try {
-    const { GoogleGenAI } = await import("@google/genai");
-    const ai = new GoogleGenAI({ apiKey });
-    const tools = getSearchTools("mcp_raw_stage1");
-
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-lite",
-      contents: buildStage1Prompt(city.nameKo, city.nameEn, category),
-      config: tools ? { tools } : {},
-    });
-
-    const text = (response as any).text || "";
+    if (USE_MCP_RAW) {
+      const mcp = await getMcpClient();
+      const query = buildStage1SearchQuery(city.nameEn, category);
+      const searchResults = await mcp.googleSearch(query, { num: 30 });
+      const parsePrompt = `[검색 결과]\n${searchResults.slice(0, 15000)}\n\n위 검색 결과를 바탕으로 ${city.nameKo}(${city.nameEn})의 ${CATEGORY_KO_LABEL[category]} 상위 30곳을 JSON 배열로 추출하세요. 각 장소마다 imageUrl(대표 이미지 URL 1개)과 priceEur(입장료/식비 EUR, 0=무료)를 반드시 포함. 필드: rank, nameKo, nameEn, googleSearchNote, googleReviewCountNote, googleImageCountNote, imageUrl, priceEur, source. JSON 배열만 반환.`;
+      const { GoogleGenAI } = await import("@google/genai");
+      const ai = new GoogleGenAI({ apiKey });
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash-lite",
+        contents: parsePrompt,
+      });
+      text = (response as any).text || "";
+    } else {
+      const { GoogleGenAI } = await import("@google/genai");
+      const ai = new GoogleGenAI({ apiKey });
+      const tools = getSearchTools("mcp_raw_stage1");
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash-lite",
+        contents: buildStage1Prompt(city.nameKo, city.nameEn, category),
+        config: tools ? { tools } : {},
+      });
+      text = (response as any).text || "";
+    }
     const parsed = extractJsonArray(text);
     const items = normalizeStage1Items(parsed);
 
@@ -494,12 +623,16 @@ async function runStage1ForCityCategory(city: TargetCity, category: SeedCategory
           .values({
             cityId: city.id,
             seedCategory: category,
+            collectionPhase: city.phase || null,
             rank: item.rank,
             nameKo: item.nameKo || null,
             nameEn: item.nameEn,
             googleSearchNote: item.googleSearchNote || null,
             googleReviewCountNote: item.googleReviewCountNote || null,
             googleImageCountNote: item.googleImageCountNote || null,
+            imageUrl: item.imageUrl || null,
+            priceEur: item.priceEur ?? null,
+            priceSource: item.priceEur !== undefined ? "stage1_search" : null,
             source: item.source || "mcp_google_search",
             sourceRank: null,
             sourceType: null,
@@ -510,11 +643,15 @@ async function runStage1ForCityCategory(city: TargetCity, category: SeedCategory
           .onConflictDoUpdate({
             target: [placeSeedRaw.cityId, placeSeedRaw.seedCategory, placeSeedRaw.rank],
             set: {
+              collectionPhase: city.phase || null,
               nameKo: item.nameKo || null,
               nameEn: item.nameEn,
               googleSearchNote: item.googleSearchNote || null,
               googleReviewCountNote: item.googleReviewCountNote || null,
               googleImageCountNote: item.googleImageCountNote || null,
+              imageUrl: item.imageUrl || null,
+              priceEur: item.priceEur ?? null,
+              priceSource: item.priceEur !== undefined ? "stage1_search" : null,
               source: item.source || "mcp_google_search",
               sourceRank: null,
               sourceType: null,
@@ -721,6 +858,59 @@ export async function runMcpRawStage2(options: Stage2RunOptions): Promise<{
     processedCategory: options.category,
     updatedRawRows: stage2.updatedRawRows,
     savedNubiReasonRows: stage2.savedNubiReasonRows,
+    errors,
+    citySource: cityMeta.source,
+    citySourcePath: cityMeta.path,
+  };
+}
+
+export async function runMcpRawStage3(options: Stage3RunOptions = {}): Promise<{
+  success: boolean;
+  runBatchId: string;
+  processedCities: number;
+  processedCategories: number;
+  updatedRows: number;
+  errors: string[];
+  citySource: "runtime_file" | "draft_default";
+  citySourcePath: string;
+}> {
+  const runBatchId = options.runBatchId || makeRunBatchId();
+  const cityMeta = getMcpCitySourceMeta();
+  if (!db) {
+    return {
+      success: false,
+      runBatchId,
+      processedCities: 0,
+      processedCategories: 0,
+      updatedRows: 0,
+      errors: ["DB 연결 없음"],
+      citySource: cityMeta.source,
+      citySourcePath: cityMeta.path,
+    };
+  }
+  const targetCities = await resolveTargetCities({ cityId: options.cityId });
+  const targetCategories = options.category ? [options.category] : CATEGORIES;
+  const batchSize = options.batchSize ?? 10;
+
+  const errors: string[] = [];
+  let updatedRows = 0;
+
+  for (const city of targetCities) {
+    for (const category of targetCategories) {
+      const result = await runStage3ForCityCategory(city, category, batchSize);
+      updatedRows += result.updatedRows;
+      if (!result.success && result.error) {
+        errors.push(`${city.nameEn}/${category}: ${result.error}`);
+      }
+    }
+  }
+
+  return {
+    success: errors.length === 0,
+    runBatchId,
+    processedCities: targetCities.length,
+    processedCategories: targetCities.length * targetCategories.length,
+    updatedRows,
     errors,
     citySource: cityMeta.source,
     citySourcePath: cityMeta.path,

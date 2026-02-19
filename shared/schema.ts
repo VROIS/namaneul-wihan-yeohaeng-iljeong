@@ -56,7 +56,8 @@ export const cities = pgTable("cities", {
   timezone: text("timezone"),
   primaryLanguage: text("primary_language"),
   // MCP 고정 순위 기준(프랑스30/유럽30)
-  mcpBucket: text("mcp_bucket"), // france30 | europe30 | both
+  mcpBucket: text("mcp_bucket"), // france30 | europe30 | both (레거시)
+  mcpPhases: jsonb("mcp_phases").$type<string[]>().default([]), // 수집 단계 배열: ["bts2026","france30"]
   mcpRankFr: integer("mcp_rank_fr"), // 1~30
   mcpRankEu: integer("mcp_rank_eu"), // 1~30
   mcpRankBasis: text("mcp_rank_basis"), // euromonitor_un_tourism_2024_2025
@@ -628,12 +629,14 @@ export const placeSeedRaw = pgTable("place_seed_raw", {
   id: serial("id").primaryKey(),
   cityId: integer("city_id").notNull().references(() => cities.id, { onDelete: "cascade" }),
   seedCategory: text("seed_category").notNull(), // attraction|restaurant|healing|adventure|hotspot
+  collectionPhase: text("collection_phase"), // 수집 출처: bts2026 | france30 | europe30
   rank: integer("rank").notNull(),
   nameKo: text("name_ko"),
   nameEn: text("name_en").notNull(),
   googleSearchNote: text("google_search_note"),
   googleReviewCountNote: text("google_review_count_note"),
   googleImageCountNote: text("google_image_count_note"),
+  imageUrl: text("image_url"), // 대표 이미지 1개 URL
   source: text("source"),
   // 2단계 보강
   sourceRank: integer("source_rank"),

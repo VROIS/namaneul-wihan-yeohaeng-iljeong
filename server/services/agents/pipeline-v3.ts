@@ -37,6 +37,36 @@ import { exchangeRates, youtubePlaceMentions, youtubeVideos, youtubeChannels, na
 import { eq, and, ilike, sql, desc, asc } from 'drizzle-orm';
 import { findCelebrityVisitsForPlaces, type CelebrityVisit } from '../celebrity-tracker';
 
+// ===== 5대 가격원칙: priceLevel → 2026 실제 물가 (EUR) =====
+function priceLevelToEur(level: number, meal?: 'lunch' | 'dinner'): number {
+  const map: Record<number, { lunch: number; dinner: number; entrance: number }> = {
+    0: { lunch: 0, dinner: 0, entrance: 0 },
+    1: { lunch: 12, dinner: 18, entrance: 8 },
+    2: { lunch: 22, dinner: 38, entrance: 15 },
+    3: { lunch: 40, dinner: 70, entrance: 25 },
+    4: { lunch: 65, dinner: 120, entrance: 50 },
+  };
+  if (meal) return map[level]?.[meal] ?? 0;
+  return map[level]?.entrance ?? 0;
+}
+
+/** 원칙 1~4: Gemini 최우선, 0=무료 유지, DB 검증 시 비싼 쪽, 패키지 투어 가격 무시 */
+function resolvePrice(
+  enrichedPrice: number,
+  geminiPrice: number,
+  dbPlace: { priceLevel?: number; priceSource?: string } | null
+): number {
+  if (geminiPrice === 0) return 0;
+  // 원칙4: place_prices가 viator/klook 등 패키지 투어면 무시 → Gemini 사용
+  const isPkgSource = dbPlace?.priceSource && ['viator', 'klook', 'tour', 'package'].some(k =>
+    dbPlace!.priceSource!.toLowerCase().includes(k)
+  );
+  const basePrice = isPkgSource ? geminiPrice : (enrichedPrice || geminiPrice);
+  if (!dbPlace?.priceLevel) return basePrice;
+  const dbEstimate = priceLevelToEur(dbPlace.priceLevel);
+  return Math.max(basePrice, dbEstimate);
+}
+
 // ===== TravelStyle 정규화 (소문자→표준형) =====
 function normalizeTravelStyle(style?: string): TravelStyle {
   if (!style) return 'Reasonable';
@@ -524,17 +554,23 @@ async function step2_enrichAndBuild(
     const ta = enrichedTA[i];
     const ph = enrichedPhoto[i];
 
+    // 5대 가격원칙: Gemini 우선, DB 검증(비싼 쪽), 패키지 투어 차단
+    const enrichedPrice = ta?.estimatedPriceEur ?? p.estimatedPriceEur ?? 0;
+    const geminiPrice = p.estimatedPriceEur ?? 0;
+    const dbPlaceForPrice = { priceLevel: p.priceLevel, priceSource: ta?.priceSource ?? p.priceSource };
+    const resolvedPrice = resolvePrice(enrichedPrice, geminiPrice, dbPlaceForPrice);
+
     const merged = {
       ...p,
       // 한국인 인기도
       koreanPopularityScore: kr?.koreanPopularityScore ?? p.koreanPopularityScore,
-      // TripAdvisor + 가격
+      // TripAdvisor + 가격 (resolvePrice 적용)
       tripAdvisorRating: ta?.tripAdvisorRating ?? p.tripAdvisorRating,
       tripAdvisorReviewCount: ta?.tripAdvisorReviewCount ?? p.tripAdvisorReviewCount,
       tripAdvisorRanking: ta?.tripAdvisorRanking ?? p.tripAdvisorRanking,
-      estimatedPriceEur: ta?.estimatedPriceEur ?? p.estimatedPriceEur,
-      priceSource: ta?.priceSource ?? p.priceSource,
-      priceEstimate: ta?.priceEstimate ?? p.priceEstimate,
+      estimatedPriceEur: resolvedPrice,
+      priceSource: resolvedPrice === 0 ? 'free' : (ta?.priceSource ?? p.priceSource),
+      priceEstimate: resolvedPrice > 0 ? `€${Math.round(resolvedPrice)}` : (ta?.priceEstimate ?? p.priceEstimate ?? '무료'),
       vibeScore: Math.max(p.vibeScore, ta?.vibeScore ?? 0),
       // 포토스팟/패키지 투어
       photoSpotScore: ph?.photoSpotScore ?? p.photoSpotScore,
@@ -597,7 +633,12 @@ async function step2_enrichAndBuild(
         // 식사 정보
         isMealSlot: isMeal,
         mealType: s.gPlace.type === 'lunch' ? 'lunch' as const : s.gPlace.type === 'dinner' ? 'dinner' as const : undefined,
-        mealPrice: isMeal ? (s.gPlace.type === 'lunch' ? mealBudget.lunch : mealBudget.dinner) : undefined,
+        // 원칙 1+2: Gemini 가격 최우선, 0이면 mealBudget fallback
+        mealPrice: isMeal
+          ? (s.gPlace.estimatedCostEur > 0
+              ? s.gPlace.estimatedCostEur
+              : (s.gPlace.type === 'lunch' ? mealBudget.lunch : mealBudget.dinner))
+          : undefined,
         mealPriceLabel: isMeal ? (s.gPlace.type === 'lunch' ? mealBudget.lunchLabel : mealBudget.dinnerLabel) : undefined,
         // Gemini의 한국어 이름 + 추천이유
         nameKo: s.gPlace.nameKo,
