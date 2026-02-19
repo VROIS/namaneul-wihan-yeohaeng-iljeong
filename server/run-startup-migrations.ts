@@ -8,6 +8,15 @@ export async function runStartupMigrations(): Promise<void> {
   if (!pool) return;
 
   try {
+    // 0004: place_seed_raw.price_eur, price_source, price_fetched_at
+    await pool.query(`
+      ALTER TABLE "place_seed_raw"
+        ADD COLUMN IF NOT EXISTS "price_eur" real,
+        ADD COLUMN IF NOT EXISTS "price_source" text,
+        ADD COLUMN IF NOT EXISTS "price_fetched_at" timestamp;
+    `);
+    console.log("[Migration] ✅ 0004 price_eur/price_source/price_fetched_at 적용 완료");
+
     // 0006: cities.mcp_phases, place_seed_raw.collection_phase, image_url
     await pool.query(`
       ALTER TABLE "cities"

@@ -57,7 +57,11 @@ export class McpClient {
         clientInfo: { name: "nubi-mcp", version: "1.0" },
       },
     });
-    await this.send({ jsonrpc: "2.0", id: ++this.reqId, method: "notifications/initialized" });
+    await this.send({
+      jsonrpc: "2.0",
+      method: "notifications/initialized",
+      params: {},
+    });
   }
 
   private send(data: object): Promise<any> {
