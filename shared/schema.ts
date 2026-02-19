@@ -501,6 +501,19 @@ export const celebEvidence = pgTable("celeb_evidence", {
   updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
+// 이미지 통합 테이블 (인스타 우선) — instagram_photos, places.instagram_photo_urls, celebrity_place_evidence, places.photoUrls 통합
+export const placeImages = pgTable("place_images", {
+  id: serial("id").primaryKey(),
+  placeId: integer("place_id").references(() => places.id, { onDelete: "cascade" }),
+  placeSeedRawId: integer("place_seed_raw_id").references(() => placeSeedRaw.id, { onDelete: "cascade" }),
+  cityId: integer("city_id").references(() => cities.id, { onDelete: "cascade" }),
+  sourceType: text("source_type").notNull(), // instagram | celebrity | google | wikimedia
+  url: text("url").notNull(),
+  sortOrder: integer("sort_order").notNull().default(1), // 1=인스타(최우선), 2=셀럽, 3=구글, 4=위키
+  fetchedAt: timestamp("fetched_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+});
+
 // 장소별 셀럽 인스타 흔적 - 이미지 최상순위 노출용
 export const celebrityPlaceEvidence = pgTable("celebrity_place_evidence", {
   id: serial("id").primaryKey(),
@@ -628,6 +641,10 @@ export const placeSeedRaw = pgTable("place_seed_raw", {
   nubiReason: text("nubi_reason"),
   evidenceUrl: text("evidence_url"),
   evidenceVerified: boolean("evidence_verified").default(false),
+  // 3단계: MCP 가격 수집
+  priceEur: real("price_eur"),           // 1인 입장료/식사비 (EUR), 0=무료
+  priceSource: text("price_source"),     // gemini_search, google_places, klook 등
+  priceFetchedAt: timestamp("price_fetched_at"),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 

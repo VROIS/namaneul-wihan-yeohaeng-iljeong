@@ -1,8 +1,9 @@
 # NUBI 프로젝트 태스크 관리
 
-> **최종 업데이트: 2026-02-14**
+> **최종 업데이트: 2026-02-19**
 > **완료된 작업 이력: `docs/TASK_ARCHIVE.md`**
 > **AI 규칙: `.cursor/rules/*.mdc` (10개 파일, 항상 자동 적용. 검증 헌법: nubi-verification-constitution.mdc)**
+> **원칙: 모든 작업·변경 기록에 날짜(YYYY-MM-DD) 반드시 기입**
 
 ---
 
@@ -12,10 +13,10 @@
 
 | 항목 | 내용 |
 |------|------|
-| **마지막 작업일** | 2026-02-14 |
-| **마지막 작업** | MCP 워크플로우(start/resume/status/report) + data_sync_log 체크포인트 구현. 파리 파일럿 1차 150/150, 2차 148/150 확인. |
-| **다음 할 일** | 파리 `adventure` 2건 누락 매칭 보완 후 2차 150/150 달성 및 PASS 보고 |
-| **배포 상태** | Koyeb 정상 (200 OK). 커밋·푸시 시 자동 배포. 로컬 = 내부테스트용. |
+| **마지막 작업일** | 2026-02-19 |
+| **마지막 작업** | **place_images 통합·품질 강화**: 56,626건 통합, img 사용 가능 URL만 선택(isUsableImageUrl), 슬롯 이미지 빈칸 방지(Google API fallback). 감사 스크립트 `dev/audit-place-images-urls.ts` |
+| **다음 할 일** | 프론트엔드 개선: nubiReason 표시 강화, 무료 장소 가격 표시 제거, 일별 탭 통합 |
+| **배포 상태** | Koyeb 정상 (200 OK). 커밋 푸시 후 자동 배포. |
 | **브랜치** | cursor-dev |
 
 ---
@@ -78,10 +79,12 @@
 
 **적용 (google-places.ts)**: editorialSummary·shortFormattedAddress·primaryTypeDisplayName 제거. DAILY_API_LIMIT=33 (1,000/월÷30일)
 
-### 일정 이미지 우선순위 (ag3-data-matcher)
-- **순서**: 셀럽 인스타(1순위) > 인스타 > 위키메디어+구글(photoUrls) > place.image > Google API
-- **DB 컬럼**: `celebrity_place_evidence.imageUrl`(20인 셀럽), `instagramPhotoUrls`(인스타), `photoUrls`(구글+위키메디어 append)
-- **적용**: ag3 preload 시 `celebrityImageMap`·`instagramPhotoUrls` 조회, `resolvePlaceImage()` 로 선택
+### 일정 이미지 우선순위 (ag3-data-matcher) — 2026-02-19 반영
+- **순서**: `place_images`(통합) > 셀럽 인스타 > 인스타 > 위키메디어+구글(photoUrls) > place.image > Google API fallback
+- **place_images**: celebrity_place_evidence, places.instagram_photo_urls, instagram_photos, places.photoUrls 통합 (56,626건, 2026-02-19)
+- **URL 품질 필터**: `isUsableImageUrl()` — instagram.com/p/xxx(media 없음), example.com 제외. Google/Wikimedia/CDN/instagram_media 허용
+- **슬롯 이미지 빈칸 방지**: 이미지 없으면 Google Places API로 보강 (4단계 fallback)
+- **감사**: `npx tsx dev/audit-place-images-urls.ts`
 
 ### 구현·DB 정리
 - place-seeder: SEARCH_CATEGORIES 5개(명소/맛집/힐링/모험/핫스팟), hotel 제거, 맛집 통합, 카테고리당 API 1회
@@ -104,7 +107,7 @@
 | # | 이슈 | 상태 | 해결 방법 |
 |---|------|------|----------|
 | 1 | **Google Maps/Places 대시보드 빨간불** | 미해결 | 건강체크가 Geocoding API 테스트 → Places API (New) 테스트로 변경 필요 |
-| 2 | **Place Seed 0/71 도시** | 미해결 | Google Places API 활성 확인 후 파리부터 공식 시딩 |
+| 2 | **Place Seed 0/71 도시** | **진행** | 프랑스 30개 도시 완료 (4,500장소). 샤모니 추가 완료. 그외 유럽 32개/기타 9개 대기. |
 | 3 | ~~API 비용 폭탄 (€1,171)~~ | **해결** | apiCallTracker, routeCallTracker 적용 완료 |
 
 ---
@@ -183,6 +186,7 @@
 |--------|------|------------|
 | 도시 | 71개 | 2026-02-08 |
 | 장소 | 1,713개 | 5카테고리 분류 완료 (파리 183건 등) |
+| place_images | 56,626건 | 2026-02-19 (통합 마이그레이션) |
 | YouTube | 18채널, 54영상, 23언급 | 2026-02-09 |
 | 네이버 블로그 | 1,239개 (14개 도시) | 2026-02-09 |
 | 인스타그램 | 해시태그 3,327, 사진 4,280 | 2026-02-09 |
@@ -249,6 +253,8 @@
 
 | 날짜 | 내용 |
 |------|------|
+| 2026-02-19 | **place_images 통합·품질 강화**: place_images 테이블(56,626건) 통합, isUsableImageUrl 필터(img 불가 URL 제외), 슬롯 이미지 빈칸 방지(Google API fallback), audit-place-images-urls.ts 감사 스크립트 |
+| 2026-02-16 | **DB 감사/정리**: `place_seed_raw` 프랑스 30개 도시 4,500건 검증 완료(샤모니 추가). 미커밋 93건 파일 정리 및 `.gitignore` 강화. |
 | 2026-02-14 | 운영정책 확정: `mcp_workflow_france_phase1`(프랑스30 자동) 활성, 유럽30은 대표 승인 후 수동 재개로 고정 |
 | 2026-02-14 | MCP 워크플로우(start/resume/status/report) 구현, data_sync_log 체크포인트 강제 기록, 파리 파일럿 실행(1차 150/150, 2차 148/150) |
 | 2026-02-08 | 파리 5카테고리 실측(report-seed-category.ts), place_seed 토글 버그 수정(행 없을 때 true). TASK §7·handoff 반영. |

@@ -92,6 +92,7 @@ export interface PlaceResult {
   tripAdvisorRanking?: string;
   estimatedPriceEur?: number;
   priceSource?: string;
+  priceLevel?: number;  // places 테이블 (1~4, 0=무료) — resolvePrice용
   photoSpotScore?: number;
   photoTip?: string;
   bestPhotoTime?: string;
@@ -156,7 +157,9 @@ export interface AG3PreOutput {
   cityId: number | null;
   dbPlacesMap: Map<string, any>;
   cityName: string;
-  /** placeId → 셀럽 인스타 이미지 URL (최상순위 노출) */
+  /** placeId → place_images 통합 이미지 URL (인스타 우선) */
+  placeImageMap?: Map<number, string>;
+  /** placeId → 셀럽 인스타 이미지 URL (place_images 미포함 시 fallback) */
   celebrityImageMap?: Map<number, string>;
 }
 

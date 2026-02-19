@@ -3,10 +3,19 @@
 > **이 파일은 완료된 작업 이력 보관용입니다. 일상 작업 시 읽을 필요 없음.**
 > **현재 작업 현황은 `docs/TASK.md` 참조**
 > **AI 규칙은 `.cursor/rules/*.mdc` 참조**
+> **원칙: 모든 작업 기록에 날짜(YYYY-MM-DD) 반드시 기입**
+> **최종 업데이트: 2026-02-19**
 
 ---
 
 ## 완료된 핵심 구현 요약
+
+### place_images 통합 (2026-02-19)
+- place_images 테이블: celebrity_place_evidence, places.instagram_photo_urls, instagram_photos, places.photoUrls 통합 (56,626건)
+- isUsableImageUrl(): instagram.com/p/xxx(media 없음), example.com 제외. Google/Wikimedia/CDN/instagram_media 허용
+- 슬롯 이미지 빈칸 방지: Google Places API fallback (4단계)
+- ag3-data-matcher: placeImageMap preload, resolvePlaceImage 필터 적용
+- dev/audit-place-images-urls.ts: URL 품질 감사 스크립트
 
 ### 아키텍처
 - Pipeline V3 (2단계 병렬) 구현 — 4-Agent 순차에서 전환 (2026-02-09)
@@ -51,6 +60,15 @@
 ---
 
 ## 일일 작업 기록
+
+### 2026-02-19 (수)
+| # | 작업 | 상태 |
+|---|------|------|
+| 1 | place_images 테이블 통합 마이그레이션 (56,626건) | 완료 |
+| 2 | place_images → preloadCityData·resolvePlaceImage 통합 | 완료 |
+| 3 | isUsableImageUrl() URL 품질 필터 (img 불가 URL 제외) | 완료 |
+| 4 | 슬롯 이미지 빈칸 방지 (Google API fallback) | 완료 |
+| 5 | dev/audit-place-images-urls.ts 감사 스크립트 | 완료 |
 
 ### 2026-02-10 (월)
 | # | 작업 | 상태 |
