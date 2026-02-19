@@ -63,6 +63,8 @@ export class DataScheduler {
         console.log(`[Scheduler] ⛔ ${schedule.taskName} - 정책상 차단/일시중단`);
         continue;
       }
+      // MCP 워크플로우: 스케줄 없음. 서버 시작 시 1회 백그라운드 연쇄 실행만.
+      if (schedule.taskName === "mcp_workflow_france_phase1") continue;
       this.scheduleTask(schedule.taskName, schedule.cronExpression);
     }
 
@@ -93,7 +95,8 @@ export class DataScheduler {
     // MCP 워크플로우: 스케줄 없음. 서버 시작 시 1회 백그라운드 실행 → 목표(BTS34→france30→europe30) 도달까지 한 도시 끝나면 다음 도시로 연쇄.
     setTimeout(async () => {
       if (DataScheduler.isTaskDisabledByPolicy("mcp_workflow_france_phase1")) return;
-      console.log("[Scheduler] MCP 워크플로우 백그라운드 시작 (목표 도달까지 연쇄 실행)...");
+      const useMcp = process.env.USE_MCP_RAW === "true";
+      console.log(`[Scheduler] MCP 워크플로우 백그라운드 시작 (USE_MCP_RAW=${useMcp}, 목표 도달까지 연쇄)...`);
       this.executeTask("mcp_workflow_france_phase1").catch((e) =>
         console.error("[Scheduler] MCP 워크플로우 실패:", e)
       );
