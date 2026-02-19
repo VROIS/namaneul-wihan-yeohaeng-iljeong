@@ -23,10 +23,20 @@ RUN npm run server:build
 # Expo 웹 빌드
 RUN npx expo export --platform web
 
-# 프로덕션 이미지
-FROM node:20-alpine AS runner
+# 프로덕션 이미지 — Python + MCP (noapi-google-search-mcp) 포함
+# bookworm: Chromium/Playwright 의존성 호환
+FROM node:20-bookworm-slim AS runner
 
 WORKDIR /app
+
+# Python 3 + noapi-google-search-mcp (Cursor MCP, API 비용 없음)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    python3-venv \
+    && pip3 install --break-system-packages --no-cache-dir noapi-google-search-mcp \
+    && python3 -m playwright install --with-deps chromium \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # 프로덕션 의존성만 설치
 COPY package*.json ./
@@ -44,9 +54,11 @@ COPY --from=builder /app/server/templates ./server/templates
 COPY --from=builder /app/server/data ./server_dist/data
 COPY --from=builder /app/server/data ./server/data
 
-# 환경 변수
+# 환경 변수 — MCP 활성화 (Gemini Search API 비용 제거)
 ENV NODE_ENV=production
 ENV PORT=8000
+ENV USE_MCP_RAW=true
+ENV MCP_GOOGLE_SEARCH_COMMAND=python3
 ARG COMMIT_HASH=unknown
 ENV COMMIT_HASH=${COMMIT_HASH}
 

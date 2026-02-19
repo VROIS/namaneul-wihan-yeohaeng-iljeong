@@ -249,6 +249,8 @@
 
 - **내부테스트 (2026-02-20)**: server:build OK (server_dist 972kb). lint·expo export 별도 확인.
 - **배포 mcp_phases (2026-02)**: 서버 시작 시 run-startup-migrations.ts가 자동으로 cities.mcp_phases, place_seed_raw.collection_phase·image_url 추가. 수동 SQL 불필요.
+- **MCP 관찰 방법**: (1) Admin `/admin` 대시보드 → overview 탭 "최근 동기화" (dataSyncLog). (2) API: `GET /api/admin/mcp-raw/status` 전체 현황, `GET /api/admin/mcp/workflow/status?runBatchId=xxx` 워크플로우 진행, `GET /api/admin/mcp/workflow/report?runBatchId=xxx` 상세 리포트. (3) Supabase Table Editor: `data_sync_log`, `place_seed_raw`. (4) 터미널: `npm run report:mcp`. (5) MCP 워크플로우: **스케줄 없음** — 서버 시작 시 1회 백그라운드 실행, 목표(BTS34→france30→europe30) 도달까지 한 도시 끝나면 다음 도시로 연쇄.
+- **배포 MCP (2026-02)**: Dockerfile에 Python3 + noapi-google-search-mcp + Chromium 추가. USE_MCP_RAW=true, MCP_GOOGLE_SEARCH_COMMAND=python3. 배포 시 Cursor MCP로 API 비용 없이 검색.
 - **배포**: 커밋·푸시 → Koyeb 자동 배포. 로컬 8082 = 내부테스트용, `.\dev\test-paris-a.ps1`.
 - **실제테스트**: 배포 URL `POST /api/routes/generate` (Paris 3일 등) → 200·일정 데이터 확인.
 

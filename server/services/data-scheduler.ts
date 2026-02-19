@@ -89,6 +89,15 @@ export class DataScheduler {
       console.log("[Scheduler] 🌱 서버 시작 - place_seed_sync 1회 실행...");
       await this.executeTask("place_seed_sync");
     }, 120000);
+
+    // MCP 워크플로우: 스케줄 없음. 서버 시작 시 1회 백그라운드 실행 → 목표(BTS34→france30→europe30) 도달까지 한 도시 끝나면 다음 도시로 연쇄.
+    setTimeout(async () => {
+      if (DataScheduler.isTaskDisabledByPolicy("mcp_workflow_france_phase1")) return;
+      console.log("[Scheduler] MCP 워크플로우 백그라운드 시작 (목표 도달까지 연쇄 실행)...");
+      this.executeTask("mcp_workflow_france_phase1").catch((e) =>
+        console.error("[Scheduler] MCP 워크플로우 실패:", e)
+      );
+    }, 180000); // 3분 후 (DB·API 키·마이그레이션 준비 대기)
   }
 
   private scheduleTaskIfNotPaused(taskName: string, cronExpression: string): void {
@@ -116,8 +125,7 @@ export class DataScheduler {
     // 🚨 위기 정보: 30분마다 (현재 정책상 PAUSED)
     this.scheduleTaskIfNotPaused("crisis_sync", "*/30 * * * *");
     
-    // ✅ MCP 프랑스 30 자동(1차 승인 실행): 매주 1회
-    this.scheduleTaskIfNotPaused("mcp_workflow_france_phase1", "0 2 * * 0");
+    // MCP 워크플로우: 스케줄 없음. 서버 시작 시 1회 백그라운드 실행 → 목표 도달까지 한 도시 끝나면 다음 도시로 연쇄.
 
     // ⏸️ 아래는 PAUSED (비용/크롤러 파이프라인)
     this.scheduleTaskIfNotPaused("mcp_raw_stage1", "0 2 * * 0");
@@ -594,20 +602,20 @@ export class DataScheduler {
 
   private async runMcpWorkflowFrancePhase1(): Promise<{ success: boolean; itemsProcessed: number; errors: string[] }> {
     try {
-      const { getMcpPhaseCities } = await import("../config/mcp-raw-data-final");
+      const { getMcpExecutionOrder } = await import("../config/mcp-raw-data-final");
       const { runMcpWorkflowStart } = await import("./mcp-raw-service");
-      const franceCities = getMcpPhaseCities("france30");
-      if (franceCities.length === 0) {
-        return { success: false, itemsProcessed: 0, errors: ["france30 도시 목록이 비어 있습니다."] };
+      const ordered = getMcpExecutionOrder();
+      if (ordered.length === 0) {
+        return { success: false, itemsProcessed: 0, errors: ["실행 순서 도시 목록이 비어 있습니다."] };
       }
 
-      const startCity = franceCities[0].nameEn;
-      const endCity = franceCities[franceCities.length - 1].nameEn;
+      const startCity = ordered[0].nameEn;
+      const endCity = ordered[ordered.length - 1].nameEn;
       const now = new Date();
       const pad = (n: number) => String(n).padStart(2, "0");
-      const runBatchId = `FR_AUTO_${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}`;
+      const runBatchId = `MCP_${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}`;
 
-      // 정책: 자동은 프랑스 30까지만 실행. 유럽 30은 별도 승인 후 수동 실행.
+      // 목표 도달까지: BTS34 → france30 → europe30 순서, 한 도시 끝나면 다음 도시로 연쇄
       const result = await runMcpWorkflowStart({
         startCity,
         endCity,
@@ -663,7 +671,7 @@ export class DataScheduler {
         place_seed_sync: "6시간마다 (연쇄 실행)",
         mcp_raw_stage1: "주 1회 (일 02:00)",
         mcp_raw_stage2: "주 1회 (일 02:30)",
-        mcp_workflow_france_phase1: "주 1회 (일 02:00, 프랑스30 자동)",
+        mcp_workflow_france_phase1: "서버 시작 시 1회 (목표 도달까지 연쇄, 스케줄 없음)",
       };
       return {
         taskName,
