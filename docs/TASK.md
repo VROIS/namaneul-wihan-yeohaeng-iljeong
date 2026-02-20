@@ -160,7 +160,7 @@
 | D-M3 | **Admin API** mcp-raw/stage1, stage2 | 완료 | runBatchId 연동 완료 |
 | D-M4 | **스케줄러** mcp_raw_stage1·2, place_seed_sync 비활성화 | 완료 | 비용 차단 정책 반영 완료 |
 | D-M5 | **대시보드** MCP 섹션, 기존 시딩·크롤러 UI 축소 | 진행 | API는 준비 완료, UI 정리 잔여 |
-| D-M6 | **BTS 2026 MCP 도시 수집** | 완료 (2026-02-20) | bts2026 phase 34개 도시, DRAFT_BTS2026, buildAppExecutionOrder(BTS 우선). collection_phase, image_url, priceEur. cities.mcp_phases. **cities.bts_rank** (1~34) 추가: resolveTargetCities가 bts_rank 우선 사용, 시드 시 bts_rank 자동 설정. |
+| D-M6 | **BTS 2026 MCP 도시 수집** | 완료 (2026-02-20) | bts2026 phase 34개 도시, DRAFT_BTS2026, buildAppExecutionOrder(BTS 우선). collection_phase, image_url, priceEur. cities.mcp_phases. **cities.bts_rank** (1~34). resolveTargetCities: BTS34(bts_rank)→France30→Europe30 우선순위 연쇄, 중복 제외. France30 기존 로우데이터는 image+price만 보강. |
 | D-M7 | **Gemini → MCP 전환** | 완료 (2026-02-20) | mcp-client.ts, USE_MCP_RAW=true 시 1단계 MCP google_search 사용. cities-by-phase 시드 API. |
 
 ### 스트림 D (구): 기존 place-seeder (MCP 전환 시 중단)

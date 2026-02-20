@@ -230,26 +230,29 @@ async function resolveTargetCities(options: Stage1RunOptions): Promise<TargetCit
     return [{ id: row.id, nameKo: row.nameKo, nameEn: row.nameEn || row.nameKo, phase: matched?.phase }];
   }
 
-  // 1) BTS 34 도시 우선: bts_rank가 있는 도시를 순서대로 사용
+  // 우선순위: BTS34 → France30 → Europe30 (buildAppExecutionOrder 순서, 중복 제외)
+  // bts_rank 있으면 BTS는 DB에서, 나머지는 config 매칭
+  const seen = new Set<string>();
+  const results: TargetCity[] = [];
+
   const btsRows = await db
     .select({ id: cities.id, nameKo: cities.name, nameEn: cities.nameEn })
     .from(cities)
     .where(isNotNull(cities.btsRank))
     .orderBy(asc(cities.btsRank));
 
-  if (btsRows.length > 0) {
-    return btsRows.map((row) => ({
-      id: row.id,
-      nameKo: row.nameKo,
-      nameEn: row.nameEn || row.nameKo,
-      phase: "bts2026" as const,
-    }));
+  for (const row of btsRows) {
+    const key = (row.nameEn || row.nameKo || "").toLowerCase().trim();
+    if (key && !seen.has(key)) {
+      seen.add(key);
+      results.push({ id: row.id, nameKo: row.nameKo, nameEn: row.nameEn || row.nameKo, phase: "bts2026" });
+    }
   }
 
-  // 2) Fallback: config 기반 (france30/europe30 등)
   const configured = getMcpExecutionOrder();
-  const results: TargetCity[] = [];
   for (const c of configured) {
+    const key = c.nameEn.toLowerCase().trim();
+    if (!key || seen.has(key)) continue;
     const [row] = await db
       .select({ id: cities.id, nameKo: cities.name, nameEn: cities.nameEn })
       .from(cities)
@@ -258,6 +261,7 @@ async function resolveTargetCities(options: Stage1RunOptions): Promise<TargetCit
       )
       .limit(1);
     if (row) {
+      seen.add(key);
       results.push({ id: row.id, nameKo: row.nameKo, nameEn: row.nameEn || c.nameEn, phase: c.phase });
     }
   }
