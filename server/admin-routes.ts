@@ -1823,7 +1823,9 @@ export function registerAdminRoutes(app: Express) {
         const phases = (existing?.mcpPhases as string[] | null) || [];
         if (!phases.includes(phase)) phases.push(phase);
         if (existing) {
-          await db.update(cities).set({ mcpPhases: phases, nameEn: c.nameEn }).where(eq(cities.id, existing.id));
+          const updateData: Record<string, unknown> = { mcpPhases: phases, nameEn: c.nameEn };
+          if (phase === "bts2026") updateData.btsRank = c.rank;
+          await db.update(cities).set(updateData).where(eq(cities.id, existing.id));
           upserted++;
           continue;
         }
@@ -1839,6 +1841,7 @@ export function registerAdminRoutes(app: Express) {
             timezone,
             primaryLanguage: lang,
             mcpPhases: [phase],
+            btsRank: c.rank,
           });
           upserted++;
         } else if (phase === "bts2026" && !coords) {

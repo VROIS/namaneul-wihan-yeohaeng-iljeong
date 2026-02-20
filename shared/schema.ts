@@ -63,6 +63,7 @@ export const cities = pgTable("cities", {
   mcpRankBasis: text("mcp_rank_basis"), // euromonitor_un_tourism_2024_2025
   mcpRankNote: text("mcp_rank_note"),
   mcpRankUpdatedAt: timestamp("mcp_rank_updated_at"),
+  btsRank: integer("bts_rank"), // BTS 2026 공연 도시 순번 1~34 (null=해당없음)
   tier: integer("tier").default(1),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
   updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),

@@ -15,7 +15,7 @@
 |------|------|
 | **마지막 작업일** | 2026-02-20 |
 | **마지막 작업** | **mcp-raw-service API 비용 제거**: Stage1 USE_MCP_RAW=false 분기 제거(MCP만 사용), Stage2/Stage3 getSearchTools 제거. Gemini Search API 호출 0건으로 비용 절감. pipeline-v3 5대 가격원칙 이미 적용됨. |
-| **다음 할 일** | BTS 도시 시드 후 MCP 1단계 실행 검증. USE_MCP_RAW=true + noapi-google-search-mcp 설치 필요 |
+| **다음 할 일** | 배포 후 BTS 시드 API 호출 → MCP 1단계 자동 실행 검증. USE_MCP_RAW=true + noapi-google-search-mcp 설치 필요 |
 | **배포 상태** | Koyeb 정상 (200 OK). 커밋 푸시 후 자동 배포. |
 | **브랜치** | cursor-dev |
 
@@ -160,7 +160,7 @@
 | D-M3 | **Admin API** mcp-raw/stage1, stage2 | 완료 | runBatchId 연동 완료 |
 | D-M4 | **스케줄러** mcp_raw_stage1·2, place_seed_sync 비활성화 | 완료 | 비용 차단 정책 반영 완료 |
 | D-M5 | **대시보드** MCP 섹션, 기존 시딩·크롤러 UI 축소 | 진행 | API는 준비 완료, UI 정리 잔여 |
-| D-M6 | **BTS 2026 MCP 도시 수집** | 완료 (2026-02-20) | bts2026 phase 34개 도시, DRAFT_BTS2026, buildAppExecutionOrder(BTS 우선). collection_phase, image_url, priceEur. cities.mcp_phases. |
+| D-M6 | **BTS 2026 MCP 도시 수집** | 완료 (2026-02-20) | bts2026 phase 34개 도시, DRAFT_BTS2026, buildAppExecutionOrder(BTS 우선). collection_phase, image_url, priceEur. cities.mcp_phases. **cities.bts_rank** (1~34) 추가: resolveTargetCities가 bts_rank 우선 사용, 시드 시 bts_rank 자동 설정. |
 | D-M7 | **Gemini → MCP 전환** | 완료 (2026-02-20) | mcp-client.ts, USE_MCP_RAW=true 시 1단계 MCP google_search 사용. cities-by-phase 시드 API. |
 
 ### 스트림 D (구): 기존 place-seeder (MCP 전환 시 중단)
@@ -249,6 +249,7 @@
 
 - **내부테스트 (2026-02-20)**: server:build OK (server_dist 972kb). lint·expo export 별도 확인.
 - **배포 mcp_phases (2026-02)**: 서버 시작 시 run-startup-migrations.ts가 자동으로 cities.mcp_phases, place_seed_raw.collection_phase·image_url 추가. 수동 SQL 불필요.
+- **BTS 34 도시 시드 (2026-02-20)**: (1) 서버 시작 → runStartupMigrations로 cities.bts_rank 컬럼 자동 추가. (2) `POST /api/admin/seed/cities-by-phase` body `{ "phase": "bts2026" }` 호출 → 34개 도시 insert/update + bts_rank 1~34 설정. (3) resolveTargetCities가 bts_rank 있는 도시를 BTS 순서대로 반환 → MCP Stage 1이 34도시×5카테고리 시딩. 목표: 5,100곳(중복 제외 시 감소).
 - **MCP 관찰 방법**: (1) Admin `/admin` 대시보드 → overview 탭 "최근 동기화" (dataSyncLog). (2) API: `GET /api/admin/mcp-raw/status` 전체 현황, `GET /api/admin/mcp/workflow/status?runBatchId=xxx` 워크플로우 진행, `GET /api/admin/mcp/workflow/report?runBatchId=xxx` 상세 리포트. (3) Supabase Table Editor: `data_sync_log`, `place_seed_raw`. (4) 터미널: `npm run report:mcp`. (5) MCP 워크플로우: **스케줄 없음** — 서버 시작 시 1회 백그라운드 실행, 목표(BTS34→france30→europe30) 도달까지 한 도시 끝나면 다음 도시로 연쇄.
 - **배포 MCP (2026-02)**: Dockerfile에 Python3 + noapi-google-search-mcp + Chromium 추가. USE_MCP_RAW=true, MCP_GOOGLE_SEARCH_COMMAND=python3. 배포 시 Cursor MCP로 API 비용 없이 검색.
 - **배포**: 커밋·푸시 → Koyeb 자동 배포. 로컬 8082 = 내부테스트용, `.\dev\test-paris-a.ps1`.
@@ -270,6 +271,7 @@
 
 | 날짜 | 내용 |
 |------|------|
+| 2026-02-20 | **BTS bts_rank 구현**: cities.bts_rank 컬럼, seed/cities-by-phase bts2026 시 bts_rank 설정, resolveTargetCities bts_rank 우선. migrations/0007, run-startup-migrations, schema, admin-routes, mcp-raw-service. |
 | 2026-02-20 | **배포 후 테스트 절차**: TASK §7에 5단계 체크리스트 추가 (사용자·AI 공통). |
 | 2026-02-20 | **.vscode/settings.json**: terminal.integrated.defaultLocation=view (Cursor OOM 대응). |
 | 2026-02-20 | **mcp-raw-service API 비용 제거**: Stage1 USE_MCP_RAW=false 분기 제거(MCP만 사용), Stage2/Stage3 getSearchTools 제거. Gemini Search API 호출 0건. |

@@ -1,6 +1,6 @@
 import { db } from "../db";
 import { cities, placeSeedRaw, placeNubiReasons, celebEvidence, places, dataSyncLog } from "@shared/schema";
-import { and, eq, gt, sql, asc } from "drizzle-orm";
+import { and, eq, gt, sql, asc, isNotNull } from "drizzle-orm";
 import { getMcpExecutionOrder, getMcpCitySourceMeta } from "../config/mcp-raw-data-final";
 import { getMcpClient, resetMcpClient } from "./mcp-client";
 
@@ -217,19 +217,37 @@ function normalizeStage2Items(items: any[]): Stage2Item[] {
 
 async function resolveTargetCities(options: Stage1RunOptions): Promise<TargetCity[]> {
   if (!db) return [];
-  const configured = getMcpExecutionOrder();
 
-    if (options.cityId) {
+  if (options.cityId) {
     const [row] = await db
       .select({ id: cities.id, nameKo: cities.name, nameEn: cities.nameEn })
       .from(cities)
       .where(eq(cities.id, options.cityId))
       .limit(1);
     if (!row) return [];
+    const configured = getMcpExecutionOrder();
     const matched = configured.find((c) => (row.nameEn && c.nameEn.toLowerCase() === row.nameEn.toLowerCase()) || c.nameKo === row.nameKo);
     return [{ id: row.id, nameKo: row.nameKo, nameEn: row.nameEn || row.nameKo, phase: matched?.phase }];
   }
 
+  // 1) BTS 34 도시 우선: bts_rank가 있는 도시를 순서대로 사용
+  const btsRows = await db
+    .select({ id: cities.id, nameKo: cities.name, nameEn: cities.nameEn })
+    .from(cities)
+    .where(isNotNull(cities.btsRank))
+    .orderBy(asc(cities.btsRank));
+
+  if (btsRows.length > 0) {
+    return btsRows.map((row) => ({
+      id: row.id,
+      nameKo: row.nameKo,
+      nameEn: row.nameEn || row.nameKo,
+      phase: "bts2026" as const,
+    }));
+  }
+
+  // 2) Fallback: config 기반 (france30/europe30 등)
+  const configured = getMcpExecutionOrder();
   const results: TargetCity[] = [];
   for (const c of configured) {
     const [row] = await db

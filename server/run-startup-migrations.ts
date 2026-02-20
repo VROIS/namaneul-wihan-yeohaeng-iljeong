@@ -28,7 +28,14 @@ export async function runStartupMigrations(): Promise<void> {
         ADD COLUMN IF NOT EXISTS "image_url" text;
     `);
     console.log("[Migration] ✅ 0006 mcp_phases/collection_phase/image_url 적용 완료");
+
+    // 0007: cities.bts_rank (BTS 2026 공연 도시 1~34)
+    await pool.query(`
+      ALTER TABLE "cities"
+        ADD COLUMN IF NOT EXISTS "bts_rank" integer;
+    `);
+    console.log("[Migration] ✅ 0007 bts_rank 적용 완료");
   } catch (err) {
-    console.warn("[Migration] 0006 스킵 또는 실패:", (err as Error).message);
+    console.warn("[Migration] 스킵 또는 실패:", (err as Error).message);
   }
 }
