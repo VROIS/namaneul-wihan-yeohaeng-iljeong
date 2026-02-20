@@ -27,8 +27,8 @@ alwaysApply: true
 
 | 항목 | 내용 |
 |------|------|
-| 마지막 작업 | BTS 2026 MCP 도시 수집 구현. bts2026 34개 도시, mcp-client.ts, USE_MCP_RAW, cities-by-phase 시드, collection_phase, image_url. |
-| 다음 할 일 | BTS 도시 시드(`POST /api/admin/seed/cities-by-phase` body: `{phase:"bts2026"}`) 후 MCP 1단계 실행. USE_MCP_RAW=true 필요. |
+| 마지막 작업 | 세션 문서화·커밋·푸시. mcp-raw-service API 비용 제거, .vscode 터미널 설정, 배포 후 테스트 절차 TASK §7 추가. |
+| 다음 할 일 | 배포 후 테스트(TASK §7 5단계). BTS 도시 시드 후 MCP 1단계 실행. USE_MCP_RAW=true 필요. |
 | 브랜치 | cursor-dev |
 | 배포 상태 | Koyeb 커밋·푸시 반영됨. |
 

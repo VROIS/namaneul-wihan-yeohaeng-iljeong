@@ -1,9 +1,8 @@
 import { db } from "../db";
 import { cities, placeSeedRaw, placeNubiReasons, celebEvidence, places, dataSyncLog } from "@shared/schema";
 import { and, eq, gt, sql, asc } from "drizzle-orm";
-import { getSearchTools } from "./gemini-search-limiter";
 import { getMcpExecutionOrder, getMcpCitySourceMeta } from "../config/mcp-raw-data-final";
-import { getMcpClient } from "./mcp-client";
+import { getMcpClient, resetMcpClient } from "./mcp-client";
 
 const USE_MCP_RAW = process.env.USE_MCP_RAW === "true";
 
@@ -361,14 +360,12 @@ async function runStage3ForCityCategory(
   try {
     const { GoogleGenAI } = await import("@google/genai");
     const ai = new GoogleGenAI({ apiKey });
-    const tools = getSearchTools("mcp_raw_stage3");
-
+    // API 비용 절감: getSearchTools 제거, tools 없이 실행 (로우데이터 품질은 MCP 1·2단계로 충분)
     for (let i = 0; i < rows.length; i += batchSize) {
       const batch = rows.slice(i, i + batchSize);
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash-lite",
         contents: buildStage3Prompt(city.nameEn, batch),
-        config: tools ? { tools } : {},
       });
       const text = (response as any).text || "";
       const parsed = extractJsonArray(text);
@@ -435,11 +432,10 @@ async function runStage2ForCityCategory(city: TargetCity, category: SeedCategory
   try {
     const { GoogleGenAI } = await import("@google/genai");
     const ai = new GoogleGenAI({ apiKey });
-    const tools = getSearchTools("mcp_raw_stage2");
+    // API 비용 절감: getSearchTools 제거, tools 없이 실행 (로우데이터 품질은 MCP 1단계로 충분)
     const response = await ai.models.generateContent({
       model: "gemini-2.5-flash-lite",
       contents: buildStage2Prompt(city.nameKo, city.nameEn, placeList, celebListText),
-      config: tools ? { tools } : {},
     });
     const text = (response as any).text || "";
     const parsed = extractJsonArray(text);
@@ -582,29 +578,20 @@ async function runStage1ForCityCategory(city: TargetCity, category: SeedCategory
 
   let text = "";
   try {
-    if (USE_MCP_RAW) {
-      const mcp = await getMcpClient();
-      const query = buildStage1SearchQuery(city.nameEn, category);
-      const searchResults = await mcp.googleSearch(query, { num: 30 });
-      const parsePrompt = `[검색 결과]\n${searchResults.slice(0, 15000)}\n\n위 검색 결과를 바탕으로 ${city.nameKo}(${city.nameEn})의 ${CATEGORY_KO_LABEL[category]} 상위 30곳을 JSON 배열로 추출하세요. 각 장소마다 imageUrl(대표 이미지 URL 1개)과 priceEur(입장료/식비 EUR, 0=무료)를 반드시 포함. 필드: rank, nameKo, nameEn, googleSearchNote, googleReviewCountNote, googleImageCountNote, imageUrl, priceEur, source. JSON 배열만 반환.`;
-      const { GoogleGenAI } = await import("@google/genai");
-      const ai = new GoogleGenAI({ apiKey });
-      const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash-lite",
-        contents: parsePrompt,
-      });
-      text = (response as any).text || "";
-    } else {
-      const { GoogleGenAI } = await import("@google/genai");
-      const ai = new GoogleGenAI({ apiKey });
-      const tools = getSearchTools("mcp_raw_stage1");
-      const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash-lite",
-        contents: buildStage1Prompt(city.nameKo, city.nameEn, category),
-        config: tools ? { tools } : {},
-      });
-      text = (response as any).text || "";
+    if (!USE_MCP_RAW) {
+      return { success: false, saved: 0, error: "USE_MCP_RAW=true 필요. API 비용 절감을 위해 MCP만 사용합니다." };
     }
+    const mcp = await getMcpClient();
+    const query = buildStage1SearchQuery(city.nameEn, category);
+    const searchResults = await mcp.googleSearch(query, { num: 30 });
+    const parsePrompt = `[검색 결과]\n${searchResults.slice(0, 15000)}\n\n위 검색 결과를 바탕으로 ${city.nameKo}(${city.nameEn})의 ${CATEGORY_KO_LABEL[category]} 상위 30곳을 JSON 배열로 추출하세요. 각 장소마다 imageUrl(대표 이미지 URL 1개)과 priceEur(입장료/식비 EUR, 0=무료)를 반드시 포함. 필드: rank, nameKo, nameEn, googleSearchNote, googleReviewCountNote, googleImageCountNote, imageUrl, priceEur, source. JSON 배열만 반환.`;
+    const { GoogleGenAI } = await import("@google/genai");
+    const ai = new GoogleGenAI({ apiKey });
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash-lite",
+      contents: parsePrompt,
+    });
+    text = (response as any).text || "";
     const parsed = extractJsonArray(text);
     const items = normalizeStage1Items(parsed);
 
@@ -754,6 +741,7 @@ export async function runMcpRawStage1(options: Stage1RunOptions = {}): Promise<{
         });
       }
     }
+    if (USE_MCP_RAW) resetMcpClient();
   }
 
   return {
@@ -1042,6 +1030,8 @@ export async function runMcpWorkflowStart(options: WorkflowStartOptions = {}): P
         errors.push(`${city.nameEn}/${category}/stage2: ${stage2Run.result.errors.join(", ") || "실패"}`);
       }
     }
+    // 도시당 MCP(Chromium) 재시작으로 메모리 해제 — exit 255 방지
+    if (USE_MCP_RAW) resetMcpClient();
   }
 
   return {
@@ -1113,6 +1103,7 @@ export async function runMcpWorkflowResume(options: {
         }
       }
     }
+    if (USE_MCP_RAW) resetMcpClient();
   }
 
   return {

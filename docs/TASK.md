@@ -14,7 +14,7 @@
 | 항목 | 내용 |
 |------|------|
 | **마지막 작업일** | 2026-02-20 |
-| **마지막 작업** | **BTS 2026 MCP 도시 수집**: bts2026 phase 34개 도시, collection_phase, image_url, priceEur. USE_MCP_RAW=true 시 MCP 검색 사용. cities-by-phase 시드, mcp-client.ts |
+| **마지막 작업** | **mcp-raw-service API 비용 제거**: Stage1 USE_MCP_RAW=false 분기 제거(MCP만 사용), Stage2/Stage3 getSearchTools 제거. Gemini Search API 호출 0건으로 비용 절감. pipeline-v3 5대 가격원칙 이미 적용됨. |
 | **다음 할 일** | BTS 도시 시드 후 MCP 1단계 실행 검증. USE_MCP_RAW=true + noapi-google-search-mcp 설치 필요 |
 | **배포 상태** | Koyeb 정상 (200 OK). 커밋 푸시 후 자동 배포. |
 | **브랜치** | cursor-dev |
@@ -254,12 +254,25 @@
 - **배포**: 커밋·푸시 → Koyeb 자동 배포. 로컬 8082 = 내부테스트용, `.\dev\test-paris-a.ps1`.
 - **실제테스트**: 배포 URL `POST /api/routes/generate` (Paris 3일 등) → 200·일정 데이터 확인.
 
+### 배포 후 테스트 절차 (사용자·AI 공통)
+
+| 순서 | 방법 | 확인 항목 |
+|:----:|------|----------|
+| 1 | 브라우저 `https://legal-dannye-dbstour-4e6b86d5.koyeb.app/` 접속 | 페이지 로드, 200 OK |
+| 2 | `https://legal-dannye-dbstour-4e6b86d5.koyeb.app/admin` 접속 | 관리자 대시보드 로드 |
+| 3 | 앱에서 일정 생성: Paris 3일 등 입력 → 생성 | 일정 데이터 반환, 슬롯 5대 필수요소 채움 |
+| 4 | (선택) API 직접: `POST .../api/routes/generate` body `{destination:"Paris",...}` | 200, JSON 일정 |
+| 5 | (선택) `GET .../api/admin/api-services` | API 상태·일일 호출 수 |
+
 ---
 
 ## 변경 이력
 
 | 날짜 | 내용 |
 |------|------|
+| 2026-02-20 | **배포 후 테스트 절차**: TASK §7에 5단계 체크리스트 추가 (사용자·AI 공통). |
+| 2026-02-20 | **.vscode/settings.json**: terminal.integrated.defaultLocation=view (Cursor OOM 대응). |
+| 2026-02-20 | **mcp-raw-service API 비용 제거**: Stage1 USE_MCP_RAW=false 분기 제거(MCP만 사용), Stage2/Stage3 getSearchTools 제거. Gemini Search API 호출 0건. |
 | 2026-02-20 | **BTS 2026 MCP 구현 완료**: bts2026 34개 도시, mcp-client.ts, USE_MCP_RAW, cities-by-phase 시드, collection_phase, image_url. |
 | 2026-02-19 | **MCP 전환 설계**: nubi-mcp-transition.mdc 추가. Gemini→Cursor MCP(noapi-google-search-mcp) 백엔드 연결, 이미지·가격 수집 강화. |
 | 2026-02-19 | **place_images 통합·품질 강화**: place_images 테이블(56,626건) 통합, isUsableImageUrl 필터(img 불가 URL 제외), 슬롯 이미지 빈칸 방지(Google API fallback), audit-place-images-urls.ts 감사 스크립트 |
