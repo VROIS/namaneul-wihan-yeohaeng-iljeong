@@ -143,3 +143,10 @@ export async function getMcpClient(): Promise<McpClient> {
   if (!clientInstance) clientInstance = new McpClient();
   return clientInstance;
 }
+
+/** MCP Python/Chromium 프로세스 종료 후 메모리 해제. 여러 검색 후 OOM 방지용. */
+export function resetMcpClient(): void {
+  if (clientInstance) {
+    clientInstance.disconnect();
+  }
+}
