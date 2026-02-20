@@ -579,13 +579,13 @@ async function runStage2ForCityCategory(city: TargetCity, category: SeedCategory
 
 function buildStage1SearchQuery(cityEn: string, category: SeedCategory): string {
   const q: Record<SeedCategory, string> = {
-    attraction: "top museums landmarks tourist attractions",
-    restaurant: "best restaurants cafes dining",
-    healing: "parks spas wellness quiet spots",
-    adventure: "theme parks adventure activities zoo outdoor",
-    hotspot: "Instagram spots popular places trending",
+    attraction: "top museums landmarks tourist attractions tickets price entrance fee",
+    restaurant: "best restaurants cafes dining average meal cost price 2024",
+    healing: "parks spas wellness quiet spots free entry nature",
+    adventure: "theme parks adventure activities zoo outdoor price tickets",
+    hotspot: "Instagram spots popular places trending photography fee",
   };
-  return `${cityEn} ${q[category]} top 30 2024`;
+  return `${cityEn} ${q[category]} top 30 2024 with price and image`;
 }
 
 async function runStage1ForCityCategory(city: TargetCity, category: SeedCategory): Promise<{
@@ -606,7 +606,7 @@ async function runStage1ForCityCategory(city: TargetCity, category: SeedCategory
     const mcp = await getMcpClient();
     const query = buildStage1SearchQuery(city.nameEn, category);
     const searchResults = await mcp.googleSearch(query, { num: 30 });
-    const parsePrompt = `[검색 결과]\n${searchResults.slice(0, 15000)}\n\n위 검색 결과를 바탕으로 ${city.nameKo}(${city.nameEn})의 ${CATEGORY_KO_LABEL[category]} 상위 30곳을 JSON 배열로 추출하세요. 각 장소마다 imageUrl(대표 이미지 URL 1개)과 priceEur(입장료/식비 EUR, 0=무료)를 반드시 포함. 필드: rank, nameKo, nameEn, googleSearchNote, googleReviewCountNote, googleImageCountNote, imageUrl, priceEur, source. JSON 배열만 반환.`;
+    const parsePrompt = `[검색 결과]\n${searchResults.slice(0, 15000)}\n\n위 검색 결과를 바탕으로 ${city.nameKo}(${city.nameEn})의 ${CATEGORY_KO_LABEL[category]} 상위 30곳을 JSON 배열로 추출하세요.\n\n[파싱 가이드]\n1. 각 장소마다 **대표 이미지 URL 1개**(imageUrl)를 반드시 포함하세요.\n2. 각 장소의 **입장료 또는 1인당 평균 식비**(priceEur)를 EUR 단위 숫자로 추출하세요. (무료 장소: 0, 정보를 찾기 어려우면 합리적인 추측값이라도 적어주세요. 절대 NULL로 두지 마세요.)\n3. 필드: rank, nameKo, nameEn, googleSearchNote, googleReviewCountNote, googleImageCountNote, imageUrl, priceEur, source\n4. JSON 배열만 반환.`;
     const { GoogleGenAI } = await import("@google/genai");
     const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
