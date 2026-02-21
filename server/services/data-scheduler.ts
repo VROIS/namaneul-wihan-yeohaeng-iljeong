@@ -153,10 +153,12 @@ export class DataScheduler {
     // [DB 대통합 Step 5] 물류 트럭: 매일 새벽 4시 (1차) → 4시 30분 (2차)
     this.scheduleTask("sync_master_place_seed", "0 4 * * *");
     this.scheduleTask("sync_prices_to_seed", "30 4 * * *");
+    this.scheduleTask("backfill_google_place_id", "0 5 * * *"); // 매일 05:00 UTC — 1도시×5카테고리 백필
     
     console.log("[Scheduler] ✅ 스케줄 설정 완료:");
     console.log("  - 🌤️ 날씨: 매 시간");
     console.log("  - 💱 환율: 하루 3번");
+    console.log("  - 🏷️ googlePlaceId 백필: 매일 05:00 (1도시/일, BTS→FR→EU)");
     console.log("  - 🚨 위기 정보: 수동 실행 (자동 중지)");
     console.log(`  - ⏸️ 일시 중단: ${DataScheduler.PAUSED_TASKS.size}개 크롤러 (재활성화: PAUSED_TASKS에서 제거)`);
   }
@@ -272,6 +274,9 @@ export class DataScheduler {
           break;
         case "sync_prices_to_seed":
           result = await this.runSyncPricesToSeed();
+          break;
+        case "backfill_google_place_id":
+          result = await this.runBackfillGooglePlaceId();
           break;
         default:
           console.warn(`[Scheduler] Unknown task: ${taskName}`);
@@ -557,6 +562,15 @@ export class DataScheduler {
     }
   }
 
+  private async runBackfillGooglePlaceId(): Promise<{ success: boolean; itemsProcessed: number; errors: string[] }> {
+    try {
+      const { runBackfillGooglePlaceId } = await import("./sync-place-seed-trucks");
+      return runBackfillGooglePlaceId();
+    } catch (error: any) {
+      return { success: false, itemsProcessed: 0, errors: [error?.message || String(error)] };
+    }
+  }
+
   private async runScoreAggregation(): Promise<{ success: boolean; itemsProcessed: number; errors: string[] }> {
     try {
       const { aggregateAllScores } = await import("./score-aggregator");
@@ -703,6 +717,7 @@ export class DataScheduler {
         place_seed_sync: "6시간마다 (연쇄 실행)",
         sync_master_place_seed: "매일 04:00 KST (1차 물류 트럭)",
         sync_prices_to_seed: "매일 04:30 KST (2차 물류 트럭)",
+        backfill_google_place_id: "매일 05:00 UTC (1도시/일 googlePlaceId 백필)",
         mcp_raw_stage1: "주 1회 (일 02:00)",
         mcp_raw_stage2: "주 1회 (일 02:30)",
         mcp_workflow_france_phase1: "서버 시작 시 1회 (목표 도달까지 연쇄, 스케줄 없음)",
