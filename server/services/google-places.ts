@@ -18,7 +18,7 @@ export const apiCallTracker = {
   date: new Date().toDateString(),
   count: 0,
   blocked: 0,
-  
+
   canMakeRequest(): boolean {
     const today = new Date().toDateString();
     if (this.date !== today) {
@@ -30,21 +30,21 @@ export const apiCallTracker = {
     }
     return this.count < DAILY_API_LIMIT;
   },
-  
+
   recordCall(): void {
     this.count++;
     if (this.count % 50 === 0) {
       console.log(`[Places API] 일일 사용량: ${this.count}/${DAILY_API_LIMIT} (${Math.round(this.count / DAILY_API_LIMIT * 100)}%)`);
     }
   },
-  
+
   recordBlocked(): void {
     this.blocked++;
     if (this.blocked === 1 || this.blocked % 10 === 0) {
       console.warn(`⚠️ [Places API] 일일 한도 초과! ${this.count}/${DAILY_API_LIMIT} 도달. ${this.blocked}건 차단됨.`);
     }
   },
-  
+
   getStatus() {
     return {
       date: this.date,
@@ -68,15 +68,15 @@ interface GooglePlaceResult {
   types?: string[];
   primaryType?: string;
   primaryTypeDisplayName?: { text: string; languageCode: string };
-  
-  photos?: Array<{ 
-    name: string; 
-    widthPx: number; 
+
+  photos?: Array<{
+    name: string;
+    widthPx: number;
     heightPx: number;
     authorAttributions?: Array<{ displayName: string; uri: string }>;
   }>;
-  
-  regularOpeningHours?: { 
+
+  regularOpeningHours?: {
     weekdayDescriptions: string[];
     openNow?: boolean;
     periods?: Array<{
@@ -88,7 +88,7 @@ interface GooglePlaceResult {
     openNow?: boolean;
     weekdayDescriptions?: string[];
   };
-  
+
   reviews?: Array<{
     name: string;
     rating: number;
@@ -98,23 +98,23 @@ interface GooglePlaceResult {
     publishTime?: string;
     relativePublishTimeDescription?: string;
   }>;
-  
+
   websiteUri?: string;
   googleMapsUri?: string;
   internationalPhoneNumber?: string;
   nationalPhoneNumber?: string;
-  
+
   editorialSummary?: { text: string; languageCode: string };
-  
+
   businessStatus?: string;
   utcOffsetMinutes?: number;
-  
+
   delivery?: boolean;
   dineIn?: boolean;
   takeout?: boolean;
   curbsidePickup?: boolean;
   reservable?: boolean;
-  
+
   servesBeer?: boolean;
   servesWine?: boolean;
   servesBreakfast?: boolean;
@@ -124,24 +124,24 @@ interface GooglePlaceResult {
   servesVegetarianFood?: boolean;
   servesCoffee?: boolean;
   servesDessert?: boolean;
-  
+
   goodForChildren?: boolean;
   goodForGroups?: boolean;
   goodForWatchingSports?: boolean;
-  
+
   liveMusic?: boolean;
   outdoorSeating?: boolean;
   restroom?: boolean;
   menuForChildren?: boolean;
   allowsDogs?: boolean;
-  
+
   accessibilityOptions?: {
     wheelchairAccessibleParking?: boolean;
     wheelchairAccessibleEntrance?: boolean;
     wheelchairAccessibleRestroom?: boolean;
     wheelchairAccessibleSeating?: boolean;
   };
-  
+
   parkingOptions?: {
     freeParkingLot?: boolean;
     paidParkingLot?: boolean;
@@ -151,19 +151,19 @@ interface GooglePlaceResult {
     freeGarageParking?: boolean;
     paidGarageParking?: boolean;
   };
-  
+
   paymentOptions?: {
     acceptsCreditCards?: boolean;
     acceptsDebitCards?: boolean;
     acceptsCashOnly?: boolean;
     acceptsNfc?: boolean;
   };
-  
+
   priceRange?: {
     startPrice?: { currencyCode: string; units: string };
     endPrice?: { currencyCode: string; units: string };
   };
-  
+
   attributions?: Array<{ provider: string; providerUri: string }>;
 }
 
@@ -172,7 +172,7 @@ interface SearchNearbyResponse {
   nextPageToken?: string;
 }
 
-interface PlaceDetailsResponse extends GooglePlaceResult {}
+interface PlaceDetailsResponse extends GooglePlaceResult { }
 
 export class GooglePlacesFetcher {
   // 🎯 API 키를 동적으로 가져옴 (DB에서 로드 후 사용 가능)
@@ -224,6 +224,49 @@ export class GooglePlacesFetcher {
   // 외부에서 API 사용 현황 조회 가능
   getApiUsageStatus() {
     return apiCallTracker.getStatus();
+  }
+
+  async searchText(
+    query: string,
+    latitude: number,
+    longitude: number,
+    radiusMeters: number = 50000
+  ): Promise<GooglePlaceResult[]> {
+    const requestBody = {
+      textQuery: query,
+      locationBias: {
+        circle: {
+          center: { latitude, longitude },
+          radius: radiusMeters,
+        },
+      },
+    };
+
+    const fieldMask = [
+      "places.id",
+      "places.displayName",
+      "places.formattedAddress",
+      "places.location",
+      "places.userRatingCount",
+      "places.types",
+      "places.primaryType",
+      "places.photos",
+      "places.googleMapsUri",
+      "places.businessStatus",
+    ].join(",");
+
+    const response = await this.makeRequest<SearchNearbyResponse>(
+      `${GOOGLE_PLACES_BASE_URL}:searchText`,
+      {
+        method: "POST",
+        headers: {
+          "X-Goog-FieldMask": fieldMask,
+        },
+        body: JSON.stringify(requestBody),
+      }
+    );
+
+    return response.places || [];
   }
 
   async searchNearby(
@@ -327,7 +370,7 @@ export class GooglePlacesFetcher {
     seedCategory?: "attraction" | "restaurant" | "healing" | "adventure" | "hotspot"
   ): Promise<number> {
     const existingPlace = await storage.getPlaceByGoogleId(googlePlace.id);
-    
+
     const priceLevelMap: Record<string, number> = {
       PRICE_LEVEL_FREE: 0,
       PRICE_LEVEL_INEXPENSIVE: 1,
@@ -336,7 +379,7 @@ export class GooglePlacesFetcher {
       PRICE_LEVEL_VERY_EXPENSIVE: 4,
     };
 
-    const photoUrls = googlePlace.photos?.slice(0, 10).map(p => 
+    const photoUrls = googlePlace.photos?.slice(0, 10).map(p =>
       `https://places.googleapis.com/v1/${p.name}/media?maxWidthPx=1200&key=${this.getApiKey()}`
     ) || [];
 
@@ -369,7 +412,7 @@ export class GooglePlacesFetcher {
       priceLevel: googlePlace.priceLevel ? priceLevelMap[googlePlace.priceLevel] : undefined,
       photoUrls,
       openingHours: (openingHours && typeof openingHours === "object" && Object.keys(openingHours).length > 0) ? openingHours : undefined,
-      
+
       // ✅ 이전에 누락되었던 필수 필드들 (Basic 등급, 추가 비용 없음)
       // rating 컬럼은 실제 DB에서 삭제됨 → buzzScore로 대체
       websiteUri: googlePlace.websiteUri ?? undefined,
@@ -377,13 +420,13 @@ export class GooglePlacesFetcher {
       phoneNumber: (googlePlace as any).internationalPhoneNumber ?? undefined,
       editorialSummary: (googlePlace as any).editorialSummary?.text ?? undefined,
       businessStatus: googlePlace.businessStatus,
-      
+
       userRatingCount: googlePlace.userRatingCount,
       buzzScore: googlePlace.rating ? Math.min(10, googlePlace.rating * 2) : undefined,
-      
+
       // 💰 Atmosphere 필드는 비용 최적화로 더 이상 요청하지 않음 (€1,001 폭탄 방지)
       // DB에 이미 있는 기존 데이터는 보존됨, 새 장소에는 null로 저장
-      
+
       lastDataSync: new Date(),
       ...(seedCategory && { seedCategory }),
     };
@@ -483,7 +526,7 @@ export class GooglePlacesFetcher {
     for (const type of types) {
       try {
         const places = await this.searchNearby(latitude, longitude, type);
-        
+
         for (const place of places) {
           try {
             const details = await this.getPlaceDetails(place.id);

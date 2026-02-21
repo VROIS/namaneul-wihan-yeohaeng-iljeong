@@ -19,7 +19,7 @@
  */
 
 import { db } from '../../db';
-import { places, cities, celebrityPlaceEvidence, placeImages } from '@shared/schema';
+import { places, cities, celebrityPlaceEvidence, placeImages, placeSeedRaw } from '@shared/schema';
 import { eq, ilike, sql, inArray } from 'drizzle-orm';
 import type { AG1Output, AG3PreOutput, AG3Output, PlaceResult, ScheduleSlot } from './types';
 import { findCityUnified, addPlaceAlias, type CityResolveResult } from '../city-resolver';
@@ -84,7 +84,7 @@ export async function preloadCityData(
 
   if (!db) {
     console.log('[AG3-pre] DB 미연결');
-    return { cityId: null, dbPlacesMap: new Map(), cityName: destination, placeImageMap: new Map(), celebrityImageMap: new Map() };
+    return { cityId: null, dbPlacesMap: new Map(), cityName: destination, placeImageMap: new Map(), celebrityImageMap: new Map(), seedRawMap: new Map() };
   }
 
   try {
@@ -94,6 +94,7 @@ export async function preloadCityData(
     const dbPlacesMap = new Map<string, any>();
     let celebrityImageMap = new Map<number, string>();
     let placeImageMap = new Map<number, string>();
+    let seedRawMap = new Map<string, any>();
 
     // 도시 미발견 시 좌표 기반 fallback
     if (!cityId && geminiPlaces && geminiPlaces.length > 0) {
@@ -224,16 +225,32 @@ export async function preloadCityData(
       }
     }
 
+    // 3. place_seed_raw 통합본(전시 매장) 사전 로드 (15초 쿼리 대체용)
+    if (cityId) {
+      try {
+        const _t1 = Date.now();
+        const seeds = await db.select().from(placeSeedRaw).where(eq(placeSeedRaw.cityId, cityId));
+        for (const s of seeds) {
+          if (s.nameEn) seedRawMap.set(s.nameEn.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, ""), s);
+          if (s.nameKo) seedRawMap.set(s.nameKo.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, ""), s);
+        }
+        console.log(`[AG3-pre] 🏭 통합 전시매장(place_seed_raw) ${seeds.length}건 사전 로드 (${Date.now() - _t1}ms)`);
+      } catch (e) {
+        console.warn(`[AG3-pre] seedData 로드 실패:`, (e as Error)?.message);
+      }
+    }
+
     return {
       cityId,
       dbPlacesMap,
       cityName: cityResult?.nameEn || destination,
       placeImageMap,
       celebrityImageMap,
+      seedRawMap
     };
   } catch (error) {
     console.error('[AG3-pre] DB 사전 로드 실패:', error);
-    return { cityId: null, dbPlacesMap: new Map(), cityName: destination, placeImageMap: new Map(), celebrityImageMap: new Map() };
+    return { cityId: null, dbPlacesMap: new Map(), cityName: destination, placeImageMap: new Map(), celebrityImageMap: new Map(), seedRawMap: new Map() };
   }
 }
 
@@ -378,7 +395,7 @@ export async function matchPlacesWithDB(
           new Promise<null>((resolve) => setTimeout(() => resolve(null), 3000)),
         ]).then(result => {
           if (result) googleResults.set(r.place.name, result);
-        }).catch(() => {})
+        }).catch(() => { })
       );
       await Promise.all(batchPromises);
     }
@@ -394,13 +411,13 @@ export async function matchPlacesWithDB(
     if (dbMatch) {
       matched++;
       if (dbMatch.id && nameLower !== dbMatch.name.toLowerCase()) {
-        addPlaceAlias(dbMatch.id, place.name).catch(() => {});
+        addPlaceAlias(dbMatch.id, place.name).catch(() => { });
       }
       // rating 컬럼은 DB에서 제외됨 → buzzScore/finalScore 기반 신뢰도 산출
       const dbBuzz = dbMatch.buzzScore ?? 0;
       const dbFinal = dbMatch.finalScore ?? 0;
       const dbReviewCount = dbMatch.userRatingCount ?? 0;
-      
+
       enriched.push({
         ...place,
         sourceType: 'Gemini AI + DB Enriched',
@@ -423,7 +440,7 @@ export async function matchPlacesWithDB(
         ],
         confidenceLevel: (dbFinal > 5) ? 'high' as const :
           (dbBuzz > 3) ? 'medium' as const :
-          place.confidenceLevel || 'low' as const,
+            place.confidenceLevel || 'low' as const,
       });
     } else if (needsGoogle) {
       const googleResult = googleResults.get(place.name);
@@ -435,7 +452,7 @@ export async function matchPlacesWithDB(
           const gidMatch = dbPlacesMap.get(googleResult.googlePlaceId.toLowerCase());
           if (gidMatch) {
             console.log(`[AG3] 🔗 gid 역매칭: "${place.name}" → "${gidMatch.name}"`);
-            if (gidMatch.id) addPlaceAlias(gidMatch.id, place.name).catch(() => {});
+            if (gidMatch.id) addPlaceAlias(gidMatch.id, place.name).catch(() => { });
             matched++;
             enriched.push({
               ...place,
@@ -539,8 +556,8 @@ export async function saveNewPlacesToDB(
           aliases: aliases,
           type: place.tags?.includes('restaurant') ? 'restaurant' as const :
             place.tags?.includes('cafe') ? 'cafe' as const :
-            place.tags?.includes('landmark') ? 'landmark' as const :
-            'attraction' as const,
+              place.tags?.includes('landmark') ? 'landmark' as const :
+                'attraction' as const,
           latitude: place.lat,
           longitude: place.lng,
           editorialSummary: place.description || place.personaFitReason,

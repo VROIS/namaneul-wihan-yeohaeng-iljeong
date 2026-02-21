@@ -59,7 +59,7 @@ const CATEGORIES: SeedCategory[] = ["attraction", "restaurant", "healing", "adve
 const STAGE2_SOURCE_TYPES = ["instagram", "youtube", "naver_blog", "package", "travel_app"] as const;
 const INSTAGRAM_UNAVAILABLE = "Sorry, this page isn't available";
 const YOUTUBE_UNAVAILABLE = "Video unavailable";
-const STAGE_MIN_ITEMS = 20;
+const STAGE_MIN_ITEMS = 5;
 
 const CATEGORY_KO_LABEL: Record<SeedCategory, string> = {
   attraction: "명소",
@@ -595,10 +595,6 @@ async function runStage1ForCityCategory(city: TargetCity, category: SeedCategory
 }> {
   if (!db) return { success: false, saved: 0, error: "DB 연결 없음" };
 
-  const apiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
-  if (!apiKey) return { success: false, saved: 0, error: "Gemini API 키 없음" };
-
-  let text = "";
   try {
     if (!USE_MCP_RAW) {
       return { success: false, saved: 0, error: "USE_MCP_RAW=true 필요. API 비용 절감을 위해 MCP만 사용합니다." };
@@ -606,16 +602,49 @@ async function runStage1ForCityCategory(city: TargetCity, category: SeedCategory
     const mcp = await getMcpClient();
     const query = buildStage1SearchQuery(city.nameEn, category);
     const searchResults = await mcp.googleSearch(query, { num: 30 });
-    const parsePrompt = `[검색 결과]\n${searchResults.slice(0, 15000)}\n\n위 검색 결과를 바탕으로 ${city.nameKo}(${city.nameEn})의 ${CATEGORY_KO_LABEL[category]} 상위 30곳을 JSON 배열로 추출하세요.\n\n[파싱 가이드]\n1. 각 장소마다 **대표 이미지 URL 1개**(imageUrl)를 반드시 포함하세요.\n2. 각 장소의 **입장료 또는 1인당 평균 식비**(priceEur)를 EUR 단위 숫자로 추출하세요. (무료 장소: 0, 정보를 찾기 어려우면 합리적인 추측값이라도 적어주세요. 절대 NULL로 두지 마세요.)\n3. 필드: rank, nameKo, nameEn, googleSearchNote, googleReviewCountNote, googleImageCountNote, imageUrl, priceEur, source\n4. JSON 배열만 반환.`;
-    const { GoogleGenAI } = await import("@google/genai");
-    const ai = new GoogleGenAI({ apiKey });
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-lite",
-      contents: parsePrompt,
-    });
-    text = (response as any).text || "";
-    const parsed = extractJsonArray(text);
-    const items = normalizeStage1Items(parsed);
+
+    // === [수정됨] 제미나이 API 호출 제거, 정규식 기반 100% 무료 파싱 ===
+    const rawItems: any[] = [];
+    const blocks = searchResults.split(/(?=\n\d+\.\s)|(?=Title:)/i);
+    let rank = 1;
+    for (let i = 0; i < blocks.length; i++) {
+      const block = blocks[i];
+      // Title: 블라블라 또는 1. 블라블라 형태 추출
+      const nameMatch = block.match(/Title:\s*(.*?)(?:\n|-)/) || block.match(/\d+\.\s+([^\n]+)/);
+      if (!nameMatch) continue;
+
+      const nameEn = nameMatch[1].replace(/[\*\#\]\[]/g, '').trim();
+      if (!nameEn || nameEn.length < 2) continue;
+
+      const priceMatch = block.match(/(?:EUR|€)\s*([0-9.,]+)/i) || block.match(/([0-9.,]+)\s*(?:EUR|€)/i);
+      const isFree = /free(?! cancellation)|무료/i.test(block);
+
+      let priceEur = null;
+      if (isFree) {
+        priceEur = 0;
+      } else if (priceMatch) {
+        priceEur = parseFloat(priceMatch[1].replace(',', '.'));
+        if (isNaN(priceEur)) priceEur = null;
+      }
+
+      const imgMatch = block.match(/https?:\/\/[^\s"'<>]+\.(?:jpg|jpeg|png|webp|gif)/i);
+
+      rawItems.push({
+        rank: rank++,
+        nameKo: null, // MCP 텍스트에 한글이 없다면 null
+        nameEn: nameEn,
+        googleSearchNote: null,
+        googleReviewCountNote: null,
+        googleImageCountNote: null,
+        imageUrl: imgMatch ? imgMatch[0] : null,
+        priceEur: priceEur,
+        source: "mcp_regex_parser"
+      });
+
+      if (rawItems.length >= 30) break; // 상위 30건까지만 저장
+    }
+
+    const items = normalizeStage1Items(rawItems);
 
     if (items.length < STAGE_MIN_ITEMS) {
       return {

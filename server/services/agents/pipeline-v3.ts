@@ -513,8 +513,8 @@ async function step2_enrichAndBuild(
 
   const [enrichedKorean, enrichedTA, enrichedPhoto, eurToKrw, realityCheck, transportPrice] = await Promise.all([
     enrichFns.enrichPlacesWithKoreanPopularity(matchedPlaces, preloaded.cityName),
-    enrichFns.enrichPlacesWithTripAdvisorAndPrices(matchedPlaces, preloaded.cityName),
-    enrichFns.enrichPlacesWithPhotoAndTour(matchedPlaces, preloaded.cityName),
+    enrichFns.enrichPlacesWithTripAdvisorAndPrices(matchedPlaces, preloaded.cityName, preloaded.seedRawMap),
+    enrichFns.enrichPlacesWithPhotoAndTour(matchedPlaces, preloaded.cityName, preloaded.seedRawMap),
     getEurToKrwRate(),
     enrichFns.getRealityCheckForCity(formData.destination),
     // 💰 교통비 산정 (카테고리 자동 분류: 가이드 vs 대중교통)
@@ -539,14 +539,8 @@ async function step2_enrichAndBuild(
 
   // ── 2d. Enrichment 결과 병합 + 셀럽 방문 검색 + nubiReason 생성 ──
 
-  // 🌟 셀럽 TOP 10 방문 흔적 검색 (Gemini 웹검색, 병렬)
-  const celebrityVisits = await findCelebrityVisitsForPlaces(
-    matchedPlaces.map(p => ({ id: p.id, name: p.name })),
-    preloaded.cityName,
-  ).catch(err => {
-    console.warn('[V3] 셀럽 검색 실패, 건너뜀:', err);
-    return new Map<string, CelebrityVisit>();
-  });
+  // 🌟 셀럽 TOP 10 방문 흔적 검색 (Gemini 웹검색, 병렬) - 성능 이슈로 완전 삭제
+  const celebrityVisits = new Map<string, CelebrityVisit>();
 
   // 각 장소별 nubiReason 데이터 수집 (DB 조회 포함, 병렬)
   const finalPlaces = await Promise.all(matchedPlaces.map(async (p, i) => {
@@ -586,10 +580,15 @@ async function step2_enrichAndBuild(
     };
 
     // ⭐ nubiReason: 순차 검색 — 찾으면 멈추고 구체적 이름+날짜 표시
+    const seedNameEn = p.name ? p.name.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, "") : "";
+    const seedNameKo = p.nameKo ? p.nameKo.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, "") : "";
+    const seedData = preloaded.seedRawMap?.get(seedNameEn) || preloaded.seedRawMap?.get(seedNameKo);
+
     merged.nubiReason = await generateNubiReasonV2(
       p.id, p.name, preloaded.cityName,
       celebrityVisits.get(p.id) || null,
       merged,
+      seedData
     );
 
     return merged;
@@ -636,8 +635,8 @@ async function step2_enrichAndBuild(
         // 원칙 1+2: Gemini 가격 최우선, 0이면 mealBudget fallback
         mealPrice: isMeal
           ? (s.gPlace.estimatedCostEur > 0
-              ? s.gPlace.estimatedCostEur
-              : (s.gPlace.type === 'lunch' ? mealBudget.lunch : mealBudget.dinner))
+            ? s.gPlace.estimatedCostEur
+            : (s.gPlace.type === 'lunch' ? mealBudget.lunch : mealBudget.dinner))
           : undefined,
         mealPriceLabel: isMeal ? (s.gPlace.type === 'lunch' ? mealBudget.lunchLabel : mealBudget.dinnerLabel) : undefined,
         // Gemini의 한국어 이름 + 추천이유
@@ -1040,145 +1039,29 @@ async function generateNubiReasonV2(
   cityName: string,
   celebrityVisit: CelebrityVisit | null,
   mergedData: any,
+  seedData?: any
 ): Promise<string> {
   try {
-    // ── 🌟 Priority 0: placeNubiReasons DB (MCP 2단계 수집 데이터 4,500건) ──
-    // DB에 있으면 0ms 즉시 반환 — API 호출 0건
-    if (db) {
-      try {
-        // 0a. placeNubiReasons 테이블 조회 (sourceRank 낮을수록 신뢰도 높음)
-        let dbPlaceId: number | null = null;
-        const placeMatch = await db.select({ id: places.id })
-          .from(places)
-          .where(ilike(places.name, `%${placeName}%`))
-          .limit(1);
-        if (placeMatch.length > 0) dbPlaceId = placeMatch[0].id;
-
-        if (dbPlaceId) {
-          const [nubiRow] = await db.select({
-            nubiReason: placeNubiReasons.nubiReason,
-            sourceType: placeNubiReasons.sourceType,
-            evidenceUrl: placeNubiReasons.evidenceUrl,
-            sourceRank: placeNubiReasons.sourceRank,
-          })
-            .from(placeNubiReasons)
-            .where(eq(placeNubiReasons.placeId, dbPlaceId))
-            .orderBy(asc(placeNubiReasons.sourceRank))
-            .limit(1);
-
-          if (nubiRow && nubiRow.nubiReason) {
-            console.log(`[NubiReason] ✅ DB hit: ${placeName} → ${nubiRow.nubiReason}`);
-            return nubiRow.nubiReason;
-          }
-        }
-
-        // 0b. place_seed_raw fallback (MCP 1단계 시딩 데이터)
-        const { findCityUnified } = await import('../city-resolver');
-        const cityResult = await findCityUnified(cityName);
-        if (cityResult) {
-          const [seedRow] = await db.select({
-            nubiReason: placeSeedRaw.nubiReason,
-          })
-            .from(placeSeedRaw)
-            .where(and(
-              eq(placeSeedRaw.cityId, cityResult.cityId),
-              ilike(placeSeedRaw.nameEn, `%${placeName}%`),
-              sql`${placeSeedRaw.nubiReason} IS NOT NULL`,
-            ))
-            .limit(1);
-
-          if (seedRow && seedRow.nubiReason) {
-            console.log(`[NubiReason] ✅ SeedRaw hit: ${placeName} → ${seedRow.nubiReason}`);
-            return seedRow.nubiReason;
-          }
-        }
-      } catch (e) {
-        // DB 조회 실패 → 기존 실시간 검색으로 fallback
-        console.warn(`[NubiReason] DB lookup failed for ${placeName}, falling back to live search`);
-      }
+    // ── 🌟 Priority 0: place_seed_raw DB (1초 즉시 반환) ──
+    if (seedData && seedData.nubiReason) {
+      console.log(`[NubiReason] ✅ SeedRaw hit: ${placeName} → ${seedData.nubiReason}`);
+      return seedData.nubiReason;
     }
 
-    // ── 1순위: 셀럽 방문 흔적 (기존 실시간 검색) ──
+    // ── 1순위: 셀럽 방문 흔적 (기존 캐시) ──
     if (celebrityVisit && celebrityVisit.found) {
       const group = celebrityVisit.celebrityGroup ? `(${celebrityVisit.celebrityGroup})` : '';
       return `${celebrityVisit.celebrityName}${group} ${celebrityVisit.date} 게시`;
     }
 
-    // ── 2순위: 유튜버 18인 언급 (채널명+영상제목+날짜 — 최대한 구체적으로) ──
-    if (db) {
-      try {
-        const ytMention = await db.select({
-          channelName: youtubeChannels.channelName,
-          videoTitle: youtubeVideos.title,
-          publishedAt: youtubeVideos.publishedAt,
-        })
-          .from(youtubePlaceMentions)
-          .innerJoin(youtubeVideos, eq(youtubePlaceMentions.videoId, youtubeVideos.id))
-          .innerJoin(youtubeChannels, eq(youtubeVideos.channelId, youtubeChannels.id))
-          .where(ilike(youtubePlaceMentions.placeName, `%${placeName}%`))
-          .orderBy(desc(youtubeChannels.trustWeight))
-          .limit(1);
-
-        if (ytMention.length > 0 && ytMention[0].channelName) {
-          const dateStr = ytMention[0].publishedAt
-            ? formatKoreanDate(new Date(ytMention[0].publishedAt))
-            : '';
-          const title = ytMention[0].videoTitle
-            ? (ytMention[0].videoTitle.length > 20 ? ytMention[0].videoTitle.slice(0, 20) + '…' : ytMention[0].videoTitle)
-            : '';
-          const detail = title ? ` '${title}'` : '';
-          return `${ytMention[0].channelName}${detail} ${dateStr} 소개`.trim();
-        }
-      } catch (e) {
-        // YouTube 조회 실패 → 다음 순위로
-      }
+    // ── 2순위: 유튜버/셀럽 언급 (seedRaw) ──
+    if (seedData && seedData.celebMention) {
+      return seedData.celebMention;
     }
 
-    // ── 3순위: 네이버 블로그 건수 + 키워드 ──
-    if (db) {
-      try {
-        // places 테이블에서 placeId 매칭
-        let dbPlaceId: number | null = null;
-        const placeMatch = await db.select({ id: places.id })
-          .from(places)
-          .where(ilike(places.name, `%${placeName}%`))
-          .limit(1);
-        if (placeMatch.length > 0) dbPlaceId = placeMatch[0].id;
-
-        if (dbPlaceId) {
-          const blogCount = await db.select({
-            count: sql<number>`count(*)`,
-          })
-            .from(naverBlogPosts)
-            .where(eq(naverBlogPosts.placeId, dbPlaceId));
-
-          const count = Number(blogCount[0]?.count || 0);
-          if (count > 0) {
-            return `네이버 블로그 ${count.toLocaleString()}건`;
-          }
-        }
-
-        // placeId 매칭 실패 시 도시+장소명으로 검색
-        const { findCityUnified } = await import('../city-resolver');
-        const cityResult = await findCityUnified(cityName);
-        if (cityResult) {
-          const blogNameCount = await db.select({
-            count: sql<number>`count(*)`,
-          })
-            .from(naverBlogPosts)
-            .where(and(
-              eq(naverBlogPosts.cityId, cityResult.cityId),
-              sql`${naverBlogPosts.postTitle} ILIKE ${`%${placeName}%`}`,
-            ));
-
-          const count = Number(blogNameCount[0]?.count || 0);
-          if (count > 0) {
-            return `네이버 블로그 ${count.toLocaleString()}건`;
-          }
-        }
-      } catch (e) {
-        // 블로그 조회 실패 → 다음 순위로
-      }
+    // ── 3순위: 네이버 블로그 건수 (seedRaw) ──
+    if (seedData && seedData.naverBlogCount > 0) {
+      return `네이버 블로그 ${seedData.naverBlogCount.toLocaleString()}건`;
     }
 
     // ── 4순위: 패키지투어 (하나투어/모두투어 등) ──

@@ -1,6 +1,6 @@
 # NUBI 프로젝트 태스크 관리
 
-> **최종 업데이트: 2026-02-20**
+> **최종 업데이트: 2026-02-21 (by Antigravity)**
 > **완료된 작업 이력: `docs/TASK_ARCHIVE.md`**
 > **AI 규칙: `.cursor/rules/*.mdc` (11개 파일, 항상 자동 적용. 검증 헌법: nubi-verification-constitution.mdc, MCP 전환: nubi-mcp-transition.mdc)**
 > **원칙: 모든 작업·변경 기록에 날짜(YYYY-MM-DD) 반드시 기입**
@@ -13,9 +13,9 @@
 
 | 항목 | 내용 |
 |------|------|
-| **마지막 작업일** | 2026-02-20 |
-| **마지막 작업** | **mcp-raw-service API 비용 제거**: Stage1 USE_MCP_RAW=false 분기 제거(MCP만 사용), Stage2/Stage3 getSearchTools 제거. Gemini Search API 호출 0건으로 비용 절감. pipeline-v3 5대 가격원칙 이미 적용됨. |
-| **다음 할 일** | 배포 후 BTS 시드 API 호출 → MCP 1단계 자동 실행 검증. USE_MCP_RAW=true + noapi-google-search-mcp 설치 필요 |
+| **마지막 작업일** | 2026-02-21 |
+| **마지막 작업** | **[Antigravity] MCP Stage 1 제미나이 의존성 100% 제거**: `mcp-raw-service.ts`의 1단계 파싱 로직을 Gemini API에서 순수 정규식(Regex)으로 교체. 수집 비용 0원 달성 (테스트 완료) |
+| **다음 할 일** | 파이프라인 V3(itinerary-generator.ts)의 60초 생성 지연 문제(route-optimizer, enrichment 병목 등) 해결 및 속도 리팩토링 진행 |
 | **배포 상태** | Koyeb 정상 (200 OK). 커밋 푸시 후 자동 배포. |
 | **브랜치** | cursor-dev |
 
@@ -271,6 +271,7 @@
 
 | 날짜 | 내용 |
 |------|------|
+| 2026-02-21 | **[Antigravity] MCP Stage 1 제미나이 의존성 100% 제거**: `server/services/mcp-raw-service.ts`의 1단계 데이터 파싱(`runStage1ForCityCategory`) 로직을 Gemini API에서 순수 RegExp(정규식) 기반으로 100% 재작성. `STAGE_MIN_ITEMS`를 5로 하향 조정하여 무과금 수집 구조 완전체 구축 테스트 완료. |
 | 2026-02-20 | **BTS bts_rank 구현**: cities.bts_rank 컬럼, seed/cities-by-phase bts2026 시 bts_rank 설정, resolveTargetCities bts_rank 우선. migrations/0007, run-startup-migrations, schema, admin-routes, mcp-raw-service. |
 | 2026-02-20 | **배포 후 테스트 절차**: TASK §7에 5단계 체크리스트 추가 (사용자·AI 공통). |
 | 2026-02-20 | **.vscode/settings.json**: terminal.integrated.defaultLocation=view (Cursor OOM 대응). |

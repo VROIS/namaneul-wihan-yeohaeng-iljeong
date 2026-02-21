@@ -632,6 +632,7 @@ export const placeSeedRaw = pgTable("place_seed_raw", {
   seedCategory: text("seed_category").notNull(), // attraction|restaurant|healing|adventure|hotspot
   collectionPhase: text("collection_phase"), // 수집 출처: bts2026 | france30 | europe30
   rank: integer("rank").notNull(),
+  unifiedId: text("unified_id"), // 통합 고유 ID (예: 111R1)
   nameKo: text("name_ko"),
   nameEn: text("name_en").notNull(),
   googleSearchNote: text("google_search_note"),
@@ -649,6 +650,12 @@ export const placeSeedRaw = pgTable("place_seed_raw", {
   priceEur: real("price_eur"),           // 1인 입장료/식사비 (EUR), 0=무료
   priceSource: text("price_source"),     // gemini_search, google_places, klook 등
   priceFetchedAt: timestamp("price_fetched_at"),
+
+  // 4단계: 통합 마스터 창고용 파생/집계 데이터
+  bestImageUrl: text("best_image_url"),     // place_images 테이블 등에서 1순위로 확정된 이미지 URL
+  celebMention: text("celeb_mention"),      // 방문한 셀럽 이름 (예: "리사")
+  naverBlogCount: integer("naver_blog_count"), // 네이버 블로그 누적 리뷰 수
+  vibeKeywords: jsonb("vibe_keywords").$type<string[]>(), // 분위기 키워드 배열
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 

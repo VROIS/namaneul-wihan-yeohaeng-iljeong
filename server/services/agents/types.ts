@@ -129,10 +129,10 @@ export const MEAL_BUDGET: Record<TravelStyle, {
   min: number;
   max: number;
 }> = {
-  Economic:   { dailyTotal: 23, lunch: 8, dinner: 15, lunchLabel: '€8 이내', dinnerLabel: '€15 이내', label: '€23/일', min: 8, max: 15 },
+  Economic: { dailyTotal: 23, lunch: 8, dinner: 15, lunchLabel: '€8 이내', dinnerLabel: '€15 이내', label: '€23/일', min: 8, max: 15 },
   Reasonable: { dailyTotal: 60, lunch: 21, dinner: 39, lunchLabel: '€21 이내', dinnerLabel: '€39 이내', label: '€60/일', min: 20, max: 40 },
-  Premium:    { dailyTotal: 110, lunch: 39, dinner: 72, lunchLabel: '€39 이내', dinnerLabel: '€72 이내', label: '€110/일', min: 40, max: 70 },
-  Luxury:     { dailyTotal: 160, lunch: 56, dinner: 104, lunchLabel: '€56 이내', dinnerLabel: '€104 이내', label: '€160/일', min: 60, max: 100 },
+  Premium: { dailyTotal: 110, lunch: 39, dinner: 72, lunchLabel: '€39 이내', dinnerLabel: '€72 이내', label: '€110/일', min: 40, max: 70 },
+  Luxury: { dailyTotal: 160, lunch: 56, dinner: 104, lunchLabel: '€56 이내', dinnerLabel: '€104 이내', label: '€160/일', min: 60, max: 100 },
 };
 
 export const DEFAULT_START_TIME = '09:00';
@@ -161,6 +161,9 @@ export interface AG3PreOutput {
   placeImageMap?: Map<number, string>;
   /** placeId → 셀럽 인스타 이미지 URL (place_images 미포함 시 fallback) */
   celebrityImageMap?: Map<number, string>;
+
+  /** nameEn/nameKo → place_seed_raw (가격, 인스타이미지 등 통합 메타데이터) */
+  seedRawMap?: Map<string, any>;
 }
 
 // ===== 스케줄 슬롯 =====
