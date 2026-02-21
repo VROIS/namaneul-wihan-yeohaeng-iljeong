@@ -23,14 +23,14 @@ alwaysApply: true
 - 사용자에게 SQL/Supabase/PowerShell 등 수동 실행 요청하지 않음 (비개발자)
 - DB·코드 작업은 배포(Koyeb)와 별개로 진행 가능
 
-## 현재 상태 (2026-02-20)
+## 현재 상태 (2026-02-21)
 
 | 항목 | 내용 |
 |------|------|
-| 마지막 작업 | 세션 문서화·커밋·푸시. mcp-raw-service API 비용 제거, .vscode 터미널 설정, 배포 후 테스트 절차 TASK §7 추가. |
-| 다음 할 일 | 배포 후 테스트(TASK §7 5단계). BTS 도시 시드 후 MCP 1단계 실행. USE_MCP_RAW=true 필요. |
+| 마지막 작업 | Step 6 구현: googlePlaceId 백필 서비스. 1회 실행 24건 성공 (rate limit 1.2초 간격 적용). 대통합 3차 물류트럭도 완성 (place_id 362건). |
+| 다음 할 일 | 커밋·푸시 → Koyeb 배포 → cron으로 매일 100건 자동 백필. 약 50일 후 5,250건 완료 예상. |
 | 브랜치 | cursor-dev |
-| 배포 상태 | Koyeb 커밋·푸시 반영됨. |
+| 배포 상태 | 미푸시. |
 
 ## 긴급 이슈
 - **Google Maps/Places API 대시보드 빨간불**: 건강체크가 Geocoding API 테스트 → 실제 사용 API(Places New/Routes)와 다름
@@ -48,5 +48,7 @@ alwaysApply: true
 - **분류**: 비용 내고 이미 가져온 **모든 도시** 데이터 → 5카테고리로 전부 분류 (제외 없음)
 
 ## 수집된 데이터 현황
-- 도시 71개, 장소 1,709개 (seed_category 5카테고리 분류 완료), 블로그 1,239개, 인스타 해시태그 3,327개
+- 도시 71개, 장소 1,745개 (seed_category 5카테고리 분류 완료), 블로그 6,516개, 인스타 해시태그 3,327개
 - YouTube 18채널/54영상/23언급, 미슐랭 33개, 웹캐시 6,703개
+- place_seed_raw 5,250건 (place_id 362, 이미지 956, 가격 954, nubiReason 4,884)
+- place_images 56,626건, place_prices 27,169건

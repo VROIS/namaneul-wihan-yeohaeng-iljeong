@@ -10,7 +10,7 @@
  * ├─────────────────────────────────────────────────────────┤
  * │ Step 2: 데이터 채우기 (2~4초, 전부 병렬)                │
  * │   • DB 매칭: places 테이블 → 사진, 점수, 좌표           │
- * │   • 가격: placePrices → 실제 입장료/식사비               │
+ * │   • 가격: place_seed_raw (통합 전시 매장)               │
  * │   • 한국 인기: naverBlogPosts → 한국인 선호도            │
  * │   • 실시간: 날씨, 환율, 위기경보, 이동시간               │
  * └─────────────────────────────────────────────────────────┘
@@ -33,7 +33,7 @@ import {
   type TransportPricingResult, type GuidePriceResult, type TransitPriceResult, type UberBlackComparison,
 } from '../transport-pricing-service';
 import { db } from '../../db';
-import { exchangeRates, youtubePlaceMentions, youtubeVideos, youtubeChannels, naverBlogPosts, placePrices, places, placeNubiReasons, placeSeedRaw } from '@shared/schema';
+import { exchangeRates, youtubePlaceMentions, youtubeVideos, youtubeChannels, naverBlogPosts, places, placeNubiReasons, placeSeedRaw } from '@shared/schema';
 import { eq, and, ilike, sql, desc, asc } from 'drizzle-orm';
 import { findCelebrityVisitsForPlaces, type CelebrityVisit } from '../celebrity-tracker';
 
@@ -1073,49 +1073,8 @@ async function generateNubiReasonV2(
       return '한국 패키지투어 필수코스';
     }
 
-    // ── 5순위: 여행앱 (마이리얼트립/클룩/트립닷컴) ──
-    if (db) {
-      try {
-        let dbPlaceId: number | null = null;
-        const placeMatch = await db.select({ id: places.id })
-          .from(places)
-          .where(ilike(places.name, `%${placeName}%`))
-          .limit(1);
-        if (placeMatch.length > 0) dbPlaceId = placeMatch[0].id;
-
-        if (dbPlaceId) {
-          const appData = await db.select({
-            source: placePrices.source,
-            rawData: placePrices.rawData,
-          })
-            .from(placePrices)
-            .where(and(
-              eq(placePrices.placeId, dbPlaceId),
-              sql`${placePrices.source} IN ('myrealtrip', 'klook', 'tripdotcom')`,
-            ))
-            .limit(1);
-
-          if (appData.length > 0) {
-            const APP_NAMES: Record<string, string> = {
-              myrealtrip: '마이리얼트립',
-              klook: '클룩',
-              tripdotcom: '트립닷컴',
-            };
-            const raw = appData[0].rawData as any;
-            const appName = APP_NAMES[appData[0].source] || appData[0].source;
-            if (raw?.rating) {
-              const reviewCount = raw.reviewCount ? ` (${Number(raw.reviewCount).toLocaleString()}건)` : '';
-              return `${appName} ${raw.rating}점${reviewCount}`;
-            }
-            if (raw?.productName) {
-              return `${appName} 인기 상품`;
-            }
-          }
-        }
-      } catch (e) {
-        // 여행앱 조회 실패 → 다음 순위로
-      }
-    }
+    // ── 5순위: [V3 대통합] place_prices 직접 쿼리 제거 → place_seed_raw 단일 소스만 사용
+    // (여행앱 데이터는 place_seed_raw.nubiReason 등에 통합되어 있음)
 
     // ── 6순위 (최종): 구글 리뷰 수 ──
     const reviewCount = mergedData.userRatingCount || 0;

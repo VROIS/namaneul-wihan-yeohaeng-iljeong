@@ -35,6 +35,20 @@ export async function runStartupMigrations(): Promise<void> {
         ADD COLUMN IF NOT EXISTS "bts_rank" integer;
     `);
     console.log("[Migration] ✅ 0007 bts_rank 적용 완료");
+
+    // 0008: place_seed_raw.place_id (places 브릿지, 가격·이미지 직연결)
+    await pool.query(`
+      ALTER TABLE "place_seed_raw"
+        ADD COLUMN IF NOT EXISTS "place_id" integer;
+    `);
+    console.log("[Migration] ✅ 0008 place_seed_raw.place_id 적용 완료");
+
+    // 0009: place_seed_raw.google_place_id (바코드: places 테이블 100% 정확 연결)
+    await pool.query(`
+      ALTER TABLE "place_seed_raw"
+        ADD COLUMN IF NOT EXISTS "google_place_id" text;
+    `);
+    console.log("[Migration] ✅ 0009 place_seed_raw.google_place_id 적용 완료");
   } catch (err) {
     console.warn("[Migration] 스킵 또는 실패:", (err as Error).message);
   }

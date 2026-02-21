@@ -628,6 +628,7 @@ export const placeNubiReasons = pgTable("place_nubi_reasons", {
 // MCP 1·2단계 통합 로우데이터 (도시×카테고리 장소 + 한국인 인지도)
 export const placeSeedRaw = pgTable("place_seed_raw", {
   id: serial("id").primaryKey(),
+  placeId: integer("place_id").references(() => places.id, { onDelete: "set null" }), // places 매칭 시 브릿지 (가격·이미지 직연결)
   cityId: integer("city_id").notNull().references(() => cities.id, { onDelete: "cascade" }),
   seedCategory: text("seed_category").notNull(), // attraction|restaurant|healing|adventure|hotspot
   collectionPhase: text("collection_phase"), // 수집 출처: bts2026 | france30 | europe30
@@ -650,6 +651,9 @@ export const placeSeedRaw = pgTable("place_seed_raw", {
   priceEur: real("price_eur"),           // 1인 입장료/식사비 (EUR), 0=무료
   priceSource: text("price_source"),     // gemini_search, google_places, klook 등
   priceFetchedAt: timestamp("price_fetched_at"),
+
+  // 6단계: googlePlaceId 바코드 (places 테이블 100% 정확 연결용)
+  googlePlaceId: text("google_place_id"),
 
   // 4단계: 통합 마스터 창고용 파생/집계 데이터
   bestImageUrl: text("best_image_url"),     // place_images 테이블 등에서 1순위로 확정된 이미지 URL

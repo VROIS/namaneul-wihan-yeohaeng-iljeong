@@ -11,7 +11,7 @@ import {
 import { routeOptimizer } from "./route-optimizer";
 import { storage } from "../storage";
 import { db } from "../db";
-import { places, instagramHashtags, youtubePlaceMentions, naverBlogPosts, cities, tripAdvisorData, placePrices, placeSeedRaw, reviews, geminiWebSearchCache, weatherCache, crisisAlerts } from "@shared/schema";
+import { places, instagramHashtags, youtubePlaceMentions, naverBlogPosts, cities, tripAdvisorData, placeSeedRaw, reviews, geminiWebSearchCache, weatherCache, crisisAlerts } from "@shared/schema";
 import { eq, sql, ilike, and, desc, asc } from "drizzle-orm";
 
 // Lazy initialization - DB에서 API 키 로드 후 사용
@@ -761,20 +761,8 @@ async function enrichPlacesWithTripAdvisorAndPrices(
       .from(tripAdvisorData)
       .where(eq(tripAdvisorData.cityId, cityId));
 
-    // 가격 데이터 일괄 조회 (place_prices)
-    const priceData = await db.select({
-      placeId: placePrices.placeId,
-      priceType: placePrices.priceType,
-      priceAverage: placePrices.priceAverage,
-      priceLow: placePrices.priceLow,
-      priceHigh: placePrices.priceHigh,
-      currency: placePrices.currency,
-      source: placePrices.source,
-    })
-      .from(placePrices)
-      .where(eq(placePrices.cityId, cityId));
-
-    // place_seed_raw 가격 fallback (이미 preload되었으면 skip)
+    // [V3 대통합] place_prices 직접 쿼리 제거 → place_seed_raw 단일 소스만 사용
+    // place_seed_raw 가격 (이미 preload되었으면 skip)
     const seedRawPriceMap = new Map<string, { priceEur: number; priceSource: string }>();
 
     if (seedRawMap && seedRawMap.size > 0) {
@@ -830,34 +818,20 @@ async function enrichPlacesWithTripAdvisorAndPrices(
       }
     }
 
-    // 가격 맵 (placeId → price)
-    const priceMap = new Map<number, { avgPrice: number; source: string; currency: string }>();
-    for (const pr of priceData) {
-      if (pr.placeId && pr.priceAverage) {
-        priceMap.set(pr.placeId, {
-          avgPrice: pr.priceAverage,
-          source: pr.source,
-          currency: pr.currency,
-        });
-      }
-    }
-
     let taMatched = 0;
-    let priceMatched = 0;
     let seedRawPriceMatched = 0;
 
     const enriched = placesArr.map(place => {
-      // 이름으로 DB placeId 찾기
+      // 이름으로 DB placeId 찾기 (TripAdvisor용)
       const dbPlaceId = placeIdByName.get(place.name.toLowerCase()) || placeIdByName.get(place.id);
 
       const ta = dbPlaceId ? taMap.get(dbPlaceId) : undefined;
-      const price = dbPlaceId ? priceMap.get(dbPlaceId) : undefined;
 
       const updates: Partial<PlaceResult> = {};
 
       // 광장·공원 등 무료 장소: 가격 없거나 0이면 무료로 고정
       const freePlace = isFreePlace(place);
-      if (freePlace && !price) {
+      if (freePlace) {
         updates.estimatedPriceEur = 0;
         updates.priceSource = 'free';
         updates.priceEstimate = '무료';
@@ -873,49 +847,7 @@ async function enrichPlacesWithTripAdvisorAndPrices(
         taMatched++;
       }
 
-      if (price) {
-        // 광장·공원 등 무료 장소에 패키지 투어 가격 적용 금지
-        const pkgSource = isPackageTourPriceSource(price.source);
-        if (freePlace && pkgSource) {
-          updates.estimatedPriceEur = 0;
-          updates.priceSource = 'free';
-          updates.priceEstimate = '무료';
-          priceMatched++;
-          return { ...place, ...updates };
-        }
-        // 무료 장소이고 가격이 0이면 명시적으로 무료 표시
-        if (freePlace && price.avgPrice === 0) {
-          updates.estimatedPriceEur = 0;
-          updates.priceSource = 'free';
-          updates.priceEstimate = '무료';
-          priceMatched++;
-          return { ...place, ...updates };
-        }
-        // 통화 변환: EUR가 아니면 EUR로 변환
-        let priceInEur = price.avgPrice;
-        if (price.currency === 'KRW') {
-          priceInEur = price.avgPrice / 1450; // KRW → EUR 근사 환율
-        } else if (price.currency === 'USD') {
-          priceInEur = price.avgPrice * 0.92;  // USD → EUR 근사 환율
-        } else if (price.currency === 'GBP') {
-          priceInEur = price.avgPrice * 1.16;  // GBP → EUR 근사 환율
-        }
-        // 비정상 가격 필터 (1인 입장료 €500 초과는 오류로 간주)
-        if (priceInEur > 500) {
-          console.warn(`[Price] ⚠️ 비정상 가격 무시: ${price.avgPrice} ${price.currency} → €${priceInEur.toFixed(0)}`);
-          priceInEur = 0;
-        }
-        updates.estimatedPriceEur = Math.round(priceInEur * 100) / 100;
-        updates.priceSource = price.source;
-        // 실제 가격이 있으면 priceEstimate 업데이트
-        const priceLabel = priceInEur > 0
-          ? `€${Math.round(priceInEur)}`
-          : `${Math.round(price.avgPrice)} ${price.currency}`;
-        updates.priceEstimate = priceLabel;
-        priceMatched++;
-      }
-
-      // place_seed_raw 가격 fallback (place_prices 미매칭 시)
+      // [V3 대통합] place_seed_raw 단일 소스로 가격 적용 (place_prices 쿼리 제거)
       if (!updates.estimatedPriceEur && !updates.priceSource && seedRawPriceMap.size > 0) {
         const nameLower = place.name.toLowerCase().trim();
         let seedPrice = seedRawPriceMap.get(nameLower);
@@ -938,7 +870,7 @@ async function enrichPlacesWithTripAdvisorAndPrices(
       return { ...place, ...updates };
     });
 
-    console.log(`[TripAdvisor/Price] 보강 완료: TripAdvisor ${taMatched}곳, 가격 ${priceMatched}곳, place_seed_raw ${seedRawPriceMatched}곳 fallback`);
+    console.log(`[TripAdvisor/Price] 보강 완료: TripAdvisor ${taMatched}곳, place_seed_raw 가격 ${seedRawPriceMatched}곳`);
     return enriched;
   } catch (error) {
     console.error('[TripAdvisor/Price] 보강 실패:', error);

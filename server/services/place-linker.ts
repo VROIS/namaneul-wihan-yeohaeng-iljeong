@@ -47,10 +47,10 @@ interface PlaceLookup {
 }
 
 // ===================================================================
-// 도시별 장소 캐시 구축
+// 도시별 장소 캐시 구축 (export: sync 스크립트에서 재사용)
 // ===================================================================
 
-async function buildCityPlaceLookup(cityId: number): Promise<PlaceLookup[]> {
+export async function buildCityPlaceLookup(cityId: number): Promise<PlaceLookup[]> {
   const dbPlaces = await db.select({
     id: places.id,
     name: places.name,
@@ -70,10 +70,10 @@ async function buildCityPlaceLookup(cityId: number): Promise<PlaceLookup[]> {
 }
 
 // ===================================================================
-// 장소명 → placeId 매칭 (핵심 로직)
+// 장소명 → placeId 매칭 (핵심 로직, export: sync 스크립트에서 재사용)
 // ===================================================================
 
-function matchPlaceName(
+export function matchPlaceName(
   placeName: string,
   lookup: PlaceLookup[],
 ): number | null {

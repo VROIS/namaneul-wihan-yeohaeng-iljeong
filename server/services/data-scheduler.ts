@@ -148,6 +148,10 @@ export class DataScheduler {
     this.scheduleTaskIfNotPaused("score_aggregation", "0 22 * * *");
     this.scheduleTaskIfNotPaused("place_seed_sync", "0 18 * * *");
     this.scheduleTaskIfNotPaused("place_link_sync", "30 21 * * *");
+
+    // [DB 대통합 Step 5] 물류 트럭: 매일 새벽 4시 (1차) → 4시 30분 (2차)
+    this.scheduleTask("sync_master_place_seed", "0 4 * * *");
+    this.scheduleTask("sync_prices_to_seed", "30 4 * * *");
     
     console.log("[Scheduler] ✅ 스케줄 설정 완료:");
     console.log("  - 🌤️ 날씨: 매 시간");
@@ -261,6 +265,12 @@ export class DataScheduler {
           break;
         case "score_aggregation":
           result = await this.runScoreAggregation();
+          break;
+        case "sync_master_place_seed":
+          result = await this.runSyncMasterPlaceSeed();
+          break;
+        case "sync_prices_to_seed":
+          result = await this.runSyncPricesToSeed();
           break;
         default:
           console.warn(`[Scheduler] Unknown task: ${taskName}`);
@@ -528,6 +538,24 @@ export class DataScheduler {
     }
   }
 
+  private async runSyncMasterPlaceSeed(): Promise<{ success: boolean; itemsProcessed: number; errors: string[] }> {
+    try {
+      const { runSyncMasterPlaceSeed } = await import("./sync-place-seed-trucks");
+      return runSyncMasterPlaceSeed();
+    } catch (error: any) {
+      return { success: false, itemsProcessed: 0, errors: [error?.message || String(error)] };
+    }
+  }
+
+  private async runSyncPricesToSeed(): Promise<{ success: boolean; itemsProcessed: number; errors: string[] }> {
+    try {
+      const { runSyncPricesToSeed } = await import("./sync-place-seed-trucks");
+      return runSyncPricesToSeed();
+    } catch (error: any) {
+      return { success: false, itemsProcessed: 0, errors: [error?.message || String(error)] };
+    }
+  }
+
   private async runScoreAggregation(): Promise<{ success: boolean; itemsProcessed: number; errors: string[] }> {
     try {
       const { aggregateAllScores } = await import("./score-aggregator");
@@ -672,6 +700,8 @@ export class DataScheduler {
         tripadvisor_sync: "매일 04:45 KST",
         exchange_rate_sync: "매일 09:00 KST",
         place_seed_sync: "6시간마다 (연쇄 실행)",
+        sync_master_place_seed: "매일 04:00 KST (1차 물류 트럭)",
+        sync_prices_to_seed: "매일 04:30 KST (2차 물류 트럭)",
         mcp_raw_stage1: "주 1회 (일 02:00)",
         mcp_raw_stage2: "주 1회 (일 02:30)",
         mcp_workflow_france_phase1: "서버 시작 시 1회 (목표 도달까지 연쇄, 스케줄 없음)",
