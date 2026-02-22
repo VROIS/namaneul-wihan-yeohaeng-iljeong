@@ -1,4 +1,4 @@
-﻿import type { Express } from "express";
+import type { Express } from "express";
 import { db, isDatabaseConnected } from "./db";
 import path from "path";
 import fs from "fs";
@@ -4814,10 +4814,18 @@ Return JSON only, no markdown:
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash",
         contents: [{ role: "user", parts: [{ text: prompt }] }],
-        config: { temperature: 0.2, maxOutputTokens: 4096, responseMimeType: "application/json" },
+        config: {
+          temperature: 0.2,
+          maxOutputTokens: 4096,
+          responseMimeType: "application/json",
+          thinkingConfig: { thinkingBudget: 0 }, // Disable thinking for speed
+        } as any,
       });
       const geminiMs = Date.now() - t0;
-      const text = response.text || "";
+      // gemini-2.5-flash: extract text parts only (exclude thought parts)
+      const candidate = (response as any).candidates?.[0];
+      const parts = candidate?.content?.parts || [];
+      const text = parts.filter((p: any) => p.text && !p.thought).map((p: any) => p.text).join("") || response.text || "";
 
       let parsed: any = null;
       try {
@@ -4828,8 +4836,9 @@ Return JSON only, no markdown:
         promptChars: prompt.length,
         responseChars: text.length,
         geminiMs,
+        finishReason: candidate?.finishReason,
         result: parsed,
-        raw: parsed ? undefined : text.substring(0, 500),
+        raw: parsed ? undefined : text.substring(0, 800),
       });
     } catch (err: any) {
       res.status(500).json({ error: err.message });

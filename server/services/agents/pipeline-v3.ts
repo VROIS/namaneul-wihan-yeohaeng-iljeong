@@ -1,4 +1,4 @@
-﻿/**
+/**
  * Pipeline V3: 2단계 일정 생성 파이프라인
  *
  * ┌─────────────────────────────────────────────────────────┐
@@ -395,14 +395,23 @@ JSON만 응답 (마크다운/설명 없이):
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       config: {
         temperature: 0.3,
-        maxOutputTokens: 4096,
+        maxOutputTokens: 8192,
         responseMimeType: "application/json",
-      },
+        // ⚡ Thinking 비활성화 → 속도 최적화 (gemini-2.5-flash 기본값: thinking ON)
+        thinkingConfig: { thinkingBudget: 0 },
+      } as any,
     });
 
-    let text = response.text || "";
-    const finishReason = (response as any).candidates?.[0]?.finishReason || 'unknown';
-    console.log(`[V3-Step1] 🤖 응답 수신 (${text.length}자, finish=${finishReason}, ${Date.now() - _t0}ms)`);
+    // gemini-2.5-flash: thinking 모드 시 응답이 parts 배열로 올 수 있음
+    const candidate = (response as any).candidates?.[0];
+    const parts = candidate?.content?.parts || [];
+    // parts 중 text 타입만 추출 (thought 타입 제외)
+    let text = parts
+      .filter((p: any) => p.text && !p.thought)
+      .map((p: any) => p.text)
+      .join('') || response.text || "";
+    const finishReason = candidate?.finishReason || 'unknown';
+    console.log(`[V3-Step1] 🤖 응답 수신 (${text.length}자, finish=${finishReason}, parts=${parts.length}, ${Date.now() - _t0}ms)`);
 
     if (text.length < 100) {
       console.warn(`[V3-Step1] ⚠️ 짧은 응답: ${text}`);
