@@ -276,7 +276,61 @@ async function saveSentimentToCache(
 }
 
 /**
- * 메인 함수: 도시별 한국 감성 데이터 조회 (캐시 우선)
+ * DB에서 직접 한국 감성 데이터 집계 (Gemini 호출 없이 빠르게 반환)
+ */
+async function fetchSentimentFromDB(
+  cityName: string,
+  vibes: string[]
+): Promise<KoreanSentimentData | null> {
+  try {
+    const { findCityUnified } = await import('./city-resolver');
+    const cityResult = await findCityUnified(cityName);
+    const cityId = cityResult?.cityId;
+    if (!cityId) return null;
+
+    const [instaRows, naverRows, ytRows] = await Promise.all([
+      db.select({ count: sql<number>`count(*)`, hashtags: sql<string>`string_agg(hashtag, ',' order by post_count desc)` })
+        .from(instagramHashtags)
+        .where(eq(instagramHashtags.linkedCityId, cityId)),
+      db.select({ count: sql<number>`count(*)`, avgScore: sql<number>`avg(sentiment_score)` })
+        .from(naverBlogPosts)
+        .where(eq(naverBlogPosts.cityId, cityId)),
+      db.select({ count: sql<number>`count(*)` })
+        .from(youtubePlaceMentions),
+    ]);
+
+    const instaCount = Number(instaRows[0]?.count || 0);
+    const instaHashtags = (instaRows[0]?.hashtags || '').split(',').filter(Boolean).slice(0, 5);
+    const naverCount = Number(naverRows[0]?.count || 0);
+    const avgSentiment = Number(naverRows[0]?.avgScore || 0.5);
+    const ytCount = Number(ytRows[0]?.count || 0);
+
+    if (instaCount === 0 && naverCount === 0) return null;
+
+    const naverSentiment: KoreanSentimentData['naverBlog']['sentiment'] =
+      avgSentiment >= 0.8 ? 'very_positive' :
+        avgSentiment >= 0.6 ? 'positive' :
+          avgSentiment >= 0.4 ? 'neutral' : 'negative';
+
+    const instaScore = calculateInstagramScore(instaCount * 1000); // hashtag count → post estimate
+    const naverScore = calculateNaverScore(naverSentiment);
+    const youtubeScore = calculateYouTubeScore(ytCount);
+
+    return {
+      instagram: { postCount: instaCount * 1000, trendingHashtags: instaHashtags, score: instaScore },
+      naverBlog: { postCount: naverCount, sentiment: naverSentiment, keywords: [], score: naverScore },
+      youtube: { mentionCount: ytCount, channels: [], score: youtubeScore },
+      totalBonus: instaScore * 0.4 + naverScore * 0.35 + youtubeScore * 0.25,
+      lastUpdated: new Date(),
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 메인 함수: 도시별 한국 감성 데이터 조회
+ * 우선순위: 캐시(7일) → DB 집계 → 기본값 (Gemini 호출 없음 — 응답속도 최우선)
  */
 export async function getKoreanSentimentForCity(
   cityName: string,
@@ -291,24 +345,19 @@ export async function getKoreanSentimentForCity(
     return cached;
   }
 
-  // 2. 캐시 없으면 Gemini로 실시간 조회
-  console.log(`[KoreanSentiment] No cache found, fetching from Gemini...`);
-  const sentimentData = await fetchSentimentWithGemini(cityName, vibes);
-
-  // 3. cityId 조회 (🔗 Agent Protocol: findCityUnified 사용)
-  let cityId: number | null = null;
-  try {
-    const { findCityUnified } = await import('./city-resolver');
-    const cityResult = await findCityUnified(cityName);
-    cityId = cityResult?.cityId || null;
-  } catch (e) {
-    // cityId 조회 실패해도 계속 진행
+  // 2. DB에서 직접 집계 (빠름, Gemini 호출 없음)
+  console.log(`[KoreanSentiment] No cache, using DB aggregation for ${cityName}...`);
+  const dbData = await fetchSentimentFromDB(cityName, vibes);
+  if (dbData) {
+    console.log(`[KoreanSentiment] DB 집계 성공: bonus=${dbData.totalBonus.toFixed(2)}`);
+    // 백그라운드로 캐시 저장
+    saveSentimentToCache(cityName, null, dbData).catch(() => {});
+    return dbData;
   }
 
-  // 4. 캐시에 저장
-  await saveSentimentToCache(cityName, cityId, sentimentData);
-
-  return sentimentData;
+  // 3. DB도 없으면 기본값 반환 (Gemini 호출 안 함 — 속도 최우선)
+  console.log(`[KoreanSentiment] No DB data for ${cityName}, using default`);
+  return getDefaultSentimentData();
 }
 
 /**

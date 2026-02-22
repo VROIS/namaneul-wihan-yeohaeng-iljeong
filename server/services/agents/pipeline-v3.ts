@@ -175,12 +175,17 @@ export async function runPipelineV3(formData: TripFormData): Promise<any> {
   daySlotsConfig.forEach(d => console.log(`[V3]   Day ${d.day}: ${d.startTime}~${d.endTime} → ${d.slots}곳`));
 
   // ===== Step 1 (Gemini) + DB 사전 로드 + 한국 감성: 모두 병렬 =====
+  // ⚡ Korean sentiment: 3초 타임아웃 (캐시 없으면 기본값, Gemini 추가 호출 안 함)
   console.log(`[V3] Step1(Gemini) + DB사전로드 + 한국감성 병렬 시작...`);
 
+  const KOREAN_SENTIMENT_TIMEOUT_MS = 3000;
   const [geminiDays, preloaded, koreanSentiment] = await Promise.all([
     step1_geminiItinerary(formData, dayCount, daySlotsConfig, vibeWeights),
     preloadCityData(formData.destination),
-    getKoreanSentimentForCity(formData.destination, vibes).catch(() => undefined),
+    Promise.race([
+      getKoreanSentimentForCity(formData.destination, vibes).catch(() => undefined),
+      new Promise<undefined>(resolve => setTimeout(() => resolve(undefined), KOREAN_SENTIMENT_TIMEOUT_MS)),
+    ]),
   ]);
 
   _mark('step1_parallel');
@@ -389,8 +394,8 @@ JSON만 응답 (마크다운/설명 없이):
       model: "gemini-3-flash-preview",
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       config: {
-        temperature: 0.7,
-        maxOutputTokens: 8192,
+        temperature: 0.3,
+        maxOutputTokens: 4096,
         responseMimeType: "application/json",
       },
     });
