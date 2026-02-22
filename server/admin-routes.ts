@@ -4765,5 +4765,75 @@ export function registerAdminRoutes(app: Express) {
       res.status(500).json({ success: false, error: "위기 정보 체크 실패" });
     }
   });
-  
+
+  // ================================================================
+  // [임시 테스트] Gemini 재호출 응답속도 측정
+  // POST /api/admin/test/gemini-refine
+  // 이미 생성된 슬롯을 넘겨서 동선 최적화+가격 추가만 요청
+  // ================================================================
+  app.post("/api/admin/test/gemini-refine", async (req: any, res: any) => {
+    try {
+      const { GoogleGenAI } = await import("@google/genai");
+      const apiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY || process.env.GEMINI_API_KEY || "";
+      if (!apiKey) return res.status(500).json({ error: "API key missing" });
+      const ai = new GoogleGenAI({ apiKey });
+
+      // 이미 생성된 슬롯 (장소+시간만, 동선최적화/가격 없는 상태)
+      const slots = req.body.slots || {
+        city: "Paris, France",
+        days: [
+          { day: 1, places: [
+            { name: "Louvre Museum", type: "activity", startTime: "09:00", endTime: "11:00" },
+            { name: "Bouillon Chartier Grands Boulevards", type: "lunch", startTime: "12:00", endTime: "13:30" },
+            { name: "Tuileries Garden", type: "activity", startTime: "13:30", endTime: "15:30" },
+            { name: "Eiffel Tower", type: "activity", startTime: "16:00", endTime: "18:00" },
+            { name: "Le Comptoir du Relais", type: "dinner", startTime: "19:00", endTime: "20:30" }
+          ]},
+          { day: 2, places: [
+            { name: "Palace of Versailles", type: "activity", startTime: "09:00", endTime: "12:00" },
+            { name: "Angelus Restaurant", type: "lunch", startTime: "13:00", endTime: "14:30" },
+            { name: "Montmartre", type: "activity", startTime: "15:00", endTime: "17:00" },
+            { name: "Sacre-Coeur Basilica", type: "activity", startTime: "17:00", endTime: "18:30" },
+            { name: "Le Relais de l Entrecote", type: "dinner", startTime: "19:30", endTime: "21:00" }
+          ]}
+        ]
+      };
+
+      const prompt = `You are a ${slots.city || "Paris"} expert travel planner. Given this draft itinerary with places and times:
+${JSON.stringify(slots)}
+
+Do these 3 tasks:
+1. Reorder places within each day ONLY if routing is clearly inefficient (minimize backtracking). Keep times as-is.
+2. Set estimatedCostEur = 2026 actual admission fee per person in EUR (0 if free, meal cost for restaurants).
+3. In the "reason" field: start with transit from previous place (metro line / walk X min / bus), then 1 sentence why worth visiting.
+
+Return JSON only, no markdown:
+{"days":[{"day":1,"places":[{"name":"","nameKo":"Korean name","type":"","startTime":"","endTime":"","reason":"transit + visit reason","estimatedCostEur":0}]}]}`;
+
+      const t0 = Date.now();
+      const response = await ai.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        config: { temperature: 0.2, maxOutputTokens: 4096, responseMimeType: "application/json" },
+      });
+      const geminiMs = Date.now() - t0;
+      const text = response.text || "";
+
+      let parsed: any = null;
+      try {
+        parsed = JSON.parse(text.replace(/```json\s*/gi, "").replace(/```\s*/g, "").trim());
+      } catch { /* noop */ }
+
+      res.json({
+        promptChars: prompt.length,
+        responseChars: text.length,
+        geminiMs,
+        result: parsed,
+        raw: parsed ? undefined : text.substring(0, 500),
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
 }
