@@ -1,4 +1,4 @@
-import { db } from "../db";
+﻿import { db } from "../db";
 import { geminiWebSearchCache, places, cities } from "../../shared/schema";
 import { eq, and, gte, or } from "drizzle-orm";
 import { getSearchTools } from "./gemini-search-limiter";
@@ -59,7 +59,7 @@ Return JSON with:
     }
     
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash",
       contents: `${systemPrompt}\n\nSearch query: ${query}`,
       config: {
         tools: getSearchTools("gemini-web-search")
@@ -243,3 +243,4 @@ export async function getWebSearchStats() {
     expert: expertCount
   };
 }
+

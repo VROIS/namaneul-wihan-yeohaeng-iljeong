@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 티스토리 블로그 크롤러
  * Gemini Web Search를 활용하여 한국어 티스토리 블로그에서 여행 정보를 수집합니다.
  */
@@ -57,7 +57,7 @@ async function searchTistoryBlogs(query: string, city: string): Promise<TistoryS
     
     // 💰 프롬프트 최적화: extractedPlaces 제거(DB 중복), posts 5개로 축소, 필드 최소화
     const response = await getAI().models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash",
       contents: [{ role: "user", parts: [{ text: `티스토리 블로그 검색: "${searchQuery}"
 JSON 반환:
 {
@@ -127,7 +127,7 @@ export async function searchPlaceReviews(
 
   try {
     const response = await getAI().models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash",
       contents: [{ role: "user", parts: [{ text: `티스토리 블로그에서 "${placeName}" (${cityName}) 에 대한 리뷰를 검색해주세요.
 
 JSON 형식으로 응답해주세요:
@@ -327,3 +327,4 @@ export const tistoryCrawler = {
   crawlAllTistory,
   getTistoryStats,
 };
+

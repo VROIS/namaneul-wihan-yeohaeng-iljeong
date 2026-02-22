@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 🌟 Celebrity Place Visit Tracker
  * 
  * Nubi 차별화 핵심: 한국 탑 셀럽 10인이 특정 장소를 방문한 흔적을 찾아서
@@ -82,7 +82,7 @@ ${celebList}
     const tools = getSearchTools("celebrity_tracker");
 
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash",
       contents: prompt,
       config: tools ? { tools } : {},
     });
@@ -195,7 +195,7 @@ ${placeList}
     // 25초 타임아웃 (Google Search grounding 포함 시 충분한 시간 필요)
     const timeoutPromise = new Promise<null>((resolve) => setTimeout(() => resolve(null), 25000));
     const searchPromise = ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash",
       contents: prompt,
       config: tools ? { tools } : {},
     });
@@ -242,3 +242,4 @@ ${placeList}
   console.log(`[Celebrity] 🌟 완료 (${elapsed}ms): ${results.size}/${targetPlaces.length}곳에서 셀럽 방문 흔적 발견`);
   return results;
 }
+

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 일정 검증 (Itinerary Verifier)
  *
  * 2차 가공된 최종 일정표를 AI 기본 지식으로 냉정·객관적으로 검증.
@@ -89,7 +89,7 @@ Examples: {"verdict":"적합","score":92,"reason":"비용과 동선이 현실적
 
   try {
     const response = await gemini.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash",
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       config: {
         temperature: 0.2,
@@ -146,3 +146,4 @@ Examples: {"verdict":"적합","score":92,"reason":"비용과 동선이 현실적
     return { passed: false, score: 0, verdict: '이상', reason: error?.message || '검증 예외' };
   }
 }
+

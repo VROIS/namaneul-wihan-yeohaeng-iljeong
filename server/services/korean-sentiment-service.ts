@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 한국 감성 데이터 서비스
  * Instagram/네이버 블로그/YouTube 데이터를 Gemini Web Search로 수집하고 캐시에 저장
  * 
@@ -157,7 +157,7 @@ JSON 형식:
 
   try {
     const response = await getAI().models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash",
       contents: [{ role: "user", parts: [{ text: prompt }] }],
     });
 
@@ -426,3 +426,4 @@ export const koreanSentimentService = {
   calculateNaverScore,
   calculateYouTubeScore
 };
+

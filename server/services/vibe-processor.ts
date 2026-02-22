@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+﻿import { GoogleGenAI } from "@google/genai";
 import { storage } from "../storage";
 import { db } from "../db";
 import { instagramHashtags, instagramLocations, instagramPhotos } from "@shared/schema";
@@ -59,7 +59,7 @@ JSON 형식으로만 응답해주세요:
 
     try {
       const response = await getAI().models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.5-flash",
         contents: [
           {
             role: "user",
@@ -334,3 +334,4 @@ JSON 형식으로만 응답해주세요:
 }
 
 export const vibeProcessor = new VibeProcessor();
+

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 포토스팟 점수 서비스 (Phase 1-3)
  * 
  * 3가지 데이터 결합으로 "사진이 잘 나오는 곳" 점수 계산:
@@ -16,7 +16,7 @@ import { eq, and, gte, desc, ilike } from "drizzle-orm";
 import { getSearchTools } from "./gemini-search-limiter";
 import { safeParseJSON, safeNumber, safeConfidence, safeDbOperation } from "./crawler-utils";
 
-const GEMINI_MODEL = "gemini-3-flash-preview";
+const GEMINI_MODEL = "gemini-2.5-flash";
 const CACHE_DURATION_HOURS = 48;
 
 // ===== 포토스팟 결과 인터페이스 =====
@@ -403,3 +403,4 @@ export async function getPhotospotStats(): Promise<{
     topPhotoSpots,
   };
 }
+

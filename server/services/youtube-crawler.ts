@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+﻿import { GoogleGenAI } from "@google/genai";
 import { db } from "../db";
 import {
   youtubeChannels,
@@ -489,7 +489,7 @@ JSON 배열 형식으로만 응답해주세요:
     try {
       const ai = getGeminiAI();
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.5-flash",
         contents: [{ role: "user", parts: [{ text: prompt }] }],
       });
 
@@ -566,3 +566,4 @@ JSON 배열 형식으로만 응답해주세요:
 }
 
 export const youtubeCrawler = new YouTubeCrawler();
+

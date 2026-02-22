@@ -1,10 +1,10 @@
-import { db } from "../db";
+﻿import { db } from "../db";
 import { tripAdvisorData, places, cities } from "../../shared/schema";
 import { eq, and, gte, desc } from "drizzle-orm";
 import { getSearchTools } from "./gemini-search-limiter";
 import { safeParseJSON, safeNumber, safeRating, safeConfidence, safeString, safeDbOperation } from "./crawler-utils";
 
-const GEMINI_MODEL = "gemini-3-flash-preview";
+const GEMINI_MODEL = "gemini-2.5-flash";
 const CACHE_DURATION_HOURS = 48;
 
 interface TripAdvisorResult {
@@ -267,3 +267,4 @@ export async function getPlaceTripAdvisorData(placeId: number): Promise<{
     fetchedAt: data.fetchedAt,
   };
 }
+

@@ -1,4 +1,4 @@
-import { db } from "../db";
+﻿import { db } from "../db";
 import { instagramHashtags, instagramLocations, instagramPhotos, apiServiceStatus } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { getSearchTools } from "./gemini-search-limiter";
@@ -64,7 +64,7 @@ export class InstagramCrawler {
       
       // 💰 프롬프트 최적화: topPosts 최소화 (caption, likeCount, imageUrl 제거)
       const searchResponse = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.5-flash",
         contents: `인스타그램 #${cleanHashtag} 검색.
 JSON 반환:
 {
@@ -376,3 +376,4 @@ JSON 반환:
 }
 
 export const instagramCrawler = new InstagramCrawler();
+

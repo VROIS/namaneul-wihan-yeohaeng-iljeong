@@ -1,4 +1,4 @@
-/**
+﻿/**
  * AG2: Gemini Creative Recommender (AI 최소 추천)
  * 소요: 5~8초 (현재 39초 대비 80% 감소)
  * 
@@ -109,7 +109,7 @@ Example (Paris): {"places":[{"name":"Eiffel Tower","reason":"파리 필수 랜�
     console.log(`[AG2] 🤖 Gemini에 ${slotCount}곳 요청 (간소화 프롬프트 ${prompt.length}자)...`);
 
     const response = await getAI().models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash",
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       config: {
         temperature: 0.7,
@@ -238,3 +238,4 @@ function repairTruncatedJSON(broken: string): { places: any[] } | null {
     return null;
   }
 }
+

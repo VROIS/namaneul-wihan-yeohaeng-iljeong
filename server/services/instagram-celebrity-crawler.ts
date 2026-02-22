@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 셀럽 인스타그램 흔적 크롤러
  *
  * 이미 확보된 장소(place_seed 기준)에 대해 20인 셀럽의 인스타 흔적을 검색
@@ -118,7 +118,7 @@ ${celebList}
 
       try {
         response = await ai.models.generateContent({
-          model: "gemini-3-flash-preview",
+          model: "gemini-2.5-flash",
           contents: prompt,
           config: tools ? { tools } : {},
         });
@@ -129,7 +129,7 @@ ${celebList}
           console.warn(`[CelebInstagram] API 할당량 초과 → Search 없이 재시도`);
           tools = undefined;
           response = await ai.models.generateContent({
-            model: "gemini-3-flash-preview",
+            model: "gemini-2.5-flash",
             contents: prompt,
             config: {},
           });
@@ -206,3 +206,4 @@ ${celebList}
     errors,
   };
 }
+

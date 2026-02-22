@@ -1,4 +1,4 @@
-import { db } from "../db";
+﻿import { db } from "../db";
 import { weatherForecast, weatherCache, cities, places } from "../../shared/schema";
 import { eq, and, gte, desc } from "drizzle-orm";
 import { getSearchTools } from "./gemini-search-limiter";
@@ -166,7 +166,7 @@ async function fetchWeatherWithGemini(
     const ai = new GoogleGenAI({ apiKey });
 
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash",
       contents: `What is the current weather and 5-day forecast for ${cityName}?
 
 Return JSON:
@@ -322,3 +322,4 @@ export async function getWeatherStats(): Promise<{
     avgRealityPenalty: Math.round(avgPenalty * 100) / 100,
   };
 }
+

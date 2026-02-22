@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 혼잡도 분석기
  * Google Places API의 openNow + Gemini를 활용하여 장소별 혼잡도를 추정합니다.
  * 
@@ -128,7 +128,7 @@ async function getPopularityFromGemini(
   try {
     // 💰 프롬프트 최적화: waitTimeEstimate, weekendDifference, seasonalNote 제거
     const response = await getAI().models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash",
       contents: [{ role: "user", parts: [{ text: `"${placeName}" (${cityName}, ${placeType}) 혼잡도.
 JSON 반환:
 {
@@ -386,3 +386,4 @@ export const popularityAnalyzer = {
   getBatchPopularity,
   getOptimalVisitOrder,
 };
+

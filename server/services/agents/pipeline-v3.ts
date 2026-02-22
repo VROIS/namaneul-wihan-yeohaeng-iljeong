@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Pipeline V3: 2단계 일정 생성 파이프라인
  *
  * ┌─────────────────────────────────────────────────────────┐
@@ -391,7 +391,7 @@ JSON만 응답 (마크다운/설명 없이):
     console.log(`[V3-Step1] 🤖 Gemini에 ${dayCount}일 완전 일정 요청 (${prompt.length}자)...`);
 
     const response = await getAI().models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash",
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       config: {
         temperature: 0.3,
@@ -1385,3 +1385,4 @@ function repairTruncatedJSON(broken: string): { days: GeminiDay[] } | null {
 
 // getNubiEvidenceUrl, getNubiSourceType 제거 (2026-02-21)
 // place_seed_raw.evidenceUrl / sourceType을 seedRawMap에서 직접 조회 → DB 쿼리 0회
+

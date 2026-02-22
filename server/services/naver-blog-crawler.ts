@@ -1,4 +1,4 @@
-import { db } from "../db";
+﻿import { db } from "../db";
 import { naverBlogPosts, cities, places } from "../../shared/schema";
 import { eq, desc, and, gte } from "drizzle-orm";
 import { getSearchTools } from "./gemini-search-limiter";
@@ -85,7 +85,7 @@ async function searchBlogWithGemini(query: string): Promise<NaverBlogSearchResul
 
     // 💰 프롬프트 최적화: bloggername, bloggerlink, postdate 제거, 5개로 축소
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash",
       contents: `한국인 여행 블로그 "${query}" 검색. JSON 배열 반환:
 [{"title":"블로그 제목","link":"URL","description":"요약 100자"}]
 최대 5개. 없으면 [].`,
@@ -120,7 +120,7 @@ async function extractPlacesFromBlog(
     const ai = new GoogleGenAI({ apiKey });
 
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash",
       contents: `Analyze this Korean travel blog post about ${cityName}:
 
 Title: ${title}
@@ -374,3 +374,4 @@ export async function getCityBlogInsights(cityId: number): Promise<{
     trendingKeywords,
   };
 }
+

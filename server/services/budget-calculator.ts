@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 예산 계산기 (Budget Calculator) - 소숫점 정밀 계산
  * 
  * 🎯 TravelStyle 기반 통합 비용 산정
@@ -143,7 +143,7 @@ async function searchEntranceFeeWithGemini(placeName: string, destination: strin
 JSON 형식으로만 답해주세요: {"entranceFee": 숫자 또는 null, "source": "출처"}`;
     
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
+      model: 'gemini-2.5-flash',
       contents: prompt,
     });
     
@@ -458,3 +458,4 @@ export class BudgetCalculator {
 }
 
 export const budgetCalculator = new BudgetCalculator();
+

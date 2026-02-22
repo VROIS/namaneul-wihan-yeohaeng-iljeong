@@ -1,4 +1,4 @@
-import { GoogleGenAI } from "@google/genai";
+﻿import { GoogleGenAI } from "@google/genai";
 import { storage } from "../storage";
 import type { Place, Review } from "@shared/schema";
 
@@ -63,7 +63,7 @@ Respond in JSON format only:
 
     try {
       const response = await getAI().models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.5-flash",
         contents: [{ role: "user", parts: [{ text: prompt }] }],
       });
 
@@ -237,3 +237,4 @@ Respond in JSON format only:
 }
 
 export const tasteVerifier = new OriginalTasteVerifier();
+

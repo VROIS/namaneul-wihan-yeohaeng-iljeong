@@ -1,4 +1,4 @@
-import type { Express } from "express";
+﻿import type { Express } from "express";
 import { db, isDatabaseConnected } from "./db";
 import path from "path";
 import fs from "fs";
@@ -554,7 +554,7 @@ export function registerAdminRoutes(app: Express) {
           const { GoogleGenAI } = await import("@google/genai");
           const ai = new GoogleGenAI({ apiKey: geminiKey });
           await ai.models.generateContent({
-            model: "gemini-3-flash-preview",
+            model: "gemini-2.5-flash",
             contents: "test"
           });
         });
@@ -3684,7 +3684,7 @@ export function registerAdminRoutes(app: Express) {
             const { GoogleGenAI } = await import("@google/genai");
             const ai = new GoogleGenAI({ apiKey });
             const response = await ai.models.generateContent({
-              model: "gemini-3-flash-preview",
+              model: "gemini-2.5-flash",
               contents: "Say 'API test successful' in Korean"
             });
             testResult = { success: true, message: response.text?.slice(0, 100) || 'OK' };
@@ -4812,7 +4812,7 @@ Return JSON only, no markdown:
 
       const t0 = Date.now();
       const response = await ai.models.generateContent({
-        model: "gemini-3-flash-preview",
+        model: "gemini-2.5-flash",
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         config: { temperature: 0.2, maxOutputTokens: 4096, responseMimeType: "application/json" },
       });
@@ -4837,3 +4837,4 @@ Return JSON only, no markdown:
   });
 
 }
+

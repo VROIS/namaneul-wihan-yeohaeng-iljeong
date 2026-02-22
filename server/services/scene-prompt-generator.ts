@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 🎬 Scene Prompt Generator
  * 
  * 일정표(itinerary) 데이터를 기반으로 Seedance용 영상 프롬프트를 자동 생성
@@ -466,7 +466,7 @@ async function generateSceneWithGemini(
     }
     
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-3-flash-preview" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
     
     const dialogueStyle = DIALOGUE_STYLE[context.curationFocus];
     const primaryVibe = context.vibes[0] || 'Family';
@@ -761,3 +761,4 @@ export async function generateSingleScenePrompt(
     isTransport: false
   };
 }
+

@@ -1,10 +1,10 @@
-import { db } from "../db";
+﻿import { db } from "../db";
 import { places, placeDataSources, cities } from "../../shared/schema";
 import { eq, and, gte, desc, isNull, or } from "drizzle-orm";
 import { getSearchTools } from "./gemini-search-limiter";
 import { safeParseJSON, safeString, safeConfidence, safeDbOperation } from "./crawler-utils";
 
-const GEMINI_MODEL = "gemini-3-flash-preview";
+const GEMINI_MODEL = "gemini-2.5-flash";
 const CACHE_DURATION_HOURS = 168; // 7일 (미슐랭 데이터는 자주 변하지 않음)
 
 interface MichelinResult {
@@ -333,3 +333,4 @@ export async function getPlaceMichelinData(placeId: number): Promise<{
     fetchedAt: data.fetchedAt,
   };
 }
+

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 한국 여행 플랫폼 크롤러 (Phase 1-1)
  * 
  * 마이리얼트립 / 클룩(Klook) / 트립닷컴(Trip.com)에서
@@ -14,7 +14,7 @@ import { eq, and, gte, desc } from "drizzle-orm";
 import { getSearchTools } from "./gemini-search-limiter";
 import { safeParseJSON, safePrice, safeNumber, safeRating, safeCurrency, safeConfidence, safeString, safeDbOperation } from "./crawler-utils";
 
-const GEMINI_MODEL = "gemini-3-flash-preview";
+const GEMINI_MODEL = "gemini-2.5-flash";
 const CACHE_DURATION_HOURS = 24;
 
 // ===== 플랫폼 정의 =====
@@ -384,3 +384,4 @@ export async function getPlaceKoreanPlatformPrices(placeId: number): Promise<{
 
   return { prices, bestPrice };
 }
+

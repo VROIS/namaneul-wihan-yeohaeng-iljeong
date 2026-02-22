@@ -1,4 +1,4 @@
-/**
+﻿/**
  * nubiReason 배치 수집 서비스
  *
  * 카테고리별 30장소 → 10곳씩 3배치 → Gemini 1회/배치 → 4단계 검증 → DB 저장
@@ -174,7 +174,7 @@ ${celebList}
     const tools = getSearchTools("nubi_reason_batch");
 
     const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: "gemini-2.5-flash",
       contents: prompt,
       config: tools ? { tools } : {},
     });
@@ -354,3 +354,4 @@ export async function collectNubiReasonsForCategory(
 
   return { totalSaved, totalFailed, batchResults };
 }
+

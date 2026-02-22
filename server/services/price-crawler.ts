@@ -1,4 +1,4 @@
-import { db } from "../db";
+﻿import { db } from "../db";
 import { placePrices, places, cities } from "../../shared/schema";
 import { eq, and, gte, desc } from "drizzle-orm";
 import { getSearchTools } from "./gemini-search-limiter";
@@ -17,7 +17,7 @@ interface PriceData {
   rawData?: Record<string, any>;
 }
 
-const GEMINI_MODEL = "gemini-3-flash-preview";
+const GEMINI_MODEL = "gemini-2.5-flash";
 
 async function extractPriceWithGemini(
   placeName: string,
@@ -494,3 +494,4 @@ export async function getPriceStats(): Promise<{
     byType,
   };
 }
+

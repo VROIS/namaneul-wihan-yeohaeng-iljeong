@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Phase E - 영상용 대사 자동 생성 서비스
  * 
  * Gemini 3.0을 사용하여:
@@ -129,7 +129,7 @@ ${input.vibes.join(", ")}
 4. 영상 프롬프트는 반드시 영어로, 상세하게`;
 
         const response = await ai.models.generateContent({
-            model: "gemini-3-flash-preview",
+            model: "gemini-2.5-flash",
             contents: systemPrompt,
         });
 
@@ -247,3 +247,4 @@ export function getAgeRangeFromCharacterId(characterId: string): string {
     };
     return ageMap[characterId] || "30-39";
 }
+

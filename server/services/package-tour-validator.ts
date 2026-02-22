@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 패키지 투어 검증 서비스 (Phase 1-2)
  * 
  * 하나투어/모두투어/참좋은여행/노랑풍선 패키지에
@@ -15,7 +15,7 @@ import { eq, and, gte, desc } from "drizzle-orm";
 import { getSearchTools } from "./gemini-search-limiter";
 import { safeParseJSON, safeNumber, safeConfidence, safeDbOperation } from "./crawler-utils";
 
-const GEMINI_MODEL = "gemini-3-flash-preview";
+const GEMINI_MODEL = "gemini-2.5-flash";
 const CACHE_DURATION_HOURS = 48; // 패키지 상품은 자주 안 바뀜
 
 // ===== 결과 인터페이스 =====
@@ -305,3 +305,4 @@ export async function getPackageTourStats(): Promise<{
     topIncludedPlaces: topIncluded,
   };
 }
+
