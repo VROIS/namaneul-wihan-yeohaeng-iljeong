@@ -43,6 +43,19 @@ import { exchangeRates, youtubePlaceMentions, youtubeVideos, youtubeChannels, na
 import { eq, and, sql, desc, asc } from 'drizzle-orm';
 import { findCelebrityVisitsForPlaces, type CelebrityVisit } from '../celebrity-tracker';
 
+/**
+ * Gemini 반환 가격 정제
+ * - "19,500" → 19.5 (천 단위 구분자 오파싱 방지)
+ * - 500 EUR 초과 → 0 (명백한 오류값 제거, 유럽 일반 입장료 최대 €200)
+ */
+function sanitizePriceEur(raw: any): number {
+  if (raw == null) return 0;
+  const n = typeof raw === 'string' ? parseFloat(raw.replace(/,/g, '.')) : Number(raw);
+  if (isNaN(n) || n < 0) return 0;
+  if (n > 500) return 0; // 명백한 오류 (팡테옹 19500 등)
+  return Math.round(n * 100) / 100;
+}
+
 // ===== 5대 가격원칙: priceLevel → 2026 실제 물가 (EUR) =====
 function priceLevelToEur(level: number, meal?: 'lunch' | 'dinner'): number {
   const map: Record<number, { lunch: number; dinner: number; entrance: number }> = {
@@ -364,11 +377,10 @@ ${dayRequirements}
 13. 식사: 점심(lunch)은 12:00~13:30, 저녁(dinner)은 18:30~20:00 시작. 해당 시간 없으면 생략
 14. 현지인 맛집 (관광객 덫 회피). 실제 영업 중인 곳만
 15. nameKo = 한국어 장소명
-16. reason = 추천 이유 + 이동수단 안내 한국어로 (예: "루브르 바로 옆, 도보 3분")
-17. transitNote = 이전 장소에서 이 장소까지 이동 방법 (예: "메트로 4호선 Saint-Michel역 하차, 도보 5분")
+16. reason = 추천 이유 한국어로. 첫 장소는 "도심에서 [교통편] [시간]분" 형태로 시작. 이후 장소는 "앞 장소에서 [교통편] [시간]분" 포함. 예: "루브르 바로 옆, 도보 3분. 인상파 대표작 소장."
 
 JSON만 응답 (마크다운/설명 없이):
-{"days":[{"day":1,"theme":"테마 한국어","places":[{"name":"Official English Name","nameKo":"한국어 이름","type":"activity","startTime":"09:00","endTime":"11:00","reason":"한국어 추천 이유 및 이동 안내","transitNote":"이전 장소에서 이동 방법","estimatedCostEur":0}]}]}`;
+{"days":[{"day":1,"theme":"테마 한국어","places":[{"name":"Official English Name","nameKo":"한국어 이름","type":"activity","startTime":"09:00","endTime":"11:00","reason":"교통편 포함 한국어 추천 이유","estimatedCostEur":0}]}]}`;
 
   try {
     console.log(`[V3-Step1] 🤖 Gemini에 ${dayCount}일 완전 일정 요청 (${prompt.length}자)...`);
@@ -486,13 +498,13 @@ async function step2_enrichAndBuild(
         tags: isMeal ? ['restaurant', 'food'] : [],
         vibeTags: isMeal ? ['Foodie' as const] : [],
         image: '',
-        priceEstimate: gPlace.estimatedCostEur > 0 ? `€${gPlace.estimatedCostEur}` : '무료',
+        priceEstimate: sanitizePriceEur(gPlace.estimatedCostEur) > 0 ? `€${sanitizePriceEur(gPlace.estimatedCostEur)}` : '무료',
         placeTypes: isMeal ? ['restaurant'] : ['tourist_attraction'],
         recommendedTime: gPlace.startTime < '12:00' ? 'morning' : gPlace.startTime < '17:00' ? 'afternoon' : 'evening',
         city: formData.destination,
         koreanPopularityScore: 0,
         googleMapsUrl: '',
-        estimatedPriceEur: gPlace.estimatedCostEur || 0,
+        estimatedPriceEur: sanitizePriceEur(gPlace.estimatedCostEur),
       };
       allPlaces.push(place);
       scheduleMap.push({ day: gDay.day, gPlace, placeId });
