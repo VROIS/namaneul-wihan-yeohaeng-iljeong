@@ -33,8 +33,8 @@ import {
   type TransportPricingResult, type GuidePriceResult, type TransitPriceResult, type UberBlackComparison,
 } from '../transport-pricing-service';
 import { db } from '../../db';
-import { exchangeRates, youtubePlaceMentions, youtubeVideos, youtubeChannels, naverBlogPosts, places, placeNubiReasons, placeSeedRaw } from '@shared/schema';
-import { eq, and, ilike, sql, desc, asc } from 'drizzle-orm';
+import { exchangeRates, youtubePlaceMentions, youtubeVideos, youtubeChannels, naverBlogPosts, places, placeSeedRaw } from '@shared/schema';
+import { eq, and, sql, desc, asc } from 'drizzle-orm';
 import { findCelebrityVisitsForPlaces, type CelebrityVisit } from '../celebrity-tracker';
 
 // ===== 5대 가격원칙: priceLevel → 2026 실제 물가 (EUR) =====
@@ -616,11 +616,17 @@ async function step2_enrichAndBuild(
 
     // 이 날의 스케줄
     const dayScheduleItems = scheduleMap.filter(s => s.day === d);
-    const dayPlaces = await Promise.all(dayScheduleItems.map(async s => {
+    const dayPlaces = dayScheduleItems.map(s => {
       const enrichedPlace = finalPlaceMap.get(s.placeId) || matchedMap.get(s.placeId)!;
       const isMeal = s.gPlace.type === 'lunch' || s.gPlace.type === 'dinner';
       // 프론트 전달 시 불필요한 0값 필드 제거 (React Native에서 {0}이 "0" 텍스트로 표시되는 문제 방지)
       const { finalScore, buzzScore, ...safePlace } = enrichedPlace as any;
+
+      // seedRawMap에서 직접 조회 (DB 추가 쿼리 없음 — place_seed_raw 1회 로드로 모두 해결)
+      const placeNameEn = enrichedPlace.name ? enrichedPlace.name.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, "") : "";
+      const placeNameKo = (enrichedPlace as any).nameKo ? (enrichedPlace as any).nameKo.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, "") : "";
+      const placeSeed = preloaded.seedRawMap?.get(placeNameEn) || preloaded.seedRawMap?.get(placeNameKo);
+
       return {
         ...safePlace,
         // 0이 아닌 경우만 포함
@@ -643,9 +649,9 @@ async function step2_enrichAndBuild(
         nameKo: s.gPlace.nameKo,
         // ⭐ nubiReason: 우리 데이터 기반 차별화 선정이유 (크게/진하게 표시)
         nubiReason: enrichedPlace.nubiReason || null,
-        // ⭐ nubiReason 메타데이터 (근거 링크 + 출처 타입)
-        nubiEvidenceUrl: await getNubiEvidenceUrl(enrichedPlace.name),
-        nubiReasonSource: await getNubiSourceType(enrichedPlace.name),
+        // ⭐ nubiReason 메타데이터 — place_seed_raw에서 직접 (DB 추가 쿼리 0회)
+        nubiEvidenceUrl: placeSeed?.evidenceUrl || null,
+        nubiReasonSource: placeSeed?.sourceType || null,
         // Gemini AI 요약 (보통 글씨로 표시)
         geminiReason: s.gPlace.reason || '',
         // 부가 정보
@@ -653,7 +659,7 @@ async function step2_enrichAndBuild(
         confidenceLevel: enrichedPlace.confidenceLevel || 'medium',
         realityCheck,
       };
-    }));
+    });
 
     // 숙소 좌표 결정
     const dayAccommodation = formData.dayAccommodations?.find(a => a.day === d);
@@ -1255,28 +1261,5 @@ function repairTruncatedJSON(broken: string): { days: GeminiDay[] } | null {
 // ⭐ nubiReason 메타데이터 헬퍼 (evidenceUrl, sourceType)
 // =====================================================
 
-/** placeNubiReasons 테이블에서 근거 URL 조회 */
-async function getNubiEvidenceUrl(placeName: string): Promise<string | null> {
-  if (!db) return null;
-  try {
-    const [match] = await db.select({ id: places.id })
-      .from(places).where(ilike(places.name, `%${placeName}%`)).limit(1);
-    if (!match) return null;
-    const [row] = await db.select({ url: placeNubiReasons.evidenceUrl })
-      .from(placeNubiReasons).where(eq(placeNubiReasons.placeId, match.id)).limit(1);
-    return row?.url || null;
-  } catch { return null; }
-}
-
-/** placeNubiReasons 테이블에서 출처 타입 조회 (instagram|youtube|naver_blog|package|travel_app) */
-async function getNubiSourceType(placeName: string): Promise<string | null> {
-  if (!db) return null;
-  try {
-    const [match] = await db.select({ id: places.id })
-      .from(places).where(ilike(places.name, `%${placeName}%`)).limit(1);
-    if (!match) return null;
-    const [row] = await db.select({ type: placeNubiReasons.sourceType })
-      .from(placeNubiReasons).where(eq(placeNubiReasons.placeId, match.id)).limit(1);
-    return row?.type || null;
-  } catch { return null; }
-}
+// getNubiEvidenceUrl, getNubiSourceType 제거 (2026-02-21)
+// place_seed_raw.evidenceUrl / sourceType을 seedRawMap에서 직접 조회 → DB 쿼리 0회
