@@ -503,14 +503,47 @@ export async function matchPlacesWithDB(
   }
 
   // === 4단계: 이미지 빈칸 방지 — 선정된 장소는 반드시 사진 있어야 함 ===
+  // Instagram 깨진 URL 사전 필터: instagram.com/p/xxx 형식은 실제 이미지 아님
+  for (let i = 0; i < enriched.length; i++) {
+    const img = enriched[i].image || '';
+    if (img && img.includes('instagram.com/p/') && !img.includes('cdninstagram') && !img.includes('fbcdn.net')) {
+      enriched[i] = { ...enriched[i], image: '' };
+    }
+  }
+
   const needsPhoto = enriched.filter((p) => !p.image || p.image.trim() === '');
   if (needsPhoto.length > 0) {
     const _pt0 = Date.now();
-    const BATCH_SIZE = 3;
+    // Wikipedia REST API: 무료, 영구 URL, 인증 불필요 - 유명 관광지 99% 커버
+    const fetchWikipediaImage = async (placeName: string): Promise<string | null> => {
+      try {
+        const encoded = encodeURIComponent(placeName.replace(/ /g, '_'));
+        const res = await Promise.race([
+          fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encoded}`, {
+            headers: { 'User-Agent': 'NubiApp/1.0 (travel app; contact@nubi.app)' }
+          }),
+          new Promise<null>((r) => setTimeout(() => r(null), 2000)),
+        ]);
+        if (!res || !(res instanceof Response) || !res.ok) return null;
+        const data = await res.json();
+        return data?.thumbnail?.source || data?.originalimage?.source || null;
+      } catch { return null; }
+    };
+
+    // 병렬 처리 (Wikipedia 5개 + Google Places 2개 동시)
+    const BATCH_SIZE = 5;
     for (let i = 0; i < needsPhoto.length; i += BATCH_SIZE) {
       const batch = needsPhoto.slice(i, i + BATCH_SIZE);
       await Promise.all(
         batch.map(async (p) => {
+          // 1차: Wikipedia (빠름, 무료, 영구)
+          const wikiUrl = await fetchWikipediaImage(p.name);
+          if (wikiUrl && isUsableImageUrl(wikiUrl)) {
+            const idx = enriched.findIndex((e) => e.name === p.name && e.lat === p.lat);
+            if (idx >= 0) enriched[idx] = { ...enriched[idx], image: wikiUrl };
+            return;
+          }
+          // 2차: Google Places API (비용 발생, 한도 내에서만)
           const res = await Promise.race([
             searchPlaceByName(p.name, cityName),
             new Promise<Awaited<ReturnType<typeof searchPlaceByName>>>((r) => setTimeout(() => r(null), 2500)),
@@ -523,7 +556,7 @@ export async function matchPlacesWithDB(
       );
     }
     const filled = enriched.filter((p) => p.image?.trim()).length;
-    if (filled > 0) console.log(`[AG3] 📷 이미지 보강: ${needsPhoto.length}곳 중 일부 확보 (${Date.now() - _pt0}ms)`);
+    console.log(`[AG3] 📷 이미지 보강: ${needsPhoto.length}곳 시도 → ${filled}/${enriched.length}곳 확보 (${Date.now() - _pt0}ms)`);
   }
 
   console.log(`[AG3] 최종: ${matched}곳 DB, ${googleFetched}곳 Google, ${unmatchedCount}곳 원본 (${Date.now() - _t0}ms)`);
