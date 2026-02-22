@@ -240,10 +240,19 @@ export async function preloadCityData(
       }
     }
 
+    // 도시 중심 좌표 (숙소 미입력 시 출발 기점으로 사용)
+    const cityCoords = (cityResult?.latitude && cityResult?.longitude)
+      ? { lat: cityResult.latitude, lng: cityResult.longitude }
+      : undefined;
+    if (cityCoords) {
+      console.log(`[AG3-pre] 📍 도시 중심 좌표: ${cityCoords.lat.toFixed(4)}, ${cityCoords.lng.toFixed(4)}`);
+    }
+
     return {
       cityId,
       dbPlacesMap,
       cityName: cityResult?.nameEn || destination,
+      cityCoords,
       placeImageMap,
       celebrityImageMap,
       seedRawMap

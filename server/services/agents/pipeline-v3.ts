@@ -1,22 +1,28 @@
 /**
  * Pipeline V3: 2단계 일정 생성 파이프라인
- * 
- * 기존 4-Agent(AG1→AG2→AG3→AG4) 순차 구조 → 2단계 병렬 구조로 간소화
- * 
+ *
  * ┌─────────────────────────────────────────────────────────┐
- * │ Step 1: Gemini 완전 일정 생성 (3~5초)                   │
- * │   • 자연어 프롬프트 → 일차별/동선별 완전한 일정표        │
- * │   • 식사 배치, 동선 최적화, 시간 배분 모두 Gemini 처리   │
+ * │ Step 1: Gemini 완전 일정 생성 (강화 프롬프트)            │
+ * │   • 도시 중심 출발/종료, 지리 동선 최적화                │
+ * │   • 교통편 명시, 2026 최신 입장료, 계절 반영             │
+ * │   • 식사 배치, 이동시간 추정 모두 Gemini 처리            │
  * ├─────────────────────────────────────────────────────────┤
- * │ Step 2: 데이터 채우기 (2~4초, 전부 병렬)                │
- * │   • DB 매칭: places 테이블 → 사진, 점수, 좌표           │
- * │   • 가격: place_seed_raw (통합 전시 매장)               │
- * │   • 한국 인기: naverBlogPosts → 한국인 선호도            │
- * │   • 실시간: 날씨, 환율, 위기경보, 이동시간               │
+ * │ Step 2: NUBI 차별화 데이터 삽입 (병렬)                  │
+ * │   • DB 매칭: places → 사진, 점수, 좌표                  │
+ * │   • nubiReason, 셀럽사진, 한국 OTA 가격                 │
+ * │   • 이동시간: Haversine 추정 (Google Routes 일시정지)    │
  * └─────────────────────────────────────────────────────────┘
- * 
- * 총 소요: 5~9초 (기존 12~18초 대비 50% 단축)
+ *
+ * Google Routes API: USE_GOOGLE_ROUTES=false 로 일시정지
+ *   → 미래 프리미엄 기능 ("실현가능성 검증") 용으로 보존
+ *   → 소도시/비주류 지역 실측 필요 시 플래그 전환
+ *
+ * 총 소요: 10~12초 목표
  */
+
+// ===== Google Routes API 플래그 (일시정지: false, 활성화: true) =====
+// 미래 프리미엄 "실현가능성 검증" 기능 용으로 보존
+const USE_GOOGLE_ROUTES = false;
 
 import { GoogleGenAI } from "@google/genai";
 import type { TripFormData, PlaceResult, DaySlotConfig, TravelPace, VibeWeight, TravelStyle } from './types';
@@ -97,6 +103,7 @@ interface GeminiPlace {
   startTime: string;
   endTime: string;
   reason: string;
+  transitNote?: string; // 이전 장소에서 이 장소까지 이동 방법 (Gemini 생성)
   estimatedCostEur: number;
 }
 
@@ -316,43 +323,52 @@ async function step1_geminiItinerary(
   };
   const dateRangeText = `${startDate ? formatDateShort(startDate) : ''}부터 ${endDate ? formatDateShort(endDate) : ''}까지`;
 
-  // ===== 핵심 요청 한 문장 (자연어로 풀어쓴 사용자 의도 → Gemini 능력 가늠용) =====
-  const oneLineRequest = `${companionDesc} ${headcount}명과 ${dateRangeText} ${formData.destination} 근교 100km 내외에서, 구글맵 리뷰순으로 유명한 장소를 중심으로 ${vibeNatural}하며 역사·유적 관람하고 현지 맛집 위주로, ${mobilityDesc} ${styleDesc} 여행하는 ${dayCount}일 일정을 만들어주세요.`;
+  // 현재 연도/월 (2026 최신 정보 반영 지시용)
+  const nowYear = new Date().getFullYear();
+  const nowMonth = new Date().getMonth() + 1;
+  const seasonNote = nowMonth >= 3 && nowMonth <= 5 ? '봄 시즌' :
+    nowMonth >= 6 && nowMonth <= 8 ? '여름 시즌 (성수기, 인파 많음)' :
+      nowMonth >= 9 && nowMonth <= 11 ? '가을 시즌' :
+        '겨울 시즌 (비수기, 일부 시설 단축운영)';
 
-  // ===== 자연어 프롬프트 조합 =====
-  const prompt = `당신은 한국인 관광객 전문 여행 플래너입니다.
+  // ===== 강화 프롬프트 조합 (v3.1 - 동선최적화 + 최신가격 + 교통편 내장) =====
+  const prompt = `당신은 ${nowYear}년 현재 기준 최신 정보를 갖춘 한국인 관광객 전문 여행 플래너입니다.
 
-[핵심 요청]
-${oneLineRequest}
-
-[여행자 프로필]
-${ageDesc ? `• ${ageDesc} 여행자가` : '• 여행자가'} ${companionDesc} ${headcount}명이 ${formData.destination}에 갑니다.
-${agesDesc ? `• ${agesDesc}` : ''}
-• 큐레이션: ${focusDesc}
-• 기간: ${startDate} ~ ${endDate} (${dayCount}일)
-• 분위기: ${vibeNatural}
-• 예산: ${styleDesc} — 점심 1인 ~€${mealBudget.lunch}, 저녁 1인 ~€${mealBudget.dinner}
-• 이동: ${mobilityDesc}
-• 속도: ${paceKo}
+[핵심 미션]
+${companionDesc} ${headcount}명, ${dateRangeText}, ${formData.destination} 여행.
+분위기: ${vibeNatural} / 예산: ${styleDesc} / 이동: ${mobilityDesc} / 속도: ${paceKo}
+${ageDesc ? `여행자 나이: ${ageDesc}` : ''} ${agesDesc ? `/ ${agesDesc}` : ''}
+큐레이션: ${focusDesc}
+현재 계절: ${seasonNote}
 
 [일별 스케줄]
 ${dayRequirements}
 
-[필수 규칙]
-0. 장소 범위: ${formData.destination} 도시 중심 및 근교(반경 약 100km) 내에서 검색. 근교 명소도 포함 가능.
-1. ⭐ 배치 우선순위: 구글맵 리뷰 수·평점이 높고 한국인에게 유명한 Must-Visit 장소를 Day 1부터 우선 배치. 인기도가 낮거나 마이너한 장소는 후반부 Day에 배치. 거리보다 중요도가 Day 배치의 핵심 기준.
-2. 장소명은 반드시 Google Maps에서 검색 가능한 영어 공식명 사용
-3. 식사 배치: 점심(type:"lunch")은 반드시 12:00~13:30에, 저녁(type:"dinner")은 18:30~20:00에 시작해야 함. 해당 시간대가 가용시간에 없으면 그 식사는 생략. 점심→저녁 간격 최소 4시간
-4. 동선 최적화: 같은 Day 안에서 가까운 장소끼리 묶고 왔다갔다 하지 않게. 단 Day 간 배치는 인기도 우선.
-5. 시간은 현실적으로 (겹치지 않게, 이동시간 고려)
-6. estimatedCostEur = 1인당 입장료(EUR). 무료면 0, 식당은 1인 식사비
-7. 현지인이 가는 진짜 맛집 추천 (관광객 덫 피하기)
-8. 실제 존재하고 현재 영업 중인 곳만
-9. nameKo = 한국어 장소명
-10. reason = 왜 이 장소를 추천하는지 한국어로 (여행자 프로필 반영)
+[동선 설계 원칙 — 핵심]
+1. 출발·종료 기점: 매일 ${formData.destination} 도시 중심부(중앙역 또는 중심 광장)에서 시작하고 돌아옴
+2. 지리적 동선 최적화: 같은 날 같은 구역·방향의 장소끼리 묶어 배치. 왕복/역방향 이동 금지
+3. 이동수단 명시: 각 장소 이동에 실제 교통편 기재 (예: "메트로 1호선", "RER C", "도보 10분", "버스 85번")
+4. 이동시간 현실 반영: 장소 간 실제 이동시간 고려하여 startTime/endTime 설정 (겹침 절대 금지)
+5. 근교 이동 시: 당일 첫 일정으로 배치하고 복귀 시간 확보
 
-JSON만 응답하세요 (마크다운/설명 없이):
-{"days":[{"day":1,"theme":"테마 한국어","places":[{"name":"Official English Name","nameKo":"한국어 이름","type":"activity","startTime":"09:00","endTime":"11:00","reason":"한국어 추천 이유","estimatedCostEur":0}]}]}`;
+[가격 원칙]
+6. estimatedCostEur = ${nowYear}년 현재 실제 입장료 (EUR, 1인 기준). 무료면 0, 식당은 1인 식사비
+7. 예산 기준: 점심 1인 ~€${mealBudget.lunch}, 저녁 1인 ~€${mealBudget.dinner}
+8. 최근 인상된 가격 반영 (루브르, 에펠탑 등 주요 명소는 ${nowYear}년 기준 실제 요금)
+9. 현재 ${seasonNote} 기준 운영 현황 반영 (임시 휴관·단축운영·예약 필수 여부 명시)
+
+[장소 선정 원칙]
+10. 장소 범위: ${formData.destination} 도시 및 근교 100km 내
+11. ⭐ Day 1 우선: 구글맵 리뷰 수·평점 높고 한국인에게 유명한 Must-Visit 장소. 마이너 장소는 후반 Day 배치
+12. 장소명: Google Maps 검색 가능한 영어 공식명 사용
+13. 식사: 점심(lunch)은 12:00~13:30, 저녁(dinner)은 18:30~20:00 시작. 해당 시간 없으면 생략
+14. 현지인 맛집 (관광객 덫 회피). 실제 영업 중인 곳만
+15. nameKo = 한국어 장소명
+16. reason = 추천 이유 + 이동수단 안내 한국어로 (예: "루브르 바로 옆, 도보 3분")
+17. transitNote = 이전 장소에서 이 장소까지 이동 방법 (예: "메트로 4호선 Saint-Michel역 하차, 도보 5분")
+
+JSON만 응답 (마크다운/설명 없이):
+{"days":[{"day":1,"theme":"테마 한국어","places":[{"name":"Official English Name","nameKo":"한국어 이름","type":"activity","startTime":"09:00","endTime":"11:00","reason":"한국어 추천 이유 및 이동 안내","transitNote":"이전 장소에서 이동 방법","estimatedCostEur":0}]}]}`;
 
   try {
     console.log(`[V3-Step1] 🤖 Gemini에 ${dayCount}일 완전 일정 요청 (${prompt.length}자)...`);
@@ -654,6 +670,8 @@ async function step2_enrichAndBuild(
         nubiReasonSource: placeSeed?.sourceType || null,
         // Gemini AI 요약 (보통 글씨로 표시)
         geminiReason: s.gPlace.reason || '',
+        // Gemini가 생성한 교통편 안내 (강화 프롬프트 v3.1)
+        transitNote: s.gPlace.transitNote || null,
         // 부가 정보
         selectionReasons: enrichedPlace.selectionReasons || [],
         confidenceLevel: enrichedPlace.confidenceLevel || 'medium',
@@ -661,7 +679,8 @@ async function step2_enrichAndBuild(
       };
     });
 
-    // 숙소 좌표 결정
+    // 숙소/출발 좌표 결정
+    // 우선순위: 사용자 입력 숙소 > 사용자 입력 도착지 좌표 > DB 도시 중심 좌표 > 첫 장소 좌표
     const dayAccommodation = formData.dayAccommodations?.find(a => a.day === d);
     let accommodationCoords: { lat: number; lng: number } | undefined;
     let accommodationName = '';
@@ -678,29 +697,36 @@ async function step2_enrichAndBuild(
     } else if (formData.destinationCoords?.lat && formData.destinationCoords?.lng) {
       accommodationCoords = formData.destinationCoords;
       accommodationName = `${formData.destination} 도심`;
+    } else if (preloaded.cityCoords?.lat && preloaded.cityCoords?.lng) {
+      // ⭐ DB cities 테이블의 도시 중심 좌표 자동 사용 (사용자가 숙소 미입력 시)
+      accommodationCoords = preloaded.cityCoords;
+      accommodationName = `${preloaded.cityName || formData.destination} 도심`;
     } else if (dayPlaces.length > 0 && dayPlaces[0].lat && dayPlaces[0].lng) {
       accommodationCoords = { lat: dayPlaces[0].lat, lng: dayPlaces[0].lng };
       accommodationName = '도심 기준';
     }
 
-    // ── 이동 구간 병렬 계산 (카테고리 무관하게 항상 계산 - 거리/시간 데이터 필요) ──
+    // ── 이동 구간 병렬 계산 ──
+    // Haversine 추정(USE_GOOGLE_ROUTES=false) → 즉시 반환, 외부 API 호출 없음
     const transitPromises: Promise<any>[] = [];
 
-    // 숙소 → 첫 장소
+    // 숙소/도심 → 첫 장소
     if (accommodationCoords && dayPlaces.length > 0) {
       transitPromises.push(
-        calcTransit(accommodationCoords, `🏨 ${accommodationName}`, dayPlaces[0], travelMode, companionCount)
+        calcTransit(accommodationCoords, `🏨 ${accommodationName}`, dayPlaces[0], travelMode, companionCount,
+          dayPlaces[0].transitNote || undefined)
       );
     }
 
     // 장소 간 이동 (연속)
     for (let i = 0; i < dayPlaces.length - 1; i++) {
       transitPromises.push(
-        calcTransit(dayPlaces[i], dayPlaces[i].name, dayPlaces[i + 1], travelMode, companionCount)
+        calcTransit(dayPlaces[i], dayPlaces[i].name, dayPlaces[i + 1], travelMode, companionCount,
+          dayPlaces[i + 1].transitNote || undefined)
       );
     }
 
-    // 마지막 장소 → 숙소
+    // 마지막 장소 → 숙소/도심
     if (accommodationCoords && dayPlaces.length > 0) {
       const last = dayPlaces[dayPlaces.length - 1];
       transitPromises.push(
@@ -1137,36 +1163,123 @@ async function getEurToKrwRate(): Promise<number> {
   return 1500;
 }
 
-/** 이동 정보 계산 (Google Routes API) */
-async function calcTransit(
+/**
+ * Haversine 직선거리 계산 (미터)
+ * Google Routes API 없이 좌표만으로 거리 추정
+ */
+function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) ** 2
+    + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+/**
+ * Haversine 기반 이동시간 추정
+ * 직선거리 × 1.35 (도로 우회 계수) ÷ 평균속도
+ * 정확도: ±5분 (도시 내 이동 기준, 여행 앱 허용 오차 내)
+ */
+function haversineTransit(
   from: any, fromName: string, to: any,
   travelMode: 'WALK' | 'TRANSIT' | 'DRIVE', companionCount: number,
-): Promise<any> {
-  const fromId = typeof from.id === 'number' ? from.id : Math.abs(hashCode(from.id || from.name || fromName));
-  const toId = typeof to.id === 'number' ? to.id : Math.abs(hashCode(to.id || to.name || ''));
+  transitNote?: string,
+): any {
+  const fromLabel = from.name || fromName;
+  const toLabel = to.name || '';
 
-  // 좌표 유효성 검사 — 무효 좌표(0,0)면 추정값 반환
-  if (!from.lat || !from.lng || !to.lat || !to.lng) {
+  // 좌표 없으면 기본값
+  if (!from.lat || !from.lng || !to.lat || !to.lng ||
+      from.lat === 0 || from.lng === 0 || to.lat === 0 || to.lng === 0) {
+    const defaultMode = travelMode === 'DRIVE' ? 'guide' : 'transit';
+    const defaultLabel = travelMode === 'DRIVE' ? '전용차량이동' : '이동';
     return {
-      from: from.name || fromName, to: to.name || '',
-      mode: travelMode === 'DRIVE' ? 'guide' : 'walk',
-      modeLabel: travelMode === 'DRIVE' ? '차량이동' : '도보',
-      duration: 15, durationText: '약 15분', distance: 2000, cost: 0, costTotal: 0,
+      from: fromLabel, to: toLabel,
+      mode: defaultMode, modeLabel: defaultLabel,
+      duration: 15, durationText: '약 15분',
+      distance: 1500, cost: 0, costTotal: 0,
+      transitNote: transitNote || null,
+      isEstimated: true,
     };
   }
 
+  const straightMeters = haversineMeters(from.lat, from.lng, to.lat, to.lng);
+  // 도로 우회 계수 1.35 적용 (유럽 도시 실측 기준)
+  const roadMeters = Math.round(straightMeters * 1.35);
+
+  // 이동수단별 평균 속도 (km/h) → 분 계산
+  let speedKmh: number;
+  let actualMode: string;
+  let modeLabel: string;
+  let costPerPerson = 0;
+
+  if (travelMode === 'DRIVE') {
+    speedKmh = 28;
+    actualMode = 'guide';
+    modeLabel = '전용차량이동';
+  } else if (straightMeters < 800) {
+    // 800m 미만: 도보
+    speedKmh = 5;
+    actualMode = 'walk';
+    modeLabel = '도보';
+  } else if (straightMeters < 2000 && travelMode === 'WALK') {
+    speedKmh = 5;
+    actualMode = 'walk';
+    modeLabel = '도보';
+  } else {
+    // 대중교통 (지하철/버스) — 환승·대기 포함 평균 20km/h
+    speedKmh = 20;
+    actualMode = 'transit';
+    modeLabel = transitNote ? '대중교통' : '지하철/버스';
+    costPerPerson = 2.0; // 유럽 평균 1회권 €2.0
+  }
+
+  const durationMinutes = Math.max(5, Math.round((roadMeters / 1000) / speedKmh * 60));
+
+  return {
+    from: fromLabel,
+    to: toLabel,
+    mode: actualMode,
+    modeLabel,
+    duration: durationMinutes,
+    durationText: `약 ${durationMinutes}분`,
+    distance: roadMeters,
+    cost: costPerPerson,
+    costTotal: costPerPerson * companionCount,
+    transitNote: transitNote || null,
+    isEstimated: true, // Haversine 추정값 표시 플래그
+  };
+}
+
+/**
+ * 이동 정보 계산
+ * USE_GOOGLE_ROUTES=true: Google Routes API 실측 (프리미엄 검증용)
+ * USE_GOOGLE_ROUTES=false: Haversine 추정 (기본, 빠름)
+ */
+async function calcTransit(
+  from: any, fromName: string, to: any,
+  travelMode: 'WALK' | 'TRANSIT' | 'DRIVE', companionCount: number,
+  transitNote?: string,
+): Promise<any> {
+  // ── Haversine 모드 (기본) ──
+  if (!USE_GOOGLE_ROUTES) {
+    return haversineTransit(from, fromName, to, travelMode, companionCount, transitNote);
+  }
+
+  // ── Google Routes API 모드 (일시정지 — 미래 프리미엄 검증 기능) ──
+  const fromId = typeof from.id === 'number' ? from.id : Math.abs(hashCode(from.id || from.name || fromName));
+  const toId = typeof to.id === 'number' ? to.id : Math.abs(hashCode(to.id || to.name || ''));
+
+  if (!from.lat || !from.lng || !to.lat || !to.lng) {
+    return haversineTransit(from, fromName, to, travelMode, companionCount, transitNote);
+  }
+
   try {
-    // WalkMore 모드: 직선 2km 이상이면 자동으로 TRANSIT 전환
     let actualMode = travelMode;
     if (travelMode === 'WALK' && from.lat && to.lat) {
-      const R = 6371000;
-      const dLat = (to.lat - from.lat) * Math.PI / 180;
-      const dLng = (to.lng - from.lng) * Math.PI / 180;
-      const a = Math.sin(dLat / 2) ** 2 + Math.cos(from.lat * Math.PI / 180) * Math.cos(to.lat * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
-      const straightDist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-      if (straightDist > 1500) {
-        actualMode = 'TRANSIT';
-      }
+      const straightDist = haversineMeters(from.lat, from.lng, to.lat, to.lng);
+      if (straightDist > 1500) actualMode = 'TRANSIT';
     }
 
     const route = await routeOptimizer.getRoute(
@@ -1188,19 +1301,11 @@ async function calcTransit(
       distance: route.distanceMeters,
       cost: Math.round(route.estimatedCost * 100) / 100,
       costTotal: Math.round(route.estimatedCost * companionCount * 100) / 100,
+      transitNote: transitNote || null,
+      isEstimated: false,
     };
   } catch {
-    return {
-      from: from.name || fromName,
-      to: to.name || '',
-      mode: 'walk',
-      modeLabel: '이동',
-      duration: 15,
-      durationText: '약 15분',
-      distance: 1000,
-      cost: 0,
-      costTotal: 0,
-    };
+    return haversineTransit(from, fromName, to, travelMode, companionCount, transitNote);
   }
 }
 

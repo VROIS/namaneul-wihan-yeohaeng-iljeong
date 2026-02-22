@@ -157,6 +157,8 @@ export interface AG3PreOutput {
   cityId: number | null;
   dbPlacesMap: Map<string, any>;
   cityName: string;
+  /** DB cities 테이블의 도시 중심 좌표 (숙소 미입력 시 출발 기점으로 사용) */
+  cityCoords?: { lat: number; lng: number };
   /** placeId → place_images 통합 이미지 URL (인스타 우선) */
   placeImageMap?: Map<number, string>;
   /** placeId → 셀럽 인스타 이미지 URL (place_images 미포함 시 fallback) */
