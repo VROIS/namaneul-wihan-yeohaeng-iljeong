@@ -73,16 +73,21 @@ function priceLevelToEur(level: number, meal?: 'lunch' | 'dinner'): number {
 function resolvePrice(
   enrichedPrice: number,
   geminiPrice: number,
-  dbPlace: { priceLevel?: number; priceSource?: string } | null
+  dbPlace: { priceLevel?: number; priceSource?: string } | null,
+  isMeal: boolean = false
 ): number {
-  if (geminiPrice === 0) return 0;
-  // 원칙4: place_prices가 viator/klook 등 패키지 투어면 무시 → Gemini 사용
+  // Gemini가 0이어도 DB 가격이 있으면 DB 우선 (식당은 식사비 예산 기준으로 별도 처리)
+  // 패키지 투어 소스면 Gemini 사용
   const isPkgSource = dbPlace?.priceSource && ['viator', 'klook', 'tour', 'package'].some(k =>
     dbPlace!.priceSource!.toLowerCase().includes(k)
   );
+  // enrichedPrice = DB에서 가져온 실제 가격
   const basePrice = isPkgSource ? geminiPrice : (enrichedPrice || geminiPrice);
+  // Gemini가 0이고 DB 가격도 없는 경우에만 0 반환
+  if (basePrice === 0 && !dbPlace?.priceLevel) return 0;
   if (!dbPlace?.priceLevel) return basePrice;
   const dbEstimate = priceLevelToEur(dbPlace.priceLevel);
+  // 둘 다 있으면 더 높은 값 반환 (사용자 경험 보호: 실제보다 싸면 당혹감)
   return Math.max(basePrice, dbEstimate);
 }
 
@@ -154,17 +159,30 @@ export async function runPipelineV3(formData: TripFormData): Promise<any> {
     percentage: weights[i],
   }));
 
-  // 일별 슬롯 계산
+  // 일별 슬롯 계산 (출발 +60분 버퍼, 귀환 -60분 버퍼)
   const userStartTime = formData.startTime || DEFAULT_START_TIME;
   const userEndTime = formData.endTime || DEFAULT_END_TIME;
   const daySlotsConfig: DaySlotConfig[] = [];
 
+  // HH:MM 문자열에 분 추가/차감
+  const addMinutesToTime = (time: string, minutes: number): string => {
+    const [h, m] = time.split(':').map(Number);
+    const total = h * 60 + m + minutes;
+    const nh = Math.floor(total / 60) % 24;
+    const nm = total % 60;
+    return `${String(nh).padStart(2, '0')}:${String(nm).padStart(2, '0')}`;
+  };
+  // 첫날: 출발시간+60분이 실제 관광 시작 (공항/기차역 → 숙소 체크인 시간 확보)
+  // 마지막날: 귀환시간-60분이 실제 관광 종료 (공항 이동 여유)
+  const day1Start = addMinutesToTime(userStartTime, 60);
+  const lastDayEnd = addMinutesToTime(userEndTime, -60);
+
   for (let d = 1; d <= dayCount; d++) {
     let dayStart = DEFAULT_START_TIME;
     let dayEnd = DEFAULT_END_TIME;
-    if (dayCount === 1) { dayStart = userStartTime; dayEnd = userEndTime; }
-    else if (d === 1) { dayStart = userStartTime; }
-    else if (d === dayCount) { dayEnd = userEndTime; }
+    if (dayCount === 1) { dayStart = day1Start; dayEnd = lastDayEnd; }
+    else if (d === 1) { dayStart = day1Start; }
+    else if (d === dayCount) { dayEnd = lastDayEnd; }
 
     const slots = calculateSlotsForDay(dayStart, dayEnd, travelPace);
     daySlotsConfig.push({ day: d, startTime: dayStart, endTime: dayEnd, slots });
@@ -349,39 +367,55 @@ async function step1_geminiItinerary(
       nowMonth >= 9 && nowMonth <= 11 ? '가을 시즌' :
         '겨울 시즌 (비수기, 일부 시설 단축운영)';
 
-  // ===== 강화 프롬프트 v3.2 (flash-lite 최적화: 출력 토큰 최소화) =====
-  const prompt = `${nowYear}년 기준 한국인 관광객 전문 여행 플래너.
+  // ===== 강화 프롬프트 v3.3 (품질 우선: 타입·가격 명시) =====
+  const prompt = `당신은 ${nowYear}년 현재 기준 최신 정보를 갖춘 한국인 관광객 전문 여행 플래너입니다.
 
-[여행 조건]
-목적지: ${formData.destination} / 기간: ${dateRangeText} / ${companionDesc} ${headcount}명
+[핵심 미션]
+${companionDesc} ${headcount}명, ${dateRangeText}, ${formData.destination} 여행.
 분위기: ${vibeNatural} / 예산: ${styleDesc} / 이동: ${mobilityDesc} / 속도: ${paceKo}
-${ageDesc ? `나이: ${ageDesc} / ` : ''}큐레이션: ${focusDesc} / 계절: ${seasonNote}
+${ageDesc ? `여행자 나이: ${ageDesc}` : ''} ${agesDesc ? `/ ${agesDesc}` : ''}
+큐레이션: ${focusDesc} / 현재 계절: ${seasonNote}
 
-[일별 요구사항]
+[일별 스케줄]
 ${dayRequirements}
 
-[규칙]
-- 매일 ${formData.destination} 도심에서 출발·귀환. 같은 구역 장소 묶기. 역방향 금지
-- 교통편: 메트로 호선/도보 분/버스 번호 명시. startTime/endTime 겹침 금지
-- estimatedCostEur: ${nowYear}년 실제 입장료(1인, EUR). 무료=0. 식당=1인 식사비
-- 점심 €${mealBudget.lunch}, 저녁 €${mealBudget.dinner} 기준. 인상된 최신 가격 사용
-- Day 1: Must-Visit 유명 장소 우선. 장소명: Google Maps 영어 공식명
-- reason: 한국어 40자 이내. 이전 장소→교통편+분+핵심이유. 예: "도보 3분, 세계 최대 미술관"
+[동선 원칙]
+1. 매일 ${formData.destination} 도시 중심부(중앙역 또는 중심 광장)에서 출발·귀환
+2. 같은 날 같은 구역·방향의 장소 묶기. 왕복/역방향 이동 금지
+3. 이동수단 명시: 메트로 호선명, 도보 분, 버스 번호 (예: "메트로 1호선", "도보 10분")
+4. startTime/endTime 겹침 절대 금지. 이동시간 반영
+5. 근교 이동 시 당일 첫 일정으로 배치
 
-JSON만 (설명 없이):
-{"days":[{"day":1,"theme":"테마","places":[{"name":"English Name","nameKo":"한국어","type":"activity","startTime":"09:00","endTime":"11:00","reason":"교통+이유(40자내)","estimatedCostEur":0}]}]}`;
+[가격 원칙]
+6. estimatedCostEur = ${nowYear}년 실제 입장료(1인, EUR). 무료=0. 식당=1인 식사비
+7. 점심 1인 ~€${mealBudget.lunch}, 저녁 1인 ~€${mealBudget.dinner}
+8. 루브르(€22), 에펠탑(€29.4) 등 ${nowYear}년 실제 인상 요금 반영 (절대 추정 금지)
+
+[장소 선정]
+9. Day 1: 구글맵 리뷰 많고 한국인에게 유명한 Must-Visit 장소 우선
+10. 장소명: Google Maps 검색 가능한 영어 공식명
+11. 점심(type="lunch"): 12:00~13:30 시작. 저녁(type="dinner"): 18:30~20:00 시작
+12. 현지인 맛집. 실제 영업 중인 곳만. nameKo=한국어 장소명
+13. reason=한국어 추천이유 (이동수단+시간+핵심이유, 60자 이내)
+
+JSON만 응답 (마크다운 없이):
+{"days":[{"day":1,"theme":"테마 한국어","places":[
+  {"name":"Official English Name","nameKo":"한국어","type":"activity","startTime":"10:00","endTime":"12:00","reason":"도심에서 메트로 1호선 15분, 세계 최대 미술관","estimatedCostEur":22},
+  {"name":"Restaurant Name","nameKo":"한국어 식당명","type":"lunch","startTime":"12:30","endTime":"14:00","reason":"도보 5분, 현지인 단골 비스트로","estimatedCostEur":${mealBudget.lunch}},
+  {"name":"Place Name","nameKo":"한국어","type":"dinner","startTime":"19:00","endTime":"21:00","reason":"메트로 4호선 10분, 미슐랭 추천","estimatedCostEur":${mealBudget.dinner}}
+]}]}`;
 
   try {
     console.log(`[V3-Step1] 🤖 Gemini에 ${dayCount}일 완전 일정 요청 (${prompt.length}자)...`);
 
     const response = await getAI().models.generateContent({
-      model: "gemini-2.5-flash-lite",
+      model: "gemini-2.5-flash",
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       config: {
         temperature: 0.3,
         maxOutputTokens: 4096,
         responseMimeType: "application/json",
-        // ⚡ Thinking 비활성화 (flash-lite 기본값 thinking ON)
+        // ⚡ Thinking 비활성화 → 속도 최적화
         thinkingConfig: { thinkingBudget: 0 },
       } as any,
     });
@@ -578,7 +612,8 @@ async function step2_enrichAndBuild(
     const enrichedPrice = ta?.estimatedPriceEur ?? p.estimatedPriceEur ?? 0;
     const geminiPrice = p.estimatedPriceEur ?? 0;
     const dbPlaceForPrice = { priceLevel: p.priceLevel, priceSource: ta?.priceSource ?? p.priceSource };
-    const resolvedPrice = resolvePrice(enrichedPrice, geminiPrice, dbPlaceForPrice);
+    const isMealSlot = p.type === 'lunch' || p.type === 'dinner';
+    const resolvedPrice = resolvePrice(enrichedPrice, geminiPrice, dbPlaceForPrice, isMealSlot);
 
     const merged = {
       ...p,

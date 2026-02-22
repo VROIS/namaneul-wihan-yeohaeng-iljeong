@@ -1007,8 +1007,6 @@ export default function TripPlannerScreen() {
 
   const renderResult = () => {
     if (!itinerary) return null;
-    const currentDay = itinerary.days?.[activeDay];
-    const places = currentDay?.places || [];
 
     return (
       <View style={[styles.resultContainer, { backgroundColor: theme.backgroundRoot }]}>
@@ -1137,11 +1135,11 @@ export default function TripPlannerScreen() {
           </View>
         </View>
 
-        {/* 🗺️ 지도 섹션 - showMap 토글에 따라 표시/숨김 */}
+        {/* 🗺️ 지도 섹션 - showMap 토글에 따라 표시/숨김 (전체 날 장소 표시) */}
         {showMap && (
           <View style={styles.mapSection}>
             <InteractiveMap
-              places={places.map(p => ({
+              places={(itinerary.days || []).flatMap(d => d.places || []).map(p => ({
                 id: p.id,
                 name: p.name,
                 lat: p.lat,
@@ -1155,65 +1153,11 @@ export default function TripPlannerScreen() {
           </View>
         )}
 
-        <View style={styles.dayTabsContainer}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.dayTabs}>
-            {(itinerary.days || []).map((day, idx) => (
-              <Pressable
-                key={idx}
-                style={[
-                  styles.dayTab,
-                  { backgroundColor: activeDay === idx ? Brand.primary : theme.backgroundDefault },
-                ]}
-                onPress={() => setActiveDay(idx)}
-              >
-                <Text style={[styles.dayTabText, { color: activeDay === idx ? "#FFFFFF" : theme.textSecondary }]}>
-                  Day {day.day}
-                </Text>
-                {day.city ? (
-                  <Text style={[styles.dayTabCity, { color: activeDay === idx ? "rgba(255,255,255,0.8)" : theme.textTertiary }]}>
-                    {day.city.length > 8 ? day.city.substring(0, 8) + "..." : day.city}
-                  </Text>
-                ) : null}
-              </Pressable>
-            ))}
-          </ScrollView>
-        </View>
-
         <ScrollView
           style={styles.resultScrollView}
           contentContainerStyle={{ paddingBottom: insets.bottom + Spacing.lg }}
           showsVerticalScrollIndicator={false}
         >
-          {/* 🏨 Day별 숙소 정보 + 출발 안내 */}
-          <View style={[styles.accommodationBar, { backgroundColor: `${Brand.primary}08`, borderColor: `${Brand.primary}20` }]}>
-            <View style={styles.accommodationInfo}>
-              <Feather name="home" size={16} color={Brand.primary} />
-              <Text style={[styles.accommodationText, { color: theme.text }]} numberOfLines={1}>
-                {(() => {
-                  const dayAccom = dayAccommodations.find(a => a.day === currentDay?.day);
-                  const generalAccom = currentDay?.accommodation;
-                  if (dayAccom) return `출발: ${dayAccom.name}`;
-                  if (generalAccom?.name) return `출발: ${generalAccom.name}`;
-                  return `출발: ${itinerary.destination} 도심 기준`;
-                })()}
-              </Text>
-              {currentDay?.departureTransit && (
-                <Text style={[styles.accommodationTransit, { color: theme.textSecondary }]}>
-                  → {currentDay.departureTransit.durationText}
-                </Text>
-              )}
-            </View>
-            <Pressable
-              style={[styles.accommodationButton, { backgroundColor: Brand.primary }]}
-              onPress={() => setHotelModalDay(currentDay?.day || 1)}
-            >
-              <Feather name="edit-2" size={12} color="#FFFFFF" />
-              <Text style={styles.accommodationButtonText}>
-                {dayAccommodations.find(a => a.day === currentDay?.day) || currentDay?.accommodation ? '변경' : '숙소 설정'}
-              </Text>
-            </Pressable>
-          </View>
-
           {/* 재최적화 중 로딩 */}
           {isReoptimizing && (
             <View style={[styles.reoptimizeBar, { backgroundColor: `${Brand.primary}10` }]}>
@@ -1224,7 +1168,55 @@ export default function TripPlannerScreen() {
             </View>
           )}
 
-          <View style={styles.placesList}>
+          {/* 🗓️ 전체 날짜 세로 나열 (한 페이지 스크롤) */}
+          {(itinerary.days || []).map((currentDay, dayIdx) => {
+            const places = currentDay?.places || [];
+            return (
+              <View key={dayIdx}>
+                {/* Day 구분 헤더 */}
+                <View style={[styles.dayHeaderBanner, { backgroundColor: `${Brand.primary}12` }]}>
+                  <View style={[styles.dayHeaderBadge, { backgroundColor: Brand.primary }]}>
+                    <Text style={styles.dayHeaderBadgeText}>Day {currentDay.day}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.dayHeaderTheme, { color: theme.text }]}>{currentDay.theme || ''}</Text>
+                    {currentDay.city && (
+                      <Text style={[styles.dayHeaderCity, { color: theme.textSecondary }]}>{currentDay.city}</Text>
+                    )}
+                  </View>
+                  <Pressable
+                    style={[styles.accommodationButton, { backgroundColor: Brand.primary }]}
+                    onPress={() => setHotelModalDay(currentDay?.day || 1)}
+                  >
+                    <Feather name="home" size={12} color="#FFFFFF" />
+                    <Text style={styles.accommodationButtonText}>
+                      {dayAccommodations.find(a => a.day === currentDay?.day) || currentDay?.accommodation ? '숙소' : '숙소 설정'}
+                    </Text>
+                  </Pressable>
+                </View>
+
+                {/* 출발 정보 */}
+                <View style={[styles.accommodationBar, { backgroundColor: `${Brand.primary}06`, borderColor: `${Brand.primary}15`, marginHorizontal: 12, marginBottom: 4, borderRadius: 8 }]}>
+                  <View style={styles.accommodationInfo}>
+                    <Feather name="home" size={14} color={Brand.primary} />
+                    <Text style={[styles.accommodationText, { color: theme.textSecondary, fontSize: 12 }]} numberOfLines={1}>
+                      {(() => {
+                        const dayAccom = dayAccommodations.find(a => a.day === currentDay?.day);
+                        const generalAccom = currentDay?.accommodation;
+                        if (dayAccom) return `출발: ${dayAccom.name}`;
+                        if (generalAccom?.name) return `출발: ${generalAccom.name}`;
+                        return `출발: ${itinerary.destination} 도심 기준`;
+                      })()}
+                    </Text>
+                    {currentDay?.departureTransit && (
+                      <Text style={[styles.accommodationTransit, { color: theme.textSecondary }]}>
+                        → {currentDay.departureTransit.durationText}
+                      </Text>
+                    )}
+                  </View>
+                </View>
+
+            <View style={styles.placesList}>
             {places.map((place, index) => {
               // 별점 계산 (vibeScore 10점 만점 → 5점 만점)
               const starRating = Math.min(5, Math.max(0, Math.round((place.vibeScore || 0) / 2)));
@@ -1394,31 +1386,31 @@ export default function TripPlannerScreen() {
                 </View>
               );
             })}
-          </View>
-
-          {/* 🏨 숙소 복귀 정보 */}
-          {currentDay?.returnTransit && (
-            <View style={[styles.accommodationBar, { backgroundColor: `${Brand.primary}05`, borderColor: `${Brand.primary}15`, marginTop: 8 }]}>
-              <View style={styles.accommodationInfo}>
-                <Feather name="arrow-left" size={14} color={theme.textSecondary} />
-                <Text style={[styles.accommodationTransit, { color: theme.textSecondary }]}>
-                  {currentDay.returnTransit.from} → 🏨 숙소 복귀 ({currentDay.returnTransit.durationText})
-                </Text>
-              </View>
             </View>
-          )}
 
-          {/* 📊 일별 합계 섹션 + 교통비 카테고리 표시 */}
-          {(() => {
-            // 백엔드 dailyCost에서 직접 읽기
-            const dc = (currentDay as any)?.dailyCost;
-            const td = (currentDay as any)?.transportDisplay;
-            const entranceEur = dc?.breakdown?.entranceEur || 0;
-            const mealEur = dc?.breakdown?.mealEur || 0;
-            const transportEur = dc?.breakdown?.transportEur || 0;
-            const totalEur = dc?.perPersonEur || (entranceEur + mealEur + transportEur);
-            return (
-              <View style={[styles.dailyTotalSection, { backgroundColor: theme.backgroundSecondary }]}>
+            {/* 🏨 숙소 복귀 정보 */}
+            {currentDay?.returnTransit && (
+              <View style={[styles.accommodationBar, { backgroundColor: `${Brand.primary}05`, borderColor: `${Brand.primary}15`, marginTop: 8, marginHorizontal: 12, borderRadius: 8 }]}>
+                <View style={styles.accommodationInfo}>
+                  <Feather name="arrow-left" size={14} color={theme.textSecondary} />
+                  <Text style={[styles.accommodationTransit, { color: theme.textSecondary }]}>
+                    {currentDay.returnTransit.from} → 🏨 숙소 복귀 ({currentDay.returnTransit.durationText})
+                  </Text>
+                </View>
+              </View>
+            )}
+
+            {/* 📊 일별 합계 섹션 + 교통비 카테고리 표시 */}
+            {(() => {
+              // 백엔드 dailyCost에서 직접 읽기
+              const dc = (currentDay as any)?.dailyCost;
+              const td = (currentDay as any)?.transportDisplay;
+              const entranceEur = dc?.breakdown?.entranceEur || 0;
+              const mealEur = dc?.breakdown?.mealEur || 0;
+              const transportEur = dc?.breakdown?.transportEur || 0;
+              const totalEur = dc?.perPersonEur || (entranceEur + mealEur + transportEur);
+              return (
+                <View style={[styles.dailyTotalSection, { backgroundColor: theme.backgroundSecondary }]}>
                 {/* 교통비 카테고리 표시 (A/B 분기) */}
                 {td && (
                   <View style={{ backgroundColor: td.category === 'guide' ? '#E3F2FD' : '#E8F5E9', borderRadius: 8, padding: 10, marginBottom: 10 }}>
@@ -1439,7 +1431,7 @@ export default function TripPlannerScreen() {
                 )}
 
                 <Text style={[styles.dailyTotalTitle, { color: theme.text }]}>
-                  📊 {activeDay + 1}일차 합계 (1인)
+                  📊 {currentDay.day}일차 합계 (1인)
                 </Text>
                 <View style={styles.dailyTotalRow}>
                   <View style={styles.dailyTotalItem}>
@@ -1468,37 +1460,44 @@ export default function TripPlannerScreen() {
                   </Text>
                 </View>
               </View>
-            );
-          })()}
+              );
+            })()}
 
-          {/* 🏨 전문가 연결 CTA (숙소 미설정 시) */}
-          {!dayAccommodations.find(a => a.day === currentDay?.day) && !currentDay?.accommodation && (
-            <Pressable
-              style={[styles.expertCta, { backgroundColor: `${Brand.primary}10`, borderColor: `${Brand.primary}30` }]}
-              onPress={() => {
-                // 전문가 탭으로 이동 (향후 구현)
-                Alert.alert(
-                  "현지 전문가 상담",
-                  "이 일정에 최적인 숙소 지역을 현지 전문가가 추천해드립니다.\n\n드라이빙 가이드 예약 시 숙소 추천이 포함됩니다.",
-                  [
-                    { text: "나중에", style: "cancel" },
-                    { text: "전문가 상담", onPress: () => console.log("[TripPlanner] Expert CTA pressed") },
-                  ]
-                );
-              }}
-            >
-              <Feather name="message-circle" size={18} color={Brand.primary} />
-              <View style={styles.expertCtaContent}>
-                <Text style={[styles.expertCtaTitle, { color: Brand.primary }]}>
-                  이 일정에 최적인 숙소는?
-                </Text>
-                <Text style={[styles.expertCtaSubtitle, { color: theme.textSecondary }]}>
-                  현지 전문가에게 맞춤 숙소 추천 받기
-                </Text>
-              </View>
-              <Feather name="chevron-right" size={18} color={Brand.primary} />
-            </Pressable>
-          )}
+            {/* 🏨 전문가 연결 CTA (숙소 미설정 시, 마지막 날에만 표시) */}
+              {dayIdx === (itinerary.days?.length || 1) - 1 && !dayAccommodations.find(a => a.day === currentDay?.day) && !currentDay?.accommodation && (
+                <Pressable
+                  style={[styles.expertCta, { backgroundColor: `${Brand.primary}10`, borderColor: `${Brand.primary}30` }]}
+                  onPress={() => {
+                    Alert.alert(
+                      "현지 전문가 상담",
+                      "이 일정에 최적인 숙소 지역을 현지 전문가가 추천해드립니다.\n\n드라이빙 가이드 예약 시 숙소 추천이 포함됩니다.",
+                      [
+                        { text: "나중에", style: "cancel" },
+                        { text: "전문가 상담", onPress: () => console.log("[TripPlanner] Expert CTA pressed") },
+                      ]
+                    );
+                  }}
+                >
+                  <Feather name="message-circle" size={18} color={Brand.primary} />
+                  <View style={styles.expertCtaContent}>
+                    <Text style={[styles.expertCtaTitle, { color: Brand.primary }]}>
+                      이 일정에 최적인 숙소는?
+                    </Text>
+                    <Text style={[styles.expertCtaSubtitle, { color: theme.textSecondary }]}>
+                      현지 전문가에게 맞춤 숙소 추천 받기
+                    </Text>
+                  </View>
+                  <Feather name="chevron-right" size={18} color={Brand.primary} />
+                </Pressable>
+              )}
+
+              {/* Day 구분선 */}
+              {dayIdx < (itinerary.days?.length || 1) - 1 && (
+                <View style={{ height: 12, backgroundColor: theme.backgroundRoot }} />
+              )}
+            </View>
+          );
+          })}
 
         </ScrollView>
 
@@ -1737,18 +1736,29 @@ const styles = StyleSheet.create({
   },
   vibeWeightsSummaryText: { fontSize: 12, fontWeight: "600" },
 
-  // 📅 일자 탭
+  // 📅 일자 헤더 (한 페이지 세로 나열 방식)
+  dayHeaderBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginTop: 8,
+    gap: 10,
+  },
+  dayHeaderBadge: {
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  dayHeaderBadgeText: { fontSize: 13, fontWeight: '700', color: '#fff' },
+  dayHeaderTheme: { fontSize: 14, fontWeight: '700' },
+  dayHeaderCity: { fontSize: 11, marginTop: 1 },
+  // (레거시 탭 스타일 보존 - 혹시 다른 곳에서 참조할 경우)
   dayTabsContainer: { paddingVertical: 4 },
   dayTabs: { paddingHorizontal: Spacing.sm, gap: 4 },
-  dayTab: {
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md, // sm → md (더 큰 터치 영역)
-    borderRadius: BorderRadius.full,
-    minWidth: 70, // 최소 너비 보장
-    alignItems: "center",
-  },
-  dayTabText: { fontSize: 14, fontWeight: "700" }, // 13 → 14
-  dayTabCity: { fontSize: 11, marginTop: 2 }, // 10 → 11
+  dayTab: { paddingHorizontal: Spacing.lg, paddingVertical: Spacing.md, borderRadius: BorderRadius.full, minWidth: 70, alignItems: "center" },
+  dayTabText: { fontSize: 14, fontWeight: "700" },
+  dayTabCity: { fontSize: 11, marginTop: 2 },
 
   // 📜 스크롤 영역
   resultScrollView: { flex: 1 },
