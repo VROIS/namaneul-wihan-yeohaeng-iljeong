@@ -39,22 +39,30 @@ function isUsableImageUrl(url: string): boolean {
   return true; // 기타는 시도
 }
 
-/** 일정 이미지 우선순위: place_images(통합) > 셀럽 인스타 > 인스타 > 위키메디어+구글 > DB image > Google API. img 불가 URL 제외 */
+/**
+ * 일정 이미지 우선순위 (수정됨):
+ * 1순위: place_seed_raw.best_image_url (검증된 최선 이미지, 5250건 채워짐)
+ * 2순위: place_seed_raw.image_url (Pixabay/Klook 실제 관광지 사진)
+ * 3순위: place_images 통합 테이블
+ * 4순위: places.photoUrls (Google Places 사진)
+ * 5순위: Wikipedia/기타 fallback
+ * 제외: instagram.com/p/ HTML 링크 (깨진 URL)
+ */
 function resolvePlaceImage(
-  placeImageUrl?: string | null,
-  celebrityImageUrl?: string | null,
-  instagramPhotoUrls?: string[] | null,
-  photoUrls?: string[] | null,
+  seedBestImageUrl?: string | null,    // 1순위: place_seed_raw.best_image_url
+  seedImageUrl?: string | null,        // 2순위: place_seed_raw.image_url
+  placeImageUrl?: string | null,       // 3순위: place_images 통합 테이블
+  photoUrls?: string[] | null,         // 4순위: places.photoUrls (구글)
   ...fallbacks: (string | undefined | null)[]
 ): string | undefined {
   const pick = (url: string | undefined | null) => (url && isUsableImageUrl(url) ? url : undefined);
   const pickFirst = (arr: string[] | null | undefined) => arr?.find((u) => isUsableImageUrl(u));
+  const s1 = pick(seedBestImageUrl);
+  if (s1) return s1;
+  const s2 = pick(seedImageUrl);
+  if (s2) return s2;
   const p1 = pick(placeImageUrl);
   if (p1) return p1;
-  const c = pick(celebrityImageUrl);
-  if (c) return c;
-  const insta = pickFirst(instagramPhotoUrls || []);
-  if (insta) return insta;
   const photo = pickFirst(photoUrls || []);
   if (photo) return photo;
   for (const f of fallbacks) {
@@ -330,7 +338,7 @@ export async function matchPlacesWithDB(
   geminiPlaces: PlaceResult[],
   preloaded: AG3PreOutput
 ): Promise<PlaceResult[]> {
-  const { dbPlacesMap, cityName, placeImageMap, celebrityImageMap } = preloaded;
+  const { dbPlacesMap, cityName, placeImageMap, celebrityImageMap, seedRawMap } = preloaded;
   const _t0 = Date.now();
 
   let matched = 0;
@@ -414,6 +422,20 @@ export async function matchPlacesWithDB(
   // === 3단계: 결과 조합 ===
   const enriched: PlaceResult[] = [];
 
+  // place_seed_raw에서 장소명으로 이미지를 찾는 헬퍼
+  const getSeedImage = (placeName: string, dbMatch?: any): { best?: string; img?: string } => {
+    const nameKey = placeName.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, "");
+    const seed = seedRawMap?.get(nameKey);
+    if (seed) return { best: seed.bestImageUrl || undefined, img: seed.imageUrl || undefined };
+    // dbMatch의 googlePlaceId로도 검색
+    if (dbMatch?.googlePlaceId) {
+      for (const [, s] of (seedRawMap || new Map())) {
+        if (s.googlePlaceId === dbMatch.googlePlaceId) return { best: s.bestImageUrl || undefined, img: s.imageUrl || undefined };
+      }
+    }
+    return {};
+  };
+
   for (const { place, dbMatch, needsGoogle } of matchResults) {
     const nameLower = place.name.toLowerCase().trim();
 
@@ -427,11 +449,20 @@ export async function matchPlacesWithDB(
       const dbFinal = dbMatch.finalScore ?? 0;
       const dbReviewCount = dbMatch.userRatingCount ?? 0;
 
+      // place_seed_raw 이미지 우선 조회 (1, 2순위)
+      const seedImg = getSeedImage(place.name, dbMatch);
+
       enriched.push({
         ...place,
         sourceType: 'Gemini AI + DB Enriched',
         description: (dbMatch.editorialSummary || place.description) ?? '',
-        image: resolvePlaceImage(placeImageMap?.get(dbMatch.id), celebrityImageMap?.get(dbMatch.id), dbMatch.instagramPhotoUrls, dbMatch.photoUrls, place.image) ?? place.image ?? '',
+        image: resolvePlaceImage(
+          seedImg.best,                      // 1순위: place_seed_raw.best_image_url
+          seedImg.img,                       // 2순위: place_seed_raw.image_url
+          placeImageMap?.get(dbMatch.id),    // 3순위: place_images 통합 테이블
+          dbMatch.photoUrls,                 // 4순위: places.photoUrls (Google)
+          place.image                        // 5순위: Gemini 원본
+        ) ?? place.image ?? '',
         vibeScore: dbMatch.vibeScore || place.vibeScore,
         finalScore: dbFinal || place.finalScore || 0,
         buzzScore: dbBuzz,
@@ -463,15 +494,22 @@ export async function matchPlacesWithDB(
             console.log(`[AG3] 🔗 gid 역매칭: "${place.name}" → "${gidMatch.name}"`);
             if (gidMatch.id) addPlaceAlias(gidMatch.id, place.name).catch(() => { });
             matched++;
+            const seedImgGid = getSeedImage(place.name, gidMatch);
             enriched.push({
               ...place,
               sourceType: 'Gemini AI + DB Enriched (gid)',
               lat: gidMatch.latitude || googleResult.lat,
               lng: gidMatch.longitude || googleResult.lng,
-              image: resolvePlaceImage(placeImageMap?.get(gidMatch.id), celebrityImageMap?.get(gidMatch.id), gidMatch.instagramPhotoUrls, gidMatch.photoUrls, googleResult.photoUrl, place.image) ?? place.image ?? '',
+              image: resolvePlaceImage(
+                seedImgGid.best,
+                seedImgGid.img,
+                placeImageMap?.get(gidMatch.id),
+                gidMatch.photoUrls,
+                googleResult.photoUrl,
+                place.image
+              ) ?? place.image ?? '',
               googleMapsUrl: gidMatch.googleMapsUri || googleResult.googleMapsUri || place.googleMapsUrl,
               confidenceScore: Math.max(place.confidenceScore, gidMatch.buzzScore ? Math.min(10, gidMatch.buzzScore) : 5),
-              // ⭐ DB + Google 데이터 모두 활용
               buzzScore: gidMatch.buzzScore ?? 0,
               userRatingCount: gidMatch.userRatingCount || googleResult.userRatingCount || 0,
               finalScore: gidMatch.finalScore ?? 0,
@@ -481,24 +519,43 @@ export async function matchPlacesWithDB(
           }
         }
 
+        // Google만 매칭된 경우도 seed 이미지 시도
+        const seedImgGoogle = getSeedImage(place.name);
         enriched.push({
           ...place,
           sourceType: 'Gemini AI + Google Places',
           lat: googleResult.lat,
           lng: googleResult.lng,
-          image: googleResult.photoUrl || place.image,
+          image: resolvePlaceImage(
+            seedImgGoogle.best,
+            seedImgGoogle.img,
+            null,
+            null,
+            googleResult.photoUrl,
+            place.image
+          ) || googleResult.photoUrl || place.image,
           googleMapsUrl: googleResult.googleMapsUri || place.googleMapsUrl,
           confidenceScore: Math.max(place.confidenceScore, (googleResult.userRatingCount || 0) > 0 ? Math.min(10, 5 + (googleResult.userRatingCount || 0) / 500) : 5),
-          // ⭐ Google Places에서 가져온 리뷰 수 → nubiReason 생성에 활용
           userRatingCount: googleResult.userRatingCount || 0,
         });
       } else {
+        // 매칭 실패한 경우도 seed 이미지 시도
+        const seedImgFallback = getSeedImage(place.name);
         unmatchedCount++;
-        enriched.push({ ...place, sourceType: 'Gemini AI (New)' });
+        enriched.push({
+          ...place,
+          sourceType: 'Gemini AI (New)',
+          image: (seedImgFallback.best || seedImgFallback.img || place.image) ?? '',
+        });
       }
     } else {
+      const seedImgFallback = getSeedImage(place.name);
       unmatchedCount++;
-      enriched.push({ ...place, sourceType: 'Gemini AI (New)' });
+      enriched.push({
+        ...place,
+        sourceType: 'Gemini AI (New)',
+        image: (seedImgFallback.best || seedImgFallback.img || place.image) ?? '',
+      });
     }
   }
 
@@ -514,19 +571,24 @@ export async function matchPlacesWithDB(
   const needsPhoto = enriched.filter((p) => !p.image || p.image.trim() === '');
   if (needsPhoto.length > 0) {
     const _pt0 = Date.now();
-    // Wikipedia REST API: 무료, 영구 URL, 인증 불필요 - 유명 관광지 99% 커버
+    // Wikipedia REST API: 무료, 영구 URL — 유명 관광지 대부분 커버
     const fetchWikipediaImage = async (placeName: string): Promise<string | null> => {
       try {
-        const encoded = encodeURIComponent(placeName.replace(/ /g, '_'));
+        // 특수문자(é, ü 등) 및 아포스트로피 처리 후 인코딩
+        const normalized = placeName.normalize('NFC').replace(/ /g, '_');
+        const encoded = encodeURIComponent(normalized);
         const res = await Promise.race([
           fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encoded}`, {
             headers: { 'User-Agent': 'NubiApp/1.0 (travel app; contact@nubi.app)' }
           }),
-          new Promise<null>((r) => setTimeout(() => r(null), 2000)),
+          new Promise<null>((r) => setTimeout(() => r(null), 4000)),  // 2000→4000ms
         ]);
         if (!res || !(res instanceof Response) || !res.ok) return null;
         const data = await res.json();
-        return data?.thumbnail?.source || data?.originalimage?.source || null;
+        // thumbnail(320px) 또는 originalimage 중 thumbnail 우선
+        const url = data?.thumbnail?.source || data?.originalimage?.source || null;
+        // Wikipedia 이미지 해상도 업그레이드: /320px- → /800px-
+        return url ? url.replace(/\/\d+px-/, '/800px-') : null;
       } catch { return null; }
     };
 
