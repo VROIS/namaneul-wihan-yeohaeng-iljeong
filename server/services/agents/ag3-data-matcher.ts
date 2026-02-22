@@ -251,8 +251,11 @@ export async function preloadCityData(
           sourceType: placeSeedRaw.sourceType
         }).from(placeSeedRaw).where(eq(placeSeedRaw.cityId, cityId));
         for (const s of seeds) {
-          if (s.nameEn) seedRawMap.set(s.nameEn.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, ""), s);
-          if (s.nameKo) seedRawMap.set(s.nameKo.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, ""), s);
+          const makeKey = (name: string | null) => name ? name.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, "") : null;
+          const keyEn = makeKey(s.nameEn);
+          const keyKo = makeKey(s.nameKo);
+          if (keyEn) seedRawMap.set(keyEn, s);
+          if (keyKo) seedRawMap.set(keyKo, s);
         }
         console.log(`[AG3-pre] 🏭 통합 전시매장(place_seed_raw) ${seeds.length}건 사전 로드 (${Date.now() - _t1}ms)`);
       } catch (e) {
@@ -395,9 +398,12 @@ export async function matchPlacesWithDB(
         }
       }
 
-      if (bestMatch) {
+      const FUZZY_THRESHOLD = 0.7;
+      if (bestMatch && bestScore >= FUZZY_THRESHOLD) {
         dbMatch = bestMatch;
-        console.log(`[AG3] 🔗 Fuzzy: "${place.name}" → "${bestMatch.name}" (${bestScore.toFixed(2)})`);
+        console.log(`[AG3] 🔗 Fuzzy: "${place.name}" → "${dbMatch.name}" (Score: ${bestScore.toFixed(2)})`);
+      } else if (bestMatch) {
+        console.log(`[AG3] ⚠️ Fuzzy reject: "${place.name}" vs "${bestMatch.name}" (Score: ${bestScore.toFixed(2)} < ${FUZZY_THRESHOLD})`);
       }
     }
 
@@ -557,22 +563,26 @@ export async function matchPlacesWithDB(
           userRatingCount: googleResult.userRatingCount || 0,
         });
       } else {
-        // 매칭 실패한 경우도 seed 데이터 시도
+        // 매칭 실패
         const seedDataFallback = getSeedData(place.name);
         unmatchedCount++;
+        const finalImg = (seedDataFallback?.evidenceUrl || seedDataFallback?.bestImageUrl || seedDataFallback?.imageUrl || place.image) ?? '';
+        console.log(`[AG3-MATCH] ❌ Unmatched: "${place.name}" (Used seed image: ${finalImg ? 'Yes' : 'No'})`);
         enriched.push({
           ...place,
           sourceType: 'Gemini AI (New)',
-          image: (seedDataFallback?.evidenceUrl || seedDataFallback?.bestImageUrl || seedDataFallback?.imageUrl || place.image) ?? '',
+          image: finalImg,
         });
       }
     } else {
       const seedDataFallback = getSeedData(place.name);
       unmatchedCount++;
+      const finalImg = (seedDataFallback?.evidenceUrl || seedDataFallback?.bestImageUrl || seedDataFallback?.imageUrl || place.image) ?? '';
+      console.log(`[AG3-MATCH] ❌ No DB/Google: "${place.name}" (Used seed image: ${finalImg ? 'Yes' : 'No'})`);
       enriched.push({
         ...place,
         sourceType: 'Gemini AI (New)',
-        image: (seedDataFallback?.evidenceUrl || seedDataFallback?.bestImageUrl || seedDataFallback?.imageUrl || place.image) ?? '',
+        image: finalImg,
       });
     }
   }
@@ -592,21 +602,25 @@ export async function matchPlacesWithDB(
     // Wikipedia REST API: 무료, 영구 URL — 유명 관광지 대부분 커버
     const fetchWikipediaImage = async (placeName: string): Promise<string | null> => {
       try {
-        // 특수문자(é, ü 등) 및 아포스트로피 처리 후 인코딩
         const normalized = placeName.normalize('NFC').replace(/ /g, '_');
         const encoded = encodeURIComponent(normalized);
-        const res = await Promise.race([
-          fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encoded}`, {
-            headers: { 'User-Agent': 'NubiApp/1.0 (travel app; contact@nubi.app)' }
-          }),
-          new Promise<null>((r) => setTimeout(() => r(null), 4000)),  // 2000→4000ms
-        ]);
-        if (!res || !(res instanceof Response) || !res.ok) return null;
-        const data = await res.json();
-        // thumbnail(320px) 또는 originalimage 중 thumbnail 우선
-        const url = data?.thumbnail?.source || data?.originalimage?.source || null;
-        // Wikipedia 이미지 해상도 업그레이드: /320px- → /800px-
-        return url ? url.replace(/\/\d+px-/, '/800px-') : null;
+        const langs = ['en', 'ko']; // 영어 먼저, 없으면 한국어 시도
+        for (const lang of langs) {
+          const res = await Promise.race([
+            fetch(`https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encoded}`, {
+              headers: { 'User-Agent': 'NubiApp/1.0 (travel app; contact@nubi.app)' }
+            }),
+            new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000)), // 타임아웃 5초로 증대
+          ]) as any;
+          if (res?.ok) {
+            const data = await res.json();
+            const url = data.thumbnail?.source || data.originalimage?.source;
+            // Wikipedia 이미지 해상도 업그레이드: /320px- → /800px-
+            const finalUrl = url ? url.replace(/\/\d+px-/, '/800px-') : null;
+            if (finalUrl && isUsableImageUrl(finalUrl)) return finalUrl;
+          }
+        }
+        return null;
       } catch { return null; }
     };
 
