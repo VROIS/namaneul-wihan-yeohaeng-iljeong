@@ -24,11 +24,13 @@ import { eq, ilike, sql, inArray } from 'drizzle-orm';
 import type { AG1Output, AG3PreOutput, AG3Output, PlaceResult, ScheduleSlot } from './types';
 import { findCityUnified, addPlaceAlias, type CityResolveResult } from '../city-resolver';
 
-/** <img>로 사용 가능한 URL인지 (인스타 post URL, example.com 제외) */
+/** <img>로 사용 가능한 URL인지 (인스타 post URL, 네이버/티스토리 등 차단 도메인 제외) */
 function isUsableImageUrl(url: string): boolean {
   const u = url.toLowerCase().trim();
   if (!u) return false;
   if (u.includes('example.com')) return false;
+  // 🚫 모바일 앱에서 Referer 체크로 렌더링 차단되는 도메인 제외
+  if (u.includes('naver.com') || u.includes('tistory.com') || u.includes('daum.net')) return false;
   // instagram.com/p/xxx 또는 /reel/xxx (HTML) — /media/?size= 는 리다이렉트로 이미지 가능
   if ((u.includes('instagram.com/p/') || u.includes('instagram.com/reel/')) && !u.includes('/media/'))
     return false;
