@@ -349,55 +349,39 @@ async function step1_geminiItinerary(
       nowMonth >= 9 && nowMonth <= 11 ? '가을 시즌' :
         '겨울 시즌 (비수기, 일부 시설 단축운영)';
 
-  // ===== 강화 프롬프트 조합 (v3.1 - 동선최적화 + 최신가격 + 교통편 내장) =====
-  const prompt = `당신은 ${nowYear}년 현재 기준 최신 정보를 갖춘 한국인 관광객 전문 여행 플래너입니다.
+  // ===== 강화 프롬프트 v3.2 (flash-lite 최적화: 출력 토큰 최소화) =====
+  const prompt = `${nowYear}년 기준 한국인 관광객 전문 여행 플래너.
 
-[핵심 미션]
-${companionDesc} ${headcount}명, ${dateRangeText}, ${formData.destination} 여행.
+[여행 조건]
+목적지: ${formData.destination} / 기간: ${dateRangeText} / ${companionDesc} ${headcount}명
 분위기: ${vibeNatural} / 예산: ${styleDesc} / 이동: ${mobilityDesc} / 속도: ${paceKo}
-${ageDesc ? `여행자 나이: ${ageDesc}` : ''} ${agesDesc ? `/ ${agesDesc}` : ''}
-큐레이션: ${focusDesc}
-현재 계절: ${seasonNote}
+${ageDesc ? `나이: ${ageDesc} / ` : ''}큐레이션: ${focusDesc} / 계절: ${seasonNote}
 
-[일별 스케줄]
+[일별 요구사항]
 ${dayRequirements}
 
-[동선 설계 원칙 — 핵심]
-1. 출발·종료 기점: 매일 ${formData.destination} 도시 중심부(중앙역 또는 중심 광장)에서 시작하고 돌아옴
-2. 지리적 동선 최적화: 같은 날 같은 구역·방향의 장소끼리 묶어 배치. 왕복/역방향 이동 금지
-3. 이동수단 명시: 각 장소 이동에 실제 교통편 기재 (예: "메트로 1호선", "RER C", "도보 10분", "버스 85번")
-4. 이동시간 현실 반영: 장소 간 실제 이동시간 고려하여 startTime/endTime 설정 (겹침 절대 금지)
-5. 근교 이동 시: 당일 첫 일정으로 배치하고 복귀 시간 확보
+[규칙]
+- 매일 ${formData.destination} 도심에서 출발·귀환. 같은 구역 장소 묶기. 역방향 금지
+- 교통편: 메트로 호선/도보 분/버스 번호 명시. startTime/endTime 겹침 금지
+- estimatedCostEur: ${nowYear}년 실제 입장료(1인, EUR). 무료=0. 식당=1인 식사비
+- 점심 €${mealBudget.lunch}, 저녁 €${mealBudget.dinner} 기준. 인상된 최신 가격 사용
+- Day 1: Must-Visit 유명 장소 우선. 장소명: Google Maps 영어 공식명
+- reason: 한국어 40자 이내. 이전 장소→교통편+분+핵심이유. 예: "도보 3분, 세계 최대 미술관"
 
-[가격 원칙]
-6. estimatedCostEur = ${nowYear}년 현재 실제 입장료 (EUR, 1인 기준). 무료면 0, 식당은 1인 식사비
-7. 예산 기준: 점심 1인 ~€${mealBudget.lunch}, 저녁 1인 ~€${mealBudget.dinner}
-8. 최근 인상된 가격 반영 (루브르, 에펠탑 등 주요 명소는 ${nowYear}년 기준 실제 요금)
-9. 현재 ${seasonNote} 기준 운영 현황 반영 (임시 휴관·단축운영·예약 필수 여부 명시)
-
-[장소 선정 원칙]
-10. 장소 범위: ${formData.destination} 도시 및 근교 100km 내
-11. ⭐ Day 1 우선: 구글맵 리뷰 수·평점 높고 한국인에게 유명한 Must-Visit 장소. 마이너 장소는 후반 Day 배치
-12. 장소명: Google Maps 검색 가능한 영어 공식명 사용
-13. 식사: 점심(lunch)은 12:00~13:30, 저녁(dinner)은 18:30~20:00 시작. 해당 시간 없으면 생략
-14. 현지인 맛집 (관광객 덫 회피). 실제 영업 중인 곳만
-15. nameKo = 한국어 장소명
-16. reason = 추천 이유 한국어로. 첫 장소는 "도심에서 [교통편] [시간]분" 형태로 시작. 이후 장소는 "앞 장소에서 [교통편] [시간]분" 포함. 예: "루브르 바로 옆, 도보 3분. 인상파 대표작 소장."
-
-JSON만 응답 (마크다운/설명 없이):
-{"days":[{"day":1,"theme":"테마 한국어","places":[{"name":"Official English Name","nameKo":"한국어 이름","type":"activity","startTime":"09:00","endTime":"11:00","reason":"교통편 포함 한국어 추천 이유","estimatedCostEur":0}]}]}`;
+JSON만 (설명 없이):
+{"days":[{"day":1,"theme":"테마","places":[{"name":"English Name","nameKo":"한국어","type":"activity","startTime":"09:00","endTime":"11:00","reason":"교통+이유(40자내)","estimatedCostEur":0}]}]}`;
 
   try {
     console.log(`[V3-Step1] 🤖 Gemini에 ${dayCount}일 완전 일정 요청 (${prompt.length}자)...`);
 
     const response = await getAI().models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-2.5-flash-lite",
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       config: {
         temperature: 0.3,
-        maxOutputTokens: 8192,
+        maxOutputTokens: 4096,
         responseMimeType: "application/json",
-        // ⚡ Thinking 비활성화 → 속도 최적화 (gemini-2.5-flash 기본값: thinking ON)
+        // ⚡ Thinking 비활성화 (flash-lite 기본값 thinking ON)
         thinkingConfig: { thinkingBudget: 0 },
       } as any,
     });

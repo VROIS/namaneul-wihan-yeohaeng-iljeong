@@ -4812,13 +4812,13 @@ Return JSON only, no markdown:
 
       const t0 = Date.now();
       const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: "gemini-2.5-flash-lite",
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         config: {
           temperature: 0.2,
           maxOutputTokens: 4096,
           responseMimeType: "application/json",
-          thinkingConfig: { thinkingBudget: 0 }, // Disable thinking for speed
+          thinkingConfig: { thinkingBudget: 0 },
         } as any,
       });
       const geminiMs = Date.now() - t0;
