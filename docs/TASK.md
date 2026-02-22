@@ -13,10 +13,10 @@
 
 | 항목 | 내용 |
 |------|------|
-| **마지막 작업일** | 2026-02-21 |
-| **마지막 작업** | **[Antigravity] MCP Stage 1 제미나이 의존성 100% 제거**: `mcp-raw-service.ts`의 1단계 파싱 로직을 Gemini API에서 순수 정규식(Regex)으로 교체. 수집 비용 0원 달성 (테스트 완료) |
-| **다음 할 일** | 파이프라인 V3(itinerary-generator.ts)의 60초 생성 지연 문제(route-optimizer, enrichment 병목 등) 해결 및 속도 리팩토링 진행 |
-| **배포 상태** | Koyeb 정상 (200 OK). 커밋 푸시 후 자동 배포. |
+| **마지막 작업일** | 2026-02-22 |
+| **마지막 작업** | **[Antigravity] 이미지 커버리지 32/32 (100%) 달성**: `place_seed_raw` 4단계 우선순위(evidence->best->image->backup) 정립 및 매칭 강화 완료. |
+| **다음 할 일** | 건강체크 API 수정 (Geocoding→Places New) 및 city_transport_fares DB 수집 |
+| **배포 상태** | Koyeb 정상 작동 중 (배포 대기) |
 | **브랜치** | cursor-dev |
 
 ---
@@ -247,7 +247,7 @@
 | **place_seed 토글 기본값 (2026-02-08)** | DB에 place_seed_sync 행 없을 때 스케줄러·API 모두 **true**(기본 ON). data-scheduler.ts `isPlaceSeedSyncEnabled()`, admin-routes GET 일치. |
 | **크롤러 일시 중단 (2026-02, 긴급)** | PAUSED_TASKS: 6개 비용 크롤러(`youtube_sync`,`instagram_sync`,`naver_blog_sync`,`tistory_sync`,`michelin_sync`,`tripadvisor_sync`) 즉시 중단. 유지: `wikimedia_sync`,`opentripmap_sync`, `weather_sync`, `exchange_rate_sync`, `crisis_sync` 및 일정 생성 연관 태스크. 수동 API 실행도 차단. |
 
-- **내부테스트 (2026-02-20)**: server:build OK (server_dist 972kb). lint·expo export 별도 확인.
+| **이미지 커버리지(2026-02-22)** | **해결 (100%)**: `ag3-data-matcher.ts` 로직 수정. 파리 4일 일정 기준 32/32 슬롯 이미지 매칭 성공. 우선순위: `evidenceUrl` > `bestImageUrl` > `imageUrl` > `places.image`. |
 - **배포 mcp_phases (2026-02)**: 서버 시작 시 run-startup-migrations.ts가 자동으로 cities.mcp_phases, place_seed_raw.collection_phase·image_url 추가. 수동 SQL 불필요.
 - **BTS 34 도시 시드 (2026-02-20)**: (1) 서버 시작 → runStartupMigrations로 cities.bts_rank 컬럼 자동 추가. (2) `POST /api/admin/seed/cities-by-phase` body `{ "phase": "bts2026" }` 호출 → 34개 도시 insert/update + bts_rank 1~34 설정. (3) resolveTargetCities가 bts_rank 있는 도시를 BTS 순서대로 반환 → MCP Stage 1이 34도시×5카테고리 시딩. 목표: 5,100곳(중복 제외 시 감소).
 - **MCP 관찰 방법**: (1) Admin `/admin` 대시보드 → overview 탭 "최근 동기화" (dataSyncLog). (2) API: `GET /api/admin/mcp-raw/status` 전체 현황, `GET /api/admin/mcp/workflow/status?runBatchId=xxx` 워크플로우 진행, `GET /api/admin/mcp/workflow/report?runBatchId=xxx` 상세 리포트. (3) Supabase Table Editor: `data_sync_log`, `place_seed_raw`. (4) 터미널: `npm run report:mcp`. (5) MCP 워크플로우: **스케줄 없음** — 서버 시작 시 1회 백그라운드 실행, 목표(BTS34→france30→europe30) 도달까지 한 도시 끝나면 다음 도시로 연쇄.

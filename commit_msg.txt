@@ -1,0 +1,8 @@
+fix: revert to gemini-2.5-flash, single-page itinerary, 1hr buffer, resolvePrice
+
+- pipeline-v3: gemini-2.5-flash-lite to gemini-2.5-flash restored
+- pipeline-v3: detailed prompt v3.3 with lunch/dinner types and price examples
+- pipeline-v3: departure +60min / arrival -60min buffer calculated in code
+- pipeline-v3: resolvePrice bug fix - geminiPrice=0 no longer overrides DB values
+- TripPlannerScreen: removed day tabs, all days shown in single scroll page
+- TripPlannerScreen: map shows all days' places

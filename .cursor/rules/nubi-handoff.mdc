@@ -23,25 +23,22 @@ alwaysApply: true
 - 사용자에게 SQL/Supabase/PowerShell 등 수동 실행 요청하지 않음 (비개발자)
 - DB·코드 작업은 배포(Koyeb)와 별개로 진행 가능
 
-## 현재 상태 (2026-02-21)
+## 현재 상태 (2026-02-22)
 
 | 항목 | 내용 |
 |------|------|
-| 마지막 작업 | Step 6 구현: googlePlaceId 백필 서비스. 1회 실행 24건 성공 (rate limit 1.2초 간격 적용). 대통합 3차 물류트럭도 완성 (place_id 362건). |
-| 다음 할 일 | 커밋·푸시 → Koyeb 배포 → cron으로 매일 100건 자동 백필. 약 50일 후 5,250건 완료 예상. |
+| 마지막 작업 | 이미지 커버리지 32/32 (100%) 달성. `place_seed_raw` 4단계 우선순위(evidence->best->image->backup) 정립 및 매칭 로직 강화 완료. |
+| 다음 할 일 | **건강체크 API 수정 (Geocoding→Places New)** 및 **city_transport_fares 수집**. |
 | 브랜치 | cursor-dev |
-| 배포 상태 | 미푸시. |
+| 배포 상태 | Koyeb 정상 작동 중 (이미지 로직 배포 대기). |
 
 ## 긴급 이슈
-- **Google Maps/Places API 대시보드 빨간불**: 건강체크가 Geocoding API 테스트 → 실제 사용 API(Places New/Routes)와 다름
-- **Place Seed 0/71 도시**: 공식 시딩 완료된 도시 없음 (places 1,669개는 초기 데이터)
-- **API 비용 보호 적용 완료**: Places 500/일, Routes 1000/일, Gemini Search 160/일
+- **Google Maps/Places API 대시보드 빨간불**: 건강체크 로직 불일치 (Places API New로 테스트 코드 수정 필요)
+- **데이터 보강**: Place Seed 프랑스 도시(30개) 수집 완료 상태 확인 및 이미지 커버리지 유지
 
 ## 최우선 작업 (순서대로)
-1. 건강체크 API 수정 (Geocoding → Places API New 테스트)
-2. city_transport_fares DB 테이블 생성 + 교통 요금 수집
-3. 프론트엔드: nubiReason 표시 + 교통비 A/B 분기 + Pipeline V3 응답 매핑
-4. 프론트엔드: 긴 한 페이지 구조 + 로딩 계산과정 표시
+1. **건강체크 API 수정**: Geocoding API 테스트 → Places API New 테스트로 변경
+2. **city_transport_fares DB 테이블 생성 + 교통 요금 수집**: 전 세계 60개 도시 요금 수집 및 데이터화
 
 ## 시딩 순서 vs 분류
 - **시딩 순서** (새 수집): 파리 → 프랑스(FR) → 유럽(Europe/)

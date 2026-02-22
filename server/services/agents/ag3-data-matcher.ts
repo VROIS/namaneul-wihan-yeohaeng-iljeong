@@ -40,23 +40,25 @@ function isUsableImageUrl(url: string): boolean {
 }
 
 /**
- * 일정 이미지 우선순위 (수정됨):
- * 1순위: place_seed_raw.best_image_url (검증된 최선 이미지, 5250건 채워짐)
- * 2순위: place_seed_raw.image_url (Pixabay/Klook 실제 관광지 사진)
- * 3순위: place_images 통합 테이블
- * 4순위: places.photoUrls (Google Places 사진)
- * 5순위: Wikipedia/기타 fallback
- * 제외: instagram.com/p/ HTML 링크 (깨진 URL)
+ * 일정 이미지 우선순위 (NUBI Handoff 규격):
+ * 1순위: place_seed_raw.evidence_url (추천 근거이자 인스타 증거 사진)
+ * 2순위: place_seed_raw.best_image_url (검증된 초고화질 마스터 이미지)
+ * 3순위: place_seed_raw.image_url (1단계 기본 수집 이미지)
+ * 4순위: places.photoUrls 및 place_images 통합 테이블
  */
 function resolvePlaceImage(
-  seedBestImageUrl?: string | null,    // 1순위: place_seed_raw.best_image_url
-  seedImageUrl?: string | null,        // 2순위: place_seed_raw.image_url
-  placeImageUrl?: string | null,       // 3순위: place_images 통합 테이블
-  photoUrls?: string[] | null,         // 4순위: places.photoUrls (구글)
+  evidenceUrl?: string | null,         // 1순위: place_seed_raw.evidence_url
+  seedBestImageUrl?: string | null,    // 2순위: place_seed_raw.best_image_url
+  seedImageUrl?: string | null,        // 3순위: place_seed_raw.image_url
+  placeImageUrl?: string | null,       // 4-1순위: place_images 통합 테이블
+  photoUrls?: string[] | null,         // 4-2순위: places.photoUrls (구글)
   ...fallbacks: (string | undefined | null)[]
 ): string | undefined {
   const pick = (url: string | undefined | null) => (url && isUsableImageUrl(url) ? url : undefined);
   const pickFirst = (arr: string[] | null | undefined) => arr?.find((u) => isUsableImageUrl(u));
+
+  const e1 = pick(evidenceUrl);
+  if (e1) return e1;
   const s1 = pick(seedBestImageUrl);
   if (s1) return s1;
   const s2 = pick(seedImageUrl);
@@ -237,7 +239,17 @@ export async function preloadCityData(
     if (cityId) {
       try {
         const _t1 = Date.now();
-        const seeds = await db.select().from(placeSeedRaw).where(eq(placeSeedRaw.cityId, cityId));
+        const seeds = await db.select({
+          id: placeSeedRaw.id,
+          nameEn: placeSeedRaw.nameEn,
+          nameKo: placeSeedRaw.nameKo,
+          googlePlaceId: placeSeedRaw.googlePlaceId,
+          imageUrl: placeSeedRaw.imageUrl,
+          bestImageUrl: placeSeedRaw.bestImageUrl,
+          evidenceUrl: placeSeedRaw.evidenceUrl,
+          nubiReason: placeSeedRaw.nubiReason,
+          sourceType: placeSeedRaw.sourceType
+        }).from(placeSeedRaw).where(eq(placeSeedRaw.cityId, cityId));
         for (const s of seeds) {
           if (s.nameEn) seedRawMap.set(s.nameEn.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, ""), s);
           if (s.nameKo) seedRawMap.set(s.nameKo.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, ""), s);
@@ -422,18 +434,18 @@ export async function matchPlacesWithDB(
   // === 3단계: 결과 조합 ===
   const enriched: PlaceResult[] = [];
 
-  // place_seed_raw에서 장소명으로 이미지를 찾는 헬퍼
-  const getSeedImage = (placeName: string, dbMatch?: any): { best?: string; img?: string } => {
+  // place_seed_raw에서 장소명으로 데이터를 찾는 헬퍼
+  const getSeedData = (placeName: string, dbMatch?: any): any | null => {
     const nameKey = placeName.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, "");
     const seed = seedRawMap?.get(nameKey);
-    if (seed) return { best: seed.bestImageUrl || undefined, img: seed.imageUrl || undefined };
+    if (seed) return seed;
     // dbMatch의 googlePlaceId로도 검색
     if (dbMatch?.googlePlaceId) {
       for (const [, s] of (seedRawMap || new Map())) {
-        if (s.googlePlaceId === dbMatch.googlePlaceId) return { best: s.bestImageUrl || undefined, img: s.imageUrl || undefined };
+        if (s.googlePlaceId === dbMatch.googlePlaceId) return s;
       }
     }
-    return {};
+    return null;
   };
 
   for (const { place, dbMatch, needsGoogle } of matchResults) {
@@ -449,19 +461,23 @@ export async function matchPlacesWithDB(
       const dbFinal = dbMatch.finalScore ?? 0;
       const dbReviewCount = dbMatch.userRatingCount ?? 0;
 
-      // place_seed_raw 이미지 우선 조회 (1, 2순위)
-      const seedImg = getSeedImage(place.name, dbMatch);
+      // place_seed_raw 데이터 우선 조회 (1, 2, 3순위)
+      const seedData = getSeedData(place.name, dbMatch);
+      const seedEvid = seedData?.evidenceUrl;
+      const seedBest = seedData?.bestImageUrl;
+      const seedImg = seedData?.imageUrl;
 
       enriched.push({
         ...place,
         sourceType: 'Gemini AI + DB Enriched',
-        description: (dbMatch.editorialSummary || place.description) ?? '',
+        description: (seedData?.nubiReason || dbMatch.editorialSummary || place.description) ?? '',
         image: resolvePlaceImage(
-          seedImg.best,                      // 1순위: place_seed_raw.best_image_url
-          seedImg.img,                       // 2순위: place_seed_raw.image_url
-          placeImageMap?.get(dbMatch.id),    // 3순위: place_images 통합 테이블
-          dbMatch.photoUrls,                 // 4순위: places.photoUrls (Google)
-          place.image                        // 5순위: Gemini 원본
+          seedEvid,                          // 1순위: evidence_url
+          seedBest,                          // 2순위: best_image_url
+          seedImg,                           // 3순위: image_url
+          placeImageMap?.get(dbMatch.id),    // 4-1순위: place_images
+          dbMatch.photoUrls,                 // 4-2순위: photoUrls
+          place.image                        // 5순위: Gemini
         ) ?? place.image ?? '',
         vibeScore: dbMatch.vibeScore || place.vibeScore,
         finalScore: dbFinal || place.finalScore || 0,
@@ -494,15 +510,16 @@ export async function matchPlacesWithDB(
             console.log(`[AG3] 🔗 gid 역매칭: "${place.name}" → "${gidMatch.name}"`);
             if (gidMatch.id) addPlaceAlias(gidMatch.id, place.name).catch(() => { });
             matched++;
-            const seedImgGid = getSeedImage(place.name, gidMatch);
+            const seedDataGid = getSeedData(place.name, gidMatch);
             enriched.push({
               ...place,
               sourceType: 'Gemini AI + DB Enriched (gid)',
               lat: gidMatch.latitude || googleResult.lat,
               lng: gidMatch.longitude || googleResult.lng,
               image: resolvePlaceImage(
-                seedImgGid.best,
-                seedImgGid.img,
+                seedDataGid?.evidenceUrl,
+                seedDataGid?.bestImageUrl,
+                seedDataGid?.imageUrl,
                 placeImageMap?.get(gidMatch.id),
                 gidMatch.photoUrls,
                 googleResult.photoUrl,
@@ -519,16 +536,17 @@ export async function matchPlacesWithDB(
           }
         }
 
-        // Google만 매칭된 경우도 seed 이미지 시도
-        const seedImgGoogle = getSeedImage(place.name);
+        // Google만 매칭된 경우도 seed 데이터 시도
+        const seedDataGoogle = getSeedData(place.name);
         enriched.push({
           ...place,
           sourceType: 'Gemini AI + Google Places',
           lat: googleResult.lat,
           lng: googleResult.lng,
           image: resolvePlaceImage(
-            seedImgGoogle.best,
-            seedImgGoogle.img,
+            seedDataGoogle?.evidenceUrl,
+            seedDataGoogle?.bestImageUrl,
+            seedDataGoogle?.imageUrl,
             null,
             null,
             googleResult.photoUrl,
@@ -539,22 +557,22 @@ export async function matchPlacesWithDB(
           userRatingCount: googleResult.userRatingCount || 0,
         });
       } else {
-        // 매칭 실패한 경우도 seed 이미지 시도
-        const seedImgFallback = getSeedImage(place.name);
+        // 매칭 실패한 경우도 seed 데이터 시도
+        const seedDataFallback = getSeedData(place.name);
         unmatchedCount++;
         enriched.push({
           ...place,
           sourceType: 'Gemini AI (New)',
-          image: (seedImgFallback.best || seedImgFallback.img || place.image) ?? '',
+          image: (seedDataFallback?.evidenceUrl || seedDataFallback?.bestImageUrl || seedDataFallback?.imageUrl || place.image) ?? '',
         });
       }
     } else {
-      const seedImgFallback = getSeedImage(place.name);
+      const seedDataFallback = getSeedData(place.name);
       unmatchedCount++;
       enriched.push({
         ...place,
         sourceType: 'Gemini AI (New)',
-        image: (seedImgFallback.best || seedImgFallback.img || place.image) ?? '',
+        image: (seedDataFallback?.evidenceUrl || seedDataFallback?.bestImageUrl || seedDataFallback?.imageUrl || place.image) ?? '',
       });
     }
   }
