@@ -23,7 +23,15 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
 import { Spacing, BorderRadius, Brand, Colors } from "@/constants/theme";
 import { RootStackParamList } from "../navigation/RootStackNavigator";
-import { UserData, saveAuth, calculateAge, getAgeGroup, socialLogin } from "../lib/auth";
+import { UserData, calculateAge, getAgeGroup, socialLogin, socialLoginWithGoogle, socialLoginWithFacebook } from "../lib/auth";
+import {
+    useGoogleAuthRequest,
+    useFacebookAuthRequest,
+    isGoogleOAuthConfigured,
+    isFacebookOAuthConfigured,
+    getIdTokenFromGoogleResponse,
+    getCodeFromFacebookResponse,
+} from "../lib/auth-oauth";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -86,10 +94,16 @@ export default function LoginScreen() {
     const [month, setMonth] = useState("");
     const [year, setYear] = useState("");
     const [dateError, setDateError] = useState<string | null>(null);
+    const [oauthLoading, setOauthLoading] = useState(false);
 
     const dayRef = useRef<TextInput>(null);
     const monthRef = useRef<TextInput>(null);
     const yearRef = useRef<TextInput>(null);
+
+    const [googleRequest, googleResponse, googlePromptAsync] = useGoogleAuthRequest();
+    const [fbRequest, fbResponse, fbPromptAsync] = useFacebookAuthRequest();
+    const processedGoogleRef = useRef<typeof googleResponse>(null);
+    const processedFbRef = useRef<typeof fbResponse>(null);
 
     const birthDate = useMemo(() => {
         if (day.length === 2 && month.length === 2 && year.length === 4) {
@@ -108,6 +122,63 @@ export default function LoginScreen() {
     const ageGroup = useMemo(() => (age !== null ? getAgeGroup(age) : null), [age]);
     const isAdult = age !== null && age >= 18;
     const isDateComplete = day.length === 2 && month.length === 2 && year.length === 4;
+    const birthDateStr = birthDate ? birthDate.toISOString().split("T")[0] : null;
+
+    useEffect(() => {
+        if (!googleResponse || googleResponse.type !== "success" || !birthDateStr) return;
+        if (processedGoogleRef.current === googleResponse) return;
+        processedGoogleRef.current = googleResponse;
+        const idToken = getIdTokenFromGoogleResponse(googleResponse);
+        if (!idToken) return;
+        setOauthLoading(true);
+        socialLoginWithGoogle({
+            idToken,
+            birthDate: birthDateStr,
+            language: selectedLanguage.code,
+            deviceType: Platform.OS === "web" ? "web" : "mobile",
+        })
+            .then((result) => {
+                if (result.success) {
+                    navigation.reset({ index: 0, routes: [{ name: "Main" }] });
+                } else {
+                    Alert.alert("로그인 실패", result.error || "Google 로그인에 실패했습니다.");
+                }
+            })
+            .catch((err) => {
+                console.error("Google login error:", err);
+                Alert.alert("로그인 실패", "Google 로그인 중 오류가 발생했습니다.");
+            })
+            .finally(() => setOauthLoading(false));
+    }, [googleResponse, birthDateStr, selectedLanguage.code, navigation]);
+
+    useEffect(() => {
+        if (!fbResponse || fbResponse.type !== "success" || !birthDateStr) return;
+        if (processedFbRef.current === fbResponse) return;
+        processedFbRef.current = fbResponse;
+        const code = getCodeFromFacebookResponse(fbResponse);
+        const redirectUri = fbRequest?.redirectUri;
+        if (!code || !redirectUri) return;
+        setOauthLoading(true);
+        socialLoginWithFacebook({
+            code,
+            redirectUri,
+            birthDate: birthDateStr,
+            language: selectedLanguage.code,
+            deviceType: Platform.OS === "web" ? "web" : "mobile",
+        })
+            .then((result) => {
+                if (result.success) {
+                    navigation.reset({ index: 0, routes: [{ name: "Main" }] });
+                } else {
+                    Alert.alert("로그인 실패", result.error || "Facebook 로그인에 실패했습니다.");
+                }
+            })
+            .catch((err) => {
+                console.error("Facebook login error:", err);
+                Alert.alert("로그인 실패", "Facebook 로그인 중 오류가 발생했습니다.");
+            })
+            .finally(() => setOauthLoading(false));
+    }, [fbResponse, fbRequest?.redirectUri, birthDateStr, selectedLanguage.code, navigation]);
 
     const validateAndSetDay = (value: string) => {
         const num = value.replace(/[^0-9]/g, "").slice(0, 2);
@@ -150,35 +221,54 @@ export default function LoginScreen() {
         }
     };
 
-    const handleSocialLogin = async (provider: "kakao" | "google" | "whatsapp") => {
+    const requireBirthDateAndAdult = (): boolean => {
         if (!isDateComplete) {
             setDateError("생년월일을 먼저 입력해주세요");
             Alert.alert("알림", "서비스 이용을 위해 생년월일 입력이 필요합니다.");
             dayRef.current?.focus();
-            return;
+            return false;
         }
-
         if (!birthDate || !isAdult) {
             setDateError("만 18세 이상만 이용 가능합니다");
             Alert.alert("알림", "만 18세 이상만 이용 가능합니다.");
-            return;
+            return false;
         }
+        return true;
+    };
+
+    const handleSocialLogin = async (provider: "kakao" | "google" | "facebook") => {
+        if (!requireBirthDateAndAdult()) return;
 
         const result = await socialLogin({
             provider,
-            birthDate: birthDate.toISOString().split('T')[0],
+            birthDate: birthDate!.toISOString().split("T")[0],
             language: selectedLanguage.code,
             deviceType: Platform.OS,
-            displayName: provider === "kakao" ? "카카오 사용자" : provider === "whatsapp" ? "WhatsApp User" : "Google User",
+            displayName: provider === "kakao" ? "카카오 사용자" : provider === "facebook" ? "Facebook User" : "Google User",
         });
 
         if (result.success && result.user) {
-            navigation.reset({
-                index: 0,
-                routes: [{ name: "Main" }],
-            });
+            navigation.reset({ index: 0, routes: [{ name: "Main" }] });
         } else {
             Alert.alert("로그인 실패", result.error || "서버 통신에 실패했습니다.");
+        }
+    };
+
+    const handleGooglePress = async () => {
+        if (!requireBirthDateAndAdult()) return;
+        if (isGoogleOAuthConfigured()) {
+            await googlePromptAsync();
+        } else {
+            await handleSocialLogin("google");
+        }
+    };
+
+    const handleFacebookPress = async () => {
+        if (!requireBirthDateAndAdult()) return;
+        if (isFacebookOAuthConfigured()) {
+            await fbPromptAsync();
+        } else {
+            await handleSocialLogin("facebook");
         }
     };
 
@@ -340,8 +430,10 @@ export default function LoginScreen() {
                                 styles.googleButton,
                                 { borderColor: theme.border },
                                 pressed && styles.buttonPressed,
+                                oauthLoading && styles.buttonDisabled,
                             ]}
-                            onPress={() => handleSocialLogin("google")}
+                            onPress={handleGooglePress}
+                            disabled={oauthLoading}
                         >
                             <View style={styles.googleIcon}>
                                 <Text style={styles.googleIconText}>G</Text>
@@ -351,17 +443,19 @@ export default function LoginScreen() {
                             </Text>
                         </Pressable>
 
-                        {/* 왓츠앱 */}
+                        {/* Facebook (Meta) */}
                         <Pressable
                             style={({ pressed }) => [
                                 styles.socialButton,
-                                styles.whatsappButton,
+                                styles.facebookButton,
                                 pressed && styles.buttonPressed,
+                                oauthLoading && styles.buttonDisabled,
                             ]}
-                            onPress={() => handleSocialLogin("whatsapp")}
+                            onPress={handleFacebookPress}
+                            disabled={oauthLoading}
                         >
-                            <FontAwesome name="whatsapp" size={24} color="#FFFFFF" />
-                            <Text style={styles.whatsappButtonText}>WhatsApp으로 시작하기</Text>
+                            <FontAwesome name="facebook" size={24} color="#FFFFFF" />
+                            <Text style={styles.facebookButtonText}>Facebook으로 시작하기</Text>
                         </Pressable>
 
                         <Text style={[styles.disclaimer, { color: theme.textTertiary }]}>
@@ -511,7 +605,7 @@ const styles = StyleSheet.create({
         gap: Spacing.md,
     },
     buttonPressed: { opacity: 0.9, transform: [{ scale: 0.98 }] },
-    buttonDisabled: { opacity: 1 },
+    buttonDisabled: { opacity: 0.6 },
     kakaoButton: { backgroundColor: "#FEE500" },
     kakaoIcon: {
         width: 24,
@@ -523,8 +617,8 @@ const styles = StyleSheet.create({
     },
     kakaoIconText: { color: "#FEE500", fontSize: 14, fontWeight: "800" },
     kakaoButtonText: { color: "#000000", fontSize: 16, fontWeight: "700" },
-    whatsappButton: { backgroundColor: "#25D366" },
-    whatsappButtonText: { color: "#FFFFFF", fontSize: 16, fontWeight: "700" },
+    facebookButton: { backgroundColor: "#1877F2" },
+    facebookButtonText: { color: "#FFFFFF", fontSize: 16, fontWeight: "700" },
     googleButton: { backgroundColor: "#FFFFFF", borderWidth: 1 },
     googleIcon: {
         width: 24,

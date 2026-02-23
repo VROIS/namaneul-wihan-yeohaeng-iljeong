@@ -17,6 +17,10 @@ COPY . .
 ARG COMMIT_HASH=unknown
 ENV COMMIT_HASH=${COMMIT_HASH}
 
+# Koyeb 환경변수 → 빌드 시 클라이언트 번들에 포함 (Google OAuth)
+ARG EXPO_PUBLIC_GOOGLE_CLIENT_ID
+ENV EXPO_PUBLIC_GOOGLE_CLIENT_ID=${EXPO_PUBLIC_GOOGLE_CLIENT_ID}
+
 # 서버 빌드 (esbuild)
 RUN npm run server:build
 

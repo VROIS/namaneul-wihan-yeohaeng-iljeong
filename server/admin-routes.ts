@@ -3582,6 +3582,10 @@ export function registerAdminRoutes(app: Express) {
       // 키 값이 있으면 환경변수에도 반영
       if (keyValue && keyValue.trim()) {
         process.env[keyName] = keyValue.trim();
+        if (keyName === 'GOOGLE_OAUTH_CLIENT_ID' || keyName === 'EXPO_PUBLIC_GOOGLE_CLIENT_ID') {
+          process.env.GOOGLE_CLIENT_ID = keyValue.trim();
+          process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID = keyValue.trim();
+        }
       }
       
       console.log(`✅ New API Key added: ${keyName}`);
@@ -3632,6 +3636,10 @@ export function registerAdminRoutes(app: Express) {
       if (keyName === 'GOOGLE_MAPS_API_KEY') {
         process.env.Google_maps_api_key = keyValue.trim();
       }
+      if (keyName === 'GOOGLE_OAUTH_CLIENT_ID' || keyName === 'EXPO_PUBLIC_GOOGLE_CLIENT_ID') {
+        process.env.GOOGLE_CLIENT_ID = keyValue.trim();
+        process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID = keyValue.trim();
+      }
       
       console.log(`✅ API Key saved: ${keyName}`);
       res.json({ success: true, message: `${keyName} 저장 완료` });
@@ -3654,6 +3662,10 @@ export function registerAdminRoutes(app: Express) {
       delete process.env[keyName];
       if (keyName === 'GEMINI_API_KEY') {
         delete process.env.AI_INTEGRATIONS_GEMINI_API_KEY;
+      }
+      if (keyName === 'GOOGLE_OAUTH_CLIENT_ID' || keyName === 'EXPO_PUBLIC_GOOGLE_CLIENT_ID') {
+        delete process.env.GOOGLE_CLIENT_ID;
+        delete process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID;
       }
       
       res.json({ success: true, message: `${keyName} 삭제 완료` });

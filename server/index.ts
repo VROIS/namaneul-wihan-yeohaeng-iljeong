@@ -42,7 +42,7 @@ function setupCors(app: express.Application) {
         "Access-Control-Allow-Methods",
         "GET, POST, PUT, DELETE, OPTIONS",
       );
-      res.header("Access-Control-Allow-Headers", "Content-Type");
+      res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
       res.header("Access-Control-Allow-Credentials", "true");
     }
 
@@ -50,7 +50,7 @@ function setupCors(app: express.Application) {
     if (process.env.NODE_ENV === "production" && !origin) {
       res.header("Access-Control-Allow-Origin", "*");
       res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-      res.header("Access-Control-Allow-Headers", "Content-Type");
+      res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
     }
 
     // 로컬 개발 환경에서는 모든 origin 허용 (개발 편의)
@@ -65,7 +65,7 @@ function setupCors(app: express.Application) {
           "Access-Control-Allow-Methods",
           "GET, POST, PUT, DELETE, OPTIONS",
         );
-        res.header("Access-Control-Allow-Headers", "Content-Type");
+        res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
         res.header("Access-Control-Allow-Credentials", "true");
       }
     }
@@ -285,6 +285,10 @@ function setupErrorHandler(app: express.Application) {
               }
               if (key.keyName === 'GOOGLE_MAPS_API_KEY') {
                 process.env.Google_maps_api_key = key.keyValue;
+              }
+              if (key.keyName === 'GOOGLE_OAUTH_CLIENT_ID' || key.keyName === 'EXPO_PUBLIC_GOOGLE_CLIENT_ID') {
+                process.env.GOOGLE_CLIENT_ID = key.keyValue;
+                process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID = key.keyValue;
               }
               loadedCount++;
             }

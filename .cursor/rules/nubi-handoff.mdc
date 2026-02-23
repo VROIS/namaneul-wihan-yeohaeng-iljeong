@@ -27,8 +27,8 @@ alwaysApply: true
 
 | 항목 | 내용 |
 |------|------|
-| 마지막 작업 | 이미지 커버리지 32/32 (100%) 달성. `place_seed_raw` 4단계 우선순위(evidence->best->image->backup) 정립 및 매칭 로직 강화 완료. |
-| 다음 할 일 | **건강체크 API 수정 (Geocoding→Places New)** 및 **city_transport_fares 수집**. |
+| 마지막 작업 | Google OAuth 배포 적용: Dockerfile ARG 추가(Koyeb 빌드 시 EXPO_PUBLIC_GOOGLE_CLIENT_ID). 서버·웹 빌드·린트 통과. |
+| 다음 할 일 | Koyeb에 EXPO_PUBLIC_GOOGLE_CLIENT_ID 환경변수 추가 후 재배포 → 배포본 Google 로그인 테스트. |
 | 브랜치 | cursor-dev |
 | 배포 상태 | Koyeb 정상 작동 중 (이미지 로직 배포 대기). |
 

@@ -9,7 +9,7 @@ export interface UserData {
   email?: string;
   name?: string;
   displayName?: string;
-  provider: "kakao" | "google" | "whatsapp";
+  provider: "kakao" | "google" | "facebook" | "whatsapp";
   language: string;
   birthDate: string;
   ageGroup?: string;
@@ -56,7 +56,7 @@ export async function clearAuth(): Promise<void> {
 }
 
 export async function socialLogin(data: {
-  provider: "kakao" | "google" | "whatsapp";
+  provider: "kakao" | "google" | "facebook" | "whatsapp";
   providerId?: string;
   birthDate: string;
   language: string;
@@ -66,26 +66,71 @@ export async function socialLogin(data: {
   try {
     const response = await fetch(`${getApiUrl()}/api/auth/social-login`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
-
     const result = await response.json();
-
     if (response.ok && result.success) {
-      const userData: UserData = {
-        ...result.user,
-        token: result.token,
-      };
+      const userData: UserData = { ...result.user, token: result.token };
       await saveAuth(userData);
       return { success: true, user: userData };
-    } else {
-      return { success: false, error: result.error || "로그인 실패" };
     }
+    return { success: false, error: result.error || "로그인 실패" };
   } catch (error) {
     console.error("Social login error:", error);
+    return { success: false, error: "서버 연결 실패" };
+  }
+}
+
+/** Google OAuth 성공 후 id_token으로 로그인 */
+export async function socialLoginWithGoogle(data: {
+  idToken: string;
+  birthDate: string;
+  language: string;
+  deviceType: string;
+}): Promise<{ success: boolean; user?: UserData; error?: string }> {
+  try {
+    const response = await fetch(`${getApiUrl()}/api/auth/google`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    const result = await response.json();
+    if (response.ok && result.success) {
+      const userData: UserData = { ...result.user, token: result.token };
+      await saveAuth(userData);
+      return { success: true, user: userData };
+    }
+    return { success: false, error: result.error || "Google 로그인 실패" };
+  } catch (error) {
+    console.error("Google login error:", error);
+    return { success: false, error: "서버 연결 실패" };
+  }
+}
+
+/** Facebook OAuth 성공 후 code로 로그인 */
+export async function socialLoginWithFacebook(data: {
+  code: string;
+  redirectUri: string;
+  birthDate: string;
+  language: string;
+  deviceType: string;
+}): Promise<{ success: boolean; user?: UserData; error?: string }> {
+  try {
+    const response = await fetch(`${getApiUrl()}/api/auth/facebook`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    const result = await response.json();
+    if (response.ok && result.success) {
+      const userData: UserData = { ...result.user, token: result.token };
+      await saveAuth(userData);
+      return { success: true, user: userData };
+    }
+    return { success: false, error: result.error || "Facebook 로그인 실패" };
+  } catch (error) {
+    console.error("Facebook login error:", error);
     return { success: false, error: "서버 연결 실패" };
   }
 }
