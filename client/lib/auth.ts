@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getApiUrl } from "./query-client";
 
 const AUTH_KEY = "@vibetrip_auth";
 const USER_KEY = "@vibetrip_user";
@@ -18,7 +19,6 @@ export interface UserData {
   createdAt?: string;
 }
 
-const API_URL = "http://localhost:8082"; // 서버 포트 확인 필요 (index.ts에 8082로 되어 있음)
 
 export async function isAuthenticated(): Promise<boolean> {
   try {
@@ -64,7 +64,7 @@ export async function socialLogin(data: {
   displayName?: string;
 }): Promise<{ success: boolean; user?: UserData; error?: string }> {
   try {
-    const response = await fetch(`${API_URL}/api/auth/social-login`, {
+    const response = await fetch(`${getApiUrl()}/api/auth/social-login`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

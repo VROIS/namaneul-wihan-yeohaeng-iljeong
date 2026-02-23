@@ -87,6 +87,7 @@ export default function LoginScreen() {
     const [year, setYear] = useState("");
     const [dateError, setDateError] = useState<string | null>(null);
 
+    const dayRef = useRef<TextInput>(null);
     const monthRef = useRef<TextInput>(null);
     const yearRef = useRef<TextInput>(null);
 
@@ -263,6 +264,7 @@ export default function LoginScreen() {
                         <View style={styles.dateInputRow}>
                             <View style={[styles.dateInputBox, { backgroundColor: theme.backgroundDefault, borderColor: dateError ? "#EF4444" : theme.border }]}>
                                 <TextInput
+                                    ref={dayRef}
                                     style={[styles.dateInput, { color: theme.text }]}
                                     placeholder="DD"
                                     placeholderTextColor={theme.textTertiary}
