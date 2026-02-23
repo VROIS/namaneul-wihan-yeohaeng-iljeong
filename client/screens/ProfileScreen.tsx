@@ -11,7 +11,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Spacing, BorderRadius, Brand, Typography, Colors, Shadows } from "@/constants/theme";
 import ThemedText from "@/components/ThemedText";
 import { apiRequest } from "@/lib/query-client";
-import { getUserData } from "@/lib/auth";
+import { getUserData, isAuthenticated, clearAuth, type UserData } from "@/lib/auth";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 // 저장된 일정 타입
@@ -42,22 +42,48 @@ export default function ProfileScreen() {
   const [savedTrips, setSavedTrips] = useState<SavedItinerary[]>([]);
   const [isLoadingTrips, setIsLoadingTrips] = useState(true);
 
-  // 저장된 일정 불러오기 (admin 고정)
+  // 👤 사용자 정보
+  const [user, setUser] = useState<UserData | null>(null);
+  const [isAuth, setIsAuth] = useState(false);
+
+  // 저장된 일정 불러오기
   useEffect(() => {
-    const loadSavedTrips = async () => {
+    const loadData = async () => {
       try {
-        // 🔧 로그인 제거: admin으로 고정
-        const response = await apiRequest("GET", `/api/users/admin/itineraries`);
-        const trips = await response.json();
-        setSavedTrips(trips || []);
+        const authenticated = await isAuthenticated();
+        setIsAuth(authenticated);
+
+        if (authenticated) {
+          const userData = await getUserData();
+          setUser(userData);
+
+          if (userData) {
+            const response = await apiRequest("GET", `/api/users/${userData.id}/itineraries`);
+            const trips = await response.json();
+            setSavedTrips(trips || []);
+          }
+        } else {
+          setSavedTrips([]);
+        }
       } catch (error) {
-        console.error("[Profile] 일정 로드 오류:", error);
+        console.error("[Profile] 로드 오류:", error);
       } finally {
         setIsLoadingTrips(false);
       }
     };
-    loadSavedTrips();
+    loadData();
   }, []);
+
+  const handleLogout = async () => {
+    await clearAuth();
+    setIsAuth(false);
+    setUser(null);
+    setSavedTrips([]);
+    navigation.reset({
+      index: 0,
+      routes: [{ name: "Main" }],
+    });
+  };
 
   const stats = [
     { label: "여행", value: String(savedTrips.length), icon: "map" },
@@ -82,8 +108,22 @@ export default function ProfileScreen() {
         >
           <Feather name="user" size={36} color="#FFFFFF" />
         </LinearGradient>
-        <ThemedText style={styles.userName}>여행자</ThemedText>
-        <Text style={[styles.userEmail, { color: theme.textSecondary }]}>traveler@vibetrip.app</Text>
+        {isAuth && user ? (
+          <>
+            <ThemedText style={styles.userName}>{user.name}</ThemedText>
+            <Text style={[styles.userEmail, { color: theme.textSecondary }]}>{user.email}</Text>
+          </>
+        ) : (
+          <>
+            <ThemedText style={styles.userName}>로그인이 필요합니다</ThemedText>
+            <Pressable
+              style={[styles.loginButton, { backgroundColor: Brand.primary }]}
+              onPress={() => navigation.navigate("Login")}
+            >
+              <Text style={styles.loginButtonText}>로그인 / 가입하기</Text>
+            </Pressable>
+          </>
+        )}
       </View>
 
       <View style={styles.statsRow}>
@@ -162,7 +202,7 @@ export default function ProfileScreen() {
       {(() => {
         const videosReady = savedTrips.filter(t => t.videoStatus === "succeeded" && t.videoUrl);
         if (videosReady.length === 0) return null;
-        
+
         return (
           <View style={styles.section}>
             <ThemedText style={styles.sectionTitle}>🎬 나의 영상 ({videosReady.length})</ThemedText>
@@ -252,6 +292,17 @@ export default function ProfileScreen() {
               <Feather name="chevron-right" size={20} color={theme.textTertiary} />
             </Pressable>
           ))}
+          {isAuth && (
+            <Pressable
+              style={[styles.menuItem, { borderTopWidth: 1, borderTopColor: theme.border }]}
+              onPress={handleLogout}
+            >
+              <View style={styles.menuItemLeft}>
+                <Feather name="log-out" size={20} color="#EF4444" />
+                <Text style={[styles.menuItemLabel, { color: "#EF4444" }]}>로그아웃</Text>
+              </View>
+            </Pressable>
+          )}
         </View>
       </View>
     </ScrollView>
@@ -278,6 +329,17 @@ const styles = StyleSheet.create({
   },
   userEmail: {
     ...Typography.small,
+  },
+  loginButton: {
+    marginTop: Spacing.md,
+    paddingHorizontal: Spacing.xl,
+    paddingVertical: Spacing.md,
+    borderRadius: BorderRadius.full,
+  },
+  loginButtonText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "700",
   },
   statsRow: {
     flexDirection: "row",

@@ -14,6 +14,7 @@ import { generateSceneDialogue } from "./services/video-dialogue-generator";
 import { runVideoGenerationPipeline } from "./services/video-pipeline";
 import { getTestVideoHtml } from "./test-video-ui";
 import { registerAdminRoutes } from "./admin-routes";
+import { registerAuthRoutes } from "./auth";
 import { db } from "./db";
 import { instagramHashtags, cities, youtubeChannels, verificationRequests, itineraries } from "../shared/schema";
 import { count, eq, desc, sql } from "drizzle-orm";
@@ -77,6 +78,7 @@ init();
 
 export async function registerRoutes(app: Express): Promise<Server> {
   registerAdminRoutes(app);
+  registerAuthRoutes(app);
 
   // Cities
   app.get("/api/cities", async (req, res) => {
@@ -294,7 +296,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const itinerary = await itineraryGenerator.generate(enrichedFormData);
-      
+
       // 🔍 디버그: places 비어있는 문제 추적
       const debugInfo = {
         daysCount: itinerary?.days?.length || 0,
@@ -308,26 +310,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         totalMs: itinerary?.metadata?._totalMs || 0,
       };
       console.log(`[Routes] 📊 일정 생성 완료:`, JSON.stringify(debugInfo));
-      
+
       // places가 전부 비어있으면 경고
       const totalPlacesInDays = debugInfo.placesPerDay.reduce((sum: number, d: any) => sum + d.placesCount, 0);
       if (totalPlacesInDays === 0) {
         console.error(`[Routes] ❌ 경고: 모든 day의 places가 비어있습니다! schedule이 비었을 수 있음`);
       }
-      
+
       res.json(itinerary);
     } catch (error: any) {
       console.error("Error generating itinerary:", error?.message || error);
-      
+
       // API 키 누락 에러 구분
       if (error?.message?.includes('API') || error?.message?.includes('키')) {
-        res.status(503).json({ 
-          error: "AI 서비스 연결 오류", 
+        res.status(503).json({
+          error: "AI 서비스 연결 오류",
           detail: error.message,
           suggestion: "관리자 대시보드에서 API 키를 확인해주세요."
         });
       } else {
-        res.status(500).json({ 
+        res.status(500).json({
           error: "일정 생성 실패",
           detail: error?.message || 'Unknown error',
           stack: (error?.stack || '').substring(0, 300),
@@ -342,15 +344,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const start = Date.now();
     try {
       steps.push(`[${Date.now() - start}ms] Start`);
-      
+
       // Gemini API 키 확인
       const geminiKey = process.env.GEMINI_API_KEY;
       steps.push(`[${Date.now() - start}ms] Gemini key: ${geminiKey ? 'present (' + geminiKey.substring(0, 8) + '...)' : 'MISSING'}`);
-      
+
       // DB 연결 확인
       const cityCheck = await db.select({ count: sql<number>`count(*)` }).from(cities);
       steps.push(`[${Date.now() - start}ms] DB OK - cities: ${cityCheck[0]?.count}`);
-      
+
       // 간단한 일정 생성 테스트
       const testFormData = {
         destination: "Paris",
@@ -369,34 +371,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
         endTime: "18:00",
         destinationCoords: { lat: 48.8566, lng: 2.3522 },
       };
-      
+
       steps.push(`[${Date.now() - start}ms] Calling generateItinerary (4+1 Agent Pipeline)...`);
       const result = await itineraryGenerator.generate(testFormData);
-      
+
       const totalMs = Date.now() - start;
       const dayCount = result?.days?.length || 0;
       const placeCount = result?.days?.reduce((sum: number, d: any) => sum + (d?.places?.length || 0), 0) || 0;
-      
+
       steps.push(`[${totalMs}ms] SUCCESS - ${dayCount}일 ${placeCount}곳`);
-      
+
       // 파이프라인 단계별 타이밍 추출
       const pipelineTimings = result?.metadata?._timings || {};
       const pipelineTotal = result?.metadata?._totalMs || totalMs;
-      
-      res.json({ 
-        status: "ok", 
-        steps, 
+
+      res.json({
+        status: "ok",
+        steps,
         totalMs,
         pipeline: {
           version: result?.metadata?._pipelineVersion || 'unknown',
           totalMs: pipelineTotal,
           stages: {
             AG1_skeleton: pipelineTimings['AG1_skeleton'] || 0,
-            AG2_AG3pre_parallel: pipelineTimings['AG2_AG3pre_parallel'] 
+            AG2_AG3pre_parallel: pipelineTimings['AG2_AG3pre_parallel']
               ? pipelineTimings['AG2_AG3pre_parallel'] - (pipelineTimings['AG1_skeleton'] || 0) : 0,
-            AG3_matchScore: pipelineTimings['AG3_matchScore'] 
+            AG3_matchScore: pipelineTimings['AG3_matchScore']
               ? pipelineTimings['AG3_matchScore'] - (pipelineTimings['AG2_AG3pre_parallel'] || 0) : 0,
-            AG4_finalize: pipelineTimings['AG4_finalize'] 
+            AG4_finalize: pipelineTimings['AG4_finalize']
               ? pipelineTimings['AG4_finalize'] - (pipelineTimings['AG3_matchScore'] || 0) : 0,
           },
           summary: `AG1:${pipelineTimings['AG1_skeleton'] || '?'}ms → AG2+3pre:${pipelineTimings['AG2_AG3pre_parallel'] ? pipelineTimings['AG2_AG3pre_parallel'] - (pipelineTimings['AG1_skeleton'] || 0) : '?'}ms → AG3:${pipelineTimings['AG3_matchScore'] ? pipelineTimings['AG3_matchScore'] - (pipelineTimings['AG2_AG3pre_parallel'] || 0) : '?'}ms → AG4:${pipelineTimings['AG4_finalize'] ? pipelineTimings['AG4_finalize'] - (pipelineTimings['AG3_matchScore'] || 0) : '?'}ms = 총 ${pipelineTotal}ms`
@@ -1554,7 +1556,7 @@ async function seedDefaultCities() {
     { name: "홍콩", country: "홍콩", countryCode: "HK", latitude: 22.3193, longitude: 114.1694, timezone: "Asia/Hong_Kong", primaryLanguage: "zh" },
     { name: "다낭", country: "베트남", countryCode: "VN", latitude: 16.0544, longitude: 108.2022, timezone: "Asia/Ho_Chi_Minh", primaryLanguage: "vi" },
     { name: "하노이", country: "베트남", countryCode: "VN", latitude: 21.0285, longitude: 105.8542, timezone: "Asia/Ho_Chi_Minh", primaryLanguage: "vi" },
-    
+
     // ===== 유럽 30개 도시 (1차 목표) =====
     // 이탈리아
     { name: "밀라노", country: "이탈리아", countryCode: "IT", latitude: 45.4642, longitude: 9.1900, timezone: "Europe/Rome", primaryLanguage: "it" },

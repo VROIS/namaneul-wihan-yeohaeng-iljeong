@@ -1,18 +1,21 @@
-import React from "react";
-import { Platform, useColorScheme } from "react-native";
+import React, { useEffect, useState } from "react";
+import { Platform, useColorScheme, View, ActivityIndicator } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import MainTabNavigator from "@/navigation/MainTabNavigator";
 import DestinationDetailScreen from "@/screens/DestinationDetailScreen";
 import OnboardingScreen from "@/screens/OnboardingScreen";
+import LoginScreen from "@/screens/LoginScreen";
 import VerificationRequestScreen from "@/screens/VerificationRequestScreen";
 import SavedTripDetailScreen from "@/screens/SavedTripDetailScreen";
 import AdminScreen from "@/screens/AdminScreen";
 import { Colors } from "@/constants/theme";
 import { Itinerary } from "@/types/trip";
+import { isAuthenticated } from "@/lib/auth";
 
 export type RootStackParamList = {
   Main: undefined;
   Onboarding: undefined;
+  Login: undefined;
   DestinationDetail: { placeId: number };
   VerificationRequest: { itinerary: Itinerary };
   SavedTripDetail: { itineraryId: number };
@@ -26,8 +29,27 @@ export default function RootStackNavigator() {
   const isDark = colorScheme === "dark";
   const theme = Colors[colorScheme ?? "light"];
 
+  const [authChecked, setAuthChecked] = useState(false);
+  const [loggedIn, setLoggedIn] = useState(false);
+
+  useEffect(() => {
+    isAuthenticated().then((result) => {
+      setLoggedIn(result);
+      setAuthChecked(true);
+    });
+  }, []);
+
+  if (!authChecked) {
+    return (
+      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: theme.backgroundRoot }}>
+        <ActivityIndicator size="large" color={theme.link} />
+      </View>
+    );
+  }
+
   return (
     <Stack.Navigator
+      initialRouteName={loggedIn ? "Main" : "Login"}
       screenOptions={{
         headerTitleAlign: "center",
         headerTransparent: true,
@@ -48,6 +70,14 @@ export default function RootStackNavigator() {
         },
       }}
     >
+      <Stack.Screen
+        name="Login"
+        component={LoginScreen}
+        options={{
+          headerShown: false,
+          presentation: "card",
+        }}
+      />
       <Stack.Screen
         name="Main"
         component={MainTabNavigator}

@@ -5,14 +5,20 @@ const USER_KEY = "@vibetrip_user";
 
 export interface UserData {
   id: string;
-  email: string;
-  name: string;
-  provider: "kakao" | "google";
+  email?: string;
+  name?: string;
+  displayName?: string;
+  provider: "kakao" | "google" | "whatsapp";
   language: string;
   birthDate: string;
-  ageGroup: string;
-  createdAt: string;
+  ageGroup?: string;
+  isPaid?: boolean;
+  planType?: string;
+  token?: string;
+  createdAt?: string;
 }
+
+const API_URL = "http://localhost:8082"; // 서버 포트 확인 필요 (index.ts에 8082로 되어 있음)
 
 export async function isAuthenticated(): Promise<boolean> {
   try {
@@ -46,6 +52,41 @@ export async function clearAuth(): Promise<void> {
     await AsyncStorage.multiRemove([AUTH_KEY, USER_KEY]);
   } catch (error) {
     console.error("Failed to clear auth:", error);
+  }
+}
+
+export async function socialLogin(data: {
+  provider: "kakao" | "google" | "whatsapp";
+  providerId?: string;
+  birthDate: string;
+  language: string;
+  deviceType: string;
+  displayName?: string;
+}): Promise<{ success: boolean; user?: UserData; error?: string }> {
+  try {
+    const response = await fetch(`${API_URL}/api/auth/social-login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(data),
+    });
+
+    const result = await response.json();
+
+    if (response.ok && result.success) {
+      const userData: UserData = {
+        ...result.user,
+        token: result.token,
+      };
+      await saveAuth(userData);
+      return { success: true, user: userData };
+    } else {
+      return { success: false, error: result.error || "로그인 실패" };
+    }
+  } catch (error) {
+    console.error("Social login error:", error);
+    return { success: false, error: "서버 연결 실패" };
   }
 }
 

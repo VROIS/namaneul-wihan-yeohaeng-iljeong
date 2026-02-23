@@ -18,23 +18,28 @@ export const users = pgTable("users", {
   preferredLanguage: text("preferred_language").default("ko"),
 
   // === 사용자 연령 정보 (가족 구성 추정용) ===
-  // 생년월일: "1985-06-15" 형태
   birthDate: text("birth_date"),
 
+  // === 소셜 로그인 정보 ===
+  provider: text("provider"),           // "kakao" | "google" | "whatsapp"
+  providerId: text("provider_id"),      // 소셜 계정 고유 ID (추후 실제 OAuth용)
+
+  // === 유료/무료 구분 ===
+  isPaid: boolean("is_paid").default(false),
+  paidAt: timestamp("paid_at"),
+  planType: text("plan_type").default("free"), // "free" | "basic" | "premium"
+
+  // === 앱 사용 메타데이터 ===
+  lastLoginAt: timestamp("last_login_at"),
+  loginCount: integer("login_count").default(0),
+  deviceType: text("device_type"),      // "ios" | "android" | "web"
+  appVersion: text("app_version"),
+
   // === 취향 저장 (마케팅 활용 + 영상 시나리오) ===
-  // 최대 3개, 순서 중요: ["Romantic", "Foodie", "Culture"]
   preferredVibes: jsonb("preferred_vibes").$type<string[]>().default([]),
-
-  // 자주 선택하는 동행 타입
   preferredCompanionType: text("preferred_companion_type"),
-
-  // 선호 여행 스타일
   preferredTravelStyle: text("preferred_travel_style"),
-
-  // 마케팅 동의
   marketingConsent: boolean("marketing_consent").default(false),
-
-  // 마지막 취향 업데이트 시간
   vibesUpdatedAt: timestamp("vibes_updated_at"),
 
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
@@ -263,6 +268,8 @@ export const itineraries = pgTable("itineraries", {
   totalCost: real("total_cost"),
   totalDuration: integer("total_duration"),
   status: text("status").default("draft"),
+  userBirthDate: text("user_birth_date"), // 레거시: 동반자 추정 로직 연동용 유지
+  userGender: text("user_gender"),       // 레거시: 동반자 추정 로직 연동용 유지
 
   // === 일정 생성 핵심 데이터 (2026-01-14 추가) ===
   // 🎯 누구를 위한 (curationFocus) - Gemini 프롬프트 가중치 1순위
@@ -329,8 +336,7 @@ export const dataSyncLog = pgTable("data_sync_log", {
   id: serial("id").primaryKey(),
   entityType: text("entity_type").notNull(),
   entityId: integer("entity_id"),
-  /** 1일 1카테고리 추적: entity_sub_type은 DB에 없으면 생략 (추후 db:push 시 추가) */
-  // entitySubType: text("entity_sub_type"),
+  entitySubType: text("entity_sub_type"), // 1일 1카테고리 추적 등 레거시 필드 유지
   source: text("source"),
   status: text("status").notNull(),
   itemsProcessed: integer("items_processed").default(0),

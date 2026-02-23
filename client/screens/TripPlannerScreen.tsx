@@ -192,7 +192,7 @@ export default function TripPlannerScreen() {
   const [currentUser, setCurrentUser] = useState<UserData | null>(null);
 
   const [formData, setFormData] = useState<TripFormData>({
-    birthDate: "1985-03-15",  // 🔧 테스트용 기본값 (로그인 시 덮어씀)
+    birthDate: "", // 🔧 필수 입력값으로 변경
     companionType: "Family",
     companionCount: 4,
     companionAges: "55, 59",
@@ -222,23 +222,7 @@ export default function TripPlannerScreen() {
         }));
         console.log(`[TripPlanner] 🎯 사용자 정보 로드: ${userData.name}, birthDate=${userData.birthDate}`);
       } else {
-        // 🔧 테스트용: 로그인 없이 기본 admin 사용자 설정
-        const testUser: UserData = {
-          id: "admin",
-          name: "테스트 사용자",
-          email: "admin@test.com",
-          birthDate: "1985-03-15", // 기본 생년월일
-          ageGroup: "30대",
-          provider: "kakao",
-          language: "ko",
-          createdAt: new Date().toISOString(),
-        };
-        setCurrentUser(testUser);
-        setFormData(prev => ({
-          ...prev,
-          birthDate: testUser.birthDate,
-        }));
-        console.log(`[TripPlanner] 🔧 테스트 모드: admin 사용자 자동 설정, birthDate=${testUser.birthDate}`);
+        console.log(`[TripPlanner] 🎯 로그인 정보 없음`);
       }
     };
     loadUserData();
@@ -491,7 +475,7 @@ export default function TripPlannerScreen() {
       executeGenerate();
     } else {
       setPendingGenerate(true);
-      navigation.navigate("Onboarding");
+      navigation.navigate("Login");
     }
   };
 
@@ -504,10 +488,22 @@ export default function TripPlannerScreen() {
 
     setIsSaving(true);
     try {
-      // 일정 데이터 구성 (🔧 로그인 제거: admin 고정)
-      // 🔧 travelStyle을 DB enum에 맞게 소문자로 변환 (luxury, comfort)
+      const authenticated = await isAuthenticated();
+      if (!authenticated) {
+        Alert.alert("로그인 필요", "일정을 저장하려면 로그인이 필요합니다.", [
+          { text: "취소", style: "cancel" },
+          { text: "로그인", onPress: () => navigation.navigate("Login") }
+        ]);
+        setIsSaving(false);
+        return;
+      }
+
+      const userData = await getUserData();
+      if (!userData) return;
+
+      // 일정 데이터 구성
       const saveData = {
-        userId: "admin", // 서버에서 강제로 admin으로 처리됨
+        userId: userData.id,
         cityId: 1, // TODO: 도시 ID 동적 매핑
         title: `${itinerary.destination} 여행`,
         startDate: itinerary.startDate,
@@ -1220,275 +1216,275 @@ export default function TripPlannerScreen() {
                   </View>
                 </View>
 
-            <View style={styles.placesList}>
-            {places.map((place, index) => {
-              // 별점 계산 (vibeScore 10점 만점 → 5점 만점)
-              const starRating = Math.min(5, Math.max(0, Math.round((place.vibeScore || 0) / 2)));
-              const stars = "⭐".repeat(starRating) + "☆".repeat(5 - starRating);
+                <View style={styles.placesList}>
+                  {places.map((place, index) => {
+                    // 별점 계산 (vibeScore 10점 만점 → 5점 만점)
+                    const starRating = Math.min(5, Math.max(0, Math.round((place.vibeScore || 0) / 2)));
+                    const stars = "⭐".repeat(starRating) + "☆".repeat(5 - starRating);
 
-              // 🍽️ 식사 슬롯 여부 (백엔드에서 isMealSlot 제공 - 1순위)
-              const isMealSlot = place.isMealSlot === true;
-              const mealType = place.mealType; // 'lunch' | 'dinner'
+                    // 🍽️ 식사 슬롯 여부 (백엔드에서 isMealSlot 제공 - 1순위)
+                    const isMealSlot = place.isMealSlot === true;
+                    const mealType = place.mealType; // 'lunch' | 'dinner'
 
-              // 식사 여부 (isMealSlot 또는 이름으로 판단)
-              const isMeal = isMealSlot || place.isMeal || place.name?.includes("점심") || place.name?.includes("저녁") ||
-                place.name?.includes("아침") || place.name?.includes("식사") ||
-                place.name?.includes("카페") || place.name?.includes("레스토랑");
+                    // 식사 여부 (isMealSlot 또는 이름으로 판단)
+                    const isMeal = isMealSlot || place.isMeal || place.name?.includes("점심") || place.name?.includes("저녁") ||
+                      place.name?.includes("아침") || place.name?.includes("식사") ||
+                      place.name?.includes("카페") || place.name?.includes("레스토랑");
 
-              // 이동 구간 정보 (백엔드에서 제공)
-              const dayTransits = currentDay?.transit?.transits || [];
-              const transitInfo = dayTransits[index]; // index번째 장소에서 다음 장소로의 이동
-              const hasTransit = index < places.length - 1;
+                    // 이동 구간 정보 (백엔드에서 제공)
+                    const dayTransits = currentDay?.transit?.transits || [];
+                    const transitInfo = dayTransits[index]; // index번째 장소에서 다음 장소로의 이동
+                    const hasTransit = index < places.length - 1;
 
-              // 인원수 (itinerary에서 가져오기)
-              const companionCount = itinerary.companionCount || 1;
+                    // 인원수 (itinerary에서 가져오기)
+                    const companionCount = itinerary.companionCount || 1;
 
-              // 가격 정보
-              const entranceFee = place.entranceFee || 0;
-              const entranceFeeTotal = place.entranceFeeTotal || (entranceFee * companionCount);
+                    // 가격 정보
+                    const entranceFee = place.entranceFee || 0;
+                    const entranceFeeTotal = place.entranceFeeTotal || (entranceFee * companionCount);
 
-              return (
-                <View key={place.id}>
-                  {/* 장소 카드 */}
-                  <View style={styles.placeItem}>
-                    {/* 타임라인 좌측 - 🍽️ 식사 슬롯은 주황색 강조 */}
-                    <View style={styles.timelineLeft}>
-                      <View style={[styles.placeNumber, { backgroundColor: isMealSlot ? "#FF6B35" : isMeal ? "#FFA500" : Brand.primary }]}>
-                        <Text style={styles.placeNumberText}>{index + 1}</Text>
-                      </View>
-                      {hasTransit && (
-                        <View style={[styles.timelineLine, { backgroundColor: theme.border }]} />
-                      )}
-                    </View>
-
-                    {/* 장소 카드 - 클릭 시 인앱 상세 모달 열기 */}
-                    <Pressable 
-                      style={[styles.placeCard, { backgroundColor: theme.backgroundDefault, borderLeftWidth: isMealSlot ? 3 : 0, borderLeftColor: "#FF6B35" }]}
-                      onPress={() => setSelectedPlace(place)}
-                    >
-                      <View style={styles.placeCardContent}>
-                        {/* 썸네일 이미지 - 탭하면 인앱 모달에서 크게 보기 */}
-                        <View style={styles.placeThumbnail}>
-                          {place.image ? (
-                            <Image 
-                              source={{ uri: place.image }} 
-                              style={styles.placeThumbnailImage}
-                              resizeMode="cover"
-                            />
-                          ) : (
-                            <View style={[styles.placeThumbnailPlaceholder, { backgroundColor: isMealSlot ? "#FFF5F0" : theme.backgroundSecondary }]}>
-                              <Feather name={isMealSlot || isMeal ? "coffee" : "map-pin"} size={20} color={isMealSlot ? "#FF6B35" : theme.textTertiary} />
+                    return (
+                      <View key={place.id}>
+                        {/* 장소 카드 */}
+                        <View style={styles.placeItem}>
+                          {/* 타임라인 좌측 - 🍽️ 식사 슬롯은 주황색 강조 */}
+                          <View style={styles.timelineLeft}>
+                            <View style={[styles.placeNumber, { backgroundColor: isMealSlot ? "#FF6B35" : isMeal ? "#FFA500" : Brand.primary }]}>
+                              <Text style={styles.placeNumberText}>{index + 1}</Text>
                             </View>
-                          )}
+                            {hasTransit && (
+                              <View style={[styles.timelineLine, { backgroundColor: theme.border }]} />
+                            )}
+                          </View>
+
+                          {/* 장소 카드 - 클릭 시 인앱 상세 모달 열기 */}
+                          <Pressable
+                            style={[styles.placeCard, { backgroundColor: theme.backgroundDefault, borderLeftWidth: isMealSlot ? 3 : 0, borderLeftColor: "#FF6B35" }]}
+                            onPress={() => setSelectedPlace(place)}
+                          >
+                            <View style={styles.placeCardContent}>
+                              {/* 썸네일 이미지 - 탭하면 인앱 모달에서 크게 보기 */}
+                              <View style={styles.placeThumbnail}>
+                                {place.image ? (
+                                  <Image
+                                    source={{ uri: place.image }}
+                                    style={styles.placeThumbnailImage}
+                                    resizeMode="cover"
+                                  />
+                                ) : (
+                                  <View style={[styles.placeThumbnailPlaceholder, { backgroundColor: isMealSlot ? "#FFF5F0" : theme.backgroundSecondary }]}>
+                                    <Feather name={isMealSlot || isMeal ? "coffee" : "map-pin"} size={20} color={isMealSlot ? "#FF6B35" : theme.textTertiary} />
+                                  </View>
+                                )}
+                              </View>
+
+                              {/* 장소 정보 */}
+                              <View style={styles.placeInfo}>
+                                {/* 장소명: 한국어명 (영문명) */}
+                                <View style={styles.placeHeader}>
+                                  <Text style={[styles.placeName, { color: theme.text }]} numberOfLines={1}>
+                                    {isMealSlot ? (mealType === 'lunch' ? "🍽️ [점심] " : "🍽️ [저녁] ") : isMeal ? "🍽️ " : ""}{(place as any).nameKo || place.name}
+                                  </Text>
+                                </View>
+                                {(place as any).nameKo && (place as any).nameKo !== place.name && (
+                                  <Text style={{ fontSize: 11, color: theme.textTertiary, marginBottom: 2 }}>{place.name}</Text>
+                                )}
+
+                                {/* 별점 표시 (vibeScore 0이면 숨김) */}
+                                {starRating > 0 && <Text style={styles.placeStars}>{stars}</Text>}
+
+                                {/* 시간 */}
+                                <View style={styles.placeTimeRow}>
+                                  <Feather name="clock" size={12} color={theme.textSecondary} />
+                                  <Text style={[styles.placeTimeText, { color: theme.textSecondary }]}>
+                                    {place.startTime} - {place.endTime}
+                                  </Text>
+                                </View>
+
+                                {/* 가격 정보 */}
+                                <View style={styles.placePriceRow}>
+                                  <Feather name={isMeal ? "credit-card" : "tag"} size={12} color={Brand.primary} />
+                                  <Text style={[styles.placePriceText, { color: Brand.primary }]}>
+                                    {isMeal
+                                      ? `💰 식사: €${place.mealPrice || '??'}`
+                                      : (place as any).estimatedPriceEur > 0 && (place as any).estimatedPriceEur < 500
+                                        ? `🎫 €${(place as any).estimatedPriceEur}`
+                                        : entranceFee > 0 && entranceFee < 500
+                                          ? `🎫 €${entranceFee}`
+                                          : `🎫 ${place.priceEstimate || '무료'}`
+                                    }
+                                  </Text>
+                                </View>
+
+                                {/* ⭐ 선정이유 (nubiReason) — 가장 중요한 차별화 포인트 */}
+                                {(place as any).nubiReason && (place as any).nubiReason !== 'Nubi AI 데이터 검증 추천' && (
+                                  <View style={{ backgroundColor: '#FFF8E1', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, marginTop: 4, alignSelf: 'flex-start' }}>
+                                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#E65100' }}>
+                                      ⭐ {(place as any).nubiReason}
+                                    </Text>
+                                  </View>
+                                )}
+
+                                {/* 설명 */}
+                                {((place as any).geminiReason || place.personaFitReason) && (
+                                  <Text style={[styles.placeReason, { color: theme.textSecondary }]} numberOfLines={2}>
+                                    {(place as any).geminiReason || place.personaFitReason}
+                                  </Text>
+                                )}
+
+                                {/* 구글맵 바로가기 힌트 */}
+                                {(place.googleMapsUrl || (place.lat && place.lng)) && (
+                                  <View style={styles.googleMapsHint}>
+                                    <Feather name="external-link" size={10} color={Brand.primary} />
+                                    <Text style={[styles.googleMapsHintText, { color: Brand.primary }]}>
+                                      Google Maps 열기
+                                    </Text>
+                                  </View>
+                                )}
+                              </View>
+                            </View>
+                          </Pressable>
                         </View>
 
-                        {/* 장소 정보 */}
-                        <View style={styles.placeInfo}>
-                          {/* 장소명: 한국어명 (영문명) */}
-                          <View style={styles.placeHeader}>
-                            <Text style={[styles.placeName, { color: theme.text }]} numberOfLines={1}>
-                              {isMealSlot ? (mealType === 'lunch' ? "🍽️ [점심] " : "🍽️ [저녁] ") : isMeal ? "🍽️ " : ""}{(place as any).nameKo || place.name}
-                            </Text>
-                          </View>
-                          {(place as any).nameKo && (place as any).nameKo !== place.name && (
-                            <Text style={{ fontSize: 11, color: theme.textTertiary, marginBottom: 2 }}>{place.name}</Text>
-                          )}
-
-                          {/* 별점 표시 (vibeScore 0이면 숨김) */}
-                          {starRating > 0 && <Text style={styles.placeStars}>{stars}</Text>}
-
-                          {/* 시간 */}
-                          <View style={styles.placeTimeRow}>
-                            <Feather name="clock" size={12} color={theme.textSecondary} />
-                            <Text style={[styles.placeTimeText, { color: theme.textSecondary }]}>
-                              {place.startTime} - {place.endTime}
-                            </Text>
-                          </View>
-
-                          {/* 가격 정보 */}
-                          <View style={styles.placePriceRow}>
-                            <Feather name={isMeal ? "credit-card" : "tag"} size={12} color={Brand.primary} />
-                            <Text style={[styles.placePriceText, { color: Brand.primary }]}>
-                              {isMeal
-                                ? `💰 식사: €${place.mealPrice || '??'}`
-                                : (place as any).estimatedPriceEur > 0 && (place as any).estimatedPriceEur < 500
-                                  ? `🎫 €${(place as any).estimatedPriceEur}`
-                                  : entranceFee > 0 && entranceFee < 500
-                                    ? `🎫 €${entranceFee}`
-                                    : `🎫 ${place.priceEstimate || '무료'}`
-                              }
-                            </Text>
-                          </View>
-
-                          {/* ⭐ 선정이유 (nubiReason) — 가장 중요한 차별화 포인트 */}
-                          {(place as any).nubiReason && (place as any).nubiReason !== 'Nubi AI 데이터 검증 추천' && (
-                            <View style={{ backgroundColor: '#FFF8E1', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, marginTop: 4, alignSelf: 'flex-start' }}>
-                              <Text style={{ fontSize: 12, fontWeight: '700', color: '#E65100' }}>
-                                ⭐ {(place as any).nubiReason}
+                        {/* 🚇 이동 구간 표시 */}
+                        {hasTransit && transitInfo && (
+                          <View style={styles.transitSection}>
+                            <View style={[styles.transitLine, { backgroundColor: theme.border }]} />
+                            <View style={[styles.transitCard, { backgroundColor: theme.backgroundSecondary }]}>
+                              <Feather name="navigation" size={14} color={theme.textSecondary} />
+                              <Text style={[styles.transitText, { color: theme.textSecondary }]}>
+                                {(() => {
+                                  const mode = transitInfo.mode || transitInfo.modeLabel || 'walk';
+                                  const icon = mode === 'guide' ? '🚗' : mode === 'metro' ? '🚇' : mode === 'bus' ? '🚌' : '🚶';
+                                  const label = mode === 'guide' ? '전용차량이동' : transitInfo.modeLabel || '도보';
+                                  const dur = transitInfo.durationText || `${transitInfo.duration || 0}분`;
+                                  const dist = transitInfo.distance ? `${(transitInfo.distance / 1000).toFixed(1)}km` : '';
+                                  // A타입(가이드): 구간 비용 안 보여줌 / B타입: 구간별 실제 비용
+                                  if (mode === 'guide') {
+                                    return `${icon} ${label} ${dur}${dist ? ` · ${dist}` : ''}`;
+                                  }
+                                  const cost = transitInfo.cost || 0;
+                                  return `${icon} ${label} ${dur}${dist ? ` · ${dist}` : ''}${cost > 0 ? ` · €${cost.toFixed(2)}` : ''}`;
+                                })()}
                               </Text>
                             </View>
-                          )}
-
-                          {/* 설명 */}
-                          {((place as any).geminiReason || place.personaFitReason) && (
-                            <Text style={[styles.placeReason, { color: theme.textSecondary }]} numberOfLines={2}>
-                              {(place as any).geminiReason || place.personaFitReason}
-                            </Text>
-                          )}
-
-                          {/* 구글맵 바로가기 힌트 */}
-                          {(place.googleMapsUrl || (place.lat && place.lng)) && (
-                            <View style={styles.googleMapsHint}>
-                              <Feather name="external-link" size={10} color={Brand.primary} />
-                              <Text style={[styles.googleMapsHintText, { color: Brand.primary }]}>
-                                Google Maps 열기
-                              </Text>
-                            </View>
-                          )}
-                        </View>
+                            <View style={[styles.transitLine, { backgroundColor: theme.border }]} />
+                          </View>
+                        )}
                       </View>
-                    </Pressable>
-                  </View>
+                    );
+                  })}
+                </View>
 
-                  {/* 🚇 이동 구간 표시 */}
-                  {hasTransit && transitInfo && (
-                    <View style={styles.transitSection}>
-                      <View style={[styles.transitLine, { backgroundColor: theme.border }]} />
-                      <View style={[styles.transitCard, { backgroundColor: theme.backgroundSecondary }]}>
-                        <Feather name="navigation" size={14} color={theme.textSecondary} />
-                        <Text style={[styles.transitText, { color: theme.textSecondary }]}>
-                          {(() => {
-                            const mode = transitInfo.mode || transitInfo.modeLabel || 'walk';
-                            const icon = mode === 'guide' ? '🚗' : mode === 'metro' ? '🚇' : mode === 'bus' ? '🚌' : '🚶';
-                            const label = mode === 'guide' ? '전용차량이동' : transitInfo.modeLabel || '도보';
-                            const dur = transitInfo.durationText || `${transitInfo.duration || 0}분`;
-                            const dist = transitInfo.distance ? `${(transitInfo.distance / 1000).toFixed(1)}km` : '';
-                            // A타입(가이드): 구간 비용 안 보여줌 / B타입: 구간별 실제 비용
-                            if (mode === 'guide') {
-                              return `${icon} ${label} ${dur}${dist ? ` · ${dist}` : ''}`;
-                            }
-                            const cost = transitInfo.cost || 0;
-                            return `${icon} ${label} ${dur}${dist ? ` · ${dist}` : ''}${cost > 0 ? ` · €${cost.toFixed(2)}` : ''}`;
-                          })()}
-                        </Text>
-                      </View>
-                      <View style={[styles.transitLine, { backgroundColor: theme.border }]} />
+                {/* 🏨 숙소 복귀 정보 */}
+                {currentDay?.returnTransit && (
+                  <View style={[styles.accommodationBar, { backgroundColor: `${Brand.primary}05`, borderColor: `${Brand.primary}15`, marginTop: 8, marginHorizontal: 12, borderRadius: 8 }]}>
+                    <View style={styles.accommodationInfo}>
+                      <Feather name="arrow-left" size={14} color={theme.textSecondary} />
+                      <Text style={[styles.accommodationTransit, { color: theme.textSecondary }]}>
+                        {currentDay.returnTransit.from} → 🏨 숙소 복귀 ({currentDay.returnTransit.durationText})
+                      </Text>
                     </View>
-                  )}
-                </View>
-              );
-            })}
-            </View>
-
-            {/* 🏨 숙소 복귀 정보 */}
-            {currentDay?.returnTransit && (
-              <View style={[styles.accommodationBar, { backgroundColor: `${Brand.primary}05`, borderColor: `${Brand.primary}15`, marginTop: 8, marginHorizontal: 12, borderRadius: 8 }]}>
-                <View style={styles.accommodationInfo}>
-                  <Feather name="arrow-left" size={14} color={theme.textSecondary} />
-                  <Text style={[styles.accommodationTransit, { color: theme.textSecondary }]}>
-                    {currentDay.returnTransit.from} → 🏨 숙소 복귀 ({currentDay.returnTransit.durationText})
-                  </Text>
-                </View>
-              </View>
-            )}
-
-            {/* 📊 일별 합계 섹션 + 교통비 카테고리 표시 */}
-            {(() => {
-              // 백엔드 dailyCost에서 직접 읽기
-              const dc = (currentDay as any)?.dailyCost;
-              const td = (currentDay as any)?.transportDisplay;
-              const entranceEur = dc?.breakdown?.entranceEur || 0;
-              const mealEur = dc?.breakdown?.mealEur || 0;
-              const transportEur = dc?.breakdown?.transportEur || 0;
-              const totalEur = dc?.perPersonEur || (entranceEur + mealEur + transportEur);
-              return (
-                <View style={[styles.dailyTotalSection, { backgroundColor: theme.backgroundSecondary }]}>
-                {/* 교통비 카테고리 표시 (A/B 분기) */}
-                {td && (
-                  <View style={{ backgroundColor: td.category === 'guide' ? '#E3F2FD' : '#E8F5E9', borderRadius: 8, padding: 10, marginBottom: 10 }}>
-                    <Text style={{ fontSize: 13, fontWeight: '700', color: td.category === 'guide' ? '#1565C0' : '#2E7D32', marginBottom: 4 }}>
-                      {td.category === 'guide' ? '🚗 드라이빙 가이드' : '🚇 대중교통'} · 1인 €{td.perPersonPerDay}/일
-                    </Text>
-                    {td.category === 'guide' && td.uberBlackComparison && (
-                      <Text style={{ fontSize: 11, color: '#666' }}>
-                        vs 우버블랙 시간제 1인 €{td.uberBlackComparison.perPersonPerDay}/일
-                      </Text>
-                    )}
-                    {td.category === 'transit' && td.guideUpsell && (
-                      <Text style={{ fontSize: 11, color: '#666' }}>
-                        💡 드라이빙 가이드 이용시 1인 €{td.guideUpsell.perPersonPerDay}/일
-                      </Text>
-                    )}
                   </View>
                 )}
 
-                <Text style={[styles.dailyTotalTitle, { color: theme.text }]}>
-                  📊 {currentDay.day}일차 합계 (1인)
-                </Text>
-                <View style={styles.dailyTotalRow}>
-                  <View style={styles.dailyTotalItem}>
-                    <Text style={[styles.dailyTotalLabel, { color: theme.textSecondary }]}>🎫 입장료</Text>
-                    <Text style={[styles.dailyTotalValue, { color: theme.text }]}>
-                      €{entranceEur.toFixed(1)}
-                    </Text>
-                  </View>
-                  <View style={styles.dailyTotalItem}>
-                    <Text style={[styles.dailyTotalLabel, { color: theme.textSecondary }]}>🍽️ 식사</Text>
-                    <Text style={[styles.dailyTotalValue, { color: theme.text }]}>
-                      €{mealEur.toFixed(1)}
-                    </Text>
-                  </View>
-                  <View style={styles.dailyTotalItem}>
-                    <Text style={[styles.dailyTotalLabel, { color: theme.textSecondary }]}>🚇 교통비</Text>
-                    <Text style={[styles.dailyTotalValue, { color: theme.text }]}>
-                      €{transportEur.toFixed(1)}
-                    </Text>
-                  </View>
-                </View>
-                <View style={[styles.dailyTotalGrand, { borderTopColor: theme.border }]}>
-                  <Text style={[styles.dailyTotalGrandLabel, { color: theme.text }]}>💰 1인 일 합계</Text>
-                  <Text style={[styles.dailyTotalGrandValue, { color: Brand.primary }]}>
-                    €{totalEur.toFixed(1)}
-                  </Text>
-                </View>
+                {/* 📊 일별 합계 섹션 + 교통비 카테고리 표시 */}
+                {(() => {
+                  // 백엔드 dailyCost에서 직접 읽기
+                  const dc = (currentDay as any)?.dailyCost;
+                  const td = (currentDay as any)?.transportDisplay;
+                  const entranceEur = dc?.breakdown?.entranceEur || 0;
+                  const mealEur = dc?.breakdown?.mealEur || 0;
+                  const transportEur = dc?.breakdown?.transportEur || 0;
+                  const totalEur = dc?.perPersonEur || (entranceEur + mealEur + transportEur);
+                  return (
+                    <View style={[styles.dailyTotalSection, { backgroundColor: theme.backgroundSecondary }]}>
+                      {/* 교통비 카테고리 표시 (A/B 분기) */}
+                      {td && (
+                        <View style={{ backgroundColor: td.category === 'guide' ? '#E3F2FD' : '#E8F5E9', borderRadius: 8, padding: 10, marginBottom: 10 }}>
+                          <Text style={{ fontSize: 13, fontWeight: '700', color: td.category === 'guide' ? '#1565C0' : '#2E7D32', marginBottom: 4 }}>
+                            {td.category === 'guide' ? '🚗 드라이빙 가이드' : '🚇 대중교통'} · 1인 €{td.perPersonPerDay}/일
+                          </Text>
+                          {td.category === 'guide' && td.uberBlackComparison && (
+                            <Text style={{ fontSize: 11, color: '#666' }}>
+                              vs 우버블랙 시간제 1인 €{td.uberBlackComparison.perPersonPerDay}/일
+                            </Text>
+                          )}
+                          {td.category === 'transit' && td.guideUpsell && (
+                            <Text style={{ fontSize: 11, color: '#666' }}>
+                              💡 드라이빙 가이드 이용시 1인 €{td.guideUpsell.perPersonPerDay}/일
+                            </Text>
+                          )}
+                        </View>
+                      )}
+
+                      <Text style={[styles.dailyTotalTitle, { color: theme.text }]}>
+                        📊 {currentDay.day}일차 합계 (1인)
+                      </Text>
+                      <View style={styles.dailyTotalRow}>
+                        <View style={styles.dailyTotalItem}>
+                          <Text style={[styles.dailyTotalLabel, { color: theme.textSecondary }]}>🎫 입장료</Text>
+                          <Text style={[styles.dailyTotalValue, { color: theme.text }]}>
+                            €{entranceEur.toFixed(1)}
+                          </Text>
+                        </View>
+                        <View style={styles.dailyTotalItem}>
+                          <Text style={[styles.dailyTotalLabel, { color: theme.textSecondary }]}>🍽️ 식사</Text>
+                          <Text style={[styles.dailyTotalValue, { color: theme.text }]}>
+                            €{mealEur.toFixed(1)}
+                          </Text>
+                        </View>
+                        <View style={styles.dailyTotalItem}>
+                          <Text style={[styles.dailyTotalLabel, { color: theme.textSecondary }]}>🚇 교통비</Text>
+                          <Text style={[styles.dailyTotalValue, { color: theme.text }]}>
+                            €{transportEur.toFixed(1)}
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={[styles.dailyTotalGrand, { borderTopColor: theme.border }]}>
+                        <Text style={[styles.dailyTotalGrandLabel, { color: theme.text }]}>💰 1인 일 합계</Text>
+                        <Text style={[styles.dailyTotalGrandValue, { color: Brand.primary }]}>
+                          €{totalEur.toFixed(1)}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })()}
+
+                {/* 🏨 전문가 연결 CTA (숙소 미설정 시, 마지막 날에만 표시) */}
+                {dayIdx === (itinerary.days?.length || 1) - 1 && !dayAccommodations.find(a => a.day === currentDay?.day) && !currentDay?.accommodation && (
+                  <Pressable
+                    style={[styles.expertCta, { backgroundColor: `${Brand.primary}10`, borderColor: `${Brand.primary}30` }]}
+                    onPress={() => {
+                      Alert.alert(
+                        "현지 전문가 상담",
+                        "이 일정에 최적인 숙소 지역을 현지 전문가가 추천해드립니다.\n\n드라이빙 가이드 예약 시 숙소 추천이 포함됩니다.",
+                        [
+                          { text: "나중에", style: "cancel" },
+                          { text: "전문가 상담", onPress: () => console.log("[TripPlanner] Expert CTA pressed") },
+                        ]
+                      );
+                    }}
+                  >
+                    <Feather name="message-circle" size={18} color={Brand.primary} />
+                    <View style={styles.expertCtaContent}>
+                      <Text style={[styles.expertCtaTitle, { color: Brand.primary }]}>
+                        이 일정에 최적인 숙소는?
+                      </Text>
+                      <Text style={[styles.expertCtaSubtitle, { color: theme.textSecondary }]}>
+                        현지 전문가에게 맞춤 숙소 추천 받기
+                      </Text>
+                    </View>
+                    <Feather name="chevron-right" size={18} color={Brand.primary} />
+                  </Pressable>
+                )}
+
+                {/* Day 구분선 */}
+                {dayIdx < (itinerary.days?.length || 1) - 1 && (
+                  <View style={{ height: 12, backgroundColor: theme.backgroundRoot }} />
+                )}
               </View>
-              );
-            })()}
-
-            {/* 🏨 전문가 연결 CTA (숙소 미설정 시, 마지막 날에만 표시) */}
-              {dayIdx === (itinerary.days?.length || 1) - 1 && !dayAccommodations.find(a => a.day === currentDay?.day) && !currentDay?.accommodation && (
-                <Pressable
-                  style={[styles.expertCta, { backgroundColor: `${Brand.primary}10`, borderColor: `${Brand.primary}30` }]}
-                  onPress={() => {
-                    Alert.alert(
-                      "현지 전문가 상담",
-                      "이 일정에 최적인 숙소 지역을 현지 전문가가 추천해드립니다.\n\n드라이빙 가이드 예약 시 숙소 추천이 포함됩니다.",
-                      [
-                        { text: "나중에", style: "cancel" },
-                        { text: "전문가 상담", onPress: () => console.log("[TripPlanner] Expert CTA pressed") },
-                      ]
-                    );
-                  }}
-                >
-                  <Feather name="message-circle" size={18} color={Brand.primary} />
-                  <View style={styles.expertCtaContent}>
-                    <Text style={[styles.expertCtaTitle, { color: Brand.primary }]}>
-                      이 일정에 최적인 숙소는?
-                    </Text>
-                    <Text style={[styles.expertCtaSubtitle, { color: theme.textSecondary }]}>
-                      현지 전문가에게 맞춤 숙소 추천 받기
-                    </Text>
-                  </View>
-                  <Feather name="chevron-right" size={18} color={Brand.primary} />
-                </Pressable>
-              )}
-
-              {/* Day 구분선 */}
-              {dayIdx < (itinerary.days?.length || 1) - 1 && (
-                <View style={{ height: 12, backgroundColor: theme.backgroundRoot }} />
-              )}
-            </View>
-          );
+            );
           })}
 
         </ScrollView>

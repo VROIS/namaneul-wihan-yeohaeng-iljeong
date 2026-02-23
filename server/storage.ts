@@ -1,4 +1,4 @@
-import { 
+import {
   type User, type InsertUser,
   type City, type InsertCity,
   type Place, type InsertPlace,
@@ -27,15 +27,17 @@ export interface IStorage {
   // Users
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
+  getUserByProvider(provider: string, providerId: string): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
   updateUserPersona(id: string, persona: "luxury" | "comfort"): Promise<User | undefined>;
-  
+  updateUserLogin(id: string, data: Partial<User>): Promise<User | undefined>;
+
   // Cities
   getCities(): Promise<City[]>;
   getCity(id: number): Promise<City | undefined>;
   getCityByName(name: string, country: string): Promise<City | undefined>;
   createCity(city: InsertCity): Promise<City>;
-  
+
   // Places
   getPlacesByCity(cityId: number, type?: string): Promise<Place[]>;
   getPlace(id: number): Promise<Place | undefined>;
@@ -44,38 +46,38 @@ export interface IStorage {
   updatePlaceScores(id: number, scores: { vibeScore?: number; buzzScore?: number; tasteVerifyScore?: number; realityPenalty?: number; finalScore?: number; tier?: number }): Promise<Place | undefined>;
   updatePlaceData(id: number, data: Partial<InsertPlace>): Promise<Place | undefined>;
   getTopPlaces(cityId: number, type: string, limit?: number): Promise<Place[]>;
-  
+
   // Place Data Sources
   getPlaceDataSources(placeId: number): Promise<PlaceDataSource[]>;
   upsertPlaceDataSource(data: Omit<PlaceDataSource, "id" | "fetchedAt">): Promise<PlaceDataSource>;
-  
+
   // Reviews
   getReviewsByPlace(placeId: number): Promise<Review[]>;
   getOriginatorReviews(placeId: number): Promise<Review[]>;
   createReview(review: Omit<Review, "id" | "fetchedAt">): Promise<Review>;
-  
+
   // Vibe Analysis
   getVibeAnalysis(placeId: number): Promise<VibeAnalysis[]>;
   createVibeAnalysis(analysis: Omit<VibeAnalysis, "id" | "analyzedAt">): Promise<VibeAnalysis>;
-  
+
   // Reality Checks
   getActiveRealityChecks(cityId: number): Promise<RealityCheck[]>;
   createRealityCheck(check: Omit<RealityCheck, "id" | "createdAt">): Promise<RealityCheck>;
-  
+
   // Weather
   getWeatherCache(cityId: number, date: Date): Promise<WeatherCache | undefined>;
   upsertWeatherCache(data: Omit<WeatherCache, "id" | "fetchedAt">): Promise<WeatherCache>;
-  
+
   // Itineraries
   getUserItineraries(userId: string): Promise<Itinerary[]>;
   getItinerary(id: number): Promise<Itinerary | undefined>;
   createItinerary(itinerary: InsertItinerary): Promise<Itinerary>;
   getItineraryItems(itineraryId: number): Promise<ItineraryItem[]>;
-  
+
   // Route Cache
   getRouteCache(originId: number, destinationId: number, mode: string): Promise<RouteCache | undefined>;
   upsertRouteCache(data: Omit<RouteCache, "id" | "fetchedAt">): Promise<RouteCache>;
-  
+
   // Sync Log
   logDataSync(log: Omit<DataSyncLog, "id" | "startedAt">): Promise<DataSyncLog>;
 }
@@ -99,6 +101,16 @@ export class DatabaseStorage implements IStorage {
 
   async updateUserPersona(id: string, persona: "luxury" | "comfort"): Promise<User | undefined> {
     const [user] = await db.update(users).set({ persona }).where(eq(users.id, id)).returning();
+    return user || undefined;
+  }
+
+  async getUserByProvider(provider: string, providerId: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(and(eq(users.provider, provider), eq(users.providerId, providerId)));
+    return user || undefined;
+  }
+
+  async updateUserLogin(id: string, data: Partial<User>): Promise<User | undefined> {
+    const [user] = await db.update(users).set({ ...data, updatedAt: new Date() }).where(eq(users.id, id)).returning();
     return user || undefined;
   }
 
@@ -180,7 +192,7 @@ export class DatabaseStorage implements IStorage {
   async upsertPlaceDataSource(data: Omit<PlaceDataSource, "id" | "fetchedAt">): Promise<PlaceDataSource> {
     const existing = await db.select().from(placeDataSources)
       .where(and(eq(placeDataSources.placeId, data.placeId), eq(placeDataSources.source, data.source)));
-    
+
     if (existing.length > 0) {
       const [updated] = await db.update(placeDataSources)
         .set({ ...data, fetchedAt: new Date() })
@@ -188,7 +200,7 @@ export class DatabaseStorage implements IStorage {
         .returning();
       return updated;
     }
-    
+
     const [created] = await db.insert(placeDataSources).values(data).returning();
     return created;
   }
@@ -236,7 +248,7 @@ export class DatabaseStorage implements IStorage {
     startOfDay.setHours(0, 0, 0, 0);
     const endOfDay = new Date(date);
     endOfDay.setHours(23, 59, 59, 999);
-    
+
     const [weather] = await db.select().from(weatherCache)
       .where(and(
         eq(weatherCache.cityId, cityId),
@@ -248,7 +260,7 @@ export class DatabaseStorage implements IStorage {
 
   async upsertWeatherCache(data: Omit<WeatherCache, "id" | "fetchedAt">): Promise<WeatherCache> {
     const existing = await this.getWeatherCache(data.cityId, data.date);
-    
+
     if (existing) {
       const [updated] = await db.update(weatherCache)
         .set({ ...data, fetchedAt: new Date() })
@@ -256,7 +268,7 @@ export class DatabaseStorage implements IStorage {
         .returning();
       return updated;
     }
-    
+
     const [created] = await db.insert(weatherCache).values(data).returning();
     return created;
   }
@@ -297,7 +309,7 @@ export class DatabaseStorage implements IStorage {
 
   async upsertRouteCache(data: Omit<RouteCache, "id" | "fetchedAt">): Promise<RouteCache> {
     const existing = await this.getRouteCache(data.originPlaceId, data.destinationPlaceId, data.travelMode);
-    
+
     if (existing) {
       const [updated] = await db.update(routeCache)
         .set({ ...data, fetchedAt: new Date() })
@@ -305,7 +317,7 @@ export class DatabaseStorage implements IStorage {
         .returning();
       return updated;
     }
-    
+
     const [created] = await db.insert(routeCache).values(data).returning();
     return created;
   }
@@ -329,7 +341,7 @@ export class DatabaseStorage implements IStorage {
 
   async upsertGuidePrice(data: Omit<GuidePrice, "id" | "createdAt">): Promise<GuidePrice> {
     const existing = await this.getGuidePriceByType(data.serviceType);
-    
+
     if (existing) {
       const [updated] = await db.update(guidePrices)
         .set({ ...data, lastUpdated: new Date() })
@@ -337,7 +349,7 @@ export class DatabaseStorage implements IStorage {
         .returning();
       return updated;
     }
-    
+
     const [created] = await db.insert(guidePrices).values(data).returning();
     return created;
   }
