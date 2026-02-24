@@ -522,22 +522,22 @@ export default function LoginScreen() {
                             </Text>
                         </Pressable>
 
-                        {/* WhatsApp (일시정지: EXPO_PUBLIC_WHATSAPP_OTP_ENABLED=false 시 숨김) */}
-                        {isWhatsAppOtpConfigured() && (
-                            <Pressable
-                                style={({ pressed }) => [
-                                    styles.socialButton,
-                                    styles.whatsappButton,
-                                    pressed && styles.buttonPressed,
-                                    oauthLoading && styles.buttonDisabled,
-                                ]}
-                                onPress={handleWhatsAppPress}
-                                disabled={oauthLoading}
-                            >
-                                <MaterialCommunityIcons name="whatsapp" size={24} color="#FFFFFF" />
-                                <Text style={styles.whatsappButtonText}>WhatsApp으로 시작하기</Text>
-                            </Pressable>
-                        )}
+                        {/* WhatsApp (출시 전 비활성화: 터치 불가) */}
+                        <Pressable
+                            style={({ pressed }) => [
+                                styles.socialButton,
+                                styles.whatsappButton,
+                                pressed && isWhatsAppOtpConfigured() && styles.buttonPressed,
+                                (oauthLoading || !isWhatsAppOtpConfigured()) && styles.buttonDisabled,
+                                !isWhatsAppOtpConfigured() && { opacity: 0.5 },
+                            ]}
+                            onPress={handleWhatsAppPress}
+                            disabled={oauthLoading || !isWhatsAppOtpConfigured()}
+                            pointerEvents={isWhatsAppOtpConfigured() ? "auto" : "none"}
+                        >
+                            <MaterialCommunityIcons name="whatsapp" size={24} color="#FFFFFF" />
+                            <Text style={styles.whatsappButtonText}>WhatsApp으로 시작하기</Text>
+                        </Pressable>
 
                         <Text style={[styles.disclaimer, { color: theme.textTertiary }]}>
                             로그인 시 이용약관 및 개인정보처리방침에 동의합니다

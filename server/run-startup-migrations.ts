@@ -8,6 +8,10 @@ export async function runStartupMigrations(): Promise<void> {
   if (!pool) return;
 
   try {
+    // users REPLICA IDENTITY (Supabase publication에서 UPDATE 허용)
+    await pool.query(`ALTER TABLE "users" REPLICA IDENTITY FULL;`);
+    console.log("[Migration] ✅ users REPLICA IDENTITY FULL 적용 완료");
+
     // 0004: place_seed_raw.price_eur, price_source, price_fetched_at
     await pool.query(`
       ALTER TABLE "place_seed_raw"
