@@ -85,9 +85,10 @@ export async function startKakaoLoginWeb(birthDate: string, language: string): P
     sessionStorage.setItem(KAKAO_CALLBACK_STORAGE_KEY, JSON.stringify({ birthDate, language }));
   }
 
-  const Kakao = (window as unknown as { Kakao?: { Auth?: { authorize: (opts: { redirectUri: string }) => void } } }).Kakao;
+  const Kakao = (window as unknown as { Kakao?: { Auth?: { authorize: (opts: { redirectUri: string; throughTalk?: boolean }) => void } } }).Kakao;
   if (!Kakao?.Auth?.authorize) throw new Error("카카오 웹 SDK를 불러올 수 없습니다.");
-  Kakao.Auth.authorize({ redirectUri });
+  // throughTalk: false → 카카오톡 앱(intent) 대신 웹 로그인 페이지로 리다이렉트
+  Kakao.Auth.authorize({ redirectUri, throughTalk: false });
 }
 
 /**
