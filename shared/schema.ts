@@ -1,5 +1,5 @@
 import { sql, relations } from "drizzle-orm";
-import { pgTable, text, varchar, integer, serial, timestamp, real, boolean, jsonb, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, serial, timestamp, real, boolean, jsonb, pgEnum, unique } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -44,6 +44,16 @@ export const users = pgTable("users", {
 
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
+
+// user_providers: 한 사용자에 여러 provider(구글/카카오/페이스북) 연결
+// 매칭 우선순위: 1) provider 2) provider 없을 때만 birth_date
+export const userProviders = pgTable("user_providers", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  provider: text("provider").notNull(),
+  providerId: text("provider_id").notNull(),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+}, (t) => [unique("user_providers_provider_provider_id_unique").on(t.provider, t.providerId)]);
 
 // Cities/Destinations
 // 🔗 Agent Protocol v1.0: 도시 식별 규약
@@ -926,6 +936,7 @@ export const insertItinerarySchema = createInsertSchema(itineraries).omit({
 // Types
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
+export type UserProvider = typeof userProviders.$inferSelect;
 export type City = typeof cities.$inferSelect;
 export type InsertCity = z.infer<typeof insertCitySchema>;
 export type Place = typeof places.$inferSelect;

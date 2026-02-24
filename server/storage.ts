@@ -13,7 +13,8 @@ import {
   type DataSyncLog,
   type GuidePrice,
   type PlacePrice,
-  users, cities, places, placeDataSources, reviews, vibeAnalysis,
+  users, userProviders,
+  cities, places, placeDataSources, reviews, vibeAnalysis,
   realityChecks, weatherCache, itineraries, itineraryItems, routeCache, dataSyncLog,
   guidePrices, placePrices
 } from "@shared/schema";
@@ -28,6 +29,8 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   getUserByProvider(provider: string, providerId: string): Promise<User | undefined>;
+  getUserByBirthDate(birthDate: string): Promise<User | undefined>;
+  linkProvider(userId: string, provider: string, providerId: string): Promise<void>;
   createUser(user: InsertUser): Promise<User>;
   updateUserPersona(id: string, persona: "luxury" | "comfort"): Promise<User | undefined>;
   updateUserLogin(id: string, data: Partial<User>): Promise<User | undefined>;
@@ -96,6 +99,13 @@ export class DatabaseStorage implements IStorage {
 
   async createUser(insertUser: InsertUser): Promise<User> {
     const [user] = await db.insert(users).values(insertUser).returning();
+    if (user && insertUser.provider && insertUser.providerId) {
+      try {
+        await this.linkProvider(user.id, insertUser.provider, insertUser.providerId);
+      } catch {
+        // user_providers 테이블 없을 수 있음
+      }
+    }
     return user;
   }
 
@@ -105,12 +115,37 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserByProvider(provider: string, providerId: string): Promise<User | undefined> {
+    // 1) user_providers 우선 (한 사용자에 여러 provider 연결)
+    try {
+      const [row] = await db.select({ user: users })
+        .from(userProviders)
+        .innerJoin(users, eq(userProviders.userId, users.id))
+        .where(and(eq(userProviders.provider, provider), eq(userProviders.providerId, providerId)));
+      if (row) return row.user;
+    } catch {
+      // user_providers 테이블 없으면 아래로 fallback
+    }
+    // 2) users.provider/providerId (마이그레이션 전 호환)
     const [user] = await db.select().from(users).where(and(eq(users.provider, provider), eq(users.providerId, providerId)));
     return user || undefined;
   }
 
+  async getUserByBirthDate(birthDate: string): Promise<User | undefined> {
+    if (!birthDate || typeof birthDate !== "string") return undefined;
+    const normalized = birthDate.trim().replace(/\s/g, "");
+    if (!normalized) return undefined;
+    const [user] = await db.select().from(users).where(eq(users.birthDate, normalized));
+    return user || undefined;
+  }
+
+  async linkProvider(userId: string, provider: string, providerId: string): Promise<void> {
+    await db.insert(userProviders).values({ userId, provider, providerId })
+      .onConflictDoNothing({ target: [userProviders.provider, userProviders.providerId] });
+  }
+
   async updateUserLogin(id: string, data: Partial<User>): Promise<User | undefined> {
-    const [user] = await db.update(users).set({ ...data, updatedAt: new Date() }).where(eq(users.id, id)).returning();
+    const { updatedAt, ...rest } = data as any;
+    const [user] = await db.update(users).set(rest).where(eq(users.id, id)).returning();
     return user || undefined;
   }
 

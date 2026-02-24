@@ -1,7 +1,65 @@
 import type { Express } from "express";
 import { storage } from "./storage";
+import type { User } from "@shared/schema";
 
 const GOOGLE_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID || "";
+
+/** provider 1순위, provider 없을 때만 birth_date로 매칭 */
+async function findOrCreateUser(params: {
+  provider: string;
+  providerId: string;
+  birthDate: string;
+  displayName: string;
+  language?: string;
+  deviceType?: string;
+}): Promise<User> {
+  const { provider, providerId, birthDate, displayName, language, deviceType } = params;
+
+  // 1) provider로 조회
+  let user = await storage.getUserByProvider(provider, providerId);
+  if (user) {
+    user = (await storage.updateUserLogin(user.id, {
+      lastLoginAt: new Date(),
+      loginCount: (user.loginCount || 0) + 1,
+      deviceType,
+      preferredLanguage: language || user.preferredLanguage,
+      birthDate: birthDate || user.birthDate,
+    }))!;
+    return user;
+  }
+
+  // 2) birth_date로 조회 → 있으면 provider 연결
+  user = await storage.getUserByBirthDate(birthDate);
+  if (user) {
+    await storage.linkProvider(user.id, provider, providerId);
+    user = (await storage.updateUserLogin(user.id, {
+      lastLoginAt: new Date(),
+      loginCount: (user.loginCount || 0) + 1,
+      deviceType,
+      preferredLanguage: language || user.preferredLanguage,
+      birthDate: birthDate || user.birthDate,
+    }))!;
+    return user;
+  }
+
+  // 3) 신규 사용자 생성
+  const username = `${provider}_${providerId.substring(0, 12)}_${Math.random().toString(36).substring(2, 6)}`;
+  return storage.createUser({
+    username,
+    password: "social_login_no_password",
+    displayName,
+    provider,
+    providerId,
+    birthDate,
+    preferredLanguage: language || "ko",
+    deviceType,
+    loginCount: 1,
+    lastLoginAt: new Date(),
+    isPaid: false,
+    planType: "free",
+  });
+}
+
 const FACEBOOK_APP_ID = process.env.EXPO_PUBLIC_FACEBOOK_APP_ID || process.env.FACEBOOK_APP_ID || "";
 const FACEBOOK_APP_SECRET = process.env.FACEBOOK_APP_SECRET || "";
 
@@ -25,31 +83,14 @@ export function registerAuthRoutes(app: Express) {
             }
             const providerId = tokenData.sub;
             const displayName = tokenData.name || tokenData.email || "Google User";
-            let user = await storage.getUserByProvider("google", providerId);
-            if (user) {
-                user = await storage.updateUserLogin(user.id, {
-                    lastLoginAt: new Date(),
-                    loginCount: (user.loginCount || 0) + 1,
-                    deviceType,
-                    preferredLanguage: language || user.preferredLanguage,
-                    birthDate: birthDate || user.birthDate,
-                })!;
-            } else {
-                user = await storage.createUser({
-                    username: `google_${providerId.substring(0, 12)}_${Math.random().toString(36).substring(2, 6)}`,
-                    password: "social_login_no_password",
-                    displayName,
-                    provider: "google",
-                    providerId,
-                    birthDate,
-                    preferredLanguage: language || "ko",
-                    deviceType,
-                    loginCount: 1,
-                    lastLoginAt: new Date(),
-                    isPaid: false,
-                    planType: "free",
-                });
-            }
+            const user = await findOrCreateUser({
+                provider: "google",
+                providerId,
+                birthDate,
+                displayName,
+                language,
+                deviceType,
+            });
             res.json({
                 success: true,
                 user: { id: user.id, username: user.username, displayName: user.displayName, provider: user.provider, birthDate: user.birthDate, language: user.preferredLanguage, isPaid: user.isPaid, planType: user.planType },
@@ -83,31 +124,14 @@ export function registerAuthRoutes(app: Express) {
                 meData.kakao_account?.profile?.name ||
                 meData.properties?.nickname ||
                 "카카오 사용자";
-            let user = await storage.getUserByProvider("kakao", providerId);
-            if (user) {
-                user = await storage.updateUserLogin(user.id, {
-                    lastLoginAt: new Date(),
-                    loginCount: (user.loginCount || 0) + 1,
-                    deviceType,
-                    preferredLanguage: language || user.preferredLanguage,
-                    birthDate: birthDate || user.birthDate,
-                })!;
-            } else {
-                user = await storage.createUser({
-                    username: `kakao_${providerId.substring(0, 12)}_${Math.random().toString(36).substring(2, 6)}`,
-                    password: "social_login_no_password",
-                    displayName,
-                    provider: "kakao",
-                    providerId,
-                    birthDate,
-                    preferredLanguage: language || "ko",
-                    deviceType,
-                    loginCount: 1,
-                    lastLoginAt: new Date(),
-                    isPaid: false,
-                    planType: "free",
-                });
-            }
+            const user = await findOrCreateUser({
+                provider: "kakao",
+                providerId,
+                birthDate,
+                displayName,
+                language,
+                deviceType,
+            });
             res.json({
                 success: true,
                 user: { id: user.id, username: user.username, displayName: user.displayName, provider: user.provider, birthDate: user.birthDate, language: user.preferredLanguage, isPaid: user.isPaid, planType: user.planType },
@@ -149,31 +173,14 @@ export function registerAuthRoutes(app: Express) {
             const meData = await meRes.json();
             const providerId = meData.id;
             const displayName = meData.name || "Facebook User";
-            let user = await storage.getUserByProvider("facebook", providerId);
-            if (user) {
-                user = await storage.updateUserLogin(user.id, {
-                    lastLoginAt: new Date(),
-                    loginCount: (user.loginCount || 0) + 1,
-                    deviceType,
-                    preferredLanguage: language || user.preferredLanguage,
-                    birthDate: birthDate || user.birthDate,
-                })!;
-            } else {
-                user = await storage.createUser({
-                    username: `facebook_${providerId}_${Math.random().toString(36).substring(2, 6)}`,
-                    password: "social_login_no_password",
-                    displayName,
-                    provider: "facebook",
-                    providerId,
-                    birthDate,
-                    preferredLanguage: language || "ko",
-                    deviceType,
-                    loginCount: 1,
-                    lastLoginAt: new Date(),
-                    isPaid: false,
-                    planType: "free",
-                });
-            }
+            const user = await findOrCreateUser({
+                provider: "facebook",
+                providerId,
+                birthDate,
+                displayName,
+                language,
+                deviceType,
+            });
             res.json({
                 success: true,
                 user: { id: user.id, username: user.username, displayName: user.displayName, provider: user.provider, birthDate: user.birthDate, language: user.preferredLanguage, isPaid: user.isPaid, planType: user.planType },
@@ -194,39 +201,15 @@ export function registerAuthRoutes(app: Express) {
                 return res.status(400).json({ error: "Provider and birthDate are required" });
             }
 
-            // 1. 기존 사용자 검색 (provider + providerId 조합)
-            // providerId가 없으면 임시로 birthDate 등을 조합하거나 추후 OAuth 연동 시 사용
-            const pid = providerId || `temp_${provider}_${birthDate.replace(/-/g, '')}`;
-
-            let user = await storage.getUserByProvider(provider, pid);
-
-            if (user) {
-                // 2. 기존 사용자 정보 업데이트 (로그인 횟수 증가, 마지막 로그인 시간 등)
-                user = await storage.updateUserLogin(user.id, {
-                    lastLoginAt: new Date(),
-                    loginCount: (user.loginCount || 0) + 1,
-                    deviceType,
-                    preferredLanguage: language || user.preferredLanguage,
-                    birthDate: birthDate || user.birthDate,
-                });
-            } else {
-                // 3. 신규 사용자 생성
-                const username = `${provider}_${pid.substring(0, 8)}_${Math.random().toString(36).substring(2, 5)}`;
-                user = await storage.createUser({
-                    username,
-                    password: "social_login_no_password", // 소셜 로그인은 비밀번호 불필요
-                    displayName: displayName || `${provider} User`,
-                    provider,
-                    providerId: pid,
-                    birthDate,
-                    preferredLanguage: language || "ko",
-                    deviceType,
-                    loginCount: 1,
-                    lastLoginAt: new Date(),
-                    isPaid: false,
-                    planType: "free",
-                });
-            }
+            const pid = providerId || `temp_${provider}_${birthDate.replace(/-/g, "")}`;
+            const user = await findOrCreateUser({
+                provider,
+                providerId: pid,
+                birthDate,
+                displayName: displayName || `${provider} User`,
+                language,
+                deviceType,
+            });
 
             // 4. 응답 (실제 운영 환경에선 JWT 토큰 생성 후 반환)
             res.json({
