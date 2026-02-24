@@ -4,7 +4,19 @@ import * as schema from "@shared/schema";
 
 const { Pool } = pg;
 
-const connectionString = process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL;
+function convertToPoolerUrl(url: string): string {
+  const match = url.match(/postgresql:\/\/postgres:([^@]+)@db\.([^.]+)\.supabase\.co:5432\/postgres/);
+  if (match) {
+    const [, password, projectRef] = match;
+    const poolerUrl = `postgresql://postgres.${projectRef}:${password}@aws-1-eu-west-3.pooler.supabase.com:6543/postgres`;
+    console.log("[DB] Direct connection URL → Transaction Pooler URL 자동 변환");
+    return poolerUrl;
+  }
+  return url;
+}
+
+const rawConnectionString = process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL;
+const connectionString = rawConnectionString ? convertToPoolerUrl(rawConnectionString) : rawConnectionString;
 
 let pool: pg.Pool | null = null;
 let db: ReturnType<typeof drizzle> | null = null;
