@@ -38,3 +38,8 @@ outputType = "webview"
 [[ports]]
 localPort = 5000
 externalPort = 80
+
+[deployment]
+deploymentTarget = "autoscale"
+run = ["node", "server_dist/index.js"]
+build = ["bash", "-c", "npm run server:build && npx expo export --platform web"]
