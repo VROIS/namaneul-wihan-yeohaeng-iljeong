@@ -9,7 +9,7 @@ export interface UserData {
   email?: string;
   name?: string;
   displayName?: string;
-  provider: "kakao" | "google" | "facebook" | "whatsapp";
+  provider: "kakao" | "google" | "whatsapp";
   language: string;
   birthDate: string;
   ageGroup?: string;
@@ -56,7 +56,7 @@ export async function clearAuth(): Promise<void> {
 }
 
 export async function socialLogin(data: {
-  provider: "kakao" | "google" | "facebook" | "whatsapp";
+  provider: "kakao" | "google" | "whatsapp";
   providerId?: string;
   birthDate: string;
   language: string;
@@ -134,16 +134,33 @@ export async function socialLoginWithKakao(data: {
   }
 }
 
-/** Facebook OAuth 성공 후 code로 로그인 */
-export async function socialLoginWithFacebook(data: {
-  code: string;
-  redirectUri: string;
+/** WhatsApp OTP 발송 */
+export async function whatsappOtpSend(phoneNumber: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    const response = await fetch(`${getApiUrl()}/api/auth/whatsapp/send-otp`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ phoneNumber }),
+    });
+    const result = await response.json();
+    if (response.ok && result.success) return { success: true };
+    return { success: false, error: result.error || "OTP 발송 실패" };
+  } catch (error) {
+    console.error("WhatsApp OTP send error:", error);
+    return { success: false, error: "서버 연결 실패" };
+  }
+}
+
+/** WhatsApp OTP 검증 후 로그인 */
+export async function whatsappOtpVerify(data: {
+  phoneNumber: string;
+  otp: string;
   birthDate: string;
   language: string;
   deviceType: string;
 }): Promise<{ success: boolean; user?: UserData; error?: string }> {
   try {
-    const response = await fetch(`${getApiUrl()}/api/auth/facebook`, {
+    const response = await fetch(`${getApiUrl()}/api/auth/whatsapp/verify`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
@@ -154,9 +171,9 @@ export async function socialLoginWithFacebook(data: {
       await saveAuth(userData);
       return { success: true, user: userData };
     }
-    return { success: false, error: result.error || "Facebook 로그인 실패" };
+    return { success: false, error: result.error || "WhatsApp 로그인 실패" };
   } catch (error) {
-    console.error("Facebook login error:", error);
+    console.error("WhatsApp OTP verify error:", error);
     return { success: false, error: "서버 연결 실패" };
   }
 }

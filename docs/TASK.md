@@ -275,7 +275,7 @@
 
 | 날짜 | 내용 |
 |------|------|
-| 2026-02-24 | **동일인 통합 (provider 우선, birth_date 2순위)**: user_providers 테이블, getUserByProvider(getUserByBirthDate), linkProvider, findOrCreateUser. Google/Kakao/Facebook/social-login 전부 적용. migrations/0009. |
+| 2026-02-24 | **동일인 통합 (provider 우선, birth_date 2순위)**: user_providers 테이블, getUserByProvider(getUserByBirthDate), linkProvider, findOrCreateUser. Google/Kakao/WhatsApp/social-login 전부 적용. migrations/0009. |
 | 2026-02-21 | **place_seed_raw.place_id + place-linker 매칭**: schema·migration 0008 추가. sync-prices-to-seed-service에서 place-linker(buildCityPlaceLookup, matchPlaceName) 재사용. 가격 0건→20건 매칭 성공. dev/run-sync-prices.ts, sync-place-seed-trucks 연동. |
 | 2026-02-21 | **[Antigravity] MCP Stage 1 제미나이 의존성 100% 제거**: `server/services/mcp-raw-service.ts`의 1단계 데이터 파싱(`runStage1ForCityCategory`) 로직을 Gemini API에서 순수 RegExp(정규식) 기반으로 100% 재작성. `STAGE_MIN_ITEMS`를 5로 하향 조정하여 무과금 수집 구조 완전체 구축 테스트 완료. |
 | 2026-02-20 | **BTS bts_rank 구현**: cities.bts_rank 컬럼, seed/cities-by-phase bts2026 시 bts_rank 설정, resolveTargetCities bts_rank 우선. migrations/0007, run-startup-migrations, schema, admin-routes, mcp-raw-service. |

@@ -60,10 +60,19 @@ async function findOrCreateUser(params: {
   });
 }
 
-const FACEBOOK_APP_ID = process.env.EXPO_PUBLIC_FACEBOOK_APP_ID || process.env.FACEBOOK_APP_ID || "";
-const FACEBOOK_APP_SECRET = process.env.FACEBOOK_APP_SECRET || "";
-
 // 카카오: accessToken으로 /v2/user/me 호출 (REST API 키 불필요)
+
+// WhatsApp OTP: 일시정지 시 비활성화 (출시 전 WHATSAPP_OTP_ENABLED=false)
+const WHATSAPP_OTP_ENABLED = process.env.WHATSAPP_OTP_ENABLED === "true";
+const otpStore = new Map<string, { otp: string; expiresAt: number }>();
+const OTP_EXPIRY_MS = 5 * 60 * 1000; // 5분
+
+function normalizePhone(phone: string): string {
+  const digits = phone.replace(/\D/g, "");
+  if (digits.startsWith("82")) return "+" + digits;
+  if (digits.startsWith("0")) return "+82" + digits.slice(1);
+  return "+82" + digits;
+}
 
 export function registerAuthRoutes(app: Express) {
     // Google OAuth: id_token 검증 후 사용자 생성/업데이트
@@ -143,41 +152,52 @@ export function registerAuthRoutes(app: Express) {
         }
     });
 
-    // Facebook OAuth: code 교환 후 사용자 생성/업데이트
-    app.post("/api/auth/facebook", async (req, res) => {
+    // WhatsApp OTP: 전화번호로 OTP 발송 (일시정지 시 503)
+    app.post("/api/auth/whatsapp/send-otp", async (req, res) => {
         try {
-            const { code, redirectUri, birthDate, language, deviceType } = req.body;
-            if (!code || !redirectUri || !birthDate) {
-                return res.status(400).json({ success: false, error: "code, redirectUri and birthDate are required" });
+            if (!WHATSAPP_OTP_ENABLED) {
+                return res.status(503).json({ success: false, error: "WhatsApp OTP is temporarily disabled" });
             }
-            if (!FACEBOOK_APP_SECRET) {
-                return res.status(503).json({ success: false, error: "Facebook app secret not configured" });
+            const { phoneNumber } = req.body;
+            if (!phoneNumber || typeof phoneNumber !== "string") {
+                return res.status(400).json({ success: false, error: "phoneNumber is required" });
             }
-            const tokenRes = await fetch(
-                `https://graph.facebook.com/v22.0/oauth/access_token?client_id=${FACEBOOK_APP_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&client_secret=${FACEBOOK_APP_SECRET}&code=${encodeURIComponent(code)}`
-            );
-            if (!tokenRes.ok) {
-                const errText = await tokenRes.text();
-                console.error("[Auth] Facebook token exchange failed:", errText);
-                return res.status(401).json({ success: false, error: "Invalid Facebook code" });
+            const phone = normalizePhone(phoneNumber);
+            const otp = String(Math.floor(100000 + Math.random() * 900000));
+            otpStore.set(phone, { otp, expiresAt: Date.now() + OTP_EXPIRY_MS });
+            // TODO: OTPLess/Twilio 연동 시 실제 WhatsApp 발송
+            console.log("[Auth] WhatsApp OTP sent (dev):", phone, "->", otp);
+            res.json({ success: true, message: "OTP sent" });
+        } catch (e: any) {
+            console.error("[Auth] WhatsApp send-otp Error:", e);
+            res.status(500).json({ success: false, error: "Failed to send OTP" });
+        }
+    });
+
+    // WhatsApp OTP: 검증 후 로그인/회원가입
+    app.post("/api/auth/whatsapp/verify", async (req, res) => {
+        try {
+            if (!WHATSAPP_OTP_ENABLED) {
+                return res.status(503).json({ success: false, error: "WhatsApp OTP is temporarily disabled" });
             }
-            const tokenData = await tokenRes.json();
-            const accessToken = tokenData.access_token;
-            if (!accessToken) {
-                return res.status(401).json({ success: false, error: "No access token from Facebook" });
+            const { phoneNumber, otp, birthDate, language, deviceType } = req.body;
+            if (!phoneNumber || !otp || !birthDate) {
+                return res.status(400).json({ success: false, error: "phoneNumber, otp and birthDate are required" });
             }
-            const meRes = await fetch(`https://graph.facebook.com/v22.0/me?fields=id,name,email&access_token=${encodeURIComponent(accessToken)}`);
-            if (!meRes.ok) {
-                return res.status(401).json({ success: false, error: "Failed to fetch Facebook user" });
+            const phone = normalizePhone(phoneNumber);
+            const stored = otpStore.get(phone);
+            if (!stored || stored.expiresAt < Date.now()) {
+                return res.status(401).json({ success: false, error: "Invalid or expired OTP" });
             }
-            const meData = await meRes.json();
-            const providerId = meData.id;
-            const displayName = meData.name || "Facebook User";
+            if (stored.otp !== String(otp)) {
+                return res.status(401).json({ success: false, error: "Invalid OTP" });
+            }
+            otpStore.delete(phone);
             const user = await findOrCreateUser({
-                provider: "facebook",
-                providerId,
+                provider: "whatsapp",
+                providerId: phone,
                 birthDate,
-                displayName,
+                displayName: "WhatsApp User",
                 language,
                 deviceType,
             });
@@ -187,8 +207,8 @@ export function registerAuthRoutes(app: Express) {
                 token: "simple_auth_token_v1_" + user.id,
             });
         } catch (e: any) {
-            console.error("[Auth] Facebook Error:", e);
-            res.status(500).json({ success: false, error: "Failed to process Facebook login" });
+            console.error("[Auth] WhatsApp verify Error:", e);
+            res.status(500).json({ success: false, error: "Failed to verify OTP" });
         }
     });
 

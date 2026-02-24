@@ -18,19 +18,17 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
-import { Feather, FontAwesome } from "@expo/vector-icons";
+import { Feather, FontAwesome, MaterialCommunityIcons } from "@expo/vector-icons";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
 import { Spacing, BorderRadius, Brand, Colors } from "@/constants/theme";
 import { RootStackParamList } from "../navigation/RootStackNavigator";
-import { UserData, calculateAge, getAgeGroup, socialLogin, socialLoginWithGoogle, socialLoginWithFacebook, socialLoginWithKakao } from "../lib/auth";
+import { UserData, calculateAge, getAgeGroup, socialLogin, socialLoginWithGoogle, socialLoginWithKakao, whatsappOtpSend, whatsappOtpVerify } from "../lib/auth";
 import {
     useGoogleAuthRequest,
-    useFacebookAuthRequest,
     isGoogleOAuthConfigured,
-    isFacebookOAuthConfigured,
+    isWhatsAppOtpConfigured,
     getIdTokenFromGoogleResponse,
-    getCodeFromFacebookResponse,
 } from "../lib/auth-oauth";
 import {
     isKakaoOAuthConfigured,
@@ -107,9 +105,11 @@ export default function LoginScreen() {
     const yearRef = useRef<TextInput>(null);
 
     const [googleRequest, googleResponse, googlePromptAsync] = useGoogleAuthRequest();
-    const [fbRequest, fbResponse, fbPromptAsync] = useFacebookAuthRequest();
     const processedGoogleRef = useRef<typeof googleResponse>(null);
-    const processedFbRef = useRef<typeof fbResponse>(null);
+    const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
+    const [whatsappPhone, setWhatsappPhone] = useState("");
+    const [whatsappOtp, setWhatsappOtp] = useState("");
+    const [whatsappStep, setWhatsappStep] = useState<"phone" | "otp">("phone");
 
     const birthDate = useMemo(() => {
         if (day.length === 2 && month.length === 2 && year.length === 4) {
@@ -156,35 +156,6 @@ export default function LoginScreen() {
             })
             .finally(() => setOauthLoading(false));
     }, [googleResponse, birthDateStr, selectedLanguage.code, navigation]);
-
-    useEffect(() => {
-        if (!fbResponse || fbResponse.type !== "success" || !birthDateStr) return;
-        if (processedFbRef.current === fbResponse) return;
-        processedFbRef.current = fbResponse;
-        const code = getCodeFromFacebookResponse(fbResponse);
-        const redirectUri = fbRequest?.redirectUri;
-        if (!code || !redirectUri) return;
-        setOauthLoading(true);
-        socialLoginWithFacebook({
-            code,
-            redirectUri,
-            birthDate: birthDateStr,
-            language: selectedLanguage.code,
-            deviceType: Platform.OS === "web" ? "web" : "mobile",
-        })
-            .then((result) => {
-                if (result.success) {
-                    navigation.reset({ index: 0, routes: [{ name: "Main" }] });
-                } else {
-                    Alert.alert("로그인 실패", result.error || "Facebook 로그인에 실패했습니다.");
-                }
-            })
-            .catch((err) => {
-                console.error("Facebook login error:", err);
-                Alert.alert("로그인 실패", "Facebook 로그인 중 오류가 발생했습니다.");
-            })
-            .finally(() => setOauthLoading(false));
-    }, [fbResponse, fbRequest?.redirectUri, birthDateStr, selectedLanguage.code, navigation]);
 
     // 카카오 웹 리다이렉트 복귀 시 code 처리
     useEffect(() => {
@@ -288,7 +259,7 @@ export default function LoginScreen() {
         return true;
     };
 
-    const handleSocialLogin = async (provider: "kakao" | "google" | "facebook") => {
+    const handleSocialLogin = async (provider: "kakao" | "google" | "whatsapp") => {
         if (!requireBirthDateAndAdult()) return;
 
         const result = await socialLogin({
@@ -296,7 +267,7 @@ export default function LoginScreen() {
             birthDate: birthDate!.toISOString().split("T")[0],
             language: selectedLanguage.code,
             deviceType: Platform.OS,
-            displayName: provider === "kakao" ? "카카오 사용자" : provider === "facebook" ? "Facebook User" : "Google User",
+            displayName: provider === "kakao" ? "카카오 사용자" : provider === "whatsapp" ? "WhatsApp User" : "Google User",
         });
 
         if (result.success && result.user) {
@@ -315,12 +286,50 @@ export default function LoginScreen() {
         }
     };
 
-    const handleFacebookPress = async () => {
+    const handleWhatsAppPress = async () => {
         if (!requireBirthDateAndAdult()) return;
-        if (isFacebookOAuthConfigured()) {
-            await fbPromptAsync();
+        setShowWhatsAppModal(true);
+        setWhatsappStep("phone");
+        setWhatsappPhone("");
+        setWhatsappOtp("");
+    };
+
+    const handleWhatsAppSendOtp = async () => {
+        const phone = whatsappPhone.replace(/\D/g, "");
+        if (phone.length < 10) {
+            Alert.alert("알림", "올바른 전화번호를 입력해주세요.");
+            return;
+        }
+        setOauthLoading(true);
+        const result = await whatsappOtpSend(whatsappPhone);
+        setOauthLoading(false);
+        if (result.success) {
+            setWhatsappStep("otp");
+            setWhatsappOtp("");
         } else {
-            await handleSocialLogin("facebook");
+            Alert.alert("OTP 발송 실패", result.error || "다시 시도해주세요.");
+        }
+    };
+
+    const handleWhatsAppVerify = async () => {
+        if (!whatsappOtp || whatsappOtp.length < 4) {
+            Alert.alert("알림", "OTP 6자리를 입력해주세요.");
+            return;
+        }
+        setOauthLoading(true);
+        const result = await whatsappOtpVerify({
+            phoneNumber: whatsappPhone,
+            otp: whatsappOtp,
+            birthDate: birthDateStr!,
+            language: selectedLanguage.code,
+            deviceType: Platform.OS === "web" ? "web" : "mobile",
+        });
+        setOauthLoading(false);
+        if (result.success) {
+            setShowWhatsAppModal(false);
+            navigation.reset({ index: 0, routes: [{ name: "Main" }] });
+        } else {
+            Alert.alert("로그인 실패", result.error || "WhatsApp 로그인에 실패했습니다.");
         }
     };
 
@@ -513,20 +522,22 @@ export default function LoginScreen() {
                             </Text>
                         </Pressable>
 
-                        {/* Facebook (Meta) */}
-                        <Pressable
-                            style={({ pressed }) => [
-                                styles.socialButton,
-                                styles.facebookButton,
-                                pressed && styles.buttonPressed,
-                                oauthLoading && styles.buttonDisabled,
-                            ]}
-                            onPress={handleFacebookPress}
-                            disabled={oauthLoading}
-                        >
-                            <FontAwesome name="facebook" size={24} color="#FFFFFF" />
-                            <Text style={styles.facebookButtonText}>Facebook으로 시작하기</Text>
-                        </Pressable>
+                        {/* WhatsApp (일시정지: EXPO_PUBLIC_WHATSAPP_OTP_ENABLED=false 시 숨김) */}
+                        {isWhatsAppOtpConfigured() && (
+                            <Pressable
+                                style={({ pressed }) => [
+                                    styles.socialButton,
+                                    styles.whatsappButton,
+                                    pressed && styles.buttonPressed,
+                                    oauthLoading && styles.buttonDisabled,
+                                ]}
+                                onPress={handleWhatsAppPress}
+                                disabled={oauthLoading}
+                            >
+                                <MaterialCommunityIcons name="whatsapp" size={24} color="#FFFFFF" />
+                                <Text style={styles.whatsappButtonText}>WhatsApp으로 시작하기</Text>
+                            </Pressable>
+                        )}
 
                         <Text style={[styles.disclaimer, { color: theme.textTertiary }]}>
                             로그인 시 이용약관 및 개인정보처리방침에 동의합니다
@@ -578,6 +589,74 @@ export default function LoginScreen() {
                                 </Pressable>
                             ))}
                         </ScrollView>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* ── WhatsApp OTP 모달 ── */}
+            <Modal
+                visible={showWhatsAppModal}
+                transparent
+                animationType="slide"
+                onRequestClose={() => setShowWhatsAppModal(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalContent, { backgroundColor: theme.backgroundDefault }]}>
+                        <View style={styles.modalHeader}>
+                            <Text style={[styles.modalTitle, { color: theme.text }]}>
+                                {whatsappStep === "phone" ? "전화번호 입력" : "OTP 입력"}
+                            </Text>
+                            <Pressable onPress={() => setShowWhatsAppModal(false)}>
+                                <Feather name="x" size={24} color={theme.text} />
+                            </Pressable>
+                        </View>
+                        {whatsappStep === "phone" ? (
+                            <View style={styles.whatsappModalBody}>
+                                <Text style={[styles.whatsappModalHint, { color: theme.textTertiary }]}>
+                                    WhatsApp으로 OTP를 받을 전화번호를 입력하세요
+                                </Text>
+                                <TextInput
+                                    style={[styles.whatsappInput, { color: theme.text, borderColor: theme.border }]}
+                                    placeholder="01012345678"
+                                    placeholderTextColor={theme.textTertiary}
+                                    value={whatsappPhone}
+                                    onChangeText={setWhatsappPhone}
+                                    keyboardType="phone-pad"
+                                />
+                                <Pressable
+                                    style={[styles.whatsappSubmit, styles.whatsappButton]}
+                                    onPress={handleWhatsAppSendOtp}
+                                    disabled={oauthLoading}
+                                >
+                                    <Text style={styles.whatsappButtonText}>OTP 발송</Text>
+                                </Pressable>
+                            </View>
+                        ) : (
+                            <View style={styles.whatsappModalBody}>
+                                <Text style={[styles.whatsappModalHint, { color: theme.textTertiary }]}>
+                                    {whatsappPhone}로 발송된 6자리 OTP를 입력하세요
+                                </Text>
+                                <TextInput
+                                    style={[styles.whatsappInput, { color: theme.text, borderColor: theme.border }]}
+                                    placeholder="000000"
+                                    placeholderTextColor={theme.textTertiary}
+                                    value={whatsappOtp}
+                                    onChangeText={(t) => setWhatsappOtp(t.replace(/\D/g, "").slice(0, 6))}
+                                    keyboardType="number-pad"
+                                    maxLength={6}
+                                />
+                                <Pressable
+                                    style={[styles.whatsappSubmit, styles.whatsappButton]}
+                                    onPress={handleWhatsAppVerify}
+                                    disabled={oauthLoading}
+                                >
+                                    <Text style={styles.whatsappButtonText}>확인</Text>
+                                </Pressable>
+                                <Pressable onPress={() => setWhatsappStep("phone")} style={{ marginTop: Spacing.sm }}>
+                                    <Text style={{ color: theme.textTertiary, fontSize: 13 }}>전화번호 변경</Text>
+                                </Pressable>
+                            </View>
+                        )}
                     </View>
                 </View>
             </Modal>
@@ -687,8 +766,8 @@ const styles = StyleSheet.create({
     },
     kakaoIconText: { color: "#FEE500", fontSize: 14, fontWeight: "800" },
     kakaoButtonText: { color: "#000000", fontSize: 16, fontWeight: "700" },
-    facebookButton: { backgroundColor: "#1877F2" },
-    facebookButtonText: { color: "#FFFFFF", fontSize: 16, fontWeight: "700" },
+    whatsappButton: { backgroundColor: "#25D366" },
+    whatsappButtonText: { color: "#FFFFFF", fontSize: 16, fontWeight: "700" },
     googleButton: { backgroundColor: "#FFFFFF", borderWidth: 1 },
     googleIcon: {
         width: 24,
@@ -733,4 +812,22 @@ const styles = StyleSheet.create({
     languageTextContainer: { flex: 1 },
     languageName: { fontSize: 16, fontWeight: "600" },
     languageSubname: { fontSize: 13, marginTop: 2 },
+
+    /* ── WhatsApp OTP 모달 ── */
+    whatsappModalBody: { paddingHorizontal: Spacing.xl, paddingBottom: Spacing.xl },
+    whatsappModalHint: { fontSize: 13, marginBottom: Spacing.md },
+    whatsappInput: {
+        borderWidth: 1,
+        borderRadius: BorderRadius.lg,
+        paddingHorizontal: Spacing.lg,
+        paddingVertical: Spacing.md,
+        fontSize: 16,
+        marginBottom: Spacing.md,
+    },
+    whatsappSubmit: {
+        paddingVertical: Spacing.lg,
+        borderRadius: BorderRadius.xl,
+        alignItems: "center",
+        justifyContent: "center",
+    },
 });

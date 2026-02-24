@@ -45,7 +45,7 @@ export const users = pgTable("users", {
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
-// user_providers: 한 사용자에 여러 provider(구글/카카오/페이스북) 연결
+// user_providers: 한 사용자에 여러 provider(구글/카카오/WhatsApp) 연결
 // 매칭 우선순위: 1) provider 2) provider 없을 때만 birth_date
 export const userProviders = pgTable("user_providers", {
   id: serial("id").primaryKey(),
