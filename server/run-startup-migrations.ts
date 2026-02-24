@@ -49,6 +49,28 @@ export async function runStartupMigrations(): Promise<void> {
         ADD COLUMN IF NOT EXISTS "google_place_id" text;
     `);
     console.log("[Migration] ✅ 0009 place_seed_raw.google_place_id 적용 완료");
+
+    // 0010: user_providers (동일인 통합: provider 1순위, birth_date 2순위)
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS "user_providers" (
+        "id" serial PRIMARY KEY NOT NULL,
+        "user_id" varchar NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+        "provider" text NOT NULL,
+        "provider_id" text NOT NULL,
+        "created_at" timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
+        CONSTRAINT "user_providers_provider_provider_id_unique" UNIQUE("provider", "provider_id")
+      );
+    `);
+    await pool.query(`CREATE INDEX IF NOT EXISTS "user_providers_user_id_idx" ON "user_providers"("user_id");`);
+    await pool.query(`CREATE INDEX IF NOT EXISTS "user_providers_provider_provider_id_idx" ON "user_providers"("provider", "provider_id");`);
+    await pool.query(`
+      INSERT INTO "user_providers" ("user_id", "provider", "provider_id")
+      SELECT "id", "provider", "provider_id"
+      FROM "users"
+      WHERE "provider" IS NOT NULL AND "provider_id" IS NOT NULL
+      ON CONFLICT ("provider", "provider_id") DO NOTHING;
+    `);
+    console.log("[Migration] ✅ 0010 user_providers 적용 완료");
   } catch (err) {
     console.warn("[Migration] 스킵 또는 실패:", (err as Error).message);
   }

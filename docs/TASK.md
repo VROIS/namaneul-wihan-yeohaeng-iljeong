@@ -238,7 +238,7 @@
 | **Place Seed 반경** | CITY_SEARCH_RADIUS_METERS=50000(place-seeder.ts). Google Places API 최대 50km. 1차 목표 순서: 파리→프랑스30→유럽30. |
 | **AG2 반경 100km** | AG2 프롬프트에 "100km radius" 추가, Paris 예시 명시. AGENT_PROTOCOL 반영. 배포 후 파리 generate로 검증. |
 | **카카오 OAuth (2026-02-24)** | auth-kakao.ts, socialLoginWithKakao, POST /api/auth/kakao, LoginScreen 연동. 웹 redirect 플로우. Koyeb에 EXPO_PUBLIC_KAKAO_JAVASCRIPT_KEY, EXPO_PUBLIC_KAKAO_REST_API_KEY 추가 후 배포 → 내부 테스트. |
-| **동일인 통합 (2026-02-24)** | user_providers 테이블, provider 1순위·birth_date 2순위 매칭. migrations/0009_user_providers.sql. Supabase에서 마이그레이션 실행 후 배포. 구글/카카오/페이스북 각각 로그인 시 1명으로 통합. |
+| **동일인 통합 (2026-02-24)** | user_providers 테이블, provider 1순위·birth_date 2순위 매칭. run-startup-migrations 0010으로 서버 시작 시 자동 적용. 구글/카카오/페이스북 각각 로그인 시 1명으로 통합. |
 | **일정 검증(Verifier)** | score≥90 통과, itinerary-verifier.ts. 잘린 JSON 복구(verdict 적합·score 50 미만→90), maxOutputTokens 1024. 내부 2회차 200/score 95. 배포본 외부 1회 500 → 재테스트 권장. |
 | **배포 콘솔 분석(2026-02-11)** | place_seed_sync failed: "Cannot convert undefined or null to object" + Invalid radius 100km(>50km). 수정: counts 무효 guard, openingHours guard, 반경 50km, 대시보드 failed 시 errorMessage 표시. |
 | **셀럽 흔적 결과 확인** | `/admin` 대시보드 → 실시간 관제탑 "셀럽 흔적" 숫자. API: `GET /api/admin/celebrity-evidence/stats`. 터미널: `npm run report:celeb`. |
