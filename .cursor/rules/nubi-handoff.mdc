@@ -27,14 +27,15 @@ alwaysApply: true
 
 | 항목 | 내용 |
 |------|------|
-| 마지막 작업 | 동일인 통합: user_providers 테이블, provider 1순위·birth_date 2순위 매칭. Google/Kakao/Facebook/social-login findOrCreateUser 적용. 빌드 통과. |
-| 다음 할 일 | Supabase에서 migrations/0009_user_providers.sql 실행 후 커밋·푸시 → 배포 → 로그인 통합 테스트. |
+| 마지막 작업 | 로그인 수정: Facebook→WhatsApp OTP(일시정지), users REPLICA IDENTITY FULL, WhatsApp 버튼 항상 표시·출시 전 비활성화. 구글·카카오 500 오류 해결. |
+| 다음 할 일 | 배포본 구글·카카오 로그인 실제 테스트. 출시 시 WHATSAPP_OTP_ENABLED=true + OTPLess 연동. |
 | 브랜치 | cursor-dev |
 | 배포 상태 | Koyeb 정상 작동 중. |
 
 ## 긴급 이슈
 - **Google Maps/Places API 대시보드 빨간불**: 건강체크 로직 불일치 (Places API New로 테스트 코드 수정 필요)
 - **데이터 보강**: Place Seed 프랑스 도시(30개) 수집 완료 상태 확인 및 이미지 커버리지 유지
+- **user_providers 마이그레이션**: Supabase에서 unique constraint 오류 시 수동 확인
 
 ## 최우선 작업 (순서대로)
 1. **건강체크 API 수정**: Geocoding API 테스트 → Places API New 테스트로 변경

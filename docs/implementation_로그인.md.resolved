@@ -1,38 +1,53 @@
-# 로그인 기능 활성화 + 사용자 DB 연동 계획
+# 로그인 기능 활성화 + 사용자 DB 연동
 
-현재 로그인은 AsyncStorage에만 저장되고 실제 DB 연동이 없는 상태입니다.
-이 계획은 소셜 로그인 버튼 클릭 → 생년월일 필수 검증 → DB 저장 → 인증 상태 유지까지의 전체 흐름을 구축합니다.
+> **최종 업데이트: 2026-02-24**
+
+## 2026-02-24 구현 완료 현황
+
+| 항목 | 상태 | 비고 |
+|------|------|------|
+| Google OAuth | ✅ 완료 | POST /api/auth/google, id_token 검증 |
+| Kakao OAuth | ✅ 완료 | POST /api/auth/kakao, accessToken → /v2/user/me |
+| Facebook | ❌ 제거 | WhatsApp OTP로 전환 (일시정지) |
+| WhatsApp OTP | ✅ 구현·일시정지 | POST /api/auth/whatsapp/send-otp, verify. 출시 전 버튼 비활성화 |
+| 동일인 통합 | ✅ 완료 | user_providers, provider 1순위·birth_date 2순위 |
+| users REPLICA IDENTITY | ✅ 완료 | run-startup-migrations.ts 자동 적용 (구글·카카오 500 오류 해결) |
+| WhatsApp 버튼 | ✅ 완료 | 항상 표시, EXPO_PUBLIC_WHATSAPP_OTP_ENABLED=false 시 비활성화 |
+
+## 미완료 (출시 시)
+
+| 항목 | 내용 |
+|------|------|
+| WhatsApp OTP 실제 발송 | OTPLess/실제 API 연동, WHATSAPP_OTP_ENABLED=true |
+| user_providers 마이그레이션 | Supabase에서 "unique constraint" 오류 시 수동 확인 |
+| 배포본 구글·카카오 로그인 | 실제 기기/브라우저에서 로그인 테스트 |
 
 ---
 
 ## ✅ 이미 구현된 것: 인증된 사용자 자동 스킵
 
-[RootStackNavigator.tsx](file:///c:/Users/SY%20Lee/Desktop/nubi-clean/client/navigation/RootStackNavigator.tsx)에 이미 구현되어 있습니다:
+[RootStackNavigator.tsx](file:///c:/Users/SY%20Lee/Desktop/nubi-clean/client/navigation/RootStackNavigator.tsx):
 
 ```tsx
-// 앱 시작 → AsyncStorage에서 토큰 확인
 initialRouteName={loggedIn ? "Main" : "Login"}
 ```
 - 로그인 되어 있으면 → **로그인 화면 스킵, Main 바로 진입** ✅
 - 로그인 안 되어 있으면 → Login 화면 표시
 
-**보강 필요한 부분:**
-현재는 AsyncStorage만 사용 → 앱 삭제/기기 변경 시 로그인 유지 불가  
-→ **서버 JWT 토큰 검증**을 추가하면 기기 변경해도 재로그인 없이 유지됩니다
+**보강 필요한 부분:** AsyncStorage만 사용 → 앱 삭제/기기 변경 시 로그인 유지 불가. 서버 JWT 토큰 검증 추가 시 기기 변경해도 유지 가능.
 
 ---
 
-## 현재 상태 파악
+## 현재 상태 파악 (2026-02-24)
 
 | 항목 | 현재 상태 |
 |------|-----------|
-| `users` 테이블 | 존재 (username, password, birthDate, preferredLanguage 있음) |
-| `provider` 컬럼 | ❌ 없음 |
-| `isPaid` 컬럼 | ❌ 없음 |
-| `loginProvider` 컬럼 | ❌ 없음 |
-| 소셜 로그인 API | ❌ 없음 |
-| 생년월일 필수 검증 | ❌ 현재 버튼 항상 클릭 가능 |
-| DB 저장 | ❌ AsyncStorage만 사용 |
+| `users` 테이블 | ✅ provider, providerId, isPaid, planType, lastLoginAt, loginCount, deviceType |
+| `user_providers` 테이블 | ✅ 동일인 통합 (한 사용자에 여러 provider) |
+| Google/Kakao API | ✅ /api/auth/google, /api/auth/kakao |
+| WhatsApp OTP API | ✅ /api/auth/whatsapp/send-otp, verify (일시정지) |
+| 생년월일 필수 검증 | ✅ 만 18세 이상 검증 |
+| DB 저장 | ✅ AsyncStorage + 서버 DB 연동 |
 
 ---
 
@@ -122,7 +137,7 @@ appVersion: text("app_version"),
 | `password` | text | 소셜로그인: `social_no_password` |
 | `birthDate` | text | `"1990-06-15"` 형식 (필수) |
 | `preferredLanguage` | text | `"ko"`, `"en"` 등 |
-| `provider` | text | `"kakao"` \| `"google"` \| `"whatsapp"` 🆕 |
+| `provider` | text | `"kakao"` \| `"google"` \| `"whatsapp"` ✅ |
 | `providerId` | text | 소셜 고유ID (추후 OAuth) 🆕 |
 | `isPaid` | boolean | 유료 여부 (기본 false) 🆕 |
 | `planType` | text | `"free"` \| `"basic"` \| `"premium"` 🆕 |
