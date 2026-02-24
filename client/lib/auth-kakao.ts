@@ -4,7 +4,7 @@
  */
 import { Platform } from "react-native";
 import { initializeKakaoSDK } from "@react-native-kakao/core";
-import { login, issueAccessTokenWithCodeWeb } from "@react-native-kakao/user";
+import { issueAccessTokenWithCodeWeb } from "@react-native-kakao/user";
 import { getApiUrl } from "./query-client";
 
 const KAKAO_JS_KEY = process.env.EXPO_PUBLIC_KAKAO_JAVASCRIPT_KEY || "";
@@ -71,7 +71,7 @@ export async function ensureKakaoSDKInitialized(): Promise<boolean> {
 
 /**
  * 카카오 로그인 시작 (웹: 리다이렉트)
- * 생년월일을 sessionStorage에 저장 후 카카오 로그인 페이지로 이동
+ * rnkakao login()은 intent 스킴을 시도해 웹에서 실패함 → Kakao.Auth.authorize 직접 사용
  */
 export async function startKakaoLoginWeb(birthDate: string, language: string): Promise<void> {
   if (Platform.OS !== "web") {
@@ -84,11 +84,10 @@ export async function startKakaoLoginWeb(birthDate: string, language: string): P
   if (typeof sessionStorage !== "undefined") {
     sessionStorage.setItem(KAKAO_CALLBACK_STORAGE_KEY, JSON.stringify({ birthDate, language }));
   }
-  await login({
-    web: {
-      redirectUri,
-    },
-  });
+
+  const Kakao = (window as unknown as { Kakao?: { Auth?: { authorize: (opts: { redirectUri: string }) => void } } }).Kakao;
+  if (!Kakao?.Auth?.authorize) throw new Error("카카오 웹 SDK를 불러올 수 없습니다.");
+  Kakao.Auth.authorize({ redirectUri });
 }
 
 /**
