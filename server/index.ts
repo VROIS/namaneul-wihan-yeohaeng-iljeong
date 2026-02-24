@@ -26,57 +26,11 @@ declare module "http" {
 
 function setupCors(app: express.Application) {
   app.use((req, res, next) => {
-    const origins = new Set<string>();
-
-    // 로컬 개발 환경
-    origins.add("http://localhost:8081");
-    origins.add("http://localhost:8082");
-    origins.add("http://localhost:19006");
-    origins.add("http://localhost:19000");
-    origins.add("http://127.0.0.1:8081");
-    origins.add("http://127.0.0.1:8082");
-    origins.add("http://127.0.0.1:19006");
-    origins.add("http://127.0.0.1:19000");
-    origins.add("http://192.168.1.23:8082");
-
-    // Koyeb 배포 환경
-    origins.add("https://legal-dannye-dbstour-4e6b86d5.koyeb.app");
-
     const origin = req.header("origin");
-
-    if (origin && origins.has(origin)) {
-      res.header("Access-Control-Allow-Origin", origin);
-      res.header(
-        "Access-Control-Allow-Methods",
-        "GET, POST, PUT, DELETE, OPTIONS",
-      );
-      res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
-      res.header("Access-Control-Allow-Credentials", "true");
-    }
-
-    // 프로덕션: 같은 도메인 요청 허용 (origin이 없는 경우)
-    if (process.env.NODE_ENV === "production" && !origin) {
-      res.header("Access-Control-Allow-Origin", "*");
-      res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-      res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
-    }
-
-    // 로컬 개발 환경에서는 모든 origin 허용 (개발 편의)
-    // 모바일 기기에서 접속할 때 origin이 없을 수 있음
-    if (process.env.NODE_ENV === "development") {
-      if (!origin) {
-        res.header("Access-Control-Allow-Origin", "*");
-      } else if (!origins.has(origin)) {
-        // 개발 환경에서는 알 수 없는 origin도 허용 (모바일 기기 대응)
-        res.header("Access-Control-Allow-Origin", origin);
-        res.header(
-          "Access-Control-Allow-Methods",
-          "GET, POST, PUT, DELETE, OPTIONS",
-        );
-        res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
-        res.header("Access-Control-Allow-Credentials", "true");
-      }
-    }
+    res.header("Access-Control-Allow-Origin", origin || "*");
+    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+    res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    res.header("Access-Control-Allow-Credentials", "true");
 
     if (req.method === "OPTIONS") {
       return res.sendStatus(200);
@@ -247,12 +201,19 @@ function setupErrorHandler(app: express.Application) {
   setupBodyParsing(app);
   setupRequestLogging(app);
 
+  app.use((req, res, next) => {
+    if (req.path.endsWith('.html') || req.path === '/' || !req.path.includes('.')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    }
+    next();
+  });
+
   configureExpoAndLanding(app);
   const server = await registerRoutes(app);
 
   setupErrorHandler(app);
 
-  const port = parseInt(process.env.PORT || "8082", 10);
+  const port = parseInt(process.env.PORT || "5000", 10);
 
   server.on('error', (err: NodeJS.ErrnoException) => {
     if (err.code === 'EADDRINUSE') {
