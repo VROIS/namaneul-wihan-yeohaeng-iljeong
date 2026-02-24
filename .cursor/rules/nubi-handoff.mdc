@@ -23,14 +23,14 @@ alwaysApply: true
 - 사용자에게 SQL/Supabase/PowerShell 등 수동 실행 요청하지 않음 (비개발자)
 - DB·코드 작업은 배포(Koyeb)와 별개로 진행 가능
 
-## 현재 상태 (2026-02-22)
+## 현재 상태 (2026-02-24)
 
 | 항목 | 내용 |
 |------|------|
-| 마지막 작업 | Google OAuth 배포 적용: Dockerfile ARG 추가(Koyeb 빌드 시 EXPO_PUBLIC_GOOGLE_CLIENT_ID). 서버·웹 빌드·린트 통과. |
-| 다음 할 일 | Koyeb에 EXPO_PUBLIC_GOOGLE_CLIENT_ID 환경변수 추가 후 재배포 → 배포본 Google 로그인 테스트. |
+| 마지막 작업 | 카카오 OAuth 구현 완료: auth-kakao.ts, socialLoginWithKakao, POST /api/auth/kakao, LoginScreen 연동. 빌드·린트 통과. |
+| 다음 할 일 | Koyeb에 EXPO_PUBLIC_KAKAO_JAVASCRIPT_KEY, EXPO_PUBLIC_KAKAO_REST_API_KEY 추가 후 배포 → 배포본 카카오 로그인 내부 테스트. |
 | 브랜치 | cursor-dev |
-| 배포 상태 | Koyeb 정상 작동 중 (이미지 로직 배포 대기). |
+| 배포 상태 | Koyeb 정상 작동 중 (카카오 OAuth 배포 대기). |
 
 ## 긴급 이슈
 - **Google Maps/Places API 대시보드 빨간불**: 건강체크 로직 불일치 (Places API New로 테스트 코드 수정 필요)

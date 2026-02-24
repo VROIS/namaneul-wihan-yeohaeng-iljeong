@@ -5,6 +5,8 @@ const GOOGLE_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID || process.env
 const FACEBOOK_APP_ID = process.env.EXPO_PUBLIC_FACEBOOK_APP_ID || process.env.FACEBOOK_APP_ID || "";
 const FACEBOOK_APP_SECRET = process.env.FACEBOOK_APP_SECRET || "";
 
+// 카카오: accessToken으로 /v2/user/me 호출 (REST API 키 불필요)
+
 export function registerAuthRoutes(app: Express) {
     // Google OAuth: id_token 검증 후 사용자 생성/업데이트
     app.post("/api/auth/google", async (req, res) => {
@@ -56,6 +58,64 @@ export function registerAuthRoutes(app: Express) {
         } catch (e: any) {
             console.error("[Auth] Google Error:", e);
             res.status(500).json({ success: false, error: "Failed to process Google login" });
+        }
+    });
+
+    // 카카오 OAuth: accessToken으로 사용자 정보 조회 후 생성/업데이트
+    app.post("/api/auth/kakao", async (req, res) => {
+        try {
+            const { accessToken, birthDate, language, deviceType } = req.body;
+            if (!accessToken || !birthDate) {
+                return res.status(400).json({ success: false, error: "accessToken and birthDate are required" });
+            }
+            const meRes = await fetch("https://kapi.kakao.com/v2/user/me", {
+                headers: { Authorization: `Bearer ${accessToken}` },
+            });
+            if (!meRes.ok) {
+                const errText = await meRes.text();
+                console.error("[Auth] Kakao /v2/user/me failed:", errText);
+                return res.status(401).json({ success: false, error: "Invalid Kakao token" });
+            }
+            const meData = await meRes.json();
+            const providerId = String(meData.id ?? meData.kakao_account?.id);
+            const displayName =
+                meData.kakao_account?.profile?.nickname ||
+                meData.kakao_account?.profile?.name ||
+                meData.properties?.nickname ||
+                "카카오 사용자";
+            let user = await storage.getUserByProvider("kakao", providerId);
+            if (user) {
+                user = await storage.updateUserLogin(user.id, {
+                    lastLoginAt: new Date(),
+                    loginCount: (user.loginCount || 0) + 1,
+                    deviceType,
+                    preferredLanguage: language || user.preferredLanguage,
+                    birthDate: birthDate || user.birthDate,
+                })!;
+            } else {
+                user = await storage.createUser({
+                    username: `kakao_${providerId.substring(0, 12)}_${Math.random().toString(36).substring(2, 6)}`,
+                    password: "social_login_no_password",
+                    displayName,
+                    provider: "kakao",
+                    providerId,
+                    birthDate,
+                    preferredLanguage: language || "ko",
+                    deviceType,
+                    loginCount: 1,
+                    lastLoginAt: new Date(),
+                    isPaid: false,
+                    planType: "free",
+                });
+            }
+            res.json({
+                success: true,
+                user: { id: user.id, username: user.username, displayName: user.displayName, provider: user.provider, birthDate: user.birthDate, language: user.preferredLanguage, isPaid: user.isPaid, planType: user.planType },
+                token: "simple_auth_token_v1_" + user.id,
+            });
+        } catch (e: any) {
+            console.error("[Auth] Kakao Error:", e);
+            res.status(500).json({ success: false, error: "Failed to process Kakao login" });
         }
     });
 

@@ -108,6 +108,32 @@ export async function socialLoginWithGoogle(data: {
   }
 }
 
+/** 카카오 OAuth 성공 후 accessToken으로 로그인 */
+export async function socialLoginWithKakao(data: {
+  accessToken: string;
+  birthDate: string;
+  language: string;
+  deviceType: string;
+}): Promise<{ success: boolean; user?: UserData; error?: string }> {
+  try {
+    const response = await fetch(`${getApiUrl()}/api/auth/kakao`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    const result = await response.json();
+    if (response.ok && result.success) {
+      const userData: UserData = { ...result.user, token: result.token };
+      await saveAuth(userData);
+      return { success: true, user: userData };
+    }
+    return { success: false, error: result.error || "카카오 로그인 실패" };
+  } catch (error) {
+    console.error("Kakao login error:", error);
+    return { success: false, error: "서버 연결 실패" };
+  }
+}
+
 /** Facebook OAuth 성공 후 code로 로그인 */
 export async function socialLoginWithFacebook(data: {
   code: string;

@@ -23,7 +23,7 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
 import { Spacing, BorderRadius, Brand, Colors } from "@/constants/theme";
 import { RootStackParamList } from "../navigation/RootStackNavigator";
-import { UserData, calculateAge, getAgeGroup, socialLogin, socialLoginWithGoogle, socialLoginWithFacebook } from "../lib/auth";
+import { UserData, calculateAge, getAgeGroup, socialLogin, socialLoginWithGoogle, socialLoginWithFacebook, socialLoginWithKakao } from "../lib/auth";
 import {
     useGoogleAuthRequest,
     useFacebookAuthRequest,
@@ -32,6 +32,12 @@ import {
     getIdTokenFromGoogleResponse,
     getCodeFromFacebookResponse,
 } from "../lib/auth-oauth";
+import {
+    isKakaoOAuthConfigured,
+    startKakaoLoginWeb,
+    exchangeKakaoCodeForToken,
+    getKakaoCallbackData,
+} from "../lib/auth-kakao";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -180,6 +186,52 @@ export default function LoginScreen() {
             .finally(() => setOauthLoading(false));
     }, [fbResponse, fbRequest?.redirectUri, birthDateStr, selectedLanguage.code, navigation]);
 
+    // 카카오 웹 리다이렉트 복귀 시 code 처리
+    useEffect(() => {
+        if (Platform.OS !== "web" || !isKakaoOAuthConfigured()) return;
+        const url = typeof window !== "undefined" ? window.location.search : "";
+        const params = new URLSearchParams(url);
+        const code = params.get("code");
+        if (!code) return;
+
+        const callbackData = getKakaoCallbackData();
+        const birthDate = callbackData?.birthDate;
+        const language = callbackData?.language || selectedLanguage.code;
+        if (!birthDate) {
+            Alert.alert("로그인 실패", "생년월일 정보가 없습니다. 다시 시도해주세요.");
+            if (typeof window !== "undefined" && window.history) {
+                window.history.replaceState({}, "", window.location.pathname);
+            }
+            return;
+        }
+
+        setOauthLoading(true);
+        exchangeKakaoCodeForToken(code)
+            .then((accessToken) =>
+                socialLoginWithKakao({
+                    accessToken,
+                    birthDate,
+                    language,
+                    deviceType: "web",
+                })
+            )
+            .then((result) => {
+                if (typeof window !== "undefined" && window.history) {
+                    window.history.replaceState({}, "", window.location.pathname);
+                }
+                if (result.success) {
+                    navigation.reset({ index: 0, routes: [{ name: "Main" }] });
+                } else {
+                    Alert.alert("로그인 실패", result.error || "카카오 로그인에 실패했습니다.");
+                }
+            })
+            .catch((err) => {
+                console.error("Kakao login error:", err);
+                Alert.alert("로그인 실패", "카카오 로그인 중 오류가 발생했습니다.");
+            })
+            .finally(() => setOauthLoading(false));
+    }, [selectedLanguage.code, navigation]);
+
     const validateAndSetDay = (value: string) => {
         const num = value.replace(/[^0-9]/g, "").slice(0, 2);
         setDay(num);
@@ -269,6 +321,22 @@ export default function LoginScreen() {
             await fbPromptAsync();
         } else {
             await handleSocialLogin("facebook");
+        }
+    };
+
+    const handleKakaoPress = async () => {
+        if (!requireBirthDateAndAdult()) return;
+        if (isKakaoOAuthConfigured() && Platform.OS === "web") {
+            setOauthLoading(true);
+            try {
+                await startKakaoLoginWeb(birthDateStr!, selectedLanguage.code);
+            } catch (err) {
+                console.error("Kakao login start error:", err);
+                Alert.alert("로그인 실패", "카카오 로그인을 시작할 수 없습니다.");
+                setOauthLoading(false);
+            }
+        } else {
+            await handleSocialLogin("kakao");
         }
     };
 
@@ -414,8 +482,10 @@ export default function LoginScreen() {
                                 styles.socialButton,
                                 styles.kakaoButton,
                                 pressed && styles.buttonPressed,
+                                oauthLoading && styles.buttonDisabled,
                             ]}
-                            onPress={() => handleSocialLogin("kakao")}
+                            onPress={handleKakaoPress}
+                            disabled={oauthLoading}
                         >
                             <View style={styles.kakaoIcon}>
                                 <Text style={styles.kakaoIconText}>K</Text>
