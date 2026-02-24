@@ -1,9 +1,10 @@
 /**
  * 카카오 OAuth 로그인 (웹 플랫폼)
- * @react-native-kakao/user 사용, redirect 플로우
+ * @react-native-kakao/core (SDK 초기화) + @react-native-kakao/user (login) 사용
  */
 import { Platform } from "react-native";
-import { login, issueAccessTokenWithCodeWeb, initializeKakaoSDK } from "@react-native-kakao/user";
+import { initializeKakaoSDK } from "@react-native-kakao/core";
+import { login, issueAccessTokenWithCodeWeb } from "@react-native-kakao/user";
 import { getApiUrl } from "./query-client";
 
 const KAKAO_JS_KEY = process.env.EXPO_PUBLIC_KAKAO_JAVASCRIPT_KEY || "";
@@ -25,14 +26,40 @@ export function getKakaoRedirectUri(): string {
 
 let sdkInitialized = false;
 
+/** 카카오 웹 SDK 스크립트 동적 로드 (index.html에 없을 때 대비) */
+function loadKakaoScript(): Promise<void> {
+  if (typeof window === "undefined") return Promise.resolve();
+  const w = window as unknown as { Kakao?: unknown };
+  if (w.Kakao) return Promise.resolve();
+  const existing = document.querySelector('script[src*="kakao_js_sdk"]');
+  if (existing) {
+    return new Promise<void>((resolve) => {
+      const check = () => (w.Kakao ? resolve() : setTimeout(check, 50));
+      check();
+    });
+  }
+  return new Promise((resolve, reject) => {
+    const s = document.createElement("script");
+    s.src = "https://t1.kakaocdn.net/kakao_js_sdk/2.7.9/kakao.min.js";
+    s.crossOrigin = "anonymous";
+    s.onload = () => resolve();
+    s.onerror = () => reject(new Error("Kakao script load failed"));
+    document.head.appendChild(s);
+  });
+}
+
 /** 웹에서 카카오 SDK 초기화 (앱 로드 시 1회) */
 export async function ensureKakaoSDKInitialized(): Promise<boolean> {
   if (!isKakaoOAuthConfigured() || Platform.OS !== "web") return false;
   if (sdkInitialized) return true;
   try {
-    await initializeKakaoSDK({
-      javascriptKey: KAKAO_JS_KEY,
-      restApiKey: KAKAO_REST_KEY,
+    await loadKakaoScript();
+    // core 패키지 API: (appKey, { web: { javascriptKey, restApiKey } })
+    await initializeKakaoSDK(KAKAO_JS_KEY, {
+      web: {
+        javascriptKey: KAKAO_JS_KEY,
+        restApiKey: KAKAO_REST_KEY,
+      },
     });
     sdkInitialized = true;
     return true;
