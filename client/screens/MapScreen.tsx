@@ -2,7 +2,7 @@ import React from "react";
 import { View, StyleSheet, Text, useColorScheme } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Typography, Spacing, Brand, Colors } from "@/constants/theme";
-import { Feather } from "@expo/vector-icons";
+import Icon from "@/components/Icon";
 
 export default function MapScreen() {
   const colorScheme = useColorScheme();
@@ -10,10 +10,17 @@ export default function MapScreen() {
   const insets = useSafeAreaInsets();
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.backgroundDefault }]}>
+    <View
+      style={[styles.container, { backgroundColor: theme.backgroundDefault }]}
+    >
       <View style={[styles.placeholder, { marginTop: insets.top }]}>
-        <View style={[styles.iconContainer, { backgroundColor: theme.backgroundSecondary }]}>
-          <Feather name="map-pin" size={48} color={Brand.primary} />
+        <View
+          style={[
+            styles.iconContainer,
+            { backgroundColor: theme.backgroundSecondary },
+          ]}
+        >
+          <Icon name="map-pin" size={48} color={Brand.primary} />
         </View>
         <Text style={[styles.title, { color: theme.text }]}>
           지도 기능 준비 중

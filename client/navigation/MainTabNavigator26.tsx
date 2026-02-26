@@ -24,6 +24,7 @@ export default function MainTabNavigator26() {
         component={HomeStackNavigator}
         options={{
           title: "Home",
+          // @ts-expect-error Custom option for unstable bottom tabs
           icon: {
             sfSymbolName: "house",
           },
@@ -37,6 +38,7 @@ export default function MainTabNavigator26() {
         component={ProfileStackNavigator}
         options={{
           title: "Profile",
+          // @ts-expect-error Custom option for unstable bottom tabs
           icon: {
             sfSymbolName: "person",
           },

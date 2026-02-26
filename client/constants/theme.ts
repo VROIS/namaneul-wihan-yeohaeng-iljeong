@@ -72,51 +72,51 @@ export const BorderRadius = {
 
 export const Typography = {
   display: {
+    fontFamily: "Pretendard-Bold",
     fontSize: 32,
     lineHeight: 40,
-    fontWeight: "700" as const,
     letterSpacing: -0.5,
   },
   h1: {
+    fontFamily: "Pretendard-Bold",
     fontSize: 24,
     lineHeight: 32,
-    fontWeight: "700" as const,
     letterSpacing: -0.25,
   },
   h2: {
+    fontFamily: "Pretendard-SemiBold",
     fontSize: 20,
     lineHeight: 28,
-    fontWeight: "600" as const,
   },
   h3: {
+    fontFamily: "Pretendard-Medium",
     fontSize: 16,
     lineHeight: 24,
-    fontWeight: "600" as const,
   },
   body: {
+    fontFamily: "Pretendard-Regular",
     fontSize: 16,
     lineHeight: 24,
-    fontWeight: "400" as const,
   },
   small: {
+    fontFamily: "Pretendard-Regular",
     fontSize: 14,
     lineHeight: 20,
-    fontWeight: "400" as const,
   },
   caption: {
+    fontFamily: "Pretendard-Medium",
     fontSize: 12,
     lineHeight: 16,
-    fontWeight: "500" as const,
   },
   label: {
+    fontFamily: "Pretendard-Medium",
     fontSize: 14,
     lineHeight: 20,
-    fontWeight: "500" as const,
   },
   link: {
+    fontFamily: "Pretendard-Regular",
     fontSize: 16,
     lineHeight: 24,
-    fontWeight: "400" as const,
   },
 };
 
@@ -144,26 +144,12 @@ export const Shadows = {
   },
 };
 
-export const Fonts = Platform.select({
-  ios: {
-    sans: "system-ui",
-    serif: "ui-serif",
-    rounded: "ui-rounded",
-    mono: "ui-monospace",
-  },
-  default: {
-    sans: "normal",
-    serif: "serif",
-    rounded: "normal",
-    mono: "monospace",
-  },
-  web: {
-    sans: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
-    serif: "Georgia, 'Times New Roman', serif",
-    rounded: "'SF Pro Rounded', 'Hiragino Maru Gothic ProN', Meiryo, 'MS PGothic', sans-serif",
-    mono: "SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
-  },
-});
+export const Fonts = {
+  sans: "Pretendard-Regular",
+  medium: "Pretendard-Medium",
+  semiBold: "Pretendard-SemiBold",
+  bold: "Pretendard-Bold",
+};
 
 // Vibe Score 색상 (10점 만점 기준)
 export function getVibeScoreColor(score: number): string {

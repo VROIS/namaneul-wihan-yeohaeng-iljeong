@@ -14,15 +14,22 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useRoute, useNavigation } from "@react-navigation/native";
 import type { RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { Video, ResizeMode } from "expo-av";
 import * as FileSystem from "expo-file-system";
 import * as MediaLibrary from "expo-media-library";
 import * as Sharing from "expo-sharing";
 
-import { Spacing, BorderRadius, Brand, Typography, Colors } from "@/constants/theme";
+import {
+  Spacing,
+  BorderRadius,
+  Brand,
+  Typography,
+  Colors,
+  Fonts,
+} from "@/constants/theme";
 import ThemedText from "@/components/ThemedText";
+import Icon from "@/components/Icon";
 import { apiRequest } from "@/lib/query-client";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
@@ -49,7 +56,8 @@ export default function SavedTripDetailScreen() {
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? "light"];
   const insets = useSafeAreaInsets();
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const navigation =
+    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const route = useRoute<RouteProp<RootStackParamList, "SavedTripDetail">>();
   const { itineraryId } = route.params;
 
@@ -63,10 +71,13 @@ export default function SavedTripDetailScreen() {
   useEffect(() => {
     const loadItinerary = async () => {
       try {
-        const response = await apiRequest("GET", `/api/itineraries/${itineraryId}`);
+        const response = await apiRequest(
+          "GET",
+          `/api/itineraries/${itineraryId}`,
+        );
         const data = await response.json();
         setItinerary(data);
-        
+
         // 기존 영상 상태 확인
         if (data.videoStatus === "succeeded" && data.videoUrl) {
           setVideoStatus("succeeded");
@@ -89,7 +100,10 @@ export default function SavedTripDetailScreen() {
   const pollVideoStatus = async () => {
     const poll = async () => {
       try {
-        const response = await apiRequest("GET", `/api/itineraries/${itineraryId}/video`);
+        const response = await apiRequest(
+          "GET",
+          `/api/itineraries/${itineraryId}/video`,
+        );
         const data = await response.json();
 
         if (data.status === "succeeded" && data.videoUrl) {
@@ -114,7 +128,10 @@ export default function SavedTripDetailScreen() {
   const handleGenerateVideo = async () => {
     setVideoStatus("generating");
     try {
-      const response = await apiRequest("POST", `/api/itineraries/${itineraryId}/video/generate`);
+      const response = await apiRequest(
+        "POST",
+        `/api/itineraries/${itineraryId}/video/generate`,
+      );
       const data = await response.json();
 
       if (data.success && data.taskId) {
@@ -138,7 +155,10 @@ export default function SavedTripDetailScreen() {
       // 권한 요청
       const { status } = await MediaLibrary.requestPermissionsAsync();
       if (status !== "granted") {
-        Alert.alert("권한 필요", "영상을 저장하려면 미디어 라이브러리 접근 권한이 필요합니다.");
+        Alert.alert(
+          "권한 필요",
+          "영상을 저장하려면 미디어 라이브러리 접근 권한이 필요합니다.",
+        );
         return;
       }
 
@@ -146,7 +166,7 @@ export default function SavedTripDetailScreen() {
 
       // 파일 다운로드
       const filename = `nubi_trip_${itineraryId}_${Date.now()}.mp4`;
-      const fileUri = FileSystem.documentDirectory + filename;
+      const fileUri = (FileSystem as any).documentDirectory + filename;
 
       const downloadResult = await FileSystem.downloadAsync(videoUrl, fileUri);
 
@@ -161,13 +181,13 @@ export default function SavedTripDetailScreen() {
       }
     } catch (error) {
       console.error("[SavedTripDetail] 영상 저장 오류:", error);
-      
+
       // 웹에서는 공유 기능 사용
       if (Platform.OS === "web" && videoUrl) {
         window.open(videoUrl, "_blank");
         return;
       }
-      
+
       // 공유 폴백
       if (await Sharing.isAvailableAsync()) {
         Alert.alert(
@@ -175,8 +195,8 @@ export default function SavedTripDetailScreen() {
           "갤러리 저장에 실패했습니다. 공유하시겠습니까?",
           [
             { text: "취소", style: "cancel" },
-            { text: "공유", onPress: () => Sharing.shareAsync(videoUrl) }
-          ]
+            { text: "공유", onPress: () => Sharing.shareAsync(videoUrl) },
+          ],
         );
       } else {
         Alert.alert("오류", "영상 저장에 실패했습니다.");
@@ -186,22 +206,32 @@ export default function SavedTripDetailScreen() {
 
   const getVideoButtonText = () => {
     switch (videoStatus) {
-      case "idle": return "✨ AI 영상 만들기";
-      case "generating": return "🔄 요청 중...";
-      case "polling": return "⏳ 생성 중... (약 4분 소요)";
-      case "succeeded": return "✅ 완료! 다시 만들기";
-      case "failed": return "❌ 실패 - 다시 시도";
+      case "idle":
+        return "✨ AI 영상 만들기";
+      case "generating":
+        return "🔄 요청 중...";
+      case "polling":
+        return "⏳ 생성 중... (약 4분 소요)";
+      case "succeeded":
+        return "✅ 완료! 다시 만들기";
+      case "failed":
+        return "❌ 실패 - 다시 시도";
     }
   };
 
-  const isVideoButtonDisabled = videoStatus === "generating" || videoStatus === "polling";
+  const isVideoButtonDisabled =
+    videoStatus === "generating" || videoStatus === "polling";
 
   if (isLoading) {
     return (
-      <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
+      <View
+        style={[styles.container, { backgroundColor: theme.backgroundRoot }]}
+      >
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={Brand.primary} />
-          <Text style={[styles.loadingText, { color: theme.textSecondary }]}>불러오는 중...</Text>
+          <Text style={[styles.loadingText, { color: theme.textSecondary }]}>
+            불러오는 중...
+          </Text>
         </View>
       </View>
     );
@@ -209,19 +239,38 @@ export default function SavedTripDetailScreen() {
 
   if (!itinerary) {
     return (
-      <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
+      <View
+        style={[styles.container, { backgroundColor: theme.backgroundRoot }]}
+      >
         <View style={styles.errorContainer}>
-          <Feather name="alert-circle" size={48} color={theme.textTertiary} />
-          <Text style={[styles.errorText, { color: theme.textSecondary }]}>일정을 찾을 수 없습니다</Text>
+          <Icon name="alert-circle" size={48} color={theme.textTertiary} />
+          <Text style={[styles.errorText, { color: theme.textSecondary }]}>
+            일정을 찾을 수 없습니다
+          </Text>
         </View>
       </View>
     );
   }
 
   // 라벨 매핑
-  const curationLabels: Record<string, string> = { Kids: "아이", Parents: "부모님", Everyone: "모두", Self: "나" };
-  const companionLabels: Record<string, string> = { Single: "혼자", Couple: "커플", Family: "가족", ExtendedFamily: "대가족", Group: "친구들" };
-  const paceLabels: Record<string, string> = { Relaxed: "여유롭게", Normal: "적당히", Packed: "빡빡하게" };
+  const curationLabels: Record<string, string> = {
+    Kids: "아이",
+    Parents: "부모님",
+    Everyone: "모두",
+    Self: "나",
+  };
+  const companionLabels: Record<string, string> = {
+    Single: "혼자",
+    Couple: "커플",
+    Family: "가족",
+    ExtendedFamily: "대가족",
+    Group: "친구들",
+  };
+  const paceLabels: Record<string, string> = {
+    Relaxed: "여유롭게",
+    Normal: "적당히",
+    Packed: "빡빡하게",
+  };
 
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
@@ -234,14 +283,22 @@ export default function SavedTripDetailScreen() {
       >
         {/* 헤더 */}
         <View style={styles.header}>
-          <Pressable style={styles.backButton} onPress={() => navigation.goBack()}>
-            <Feather name="arrow-left" size={24} color={theme.text} />
+          <Pressable
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+          >
+            <Icon name="arrow-left" size={24} color={theme.text} />
           </Pressable>
           <ThemedText style={styles.title}>{itinerary.title}</ThemedText>
         </View>
 
         {/* 🎬 영상 카드 */}
-        <View style={[styles.videoCard, { backgroundColor: theme.backgroundDefault }]}>
+        <View
+          style={[
+            styles.videoCard,
+            { backgroundColor: theme.backgroundDefault },
+          ]}
+        >
           {videoStatus === "succeeded" && videoUrl ? (
             // ✅ 영상 완료: 비디오 플레이어 + 저장 버튼
             <View style={styles.videoPlayerContainer}>
@@ -253,16 +310,24 @@ export default function SavedTripDetailScreen() {
                 isLooping
                 shouldPlay={false}
               />
-              <Pressable style={styles.saveVideoButton} onPress={handleSaveVideo}>
-                <Feather name="download" size={20} color="#FFFFFF" />
+              <Pressable
+                style={styles.saveVideoButton}
+                onPress={handleSaveVideo}
+              >
+                <Icon name="download" size={20} color="#FFFFFF" />
                 <Text style={styles.saveVideoButtonText}>💾 영상 저장</Text>
               </Pressable>
-              <Pressable 
-                style={[styles.regenerateButton, { borderColor: theme.border }]} 
+              <Pressable
+                style={[styles.regenerateButton, { borderColor: theme.border }]}
                 onPress={handleGenerateVideo}
               >
-                <Feather name="refresh-cw" size={16} color={theme.textSecondary} />
-                <Text style={[styles.regenerateButtonText, { color: theme.textSecondary }]}>
+                <Icon name="refresh-cw" size={16} color={theme.textSecondary} />
+                <Text
+                  style={[
+                    styles.regenerateButtonText,
+                    { color: theme.textSecondary },
+                  ]}
+                >
                   다시 생성하기
                 </Text>
               </Pressable>
@@ -274,10 +339,14 @@ export default function SavedTripDetailScreen() {
               style={styles.videoCardGradient}
             >
               <View style={styles.videoCardHeader}>
-                <Feather name="film" size={24} color={Brand.primary} />
-                <Text style={[styles.videoCardTitle, { color: theme.text }]}>AI 여행 영상</Text>
+                <Icon name="film" size={24} color={Brand.primary} />
+                <Text style={[styles.videoCardTitle, { color: theme.text }]}>
+                  AI 여행 영상
+                </Text>
               </View>
-              <Text style={[styles.videoCardDesc, { color: theme.textSecondary }]}>
+              <Text
+                style={[styles.videoCardDesc, { color: theme.textSecondary }]}
+              >
                 저장된 일정을 기반으로 지브리 스타일의 감동 영상을 만들어 드려요
               </Text>
 
@@ -289,12 +358,21 @@ export default function SavedTripDetailScreen() {
                 onPress={handleGenerateVideo}
                 disabled={isVideoButtonDisabled}
               >
-                {isVideoButtonDisabled && <ActivityIndicator color="#fff" style={styles.videoButtonSpinner} />}
-                <Text style={styles.videoButtonText}>{getVideoButtonText()}</Text>
+                {isVideoButtonDisabled && (
+                  <ActivityIndicator
+                    color="#fff"
+                    style={styles.videoButtonSpinner}
+                  />
+                )}
+                <Text style={styles.videoButtonText}>
+                  {getVideoButtonText()}
+                </Text>
               </Pressable>
 
               {videoStatus === "polling" && (
-                <Text style={[styles.progressText, { color: theme.textSecondary }]}>
+                <Text
+                  style={[styles.progressText, { color: theme.textSecondary }]}
+                >
                   여러 장면을 순차적으로 생성하고 있습니다...
                 </Text>
               )}
@@ -303,36 +381,55 @@ export default function SavedTripDetailScreen() {
         </View>
 
         {/* 일정 정보 */}
-        <View style={[styles.infoCard, { backgroundColor: theme.backgroundDefault }]}>
-          <Text style={[styles.infoTitle, { color: theme.text }]}>여행 정보</Text>
-          
+        <View
+          style={[
+            styles.infoCard,
+            { backgroundColor: theme.backgroundDefault },
+          ]}
+        >
+          <Text style={[styles.infoTitle, { color: theme.text }]}>
+            여행 정보
+          </Text>
+
           <View style={styles.infoRow}>
-            <Feather name="calendar" size={16} color={theme.textSecondary} />
-            <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>날짜</Text>
+            <Icon name="calendar" size={16} color={theme.textSecondary} />
+            <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>
+              날짜
+            </Text>
             <Text style={[styles.infoValue, { color: theme.text }]}>
-              {itinerary.startDate?.split("T")[0]} ~ {itinerary.endDate?.split("T")[0]}
+              {itinerary.startDate?.split("T")[0]} ~{" "}
+              {itinerary.endDate?.split("T")[0]}
             </Text>
           </View>
 
           <View style={styles.infoRow}>
-            <Feather name="users" size={16} color={theme.textSecondary} />
-            <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>동행</Text>
+            <Icon name="users" size={16} color={theme.textSecondary} />
+            <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>
+              동행
+            </Text>
             <Text style={[styles.infoValue, { color: theme.text }]}>
-              {companionLabels[itinerary.companionType] || itinerary.companionType} ({itinerary.companionCount}명)
+              {companionLabels[itinerary.companionType] ||
+                itinerary.companionType}{" "}
+              ({itinerary.companionCount}명)
             </Text>
           </View>
 
           <View style={styles.infoRow}>
-            <Feather name="heart" size={16} color={theme.textSecondary} />
-            <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>누구를 위한</Text>
+            <Icon name="heart" size={16} color={theme.textSecondary} />
+            <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>
+              누구를 위한
+            </Text>
             <Text style={[styles.infoValue, { color: theme.text }]}>
-              {curationLabels[itinerary.curationFocus] || itinerary.curationFocus}
+              {curationLabels[itinerary.curationFocus] ||
+                itinerary.curationFocus}
             </Text>
           </View>
 
           <View style={styles.infoRow}>
-            <Feather name="zap" size={16} color={theme.textSecondary} />
-            <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>일정 밀도</Text>
+            <Icon name="zap" size={16} color={theme.textSecondary} />
+            <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>
+              일정 밀도
+            </Text>
             <Text style={[styles.infoValue, { color: theme.text }]}>
               {paceLabels[itinerary.travelPace] || itinerary.travelPace}
             </Text>
@@ -340,12 +437,24 @@ export default function SavedTripDetailScreen() {
 
           {itinerary.vibes && itinerary.vibes.length > 0 && (
             <View style={styles.vibesRow}>
-              <Feather name="star" size={16} color={theme.textSecondary} />
-              <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>바이브</Text>
+              <Icon name="star" size={16} color={theme.textSecondary} />
+              <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>
+                바이브
+              </Text>
               <View style={styles.vibesTags}>
                 {itinerary.vibes.map((vibe, index) => (
-                  <View key={index} style={[styles.vibeTag, { backgroundColor: `${Brand.primary}15` }]}>
-                    <Text style={[styles.vibeTagText, { color: Brand.primary }]}>{vibe}</Text>
+                  <View
+                    key={index}
+                    style={[
+                      styles.vibeTag,
+                      { backgroundColor: `${Brand.primary}15` },
+                    ]}
+                  >
+                    <Text
+                      style={[styles.vibeTagText, { color: Brand.primary }]}
+                    >
+                      {vibe}
+                    </Text>
                   </View>
                 ))}
               </View>
@@ -393,7 +502,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 24,
-    fontWeight: "800",
+    fontFamily: Fonts.bold,
     flex: 1,
   },
   videoCard: {
@@ -412,7 +521,7 @@ const styles = StyleSheet.create({
   },
   videoCardTitle: {
     fontSize: 18,
-    fontWeight: "700",
+    fontFamily: Fonts.bold,
   },
   videoCardDesc: {
     fontSize: 14,
@@ -438,7 +547,7 @@ const styles = StyleSheet.create({
   videoButtonText: {
     color: "#FFFFFF",
     fontSize: 16,
-    fontWeight: "700",
+    fontFamily: Fonts.bold,
   },
   progressText: {
     fontSize: 13,
@@ -469,7 +578,7 @@ const styles = StyleSheet.create({
   saveVideoButtonText: {
     color: "#FFFFFF",
     fontSize: 16,
-    fontWeight: "700",
+    fontFamily: Fonts.bold,
   },
   regenerateButton: {
     flexDirection: "row",
@@ -484,7 +593,7 @@ const styles = StyleSheet.create({
   },
   regenerateButtonText: {
     fontSize: 14,
-    fontWeight: "500",
+    fontFamily: Fonts.medium,
   },
   infoCard: {
     padding: Spacing.lg,
@@ -492,7 +601,7 @@ const styles = StyleSheet.create({
   },
   infoTitle: {
     fontSize: 16,
-    fontWeight: "700",
+    fontFamily: Fonts.bold,
     marginBottom: Spacing.md,
   },
   infoRow: {
@@ -507,7 +616,7 @@ const styles = StyleSheet.create({
   },
   infoValue: {
     fontSize: 14,
-    fontWeight: "600",
+    fontFamily: Fonts.semiBold,
     flex: 1,
   },
   vibesRow: {
@@ -529,6 +638,6 @@ const styles = StyleSheet.create({
   },
   vibeTagText: {
     fontSize: 12,
-    fontWeight: "600",
+    fontFamily: Fonts.semiBold,
   },
 });

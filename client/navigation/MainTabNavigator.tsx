@@ -1,10 +1,11 @@
 import React from "react";
 import { StyleSheet, Platform, useColorScheme, View } from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-import { Feather } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+
+import Icon from "@/components/Icon";
 
 import { Brand, Colors } from "@/constants/theme";
 import TripPlannerScreen from "@/screens/TripPlannerScreen";
@@ -16,7 +17,7 @@ import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 export type MainTabParamList = {
   Home: undefined;
   Map: undefined;
-  Verify: undefined;  // 검증 센터 (센터 위치)
+  Verify: undefined; // 검증 센터 (센터 위치)
   Profile: undefined;
   Admin: undefined;
 };
@@ -38,11 +39,16 @@ export default function MainTabNavigator() {
   const isDark = colorScheme === "dark";
   const theme = Colors[colorScheme ?? "light"];
   const { showMap, toggleMap } = useMapToggle();
-  const rootNavigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const rootNavigation =
+    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
-  const getTabBarIcon = (routeName: string, color: string, focused: boolean) => {
-    let iconName: keyof typeof Feather.glyphMap;
-    
+  const getTabBarIcon = (
+    routeName: string,
+    color: string,
+    focused: boolean,
+  ) => {
+    let iconName: string;
+
     switch (routeName) {
       case "Home":
         iconName = "edit-3";
@@ -51,7 +57,7 @@ export default function MainTabNavigator() {
         iconName = "map";
         break;
       case "Verify":
-        iconName = "check-circle";  // ✅ 전문가 검증
+        iconName = "check-circle"; // ✅ 전문가 검증
         break;
       case "Profile":
         iconName = "user";
@@ -62,15 +68,16 @@ export default function MainTabNavigator() {
       default:
         iconName = "circle";
     }
-    
-    return <Feather name={iconName} size={24} color={color} />;
+
+    return <Icon name={iconName} size={24} color={color} />;
   };
 
   return (
     <>
       <Tab.Navigator
         screenOptions={({ route }) => ({
-          tabBarIcon: ({ color, focused }) => getTabBarIcon(route.name, color, focused),
+          tabBarIcon: ({ color, focused }) =>
+            getTabBarIcon(route.name, color, focused),
           tabBarActiveTintColor: Brand.primary,
           tabBarInactiveTintColor: theme.textTertiary,
           tabBarStyle: {
@@ -124,17 +131,17 @@ export default function MainTabNavigator() {
             headerShown: false,
             // 지도 활성화 상태에 따라 아이콘 색상 변경
             tabBarIcon: ({ focused }) => (
-              <Feather 
-                name={showMap ? "x" : "map"} 
-                size={24} 
-                color={showMap ? Brand.primary : theme.textTertiary} 
+              <Icon
+                name={showMap ? "x" : "map"}
+                size={24}
+                color={showMap ? Brand.primary : theme.textTertiary}
               />
             ),
           }}
           listeners={{
             tabPress: (e) => {
-              e.preventDefault();  // 화면 이동 방지
-              toggleMap();         // 지도 토글
+              e.preventDefault(); // 화면 이동 방지
+              toggleMap(); // 지도 토글
             },
           }}
         />

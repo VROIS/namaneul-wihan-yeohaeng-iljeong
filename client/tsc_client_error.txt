@@ -1,0 +1,823 @@
+﻿../_agent/skills/react-components/examples/gold-standard-card.tsx(20,26): error TS2307: Cannot find module '../data/mockData' or its corresponding type declarations.
+../_agent/skills/remotion/examples/WalkthroughComposition.tsx(1,27): error TS2307: Cannot find module 'remotion' or its corresponding type declarations.
+../_agent/skills/remotion/examples/WalkthroughComposition.tsx(2,24): error TS2307: Cannot find module 'remotion' or its corresponding type declarations.
+../_agent/skills/remotion/examples/WalkthroughComposition.tsx(3,20): error TS2307: Cannot find module '@remotion/transitions/fade' or its corresponding type declarations.
+../_agent/skills/remotion/examples/WalkthroughComposition.tsx(4,21): error TS2307: Cannot find module '@remotion/transitions/slide' or its corresponding type declarations.
+../_agent/skills/remotion/examples/WalkthroughComposition.tsx(5,32): error TS2307: Cannot find module '@remotion/transitions' or its corresponding type declarations.
+../_agent/skills/remotion/examples/WalkthroughComposition.tsx(6,27): error TS2307: Cannot find module './ScreenSlide' or its corresponding type declarations.
+../_agent/skills/remotion/examples/WalkthroughComposition.tsx(7,29): error TS2307: Cannot find module '../screens.json' or its corresponding type declarations.
+../_agent/skills/remotion/examples/WalkthroughComposition.tsx(12,6): error TS7006: Parameter 'sum' implicitly has an 'any' type.
+../_agent/skills/remotion/examples/WalkthroughComposition.tsx(12,11): error TS7006: Parameter 'screen' implicitly has an 'any' type.
+../_agent/skills/remotion/examples/WalkthroughComposition.tsx(23,37): error TS7006: Parameter 'screen' implicitly has an 'any' type.
+../_agent/skills/remotion/examples/WalkthroughComposition.tsx(23,45): error TS7006: Parameter 'index' implicitly has an 'any' type.
+../_agent/skills/remotion/resources/screen-slide-template.tsx(1,69): error TS2307: Cannot find module 'remotion' or its corresponding type declarations.
+../_agent/skills/remotion/resources/screen-slide-template.tsx(2,19): error TS2307: Cannot find module 'remotion' or its corresponding type declarations.
+../_agent/skills/shadcn-ui/examples/auth-layout.tsx(6,24): error TS2307: Cannot find module '@/components/ui/button' or its corresponding type declarations.
+../_agent/skills/shadcn-ui/examples/auth-layout.tsx(14,8): error TS2307: Cannot find module '@/components/ui/card' or its corresponding type declarations.
+../_agent/skills/shadcn-ui/examples/auth-layout.tsx(15,23): error TS2307: Cannot find module '@/components/ui/input' or its corresponding type declarations.
+../_agent/skills/shadcn-ui/examples/auth-layout.tsx(16,23): error TS2307: Cannot find module '@/components/ui/label' or its corresponding type declarations.
+../_agent/skills/shadcn-ui/examples/auth-layout.tsx(17,58): error TS2307: Cannot find module '@/components/ui/tabs' or its corresponding type declarations.
+../_agent/skills/shadcn-ui/examples/data-table.tsx(16,8): error TS2307: Cannot find module '@tanstack/react-table' or its corresponding type declarations.
+../_agent/skills/shadcn-ui/examples/data-table.tsx(17,58): error TS2307: Cannot find module 'lucide-react' or its corresponding type declarations.
+../_agent/skills/shadcn-ui/examples/data-table.tsx(20,24): error TS2307: Cannot find module '@/components/ui/button' or its corresponding type declarations.
+../_agent/skills/shadcn-ui/examples/data-table.tsx(29,8): error TS2307: Cannot find module '@/components/ui/dropdown-menu' or its corresponding type declarations.
+../_agent/skills/shadcn-ui/examples/data-table.tsx(30,23): error TS2307: Cannot find module '@/components/ui/input' or its corresponding type declarations.
+../_agent/skills/shadcn-ui/examples/data-table.tsx(38,8): error TS2307: Cannot find module '@/components/ui/table' or its corresponding type declarations.
+../_agent/skills/shadcn-ui/examples/data-table.tsx(78,16): error TS7031: Binding element 'column' implicitly has an 'any' type.
+../_agent/skills/shadcn-ui/examples/data-table.tsx(89,14): error TS7031: Binding element 'row' implicitly has an 'any' type.
+../_agent/skills/shadcn-ui/examples/data-table.tsx(93,16): error TS7031: Binding element 'column' implicitly has an 'any' type.
+../_agent/skills/shadcn-ui/examples/data-table.tsx(104,14): error TS7031: Binding element 'row' implicitly has an 'any' type.
+../_agent/skills/shadcn-ui/examples/data-table.tsx(109,14): error TS7031: Binding element 'row' implicitly has an 'any' type.
+../_agent/skills/shadcn-ui/examples/data-table.tsx(116,14): error TS7031: Binding element 'row' implicitly has an 'any' type.
+../_agent/skills/shadcn-ui/examples/data-table.tsx(123,14): error TS7031: Binding element 'row' implicitly has an 'any' type.
+../_agent/skills/shadcn-ui/examples/data-table.tsx(182,22): error TS7006: Parameter 'event' implicitly has an 'any' type.
+../_agent/skills/shadcn-ui/examples/data-table.tsx(196,24): error TS7006: Parameter 'column' implicitly has an 'any' type.
+../_agent/skills/shadcn-ui/examples/data-table.tsx(197,21): error TS7006: Parameter 'column' implicitly has an 'any' type.
+../_agent/skills/shadcn-ui/examples/data-table.tsx(203,39): error TS7006: Parameter 'value' implicitly has an 'any' type.
+../_agent/skills/shadcn-ui/examples/data-table.tsx(217,43): error TS7006: Parameter 'headerGroup' implicitly has an 'any' type.
+../_agent/skills/shadcn-ui/examples/data-table.tsx(219,43): error TS7006: Parameter 'header' implicitly has an 'any' type.
+../_agent/skills/shadcn-ui/examples/data-table.tsx(236,45): error TS7006: Parameter 'row' implicitly has an 'any' type.
+../_agent/skills/shadcn-ui/examples/data-table.tsx(241,47): error TS7006: Parameter 'cell' implicitly has an 'any' type.
+../_agent/skills/shadcn-ui/examples/form-pattern.tsx(6,24): error TS2307: Cannot find module '@/components/ui/button' or its corresponding type declarations.
+../_agent/skills/shadcn-ui/examples/form-pattern.tsx(15,8): error TS2307: Cannot find module '@/components/ui/form' or its corresponding type declarations.
+../_agent/skills/shadcn-ui/examples/form-pattern.tsx(16,23): error TS2307: Cannot find module '@/components/ui/input' or its corresponding type declarations.
+../_agent/skills/shadcn-ui/examples/form-pattern.tsx(23,8): error TS2307: Cannot find module '@/components/ui/select' or its corresponding type declarations.
+../_agent/skills/shadcn-ui/examples/form-pattern.tsx(24,26): error TS2307: Cannot find module '@/components/ui/textarea' or its corresponding type declarations.
+../_agent/skills/shadcn-ui/examples/form-pattern.tsx(25,23): error TS2307: Cannot find module '@/components/ui/use-toast' or its corresponding type declarations.
+../_agent/skills/shadcn-ui/examples/form-pattern.tsx(26,29): error TS2307: Cannot find module '@hookform/resolvers/zod' or its corresponding type declarations.
+../_agent/skills/shadcn-ui/examples/form-pattern.tsx(27,25): error TS2307: Cannot find module 'react-hook-form' or its corresponding type declarations.
+../_agent/skills/shadcn-ui/examples/form-pattern.tsx(76,22): error TS7031: Binding element 'field' implicitly has an 'any' type.
+../_agent/skills/shadcn-ui/examples/form-pattern.tsx(93,22): error TS7031: Binding element 'field' implicitly has an 'any' type.
+../_agent/skills/shadcn-ui/examples/form-pattern.tsx(107,22): error TS7031: Binding element 'field' implicitly has an 'any' type.
+../_agent/skills/shadcn-ui/examples/form-pattern.tsx(133,22): error TS7031: Binding element 'field' implicitly has an 'any' type.
+components/ErrorFallback.tsx(126,44): error TS2339: Property 'mono' does not exist on type '{ sans: string; medium: string; semiBold: string; bold: string; }'.
+navigation/MainTabNavigator26.tsx(27,11): error TS2353: Object literal may only specify known properties, and 'icon' does not exist in type 'NativeBottomTabNavigationOptions | ((props: { route: RouteProp<MainTabParamList, "HomeTab">; navigation: NativeBottomTabNavigationProp<MainTabParamList, "HomeTab", string | undefined>; theme: Theme; }) => NativeBottomTabNavigationOptions)'.
+navigation/MainTabNavigator26.tsx(40,11): error TS2353: Object literal may only specify known properties, and 'icon' does not exist in type 'NativeBottomTabNavigationOptions | ((props: { route: RouteProp<MainTabParamList, "ProfileTab">; navigation: NativeBottomTabNavigationProp<MainTabParamList, "ProfileTab", string | undefined>; theme: Theme; }) => NativeBottomTabNavigationOptions)'.
+screens/DestinationDetailScreen.tsx(32,28): error TS2339: Property 'finalScore' does not exist on type '{}'.
+screens/DestinationDetailScreen.tsx(44,35): error TS2339: Property 'photoUrls' does not exist on type '{}'.
+screens/DestinationDetailScreen.tsx(73,25): error TS2339: Property 'name' does not exist on type '{}'.
+screens/DestinationDetailScreen.tsx(78,27): error TS2339: Property 'address' does not exist on type '{}'.
+screens/DestinationDetailScreen.tsx(95,22): error TS2339: Property 'vibeKeywords' does not exist on type '{}'.
+screens/DestinationDetailScreen.tsx(113,19): error TS2339: Property 'type' does not exist on type '{}'.
+screens/DestinationDetailScreen.tsx(113,51): error TS2339: Property 'isVerified' does not exist on type '{}'.
+screens/LoginScreen.tsx(138,54): error TS2345: Argument of type '{ type: "success" | "error"; errorCode: string | null; error?: AuthError | null | undefined; params: Record<string, string>; authentication: TokenResponse | null; url: string; }' is not assignable to parameter of type '{ type: string; params?: { id_token?: string | undefined; } | undefined; authentication?: { idToken?: string | undefined; } | undefined; }'.
+  Types of property 'authentication' are incompatible.
+    Type 'TokenResponse | null' is not assignable to type '{ idToken?: string | undefined; } | undefined'.
+      Type 'null' is not assignable to type '{ idToken?: string | undefined; } | undefined'.
+screens/OnboardingScreen.tsx(140,3): error TS1232: An import declaration can only be used at the top level of a namespace or module.
+screens/OnboardingScreen.tsx(140,20): error TS2307: Cannot find module '@/components/Icon' or its corresponding type declarations.
+screens/PlanModalScreen.tsx(33,58): error TS2345: Argument of type '{ birthDate: string; companionType: "Family"; companionCount: number; companionAges: string; curationFocus: "Everyone"; destination: string; startDate: string; startTime: string; endDate: string; endTime: string; vibes: never[]; travelStyle: "Reasonable"; }' is not assignable to parameter of type 'TripFormData | (() => TripFormData)'.
+  Type '{ birthDate: string; companionType: "Family"; companionCount: number; companionAges: string; curationFocus: "Everyone"; destination: string; startDate: string; startTime: string; endDate: string; endTime: string; vibes: never[]; travelStyle: "Reasonable"; }' is missing the following properties from type 'TripFormData': travelPace, mobilityStyle
+screens/PlanModalScreen.tsx(173,25): error TS2339: Property 'description' does not exist on type '{ id: CurationFocus; label: string; icon: string; }'.
+screens/PlanModalScreen.tsx(356,24): error TS2339: Property 'description' does not exist on type '{ id: TravelStyle; label: string; icon: string; priceLevel: number; transport: string; dining: string; guide: string; placesPerDay: number; includesGuidePrice: boolean; }'.
+screens/SavedTripDetailScreen.tsx(149,34): error TS2339: Property 'documentDirectory' does not exist on type 'typeof import("C:/Users/SY Lee/Desktop/nubi-clean/node_modules/expo-file-system/build/index")'.
+screens/TripPlannerScreen.tsx(299,48): error TS2339: Property 'transit' does not exist on type 'DayPlan'.
+screens/TripPlannerScreen.tsx(706,11): error TS2322: Type '{ text: string; textSecondary: string; textTertiary: string; buttonText: string; tabIconDefault: string; tabIconSelected: string; link: string; backgroundRoot: string; backgroundDefault: string; ... 6 more ...; info: string; } | { ...; }' is not assignable to type '{ text: string; textSecondary: string; textTertiary: string; backgroundDefault: string; background: string; }'.
+  Property 'background' is missing in type '{ text: string; textSecondary: string; textTertiary: string; buttonText: string; tabIconDefault: string; tabIconSelected: string; link: string; backgroundRoot: string; backgroundDefault: string; ... 6 more ...; info: string; }' but required in type '{ text: string; textSecondary: string; textTertiary: string; backgroundDefault: string; background: string; }'.
+screens/TripPlannerScreen.tsx(737,11): error TS2322: Type '{ text: string; textSecondary: string; textTertiary: string; buttonText: string; tabIconDefault: string; tabIconSelected: string; link: string; backgroundRoot: string; backgroundDefault: string; ... 6 more ...; info: string; } | { ...; }' is not assignable to type '{ text: string; textSecondary: string; textTertiary: string; backgroundDefault: string; background: string; }'.
+  Property 'background' is missing in type '{ text: string; textSecondary: string; textTertiary: string; buttonText: string; tabIconDefault: string; tabIconSelected: string; link: string; backgroundRoot: string; backgroundDefault: string; ... 6 more ...; info: string; }' but required in type '{ text: string; textSecondary: string; textTertiary: string; backgroundDefault: string; background: string; }'.
+screens/TripPlannerScreen.tsx(1021,15): error TS2322: Type '0 | { backgroundColor: string; } | null' is not assignable to type 'Falsy | ViewStyle | RegisteredStyle<ViewStyle> | RecursiveArray<Falsy | ViewStyle | RegisteredStyle<ViewStyle>> | readonly (Falsy | ... 1 more ... | RegisteredStyle<...>)[]'.
+  Type '0' is not assignable to type 'Falsy | ViewStyle | RegisteredStyle<ViewStyle> | RecursiveArray<Falsy | ViewStyle | RegisteredStyle<ViewStyle>> | readonly (Falsy | ... 1 more ... | RegisteredStyle<...>)[]'.
+screens/TripPlannerScreen.tsx(1182,94): error TS2339: Property 'theme' does not exist on type 'DayPlan'.
+screens/TripPlannerScreen.tsx(1235,53): error TS2339: Property 'transit' does not exist on type 'DayPlan'.
+screens/TripPlannerScreen.tsx(1508,78): error TS2339: Property 'background' does not exist on type '{ text: string; textSecondary: string; textTertiary: string; buttonText: string; tabIconDefault: string; tabIconSelected: string; link: string; backgroundRoot: string; backgroundDefault: string; ... 6 more ...; info: string; } | { ...; }'.
+  Property 'background' does not exist on type '{ text: string; textSecondary: string; textTertiary: string; buttonText: string; tabIconDefault: string; tabIconSelected: string; link: string; backgroundRoot: string; backgroundDefault: string; ... 6 more ...; info: string; }'.
+screens/TripPlannerScreen.tsx(1526,19): error TS2322: Type '{ text: string; textSecondary: string; textTertiary: string; buttonText: string; tabIconDefault: string; tabIconSelected: string; link: string; backgroundRoot: string; backgroundDefault: string; ... 6 more ...; info: string; } | { ...; }' is not assignable to type '{ text: string; textSecondary: string; textTertiary: string; backgroundDefault: string; background: string; }'.
+  Property 'background' is missing in type '{ text: string; textSecondary: string; textTertiary: string; buttonText: string; tabIconDefault: string; tabIconSelected: string; link: string; backgroundRoot: string; backgroundDefault: string; ... 6 more ...; info: string; }' but required in type '{ text: string; textSecondary: string; textTertiary: string; backgroundDefault: string; background: string; }'.
+screens/TripPlannerScreen.tsx(1895,17): error TS1355: A 'const' assertions can only be applied to references to enum members, or string, number, boolean, array, or object literals.
+../dev/check-google-user.ts(14,29): error TS18047: 'db' is possibly 'null'.
+../dev/check-google-user.ts(33,26): error TS18047: 'db' is possibly 'null'.
+../dev/configure-france-auto-policy.ts(2,16): error TS7016: Could not find a declaration file for module 'pg'. 'C:/Users/SY Lee/Desktop/nubi-clean/node_modules/pg/esm/index.mjs' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/pg` if it exists or add a new declaration (.d.ts) file containing `declare module 'pg';`
+../dev/diagnose-consolidation.ts(7,31): error TS18047: 'db' is possibly 'null'.
+../dev/diagnose-consolidation.ts(22,28): error TS18047: 'db' is possibly 'null'.
+../dev/diagnose-consolidation.ts(31,24): error TS18047: 'db' is possibly 'null'.
+../dev/diagnose-consolidation.ts(42,27): error TS18047: 'db' is possibly 'null'.
+../dev/diagnose-consolidation.ts(51,29): error TS18047: 'db' is possibly 'null'.
+../dev/diagnose-consolidation.ts(59,30): error TS18047: 'db' is possibly 'null'.
+../dev/diagnose-consolidation.ts(68,29): error TS18047: 'db' is possibly 'null'.
+../dev/diagnose-consolidation.ts(79,29): error TS18047: 'db' is possibly 'null'.
+../dev/report-consolidation-status.ts(6,19): error TS18047: 'db' is possibly 'null'.
+../dev/report-consolidation-status.ts(37,20): error TS18047: 'db' is possibly 'null'.
+../dev/report-google-place-id-status.ts(6,19): error TS18047: 'db' is possibly 'null'.
+../dev/report-google-place-id-status.ts(24,24): error TS18047: 'db' is possibly 'null'.
+../scripts/add-seedance-api-key.ts(9,16): error TS7016: Could not find a declaration file for module 'pg'. 'C:/Users/SY Lee/Desktop/nubi-clean/node_modules/pg/esm/index.mjs' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/pg` if it exists or add a new declaration (.d.ts) file containing `declare module 'pg';`
+../scripts/check-prices.ts(8,29): error TS18047: 'db' is possibly 'null'.
+../scripts/check-prices.ts(9,33): error TS18047: 'db' is possibly 'null'.
+../scripts/check-prices.ts(17,30): error TS18047: 'db' is possibly 'null'.
+../scripts/count-places.ts(7,23): error TS18047: 'db' is possibly 'null'.
+../scripts/crawl-missing-places.ts(17,32): error TS18047: 'db' is possibly 'null'.
+../scripts/crawl-missing-places.ts(21,34): error TS18047: 'db' is possibly 'null'.
+../scripts/crawl-missing-places.ts(25,34): error TS18047: 'db' is possibly 'null'.
+../scripts/db_cleanup.ts(1,234): error TS18047: 'db' is possibly 'null'.
+../scripts/debug-city-matching.ts(12,25): error TS18047: 'db' is possibly 'null'.
+../scripts/debug-city-matching.ts(16,27): error TS18047: 'db' is possibly 'null'.
+../scripts/debug-db-status.ts(10,27): error TS18047: 'db' is possibly 'null'.
+../scripts/debug-db-status.ts(20,32): error TS18047: 'db' is possibly 'null'.
+../scripts/debug-db-status.ts(23,30): error TS18047: 'db' is possibly 'null'.
+../scripts/debug-name-matching.ts(10,28): error TS18047: 'db' is possibly 'null'.
+../scripts/debug-name-matching.ts(18,34): error TS18047: 'db' is possibly 'null'.
+../scripts/fix-schema-manual.ts(10,15): error TS18047: 'db' is possibly 'null'.
+../scripts/get-latest-itinerary-id.ts(3,16): error TS7016: Could not find a declaration file for module 'pg'. 'C:/Users/SY Lee/Desktop/nubi-clean/node_modules/pg/esm/index.mjs' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/pg` if it exists or add a new declaration (.d.ts) file containing `declare module 'pg';`
+../scripts/get-latest-itinerary-id.ts(24,26): error TS7006: Parameter 'row' implicitly has an 'any' type.
+../scripts/list-byteplus-models.ts(3,16): error TS7016: Could not find a declaration file for module 'pg'. 'C:/Users/SY Lee/Desktop/nubi-clean/node_modules/pg/esm/index.mjs' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/pg` if it exists or add a new declaration (.d.ts) file containing `declare module 'pg';`
+../scripts/list-columns.ts(7,22): error TS18047: 'db' is possibly 'null'.
+../scripts/list-columns.ts(11,22): error TS18047: 'db' is possibly 'null'.
+../scripts/list-tables.ts(6,23): error TS18047: 'db' is possibly 'null'.
+../scripts/migrate-add-raw-data.ts(3,16): error TS7016: Could not find a declaration file for module 'pg'. 'C:/Users/SY Lee/Desktop/nubi-clean/node_modules/pg/esm/index.mjs' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/pg` if it exists or add a new declaration (.d.ts) file containing `declare module 'pg';`
+../scripts/report-consolidation.ts(10,27): error TS18047: 'db' is possibly 'null'.
+../scripts/report-consolidation.ts(14,29): error TS18047: 'db' is possibly 'null'.
+../scripts/report-consolidation.ts(18,25): error TS18047: 'db' is possibly 'null'.
+../scripts/report-consolidation.ts(22,26): error TS18047: 'db' is possibly 'null'.
+../scripts/report-consolidation.ts(26,27): error TS18047: 'db' is possibly 'null'.
+../scripts/report-consolidation.ts(30,26): error TS18047: 'db' is possibly 'null'.
+../scripts/sync-master-place-seed.ts(42,28): error TS18047: 'db' is possibly 'null'.
+../scripts/sync-master-place-seed.ts(48,29): error TS18047: 'db' is possibly 'null'.
+../scripts/sync-master-place-seed.ts(78,34): error TS18047: 'db' is possibly 'null'.
+../scripts/sync-master-place-seed.ts(106,39): error TS18047: 'db' is possibly 'null'.
+../scripts/sync-master-place-seed.ts(122,44): error TS18047: 'db' is possibly 'null'.
+../scripts/sync-master-place-seed.ts(135,39): error TS18047: 'db' is possibly 'null'.
+../scripts/sync-master-place-seed.ts(144,33): error TS18047: 'db' is possibly 'null'.
+../scripts/sync-master-place-seed.ts(148,49): error TS2339: Property 'vibeKeywords' does not exist on type '{ id: number; placeId: number; photoUrl: string | null; visualScore: number | null; compositionScore: number | null; lightingScore: number | null; colorScore: number | null; vibeCategories: string[] | null; geminiResponse: unknown; analyzedAt: Date; }'.
+../scripts/sync-master-place-seed.ts(152,39): error TS18047: 'db' is possibly 'null'.
+../scripts/sync-master-place-seed.ts(164,33): error TS18047: 'db' is possibly 'null'.
+../scripts/sync-master-place-seed.ts(171,36): error TS18047: 'db' is possibly 'null'.
+../scripts/sync-master-place-seed.ts(182,19): error TS18047: 'db' is possibly 'null'.
+../scripts/sync-master-place-seed.ts(186,19): error TS18047: 'db' is possibly 'null'.
+../scripts/sync-prices-to-seed.ts(15,28): error TS18047: 'db' is possibly 'null'.
+../scripts/sync-prices-to-seed.ts(21,29): error TS18047: 'db' is possibly 'null'.
+../scripts/sync-prices-to-seed.ts(33,34): error TS18047: 'db' is possibly 'null'.
+../scripts/sync-prices-to-seed.ts(58,39): error TS18047: 'db' is possibly 'null'.
+../scripts/sync-prices-to-seed.ts(66,34): error TS18047: 'db' is possibly 'null'.
+../scripts/sync-prices-to-seed.ts(76,27): error TS18047: 'db' is possibly 'null'.
+../scripts/test_gemini.ts(1,188): error TS18047: 'db' is possibly 'null'.
+../scripts/test_gemini.ts(1,627): error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string | ArrayBufferView<ArrayBufferLike>'.
+  Type 'undefined' is not assignable to type 'string | ArrayBufferView<ArrayBufferLike>'.
+../scripts/test_mcp_run.ts(1,247): error TS18047: 'db' is possibly 'null'.
+../scripts/test_mcp_run.ts(1,504): error TS18047: 'db' is possibly 'null'.
+../scripts/test_trip.ts(1,167): error TS18047: 'db' is possibly 'null'.
+../scripts/verify-master-data.ts(9,27): error TS18047: 'db' is possibly 'null'.
+../scripts/verify-mcp-data.ts(9,25): error TS18047: 'db' is possibly 'null'.
+../scripts/verify-mcp-data.ts(24,31): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(158,9): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(160,9): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(162,9): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(164,9): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(244,9): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(245,9): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(246,9): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(247,9): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(248,9): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(249,9): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(252,32): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(297,32): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(436,15): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(607,30): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(626,31): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(652,31): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(674,13): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(688,29): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(707,30): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(732,30): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(754,13): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(768,27): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(785,31): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(808,15): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(829,32): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(857,30): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(942,36): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(943,38): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(949,37): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(950,41): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(956,36): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(957,41): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(958,41): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(959,39): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(965,34): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(966,37): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(972,35): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(973,36): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(974,38): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(980,38): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(981,41): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(1058,26): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(1079,27): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(1116,13): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(1140,28): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(1145,32): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(1206,13): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(1231,13): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(1252,13): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(1297,27): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(1312,13): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(1337,28): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(1490,45): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(1493,26): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(1498,30): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(1499,42): error TS2339: Property 'id' does not exist on type 'number'.
+../server/admin-routes.ts(1502,38): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(1503,26): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(1504,26): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(1505,38): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(1557,26): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(1599,26): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(1719,17): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(1736,17): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(1784,17): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(1816,34): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(1828,17): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(1834,17): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(1955,17): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(1983,30): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(2004,34): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(2024,13): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(2050,31): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(2069,35): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(2089,13): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(2160,17): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(2214,27): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(2214,36): error TS2339: Property 'places' does not exist on type '{}'.
+../server/admin-routes.ts(2840,28): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(2854,31): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(2887,31): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(2914,31): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(2942,15): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(2950,31): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(2966,28): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(3032,32): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(3075,17): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(3088,17): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(3119,9): error TS2353: Object literal may only specify known properties, and 'hours' does not exist in type 'TransportPriceInput'.
+../server/admin-routes.ts(3151,33): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(3225,45): error TS2339: Property 'estimateQuickBudget' does not exist on type 'BudgetCalculator'.
+../server/admin-routes.ts(3249,32): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(3287,39): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(3294,37): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(3324,35): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(3328,36): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(3334,34): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(3364,36): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(3370,32): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(3416,40): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(3419,40): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(3425,39): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(3431,32): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(3443,17): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(3480,34): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(3485,35): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(3496,33): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(3500,37): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(3504,35): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(3537,26): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(3568,30): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(3574,13): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(3610,30): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(3613,15): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(3621,15): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(3657,13): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(3684,33): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(3760,13): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(3783,32): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(3786,33): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(3792,30): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(3809,32): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(3831,35): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(3836,33): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(3839,35): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(3842,32): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(3848,36): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(3874,38): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(3894,35): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(3895,33): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(3896,37): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(3901,32): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(3904,32): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(3907,32): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(3952,24): error TS2339: Property 'synced' does not exist on type '{ totalVideos: number; totalPlaces: number; errors: string[]; }'.
+../server/admin-routes.ts(3954,26): error TS2339: Property 'totalMentions' does not exist on type '{ totalVideos: number; totalPlaces: number; errors: string[]; }'.
+../server/admin-routes.ts(4198,32): error TS18047: 'db' is possibly 'null'.
+../server/admin-routes.ts(4352,9): error TS2783: 'success' is specified more than once, so this usage will be overwritten.
+../server/admin-routes.ts(4503,18): error TS2783: 'success' is specified more than once, so this usage will be overwritten.
+../server/admin-routes.ts(4529,18): error TS2783: 'success' is specified more than once, so this usage will be overwritten.
+../server/admin-routes.ts(4618,26): error TS18047: 'db' is possibly 'null'.
+../server/auth.ts(51,5): error TS2353: Object literal may only specify known properties, and 'provider' does not exist in type '{ password: string; username: string; displayName?: string | null | undefined; persona?: "luxury" | "comfort" | "economic" | null | undefined; }'.
+../server/config/mcp-raw-data-final.ts(138,31): error TS2339: Property 'phase' does not exist on type 'McpFinalCity'.
+../server/config/mcp-raw-data-final.ts(138,56): error TS2339: Property 'phase' does not exist on type 'McpFinalCity'.
+../server/config/mcp-raw-data-final.ts(138,82): error TS2339: Property 'phase' does not exist on type 'McpFinalCity'.
+../server/config/mcp-raw-data-final.ts(138,132): error TS2339: Property 'rank' does not exist on type 'McpFinalCity'.
+../server/db.ts(2,16): error TS7016: Could not find a declaration file for module 'pg'. 'C:/Users/SY Lee/Desktop/nubi-clean/node_modules/pg/esm/index.mjs' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/pg` if it exists or add a new declaration (.d.ts) file containing `declare module 'pg';`
+../server/db.ts(26,25): error TS7006: Parameter 'client' implicitly has an 'any' type.
+../server/routes.ts(276,32): error TS18047: 'db' is possibly 'null'.
+../server/routes.ts(353,31): error TS18047: 'db' is possibly 'null'.
+../server/routes.ts(810,21): error TS2339: Property 'day' does not exist on type '{ id: number; placeId: number; itineraryId: number; dayNumber: number; orderInDay: number; startTime: string | null; endTime: string | null; duration: number | null; travelMode: string | null; travelDuration: number | null; travelCost: number | null; notes: string | null; }'.
+../server/routes.ts(811,28): error TS2339: Property 'slotNumber' does not exist on type '{ id: number; placeId: number; itineraryId: number; dayNumber: number; orderInDay: number; startTime: string | null; endTime: string | null; duration: number | null; travelMode: string | null; travelDuration: number | null; travelCost: number | null; notes: string | null; }'.
+../server/routes.ts(812,27): error TS2339: Property 'placeName' does not exist on type '{ id: number; placeId: number; itineraryId: number; dayNumber: number; orderInDay: number; startTime: string | null; endTime: string | null; duration: number | null; travelMode: string | null; travelDuration: number | null; travelCost: number | null; notes: string | null; }'.
+../server/routes.ts(813,27): error TS2339: Property 'type' does not exist on type '{ id: number; placeId: number; itineraryId: number; dayNumber: number; orderInDay: number; startTime: string | null; endTime: string | null; duration: number | null; travelMode: string | null; travelDuration: number | null; travelCost: number | null; notes: string | null; }'.
+../server/routes.ts(816,29): error TS2339: Property 'description' does not exist on type '{ id: number; placeId: number; itineraryId: number; dayNumber: number; orderInDay: number; startTime: string | null; endTime: string | null; duration: number | null; travelMode: string | null; travelDuration: number | null; travelCost: number | null; notes: string | null; }'.
+../server/routes.ts(973,13): error TS18047: 'db' is possibly 'null'.
+../server/routes.ts(1026,56): error TS18047: 'status' is possibly 'null'.
+../server/routes.ts(1028,21): error TS18047: 'status' is possibly 'null'.
+../server/routes.ts(1028,21): error TS2367: This comparison appears to be unintentional because the types '"pending" | "failed" | "running" | "succeeded"' and '"Succeed"' have no overlap.
+../server/routes.ts(1028,52): error TS18047: 'status' is possibly 'null'.
+../server/routes.ts(1029,34): error TS18047: 'status' is possibly 'null'.
+../server/routes.ts(1030,60): error TS18047: 'status' is possibly 'null'.
+../server/routes.ts(1032,28): error TS18047: 'status' is possibly 'null'.
+../server/routes.ts(1032,28): error TS2367: This comparison appears to be unintentional because the types '"pending" | "failed" | "running" | "succeeded"' and '"Failed"' have no overlap.
+../server/routes.ts(1065,17): error TS18047: 'db' is possibly 'null'.
+../server/routes.ts(1075,17): error TS18047: 'db' is possibly 'null'.
+../server/routes.ts(1203,9): error TS2353: Object literal may only specify known properties, and 'modelId' does not exist in type 'SeedanceClipInput'.
+../server/routes.ts(1301,15): error TS2367: This comparison appears to be unintentional because the types '"pending" | "failed" | "running" | "succeeded"' and '"Succeed"' have no overlap.
+../server/routes.ts(1302,19): error TS18047: 'db' is possibly 'null'.
+../server/routes.ts(1314,22): error TS2367: This comparison appears to be unintentional because the types '"pending" | "failed" | "running" | "succeeded"' and '"Failed"' have no overlap.
+../server/routes.ts(1315,19): error TS18047: 'db' is possibly 'null'.
+../server/routes.ts(1385,31): error TS18047: 'db' is possibly 'null'.
+../server/routes.ts(1407,19): error TS18047: 'db' is possibly 'null'.
+../server/routes.ts(1410,9): error TS2740: Type 'Omit<PgSelectBase<"verification_requests", { id: PgColumn<{ name: "id"; tableName: "verification_requests"; dataType: "number"; columnType: "PgSerial"; data: number; driverParam: number; notNull: true; hasDefault: true; ... 6 more ...; generated: undefined; }, {}, {}>; ... 12 more ...; updatedAt: PgColumn<...>; }, ....' is missing the following properties from type 'PgSelectBase<"verification_requests", { id: PgColumn<{ name: "id"; tableName: "verification_requests"; dataType: "number"; columnType: "PgSerial"; data: number; driverParam: number; notNull: true; hasDefault: true; ... 6 more ...; generated: undefined; }, {}, {}>; ... 12 more ...; updatedAt: PgColumn<...>; }, ... 5 ...': config, joinsNotNullableMap, tableName, isPartialSelect, and 5 more.
+../server/routes.ts(1424,31): error TS18047: 'db' is possibly 'null'.
+../server/routes.ts(1450,31): error TS18047: 'db' is possibly 'null'.
+../server/routes.ts(1473,34): error TS18047: 'db' is possibly 'null'.
+../server/routes.ts(1481,31): error TS18047: 'db' is possibly 'null'.
+../server/routes.ts(1489,34): error TS18047: 'db' is possibly 'null'.
+../server/routes.ts(1538,13): error TS18047: 'db' is possibly 'null'.
+../server/routes.ts(1643,13): error TS18047: 'db' is possibly 'null'.
+../server/routes.ts(1659,13): error TS18047: 'db' is possibly 'null'.
+../server/services/agents/ag3-data-matcher.ts(170,15): error TS2339: Property 'googlePlaceId' does not exist on type '{ id: number; name: string; }'.
+../server/services/agents/ag3-data-matcher.ts(171,29): error TS2339: Property 'googlePlaceId' does not exist on type '{ id: number; name: string; }'.
+../server/services/agents/pipeline-v3.ts(615,26): error TS2339: Property 'type' does not exist on type 'PlaceResult'.
+../server/services/agents/pipeline-v3.ts(615,48): error TS2339: Property 'type' does not exist on type 'PlaceResult'.
+../server/services/agents/pipeline-v3.ts(645,26): error TS2551: Property 'nameKo' does not exist on type 'PlaceResult'. Did you mean 'name'?
+../server/services/agents/pipeline-v3.ts(645,37): error TS2551: Property 'nameKo' does not exist on type 'PlaceResult'. Did you mean 'name'?
+../server/services/budget-calculator.ts(122,26): error TS18047: 'db' is possibly 'null'.
+../server/services/budget-calculator.ts(123,38): error TS2339: Property 'query' does not exist on type 'PgTableWithColumns<{ name: "gemini_web_search_cache"; schema: undefined; columns: { id: PgColumn<{ name: "id"; tableName: "gemini_web_search_cache"; dataType: "number"; columnType: "PgSerial"; data: number; driverParam: number; ... 8 more ...; generated: undefined; }, {}, {}>; ... 9 more ...; fetchedAt: PgColumn<......'.
+../server/services/budget-calculator.ts(127,56): error TS2339: Property 'createdAt' does not exist on type '{ id: number; placeId: number | null; cityId: number | null; searchQuery: string; searchType: string; rawResult: unknown; extractedData: { michelinStars?: number | undefined; michelinDescription?: string | undefined; tripAdvisorRating?: number | undefined; tripAdvisorReviewCount?: number | undefined; expertReviews?:...'.
+../server/services/budget-calculator.ts(129,32): error TS2339: Property 'result' does not exist on type '{ id: number; placeId: number | null; cityId: number | null; searchQuery: string; searchType: string; rawResult: unknown; extractedData: { michelinStars?: number | undefined; michelinDescription?: string | undefined; tripAdvisorRating?: number | undefined; tripAdvisorReviewCount?: number | undefined; expertReviews?:...'.
+../server/services/budget-calculator.ts(157,13): error TS18047: 'db' is possibly 'null'.
+../server/services/budget-calculator.ts(158,9): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(value: { searchQuery: string | SQL<unknown> | Placeholder<string, any>; searchType: string | SQL<unknown> | Placeholder<string, any>; id?: number | SQL<unknown> | Placeholder<...> | undefined; ... 7 more ...; expiresAt?: Date | ... 3 more ... | undefined; }): PgInsertBase<...>', gave the following error.
+    Object literal may only specify known properties, and 'query' does not exist in type '{ searchQuery: string | SQL<unknown> | Placeholder<string, any>; searchType: string | SQL<unknown> | Placeholder<string, any>; id?: number | SQL<unknown> | Placeholder<...> | undefined; ... 7 more ...; expiresAt?: Date | ... 3 more ... | undefined; }'.
+  Overload 2 of 2, '(values: { searchQuery: string | SQL<unknown> | Placeholder<string, any>; searchType: string | SQL<unknown> | Placeholder<string, any>; id?: number | SQL<unknown> | Placeholder<...> | undefined; ... 7 more ...; expiresAt?: Date | ... 3 more ... | undefined; }[]): PgInsertBase<...>', gave the following error.
+    Object literal may only specify known properties, and 'query' does not exist in type '{ searchQuery: string | SQL<unknown> | Placeholder<string, any>; searchType: string | SQL<unknown> | Placeholder<string, any>; id?: number | SQL<unknown> | Placeholder<...> | undefined; ... 7 more ...; expiresAt?: Date | ... 3 more ... | undefined; }[]'.
+../server/services/budget-calculator.ts(216,31): error TS18047: 'db' is possibly 'null'.
+../server/services/budget-calculator.ts(220,29): error TS18047: 'db' is possibly 'null'.
+../server/services/budget-calculator.ts(266,5): error TS2353: Object literal may only specify known properties, and 'hours' does not exist in type 'TransportPriceInput'.
+../server/services/budget-calculator.ts(298,44): error TS2339: Property 'dailyPrice' does not exist on type 'TransportPricingResult'.
+  Property 'dailyPrice' does not exist on type 'GuidePriceResult'.
+../server/services/budget-calculator.ts(313,45): error TS2339: Property 'totalPrice' does not exist on type 'TransportPricingResult'.
+  Property 'totalPrice' does not exist on type 'GuidePriceResult'.
+../server/services/budget-calculator.ts(322,51): error TS2339: Property 'dailyPrice' does not exist on type 'TransportPricingResult'.
+  Property 'dailyPrice' does not exist on type 'GuidePriceResult'.
+../server/services/budget-calculator.ts(339,37): error TS2339: Property 'vehicleDescription' does not exist on type 'TransportPricingResult'.
+  Property 'vehicleDescription' does not exist on type 'TransitPriceResult'.
+../server/services/budget-calculator.ts(346,23): error TS2339: Property 'breakdown' does not exist on type 'TransportPricingResult'.
+  Property 'breakdown' does not exist on type 'GuidePriceResult'.
+../server/services/budget-calculator.ts(347,42): error TS2339: Property 'breakdown' does not exist on type 'TransportPricingResult'.
+  Property 'breakdown' does not exist on type 'GuidePriceResult'.
+../server/services/budget-calculator.ts(347,100): error TS2339: Property 'breakdown' does not exist on type 'TransportPricingResult'.
+  Property 'breakdown' does not exist on type 'GuidePriceResult'.
+../server/services/budget-calculator.ts(349,23): error TS2339: Property 'breakdown' does not exist on type 'TransportPricingResult'.
+  Property 'breakdown' does not exist on type 'GuidePriceResult'.
+../server/services/budget-calculator.ts(350,40): error TS2339: Property 'breakdown' does not exist on type 'TransportPricingResult'.
+  Property 'breakdown' does not exist on type 'GuidePriceResult'.
+../server/services/budget-calculator.ts(350,93): error TS2339: Property 'breakdown' does not exist on type 'TransportPricingResult'.
+  Property 'breakdown' does not exist on type 'GuidePriceResult'.
+../server/services/budget-calculator.ts(359,34): error TS2339: Property 'totalPrice' does not exist on type 'TransportPricingResult'.
+  Property 'totalPrice' does not exist on type 'GuidePriceResult'.
+../server/services/budget-calculator.ts(367,29): error TS2339: Property 'transportType' does not exist on type 'TransportPricingResult'.
+  Property 'transportType' does not exist on type 'GuidePriceResult'.
+../server/services/budget-calculator.ts(368,36): error TS2339: Property 'vehicleDescription' does not exist on type 'TransportPricingResult'.
+  Property 'vehicleDescription' does not exist on type 'TransitPriceResult'.
+../server/services/budget-calculator.ts(369,38): error TS2339: Property 'includesGuide' does not exist on type 'TransportPricingResult'.
+  Property 'includesGuide' does not exist on type 'GuidePriceResult'.
+../server/services/budget-calculator.ts(370,34): error TS2339: Property 'dailyPrice' does not exist on type 'TransportPricingResult'.
+  Property 'dailyPrice' does not exist on type 'GuidePriceResult'.
+../server/services/crisis-alert-service.ts(320,30): error TS18047: 'db' is possibly 'null'.
+../server/services/crisis-alert-service.ts(329,15): error TS18047: 'db' is possibly 'null'.
+../server/services/crisis-alert-service.ts(402,26): error TS18047: 'db' is possibly 'null'.
+../server/services/crisis-alert-service.ts(427,26): error TS18047: 'db' is possibly 'null'.
+../server/services/crisis-alert-service.ts(446,11): error TS18047: 'db' is possibly 'null'.
+../server/services/crisis-alert-service.ts(467,29): error TS18047: 'db' is possibly 'null'.
+../server/services/crisis-alert-service.ts(514,33): error TS18047: 'db' is possibly 'null'.
+../server/services/crisis-alert-service.ts(517,11): error TS18047: 'db' is possibly 'null'.
+../server/services/crisis-alert-service.ts(526,11): error TS18047: 'db' is possibly 'null'.
+../server/services/crisis-alert-service.ts(535,11): error TS18047: 'db' is possibly 'null'.
+../server/services/crisis-alert-service.ts(542,32): error TS18047: 'db' is possibly 'null'.
+../server/services/crisis-alert-service.ts(576,26): error TS18047: 'db' is possibly 'null'.
+../server/services/crisis-crawler.ts(129,26): error TS18047: 'db' is possibly 'null'.
+../server/services/crisis-crawler.ts(131,26): error TS18047: 'db' is possibly 'null'.
+../server/services/crisis-crawler.ts(170,35): error TS18047: 'db' is possibly 'null'.
+../server/services/crisis-crawler.ts(181,15): error TS18047: 'db' is possibly 'null'.
+../server/services/crisis-crawler.ts(181,39): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(value: { title: string | SQL<unknown> | Placeholder<string, any>; date: string | SQL<unknown> | Placeholder<string, any>; source?: string | SQL<unknown> | Placeholder<...> | null | undefined; ... 21 more ...; geminiAnalysis?: string | ... 3 more ... | undefined; }): PgInsertBase<...>', gave the following error.
+    Argument of type '{ cityId: number; countryCode: string; alertType: string; severity: number; title: string; description: string; sourceUrl: string; sourceName: string; affectedAreas: string[]; geminiAnalysis: string; impactScore: number; isActive: true; }' is not assignable to parameter of type '{ title: string | SQL<unknown> | Placeholder<string, any>; date: string | SQL<unknown> | Placeholder<string, any>; source?: string | SQL<unknown> | Placeholder<string, any> | null | undefined; ... 21 more ...; geminiAnalysis?: string | ... 3 more ... | undefined; }'.
+      Property 'date' is missing in type '{ cityId: number; countryCode: string; alertType: string; severity: number; title: string; description: string; sourceUrl: string; sourceName: string; affectedAreas: string[]; geminiAnalysis: string; impactScore: number; isActive: true; }' but required in type '{ title: string | SQL<unknown> | Placeholder<string, any>; date: string | SQL<unknown> | Placeholder<string, any>; source?: string | SQL<unknown> | Placeholder<string, any> | null | undefined; ... 21 more ...; geminiAnalysis?: string | ... 3 more ... | undefined; }'.
+  Overload 2 of 2, '(values: { title: string | SQL<unknown> | Placeholder<string, any>; date: string | SQL<unknown> | Placeholder<string, any>; source?: string | SQL<unknown> | Placeholder<...> | null | undefined; ... 21 more ...; geminiAnalysis?: string | ... 3 more ... | undefined; }[]): PgInsertBase<...>', gave the following error.
+    Object literal may only specify known properties, and 'cityId' does not exist in type '{ title: string | SQL<unknown> | Placeholder<string, any>; date: string | SQL<unknown> | Placeholder<string, any>; source?: string | SQL<unknown> | Placeholder<string, any> | null | undefined; ... 21 more ...; geminiAnalysis?: string | ... 3 more ... | undefined; }[]'.
+../server/services/crisis-crawler.ts(210,12): error TS18047: 'db' is possibly 'null'.
+../server/services/crisis-crawler.ts(219,10): error TS18047: 'db' is possibly 'null'.
+../server/services/crisis-crawler.ts(226,25): error TS18047: 'db' is possibly 'null'.
+../server/services/crisis-crawler.ts(226,44): error TS18047: 'db' is possibly 'null'.
+../server/services/crisis-crawler.ts(227,26): error TS18047: 'db' is possibly 'null'.
+../server/services/crisis-crawler.ts(227,45): error TS18047: 'db' is possibly 'null'.
+../server/services/crisis-crawler.ts(231,28): error TS18047: 'db' is possibly 'null'.
+../server/services/data-scheduler.ts(58,29): error TS18047: 'db' is possibly 'null'.
+../server/services/data-scheduler.ts(58,38): error TS2339: Property 'dataCollectionSchedule' does not exist on type '{}'.
+../server/services/data-scheduler.ts(194,13): error TS18047: 'db' is possibly 'null'.
+../server/services/data-scheduler.ts(286,13): error TS18047: 'db' is possibly 'null'.
+../server/services/data-scheduler.ts(304,13): error TS18047: 'db' is possibly 'null'.
+../server/services/data-scheduler.ts(591,27): error TS18047: 'db' is possibly 'null'.
+../server/services/data-scheduler.ts(753,13): error TS18047: 'db' is possibly 'null'.
+../server/services/exchange-rate.ts(27,13): error TS18047: 'db' is possibly 'null'.
+../server/services/exchange-rate.ts(70,32): error TS18047: 'db' is possibly 'null'.
+../server/services/exchange-rate.ts(80,17): error TS18047: 'db' is possibly 'null'.
+../server/services/exchange-rate.ts(88,17): error TS18047: 'db' is possibly 'null'.
+../server/services/exchange-rate.ts(107,30): error TS18047: 'db' is possibly 'null'.
+../server/services/exchange-rate.ts(116,28): error TS18047: 'db' is possibly 'null'.
+../server/services/exchange-rate.ts(134,25): error TS18047: 'db' is possibly 'null'.
+../server/services/gemini-web-search.ts(103,31): error TS18047: 'db' is possibly 'null'.
+../server/services/gemini-web-search.ts(120,9): error TS18047: 'db' is possibly 'null'.
+../server/services/gemini-web-search.ts(137,31): error TS18047: 'db' is possibly 'null'.
+../server/services/gemini-web-search.ts(154,9): error TS18047: 'db' is possibly 'null'.
+../server/services/gemini-web-search.ts(171,31): error TS18047: 'db' is possibly 'null'.
+../server/services/gemini-web-search.ts(188,9): error TS18047: 'db' is possibly 'null'.
+../server/services/gemini-web-search.ts(206,25): error TS18047: 'db' is possibly 'null'.
+../server/services/gemini-web-search.ts(229,25): error TS18047: 'db' is possibly 'null'.
+../server/services/gemini-web-search.ts(229,44): error TS18047: 'db' is possibly 'null'.
+../server/services/gemini-web-search.ts(231,24): error TS18047: 'db' is possibly 'null'.
+../server/services/google-places.ts(545,31): error TS2345: Argument of type '{ entityType: string; entityId: number; source: string; status: string; itemsProcessed: number; itemsFailed: number; completedAt: Date; errorMessage: null; }' is not assignable to parameter of type 'Omit<{ source: string | null; id: number; status: string; entityType: string; entityId: number | null; entitySubType: string | null; itemsProcessed: number | null; itemsFailed: number | null; errorMessage: string | null; startedAt: Date; completedAt: Date | null; }, "id" | "startedAt">'.
+  Property 'entitySubType' is missing in type '{ entityType: string; entityId: number; source: string; status: string; itemsProcessed: number; itemsFailed: number; completedAt: Date; errorMessage: null; }' but required in type 'Omit<{ source: string | null; id: number; status: string; entityType: string; entityId: number | null; entitySubType: string | null; itemsProcessed: number | null; itemsFailed: number | null; errorMessage: string | null; startedAt: Date; completedAt: Date | null; }, "id" | "startedAt">'.
+../server/services/instagram-auto-collector.ts(86,29): error TS18047: 'db' is possibly 'null'.
+../server/services/instagram-auto-collector.ts(86,38): error TS2339: Property 'places' does not exist on type '{}'.
+../server/services/instagram-auto-collector.ts(115,32): error TS18047: 'db' is possibly 'null'.
+../server/services/instagram-auto-collector.ts(115,41): error TS2339: Property 'instagramHashtags' does not exist on type '{}'.
+../server/services/instagram-auto-collector.ts(120,17): error TS18047: 'db' is possibly 'null'.
+../server/services/instagram-auto-collector.ts(134,17): error TS18047: 'db' is possibly 'null'.
+../server/services/instagram-auto-collector.ts(148,23): error TS18047: 'db' is possibly 'null'.
+../server/services/instagram-auto-collector.ts(166,13): error TS18047: 'db' is possibly 'null'.
+../server/services/instagram-auto-collector.ts(191,30): error TS18047: 'db' is possibly 'null'.
+../server/services/instagram-auto-collector.ts(191,39): error TS2339: Property 'places' does not exist on type '{}'.
+../server/services/instagram-crawler.ts(166,29): error TS18047: 'db' is possibly 'null'.
+../server/services/instagram-crawler.ts(178,13): error TS18047: 'db' is possibly 'null'.
+../server/services/instagram-crawler.ts(195,36): error TS18047: 'db' is possibly 'null'.
+../server/services/instagram-crawler.ts(203,19): error TS18047: 'db' is possibly 'null'.
+../server/services/instagram-crawler.ts(228,30): error TS18047: 'db' is possibly 'null'.
+../server/services/instagram-crawler.ts(240,13): error TS18047: 'db' is possibly 'null'.
+../server/services/instagram-crawler.ts(259,28): error TS18047: 'db' is possibly 'null'.
+../server/services/instagram-crawler.ts(285,29): error TS18047: 'db' is possibly 'null'.
+../server/services/instagram-crawler.ts(312,30): error TS18047: 'db' is possibly 'null'.
+../server/services/instagram-crawler.ts(321,15): error TS18047: 'db' is possibly 'null'.
+../server/services/instagram-crawler.ts(333,15): error TS18047: 'db' is possibly 'null'.
+../server/services/instagram-crawler.ts(356,28): error TS18047: 'db' is possibly 'null'.
+../server/services/instagram-crawler.ts(357,29): error TS18047: 'db' is possibly 'null'.
+../server/services/instagram-crawler.ts(358,26): error TS18047: 'db' is possibly 'null'.
+../server/services/itinerary-generator.ts(1133,33): error TS18047: 'db' is possibly 'null'.
+../server/services/itinerary-generator.ts(1152,32): error TS18047: 'db' is possibly 'null'.
+../server/services/itinerary-generator.ts(1247,13): error TS2339: Property 'userRatingCount' does not exist on type 'PlaceResult'.
+../server/services/itinerary-generator.ts(1247,38): error TS2339: Property 'userRatingCount' does not exist on type 'PlaceResult'.
+../server/services/itinerary-generator.ts(1248,25): error TS2339: Property 'userRatingCount' does not exist on type 'PlaceResult'.
+../server/services/itinerary-generator.ts(1252,46): error TS2339: Property 'rating' does not exist on type 'PlaceResult'.
+../server/services/itinerary-generator.ts(1252,66): error TS2339: Property 'rating' does not exist on type 'PlaceResult'.
+../server/services/itinerary-generator.ts(2459,11): error TS2322: Type 'string' is not assignable to type 'number'.
+../server/services/itinerary-generator.ts(2482,32): error TS2353: Object literal may only specify known properties, and 'lat' does not exist in type '{ address: string | null; type: "restaurant" | "attraction" | "hotel" | "cafe" | "landmark"; id: number; name: string; createdAt: Date; aliases: string[] | null; latitude: number; ... 54 more ...; lastDataSync: Date | null; }'.
+../server/services/itinerary-generator.ts(2507,24): error TS2353: Object literal may only specify known properties, and 'lat' does not exist in type '{ address: string | null; type: "restaurant" | "attraction" | "hotel" | "cafe" | "landmark"; id: number; name: string; createdAt: Date; aliases: string[] | null; latitude: number; ... 54 more ...; lastDataSync: Date | null; }'.
+../server/services/korean-platform-crawler.ts(141,28): error TS18047: 'db' is possibly 'null'.
+../server/services/korean-platform-crawler.ts(160,13): error TS18047: 'db' is possibly 'null'.
+../server/services/korean-platform-crawler.ts(160,36): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(value: { source: string | SQL<unknown> | Placeholder<string, any>; priceType: string | SQL<unknown> | Placeholder<string, any>; id?: number | SQL<unknown> | Placeholder<...> | undefined; ... 13 more ...; priceLabel?: string | ... 3 more ... | undefined; }): PgInsertBase<...>', gave the following error.
+    Object literal may only specify known properties, and 'reviewCount' does not exist in type 'SQL<unknown> | { googlePriceLevel?: number | undefined; klookProductId?: string | undefined; viatorProductId?: string | undefined; extractedText?: string | undefined; } | Placeholder<string, any>'.
+  Overload 2 of 2, '(values: { source: string | SQL<unknown> | Placeholder<string, any>; priceType: string | SQL<unknown> | Placeholder<string, any>; id?: number | SQL<unknown> | Placeholder<...> | undefined; ... 13 more ...; priceLabel?: string | ... 3 more ... | undefined; }[]): PgInsertBase<...>', gave the following error.
+    Object literal may only specify known properties, and 'placeId' does not exist in type '{ source: string | SQL<unknown> | Placeholder<string, any>; priceType: string | SQL<unknown> | Placeholder<string, any>; id?: number | SQL<unknown> | Placeholder<string, any> | undefined; ... 13 more ...; priceLabel?: string | ... 3 more ... | undefined; }[]'.
+../server/services/korean-platform-crawler.ts(205,24): error TS18047: 'db' is possibly 'null'.
+../server/services/korean-platform-crawler.ts(212,28): error TS18047: 'db' is possibly 'null'.
+../server/services/korean-platform-crawler.ts(253,27): error TS18047: 'db' is possibly 'null'.
+../server/services/korean-platform-crawler.ts(282,30): error TS18047: 'db' is possibly 'null'.
+../server/services/korean-platform-crawler.ts(288,27): error TS18047: 'db' is possibly 'null'.
+../server/services/korean-platform-crawler.ts(292,32): error TS18047: 'db' is possibly 'null'.
+../server/services/korean-platform-crawler.ts(307,13): error TS18047: 'db' is possibly 'null'.
+../server/services/korean-platform-crawler.ts(352,28): error TS18047: 'db' is possibly 'null'.
+../server/services/korean-sentiment-service.ts(72,26): error TS18047: 'db' is possibly 'null'.
+../server/services/korean-sentiment-service.ts(263,11): error TS18047: 'db' is possibly 'null'.
+../server/services/korean-sentiment-service.ts(292,7): error TS18047: 'db' is possibly 'null'.
+../server/services/korean-sentiment-service.ts(295,7): error TS18047: 'db' is possibly 'null'.
+../server/services/korean-sentiment-service.ts(298,7): error TS18047: 'db' is possibly 'null'.
+../server/services/korean-sentiment-service.ts(372,32): error TS18047: 'db' is possibly 'null'.
+../server/services/korean-sentiment-service.ts(376,32): error TS18047: 'db' is possibly 'null'.
+../server/services/korean-sentiment-service.ts(380,34): error TS18047: 'db' is possibly 'null'.
+../server/services/mcp-city-rank-sync-service.ts(108,9): error TS2322: Type 'McpCityPhase' is not assignable to type 'Phase'.
+  Type '"bts2026"' is not assignable to type 'Phase'.
+../server/services/mcp-city-rank-sync-service.ts(124,29): error TS2345: Argument of type 'McpCityPhase' is not assignable to parameter of type 'Phase'.
+  Type '"bts2026"' is not assignable to type 'Phase'.
+../server/services/michelin-crawler.ts(65,9): error TS2322: Type 'string | null' is not assignable to type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+../server/services/michelin-crawler.ts(66,9): error TS2322: Type 'string | null' is not assignable to type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+../server/services/michelin-crawler.ts(67,9): error TS2322: Type 'null' is not assignable to type 'string | undefined'.
+../server/services/michelin-crawler.ts(68,9): error TS2322: Type 'null' is not assignable to type 'string | undefined'.
+../server/services/michelin-crawler.ts(90,30): error TS18047: 'db' is possibly 'null'.
+../server/services/michelin-crawler.ts(114,11): error TS18047: 'db' is possibly 'null'.
+../server/services/michelin-crawler.ts(120,11): error TS18047: 'db' is possibly 'null'.
+../server/services/michelin-crawler.ts(141,13): error TS18047: 'db' is possibly 'null'.
+../server/services/michelin-crawler.ts(190,24): error TS18047: 'db' is possibly 'null'.
+../server/services/michelin-crawler.ts(197,28): error TS18047: 'db' is possibly 'null'.
+../server/services/michelin-crawler.ts(238,27): error TS18047: 'db' is possibly 'null'.
+../server/services/michelin-crawler.ts(267,30): error TS18047: 'db' is possibly 'null'.
+../server/services/michelin-crawler.ts(313,24): error TS18047: 'db' is possibly 'null'.
+../server/services/naver-blog-crawler.ts(166,24): error TS18047: 'db' is possibly 'null'.
+../server/services/naver-blog-crawler.ts(186,36): error TS18047: 'db' is possibly 'null'.
+../server/services/naver-blog-crawler.ts(221,15): error TS18047: 'db' is possibly 'null'.
+../server/services/naver-blog-crawler.ts(259,27): error TS18047: 'db' is possibly 'null'.
+../server/services/naver-blog-crawler.ts(286,26): error TS18047: 'db' is possibly 'null'.
+../server/services/naver-blog-crawler.ts(295,29): error TS18047: 'db' is possibly 'null'.
+../server/services/naver-blog-crawler.ts(321,23): error TS18047: 'db' is possibly 'null'.
+../server/services/nubi-reason-batch-service.ts(323,47): error TS2769: No overload matches this call.
+  Overload 1 of 3, '(left: PgColumn<{ name: "type"; tableName: "places"; dataType: "string"; columnType: "PgEnumColumn"; data: "restaurant" | "attraction" | "hotel" | "cafe" | "landmark"; driverParam: string; notNull: true; ... 7 more ...; generated: undefined; }, {}, {}>, right: SQLWrapper | ... 4 more ... | "landmark"): SQL<...>', gave the following error.
+    Argument of type 'string' is not assignable to parameter of type 'SQLWrapper | "restaurant" | "attraction" | "hotel" | "cafe" | "landmark"'.
+  Overload 2 of 3, '(left: Aliased<string>, right: string | SQLWrapper): SQL<unknown>', gave the following error.
+    Argument of type 'PgColumn<{ name: "type"; tableName: "places"; dataType: "string"; columnType: "PgEnumColumn"; data: "restaurant" | "attraction" | "hotel" | "cafe" | "landmark"; driverParam: string; notNull: true; ... 7 more ...; generated: undefined; }, {}, {}>' is not assignable to parameter of type 'Aliased<string>'.
+      Type 'PgColumn<{ name: "type"; tableName: "places"; dataType: "string"; columnType: "PgEnumColumn"; data: "restaurant" | "attraction" | "hotel" | "cafe" | "landmark"; driverParam: string; notNull: true; ... 7 more ...; generated: undefined; }, {}, {}>' is missing the following properties from type 'Aliased<string>': sql, fieldAlias
+  Overload 3 of 3, '(left: never, right: unknown): SQL<unknown>', gave the following error.
+    Argument of type 'PgColumn<{ name: "type"; tableName: "places"; dataType: "string"; columnType: "PgEnumColumn"; data: "restaurant" | "attraction" | "hotel" | "cafe" | "landmark"; driverParam: string; notNull: true; ... 7 more ...; generated: undefined; }, {}, {}>' is not assignable to parameter of type 'never'.
+../server/services/opentripmap-enrichment.ts(70,28): error TS18047: 'db' is possibly 'null'.
+../server/services/opentripmap-enrichment.ts(99,15): error TS18047: 'db' is possibly 'null'.
+../server/services/opentripmap-enrichment.ts(120,11): error TS18047: 'db' is possibly 'null'.
+../server/services/opentripmap-enrichment.ts(146,28): error TS18047: 'db' is possibly 'null'.
+../server/services/opentripmap-enrichment.ts(173,15): error TS18047: 'db' is possibly 'null'.
+../server/services/package-tour-validator.ts(95,26): error TS18047: 'db' is possibly 'null'.
+../server/services/package-tour-validator.ts(113,11): error TS18047: 'db' is possibly 'null'.
+../server/services/package-tour-validator.ts(146,24): error TS18047: 'db' is possibly 'null'.
+../server/services/package-tour-validator.ts(153,28): error TS18047: 'db' is possibly 'null'.
+../server/services/package-tour-validator.ts(179,30): error TS18047: 'db' is possibly 'null'.
+../server/services/package-tour-validator.ts(212,27): error TS18047: 'db' is possibly 'null'.
+../server/services/package-tour-validator.ts(238,26): error TS18047: 'db' is possibly 'null'.
+../server/services/package-tour-validator.ts(271,25): error TS18047: 'db' is possibly 'null'.
+../server/services/package-tour-validator.ts(282,13): error TS18047: 'db' is possibly 'null'.
+../server/services/photospot-scorer.ts(45,28): error TS18047: 'db' is possibly 'null'.
+../server/services/photospot-scorer.ts(51,34): error TS18047: 'db' is possibly 'null'.
+../server/services/photospot-scorer.ts(83,27): error TS18047: 'db' is possibly 'null'.
+../server/services/photospot-scorer.ts(169,28): error TS18047: 'db' is possibly 'null'.
+../server/services/photospot-scorer.ts(215,11): error TS18047: 'db' is possibly 'null'.
+../server/services/photospot-scorer.ts(243,24): error TS18047: 'db' is possibly 'null'.
+../server/services/photospot-scorer.ts(250,28): error TS18047: 'db' is possibly 'null'.
+../server/services/photospot-scorer.ts(293,27): error TS18047: 'db' is possibly 'null'.
+../server/services/photospot-scorer.ts(311,26): error TS18047: 'db' is possibly 'null'.
+../server/services/photospot-scorer.ts(362,25): error TS18047: 'db' is possibly 'null'.
+../server/services/photospot-scorer.ts(373,13): error TS18047: 'db' is possibly 'null'.
+../server/services/place-linker.ts(54,26): error TS18047: 'db' is possibly 'null'.
+../server/services/place-linker.ts(152,28): error TS18047: 'db' is possibly 'null'.
+../server/services/place-linker.ts(176,29): error TS18047: 'db' is possibly 'null'.
+../server/services/place-linker.ts(210,17): error TS18047: 'db' is possibly 'null'.
+../server/services/place-linker.ts(243,28): error TS18047: 'db' is possibly 'null'.
+../server/services/place-linker.ts(301,15): error TS18047: 'db' is possibly 'null'.
+../server/services/place-linker.ts(330,28): error TS18047: 'db' is possibly 'null'.
+../server/services/place-linker.ts(379,15): error TS18047: 'db' is possibly 'null'.
+../server/services/place-seeder.ts(154,24): error TS18047: 'db' is possibly 'null'.
+../server/services/place-seeder.ts(190,25): error TS18047: 'db' is possibly 'null'.
+../server/services/place-seeder.ts(192,24): error TS18047: 'db' is possibly 'null'.
+../server/services/place-seeder.ts(210,13): error TS18047: 'db' is possibly 'null'.
+../server/services/place-seeder.ts(222,24): error TS18047: 'db' is possibly 'null'.
+../server/services/place-seeder.ts(237,29): error TS18047: 'db' is possibly 'null'.
+../server/services/place-seeder.ts(243,13): error TS18047: 'db' is possibly 'null'.
+../server/services/place-seeder.ts(257,24): error TS18047: 'db' is possibly 'null'.
+../server/services/place-seeder.ts(271,13): error TS18047: 'db' is possibly 'null'.
+../server/services/place-seeder.ts(275,13): error TS18047: 'db' is possibly 'null'.
+../server/services/place-seeder.ts(293,25): error TS18047: 'db' is possibly 'null'.
+../server/services/place-seeder.ts(335,24): error TS18047: 'db' is possibly 'null'.
+../server/services/place-seeder.ts(371,97): error TS2345: Argument of type 'string' is not assignable to parameter of type '"restaurant" | "attraction" | "adventure" | "healing" | "hotspot" | undefined'.
+../server/services/place-seeder.ts(401,29): error TS18047: 'db' is possibly 'null'.
+../server/services/place-seeder.ts(465,15): error TS18047: 'db' is possibly 'null'.
+../server/services/place-seeder.ts(487,24): error TS18047: 'db' is possibly 'null'.
+../server/services/place-seeder.ts(547,15): error TS2345: Argument of type 'string' is not assignable to parameter of type '"restaurant" | "attraction" | "adventure" | "healing" | "hotspot" | undefined'.
+../server/services/place-seeder.ts(604,31): error TS2345: Argument of type '{ entityType: string; entityId: number; source: string; status: string; itemsProcessed: number; itemsFailed: number; completedAt: Date; errorMessage: string | null; }' is not assignable to parameter of type 'Omit<{ source: string | null; id: number; status: string; entityType: string; entityId: number | null; entitySubType: string | null; itemsProcessed: number | null; itemsFailed: number | null; errorMessage: string | null; startedAt: Date; completedAt: Date | null; }, "id" | "startedAt">'.
+  Property 'entitySubType' is missing in type '{ entityType: string; entityId: number; source: string; status: string; itemsProcessed: number; itemsFailed: number; completedAt: Date; errorMessage: string | null; }' but required in type 'Omit<{ source: string | null; id: number; status: string; entityType: string; entityId: number | null; entitySubType: string | null; itemsProcessed: number | null; itemsFailed: number | null; errorMessage: string | null; startedAt: Date; completedAt: Date | null; }, "id" | "startedAt">'.
+../server/services/place-seeder.ts(663,31): error TS18047: 'db' is possibly 'null'.
+../server/services/place-seeder.ts(666,32): error TS18047: 'db' is possibly 'null'.
+../server/services/place-seeder.ts(794,13): error TS18047: 'db' is possibly 'null'.
+../server/services/place-seeder.ts(807,13): error TS18047: 'db' is possibly 'null'.
+../server/services/place-seeder.ts(822,13): error TS18047: 'db' is possibly 'null'.
+../server/services/place-seeder.ts(835,13): error TS18047: 'db' is possibly 'null'.
+../server/services/place-seeder.ts(971,59): error TS2339: Property 'totalPosts' does not exist on type '{ success: boolean; postsCollected: number; placesExtracted: number; }'.
+../server/services/place-seeder.ts(1015,29): error TS18047: 'db' is possibly 'null'.
+../server/services/place-seeder.ts(1040,15): error TS18047: 'db' is possibly 'null'.
+../server/services/place-seeder.ts(1050,29): error TS18047: 'db' is possibly 'null'.
+../server/services/place-seeder.ts(1056,15): error TS18047: 'db' is possibly 'null'.
+../server/services/place-seeder.ts(1068,29): error TS18047: 'db' is possibly 'null'.
+../server/services/place-seeder.ts(1074,13): error TS18047: 'db' is possibly 'null'.
+../server/services/place-seeder.ts(1085,29): error TS18047: 'db' is possibly 'null'.
+../server/services/place-seeder.ts(1089,15): error TS18047: 'db' is possibly 'null'.
+../server/services/place-seeder.ts(1110,29): error TS18047: 'db' is possibly 'null'.
+../server/services/place-seeder.ts(1113,30): error TS18047: 'db' is possibly 'null'.
+../server/services/place-seeder.ts(1122,31): error TS18047: 'db' is possibly 'null'.
+../server/services/place-seeder.ts(1130,33): error TS18047: 'db' is possibly 'null'.
+../server/services/popularity-analyzer.ts(157,9): error TS2322: Type 'null' is not assignable to type 'string | undefined'.
+../server/services/popularity-analyzer.ts(175,25): error TS18047: 'db' is possibly 'null'.
+../server/services/popularity-analyzer.ts(192,24): error TS18047: 'db' is possibly 'null'.
+../server/services/popularity-analyzer.ts(217,28): error TS2339: Property 'rating' does not exist on type '{ id: number; cityId: number; googlePlaceId: string | null; name: string; displayNameKo: string | null; aliases: string[] | null; type: "restaurant" | "attraction" | "hotel" | "cafe" | "landmark"; ... 54 more ...; updatedAt: Date; }'.
+../server/services/popularity-analyzer.ts(239,11): error TS18047: 'db' is possibly 'null'.
+../server/services/price-crawler.ts(70,9): error TS2322: Type 'number | null' is not assignable to type 'number | undefined'.
+  Type 'null' is not assignable to type 'number | undefined'.
+../server/services/price-crawler.ts(71,9): error TS2322: Type 'number | null' is not assignable to type 'number | undefined'.
+  Type 'null' is not assignable to type 'number | undefined'.
+../server/services/price-crawler.ts(72,9): error TS2322: Type 'number | null' is not assignable to type 'number | undefined'.
+  Type 'null' is not assignable to type 'number | undefined'.
+../server/services/price-crawler.ts(76,9): error TS2322: Type 'string | null' is not assignable to type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+../server/services/price-crawler.ts(77,9): error TS2322: Type 'string | null' is not assignable to type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+../server/services/price-crawler.ts(155,11): error TS2322: Type 'string | null' is not assignable to type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+../server/services/price-crawler.ts(179,31): error TS18047: 'db' is possibly 'null'.
+../server/services/price-crawler.ts(198,13): error TS18047: 'db' is possibly 'null'.
+../server/services/price-crawler.ts(276,31): error TS18047: 'db' is possibly 'null'.
+../server/services/price-crawler.ts(287,11): error TS18047: 'db' is possibly 'null'.
+../server/services/price-crawler.ts(312,31): error TS18047: 'db' is possibly 'null'.
+../server/services/price-crawler.ts(330,11): error TS18047: 'db' is possibly 'null'.
+../server/services/price-crawler.ts(353,24): error TS18047: 'db' is possibly 'null'.
+../server/services/price-crawler.ts(359,28): error TS18047: 'db' is possibly 'null'.
+../server/services/price-crawler.ts(384,18): error TS2367: This comparison appears to be unintentional because the types '"hotel"' and '"activity"' have no overlap.
+../server/services/price-crawler.ts(384,47): error TS2367: This comparison appears to be unintentional because the types '"hotel"' and '"tour"' have no overlap.
+../server/services/price-crawler.ts(404,27): error TS18047: 'db' is possibly 'null'.
+../server/services/price-crawler.ts(433,24): error TS18047: 'db' is possibly 'null'.
+../server/services/price-crawler.ts(481,27): error TS18047: 'db' is possibly 'null'.
+../server/services/route-optimizer.ts(281,35): error TS18047: 'cached.durationSeconds' is possibly 'null'.
+../server/services/scene-prompt-generator.ts(28,71): error TS2339: Property 'serviceName' does not exist on type 'PgTableWithColumns<{ name: "api_keys"; schema: undefined; columns: { id: PgColumn<{ name: "id"; tableName: "api_keys"; dataType: "number"; columnType: "PgSerial"; data: number; driverParam: number; notNull: true; hasDefault: true; ... 6 more ...; generated: undefined; }, {}, {}>; ... 8 more ...; updatedAt: PgColumn<...'.
+../server/services/scene-prompt-generator.ts(29,42): error TS2339: Property 'apiKey' does not exist on type '{ id: number; keyName: string; keyValue: string; displayName: string; description: string | null; isActive: boolean | null; lastTestedAt: Date | null; lastTestResult: string | null; createdAt: Date; updatedAt: Date; }'.
+../server/services/scene-prompt-generator.ts(30,26): error TS2339: Property 'apiKey' does not exist on type '{ id: number; keyName: string; keyValue: string; displayName: string; description: string | null; isActive: boolean | null; lastTestedAt: Date | null; lastTestResult: string | null; createdAt: Date; updatedAt: Date; }'.
+../server/services/score-aggregator.ts(123,57): error TS2339: Property 'placeId' does not exist on type 'PgTableWithColumns<{ name: "instagram_hashtags"; schema: undefined; columns: { id: PgColumn<{ name: "id"; tableName: "instagram_hashtags"; dataType: "number"; columnType: "PgSerial"; data: number; driverParam: number; ... 8 more ...; generated: undefined; }, {}, {}>; ... 11 more ...; updatedAt: PgColumn<...>; }; dia...'.
+../server/services/score-aggregator.ts(127,59): error TS2339: Property 'placeId' does not exist on type 'PgTableWithColumns<{ name: "instagram_locations"; schema: undefined; columns: { id: PgColumn<{ name: "id"; tableName: "instagram_locations"; dataType: "number"; columnType: "PgSerial"; data: number; driverParam: number; ... 8 more ...; generated: undefined; }, {}, {}>; ... 11 more ...; updatedAt: PgColumn<...>; }; d...'.
+../server/services/scoring-engine.ts(457,31): error TS2345: Argument of type '{ entityType: string; entityId: number; source: string; status: string; itemsProcessed: number; itemsFailed: number; completedAt: Date; errorMessage: null; }' is not assignable to parameter of type 'Omit<{ source: string | null; id: number; status: string; entityType: string; entityId: number | null; entitySubType: string | null; itemsProcessed: number | null; itemsFailed: number | null; errorMessage: string | null; startedAt: Date; completedAt: Date | null; }, "id" | "startedAt">'.
+  Property 'entitySubType' is missing in type '{ entityType: string; entityId: number; source: string; status: string; itemsProcessed: number; itemsFailed: number; completedAt: Date; errorMessage: null; }' but required in type 'Omit<{ source: string | null; id: number; status: string; entityType: string; entityId: number | null; entitySubType: string | null; itemsProcessed: number | null; itemsFailed: number | null; errorMessage: string | null; startedAt: Date; completedAt: Date | null; }, "id" | "startedAt">'.
+../server/services/seedance-video-generator.ts(46,16): error TS7016: Could not find a declaration file for module 'pg'. 'C:/Users/SY Lee/Desktop/nubi-clean/node_modules/pg/esm/index.mjs' implicitly has an 'any' type.
+  Try `npm i --save-dev @types/pg` if it exists or add a new declaration (.d.ts) file containing `declare module 'pg';`
+../server/services/seedance-video-generator.ts(83,39): error TS2339: Property 'apiKeys' does not exist on type '{}'.
+../server/services/seedance-video-generator.ts(83,64): error TS2339: Property 'apiKeys' does not exist on type '{}'.
+../server/services/seedance-video-generator.ts(155,19): error TS2339: Property 'modelId' does not exist on type 'SeedanceClipInput'.
+../server/services/seedance-video-generator.ts(156,39): error TS2339: Property 'modelId' does not exist on type 'SeedanceClipInput'.
+../server/services/sync-consolidation-service.ts(60,22): error TS18047: 'db' is possibly 'null'.
+../server/services/sync-consolidation-service.ts(132,28): error TS18047: 'db' is possibly 'null'.
+../server/services/sync-consolidation-service.ts(159,15): error TS18047: 'db' is possibly 'null'.
+../server/services/sync-consolidation-service.ts(182,15): error TS18047: 'db' is possibly 'null'.
+../server/services/sync-consolidation-service.ts(200,30): error TS18047: 'db' is possibly 'null'.
+../server/services/sync-consolidation-service.ts(207,17): error TS18047: 'db' is possibly 'null'.
+../server/services/sync-consolidation-service.ts(215,30): error TS18047: 'db' is possibly 'null'.
+../server/services/sync-consolidation-service.ts(222,15): error TS18047: 'db' is possibly 'null'.
+../server/services/sync-consolidation-service.ts(231,30): error TS18047: 'db' is possibly 'null'.
+../server/services/sync-consolidation-service.ts(241,17): error TS18047: 'db' is possibly 'null'.
+../server/services/sync-consolidation-service.ts(251,26): error TS18047: 'db' is possibly 'null'.
+../server/services/sync-consolidation-service.ts(258,15): error TS18047: 'db' is possibly 'null'.
+../server/services/sync-consolidation-service.ts(284,28): error TS18047: 'db' is possibly 'null'.
+../server/services/sync-consolidation-service.ts(301,19): error TS18047: 'db' is possibly 'null'.
+../server/services/sync-consolidation-service.ts(318,31): error TS18047: 'db' is possibly 'null'.
+../server/services/sync-consolidation-service.ts(325,15): error TS18047: 'db' is possibly 'null'.
+../server/services/sync-consolidation-service.ts(340,28): error TS18047: 'db' is possibly 'null'.
+../server/services/sync-consolidation-service.ts(349,15): error TS18047: 'db' is possibly 'null'.
+../server/services/sync-consolidation-service.ts(364,30): error TS18047: 'db' is possibly 'null'.
+../server/services/sync-consolidation-service.ts(373,15): error TS18047: 'db' is possibly 'null'.
+../server/services/sync-consolidation-service.ts(384,29): error TS18047: 'db' is possibly 'null'.
+../server/services/sync-consolidation-service.ts(391,15): error TS18047: 'db' is possibly 'null'.
+../server/services/sync-google-place-id-service.ts(35,25): error TS18047: 'db' is possibly 'null'.
+../server/services/sync-google-place-id-service.ts(203,29): error TS18047: 'db' is possibly 'null'.
+../server/services/sync-google-place-id-service.ts(217,33): error TS18047: 'db' is possibly 'null'.
+../server/services/sync-google-place-id-service.ts(223,16): error TS2322: Type '{ id: number; name: string; nameEn: string | null; lat: number; lng: number; }' is not assignable to type '{ id: number; name: string; nameEn: string; lat: number; lng: number; }'.
+  Types of property 'nameEn' are incompatible.
+    Type 'string | null' is not assignable to type 'string'.
+      Type 'null' is not assignable to type 'string'.
+../server/services/sync-google-place-id-service.ts(270,25): error TS18047: 'db' is possibly 'null'.
+../server/services/sync-google-place-id-service.ts(289,29): error TS18047: 'db' is possibly 'null'.
+../server/services/sync-google-place-id-service.ts(353,15): error TS18047: 'db' is possibly 'null'.
+../server/services/sync-prices-to-seed-service.ts(15,26): error TS18047: 'db' is possibly 'null'.
+../server/services/sync-prices-to-seed-service.ts(39,15): error TS18047: 'db' is possibly 'null'.
+../server/services/sync-prices-to-seed-service.ts(46,28): error TS18047: 'db' is possibly 'null'.
+../server/services/sync-prices-to-seed-service.ts(55,17): error TS18047: 'db' is possibly 'null'.
+../server/services/taste-verifier.ts(214,7): error TS2353: Object literal may only specify known properties, and 'isVerified' does not exist in type '{ vibeScore?: number | undefined; buzzScore?: number | undefined; tasteVerifyScore?: number | undefined; realityPenalty?: number | undefined; finalScore?: number | undefined; tier?: number | undefined; }'.
+../server/services/tistory-crawler.ts(111,24): error TS18047: 'db' is possibly 'null'.
+../server/services/tistory-crawler.ts(160,13): error TS18047: 'db' is possibly 'null'.
+../server/services/tistory-crawler.ts(189,24): error TS18047: 'db' is possibly 'null'.
+../server/services/tistory-crawler.ts(213,13): error TS18047: 'db' is possibly 'null'.
+../server/services/tistory-crawler.ts(213,45): error TS2769: No overload matches this call.
+  Overload 1 of 2, '(value: { searchQuery: string | SQL<unknown> | Placeholder<string, any>; searchType: string | SQL<unknown> | Placeholder<string, any>; id?: number | SQL<unknown> | Placeholder<...> | undefined; ... 7 more ...; expiresAt?: Date | ... 3 more ... | undefined; }): PgInsertBase<...>', gave the following error.
+    Object literal may only specify known properties, and 'posts' does not exist in type 'SQL<unknown> | { michelinStars?: number | undefined; michelinDescription?: string | undefined; tripAdvisorRating?: number | undefined; tripAdvisorReviewCount?: number | undefined; expertReviews?: { ...; }[] | undefined; awards?: string[] | undefined; } | Placeholder<...>'.
+  Overload 2 of 2, '(values: { searchQuery: string | SQL<unknown> | Placeholder<string, any>; searchType: string | SQL<unknown> | Placeholder<string, any>; id?: number | SQL<unknown> | Placeholder<...> | undefined; ... 7 more ...; expiresAt?: Date | ... 3 more ... | undefined; }[]): PgInsertBase<...>', gave the following error.
+    Object literal may only specify known properties, and 'cityId' does not exist in type '{ searchQuery: string | SQL<unknown> | Placeholder<string, any>; searchType: string | SQL<unknown> | Placeholder<string, any>; id?: number | SQL<unknown> | Placeholder<...> | undefined; ... 7 more ...; expiresAt?: Date | ... 3 more ... | undefined; }[]'.
+../server/services/tistory-crawler.ts(248,27): error TS18047: 'db' is possibly 'null'.
+../server/services/tistory-crawler.ts(285,27): error TS18047: 'db' is possibly 'null'.
+../server/services/tistory-crawler.ts(292,35): error TS18047: 'db' is possibly 'null'.
+../server/services/tistory-crawler.ts(303,32): error TS18047: 'db' is possibly 'null'.
+../server/services/transport-pricing-service.ts(177,31): error TS18047: 'db' is possibly 'null'.
+../server/services/tripadvisor-crawler.ts(66,9): error TS2322: Type 'number | null' is not assignable to type 'number | undefined'.
+  Type 'null' is not assignable to type 'number | undefined'.
+../server/services/tripadvisor-crawler.ts(67,9): error TS2322: Type 'number | null' is not assignable to type 'number | undefined'.
+  Type 'null' is not assignable to type 'number | undefined'.
+../server/services/tripadvisor-crawler.ts(68,9): error TS2322: Type 'string | null' is not assignable to type 'string | undefined'.
+  Type 'null' is not assignable to type 'string | undefined'.
+../server/services/tripadvisor-crawler.ts(69,9): error TS2322: Type 'null' is not assignable to type 'string | undefined'.
+../server/services/tripadvisor-crawler.ts(70,9): error TS2322: Type 'null' is not assignable to type 'number | undefined'.
+../server/services/tripadvisor-crawler.ts(71,9): error TS2322: Type 'null' is not assignable to type 'number | undefined'.
+../server/services/tripadvisor-crawler.ts(72,9): error TS2322: Type 'null' is not assignable to type 'number | undefined'.
+../server/services/tripadvisor-crawler.ts(73,9): error TS2322: Type 'null' is not assignable to type 'number | undefined'.
+../server/services/tripadvisor-crawler.ts(74,9): error TS2322: Type 'null' is not assignable to type 'number | undefined'.
+../server/services/tripadvisor-crawler.ts(75,9): error TS2322: Type 'null' is not assignable to type 'string | undefined'.
+../server/services/tripadvisor-crawler.ts(95,30): error TS18047: 'db' is possibly 'null'.
+../server/services/tripadvisor-crawler.ts(112,13): error TS18047: 'db' is possibly 'null'.
+../server/services/tripadvisor-crawler.ts(148,24): error TS18047: 'db' is possibly 'null'.
+../server/services/tripadvisor-crawler.ts(154,28): error TS18047: 'db' is possibly 'null'.
+../server/services/tripadvisor-crawler.ts(183,27): error TS18047: 'db' is possibly 'null'.
+../server/services/tripadvisor-crawler.ts(202,25): error TS18047: 'db' is possibly 'null'.
+../server/services/tripadvisor-crawler.ts(212,13): error TS18047: 'db' is possibly 'null'.
+../server/services/tripadvisor-crawler.ts(251,24): error TS18047: 'db' is possibly 'null'.
+../server/services/vibe-processor.ts(176,37): error TS18047: 'db' is possibly 'null'.
+../server/services/vibe-processor.ts(287,37): error TS18047: 'db' is possibly 'null'.
+../server/services/vibe-processor.ts(303,28): error TS18047: 'db' is possibly 'null'.
+../server/services/weather-crawler.ts(72,24): error TS18047: 'db' is possibly 'null'.
+../server/services/weather-crawler.ts(115,13): error TS18047: 'db' is possibly 'null'.
+../server/services/weather-crawler.ts(132,11): error TS18047: 'db' is possibly 'null'.
+../server/services/weather-crawler.ts(207,15): error TS18047: 'db' is possibly 'null'.
+../server/services/weather-crawler.ts(238,27): error TS18047: 'db' is possibly 'null'.
+../server/services/weather-crawler.ts(269,34): error TS18047: 'db' is possibly 'null'.
+../server/services/weather-crawler.ts(276,27): error TS18047: 'db' is possibly 'null'.
+../server/services/weather-crawler.ts(311,27): error TS18047: 'db' is possibly 'null'.
+../server/services/wikimedia-enrichment.ts(54,11): error TS18047: 'db' is possibly 'null'.
+../server/services/wikimedia-enrichment.ts(83,28): error TS18047: 'db' is possibly 'null'.
+../server/services/wikimedia-enrichment.ts(153,28): error TS18047: 'db' is possibly 'null'.
+../server/services/wikimedia-enrichment.ts(183,15): error TS18047: 'db' is possibly 'null'.
+../server/services/youtube-crawler.ts(91,29): error TS18047: 'db' is possibly 'null'.
+../server/services/youtube-crawler.ts(91,38): error TS2339: Property 'youtubeChannels' does not exist on type '{}'.
+../server/services/youtube-crawler.ts(112,39): error TS18047: 'db' is possibly 'null'.
+../server/services/youtube-crawler.ts(112,48): error TS2339: Property 'youtubeVideos' does not exist on type '{}'.
+../server/services/youtube-crawler.ts(137,23): error TS18047: 'db' is possibly 'null'.
+../server/services/youtube-crawler.ts(153,23): error TS18047: 'db' is possibly 'null'.
+../server/services/youtube-crawler.ts(171,41): error TS18047: 'db' is possibly 'null'.
+../server/services/youtube-crawler.ts(203,19): error TS18047: 'db' is possibly 'null'.
+../server/services/youtube-crawler.ts(217,19): error TS18047: 'db' is possibly 'null'.
+../server/services/youtube-crawler.ts(232,13): error TS18047: 'db' is possibly 'null'.
+../server/services/youtube-crawler.ts(263,28): error TS18047: 'db' is possibly 'null'.
+../server/services/youtube-crawler.ts(263,37): error TS2339: Property 'youtubeChannels' does not exist on type '{}'.
+../server/services/youtube-crawler.ts(538,32): error TS18047: 'db' is possibly 'null'.
+../server/services/youtube-crawler.ts(545,30): error TS18047: 'db' is possibly 'null'.
+../server/services/youtube-crawler.ts(549,32): error TS18047: 'db' is possibly 'null'.
+../server/services/youtube-crawler.ts(553,35): error TS18047: 'db' is possibly 'null'.
+../server/services/youtube-crawler.ts(553,44): error TS2339: Property 'youtubeChannels' does not exist on type '{}'.
+../server/services/youtube-fetcher.ts(126,13): error TS18047: 'db' is possibly 'null'.
+../server/services/youtube-fetcher.ts(230,29): error TS18047: 'db' is possibly 'null'.
+../server/services/youtube-fetcher.ts(241,13): error TS18047: 'db' is possibly 'null'.
+../server/services/youtube-fetcher.ts(265,37): error TS18047: 'db' is possibly 'null'.
+../server/services/youtube-fetcher.ts(285,17): error TS18047: 'db' is possibly 'null'.
+../server/services/youtube-fetcher.ts(287,17): error TS18047: 'db' is possibly 'null'.
+../server/services/youtube-fetcher.ts(304,11): error TS18047: 'db' is possibly 'null'.
+../server/services/youtube-fetcher.ts(317,28): error TS18047: 'db' is possibly 'null'.
+../server/storage.ts(91,26): error TS18047: 'db' is possibly 'null'.
+../server/storage.ts(96,26): error TS18047: 'db' is possibly 'null'.
+../server/storage.ts(101,26): error TS18047: 'db' is possibly 'null'.
+../server/storage.ts(102,28): error TS2339: Property 'provider' does not exist on type '{ password: string; username: string; displayName?: string | null | undefined; persona?: "luxury" | "comfort" | "economic" | null | undefined; }'.
+../server/storage.ts(102,51): error TS2339: Property 'providerId' does not exist on type '{ password: string; username: string; displayName?: string | null | undefined; persona?: "luxury" | "comfort" | "economic" | null | undefined; }'.
+../server/storage.ts(104,53): error TS2339: Property 'provider' does not exist on type '{ password: string; username: string; displayName?: string | null | undefined; persona?: "luxury" | "comfort" | "economic" | null | undefined; }'.
+../server/storage.ts(104,74): error TS2339: Property 'providerId' does not exist on type '{ password: string; username: string; displayName?: string | null | undefined; persona?: "luxury" | "comfort" | "economic" | null | undefined; }'.
+../server/storage.ts(113,26): error TS18047: 'db' is possibly 'null'.
+../server/storage.ts(120,27): error TS18047: 'db' is possibly 'null'.
+../server/storage.ts(129,26): error TS18047: 'db' is possibly 'null'.
+../server/storage.ts(137,26): error TS18047: 'db' is possibly 'null'.
+../server/storage.ts(142,11): error TS18047: 'db' is possibly 'null'.
+../server/storage.ts(148,26): error TS18047: 'db' is possibly 'null'.
+../server/storage.ts(154,12): error TS18047: 'db' is possibly 'null'.
+../server/storage.ts(158,26): error TS18047: 'db' is possibly 'null'.
+../server/storage.ts(163,26): error TS18047: 'db' is possibly 'null'.
+../server/storage.ts(168,29): error TS18047: 'db' is possibly 'null'.
+../server/storage.ts(175,14): error TS18047: 'db' is possibly 'null'.
+../server/storage.ts(177,12): error TS18047: 'db' is possibly 'null'.
+../server/storage.ts(181,27): error TS18047: 'db' is possibly 'null'.
+../server/storage.ts(186,27): error TS18047: 'db' is possibly 'null'.
+../server/storage.ts(191,30): error TS18047: 'db' is possibly 'null'.
+../server/storage.ts(196,27): error TS18047: 'db' is possibly 'null'.
+../server/storage.ts(211,27): error TS18047: 'db' is possibly 'null'.
+../server/storage.ts(216,12): error TS18047: 'db' is possibly 'null'.
+../server/storage.ts(224,12): error TS18047: 'db' is possibly 'null'.
+../server/storage.ts(228,28): error TS18047: 'db' is possibly 'null'.
+../server/storage.ts(232,31): error TS18047: 'db' is possibly 'null'.
+../server/storage.ts(239,29): error TS18047: 'db' is possibly 'null'.
+../server/storage.ts(245,12): error TS18047: 'db' is possibly 'null'.
+../server/storage.ts(249,12): error TS18047: 'db' is possibly 'null'.
+../server/storage.ts(255,31): error TS18047: 'db' is possibly 'null'.
+../server/storage.ts(261,12): error TS18047: 'db' is possibly 'null'.
+../server/storage.ts(265,33): error TS18047: 'db' is possibly 'null'.
+../server/storage.ts(271,12): error TS18047: 'db' is possibly 'null'.
+../server/storage.ts(276,30): error TS18047: 'db' is possibly 'null'.
+../server/storage.ts(287,29): error TS18047: 'db' is possibly 'null'.
+../server/storage.ts(300,31): error TS18047: 'db' is possibly 'null'.
+../server/storage.ts(307,29): error TS18047: 'db' is possibly 'null'.
+../server/storage.ts(313,12): error TS18047: 'db' is possibly 'null'.
+../server/storage.ts(319,31): error TS18047: 'db' is possibly 'null'.
+../server/storage.ts(324,34): error TS18047: 'db' is possibly 'null'.
+../server/storage.ts(329,12): error TS18047: 'db' is possibly 'null'.
+../server/storage.ts(336,27): error TS18047: 'db' is possibly 'null'.
+../server/storage.ts(349,31): error TS18047: 'db' is possibly 'null'.
+../server/storage.ts(356,29): error TS18047: 'db' is possibly 'null'.
+../server/storage.ts(362,28): error TS18047: 'db' is possibly 'null'.
+../server/storage.ts(368,12): error TS18047: 'db' is possibly 'null'.
+../server/storage.ts(372,27): error TS18047: 'db' is possibly 'null'.
+../server/storage.ts(381,31): error TS18047: 'db' is possibly 'null'.
+../server/storage.ts(388,29): error TS18047: 'db' is possibly 'null'.
+../server/storage.ts(394,27): error TS18047: 'db' is possibly 'null'.
+../server/storage.ts(400,12): error TS18047: 'db' is possibly 'null'.

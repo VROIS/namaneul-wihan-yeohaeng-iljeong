@@ -4,6 +4,9 @@ import { getApiUrl } from "./query-client";
 const AUTH_KEY = "@vibetrip_auth";
 const USER_KEY = "@vibetrip_user";
 
+// 로컬 개발 환경에서 빠른 테스트를 위해 인증 우회를 활성화합니다.
+const BYPASS_AUTH_IN_DEV = true;
+
 export interface UserData {
   id: string;
   email?: string;
@@ -21,6 +24,9 @@ export interface UserData {
 
 
 export async function isAuthenticated(): Promise<boolean> {
+  if (__DEV__ && BYPASS_AUTH_IN_DEV) {
+    return true;
+  }
   try {
     const token = await AsyncStorage.getItem(AUTH_KEY);
     return token !== null;
@@ -30,6 +36,20 @@ export async function isAuthenticated(): Promise<boolean> {
 }
 
 export async function getUserData(): Promise<UserData | null> {
+  if (__DEV__ && BYPASS_AUTH_IN_DEV) {
+    return {
+      id: "local_dev_user",
+      email: "local@example.com",
+      name: "로컬 개발자",
+      displayName: "로컬 개발자",
+      provider: "kakao",
+      language: "ko",
+      birthDate: "1990-01-01",
+      ageGroup: "30대",
+      isPaid: true,
+      token: "mock_token_for_dev",
+    };
+  }
   try {
     const data = await AsyncStorage.getItem(USER_KEY);
     return data ? JSON.parse(data) : null;

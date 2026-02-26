@@ -9,7 +9,7 @@ import {
   Modal,
   useColorScheme,
 } from "react-native";
-import { Feather } from "@expo/vector-icons";
+import Icon from "@/components/Icon";
 import { Spacing, BorderRadius, Fonts, Colors } from "@/constants/theme";
 
 export type ErrorFallbackProps = {
@@ -53,7 +53,7 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
             },
           ]}
         >
-          <Feather name="alert-circle" size={20} color={theme.text} />
+          <Icon name="alert-circle" size={20} color={theme.text} />
         </Pressable>
       ) : null}
 
@@ -91,8 +91,18 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
           onRequestClose={() => setIsModalVisible(false)}
         >
           <View style={styles.modalOverlay}>
-            <View style={[styles.modalContainer, { backgroundColor: theme.backgroundRoot }]}>
-              <View style={[styles.modalHeader, { borderBottomColor: theme.border }]}>
+            <View
+              style={[
+                styles.modalContainer,
+                { backgroundColor: theme.backgroundRoot },
+              ]}
+            >
+              <View
+                style={[
+                  styles.modalHeader,
+                  { borderBottomColor: theme.border },
+                ]}
+              >
                 <Text style={[styles.modalTitle, { color: theme.text }]}>
                   Error Details
                 </Text>
@@ -103,7 +113,7 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
                     { opacity: pressed ? 0.6 : 1 },
                   ]}
                 >
-                  <Feather name="x" size={24} color={theme.text} />
+                  <Icon name="x" size={24} color={theme.text} />
                 </Pressable>
               </View>
 
@@ -123,7 +133,7 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
                       styles.errorText,
                       {
                         color: theme.text,
-                        fontFamily: Fonts?.mono || "monospace",
+                        fontFamily: "monospace",
                       },
                     ]}
                     selectable

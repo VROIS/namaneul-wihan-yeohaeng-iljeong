@@ -1,5 +1,11 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, Platform, ActivityIndicator } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Platform,
+  ActivityIndicator,
+} from "react-native";
 import { WebView } from "react-native-webview";
 import { Brand } from "@/constants/theme";
 import { apiRequest } from "@/lib/query-client";
@@ -29,18 +35,18 @@ export function InteractiveMap({ places, height = 200 }: InteractiveMapProps) {
       try {
         setLoading(true);
         setError(null);
-        
-        const validPlaces = places.filter(p => p.lat && p.lng);
-        
+
+        const validPlaces = places.filter((p) => p.lat && p.lng);
+
         const response = await apiRequest("POST", "/api/map/html", {
-          places: validPlaces.map(p => ({
+          places: validPlaces.map((p) => ({
             lat: p.lat,
             lng: p.lng,
             name: p.name,
             vibeScore: p.vibeScore || 0,
           })),
         });
-        
+
         const data = await response.json();
         setMapHtml(data.html);
       } catch (err) {
@@ -69,7 +75,9 @@ export function InteractiveMap({ places, height = 200 }: InteractiveMapProps) {
       <View style={[styles.container, { height }]}>
         <View style={styles.fallback}>
           <ActivityIndicator size="small" color={Brand.primary} />
-          <Text style={[styles.fallbackText, { marginTop: 8 }]}>지도 로딩 중...</Text>
+          <Text style={[styles.fallbackText, { marginTop: 8 }]}>
+            지도 로딩 중...
+          </Text>
         </View>
       </View>
     );
@@ -79,7 +87,9 @@ export function InteractiveMap({ places, height = 200 }: InteractiveMapProps) {
     return (
       <View style={[styles.container, { height }]}>
         <View style={styles.fallback}>
-          <Text style={styles.fallbackText}>{error || "지도를 불러올 수 없습니다"}</Text>
+          <Text style={styles.fallbackText}>
+            {error || "지도를 불러올 수 없습니다"}
+          </Text>
         </View>
       </View>
     );

@@ -12,8 +12,8 @@ import {
   Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Icon from "@/components/Icon";
 import { useNavigation } from "@react-navigation/native";
-import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
@@ -42,9 +42,12 @@ export default function OnboardingScreen() {
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? "light"];
   const insets = useSafeAreaInsets();
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const navigation =
+    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
-  const [selectedLanguage, setSelectedLanguage] = useState<Language>(LANGUAGES[0]);
+  const [selectedLanguage, setSelectedLanguage] = useState<Language>(
+    LANGUAGES[0],
+  );
   const [showLanguageModal, setShowLanguageModal] = useState(false);
 
   const [day, setDay] = useState("");
@@ -61,17 +64,28 @@ export default function OnboardingScreen() {
       const m = parseInt(month, 10) - 1;
       const y = parseInt(year, 10);
       const date = new Date(y, m, d);
-      if (date.getDate() === d && date.getMonth() === m && date.getFullYear() === y) {
+      if (
+        date.getDate() === d &&
+        date.getMonth() === m &&
+        date.getFullYear() === y
+      ) {
         return date;
       }
     }
     return null;
   }, [day, month, year]);
 
-  const age = useMemo(() => (birthDate ? calculateAge(birthDate) : null), [birthDate]);
-  const ageGroup = useMemo(() => (age !== null ? getAgeGroup(age) : null), [age]);
+  const age = useMemo(
+    () => (birthDate ? calculateAge(birthDate) : null),
+    [birthDate],
+  );
+  const ageGroup = useMemo(
+    () => (age !== null ? getAgeGroup(age) : null),
+    [age],
+  );
   const isAdult = age !== null && age >= 18;
-  const isDateComplete = day.length === 2 && month.length === 2 && year.length === 4;
+  const isDateComplete =
+    day.length === 2 && month.length === 2 && year.length === 4;
 
   const validateAndSetDay = (value: string) => {
     const num = value.replace(/[^0-9]/g, "").slice(0, 2);
@@ -138,51 +152,82 @@ export default function OnboardingScreen() {
     });
   };
 
+
+
   return (
-    <View
-      style={[
-        styles.container,
-        { backgroundColor: theme.backgroundRoot },
-      ]}
-    >
+    <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <View style={[styles.content, { paddingTop: insets.top + Spacing.xl, paddingBottom: insets.bottom + Spacing.xl }]}>
+        <View
+          style={[
+            styles.content,
+            {
+              paddingTop: insets.top + Spacing.xl,
+              paddingBottom: insets.bottom + Spacing.xl,
+            },
+          ]}
+        >
           {/* Header */}
           <View style={styles.header}>
-            <Pressable onPress={() => navigation.goBack()} style={styles.backButton}>
-              <Feather name="arrow-left" size={24} color={theme.text} />
+            <Pressable
+              onPress={() => navigation.goBack()}
+              style={styles.backButton}
+            >
+              <Icon name="arrow-left" size={24} color={theme.text} />
             </Pressable>
-            <Text style={[styles.headerTitle, { color: theme.text }]}>가입하기</Text>
+            <Text style={[styles.headerTitle, { color: theme.text }]}>
+              가입하기
+            </Text>
             <View style={styles.placeholder} />
           </View>
 
           {/* Form Section */}
           <View style={styles.formSection}>
             {/* Language Selector */}
-            <Text style={[styles.label, { color: theme.textSecondary }]}>언어</Text>
+            <Text style={[styles.label, { color: theme.textSecondary }]}>
+              언어
+            </Text>
             <Pressable
-              style={[styles.selector, { backgroundColor: theme.backgroundDefault, borderColor: theme.border }]}
+              style={[
+                styles.selector,
+                {
+                  backgroundColor: theme.backgroundDefault,
+                  borderColor: theme.border,
+                },
+              ]}
               onPress={() => setShowLanguageModal(true)}
             >
               <Text style={styles.flagText}>{selectedLanguage.flag}</Text>
               <Text style={[styles.selectorText, { color: theme.text }]}>
                 {selectedLanguage.nativeName}
               </Text>
-              <Feather name="chevron-down" size={20} color={theme.textTertiary} />
+              <Icon name="chevron-down" size={20} color={theme.textTertiary} />
             </Pressable>
 
             {/* Birth Date Input - Card Style DD/MM/YYYY */}
-            <Text style={[styles.label, { color: theme.textSecondary, marginTop: Spacing.xl }]}>
+            <Text
+              style={[
+                styles.label,
+                { color: theme.textSecondary, marginTop: Spacing.xl },
+              ]}
+            >
               생년월일
             </Text>
             <Text style={[styles.birthDateHint, { color: theme.textTertiary }]}>
               실제 생년월일을 입력하시면 가족 맞춤 일정을 드려요
             </Text>
             <View style={styles.dateInputRow}>
-              <View style={[styles.dateInputBox, { backgroundColor: theme.backgroundDefault, borderColor: dateError ? "#EF4444" : theme.border }]}>
+              <View
+                style={[
+                  styles.dateInputBox,
+                  {
+                    backgroundColor: theme.backgroundDefault,
+                    borderColor: dateError ? "#EF4444" : theme.border,
+                  },
+                ]}
+              >
                 <TextInput
                   style={[styles.dateInput, { color: theme.text }]}
                   placeholder="DD"
@@ -194,8 +239,20 @@ export default function OnboardingScreen() {
                   textAlign="center"
                 />
               </View>
-              <Text style={[styles.dateSeparator, { color: theme.textTertiary }]}>/</Text>
-              <View style={[styles.dateInputBox, { backgroundColor: theme.backgroundDefault, borderColor: dateError ? "#EF4444" : theme.border }]}>
+              <Text
+                style={[styles.dateSeparator, { color: theme.textTertiary }]}
+              >
+                /
+              </Text>
+              <View
+                style={[
+                  styles.dateInputBox,
+                  {
+                    backgroundColor: theme.backgroundDefault,
+                    borderColor: dateError ? "#EF4444" : theme.border,
+                  },
+                ]}
+              >
                 <TextInput
                   ref={monthRef}
                   style={[styles.dateInput, { color: theme.text }]}
@@ -208,8 +265,21 @@ export default function OnboardingScreen() {
                   textAlign="center"
                 />
               </View>
-              <Text style={[styles.dateSeparator, { color: theme.textTertiary }]}>/</Text>
-              <View style={[styles.dateInputBox, styles.yearBox, { backgroundColor: theme.backgroundDefault, borderColor: dateError ? "#EF4444" : theme.border }]}>
+              <Text
+                style={[styles.dateSeparator, { color: theme.textTertiary }]}
+              >
+                /
+              </Text>
+              <View
+                style={[
+                  styles.dateInputBox,
+                  styles.yearBox,
+                  {
+                    backgroundColor: theme.backgroundDefault,
+                    borderColor: dateError ? "#EF4444" : theme.border,
+                  },
+                ]}
+              >
                 <TextInput
                   ref={yearRef}
                   style={[styles.dateInput, { color: theme.text }]}
@@ -231,7 +301,9 @@ export default function OnboardingScreen() {
             {dateError ? (
               <Text style={styles.errorText}>{dateError}</Text>
             ) : isDateComplete && !isAdult && age !== null ? (
-              <Text style={styles.errorText}>만 18세 이상만 이용 가능합니다</Text>
+              <Text style={styles.errorText}>
+                만 18세 이상만 이용 가능합니다
+              </Text>
             ) : null}
           </View>
 
@@ -289,11 +361,18 @@ export default function OnboardingScreen() {
         onRequestClose={() => setShowLanguageModal(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: theme.backgroundDefault }]}>
+          <View
+            style={[
+              styles.modalContent,
+              { backgroundColor: theme.backgroundDefault },
+            ]}
+          >
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: theme.text }]}>언어 선택</Text>
+              <Text style={[styles.modalTitle, { color: theme.text }]}>
+                언어 선택
+              </Text>
               <Pressable onPress={() => setShowLanguageModal(false)}>
-                <Feather name="x" size={24} color={theme.text} />
+                <Icon name="x" size={24} color={theme.text} />
               </Pressable>
             </View>
             <ScrollView style={styles.languageList}>
@@ -302,7 +381,8 @@ export default function OnboardingScreen() {
                   key={lang.code}
                   style={[
                     styles.languageItem,
-                    selectedLanguage.code === lang.code && styles.languageItemSelected,
+                    selectedLanguage.code === lang.code &&
+                    styles.languageItemSelected,
                   ]}
                   onPress={() => {
                     setSelectedLanguage(lang);
@@ -314,12 +394,17 @@ export default function OnboardingScreen() {
                     <Text style={[styles.languageName, { color: theme.text }]}>
                       {lang.nativeName}
                     </Text>
-                    <Text style={[styles.languageSubname, { color: theme.textTertiary }]}>
+                    <Text
+                      style={[
+                        styles.languageSubname,
+                        { color: theme.textTertiary },
+                      ]}
+                    >
                       {lang.name}
                     </Text>
                   </View>
                   {selectedLanguage.code === lang.code ? (
-                    <Feather name="check" size={20} color={Brand.primary} />
+                    <Icon name="check" size={20} color={Brand.primary} />
                   ) : null}
                 </Pressable>
               ))}

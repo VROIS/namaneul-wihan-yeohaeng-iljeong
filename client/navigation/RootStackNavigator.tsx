@@ -1,5 +1,10 @@
 import React, { useEffect, useState } from "react";
-import { Platform, useColorScheme, View, ActivityIndicator } from "react-native";
+import {
+  Platform,
+  useColorScheme,
+  View,
+  ActivityIndicator,
+} from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import MainTabNavigator from "@/navigation/MainTabNavigator";
 import DestinationDetailScreen from "@/screens/DestinationDetailScreen";
@@ -8,6 +13,7 @@ import LoginScreen from "@/screens/LoginScreen";
 import VerificationRequestScreen from "@/screens/VerificationRequestScreen";
 import SavedTripDetailScreen from "@/screens/SavedTripDetailScreen";
 import AdminScreen from "@/screens/AdminScreen";
+import BTSConcertPlannerScreen from "@/screens/BTSConcertPlannerScreen";
 import { Colors } from "@/constants/theme";
 import { Itinerary } from "@/types/trip";
 import { isAuthenticated } from "@/lib/auth";
@@ -20,6 +26,7 @@ export type RootStackParamList = {
   VerificationRequest: { itinerary: Itinerary };
   SavedTripDetail: { itineraryId: number };
   AdminModal: undefined;
+  BTSConcertPlanner: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -41,7 +48,14 @@ export default function RootStackNavigator() {
 
   if (!authChecked) {
     return (
-      <View style={{ flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: theme.backgroundRoot }}>
+      <View
+        style={{
+          flex: 1,
+          justifyContent: "center",
+          alignItems: "center",
+          backgroundColor: theme.backgroundRoot,
+        }}
+      >
         <ActivityIndicator size="large" color={theme.link} />
       </View>
     );
@@ -123,6 +137,13 @@ export default function RootStackNavigator() {
           presentation: "fullScreenModal",
           headerShown: false,
           animation: "slide_from_bottom",
+        }}
+      />
+      <Stack.Screen
+        name="BTSConcertPlanner"
+        component={BTSConcertPlannerScreen}
+        options={{
+          headerShown: false,
         }}
       />
     </Stack.Navigator>

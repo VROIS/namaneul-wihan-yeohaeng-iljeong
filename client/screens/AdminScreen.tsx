@@ -12,8 +12,8 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { WebView } from "react-native-webview";
-import { Feather } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
+import Icon from "@/components/Icon";
 
 import { Colors, Spacing, Brand } from "@/constants/theme";
 import ThemedText from "@/components/ThemedText";
@@ -57,7 +57,9 @@ export default function AdminScreen() {
   // 비밀번호 인증 화면
   if (!isAuthenticated) {
     return (
-      <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
+      <View
+        style={[styles.container, { backgroundColor: theme.backgroundRoot }]}
+      >
         {/* 상단 닫기 버튼 */}
         <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
           <TouchableOpacity
@@ -65,7 +67,7 @@ export default function AdminScreen() {
             onPress={handleClose}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Feather name="x" size={24} color={theme.text} />
+            <Icon name="x" size={24} color={theme.text} />
           </TouchableOpacity>
           <ThemedText style={styles.headerTitle}>관리자 인증</ThemedText>
           <View style={{ width: 40 }} />
@@ -76,11 +78,13 @@ export default function AdminScreen() {
           behavior={Platform.OS === "ios" ? "padding" : "height"}
         >
           <View style={styles.authBox}>
-            <Feather name="shield" size={48} color={Brand.primary} />
+            <Icon name="shield" size={48} color={Brand.primary} />
             <ThemedText style={[styles.authTitle, { color: theme.text }]}>
               관리자 대시보드
             </ThemedText>
-            <ThemedText style={[styles.authSubtitle, { color: theme.textSecondary }]}>
+            <ThemedText
+              style={[styles.authSubtitle, { color: theme.textSecondary }]}
+            >
               접근하려면 비밀번호를 입력하세요
             </ThemedText>
 
@@ -106,7 +110,9 @@ export default function AdminScreen() {
             />
 
             {error ? (
-              <ThemedText style={[styles.errorText, { color: Colors.light.danger }]}>
+              <ThemedText
+                style={[styles.errorText, { color: Colors.light.danger }]}
+              >
                 {error}
               </ThemedText>
             ) : null}
@@ -127,7 +133,9 @@ export default function AdminScreen() {
   // 인증 완료 후: 관리자 대시보드 (웹에서는 iframe 사용)
   if (Platform.OS === "web") {
     return (
-      <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
+      <View
+        style={[styles.container, { backgroundColor: theme.backgroundRoot }]}
+      >
         {/* 상단 닫기 버튼 */}
         <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
           <TouchableOpacity
@@ -135,7 +143,7 @@ export default function AdminScreen() {
             onPress={handleClose}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Feather name="x" size={24} color="#FFFFFF" />
+            <Icon name="x" size={24} color="#FFFFFF" />
           </TouchableOpacity>
           <ThemedText style={[styles.headerTitle, { color: "#FFFFFF" }]}>
             관리자 대시보드
@@ -146,12 +154,14 @@ export default function AdminScreen() {
         {/* iframe으로 관리자 대시보드 직접 표시 */}
         <iframe
           src={adminUrl}
-          style={{
-            flex: 1,
-            width: "100%",
-            height: "100%",
-            border: "none",
-          } as any}
+          style={
+            {
+              flex: 1,
+              width: "100%",
+              height: "100%",
+              border: "none",
+            } as any
+          }
           title="Admin Dashboard"
         />
       </View>
@@ -167,7 +177,7 @@ export default function AdminScreen() {
           onPress={handleClose}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Feather name="x" size={24} color="#FFFFFF" />
+          <Icon name="x" size={24} color="#FFFFFF" />
         </TouchableOpacity>
         <ThemedText style={[styles.headerTitle, { color: "#FFFFFF" }]}>
           관리자 대시보드

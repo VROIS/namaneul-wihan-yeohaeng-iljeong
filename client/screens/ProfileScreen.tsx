@@ -1,17 +1,38 @@
 import React, { useState, useEffect } from "react";
-import { View, StyleSheet, Text, Pressable, ScrollView, useColorScheme, ActivityIndicator } from "react-native";
+import {
+  View,
+  StyleSheet,
+  Text,
+  Pressable,
+  ScrollView,
+  useColorScheme,
+  ActivityIndicator,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 
-import { Spacing, BorderRadius, Brand, Typography, Colors, Shadows } from "@/constants/theme";
+import {
+  Spacing,
+  BorderRadius,
+  Brand,
+  Typography,
+  Colors,
+  Shadows,
+  Fonts,
+} from "@/constants/theme";
+import Icon from "@/components/Icon";
 import ThemedText from "@/components/ThemedText";
 import { apiRequest } from "@/lib/query-client";
-import { getUserData, isAuthenticated, clearAuth, type UserData } from "@/lib/auth";
+import {
+  getUserData,
+  isAuthenticated,
+  clearAuth,
+  type UserData,
+} from "@/lib/auth";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 // 저장된 일정 타입
@@ -35,7 +56,8 @@ export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const tabBarHeight = useBottomTabBarHeight();
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const navigation =
+    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [persona, setPersona] = useState<"luxury" | "comfort">("comfort");
 
   // 🗂️ 저장된 일정 목록
@@ -58,7 +80,10 @@ export default function ProfileScreen() {
           setUser(userData);
 
           if (userData) {
-            const response = await apiRequest("GET", `/api/users/${userData.id}/itineraries`);
+            const response = await apiRequest(
+              "GET",
+              `/api/users/${userData.id}/itineraries`,
+            );
             const trips = await response.json();
             setSavedTrips(trips || []);
           }
@@ -87,7 +112,13 @@ export default function ProfileScreen() {
 
   const stats = [
     { label: "여행", value: String(savedTrips.length), icon: "map" },
-    { label: "방문", value: String(savedTrips.reduce((sum, t) => sum + (t.companionCount || 0), 0)), icon: "map-pin" },
+    {
+      label: "방문",
+      value: String(
+        savedTrips.reduce((sum, t) => sum + (t.companionCount || 0), 0),
+      ),
+      icon: "map-pin",
+    },
     { label: "저장", value: String(savedTrips.length), icon: "bookmark" },
   ];
 
@@ -103,15 +134,21 @@ export default function ProfileScreen() {
     >
       <View style={styles.profileCard}>
         <LinearGradient
-          colors={persona === "luxury" ? [Brand.luxuryGold, "#F97316"] : [Brand.comfortBlue, "#06B6D4"]}
+          colors={
+            persona === "luxury"
+              ? [Brand.luxuryGold, "#F97316"]
+              : [Brand.comfortBlue, "#06B6D4"]
+          }
           style={styles.avatarGradient}
         >
-          <Feather name="user" size={36} color="#FFFFFF" />
+          <Icon name="user" size={36} color="#FFFFFF" />
         </LinearGradient>
         {isAuth && user ? (
           <>
             <ThemedText style={styles.userName}>{user.name}</ThemedText>
-            <Text style={[styles.userEmail, { color: theme.textSecondary }]}>{user.email}</Text>
+            <Text style={[styles.userEmail, { color: theme.textSecondary }]}>
+              {user.email}
+            </Text>
           </>
         ) : (
           <>
@@ -128,10 +165,25 @@ export default function ProfileScreen() {
 
       <View style={styles.statsRow}>
         {stats.map((stat, index) => (
-          <View key={index} style={[styles.statCard, { backgroundColor: theme.backgroundDefault }]}>
-            <Feather name={stat.icon as any} size={20} color={Brand.primary} style={styles.statIcon} />
-            <Text style={[styles.statValue, { color: theme.text }]}>{stat.value}</Text>
-            <Text style={[styles.statLabel, { color: theme.textSecondary }]}>{stat.label}</Text>
+          <View
+            key={index}
+            style={[
+              styles.statCard,
+              { backgroundColor: theme.backgroundDefault },
+            ]}
+          >
+            <Icon
+              name={stat.icon as any}
+              size={20}
+              color={Brand.primary}
+              style={styles.statIcon}
+            />
+            <Text style={[styles.statValue, { color: theme.text }]}>
+              {stat.value}
+            </Text>
+            <Text style={[styles.statLabel, { color: theme.textSecondary }]}>
+              {stat.label}
+            </Text>
           </View>
         ))}
       </View>
@@ -142,51 +194,98 @@ export default function ProfileScreen() {
         {isLoadingTrips ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="small" color={Brand.primary} />
-            <Text style={[styles.loadingText, { color: theme.textSecondary }]}>불러오는 중...</Text>
+            <Text style={[styles.loadingText, { color: theme.textSecondary }]}>
+              불러오는 중...
+            </Text>
           </View>
         ) : savedTrips.length === 0 ? (
-          <View style={[styles.emptyTrips, { backgroundColor: theme.backgroundDefault }]}>
-            <Feather name="map" size={40} color={theme.textTertiary} />
-            <Text style={[styles.emptyTripsText, { color: theme.textSecondary }]}>
+          <View
+            style={[
+              styles.emptyTrips,
+              { backgroundColor: theme.backgroundDefault },
+            ]}
+          >
+            <Icon name="map" size={40} color={theme.textTertiary} />
+            <Text
+              style={[styles.emptyTripsText, { color: theme.textSecondary }]}
+            >
               저장된 여행이 없어요
             </Text>
-            <Text style={[styles.emptyTripsHint, { color: theme.textTertiary }]}>
+            <Text
+              style={[styles.emptyTripsHint, { color: theme.textTertiary }]}
+            >
               일정을 생성하고 저장해보세요!
             </Text>
           </View>
         ) : (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tripsScroll}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.tripsScroll}
+          >
             {savedTrips.map((trip) => (
               <Pressable
                 key={trip.id}
-                style={[styles.tripCard, { backgroundColor: theme.backgroundDefault }]}
-                onPress={() => navigation.navigate("SavedTripDetail", { itineraryId: trip.id })}
+                style={[
+                  styles.tripCard,
+                  { backgroundColor: theme.backgroundDefault },
+                ]}
+                onPress={() =>
+                  navigation.navigate("SavedTripDetail", {
+                    itineraryId: trip.id,
+                  })
+                }
               >
                 <View style={styles.tripCardHeader}>
-                  <View style={[styles.tripCardIcon, { backgroundColor: `${Brand.primary}20` }]}>
-                    <Feather name="map-pin" size={20} color={Brand.primary} />
+                  <View
+                    style={[
+                      styles.tripCardIcon,
+                      { backgroundColor: `${Brand.primary}20` },
+                    ]}
+                  >
+                    <Icon name="map-pin" size={20} color={Brand.primary} />
                   </View>
                   {trip.videoStatus === "succeeded" && (
                     <View style={styles.videoReadyBadge}>
-                      <Feather name="film" size={12} color="#FFFFFF" />
+                      <Icon name="film" size={12} color="#FFFFFF" />
                     </View>
                   )}
                 </View>
-                <Text style={[styles.tripCardTitle, { color: theme.text }]} numberOfLines={1}>
+                <Text
+                  style={[styles.tripCardTitle, { color: theme.text }]}
+                  numberOfLines={1}
+                >
                   {trip.title}
                 </Text>
-                <Text style={[styles.tripCardDate, { color: theme.textSecondary }]}>
-                  {trip.startDate?.split("T")[0]} ~ {trip.endDate?.split("T")[0]}
+                <Text
+                  style={[styles.tripCardDate, { color: theme.textSecondary }]}
+                >
+                  {trip.startDate?.split("T")[0]} ~{" "}
+                  {trip.endDate?.split("T")[0]}
                 </Text>
                 <View style={styles.tripCardTags}>
-                  <View style={[styles.tripTag, { backgroundColor: `${Brand.primary}15` }]}>
-                    <Text style={[styles.tripTagText, { color: Brand.primary }]}>
+                  <View
+                    style={[
+                      styles.tripTag,
+                      { backgroundColor: `${Brand.primary}15` },
+                    ]}
+                  >
+                    <Text
+                      style={[styles.tripTagText, { color: Brand.primary }]}
+                    >
                       {trip.companionCount}명
                     </Text>
                   </View>
                   {trip.vibes?.[0] && (
-                    <View style={[styles.tripTag, { backgroundColor: `${Brand.secondary}15` }]}>
-                      <Text style={[styles.tripTagText, { color: Brand.secondary }]}>
+                    <View
+                      style={[
+                        styles.tripTag,
+                        { backgroundColor: `${Brand.secondary}15` },
+                      ]}
+                    >
+                      <Text
+                        style={[styles.tripTagText, { color: Brand.secondary }]}
+                      >
                         {trip.vibes[0]}
                       </Text>
                     </View>
@@ -200,31 +299,54 @@ export default function ProfileScreen() {
 
       {/* 🎬 나의 영상 섹션 */}
       {(() => {
-        const videosReady = savedTrips.filter(t => t.videoStatus === "succeeded" && t.videoUrl);
+        const videosReady = savedTrips.filter(
+          (t) => t.videoStatus === "succeeded" && t.videoUrl,
+        );
         if (videosReady.length === 0) return null;
 
         return (
           <View style={styles.section}>
-            <ThemedText style={styles.sectionTitle}>🎬 나의 영상 ({videosReady.length})</ThemedText>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tripsScroll}>
+            <ThemedText style={styles.sectionTitle}>
+              🎬 나의 영상 ({videosReady.length})
+            </ThemedText>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.tripsScroll}
+            >
               {videosReady.map((trip) => (
                 <Pressable
                   key={trip.id}
-                  style={[styles.videoCard, { backgroundColor: theme.backgroundDefault }]}
-                  onPress={() => navigation.navigate("SavedTripDetail", { itineraryId: trip.id })}
+                  style={[
+                    styles.videoCard,
+                    { backgroundColor: theme.backgroundDefault },
+                  ]}
+                  onPress={() =>
+                    navigation.navigate("SavedTripDetail", {
+                      itineraryId: trip.id,
+                    })
+                  }
                 >
                   <View style={styles.videoThumbnail}>
                     <LinearGradient
                       colors={["#6366f1", "#8b5cf6"]}
                       style={styles.videoThumbnailGradient}
                     >
-                      <Feather name="play-circle" size={32} color="#FFFFFF" />
+                      <Icon name="play-circle" size={32} color="#FFFFFF" />
                     </LinearGradient>
                   </View>
-                  <Text style={[styles.videoCardTitle, { color: theme.text }]} numberOfLines={1}>
+                  <Text
+                    style={[styles.videoCardTitle, { color: theme.text }]}
+                    numberOfLines={1}
+                  >
                     {trip.title}
                   </Text>
-                  <Text style={[styles.videoCardDate, { color: theme.textSecondary }]}>
+                  <Text
+                    style={[
+                      styles.videoCardDate,
+                      { color: theme.textSecondary },
+                    ]}
+                  >
                     {trip.startDate?.split("T")[0]}
                   </Text>
                 </Pressable>
@@ -241,38 +363,80 @@ export default function ProfileScreen() {
             style={[
               styles.personaCard,
               { backgroundColor: theme.backgroundDefault },
-              persona === "luxury" && { borderColor: Brand.luxuryGold, borderWidth: 2 }
+              persona === "luxury" && {
+                borderColor: Brand.luxuryGold,
+                borderWidth: 2,
+              },
             ]}
             onPress={() => setPersona("luxury")}
           >
-            <View style={[styles.personaIcon, { backgroundColor: `${Brand.luxuryGold}20` }]}>
-              <Feather name="star" size={24} color={Brand.luxuryGold} />
+            <View
+              style={[
+                styles.personaIcon,
+                { backgroundColor: `${Brand.luxuryGold}20` },
+              ]}
+            >
+              <Icon name="star" size={24} color={Brand.luxuryGold} />
             </View>
-            <Text style={[styles.personaTitle, { color: theme.text }]}>럭셔리</Text>
-            <Text style={[styles.personaDesc, { color: theme.textSecondary }]}>프리미엄 경험</Text>
+            <Text style={[styles.personaTitle, { color: theme.text }]}>
+              럭셔리
+            </Text>
+            <Text style={[styles.personaDesc, { color: theme.textSecondary }]}>
+              프리미엄 경험
+            </Text>
           </Pressable>
 
           <Pressable
             style={[
               styles.personaCard,
               { backgroundColor: theme.backgroundDefault },
-              persona === "comfort" && { borderColor: Brand.comfortBlue, borderWidth: 2 }
+              persona === "comfort" && {
+                borderColor: Brand.comfortBlue,
+                borderWidth: 2,
+              },
             ]}
             onPress={() => setPersona("comfort")}
           >
-            <View style={[styles.personaIcon, { backgroundColor: `${Brand.comfortBlue}20` }]}>
-              <Feather name="heart" size={24} color={Brand.comfortBlue} />
+            <View
+              style={[
+                styles.personaIcon,
+                { backgroundColor: `${Brand.comfortBlue}20` },
+              ]}
+            >
+              <Icon name="heart" size={24} color={Brand.comfortBlue} />
             </View>
-            <Text style={[styles.personaTitle, { color: theme.text }]}>편안함</Text>
-            <Text style={[styles.personaDesc, { color: theme.textSecondary }]}>안전한 여행</Text>
+            <Text style={[styles.personaTitle, { color: theme.text }]}>
+              편안함
+            </Text>
+            <Text style={[styles.personaDesc, { color: theme.textSecondary }]}>
+              안전한 여행
+            </Text>
           </Pressable>
         </View>
       </View>
 
       <View style={styles.section}>
         <ThemedText style={styles.sectionTitle}>설정</ThemedText>
-        <View style={[styles.menuCard, { backgroundColor: theme.backgroundDefault }]}>
+        <View
+          style={[
+            styles.menuCard,
+            { backgroundColor: theme.backgroundDefault },
+          ]}
+        >
           {[
+            {
+              icon: "credit-card",
+              label: "결제 수단 및 내역",
+              onPress: () => {
+                // TODO: 결제 화면 라우팅 추가 예정
+                alert("결제 기능을 준비 중입니다.");
+              }
+            },
+            {
+              icon: "settings",
+              label: "관리자 대시보드",
+              onPress: () => navigation.navigate("AdminModal"),
+            },
             { icon: "bell", label: "알림 설정" },
             { icon: "globe", label: "언어 설정" },
             { icon: "shield", label: "개인정보 보호" },
@@ -280,26 +444,41 @@ export default function ProfileScreen() {
           ].map((item, index) => (
             <Pressable
               key={index}
+              onPress={item.onPress}
               style={[
                 styles.menuItem,
-                index < 3 && { borderBottomWidth: 1, borderBottomColor: theme.border }
+                index < 6 && {
+                  borderBottomWidth: 1,
+                  borderBottomColor: theme.border,
+                },
               ]}
             >
               <View style={styles.menuItemLeft}>
-                <Feather name={item.icon as any} size={20} color={theme.textSecondary} />
-                <Text style={[styles.menuItemLabel, { color: theme.text }]}>{item.label}</Text>
+                <Icon
+                  name={item.icon as any}
+                  size={20}
+                  color={theme.textSecondary}
+                />
+                <Text style={[styles.menuItemLabel, { color: theme.text }]}>
+                  {item.label}
+                </Text>
               </View>
-              <Feather name="chevron-right" size={20} color={theme.textTertiary} />
+              <Icon name="chevron-right" size={20} color={theme.textTertiary} />
             </Pressable>
           ))}
           {isAuth && (
             <Pressable
-              style={[styles.menuItem, { borderTopWidth: 1, borderTopColor: theme.border }]}
+              style={[
+                styles.menuItem,
+                { borderTopWidth: 1, borderTopColor: theme.border },
+              ]}
               onPress={handleLogout}
             >
               <View style={styles.menuItemLeft}>
-                <Feather name="log-out" size={20} color="#EF4444" />
-                <Text style={[styles.menuItemLabel, { color: "#EF4444" }]}>로그아웃</Text>
+                <Icon name="log-out" size={20} color="#EF4444" />
+                <Text style={[styles.menuItemLabel, { color: "#EF4444" }]}>
+                  로그아웃
+                </Text>
               </View>
             </Pressable>
           )}
@@ -339,7 +518,7 @@ const styles = StyleSheet.create({
   loginButtonText: {
     color: "#FFFFFF",
     fontSize: 14,
-    fontWeight: "700",
+    fontFamily: Fonts.bold,
   },
   statsRow: {
     flexDirection: "row",
@@ -432,7 +611,7 @@ const styles = StyleSheet.create({
   },
   emptyTripsText: {
     fontSize: 16,
-    fontWeight: "600",
+    fontFamily: Fonts.semiBold,
     marginTop: Spacing.md,
   },
   emptyTripsHint: {
@@ -472,7 +651,7 @@ const styles = StyleSheet.create({
   },
   tripCardTitle: {
     fontSize: 15,
-    fontWeight: "700",
+    fontFamily: Fonts.bold,
     marginBottom: Spacing.xs,
   },
   tripCardDate: {
@@ -490,7 +669,7 @@ const styles = StyleSheet.create({
   },
   tripTagText: {
     fontSize: 11,
-    fontWeight: "600",
+    fontFamily: Fonts.semiBold,
   },
   // 🎬 나의 영상 스타일
   videoCard: {
@@ -513,7 +692,7 @@ const styles = StyleSheet.create({
   },
   videoCardTitle: {
     fontSize: 13,
-    fontWeight: "600",
+    fontFamily: Fonts.semiBold,
     marginBottom: 2,
   },
   videoCardDate: {

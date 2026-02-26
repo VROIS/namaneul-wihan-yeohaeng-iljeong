@@ -1,18 +1,34 @@
 import React from "react";
-import { View, StyleSheet, Text, ScrollView, Pressable, Dimensions, useColorScheme } from "react-native";
+import {
+  View,
+  StyleSheet,
+  Text,
+  ScrollView,
+  Pressable,
+  Dimensions,
+  useColorScheme,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { useQuery } from "@tanstack/react-query";
 import { Image } from "expo-image";
-import { Feather } from "@expo/vector-icons";
 import { BlurView } from "expo-blur";
+import Icon from "@/components/Icon";
 import { LinearGradient } from "expo-linear-gradient";
-import { Typography, Spacing, BorderRadius, Brand, Colors, Shadows, getVibeScoreGradient } from "@/constants/theme";
+import {
+  Typography,
+  Spacing,
+  BorderRadius,
+  Brand,
+  Colors,
+  Shadows,
+  getVibeScoreGradient,
+} from "@/constants/theme";
 import ThemedText from "@/components/ThemedText";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const HERO_HEIGHT = SCREEN_WIDTH * 9 / 16;
+const HERO_HEIGHT = (SCREEN_WIDTH * 9) / 16;
 
 type RouteParams = RouteProp<RootStackParamList, "DestinationDetail">;
 
@@ -25,7 +41,7 @@ export default function DestinationDetailScreen() {
   const route = useRoute<RouteParams>();
   const { placeId } = route.params;
 
-  const { data: place, isLoading } = useQuery({
+  const { data: place, isLoading } = useQuery<any>({
     queryKey: ["/api/places", placeId],
   });
 
@@ -41,7 +57,11 @@ export default function DestinationDetailScreen() {
       >
         <View style={styles.heroContainer}>
           <Image
-            source={{ uri: place?.photoUrls?.[0] || "https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b" }}
+            source={{
+              uri:
+                place?.photoUrls?.[0] ||
+                "https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b",
+            }}
             style={styles.heroImage}
             contentFit="cover"
           />
@@ -49,19 +69,29 @@ export default function DestinationDetailScreen() {
             colors={["transparent", "rgba(0,0,0,0.7)"]}
             style={styles.heroGradient}
           />
-          
+
           <Pressable
             onPress={() => navigation.goBack()}
             style={[styles.backButton, { top: insets.top + Spacing.sm }]}
           >
-            <BlurView intensity={80} tint={isDark ? "dark" : "light"} style={styles.backButtonBlur}>
-              <Feather name="arrow-left" size={24} color={theme.text} />
+            <BlurView
+              intensity={80}
+              tint={isDark ? "dark" : "light"}
+              style={styles.backButtonBlur}
+            >
+              <Icon name="arrow-left" size={24} color={theme.text} />
             </BlurView>
           </Pressable>
 
-          <Pressable style={[styles.saveButton, { top: insets.top + Spacing.sm }]}>
-            <BlurView intensity={80} tint={isDark ? "dark" : "light"} style={styles.backButtonBlur}>
-              <Feather name="bookmark" size={24} color={theme.text} />
+          <Pressable
+            style={[styles.saveButton, { top: insets.top + Spacing.sm }]}
+          >
+            <BlurView
+              intensity={80}
+              tint={isDark ? "dark" : "light"}
+              style={styles.backButtonBlur}
+            >
+              <Icon name="bookmark" size={24} color={theme.text} />
             </BlurView>
           </Pressable>
         </View>
@@ -73,7 +103,7 @@ export default function DestinationDetailScreen() {
                 {place?.name || "로딩 중..."}
               </ThemedText>
               <View style={styles.locationRow}>
-                <Feather name="map-pin" size={14} color={theme.textSecondary} />
+                <Icon name="map-pin" size={14} color={theme.textSecondary} />
                 <Text style={[styles.location, { color: theme.textSecondary }]}>
                   {place?.address || "주소 정보 없음"}
                 </Text>
@@ -87,44 +117,68 @@ export default function DestinationDetailScreen() {
               >
                 <Text style={styles.vibeScoreText}>{vibeScore.toFixed(1)}</Text>
               </LinearGradient>
-              <Text style={[styles.vibeLabel, { color: theme.textSecondary }]}>Vibe</Text>
+              <Text style={[styles.vibeLabel, { color: theme.textSecondary }]}>
+                Vibe
+              </Text>
             </View>
           </View>
 
           <View style={styles.tagsContainer}>
-            {(place?.vibeKeywords as string[] || ["힙한", "인스타그래머블"]).map((tag, index) => (
-              <View key={index} style={[styles.tag, { backgroundColor: `${Brand.primary}15` }]}>
-                <Text style={[styles.tagText, { color: Brand.primary }]}>{tag}</Text>
+            {(
+              (place?.vibeKeywords as string[]) || ["힙한", "인스타그래머블"]
+            ).map((tag, index) => (
+              <View
+                key={index}
+                style={[styles.tag, { backgroundColor: `${Brand.primary}15` }]}
+              >
+                <Text style={[styles.tagText, { color: Brand.primary }]}>
+                  {tag}
+                </Text>
               </View>
             ))}
           </View>
 
-          <View style={[styles.card, { backgroundColor: theme.backgroundDefault }]}>
+          <View
+            style={[styles.card, { backgroundColor: theme.backgroundDefault }]}
+          >
             <View style={styles.cardHeader}>
-              <Feather name="zap" size={20} color={Brand.primary} />
+              <Icon name="zap" size={20} color={Brand.primary} />
               <ThemedText style={styles.cardTitle}>AI 분석</ThemedText>
             </View>
             <Text style={[styles.cardContent, { color: theme.textSecondary }]}>
-              이 장소는 현지인들에게 사랑받는 곳으로, 특히 사진 촬영하기 좋은 분위기가 특징입니다. 
-              방문객 리뷰를 분석한 결과, 분위기와 서비스에서 높은 평가를 받고 있습니다.
+              이 장소는 현지인들에게 사랑받는 곳으로, 특히 사진 촬영하기 좋은
+              분위기가 특징입니다. 방문객 리뷰를 분석한 결과, 분위기와
+              서비스에서 높은 평가를 받고 있습니다.
             </Text>
           </View>
 
           {place?.type === "restaurant" && place?.isVerified && (
-            <View style={[styles.card, { backgroundColor: `${Brand.comfortBlue}10` }]}>
+            <View
+              style={[
+                styles.card,
+                { backgroundColor: `${Brand.comfortBlue}10` },
+              ]}
+            >
               <View style={styles.cardHeader}>
-                <Feather name="check-circle" size={20} color={Brand.comfortBlue} />
-                <Text style={[styles.cardTitle, { color: Brand.comfortBlue }]}>맛집 인증</Text>
+                <Icon name="check-circle" size={20} color={Brand.comfortBlue} />
+                <Text style={[styles.cardTitle, { color: Brand.comfortBlue }]}>
+                  맛집 인증
+                </Text>
               </View>
-              <Text style={[styles.cardContent, { color: theme.textSecondary }]}>
-                현지인 리뷰 분석 결과, 이 레스토랑은 오리지널 맛을 유지하고 있는 것으로 확인되었습니다.
+              <Text
+                style={[styles.cardContent, { color: theme.textSecondary }]}
+              >
+                현지인 리뷰 분석 결과, 이 레스토랑은 오리지널 맛을 유지하고 있는
+                것으로 확인되었습니다.
               </Text>
             </View>
           )}
 
-          <View style={[styles.card, { backgroundColor: theme.backgroundDefault }]}>
+          <View
+            style={[styles.card, { backgroundColor: theme.backgroundDefault }]}
+          >
             <View style={styles.cardHeader}>
-              <Feather name="cloud" size={20} color={Brand.warning} />
+              <Icon name="cloud" size={20} color={Brand.primary} />
               <ThemedText style={styles.cardTitle}>실시간 정보</ThemedText>
             </View>
             <Text style={[styles.cardContent, { color: theme.textSecondary }]}>

@@ -1,12 +1,28 @@
 import React, { useState } from "react";
-import { View, StyleSheet, Text, Pressable, TextInput, ScrollView, useColorScheme, Platform } from "react-native";
+import {
+  View,
+  StyleSheet,
+  Text,
+  Pressable,
+  TextInput,
+  ScrollView,
+  useColorScheme,
+  Platform,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
-import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { Typography, Spacing, BorderRadius, Brand, Colors } from "@/constants/theme";
+import {
+  Typography,
+  Spacing,
+  BorderRadius,
+  Brand,
+  Colors,
+  Fonts,
+} from "@/constants/theme";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import ThemedText from "@/components/ThemedText";
+import Icon from "@/components/Icon";
 import {
   TripFormData,
   Vibe,
@@ -21,7 +37,14 @@ import {
 
 type Step = "companion" | "focus" | "destination" | "dates" | "vibes" | "style";
 
-const STEPS: Step[] = ["companion", "focus", "destination", "dates", "vibes", "style"];
+const STEPS: Step[] = [
+  "companion",
+  "focus",
+  "destination",
+  "dates",
+  "vibes",
+  "style",
+];
 
 export default function PlanModalScreen() {
   const colorScheme = useColorScheme();
@@ -43,6 +66,8 @@ export default function PlanModalScreen() {
     endTime: "21:00",
     vibes: [],
     travelStyle: "Reasonable",
+    travelPace: "Normal",
+    mobilityStyle: "WalkMore",
   });
 
   const currentStepIndex = STEPS.indexOf(currentStep);
@@ -71,10 +96,10 @@ export default function PlanModalScreen() {
   };
 
   const toggleVibe = (vibe: Vibe) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
       vibes: prev.vibes.includes(vibe)
-        ? prev.vibes.filter(v => v !== vibe)
+        ? prev.vibes.filter((v) => v !== vibe)
         : [...prev.vibes, vibe],
     }));
   };
@@ -87,52 +112,84 @@ export default function PlanModalScreen() {
       </ThemedText>
 
       <View style={styles.optionsGrid}>
-        {COMPANION_OPTIONS.map(option => (
+        {COMPANION_OPTIONS.map((option) => (
           <Pressable
             key={option.id}
             style={[
               styles.optionCard,
-              { backgroundColor: theme.backgroundDefault, borderColor: theme.border },
+              {
+                backgroundColor: theme.backgroundDefault,
+                borderColor: theme.border,
+              },
               formData.companionType === option.id && {
                 borderColor: Brand.primary,
                 borderWidth: 2,
                 backgroundColor: `${Brand.primary}10`,
               },
             ]}
-            onPress={() => setFormData(prev => ({ ...prev, companionType: option.id }))}
+            onPress={() =>
+              setFormData((prev) => ({ ...prev, companionType: option.id }))
+            }
           >
-            <View style={[
-              styles.optionIcon,
-              { backgroundColor: formData.companionType === option.id ? `${Brand.primary}20` : theme.backgroundSecondary },
-            ]}>
-              <Feather
+            <View
+              style={[
+                styles.optionIcon,
+                {
+                  backgroundColor:
+                    formData.companionType === option.id
+                      ? `${Brand.primary}20`
+                      : theme.backgroundSecondary,
+                },
+              ]}
+            >
+              <Icon
                 name={option.icon as any}
                 size={24}
-                color={formData.companionType === option.id ? Brand.primary : theme.textSecondary}
+                color={
+                  formData.companionType === option.id
+                    ? Brand.primary
+                    : theme.textSecondary
+                }
               />
             </View>
-            <Text style={[
-              styles.optionLabel,
-              { color: formData.companionType === option.id ? Brand.primary : theme.text },
-            ]}>
+            <Text
+              style={[
+                styles.optionLabel,
+                {
+                  color:
+                    formData.companionType === option.id
+                      ? Brand.primary
+                      : theme.text,
+                },
+              ]}
+            >
               {option.label}
             </Text>
           </Pressable>
         ))}
       </View>
 
-      {(formData.companionType === "Family" || formData.companionType === "Group") ? (
+      {formData.companionType === "Family" ||
+        formData.companionType === "Group" ? (
         <View style={styles.inputSection}>
-          <ThemedText style={styles.inputLabel}>동행자 나이 (쉼표로 구분)</ThemedText>
+          <ThemedText style={styles.inputLabel}>
+            동행자 나이 (쉼표로 구분)
+          </ThemedText>
           <TextInput
             style={[
               styles.input,
-              { backgroundColor: theme.backgroundDefault, borderColor: theme.border, color: theme.text },
+              {
+                backgroundColor: theme.backgroundDefault,
+                borderColor: theme.border,
+                color: theme.text,
+              },
             ]}
             placeholder="예: 10, 13, 55, 59"
             placeholderTextColor={theme.textTertiary}
             value={formData.companionAges}
-            onChangeText={text => setFormData(prev => ({ ...prev, companionAges: text }))}
+            onChangeText={(text) =>
+              setFormData((prev) => ({ ...prev, companionAges: text }))
+            }
             keyboardType="default"
           />
         </View>
@@ -148,34 +205,48 @@ export default function PlanModalScreen() {
       </ThemedText>
 
       <View style={styles.focusList}>
-        {CURATION_FOCUS_OPTIONS.map(option => (
+        {CURATION_FOCUS_OPTIONS.map((option) => (
           <Pressable
             key={option.id}
             style={[
               styles.focusCard,
-              { backgroundColor: theme.backgroundDefault, borderColor: theme.border },
+              {
+                backgroundColor: theme.backgroundDefault,
+                borderColor: theme.border,
+              },
               formData.curationFocus === option.id && {
                 borderColor: Brand.primary,
                 borderWidth: 2,
                 backgroundColor: `${Brand.primary}10`,
               },
             ]}
-            onPress={() => setFormData(prev => ({ ...prev, curationFocus: option.id }))}
+            onPress={() =>
+              setFormData((prev) => ({ ...prev, curationFocus: option.id }))
+            }
           >
             <View style={styles.focusContent}>
-              <Text style={[
-                styles.focusLabel,
-                { color: formData.curationFocus === option.id ? Brand.primary : theme.text },
-              ]}>
+              <Text
+                style={[
+                  styles.focusLabel,
+                  {
+                    color:
+                      formData.curationFocus === option.id
+                        ? Brand.primary
+                        : theme.text,
+                  },
+                ]}
+              >
                 {option.label}
               </Text>
               <Text style={[styles.focusDesc, { color: theme.textSecondary }]}>
-                {option.description}
+                {(option as any).description}
               </Text>
             </View>
             {formData.curationFocus === option.id ? (
-              <View style={[styles.checkCircle, { backgroundColor: Brand.primary }]}>
-                <Feather name="check" size={16} color="#FFFFFF" />
+              <View
+                style={[styles.checkCircle, { backgroundColor: Brand.primary }]}
+              >
+                <Icon name="check" size={16} color="#FFFFFF" />
               </View>
             ) : null}
           </Pressable>
@@ -194,12 +265,18 @@ export default function PlanModalScreen() {
       <TextInput
         style={[
           styles.destinationInput,
-          { backgroundColor: theme.backgroundDefault, borderColor: theme.border, color: theme.text },
+          {
+            backgroundColor: theme.backgroundDefault,
+            borderColor: theme.border,
+            color: theme.text,
+          },
         ]}
         placeholder="예: 파리, 프랑스"
         placeholderTextColor={theme.textTertiary}
         value={formData.destination}
-        onChangeText={text => setFormData(prev => ({ ...prev, destination: text }))}
+        onChangeText={(text) =>
+          setFormData((prev) => ({ ...prev, destination: text }))
+        }
       />
     </View>
   );
@@ -217,12 +294,18 @@ export default function PlanModalScreen() {
           <TextInput
             style={[
               styles.input,
-              { backgroundColor: theme.backgroundDefault, borderColor: theme.border, color: theme.text },
+              {
+                backgroundColor: theme.backgroundDefault,
+                borderColor: theme.border,
+                color: theme.text,
+              },
             ]}
             placeholder="YYYY-MM-DD"
             placeholderTextColor={theme.textTertiary}
             value={formData.startDate}
-            onChangeText={text => setFormData(prev => ({ ...prev, startDate: text }))}
+            onChangeText={(text) =>
+              setFormData((prev) => ({ ...prev, startDate: text }))
+            }
           />
         </View>
         <View style={styles.dateColumn}>
@@ -230,12 +313,18 @@ export default function PlanModalScreen() {
           <TextInput
             style={[
               styles.input,
-              { backgroundColor: theme.backgroundDefault, borderColor: theme.border, color: theme.text },
+              {
+                backgroundColor: theme.backgroundDefault,
+                borderColor: theme.border,
+                color: theme.text,
+              },
             ]}
             placeholder="09:00"
             placeholderTextColor={theme.textTertiary}
             value={formData.startTime}
-            onChangeText={text => setFormData(prev => ({ ...prev, startTime: text }))}
+            onChangeText={(text) =>
+              setFormData((prev) => ({ ...prev, startTime: text }))
+            }
           />
         </View>
       </View>
@@ -246,12 +335,18 @@ export default function PlanModalScreen() {
           <TextInput
             style={[
               styles.input,
-              { backgroundColor: theme.backgroundDefault, borderColor: theme.border, color: theme.text },
+              {
+                backgroundColor: theme.backgroundDefault,
+                borderColor: theme.border,
+                color: theme.text,
+              },
             ]}
             placeholder="YYYY-MM-DD"
             placeholderTextColor={theme.textTertiary}
             value={formData.endDate}
-            onChangeText={text => setFormData(prev => ({ ...prev, endDate: text }))}
+            onChangeText={(text) =>
+              setFormData((prev) => ({ ...prev, endDate: text }))
+            }
           />
         </View>
         <View style={styles.dateColumn}>
@@ -259,12 +354,18 @@ export default function PlanModalScreen() {
           <TextInput
             style={[
               styles.input,
-              { backgroundColor: theme.backgroundDefault, borderColor: theme.border, color: theme.text },
+              {
+                backgroundColor: theme.backgroundDefault,
+                borderColor: theme.border,
+                color: theme.text,
+              },
             ]}
             placeholder="21:00"
             placeholderTextColor={theme.textTertiary}
             value={formData.endTime}
-            onChangeText={text => setFormData(prev => ({ ...prev, endTime: text }))}
+            onChangeText={(text) =>
+              setFormData((prev) => ({ ...prev, endTime: text }))
+            }
           />
         </View>
       </View>
@@ -273,20 +374,25 @@ export default function PlanModalScreen() {
 
   const renderVibesStep = () => (
     <View style={styles.stepContent}>
-      <ThemedText style={styles.stepTitle}>어떤 분위기를 원하시나요?</ThemedText>
+      <ThemedText style={styles.stepTitle}>
+        어떤 분위기를 원하시나요?
+      </ThemedText>
       <ThemedText style={[styles.stepSubtitle, { color: theme.textSecondary }]}>
         여러 개 선택할 수 있습니다
       </ThemedText>
 
       <View style={styles.vibesGrid}>
-        {VIBE_OPTIONS.map(vibe => {
+        {VIBE_OPTIONS.map((vibe) => {
           const isSelected = formData.vibes.includes(vibe.id);
           return (
             <Pressable
               key={vibe.id}
               style={[
                 styles.vibeCard,
-                { backgroundColor: theme.backgroundDefault, borderColor: theme.border },
+                {
+                  backgroundColor: theme.backgroundDefault,
+                  borderColor: theme.border,
+                },
                 isSelected && {
                   borderColor: Brand.primary,
                   borderWidth: 2,
@@ -295,15 +401,17 @@ export default function PlanModalScreen() {
               ]}
               onPress={() => toggleVibe(vibe.id)}
             >
-              <Feather
+              <Icon
                 name={vibe.icon as any}
                 size={24}
                 color={isSelected ? Brand.primary : theme.textSecondary}
               />
-              <Text style={[
-                styles.vibeLabel,
-                { color: isSelected ? Brand.primary : theme.text },
-              ]}>
+              <Text
+                style={[
+                  styles.vibeLabel,
+                  { color: isSelected ? Brand.primary : theme.text },
+                ]}
+              >
                 {vibe.label}
               </Text>
             </Pressable>
@@ -321,44 +429,69 @@ export default function PlanModalScreen() {
       </ThemedText>
 
       <View style={styles.styleList}>
-        {TRAVEL_STYLE_OPTIONS.map(style => (
+        {TRAVEL_STYLE_OPTIONS.map((style) => (
           <Pressable
             key={style.id}
             style={[
               styles.styleCard,
-              { backgroundColor: theme.backgroundDefault, borderColor: theme.border },
+              {
+                backgroundColor: theme.backgroundDefault,
+                borderColor: theme.border,
+              },
               formData.travelStyle === style.id && {
                 borderColor: Brand.primary,
                 borderWidth: 2,
                 backgroundColor: `${Brand.primary}10`,
               },
             ]}
-            onPress={() => setFormData(prev => ({ ...prev, travelStyle: style.id }))}
+            onPress={() =>
+              setFormData((prev) => ({ ...prev, travelStyle: style.id }))
+            }
           >
-            <View style={[
-              styles.styleIcon,
-              { backgroundColor: formData.travelStyle === style.id ? `${Brand.primary}20` : theme.backgroundSecondary },
-            ]}>
-              <Feather
+            <View
+              style={[
+                styles.styleIcon,
+                {
+                  backgroundColor:
+                    formData.travelStyle === style.id
+                      ? `${Brand.primary}20`
+                      : theme.backgroundSecondary,
+                },
+              ]}
+            >
+              <Icon
                 name={style.icon as any}
                 size={20}
-                color={formData.travelStyle === style.id ? Brand.primary : theme.textSecondary}
+                color={
+                  formData.travelStyle === style.id
+                    ? Brand.primary
+                    : theme.textSecondary
+                }
               />
             </View>
             <View style={styles.styleContent}>
-              <Text style={[
-                styles.styleLabel,
-                { color: formData.travelStyle === style.id ? Brand.primary : theme.text },
-              ]}>
+              <Text
+                style={[
+                  styles.styleLabel,
+                  {
+                    color:
+                      formData.travelStyle === style.id
+                        ? Brand.primary
+                        : theme.text,
+                  },
+                ]}
+              >
                 {style.label}
               </Text>
               <Text style={[styles.styleDesc, { color: theme.textSecondary }]}>
-                {style.description}
+                {(style as any).description}
               </Text>
             </View>
             {formData.travelStyle === style.id ? (
-              <View style={[styles.checkCircle, { backgroundColor: Brand.primary }]}>
-                <Feather name="check" size={16} color="#FFFFFF" />
+              <View
+                style={[styles.checkCircle, { backgroundColor: Brand.primary }]}
+              >
+                <Icon name="check" size={16} color="#FFFFFF" />
               </View>
             ) : null}
           </Pressable>
@@ -369,13 +502,20 @@ export default function PlanModalScreen() {
 
   const renderCurrentStep = () => {
     switch (currentStep) {
-      case "companion": return renderCompanionStep();
-      case "focus": return renderFocusStep();
-      case "destination": return renderDestinationStep();
-      case "dates": return renderDatesStep();
-      case "vibes": return renderVibesStep();
-      case "style": return renderStyleStep();
-      default: return null;
+      case "companion":
+        return renderCompanionStep();
+      case "focus":
+        return renderFocusStep();
+      case "destination":
+        return renderDestinationStep();
+      case "dates":
+        return renderDatesStep();
+      case "vibes":
+        return renderVibesStep();
+      case "style":
+        return renderStyleStep();
+      default:
+        return null;
     }
   };
 
@@ -383,7 +523,11 @@ export default function PlanModalScreen() {
     <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
       <View style={[styles.header, { paddingTop: insets.top + Spacing.md }]}>
         <Pressable onPress={goBack} style={styles.headerButton}>
-          <Feather name={isFirstStep ? "x" : "arrow-left"} size={24} color={theme.text} />
+          <Icon
+            name={isFirstStep ? "x" : "arrow-left"}
+            size={24}
+            color={theme.text}
+          />
         </Pressable>
         <View style={styles.progressContainer}>
           {STEPS.map((step, index) => (
@@ -391,7 +535,10 @@ export default function PlanModalScreen() {
               key={step}
               style={[
                 styles.progressDot,
-                { backgroundColor: index <= currentStepIndex ? Brand.primary : theme.border },
+                {
+                  backgroundColor:
+                    index <= currentStepIndex ? Brand.primary : theme.border,
+                },
               ]}
             />
           ))}
@@ -406,7 +553,9 @@ export default function PlanModalScreen() {
         {renderCurrentStep()}
       </KeyboardAwareScrollViewCompat>
 
-      <View style={[styles.footer, { paddingBottom: insets.bottom + Spacing.lg }]}>
+      <View
+        style={[styles.footer, { paddingBottom: insets.bottom + Spacing.lg }]}
+      >
         <Pressable onPress={goNext} style={styles.nextButton}>
           <LinearGradient
             colors={Brand.gradient as [string, string]}
@@ -418,7 +567,7 @@ export default function PlanModalScreen() {
               {isLastStep ? "여정 생성하기" : "다음"}
             </Text>
             {!isLastStep ? (
-              <Feather name="arrow-right" size={20} color="#FFFFFF" />
+              <Icon name="arrow-right" size={20} color="#FFFFFF" />
             ) : null}
           </LinearGradient>
         </Pressable>
@@ -491,7 +640,7 @@ const styles = StyleSheet.create({
   },
   optionLabel: {
     ...Typography.label,
-    fontWeight: "600",
+    fontFamily: Fonts.semiBold,
   },
   inputSection: {
     marginTop: Spacing.xl,
@@ -565,7 +714,7 @@ const styles = StyleSheet.create({
   },
   vibeLabel: {
     ...Typography.caption,
-    fontWeight: "600",
+    fontFamily: Fonts.semiBold,
   },
   styleList: {
     gap: Spacing.md,
@@ -613,6 +762,6 @@ const styles = StyleSheet.create({
   nextButtonText: {
     ...Typography.label,
     color: "#FFFFFF",
-    fontWeight: "700",
+    fontFamily: Fonts.bold,
   },
 });
