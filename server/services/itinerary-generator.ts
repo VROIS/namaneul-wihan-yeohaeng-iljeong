@@ -1,4 +1,4 @@
-﻿import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 import {
   getKoreanSentimentForCity,
   formatSentimentForPrompt,
@@ -1838,6 +1838,9 @@ ${formData.destination}의 실제 유명한 장소들을 추천해주세요. 정
     const response = await getAI().models.generateContent({
       model: "gemini-2.5-flash",
       contents: [{ role: "user", parts: [{ text: prompt }] }],
+      config: {
+        thinkingConfig: { thinkingBudget: 0 },
+      } as any,
     });
 
     const text = response.text || "";

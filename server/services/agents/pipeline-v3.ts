@@ -192,19 +192,15 @@ export async function runPipelineV3(formData: TripFormData): Promise<any> {
   console.log(`[V3] ${dayCount}일, 총 ${totalSlots}슬롯, 밀도: ${travelPace} (${paceConfig.slotDurationMinutes}분/장소)`);
   daySlotsConfig.forEach(d => console.log(`[V3]   Day ${d.day}: ${d.startTime}~${d.endTime} → ${d.slots}곳`));
 
-  // ===== Step 1 (Gemini) + DB 사전 로드 + 한국 감성: 모두 병렬 =====
-  // ⚡ Korean sentiment: 3초 타임아웃 (캐시 없으면 기본값, Gemini 추가 호출 안 함)
-  console.log(`[V3] Step1(Gemini) + DB사전로드 + 한국감성 병렬 시작...`);
+  // ===== Step 1 (Gemini) + DB 사전 로드: 병렬 =====
+  // ⏸️ Korean sentiment: 비용 절감 위해 비활성화 (테스트 단계)
+  console.log(`[V3] Step1(Gemini) + DB사전로드 병렬 시작...`);
 
-  const KOREAN_SENTIMENT_TIMEOUT_MS = 3000;
-  const [geminiDays, preloaded, koreanSentiment] = await Promise.all([
+  const [geminiDays, preloaded] = await Promise.all([
     step1_geminiItinerary(formData, dayCount, daySlotsConfig, vibeWeights),
     preloadCityData(formData.destination),
-    Promise.race([
-      getKoreanSentimentForCity(formData.destination, vibes).catch(() => undefined),
-      new Promise<undefined>(resolve => setTimeout(() => resolve(undefined), KOREAN_SENTIMENT_TIMEOUT_MS)),
-    ]),
   ]);
+  const koreanSentiment = undefined;
 
   _mark('step1_parallel');
   console.log(`[V3] Step1 완료 (${_timings['step1_parallel']}ms): Gemini ${geminiDays.length}일, DB ${preloaded.dbPlacesMap.size}키`);

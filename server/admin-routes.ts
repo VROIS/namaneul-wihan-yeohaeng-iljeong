@@ -61,6 +61,14 @@ export function registerAdminRoutes(app: Express) {
     }
     return false;
   };
+
+  const rejectCostApi = (label: string, res: any): boolean => {
+    res.status(503).json({
+      success: false,
+      error: `⏸️ ${label} — 비용 절감을 위해 테스트 기간 동안 비활성화되었습니다.`,
+    });
+    return true;
+  };
   
   app.get("/admin", (req, res) => {
     // 여러 경로에서 템플릿 검색 (개발 환경 + 빌드된 환경 모두 지원)
@@ -2264,19 +2272,8 @@ export function registerAdminRoutes(app: Express) {
     }
   });
 
-  app.post("/api/admin/crisis/sync", async (req, res) => {
-    try {
-      const { crawlCrisisAlerts } = await import("./services/crisis-crawler");
-      const cityId = req.body.cityId ? parseInt(req.body.cityId) : undefined;
-      const result = await crawlCrisisAlerts(cityId);
-      res.json({
-        message: "위기 정보 수집 완료",
-        ...result
-      });
-    } catch (error) {
-      console.error("Error syncing crisis alerts:", error);
-      res.status(500).json({ error: "Failed to sync crisis alerts" });
-    }
+  app.post("/api/admin/crisis/sync", async (_req, res) => {
+    rejectCostApi("위기 정보 수집 (Gemini)", res);
   });
 
   // ========================================
@@ -2294,49 +2291,16 @@ export function registerAdminRoutes(app: Express) {
     }
   });
 
-  app.post("/api/admin/websearch/enrich/:placeId", async (req, res) => {
-    try {
-      const placeId = parseInt(req.params.placeId);
-      const { enrichPlaceWithWebData } = await import("./services/gemini-web-search");
-      const result = await enrichPlaceWithWebData(placeId);
-      res.json({
-        message: "웹 검색 데이터 보강 완료",
-        ...result
-      });
-    } catch (error) {
-      console.error("Error enriching place with web data:", error);
-      res.status(500).json({ error: "Failed to enrich place with web data" });
-    }
+  app.post("/api/admin/websearch/enrich/:placeId", async (_req, res) => {
+    rejectCostApi("웹검색 보강 (Gemini)", res);
   });
 
-  app.post("/api/admin/websearch/michelin", async (req, res) => {
-    try {
-      const { placeName, cityName, placeId } = req.body;
-      if (!placeName || !cityName) {
-        return res.status(400).json({ error: "placeName and cityName are required" });
-      }
-      const { searchMichelinInfo } = await import("./services/gemini-web-search");
-      const result = await searchMichelinInfo(placeName, cityName, placeId);
-      res.json(result);
-    } catch (error) {
-      console.error("Error searching Michelin info:", error);
-      res.status(500).json({ error: "Failed to search Michelin info" });
-    }
+  app.post("/api/admin/websearch/michelin", async (_req, res) => {
+    rejectCostApi("미슐랭 웹검색 (Gemini)", res);
   });
 
-  app.post("/api/admin/websearch/tripadvisor", async (req, res) => {
-    try {
-      const { placeName, cityName, placeId } = req.body;
-      if (!placeName || !cityName) {
-        return res.status(400).json({ error: "placeName and cityName are required" });
-      }
-      const { searchTripAdvisorInfo } = await import("./services/gemini-web-search");
-      const result = await searchTripAdvisorInfo(placeName, cityName, placeId);
-      res.json(result);
-    } catch (error) {
-      console.error("Error searching TripAdvisor info:", error);
-      res.status(500).json({ error: "Failed to search TripAdvisor info" });
-    }
+  app.post("/api/admin/websearch/tripadvisor", async (_req, res) => {
+    rejectCostApi("TripAdvisor 웹검색 (Gemini)", res);
   });
 
   // ========================================
@@ -2366,33 +2330,12 @@ export function registerAdminRoutes(app: Express) {
     }
   });
 
-  app.post("/api/admin/prices/sync/city/:cityId", async (req, res) => {
-    try {
-      const cityId = parseInt(req.params.cityId);
-      const { crawlPricesForCity } = await import("./services/price-crawler");
-      const result = await crawlPricesForCity(cityId);
-      res.json({
-        message: "가격 정보 수집 완료",
-        ...result
-      });
-    } catch (error) {
-      console.error("Error syncing city prices:", error);
-      res.status(500).json({ error: "Failed to sync city prices" });
-    }
+  app.post("/api/admin/prices/sync/city/:cityId", async (_req, res) => {
+    rejectCostApi("가격 수집 (Gemini)", res);
   });
 
-  app.post("/api/admin/prices/sync/all", async (req, res) => {
-    try {
-      const { crawlAllPrices } = await import("./services/price-crawler");
-      const result = await crawlAllPrices();
-      res.json({
-        message: "전체 가격 정보 수집 완료",
-        ...result
-      });
-    } catch (error) {
-      console.error("Error syncing all prices:", error);
-      res.status(500).json({ error: "Failed to sync all prices" });
-    }
+  app.post("/api/admin/prices/sync/all", async (_req, res) => {
+    rejectCostApi("전체 가격 수집 (Gemini)", res);
   });
 
   // ========================================
@@ -2582,33 +2525,12 @@ export function registerAdminRoutes(app: Express) {
     }
   });
 
-  app.post("/api/admin/korean-platforms/sync/city/:cityId", async (req, res) => {
-    try {
-      const cityId = parseInt(req.params.cityId);
-      const { crawlKoreanPlatformsForCity } = await import("./services/korean-platform-crawler");
-      const result = await crawlKoreanPlatformsForCity(cityId);
-      res.json({
-        message: "한국 플랫폼 데이터 수집 완료",
-        ...result
-      });
-    } catch (error) {
-      console.error("Error syncing Korean platforms for city:", error);
-      res.status(500).json({ error: "한국 플랫폼 수집 실패" });
-    }
+  app.post("/api/admin/korean-platforms/sync/city/:cityId", async (_req, res) => {
+    rejectCostApi("한국 플랫폼 수집 (Gemini)", res);
   });
 
-  app.post("/api/admin/korean-platforms/sync/all", async (req, res) => {
-    try {
-      const { crawlAllKoreanPlatforms } = await import("./services/korean-platform-crawler");
-      const result = await crawlAllKoreanPlatforms();
-      res.json({
-        message: "전체 한국 플랫폼 데이터 수집 완료",
-        ...result
-      });
-    } catch (error) {
-      console.error("Error syncing all Korean platforms:", error);
-      res.status(500).json({ error: "전체 한국 플랫폼 수집 실패" });
-    }
+  app.post("/api/admin/korean-platforms/sync/all", async (_req, res) => {
+    rejectCostApi("전체 한국 플랫폼 수집 (Gemini)", res);
   });
 
   app.get("/api/admin/korean-platforms/place/:placeId", async (req, res) => {
@@ -4021,174 +3943,24 @@ export function registerAdminRoutes(app: Express) {
     });
   });
 
-  // 전체 한국 감성 데이터 동기화 (Gemini 기반)
-  app.post("/api/admin/korean-sentiment/sync-all", async (req, res) => {
-    try {
-      const { getKoreanSentimentForCity } = await import("./services/korean-sentiment-service");
-      
-      const results: Array<{
-        city: string;
-        country: string;
-        success: boolean;
-        totalBonus?: number;
-        error?: string;
-      }> = [];
-      
-      let successCount = 0;
-      let errorCount = 0;
-      
-      // 한 번에 3개씩 병렬 처리 (API 제한 고려)
-      for (let i = 0; i < EUROPE_30_CITIES.length; i += 3) {
-        const batch = EUROPE_30_CITIES.slice(i, i + 3);
-        
-        const batchResults = await Promise.allSettled(
-          batch.map(async (city) => {
-            const sentiment = await getKoreanSentimentForCity(city.name, ['Hotspot', 'Foodie', 'Culture']);
-            return { city: city.name, country: city.country, sentiment };
-          })
-        );
-        
-        for (const result of batchResults) {
-          if (result.status === 'fulfilled') {
-            results.push({
-              city: result.value.city,
-              country: result.value.country,
-              success: true,
-              totalBonus: result.value.sentiment.totalBonus
-            });
-            successCount++;
-          } else {
-            const cityName = batch[batchResults.indexOf(result)]?.name || 'Unknown';
-            results.push({
-              city: cityName,
-              country: batch[batchResults.indexOf(result)]?.country || 'Unknown',
-              success: false,
-              error: result.reason?.message || 'Unknown error'
-            });
-            errorCount++;
-          }
-        }
-        
-        // API 제한 방지를 위한 딜레이
-        if (i + 3 < EUROPE_30_CITIES.length) {
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        }
-      }
-      
-      res.json({
-        message: `유럽 30개 도시 한국 감성 데이터 동기화 완료`,
-        totalCities: EUROPE_30_CITIES.length,
-        success: successCount,
-        errors: errorCount,
-        results
-      });
-    } catch (error) {
-      console.error("Error syncing Korean sentiment for all cities:", error);
-      res.status(500).json({ error: "Failed to sync Korean sentiment data" });
-    }
+  // 전체 한국 감성 데이터 동기화 (⏸️ 비용 절감 위해 비활성화)
+  app.post("/api/admin/korean-sentiment/sync-all", async (_req, res) => {
+    res.status(503).json({ error: "⏸️ 한국 감성 동기화가 비용 절감을 위해 비활성화되었습니다. (테스트 단계)" });
   });
 
-  // Instagram 한국 감성 동기화 (Gemini 기반 - 직접 크롤링 대신)
-  app.post("/api/admin/korean-sentiment/sync-instagram", async (req, res) => {
-    try {
-      const { getKoreanSentimentForCity } = await import("./services/korean-sentiment-service");
-      
-      let successCount = 0;
-      const results: Array<{ city: string; postCount: number; hashtags: string[] }> = [];
-      
-      for (const city of EUROPE_30_CITIES.slice(0, 10)) { // 처음 10개만
-        try {
-          const sentiment = await getKoreanSentimentForCity(city.name, ['Hotspot']);
-          results.push({
-            city: city.name,
-            postCount: sentiment.instagram.postCount,
-            hashtags: sentiment.instagram.trendingHashtags.slice(0, 3)
-          });
-          successCount++;
-          await new Promise(resolve => setTimeout(resolve, 500));
-        } catch (e) {
-          // 개별 실패는 무시하고 계속
-        }
-      }
-      
-      res.json({
-        message: "Instagram 감성 데이터 동기화 완료 (Gemini 기반)",
-        synced: successCount,
-        totalPosts: results.reduce((sum, r) => sum + r.postCount, 0),
-        results
-      });
-    } catch (error) {
-      console.error("Error syncing Instagram sentiment:", error);
-      res.status(500).json({ error: "Failed to sync Instagram sentiment data" });
-    }
+  // Instagram 한국 감성 동기화 (⏸️ 비용 절감 위해 비활성화)
+  app.post("/api/admin/korean-sentiment/sync-instagram", async (_req, res) => {
+    res.status(503).json({ error: "⏸️ 한국 감성 동기화가 비용 절감을 위해 비활성화되었습니다. (테스트 단계)" });
   });
 
-  // 네이버 블로그 한국 감성 동기화 (Gemini 기반)
-  app.post("/api/admin/korean-sentiment/sync-naver", async (req, res) => {
-    try {
-      const { getKoreanSentimentForCity } = await import("./services/korean-sentiment-service");
-      
-      let successCount = 0;
-      const results: Array<{ city: string; sentiment: string; keywords: string[] }> = [];
-      
-      for (const city of EUROPE_30_CITIES.slice(0, 10)) {
-        try {
-          const sentiment = await getKoreanSentimentForCity(city.name, ['Foodie', 'Culture']);
-          results.push({
-            city: city.name,
-            sentiment: sentiment.naverBlog.sentiment,
-            keywords: sentiment.naverBlog.keywords.slice(0, 5)
-          });
-          successCount++;
-          await new Promise(resolve => setTimeout(resolve, 500));
-        } catch (e) {
-          // 개별 실패는 무시
-        }
-      }
-      
-      res.json({
-        message: "네이버 블로그 감성 데이터 동기화 완료 (Gemini 기반)",
-        synced: successCount,
-        results
-      });
-    } catch (error) {
-      console.error("Error syncing Naver sentiment:", error);
-      res.status(500).json({ error: "Failed to sync Naver sentiment data" });
-    }
+  // 네이버 블로그 한국 감성 동기화 (⏸️ 비용 절감 위해 비활성화)
+  app.post("/api/admin/korean-sentiment/sync-naver", async (_req, res) => {
+    res.status(503).json({ error: "⏸️ 한국 감성 동기화가 비용 절감을 위해 비활성화되었습니다. (테스트 단계)" });
   });
 
-  // YouTube 한국 감성 동기화 (Gemini 기반)
-  app.post("/api/admin/korean-sentiment/sync-youtube", async (req, res) => {
-    try {
-      const { getKoreanSentimentForCity } = await import("./services/korean-sentiment-service");
-      
-      let successCount = 0;
-      const results: Array<{ city: string; videoCount: number; channels: string[] }> = [];
-      
-      for (const city of EUROPE_30_CITIES.slice(0, 10)) {
-        try {
-          const sentiment = await getKoreanSentimentForCity(city.name, ['Adventure', 'Culture']);
-          results.push({
-            city: city.name,
-            videoCount: sentiment.youtube.mentionCount,
-            channels: sentiment.youtube.channels.slice(0, 3)
-          });
-          successCount++;
-          await new Promise(resolve => setTimeout(resolve, 500));
-        } catch (e) {
-          // 개별 실패는 무시
-        }
-      }
-      
-      res.json({
-        message: "YouTube 감성 데이터 동기화 완료 (Gemini 기반)",
-        synced: successCount,
-        results
-      });
-    } catch (error) {
-      console.error("Error syncing YouTube sentiment:", error);
-      res.status(500).json({ error: "Failed to sync YouTube sentiment data" });
-    }
+  // YouTube 한국 감성 동기화 (⏸️ 비용 절감 위해 비활성화)
+  app.post("/api/admin/korean-sentiment/sync-youtube", async (_req, res) => {
+    res.status(503).json({ error: "⏸️ 한국 감성 동기화가 비용 절감을 위해 비활성화되었습니다. (테스트 단계)" });
   });
 
   // 캐시된 한국 감성 데이터 현황 조회

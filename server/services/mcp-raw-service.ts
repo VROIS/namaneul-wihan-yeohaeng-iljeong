@@ -365,8 +365,6 @@ async function runStage3ForCityCategory(
   batchSize: number = 10
 ): Promise<{ success: boolean; updatedRows: number; error?: string }> {
   if (!db) return { success: false, updatedRows: 0, error: "DB 연결 없음" };
-  const apiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
-  if (!apiKey) return { success: false, updatedRows: 0, error: "Gemini API 키 없음" };
 
   const rows = await db
     .select({ id: placeSeedRaw.id, nameEn: placeSeedRaw.nameEn, nameKo: placeSeedRaw.nameKo })
@@ -380,42 +378,59 @@ async function runStage3ForCityCategory(
 
   let updatedRows = 0;
   try {
-    const { GoogleGenAI } = await import("@google/genai");
-    const ai = new GoogleGenAI({ apiKey });
-    // API 비용 절감: getSearchTools 제거, tools 없이 실행 (로우데이터 품질은 MCP 1·2단계로 충분)
-    for (let i = 0; i < rows.length; i += batchSize) {
-      const batch = rows.slice(i, i + batchSize);
-      const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash-lite",
-        contents: buildStage3Prompt(city.nameEn, batch),
-      });
-      const text = (response as any).text || "";
-      const parsed = extractJsonArray(text);
-      if (!Array.isArray(parsed) || parsed.length === 0) continue;
+    if (!USE_MCP_RAW) {
+      return { success: false, updatedRows: 0, error: "USE_MCP_RAW=true 필요" };
+    }
 
-      const now = new Date();
-      for (const row of batch) {
-        const item = parsed.find(
-          (p: any) =>
-            (row.nameEn && String(p?.placeName || "").toLowerCase().includes(row.nameEn.toLowerCase())) ||
-            (row.nameKo && String(p?.placeName || "").includes(row.nameKo || "")) ||
-            (p?.placeName && row.nameEn && row.nameEn.toLowerCase().includes(String(p.placeName).toLowerCase()))
-        );
-        if (!item) continue;
-        const priceEur = typeof item?.priceEur === "number" ? item.priceEur : 0;
-        const priceSource = String(item?.priceSource || "gemini_search").slice(0, 50);
-        await db
-          .update(placeSeedRaw)
-          .set({
+    const mcp = await getMcpClient();
+    const FREE_KEYWORDS = /square|plaza|park|garden|piazza|platz|jardin|place|boulevard|promenade|bridge|street|market|quarter|district/i;
+
+    for (const row of rows) {
+      try {
+        const placeName = row.nameKo || row.nameEn;
+        if (!placeName) continue;
+
+        if (FREE_KEYWORDS.test(row.nameEn || "")) {
+          await db.update(placeSeedRaw).set({
+            priceEur: 0,
+            priceSource: "mcp_free_keyword",
+            priceFetchedAt: new Date(),
+          }).where(eq(placeSeedRaw.id, row.id));
+          updatedRows++;
+          continue;
+        }
+
+        const query = `${placeName} ${city.nameEn} entrance fee ticket price EUR 2024`;
+        const searchResult = await mcp.googleSearch(query, { num: 5 });
+
+        let priceEur: number | null = null;
+        let priceSource = "mcp_search";
+
+        const isFree = /free(?! cancellation)|무료|no (?:entrance |admission )?fee|free entry/i.test(searchResult);
+        if (isFree) {
+          priceEur = 0;
+          priceSource = "mcp_free_detected";
+        } else {
+          const priceMatch = searchResult.match(/(?:EUR|€)\s*([0-9]+(?:[.,][0-9]{1,2})?)/i)
+            || searchResult.match(/([0-9]+(?:[.,][0-9]{1,2})?)\s*(?:EUR|€)/i);
+          if (priceMatch) {
+            priceEur = parseFloat(priceMatch[1].replace(',', '.'));
+            if (isNaN(priceEur)) priceEur = null;
+          }
+        }
+
+        if (priceEur !== null) {
+          await db.update(placeSeedRaw).set({
             priceEur,
             priceSource,
-            priceFetchedAt: now,
-          })
-          .where(eq(placeSeedRaw.id, row.id));
-        updatedRows++;
-      }
-      if (i + batchSize < rows.length) {
-        await new Promise((r) => setTimeout(r, 1500));
+            priceFetchedAt: new Date(),
+          }).where(eq(placeSeedRaw.id, row.id));
+          updatedRows++;
+        }
+
+        await new Promise((r) => setTimeout(r, 500));
+      } catch {
+        // 개별 장소 실패 무시
       }
     }
     return { success: true, updatedRows };
@@ -431,8 +446,6 @@ async function runStage2ForCityCategory(city: TargetCity, category: SeedCategory
   error?: string;
 }> {
   if (!db) return { success: false, updatedRawRows: 0, savedNubiReasonRows: 0, error: "DB 연결 없음" };
-  const apiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
-  if (!apiKey) return { success: false, updatedRawRows: 0, savedNubiReasonRows: 0, error: "Gemini API 키 없음" };
 
   const baseRows = await db
     .select()
@@ -452,23 +465,64 @@ async function runStage2ForCityCategory(city: TargetCity, category: SeedCategory
   const celebListText = celebRows.map((c) => `@${c.instagramHandle} (${c.name})`).join(", ");
 
   try {
-    const { GoogleGenAI } = await import("@google/genai");
-    const ai = new GoogleGenAI({ apiKey });
-    // API 비용 절감: getSearchTools 제거, tools 없이 실행 (로우데이터 품질은 MCP 1단계로 충분)
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash-lite",
-      contents: buildStage2Prompt(city.nameKo, city.nameEn, placeList, celebListText),
-    });
-    const text = (response as any).text || "";
-    const parsed = extractJsonArray(text);
-    const items = normalizeStage2Items(parsed);
-    if (items.length < STAGE_MIN_ITEMS) {
-      return {
-        success: false,
-        updatedRawRows: 0,
-        savedNubiReasonRows: 0,
-        error: `2단계 응답 품질 미달 (${items.length}건, 최소 ${STAGE_MIN_ITEMS}건 필요)`,
-      };
+    if (!USE_MCP_RAW) {
+      return { success: false, updatedRawRows: 0, savedNubiReasonRows: 0, error: "USE_MCP_RAW=true 필요" };
+    }
+
+    const mcp = await getMcpClient();
+    const items: Stage2Item[] = [];
+
+    for (const placeName of placeList) {
+      try {
+        const query = `${placeName} ${city.nameEn} review recommendation reason Korean tourist`;
+        const searchResult = await mcp.googleSearch(query, { num: 5 });
+
+        let nubiReason = "";
+        let evidenceUrl = "";
+        let sourceType = "travel_app";
+        let sourceRank = 5;
+
+        const urlMatch = searchResult.match(/https?:\/\/[^\s"'<>]+/);
+        if (urlMatch) evidenceUrl = urlMatch[0];
+
+        if (/instagram\.com/i.test(searchResult)) {
+          sourceType = "instagram"; sourceRank = 1;
+        } else if (/youtube\.com|youtu\.be/i.test(searchResult)) {
+          sourceType = "youtube"; sourceRank = 2;
+        } else if (/blog\.naver\.com/i.test(searchResult)) {
+          sourceType = "naver_blog"; sourceRank = 3;
+        } else if (/hanatour|modetour|ybtour|verygood/i.test(searchResult)) {
+          sourceType = "package"; sourceRank = 4;
+        }
+
+        const snippetMatch = searchResult.match(/(?:Snippet|Description):\s*(.+?)(?:\n|$)/i);
+        if (snippetMatch) {
+          nubiReason = snippetMatch[1].trim().slice(0, 200);
+        } else {
+          const lines = searchResult.split('\n').filter(l => l.trim().length > 20);
+          nubiReason = (lines[0] || `${placeName} - ${city.nameEn} 인기 장소`).trim().slice(0, 200);
+        }
+
+        items.push({
+          placeName,
+          sourceRank,
+          sourceType,
+          nubiReason,
+          evidenceUrl,
+          verified: !!evidenceUrl,
+        });
+
+        await new Promise((r) => setTimeout(r, 500));
+      } catch {
+        items.push({
+          placeName,
+          sourceRank: 5,
+          sourceType: "travel_app",
+          nubiReason: `${placeName} - ${city.nameEn} 추천 장소`,
+          evidenceUrl: "",
+          verified: false,
+        });
+      }
     }
 
     const rawLookup = new Map<string, (typeof baseRows)[number]>();

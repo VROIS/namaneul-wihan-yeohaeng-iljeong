@@ -1,7 +1,6 @@
-﻿import { db } from "../db";
-import { weatherForecast, weatherCache, cities, places } from "../../shared/schema";
+import { db } from "../db";
+import { weatherForecast, weatherCache, cities } from "../../shared/schema";
 import { eq, and, gte, desc } from "drizzle-orm";
-import { getSearchTools } from "./gemini-search-limiter";
 
 // DB에서 런타임에 로드되는 키를 사용하기 위해 호출 시점에 읽음 (모듈 로드 시점 X)
 const getOpenWeatherKey = () => process.env.OPENWEATHER_API_KEY || "";
@@ -77,8 +76,8 @@ export async function fetchWeatherForCity(cityId: number): Promise<{
 
   const apiKey = getOpenWeatherKey();
   if (!apiKey) {
-    console.log("[Weather] No API key (DB에서 로드 확인), using Gemini fallback");
-    return fetchWeatherWithGemini(cityId, city.name, city.latitude, city.longitude);
+    console.warn("[Weather] OPENWEATHER_API_KEY 없음 - 날씨 수집 스킵 (DB api_keys 확인)");
+    return { success: false, forecastDays: 0 };
   }
 
   try {
@@ -146,86 +145,8 @@ export async function fetchWeatherForCity(cityId: number): Promise<{
     };
   } catch (error) {
     console.error(`[Weather] API error for ${city.name}:`, error);
-    return fetchWeatherWithGemini(cityId, city.name, city.latitude, city.longitude);
+    return { success: false, forecastDays: 0 };
   }
-}
-
-async function fetchWeatherWithGemini(
-  cityId: number,
-  cityName: string,
-  lat: number,
-  lon: number
-): Promise<{ success: boolean; forecastDays: number; currentCondition?: string }> {
-  try {
-    const apiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY || process.env.GEMINI_API_KEY || '';
-    if (!apiKey) {
-      console.error("[Weather] Gemini API 키 없음 - fallback 불가");
-      return { success: false, forecastDays: 0 };
-    }
-    const { GoogleGenAI } = await import("@google/genai");
-    const ai = new GoogleGenAI({ apiKey });
-
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: `What is the current weather and 5-day forecast for ${cityName}?
-
-Return JSON:
-{
-  "current": {
-    "temp": 25,
-    "condition": "Clear",
-    "humidity": 60
-  },
-  "forecast": [
-    {
-      "date": "2026-01-08",
-      "tempMin": 18,
-      "tempMax": 28,
-      "condition": "Clear",
-      "rainProbability": 0.1
-    }
-  ]
-}`,
-      config: {
-        tools: getSearchTools("weather"),
-      },
-    });
-
-    const text = response.text || "";
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]);
-
-      for (const day of parsed.forecast || []) {
-        const realityPenalty = calculateRealityPenalty(
-          day.condition,
-          day.tempMax,
-          day.rainProbability || 0,
-          5
-        );
-
-        await db.insert(weatherForecast).values({
-          cityId,
-          forecastDate: new Date(day.date),
-          tempMin: day.tempMin,
-          tempMax: day.tempMax,
-          weatherMain: day.condition,
-          rainProbability: day.rainProbability,
-          realityPenalty,
-        }).onConflictDoNothing();
-      }
-
-      return {
-        success: true,
-        forecastDays: parsed.forecast?.length || 0,
-        currentCondition: parsed.current?.condition,
-      };
-    }
-  } catch (error) {
-    console.error("[Weather] Gemini fallback error:", error);
-  }
-
-  return { success: false, forecastDays: 0 };
 }
 
 export async function syncAllCitiesWeather(): Promise<{

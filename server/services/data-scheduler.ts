@@ -33,6 +33,15 @@ export class DataScheduler {
     "tistory_sync",         // 블로그 크롤러
     "michelin_sync",        // 미쉐린/TripAdvisor
     "tripadvisor_sync",
+    "backfill_google_place_id", // Google Places API 비용 — 테스트 단계 일시중지
+    "price_sync",           // 가격 크롤러 (Gemini) — 테스트 단계 일시중지
+    "korean_platform_sync", // 한국 플랫폼 (Gemini) — 테스트 단계 일시중지
+    "package_tour_sync",    // 패키지투어 (Gemini) — 테스트 단계 일시중지
+    "photospot_sync",       // 포토스팟 (Gemini) — 테스트 단계 일시중지
+    "score_aggregation",    // 점수 집계 — 데이터 수집 중지 중 불필요
+    "place_link_sync",      // 장소 연결 — 데이터 수집 중지 중 불필요
+    "wikimedia_sync",       // 위키미디어
+    "opentripmap_sync",     // OpenTripMap
   ]);
 
   static isTaskDisabledByPolicy(taskName: string): boolean {
