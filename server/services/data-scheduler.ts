@@ -24,9 +24,7 @@ export class DataScheduler {
   private static readonly PAUSED_TASKS: Set<string> = new Set([
     "crisis_sync",          // 프론트 연결 전까지 자동 중지 (수동 실행만)
     "place_seed_sync",      // MCP 전환 전 자동 중지 (수동 실행만)
-    "mcp_raw_stage1",       // MCP 수집은 우선 수동 실행(검증 중심)
-    "mcp_raw_stage2",       // MCP 2단계도 우선 수동 실행(검증 중심)
-    "mcp_workflow_france_phase1", // 1차 목표 달성(5,250건 수집 완료) — 서버 크래시 방지
+    "mcp_raw_stage1",       // Stage 1 미션 완료 (5,250건 수집됨)
     "youtube_sync",         // YouTube API
     "instagram_sync",       // Meta/인스타
     "naver_blog_sync",      // 블로그 크롤러
