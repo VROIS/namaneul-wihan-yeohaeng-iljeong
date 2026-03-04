@@ -19,6 +19,7 @@ import { Video, ResizeMode } from "expo-av";
 import * as FileSystem from "expo-file-system";
 import * as MediaLibrary from "expo-media-library";
 import * as Sharing from "expo-sharing";
+import { useTranslation } from "react-i18next";
 
 import {
   Spacing,
@@ -53,6 +54,7 @@ interface ItineraryDetail {
 }
 
 export default function SavedTripDetailScreen() {
+  const { t } = useTranslation();
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? "light"];
   const insets = useSafeAreaInsets();
@@ -156,13 +158,13 @@ export default function SavedTripDetailScreen() {
       const { status } = await MediaLibrary.requestPermissionsAsync();
       if (status !== "granted") {
         Alert.alert(
-          "권한 필요",
-          "영상을 저장하려면 미디어 라이브러리 접근 권한이 필요합니다.",
+          t("saved.permissionRequired"),
+          t("saved.permissionMsg"),
         );
         return;
       }
 
-      Alert.alert("다운로드 중", "영상을 저장하고 있습니다...");
+      Alert.alert(t("saved.videoDownloading"), t("saved.videoDownloadingMsg"));
 
       // 파일 다운로드
       const filename = `nubi_trip_${itineraryId}_${Date.now()}.mp4`;
@@ -175,7 +177,7 @@ export default function SavedTripDetailScreen() {
         const asset = await MediaLibrary.createAssetAsync(downloadResult.uri);
         await MediaLibrary.createAlbumAsync("누비 여행", asset, false);
 
-        Alert.alert("저장 완료! ✅", "영상이 갤러리에 저장되었습니다.");
+        Alert.alert(t("saved.videoSaveComplete"), t("saved.videoSaveCompleteMsg"));
       } else {
         throw new Error("다운로드 실패");
       }
@@ -191,15 +193,15 @@ export default function SavedTripDetailScreen() {
       // 공유 폴백
       if (await Sharing.isAvailableAsync()) {
         Alert.alert(
-          "저장 실패",
-          "갤러리 저장에 실패했습니다. 공유하시겠습니까?",
+          t("saved.videoSaveFailed"),
+          t("saved.videoSaveFailedMsg"),
           [
-            { text: "취소", style: "cancel" },
-            { text: "공유", onPress: () => Sharing.shareAsync(videoUrl) },
+            { text: t("common.cancel"), style: "cancel" },
+            { text: t("common.share"), onPress: () => Sharing.shareAsync(videoUrl) },
           ],
         );
       } else {
-        Alert.alert("오류", "영상 저장에 실패했습니다.");
+        Alert.alert(t("common.error"), t("saved.videoSaveErrorMsg"));
       }
     }
   };
@@ -207,15 +209,15 @@ export default function SavedTripDetailScreen() {
   const getVideoButtonText = () => {
     switch (videoStatus) {
       case "idle":
-        return "✨ AI 영상 만들기";
+        return t("saved.videoCreate");
       case "generating":
-        return "🔄 요청 중...";
+        return t("saved.videoRequesting");
       case "polling":
-        return "⏳ 생성 중... (약 4분 소요)";
+        return t("saved.videoGenerating");
       case "succeeded":
-        return "✅ 완료! 다시 만들기";
+        return t("saved.videoComplete");
       case "failed":
-        return "❌ 실패 - 다시 시도";
+        return t("saved.videoFailed");
     }
   };
 
@@ -230,7 +232,7 @@ export default function SavedTripDetailScreen() {
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={Brand.primary} />
           <Text style={[styles.loadingText, { color: theme.textSecondary }]}>
-            불러오는 중...
+            {t("saved.loading")}
           </Text>
         </View>
       </View>
@@ -245,7 +247,7 @@ export default function SavedTripDetailScreen() {
         <View style={styles.errorContainer}>
           <Icon name="alert-circle" size={48} color={theme.textTertiary} />
           <Text style={[styles.errorText, { color: theme.textSecondary }]}>
-            일정을 찾을 수 없습니다
+            {t("saved.notFound")}
           </Text>
         </View>
       </View>
@@ -254,22 +256,22 @@ export default function SavedTripDetailScreen() {
 
   // 라벨 매핑
   const curationLabels: Record<string, string> = {
-    Kids: "아이",
-    Parents: "부모님",
-    Everyone: "모두",
-    Self: "나",
+    Kids: t("labels.curationKids"),
+    Parents: t("labels.curationParents"),
+    Everyone: t("labels.curationEveryone"),
+    Self: t("labels.curationSelf"),
   };
   const companionLabels: Record<string, string> = {
-    Single: "혼자",
-    Couple: "커플",
-    Family: "가족",
-    ExtendedFamily: "대가족",
-    Group: "친구들",
+    Single: t("labels.companionSingle"),
+    Couple: t("labels.companionCouple"),
+    Family: t("labels.companionFamily"),
+    ExtendedFamily: t("labels.companionExtended"),
+    Group: t("labels.companionGroup"),
   };
   const paceLabels: Record<string, string> = {
-    Relaxed: "여유롭게",
-    Normal: "적당히",
-    Packed: "빡빡하게",
+    Relaxed: t("labels.paceRelaxed"),
+    Normal: t("labels.paceNormal"),
+    Packed: t("labels.pacePacked"),
   };
 
   return (
@@ -315,7 +317,7 @@ export default function SavedTripDetailScreen() {
                 onPress={handleSaveVideo}
               >
                 <Icon name="download" size={20} color="#FFFFFF" />
-                <Text style={styles.saveVideoButtonText}>💾 영상 저장</Text>
+                <Text style={styles.saveVideoButtonText}>{t("saved.videoSave")}</Text>
               </Pressable>
               <Pressable
                 style={[styles.regenerateButton, { borderColor: theme.border }]}
@@ -328,7 +330,7 @@ export default function SavedTripDetailScreen() {
                     { color: theme.textSecondary },
                   ]}
                 >
-                  다시 생성하기
+                  {t("saved.videoRegenerate")}
                 </Text>
               </Pressable>
             </View>
@@ -341,13 +343,13 @@ export default function SavedTripDetailScreen() {
               <View style={styles.videoCardHeader}>
                 <Icon name="film" size={24} color={Brand.primary} />
                 <Text style={[styles.videoCardTitle, { color: theme.text }]}>
-                  AI 여행 영상
+                  {t("saved.videoTitle")}
                 </Text>
               </View>
               <Text
                 style={[styles.videoCardDesc, { color: theme.textSecondary }]}
               >
-                저장된 일정을 기반으로 지브리 스타일의 감동 영상을 만들어 드려요
+                {t("saved.videoDesc")}
               </Text>
 
               <Pressable
@@ -373,7 +375,7 @@ export default function SavedTripDetailScreen() {
                 <Text
                   style={[styles.progressText, { color: theme.textSecondary }]}
                 >
-                  여러 장면을 순차적으로 생성하고 있습니다...
+                  {t("saved.videoPolling")}
                 </Text>
               )}
             </LinearGradient>
@@ -388,13 +390,13 @@ export default function SavedTripDetailScreen() {
           ]}
         >
           <Text style={[styles.infoTitle, { color: theme.text }]}>
-            여행 정보
+            {t("saved.tripInfo")}
           </Text>
 
           <View style={styles.infoRow}>
             <Icon name="calendar" size={16} color={theme.textSecondary} />
             <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>
-              날짜
+              {t("saved.date")}
             </Text>
             <Text style={[styles.infoValue, { color: theme.text }]}>
               {itinerary.startDate?.split("T")[0]} ~{" "}
@@ -405,7 +407,7 @@ export default function SavedTripDetailScreen() {
           <View style={styles.infoRow}>
             <Icon name="users" size={16} color={theme.textSecondary} />
             <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>
-              동행
+              {t("saved.companion")}
             </Text>
             <Text style={[styles.infoValue, { color: theme.text }]}>
               {companionLabels[itinerary.companionType] ||
@@ -417,7 +419,7 @@ export default function SavedTripDetailScreen() {
           <View style={styles.infoRow}>
             <Icon name="heart" size={16} color={theme.textSecondary} />
             <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>
-              누구를 위한
+              {t("saved.curationFocus")}
             </Text>
             <Text style={[styles.infoValue, { color: theme.text }]}>
               {curationLabels[itinerary.curationFocus] ||
@@ -428,7 +430,7 @@ export default function SavedTripDetailScreen() {
           <View style={styles.infoRow}>
             <Icon name="zap" size={16} color={theme.textSecondary} />
             <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>
-              일정 밀도
+              {t("saved.travelPace")}
             </Text>
             <Text style={[styles.infoValue, { color: theme.text }]}>
               {paceLabels[itinerary.travelPace] || itinerary.travelPace}
@@ -439,7 +441,7 @@ export default function SavedTripDetailScreen() {
             <View style={styles.vibesRow}>
               <Icon name="star" size={16} color={theme.textSecondary} />
               <Text style={[styles.infoLabel, { color: theme.textSecondary }]}>
-                바이브
+                {t("saved.vibes")}
               </Text>
               <View style={styles.vibesTags}>
                 {itinerary.vibes.map((vibe, index) => (

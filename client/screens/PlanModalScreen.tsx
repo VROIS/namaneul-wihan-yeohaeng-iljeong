@@ -12,6 +12,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
+import { useTranslation } from "react-i18next";
 import {
   Typography,
   Spacing,
@@ -47,6 +48,7 @@ const STEPS: Step[] = [
 ];
 
 export default function PlanModalScreen() {
+  const { t } = useTranslation();
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? "light"];
   const insets = useSafeAreaInsets();
@@ -106,9 +108,9 @@ export default function PlanModalScreen() {
 
   const renderCompanionStep = () => (
     <View style={styles.stepContent}>
-      <ThemedText style={styles.stepTitle}>누구와 함께 떠나시나요?</ThemedText>
+      <ThemedText style={styles.stepTitle}>{t("plan.companionTitle")}</ThemedText>
       <ThemedText style={[styles.stepSubtitle, { color: theme.textSecondary }]}>
-        동행을 선택하면 맞춤 여행을 추천해 드립니다
+        {t("plan.companionHint")}
       </ThemedText>
 
       <View style={styles.optionsGrid}>
@@ -173,7 +175,7 @@ export default function PlanModalScreen() {
         formData.companionType === "Group" ? (
         <View style={styles.inputSection}>
           <ThemedText style={styles.inputLabel}>
-            동행자 나이 (쉼표로 구분)
+            {t("plan.companionAges")}
           </ThemedText>
           <TextInput
             style={[
@@ -184,7 +186,7 @@ export default function PlanModalScreen() {
                 color: theme.text,
               },
             ]}
-            placeholder="예: 10, 13, 55, 59"
+            placeholder={t("plan.companionAgesPlaceholder")}
             placeholderTextColor={theme.textTertiary}
             value={formData.companionAges}
             onChangeText={(text) =>
@@ -199,9 +201,9 @@ export default function PlanModalScreen() {
 
   const renderFocusStep = () => (
     <View style={styles.stepContent}>
-      <ThemedText style={styles.stepTitle}>이번 여행의 주인공은?</ThemedText>
+      <ThemedText style={styles.stepTitle}>{t("plan.focusTitle")}</ThemedText>
       <ThemedText style={[styles.stepSubtitle, { color: theme.textSecondary }]}>
-        누구를 위한 여행인지에 따라 일정이 달라집니다
+        {t("plan.focusHint")}
       </ThemedText>
 
       <View style={styles.focusList}>
@@ -257,9 +259,9 @@ export default function PlanModalScreen() {
 
   const renderDestinationStep = () => (
     <View style={styles.stepContent}>
-      <ThemedText style={styles.stepTitle}>어디로 떠나시나요?</ThemedText>
+      <ThemedText style={styles.stepTitle}>{t("plan.destinationTitle")}</ThemedText>
       <ThemedText style={[styles.stepSubtitle, { color: theme.textSecondary }]}>
-        도시 또는 나라를 입력해주세요
+        {t("plan.destinationHint")}
       </ThemedText>
 
       <TextInput
@@ -271,7 +273,7 @@ export default function PlanModalScreen() {
             color: theme.text,
           },
         ]}
-        placeholder="예: 파리, 프랑스"
+        placeholder={t("plan.destinationPlaceholder")}
         placeholderTextColor={theme.textTertiary}
         value={formData.destination}
         onChangeText={(text) =>
@@ -283,14 +285,14 @@ export default function PlanModalScreen() {
 
   const renderDatesStep = () => (
     <View style={styles.stepContent}>
-      <ThemedText style={styles.stepTitle}>언제 떠나시나요?</ThemedText>
+      <ThemedText style={styles.stepTitle}>{t("plan.datesTitle")}</ThemedText>
       <ThemedText style={[styles.stepSubtitle, { color: theme.textSecondary }]}>
-        렌터카처럼 시작 시간과 종료 시간까지 선택하세요
+        {t("plan.datesHint")}
       </ThemedText>
 
       <View style={styles.dateRow}>
         <View style={styles.dateColumn}>
-          <ThemedText style={styles.inputLabel}>시작일</ThemedText>
+          <ThemedText style={styles.inputLabel}>{t("trip.startDate")}</ThemedText>
           <TextInput
             style={[
               styles.input,
@@ -309,7 +311,7 @@ export default function PlanModalScreen() {
           />
         </View>
         <View style={styles.dateColumn}>
-          <ThemedText style={styles.inputLabel}>시작 시간</ThemedText>
+          <ThemedText style={styles.inputLabel}>{t("trip.startTime")}</ThemedText>
           <TextInput
             style={[
               styles.input,
@@ -331,7 +333,7 @@ export default function PlanModalScreen() {
 
       <View style={styles.dateRow}>
         <View style={styles.dateColumn}>
-          <ThemedText style={styles.inputLabel}>종료일</ThemedText>
+          <ThemedText style={styles.inputLabel}>{t("trip.endDate")}</ThemedText>
           <TextInput
             style={[
               styles.input,
@@ -350,7 +352,7 @@ export default function PlanModalScreen() {
           />
         </View>
         <View style={styles.dateColumn}>
-          <ThemedText style={styles.inputLabel}>종료 시간</ThemedText>
+          <ThemedText style={styles.inputLabel}>{t("trip.endTime")}</ThemedText>
           <TextInput
             style={[
               styles.input,
@@ -375,10 +377,10 @@ export default function PlanModalScreen() {
   const renderVibesStep = () => (
     <View style={styles.stepContent}>
       <ThemedText style={styles.stepTitle}>
-        어떤 분위기를 원하시나요?
+        {t("plan.vibesTitle")}
       </ThemedText>
       <ThemedText style={[styles.stepSubtitle, { color: theme.textSecondary }]}>
-        여러 개 선택할 수 있습니다
+        {t("plan.vibesHint")}
       </ThemedText>
 
       <View style={styles.vibesGrid}>
@@ -423,9 +425,9 @@ export default function PlanModalScreen() {
 
   const renderStyleStep = () => (
     <View style={styles.stepContent}>
-      <ThemedText style={styles.stepTitle}>여행 스타일을 선택하세요</ThemedText>
+      <ThemedText style={styles.stepTitle}>{t("plan.styleTitle")}</ThemedText>
       <ThemedText style={[styles.stepSubtitle, { color: theme.textSecondary }]}>
-        예산과 취향에 맞는 스타일을 선택해주세요
+        {t("plan.styleHint")}
       </ThemedText>
 
       <View style={styles.styleList}>
@@ -564,7 +566,7 @@ export default function PlanModalScreen() {
             style={styles.nextButtonGradient}
           >
             <Text style={styles.nextButtonText}>
-              {isLastStep ? "여정 생성하기" : "다음"}
+              {isLastStep ? t("plan.createTrip") : t("common.next")}
             </Text>
             {!isLastStep ? (
               <Icon name="arrow-right" size={20} color="#FFFFFF" />

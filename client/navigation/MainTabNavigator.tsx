@@ -3,6 +3,7 @@ import { StyleSheet, Platform, useColorScheme, View } from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { BlurView } from "expo-blur";
 import { useNavigation } from "@react-navigation/native";
+import { useTranslation } from "react-i18next";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
 import Icon from "@/components/Icon";
@@ -35,6 +36,7 @@ function AdminPlaceholder() {
 }
 
 export default function MainTabNavigator() {
+  const { t } = useTranslation();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
   const theme = Colors[colorScheme ?? "light"];
@@ -118,7 +120,7 @@ export default function MainTabNavigator() {
           name="Home"
           component={TripPlannerScreen}
           options={{
-            tabBarLabel: "일정",
+            tabBarLabel: t("tab.plan"),
             headerShown: false,
           }}
         />
@@ -127,7 +129,7 @@ export default function MainTabNavigator() {
           name="Map"
           component={MapTogglePlaceholder}
           options={{
-            tabBarLabel: "지도",
+            tabBarLabel: t("tab.map"),
             headerShown: false,
             // 지도 활성화 상태에 따라 아이콘 색상 변경
             tabBarIcon: ({ focused }) => (
@@ -150,8 +152,8 @@ export default function MainTabNavigator() {
           name="Verify"
           component={VerificationRequestScreen}
           options={{
-            tabBarLabel: "전문가",
-            headerTitle: "전문가 검증",
+            tabBarLabel: t("tab.expert"),
+            headerTitle: t("verify.title"),
           }}
         />
         {/* 👤 프로필 */}
@@ -159,8 +161,8 @@ export default function MainTabNavigator() {
           name="Profile"
           component={ProfileScreen}
           options={{
-            tabBarLabel: "프로필",
-            headerTitle: "프로필",
+            tabBarLabel: t("tab.profile"),
+            headerTitle: t("tab.profile"),
           }}
         />
         {/* ⚙️ 설정 (관리자) - 클릭 시 모달로 열림 */}
@@ -168,7 +170,7 @@ export default function MainTabNavigator() {
           name="Admin"
           component={AdminPlaceholder}
           options={{
-            tabBarLabel: "설정",
+            tabBarLabel: t("tab.settings"),
             headerShown: false,
           }}
           listeners={{

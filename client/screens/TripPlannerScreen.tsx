@@ -64,12 +64,7 @@ if (Platform.OS !== "web") {
 type ScreenState = "Input" | "Loading" | "Result";
 type PickerMode = "startDate" | "startTime" | "endDate" | "endTime" | null;
 
-const LOADING_MESSAGES = [
-  "실시간 교통 정보 분석 중",
-  "현지 운영 현황 확인 중",
-  "취향 기반 경로 최적화 중",
-  "데이터 신뢰도 검증 중",
-];
+// LOADING_MESSAGES moved inside component for i18n
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -192,7 +187,12 @@ export default function TripPlannerScreen() {
   const [showWebInput, setShowWebInput] = useState<PickerMode>(null);
   const [pendingGenerate, setPendingGenerate] = useState(false);
   const { showMap } = useMapToggle(); // 🗺️ 지도 토글 (Context에서 가져옴)
-  const { i18n } = useTranslation();
+  const { t, i18n } = useTranslation();
+
+  const LOADING_MESSAGES = useMemo(
+    () => [t("trip.loading1"), t("trip.loading2"), t("trip.loading3"), t("trip.loading4")],
+    [t],
+  );
 
   // 💾 일정 저장 상태
   const [isSaving, setIsSaving] = useState(false);
@@ -336,8 +336,8 @@ export default function TripPlannerScreen() {
       } catch (error) {
         console.error("[TripPlanner] Day 재최적화 실패:", error);
         Alert.alert(
-          "알림",
-          "동선 재최적화에 실패했습니다. 숙소 정보는 저장되었습니다.",
+          t("common.notice"),
+          t("trip.reoptimizeFailed"),
         );
       } finally {
         setIsReoptimizing(false);
@@ -425,17 +425,17 @@ export default function TripPlannerScreen() {
           if (data.highSeverity) {
             // 심각한 위기 정보 - 경고 팝업
             Alert.alert(
-              "⚠️ 여행 주의 정보",
+              t("trip.crisisTitle"),
               `${formData.destination}에 ${data.alertCount}개의 주의사항이 있습니다:\n\n${alertMessages}\n\n${data.summary}\n\n일정을 계속 생성하시겠습니까?`,
               [
                 {
-                  text: "취소",
+                  text: t("common.cancel"),
                   style: "cancel",
                   onPress: () =>
                     resolve({ hasAlerts: true, shouldProceed: false }),
                 },
                 {
-                  text: "계속 생성",
+                  text: t("trip.crisisContinue"),
                   onPress: () =>
                     resolve({ hasAlerts: true, shouldProceed: true }),
                 },
@@ -444,11 +444,11 @@ export default function TripPlannerScreen() {
           } else {
             // 일반 알림 정보 - 알림 팝업
             Alert.alert(
-              "📢 참고 정보",
+              t("trip.crisisReferenceTitle"),
               `${formData.destination}에 참고할 정보가 있습니다:\n\n${alertMessages}`,
               [
                 {
-                  text: "확인 후 생성",
+                  text: t("trip.crisisConfirm"),
                   onPress: () =>
                     resolve({ hasAlerts: true, shouldProceed: true }),
                 },
@@ -522,7 +522,7 @@ export default function TripPlannerScreen() {
       );
 
       setItinerary({
-        title: result.title || `${formData.destination} 여행`,
+        title: result.title || `${formData.destination} ${t("profile.trips")}`,
         destination: result.destination || formData.destination,
         startDate: result.startDate || formData.startDate,
         endDate: result.endDate || formData.endDate,
@@ -536,13 +536,13 @@ export default function TripPlannerScreen() {
       clearInterval(interval);
       console.error("Failed to generate itinerary:", error);
 
-      const message = error?.message || "일정 생성에 실패했습니다.";
+      const message = error?.message || "";
       Alert.alert(
-        "일정 생성 실패",
+        t("trip.generateFailed"),
         message.includes("일정 검증")
-          ? "일정 검증 기준 미달. 다시 시도해 주세요."
-          : "다시 시도해 주세요.",
-        [{ text: "확인" }],
+          ? t("trip.validationFailed")
+          : t("trip.retryHint"),
+        [{ text: t("common.confirm") }],
       );
       setScreen("Input");
     }
@@ -561,7 +561,7 @@ export default function TripPlannerScreen() {
   // 💾 일정 저장 함수
   const handleSaveItinerary = async () => {
     if (!itinerary) {
-      Alert.alert("오류", "저장할 일정이 없습니다.");
+      Alert.alert(t("common.error"), t("trip.noItinerary"));
       return;
     }
 
@@ -569,9 +569,9 @@ export default function TripPlannerScreen() {
     try {
       const authenticated = await isAuthenticated();
       if (!authenticated) {
-        Alert.alert("로그인 필요", "일정을 저장하려면 로그인이 필요합니다.", [
-          { text: "취소", style: "cancel" },
-          { text: "로그인", onPress: () => navigation.navigate("Login") },
+        Alert.alert(t("trip.loginRequired"), t("trip.saveLoginHint"), [
+          { text: t("common.cancel"), style: "cancel" },
+          { text: t("trip.loginBtn"), onPress: () => navigation.navigate("Login") },
         ]);
         setIsSaving(false);
         return;
@@ -584,7 +584,7 @@ export default function TripPlannerScreen() {
       const saveData = {
         userId: userData.id,
         cityId: 1, // TODO: 도시 ID 동적 매핑
-        title: `${itinerary.destination} 여행`,
+        title: `${itinerary.destination} ${t("profile.trips")}`,
         startDate: itinerary.startDate,
         endDate: itinerary.endDate,
         travelStyle: (formData.travelStyle || "comfort").toLowerCase(), // DB enum: luxury, comfort
@@ -606,15 +606,15 @@ export default function TripPlannerScreen() {
       if (saved.id) {
         setSavedItineraryId(saved.id);
         Alert.alert(
-          "저장 완료! ✅",
-          `일정이 저장되었습니다.\n\n프로필 > 나의 여정에서 확인하고\n영상을 생성할 수 있어요!`,
-          [{ text: "확인", style: "default" }],
+          t("trip.saveComplete"),
+          t("trip.saveCompleteMsg"),
+          [{ text: t("common.confirm"), style: "default" }],
         );
         console.log(`[TripPlanner] 💾 일정 저장 완료: id=${saved.id}`);
       }
     } catch (error) {
       console.error("[TripPlanner] 저장 오류:", error);
-      Alert.alert("저장 실패", "일정 저장 중 오류가 발생했습니다.");
+      Alert.alert(t("trip.saveFailed"), t("trip.saveFailedMsg"));
     } finally {
       setIsSaving(false);
     }
@@ -660,12 +660,12 @@ export default function TripPlannerScreen() {
     const isDate = showWebInput === "startDate" || showWebInput === "endDate";
     const title =
       showWebInput === "startDate"
-        ? "시작일"
+        ? t("trip.startDate")
         : showWebInput === "endDate"
-          ? "종료일"
+          ? t("trip.endDate")
           : showWebInput === "startTime"
-            ? "시작 시간"
-            : "종료 시간";
+            ? t("trip.startTime")
+            : t("trip.endTime");
     const currentValue =
       showWebInput === "startDate"
         ? formData.startDate
@@ -693,7 +693,7 @@ export default function TripPlannerScreen() {
                 <Text
                   style={[styles.pickerCancel, { color: theme.textSecondary }]}
                 >
-                  취소
+                  {t("common.cancel")}
                 </Text>
               </Pressable>
               <Text style={[styles.pickerTitle, { color: theme.text }]}>
@@ -701,7 +701,7 @@ export default function TripPlannerScreen() {
               </Text>
               <Pressable onPress={() => setShowWebInput(null)}>
                 <Text style={[styles.pickerConfirm, { color: Brand.primary }]}>
-                  확인
+                  {t("common.confirm")}
                 </Text>
               </Pressable>
             </View>
@@ -751,12 +751,12 @@ export default function TripPlannerScreen() {
     const mode = isDate ? "date" : "time";
     const title =
       pickerMode === "startDate"
-        ? "시작일"
+        ? t("trip.startDate")
         : pickerMode === "endDate"
-          ? "종료일"
+          ? t("trip.endDate")
           : pickerMode === "startTime"
-            ? "시작 시간"
-            : "종료 시간";
+            ? t("trip.startTime")
+            : t("trip.endTime");
 
     if (Platform.OS === "ios") {
       return (
@@ -776,7 +776,7 @@ export default function TripPlannerScreen() {
                       { color: theme.textSecondary },
                     ]}
                   >
-                    취소
+                    {t("common.cancel")}
                   </Text>
                 </Pressable>
                 <Text style={[styles.pickerTitle, { color: theme.text }]}>
@@ -786,7 +786,7 @@ export default function TripPlannerScreen() {
                   <Text
                     style={[styles.pickerConfirm, { color: Brand.primary }]}
                   >
-                    확인
+                    {t("common.confirm")}
                   </Text>
                 </Pressable>
               </View>
@@ -868,10 +868,10 @@ export default function TripPlannerScreen() {
         <Text style={{ fontSize: 28 }}>💜</Text>
         <View style={{ flex: 1 }}>
           <Text style={{ color: "#A78BFA", fontFamily: "Pretendard-Bold", fontSize: 14 }}>
-            BTS 콘서트 투어 플래너
+            {t("trip.btsBanner")}
           </Text>
           <Text style={{ color: "#6B7280", fontFamily: "Pretendard-Medium", fontSize: 11, marginTop: 2 }}>
-            멤버 취향으로 콘서트 도시 여정 만들기
+            {t("trip.btsBannerSub")}
           </Text>
         </View>
         <Icon name="chevron-right" size={20} color="#8B5CF6" />
@@ -897,19 +897,19 @@ export default function TripPlannerScreen() {
                 }),
               }))
             }
-            placeholder="예: 파리, 피렌체, 남프랑스"
+            placeholder={t("trip.destinationPlaceholder")}
             placeholderTextColor={theme.textTertiary}
           />
         </View>
         <Text style={[styles.sectionSubtitle, { color: theme.textTertiary, marginTop: 4, marginLeft: 4 }]}>
-          한글이나 영어로 도시명을 입력하세요.
+          {t("trip.destinationHint")}
         </Text>
       </View>
 
       {/* 🏨 숙소 (선택적 — 초행자는 나중에 결과화면에서 설정 가능) */}
       <View style={[styles.section, { zIndex: 15 }]}>
         <PlaceAutocomplete
-          placeholder="숙소 주소 (선택)"
+          placeholder={t("trip.accommodation")}
           value={formData.accommodationName || ""}
           icon="home"
           types="lodging|establishment"
@@ -922,7 +922,7 @@ export default function TripPlannerScreen() {
               : undefined
           }
           radiusBias="30000"
-          helperText="아직 숙소를 안 정했다면 비워두세요. 일정 생성 후에도 설정 가능합니다."
+          helperText={t("trip.accommodationHint")}
           onSelect={(place: PlaceSelection) => {
             setFormData((prev) => ({
               ...prev,
@@ -1004,7 +1004,7 @@ export default function TripPlannerScreen() {
       </View>
 
       <View style={styles.section}>
-        {renderSectionHeader("누구랑", "함께할 사람을 선택하세요")}
+        {renderSectionHeader(t("trip.companion"), t("trip.companionHint"))}
         <View style={styles.iconGrid}>
           {COMPANION_OPTIONS.map((option) => {
             const isSelected = formData.companionType === option.id;
@@ -1048,7 +1048,7 @@ export default function TripPlannerScreen() {
       </View>
 
       <View style={styles.section}>
-        {renderSectionHeader("누구를 위한", "누구 중심으로 일정을 짤까요?")}
+        {renderSectionHeader(t("trip.curationFocus"), t("trip.curationFocusHint"))}
         <View style={styles.iconGrid}>
           {CURATION_FOCUS_OPTIONS.map((option) => {
             const isSelected = formData.curationFocus === option.id;
@@ -1087,12 +1087,12 @@ export default function TripPlannerScreen() {
       </View>
 
       <View style={styles.section}>
-        {renderSectionHeader("무엇을", "원하는 여행 스타일 (최대 3개)")}
+        {renderSectionHeader(t("trip.vibes"), t("trip.vibesHint"))}
         <View style={styles.vibeGrid}>
           {VIBE_OPTIONS.map((vibe) => {
             const isSelected = formData.vibes.includes(vibe.id);
             const selectionIndex = formData.vibes.indexOf(vibe.id);
-            const priorityLabels = ["(최우선)", "(우선)", "(반영)"];
+            const priorityLabels = [t("trip.priorityHighest"), t("trip.priorityHigh"), t("trip.priorityNormal")];
             const priorityLabel =
               selectionIndex >= 0 ? priorityLabels[selectionIndex] : "";
             return (
@@ -1129,7 +1129,7 @@ export default function TripPlannerScreen() {
       </View>
 
       <View style={styles.section}>
-        {renderSectionHeader("여행 스타일", "일정 밀도를 선택하세요")}
+        {renderSectionHeader(t("trip.travelPace"), t("trip.travelPaceHint"))}
         <View style={styles.toggleRow}>
           {TRAVEL_PACE_OPTIONS.map((option) => {
             const isSelected = formData.travelPace === option.id;
@@ -1168,7 +1168,7 @@ export default function TripPlannerScreen() {
       </View>
 
       <View style={styles.section}>
-        {renderSectionHeader("예산", "여행 예산 수준을 선택하세요")}
+        {renderSectionHeader(t("trip.budget"), t("trip.budgetHint"))}
         <View style={styles.iconGrid}>
           {TRAVEL_STYLE_OPTIONS.map((option) => {
             const isSelected = formData.travelStyle === option.id;
@@ -1207,7 +1207,7 @@ export default function TripPlannerScreen() {
       </View>
 
       <View style={styles.section}>
-        {renderSectionHeader("이동 스타일", "이동 방식을 선택하세요")}
+        {renderSectionHeader(t("trip.mobilityStyle"), t("trip.mobilityStyleHint"))}
         <View style={styles.toggleRow}>
           {MOBILITY_STYLE_OPTIONS.map((option) => {
             const isSelected = formData.mobilityStyle === option.id;
@@ -1253,7 +1253,7 @@ export default function TripPlannerScreen() {
           style={styles.generateGradient}
         >
           <Icon name="navigation" size={20} color="#FFFFFF" />
-          <Text style={styles.generateText}>일정 생성</Text>
+          <Text style={styles.generateText}>{t("trip.generate")}</Text>
         </LinearGradient>
       </Pressable>
       {renderPicker()}
@@ -1352,9 +1352,9 @@ export default function TripPlannerScreen() {
                 )
                 .join("\n\n");
               Alert.alert(
-                `⚠️ ${itinerary.destination} 여행 주의 정보`,
+                `⚠️ ${itinerary.destination} ${t("trip.crisisTitle")}`,
                 `${itinerary.crisisAlerts!.length}개의 주의사항:\n\n${alertMessages}`,
-                [{ text: "확인", style: "default" }],
+                [{ text: t("common.confirm"), style: "default" }],
               );
             }}
           />
@@ -1376,11 +1376,10 @@ export default function TripPlannerScreen() {
           <View style={styles.tripSummaryItem}>
             <Icon name="map-pin" size={14} color={theme.textSecondary} />
             <Text style={[styles.tripSummaryText, { color: theme.text }]}>
-              {(itinerary.days || []).reduce(
+              {t("common.places", { count: (itinerary.days || []).reduce(
                 (sum, d) => sum + (d.places?.length || 0),
                 0,
-              )}
-              개 장소
+              ) })}
             </Text>
           </View>
           {(() => {
@@ -1399,7 +1398,7 @@ export default function TripPlannerScreen() {
                       { color: Brand.primary, fontFamily: Fonts.bold },
                     ]}
                   >
-                    1인 €{totalPerPerson.toFixed(0)}
+                    {t("common.perPerson")} €{totalPerPerson.toFixed(0)}
                   </Text>
                 </View>
               );
@@ -1420,28 +1419,27 @@ export default function TripPlannerScreen() {
               {(() => {
                 // 🎯 누구를 위한 (curationFocus 기반)
                 const focusLabels: Record<string, string> = {
-                  Kids: "아이",
-                  Parents: "부모님",
-                  Everyone: "모두",
-                  Self: "나",
+                  Kids: t("labels.curationKids"),
+                  Parents: t("labels.curationParents"),
+                  Everyone: t("labels.curationEveryone"),
+                  Self: t("labels.curationSelf"),
                 };
                 const curationFocus =
                   (itinerary as any).metadata?.curationFocus ||
                   formData.curationFocus ||
                   "Everyone";
-                const focusLabel = focusLabels[curationFocus] || "모두";
+                const focusLabel = focusLabels[curationFocus] || t("labels.curationEveryone");
 
-                // 누구랑 (companionType 기반)
                 const companionLabels: Record<string, string> = {
-                  Single: "혼자",
-                  Couple: "커플",
-                  Family: "가족",
-                  ExtendedFamily: "대가족",
-                  Group: "친구들",
+                  Single: t("labels.companionSingle"),
+                  Couple: t("labels.companionCouple"),
+                  Family: t("labels.companionFamily"),
+                  ExtendedFamily: t("labels.companionExtended"),
+                  Group: t("labels.companionGroup"),
                 };
                 const companionType =
                   itinerary.companionType || formData.companionType || "Couple";
-                const companionLabel = companionLabels[companionType] || "가족";
+                const companionLabel = companionLabels[companionType] || t("labels.companionFamily");
 
                 // 바이브에서 주요 2개 추출
                 const vibes =
@@ -1520,7 +1518,7 @@ export default function TripPlannerScreen() {
             >
               <ActivityIndicator size="small" color={Brand.primary} />
               <Text style={[styles.reoptimizeText, { color: Brand.primary }]}>
-                숙소 기준 동선 재최적화 중...
+                {t("trip.reoptimizing")}
               </Text>
             </View>
           )}
@@ -1576,8 +1574,8 @@ export default function TripPlannerScreen() {
                       {dayAccommodations.find(
                         (a) => a.day === currentDay?.day,
                       ) || currentDay?.accommodation
-                        ? "숙소"
-                        : "숙소 설정"}
+                        ? t("trip.accommodationSet")
+                        : t("trip.accommodationSetup")}
                     </Text>
                   </Pressable>
                 </View>
@@ -1609,10 +1607,10 @@ export default function TripPlannerScreen() {
                           (a) => a.day === currentDay?.day,
                         );
                         const generalAccom = currentDay?.accommodation;
-                        if (dayAccom) return `출발: ${dayAccom.name}`;
+                        if (dayAccom) return `${t("trip.departure")}: ${dayAccom.name}`;
                         if (generalAccom?.name)
-                          return `출발: ${generalAccom.name}`;
-                        return `출발: ${itinerary.destination} 도심 기준`;
+                          return `${t("trip.departure")}: ${generalAccom.name}`;
+                        return `${t("trip.departure")}: ${t("trip.departureCityCenter", { destination: itinerary.destination })}`;
                       })()}
                     </Text>
                     {currentDay?.departureTransit && (
@@ -1760,8 +1758,8 @@ export default function TripPlannerScreen() {
                                   >
                                     {isMealSlot
                                       ? mealType === "lunch"
-                                        ? "🍽️ [점심] "
-                                        : "🍽️ [저녁] "
+                                        ? `🍽️ [${t("trip.lunch")}] `
+                                        : `🍽️ [${t("trip.dinner")}] `
                                       : isMeal
                                         ? "🍽️ "
                                         : ""}
@@ -1823,7 +1821,7 @@ export default function TripPlannerScreen() {
                                         ? `🎫 €${(place as any).estimatedPriceEur}`
                                         : entranceFee > 0 && entranceFee < 500
                                           ? `🎫 €${entranceFee}`
-                                          : `🎫 ${place.priceEstimate || "무료"}`}
+                                          : `🎫 ${place.priceEstimate || t("common.free")}`}
                                   </Text>
                                 </View>
 
@@ -1883,7 +1881,7 @@ export default function TripPlannerScreen() {
                                           { color: Brand.primary },
                                         ]}
                                       >
-                                        Google Maps 열기
+                                        {t("trip.openGoogleMaps")}
                                       </Text>
                                     </View>
                                   )}
@@ -1933,8 +1931,8 @@ export default function TripPlannerScreen() {
                                           : "🚶";
                                   const label =
                                     mode === "guide"
-                                      ? "전용차량이동"
-                                      : transitInfo.modeLabel || "도보";
+                                      ? t("trip.guideVehicle")
+                                      : transitInfo.modeLabel || t("trip.walking");
                                   const dur =
                                     transitInfo.durationText ||
                                     `${transitInfo.duration || 0}분`;
@@ -1989,7 +1987,7 @@ export default function TripPlannerScreen() {
                           { color: theme.textSecondary },
                         ]}
                       >
-                        {currentDay.returnTransit.from} → 🏨 숙소 복귀 (
+                        {currentDay.returnTransit.from} → 🏨 {t("trip.returnToHotel")} (
                         {currentDay.returnTransit.durationText})
                       </Text>
                     </View>
@@ -2034,8 +2032,8 @@ export default function TripPlannerScreen() {
                             }}
                           >
                             {td.category === "guide"
-                              ? "🚗 드라이빙 가이드"
-                              : "🚇 대중교통"}{" "}
+                              ? t("trip.guideTransport")
+                              : t("trip.publicTransport")}{" "}
                             · 1인 €{td.perPersonPerDay}/일
                           </Text>
                           {td.category === "guide" &&
@@ -2057,7 +2055,7 @@ export default function TripPlannerScreen() {
                       <Text
                         style={[styles.dailyTotalTitle, { color: theme.text }]}
                       >
-                        📊 {currentDay.day}일차 합계 (1인)
+                        {t("trip.dailySummary", { day: currentDay.day })}
                       </Text>
                       <View style={styles.dailyTotalRow}>
                         <View style={styles.dailyTotalItem}>
@@ -2067,7 +2065,7 @@ export default function TripPlannerScreen() {
                               { color: theme.textSecondary },
                             ]}
                           >
-                            🎫 입장료
+                            {t("trip.entranceFee")}
                           </Text>
                           <Text
                             style={[
@@ -2085,7 +2083,7 @@ export default function TripPlannerScreen() {
                               { color: theme.textSecondary },
                             ]}
                           >
-                            🍽️ 식사
+                            {t("trip.mealCost")}
                           </Text>
                           <Text
                             style={[
@@ -2103,7 +2101,7 @@ export default function TripPlannerScreen() {
                               { color: theme.textSecondary },
                             ]}
                           >
-                            🚇 교통비
+                            {t("trip.transportCost")}
                           </Text>
                           <Text
                             style={[
@@ -2127,7 +2125,7 @@ export default function TripPlannerScreen() {
                             { color: theme.text },
                           ]}
                         >
-                          💰 1인 일 합계
+                          {t("trip.dailyTotal")}
                         </Text>
                         <Text
                           style={[
@@ -2156,12 +2154,12 @@ export default function TripPlannerScreen() {
                       ]}
                       onPress={() => {
                         Alert.alert(
-                          "현지 전문가 상담",
-                          "이 일정에 최적인 숙소 지역을 현지 전문가가 추천해드립니다.\n\n드라이빙 가이드 예약 시 숙소 추천이 포함됩니다.",
+                          t("trip.expertConsult"),
+                          t("trip.expertConsultMsg"),
                           [
-                            { text: "나중에", style: "cancel" },
+                            { text: t("trip.expertConsultLater"), style: "cancel" },
                             {
-                              text: "전문가 상담",
+                              text: t("trip.expertConsultBtn"),
                               onPress: () =>
                                 console.log("[TripPlanner] Expert CTA pressed"),
                             },
@@ -2181,7 +2179,7 @@ export default function TripPlannerScreen() {
                             { color: Brand.primary },
                           ]}
                         >
-                          이 일정에 최적인 숙소는?
+                          {t("trip.bestAccommodation")}
                         </Text>
                         <Text
                           style={[
@@ -2189,7 +2187,7 @@ export default function TripPlannerScreen() {
                             { color: theme.textSecondary },
                           ]}
                         >
-                          현지 전문가에게 맞춤 숙소 추천 받기
+                          {t("trip.expertRecommend")}
                         </Text>
                       </View>
                       <Icon
@@ -2238,7 +2236,7 @@ export default function TripPlannerScreen() {
             >
               <View style={styles.hotelModalHeader}>
                 <Text style={[styles.hotelModalTitle, { color: theme.text }]}>
-                  Day {hotelModalDay} 숙소 설정
+                  {t("trip.hotelSetupTitle", { day: hotelModalDay })}
                 </Text>
                 <Pressable onPress={() => setHotelModalDay(null)}>
                   <Icon name="x" size={24} color={theme.text} />
@@ -2250,11 +2248,11 @@ export default function TripPlannerScreen() {
                   { color: theme.textSecondary },
                 ]}
               >
-                숙소를 설정하면 이 날의 동선이 자동으로 최적화됩니다
+                {t("trip.hotelSetupHint")}
               </Text>
               <View style={{ zIndex: 100, marginTop: 16 }}>
                 <PlaceAutocomplete
-                  placeholder="호텔, 에어비앤비 등 검색"
+                  placeholder={t("trip.hotelSearchPlaceholder")}
                   value=""
                   icon="home"
                   types="lodging|establishment"

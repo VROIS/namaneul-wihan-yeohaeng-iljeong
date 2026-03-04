@@ -20,6 +20,7 @@ import {
   Linking,
 } from "react-native";
 import { WebView } from "react-native-webview";
+import { useTranslation } from "react-i18next";
 import Icon from "@/components/Icon";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Brand } from "@/constants/theme";
@@ -61,6 +62,7 @@ export function PlaceDetailModal({
   place,
   theme,
 }: PlaceDetailModalProps) {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const [imageFullscreen, setImageFullscreen] = useState(false);
   const [showMap, setShowMap] = useState(false);
@@ -224,18 +226,18 @@ export function PlaceDetailModal({
             >
               <View style={styles.reasonHeader}>
                 <Text style={[styles.reasonLabel, { color: Brand.primary }]}>
-                  ✨ NUBI 선정 이유
+                  {t("place.nubiReason")}
                 </Text>
                 {place.nubiReasonSource && (
                   <Text
                     style={[styles.reasonSource, { color: theme.textTertiary }]}
                   >
                     {place.nubiReasonSource === "instagram"
-                      ? "📸 인스타"
+                      ? t("place.sourceInstagram")
                       : place.nubiReasonSource === "naver_blog"
-                        ? "📝 네이버 블로그"
+                        ? t("place.sourceNaverBlog")
                         : place.nubiReasonSource === "youtube"
-                          ? "🎬 유튜브"
+                          ? t("place.sourceYoutube")
                           : ""}
                   </Text>
                 )}
@@ -275,14 +277,14 @@ export function PlaceDetailModal({
               />
               <Text style={[styles.infoText, { color: theme.text }]}>
                 {isMeal
-                  ? `식사비 1인 €${place.mealPrice || "??"}`
+                  ? t("place.mealPerPerson", { price: place.mealPrice || "??" })
                   : place.estimatedPriceEur &&
                       place.estimatedPriceEur > 0 &&
                       place.estimatedPriceEur < 500
-                    ? `입장료 1인 €${place.estimatedPriceEur}`
+                    ? t("place.entrancePerPerson", { price: place.estimatedPriceEur })
                     : place.priceEstimate && place.priceEstimate !== "무료"
                       ? place.priceEstimate
-                      : "무료 입장"}
+                      : t("place.freeEntrance")}
               </Text>
             </View>
 
@@ -291,8 +293,7 @@ export function PlaceDetailModal({
               <View style={styles.infoRow}>
                 <Icon name="star" size={16} color="#FF6B35" />
                 <Text style={[styles.infoText, { color: theme.text }]}>
-                  TripAdvisor {place.tripAdvisorRating.toFixed(1)} (
-                  {(place.tripAdvisorReviewCount || 0).toLocaleString()}개 리뷰)
+                  {t("place.tripAdvisorRating", { rating: place.tripAdvisorRating.toFixed(1), count: (place.tripAdvisorReviewCount || 0).toLocaleString() })}
                 </Text>
               </View>
             ) : null}
@@ -318,7 +319,7 @@ export function PlaceDetailModal({
               >
                 <Icon name="map" size={16} color={Brand.primary} />
                 <Text style={[styles.mapToggleText, { color: Brand.primary }]}>
-                  {showMap ? "지도 닫기" : "이 장소 지도 보기"}
+                  {showMap ? t("place.hideMap") : t("place.showMap")}
                 </Text>
                 <Icon
                   name={showMap ? "chevron-up" : "chevron-down"}
@@ -339,7 +340,7 @@ export function PlaceDetailModal({
                           fontSize: 12,
                         }}
                       >
-                        지도 로딩 중...
+                        {t("place.mapLoading")}
                       </Text>
                     </View>
                   )}
@@ -367,7 +368,7 @@ export function PlaceDetailModal({
               <Text
                 style={[styles.externalMapText, { color: theme.textSecondary }]}
               >
-                Google Maps 앱으로 길 찾기
+                {t("place.openGoogleMaps")}
               </Text>
               <Icon name="external-link" size={13} color={theme.textTertiary} />
             </Pressable>

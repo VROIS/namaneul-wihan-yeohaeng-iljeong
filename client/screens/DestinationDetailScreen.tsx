@@ -11,6 +11,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { Image } from "expo-image";
 import { BlurView } from "expo-blur";
 import Icon from "@/components/Icon";
@@ -33,6 +34,7 @@ const HERO_HEIGHT = (SCREEN_WIDTH * 9) / 16;
 type RouteParams = RouteProp<RootStackParamList, "DestinationDetail">;
 
 export default function DestinationDetailScreen() {
+  const { t } = useTranslation();
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? "light"];
   const isDark = colorScheme === "dark";
@@ -100,12 +102,12 @@ export default function DestinationDetailScreen() {
           <View style={styles.header}>
             <View style={styles.titleContainer}>
               <ThemedText style={styles.title}>
-                {place?.name || "로딩 중..."}
+                {place?.name || t("destination.loading")}
               </ThemedText>
               <View style={styles.locationRow}>
                 <Icon name="map-pin" size={14} color={theme.textSecondary} />
                 <Text style={[styles.location, { color: theme.textSecondary }]}>
-                  {place?.address || "주소 정보 없음"}
+                  {place?.address || t("destination.noAddress")}
                 </Text>
               </View>
             </View>
@@ -143,12 +145,10 @@ export default function DestinationDetailScreen() {
           >
             <View style={styles.cardHeader}>
               <Icon name="zap" size={20} color={Brand.primary} />
-              <ThemedText style={styles.cardTitle}>AI 분석</ThemedText>
+              <ThemedText style={styles.cardTitle}>{t("destination.aiAnalysis")}</ThemedText>
             </View>
             <Text style={[styles.cardContent, { color: theme.textSecondary }]}>
-              이 장소는 현지인들에게 사랑받는 곳으로, 특히 사진 촬영하기 좋은
-              분위기가 특징입니다. 방문객 리뷰를 분석한 결과, 분위기와
-              서비스에서 높은 평가를 받고 있습니다.
+              {t("destination.aiAnalysisContent")}
             </Text>
           </View>
 
@@ -162,14 +162,13 @@ export default function DestinationDetailScreen() {
               <View style={styles.cardHeader}>
                 <Icon name="check-circle" size={20} color={Brand.comfortBlue} />
                 <Text style={[styles.cardTitle, { color: Brand.comfortBlue }]}>
-                  맛집 인증
+                  {t("destination.verified")}
                 </Text>
               </View>
               <Text
                 style={[styles.cardContent, { color: theme.textSecondary }]}
               >
-                현지인 리뷰 분석 결과, 이 레스토랑은 오리지널 맛을 유지하고 있는
-                것으로 확인되었습니다.
+                {t("destination.verifiedContent")}
               </Text>
             </View>
           )}
@@ -179,11 +178,10 @@ export default function DestinationDetailScreen() {
           >
             <View style={styles.cardHeader}>
               <Icon name="cloud" size={20} color={Brand.primary} />
-              <ThemedText style={styles.cardTitle}>실시간 정보</ThemedText>
+              <ThemedText style={styles.cardTitle}>{t("destination.realtime")}</ThemedText>
             </View>
             <Text style={[styles.cardContent, { color: theme.textSecondary }]}>
-              현재 날씨: 맑음 22°C{"\n"}
-              혼잡도: 보통
+              {t("destination.realtimeContent")}
             </Text>
           </View>
         </View>

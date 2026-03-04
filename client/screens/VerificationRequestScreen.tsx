@@ -11,6 +11,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { useTranslation } from "react-i18next";
 import {
   Typography,
   Spacing,
@@ -28,6 +29,7 @@ import { getUserData, UserData } from "@/lib/auth";
 type RouteParams = RouteProp<RootStackParamList, "VerificationRequest">;
 
 export default function VerificationRequestScreen() {
+  const { t } = useTranslation();
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? "light"];
   const insets = useSafeAreaInsets();
@@ -57,16 +59,16 @@ export default function VerificationRequestScreen() {
       const result = await response.json();
       if (result.success) {
         Alert.alert(
-          "검증 요청 완료",
-          "현지 전문가가 일정을 검토한 후 알려드리겠습니다.",
-          [{ text: "확인", onPress: () => navigation.goBack() }],
+          t("verify.submitSuccess"),
+          t("verify.submitSuccessMsg"),
+          [{ text: t("common.confirm"), onPress: () => navigation.goBack() }],
         );
       }
     } catch (error) {
       console.error("Verification request error:", error);
       Alert.alert(
-        "오류",
-        "요청 처리 중 문제가 발생했습니다. 다시 시도해 주세요.",
+        t("common.error"),
+        t("verify.submitError"),
       );
     } finally {
       setSubmitting(false);
@@ -80,9 +82,9 @@ export default function VerificationRequestScreen() {
   if (!itinerary) {
     return (
       <View style={[styles.container, { backgroundColor: theme.backgroundRoot, justifyContent: "center", alignItems: "center" }]}>
-        <Text style={{ color: theme.text }}>일정 정보가 없습니다.</Text>
+        <Text style={{ color: theme.text }}>{t("verify.noItinerary")}</Text>
         <Pressable onPress={() => navigation.goBack()} style={{ marginTop: 20 }}>
-          <Text style={{ color: Brand.primary }}>돌아가기</Text>
+          <Text style={{ color: Brand.primary }}>{t("common.back")}</Text>
         </Pressable>
       </View>
     );
@@ -98,7 +100,7 @@ export default function VerificationRequestScreen() {
           <Icon name="arrow-left" size={24} color={theme.text} />
         </Pressable>
         <Text style={[styles.headerTitle, { color: theme.text }]}>
-          전문가 검증
+          {t("verify.title")}
         </Text>
         <View style={styles.backButton} />
       </View>
@@ -113,10 +115,10 @@ export default function VerificationRequestScreen() {
           <Icon name="award" size={24} color={Brand.primary} />
           <View style={styles.infoTextContainer}>
             <Text style={[styles.infoTitle, { color: theme.text }]}>
-              파리 현지 35년 경력 가이드
+              {t("verify.expertInfo")}
             </Text>
             <Text style={[styles.infoDesc, { color: theme.textSecondary }]}>
-              AI 생성 일정을 검토하고 개선점을 알려드립니다
+              {t("verify.expertDesc")}
             </Text>
           </View>
         </View>
@@ -128,7 +130,7 @@ export default function VerificationRequestScreen() {
           ]}
         >
           <Text style={[styles.summaryLabel, { color: theme.textSecondary }]}>
-            검증 요청 일정
+            {t("verify.requestLabel")}
           </Text>
           <Text style={[styles.summaryTitle, { color: theme.text }]}>
             {itinerary.destination}
@@ -172,14 +174,14 @@ export default function VerificationRequestScreen() {
             ]}
           >
             {user?.isPaid
-              ? "프리미엄 회원 (신청 가능)"
-              : "일반 회원 (요청 전 결제 필요)"}
+              ? t("verify.premiumMember")
+              : t("verify.normalMember")}
           </Text>
         </View>
 
         <View style={styles.commentSection}>
           <Text style={[styles.commentLabel, { color: theme.text }]}>
-            전문가에게 한마디 (선택)
+            {t("verify.commentLabel")}
           </Text>
           <TextInput
             style={[
@@ -190,7 +192,7 @@ export default function VerificationRequestScreen() {
                 borderColor: theme.border,
               },
             ]}
-            placeholder="궁금한 점이나 요청사항을 적어주세요"
+            placeholder={t("verify.commentPlaceholder")}
             placeholderTextColor={theme.textTertiary}
             value={comment}
             onChangeText={setComment}
@@ -219,7 +221,7 @@ export default function VerificationRequestScreen() {
         >
           <Icon name="send" size={18} color="#FFFFFF" />
           <Text style={styles.submitText}>
-            {submitting ? "처리 중..." : "검증 요청하기"}
+            {submitting ? t("common.processing") : t("verify.submit")}
           </Text>
         </Pressable>
       </View>

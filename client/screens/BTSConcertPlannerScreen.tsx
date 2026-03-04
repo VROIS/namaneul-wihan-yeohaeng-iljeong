@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { useTranslation } from "react-i18next";
 import Icon from "@/components/Icon";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { getApiUrl } from "@/lib/query-client";
@@ -35,6 +36,7 @@ type BtsPlace = { id: number; nameKo: string | null; nameEn: string; imageUrl: s
 type ItineraryDay = { day: number; places: Array<{ name: string; startTime: string; description: string; image?: string }>; city: string };
 
 export default function BTSConcertPlannerScreen() {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [screen, setScreen] = useState<"select" | "places" | "loading" | "result">("select");
@@ -99,18 +101,18 @@ export default function BTSConcertPlannerScreen() {
     })
       .then(async (r) => {
         const data = await r.json();
-        if (!r.ok) throw new Error(data?.error || "일정 생성 실패");
+        if (!r.ok) throw new Error(data?.error || t("bts.generateFailed"));
         return data;
       })
       .then((data) => {
         setItinerary({
-          title: data.title || "나만의 방탄 투어",
+          title: data.title || t("bts.title"),
           days: data.days || [],
         });
         setScreen("result");
       })
       .catch((e) => {
-        setError(e?.message || "일정 생성 실패");
+        setError(e?.message || t("bts.generateFailed"));
         setScreen("places");
       });
   };
@@ -131,9 +133,9 @@ export default function BTSConcertPlannerScreen() {
           <Pressable onPress={() => navigation.goBack()} style={styles.backBtn}>
             <Icon name="arrow-left" size={22} color="#F9FAFB" />
           </Pressable>
-          <Text style={styles.headerTitle}>나만의 방탄 투어</Text>
+          <Text style={styles.headerTitle}>{t("bts.title")}</Text>
         </View>
-        <Text style={styles.subTitle}>누구의 여정 바이브와 함께할까요?</Text>
+        <Text style={styles.subTitle}>{t("bts.selectVibe")}</Text>
 
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.cityRow}>
           {cities.slice(0, 10).map((c) => (
@@ -151,6 +153,8 @@ export default function BTSConcertPlannerScreen() {
           {MEMBERS.map((m) => (
             <Pressable
               key={m.id}
+              accessibilityRole="button"
+              accessibilityLabel={m.name}
               style={[
                 styles.bubble,
                 { backgroundColor: m.color },
@@ -164,6 +168,8 @@ export default function BTSConcertPlannerScreen() {
         </View>
 
         <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t("bts.nextSelectPlaces")}
           style={[
             styles.primaryBtn,
             (!selectedMemberId || loading) && styles.primaryBtnDisabled,
@@ -174,7 +180,7 @@ export default function BTSConcertPlannerScreen() {
           {loading ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.primaryBtnText}>다음: 8곳 중 선택하기</Text>
+            <Text style={styles.primaryBtnText}>{t("bts.nextSelectPlaces")}</Text>
           )}
         </Pressable>
       </View>
@@ -190,7 +196,7 @@ export default function BTSConcertPlannerScreen() {
           <Pressable onPress={() => setScreen("select")} style={styles.backBtn}>
             <Icon name="arrow-left" size={22} color="#F9FAFB" />
           </Pressable>
-          <Text style={styles.headerTitle}>장소 선택 ({selectedPlaceIds.length}/8)</Text>
+          <Text style={styles.headerTitle}>{t("bts.placeSelectCount", { count: selectedPlaceIds.length })}</Text>
         </View>
         {error && <Text style={styles.errorText}>{error}</Text>}
         <ScrollView contentContainerStyle={styles.placeGrid}>
@@ -216,7 +222,7 @@ export default function BTSConcertPlannerScreen() {
           onPress={handleGenerate}
         >
           <Text style={styles.primaryBtnText}>
-            ✨ {selectedPlaceIds.length}곳으로 일정 생성
+            {t("bts.generateWithPlaces", { count: selectedPlaceIds.length })}
           </Text>
         </Pressable>
       </View>
@@ -228,8 +234,8 @@ export default function BTSConcertPlannerScreen() {
     return (
       <View style={[styles.container, styles.centerContent, { paddingTop: insets.top }]}>
         <View style={styles.loadingRing} />
-        <Text style={styles.loadingTitle}>일정 생성 중</Text>
-        <Text style={styles.loadingSub}>담으신 장소로 맞춤 투어를 만들고 있어요...</Text>
+        <Text style={styles.loadingTitle}>{t("bts.generating")}</Text>
+        <Text style={styles.loadingSub}>{t("bts.generatingHint")}</Text>
       </View>
     );
   }
@@ -241,7 +247,7 @@ export default function BTSConcertPlannerScreen() {
         <Pressable onPress={handleReset} style={styles.backBtn}>
           <Icon name="arrow-left" size={22} color="#F9FAFB" />
         </Pressable>
-        <Text style={styles.headerTitle}>{itinerary?.title || "나만의 방탄 투어"}</Text>
+        <Text style={styles.headerTitle}>{itinerary?.title || t("bts.title")}</Text>
       </View>
       <ScrollView contentContainerStyle={styles.resultContent}>
         {itinerary?.days.map((day) => (
@@ -262,7 +268,7 @@ export default function BTSConcertPlannerScreen() {
           </View>
         ))}
         <Pressable style={[styles.primaryBtn, { backgroundColor: "#374151", marginTop: 20 }]} onPress={handleReset}>
-          <Text style={styles.primaryBtnText}>처음으로</Text>
+          <Text style={styles.primaryBtnText}>{t("bts.backToStart")}</Text>
         </Pressable>
       </ScrollView>
     </View>
