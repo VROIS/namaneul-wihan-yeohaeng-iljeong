@@ -19,35 +19,19 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
 import { Spacing, BorderRadius, Brand, Colors } from "@/constants/theme";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
+import { useTranslation } from "react-i18next";
 import { saveAuth, calculateAge, getAgeGroup, type UserData } from "@/lib/auth";
-
-type Language = {
-  code: string;
-  flag: string;
-  name: string;
-  nativeName: string;
-};
-
-const LANGUAGES: Language[] = [
-  { code: "ko", flag: "🇰🇷", name: "Korean", nativeName: "한국어" },
-  { code: "en", flag: "🇺🇸", name: "English", nativeName: "English" },
-  { code: "fr", flag: "🇫🇷", name: "French", nativeName: "Français" },
-  { code: "zh", flag: "🇨🇳", name: "Chinese", nativeName: "中文" },
-  { code: "ja", flag: "🇯🇵", name: "Japanese", nativeName: "日本語" },
-  { code: "es", flag: "🇪🇸", name: "Spanish", nativeName: "Español" },
-  { code: "de", flag: "🇩🇪", name: "German", nativeName: "Deutsch" },
-];
+import { SUPPORTED_LANGS, changeLanguageAndPersist } from "@/lib/i18n";
 
 export default function OnboardingScreen() {
+  const { t, i18n } = useTranslation();
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? "light"];
   const insets = useSafeAreaInsets();
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
-  const [selectedLanguage, setSelectedLanguage] = useState<Language>(
-    LANGUAGES[0],
-  );
+  const currentLang = SUPPORTED_LANGS.find((l) => l.code === i18n.language) ?? SUPPORTED_LANGS[0];
   const [showLanguageModal, setShowLanguageModal] = useState(false);
 
   const [day, setDay] = useState("");
@@ -94,7 +78,7 @@ export default function OnboardingScreen() {
     if (num.length === 2) {
       const d = parseInt(num, 10);
       if (d < 1 || d > 31) {
-        setDateError("유효하지 않은 날짜입니다");
+        setDateError(t("onboarding.dateInvalid"));
       } else {
         monthRef.current?.focus();
       }
@@ -108,7 +92,7 @@ export default function OnboardingScreen() {
     if (num.length === 2) {
       const m = parseInt(num, 10);
       if (m < 1 || m > 12) {
-        setDateError("유효하지 않은 월입니다");
+        setDateError(t("onboarding.monthInvalid"));
       } else {
         yearRef.current?.focus();
       }
@@ -123,14 +107,14 @@ export default function OnboardingScreen() {
       const y = parseInt(num, 10);
       const currentYear = new Date().getFullYear();
       if (y < 1920 || y > currentYear - 10) {
-        setDateError("유효하지 않은 연도입니다");
+        setDateError(t("onboarding.yearInvalid"));
       }
     }
   };
 
   const handleSocialLogin = async (provider: "kakao" | "google") => {
     if (!birthDate || !isAdult) {
-      setDateError("만 18세 이상만 이용 가능합니다");
+      setDateError(t("onboarding.adultOnly"));
       return;
     }
 
@@ -139,7 +123,7 @@ export default function OnboardingScreen() {
       email: `user@${provider}.com`,
       name: provider === "kakao" ? "카카오 사용자" : "Google User",
       provider,
-      language: selectedLanguage.code,
+      language: i18n.language,
       birthDate: birthDate.toISOString(),
       ageGroup: ageGroup || "",
       createdAt: new Date().toISOString(),
@@ -178,7 +162,7 @@ export default function OnboardingScreen() {
               <Icon name="arrow-left" size={24} color={theme.text} />
             </Pressable>
             <Text style={[styles.headerTitle, { color: theme.text }]}>
-              가입하기
+              {t("onboarding.signUp")}
             </Text>
             <View style={styles.placeholder} />
           </View>
@@ -187,7 +171,7 @@ export default function OnboardingScreen() {
           <View style={styles.formSection}>
             {/* Language Selector */}
             <Text style={[styles.label, { color: theme.textSecondary }]}>
-              언어
+              {t("onboarding.language")}
             </Text>
             <Pressable
               style={[
@@ -199,9 +183,9 @@ export default function OnboardingScreen() {
               ]}
               onPress={() => setShowLanguageModal(true)}
             >
-              <Text style={styles.flagText}>{selectedLanguage.flag}</Text>
+              <Text style={styles.flagText}>{currentLang.flag}</Text>
               <Text style={[styles.selectorText, { color: theme.text }]}>
-                {selectedLanguage.nativeName}
+                {currentLang.nativeName}
               </Text>
               <Icon name="chevron-down" size={20} color={theme.textTertiary} />
             </Pressable>
@@ -213,10 +197,10 @@ export default function OnboardingScreen() {
                 { color: theme.textSecondary, marginTop: Spacing.xl },
               ]}
             >
-              생년월일
+              {t("onboarding.birthDate")}
             </Text>
             <Text style={[styles.birthDateHint, { color: theme.textTertiary }]}>
-              실제 생년월일을 입력하시면 가족 맞춤 일정을 드려요
+              {t("onboarding.birthDateHint")}
             </Text>
             <View style={styles.dateInputRow}>
               <View
@@ -237,6 +221,11 @@ export default function OnboardingScreen() {
                   keyboardType="number-pad"
                   maxLength={2}
                   textAlign="center"
+                  {...(Platform.OS === "web" && {
+                    // @ts-expect-error 웹: type="number"는 선행 0 제거·숫자 변형 유발
+                    type: "text",
+                    inputMode: "numeric",
+                  })}
                 />
               </View>
               <Text
@@ -290,6 +279,11 @@ export default function OnboardingScreen() {
                   keyboardType="number-pad"
                   maxLength={4}
                   textAlign="center"
+                  {...(Platform.OS === "web" && {
+                    // @ts-expect-error 웹: type="number"는 선행 0 제거·숫자 변형 유발
+                    type: "text",
+                    inputMode: "numeric",
+                  })}
                 />
               </View>
               {isAdult && ageGroup ? (
@@ -302,7 +296,7 @@ export default function OnboardingScreen() {
               <Text style={styles.errorText}>{dateError}</Text>
             ) : isDateComplete && !isAdult && age !== null ? (
               <Text style={styles.errorText}>
-                만 18세 이상만 이용 가능합니다
+                {t("onboarding.adultOnly")}
               </Text>
             ) : null}
           </View>
@@ -323,7 +317,7 @@ export default function OnboardingScreen() {
               <View style={styles.kakaoIcon}>
                 <Text style={styles.kakaoIconText}>K</Text>
               </View>
-              <Text style={styles.kakaoButtonText}>카카오로 시작하기</Text>
+              <Text style={styles.kakaoButtonText}>{t("onboarding.kakaoStart")}</Text>
             </Pressable>
 
             {/* Google Button */}
@@ -342,12 +336,12 @@ export default function OnboardingScreen() {
                 <Text style={styles.googleIconText}>G</Text>
               </View>
               <Text style={[styles.googleButtonText, { color: theme.text }]}>
-                Google로 시작하기
+                {t("onboarding.googleStart")}
               </Text>
             </Pressable>
 
             <Text style={[styles.disclaimer, { color: theme.textTertiary }]}>
-              로그인 시 이용약관 및 개인정보처리방침에 동의합니다
+              {t("onboarding.termsAgree")}
             </Text>
           </View>
         </View>
@@ -369,23 +363,23 @@ export default function OnboardingScreen() {
           >
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: theme.text }]}>
-                언어 선택
+                {t("onboarding.languageSelect")}
               </Text>
               <Pressable onPress={() => setShowLanguageModal(false)}>
                 <Icon name="x" size={24} color={theme.text} />
               </Pressable>
             </View>
             <ScrollView style={styles.languageList}>
-              {LANGUAGES.map((lang) => (
+              {SUPPORTED_LANGS.map((lang) => (
                 <Pressable
                   key={lang.code}
                   style={[
                     styles.languageItem,
-                    selectedLanguage.code === lang.code &&
+                    currentLang.code === lang.code &&
                     styles.languageItemSelected,
                   ]}
-                  onPress={() => {
-                    setSelectedLanguage(lang);
+                  onPress={async () => {
+                    await changeLanguageAndPersist(lang.code);
                     setShowLanguageModal(false);
                   }}
                 >
@@ -403,7 +397,7 @@ export default function OnboardingScreen() {
                       {lang.name}
                     </Text>
                   </View>
-                  {selectedLanguage.code === lang.code ? (
+                  {currentLang.code === lang.code ? (
                     <Icon name="check" size={20} color={Brand.primary} />
                   ) : null}
                 </Pressable>

@@ -52,6 +52,7 @@ import {
 } from "@/components/PlaceAutocomplete";
 import { PlaceDetailModal } from "@/components/PlaceDetailModal";
 import { isAuthenticated, getUserData, UserData } from "@/lib/auth";
+import { useTranslation } from "react-i18next";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { useMapToggle } from "@/contexts/MapToggleContext";
 
@@ -105,6 +106,7 @@ function CrisisAlertBanner({
   alerts: CrisisAlert[];
   onPress: () => void;
 }) {
+  const { t } = useTranslation();
   const pulseAnim = React.useRef(new Animated.Value(1)).current;
 
   React.useEffect(() => {
@@ -141,7 +143,8 @@ function CrisisAlertBanner({
       >
         <Icon name="alert-triangle" size={18} color="#FFFFFF" />
         <Text style={crisisStyles.bannerText}>
-          {highSeverity ? "⚠️ 주의!" : "📢 참고"} {alerts.length}개 여행 정보
+          {highSeverity ? t("trip.crisisAlert") : t("trip.crisisInfo")}{" "}
+          {t("trip.crisisCount", { count: alerts.length })}
         </Text>
         <Icon name="chevron-right" size={18} color="#FFFFFF" />
       </Animated.View>
@@ -189,6 +192,7 @@ export default function TripPlannerScreen() {
   const [showWebInput, setShowWebInput] = useState<PickerMode>(null);
   const [pendingGenerate, setPendingGenerate] = useState(false);
   const { showMap } = useMapToggle(); // 🗺️ 지도 토글 (Context에서 가져옴)
+  const { i18n } = useTranslation();
 
   // 💾 일정 저장 상태
   const [isSaving, setIsSaving] = useState(false);
@@ -479,10 +483,11 @@ export default function TripPlannerScreen() {
     }, 2000);
 
     try {
-      // 🎯 사용자 ID 포함 → 백엔드에서 birthDate 조회
+      // 🎯 사용자 ID + 언어 포함 → 백엔드에서 birthDate 조회, 일정 출력 언어 반영
       const requestData = {
         ...formData,
         userId: currentUser?.id, // DB에서 사용자 정보 조회용
+        language: currentUser?.language || i18n.language || "ko", // 일정 생성 출력 언어
       };
 
       console.log(
@@ -842,6 +847,9 @@ export default function TripPlannerScreen() {
 
       {/* 🎵 BTS 콘서트 투어 배너 */}
       <Pressable
+        testID="bts-concert-planner-banner"
+        accessibilityRole="button"
+        accessibilityLabel="BTS 콘서트 투어 플래너"
         style={{
           marginHorizontal: 16,
           marginBottom: 12,

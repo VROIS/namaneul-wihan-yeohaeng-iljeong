@@ -271,7 +271,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // 🎯 사용자 정보 DB에서 조회 (birthDate 필수 - 로그인시 입력됨)
-      let enrichedFormData = { ...formData };
+      let enrichedFormData: Record<string, any> = {
+        ...formData,
+        language: formData.language || "ko",  // 일정 생성 출력 언어 (기본 한국어)
+      };
 
       if (formData.userId) {
         try {
@@ -279,14 +282,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
             birthDate: users.birthDate,
             displayName: users.displayName,
             preferredVibes: users.preferredVibes,
+            preferredLanguage: users.preferredLanguage,
           }).from(users).where(eq(users.id, formData.userId));
 
           if (user) {
-            // DB에서 가져온 사용자 정보 병합
+            // DB에서 가져온 사용자 정보 병합 (language: 일정 생성 출력 언어)
             enrichedFormData = {
               ...formData,
               birthDate: user.birthDate,  // 🎯 핵심: 가족 연령 추정용
               userDisplayName: user.displayName,
+              language: formData.language || user.preferredLanguage || "ko",
               // preferredVibes는 프론트에서 선택한 vibes 우선
             };
 
@@ -683,6 +688,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error comparing routes:", error);
       res.status(500).json({ error: "Failed to compare routes" });
+    }
+  });
+
+  // 사용자 언어 설정 업데이트 (i18n 동기화)
+  app.patch("/api/users/:userId/preferred-language", async (req, res) => {
+    try {
+      const { userId } = req.params;
+      const { preferredLanguage } = req.body;
+      if (!userId || !preferredLanguage || typeof preferredLanguage !== "string") {
+        return res.status(400).json({ error: "userId and preferredLanguage required" });
+      }
+      const valid = ["ko", "en", "ja", "fr", "zh", "es", "de"];
+      if (!valid.includes(preferredLanguage)) {
+        return res.status(400).json({ error: "Invalid preferredLanguage" });
+      }
+      const updated = await storage.updateUserLogin(userId, { preferredLanguage });
+      if (!updated) return res.status(404).json({ error: "User not found" });
+      res.json({ success: true, preferredLanguage: updated.preferredLanguage });
+    } catch (error: any) {
+      console.error("Error updating preferred language:", error);
+      res.status(500).json({ error: "Failed to update language" });
     }
   });
 

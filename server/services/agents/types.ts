@@ -64,6 +64,8 @@ export interface TripFormData {
     address: string;
     coords: { lat: number; lng: number };
   }>;
+  /** 일정 출력 언어 (ko, en, ja, fr 등). 기본 ko */
+  language?: string;
 }
 
 // ===== 장소 결과 =====

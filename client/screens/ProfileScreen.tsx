@@ -7,6 +7,7 @@ import {
   ScrollView,
   useColorScheme,
   ActivityIndicator,
+  Modal,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -31,8 +32,14 @@ import {
   getUserData,
   isAuthenticated,
   clearAuth,
+  saveAuth,
   type UserData,
 } from "@/lib/auth";
+import { useTranslation } from "react-i18next";
+import {
+  SUPPORTED_LANGS,
+  changeLanguageAndPersist,
+} from "@/lib/i18n";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 // 저장된 일정 타입
@@ -67,6 +74,7 @@ export default function ProfileScreen() {
   // 👤 사용자 정보
   const [user, setUser] = useState<UserData | null>(null);
   const [isAuth, setIsAuth] = useState(false);
+  const [showLanguageModal, setShowLanguageModal] = useState(false);
 
   // 저장된 일정 불러오기
   useEffect(() => {
@@ -99,6 +107,22 @@ export default function ProfileScreen() {
     loadData();
   }, []);
 
+  const handleLanguageChange = async (code: string) => {
+    await changeLanguageAndPersist(code);
+    setShowLanguageModal(false);
+    if (user?.id && user.id !== "guest_browse") {
+      try {
+        await apiRequest("PATCH", `/api/users/${user.id}/preferred-language`, {
+          preferredLanguage: code,
+        });
+        setUser((prev) => (prev ? { ...prev, language: code } : null));
+        await saveAuth({ ...user!, language: code });
+      } catch (e) {
+        console.warn("[Profile] 언어 DB 업데이트 실패:", e);
+      }
+    }
+  };
+
   const handleLogout = async () => {
     await clearAuth();
     setIsAuth(false);
@@ -110,16 +134,18 @@ export default function ProfileScreen() {
     });
   };
 
+  const currentLang = SUPPORTED_LANGS.find((l) => l.code === i18n.language) ?? SUPPORTED_LANGS[0];
+
   const stats = [
-    { label: "여행", value: String(savedTrips.length), icon: "map" },
+    { label: t("profile.trips"), value: String(savedTrips.length), icon: "map" },
     {
-      label: "방문",
+      label: t("profile.visits"),
       value: String(
         savedTrips.reduce((sum, t) => sum + (t.companionCount || 0), 0),
       ),
       icon: "map-pin",
     },
-    { label: "저장", value: String(savedTrips.length), icon: "bookmark" },
+    { label: t("common.save"), value: String(savedTrips.length), icon: "bookmark" },
   ];
 
   return (
@@ -438,7 +464,11 @@ export default function ProfileScreen() {
               onPress: () => navigation.navigate("AdminModal"),
             },
             { icon: "bell", label: "알림 설정" },
-            { icon: "globe", label: "언어 설정" },
+            {
+              icon: "globe",
+              label: t("profile.language"),
+              onPress: () => setShowLanguageModal(true),
+            },
             { icon: "shield", label: "개인정보 보호" },
             { icon: "help-circle", label: "도움말" },
           ].map((item, index) => (
@@ -477,16 +507,111 @@ export default function ProfileScreen() {
               <View style={styles.menuItemLeft}>
                 <Icon name="log-out" size={20} color="#EF4444" />
                 <Text style={[styles.menuItemLabel, { color: "#EF4444" }]}>
-                  로그아웃
+                  {t("profile.logout")}
                 </Text>
               </View>
             </Pressable>
           )}
         </View>
       </View>
+
+      {/* 언어 선택 모달 */}
+      <Modal
+        visible={showLanguageModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowLanguageModal(false)}
+      >
+        <View style={langModalStyles.overlay}>
+          <View
+            style={[
+              langModalStyles.content,
+              { backgroundColor: theme.backgroundDefault },
+            ]}
+          >
+            <View style={langModalStyles.header}>
+              <Text style={[langModalStyles.title, { color: theme.text }]}>
+                {t("login.languageSelect")}
+              </Text>
+              <Pressable onPress={() => setShowLanguageModal(false)}>
+                <Icon name="x" size={24} color={theme.text} />
+              </Pressable>
+            </View>
+            <ScrollView style={langModalStyles.list}>
+              {SUPPORTED_LANGS.map((lang) => (
+                <Pressable
+                  key={lang.code}
+                  style={[
+                    langModalStyles.item,
+                    currentLang.code === lang.code &&
+                    langModalStyles.itemSelected,
+                  ]}
+                  onPress={() => handleLanguageChange(lang.code)}
+                >
+                  <Text style={langModalStyles.flag}>{lang.flag}</Text>
+                  <View style={langModalStyles.itemText}>
+                    <Text style={[langModalStyles.itemName, { color: theme.text }]}>
+                      {lang.nativeName}
+                    </Text>
+                    <Text
+                      style={[
+                        langModalStyles.itemSub,
+                        { color: theme.textTertiary },
+                      ]}
+                    >
+                      {lang.name}
+                    </Text>
+                  </View>
+                  {currentLang.code === lang.code ? (
+                    <Icon name="check" size={20} color={Brand.primary} />
+                  ) : null}
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
+
+const langModalStyles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
+  },
+  content: {
+    borderTopLeftRadius: BorderRadius["2xl"],
+    borderTopRightRadius: BorderRadius["2xl"],
+    paddingTop: Spacing.lg,
+    paddingBottom: Spacing["3xl"],
+    maxHeight: "70%",
+  },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: Spacing.xl,
+    paddingBottom: Spacing.lg,
+  },
+  title: { fontSize: 20, fontWeight: "700" },
+  list: { paddingHorizontal: Spacing.xl },
+  item: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: Spacing.lg,
+    paddingHorizontal: Spacing.lg,
+    borderRadius: BorderRadius.lg,
+    marginBottom: Spacing.sm,
+    gap: Spacing.md,
+  },
+  itemSelected: { backgroundColor: "rgba(66, 133, 244, 0.08)" },
+  itemText: { flex: 1 },
+  itemName: { fontSize: 16, fontWeight: "600" },
+  itemSub: { fontSize: 13, marginTop: 2 },
+  flag: { fontSize: 24 },
+});
 
 const styles = StyleSheet.create({
   profileCard: {

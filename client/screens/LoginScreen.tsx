@@ -21,6 +21,7 @@ import { useNavigation } from "@react-navigation/native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
+import { LinearGradient } from "expo-linear-gradient";
 import { Spacing, BorderRadius, Brand, Colors, Fonts } from "@/constants/theme";
 import Icon from "@/components/Icon";
 import { RootStackParamList } from "../navigation/RootStackNavigator";
@@ -50,33 +51,95 @@ import {
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
-type Language = {
-  code: string;
-  flag: string;
-  name: string;
-  nativeName: string;
-};
+const SLOGAN_KEY = "login.slogan";
+const TYPING_DELAY = 80;
+const ARC_AMPLITUDE = 8;
 
-const LANGUAGES: Language[] = [
-  { code: "ko", flag: "🇰🇷", name: "Korean", nativeName: "한국어" },
-  { code: "en", flag: "🇺🇸", name: "English", nativeName: "English" },
-  { code: "fr", flag: "🇫🇷", name: "French", nativeName: "Français" },
-  { code: "zh", flag: "🇨🇳", name: "Chinese", nativeName: "中文" },
-  { code: "ja", flag: "🇯🇵", name: "Japanese", nativeName: "日本語" },
-  { code: "es", flag: "🇪🇸", name: "Spanish", nativeName: "Español" },
-  { code: "de", flag: "🇩🇪", name: "German", nativeName: "Deutsch" },
-];
+function TypingSloganCard() {
+  const { t } = useTranslation();
+  const slogan = t(SLOGAN_KEY);
+  const [displayed, setDisplayed] = useState("");
+
+  useEffect(() => {
+    setDisplayed("");
+    let i = 0;
+    const id = setInterval(() => {
+      i++;
+      setDisplayed(slogan.slice(0, i));
+      if (i >= slogan.length) clearInterval(id);
+    }, TYPING_DELAY);
+    return () => clearInterval(id);
+  }, [slogan]);
+
+  const chars = displayed.split("");
+  const n = chars.length;
+
+  return (
+    <View style={sloganStyles.card}>
+      <View style={sloganStyles.iconLeft}>
+        <Icon name="brain" size={26} color="#8B5CF6" />
+      </View>
+      <View style={sloganStyles.arcContainer}>
+        {chars.map((ch, i) => {
+          const angle = n > 1 ? (2 * Math.PI * i) / Math.max(1, n - 1) : 0;
+          const translateY = -ARC_AMPLITUDE * Math.cos(angle);
+          return (
+            <Text
+              key={`${i}-${ch}`}
+              style={[sloganStyles.arcChar, { transform: [{ translateY }] }]}
+            >
+              {ch}
+            </Text>
+          );
+        })}
+      </View>
+      <View style={sloganStyles.iconRight}>
+        <Icon name="shield-check" size={26} color="#10B981" />
+      </View>
+    </View>
+  );
+}
+
+const sloganStyles = StyleSheet.create({
+  card: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(139, 92, 246, 0.06)",
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: "rgba(139, 92, 246, 0.2)",
+    paddingVertical: Spacing.lg + 4,
+    paddingHorizontal: Spacing.xl,
+    marginHorizontal: Spacing.lg,
+    marginBottom: Spacing.md,
+    gap: Spacing.md,
+  },
+  iconLeft: { paddingRight: Spacing.sm },
+  iconRight: { paddingLeft: Spacing.sm },
+  arcContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    flex: 1,
+  },
+  arcChar: {
+    fontSize: 26,
+    fontFamily: Fonts.bold,
+    color: "#374151",
+    letterSpacing: 0.5,
+  },
+});
 
 export default function LoginScreen() {
+  const { t, i18n } = useTranslation();
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? "light"];
   const insets = useSafeAreaInsets();
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
-  const [selectedLanguage, setSelectedLanguage] = useState<Language>(
-    LANGUAGES[0],
-  );
+  const currentLang = SUPPORTED_LANGS.find((l) => l.code === i18n.language) ?? SUPPORTED_LANGS[0];
   const [showLanguageModal, setShowLanguageModal] = useState(false);
 
   const [day, setDay] = useState("");
@@ -136,10 +199,10 @@ export default function LoginScreen() {
     const idToken = getIdTokenFromGoogleResponse(googleResponse);
     if (!idToken) return;
     setOauthLoading(true);
-    socialLoginWithGoogle({
+      socialLoginWithGoogle({
       idToken,
       birthDate: birthDateStr,
-      language: selectedLanguage.code,
+      language: i18n.language,
       deviceType: Platform.OS === "web" ? "web" : "mobile",
     })
       .then((result) => {
@@ -154,10 +217,10 @@ export default function LoginScreen() {
       })
       .catch((err) => {
         console.error("Google login error:", err);
-        Alert.alert("로그인 실패", "Google 로그인 중 오류가 발생했습니다.");
+        Alert.alert(t("login.loginFailed"), t("login.loginFailed"));
       })
       .finally(() => setOauthLoading(false));
-  }, [googleResponse, birthDateStr, selectedLanguage.code, navigation]);
+  }, [googleResponse, birthDateStr, i18n.language, navigation]);
 
   // 카카오 웹 리다이렉트 복귀 시 code 처리
   useEffect(() => {
@@ -169,12 +232,9 @@ export default function LoginScreen() {
 
     const callbackData = getKakaoCallbackData();
     const birthDate = callbackData?.birthDate;
-    const language = callbackData?.language || selectedLanguage.code;
+    const language = callbackData?.language || i18n.language;
     if (!birthDate) {
-      Alert.alert(
-        "로그인 실패",
-        "생년월일 정보가 없습니다. 다시 시도해주세요.",
-      );
+      Alert.alert(t("login.loginFailed"), t("login.loginFailed"));
       if (typeof window !== "undefined" && window.history) {
         window.history.replaceState({}, "", window.location.pathname);
       }
@@ -199,8 +259,8 @@ export default function LoginScreen() {
           navigation.reset({ index: 0, routes: [{ name: "Main" }] });
         } else {
           Alert.alert(
-            "로그인 실패",
-            result.error || "카카오 로그인에 실패했습니다.",
+            t("login.loginFailed"),
+            result.error || t("login.loginFailed"),
           );
         }
       })
@@ -209,7 +269,7 @@ export default function LoginScreen() {
         Alert.alert("로그인 실패", "카카오 로그인 중 오류가 발생했습니다.");
       })
       .finally(() => setOauthLoading(false));
-  }, [selectedLanguage.code, navigation]);
+  }, [i18n.language, navigation]);
 
   const validateAndSetDay = (value: string) => {
     const num = value.replace(/[^0-9]/g, "").slice(0, 2);
@@ -232,7 +292,7 @@ export default function LoginScreen() {
     if (num.length === 2) {
       const m = parseInt(num, 10);
       if (m < 1 || m > 12) {
-        setDateError("유효하지 않은 월입니다");
+        setDateError(t("login.monthInvalid"));
       } else {
         yearRef.current?.focus();
       }
@@ -247,21 +307,21 @@ export default function LoginScreen() {
       const y = parseInt(num, 10);
       const currentYear = new Date().getFullYear();
       if (y < 1920 || y > currentYear - 10) {
-        setDateError("유효하지 않은 연도입니다");
+        setDateError(t("login.yearInvalid"));
       }
     }
   };
 
   const requireBirthDateAndAdult = (): boolean => {
     if (!isDateComplete) {
-      setDateError("생년월일을 먼저 입력해주세요");
-      Alert.alert("알림", "서비스 이용을 위해 생년월일 입력이 필요합니다.");
+      setDateError(t("login.birthRequired"));
+      Alert.alert(t("login.alert"), t("login.birthRequiredAlert"));
       dayRef.current?.focus();
       return false;
     }
     if (!birthDate || !isAdult) {
-      setDateError("만 18세 이상만 이용 가능합니다");
-      Alert.alert("알림", "만 18세 이상만 이용 가능합니다.");
+      setDateError(t("login.adultOnly"));
+      Alert.alert(t("login.alert"), t("login.adultOnly"));
       return false;
     }
     return true;
@@ -275,7 +335,7 @@ export default function LoginScreen() {
     const result = await socialLogin({
       provider,
       birthDate: birthDate!.toISOString().split("T")[0],
-      language: selectedLanguage.code,
+      language: i18n.language,
       deviceType: Platform.OS,
       displayName:
         provider === "kakao"
@@ -288,7 +348,7 @@ export default function LoginScreen() {
     if (result.success && result.user) {
       navigation.reset({ index: 0, routes: [{ name: "Main" }] });
     } else {
-      Alert.alert("로그인 실패", result.error || "서버 통신에 실패했습니다.");
+      Alert.alert(t("login.loginFailed"), result.error || t("login.loginFailed"));
     }
   };
 
@@ -312,7 +372,7 @@ export default function LoginScreen() {
   const handleWhatsAppSendOtp = async () => {
     const phone = whatsappPhone.replace(/\D/g, "");
     if (phone.length < 10) {
-      Alert.alert("알림", "올바른 전화번호를 입력해주세요.");
+      Alert.alert(t("login.alert"), t("login.phoneHint"));
       return;
     }
     setOauthLoading(true);
@@ -322,13 +382,13 @@ export default function LoginScreen() {
       setWhatsappStep("otp");
       setWhatsappOtp("");
     } else {
-      Alert.alert("OTP 발송 실패", result.error || "다시 시도해주세요.");
+      Alert.alert(t("login.loginFailed"), result.error || t("common.retry"));
     }
   };
 
   const handleWhatsAppVerify = async () => {
     if (!whatsappOtp || whatsappOtp.length < 4) {
-      Alert.alert("알림", "OTP 6자리를 입력해주세요.");
+      Alert.alert(t("login.alert"), t("login.otpHint", { phone: whatsappPhone }));
       return;
     }
     setOauthLoading(true);
@@ -345,8 +405,8 @@ export default function LoginScreen() {
       navigation.reset({ index: 0, routes: [{ name: "Main" }] });
     } else {
       Alert.alert(
-        "로그인 실패",
-        result.error || "WhatsApp 로그인에 실패했습니다.",
+        t("login.loginFailed"),
+        result.error || t("login.loginFailed"),
       );
     }
   };
@@ -356,7 +416,7 @@ export default function LoginScreen() {
     if (isKakaoOAuthConfigured() && Platform.OS === "web") {
       setOauthLoading(true);
       try {
-        await startKakaoLoginWeb(birthDateStr!, selectedLanguage.code);
+        await startKakaoLoginWeb(birthDateStr!, i18n.language);
       } catch (err) {
         console.error("Kakao login start error:", err);
         Alert.alert("로그인 실패", "카카오 로그인을 시작할 수 없습니다.");
@@ -372,7 +432,7 @@ export default function LoginScreen() {
       id: "guest_browse",
       displayName: "비회원",
       provider: "kakao",
-      language: selectedLanguage.code,
+      language: i18n.language,
       birthDate: birthDateStr || "1990-01-01",
     };
     await saveAuth(guestUser);
@@ -380,7 +440,10 @@ export default function LoginScreen() {
   };
 
   return (
-    <View style={styles.container}>
+    <LinearGradient
+      colors={["rgba(139, 92, 246, 0.05)", "#FFFFFF"]}
+      style={styles.container}
+    >
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
@@ -396,17 +459,10 @@ export default function LoginScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* ── 상단 타이포그래픽 문구 (애니메이션 제거, 정적 텍스트 복구) ── */}
-          <View style={styles.typoSection}>
-            <Text style={[styles.typoLine1, { color: theme.text }]}>
-              AI가 설계하고
-            </Text>
-            <Text style={[styles.typoLine2, { color: theme.textSecondary }]}>
-              현지 전문가가 검증한
-            </Text>
-          </View>
+          {/* ── 슬로건 카드: 타이핑 효과 + 반원형 텍스트 + 아이콘 ── */}
+          <TypingSloganCard />
 
-          {/* ── NUBI 로고 ── */}
+          {/* ── NUBI 로고 (보조 요소, 27%) ── */}
           <View style={styles.logoSection}>
             <Image
               source={require("../../assets/images/icon.png")}
@@ -421,7 +477,7 @@ export default function LoginScreen() {
           {/* ── 언어 선택 ── */}
           <View style={styles.formSection}>
             <Text style={[styles.label, { color: theme.textSecondary }]}>
-              언어
+              {t("login.language")}
             </Text>
             <Pressable
               style={[
@@ -433,9 +489,9 @@ export default function LoginScreen() {
               ]}
               onPress={() => setShowLanguageModal(true)}
             >
-              <Text style={styles.flagText}>{selectedLanguage.flag}</Text>
+              <Text style={styles.flagText}>{currentLang.flag}</Text>
               <Text style={[styles.selectorText, { color: theme.text }]}>
-                {selectedLanguage.nativeName}
+                {currentLang.nativeName}
               </Text>
               <Icon name="chevron-down" size={20} color={theme.textTertiary} />
             </Pressable>
@@ -447,10 +503,10 @@ export default function LoginScreen() {
                 { color: theme.textSecondary, marginTop: Spacing.xl },
               ]}
             >
-              생년월일
+              {t("login.birthDate")}
             </Text>
             <Text style={[styles.birthDateHint, { color: theme.textTertiary }]}>
-              실제 생년월일을 입력하시면 가족 맞춤 일정을 드려요
+              {t("login.birthDateHint")}
             </Text>
             <View style={styles.dateInputRow}>
               <View
@@ -472,6 +528,11 @@ export default function LoginScreen() {
                   keyboardType="number-pad"
                   maxLength={2}
                   textAlign="center"
+                  {...(Platform.OS === "web" && {
+                    // @ts-expect-error 웹: type="number"는 선행 0 제거·숫자 변형(03→02 등) 유발. text+inputMode로 정확한 입력 보장
+                    type: "text",
+                    inputMode: "numeric",
+                  })}
                 />
               </View>
               <Text
@@ -498,6 +559,11 @@ export default function LoginScreen() {
                   keyboardType="number-pad"
                   maxLength={2}
                   textAlign="center"
+                  {...(Platform.OS === "web" && {
+                    // @ts-expect-error 웹: type="number"는 선행 0 제거·숫자 변형 유발
+                    type: "text",
+                    inputMode: "numeric",
+                  })}
                 />
               </View>
               <Text
@@ -525,6 +591,11 @@ export default function LoginScreen() {
                   keyboardType="number-pad"
                   maxLength={4}
                   textAlign="center"
+                  {...(Platform.OS === "web" && {
+                    // @ts-expect-error 웹: type="number"는 선행 0 제거·숫자 변형 유발
+                    type: "text",
+                    inputMode: "numeric",
+                  })}
                 />
               </View>
               {isAdult && ageGroup ? (
@@ -537,7 +608,7 @@ export default function LoginScreen() {
               <Text style={styles.errorText}>{dateError}</Text>
             ) : isDateComplete && !isAdult && age !== null ? (
               <Text style={styles.errorText}>
-                만 18세 이상만 이용 가능합니다
+                {t("login.adultOnly")}
               </Text>
             ) : null}
           </View>
@@ -577,7 +648,7 @@ export default function LoginScreen() {
                 <Text style={styles.googleIconText}>G</Text>
               </View>
               <Text style={[styles.googleButtonText, { color: theme.text }]}>
-                Google로 시작하기
+                {t("login.googleStart")}
               </Text>
             </Pressable>
 
@@ -589,7 +660,7 @@ export default function LoginScreen() {
               ]}
             >
               <Text style={[styles.disclaimer, { color: theme.link }]}>
-                로그인 없이 둘러보기
+                {t("login.guestBrowse")}
               </Text>
             </Pressable>
             {/* BTS 투어 바로가기 (로그인 없이 접근) */}
@@ -600,7 +671,7 @@ export default function LoginScreen() {
               ]}
             >
               <Text style={[styles.disclaimer, { color: theme.link }]}>
-                🎵 BTS 투어 바로가기
+                {t("login.btsTour")}
               </Text>
             </Pressable>
 
@@ -624,12 +695,12 @@ export default function LoginScreen() {
                 color="#FFFFFF"
               />
               <Text style={styles.whatsappButtonText}>
-                WhatsApp으로 시작하기
+                {t("login.whatsappStart")}
               </Text>
             </Pressable>
 
             <Text style={[styles.disclaimer, { color: theme.textTertiary }]}>
-              로그인 시 이용약관 및 개인정보처리방침에 동의합니다
+              {t("login.termsAgree")}
             </Text>
           </View>
         </ScrollView>
@@ -651,23 +722,23 @@ export default function LoginScreen() {
           >
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: theme.text }]}>
-                언어 선택
+                {t("login.languageSelect")}
               </Text>
               <Pressable onPress={() => setShowLanguageModal(false)}>
                 <Icon name="x" size={24} color={theme.text} />
               </Pressable>
             </View>
             <ScrollView style={styles.languageList}>
-              {LANGUAGES.map((lang) => (
+              {SUPPORTED_LANGS.map((lang) => (
                 <Pressable
                   key={lang.code}
                   style={[
                     styles.languageItem,
-                    selectedLanguage.code === lang.code &&
+                    currentLang.code === lang.code &&
                     styles.languageItemSelected,
                   ]}
-                  onPress={() => {
-                    setSelectedLanguage(lang);
+                  onPress={async () => {
+                    await changeLanguageAndPersist(lang.code);
                     setShowLanguageModal(false);
                   }}
                 >
@@ -685,7 +756,7 @@ export default function LoginScreen() {
                       {lang.name}
                     </Text>
                   </View>
-                  {selectedLanguage.code === lang.code ? (
+                  {currentLang.code === lang.code ? (
                     <Icon name="check" size={20} color={Brand.primary} />
                   ) : null}
                 </Pressable>
@@ -711,7 +782,7 @@ export default function LoginScreen() {
           >
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: theme.text }]}>
-                {whatsappStep === "phone" ? "전화번호 입력" : "OTP 입력"}
+                {whatsappStep === "phone" ? t("login.phoneInput") : t("login.otpInput")}
               </Text>
               <Pressable onPress={() => setShowWhatsAppModal(false)}>
                 <Icon name="x" size={24} color={theme.text} />
@@ -725,7 +796,7 @@ export default function LoginScreen() {
                     { color: theme.textTertiary },
                   ]}
                 >
-                  WhatsApp으로 OTP를 받을 전화번호를 입력하세요
+                  {t("login.phoneHint")}
                 </Text>
                 <TextInput
                   style={[
@@ -743,7 +814,7 @@ export default function LoginScreen() {
                   onPress={handleWhatsAppSendOtp}
                   disabled={oauthLoading}
                 >
-                  <Text style={styles.whatsappButtonText}>OTP 발송</Text>
+                  <Text style={styles.whatsappButtonText}>{t("login.otpSend")}</Text>
                 </Pressable>
               </View>
             ) : (
@@ -754,7 +825,7 @@ export default function LoginScreen() {
                     { color: theme.textTertiary },
                   ]}
                 >
-                  {whatsappPhone}로 발송된 6자리 OTP를 입력하세요
+                  {t("login.otpHint", { phone: whatsappPhone })}
                 </Text>
                 <TextInput
                   style={[
@@ -775,7 +846,7 @@ export default function LoginScreen() {
                   onPress={handleWhatsAppVerify}
                   disabled={oauthLoading}
                 >
-                  <Text style={styles.whatsappButtonText}>확인</Text>
+                  <Text style={styles.whatsappButtonText}>{t("common.confirm")}</Text>
                 </Pressable>
                 <Pressable
                   onPress={() => setWhatsappStep("phone")}
@@ -790,35 +861,14 @@ export default function LoginScreen() {
           </View>
         </View>
       </Modal>
-    </View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#FFFFFF" },
-  flex: { flex: 1, backgroundColor: "#FFFFFF" },
-  content: { paddingHorizontal: Spacing.xl, backgroundColor: "#FFFFFF" },
-
-  /* ── 타이포그래픽 문구 ── */
-  typoSection: {
-    alignItems: "center",
-    marginBottom: Spacing.sm,
-  },
-  typoLine1: {
-    fontSize: 22,
-    fontFamily: Fonts.bold,
-    color: "#1565C0",
-    letterSpacing: -0.5,
-    textAlign: "center",
-  },
-  typoLine2: {
-    fontSize: 22,
-    fontFamily: Fonts.bold,
-    color: "#1E88E5",
-    letterSpacing: -0.5,
-    textAlign: "center",
-    marginTop: 2,
-  },
+  container: { flex: 1 },
+  flex: { flex: 1 },
+  content: { paddingHorizontal: Spacing.xl },
 
   /* ── 로고 ── */
   logoSection: {
@@ -826,8 +876,8 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.sm,
   },
   appLogo: {
-    width: SCREEN_WIDTH * 0.42,
-    height: SCREEN_WIDTH * 0.42,
+    width: SCREEN_WIDTH * 0.27,
+    height: SCREEN_WIDTH * 0.27,
   },
 
   /* ── 구분선 ── */

@@ -270,10 +270,23 @@
 
 ---
 
+## RALPH Roof 검증 (i18n 다국어, 2026-03-04)
+
+| 단계 | 검증 항목 | 방법 |
+|:----:|----------|------|
+| 1 | 프론트 언어 변경 | 로그인 화면 → 언어 선택 → 한국어/영어/일본어 등 변경 → UI 텍스트 즉시 변경 |
+| 2 | 언어 저장 | 앱 재시작 후 선택한 언어 유지 (AsyncStorage) |
+| 3 | DB 동기화 | 프로필 → 언어 설정 → 변경 시 `PATCH /api/users/:userId/preferred-language` 호출 → DB `users.preferred_language` 업데이트 |
+| 4 | 일정 생성 언어 | 일정 생성 시 `language` 파라미터 전달 → Pipeline V3가 nameKo/reason/theme을 해당 언어로 출력 |
+| 5 | 풀스택 연동 | 로그인(언어 저장) → 프로필 언어 변경(DB) → 일정 생성(선택 언어로 출력) 전체 플로우 |
+
+---
+
 ## 변경 이력
 
 | 날짜 | 내용 |
 |------|------|
+| 2026-03-04 | **i18n 다국어 풀스택 구현 완료**: i18next + react-i18next + expo-localization. 로케일 ko/en/ja/fr/zh/es/de. LoginScreen·OnboardingScreen·ProfileScreen·TripPlannerScreen(CrisisAlertBanner) t() 적용. PATCH /api/users/:userId/preferred-language. Pipeline V3 language 파라미터 → 일정 nameKo/reason/theme 다국어 출력. RALPH Roof 검증 체크리스트 TASK §7. 빌드 성공. |
 | 2026-03-04 | **BTS 이벤트 페이지 프로토타입 완성**: BTSConcertPlannerScreen bts-app UI 교체, cities/top-places/generate API 연동. 로그인 화면 "BTS 투어 바로가기" 추가(인증 우회). 멤버 7종·도시 선택→8곳 카드→일정 생성→결과 대시보드 플로우. |
 | 2026-02-24 | **로그인 통합**: 동일인(user_providers, provider 1순위·birth_date 2순위), Facebook→WhatsApp OTP(일시정지), users REPLICA IDENTITY FULL(구글·카카오 500 해결), WhatsApp 버튼 항상 표시·비활성화. |
 | 2026-02-21 | **place_seed_raw.place_id + place-linker 매칭**: schema·migration 0008 추가. sync-prices-to-seed-service에서 place-linker(buildCityPlaceLookup, matchPlaceName) 재사용. 가격 0건→20건 매칭 성공. dev/run-sync-prices.ts, sync-place-seed-trucks 연동. |

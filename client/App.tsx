@@ -9,6 +9,8 @@ import { StatusBar } from "expo-status-bar";
 import { useFonts } from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
 
+import "@/lib/i18n";
+import { initI18nLanguage } from "@/lib/i18n";
 import { queryClient } from "@/lib/query-client";
 import RootStackNavigator from "@/navigation/RootStackNavigator";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -24,6 +26,10 @@ export default function App() {
     "Pretendard-SemiBold": require("../assets/fonts/Pretendard-SemiBold.otf"),
     "Pretendard-Bold": require("../assets/fonts/Pretendard-Bold.otf"),
   });
+
+  useEffect(() => {
+    initI18nLanguage().catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (loaded || error) {

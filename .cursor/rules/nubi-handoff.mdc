@@ -27,8 +27,8 @@ alwaysApply: true
 
 | 항목 | 내용 |
 |------|------|
-| 마지막 작업 | BTS 프로토타입 완성: BTSConcertPlannerScreen bts-app UI 교체 + cities/top-places/generate API 연동. 로그인 화면에 "BTS 투어 바로가기" 추가 (인증 우회). |
-| 다음 할 일 | 배포 후 BTS E2E 테스트 (place_seed_raw bts2026 데이터 있는 도시에서). |
+| 마지막 작업 | i18n 다국어 풀스택 구현 완료. LoginScreen·OnboardingScreen·ProfileScreen·TripPlannerScreen(CrisisAlertBanner) t() 적용. PATCH preferred-language API, Pipeline V3 language 연동. 빌드 성공. |
+| 다음 할 일 | 배포 후 RALPH Roof 검증(TASK §7 5단계). i18n 언어 변경·일정 생성 언어 테스트. |
 | 브랜치 | cursor-dev |
 | 배포 상태 | Koyeb 정상 작동 중. |
 

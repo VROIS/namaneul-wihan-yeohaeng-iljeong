@@ -345,6 +345,19 @@ async function step1_geminiItinerary(
     return `Day ${d.day}: ${d.startTime} 출발 ~ ${d.endTime} 마무리, 총 ${d.slots}곳 (관광 ${activityCount} + 식사 ${mealCount}) → ${mealNote}`;
   }).join('\n');
 
+  // 출력 언어 (일정 텍스트: nameKo, reason, theme 등)
+  const outputLang = (formData as any).language || 'ko';
+  const langMap: Record<string, { name: string; prompt: string }> = {
+    ko: { name: '한국어', prompt: 'nameKo=한국어 장소명, reason=한국어 추천이유 (이동수단+시간+핵심이유, 60자 이내), theme=한국어 테마' },
+    en: { name: 'English', prompt: 'nameKo=English place name (or local name), reason=English recommendation reason (transport+time+key point, 60 chars), theme=English theme' },
+    ja: { name: '日本語', prompt: 'nameKo=日本語の場所名, reason=日本語の推薦理由 (移動手段+時間+ポイント, 60字以内), theme=日本語テーマ' },
+    fr: { name: 'Français', prompt: 'nameKo=Nom du lieu en français, reason=Raison de recommandation en français (transport+temps+point clé, 60 caractères), theme=Thème en français' },
+    zh: { name: '中文', prompt: 'nameKo=中文场所名, reason=中文推荐理由 (交通+时间+要点, 60字以内), theme=中文主题' },
+    es: { name: 'Español', prompt: 'nameKo=Nombre del lugar en español, reason=Razón de recomendación en español (transporte+tiempo+punto clave, 60 caracteres), theme=Tema en español' },
+    de: { name: 'Deutsch', prompt: 'nameKo=Deutscher Ortsname, reason=Deutsche Empfehlungsbegründung (Verkehr+Zeit+Kernpunkt, 60 Zeichen), theme=Deutsches Thema' },
+  };
+  const langSpec = langMap[outputLang] || langMap.ko;
+
   // 날짜를 "3월 1일" 형태로 (한국어 자연어용)
   const formatDateShort = (d: string) => {
     if (!d || d.length < 10) return d;
@@ -391,11 +404,11 @@ ${dayRequirements}
 9. Day 1: 구글맵 리뷰 많고 한국인에게 유명한 Must-Visit 장소 우선
 10. 장소명: Google Maps 검색 가능한 영어 공식명
 11. 점심(type="lunch"): 12:00~13:30 시작. 저녁(type="dinner"): 18:30~20:00 시작
-12. 현지인 맛집. 실제 영업 중인 곳만. nameKo=한국어 장소명
-13. reason=한국어 추천이유 (이동수단+시간+핵심이유, 60자 이내)
+12. 현지인 맛집. 실제 영업 중인 곳만.
+13. [출력 언어: ${langSpec.name}] ${langSpec.prompt}
 
 JSON만 응답 (마크다운 없이):
-{"days":[{"day":1,"theme":"테마 한국어","places":[
+{"days":[{"day":1,"theme":"테마 (${langSpec.name})","places":[
   {"name":"Official English Name","nameKo":"한국어","type":"activity","startTime":"10:00","endTime":"12:00","reason":"도심에서 메트로 1호선 15분, 세계 최대 미술관","estimatedCostEur":22},
   {"name":"Restaurant Name","nameKo":"한국어 식당명","type":"lunch","startTime":"12:30","endTime":"14:00","reason":"도보 5분, 현지인 단골 비스트로","estimatedCostEur":${mealBudget.lunch}},
   {"name":"Place Name","nameKo":"한국어","type":"dinner","startTime":"19:00","endTime":"21:00","reason":"메트로 4호선 10분, 미슐랭 추천","estimatedCostEur":${mealBudget.dinner}}
