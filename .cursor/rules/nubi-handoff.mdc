@@ -23,12 +23,12 @@ alwaysApply: true
 - 사용자에게 SQL/Supabase/PowerShell 등 수동 실행 요청하지 않음 (비개발자)
 - DB·코드 작업은 배포(Koyeb)와 별개로 진행 가능
 
-## 현재 상태 (2026-02-24)
+## 현재 상태 (2026-03-04)
 
 | 항목 | 내용 |
 |------|------|
-| 마지막 작업 | 로그인 수정: Facebook→WhatsApp OTP(일시정지), users REPLICA IDENTITY FULL, WhatsApp 버튼 항상 표시·출시 전 비활성화. 구글·카카오 500 오류 해결. |
-| 다음 할 일 | 배포본 구글·카카오 로그인 실제 테스트. 출시 시 WHATSAPP_OTP_ENABLED=true + OTPLess 연동. |
+| 마지막 작업 | BTS 프로토타입 완성: BTSConcertPlannerScreen bts-app UI 교체 + cities/top-places/generate API 연동. 로그인 화면에 "BTS 투어 바로가기" 추가 (인증 우회). |
+| 다음 할 일 | 배포 후 BTS E2E 테스트 (place_seed_raw bts2026 데이터 있는 도시에서). |
 | 브랜치 | cursor-dev |
 | 배포 상태 | Koyeb 정상 작동 중. |
 

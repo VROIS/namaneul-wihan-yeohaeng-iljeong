@@ -274,6 +274,7 @@
 
 | 날짜 | 내용 |
 |------|------|
+| 2026-03-04 | **BTS 이벤트 페이지 프로토타입 완성**: BTSConcertPlannerScreen bts-app UI 교체, cities/top-places/generate API 연동. 로그인 화면 "BTS 투어 바로가기" 추가(인증 우회). 멤버 7종·도시 선택→8곳 카드→일정 생성→결과 대시보드 플로우. |
 | 2026-02-24 | **로그인 통합**: 동일인(user_providers, provider 1순위·birth_date 2순위), Facebook→WhatsApp OTP(일시정지), users REPLICA IDENTITY FULL(구글·카카오 500 해결), WhatsApp 버튼 항상 표시·비활성화. |
 | 2026-02-21 | **place_seed_raw.place_id + place-linker 매칭**: schema·migration 0008 추가. sync-prices-to-seed-service에서 place-linker(buildCityPlaceLookup, matchPlaceName) 재사용. 가격 0건→20건 매칭 성공. dev/run-sync-prices.ts, sync-place-seed-trucks 연동. |
 | 2026-02-21 | **[Antigravity] MCP Stage 1 제미나이 의존성 100% 제거**: `server/services/mcp-raw-service.ts`의 1단계 데이터 파싱(`runStage1ForCityCategory`) 로직을 Gemini API에서 순수 RegExp(정규식) 기반으로 100% 재작성. `STAGE_MIN_ITEMS`를 5로 하향 조정하여 무과금 수집 구조 완전체 구축 테스트 완료. |

@@ -869,35 +869,33 @@ export default function TripPlannerScreen() {
         <Icon name="chevron-right" size={20} color="#8B5CF6" />
       </Pressable>
 
-      {/* 🗺️ 목적지 (Google Places Autocomplete - 도시 검색) */}
+      {/* 🗺️ 목적지 (자유 입력 — 한글/영어 OK, DB city-resolver가 매칭) */}
       <View style={[styles.section, { zIndex: 20 }]}>
-        <PlaceAutocomplete
-          placeholder="목적지 (도시명)"
-          value={formData.destination}
-          icon="map-pin"
-          types="(cities)"
-          theme={theme}
-          zIndex={20}
-          onSelect={(place: PlaceSelection) => {
-            setFormData((prev) => ({
-              ...prev,
-              destination: place.name,
-              destinationCoords: place.coords,
-            }));
-          }}
-          onClear={() => {
-            setFormData((prev) => ({
-              ...prev,
-              destination: "",
-              destinationCoords: undefined,
-              // 목적지 초기화시 숙소도 초기화
-              accommodationName: undefined,
-              accommodationAddress: undefined,
-              accommodationCoords: undefined,
-              accommodationPlaceId: undefined,
-            }));
-          }}
-        />
+        <View style={[styles.inputBox, { backgroundColor: theme.backgroundDefault }]}>
+          <Icon name="map-pin" size={20} color={Brand.primary} />
+          <TextInput
+            style={[styles.textInput, { color: theme.text }]}
+            value={formData.destination}
+            onChangeText={(text) =>
+              setFormData((prev) => ({
+                ...prev,
+                destination: text,
+                destinationCoords: undefined,
+                ...(text ? {} : {
+                  accommodationName: undefined,
+                  accommodationAddress: undefined,
+                  accommodationCoords: undefined,
+                  accommodationPlaceId: undefined,
+                }),
+              }))
+            }
+            placeholder="예: 파리, 피렌체, 남프랑스"
+            placeholderTextColor={theme.textTertiary}
+          />
+        </View>
+        <Text style={[styles.sectionSubtitle, { color: theme.textTertiary, marginTop: 4, marginLeft: 4 }]}>
+          한글이나 영어로 도시명을 입력하세요.
+        </Text>
       </View>
 
       {/* 🏨 숙소 (선택적 — 초행자는 나중에 결과화면에서 설정 가능) */}

@@ -15,6 +15,7 @@ import { runVideoGenerationPipeline } from "./services/video-pipeline";
 import { getTestVideoHtml } from "./test-video-ui";
 import { registerAdminRoutes } from "./admin-routes";
 import { registerAuthRoutes } from "./auth";
+import { registerBtsRoutes } from "./bts-routes";
 import { db } from "./db";
 import { instagramHashtags, cities, youtubeChannels, verificationRequests, itineraries } from "../shared/schema";
 import { count, eq, desc, sql } from "drizzle-orm";
@@ -79,6 +80,7 @@ init();
 export async function registerRoutes(app: Express): Promise<Server> {
   registerAdminRoutes(app);
   registerAuthRoutes(app);
+  registerBtsRoutes(app);
 
   // Cities
   app.get("/api/cities", async (req, res) => {

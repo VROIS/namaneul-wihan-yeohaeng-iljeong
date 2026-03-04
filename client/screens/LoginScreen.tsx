@@ -28,6 +28,7 @@ import {
   UserData,
   calculateAge,
   getAgeGroup,
+  saveAuth,
   socialLogin,
   socialLoginWithGoogle,
   socialLoginWithKakao,
@@ -366,6 +367,18 @@ export default function LoginScreen() {
     }
   };
 
+  const handleGuestBrowse = async () => {
+    const guestUser: UserData = {
+      id: "guest_browse",
+      displayName: "비회원",
+      provider: "kakao",
+      language: selectedLanguage.code,
+      birthDate: birthDateStr || "1990-01-01",
+    };
+    await saveAuth(guestUser);
+    navigation.reset({ index: 0, routes: [{ name: "Main" }] });
+  };
+
   return (
     <View style={styles.container}>
       <KeyboardAvoidingView
@@ -565,6 +578,29 @@ export default function LoginScreen() {
               </View>
               <Text style={[styles.googleButtonText, { color: theme.text }]}>
                 Google로 시작하기
+              </Text>
+            </Pressable>
+
+            {/* 로그인 없이 둘러보기 (테스트용) */}
+            <Pressable
+              onPress={handleGuestBrowse}
+              style={({ pressed }) => [
+                { opacity: pressed ? 0.7 : 1, paddingVertical: Spacing.sm },
+              ]}
+            >
+              <Text style={[styles.disclaimer, { color: theme.link }]}>
+                로그인 없이 둘러보기
+              </Text>
+            </Pressable>
+            {/* BTS 투어 바로가기 (로그인 없이 접근) */}
+            <Pressable
+              onPress={() => navigation.navigate("BTSConcertPlanner")}
+              style={({ pressed }) => [
+                { opacity: pressed ? 0.7 : 1, paddingVertical: Spacing.sm },
+              ]}
+            >
+              <Text style={[styles.disclaimer, { color: theme.link }]}>
+                🎵 BTS 투어 바로가기
               </Text>
             </Pressable>
 
