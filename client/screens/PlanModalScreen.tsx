@@ -165,7 +165,7 @@ export default function PlanModalScreen() {
                 },
               ]}
             >
-              {option.label}
+              {t(option.labelKey)}
             </Text>
           </Pressable>
         ))}
@@ -238,7 +238,7 @@ export default function PlanModalScreen() {
                   },
                 ]}
               >
-                {option.label}
+                {t(option.labelKey)}
               </Text>
               <Text style={[styles.focusDesc, { color: theme.textSecondary }]}>
                 {(option as any).description}
@@ -414,7 +414,7 @@ export default function PlanModalScreen() {
                   { color: isSelected ? Brand.primary : theme.text },
                 ]}
               >
-                {vibe.label}
+                {t(vibe.labelKey)}
               </Text>
             </Pressable>
           );
@@ -483,7 +483,7 @@ export default function PlanModalScreen() {
                   },
                 ]}
               >
-                {style.label}
+                {t(style.labelKey)}
               </Text>
               <Text style={[styles.styleDesc, { color: theme.textSecondary }]}>
                 {(style as any).description}
@@ -643,6 +643,7 @@ const styles = StyleSheet.create({
   optionLabel: {
     ...Typography.label,
     fontFamily: Fonts.semiBold,
+    textAlign: "center",
   },
   inputSection: {
     marginTop: Spacing.xl,
@@ -707,16 +708,19 @@ const styles = StyleSheet.create({
   },
   vibeCard: {
     width: "30%",
-    aspectRatio: 1,
+    minHeight: 80,
     justifyContent: "center",
     alignItems: "center",
     borderRadius: BorderRadius.md,
     borderWidth: 1,
-    gap: Spacing.sm,
+    gap: Spacing.xs,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: 4,
   },
   vibeLabel: {
     ...Typography.caption,
     fontFamily: Fonts.semiBold,
+    textAlign: "center",
   },
   styleList: {
     gap: Spacing.md,

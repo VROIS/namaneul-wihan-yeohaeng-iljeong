@@ -197,38 +197,39 @@ export interface Itinerary {
   dayAccommodations?: DayAccommodation[];  // Day별 개별 숙소 (이동형 여행)
 }
 
-export const VIBE_OPTIONS: { id: Vibe; label: string; icon: string; baseWeight: number }[] = [
-  { id: 'Healing', label: '힐링', icon: 'heart', baseWeight: 35 },
-  { id: 'Adventure', label: '모험', icon: 'compass', baseWeight: 10 },
-  { id: 'Hotspot', label: '핫스팟', icon: 'trending-up', baseWeight: 15 },
-  { id: 'Foodie', label: '미식', icon: 'coffee', baseWeight: 25 },
-  { id: 'Romantic', label: '로맨틱', icon: 'heart', baseWeight: 5 },
-  { id: 'Culture', label: '문화/예술', icon: 'book-open', baseWeight: 10 },
+export const VIBE_OPTIONS: { id: Vibe; label: string; labelKey: string; icon: string; baseWeight: number }[] = [
+  { id: 'Healing', label: '힐링', labelKey: 'options.healing', icon: 'heart', baseWeight: 35 },
+  { id: 'Adventure', label: '모험', labelKey: 'options.adventure', icon: 'compass', baseWeight: 10 },
+  { id: 'Hotspot', label: '핫스팟', labelKey: 'options.hotspot', icon: 'trending-up', baseWeight: 15 },
+  { id: 'Foodie', label: '미식', labelKey: 'options.foodie', icon: 'coffee', baseWeight: 25 },
+  { id: 'Romantic', label: '로맨틱', labelKey: 'options.romantic', icon: 'heart', baseWeight: 5 },
+  { id: 'Culture', label: '문화/예술', labelKey: 'options.culture', icon: 'book-open', baseWeight: 10 },
 ];
 
 // 여행 스타일 = Premium/Luxury 선택시 가이드 가격 포함 (마케팅 접점)
 // ⚠️ mobilityStyle=Minimal과 중복 적용 안 됨 (동일 가격 1회만 스며듦)
 export const TRAVEL_STYLE_OPTIONS: { 
   id: TravelStyle; 
-  label: string; 
+  label: string;
+  labelKey: string;
   icon: string; 
   priceLevel: number; 
   transport: string; 
   dining: string; 
   guide: string; 
   placesPerDay: number;
-  includesGuidePrice: boolean;  // 가이드 가격 포함 여부
+  includesGuidePrice: boolean;
 }[] = [
-  { id: 'Luxury', label: '럭셔리', icon: 'star', priceLevel: 4, transport: 'VIP 전용차량', dining: '미슐랭급', guide: '전담 가이드 동행', placesPerDay: 2, includesGuidePrice: true },
-  { id: 'Premium', label: '프리미엄', icon: 'award', priceLevel: 3, transport: '고급 세단', dining: '트렌디 레스토랑', guide: '세단 가이드', placesPerDay: 3, includesGuidePrice: true },
-  { id: 'Reasonable', label: '합리적', icon: 'thumbs-up', priceLevel: 2, transport: '우버+대중교통', dining: '현지인 맛집', guide: '워킹 가이드', placesPerDay: 4, includesGuidePrice: false },
-  { id: 'Economic', label: '경제적', icon: 'dollar-sign', priceLevel: 1, transport: '대중교통', dining: '스트리트푸드', guide: '없음 (자유)', placesPerDay: 6, includesGuidePrice: false },
+  { id: 'Luxury', label: '럭셔리', labelKey: 'options.luxury', icon: 'star', priceLevel: 4, transport: 'VIP 전용차량', dining: '미슐랭급', guide: '전담 가이드 동행', placesPerDay: 2, includesGuidePrice: true },
+  { id: 'Premium', label: '프리미엄', labelKey: 'options.premium', icon: 'award', priceLevel: 3, transport: '고급 세단', dining: '트렌디 레스토랑', guide: '세단 가이드', placesPerDay: 3, includesGuidePrice: true },
+  { id: 'Reasonable', label: '합리적', labelKey: 'options.reasonable', icon: 'thumbs-up', priceLevel: 2, transport: '우버+대중교통', dining: '현지인 맛집', guide: '워킹 가이드', placesPerDay: 4, includesGuidePrice: false },
+  { id: 'Economic', label: '경제적', labelKey: 'options.economic', icon: 'dollar-sign', priceLevel: 1, transport: '대중교통', dining: '스트리트푸드', guide: '없음 (자유)', placesPerDay: 6, includesGuidePrice: false },
 ];
 
-export const TRAVEL_PACE_OPTIONS: { id: TravelPace; label: string; icon: string; placesPerDay: number; description: string }[] = [
-  { id: 'Packed', label: '빡빡하게', icon: 'zap', placesPerDay: 6, description: '관광3 + 점심1 + 카페1 + 저녁1' },
-  { id: 'Normal', label: '보통', icon: 'clock', placesPerDay: 4, description: '관광2 + 점심1 + 저녁1' },
-  { id: 'Relaxed', label: '여유롭게', icon: 'sun', placesPerDay: 3, description: '관광1 + 점심1 + 저녁1' },
+export const TRAVEL_PACE_OPTIONS: { id: TravelPace; label: string; labelKey: string; icon: string; placesPerDay: number; description: string }[] = [
+  { id: 'Packed', label: '빡빡하게', labelKey: 'options.packed', icon: 'zap', placesPerDay: 6, description: '관광3 + 점심1 + 카페1 + 저녁1' },
+  { id: 'Normal', label: '보통', labelKey: 'options.normal', icon: 'clock', placesPerDay: 4, description: '관광2 + 점심1 + 저녁1' },
+  { id: 'Relaxed', label: '여유롭게', labelKey: 'options.relaxed', icon: 'sun', placesPerDay: 3, description: '관광1 + 점심1 + 저녁1' },
 ];
 
 // 8️⃣ 이동 스타일 = 교통비 원칙 결정
@@ -236,16 +237,17 @@ export const TRAVEL_PACE_OPTIONS: { id: TravelPace; label: string; icon: string;
 // Minimal → 드라이빙 가이드 가격표 적용 (마케팅 접점)
 export const MOBILITY_STYLE_OPTIONS: { 
   id: MobilityStyle; 
-  label: string; 
+  label: string;
+  labelKey: string;
   icon: string; 
   radiusKm: number; 
   transport: string;
   priceSource: 'google_api' | 'guide_price';
   description: string;
 }[] = [
-  { id: 'WalkMore', label: '많이 걷기', icon: 'map', radiusKm: 2, transport: '대중교통만', priceSource: 'google_api', description: '실시간 대중교통 요금' },
-  { id: 'Moderate', label: '적당히', icon: 'navigation', radiusKm: 3, transport: '대중교통+우버', priceSource: 'google_api', description: '실시간 우버/대중교통 요금' },
-  { id: 'Minimal', label: '이동 최소화', icon: 'home', radiusKm: 5, transport: '드라이빙 가이드', priceSource: 'guide_price', description: '전용 차량 가이드 서비스' },
+  { id: 'WalkMore', label: '많이 걷기', labelKey: 'options.walkMore', icon: 'map', radiusKm: 2, transport: '대중교통만', priceSource: 'google_api', description: '실시간 대중교통 요금' },
+  { id: 'Moderate', label: '적당히', labelKey: 'options.moderate', icon: 'navigation', radiusKm: 3, transport: '대중교통+우버', priceSource: 'google_api', description: '실시간 우버/대중교통 요금' },
+  { id: 'Minimal', label: '이동 최소화', labelKey: 'options.minimal', icon: 'home', radiusKm: 5, transport: '드라이빙 가이드', priceSource: 'guide_price', description: '전용 차량 가이드 서비스' },
 ];
 
 // 누구랑 → 인원 수 + 교통편 자동 확정의 핵심
@@ -255,37 +257,38 @@ export const MOBILITY_STYLE_OPTIONS: {
 //   친구들(8명+) → 미니버스
 export const COMPANION_OPTIONS: { 
   id: CompanionType; 
-  label: string; 
+  label: string;
+  labelKey: string;
   icon: string; 
   minCount: number; 
   maxCount: number; 
   defaultCount: number;
   transportType: 'sedan' | 'van' | 'minibus';
 }[] = [
-  { id: 'Single', label: '혼자', icon: 'user', minCount: 1, maxCount: 1, defaultCount: 1, transportType: 'sedan' },
-  { id: 'Couple', label: '커플', icon: 'heart', minCount: 2, maxCount: 2, defaultCount: 2, transportType: 'sedan' },
-  { id: 'Family', label: '가족', icon: 'users', minCount: 3, maxCount: 4, defaultCount: 4, transportType: 'sedan' },
-  { id: 'ExtendedFamily', label: '대가족', icon: 'home', minCount: 5, maxCount: 7, defaultCount: 6, transportType: 'van' },
-  { id: 'Group', label: '친구들', icon: 'users', minCount: 8, maxCount: 20, defaultCount: 10, transportType: 'minibus' },
+  { id: 'Single', label: '혼자', labelKey: 'options.single', icon: 'user', minCount: 1, maxCount: 1, defaultCount: 1, transportType: 'sedan' },
+  { id: 'Couple', label: '커플', labelKey: 'options.couple', icon: 'heart', minCount: 2, maxCount: 2, defaultCount: 2, transportType: 'sedan' },
+  { id: 'Family', label: '가족', labelKey: 'options.family', icon: 'users', minCount: 3, maxCount: 4, defaultCount: 4, transportType: 'sedan' },
+  { id: 'ExtendedFamily', label: '대가족', labelKey: 'options.extendedFamily', icon: 'home', minCount: 5, maxCount: 7, defaultCount: 6, transportType: 'van' },
+  { id: 'Group', label: '친구들', labelKey: 'options.group', icon: 'users', minCount: 8, maxCount: 20, defaultCount: 10, transportType: 'minibus' },
 ];
 
-export const CURATION_FOCUS_OPTIONS: { id: CurationFocus; label: string; icon: string }[] = [
-  { id: 'Kids', label: '아이', icon: 'smile' },
-  { id: 'Parents', label: '부모님', icon: 'heart' },
-  { id: 'Everyone', label: '모두', icon: 'users' },
-  { id: 'Self', label: '나', icon: 'user' },
+export const CURATION_FOCUS_OPTIONS: { id: CurationFocus; label: string; labelKey: string; icon: string }[] = [
+  { id: 'Kids', label: '아이', labelKey: 'options.kids', icon: 'smile' },
+  { id: 'Parents', label: '부모님', labelKey: 'options.parents', icon: 'heart' },
+  { id: 'Everyone', label: '모두', labelKey: 'options.everyone', icon: 'users' },
+  { id: 'Self', label: '나', labelKey: 'options.self', icon: 'user' },
 ];
 
-export const MEAL_LEVEL_OPTIONS: { id: MealLevel; label: string; icon: string; pricePerMeal: number; description: string }[] = [
-  { id: 'Michelin', label: '미슐랭급', icon: 'star', pricePerMeal: 100, description: '미슐랭 1~3스타' },
-  { id: 'Trendy', label: '트렌디', icon: 'trending-up', pricePerMeal: 50, description: '인스타 핫플' },
-  { id: 'Local', label: '현지맛집', icon: 'map-pin', pricePerMeal: 30, description: '로컬 추천' },
-  { id: 'Budget', label: '간편식', icon: 'coffee', pricePerMeal: 10, description: '스트리트푸드' },
+export const MEAL_LEVEL_OPTIONS: { id: MealLevel; label: string; labelKey: string; icon: string; pricePerMeal: number; description: string }[] = [
+  { id: 'Michelin', label: '미슐랭급', labelKey: 'options.michelin', icon: 'star', pricePerMeal: 100, description: '미슐랭 1~3스타' },
+  { id: 'Trendy', label: '트렌디', labelKey: 'options.trendy', icon: 'trending-up', pricePerMeal: 50, description: '인스타 핫플' },
+  { id: 'Local', label: '현지맛집', labelKey: 'options.local', icon: 'map-pin', pricePerMeal: 30, description: '로컬 추천' },
+  { id: 'Budget', label: '간편식', labelKey: 'options.budget', icon: 'coffee', pricePerMeal: 10, description: '스트리트푸드' },
 ];
 
-export const GUIDE_OPTION_OPTIONS: { id: GuideOption; label: string; icon: string; pricePerDay: number; description: string; editable: boolean }[] = [
-  { id: 'None', label: '없음 (자유)', icon: 'compass', pricePerDay: 0, description: '직접 이동', editable: false },
-  { id: 'Walking', label: '워킹 가이드', icon: 'map', pricePerDay: 420, description: '반일 도보 투어', editable: true },
-  { id: 'Sedan', label: '세단 가이드', icon: 'navigation', pricePerDay: 600, description: '전일 차량+가이드', editable: true },
-  { id: 'VIP', label: 'VIP 전담', icon: 'award', pricePerDay: 1015, description: '최상위 VIP 서비스', editable: true },
+export const GUIDE_OPTION_OPTIONS: { id: GuideOption; label: string; labelKey: string; icon: string; pricePerDay: number; description: string; editable: boolean }[] = [
+  { id: 'None', label: '없음 (자유)', labelKey: 'options.guideNone', icon: 'compass', pricePerDay: 0, description: '직접 이동', editable: false },
+  { id: 'Walking', label: '워킹 가이드', labelKey: 'options.guideWalking', icon: 'map', pricePerDay: 420, description: '반일 도보 투어', editable: true },
+  { id: 'Sedan', label: '세단 가이드', labelKey: 'options.guideSedan', icon: 'navigation', pricePerDay: 600, description: '전일 차량+가이드', editable: true },
+  { id: 'VIP', label: 'VIP 전담', labelKey: 'options.guideVip', icon: 'award', pricePerDay: 1015, description: '최상위 VIP 서비스', editable: true },
 ];

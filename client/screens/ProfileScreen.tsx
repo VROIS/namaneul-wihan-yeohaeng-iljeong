@@ -65,6 +65,7 @@ export default function ProfileScreen() {
   const tabBarHeight = useBottomTabBarHeight();
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { t, i18n } = useTranslation();
   const [persona, setPersona] = useState<"luxury" | "comfort">("comfort");
 
   // 🗂️ 저장된 일정 목록

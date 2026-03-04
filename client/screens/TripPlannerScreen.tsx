@@ -1039,7 +1039,7 @@ export default function TripPlannerScreen() {
                     { color: isSelected ? "#FFFFFF" : theme.textSecondary },
                   ]}
                 >
-                  {option.label}
+                  {t(option.labelKey)}
                 </Text>
               </Pressable>
             );
@@ -1078,7 +1078,7 @@ export default function TripPlannerScreen() {
                     { color: isSelected ? "#FFFFFF" : theme.textSecondary },
                   ]}
                 >
-                  {option.label}
+                  {t(option.labelKey)}
                 </Text>
               </Pressable>
             );
@@ -1119,7 +1119,7 @@ export default function TripPlannerScreen() {
                     { color: isSelected ? "#FFFFFF" : theme.textSecondary },
                   ]}
                 >
-                  {vibe.label}
+                  {t(vibe.labelKey)}
                   {priorityLabel}
                 </Text>
               </Pressable>
@@ -1159,7 +1159,7 @@ export default function TripPlannerScreen() {
                     { color: isSelected ? "#FFFFFF" : theme.textSecondary },
                   ]}
                 >
-                  {option.label}
+                  {t(option.labelKey)}
                 </Text>
               </Pressable>
             );
@@ -1198,7 +1198,7 @@ export default function TripPlannerScreen() {
                     { color: isSelected ? "#FFFFFF" : theme.textSecondary },
                   ]}
                 >
-                  {option.label}
+                  {t(option.labelKey)}
                 </Text>
               </Pressable>
             );
@@ -1237,7 +1237,7 @@ export default function TripPlannerScreen() {
                     { color: isSelected ? "#FFFFFF" : theme.textSecondary },
                   ]}
                 >
-                  {option.label}
+                  {t(option.labelKey)}
                 </Text>
               </Pressable>
             );
@@ -2330,23 +2330,27 @@ const styles = StyleSheet.create({
   iconGrid: { flexDirection: "row", gap: Spacing.sm },
   iconButton: {
     flex: 1,
-    aspectRatio: 1,
+    minHeight: 70,
     borderRadius: BorderRadius.md,
     justifyContent: "center",
     alignItems: "center",
     gap: Spacing.xs,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: 4,
   },
-  iconLabel: { fontSize: 11, fontFamily: Fonts.bold },
+  iconLabel: { fontSize: 11, fontFamily: Fonts.bold, textAlign: "center" },
   vibeGrid: { flexDirection: "row", flexWrap: "wrap", gap: Spacing.sm },
   vibeButton: {
     width: (SCREEN_WIDTH - Spacing.lg * 2 - Spacing.sm * 2) / 3,
-    aspectRatio: 1.2,
+    minHeight: 70,
     borderRadius: BorderRadius.md,
     justifyContent: "center",
     alignItems: "center",
     gap: Spacing.xs,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: 4,
   },
-  vibeText: { fontSize: 12, fontFamily: Fonts.semiBold },
+  vibeText: { fontSize: 12, fontFamily: Fonts.semiBold, textAlign: "center" },
   toggleRow: { flexDirection: "row", gap: Spacing.sm },
   toggleButton: {
     flex: 1,
@@ -2354,10 +2358,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.sm,
     borderRadius: BorderRadius.md,
-    gap: Spacing.sm,
+    gap: Spacing.xs,
   },
-  toggleText: { fontSize: 14, fontFamily: Fonts.bold },
+  toggleText: { fontSize: 13, fontFamily: Fonts.bold, textAlign: "center", flexShrink: 1 },
   generateButton: {
     borderRadius: BorderRadius.xl,
     overflow: "hidden",
