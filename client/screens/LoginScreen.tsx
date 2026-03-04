@@ -48,6 +48,8 @@ import {
   exchangeKakaoCodeForToken,
   getKakaoCallbackData,
 } from "../lib/auth-kakao";
+import { useTranslation } from "react-i18next";
+import { SUPPORTED_LANGS, changeLanguageAndPersist } from "../lib/i18n";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
