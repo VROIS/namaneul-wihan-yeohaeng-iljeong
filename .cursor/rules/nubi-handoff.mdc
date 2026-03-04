@@ -27,9 +27,9 @@ alwaysApply: true
 
 | 항목 | 내용 |
 |------|------|
-| 마지막 작업 | i18n 다국어 풀스택 구현 완료. LoginScreen·OnboardingScreen·ProfileScreen·TripPlannerScreen(CrisisAlertBanner) t() 적용. PATCH preferred-language API, Pipeline V3 language 연동. 빌드 성공. |
-| 다음 할 일 | 배포 후 RALPH Roof 검증(TASK §7 5단계). i18n 언어 변경·일정 생성 언어 테스트. |
-| 브랜치 | cursor-dev |
+| 마지막 작업 | main 브랜치 통합. cursor-dev → main 병합, .cursor/rules·docs·server 버전 표기 main으로 변경. |
+| 다음 할 일 | Koyeb 배포 설정에서 Branch를 main으로 변경. 배포 후 RALPH Roof 검증. |
+| 브랜치 | main |
 | 배포 상태 | Koyeb 정상 작동 중. |
 
 ## 긴급 이슈

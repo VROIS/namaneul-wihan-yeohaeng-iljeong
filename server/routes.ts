@@ -1391,7 +1391,7 @@ High quality, 4k, professional animation.`;
   app.get("/api/health", (req, res) => {
     res.json({
       status: "ok",
-      version: `cursor-dev-${process.env.COMMIT_HASH || "local"}`,
+      version: `main-${process.env.COMMIT_HASH || "local"}`,
       timestamp: new Date().toISOString(),
       services: {
         googlePlaces: !!(process.env.Google_maps_api_key || process.env.GOOGLE_MAPS_API_KEY),

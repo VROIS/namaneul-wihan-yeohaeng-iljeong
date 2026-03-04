@@ -17,7 +17,7 @@
 | **마지막 작업** | **로그인**: Facebook→WhatsApp OTP(일시정지), users REPLICA IDENTITY FULL, WhatsApp 버튼 항상 표시·비활성화. 구글·카카오 500 해결. |
 | **다음 할 일** | 배포본 구글·카카오 로그인 테스트. 건강체크 API 수정, city_transport_fares DB. |
 | **배포 상태** | Koyeb 정상 작동 중 |
-| **브랜치** | cursor-dev |
+| **브랜치** | main |
 
 ---
 

@@ -156,7 +156,7 @@ await db.insert(table).values(cleanData);
 ## 5. 개발/배포 프로세스 (절대 준수)
 
 - **로컬호스트 사용하지 않음** (localhost 서버 실행 불필요)
-- 작업 흐름: **코드 수정 → Git 커밋(cursor-dev 브랜치) → Koyeb 자동 배포 → Supabase DB 반영**
+- 작업 흐름: **코드 수정 → Git 커밋(main 브랜치) → Koyeb 자동 배포 → Supabase DB 반영**
 - DB: Supabase PostgreSQL (원격) — 로컬 DB 없음
 - 배포 URL: https://legal-dannye-dbstour-4e6b86d5.koyeb.app
 - 테스트/검증: 배포된 서버에서 직접 확인
