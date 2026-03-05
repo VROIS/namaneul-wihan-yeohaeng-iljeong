@@ -13,9 +13,9 @@
 
 | 항목 | 내용 |
 |------|------|
-| **마지막 작업일** | 2026-02-24 |
-| **마지막 작업** | **로그인**: Facebook→WhatsApp OTP(일시정지), users REPLICA IDENTITY FULL, WhatsApp 버튼 항상 표시·비활성화. 구글·카카오 500 해결. |
-| **다음 할 일** | 배포본 구글·카카오 로그인 테스트. 건강체크 API 수정, city_transport_fares DB. |
+| **마지막 작업일** | 2026-03-06 |
+| **마지막 작업** | **긴급**: 영상 API 4개 503 봉쇄 (미구현, Gemini 비용 절감). GET/POST video/prompts, test-prompt, generate, generate-direct. |
+| **다음 할 일** | 배포본 구글·카카오 로그인 테스트. city_transport_fares DB, 프로필·여정 i18n 잔여. |
 | **배포 상태** | Koyeb 정상 작동 중 |
 | **브랜치** | main |
 
@@ -106,7 +106,7 @@
 
 | # | 이슈 | 상태 | 해결 방법 |
 |---|------|------|----------|
-| 1 | **Google Maps/Places 대시보드 빨간불** | 미해결 | 건강체크가 Geocoding API 테스트 → Places API (New) 테스트로 변경 필요 |
+| 1 | ~~**Google Maps/Places 대시보드 빨간불**~~ | **해결** | 건강체크 Geocoding → Places API (New) 테스트로 변경 완료 |
 | 2 | **Place Seed 0/71 도시** | **진행** | 프랑스 30개 도시 완료 (4,500장소). 샤모니 추가 완료. 그외 유럽 32개/기타 9개 대기. |
 | 3 | ~~API 비용 폭탄 (€1,171)~~ | **해결** | apiCallTracker, routeCallTracker 적용 완료 |
 
@@ -286,6 +286,7 @@
 
 | 날짜 | 내용 |
 |------|------|
+| 2026-03-04 | **건강체크 API 수정 완료**: Geocoding API 테스트 → Places API (New) 테스트로 변경. 대시보드 빨간불 해결. |
 | 2026-03-04 | **i18n 다국어 풀스택 구현 완료**: i18next + react-i18next + expo-localization. 로케일 ko/en/ja/fr/zh/es/de. LoginScreen·OnboardingScreen·ProfileScreen·TripPlannerScreen(CrisisAlertBanner) t() 적용. PATCH /api/users/:userId/preferred-language. Pipeline V3 language 파라미터 → 일정 nameKo/reason/theme 다국어 출력. RALPH Roof 검증 체크리스트 TASK §7. 빌드 성공. |
 | 2026-03-04 | **BTS 이벤트 페이지 프로토타입 완성**: BTSConcertPlannerScreen bts-app UI 교체, cities/top-places/generate API 연동. 로그인 화면 "BTS 투어 바로가기" 추가(인증 우회). 멤버 7종·도시 선택→8곳 카드→일정 생성→결과 대시보드 플로우. |
 | 2026-02-24 | **로그인 통합**: 동일인(user_providers, provider 1순위·birth_date 2순위), Facebook→WhatsApp OTP(일시정지), users REPLICA IDENTITY FULL(구글·카카오 500 해결), WhatsApp 버튼 항상 표시·비활성화. |

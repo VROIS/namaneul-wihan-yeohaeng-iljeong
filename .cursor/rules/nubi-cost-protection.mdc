@@ -33,6 +33,11 @@ alwaysApply: true
 - **도시당 비용**: ~$1.89 (Google Places 4카테고리 × Nearby Search)
 - **월 예상**: ~$113 (Google $200/월 무료 크레딧 범위 내)
 
+### 5. 영상 API (routes.ts) — 2026-03-06 긴급 봉쇄
+- **상태**: 미구현 기능, 장면당 Gemini 호출로 비용 폭탄 주원인 → **503 완전 봉쇄**
+- **봉쇄 엔드포인트**: `GET /api/itineraries/:id/video/prompts`, `POST /api/video/test-prompt`, `POST /api/itineraries/:id/video/generate`, `POST /api/video/generate-direct`
+- **해제 시**: 구현 완료 후 nubi-handoff.mdc 확인
+
 ## 절대 금지 규칙
 1. **apiCallTracker 없이 Google Places API 직접 호출 금지**
 2. **routeCallTracker 없이 Google Routes API 직접 호출 금지**

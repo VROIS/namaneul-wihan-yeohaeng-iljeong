@@ -23,23 +23,23 @@ alwaysApply: true
 - 사용자에게 SQL/Supabase/PowerShell 등 수동 실행 요청하지 않음 (비개발자)
 - DB·코드 작업은 배포(Koyeb)와 별개로 진행 가능
 
-## 현재 상태 (2026-03-04)
+## 현재 상태 (2026-03-06)
 
 | 항목 | 내용 |
 |------|------|
-| 마지막 작업 | main 브랜치 통합. cursor-dev → main 병합, .cursor/rules·docs·server 버전 표기 main으로 변경. |
-| 다음 할 일 | Koyeb 배포 설정에서 Branch를 main으로 변경. 배포 후 RALPH Roof 검증. |
+| 마지막 작업 | **긴급**: 영상 API 4개 503 봉쇄 (미구현, Gemini 비용 절감). |
+| 다음 할 일 | city_transport_fares DB, 프로필·여정 i18n 잔여 작업. |
 | 브랜치 | main |
 | 배포 상태 | Koyeb 정상 작동 중. |
 
 ## 긴급 이슈
-- **Google Maps/Places API 대시보드 빨간불**: 건강체크 로직 불일치 (Places API New로 테스트 코드 수정 필요)
+- ~~**Gemini API 비용 폭탄**~~: **긴급 조치** (2026-03-06) 영상 API 4개 503 봉쇄. 장면당 Gemini 호출로 미구현 기능이 비용 주원인 → 당분간 완전 차단.
+- ~~**Google Maps/Places API 대시보드 빨간불**~~: **해결** (건강체크 Geocoding → Places API New 변경 완료)
 - **데이터 보강**: Place Seed 프랑스 도시(30개) 수집 완료 상태 확인 및 이미지 커버리지 유지
 - **user_providers 마이그레이션**: Supabase에서 unique constraint 오류 시 수동 확인
 
 ## 최우선 작업 (순서대로)
-1. **건강체크 API 수정**: Geocoding API 테스트 → Places API New 테스트로 변경
-2. **city_transport_fares DB 테이블 생성 + 교통 요금 수집**: 전 세계 60개 도시 요금 수집 및 데이터화
+1. **city_transport_fares DB 테이블 생성 + 교통 요금 수집**: 전 세계 60개 도시 요금 수집 및 데이터화
 
 ## 시딩 순서 vs 분류
 - **시딩 순서** (새 수집): 파리 → 프랑스(FR) → 유럽(Europe/)

@@ -44,6 +44,7 @@
 - Google Routes API: 일 1,000건 (routeCallTracker)
 - Gemini Google Search: 일 160건 (gemini-search-limiter)
 - ag3-data-matcher 직접 호출 취약점 수정 (2026-02-10)
+- **영상 API 4개 503 봉쇄** (2026-03-06): 미구현 기능이 장면당 Gemini 호출로 비용 폭탄 주원인 → prompts, test-prompt, generate, generate-direct 당분간 완전 차단
 
 ### 인프라
 - Koyeb Docker 배포, Supabase PostgreSQL
@@ -60,6 +61,11 @@
 ---
 
 ## 일일 작업 기록
+
+### 2026-03-04 (수)
+| # | 작업 | 상태 |
+|---|------|------|
+| 1 | 건강체크 API 수정 (Geocoding → Places API New) | 완료 |
 
 ### 2026-02-19 (수)
 | # | 작업 | 상태 |
