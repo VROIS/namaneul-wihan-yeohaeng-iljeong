@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>BTS Travel Persona - NUBI</title>
+  <style>
+    /* Base Resets & Variables */
+    :root {
+      --space-black: #05050A;
+      --neon-purple: #8B5CF6;
+      --deep-violet: #4C1D95;
+      --glass-bg: rgba(255, 255, 255, 0.03);
+      --glass-border: rgba(255, 255, 255, 0.08);
+    }
+    
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    
+    body {
+      background-color: var(--space-black);
+      color: white;
+      overflow: hidden; /* Prevent scrolling, act like an app */
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      width: 100vw;
+      perspective: 1000px;
+    }
+
+    /* Mobile Container Simulation for Desktop view, Full width on actual mobile */
+    #app-container {
+      width: 100%;
+      height: 100%;
+      max-width: 430px; /* iPhone Pro Max width */
+      position: relative;
+      background: radial-gradient(circle at 50% 0%, var(--deep-violet) 0%, var(--space-black) 60%);
+      overflow: hidden;
+      box-shadow: 0 0 50px rgba(0,0,0,0.5);
+    }
+
+    /* Ambient Particles System */
+    .particles {
+      position: absolute; width: 100%; height: 100%; top: 0; left: 0; pointer-events: none; z-index: 1;
+    }
+    .particle {
+      position: absolute;
+      background: var(--neon-purple);
+      border-radius: 50%;
+      opacity: 0.3;
+      animation: float 10s infinite linear;
+    }
+    @keyframes float {
+      0% { transform: translateY(100vh) scale(0); opacity: 0; }
+      50% { opacity: 0.5; }
+      100% { transform: translateY(-100px) scale(1); opacity: 0; }
+    }
+
+    /* UI Layering */
+    .scene {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      transition: opacity 0.8s ease, transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+      z-index: 10;
+      opacity: 0; pointer-events: none;
+    }
+    .scene.active { opacity: 1; pointer-events: all; transform: scale(1); }
+    .scene.hidden-up { opacity: 0; transform: scale(1.1) translateY(-50px); }
+    .scene.hidden-down { opacity: 0; transform: scale(0.9) translateY(50px); }
+
+    /* Scene 1: Character Selection */
+    .header-glass {
+      position: absolute; top: 20px; width: 90%; height: 60px;
+      background: var(--glass-bg); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+      border: 1px solid var(--glass-border); border-radius: 20px;
+      display: flex; align-items: center; justify-content: center; z-index: 20;
+    }
+    .header-title { font-size: 1.2rem; font-weight: bold; letter-spacing: 2px; }
+    .header-subtitle { font-size: 0.7rem; color: #aaa; margin-top: 4px; }
+
+    .character-carousel {
+      width: 100%; height: 50vh; display: flex; align-items: center;
+      overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none;
+      padding: 0 50vw; /* Center the first item */
+    }
+    .character-carousel::-webkit-scrollbar { display: none; }
+    
+    .char-card {
+      min-width: 220px; height: 320px; margin: 0 10px; scroll-snap-align: center;
+      background: linear-gradient(145deg, rgba(255,255,255,0.05), rgba(0,0,0,0.2));
+      border: 1px solid var(--glass-border); border-radius: 24px;
+      display: flex; flex-direction: column; align-items: center; justify-content: flex-end;
+      padding: 20px; position: relative; transition: all 0.3s ease;
+      transform-style: preserve-3d; /* For Parallax */
+    }
+    .char-card.selected {
+      border-color: var(--neon-purple); box-shadow: 0 0 30px rgba(139, 92, 246, 0.4);
+      transform: scale(1.05);
+    }
+    /* Fake Avatar (Silhouette) */
+    .avatar-placeholder {
+      width: 140px; height: 140px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--neon-purple), #F59E0B);
+      position: absolute; top: -40px; box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+      /* Parallax target */
+      transform: translateZ(50px);
+      transition: transform 0.1s ease-out;
+    }
+    .char-name { font-size: 1.5rem; font-weight: 800; margin-bottom: 5px; transform: translateZ(30px); }
+    .char-archetype { font-size: 0.9rem; color: #ccc; margin-bottom: 15px; transform: translateZ(20px); }
+    .tag-container { display: flex; gap: 8px; transform: translateZ(10px); }
+    .tag { font-size: 0.7rem; padding: 4px 10px; border-radius: 12px; background: rgba(255,255,255,0.1); }
+
+    .action-btn {
+      position: absolute; bottom: 40px; width: 80%; padding: 18px;
+      border-radius: 30px; border: none; background: linear-gradient(90deg, var(--neon-purple), var(--deep-violet));
+      color: white; font-size: 1.1rem; font-weight: bold;
+      box-shadow: 0 10px 20px rgba(139, 92, 246, 0.3);
+      cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .action-btn:active { transform: scale(0.95); }
+
+    /* Scene 2: 8-Card Cart (Surround) */
+    #center-avatar {
+      width: 120px; height: 120px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--neon-purple), #F59E0B);
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      z-index: 50; box-shadow: 0 0 50px rgba(139, 92, 246, 0.5);
+    }
+    .surround-card {
+      position: absolute; width: 80px; height: 110px; border-radius: 12px;
+      background: var(--glass-bg); backdrop-filter: blur(10px); border: 1px solid var(--glass-border);
+      top: 50%; left: 50%; /* Starts at center */
+      display: flex; align-items: flex-end; padding: 8px; font-size: 0.6rem;
+      transition: all 1s cubic-bezier(0.175, 0.885, 0.32, 1.275); /* Spring effect */
+      opacity: 0; transform: translate(-50%, -50%) scale(0);
+    }
+    /* Expanded state applied via JS */
+    .surround-card.expanded { opacity: 1; }
+
+    /* Scene 3: Loader */
+    .loader-ring {
+      width: 150px; height: 150px; border: 4px solid rgba(255,255,255,0.1);
+      border-top-color: var(--neon-purple); border-radius: 50%;
+      animation: spin 1s infinite linear;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loader-text { margin-top: 30px; font-size: 1.2rem; letter-spacing: 1px; animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; text-shadow: 0 0 10px var(--neon-purple); } 50% { opacity: 0.5; } }
+
+    /* Scene 4: Output */
+    .storyboard-zone-a {
+      width: 100%; height: 35%; background: #222; position: relative;
+    }
+    .storyboard-zone-b {
+      width: 100%; height: 45%; background: var(--space-black); padding: 20px;
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .timeline-mock {
+      height: 40px; width: 200%; background: linear-gradient(90deg, var(--neon-purple) 50%, #333 50%);
+      border-radius: 20px; margin-top: 20px;
+    }
+
+  </style>
+</head>
+<body>
+
+  <div id="app-container">
+    <!-- Particle Background -->
+    <div class="particles" id="particles"></div>
+
+    <!-- Scene 1: Entry -->
+    <div class="scene active" id="scene-1">
+      <div class="header-glass">
+        <div style="text-align: center;">
+          <div class="header-title">나만의 방탄 투어</div>
+          <div class="header-subtitle">Choose your travel persona</div>
+        </div>
+      </div>
+
+      <div class="character-carousel" id="carousel">
+        <!-- Spacer for center alignment -->
+        <div style="min-width: calc(50vw - 120px);"></div>
+        
+        <div class="char-card selected" id="card-v">
+          <div class="avatar-placeholder" id="avatar-v"></div>
+          <div class="char-name">V</div>
+          <div class="char-archetype">Romantic Wanderer</div>
+          <div class="tag-container">
+            <span class="tag">#Romance</span>
+            <span class="tag">#Art</span>
+          </div>
+        </div>
+        
+        <!-- Dummy cards to show scrolling capability -->
+        <div class="char-card">
+          <div class="avatar-placeholder" style="background: linear-gradient(135deg, #3B82F6, #10B981);"></div>
+          <div class="char-name">RM</div>
+          <div class="char-archetype">Culture Collector</div>
+          <div class="tag-container">
+            <span class="tag">#Museums</span>
+            <span class="tag">#Nature</span>
+          </div>
+        </div>
+
+        <div style="min-width: calc(50vw - 120px);"></div>
+      </div>
+
+      <button class="action-btn" onclick="goToCartPhase()">이 바이브로 시작하기 ✨</button>
+    </div>
+
+    <!-- Scene 2: Cart (Surround) -->
+    <div class="scene hidden-down" id="scene-2">
+      <div id="center-avatar"></div>
+      <!-- 8 Cards will be injected via JS -->
+      <div id="surround-container"></div>
+      
+      <button class="action-btn" style="bottom: 40px;" onclick="goToSynthesis()">AI 동선 최적화 🧠</button>
+    </div>
+
+    <!-- Scene 3: Synthesis -->
+    <div class="scene hidden-down" id="scene-3">
+      <div class="loader-ring"></div>
+      <div class="loader-text" id="loader-msg">바이브 동기화 중...</div>
+    </div>
+
+    <!-- Scene 4: Output -->
+    <div class="scene hidden-down" id="scene-4">
+      <div class="storyboard-zone-a">
+        <div style="position: absolute; bottom: 10px; left: 10px; font-weight: 800; font-size: 2rem; color: rgba(255,255,255,0.8);">8 Sec Reels Preview</div>
+      </div>
+      <div class="storyboard-zone-b">
+        <h3>Smart Timeline</h3>
+        <p style="color: #888; font-size: 0.8rem; margin-top: 5px;">Swipe to travel</p>
+        <div class="timeline-mock"></div>
+        <div style="height: 100px; border: 1px dashed #555; border-radius: 12px; margin-top: 20px; display: flex; align-items: center; justify-content: center; color: #666;">
+          Interactive Map Path
+        </div>
+      </div>
+      <button class="action-btn" style="bottom: 20px; width: 90%; left: 5%;">🗺️ 이 일정 지도에 담기</button>
+    </div>
+
+  </div>
+
+  <script>
+    // 1. Generate Particles
+    const particleContainer = document.getElementById('particles');
+    for(let i=0; i<30; i++) {
+      const p = document.createElement('div');
+      p.className = 'particle';
+      p.style.width = Math.random() * 5 + 2 + 'px';
+      p.style.height = p.style.width;
+      p.style.left = Math.random() * 100 + '%';
+      p.style.animationDuration = Math.random() * 5 + 5 + 's';
+      p.style.animationDelay = Math.random() * 5 + 's';
+      particleContainer.appendChild(p);
+    }
+
+    // 2. Gyroscope Parallax Simulation (Mouse for Desktop preview)
+    const cardV = document.getElementById('card-v');
+    const avatarV = document.getElementById('avatar-v');
+    
+    // Simulate device orientation using mouse move for desktop testing
+    document.addEventListener('mousemove', (e) => {
+      if(!document.getElementById('scene-1').classList.contains('active')) return;
+      
+      const xAxis = (window.innerWidth / 2 - e.pageX) / 25;
+      const yAxis = (window.innerHeight / 2 - e.pageY) / 25;
+      
+      cardV.style.transform = `rotateY(${xAxis}deg) rotateX(${yAxis}deg) scale(1.05)`;
+      // Avatar moves more deeply to create 3D illusion
+      avatarV.style.transform = `translateZ(60px) translateX(${-xAxis}px) translateY(${-yAxis}px)`;
+    });
+
+    // Request actual device orientation if available
+    if (window.DeviceOrientationEvent) {
+      window.addEventListener('deviceorientation', (e) => {
+        if(!document.getElementById('scene-1').classList.contains('active')) return;
+        let beta = e.beta;  // X-axis (-180 to 180)
+        let gamma = e.gamma; // Y-axis (-90 to 90)
+        
+        // Cap values to prevent extreme flipping
+        beta = Math.max(-30, Math.min(30, beta));
+        gamma = Math.max(-30, Math.min(30, gamma));
+
+        cardV.style.transform = `rotateY(${gamma}deg) rotateX(${beta}deg) scale(1.05)`;
+        avatarV.style.transform = `translateZ(60px) translateX(${-gamma}px) translateY(${-beta}px)`;
+      });
+    }
+
+    // Transistions
+    function switchScene(from, to) {
+      document.getElementById(from).classList.remove('active');
+      document.getElementById(from).classList.add('hidden-up');
+      
+      const target = document.getElementById(to);
+      target.classList.remove('hidden-down');
+      target.classList.remove('hidden-up');
+      target.classList.add('active');
+    }
+
+    // Go to Scene 2
+    function goToCartPhase() {
+      switchScene('scene-1', 'scene-2');
+      
+      // Generate 8 Surround Cards after short delay to let scene transition finish
+      setTimeout(() => {
+        const container = document.getElementById('surround-container');
+        container.innerHTML = '';
+        const radius = 130; // Radius of the circle
+        const totalCards = 8;
+        
+        for(let i=0; i<totalCards; i++) {
+          const angle = (i / totalCards) * (2 * Math.PI) - (Math.PI / 2); // Start at top
+          const x = Math.cos(angle) * radius;
+          const y = Math.sin(angle) * radius;
+          
+          const card = document.createElement('div');
+          card.className = 'surround-card';
+          card.innerHTML = `Vibe ${i+1}`;
+          container.appendChild(card);
+          
+          // Trigger expansion animation
+          setTimeout(() => {
+            card.style.transform = `translate(calc(-50% + ${x}px), calc(-50% + ${y}px)) scale(1)`;
+            card.classList.add('expanded');
+          }, i * 100); // Staggered deployment
+        }
+      }, 500);
+    }
+
+    // Go to Scene 3 (Loading) then Scene 4 automatically
+    function goToSynthesis() {
+      // 1. First animate the 8 cards shrinking back into the center Avatar
+      const cards = document.querySelectorAll('.surround-card');
+      cards.forEach((card, index) => {
+        card.style.transform = 'translate(-50%, -50%) scale(0)';
+        card.style.opacity = '0';
+      });
+
+      // 2. Wait for shrink, then switch scene
+      setTimeout(() => {
+        switchScene('scene-2', 'scene-3');
+        
+        // Cycle Loading Messages
+        const msgEl = document.getElementById('loader-msg');
+        const msgs = [
+          "경로 최적화 연산 중...", 
+          "현지 예상 관람료 스캔 완료!", 
+          "파업/비 예보 체킹 완료...", 
+          "최종 동선 생성 완료 ✨"
+        ];
+        
+        let step = 0;
+        const interval = setInterval(() => {
+          msgEl.innerText = msgs[step];
+          step++;
+          if(step >= msgs.length) {
+            clearInterval(interval);
+            setTimeout(() => switchScene('scene-3', 'scene-4'), 800);
+          }
+        }, 800);
+        
+      }, 800);
+    }
+
+  </script>
+</body>
+</html>
