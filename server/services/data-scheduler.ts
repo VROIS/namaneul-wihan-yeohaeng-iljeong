@@ -25,7 +25,7 @@ export class DataScheduler {
     "crisis_sync",          // 프론트 연결 전까지 자동 중지 (수동 실행만)
     "place_seed_sync",      // MCP 전환 전 자동 중지 (수동 실행만)
     "mcp_raw_stage1",       // Stage 1 미션 완료 (5,250건 수집됨)
-    "mcp3_content",         // MCP3 숏폼/콘텐츠 수집 — 수동 실행 전용
+    // mcp3_content — 활성화됨 (서버 시작 시 자동 실행)
     "youtube_sync",         // YouTube API
     "instagram_sync",       // Meta/인스타
     "naver_blog_sync",      // 블로그 크롤러
@@ -110,6 +110,17 @@ export class DataScheduler {
         console.error("[Scheduler] MCP 워크플로우 실패:", e)
       );
     }, 180000); // 3분 후 (DB·API 키·마이그레이션 준비 대기)
+
+    // MCP3 콘텐츠 수집: 서버 시작 시 자동 실행 → 전체 도시 연쇄 (쉼 없이)
+    setTimeout(async () => {
+      if (DataScheduler.isTaskDisabledByPolicy("mcp3_content")) return;
+      const useMcp = process.env.USE_MCP_RAW === "true";
+      if (!useMcp) return;
+      console.log(`[Scheduler] MCP3 콘텐츠 수집 백그라운드 시작 (전체 도시 연쇄)...`);
+      this.executeTask("mcp3_content").catch((e) =>
+        console.error("[Scheduler] MCP3 콘텐츠 수집 실패:", e)
+      );
+    }, 300000); // 5분 후 (MCP 워크플로우와 겹치지 않게)
   }
 
   private scheduleTaskIfNotPaused(taskName: string, cronExpression: string): void {
@@ -273,6 +284,9 @@ export class DataScheduler {
           break;
         case "mcp_workflow_france_phase1":
           result = await this.runMcpWorkflowFrancePhase1();
+          break;
+        case "mcp3_content":
+          result = await this.runMcp3Content();
           break;
         case "score_aggregation":
           result = await this.runScoreAggregation();
@@ -646,6 +660,20 @@ export class DataScheduler {
     }
   }
 
+  private async runMcp3Content(): Promise<{ success: boolean; itemsProcessed: number; errors: string[] }> {
+    try {
+      const { runMcp3Content } = await import("./mcp-raw-service");
+      const result = await runMcp3Content();
+      return {
+        success: result.success,
+        itemsProcessed: result.totalSearched,
+        errors: result.errors,
+      };
+    } catch (e: any) {
+      return { success: false, itemsProcessed: 0, errors: [e?.message || "MCP3 실패"] };
+    }
+  }
+
   private async runMcpRawStage2(): Promise<{ success: boolean; itemsProcessed: number; errors: string[] }> {
     return {
       success: false,
@@ -729,6 +757,7 @@ export class DataScheduler {
         mcp_raw_stage1: "주 1회 (일 02:00)",
         mcp_raw_stage2: "주 1회 (일 02:30)",
         mcp_workflow_france_phase1: "서버 시작 시 1회 (목표 도달까지 연쇄, 스케줄 없음)",
+        mcp3_content: "서버 시작 5분 후 자동 실행 (전체 도시 연쇄, 쉼 없이)",
       };
       return {
         taskName,
