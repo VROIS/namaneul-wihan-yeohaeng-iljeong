@@ -377,12 +377,7 @@ export class ScoringEngine {
     let realityPenalty = 0;
 
     if (city) {
-      const realityChecks = await storage.getActiveRealityChecks(city.id);
-      for (const check of realityChecks) {
-        if (check.affectedPlaceIds?.includes(placeId) || !check.affectedPlaceIds) {
-          realityPenalty += check.penaltyScore || 0;
-        }
-      }
+      // [DROPPED 0013] reality_checks 테이블 삭제됨 — 0건이었으므로 로직 제거
 
       const weather = await weatherFetcher.getWeatherForCity(city.id);
       if (weather) {

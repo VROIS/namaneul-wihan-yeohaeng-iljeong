@@ -1,5 +1,5 @@
 import type { Express } from "express";
-import { db, isDatabaseConnected } from "./db";
+import { db, pool, isDatabaseConnected } from "./db";
 import path from "path";
 import fs from "fs";
 import { GoogleGenAI } from "@google/genai";
@@ -4624,6 +4624,138 @@ Return JSON only, no markdown:
         result: parsed,
         raw: parsed ? undefined : text.substring(0, 800),
       });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // ====================================================================
+  // SSoT 동기화: place_seed_raw ← place_images / places / place_prices
+  // 한 번만 실행하면 됨. place_seed_raw가 프론트 단일 데이터소스가 됨.
+  // ====================================================================
+  app.post('/api/admin/sync-seed-sst', async (_req, res) => {
+    if (!pool) return res.status(503).json({ error: 'DB not connected' });
+    const results: Record<string, number> = {};
+    try {
+      // Step 1: place_id FK 연결된 경우 places.photo_urls[0] 우선 채우기
+      const r1 = await pool.query(`
+        UPDATE place_seed_raw psr
+        SET best_image_url = COALESCE(
+          (SELECT p.photo_urls->>0 FROM places p WHERE p.id = psr.place_id
+           AND p.photo_urls IS NOT NULL AND jsonb_array_length(p.photo_urls) > 0),
+          (SELECT pi.url FROM place_images pi WHERE pi.place_id = psr.place_id
+           ORDER BY pi.sort_order ASC, pi.id ASC LIMIT 1)
+        )
+        WHERE psr.place_id IS NOT NULL AND psr.best_image_url IS NULL
+      `);
+      results.step1_via_place_id = r1.rowCount ?? 0;
+
+      // Step 2: 이름 정규화 매칭으로 나머지 채우기
+      const r2 = await pool.query(`
+        UPDATE place_seed_raw psr
+        SET best_image_url = (
+          SELECT COALESCE(p.photo_urls->>0, pi.url)
+          FROM places p
+          LEFT JOIN place_images pi ON pi.place_id = p.id
+          WHERE p.city_id = psr.city_id
+            AND (
+              lower(regexp_replace(p.name, '[\s\W]+', '', 'g'))
+                = lower(regexp_replace(psr.name_en, '[\s\W]+', '', 'g'))
+              OR (psr.name_ko IS NOT NULL
+                AND lower(regexp_replace(COALESCE(p.display_name_ko,''), '[\s\W]+', '', 'g'))
+                  = lower(regexp_replace(psr.name_ko, '[\s\W]+', '', 'g')))
+            )
+          ORDER BY pi.sort_order ASC, pi.id ASC LIMIT 1
+        )
+        WHERE psr.best_image_url IS NULL
+      `);
+      results.step2_via_name_match = r2.rowCount ?? 0;
+
+      // Step 3: place_id FK 역방향 채우기 (이름 매칭)
+      const r3 = await pool.query(`
+        UPDATE place_seed_raw psr
+        SET place_id = (
+          SELECT p.id FROM places p WHERE p.city_id = psr.city_id
+            AND (
+              lower(regexp_replace(p.name, '[\s\W]+', '', 'g'))
+                = lower(regexp_replace(psr.name_en, '[\s\W]+', '', 'g'))
+              OR (psr.name_ko IS NOT NULL
+                AND lower(regexp_replace(COALESCE(p.display_name_ko,''), '[\s\W]+', '', 'g'))
+                  = lower(regexp_replace(psr.name_ko, '[\s\W]+', '', 'g')))
+            )
+          LIMIT 1
+        )
+        WHERE psr.place_id IS NULL
+      `);
+      results.step3_place_id_backfill = r3.rowCount ?? 0;
+
+      // Step 4: place_images.place_seed_raw_id 역방향 채우기
+      const r4 = await pool.query(`
+        UPDATE place_images pi
+        SET place_seed_raw_id = psr.id
+        FROM place_seed_raw psr
+        WHERE pi.place_id = psr.place_id
+          AND psr.place_id IS NOT NULL
+          AND pi.place_seed_raw_id IS NULL
+      `);
+      results.step4_image_seed_backfill = r4.rowCount ?? 0;
+
+      // Step 5: place_prices -> place_seed_raw.price_eur 채우기
+      const r5 = await pool.query(`
+        UPDATE place_seed_raw psr
+        SET price_eur = (
+          SELECT CASE pp.currency
+            WHEN 'EUR' THEN pp.price_average
+            WHEN 'KRW' THEN pp.price_average / 1350.0
+            WHEN 'USD' THEN pp.price_average * 0.92
+            ELSE pp.price_average / 1350.0
+          END
+          FROM place_prices pp
+          WHERE pp.place_id = psr.place_id
+            AND pp.price_type IN ('entrance_fee', 'activity')
+            AND pp.price_average IS NOT NULL
+          ORDER BY pp.confidence_score DESC NULLS LAST LIMIT 1
+        )
+        WHERE psr.place_id IS NOT NULL AND psr.price_eur IS NULL
+      `);
+      results.step5_price_eur = r5.rowCount ?? 0;
+
+      // 결과 요약
+      const { rows: summary } = await pool.query(`
+        SELECT COUNT(*) as total,
+          COUNT(best_image_url) as has_image,
+          ROUND(COUNT(best_image_url)*100.0/NULLIF(COUNT(*),0),1) as image_pct,
+          COUNT(price_eur) as has_price,
+          ROUND(COUNT(price_eur)*100.0/NULLIF(COUNT(*),0),1) as price_pct,
+          COUNT(place_id) as has_place_id,
+          ROUND(COUNT(place_id)*100.0/NULLIF(COUNT(*),0),1) as place_id_pct
+        FROM place_seed_raw
+      `);
+      results.summary = summary[0] as any;
+
+      res.json({ ok: true, results });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message, results });
+    }
+  });
+
+  // SSoT 현황 조회
+  app.get('/api/admin/sync-seed-sst/status', async (_req, res) => {
+    if (!pool) return res.status(503).json({ error: 'DB not connected' });
+    try {
+      const { rows } = await pool.query(`
+        SELECT COUNT(*) as total,
+          COUNT(best_image_url) as has_image,
+          ROUND(COUNT(best_image_url)*100.0/NULLIF(COUNT(*),0),1) as image_pct,
+          COUNT(price_eur) as has_price,
+          ROUND(COUNT(price_eur)*100.0/NULLIF(COUNT(*),0),1) as price_pct,
+          COUNT(place_id) as has_place_id,
+          ROUND(COUNT(place_id)*100.0/NULLIF(COUNT(*),0),1) as place_id_pct,
+          COUNT(nubi_reason) as has_nubi_reason,
+          COUNT(image_url) as has_image_url
+        FROM place_seed_raw
+      `);
+      res.json({ status: rows[0] });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }

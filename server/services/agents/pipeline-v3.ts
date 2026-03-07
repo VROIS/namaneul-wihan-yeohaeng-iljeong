@@ -69,26 +69,23 @@ function priceLevelToEur(level: number, meal?: 'lunch' | 'dinner'): number {
   return map[level]?.entrance ?? 0;
 }
 
-/** 원칙 1~4: Gemini 최우선, 0=무료 유지, DB 검증 시 비싼 쪽, 패키지 투어 가격 무시 */
+/** 원칙 1~4: Gemini 최우선, 0=무료 유지, DB 검증 시 비싼 쪽, 패키지 투어 가격 무시
+ *  + seedPriceEur: place_seed_raw의 수집 가격 (3자 중 최고가 채택) */
 function resolvePrice(
   enrichedPrice: number,
   geminiPrice: number,
   dbPlace: { priceLevel?: number; priceSource?: string } | null,
-  isMeal: boolean = false
+  isMeal: boolean = false,
+  seedPriceEur: number = 0
 ): number {
-  // Gemini가 0이어도 DB 가격이 있으면 DB 우선 (식당은 식사비 예산 기준으로 별도 처리)
-  // 패키지 투어 소스면 Gemini 사용
   const isPkgSource = dbPlace?.priceSource && ['viator', 'klook', 'tour', 'package'].some(k =>
     dbPlace!.priceSource!.toLowerCase().includes(k)
   );
-  // enrichedPrice = DB에서 가져온 실제 가격
   const basePrice = isPkgSource ? geminiPrice : (enrichedPrice || geminiPrice);
-  // Gemini가 0이고 DB 가격도 없는 경우에만 0 반환
-  if (basePrice === 0 && !dbPlace?.priceLevel) return 0;
-  if (!dbPlace?.priceLevel) return basePrice;
-  const dbEstimate = priceLevelToEur(dbPlace.priceLevel);
-  // 둘 다 있으면 더 높은 값 반환 (사용자 경험 보호: 실제보다 싸면 당혹감)
-  return Math.max(basePrice, dbEstimate);
+  if (basePrice === 0 && !dbPlace?.priceLevel && seedPriceEur === 0) return 0;
+  const dbEstimate = dbPlace?.priceLevel ? priceLevelToEur(dbPlace.priceLevel) : 0;
+  // 3자 중 최고가 채택 (사용자 경험 보호: 실제보다 싸면 당혹감)
+  return Math.max(basePrice, dbEstimate, seedPriceEur);
 }
 
 // ===== TravelStyle 정규화 (소문자→표준형) =====
@@ -115,8 +112,9 @@ function getAI(): GoogleGenAI {
 
 // ===== Gemini 응답 타입 =====
 interface GeminiPlace {
-  name: string;
-  nameKo: string;
+  name: string;         // Google Maps 영어 공식명
+  nameKo: string;       // 사용자 선택 언어명
+  nameLocal?: string;   // 현지 원어명 (예: "Tour Eiffel", "Colosseo")
   type: 'activity' | 'lunch' | 'dinner' | 'cafe';
   startTime: string;
   endTime: string;
@@ -402,16 +400,16 @@ ${dayRequirements}
 
 [장소 선정]
 9. Day 1: 구글맵 리뷰 많고 한국인에게 유명한 Must-Visit 장소 우선
-10. 장소명: Google Maps 검색 가능한 영어 공식명
+10. 장소명: name=Google Maps 검색 가능한 영어 공식명, nameLocal=현지 언어 공식명 (예: 파리라면 프랑스어 "Tour Eiffel", 로마라면 이탈리아어 "Colosseo", 도쿄라면 일본어 "東京スカイツリー")
 11. 점심(type="lunch"): 12:00~13:30 시작. 저녁(type="dinner"): 18:30~20:00 시작
 12. 현지인 맛집. 실제 영업 중인 곳만.
 13. [출력 언어: ${langSpec.name}] ${langSpec.prompt}
 
 JSON만 응답 (마크다운 없이):
 {"days":[{"day":1,"theme":"테마 (${langSpec.name})","places":[
-  {"name":"Official English Name","nameKo":"한국어","type":"activity","startTime":"10:00","endTime":"12:00","reason":"도심에서 메트로 1호선 15분, 세계 최대 미술관","estimatedCostEur":22},
-  {"name":"Restaurant Name","nameKo":"한국어 식당명","type":"lunch","startTime":"12:30","endTime":"14:00","reason":"도보 5분, 현지인 단골 비스트로","estimatedCostEur":${mealBudget.lunch}},
-  {"name":"Place Name","nameKo":"한국어","type":"dinner","startTime":"19:00","endTime":"21:00","reason":"메트로 4호선 10분, 미슐랭 추천","estimatedCostEur":${mealBudget.dinner}}
+  {"name":"Official English Name","nameKo":"한국어","nameLocal":"Nom officiel local","type":"activity","startTime":"10:00","endTime":"12:00","reason":"도심에서 메트로 1호선 15분, 세계 최대 미술관","estimatedCostEur":22},
+  {"name":"Restaurant Name","nameKo":"한국어 식당명","nameLocal":"Nom local","type":"lunch","startTime":"12:30","endTime":"14:00","reason":"도보 5분, 현지인 단골 비스트로","estimatedCostEur":${mealBudget.lunch}},
+  {"name":"Place Name","nameKo":"한국어","nameLocal":"Nom local","type":"dinner","startTime":"19:00","endTime":"21:00","reason":"메트로 4호선 10분, 미슐랭 추천","estimatedCostEur":${mealBudget.dinner}}
 ]}]}`;
 
   try {
@@ -617,12 +615,17 @@ async function step2_enrichAndBuild(
     const ta = enrichedTA[i];
     const ph = enrichedPhoto[i];
 
-    // 5대 가격원칙: Gemini 우선, DB 검증(비싼 쪽), 패키지 투어 차단
+    // seedRawMap 조회 (가격 + 인앱 링크용)
+    const seedNameEn = p.name ? p.name.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, "") : "";
+    const seedNameKo = p.nameKo ? p.nameKo.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, "") : "";
+    const seedData = preloaded.seedRawMap?.get(seedNameEn) || preloaded.seedRawMap?.get(seedNameKo);
+
+    // 5대 가격원칙: Gemini 우선, DB 검증(비싼 쪽), 패키지 투어 차단, seedPriceEur 3자 최고가
     const enrichedPrice = ta?.estimatedPriceEur ?? p.estimatedPriceEur ?? 0;
     const geminiPrice = p.estimatedPriceEur ?? 0;
     const dbPlaceForPrice = { priceLevel: p.priceLevel, priceSource: ta?.priceSource ?? p.priceSource };
     const isMealSlot = p.type === 'lunch' || p.type === 'dinner';
-    const resolvedPrice = resolvePrice(enrichedPrice, geminiPrice, dbPlaceForPrice, isMealSlot);
+    const resolvedPrice = resolvePrice(enrichedPrice, geminiPrice, dbPlaceForPrice, isMealSlot, seedData?.priceEur ?? 0);
 
     const merged = {
       ...p,
@@ -649,11 +652,7 @@ async function step2_enrichAndBuild(
       } : {}),
     };
 
-    // ⭐ nubiReason: 순차 검색 — 찾으면 멈추고 구체적 이름+날짜 표시
-    const seedNameEn = p.name ? p.name.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, "") : "";
-    const seedNameKo = p.nameKo ? p.nameKo.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, "") : "";
-    const seedData = preloaded.seedRawMap?.get(seedNameEn) || preloaded.seedRawMap?.get(seedNameKo);
-
+    // ⭐ nubiReason: 순차 검색 — seedData는 위에서 이미 조회됨
     merged.nubiReason = await generateNubiReasonV2(
       p.id, p.name, preloaded.cityName,
       celebrityVisits.get(p.id) || null,
@@ -715,13 +714,17 @@ async function step2_enrichAndBuild(
             : (s.gPlace.type === 'lunch' ? mealBudget.lunch : mealBudget.dinner))
           : undefined,
         mealPriceLabel: isMeal ? (s.gPlace.type === 'lunch' ? mealBudget.lunchLabel : mealBudget.dinnerLabel) : undefined,
-        // Gemini의 한국어 이름 + 추천이유
+        // Gemini의 한국어 이름 + 현지 원어명 + 추천이유
         nameKo: s.gPlace.nameKo,
+        nameLocal: s.gPlace.nameLocal || null,
         // ⭐ nubiReason: 우리 데이터 기반 차별화 선정이유 (크게/진하게 표시)
         nubiReason: enrichedPlace.nubiReason || null,
         // ⭐ nubiReason 메타데이터 — place_seed_raw에서 직접 (DB 추가 쿼리 0회)
         nubiEvidenceUrl: placeSeed?.evidenceUrl || null,
         nubiReasonSource: placeSeed?.sourceType || null,
+        // ⭐ 인앱 링크 (유효성 검증된 URL만 저장됨 — 없으면 버튼 숨김)
+        instagramPostUrl: placeSeed?.instagramPostUrl || null,
+        tiktokPostUrl: placeSeed?.tiktokPostUrl || null,
         // Gemini AI 요약 (보통 글씨로 표시)
         geminiReason: s.gPlace.reason || '',
         // Gemini가 생성한 교통편 안내 (강화 프롬프트 v3.1)

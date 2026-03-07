@@ -72,7 +72,8 @@
 | id | serial | DB 내부 PK | 42 |
 | **googlePlaceId** | text | 글로벌 유일 키 (바코드) | "ChIJLU7jZClu5kcR..." |
 | name | text | Google 공식명 | "Tour Eiffel" |
-| **displayNameKo** | text | 한국어 표시명 | "에펠탑" |
+| **nameLocal** | text | 현지 원어명 | "Tour Eiffel" |
+| **namesI18n** | jsonb | 다국어 이름 맵 | {"ko":"에펠탑","en":"Eiffel Tower"} |
 | **aliases** | jsonb | 별칭 배열 | ["에펠탑", "Eiffel Tower"] |
 | cityId | integer | 소속 도시 FK | 1 |
 
@@ -144,8 +145,10 @@ interface ConfirmedPlace {
   dbPlaceId: number;         // DB places.id
   
   // ===== 표시 (인간어) =====
-  name: string;              // Google 공식명 "Tour Eiffel"
-  displayNameKo: string;     // 한국어 "에펠탑"
+  name: string;              // Google 영어 공식명 "Eiffel Tower"
+  nameKo: string;            // 사용자 선택 언어명 (ko:"에펠탑", en:"Eiffel Tower", ja:"エッフェル塔" ...)
+  nameLocal?: string;        // 현지 원어명 (fr:"Tour Eiffel", it:"Colosseo" ...)
+  namesI18n?: Record<string, string>; // {ko,en,ja,zh,fr,es,de} — DB place_seed_raw.names_i18n
   description: string;       // 요약 설명
   
   // ===== 위치 =====

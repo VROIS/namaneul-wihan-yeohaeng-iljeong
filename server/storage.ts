@@ -4,18 +4,15 @@ import {
   type Place, type InsertPlace,
   type PlaceDataSource,
   type Review,
-  type VibeAnalysis,
-  type RealityCheck,
   type WeatherCache,
   type Itinerary, type InsertItinerary,
-  type ItineraryItem,
   type RouteCache,
   type DataSyncLog,
   type GuidePrice,
   type PlacePrice,
   users, userProviders,
-  cities, places, placeDataSources, reviews, vibeAnalysis,
-  realityChecks, weatherCache, itineraries, itineraryItems, routeCache, dataSyncLog,
+  cities, places, placeDataSources, reviews,
+  weatherCache, itineraries, routeCache, dataSyncLog,
   guidePrices, placePrices
 } from "@shared/schema";
 import { db } from "./db";
@@ -59,13 +56,7 @@ export interface IStorage {
   getOriginatorReviews(placeId: number): Promise<Review[]>;
   createReview(review: Omit<Review, "id" | "fetchedAt">): Promise<Review>;
 
-  // Vibe Analysis
-  getVibeAnalysis(placeId: number): Promise<VibeAnalysis[]>;
-  createVibeAnalysis(analysis: Omit<VibeAnalysis, "id" | "analyzedAt">): Promise<VibeAnalysis>;
-
-  // Reality Checks
-  getActiveRealityChecks(cityId: number): Promise<RealityCheck[]>;
-  createRealityCheck(check: Omit<RealityCheck, "id" | "createdAt">): Promise<RealityCheck>;
+  // [DROPPED 0013] vibeAnalysis, realityChecks 테이블 삭제됨
 
   // Weather
   getWeatherCache(cityId: number, date: Date): Promise<WeatherCache | undefined>;
@@ -256,27 +247,6 @@ export class DatabaseStorage implements IStorage {
     return newReview;
   }
 
-  // Vibe Analysis
-  async getVibeAnalysis(placeId: number): Promise<VibeAnalysis[]> {
-    return db.select().from(vibeAnalysis).where(eq(vibeAnalysis.placeId, placeId));
-  }
-
-  async createVibeAnalysis(analysis: Omit<VibeAnalysis, "id" | "analyzedAt">): Promise<VibeAnalysis> {
-    const [newAnalysis] = await db.insert(vibeAnalysis).values(analysis).returning();
-    return newAnalysis;
-  }
-
-  // Reality Checks
-  async getActiveRealityChecks(cityId: number): Promise<RealityCheck[]> {
-    return db.select().from(realityChecks)
-      .where(and(eq(realityChecks.cityId, cityId), eq(realityChecks.isActive, true)));
-  }
-
-  async createRealityCheck(check: Omit<RealityCheck, "id" | "createdAt">): Promise<RealityCheck> {
-    const [newCheck] = await db.insert(realityChecks).values(check).returning();
-    return newCheck;
-  }
-
   // Weather
   async getWeatherCache(cityId: number, date: Date): Promise<WeatherCache | undefined> {
     const startOfDay = new Date(date);
@@ -323,12 +293,6 @@ export class DatabaseStorage implements IStorage {
   async createItinerary(itinerary: InsertItinerary): Promise<Itinerary> {
     const [newItinerary] = await db.insert(itineraries).values(itinerary).returning();
     return newItinerary;
-  }
-
-  async getItineraryItems(itineraryId: number): Promise<ItineraryItem[]> {
-    return db.select().from(itineraryItems)
-      .where(eq(itineraryItems.itineraryId, itineraryId))
-      .orderBy(itineraryItems.dayNumber, itineraryItems.orderInDay);
   }
 
   // Route Cache

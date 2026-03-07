@@ -29,14 +29,16 @@ function isUsableImageUrl(url: string): boolean {
   const u = url.toLowerCase().trim();
   if (!u) return false;
   if (u.includes('example.com')) return false;
+  // 🚫 전멸 확인된 소스 차단 (0013 DB 정리와 동일)
+  if (u.includes('places.googleapis.com') || u.includes('maps.googleapis.com')) return false;
+  if (u.includes('fbcdn.net') || u.includes('cdninstagram') || u.includes('cdn.fbsbx.com')) return false;
   // 🚫 모바일 앱에서 Referer 체크로 렌더링 차단되는 도메인 제외
   if (u.includes('naver.com') || u.includes('tistory.com') || u.includes('daum.net')) return false;
   // instagram.com/p/xxx 또는 /reel/xxx (HTML) — /media/?size= 는 리다이렉트로 이미지 가능
   if ((u.includes('instagram.com/p/') || u.includes('instagram.com/reel/')) && !u.includes('/media/'))
     return false;
-  if (u.includes('places.googleapis.com') || u.includes('maps.googleapis.com')) return true;
+  // ✅ 영구 유효 소스
   if (u.includes('wikimedia.org') || u.includes('wikipedia.org')) return true;
-  if (u.includes('fbcdn.net') || u.includes('cdninstagram') || u.includes('cdn.fbsbx.com')) return true;
   if (u.includes('i.ytimg.com') || u.includes('unsplash.com')) return true;
   return true; // 기타는 시도
 }
@@ -245,12 +247,17 @@ export async function preloadCityData(
           id: placeSeedRaw.id,
           nameEn: placeSeedRaw.nameEn,
           nameKo: placeSeedRaw.nameKo,
+          nameLocal: placeSeedRaw.nameLocal,
           googlePlaceId: placeSeedRaw.googlePlaceId,
           imageUrl: placeSeedRaw.imageUrl,
           bestImageUrl: placeSeedRaw.bestImageUrl,
           evidenceUrl: placeSeedRaw.evidenceUrl,
           nubiReason: placeSeedRaw.nubiReason,
-          sourceType: placeSeedRaw.sourceType
+          sourceType: placeSeedRaw.sourceType,
+          priceEur: placeSeedRaw.priceEur,
+          priceSource: placeSeedRaw.priceSource,
+          instagramPostUrl: placeSeedRaw.instagramPostUrl,
+          tiktokPostUrl: placeSeedRaw.tiktokPostUrl
         }).from(placeSeedRaw).where(eq(placeSeedRaw.cityId, cityId));
         for (const s of seeds) {
           const makeKey = (name: string | null) => name ? name.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, "") : null;

@@ -9,7 +9,7 @@
  * - instagramHashtags/instagramLocations → buzzScore 보강
  * - placePrices → priceLevel 업데이트
  * - reviews → tasteVerifyScore 계산
- * - vibeAnalysis → vibeScore 계산
+ * - places.vibeScore → vibeScore (기존 값 사용)
  * 
  * 계산 공식:
  * - buzzScore (0-10): Google(40%) + TripAdvisor(30%) + Instagram(20%) + Reviews(10%)
@@ -20,9 +20,9 @@
  */
 
 import { db } from "../db";
-import { 
-  places, placeDataSources, tripAdvisorData, 
-  reviews, vibeAnalysis,
+import {
+  places, placeDataSources, tripAdvisorData,
+  reviews,
   instagramHashtags, instagramLocations
 } from "@shared/schema";
 import { eq, sql, and, isNotNull } from "drizzle-orm";
@@ -139,13 +139,7 @@ async function calculatePlaceScores(placeId: number) {
     and(eq(reviews.placeId, placeId), eq(reviews.isOriginatorLanguage, true))
   );
 
-  // 5. Vibe Analysis 데이터
-  const vibeData = await db!.select({
-    avgVisual: sql<number>`avg(${vibeAnalysis.visualScore})`.as("avg_visual"),
-    avgComposition: sql<number>`avg(${vibeAnalysis.compositionScore})`.as("avg_composition"),
-    avgLighting: sql<number>`avg(${vibeAnalysis.lightingScore})`.as("avg_lighting"),
-    avgColor: sql<number>`avg(${vibeAnalysis.colorScore})`.as("avg_color"),
-  }).from(vibeAnalysis).where(eq(vibeAnalysis.placeId, placeId));
+  // 5. Vibe Analysis — [DROPPED 0013] 테이블 삭제됨, places.vibeScore 직접 사용
 
   // === 점수 계산 ===
 
@@ -198,17 +192,8 @@ async function calculatePlaceScores(placeId: number) {
   }
   buzzScore = Math.round(buzzScore * 10) / 10; // 소수점 1자리
 
-  // VibeScore (0-10): 비주얼/감성
-  let vibeScore = placeData?.vibeScore ?? 0;
-  if (vibeData.length > 0 && vibeData[0].avgVisual) {
-    vibeScore = (
-      (vibeData[0].avgVisual || 0) * 0.3 +
-      (vibeData[0].avgComposition || 0) * 0.3 +
-      (vibeData[0].avgLighting || 0) * 0.2 +
-      (vibeData[0].avgColor || 0) * 0.2
-    );
-    vibeScore = Math.round(vibeScore * 10) / 10;
-  }
+  // VibeScore (0-10): places 테이블 기존 값 사용 (vibe_analysis 테이블 DROP됨)
+  const vibeScore = placeData?.vibeScore ?? 0;
 
   // TasteVerifyScore (0-10): 오리지널 맛 검증
   let tasteVerifyScore = 0;

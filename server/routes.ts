@@ -134,9 +134,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const dataSources = await storage.getPlaceDataSources(place.id);
-      const vibeAnalysis = await storage.getVibeAnalysis(place.id);
 
-      res.json({ ...place, dataSources, vibeAnalysis });
+      res.json({ ...place, dataSources });
     } catch (error) {
       console.error("Error fetching place:", error);
       res.status(500).json({ error: "Failed to fetch place" });
@@ -244,17 +243,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Reality checks
-  app.get("/api/cities/:cityId/reality-checks", async (req, res) => {
-    try {
-      const cityId = parseInt(req.params.cityId);
-      const checks = await storage.getActiveRealityChecks(cityId);
-      res.json(checks);
-    } catch (error) {
-      console.error("Error fetching reality checks:", error);
-      res.status(500).json({ error: "Failed to fetch reality checks" });
-    }
-  });
+  // [DROPPED 0013] reality-checks 엔드포인트 삭제
 
   // Itinerary generation
   app.post("/api/routes/generate", async (req, res) => {

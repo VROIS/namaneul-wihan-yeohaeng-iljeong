@@ -52,6 +52,8 @@ interface PlaceDetailModalProps {
     personaFitReason?: string;
     geminiReason?: string;
     type?: string;
+    instagramPostUrl?: string;
+    tiktokPostUrl?: string;
   } | null;
   theme: any;
 }
@@ -248,6 +250,32 @@ export function PlaceDetailModal({
             </View>
           ) : null}
 
+          {/* 인스타/틱톡 인앱 링크 — URL이 있을 때만 노출 */}
+          {(place.instagramPostUrl || place.tiktokPostUrl) && (
+            <View style={styles.socialLinksRow}>
+              {place.instagramPostUrl && (
+                <Pressable
+                  style={[styles.socialLinkBtn, { backgroundColor: '#E1306C15', borderColor: '#E1306C40' }]}
+                  onPress={() => Linking.openURL(place.instagramPostUrl!)}
+                >
+                  <Text style={[styles.socialLinkText, { color: '#E1306C' }]}>
+                    {t("place.viewOnInstagram", "인스타에서 보기")}
+                  </Text>
+                </Pressable>
+              )}
+              {place.tiktokPostUrl && (
+                <Pressable
+                  style={[styles.socialLinkBtn, { backgroundColor: '#00000008', borderColor: '#00000020' }]}
+                  onPress={() => Linking.openURL(place.tiktokPostUrl!)}
+                >
+                  <Text style={[styles.socialLinkText, { color: '#000' }]}>
+                    {t("place.viewOnTiktok", "틱톡에서 보기")}
+                  </Text>
+                </Pressable>
+              )}
+            </View>
+          )}
+
           {/* 시간 / 가격 / 평점 */}
           <View
             style={[
@@ -381,6 +409,24 @@ export function PlaceDetailModal({
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+
+  socialLinksRow: {
+    flexDirection: "row",
+    gap: 10,
+    paddingHorizontal: 16,
+    marginBottom: 12,
+  },
+  socialLinkBtn: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    alignItems: "center",
+  },
+  socialLinkText: {
+    fontSize: 13,
+    fontWeight: "600",
+  },
 
   header: {
     flexDirection: "row",

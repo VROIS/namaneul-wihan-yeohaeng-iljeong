@@ -1766,8 +1766,11 @@ export default function TripPlannerScreen() {
                                     {(place as any).nameKo || place.name}
                                   </Text>
                                 </View>
-                                {(place as any).nameKo &&
-                                  (place as any).nameKo !== place.name && (
+                                {(() => {
+                                  const userLangName = (place as any).nameKo || place.name;
+                                  const localName = (place as any).nameLocal || place.name;
+                                  const secondary = (place as any).nameLocal ? localName : place.name;
+                                  return secondary && secondary !== userLangName ? (
                                     <Text
                                       style={{
                                         fontSize: 11,
@@ -1775,9 +1778,10 @@ export default function TripPlannerScreen() {
                                         marginBottom: 2,
                                       }}
                                     >
-                                      {place.name}
+                                      {secondary}
                                     </Text>
-                                  )}
+                                  ) : null;
+                                })()}
 
                                 {/* 별점 표시 (vibeScore 0이면 숨김) */}
                                 {starRating > 0 && (

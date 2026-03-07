@@ -174,6 +174,8 @@ export const places = pgTable("places", {
   vibeKeywords: jsonb("vibe_keywords").$type<string[]>().default([]),
   /** 시딩 카테고리: 명소(attraction), 맛집(restaurant), 힐링(healing), 모험(adventure), 핫스팟(hotspot). 1일 1카테고리·도시별 카운트용 */
   seedCategory: text("seed_category"),
+  nameLocal: text("name_local"),
+  namesI18n: jsonb("names_i18n").$type<Record<string,string>>(),
   isVerified: boolean("is_verified").default(false),
   lastDataSync: timestamp("last_data_sync"),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
@@ -214,37 +216,8 @@ export const reviews = pgTable("reviews", {
   fetchedAt: timestamp("fetched_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
-// Vibe analysis results from Gemini
-export const vibeAnalysis = pgTable("vibe_analysis", {
-  id: serial("id").primaryKey(),
-  placeId: integer("place_id").notNull().references(() => places.id, { onDelete: "cascade" }),
-  photoUrl: text("photo_url"),
-  visualScore: real("visual_score"),
-  compositionScore: real("composition_score"),
-  lightingScore: real("lighting_score"),
-  colorScore: real("color_score"),
-  vibeCategories: jsonb("vibe_categories").$type<string[]>(),
-  geminiResponse: jsonb("gemini_response"),
-  analyzedAt: timestamp("analyzed_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-});
-
-// Reality checks (weather, safety, events)
-export const realityChecks = pgTable("reality_checks", {
-  id: serial("id").primaryKey(),
-  cityId: integer("city_id").notNull().references(() => cities.id, { onDelete: "cascade" }),
-  checkType: text("check_type").notNull(),
-  severity: text("severity"),
-  title: text("title"),
-  description: text("description"),
-  affectedPlaceIds: jsonb("affected_place_ids").$type<number[]>(),
-  penaltyScore: real("penalty_score").default(0),
-  startDate: timestamp("start_date"),
-  endDate: timestamp("end_date"),
-  source: text("source"),
-  rawData: jsonb("raw_data"),
-  isActive: boolean("is_active").default(true),
-  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-});
+// [DROPPED 0013] vibe_analysis — 0건, 미사용
+// [DROPPED 0013] reality_checks — 0건, 미사용
 
 // Weather data cache
 export const weatherCache = pgTable("weather_cache", {
@@ -310,21 +283,7 @@ export const itineraries = pgTable("itineraries", {
   updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
-// Itinerary items (places in order)
-export const itineraryItems = pgTable("itinerary_items", {
-  id: serial("id").primaryKey(),
-  itineraryId: integer("itinerary_id").notNull().references(() => itineraries.id, { onDelete: "cascade" }),
-  placeId: integer("place_id").notNull().references(() => places.id, { onDelete: "cascade" }),
-  dayNumber: integer("day_number").notNull(),
-  orderInDay: integer("order_in_day").notNull(),
-  startTime: text("start_time"),
-  endTime: text("end_time"),
-  duration: integer("duration"),
-  travelMode: text("travel_mode"),
-  travelDuration: integer("travel_duration"),
-  travelCost: real("travel_cost"),
-  notes: text("notes"),
-});
+// [DROPPED 0013] itinerary_items — 0건, rawData JSON으로 대체됨
 
 // Route calculations cache
 export const routeCache = pgTable("route_cache", {
@@ -676,6 +635,19 @@ export const placeSeedRaw = pgTable("place_seed_raw", {
   celebMention: text("celeb_mention"),      // 방문한 셀럽 이름 (예: "리사")
   naverBlogCount: integer("naver_blog_count"), // 네이버 블로그 누적 리뷰 수
   vibeKeywords: jsonb("vibe_keywords").$type<string[]>(), // 분위기 키워드 배열
+  // SSoT 통합: places 테이블에서 역수집한 데이터
+  latitude: real("latitude"),
+  longitude: real("longitude"),
+  googleRating: real("google_rating"),
+  googleReviewCount: integer("google_review_count"),
+  photoUrls: jsonb("photo_urls").$type<string[]>(),
+  openingHours: jsonb("opening_hours").$type<Record<string, string>>(),
+  editorialSummary: text("editorial_summary"),
+  nameLocal: text("name_local"),
+  namesI18n: jsonb("names_i18n").$type<Record<string,string>>(),
+  // SSoT 인앱 링크 (유효성 검증된 게시글 URL만 저장)
+  instagramPostUrl: text("instagram_post_url"),
+  tiktokPostUrl: text("tiktok_post_url"),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
@@ -848,7 +820,6 @@ export const dataCollectionSchedule = pgTable("data_collection_schedule", {
 // Relations
 export const citiesRelations = relations(cities, ({ many }) => ({
   places: many(places),
-  realityChecks: many(realityChecks),
   weatherCache: many(weatherCache),
   itineraries: many(itineraries),
 }));
@@ -860,7 +831,6 @@ export const placesRelations = relations(places, ({ one, many }) => ({
   }),
   dataSources: many(placeDataSources),
   reviews: many(reviews),
-  vibeAnalysis: many(vibeAnalysis),
 }));
 
 export const placeDataSourcesRelations = relations(placeDataSources, ({ one }) => ({
@@ -877,14 +847,7 @@ export const reviewsRelations = relations(reviews, ({ one }) => ({
   }),
 }));
 
-export const vibeAnalysisRelations = relations(vibeAnalysis, ({ one }) => ({
-  place: one(places, {
-    fields: [vibeAnalysis.placeId],
-    references: [places.id],
-  }),
-}));
-
-export const itinerariesRelations = relations(itineraries, ({ one, many }) => ({
+export const itinerariesRelations = relations(itineraries, ({ one }) => ({
   user: one(users, {
     fields: [itineraries.userId],
     references: [users.id],
@@ -892,18 +855,6 @@ export const itinerariesRelations = relations(itineraries, ({ one, many }) => ({
   city: one(cities, {
     fields: [itineraries.cityId],
     references: [cities.id],
-  }),
-  items: many(itineraryItems),
-}));
-
-export const itineraryItemsRelations = relations(itineraryItems, ({ one }) => ({
-  itinerary: one(itineraries, {
-    fields: [itineraryItems.itineraryId],
-    references: [itineraries.id],
-  }),
-  place: one(places, {
-    fields: [itineraryItems.placeId],
-    references: [places.id],
   }),
 }));
 
@@ -943,12 +894,9 @@ export type Place = typeof places.$inferSelect;
 export type InsertPlace = z.infer<typeof insertPlaceSchema>;
 export type PlaceDataSource = typeof placeDataSources.$inferSelect;
 export type Review = typeof reviews.$inferSelect;
-export type VibeAnalysis = typeof vibeAnalysis.$inferSelect;
-export type RealityCheck = typeof realityChecks.$inferSelect;
 export type WeatherCache = typeof weatherCache.$inferSelect;
 export type Itinerary = typeof itineraries.$inferSelect;
 export type InsertItinerary = z.infer<typeof insertItinerarySchema>;
-export type ItineraryItem = typeof itineraryItems.$inferSelect;
 export type RouteCache = typeof routeCache.$inferSelect;
 export type DataSyncLog = typeof dataSyncLog.$inferSelect;
 

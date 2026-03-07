@@ -3,7 +3,7 @@ import { storage } from "../storage";
 import { db } from "../db";
 import { instagramHashtags, instagramLocations, instagramPhotos } from "@shared/schema";
 import { eq, like, ilike, or, sql } from "drizzle-orm";
-import type { VibeAnalysis, Place } from "@shared/schema";
+import type { Place } from "@shared/schema";
 
 // Gemini AI를 동적으로 초기화 (DB에서 키 로드 후 사용 가능하도록)
 function getAI(): GoogleGenAI {
@@ -247,17 +247,7 @@ JSON 형식으로만 응답해주세요:
         try {
           const result = await this.analyzeImageVibe(photoUrl);
           vibeResults.push(result);
-          
-          await storage.createVibeAnalysis({
-            placeId,
-            photoUrl,
-            visualScore: result.visualScore,
-            compositionScore: result.compositionScore,
-            lightingScore: result.lightingScore,
-            colorScore: result.colorScore,
-            vibeCategories: result.vibeCategories,
-            geminiResponse: result as any,
-          });
+          // [DROPPED 0013] vibe_analysis 테이블 삭제 — DB 저장 생략
         } catch (error) {
           console.error(`Failed to analyze photo for place ${placeId}:`, error);
         }
