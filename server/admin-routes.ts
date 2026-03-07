@@ -4240,6 +4240,40 @@ export function registerAdminRoutes(app: Express) {
     }
   });
 
+  // MCP3: 숏폼/콘텐츠 URL 수집 (TikTok, Instagram Reels, 게시글)
+  app.post("/api/admin/mcp-raw/mcp3", async (req, res) => {
+    try {
+      const { runMcp3Content } = await import("./services/mcp-raw-service");
+      const cityId = req.body?.cityId ? Number(req.body.cityId) : undefined;
+      const category = req.body?.category as "attraction" | "restaurant" | "healing" | "adventure" | "hotspot" | undefined;
+      const runBatchId = req.body?.runBatchId ? String(req.body.runBatchId) : undefined;
+      const overwrite = req.body?.overwrite === true;
+      const result = await runMcp3Content({ cityId, category, runBatchId, overwrite });
+      res.json({
+        success: result.success,
+        stage: "mcp3",
+        runBatchId: result.runBatchId,
+        citySource: result.citySource,
+        citySourcePath: result.citySourcePath,
+        processedCities: result.processedCities,
+        processedCategories: result.processedCategories,
+        totalSearched: result.totalSearched,
+        tiktokSaved: result.tiktokSaved,
+        instaSaved: result.instaSaved,
+        gate2Rejected: result.gate2Rejected,
+        errors: result.errors,
+      });
+    } catch (error) {
+      console.error("Error running mcp3:", error);
+      res.status(500).json({
+        success: false,
+        stage: "mcp3",
+        error: "Failed to run mcp3",
+        details: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
   // MCP 상태 조회: 프론트 전달용
   app.get("/api/admin/mcp-raw/status", async (req, res) => {
     try {

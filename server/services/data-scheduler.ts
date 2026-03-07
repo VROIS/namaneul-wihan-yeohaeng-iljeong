@@ -25,6 +25,7 @@ export class DataScheduler {
     "crisis_sync",          // 프론트 연결 전까지 자동 중지 (수동 실행만)
     "place_seed_sync",      // MCP 전환 전 자동 중지 (수동 실행만)
     "mcp_raw_stage1",       // Stage 1 미션 완료 (5,250건 수집됨)
+    "mcp3_content",         // MCP3 숏폼/콘텐츠 수집 — 수동 실행 전용
     "youtube_sync",         // YouTube API
     "instagram_sync",       // Meta/인스타
     "naver_blog_sync",      // 블로그 크롤러
