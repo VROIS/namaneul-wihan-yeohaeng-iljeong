@@ -121,7 +121,7 @@ export class DataScheduler {
       this.executeTask("mcp3_content").catch((e) =>
         console.error("[Scheduler] MCP3 콘텐츠 수집 실패:", e)
       );
-    }, 300000); // 5분 후 (MCP 워크플로우와 겹치지 않게)
+    }, 180000); // 3분 후 (DB·마이그레이션 준비 대기)
   }
 
   private scheduleTaskIfNotPaused(taskName: string, cronExpression: string): void {
