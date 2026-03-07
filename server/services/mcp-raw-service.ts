@@ -1105,10 +1105,11 @@ async function searchContentForPlace(
     try {
       return await mcp.googleSearch(query, { num: 5 });
     } catch (err: any) {
-      if (err?.code === "EPIPE" || err?.message?.includes("EPIPE") || err?.message?.includes("MCP exited")) {
-        console.warn(`[MCP3] EPIPE 감지 — MCP 리셋 후 재시도 (${placeName})`);
+      const msg = err?.message || "";
+      if (err?.code === "EPIPE" || msg.includes("EPIPE") || msg.includes("MCP exited") || msg.includes("timeout")) {
+        console.warn(`[MCP3] MCP 에러 (${msg.slice(0, 40)}) — 리셋 후 재시도 (${placeName})`);
         resetMcpClient();
-        await new Promise((r) => setTimeout(r, 3000));
+        await new Promise((r) => setTimeout(r, 5000));
         mcp = await getMcpClient();
         return await mcp.googleSearch(query, { num: 5 });
       }
@@ -1348,10 +1349,10 @@ export async function runMcp3Content(options: Mcp3RunOptions = {}): Promise<{
           errors.push(`${city.nameEn}/${category}: ${result.error}`);
         }
 
-        // 50건마다 MCP 프로세스 리셋 (메모리 관리)
-        if (totalSearched > 0 && totalSearched % 50 === 0) {
+        // 10건마다 MCP 프로세스 리셋 (Chromium 메모리 누수 방지)
+        if (totalSearched > 0 && totalSearched % 10 === 0) {
           resetMcpClient();
-          await new Promise((r) => setTimeout(r, 2000));
+          await new Promise((r) => setTimeout(r, 3000));
         }
       } catch (err: any) {
         errors.push(`${city.nameEn}/${category}: ${err?.message}`);
