@@ -4301,7 +4301,7 @@ export function registerAdminRoutes(app: Express) {
   app.get("/api/admin/mcp3/progress", async (req, res) => {
     try {
       if (!db) return res.json({ error: "DB 없음" });
-      const [row] = await db.execute(sql`
+      const result = await db.execute(sql`
         SELECT
           COUNT(*) FILTER (WHERE tiktok_post_url IS NOT NULL) as tiktok_count,
           COUNT(*) FILTER (WHERE instagram_post_url LIKE '%/reel/%') as reel_count,
@@ -4310,6 +4310,7 @@ export function registerAdminRoutes(app: Express) {
           COUNT(*) as total
         FROM place_seed_raw
       `);
+      const row = result.rows?.[0] ?? result[0] ?? {};
       res.json({ success: true, ...row });
     } catch (e: any) {
       res.status(500).json({ error: e?.message });
