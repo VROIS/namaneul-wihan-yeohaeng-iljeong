@@ -54,27 +54,31 @@ export async function runStartupMigrations(): Promise<void> {
     `);
     console.log("[Migration] ✅ 0009 place_seed_raw.google_place_id 적용 완료");
 
-    // 0010: user_providers (동일인 통합: provider 1순위, birth_date 2순위)
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS "user_providers" (
-        "id" serial PRIMARY KEY NOT NULL,
-        "user_id" varchar NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
-        "provider" text NOT NULL,
-        "provider_id" text NOT NULL,
-        "created_at" timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
-        CONSTRAINT "user_providers_provider_provider_id_unique" UNIQUE("provider", "provider_id")
-      );
-    `);
-    await pool.query(`CREATE INDEX IF NOT EXISTS "user_providers_user_id_idx" ON "user_providers"("user_id");`);
-    await pool.query(`CREATE INDEX IF NOT EXISTS "user_providers_provider_provider_id_idx" ON "user_providers"("provider", "provider_id");`);
-    await pool.query(`
-      INSERT INTO "user_providers" ("user_id", "provider", "provider_id")
-      SELECT "id", "provider", "provider_id"
-      FROM "users"
-      WHERE "provider" IS NOT NULL AND "provider_id" IS NOT NULL
-      ON CONFLICT ("provider", "provider_id") DO NOTHING;
-    `);
-    console.log("[Migration] ✅ 0010 user_providers 적용 완료");
+    // 0010: user_providers (동일인 통합) — 별도 try-catch (실패해도 이후 migration 계속)
+    try {
+      await pool.query(`
+        CREATE TABLE IF NOT EXISTS "user_providers" (
+          "id" serial PRIMARY KEY NOT NULL,
+          "user_id" varchar NOT NULL REFERENCES "users"("id") ON DELETE CASCADE,
+          "provider" text NOT NULL,
+          "provider_id" text NOT NULL,
+          "created_at" timestamp DEFAULT CURRENT_TIMESTAMP NOT NULL,
+          CONSTRAINT "user_providers_provider_provider_id_unique" UNIQUE("provider", "provider_id")
+        );
+      `);
+      await pool.query(`CREATE INDEX IF NOT EXISTS "user_providers_user_id_idx" ON "user_providers"("user_id");`);
+      await pool.query(`CREATE INDEX IF NOT EXISTS "user_providers_provider_provider_id_idx" ON "user_providers"("provider", "provider_id");`);
+      await pool.query(`
+        INSERT INTO "user_providers" ("user_id", "provider", "provider_id")
+        SELECT "id", "provider", "provider_id"
+        FROM "users"
+        WHERE "provider" IS NOT NULL AND "provider_id" IS NOT NULL
+        ON CONFLICT ("provider", "provider_id") DO NOTHING;
+      `);
+      console.log("[Migration] ✅ 0010 user_providers 적용 완료");
+    } catch (e010) {
+      console.warn("[Migration] 0010 user_providers 스킵:", (e010 as Error).message);
+    }
     // 0011: 다국어 장소명
     await pool.query("ALTER TABLE place_seed_raw ADD COLUMN IF NOT EXISTS name_local text, ADD COLUMN IF NOT EXISTS names_i18n jsonb; ALTER TABLE places ADD COLUMN IF NOT EXISTS name_local text, ADD COLUMN IF NOT EXISTS names_i18n jsonb;");
     console.log("[Migration] 0011 name_local/names_i18n 적용 완료");
