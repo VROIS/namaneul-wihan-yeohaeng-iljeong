@@ -4297,6 +4297,25 @@ export function registerAdminRoutes(app: Express) {
     }
   });
 
+  // MCP3 수집 현황 조회
+  app.get("/api/admin/mcp3/progress", async (req, res) => {
+    try {
+      if (!db) return res.json({ error: "DB 없음" });
+      const [row] = await db.execute(sql`
+        SELECT
+          COUNT(*) FILTER (WHERE tiktok_post_url IS NOT NULL) as tiktok_count,
+          COUNT(*) FILTER (WHERE instagram_post_url LIKE '%/reel/%') as reel_count,
+          COUNT(*) FILTER (WHERE instagram_post_url LIKE '%/p/%') as post_count,
+          COUNT(*) FILTER (WHERE instagram_post_url IS NOT NULL) as insta_total,
+          COUNT(*) as total
+        FROM place_seed_raw
+      `);
+      res.json({ success: true, ...row });
+    } catch (e: any) {
+      res.status(500).json({ error: e?.message });
+    }
+  });
+
   // MCP 워크플로우 시작 (도시/카테고리 완전 순차)
   app.post("/api/admin/mcp/workflow/start", async (req, res) => {
     try {
