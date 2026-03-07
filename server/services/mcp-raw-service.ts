@@ -1101,10 +1101,25 @@ async function searchContentForPlace(
     tiktokUrl: null, instagramUrl: null, instagramType: null, gate2Rejected: 0,
   };
 
+  const doSearch = async (query: string): Promise<string> => {
+    try {
+      return await mcp.googleSearch(query, { num: 5 });
+    } catch (err: any) {
+      if (err?.code === "EPIPE" || err?.message?.includes("EPIPE") || err?.message?.includes("MCP exited")) {
+        console.warn(`[MCP3] EPIPE 감지 — MCP 리셋 후 재시도 (${placeName})`);
+        resetMcpClient();
+        await new Promise((r) => setTimeout(r, 3000));
+        mcp = await getMcpClient();
+        return await mcp.googleSearch(query, { num: 5 });
+      }
+      throw err;
+    }
+  };
+
   try {
     // 1순위: TikTok 검색
     const tiktokQuery = `"${placeName}" ${cityName} site:tiktok.com`;
-    const tiktokResult = await mcp.googleSearch(tiktokQuery, { num: 5 });
+    const tiktokResult = await doSearch(tiktokQuery);
     const tiktokUrls = extractContentUrls(tiktokResult); // Gate 1
     if (tiktokUrls.tiktokUrl) {
       if (await validateContentUrl(tiktokUrls.tiktokUrl)) { // Gate 2
@@ -1118,7 +1133,7 @@ async function searchContentForPlace(
 
     // 2순위: Instagram 릴스 검색
     const reelQuery = `"${placeName}" ${cityName} site:instagram.com reel OR reels`;
-    const reelResult = await mcp.googleSearch(reelQuery, { num: 5 });
+    const reelResult = await doSearch(reelQuery);
     const reelUrls = extractContentUrls(reelResult); // Gate 1
     if (reelUrls.instagramUrl) {
       if (await validateContentUrl(reelUrls.instagramUrl)) { // Gate 2
@@ -1132,7 +1147,7 @@ async function searchContentForPlace(
     // 3순위: 릴스 못 찾으면 인스타 이미지 (인물/사람 포함 사진)
     if (!merged.instagramUrl) {
       const imgQuery = `"${placeName}" ${cityName} site:instagram.com food OR travel OR people`;
-      const imgResult = await mcp.googleSearch(imgQuery, { num: 5 });
+      const imgResult = await doSearch(imgQuery);
       const imgUrls = extractContentUrls(imgResult); // Gate 1
       if (imgUrls.instagramUrl) {
         if (await validateContentUrl(imgUrls.instagramUrl)) { // Gate 2
@@ -1147,7 +1162,7 @@ async function searchContentForPlace(
     // 4순위: 그래도 없으면 일반 게시글
     if (!merged.instagramUrl) {
       const postQuery = `"${placeName}" ${cityName} site:instagram.com`;
-      const postResult = await mcp.googleSearch(postQuery, { num: 5 });
+      const postResult = await doSearch(postQuery);
       const postUrls = extractContentUrls(postResult); // Gate 1
       if (postUrls.instagramUrl) {
         if (await validateContentUrl(postUrls.instagramUrl)) { // Gate 2
@@ -1214,13 +1229,23 @@ async function runMcp3ForCityCategory(
 
     console.log(`[MCP3] ${city.nameEn}/${category} 배치 ${batchNum}/${totalBatches} (${batch.length}곳)`);
 
+    let consecutiveFails = 0;
     for (const row of batch) {
       const placeName = row.nameEn || row.nameKo;
       if (!placeName) continue;
 
+      // 연속 실패 3회 → 배치 중단 (MCP 프로세스 불안정)
+      if (consecutiveFails >= 3) {
+        console.warn(`[MCP3] ${city.nameEn}/${category} 연속 ${consecutiveFails}회 실패 — 배치 스킵`);
+        resetMcpClient();
+        await new Promise((r) => setTimeout(r, 5000));
+        break;
+      }
+
       try {
         const content = await searchContentForPlace(mcp, placeName, city.nameEn);
         gate2Rejected += content.gate2Rejected;
+        consecutiveFails = 0; // 성공 시 리셋
 
         const updates: Record<string, any> = {};
 
@@ -1249,8 +1274,9 @@ async function runMcp3ForCityCategory(
         console.log(
           `[MCP3] ${placeName} | TT:${content.tiktokUrl ? "O" : "X"} IG:${content.instagramType || "X"}${g2}`
         );
-      } catch {
-        // 개별 장소 실패 무시
+      } catch (err: any) {
+        consecutiveFails++;
+        console.warn(`[MCP3] ${placeName} 실패 (${consecutiveFails}/3): ${err?.message?.slice(0, 60)}`);
       }
     }
 
@@ -1299,7 +1325,17 @@ export async function runMcp3Content(options: Mcp3RunOptions = {}): Promise<{
 
   console.log(`[MCP3] 시작: ${targetCities.length}개 도시 x ${targetCategories.length}개 카테고리 (10곳씩 배치)`);
 
+  let cityConsecutiveFails = 0;
   for (const city of targetCities) {
+    // 도시 연속 실패 5회 → MCP 리셋 후 계속 (중단하지 않음)
+    if (cityConsecutiveFails >= 5) {
+      console.warn(`[MCP3] 도시 연속 ${cityConsecutiveFails}회 실패 — MCP 리셋 후 계속`);
+      resetMcpClient();
+      await new Promise((r) => setTimeout(r, 10000));
+      cityConsecutiveFails = 0;
+    }
+
+    let cityFailed = false;
     for (const category of targetCategories) {
       try {
         const result = await runMcp3ForCityCategory(city, category, overwrite);
@@ -1319,8 +1355,11 @@ export async function runMcp3Content(options: Mcp3RunOptions = {}): Promise<{
         }
       } catch (err: any) {
         errors.push(`${city.nameEn}/${category}: ${err?.message}`);
+        cityFailed = true;
       }
     }
+
+    cityConsecutiveFails = cityFailed ? cityConsecutiveFails + 1 : 0;
 
     console.log(
       `[MCP3] ${city.nameEn} 완료 | 누적: TT=${tiktokSaved} IG=${instaSaved} G2reject=${gate2Rejected} / ${totalSearched}건`
