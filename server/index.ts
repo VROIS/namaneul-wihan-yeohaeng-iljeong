@@ -7,6 +7,14 @@ import * as path from "path";
 import { db, isDatabaseConnected } from "./db";
 import { apiKeys } from "../shared/schema";
 
+// 서버 크래시 방지: MCP/백그라운드 작업의 unhandled 에러가 프로세스를 죽이지 않도록
+process.on("uncaughtException", (err) => {
+  console.error("[FATAL] uncaughtException (서버 유지):", err?.message || err);
+});
+process.on("unhandledRejection", (reason) => {
+  console.error("[FATAL] unhandledRejection (서버 유지):", (reason as Error)?.message || reason);
+});
+
 const app = express();
 const log = console.log;
 

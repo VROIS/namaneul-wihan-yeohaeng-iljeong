@@ -40,11 +40,10 @@ export class McpClient {
       this.proc = null;
     });
     this.proc.on("exit", (code) => {
-      if (code !== 0 && code !== null) {
-        console.warn(`[MCP] 프로세스 종료: code=${code}`);
-        for (const [, { reject }] of this.pending) reject(new Error(`MCP exited: ${code}`));
-        this.pending.clear();
-      }
+      console.warn(`[MCP] 프로세스 종료: code=${code}`);
+      const err = new Error(`MCP exited: ${code}`);
+      for (const [, { reject }] of this.pending) reject(err);
+      this.pending.clear();
       this.proc = null;
     });
     await this.initialize();
