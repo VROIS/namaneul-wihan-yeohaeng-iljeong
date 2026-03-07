@@ -31,12 +31,17 @@ export class McpClient {
       env: MCP_ENV,
     });
     this.proc.stdout?.on("data", (chunk) => this.onData(chunk));
+    // EPIPE 방지: stdin 에러 무시 (프로세스 종료 시 발생)
+    this.proc.stdin?.on("error", () => {});
     this.proc.on("error", (err) => {
+      console.warn(`[MCP] 프로세스 에러: ${err.message}`);
       for (const [, { reject }] of this.pending) reject(err);
       this.pending.clear();
+      this.proc = null;
     });
     this.proc.on("exit", (code) => {
       if (code !== 0 && code !== null) {
+        console.warn(`[MCP] 프로세스 종료: code=${code}`);
         for (const [, { reject }] of this.pending) reject(new Error(`MCP exited: ${code}`));
         this.pending.clear();
       }
@@ -97,7 +102,11 @@ export class McpClient {
   }
 
   async callTool(name: string, args: Record<string, unknown> = {}): Promise<CallToolResult> {
-    if (!this.proc) await this.connect();
+    // 프로세스 죽었으면 자동 재연결
+    if (!this.proc) {
+      this.pending.clear();
+      await this.connect();
+    }
     const id = ++this.reqId;
     const result = await Promise.race([
       this.send({
@@ -109,7 +118,15 @@ export class McpClient {
       new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error("MCP callTool timeout (120s)")), 120000)
       ),
-    ]);
+    ]).catch((err) => {
+      // EPIPE/프로세스 죽음 → 프로세스 정리 후 에러 전파
+      if (err?.code === "EPIPE" || err?.message?.includes("EPIPE")) {
+        this.proc?.kill();
+        this.proc = null;
+        this.pending.clear();
+      }
+      throw err;
+    });
     if (result?.content) return { content: result.content, isError: result.isError };
     return { content: [{ type: "text", text: JSON.stringify(result) }] };
   }
