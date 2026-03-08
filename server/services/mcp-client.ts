@@ -115,7 +115,7 @@ export class McpClient {
         params: { name, arguments: args },
       }),
       new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error("MCP callTool timeout (30s)")), 30000)
+        setTimeout(() => reject(new Error("MCP callTool timeout (60s)")), 60000)
       ),
     ]).catch((err) => {
       // 타임아웃 또는 EPIPE → 프로세스 정리 (멈춘 Chromium 강제 종료)
