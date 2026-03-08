@@ -4297,15 +4297,13 @@ export function registerAdminRoutes(app: Express) {
     }
   });
 
-  // MCP3 디버그: 1곳만 검색해서 결과 텍스트 반환
+  // MCP3 디버그: fetch-lite로 Google 검색 테스트
   app.get("/api/admin/mcp3/debug-search", async (req, res) => {
     try {
-      const { getMcpClient, resetMcpClient } = await import("./services/mcp-client");
+      const { googleSearchLite } = await import("./services/google-search-lite");
       const q = String(req.query.q || '"Goyang Starfield" site:tiktok.com');
-      const mcp = await getMcpClient();
-      const result = await mcp.googleSearch(q, { num: 5 });
-      resetMcpClient();
-      res.json({ success: true, query: q, resultLength: result.length, result: result.slice(0, 2000) });
+      const result = await googleSearchLite(q, 5);
+      res.json({ success: true, query: q, resultLength: result.length, result: result.slice(0, 3000) });
     } catch (e: any) {
       res.status(500).json({ error: e?.message });
     }

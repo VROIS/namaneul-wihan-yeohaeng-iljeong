@@ -3,6 +3,7 @@ import { cities, placeSeedRaw, placeNubiReasons, celebEvidence, places, dataSync
 import { and, eq, gt, sql, asc, isNotNull } from "drizzle-orm";
 import { getMcpExecutionOrder, getMcpCitySourceMeta } from "../config/mcp-raw-data-final";
 import { getMcpClient, resetMcpClient } from "./mcp-client";
+import { googleSearchLite } from "./google-search-lite";
 
 const USE_MCP_RAW = process.env.USE_MCP_RAW === "true";
 
@@ -1201,53 +1202,44 @@ async function runMcp3ForCityCategory(
     return { success: true, searched: 0, tiktokSaved: 0, instaSaved: 0, gate2Rejected: 0 };
   }
 
-  if (!USE_MCP_RAW) {
-    return { success: false, searched: 0, tiktokSaved: 0, instaSaved: 0, gate2Rejected: 0, error: "USE_MCP_RAW=true 필요" };
-  }
-
-  const mcp = await getMcpClient();
   let tiktokSaved = 0, instaSaved = 0, gate2Rejected = 0;
   const places = allRows.filter((r) => r.nameEn).map((r) => ({ id: r.id, nameEn: r.nameEn! }));
 
-  console.log(`[MCP3] ${city.nameEn}/${category} ${places.length}곳 OR 묶음 검색`);
+  console.log(`[MCP3] ${city.nameEn}/${category} ${places.length}곳 OR 묶음 검색 (fetch-lite)`);
 
-  // 검색 결과 모으기
+  // 검색 결과 모으기 (Chromium 없이 fetch로 Google 검색)
   let allSearchText = "";
 
   try {
     // 검색 1: TikTok
     const ttQueries = buildOrQueries(places, "site:tiktok.com");
     for (const q of ttQueries) {
-      console.log(`[MCP3-dbg] TikTok query (${q.length}자): ${q.slice(0, 120)}...`);
-      const result = await mcp.googleSearch(q, { num: 10 });
-      console.log(`[MCP3-dbg] TikTok result (${result.length}자): ${result.slice(0, 300)}`);
+      console.log(`[MCP3] TikTok query (${q.length}자)`);
+      const result = await googleSearchLite(q, 10);
+      console.log(`[MCP3] TikTok result (${result.length}자): ${result.slice(0, 200)}`);
       allSearchText += "\n" + result;
     }
 
     // 검색 2: Instagram 릴스
     const reelQueries = buildOrQueries(places, "site:instagram.com reel");
     for (const q of reelQueries) {
-      console.log(`[MCP3-dbg] Reel query (${q.length}자): ${q.slice(0, 120)}...`);
-      const result = await mcp.googleSearch(q, { num: 10 });
-      console.log(`[MCP3-dbg] Reel result (${result.length}자): ${result.slice(0, 300)}`);
+      console.log(`[MCP3] Reel query (${q.length}자)`);
+      const result = await googleSearchLite(q, 10);
+      console.log(`[MCP3] Reel result (${result.length}자): ${result.slice(0, 200)}`);
       allSearchText += "\n" + result;
     }
 
     // 검색 3: Instagram 이미지 (인물 포함)
     const imgQueries = buildOrQueries(places, "site:instagram.com food OR travel OR people");
     for (const q of imgQueries) {
-      console.log(`[MCP3-dbg] Img query (${q.length}자): ${q.slice(0, 120)}...`);
-      const result = await mcp.googleSearch(q, { num: 10 });
-      console.log(`[MCP3-dbg] Img result (${result.length}자): ${result.slice(0, 300)}`);
+      console.log(`[MCP3] Img query (${q.length}자)`);
+      const result = await googleSearchLite(q, 10);
+      console.log(`[MCP3] Img result (${result.length}자): ${result.slice(0, 200)}`);
       allSearchText += "\n" + result;
     }
   } catch (err: any) {
     const msg = err?.message || "";
-    console.warn(`[MCP3] ${city.nameEn}/${category} 검색 실패: ${msg.slice(0, 60)}`);
-    if (msg.includes("EPIPE") || msg.includes("timeout") || msg.includes("MCP exited")) {
-      resetMcpClient();
-      await new Promise((r) => setTimeout(r, 3000));
-    }
+    console.warn(`[MCP3] ${city.nameEn}/${category} 검색 실패: ${msg.slice(0, 100)}`);
     return { success: false, searched: places.length, tiktokSaved: 0, instaSaved: 0, gate2Rejected: 0, error: msg.slice(0, 100) };
   }
 
@@ -1348,9 +1340,8 @@ export async function runMcp3Content(options: Mcp3RunOptions = {}): Promise<{
         errors.push(`${city.nameEn}/${category}: ${err?.message}`);
       }
 
-      // 매 카테고리 끝날 때마다 Chromium 죽임 (512MB 한계)
-      resetMcpClient();
-      await new Promise((r) => setTimeout(r, 3000));
+      // Google rate limit 방지 (fetch-lite는 메모리 문제 없음)
+      await new Promise((r) => setTimeout(r, 2000));
     }
 
     console.log(
