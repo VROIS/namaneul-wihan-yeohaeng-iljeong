@@ -1218,21 +1218,27 @@ async function runMcp3ForCityCategory(
     // 검색 1: TikTok
     const ttQueries = buildOrQueries(places, "site:tiktok.com");
     for (const q of ttQueries) {
+      console.log(`[MCP3-dbg] TikTok query (${q.length}자): ${q.slice(0, 120)}...`);
       const result = await mcp.googleSearch(q, { num: 10 });
+      console.log(`[MCP3-dbg] TikTok result (${result.length}자): ${result.slice(0, 300)}`);
       allSearchText += "\n" + result;
     }
 
     // 검색 2: Instagram 릴스
     const reelQueries = buildOrQueries(places, "site:instagram.com reel");
     for (const q of reelQueries) {
+      console.log(`[MCP3-dbg] Reel query (${q.length}자): ${q.slice(0, 120)}...`);
       const result = await mcp.googleSearch(q, { num: 10 });
+      console.log(`[MCP3-dbg] Reel result (${result.length}자): ${result.slice(0, 300)}`);
       allSearchText += "\n" + result;
     }
 
     // 검색 3: Instagram 이미지 (인물 포함)
     const imgQueries = buildOrQueries(places, "site:instagram.com food OR travel OR people");
     for (const q of imgQueries) {
+      console.log(`[MCP3-dbg] Img query (${q.length}자): ${q.slice(0, 120)}...`);
       const result = await mcp.googleSearch(q, { num: 10 });
+      console.log(`[MCP3-dbg] Img result (${result.length}자): ${result.slice(0, 300)}`);
       allSearchText += "\n" + result;
     }
   } catch (err: any) {
@@ -1246,6 +1252,13 @@ async function runMcp3ForCityCategory(
   }
 
   // Gate 1: URL 추출 + 장소 매칭
+  const tiktokUrls = allSearchText.match(/https?:\/\/(?:www\.)?tiktok\.com\/@[^/\s]+\/video\/\d+/gi) || [];
+  const reelUrls = allSearchText.match(/https?:\/\/(?:www\.)?instagram\.com\/(?:[^/\s]+\/)?reel\/[A-Za-z0-9_-]+\/?/gi) || [];
+  const postUrls = allSearchText.match(/https?:\/\/(?:www\.)?instagram\.com\/(?:[^/\s]+\/)?p\/[A-Za-z0-9_-]+\/?/gi) || [];
+  console.log(`[MCP3-dbg] URL발견: TT=${tiktokUrls.length} Reel=${reelUrls.length} Post=${postUrls.length} | searchText=${allSearchText.length}자`);
+  if (tiktokUrls.length === 0 && reelUrls.length === 0 && postUrls.length === 0) {
+    console.log(`[MCP3-dbg] searchText 전문(앞500자): ${allSearchText.slice(0, 500)}`);
+  }
   const matched = extractAllContentUrls(allSearchText, places);
 
   // Gate 2 + Gate 3 + DB 저장
