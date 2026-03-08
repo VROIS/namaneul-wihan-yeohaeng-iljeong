@@ -26,7 +26,7 @@ export class DataScheduler {
     "place_seed_sync",      // MCP 전환 전 자동 중지 (수동 실행만)
     "mcp_raw_stage1",       // Stage 1 미션 완료 (5,250건 수집됨)
     "mcp_workflow_france_phase1", // MCP3로 대체됨 — 동시 실행 시 EPIPE 충돌
-    // mcp3_content — 활성화 (fetch-lite, Chromium 불필요)
+    "mcp3_content",         // Google 429 rate limit 대응 후 활성화
     "youtube_sync",         // YouTube API
     "instagram_sync",       // Meta/인스타
     "naver_blog_sync",      // 블로그 크롤러

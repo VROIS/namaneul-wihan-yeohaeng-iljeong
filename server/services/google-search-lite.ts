@@ -42,38 +42,61 @@ export interface SearchResult {
  * @returns 검색 결과 텍스트 (MCP googleSearch 호환 형식)
  */
 export async function googleSearchLite(query: string, num: number = 10): Promise<string> {
-  const encoded = encodeURIComponent(query);
-  const url = `https://www.google.com/search?q=${encoded}&hl=en&num=${num + 5}`;
+  const MAX_RETRIES = 3;
 
-  const response = await fetch(url, {
-    headers: {
-      "User-Agent": randomUA(),
-      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      "Accept-Language": "en-US,en;q=0.9",
-      "Accept-Encoding": "gzip, deflate",
-      "Connection": "keep-alive",
-    },
-    redirect: "follow",
-    signal: AbortSignal.timeout(15000),
-  });
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    // 요청 전 랜덤 지연 (rate limit 방지: 1~3초)
+    if (attempt > 0) {
+      const backoff = (2 ** attempt) * 1000 + Math.random() * 2000;
+      console.log(`[SearchLite] 429 재시도 ${attempt}/${MAX_RETRIES} (${Math.round(backoff / 1000)}초 대기)`);
+      await new Promise((r) => setTimeout(r, backoff));
+    }
 
-  if (!response.ok) {
-    throw new Error(`Google search HTTP ${response.status}: ${response.statusText}`);
+    const encoded = encodeURIComponent(query);
+    const url = `https://www.google.com/search?q=${encoded}&hl=en&num=${num + 5}`;
+
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": randomUA(),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        "Accept-Encoding": "gzip, deflate",
+        "Connection": "keep-alive",
+      },
+      redirect: "follow",
+      signal: AbortSignal.timeout(15000),
+    });
+
+    if (response.status === 429) {
+      if (attempt < MAX_RETRIES - 1) continue;
+      throw new Error("Google 429 rate limit (3회 재시도 실패)");
+    }
+
+    if (!response.ok) {
+      throw new Error(`Google search HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const html = await response.text();
+
+    // CAPTCHA 감지
+    if (html.includes("unusual traffic") || html.includes("captcha")) {
+      if (attempt < MAX_RETRIES - 1) continue;
+      throw new Error("Google CAPTCHA 감지 (3회 재시도 실패)");
+    }
+
+    const results = parseGoogleResults(html);
+
+    if (results.length === 0) {
+      return extractUrlsFromHtml(html);
+    }
+
+    return results
+      .slice(0, num)
+      .map((r, i) => `${i + 1}. ${r.title}\n   URL: ${r.url}\n   ${r.snippet}`)
+      .join("\n\n");
   }
 
-  const html = await response.text();
-  const results = parseGoogleResults(html);
-
-  if (results.length === 0) {
-    // Fallback: 원시 HTML에서 URL만 추출
-    return extractUrlsFromHtml(html);
-  }
-
-  // MCP googleSearch 호환 형식으로 반환
-  return results
-    .slice(0, num)
-    .map((r, i) => `${i + 1}. ${r.title}\n   URL: ${r.url}\n   ${r.snippet}`)
-    .join("\n\n");
+  throw new Error("Google search 최대 재시도 초과");
 }
 
 /** Google 검색 결과 HTML 파싱 */

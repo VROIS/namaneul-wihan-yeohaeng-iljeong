@@ -1212,12 +1212,15 @@ async function runMcp3ForCityCategory(
 
   try {
     // 검색 1: TikTok
+    const searchDelay = () => new Promise((r) => setTimeout(r, 2000 + Math.random() * 3000));
+
     const ttQueries = buildOrQueries(places, "site:tiktok.com");
     for (const q of ttQueries) {
       console.log(`[MCP3] TikTok query (${q.length}자)`);
       const result = await googleSearchLite(q, 10);
       console.log(`[MCP3] TikTok result (${result.length}자): ${result.slice(0, 200)}`);
       allSearchText += "\n" + result;
+      await searchDelay();
     }
 
     // 검색 2: Instagram 릴스
@@ -1227,6 +1230,7 @@ async function runMcp3ForCityCategory(
       const result = await googleSearchLite(q, 10);
       console.log(`[MCP3] Reel result (${result.length}자): ${result.slice(0, 200)}`);
       allSearchText += "\n" + result;
+      await searchDelay();
     }
 
     // 검색 3: Instagram 이미지 (인물 포함)
@@ -1236,6 +1240,7 @@ async function runMcp3ForCityCategory(
       const result = await googleSearchLite(q, 10);
       console.log(`[MCP3] Img result (${result.length}자): ${result.slice(0, 200)}`);
       allSearchText += "\n" + result;
+      if (imgQueries.length > 1) await searchDelay();
     }
   } catch (err: any) {
     const msg = err?.message || "";
@@ -1340,8 +1345,8 @@ export async function runMcp3Content(options: Mcp3RunOptions = {}): Promise<{
         errors.push(`${city.nameEn}/${category}: ${err?.message}`);
       }
 
-      // Google rate limit 방지 (fetch-lite는 메모리 문제 없음)
-      await new Promise((r) => setTimeout(r, 2000));
+      // Google rate limit 방지 (3~7초 랜덤 지연)
+      await new Promise((r) => setTimeout(r, 3000 + Math.random() * 4000));
     }
 
     console.log(
