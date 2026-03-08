@@ -26,7 +26,8 @@ import {
   weatherForecast,
   apiKeys,
   celebrityPlaceEvidence,
-  celebEvidence
+  celebEvidence,
+  placeSeedRaw
 } from "../shared/schema";
 import { instagramCrawler } from "./services/instagram-crawler";
 import { eq, desc, sql, count, and, gte } from "drizzle-orm";
@@ -4344,6 +4345,67 @@ export function registerAdminRoutes(app: Express) {
       `);
       const row = result.rows?.[0] ?? result[0] ?? {};
       res.json({ success: true, ...row });
+    } catch (e: any) {
+      res.status(500).json({ error: e?.message });
+    }
+  });
+
+  // MCP3 장소 목록 조회 (Claude WebSearch Agent용)
+  app.get("/api/admin/mcp3/places", async (req, res) => {
+    try {
+      if (!db) return res.status(503).json({ error: "DB 없음" });
+      const cityId = Number(req.query.cityId);
+      const category = req.query.category as string | undefined;
+      if (!cityId) return res.status(400).json({ error: "cityId 필수" });
+
+      // 도시명 조회
+      const cityRow = await db.select({ nameEn: cities.nameEn }).from(cities).where(eq(cities.id, cityId)).limit(1);
+      const cityNameEn = cityRow[0]?.nameEn || "Unknown";
+
+      // 카테고리 필터
+      const categories = category
+        ? [category]
+        : ["attraction", "restaurant", "healing", "adventure", "hotspot"];
+
+      const result: Record<string, any[]> = {};
+      for (const cat of categories) {
+        const rows = await db.select({
+          id: placeSeedRaw.id,
+          rank: placeSeedRaw.rank,
+          nameEn: placeSeedRaw.nameEn,
+          nameKo: placeSeedRaw.nameKo,
+        })
+        .from(placeSeedRaw)
+        .where(and(eq(placeSeedRaw.cityId, cityId), eq(placeSeedRaw.seedCategory, cat)))
+        .orderBy(placeSeedRaw.rank)
+        .limit(30);
+        result[cat] = rows;
+      }
+
+      res.json({ success: true, cityId, cityNameEn, categories: result });
+    } catch (e: any) {
+      res.status(500).json({ error: e?.message });
+    }
+  });
+
+  // MCP3 URL 벌크 저장 (Claude WebSearch Agent용 — 정제 완료된 URL 직접 저장)
+  app.post("/api/admin/mcp3/save-urls", async (req, res) => {
+    try {
+      if (!db) return res.status(503).json({ error: "DB 없음" });
+      const items = req.body?.items as Array<{ placeId: number; tiktokUrl?: string; instagramUrl?: string }>;
+      if (!items || !Array.isArray(items)) return res.status(400).json({ error: "items 배열 필수" });
+
+      let updated = 0;
+      for (const item of items) {
+        const updates: Record<string, any> = {};
+        if (item.tiktokUrl) updates.tiktokPostUrl = item.tiktokUrl;
+        if (item.instagramUrl) updates.instagramPostUrl = item.instagramUrl;
+        if (Object.keys(updates).length === 0) continue;
+        await db.update(placeSeedRaw).set(updates).where(eq(placeSeedRaw.id, item.placeId));
+        updated++;
+      }
+
+      res.json({ success: true, updated });
     } catch (e: any) {
       res.status(500).json({ error: e?.message });
     }
