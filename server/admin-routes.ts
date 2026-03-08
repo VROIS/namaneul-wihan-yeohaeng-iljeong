@@ -4300,8 +4300,28 @@ export function registerAdminRoutes(app: Express) {
   // MCP3 디버그: fetch-lite로 Google 검색 테스트
   app.get("/api/admin/mcp3/debug-search", async (req, res) => {
     try {
-      const { googleSearchLite } = await import("./services/google-search-lite");
       const q = String(req.query.q || '"Goyang Starfield" site:tiktok.com');
+      const raw = req.query.raw === "1";
+
+      if (raw) {
+        // 원시 HTML 반환 (디버깅용)
+        const encoded = encodeURIComponent(q);
+        const url = `https://www.google.com/search?q=${encoded}&hl=en&num=10`;
+        const resp = await fetch(url, {
+          headers: {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml",
+            "Accept-Language": "en-US,en;q=0.9",
+          },
+          redirect: "follow",
+          signal: AbortSignal.timeout(15000),
+        });
+        const html = await resp.text();
+        res.json({ success: true, query: q, status: resp.status, htmlLength: html.length, html: html.slice(0, 5000) });
+        return;
+      }
+
+      const { googleSearchLite } = await import("./services/google-search-lite");
       const result = await googleSearchLite(q, 5);
       res.json({ success: true, query: q, resultLength: result.length, result: result.slice(0, 3000) });
     } catch (e: any) {
