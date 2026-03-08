@@ -1091,122 +1091,109 @@ async function validateContentUrl(url: string): Promise<boolean> {
   }
 }
 
-/** 개별 장소 콘텐츠 검색 (Gate 1 + Gate 2 + Gate 3) */
-async function searchContentForPlace(
-  mcp: Awaited<ReturnType<typeof getMcpClient>>,
-  placeName: string,
-  cityName: string
-): Promise<Mcp3ContentResult & { gate2Rejected: number }> {
-  const merged: Mcp3ContentResult & { gate2Rejected: number } = {
-    tiktokUrl: null, instagramUrl: null, instagramType: null, gate2Rejected: 0,
-  };
-
-  const doSearch = async (query: string): Promise<string> => {
-    try {
-      return await mcp.googleSearch(query, { num: 5 });
-    } catch (err: any) {
-      const msg = err?.message || "";
-      if (err?.code === "EPIPE" || msg.includes("EPIPE") || msg.includes("MCP exited") || msg.includes("timeout")) {
-        console.warn(`[MCP3] MCP 에러 (${msg.slice(0, 40)}) — 리셋 후 재시도 (${placeName})`);
-        resetMcpClient();
-        await new Promise((r) => setTimeout(r, 5000));
-        mcp = await getMcpClient();
-        return await mcp.googleSearch(query, { num: 5 });
-      }
-      throw err;
-    }
-  };
-
-  try {
-    // 1순위: TikTok 검색
-    const tiktokQuery = `"${placeName}" ${cityName} site:tiktok.com`;
-    const tiktokResult = await doSearch(tiktokQuery);
-    const tiktokUrls = extractContentUrls(tiktokResult); // Gate 1
-    if (tiktokUrls.tiktokUrl) {
-      if (await validateContentUrl(tiktokUrls.tiktokUrl)) { // Gate 2
-        merged.tiktokUrl = tiktokUrls.tiktokUrl;
-      } else {
-        merged.gate2Rejected++;
-      }
-    }
-
-    await new Promise((r) => setTimeout(r, 300));
-
-    // 2순위: Instagram 릴스 검색
-    const reelQuery = `"${placeName}" ${cityName} site:instagram.com reel OR reels`;
-    const reelResult = await doSearch(reelQuery);
-    const reelUrls = extractContentUrls(reelResult); // Gate 1
-    if (reelUrls.instagramUrl) {
-      if (await validateContentUrl(reelUrls.instagramUrl)) { // Gate 2
-        merged.instagramUrl = reelUrls.instagramUrl;
-        merged.instagramType = reelUrls.instagramType; // Gate 3
-      } else {
-        merged.gate2Rejected++;
-      }
-    }
-
-    // 3순위: 릴스 못 찾으면 인스타 이미지 (인물/사람 포함 사진)
-    if (!merged.instagramUrl) {
-      const imgQuery = `"${placeName}" ${cityName} site:instagram.com food OR travel OR people`;
-      const imgResult = await doSearch(imgQuery);
-      const imgUrls = extractContentUrls(imgResult); // Gate 1
-      if (imgUrls.instagramUrl) {
-        if (await validateContentUrl(imgUrls.instagramUrl)) { // Gate 2
-          merged.instagramUrl = imgUrls.instagramUrl;
-          merged.instagramType = imgUrls.instagramType; // Gate 3
-        } else {
-          merged.gate2Rejected++;
-        }
-      }
-    }
-
-    // 4순위: 그래도 없으면 일반 게시글
-    if (!merged.instagramUrl) {
-      const postQuery = `"${placeName}" ${cityName} site:instagram.com`;
-      const postResult = await doSearch(postQuery);
-      const postUrls = extractContentUrls(postResult); // Gate 1
-      if (postUrls.instagramUrl) {
-        if (await validateContentUrl(postUrls.instagramUrl)) { // Gate 2
-          merged.instagramUrl = postUrls.instagramUrl;
-          merged.instagramType = postUrls.instagramType; // Gate 3
-        } else {
-          merged.gate2Rejected++;
-        }
-      }
-    }
-
-    await new Promise((r) => setTimeout(r, 300));
-  } catch (err: any) {
-    console.warn(`[MCP3] 검색 실패 ${placeName}: ${err?.message?.slice(0, 60)}`);
-  }
-
-  return merged;
+/** OR 묶음 쿼리 생성 — 30곳 name_en을 OR로 묶어 site: 접미사 추가 */
+function buildOrQueries(places: { nameEn: string }[], suffix: string): string[] {
+  const MAX_LEN = 2000;
+  const names = places.map((p) => `"${p.nameEn}"`);
+  const full = names.join(" OR ") + " " + suffix;
+  if (full.length <= MAX_LEN) return [full];
+  // 2분할
+  const mid = Math.ceil(names.length / 2);
+  return [
+    names.slice(0, mid).join(" OR ") + " " + suffix,
+    names.slice(mid).join(" OR ") + " " + suffix,
+  ];
 }
 
-/** 도시+카테고리 단위 MCP3 실행 (10곳씩 배치) */
+/** 검색 결과 텍스트에서 모든 유효 URL을 추출 (Gate 1) + 장소명 매칭 */
+function extractAllContentUrls(searchText: string, places: { id: number; nameEn: string }[]): Map<number, Mcp3ContentResult> {
+  const results = new Map<number, Mcp3ContentResult>();
+
+  // TikTok URL 전부 추출
+  const tiktokUrls = searchText.match(/https?:\/\/(?:www\.)?tiktok\.com\/@[^/\s]+\/video\/\d+/gi) || [];
+  // Instagram reel URL 전부 추출
+  const reelUrls = searchText.match(/https?:\/\/(?:www\.)?instagram\.com\/(?:[^/\s]+\/)?reel\/[A-Za-z0-9_-]+\/?/gi) || [];
+  // Instagram post URL 전부 추출
+  const postUrls = searchText.match(/https?:\/\/(?:www\.)?instagram\.com\/(?:[^/\s]+\/)?p\/[A-Za-z0-9_-]+\/?/gi) || [];
+
+  // 각 URL 주변 텍스트에서 장소명 매칭
+  for (const place of places) {
+    const nameLower = place.nameEn.toLowerCase();
+    // 장소명의 핵심 단어 (2글자 이상)
+    const keywords = place.nameEn.split(/\s+/).filter((w) => w.length >= 2).map((w) => w.toLowerCase());
+
+    const matchesPlace = (text: string): boolean => {
+      const textLower = text.toLowerCase();
+      if (textLower.includes(nameLower)) return true;
+      // 핵심 키워드 2개 이상 매칭
+      const matched = keywords.filter((kw) => textLower.includes(kw));
+      return matched.length >= 2 && matched.length >= keywords.length * 0.5;
+    };
+
+    if (results.has(place.id)) continue;
+    const entry: Mcp3ContentResult = { tiktokUrl: null, instagramUrl: null, instagramType: null };
+
+    // TikTok 매칭
+    for (const url of tiktokUrls) {
+      if (isRejectedUrl(url)) continue;
+      // URL 주변 100자 범위에서 장소명 찾기
+      const idx = searchText.indexOf(url);
+      const context = searchText.slice(Math.max(0, idx - 200), idx + url.length + 200);
+      if (matchesPlace(context)) {
+        entry.tiktokUrl = url;
+        break;
+      }
+    }
+
+    // Instagram 매칭 (릴스 우선)
+    for (const url of reelUrls) {
+      if (isRejectedUrl(url)) continue;
+      const idx = searchText.indexOf(url);
+      const context = searchText.slice(Math.max(0, idx - 200), idx + url.length + 200);
+      if (matchesPlace(context)) {
+        entry.instagramUrl = url;
+        entry.instagramType = "reel";
+        break;
+      }
+    }
+    if (!entry.instagramUrl) {
+      for (const url of postUrls) {
+        if (isRejectedUrl(url)) continue;
+        const idx = searchText.indexOf(url);
+        const context = searchText.slice(Math.max(0, idx - 200), idx + url.length + 200);
+        if (matchesPlace(context)) {
+          entry.instagramUrl = url;
+          entry.instagramType = "post";
+          break;
+        }
+      }
+    }
+
+    if (entry.tiktokUrl || entry.instagramUrl) {
+      results.set(place.id, entry);
+    }
+  }
+
+  return results;
+}
+
+/** v2: 도시+카테고리 단위 MCP3 — 30곳 OR 묶음 배치 검색 (검색 3회) */
 async function runMcp3ForCityCategory(
   city: TargetCity,
   category: SeedCategory,
-  overwrite: boolean
+  _overwrite: boolean
 ): Promise<{ success: boolean; searched: number; tiktokSaved: number; instaSaved: number; gate2Rejected: number; error?: string }> {
   if (!db) return { success: false, searched: 0, tiktokSaved: 0, instaSaved: 0, gate2Rejected: 0, error: "DB 연결 없음" };
 
-  // 콘텐츠 없는 장소만 대상 (overwrite면 전체), 최대 30곳
-  const conditions = [eq(placeSeedRaw.cityId, city.id), eq(placeSeedRaw.seedCategory, category)];
-  if (!overwrite) {
-    conditions.push(sql`(${placeSeedRaw.tiktokPostUrl} IS NULL OR ${placeSeedRaw.instagramPostUrl} IS NULL)`);
-  }
-
+  // 30곳 전부 추출 (URL 유무 상관없이)
   const allRows = await db
     .select({
       id: placeSeedRaw.id,
       nameEn: placeSeedRaw.nameEn,
       nameKo: placeSeedRaw.nameKo,
-      tiktokPostUrl: placeSeedRaw.tiktokPostUrl,
-      instagramPostUrl: placeSeedRaw.instagramPostUrl,
     })
     .from(placeSeedRaw)
-    .where(and(...conditions))
+    .where(and(eq(placeSeedRaw.cityId, city.id), eq(placeSeedRaw.seedCategory, category)))
     .orderBy(asc(placeSeedRaw.rank))
     .limit(30);
 
@@ -1220,74 +1207,80 @@ async function runMcp3ForCityCategory(
 
   const mcp = await getMcpClient();
   let tiktokSaved = 0, instaSaved = 0, gate2Rejected = 0;
-  const BATCH_SIZE = 10;
+  const places = allRows.filter((r) => r.nameEn).map((r) => ({ id: r.id, nameEn: r.nameEn! }));
 
-  // 10곳씩 배치 처리
-  for (let batchStart = 0; batchStart < allRows.length; batchStart += BATCH_SIZE) {
-    const batch = allRows.slice(batchStart, batchStart + BATCH_SIZE);
-    const batchNum = Math.floor(batchStart / BATCH_SIZE) + 1;
-    const totalBatches = Math.ceil(allRows.length / BATCH_SIZE);
+  console.log(`[MCP3] ${city.nameEn}/${category} ${places.length}곳 OR 묶음 검색`);
 
-    console.log(`[MCP3] ${city.nameEn}/${category} 배치 ${batchNum}/${totalBatches} (${batch.length}곳)`);
+  // 검색 결과 모으기
+  let allSearchText = "";
 
-    let consecutiveFails = 0;
-    for (const row of batch) {
-      const placeName = row.nameEn || row.nameKo;
-      if (!placeName) continue;
+  try {
+    // 검색 1: TikTok
+    const ttQueries = buildOrQueries(places, "site:tiktok.com");
+    for (const q of ttQueries) {
+      const result = await mcp.googleSearch(q, { num: 10 });
+      allSearchText += "\n" + result;
+    }
 
-      // 연속 실패 3회 → 배치 중단 (MCP 프로세스 불안정)
-      if (consecutiveFails >= 3) {
-        console.warn(`[MCP3] ${city.nameEn}/${category} 연속 ${consecutiveFails}회 실패 — 배치 스킵`);
-        resetMcpClient();
-        await new Promise((r) => setTimeout(r, 5000));
-        break;
-      }
+    // 검색 2: Instagram 릴스
+    const reelQueries = buildOrQueries(places, "site:instagram.com reel");
+    for (const q of reelQueries) {
+      const result = await mcp.googleSearch(q, { num: 10 });
+      allSearchText += "\n" + result;
+    }
 
-      try {
-        const content = await searchContentForPlace(mcp, placeName, city.nameEn);
-        gate2Rejected += content.gate2Rejected;
-        consecutiveFails = 0; // 성공 시 리셋
+    // 검색 3: Instagram 이미지 (인물 포함)
+    const imgQueries = buildOrQueries(places, "site:instagram.com food OR travel OR people");
+    for (const q of imgQueries) {
+      const result = await mcp.googleSearch(q, { num: 10 });
+      allSearchText += "\n" + result;
+    }
+  } catch (err: any) {
+    const msg = err?.message || "";
+    console.warn(`[MCP3] ${city.nameEn}/${category} 검색 실패: ${msg.slice(0, 60)}`);
+    if (msg.includes("EPIPE") || msg.includes("timeout") || msg.includes("MCP exited")) {
+      resetMcpClient();
+      await new Promise((r) => setTimeout(r, 3000));
+    }
+    return { success: false, searched: places.length, tiktokSaved: 0, instaSaved: 0, gate2Rejected: 0, error: msg.slice(0, 100) };
+  }
 
-        const updates: Record<string, any> = {};
+  // Gate 1: URL 추출 + 장소 매칭
+  const matched = extractAllContentUrls(allSearchText, places);
 
-        // TikTok: 없거나 overwrite일 때만
-        if (content.tiktokUrl && (!row.tiktokPostUrl || overwrite)) {
-          updates.tiktokPostUrl = content.tiktokUrl;
-          tiktokSaved++;
-        }
+  // Gate 2 + Gate 3 + DB 저장
+  for (const [placeId, content] of matched) {
+    const updates: Record<string, any> = {};
 
-        // Instagram: 릴스 > 기존 게시글 교체, 없으면 새로 저장
-        if (content.instagramUrl) {
-          const existingIsReel = row.instagramPostUrl?.includes("/reel/");
-          const newIsReel = content.instagramType === "reel";
-
-          if (!row.instagramPostUrl || overwrite || (newIsReel && !existingIsReel)) {
-            updates.instagramPostUrl = content.instagramUrl;
-            instaSaved++;
-          }
-        }
-
-        if (Object.keys(updates).length > 0) {
-          await db.update(placeSeedRaw).set(updates).where(eq(placeSeedRaw.id, row.id));
-        }
-
-        const g2 = content.gate2Rejected > 0 ? ` G2reject:${content.gate2Rejected}` : "";
-        console.log(
-          `[MCP3] ${placeName} | TT:${content.tiktokUrl ? "O" : "X"} IG:${content.instagramType || "X"}${g2}`
-        );
-      } catch (err: any) {
-        consecutiveFails++;
-        console.warn(`[MCP3] ${placeName} 실패 (${consecutiveFails}/3): ${err?.message?.slice(0, 60)}`);
+    if (content.tiktokUrl) {
+      if (await validateContentUrl(content.tiktokUrl)) {
+        updates.tiktokPostUrl = content.tiktokUrl;
+        tiktokSaved++;
+      } else {
+        gate2Rejected++;
       }
     }
 
-    // 배치 간 500ms 대기
-    if (batchStart + BATCH_SIZE < allRows.length) {
-      await new Promise((r) => setTimeout(r, 500));
+    if (content.instagramUrl) {
+      if (await validateContentUrl(content.instagramUrl)) {
+        updates.instagramPostUrl = content.instagramUrl;
+        instaSaved++;
+      } else {
+        gate2Rejected++;
+      }
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await db.update(placeSeedRaw).set(updates).where(eq(placeSeedRaw.id, placeId));
     }
   }
 
-  return { success: true, searched: allRows.length, tiktokSaved, instaSaved, gate2Rejected };
+  const searchCount = buildOrQueries(places, "").length * 3;
+  console.log(
+    `[MCP3] ${city.nameEn}/${category} 완료 | ${places.length}곳 → TT:${tiktokSaved} IG:${instaSaved} G2reject:${gate2Rejected} (검색 ${searchCount}회)`
+  );
+
+  return { success: true, searched: places.length, tiktokSaved, instaSaved, gate2Rejected };
 }
 
 /** MCP3 메인: 숏폼/콘텐츠 URL 수집 */
@@ -1324,19 +1317,9 @@ export async function runMcp3Content(options: Mcp3RunOptions = {}): Promise<{
   const errors: string[] = [];
   let totalSearched = 0, tiktokSaved = 0, instaSaved = 0, gate2Rejected = 0;
 
-  console.log(`[MCP3] 시작: ${targetCities.length}개 도시 x ${targetCategories.length}개 카테고리 (10곳씩 배치)`);
+  console.log(`[MCP3v2] 시작: ${targetCities.length}개 도시 x ${targetCategories.length}개 카테고리 (OR 묶음 배치)`);
 
-  let cityConsecutiveFails = 0;
   for (const city of targetCities) {
-    // 도시 연속 실패 5회 → MCP 리셋 후 계속 (중단하지 않음)
-    if (cityConsecutiveFails >= 5) {
-      console.warn(`[MCP3] 도시 연속 ${cityConsecutiveFails}회 실패 — MCP 리셋 후 계속`);
-      resetMcpClient();
-      await new Promise((r) => setTimeout(r, 10000));
-      cityConsecutiveFails = 0;
-    }
-
-    let cityFailed = false;
     for (const category of targetCategories) {
       try {
         const result = await runMcp3ForCityCategory(city, category, overwrite);
@@ -1348,26 +1331,21 @@ export async function runMcp3Content(options: Mcp3RunOptions = {}): Promise<{
         if (!result.success && result.error) {
           errors.push(`${city.nameEn}/${category}: ${result.error}`);
         }
-
-        // 10건마다 MCP 프로세스 리셋 (Chromium 메모리 누수 방지)
-        if (totalSearched > 0 && totalSearched % 10 === 0) {
-          resetMcpClient();
-          await new Promise((r) => setTimeout(r, 3000));
-        }
       } catch (err: any) {
         errors.push(`${city.nameEn}/${category}: ${err?.message}`);
-        cityFailed = true;
       }
+
+      // 매 카테고리 끝날 때마다 Chromium 죽임 (512MB 한계)
+      resetMcpClient();
+      await new Promise((r) => setTimeout(r, 3000));
     }
 
-    cityConsecutiveFails = cityFailed ? cityConsecutiveFails + 1 : 0;
-
     console.log(
-      `[MCP3] ${city.nameEn} 완료 | 누적: TT=${tiktokSaved} IG=${instaSaved} G2reject=${gate2Rejected} / ${totalSearched}건`
+      `[MCP3v2] ${city.nameEn} 완료 | 누적: TT=${tiktokSaved} IG=${instaSaved} G2reject=${gate2Rejected} / ${totalSearched}건`
     );
   }
 
-  console.log(`[MCP3] 전체 완료: ${totalSearched}건 → TT=${tiktokSaved} IG=${instaSaved} G2reject=${gate2Rejected}`);
+  console.log(`[MCP3v2] 전체 완료: ${totalSearched}건 → TT=${tiktokSaved} IG=${instaSaved} G2reject=${gate2Rejected}`);
 
   return {
     success: errors.length === 0,
