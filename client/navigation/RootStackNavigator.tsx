@@ -14,6 +14,10 @@ import VerificationRequestScreen from "@/screens/VerificationRequestScreen";
 import SavedTripDetailScreen from "@/screens/SavedTripDetailScreen";
 import AdminScreen from "@/screens/AdminScreen";
 import BTSConcertPlannerScreen from "@/screens/BTSConcertPlannerScreen";
+import BTSStackNavigator from "@/navigation/BTSStackNavigator";
+import { BTSLandingScreen } from "@/screens/BTSLandingScreen";
+import { BTSLandingScreenC } from "@/screens/BTSLandingScreenC"; // C안 보관
+import { BTSLandingScreenA1 } from "@/screens/BTSLandingScreenA1"; // ⚠️ 수정금지(승인필요) — A1안
 import { Colors } from "@/constants/theme";
 import { Itinerary } from "@/types/trip";
 import { isAuthenticated } from "@/lib/auth";
@@ -27,6 +31,8 @@ export type RootStackParamList = {
   SavedTripDetail: { itineraryId: number };
   AdminModal: undefined;
   BTSConcertPlanner: undefined;
+  BTSMiniApp: undefined;
+  BTSLanding: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -63,7 +69,7 @@ export default function RootStackNavigator() {
 
   return (
     <Stack.Navigator
-      initialRouteName={loggedIn ? "Main" : "Login"}
+      initialRouteName="BTSLanding"  /* P1 테스트: 항상 BTS 랜딩부터 */
       screenOptions={{
         headerTitleAlign: "center",
         headerTransparent: true,
@@ -84,6 +90,15 @@ export default function RootStackNavigator() {
         },
       }}
     >
+      {/* ⚠️ 수정금지(승인필요) — A안 원본 복원 */}
+      <Stack.Screen
+        name="BTSLanding"
+        component={BTSLandingScreen}
+        options={{
+          headerShown: false,
+          presentation: "card",
+        }}
+      />
       <Stack.Screen
         name="Login"
         component={LoginScreen}
@@ -144,6 +159,16 @@ export default function RootStackNavigator() {
         component={BTSConcertPlannerScreen}
         options={{
           headerShown: false,
+        }}
+      />
+      {/* BTS 미니앱 (풀스크린 독립 스택) */}
+      <Stack.Screen
+        name="BTSMiniApp"
+        component={BTSStackNavigator}
+        options={{
+          presentation: "fullScreenModal",
+          headerShown: false,
+          animation: "slide_from_bottom",
         }}
       />
     </Stack.Navigator>

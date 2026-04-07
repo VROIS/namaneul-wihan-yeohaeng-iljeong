@@ -73,3 +73,12 @@ migrations/meta/
 
 # Cursor IDE settings
 .cursor/
+
+# 내손안에 가이드 레거시 (참고용, 185MB)
+legacy-guide/
+
+# 마이그레이션 임시 데이터
+scripts/migration-data/
+
+# AI 에이전트 스킬
+_agent/

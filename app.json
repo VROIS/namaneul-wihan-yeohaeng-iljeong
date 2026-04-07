@@ -43,6 +43,12 @@
     ],
     "experiments": {
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "f13f4f4b-7116-44be-b0c8-c91b633a5fb5"
+      }
+    },
+    "owner": "vrois"
   }
 }

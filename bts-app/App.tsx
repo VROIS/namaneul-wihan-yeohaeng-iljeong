@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import GlassLightStickAuth from './components/GlassLightStickAuth';
 import { StyleSheet, View, Text, TouchableWithoutFeedback, Dimensions, SafeAreaView, ScrollView } from 'react-native';
 import Animated, {
   useSharedValue,
@@ -250,7 +251,7 @@ const DashboardScreen = ({ onReset, selectedVibes }) => {
 
 // --- ROUTER (App) --- //
 export default function App() {
-  const [currentScreen, setCurrentScreen] = useState('Select');
+  const [currentScreen, setCurrentScreen] = useState('Auth');
   const [selectedCharId, setSelectedCharId] = useState(null);
 
   // 최상단으로 끌어올린 장바구니(카트) 상태!
@@ -266,6 +267,9 @@ export default function App() {
 
   return (
     <SafeAreaView style={styles.container}>
+      {currentScreen === 'Auth' && (
+        <GlassLightStickAuth onLoginComplete={() => setCurrentScreen('Select')} />
+      )}
       {currentScreen === 'Select' && (
         <SelectScreen
           onNavigate={goToLoading}

@@ -1,0 +1,157 @@
+/**
+ * BTS 미니앱 전역 상태 관리
+ * 캐릭터 선택 → 도시/장소 선택 → 일정 생성까지의 전체 플로우 상태
+ */
+
+import React, { createContext, useContext, useState, useCallback } from "react";
+import type { BTSCharacter } from "@/constants/bts-characters";
+
+// 타입 정의
+export type BTSCity = {
+  id: number;
+  nameKo: string;
+  nameEn: string;
+  btsRank: number;
+};
+
+export type BTSPlace = {
+  id: number;
+  nameKo: string | null;
+  nameEn: string;
+  seedCategory: string | null;
+  imageUrl: string | null;
+  priceEur: number | null;
+  nubiReason: string | null;
+};
+
+export type BTSItineraryPlace = {
+  id: string;
+  name: string;
+  description: string;
+  startTime: string;
+  endTime: string;
+  image: string;
+  priceEstimate: string;
+  tags: string[];
+  nubiReason: string | null;
+};
+
+export type BTSItinerary = {
+  title: string;
+  destination: string;
+  days: Array<{
+    day: number;
+    places: BTSItineraryPlace[];
+    city: string;
+    summary: string;
+  }>;
+};
+
+type BTSContextType = {
+  // 선택 상태
+  selectedCharacter: BTSCharacter | null;
+  selectedCity: BTSCity | null;
+  selectedPlaces: BTSPlace[];
+  selectedPlaceIds: number[];
+  itinerary: BTSItinerary | null;
+
+  // 데이터
+  cities: BTSCity[];
+  topPlaces: BTSPlace[];
+
+  // 로딩 상태
+  isLoadingCities: boolean;
+  isLoadingPlaces: boolean;
+  isGenerating: boolean;
+  error: string | null;
+
+  // 액션
+  setSelectedCharacter: (char: BTSCharacter) => void;
+  setSelectedCity: (city: BTSCity) => void;
+  togglePlace: (place: BTSPlace) => void;
+  setCities: (cities: BTSCity[]) => void;
+  setTopPlaces: (places: BTSPlace[]) => void;
+  setItinerary: (itinerary: BTSItinerary | null) => void;
+  setIsLoadingCities: (v: boolean) => void;
+  setIsLoadingPlaces: (v: boolean) => void;
+  setIsGenerating: (v: boolean) => void;
+  setError: (err: string | null) => void;
+  reset: () => void;
+};
+
+const BTSContext = createContext<BTSContextType | null>(null);
+
+export function BTSProvider({ children }: { children: React.ReactNode }) {
+  const [selectedCharacter, setSelectedCharacter] = useState<BTSCharacter | null>(null);
+  const [selectedCity, setSelectedCity] = useState<BTSCity | null>(null);
+  const [selectedPlaceIds, setSelectedPlaceIds] = useState<number[]>([]);
+  const [selectedPlaces, setSelectedPlaces] = useState<BTSPlace[]>([]);
+  const [cities, setCities] = useState<BTSCity[]>([]);
+  const [topPlaces, setTopPlaces] = useState<BTSPlace[]>([]);
+  const [itinerary, setItinerary] = useState<BTSItinerary | null>(null);
+  const [isLoadingCities, setIsLoadingCities] = useState(false);
+  const [isLoadingPlaces, setIsLoadingPlaces] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const togglePlace = useCallback((place: BTSPlace) => {
+    setSelectedPlaceIds((prev) => {
+      if (prev.includes(place.id)) {
+        setSelectedPlaces((sp) => sp.filter((p) => p.id !== place.id));
+        return prev.filter((id) => id !== place.id);
+      }
+      if (prev.length >= 8) return prev; // 최대 8개
+      setSelectedPlaces((sp) => [...sp, place]);
+      return [...prev, place.id];
+    });
+  }, []);
+
+  const reset = useCallback(() => {
+    setSelectedCharacter(null);
+    setSelectedCity(null);
+    setSelectedPlaceIds([]);
+    setSelectedPlaces([]);
+    setTopPlaces([]);
+    setItinerary(null);
+    setError(null);
+    setIsGenerating(false);
+    setIsLoadingPlaces(false);
+  }, []);
+
+  return (
+    <BTSContext.Provider
+      value={{
+        selectedCharacter,
+        selectedCity,
+        selectedPlaces,
+        selectedPlaceIds,
+        itinerary,
+        cities,
+        topPlaces,
+        isLoadingCities,
+        isLoadingPlaces,
+        isGenerating,
+        error,
+        setSelectedCharacter,
+        setSelectedCity,
+        togglePlace,
+        setCities,
+        setTopPlaces,
+        setItinerary,
+        setIsLoadingCities,
+        setIsLoadingPlaces,
+        setIsGenerating,
+        setError,
+        reset,
+      }}
+    >
+      {children}
+    </BTSContext.Provider>
+  );
+}
+
+export function useBTS(): BTSContextType {
+  const ctx = useContext(BTSContext);
+  if (!ctx) throw new Error("useBTS must be used within BTSProvider");
+  return ctx;
+}
