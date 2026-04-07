@@ -22,6 +22,7 @@ export class DataScheduler {
   // ⏸️ [일시 중단] 비용 나가는 크롤러 — 삭제 아님, 추후 재활성화 가능
   // 현재 정책: 비용 유발 6개만 즉시 중단
   private static readonly PAUSED_TASKS: Set<string> = new Set([
+    "weather_sync",         // ⚠️ 수정금지(승인필요) 4/7 일시정지 — DB 용량 절약 (309MB/500MB), TRUNCATE 후 필요 시 재활성화
     "crisis_sync",          // 프론트 연결 전까지 자동 중지 (수동 실행만)
     "place_seed_sync",      // MCP 전환 전 자동 중지 (수동 실행만)
     "mcp_raw_stage1",       // Stage 1 미션 완료 (5,250건 수집됨)
@@ -238,6 +239,10 @@ export class DataScheduler {
           break;
         case "weather_sync":
           result = await this.runWeatherSync();
+          break;
+        // ⚠️ 수정금지(승인필요) 4/7 추가 — weather 테이블 정리 (DB 용량 절약)
+        case "weather_cleanup":
+          result = await this.runWeatherCleanup();
           break;
         case "tripadvisor_sync":
           result = await this.runTripAdvisorSync();
@@ -478,6 +483,23 @@ export class DataScheduler {
         itemsProcessed: result.citiesSynced,
         errors: [],
       };
+    } catch (error: any) {
+      return { success: false, itemsProcessed: 0, errors: [error.message] };
+    }
+  }
+
+  // ⚠️ 수정금지(승인필요) 4/7 추가 — weather_forecast + weather_cache TRUNCATE
+  private async runWeatherCleanup(): Promise<{ success: boolean; itemsProcessed: number; errors: string[] }> {
+    try {
+      const { pool } = await import("../db");
+      if (!pool) throw new Error("DB pool not available");
+      const r1 = await pool.query("SELECT count(*) as c FROM weather_forecast");
+      const r2 = await pool.query("SELECT count(*) as c FROM weather_cache");
+      const before = { forecast: r1.rows[0].c, cache: r2.rows[0].c };
+      await pool.query("TRUNCATE TABLE weather_forecast");
+      await pool.query("TRUNCATE TABLE weather_cache");
+      console.log(`[WeatherCleanup] ✅ 정리 완료 — forecast ${before.forecast}행, cache ${before.cache}행 삭제`);
+      return { success: true, itemsProcessed: Number(before.forecast) + Number(before.cache), errors: [] };
     } catch (error: any) {
       return { success: false, itemsProcessed: 0, errors: [error.message] };
     }
