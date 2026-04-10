@@ -1,0 +1,560 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>파리 1116 - 손안에 가이드</title>
+    <link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoi67Kg66W07IKs7JygIOq2geyghCDrgrTrtoAg7ZW17IusIiwic2hvcnRfbmFtZSI6IuuyoOultOyCrOycoCDqtoHsoIQg64K067aAIO2VteyLrCIsInN0YXJ0X3VybCI6Ii4iLCJkaXNwbGF5Ijoic3RhbmRhbG9uZSIsInRoZW1lX2NvbG9yIjoiIzQyODVGNCJ9">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            background-color: #f0f2f5;
+            overflow-x: hidden;
+        }
+        .hidden { display: none !important; }
+        
+        /* 앱과 100% 동일한 CSS (복사) */
+        .full-screen-bg { 
+            position: fixed; 
+            top: 0; 
+            left: 0; 
+            width: 100vw; 
+            height: 100vh; 
+            object-fit: cover; 
+            z-index: 1; 
+        }
+        .ui-layer { 
+            position: fixed; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            z-index: 10; 
+            display: flex; 
+            flex-direction: column;
+        }
+        .header-safe-area { 
+            position: relative;
+            width: 100%; 
+            height: 80px; 
+            flex-shrink: 0; 
+            z-index: 20;
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            padding: 0 1rem;
+        }
+        .content-safe-area { 
+            flex: 1; 
+            overflow-y: auto; 
+            -webkit-overflow-scrolling: touch; 
+            background: transparent;
+            z-index: 25;
+        }
+        .footer-safe-area { 
+            width: 100%; 
+            height: 100px; 
+            flex-shrink: 0; 
+            z-index: 30; 
+            display: flex; 
+            justify-content: space-around; 
+            align-items: center; 
+            padding: 0 1rem;
+        }
+        
+        /* 텍스트 오버레이 */
+        .text-content {
+            padding: 2rem 1.5rem;
+            line-height: 1.8;
+            word-break: keep-all;
+            overflow-wrap: break-word;
+        }
+        .readable-on-image {
+            color: white;
+            text-shadow: 0px 2px 8px rgba(0, 0, 0, 0.95);
+        }
+        
+        /* 버튼 공통 스타일 (앱과 동일) */
+        .interactive-btn {
+            transition: transform 0.1s ease;
+            cursor: pointer;
+            border: none;
+        }
+        .interactive-btn:active {
+            transform: scale(0.95);
+        }
+        
+        /* 헤더 (메타데이터) */
+        .header {
+            padding: 20px;
+            background-color: #4285F4; /* Gemini Blue - 앱 통일 */
+            color: #fff;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0 0 15px 0;
+            font-size: 28px;
+        }
+        .metadata {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        .metadata p {
+            margin: 5px 0;
+        }
+        
+        /* 갤러리 뷰 */
+        #gallery-view {
+            padding: 15px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+        }
+        
+        /* 반응형: 태블릿/노트북/PC (768px 이상) */
+        @media (min-width: 768px) {
+            .gallery-grid {
+                grid-template-columns: repeat(3, 1fr);
+                gap: 20px;
+            }
+            #gallery-view {
+                padding: 30px;
+            }
+        }
+        
+        .gallery-item {
+            cursor: pointer;
+            text-align: center;
+        }
+        .gallery-item img {
+            width: 100%;
+            height: 150px;
+            object-fit: cover;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            transition: transform 0.2s, box-shadow 0.2s;
+            background-color: #e9e9e9;
+        }
+        .gallery-item:hover img {
+            transform: scale(1.05);
+            box-shadow: 0 6px 15px rgba(0,0,0,0.2);
+        }
+        .gallery-item p {
+            margin: 8px 0 0;
+            font-weight: 700;
+            color: #333;
+            font-size: 14px;
+        }
+        
+        /* 갤러리 하단 버튼 */
+        .gallery-footer {
+            text-align: center;
+            padding: 30px 15px;
+        }
+        .app-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: #4285F4;
+            color: white;
+            padding: 16px 32px;
+            border-radius: 12px;
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 18px;
+            box-shadow: 0 4px 12px rgba(66, 133, 244, 0.3);
+            transition: all 0.3s;
+        }
+        .app-button:hover {
+            background: #3367D6;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(66, 133, 244, 0.4);
+        }
+    </style>
+</head>
+<body>
+    <!-- ❌ X 닫기 버튼 (우측 상단, 최상위 z-index) -->
+    <button id="closeWindowBtn" onclick="window.close()" title="페이지 닫기" style="position: fixed; top: 1rem; right: 1rem; z-index:   99999; width: 3rem; height: 3rem; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(8px); border-radius: 50%; color: #4285F4; cursor: pointer; transition: all 0.2s ease; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3); border: none;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+    </button>
+    
+    <!-- 헤더 (메타데이터) -->
+    <div class="header">
+        <h1>파리 1116</h1>
+        <div class="metadata">
+            <p>👤 관리자 님이 보냄</p>
+            <p>📍 파리, 프랑스</p>
+            <p>📅 2025-11-15</p>
+        </div>
+    </div>
+    
+    <!-- 갤러리 뷰 -->
+    <div id="gallery-view">
+        
+        <div class="gallery-grid">
+            
+            <div class="gallery-item" data-id="0">
+                <img src="/uploads/1763242430239-x39pza.jpg" alt="가이드 1" loading="lazy">
+                <p>가이드 1</p>
+            </div>
+        
+            <div class="gallery-item" data-id="1">
+                <img src="/uploads/1763242430492-itochc.jpg" alt="가이드 2" loading="lazy">
+                <p>가이드 2</p>
+            </div>
+        
+            <div class="gallery-item" data-id="2">
+                <img src="/uploads/1763242430540-m0vxwg.jpg" alt="가이드 3" loading="lazy">
+                <p>가이드 3</p>
+            </div>
+        
+            <div class="gallery-item" data-id="3">
+                <img src="/uploads/1763242430587-3ilu9b.jpg" alt="가이드 4" loading="lazy">
+                <p>가이드 4</p>
+            </div>
+        
+            <div class="gallery-item" data-id="4">
+                <img src="/uploads/1763242430633-361bjy.jpg" alt="가이드 5" loading="lazy">
+                <p>가이드 5</p>
+            </div>
+        
+            <div class="gallery-item" data-id="5">
+                <img src="/uploads/1763242430681-sb7xm.jpg" alt="가이드 6" loading="lazy">
+                <p>가이드 6</p>
+            </div>
+        
+            <div class="gallery-item" data-id="6">
+                <img src="/uploads/1763242430727-q1k8u.jpg" alt="가이드 7" loading="lazy">
+                <p>가이드 7</p>
+            </div>
+        
+            <div class="gallery-item" data-id="7">
+                <img src="/uploads/1763242430773-d7gdu.jpg" alt="가이드 8" loading="lazy">
+                <p>가이드 8</p>
+            </div>
+        
+            <div class="gallery-item" data-id="8">
+                <img src="/uploads/1763242430825-z0qcod.jpg" alt="가이드 9" loading="lazy">
+                <p>가이드 9</p>
+            </div>
+        
+            <div class="gallery-item" data-id="9">
+                <img src="/uploads/1763242430872-aibyfq.jpg" alt="가이드 10" loading="lazy">
+                <p>가이드 10</p>
+            </div>
+        
+            <div class="gallery-item" data-id="10">
+                <img src="/uploads/1763242430919-cxepw.jpg" alt="가이드 11" loading="lazy">
+                <p>가이드 11</p>
+            </div>
+        
+            <div class="gallery-item" data-id="11">
+                <img src="/uploads/1763242430968-ezngh.jpg" alt="가이드 12" loading="lazy">
+                <p>가이드 12</p>
+            </div>
+        
+            <div class="gallery-item" data-id="12">
+                <img src="/uploads/1763242431015-4suak9.jpg" alt="가이드 13" loading="lazy">
+                <p>가이드 13</p>
+            </div>
+        
+            <div class="gallery-item" data-id="13">
+                <img src="/uploads/1763242431060-k35t9h.jpg" alt="가이드 14" loading="lazy">
+                <p>가이드 14</p>
+            </div>
+        
+            <div class="gallery-item" data-id="14">
+                <img src="/uploads/1763242431107-kwl51b.jpg" alt="가이드 15" loading="lazy">
+                <p>가이드 15</p>
+            </div>
+        
+            <div class="gallery-item" data-id="15">
+                <img src="/uploads/1763242431153-l4zmg.jpg" alt="가이드 16" loading="lazy">
+                <p>가이드 16</p>
+            </div>
+        
+            <div class="gallery-item" data-id="16">
+                <img src="/uploads/1763242431201-mhfuw.jpg" alt="가이드 17" loading="lazy">
+                <p>가이드 17</p>
+            </div>
+        
+            <div class="gallery-item" data-id="17">
+                <img src="/uploads/1763242431248-w29k98.jpg" alt="가이드 18" loading="lazy">
+                <p>가이드 18</p>
+            </div>
+        
+            <div class="gallery-item" data-id="18">
+                <img src="/uploads/1763242431293-2yxh2x.jpg" alt="가이드 19" loading="lazy">
+                <p>가이드 19</p>
+            </div>
+        
+            <div class="gallery-item" data-id="19">
+                <img src="/uploads/1763242431348-s240vx.jpg" alt="가이드 20" loading="lazy">
+                <p>가이드 20</p>
+            </div>
+        
+        </div>
+        <div class="gallery-footer">
+            <a href="/" class="app-button" id="home-button">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="width: 24px; height: 24px;">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                </svg>
+                손안에 가이드 시작하기
+            </a>
+        </div>
+    </div>
+    
+    <!-- 상세 뷰 (앱과 100% 동일한 구조) -->
+    <div id="detail-view" class="ui-layer hidden">
+        <img id="detail-bg" src="" class="full-screen-bg">
+        <header class="header-safe-area">
+            <button id="detail-back" class="interactive-btn" style="width: 3rem; height: 3rem; display: flex; align-items: center; justify-content: center; border-radius: 9999px; background: rgba(0,0,0,0.6); backdrop-filter: blur(12px); color: #4285F4; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); position: absolute; top: 50%; left: 1rem; transform: translateY(-50%);" aria-label="뒤로가기">
+                <svg xmlns="http://www.w3.org/2000/svg" style="width: 1.5rem; height: 1.5rem;" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
+                </svg>
+            </button>
+        </header>
+        <div class="content-safe-area">
+            <div id="detail-text" class="text-content hidden">
+                <p id="detail-description" class="readable-on-image" style="font-size: 1.25rem; line-height: 1.75rem;"></p>
+            </div>
+        </div>
+        <footer id="detail-footer" class="footer-safe-area hidden" style="background: transparent;">
+            <button id="detail-audio" class="interactive-btn" style="width: 4rem; height: 4rem; display: flex; align-items: center; justify-content: center; border-radius: 9999px; background: rgba(0,0,0,0.6); backdrop-filter: blur(12px); color: #4285F4; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);" aria-label="오디오 재생">
+                <svg id="play-icon" xmlns="http://www.w3.org/2000/svg" style="width: 2rem; height: 2rem;" viewBox="0 0 24 24" fill="currentColor">
+                    <path fill-rule="evenodd" d="M4.5 5.653c0-1.426 1.529-2.33 2.779-1.643l11.54 6.648c1.295.748 1.295 2.538 0 3.286L7.279 20.99c-1.25.717-2.779-.217-2.779-1.643V5.653z" clip-rule="evenodd" />
+                </svg>
+                <svg id="pause-icon" xmlns="http://www.w3.org/2000/svg" style="width: 2rem; height: 2rem; display: none;" viewBox="0 0 24 24" fill="currentColor">
+                    <path fill-rule="evenodd" d="M6.75 5.25a.75.75 0 01.75-.75H9a.75.75 0 01.75.75v13.5a.75.75 0 01-.75.75H7.5a.75.75 0 01-.75-.75V5.25zm7.5 0A.75.75 0 0115 4.5h1.5a.75.75 0 01.75.75v13.5a.75.75 0 01-.75.75H15a.75.75 0 01-.75-.75V5.25z" clip-rule="evenodd" />
+                </svg>
+            </button>
+            <button id="text-toggle" class="interactive-btn" style="width: 4rem; height: 4rem; display: flex; align-items: center; justify-content: center; border-radius: 9999px; background: rgba(0,0,0,0.6); backdrop-filter: blur(12px); color: #4285F4; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);" aria-label="해설 읽기">
+                <svg xmlns="http://www.w3.org/2000/svg" style="width: 2rem; height: 2rem;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+            </button>
+            <a href="/" id="detail-home" class="interactive-btn" style="width: 4rem; height: 4rem; display: flex; align-items: center; justify-content: center; border-radius: 9999px; background: rgba(0,0,0,0.6); backdrop-filter: blur(12px); color: #4285F4; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); text-decoration: none;" aria-label="앱으로 이동">
+                <svg xmlns="http://www.w3.org/2000/svg" style="width: 2rem; height: 2rem;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                </svg>
+            </a>
+        </footer>
+    </div>
+    
+    <!-- 데이터 저장 -->
+    <script id="app-data" type="application/json">[{"id":0,"imageDataUrl":"/uploads/1763242430239-x39pza.jpg","description":"태양왕 루이 14세가 절대 권력을 과시하며, 무려 3만 6천여 명의 노동자와 6천 마리의 말이 투입된 이 거대한 황금빛 철책은 단순한 경계가 아니라, 프랑스 왕실의 영광과 권위를 상징하는 작품입니다.\n\n프랑스 바로크 건축의 걸작인 베르사유 궁전의 입구에 자리한 이 철책은 1668년에 완성되었습니다. 한국의 조선 시대 후기와 비슷한 시기이죠. 궁전의 위용을 더욱 돋보이게 하기 위해, 금으로 도금된 화려한 장식이 돋보입니다. 특히 중앙에는 태양왕을 상징하는 태양 문양과 왕관이 자리하고 있어, 그 위엄을 한껏 드러내고 있습니다.\n\n이 철책은 단순한 장식이 아니라, 왕실의 권위를 시각적으로 보여주는 동시에, 외부와의 구분을 명확히 하는 중요한 건축 요소였습니다. 촘촘하게 세워진 창살 사이로 보이는 궁전의 웅장한 모습은 마치 그림 같은 풍경을 선사합니다. 사진 촬영 팁을 드리자면, 이 황금빛 철책과 함께 베르사유 궁전의 아름다운 건물을 담는 것이 포인트입니다. 아침 일찍 방문하시면 인파를 피해 여유롭게 촬영할 수 있으며, 해 질 녘 노을이 비칠 때면 황금빛 철책이 더욱 신비롭게 빛나는 장관을 연출합니다."},{"id":1,"imageDataUrl":"/uploads/1763242430492-itochc.jpg","description":"루이 14세의 권력과 화려함의 정점을 보여주는 이 살롱은 사실 질투와 권력 다툼의 격전지였다는 사실, 알고 계셨나요?\n\n여기는 바로 프랑스 베르사유 궁전에 있는 '살롱 드 라 페' 즉, 평화의 살롱입니다. 17세기 후반, 태양왕 루이 14세가 절대 왕정을 구축하던 시기에 지어진 이 살롱은 당시 프랑스 역사상 가장 화려했던 시기의 건축 미학을 고스란히 담고 있습니다. 격자 무늬의 천장, 거대한 샹들리에, 그리고 벽면을 장식한 금빛 조각과 거울들은 왕의 권위를 과시하고 신하들의 감탄을 자아내기에 충분했죠.\n\n이 살롱은 '전쟁의 살롱'과 완벽하게 대칭을 이루도록 설계되어, 평화와 전쟁이라는 두 가지 상반된 이미지를 동시에 구현하려는 의도가 엿보입니다. 특히 이곳은 '여왕의 아파트'로 여겨졌으며, 시대에 따라서는 음악의 방으로도 사용되었다고 해요. 마치 살아있는 역사처럼, 이곳을 거쳐간 여러 여왕들의 이야기가 숨 쉬고 있는 듯한 느낌마저 듭니다.\n\n살롱 드 라 페에서 최고의 사진을 찍고 싶으시다면, 중앙의 샹들리에를 배경으로 하시되, 너무 밝은 낮보다는 해 질 녘 은은한 조명이 켜질 때 방문해 보세요. 황금빛으로 물든 내부가 더욱 신비롭고 웅장하게 느껴질 겁니다. 이곳에 서서 잠시 눈을 감고, 300년 전 프랑스 궁정의 화려함과 그 속에 숨겨진 이야기들을 상상해보는 것은 어떨까요?"},{"id":2,"imageDataUrl":"/uploads/1763242430540-m0vxwg.jpg","description":"왕비의 침실에선 왕비가 잠만 잔 게 아니라, 실제로 중요한 사적인 면담을 하고 심지어 공개적으로 출산까지 했다는 사실, 알고 계셨나요? 상상만 해도 아찔한데요!\n\n이곳은 베르사유 궁전의 '왕비의 침실', 라틴어로 'Chambre de la Reine'이라고 불리는 곳입니다. 특히 17세기 말부터 18세기까지 프랑스 왕비들의 사적인 공간이자 공적인 공간으로 사용되었어요. 루이 14세 시대부터 궁전 건축이 활발히 이루어졌는데, 특히 이 방은 프랑스 역사상 가장 화려했던 절대왕정 시대를 상징하는 공간 중 하나라고 할 수 있습니다.\n\n보시다시피, 방 전체를 뒤덮고 있는 화려한 플로럴 패턴의 벽지와 커튼, 그리고 침대 주변을 둘러싼 금빛 난간까지! 마치 동화 속 한 장면 같지 않나요? 모든 장식이 최고급 비단과 금으로 장식되어 있어서 왕비의 권위와 위엄을 한껏 보여주고 있습니다. 특히 머리맡의 섬세한 조각과 화려한 샹들리에가 시선을 사로잡는데, 이건 당시 왕실 장식의 정수를 보여주는 예라고 할 수 있습니다.\n\n이 방은 단순한 침실을 넘어, 왕비가 일상생활을 하고 정무를 보는 등 다양한 활동이 이루어졌던 곳입니다. 그래서 여러분이 이곳에 방문하신다면, 단순히 아름다운 인테리어를 감상하는 것을 넘어, 당시 왕비의 삶과 프랑스 왕실의 역사를 생생하게 느껴보실 수 있을 거예요. 사진을 찍으실 때는 이 황금빛 난간을 앞으로 해서 침실 전체가 나오도록 구도를 잡으면, 마치 여러분이 왕비가 된 듯한 웅장한 느낌을 담을 수 있답니다!"},{"id":3,"imageDataUrl":"/uploads/1763242430587-3ilu9b.jpg","description":"아니, 이게 어떻게 된 일인가요? 이곳은 왕비들의 쟁쟁한 권력 다툼의 현장이었다고 합니다!\n\n여기는 베르사유 궁전의 '살롱 데 노블(Salon des Nobles)', 귀족들의 방입니다. 이 방은 왕비가 바뀔 때마다 용도와 장식이 바뀌는 아주 흥미로운 역사를 가지고 있죠. 태양왕 루이 14세 시절에는 그의 아내, 마리 테레즈 왕비의 곁방으로 사용되었고요. 이어 루이 15세 시대에는 그의 왕비 마리 레슈친스카가 이곳에서 공식적인 접견을 가졌답니다. 그리고 가장 유명한, 루이 16세의 왕비 마리 앙투아네트! 그녀는 이 방의 장식을 완전히 새로 꾸몄지만, 이전의 화려함은 그대로 보존했다고 합니다. 상상해보세요, 벽마다 섬세한 문양이 수놓아진 벽지와 눈부신 샹들리에, 그리고 웅장한 카펫까지. 마치 시간 여행을 온 듯한 느낌을 주죠? 이 방에 앉아 왕비들이 어떤 이야기를 주고받았을지, 어떤 결정들이 이곳에서 내려졌을지 생각하면 정말 짜릿하지 않나요?"},{"id":4,"imageDataUrl":"/uploads/1763242430633-361bjy.jpg","description":"프랑스 왕실에서 가장 은밀하고도 화려했던, 왕과 왕비가 백성들 앞에서 식사했던 기상천외한 공간, '왕비의 대기실'에 오신 것을 환영합니다. 이곳은 단순한 방이 아니라, 절대 왕권의 위엄을 과시하는 거대한 무대였답니다.\n\n이 방은 17세기 후반, 태양왕 루이 14세 때 완성된 베르사유 궁전의 일부입니다. 조선 시대로 비유하자면, 임진왜란 이후 혼란을 수습하고 왕권 강화에 힘쓰던 때와 비슷하죠. 당시 프랑스에서는 왕의 모든 일상이 대중에게 공개되는 것이 국왕의 권위를 높이는 방법이라고 여겼어요.\n\n자, 이제 눈앞에 펼쳐진 황홀경을 감상해 보시죠. 이 방의 이름은 'Antichambre du Grand Couvert de la Reine', 즉 '왕비의 만찬 대기실'입니다. 왕비가 공적인 자리에서 식사를 하던 곳이었죠. 화려한 태피스트리와 벽화, 그리고 샹들리에가 당시 왕실의 엄청난 부와 권력을 여실히 보여줍니다. 특히 저 거대한 태피스트리는 신화나 성경의 장면을 묘사한 것으로, 왕실의 문화적 소양과 예술적 취향을 자랑하는 역할을 했습니다.\n\n여기서 주목할 점은, 왕비가 식사를 할 때 마치 연극의 한 장면처럼 모든 과정이 엄숙하고 절도 있게 진행되었다는 것입니다. 음악이 연주되고, 귀족들이 도열하여 왕비를 알현했으며, 왕비는 이 모든 시선을 받으며 자신의 위엄을 드러냈죠. 마리 앙투아네트 왕비 시절에는 특히 음악이 더욱 강조되어, 식사 시간 자체가 하나의 공연처럼 펼쳐졌다고 해요.\n\n이곳에서 최고의 사진을 남기고 싶으시다면, 샹들리에에서 뿜어져 나오는 빛이 바닥의 나무 바닥에 은은하게 반사되는 순간을 포착해 보세요. 마치 동화 속 한 장면처럼 신비로운 분위기를 연출할 수 있을 겁니다."},{"id":5,"imageDataUrl":"/uploads/1763242430681-sb7xm.jpg","description":"프랑스 베르사유 궁전에 있는 '왕비의 경비실'은 말 그대로 왕비의 안전을 지키던 최정예 근위병들의 공간이었습니다. 낮과 밤을 가리지 않고 12명의 경비병들이 항시 대기하며 왕비를 삼엄하게 경호했죠.\n\n이곳은 17세기, 프랑스가 절대 왕정의 화려함을 최고조로 구가하던 시기에 조성되었습니다. 마치 조선시대 영조나 정조 시대에 왕실의 권위와 위엄을 높이기 위해 궁궐을 화려하게 꾸몄던 것처럼, 유럽에서는 바로크 양식의 절정을 보여주는 시대였습니다.\n\n특히 이 경비실은 그 당시의 호화로운 장식이 거의 그대로 보존되어 있다는 점에서 역사적 가치가 매우 높습니다. 화려한 천장화부터 벽면을 장식한 섬세한 문양, 그리고 바닥의 고급스러운 나무 바닥재까지, 어느 하나 놓칠 수 없는 아름다움으로 가득합니다. 특히 눈여겨봐야 할 것은 마치 그림처럼 보이는 벽면의 문양들인데, 이것이 실제 문인지 아니면 장식인지 헷갈릴 정도로 정교하게 만들어져 있습니다. 마치 조선시대 민화에 등장하는 기하학적인 문양들이 현실로 튀어나온 듯한 느낌도 주고요.\n\n이곳에서 기념사진을 남기려면, 웅장한 샹들리에와 화려한 벽면 장식을 배경으로 인증샷을 찍는 것이 포인트입니다. 마치 시간 여행을 온 듯한 느낌으로, 당시 왕족과 귀족들의 삶을 상상하며 사진을 찍어보세요."},{"id":6,"imageDataUrl":"/uploads/1763242430727-q1k8u.jpg","description":"이곳은 그냥 방이 아닙니다. 바로 루이 14세가 전쟁에서의 승리를 기념하기 위해 만든, 말 그대로 '전쟁의 방'입니다!\n\n1680년대, 프랑스는 절대 왕정의 황금기를 구가하고 있었고, 태양왕 루이 14세는 베르사유 궁전을 유럽 최고의 궁궐로 만들기 위해 엄청난 투자를 했습니다. 이 '전쟁의 방'은 베르사유 궁전의 화려함의 정수를 보여주는 장소 중 하나로, 바로 옆에 있는 '거울의 방'과 짝을 이루며 그 위용을 더합니다.\n\n이 방에 들어서는 순간, 눈앞에 펼쳐지는 황금빛 장식과 화려한 조각, 그리고 웅장한 벽화에 압도될 것입니다. 천장에는 루이 14세의 위대한 업적을 기리는 그림들이 가득하며, 벽면을 장식한 대리석과 금박은 빛을 받아 찬란하게 빛납니다. 중앙의 커다란 샹들리에와 벽마다 걸린 촛대들은 그 자체로 예술 작품이죠. 특히 방 한가운데 있는 둥근 벽화에는 전쟁의 신 마르스가 말을 타고 있는 모습이 묘사되어 있는데, 이는 루이 14세의 군사적 승리를 상징합니다. 이곳의 모든 요소는 루이 14세의 권위와 영광을 드러내기 위해 철저하게 계산된 디자인입니다. 팁을 드리자면, 이 방의 황금빛 디테일을 제대로 담고 싶다면, 샹들리에와 창문에서 들어오는 빛의 각도를 잘 활용해서 사진을 찍어보세요. 마치 동화 속에 들어온 듯한 환상적인 사진을 남길 수 있을 거예요."},{"id":7,"imageDataUrl":"/uploads/1763242430773-d7gdu.jpg","description":"베르사유 궁전의 거울의 방은 사실 엄청난 호불호가 갈렸던 공간이었다는 사실, 알고 계셨나요? 원래는 정원을 바라보는 넓은 테라스였는데, 날씨 때문에 너무 불편해서 17개의 아케이드와 17개의 창문을 가진 지금의 모습으로 바뀌었다고 합니다.\n\n이곳은 1678년부터 1684년까지, 그러니까 한국으로 치면 조선시대 숙종 때 지어졌는데요. 프랑스의 절대 왕정을 상징하는 바로크 건축 양식의 정수를 보여줍니다. 바로크 양식의 특징인 화려함과 웅장함이 이곳에 고스란히 담겨있죠.\n\n무엇보다 '거울의 방'이라는 이름처럼, 17개의 거대한 아케이드를 따라 설치된 17개의 거울이 압권입니다. 이 거울들은 바깥의 정원을 반사하고, 맞은편 17개의 창문을 통해 들어오는 햇빛을 그대로 되돌려 보내 마치 공간이 무한대로 확장되는 듯한 착시 효과를 일으킵니다. 여기에 화려한 샹들리에와 황금빛 장식이 더해져 눈이 부실 정도입니다. 마치 태양왕 루이 14세의 권세가 공간을 압도하는 듯한 느낌을 줍니다.\n\n이곳은 단순히 아름다운 공간을 넘어, 왕과 신하들이 만나고 무도회를 열었던 중요한 사교 공간이기도 했습니다. 그래서일까요? 사진 촬영 팁을 드리자면, 이 거울의 방에서는 정말 어떤 각도로 찍어도 작품이 됩니다! 특히 창문에서 들어오는 빛이 거울에 반사될 때 찍으면 드라마틱한 사진을 얻을 수 있으니, 꼭 시도해보세요. 마치 영화 주인공이 된 듯한 기분을 만끽하실 수 있을 거예요."},{"id":8,"imageDataUrl":"/uploads/1763242430825-z0qcod.jpg","description":"왕의 침실, 이곳은 단순한 잠자리 그 이상이었습니다! 해가 뜨고 지는 의식, 즉 '르베'와 '쿠셰'라는 특별한 예식이 이곳에서 열렸고, 왕은 '쁘띠 쿠베르'라 불리는 소규모 만찬을 즐기거나, 신하들과 귀한 손님들을 접견하기도 했습니다. 마치 오늘날 청와대나 백악관의 집무실 겸 응접실을 보는 듯하죠?\n\n이 방은 17세기 프랑스의 절대 왕정을 이끈 루이 14세의 생활과 떼려야 뗄 수 없는 공간입니다. 루이 14세 시대, 바로 1600년대 중후반에서 1700년대 초반에 걸쳐 베르사유 궁전은 왕권의 상징으로 화려하게 건축되었습니다. 지금 보시는 이 방은 그 당시 왕실의 엄격한 규율과 화려함을 고스란히 담고 있습니다.\n\n문을 열고 들어서면 온통 황금빛으로 빛나는 화려함에 압도될 겁니다. 샹들리에의 영롱한 빛이 금빛 벽과 가구에 반사되어 눈이 부실 정도예요. 특히 침대 주변을 둘러싼 화려한 커튼과 장식은 왕족의 권위를 보여주는 듯합니다. 이런 곳에서 왕이 잠을 잤다고 생각하니, 마치 동화 속에 들어온 기분이 들지 않나요? 사진 촬영 팁을 드리자면, 빛이 가장 잘 들어오는 오전 시간에 방문하시면 샹들리에의 반짝임과 황금빛의 화려함을 더욱 드라마틱하게 담으실 수 있을 거예요."},{"id":9,"imageDataUrl":"/uploads/1763242430872-aibyfq.jpg","description":"아폴론의 방, 그 이름만 들어도 벌써부터 금빛 찬란하고 신비로운 기운이 느껴지지 않나요? 이곳은 태양신 아폴론에게 바쳐진 곳으로, 바로 그 태양처럼 빛나는 루이 14세가 자신을 투영했던 공간이랍니다.\n\n무려 17세기 후반, 프랑스가 절대 왕정의 화려함을 최고조로 꽃피우던 시기에 이 살롱은 왕의 즉위식과 같은 공식적인 행사가 열리던 곳이었어요. 마치 오케스트라의 지휘봉처럼, 왕이 앉는 옥좌가 딱 놓여있으니 그 위엄이 느껴지시죠? 웅장한 태피스트리와 거대한 그림, 그리고 번쩍이는 샹들리에까지. 모든 것이 왕의 권위를 드높이기 위한 장치였다고 해도 과언이 아니죠.\n\n하지만 반전은 따로 있었으니, 밤이 되면 이곳은 춤과 음악이 넘실대는 무도회장으로 변신했다는 사실! 낮에는 근엄한 신하들이 줄을 서서 왕에게 예를 표하던 곳이, 밤에는 흥겨운 춤과 웃음소리로 가득 찼다니, 그 대비가 얼마나 극적이에요? 이 붉은 벨벳 커튼과 황금빛 장식이 주는 화려함 속에서, 왕은 때로는 신처럼 군림하고 때로는 유쾌한 파티를 즐겼던 거죠. 사진 찍으실 때는 이 붉은 카펫과 옥좌를 배경으로, 마치 왕이 된 듯한 포즈를 취해보시는 건 어떨까요? 잊지 못할 인생샷을 건질 수 있을 거예요!"},{"id":10,"imageDataUrl":"/uploads/1763242430919-cxepw.jpg","description":"자, 여러분! 지금 보시는 이 화려한 공간, 혹시 루이 14세가 잠자는 모습 그대로를 공개했다는 사실, 알고 계셨나요? 왕의 침실이자 의식을 치르는 곳이었다는 점을 생각하면 정말 상상 초월이죠!\n\n여기는 바로 프랑스 베르사유 궁전의 207호, '살롱 드 메르퀴르'입니다. 17세기, 그러니까 우리나라로 치면 조선 시대에 해당하는 바로 그 시절, 태양왕 루이 14세는 신하들 앞에서 잠들고 일어나는 모습까지 공개하며 절대 권력을 과시했는데요. 이 살롱은 단순히 침실을 넘어, 밤낮으로 열리는 '그랜드 레베(Grand Lever)'와 '그랜드 쿠셰(Grand Coucher)'라는 공식적인 의식을 거행하던 곳이기도 했습니다.\n\n보시다시피 붉은 벨벳 벽과 황금빛 장식, 그리고 화려한 샹들리에가 어우러져 그야말로 왕족의 위엄과 사치를 그대로 보여주죠. 가운데 옥좌와 양옆에 놓인 붉은 의자들은 당시 얼마나 많은 사람들이 이 공간을 드나들었을지를 짐작하게 합니다. 특히 벽에 걸린 그림들은 단순히 장식이 아니라, 당시 왕실의 위엄을 드높이기 위한 중요한 요소들이었을 겁니다. 루이 14세는 1701년까지 이곳에서 이러한 의식을 치렀다고 하니, 당시 왕실 문화의 중심지였던 셈이죠. 베르사유 궁전의 수많은 방 중에서도 이곳은 프랑스 절대 왕정의 화려함과 복잡한 궁정 문화를 생생하게 엿볼 수 있는 특별한 장소입니다."},{"id":11,"imageDataUrl":"/uploads/1763242430968-ezngh.jpg","description":"프랑스 절대 왕정의 화려함 뒤에 숨겨진 왕의 밀실, 바로 '살롱 드 마르'의 비밀을 파헤쳐 봅시다. 이곳은 단순한 방이 아니었습니다. 17세기 말, 한국으로 치면 조선 시대 숙종 무렵, 루이 14세의 개인적인 공간으로 이곳의 주인은 바로 '전쟁의 신' 마르스였습니다.\n\n네, 맞습니다. 저 그림 속 웅장한 풍경을 보세요. '살롱 드 마르'는 '왕의 아파트'에서 가장 먼저 만나는 방으로, 그의 군사적 위용을 과시하기 위한 공간이었답니다. 이곳의 벽을 장식한 그림들은 바로 신화 속 전쟁의 신 마르스를 묘사하며, 왕의 권위와 힘을 신성하게 표현하고 있죠. 벽난로 위와 그 옆 벽에 걸린 그림들, 그리고 화려한 샹들리에까지, 모든 것이 왕의 위엄을 드러내기 위한 계산된 연출입니다. 마치 게임 캐릭터의 능력치를 최대로 끌어올리는 설정처럼 말이죠.\n\n프랑스 바로크 양식의 진수를 보여주는 이 방은, 붉은색 벨벳 벽지와 황금빛 장식이 어우러져 보는 이의 눈을 압도합니다. 특히 천장의 샹들리에의 영롱한 빛은 이곳을 더욱 신비롭고 숭고하게 만들죠. 만약 여러분이 이곳을 방문한다면, 이 그림 속 인물들의 표정과 손짓 하나하나에 담긴 의미를 천천히 음미해 보세요. 아마 루이 14세가 어떤 심경으로 이 방을 거닐었을지, 상상하는 재미가 쏠쏠할 겁니다."},{"id":12,"imageDataUrl":"/uploads/1763242431015-4suak9.jpg","description":"왕의 집무실로 가는 길목에 있는 이 화려한 살롱, 바로 '디안의 방'은 단순한 복도가 아니었습니다! 이곳에서는 왕을 보기 위한 공개 리허설이 열렸는데, 마치 요즘 콘서트장처럼 관중들이 왕을 보기 위해 몰려들었다는 놀라운 사실!\n\n이곳은 17세기 프랑스의 루이 14세 시대, 즉 조선으로 치면 숙종 때 지어진 베르사유 궁전의 일부입니다. 화려함의 극치를 보여주는 이 공간은 당시 왕의 위엄과 권력을 상징하죠.\n\n보세요, 벽면을 가득 채운 금색 장식과 대리석이 눈부시죠? 특히 중앙의 조각상과 그 뒤를 장식한 조각물은 르네상스 후기 바로크 양식의 특징을 고스란히 보여줍니다. 마치 황금빛 보물창고에 들어온 듯한 느낌인데요.\n\n이 방의 핵심은 바로 천장과 벽면에 조화롭게 배치된 정교한 조각과 문양입니다. 마치 살아있는 듯한 입체감과 금색의 영롱함이 어우러져 시각적인 황홀경을 선사하죠. 이곳에서 사진을 찍는다면, 왕족이 된 듯한 기분으로 웅장함을 담아보세요. 특히 조각상 앞에서 인생샷을 남기는 것을 추천합니다!"},{"id":13,"imageDataUrl":"/uploads/1763242431060-k35t9h.jpg","description":"프랑스 베르사유 궁전의 '전쟁 갤러리'에 오신 여러분, 이곳은 단순한 그림 전시실이 아닙니다. 숨 막히는 광경 속에 무려 300년 전 왕실의 은밀한 역사가 담겨 있다고 하는데요!\n\n이 웅장한 '전쟁 갤러리(Galerie des Batailles)'는 1830년대 프랑스 7월 혁명 이후, 루이 필리프 1세 국왕의 지시로 탄생했습니다. 마치 조선시대 왕조실록처럼, 프랑스 역사의 결정적인 순간들을 담아낸 대형 역사화들이 가득하죠. 이 갤러리의 하이라이트는 압도적인 크기의 캔버스에 그려진 프랑스 군대의 위대한 승리들을 생생하게 묘사한 작품들입니다. 마치 타임머신을 타고 그 현장에 와 있는 듯한 착각을 불러일으킬 정도죠.\n\n이곳의 작품들은 단순한 회화가 아니라, 프랑스라는 국가가 어떻게 승리를 통해 영광을 쌓아왔는지를 증명하는 거대한 역사 기록물입니다. 각 그림마다 수백, 수천 명의 병사들이 묘사되어 있으며, 그들의 표정과 움직임 하나하나가 당시의 역동적인 상황을 고스란히 전달합니다. 특히 각 그림의 하단에 새겨진 연대기와 간략한 설명은 마치 게임의 '업적'처럼 느껴지기도 하죠. 사진 찍기 좋은 장소를 찾는다면, 중앙에서 양쪽으로 펼쳐진 갤러리의 끝자락을 담아보세요. 웅장한 천장과 끝없이 이어지는 그림들이 만들어내는 원근감이 정말 예술입니다. 이곳을 방문하신다면, 그림 속 영웅들의 이야기를 상상하며 천천히 산책하듯 둘러보시는 것을 추천합니다."},{"id":14,"imageDataUrl":"/uploads/1763242431107-kwl51b.jpg","description":"이 화려한 '1792년의 방'에서는 프랑스 혁명의 격동적인 순간이 고스란히 느껴집니다.\n\n1792년, 바로 그 해는 프랑스 역사에 있어 루이 16세가 폐위되고 공화정이 선포되며 왕정이 종식된, 가히 혁명의 불꽃이 가장 거세게 타올랐던 시기죠. 이 방은 프랑스 대혁명 이전, 구체제 하에서는 왕비의 거처였던 '그랑 아파르트망'의 일부였지만, 루이 필립 왕에 의해 1792년 공화정 선포를 기념하는 공간으로 재탄생했습니다. 마치 조선 시대 후기, 격변하는 정세 속에서 왕실의 공간이 새로운 의미를 부여받았던 것처럼 말이죠.\n\n정교하게 조각된 황금 장식과 거대한 벽화, 그리고 사방을 가득 채운 초상화들이 시선을 사로잡습니다. 특히 천장 중앙의 샹들리에와 양쪽 벽면에 걸린 그림들을 주목해보세요. 햇빛이 쏟아져 들어오는 창문 덕분에 바닥에 그림자가 드리워져 마치 무대에 오른 듯한 극적인 효과를 연출합니다. 이곳은 단순히 아름다운 공간을 넘어, 프랑스 역사의 중요한 순간들을 담고 있는 살아있는 증거라 할 수 있습니다. 사진을 찍으신다면, 이 빛과 그림자의 조화를 활용해서 방의 웅장함을 더욱 극대화하는 것을 추천합니다!"},{"id":15,"imageDataUrl":"/uploads/1763242431153-l4zmg.jpg","description":"나폴레옹 1세의 대관식을 배경으로 한 이 그림, 사실은 무려 1800년대에 그려졌다는 사실! 그것도 프랑스 역사를 재해석한 루이 필리프 1세의 야심 찬 프로젝트의 일환이었죠.\n\n이곳은 프랑스 베르사유 궁전 안에 있는 '사크르 살롱'입니다. 1804년, 나폴레옹 1세의 대관식을 그린 자크 루이 다비드의 걸작 '나폴레옹 1세의 대관식'이 바로 이 방의 주인공입니다. 프랑스 혁명 이후 혼란했던 시기를 거쳐 황제로 즉위한 나폴레옹의 위엄과 권위를 화려하게 담아냈는데요.\n\n화면 속 거대한 그림을 보세요. 마치 그림 속으로 빨려 들어갈 듯한 입체감과 웅장함이 느껴지시죠? 특히 황제 대관식이라는 역사적 순간을 생생하게 재현한 다비드의 탁월한 묘사력은 감탄을 자아냅니다. 그림 속 인물들의 표정 하나하나, 의상의 질감까지도 섬세하게 표현되어 있어 당시의 분위기를 그대로 느낄 수 있습니다.\n\n이 방은 원래 루이 14세 시절, 왕실 연회가 열렸던 '그랑 가르드'라는 큰 홀이었는데요. 19세기 중반, 루이 필리프 1세가 베르사유 궁전을 프랑스 역사 박물관으로 개조하면서 이곳에 나폴레옹 관련 그림들을 전시하기로 결정했습니다. 그리고 그 중심에 바로 이 '나폴레옹 1세의 대관식' 그림이 놓이게 된 것이죠.\n\n여러분도 이곳에 오신다면, 단순히 그림을 보는 것을 넘어 나폴레옹이라는 역사적 인물과 프랑스의 격동적인 역사를 생생하게 느껴보시길 바랍니다. 특히 그림 앞에 서서, 마치 그 순간에 함께하는 듯한 상상을 해보는 건 어떨까요? 웅장한 샹들리에와 황금빛 장식, 그리고 역사적인 그림이 어우러져 잊지 못할 경험을 선사할 겁니다."},{"id":16,"imageDataUrl":"/uploads/1763242431201-mhfuw.jpg","description":"프랑스 베르사유 궁전의 화려함 끝판왕, 바로 이곳에서 왕들의 찬란했던 종교 의식이 펼쳐졌습니다!  이곳은 1710년, 태양왕 루이 14세 시대의 마지막을 장식하며 완공된 왕실 예배당으로, 이전의 네 개 예배당을 계승한 다섯 번째이자 마지막 예배당입니다.  조선 시대라면 임진왜란 이후 효종대왕이 즉위하던 시기쯤이겠네요.  웅장한 기둥과 황금빛 장식, 그리고 천장화까지! 마치 천상의 오케스트라가 연주될 것만 같은 황홀한 분위기입니다.  특히 주목해야 할 것은 중앙에 자리한 거대한 파이프 오르간인데요, 이 오르간은 그 자체로 하나의 예술 작품이라고 할 수 있습니다.  하늘로 솟아오르는 듯한 돔 천장과 성스러운 분위기를 더하는 스테인드글라스 창문은 빛의 마법을 선사하죠.  이곳에선 웅장한 미사가 거행되었을 뿐만 아니라, 왕실의 중요한 행사들이 열리며 역사적인 순간들을 만들어냈습니다.  여러분도 이곳에서 잠시나마 경건함과 웅장함을 느껴보시는 건 어떨까요?  사진 촬영 팁을 드리자면, 넓은 시야를 담기 위해 광각 렌즈를 사용하거나, 인물의 등장으로 공간감을 더하는 것도 좋은 방법입니다.  웅장한 파이프 오르간을 배경으로 인생샷을 남겨보세요!"},{"id":17,"imageDataUrl":"/uploads/1763242431248-w29k98.jpg","description":"프랑스 베르사유 궁전에 숨겨진 이야기, 이곳은 바로 '살롱 드 비너스'! 무려 17세기 후반, 태양왕 루이 14세 시절부터 베르사유의 화려함을 대변해 온 곳입니다.\n\n이곳은 로마 신화 속 사랑과 미의 여신 비너스에게 헌정된 방으로, 왕의 개인 아파트먼트로 향하는 가장 중요한 통로였습니다. 과거에는 '대사들의 계단'을 통해 연결되었지만, 지금은 그 위용을 볼 수 없죠. 하지만 이 살롱은 왕실의 연회가 열릴 때면 맛있는 음식과 음료가 제공되는 화려한 리셉션 공간으로 변신하곤 했습니다.\n\n방 안을 둘러보면, 금빛 장식과 대리석 기둥이 어우러져 눈부신 광경을 연출합니다. 천장화 역시 화려한 색감으로 시선을 사로잡죠. 특히 벽면 곳곳에 배치된 황금색 조각 장식과 문양은 당대 최고의 예술가들이 만들어낸 걸작이라고 할 수 있습니다.\n\n자, 이곳에서 인생샷을 남기고 싶으시다면, 이 화려한 샹들리에와 황금빛 장식이 조화롭게 어우러지는 순간을 포착해보세요. 아마 여러분도 태양왕의 숨결을 느끼게 되실 겁니다!"},{"id":18,"imageDataUrl":"/uploads/1763242431293-2yxh2x.jpg","description":"프랑스 베르사유 궁전의 '헤라클레스의 방'! 이 방 천장에는 무려 142명의 인물이 등장하는 어마어마한 규모의 프레스코화가 그려져 있는데, 마치 신화 속 장면이 눈앞에 펼쳐지는 듯한 착각을 일으킨다니까요?\n\n이 화려한 방은 태양왕 루이 14세 시대, 정확히는 1712년에 완공된 마지막 살롱입니다. 프랑스 역사로 치자면 조선 시대 후기의 영조, 정조 시대를 지나 순조 때쯤이라고 생각하시면 이해가 쉬울 거예요. 웅장한 규모와 함께, 방 전체를 감싸는 황금빛 장식과 대리석 기둥은 보는 사람을 압도하는 위엄을 뿜어냅니다. 천장의 프레스코화는 3년이라는 짧은 시간 안에 완성되었다는 사실이 믿기지 않을 정도로 섬세하고 역동적인데요, 신화 속 영웅 헤라클레스의 위업을 기리기 위해 그려진 거대한 작품이니, 이곳에선 마치 왕이 된 듯한 기분을 만끽하실 수 있을 겁니다.\n\n방문을 계획하신다면, 천장화를 가장 잘 감상할 수 있는 위치를 미리 파악해두시는 게 좋아요. 특히 해가 잘 드는 오후 시간에 방문하시면, 그림자 효과 덕분에 더욱 입체적이고 생생한 느낌을 받으실 수 있을 거예요. 휴대폰 카메라보다는 눈으로 직접 담는 것이 훨씬 더 경이로울 테니, 잠시 스마트폰은 주머니에 넣어두고 이 장엄한 예술 작품에 흠뻑 빠져보시는 건 어떨까요?"},{"id":19,"imageDataUrl":"/uploads/1763242431348-s240vx.jpg","description":"이곳, 바로 그 유명한 베르사유 궁전의 왕립 예배당입니다! 1699년에 완공되었는데, 우리나라 조선 시대로 치면 숙종 임금 때쯤이겠네요. 얼마나 화려하고 웅장한지, 마치 금으로 도배를 한 것 같은 착각마저 듭니다.\n\n자, 시선을 위로 한번 올려보세요! 천장에는 '천국의 영광'을 묘사한 거대한 프레스코화가 펼쳐져 있는데요, 웅장한 오르간과 함께 이곳의 분위기를 압도하고 있습니다. 저 거대한 기둥들은 보시다시피 코린트 양식인데요, 잎사귀 모양의 장식이 섬세하게 표현되어 있어 바로크 건축의 화려함을 제대로 보여줍니다.\n\n특히 이곳은 프랑스 왕실의 중요한 의식이 거행되던 장소로, 루이 14세의 손자였던 프랑수아의 결혼식도 바로 이 예배당에서 열렸다고 해요. 이곳에 서 있으면 마치 시간 여행을 떠나 프랑스 왕족이 된 듯한 기분을 느낄 수 있을 거예요.\n\n사진 촬영 팁을 드리자면, 이 웅장함을 한 프레임에 담으려면 삼각대는 필수! 그리고 아래층에서 오르간을 배경으로, 위층에서 천장화를 조망하는 각도로 찍으면 최고의 인생샷을 건질 수 있을 겁니다. 아, 그리고 예배당 내부에서는 절대 사진 촬영이 금지될 수 있으니, 방문 전에 꼭 확인하세요!"}]</script>
+    
+    <script>
+        // 데이터 로드
+        const appData = JSON.parse(document.getElementById('app-data').textContent);
+        const galleryView = document.getElementById('gallery-view');
+        const detailView = document.getElementById('detail-view');
+        const header = document.querySelector('.header');
+        
+        // Web Speech API
+        const synth = window.speechSynthesis;
+        let voices = [];
+        let currentUtterance = null;
+        
+        function populateVoiceList() {
+            voices = synth.getVoices().filter(v => v.lang.startsWith('ko'));
+        }
+        
+        function stopAudio() {
+            if (synth.speaking) {
+                synth.pause();
+                synth.cancel();
+            }
+            const playIcon = document.getElementById('play-icon');
+            const pauseIcon = document.getElementById('pause-icon');
+            if (playIcon) playIcon.style.display = 'block';
+            if (pauseIcon) pauseIcon.style.display = 'none';
+        }
+        
+        function playAudio(text) {
+            stopAudio();
+            
+            // ⚠️ **핵심 로직 - 절대 수정 금지!** (2025-10-03 치명적 버그 해결)
+            // 
+            // 문제: HTML 내부 JavaScript에서 정규식 /<brs*/?>/gi 사용 시
+            //       HTML 파서가 < > 를 &lt; &gt; 로 변환하여 JavaScript 파싱 에러 발생
+            //       → "Uncaught SyntaxError: Unexpected token '&'" 
+            //
+            // 해결: new RegExp() 방식으로 HTML 파서와 100% 분리
+            //       - 안전성: HTML escape 문제 원천 차단
+            //       - 호환성: 모든 브라우저 지원
+            //       - 영구성: 앞으로 절대 깨지지 않음
+            //
+            // 영향: 27개 기존 공유 페이지 DB 일괄 업데이트 완료 (2025-10-03)
+            const cleanText = text.replace(new RegExp('<br\s*/?>', 'gi'), ' ');
+            
+            // 문장 분리 및 하이라이트 준비
+            const sentences = cleanText.match(/[^.!?]+[.!?]+/g) || [cleanText];
+            const textElement = document.getElementById('detail-description');
+            
+            // 원본 텍스트 저장
+            const originalText = cleanText;
+            
+            currentUtterance = new SpeechSynthesisUtterance(cleanText);
+            
+            // ⚠️ 오프라인 최적화 - Microsoft Heami 음성 강제 지정 (현장 테스트 완료)
+            // 첨부된 HTML 방식: 정확한 이름 매칭으로 음성 고정
+            const targetVoice = voices.find(v => v.name === 'Microsoft Heami - Korean (Korea)');
+            currentUtterance.voice = targetVoice;
+            currentUtterance.lang = 'ko-KR';
+            currentUtterance.rate = 1.0;
+            
+            const playIcon = document.getElementById('play-icon');
+            const pauseIcon = document.getElementById('pause-icon');
+            
+            let currentSentenceIndex = 0;
+            
+            currentUtterance.onstart = () => {
+                playIcon.style.display = 'none';
+                pauseIcon.style.display = 'block';
+            };
+            
+            // 단어 경계마다 하이라이트
+            currentUtterance.onboundary = (event) => {
+                if (event.name === 'sentence') {
+                    // 현재 문장 하이라이트
+                    const highlightedHTML = sentences.map((sentence, idx) => {
+                        if (idx === currentSentenceIndex) {
+                            return '<span style="background-color: rgba(66, 133, 244, 0.3); font-weight: 600;">' + sentence + '</span>';
+                        }
+                        return sentence;
+                    }).join('');
+                    
+                    textElement.innerHTML = highlightedHTML;
+                    currentSentenceIndex++;
+                }
+            };
+            
+            currentUtterance.onend = () => {
+                playIcon.style.display = 'block';
+                pauseIcon.style.display = 'none';
+                // 하이라이트 제거, 원본 복원
+                textElement.textContent = originalText;
+            };
+            
+            synth.speak(currentUtterance);
+        }
+        
+        populateVoiceList();
+        if (synth.onvoiceschanged !== undefined) {
+            synth.onvoiceschanged = populateVoiceList;
+        }
+        
+        // 갤러리 아이템 클릭 (앱과 100% 동일한 로직)
+        document.querySelectorAll('.gallery-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const itemData = appData[parseInt(item.dataset.id)];
+                
+                // 배경 이미지 설정
+                document.getElementById('detail-bg').src = itemData.imageDataUrl;
+                
+                // 텍스트 설정
+                document.getElementById('detail-description').textContent = itemData.description;
+                
+                // UI 표시
+                galleryView.classList.add('hidden');
+                header.classList.add('hidden');
+                detailView.classList.remove('hidden');
+                document.getElementById('detail-footer').classList.remove('hidden');
+                
+                // 텍스트는 표시 상태로 시작 (음성과 동시에 보임)
+                document.getElementById('detail-text').classList.remove('hidden');
+                
+                // 음성 자동 재생
+                playAudio(itemData.description);
+            });
+        });
+        
+        // 🔙 보관함으로 돌아가기 버튼 (갤러리 뷰)
+        const galleryBackBtn = document.getElementById('gallery-back-btn');
+        if (galleryBackBtn) {
+            galleryBackBtn.addEventListener('click', () => {
+                window.location.href = '/#archive';
+            });
+        }
+        
+        // 뒤로 가기
+        document.getElementById('detail-back').addEventListener('click', () => {
+            stopAudio();
+            detailView.classList.add('hidden');
+            document.getElementById('detail-text').classList.add('hidden');
+            document.getElementById('detail-footer').classList.add('hidden');
+            header.classList.remove('hidden');
+            galleryView.classList.remove('hidden');
+        });
+        
+        // 텍스트 토글 버튼 (앱과 동일한 로직)
+        document.getElementById('text-toggle')?.addEventListener('click', () => {
+            document.getElementById('detail-text').classList.toggle('hidden');
+        });
+        
+        // 음성 재생/정지
+        document.getElementById('detail-audio').addEventListener('click', () => {
+            if (synth.speaking) {
+                stopAudio();
+            } else {
+                const text = document.getElementById('detail-description').textContent;
+                playAudio(text);
+            }
+        });
+        
+        // 홈 버튼 (갤러리 하단)
+        const homeButton = document.getElementById('home-button');
+        if (homeButton) {
+            homeButton.addEventListener('click', (e) => {
+                e.preventDefault();
+                stopAudio();
+                setTimeout(() => {
+                    window.location.href = homeButton.href;
+                }, 200);
+            });
+        }
+        
+        // 홈 버튼 (상세 뷰 하단) - 음성 듣다가 바로 앱으로 가기
+        const detailHome = document.getElementById('detail-home');
+        if (detailHome) {
+            detailHome.addEventListener('click', (e) => {
+                e.preventDefault();
+                stopAudio();
+                setTimeout(() => {
+                    window.location.href = detailHome.href;
+                }, 200);
+            });
+        }
+        
+        // 페이지 이탈 시 오디오 정지 (백그라운드 재생 방지)
+        window.addEventListener('beforeunload', () => {
+            stopAudio();
+        });
+    </script>
+    
+    <!-- ⚠️ 핵심 로직: Service Worker 등록 (오프라인 지원) -->
+    <script>
+        // Service Worker 지원 확인 및 등록
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw-share.js')
+                    .then(registration => {
+                        console.log('✅ [SW] 등록 성공:', registration.scope);
+                    })
+                    .catch(error => {
+                        console.log('❌ [SW] 등록 실패:', error);
+                    });
+            });
+        }
+    </script>
+</body>
+</html>

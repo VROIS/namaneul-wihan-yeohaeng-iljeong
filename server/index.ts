@@ -111,6 +111,46 @@ function setupBodyParsing(app: express.Application) {
   app.use(express.urlencoded({ extended: false }));
 }
 
+// ⚠️ 수정금지(승인필요) — 앱 에러 리포트 엔드포인트 (AI가 에러 확인용)
+function setupAppErrorReporter(app: express.Application) {
+  const errorLogPath = path.resolve(process.cwd(), "app-errors.log");
+
+  app.post("/api/app-errors", (req: Request, res: Response) => {
+    const { errors } = req.body || {};
+    if (!errors || !Array.isArray(errors)) {
+      return res.status(400).json({ ok: false });
+    }
+
+    const lines = errors.map((e: any) =>
+      `[${e.timestamp}] ${e.component || "?"} | ${e.message}${e.stack ? "\n  " + e.stack.split("\n").slice(0, 3).join("\n  ") : ""}`
+    ).join("\n");
+
+    fs.appendFileSync(errorLogPath, lines + "\n---\n", "utf-8");
+    console.error(`[APP-ERROR] ${errors.length}건 수신:\n${lines}`);
+    res.json({ ok: true, received: errors.length });
+  });
+
+  // 에러 로그 읽기 (AI가 확인용)
+  app.get("/api/app-errors", (_req: Request, res: Response) => {
+    try {
+      const content = fs.existsSync(errorLogPath) ? fs.readFileSync(errorLogPath, "utf-8") : "(에러 없음)";
+      res.type("text/plain").send(content);
+    } catch {
+      res.type("text/plain").send("(읽기 실패)");
+    }
+  });
+
+  // 에러 로그 클리어
+  app.delete("/api/app-errors", (_req: Request, res: Response) => {
+    try {
+      fs.writeFileSync(errorLogPath, "", "utf-8");
+      res.json({ ok: true, cleared: true });
+    } catch {
+      res.json({ ok: false });
+    }
+  });
+}
+
 function setupRequestLogging(app: express.Application) {
   app.use((req, res, next) => {
     const start = Date.now();
@@ -245,6 +285,7 @@ function setupErrorHandler(app: express.Application) {
   setupCors(app);
   setupCharset(app);
   setupBodyParsing(app);
+  setupAppErrorReporter(app); // ⚠️ 수정금지(승인필요) — 앱 에러 원격 수집
   setupRequestLogging(app);
 
   configureExpoAndLanding(app);

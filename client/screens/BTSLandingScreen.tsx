@@ -1,0 +1,487 @@
+// ⚠️ 수정금지(승인필요) — BTS 랜딩 (VROIS/vrois 변환 + 무대 구도)
+// 상단 전구 8개(서치라이트) → 히어로 텍스트 → "MAKE YOUR TRIP" (앱 정체성) → 구체+손잡이(하단)
+// Skia 서치라이트 + 3단계 조명 + 렌즈플레어
+import React, { useEffect, useState, useCallback, useRef } from "react";
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  Dimensions,
+  StatusBar,
+  Platform,
+  Keyboard,
+  KeyboardAvoidingView,
+  Alert,
+} from "react-native";
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withDelay,
+  withTiming,
+  withSpring,
+  withSequence,
+  interpolate,
+  interpolateColor,
+  Extrapolation,
+  Easing,
+} from "react-native-reanimated";
+import { BlurView } from "expo-blur";
+import { LinearGradient } from "expo-linear-gradient";
+import { useNavigation } from "@react-navigation/native";
+import * as Haptics from "expo-haptics";
+import { socialLoginWithGoogle, socialLoginWithKakao } from "@/lib/auth";
+import { useGoogleAuthRequest, getIdTokenFromGoogleResponse, isGoogleOAuthConfigured } from "@/lib/auth-oauth";
+import { isKakaoOAuthConfigured, startKakaoLoginWeb } from "@/lib/auth-kakao";
+import { getApiUrl } from "@/lib/query-client";
+
+const { width: SW, height: SH } = Dimensions.get("window");
+
+// ⚠️ 수정금지(승인필요) — 원본 색상 (VROIS/vrois)
+const STAGE_COLORS = ["#001a4d", "#050930", "#9333ea"];
+const PRIMARY = "#8bacff";
+const SECONDARY = "#b486ff";
+
+// ⚠️ 수정금지(승인필요) — 아미봉 비율
+const GLOBE_SIZE = SW * 0.62;
+const HANDLE_W = 50;
+const HANDLE_H = SW * 0.35;
+const BTN_AREA_W = SW * 0.72;
+
+// ⚠️ 수정금지(승인필요) — Haptics
+const haptic = (t: "light" | "medium" | "success") => {
+  try {
+    if (t === "light") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    else if (t === "medium") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    else Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  } catch {}
+};
+
+// ⚠️ 수정금지(승인필요) — D-Day 실시간 (fallback: 하드코딩)
+function getDDayFallback(): { city: string; dDay: number } {
+  const concert = new Date("2026-04-09");
+  const today = new Date();
+  const dDay = Math.ceil((concert.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  return { city: "GOYANG", dDay };
+}
+
+// 전구/서치라이트 삭제됨 (Expo Go 미지원 + 비율 깨짐)
+
+export function BTSLandingScreen() {
+  const navigation = useNavigation<any>();
+  const [dob, setDob] = useState("");
+  const [dobComplete, setDobComplete] = useState(false);
+  const [lightingStage, setLightingStage] = useState(0);
+  const [oauthLoading, setOauthLoading] = useState(false);
+  const [concertInfo, setConcertInfo] = useState(getDDayFallback());
+
+  // ⚠️ 수정금지(승인필요) — /api/bts/next-concert 실시간 연동
+  useEffect(() => {
+    fetch(`${getApiUrl()}/api/bts/next-concert`)
+      .then(r => r.json())
+      .then(data => {
+        if (data.city) setConcertInfo({ city: data.city.toUpperCase(), dDay: data.dDay });
+      })
+      .catch(() => {}); // 실패 시 fallback 유지
+  }, []);
+
+  const { city, dDay } = concertInfo;
+
+  // ⚠️ 수정금지(승인필요) — Google OAuth hook (기존 LoginScreen 패턴 그대로)
+  const [googleRequest, googleResponse, googlePromptAsync] = useGoogleAuthRequest();
+  const processedGoogleRef = useRef<typeof googleResponse>(null);
+
+  const entrance = useSharedValue(0);
+  const flare = useSharedValue(0);
+  const globeGlow = useSharedValue(0);
+  const bgStage = useSharedValue(0);
+  const whiteout = useSharedValue(0);
+  // ⚠️ 수정금지(승인필요) — 생년월일 → birthDate 문자열
+  const birthDateStr = (() => {
+    const digits = dob.replace(/\D/g, "");
+    if (digits.length !== 8) return "";
+    return `${digits.slice(4)}-${digits.slice(2, 4)}-${digits.slice(0, 2)}`;
+  })();
+
+  // ⚠️ 수정금지(승인필요) — Google OAuth 응답 처리 (기존 LoginScreen 패턴)
+  useEffect(() => {
+    if (!googleResponse || googleResponse.type !== "success" || !birthDateStr) return;
+    if (processedGoogleRef.current === googleResponse) return;
+    processedGoogleRef.current = googleResponse;
+    // @ts-expect-error Type mismatch from AuthSession
+    const idToken = getIdTokenFromGoogleResponse(googleResponse);
+    if (!idToken) return;
+    setOauthLoading(true);
+    socialLoginWithGoogle({
+      idToken,
+      birthDate: birthDateStr,
+      language: "ko",
+      deviceType: Platform.OS === "web" ? "web" : "mobile",
+    })
+      .then((result) => {
+        if (result.success) {
+          // 인증 성공 → 세계지도 → 캐릭터
+          goToWorldMap();
+        } else {
+          Alert.alert("로그인 실패", result.error || "Google 로그인에 실패했습니다.");
+        }
+      })
+      .catch(() => Alert.alert("로그인 실패", "서버 연결에 실패했습니다."))
+      .finally(() => setOauthLoading(false));
+  }, [googleResponse, birthDateStr]);
+
+  // ⚠️ 수정금지(승인필요) — 등장 시퀀스
+  useEffect(() => {
+    // 아미봉 스윽 올라옴 (원본: 2.5s cubic-bezier)
+    entrance.value = withDelay(
+      800,
+      withTiming(1, { duration: 2500, easing: Easing.bezier(0.22, 1, 0.36, 1) })
+    );
+    // stage 1 (Midnight)
+    setTimeout(() => {
+      bgStage.value = withTiming(1, { duration: 200 });
+      setLightingStage(1);
+      globeGlow.value = withTiming(0.3, { duration: 600 });
+    }, 3300);
+  }, []);
+
+  // ⚠️ 수정금지(승인필요) — 생년월일 포맷
+  const handleDobInput = useCallback((text: string) => {
+    const digits = text.replace(/\D/g, "").slice(0, 8);
+    let fmt = digits;
+    if (digits.length > 2) fmt = digits.slice(0, 2) + " / " + digits.slice(2);
+    if (digits.length > 4) fmt = digits.slice(0, 2) + " / " + digits.slice(2, 4) + " / " + digits.slice(4);
+    setDob(fmt);
+    if (digits.length === 8) {
+      setDobComplete(true);
+      Keyboard.dismiss();
+      haptic("medium");
+    } else {
+      setDobComplete(false);
+    }
+  }, []);
+
+  // ⚠️ 수정금지(승인필요) — 터치 → stage 2 + 플레어
+  const handleInteraction = useCallback(() => {
+    bgStage.value = withTiming(2, { duration: 200 });
+    setLightingStage(2);
+    globeGlow.value = withSpring(0.8, { damping: 12 });
+    flare.value = withSequence(
+      withTiming(1, { duration: 150 }),
+      withTiming(0, { duration: 150 })
+    );
+    haptic("light");
+  }, []);
+
+  // ⚠️ 수정금지(승인필요) — 세계지도 전환 (인증 성공 후 호출)
+  const goToWorldMap = useCallback(() => {
+    whiteout.value = withTiming(1, { duration: 600 });
+    setTimeout(() => {
+      navigation.replace("BTSWorldMap", { city, cityId: 0 });
+    }, 700);
+  }, [city]);
+
+  // ⚠️ 수정금지(승인필요) — OAuth 실제 연결 (기존 LoginScreen 패턴 그대로)
+  const handleLogin = useCallback(async (provider: string) => {
+    if (!dobComplete) return;
+    handleInteraction();
+    globeGlow.value = withSpring(1, { damping: 8, stiffness: 200 });
+    haptic("success");
+
+    if (provider === "google") {
+      // Google: promptAsync → useEffect에서 응답 처리
+      if (isGoogleOAuthConfigured()) {
+        await googlePromptAsync();
+      } else {
+        // DEV 모드 또는 미설정 → 바로 전환
+        goToWorldMap();
+      }
+    } else if (provider === "kakao") {
+      // Kakao: 웹에서는 리다이렉트, 네이티브는 SDK
+      if (isKakaoOAuthConfigured() && Platform.OS === "web") {
+        setOauthLoading(true);
+        try {
+          await startKakaoLoginWeb(birthDateStr, "ko");
+        } catch {
+          Alert.alert("로그인 실패", "카카오 로그인을 시작할 수 없습니다.");
+          setOauthLoading(false);
+        }
+      } else {
+        // DEV 모드 또는 미설정 → 바로 전환
+        goToWorldMap();
+      }
+    }
+  }, [dobComplete, birthDateStr, city]);
+
+  // ── 애니메이션 스타일 ──
+
+  const bgStyle = useAnimatedStyle(() => ({
+    backgroundColor: interpolateColor(bgStage.value, [0, 1, 2], STAGE_COLORS),
+  }));
+
+  const entranceStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateY: interpolate(entrance.value, [0, 1], [150, 0], Extrapolation.CLAMP) },
+    ],
+    opacity: interpolate(entrance.value, [0, 0.3, 1], [0, 0.5, 1], Extrapolation.CLAMP),
+  }));
+
+  const globeShadowStyle = useAnimatedStyle(() => ({
+    shadowOpacity: globeGlow.value,
+    shadowRadius: interpolate(globeGlow.value, [0, 0.5, 1], [0, 40, 80], Extrapolation.CLAMP),
+  }));
+
+  const innerGlowOpacity = useAnimatedStyle(() => ({
+    opacity: interpolate(bgStage.value, [0, 1, 2], [0.1, 0.3, 0.6], Extrapolation.CLAMP),
+  }));
+
+  const flareStyle = useAnimatedStyle(() => ({
+    opacity: flare.value * 0.4,
+    transform: [{ scale: interpolate(flare.value, [0, 1], [0.5, 2.5], Extrapolation.CLAMP) }],
+  }));
+
+  const whiteoutStyle = useAnimatedStyle(() => ({ opacity: whiteout.value }));
+
+  const blurBg = Platform.select({ android: { backgroundColor: "rgba(255,255,255,0.1)" }, default: {} });
+  const isDisabled = !dobComplete;
+
+  return (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+      <View style={styles.root}>
+        <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+
+        {/* Layer 0: 배경 3단계 */}
+        <Animated.View style={[StyleSheet.absoluteFill, bgStyle]} />
+
+        {/* Layer 2: 렌즈 플레어 */}
+        <Animated.View style={[StyleSheet.absoluteFill, flareStyle, { backgroundColor: "rgba(255,255,255,0.4)", pointerEvents: "none" }]} />
+
+        {/* ── 상단 히어로 텍스트 ── */}
+        <View style={styles.hero}>
+          <Text style={styles.tourLabel}>WORLD TOUR 2026</Text>
+          <View style={styles.titleRow}>
+            <Text style={styles.titleBTS}>BTS </Text>
+            <Text style={styles.titleArirang}>'Arirang'</Text>
+          </View>
+          <View style={styles.sloganWrap}>
+            <Text style={styles.slogan}>MAKE YOUR TRIP</Text>
+            <Text style={styles.slogan}>WITH THEM</Text>
+          </View>
+        </View>
+
+        {/* ── 아미봉 (구체 + 손잡이) — 하단 배치, 스윽 올라옴 ── */}
+        <Animated.View style={[styles.bombWrap, entranceStyle]}>
+          {/* 구체 */}
+          <Animated.View style={[styles.globeShadow, globeShadowStyle, { shadowColor: lightingStage === 2 ? "#a855f7" : PRIMARY }]}>
+            <TouchableOpacity activeOpacity={0.97} onPress={handleInteraction} style={[styles.globeClip, blurBg]}>
+              <BlurView intensity={20} tint="dark" style={styles.globeInner}>
+                <Animated.View style={[styles.innerGlow, innerGlowOpacity]}>
+                  <LinearGradient
+                    colors={[`${PRIMARY}25`, "transparent", `${SECONDARY}15`]}
+                    style={StyleSheet.absoluteFill}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                  />
+                </Animated.View>
+                <Text style={styles.cityLabel}>{city}</Text>
+                <Text style={styles.dDay}>D-{dDay}</Text>
+                <View style={styles.inputArea}>
+                  <Text style={styles.inputLabel}>DATE OF BIRTH</Text>
+                  <TextInput
+                    style={styles.input}
+                    placeholder="DD / MM / YYYY"
+                    placeholderTextColor="rgba(255,255,255,0.2)"
+                    value={dob}
+                    onChangeText={handleDobInput}
+                    onFocus={handleInteraction}
+                    keyboardType="number-pad"
+                    returnKeyType="done"
+                    maxLength={14}
+                  />
+                </View>
+              </BlurView>
+            </TouchableOpacity>
+          </Animated.View>
+
+          {/* 손잡이 */}
+          <View style={styles.handleWrap}>
+            <LinearGradient colors={["rgba(255,255,255,0.1)", "rgba(5,9,48,1)"]} style={styles.handleGrad} />
+            <View style={styles.btnArea}>
+              <TouchableOpacity style={[styles.btn, styles.googleBtn, isDisabled && styles.off]} onPress={() => handleLogin("google")} disabled={isDisabled} activeOpacity={0.96}>
+                <Text style={styles.googleTxt}>Continue with Google</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.btn, styles.kakaoBtn, isDisabled && styles.off]} onPress={() => handleLogin("kakao")} disabled={isDisabled} activeOpacity={0.96}>
+                <Text style={styles.kakaoTxt}>Continue with Kakao</Text>
+              </TouchableOpacity>
+              {Platform.OS === "ios" && (
+                <TouchableOpacity style={[styles.appleLink, isDisabled && styles.off]} onPress={() => handleLogin("apple")} disabled={isDisabled} activeOpacity={0.96}>
+                  <Text style={styles.appleTxt}>Sign in with Apple</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        </Animated.View>
+
+        {/* ⚠️ 수정금지(승인필요) — 화이트아웃 (zIndex 99로 모든 레이어 위) */}
+        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: "#FFF", pointerEvents: "none", zIndex: 99 }, whiteoutStyle]} />
+      </View>
+    </KeyboardAvoidingView>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: { flex: 1, backgroundColor: STAGE_COLORS[0] },
+
+  // ⚠️ 수정금지(승인필요) — 히어로 (상단)
+  hero: {
+    paddingTop: Platform.OS === "ios" ? 80 : 55,
+    paddingLeft: 28,
+    paddingRight: 28,
+    zIndex: 20,
+  },
+  tourLabel: {
+    fontSize: 10,
+    fontFamily: "SpaceGrotesk-Regular",
+    letterSpacing: 6,
+    color: "rgba(255,255,255,0.5)",
+    marginBottom: 8,
+  },
+  titleRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    marginBottom: 20,
+  },
+  titleBTS: {
+    fontSize: 42,
+    fontFamily: "SpaceGrotesk-Bold",
+    color: PRIMARY,
+    textShadowColor: "rgba(139,172,255,0.3)",
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 20,
+  },
+  // ⚠️ 수정금지(승인필요) — Arirang 이탤릭 (고유명사)
+  titleArirang: {
+    fontSize: 42,
+    fontFamily: "SpaceGrotesk-Bold",
+    fontStyle: "italic",
+    color: PRIMARY,
+    textShadowColor: "rgba(139,172,255,0.3)",
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 20,
+  },
+  // ⚠️ 수정금지(승인필요) — 앱 정체성 문구 (가장 크게)
+  sloganWrap: {
+    marginBottom: 0,
+  },
+  slogan: {
+    fontSize: 30,
+    fontFamily: "SpaceGrotesk-Bold",
+    color: "#FFFFFF",
+    letterSpacing: 2,
+    lineHeight: 38,
+    textShadowColor: "rgba(139,172,255,0.4)",
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 12,
+  },
+
+  // ⚠️ 수정금지(승인필요) — 아미봉 (하단 배치)
+  bombWrap: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingBottom: Platform.OS === "ios" ? 30 : 16,
+  },
+  globeShadow: {
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 20,
+  },
+  globeClip: {
+    width: GLOBE_SIZE,
+    height: GLOBE_SIZE,
+    borderRadius: GLOBE_SIZE / 2,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.1)",
+  },
+  globeInner: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 20,
+  },
+  innerGlow: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: GLOBE_SIZE / 2,
+  },
+  cityLabel: {
+    fontSize: 10,
+    fontFamily: "SpaceGrotesk-Bold",
+    letterSpacing: 4,
+    color: "rgba(255,255,255,0.4)",
+    marginBottom: 2,
+  },
+  dDay: {
+    fontSize: 44,
+    fontFamily: "NotoSerifKR-Bold",
+    color: "#FFFFFF",
+    letterSpacing: -2,
+    marginBottom: 16,
+  },
+  inputArea: { width: "75%", alignItems: "center" },
+  inputLabel: {
+    fontSize: 9,
+    fontFamily: "SpaceGrotesk-Bold",
+    letterSpacing: 3,
+    color: "rgba(255,255,255,0.4)",
+    marginBottom: 6,
+  },
+  input: {
+    width: "100%",
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.15)",
+    borderRadius: 50,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    textAlign: "center",
+    fontSize: 13,
+    color: "#FFFFFF",
+    fontFamily: "SpaceGrotesk-Regular",
+  },
+
+  // ⚠️ 수정금지(승인필요) — 손잡이
+  handleWrap: {
+    width: HANDLE_W,
+    height: HANDLE_H,
+    alignItems: "center",
+    marginTop: -16,
+    zIndex: -1,
+  },
+  handleGrad: {
+    ...StyleSheet.absoluteFillObject,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+  },
+  btnArea: {
+    position: "absolute",
+    top: 20,
+    width: BTN_AREA_W,
+    alignSelf: "center",
+    gap: 10,
+  },
+  btn: {
+    height: 44,
+    borderRadius: 50,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  googleBtn: { backgroundColor: PRIMARY },
+  googleTxt: { fontSize: 11, fontFamily: "SpaceGrotesk-Bold", color: "#050930", letterSpacing: 2, textTransform: "uppercase" },
+  kakaoBtn: { backgroundColor: "rgba(255,255,255,0.1)", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" },
+  kakaoTxt: { fontSize: 11, fontFamily: "SpaceGrotesk-Bold", color: "#FFFFFF", letterSpacing: 2, textTransform: "uppercase" },
+  appleLink: { height: 32, justifyContent: "center", alignItems: "center" },
+  appleTxt: { fontSize: 10, fontFamily: "SpaceGrotesk-Bold", color: PRIMARY, letterSpacing: 2, textTransform: "uppercase" },
+  off: { opacity: 0.35 },
+
+});

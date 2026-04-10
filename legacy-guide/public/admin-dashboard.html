@@ -1,0 +1,3168 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>관리자 대시보드</title>
+
+    <!-- 🌐 2025-12-24: 구글 번역 쿠키 사전 설정 -->
+    <script>
+        (function () {
+            var storedLang = null;
+            try { storedLang = localStorage.getItem('appLanguage'); } catch (e) { }
+            var lang = storedLang || 'ko';
+            if (lang && lang !== 'ko' && /^[a-z]{2}(-[A-Z]{2})?$/.test(lang)) {
+                var domain = window.location.hostname;
+                document.cookie = 'googtrans=/ko/' + lang + ';path=/;domain=' + domain;
+                document.cookie = 'googtrans=/ko/' + lang + ';path=/';
+                console.log('🌐 [admin-dashboard.html] googtrans 쿠키 설정:', lang);
+            }
+        })();
+    </script>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" as="style" crossorigin
+        href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" />
+    <style>
+        body {
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+            background: #f5f5f5;
+        }
+
+        .tab-button {
+            transition: all 0.2s;
+        }
+
+        .tab-button.active {
+            background: white;
+            border-bottom: 2px solid #4285F4;
+        }
+
+        .stat-card {
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        /* 반응형 디자인 */
+        @media (max-width: 768px) {
+            .max-w-7xl {
+                padding: 1rem;
+            }
+
+            #guidesGrid {
+                grid-template-columns: 1fr !important;
+            }
+
+            #createShareBtn {
+                font-size: 0.875rem;
+                padding: 0.5rem 1rem;
+            }
+
+            .tab-button {
+                font-size: 0.875rem;
+                padding: 0.75rem 1rem;
+            }
+        }
+
+        @media (min-width: 769px) and (max-width: 1023px) {
+            #guidesGrid {
+                grid-template-columns: repeat(2, 1fr) !important;
+            }
+        }
+
+        @media (min-width: 1024px) {
+            #guidesGrid {
+                grid-template-columns: repeat(3, 1fr) !important;
+            }
+        }
+
+        /* 상세페이지 컴포넌트 CSS - 동적 삽입됨 */
+        :root {
+            --gemini-blue: #4285F4;
+        }
+
+        .text-gemini-blue {
+            color: var(--gemini-blue);
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        /* ⚠️ 상세페이지 컴포넌트 스타일 (profile.html 복붙 - 2025-12-15) */
+        #adminDetailPage {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 9998;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #adminDetailPage .full-screen-bg {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            object-fit: cover;
+            z-index: 1;
+        }
+
+        #adminDetailPage .header-safe-area {
+            position: relative;
+            width: 100%;
+            height: 60px;
+            flex-shrink: 0;
+            z-index: 30;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0 1rem;
+        }
+
+        #adminDetailPage .info-fixed-area {
+            position: relative;
+            width: 100%;
+            flex-shrink: 0;
+            z-index: 25;
+            padding: 0 1rem 0.5rem 1rem;
+        }
+
+        #adminDetailPage .content-safe-area {
+            position: relative;
+            flex: 1;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            background: transparent;
+            z-index: 20;
+        }
+
+        #adminDetailPage .text-content {
+            padding: 1.5rem;
+            line-height: 1.8;
+            word-break: keep-all;
+            overflow-wrap: break-word;
+        }
+
+        #adminDetailPage .readable-on-image {
+            color: white;
+        }
+
+        #adminDetailPage .footer-safe-area {
+            position: relative;
+            width: 100%;
+            height: 100px;
+            flex-shrink: 0;
+            z-index: 30;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 1.5rem;
+            padding: 0 1rem;
+            background: transparent;
+        }
+
+        #adminDetailPage .interactive-btn {
+            transition: transform 0.1s ease, background-color 0.2s ease;
+        }
+
+        #adminDetailPage .interactive-btn:active {
+            transform: scale(0.95);
+        }
+    </style>
+</head>
+
+<body class="min-h-screen">
+    <!-- ⚠️ 상세페이지 컴포넌트 HTML (profile.html 복붙 - 2025-12-15) -->
+    <div id="adminDetailPage" class="hidden">
+        <img id="adminDetailImage" src="" alt="상세페이지 이미지" class="full-screen-bg">
+        <header class="header-safe-area">
+            <button id="adminDetailBackBtn"
+                class="w-12 h-12 flex items-center justify-center rounded-full bg-black/60 backdrop-blur-md text-gemini-blue interactive-btn shadow-2xl absolute top-1/2 right-4 -translate-y-1/2"
+                style="z-index: 10001; pointer-events: auto;" aria-label="닫기">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke-width="2"
+                    stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+            </button>
+        </header>
+        <div class="info-fixed-area">
+            <div id="adminDetailLocationInfo"
+                class="hidden flex items-center gap-2 bg-white/90 backdrop-blur-sm rounded-lg px-3 py-2 shadow-md">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gemini-blue flex-shrink-0"
+                    viewBox="0 0 24 24" fill="currentColor">
+                    <path fill-rule="evenodd"
+                        d="M11.54 22.351l.07.04.028.016a.76.76 0 00.723 0l.028-.015.071-.041a16.975 16.975 0 001.144-.742 19.58 19.58 0 002.683-2.282c1.944-1.99 3.963-4.98 3.963-8.827a8.25 8.25 0 00-16.5 0c0 3.846 2.02 6.837 3.963 8.827a19.58 19.58 0 002.682 2.282 16.975 16.975 0 001.145.742zM12 13.5a3 3 0 100-6 3 3 0 000 6z"
+                        clip-rule="evenodd" />
+                </svg>
+                <span id="adminDetailLocationName" class="text-base font-semibold text-gray-800"></span>
+            </div>
+            <div id="adminDetailVoiceQueryInfo"
+                class="hidden flex items-center gap-2 bg-white/90 backdrop-blur-sm rounded-lg px-3 py-2 shadow-md mt-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gemini-blue flex-shrink-0"
+                    viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M8.25 4.5a3.75 3.75 0 117.5 0v8.25a3.75 3.75 0 11-7.5 0V4.5z" />
+                    <path
+                        d="M6 10.5a.75.75 0 01.75.75v1.5a5.25 5.25 0 1010.5 0v-1.5a.75.75 0 011.5 0v1.5a6.751 6.751 0 01-6 6.709v2.291h3a.75.75 0 010 1.5h-7.5a.75.75 0 010-1.5h3v-2.291a6.751 6.751 0 01-6-6.709v-1.5A.75.75 0 016 10.5z" />
+                </svg>
+                <span id="adminDetailVoiceQueryText" class="text-base font-semibold text-gray-800"></span>
+            </div>
+        </div>
+        <div class="content-safe-area">
+            <div id="adminDetailTextOverlay" class="text-content">
+                <p id="adminDetailDescription" class="readable-on-image text-xl leading-relaxed"></p>
+            </div>
+        </div>
+        <footer class="footer-safe-area">
+            <button id="adminDetailAudioBtn" aria-label="오디오 재생"
+                class="w-16 h-16 flex items-center justify-center rounded-full bg-black/60 backdrop-blur-md text-gemini-blue interactive-btn shadow-2xl">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" viewBox="0 0 24 24" fill="currentColor">
+                    <path fill-rule="evenodd"
+                        d="M4.5 5.653c0-1.426 1.529-2.33 2.779-1.643l11.54 6.648c1.295.748 1.295 2.538 0 3.286L7.279 20.99c-1.25.717-2.779-.217-2.779-1.643V5.653z"
+                        clip-rule="evenodd" />
+                </svg>
+            </button>
+            <button id="adminDetailTextToggleBtn" aria-label="해설 읽기"
+                class="w-16 h-16 flex items-center justify-center rounded-full bg-black/60 backdrop-blur-md text-gemini-blue interactive-btn shadow-2xl">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round"
+                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+            </button>
+        </footer>
+    </div>
+
+    <div class="max-w-7xl mx-auto p-6">
+        <!-- 헤더 -->
+        <div class="flex justify-between items-center mb-6">
+            <h1 class="text-2xl font-bold text-gray-900">관리자 대시보드</h1>
+            <!-- ⚠️ 수정금지(승인필요) — 닫기: iframe이면 postMessage, 아니면 window.close() (Claude Opus 4.6, 2026-03-09) -->
+            <button onclick="if(window.parent!==window){window.parent.postMessage({type:'closeOverlay'},'*')}else{window.close()}"
+                class="px-4 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition">
+                닫기
+            </button>
+        </div>
+
+        <!-- 탭 네비게이션 -->
+        <div class="bg-white rounded-lg shadow-sm mb-6 overflow-x-auto">
+            <div class="flex border-b min-w-max">
+                <button onclick="showTab('overview')" id="tab-overview"
+                    class="tab-button active px-4 sm:px-6 py-3 font-medium text-gray-700 whitespace-nowrap text-sm sm:text-base">
+                    요약
+                </button>
+                <button onclick="showTab('content')" id="tab-content"
+                    class="tab-button px-4 sm:px-6 py-3 font-medium text-gray-500 hover:text-gray-700 whitespace-nowrap text-sm sm:text-base">
+                    공유페이지
+                </button>
+                <button onclick="showTab('guides')" id="tab-guides"
+                    class="tab-button px-4 sm:px-6 py-3 font-medium text-gray-500 hover:text-gray-700 whitespace-nowrap text-sm sm:text-base">
+                    상세페이지
+                </button>
+                <button onclick="showTab('revenue')" id="tab-revenue"
+                    class="tab-button px-4 sm:px-6 py-3 font-medium text-gray-500 hover:text-gray-700 whitespace-nowrap text-sm sm:text-base">
+                    수익
+                </button>
+                <button onclick="showTab('stats')" id="tab-stats"
+                    class="tab-button px-4 sm:px-6 py-3 font-medium text-gray-500 hover:text-gray-700 whitespace-nowrap text-sm sm:text-base">
+                    통계
+                </button>
+                <button onclick="showTab('cashback')" id="tab-cashback"
+                    class="tab-button px-4 sm:px-6 py-3 font-medium text-gray-500 hover:text-gray-700 whitespace-nowrap text-sm sm:text-base">
+                    💰 캐시백
+                </button>
+                <button onclick="showTab('prompts')" id="tab-prompts"
+                    class="tab-button px-4 sm:px-6 py-3 font-medium text-gray-500 hover:text-gray-700 whitespace-nowrap text-sm sm:text-base">
+                    🎯 AI 프롬프트
+                </button>
+            </div>
+        </div>
+
+        <!-- 로딩 상태 -->
+        <div id="loading" class="text-center py-12">
+            <div class="inline-block animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-blue-500">
+            </div>
+            <p class="mt-4 text-gray-600">데이터 로딩 중...</p>
+        </div>
+
+        <!-- 요약 탭 -->
+        <div id="content-overview" class="hidden">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+                <!-- 가입자 -->
+                <div class="stat-card bg-white rounded-lg p-6 shadow-sm">
+                    <h3 class="text-sm font-medium text-gray-500 mb-2">가입자</h3>
+                    <p id="totalUsers" class="text-3xl font-bold text-gray-900 mb-1">-</p>
+                    <p class="text-sm text-gray-500">최근 7일: <span id="recentUsers"
+                            class="font-semibold text-blue-600">-</span>명</p>
+                </div>
+
+                <!-- AI 호출 횟수 -->
+                <div class="stat-card bg-white rounded-lg p-6 shadow-sm">
+                    <h3 class="text-sm font-medium text-gray-500 mb-2">AI 호출 횟수</h3>
+                    <p id="totalApiCalls" class="text-3xl font-bold text-gray-900 mb-1">-</p>
+                    <p class="text-sm text-gray-500">예상 비용: <span id="estimatedCost"
+                            class="font-semibold text-orange-600">-</span></p>
+                </div>
+
+                <!-- 공유 링크 -->
+                <div class="stat-card bg-white rounded-lg p-6 shadow-sm">
+                    <h3 class="text-sm font-medium text-gray-500 mb-2">공유 링크</h3>
+                    <p id="totalShares" class="text-3xl font-bold text-gray-900 mb-1">-</p>
+                    <p class="text-sm text-gray-500">생성된 링크</p>
+                </div>
+
+                <!-- 공유 조회수 -->
+                <div class="stat-card bg-white rounded-lg p-6 shadow-sm">
+                    <h3 class="text-sm font-medium text-gray-500 mb-2">공유 조회수</h3>
+                    <p id="totalViews" class="text-3xl font-bold text-gray-900 mb-1">-</p>
+                    <p class="text-sm text-gray-500">누적 조회</p>
+                </div>
+            </div>
+
+            <!-- 로그인 방식 -->
+            <div class="bg-white rounded-lg p-6 shadow-sm">
+                <h2 class="text-lg font-semibold text-gray-900 mb-4">로그인 방식별 사용자</h2>
+                <div id="providerStats" class="space-y-3">
+                    <!-- 동적 생성 -->
+                </div>
+            </div>
+        </div>
+
+        <!-- 콘텐츠 탭 (from index.html Featured 갤러리 관리) -->
+        <div id="content-content" class="hidden">
+            <!-- 추천 모음 관리 (관리자 전용) -->
+            <div class="bg-white p-6 rounded-lg shadow-sm border-l-4 border-yellow-500">
+                <div class="flex items-center justify-between mb-3">
+                    <h2 class="text-lg font-semibold text-gray-800">⭐ 추천 모음 관리</h2>
+                    <span class="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">관리자 전용</span>
+                </div>
+                <p class="text-sm text-gray-500 mb-4">추천 갤러리에 표시할 공유 페이지를 검색하세요 (최대 3개)</p>
+
+                <div class="space-y-4">
+                    <!-- 검색창 -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">🔍 공유 페이지 이름 검색</label>
+                        <input type="text" id="shareSearchInput" placeholder="예: 철수아빠 파리3일여행"
+                            class="w-full px-4 py-3 border border-gray-300 rounded-md focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 text-base"
+                            data-testid="input-share-search" />
+                    </div>
+
+                    <!-- 검색 결과 -->
+                    <div id="searchResults" class="space-y-2 max-h-80 overflow-y-auto">
+                        <p class="text-sm text-gray-400 text-center py-4">검색어를 입력하세요</p>
+                    </div>
+                </div>
+
+                <!-- 현재 Featured 목록 -->
+                <div class="mt-6 pt-6 border-t border-gray-200">
+                    <h3 class="text-sm font-semibold text-gray-700 mb-3">현재 Featured (<span
+                            id="featuredCount">0</span>/3)</h3>
+                    <div id="featuredList" class="space-y-2">
+                        <p class="text-sm text-gray-400">로딩 중...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 전체목록 -->
+            <div class="bg-white rounded-lg p-4 sm:p-6 shadow-sm mt-6">
+                <div class="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-4">
+                    <h2 class="text-lg font-semibold text-gray-900">전체목록</h2>
+                    <div class="flex flex-wrap gap-2">
+                        <button onclick="regenerateAllV1()"
+                            class="px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition flex items-center gap-1 text-sm"
+                            data-testid="btn-regenerate-all-v1">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24"
+                                stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round"
+                                    d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                            V1 재생성
+                        </button>
+                        <input type="text" id="allSharesSearch" placeholder="검색..."
+                            class="flex-1 min-w-[100px] px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-sm">
+                        <select id="sortOrder"
+                            class="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-sm">
+                            <option value="latest">최신순</option>
+                            <option value="views">조회수순</option>
+                            <option value="name">이름순</option>
+                        </select>
+                    </div>
+                </div>
+                <div id="allSharesList" class="space-y-3">
+                    <!-- 동적 생성 -->
+                </div>
+                <div class="mt-4 text-center">
+                    <button id="loadMoreBtn" onclick="loadMore()"
+                        class="px-6 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition">
+                        더 보기
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 가이드 관리 탭 -->
+        <div id="content-guides" class="hidden">
+            <div class="space-y-6">
+                <!-- 검색 및 필터 -->
+                <div class="bg-white rounded-lg p-6 shadow-sm">
+                    <h2 class="text-lg font-semibold text-gray-900 mb-4">가이드 검색 및 필터</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <input type="text" id="guideLocationSearch" placeholder="위치 검색 (예: 베르사유, 에펠탑)"
+                            class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none">
+                        <input type="text" id="guideTagsSearch" placeholder="태그 검색 (쉼표 구분, 예: 궁전,역사)"
+                            class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none">
+                    </div>
+                    <div class="mt-4 flex gap-3">
+                        <button onclick="searchGuides()"
+                            class="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition">
+                            🔍 검색
+                        </button>
+                        <button onclick="resetGuideFilters()"
+                            class="px-6 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition">
+                            초기화
+                        </button>
+                        <span id="guideCount" class="ml-auto self-center text-sm text-gray-500">총 0개</span>
+                    </div>
+                </div>
+
+                <!-- 가이드 그리드 -->
+                <div class="bg-white rounded-lg p-6 shadow-sm">
+                    <div class="flex flex-wrap justify-between items-center gap-3 mb-4">
+                        <h2 class="text-lg font-semibold text-gray-900">가이드 목록</h2>
+                        <div class="flex flex-wrap gap-2">
+                            <button onclick="deleteAllGuides()"
+                                class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg font-medium transition">
+                                🗑️ 전체 삭제
+                            </button>
+                            <button id="createShareBtn" onclick="openCreateShareModal()"
+                                class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg font-medium transition disabled:opacity-50 disabled:cursor-not-allowed"
+                                disabled>
+                                선택한 가이드로 공유 페이지 만들기 (<span id="selectedCount">0</span>)
+                            </button>
+                        </div>
+                    </div>
+                    <div id="guidesGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <!-- 동적 생성 -->
+                    </div>
+                    <div class="mt-4 text-center">
+                        <button id="loadMoreGuidesBtn" onclick="loadMoreGuides()"
+                            class="px-6 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition">
+                            더 보기
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 수익 탭 -->
+        <div id="content-revenue" class="hidden">
+            <div class="space-y-6">
+                <!-- 수익 요약 카드 -->
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div class="bg-white rounded-lg p-6 shadow-sm">
+                        <h3 class="text-sm font-medium text-gray-500 mb-2">총 수입</h3>
+                        <p id="revenue-total" class="text-3xl font-bold text-green-600">-</p>
+                        <p class="text-xs text-gray-400 mt-1">EUR (10 EUR = 140 크레딧)</p>
+                    </div>
+                    <div class="bg-white rounded-lg p-6 shadow-sm">
+                        <h3 class="text-sm font-medium text-gray-500 mb-2">AI 비용 (추정)</h3>
+                        <p id="revenue-ai-cost" class="text-3xl font-bold text-orange-500">-</p>
+                        <p class="text-xs text-gray-400 mt-1">EUR (Gemini 3.0 Flash)</p>
+                    </div>
+                    <div class="bg-white rounded-lg p-6 shadow-sm">
+                        <h3 class="text-sm font-medium text-gray-500 mb-2">고정비</h3>
+                        <p id="revenue-fixed-cost" class="text-3xl font-bold text-gray-600">300 EUR</p>
+                        <p class="text-xs text-gray-400 mt-1">월간 서버/서비스 비용</p>
+                    </div>
+                    <div class="bg-white rounded-lg p-6 shadow-sm">
+                        <h3 class="text-sm font-medium text-gray-500 mb-2">순수익</h3>
+                        <p id="revenue-net" class="text-3xl font-bold">-</p>
+                        <p class="text-xs text-gray-400 mt-1">총수입 - AI비용 - 고정비</p>
+                    </div>
+                </div>
+
+                <!-- 추가 지표 -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="bg-white rounded-lg p-6 shadow-sm">
+                        <h3 class="text-sm font-medium text-gray-500 mb-2">ARPU (결제자당 평균수익)</h3>
+                        <p id="revenue-arpu" class="text-2xl font-bold text-blue-600">-</p>
+                        <p class="text-xs text-gray-400 mt-1" id="revenue-payers">결제자: -명</p>
+                    </div>
+                    <div class="bg-white rounded-lg p-6 shadow-sm">
+                        <h3 class="text-sm font-medium text-gray-500 mb-2">총 결제 건수</h3>
+                        <p id="revenue-transactions" class="text-2xl font-bold text-purple-600">-</p>
+                        <p class="text-xs text-gray-400 mt-1">Stripe 결제</p>
+                    </div>
+                    <div class="bg-white rounded-lg p-6 shadow-sm">
+                        <h3 class="text-sm font-medium text-gray-500 mb-2">총 AI 호출</h3>
+                        <p id="revenue-ai-calls" class="text-2xl font-bold text-indigo-600">-</p>
+                        <p class="text-xs text-gray-400 mt-1">상세페이지 생성</p>
+                    </div>
+                </div>
+
+                <!-- 크레딧 현황 -->
+                <div class="bg-white rounded-lg p-6 shadow-sm">
+                    <h2 class="text-lg font-semibold text-gray-900 mb-4">크레딧 현황</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div class="text-center p-4 bg-green-50 rounded-lg">
+                            <p class="text-sm text-gray-500">판매 크레딧</p>
+                            <p id="credit-sold" class="text-2xl font-bold text-green-600">-</p>
+                        </div>
+                        <div class="text-center p-4 bg-red-50 rounded-lg">
+                            <p class="text-sm text-gray-500">사용된 크레딧</p>
+                            <p id="credit-used" class="text-2xl font-bold text-red-600">-</p>
+                        </div>
+                        <div class="text-center p-4 bg-blue-50 rounded-lg">
+                            <p class="text-sm text-gray-500">보너스 지급</p>
+                            <p id="credit-bonus" class="text-2xl font-bold text-blue-600">-</p>
+                        </div>
+                        <div class="text-center p-4 bg-purple-50 rounded-lg">
+                            <p class="text-sm text-gray-500">유저 잔여 크레딧</p>
+                            <p id="credit-remaining" class="text-2xl font-bold text-purple-600">-</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 월별 추이 -->
+                <div class="bg-white rounded-lg p-6 shadow-sm">
+                    <h2 class="text-lg font-semibold text-gray-900 mb-4">월별 수익 추이 (최근 6개월)</h2>
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead>
+                                <tr class="border-b">
+                                    <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">월</th>
+                                    <th class="text-right py-3 px-4 text-sm font-medium text-gray-500">수입 (EUR)</th>
+                                    <th class="text-right py-3 px-4 text-sm font-medium text-gray-500">AI 비용 (EUR)</th>
+                                    <th class="text-center py-3 px-4 text-sm font-medium text-gray-500">결제 건수</th>
+                                    <th class="text-center py-3 px-4 text-sm font-medium text-gray-500">AI 호출</th>
+                                </tr>
+                            </thead>
+                            <tbody id="monthlyTrendTable">
+                                <!-- 동적 생성 -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 최근 결제 내역 -->
+                <div class="bg-white rounded-lg p-6 shadow-sm">
+                    <h2 class="text-lg font-semibold text-gray-900 mb-4">최근 결제 내역</h2>
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead>
+                                <tr class="border-b">
+                                    <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">날짜</th>
+                                    <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">사용자 ID</th>
+                                    <th class="text-right py-3 px-4 text-sm font-medium text-gray-500">크레딧</th>
+                                    <th class="text-right py-3 px-4 text-sm font-medium text-gray-500">금액 (EUR)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="recentTransactionsTable">
+                                <!-- 동적 생성 -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <p id="no-transactions" class="text-center text-gray-500 py-8 hidden">결제 내역이 없습니다.</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 통계 탭 -->
+        <div id="content-stats" class="hidden">
+            <div class="space-y-6">
+                <!-- 일별 추이 -->
+                <div class="bg-white rounded-lg p-6 shadow-sm">
+                    <h2 class="text-lg font-semibold text-gray-900 mb-4">일별 활동 추이 (최근 7일)</h2>
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead>
+                                <tr class="border-b">
+                                    <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">날짜</th>
+                                    <th class="text-center py-3 px-4 text-sm font-medium text-gray-500">신규 가입</th>
+                                    <th class="text-center py-3 px-4 text-sm font-medium text-gray-500">AI 호출</th>
+                                    <th class="text-center py-3 px-4 text-sm font-medium text-gray-500">공유 링크</th>
+                                </tr>
+                            </thead>
+                            <tbody id="dailyTrends">
+                                <!-- 동적 생성 -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- 사용자 행동 -->
+                <div class="bg-white rounded-lg p-6 shadow-sm">
+                    <h2 class="text-lg font-semibold text-gray-900 mb-4">사용자 행동</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <!-- 디바이스 분포 -->
+                        <div>
+                            <h3 class="text-sm font-medium text-gray-500 mb-3">디바이스 분포</h3>
+                            <div id="deviceStats" class="space-y-2">
+                                <!-- 동적 생성 -->
+                            </div>
+                        </div>
+                        <!-- 브라우저 분포 -->
+                        <div>
+                            <h3 class="text-sm font-medium text-gray-500 mb-3">브라우저 분포</h3>
+                            <div id="browserStats" class="space-y-2">
+                                <!-- 동적 생성 -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- AI 성능 -->
+                <div class="bg-white rounded-lg p-6 shadow-sm">
+                    <h2 class="text-lg font-semibold text-gray-900 mb-4">AI 성능</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div>
+                            <h3 class="text-sm font-medium text-gray-500 mb-2">평균 응답 시간</h3>
+                            <p id="avgResponseTime" class="text-2xl font-bold text-gray-900">-</p>
+                            <p class="text-xs text-gray-500 mt-1">목표: 2-2.5초</p>
+                        </div>
+                        <div>
+                            <h3 class="text-sm font-medium text-gray-500 mb-2">성공률</h3>
+                            <p id="successRate" class="text-2xl font-bold text-green-600">-</p>
+                        </div>
+                        <div>
+                            <h3 class="text-sm font-medium text-gray-500 mb-2">에러율</h3>
+                            <p id="errorRate" class="text-2xl font-bold text-red-600">-</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 캐시백 탭 (2025-11-28 리워드 시스템) -->
+        <div id="content-cashback" class="hidden">
+            <div class="space-y-6">
+                <!-- 캐시백 통계 -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="stat-card bg-white rounded-lg p-6 shadow-sm">
+                        <h3 class="text-sm font-medium text-gray-500 mb-2">대기 중인 요청</h3>
+                        <p id="pendingCashback" class="text-3xl font-bold text-amber-600">-</p>
+                    </div>
+                    <div class="stat-card bg-white rounded-lg p-6 shadow-sm">
+                        <h3 class="text-sm font-medium text-gray-500 mb-2">승인된 요청</h3>
+                        <p id="approvedCashback" class="text-3xl font-bold text-green-600">-</p>
+                    </div>
+                    <div class="stat-card bg-white rounded-lg p-6 shadow-sm">
+                        <h3 class="text-sm font-medium text-gray-500 mb-2">총 지급액</h3>
+                        <p id="totalCashbackAmount" class="text-3xl font-bold text-blue-600">-</p>
+                    </div>
+                </div>
+
+                <!-- 캐시백 요청 목록 -->
+                <div class="bg-white rounded-lg p-6 shadow-sm">
+                    <h2 class="text-lg font-semibold text-gray-900 mb-4">캐시백 요청 목록</h2>
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead>
+                                <tr class="border-b bg-gray-50">
+                                    <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">상태</th>
+                                    <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">사용자</th>
+                                    <th class="text-center py-3 px-4 text-sm font-medium text-gray-500">크레딧</th>
+                                    <th class="text-center py-3 px-4 text-sm font-medium text-gray-500">금액</th>
+                                    <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">결제수단</th>
+                                    <th class="text-left py-3 px-4 text-sm font-medium text-gray-500">신청일</th>
+                                    <th class="text-center py-3 px-4 text-sm font-medium text-gray-500">액션</th>
+                                </tr>
+                            </thead>
+                            <tbody id="cashbackList">
+                                <tr>
+                                    <td colspan="7" class="text-center py-8 text-gray-400">로딩 중...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 프롬프트 탭 (2025-12-18 언어별 AI 프롬프트 관리) -->
+        <div id="content-prompts" class="hidden">
+            <div class="space-y-6">
+                <!-- 프롬프트 시딩 버튼 -->
+                <div class="bg-white rounded-lg p-4 sm:p-6 shadow-sm border-l-4 border-blue-500">
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-3">
+                        <div>
+                            <h2 class="text-lg font-semibold text-gray-800">🎯 언어별 AI 프롬프트 관리</h2>
+                            <p class="text-sm text-gray-500 mt-1">7개 언어 × 2가지 타입 = 14개 프롬프트</p>
+                        </div>
+                        <button id="seedPromptsBtn" onclick="seedDefaultPrompts()"
+                            class="w-full sm:w-auto px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition text-sm">
+                            기본 프롬프트 생성
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 프롬프트 필터 -->
+                <div class="bg-white rounded-lg p-4 shadow-sm">
+                    <div class="flex flex-wrap gap-3">
+                        <div class="flex-1 min-w-[120px]">
+                            <label class="block text-xs text-gray-500 mb-1">언어</label>
+                            <select id="promptLangFilter" onchange="filterPrompts()"
+                                class="w-full px-3 py-2 border rounded-lg text-sm">
+                                <option value="all">전체</option>
+                                <option value="ko">한국어</option>
+                                <option value="en">English</option>
+                                <option value="zh-CN">中文</option>
+                                <option value="ja">日本語</option>
+                                <option value="fr">Français</option>
+                                <option value="de">Deutsch</option>
+                                <option value="es">Español</option>
+                            </select>
+                        </div>
+                        <div class="flex-1 min-w-[120px]">
+                            <label class="block text-xs text-gray-500 mb-1">타입</label>
+                            <select id="promptTypeFilter" onchange="filterPrompts()"
+                                class="w-full px-3 py-2 border rounded-lg text-sm">
+                                <option value="all">전체</option>
+                                <option value="image">이미지</option>
+                                <option value="text">텍스트</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 프롬프트 목록 -->
+                <div id="promptsList" class="space-y-4">
+                    <p class="text-center text-gray-400 py-8">프롬프트 로딩 중...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 프롬프트 편집 모달 -->
+        <div id="promptEditModal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+            <div class="bg-white rounded-lg max-w-3xl w-full max-h-[90vh] overflow-hidden">
+                <div class="p-4 border-b flex justify-between items-center">
+                    <h3 class="text-lg font-semibold" id="promptEditTitle">프롬프트 편집</h3>
+                    <button onclick="closePromptModal()" class="text-gray-500 hover:text-gray-700">✕</button>
+                </div>
+                <div class="p-4 overflow-y-auto max-h-[60vh]">
+                    <input type="hidden" id="promptEditLang" />
+                    <input type="hidden" id="promptEditType" />
+                    <textarea id="promptEditContent"
+                        class="w-full h-96 p-3 border rounded-lg text-sm font-mono leading-relaxed resize-y"
+                        placeholder="프롬프트 내용을 입력하세요..."></textarea>
+                    <p class="text-xs text-gray-400 mt-2">⚠️ 주의: [중요] 텍스트로만 응답 규칙을 항상 포함해야 합니다.</p>
+                </div>
+                <div class="p-4 border-t flex justify-end gap-2">
+                    <button onclick="closePromptModal()"
+                        class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg">취소</button>
+                    <button onclick="savePrompt()"
+                        class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">저장</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentTab = 'overview';
+        let allPrompts = [];
+        let allShares = [];
+        let displayedShares = 0;
+        const SHARES_PER_PAGE = 20;
+
+        // 날짜+시간 포맷 함수
+        function formatDateTime(dateStr) {
+            if (!dateStr) return '-';
+            try {
+                const date = new Date(dateStr);
+                if (isNaN(date.getTime())) return '-';
+                return date.toLocaleString('ko-KR', {
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            } catch (e) {
+                return '-';
+            }
+        }
+
+        // 탭 전환
+        function showTab(tab) {
+            currentTab = tab;
+
+            // 모든 탭 숨기기
+            ['overview', 'content', 'guides', 'revenue', 'stats', 'cashback', 'prompts'].forEach(t => {
+                document.getElementById(`content-${t}`).classList.add('hidden');
+                document.getElementById(`tab-${t}`).classList.remove('active');
+                document.getElementById(`tab-${t}`).classList.add('text-gray-500');
+                document.getElementById(`tab-${t}`).classList.remove('text-gray-700');
+            });
+
+            // 선택된 탭 표시
+            document.getElementById(`content-${tab}`).classList.remove('hidden');
+            document.getElementById(`tab-${tab}`).classList.add('active');
+            document.getElementById(`tab-${tab}`).classList.remove('text-gray-500');
+            document.getElementById(`tab-${tab}`).classList.add('text-gray-700');
+
+            // 탭별 데이터 로드
+            if (tab === 'content') {
+                loadAdminData();
+            } else if (tab === 'guides') {
+                searchGuides();
+                loadCurrentFeatured();
+            } else if (tab === 'revenue') {
+                loadRevenueData();
+            } else if (tab === 'stats') {
+                loadStats();
+            } else if (tab === 'cashback') {
+                loadCashbackRequests();
+            } else if (tab === 'prompts') {
+                loadPrompts();
+            }
+        }
+
+        // ═══════════════════════════════════════════════════
+        // 💰 수익 대시보드 함수
+        // ═══════════════════════════════════════════════════
+        async function loadRevenueData() {
+            try {
+                const response = await fetch('/api/admin/revenue', {
+                    credentials: 'include'
+                });
+
+                if (!response.ok) throw new Error('수익 데이터 로드 실패');
+
+                const data = await response.json();
+
+                // 요약 카드 업데이트
+                document.getElementById('revenue-total').textContent = `${data.summary.totalRevenue} EUR`;
+                document.getElementById('revenue-ai-cost').textContent = `${data.summary.totalAICost} EUR`;
+                document.getElementById('revenue-fixed-cost').textContent = `${data.summary.fixedCost} EUR`;
+
+                // 순수익 색상 설정
+                const netEl = document.getElementById('revenue-net');
+                netEl.textContent = `${data.summary.netProfit} EUR`;
+                if (data.summary.netProfit >= 0) {
+                    netEl.classList.remove('text-red-600');
+                    netEl.classList.add('text-green-600');
+                } else {
+                    netEl.classList.remove('text-green-600');
+                    netEl.classList.add('text-red-600');
+                }
+
+                // 추가 지표
+                document.getElementById('revenue-arpu').textContent = `${data.summary.arpu} EUR`;
+                document.getElementById('revenue-payers').textContent = `결제자: ${data.summary.uniquePayers}명`;
+                document.getElementById('revenue-transactions').textContent = data.summary.totalTransactions;
+                document.getElementById('revenue-ai-calls').textContent = data.summary.totalAICalls;
+
+                // 크레딧 현황
+                document.getElementById('credit-sold').textContent = data.creditStats.sold.toLocaleString();
+                document.getElementById('credit-used').textContent = data.creditStats.used.toLocaleString();
+                document.getElementById('credit-bonus').textContent = data.creditStats.bonusGiven.toLocaleString();
+                document.getElementById('credit-remaining').textContent = data.creditStats.remaining.toLocaleString();
+
+                // 월별 추이 테이블
+                const trendTable = document.getElementById('monthlyTrendTable');
+                trendTable.innerHTML = data.monthlyTrend.map(m => `
+                    <tr class="border-b hover:bg-gray-50">
+                        <td class="py-3 px-4 font-medium">${m.month}</td>
+                        <td class="py-3 px-4 text-right text-green-600">${m.revenue} EUR</td>
+                        <td class="py-3 px-4 text-right text-orange-500">${m.aiCost} EUR</td>
+                        <td class="py-3 px-4 text-center">${m.transactions}</td>
+                        <td class="py-3 px-4 text-center">${m.aiCalls}</td>
+                    </tr>
+                `).join('');
+
+                // 최근 결제 내역 테이블
+                const txTable = document.getElementById('recentTransactionsTable');
+                const noTxMsg = document.getElementById('no-transactions');
+
+                if (data.recentTransactions.length === 0) {
+                    txTable.innerHTML = '';
+                    noTxMsg.classList.remove('hidden');
+                } else {
+                    noTxMsg.classList.add('hidden');
+                    txTable.innerHTML = data.recentTransactions.map(tx => `
+                        <tr class="border-b hover:bg-gray-50">
+                            <td class="py-3 px-4">${formatDateTime(tx.createdAt)}</td>
+                            <td class="py-3 px-4 text-sm text-gray-600">${tx.userId.substring(0, 20)}...</td>
+                            <td class="py-3 px-4 text-right font-medium text-green-600">+${tx.amount}</td>
+                            <td class="py-3 px-4 text-right font-medium">${tx.amountEUR} EUR</td>
+                        </tr>
+                    `).join('');
+                }
+
+            } catch (error) {
+                console.error('수익 데이터 로드 오류:', error);
+            }
+        }
+
+        // ═══════════════════════════════════════════════════
+        // Featured 갤러리 관리 함수들 (from index.js)
+        // ═══════════════════════════════════════════════════
+        async function loadAdminData() {
+            await loadFeaturedList();
+            await loadAllShares(); // 전체 공유 목록도 로드
+
+            // 검색창 이벤트 리스너 추가
+            const searchInput = document.getElementById('shareSearchInput');
+            if (searchInput && !searchInput.dataset.listenerAdded) {
+                searchInput.dataset.listenerAdded = 'true';
+                let searchTimeout;
+                searchInput.addEventListener('input', (e) => {
+                    clearTimeout(searchTimeout);
+                    searchTimeout = setTimeout(() => {
+                        searchShares(e.target.value);
+                    }, 300); // 300ms 디바운스
+                });
+            }
+        }
+
+        async function searchShares(query) {
+            const resultsContainer = document.getElementById('searchResults');
+            if (!resultsContainer) return;
+
+            if (!query || query.trim().length === 0) {
+                resultsContainer.innerHTML = '<p class="text-sm text-gray-400 text-center py-4">검색어를 입력하세요</p>';
+                return;
+            }
+
+            try {
+                resultsContainer.innerHTML = '<p class="text-sm text-gray-400 text-center py-4">검색 중...</p>';
+
+                const response = await fetch(`/api/admin/all-shares?search=${encodeURIComponent(query)}`, {
+                    credentials: 'include'
+                });
+
+                if (!response.ok) throw new Error('검색 실패');
+
+                const shares = await response.json();
+
+                if (!shares || shares.length === 0) {
+                    resultsContainer.innerHTML = `
+                        <p class="text-sm text-gray-400 text-center py-4">
+                            "<span class="font-semibold">${query}</span>" 검색 결과가 없습니다
+                        </p>
+                    `;
+                    return;
+                }
+
+                resultsContainer.innerHTML = shares.map(share => `
+                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200 hover:border-yellow-400 transition-colors">
+                        <div class="flex-1 min-w-0">
+                            <p class="font-medium text-gray-900 truncate">${share.name}</p>
+                            <div class="flex items-center gap-3 mt-1">
+                                <span class="text-xs text-gray-500">📥 ${share.downloadCount || 0}회</span>
+                                <span class="text-xs text-gray-400">${formatDateTime(share.created_at || share.createdAt)}</span>
+                                ${share.featured ? '<span class="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded">⭐ Featured</span>' : ''}
+                            </div>
+                        </div>
+                        ${!share.featured ? `
+                            <button 
+                                onclick="addFeaturedById('${share.id}')" 
+                                class="ml-3 px-3 py-1.5 bg-yellow-500 text-white text-sm font-medium rounded hover:bg-yellow-600 transition-colors whitespace-nowrap"
+                                data-testid="button-add-featured-${share.id}">
+                                ⭐ 추가
+                            </button>
+                        ` : `
+                            <span class="ml-3 px-3 py-1.5 bg-gray-200 text-gray-500 text-sm font-medium rounded cursor-not-allowed whitespace-nowrap">
+                                이미 추가됨
+                            </span>
+                        `}
+                    </div>
+                `).join('');
+
+            } catch (error) {
+                console.error('공유 페이지 검색 오류:', error);
+                resultsContainer.innerHTML = '<p class="text-sm text-red-400 text-center py-4">검색 중 오류가 발생했습니다</p>';
+            }
+        }
+
+        async function loadFeaturedList() {
+            try {
+                const response = await fetch('/api/admin/featured', {
+                    credentials: 'include'
+                });
+                if (!response.ok) throw new Error('Failed to load featured');
+
+                const featured = await response.json();
+
+                const list = document.getElementById('featuredList');
+                const count = document.getElementById('featuredCount');
+
+                if (count) count.textContent = featured.length;
+
+                if (!list) return;
+
+                if (!featured || featured.length === 0) {
+                    list.innerHTML = '<p class="text-sm text-gray-400">Featured 페이지가 없습니다</p>';
+                    return;
+                }
+
+                list.innerHTML = featured.map(page => `
+                    <div class="flex items-center justify-between p-2 bg-yellow-50 rounded">
+                        <span class="text-sm font-medium text-gray-800">${page.name}</span>
+                        <div class="flex items-center gap-2">
+                            <button onclick="editFeatured('${page.id}')" class="text-blue-600 hover:text-blue-800 text-sm font-medium">
+                                ✏️ 편집
+                            </button>
+                            <button onclick="removeFeatured('${page.id}')" class="text-red-500 hover:text-red-700 text-sm font-medium">
+                                ✕ 제거
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Featured 목록 로드 오류:', error);
+                const list = document.getElementById('featuredList');
+                if (list) list.innerHTML = '<p class="text-sm text-red-400">로드 실패</p>';
+            }
+        }
+
+        window.addFeaturedById = async function (shareId) {
+            if (!shareId) {
+                alert('공유 페이지를 선택해주세요');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/admin/featured/${shareId}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include'
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    alert('⭐ Featured에 추가되었습니다!');
+                    await loadFeaturedList();
+                    // 검색 결과 다시 로드해서 "이미 추가됨" 표시
+                    const searchInput = document.getElementById('shareSearchInput');
+                    if (searchInput && searchInput.value) {
+                        await searchShares(searchInput.value);
+                    }
+                } else {
+                    alert(data.error || 'Featured 추가 실패');
+                }
+            } catch (error) {
+                console.error('Featured 추가 오류:', error);
+                alert('Featured 추가 중 오류 발생');
+            }
+        };
+
+        window.removeFeatured = async function (shareId) {
+            if (!confirm('Featured에서 제거하시겠습니까?')) return;
+
+            try {
+                const response = await fetch(`/api/admin/featured/${shareId}`, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include'
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    alert('Featured에서 제거되었습니다');
+                    await loadFeaturedList();
+                } else {
+                    alert(data.error || 'Featured 제거 실패');
+                }
+            } catch (error) {
+                console.error('Featured 제거 오류:', error);
+                alert('Featured 제거 중 오류 발생');
+            }
+        };
+
+        // Featured 편집 모달
+        window.editFeatured = async function (id) {
+            try {
+                // 1. 관리자용 API로 데이터 가져오기
+                const res = await fetch(`/api/admin/featured/${id}/data`, {
+                    credentials: 'include'
+                });
+                if (!res.ok) {
+                    const errorData = await res.json();
+                    throw new Error(errorData.error || '데이터 로드 실패');
+                }
+                const data = await res.json();
+                const { page, guides } = data;
+
+                console.log('📊 편집 데이터:', { page, guides, guidesCount: guides?.length });
+
+                // 2. 모달 입력 필드 채우기
+                document.getElementById('editTitle').value = page.name || '';
+                document.getElementById('editSender').value = page.sender || '여행자';
+                document.getElementById('editLocation').value = page.location || '미지정';
+                document.getElementById('editDate').value = page.date || new Date(page.createdAt).toISOString().split('T')[0];
+
+                // 3. 드래그 앤 드롭 가이드 리스트 생성 (모바일 터치 + PC 마우스)
+                const guideListHtml = guides.map((guide, index) => {
+                    const imgSrc = guide.imageUrl || '';
+                    return `
+                        <div class="guide-item flex items-center gap-3 p-3 bg-white rounded-lg border-2 border-gray-300 mb-2 cursor-grab active:cursor-grabbing select-none transition-all" 
+                             data-guide-id="${guide.id}"
+                             draggable="true">
+                            <div class="drag-handle text-gray-400 text-2xl px-1" style="touch-action: none;">☰</div>
+                            <img src="${imgSrc}" alt="가이드 ${index + 1}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 8px; flex-shrink: 0;">
+                            <span class="guide-number font-medium text-gray-700 flex-1">가이드 ${index + 1}</span>
+                        </div>
+                    `;
+                }).join('');
+
+                // 드래그 앤 드롭 이벤트 설정
+                setTimeout(() => initDragAndDrop(), 100);
+
+                document.getElementById('guideList').innerHTML = guideListHtml;
+
+                // 5. 모달 표시
+                document.getElementById('editFeaturedModal').classList.remove('hidden');
+
+                // 6. 저장 버튼 클릭 이벤트
+                document.getElementById('saveFeaturedBtn').onclick = async () => {
+                    const title = document.getElementById('editTitle').value;
+                    const sender = document.getElementById('editSender').value;
+                    const location = document.getElementById('editLocation').value;
+                    const date = document.getElementById('editDate').value;
+
+                    if (!title || !sender || !location || !date) {
+                        alert('❌ 모든 필드를 입력해주세요.');
+                        return;
+                    }
+
+                    // 가이드 순서 가져오기 (UUID 문자열로 유지)
+                    const guideItems = document.querySelectorAll('.guide-item');
+                    const newGuideIds = Array.from(guideItems).map(item => item.dataset.guideId);
+
+                    try {
+                        const response = await fetch(`/api/admin/shares/${id}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            credentials: 'include',
+                            body: JSON.stringify({
+                                title,
+                                sender,
+                                location,
+                                date,
+                                guideIds: newGuideIds
+                            })
+                        });
+
+                        if (!response.ok) {
+                            const errorData = await response.json();
+                            throw new Error(errorData.error || '편집 실패');
+                        }
+
+                        const result = await response.json();
+                        alert('✅ ' + result.message);
+                        closeEditModal();
+                        loadFeaturedList();
+                    } catch (error) {
+                        console.error('Featured 편집 오류:', error);
+                        alert('❌ 편집 실패: ' + error.message);
+                    }
+                };
+            } catch (error) {
+                console.error('Featured 편집 오류:', error);
+                alert('❌ 편집 실패: ' + error.message);
+            }
+        };
+
+        // 모달 닫기
+        window.closeEditModal = function () {
+            document.getElementById('editFeaturedModal').classList.add('hidden');
+        };
+
+        // 가이드 위로 이동 (모바일 친화적)
+        window.moveGuideUp = function (button) {
+            const item = button.closest('.guide-item');
+            const prev = item.previousElementSibling;
+            if (prev) {
+                item.parentNode.insertBefore(item, prev);
+                updateGuideNumbers();
+            }
+        };
+
+        // 가이드 아래로 이동 (모바일 친화적)
+        window.moveGuideDown = function (button) {
+            const item = button.closest('.guide-item');
+            const next = item.nextElementSibling;
+            if (next) {
+                item.parentNode.insertBefore(next, item);
+                updateGuideNumbers();
+            }
+        };
+
+        // 가이드 번호 업데이트
+        function updateGuideNumbers() {
+            const items = document.querySelectorAll('.guide-item');
+            items.forEach((item, index) => {
+                const label = item.querySelector('.guide-number');
+                if (label) label.textContent = `가이드 ${index + 1}`;
+            });
+        }
+
+        // ═══════════════════════════════════════════════════
+        // 드래그 앤 드롭 (모바일 터치 + PC 마우스)
+        // ═══════════════════════════════════════════════════
+        let draggedItem = null;
+        let touchStartY = 0;
+        let touchCurrentY = 0;
+        let placeholder = null;
+
+        function initDragAndDrop() {
+            const guideList = document.getElementById('guideList');
+            if (!guideList) return;
+
+            const items = guideList.querySelectorAll('.guide-item');
+
+            items.forEach(item => {
+                // PC: 마우스 드래그
+                item.addEventListener('dragstart', handleDragStart);
+                item.addEventListener('dragend', handleDragEnd);
+                item.addEventListener('dragover', handleDragOver);
+                item.addEventListener('drop', handleDrop);
+
+                // 모바일: 터치 드래그
+                item.addEventListener('touchstart', handleTouchStart, { passive: false });
+                item.addEventListener('touchmove', handleTouchMove, { passive: false });
+                item.addEventListener('touchend', handleTouchEnd);
+            });
+        }
+
+        // PC 드래그 이벤트
+        function handleDragStart(e) {
+            draggedItem = this;
+            this.style.opacity = '0.5';
+            this.style.border = '2px dashed #4285F4';
+            e.dataTransfer.effectAllowed = 'move';
+        }
+
+        function handleDragEnd(e) {
+            this.style.opacity = '1';
+            this.style.border = '2px solid #d1d5db';
+            draggedItem = null;
+            updateGuideNumbers();
+        }
+
+        function handleDragOver(e) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'move';
+
+            if (draggedItem && draggedItem !== this) {
+                const rect = this.getBoundingClientRect();
+                const midY = rect.top + rect.height / 2;
+
+                if (e.clientY < midY) {
+                    this.parentNode.insertBefore(draggedItem, this);
+                } else {
+                    this.parentNode.insertBefore(draggedItem, this.nextSibling);
+                }
+            }
+        }
+
+        function handleDrop(e) {
+            e.preventDefault();
+            updateGuideNumbers();
+        }
+
+        // 모바일 터치 이벤트
+        function handleTouchStart(e) {
+            if (e.target.closest('.drag-handle')) {
+                e.preventDefault();
+                draggedItem = this;
+                touchStartY = e.touches[0].clientY;
+
+                this.style.opacity = '0.7';
+                this.style.transform = 'scale(1.02)';
+                this.style.boxShadow = '0 4px 12px rgba(0,0,0,0.15)';
+                this.style.zIndex = '1000';
+            }
+        }
+
+        function handleTouchMove(e) {
+            if (!draggedItem) return;
+            e.preventDefault();
+
+            touchCurrentY = e.touches[0].clientY;
+            const guideList = document.getElementById('guideList');
+            const items = Array.from(guideList.querySelectorAll('.guide-item'));
+
+            items.forEach(item => {
+                if (item === draggedItem) return;
+
+                const rect = item.getBoundingClientRect();
+                const midY = rect.top + rect.height / 2;
+
+                if (touchCurrentY < midY && touchCurrentY > rect.top) {
+                    guideList.insertBefore(draggedItem, item);
+                } else if (touchCurrentY > midY && touchCurrentY < rect.bottom) {
+                    guideList.insertBefore(draggedItem, item.nextSibling);
+                }
+            });
+        }
+
+        function handleTouchEnd(e) {
+            if (!draggedItem) return;
+
+            draggedItem.style.opacity = '1';
+            draggedItem.style.transform = '';
+            draggedItem.style.boxShadow = '';
+            draggedItem.style.zIndex = '';
+
+            draggedItem = null;
+            updateGuideNumbers();
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // ⚠️ profile.html 복붙 (2025-12-15)
+        // admin-dashboard.html용: adminDetailPage 객체
+        // race condition 방지: synth.cancel() + renderId 패턴
+        // ═══════════════════════════════════════════════════════════════
+
+        const adminDetailPage = {
+            _isInitialized: false,
+
+            _state: {
+                isTextVisible: true,
+                synth: null,
+                voices: [],
+                currentUtterance: null,
+                originalText: '',
+                onClose: null,
+                translationComplete: true,
+                translationObserver: null,
+                voiceConfigsCache: null,
+                voiceConfigsLoading: false,
+                currentGuideData: null,
+                renderId: 0,
+                savedVoiceLang: null,
+                savedVoiceName: null
+            },
+
+            _defaultVoicePriorities: {
+                'ko-KR': { default: ['Microsoft Heami', 'Yuna'] },
+                'en-US': { default: ['Samantha', 'Microsoft Zira', 'Google US English', 'English'] },
+                'ja-JP': { default: ['Kyoko', 'Microsoft Haruka', 'Google 日本語', 'Japanese'] },
+                'zh-CN': { default: ['Ting-Ting', 'Microsoft Huihui', 'Google 普通话', 'Chinese'] },
+                'fr-FR': { default: ['Thomas', 'Microsoft Hortense', 'Google français', 'French'] },
+                'de-DE': { default: ['Anna', 'Microsoft Hedda', 'Google Deutsch', 'German'] },
+                'es-ES': { default: ['Monica', 'Microsoft Helena', 'Google español', 'Spanish'] }
+            },
+
+            init: function (options = {}) {
+                if (this._isInitialized) {
+                    console.log('[AdminDetailPage] 이미 초기화됨, 스킵');
+                    return;
+                }
+                this._isInitialized = true;
+
+                const self = this;
+                this._state.synth = window.speechSynthesis;
+                // ⚠️ 수정금지(승인필요): 2026-03-13 네이티브 TTS 브릿지 감지
+                this._state.isNativeApp = !!window.ReactNativeWebView;
+                this._state.onClose = options.onClose || null;
+
+                this._els = {
+                    page: document.getElementById('adminDetailPage'),
+                    image: document.getElementById('adminDetailImage'),
+                    description: document.getElementById('adminDetailDescription'),
+                    locationInfo: document.getElementById('adminDetailLocationInfo'),
+                    locationName: document.getElementById('adminDetailLocationName'),
+                    voiceQueryInfo: document.getElementById('adminDetailVoiceQueryInfo'),
+                    voiceQueryText: document.getElementById('adminDetailVoiceQueryText'),
+                    textOverlay: document.getElementById('adminDetailTextOverlay'),
+                    audioBtn: document.getElementById('adminDetailAudioBtn'),
+                    textToggleBtn: document.getElementById('adminDetailTextToggleBtn'),
+                    backBtn: document.getElementById('adminDetailBackBtn')
+                };
+
+                this._populateVoiceList();
+                if (speechSynthesis.onvoiceschanged !== undefined) {
+                    speechSynthesis.onvoiceschanged = () => self._populateVoiceList();
+                }
+
+                this._loadVoiceConfigsFromDB();
+
+                this._els.backBtn.addEventListener('click', () => self.close());
+                this._els.audioBtn.addEventListener('click', () => self._toggleAudio());
+                this._els.textToggleBtn.addEventListener('click', () => { self._stopAudio(); self._toggleText(); });
+
+                this._initTranslationWatcher();
+                console.log('[AdminDetailPage] Initialized');
+            },
+
+            _loadVoiceConfigsFromDB: async function () {
+                if (this._state.voiceConfigsCache) return this._state.voiceConfigsCache;
+                if (this._state.voiceConfigsLoading) {
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    return this._state.voiceConfigsCache || null;
+                }
+
+                this._state.voiceConfigsLoading = true;
+                try {
+                    const response = await fetch('/api/voice-configs');
+                    if (response.ok) {
+                        const configs = await response.json();
+                        this._state.voiceConfigsCache = {};
+                        for (const config of configs) {
+                            if (!this._state.voiceConfigsCache[config.langCode]) {
+                                this._state.voiceConfigsCache[config.langCode] = {};
+                            }
+                            this._state.voiceConfigsCache[config.langCode][config.platform] = {
+                                priorities: config.voicePriorities,
+                                excludeVoices: config.excludeVoices || []
+                            };
+                        }
+                        console.log('🔊 [AdminDetailPage Voice DB] 설정 로드 완료:', Object.keys(this._state.voiceConfigsCache));
+                    }
+                } catch (error) {
+                    console.warn('🔊 [AdminDetailPage Voice DB] 로드 실패, 기본값 사용:', error.message);
+                }
+                this._state.voiceConfigsLoading = false;
+                return this._state.voiceConfigsCache;
+            },
+
+            _detectPlatform: function () {
+                const ua = navigator.userAgent;
+                if (/iPhone|iPad|iPod|Mac/.test(ua)) return 'ios';
+                if (/Android/.test(ua)) return 'android';
+                if (/Windows/.test(ua)) return 'windows';
+                return 'default';
+            },
+
+            _getVoicePriorityFromDB: function (langCode) {
+                const platform = this._detectPlatform();
+
+                if (this._state.voiceConfigsCache && this._state.voiceConfigsCache[langCode]) {
+                    const config = this._state.voiceConfigsCache[langCode][platform] || this._state.voiceConfigsCache[langCode]['default'];
+                    if (config) {
+                        return { priorities: config.priorities, excludeVoices: config.excludeVoices };
+                    }
+                }
+
+                const fallback = this._defaultVoicePriorities[langCode];
+                if (fallback) {
+                    const priorities = fallback[platform] || fallback['default'] || fallback[Object.keys(fallback)[0]];
+                    return { priorities, excludeVoices: [] };
+                }
+
+                return { priorities: [], excludeVoices: [] };
+            },
+
+            // 🌐 2025-12-24: 동적 콘텐츠 강제 재번역
+            _retranslationPending: false,
+
+            _retranslateNewContent: function () {
+                const self = this;
+                // 🌐 2025-12-24: userLang 체크 제거 - Google Translate 드롭다운 활성화 여부만 확인
+                return new Promise((resolve) => {
+                    const selectElement = document.querySelector('.goog-te-combo');
+
+                    if (!selectElement || !selectElement.value) {
+                        console.log('[AdminDetailPage Retranslate] Google Translate 드롭다운 비활성 - 스킵');
+                        resolve();
+                        return;
+                    }
+
+                    const currentLang = selectElement.value;
+                    console.log('[AdminDetailPage Retranslate] 🔄 강제 재번역 시작:', currentLang);
+                    self._retranslationPending = true;
+
+                    selectElement.value = '';
+                    selectElement.dispatchEvent(new Event('change'));
+
+                    setTimeout(() => {
+                        selectElement.value = currentLang;
+                        selectElement.dispatchEvent(new Event('change'));
+
+                        setTimeout(() => {
+                            console.log('[AdminDetailPage Retranslate] ✅ 재번역 완료');
+                            self._retranslationPending = false;
+                            window.dispatchEvent(new CustomEvent('adminRetranslationComplete'));
+                            resolve();
+                        }, 800);
+                    }, 100);
+                });
+            },
+
+            _initTranslationWatcher: function () {
+                const self = this;
+                const userLang = localStorage.getItem('appLanguage') || 'ko';
+
+                if (userLang === 'ko') {
+                    this._state.translationComplete = true;
+                    return;
+                }
+
+                const hasTranslateClass = document.body.classList.contains('translated-ltr') ||
+                    document.body.classList.contains('translated-rtl');
+                if (hasTranslateClass) {
+                    this._state.translationComplete = true;
+                    return;
+                }
+
+                this._state.translationComplete = false;
+
+                this._state.translationObserver = new MutationObserver(function (mutations) {
+                    const hasTranslated = document.body.classList.contains('translated-ltr') ||
+                        document.body.classList.contains('translated-rtl');
+                    if (hasTranslated) {
+                        self._state.translationComplete = true;
+                        self._state.translationObserver.disconnect();
+                        window.dispatchEvent(new CustomEvent('adminTranslationComplete'));
+                    }
+                });
+
+                this._state.translationObserver.observe(document.body, {
+                    attributes: true,
+                    attributeFilter: ['class']
+                });
+
+                setTimeout(function () {
+                    if (!self._state.translationComplete) {
+                        self._state.translationComplete = true;
+                        if (self._state.translationObserver) {
+                            self._state.translationObserver.disconnect();
+                        }
+                        window.dispatchEvent(new CustomEvent('adminTranslationComplete', { detail: { timeout: true } }));
+                    }
+                }, 3000);
+            },
+
+            _populateVoiceList: function () {
+                this._state.voices = this._state.synth.getVoices();
+            },
+
+            _getVoiceForLanguage: function (userLang) {
+                const langMap = {
+                    'ko': 'ko-KR', 'en': 'en-US', 'ja': 'ja-JP', 'zh-CN': 'zh-CN',
+                    'fr': 'fr-FR', 'de': 'de-DE', 'es': 'es-ES'
+                };
+
+                const fullLang = langMap[userLang] || 'ko-KR';
+                const langCode = fullLang.substring(0, 2);
+
+                const voiceConfig = this._getVoicePriorityFromDB(fullLang);
+                const priorities = voiceConfig.priorities;
+                const excludeVoices = voiceConfig.excludeVoices;
+
+                const allVoices = this._state.voices;
+                let targetVoice = null;
+
+                for (const voiceName of priorities) {
+                    targetVoice = allVoices.find(v =>
+                        v.name.includes(voiceName) && !excludeVoices.some(ex => v.name.includes(ex))
+                    );
+                    if (targetVoice) break;
+                }
+
+                if (!targetVoice) {
+                    targetVoice = allVoices.find(v =>
+                        v.lang.replace('_', '-').startsWith(langCode) && !excludeVoices.some(ex => v.name.includes(ex))
+                    );
+                }
+
+                return targetVoice || allVoices[0];
+            },
+
+            // 데이터로 직접 열기 (guideId 대신 guide 객체 전달)
+            openWithData: function (guide) {
+                // 🔒 강제 초기화 - 이전 음성/데이터 완전 정리
+                if (this._state.synth) {
+                    this._state.synth.cancel();
+                }
+                this._stopAudio();
+
+                // 상태 초기화
+                this._state.currentGuideData = null;
+                this._state.savedVoiceLang = null;
+                this._state.savedVoiceName = null;
+                this._state.originalText = '';
+                this._state.currentUtterance = null;
+
+                // 렌더 ID 증가 - 이전 콜백 무효화
+                this._state.renderId++;
+                const thisRenderId = this._state.renderId;
+
+                console.log('[AdminDetailPage] openWithData() renderId:', thisRenderId);
+
+                this._show();
+                this._state.currentGuideData = guide;
+                this._render(guide, thisRenderId);
+            },
+
+            _render: function (guide, renderId) {
+                const isVoiceGuide = (!guide.imageUrl && !guide.imageDataUrl) && (guide.voiceQuery || guide.title);
+                const imageUrl = guide.imageUrl || guide.imageDataUrl || '/images/landing-logo.jpg';
+                this._els.image.src = imageUrl;
+
+                if (!guide.imageUrl && !guide.imageDataUrl) {
+                    this._els.image.style.filter = 'blur(8px) brightness(0.7)';
+                    this._els.image.style.transform = 'scale(1.1)';
+                } else {
+                    this._els.image.style.filter = '';
+                    this._els.image.style.transform = '';
+                }
+
+                this._els.description.textContent = guide.description || '내용 없음';
+
+                if (isVoiceGuide) {
+                    this._els.locationInfo.classList.add('hidden');
+                    if (this._els.voiceQueryInfo && this._els.voiceQueryText) {
+                        this._els.voiceQueryText.textContent = guide.voiceQuery || guide.title || '';
+                        this._els.voiceQueryInfo.classList.remove('hidden');
+                    }
+                } else {
+                    if (this._els.voiceQueryInfo) {
+                        this._els.voiceQueryInfo.classList.add('hidden');
+                    }
+                    if (guide.locationName) {
+                        this._els.locationName.textContent = guide.locationName;
+                        this._els.locationInfo.classList.remove('hidden');
+                    } else {
+                        this._els.locationInfo.classList.add('hidden');
+                    }
+                }
+
+                this._state.savedVoiceLang = guide.voiceLang || null;
+                this._state.savedVoiceName = guide.voiceName || null;
+
+                // ⚠️ 수정금지(승인필요): 2026-03-12 TTS 자동재생 전환 (롤백: 아래 주석 해제)
+                // [이전 수동재생] this._updateAudioButtonIcon(false);
+                this._retranslateNewContent();
+                if (guide.description) {
+                    this._playAudio(guide.description, guide.voiceLang, guide.voiceName);
+                }
+            },
+
+            _show: function () {
+                this._els.page.classList.remove('hidden');
+                document.documentElement.style.overflow = 'hidden';
+                document.body.style.overflow = 'hidden';
+                this._refreshTranslationState();
+            },
+
+            _refreshTranslationState: function () {
+                const self = this;
+                const userLang = localStorage.getItem('appLanguage') || 'ko';
+
+                if (userLang === 'ko') {
+                    this._state.translationComplete = true;
+                    return;
+                }
+
+                const hasTranslateClass = document.body.classList.contains('translated-ltr') ||
+                    document.body.classList.contains('translated-rtl');
+                if (hasTranslateClass) {
+                    this._state.translationComplete = true;
+                    return;
+                }
+
+                this._state.translationComplete = false;
+
+                if (this._state.translationObserver) {
+                    this._state.translationObserver.disconnect();
+                }
+
+                this._state.translationObserver = new MutationObserver(function (mutations) {
+                    const hasTranslated = document.body.classList.contains('translated-ltr') ||
+                        document.body.classList.contains('translated-rtl');
+                    if (hasTranslated) {
+                        self._state.translationComplete = true;
+                        self._state.translationObserver.disconnect();
+                        window.dispatchEvent(new CustomEvent('adminTranslationComplete'));
+                    }
+                });
+
+                this._state.translationObserver.observe(document.body, {
+                    attributes: true,
+                    attributeFilter: ['class']
+                });
+            },
+
+            close: function () {
+                this._stopAudio();
+                this._els.page.classList.add('hidden');
+                document.documentElement.style.overflow = '';
+                document.body.style.overflow = '';
+
+                if (this._state.onClose) {
+                    this._state.onClose();
+                }
+            },
+
+            _playAudio: async function (text, savedVoiceLang, savedVoiceName, renderId) {
+                const self = this;
+                const thisRenderId = renderId || this._state.renderId;
+                this._stopAudio();
+
+                const userLang = localStorage.getItem('appLanguage') || 'ko';
+                if (userLang !== 'ko' && !this._state.translationComplete) {
+                    await new Promise(resolve => {
+                        const handler = () => {
+                            window.removeEventListener('adminTranslationComplete', handler);
+                            resolve();
+                        };
+                        window.addEventListener('adminTranslationComplete', handler);
+                        setTimeout(resolve, 3500);
+                    });
+                }
+
+                // 🌐 2025-12-24: 번역 클래스 감지 후 실제 텍스트 변환까지 추가 대기 (500ms)
+                if (userLang !== 'ko') {
+                    await new Promise(r => setTimeout(r, 500));
+                    console.log('[TTS] 번역 텍스트 적용 대기 완료 (500ms)');
+                }
+
+                // 🌐 Google Translate의 <font> 태그에서 번역된 텍스트 추출
+                let currentText = text;
+                const fontEl = this._els.description.querySelector('font');
+                if (fontEl) {
+                    currentText = fontEl.innerText.trim() || fontEl.textContent.trim() || text;
+                    console.log('[TTS] Google Translate <font> 태그에서 번역 텍스트 추출');
+                } else {
+                    currentText = this._els.description.innerText || text;
+                }
+                const cleanText = currentText.replace(new RegExp('<br\\s*/?>', 'gi'), ' ');
+                const sentences = cleanText.match(/[^.!?]+[.!?]+/g) || [cleanText];
+
+                this._state.originalText = cleanText;
+                this._state.currentUtterance = new SpeechSynthesisUtterance(cleanText);
+
+                // 🌐 2025-12-24: 앱 언어 무조건 우선 (저장된 언어 무시)
+                const langFullMap = { 'ko': 'ko-KR', 'en': 'en-US', 'ja': 'ja-JP', 'zh-CN': 'zh-CN', 'fr': 'fr-FR', 'de': 'de-DE', 'es': 'es-ES' };
+                const fullLang = langFullMap[userLang] || 'ko-KR';
+
+                let voices = this._state.synth.getVoices();
+                if (voices.length === 0) {
+                    await new Promise(resolve => {
+                        const checkVoices = () => {
+                            voices = self._state.synth.getVoices();
+                            if (voices.length > 0) resolve();
+                            else setTimeout(checkVoices, 100);
+                        };
+                        setTimeout(checkVoices, 100);
+                        setTimeout(resolve, 1000);
+                    });
+                    voices = this._state.synth.getVoices();
+                }
+                this._state.voices = voices;
+
+                let targetVoice = null;
+                const shortLang = fullLang.substring(0, 2);
+
+                if (shortLang === 'ko') {
+                    // ⭐ 한국어 하드코딩 (iOS: Yuna/Sora, Android: 유나/소라, Windows: Heami)
+                    const koVoices = voices.filter(v => v.lang.startsWith('ko'));
+                    targetVoice = koVoices.find(v => v.name.includes('Yuna'))
+                        || koVoices.find(v => v.name.includes('Sora'))
+                        || koVoices.find(v => v.name.includes('유나'))
+                        || koVoices.find(v => v.name.includes('소라'))
+                        || koVoices.find(v => v.name.includes('Heami'))
+                        || koVoices[0];
+                    console.log('[AdminDetailPage TTS] 한국어 음성:', targetVoice?.name);
+                } else {
+                    targetVoice = this._getVoiceForLanguage(shortLang === 'zh' ? 'zh-CN' : shortLang);
+                }
+
+                this._state.currentUtterance.voice = targetVoice;
+                this._state.currentUtterance.lang = fullLang;
+                this._state.currentUtterance.rate = 1.0;
+
+                let currentSentenceIndex = 0;
+
+                this._state.currentUtterance.onstart = () => {
+                    self._updateAudioButtonIcon(true);
+                };
+
+                this._state.currentUtterance.onboundary = (event) => {
+                    if (thisRenderId !== self._state.renderId) return;
+
+                    if (event.name === 'sentence') {
+                        const highlightedHTML = sentences.map((sentence, idx) => {
+                            if (idx === currentSentenceIndex) {
+                                return '<span class="current-sentence" style="background-color: rgba(66, 133, 244, 0.3); font-weight: 600;">' + sentence + '</span>';
+                            }
+                            return sentence;
+                        }).join('');
+
+                        self._els.description.innerHTML = highlightedHTML;
+                        currentSentenceIndex++;
+
+                        const currentSpan = self._els.description.querySelector('.current-sentence');
+                        if (currentSpan) {
+                            currentSpan.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        }
+                    }
+                };
+
+                this._state.currentUtterance.onend = () => {
+                    if (thisRenderId !== self._state.renderId) return;
+                    self._updateAudioButtonIcon(false);
+                    self._els.description.textContent = self._state.originalText;
+                };
+
+                // ⚠️ 수정금지(승인필요): 2026-03-13 3단계 TTS 전략
+                // 1단계: 앱(WebView) → 네이티브 TTS (expo-speech)
+                if (this._state.isNativeApp && window.ReactNativeWebView) {
+                    this._state.isNativeSpeaking = true;
+                    this._updateAudioButtonIcon(true);
+                    window.ReactNativeWebView.postMessage(JSON.stringify({
+                        type: 'speak',
+                        payload: { text: cleanText, language: fullLang, rate: 1.0, pitch: 1.0 }
+                    }));
+                    if (window.__adminNativeSpeakDoneListener) {
+                        window.removeEventListener('nativeResponse', window.__adminNativeSpeakDoneListener);
+                    }
+                    window.__adminNativeSpeakDoneListener = function(e) {
+                        if (e.detail && e.detail.type === 'speakDone') {
+                            window.removeEventListener('nativeResponse', window.__adminNativeSpeakDoneListener);
+                            window.__adminNativeSpeakDoneListener = null;
+                            self._state.isNativeSpeaking = false;
+                            if (thisRenderId !== self._state.renderId) return;
+                            self._updateAudioButtonIcon(false);
+                            if (self._state.originalText && self._els.description) {
+                                self._els.description.textContent = self._state.originalText;
+                            }
+                        }
+                    };
+                    window.addEventListener('nativeResponse', window.__adminNativeSpeakDoneListener);
+                    return;
+                }
+
+                // 2단계: 웹 브라우저 → synth.speak() 시도 + 자동재생 감지
+                let autoplayStarted = false;
+                const origOnstart = this._state.currentUtterance.onstart;
+                this._state.currentUtterance.onstart = () => {
+                    autoplayStarted = true;
+                    if (origOnstart) origOnstart();
+                };
+                this._state.synth.speak(this._state.currentUtterance);
+                setTimeout(() => {
+                    if (!autoplayStarted && thisRenderId === self._state.renderId) {
+                        console.log('[AdminDetailPage TTS] 자동재생 차단 감지 → ▶ 버튼 대기');
+                        self._state.synth.cancel();
+                        self._updateAudioButtonIcon(false);
+                    }
+                }, 1200);
+            },
+
+            _stopAudio: function () {
+                // ⚠️ 수정금지(승인필요): 2026-03-13 네이티브 TTS 정지 + pause 상태 초기화
+                this._state._nativePaused = false;
+                this._state._nativePausedText = null;
+                if (this._state.isNativeApp && window.ReactNativeWebView) {
+                    this._state.isNativeSpeaking = false;
+                    window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'stopSpeech', payload: {} }));
+                    if (window.__adminNativeSpeakDoneListener) {
+                        window.removeEventListener('nativeResponse', window.__adminNativeSpeakDoneListener);
+                        window.__adminNativeSpeakDoneListener = null;
+                    }
+                } else {
+                    if (this._state.currentUtterance) {
+                        this._state.currentUtterance.onboundary = null;
+                        this._state.currentUtterance.onend = null;
+                        this._state.currentUtterance.onstart = null;
+                        this._state.currentUtterance.onerror = null;
+                    }
+                    if (this._state.synth && this._state.synth.speaking) {
+                        const isAndroidChrome = /Android/i.test(navigator.userAgent) && /Chrome/i.test(navigator.userAgent);
+                        if (!isAndroidChrome) { this._state.synth.pause(); }
+                        this._state.synth.cancel();
+                    }
+                }
+                this._updateAudioButtonIcon(false);
+                if (this._state.originalText && this._els.description) {
+                    this._els.description.textContent = this._state.originalText;
+                }
+            },
+
+            // ⚠️ 수정금지(승인필요): 2026-03-13 네이티브 pause/resume 포함 음성 토글
+            _toggleAudio: function () {
+                const text = this._els.description.textContent;
+                if (!text || text === '불러오는 중...') return;
+
+                if (this._state.isNativeSpeaking) {
+                    // 네이티브 TTS 재생 중 → 일시정지 (stopSpeech만, _stopAudio 호출 안함)
+                    this._state.isNativeSpeaking = false;
+                    this._state._nativePausedText = this._state.originalText || text;
+                    this._state._nativePaused = true;
+                    if (window.ReactNativeWebView) {
+                        window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'stopSpeech', payload: {} }));
+                    }
+                    if (window.__adminNativeSpeakDoneListener) {
+                        window.removeEventListener('nativeResponse', window.__adminNativeSpeakDoneListener);
+                        window.__adminNativeSpeakDoneListener = null;
+                    }
+                    this._updateAudioButtonIcon(false);
+                } else if (this._state._nativePaused) {
+                    // 네이티브 TTS 일시정지 상태 → 재개 (처음부터 재시작)
+                    const resumeText = this._state._nativePausedText || text;
+                    this._state._nativePaused = false;
+                    this._state._nativePausedText = null;
+                    this._playAudio(resumeText, this._state.savedVoiceLang, this._state.savedVoiceName);
+                } else if (this._state.synth.speaking) {
+                    this._stopAudio();
+                } else {
+                    this._playAudio(text, this._state.savedVoiceLang, this._state.savedVoiceName);
+                }
+            },
+
+            _updateAudioButtonIcon: function (isPlaying) {
+                this._els.audioBtn.innerHTML = isPlaying ? `
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" viewBox="0 0 24 24" fill="currentColor">
+                        <path fill-rule="evenodd" d="M6.75 5.25a.75.75 0 01.75-.75H9a.75.75 0 01.75.75v13.5a.75.75 0 01-.75.75H7.5a.75.75 0 01-.75-.75V5.25zm7.5 0A.75.75 0 0115 4.5h1.5a.75.75 0 01.75.75v13.5a.75.75 0 01-.75.75H15a.75.75 0 01-.75-.75V5.25z" clip-rule="evenodd" />
+                    </svg>
+                ` : `
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8" viewBox="0 0 24 24" fill="currentColor">
+                        <path fill-rule="evenodd" d="M4.5 5.653c0-1.426 1.529-2.33 2.779-1.643l11.54 6.648c1.295.748 1.295 2.538 0 3.286L7.279 20.99c-1.25.717-2.779-.217-2.779-1.643V5.653z" clip-rule="evenodd" />
+                    </svg>
+                `;
+            },
+
+            _toggleText: function () {
+                this._state.isTextVisible = !this._state.isTextVisible;
+                this._els.textOverlay.style.opacity = this._state.isTextVisible ? '1' : '0';
+            }
+        };
+
+        // 초기화
+        document.addEventListener('DOMContentLoaded', () => {
+            adminDetailPage.init();
+        });
+
+        // 상세보기 열기 함수
+        function viewGuideDetail(guideId) {
+            const guide = allGuides.find(g => g.id === guideId);
+            if (!guide) return;
+
+            adminDetailPage.openWithData({
+                imageUrl: guide.imageUrl,
+                description: guide.description,
+                locationName: guide.locationName,
+                voiceLang: guide.voiceLang,
+                voiceName: guide.voiceName
+            });
+        }
+
+        // ═══════════════════════════════════════════════════
+        // 가이드 관리 함수
+        // ═══════════════════════════════════════════════════
+        let allGuides = [];
+        let displayedGuides = 0;
+        const GUIDES_PER_PAGE = 30;
+        let selectedGuideIds = new Set();
+
+        async function searchGuides() {
+            const locationSearch = document.getElementById('guideLocationSearch').value.trim();
+            const tagsSearch = document.getElementById('guideTagsSearch').value.trim();
+
+            const params = new URLSearchParams();
+            if (locationSearch) params.append('locationName', locationSearch);
+            if (tagsSearch) params.append('tags', tagsSearch);
+            params.append('limit', GUIDES_PER_PAGE);
+            params.append('offset', 0);
+
+            try {
+                const res = await fetch(`/api/admin/guides?${params}`);
+                if (!res.ok) throw new Error('검색 실패');
+
+                const data = await res.json();
+                allGuides = data.guides;
+                displayedGuides = allGuides.length;
+
+                document.getElementById('guideCount').textContent = `총 ${data.total}개`;
+                renderGuides();
+            } catch (error) {
+                console.error('가이드 검색 오류:', error);
+                alert('가이드 검색에 실패했습니다.');
+            }
+        }
+
+        function renderGuides() {
+            const grid = document.getElementById('guidesGrid');
+            if (!grid) return;
+
+            if (allGuides.length === 0) {
+                grid.innerHTML = '<p class="text-gray-500 col-span-full text-center py-8">검색 결과가 없습니다.</p>';
+                return;
+            }
+
+            grid.innerHTML = allGuides.map(guide => `
+                <div class="border border-gray-200 rounded-lg overflow-hidden hover:shadow-lg transition ${selectedGuideIds.has(guide.id) ? 'ring-2 ring-blue-500' : ''}">
+                    <div class="relative">
+                        <img src="${guide.imageUrl || '/placeholder.jpg'}" alt="${guide.title}" class="w-full h-48 object-cover cursor-pointer hover:opacity-90 transition" onclick="viewGuideDetail('${guide.id}')">
+                        <label class="absolute top-2 right-2 cursor-pointer" onclick="event.stopPropagation()">
+                            <input type="checkbox" class="w-5 h-5 rounded" ${selectedGuideIds.has(guide.id) ? 'checked' : ''} onchange="toggleGuideSelection('${guide.id}')">
+                        </label>
+                    </div>
+                    <div class="p-4">
+                        <h3 class="font-semibold text-gray-900 mb-1 truncate">${guide.title}</h3>
+                        <p class="text-xs text-gray-400 mb-2">${formatDateTime(guide.created_at || guide.createdAt)}</p>
+                        <p class="text-sm text-gray-500 mb-2">${guide.locationName || '위치 없음'}</p>
+                        <div class="flex flex-wrap gap-1 mb-3">
+                            ${(guide.tags || []).map(tag => `
+                                <span class="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded">${tag}</span>
+                            `).join('')}
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="editGuideTags('${guide.id}')" class="flex-1 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded transition text-sm">
+                                태그 편집
+                            </button>
+                            <button onclick="deleteGuide('${guide.id}')" class="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded transition text-sm">
+                                삭제
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+
+            updateSelectionUI();
+        }
+
+        async function editGuideTags(guideId) {
+            const guide = allGuides.find(g => g.id === guideId);
+            if (!guide) return;
+
+            const currentTags = (guide.tags || []).join(', ');
+            const newTagsStr = prompt(`태그 편집 (쉼표로 구분)\\n\\n현재 태그: ${currentTags || '없음'}`, currentTags);
+
+            if (newTagsStr === null) return;
+
+            const newTags = newTagsStr.split(',').map(t => t.trim()).filter(t => t);
+
+            try {
+                const res = await fetch(`/api/admin/guides/${guideId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tags: newTags })
+                });
+
+                if (!res.ok) throw new Error('태그 편집 실패');
+
+                alert('✅ 태그가 수정되었습니다!');
+                searchGuides();
+            } catch (error) {
+                console.error('태그 편집 오류:', error);
+                alert('태그 편집에 실패했습니다.');
+            }
+        }
+
+        async function deleteGuide(guideId) {
+            const guide = allGuides.find(g => g.id === guideId);
+            if (!guide) return;
+
+            const guideName = guide.title || guide.locationName || '이 가이드';
+            if (!confirm(`"${guideName}"를 삭제하시겠습니까?\\n\\n이 작업은 되돌릴 수 없습니다.`)) return;
+
+            try {
+                const res = await fetch(`/api/admin/guides/${guideId}`, {
+                    method: 'DELETE'
+                });
+
+                if (!res.ok) throw new Error('가이드 삭제 실패');
+
+                alert('✅ 가이드가 삭제되었습니다!');
+
+                // 선택된 가이드 목록에서도 제거
+                selectedGuideIds.delete(guideId);
+
+                // 목록 새로고침
+                searchGuides();
+            } catch (error) {
+                console.error('가이드 삭제 오류:', error);
+                alert('가이드 삭제에 실패했습니다.');
+            }
+        }
+
+        // 전체 삭제 기능
+        async function deleteAllGuides() {
+            const totalCount = document.getElementById('guideCount').textContent;
+
+            if (!confirm(`⚠️ 모든 상세페이지를 삭제하시겠습니까?\n\n${totalCount}\n\n이 작업은 되돌릴 수 없습니다!`)) return;
+            if (!confirm(`🚨 최종 확인: 정말로 모든 상세페이지를 영구 삭제하시겠습니까?`)) return;
+
+            try {
+                const res = await fetch('/api/admin/guides/delete-all', {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                if (!res.ok) {
+                    const error = await res.json();
+                    throw new Error(error.error || '전체 삭제 실패');
+                }
+
+                const result = await res.json();
+                alert(`✅ ${result.message}`);
+
+                // 선택 초기화 및 목록 새로고침
+                selectedGuideIds.clear();
+                searchGuides();
+            } catch (error) {
+                console.error('전체 삭제 오류:', error);
+                alert('❌ 전체 삭제에 실패했습니다: ' + error.message);
+            }
+        }
+
+        function toggleGuideSelection(guideId) {
+            if (selectedGuideIds.has(guideId)) {
+                selectedGuideIds.delete(guideId);
+            } else {
+                selectedGuideIds.add(guideId);
+            }
+            renderGuides();
+        }
+
+        function updateSelectionUI() {
+            const count = selectedGuideIds.size;
+            document.getElementById('selectedCount').textContent = count;
+            document.getElementById('createShareBtn').disabled = count === 0;
+        }
+
+        function openCreateShareModal() {
+            const name = prompt(`공유 페이지 이름을 입력하세요\n\n선택한 가이드: ${selectedGuideIds.size}개`);
+            if (!name || name.trim().length === 0) return;
+
+            createShareFromGuides(name.trim());
+        }
+
+        async function createShareFromGuides(name) {
+            try {
+                const res = await fetch('/api/admin/create-share-from-guides', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        guideIds: Array.from(selectedGuideIds),
+                        name
+                    })
+                });
+
+                if (!res.ok) {
+                    const error = await res.json();
+                    throw new Error(error.error || '공유 페이지 생성 실패');
+                }
+
+                const data = await res.json();
+                alert(`공유 페이지가 생성되었습니다!\n\n${data.shareUrl}`);
+
+                selectedGuideIds.clear();
+                renderGuides();
+            } catch (error) {
+                console.error('공유 페이지 생성 오류:', error);
+                alert('공유 페이지 생성에 실패했습니다: ' + error.message);
+            }
+        }
+
+        function resetGuideFilters() {
+            document.getElementById('guideLocationSearch').value = '';
+            document.getElementById('guideTagsSearch').value = '';
+            searchGuides();
+        }
+
+        async function loadMoreGuides() {
+            const locationSearch = document.getElementById('guideLocationSearch').value.trim();
+            const tagsSearch = document.getElementById('guideTagsSearch').value.trim();
+
+            const params = new URLSearchParams();
+            if (locationSearch) params.append('locationName', locationSearch);
+            if (tagsSearch) params.append('tags', tagsSearch);
+            params.append('limit', GUIDES_PER_PAGE);
+            params.append('offset', displayedGuides);
+
+            try {
+                const res = await fetch(`/api/admin/guides?${params}`);
+                if (!res.ok) throw new Error('로드 실패');
+
+                const data = await res.json();
+                allGuides = [...allGuides, ...data.guides];
+                displayedGuides = allGuides.length;
+
+                renderGuides();
+            } catch (error) {
+                console.error('더 보기 오류:', error);
+                alert('더 보기에 실패했습니다.');
+            }
+        }
+
+        // ═══════════════════════════════════════════════════
+        // Featured 갤러리 관리 함수
+        // ═══════════════════════════════════════════════════
+        let allSharePages = [];
+        let currentFeaturedPages = [];
+
+        async function searchFeaturedShares() {
+            const query = document.getElementById('featuredShareSearch').value.trim();
+
+            try {
+                const res = await fetch(`/api/admin/shares?search=${encodeURIComponent(query)}`);
+                if (!res.ok) throw new Error('검색 실패');
+
+                const data = await res.json();
+                allSharePages = data.shares;
+                renderFeaturedSearchResults();
+            } catch (error) {
+                console.error('공유 페이지 검색 오류:', error);
+            }
+        }
+
+        function renderFeaturedSearchResults() {
+            const list = document.getElementById('featuredSharesList');
+            if (!list) return;
+
+            if (allSharePages.length === 0) {
+                list.innerHTML = '<p class="text-gray-500 text-sm text-center py-4">검색 결과가 없습니다</p>';
+                return;
+            }
+
+            list.innerHTML = allSharePages.map(share => `
+                <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
+                    <div class="flex-1 min-w-0">
+                        <p class="font-medium text-gray-900 truncate">${share.name}</p>
+                        <p class="text-sm text-gray-500">조회수: ${share.downloadCount || 0}</p>
+                    </div>
+                    <button onclick="addToFeatured('${share.id}')" class="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded transition">
+                        추가
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        async function loadCurrentFeatured() {
+            try {
+                const res = await fetch('/api/featured');
+                if (!res.ok) throw new Error('Featured 로드 실패');
+
+                const data = await res.json();
+                currentFeaturedPages = data.featured || [];
+                renderCurrentFeatured();
+            } catch (error) {
+                console.error('Featured 로드 오류:', error);
+            }
+        }
+
+        function renderCurrentFeatured() {
+            const list = document.getElementById('currentFeaturedList');
+            const countDisplay = document.getElementById('featuredCountDisplay');
+            if (!list || !countDisplay) return;
+
+            countDisplay.textContent = `${currentFeaturedPages.length}/3`;
+
+            if (currentFeaturedPages.length === 0) {
+                list.innerHTML = '<p class="text-gray-500 text-sm text-center py-4">Featured 항목이 없습니다</p>';
+                return;
+            }
+
+            list.innerHTML = currentFeaturedPages.map(page => `
+                <div class="flex justify-between items-center p-3 bg-blue-50 rounded-lg">
+                    <div class="flex-1 min-w-0">
+                        <p class="font-medium text-gray-900 truncate">${page.name}</p>
+                        <p class="text-sm text-gray-500">순서: ${page.featuredOrder || '-'}</p>
+                    </div>
+                    <button onclick="removeFromFeatured('${page.id}')" class="px-3 py-1 bg-red-500 hover:bg-red-600 text-white text-sm rounded transition">
+                        제거
+                    </button>
+                </div>
+            `).join('');
+        }
+
+        async function addToFeatured(shareId) {
+            if (currentFeaturedPages.length >= 3) {
+                alert('Featured는 최대 3개까지만 추가할 수 있습니다.');
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/admin/shares/${shareId}/featured`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ featured: true })
+                });
+
+                if (!res.ok) throw new Error('Featured 추가 실패');
+
+                alert('Featured에 추가되었습니다!');
+                await loadCurrentFeatured();
+            } catch (error) {
+                console.error('Featured 추가 오류:', error);
+                alert('Featured 추가에 실패했습니다.');
+            }
+        }
+
+        async function removeFromFeatured(shareId) {
+            if (!confirm('Featured에서 제거하시겠습니까?')) return;
+
+            try {
+                const res = await fetch(`/api/admin/shares/${shareId}/featured`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ featured: false })
+                });
+
+                if (!res.ok) throw new Error('Featured 제거 실패');
+
+                alert('Featured에서 제거되었습니다.');
+                await loadCurrentFeatured();
+            } catch (error) {
+                console.error('Featured 제거 오류:', error);
+                alert('Featured 제거에 실패했습니다.');
+            }
+        }
+
+        // 검색 입력 이벤트
+        document.addEventListener('DOMContentLoaded', () => {
+            const searchInput = document.getElementById('featuredShareSearch');
+            if (searchInput) {
+                searchInput.addEventListener('input', () => {
+                    if (searchInput.value.trim().length > 0) {
+                        searchFeaturedShares();
+                    }
+                });
+            }
+        });
+
+        // 초기 데이터 로드
+        async function init() {
+            console.log('[ADMIN] init() 시작');
+            try {
+                // 요약 데이터 로드
+                console.log('[ADMIN] API 호출: /api/admin/overview');
+                const res = await fetch('/api/admin/overview', {
+                    credentials: 'include'
+                });
+
+                console.log('[ADMIN] API 응답 상태:', res.status);
+
+                // 401 에러 시 로그인 프롬프트
+                if (res.status === 401) {
+                    console.log('[ADMIN] 401 - 로그인 필요');
+                    await promptAdminLogin();
+                    return init(); // 로그인 후 재시도
+                }
+
+                if (!res.ok) {
+                    const errorText = await res.text();
+                    console.error('[ADMIN] API 오류:', errorText);
+                    throw new Error('데이터 로드 실패: ' + res.status);
+                }
+
+                const data = await res.json();
+                console.log('[ADMIN] 받은 데이터:', JSON.stringify(data, null, 2));
+
+                renderOverview(data);
+
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('content-overview').classList.remove('hidden');
+                console.log('[ADMIN] init() 완료');
+            } catch (error) {
+                console.error('[ADMIN] 초기화 오류:', error);
+                document.getElementById('loading').innerHTML = `
+                    <p class="text-red-600">데이터 로드 실패</p>
+                    <p class="text-sm text-gray-500 mt-2">${error.message}</p>
+                    <button onclick="init()" class="mt-3 px-4 py-2 bg-blue-500 text-white rounded">재시도</button>
+                `;
+            }
+        }
+
+        // 관리자 로그인 프롬프트
+        async function promptAdminLogin() {
+            const password = prompt('관리자 비밀번호를 입력하세요:');
+            if (!password) {
+                throw new Error('비밀번호가 입력되지 않았습니다.');
+            }
+
+            const res = await fetch('/api/admin/auth', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ password })
+            });
+
+            if (!res.ok) {
+                alert('❌ 잘못된 비밀번호입니다.');
+                throw new Error('인증 실패');
+            }
+
+            const data = await res.json();
+            console.log('✅ 관리자 인증 성공:', data);
+        }
+
+        // 요약 렌더링
+        function renderOverview(data) {
+            console.log('[ADMIN] renderOverview 시작:', data);
+
+            // 안전한 값 설정 (null/undefined 처리)
+            const totalUsers = data.totalUsers ?? 0;
+            const recentUsers = data.recentUsers ?? 0;
+            const totalApiCalls = data.totalApiCalls ?? 0;
+            const estimatedCost = data.estimatedCost ?? 0;
+            const totalShares = data.totalShares ?? 0;
+            const totalViews = data.totalViews ?? 0;
+            const providers = data.providers ?? [];
+
+            console.log('[ADMIN] 파싱된 값:', { totalUsers, recentUsers, totalApiCalls, estimatedCost, totalShares, totalViews, providers });
+
+            document.getElementById('totalUsers').textContent = totalUsers.toLocaleString();
+            document.getElementById('recentUsers').textContent = recentUsers.toLocaleString();
+            document.getElementById('totalApiCalls').textContent = totalApiCalls.toLocaleString();
+            document.getElementById('estimatedCost').textContent = `₩${Math.round(estimatedCost * 1300).toLocaleString()}`;
+            document.getElementById('totalShares').textContent = totalShares.toLocaleString();
+            document.getElementById('totalViews').textContent = totalViews.toLocaleString();
+
+            // 로그인 방식
+            const providerHtml = providers.map(p => `
+                <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg">
+                    <span class="font-medium text-gray-700">${p.provider === 'google' ? 'Google' : p.provider === 'kakao' ? 'Kakao' : 'Replit'}</span>
+                    <span class="font-bold text-gray-900">${p.count}명</span>
+                </div>
+            `).join('');
+            document.getElementById('providerStats').innerHTML = providerHtml || '<p class="text-gray-500">데이터 없음</p>';
+
+            console.log('[ADMIN] renderOverview 완료');
+        }
+
+        // 추천 갤러리 로드
+        async function loadFeatured() {
+            try {
+                const res = await fetch('/api/admin/featured');
+                if (!res.ok) throw new Error('추천 갤러리 로드 실패');
+                const data = await res.json();
+                renderFeatured(data.featured);
+            } catch (error) {
+                console.error('추천 갤러리 로드 오류:', error);
+            }
+        }
+
+        // 추천 갤러리 렌더링
+        function renderFeatured(featured) {
+            const html = featured.map(item => `
+                <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
+                    <div class="flex-1">
+                        <h3 class="font-semibold text-gray-900">${item.name}</h3>
+                        <p class="text-sm text-gray-500">${formatDateTime(item.created_at || item.createdAt)}</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <!-- ⚠️ 수정금지(승인필요): 2026-03-19 window.open → openPageOverlay — WebView에서 window.close() 미작동 해결 -->
+                        <button onclick="if(window.parent&&window.parent.openPageOverlay){window.parent.openPageOverlay('/s/${item.id}')}else{window.open('/s/${item.id}','_blank')}" class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded-lg transition">
+                            미리보기
+                        </button>
+                        <button onclick="removeFeatured('${item.id}')" class="px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white text-sm rounded-lg transition">
+                            제거
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+            document.getElementById('featuredList').innerHTML = html || '<p class="text-center text-gray-500 py-8">추천 갤러리가 없습니다.</p>';
+        }
+
+        // 전체 공유 로드
+        async function loadAllShares() {
+            try {
+                const res = await fetch('/api/admin/content/all-shares');
+                if (!res.ok) throw new Error('전체 공유 로드 실패');
+                const data = await res.json();
+                allShares = data.shares;
+                displayedShares = 0;
+                renderAllShares();
+            } catch (error) {
+                console.error('전체 공유 로드 오류:', error);
+            }
+        }
+
+        // 전체 공유 렌더링
+        function renderAllShares() {
+            const end = Math.min(displayedShares + SHARES_PER_PAGE, allShares.length);
+            const shares = allShares.slice(displayedShares, end);
+
+            const html = shares.map(item => `
+                <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
+                    <div class="flex-1">
+                        <h3 class="font-semibold text-gray-900">${item.name}</h3>
+                        <p class="text-sm text-gray-500">${formatDateTime(item.created_at || item.createdAt)} | 조회수: ${item.download_count || item.downloadCount || 0}</p>
+                    </div>
+                    <div class="flex gap-2">
+                        <!-- ⚠️ 수정금지(승인필요): 2026-03-19 window.open → openPageOverlay — WebView에서 window.close() 미작동 해결 -->
+                        <button onclick="if(window.parent&&window.parent.openPageOverlay){window.parent.openPageOverlay('/s/${item.id}')}else{window.open('/s/${item.id}','_blank')}" class="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded-lg transition">
+                            미리보기
+                        </button>
+                        <button onclick="deleteShare('${item.id}')" class="px-4 py-2 bg-red-600 hover:bg-red-700 text-white text-sm rounded-lg transition">
+                            삭제
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+
+            if (displayedShares === 0) {
+                document.getElementById('allSharesList').innerHTML = html || '<p class="text-center text-gray-500 py-8">공유 페이지가 없습니다.</p>';
+            } else {
+                document.getElementById('allSharesList').insertAdjacentHTML('beforeend', html);
+            }
+
+            displayedShares = end;
+            document.getElementById('loadMoreBtn').style.display = displayedShares >= allShares.length ? 'none' : 'block';
+        }
+
+        // 더 보기
+        function loadMore() {
+            renderAllShares();
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // ⭐ V1 공유페이지 일괄 재생성 (2025-12-16)
+        // ═══════════════════════════════════════════════════════════════
+        async function regenerateAllV1() {
+            // ⚠️ 수정금지(승인필요) — V1 재생성 confirm 메시지: 마이그래이션 내용 명시 (Claude Sonnet 4.6, 2026-03-10)
+            if (!confirm('모든 공유페이지를 V1 표준 템플릿으로 재생성하시겠습니까?\n\n• 음성 가이드 썸네일 표준화\n• locationName/voiceQuery 필드 적용\n• TTS 음성 우선순위 적용\n• 공유페이지 X닫기 버튼 position:fixed 복원 (JS토글 제거)\n• 공유페이지 닫기: window.close() → SPA 오버레이 postMessage 업그레이드\n• 인라인 스크립트 변수 충돌 수정 (voiceConfigsCache SyntaxError 해결)')) {
+                return;
+            }
+
+            try {
+                const button = event.target.closest('button');
+                const originalText = button.innerHTML;
+                button.disabled = true;
+                button.innerHTML = '<svg class="animate-spin h-5 w-5 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
+
+                const res = await fetch('/api/admin/regenerate-all', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+
+                if (!res.ok) {
+                    throw new Error('재생성 실패');
+                }
+
+                const data = await res.json();
+                alert(`✅ V1 일괄 재생성 완료!\n\n성공: ${data.successCount}개\n실패: ${data.failCount}개`);
+
+                location.reload();
+            } catch (error) {
+                console.error('V1 재생성 오류:', error);
+                alert('❌ V1 일괄 재생성에 실패했습니다.');
+                button.disabled = false;
+                button.innerHTML = originalText;
+            }
+        }
+
+        // 통계 로드
+        async function loadStats() {
+            try {
+                const res = await fetch('/api/admin/stats');
+                if (!res.ok) throw new Error('통계 로드 실패');
+                const data = await res.json();
+                renderStats(data);
+            } catch (error) {
+                console.error('통계 로드 오류:', error);
+            }
+        }
+
+        // 통계 렌더링
+        function renderStats(data) {
+            // 일별 추이
+            const trendsHtml = data.dailyTrends && data.dailyTrends.length > 0
+                ? data.dailyTrends.map(day => `
+                    <tr class="border-b hover:bg-gray-50">
+                        <td class="py-3 px-4 text-sm text-gray-700">${new Date(day.date).toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' })}</td>
+                        <td class="py-3 px-4 text-sm text-center font-semibold text-gray-900">${day.newUsers}</td>
+                        <td class="py-3 px-4 text-sm text-center font-semibold text-gray-900">${day.apiCalls}</td>
+                        <td class="py-3 px-4 text-sm text-center font-semibold text-gray-900">${day.shares}</td>
+                    </tr>
+                `).join('')
+                : '<tr><td colspan="4" class="py-8 text-center text-gray-500">데이터가 없습니다. (AI 호출 및 사용자 활동 로그 수집 전)</td></tr>';
+            document.getElementById('dailyTrends').innerHTML = trendsHtml;
+
+            // 디바이스
+            const deviceHtml = data.devices && data.devices.length > 0
+                ? data.devices.map(d => `
+                    <div class="flex justify-between items-center p-2 bg-gray-50 rounded">
+                        <span class="text-sm text-gray-700">${d.type}</span>
+                        <span class="text-sm font-semibold text-gray-900">${d.count} (${d.percentage}%)</span>
+                    </div>
+                `).join('')
+                : '<p class="text-sm text-center text-gray-500 py-4">데이터가 없습니다</p>';
+            document.getElementById('deviceStats').innerHTML = deviceHtml;
+
+            // 브라우저
+            const browserHtml = data.browsers && data.browsers.length > 0
+                ? data.browsers.map(b => `
+                    <div class="flex justify-between items-center p-2 bg-gray-50 rounded">
+                        <span class="text-sm text-gray-700">${b.name}</span>
+                        <span class="text-sm font-semibold text-gray-900">${b.count} (${b.percentage}%)</span>
+                    </div>
+                `).join('')
+                : '<p class="text-sm text-center text-gray-500 py-4">데이터가 없습니다</p>';
+            document.getElementById('browserStats').innerHTML = browserHtml;
+
+            // AI 성능
+            document.getElementById('avgResponseTime').textContent = data.aiPerformance.avgResponseTime || data.aiPerformance.avgResponseTime === 0 ? `${data.aiPerformance.avgResponseTime}ms` : '-';
+            document.getElementById('successRate').textContent = data.aiPerformance.successRate || data.aiPerformance.successRate === 0 ? `${data.aiPerformance.successRate}%` : '-';
+            document.getElementById('errorRate').textContent = data.aiPerformance.errorRate || data.aiPerformance.errorRate === 0 ? `${data.aiPerformance.errorRate}%` : '-';
+        }
+
+        // Featured 제거
+        async function removeFeatured(id) {
+            if (!confirm('추천 갤러리에서 제거하시겠습니까?')) return;
+
+            try {
+                const res = await fetch(`/api/admin/featured/${id}`, { method: 'DELETE' });
+                if (!res.ok) throw new Error('제거 실패');
+                alert('제거되었습니다.');
+                loadFeatured();
+            } catch (error) {
+                alert('오류: ' + error.message);
+            }
+        }
+
+        // 공유 삭제
+        async function deleteShare(id) {
+            const share = allShares.find(s => s.id === id);
+            const name = share ? share.name : '공유 페이지';
+
+            if (!confirm(`"${name}" 공유 페이지를 영구 삭제하시겠습니까?\n\n이 작업은 되돌릴 수 없습니다.`)) return;
+            if (!confirm(`최종 확인: 정말로 삭제하시겠습니까?`)) return;
+
+            try {
+                const res = await fetch(`/api/admin/shares/${id}`, { method: 'DELETE' });
+                if (!res.ok) throw new Error('삭제 실패');
+                const result = await res.json();
+                alert(result.message);
+                loadAllShares();
+            } catch (error) {
+                alert('오류: ' + error.message);
+            }
+        }
+
+        // 검색 기능
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('featuredSearch')?.addEventListener('input', (e) => {
+                const query = e.target.value.toLowerCase();
+                document.querySelectorAll('#featuredList > div').forEach(item => {
+                    const text = item.textContent.toLowerCase();
+                    item.style.display = text.includes(query) ? 'flex' : 'none';
+                });
+            });
+
+            document.getElementById('allSharesSearch')?.addEventListener('input', (e) => {
+                const query = e.target.value.toLowerCase();
+                document.querySelectorAll('#allSharesList > div').forEach(item => {
+                    const text = item.textContent.toLowerCase();
+                    item.style.display = text.includes(query) ? 'flex' : 'none';
+                });
+            });
+        });
+
+        // ═══════════════════════════════════════════════════
+        // 💰 캐시백 관리 함수들 (2025-11-28 리워드 시스템)
+        // ═══════════════════════════════════════════════════
+
+        async function loadCashbackRequests() {
+            try {
+                const res = await fetch('/api/admin/cashback');
+                const data = await res.json();
+
+                if (!data.requests) {
+                    document.getElementById('cashbackList').innerHTML = '<tr><td colspan="7" class="text-center py-8 text-gray-400">캐시백 요청이 없습니다.</td></tr>';
+                    return;
+                }
+
+                const pending = data.requests.filter(r => r.status === 'pending').length;
+                const approved = data.requests.filter(r => r.status === 'approved').length;
+                const totalAmount = data.requests
+                    .filter(r => r.status === 'approved')
+                    .reduce((sum, r) => sum + (r.cashAmount || 0), 0);
+
+                document.getElementById('pendingCashback').textContent = pending;
+                document.getElementById('approvedCashback').textContent = approved;
+                document.getElementById('totalCashbackAmount').textContent = `€${(totalAmount / 100).toFixed(2)}`;
+
+                if (data.requests.length === 0) {
+                    document.getElementById('cashbackList').innerHTML = '<tr><td colspan="7" class="text-center py-8 text-gray-400">캐시백 요청이 없습니다.</td></tr>';
+                    return;
+                }
+
+                document.getElementById('cashbackList').innerHTML = data.requests.map(req => {
+                    const statusBadge = {
+                        'pending': '<span class="px-2 py-1 bg-amber-100 text-amber-800 text-xs rounded-full">⏳ 대기</span>',
+                        'approved': '<span class="px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">✅ 승인</span>',
+                        'rejected': '<span class="px-2 py-1 bg-red-100 text-red-800 text-xs rounded-full">❌ 거절</span>'
+                    }[req.status] || req.status;
+
+                    const methodText = {
+                        'kakaopay': '카카오페이',
+                        'bank_transfer': '계좌이체'
+                    }[req.paymentMethod] || req.paymentMethod;
+
+                    const actionBtns = req.status === 'pending' ? `
+                        <div class="flex gap-2">
+                            <button onclick="approveCashback('${req.id}')" class="px-3 py-1 bg-green-500 hover:bg-green-600 text-white text-xs rounded-lg transition">승인</button>
+                            <button onclick="rejectCashback('${req.id}')" class="px-3 py-1 bg-red-500 hover:bg-red-600 text-white text-xs rounded-lg transition">거절</button>
+                        </div>
+                    ` : req.adminNote ? `<span class="text-xs text-gray-500">${req.adminNote}</span>` : '-';
+
+                    return `
+                        <tr class="border-b hover:bg-gray-50">
+                            <td class="py-3 px-4">${statusBadge}</td>
+                            <td class="py-3 px-4 text-sm">${req.userId?.substring(0, 8) || '-'}...</td>
+                            <td class="py-3 px-4 text-sm text-center font-medium">${req.creditsAmount}</td>
+                            <td class="py-3 px-4 text-sm text-center font-medium text-green-600">€${(req.cashAmount / 100).toFixed(0)}</td>
+                            <td class="py-3 px-4 text-sm">${methodText}<br><span class="text-xs text-gray-500">${req.paymentInfo || ''}</span></td>
+                            <td class="py-3 px-4 text-sm">${formatDateTime(req.createdAt)}</td>
+                            <td class="py-3 px-4">${actionBtns}</td>
+                        </tr>
+                    `;
+                }).join('');
+
+            } catch (error) {
+                console.error('캐시백 목록 로드 오류:', error);
+                document.getElementById('cashbackList').innerHTML = '<tr><td colspan="7" class="text-center py-8 text-red-400">오류가 발생했습니다.</td></tr>';
+            }
+        }
+
+        async function approveCashback(id) {
+            const adminNote = prompt('승인 메모 (선택사항):');
+
+            try {
+                const res = await fetch(`/api/admin/cashback/${id}/approve`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ adminNote: adminNote || '승인됨' })
+                });
+
+                const result = await res.json();
+
+                if (result.success) {
+                    alert('캐시백이 승인되었습니다.');
+                    loadCashbackRequests();
+                } else {
+                    alert('오류: ' + (result.error || '승인 실패'));
+                }
+            } catch (error) {
+                alert('오류: ' + error.message);
+            }
+        }
+
+        async function rejectCashback(id) {
+            const adminNote = prompt('거절 사유 (필수):');
+
+            if (!adminNote) {
+                alert('거절 사유를 입력해주세요.');
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/admin/cashback/${id}/reject`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ adminNote })
+                });
+
+                const result = await res.json();
+
+                if (result.success) {
+                    alert('캐시백이 거절되었습니다.');
+                    loadCashbackRequests();
+                } else {
+                    alert('오류: ' + (result.error || '거절 실패'));
+                }
+            } catch (error) {
+                alert('오류: ' + error.message);
+            }
+        }
+
+        // ═══════════════════════════════════════════════════
+        // 🎯 AI 프롬프트 관리 함수 (2025-12-18)
+        // ═══════════════════════════════════════════════════
+
+        const LANGUAGE_NAMES = {
+            'ko': '한국어',
+            'en': 'English',
+            'zh-CN': '中文',
+            'ja': '日本語',
+            'fr': 'Français',
+            'de': 'Deutsch',
+            'es': 'Español'
+        };
+
+        async function loadPrompts() {
+            const container = document.getElementById('promptsList');
+            container.innerHTML = '<p class="text-center text-gray-400 py-8">프롬프트 로딩 중...</p>';
+
+            try {
+                const res = await fetch('/api/admin/prompts', {
+                    credentials: 'include',
+                    cache: 'no-store'
+                });
+
+                if (!res.ok) throw new Error('프롬프트 로드 실패');
+
+                const data = await res.json();
+                allPrompts = data.prompts || [];
+
+                if (allPrompts.length === 0) {
+                    container.innerHTML = `
+                        <div class="text-center py-12">
+                            <p class="text-gray-500 mb-4">프롬프트가 없습니다.</p>
+                            <button onclick="seedDefaultPrompts()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                                기본 프롬프트 생성
+                            </button>
+                        </div>
+                    `;
+                    return;
+                }
+
+                filterPrompts();
+            } catch (error) {
+                container.innerHTML = `<p class="text-center text-red-500 py-8">오류: ${error.message}</p>`;
+            }
+        }
+
+        function filterPrompts() {
+            const langFilter = document.getElementById('promptLangFilter').value;
+            const typeFilter = document.getElementById('promptTypeFilter').value;
+
+            let filtered = allPrompts;
+
+            if (langFilter !== 'all') {
+                filtered = filtered.filter(p => p.language === langFilter);
+            }
+
+            if (typeFilter !== 'all') {
+                filtered = filtered.filter(p => p.type === typeFilter);
+            }
+
+            renderPrompts(filtered);
+        }
+
+        function renderPrompts(prompts) {
+            const container = document.getElementById('promptsList');
+
+            if (prompts.length === 0) {
+                container.innerHTML = '<p class="text-center text-gray-400 py-8">필터링된 결과가 없습니다.</p>';
+                return;
+            }
+
+            container.innerHTML = prompts.map(p => `
+                <div class="bg-white rounded-lg p-4 shadow-sm border-l-4 ${p.type === 'image' ? 'border-purple-500' : 'border-green-500'}">
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
+                        <div class="flex flex-wrap items-center gap-2">
+                            <span class="text-lg">${p.type === 'image' ? '🖼️' : '💬'}</span>
+                            <span class="font-semibold">${LANGUAGE_NAMES[p.language] || p.language}</span>
+                            <span class="text-xs px-2 py-1 rounded ${p.type === 'image' ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700'}">
+                                ${p.type === 'image' ? '이미지' : '텍스트'}
+                            </span>
+                            <span class="text-xs text-gray-400">v${p.version || 1}</span>
+                        </div>
+                    </div>
+                    <textarea id="prompt-${p.language}-${p.type}" class="w-full h-48 p-3 text-sm text-gray-700 bg-gray-50 border border-gray-200 rounded-lg font-mono leading-relaxed resize-y focus:ring-2 focus:ring-blue-500 focus:border-transparent">${escapeHtml(p.content)}</textarea>
+                    <div class="flex justify-between items-center mt-3">
+                        <p class="text-xs text-gray-400">⚠️ "텍스트로만 응답" 규칙 필수</p>
+                        <button onclick="savePromptDirect('${p.language}', '${p.type}')" class="px-4 py-2 text-sm bg-blue-500 text-white hover:bg-blue-600 rounded-lg transition font-medium">
+                            저장
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        async function savePromptDirect(language, type) {
+            const textarea = document.getElementById(`prompt-${language}-${type}`);
+            if (!textarea) {
+                alert('프롬프트를 찾을 수 없습니다.');
+                return;
+            }
+
+            const content = textarea.value.trim();
+
+            if (!content) {
+                alert('프롬프트 내용을 입력해주세요.');
+                return;
+            }
+
+            if (!content.includes('텍스트로만 응답') && !content.includes('text only') && !content.includes('text-only')) {
+                if (!confirm('경고: "텍스트로만 응답" 규칙이 없습니다. 음성 응답이 생성될 수 있습니다. 계속하시겠습니까?')) {
+                    return;
+                }
+            }
+
+            try {
+                const res = await fetch('/api/admin/prompts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ language, type, content })
+                });
+
+                const result = await res.json();
+
+                if (result.success) {
+                    if (window.clearPromptCache) window.clearPromptCache();
+                    alert('저장되었습니다.');
+                    loadPrompts();
+                } else {
+                    alert('오류: ' + (result.error || '저장 실패'));
+                }
+            } catch (error) {
+                alert('오류: ' + error.message);
+            }
+        }
+
+        function openPromptEdit(language, type) {
+            const prompt = allPrompts.find(p => p.language === language && p.type === type);
+
+            if (!prompt) {
+                alert('프롬프트를 찾을 수 없습니다.');
+                return;
+            }
+
+            document.getElementById('promptEditLang').value = language;
+            document.getElementById('promptEditType').value = type;
+            document.getElementById('promptEditContent').value = prompt.content;
+            document.getElementById('promptEditTitle').textContent =
+                `프롬프트 편집: ${LANGUAGE_NAMES[language]} - ${type === 'image' ? '이미지' : '텍스트'}`;
+
+            document.getElementById('promptEditModal').classList.remove('hidden');
+        }
+
+        function closePromptModal() {
+            document.getElementById('promptEditModal').classList.add('hidden');
+        }
+
+        async function savePrompt() {
+            const language = document.getElementById('promptEditLang').value;
+            const type = document.getElementById('promptEditType').value;
+            const content = document.getElementById('promptEditContent').value.trim();
+
+            if (!content) {
+                alert('프롬프트 내용을 입력해주세요.');
+                return;
+            }
+
+            if (!content.includes('텍스트로만 응답') && !content.includes('text only') && !content.includes('text-only')) {
+                if (!confirm('경고: 프롬프트에 "텍스트로만 응답" 규칙이 없습니다. 음성 응답이 생성될 수 있습니다. 계속하시겠습니까?')) {
+                    return;
+                }
+            }
+
+            try {
+                const res = await fetch('/api/admin/prompts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ language, type, content })
+                });
+
+                const result = await res.json();
+
+                if (result.success) {
+                    if (window.clearPromptCache) window.clearPromptCache();
+                    alert('프롬프트가 저장되었습니다.');
+                    closePromptModal();
+                    loadPrompts();
+                } else {
+                    alert('오류: ' + (result.error || '저장 실패'));
+                }
+            } catch (error) {
+                alert('오류: ' + error.message);
+            }
+        }
+
+        async function seedDefaultPrompts() {
+            if (!confirm('14개 기본 프롬프트를 생성하시겠습니까? (기존 프롬프트는 유지됩니다)')) {
+                return;
+            }
+
+            try {
+                const res = await fetch('/api/admin/prompts/seed', {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+
+                const result = await res.json();
+
+                if (result.success) {
+                    alert(result.message);
+                    loadPrompts();
+                } else {
+                    alert('오류: ' + (result.error || '시딩 실패'));
+                }
+            } catch (error) {
+                alert('오류: ' + error.message);
+            }
+        }
+
+        // 초기화
+        init();
+    </script>
+
+    <!-- Featured 편집 모달 (from index.html) -->
+    <div id="editFeaturedModal"
+        class="hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden">
+            <!-- 모달 헤더 -->
+            <div class="flex items-center justify-between p-6 border-b border-gray-200">
+                <h2 class="text-2xl font-bold text-gray-800">✏️ Featured 편집</h2>
+                <button onclick="closeEditModal()" class="text-gray-400 hover:text-gray-600 transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12">
+                        </path>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- 모달 바디 -->
+            <div class="p-6 overflow-y-auto" style="max-height: calc(90vh - 200px);">
+                <!-- 입력 필드 -->
+                <div class="space-y-4 mb-6">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">제목</label>
+                        <input id="editTitle" type="text"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">발신자</label>
+                        <input id="editSender" type="text"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">위치</label>
+                        <input id="editLocation" type="text"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">날짜</label>
+                        <input id="editDate" type="date"
+                            class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-yellow-500 focus:border-transparent">
+                    </div>
+                </div>
+
+                <!-- 가이드 목록 -->
+                <div>
+                    <h3 class="text-lg font-bold text-gray-800 mb-3">📸 콘텐츠 순서 (▲▼ 버튼으로 변경)</h3>
+                    <p class="text-sm text-gray-500 mb-3">여행 동선이나 하이라이트 순서대로 배치하세요 (최대 20개)</p>
+                    <div id="guideList" class="space-y-2 p-4 bg-gray-50 rounded-lg"
+                        style="max-height: 70vh; overflow-y: auto;">
+                        <!-- 동적 생성 -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- 모달 푸터 -->
+            <div class="flex items-center justify-end gap-3 p-6 border-t border-gray-200 bg-gray-50">
+                <button onclick="closeEditModal()"
+                    class="px-6 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-100 font-semibold transition-colors">
+                    취소
+                </button>
+                <button id="saveFeaturedBtn"
+                    class="px-6 py-2 bg-yellow-500 hover:bg-yellow-600 text-white rounded-lg font-semibold transition-all shadow-lg">
+                    💾 저장 및 HTML 재생성
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Google Translate Widget (숨김) -->
+    <div id="google_translate_element" style="display:none;"></div>
+
+    <!-- 언어 헬퍼 -->
+    <script src="language-helper.js"></script>
+
+    <!-- Google Translate Initialization -->
+    <script type="text/javascript">
+        function googleTranslateElementInit() {
+            // 🌐 2025-12-24: 양방향 번역 - 콘텐츠 언어 자동 감지, 앱 언어로 번역
+            new google.translate.TranslateElement({
+                pageLanguage: 'auto',
+                includedLanguages: 'ko,en,ja,zh-CN,fr,de,es',
+                autoDisplay: false
+            }, 'google_translate_element');
+        }
+    </script>
+    <script type="text/javascript"
+        src="//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit"></script>
+
+    <!-- Google Translate CSS 숨김 + 스피너 완전 숨김 -->
+    <style>
+        .goog-te-banner-frame {
+            display: none !important;
+        }
+
+        .goog-te-banner-frame.skiptranslate {
+            display: none !important;
+        }
+
+        body {
+            top: 0px !important;
+        }
+
+        .goog-te-gadget {
+            font-size: 0px !important;
+            color: transparent !important;
+        }
+
+        .goog-logo-link {
+            display: none !important;
+        }
+
+        .skiptranslate {
+            display: none !important;
+        }
+
+        .goog-te-spinner-pos {
+            display: none !important;
+        }
+
+        .goog-te-spinner {
+            display: none !important;
+        }
+
+        .goog-te-spinner-animation {
+            display: none !important;
+        }
+
+        .goog-te-menu-frame {
+            display: none !important;
+        }
+
+        .goog-te-menu2 {
+            display: none !important;
+        }
+
+        #goog-gt-tt {
+            display: none !important;
+        }
+
+        .goog-te-balloon-frame {
+            display: none !important;
+        }
+
+        .goog-text-highlight {
+            background: none !important;
+            box-shadow: none !important;
+        }
+
+        iframe.goog-te-menu-frame {
+            display: none !important;
+        }
+
+        iframe.skiptranslate {
+            display: none !important;
+        }
+
+        [id^="goog-gt-"] {
+            display: none !important;
+        }
+    </style>
+</body>
+
+</html>

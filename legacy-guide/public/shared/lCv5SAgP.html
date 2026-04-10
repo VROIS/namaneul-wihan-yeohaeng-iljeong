@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>251115 - 손안에 가이드</title>
+    <link rel="manifest" href="data:application/json;base64,eyJuYW1lIjoiMjUxMTE1Iiwic2hvcnRfbmFtZSI6IjI1MTExNSIsInN0YXJ0X3VybCI6Ii4iLCJkaXNwbGF5Ijoic3RhbmRhbG9uZSIsInRoZW1lX2NvbG9yIjoiIzQyODVGNCJ9">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            background-color: #f0f2f5;
+            overflow-x: hidden;
+        }
+        .hidden { display: none !important; }
+        
+        /* 앱과 100% 동일한 CSS (복사) */
+        .full-screen-bg { 
+            position: fixed; 
+            top: 0; 
+            left: 0; 
+            width: 100vw; 
+            height: 100vh; 
+            object-fit: cover; 
+            z-index: 1; 
+        }
+        .ui-layer { 
+            position: fixed; 
+            top: 0; 
+            left: 0; 
+            width: 100%; 
+            height: 100%; 
+            z-index: 10; 
+            display: flex; 
+            flex-direction: column;
+        }
+        .header-safe-area { 
+            position: relative;
+            width: 100%; 
+            height: 80px; 
+            flex-shrink: 0; 
+            z-index: 20;
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            padding: 0 1rem;
+        }
+        .content-safe-area { 
+            flex: 1; 
+            overflow-y: auto; 
+            -webkit-overflow-scrolling: touch; 
+            background: transparent;
+            z-index: 25;
+        }
+        .footer-safe-area { 
+            width: 100%; 
+            height: 100px; 
+            flex-shrink: 0; 
+            z-index: 30; 
+            display: flex; 
+            justify-content: space-around; 
+            align-items: center; 
+            padding: 0 1rem;
+        }
+        
+        /* 텍스트 오버레이 */
+        .text-content {
+            padding: 2rem 1.5rem;
+            line-height: 1.8;
+            word-break: keep-all;
+            overflow-wrap: break-word;
+        }
+        .readable-on-image {
+            color: white;
+            text-shadow: 0px 2px 8px rgba(0, 0, 0, 0.95);
+        }
+        
+        /* 버튼 공통 스타일 (앱과 동일) */
+        .interactive-btn {
+            transition: transform 0.1s ease;
+            cursor: pointer;
+            border: none;
+        }
+        .interactive-btn:active {
+            transform: scale(0.95);
+        }
+        
+        /* 헤더 (메타데이터) */
+        .header {
+            padding: 20px;
+            background-color: #4285F4; /* Gemini Blue - 앱 통일 */
+            color: #fff;
+            text-align: center;
+        }
+        .header h1 {
+            margin: 0 0 15px 0;
+            font-size: 28px;
+        }
+        .metadata {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        .metadata p {
+            margin: 5px 0;
+        }
+        
+        /* 갤러리 뷰 */
+        #gallery-view {
+            padding: 15px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+        }
+        
+        /* 반응형: 태블릿/노트북/PC (768px 이상) */
+        @media (min-width: 768px) {
+            .gallery-grid {
+                grid-template-columns: repeat(3, 1fr);
+                gap: 20px;
+            }
+            #gallery-view {
+                padding: 30px;
+            }
+        }
+        
+        .gallery-item {
+            cursor: pointer;
+            text-align: center;
+        }
+        .gallery-item img {
+            width: 100%;
+            height: 150px;
+            object-fit: cover;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+            transition: transform 0.2s, box-shadow 0.2s;
+            background-color: #e9e9e9;
+        }
+        .gallery-item:hover img {
+            transform: scale(1.05);
+            box-shadow: 0 6px 15px rgba(0,0,0,0.2);
+        }
+        .gallery-item p {
+            margin: 8px 0 0;
+            font-weight: 700;
+            color: #333;
+            font-size: 14px;
+        }
+        
+        /* 갤러리 하단 버튼 */
+        .gallery-footer {
+            text-align: center;
+            padding: 30px 15px;
+        }
+        .app-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            background: #4285F4;
+            color: white;
+            padding: 16px 32px;
+            border-radius: 12px;
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 18px;
+            box-shadow: 0 4px 12px rgba(66, 133, 244, 0.3);
+            transition: all 0.3s;
+        }
+        .app-button:hover {
+            background: #3367D6;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(66, 133, 244, 0.4);
+        }
+    </style>
+</head>
+<body>
+    <!-- ❌ X 닫기 버튼 (우측 상단, 최상위 z-index) -->
+    <button id="closeWindowBtn" onclick="window.close()" title="페이지 닫기" style="position: fixed; top: 1rem; right: 1rem; z-index: 10000; width: 3rem; height: 3rem; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.6); backdrop-filter: blur(8px); border-radius: 50%; color: #4285F4; cursor: pointer; transition: all 0.2s ease; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3); border: none;">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+        </svg>
+    </button>
+    
+    <!-- 헤더 (메타데이터) -->
+    <div class="header">
+        <h1>251115</h1>
+        <div class="metadata">
+            <p>👤 김강욱 님이 보냄</p>
+            <p>📍 Platine Hôtel</p>
+            <p>📅 2025년 11월 15일</p>
+        </div>
+    </div>
+    
+    <!-- 갤러리 뷰 -->
+    <div id="gallery-view">
+        
+        <div class="gallery-grid">
+            
+            <div class="gallery-item" data-id="0">
+                <img src="/uploads/1763204096939-zugpsp.jpg" alt="가이드 1" loading="lazy">
+                <p>가이드 1</p>
+            </div>
+        
+            <div class="gallery-item" data-id="1">
+                <img src="/uploads/1763204059976-ux4tzl.jpg" alt="가이드 2" loading="lazy">
+                <p>가이드 2</p>
+            </div>
+        
+            <div class="gallery-item" data-id="2">
+                <img src="/uploads/1763204026197-9khoyc.jpg" alt="가이드 3" loading="lazy">
+                <p>가이드 3</p>
+            </div>
+        
+        </div>
+        <div class="gallery-footer">
+            <a href="/" class="app-button" id="home-button">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" style="width: 24px; height: 24px;">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                </svg>
+                손안에 가이드 시작하기
+            </a>
+        </div>
+    </div>
+    
+    <!-- 상세 뷰 (앱과 100% 동일한 구조) -->
+    <div id="detail-view" class="ui-layer hidden">
+        <img id="detail-bg" src="" class="full-screen-bg">
+        <header class="header-safe-area">
+            <button id="detail-back" class="interactive-btn" style="width: 3rem; height: 3rem; display: flex; align-items: center; justify-content: center; border-radius: 9999px; background: rgba(0,0,0,0.6); backdrop-filter: blur(12px); color: #4285F4; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); position: absolute; top: 50%; left: 1rem; transform: translateY(-50%);" aria-label="뒤로가기">
+                <svg xmlns="http://www.w3.org/2000/svg" style="width: 1.5rem; height: 1.5rem;" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
+                </svg>
+            </button>
+        </header>
+        <div class="content-safe-area">
+            <div id="detail-text" class="text-content hidden">
+                <p id="detail-description" class="readable-on-image" style="font-size: 1.25rem; line-height: 1.75rem;"></p>
+            </div>
+        </div>
+        <footer id="detail-footer" class="footer-safe-area hidden" style="background: transparent;">
+            <button id="detail-audio" class="interactive-btn" style="width: 4rem; height: 4rem; display: flex; align-items: center; justify-content: center; border-radius: 9999px; background: rgba(0,0,0,0.6); backdrop-filter: blur(12px); color: #4285F4; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);" aria-label="오디오 재생">
+                <svg id="play-icon" xmlns="http://www.w3.org/2000/svg" style="width: 2rem; height: 2rem;" viewBox="0 0 24 24" fill="currentColor">
+                    <path fill-rule="evenodd" d="M4.5 5.653c0-1.426 1.529-2.33 2.779-1.643l11.54 6.648c1.295.748 1.295 2.538 0 3.286L7.279 20.99c-1.25.717-2.779-.217-2.779-1.643V5.653z" clip-rule="evenodd" />
+                </svg>
+                <svg id="pause-icon" xmlns="http://www.w3.org/2000/svg" style="width: 2rem; height: 2rem; display: none;" viewBox="0 0 24 24" fill="currentColor">
+                    <path fill-rule="evenodd" d="M6.75 5.25a.75.75 0 01.75-.75H9a.75.75 0 01.75.75v13.5a.75.75 0 01-.75.75H7.5a.75.75 0 01-.75-.75V5.25zm7.5 0A.75.75 0 0115 4.5h1.5a.75.75 0 01.75.75v13.5a.75.75 0 01-.75.75H15a.75.75 0 01-.75-.75V5.25z" clip-rule="evenodd" />
+                </svg>
+            </button>
+            <button id="text-toggle" class="interactive-btn" style="width: 4rem; height: 4rem; display: flex; align-items: center; justify-content: center; border-radius: 9999px; background: rgba(0,0,0,0.6); backdrop-filter: blur(12px); color: #4285F4; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25);" aria-label="해설 읽기">
+                <svg xmlns="http://www.w3.org/2000/svg" style="width: 2rem; height: 2rem;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+            </button>
+            <a href="/" id="detail-home" class="interactive-btn" style="width: 4rem; height: 4rem; display: flex; align-items: center; justify-content: center; border-radius: 9999px; background: rgba(0,0,0,0.6); backdrop-filter: blur(12px); color: #4285F4; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); text-decoration: none;" aria-label="앱으로 이동">
+                <svg xmlns="http://www.w3.org/2000/svg" style="width: 2rem; height: 2rem;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                </svg>
+            </a>
+        </footer>
+    </div>
+    
+    <!-- 데이터 저장 -->
+    <script id="app-data" type="application/json">[{"id":0,"imageDataUrl":"/uploads/1763204096939-zugpsp.jpg","description":"이게 대체 무슨 일입니까? 분명히 사진 속 인물은 동양인으로 보이는데, 서양 문화권에서 유래한 '자화상'의 방식을 따르고 있습니다. 현대 기술의 발전 덕분에 1년에 몇 번 찍을까 말까 했던 사진이, 이젠 누구나 언제든 찍을 수 있는 일상 예술이 된 거죠.\n\n이 작품은 2020년대 후반의 어느 평범한 일상을 담고 있습니다. 조선 시대 화원들이 붓으로 임금의 어진을 그리던 시절과는 비교할 수 없을 정도로, 사진은 이제 우리 삶의 한 부분이 되어버린 시대죠.\n\n이 작품의 제목은 ‘담배 한 개비, 그리고 생각’입니다. 작가 미상의 이 셀카는 예술의 경계를 허무는 '일상 스냅'의 진수를 보여줍니다. 작품 속 인물은 편안한 표정으로 담배를 피우며 마치 깊은 생각에 잠긴 듯한 모습이죠. 왠지 모르게 한숨 돌리는 듯한 고단함과 함께, 팍팍한 삶 속에서도 자신만의 여유를 찾으려는 인간적인 면모가 돋보입니다. 배경에 보이는 액자 속 가족사진은 이 인물이 삶의 짐을 짊어진 가장일 수도 있다는 여운을 남기며, 보는 이로 하여금 짠한 공감을 불러일으킵니다. 어떠신가요? 여러분도 바쁜 일상 속에서 잠시 멈춰 서서 자신을 돌아보는 시간을 가져보시는 건 어떨까요? 어쩌면 여러분의 그 순간이 또 하나의 멋진 '일상 예술'이 될지도 모릅니다."},{"id":1,"imageDataUrl":"/uploads/1763204059976-ux4tzl.jpg","description":"이 건축물은 한때 철거될 뻔한 위기를 겪었지만, 빅토르 위고의 소설 <노트르담의 꼽추> 덕분에 기적적으로 보존될 수 있었습니다. 12세기에 착공되어 무려 200년에 걸쳐 완성된 노트르담 대성당은 1163년부터 1345년까지, 우리나라로 치면 고려시대 중반부터 조선 초기까지 이르는 긴 시간 동안 지어졌어요.\n\n파리의 중심, 시테섬에 자리한 이 대성당은 웅장한 규모와 섬세한 고딕 양식으로 전 세계인의 사랑을 받는 명소입니다. 특히 서쪽 정면의 장미창은 햇살이 스며들 때마다 스테인드글라스가 영롱한 빛을 뿜어내며 신비로운 분위기를 연출하는데, 정말 사진으로는 다 담을 수 없는 감동을 선사하죠. 내부의 웅장함은 물론, 파리 시내를 조망할 수 있는 종탑까지, 어느 것 하나 놓칠 수 없는 감상 포인트가 가득해요. 특히 센 강변에서 바라보는 성당의 모습은 파리의 낭만을 고스란히 느낄 수 있게 해줍니다. 이곳을 배경으로 사진을 찍으신다면, 강물에 비치는 성당의 반영까지 함께 담아내는 광각 렌즈를 활용해보세요. 그러면 그림 같은 풍경과 함께 인생샷을 건질 수 있을 거예요!"},{"id":2,"imageDataUrl":"/uploads/1763204026197-9khoyc.jpg","description":"이 다리가 지어질 당시, 강물에 떠다니는 시체를 쉽게 확인하기 위해 다리 옆면에 가스등이 설치되었다는 섬뜩한 이야기가 있습니다.\n\n지금 보고 계신 아름다운 다리는 바로 파리에서 가장 오래된 다리, 퐁뇌프 다리입니다. 무려 1578년부터 1607년까지 약 30년에 걸쳐 지어졌으니, 우리나라 역사로 치면 조선 중기, 임진왜란과 정유재란을 겪던 시기에 해당합니다. 이런 격동의 시기에 유럽 한복판에서는 이렇게 견고하고 아름다운 다리가 건설되고 있었다니, 정말 놀랍죠?\n\n퐁뇌프 다리는 이름과는 달리 '새로운 다리(Pont Neuf)'라는 뜻을 가졌지만, 사실 파리에서 가장 오래된 다리예요. 역설적인 이름만큼이나 흥미로운 이야기를 많이 품고 있습니다. 퐁뇌프 다리가 특별한 이유는, 그 이전의 다리들처럼 다리 위에 집이나 상점을 짓지 않고 순수한 다리 본연의 기능에 충실했기 때문입니다. 덕분에 파리의 탁 트인 전경을 감상할 수 있게 되었죠. 로마의 교량 건축 양식에서 영감을 받은 12개의 아치 구조는 견고함과 동시에 우아함을 자랑합니다.\n\n다리 위에는 앙리 4세의 기마상이 우뚝 서 있는데, 파리의 번영을 상징하는 중요한 랜드마크입니다. 특히 해 질 녘 노을빛을 받으면 다리의 석회암이 황금빛으로 물들며 환상적인 분위기를 연출합니다. 이때 센 강 유람선을 타고 다리 아래를 지나가면서 사진을 찍으면, 그 어떤 파리 명소보다도 낭만적인 인생샷을 건질 수 있을 거예요! 강물에 비친 다리의 반영까지 담아낸다면 금상첨화겠죠?"}]</script>
+    
+    <script>
+        // 데이터 로드
+        const appData = JSON.parse(document.getElementById('app-data').textContent);
+        const galleryView = document.getElementById('gallery-view');
+        const detailView = document.getElementById('detail-view');
+        const header = document.querySelector('.header');
+        
+        // Web Speech API
+        const synth = window.speechSynthesis;
+        let voices = [];
+        let currentUtterance = null;
+        
+        function populateVoiceList() {
+            voices = synth.getVoices().filter(v => v.lang.startsWith('ko'));
+        }
+        
+        function stopAudio() {
+            if (synth.speaking) {
+                synth.pause();
+                synth.cancel();
+            }
+            const playIcon = document.getElementById('play-icon');
+            const pauseIcon = document.getElementById('pause-icon');
+            if (playIcon) playIcon.style.display = 'block';
+            if (pauseIcon) pauseIcon.style.display = 'none';
+        }
+        
+        function playAudio(text) {
+            stopAudio();
+            
+            // ⚠️ **핵심 로직 - 절대 수정 금지!** (2025-10-03 치명적 버그 해결)
+            // 
+            // 문제: HTML 내부 JavaScript에서 정규식 /<brs*/?>/gi 사용 시
+            //       HTML 파서가 < > 를 &lt; &gt; 로 변환하여 JavaScript 파싱 에러 발생
+            //       → "Uncaught SyntaxError: Unexpected token '&'" 
+            //
+            // 해결: new RegExp() 방식으로 HTML 파서와 100% 분리
+            //       - 안전성: HTML escape 문제 원천 차단
+            //       - 호환성: 모든 브라우저 지원
+            //       - 영구성: 앞으로 절대 깨지지 않음
+            //
+            // 영향: 27개 기존 공유 페이지 DB 일괄 업데이트 완료 (2025-10-03)
+            const cleanText = text.replace(new RegExp('<br\s*/?>', 'gi'), ' ');
+            
+            // 문장 분리 및 하이라이트 준비
+            const sentences = cleanText.match(/[^.!?]+[.!?]+/g) || [cleanText];
+            const textElement = document.getElementById('detail-description');
+            
+            // 원본 텍스트 저장
+            const originalText = cleanText;
+            
+            currentUtterance = new SpeechSynthesisUtterance(cleanText);
+            
+            // ⚠️ 오프라인 최적화 - Microsoft Heami 음성 강제 지정 (현장 테스트 완료)
+            // 첨부된 HTML 방식: 정확한 이름 매칭으로 음성 고정
+            const targetVoice = voices.find(v => v.name === 'Microsoft Heami - Korean (Korea)');
+            currentUtterance.voice = targetVoice;
+            currentUtterance.lang = 'ko-KR';
+            currentUtterance.rate = 1.0;
+            
+            const playIcon = document.getElementById('play-icon');
+            const pauseIcon = document.getElementById('pause-icon');
+            
+            let currentSentenceIndex = 0;
+            
+            currentUtterance.onstart = () => {
+                playIcon.style.display = 'none';
+                pauseIcon.style.display = 'block';
+            };
+            
+            // 단어 경계마다 하이라이트
+            currentUtterance.onboundary = (event) => {
+                if (event.name === 'sentence') {
+                    // 현재 문장 하이라이트
+                    const highlightedHTML = sentences.map((sentence, idx) => {
+                        if (idx === currentSentenceIndex) {
+                            return '<span style="background-color: rgba(66, 133, 244, 0.3); font-weight: 600;">' + sentence + '</span>';
+                        }
+                        return sentence;
+                    }).join('');
+                    
+                    textElement.innerHTML = highlightedHTML;
+                    currentSentenceIndex++;
+                }
+            };
+            
+            currentUtterance.onend = () => {
+                playIcon.style.display = 'block';
+                pauseIcon.style.display = 'none';
+                // 하이라이트 제거, 원본 복원
+                textElement.textContent = originalText;
+            };
+            
+            synth.speak(currentUtterance);
+        }
+        
+        populateVoiceList();
+        if (synth.onvoiceschanged !== undefined) {
+            synth.onvoiceschanged = populateVoiceList;
+        }
+        
+        // 갤러리 아이템 클릭 (앱과 100% 동일한 로직)
+        document.querySelectorAll('.gallery-item').forEach(item => {
+            item.addEventListener('click', () => {
+                const itemData = appData[parseInt(item.dataset.id)];
+                
+                // 배경 이미지 설정
+                document.getElementById('detail-bg').src = itemData.imageDataUrl;
+                
+                // 텍스트 설정
+                document.getElementById('detail-description').textContent = itemData.description;
+                
+                // UI 표시
+                galleryView.classList.add('hidden');
+                header.classList.add('hidden');
+                detailView.classList.remove('hidden');
+                document.getElementById('detail-footer').classList.remove('hidden');
+                
+                // 텍스트는 표시 상태로 시작 (음성과 동시에 보임)
+                document.getElementById('detail-text').classList.remove('hidden');
+                
+                // 음성 자동 재생
+                playAudio(itemData.description);
+            });
+        });
+        
+        // 🔙 보관함으로 돌아가기 버튼 (갤러리 뷰)
+        const galleryBackBtn = document.getElementById('gallery-back-btn');
+        if (galleryBackBtn) {
+            galleryBackBtn.addEventListener('click', () => {
+                window.location.href = '/#archive';
+            });
+        }
+        
+        // 뒤로 가기
+        document.getElementById('detail-back').addEventListener('click', () => {
+            stopAudio();
+            detailView.classList.add('hidden');
+            document.getElementById('detail-text').classList.add('hidden');
+            document.getElementById('detail-footer').classList.add('hidden');
+            header.classList.remove('hidden');
+            galleryView.classList.remove('hidden');
+        });
+        
+        // 텍스트 토글 버튼 (앱과 동일한 로직)
+        document.getElementById('text-toggle')?.addEventListener('click', () => {
+            document.getElementById('detail-text').classList.toggle('hidden');
+        });
+        
+        // 음성 재생/정지
+        document.getElementById('detail-audio').addEventListener('click', () => {
+            if (synth.speaking) {
+                stopAudio();
+            } else {
+                const text = document.getElementById('detail-description').textContent;
+                playAudio(text);
+            }
+        });
+        
+        // 홈 버튼 (갤러리 하단)
+        const homeButton = document.getElementById('home-button');
+        if (homeButton) {
+            homeButton.addEventListener('click', (e) => {
+                e.preventDefault();
+                stopAudio();
+                setTimeout(() => {
+                    window.location.href = homeButton.href;
+                }, 200);
+            });
+        }
+        
+        // 홈 버튼 (상세 뷰 하단) - 음성 듣다가 바로 앱으로 가기
+        const detailHome = document.getElementById('detail-home');
+        if (detailHome) {
+            detailHome.addEventListener('click', (e) => {
+                e.preventDefault();
+                stopAudio();
+                setTimeout(() => {
+                    window.location.href = detailHome.href;
+                }, 200);
+            });
+        }
+        
+        // 페이지 이탈 시 오디오 정지 (백그라운드 재생 방지)
+        window.addEventListener('beforeunload', () => {
+            stopAudio();
+        });
+    </script>
+    
+    <!-- ⚠️ 핵심 로직: Service Worker 등록 (오프라인 지원) -->
+    <script>
+        // Service Worker 지원 확인 및 등록
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw-share.js')
+                    .then(registration => {
+                        console.log('✅ [SW] 등록 성공:', registration.scope);
+                    })
+                    .catch(error => {
+                        console.log('❌ [SW] 등록 실패:', error);
+                    });
+            });
+        }
+    </script>
+</body>
+</html>
