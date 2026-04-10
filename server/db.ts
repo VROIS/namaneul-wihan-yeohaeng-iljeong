@@ -4,20 +4,33 @@ import * as schema from "@shared/schema";
 
 const { Pool } = pg;
 
-// DATABASE_URL이 없으면 경고만 출력하고 null로 설정
+function convertToPoolerUrl(url: string): string {
+  const match = url.match(/postgresql:\/\/postgres:([^@]+)@db\.([^.]+)\.supabase\.co:5432\/postgres/);
+  if (match) {
+    const [, password, projectRef] = match;
+    const poolerUrl = `postgresql://postgres.${projectRef}:${password}@aws-1-eu-west-3.pooler.supabase.com:6543/postgres`;
+    console.log("[DB] Direct connection URL → Transaction Pooler URL 자동 변환");
+    return poolerUrl;
+  }
+  return url;
+}
+
+const rawConnectionString = process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL;
+const connectionString = rawConnectionString ? convertToPoolerUrl(rawConnectionString) : rawConnectionString;
+
 let pool: pg.Pool | null = null;
 let db: ReturnType<typeof drizzle> | null = null;
 
-if (!process.env.DATABASE_URL) {
+if (!connectionString) {
   console.warn(
     "⚠️  DATABASE_URL이 설정되지 않았습니다.",
     "\n   DB 연동 기능이 비활성화됩니다.",
-    "\n   Supabase PostgreSQL 연결을 위해 .env 파일에 DATABASE_URL을 설정하세요.",
+    "\n   Supabase PostgreSQL 연결을 위해 SUPABASE_DATABASE_URL을 설정하세요.",
   );
 } else {
   try {
     pool = new Pool({ 
-      connectionString: process.env.DATABASE_URL,
+      connectionString,
       // 🇰🇷 한글 인코딩 보장을 위한 UTF-8 설정
       options: "-c client_encoding=UTF8",
     });
