@@ -863,7 +863,7 @@ export default function TripPlannerScreen() {
           alignItems: "center",
           gap: 12,
         }}
-        onPress={() => (navigation as any).navigate("BTSConcertPlanner")}
+        onPress={() => (navigation as any).navigate("BTSLanding")} // ⚠️ 수정금지(승인필요) — 배너→BTS 랜딩(18KB) 연결
       >
         <Text style={{ fontSize: 28 }}>💜</Text>
         <View style={{ flex: 1 }}>
