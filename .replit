@@ -10,6 +10,7 @@ channel = "stable-25_05"
 [userenv.shared]
 PORT = "5000"
 NODE_ENV = "development"
+EXPO_PUBLIC_DOMAIN = "https://828b2285-99c5-4cc9-9bcd-a09cdff531bc-00-kzvu1v5xhevl.sisko.replit.dev"
 
 [workflows]
 runButton = "Project"
@@ -48,7 +49,7 @@ outputType = "console"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "CI=1 npx expo start --tunnel"
+args = "npx expo start"
 
 [[ports]]
 localPort = 5000

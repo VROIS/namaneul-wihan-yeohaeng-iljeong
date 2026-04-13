@@ -149,52 +149,12 @@ function getAppName(): string {
   }
 }
 
-function serveExpoManifest(platform: string, res: Response) {
-  const manifestPath = path.resolve(
-    process.cwd(),
-    "static-build",
-    platform,
-    "manifest.json",
-  );
-
-  if (!fs.existsSync(manifestPath)) {
-    return res
-      .status(404)
-      .json({ error: `Manifest not found for platform: ${platform}` });
-  }
-
-  res.setHeader("expo-protocol-version", "1");
-  res.setHeader("expo-sfv-version", "0");
-  res.setHeader("content-type", "application/json");
-
-  const manifest = fs.readFileSync(manifestPath, "utf-8");
-  res.send(manifest);
-}
-
-
+// ⚠️ 수정금지(승인필요) — Expo Go는 Metro(port 8081)에 직접 연결.
+// Express(port 5000)에서 네이티브 manifest를 서빙하지 않음.
+// serveExpoManifest() 제거됨 (2026-04-13, Replit 공식 문서 준수).
 function configureExpoAndLanding(app: express.Application) {
-  const appName = getAppName();
-
-  log("Serving static Expo files with dynamic manifest routing");
-
-  app.use((req: Request, res: Response, next: NextFunction) => {
-    if (req.path.startsWith("/api")) {
-      return next();
-    }
-
-    if (req.path !== "/" && req.path !== "/manifest") {
-      return next();
-    }
-
-    const platform = req.header("expo-platform");
-    if (platform && (platform === "ios" || platform === "android")) {
-      return serveExpoManifest(platform, res);
-    }
-
-    next();
-  });
-
   // Expo 웹 빌드 서빙 (dist 폴더)
+  // ⚠️ 수정금지(승인필요) — 웹 빌드 전용, 네이티브 앱과 무관
   const distPath = path.resolve(process.cwd(), "dist");
   if (fs.existsSync(distPath)) {
     app.use(express.static(distPath));
@@ -213,9 +173,6 @@ function configureExpoAndLanding(app: express.Application) {
   }
 
   app.use("/assets", express.static(path.resolve(process.cwd(), "assets")));
-  app.use(express.static(path.resolve(process.cwd(), "static-build")));
-
-  log("Expo routing: Checking expo-platform header on / and /manifest");
 }
 
 function setupErrorHandler(app: express.Application) {
