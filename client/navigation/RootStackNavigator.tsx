@@ -17,8 +17,9 @@ import BTSConcertPlannerScreen from "@/screens/BTSConcertPlannerScreen";
 import BTSStackNavigator from "@/navigation/BTSStackNavigator";
 import { BTSLandingScreen } from "@/screens/BTSLandingScreen";
 import BTSWorldMapScreen from "@/screens/bts/BTSWorldMapScreen";
-import { BTSLandingScreenC } from "@/screens/BTSLandingScreenC"; // C안 보관
-import { BTSLandingScreenA1 } from "@/screens/BTSLandingScreenA1"; // ⚠️ 수정금지(승인필요) — A1안
+// ⚠️ 수정금지(승인필요) — 보관 화면 import 제거 (번들 크기 축소, 14.97MB→Expo Go 30초 타임아웃 초과)
+// import { BTSLandingScreenC } from "@/screens/BTSLandingScreenC"; // C안 보관
+// import { BTSLandingScreenA1 } from "@/screens/BTSLandingScreenA1"; // A1안 보관
 import { Colors } from "@/constants/theme";
 import { Itinerary } from "@/types/trip";
 import { isAuthenticated } from "@/lib/auth";
