@@ -167,42 +167,6 @@ const metroProxy = createProxyMiddleware({
 });
 
 function configureExpoAndLanding(app: express.Application) {
-  // ⚠️ 수정금지(승인필요) — Expo Go 매니페스트 URL 변환
-  // Metro가 반환하는 매니페스트의 번들 URL에 :8081이 포함되어 외부 접근 불가.
-  // Express(5000) 프록시 경유하도록 URL을 변환.
-  app.use((req: Request, res: Response, next: NextFunction) => {
-    if (req.path.startsWith("/api")) return next();
-    const platform = req.header("expo-platform");
-    if (platform !== "ios" && platform !== "android") return next();
-    if (req.path.endsWith(".bundle") || req.path.startsWith("/assets")) return next();
-
-    const http = require("http");
-    const metroReq = http.request(
-      `http://localhost:8081${req.url}`,
-      { headers: { ...req.headers, host: "localhost:8081" } },
-      (metroRes: any) => {
-        const chunks: Buffer[] = [];
-        metroRes.on("data", (c: Buffer) => chunks.push(c));
-        metroRes.on("end", () => {
-          let body = Buffer.concat(chunks).toString("utf8");
-          const expoHost = process.env.EXPO_PUBLIC_DOMAIN || "";
-          body = body.replace(
-            /http:\/\/[^:]+:8081/g,
-            expoHost
-          );
-          res.status(metroRes.statusCode);
-          Object.entries(metroRes.headers).forEach(([k, v]) => {
-            if (k !== "transfer-encoding") res.setHeader(k, v as string);
-          });
-          res.setHeader("content-length", Buffer.byteLength(body));
-          res.end(body);
-        });
-      }
-    );
-    metroReq.on("error", () => next());
-    metroReq.end();
-  });
-
   // ⚠️ 수정금지(승인필요) — Expo Go 네이티브 요청을 Metro(8081)로 프록시
   // expo-platform 헤더가 있는 요청 = Expo Go 네이티브 앱
   app.use((req: Request, res: Response, next: NextFunction) => {
