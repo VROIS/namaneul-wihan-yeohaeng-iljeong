@@ -11,6 +11,7 @@ channel = "stable-25_05"
 PORT = "5000"
 NODE_ENV = "development"
 EXPO_PUBLIC_DOMAIN = "https://828b2285-99c5-4cc9-9bcd-a09cdff531bc-00-kzvu1v5xhevl.sisko.replit.dev"
+REACT_NATIVE_PACKAGER_HOSTNAME = "828b2285-99c5-4cc9-9bcd-a09cdff531bc-00-kzvu1v5xhevl.sisko.replit.dev"
 
 [workflows]
 runButton = "Project"
