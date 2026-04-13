@@ -24,7 +24,10 @@ const { width: SW, height: SH } = Dimensions.get("window");
 
 // ⚠️ 수정금지(승인필요) — 지도 크기 (viewBox 99x50 비율 유지)
 const MAP_W = SW;
-const MAP_H = SW * (50 / 99);
+const MAP_H_ORIGINAL = SW * (50 / 99);
+// ⚠️ 수정금지(승인필요) — 원본 비율 유지, 화면 폭 꽉 채움
+// ⚠️ 수정금지(승인필요) — 세로 1.6배 확장 (K6 최종안)
+const MAP_H = MAP_H_ORIGINAL * 1.6;
 const MAP_TOP = (SH - MAP_H) / 2;
 
 // ⚠️ 수정금지(승인필요) — 도시 좌표 DB (위경도 → viewBox 변환)
@@ -150,11 +153,21 @@ export default function BTSWorldMapScreen() {
   const t4 = useAnimatedStyle(() => ({ opacity: textOpacity4.value }));
 
   const dDayText = dDay > 0 ? `D-${dDay}` : dDay === 0 ? "D-Day" : `D+${Math.abs(dDay)}`;
-  const dateDisplay = concertDate ? new Date(concertDate).toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" }) : "";
+  // ⚠️ 수정금지(승인필요) — 날짜 포맷: 2026.4.17 (전 인류 이해, 년월일 제외)
+  const dateDisplay = concertDate ? (() => { const d = new Date(concertDate); return `${d.getFullYear()}.${d.getMonth()+1}.${d.getDate()}`; })() : "";
 
   return (
     <Animated.View style={[styles.container, fadeStyle]}>
       <View style={styles.bg} />
+
+      {/* ⚠️ 수정금지(승인필요) — 상단 타이틀 (랜딩과 동일, 일관성) */}
+      <View style={styles.hero}>
+        <Text style={styles.tourLabel}>WORLD TOUR 2026</Text>
+        <View style={styles.titleRow}>
+          <Text style={styles.titleBTS}>BTS </Text>
+          <Text style={styles.titleArirang}>'Arirang'</Text>
+        </View>
+      </View>
 
       {/* ⚠️ 수정금지(승인필요) — 도트맵 + 마커 (같은 부모 안) */}
       <Animated.View style={[styles.mapArea, mapStyle]}>
@@ -184,6 +197,39 @@ export default function BTSWorldMapScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   bg: { ...StyleSheet.absoluteFillObject, backgroundColor: "#FFFFFF" },
+  // ⚠️ 수정금지(승인필요) — 상단 타이틀 (랜딩과 동일 구조, 흰 배경용 색상)
+  // ⚠️ 수정금지(승인필요) — 상단 타이틀 (중앙, 지도 위 여백 채움)
+  // ⚠️ 수정금지(승인필요) — 타이틀을 지도 바로 위에 배치 (절대 위치)
+  hero: {
+    position: "absolute" as const,
+    top: MAP_TOP - 110, // ⚠️ 수정금지(승인필요) — 지도 위 최소 여백
+    left: 0,
+    right: 0,
+    alignItems: "center" as const,
+    zIndex: 20,
+  },
+  tourLabel: {
+    fontSize: 12,
+    fontFamily: "SpaceGrotesk-Regular",
+    letterSpacing: 8,
+    color: "rgba(0,0,0,0.35)",
+    marginBottom: 4,
+  },
+  titleRow: {
+    flexDirection: "row" as const,
+    alignItems: "baseline" as const,
+  },
+  titleBTS: {
+    fontSize: 44,
+    fontFamily: "SpaceGrotesk-Bold",
+    color: "#6C2DC7",
+  },
+  titleArirang: {
+    fontSize: 44,
+    fontFamily: "SpaceGrotesk-Bold",
+    fontStyle: "italic" as const,
+    color: "#6C2DC7",
+  },
   mapArea: {
     position: "absolute",
     left: 0,
