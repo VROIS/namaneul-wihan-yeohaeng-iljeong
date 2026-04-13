@@ -17,7 +17,7 @@ import Animated, {
 import { BlurView } from "expo-blur";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { SvgXml } from "react-native-svg";
-import { BTS_WORLD_MAP_SVG } from "@/constants/bts-world-map-svg";
+import { loadBtsWorldMapSvg } from "@/constants/bts-world-map-svg";
 import { geoToViewBox } from "@/components/DotWorldMap";
 
 const { width: SW, height: SH } = Dimensions.get("window");
@@ -53,6 +53,12 @@ type RouteParams = { city?: string; cityId?: number; date?: string; dDay?: numbe
 export default function BTSWorldMapScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<RouteProp<{ BTSWorldMap: RouteParams }, "BTSWorldMap">>();
+
+  // ⚠️ 수정금지(승인필요) — SVG 에셋 비동기 로딩 (번들 크기 축소)
+  const [svgXml, setSvgXml] = useState<string | null>(null);
+  useEffect(() => {
+    loadBtsWorldMapSvg().then(setSvgXml);
+  }, []);
 
   // ⚠️ 수정금지(승인필요) — API 실시간 데이터 (랜딩 params + API fallback)
   const [concert, setConcert] = useState({
@@ -171,7 +177,7 @@ export default function BTSWorldMapScreen() {
 
       {/* ⚠️ 수정금지(승인필요) — 도트맵 + 마커 (같은 부모 안) */}
       <Animated.View style={[styles.mapArea, mapStyle]}>
-        <SvgXml xml={BTS_WORLD_MAP_SVG} width={MAP_W} height={MAP_H} />
+        {svgXml ? <SvgXml xml={svgXml} width={MAP_W} height={MAP_H} /> : null}
 
         {/* ⚠️ 수정금지(승인필요) — 공연 알림판 카드 (도시 좌표 위에 배치) */}
         <Animated.View

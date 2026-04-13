@@ -2,6 +2,7 @@ import React from "react";
 import { StyleSheet, Platform, useColorScheme, View } from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { BlurView } from "expo-blur";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -41,6 +42,8 @@ export default function MainTabNavigator() {
   const isDark = colorScheme === "dark";
   const theme = Colors[colorScheme ?? "light"];
   const { showMap, toggleMap } = useMapToggle();
+  // ⚠️ 수정금지(승인필요) — 삼성폰 하단 3버튼 겹침 방지 (SafeArea 여백)
+  const insets = useSafeAreaInsets();
   const rootNavigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
@@ -91,7 +94,9 @@ export default function MainTabNavigator() {
             }),
             borderTopWidth: 0,
             elevation: 0,
-            height: 55,
+            // ⚠️ 수정금지(승인필요) — 삼성폰 하단 시스템 버튼 겹침 방지
+            height: 55 + insets.bottom,
+            paddingBottom: insets.bottom,
           },
           tabBarBackground: () =>
             Platform.OS === "ios" ? (
