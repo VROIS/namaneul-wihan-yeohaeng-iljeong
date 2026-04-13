@@ -1,6 +1,4 @@
-// ⚠️ 수정금지(승인필요) — 보라 사각형 도트맵 + 캡슐 공연도시 마커
-// 2,134개 보라 그라데이션 사각형 + 34개 흰색 캡슐 (아미봉 추상화)
-export const BTS_WORLD_MAP_SVG = `<svg viewBox="0 0 99 50" xmlns="http://www.w3.org/2000/svg">
+<svg viewBox="0 0 99 50" xmlns="http://www.w3.org/2000/svg">
 <rect width="99" height="50" fill="#FFFFFF"/>
 <rect x="3.23" y="-0.28" width="0.55" height="0.55" rx="0.04" fill="#2d1b69"/>
 <rect x="15.22" y="-0.28" width="0.55" height="0.55" rx="0.04" fill="#2d1b69"/>
@@ -2170,4 +2168,4 @@ export const BTS_WORLD_MAP_SVG = `<svg viewBox="0 0 99 50" xmlns="http://www.w3.
 <rect x="93.60" y="40.10" width="0.8" height="1.2" rx="0.40" fill="rgba(255,255,255,0.85)" stroke="#7C3AED" stroke-width="0.1"/>
 <rect x="82.60" y="22.78" width="0.8" height="1.2" rx="0.40" fill="rgba(255,255,255,0.85)" stroke="#7C3AED" stroke-width="0.1"/>
 <rect x="85.10" y="25.38" width="0.8" height="1.2" rx="0.40" fill="rgba(255,255,255,0.85)" stroke="#7C3AED" stroke-width="0.1"/>
-</svg>`;
+</svg>
