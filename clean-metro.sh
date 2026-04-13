@@ -1,6 +1,6 @@
 #!/bin/bash
-# ⚠️ 수정금지(승인필요) — Expo Go Metro 자동 시작 스크립트
-# 포트 8081 좀비 프로세스 정리 후 Metro 시작
+# ⚠️ 수정금지(승인필요) — Metro 시작 전 자동 정리 스크립트
+# 포트 8081 좀비 프로세스 정리 + 캐시 삭제
 
 PORT=8081
 
@@ -33,19 +33,15 @@ console.log([...pids].join(' '));
 " 2>/dev/null)
 
 if [ -n "$PIDS" ]; then
-  echo "[start-expo] 포트 ${PORT} 점유 프로세스 정리: $PIDS"
+  echo "[clean-metro] 포트 ${PORT} 점유 프로세스 정리: $PIDS"
   for pid in $PIDS; do
     kill -9 "$pid" 2>/dev/null
   done
   sleep 1
 else
-  echo "[start-expo] 포트 ${PORT} 사용 가능"
+  echo "[clean-metro] 포트 ${PORT} 사용 가능"
 fi
 
 # 2. Metro 캐시 삭제
 rm -rf /tmp/metro-* node_modules/.cache 2>/dev/null
-echo "[start-expo] Metro 캐시 정리 완료"
-
-# 3. Metro 시작 (기존 고정 명령어 그대로)
-echo "[start-expo] Metro Bundler 시작..."
-REACT_NATIVE_PACKAGER_HOSTNAME=828b2285-99c5-4cc9-9bcd-a09cdff531bc-00-kzvu1v5xhevl.expo.sisko.replit.dev npx expo start
+echo "[clean-metro] 준비 완료"

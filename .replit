@@ -50,7 +50,7 @@ outputType = "console"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "bash start-expo.sh"
+args = "bash clean-metro.sh && REACT_NATIVE_PACKAGER_HOSTNAME=828b2285-99c5-4cc9-9bcd-a09cdff531bc-00-kzvu1v5xhevl.expo.sisko.replit.dev npx expo start"
 
 [[ports]]
 localPort = 5000
