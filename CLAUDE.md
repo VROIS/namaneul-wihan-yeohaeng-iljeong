@@ -118,8 +118,11 @@
 1. **`app.config.js` 생성 금지** — Replit 공식 문서 명시 FORBIDDEN.
    삭제된 파일을 복원하거나 재생성하는 것 금지.
 
-2. **워크플로우 명령어 변경 금지** — `Start Frontend`의 명령어는 `npx expo start`.
-   `CI=1` 추가 금지 (HMR 비활성화됨). `--tunnel` 추가 금지 (ngrok 불필요).
+2. **워크플로우 명령어 변경 금지** — `Start Frontend`의 명령어는 아래로 고정:
+   ```
+   REACT_NATIVE_PACKAGER_HOSTNAME=828b2285-99c5-4cc9-9bcd-a09cdff531bc-00-kzvu1v5xhevl.expo.sisko.replit.dev npx expo start
+   ```
+   `CI=1` 추가 금지. `--tunnel` 추가 금지. `REACT_NATIVE_PACKAGER_HOSTNAME` 값 변경 금지.
 
 3. **`serveExpoManifest()` 복원 금지** — `server/index.ts`에서 삭제된 함수.
    Expo Go는 Metro(port 8081)에 직접 연결. Express(5000)에서 manifest 서빙 안 함.
