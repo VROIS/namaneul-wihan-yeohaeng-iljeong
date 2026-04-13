@@ -1,19 +1,24 @@
-// ⚠️ 수정금지(승인필요) — BTS 세계지도 (보라 도트맵 + 캡슐 알림판 줌인)
-// 줌인 시 대상 도시 캡슐이 확대되며 도시명+공연기간+D-Day 텍스트 등장
-import React, { useEffect } from "react";
+// ⚠️ 수정금지(승인필요) — BTS 세계지도 줌인 + 3D 글래스 알림판
+// 마커가 mapArea 안에 배치 → 줌인과 함께 자연스럽게 확대
+// 데이터: /api/bts/next-concert 실시간 (날짜, D-Day, 공연장)
+import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, Dimensions, Platform } from "react-native";
+import { getApiUrl } from "@/lib/query-client";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withTiming,
   withDelay,
+  withSpring,
   interpolate,
   Extrapolation,
   Easing,
 } from "react-native-reanimated";
+import { BlurView } from "expo-blur";
 import { useNavigation, useRoute, RouteProp } from "@react-navigation/native";
 import { SvgXml } from "react-native-svg";
 import { BTS_WORLD_MAP_SVG } from "@/constants/bts-world-map-svg";
+import { geoToViewBox } from "@/components/DotWorldMap";
 
 const { width: SW, height: SH } = Dimensions.get("window");
 
@@ -22,63 +27,102 @@ const MAP_W = SW;
 const MAP_H = SW * (50 / 99);
 const MAP_TOP = (SH - MAP_H) / 2;
 
-// ⚠️ 수정금지(승인필요) — 고양 좌표 (dotted-map getPoints 검증)
-const GOYANG_VB_X = 87;
-const GOYANG_VB_Y = 18.19;
-const GOYANG_X = (GOYANG_VB_X / 99) * MAP_W;
-const GOYANG_Y = (GOYANG_VB_Y / 50) * MAP_H;
+// ⚠️ 수정금지(승인필요) — 도시 좌표 DB (위경도 → viewBox 변환)
+// 추후 API에서 가져오도록 확장 가능
+const CITY_COORDS: Record<string, { lat: number; lng: number }> = {
+  GOYANG: { lat: 37.6584, lng: 126.832 },
+  TOKYO: { lat: 35.6762, lng: 139.6503 },
+  TAMPA: { lat: 27.9506, lng: -82.4572 },
+  PARIS: { lat: 48.8566, lng: 2.3522 },
+  LONDON: { lat: 51.5074, lng: -0.1278 },
+  "LOS ANGELES": { lat: 34.0522, lng: -118.2437 },
+  BUSAN: { lat: 35.1796, lng: 129.0756 },
+  MADRID: { lat: 40.4168, lng: -3.7038 },
+  MUNICH: { lat: 48.1351, lng: 11.5820 },
+  SINGAPORE: { lat: 1.3521, lng: 103.8198 },
+  BANGKOK: { lat: 13.7563, lng: 100.5018 },
+  SYDNEY: { lat: -33.8688, lng: 151.2093 },
+  MANILA: { lat: 14.5995, lng: 120.9842 },
+};
 
-// ⚠️ 수정금지(승인필요) — 캡슐 초기 크기 (SVG의 캡슐 마커와 일치)
-const CAPSULE_INIT_W = (0.8 / 99) * MAP_W;   // viewBox 0.8 → 화면 크기
-const CAPSULE_INIT_H = (1.2 / 99) * MAP_W;   // viewBox 1.2 → 화면 크기
-
-type RouteParams = { city?: string; cityId?: number; dates?: string; dDay?: number };
+type RouteParams = { city?: string; cityId?: number; date?: string; dDay?: number; venue?: string };
 
 export default function BTSWorldMapScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<RouteProp<{ BTSWorldMap: RouteParams }, "BTSWorldMap">>();
-  const targetCity = route.params?.city || "GOYANG";
-  const concertDates = route.params?.dates || "4/09~12";
-  const dDay = route.params?.dDay ?? -3;
 
-  // ⚠️ 수정금지(승인필요) — 줌인 애니메이션 값
+  // ⚠️ 수정금지(승인필요) — API 실시간 데이터 (랜딩 params + API fallback)
+  const [concert, setConcert] = useState({
+    city: route.params?.city || "GOYANG",
+    date: route.params?.date || "",
+    dDay: route.params?.dDay ?? 0,
+    venue: route.params?.venue || "",
+  });
+
+  // ⚠️ 수정금지(승인필요) — params 없으면 API에서 직접 가져옴
+  useEffect(() => {
+    if (!concert.date) {
+      fetch(`${getApiUrl()}/api/bts/next-concert`)
+        .then(r => r.json())
+        .then(d => {
+          if (d.city) setConcert({ city: d.city.toUpperCase(), date: d.date, dDay: d.dDay, venue: d.venue || "" });
+        })
+        .catch(() => {}); // fallback 유지
+    }
+  }, []);
+
+  const targetCity = concert.city;
+  const concertDate = concert.date;
+  const dDay = concert.dDay;
+  const venue = concert.venue;
+
+  // ⚠️ 수정금지(승인필요) — 도시 좌표 → viewBox → 화면 좌표
+  const coords = CITY_COORDS[targetCity.toUpperCase()] || CITY_COORDS.GOYANG;
+  const vb = geoToViewBox(coords.lat, coords.lng);
+  const targetX = (vb.x / 99) * MAP_W;
+  const targetY = (vb.y / 50) * MAP_H;
+
+  // ⚠️ 수정금지(승인필요) — 애니메이션 값
   const mapScale = useSharedValue(1);
   const mapTx = useSharedValue(0);
   const mapTy = useSharedValue(0);
   const fadeOut = useSharedValue(0);
-
-  // ⚠️ 수정금지(승인필요) — 캡슐 알림판 애니메이션 값
-  const capsuleProgress = useSharedValue(0); // 0=작은점, 1=알림판
-  const textOpacity = useSharedValue(0);
+  const cardScale = useSharedValue(0);   // 카드 팽창: 0=점, 1=풀카드
+  const textOpacity1 = useSharedValue(0); // 도시명
+  const textOpacity2 = useSharedValue(0); // 날짜
+  const textOpacity3 = useSharedValue(0); // D-Day
+  const textOpacity4 = useSharedValue(0); // 공연장
 
   useEffect(() => {
-    // ⚠️ 수정금지(승인필요) — 줌인 좌표 계산 (수학 검증)
+    // ⚠️ 수정금지(승인필요) — 줌인 좌표 계산
     const S = 6;
-    const tx = SW / 2 - MAP_W / 2 - (GOYANG_X - MAP_W / 2) * S;
-    const ty = SH / 2 - MAP_TOP - MAP_H / 2 - (GOYANG_Y - MAP_H / 2) * S;
+    const tx = SW / 2 - MAP_W / 2 - (targetX - MAP_W / 2) * S;
+    const ty = SH / 2 - MAP_TOP - MAP_H / 2 - (targetY - MAP_H / 2) * S;
 
-    // 1초 후 줌인 시작 (1.5초 동안)
+    // ⚠️ 수정금지(승인필요) — 1초 후 줌인 시작 (1.5초, 원본 타이밍)
     const zoomTimer = setTimeout(() => {
       mapScale.value = withTiming(S, { duration: 1500, easing: Easing.inOut(Easing.cubic) });
       mapTx.value = withTiming(tx, { duration: 1500, easing: Easing.inOut(Easing.cubic) });
       mapTy.value = withTiming(ty, { duration: 1500, easing: Easing.inOut(Easing.cubic) });
-      // 캡슐 확대 동기화 (줌인과 함께)
-      capsuleProgress.value = withTiming(1, { duration: 1500, easing: Easing.inOut(Easing.cubic) });
     }, 1000);
 
-    // 줌인 70% 시점에 텍스트 페이드인
-    const textTimer = setTimeout(() => {
-      textOpacity.value = withTiming(1, { duration: 600 });
+    // ⚠️ 수정금지(승인필요) — 줌인 거의 완료 시 (2초) 카드 팽창
+    const cardTimer = setTimeout(() => {
+      cardScale.value = withSpring(1, { damping: 15, stiffness: 160 });
+      textOpacity1.value = withTiming(1, { duration: 300 });
+      textOpacity2.value = withDelay(100, withTiming(1, { duration: 300 }));
+      textOpacity3.value = withDelay(200, withTiming(1, { duration: 300 }));
+      textOpacity4.value = withDelay(300, withTiming(1, { duration: 300 }));
     }, 2000);
 
-    // 줌인 완료 후 → BTSMiniApp (총 4초)
+    // ⚠️ 수정금지(승인필요) — 알림판 유지 후 전환 (총 3.5초, 원본 타이밍)
     let innerTimer: NodeJS.Timeout;
     const navTimer = setTimeout(() => {
       fadeOut.value = withTiming(1, { duration: 400 });
       innerTimer = setTimeout(() => navigation.replace("BTSMiniApp"), 500);
-    }, 4000);
+    }, 3500);
 
-    return () => { clearTimeout(zoomTimer); clearTimeout(textTimer); clearTimeout(navTimer); clearTimeout(innerTimer); };
+    return () => { clearTimeout(zoomTimer); clearTimeout(cardTimer); clearTimeout(navTimer); clearTimeout(innerTimer); };
   }, []);
 
   // ⚠️ 수정금지(승인필요) — 지도 transform
@@ -90,61 +134,49 @@ export default function BTSWorldMapScreen() {
     ],
   }));
 
-  // ⚠️ 수정금지(승인필요) — 캡슐 알림판 스타일 (줌인과 동기화)
-  const capsuleStyle = useAnimatedStyle(() => {
-    // ⚠️ 수정금지(승인필요) — Layla식 3D 입체 카드: pill → FULL 클로즈업
-    const w = interpolate(capsuleProgress.value, [0, 1], [CAPSULE_INIT_W * 6, SW * 0.85], Extrapolation.CLAMP);
-    const h = interpolate(capsuleProgress.value, [0, 1], [CAPSULE_INIT_H * 6, SH * 0.4], Extrapolation.CLAMP);
-    // 둥근 모서리: pill → 20px (Layla 카드)
-    const borderRadius = interpolate(capsuleProgress.value, [0, 1], [CAPSULE_INIT_W * 3, 20], Extrapolation.CLAMP);
-
+  // ⚠️ 수정금지(승인필요) — 카드 스타일 (도시 위치에서 팽창)
+  const cardAnimStyle = useAnimatedStyle(() => {
+    const s = interpolate(cardScale.value, [0, 1], [0.1, 1], Extrapolation.CLAMP);
     return {
-      width: w,
-      height: h,
-      borderRadius,
-      // 글래스모피즘 배경 — 반투명 보라
-      backgroundColor: `rgba(124, 58, 237, ${interpolate(capsuleProgress.value, [0, 0.5, 1], [0.85, 0.9, 0.92], Extrapolation.CLAMP)})`,
-      // 입체 그림자 — 카드가 떠있는 느낌
-      shadowColor: "rgba(0,0,0,0.5)",
-      shadowOpacity: interpolate(capsuleProgress.value, [0, 1], [0, 1], Extrapolation.CLAMP),
-      shadowRadius: interpolate(capsuleProgress.value, [0, 1], [0, 24], Extrapolation.CLAMP),
-      shadowOffset: { width: 0, height: interpolate(capsuleProgress.value, [0, 1], [0, 8], Extrapolation.CLAMP) },
-      elevation: interpolate(capsuleProgress.value, [0, 1], [0, 16], Extrapolation.CLAMP),
-      // 글래스 테두리
-      borderWidth: 1,
-      borderColor: `rgba(255,255,255,${interpolate(capsuleProgress.value, [0, 1], [0.3, 0.15], Extrapolation.CLAMP)})`,
+      transform: [{ scale: s }],
+      opacity: interpolate(cardScale.value, [0, 0.3, 1], [0, 0.5, 1], Extrapolation.CLAMP),
     };
   });
 
-  // ⚠️ 수정금지(승인필요) — 텍스트 페이드인
-  const textStyle = useAnimatedStyle(() => ({
-    opacity: textOpacity.value,
-  }));
-
   const fadeStyle = useAnimatedStyle(() => ({ opacity: 1 - fadeOut.value }));
+  const t1 = useAnimatedStyle(() => ({ opacity: textOpacity1.value }));
+  const t2 = useAnimatedStyle(() => ({ opacity: textOpacity2.value }));
+  const t3 = useAnimatedStyle(() => ({ opacity: textOpacity3.value }));
+  const t4 = useAnimatedStyle(() => ({ opacity: textOpacity4.value }));
 
   const dDayText = dDay > 0 ? `D-${dDay}` : dDay === 0 ? "D-Day" : `D+${Math.abs(dDay)}`;
+  const dateDisplay = concertDate ? new Date(concertDate).toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" }) : "";
 
   return (
     <Animated.View style={[styles.container, fadeStyle]}>
       <View style={styles.bg} />
 
-      {/* 도트맵 SVG */}
+      {/* ⚠️ 수정금지(승인필요) — 도트맵 + 마커 (같은 부모 안) */}
       <Animated.View style={[styles.mapArea, mapStyle]}>
         <SvgXml xml={BTS_WORLD_MAP_SVG} width={MAP_W} height={MAP_H} />
-      </Animated.View>
 
-      {/* ⚠️ 수정금지(승인필요) — 캡슐 알림판 오버레이 (화면 중앙 고정) */}
-      <View style={styles.capsuleContainer} pointerEvents="none">
-        <Animated.View style={[styles.capsule, capsuleStyle]}>
-          <Animated.View style={[styles.capsuleContent, textStyle]}>
-            <Text style={styles.capsuleCity}>{targetCity.toUpperCase()}</Text>
-            <View style={styles.divider} />
-            <Text style={styles.capsuleDates}>{concertDates}</Text>
-            <Text style={styles.capsuleDDay}>{dDayText}</Text>
-          </Animated.View>
+        {/* ⚠️ 수정금지(승인필요) — 공연 알림판 카드 (도시 좌표 위에 배치) */}
+        <Animated.View
+          style={[
+            styles.cardAnchor,
+            { left: targetX - 100, top: targetY - 70 },
+            cardAnimStyle,
+          ]}
+        >
+          <BlurView intensity={100} tint="light" style={styles.cardBlur}>
+            <Animated.Text style={[styles.cardCity, t1]}>{targetCity}</Animated.Text>
+            <Animated.View style={[styles.divider, t2]} />
+            <Animated.Text style={[styles.cardDate, t2]}>{dateDisplay}</Animated.Text>
+            <Animated.Text style={[styles.cardDDay, t3]}>{dDayText}</Animated.Text>
+            {venue ? <Animated.Text style={[styles.cardVenue, t4]}>{venue}</Animated.Text> : null}
+          </BlurView>
         </Animated.View>
-      </View>
+      </Animated.View>
     </Animated.View>
   );
 }
@@ -159,49 +191,59 @@ const styles = StyleSheet.create({
     width: MAP_W,
     height: MAP_H,
   },
-  // ⚠️ 수정금지(승인필요) — 캡슐을 화면 중앙에 고정 (줌인 완료 시 도시 위치 = 화면 중앙)
-  capsuleContainer: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: "center",
-    alignItems: "center",
+  // ⚠️ 수정금지(승인필요) — 카드 앵커 (도시 좌표 위)
+  cardAnchor: {
+    position: "absolute",
+    width: 200,
+    height: 140,
+    zIndex: 10,
   },
-  capsule: {
-    justifyContent: "center",
-    alignItems: "center",
-    overflow: "hidden",
-  },
-  // ⚠️ 수정금지(승인필요) — 캡슐 내부 텍스트 (FULL 클로즈업 크기)
-  capsuleContent: {
-    alignItems: "center",
-    justifyContent: "center",
+  // ⚠️ 수정금지(승인필요) — 3D 글래스 카드 (최대한 옅은 보라 + 입체)
+  cardBlur: {
     flex: 1,
-    paddingHorizontal: 20,
+    borderRadius: 20,
+    borderCurve: "continuous" as any, // ⚠️ 수정금지(승인필요) — iOS 스무스 코너 (RN 베스트프랙티스)
+    // ⚠️ 수정금지(승인필요) — 흰색 글래스 배경 (보라 도트맵 위에서 돋보임)
+    backgroundColor: "rgba(255, 255, 255, 0.92)",
+    borderWidth: 1.5,
+    borderColor: "rgba(108, 45, 199, 0.4)",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    gap: 3,
+    overflow: "hidden",
+    // ⚠️ 수정금지(승인필요) — 3D 그림자 (RN 베스트프랙티스: boxShadow CSS 문법)
+    boxShadow: "0 12px 40px rgba(0, 0, 0, 0.35), 0 0 20px rgba(108, 45, 199, 0.3)" as any,
   },
-  capsuleCity: {
-    fontSize: 36,
-    fontFamily: "SpaceGrotesk-Bold",
-    color: "#FFFFFF",
-    letterSpacing: 4,
-    marginBottom: 10,
-  },
-  // ⚠️ 수정금지(승인필요) — 구분선 (Layla식 subtle divider)
   divider: {
-    width: 40,
+    width: 24,
     height: 1,
-    backgroundColor: "rgba(255,255,255,0.3)",
-    marginBottom: 10,
+    backgroundColor: "rgba(108, 45, 199, 0.3)",
+    marginVertical: 3,
   },
-  capsuleDates: {
-    fontSize: 18,
-    fontFamily: "SpaceGrotesk-Regular",
-    color: "rgba(255,255,255,0.85)",
-    letterSpacing: 2,
-    marginBottom: 6,
-  },
-  capsuleDDay: {
-    fontSize: 28,
+  // ⚠️ 수정금지(승인필요) — 카드 텍스트 (흰 배경 + 보라 텍스트)
+  cardCity: {
+    fontSize: 12,
     fontFamily: "SpaceGrotesk-Bold",
-    color: "#FFFFFF",
-    letterSpacing: 3,
+    color: "#1A1A1A",
+    letterSpacing: 2,
+  },
+  cardDate: {
+    fontSize: 6,
+    fontFamily: "SpaceGrotesk-Regular",
+    color: "rgba(0,0,0,0.6)",
+    letterSpacing: 0.5,
+  },
+  cardDDay: {
+    fontSize: 10,
+    fontFamily: "SpaceGrotesk-Bold",
+    color: "#6C2DC7",
+  },
+  cardVenue: {
+    fontSize: 5,
+    fontFamily: "SpaceGrotesk-Regular",
+    color: "rgba(0,0,0,0.5)",
+    marginTop: 2,
   },
 });

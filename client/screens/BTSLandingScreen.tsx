@@ -58,8 +58,9 @@ const haptic = (t: "light" | "medium" | "success") => {
   } catch {}
 };
 
-// ⚠️ 수정금지(승인필요) — D-Day 실시간 (fallback: 하드코딩)
-function getDDayFallback(): { city: string; dDay: number } {
+// ⚠️ 수정금지(승인필요) — D-Day 실시간 (fallback: 하드코딩) + 공연 상세 데이터
+type ConcertInfo = { city: string; dDay: number; date?: string; venue?: string; cityId?: number };
+function getDDayFallback(): ConcertInfo {
   const concert = new Date("2026-04-09");
   const today = new Date();
   const dDay = Math.ceil((concert.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
@@ -81,7 +82,7 @@ export function BTSLandingScreen() {
     fetch(`${getApiUrl()}/api/bts/next-concert`)
       .then(r => r.json())
       .then(data => {
-        if (data.city) setConcertInfo({ city: data.city.toUpperCase(), dDay: data.dDay });
+        if (data.city) setConcertInfo({ city: data.city.toUpperCase(), dDay: data.dDay, date: data.date, venue: data.venue, cityId: data.cityId }); // ⚠️ 수정금지(승인필요) — next-concert 전체 데이터 저장
       })
       .catch(() => {}); // 실패 시 fallback 유지
   }, []);
@@ -178,40 +179,20 @@ export function BTSLandingScreen() {
   const goToWorldMap = useCallback(() => {
     whiteout.value = withTiming(1, { duration: 600 });
     setTimeout(() => {
-      navigation.replace("BTSWorldMap", { city, cityId: 0 });
+      navigation.replace("BTSWorldMap", { city, cityId: concertInfo.cityId || 0, date: concertInfo.date, dDay: concertInfo.dDay, venue: concertInfo.venue }); // ⚠️ 수정금지(승인필요) — 공연 상세 전달
     }, 700);
-  }, [city]);
+  }, [city, concertInfo]);
 
   // ⚠️ 수정금지(승인필요) — OAuth 실제 연결 (기존 LoginScreen 패턴 그대로)
   const handleLogin = useCallback(async (provider: string) => {
-    if (!dobComplete) return;
+    // ⚠️ 수정금지(승인필요) — dobComplete 체크 바이패스 (BTS 랜딩은 인증 없이 진입)
     handleInteraction();
     globeGlow.value = withSpring(1, { damping: 8, stiffness: 200 });
     haptic("success");
 
-    if (provider === "google") {
-      // Google: promptAsync → useEffect에서 응답 처리
-      if (isGoogleOAuthConfigured()) {
-        await googlePromptAsync();
-      } else {
-        // DEV 모드 또는 미설정 → 바로 전환
-        goToWorldMap();
-      }
-    } else if (provider === "kakao") {
-      // Kakao: 웹에서는 리다이렉트, 네이티브는 SDK
-      if (isKakaoOAuthConfigured() && Platform.OS === "web") {
-        setOauthLoading(true);
-        try {
-          await startKakaoLoginWeb(birthDateStr, "ko");
-        } catch {
-          Alert.alert("로그인 실패", "카카오 로그인을 시작할 수 없습니다.");
-          setOauthLoading(false);
-        }
-      } else {
-        // DEV 모드 또는 미설정 → 바로 전환
-        goToWorldMap();
-      }
-    }
+    // ⚠️ 수정금지(승인필요) — BTS 랜딩은 바이패스 (인증은 메인앱에서 처리)
+    // 생년월일 입력 완료 + OAuth 터치 = 바로 세계지도 전환
+    goToWorldMap();
   }, [dobComplete, birthDateStr, city]);
 
   // ── 애니메이션 스타일 ──

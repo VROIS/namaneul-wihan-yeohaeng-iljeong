@@ -34,7 +34,7 @@ export type RootStackParamList = {
   BTSConcertPlanner: undefined;
   BTSMiniApp: undefined;
   BTSLanding: undefined;
-  BTSWorldMap: { city?: string; cityId?: number };
+  BTSWorldMap: { city?: string; cityId?: number; date?: string; dDay?: number; venue?: string }; // ⚠️ 수정금지(승인필요) — next-concert API 데이터 전달
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
