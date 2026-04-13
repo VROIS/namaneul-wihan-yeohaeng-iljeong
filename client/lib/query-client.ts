@@ -1,5 +1,5 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
-// Platform import 제거 - 현재 미사용
+import Constants from "expo-constants";
 
 /**
  * Gets the base URL for the Express API server (e.g., "http://localhost:3000")
@@ -8,7 +8,6 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
 export function getApiUrl(): string {
   // 웹 환경에서는 같은 도메인 origin 사용
   if (typeof window !== "undefined" && window.location) {
-    // localhost 포함 모든 브라우저 환경: 같은 origin 사용 (API와 프론트 동일 서버)
     return window.location.origin;
   }
 
@@ -25,7 +24,13 @@ export function getApiUrl(): string {
     return `http://${host}`;
   }
 
-  // 로컬 개발 서버 사용
+  // app.config.js에서 주입된 Replit 공개 URL 사용
+  const apiDomain = Constants.expoConfig?.extra?.apiDomain as string | undefined;
+  if (apiDomain) {
+    return apiDomain;
+  }
+
+  // 로컬 개발 서버 폴백
   return "http://192.168.1.23:8082";
 }
 
