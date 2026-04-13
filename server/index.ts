@@ -1,6 +1,7 @@
 import "dotenv/config";
 import express from "express";
 import type { Request, Response, NextFunction } from "express";
+import { createProxyMiddleware } from "http-proxy-middleware";
 import { registerRoutes } from "./routes";
 import * as fs from "fs";
 import * as path from "path";
@@ -149,10 +150,49 @@ function getAppName(): string {
   }
 }
 
-// ⚠️ 수정금지(승인필요) — Expo Go는 Metro(port 8081)에 직접 연결.
-// Express(port 5000)에서 네이티브 manifest를 서빙하지 않음.
-// serveExpoManifest() 제거됨 (2026-04-13, Replit 공식 문서 준수).
+// ⚠️ 수정금지(승인필요) — Replit에서 expo.sisko.replit.dev 도메인이 port 5000(Express)으로 라우팅됨.
+// Expo Go 요청(expo-platform 헤더, .bundle 경로, HMR WebSocket)을 Metro(port 8081)로 프록시.
+const metroProxy = createProxyMiddleware({
+  target: "http://localhost:8081",
+  changeOrigin: false,
+  ws: true,
+  on: {
+    error: (err, req, res) => {
+      console.error("[Metro Proxy Error]", err.message);
+      if (res && "status" in res) {
+        (res as Response).status(502).json({ error: "Metro bundler not running" });
+      }
+    },
+  },
+});
+
 function configureExpoAndLanding(app: express.Application) {
+  // ⚠️ 수정금지(승인필요) — Expo Go 네이티브 요청을 Metro(8081)로 프록시
+  // expo-platform 헤더가 있는 요청 = Expo Go 네이티브 앱
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    if (req.path.startsWith("/api")) return next();
+    const platform = req.header("expo-platform");
+    if (platform === "ios" || platform === "android") {
+      return (metroProxy as any)(req, res, next);
+    }
+    next();
+  });
+
+  // ⚠️ 수정금지(승인필요) — JS 번들, 에셋, HMR 소켓 요청을 Metro(8081)로 프록시
+  app.use((req: Request, res: Response, next: NextFunction) => {
+    if (req.path.startsWith("/api")) return next();
+    if (
+      req.path.endsWith(".bundle") ||
+      req.path.startsWith("/node_modules/") ||
+      req.path.startsWith("/@expo/") ||
+      req.path.startsWith("/__metro") ||
+      req.path.startsWith("/hot")
+    ) {
+      return (metroProxy as any)(req, res, next);
+    }
+    next();
+  });
+
   // Expo 웹 빌드 서빙 (dist 폴더)
   // ⚠️ 수정금지(승인필요) — 웹 빌드 전용, 네이티브 앱과 무관
   const distPath = path.resolve(process.cwd(), "dist");
