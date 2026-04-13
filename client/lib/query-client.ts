@@ -1,5 +1,4 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
-import Constants from "expo-constants";
 
 /**
  * Gets the base URL for the Express API server (e.g., "http://localhost:3000")
@@ -11,23 +10,14 @@ export function getApiUrl(): string {
     return window.location.origin;
   }
 
-  let host = process.env.EXPO_PUBLIC_DOMAIN;
-
-  // 환경변수가 설정되어 있으면 사용
+  // EXPO_PUBLIC_DOMAIN: Replit Secrets에 설정된 공개 백엔드 URL
+  // ⚠️ 수정금지(승인필요) — Metro 번들러가 빌드 시 인라인 주입
+  const host = process.env.EXPO_PUBLIC_DOMAIN;
   if (host) {
-    // http:// 또는 https://가 포함되어 있으면 그대로 사용
     if (host.startsWith("http://") || host.startsWith("https://")) {
       return host;
     }
-
-    // 로컬 환경 (http://)
     return `http://${host}`;
-  }
-
-  // app.config.js에서 주입된 Replit 공개 URL 사용
-  const apiDomain = Constants.expoConfig?.extra?.apiDomain as string | undefined;
-  if (apiDomain) {
-    return apiDomain;
   }
 
   // 로컬 개발 서버 폴백
