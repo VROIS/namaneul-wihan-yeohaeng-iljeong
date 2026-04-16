@@ -72,7 +72,7 @@ export default function RootStackNavigator() {
 
   return (
     <Stack.Navigator
-      initialRouteName="BTSMiniApp"  /* ⚠️ 임시 */
+      initialRouteName="Main"  /* ⚠️ 수정금지(승인필요) — NUBI 메인 먼저, BTS는 배너→랜딩→미니앱 */
       screenOptions={{
         headerTitleAlign: "center",
         headerTransparent: true,
