@@ -201,6 +201,47 @@
 | ~~랜딩 3버전 미확정~~ | ~~중복 코드~~ | ✅ 18KB 메인 버전 확정 (4/11 Cursor 커밋) |
 | ~~react-native-maps 미설치~~ | ~~세계지도 불가~~ | ✅ SVG 도트맵으로 대체 (2,134점 보라 사각형) |
 | Rive 미설치 | 캐릭터 애니메이션 PNG만 가능 | P2에서 도입 |
+| ~~Expo Go 직접 연결 불가~~ | ~~실기기 테스트 불가~~ | Windows 방화벽 차단 → Chrome DevTools 모바일 뷰로 대체 |
+
+---
+
+## 2026-04-16 작업 기록
+
+### Screen C (캐릭터 선택) — 완전 재구현
+
+| 항목 | 변경 전 | 변경 후 |
+|------|---------|---------|
+| 레이아웃 | FlatList 캐러셀 + 파티클 | 삼각함수 원형 배치 (sin/cos) |
+| 디자인 패턴 | 다크 시네마틱 | 화이트 프리미엄 + TeamShowcase 호버 |
+| 캐릭터 이미지 | 구 아바타 (char_*.png) | 신규 전신 일러스트 (bts_*.png) + 얼굴 크롭 |
+| 반응형 | Dimensions.get 고정값 | useWindowDimensions 훅 (동적 계산) |
+| 인터랙션 | 스와이프 캐러셀 | 호버(1.25x 확대) + 탭(즉시 전환) |
+| 호버 효과 | 없음 | 공유 hoveredId: 나머지 dim + 그레이스케일→컬러 |
+| 중앙 영역 | "누구랑 여행하고 싶으세요?" 고정 | 호버 시 캐릭터 영어이름 + 한국어특징 + 태그 표시 |
+| 타이틀 | 원형 중심에 겹침 | 원형 상단으로 분리 (여백 24px) |
+| 선택 후 | 1.5초 골드링 대기 | 즉시 다음 화면(BTSPlaceCart) 이동 |
+| 패키지 | react-native-circle-layout | 제거 (미사용) |
+
+### 에셋 추가
+- `assets/images/bts-characters/bts_*.png` × 7장 (전신 일러스트)
+- `assets/images/tripis-icon.png` (앱 아이콘)
+- `assets/images/tripis-logo.png` (Tripis 로고)
+
+### 폰트 통일 (Pretendard-Bold)
+- `BTSLandingScreen.tsx` — SpaceGrotesk/NotoSerifKR → Pretendard-Bold
+- `BTSWorldMapScreen.tsx` — SpaceGrotesk → Pretendard-Bold
+- `BTSCharacterSelectScreen.tsx` — 신규 작성 시 Pretendard-Bold 적용
+
+### 서버
+- `server/bts-routes.ts` — top-places/generate 쿼리에 lat/lng 좌표 추가
+
+### 내부 검증
+- TypeScript 빌드: 에러 0개
+- /simplify 실행: react-native-circle-layout 제거, CSS filter 정리, useMemo 적용
+- 화면 전환 확인: WorldMap → CharacterSelect → PlaceCart 정상
+
+### 앱 이름 변경
+- **Tripis (트리피스)** — "당신의 여행을 전달하는, 세상에 하나뿐인 AI 비서"
 | BGM 에셋 없음 | Scene 4 BGM 재생 불가 | 로열티프리 확보 필요 |
 | ~~Expo 앱 빌드 환경~~ | ~~네이티브 확인 불가~~ | ⚠️ Playwright 웹 검증으로 대체 |
 

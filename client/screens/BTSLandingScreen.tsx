@@ -323,7 +323,7 @@ const styles = StyleSheet.create({
   },
   tourLabel: {
     fontSize: 10,
-    fontFamily: "SpaceGrotesk-Regular",
+    fontFamily: "Pretendard-Bold",
     letterSpacing: 6,
     color: "rgba(255,255,255,0.5)",
     marginBottom: 8,
@@ -335,7 +335,7 @@ const styles = StyleSheet.create({
   },
   titleBTS: {
     fontSize: 42,
-    fontFamily: "SpaceGrotesk-Bold",
+    fontFamily: "Pretendard-Bold",
     color: PRIMARY,
     textShadowColor: "rgba(139,172,255,0.3)",
     textShadowOffset: { width: 0, height: 0 },
@@ -344,7 +344,7 @@ const styles = StyleSheet.create({
   // ⚠️ 수정금지(승인필요) — Arirang 이탤릭 (고유명사)
   titleArirang: {
     fontSize: 42,
-    fontFamily: "SpaceGrotesk-Bold",
+    fontFamily: "Pretendard-Bold",
     fontStyle: "italic",
     color: PRIMARY,
     textShadowColor: "rgba(139,172,255,0.3)",
@@ -357,7 +357,7 @@ const styles = StyleSheet.create({
   },
   slogan: {
     fontSize: 30,
-    fontFamily: "SpaceGrotesk-Bold",
+    fontFamily: "Pretendard-Bold",
     color: "#FFFFFF",
     letterSpacing: 2,
     lineHeight: 38,
@@ -397,14 +397,14 @@ const styles = StyleSheet.create({
   },
   cityLabel: {
     fontSize: 10,
-    fontFamily: "SpaceGrotesk-Bold",
+    fontFamily: "Pretendard-Bold",
     letterSpacing: 4,
     color: "rgba(255,255,255,0.4)",
     marginBottom: 2,
   },
   dDay: {
     fontSize: 44,
-    fontFamily: "NotoSerifKR-Bold",
+    fontFamily: "Pretendard-Bold",
     color: "#FFFFFF",
     letterSpacing: -2,
     marginBottom: 16,
@@ -412,7 +412,7 @@ const styles = StyleSheet.create({
   inputArea: { width: "75%", alignItems: "center" },
   inputLabel: {
     fontSize: 9,
-    fontFamily: "SpaceGrotesk-Bold",
+    fontFamily: "Pretendard-Bold",
     letterSpacing: 3,
     color: "rgba(255,255,255,0.4)",
     marginBottom: 6,
@@ -428,7 +428,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontSize: 13,
     color: "#FFFFFF",
-    fontFamily: "SpaceGrotesk-Regular",
+    fontFamily: "Pretendard-Bold",
   },
 
   // ⚠️ 수정금지(승인필요) — 손잡이
@@ -458,11 +458,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   googleBtn: { backgroundColor: PRIMARY },
-  googleTxt: { fontSize: 11, fontFamily: "SpaceGrotesk-Bold", color: "#050930", letterSpacing: 2, textTransform: "uppercase" },
+  googleTxt: { fontSize: 11, fontFamily: "Pretendard-Bold", color: "#050930", letterSpacing: 2, textTransform: "uppercase" },
   kakaoBtn: { backgroundColor: "rgba(255,255,255,0.1)", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" },
-  kakaoTxt: { fontSize: 11, fontFamily: "SpaceGrotesk-Bold", color: "#FFFFFF", letterSpacing: 2, textTransform: "uppercase" },
+  kakaoTxt: { fontSize: 11, fontFamily: "Pretendard-Bold", color: "#FFFFFF", letterSpacing: 2, textTransform: "uppercase" },
   appleLink: { height: 32, justifyContent: "center", alignItems: "center" },
-  appleTxt: { fontSize: 10, fontFamily: "SpaceGrotesk-Bold", color: PRIMARY, letterSpacing: 2, textTransform: "uppercase" },
+  appleTxt: { fontSize: 10, fontFamily: "Pretendard-Bold", color: PRIMARY, letterSpacing: 2, textTransform: "uppercase" },
   off: { opacity: 0.35 },
 
 });

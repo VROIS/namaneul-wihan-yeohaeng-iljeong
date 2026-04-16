@@ -216,7 +216,7 @@ const styles = StyleSheet.create({
   },
   tourLabel: {
     fontSize: 12,
-    fontFamily: "SpaceGrotesk-Regular",
+    fontFamily: "Pretendard-Bold",
     letterSpacing: 8,
     color: "rgba(0,0,0,0.35)",
     marginBottom: 4,
@@ -227,12 +227,12 @@ const styles = StyleSheet.create({
   },
   titleBTS: {
     fontSize: 44,
-    fontFamily: "SpaceGrotesk-Bold",
+    fontFamily: "Pretendard-Bold",
     color: "#6C2DC7",
   },
   titleArirang: {
     fontSize: 44,
-    fontFamily: "SpaceGrotesk-Bold",
+    fontFamily: "Pretendard-Bold",
     fontStyle: "italic" as const,
     color: "#6C2DC7",
   },
@@ -277,24 +277,24 @@ const styles = StyleSheet.create({
   // ⚠️ 수정금지(승인필요) — 카드 텍스트 (흰 배경 + 보라 텍스트)
   cardCity: {
     fontSize: 12,
-    fontFamily: "SpaceGrotesk-Bold",
+    fontFamily: "Pretendard-Bold",
     color: "#1A1A1A",
     letterSpacing: 2,
   },
   cardDate: {
     fontSize: 6,
-    fontFamily: "SpaceGrotesk-Regular",
+    fontFamily: "Pretendard-Bold",
     color: "rgba(0,0,0,0.6)",
     letterSpacing: 0.5,
   },
   cardDDay: {
     fontSize: 10,
-    fontFamily: "SpaceGrotesk-Bold",
+    fontFamily: "Pretendard-Bold",
     color: "#6C2DC7",
   },
   cardVenue: {
     fontSize: 5,
-    fontFamily: "SpaceGrotesk-Regular",
+    fontFamily: "Pretendard-Bold",
     color: "rgba(0,0,0,0.5)",
     marginTop: 2,
   },

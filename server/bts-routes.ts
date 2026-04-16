@@ -130,6 +130,9 @@ export function registerBtsRoutes(app: Express): void {
           bestImageUrl: placeSeedRaw.bestImageUrl,
           priceEur: placeSeedRaw.priceEur,
           nubiReason: placeSeedRaw.nubiReason,
+          // ⚠️ 수정금지(승인필요) — 좌표 추가 (지도 표시 + 동선 계산용)
+          latitude: placeSeedRaw.latitude,
+          longitude: placeSeedRaw.longitude,
         })
         .from(placeSeedRaw)
         .where(
@@ -195,6 +198,9 @@ export function registerBtsRoutes(app: Express): void {
           bestImageUrl: placeSeedRaw.bestImageUrl,
           priceEur: placeSeedRaw.priceEur,
           nubiReason: placeSeedRaw.nubiReason,
+          // ⚠️ 수정금지(승인필요) — 좌표 추가 (지도 표시 + 동선 계산용)
+          latitude: placeSeedRaw.latitude,
+          longitude: placeSeedRaw.longitude,
         })
         .from(placeSeedRaw)
         .where(
