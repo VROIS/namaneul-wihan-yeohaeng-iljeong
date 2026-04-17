@@ -210,6 +210,15 @@ function configureExpoAndLanding(app: express.Application) {
       next();
     });
     log("✅ Serving Expo web build from /dist");
+  } else {
+    // ⚠️ 수정금지(승인필요) — dev fallback: /dist 없으면 Metro(8081)로 프록시하여 dev bundle + 에셋 서빙
+    // API(/api, /admin)만 제외. /assets 는 Metro가 ?unstable_path 쿼리로 처리하므로 프록시 포함. 2026-04-17 추가
+    app.use((req: Request, res: Response, next: NextFunction) => {
+      if (req.path.startsWith("/api")) return next();
+      if (req.path.startsWith("/admin")) return next();
+      return (metroProxy as any)(req, res, next);
+    });
+    log("⚙️  Dev mode: proxying non-API requests (incl. /assets) to Metro at localhost:8081");
   }
 
   app.use("/assets", express.static(path.resolve(process.cwd(), "assets")));

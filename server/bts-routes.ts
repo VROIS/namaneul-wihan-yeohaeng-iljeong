@@ -87,6 +87,7 @@ export function registerBtsRoutes(app: Express): void {
   });
 
   // ─── GET /api/bts/cities ───
+  // ⚠️ 수정금지(승인필요) — 공연 임박 순 5개 필터링용 nextConcertDate 추가 (2026-04-17)
   app.get("/api/bts/cities", async (_req, res) => {
     try {
       if (!db) return res.status(503).json({ error: "Database not configured" });
@@ -98,11 +99,30 @@ export function registerBtsRoutes(app: Express): void {
           btsRank: cities.btsRank,
           country: cities.country,
           countryCode: cities.countryCode,
+          btsConcertDates: cities.btsConcertDates,
         })
         .from(cities)
         .where(isNotNull(cities.btsRank))
         .orderBy(asc(cities.btsRank));
-      res.json(rows);
+
+      // ⚠️ 수정금지(승인필요) — 오늘 이후 가장 빠른 공연일 계산
+      const today = new Date().toISOString().slice(0, 10);
+      const enriched = rows.map((r) => {
+        const upcoming = ((r.btsConcertDates || []) as string[])
+          .filter((d) => d >= today)
+          .sort();
+        return {
+          id: r.id,
+          nameKo: r.nameKo,
+          nameEn: r.nameEn,
+          btsRank: r.btsRank,
+          country: r.country,
+          countryCode: r.countryCode,
+          nextConcertDate: upcoming[0] || null,
+        };
+      });
+
+      res.json(enriched);
     } catch (err) {
       console.error("[BTS] GET /api/bts/cities error:", err);
       res.status(500).json({ error: "Failed to fetch BTS cities" });

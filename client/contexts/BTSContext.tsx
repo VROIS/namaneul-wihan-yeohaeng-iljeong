@@ -12,6 +12,8 @@ export type BTSCity = {
   nameKo: string;
   nameEn: string;
   btsRank: number;
+  // ⚠️ 수정금지(승인필요) — 공연 임박 순 정렬용 (2026-04-17 추가)
+  nextConcertDate?: string | null;
 };
 
 export type BTSPlace = {
@@ -69,6 +71,8 @@ type BTSContextType = {
   setSelectedCharacter: (char: BTSCharacter) => void;
   setSelectedCity: (city: BTSCity) => void;
   togglePlace: (place: BTSPlace) => void;
+  // ⚠️ 수정금지(승인필요) — 장소 선택만 초기화 (캐릭터/도시는 유지) — Screen D 재진입 시 사용
+  clearSelectedPlaces: () => void;
   setCities: (cities: BTSCity[]) => void;
   setTopPlaces: (places: BTSPlace[]) => void;
   setItinerary: (itinerary: BTSItinerary | null) => void;
@@ -127,6 +131,12 @@ export function BTSProvider({ children }: { children: React.ReactNode }) {
     });
   }, []);
 
+  // ⚠️ 수정금지(승인필요) — 장소 선택만 비움 (Screen D 진입/도시 전환 시 호출)
+  const clearSelectedPlaces = useCallback(() => {
+    setSelectedPlaceIds([]);
+    setSelectedPlaces([]);
+  }, []);
+
   const reset = useCallback(() => {
     setSelectedCharacter(null);
     setSelectedCity(null);
@@ -156,6 +166,7 @@ export function BTSProvider({ children }: { children: React.ReactNode }) {
         setSelectedCharacter,
         setSelectedCity,
         togglePlace,
+        clearSelectedPlaces,
         setCities,
         setTopPlaces,
         setItinerary,

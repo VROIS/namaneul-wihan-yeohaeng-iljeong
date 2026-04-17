@@ -286,10 +286,62 @@
 
 ---
 
+## 2026-04-17 세션: Screen D 재설계 + EAS 자동화 기반 구축
+
+### Screen D 재설계 (화이트 프리미엄 + 글라스 극투명)
+사용자 피드백 5차 반영한 전면 재작성. 스크린샷 확인 완료, "초안 수준, 수정/조정 많음" 예정.
+
+| 상태 | 작업 | 파일 | 메모 |
+|------|------|------|------|
+| ✅ | 전면 재작성 | `client/screens/bts/BTSPlaceCartScreen.tsx` | 다크→화이트, HERO 69% 공간, 이모지 완전 제거 |
+| ✅ | 헤더 최소화 | 동일 | 뒤로가기(←) 단독 줄, "같이 떠나요" CTA |
+| ✅ | 도시 버튼 5등분 | 동일 | 공연 임박 순, 가로 스크롤 제거 |
+| ✅ | 장소 글라스 카드 | 동일 | BlurView + 0.18 투명 + 실제 사진 + 카테고리 목업 폴백 |
+| ✅ | Rive 애니메이션 폴백 | 동일 | 선택 시 Reanimated bounce/tilt, Rive 파일 수급 대기 |
+| ✅ | 전역 버튼 시스템 신규 | `client/components/ui/LiquidButton.tsx` | RN 어댑트 (shadcn LiquidButton → BlurView + shadow) |
+| ✅ | 원본 shadcn 보관 | `docs/design-references/button-system-shadcn.tsx` | Button + LiquidButton + MetalButton 영구 참조 |
+| ✅ | nextConcertDate 필드 | `server/bts-routes.ts` | cities API 응답 확장, 공연 임박 순 클라이언트 정렬 |
+| ✅ | BTSCity 타입 확장 | `client/contexts/BTSContext.tsx` | nextConcertDate + clearSelectedPlaces 액션 |
+| ✅ | dev fallback 프록시 | `server/index.ts` | `/dist` 없을 때 Metro 8081로 자동 프록시 |
+| ✅ | tsconfig 제외 추가 | `tsconfig.json` | `docs/design-references/**`, `_agent/**` 제외 |
+
+### EAS Update 자동화 기반 (비개발자 터미널 제로 워크플로우)
+사용자가 Expo 대시보드 스크린샷 공유 → EAS 무료 계정 + Apple Developer 계정 확인 → GitHub 연결 + EAS Update 자동화 파이프라인 구축.
+
+| 상태 | 작업 | 파일 | 메모 |
+|------|------|------|------|
+| ✅ | EAS 빌드 설정 | `eas.json` | cli 13.0+, appVersionSource=remote, channel(main/production) 추가, Android APK 유지 |
+| ✅ | GitHub Actions 워크플로우 | `.github/workflows/eas-update.yml` | main 푸시 시 자동 `eas update` 실행 |
+| ✅ | app.json EAS Update 설정 | `app.json` | updates.url + runtimeVersion.policy=appVersion 추가 |
+| ✅ | 사용자 한글 가이드 | `docs/EAS-DASHBOARD-GUIDE.md` | 대시보드 클릭 4단계 + iPhone/Android 설치 + 문제해결 |
+| ⬜ | **사용자 액션 필요** | Expo 대시보드 | Connect GitHub + EXPO_TOKEN 발급 + Secrets 등록 |
+| ⬜ | **사용자 액션 필요** | 대시보드 Development builds | iOS + Android 최초 빌드 (20-30분 × 2) |
+| ⬜ | **사용자 액션 필요** | 폰 2대 | QR 스캔 설치 |
+
+### 최종 워크플로우 (셋업 후)
+```
+Claude 코드 수정 → git push → GitHub Actions → EAS Update → 폰 앱 재시작 → 새 버전
+```
+사용자 iteration 당 액션: **앱 닫고 다시 열기 1회**. 1000회 iteration 대응 가능.
+
+### 다음 세션 즉시 재개 지점
+1. 사용자 액션 1-3 완료 확인 (GitHub 연결 / EXPO_TOKEN / Dev Build 완료)
+2. 의도적 작은 수정 (예: CTA 폰트 크기 1pt) → 푸시 → 폰 반영 확인
+3. 성공 후 Screen D 본격 "수정/조정" iteration 시작
+4. 사용자 피드백 수집 → Claude 수정 → push → 확인 루프
+
+### 주의사항
+- **네이티브 변경 시 (`package.json` expo-*/react-native-* 추가, `app.json` plugins 변경)**: EAS Build 재실행 필요 (20-30분). JS/이미지/스타일만 변경은 Update로 즉시 전달.
+- **무료 플랜**: EAS Build 30회/월 (초기 + 네이티브 변경 시만 소모), EAS Update 무제한.
+
+---
+
 ## 변경 이력
 
 | 날짜 | 내용 |
 |------|------|
+| 2026-04-17 | Screen D 전면 재설계 + 전역 LiquidButton + EAS Update 자동화 파이프라인 구축 (GitHub Actions + 대시보드 가이드) |
+| 2026-04-16 | Screen C 캐릭터 선택 화이트 프리미엄 재구현 + 에셋 교체 + 폰트 통일 (커밋 61b0ba2) |
 | 2026-04-13 | 세계지도 줌인 카드 완성 — mapArea 내 배치, DB 연동, 글래스 스타일, Playwright 검증, RALPH LOOP 워크플로우 도입 |
 | 2026-04-12 | Gemini API 키 갱신, Replit/Koyeb 배포 확인, 도트맵 SVG 교체, DotWorldMap 컴포넌트 |
 | 2026-04-11 | Cursor 개발본 통합 (18KB 랜딩), 배너→랜딩→미니앱 연결, 프로젝트 구조 정리 |

@@ -1,0 +1,47 @@
+# ⚠️ 수정금지(승인필요) — EAS Update 자동화 (2026-04-17)
+# main 브랜치 푸시 시 Expo Update 자동 배포 → Development Build가 설치된 폰이 앱 재시작 시 최신 JS 번들 fetch
+# Secret 필수: EXPO_TOKEN (GitHub repo Settings → Secrets → Actions)
+# 참조: docs/EAS-DASHBOARD-GUIDE.md
+
+name: EAS Update on push to main
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.github/**'
+
+jobs:
+  update:
+    name: Publish JS update to EAS
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for EXPO_TOKEN
+        run: |
+          if [ -z "${{ secrets.EXPO_TOKEN }}" ]; then
+            echo "⚠️  EXPO_TOKEN secret is missing. Add it in repo Settings → Secrets → Actions"
+            exit 1
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --prefer-offline
+
+      - name: Setup Expo and EAS CLI
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Publish EAS Update
+        run: eas update --branch main --message "${{ github.event.head_commit.message }}" --non-interactive

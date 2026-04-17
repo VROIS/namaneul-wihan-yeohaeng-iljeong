@@ -1,148 +1,233 @@
-/**
- * BTS 미니앱 - Scene 2: 장소 카트 (서라운드 카드 + 장바구니)
- * 중앙 아바타 주위에 8장 카드가 원형으로 펼쳐지는 몰입형 선택 UI
- */
-
-import React, { useEffect, useCallback, useMemo } from "react";
+// ⚠️ 수정금지(승인필요) — BTS Screen D: 장소 카트 (화이트 프리미엄 + 글라스 극투명 + HERO 최대화)
+// REF: Screen C BTSCharacterSelectScreen 패턴 / docs/design-references/button-system-shadcn.tsx
+// 2026-04-17 재설계 — 다크→화이트, 이모지 제거, 헤더 최소화, 도시 5등분, 캐릭터 Rive 폴백
+import React, { useEffect, useCallback, useMemo, useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
-  Dimensions,
   Pressable,
   StatusBar,
-  ScrollView,
   ActivityIndicator,
+  Image,
+  useWindowDimensions,
+  Platform,
 } from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
   withSpring,
-  withDelay,
-  FadeIn,
-  SlideInDown,
-  ZoomIn,
+  withSequence,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import { BlurView } from "expo-blur";
+import * as Haptics from "expo-haptics";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
-import { BTSColors, CharacterGradients, BTSBorderRadius } from "@/constants/bts-theme";
-import { useBTS, type BTSPlace } from "@/contexts/BTSContext";
+import { CharacterGradients } from "@/constants/bts-theme";
+import { useBTS, type BTSPlace, type BTSCity } from "@/contexts/BTSContext";
 import { getApiUrl } from "@/lib/query-client";
 import type { BTSStackParamList } from "@/navigation/BTSStackNavigator";
+import LiquidButton from "@/components/ui/LiquidButton";
 
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get("window");
-const CENTER_SIZE = 100;
-const CARD_W = 90;
-const CARD_H = 120;
-const RADIUS = Math.min(SCREEN_W * 0.32, 140);
+// ⚠️ 수정금지(승인필요) — Screen C와 동일 전신 이미지 (캐릭터 일관성)
+const CHAR_IMAGES: Record<string, any> = {
+  collector: require("../../../assets/images/bts-characters/bts_collector.png"),
+  romanticist: require("../../../assets/images/bts-characters/bts_romanticist.png"),
+  explorer: require("../../../assets/images/bts-characters/bts_explorer.png"),
+  challenger: require("../../../assets/images/bts-characters/bts_challenger.png"),
+  companion: require("../../../assets/images/bts-characters/bts_companion.png"),
+  recharger: require("../../../assets/images/bts-characters/bts_recharger.png"),
+  chiller: require("../../../assets/images/bts-characters/bts_chiller.png"),
+};
 
-// ─── Surround Card ───
-type SurroundCardProps = {
+// ⚠️ 수정금지(승인필요) — 카테고리별 목업 사진 폴백
+// TODO: assets/images/bts-place-mocks/ 실제 이미지 수급 후 require() 로 교체
+// 현재는 imageUrl이 null일 때 캐릭터 대표 이미지 재활용 (임시)
+const CATEGORY_MOCK_URL: Record<string, string> = {
+  attraction: "https://images.unsplash.com/photo-1566127992631-137a642a90f4?w=400",
+  healing: "https://images.unsplash.com/photo-1540541338287-41700207dee6?w=400",
+  restaurant: "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=400",
+  hotspot: "https://images.unsplash.com/photo-1470004914212-05527e49370b?w=400",
+  adventure: "https://images.unsplash.com/photo-1551632811-561732d1e306?w=400",
+};
+const DEFAULT_MOCK_URL =
+  "https://images.unsplash.com/photo-1488085061387-422e29b40080?w=400";
+
+// ⚠️ 수정금지(승인필요) — Haptics 유틸 (Screen C와 동일)
+const haptic = (t: "light" | "medium" | "success") => {
+  try {
+    if (t === "light") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    else if (t === "medium") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    else Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  } catch {}
+};
+
+// ⚠️ 수정금지(승인필요) — 장소 사진 소스 결정 (로우데이터 → 카테고리 목업 → 기본)
+function resolvePlaceImage(place: BTSPlace): { uri: string } {
+  if (place.imageUrl) return { uri: place.imageUrl };
+  const cat = place.seedCategory || "";
+  return { uri: CATEGORY_MOCK_URL[cat] || DEFAULT_MOCK_URL };
+}
+
+// ⚠️ 수정금지(승인필요) — 장소 글라스 카드 (사진 내장 + 극투명)
+type PlaceCardProps = {
   place: BTSPlace;
   index: number;
   total: number;
   isSelected: boolean;
   onToggle: () => void;
+  radiusX: number;
+  radiusY: number;
+  tint: string;
 };
 
-function SurroundCard({ place, index, total, isSelected, onToggle }: SurroundCardProps) {
+const PlaceCard = React.memo(function PlaceCard({
+  place,
+  index,
+  total,
+  isSelected,
+  onToggle,
+  radiusX,
+  radiusY,
+  tint,
+}: PlaceCardProps) {
+  // ⚠️ 수정금지(승인필요) — 타원형 원주 배치 (perspective 느낌)
   const angle = (index / total) * (2 * Math.PI) - Math.PI / 2;
-  const x = Math.cos(angle) * RADIUS;
-  const y = Math.sin(angle) * RADIUS;
+  const x = Math.cos(angle) * radiusX;
+  const y = Math.sin(angle) * radiusY;
 
-  const scale = useSharedValue(0);
-
-  useEffect(() => {
-    scale.value = withDelay(index * 80, withSpring(1, { damping: 12, stiffness: 120 }));
-  }, []);
+  const scale = useSharedValue(1);
 
   const animStyle = useAnimatedStyle(() => ({
     transform: [
       { translateX: x - CARD_W / 2 },
       { translateY: y - CARD_H / 2 },
-      { scale: scale.value },
+      { scale: scale.value * (isSelected ? 1.05 : 1) },
     ],
   }));
 
-  // 카테고리 이모지
-  const catEmoji = useMemo(() => {
-    const map: Record<string, string> = {
-      attraction: "🏛️",
-      healing: "🧘",
-      restaurant: "🍽️",
-      hotspot: "📸",
-      adventure: "🏔️",
-    };
-    return map[place.seedCategory || ""] || "📍";
-  }, [place.seedCategory]);
+  const img = resolvePlaceImage(place);
 
   return (
-    <Pressable onPress={onToggle} style={styles.cardPressable}>
-      <Animated.View
+    <Animated.View style={[styles.cardAbsolute, animStyle]}>
+      <Pressable
+        onPress={() => {
+          scale.value = withSequence(
+            withSpring(0.9, { damping: 12, stiffness: 220 }),
+            withSpring(1, { damping: 14, stiffness: 160 })
+          );
+          onToggle();
+        }}
         style={[
-          styles.surroundCard,
-          animStyle,
-          isSelected && styles.surroundCardSelected,
+          styles.cardPressable,
+          {
+            borderColor: isSelected ? tint : "rgba(255,255,255,0.5)",
+            borderWidth: isSelected ? 2.5 : 1,
+            shadowColor: isSelected ? tint : "#000",
+            shadowOpacity: isSelected ? 0.35 : 0.1,
+            shadowRadius: isSelected ? 12 : 6,
+          },
         ]}
       >
-        <Text style={styles.cardEmoji}>{catEmoji}</Text>
-        <Text style={styles.cardName} numberOfLines={2}>
-          {place.nameKo || place.nameEn}
-        </Text>
-        {place.priceEur != null && (
-          <Text style={styles.cardPrice}>€{place.priceEur}</Text>
-        )}
+        {/* 블러 글라스 레이어 */}
+        <BlurView
+          intensity={45}
+          tint="light"
+          style={StyleSheet.absoluteFillObject}
+        />
+        {/* 사진 주인공 */}
+        <Image source={img} style={styles.cardImage} resizeMode="cover" />
+        {/* 사진 위 살짝 뿌옇게 (0.15 극투명) */}
+        <View
+          style={[
+            StyleSheet.absoluteFillObject,
+            { backgroundColor: "rgba(255,255,255,0.15)" },
+          ]}
+        />
+        {/* 하단 텍스트 영역 */}
+        <View style={styles.cardLabel}>
+          <Text numberOfLines={2} style={styles.cardLabelText}>
+            {place.nameKo || place.nameEn}
+          </Text>
+        </View>
+        {/* 선택 배지 */}
         {isSelected && (
-          <View style={styles.checkBadge}>
+          <View style={[styles.checkBadge, { backgroundColor: tint }]}>
             <Text style={styles.checkText}>✓</Text>
           </View>
         )}
-      </Animated.View>
-    </Pressable>
+      </Pressable>
+    </Animated.View>
   );
-}
+});
 
-// ─── City Selector ───
-function CitySelector() {
-  const { cities, selectedCity, setSelectedCity } = useBTS();
+// ⚠️ 수정금지(승인필요) — 중앙 캐릭터 카드 (전신 + 장소 선택 시 반응 애니메이션)
+// TODO: Rive 파일(.riv) 수급 후 <Rive source=... />로 대체 — 캐릭터별 7종
+function CharacterHero({
+  characterId,
+  gradient,
+  selectedCount,
+  w,
+  h,
+}: {
+  characterId: string;
+  gradient: readonly [string, string];
+  selectedCount: number;
+  w: number;
+  h: number;
+}) {
+  const scale = useSharedValue(1);
+  const tilt = useSharedValue(0);
+
+  // 선택 개수 변화 시 반응 애니메이션 (Rive 폴백)
+  useEffect(() => {
+    if (selectedCount === 0) return;
+    scale.value = withSequence(
+      withSpring(1.08, { damping: 10, stiffness: 220 }),
+      withSpring(1, { damping: 14, stiffness: 160 })
+    );
+    tilt.value = withSequence(
+      withSpring(3, { damping: 10, stiffness: 220 }),
+      withSpring(0, { damping: 14, stiffness: 160 })
+    );
+  }, [selectedCount]);
+
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }, { rotateZ: `${tilt.value}deg` }],
+  }));
+
+  const imgSource = CHAR_IMAGES[characterId] || CHAR_IMAGES.collector;
 
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.cityRow}
+    <Animated.View
+      style={[
+        styles.heroCard,
+        {
+          width: w,
+          height: h,
+          borderColor: gradient[0],
+          shadowColor: gradient[0],
+        },
+        animStyle,
+      ]}
     >
-      {cities.map((city) => (
-        <Pressable
-          key={city.id}
-          style={[
-            styles.cityChip,
-            selectedCity?.id === city.id && styles.cityChipActive,
-          ]}
-          onPress={() => setSelectedCity(city)}
-        >
-          <Text
-            style={[
-              styles.cityChipText,
-              selectedCity?.id === city.id && styles.cityChipTextActive,
-            ]}
-          >
-            {city.nameKo}
-          </Text>
-        </Pressable>
-      ))}
-    </ScrollView>
+      <Image source={imgSource} style={styles.heroImage} resizeMode="cover" />
+    </Animated.View>
   );
 }
 
-// ─── Main Screen ───
+// 카드 사이즈 상수
+const CARD_W = 86;
+const CARD_H = 116;
+
+// ⚠️ 수정금지(승인필요) — 메인 화면
 export default function BTSPlaceCartScreen() {
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NativeStackNavigationProp<BTSStackParamList>>();
+  const { width: sw, height: sh } = useWindowDimensions();
   const {
     selectedCharacter,
     selectedCity,
@@ -152,37 +237,37 @@ export default function BTSPlaceCartScreen() {
     isLoadingPlaces,
     error,
     setSelectedCity,
-    setCities,
     setTopPlaces,
-    setIsLoadingCities,
     setIsLoadingPlaces,
     togglePlace,
+    clearSelectedPlaces,
     setError,
   } = useBTS();
 
   const baseUrl = getApiUrl();
   const gradient = CharacterGradients[selectedCharacter?.id || "collector"];
+  const tint = gradient[0];
 
-  // 도시 목록 로드
-  useEffect(() => {
-    setIsLoadingCities(true);
-    fetch(`${baseUrl}/api/bts/cities`)
-      .then((r) => r.json())
-      .then((data) => {
-        setCities(data);
-        if (data.length > 0 && !selectedCity) {
-          setSelectedCity(data[0]);
-        }
-      })
-      .catch(() => setCities([]))
-      .finally(() => setIsLoadingCities(false));
-  }, [baseUrl]);
+  const [hoveredId, setHoveredId] = useState<number | null>(null);
+
+  // ⚠️ 수정금지(승인필요) — 공연 임박 순 상위 5개 도시 (폴백: btsRank 순)
+  const cityButtons = useMemo(() => {
+    const withDate = cities.filter((c) => c.nextConcertDate);
+    if (withDate.length > 0) {
+      const sorted = [...withDate].sort((a, b) =>
+        (a.nextConcertDate || "").localeCompare(b.nextConcertDate || "")
+      );
+      return sorted.slice(0, 5);
+    }
+    return cities.slice(0, 5);
+  }, [cities]);
 
   // 장소 로드 (캐릭터 + 도시 선택 시)
   useEffect(() => {
     if (!selectedCharacter || !selectedCity) return;
     setIsLoadingPlaces(true);
     setError(null);
+    clearSelectedPlaces(); // 도시 전환 시 선택 초기화
     fetch(
       `${baseUrl}/api/bts/top-places?cityId=${selectedCity.id}&memberId=${selectedCharacter.id}`
     )
@@ -197,72 +282,123 @@ export default function BTSPlaceCartScreen() {
 
   const handleNext = useCallback(() => {
     if (selectedPlaceIds.length >= 2) {
+      haptic("success");
       navigation.navigate("BTSLoading");
     }
-  }, [selectedPlaceIds, navigation]);
+  }, [selectedPlaceIds.length, navigation]);
+
+  const handleTogglePlace = useCallback(
+    (place: BTSPlace) => {
+      haptic("light");
+      togglePlace(place);
+    },
+    [togglePlace]
+  );
+
+  const handleCityPick = useCallback(
+    (city: BTSCity) => {
+      haptic("light");
+      setSelectedCity(city);
+    },
+    [setSelectedCity]
+  );
 
   const selectedCount = selectedPlaceIds.length;
   const canProceed = selectedCount >= 2;
 
-  return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
-      <StatusBar barStyle="light-content" />
+  // ⚠️ 수정금지(승인필요) — 반응형 HERO 영역 계산
+  const hero = useMemo(() => {
+    const topArea = insets.top + 4 + 36 + 8 + 32 + 8; // ~100
+    const bottomArea = insets.bottom + 16 + 24 + 10 + 52 + 16; // ~120
+    const availH = sh - topArea - bottomArea;
+    const availW = sw;
 
+    // 중앙 캐릭터 카드 크기 — 가용 공간의 55% 또는 최대 220
+    const heroH = Math.min(availH * 0.58, 260);
+    const heroW = heroH * (16 / 22); // 16:22 비율 유지
+
+    // 원주 배치 반지름 — 타원형(가로 넓고, 세로 짧음)
+    const radiusX = Math.min(availW * 0.42, 170);
+    const radiusY = Math.min(availH * 0.42, 200);
+
+    return { heroW, heroH, radiusX, radiusY, availW, availH };
+  }, [sw, sh, insets.top, insets.bottom]);
+
+  return (
+    <View style={styles.container}>
+      <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
+
+      {/* ⚠️ 수정금지(승인필요) — 미세 틴트 그라디언트 배경 (글라스 효과 확보용) */}
       <LinearGradient
-        colors={[BTSColors.deepViolet, BTSColors.spaceBlack]}
+        colors={["#FFFFFF", (tint + "0A") as any]}
         style={StyleSheet.absoluteFill}
         start={{ x: 0.5, y: 0 }}
-        end={{ x: 0.5, y: 0.5 }}
+        end={{ x: 0.5, y: 1 }}
       />
 
-      {/* 헤더 */}
-      <Animated.View entering={FadeIn.duration(400)} style={styles.headerWrap}>
-        <BlurView intensity={40} tint="dark" style={styles.header}>
-          <Pressable onPress={() => navigation.goBack()} style={styles.backBtn}>
-            <Text style={styles.backText}>←</Text>
-          </Pressable>
-          <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>
-              {selectedCharacter?.name || ""}의 바이브 스팟
-            </Text>
-            <Text style={styles.headerSub}>
-              {selectedCount}/8 선택됨 · 2개 이상 선택하세요
-            </Text>
-          </View>
-          <View style={styles.backBtn} />
-        </BlurView>
-      </Animated.View>
+      {/* 뒤로가기 행 */}
+      <View style={[styles.backRow, { paddingTop: insets.top + 4 }]}>
+        <Pressable
+          onPress={() => navigation.goBack()}
+          style={styles.backBtn}
+          accessibilityLabel="뒤로가기"
+        >
+          <BlurView
+            intensity={40}
+            tint="light"
+            style={StyleSheet.absoluteFillObject}
+          />
+          <View
+            style={[
+              StyleSheet.absoluteFillObject,
+              { backgroundColor: "rgba(255,255,255,0.3)" },
+            ]}
+          />
+          <Text style={styles.backText}>←</Text>
+        </Pressable>
+      </View>
 
-      {/* 도시 선택 */}
-      <CitySelector />
+      {/* 도시 버튼 5등분 (공연 임박 순) */}
+      <View style={styles.cityRow}>
+        {cityButtons.map((city) => (
+          <LiquidButton
+            key={city.id}
+            label={city.nameKo || city.nameEn}
+            size="md"
+            flex={1}
+            tint={tint}
+            variant={selectedCity?.id === city.id ? "selected" : "default"}
+            onPress={() => handleCityPick(city)}
+          />
+        ))}
+      </View>
 
-      {/* 서라운드 영역 */}
-      <View style={styles.surroundArea}>
+      {/* HERO 영역 — 중앙 캐릭터 + 8장 장소 카드 */}
+      <View style={styles.heroArea}>
         {isLoadingPlaces ? (
-          <ActivityIndicator size="large" color={BTSColors.neonPurple} />
+          <ActivityIndicator size="large" color={tint} />
         ) : (
           <>
-            {/* 중앙 아바타 */}
-            <Animated.View entering={ZoomIn.delay(200).springify()}>
-              <LinearGradient
-                colors={[gradient[0], gradient[1]]}
-                style={styles.centerAvatar}
-              >
-                <Text style={styles.centerEmoji}>
-                  {selectedCharacter?.emoji || "🎵"}
-                </Text>
-              </LinearGradient>
-            </Animated.View>
-
-            {/* 8장 서라운드 카드 */}
+            {selectedCharacter && (
+              <CharacterHero
+                characterId={selectedCharacter.id}
+                gradient={gradient}
+                selectedCount={selectedCount}
+                w={hero.heroW}
+                h={hero.heroH}
+              />
+            )}
             {topPlaces.map((place, i) => (
-              <SurroundCard
+              <PlaceCard
                 key={place.id}
                 place={place}
                 index={i}
                 total={topPlaces.length}
                 isSelected={selectedPlaceIds.includes(place.id)}
-                onToggle={() => togglePlace(place)}
+                onToggle={() => handleTogglePlace(place)}
+                radiusX={hero.radiusX}
+                radiusY={hero.radiusY}
+                tint={tint}
               />
             ))}
           </>
@@ -272,40 +408,38 @@ export default function BTSPlaceCartScreen() {
       {/* 에러 */}
       {error && <Text style={styles.errorText}>{error}</Text>}
 
-      {/* 하단 게이지 + CTA */}
-      <Animated.View
-        entering={SlideInDown.delay(600).springify()}
-        style={[styles.bottomArea, { paddingBottom: insets.bottom + 16 }]}
-      >
+      {/* 하단 — 게이지 + CTA "같이 떠나요" */}
+      <View style={[styles.bottomArea, { paddingBottom: insets.bottom + 16 }]}>
         {/* 게이지 바 */}
-        <View style={styles.gaugeContainer}>
+        <View style={styles.gaugeRow}>
           <View style={styles.gaugeTrack}>
-            <Animated.View
+            <View
               style={[
                 styles.gaugeFill,
-                { width: `${(selectedCount / 8) * 100}%` },
+                {
+                  width: `${(selectedCount / 8) * 100}%`,
+                  backgroundColor: tint,
+                },
               ]}
             />
           </View>
-          <Text style={styles.gaugeText}>{selectedCount} / 8</Text>
+          <Text style={[styles.gaugeText, { color: tint }]}>
+            {selectedCount} / 8
+          </Text>
         </View>
 
         {/* CTA 버튼 */}
         <Pressable onPress={handleNext} disabled={!canProceed}>
           <LinearGradient
-            colors={
-              canProceed
-                ? [BTSColors.neonPurple, BTSColors.deepViolet]
-                : ["#374151", "#1F2937"]
-            }
+            colors={canProceed ? [gradient[0], gradient[1]] : ["#CCCCCC", "#999999"]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 0 }}
             style={[styles.ctaBtn, !canProceed && { opacity: 0.5 }]}
           >
-            <Text style={styles.ctaText}>AI 동선 최적화 🧠</Text>
+            <Text style={styles.ctaText}>같이 떠나요</Text>
           </LinearGradient>
         </Pressable>
-      </Animated.View>
+      </View>
     </View>
   );
 }
@@ -313,138 +447,100 @@ export default function BTSPlaceCartScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: BTSColors.spaceBlack,
+    backgroundColor: "#FFFFFF",
   },
 
-  // Header
-  headerWrap: {
-    paddingHorizontal: 20,
-    marginTop: 8,
-    zIndex: 20,
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    height: 56,
-    borderRadius: 20,
-    overflow: "hidden",
-    paddingHorizontal: 16,
-    borderWidth: 1,
-    borderColor: BTSColors.glassBorder,
+  // ⚠️ 수정금지(승인필요) — 뒤로가기 행
+  backRow: {
+    paddingHorizontal: 12,
+    paddingBottom: 4,
   },
   backBtn: {
     width: 36,
     height: 36,
+    borderRadius: 18,
+    overflow: "hidden",
     justifyContent: "center",
     alignItems: "center",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.6)",
   },
   backText: {
-    color: BTSColors.textPrimary,
-    fontSize: 20,
-    fontWeight: "600",
-  },
-  headerCenter: { flex: 1, alignItems: "center" },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: BTSColors.textPrimary,
-  },
-  headerSub: {
-    fontSize: 10,
-    color: BTSColors.textTertiary,
-    marginTop: 2,
-  },
-
-  // City selector
-  cityRow: {
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    gap: 8,
-  },
-  cityChip: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 20,
-    backgroundColor: "rgba(255,255,255,0.06)",
-    borderWidth: 1,
-    borderColor: BTSColors.glassBorder,
-  },
-  cityChipActive: {
-    backgroundColor: BTSColors.purpleGlowLight,
-    borderColor: BTSColors.neonPurple,
-  },
-  cityChipText: {
-    fontSize: 13,
-    color: BTSColors.textSecondary,
-    fontWeight: "500",
-  },
-  cityChipTextActive: {
-    color: BTSColors.neonPurple,
+    fontSize: 18,
+    fontFamily: "Pretendard-Bold",
     fontWeight: "700",
+    color: "#1A1A1A",
   },
 
-  // Surround area
-  surroundArea: {
+  // ⚠️ 수정금지(승인필요) — 도시 버튼 행 (5등분, 세로 여백 최소)
+  cityRow: {
+    flexDirection: "row",
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingTop: 4,
+    paddingBottom: 4,
+  },
+
+  // ⚠️ 수정금지(승인필요) — HERO 영역 (flex: 1로 모든 여유 공간 흡수)
+  heroArea: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-  },
-  centerAvatar: {
-    width: CENTER_SIZE,
-    height: CENTER_SIZE,
-    borderRadius: CENTER_SIZE / 2,
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: BTSColors.neonPurple,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.5,
-    shadowRadius: 24,
-    elevation: 10,
-  },
-  centerEmoji: {
-    fontSize: 40,
+    position: "relative",
   },
 
-  // Surround cards
-  cardPressable: {
-    position: "absolute",
+  // 중앙 캐릭터 카드
+  heroCard: {
+    borderRadius: 20,
+    borderWidth: 3,
+    overflow: "hidden",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 8,
+    backgroundColor: "#FFFFFF",
+    zIndex: 20,
   },
-  surroundCard: {
+  heroImage: {
+    width: "100%",
+    height: "100%",
+  },
+
+  // 장소 카드 (절대 배치)
+  cardAbsolute: {
+    position: "absolute",
     width: CARD_W,
     height: CARD_H,
-    borderRadius: BTSBorderRadius.sm,
-    backgroundColor: BTSColors.glassBg,
-    borderWidth: 1,
-    borderColor: BTSColors.glassBorder,
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 8,
+    left: "50%",
+    top: "50%",
+    zIndex: 10,
   },
-  surroundCardSelected: {
-    borderColor: BTSColors.neonPurple,
-    backgroundColor: BTSColors.purpleGlowLight,
-    shadowColor: BTSColors.neonPurple,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 6,
+  cardPressable: {
+    flex: 1,
+    borderRadius: 14,
+    overflow: "hidden",
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
   },
-  cardEmoji: {
-    fontSize: 24,
-    marginBottom: 4,
+  cardImage: {
+    ...StyleSheet.absoluteFillObject,
   },
-  cardName: {
+  cardLabel: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
+    backgroundColor: "rgba(255,255,255,0.75)",
+  },
+  cardLabelText: {
     fontSize: 10,
-    fontWeight: "600",
-    color: BTSColors.textPrimary,
-    textAlign: "center",
-    lineHeight: 14,
-  },
-  cardPrice: {
-    fontSize: 9,
-    color: BTSColors.neonPurple,
+    fontFamily: "Pretendard-Bold",
     fontWeight: "700",
-    marginTop: 2,
+    color: "#1A1A1A",
+    textAlign: "center",
+    lineHeight: 13,
   },
   checkBadge: {
     position: "absolute",
@@ -453,30 +549,34 @@ const styles = StyleSheet.create({
     width: 18,
     height: 18,
     borderRadius: 9,
-    backgroundColor: BTSColors.neonPurple,
     justifyContent: "center",
     alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
   },
   checkText: {
-    fontSize: 10,
-    color: "#FFF",
-    fontWeight: "800",
+    fontSize: 11,
+    color: "#FFFFFF",
+    fontWeight: "900",
   },
 
-  // Error
+  // ⚠️ 수정금지(승인필요) — 에러 텍스트
   errorText: {
-    color: BTSColors.danger,
+    color: "#EF4444",
     textAlign: "center",
-    fontSize: 13,
+    fontSize: 12,
     paddingHorizontal: 20,
+    fontFamily: "Pretendard-Bold",
   },
 
-  // Bottom
+  // ⚠️ 수정금지(승인필요) — 하단 영역
   bottomArea: {
-    paddingHorizontal: 24,
-    gap: 12,
+    paddingHorizontal: 20,
+    gap: 10,
   },
-  gaugeContainer: {
+  gaugeRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
@@ -485,29 +585,30 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 6,
     borderRadius: 3,
-    backgroundColor: "rgba(255,255,255,0.08)",
+    backgroundColor: "#F0F0F0",
     overflow: "hidden",
   },
   gaugeFill: {
     height: "100%",
     borderRadius: 3,
-    backgroundColor: BTSColors.neonPurple,
   },
   gaugeText: {
     fontSize: 12,
-    color: BTSColors.textSecondary,
-    fontWeight: "700",
-    minWidth: 35,
+    fontFamily: "Pretendard-Bold",
+    fontWeight: "800",
+    minWidth: 40,
     textAlign: "right",
   },
   ctaBtn: {
-    paddingVertical: 18,
-    borderRadius: BTSBorderRadius["2xl"],
+    paddingVertical: 16,
+    borderRadius: 26,
     alignItems: "center",
   },
   ctaText: {
-    fontSize: 16,
+    fontSize: 15,
+    fontFamily: "Pretendard-Bold",
     fontWeight: "800",
     color: "#FFFFFF",
+    letterSpacing: 0.5,
   },
 });

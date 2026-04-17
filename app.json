@@ -50,6 +50,12 @@
         "projectId": "f13f4f4b-7116-44be-b0c8-c91b633a5fb5"
       }
     },
+    "updates": {
+      "url": "https://u.expo.dev/f13f4f4b-7116-44be-b0c8-c91b633a5fb5"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
     "owner": "vrois"
   }
 }
