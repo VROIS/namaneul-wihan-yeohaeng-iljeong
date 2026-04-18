@@ -35,16 +35,17 @@ jobs:
       - name: Install dependencies
         run: npm ci --no-audit --prefer-offline
 
-      # ⚠️ 수정금지(승인필요) — development 프로필 + --local 로 GitHub 러너에서 직접 빌드
-      # eas.json의 build.development 정의 사용 (developmentClient, distribution: internal, apk)
-      - name: Build Android APK (development profile, local runner)
-        run: eas build --local --platform android --profile development --non-interactive
+      # ⚠️ 수정금지(승인필요) — preview 프로필 + --local 로 GitHub 러너에서 직접 빌드
+      # eas.json의 build.preview 정의 사용 (internal 배포, apk, Dev Launcher 없음)
+      # 앱 켜자마자 vibetrip 본체 실행 + EAS Update channel=main 자동 fetch
+      - name: Build Android APK (preview profile, local runner)
+        run: eas build --local --platform android --profile preview --non-interactive
         env:
           EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: android-development-apk-${{ github.sha }}
+          name: android-preview-apk-${{ github.sha }}
           path: '*.apk'
           retention-days: 14
