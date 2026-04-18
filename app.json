@@ -40,7 +40,8 @@
       ],
       "expo-web-browser",
       "expo-localization",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      "./plugins/withKakaoMavenRepo"
     ],
     "experiments": {
       "reactCompiler": true
