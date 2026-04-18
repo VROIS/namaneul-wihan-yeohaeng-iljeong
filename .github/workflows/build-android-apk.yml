@@ -1,0 +1,50 @@
+# ⚠️ 수정금지(승인필요) — Android APK 로컬 빌드 (2026-04-18)
+# 목적: Expo 무료 플랜 빌드 한도 회피 (eas build --local 로 GitHub Actions 러너에서 직접 빌드)
+# 트리거: 수동(workflow_dispatch) — Actions 탭에서 "Run workflow" 클릭
+# 결과: Artifacts 섹션에서 APK 다운로드 → 폰에 설치
+# Secret 필수: EXPO_TOKEN (EAS 인증용)
+
+name: Build Android APK (local)
+
+on: workflow_dispatch
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Setup Java (Android 빌드 필수)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Install EAS CLI
+        run: npm install -g eas-cli
+
+      - name: Install dependencies
+        run: npm ci --no-audit --prefer-offline
+
+      # ⚠️ 수정금지(승인필요) — development 프로필 + --local 로 GitHub 러너에서 직접 빌드
+      # eas.json의 build.development 정의 사용 (developmentClient, distribution: internal, apk)
+      - name: Build Android APK (development profile, local runner)
+        run: eas build --local --platform android --profile development --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-development-apk-${{ github.sha }}
+          path: '*.apk'
+          retention-days: 14
