@@ -1,12 +1,26 @@
 # ⚠️ 수정금지(승인필요) — Android APK 로컬 빌드 (2026-04-18)
 # 목적: Expo 무료 플랜 빌드 한도 회피 (eas build --local 로 GitHub Actions 러너에서 직접 빌드)
-# 트리거: 수동(workflow_dispatch) — Actions 탭에서 "Run workflow" 클릭
-# 결과: Artifacts 섹션에서 APK 다운로드 → 폰에 설치
+# 트리거:
+#   (1) 자동 — main 브랜치에 네이티브 관련 파일 변경 push 시 자동 빌드 (package.json, app.json, plugins/ 등)
+#   (2) 수동 — Actions 탭 "Run workflow" 클릭 (언제든 강제 리빌드 가능)
+# 결과: Artifacts 섹션에서 APK 다운로드 → 폰에 설치 (자동 빌드 완료 이메일 알림 GitHub 기본 제공)
 # Secret 필수: EXPO_TOKEN (EAS 인증용)
 
 name: Build Android APK (local)
 
-on: workflow_dispatch
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'package.json'
+      - 'package-lock.json'
+      - 'app.json'
+      - 'app.config.*'
+      - 'eas.json'
+      - 'plugins/**'
+      - 'assets/**'
+      - '.github/workflows/build-android-apk.yml'
+  workflow_dispatch:
 
 jobs:
   build:
