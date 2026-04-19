@@ -2,7 +2,9 @@
 // SVG 에셋을 런타임에 로드 (번들 크기 축소 — 172KB 인라인 제거)
 import { Platform } from "react-native";
 import { Asset } from "expo-asset";
-import * as FileSystem from "expo-file-system";
+// ⚠️ 수정금지(승인필요) — SDK 54에서 expo-file-system의 readAsStringAsync가 deprecated
+// legacy 서브모듈로 전환하여 기존 동작 유지. 이 전환이 도트지도 모바일 silent fail 해결.
+import * as FileSystem from "expo-file-system/legacy";
 
 // ⚠️ 수정금지(승인필요) — SVG 캐시 (한 번 로드 후 재사용)
 let cachedSvg: string | null = null;
