@@ -45,6 +45,8 @@ interface TargetCity {
   nameKo: string;
   nameEn: string;
   phase?: string; // bts2026 | france30 | europe30
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 interface Stage2Item {
@@ -284,14 +286,14 @@ async function resolveTargetCities(options: Stage1RunOptions): Promise<TargetCit
 
   if (options.cityId) {
     const [row] = await db
-      .select({ id: cities.id, nameKo: cities.name, nameEn: cities.nameEn })
+      .select({ id: cities.id, nameKo: cities.name, nameEn: cities.nameEn, latitude: cities.latitude, longitude: cities.longitude })
       .from(cities)
       .where(eq(cities.id, options.cityId))
       .limit(1);
     if (!row) return [];
     const configured = getMcpExecutionOrder();
     const matched = configured.find((c) => (row.nameEn && c.nameEn.toLowerCase() === row.nameEn.toLowerCase()) || c.nameKo === row.nameKo);
-    return [{ id: row.id, nameKo: row.nameKo, nameEn: row.nameEn || row.nameKo, phase: matched?.phase }];
+    return [{ id: row.id, nameKo: row.nameKo, nameEn: row.nameEn || row.nameKo, phase: matched?.phase, latitude: row.latitude, longitude: row.longitude }];
   }
 
   // 우선순위: BTS34 → France30 → Europe30 (buildAppExecutionOrder 순서, 중복 제외)
@@ -300,7 +302,7 @@ async function resolveTargetCities(options: Stage1RunOptions): Promise<TargetCit
   const results: TargetCity[] = [];
 
   const btsRows = await db
-    .select({ id: cities.id, nameKo: cities.name, nameEn: cities.nameEn })
+    .select({ id: cities.id, nameKo: cities.name, nameEn: cities.nameEn, latitude: cities.latitude, longitude: cities.longitude })
     .from(cities)
     .where(isNotNull(cities.btsRank))
     .orderBy(asc(cities.btsRank));
@@ -309,7 +311,7 @@ async function resolveTargetCities(options: Stage1RunOptions): Promise<TargetCit
     const key = (row.nameEn || row.nameKo || "").toLowerCase().trim();
     if (key && !seen.has(key)) {
       seen.add(key);
-      results.push({ id: row.id, nameKo: row.nameKo, nameEn: row.nameEn || row.nameKo, phase: "bts2026" });
+      results.push({ id: row.id, nameKo: row.nameKo, nameEn: row.nameEn || row.nameKo, phase: "bts2026", latitude: row.latitude, longitude: row.longitude });
     }
   }
 
@@ -318,7 +320,7 @@ async function resolveTargetCities(options: Stage1RunOptions): Promise<TargetCit
     const key = c.nameEn.toLowerCase().trim();
     if (!key || seen.has(key)) continue;
     const [row] = await db
-      .select({ id: cities.id, nameKo: cities.name, nameEn: cities.nameEn })
+      .select({ id: cities.id, nameKo: cities.name, nameEn: cities.nameEn, latitude: cities.latitude, longitude: cities.longitude })
       .from(cities)
       .where(
         sql`LOWER(${cities.name}) = LOWER(${c.nameKo}) OR LOWER(COALESCE(${cities.nameEn}, '')) = LOWER(${c.nameEn})`
@@ -326,7 +328,7 @@ async function resolveTargetCities(options: Stage1RunOptions): Promise<TargetCit
       .limit(1);
     if (row) {
       seen.add(key);
-      results.push({ id: row.id, nameKo: row.nameKo, nameEn: row.nameEn || c.nameEn, phase: c.phase });
+      results.push({ id: row.id, nameKo: row.nameKo, nameEn: row.nameEn || c.nameEn, phase: c.phase, latitude: row.latitude, longitude: row.longitude });
     }
   }
   return results;
@@ -718,6 +720,94 @@ const WIKIPEDIA_CATEGORY_QUERIES: Record<SeedCategory, string> = {
   hotspot: "shopping districts neighborhoods landmarks",
 };
 
+// ⚠️ 수정금지(승인필요) — Wikipedia Geosearch: 도시 좌표 반경 100km 내 장소 (지리 정확도 보장)
+// MCP_RAW_DATA_PROMPTS.md 규칙과 일치: "도시 중심 반경 100km 내외만 대상"
+// 캐시: 도시 1회 fetch 후 5 카테고리 분류에 재사용 (API 부담 최소)
+interface GeoPlace {
+  pageid: number;
+  title: string;
+  thumbnail?: string;
+  extract?: string;
+}
+const geoSearchCache = new Map<number, { places: GeoPlace[]; fetchedAt: number }>();
+const GEO_CACHE_TTL_MS = 15 * 60 * 1000; // 15분
+
+async function fetchWikipediaGeosearch(cityId: number, lat: number, lng: number): Promise<GeoPlace[]> {
+  const cached = geoSearchCache.get(cityId);
+  if (cached && Date.now() - cached.fetchedAt < GEO_CACHE_TTL_MS) return cached.places;
+
+  const places: GeoPlace[] = [];
+  const seen = new Set<number>();
+  // 500개 한 번에는 제한 있어서 continue로 여러 번 호출
+  let gscontinue: string | null = null;
+  for (let page = 0; page < 5; page++) {
+    const continueParam = gscontinue ? `&ggscontinue=${encodeURIComponent(gscontinue)}` : "";
+    const url =
+      `https://en.wikipedia.org/w/api.php?action=query&format=json` +
+      `&generator=geosearch&ggscoord=${lat}|${lng}&ggsradius=100000&ggslimit=500${continueParam}` +
+      `&prop=pageimages|extracts&piprop=thumbnail&pithumbsize=800` +
+      `&exsentences=1&exintro=1&explaintext=1`;
+    try {
+      const res = await fetch(url, {
+        headers: { "User-Agent": "NubiBot/1.0 (vibetrip; contact@vibetrip.app)" },
+        signal: AbortSignal.timeout(20000),
+      });
+      if (!res.ok) break;
+      const data: any = await res.json();
+      const pages = data?.query?.pages || {};
+      for (const pid of Object.keys(pages)) {
+        const p: any = pages[pid];
+        if (!p?.pageid || seen.has(p.pageid)) continue;
+        seen.add(p.pageid);
+        const thumb: string | undefined = p?.thumbnail?.source;
+        if (!thumb) continue; // 이미지 없는 페이지 skip
+        places.push({
+          pageid: p.pageid,
+          title: p.title || "",
+          thumbnail: thumb,
+          extract: p.extract ? String(p.extract).slice(0, 200) : undefined,
+        });
+      }
+      gscontinue = data?.continue?.ggscontinue || null;
+      if (!gscontinue) break;
+    } catch {
+      break;
+    }
+  }
+  geoSearchCache.set(cityId, { places, fetchedAt: Date.now() });
+  return places;
+}
+
+// ⚠️ 수정금지(승인필요) — 카테고리 키워드 매칭 (제목 기반)
+const GEO_CATEGORY_KEYWORDS: Record<SeedCategory, RegExp> = {
+  attraction: /\b(museum|monument|landmark|cathedral|basilica|palace|castle|mausoleum|memorial|tower|tomb|temple|mosque|church|opera|theatre|theater|gallery|pyramid|ruin|fortress|citadel|shrine|statue)\b/i,
+  restaurant: /\b(restaurant|cuisine|market|food hall|bakery|brewery|winery|bistro)\b/i,
+  healing: /\b(park|garden|lake|forest|nature reserve|botanical|beach|spring|reservoir|woods|meadow|grove|promenade|waterfront)\b/i,
+  adventure: /\b(zoo|amusement park|theme park|aquarium|observatory|stadium|arena|race\s?track|resort|safari)\b/i,
+  hotspot: /\b(shopping|mall|district|street|neighborhood|neighbourhood|avenue|plaza|square|quarter|boulevard|market)\b/i,
+};
+
+function filterGeoByCategory(places: GeoPlace[], category: SeedCategory): Stage1Item[] {
+  const regex = GEO_CATEGORY_KEYWORDS[category];
+  const items: Stage1Item[] = [];
+  for (const p of places) {
+    if (!regex.test(p.title)) continue;
+    items.push({
+      rank: items.length + 1,
+      nameEn: p.title,
+      nameKo: undefined,
+      googleSearchNote: undefined,
+      googleReviewCountNote: undefined,
+      googleImageCountNote: p.extract,
+      imageUrl: p.thumbnail,
+      priceEur: undefined,
+      source: "wikipedia_geosearch",
+    });
+    if (items.length >= 30) break;
+  }
+  return items;
+}
+
 async function fetchWikipediaStage1(cityEn: string, category: SeedCategory): Promise<Stage1Item[]> {
   const query = `${cityEn} ${WIKIPEDIA_CATEGORY_QUERIES[category]}`;
   const url =
@@ -777,10 +867,24 @@ async function runStage1ForCityCategory(city: TargetCity, category: SeedCategory
     if (!USE_MCP_RAW) {
       return { success: false, saved: 0, error: "USE_MCP_RAW=true 필요. API 비용 절감을 위해 MCP만 사용합니다." };
     }
-    // ⚠️ 수정금지(승인필요) — Wikipedia API 사용 (2026-04-20 전환, Google HTML 변경 대응)
-    // Wikipedia는 JSON 구조화 응답 + 이미지 URL 내장 → 파싱/환각 위험 제거
-    // category별 검색 쿼리로 상위 30개 페이지 획득 (이미지 있는 것만)
-    const rawItems = await fetchWikipediaStage1(city.nameEn, category);
+    // ⚠️ 수정금지(승인필요) — Wikipedia Geosearch 우선 (지리 정확도 보장, 2026-04-20 전환)
+    // 좌표 있는 도시: geosearch 반경 100km → 카테고리 키워드 필터 (정확)
+    // 좌표 없음(드물 case): search 기반 fallback (정확도 낮지만 수집은 됨)
+    let rawItems: Stage1Item[] = [];
+    if (city.latitude && city.longitude) {
+      const geoPlaces = await fetchWikipediaGeosearch(city.id, city.latitude, city.longitude);
+      rawItems = filterGeoByCategory(geoPlaces, category);
+    }
+    if (rawItems.length < STAGE_MIN_ITEMS) {
+      // geosearch 결과 부족 시 기존 search 기반으로 보강
+      const searchItems = await fetchWikipediaStage1(city.nameEn, category);
+      const seenNames = new Set(rawItems.map((x) => x.nameEn.toLowerCase()));
+      for (const s of searchItems) {
+        if (seenNames.has(s.nameEn.toLowerCase())) continue;
+        rawItems.push({ ...s, rank: rawItems.length + 1 });
+        if (rawItems.length >= 30) break;
+      }
+    }
 
     const items = normalizeStage1Items(rawItems);
 
