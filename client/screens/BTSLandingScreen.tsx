@@ -305,7 +305,7 @@ export function BTSLandingScreen() {
         </Animated.View>
 
         {/* ⚠️ 수정금지(승인필요) — EAS Update 검증 태그 (커밋마다 숫자 증가) */}
-        <Text style={styles.buildTag}>build-01</Text>
+        <Text style={styles.buildTag}>build-02</Text>
 
         {/* ⚠️ 수정금지(승인필요) — 화이트아웃 (zIndex 99로 모든 레이어 위) */}
         <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: "#FFF", pointerEvents: "none", zIndex: 99 }, whiteoutStyle]} />
