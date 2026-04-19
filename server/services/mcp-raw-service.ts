@@ -706,6 +706,66 @@ function buildStage1SearchQuery(cityEn: string, category: SeedCategory): string 
   return `${cityEn} ${q[category]} top 30 2024 with price and image`;
 }
 
+// ⚠️ 수정금지(승인필요) — Wikipedia API Stage 1 (2026-04-20, Google HTML 구조 변경 대응)
+// Google HTML 구조 변경(2026)으로 /url?q= 0건 반환 → Wikipedia API로 전환
+// 비용: 0원 (Wikipedia 무료 API, 제한 없음)
+// 장점: JSON 구조화 응답, 이미지 URL 내장 (pageimages.thumbnail), 환각 없음
+const WIKIPEDIA_CATEGORY_QUERIES: Record<SeedCategory, string> = {
+  attraction: "landmarks museums monuments tourist attractions",
+  restaurant: "cuisine food markets",
+  healing: "parks gardens squares plazas",
+  adventure: "zoo amusement parks theme parks",
+  hotspot: "shopping districts neighborhoods landmarks",
+};
+
+async function fetchWikipediaStage1(cityEn: string, category: SeedCategory): Promise<Stage1Item[]> {
+  const query = `${cityEn} ${WIKIPEDIA_CATEGORY_QUERIES[category]}`;
+  const url =
+    `https://en.wikipedia.org/w/api.php?action=query&format=json` +
+    `&generator=search&gsrsearch=${encodeURIComponent(query)}` +
+    `&gsrlimit=50&gsrnamespace=0` +
+    `&prop=pageimages|extracts&piprop=thumbnail&pithumbsize=800` +
+    `&exsentences=1&exintro=1&explaintext=1`;
+  try {
+    const res = await fetch(url, {
+      headers: { "User-Agent": "NubiBot/1.0 (vibetrip; contact@vibetrip.app)" },
+      signal: AbortSignal.timeout(15000),
+    });
+    if (!res.ok) return [];
+    const data: any = await res.json();
+    const pages = Object.values(data?.query?.pages || {}) as any[];
+    // search index 순 정렬 (Wikipedia 이미 관련도순 반환)
+    pages.sort((a, b) => (a.index || 0) - (b.index || 0));
+    const items: Stage1Item[] = [];
+    const cityLower = cityEn.toLowerCase();
+    for (const page of pages) {
+      const title: string = page.title || "";
+      if (!title) continue;
+      // 메타/목록 페이지 제외
+      if (/^(tourism in|tourist attraction|list of|culture of|history of|economy of|index of|roadside attraction|tourist city)$/i.test(title)) continue;
+      if (/^(tourism|tourist)\s+in\s+/i.test(title)) continue;
+      if (/^list\s+of\s+/i.test(title)) continue;
+      const imageUrl = page.thumbnail?.source || undefined;
+      if (!imageUrl) continue; // 이미지 없는 페이지 skip (숏폼 원재료)
+      items.push({
+        rank: items.length + 1,
+        nameEn: title,
+        nameKo: undefined,
+        googleSearchNote: undefined,
+        googleReviewCountNote: undefined,
+        googleImageCountNote: page.extract ? String(page.extract).slice(0, 200) : undefined,
+        imageUrl,
+        priceEur: undefined,
+        source: "wikipedia_api",
+      });
+      if (items.length >= 30) break;
+    }
+    return items;
+  } catch {
+    return [];
+  }
+}
+
 async function runStage1ForCityCategory(city: TargetCity, category: SeedCategory): Promise<{
   success: boolean;
   saved: number;
@@ -717,51 +777,10 @@ async function runStage1ForCityCategory(city: TargetCity, category: SeedCategory
     if (!USE_MCP_RAW) {
       return { success: false, saved: 0, error: "USE_MCP_RAW=true 필요. API 비용 절감을 위해 MCP만 사용합니다." };
     }
-    // ⚠️ 수정금지(승인필요) — Python MCP 대신 googleSearchLite(fetch) 사용 (Koyeb 512MB 메모리 안정)
-    // 이유: Python+Chromium spawn이 Koyeb에서 0건 반환 (메모리 불안정). lite는 fetch 기반 3회 재시도.
-    const query = buildStage1SearchQuery(city.nameEn, category);
-    const searchResults = await googleSearchLite(query, 30);
-
-    // === [수정됨] 제미나이 API 호출 제거, 정규식 기반 100% 무료 파싱 ===
-    const rawItems: any[] = [];
-    const blocks = searchResults.split(/(?=\n\d+\.\s)|(?=Title:)/i);
-    let rank = 1;
-    for (let i = 0; i < blocks.length; i++) {
-      const block = blocks[i];
-      // Title: 블라블라 또는 1. 블라블라 형태 추출
-      const nameMatch = block.match(/Title:\s*(.*?)(?:\n|-)/) || block.match(/\d+\.\s+([^\n]+)/);
-      if (!nameMatch) continue;
-
-      const nameEn = nameMatch[1].replace(/[\*\#\]\[]/g, '').trim();
-      if (!nameEn || nameEn.length < 2) continue;
-
-      const priceMatch = block.match(/(?:EUR|€)\s*([0-9.,]+)/i) || block.match(/([0-9.,]+)\s*(?:EUR|€)/i);
-      const isFree = /free(?! cancellation)|무료/i.test(block);
-
-      let priceEur = null;
-      if (isFree) {
-        priceEur = 0;
-      } else if (priceMatch) {
-        priceEur = parseFloat(priceMatch[1].replace(',', '.'));
-        if (isNaN(priceEur)) priceEur = null;
-      }
-
-      const imgMatch = block.match(/https?:\/\/[^\s"'<>]+\.(?:jpg|jpeg|png|webp|gif)/i);
-
-      rawItems.push({
-        rank: rank++,
-        nameKo: null, // MCP 텍스트에 한글이 없다면 null
-        nameEn: nameEn,
-        googleSearchNote: null,
-        googleReviewCountNote: null,
-        googleImageCountNote: null,
-        imageUrl: imgMatch ? imgMatch[0] : null,
-        priceEur: priceEur,
-        source: "mcp_regex_parser"
-      });
-
-      if (rawItems.length >= 30) break; // 상위 30건까지만 저장
-    }
+    // ⚠️ 수정금지(승인필요) — Wikipedia API 사용 (2026-04-20 전환, Google HTML 변경 대응)
+    // Wikipedia는 JSON 구조화 응답 + 이미지 URL 내장 → 파싱/환각 위험 제거
+    // category별 검색 쿼리로 상위 30개 페이지 획득 (이미지 있는 것만)
+    const rawItems = await fetchWikipediaStage1(city.nameEn, category);
 
     const items = normalizeStage1Items(rawItems);
 
