@@ -792,14 +792,15 @@ async function runStage1ForCityCategory(city: TargetCity, category: SeedCategory
       };
     }
 
-    // ⚠️ 수정금지(승인필요) — 이미지 URL 검증 + Wikimedia 폴백 (병렬 5개 배치, 2026-04-20 추가)
-    // 정책: verifyImageUrl(HTTP HEAD, content-type image/*) → 실패 시 fetchWikimediaImageByName(nameEn)
-    // 결과: 최종 URL을 item.imageUrl에 덮어씀 (검증 성공 것만 저장, 실패하면 null)
+    // ⚠️ 수정금지(승인필요) — 이미지 URL 검증 + Wikimedia 폴백 (2026-04-20)
+    // Wikipedia API 응답은 신뢰 (검증 skip) — Wikimedia가 HEAD 요청에 429 rate limit 반환하여 false negative 발생
+    // LLM 환각 URL(Google/기타)만 HEAD 검증 + Wikimedia 이름 검색 폴백
     const BATCH = 5;
     for (let i = 0; i < items.length; i += BATCH) {
       const slice = items.slice(i, i + BATCH);
       await Promise.all(
         slice.map(async (item) => {
+          if (item.source === "wikipedia_api" && item.imageUrl) return;
           const final = await validateOrFallbackImage(item.imageUrl, item.nameEn);
           item.imageUrl = final || undefined;
         })
