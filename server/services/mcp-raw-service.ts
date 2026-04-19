@@ -150,6 +150,69 @@ async function verifyEvidenceUrl(url: string, sourceType: string): Promise<boole
   }
 }
 
+// ⚠️ 수정금지(승인필요) — Stage 1 이미지 URL HTTP HEAD 검증 (LLM 환각 URL 차단용, 2026-04-20 추가)
+async function verifyImageUrl(url: string): Promise<boolean> {
+  if (!url || !url.startsWith("http")) return false;
+  try {
+    const response = await fetch(url, {
+      method: "HEAD",
+      redirect: "follow",
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; NubiBot/1.0)" },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!response.ok) return false;
+    const contentType = response.headers.get("content-type") || "";
+    return contentType.startsWith("image/");
+  } catch {
+    return false;
+  }
+}
+
+// ⚠️ 수정금지(승인필요) — Wikimedia Commons 장소명 기반 이미지 검색 (Stage 1 이미지 폴백용)
+// 좌표 없이 nameEn으로 검색 → Commons 파일 상위 1건 → thumbUrl 반환
+async function fetchWikimediaImageByName(nameEn: string): Promise<string | null> {
+  if (!nameEn) return null;
+  try {
+    const searchUrl =
+      `https://commons.wikimedia.org/w/api.php?action=query&format=json&list=search` +
+      `&srnamespace=6&srlimit=1&srsearch=${encodeURIComponent(nameEn)}`;
+    const res = await fetch(searchUrl, { signal: AbortSignal.timeout(6000) });
+    if (!res.ok) return null;
+    const data: any = await res.json();
+    const title = data?.query?.search?.[0]?.title;
+    if (!title) return null;
+    const infoUrl =
+      `https://commons.wikimedia.org/w/api.php?action=query&format=json&titles=${encodeURIComponent(title)}` +
+      `&prop=imageinfo&iiprop=url&iiurlwidth=800`;
+    const infoRes = await fetch(infoUrl, { signal: AbortSignal.timeout(6000) });
+    if (!infoRes.ok) return null;
+    const infoData: any = await infoRes.json();
+    const pages = infoData?.query?.pages || {};
+    for (const pid of Object.keys(pages)) {
+      const ii = pages[pid]?.imageinfo?.[0];
+      if (ii?.thumburl) return ii.thumburl;
+      if (ii?.url) return ii.url;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// ⚠️ 수정금지(승인필요) — 검증 + 폴백 체인: 원본 검증 실패 시 Wikimedia 이름 검색으로 대체
+async function validateOrFallbackImage(originalUrl: string | undefined | null, nameEn: string): Promise<string | null> {
+  if (originalUrl) {
+    const ok = await verifyImageUrl(originalUrl);
+    if (ok) return originalUrl;
+  }
+  const fallback = await fetchWikimediaImageByName(nameEn);
+  if (fallback) {
+    const ok = await verifyImageUrl(fallback);
+    if (ok) return fallback;
+  }
+  return null;
+}
+
 function normalizeStage1Items(items: any[]): Stage1Item[] {
   const normalized: Stage1Item[] = [];
   const seen = new Set<number>();
@@ -654,9 +717,10 @@ async function runStage1ForCityCategory(city: TargetCity, category: SeedCategory
     if (!USE_MCP_RAW) {
       return { success: false, saved: 0, error: "USE_MCP_RAW=true 필요. API 비용 절감을 위해 MCP만 사용합니다." };
     }
-    const mcp = await getMcpClient();
+    // ⚠️ 수정금지(승인필요) — Python MCP 대신 googleSearchLite(fetch) 사용 (Koyeb 512MB 메모리 안정)
+    // 이유: Python+Chromium spawn이 Koyeb에서 0건 반환 (메모리 불안정). lite는 fetch 기반 3회 재시도.
     const query = buildStage1SearchQuery(city.nameEn, category);
-    const searchResults = await mcp.googleSearch(query, { num: 30 });
+    const searchResults = await googleSearchLite(query, 30);
 
     // === [수정됨] 제미나이 API 호출 제거, 정규식 기반 100% 무료 파싱 ===
     const rawItems: any[] = [];
@@ -707,6 +771,20 @@ async function runStage1ForCityCategory(city: TargetCity, category: SeedCategory
         saved: 0,
         error: `1단계 응답 품질 미달 (${items.length}건, 최소 ${STAGE_MIN_ITEMS}건 필요)`,
       };
+    }
+
+    // ⚠️ 수정금지(승인필요) — 이미지 URL 검증 + Wikimedia 폴백 (병렬 5개 배치, 2026-04-20 추가)
+    // 정책: verifyImageUrl(HTTP HEAD, content-type image/*) → 실패 시 fetchWikimediaImageByName(nameEn)
+    // 결과: 최종 URL을 item.imageUrl에 덮어씀 (검증 성공 것만 저장, 실패하면 null)
+    const BATCH = 5;
+    for (let i = 0; i < items.length; i += BATCH) {
+      const slice = items.slice(i, i + BATCH);
+      await Promise.all(
+        slice.map(async (item) => {
+          const final = await validateOrFallbackImage(item.imageUrl, item.nameEn);
+          item.imageUrl = final || undefined;
+        })
+      );
     }
 
     await db.transaction(async (tx) => {

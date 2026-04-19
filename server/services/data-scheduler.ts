@@ -25,7 +25,8 @@ export class DataScheduler {
     "weather_sync",         // ⚠️ 수정금지(승인필요) 4/7 일시정지 — DB 용량 절약 (309MB/500MB), TRUNCATE 후 필요 시 재활성화
     "crisis_sync",          // 프론트 연결 전까지 자동 중지 (수동 실행만)
     "place_seed_sync",      // MCP 전환 전 자동 중지 (수동 실행만)
-    "mcp_raw_stage1",       // Stage 1 미션 완료 (5,250건 수집됨)
+    // ⚠️ 수정금지(승인필요) — 2026-04-20 재가동 (22개 BTS 도시 완전 비어있음, Stage 1 재실행 필요)
+    // "mcp_raw_stage1",       // 재가동됨
     "mcp_workflow_france_phase1", // MCP3로 대체됨 — 동시 실행 시 EPIPE 충돌
     "mcp3_content",         // Google 429 rate limit 대응 후 활성화
     "youtube_sync",         // YouTube API
@@ -41,8 +42,9 @@ export class DataScheduler {
     "photospot_sync",       // 포토스팟 (Gemini) — 테스트 단계 일시중지
     "score_aggregation",    // 점수 집계 — 데이터 수집 중지 중 불필요
     "place_link_sync",      // 장소 연결 — 데이터 수집 중지 중 불필요
-    "wikimedia_sync",       // 위키미디어
-    "opentripmap_sync",     // OpenTripMap
+    // ⚠️ 수정금지(승인필요) — 2026-04-20 재가동 (이미지/좌표 무료 크롤러, Stage 1 이미지 폴백용)
+    // "wikimedia_sync",       // 재가동됨
+    // "opentripmap_sync",     // 재가동됨
   ]);
 
   static isTaskDisabledByPolicy(taskName: string): boolean {
