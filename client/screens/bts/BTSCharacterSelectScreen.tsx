@@ -1,7 +1,7 @@
-// ⚠️ 수정금지(승인필요) — BTS 캐릭터 선택 (화이트 프리미엄 + 삼각함수 원형 배치)
-// REF: TeamShowcase 패턴 — 공유 호버, 그레이스케일→컬러, 즉시 표시
-// 레이아웃: 상단 타이틀 + 원형(중심=호버 정보) + 상하 여백 균등
-import React, { useState, useCallback, useMemo } from "react";
+// ⚠️ 수정금지(승인필요) — BTS 캐릭터 선택 (2026-04-20 플랜 승인 재설계)
+// 사양: 타원 배치 + 카카오 글라스 패턴 + 2단계 탭 + 플로팅 텍스트 오버레이
+// 근거: LiquidButton.tsx 유리 스택 + BTSLandingScreen.tsx kakaoBtn 패턴
+import React, { useState, useCallback, useMemo, useRef } from "react";
 import {
   View,
   Text,
@@ -10,13 +10,14 @@ import {
   Pressable,
   StatusBar,
   Image,
-  Platform,
 } from "react-native";
 import Animated, {
-  useSharedValue,
   useAnimatedStyle,
   withSpring,
+  withTiming,
 } from "react-native-reanimated";
+import { LinearGradient } from "expo-linear-gradient";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -46,210 +47,203 @@ const CHAR_IMAGES: Record<string, any> = {
   chiller: require("../../../assets/images/bts-characters/bts_chiller.png"),
 };
 
-// ⚠️ 수정금지(승인필요) — 고정 상수
-const BORDER_WIDTH = 3.5;
-const AVATAR_PADDING = 2;
 const ANGLE_OFFSET = -Math.PI / 2;
 
-// ⚠️ 수정금지(승인필요) — 반응형 레이아웃 (useWindowDimensions 기반)
-function useCircleLayout() {
+// ⚠️ 수정금지(승인필요) — 타원 배치 레이아웃 (가로 좁게/세로 길게 iPhone 긴 화면 활용)
+function useEllipseLayout() {
   const { width: sw, height: sh } = useWindowDimensions();
   return useMemo(() => {
-    // ⚠️ 수정금지(승인필요) — 원형 최대 크기: 세로 85% 활용, 타이틀+여백 100px 확보
-    const availH = sh * 0.85 - 100;
-    const containerW = Math.min(sw - 8, 440, availH);
-    const avatarSize = Math.max(Math.round(containerW * 0.21), 62);
-    const circleRadius = (containerW / 2) - (avatarSize / 2) - 2;
-    const areaSize = circleRadius * 2 + avatarSize;
-    const innerSize = avatarSize - BORDER_WIDTH * 2 - AVATAR_PADDING * 2;
+    // 아바타 크기: 화면 작은 쪽 28%, 최소 96px (기존 0.21 → 0.28 확대)
+    const avatarSize = Math.max(Math.round(Math.min(sw, sh) * 0.28), 96);
+    // 가로 반지름: 화면폭 - 아바타 - 여유 마진
+    const rx = (sw - avatarSize) / 2 - 12;
+    // 세로 반지름: 1.4배 → 타원
+    const ry = rx * 1.4;
+    const areaW = 2 * rx + avatarSize;
+    const areaH = 2 * ry + avatarSize;
     const positions = BTS_CHARACTERS.map((_, i) => {
       const angle = ANGLE_OFFSET + (2 * Math.PI * i) / 7;
       return {
-        x: areaSize / 2 + Math.cos(angle) * circleRadius,
-        y: areaSize / 2 + Math.sin(angle) * circleRadius,
+        x: areaW / 2 + Math.cos(angle) * rx,
+        y: areaH / 2 + Math.sin(angle) * ry,
       };
     });
-    return { containerW, avatarSize, circleRadius, areaSize, innerSize, positions };
+    return { avatarSize, areaW, areaH, positions };
   }, [sw, sh]);
 }
 
-// ⚠️ 수정금지(승인필요) — 개별 아바타 (TeamShowcase 패턴)
+// ⚠️ 수정금지(승인필요) — 개별 아바타 (카카오 글라스 패턴 + 플로팅 텍스트)
+// onTap 안정 레퍼런스(charId 전달) + useAnimatedStyle 직접 withSpring/withTiming (React.memo 유지)
 const CharacterAvatar = React.memo(function CharacterAvatar({
   character,
-  isHovered,
+  isSelected,
   isDimmed,
-  onSelect,
-  onHoverIn,
-  onHoverOut,
+  onTap,
   posX,
   posY,
   avatarSize,
-  innerSize,
 }: {
   character: BTSCharacter;
-  isHovered: boolean;
+  isSelected: boolean;
   isDimmed: boolean;
-  onSelect: () => void;
-  onHoverIn: () => void;
-  onHoverOut: () => void;
+  onTap: (charId: string) => void;
   posX: number;
   posY: number;
   avatarSize: number;
-  innerSize: number;
 }) {
   const gradient = CharacterGradients[character.id] || CharacterGradients.collector;
-  const hoverScale = useSharedValue(1);
 
+  // JS prop 변경 시 워크렛 재실행 → withSpring/withTiming가 자체 보간 (useEffect 불필요)
   const scaleStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: hoverScale.value }],
-  }));
+    transform: [{ scale: withSpring(isSelected ? 1.1 : 1, { damping: 12, stiffness: 180 }) }],
+  }), [isSelected]);
+
+  const textStyle = useAnimatedStyle(() => ({
+    opacity: withTiming(isSelected ? 1 : 0, { duration: 200 }),
+  }), [isSelected]);
 
   return (
     <Animated.View style={[{
       position: "absolute",
       left: posX - avatarSize / 2,
       top: posY - avatarSize / 2,
-      alignItems: "center",
+      width: avatarSize,
+      height: avatarSize,
+      // 3D 깊이감 그림자 (iOS + Android elevation)
+      shadowColor: isSelected ? gradient[0] : "#000",
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: isSelected ? 0.55 : 0.2,
+      shadowRadius: isSelected ? 20 : 12,
+      elevation: isSelected ? 16 : 8,
     }, scaleStyle]}>
       <Pressable
-        onPress={onSelect}
-        onPressIn={() => {
-          hoverScale.value = withSpring(1.25, { damping: 12, stiffness: 180 });
-          onHoverIn();
-          haptic("light");
-        }}
-        onPressOut={() => {
-          hoverScale.value = withSpring(1, { damping: 14, stiffness: 160 });
-          onHoverOut();
-        }}
-        {...(Platform.OS === "web" ? {
-          onHoverIn: () => {
-            hoverScale.value = withSpring(1.2, { damping: 12, stiffness: 180 });
-            onHoverIn();
-          },
-          onHoverOut: () => {
-            hoverScale.value = withSpring(1, { damping: 14, stiffness: 160 });
-            onHoverOut();
-          },
-        } : {})}
-      >
-        <View style={{
+        onPress={() => onTap(character.id)}
+        style={{
           width: avatarSize,
           height: avatarSize,
           borderRadius: avatarSize / 2,
-          justifyContent: "center",
-          alignItems: "center",
-          backgroundColor: "#FFFFFF",
-          borderColor: isHovered ? gradient[0] : gradient[0] + (isDimmed ? "40" : "80"),
-          borderWidth: isHovered ? BORDER_WIDTH + 1.5 : BORDER_WIDTH,
-          shadowColor: gradient[0],
-          shadowOffset: { width: 0, height: isHovered ? 0 : 3 },
-          shadowOpacity: isHovered ? 0.6 : 0.15,
-          shadowRadius: isHovered ? 20 : 6,
-          elevation: isHovered ? 12 : 3,
-          opacity: isDimmed ? 0.45 : 1,
-        }}>
-          <View style={{
-            width: innerSize,
-            height: innerSize,
-            borderRadius: innerSize / 2,
-            overflow: "hidden",
-          }}>
-            <Image
-              source={CHAR_IMAGES[character.id]}
-              style={{
-                width: innerSize,
-                height: innerSize * 2.5,
-                ...(Platform.OS === "web" ? {
-                  filter: isHovered ? "grayscale(0) brightness(1.05)" : "grayscale(0.6) brightness(0.9)",
-                } as any : {}),
-              }}
-              resizeMode="cover"
-            />
-          </View>
-        </View>
+          overflow: "hidden",
+        }}
+      >
+        {/* 레이어 1: 어두운 그라디언트 베이스 — 카카오 패턴 작동 조건 */}
+        <LinearGradient
+          colors={["rgba(20, 20, 40, 0.92)", "rgba(5, 9, 48, 0.98)"]}
+          style={StyleSheet.absoluteFillObject}
+        />
+
+        {/* 레이어 2: 캐릭터 이미지 (얼굴 크롭, 전신의 상단 40%) */}
+        <Image
+          source={CHAR_IMAGES[character.id]}
+          style={{
+            position: "absolute",
+            left: 0,
+            top: 0,
+            width: avatarSize,
+            height: avatarSize * 2.5,
+          }}
+          resizeMode="cover"
+        />
+
+        {/* 레이어 3: 기본 어두운 오버레이 (선택 시 제거로 컬러 복귀) */}
+        {!isSelected && (
+          <View style={[
+            StyleSheet.absoluteFillObject,
+            { backgroundColor: isDimmed ? "rgba(30,30,30,0.65)" : "rgba(60,60,60,0.45)" },
+          ]} />
+        )}
+
+        {/* 레이어 4: 카카오 패턴 유리 오버레이 (Android 포함 글라스 효과) */}
+        <View style={[
+          StyleSheet.absoluteFillObject,
+          {
+            backgroundColor: "rgba(255,255,255,0.10)",
+            borderRadius: avatarSize / 2,
+            borderWidth: isSelected ? 2 : 1,
+            borderColor: isSelected ? gradient[0] : "rgba(255,255,255,0.22)",
+          },
+        ]} />
+
+        {/* 레이어 5: 상단 1px 화이트 반사광 (유리 엣지) */}
+        <View style={{
+          position: "absolute",
+          top: 0,
+          left: "18%",
+          right: "18%",
+          height: 0.6,
+          backgroundColor: "rgba(255,255,255,0.85)",
+        }} />
+
+        {/* 레이어 6: 선택 시 플로팅 텍스트 (유리 위에 떠있는 느낌) */}
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            {
+              position: "absolute",
+              bottom: "15%",
+              left: 0,
+              right: 0,
+              alignItems: "center",
+            },
+            textStyle,
+          ]}
+        >
+          <Text style={styles.floatingNameEn}>{character.nameEn}</Text>
+          <Text style={styles.floatingArchetype}>{character.archetype}</Text>
+        </Animated.View>
       </Pressable>
     </Animated.View>
   );
 });
 
-// ⚠️ 수정금지(승인필요) — 원형 중심 캐릭터 정보 (TeamShowcase 우측 패턴)
-function CenterInfo({ character }: { character: BTSCharacter | null }) {
-  if (!character) {
-    return (
-      <View style={styles.centerInfo}>
-        <Text style={styles.centerHint}>터치하여 선택</Text>
-      </View>
-    );
-  }
-  const gradient = CharacterGradients[character.id] || CharacterGradients.collector;
-  return (
-    <View style={styles.centerInfo}>
-      <Text style={[styles.centerNameEn, { color: gradient[0] }]}>
-        {character.nameEn}
-      </Text>
-      <Text style={styles.centerArchetype}>{character.archetype}</Text>
-      <View style={styles.tagRow}>
-        {character.tags.map((tag) => (
-          <Text key={tag} style={[styles.tag, { color: gradient[0] + "CC" }]}>{tag}</Text>
-        ))}
-      </View>
-    </View>
-  );
-}
-
 // ⚠️ 수정금지(승인필요) — 메인 화면
 export default function BTSCharacterSelectScreen() {
   const navigation = useNavigation<NativeStackNavigationProp<BTSStackParamList>>();
   const { setSelectedCharacter } = useBTS();
-  const { avatarSize, areaSize, innerSize, positions } = useCircleLayout();
-  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const insets = useSafeAreaInsets();
+  const { avatarSize, areaW, areaH, positions } = useEllipseLayout();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  // ref로 현재 selectedId 참조 → handleCharacterTap 레퍼런스 안정화 (React.memo 보존)
+  const selectedIdRef = useRef<string | null>(null);
+  selectedIdRef.current = selectedId;
 
-  const hoveredChar = useMemo(
-    () => hoveredId ? BTS_CHARACTERS.find((c) => c.id === hoveredId) || null : null,
-    [hoveredId]
-  );
-
-  const handleSelect = useCallback((char: BTSCharacter) => {
-    haptic("medium");
-    setSelectedCharacter(char);
-    haptic("success");
-    navigation.navigate("BTSPlaceCart");
+  // ⚠️ 수정금지(승인필요) — 2단계 탭: 1탭=선택 진입, 같은 캐릭터 2탭=확정
+  // deps에 selectedId 없음 → 안정 레퍼런스 → 7개 CharacterAvatar memo 유지
+  const handleCharacterTap = useCallback((charId: string) => {
+    const char = BTS_CHARACTERS.find((c) => c.id === charId);
+    if (!char) return;
+    if (selectedIdRef.current === charId) {
+      haptic("success");
+      setSelectedCharacter(char);
+      navigation.navigate("BTSPlaceCart");
+    } else {
+      haptic("light");
+      setSelectedId(charId);
+    }
   }, [setSelectedCharacter, navigation]);
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
-      {/* ⚠️ 수정금지(승인필요) — 상하 균등 여백, 수직 중앙 정렬 */}
-      <View style={styles.content}>
-        {/* 상단 타이틀 (원형 바로 위) */}
-        <View style={styles.titleWrap}>
-          <Text style={styles.titleLine}>누구랑</Text>
-          <Text style={styles.titleLine}>여행하고 싶으세요?</Text>
-        </View>
+      {/* 상단 타이틀 — 최대 크게, 상단 고정 */}
+      <View style={[styles.titleWrap, { top: insets.top + 24 }]}>
+        <Text style={styles.titleLine}>누구랑</Text>
+        <Text style={styles.titleLine}>여행하고 싶으세요?</Text>
+      </View>
 
-        {/* 원형 배치 + 중심 정보 */}
-        <View style={[styles.circleArea, { width: areaSize, height: areaSize }]}>
-          {/* 중심: 호버된 캐릭터 정보 */}
-          <View style={styles.centerWrap}>
-            <CenterInfo character={hoveredChar} />
-          </View>
-
-          {/* 7명 원형 배치 */}
+      {/* 타원 배치 영역 — 중앙 정렬 */}
+      <View style={styles.circleWrap}>
+        <View style={{ width: areaW, height: areaH, position: "relative" }}>
           {BTS_CHARACTERS.map((char, idx) => (
             <CharacterAvatar
               key={char.id}
               character={char}
-              isHovered={hoveredId === char.id}
-              isDimmed={hoveredId !== null && hoveredId !== char.id}
-              onSelect={() => handleSelect(char)}
-              onHoverIn={() => setHoveredId(char.id)}
-              onHoverOut={() => setHoveredId(null)}
+              isSelected={selectedId === char.id}
+              isDimmed={selectedId !== null && selectedId !== char.id}
+              onTap={handleCharacterTap}
               posX={positions[idx].x}
               posY={positions[idx].y}
               avatarSize={avatarSize}
-              innerSize={innerSize}
             />
           ))}
         </View>
@@ -263,75 +257,50 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#FFFFFF",
   },
-  // ⚠️ 수정금지(승인필요) — 상하 균등 여백
-  content: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  // ⚠️ 수정금지(승인필요) — 타이틀 (원형 바로 위, 콤팩트)
+  // ⚠️ 수정금지(승인필요) — 타이틀: 최대 크게(32pt) + 상단 고정 + 중앙 정렬
   titleWrap: {
+    position: "absolute",
+    left: 0,
+    right: 0,
     alignItems: "center",
-    marginBottom: 24,
+    zIndex: 10,
   },
   titleLine: {
-    fontSize: 18,
+    fontSize: 32,
     fontFamily: "Pretendard-Bold",
     fontWeight: "800",
     color: "#1A1A1A",
     textAlign: "center",
-    lineHeight: 26,
+    lineHeight: 42,
     letterSpacing: 0.3,
   },
-  // ⚠️ 수정금지(승인필요) — 원형 배치 영역
-  circleArea: {
-    position: "relative",
-    overflow: "visible",
-  },
-  // ⚠️ 수정금지(승인필요) — 중심 정보 영역 (호버 캐릭터)
-  centerWrap: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+  // ⚠️ 수정금지(승인필요) — 타원 영역: 화면 중앙 수직/수평, 타이틀과 자연 여백
+  circleWrap: {
+    flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    zIndex: 5,
-    pointerEvents: "none",
   },
-  centerInfo: {
-    alignItems: "center",
-  },
-  centerHint: {
-    fontSize: 11,
-    color: "#CCC",
-    fontWeight: "500",
-    letterSpacing: 0.5,
-  },
-  centerNameEn: {
-    fontSize: 16,
+  // ⚠️ 수정금지(승인필요) — 플로팅 텍스트: 배경 박스 없이 그림자로 떠있는 느낌
+  floatingNameEn: {
+    fontSize: 13,
+    color: "#FFFFFF",
     fontFamily: "Pretendard-Bold",
     fontWeight: "800",
-    letterSpacing: 0.5,
-    textAlign: "center",
+    letterSpacing: 1.3,
+    textTransform: "uppercase",
+    textShadowColor: "rgba(0,0,0,0.6)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
-  centerArchetype: {
+  floatingArchetype: {
     marginTop: 2,
-    fontSize: 11,
-    fontWeight: "500",
-    color: "#666",
-    textAlign: "center",
+    fontSize: 10,
+    color: "#FFFFFF",
+    fontFamily: "Pretendard-Bold",
+    opacity: 0.92,
     letterSpacing: 0.3,
-  },
-  tagRow: {
-    flexDirection: "row",
-    marginTop: 4,
-    gap: 4,
-  },
-  tag: {
-    fontSize: 9,
-    fontWeight: "600",
-    letterSpacing: 0.2,
+    textShadowColor: "rgba(0,0,0,0.6)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
   },
 });
