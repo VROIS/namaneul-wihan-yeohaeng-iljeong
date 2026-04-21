@@ -19,7 +19,7 @@ import Animated, {
 import { LinearGradient } from "expo-linear-gradient";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import * as Haptics from "expo-haptics";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
 import { BTS_CHARACTERS, type BTSCharacter } from "@/constants/bts-characters";
@@ -36,17 +36,19 @@ const haptic = (t: "light" | "medium" | "success") => {
   } catch {}
 };
 
-// ⚠️ 수정금지(승인필요) — 캐릭터 전신 일러스트 (require 하드코딩 유지)
-// 사용자 결정: 네트워크 URL 전환 안 함 (속도/안정성 우선)
-// iOS Expo Go dev 환경 미지원 허용, APK/TestFlight/App Store 프로덕션에서는 정상
-const CHAR_IMAGES: Record<string, any> = {
-  collector: require("../../../assets/images/bts-characters/bts_collector.png"),
-  romanticist: require("../../../assets/images/bts-characters/bts_romanticist.png"),
-  explorer: require("../../../assets/images/bts-characters/bts_explorer.png"),
-  challenger: require("../../../assets/images/bts-characters/bts_challenger.png"),
-  companion: require("../../../assets/images/bts-characters/bts_companion.png"),
-  recharger: require("../../../assets/images/bts-characters/bts_recharger.png"),
-  chiller: require("../../../assets/images/bts-characters/bts_chiller.png"),
+// ⚠️ 수정금지(승인필요) — 캐릭터 전신 일러스트 (GitHub raw URL, Screen D 패턴 통일)
+// 2026-04-21 require() 하드코딩 → URL 전환: iOS Expo Go/Replit Metro에서 require() 서빙 실패 확인
+// Screen D(BTSPlaceCartScreen)의 { uri: string } 네트워크 패턴이 모든 환경에서 정상 → 동일 패턴 적용
+// RN Image 기본 캐싱으로 최초 이후 즉시 로드, 프로덕션 APK/iOS 릴리즈 전부 호환
+const GH_RAW = "https://raw.githubusercontent.com/VROIS/namaneul-wihan-yeohaeng-iljeong/main/assets/images/bts-characters";
+const CHAR_IMAGES: Record<string, { uri: string }> = {
+  collector: { uri: `${GH_RAW}/bts_collector.png` },
+  romanticist: { uri: `${GH_RAW}/bts_romanticist.png` },
+  explorer: { uri: `${GH_RAW}/bts_explorer.png` },
+  challenger: { uri: `${GH_RAW}/bts_challenger.png` },
+  companion: { uri: `${GH_RAW}/bts_companion.png` },
+  recharger: { uri: `${GH_RAW}/bts_recharger.png` },
+  chiller: { uri: `${GH_RAW}/bts_chiller.png` },
 };
 
 const ANGLE_OFFSET = -Math.PI / 2;
@@ -222,6 +224,14 @@ export default function BTSCharacterSelectScreen() {
     [selectedId]
   );
 
+  // ⚠️ 수정금지(승인필요) — 복귀 시 초기화: Screen D → 뒤로가기 복귀하면 선택 해제
+  // useFocusEffect는 최초 진입 + 매 focus마다 실행 → 항상 "첫 출발 상태" 보장
+  useFocusEffect(
+    useCallback(() => {
+      setSelectedId(null);
+    }, [])
+  );
+
   // ⚠️ 수정금지(승인필요) — 2단계 탭: 1탭=overlay 등장, 같은 캐릭터 2탭=확정
   const handleCharacterTap = useCallback((charId: string) => {
     const char = BTS_CHARACTERS.find((c) => c.id === charId);
@@ -249,6 +259,17 @@ export default function BTSCharacterSelectScreen() {
       {/* ⚠️ 수정금지(승인필요) — 타원 영역: 타이틀과 100px 간격, 중앙 overlay는 동일 영역 내 absolute */}
       <View style={[styles.circleWrap, { marginTop: insets.top + TITLE_TOP_OFFSET + TITLE_HEIGHT + TITLE_TO_ELLIPSE_GAP }]}>
         <View style={{ width: areaW, height: areaH, position: "relative" }}>
+          {/* ⚠️ 수정금지(승인필요) — 배경 탭 취소: 선택 상태에서만 활성, 썸네일보다 낮은 z → 썸네일 탭은 정상 */}
+          {selectedId && (
+            <Pressable
+              style={StyleSheet.absoluteFillObject}
+              onPress={() => {
+                haptic("light");
+                setSelectedId(null);
+              }}
+            />
+          )}
+
           {BTS_CHARACTERS.map((char, idx) => (
             <CharacterAvatar
               key={char.id}
