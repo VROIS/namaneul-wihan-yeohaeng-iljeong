@@ -47,10 +47,14 @@ jobs:
 
       # 2026-04-21 수정: 커밋 메시지 특수문자(→, ?, " 등)로 shell arg 깨짐 방지
       # 환경변수로 전달 + 첫 줄만 추출 + 따옴표 제거
+      # workflow_dispatch는 head_commit.message 없음 → SHA 기반 fallback
       - name: Publish EAS Update
         env:
           COMMIT_MSG: ${{ github.event.head_commit.message }}
           EXPO_PUBLIC_DOMAIN: ${{ secrets.EXPO_PUBLIC_DOMAIN }}
         run: |
           SAFE_MSG=$(printf '%s' "$COMMIT_MSG" | head -n 1 | tr -d '"')
+          if [ -z "$SAFE_MSG" ]; then
+            SAFE_MSG="manual update ${GITHUB_SHA:0:7}"
+          fi
           eas update --branch main --message "$SAFE_MSG" --non-interactive
