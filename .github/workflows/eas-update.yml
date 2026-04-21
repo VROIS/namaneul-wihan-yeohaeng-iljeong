@@ -12,6 +12,8 @@ on:
       - '**.md'
       - 'docs/**'
       - '.github/**'
+  # 2026-04-21 추가: 수동 실행 지원 (지난 실패 복구용)
+  workflow_dispatch:
 
 jobs:
   update:
