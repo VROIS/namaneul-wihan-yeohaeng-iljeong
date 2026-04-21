@@ -121,6 +121,8 @@ const CharacterAvatar = React.memo(function CharacterAvatar({
       shadowOpacity: isSelected ? 0.55 : 0.2,
       shadowRadius: isSelected ? 20 : 12,
       elevation: isSelected ? 16 : 8,
+      // ⚠️ 수정금지(승인필요) — 2026-04-21 긴급: overlay(z20)보다 위로 올려 덮힘 영역 썸네일 탭 정상화
+      zIndex: 25,
     }, scaleStyle]}>
       <Pressable
         onPress={() => onTap(character.id)}
@@ -131,11 +133,11 @@ const CharacterAvatar = React.memo(function CharacterAvatar({
           overflow: "hidden",
         }}
       >
-        {/* 레이어 1: 어두운 그라디언트 베이스 (카카오 패턴 작동 조건) */}
-        <LinearGradient
-          colors={["rgba(20, 20, 40, 0.92)", "rgba(5, 9, 48, 0.98)"]}
-          style={StyleSheet.absoluteFillObject}
-        />
+        {/* ⚠️ 수정금지(승인필요) — 2026-04-21 인스타 스타일 전환:
+            - 레이어 1 (어두운 LinearGradient 베이스) 제거
+            - 레이어 4 (유리 오버레이 + 테두리) 제거
+            - 레이어 5 (상단 반사광/유리 엣지) 제거
+            이유: 사용자 피드백 "액자 정형화된 틀 느낌 제거" → 원형 clip만 유지, 이미지 자체로 인스타 느낌 */}
 
         {/* 레이어 2: 캐릭터 이미지 (전신 상단 40% 크롭) */}
         <Image
@@ -150,34 +152,13 @@ const CharacterAvatar = React.memo(function CharacterAvatar({
           resizeMode="cover"
         />
 
-        {/* 레이어 3: 미선택 시 어두운 오버레이 (선택 시 제거로 컬러 복귀) */}
+        {/* 레이어 3: 미선택 시 어두운 오버레이 (선택 시 제거로 컬러 복귀) — 기능성 유지 */}
         {!isSelected && (
           <View style={[
             StyleSheet.absoluteFillObject,
             { backgroundColor: isDimmed ? "rgba(30,30,30,0.65)" : "rgba(60,60,60,0.45)" },
           ]} />
         )}
-
-        {/* 레이어 4: 카카오 패턴 유리 오버레이 (Android 포함) */}
-        <View style={[
-          StyleSheet.absoluteFillObject,
-          {
-            backgroundColor: "rgba(255,255,255,0.10)",
-            borderRadius: avatarSize / 2,
-            borderWidth: isSelected ? 2 : 1,
-            borderColor: isSelected ? gradient[0] : "rgba(255,255,255,0.22)",
-          },
-        ]} />
-
-        {/* 레이어 5: 상단 반사광 (유리 엣지) */}
-        <View style={{
-          position: "absolute",
-          top: 0,
-          left: "18%",
-          right: "18%",
-          height: 0.6,
-          backgroundColor: "rgba(255,255,255,0.85)",
-        }} />
 
         {/* 레이어 6: 텍스트 오버레이 (캐릭터 위 하단 15% 영역, 프로포셔널) */}
         <View
@@ -284,12 +265,11 @@ export default function BTSCharacterSelectScreen() {
           ))}
 
           {/* ⚠️ 수정금지(승인필요) — 중앙 overlay: 선택 시 줌인 등장, key로 캐릭터 교체 시 재마운트 */}
-          {/* pointerEvents="none" — 탭 관통 (overlay가 썸네일/backdrop 탭을 먹지 않음) */}
+          {/* 2026-04-21 긴급: pointerEvents="none" 제거 — hero 탭 = confirm(navigate) 복원 (207b643 로직). 덮힘 구간 switch는 썸네일 zIndex:25로 해결 */}
           {selectedChar && (
             <Animated.View
               key={selectedChar.id}
               entering={ZoomIn.duration(300)}
-              pointerEvents="none"
               style={{
                 position: "absolute",
                 left: (areaW - heroSize) / 2,

@@ -124,29 +124,17 @@ const PlaceCard = React.memo(function PlaceCard({
         style={[
           styles.cardPressable,
           {
-            borderColor: isSelected ? tint : "rgba(255,255,255,0.5)",
-            borderWidth: isSelected ? 2.5 : 1,
+            // ⚠️ 수정금지(승인필요) — 2026-04-21 인스타 스타일 전환: 테두리 제거 (선택은 shadow glow로 구분)
+            borderWidth: 0,
             shadowColor: isSelected ? tint : "#000",
-            shadowOpacity: isSelected ? 0.35 : 0.1,
-            shadowRadius: isSelected ? 12 : 6,
+            shadowOpacity: isSelected ? 0.45 : 0.12,
+            shadowRadius: isSelected ? 14 : 6,
           },
         ]}
       >
-        {/* 블러 글라스 레이어 */}
-        <BlurView
-          intensity={45}
-          tint="light"
-          style={StyleSheet.absoluteFillObject}
-        />
+        {/* ⚠️ 수정금지(승인필요) — 2026-04-21 인스타 스타일: BlurView 글라스 + 흰 오버레이 제거, 사진 자체만 노출 */}
         {/* 사진 주인공 */}
         <Image source={img} style={styles.cardImage} resizeMode="cover" />
-        {/* 사진 위 살짝 뿌옇게 (0.15 극투명) */}
-        <View
-          style={[
-            StyleSheet.absoluteFillObject,
-            { backgroundColor: "rgba(255,255,255,0.15)" },
-          ]}
-        />
         {/* 하단 텍스트 영역 */}
         <View style={styles.cardLabel}>
           <Text numberOfLines={2} style={styles.cardLabelText}>
@@ -208,7 +196,7 @@ function CharacterHero({
         {
           width: w,
           height: h,
-          borderColor: gradient[0],
+          // ⚠️ 수정금지(승인필요) — 2026-04-21 인스타 스타일: borderColor 제거 (heroCard의 borderWidth 0). shadowColor만 유지
           shadowColor: gradient[0],
         },
         animStyle,
@@ -490,9 +478,9 @@ const styles = StyleSheet.create({
   },
 
   // 중앙 캐릭터 카드
+  // ⚠️ 수정금지(승인필요) — 2026-04-21 인스타 스타일: heroCard 테두리(borderWidth 3) 제거. 형태는 borderRadius 20 유지, shadow로 입체감
   heroCard: {
     borderRadius: 20,
-    borderWidth: 3,
     overflow: "hidden",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
