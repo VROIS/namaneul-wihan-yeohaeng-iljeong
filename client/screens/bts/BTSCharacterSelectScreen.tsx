@@ -9,8 +9,9 @@ import {
   useWindowDimensions,
   Pressable,
   StatusBar,
-  Image,
 } from "react-native";
+// ⚠️ 수정금지(승인필요) — 2026-04-21 expo-image로 교체: react-native Image는 newArchEnabled + Android Fresco 조합에서 일부 URL 로드 실패. DestinationDetailScreen 이 검증된 루트
+import { Image } from "expo-image";
 import Animated, {
   useAnimatedStyle,
   withSpring,
@@ -121,8 +122,7 @@ const CharacterAvatar = React.memo(function CharacterAvatar({
       shadowOpacity: isSelected ? 0.55 : 0.2,
       shadowRadius: isSelected ? 20 : 12,
       elevation: isSelected ? 16 : 8,
-      // ⚠️ 수정금지(승인필요) — 2026-04-21 긴급: overlay(z20)보다 위로 올려 덮힘 영역 썸네일 탭 정상화
-      zIndex: 25,
+      // ⚠️ 수정금지(승인필요) — 2026-04-21 회복: zIndex:25 제거 (01f53bf 에서 추가 후 hero가 뒤로 밀리는 회귀 발생). overlay(z20)가 시각 최상위 = 직전 정상 버전(207b643) 로직
     }, scaleStyle]}>
       <Pressable
         onPress={() => onTap(character.id)}
@@ -149,7 +149,7 @@ const CharacterAvatar = React.memo(function CharacterAvatar({
             width: avatarSize,
             height: avatarSize * 2.5,
           }}
-          resizeMode="cover"
+          contentFit="cover"
         />
 
         {/* 레이어 3: 미선택 시 어두운 오버레이 (선택 시 제거로 컬러 복귀) — 기능성 유지 */}

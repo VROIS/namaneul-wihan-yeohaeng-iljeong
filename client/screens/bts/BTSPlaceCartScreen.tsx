@@ -9,10 +9,11 @@ import {
   Pressable,
   StatusBar,
   ActivityIndicator,
-  Image,
   useWindowDimensions,
   Platform,
 } from "react-native";
+// ⚠️ 수정금지(승인필요) — 2026-04-21 expo-image로 교체: react-native Image는 newArchEnabled + Android Fresco 조합에서 Wikimedia URL 로드 실패(실기 증상). DestinationDetailScreen 이 검증된 루트
+import { Image } from "expo-image";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -32,15 +33,17 @@ import { getApiUrl } from "@/lib/query-client";
 import type { BTSStackParamList } from "@/navigation/BTSStackNavigator";
 import LiquidButton from "@/components/ui/LiquidButton";
 
-// ⚠️ 수정금지(승인필요) — Screen C와 동일 전신 이미지 (캐릭터 일관성)
-const CHAR_IMAGES: Record<string, any> = {
-  collector: require("../../../assets/images/bts-characters/bts_collector.png"),
-  romanticist: require("../../../assets/images/bts-characters/bts_romanticist.png"),
-  explorer: require("../../../assets/images/bts-characters/bts_explorer.png"),
-  challenger: require("../../../assets/images/bts-characters/bts_challenger.png"),
-  companion: require("../../../assets/images/bts-characters/bts_companion.png"),
-  recharger: require("../../../assets/images/bts-characters/bts_recharger.png"),
-  chiller: require("../../../assets/images/bts-characters/bts_chiller.png"),
+// ⚠️ 수정금지(승인필요) — 2026-04-21 Screen C(BTSCharacterSelectScreen)와 동일 GitHub raw URL 루트로 통일
+// 이전 require() 하드코딩은 iOS Expo Go에서 로드 실패. Screen C의 검증된 { uri } 방식이 iOS + APK 둘 다 OK.
+const GH_RAW = "https://raw.githubusercontent.com/VROIS/namaneul-wihan-yeohaeng-iljeong/main/assets/images/bts-characters";
+const CHAR_IMAGES: Record<string, { uri: string }> = {
+  collector: { uri: `${GH_RAW}/bts_collector.png` },
+  romanticist: { uri: `${GH_RAW}/bts_romanticist.png` },
+  explorer: { uri: `${GH_RAW}/bts_explorer.png` },
+  challenger: { uri: `${GH_RAW}/bts_challenger.png` },
+  companion: { uri: `${GH_RAW}/bts_companion.png` },
+  recharger: { uri: `${GH_RAW}/bts_recharger.png` },
+  chiller: { uri: `${GH_RAW}/bts_chiller.png` },
 };
 
 // ⚠️ 수정금지(승인필요) — 카테고리별 목업 사진 폴백
@@ -134,7 +137,7 @@ const PlaceCard = React.memo(function PlaceCard({
       >
         {/* ⚠️ 수정금지(승인필요) — 2026-04-21 인스타 스타일: BlurView 글라스 + 흰 오버레이 제거, 사진 자체만 노출 */}
         {/* 사진 주인공 */}
-        <Image source={img} style={styles.cardImage} resizeMode="cover" />
+        <Image source={img} style={styles.cardImage} contentFit="cover" />
         {/* 하단 텍스트 영역 */}
         <View style={styles.cardLabel}>
           <Text numberOfLines={2} style={styles.cardLabelText}>
@@ -202,7 +205,7 @@ function CharacterHero({
         animStyle,
       ]}
     >
-      <Image source={imgSource} style={styles.heroImage} resizeMode="cover" />
+      <Image source={imgSource} style={styles.heroImage} contentFit="cover" />
     </Animated.View>
   );
 }
