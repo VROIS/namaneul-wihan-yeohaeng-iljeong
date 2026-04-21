@@ -23,7 +23,7 @@ import * as Haptics from "expo-haptics";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
-import { BTS_CHARACTERS, type BTSCharacter } from "@/constants/bts-characters";
+import { BTS_CHARACTERS, BTS_CHARACTER_IMAGES, type BTSCharacter } from "@/constants/bts-characters";
 import { CharacterGradients } from "@/constants/bts-theme";
 import { useBTS } from "@/contexts/BTSContext";
 import type { BTSStackParamList } from "@/navigation/BTSStackNavigator";
@@ -35,21 +35,6 @@ const haptic = (t: "light" | "medium" | "success") => {
     else if (t === "medium") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     else Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   } catch {}
-};
-
-// ⚠️ 수정금지(승인필요) — 캐릭터 전신 일러스트 (GitHub raw URL, Screen D 패턴 통일)
-// 2026-04-21 require() 하드코딩 → URL 전환: iOS Expo Go/Replit Metro에서 require() 서빙 실패 확인
-// Screen D(BTSPlaceCartScreen)의 { uri: string } 네트워크 패턴이 모든 환경에서 정상 → 동일 패턴 적용
-// RN Image 기본 캐싱으로 최초 이후 즉시 로드, 프로덕션 APK/iOS 릴리즈 전부 호환
-const GH_RAW = "https://raw.githubusercontent.com/VROIS/namaneul-wihan-yeohaeng-iljeong/main/assets/images/bts-characters";
-const CHAR_IMAGES: Record<string, { uri: string }> = {
-  collector: { uri: `${GH_RAW}/bts_collector.png` },
-  romanticist: { uri: `${GH_RAW}/bts_romanticist.png` },
-  explorer: { uri: `${GH_RAW}/bts_explorer.png` },
-  challenger: { uri: `${GH_RAW}/bts_challenger.png` },
-  companion: { uri: `${GH_RAW}/bts_companion.png` },
-  recharger: { uri: `${GH_RAW}/bts_recharger.png` },
-  chiller: { uri: `${GH_RAW}/bts_chiller.png` },
 };
 
 const ANGLE_OFFSET = -Math.PI / 2;
@@ -141,7 +126,7 @@ const CharacterAvatar = React.memo(function CharacterAvatar({
 
         {/* 레이어 2: 캐릭터 이미지 (전신 상단 40% 크롭) */}
         <Image
-          source={CHAR_IMAGES[character.id]}
+          source={BTS_CHARACTER_IMAGES[character.id]}
           style={{
             position: "absolute",
             left: 0,

@@ -28,23 +28,11 @@ import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
 import { CharacterGradients } from "@/constants/bts-theme";
+import { BTS_CHARACTER_IMAGES } from "@/constants/bts-characters";
 import { useBTS, type BTSPlace, type BTSCity } from "@/contexts/BTSContext";
 import { getApiUrl } from "@/lib/query-client";
 import type { BTSStackParamList } from "@/navigation/BTSStackNavigator";
 import LiquidButton from "@/components/ui/LiquidButton";
-
-// ⚠️ 수정금지(승인필요) — 2026-04-21 Screen C(BTSCharacterSelectScreen)와 동일 GitHub raw URL 루트로 통일
-// 이전 require() 하드코딩은 iOS Expo Go에서 로드 실패. Screen C의 검증된 { uri } 방식이 iOS + APK 둘 다 OK.
-const GH_RAW = "https://raw.githubusercontent.com/VROIS/namaneul-wihan-yeohaeng-iljeong/main/assets/images/bts-characters";
-const CHAR_IMAGES: Record<string, { uri: string }> = {
-  collector: { uri: `${GH_RAW}/bts_collector.png` },
-  romanticist: { uri: `${GH_RAW}/bts_romanticist.png` },
-  explorer: { uri: `${GH_RAW}/bts_explorer.png` },
-  challenger: { uri: `${GH_RAW}/bts_challenger.png` },
-  companion: { uri: `${GH_RAW}/bts_companion.png` },
-  recharger: { uri: `${GH_RAW}/bts_recharger.png` },
-  chiller: { uri: `${GH_RAW}/bts_chiller.png` },
-};
 
 // ⚠️ 수정금지(승인필요) — 카테고리별 목업 사진 폴백
 // TODO: assets/images/bts-place-mocks/ 실제 이미지 수급 후 require() 로 교체
@@ -190,7 +178,7 @@ function CharacterHero({
     transform: [{ scale: scale.value }, { rotateZ: `${tilt.value}deg` }],
   }));
 
-  const imgSource = CHAR_IMAGES[characterId] || CHAR_IMAGES.collector;
+  const imgSource = BTS_CHARACTER_IMAGES[characterId] || BTS_CHARACTER_IMAGES.collector;
 
   return (
     <Animated.View

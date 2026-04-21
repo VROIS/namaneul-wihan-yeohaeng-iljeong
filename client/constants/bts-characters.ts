@@ -106,3 +106,16 @@ export const BTS_CHARACTERS: BTSCharacter[] = [
 export function getCharacterById(id: string): BTSCharacter | undefined {
   return BTS_CHARACTERS.find((c) => c.id === id);
 }
+
+// ⚠️ 수정금지(승인필요) — 캐릭터 전신 이미지 URL 매핑 (Screen 3/4 공유 소스)
+// iOS Expo Go의 require() 실패 회피용 GitHub raw URL. 이미지 변경 시 여기 한 곳만 수정
+const GH_RAW = "https://raw.githubusercontent.com/VROIS/namaneul-wihan-yeohaeng-iljeong/main/assets/images/bts-characters";
+export const BTS_CHARACTER_IMAGES: Record<string, { uri: string }> = {
+  collector: { uri: `${GH_RAW}/bts_collector.png` },
+  romanticist: { uri: `${GH_RAW}/bts_romanticist.png` },
+  explorer: { uri: `${GH_RAW}/bts_explorer.png` },
+  challenger: { uri: `${GH_RAW}/bts_challenger.png` },
+  companion: { uri: `${GH_RAW}/bts_companion.png` },
+  recharger: { uri: `${GH_RAW}/bts_recharger.png` },
+  chiller: { uri: `${GH_RAW}/bts_chiller.png` },
+};
