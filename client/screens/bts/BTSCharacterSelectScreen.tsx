@@ -284,10 +284,12 @@ export default function BTSCharacterSelectScreen() {
           ))}
 
           {/* ⚠️ 수정금지(승인필요) — 중앙 overlay: 선택 시 줌인 등장, key로 캐릭터 교체 시 재마운트 */}
+          {/* pointerEvents="none" — 탭 관통 (overlay가 썸네일/backdrop 탭을 먹지 않음) */}
           {selectedChar && (
             <Animated.View
               key={selectedChar.id}
               entering={ZoomIn.duration(300)}
+              pointerEvents="none"
               style={{
                 position: "absolute",
                 left: (areaW - heroSize) / 2,
