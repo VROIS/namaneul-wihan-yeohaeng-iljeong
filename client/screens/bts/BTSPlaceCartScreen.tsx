@@ -10,7 +10,7 @@ import {
   StatusBar,
   ActivityIndicator,
   useWindowDimensions,
-  Platform,
+  ScrollView,
 } from "react-native";
 // ⚠️ 수정금지(승인필요) — 2026-04-21 expo-image로 교체: react-native Image는 newArchEnabled + Android Fresco 조합에서 Wikimedia URL 로드 실패(실기 증상). DestinationDetailScreen 이 검증된 루트
 import { Image } from "expo-image";
@@ -64,12 +64,14 @@ function resolvePlaceImage(place: BTSPlace): { uri: string } {
 }
 
 // ⚠️ 수정금지(승인필요) — 장소 글라스 카드 (사진 내장 + 극투명)
+// ⚠️ 수정금지(승인필요) — 2026-04-22 onToggle/onLoaded 시그니처 안정화: PlaceCard 내부에서 place 전달 → 부모는 useCallback 가능 → React.memo 유지
 type PlaceCardProps = {
   place: BTSPlace;
   index: number;
   total: number;
   isSelected: boolean;
-  onToggle: () => void;
+  onToggle: (place: BTSPlace) => void;
+  onLoaded: () => void;
   radiusX: number;
   radiusY: number;
   tint: string;
@@ -81,6 +83,7 @@ const PlaceCard = React.memo(function PlaceCard({
   total,
   isSelected,
   onToggle,
+  onLoaded,
   radiusX,
   radiusY,
   tint,
@@ -121,7 +124,7 @@ const PlaceCard = React.memo(function PlaceCard({
             withSpring(0.9, { damping: 12, stiffness: 220 }),
             withSpring(1, { damping: 14, stiffness: 160 })
           );
-          onToggle();
+          onToggle(place);
         }}
         style={[
           styles.cardPressable,
@@ -144,9 +147,13 @@ const PlaceCard = React.memo(function PlaceCard({
           priority="high"
           cachePolicy="memory-disk"
           transition={200}
+          onLoad={onLoaded}
           onError={() => {
             if (retryCount < 2) {
               retryTimerRef.current = setTimeout(() => setRetryCount((c) => c + 1), 400);
+            } else {
+              // ⚠️ 수정금지(승인필요) — 2026-04-22 Part D: retry 소진 시에도 onLoaded 호출 (2차 배치 게이팅 데드락 방지). 실패해도 다음 4장은 렌더되어야 함
+              onLoaded();
             }
           }}
         />
@@ -221,17 +228,31 @@ function CharacterHero({
         source={imgSource}
         style={styles.heroImage}
         contentFit="cover"
-        priority="high"
+        priority="low"
         cachePolicy="memory-disk"
         transition={200}
+      />
+      {/* ⚠️ 수정금지(승인필요) — 2026-04-22 Part C: DIM 오버레이 (Screen 3 기본형과 동일). 캐릭터 어둡게 처리하여 앞쪽 8장 카드 가독성 확보. 캐릭터는 존재감만 */}
+      <View
+        style={[
+          StyleSheet.absoluteFillObject,
+          { backgroundColor: HERO_DIM_COLOR },
+        ]}
       />
     </Animated.View>
   );
 }
 
-// 카드 사이즈 상수
-const CARD_W = 86;
-const CARD_H = 116;
+// ⚠️ 수정금지(승인필요) — 2026-04-22 카드 9:16 세로 비율 + 꽉찬 느낌으로 확대 (사용자 스샷 피드백). 86x116 → 100x178
+const CARD_W = 100;
+const CARD_H = 178; // 100 * 16 / 9 = 177.77
+
+// ⚠️ 수정금지(승인필요) — 2026-04-22 Part D: 4+4 배치 로드 상수. Glide 동시성(~4) 회피. BATCH_SIZE=4, 총 8장
+const BATCH_SIZE = 4;
+const MAX_PLACES = 8;
+
+// ⚠️ 수정금지(승인필요) — 2026-04-22 Part C: 캐릭터 DIM 오버레이 색상 (Screen 3 기본형과 동일)
+const HERO_DIM_COLOR = "rgba(30,30,30,0.55)";
 
 // ⚠️ 수정금지(승인필요) — 메인 화면
 export default function BTSPlaceCartScreen() {
@@ -258,7 +279,24 @@ export default function BTSPlaceCartScreen() {
   const gradient = CharacterGradients[selectedCharacter?.id || "collector"];
   const tint = gradient[0];
 
-  const [hoveredId, setHoveredId] = useState<number | null>(null);
+  // ⚠️ 수정금지(승인필요) — 2026-04-22 Part D: 단일 카운터로 4+4 배치 게이팅. 배치 1 완료(>=4)→배치 2 렌더, 8장 완료→캐릭터 DIM mount. 2차 배치가 1차 완료 후에만 mount되므로 순서 보장
+  const [loadedCount, setLoadedCount] = useState(0);
+  const expectedCount = Math.min(topPlaces.length, MAX_PLACES);
+  const firstBatchDone = loadedCount >= Math.min(BATCH_SIZE, expectedCount);
+  // ⚠️ 수정금지(승인필요) — 2026-04-22 엣지케이스: API가 8장 미만 반환 시에도 캐릭터 mount되도록 expectedCount 기준. 도시별 place 수가 다를 수 있음
+  const allCardsLoaded = expectedCount > 0 && loadedCount >= expectedCount;
+
+  // ⚠️ 수정금지(승인필요) — 2026-04-22 Part D: topPlaces 변경 시 렌더 단계에서 동기 리셋. useEffect 리셋은 commit 후 실행되어 cache-hit으로 onLoad가 먼저 발화하는 레이스 존재. React 공식 derived-state 패턴으로 해결
+  const [prevTopPlaces, setPrevTopPlaces] = useState(topPlaces);
+  if (topPlaces !== prevTopPlaces) {
+    setPrevTopPlaces(topPlaces);
+    setLoadedCount(0);
+  }
+
+  // ⚠️ 수정금지(승인필요) — 2026-04-22 Part D: 카드 로드 완료 통보. Math.min으로 중복 onLoad 방어(cache hit + retry success 시). useCallback으로 안정화하여 PlaceCard React.memo 유지
+  const handleCardLoaded = useCallback(() => {
+    setLoadedCount((c) => Math.min(c + 1, MAX_PLACES));
+  }, []);
 
   // ⚠️ 수정금지(승인필요) — 공연 임박 순 상위 5개 도시 (폴백: btsRank 순)
   const cityButtons = useMemo(() => {
@@ -289,27 +327,6 @@ export default function BTSPlaceCartScreen() {
       })
       .finally(() => setIsLoadingPlaces(false));
   }, [selectedCharacter?.id, selectedCity?.id, baseUrl]);
-
-  // ⚠️ 수정금지(승인필요) — 2026-04-22 Android 동시성 완화: topPlaces 변경 시 이미지 URL을 순차로 prefetch
-  // 원인: 8장 병렬 fetch에서 Android OkHttp/Glide가 일부 연결 실패(Failed to load). 순차 prefetch로 동시성 회피 + disk 캐시 적재
-  // expo-image 공식 API: https://docs.expo.dev/versions/latest/sdk/image/#imageprefetchurl-cachepolicy
-  useEffect(() => {
-    if (!topPlaces.length) return;
-    let cancelled = false;
-    (async () => {
-      for (const p of topPlaces) {
-        if (cancelled) break;
-        try {
-          await Image.prefetch(resolvePlaceImage(p).uri, "memory-disk");
-        } catch {
-          // prefetch 실패는 무시 — 카드의 onError retry가 처리
-        }
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [topPlaces]);
 
   const handleNext = useCallback(() => {
     if (selectedPlaceIds.length >= 2) {
@@ -348,9 +365,9 @@ export default function BTSPlaceCartScreen() {
     const heroH = Math.min(availH * 0.58, 260);
     const heroW = heroH * (16 / 22); // 16:22 비율 유지
 
-    // 원주 배치 반지름 — 타원형(가로 넓고, 세로 짧음)
-    const radiusX = Math.min(availW * 0.42, 170);
-    const radiusY = Math.min(availH * 0.42, 200);
+    // ⚠️ 수정금지(승인필요) — 2026-04-22 모바일 overflow 해결: 카드 가장자리가 화면 안에 들어오도록 반지름 상한 축소. 캐릭터 DIM 뒷장과 겹침 허용(존재감만)
+    const radiusX = Math.min((availW - CARD_W) / 2 - 12, 130);
+    const radiusY = Math.min((availH - CARD_H) / 2 - 12, 180);
 
     return { heroW, heroH, radiusX, radiusY, availW, availH };
   }, [sw, sh, insets.top, insets.bottom]);
@@ -367,110 +384,139 @@ export default function BTSPlaceCartScreen() {
         end={{ x: 0.5, y: 1 }}
       />
 
-      {/* 뒤로가기 행 */}
-      <View style={[styles.backRow, { paddingTop: insets.top + 4 }]}>
-        <Pressable
-          onPress={() => navigation.goBack()}
-          style={styles.backBtn}
-          accessibilityLabel="뒤로가기"
-        >
-          <BlurView
-            intensity={40}
-            tint="light"
-            style={StyleSheet.absoluteFillObject}
-          />
-          <View
-            style={[
-              StyleSheet.absoluteFillObject,
-              { backgroundColor: "rgba(255,255,255,0.3)" },
-            ]}
-          />
-          <Text style={styles.backText}>←</Text>
-        </Pressable>
-      </View>
-
-      {/* 도시 버튼 5등분 (공연 임박 순) */}
-      <View style={styles.cityRow}>
-        {cityButtons.map((city) => (
-          <LiquidButton
-            key={city.id}
-            label={city.nameKo || city.nameEn}
-            size="md"
-            flex={1}
-            tint={tint}
-            variant={selectedCity?.id === city.id ? "selected" : "default"}
-            onPress={() => handleCityPick(city)}
-          />
-        ))}
-      </View>
-
-      {/* HERO 영역 — 중앙 캐릭터 + 8장 장소 카드 */}
-      <View style={styles.heroArea}>
-        {isLoadingPlaces ? (
-          <ActivityIndicator size="large" color={tint} />
-        ) : (
-          <>
-            {selectedCharacter && (
-              <CharacterHero
-                characterId={selectedCharacter.id}
-                gradient={gradient}
-                selectedCount={selectedCount}
-                w={hero.heroW}
-                h={hero.heroH}
-              />
-            )}
-            {topPlaces.map((place, i) => (
-              <PlaceCard
-                key={place.id}
-                place={place}
-                index={i}
-                total={topPlaces.length}
-                isSelected={selectedPlaceIds.includes(place.id)}
-                onToggle={() => handleTogglePlace(place)}
-                radiusX={hero.radiusX}
-                radiusY={hero.radiusY}
-                tint={tint}
-              />
-            ))}
-          </>
-        )}
-      </View>
-
-      {/* 에러 */}
-      {error && <Text style={styles.errorText}>{error}</Text>}
-
-      {/* 하단 — 게이지 + CTA "같이 떠나요" */}
-      <View style={[styles.bottomArea, { paddingBottom: insets.bottom + 16 }]}>
-        {/* 게이지 바 */}
-        <View style={styles.gaugeRow}>
-          <View style={styles.gaugeTrack}>
+      {/* ⚠️ 수정금지(승인필요) — 2026-04-22 Part B: 상단 고정존 (뒤로가기 + 도시 버튼). 여기까지만 고정, 이하 전부 스크롤 */}
+      <View>
+        <View style={[styles.backRow, { paddingTop: insets.top + 4 }]}>
+          <Pressable
+            onPress={() => navigation.goBack()}
+            style={styles.backBtn}
+            accessibilityLabel="뒤로가기"
+          >
+            <BlurView
+              intensity={40}
+              tint="light"
+              style={StyleSheet.absoluteFillObject}
+            />
             <View
               style={[
-                styles.gaugeFill,
-                {
-                  width: `${(selectedCount / 8) * 100}%`,
-                  backgroundColor: tint,
-                },
+                StyleSheet.absoluteFillObject,
+                { backgroundColor: "rgba(255,255,255,0.3)" },
               ]}
             />
-          </View>
-          <Text style={[styles.gaugeText, { color: tint }]}>
-            {selectedCount} / 8
-          </Text>
+            <Text style={styles.backText}>←</Text>
+          </Pressable>
         </View>
 
-        {/* CTA 버튼 */}
-        <Pressable onPress={handleNext} disabled={!canProceed}>
-          <LinearGradient
-            colors={canProceed ? [gradient[0], gradient[1]] : ["#CCCCCC", "#999999"]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={[styles.ctaBtn, !canProceed && { opacity: 0.5 }]}
-          >
-            <Text style={styles.ctaText}>같이 떠나요</Text>
-          </LinearGradient>
-        </Pressable>
+        <View style={styles.cityRow}>
+          {cityButtons.map((city) => (
+            <LiquidButton
+              key={city.id}
+              label={city.nameKo || city.nameEn}
+              size="md"
+              flex={1}
+              tint={tint}
+              variant={selectedCity?.id === city.id ? "selected" : "default"}
+              onPress={() => handleCityPick(city)}
+            />
+          ))}
+        </View>
       </View>
+
+      {/* ⚠️ 수정금지(승인필요) — 2026-04-22 Part B: 전체 스크롤존. 궤도 + 캐릭터 DIM 뒷장 + 게이지 + CTA 모두 포함 (하단 고정존 없음, 사용자 지시). 향후 추가 콘텐츠는 heroArea 아래/게이지 위에 삽입 */}
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: insets.bottom + 24 },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.heroArea}>
+          {isLoadingPlaces ? (
+            <ActivityIndicator size="large" color={tint} />
+          ) : (
+            <>
+              {/* ⚠️ 수정금지(승인필요) — 2026-04-22 Part C: 캐릭터 DIM 뒷장. 8장 카드 모두 로드 완료 후에만 mount → Glide 경합 원천 제거 */}
+              {allCardsLoaded && selectedCharacter && (
+                <CharacterHero
+                  characterId={selectedCharacter.id}
+                  gradient={gradient}
+                  selectedCount={selectedCount}
+                  w={hero.heroW}
+                  h={hero.heroH}
+                />
+              )}
+
+              {/* ⚠️ 수정금지(승인필요) — 2026-04-22 Part D: 1차 배치 (카드 0~BATCH_SIZE) — 먼저 렌더. handleCardLoaded 콜백으로 로드 완료 카운팅 */}
+              {topPlaces.slice(0, BATCH_SIZE).map((place, i) => (
+                <PlaceCard
+                  key={place.id}
+                  place={place}
+                  index={i}
+                  total={topPlaces.length}
+                  isSelected={selectedPlaceIds.includes(place.id)}
+                  onToggle={handleTogglePlace}
+                  onLoaded={handleCardLoaded}
+                  radiusX={hero.radiusX}
+                  radiusY={hero.radiusY}
+                  tint={tint}
+                />
+              ))}
+
+              {/* ⚠️ 수정금지(승인필요) — 2026-04-22 Part D: 2차 배치 (카드 BATCH_SIZE~MAX_PLACES) — 1차 4장 로드 완료 후에만 렌더. Glide ~4 동시성 초과 방지 */}
+              {firstBatchDone &&
+                topPlaces.slice(BATCH_SIZE, MAX_PLACES).map((place, i) => (
+                  <PlaceCard
+                    key={place.id}
+                    place={place}
+                    index={i + BATCH_SIZE}
+                    total={topPlaces.length}
+                    isSelected={selectedPlaceIds.includes(place.id)}
+                    onToggle={handleTogglePlace}
+                    onLoaded={handleCardLoaded}
+                    radiusX={hero.radiusX}
+                    radiusY={hero.radiusY}
+                    tint={tint}
+                  />
+                ))}
+            </>
+          )}
+        </View>
+
+        {/* 에러 */}
+        {error && <Text style={styles.errorText}>{error}</Text>}
+
+        {/* ⚠️ 수정금지(승인필요) — 2026-04-22 Part B: 게이지 + CTA를 스크롤 내부 embed (하단 고정존 폐기 — 사용자: "고정존 만들면 화면 나뉘어 답답함") */}
+        <View style={styles.bottomArea}>
+          <View style={styles.gaugeRow}>
+            <View style={styles.gaugeTrack}>
+              <View
+                style={[
+                  styles.gaugeFill,
+                  {
+                    width: `${(selectedCount / MAX_PLACES) * 100}%`,
+                    backgroundColor: tint,
+                  },
+                ]}
+              />
+            </View>
+            <Text style={[styles.gaugeText, { color: tint }]}>
+              {selectedCount} / {MAX_PLACES}
+            </Text>
+          </View>
+
+          <Pressable onPress={handleNext} disabled={!canProceed}>
+            <LinearGradient
+              colors={canProceed ? [gradient[0], gradient[1]] : ["#CCCCCC", "#999999"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={[styles.ctaBtn, !canProceed && { opacity: 0.5 }]}
+            >
+              <Text style={styles.ctaText}>같이 떠나요</Text>
+            </LinearGradient>
+          </Pressable>
+        </View>
+      </ScrollView>
     </View>
   );
 }
@@ -479,6 +525,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#FFFFFF",
+  },
+
+  // ⚠️ 수정금지(승인필요) — 2026-04-22 전체 스크롤 컨텐츠 여백. 하단 paddingBottom은 insets.bottom으로 런타임 추가
+  scrollContent: {
+    paddingTop: 0,
   },
 
   // ⚠️ 수정금지(승인필요) — 뒤로가기 행
@@ -512,16 +563,16 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
   },
 
-  // ⚠️ 수정금지(승인필요) — HERO 영역 (flex: 1로 모든 여유 공간 흡수)
+  // ⚠️ 수정금지(승인필요) — 2026-04-22 HERO 영역 (ScrollView 내부). flex:1 대신 minHeight로 궤도 공간 확보. radiusY(180) * 2 + CARD_H(178) + 여유 → ~540
   heroArea: {
-    flex: 1,
+    minHeight: 540,
     justifyContent: "center",
     alignItems: "center",
     position: "relative",
   },
 
   // 중앙 캐릭터 카드
-  // ⚠️ 수정금지(승인필요) — 2026-04-21 인스타 스타일: heroCard 테두리(borderWidth 3) 제거. 형태는 borderRadius 20 유지, shadow로 입체감
+  // ⚠️ 수정금지(승인필요) — 2026-04-22 Part C: zIndex 20 → 1 (카드 z:10 뒤로 이동). 캐릭터는 DIM 뒷장으로 존재감만, 8장 카드가 시각 주인공
   heroCard: {
     borderRadius: 20,
     overflow: "hidden",
@@ -530,7 +581,7 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 8,
     backgroundColor: "#FFFFFF",
-    zIndex: 20,
+    zIndex: 1,
   },
   heroImage: {
     width: "100%",
@@ -602,9 +653,10 @@ const styles = StyleSheet.create({
     fontFamily: "Pretendard-Bold",
   },
 
-  // ⚠️ 수정금지(승인필요) — 하단 영역
+  // ⚠️ 수정금지(승인필요) — 2026-04-22 게이지+CTA 영역 (스크롤 내부 embed). 하단 고정존 폐기 (사용자 지시). paddingBottom은 scrollContent에서 insets.bottom으로 처리
   bottomArea: {
     paddingHorizontal: 20,
+    paddingTop: 16,
     gap: 10,
   },
   gaugeRow: {
