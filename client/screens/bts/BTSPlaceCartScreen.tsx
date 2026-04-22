@@ -102,6 +102,11 @@ const PlaceCard = React.memo(function PlaceCard({
 
   const img = resolvePlaceImage(place);
 
+  // ⚠️ 수정금지(승인필요) — 2026-04-22 임시 디버그: layout 실측 + Image 로드 상태 추적
+  // 빈 카드 원인 특정용 (증거 수집 후 제거 예정)
+  const [dbgSize, setDbgSize] = useState<string>("?");
+  const [dbgStatus, setDbgStatus] = useState<string>("?");
+
   return (
     <Animated.View style={[styles.cardAbsolute, animStyle]}>
       <Pressable
@@ -111,6 +116,11 @@ const PlaceCard = React.memo(function PlaceCard({
             withSpring(1, { damping: 14, stiffness: 160 })
           );
           onToggle();
+        }}
+        onLayout={(e) => {
+          const w = Math.round(e.nativeEvent.layout.width);
+          const h = Math.round(e.nativeEvent.layout.height);
+          setDbgSize(`${w}x${h}`);
         }}
         style={[
           styles.cardPressable,
@@ -124,8 +134,20 @@ const PlaceCard = React.memo(function PlaceCard({
         ]}
       >
         {/* ⚠️ 수정금지(승인필요) — 2026-04-21 인스타 스타일: BlurView 글라스 + 흰 오버레이 제거, 사진 자체만 노출 */}
-        {/* 사진 주인공 */}
-        <Image source={img} style={styles.cardImage} contentFit="cover" />
+        {/* ⚠️ 수정금지(승인필요) — 2026-04-21 Android 타이밍/네트워크 대응: priority high + cachePolicy memory-disk + transition (8장 동시 fetch 시 일부 실패 방지) */}
+        <Image
+          source={img}
+          style={styles.cardImage}
+          contentFit="cover"
+          priority="high"
+          cachePolicy="memory-disk"
+          transition={200}
+          onLoad={() => setDbgStatus("L")}
+          onError={(e: any) => setDbgStatus("E:" + String(e?.error || "fail").slice(0, 8))}
+        />
+        {/* ⚠️ 수정금지(승인필요) — 2026-04-22 임시 디버그 라벨: "layout크기@위치좌표|로드상태"
+            사용자 실기 스크린샷으로 빈 카드 원인 특정. 증거 수집 후 제거 예정 */}
+        <Text style={debugLabelStyle}>{`${dbgSize}@${Math.round(x)},${Math.round(y)}|${dbgStatus}`}</Text>
         {/* 하단 텍스트 영역 */}
         <View style={styles.cardLabel}>
           <Text numberOfLines={2} style={styles.cardLabelText}>
@@ -142,6 +164,23 @@ const PlaceCard = React.memo(function PlaceCard({
     </Animated.View>
   );
 });
+
+// ⚠️ 수정금지(승인필요) — 2026-04-22 임시 디버그 라벨 스타일 (증거 수집 후 제거)
+const debugLabelStyle = {
+  position: "absolute" as const,
+  top: 2,
+  left: 2,
+  right: 2,
+  fontSize: 8,
+  color: "#000",
+  backgroundColor: "rgba(255,230,0,0.92)",
+  paddingHorizontal: 2,
+  paddingVertical: 1,
+  borderRadius: 2,
+  textAlign: "center" as const,
+  fontWeight: "700" as const,
+  zIndex: 99,
+};
 
 // ⚠️ 수정금지(승인필요) — 중앙 캐릭터 카드 (전신 + 장소 선택 시 반응 애니메이션)
 // TODO: Rive 파일(.riv) 수급 후 <Rive source=... />로 대체 — 캐릭터별 7종
@@ -193,7 +232,14 @@ function CharacterHero({
         animStyle,
       ]}
     >
-      <Image source={imgSource} style={styles.heroImage} contentFit="cover" />
+      <Image
+        source={imgSource}
+        style={styles.heroImage}
+        contentFit="cover"
+        priority="high"
+        cachePolicy="memory-disk"
+        transition={200}
+      />
     </Animated.View>
   );
 }
