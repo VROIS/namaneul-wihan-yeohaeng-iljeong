@@ -1,7 +1,7 @@
 // ⚠️ 수정금지(승인필요) — BTS Screen D: 장소 카트 (화이트 프리미엄 + 글라스 극투명 + HERO 최대화)
 // REF: Screen C BTSCharacterSelectScreen 패턴 / docs/design-references/button-system-shadcn.tsx
 // 2026-04-17 재설계 — 다크→화이트, 이모지 제거, 헤더 최소화, 도시 5등분, 캐릭터 Rive 폴백
-import React, { useEffect, useCallback, useMemo, useState } from "react";
+import React, { useEffect, useCallback, useMemo, useState, useRef } from "react";
 import {
   View,
   Text,
@@ -102,10 +102,16 @@ const PlaceCard = React.memo(function PlaceCard({
 
   const img = resolvePlaceImage(place);
 
-  // ⚠️ 수정금지(승인필요) — 2026-04-22 임시 디버그: layout 실측 + Image 로드 상태 추적
-  // 빈 카드 원인 특정용 (증거 수집 후 제거 예정)
-  const [dbgSize, setDbgSize] = useState<string>("?");
-  const [dbgStatus, setDbgStatus] = useState<string>("?");
+  // ⚠️ 수정금지(승인필요) — 2026-04-22 Android 네트워크 실패 onError 재시도 (최대 2회)
+  // 원인: Android OkHttp/Glide 8장 동시 fetch 중 일부 Failed to load. key 변경으로 재마운트하여 재fetch
+  // useRef로 timer 추적 + unmount cleanup → 언마운트된 컴포넌트 setState 방지
+  const [retryCount, setRetryCount] = useState(0);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    return () => {
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+    };
+  }, []);
 
   return (
     <Animated.View style={[styles.cardAbsolute, animStyle]}>
@@ -116,11 +122,6 @@ const PlaceCard = React.memo(function PlaceCard({
             withSpring(1, { damping: 14, stiffness: 160 })
           );
           onToggle();
-        }}
-        onLayout={(e) => {
-          const w = Math.round(e.nativeEvent.layout.width);
-          const h = Math.round(e.nativeEvent.layout.height);
-          setDbgSize(`${w}x${h}`);
         }}
         style={[
           styles.cardPressable,
@@ -136,18 +137,19 @@ const PlaceCard = React.memo(function PlaceCard({
         {/* ⚠️ 수정금지(승인필요) — 2026-04-21 인스타 스타일: BlurView 글라스 + 흰 오버레이 제거, 사진 자체만 노출 */}
         {/* ⚠️ 수정금지(승인필요) — 2026-04-21 Android 타이밍/네트워크 대응: priority high + cachePolicy memory-disk + transition (8장 동시 fetch 시 일부 실패 방지) */}
         <Image
+          key={`${place.id}-${retryCount}`}
           source={img}
           style={styles.cardImage}
           contentFit="cover"
           priority="high"
           cachePolicy="memory-disk"
           transition={200}
-          onLoad={() => setDbgStatus("L")}
-          onError={(e: any) => setDbgStatus("E:" + String(e?.error || "fail").slice(0, 8))}
+          onError={() => {
+            if (retryCount < 2) {
+              retryTimerRef.current = setTimeout(() => setRetryCount((c) => c + 1), 400);
+            }
+          }}
         />
-        {/* ⚠️ 수정금지(승인필요) — 2026-04-22 임시 디버그 라벨: "layout크기@위치좌표|로드상태"
-            사용자 실기 스크린샷으로 빈 카드 원인 특정. 증거 수집 후 제거 예정 */}
-        <Text style={debugLabelStyle}>{`${dbgSize}@${Math.round(x)},${Math.round(y)}|${dbgStatus}`}</Text>
         {/* 하단 텍스트 영역 */}
         <View style={styles.cardLabel}>
           <Text numberOfLines={2} style={styles.cardLabelText}>
@@ -164,23 +166,6 @@ const PlaceCard = React.memo(function PlaceCard({
     </Animated.View>
   );
 });
-
-// ⚠️ 수정금지(승인필요) — 2026-04-22 임시 디버그 라벨 스타일 (증거 수집 후 제거)
-const debugLabelStyle = {
-  position: "absolute" as const,
-  top: 2,
-  left: 2,
-  right: 2,
-  fontSize: 8,
-  color: "#000",
-  backgroundColor: "rgba(255,230,0,0.92)",
-  paddingHorizontal: 2,
-  paddingVertical: 1,
-  borderRadius: 2,
-  textAlign: "center" as const,
-  fontWeight: "700" as const,
-  zIndex: 99,
-};
 
 // ⚠️ 수정금지(승인필요) — 중앙 캐릭터 카드 (전신 + 장소 선택 시 반응 애니메이션)
 // TODO: Rive 파일(.riv) 수급 후 <Rive source=... />로 대체 — 캐릭터별 7종
@@ -304,6 +289,27 @@ export default function BTSPlaceCartScreen() {
       })
       .finally(() => setIsLoadingPlaces(false));
   }, [selectedCharacter?.id, selectedCity?.id, baseUrl]);
+
+  // ⚠️ 수정금지(승인필요) — 2026-04-22 Android 동시성 완화: topPlaces 변경 시 이미지 URL을 순차로 prefetch
+  // 원인: 8장 병렬 fetch에서 Android OkHttp/Glide가 일부 연결 실패(Failed to load). 순차 prefetch로 동시성 회피 + disk 캐시 적재
+  // expo-image 공식 API: https://docs.expo.dev/versions/latest/sdk/image/#imageprefetchurl-cachepolicy
+  useEffect(() => {
+    if (!topPlaces.length) return;
+    let cancelled = false;
+    (async () => {
+      for (const p of topPlaces) {
+        if (cancelled) break;
+        try {
+          await Image.prefetch(resolvePlaceImage(p).uri, "memory-disk");
+        } catch {
+          // prefetch 실패는 무시 — 카드의 onError retry가 처리
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [topPlaces]);
 
   const handleNext = useCallback(() => {
     if (selectedPlaceIds.length >= 2) {
