@@ -56,15 +56,13 @@ const haptic = (t: "light" | "medium" | "success") => {
   } catch {}
 };
 
-// ⚠️ 수정금지(승인필요) — 2026-04-23 Track 1b-⑩: 위키미디어/Unsplash URL 을 300px 썸네일로 변환.
-// Screen 4 카드 렌더 사이즈(100×178)에 맞춰 다운로드 부하 감소. 확대/숏폼은 원본 유지.
-// 정규식은 모듈 스코프 호이스팅 (Vercel RN js-hoist-regexp 규칙). /g flag 의 lastIndex 는 replace 사용 시 무관.
-const WIKIMEDIA_PX_REGEX = /\/\d+px-/;
+// ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1b-⑩ 회귀 수정:
+// Wikimedia /300px- 는 HTTP 400 반환 (300 이 표준 썸네일 크기 아님 확정) → 원본 URL 유지.
+// 사용자 실기 보고: iOS 8/8 → 0-1/8, AOS 3-4/8 → 0-1/8, 웹 브라우저 0-1/8 회귀 원인.
+// Unsplash `?w=300` 만 안전 (문서화된 쿼리 파라미터).
+// 향후 Wikimedia 축소 필요 시 검증된 사이즈(예 400/640/800) 재탐색 선행.
 const UNSPLASH_W_REGEX = /([?&])w=\d+/g;
 function toThumbnailUrl(url: string): string {
-  if (url.includes("upload.wikimedia.org/wikipedia/commons/thumb/")) {
-    return url.replace(WIKIMEDIA_PX_REGEX, "/300px-");
-  }
   if (url.includes("images.unsplash.com")) {
     return url.replace(UNSPLASH_W_REGEX, "$1w=300");
   }
