@@ -1,7 +1,7 @@
 // ⚠️ 수정금지(승인필요) — BTS Screen D: 장소 카트 (화이트 프리미엄 + 글라스 극투명 + HERO 최대화)
 // REF: Screen C BTSCharacterSelectScreen 패턴 / docs/design-references/button-system-shadcn.tsx
 // 2026-04-17 재설계 — 다크→화이트, 이모지 제거, 헤더 최소화, 도시 5등분, 캐릭터 Rive 폴백
-import React, { useEffect, useCallback, useMemo, useState, useRef } from "react";
+import React, { useEffect, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -56,65 +56,58 @@ const haptic = (t: "light" | "medium" | "success") => {
   } catch {}
 };
 
-// ⚠️ 수정금지(승인필요) — 장소 사진 소스 결정 (로우데이터 → 카테고리 목업 → 기본)
+// ⚠️ 수정금지(승인필요) — 2026-04-23 Track 1b-⑩: 위키미디어/Unsplash URL 을 300px 썸네일로 변환.
+// Screen 4 카드 렌더 사이즈(100×178)에 맞춰 다운로드 부하 감소. 확대/숏폼은 원본 유지.
+// 정규식은 모듈 스코프 호이스팅 (Vercel RN js-hoist-regexp 규칙). /g flag 의 lastIndex 는 replace 사용 시 무관.
+const WIKIMEDIA_PX_REGEX = /\/\d+px-/;
+const UNSPLASH_W_REGEX = /([?&])w=\d+/g;
+function toThumbnailUrl(url: string): string {
+  if (url.includes("upload.wikimedia.org/wikipedia/commons/thumb/")) {
+    return url.replace(WIKIMEDIA_PX_REGEX, "/300px-");
+  }
+  if (url.includes("images.unsplash.com")) {
+    return url.replace(UNSPLASH_W_REGEX, "$1w=300");
+  }
+  return url;
+}
+
+// ⚠️ 수정금지(승인필요) — 장소 사진 소스 결정 (로우데이터 → 카테고리 목업 → 기본). 썸네일 축소 자동 적용.
 function resolvePlaceImage(place: BTSPlace): { uri: string } {
-  if (place.imageUrl) return { uri: place.imageUrl };
-  const cat = place.seedCategory || "";
-  return { uri: CATEGORY_MOCK_URL[cat] || DEFAULT_MOCK_URL };
+  const url = place.imageUrl || CATEGORY_MOCK_URL[place.seedCategory || ""] || DEFAULT_MOCK_URL;
+  return { uri: toThumbnailUrl(url) };
 }
 
 // ⚠️ 수정금지(승인필요) — 장소 글라스 카드 (사진 내장 + 극투명)
-// ⚠️ 수정금지(승인필요) — 2026-04-22 onToggle/onLoaded 시그니처 안정화: PlaceCard 내부에서 place 전달 → 부모는 useCallback 가능 → React.memo 유지
+// ⚠️ 수정금지(승인필요) — 2026-04-23 Track 1b 통합: 게이트/재시도/x·y 애니메이션/과도 priority 제거.
+// 위치 posX·posY 는 부모에서 useMemo 사전 계산 후 prop 전달 → PlaceCard 안 Math.cos/Math.sin 호출 제거.
 type PlaceCardProps = {
   place: BTSPlace;
-  index: number;
-  total: number;
+  posX: number;
+  posY: number;
   isSelected: boolean;
   onToggle: (place: BTSPlace) => void;
-  onLoaded: () => void;
-  radiusX: number;
-  radiusY: number;
   tint: string;
 };
 
 const PlaceCard = React.memo(function PlaceCard({
   place,
-  index,
-  total,
+  posX,
+  posY,
   isSelected,
   onToggle,
-  onLoaded,
-  radiusX,
-  radiusY,
   tint,
 }: PlaceCardProps) {
-  // ⚠️ 수정금지(승인필요) — 타원형 원주 배치 (perspective 느낌)
-  const angle = (index / total) * (2 * Math.PI) - Math.PI / 2;
-  const x = Math.cos(angle) * radiusX;
-  const y = Math.sin(angle) * radiusY;
-
+  // ⚠️ 수정금지(승인필요) — 2026-04-23 Track 1b-③: scale 만 유지 (tap 피드백). x/y 이동 애니메이션 제거.
   const scale = useSharedValue(1);
-
   const animStyle = useAnimatedStyle(() => ({
     transform: [
-      { translateX: x - CARD_W / 2 },
-      { translateY: y - CARD_H / 2 },
+      { translateX: posX - CARD_W / 2 },
+      { translateY: posY - CARD_H / 2 },
       { scale: scale.value * (isSelected ? 1.05 : 1) },
     ],
   }));
 
   const img = resolvePlaceImage(place);
-
-  // ⚠️ 수정금지(승인필요) — 2026-04-22 Android 네트워크 실패 onError 재시도 (최대 2회)
-  // 원인: Android OkHttp/Glide 8장 동시 fetch 중 일부 Failed to load. key 변경으로 재마운트하여 재fetch
-  // useRef로 timer 추적 + unmount cleanup → 언마운트된 컴포넌트 setState 방지
-  const [retryCount, setRetryCount] = useState(0);
-  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    return () => {
-      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
-    };
-  }, []);
 
   return (
     <Animated.View style={[styles.cardAbsolute, animStyle]}>
@@ -129,7 +122,6 @@ const PlaceCard = React.memo(function PlaceCard({
         style={[
           styles.cardPressable,
           {
-            // ⚠️ 수정금지(승인필요) — 2026-04-21 인스타 스타일 전환: 테두리 제거 (선택은 shadow glow로 구분)
             borderWidth: 0,
             shadowColor: isSelected ? tint : "#000",
             shadowOpacity: isSelected ? 0.45 : 0.12,
@@ -137,33 +129,19 @@ const PlaceCard = React.memo(function PlaceCard({
           },
         ]}
       >
-        {/* ⚠️ 수정금지(승인필요) — 2026-04-21 인스타 스타일: BlurView 글라스 + 흰 오버레이 제거, 사진 자체만 노출 */}
-        {/* ⚠️ 수정금지(승인필요) — 2026-04-21 Android 타이밍/네트워크 대응: priority high + cachePolicy memory-disk + transition (8장 동시 fetch 시 일부 실패 방지) */}
+        {/* ⚠️ 수정금지(승인필요) — 2026-04-23 Track 1b-④⑥⑨: priority "normal" (8장 동시 high 경합 해소), retry/transition 제거 (Glide 동시성 악순환 차단). 실패는 조용히 수용. */}
         <Image
-          key={`${place.id}-${retryCount}`}
           source={img}
           style={styles.cardImage}
           contentFit="cover"
-          priority="high"
+          priority="normal"
           cachePolicy="memory-disk"
-          transition={200}
-          onLoad={onLoaded}
-          onError={() => {
-            if (retryCount < 2) {
-              retryTimerRef.current = setTimeout(() => setRetryCount((c) => c + 1), 400);
-            } else {
-              // ⚠️ 수정금지(승인필요) — 2026-04-22 Part D: retry 소진 시에도 onLoaded 호출 (2차 배치 게이팅 데드락 방지). 실패해도 다음 4장은 렌더되어야 함
-              onLoaded();
-            }
-          }}
         />
-        {/* 하단 텍스트 영역 */}
         <View style={styles.cardLabel}>
           <Text numberOfLines={2} style={styles.cardLabelText}>
             {place.nameKo || place.nameEn}
           </Text>
         </View>
-        {/* 선택 배지 */}
         {isSelected && (
           <View style={[styles.checkBadge, { backgroundColor: tint }]}>
             <Text style={styles.checkText}>✓</Text>
@@ -174,54 +152,31 @@ const PlaceCard = React.memo(function PlaceCard({
   );
 });
 
-// ⚠️ 수정금지(승인필요) — 중앙 캐릭터 카드 (전신 + 장소 선택 시 반응 애니메이션)
+// ⚠️ 수정금지(승인필요) — 중앙 캐릭터 카드 (전신 이미지만)
+// ⚠️ 수정금지(승인필요) — 2026-04-23 Track 1b-⑦⑧: DIM 오버레이 제거 + tilt/scale 애니메이션 제거 (selectedCount 의존 useEffect 삭제). 정적 표시로 GPU 레이어 축소.
 // TODO: Rive 파일(.riv) 수급 후 <Rive source=... />로 대체 — 캐릭터별 7종
 function CharacterHero({
   characterId,
   gradient,
-  selectedCount,
   w,
   h,
 }: {
   characterId: string;
   gradient: readonly [string, string];
-  selectedCount: number;
   w: number;
   h: number;
 }) {
-  const scale = useSharedValue(1);
-  const tilt = useSharedValue(0);
-
-  // 선택 개수 변화 시 반응 애니메이션 (Rive 폴백)
-  useEffect(() => {
-    if (selectedCount === 0) return;
-    scale.value = withSequence(
-      withSpring(1.08, { damping: 10, stiffness: 220 }),
-      withSpring(1, { damping: 14, stiffness: 160 })
-    );
-    tilt.value = withSequence(
-      withSpring(3, { damping: 10, stiffness: 220 }),
-      withSpring(0, { damping: 14, stiffness: 160 })
-    );
-  }, [selectedCount]);
-
-  const animStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }, { rotateZ: `${tilt.value}deg` }],
-  }));
-
   const imgSource = BTS_CHARACTER_IMAGES[characterId] || BTS_CHARACTER_IMAGES.collector;
 
   return (
-    <Animated.View
+    <View
       style={[
         styles.heroCard,
         {
           width: w,
           height: h,
-          // ⚠️ 수정금지(승인필요) — 2026-04-21 인스타 스타일: borderColor 제거 (heroCard의 borderWidth 0). shadowColor만 유지
           shadowColor: gradient[0],
         },
-        animStyle,
       ]}
     >
       <Image
@@ -232,14 +187,7 @@ function CharacterHero({
         cachePolicy="memory-disk"
         transition={200}
       />
-      {/* ⚠️ 수정금지(승인필요) — 2026-04-22 Part C: DIM 오버레이 (Screen 3 기본형과 동일). 캐릭터 어둡게 처리하여 앞쪽 8장 카드 가독성 확보. 캐릭터는 존재감만 */}
-      <View
-        style={[
-          StyleSheet.absoluteFillObject,
-          { backgroundColor: HERO_DIM_COLOR },
-        ]}
-      />
-    </Animated.View>
+    </View>
   );
 }
 
@@ -247,12 +195,8 @@ function CharacterHero({
 const CARD_W = 100;
 const CARD_H = 178; // 100 * 16 / 9 = 177.77
 
-// ⚠️ 수정금지(승인필요) — 2026-04-22 Part D: 4+4 배치 로드 상수. Glide 동시성(~4) 회피. BATCH_SIZE=4, 총 8장
-const BATCH_SIZE = 4;
+// ⚠️ 수정금지(승인필요) — 2026-04-23 Track 1b-①: 게이팅 제거로 BATCH_SIZE 불필요. 총 장수만 유지.
 const MAX_PLACES = 8;
-
-// ⚠️ 수정금지(승인필요) — 2026-04-22 Part C: 캐릭터 DIM 오버레이 색상 (Screen 3 기본형과 동일)
-const HERO_DIM_COLOR = "rgba(30,30,30,0.55)";
 
 // ⚠️ 수정금지(승인필요) — 메인 화면
 export default function BTSPlaceCartScreen() {
@@ -279,24 +223,9 @@ export default function BTSPlaceCartScreen() {
   const gradient = CharacterGradients[selectedCharacter?.id || "collector"];
   const tint = gradient[0];
 
-  // ⚠️ 수정금지(승인필요) — 2026-04-22 Part D: 단일 카운터로 4+4 배치 게이팅. 배치 1 완료(>=4)→배치 2 렌더, 8장 완료→캐릭터 DIM mount. 2차 배치가 1차 완료 후에만 mount되므로 순서 보장
-  const [loadedCount, setLoadedCount] = useState(0);
-  const expectedCount = Math.min(topPlaces.length, MAX_PLACES);
-  const firstBatchDone = loadedCount >= Math.min(BATCH_SIZE, expectedCount);
-  // ⚠️ 수정금지(승인필요) — 2026-04-22 엣지케이스: API가 8장 미만 반환 시에도 캐릭터 mount되도록 expectedCount 기준. 도시별 place 수가 다를 수 있음
-  const allCardsLoaded = expectedCount > 0 && loadedCount >= expectedCount;
-
-  // ⚠️ 수정금지(승인필요) — 2026-04-22 Part D: topPlaces 변경 시 렌더 단계에서 동기 리셋. useEffect 리셋은 commit 후 실행되어 cache-hit으로 onLoad가 먼저 발화하는 레이스 존재. React 공식 derived-state 패턴으로 해결
-  const [prevTopPlaces, setPrevTopPlaces] = useState(topPlaces);
-  if (topPlaces !== prevTopPlaces) {
-    setPrevTopPlaces(topPlaces);
-    setLoadedCount(0);
-  }
-
-  // ⚠️ 수정금지(승인필요) — 2026-04-22 Part D: 카드 로드 완료 통보. Math.min으로 중복 onLoad 방어(cache hit + retry success 시). useCallback으로 안정화하여 PlaceCard React.memo 유지
-  const handleCardLoaded = useCallback(() => {
-    setLoadedCount((c) => Math.min(c + 1, MAX_PLACES));
-  }, []);
+  // ⚠️ 수정금지(승인필요) — 2026-04-23 Track 1b-①: 캐스케이드 마운트 게이트 전체 제거.
+  // 제거 대상: loadedCount / prevTopPlaces / firstBatchDone / allCardsLoaded / handleCardLoaded
+  // 이유: 게이트가 렌더 블로킹 유발(Screen 3 대비 느림 주원인). Screen 3 처럼 즉시 레이아웃 + 이미지만 비동기 로드.
 
   // ⚠️ 수정금지(승인필요) — 공연 임박 순 상위 5개 도시 (폴백: btsRank 순)
   const cityButtons = useMemo(() => {
@@ -372,6 +301,18 @@ export default function BTSPlaceCartScreen() {
     return { heroW, heroH, radiusX, radiusY, availW, availH };
   }, [sw, sh, insets.top, insets.bottom]);
 
+  // ⚠️ 수정금지(승인필요) — 2026-04-23 Track 1b-②: 궤도 위치(angle/x/y) 사전 계산. PlaceCard 안 Math.cos/Math.sin 호출 제거, 렌더마다 재계산 방지.
+  const positions = useMemo(() => {
+    const total = Math.min(topPlaces.length, MAX_PLACES);
+    return Array.from({ length: total }, (_, i) => {
+      const angle = (i / total) * (2 * Math.PI) - Math.PI / 2;
+      return {
+        x: Math.cos(angle) * hero.radiusX,
+        y: Math.sin(angle) * hero.radiusY,
+      };
+    });
+  }, [topPlaces.length, hero.radiusX, hero.radiusY]);
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
@@ -436,49 +377,28 @@ export default function BTSPlaceCartScreen() {
             <ActivityIndicator size="large" color={tint} />
           ) : (
             <>
-              {/* ⚠️ 수정금지(승인필요) — 2026-04-22 Part C: 캐릭터 DIM 뒷장. 8장 카드 모두 로드 완료 후에만 mount → Glide 경합 원천 제거 */}
-              {allCardsLoaded && selectedCharacter && (
+              {/* ⚠️ 수정금지(승인필요) — 2026-04-23 Track 1b-①: 히어로 즉시 마운트 (allCardsLoaded 게이트 제거). Screen 3 패턴 */}
+              {selectedCharacter && (
                 <CharacterHero
                   characterId={selectedCharacter.id}
                   gradient={gradient}
-                  selectedCount={selectedCount}
                   w={hero.heroW}
                   h={hero.heroH}
                 />
               )}
 
-              {/* ⚠️ 수정금지(승인필요) — 2026-04-22 Part D: 1차 배치 (카드 0~BATCH_SIZE) — 먼저 렌더. handleCardLoaded 콜백으로 로드 완료 카운팅 */}
-              {topPlaces.slice(0, BATCH_SIZE).map((place, i) => (
+              {/* ⚠️ 수정금지(승인필요) — 2026-04-23 Track 1b-①②: 8장 카드 일괄 렌더 (4+4 배치 게이팅 제거). positions 사전 계산 전달 */}
+              {topPlaces.slice(0, MAX_PLACES).map((place, i) => (
                 <PlaceCard
                   key={place.id}
                   place={place}
-                  index={i}
-                  total={topPlaces.length}
+                  posX={positions[i].x}
+                  posY={positions[i].y}
                   isSelected={selectedPlaceIds.includes(place.id)}
                   onToggle={handleTogglePlace}
-                  onLoaded={handleCardLoaded}
-                  radiusX={hero.radiusX}
-                  radiusY={hero.radiusY}
                   tint={tint}
                 />
               ))}
-
-              {/* ⚠️ 수정금지(승인필요) — 2026-04-22 Part D: 2차 배치 (카드 BATCH_SIZE~MAX_PLACES) — 1차 4장 로드 완료 후에만 렌더. Glide ~4 동시성 초과 방지 */}
-              {firstBatchDone &&
-                topPlaces.slice(BATCH_SIZE, MAX_PLACES).map((place, i) => (
-                  <PlaceCard
-                    key={place.id}
-                    place={place}
-                    index={i + BATCH_SIZE}
-                    total={topPlaces.length}
-                    isSelected={selectedPlaceIds.includes(place.id)}
-                    onToggle={handleTogglePlace}
-                    onLoaded={handleCardLoaded}
-                    radiusX={hero.radiusX}
-                    radiusY={hero.radiusY}
-                    tint={tint}
-                  />
-                ))}
             </>
           )}
         </View>
