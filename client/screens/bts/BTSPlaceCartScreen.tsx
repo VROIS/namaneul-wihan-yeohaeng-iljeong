@@ -1,7 +1,7 @@
 // ⚠️ 수정금지(승인필요) — BTS Screen D: 장소 카트 (화이트 프리미엄 + 글라스 극투명 + HERO 최대화)
 // REF: Screen C BTSCharacterSelectScreen 패턴 / docs/design-references/button-system-shadcn.tsx
 // 2026-04-17 재설계 — 다크→화이트, 이모지 제거, 헤더 최소화, 도시 5등분, 캐릭터 Rive 폴백
-import React, { useEffect, useCallback, useMemo, useState, useRef } from "react";
+import React, { useEffect, useCallback, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -33,19 +33,6 @@ import { useBTS, type BTSPlace, type BTSCity } from "@/contexts/BTSContext";
 import { getApiUrl } from "@/lib/query-client";
 import type { BTSStackParamList } from "@/navigation/BTSStackNavigator";
 import LiquidButton from "@/components/ui/LiquidButton";
-
-// ⚠️ 수정금지(승인필요) — 카테고리별 목업 사진 폴백
-// TODO: assets/images/bts-place-mocks/ 실제 이미지 수급 후 require() 로 교체
-// 현재는 imageUrl이 null일 때 캐릭터 대표 이미지 재활용 (임시)
-const CATEGORY_MOCK_URL: Record<string, string> = {
-  attraction: "https://images.unsplash.com/photo-1566127992631-137a642a90f4?w=400",
-  healing: "https://images.unsplash.com/photo-1540541338287-41700207dee6?w=400",
-  restaurant: "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=400",
-  hotspot: "https://images.unsplash.com/photo-1470004914212-05527e49370b?w=400",
-  adventure: "https://images.unsplash.com/photo-1551632811-561732d1e306?w=400",
-};
-const DEFAULT_MOCK_URL =
-  "https://images.unsplash.com/photo-1488085061387-422e29b40080?w=400";
 
 // ⚠️ 수정금지(승인필요) — Haptics 유틸 (Screen C와 동일)
 const haptic = (t: "light" | "medium" | "success") => {
@@ -79,28 +66,21 @@ function toCardThumbUrl(url: string): string {
   return url;
 }
 
-// ⚠️ 수정금지(승인필요) — 장소 사진 소스 결정 (로우데이터 → 카테고리 목업 → 기본). 카드 썸네일 사이즈 자동 적용.
-// forceFallback=true 시 원본 imageUrl 건너뛰고 카테고리 목업 사용 (Track 1c 실패/타임아웃 케이스).
-function resolvePlaceImage(place: BTSPlace, forceFallback = false): { uri: string } {
-  const mock = CATEGORY_MOCK_URL[place.seedCategory || ""] || DEFAULT_MOCK_URL;
-  const url = forceFallback ? mock : (place.imageUrl || mock);
-  return { uri: toCardThumbUrl(url) };
+// ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1g: 스톡 폴백 제거. imageUrl 없으면 undefined → 빈 카드. 가짜 스톡 사진 절대 노출 안 함.
+function resolvePlaceImage(place: BTSPlace): { uri: string } | undefined {
+  if (!place.imageUrl) return undefined;
+  return { uri: toCardThumbUrl(place.imageUrl) };
 }
 
-// ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1c: 이미지 로드 타임아웃 (ms). 측정 기반 2500ms = 병렬 실측 430ms + 모바일 마진. 사용자 3초 관용 한계 내.
-const IMAGE_LOAD_TIMEOUT_MS = 2500;
-
 // ⚠️ 수정금지(승인필요) — 장소 글라스 카드 (사진 내장 + 극투명)
-// ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1c: Wait-for-Complete + Fallback. onLoad/onError/timeout 3경로로 readyIds 부모에 보고. 실패 시 CATEGORY_MOCK_URL 교체.
+// ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1g: 자해 타임아웃 제거. Glide 가 완성할 때까지 무조건 대기. onLoad → readyIds 부모 통보.
 type PlaceCardProps = {
   place: BTSPlace;
   posX: number;
   posY: number;
   isSelected: boolean;
-  isFailed: boolean;
   onToggle: (place: BTSPlace) => void;
   onReady: (id: number) => void;
-  onFailed: (id: number) => void;
   tint: string;
 };
 
@@ -109,10 +89,8 @@ const PlaceCard = React.memo(function PlaceCard({
   posX,
   posY,
   isSelected,
-  isFailed,
   onToggle,
   onReady,
-  onFailed,
   tint,
 }: PlaceCardProps) {
   // ⚠️ 수정금지(승인필요) — 2026-04-23 Track 1b-③: scale 만 유지 (tap 피드백). x/y 이동 애니메이션 제거.
@@ -125,21 +103,8 @@ const PlaceCard = React.memo(function PlaceCard({
     ],
   }));
 
-  // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1c: 로드 성공 여부 추적. 타임아웃이 성공 후 덮어쓰기 방지 (실제 이미지를 폴백으로 교체 막음).
-  const loadedRef = useRef(false);
-
-  // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1c: 2500ms 타임아웃 → 아직 로드 안 됐으면 onFailed 강제 호출 (영구 404 URL 대응).
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (!loadedRef.current) {
-        onFailed(place.id);
-      }
-    }, IMAGE_LOAD_TIMEOUT_MS);
-    return () => clearTimeout(timer);
-  }, [place.id, onFailed]);
-
-  // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1c: 실패 시 resolvePlaceImage 의 forceFallback 플래그로 카테고리 목업 강제.
-  const img = resolvePlaceImage(place, isFailed);
+  // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1g: 폴백 스왑 없음. imageUrl 없으면 undefined → 빈 카드 노출.
+  const img = resolvePlaceImage(place);
 
   return (
     <Animated.View style={[styles.cardAbsolute, animStyle]}>
@@ -161,22 +126,14 @@ const PlaceCard = React.memo(function PlaceCard({
           },
         ]}
       >
-        {/* ⚠️ 수정금지(승인필요) — 2026-04-23 Track 1b-④⑥⑨ + 2026-04-24 Track 1c: priority "normal" 통일, retry/transition 없음. onLoad/onError 로 부모 상태 통지. */}
+        {/* ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1g: 타임아웃/폴백/onError 핸들러 전부 제거. Glide 가 완성할 때까지 무조건 대기. onLoad 만 부모 통보. */}
         <Image
           source={img}
           style={styles.cardImage}
           contentFit="cover"
           priority="normal"
           cachePolicy="memory-disk"
-          onLoad={() => {
-            loadedRef.current = true;
-            onReady(place.id);
-          }}
-          onError={() => {
-            if (!loadedRef.current) {
-              onFailed(place.id);
-            }
-          }}
+          onLoad={() => onReady(place.id)}
         />
         <View style={styles.cardLabel}>
           <Text numberOfLines={2} style={styles.cardLabelText}>
@@ -264,38 +221,24 @@ export default function BTSPlaceCartScreen() {
   const gradient = CharacterGradients[selectedCharacter?.id || "collector"];
   const tint = gradient[0];
 
-  // ⚠️ 수정금지(승인필요) — 2026-04-23 Track 1b-①: 캐스케이드 마운트 게이트 제거 (영구).
-  // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1c: Wait-for-Complete 상태 (8장 모두 로드/폴백 완료 후 노출).
-  // 사용자 원칙: "완전치 않은 것은 안 보여주는 것만 못함" → 8/8 readyIds 도달 전에는 스피너.
+  // ⚠️ 수정금지(승인필요) — 2026-04-23 Track 1b-①: 캐스케이드 마운트 게이트 제거.
+  // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1g: failedIds/타임아웃/폴백 모두 제거. 실제 이미지 완성까지 무조건 대기 (안전장치 0).
+  // 사용자 원칙: "선택지 없이 무조건 완성 될때까지 기다림" → 8/8 실사진 readyIds 도달 전엔 스피너 영구.
   const [readyIds, setReadyIds] = useState<Set<number>>(() => new Set());
-  const [failedIds, setFailedIds] = useState<Set<number>>(() => new Set());
   const expectedCount = Math.min(topPlaces.length, MAX_PLACES);
   const allReady = expectedCount > 0 && readyIds.size >= expectedCount;
 
-  // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1c: topPlaces 변경 시 Set 리셋. useEffect 내부 (렌더 단계 리셋 레이스 방지, 이전 L289-294 버그 교훈).
+  // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1g: 내용 기반 키로 리셋 (참조 비교 시 fetch마다 새 배열 → 불필요 리셋 + 스피너 재노출 방지).
+  const topPlacesKey = useMemo(
+    () => topPlaces.slice(0, MAX_PLACES).map((p) => p.id).join(","),
+    [topPlaces]
+  );
   useEffect(() => {
     setReadyIds(new Set());
-    setFailedIds(new Set());
-  }, [topPlaces]);
+  }, [topPlacesKey]);
 
-  // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1c: 로드 성공 통보. useCallback 으로 안정화하여 PlaceCard React.memo 유지.
+  // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1g: 로드 성공 통보만 유지. useCallback 으로 PlaceCard React.memo 안정화.
   const handleReady = useCallback((id: number) => {
-    setReadyIds((prev) => {
-      if (prev.has(id)) return prev;
-      const next = new Set(prev);
-      next.add(id);
-      return next;
-    });
-  }, []);
-
-  // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1c: 실패/타임아웃 통보. failedIds + readyIds 양쪽 추가 (폴백도 완료로 카운트).
-  const handleFailed = useCallback((id: number) => {
-    setFailedIds((prev) => {
-      if (prev.has(id)) return prev;
-      const next = new Set(prev);
-      next.add(id);
-      return next;
-    });
     setReadyIds((prev) => {
       if (prev.has(id)) return prev;
       const next = new Set(prev);
@@ -482,10 +425,8 @@ export default function BTSPlaceCartScreen() {
                     posX={positions[i].x}
                     posY={positions[i].y}
                     isSelected={selectedPlaceIds.includes(place.id)}
-                    isFailed={failedIds.has(place.id)}
                     onToggle={handleTogglePlace}
                     onReady={handleReady}
-                    onFailed={handleFailed}
                     tint={tint}
                   />
                 ))}
