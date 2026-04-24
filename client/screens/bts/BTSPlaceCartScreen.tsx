@@ -418,18 +418,21 @@ export default function BTSPlaceCartScreen() {
                   />
                 )}
 
-                {topPlaces.slice(0, MAX_PLACES).map((place, i) => (
-                  <PlaceCard
-                    key={place.id}
-                    place={place}
-                    posX={positions[i].x}
-                    posY={positions[i].y}
-                    isSelected={selectedPlaceIds.includes(place.id)}
-                    onToggle={handleTogglePlace}
-                    onReady={handleReady}
-                    tint={tint}
-                  />
-                ))}
+                {/* ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1h: 순차 마운트. 카드 i 는 i-1 까지 로드 완료 후에만 마운트. Glide 동시성 8개 → Wikimedia Varnish rate-limit (429) 회피. */}
+                {topPlaces.slice(0, MAX_PLACES).map((place, i) =>
+                  i <= readyIds.size ? (
+                    <PlaceCard
+                      key={place.id}
+                      place={place}
+                      posX={positions[i].x}
+                      posY={positions[i].y}
+                      isSelected={selectedPlaceIds.includes(place.id)}
+                      onToggle={handleTogglePlace}
+                      onReady={handleReady}
+                      tint={tint}
+                    />
+                  ) : null
+                )}
               </View>
             </>
           )}
