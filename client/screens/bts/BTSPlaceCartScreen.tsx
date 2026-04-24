@@ -19,6 +19,7 @@ import Animated, {
   useAnimatedStyle,
   withSpring,
   withSequence,
+  withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -66,9 +67,21 @@ function toCardThumbUrl(url: string): string {
   return url;
 }
 
-// ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1i: Wikimedia User-Agent 정책 준수.
-// 기본 Glide UA ("okhttp/...") → Wikimedia 소프트 블록 가능. iOS SDWebImage 는 bundle-id 포함 UA 로 통과.
-// 공식 정책: https://meta.wikimedia.org/wiki/User-Agent_policy (식별 가능 UA 필수)
+// ⚠️ 수정금지(승인필요) — 🔑 핵심 로직 (2026-04-24 24시간 연구 끝 발견)
+// ═══════════════════════════════════════════════════════════════════════════
+// 배경: AOS Samsung A36 5G 에서 Wikimedia 이미지 5/8 조용히 실패. iOS 는 100%. 같은 URL.
+// 24시간 추측 여정: 타임아웃 2500ms → 스톡 폴백 → rate-limit → 순차 마운트 — 전부 틀림.
+// 진짜 원인: Wikimedia 공식 User-Agent 정책.
+//   - https://meta.wikimedia.org/wiki/User-Agent_policy
+//   - "All API requests must have a distinguishing User-Agent header.
+//      Anonymous UAs may be blocked."
+//   - Glide 기본 UA = "okhttp/..." (식별 불가) → Wikimedia 소프트 블록
+//   - iOS SDWebImage = bundle-id 포함 → 정책 통과 → 정상 작동
+// 해결: Wikimedia URL 에만 명시적 식별 UA 부착 → AOS 8/8 3초 (즉시 해결)
+// 교훈: "플랫폼별 실패" 증상 = 공식 문서 3분 리서치. CLAUDE.md 제1/12조 엄수.
+// ═══════════════════════════════════════════════════════════════════════════
+// 메인앱 적용 주의: 메인앱 이미지 소스는 Wikimedia 외 (Google Places/Unsplash 등).
+// 각 소스의 공식 UA 정책 별도 확인 후 대응 (Track 2 조사 필요).
 const WIKIMEDIA_UA = "VibeTrip/1.0 (contact@vibetrip.app) Expo/54";
 
 // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1g: 스톡 폴백 제거. imageUrl 없으면 undefined → 빈 카드. 가짜 스톡 사진 절대 노출 안 함.
@@ -139,12 +152,14 @@ const PlaceCard = React.memo(function PlaceCard({
         ]}
       >
         {/* ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1g: 타임아웃/폴백/onError 핸들러 전부 제거. Glide 가 완성할 때까지 무조건 대기. onLoad 만 부모 통보. */}
+        {/* ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1j: transition={150} 으로 이미지 로드 시 부드러운 fade-in (깝빡 현상 완화). */}
         <Image
           source={img}
           style={styles.cardImage}
           contentFit="cover"
           priority="normal"
           cachePolicy="memory-disk"
+          transition={150}
           onLoad={() => onReady(place.id)}
         />
         <View style={styles.cardLabel}>
@@ -248,6 +263,13 @@ export default function BTSPlaceCartScreen() {
   useEffect(() => {
     setReadyIds(new Set());
   }, [topPlacesKey]);
+
+  // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1j: cardsLayer opacity Reanimated fade-in (allReady 전환 시 부드러움, 깝빡 현상 완화).
+  const cardsOpacity = useSharedValue(0);
+  useEffect(() => {
+    cardsOpacity.value = withTiming(allReady ? 1 : 0, { duration: 300 });
+  }, [allReady, cardsOpacity]);
+  const cardsLayerStyle = useAnimatedStyle(() => ({ opacity: cardsOpacity.value }));
 
   // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1g: 로드 성공 통보만 유지. useCallback 으로 PlaceCard React.memo 안정화.
   const handleReady = useCallback((id: number) => {
@@ -417,8 +439,9 @@ export default function BTSPlaceCartScreen() {
               )}
 
               {/* ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1c: 카드/히어로는 항상 마운트 (이미지 로드 기회 유지) + opacity 로 allReady 전 숨김. 8장 모두 준비되면 일괄 노출. */}
-              <View
-                style={[StyleSheet.absoluteFillObject, styles.cardsLayer, { opacity: allReady ? 1 : 0 }]}
+              {/* ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1j: Reanimated withTiming 300ms 로 부드러운 fade-in. */}
+              <Animated.View
+                style={[StyleSheet.absoluteFillObject, styles.cardsLayer, cardsLayerStyle]}
                 pointerEvents={allReady ? "auto" : "none"}
               >
                 {selectedCharacter && (
@@ -445,7 +468,7 @@ export default function BTSPlaceCartScreen() {
                     />
                   ) : null
                 )}
-              </View>
+              </Animated.View>
             </>
           )}
         </View>
