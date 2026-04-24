@@ -1,7 +1,7 @@
 // ⚠️ 수정금지(승인필요) — BTS Screen D: 장소 카트 (화이트 프리미엄 + 글라스 극투명 + HERO 최대화)
 // REF: Screen C BTSCharacterSelectScreen 패턴 / docs/design-references/button-system-shadcn.tsx
 // 2026-04-17 재설계 — 다크→화이트, 이모지 제거, 헤더 최소화, 도시 5등분, 캐릭터 Rive 폴백
-import React, { useEffect, useCallback, useMemo } from "react";
+import React, { useEffect, useCallback, useMemo, useState, useRef } from "react";
 import {
   View,
   Text,
@@ -80,20 +80,27 @@ function toCardThumbUrl(url: string): string {
 }
 
 // ⚠️ 수정금지(승인필요) — 장소 사진 소스 결정 (로우데이터 → 카테고리 목업 → 기본). 카드 썸네일 사이즈 자동 적용.
-function resolvePlaceImage(place: BTSPlace): { uri: string } {
-  const url = place.imageUrl || CATEGORY_MOCK_URL[place.seedCategory || ""] || DEFAULT_MOCK_URL;
+// forceFallback=true 시 원본 imageUrl 건너뛰고 카테고리 목업 사용 (Track 1c 실패/타임아웃 케이스).
+function resolvePlaceImage(place: BTSPlace, forceFallback = false): { uri: string } {
+  const mock = CATEGORY_MOCK_URL[place.seedCategory || ""] || DEFAULT_MOCK_URL;
+  const url = forceFallback ? mock : (place.imageUrl || mock);
   return { uri: toCardThumbUrl(url) };
 }
 
+// ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1c: 이미지 로드 타임아웃 (ms). 측정 기반 2500ms = 병렬 실측 430ms + 모바일 마진. 사용자 3초 관용 한계 내.
+const IMAGE_LOAD_TIMEOUT_MS = 2500;
+
 // ⚠️ 수정금지(승인필요) — 장소 글라스 카드 (사진 내장 + 극투명)
-// ⚠️ 수정금지(승인필요) — 2026-04-23 Track 1b 통합: 게이트/재시도/x·y 애니메이션/과도 priority 제거.
-// 위치 posX·posY 는 부모에서 useMemo 사전 계산 후 prop 전달 → PlaceCard 안 Math.cos/Math.sin 호출 제거.
+// ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1c: Wait-for-Complete + Fallback. onLoad/onError/timeout 3경로로 readyIds 부모에 보고. 실패 시 CATEGORY_MOCK_URL 교체.
 type PlaceCardProps = {
   place: BTSPlace;
   posX: number;
   posY: number;
   isSelected: boolean;
+  isFailed: boolean;
   onToggle: (place: BTSPlace) => void;
+  onReady: (id: number) => void;
+  onFailed: (id: number) => void;
   tint: string;
 };
 
@@ -102,7 +109,10 @@ const PlaceCard = React.memo(function PlaceCard({
   posX,
   posY,
   isSelected,
+  isFailed,
   onToggle,
+  onReady,
+  onFailed,
   tint,
 }: PlaceCardProps) {
   // ⚠️ 수정금지(승인필요) — 2026-04-23 Track 1b-③: scale 만 유지 (tap 피드백). x/y 이동 애니메이션 제거.
@@ -115,7 +125,21 @@ const PlaceCard = React.memo(function PlaceCard({
     ],
   }));
 
-  const img = resolvePlaceImage(place);
+  // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1c: 로드 성공 여부 추적. 타임아웃이 성공 후 덮어쓰기 방지 (실제 이미지를 폴백으로 교체 막음).
+  const loadedRef = useRef(false);
+
+  // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1c: 2500ms 타임아웃 → 아직 로드 안 됐으면 onFailed 강제 호출 (영구 404 URL 대응).
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (!loadedRef.current) {
+        onFailed(place.id);
+      }
+    }, IMAGE_LOAD_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [place.id, onFailed]);
+
+  // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1c: 실패 시 resolvePlaceImage 의 forceFallback 플래그로 카테고리 목업 강제.
+  const img = resolvePlaceImage(place, isFailed);
 
   return (
     <Animated.View style={[styles.cardAbsolute, animStyle]}>
@@ -137,13 +161,22 @@ const PlaceCard = React.memo(function PlaceCard({
           },
         ]}
       >
-        {/* ⚠️ 수정금지(승인필요) — 2026-04-23 Track 1b-④⑥⑨: priority "normal" (8장 동시 high 경합 해소), retry/transition 제거 (Glide 동시성 악순환 차단). 실패는 조용히 수용. */}
+        {/* ⚠️ 수정금지(승인필요) — 2026-04-23 Track 1b-④⑥⑨ + 2026-04-24 Track 1c: priority "normal" 통일, retry/transition 없음. onLoad/onError 로 부모 상태 통지. */}
         <Image
           source={img}
           style={styles.cardImage}
           contentFit="cover"
           priority="normal"
           cachePolicy="memory-disk"
+          onLoad={() => {
+            loadedRef.current = true;
+            onReady(place.id);
+          }}
+          onError={() => {
+            if (!loadedRef.current) {
+              onFailed(place.id);
+            }
+          }}
         />
         <View style={styles.cardLabel}>
           <Text numberOfLines={2} style={styles.cardLabelText}>
@@ -231,9 +264,45 @@ export default function BTSPlaceCartScreen() {
   const gradient = CharacterGradients[selectedCharacter?.id || "collector"];
   const tint = gradient[0];
 
-  // ⚠️ 수정금지(승인필요) — 2026-04-23 Track 1b-①: 캐스케이드 마운트 게이트 전체 제거.
-  // 제거 대상: loadedCount / prevTopPlaces / firstBatchDone / allCardsLoaded / handleCardLoaded
-  // 이유: 게이트가 렌더 블로킹 유발(Screen 3 대비 느림 주원인). Screen 3 처럼 즉시 레이아웃 + 이미지만 비동기 로드.
+  // ⚠️ 수정금지(승인필요) — 2026-04-23 Track 1b-①: 캐스케이드 마운트 게이트 제거 (영구).
+  // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1c: Wait-for-Complete 상태 (8장 모두 로드/폴백 완료 후 노출).
+  // 사용자 원칙: "완전치 않은 것은 안 보여주는 것만 못함" → 8/8 readyIds 도달 전에는 스피너.
+  const [readyIds, setReadyIds] = useState<Set<number>>(() => new Set());
+  const [failedIds, setFailedIds] = useState<Set<number>>(() => new Set());
+  const expectedCount = Math.min(topPlaces.length, MAX_PLACES);
+  const allReady = expectedCount > 0 && readyIds.size >= expectedCount;
+
+  // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1c: topPlaces 변경 시 Set 리셋. useEffect 내부 (렌더 단계 리셋 레이스 방지, 이전 L289-294 버그 교훈).
+  useEffect(() => {
+    setReadyIds(new Set());
+    setFailedIds(new Set());
+  }, [topPlaces]);
+
+  // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1c: 로드 성공 통보. useCallback 으로 안정화하여 PlaceCard React.memo 유지.
+  const handleReady = useCallback((id: number) => {
+    setReadyIds((prev) => {
+      if (prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+  }, []);
+
+  // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1c: 실패/타임아웃 통보. failedIds + readyIds 양쪽 추가 (폴백도 완료로 카운트).
+  const handleFailed = useCallback((id: number) => {
+    setFailedIds((prev) => {
+      if (prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+    setReadyIds((prev) => {
+      if (prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+  }, []);
 
   // ⚠️ 수정금지(승인필요) — 공연 임박 순 상위 5개 도시 (폴백: btsRank 순)
   const cityButtons = useMemo(() => {
@@ -385,28 +454,42 @@ export default function BTSPlaceCartScreen() {
             <ActivityIndicator size="large" color={tint} />
           ) : (
             <>
-              {/* ⚠️ 수정금지(승인필요) — 2026-04-23 Track 1b-①: 히어로 즉시 마운트 (allCardsLoaded 게이트 제거). Screen 3 패턴 */}
-              {selectedCharacter && (
-                <CharacterHero
-                  characterId={selectedCharacter.id}
-                  gradient={gradient}
-                  w={hero.heroW}
-                  h={hero.heroH}
-                />
+              {/* ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1c: allReady 전에는 스피너 오버레이 (사용자 원칙: 불완전 노출 금지). */}
+              {!allReady && (
+                <View style={styles.spinnerOverlay} pointerEvents="none">
+                  <ActivityIndicator size="large" color={tint} />
+                </View>
               )}
 
-              {/* ⚠️ 수정금지(승인필요) — 2026-04-23 Track 1b-①②: 8장 카드 일괄 렌더 (4+4 배치 게이팅 제거). positions 사전 계산 전달 */}
-              {topPlaces.slice(0, MAX_PLACES).map((place, i) => (
-                <PlaceCard
-                  key={place.id}
-                  place={place}
-                  posX={positions[i].x}
-                  posY={positions[i].y}
-                  isSelected={selectedPlaceIds.includes(place.id)}
-                  onToggle={handleTogglePlace}
-                  tint={tint}
-                />
-              ))}
+              {/* ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1c: 카드/히어로는 항상 마운트 (이미지 로드 기회 유지) + opacity 로 allReady 전 숨김. 8장 모두 준비되면 일괄 노출. */}
+              <View
+                style={[StyleSheet.absoluteFillObject, styles.cardsLayer, { opacity: allReady ? 1 : 0 }]}
+                pointerEvents={allReady ? "auto" : "none"}
+              >
+                {selectedCharacter && (
+                  <CharacterHero
+                    characterId={selectedCharacter.id}
+                    gradient={gradient}
+                    w={hero.heroW}
+                    h={hero.heroH}
+                  />
+                )}
+
+                {topPlaces.slice(0, MAX_PLACES).map((place, i) => (
+                  <PlaceCard
+                    key={place.id}
+                    place={place}
+                    posX={positions[i].x}
+                    posY={positions[i].y}
+                    isSelected={selectedPlaceIds.includes(place.id)}
+                    isFailed={failedIds.has(place.id)}
+                    onToggle={handleTogglePlace}
+                    onReady={handleReady}
+                    onFailed={handleFailed}
+                    tint={tint}
+                  />
+                ))}
+              </View>
             </>
           )}
         </View>
@@ -497,6 +580,20 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     position: "relative",
+  },
+
+  // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1c: 8장 로드 대기 스피너 오버레이. heroArea 중앙 배치.
+  spinnerOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 100,
+  },
+
+  // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1c: 카드 + 히어로 레이어. heroArea 와 동일 중앙 정렬 정책 유지.
+  cardsLayer: {
+    justifyContent: "center",
+    alignItems: "center",
   },
 
   // 중앙 캐릭터 카드
