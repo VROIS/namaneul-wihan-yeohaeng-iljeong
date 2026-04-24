@@ -11,7 +11,9 @@ import {
   ActivityIndicator,
   useWindowDimensions,
   ScrollView,
+  Switch,
 } from "react-native";
+import { useTranslation } from "react-i18next";
 // ⚠️ 수정금지(승인필요) — 2026-04-21 expo-image로 교체: react-native Image는 newArchEnabled + Android Fresco 조합에서 Wikimedia URL 로드 실패(실기 증상). DestinationDetailScreen 이 검증된 루트
 import { Image } from "expo-image";
 import Animated, {
@@ -34,6 +36,7 @@ import { useBTS, type BTSPlace, type BTSCity } from "@/contexts/BTSContext";
 import { getApiUrl } from "@/lib/query-client";
 import type { BTSStackParamList } from "@/navigation/BTSStackNavigator";
 import LiquidButton from "@/components/ui/LiquidButton";
+import { changeLanguageAndPersist } from "@/lib/i18n";
 
 // ⚠️ 수정금지(승인필요) — Haptics 유틸 (Screen C와 동일)
 const haptic = (t: "light" | "medium" | "success") => {
@@ -124,10 +127,20 @@ function resolvePlaceImageFull(
   return { uri };
 }
 
+// ⚠️ 수정금지(승인필요) — 2026-04-24 Track 5b: 도시/장소 이름 언어 연동 헬퍼. 영어 토글 시 nameEn 우선.
+function localizedName(
+  item: { nameKo?: string | null; nameEn?: string | null },
+  isKorean: boolean
+): string {
+  if (isKorean) return item.nameKo || item.nameEn || "";
+  return item.nameEn || item.nameKo || "";
+}
+
 // ⚠️ 수정금지(승인필요) — 장소 글라스 카드 (사진 내장 + 극투명)
 // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1g: 자해 타임아웃 제거. Glide 가 완성할 때까지 무조건 대기. onLoad → readyIds 부모 통보.
 type PlaceCardProps = {
   place: BTSPlace;
+  displayName: string;
   posX: number;
   posY: number;
   isSelected: boolean;
@@ -138,6 +151,7 @@ type PlaceCardProps = {
 
 const PlaceCard = React.memo(function PlaceCard({
   place,
+  displayName,
   posX,
   posY,
   isSelected,
@@ -191,7 +205,7 @@ const PlaceCard = React.memo(function PlaceCard({
         />
         <View style={styles.cardLabel}>
           <Text numberOfLines={2} style={styles.cardLabelText}>
-            {place.nameKo || place.nameEn}
+            {displayName}
           </Text>
         </View>
         {isSelected && (
@@ -252,6 +266,14 @@ const MAX_PLACES = 8;
 
 // ⚠️ 수정금지(승인필요) — 메인 화면
 export default function BTSPlaceCartScreen() {
+  // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 5b: i18n (메인앱 react-i18next 재사용). BTS ARMY 전세계인 → 언어 전환 지원.
+  // startsWith("ko") 로 "ko", "ko-KR" 등 모든 한국어 variant 커버.
+  const { t, i18n } = useTranslation();
+  const isKorean = i18n.language?.startsWith("ko") ?? false;
+  const handleLangToggle = useCallback((toKo: boolean) => {
+    changeLanguageAndPersist(toKo ? "ko" : "en");
+  }, []);
+
   const insets = useSafeAreaInsets();
   const navigation = useNavigation<NativeStackNavigationProp<BTSStackParamList>>();
   const { width: sw, height: sh } = useWindowDimensions();
@@ -333,7 +355,7 @@ export default function BTSPlaceCartScreen() {
       .then((data) => setTopPlaces(Array.isArray(data) ? data : []))
       .catch(() => {
         setTopPlaces([]);
-        setError("장소를 불러오지 못했어요");
+        setError(t("bts.placeCart.errorLoad"));
       })
       .finally(() => setIsLoadingPlaces(false));
   }, [selectedCharacter?.id, selectedCity?.id, baseUrl]);
@@ -417,12 +439,13 @@ export default function BTSPlaceCartScreen() {
       />
 
       {/* ⚠️ 수정금지(승인필요) — 2026-04-22 Part B: 상단 고정존 (뒤로가기 + 도시 버튼). 여기까지만 고정, 이하 전부 스크롤 */}
+      {/* ⚠️ 수정금지(승인필요) — 2026-04-24 Track 5b: 우측 상단 언어 스위치 (iOS 스타일). back 반대 위치. Screen 4 부터 노출. */}
       <View>
         <View style={[styles.backRow, { paddingTop: insets.top + 4 }]}>
           <Pressable
             onPress={() => navigation.goBack()}
             style={styles.backBtn}
-            accessibilityLabel="뒤로가기"
+            accessibilityLabel={t("common.back")}
           >
             <BlurView
               intensity={40}
@@ -437,13 +460,41 @@ export default function BTSPlaceCartScreen() {
             />
             <Text style={styles.backText}>←</Text>
           </Pressable>
+
+          {/* ⚠️ 수정금지(승인필요) — 2026-04-24 Track 5b: 언어 스위치. EN ○─ 한. RN built-in Switch 재사용 (새 컴포넌트/라이브러리 0). */}
+          <View style={styles.langSwitchWrap}>
+            <Text
+              style={[
+                styles.langLabel,
+                !isKorean && { color: tint, fontWeight: "800" },
+              ]}
+            >
+              EN
+            </Text>
+            <Switch
+              value={isKorean}
+              onValueChange={handleLangToggle}
+              trackColor={{ false: "#D0D0D0", true: tint }}
+              thumbColor="#FFFFFF"
+              ios_backgroundColor="#D0D0D0"
+              style={styles.langSwitch}
+            />
+            <Text
+              style={[
+                styles.langLabel,
+                isKorean && { color: tint, fontWeight: "800" },
+              ]}
+            >
+              한
+            </Text>
+          </View>
         </View>
 
         <View style={styles.cityRow}>
           {cityButtons.map((city) => (
             <LiquidButton
               key={city.id}
-              label={city.nameKo || city.nameEn}
+              label={localizedName(city, isKorean)}
               size="md"
               flex={1}
               tint={tint}
@@ -498,6 +549,7 @@ export default function BTSPlaceCartScreen() {
                     <PlaceCard
                       key={place.id}
                       place={place}
+                      displayName={localizedName(place, isKorean)}
                       posX={positions[i].x}
                       posY={positions[i].y}
                       isSelected={false}
@@ -519,7 +571,7 @@ export default function BTSPlaceCartScreen() {
         {selectedPlaces.length > 0 && (
           <View style={styles.cartSection}>
             <Text style={[styles.cartTitle, { color: tint }]}>
-              같이 갈 곳 {selectedCount}/{MAX_PLACES}
+              {t("bts.placeCart.cartTitle", { count: selectedCount, max: MAX_PLACES })}
             </Text>
             <ScrollView
               horizontal
@@ -536,7 +588,7 @@ export default function BTSPlaceCartScreen() {
                     recyclingKey={`cart-${p.id}`}
                   />
                   <Text numberOfLines={1} style={styles.cartCardLabel}>
-                    {p.nameKo || p.nameEn}
+                    {localizedName(p, isKorean)}
                   </Text>
                 </View>
               ))}
@@ -562,11 +614,11 @@ export default function BTSPlaceCartScreen() {
                 {idx + 1}
               </Text>
               <Text style={styles.detailTitle} numberOfLines={2}>
-                {p.nameKo || p.nameEn}
+                {localizedName(p, isKorean)}
               </Text>
               {/* ⚠️ 수정금지(승인필요) — 2026-04-24 Track 4a v3: 도시 버튼(LiquidButton)과 껍데기 + 폰트 완전 통일. */}
               <LiquidButton
-                label="제거"
+                label={t("bts.placeCart.remove")}
                 size="sm"
                 tint={tint}
                 onPress={() => handleTogglePlace(p)}
@@ -601,7 +653,7 @@ export default function BTSPlaceCartScreen() {
               end={{ x: 1, y: 0 }}
               style={[styles.ctaBtn, !canProceed && { opacity: 0.5 }]}
             >
-              <Text style={styles.ctaText}>같이 떠나요</Text>
+              <Text style={styles.ctaText}>{t("bts.placeCart.cta")}</Text>
             </LinearGradient>
           </Pressable>
         </View>
@@ -622,9 +674,32 @@ const styles = StyleSheet.create({
   },
 
   // ⚠️ 수정금지(승인필요) — 뒤로가기 행
+  // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 5b: back(좌) ↔ 언어 스위치(우) space-between 정반대 위치.
   backRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingHorizontal: 12,
     paddingBottom: 4,
+  },
+  // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 5b: 언어 스위치 컨테이너 (EN ○── 한).
+  langSwitchWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 4,
+  },
+  langLabel: {
+    fontSize: 12,
+    fontFamily: "Pretendard-Bold",
+    fontWeight: "700",
+    letterSpacing: 0.3,
+    color: "#9A9A9A",
+    minWidth: 20,
+    textAlign: "center",
+  },
+  langSwitch: {
+    transform: [{ scaleX: 0.8 }, { scaleY: 0.8 }],
   },
   backBtn: {
     width: 36,

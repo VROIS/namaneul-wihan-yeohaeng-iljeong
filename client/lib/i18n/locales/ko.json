@@ -1,4 +1,12 @@
 {
+  "bts": {
+    "placeCart": {
+      "cartTitle": "같이 갈 곳 {{count}}/{{max}}",
+      "remove": "제거",
+      "cta": "같이 떠나요",
+      "errorLoad": "장소를 불러오지 못했어요"
+    }
+  },
   "common": {
     "confirm": "확인",
     "cancel": "취소",

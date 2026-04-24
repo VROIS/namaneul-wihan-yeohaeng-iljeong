@@ -217,9 +217,10 @@ export default function BTSCharacterSelectScreen() {
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
 
       {/* ⚠️ 수정금지(승인필요) — 타이틀: fontSize 30, 상단 여백 확보 */}
+      {/* ⚠️ 수정금지(승인필요) — 2026-04-24 Track 5a: 전세계 BTS ARMY 고려 영어 문구. 캐릭터 한/영 병기라 이 화면은 토글 불필요. */}
       <View style={[styles.titleWrap, { top: insets.top + TITLE_TOP_OFFSET }]}>
-        <Text style={styles.titleLine}>누구랑</Text>
-        <Text style={styles.titleLine}>여행하고 싶으세요?</Text>
+        <Text style={styles.titleLine}>Who's your</Text>
+        <Text style={styles.titleLine}>travel companion?</Text>
       </View>
 
       {/* ⚠️ 수정금지(승인필요) — 타원 영역: 타이틀과 100px 간격, 중앙 overlay는 동일 영역 내 absolute */}

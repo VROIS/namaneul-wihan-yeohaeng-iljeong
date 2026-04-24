@@ -1,4 +1,12 @@
 {
+  "bts": {
+    "placeCart": {
+      "cartTitle": "Going together {{count}}/{{max}}",
+      "remove": "Remove",
+      "cta": "Let's go together",
+      "errorLoad": "Couldn't load places"
+    }
+  },
   "common": {
     "confirm": "OK",
     "cancel": "Cancel",
