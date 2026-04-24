@@ -1,12 +1,4 @@
 {
-  "bts": {
-    "placeCart": {
-      "cartTitle": "같이 갈 곳 {{count}}/{{max}}",
-      "remove": "제거",
-      "cta": "같이 떠나요",
-      "errorLoad": "장소를 불러오지 못했어요"
-    }
-  },
   "common": {
     "confirm": "확인",
     "cancel": "취소",
@@ -169,7 +161,13 @@
     "generating": "일정 생성 중",
     "generatingHint": "담으신 장소로 맞춤 투어를 만들고 있어요...",
     "generateFailed": "일정 생성 실패",
-    "backToStart": "처음으로"
+    "backToStart": "처음으로",
+    "placeCart": {
+      "cartTitle": "같이 갈 곳 {{count}}/{{max}}",
+      "remove": "제거",
+      "cta": "같이 떠나요",
+      "errorLoad": "장소를 불러오지 못했어요"
+    }
   },
   "saved": {
     "loading": "불러오는 중...",
