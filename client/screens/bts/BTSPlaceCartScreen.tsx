@@ -519,7 +519,7 @@ export default function BTSPlaceCartScreen() {
         {selectedPlaces.length > 0 && (
           <View style={styles.cartSection}>
             <Text style={[styles.cartTitle, { color: tint }]}>
-              내 카트 {selectedCount}/{MAX_PLACES}
+              같이 갈 곳 {selectedCount}/{MAX_PLACES}
             </Text>
             <ScrollView
               horizontal
@@ -564,12 +564,13 @@ export default function BTSPlaceCartScreen() {
               <Text style={styles.detailTitle} numberOfLines={2}>
                 {p.nameKo || p.nameEn}
               </Text>
-              <Pressable
+              {/* ⚠️ 수정금지(승인필요) — 2026-04-24 Track 4a v3: 도시 버튼(LiquidButton)과 껍데기 + 폰트 완전 통일. */}
+              <LiquidButton
+                label="제거"
+                size="sm"
+                tint={tint}
                 onPress={() => handleTogglePlace(p)}
-                style={styles.detailRemoveBtn}
-              >
-                <Text style={styles.detailRemoveText}>제거</Text>
-              </Pressable>
+              />
             </View>
           </View>
         ))}
@@ -769,10 +770,12 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
     gap: 8,
   },
+  // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 4a v3: letterSpacing 추가 (Screen 3/Landing 과 자간 일치).
   cartTitle: {
     fontSize: 13,
     fontFamily: "Pretendard-Bold",
     fontWeight: "800",
+    letterSpacing: 0.3,
     paddingHorizontal: 20,
   },
   cartCarousel: {
@@ -793,11 +796,12 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontFamily: "Pretendard-Bold",
     fontWeight: "700",
+    letterSpacing: 0.2,
     color: "#1A1A1A",
     textAlign: "center",
   },
 
-  // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 4a: 상세 섹션 (큰 이미지 + 장소명 + 제거 버튼).
+  // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 4a: 상세 섹션 (큰 이미지 + 장소명 + 제거 버튼 LiquidButton).
   detailSection: {
     paddingHorizontal: 20,
     paddingTop: 12,
@@ -819,6 +823,7 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontFamily: "Pretendard-Bold",
     fontWeight: "900",
+    letterSpacing: 0.5,
     minWidth: 24,
   },
   detailTitle: {
@@ -826,21 +831,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: "Pretendard-Bold",
     fontWeight: "800",
+    letterSpacing: 0.3,
     color: "#1A1A1A",
-  },
-  detailRemoveBtn: {
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 10,
-    backgroundColor: "#F4F4F5",
-    borderWidth: 1,
-    borderColor: "#E5E5E5",
-  },
-  detailRemoveText: {
-    fontSize: 12,
-    fontFamily: "Pretendard-Bold",
-    fontWeight: "700",
-    color: "#555",
   },
 
   gaugeRow: {
