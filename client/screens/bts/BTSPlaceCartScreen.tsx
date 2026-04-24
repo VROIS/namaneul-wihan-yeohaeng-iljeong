@@ -66,10 +66,22 @@ function toCardThumbUrl(url: string): string {
   return url;
 }
 
+// ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1i: Wikimedia User-Agent 정책 준수.
+// 기본 Glide UA ("okhttp/...") → Wikimedia 소프트 블록 가능. iOS SDWebImage 는 bundle-id 포함 UA 로 통과.
+// 공식 정책: https://meta.wikimedia.org/wiki/User-Agent_policy (식별 가능 UA 필수)
+const WIKIMEDIA_UA = "VibeTrip/1.0 (contact@vibetrip.app) Expo/54";
+
 // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1g: 스톡 폴백 제거. imageUrl 없으면 undefined → 빈 카드. 가짜 스톡 사진 절대 노출 안 함.
-function resolvePlaceImage(place: BTSPlace): { uri: string } | undefined {
+// ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1i: Wikimedia 요청에 User-Agent 헤더 부착.
+function resolvePlaceImage(
+  place: BTSPlace
+): { uri: string; headers?: Record<string, string> } | undefined {
   if (!place.imageUrl) return undefined;
-  return { uri: toCardThumbUrl(place.imageUrl) };
+  const uri = toCardThumbUrl(place.imageUrl);
+  if (uri.includes("upload.wikimedia.org")) {
+    return { uri, headers: { "User-Agent": WIKIMEDIA_UA } };
+  }
+  return { uri };
 }
 
 // ⚠️ 수정금지(승인필요) — 장소 글라스 카드 (사진 내장 + 극투명)
