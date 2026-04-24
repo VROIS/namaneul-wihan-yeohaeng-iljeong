@@ -454,13 +454,13 @@ export default function BTSPlaceCartScreen() {
         </View>
       </View>
 
-      {/* ⚠️ 수정금지(승인필요) — 2026-04-22 Part B: 전체 스크롤존. 궤도 + 카트 + 상세 섹션 포함. */}
-      {/* ⚠️ 수정금지(승인필요) — 2026-04-24 Track 4a: CTA 플로팅 이동 → scrollview paddingBottom 증가 (플로팅 CTA 높이 ~120 + insets + 여유). */}
+      {/* ⚠️ 수정금지(승인필요) — 2026-04-22 Part B: 전체 스크롤존. 궤도 + 카트 + 상세 섹션 + CTA 모두 포함. */}
+      {/* ⚠️ 수정금지(승인필요) — 2026-04-24 Track 4a v2 (사용자 피드백): CTA 가 스크롤과 함께 움직이도록 ScrollView 안으로 복귀. paddingBottom 은 insets + 24 로 원복. */}
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: insets.bottom + 140 },
+          { paddingBottom: insets.bottom + 24 },
         ]}
         showsVerticalScrollIndicator={false}
       >
@@ -573,13 +573,9 @@ export default function BTSPlaceCartScreen() {
             </View>
           </View>
         ))}
-      </ScrollView>
 
-      {/* ⚠️ 수정금지(승인필요) — 2026-04-24 Track 4a: CTA 플로팅 (하단 absolute + BlurView backdrop). 스크롤과 무관하게 항상 보임. */}
-      <View style={[styles.floatingBottom, { paddingBottom: insets.bottom + 12 }]} pointerEvents="box-none">
-        <BlurView intensity={30} tint="light" style={StyleSheet.absoluteFillObject} />
-        <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "rgba(255,255,255,0.7)" }]} />
-        <View style={styles.floatingInner}>
+        {/* ⚠️ 수정금지(승인필요) — 2026-04-24 Track 4a v2 (사용자 피드백): CTA 플로팅 고정 해제 → ScrollView 안 마지막 위치 (컨텐츠와 함께 스크롤). 하단 고정이 카트 캐러셀을 가리던 문제 해결. */}
+        <View style={styles.bottomArea}>
           <View style={styles.gaugeRow}>
             <View style={styles.gaugeTrack}>
               <View
@@ -608,7 +604,7 @@ export default function BTSPlaceCartScreen() {
             </LinearGradient>
           </Pressable>
         </View>
-      </View>
+      </ScrollView>
     </View>
   );
 }
@@ -760,15 +756,8 @@ const styles = StyleSheet.create({
   },
 
   // ⚠️ 수정금지(승인필요) — 2026-04-22 게이지+CTA 영역 (스크롤 내부 embed). 하단 고정존 폐기 (사용자 지시). paddingBottom은 scrollContent에서 insets.bottom으로 처리
-  // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 4a: CTA 플로팅 컨테이너 (하단 absolute + BlurView backdrop).
-  floatingBottom: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    overflow: "hidden",
-  },
-  floatingInner: {
+  // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 4a v2 (사용자 피드백): CTA 는 ScrollView 안 마지막 요소. 스크롤과 함께 움직임.
+  bottomArea: {
     paddingHorizontal: 20,
     paddingTop: 16,
     gap: 10,
