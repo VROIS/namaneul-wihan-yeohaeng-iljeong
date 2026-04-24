@@ -67,6 +67,20 @@ function toCardThumbUrl(url: string): string {
   return url;
 }
 
+// ⚠️ 수정금지(승인필요) — 2026-04-24 Track 4a: 큰 화면(모달)용 URL (1280px).
+// Samsung A36 5G 모달 폭 ≈ 360dp × 2.75 dpr = 990px → Wikimedia nearest-up bucket = 1280px.
+// Unsplash w=1200. /thumb/ 없는 원본 URL 은 그대로 통과 (원본 크기 = 최고 화질).
+function toFullUrl(url: string): string {
+  if (url.includes("upload.wikimedia.org/wikipedia/commons/thumb/")) {
+    const bucket = snapToWikimediaBucket(1280);
+    return url.replace(WIKIMEDIA_PX_REGEX, `/${bucket}px-`);
+  }
+  if (url.includes("images.unsplash.com")) {
+    return url.replace(UNSPLASH_W_REGEX, "$1w=1200");
+  }
+  return url;
+}
+
 // ⚠️ 수정금지(승인필요) — 🔑 핵심 로직 (2026-04-24 24시간 연구 끝 발견)
 // ═══════════════════════════════════════════════════════════════════════════
 // 배경: AOS Samsung A36 5G 에서 Wikimedia 이미지 5/8 조용히 실패. iOS 는 100%. 같은 URL.
@@ -91,6 +105,19 @@ function resolvePlaceImage(
 ): { uri: string; headers?: Record<string, string> } | undefined {
   if (!place.imageUrl) return undefined;
   const uri = toCardThumbUrl(place.imageUrl);
+  if (uri.includes("upload.wikimedia.org")) {
+    return { uri, headers: { "User-Agent": WIKIMEDIA_UA } };
+  }
+  return { uri };
+}
+
+// ⚠️ 수정금지(승인필요) — 2026-04-24 Track 4a: 상세 섹션용 큰 이미지 소스 (1280px + 동일 UA 정책).
+// Track 1i 의 resolvePlaceImage 와 병렬 구조 — Track 1i 로직 건드리지 않음.
+function resolvePlaceImageFull(
+  place: BTSPlace
+): { uri: string; headers?: Record<string, string> } | undefined {
+  if (!place.imageUrl) return undefined;
+  const uri = toFullUrl(place.imageUrl);
   if (uri.includes("upload.wikimedia.org")) {
     return { uri, headers: { "User-Agent": WIKIMEDIA_UA } };
   }
@@ -337,6 +364,16 @@ export default function BTSPlaceCartScreen() {
   const selectedCount = selectedPlaceIds.length;
   const canProceed = selectedCount >= 2;
 
+  // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 4a: 카트 배열 = selectedPlaceIds 순서대로 topPlaces 에서 조회.
+  // 선택 순서 = 여정 순서 (사용자 결정: 드래그 순서 변경 불필요).
+  const selectedPlaces = useMemo(
+    () =>
+      selectedPlaceIds
+        .map((id) => topPlaces.find((p) => p.id === id))
+        .filter((p): p is BTSPlace => !!p),
+    [selectedPlaceIds, topPlaces]
+  );
+
   // ⚠️ 수정금지(승인필요) — 반응형 HERO 영역 계산
   const hero = useMemo(() => {
     const topArea = insets.top + 4 + 36 + 8 + 32 + 8; // ~100
@@ -417,12 +454,13 @@ export default function BTSPlaceCartScreen() {
         </View>
       </View>
 
-      {/* ⚠️ 수정금지(승인필요) — 2026-04-22 Part B: 전체 스크롤존. 궤도 + 캐릭터 DIM 뒷장 + 게이지 + CTA 모두 포함 (하단 고정존 없음, 사용자 지시). 향후 추가 콘텐츠는 heroArea 아래/게이지 위에 삽입 */}
+      {/* ⚠️ 수정금지(승인필요) — 2026-04-22 Part B: 전체 스크롤존. 궤도 + 카트 + 상세 섹션 포함. */}
+      {/* ⚠️ 수정금지(승인필요) — 2026-04-24 Track 4a: CTA 플로팅 이동 → scrollview paddingBottom 증가 (플로팅 CTA 높이 ~120 + insets + 여유). */}
       <ScrollView
         style={{ flex: 1 }}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: insets.bottom + 24 },
+          { paddingBottom: insets.bottom + 140 },
         ]}
         showsVerticalScrollIndicator={false}
       >
@@ -454,14 +492,15 @@ export default function BTSPlaceCartScreen() {
                 )}
 
                 {/* ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1h: 순차 마운트. 카드 i 는 i-1 까지 로드 완료 후에만 마운트. Glide 동시성 8개 → Wikimedia Varnish rate-limit (429) 회피. */}
+                {/* ⚠️ 수정금지(승인필요) — 2026-04-24 Track 4a: 카트에 담긴 카드는 궤도에서 완전히 사라짐 (frame + image + label 전체). 빈 액자 금지. 캐릭터 노출 효과. */}
                 {topPlaces.slice(0, MAX_PLACES).map((place, i) =>
-                  i <= readyIds.size ? (
+                  i <= readyIds.size && !selectedPlaceIds.includes(place.id) ? (
                     <PlaceCard
                       key={place.id}
                       place={place}
                       posX={positions[i].x}
                       posY={positions[i].y}
-                      isSelected={selectedPlaceIds.includes(place.id)}
+                      isSelected={false}
                       onToggle={handleTogglePlace}
                       onReady={handleReady}
                       tint={tint}
@@ -476,8 +515,71 @@ export default function BTSPlaceCartScreen() {
         {/* 에러 */}
         {error && <Text style={styles.errorText}>{error}</Text>}
 
-        {/* ⚠️ 수정금지(승인필요) — 2026-04-22 Part B: 게이지 + CTA를 스크롤 내부 embed (하단 고정존 폐기 — 사용자: "고정존 만들면 화면 나뉘어 답답함") */}
-        <View style={styles.bottomArea}>
+        {/* ⚠️ 수정금지(승인필요) — 2026-04-24 Track 4a: 카트 가로 캐러셀 (선택된 카드 썸네일). 330px 재사용. */}
+        {selectedPlaces.length > 0 && (
+          <View style={styles.cartSection}>
+            <Text style={[styles.cartTitle, { color: tint }]}>
+              내 카트 {selectedCount}/{MAX_PLACES}
+            </Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.cartCarousel}
+            >
+              {selectedPlaces.map((p) => (
+                <View key={p.id} style={styles.cartCard}>
+                  <Image
+                    source={resolvePlaceImage(p)}
+                    style={styles.cartCardImage}
+                    contentFit="cover"
+                    cachePolicy="memory-disk"
+                    recyclingKey={`cart-${p.id}`}
+                  />
+                  <Text numberOfLines={1} style={styles.cartCardLabel}>
+                    {p.nameKo || p.nameEn}
+                  </Text>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+
+        {/* ⚠️ 수정금지(승인필요) — 2026-04-24 Track 4a: 상세 섹션 쭈르륵 쌓임. placeholder=330 즉시 + source=1280 백그라운드 교체 (사용자 체감 딜레이 0, 점점 선명). */}
+        {selectedPlaces.map((p, idx) => (
+          <View key={p.id} style={styles.detailSection}>
+            {/* ⚠️ 수정금지(승인필요) — 2026-04-24 Track 4a: recyclingKey 로 Samsung A36 5G 메모리 관리. 1280px × 8 = ~39MB 우려 완화. */}
+            <Image
+              source={resolvePlaceImageFull(p)}
+              placeholder={resolvePlaceImage(p)}
+              style={styles.detailImage}
+              contentFit="cover"
+              transition={200}
+              cachePolicy="memory-disk"
+              recyclingKey={`detail-${p.id}`}
+            />
+            <View style={styles.detailInfo}>
+              <Text style={[styles.detailIndex, { color: tint }]}>
+                {idx + 1}
+              </Text>
+              <Text style={styles.detailTitle} numberOfLines={2}>
+                {p.nameKo || p.nameEn}
+              </Text>
+              <Pressable
+                onPress={() => handleTogglePlace(p)}
+                style={styles.detailRemoveBtn}
+              >
+                <Text style={styles.detailRemoveText}>제거</Text>
+              </Pressable>
+            </View>
+          </View>
+        ))}
+      </ScrollView>
+
+      {/* ⚠️ 수정금지(승인필요) — 2026-04-24 Track 4a: CTA 플로팅 (하단 absolute + BlurView backdrop). 스크롤과 무관하게 항상 보임. */}
+      <View style={[styles.floatingBottom, { paddingBottom: insets.bottom + 12 }]} pointerEvents="box-none">
+        <BlurView intensity={30} tint="light" style={StyleSheet.absoluteFillObject} />
+        <View style={[StyleSheet.absoluteFillObject, { backgroundColor: "rgba(255,255,255,0.7)" }]} />
+        <View style={styles.floatingInner}>
           <View style={styles.gaugeRow}>
             <View style={styles.gaugeTrack}>
               <View
@@ -506,7 +608,7 @@ export default function BTSPlaceCartScreen() {
             </LinearGradient>
           </Pressable>
         </View>
-      </ScrollView>
+      </View>
     </View>
   );
 }
@@ -658,11 +760,100 @@ const styles = StyleSheet.create({
   },
 
   // ⚠️ 수정금지(승인필요) — 2026-04-22 게이지+CTA 영역 (스크롤 내부 embed). 하단 고정존 폐기 (사용자 지시). paddingBottom은 scrollContent에서 insets.bottom으로 처리
-  bottomArea: {
+  // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 4a: CTA 플로팅 컨테이너 (하단 absolute + BlurView backdrop).
+  floatingBottom: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    overflow: "hidden",
+  },
+  floatingInner: {
     paddingHorizontal: 20,
     paddingTop: 16,
     gap: 10,
   },
+
+  // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 4a: 카트 섹션 (가로 캐러셀).
+  cartSection: {
+    paddingTop: 8,
+    paddingBottom: 12,
+    gap: 8,
+  },
+  cartTitle: {
+    fontSize: 13,
+    fontFamily: "Pretendard-Bold",
+    fontWeight: "800",
+    paddingHorizontal: 20,
+  },
+  cartCarousel: {
+    paddingHorizontal: 20,
+    gap: 10,
+  },
+  cartCard: {
+    width: 76,
+    gap: 6,
+  },
+  cartCardImage: {
+    width: 76,
+    height: 100,
+    borderRadius: 10,
+    backgroundColor: "#EFEFEF",
+  },
+  cartCardLabel: {
+    fontSize: 11,
+    fontFamily: "Pretendard-Bold",
+    fontWeight: "700",
+    color: "#1A1A1A",
+    textAlign: "center",
+  },
+
+  // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 4a: 상세 섹션 (큰 이미지 + 장소명 + 제거 버튼).
+  detailSection: {
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 8,
+    gap: 10,
+  },
+  detailImage: {
+    width: "100%",
+    aspectRatio: 4 / 3,
+    borderRadius: 16,
+    backgroundColor: "#EFEFEF",
+  },
+  detailInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  detailIndex: {
+    fontSize: 22,
+    fontFamily: "Pretendard-Bold",
+    fontWeight: "900",
+    minWidth: 24,
+  },
+  detailTitle: {
+    flex: 1,
+    fontSize: 16,
+    fontFamily: "Pretendard-Bold",
+    fontWeight: "800",
+    color: "#1A1A1A",
+  },
+  detailRemoveBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: "#F4F4F5",
+    borderWidth: 1,
+    borderColor: "#E5E5E5",
+  },
+  detailRemoveText: {
+    fontSize: 12,
+    fontFamily: "Pretendard-Bold",
+    fontWeight: "700",
+    color: "#555",
+  },
+
   gaugeRow: {
     flexDirection: "row",
     alignItems: "center",
