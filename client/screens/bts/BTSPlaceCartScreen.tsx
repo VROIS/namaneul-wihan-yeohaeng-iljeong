@@ -56,23 +56,33 @@ const haptic = (t: "light" | "medium" | "success") => {
   } catch {}
 };
 
-// ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1b-⑩ 회귀 수정:
-// Wikimedia /300px- 는 HTTP 400 반환 (300 이 표준 썸네일 크기 아님 확정) → 원본 URL 유지.
-// 사용자 실기 보고: iOS 8/8 → 0-1/8, AOS 3-4/8 → 0-1/8, 웹 브라우저 0-1/8 회귀 원인.
-// Unsplash `?w=300` 만 안전 (문서화된 쿼리 파라미터).
-// 향후 Wikimedia 축소 필요 시 검증된 사이즈(예 400/640/800) 재탐색 선행.
+// ⚠️ 수정금지(승인필요) — 2026-04-24 W-6 옵션 A: Wikimedia 공식 허용 버킷 스냅 방식.
+// T414805/Common_thumbnail_sizes 공식 문서 기준 허용 width 목록. 그 외 사이즈는 HTTP 400 거부.
+// Screen 4 카드(100×178 dp, dpr 2.75 → 물리 275~490px) → nearest-up bucket = 330px.
+const WIKIMEDIA_BUCKETS = [20, 40, 60, 120, 250, 330, 500, 960, 1280, 1920, 3840];
+const WIKIMEDIA_PX_REGEX = /\/\d+px-/;
 const UNSPLASH_W_REGEX = /([?&])w=\d+/g;
-function toThumbnailUrl(url: string): string {
+
+function snapToWikimediaBucket(targetPx: number): number {
+  return WIKIMEDIA_BUCKETS.find((b) => b >= targetPx) ?? 3840;
+}
+
+// 카드 썸네일용 (330px). Wikimedia URL 변환 + Unsplash w=300 동시 처리.
+function toCardThumbUrl(url: string): string {
+  if (url.includes("upload.wikimedia.org/wikipedia/commons/thumb/")) {
+    const bucket = snapToWikimediaBucket(330);
+    return url.replace(WIKIMEDIA_PX_REGEX, `/${bucket}px-`);
+  }
   if (url.includes("images.unsplash.com")) {
     return url.replace(UNSPLASH_W_REGEX, "$1w=300");
   }
   return url;
 }
 
-// ⚠️ 수정금지(승인필요) — 장소 사진 소스 결정 (로우데이터 → 카테고리 목업 → 기본). 썸네일 축소 자동 적용.
+// ⚠️ 수정금지(승인필요) — 장소 사진 소스 결정 (로우데이터 → 카테고리 목업 → 기본). 카드 썸네일 사이즈 자동 적용.
 function resolvePlaceImage(place: BTSPlace): { uri: string } {
   const url = place.imageUrl || CATEGORY_MOCK_URL[place.seedCategory || ""] || DEFAULT_MOCK_URL;
-  return { uri: toThumbnailUrl(url) };
+  return { uri: toCardThumbUrl(url) };
 }
 
 // ⚠️ 수정금지(승인필요) — 장소 글라스 카드 (사진 내장 + 극투명)
