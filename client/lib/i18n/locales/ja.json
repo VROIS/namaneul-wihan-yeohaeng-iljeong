@@ -161,7 +161,13 @@
     "generating": "日程を作成中",
     "generatingHint": "選択した場所でオリジナルツアーを作成中...",
     "generateFailed": "作成失敗",
-    "backToStart": "最初からやり直す"
+    "backToStart": "最初からやり直す",
+    "placeCart": {
+      "cartTitle": "一緒に行く場所 {{count}}/{{max}}",
+      "remove": "削除",
+      "cta": "一緒に出かけよう",
+      "errorLoad": "場所を読み込めませんでした"
+    }
   },
   "saved": {
     "loading": "読み込み中...",

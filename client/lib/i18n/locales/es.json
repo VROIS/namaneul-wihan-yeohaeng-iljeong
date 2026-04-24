@@ -161,7 +161,13 @@
     "generating": "Generando itinerario",
     "generatingHint": "Creando un tour personalizado con tus lugares seleccionados...",
     "generateFailed": "Error en la generación",
-    "backToStart": "Empezar de nuevo"
+    "backToStart": "Empezar de nuevo",
+    "placeCart": {
+      "cartTitle": "Lugares para ir juntos {{count}}/{{max}}",
+      "remove": "Eliminar",
+      "cta": "Viajemos juntos",
+      "errorLoad": "No se pudieron cargar los lugares"
+    }
   },
   "saved": {
     "loading": "Cargando...",

@@ -161,7 +161,13 @@
     "generating": "正在生成行程",
     "generatingHint": "正在用您选择的地点创建定制旅程...",
     "generateFailed": "生成失败",
-    "backToStart": "重新开始"
+    "backToStart": "重新开始",
+    "placeCart": {
+      "cartTitle": "一起去的地方 {{count}}/{{max}}",
+      "remove": "移除",
+      "cta": "一起出发吧",
+      "errorLoad": "无法加载地点"
+    }
   },
   "saved": {
     "loading": "加载中...",

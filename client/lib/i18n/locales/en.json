@@ -163,9 +163,9 @@
     "generateFailed": "Generation failed",
     "backToStart": "Start Over",
     "placeCart": {
-      "cartTitle": "Places to visit together {{count}}/{{max}}",
+      "cartTitle": "Going together {{count}}/{{max}}",
       "remove": "Remove",
-      "cta": "Let's travel together",
+      "cta": "Let's go together",
       "errorLoad": "Couldn't load places"
     }
   },

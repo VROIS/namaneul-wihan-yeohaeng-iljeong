@@ -161,7 +161,13 @@
     "generating": "Génération de l'itinéraire",
     "generatingHint": "Création d'un tour personnalisé avec vos lieux sélectionnés...",
     "generateFailed": "Échec de la génération",
-    "backToStart": "Recommencer"
+    "backToStart": "Recommencer",
+    "placeCart": {
+      "cartTitle": "Ensemble à visiter {{count}}/{{max}}",
+      "remove": "Retirer",
+      "cta": "Partons ensemble",
+      "errorLoad": "Impossible de charger les lieux"
+    }
   },
   "saved": {
     "loading": "Chargement...",

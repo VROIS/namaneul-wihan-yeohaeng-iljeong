@@ -161,7 +161,13 @@
     "generating": "Reiseplan wird erstellt",
     "generatingHint": "Ein individueller Tour wird mit deinen ausgewählten Orten erstellt...",
     "generateFailed": "Erstellung fehlgeschlagen",
-    "backToStart": "Von vorne beginnen"
+    "backToStart": "Von vorne beginnen",
+    "placeCart": {
+      "cartTitle": "Gemeinsam besuchen {{count}}/{{max}}",
+      "remove": "Entfernen",
+      "cta": "Lass uns gemeinsam reisen",
+      "errorLoad": "Orte konnten nicht geladen werden"
+    }
   },
   "saved": {
     "loading": "Laden...",
