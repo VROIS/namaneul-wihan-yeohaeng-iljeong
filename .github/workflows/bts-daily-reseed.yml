@@ -1,0 +1,79 @@
+# ⚠️ 수정금지(승인필요) — BTS 일일 자동 재시드 (사용자 2026-04-25 승인)
+# 매일 PDT 자정+30분 (UTC 07:30) Google quota reset 직후 1도시 자동 처리
+# 32 BTS 도시 / 31일 = 한 달 내 6 카테고리 데이터 완비
+#
+# Secret 필수 (GitHub repo Settings → Secrets → Actions):
+#   - SUPA_URL: postgresql://... (Supabase 접속, GOOGLE_MAPS_API_KEY 는 DB에서 자동 로드)
+#
+# 호출 분배 (1도시):
+#   - Text Search Essentials: 30 (quota cap 정확)
+#   - Place Photos: 30 (식당 20 + 다른 5 카테고리 잔여 10)
+#   - Wikipedia REST: 180 (무제한)
+
+name: BTS Daily Reseed (1 city/day, 6 categories)
+
+on:
+  schedule:
+    # UTC 07:30 = PDT 00:30 (자정 30분 후, Google quota daily reset 직후)
+    # ⚠️ DST: 미국 PDT(서머타임) UTC-7 → '30 7 * * *' / PST(겨울) UTC-8 → '30 8 * * *'
+    # 매년 3월 둘째 일요일~11월 첫째 일요일 = PDT (현재 적용)
+    # 11월 첫째 일요일~3월 둘째 일요일 = PST (cron 변경 필요)
+    - cron: '30 7 * * *'
+  # 수동 실행 지원 (테스트 + 복구)
+  workflow_dispatch:
+    inputs:
+      city:
+        description: '특정 도시 강제 (예: El_Paso). 비우면 자동 선택'
+        required: false
+        type: string
+      dry_run:
+        description: 'DRY-RUN (호출 0)'
+        required: false
+        type: boolean
+        default: false
+
+# 동시 실행 방지 (schedule + workflow_dispatch 충돌 시 대기열)
+concurrency:
+  group: bts-daily-reseed
+  cancel-in-progress: false
+
+jobs:
+  reseed:
+    name: BTS 1 city reseed
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Check SUPA_URL secret
+        run: |
+          if [ -z "${{ secrets.SUPA_URL }}" ]; then
+            echo "⚠️  SUPA_URL secret is missing. Add it in repo Settings → Secrets → Actions"
+            exit 1
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies (pg only)
+        run: npm ci --no-audit --prefer-offline --omit=dev
+
+      - name: Run BTS daily cron
+        env:
+          SUPA_URL: ${{ secrets.SUPA_URL }}
+          CITY_INPUT: ${{ inputs.city }}
+          DRY_RUN_INPUT: ${{ inputs.dry_run }}
+        run: |
+          ARGS=""
+          if [ -n "$CITY_INPUT" ]; then
+            ARGS="$ARGS --city=$CITY_INPUT"
+          fi
+          if [ "$DRY_RUN_INPUT" = "true" ]; then
+            ARGS="$ARGS --dry-run"
+          fi
+          echo "🚀 실행: node scripts/p0-bts-daily-cron.mjs $ARGS"
+          node scripts/p0-bts-daily-cron.mjs $ARGS
