@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ko"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" name="viewport"/>
+<title>Travel Companion Selection</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<style data-purpose="custom-animations">
+    @keyframes pulse-glow {
+      0%, 100% {
+        box-shadow: 0 0 15px 5px rgba(168, 85, 247, 0.4), inset 0 0 10px rgba(168, 85, 247, 0.2);
+      }
+      50% {
+        box-shadow: 0 0 25px 10px rgba(168, 85, 247, 0.7), inset 0 0 15px rgba(168, 85, 247, 0.4);
+      }
+    }
+    .glow-active {
+      animation: pulse-glow 2s infinite;
+      border-color: #a855f7;
+    }
+  </style>
+</head>
+<body class="bg-white min-h-screen flex items-center justify-center font-sans overflow-hidden">
+<main class="relative w-full max-w-md h-[884px] flex items-center justify-center p-4">
+<div class="absolute inset-0 flex flex-col items-center justify-center z-10 pointer-events-none">
+<h1 class="text-[32px] leading-snug font-bold text-gray-900 text-center whitespace-pre-line tracking-tight">누구랑
+        여행하고
+        싶으세요?</h1>
+</div>
+<div class="relative w-[340px] h-[340px] rounded-full z-20">
+<div class="absolute top-[-40px] left-1/2 transform -translate-x-1/2 cursor-pointer transition-transform hover:scale-105 active:scale-95">
+<div class="w-32 h-32 rounded-full p-1 bg-white glow-active border-4 border-purple-500">
+<img alt="Character" class="w-full h-full object-cover rounded-full" src="placeholder-realm.png"/>
+</div>
+</div>
+<div class="absolute top-[20px] right-[-20px] cursor-pointer transition-transform hover:scale-105 active:scale-95">
+<div class="w-24 h-24 rounded-full border-2 border-white shadow-sm overflow-hidden">
+<img alt="Character" class="w-full h-full object-cover" src="placeholder-veil.png"/>
+</div>
+</div>
+<div class="absolute top-1/2 right-[-50px] transform -translate-y-1/2 cursor-pointer transition-transform hover:scale-105 active:scale-95">
+<div class="w-24 h-24 rounded-full border-2 border-white shadow-sm overflow-hidden">
+<img alt="Character" class="w-full h-full object-cover" src="placeholder-hype.png"/>
+</div>
+</div>
+<div class="absolute bottom-[0px] right-[10px] cursor-pointer transition-transform hover:scale-105 active:scale-95">
+<div class="w-24 h-24 rounded-full border-2 border-white shadow-sm overflow-hidden">
+<img alt="Character" class="w-full h-full object-cover" src="placeholder-surge.png"/>
+</div>
+</div>
+<div class="absolute bottom-[-60px] left-1/2 transform -translate-x-1/2 cursor-pointer transition-transform hover:scale-105 active:scale-95">
+<div class="w-24 h-24 rounded-full border-2 border-white shadow-sm overflow-hidden">
+<img alt="Character" class="w-full h-full object-cover" src="placeholder-shine.png"/>
+</div>
+</div>
+<div class="absolute bottom-[20px] left-[-30px] cursor-pointer transition-transform hover:scale-105 active:scale-95">
+<div class="w-24 h-24 rounded-full border-2 border-white shadow-sm overflow-hidden">
+<img alt="Character" class="w-full h-full object-cover" src="placeholder-savor.png"/>
+</div>
+</div>
+<div class="absolute top-[40px] left-[-40px] cursor-pointer transition-transform hover:scale-105 active:scale-95">
+<div class="w-24 h-24 rounded-full border-2 border-white shadow-sm overflow-hidden">
+<img alt="Character" class="w-full h-full object-cover" src="placeholder-still.png"/>
+</div>
+</div>
+</div>
+</main>
+<script data-purpose="avatar-selection-logic">
+    document.addEventListener('DOMContentLoaded', () => {
+      const avatars = document.querySelectorAll('main > div:nth-child(2) > div');
+      avatars.forEach(avatar => {
+        avatar.addEventListener('click', function() {
+          avatars.forEach(a => {
+            const innerDiv = a.querySelector('div');
+            innerDiv.classList.remove('glow-active', 'border-4', 'border-purple-500', 'p-1', 'w-32', 'h-32');
+            innerDiv.classList.add('border-2', 'border-white', 'shadow-sm', 'w-24', 'h-24');
+          });
+          const clickedInnerDiv = this.querySelector('div');
+          clickedInnerDiv.classList.remove('border-2', 'border-white', 'shadow-sm', 'w-24', 'h-24');
+          clickedInnerDiv.classList.add('glow-active', 'border-4', 'border-purple-500', 'p-1', 'w-32', 'h-32');
+        });
+      });
+    });
+  </script>
+</body></html>

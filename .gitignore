@@ -82,3 +82,36 @@ scripts/migration-data/
 
 # AI 에이전트 스킬
 _agent/
+
+# Claude Code IDE 자산 (메모리/플랜/worktrees - 절대 push 금지)
+.claude/
+
+# Playwright MCP 캐시
+.playwright-mcp/
+
+# 디버그/테스트 스크린샷
+D-*.png
+assets/screenshot-*.png
+assets/test-screenshots/
+
+# APK 다운로드 임시 폴더
+apk-download/
+
+# 디버그/검증/1회용 스크립트 (운영 X, 로컬 보관용)
+scripts/db_investigate*.mjs
+scripts/debug-*.mjs
+scripts/test-*.mjs
+scripts/check_*.mjs
+scripts/check-*.mjs
+scripts/verify-*.mjs
+scripts/final-verify.mjs
+scripts/bulk-trigger-*.mjs
+scripts/insert-cron-schedules.mjs
+scripts/set-use-mcp-raw.mjs
+scripts/add-unique-constraint.mjs
+scripts/download-apk.sh
+
+# 임시 메모/문서
+commit_msg.txt
+next-prompt.md
+이
