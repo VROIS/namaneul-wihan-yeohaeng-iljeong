@@ -463,11 +463,13 @@ try {
 
   const apiKey = await getApiKey(db);
   const locationStr = buildLocationStr(city.name_en, city.country_code);
+  // ⚠️ 수정금지(승인필요) — Google Places (New) Text Search 의 locationBias.circle.radius 최대 50000m (50km).
+  //   100000m = 400 Invalid circle.radius 에러 (2026-04-26 cron 첫 실행 실패 원인).
   const locationBias = (city.latitude && city.longitude)
-    ? { circle: { center: { latitude: city.latitude, longitude: city.longitude }, radius: 100000 } }
+    ? { circle: { center: { latitude: city.latitude, longitude: city.longitude }, radius: 50000 } }
     : null;
 
-  console.log(`✅ 선택: ${city.name_en} (id=${city.id}) | "${locationStr}" | bias 100km`);
+  console.log(`✅ 선택: ${city.name_en} (id=${city.id}) | "${locationStr}" | bias 50km`);
   console.log(`✅ API key: ${apiKey.slice(0, 8)}...`);
 
   if (DRY_RUN) {
