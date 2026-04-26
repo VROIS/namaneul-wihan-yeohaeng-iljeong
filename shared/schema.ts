@@ -93,12 +93,13 @@ export const cities = pgTable("cities", {
   mcpRankNote: text("mcp_rank_note"),
   mcpRankUpdatedAt: timestamp("mcp_rank_updated_at"),
   btsRank: integer("bts_rank"), // BTS 2026 공연 도시 순번 1~34 (null=해당없음)
-  // === BTS 공연 정보 (cities에 통합, SSoT) ===
+  // ⚠️ 수정금지(승인필요) — 2026-04-26 단일 SSOT 정리 (사용자 결정):
+  //   장소 정보 (venue/army_zone/merch_store) = place_seed_raw 통합
+  //   cities 는 도시 자체의 BTS 활동 메타만 보유 (일정/순위/검증)
   btsConcertDates: jsonb("bts_concert_dates").$type<string[]>().default([]), // ["2026-04-09","2026-04-12"]
-  btsVenue: text("bts_venue"), // 공연장명
-  btsVenueCapacity: integer("bts_venue_capacity"),
-  btsFanZone: jsonb("bts_fan_zone").$type<{ location?: string; hours?: string; notes?: string }>(),
-  btsMerchInfo: jsonb("bts_merch_info").$type<{ address?: string; hours?: string; notes?: string }>(),
+  btsShowTimes: jsonb("bts_show_times").$type<{ date: string; time: string }[]>().default([]),
+  btsTimeConfirmed: boolean("bts_time_confirmed").default(false),
+  btsArchived: boolean("bts_archived").default(false),
   btsSpecialNotes: text("bts_special_notes"),
   btsSource: text("bts_source"),
   btsVerified: boolean("bts_verified").default(false),

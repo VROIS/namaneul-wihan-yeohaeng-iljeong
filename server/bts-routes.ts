@@ -36,6 +36,7 @@ export function registerBtsRoutes(app: Express): void {
   app.get("/api/bts/next-concert", async (_req, res) => {
     try {
       if (!db) return res.status(503).json({ error: "Database not configured" });
+      // ⚠️ 수정금지(승인필요) — 2026-04-26 단일 SSOT: venue = place_seed_raw LEFT JOIN (seed_category='bts_venue')
       const rows = await db
         .select({
           id: cities.id,
@@ -43,9 +44,17 @@ export function registerBtsRoutes(app: Express): void {
           nameEn: cities.nameEn,
           btsRank: cities.btsRank,
           btsConcertDates: cities.btsConcertDates,
-          btsVenue: cities.btsVenue,
+          venueName: placeSeedRaw.nameEn,
         })
         .from(cities)
+        .leftJoin(
+          placeSeedRaw,
+          and(
+            eq(placeSeedRaw.cityId, cities.id),
+            eq(placeSeedRaw.seedCategory, "bts_venue"),
+            eq(placeSeedRaw.collectionPhase, "bts2026")
+          )
+        )
         .where(isNotNull(cities.btsRank))
         .orderBy(asc(cities.btsRank));
 
@@ -65,7 +74,7 @@ export function registerBtsRoutes(app: Express): void {
                 cityKo: row.nameKo || "",
                 date: d,
                 dDay: diff,
-                venue: row.btsVenue,
+                venue: row.venueName,
               };
             }
             break; // 각 도시에서 가장 빠른 날짜만
@@ -76,7 +85,7 @@ export function registerBtsRoutes(app: Express): void {
       if (!next) {
         // 모든 공연 종료 시 마지막 도시 반환
         const last = rows[rows.length - 1];
-        next = { cityId: last?.id || 0, city: last?.nameEn || "Manila", cityKo: last?.nameKo || "마닐라", date: "2027-03-14", dDay: 0, venue: last?.btsVenue || null };
+        next = { cityId: last?.id || 0, city: last?.nameEn || "Manila", cityKo: last?.nameKo || "마닐라", date: "2027-03-14", dDay: 0, venue: last?.venueName || null };
       }
 
       res.json(next);
