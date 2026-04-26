@@ -111,30 +111,55 @@
 
 ## 제13조: ⚠️ Expo Go / Replit 설정 — 절대 수정 금지 (변경 즉시 Expo Go 연결 파괴)
 
-> 아래는 Replit 공식 문서 기준으로 확정된 표준. 변경 전 반드시 사용자 서면 승인 필요.
+> 아래는 2026-04-26 실제 디버깅으로 확정된 최종 표준.
+> 변경 전 반드시 사용자 서면 승인 필요.
 
-**금지 항목 (위반 시 즉시 퇴출):**
+### ✅ Start Frontend 워크플로우 확정 커맨드 (이 한 줄만 허용)
 
-1. **`app.config.js` 생성 금지** — Replit 공식 문서 명시 FORBIDDEN.
-   삭제된 파일을 복원하거나 재생성하는 것 금지.
+```
+EXPO_PACKAGER_PROXY_URL=https://828b2285-99c5-4cc9-9bcd-a09cdff531bc-00-kzvu1v5xhevl.expo.sisko.replit.dev npx expo start
+```
 
-2. **워크플로우 명령어 변경 금지** — `Start Frontend`의 명령어는 아래로 고정:
-   ```
-   REACT_NATIVE_PACKAGER_HOSTNAME=828b2285-99c5-4cc9-9bcd-a09cdff531bc-00-kzvu1v5xhevl.expo.sisko.replit.dev npx expo start
-   ```
-   `CI=1` 추가 금지. `--tunnel` 추가 금지. `REACT_NATIVE_PACKAGER_HOSTNAME` 값 변경 금지.
+> **원칙**: 이 Replit 환경은 포트를 직접 명시하지 않고 Replit 프록시 자동 라우팅에 맡긴다.
+> `EXPO_PACKAGER_PROXY_URL`은 Metro가 포트 없이 `exp://...expo.sisko.replit.dev`를 생성하게 한다.
+> `REACT_NATIVE_PACKAGER_HOSTNAME`을 쓰면 Metro가 `:8081`을 강제로 붙여 Replit 프록시가 끊긴다.
 
-3. **`serveExpoManifest()` 복원 금지** — `server/index.ts`에서 삭제된 함수.
-   Expo Go는 Metro(port 8081)에 직접 연결. Express(5000)에서 manifest 서빙 안 함.
+---
 
-4. **`Constants.expoConfig?.extra?.apiDomain` 코드 복원 금지** —
-   `client/lib/query-client.ts`에서 제거된 폴백. `EXPO_PUBLIC_DOMAIN` 환경변수가 유일한 소스.
+### ❌ 절대 금지 항목 (위반 즉시 Expo Go 연결 파괴)
 
-**올바른 설정 (표준):**
-- API URL: `EXPO_PUBLIC_DOMAIN` 환경변수 (Replit Secrets, shared 환경)
-- Expo 설정: `app.json` 전용 (app.config.js 사용 금지)
-- Metro 포트: 8081 (Replit이 직접 노출, tunnel 불필요)
-- `EXPO_TOKEN` 시크릿: 로그인 없이 Metro 실행 가능
+| 금지 항목 | 이유 |
+|-----------|------|
+| `REACT_NATIVE_PACKAGER_HOSTNAME=...` 단독 사용 | Metro가 `exp://...:8081` 생성 → Replit 프록시 라우팅 실패 |
+| `EXPO_PACKAGER_PROXY_URL=https://...:8081` (포트 명시) | QR 접속 끊김 |
+| `--go` 플래그 추가 | iOS 앱 멈춤 (commit 4e35953 롤백 이력) |
+| `--clear` 플래그 추가 | 캐시 충돌 |
+| `--tunnel` 플래그 추가 | ngrok 충돌 (Replit 직접 노출이라 불필요) |
+| `CI=1` 추가 | HMR / Fast Refresh 비활성화 |
+| `npm install && ...` 선행 추가 | 불필요, 워크플로 지연 |
+| 두 워크플로 동시 재시작 | Metro의 FallbackWatcher가 로그 파일 로테이션 중 ENOENT로 죽음 |
+| `app.config.js` / `app.config.ts` 생성 | Replit 공식 FORBIDDEN |
+| `serveExpoManifest()` 복원 | Expo Go는 Metro(8081)에 직접 연결, Express 경유 불필요 |
+| `Constants.expoConfig?.extra?.apiDomain` 폴백 복원 | `EXPO_PUBLIC_DOMAIN` 단일 소스 위반 |
+
+---
+
+### ✅ 올바른 설정 전체 표준
+
+- **Metro 연결 URL**: `exp://828b2285-99c5-4cc9-9bcd-a09cdff531bc-00-kzvu1v5xhevl.expo.sisko.replit.dev` (포트 없음 — Replit 프록시 자동 처리)
+- **API URL**: `EXPO_PUBLIC_DOMAIN` 환경변수 단독 소스 (Replit Secrets)
+- **Expo 설정**: `app.json` 전용 (`app.config.js` 사용 금지)
+- **포트 라우팅**: Replit 프록시 자동 담당 (에이전트가 포트 직접 설정 금지)
+- **재시작 순서**: `Start application` 완전 안정화 확인 → `Start Frontend` 순차 재시작 (동시 금지)
+
+---
+
+### 📋 디버깅 이력 요약
+
+| 날짜 | 커밋/이벤트 | 내용 |
+|------|------------|------|
+| 2026-04-13 | fd00038 | Expo Go 표준화 최초 확정 (3일 디버깅, 11회 시행착오) |
+| 2026-04-26 | 세션 디버깅 | `REACT_NATIVE_PACKAGER_HOSTNAME` → `EXPO_PACKAGER_PROXY_URL` 전환 확정 (포트 자동화 원칙) |
 
 ---
 

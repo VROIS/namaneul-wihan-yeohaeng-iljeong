@@ -49,11 +49,17 @@ NUBI is a React Native/Expo travel application with an Express backend. It provi
 
 ### 2. 워크플로우 명령어 (고정 — 절대 변경 금지)
 ```
-REACT_NATIVE_PACKAGER_HOSTNAME=828b2285-99c5-4cc9-9bcd-a09cdff531bc-00-kzvu1v5xhevl.expo.sisko.replit.dev npx expo start
+EXPO_PACKAGER_PROXY_URL=https://828b2285-99c5-4cc9-9bcd-a09cdff531bc-00-kzvu1v5xhevl.expo.sisko.replit.dev npx expo start
 ```
-- `REACT_NATIVE_PACKAGER_HOSTNAME` = Expo Go가 Metro에 접속할 공개 도메인 (고정값)
+- `EXPO_PACKAGER_PROXY_URL` = Replit 프록시 URL (https 포함, 포트 없음)
+- Metro가 `exp://...expo.sisko.replit.dev` (포트 없음) 를 생성 → Replit 자동 라우팅
+- `REACT_NATIVE_PACKAGER_HOSTNAME` 단독 사용 금지 — Metro가 `:8081` 강제 부착 → 프록시 끊김
 - `CI=1` 추가 금지 (HMR 비활성화됨)
 - `--tunnel` 추가 금지 (ngrok 불필요, Replit이 직접 노출)
+- `--go` 추가 금지 (iOS 앱 멈춤)
+- `--clear` 추가 금지 (캐시 충돌)
+- `:8081` 포트 명시 금지 (QR 접속 끊김)
+- 두 워크플로 동시 재시작 금지 (Metro FallbackWatcher ENOENT 크래시)
 
 ### 3. Express에서 네이티브 manifest 서빙 금지
 - Expo Go는 Metro(port 8081)에 직접 연결
@@ -71,3 +77,4 @@ REACT_NATIVE_PACKAGER_HOSTNAME=828b2285-99c5-4cc9-9bcd-a09cdff531bc-00-kzvu1v5xh
 ## Recent Changes
 - 2026-02-24: Initial Replit setup - configured port 5000, CORS for Replit proxy, cache headers, PostgreSQL database, deployment config
 - 2026-04-13: Expo Go Replit 표준화 — app.config.js 삭제, serveExpoManifest() 제거, EXPO_PUBLIC_DOMAIN 설정, REACT_NATIVE_PACKAGER_HOSTNAME=*.expo.sisko.replit.dev 고정, 워크플로우 명령어 확정
+- 2026-04-26: Expo Go 커맨드 재확정 — REACT_NATIVE_PACKAGER_HOSTNAME → EXPO_PACKAGER_PROXY_URL 전환 (포트 자동화 원칙: Metro가 :8081 강제 부착하는 구식 방식 폐기, Replit 프록시 자동 라우팅으로 일원화)
