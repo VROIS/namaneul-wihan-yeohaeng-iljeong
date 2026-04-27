@@ -14,11 +14,17 @@ name: BTS Daily Reseed (1 city/day, 6 categories)
 
 on:
   schedule:
+    # ⚠️ 수정금지(승인필요) — 2026-04-27 사용자 승인 일시 중지 (v3 plan 적용 후 재개)
+    # 사유: scripts/p0-bts-daily-cron.mjs phase3_5_dbInsert (라인 314-346) DELETE+INSERT
+    #       매일 시드 180 row 통째 교체 = 시드 SSOT 매일 변동 = 178 row 삭제 위험
+    # 재개 조건: cron 재작성 (DELETE 폐기 + Find Place + Photo + Supabase Storage 업로드 + 부족분만 갱신)
+    # workflow_dispatch (수동 실행) = 그대로 유지 = 검증/테스트 가능
+    #
     # UTC 07:30 = PDT 00:30 (자정 30분 후, Google quota daily reset 직후)
     # ⚠️ DST: 미국 PDT(서머타임) UTC-7 → '30 7 * * *' / PST(겨울) UTC-8 → '30 8 * * *'
     # 매년 3월 둘째 일요일~11월 첫째 일요일 = PDT (현재 적용)
     # 11월 첫째 일요일~3월 둘째 일요일 = PST (cron 변경 필요)
-    - cron: '30 7 * * *'
+    # - cron: '30 7 * * *'  # ⏸️ 일시 중지 2026-04-27
   # 수동 실행 지원 (테스트 + 복구)
   workflow_dispatch:
     inputs:

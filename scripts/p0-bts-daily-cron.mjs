@@ -1,62 +1,75 @@
-// ⚠️ 수정금지(승인필요) — BTS 일일 자동 cron 재시드 (사용자 2026-04-25 승인, GitHub Actions B)
+// ⚠️ 수정금지(승인필요) — BTS 일일 cron v3 (사용자 2026-04-27 명시 워크플로우)
 //
-// 사용자 의도:
-//   - 매일 PT 자정+30분 자동 실행 (UTC 08:30, quota reset 직후)
-//   - 1도시 자동 선택 (공연 임박 순 + 미처리/부족 데이터)
-//   - 6 카테고리 랭킹 재정비 (사용자 통찰: reviews + photos.length, 평점 X)
-//   - Wikipedia 우선 → Photos 잔여 (식당 20 + 다른 10 = quota cap 30 정확)
+// === 사용자 명시 워크플로우 (그대로) ===
+//   1. 도시명 인자 필수 (자동 선택 X) — 예: --city=El_Paso
+//   2. DB 에서 6 vibe 카테고리 × 상위 5 = 30 곳 SELECT
+//   3. restaurant × 상위 10 = 10 곳 SELECT
+//   4. 공연장 (bts_venue) = skip (Wikipedia URL 그대로)
+//   5. 각 row:
+//      a. place_id 없음 → searchText (이름 + 도시 + 주 + 국가) → place_id + photoName
+//      b. place_id 있음 → searchText skip (캐싱 활용)
+//      c. Photo Media → JPEG binary
+//      d. Supabase Storage 업로드 → 우리 CDN URL
+//      e. UPDATE image_url + google_place_id + image_attribution + image_updated_at
 //
-// 호출 분배 (1도시):
-//   - Text Search Essentials: 30 (5 × 6 카테고리) — quota cap 30/day 정확
-//   - Wikipedia REST: 180 (30 × 6) — 무제한
-//   - Place Photos: 30 (식당 20 + 다른 카테고리 잔여 10) — quota cap 30/day 정확
+// === 일일 cap (이전 v2 그대로) ===
+//   - SEARCH 30 + PHOTO 30 = 첫 회 = 도시당 약 3 일 분할 (40 row × 2 호출 ÷ 30)
+//   - place_id 캐싱 후 = Photo 만 = 1 일 (이후 갱신)
 //
-// 안전장치 5개 (v2 그대로):
-//   1. ALLOWED_FIELDS + ATMOSPHERE 33개 차단
-//   2. searchNearby 코드 정의 X
-//   3. PHOTOS_DAILY_LIMIT 30 (사용자 cap 일치)
-//   4. 호출 간격 10초 (Text), 1.5초 (Photos)
-//   5. 429 retry 60초 1회만
+// === 안전장치 5 개 (이전 v2 그대로) ===
+//   1. ALLOWED_FIELDS + ATMOSPHERE 33 차단
+//   2. searchNearby 호출 X
+//   3. SEARCH/PHOTOS DAILY_LIMIT 30 이중 cap
+//   4. 호출 간격 10 초 (search), 1.5 초 (photo)
+//   5. 429 retry 60 초 1 회만
 //
-// 도시 자동 선택 (DB 쿼리):
-//   - bts_rank NOT NULL + bts_archived=false + (image_url 보유 < 100 또는 처리 미완)
-//   - 공연 임박 순 (bts_concert_dates 가장 가까운 미래)
-//   - 1개 선택
+// === Secret 요구사항 ===
+//   - SUPA_URL (env)
+//   - GOOGLE_MAPS_API_KEY (api_keys 자동 로드)
+//   - SUPABASE_ANON_KEY (api_keys 자동 로드, 2026-04-27: bucket place-images RLS 정책 우회)
 //
-// 실행:
-//   node scripts/p0-bts-daily-cron.mjs        (자동 도시 선택)
-//   node scripts/p0-bts-daily-cron.mjs --city=Mexico_City  (수동)
-//   node scripts/p0-bts-daily-cron.mjs --dry-run
+// === 실행 ===
+//   node scripts/p0-bts-daily-cron.mjs --city=El_Paso              # 사용자 명시 도시
+//   node scripts/p0-bts-daily-cron.mjs --city=El_Paso --dry-run    # 검증
+//   node scripts/p0-bts-daily-cron.mjs --city=El_Paso --category=shopping  # 특정 카테고리만
 
 import pg from 'pg';
 
-// ⚠️ Agent 검증 FAIL 수정 (2026-04-25): DB 비밀번호 하드코드 fallback 제거
-// SUPA_URL 환경변수 필수 (GitHub Secrets 또는 로컬 export)
+// ━━━━━━ Config ━━━━━━
 const SUPA_URL = process.env.SUPA_URL;
 if (!SUPA_URL) {
-  console.error('❌ SUPA_URL 환경변수 미설정. GitHub Secrets 또는 export SUPA_URL=... 필요');
+  console.error('❌ SUPA_URL 환경변수 미설정.');
   process.exit(1);
 }
-const UA = 'NubiBot/1.0 (vibetrip; contact@vibetrip.app)';
-const CITY_ARG = process.argv.find((a) => a.startsWith('--city='));
-const MANUAL_CITY = CITY_ARG ? CITY_ARG.split('=')[1].replace(/_/g, ' ') : null;
-const DRY_RUN = process.argv.includes('--dry-run');
+
+const args = Object.fromEntries(process.argv.slice(2).map(a => {
+  const [k, v] = a.replace(/^--/, '').split('=');
+  return [k, v ?? true];
+}));
+const CITY_ARG = args.city ? args.city.replace(/_/g, ' ') : null;
+const CATEGORY_ARG = args.category || null;
+const DRY_RUN = args['dry-run'] === true;
+
+if (!CITY_ARG) {
+  console.error('❌ --city=<도시명> 인자 필수 (예: --city=El_Paso)');
+  process.exit(1);
+}
 
 // ━━━━━━ 안전장치 #1 ━━━━━━
 const ALLOWED_FIELDS = new Set([
-  'places.id','places.displayName','places.location','places.formattedAddress',
-  'places.photos','places.rating','places.userRatingCount',
+  'places.id', 'places.displayName', 'places.location', 'places.formattedAddress',
+  'places.photos', 'places.rating', 'places.userRatingCount',
 ]);
 const ATMOSPHERE_FIELDS = new Set([
-  'allowsDogs','curbsidePickup','delivery','dineIn','editorialSummary','evChargeAmenitySummary',
-  'evChargeOptions','fuelOptions','generativeSummary','goodForChildren','goodForGroups',
-  'goodForWatchingSports','liveMusic','menuForChildren','neighborhoodSummary','parkingOptions',
-  'paymentOptions','outdoorSeating','reservable','restroom','reviews','reviewSummary',
-  'routingSummaries','servesBeer','servesBreakfast','servesBrunch','servesCocktails',
-  'servesCoffee','servesDessert','servesDinner','servesLunch','servesVegetarianFood',
-  'servesWine','takeout',
+  'allowsDogs', 'curbsidePickup', 'delivery', 'dineIn', 'editorialSummary', 'evChargeAmenitySummary',
+  'evChargeOptions', 'fuelOptions', 'generativeSummary', 'goodForChildren', 'goodForGroups',
+  'goodForWatchingSports', 'liveMusic', 'menuForChildren', 'neighborhoodSummary', 'parkingOptions',
+  'paymentOptions', 'outdoorSeating', 'reservable', 'restroom', 'reviews', 'reviewSummary',
+  'routingSummaries', 'servesBeer', 'servesBreakfast', 'servesBrunch', 'servesCocktails',
+  'servesCoffee', 'servesDessert', 'servesDinner', 'servesLunch', 'servesVegetarianFood',
+  'servesWine', 'takeout',
 ]);
-const FIELD_MASK = 'places.id,places.displayName,places.location,places.formattedAddress,places.photos,places.rating,places.userRatingCount';
+const FIELD_MASK = 'places.id,places.displayName,places.location,places.photos,places.userRatingCount';
 
 function validateFieldMask(mask) {
   for (const f of mask.split(',').map((x) => x.trim())) {
@@ -67,71 +80,41 @@ function validateFieldMask(mask) {
 }
 validateFieldMask(FIELD_MASK);
 
-// ━━━━━━ 일일 한도 (사용자 quota cap 일치) ━━━━━━
+// ━━━━━━ 일일 한도 ━━━━━━
+const SEARCH_DAILY_LIMIT = 30;
 const PHOTOS_DAILY_LIMIT = 30;
-const TEXT_DAILY_LIMIT = 30;
-const RESTAURANT_PHOTOS = 20;  // 식당 카테고리 photos 한도 (사용자 명시)
-const OTHER_PHOTOS = 10;       // 다른 5 카테고리 잔여 한도 (사용자 명시)
-let textCalls = 0, photoCalls = 0, wikiCalls = 0, restaurantPhotoCalls = 0, otherPhotoCalls = 0;
+let searchCalls = 0, photoCalls = 0;
 
-// ━━━━━━ 도시 location string ━━━━━━
+// ━━━━━━ 사용자 SSOT 카테고리 spec ━━━━━━
+//   vibe 6 = 카테고리당 상위 5
+//   restaurant = 상위 10
+//   bts_venue = skip (Wikipedia)
+const VIBE_CATEGORIES = ['attraction', 'healing', 'adventure', 'hotspot', 'heritage', 'shopping'];
+const RESTAURANT_CATEGORY = 'restaurant';
+const VIBE_TOP_N = 5;
+const RESTAURANT_TOP_N = 10;
+
+// ━━━━━━ 도시 location string (메모리 project_bts_data_insights.md) ━━━━━━
 const US_STATES = {
-  'Tampa':'Florida','El Paso':'Texas','Stanford':'California','Las Vegas':'Nevada',
-  'East Rutherford':'New Jersey','Foxborough':'Massachusetts','Baltimore':'Maryland',
-  'Arlington':'Texas','Chicago':'Illinois','Los Angeles':'California',
+  'Tampa': 'Florida', 'El Paso': 'Texas', 'Stanford': 'California', 'Las Vegas': 'Nevada',
+  'East Rutherford': 'New Jersey', 'Foxborough': 'Massachusetts', 'Baltimore': 'Maryland',
+  'Arlington': 'Texas', 'Chicago': 'Illinois', 'Los Angeles': 'California',
 };
 const COUNTRY_EN = {
-  US:'United States',MX:'Mexico',KR:'South Korea',ES:'Spain',BE:'Belgium',
-  GB:'United Kingdom',DE:'Germany',FR:'France',CA:'Canada',CO:'Colombia',
-  PE:'Peru',CL:'Chile',AR:'Argentina',BR:'Brazil',TW:'Taiwan',TH:'Thailand',
-  MY:'Malaysia',SG:'Singapore',ID:'Indonesia',AU:'Australia',HK:'Hong Kong',PH:'Philippines',
+  US: 'United States', MX: 'Mexico', KR: 'South Korea', ES: 'Spain', BE: 'Belgium',
+  GB: 'United Kingdom', DE: 'Germany', FR: 'France', CA: 'Canada', CO: 'Colombia',
+  PE: 'Peru', CL: 'Chile', AR: 'Argentina', BR: 'Brazil', TW: 'Taiwan', TH: 'Thailand',
+  MY: 'Malaysia', SG: 'Singapore', ID: 'Indonesia', AU: 'Australia', HK: 'Hong Kong', PH: 'Philippines',
 };
 function buildLocationStr(city, cc) {
   if (cc === 'US' && US_STATES[city]) return `${city}, ${US_STATES[city]}, United States`;
   return COUNTRY_EN[cc] ? `${city}, ${COUNTRY_EN[cc]}` : city;
 }
 
-function buildQueries(category, locStr) {
-  const Q = {
-    restaurant: [
-      `best restaurants in ${locStr}`,`popular restaurants in ${locStr}`,
-      `top rated restaurants in ${locStr}`,`local favorite restaurants in ${locStr}`,
-      `fine dining in ${locStr}`,
-    ],
-    heritage: [
-      `historical sites in ${locStr}`,`historic landmarks in ${locStr}`,
-      `museums in ${locStr}`,`cultural heritage attractions in ${locStr}`,
-      `monuments in ${locStr}`,
-    ],
-    hotspot: [
-      `popular tourist attractions in ${locStr}`,`top sights in ${locStr}`,
-      `must-see places in ${locStr}`,`iconic landmarks in ${locStr}`,
-      `famous places in ${locStr}`,
-    ],
-    healing: [
-      `popular parks in ${locStr}`,`gardens in ${locStr}`,
-      `nature spots in ${locStr}`,`relaxing places in ${locStr}`,
-      `botanical garden in ${locStr}`,
-    ],
-    adventure: [
-      `theme parks in ${locStr}`,`amusement parks in ${locStr}`,
-      `outdoor activities in ${locStr}`,`family fun in ${locStr}`,
-      `entertainment venues in ${locStr}`,
-    ],
-    shopping: [
-      `popular shopping malls in ${locStr}`,`shopping districts in ${locStr}`,
-      `outlets in ${locStr}`,`markets in ${locStr}`,
-      `department stores in ${locStr}`,
-    ],
-  };
-  return Q[category] || [];
-}
-
-// ━━━━━━ Google Text Search (429 retry) ━━━━━━
-async function textSearchOnce(query, apiKey, regionCode, locationBias) {
+// ━━━━━━ Google searchText (place_id + photoName) ━━━━━━
+async function searchTextOnce(textQuery, apiKey, locationBias) {
   validateFieldMask(FIELD_MASK);
-  const body = { textQuery: query, pageSize: 20 };
-  if (regionCode) body.regionCode = regionCode.toLowerCase();
+  const body = { textQuery, pageSize: 1 };
   if (locationBias) body.locationBias = locationBias;
   return await fetch('https://places.googleapis.com/v1/places:searchText', {
     method: 'POST',
@@ -145,352 +128,262 @@ async function textSearchOnce(query, apiKey, regionCode, locationBias) {
   });
 }
 
-async function textSearch(query, apiKey, regionCode, locationBias) {
-  if (textCalls >= TEXT_DAILY_LIMIT) throw new Error(`🚨 Text DAILY_LIMIT ${TEXT_DAILY_LIMIT} 초과`);
-  textCalls++;
-  let res = await textSearchOnce(query, apiKey, regionCode, locationBias);
+async function findPlace(textQuery, apiKey, locationBias) {
+  if (searchCalls >= SEARCH_DAILY_LIMIT) {
+    throw new Error(`🚨 SEARCH_DAILY_LIMIT ${SEARCH_DAILY_LIMIT} 초과`);
+  }
+  searchCalls++;
+  let res = await searchTextOnce(textQuery, apiKey, locationBias);
   if (res.status === 429) {
-    console.log(`  ⏸️  429 → 60초 대기 retry...`);
+    console.log(`  ⏸️  search 429 → 60초 대기...`);
     await new Promise((r) => setTimeout(r, 60000));
-    res = await textSearchOnce(query, apiKey, regionCode, locationBias);
+    res = await searchTextOnce(textQuery, apiKey, locationBias);
   }
   if (!res.ok) {
     const t = await res.text();
-    throw new Error(`Text Search 실패 ${res.status}: ${t.slice(0, 200)}`);
+    throw new Error(`searchText 실패 ${res.status}: ${t.slice(0, 200)}`);
   }
   const data = await res.json();
-  return data.places || [];
+  if (!data.places?.[0]) return null;
+  const p = data.places[0];
+  return {
+    placeId: p.id,
+    photoName: p.photos?.[0]?.name || null,
+    location: p.location || null,
+  };
 }
 
-// ━━━━━━ Wikipedia (city + name) ━━━━━━
-const STOP = new Set([
-  'the','of','a','an','and','or','in','on','at','to','for','by','with','from',
-  'restaurant','restaurants','cafe','park','museum','garden','mall','market','center','centre',
-  'el','la','le','les','de','du','des',
-]);
-function tokenize(s, extraStop = new Set()) {
-  if (!s) return [];
-  const stopSet = new Set([...STOP, ...extraStop]);
-  return s.toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '')
-    .split(/[\s\-_.,'"()\[\]!?#&%$/\\:;]+/)
-    .filter((t) => t && t.length >= 2 && !stopSet.has(t));
-}
-function matchRatio(name, target, extraStop = new Set()) {
-  const nt = tokenize(name, extraStop);
-  if (nt.length === 0) return 0;
-  const ft = new Set(tokenize(target, extraStop));
-  return nt.filter((t) => ft.has(t)).length / nt.length;
-}
-
-async function wikipediaSearchWithCity(city, name) {
-  wikiCalls++;
-  const q = `${name} ${city}`;
-  const url = `https://en.wikipedia.org/w/rest.php/v1/search/page?q=${encodeURIComponent(q)}&limit=3`;
-  try {
-    const res = await fetch(url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(10000) });
-    if (!res.ok) return null;
-    const data = await res.json();
-    if (!data.pages?.length) return null;
-    const cityStop = new Set(tokenize(city));
-    for (const page of data.pages) {
-      if (!page.thumbnail?.url) continue;
-      if (matchRatio(name, page.title, cityStop) >= 0.5) {
-        const thumbUrl = page.thumbnail.url.startsWith('//') ? 'https:' + page.thumbnail.url : page.thumbnail.url;
-        return { thumbnail: thumbUrl.replace(/\/\d+px-/, '/500px-'), pageTitle: page.title };
-      }
-    }
-    return null;
-  } catch { return null; }
-}
-
-// ━━━━━━ Place Photos (식당 20 + 다른 10 분리) ━━━━━━
-async function getPhotoUrl(photoName, apiKey, isRestaurant) {
-  if (photoCalls >= PHOTOS_DAILY_LIMIT) throw new Error(`🚨 Photos LIMIT ${PHOTOS_DAILY_LIMIT}`);
-  if (isRestaurant && restaurantPhotoCalls >= RESTAURANT_PHOTOS) {
-    throw new Error(`RESTAURANT_PHOTOS ${RESTAURANT_PHOTOS} 도달`);
-  }
-  if (!isRestaurant && otherPhotoCalls >= OTHER_PHOTOS) {
-    throw new Error(`OTHER_PHOTOS ${OTHER_PHOTOS} 도달`);
+// ━━━━━━ Photo Media (binary) ━━━━━━
+async function downloadPhotoBinary(photoName, apiKey) {
+  if (photoCalls >= PHOTOS_DAILY_LIMIT) {
+    throw new Error(`🚨 PHOTOS_DAILY_LIMIT ${PHOTOS_DAILY_LIMIT} 초과`);
   }
   photoCalls++;
-  if (isRestaurant) restaurantPhotoCalls++; else otherPhotoCalls++;
-
-  const url = `https://places.googleapis.com/v1/${photoName}/media?maxHeightPx=500&key=${apiKey}&skipHttpRedirect=true`;
-  let res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+  const url = `https://places.googleapis.com/v1/${photoName}/media?maxHeightPx=1200&maxWidthPx=1600&key=${apiKey}`;
+  let res = await fetch(url, { signal: AbortSignal.timeout(20000) });
   if (res.status === 429) {
-    console.log(`  ⏸️  Photos 429 → 60초 대기 retry...`);
+    console.log(`  ⏸️  photo 429 → 60초 대기...`);
     await new Promise((r) => setTimeout(r, 60000));
-    res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    res = await fetch(url, { signal: AbortSignal.timeout(20000) });
   }
   if (!res.ok) {
     const t = await res.text();
-    throw new Error(`Photos 실패 ${res.status}: ${t.slice(0, 100)}`);
+    throw new Error(`Photo 실패 ${res.status}: ${t.slice(0, 100)}`);
   }
-  const data = await res.json();
-  return data.photoUri || null;
+  const arr = await res.arrayBuffer();
+  return Buffer.from(arr);
+}
+
+// ━━━━━━ Supabase Storage 업로드 ━━━━━━
+async function uploadToStorage(supabaseUrl, serviceKey, fileName, buffer) {
+  const url = `${supabaseUrl}/storage/v1/object/place-images/${fileName}`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${serviceKey}`,
+      'Content-Type': 'image/jpeg',
+      'x-upsert': 'true',
+    },
+    body: buffer,
+    signal: AbortSignal.timeout(15000),
+  });
+  if (!res.ok) {
+    const t = await res.text();
+    throw new Error(`Storage 업로드 실패 ${res.status}: ${t.slice(0, 200)}`);
+  }
+  return `${supabaseUrl}/storage/v1/object/public/place-images/${fileName}`;
 }
 
 // ━━━━━━ DB ━━━━━━
-async function getApiKey(db) {
-  const r = await db.query("SELECT key_value FROM api_keys WHERE key_name = 'GOOGLE_MAPS_API_KEY'");
-  if (!r.rows.length) throw new Error('GOOGLE_MAPS_API_KEY 없음');
+async function getApiKey(db, keyName) {
+  const r = await db.query(
+    "SELECT key_value FROM api_keys WHERE key_name = $1 AND is_active = true",
+    [keyName]
+  );
+  if (!r.rows.length) throw new Error(`🚨 ${keyName} 없음 (api_keys 테이블에 추가 필요)`);
   return r.rows[0].key_value;
 }
 
-// ━━━━━━ 자동 도시 선택 (공연 임박 + 미처리/부족) ━━━━━━
-async function selectNextCity(db) {
+// ━━━━━━ 카테고리 상위 N row SELECT (사용자 SSOT) ━━━━━━
+async function selectTopNByCategory(db, cityId, category, topN) {
   const r = await db.query(`
-    SELECT c.id, c.name_en, c.country_code, c.latitude, c.longitude,
-      (SELECT COUNT(*) FROM place_seed_raw psr
-        WHERE psr.city_id = c.id AND psr.collection_phase = 'bts2026'
-          AND psr.image_url IS NOT NULL) AS image_count,
-      (SELECT MIN(d::date) FROM jsonb_array_elements_text(COALESCE(c.bts_concert_dates, '[]'::jsonb)) d
-        WHERE d::date >= CURRENT_DATE) AS next_concert
-    FROM cities c
-    WHERE c.bts_rank IS NOT NULL AND COALESCE(c.bts_archived, false) = false
-      AND c.name_en IN (
-        'El Paso','Mexico City','Stanford','Las Vegas','Busan','Madrid','Brussels',
-        'London','Munich','Paris','East Rutherford','Foxborough','Baltimore','Arlington',
-        'Toronto','Chicago','Los Angeles','Bogota','Lima','Santiago','Buenos Aires',
-        'Sao Paulo','Kaohsiung','Bangkok','Kuala Lumpur','Singapore','Jakarta','Melbourne',
-        'Sydney','Hong Kong','Manila','Tampa'
-      )
-    ORDER BY
-      (SELECT COUNT(*) FROM place_seed_raw psr
-        WHERE psr.city_id = c.id AND psr.collection_phase = 'bts2026'
-          AND psr.seed_category IN ('restaurant','heritage','hotspot','healing','adventure','shopping')
-          AND psr.image_url IS NOT NULL) ASC,
-      (SELECT MIN(d::date) FROM jsonb_array_elements_text(COALESCE(c.bts_concert_dates, '[]'::jsonb)) d
-        WHERE d::date >= CURRENT_DATE) ASC NULLS LAST
-    LIMIT 1
-  `);
-  return r.rows[0] || null;
+    SELECT id, name_en, name_ko, seed_category, google_place_id, rank
+    FROM place_seed_raw
+    WHERE city_id = $1
+      AND collection_phase = 'bts2026'
+      AND seed_category = $2
+      AND name_en IS NOT NULL AND TRIM(name_en) <> ''
+    ORDER BY rank NULLS LAST, id
+    LIMIT $3
+  `, [cityId, category, topN]);
+  return r.rows;
 }
 
-// ━━━━━━ Phase 1 ━━━━━━
-async function phase1_collectGoogleData(cityName, apiKey, locationStr, regionCode, locationBias) {
-  console.log(`\n━━━━━━ PHASE 1: Google Text Search ━━━━━━`);
-  const categories = ['restaurant','heritage','hotspot','healing','adventure','shopping'];
-  const results = {};
-  for (const cat of categories) {
-    console.log(`\n📂 [${cat}]`);
-    const queries = buildQueries(cat, locationStr);
-    const placesByid = new Map();
-    for (const q of queries) {
-      try {
-        console.log(`  📡 "${q.slice(0, 60)}..." (${textCalls + 1})`);
-        const found = await textSearch(q, apiKey, regionCode, locationBias);
-        for (const p of found) if (!placesByid.has(p.id)) placesByid.set(p.id, p);
-      } catch (e) {
-        console.error(`  ❌ ${e.message.slice(0, 100)}`);
-        if (e.message.includes('DAILY_LIMIT')) throw e;
-      }
-      await new Promise((r) => setTimeout(r, 10000));
-    }
-    const sorted = Array.from(placesByid.values())
-      .filter((p) => (p.userRatingCount || 0) >= 100 && p.photos?.length > 0)
-      .sort((a, b) => {
-        if ((b.userRatingCount || 0) !== (a.userRatingCount || 0))
-          return (b.userRatingCount || 0) - (a.userRatingCount || 0);
-        return (b.photos?.length || 0) - (a.photos?.length || 0);
-      })
-      .slice(0, 30);
-    results[cat] = sorted;
-    console.log(`  ✅ ${cat}: ${placesByid.size} 후보 → ${sorted.length} 정렬`);
-  }
-  return results;
-}
+// ━━━━━━ row 1 개 처리 ━━━━━━
+async function processRow(db, row, city, googleKey, supabaseUrl, supabaseKey) {
+  const locStr = buildLocationStr(city.name_en, city.country_code);
+  const textQuery = `${row.name_en}, ${locStr}`;
+  console.log(`\n  📍 #${row.id} [${row.seed_category}] ${row.name_en}`);
 
-// ━━━━━━ Phase 2 ━━━━━━
-function phase2_validate(googleData) {
-  console.log(`\n━━━━━━ PHASE 2: 검증 ━━━━━━`);
-  for (const [cat, rows] of Object.entries(googleData)) {
-    console.log(`  ${cat}: ${rows.length} rows`);
-    if (rows.length === 0) throw new Error(`🚨 ${cat} 0 rows = 진행 중단`);
-  }
-  console.log(`  ✅ 검증 통과`);
-}
+  let placeId = row.google_place_id;
+  let photoName = null;
+  let photoLocation = null;
 
-// ━━━━━━ Phase 3-5: DB INSERT ━━━━━━
-async function phase3_5_dbInsert(db, cityId, googleData) {
-  console.log(`\n━━━━━━ PHASE 3-5: DB 트랜잭션 ━━━━━━`);
-  await db.query('BEGIN');
-  try {
-    for (const [cat, rows] of Object.entries(googleData)) {
-      const del = await db.query(
-        `DELETE FROM place_seed_raw WHERE city_id = $1 AND seed_category = $2 AND collection_phase = 'bts2026'`,
-        [cityId, cat]
-      );
-      let inserted = 0;
-      for (let i = 0; i < rows.length; i++) {
-        const p = rows[i];
-        const lat = p.location?.latitude;
-        const lng = p.location?.longitude;
-        if (lat == null || lng == null) continue;
-        await db.query(
-          `INSERT INTO place_seed_raw (city_id, name_en, latitude, longitude, seed_category, rank, image_url, collection_phase)
-           VALUES ($1, $2, $3, $4, $5, $6, NULL, 'bts2026')`,
-          [cityId, p.displayName?.text || '', lat, lng, cat, i + 1]
-        );
-        inserted++;
-      }
-      console.log(`  ${cat}: DELETE ${del.rowCount} → INSERT ${inserted}`);
-      if (inserted === 0) throw new Error(`🚨 ${cat} INSERT 0 = ROLLBACK`);
-    }
-    await db.query('COMMIT');
-    console.log(`  ✅ COMMIT`);
-  } catch (e) {
-    await db.query('ROLLBACK');
-    throw new Error(`Phase 3-5 ROLLBACK: ${e.message}`);
-  }
-}
-
-// ━━━━━━ Phase 6: Wikipedia ━━━━━━
-async function phase6_wikipedia(db, cityId, cityName, googleData) {
-  console.log(`\n━━━━━━ PHASE 6: Wikipedia ━━━━━━`);
-  let total = 0, hit = 0;
-  for (const [cat, rows] of Object.entries(googleData)) {
-    let catHit = 0;
-    for (let i = 0; i < rows.length; i++) {
-      const name = rows[i].displayName?.text;
-      if (!name) continue;
-      total++;
-      const wiki = await wikipediaSearchWithCity(cityName, name);
-      if (wiki) {
-        await db.query(
-          `UPDATE place_seed_raw SET image_url = $1, updated_at = NOW()
-           WHERE city_id = $2 AND seed_category = $3 AND rank = $4 AND collection_phase = 'bts2026'`,
-          [wiki.thumbnail, cityId, cat, i + 1]
-        );
-        hit++; catHit++;
-      }
-      await new Promise((r) => setTimeout(r, 200));
-    }
-    console.log(`  ${cat}: Wiki ${catHit}/${rows.length}`);
-  }
-  return { hit, total };
-}
-
-// ━━━━━━ Phase 7: Photos (식당 20 + 다른 10) ━━━━━━
-async function phase7_photos(db, cityId, googleData, apiKey) {
-  console.log(`\n━━━━━━ PHASE 7: Photos (식당 20 + 다른 10) ━━━━━━`);
-
-  // 식당 = top 20 만 (rank 1-20)
-  console.log(`\n  🍽 RESTAURANT (rank 1-20 만)`);
-  const restRows = googleData.restaurant || [];
-  for (let i = 0; i < Math.min(restRows.length, 20); i++) {
-    if (restaurantPhotoCalls >= RESTAURANT_PHOTOS) break;
-    const existing = await db.query(
-      `SELECT image_url FROM place_seed_raw WHERE city_id = $1 AND seed_category = 'restaurant' AND rank = $2 AND collection_phase = 'bts2026'`,
-      [cityId, i + 1]
-    );
-    if (existing.rows[0]?.image_url) continue;
-    const photoName = restRows[i].photos?.[0]?.name;
-    if (!photoName) continue;
-    try {
-      const url = await getPhotoUrl(photoName, apiKey, true);
-      if (url) {
-        await db.query(
-          `UPDATE place_seed_raw SET image_url = $1, updated_at = NOW()
-           WHERE city_id = $2 AND seed_category = 'restaurant' AND rank = $3 AND collection_phase = 'bts2026'`,
-          [url, cityId, i + 1]
-        );
-        console.log(`    ✓ rank ${i + 1}: ${restRows[i].displayName?.text?.slice(0, 30)}`);
-      }
-      await new Promise((r) => setTimeout(r, 1500));
-    } catch (e) {
-      console.error(`    ⚠️ rank ${i + 1}: ${e.message.slice(0, 60)}`);
-      if (e.message.includes('LIMIT')) break;
-    }
-  }
-  console.log(`  ✅ Restaurant Photos: ${restaurantPhotoCalls}/${RESTAURANT_PHOTOS}`);
-
-  // 다른 5 카테고리 = 잔여 10 (priority: heritage > hotspot > shopping > healing > adventure)
-  console.log(`\n  🏛 OTHER 5 CATEGORIES (잔여 10)`);
-  const PRIORITY = ['heritage', 'hotspot', 'shopping', 'healing', 'adventure'];
-  for (const cat of PRIORITY) {
-    if (otherPhotoCalls >= OTHER_PHOTOS) break;
-    const rows = googleData[cat] || [];
-    for (let i = 0; i < rows.length; i++) {
-      if (otherPhotoCalls >= OTHER_PHOTOS) break;
-      const existing = await db.query(
-        `SELECT image_url FROM place_seed_raw WHERE city_id = $1 AND seed_category = $2 AND rank = $3 AND collection_phase = 'bts2026'`,
-        [cityId, cat, i + 1]
-      );
-      if (existing.rows[0]?.image_url) continue;
-      const photoName = rows[i].photos?.[0]?.name;
-      if (!photoName) continue;
-      try {
-        const url = await getPhotoUrl(photoName, apiKey, false);
-        if (url) {
-          await db.query(
-            `UPDATE place_seed_raw SET image_url = $1, updated_at = NOW()
-             WHERE city_id = $2 AND seed_category = $3 AND rank = $4 AND collection_phase = 'bts2026'`,
-            [url, cityId, cat, i + 1]
-          );
-          console.log(`    ✓ ${cat} rank ${i + 1}: ${rows[i].displayName?.text?.slice(0, 30)}`);
-        }
-        await new Promise((r) => setTimeout(r, 1500));
-      } catch (e) {
-        if (e.message.includes('LIMIT')) break;
-      }
-    }
-  }
-  console.log(`  ✅ Other Photos: ${otherPhotoCalls}/${OTHER_PHOTOS}`);
-}
-
-// ━━━━━━ 메인 ━━━━━━
-console.log(`\n🚀 [BTS Daily Cron] ${new Date().toISOString()}`);
-console.log(`   모드: ${DRY_RUN ? 'DRY-RUN' : 'REAL'}`);
-
-const db = new pg.Client({ connectionString: SUPA_URL });
-await db.connect();
-
-try {
-  // 도시 선택
-  let city;
-  if (MANUAL_CITY) {
-    const r = await db.query('SELECT id, name_en, country_code, latitude, longitude FROM cities WHERE name_en = $1', [MANUAL_CITY]);
-    if (!r.rows.length) throw new Error(`도시 "${MANUAL_CITY}" 없음`);
-    city = r.rows[0];
-  } else {
-    city = await selectNextCity(db);
-    if (!city) {
-      console.log(`✅ 모든 도시 처리 완료 — 종료`);
-      process.exit(0);
-    }
-  }
-
-  const apiKey = await getApiKey(db);
-  const locationStr = buildLocationStr(city.name_en, city.country_code);
-  // ⚠️ 수정금지(승인필요) — Google Places (New) Text Search 의 locationBias.circle.radius 최대 50000m (50km).
-  //   100000m = 400 Invalid circle.radius 에러 (2026-04-26 cron 첫 실행 실패 원인).
-  const locationBias = (city.latitude && city.longitude)
-    ? { circle: { center: { latitude: city.latitude, longitude: city.longitude }, radius: 50000 } }
-    : null;
-
-  console.log(`✅ 선택: ${city.name_en} (id=${city.id}) | "${locationStr}" | bias 50km`);
-  console.log(`✅ API key: ${apiKey.slice(0, 8)}...`);
-
+  // searchText (place_id 캐싱 시에도 photoName 받기 위해 1 회 호출)
   if (DRY_RUN) {
-    console.log(`\n🔄 DRY-RUN 종료`);
-    process.exit(0);
+    console.log(`     [DRY] searchText("${textQuery.slice(0, 50)}...")`);
+    placeId = placeId || 'DRY_PLACE_ID';
+    photoName = 'DRY_PHOTO_NAME';
+  } else {
+    const locBias = city.latitude && city.longitude ? {
+      circle: {
+        center: { latitude: city.latitude, longitude: city.longitude },
+        radius: 50000,
+      }
+    } : null;
+    const found = await findPlace(textQuery, googleKey, locBias);
+    if (!found) {
+      console.log(`     ✗ searchText 결과 없음 → skip`);
+      return { skipped: true };
+    }
+    placeId = found.placeId;
+    photoName = found.photoName;
+    photoLocation = found.location;
+    console.log(`     ✓ searchText → placeId=${placeId.slice(0, 20)}... photo=${photoName ? '1' : '0'}`);
+    await new Promise((r) => setTimeout(r, 10000));
   }
 
-  // Phase 1-7
-  const googleData = await phase1_collectGoogleData(city.name_en, apiKey, locationStr, city.country_code, locationBias);
-  phase2_validate(googleData);
-  await phase3_5_dbInsert(db, city.id, googleData);
-  const wiki = await phase6_wikipedia(db, city.id, city.name_en, googleData);
-  await phase7_photos(db, city.id, googleData, apiKey);
+  if (!photoName) {
+    console.log(`     ✗ photoName 없음 → skip`);
+    return { skipped: true };
+  }
 
-  console.log(`\n=== 결과 (${city.name_en}) ===`);
-  console.log(`Text Search: ${textCalls}/${TEXT_DAILY_LIMIT}`);
-  console.log(`Place Photos: ${photoCalls}/${PHOTOS_DAILY_LIMIT} (식당 ${restaurantPhotoCalls}/${RESTAURANT_PHOTOS}, 기타 ${otherPhotoCalls}/${OTHER_PHOTOS})`);
-  console.log(`Wikipedia: ${wikiCalls}, 매칭 ${wiki.hit}/${wiki.total}`);
-} catch (e) {
-  console.error(`\n❌ 진행 중단: ${e.message}`);
-  process.exit(1);
-} finally {
-  await db.end();
+  // Photo Media → binary
+  let buffer;
+  if (DRY_RUN) {
+    console.log(`     [DRY] Photo Media`);
+    buffer = Buffer.from('DRY');
+  } else {
+    buffer = await downloadPhotoBinary(photoName, googleKey);
+    console.log(`     ✓ binary ${(buffer.length / 1024).toFixed(0)} KB`);
+    await new Promise((r) => setTimeout(r, 1500));
+  }
+
+  // Storage 업로드
+  const fileName = `${city.id}/${row.seed_category}/${row.id}.jpg`;
+  let storageUrl;
+  if (DRY_RUN) {
+    storageUrl = `[DRY] ${fileName}`;
+  } else {
+    storageUrl = await uploadToStorage(supabaseUrl, supabaseKey, fileName, buffer);
+    console.log(`     ✓ Storage → ${storageUrl}`);
+  }
+
+  // DB UPDATE (DELETE/INSERT X)
+  const attribution = `Photo via Google Places (${placeId})`;
+  if (DRY_RUN) {
+    console.log(`     [DRY] UPDATE place_seed_raw`);
+  } else {
+    await db.query(`
+      UPDATE place_seed_raw
+      SET image_url = $1,
+          google_place_id = COALESCE(google_place_id, $2),
+          image_attribution = $3,
+          image_updated_at = NOW(),
+          latitude = COALESCE(latitude, $4),
+          longitude = COALESCE(longitude, $5)
+      WHERE id = $6
+    `, [
+      storageUrl, placeId, attribution,
+      photoLocation?.latitude || null,
+      photoLocation?.longitude || null,
+      row.id,
+    ]);
+    console.log(`     ✓ DB UPDATE`);
+  }
+
+  return { processed: true, storageUrl, placeId };
 }
+
+// ━━━━━━ Main ━━━━━━
+(async () => {
+  console.log(`🚀 BTS cron v3 ${DRY_RUN ? '(DRY-RUN)' : ''}`);
+  console.log(`   도시: ${CITY_ARG}${CATEGORY_ARG ? ` / 카테고리: ${CATEGORY_ARG}` : ' / 모든 카테고리'}\n`);
+
+  const db = new pg.Client({ connectionString: SUPA_URL, ssl: { rejectUnauthorized: false } });
+  await db.connect();
+
+  try {
+    // 1) API 키 + 도시
+    const googleKey = await getApiKey(db, 'GOOGLE_MAPS_API_KEY');
+    let supabaseKey, supabaseUrl;
+    if (!DRY_RUN) {
+      // ⚠️ 수정금지(승인필요) — 2026-04-27 사용자 결정: ANON key + RLS 정책 우회
+      // service_role key 없으므로 anon key (publishable) 사용. bucket place-images RLS 정책 = anon INSERT 허용.
+      supabaseKey = await getApiKey(db, 'SUPABASE_ANON_KEY');
+      try {
+        supabaseUrl = await getApiKey(db, 'SUPABASE_URL');
+      } catch {
+        const m = SUPA_URL.match(/db\.([^.]+)\.supabase\.co/);
+        if (!m) throw new Error('SUPABASE_URL 추정 실패');
+        supabaseUrl = `https://${m[1]}.supabase.co`;
+      }
+    }
+
+    const cr = await db.query(
+      'SELECT id, name_en, country_code, latitude, longitude FROM cities WHERE name_en = $1 LIMIT 1',
+      [CITY_ARG]
+    );
+    if (!cr.rows.length) throw new Error(`도시 없음: ${CITY_ARG}`);
+    const city = cr.rows[0];
+    console.log(`   ✓ 도시 = ${city.name_en} (id=${city.id}, ${city.country_code})`);
+
+    // 2) 카테고리별 상위 N row 수집 (사용자 SSOT)
+    const tasks = [];
+
+    // CATEGORY_ARG 명시 = 그 카테고리만
+    const categoriesToProcess = CATEGORY_ARG
+      ? [CATEGORY_ARG]
+      : [...VIBE_CATEGORIES, RESTAURANT_CATEGORY];
+
+    for (const cat of categoriesToProcess) {
+      const topN = cat === RESTAURANT_CATEGORY ? RESTAURANT_TOP_N : VIBE_TOP_N;
+      const rows = await selectTopNByCategory(db, city.id, cat, topN);
+      tasks.push(...rows);
+      console.log(`   ✓ ${cat}: ${rows.length}/${topN}`);
+    }
+
+    if (tasks.length === 0) {
+      console.log('\n✗ 처리할 row 없음 (카테고리 시드 0)');
+      return;
+    }
+    console.log(`\n📊 처리 대상: ${tasks.length} row`);
+
+    // 3) 각 row 처리 (cap 안)
+    let processed = 0, skipped = 0, errors = 0;
+    for (const row of tasks) {
+      try {
+        const r = await processRow(db, row, city, googleKey, supabaseUrl, supabaseKey);
+        if (r.skipped) skipped++;
+        else if (r.processed) processed++;
+      } catch (e) {
+        errors++;
+        console.error(`     ❌ ${e.message.slice(0, 200)}`);
+        if (e.message.includes('DAILY_LIMIT')) {
+          console.error('🚨 일일 한도 도달 — 종료 (남은 row 는 다음 날)');
+          break;
+        }
+      }
+    }
+
+    console.log(`\n📊 결과: 처리 ${processed} / skip ${skipped} / 오류 ${errors}`);
+    console.log(`📞 호출: search ${searchCalls} / photo ${photoCalls}`);
+  } finally {
+    await db.end();
+  }
+
+  console.log(`\n✅ cron 완료 ${DRY_RUN ? '(DRY-RUN)' : ''}`);
+})().catch((e) => {
+  console.error('❌ FATAL:', e.message);
+  process.exit(1);
+});
