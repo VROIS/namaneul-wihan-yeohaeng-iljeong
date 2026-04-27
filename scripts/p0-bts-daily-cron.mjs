@@ -284,14 +284,17 @@ async function processRow(db, row, city, googleKey, supabaseUrl, supabaseKey) {
   if (DRY_RUN) {
     console.log(`     [DRY] UPDATE place_seed_raw`);
   } else {
+    // ⚠️ 수정금지(승인필요) — 2026-04-27 사용자 원칙 B: Google = 최종 좌표 SSOT
+    // COALESCE($google, 기존) = Google 응답 있으면 무조건 덮어쓰기 (서브에이전트 4자리 → Google 6자리 자동 업그레이드)
+    // Google 미응답 시만 기존 보존 (T2/T3 fallback)
     await db.query(`
       UPDATE place_seed_raw
       SET image_url = $1,
           google_place_id = COALESCE(google_place_id, $2),
           image_attribution = $3,
           image_updated_at = NOW(),
-          latitude = COALESCE(latitude, $4),
-          longitude = COALESCE(longitude, $5)
+          latitude = COALESCE($4, latitude),
+          longitude = COALESCE($5, longitude)
       WHERE id = $6
     `, [
       storageUrl, placeId, attribution,
