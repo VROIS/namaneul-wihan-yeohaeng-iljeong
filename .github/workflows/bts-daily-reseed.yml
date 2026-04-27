@@ -23,7 +23,11 @@ on:
   workflow_dispatch:
     inputs:
       city:
-        description: '특정 도시 강제 (예: El_Paso). 비우면 자동 선택'
+        description: '특정 도시 강제 (예: El_Paso, 언더스코어 권장)'
+        required: false
+        type: string
+      category:
+        description: '특정 카테고리만 (restaurant/attraction/healing/adventure/hotspot/heritage/shopping). 비우면 모든 카테고리'
         required: false
         type: string
       dry_run:
@@ -66,14 +70,19 @@ jobs:
         env:
           SUPA_URL: ${{ secrets.SUPA_URL }}
           CITY_INPUT: ${{ inputs.city }}
+          CATEGORY_INPUT: ${{ inputs.category }}
           DRY_RUN_INPUT: ${{ inputs.dry_run }}
         run: |
-          ARGS=""
+          # ⚠️ 수정금지(승인필요) — bash array 사용 필수 (공백 포함 입력 word-split 방지)
+          ARGS=()
           if [ -n "$CITY_INPUT" ]; then
-            ARGS="$ARGS --city=$CITY_INPUT"
+            ARGS+=("--city=$CITY_INPUT")
+          fi
+          if [ -n "$CATEGORY_INPUT" ]; then
+            ARGS+=("--category=$CATEGORY_INPUT")
           fi
           if [ "$DRY_RUN_INPUT" = "true" ]; then
-            ARGS="$ARGS --dry-run"
+            ARGS+=("--dry-run")
           fi
-          echo "🚀 실행: node scripts/p0-bts-daily-cron.mjs $ARGS"
-          node scripts/p0-bts-daily-cron.mjs $ARGS
+          echo "🚀 실행: node scripts/p0-bts-daily-cron.mjs ${ARGS[*]}"
+          node scripts/p0-bts-daily-cron.mjs "${ARGS[@]}"
