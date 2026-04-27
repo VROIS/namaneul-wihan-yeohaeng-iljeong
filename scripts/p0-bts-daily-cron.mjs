@@ -81,8 +81,11 @@ function validateFieldMask(mask) {
 validateFieldMask(FIELD_MASK);
 
 // ━━━━━━ 일일 한도 ━━━━━━
-const SEARCH_DAILY_LIMIT = 30;
-const PHOTOS_DAILY_LIMIT = 30;
+// ⚠️ 수정금지(승인필요) — 2026-04-28 사용자 승인: 30 → 40 상향
+// 사유: Google quota 50/50 (대시보드 상향) + 도시당 40 = vibe 5×6 + restaurant 10 = 1 cron 1 일 처리
+// 효과: 1 도시 = 1 일 자동 (이전 = 30 cap = 2 runs/도시 = 1.3 일/도시)
+const SEARCH_DAILY_LIMIT = 40;
+const PHOTOS_DAILY_LIMIT = 40;
 let searchCalls = 0, photoCalls = 0;
 
 // ━━━━━━ 사용자 SSOT 카테고리 spec ━━━━━━
