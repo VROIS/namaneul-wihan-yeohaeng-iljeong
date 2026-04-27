@@ -321,12 +321,21 @@ async function processRow(db, row, city, googleKey, supabaseUrl, supabaseKey) {
       // ⚠️ 수정금지(승인필요) — 2026-04-27 사용자 결정: ANON key + RLS 정책 우회
       // service_role key 없으므로 anon key (publishable) 사용. bucket place-images RLS 정책 = anon INSERT 허용.
       supabaseKey = await getApiKey(db, 'SUPABASE_ANON_KEY');
-      try {
-        supabaseUrl = await getApiKey(db, 'SUPABASE_URL');
-      } catch {
-        const m = SUPA_URL.match(/db\.([^.]+)\.supabase\.co/);
-        if (!m) throw new Error('SUPABASE_URL 추정 실패');
-        supabaseUrl = `https://${m[1]}.supabase.co`;
+      // ⚠️ 수정금지(승인필요) — 2026-04-27 사용자 승인 SUPABASE_URL 다중 fallback
+      // 우선순위: env > api_keys > 직접 (db.X.supabase.co) > pooler (postgres.X@...)
+      if (process.env.SUPABASE_URL) {
+        supabaseUrl = process.env.SUPABASE_URL;
+      } else {
+        try {
+          supabaseUrl = await getApiKey(db, 'SUPABASE_URL');
+        } catch {
+          // direct: postgresql://postgres:pwd@db.PROJECT.supabase.co:5432/postgres
+          let m = SUPA_URL.match(/db\.([^.]+)\.supabase\.co/);
+          // pooler: postgresql://postgres.PROJECT:pwd@aws-0-region.pooler.supabase.com:6543/postgres
+          if (!m) m = SUPA_URL.match(/postgres\.([a-z0-9]+):/);
+          if (!m) throw new Error('SUPABASE_URL 추정 실패 (env / api_keys / db / pooler 모두 실패)');
+          supabaseUrl = `https://${m[1]}.supabase.co`;
+        }
       }
     }
 
