@@ -40,7 +40,7 @@ try {
            CASE WHEN image_url IS NULL THEN 'NULL'
                 WHEN image_url LIKE '%storage%place-images%' THEN 'GOOGLE_JPG'
                 ELSE 'OTHER' END AS img_state,
-           created_at, updated_at
+           created_at, image_updated_at
     FROM place_seed_raw
     WHERE city_id = 101 AND collection_phase = 'bts2026'
     ORDER BY id
@@ -52,7 +52,7 @@ try {
     name: (r.name_en || '').slice(0, 35),
     img: r.img_state,
     created: r.created_at?.toISOString().slice(5, 16),
-    updated: r.updated_at?.toISOString().slice(5, 16),
+    img_upd: r.image_updated_at?.toISOString().slice(5, 16) || '-',
   })));
 
   // 2) 카테고리별 ID 범위
@@ -80,7 +80,7 @@ try {
   const orphanCheck = await db.query(`
     SELECT id, city_id, seed_category, collection_phase, name_en,
            CASE WHEN image_url IS NULL THEN 'NULL' ELSE 'HAS_URL' END AS img,
-           created_at, updated_at
+           created_at, image_updated_at
     FROM place_seed_raw
     WHERE id = ANY($1::int[])
     ORDER BY id
@@ -99,10 +99,10 @@ try {
   console.log('━'.repeat(80));
   const apr27 = await db.query(`
     SELECT id, city_id, seed_category, collection_phase, name_en,
-           created_at, updated_at
+           created_at, image_updated_at
     FROM place_seed_raw
     WHERE (created_at >= '2026-04-27 15:00:00' AND created_at < '2026-04-27 16:00:00')
-       OR (updated_at >= '2026-04-27 15:00:00' AND updated_at < '2026-04-27 16:00:00')
+       OR (image_updated_at >= '2026-04-27 15:00:00' AND image_updated_at < '2026-04-27 16:00:00')
     ORDER BY created_at, id
     LIMIT 50
   `);
