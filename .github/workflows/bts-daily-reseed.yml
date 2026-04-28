@@ -25,6 +25,11 @@ on:
         description: '특정 도시 강제 (예: El_Paso, 언더스코어 권장)'
         required: false
         type: string
+      city_id_num:
+        description: 'city_id 숫자 — p3 Wikipedia/Unsplash fallback 대상 (예: 101=El Paso, 102=Mexico City)'
+        required: false
+        default: '101'
+        type: string
       category:
         description: '특정 카테고리만 (restaurant/attraction/healing/adventure/hotspot/heritage/shopping). 비우면 모든 카테고리'
         required: false
@@ -85,3 +90,17 @@ jobs:
           fi
           echo "🚀 실행: node scripts/p0-bts-daily-cron.mjs ${ARGS[*]}"
           node scripts/p0-bts-daily-cron.mjs "${ARGS[@]}"
+
+      - name: P3 Wikipedia/Unsplash fallback (image_url IS NULL 채우기)
+        env:
+          SUPA_URL: ${{ secrets.SUPA_URL }}
+        run: |
+          # ⚠️ 수정금지(승인필요) — Google cron 완료 후 image_url IS NULL 잔여분 채우기
+          # DRY-RUN 시 = p3 도 dry-run (DB 변경 없음)
+          CITY_NUM="${{ inputs.city_id_num || '101' }}"
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            echo "🔍 [DRY] node scripts/p3-wikipedia-unsplash-fill.mjs --city-id=$CITY_NUM"
+            node scripts/p3-wikipedia-unsplash-fill.mjs --city-id="$CITY_NUM"
+          else
+            node scripts/p3-wikipedia-unsplash-fill.mjs --city-id="$CITY_NUM" --commit
+          fi
