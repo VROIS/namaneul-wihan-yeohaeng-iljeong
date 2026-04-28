@@ -33,21 +33,30 @@ GROUP BY c.id;
 - existing ≥ 25 → "이미 시드 보유. 발굴 skip" + 종료
 - existing < 25 → 3단계 진행
 
-### 3단계 — 서브 에이전트 발굴 (general-purpose + WebSearch, v4 최종 = Google Search 기반 + Pass 1+2 통합 단일 호출)
+### 3단계 — 서브 에이전트 발굴 (general-purpose + Google Search 강제, 7 카테고리 병렬 동시)
 
 ⚠️ 즉시 실행 모드. Plan mode 진입 X. ExitPlanMode 호출 X. 직접 작업 후 보고만.
 
-서브 에이전트 호출 spec (v4 = 32 도시 × 7 카테고리 = 224 회 동일 적용):
-- 도구: `WebSearch` (Google 검색 직접 호출 필수) + `WebFetch` + Read + Write
+서브 에이전트 호출 spec (v5 = 32 도시 × 7 카테고리 = 32 회 도시 호출 × 7 병렬 sub-agent):
+
+**🔥 핵심 3 강제 (사용자 2026-04-28, 선임 누락분)**:
+1. **Google Search 만 사용** — `WebSearch` 도구로 google.com 직접 호출 강제. Bing/DuckDuckGo/generic search 거부. Pass 1 + Pass 2 모두 Google.
+2. **7 카테고리 병렬 동시** — 1 도시 처리 시 단일 메시지에 7 sub-agent 호출 (Promise.all 패턴). model = Sonnet 명시.
+3. **Wikipedia = 데이터 소스 X** — 좌표 검증 시 T2 출처로만 사용. 시드 30곳 후보 발굴 = 100% Google Search.
+
+서브 에이전트 호출 spec:
+- 도구: `WebSearch` (Google 결과 페이지 직접 fetch 강제) + `WebFetch` (좌표 검증 보조) + Read + Write
+- model: Sonnet (Haiku/Opus 아님, Agent tool 의 `model: "sonnet"` 인자 명시)
 - 테마 = 한 단어만 (세부 분류 X = 사용자 SSOT)
 - 반경 100km (도시 중심 좌표 = cities 테이블)
 - 단일 호출 = Pass 1 (초기 발굴) + Pass 2 (자체 검증) 통합
+- 1 도시 = 7 sub-agent 병렬 = 약 6분 (순차 42분 대비 7배)
 
-**Pass 1 — WebSearch 4 쿼리 + 좌표 검증**:
-1. `"{테마영문} {도시영문} {국가}"` (예: "attractions El Paso TX USA")
-2. `"best {테마영문} {도시영문} TripAdvisor"`
-3. `"top {테마영문} {도시영문} Yelp"`
-4. `"popular {테마영문} {도시영문} reviews 2026"`
+**Pass 1 — Google Search 4 쿼리 + 좌표 검증** (다른 검색엔진 거부):
+1. `"{테마영문} {도시영문} {국가}"` (예: "attractions El Paso TX USA") → Google
+2. `"best {테마영문} {도시영문} TripAdvisor"` → Google
+3. `"top {테마영문} {도시영문} Yelp"` → Google
+4. `"popular {테마영문} {도시영문} reviews 2026"` → Google
 
 후보 30 곳 사용자 SSOT 3 조건 정렬:
 - ① Google 검색량/노출 (실제 결과 수)
@@ -70,10 +79,10 @@ GROUP BY c.id;
 - google_review_count_note = "Google Maps 리뷰 N (확인 YYYY-MM-DD)"
 - google_image_count_note = "Google Images '키워드' = 약 N건"
 
-**Pass 2 — 응답 직전 자체 검증 (WebSearch 3 쿼리)**:
-1. `"top {category영문} {city} 2026"`
-2. `"most popular {category영문} {city} reviews"`
-3. `"best {category영문} {city} TripAdvisor"`
+**Pass 2 — 응답 직전 자체 검증 (Google Search 3 쿼리, 다른 검색엔진 거부)**:
+1. `"top {category영문} {city} 2026"` → Google
+2. `"most popular {category영문} {city} reviews"` → Google
+3. `"best {category영문} {city} TripAdvisor"` → Google
 
 Pass 1 list (30 곳) vs Pass 2 결과 비교 → ranking 조정:
 - Pass 2 빈번 + Pass 1 미포함 = added (rank 추가)
@@ -214,13 +223,13 @@ WHERE city_id = $1 AND collection_phase = 'bts2026';
 
 ---
 
-## 사용 예시
+## 사용 예시 (1 카테고리 단독)
 
 ```
 사용자: /bts-discover Paris shopping
-AI: [Step 1~5 자동 실행]
+AI: [Step 1~5 자동 실행 — 1 sub-agent (Sonnet) Google Search 7 쿼리]
    소요 약 6 분
-   결과: 30 row 발굴, scripts/paris-shopping-30.json 저장, DB total_with_tag = 30
+   결과: 30 row 발굴, scripts/paris-shopping-30-v4.json 저장, DB total_with_tag = 30
 ```
 
 ```
@@ -228,9 +237,26 @@ AI: [Step 1~5 자동 실행]
 AI: Step 2 검증 → existing = 30 → "이미 시드 보유. 발굴 skip"
 ```
 
+## 사용 예시 (1 도시 풀 = 7 카테고리 병렬)
+
+```
+사용자: /bts-discover Mexico City all
+AI: [7 sub-agent (Sonnet) 동시 호출 = 단일 메시지에 7 Agent tool calls]
+   - sub-agent 1: attraction (Google Search 7 쿼리)
+   - sub-agent 2: restaurant (Google Search 7 쿼리)
+   - sub-agent 3: healing (Google Search 7 쿼리)
+   - sub-agent 4: adventure (Google Search 7 쿼리)
+   - sub-agent 5: hotspot (Google Search 7 쿼리)
+   - sub-agent 6: heritage (Google Search 7 쿼리)
+   - sub-agent 7: shopping (Google Search 7 쿼리)
+   소요 약 6 분 (병렬, 순차 42 분 대비 7배)
+   결과: 7 JSON 저장 + consolidate-v3-best-rank.mjs → 161 unique row → DB UPSERT
+```
+
 ---
 
 ## 향후 확장
 
-- 32 도시 × 7 카테고리 일괄 = 별도 cron (워크플로우 yml) 또는 = 사용자가 매일 1 줄 호출
+- **32 도시 자동 routine** = Claude `schedule` 스킬 매일 KST 03:00 → 다음 도시 (cities.bts_concert_dates ASC) → 7 카테고리 병렬 sub-agent → consolidate → DB → /bts-image-fill 연쇄
 - 부족분 도시 자동 선택: `/bts-discover-next` (cities 테이블 SELECT → 가장 부족한 도시 + 카테고리 자동)
+- = 사용자 한 줄도 안 누르고 32 도시 × 7 카테고리 = 약 1 달 자동 완료
