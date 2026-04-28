@@ -92,6 +92,7 @@ jobs:
           node scripts/p0-bts-daily-cron.mjs "${ARGS[@]}"
 
       - name: P3 Wikipedia/Unsplash fallback (image_url IS NULL 채우기)
+        if: always()
         env:
           SUPA_URL: ${{ secrets.SUPA_URL }}
         run: |
