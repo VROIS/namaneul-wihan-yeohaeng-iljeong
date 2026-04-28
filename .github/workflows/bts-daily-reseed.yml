@@ -1,6 +1,11 @@
-# ⚠️ 수정금지(승인필요) — BTS 일일 자동 재시드 (사용자 2026-04-25 승인)
-# 매일 PDT 자정+30분 (UTC 07:30) Google quota reset 직후 1도시 자동 처리
-# 32 BTS 도시 / 31일 = 한 달 내 6 카테고리 데이터 완비
+# ⚠️ 수정금지(승인필요) — BTS 도시별 Google Places 이미지 수집 (수동 trigger)
+# 2026-04-28 사용자 결정: 스케줄러 폐기, manual trigger 만 (사용자 1줄 = 1 도시)
+# 3 자산 순차 실행 흐름:
+#   1) /bts-discover <city> all  → 7 카테고리 발굴 (~6분)
+#   2) /bts-image-fill <city_id> → Wiki/Unsplash 채움 (~5분)
+#   3) gh workflow run "BTS Daily Reseed (1 city/day, 6 categories)" -f city=<City_Name>
+#                                → Google cron 40 곳 (~10분)
+#   = 1 도시 완성 (~25분)
 #
 # Secret 필수 (GitHub repo Settings → Secrets → Actions):
 #   - SUPA_URL: postgresql://... (Supabase 접속, GOOGLE_MAPS_API_KEY 는 DB에서 자동 로드)
@@ -13,12 +18,9 @@
 name: BTS Daily Reseed (1 city/day, 6 categories)
 
 on:
-  # ⚠️ 수정금지(승인필요) — 2026-04-27 사용자 승인 v4 자동화 = KST 04:30 (UTC 19:30)
-  # 검증 완료: 엘파소 cron v3 (Find Place + Photo + Storage 업로드) = run #25004751231 정상 동작
-  # 검증 완료: 엘파소 v3 → 161 row consolidated UPSERT = run #25020003278 정상 동작
-  # 재개: 매일 KST 04:30 = Google daily quota reset 후 = 안전
-  schedule:
-    - cron: '30 19 * * *'  # UTC 19:30 = KST 04:30 (Korea +9)
+  # ⚠️ 수정금지(승인필요) — 2026-04-28 사용자 결정: 스케줄 제거, 수동 trigger 만
+  # 사용자가 도시 지정해서 manual trigger 시에만 실행
+  # 3 자산 (bts-discover + bts-image-fill + bts-daily-reseed) 순차 실행 = 1 도시 완성
   workflow_dispatch:
     inputs:
       city:
