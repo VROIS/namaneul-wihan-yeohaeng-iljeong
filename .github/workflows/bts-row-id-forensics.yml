@@ -1,0 +1,32 @@
+# 39 orphan JPG row_id 추적 (1회성, 읽기 전용)
+# 사용자 2026-04-28: DELETE/INSERT 사고로 row_id 재발급 의심 — 추적
+name: BTS Row ID Forensics (read-only)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  forensics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check SUPA_URL
+        run: |
+          if [ -z "${{ secrets.SUPA_URL }}" ]; then
+            echo "⚠️  SUPA_URL secret missing"; exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install pg
+        run: npm ci --no-audit --prefer-offline --omit=dev
+
+      - name: Run forensics
+        env:
+          SUPA_URL: ${{ secrets.SUPA_URL }}
+        run: node scripts/p2-row-id-forensics.mjs
