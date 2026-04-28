@@ -346,7 +346,7 @@ async function processRow(db, row, city, googleKey, supabaseUrl, supabaseKey) {
     }
 
     const cr = await db.query(
-      'SELECT id, name_en, country_code, latitude, longitude FROM cities WHERE name_en = $1 LIMIT 1',
+      'SELECT id, name_en, country_code, latitude, longitude FROM cities WHERE LOWER(name_en) = LOWER($1) LIMIT 1',
       [CITY_ARG]
     );
     if (!cr.rows.length) throw new Error(`도시 없음: ${CITY_ARG}`);
