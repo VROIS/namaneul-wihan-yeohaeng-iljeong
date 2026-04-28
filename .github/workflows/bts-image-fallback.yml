@@ -1,0 +1,62 @@
+# ⚠️ 수정금지(승인필요) — Wikipedia/Unsplash 이미지 폴백 전용 (Google Places 호출 없음)
+# image_url IS NULL 인 row에 Wikipedia → Unsplash 순서로 이미지 채우기
+# Google cron(bts-daily-reseed.yml)과 완전 분리 — quota 소모 없음
+
+name: BTS Image Fallback (Wikipedia + Unsplash, no Google)
+
+on:
+  workflow_dispatch:
+    inputs:
+      city_id:
+        description: 'Supabase city.id (예: 101 = El Paso)'
+        required: false
+        default: '101'
+        type: string
+      dry_run:
+        description: 'DRY-RUN (DB 변경 없음, 매칭 결과만 출력)'
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: bts-image-fallback
+  cancel-in-progress: false
+
+jobs:
+  image-fallback:
+    name: Wikipedia + Unsplash image fallback
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check SUPA_URL secret
+        run: |
+          if [ -z "${{ secrets.SUPA_URL }}" ]; then
+            echo "⚠️  SUPA_URL secret is missing. Add it in repo Settings → Secrets → Actions"
+            exit 1
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies (pg only)
+        run: npm ci --no-audit --prefer-offline --omit=dev
+
+      - name: Run Wikipedia/Unsplash fallback
+        env:
+          SUPA_URL: ${{ secrets.SUPA_URL }}
+        run: |
+          # ⚠️ 수정금지(승인필요) — image_url IS NULL 채우기 (COALESCE 보호, Google 이미지 덮어쓰기 금지)
+          CITY_ID="${{ inputs.city_id || '101' }}"
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            echo "🔍 [DRY-RUN] city_id=$CITY_ID — DB 변경 없음"
+            node scripts/p3-wikipedia-unsplash-fill.mjs --city-id="$CITY_ID"
+          else
+            echo "🚀 [COMMIT] city_id=$CITY_ID — DB에 저장"
+            node scripts/p3-wikipedia-unsplash-fill.mjs --city-id="$CITY_ID" --commit
+          fi
