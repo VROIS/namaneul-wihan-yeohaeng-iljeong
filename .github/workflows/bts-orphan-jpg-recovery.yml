@@ -1,0 +1,60 @@
+# 39 orphan JPG 복구 (1회성)
+# 사용자 2026-04-28 승인:
+#   - 04-27 cron run #25002971649 + #25004751231 로그에서 textQuery 추출
+#   - 살아있는 163 row name_en 와 정확 매칭
+#   - 매칭 성공 = Storage rename + DB image_url 백필
+#   - 매칭 실패 = NULL 유지 (row 절대 삭제 X)
+
+name: BTS Orphan JPG Recovery (39 files, 04-27 cron)
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: 'COMMIT (실제 Storage rename + DB UPDATE). 비우면 dry-run.'
+        required: false
+        type: boolean
+        default: false
+
+concurrency:
+  group: bts-orphan-recovery
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read   # 04-27 run log 추출 권한
+
+jobs:
+  recover:
+    name: Match orphan JPG to live row + recover
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check SUPA_URL
+        run: |
+          if [ -z "${{ secrets.SUPA_URL }}" ]; then
+            echo "⚠️  SUPA_URL secret missing"; exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install pg
+        run: npm ci --no-audit --prefer-offline --omit=dev
+
+      - name: Run orphan recovery
+        env:
+          SUPA_URL: ${{ secrets.SUPA_URL }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "${{ inputs.commit }}" = "true" ]; then
+            echo "🚀 COMMIT 모드 — Storage rename + DB UPDATE 실행"
+            node scripts/p4-orphan-jpg-recovery.mjs --commit
+          else
+            echo "🔍 DRY-RUN — 매칭만 시뮬, Storage/DB 변경 X"
+            node scripts/p4-orphan-jpg-recovery.mjs --dry-run
+          fi
