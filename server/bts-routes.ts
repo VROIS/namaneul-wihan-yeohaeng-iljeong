@@ -6,18 +6,19 @@
 import type { Express } from "express";
 import { db } from "./db";
 import { cities, placeSeedRaw } from "../shared/schema";
-import { isNotNull, asc, eq, and, inArray } from "drizzle-orm";
+import { isNotNull, asc, desc, eq, and, inArray, sql } from "drizzle-orm";
 import { optimizeBTSRoute, type PlaceForOptimization } from "./services/bts-gemini";
 
-// 멤버별 seed_category 가중치 (5.3.2 형식 → 50%, 30%, 20%)
-const MEMBER_WEIGHTS: Record<string, Record<string, number>> = {
-  collector: { attraction: 5, healing: 3, restaurant: 2 },
-  romanticist: { attraction: 5, healing: 3, restaurant: 2 },
-  explorer: { hotspot: 5, adventure: 3, attraction: 2 },
-  challenger: { adventure: 5, restaurant: 3, hotspot: 2 },
-  companion: { healing: 5, attraction: 3, restaurant: 2 },
-  recharger: { healing: 5, restaurant: 3, attraction: 2 },
-  chiller: { healing: 5, attraction: 3, restaurant: 2 },
+// ⚠️ 수정금지(승인필요) — 2026-04-30 사용자 SSOT: 1 캐릭터 ↔ 1 카테고리 1:1
+// 이전 MEMBER_WEIGHTS (5/3/2 가중) 폐기. category_tags 배열 필터로 multi-tag 활용.
+const CHARACTER_PRIMARY_CATEGORY: Record<string, string> = {
+  collector: "heritage",     // 문화 수집가
+  romanticist: "hotspot",    // 낭만주의자
+  explorer: "attraction",    // 미학적 탐험가
+  challenger: "adventure",   // 아드레날린 미식가
+  recharger: "healing",      // 럭셔리 휴식가
+  chiller: "shopping",       // 궁극의 힐러 (사용자 정정)
+  // companion = 혼합형 (5 카테고리 union): heritage + hotspot + attraction + healing + shopping
 };
 
 // 캐릭터명 매핑
@@ -147,7 +148,12 @@ export function registerBtsRoutes(app: Express): void {
       if (!cityId || isNaN(cityId)) {
         return res.status(400).json({ error: "cityId required" });
       }
-      const weights = MEMBER_WEIGHTS[memberId] || MEMBER_WEIGHTS.challenger;
+      // ⚠️ 수정금지(승인필요) — 2026-04-30 사용자 SSOT: category_tags 배열 필터 (multi-tag)
+      // companion = 혼합형 (5 카테고리), 그 외 = 1 카테고리 매칭
+      const isCompanion = memberId === "companion";
+      const targetCats = isCompanion
+        ? ["heritage", "hotspot", "attraction", "healing", "shopping"]
+        : [CHARACTER_PRIMARY_CATEGORY[memberId] || "attraction"];
 
       const rows = await db
         .select({
@@ -155,6 +161,7 @@ export function registerBtsRoutes(app: Express): void {
           nameKo: placeSeedRaw.nameKo,
           nameEn: placeSeedRaw.nameEn,
           seedCategory: placeSeedRaw.seedCategory,
+          categoryTags: placeSeedRaw.categoryTags,
           imageUrl: placeSeedRaw.imageUrl,
           bestImageUrl: placeSeedRaw.bestImageUrl,
           priceEur: placeSeedRaw.priceEur,
@@ -162,23 +169,25 @@ export function registerBtsRoutes(app: Express): void {
           // ⚠️ 수정금지(승인필요) — 좌표 추가 (지도 표시 + 동선 계산용)
           latitude: placeSeedRaw.latitude,
           longitude: placeSeedRaw.longitude,
+          // 2026-04-30: 추가 메타 (rating + 리뷰 수 정렬 키)
+          googleRating: placeSeedRaw.googleRating,
+          googleReviewCount: placeSeedRaw.googleReviewCount,
+          editorialSummary: placeSeedRaw.editorialSummary,
+          openingHours: placeSeedRaw.openingHours,
         })
         .from(placeSeedRaw)
         .where(
           and(
             eq(placeSeedRaw.cityId, cityId),
-            eq(placeSeedRaw.collectionPhase, "bts2026")
+            eq(placeSeedRaw.collectionPhase, "bts2026"),
+            // category_tags 배열에 target 카테고리 중 하나라도 포함 (&& = overlap)
+            sql`${placeSeedRaw.categoryTags} && ${targetCats}::text[]`
           )
-        );
+        )
+        .orderBy(desc(placeSeedRaw.googleReviewCount));
 
-      // 가중치 점수 계산 + 동일 점수 내 랜덤 셔플
-      const scored = rows.map((r) => {
-        const w = weights[r.seedCategory || ""] || 0;
-        return { ...r, score: w, rand: Math.random() };
-      });
-      scored.sort((a, b) => b.score - a.score || a.rand - b.rand);
-
-      const top8 = scored.slice(0, 8).map(({ score, rand, bestImageUrl, imageUrl, ...r }) => ({
+      // top 8 (사용자 SSOT)
+      const top8 = rows.slice(0, 8).map(({ bestImageUrl, imageUrl, ...r }) => ({
         ...r,
         imageUrl: bestImageUrl || imageUrl || null,
       }));

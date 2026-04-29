@@ -672,6 +672,11 @@ export const placeSeedRaw = pgTable("place_seed_raw", {
   // SSoT 인앱 링크 (유효성 검증된 게시글 URL만 저장)
   instagramPostUrl: text("instagram_post_url"),
   tiktokPostUrl: text("tiktok_post_url"),
+  // ⚠️ 수정금지(승인필요) — 2026-04-30: multi-tag SSOT (1 장소 = N 카테고리)
+  phaseTags: text("phase_tags").array(),       // ['bts2026'] 등 수집 phase 태그
+  categoryTags: text("category_tags").array(), // ['heritage','hotspot','attraction'] 등 다중 카테고리 태그
+  imageAttribution: text("image_attribution"), // "Photo via Google Places (placeId)"
+  imageUpdatedAt: timestamp("image_updated_at"),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
