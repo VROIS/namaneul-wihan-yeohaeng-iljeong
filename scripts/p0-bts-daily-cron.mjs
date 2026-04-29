@@ -222,10 +222,29 @@ async function selectTopNByCategory(db, cityId, category, topN) {
   return r.rows;
 }
 
+// ━━━━━━ 카테고리 키워드 (사용자 SSOT 본질 정정 2026-04-29) ━━━━━━
+// 이전: textQuery = "El Cardenal, Mexico City, Mexico" = 모호 매칭 → photoName 못 받음
+// 정정: textQuery = "El Cardenal restaurant 19.4337,-99.1353 Mexico City, Mexico" = 정확
+const CATEGORY_KEYWORDS = {
+  restaurant: 'restaurant',
+  shopping: 'shopping mall',
+  attraction: 'tourist attraction landmark',
+  healing: 'park spa wellness',
+  adventure: 'adventure activities outdoor',
+  hotspot: 'popular tourist spot',
+  heritage: 'historical site heritage',
+};
+
 // ━━━━━━ row 1 개 처리 ━━━━━━
 async function processRow(db, row, city, googleKey, supabaseUrl, supabaseKey) {
   const locStr = buildLocationStr(city.name_en, city.country_code);
-  const textQuery = `${row.name_en}, ${locStr}`;
+  // ⚠️ 수정금지(승인필요) — 2026-04-29 사용자 SSOT 본질 정정: 좌표 + 카테고리 키워드 추가
+  // 이전 결함: name + city + country = 모호 매칭 (예: "El Cardenal" 동명 다른 가게)
+  // 정정: name + categoryKw + 좌표 6자리 + city + country = 정확 매칭 보장
+  const categoryKw = CATEGORY_KEYWORDS[row.seed_category] || '';
+  const coordStr = (row.latitude && row.longitude) ? `${row.latitude},${row.longitude}` : '';
+  const textQuery = [row.name_en, categoryKw, coordStr, locStr]
+    .filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
   console.log(`\n  📍 #${row.id} [${row.seed_category}] ${row.name_en}`);
 
   let placeId = row.google_place_id;

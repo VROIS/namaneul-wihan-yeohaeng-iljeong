@@ -3,19 +3,24 @@
 # 3 자산 순차 실행 흐름:
 #   1) /bts-discover <city> all  → 7 카테고리 발굴 (~6분)
 #   2) /bts-image-fill <city_id> → Wiki/Unsplash 채움 (~5분)
-#   3) gh workflow run "BTS Daily Reseed (1 city/day, 6 categories)" -f city=<City_Name>
+#   3) gh workflow run "BTS Daily Reseed (1 city/day, 7 categories)" -f city=<City_Name>
 #                                → Google cron 40 곳 (~10분)
 #   = 1 도시 완성 (~25분)
 #
 # Secret 필수 (GitHub repo Settings → Secrets → Actions):
 #   - SUPA_URL: postgresql://... (Supabase 접속, GOOGLE_MAPS_API_KEY 는 DB에서 자동 로드)
 #
-# 호출 분배 (1도시):
-#   - Text Search Essentials: 30 (quota cap 정확)
-#   - Place Photos: 30 (식당 20 + 다른 5 카테고리 잔여 10)
-#   - Wikipedia REST: 180 (무제한)
+# 호출 분배 (1도시, 2026-04-28 cap 30→40 상향 후):
+#   - Text Search Essentials: 40 (vibe 6 × 5 = 30 + restaurant 10)
+#   - Place Photos: 40 (Text Search 와 동일, photoName 받은 row 만)
+#   - 카테고리 7 = attraction + restaurant + healing + adventure + hotspot + heritage + shopping
+#
+# 2026-04-29 사용자 정정 (선임/본인 잘못된 코멘트 수정):
+#   - "6 categories" → 7 categories (shopping 신규 포함)
+#   - cap 30 → 40 (실제 코드 SEARCH_DAILY_LIMIT/PHOTOS_DAILY_LIMIT)
+#   - cron textQuery 강화 = name + categoryKw + 좌표 6자리 + city + country (모호 매칭 방지)
 
-name: BTS Daily Reseed (1 city/day, 6 categories)
+name: BTS Daily Reseed (1 city/day, 7 categories)
 
 on:
   # ⚠️ 수정금지(승인필요) — 2026-04-28 사용자 결정: 스케줄 제거, 수동 trigger 만
