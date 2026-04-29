@@ -221,9 +221,9 @@ try {
     console.log(unsplashKey ? '🔑 Unsplash key OK' : '⚠️ Unsplash key 없음 (Wikipedia만)');
   } catch { console.log('⚠️ api_keys 테이블 없음 (Wikipedia만)'); }
 
-  // NULL row 조회
+  // NULL row 조회 (evidence_url 추가 — 사용자 시드 발굴 시 검증된 위키 URL 활용)
   const rows = await db.query(`
-    SELECT id, name_en, latitude, longitude, seed_category
+    SELECT id, name_en, latitude, longitude, seed_category, evidence_url
     FROM place_seed_raw
     WHERE city_id = $1
       AND collection_phase = 'bts2026'
@@ -234,16 +234,34 @@ try {
   console.log(`📊 처리 대상: ${rows.rows.length} rows\n`);
 
   const stats = {};
-  const initStat = () => ({ total: 0, wikidata: 0, wiki: 0, unsplash: 0, no_match: 0 });
+  const initStat = () => ({ total: 0, evidence_url: 0, wikidata: 0, wiki: 0, unsplash: 0, no_match: 0 });
 
   for (const row of rows.rows) {
     if (!stats[row.seed_category]) stats[row.seed_category] = initStat();
     const s = stats[row.seed_category];
     s.total++;
 
-    // 1) Wikidata SPARQL (좌표 + 카테고리 + radius 1km)
+    // ━━━━━━ Stage 0 (신규, 0순위) — evidence_url 직접 활용 ━━━━━━
+    // 사용자 시드 발굴 시 이미 검증된 위키피디아 URL = 100% 확실 매칭
     let result = null;
-    if (row.latitude && row.longitude) {
+    if (row.evidence_url?.includes('wikipedia.org/wiki/')) {
+      const m = row.evidence_url.match(/wikipedia\.org\/wiki\/([^?#]+)/);
+      if (m) {
+        const title = decodeURIComponent(m[1]).replace(/_/g, ' ');
+        const sm = await pageSummary(title);
+        if (sm && (sm.originalimage?.source || sm.thumbnail?.source)) {
+          result = {
+            src: `evidence_url(${title})`,
+            title: sm.title,
+            image: sm.originalimage?.source || sm.thumbnail?.source,
+          };
+          s.evidence_url++;
+        }
+      }
+    }
+
+    // 1) Wikidata SPARQL (좌표 + 카테고리 + radius 1km)
+    if (!result && row.latitude && row.longitude) {
       const wd = await wikidataAround(row.name_en, row.latitude, row.longitude, row.seed_category, 1.0);
       if (wd) {
         // article URL 에서 page title 추출
@@ -268,8 +286,12 @@ try {
     }
 
     if (result) {
+      const isEvidence = result.src.startsWith('evidence_url');
       const isWikidata = result.src.startsWith('wikidata');
-      if (isWikidata) s.wikidata++; else s.wiki++;
+      // evidence_url 은 stage 0 진입 시 이미 카운트됨, 중복 X
+      if (!isEvidence) {
+        if (isWikidata) s.wikidata++; else s.wiki++;
+      }
       console.log(`  ✓ [${result.src}] ${row.name_en} → ${result.title}`);
       await db.query(`
         UPDATE place_seed_raw
@@ -304,15 +326,15 @@ try {
   console.log('\n' + '─'.repeat(75));
   console.log(`📊 결과 (city_id=${CITY_ID} ${fullLocation}, COMMITTED):`);
   console.log('─'.repeat(75));
-  console.log('카테고리         대상   Wikidata   Wiki   Unsplash   미매칭');
-  console.log('─'.repeat(75));
-  let totT = 0, totWd = 0, totW = 0, totU = 0, totN = 0;
+  console.log('카테고리         대상   EvidenceURL   Wikidata   Wiki   Unsplash   미매칭');
+  console.log('─'.repeat(85));
+  let totT = 0, totE = 0, totWd = 0, totW = 0, totU = 0, totN = 0;
   for (const [cat, s] of Object.entries(stats).sort()) {
-    console.log(`${cat.padEnd(14)} ${String(s.total).padStart(4)} ${String(s.wikidata).padStart(8)} ${String(s.wiki).padStart(7)} ${String(s.unsplash).padStart(9)} ${String(s.no_match).padStart(7)}`);
-    totT += s.total; totWd += s.wikidata; totW += s.wiki; totU += s.unsplash; totN += s.no_match;
+    console.log(`${cat.padEnd(14)} ${String(s.total).padStart(4)} ${String(s.evidence_url).padStart(11)} ${String(s.wikidata).padStart(10)} ${String(s.wiki).padStart(7)} ${String(s.unsplash).padStart(9)} ${String(s.no_match).padStart(7)}`);
+    totT += s.total; totE += s.evidence_url; totWd += s.wikidata; totW += s.wiki; totU += s.unsplash; totN += s.no_match;
   }
-  console.log('─'.repeat(75));
-  console.log(`합계           ${String(totT).padStart(4)} ${String(totWd).padStart(8)} ${String(totW).padStart(7)} ${String(totU).padStart(9)} ${String(totN).padStart(7)}`);
+  console.log('─'.repeat(85));
+  console.log(`합계           ${String(totT).padStart(4)} ${String(totE).padStart(11)} ${String(totWd).padStart(10)} ${String(totW).padStart(7)} ${String(totU).padStart(9)} ${String(totN).padStart(7)}`);
   console.log(`\n✅ Supabase Studio SQL Editor 검증 쿼리:`);
   console.log(`SELECT seed_category, COUNT(*) FILTER (WHERE image_url IS NULL) AS still_null FROM place_seed_raw WHERE city_id=${CITY_ID} AND collection_phase='bts2026' GROUP BY seed_category ORDER BY seed_category;`);
 
