@@ -107,6 +107,13 @@ export function getCharacterById(id: string): BTSCharacter | undefined {
   return BTS_CHARACTERS.find((c) => c.id === id);
 }
 
+// ⚠️ 수정금지(승인필요) — 1 캐릭터 ↔ 1 카테고리 SSOT 는 shared/ 단일 정의 (server/client 양쪽 import).
+export {
+  CHARACTER_PRIMARY_CATEGORY,
+  COMPANION_VIBE_CATEGORIES,
+  type BTSCharacterId,
+} from "../../shared/bts-character-mapping";
+
 // ⚠️ 수정금지(승인필요) — 캐릭터 전신 이미지 URL 매핑 (Screen 3/4 공유 소스)
 // iOS Expo Go의 require() 실패 회피용 GitHub raw URL. 이미지 변경 시 여기 한 곳만 수정
 // 2026-04-23: PNG → WebP 포맷 전환 (해상도 896×1200 유지, q=85). 7장 합계 16.1MB → 1.17MB (13.7× 감소, 92.7% 절약). expo-image 네이티브 WebP 지원.

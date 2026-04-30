@@ -8,18 +8,32 @@ import { db } from "./db";
 import { cities, placeSeedRaw } from "../shared/schema";
 import { isNotNull, asc, desc, eq, and, inArray, sql } from "drizzle-orm";
 import { optimizeBTSRoute, type PlaceForOptimization } from "./services/bts-gemini";
+import { pickRestaurantBySegment, pickRestaurantNearVenue } from "./services/route-matcher";
+import {
+  CHARACTER_PRIMARY_CATEGORY,
+  COMPANION_VIBE_CATEGORIES,
+} from "../shared/bts-character-mapping";
 
-// ⚠️ 수정금지(승인필요) — 2026-04-30 사용자 SSOT: 1 캐릭터 ↔ 1 카테고리 1:1
-// 이전 MEMBER_WEIGHTS (5/3/2 가중) 폐기. category_tags 배열 필터로 multi-tag 활용.
-const CHARACTER_PRIMARY_CATEGORY: Record<string, string> = {
-  collector: "heritage",     // 문화 수집가
-  romanticist: "hotspot",    // 낭만주의자
-  explorer: "attraction",    // 미학적 탐험가
-  challenger: "adventure",   // 아드레날린 미식가
-  recharger: "healing",      // 럭셔리 휴식가
-  chiller: "shopping",       // 궁극의 힐러 (사용자 정정)
-  // companion = 혼합형 (5 카테고리 union): heritage + hotspot + attraction + healing + shopping
-};
+// ⚠️ 수정금지(승인필요) — /api/bts/top-places 가 SELECT 하는 컬럼. 슬롯 4 곳 동일 형상 보장용.
+const PLACE_COLS = {
+  id: placeSeedRaw.id,
+  nameKo: placeSeedRaw.nameKo,
+  nameEn: placeSeedRaw.nameEn,
+  seedCategory: placeSeedRaw.seedCategory,
+  categoryTags: placeSeedRaw.categoryTags,
+  imageUrl: placeSeedRaw.imageUrl,
+  bestImageUrl: placeSeedRaw.bestImageUrl,
+  priceEur: placeSeedRaw.priceEur,
+  nubiReason: placeSeedRaw.nubiReason,
+  latitude: placeSeedRaw.latitude,
+  longitude: placeSeedRaw.longitude,
+  googleRating: placeSeedRaw.googleRating,
+  googleReviewCount: placeSeedRaw.googleReviewCount,
+  editorialSummary: placeSeedRaw.editorialSummary,
+  openingHours: placeSeedRaw.openingHours,
+} as const;
+
+type PlaceRow = Pick<typeof placeSeedRaw.$inferSelect, keyof typeof PLACE_COLS>;
 
 // 캐릭터명 매핑
 const MEMBER_NAMES: Record<string, string> = {
@@ -140,6 +154,9 @@ export function registerBtsRoutes(app: Express): void {
   });
 
   // ─── GET /api/bts/top-places ───
+  // ⚠️ 수정금지(승인필요) — 2026-04-30 사용자 SSOT: 8 슬롯 고정 순서
+  // slot 1 = bts_venue (출발), slot 5 = 점심 (segment 매칭, 정중앙 하단)
+  // slot 8 = 저녁 (venue 인근), slot 2,3,4,6,7 = 주 카테고리 vibe 1~5 (companion = 5 카테고리)
   app.get("/api/bts/top-places", async (req, res) => {
     try {
       if (!db) return res.status(503).json({ error: "Database not configured" });
@@ -148,51 +165,75 @@ export function registerBtsRoutes(app: Express): void {
       if (!cityId || isNaN(cityId)) {
         return res.status(400).json({ error: "cityId required" });
       }
-      // ⚠️ 수정금지(승인필요) — 2026-04-30 사용자 SSOT: category_tags 배열 필터 (multi-tag)
-      // companion = 혼합형 (5 카테고리), 그 외 = 1 카테고리 매칭
-      const isCompanion = memberId === "companion";
-      const targetCats = isCompanion
-        ? ["heritage", "hotspot", "attraction", "healing", "shopping"]
-        : [CHARACTER_PRIMARY_CATEGORY[memberId] || "attraction"];
 
-      const rows = await db
-        .select({
-          id: placeSeedRaw.id,
-          nameKo: placeSeedRaw.nameKo,
-          nameEn: placeSeedRaw.nameEn,
-          seedCategory: placeSeedRaw.seedCategory,
-          categoryTags: placeSeedRaw.categoryTags,
-          imageUrl: placeSeedRaw.imageUrl,
-          bestImageUrl: placeSeedRaw.bestImageUrl,
-          priceEur: placeSeedRaw.priceEur,
-          nubiReason: placeSeedRaw.nubiReason,
-          // ⚠️ 수정금지(승인필요) — 좌표 추가 (지도 표시 + 동선 계산용)
-          latitude: placeSeedRaw.latitude,
-          longitude: placeSeedRaw.longitude,
-          // 2026-04-30: 추가 메타 (rating + 리뷰 수 정렬 키)
-          googleRating: placeSeedRaw.googleRating,
-          googleReviewCount: placeSeedRaw.googleReviewCount,
-          editorialSummary: placeSeedRaw.editorialSummary,
-          openingHours: placeSeedRaw.openingHours,
-        })
+      const phaseFilter = and(
+        eq(placeSeedRaw.cityId, cityId),
+        eq(placeSeedRaw.collectionPhase, "bts2026")
+      );
+      const dbi = db;
+      const byCategoryTag = (tag: string, limit: number) =>
+        dbi
+          .select(PLACE_COLS)
+          .from(placeSeedRaw)
+          .where(and(phaseFilter, sql`${placeSeedRaw.categoryTags} && ARRAY[${tag}]::text[]`))
+          .orderBy(desc(placeSeedRaw.googleReviewCount))
+          .limit(limit);
+
+      const venueQuery = dbi
+        .select(PLACE_COLS)
         .from(placeSeedRaw)
-        .where(
-          and(
-            eq(placeSeedRaw.cityId, cityId),
-            eq(placeSeedRaw.collectionPhase, "bts2026"),
-            // category_tags 배열에 target 카테고리 중 하나라도 포함 (&& = overlap)
-            sql`${placeSeedRaw.categoryTags} && ${targetCats}::text[]`
-          )
-        )
-        .orderBy(desc(placeSeedRaw.googleReviewCount));
+        .where(and(phaseFilter, eq(placeSeedRaw.seedCategory, "bts_venue")))
+        .orderBy(desc(placeSeedRaw.googleReviewCount))
+        .limit(1);
+      const restaurantQuery = byCategoryTag("restaurant", 10);
 
-      // top 8 (사용자 SSOT)
-      const top8 = rows.slice(0, 8).map(({ bestImageUrl, imageUrl, ...r }) => ({
-        ...r,
-        imageUrl: bestImageUrl || imageUrl || null,
-      }));
+      const isCompanion = memberId === "companion";
+      // companion = 5 카테고리 병렬, 그 외 = 1 카테고리 top 5
+      const vibeQuery: Promise<PlaceRow[]> = isCompanion
+        ? Promise.all(COMPANION_VIBE_CATEGORIES.map((c) => byCategoryTag(c, 1).then((r) => r[0]))).then((arr) => arr.filter((p): p is PlaceRow => !!p))
+        : byCategoryTag(CHARACTER_PRIMARY_CATEGORY[memberId as keyof typeof CHARACTER_PRIMARY_CATEGORY] ?? "attraction", 5);
 
-      res.json(top8);
+      const [venueRows, vibeRows, restaurantPool] = await Promise.all([
+        venueQuery,
+        vibeQuery,
+        restaurantQuery,
+      ]);
+
+      const venue: PlaceRow | null = venueRows[0] ?? null;
+      // 부족분 = null 로 패딩 (가짜 채우기 X, 슬롯 길이 5 보장)
+      const vibeSlots: (PlaceRow | null)[] = Array.from({ length: 5 }, (_, i) => vibeRows[i] ?? null);
+
+      const lunch = pickRestaurantBySegment(restaurantPool, vibeSlots[2], vibeSlots[3]);
+      const dinner = pickRestaurantNearVenue(restaurantPool, venue, lunch ? [lunch.id] : []);
+
+      const slotPlaces: (PlaceRow | null)[] = [
+        venue,          // 1 공연장
+        vibeSlots[0],   // 2
+        vibeSlots[1],   // 3
+        vibeSlots[2],   // 4
+        lunch,          // 5 점심 ★
+        vibeSlots[3],   // 6
+        vibeSlots[4],   // 7
+        dinner,         // 8 저녁 (venue 인근)
+      ];
+
+      // ⚠️ 수정금지(승인필요) — 카드 노출 필드 7 개만 (BTSContext.tsx BTSPlace 타입)
+      // 평점·리뷰수·영업시간·태그 등은 카드 공간 부족으로 미노출 (사용자 SSOT 2026-04-30)
+      const slots = slotPlaces.map((p, i) => {
+        if (!p) return { slot: i + 1, id: null };
+        return {
+          slot: i + 1,
+          id: p.id,
+          nameKo: p.nameKo,
+          nameEn: p.nameEn,
+          seedCategory: p.seedCategory,
+          imageUrl: p.bestImageUrl || p.imageUrl || null,
+          priceEur: p.priceEur,
+          nubiReason: p.nubiReason,
+        };
+      });
+
+      res.json(slots);
     } catch (err) {
       console.error("[BTS] GET /api/bts/top-places error:", err);
       res.status(500).json({ error: "Failed to fetch top places" });
