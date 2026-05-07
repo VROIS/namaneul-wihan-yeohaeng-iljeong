@@ -74,16 +74,15 @@ function effectiveImage(p: PlaceRow | null | undefined): string | null {
   // ⚠️ 정규화된 URL 으로 alive 검증 = 응답 URL 과 동일 보장
   return normalizeImageUrl(p.bestImageUrl || p.imageUrl || null, 1280);
 }
-// ⚠️ 후보 N 개 = 병렬 HEAD 검증 (= for await 직렬 X) + 첫 alive row 반환.
-// 같은 row 두 번 검증 X = 응답 normalizeImageUrl 과 cache 공유.
+// ⚠️ 수정금지(승인필요) — 2026-05-07: HEAD 검증 = Replit 서버 외부 fetch 차단/timeout 환경에서 = 모든 row false 사고.
+// → DB 정규화 후 = 깨진 URL 거의 0 → HEAD 검증 폐기 + 첫 eligible 반환 (fail-open).
+// 깨진 이미지 row = 클라이언트 expo-image cover fit + native UA 헤더 = 1 주일 노하우 그대로 처리.
 async function pickAliveFrom<T extends PlaceRow>(
   candidates: T[],
   used: Set<number>
 ): Promise<T | null> {
-  const eligible = candidates.filter((c) => !used.has(c.id));
-  const flags = await Promise.all(eligible.map((c) => isImageAlive(effectiveImage(c))));
-  for (let i = 0; i < eligible.length; i++) if (flags[i]) return eligible[i];
-  return null;
+  const eligible = candidates.filter((c) => !used.has(c.id) && !!effectiveImage(c));
+  return eligible[0] || null;
 }
 
 // 캐릭터명 매핑
@@ -279,13 +278,8 @@ export function registerBtsRoutes(app: Express): void {
         vibeSlots[vIdx] = next;
       }
 
-      // 식당 풀 = 이미 사용된 id 제외 + alive 검증 적용
-      const restaurantPoolFiltered = restaurantPoolAll.filter((r) => !usedIds.has(r.id));
-      // alive 검증 후보만 추출 (= 병렬 검증)
-      const aliveFlags = await Promise.all(
-        restaurantPoolFiltered.map((r) => isImageAlive(effectiveImage(r)))
-      );
-      const restaurantPool = restaurantPoolFiltered.filter((_, i) => aliveFlags[i]);
+      // 식당 풀 = 이미 사용된 id 제외 (= HEAD 검증 폐기, fail-open).
+      const restaurantPool = restaurantPoolAll.filter((r) => !usedIds.has(r.id) && !!effectiveImage(r));
 
       const lunch = pickRestaurantBySegment(restaurantPool, vibeSlots[2], vibeSlots[3]);
       if (lunch) usedIds.add(lunch.id);
