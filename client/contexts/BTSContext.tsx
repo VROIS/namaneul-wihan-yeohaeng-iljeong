@@ -24,6 +24,9 @@ export type BTSPlace = {
   imageUrl: string | null;
   priceEur: number | null;
   nubiReason: string | null;
+  // ⚠️ 수정금지(승인필요) — 2026-05-06 Screen 4 카트→지도 = WebView 마커용 좌표
+  latitude?: number | null;
+  longitude?: number | null;
 };
 
 export type BTSItineraryPlace = {

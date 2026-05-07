@@ -7,7 +7,13 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
 export function getApiUrl(): string {
   // 웹 환경에서는 같은 도메인 origin 사용
   if (typeof window !== "undefined" && window.location) {
-    return window.location.origin;
+    // ⚠️ 수정금지(승인필요) 2026-05-06 임시 = 로컬 Metro web dev (:19006 / :8081) → Express (:8082) 로 자동 redirect.
+    // Replit/배포 환경에서는 같은 도메인이라 영향 X. 자동 분기라 원복 불필요.
+    const origin = window.location.origin;
+    if (origin.includes(":19006") || origin.includes(":8081")) {
+      return origin.replace(/:(19006|8081)/, ":8082");
+    }
+    return origin;
   }
 
   // EXPO_PUBLIC_DOMAIN: Replit Secrets에 설정된 공개 백엔드 URL

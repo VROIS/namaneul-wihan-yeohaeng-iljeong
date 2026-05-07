@@ -118,3 +118,33 @@ scripts/download-apk.sh
 commit_msg.txt
 next-prompt.md
 이
+
+# 2026-05 임시 SQL chunk / 마이그레이션 잔여물
+_chunk*.sql
+_mx_*.sql
+_wiki_*.sql
+
+# 2026-05 디버깅 임시 스크립트
+scripts/_tmp_*.mjs
+scripts/sql-*.mjs
+
+# 2026-05 임시 텍스트 메모 (사용자 작업 중간 산출물)
+docs/Skip to content.txt
+docs/Top *.txt
+docs/paris*.txt
+docs/stanford_*.txt
+docs/rank*.txt
+docs/결정*.txt
+docs/부산*.txt
+docs/정정된*.txt
+docs/PARIS_DEEP_RESEARCH_PROMPT.md
+
+# 2026-05 검수용 baseline / qa 폴더 (= 로컬 시뮬 결과물)
+docs/baseline-*/
+docs/changed-*/
+docs/ssot-*/
+docs/db-only-*/
+docs/bts-test-*/
+docs/raw/
+docs/qa/
+docs/paris_qa.html

@@ -13,6 +13,7 @@ import {
   CHARACTER_PRIMARY_CATEGORY,
   COMPANION_VIBE_CATEGORIES,
 } from "../shared/bts-character-mapping";
+import { normalizeImageUrl } from "../shared/lib/normalize-image-url";
 
 // ⚠️ 수정금지(승인필요) — /api/bts/top-places 가 SELECT 하는 컬럼. 슬롯 4 곳 동일 형상 보장용.
 const PLACE_COLS = {
@@ -34,6 +35,56 @@ const PLACE_COLS = {
 } as const;
 
 type PlaceRow = Pick<typeof placeSeedRaw.$inferSelect, keyof typeof PLACE_COLS>;
+
+// ⚠️ 수정금지(승인필요) — 2026-05-07 사용자 명시 결정성: 이미지 URL 살아있는지 검증 = HEAD 호출 + 5분 메모리 cache.
+// 깨진 storage URL → 다음 rank 로 자동 swap = "같은 입력 → 같은 결과 + 항상 정상 카드".
+const _imgAliveCache = new Map<string, { ok: boolean; t: number }>();
+const _IMG_CACHE_TTL = 5 * 60 * 1000;
+const _IMG_CACHE_MAX = 500;
+function _imgCacheSet(url: string, ok: boolean): void {
+  if (_imgAliveCache.size >= _IMG_CACHE_MAX) {
+    const cutoff = Date.now() - _IMG_CACHE_TTL;
+    for (const [k, v] of _imgAliveCache) if (v.t < cutoff) _imgAliveCache.delete(k);
+    if (_imgAliveCache.size >= _IMG_CACHE_MAX) {
+      const oldest = _imgAliveCache.keys().next().value;
+      if (oldest) _imgAliveCache.delete(oldest);
+    }
+  }
+  _imgAliveCache.set(url, { ok, t: Date.now() });
+}
+async function isImageAlive(url: string | null | undefined): Promise<boolean> {
+  if (!url) return false;
+  const now = Date.now();
+  const c = _imgAliveCache.get(url);
+  if (c && now - c.t < _IMG_CACHE_TTL) return c.ok;
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 2000);
+    const res = await fetch(url, { method: "HEAD", signal: ctrl.signal });
+    clearTimeout(timer);
+    _imgCacheSet(url, res.ok);
+    return res.ok;
+  } catch {
+    _imgCacheSet(url, false);
+    return false;
+  }
+}
+function effectiveImage(p: PlaceRow | null | undefined): string | null {
+  if (!p) return null;
+  // ⚠️ 정규화된 URL 으로 alive 검증 = 응답 URL 과 동일 보장
+  return normalizeImageUrl(p.bestImageUrl || p.imageUrl || null, 1280);
+}
+// ⚠️ 후보 N 개 = 병렬 HEAD 검증 (= for await 직렬 X) + 첫 alive row 반환.
+// 같은 row 두 번 검증 X = 응답 normalizeImageUrl 과 cache 공유.
+async function pickAliveFrom<T extends PlaceRow>(
+  candidates: T[],
+  used: Set<number>
+): Promise<T | null> {
+  const eligible = candidates.filter((c) => !used.has(c.id));
+  const flags = await Promise.all(eligible.map((c) => isImageAlive(effectiveImage(c))));
+  for (let i = 0; i < eligible.length; i++) if (flags[i]) return eligible[i];
+  return null;
+}
 
 // 캐릭터명 매핑
 const MEMBER_NAMES: Record<string, string> = {
@@ -166,45 +217,82 @@ export function registerBtsRoutes(app: Express): void {
         return res.status(400).json({ error: "cityId required" });
       }
 
-      const phaseFilter = and(
-        eq(placeSeedRaw.cityId, cityId),
-        eq(placeSeedRaw.collectionPhase, "bts2026")
-      );
+      // ⚠️ 수정금지(승인필요) — 2026-05-07 사용자 SSOT: place_seed_raw 단일 테이블. collection_phase = 폐기 (= AI 과도 분류).
+      // = 도시 = 통합 최종 top 시드. 카테고리 태그만 사용. 정렬 = rank ASC (= 최종 랭킹순) + reviewCount DESC.
+      const cityFilter = eq(placeSeedRaw.cityId, cityId);
+      // 안전장치: imageUrl NULL row 자동 skip
+      const imageNotNull = sql`COALESCE(${placeSeedRaw.bestImageUrl}, ${placeSeedRaw.imageUrl}) IS NOT NULL`;
       const dbi = db;
-      const byCategoryTag = (tag: string, limit: number) =>
-        dbi
+      // ⚠️ 수정금지(승인필요) — 2026-05-07 사용자 SSOT: vibe 슬롯 = "순수 vibe" row만.
+      // category_tags=["heritage","restaurant"] 같은 다중 tag row는 = lunch/dinner 자리만 사용.
+      // 즉 vibe 검색 시 = 같은 row 가 restaurant tag 도 가지면 vibe slot 에서 제외 (= 식당 카드 중복 차단).
+      const byCategoryTag = (tag: string, limit: number) => {
+        const conditions = [cityFilter, sql`${placeSeedRaw.categoryTags} && ARRAY[${tag}]::text[]`, imageNotNull];
+        if (tag !== "restaurant") {
+          conditions.push(sql`NOT (${placeSeedRaw.categoryTags} && ARRAY['restaurant']::text[])`);
+        }
+        return dbi
           .select(PLACE_COLS)
           .from(placeSeedRaw)
-          .where(and(phaseFilter, sql`${placeSeedRaw.categoryTags} && ARRAY[${tag}]::text[]`))
-          .orderBy(desc(placeSeedRaw.googleReviewCount))
+          .where(and(...conditions))
+          .orderBy(asc(placeSeedRaw.rank), desc(placeSeedRaw.googleReviewCount))
           .limit(limit);
+      };
 
       const venueQuery = dbi
         .select(PLACE_COLS)
         .from(placeSeedRaw)
-        .where(and(phaseFilter, eq(placeSeedRaw.seedCategory, "bts_venue")))
+        .where(and(cityFilter, eq(placeSeedRaw.seedCategory, "bts_venue")))
         .orderBy(desc(placeSeedRaw.googleReviewCount))
         .limit(1);
-      const restaurantQuery = byCategoryTag("restaurant", 10);
+      // ⚠️ 수정금지(승인필요) — 2026-05-07 사용자 명시 결정성: limit 확장 (= 5/10 → 15/20)
+      // 같은 row 가 여러 category_tags (예: ["heritage","restaurant"]) 가질 수 있어
+      // vibe 슬롯과 lunch/dinner 가 동일 id 매칭되는 사고 방지용 후보 풀 충분 확보.
+      const restaurantQuery = byCategoryTag("restaurant", 20);
 
       const isCompanion = memberId === "companion";
-      // companion = 5 카테고리 병렬, 그 외 = 1 카테고리 top 5
+      // companion = 5 카테고리 병렬, 그 외 = 1 카테고리 top 15
       const vibeQuery: Promise<PlaceRow[]> = isCompanion
-        ? Promise.all(COMPANION_VIBE_CATEGORIES.map((c) => byCategoryTag(c, 1).then((r) => r[0]))).then((arr) => arr.filter((p): p is PlaceRow => !!p))
-        : byCategoryTag(CHARACTER_PRIMARY_CATEGORY[memberId as keyof typeof CHARACTER_PRIMARY_CATEGORY] ?? "attraction", 5);
+        ? Promise.all(COMPANION_VIBE_CATEGORIES.map((c) => byCategoryTag(c, 3).then((r) => r))).then((arr) => arr.flat())
+        : byCategoryTag(CHARACTER_PRIMARY_CATEGORY[memberId as keyof typeof CHARACTER_PRIMARY_CATEGORY] ?? "attraction", 15);
 
-      const [venueRows, vibeRows, restaurantPool] = await Promise.all([
+      const [venueRows, vibeRowsAll, restaurantPoolAll] = await Promise.all([
         venueQuery,
         vibeQuery,
         restaurantQuery,
       ]);
 
       const venue: PlaceRow | null = venueRows[0] ?? null;
-      // 부족분 = null 로 패딩 (가짜 채우기 X, 슬롯 길이 5 보장)
-      const vibeSlots: (PlaceRow | null)[] = Array.from({ length: 5 }, (_, i) => vibeRows[i] ?? null);
+
+      // ⚠️ 수정금지(승인필요) — 2026-05-07 사용자 SSOT 결정성:
+      // 1 장소 = 1 카드 = 누적 exclude. venue → vibe5 → lunch → dinner 모두 unique id 보장.
+      // + 깨진 storage URL = 다음 rank 자동 swap (= isImageAlive HEAD 검증).
+      const usedIds = new Set<number>();
+      if (venue) usedIds.add(venue.id);
+
+      // vibe top 5 = 누적 exclude + 이미지 alive 검증 → 깨진 row skip → 다음 rank
+      const vibeSlots: (PlaceRow | null)[] = [null, null, null, null, null];
+      for (let vIdx = 0; vIdx < 5; vIdx++) {
+        const next = await pickAliveFrom(vibeRowsAll, usedIds);
+        if (!next) break;
+        usedIds.add(next.id);
+        vibeSlots[vIdx] = next;
+      }
+
+      // 식당 풀 = 이미 사용된 id 제외 + alive 검증 적용
+      const restaurantPoolFiltered = restaurantPoolAll.filter((r) => !usedIds.has(r.id));
+      // alive 검증 후보만 추출 (= 병렬 검증)
+      const aliveFlags = await Promise.all(
+        restaurantPoolFiltered.map((r) => isImageAlive(effectiveImage(r)))
+      );
+      const restaurantPool = restaurantPoolFiltered.filter((_, i) => aliveFlags[i]);
 
       const lunch = pickRestaurantBySegment(restaurantPool, vibeSlots[2], vibeSlots[3]);
-      const dinner = pickRestaurantNearVenue(restaurantPool, venue, lunch ? [lunch.id] : []);
+      if (lunch) usedIds.add(lunch.id);
+      const dinner = pickRestaurantNearVenue(
+        restaurantPool.filter((r) => !usedIds.has(r.id)),
+        venue
+      );
 
       const slotPlaces: (PlaceRow | null)[] = [
         venue,          // 1 공연장
@@ -217,19 +305,24 @@ export function registerBtsRoutes(app: Express): void {
         dinner,         // 8 저녁 (venue 인근)
       ];
 
-      // ⚠️ 수정금지(승인필요) — 카드 노출 필드 7 개만 (BTSContext.tsx BTSPlace 타입)
+      // ⚠️ 수정금지(승인필요) — 카드 노출 필드 7 개 + 좌표 2 개 (= 지도 마커용, 2026-05-06 Screen 4 카트→지도)
       // 평점·리뷰수·영업시간·태그 등은 카드 공간 부족으로 미노출 (사용자 SSOT 2026-04-30)
+      // ⚠️ 수정금지(승인필요) — 2026-05-07 사용자 SSOT: 이미지 URL 단일 정규화.
+      // 클라이언트 변환 로직 폐기 → server normalize 1 회 → 모든 도시/카테고리/신규 row 동일 적용.
       const slots = slotPlaces.map((p, i) => {
         if (!p) return { slot: i + 1, id: null };
+        const rawUrl = p.bestImageUrl || p.imageUrl || null;
         return {
           slot: i + 1,
           id: p.id,
           nameKo: p.nameKo,
           nameEn: p.nameEn,
           seedCategory: p.seedCategory,
-          imageUrl: p.bestImageUrl || p.imageUrl || null,
+          imageUrl: normalizeImageUrl(rawUrl, 1280),
           priceEur: p.priceEur,
           nubiReason: p.nubiReason,
+          latitude: p.latitude != null ? Number(p.latitude) : null,
+          longitude: p.longitude != null ? Number(p.longitude) : null,
         };
       });
 
@@ -238,6 +331,15 @@ export function registerBtsRoutes(app: Express): void {
       console.error("[BTS] GET /api/bts/top-places error:", err);
       res.status(500).json({ error: "Failed to fetch top places" });
     }
+  });
+
+  // ─── GET /api/bts/map-config ───
+  // ⚠️ 수정금지(승인필요) — 2026-05-06 Screen 4 카트→지도 = WebView 안 Google Maps API key 노출
+  // QA `/api/config` 패턴과 동일. referrer 제한 = 운영 합의 후 Google Cloud Console 설정.
+  app.get("/api/bts/map-config", (_req, res) => {
+    const key = process.env.GOOGLE_MAPS_API_KEY || process.env.Google_maps_api_key || "";
+    if (!key) return res.status(503).json({ error: "Google Maps API key missing" });
+    res.json({ googleMapsApiKey: key });
   });
 
   // ─── POST /api/bts/generate (Gemini AI 보강) ───

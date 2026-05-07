@@ -1,7 +1,7 @@
 // ⚠️ 수정금지(승인필요) — BTS Screen D: 장소 카트 (화이트 프리미엄 + 글라스 극투명 + HERO 최대화)
 // REF: Screen C BTSCharacterSelectScreen 패턴 / docs/design-references/button-system-shadcn.tsx
 // 2026-04-17 재설계 — 다크→화이트, 이모지 제거, 헤더 최소화, 도시 5등분, 캐릭터 Rive 폴백
-import React, { useEffect, useCallback, useMemo, useState } from "react";
+import React, { useEffect, useCallback, useMemo, useState, useRef } from "react";
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
   useWindowDimensions,
   ScrollView,
   Switch,
+  Platform,
 } from "react-native";
 import { useTranslation } from "react-i18next";
 // ⚠️ 수정금지(승인필요) — 2026-04-21 expo-image로 교체: react-native Image는 newArchEnabled + Android Fresco 조합에서 Wikimedia URL 로드 실패(실기 증상). DestinationDetailScreen 이 검증된 루트
@@ -37,6 +38,8 @@ import { getApiUrl } from "@/lib/query-client";
 import type { BTSStackParamList } from "@/navigation/BTSStackNavigator";
 import LiquidButton from "@/components/ui/LiquidButton";
 import { changeLanguageAndPersist } from "@/lib/i18n";
+// ⚠️ 수정금지(승인필요) — 2026-05-06 BTS Screen 4 카트 캐러셀 → WebView 지도 (인앱)
+import BTSPlaceMap from "@/components/bts/BTSPlaceMap";
 
 // ⚠️ 수정금지(승인필요) — Haptics 유틸 (Screen C와 동일)
 const haptic = (t: "light" | "medium" | "success") => {
@@ -50,6 +53,9 @@ const haptic = (t: "light" | "medium" | "success") => {
 // ⚠️ 수정금지(승인필요) — 2026-04-24 W-6 옵션 A: Wikimedia 공식 허용 버킷 스냅 방식.
 // T414805/Common_thumbnail_sizes 공식 문서 기준 허용 width 목록. 그 외 사이즈는 HTTP 400 거부.
 // Screen 4 카드(100×178 dp, dpr 2.75 → 물리 275~490px) → nearest-up bucket = 330px.
+// ⚠️ 수정금지(승인필요) — 2026-05-07: 1 주일 노하우 복원. 클라이언트 변환 로직 = SSOT.
+//   카드 = toCardThumbUrl(330px) / 상세 = toFullUrl(1280px) / Wikimedia 공식 버킷.
+//   백엔드 normalize 는 호환 (= 응답 1280px URL 도 카드 변환 시 → 330px 정상).
 const WIKIMEDIA_BUCKETS = [20, 40, 60, 120, 250, 330, 500, 960, 1280, 1920, 3840];
 const WIKIMEDIA_PX_REGEX = /\/\d+px-/;
 const UNSPLASH_W_REGEX = /([?&])w=\d+/g;
@@ -73,6 +79,7 @@ function toCardThumbUrl(url: string): string {
 // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 4a: 큰 화면(모달)용 URL (1280px).
 // Samsung A36 5G 모달 폭 ≈ 360dp × 2.75 dpr = 990px → Wikimedia nearest-up bucket = 1280px.
 // Unsplash w=1200. /thumb/ 없는 원본 URL 은 그대로 통과 (원본 크기 = 최고 화질).
+// = DB 정규화 시점에 = 시드 발굴 단계에서 = /thumb/ 형식만 저장 = 새 row 영원히 표준.
 function toFullUrl(url: string): string {
   if (url.includes("upload.wikimedia.org/wikipedia/commons/thumb/")) {
     const bucket = snapToWikimediaBucket(1280);
@@ -103,12 +110,13 @@ const WIKIMEDIA_UA = "VibeTrip/1.0 (contact@vibetrip.app) Expo/54";
 
 // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1g: 스톡 폴백 제거. imageUrl 없으면 undefined → 빈 카드. 가짜 스톡 사진 절대 노출 안 함.
 // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1i: Wikimedia 요청에 User-Agent 헤더 부착.
+// ⚠️ 수정금지(승인필요) — 2026-05-07: web 환경에서 User-Agent 는 forbidden header → 브라우저 fetch 거부 → web 만 헤더 X.
 function resolvePlaceImage(
   place: BTSPlace
 ): { uri: string; headers?: Record<string, string> } | undefined {
   if (!place.imageUrl) return undefined;
   const uri = toCardThumbUrl(place.imageUrl);
-  if (uri.includes("upload.wikimedia.org")) {
+  if (uri.includes("upload.wikimedia.org") && Platform.OS !== "web") {
     return { uri, headers: { "User-Agent": WIKIMEDIA_UA } };
   }
   return { uri };
@@ -121,7 +129,7 @@ function resolvePlaceImageFull(
 ): { uri: string; headers?: Record<string, string> } | undefined {
   if (!place.imageUrl) return undefined;
   const uri = toFullUrl(place.imageUrl);
-  if (uri.includes("upload.wikimedia.org")) {
+  if (uri.includes("upload.wikimedia.org") && Platform.OS !== "web") {
     return { uri, headers: { "User-Agent": WIKIMEDIA_UA } };
   }
   return { uri };
@@ -258,8 +266,9 @@ function CharacterHero({
 }
 
 // ⚠️ 수정금지(승인필요) — 2026-04-22 카드 9:16 세로 비율 + 꽉찬 느낌으로 확대 (사용자 스샷 피드백). 86x116 → 100x178
-const CARD_W = 100;
-const CARD_H = 178; // 100 * 16 / 9 = 177.77
+// ⚠️ 수정금지(승인필요) — 2026-05-07 사용자 명시 = 최대한 안 겹치게: 80×140 (= 100×178 대비 면적 -37%)
+const CARD_W = 80;
+const CARD_H = 140;
 
 // ⚠️ 수정금지(승인필요) — 2026-04-23 Track 1b-①: 게이팅 제거로 BATCH_SIZE 불필요. 총 장수만 유지.
 const MAX_PLACES = 8;
@@ -296,6 +305,26 @@ export default function BTSPlaceCartScreen() {
   const baseUrl = getApiUrl();
   const gradient = CharacterGradients[selectedCharacter?.id || "collector"];
   const tint = gradient[0];
+
+  // ⚠️ 수정금지(승인필요) — 2026-05-06 Screen 4 카트→지도 = Google Maps API key fetch + ScrollView/카드 ref
+  const [mapApiKey, setMapApiKey] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${baseUrl}/api/bts/map-config`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((d) => {
+        if (!cancelled) setMapApiKey(d?.googleMapsApiKey || null);
+      })
+      .catch(() => {
+        if (!cancelled) setMapApiKey(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [baseUrl]);
+
+  const scrollRef = useRef<ScrollView>(null);
+  const cardRefs = useRef<Record<number, View | null>>({});
 
   // ⚠️ 수정금지(승인필요) — 2026-04-23 Track 1b-①: 캐스케이드 마운트 게이트 제거.
   // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1g: failedIds/타임아웃/폴백 모두 제거. 실제 이미지 완성까지 무조건 대기 (안전장치 0).
@@ -352,7 +381,18 @@ export default function BTSPlaceCartScreen() {
       `${baseUrl}/api/bts/top-places?cityId=${selectedCity.id}&memberId=${selectedCharacter.id}`
     )
       .then((r) => r.json())
-      .then((data) => setTopPlaces(Array.isArray(data) ? data : []))
+      .then((data) => {
+        // ⚠️ 수정금지(승인필요) — 2026-05-07 안전장치: id=null slot 제외 + 중복 id dedup
+        // = readyIds 가 같은 id 1 회만 추가 → 중복 카드 마운트 시 readyIds.size < expectedCount → 영구 spinner 차단
+        const arr = Array.isArray(data) ? data : [];
+        const seen = new Set<number>();
+        const dedup = arr.filter((p: any) => {
+          if (!p || !p.id || seen.has(p.id)) return false;
+          seen.add(p.id);
+          return true;
+        });
+        setTopPlaces(dedup);
+      })
       .catch(() => {
         setTopPlaces([]);
         setError(t("bts.placeCart.errorLoad"));
@@ -361,11 +401,24 @@ export default function BTSPlaceCartScreen() {
   }, [selectedCharacter?.id, selectedCity?.id, baseUrl]);
 
   const handleNext = useCallback(() => {
-    if (selectedPlaceIds.length >= 2) {
+    // ⚠️ 수정금지(승인필요) — 2026-05-06 v3 SSOT: 카드 ≥ 3 부터 일정 생성 (사용자 명시 "3 부터 생성")
+    if (selectedPlaceIds.length >= 3) {
       haptic("success");
       navigation.navigate("BTSLoading");
     }
   }, [selectedPlaceIds.length, navigation]);
+
+  // ⚠️ 수정금지(승인필요) — 2026-05-06 마커 클릭 → 인앱 ScrollView 의 해당 카드 상세 섹션으로 scrollTo (= 모달 X)
+  const handleMarkerPress = useCallback((placeId: number) => {
+    haptic("light");
+    const node = cardRefs.current[placeId];
+    if (!node || !scrollRef.current) return;
+    node.measureLayout(
+      scrollRef.current as any,
+      (_x, y) => scrollRef.current?.scrollTo({ y: Math.max(0, y - 16), animated: true }),
+      () => {}
+    );
+  }, []);
 
   const handleTogglePlace = useCallback(
     (place: BTSPlace) => {
@@ -384,16 +437,28 @@ export default function BTSPlaceCartScreen() {
   );
 
   const selectedCount = selectedPlaceIds.length;
-  const canProceed = selectedCount >= 2;
+  // ⚠️ 수정금지(승인필요) — 2026-05-06 v3 SSOT: 카드 ≥ 3 부터 CTA 활성 (= "3 부터 생성")
+  const canProceed = selectedCount >= 3;
+
+  // ⚠️ 수정금지(승인필요) — 2026-05-06 venue (slot 1 = bts_venue) id 추출 = 지도 마커 항상 표시 + 2 중 상태
+  const venueId = useMemo(() => {
+    const v = topPlaces.find((p) => p.seedCategory === "bts_venue");
+    return v?.id ?? null;
+  }, [topPlaces]);
 
   // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 4a: 카트 배열 = selectedPlaceIds 순서대로 topPlaces 에서 조회.
   // 선택 순서 = 여정 순서 (사용자 결정: 드래그 순서 변경 불필요).
+  // ⚠️ 2026-05-07 js-index-maps: id → place Map 으로 O(1) lookup.
+  const topPlacesById = useMemo(
+    () => new Map(topPlaces.map((p) => [p.id, p])),
+    [topPlaces]
+  );
   const selectedPlaces = useMemo(
     () =>
       selectedPlaceIds
-        .map((id) => topPlaces.find((p) => p.id === id))
+        .map((id) => topPlacesById.get(id))
         .filter((p): p is BTSPlace => !!p),
-    [selectedPlaceIds, topPlaces]
+    [selectedPlaceIds, topPlacesById]
   );
 
   // ⚠️ 수정금지(승인필요) — 반응형 HERO 영역 계산
@@ -407,9 +472,9 @@ export default function BTSPlaceCartScreen() {
     const heroH = Math.min(availH * 0.58, 260);
     const heroW = heroH * (16 / 22); // 16:22 비율 유지
 
-    // ⚠️ 수정금지(승인필요) — 2026-04-22 모바일 overflow 해결: 카드 가장자리가 화면 안에 들어오도록 반지름 상한 축소. 캐릭터 DIM 뒷장과 겹침 허용(존재감만)
-    const radiusX = Math.min((availW - CARD_W) / 2 - 12, 130);
-    const radiusY = Math.min((availH - CARD_H) / 2 - 12, 180);
+    // ⚠️ 수정금지(승인필요) — 2026-05-07 사용자 명시 = 최대한 안 겹치게: cap 145/210 → 155/240
+    const radiusX = Math.min((availW - CARD_W) / 2 - 12, 155);
+    const radiusY = Math.min((availH - CARD_H) / 2 - 12, 240);
 
     return { heroW, heroH, radiusX, radiusY, availW, availH };
   }, [sw, sh, insets.top, insets.bottom]);
@@ -508,6 +573,7 @@ export default function BTSPlaceCartScreen() {
       {/* ⚠️ 수정금지(승인필요) — 2026-04-22 Part B: 전체 스크롤존. 궤도 + 카트 + 상세 섹션 + CTA 모두 포함. */}
       {/* ⚠️ 수정금지(승인필요) — 2026-04-24 Track 4a v2 (사용자 피드백): CTA 가 스크롤과 함께 움직이도록 ScrollView 안으로 복귀. paddingBottom 은 insets + 24 로 원복. */}
       <ScrollView
+        ref={scrollRef}
         style={{ flex: 1 }}
         contentContainerStyle={[
           styles.scrollContent,
@@ -567,38 +633,34 @@ export default function BTSPlaceCartScreen() {
         {/* 에러 */}
         {error && <Text style={styles.errorText}>{error}</Text>}
 
-        {/* ⚠️ 수정금지(승인필요) — 2026-04-24 Track 4a: 카트 가로 캐러셀 (선택된 카드 썸네일). 330px 재사용. */}
-        {selectedPlaces.length > 0 && (
-          <View style={styles.cartSection}>
-            <Text style={[styles.cartTitle, { color: tint }]}>
-              {t("bts.placeCart.cartTitle", { count: selectedCount, max: MAX_PLACES })}
-            </Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.cartCarousel}
-            >
-              {selectedPlaces.map((p) => (
-                <View key={p.id} style={styles.cartCard}>
-                  <Image
-                    source={resolvePlaceImage(p)}
-                    style={styles.cartCardImage}
-                    contentFit="cover"
-                    cachePolicy="memory-disk"
-                    recyclingKey={`cart-${p.id}`}
-                  />
-                  <Text numberOfLines={1} style={styles.cartCardLabel}>
-                    {localizedName(p, isKorean)}
-                  </Text>
-                </View>
-              ))}
-            </ScrollView>
-          </View>
-        )}
+        {/* ⚠️ 수정금지(승인필요) — 2026-05-06 BTS Screen 4 v3 SSOT: 카트 가로 캐러셀 (76×100 썸네일) → WebView 인앱 지도 교체 */}
+        {/* venue (= 별 마커) 항상 표시. 첫 카드 떼면 → 별 + "BTS" 라벨 활성화 (= 사용자 직관 = 공연장) */}
+        {/* 마커 클릭 → 아래 상세 섹션의 해당 카드로 인앱 scrollTo (= 모달 X) */}
+        <View style={styles.mapSection}>
+          <Text style={[styles.cartTitle, { color: tint }]}>
+            {t("bts.placeCart.cartTitle", { count: selectedCount, max: MAX_PLACES })}
+          </Text>
+          <BTSPlaceMap
+            places={topPlaces.slice(0, MAX_PLACES)}
+            selectedIds={selectedPlaceIds}
+            venueId={venueId}
+            apiKey={mapApiKey}
+            onMarkerPress={handleMarkerPress}
+            tint={tint}
+            height={240}
+          />
+        </View>
 
         {/* ⚠️ 수정금지(승인필요) — 2026-04-24 Track 4a: 상세 섹션 쭈르륵 쌓임. placeholder=330 즉시 + source=1280 백그라운드 교체 (사용자 체감 딜레이 0, 점점 선명). */}
+        {/* ⚠️ 수정금지(승인필요) — 2026-05-06: 카드별 ref = 지도 마커 클릭 시 scrollTo 대상 (= 인앱 처리, 모달 X) */}
         {selectedPlaces.map((p, idx) => (
-          <View key={p.id} style={styles.detailSection}>
+          <View
+            key={p.id}
+            ref={(el) => {
+              cardRefs.current[p.id] = el;
+            }}
+            style={styles.detailSection}
+          >
             {/* ⚠️ 수정금지(승인필요) — 2026-04-24 Track 4a: recyclingKey 로 Samsung A36 5G 메모리 관리. 1280px × 8 = ~39MB 우려 완화. */}
             <Image
               source={resolvePlaceImageFull(p)}
@@ -839,10 +901,17 @@ const styles = StyleSheet.create({
     gap: 10,
   },
 
-  // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 4a: 카트 섹션 (가로 캐러셀).
+  // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 4a: 카트 섹션 (가로 캐러셀). 2026-05-06 폐기 = mapSection 으로 교체. (스타일은 잔존 = 향후 참조용)
   cartSection: {
     paddingTop: 8,
     paddingBottom: 12,
+    gap: 8,
+  },
+  // ⚠️ 수정금지(승인필요) — 2026-05-06 BTS Screen 4 v3 SSOT: 카트 캐러셀 → WebView 인앱 지도. cartSection 패턴 그대로.
+  mapSection: {
+    paddingTop: 8,
+    paddingBottom: 12,
+    paddingHorizontal: 20,
     gap: 8,
   },
   // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 4a v3: letterSpacing 추가 (Screen 3/Landing 과 자간 일치).

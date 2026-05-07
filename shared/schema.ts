@@ -678,6 +678,13 @@ export const placeSeedRaw = pgTable("place_seed_raw", {
   imageAttribution: text("image_attribution"), // "Photo via Google Places (placeId)"
   imageUpdatedAt: timestamp("image_updated_at"),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  // ⚠️ 수정금지(승인필요) — 2026-05-04 사용자 SSOT: gemini3-2026-05 표준화 17 필드 추가 (메인앱 통합 진입점)
+  summaryKo: text("summary_ko"),                          // 한국어 감성 요약 (NUBI 카피, 숏폼 KO)
+  dayZone: text("day_zone"),                              // core (≤10km) / outskirt (10-100km)
+  distanceKmFromCenter: real("distance_km_from_center"),  // 도심 거리 (haversine)
+  address: text("address"),                               // 전체 주소 + 우편번호
+  googlePrimaryType: text("google_primary_type"),         // Google primary type (museum, restaurant 등)
+  geminiRank: integer("gemini_rank"),                     // Gemini 응답 순위 (rank 재정렬 우선 키)
 });
 
 // 가격 정보 로우 데이터 (다중 소스)

@@ -111,7 +111,7 @@ async function ensureApiKeys(db) {
 const LOC_STR = [CITY_NAME, STATE, COUNTRY].filter(Boolean).join(', ');
 const QUERIES = {
   heritage:   `museum art museum science museum history museum historical landmark historical place castle monument palace fortress church cathedral mosque temple synagogue archaeological site cultural center in ${LOC_STR}`,
-  hotspot:    `viewpoints photo spots in ${LOC_STR}`,
+  hotspot:    `viewpoints photo spots point of view panoramic view in ${LOC_STR}`,
   attraction: `tourist attraction amusement park zoo aquarium theme park planetarium in ${LOC_STR}`,
   adventure:  `amusement park water park theme park hiking area climbing gym gym sports complex ski resort nature reserve in ${LOC_STR}`,
   healing:    `park spa garden botanical garden beach wellness center nature preserve in ${LOC_STR}`,
