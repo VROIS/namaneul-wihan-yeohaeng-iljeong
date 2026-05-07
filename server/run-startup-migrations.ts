@@ -123,6 +123,22 @@ export async function runStartupMigrations(): Promise<void> {
         ADD COLUMN IF NOT EXISTS tiktok_post_url text;
     `);
     console.log("[Migration] 0013c instagram_post_url/tiktok_post_url 컬럼 추가 완료");
+
+    // 0014: multi-tag SSOT + 이미지 메타 + gemini3 표준화 17필드
+    await pool.query(`
+      ALTER TABLE place_seed_raw
+        ADD COLUMN IF NOT EXISTS phase_tags text[],
+        ADD COLUMN IF NOT EXISTS category_tags text[],
+        ADD COLUMN IF NOT EXISTS image_attribution text,
+        ADD COLUMN IF NOT EXISTS image_updated_at timestamptz,
+        ADD COLUMN IF NOT EXISTS summary_ko text,
+        ADD COLUMN IF NOT EXISTS day_zone text,
+        ADD COLUMN IF NOT EXISTS distance_km_from_center real,
+        ADD COLUMN IF NOT EXISTS address text,
+        ADD COLUMN IF NOT EXISTS google_primary_type text,
+        ADD COLUMN IF NOT EXISTS gemini_rank integer;
+    `);
+    console.log("[Migration] 0014 multi-tag/image-meta/gemini3 컬럼 10개 추가 완료");
   } catch (err) {
     console.warn("[Migration] 스킵 또는 실패:", (err as Error).message);
   }
