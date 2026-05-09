@@ -47,8 +47,8 @@ interface PlaceDetailModalProps {
     lat?: number;
     lng?: number;
     googleMapsUrl?: string;
-    tripAdvisorRating?: number;
-    tripAdvisorReviewCount?: number;
+    // ⚠️ 수정금지(승인필요) 2026-05-09 = TripAdvisor 폐기 + Google 리뷰 수 (= searchText userRatingCount = 사용자 SSOT)
+    userRatingCount?: number;
     personaFitReason?: string;
     geminiReason?: string;
     type?: string;
@@ -250,31 +250,7 @@ export function PlaceDetailModal({
             </View>
           ) : null}
 
-          {/* 인스타/틱톡 인앱 링크 — URL이 있을 때만 노출 */}
-          {(place.instagramPostUrl || place.tiktokPostUrl) && (
-            <View style={styles.socialLinksRow}>
-              {place.instagramPostUrl && (
-                <Pressable
-                  style={[styles.socialLinkBtn, { backgroundColor: '#E1306C15', borderColor: '#E1306C40' }]}
-                  onPress={() => Linking.openURL(place.instagramPostUrl!)}
-                >
-                  <Text style={[styles.socialLinkText, { color: '#E1306C' }]}>
-                    {t("place.viewOnInstagram", "인스타에서 보기")}
-                  </Text>
-                </Pressable>
-              )}
-              {place.tiktokPostUrl && (
-                <Pressable
-                  style={[styles.socialLinkBtn, { backgroundColor: '#00000008', borderColor: '#00000020' }]}
-                  onPress={() => Linking.openURL(place.tiktokPostUrl!)}
-                >
-                  <Text style={[styles.socialLinkText, { color: '#000' }]}>
-                    {t("place.viewOnTiktok", "틱톡에서 보기")}
-                  </Text>
-                </Pressable>
-              )}
-            </View>
-          )}
+          {/* ⚠️ 수정금지(승인필요) 2026-05-09 = Instagram/TikTok 표시 폐기 (= 사용자 명시 = 인프라 부족) */}
 
           {/* 시간 / 가격 / 평점 */}
           <View
@@ -316,12 +292,12 @@ export function PlaceDetailModal({
               </Text>
             </View>
 
-            {/* TripAdvisor 평점 */}
-            {place.tripAdvisorRating && place.tripAdvisorRating > 0 ? (
+            {/* ⚠️ 수정금지(승인필요) 2026-05-09 = Google 리뷰 수 (= searchText userRatingCount = TripAdvisor 대체 = 사용자 SSOT) */}
+            {place.userRatingCount && place.userRatingCount > 0 ? (
               <View style={styles.infoRow}>
                 <Icon name="star" size={16} color="#FF6B35" />
                 <Text style={[styles.infoText, { color: theme.text }]}>
-                  {t("place.tripAdvisorRating", { rating: place.tripAdvisorRating.toFixed(1), count: (place.tripAdvisorReviewCount || 0).toLocaleString() })}
+                  {`Google 리뷰 ${place.userRatingCount.toLocaleString()}개`}
                 </Text>
               </View>
             ) : null}

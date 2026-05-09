@@ -2154,10 +2154,22 @@ async function distributePlacesWithUserTime(
     });
   }
 
-  // === 일반 장소: 점수 순 정렬 (동선 최적화는 일별 배분 후 적용) ===
-  const sortedNonFoodPlaces = [...nonFoodPlaces].sort(
-    (a, b) => (b.finalScore || b.vibeScore) - (a.finalScore || a.vibeScore)
+  // ⚠️ 수정금지(승인필요) 2026-05-09 = sourceType 기반 분기 정렬 (= AG1 branch SSOT 반영)
+  // = db-only         → place_seed_raw.rank ASC (= 사용자 검증 큐레이션 순서)
+  // = gemini-fallback → AG2 응답 순서 그대로 (= 정렬 X, 폐기 X = 사용자 의도)
+  const isDbOnly = nonFoodPlaces.length > 0 && nonFoodPlaces.every(
+    (p: any) => p.sourceType === 'DB Direct (Place Seed Raw)'
   );
+  let sortedNonFoodPlaces: PlaceResult[];
+  if (isDbOnly) {
+    sortedNonFoodPlaces = [...nonFoodPlaces].sort(
+      (a: any, b: any) => (a.dbRank ?? 9999) - (b.dbRank ?? 9999)
+    );
+    console.log(`[Itinerary] 🌿 db-only 정렬 = dbRank ASC (= ${sortedNonFoodPlaces.length}곳)`);
+  } else {
+    sortedNonFoodPlaces = nonFoodPlaces;
+    console.log(`[Itinerary] 🌿 gemini-fallback 정렬 X = AG2 응답 순서 그대로 (= ${sortedNonFoodPlaces.length}곳, 폐기 X)`);
+  }
 
   // === 4순위: 식당 유명세 점수 계산 ===
   const foodWithScores: { place: PlaceResult; restaurantScore: number }[] = [];

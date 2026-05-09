@@ -148,6 +148,12 @@ export async function runPipelineV3(formData: TripFormData): Promise<any> {
   const companionCount = getCompanionCount(formData.companionType || 'Solo');
   const vibes = formData.vibes || ['Foodie', 'Culture', 'Healing'];
 
+  // ⚠️ 수정금지(승인필요) 2026-05-09 = sourceMode 분기 인프라 (= 사용자 SSOT)
+  // = 'mixed' (현재 = DB 매칭 + Gemini 호출 + auto-learn 보강) = OFF 상태
+  // = 'db-only' (미래 = 9 발굴 도시 검증 충분 시 = 외부 호출 0) = 사용자 토글 ON 시 활성
+  // = AG1 → AG2 → AG3 → AG4 = 모든 후속 인식 = result.metadata 에 포함
+  const sourceMode: 'mixed' | 'db-only' = (formData as any).sourceMode === 'db-only' ? 'db-only' : 'mixed';
+
   // Vibe 가중치 계산
   const PRIORITY_WEIGHTS: Record<number, number[]> = { 1: [100], 2: [60, 40], 3: [50, 30, 20] };
   const weights = PRIORITY_WEIGHTS[vibes.length] || [50, 30, 20];
@@ -217,6 +223,7 @@ export async function runPipelineV3(formData: TripFormData): Promise<any> {
     _timings,
     _totalMs: Date.now() - _t0,
     _pipelineVersion: 'v3-2step',
+    sourceMode,  // ⚠️ 수정금지(승인필요) 2026-05-09 = AG1 분기 결정 = AG4 까지 손실 없이 전달
   };
 
   console.log(`[V3] ===== Pipeline V3 완료 (${Date.now() - _t0}ms) =====`);
@@ -478,6 +485,55 @@ JSON만 응답 (마크다운 없이):
       return [];
     }
 
+    // ⚠️ 수정금지(승인필요) 2026-05-09 = 사용자 SSOT = AG2 1차 응답 raw 보관 (= 검수용)
+    // = ENV DEBUG_PIPELINE_SNAPSHOT=1 일 때만 저장
+    if (process.env.DEBUG_PIPELINE_SNAPSHOT === '1') {
+      try {
+        const fs = await import('fs');
+        const path = await import('path');
+        const outDir = `docs/db-only-${new Date().toISOString().slice(0, 10)}-gemini`;
+        if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+        const outPath = path.join(outDir, 'ag2-raw.json');
+        fs.writeFileSync(outPath, JSON.stringify({
+          timestamp: new Date().toISOString(),
+          formData_summary: {
+            destination: formData.destination,
+            startDate: formData.startDate,
+            endDate: formData.endDate,
+            startTime: formData.startTime,
+            endTime: formData.endTime,
+            companionType: formData.companionType,
+            companionCount: formData.companionCount,
+            curationFocus: formData.curationFocus,
+            travelPace: formData.travelPace,
+            travelStyle: formData.travelStyle,
+            mobilityStyle: formData.mobilityStyle,
+            vibes: formData.vibes,
+          },
+          prompt,
+          raw_response: result,
+          days_summary: days.map(d => ({
+            day: d.day,
+            theme: d.theme,
+            placeCount: d.places?.length || 0,
+            places: d.places?.map(p => ({
+              name: p.name,
+              nameKo: (p as any).nameKo,
+              nameLocal: (p as any).nameLocal,
+              type: p.type,
+              startTime: p.startTime,
+              endTime: p.endTime,
+              estimatedCostEur: (p as any).estimatedCostEur,
+              reason: p.reason,
+            })) || [],
+          })),
+        }, null, 2));
+        console.log(`[V3-Step1] 📝 AG2 raw 보관: ${outPath}`);
+      } catch (e) {
+        console.warn(`[V3-Step1] AG2 raw 보관 실패:`, (e as Error).message);
+      }
+    }
+
     // 검증: 각 일의 장소 수/식사 체크
     for (const day of days) {
       const hasLunch = day.places?.some(p => p.type === 'lunch');
@@ -663,7 +719,12 @@ async function step2_enrichAndBuild(
     return merged;
   }));
 
-  // 최종 장소 맵
+  // ⚠️ 수정금지(승인필요) 2026-05-09 = saveNewPlacesToDB 위치 이동 (= days 빌드 전 = 보강 결과 반영)
+  // = 신규 발굴 곳 = searchText + PhotoMedia + Storage upload 후 finalPlaces 갱신
+  // = days 빌드 시 = 갱신된 image/lat/lng 사용 = baseline 에 정상 반영
+  await saveNewPlacesToDB(finalPlaces, preloaded.cityId);
+
+  // 최종 장소 맵 (= saveNewPlacesToDB 후 = 보강 결과 반영)
   const finalPlaceMap = new Map<string, PlaceResult>();
   for (const fp of finalPlaces) {
     finalPlaceMap.set(fp.id, fp);
@@ -992,8 +1053,7 @@ async function step2_enrichAndBuild(
   console.log(`[V3-Step2] 💰 1인 총 비용: €${totalPerPersonEur} / ₩${totalPerPersonKrw.toLocaleString()}`);
   console.log(`[V3-Step2] 💰 1인 1일 평균: €${perPersonPerDay}`);
 
-  // 백그라운드: 미등록 장소 DB 저장
-  saveNewPlacesToDB(finalPlaces, preloaded.cityId);
+  // ⚠️ 수정금지(승인필요) 2026-05-09 = saveNewPlacesToDB = 위로 이동 (= days 빌드 전) = 중복 호출 X
 
   // ── 최종 응답 빌드 (프론트엔드 호환 형식) ──
   const paceLabel = travelPace === 'Packed' ? '빡빡하게' : travelPace === 'Normal' ? '보통' : '여유롭게';

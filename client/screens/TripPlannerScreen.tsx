@@ -1628,13 +1628,7 @@ export default function TripPlannerScreen() {
 
                 <View style={styles.placesList}>
                   {places.map((place, index) => {
-                    // 별점 계산 (vibeScore 10점 만점 → 5점 만점)
-                    const starRating = Math.min(
-                      5,
-                      Math.max(0, Math.round((place.vibeScore || 0) / 2)),
-                    );
-                    const stars =
-                      "⭐".repeat(starRating) + "☆".repeat(5 - starRating);
+                    // ⚠️ 수정금지(승인필요) 2026-05-09 = 별점(vibeScore) 폐기 = userRatingCount(rc) 만 사용 (= 사용자 SSOT)
 
                     // 🍽️ 식사 슬롯 여부 (백엔드에서 isMealSlot 제공 - 1순위)
                     const isMealSlot = place.isMealSlot === true;
@@ -1783,9 +1777,11 @@ export default function TripPlannerScreen() {
                                   ) : null;
                                 })()}
 
-                                {/* 별점 표시 (vibeScore 0이면 숨김) */}
-                                {starRating > 0 && (
-                                  <Text style={styles.placeStars}>{stars}</Text>
+                                {/* ⚠️ 수정금지(승인필요) 2026-05-09 = 별점(vibeScore) 폐기 + RC(google_review_count) 표시 (= 사용자 SSOT) */}
+                                {(place as any).userRatingCount > 0 && (
+                                  <Text style={styles.placeStars}>
+                                    ⭐ rc {(place as any).userRatingCount.toLocaleString()}
+                                  </Text>
                                 )}
 
                                 {/* 시간 */}
