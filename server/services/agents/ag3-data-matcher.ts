@@ -711,35 +711,45 @@ export async function saveNewPlacesToDB(
     return `${SUPA_PUB}/storage/v1/object/public/place-images/${fileName}`;
   }
 
-  // ⚠️ 수정금지(승인필요) 2026-05-09 = setTimeout 폐기 = 즉시 await (= 사용자 SSOT)
-  // = 첫 호출에 image/lat/lng/google_place_id baseline 반영 = 호출자가 결과에 직접 사용
-  let saved = 0, skipped = 0, enrichedByApi = 0, photoOk = 0;
-  let error = '';
-  for (const place of toSave) {
+  // ⚠️ 수정금지(승인필요) 2026-05-09 = Promise.all 병렬화 (= simplify HIGH 권장)
+  // = 순차 14~21 초 → 병렬 ~3.5 초 (= 4~6 배 단축)
+  // = Google API rate limit (= 분당 600) = 4~6 호출 = 충분 여유
+  // = race-safe rank = 카테고리별 base + 인덱스 (= MAX(rank) 사전 1 회)
+
+  // 1. nextRank base 사전 계산 (= 카테고리별 1 회 = race condition 차단)
+  const baseRanks: Record<string, number> = {};
+  for (const cat of ['restaurant', 'attraction']) {
+    const r = await db!.execute(
+      sql`SELECT COALESCE(MAX(rank), 8999) + 1 AS next_rank FROM place_seed_raw
+          WHERE city_id = ${cityId} AND seed_category = ${cat}
+          AND collection_phase = 'auto-learn-2026-05'`
+    );
+    baseRanks[cat] = (r as any).rows?.[0]?.next_rank ?? 9000;
+  }
+  const today = new Date().toISOString().slice(0, 10);
+
+  // 2. 병렬 처리 (= searchText + PhotoMedia + Storage + INSERT)
+  const results = await Promise.all(toSave.map(async (place, i) => {
     try {
-      // 1. searchText 1 회 = 좌표 + photo reference + place_id (= 어제 패턴 그대로)
       const result = await searchText(place.name, (place as any).geminiAddress);
-      if (!result || !result.id || !result.location) { skipped++; continue; }
+      if (!result || !result.id || !result.location) return { saved: 0, skipped: 1, enrichedByApi: 0, photoOk: 0 };
 
       const placeId: string = result.id;
       const lat: number = result.location.latitude;
       const lng: number = result.location.longitude;
-      if (!lat || !lng) { skipped++; continue; }
+      if (!lat || !lng) return { saved: 0, skipped: 1, enrichedByApi: 0, photoOk: 0 };
 
       const seedCategory: string = place.tags?.includes('restaurant') ? 'restaurant'
         : place.tags?.includes('food') ? 'restaurant'
         : 'attraction';
 
-      // 2. PhotoMedia + Storage 업로드 (= 어제 패턴 그대로)
       let imageUrl: string | null = null;
       const photoName = result.photos?.[0]?.name;
       if (photoName) {
         imageUrl = await uploadPhoto(photoName, placeId, seedCategory);
-        if (imageUrl) photoOk++;
       }
-      enrichedByApi++;
 
-      // ⚠️ 수정금지(승인필요) 2026-05-09 = place 객체 직접 갱신 (= 호출자 baseline 반영 = 첫 호출에 image/좌표 표시)
+      // ⚠️ place 객체 직접 갱신 (= 호출자 baseline 반영, race X = 각 호출 자기 place 만)
       place.lat = lat;
       place.lng = lng;
       place.image = imageUrl || '';
@@ -748,15 +758,7 @@ export async function saveNewPlacesToDB(
       place.userRatingCount = result.userRatingCount || 0;
       console.log(`[AG3-SAVE] 📡 "${place.name}" → (${lat}, ${lng}) img=${imageUrl ? 'Storage' : 'NULL'}`);
 
-      // 3. INSERT (= place_seed_raw auto-learn-2026-05)
-      const nextRankRow = await db!.execute(
-        sql`SELECT COALESCE(MAX(rank), 8999) + 1 AS next_rank FROM place_seed_raw
-            WHERE city_id = ${cityId} AND seed_category = ${seedCategory}
-            AND collection_phase = 'auto-learn-2026-05'`
-      );
-      const nextRank = (nextRankRow as any).rows?.[0]?.next_rank ?? 9000;
-
-      const today = new Date().toISOString().slice(0, 10);
+      const nextRank = baseRanks[seedCategory] + i;
       await db!.insert(placeSeedRaw).values({
         cityId: cityId,
         seedCategory,
@@ -776,10 +778,21 @@ export async function saveNewPlacesToDB(
         categoryTags: [seedCategory],
         phaseTags: [`auto-learn-${today}`],
       } as any).onConflictDoNothing();
-      saved++;
+
+      return { saved: 1, skipped: 0, enrichedByApi: 1, photoOk: imageUrl ? 1 : 0 };
     } catch (e) {
-      if (!error) error = (e as Error).message;
+      return { saved: 0, skipped: 0, enrichedByApi: 0, photoOk: 0, error: (e as Error).message };
     }
-  }
-  console.log(`[AG3] 🆕 saved=${saved} skipped=${skipped} apiEnriched=${enrichedByApi} photoOk=${photoOk} error="${error}"`);
+  }));
+
+  // 3. 카운터 집계
+  const totals = results.reduce((acc, r: any) => ({
+    saved: acc.saved + r.saved,
+    skipped: acc.skipped + r.skipped,
+    enrichedByApi: acc.enrichedByApi + r.enrichedByApi,
+    photoOk: acc.photoOk + r.photoOk,
+    error: acc.error || r.error || '',
+  }), { saved: 0, skipped: 0, enrichedByApi: 0, photoOk: 0, error: '' });
+
+  console.log(`[AG3] 🆕 saved=${totals.saved} skipped=${totals.skipped} apiEnriched=${totals.enrichedByApi} photoOk=${totals.photoOk} error="${totals.error}"`);
 }
