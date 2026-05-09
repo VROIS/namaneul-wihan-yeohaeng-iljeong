@@ -1778,11 +1778,12 @@ export default function TripPlannerScreen() {
                                 })()}
 
                                 {/* ⚠️ 수정금지(승인필요) 2026-05-09 = 별점(vibeScore) 폐기 + RC(google_review_count) 표시 (= 사용자 SSOT) */}
-                                {(place as any).userRatingCount > 0 && (
+                                {/* ⚠️ Vercel React Best Practices = rendering-conditional-render = ternary > && */}
+                                {(place as any).userRatingCount > 0 ? (
                                   <Text style={styles.placeStars}>
                                     ⭐ rc {(place as any).userRatingCount.toLocaleString()}
                                   </Text>
-                                )}
+                                ) : null}
 
                                 {/* 시간 */}
                                 <View style={styles.placeTimeRow}>
