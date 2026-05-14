@@ -421,7 +421,7 @@ export async function matchPlacesWithDB(
     // 1~3. 옛 dbPlacesMap fuzzy/partial 매칭 = 모두 폐기
     let dbMatch: any = undefined;
 
-    // ⚠️ 수정금지(승인필요) seedDirectMatch 적용 = 좌표 + 이미지 즉시 채움 (Google 호출 회피)
+    // ⚠️ 수정금지(승인필요) seedDirectMatch 적용 = 좌표 + 이미지 + pid 즉시 채움 (Google 호출 회피)
     if (seedDirectMatch) {
       // 시드의 좌표 즉시 주입 (= needsGoogle 회피)
       if (seedDirectMatch.latitude && seedDirectMatch.longitude) {
@@ -430,6 +430,15 @@ export async function matchPlacesWithDB(
       }
       // 사용자 의도 = 정확한 우리 큐레이션 이미지 우선
       if (seedDirectMatch.imageUrl) place.image = seedDirectMatch.imageUrl;
+      // ⚠️ 수정금지(승인필요) 2026-05-14 = 모달 정확도 = 검증된 google_place_id 매핑 (= 핫픽스 3)
+      // = 누락 시 = 모달 = name+city 검색 fallback = 인근 잘못된 장소 매칭 위험
+      if (seedDirectMatch.googlePlaceId) (place as any).googlePlaceId = seedDirectMatch.googlePlaceId;
+      if (seedDirectMatch.googleReviewCount) (place as any).userRatingCount = seedDirectMatch.googleReviewCount;
+      // ⚠️ 수정금지(승인필요) 2026-05-14 = v3 SSOT = 위트 카피 우선 (= shortform_ko = editorial_summary)
+      // = description = editorialSummary 우선 → summary_ko 폴백 (= "프사각" "MZ들" 노출)
+      if (seedDirectMatch.editorialSummary) place.description = seedDirectMatch.editorialSummary;
+      else if (seedDirectMatch.summaryKo) place.description = seedDirectMatch.summaryKo;
+      if (seedDirectMatch.summaryKo) place.personaFitReason = seedDirectMatch.summaryKo;
       // 별도 marker 로 후속 enrichment 가 인식하도록
       (place as any).__seedDirectMatch = seedDirectMatch;
     }

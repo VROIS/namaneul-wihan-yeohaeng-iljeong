@@ -138,12 +138,17 @@ export function PlaceDetailModal({
             referrerPolicy: "no-referrer-when-downgrade",
           })
         ) : (
+          /* ⚠️ 수정금지(승인필요) 2026-05-14 = BTS BTSPlaceMap 패턴 = 앱 WebView 작동 옵션 */
+          /* = mixedContentMode (= Android) + setSupportMultipleWindows + allowsInlineMediaPlayback */
           <WebView
             source={{ uri: embedUrl }}
             style={styles.webview}
             javaScriptEnabled
             domStorageEnabled
             originWhitelist={["*"]}
+            mixedContentMode={Platform.OS === "android" ? "always" : undefined}
+            setSupportMultipleWindows={false}
+            allowsInlineMediaPlayback
           />
         )}
       </View>
