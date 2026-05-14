@@ -654,8 +654,12 @@ async function step2_enrichAndBuild(
         koreanPopularityScore: 0,
         googleMapsUrl: '',
         estimatedPriceEur: sanitizePriceEur(gPlace.estimatedCostEur),
-        // ⚠️ 수정금지(승인필요) 2026-05-14 = AG3 매칭용 = 행정주소 전달
+        // ⚠️ 수정금지(승인필요) 2026-05-14 = AG3 매칭용 + DB INSERT 매핑
+        // = geminiAddress = 행정주소 (= 1순위 매칭 키)
+        // = nameKo/nameLocal = saveNewPlacesToDB INSERT 매핑 (= 한국어/원어명 누락 방지)
         geminiAddress: gPlace.address || '',
+        nameKo: gPlace.nameKo || null,
+        nameLocal: gPlace.nameLocal || null,
       } as any;
       allPlaces.push(place);
       scheduleMap.push({ day: gDay.day, gPlace, placeId });

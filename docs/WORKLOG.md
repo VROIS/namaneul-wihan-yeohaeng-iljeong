@@ -104,6 +104,30 @@
 | 11 | P3 | GeminiPlace 인터페이스 = 옛 `reason` 필드 제거 |
 | 12 | P3 | AG3 매칭 4+ 중첩 → `matchByAddress()` 추출 |
 
+### 🎯 다음 세션 핵심 작업 = **BTS 지도 패턴 = 메인앱 여정 지도 적용** (사용자 SSOT 2026-05-14)
+
+| # | 작업 | 영향 |
+|---|---|---|
+| A | **`BTSPlaceMap` 공통화** → `client/components/RouteMap.tsx` 추출 | 컴포넌트 통합 |
+| B | **`InteractiveMap` 폐기** = `RouteMap` 으로 교체 (= 메인앱 = BTS 패턴) | 웹/앱 모두 작동 |
+| C | **마커 터치 = scrollTo 핸들러** (= TripPlannerScreen) | UX = BTS 와 동일 |
+| D | **`PlaceResult.seedCategory` 매핑** (= ag3-data-matcher.ts:432, 1 줄) | 마커 카테고리 색상/아이콘 |
+| E | **슬롯 카드 좌상단 = 카테고리 lucide 아이콘** (= 사용자 명시) | UI 통일 |
+
+= 추정 소요 = ~1 시간 + EAS Update 배포.
+= 사용자 SSOT = "BTS 지도 = 표준" + "마커 터치 = 카드 scrollTo" + "분류 아이콘 = 슬롯 좌상단".
+
+### 📋 핫픽스 이력 (= 2026-05-14)
+
+| 커밋 | 내용 |
+|---|---|
+| `68addf8` | feat = 메인앱 v3 + DB 통합 + WORKLOG |
+| `96c5921` | hotfix 1 = sourceType 'Gemini V3' → 'Gemini AI (New)' (= saveNewPlacesToDB 필터 호환) |
+| (= Replit) | Migration 0015 = `celeb_mention` 컬럼 추가 (= schema vs DB 불일치) |
+| `dd99018` | hotfix 2 = ag3 googlePlaceId/userRatingCount/editorialSummary 매핑 + WebView Android 옵션 + Icon 10 추가 |
+
+= 운영 1 회 호출 = **4 핫픽스 발견 + 적용** = 추적 인프라 가치 증명.
+
 ### 📝 다음 단계 = 커밋/푸시 (= 사용자 명시 시)
 
 1. baseline 캡처 = `node scripts/_diag-bg-verification.mjs baseline`
