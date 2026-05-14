@@ -1350,20 +1350,14 @@ export function registerAdminRoutes(app: Express) {
         return;
       }
       
-      const { googlePlacesFetcher } = await import("./services/google-places");
-      
-      const result = await googlePlacesFetcher.syncCityPlaces(
-        cityId,
-        city.latitude,
-        city.longitude,
-        ["restaurant", "attraction"]
-      );
-      
-      res.json({ 
-        message: `${city.name} 장소 동기화 완료`,
+      // ⚠️ 수정금지(승인필요) 2026-05-12 = 사용자 SSOT = searchText 폐기
+      // = syncCityPlaces = Enterprise SKU 트리거 = seed-gemini.mjs (= Place Details Pro) 표준 사용
+      res.status(410).json({
+        error: 'DEPRECATED',
+        message: 'syncCityPlaces (searchText) = 2026-05-12 폐기. scripts/seed-gemini.mjs 사용 (= Place Details Pro = 표준)',
         city: city.name,
-        ...result 
       });
+      return;
     } catch (error) {
       console.error("Error syncing places:", error);
       res.status(500).json({ error: "장소 동기화 실패", details: String(error) });

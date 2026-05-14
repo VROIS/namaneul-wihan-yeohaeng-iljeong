@@ -14,9 +14,13 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
-  Image,
   Linking,
 } from "react-native";
+// ⚠️ 수정금지(승인필요) 2026-05-12 = BTS 1주일 디버깅 SSOT 완전 적용 (= 단순 expo-image 부족)
+// = client/lib/wikimedia-image.ts = Wikimedia 버킷 변환 + User-Agent 헤더 + Platform 분기
+// = AOS Samsung A36 5G Wikimedia 5/8 실패 → 8/8 3초 (= BTS 검증)
+import { Image } from "expo-image";
+import { resolveImageSource } from "@/lib/wikimedia-image";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -1704,12 +1708,16 @@ export default function TripPlannerScreen() {
                           >
                             <View style={styles.placeCardContent}>
                               {/* 썸네일 이미지 - 탭하면 인앱 모달에서 크게 보기 */}
+                              {/* ⚠️ 수정금지(승인필요) 2026-05-12 = BTS 1주일 SSOT = resolveImageSource (= UA + bucket + Platform 분기) */}
                               <View style={styles.placeThumbnail}>
                                 {place.image ? (
                                   <Image
-                                    source={{ uri: place.image }}
+                                    source={resolveImageSource(place.image, "card")}
                                     style={styles.placeThumbnailImage}
-                                    resizeMode="cover"
+                                    contentFit="cover"
+                                    priority="normal"
+                                    cachePolicy="memory-disk"
+                                    transition={150}
                                   />
                                 ) : (
                                   <View
@@ -1852,8 +1860,10 @@ export default function TripPlannerScreen() {
                                     </View>
                                   )}
 
-                                {/* 설명 */}
-                                {((place as any).geminiReason ||
+                                {/* ⚠️ 수정금지(승인필요) 2026-05-09 = 숓품식 한 줄 소개 (= DB summaryKo) 우선 노출 = 사용자 SSOT */}
+                                {/* description = ag3-data-matcher.ts:495 에서 DB summaryKo 로 덮어쓰기 = 우선 노출 / 없으면 AG2 reason fallback */}
+                                {((place as any).description ||
+                                  (place as any).geminiReason ||
                                   place.personaFitReason) && (
                                     <Text
                                       style={[
@@ -1862,7 +1872,8 @@ export default function TripPlannerScreen() {
                                       ]}
                                       numberOfLines={2}
                                     >
-                                      {(place as any).geminiReason ||
+                                      {(place as any).description ||
+                                        (place as any).geminiReason ||
                                         place.personaFitReason}
                                     </Text>
                                   )}

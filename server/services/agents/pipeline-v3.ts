@@ -69,23 +69,33 @@ function priceLevelToEur(level: number, meal?: 'lunch' | 'dinner'): number {
   return map[level]?.entrance ?? 0;
 }
 
-/** 원칙 1~4: Gemini 최우선, 0=무료 유지, DB 검증 시 비싼 쪽, 패키지 투어 가격 무시
- *  + seedPriceEur: place_seed_raw의 수집 가격 (3자 중 최고가 채택) */
+/** ⚠️ 수정금지(승인필요) 2026-05-12 = 사용자 SSOT 단일 컬럼 price_eur 우선순위 명확화
+ *  순차: 1) Gemini estimatedCostEur 우선 → 2) PD priceLevel × priceLevelToEur (= 최대값 비교)
+ *        → 3) seed_raw priceEur (= 최대값 비교) → 4) 매트릭스 폴백 (= 식당 = MEAL_BUDGET / 비식당 = 0)
+ *  = 3 자 최대값 + 매트릭스 폴백 = 비용 합산 원재료 = 사용자 SSOT
+ *  = 패키지 투어 (viator/klook/tour) = Gemini 우선 (= 패키지 가격 무시) */
 function resolvePrice(
   enrichedPrice: number,
   geminiPrice: number,
   dbPlace: { priceLevel?: number; priceSource?: string } | null,
   isMeal: boolean = false,
-  seedPriceEur: number = 0
+  seedPriceEur: number = 0,
+  mealType?: 'lunch' | 'dinner',
+  travelStyle: TravelStyle = 'Reasonable',
 ): number {
   const isPkgSource = dbPlace?.priceSource && ['viator', 'klook', 'tour', 'package'].some(k =>
     dbPlace!.priceSource!.toLowerCase().includes(k)
   );
   const basePrice = isPkgSource ? geminiPrice : (enrichedPrice || geminiPrice);
-  if (basePrice === 0 && !dbPlace?.priceLevel && seedPriceEur === 0) return 0;
-  const dbEstimate = dbPlace?.priceLevel ? priceLevelToEur(dbPlace.priceLevel) : 0;
-  // 3자 중 최고가 채택 (사용자 경험 보호: 실제보다 싸면 당혹감)
-  return Math.max(basePrice, dbEstimate, seedPriceEur);
+  const dbEstimate = dbPlace?.priceLevel ? priceLevelToEur(dbPlace.priceLevel, mealType) : 0;
+  // 3 자 최대값 (= 사용자 경험 보호: 실제보다 싸면 당혹감)
+  const max3 = Math.max(basePrice, dbEstimate, seedPriceEur);
+  if (max3 > 0) return max3;
+  // 모두 0 = 매트릭스 폴백 (= 사용자 SSOT 최후 보루)
+  if (isMeal && mealType) {
+    return MEAL_BUDGET[travelStyle]?.[mealType] ?? 0;
+  }
+  return 0; // 비식당 = 무료 가정 (= AG2 가 0 응답 = 무료 인정)
 }
 
 // ===== TravelStyle 정규화 (소문자→표준형) =====
@@ -115,10 +125,13 @@ interface GeminiPlace {
   name: string;         // Google Maps 영어 공식명
   nameKo: string;       // 사용자 선택 언어명
   nameLocal?: string;   // 현지 원어명 (예: "Tour Eiffel", "Colosseo")
+  address?: string;     // ⚠️ 2026-05-14 v3 = AG3 통합 매칭 1 순위 (= 행정주소)
   type: 'activity' | 'lunch' | 'dinner' | 'cafe';
   startTime: string;
   endTime: string;
-  reason: string;
+  reason?: string;      // = 옛 필드 (= optional, v3 에서 selection_reason_ko 로 대체)
+  selection_reason_ko?: string;  // ⚠️ 2026-05-14 v3 신규 = 인스타/FOMO = → summary_ko
+  shortform_ko?: string;          // ⚠️ 2026-05-14 v3 신규 = 코믹/위트 = → editorial_summary
   transitNote?: string; // 이전 장소에서 이 장소까지 이동 방법 (Gemini 생성)
   estimatedCostEur: number;
 }
@@ -217,13 +230,35 @@ export async function runPipelineV3(formData: TripFormData): Promise<any> {
 
   _mark('step2_enrich');
 
-  // 타이밍 정보 추가
+  // ⚠️ 수정금지(승인필요) 2026-05-14 = 사용자 SSOT = 추적 메타 강화 (= Replit 서버 콘솔 접근 X 우회)
+  // = 클라이언트 DevTools 콘솔에서 response.metadata 직접 확인 = 백엔드 동작 추적
+  const finalPlaces = result.places || [];
+  const unmatchedCount = finalPlaces.filter((p: any) => !p.googlePlaceId).length;
+  const matchedCount = finalPlaces.length - unmatchedCount;
+
   result.metadata = {
     ...result.metadata,
     _timings,
     _totalMs: Date.now() - _t0,
     _pipelineVersion: 'v3-2step',
-    sourceMode,  // ⚠️ 수정금지(승인필요) 2026-05-09 = AG1 분기 결정 = AG4 까지 손실 없이 전달
+    sourceMode,  // = AG1 분기 결정 (= 2026-05-09)
+
+    // ⭐ 신규 추적 메타 (= 2026-05-14)
+    _matching: {
+      total: finalPlaces.length,
+      matched: matchedCount,
+      unmatched: unmatchedCount,
+      matchRate: finalPlaces.length > 0 ? Math.round((matchedCount * 100) / finalPlaces.length) : 0,
+    },
+    _backgroundSave: {
+      started: unmatchedCount > 0,
+      targetCount: unmatchedCount,
+      note: unmatchedCount > 0
+        ? `${unmatchedCount} 곳 = TS+PM + Storage + DB INSERT 백그라운드 진행 중 (응답 후 완료)`
+        : '미매칭 없음 = 백그라운드 작업 없음',
+    },
+    _geminiModel: 'gemini-3-flash-preview',
+    _matchingAlgorithm: 'address > name > coords10m (= v3 2026-05-14)',
   };
 
   console.log(`[V3] ===== Pipeline V3 완료 (${Date.now() - _t0}ms) =====`);
@@ -381,55 +416,67 @@ async function step1_geminiItinerary(
       nowMonth >= 9 && nowMonth <= 11 ? '가을 시즌' :
         '겨울 시즌 (비수기, 일부 시설 단축운영)';
 
-  // ===== 강화 프롬프트 v3.3 (품질 우선: 타입·가격 명시) =====
-  const prompt = `당신은 ${nowYear}년 현재 기준 최신 정보를 갖춘 한국인 관광객 전문 여행 플래너입니다.
+  // ⚠️ 수정금지(승인필요) 2026-05-14 = 메인앱 v3 prompt 사용자 SSOT 확정
+  // = 시드 v3 톤 + 한국 여행자 컨텍스트 + 슬롯 매트릭스 + 동선 정렬
+  // = v3 핵심 신규 필드 = selection_reason_ko (FOMO) + shortform_ko (코믹/위트)
+  // = 컬럼 매핑: summary_ko ← selection_reason_ko / editorial_summary ← shortform_ko
+  // = 옛 ops 필드 (= type/startTime/endTime/estimatedCostEur) = AG3/AG4 호환 유지
+  // = 모델 = gemini-3-flash-preview + googleSearch grounding (= 시드와 통일)
+  // = Paris 시뮬 검증 = 15.7s / $0.0012 / 18 곳 (= docs/raw/mainapp-paris-v3.json)
+  const koreanTravelerStyle = `${companionDesc} ${headcount}명 / vibe=${formData.vibes?.join('+') || vibeNatural} / 페이스=${paceKo} / 스타일=${styleDesc}${ageDesc ? ` / 나이=${ageDesc}` : ''}`;
+  const prompt = `You are a travel data assistant for KOREAN TRAVELERS (${nowYear}년 기준 최신 정보).
+Return STRICT machine-parseable JSON only (no prose, no markdown wrappers).
 
-[핵심 미션]
-${companionDesc} ${headcount}명, ${dateRangeText}, ${formData.destination} 여행.
-분위기: ${vibeNatural} / 예산: ${styleDesc} / 이동: ${mobilityDesc} / 속도: ${paceKo}
-${ageDesc ? `여행자 나이: ${ageDesc}` : ''} ${agesDesc ? `/ ${agesDesc}` : ''}
-큐레이션: ${focusDesc} / 현재 계절: ${seasonNote}
+CITY: ${formData.destination}
+RADIUS_KM: 100
+TARGET_AUDIENCE: Korean travelers (= 한국 인스타/블로그/유튜브 트렌드 기준)
 
-[일별 스케줄]
+[USER CONTEXT — AG1 보강]
+${koreanTravelerStyle}
+계절: ${seasonNote} / 큐레이션: ${focusDesc}
+
+[SLOT MATRIX — AG1 결정]
 ${dayRequirements}
 
 [동선 원칙]
-1. 매일 ${formData.destination} 도시 중심부(중앙역 또는 중심 광장)에서 출발·귀환
-2. 같은 날 같은 구역·방향의 장소 묶기. 왕복/역방향 이동 금지
-3. 이동수단 명시: 메트로 호선명, 도보 분, 버스 번호 (예: "메트로 1호선", "도보 10분")
-4. startTime/endTime 겹침 절대 금지. 이동시간 반영
-5. 근교 이동 시 당일 첫 일정으로 배치
+- 매일 ${formData.destination} 도시 중심부에서 출발·귀환, 같은 날 = 같은 구역 묶기
+- Array order within each day = visit order
+- 점심(type="lunch") 12:00~13:30 / 저녁(type="dinner") 18:30~20:00
+- startTime/endTime 겹침 금지 (= 이동시간 반영)
 
 [가격 원칙]
-6. estimatedCostEur = ${nowYear}년 실제 입장료(1인, EUR). 무료=0. 식당=1인 식사비
-7. 점심 1인 ~€${mealBudget.lunch}, 저녁 1인 ~€${mealBudget.dinner}
-8. 루브르(€22), 에펠탑(€29.4) 등 ${nowYear}년 실제 인상 요금 반영 (절대 추정 금지)
+- estimatedCostEur = ${nowYear}년 실제 입장료 (1인, EUR). 무료=0
+- 점심 1인 ~€${mealBudget.lunch}, 저녁 1인 ~€${mealBudget.dinner}
 
-[장소 선정]
-9. Day 1: 구글맵 리뷰 많고 한국인에게 유명한 Must-Visit 장소 우선
-10. 장소명: name=Google Maps 검색 가능한 영어 공식명, nameLocal=현지 언어 공식명 (예: 파리라면 프랑스어 "Tour Eiffel", 로마라면 이탈리아어 "Colosseo", 도쿄라면 일본어 "東京スカイツリー")
-11. 점심(type="lunch"): 12:00~13:30 시작. 저녁(type="dinner"): 18:30~20:00 시작
-12. 현지인 맛집. 실제 영업 중인 곳만.
-13. [출력 언어: ${langSpec.name}] ${langSpec.prompt}
+For each place include:
+- name (English official name on Google Maps)
+- nameKo (한국어 = 한국 여행자가 부르는 이름)
+- nameLocal (local language name = 예: 파리=Tour Eiffel)
+- address (FULL street address with NUMBER + street + postal code + city)
+- type ("activity" | "lunch" | "dinner")
+- startTime, endTime ("HH:MM")
+- estimatedCostEur (1 인 EUR)
+- selection_reason_ko (한국어 한 줄 = 한국 여행객 트렌드 = 인스타 성지/한국 vlog 등 사회적 검증)
+- shortform_ko (한국어 한 줄 = 장소에 대한 코믹/위트 = Claude 톤. 단순 정보 X = "프사각", "본전 뽑음" 같은 한국 슬랭)
 
-JSON만 응답 (마크다운 없이):
-{"days":[{"day":1,"theme":"테마 (${langSpec.name})","places":[
-  {"name":"Official English Name","nameKo":"한국어","nameLocal":"Nom officiel local","type":"activity","startTime":"10:00","endTime":"12:00","reason":"도심에서 메트로 1호선 15분, 세계 최대 미술관","estimatedCostEur":22},
-  {"name":"Restaurant Name","nameKo":"한국어 식당명","nameLocal":"Nom local","type":"lunch","startTime":"12:30","endTime":"14:00","reason":"도보 5분, 현지인 단골 비스트로","estimatedCostEur":${mealBudget.lunch}},
-  {"name":"Place Name","nameKo":"한국어","nameLocal":"Nom local","type":"dinner","startTime":"19:00","endTime":"21:00","reason":"메트로 4호선 10분, 미슐랭 추천","estimatedCostEur":${mealBudget.dinner}}
+OUTPUT (strict JSON, no markdown fences):
+{"days":[{"day":1,"theme":"테마","places":[
+  {"name":"Eiffel Tower","nameKo":"에펠탑","nameLocal":"Tour Eiffel","address":"Champ de Mars, 5 Av. Anatole France, 75007 Paris","type":"activity","startTime":"10:00","endTime":"12:00","estimatedCostEur":29.4,"selection_reason_ko":"파리 인스타 인증샷 1순위 성지","shortform_ko":"파리 왔으면 외쳐줘야 국룰 '나 파리다!'"}
 ]}]}`;
 
   try {
-    console.log(`[V3-Step1] 🤖 Gemini에 ${dayCount}일 완전 일정 요청 (${prompt.length}자)...`);
+    console.log(`[V3-Step1] 🤖 Gemini-3-flash-preview + grounding (${prompt.length}자)...`);
 
+    // ⚠️ 수정금지(승인필요) 2026-05-14 = 모델/Tools 변경
+    // = gemini-2.5-flash (JSON mode) → gemini-3-flash-preview (grounding) = 시드 v3 와 통일
+    // = responseMimeType 제거 (= grounding 호환 X = prompt 에서 STRICT JSON 명시)
     const response = await getAI().models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3-flash-preview",
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       config: {
         temperature: 0.3,
-        maxOutputTokens: 4096,
-        responseMimeType: "application/json",
-        // ⚡ Thinking 비활성화 → 속도 최적화
+        maxOutputTokens: 8192,
+        tools: [{ googleSearch: {} }],
         thinkingConfig: { thinkingBudget: 0 },
       } as any,
     });
@@ -580,16 +627,21 @@ async function step2_enrichAndBuild(
     for (const gPlace of gDay.places) {
       const isMeal = gPlace.type === 'lunch' || gPlace.type === 'dinner';
       const placeId = `v3-d${gDay.day}-${allPlaces.length}`;
+      // ⚠️ 수정금지(승인필요) 2026-05-14 = v3 신규 필드 우선 매핑
+      // = description = shortform_ko (= 후킹 카피) → 옛 reason 폴백
+      // = personaFitReason = selection_reason_ko (= 인스타/FOMO) → 옛 reason 폴백
+      const desc = gPlace.shortform_ko || gPlace.reason || '';
+      const persona = gPlace.selection_reason_ko || gPlace.reason || 'AI 추천 장소';
       const place: PlaceResult = {
         id: placeId,
         name: gPlace.name || 'Unknown Place',
-        description: gPlace.reason || '',
+        description: desc,
         lat: 0,
         lng: 0,
         vibeScore: 7,
         confidenceScore: 5,
         sourceType: 'Gemini V3',
-        personaFitReason: gPlace.reason || 'AI 추천 장소',
+        personaFitReason: persona,
         tags: isMeal ? ['restaurant', 'food'] : [],
         vibeTags: isMeal ? ['Foodie' as const] : [],
         image: '',
@@ -600,7 +652,9 @@ async function step2_enrichAndBuild(
         koreanPopularityScore: 0,
         googleMapsUrl: '',
         estimatedPriceEur: sanitizePriceEur(gPlace.estimatedCostEur),
-      };
+        // ⚠️ 수정금지(승인필요) 2026-05-14 = AG3 매칭용 = 행정주소 전달
+        geminiAddress: gPlace.address || '',
+      } as any;
       allPlaces.push(place);
       scheduleMap.push({ day: gDay.day, gPlace, placeId });
     }
@@ -680,8 +734,18 @@ async function step2_enrichAndBuild(
     const enrichedPrice = ta?.estimatedPriceEur ?? p.estimatedPriceEur ?? 0;
     const geminiPrice = p.estimatedPriceEur ?? 0;
     const dbPlaceForPrice = { priceLevel: p.priceLevel, priceSource: ta?.priceSource ?? p.priceSource };
-    const isMealSlot = p.type === 'lunch' || p.type === 'dinner';
-    const resolvedPrice = resolvePrice(enrichedPrice, geminiPrice, dbPlaceForPrice, isMealSlot, seedData?.priceEur ?? 0);
+    const isMealSlot = (p as any).type === 'lunch' || (p as any).type === 'dinner';
+    // ⚠️ 수정금지(승인필요) 2026-05-12 = resolvePrice 우선순위 = mealType + travelStyle 전달 (= 매트릭스 폴백)
+    const mealTypeForPrice: 'lunch' | 'dinner' | undefined =
+      (p as any).type === 'lunch' ? 'lunch' :
+      (p as any).type === 'dinner' ? 'dinner' :
+      undefined;
+    const styleForPrice = normalizeTravelStyle(formData.travelStyle);
+    const resolvedPrice = resolvePrice(
+      enrichedPrice, geminiPrice, dbPlaceForPrice, isMealSlot,
+      seedData?.priceEur ?? 0,
+      mealTypeForPrice, styleForPrice,
+    );
 
     const merged = {
       ...p,
@@ -719,10 +783,13 @@ async function step2_enrichAndBuild(
     return merged;
   }));
 
-  // ⚠️ 수정금지(승인필요) 2026-05-09 = saveNewPlacesToDB 위치 이동 (= days 빌드 전 = 보강 결과 반영)
-  // = 신규 발굴 곳 = searchText + PhotoMedia + Storage upload 후 finalPlaces 갱신
-  // = days 빌드 시 = 갱신된 image/lat/lng 사용 = baseline 에 정상 반영
-  await saveNewPlacesToDB(finalPlaces, preloaded.cityId);
+  // ⚠️ 수정금지(승인필요) 2026-05-14 = 사용자 SSOT = 백그라운드 = 응답 속도 ↑
+  // = await 제거 = saveNewPlacesToDB (= TS+PM + Storage + DB INSERT) = 응답 후 백그라운드
+  // = 첫 사용자 = 미매칭 행 이미지/pid NULL 노출 / 다음 사용자 = DB hit = 정확
+  // = 사용자 SSOT 본질 = "DB 자동 캐싱 = 시간 갈수록 호출 ↓"
+  saveNewPlacesToDB(finalPlaces, preloaded.cityId).catch(e =>
+    console.error('[V3-Step2] ⚠️ 백그라운드 saveNewPlacesToDB 실패:', e?.message || e)
+  );
 
   // 최종 장소 맵 (= saveNewPlacesToDB 후 = 보강 결과 반영)
   const finalPlaceMap = new Map<string, PlaceResult>();

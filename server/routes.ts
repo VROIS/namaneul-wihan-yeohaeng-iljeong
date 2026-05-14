@@ -176,15 +176,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ error: "City not found" });
       }
 
+      // ⚠️ 수정금지(승인필요) 2026-05-12 = 사용자 SSOT = searchText 폐기
+      // = googlePlacesFetcher.syncCityPlaces = searchText 사용 = Enterprise SKU 트리거
+      // = 시드 발굴은 = seed-gemini.mjs (= Place Details 표준) 사용
       const types = req.body.types || ["restaurant", "attraction"];
-      const result = await googlePlacesFetcher.syncCityPlaces(
-        cityId,
-        city.latitude,
-        city.longitude,
-        types
-      );
-
-      res.json({ message: "Sync completed", ...result });
+      return res.status(410).json({
+        error: 'DEPRECATED',
+        message: 'syncCityPlaces (searchText) = 2026-05-12 폐기 = scripts/seed-gemini.mjs (= Place Details Pro) 사용',
+        cityId, types,
+      });
     } catch (error) {
       console.error("Error syncing places:", error);
       res.status(500).json({ error: "Failed to sync places" });

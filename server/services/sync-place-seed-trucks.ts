@@ -82,18 +82,15 @@ export async function runSyncConsolidation(): Promise<{
   }
 }
 
-/** 4차: googlePlaceId 백필 (일 100건, Text Search API) */
+/** ⚠️ 수정금지(승인필요) 2026-05-12 = 사용자 SSOT = searchText + Enterprise priceLevel 폭탄 폐기
+ * = sync-google-place-id-service.ts:116 = `places.priceLevel` = Enterprise SKU 트리거
+ * = 매일 cron + manual trigger 시 = 비용 폭주
+ * = 폐기 = 시드 발굴은 = seed-gemini.mjs (= Place Details Pro 표준) 만 사용 */
 export async function runBackfillGooglePlaceId(): Promise<{
   success: boolean;
   itemsProcessed: number;
   errors: string[];
 }> {
-  try {
-    const { runGooglePlaceIdBackfill } = await import("./sync-google-place-id-service");
-    const r = await runGooglePlaceIdBackfill();
-    console.log(`[Backfill] ${r.cityProcessed}(${r.phase}): googlePlaceId ${r.googlePlaceIdSet}건, place_id ${r.placeIdLinked}건, API ${r.totalApiCalls}회`);
-    return { success: true, itemsProcessed: r.googlePlaceIdSet, errors: r.errors };
-  } catch (e: any) {
-    return { success: false, itemsProcessed: 0, errors: [e?.message || String(e)] };
-  }
+  console.log('[Backfill] ⏸️ 폐기 (= 2026-05-12 사용자 SSOT = searchText Enterprise priceLevel 폭탄 차단)');
+  return { success: false, itemsProcessed: 0, errors: ['DEPRECATED: searchText Enterprise SKU triggered = 폐기'] };
 }

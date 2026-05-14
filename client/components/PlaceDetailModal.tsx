@@ -1,31 +1,29 @@
 /**
- * PlaceDetailModal
- * 장소 카드 클릭 시 표시되는 인앱 상세 모달
- * - 이미지 풀스크린 뷰어
- * - nubiReason 강조 표시
- * - 인앱 지도 (WebView, 외부 앱 이탈 없음)
- * - 시간/가격/이동 정보
+ * ⚠️ 수정금지(승인필요) 2026-05-12 = 사용자 SSOT = 우리 모달 통째 폐기
+ * = Google Maps Embed iframe = 사진/평점/리뷰/메뉴/시간 = 모두 Google 자동
+ * = 우리 = 신뢰성 정보 큐레이션 + 클릭 = Google 자동 = 인간 본능 후킹
+ * = 비용 = 완전 무료 + 무제한 (= Maps Embed API)
+ * = 정책 = 캐시 X = 실시간 사용자 호출 = 정책 안전
  */
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Modal,
   View,
-  Text,
-  Image,
   Pressable,
-  ScrollView,
   StyleSheet,
-  Dimensions,
-  ActivityIndicator,
+  Platform,
+  Text,
   Linking,
+  ActivityIndicator,
 } from "react-native";
 import { WebView } from "react-native-webview";
-import { useTranslation } from "react-i18next";
-import Icon from "@/components/Icon";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Brand } from "@/constants/theme";
+import Icon from "@/components/Icon";
+import { getApiUrl } from "@/lib/query-client";
 
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get("window");
+// ⚠️ 수정금지(승인필요) 2026-05-12 = BTS 패턴 재사용 = 서버 endpoint /api/bts/map-config 에서 키 받음
+// = Replit Secrets 의 GOOGLE_MAPS_API_KEY = 동일 키 (= DB api_keys + Replit 통합)
+// = 클라이언트 빌드에 키 직접 노출 X = 런타임 fetch = 보안 ↑
 
 interface PlaceDetailModalProps {
   visible: boolean;
@@ -33,66 +31,65 @@ interface PlaceDetailModalProps {
   place: {
     name: string;
     nameKo?: string;
-    image?: string;
-    nubiReason?: string;
-    nubiEvidenceUrl?: string;
-    nubiReasonSource?: string;
-    startTime?: string;
-    endTime?: string;
-    estimatedPriceEur?: number;
-    priceEstimate?: string;
-    isMealSlot?: boolean;
-    mealType?: string;
-    mealPrice?: number;
     lat?: number;
     lng?: number;
     googleMapsUrl?: string;
-    // ⚠️ 수정금지(승인필요) 2026-05-09 = TripAdvisor 폐기 + Google 리뷰 수 (= searchText userRatingCount = 사용자 SSOT)
-    userRatingCount?: number;
-    personaFitReason?: string;
-    geminiReason?: string;
-    type?: string;
-    instagramPostUrl?: string;
-    tiktokPostUrl?: string;
+    [key: string]: any; // = 호환성 = 옛 모달의 다양한 필드 (= 사용 X 이지만 type 호환)
   } | null;
-  theme: any;
+  theme?: any;
 }
 
 export function PlaceDetailModal({
   visible,
   onClose,
   place,
-  theme,
 }: PlaceDetailModalProps) {
-  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const [imageFullscreen, setImageFullscreen] = useState(false);
-  const [showMap, setShowMap] = useState(false);
-  const [mapLoading, setMapLoading] = useState(true);
+  // ⚠️ 수정금지(승인필요) 2026-05-12 = BTS 패턴 = /api/bts/map-config fetch
+  const [embedApiKey, setEmbedApiKey] = useState<string | null>(null);
+  useEffect(() => {
+    if (!visible) return;
+    fetch(`${getApiUrl()}/api/bts/map-config`)
+      .then((r) => r.json())
+      .then((d) => setEmbedApiKey(d.googleMapsApiKey || null))
+      .catch(() => setEmbedApiKey(""));
+  }, [visible]);
 
   if (!place) return null;
 
-  const isMeal =
-    place.isMealSlot || place.type === "lunch" || place.type === "dinner";
+  // ⚠️ 수정금지(승인필요) 2026-05-12 = Embed URL 결정 우선순위 (= 사용자 SSOT 정확 매칭)
+  // = 1) googlePlaceId (= 100% 정확 = 사진/평점/리뷰 카드 자동) ⭐
+  // = 2) name + city 검색 (= 동명 회피 = lat/lng 보다 정확)
+  // = 3) lat/lng (= 마지막 fallback = 엉뚱한 매칭 위험)
+  const placeId = (place as any).googlePlaceId;
+  const cityName = (place as any).city || "";
   const displayName = place.nameKo || place.name;
-  const displayReason =
-    place.nubiReason || place.personaFitReason || place.geminiReason || "";
-  const mealLabel =
-    place.mealType === "lunch"
-      ? "🍽️ 점심"
-      : place.mealType === "dinner"
-        ? "🍽️ 저녁"
-        : "";
+  const keyReady = embedApiKey !== null;
+  const hasKey = !!embedApiKey;
 
-  // 인앱 Google Maps HTML (단일 장소 핀)
-  const apiKey = ""; // 서버에서 주입 — 클라이언트 키 없이 embed URL 사용
-  const mapEmbedUrl =
-    place.lat && place.lng
-      ? `https://maps.google.com/maps?q=${place.lat},${place.lng}&z=16&output=embed`
-      : null;
+  let embedUrl: string | null = null;
+  if (keyReady) {
+    if (hasKey && placeId && placeId.startsWith("ChIJ")) {
+      // ⭐ 1 순위 = place_id = 사진/평점/리뷰 카드 + 지도 = 100% 정확
+      embedUrl = `https://www.google.com/maps/embed/v1/place?key=${embedApiKey}&q=place_id:${placeId}`;
+    } else if (hasKey) {
+      // 2 순위 = name + city 검색 (= 동명 회피 = lat/lng 보다 정확)
+      const q = encodeURIComponent(cityName ? `${place.name}, ${cityName}` : place.name);
+      embedUrl = `https://www.google.com/maps/embed/v1/place?key=${embedApiKey}&q=${q}`;
+    } else {
+      // 3 순위 = key fetch 실패 = Legacy embed (= 단순 지도)
+      const q = cityName
+        ? encodeURIComponent(`${place.name}, ${cityName}`)
+        : (place.lat && place.lng ? `${place.lat},${place.lng}` : encodeURIComponent(place.name));
+      embedUrl = `https://maps.google.com/maps?q=${q}&z=16&output=embed`;
+    }
+  }
 
-  const handleOpenGoogleMaps = () => {
-    if (place.googleMapsUrl) {
+  // Google Maps 앱으로 열기 (= 익숙한 UX = 외부 앱)
+  const handleOpenInApp = () => {
+    if (placeId && placeId.startsWith("ChIJ")) {
+      Linking.openURL(`https://www.google.com/maps/place/?q=place_id:${placeId}`);
+    } else if (place.googleMapsUrl) {
       Linking.openURL(place.googleMapsUrl);
     } else if (place.lat && place.lng) {
       Linking.openURL(
@@ -101,33 +98,6 @@ export function PlaceDetailModal({
     }
   };
 
-  // 풀스크린 이미지 뷰어
-  if (imageFullscreen && place.image) {
-    return (
-      <Modal
-        visible={true}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setImageFullscreen(false)}
-      >
-        <View style={styles.fullscreenOverlay}>
-          <Pressable
-            style={styles.fullscreenClose}
-            onPress={() => setImageFullscreen(false)}
-          >
-            <Icon name="x" size={28} color="#fff" />
-          </Pressable>
-          <Image
-            source={{ uri: place.image }}
-            style={styles.fullscreenImage}
-            resizeMode="contain"
-          />
-          <Text style={styles.fullscreenCaption}>{displayName}</Text>
-        </View>
-      </Modal>
-    );
-  }
-
   return (
     <Modal
       visible={visible}
@@ -135,447 +105,87 @@ export function PlaceDetailModal({
       transparent={false}
       onRequestClose={onClose}
     >
-      <View
-        style={[styles.container, { backgroundColor: theme.backgroundRoot }]}
-      >
-        {/* 헤더 */}
-        <View
-          style={[
-            styles.header,
-            {
-              paddingTop: insets.top + 8,
-              backgroundColor: theme.backgroundDefault,
-              borderBottomColor: theme.border,
-            },
-          ]}
-        >
+      <View style={[styles.container, { paddingTop: insets.top }]}>
+        {/* 헤더 = 닫기 + 이름 + 외부 Google Maps 열기 */}
+        <View style={styles.header}>
           <Pressable onPress={onClose} style={styles.headerBtn} hitSlop={8}>
-            <Icon name="arrow-left" size={22} color={theme.text} />
+            <Icon name="x" size={24} color="#000" />
           </Pressable>
-          <Text
-            style={[styles.headerTitle, { color: theme.text }]}
-            numberOfLines={1}
-          >
-            {isMeal ? `${mealLabel} ` : ""}
+          <Text style={styles.headerTitle} numberOfLines={1}>
             {displayName}
           </Text>
-          {/* 외부 Google Maps 링크 (아이콘만) */}
-          <Pressable
-            onPress={handleOpenGoogleMaps}
-            style={styles.headerBtn}
-            hitSlop={8}
-          >
-            <Icon name="external-link" size={20} color={theme.textSecondary} />
+          <Pressable onPress={handleOpenInApp} style={styles.headerBtn} hitSlop={8}>
+            <Icon name="external-link" size={20} color="#666" />
           </Pressable>
         </View>
 
-        <ScrollView
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
-        >
-          {/* 이미지 영역 */}
-          <Pressable
-            onPress={() => place.image && setImageFullscreen(true)}
-            style={styles.imageContainer}
-          >
-            {place.image ? (
-              <>
-                <Image
-                  source={{ uri: place.image }}
-                  style={styles.heroImage}
-                  resizeMode="cover"
-                />
-                {/* 확대 힌트 */}
-                <View style={styles.imageZoomHint}>
-                  <Icon name="maximize-2" size={14} color="#fff" />
-                </View>
-              </>
-            ) : (
-              <View
-                style={[
-                  styles.heroImagePlaceholder,
-                  {
-                    backgroundColor: isMeal
-                      ? "#FFF5F0"
-                      : theme.backgroundSecondary,
-                  },
-                ]}
-              >
-                <Icon
-                  name={isMeal ? "coffee" : "map-pin"}
-                  size={48}
-                  color={isMeal ? "#FF6B35" : theme.textTertiary}
-                />
-                <Text
-                  style={[styles.noImageText, { color: theme.textTertiary }]}
-                >
-                  {displayName}
-                </Text>
-              </View>
-            )}
-          </Pressable>
-
-          {/* nubiReason - 핵심 차별화 */}
-          {displayReason ? (
-            <View
-              style={[
-                styles.reasonCard,
-                {
-                  backgroundColor: `${Brand.primary}10`,
-                  borderColor: `${Brand.primary}30`,
-                },
-              ]}
-            >
-              <View style={styles.reasonHeader}>
-                <Text style={[styles.reasonLabel, { color: Brand.primary }]}>
-                  {t("place.nubiReason")}
-                </Text>
-                {place.nubiReasonSource && (
-                  <Text
-                    style={[styles.reasonSource, { color: theme.textTertiary }]}
-                  >
-                    {place.nubiReasonSource === "instagram"
-                      ? t("place.sourceInstagram")
-                      : place.nubiReasonSource === "naver_blog"
-                        ? t("place.sourceNaverBlog")
-                        : place.nubiReasonSource === "youtube"
-                          ? t("place.sourceYoutube")
-                          : ""}
-                  </Text>
-                )}
-              </View>
-              <Text style={[styles.reasonText, { color: theme.text }]}>
-                {displayReason}
-              </Text>
-            </View>
-          ) : null}
-
-          {/* ⚠️ 수정금지(승인필요) 2026-05-09 = Instagram/TikTok 표시 폐기 (= 사용자 명시 = 인프라 부족) */}
-
-          {/* 시간 / 가격 / 평점 */}
-          <View
-            style={[
-              styles.infoCard,
-              {
-                backgroundColor: theme.backgroundDefault,
-                borderColor: theme.border,
-              },
-            ]}
-          >
-            {/* 시간 */}
-            {place.startTime && place.endTime && (
-              <View style={styles.infoRow}>
-                <Icon name="clock" size={16} color={Brand.primary} />
-                <Text style={[styles.infoText, { color: theme.text }]}>
-                  {place.startTime} — {place.endTime}
-                </Text>
-              </View>
-            )}
-
-            {/* 가격 */}
-            <View style={styles.infoRow}>
-              <Icon
-                name={isMeal ? "credit-card" : "tag"}
-                size={16}
-                color={Brand.primary}
-              />
-              <Text style={[styles.infoText, { color: theme.text }]}>
-                {isMeal
-                  ? t("place.mealPerPerson", { price: place.mealPrice || "??" })
-                  : place.estimatedPriceEur &&
-                      place.estimatedPriceEur > 0 &&
-                      place.estimatedPriceEur < 500
-                    ? t("place.entrancePerPerson", { price: place.estimatedPriceEur })
-                    : place.priceEstimate && place.priceEstimate !== "무료"
-                      ? place.priceEstimate
-                      : t("place.freeEntrance")}
-              </Text>
-            </View>
-
-            {/* ⚠️ 수정금지(승인필요) 2026-05-09 = Google 리뷰 수 (= searchText userRatingCount = TripAdvisor 대체 = 사용자 SSOT) */}
-            {place.userRatingCount && place.userRatingCount > 0 ? (
-              <View style={styles.infoRow}>
-                <Icon name="star" size={16} color="#FF6B35" />
-                <Text style={[styles.infoText, { color: theme.text }]}>
-                  {`Google 리뷰 ${place.userRatingCount.toLocaleString()}개`}
-                </Text>
-              </View>
-            ) : null}
+        {/* Google Maps Embed = 사진 + 평점 + 리뷰 + 시간 + 메뉴 = 자동 */}
+        {!embedUrl ? (
+          <View style={styles.loader}>
+            <ActivityIndicator size="large" color="#666" />
           </View>
-
-          {/* 인앱 지도 섹션 */}
-          {place.lat && place.lng ? (
-            <View style={styles.mapSection}>
-              <Pressable
-                style={[
-                  styles.mapToggleBtn,
-                  {
-                    backgroundColor: showMap
-                      ? `${Brand.primary}15`
-                      : theme.backgroundDefault,
-                    borderColor: Brand.primary,
-                  },
-                ]}
-                onPress={() => {
-                  setShowMap(!showMap);
-                  setMapLoading(true);
-                }}
-              >
-                <Icon name="map" size={16} color={Brand.primary} />
-                <Text style={[styles.mapToggleText, { color: Brand.primary }]}>
-                  {showMap ? t("place.hideMap") : t("place.showMap")}
-                </Text>
-                <Icon
-                  name={showMap ? "chevron-up" : "chevron-down"}
-                  size={16}
-                  color={Brand.primary}
-                />
-              </Pressable>
-
-              {showMap && mapEmbedUrl && (
-                <View style={styles.mapContainer}>
-                  {mapLoading && (
-                    <View style={styles.mapLoader}>
-                      <ActivityIndicator size="small" color={Brand.primary} />
-                      <Text
-                        style={{
-                          color: theme.textSecondary,
-                          marginTop: 6,
-                          fontSize: 12,
-                        }}
-                      >
-                        {t("place.mapLoading")}
-                      </Text>
-                    </View>
-                  )}
-                  <WebView
-                    source={{ uri: mapEmbedUrl }}
-                    style={[styles.mapWebView, mapLoading && { opacity: 0 }]}
-                    onLoad={() => setMapLoading(false)}
-                    onError={() => setMapLoading(false)}
-                    javaScriptEnabled
-                    domStorageEnabled
-                    originWhitelist={["*"]}
-                  />
-                </View>
-              )}
-            </View>
-          ) : null}
-
-          {/* 외부 Google Maps 버튼 */}
-          {(place.googleMapsUrl || (place.lat && place.lng)) && (
-            <Pressable
-              style={[styles.externalMapBtn, { borderColor: theme.border }]}
-              onPress={handleOpenGoogleMaps}
-            >
-              <Icon name="navigation" size={15} color={theme.textSecondary} />
-              <Text
-                style={[styles.externalMapText, { color: theme.textSecondary }]}
-              >
-                {t("place.openGoogleMaps")}
-              </Text>
-              <Icon name="external-link" size={13} color={theme.textTertiary} />
-            </Pressable>
-          )}
-        </ScrollView>
+        ) : Platform.OS === "web" ? (
+          React.createElement("iframe", {
+            src: embedUrl,
+            style: {
+              width: "100%",
+              height: "100%",
+              border: 0,
+              flex: 1,
+            },
+            allowFullScreen: true,
+            loading: "lazy",
+            referrerPolicy: "no-referrer-when-downgrade",
+          })
+        ) : (
+          <WebView
+            source={{ uri: embedUrl }}
+            style={styles.webview}
+            javaScriptEnabled
+            domStorageEnabled
+            originWhitelist={["*"]}
+          />
+        )}
       </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-
-  socialLinksRow: {
-    flexDirection: "row",
-    gap: 10,
-    paddingHorizontal: 16,
-    marginBottom: 12,
-  },
-  socialLinkBtn: {
+  container: {
     flex: 1,
-    paddingVertical: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    alignItems: "center",
+    backgroundColor: "#fff",
   },
-  socialLinkText: {
-    fontSize: 13,
-    fontWeight: "600",
-  },
-
   header: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 12,
-    paddingBottom: 12,
+    paddingVertical: 8,
     borderBottomWidth: 1,
-    gap: 8,
+    borderBottomColor: "#eee",
   },
   headerBtn: {
-    width: 36,
-    height: 36,
+    width: 40,
+    height: 40,
     justifyContent: "center",
     alignItems: "center",
   },
   headerTitle: {
     flex: 1,
     fontSize: 16,
-    fontWeight: "700",
-    textAlign: "center",
-  },
-
-  imageContainer: {
-    width: SCREEN_W,
-    height: 240,
-    position: "relative",
-  },
-  heroImage: {
-    width: SCREEN_W,
-    height: 240,
-  },
-  heroImagePlaceholder: {
-    width: SCREEN_W,
-    height: 240,
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 12,
-  },
-  noImageText: {
-    fontSize: 14,
-    textAlign: "center",
-    paddingHorizontal: 24,
-  },
-  imageZoomHint: {
-    position: "absolute",
-    bottom: 10,
-    right: 10,
-    backgroundColor: "rgba(0,0,0,0.45)",
-    borderRadius: 16,
-    padding: 6,
-  },
-
-  reasonCard: {
-    margin: 12,
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    gap: 6,
-  },
-  reasonHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  reasonLabel: {
-    fontSize: 12,
-    fontWeight: "700",
-    letterSpacing: 0.3,
-  },
-  reasonSource: {
-    fontSize: 11,
-  },
-  reasonText: {
-    fontSize: 15,
-    fontWeight: "500",
-    lineHeight: 22,
-  },
-
-  infoCard: {
-    marginHorizontal: 12,
-    marginBottom: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 14,
-    gap: 10,
-  },
-  infoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  infoText: {
-    fontSize: 14,
-    flex: 1,
-  },
-
-  mapSection: {
-    marginHorizontal: 12,
-    marginBottom: 12,
-  },
-  mapToggleBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    borderWidth: 1,
-    borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-  },
-  mapToggleText: {
-    fontSize: 14,
     fontWeight: "600",
-    flex: 1,
     textAlign: "center",
+    color: "#000",
+    marginHorizontal: 8,
   },
-  mapContainer: {
-    height: 260,
-    borderRadius: 10,
-    overflow: "hidden",
-    marginTop: 8,
-    position: "relative",
-  },
-  mapLoader: {
-    position: "absolute",
-    inset: 0,
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 1,
-    backgroundColor: "#f5f5f5",
-  },
-  mapWebView: {
+  webview: {
     flex: 1,
+    width: "100%",
   },
-
-  externalMapBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 6,
-    marginHorizontal: 12,
-    marginBottom: 8,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderRadius: 8,
-  },
-  externalMapText: {
-    fontSize: 13,
-  },
-
-  // 풀스크린 이미지
-  fullscreenOverlay: {
+  loader: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.95)",
     justifyContent: "center",
     alignItems: "center",
-  },
-  fullscreenClose: {
-    position: "absolute",
-    top: 50,
-    right: 20,
-    zIndex: 10,
-    padding: 8,
-  },
-  fullscreenImage: {
-    width: SCREEN_W,
-    height: SCREEN_H * 0.75,
-  },
-  fullscreenCaption: {
-    color: "rgba(255,255,255,0.7)",
-    fontSize: 13,
-    marginTop: 16,
-    textAlign: "center",
-    paddingHorizontal: 32,
   },
 });
