@@ -96,13 +96,13 @@ if (mode === 'baseline') {
   }
   // 최신 30 행 추가 = 시각 검증
   const recent = (await c.query(`
-    SELECT id, name_en, name_ko, ci.name_en AS city, created_at,
-      google_place_id IS NOT NULL AS has_pid,
-      image_url IS NOT NULL AS has_img
+    SELECT p.id, p.name_en, p.name_ko, ci.name_en AS city, p.created_at,
+      p.google_place_id IS NOT NULL AS has_pid,
+      p.image_url IS NOT NULL AS has_img
     FROM place_seed_raw p JOIN cities ci ON ci.id = p.city_id
-    WHERE collection_phase = 'auto-learn-2026-05'
-      AND created_at > $1
-    ORDER BY created_at DESC LIMIT 30
+    WHERE p.collection_phase = 'auto-learn-2026-05'
+      AND p.created_at > $1
+    ORDER BY p.created_at DESC LIMIT 30
   `, [baseline.timestamp])).rows;
   if (recent.length > 0) {
     console.log(`\n최신 추가 행 (${recent.length}):`);

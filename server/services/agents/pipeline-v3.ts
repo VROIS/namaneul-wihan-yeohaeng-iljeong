@@ -640,7 +640,9 @@ async function step2_enrichAndBuild(
         lng: 0,
         vibeScore: 7,
         confidenceScore: 5,
-        sourceType: 'Gemini V3',
+        // ⚠️ 수정금지(승인필요) 2026-05-14 = saveNewPlacesToDB 필터 호환 = 'Gemini AI (New)' 유지
+        // = 'Gemini V3' 로 변경 시 = 필터 통과 X = toSave=0 = DB 자동 캐싱 X (= 운영 검증 시 발견)
+        sourceType: 'Gemini AI (New)',
         personaFitReason: persona,
         tags: isMeal ? ['restaurant', 'food'] : [],
         vibeTags: isMeal ? ['Foodie' as const] : [],
