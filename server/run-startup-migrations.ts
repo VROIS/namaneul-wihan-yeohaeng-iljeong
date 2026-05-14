@@ -139,6 +139,13 @@ export async function runStartupMigrations(): Promise<void> {
         ADD COLUMN IF NOT EXISTS gemini_rank integer;
     `);
     console.log("[Migration] 0014 multi-tag/image-meta/gemini3 컬럼 10개 추가 완료");
+
+    // 0015: celeb_mention 컬럼 추가 (schema.ts 동기화)
+    await pool.query(`
+      ALTER TABLE place_seed_raw
+        ADD COLUMN IF NOT EXISTS celeb_mention text;
+    `);
+    console.log("[Migration] 0015 celeb_mention 컬럼 추가 완료");
   } catch (err) {
     console.warn("[Migration] 스킵 또는 실패:", (err as Error).message);
   }
