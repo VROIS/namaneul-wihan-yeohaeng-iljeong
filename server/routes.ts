@@ -759,6 +759,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         'Economic': 'comfort', // 🩹 [2026-01-26] DB Enum 불일치 방지 (economic -> comfort)
         'luxury': 'luxury',
         'comfort': 'comfort',
+        'reasonable': 'comfort',
         'economic': 'comfort', // 🩹 [2026-01-26] DB Enum 불일치 방지
       };
 
