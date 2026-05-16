@@ -193,6 +193,12 @@ function configureExpoAndLanding(app: express.Application) {
     next();
   });
 
+  // public 폴더 서빙 (robots.txt 등 정적 파일 — dist 재빌드에 영향받지 않음)
+  const publicPath = path.resolve(process.cwd(), "public");
+  if (fs.existsSync(publicPath)) {
+    app.use(express.static(publicPath));
+  }
+
   // Expo 웹 빌드 서빙 (dist 폴더)
   // ⚠️ 수정금지(승인필요) — 웹 빌드 전용, 네이티브 앱과 무관
   const distPath = path.resolve(process.cwd(), "dist");

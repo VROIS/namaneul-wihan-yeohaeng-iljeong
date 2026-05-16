@@ -23,7 +23,10 @@
     },
     "web": {
       "output": "single",
-      "favicon": "./assets/images/icon.png"
+      "favicon": "./assets/images/icon.png",
+      "lang": "ko",
+      "name": "NUBI - 나만의 여행",
+      "description": "NUBI(누비) — AI가 내 취향에 맞게 설계하는 나만의 여행 플래너. 일정·숙소·맛집까지 한 번에."
     },
     "plugins": [
       [
