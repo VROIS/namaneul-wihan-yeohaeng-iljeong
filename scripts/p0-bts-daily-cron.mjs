@@ -69,7 +69,7 @@ const ATMOSPHERE_FIELDS = new Set([
   'servesCoffee', 'servesDessert', 'servesDinner', 'servesLunch', 'servesVegetarianFood',
   'servesWine', 'takeout',
 ]);
-const FIELD_MASK = 'places.id,places.displayName,places.location,places.photos,places.userRatingCount';
+const FIELD_MASK = 'places.id,places.displayName,places.location,places.photos,places.userRatingCount,places.googleMapsUri';
 
 function validateFieldMask(mask) {
   for (const f of mask.split(',').map((x) => x.trim())) {
@@ -117,7 +117,8 @@ function buildLocationStr(city, cc) {
 // ━━━━━━ Google searchText (place_id + photoName) ━━━━━━
 async function searchTextOnce(textQuery, apiKey, locationBias) {
   validateFieldMask(FIELD_MASK);
-  const body = { textQuery, pageSize: 1 };
+  // ⚠️ 수정금지(승인필요) 2026-05-15 = languageCode: 'ko' (= 한국어 displayName)
+  const body = { textQuery, pageSize: 1, languageCode: 'ko' };
   if (locationBias) body.locationBias = locationBias;
   return await fetch('https://places.googleapis.com/v1/places:searchText', {
     method: 'POST',

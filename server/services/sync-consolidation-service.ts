@@ -262,25 +262,9 @@ export async function runConsolidation(): Promise<ConsolidationResult> {
     }
     console.log(`[Consolidation] Step 2 완료: 이미지 ${result.imagesUpdated}건 (셀럽>인스타>구글 우선순위)`);
 
-    // ── Step 3: place_prices → priceEur (우선순위: google_places > klook/viator > gemini) ──
-    console.log("[Consolidation] Step 3/6: 가격 우선순위 채우기...");
-    const PRICE_SOURCE_PRIORITY: Record<string, number> = {
-      google_places_actual: 1,
-      google_places: 2,
-      klook: 3,
-      viator: 3,
-      klook_viator: 3,
-      myrealtrip: 4,
-      tripdotcom: 4,
-      official_website: 5,
-      gemini_search: 9,
-      place_prices_bridge: 9,
-    };
-
+    // ⚠️ 2026-05-15 = price_eur 단일 SSOT (= SSOT §14 GREATEST 비싼 쪽)
+    console.log("[Consolidation] Step 3/6: 가격 채우기 (GREATEST 비싼 쪽)...");
     for (const seed of seedsWithPlaceId) {
-      const currentPriority = PRICE_SOURCE_PRIORITY[seed.priceSource ?? ""] ?? 10;
-      if (seed.priceEur != null && currentPriority <= 3) continue;
-
       const prices = await db
         .select()
         .from(placePrices)
@@ -288,27 +272,25 @@ export async function runConsolidation(): Promise<ConsolidationResult> {
         .orderBy(desc(placePrices.fetchedAt));
 
       if (prices.length > 0) {
-        // 소스 우선순위대로 정렬하여 최우선 가격 선택
-        const sorted = prices
-          .filter((p) => (p.priceAverage ?? p.priceHigh ?? p.priceLow) != null)
-          .sort((a, b) => (PRICE_SOURCE_PRIORITY[a.source] ?? 8) - (PRICE_SOURCE_PRIORITY[b.source] ?? 8));
+        const candidates = prices
+          .map((p) => p.priceAverage ?? p.priceHigh ?? p.priceLow)
+          .filter((v): v is number => v != null);
 
-        if (sorted.length > 0) {
-          const best = sorted[0];
-          const bestPriority = PRICE_SOURCE_PRIORITY[best.source] ?? 8;
-          if (bestPriority < currentPriority) {
-            const finalPrice = best.priceAverage ?? best.priceHigh ?? best.priceLow;
+        if (candidates.length > 0) {
+          const maxPrice = Math.max(...candidates);
+          const currentPrice = seed.priceEur ?? 0;
+          if (maxPrice > currentPrice) {
             await db
               .update(placeSeedRaw)
-              .set({ priceEur: finalPrice!, priceSource: best.source })
+              .set({ priceEur: maxPrice })
               .where(eq(placeSeedRaw.id, seed.id));
-            seed.priceEur = finalPrice!;
+            seed.priceEur = maxPrice;
             result.pricesUpdated++;
           }
         }
       }
     }
-    console.log(`[Consolidation] Step 3 완료: 가격 ${result.pricesUpdated}건 (실제가격 우선)`);
+    console.log(`[Consolidation] Step 3 완료: 가격 ${result.pricesUpdated}건 (GREATEST)`);
 
     // ── Step 4: naver_blog_posts → naverBlogCount ──
     console.log("[Consolidation] Step 4/6: 블로그 수 채우기...");

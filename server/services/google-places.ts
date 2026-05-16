@@ -64,7 +64,7 @@ interface GooglePlaceResult {
   location: { latitude: number; longitude: number };
   rating?: number;
   userRatingCount?: number;
-  priceLevel?: string;
+  // ⚠️ 2026-05-15 = priceLevel 폐기 (= price_eur 단일 SSOT)
   types?: string[];
   primaryType?: string;
   primaryTypeDisplayName?: { text: string; languageCode: string };
@@ -234,6 +234,8 @@ export class GooglePlacesFetcher {
   ): Promise<GooglePlaceResult[]> {
     const requestBody = {
       textQuery: query,
+      // ⚠️ 수정금지(승인필요) 2026-05-15 = languageCode: 'ko' (= 한국어 displayName)
+      languageCode: 'ko',
       locationBias: {
         circle: {
           center: { latitude, longitude },
@@ -291,6 +293,8 @@ export class GooglePlacesFetcher {
       includedTypes,
       maxResultCount: 30,  // 카테고리당 30곳 목표
       rankPreference: "POPULARITY",  // 🔥 구글 리뷰 많은 순 (인기순) 정렬
+      // ⚠️ 수정금지(승인필요) 2026-05-15 = languageCode: 'ko' (= 한국어 displayName)
+      languageCode: 'ko',
       locationRestriction: {
         circle: {
           center: { latitude, longitude },
@@ -328,8 +332,8 @@ export class GooglePlacesFetcher {
   }
 
   async getPlaceDetails(placeId: string): Promise<GooglePlaceResult> {
-    // 💰 비용 최적화: Enterprise만 요청 (Atmosphere 제외)
-    // editorialSummary 제거 → OpenTripMap/Wikimedia로 대체. 무료티어(1일~33건) 내 핵심 필드만
+    // ⚠️ 2026-05-15 = priceLevel 제거 (= SSOT §16 + 제15조)
+    // = price_eur 단일 SSOT 채택 = price_level 폐기
     const fieldMask = [
       "id",
       "displayName",
@@ -337,7 +341,6 @@ export class GooglePlacesFetcher {
       "location",
       "rating",
       "userRatingCount",
-      "priceLevel",
       "types",
       "primaryType",
       "photos",
@@ -348,8 +351,9 @@ export class GooglePlacesFetcher {
       "internationalPhoneNumber",
     ].join(",");
 
+    // ⚠️ 수정금지(승인필요) 2026-05-15 = languageCode='ko' query param (= GET 방식이라 query 로)
     return this.makeRequest<PlaceDetailsResponse>(
-      `${GOOGLE_PLACES_BASE_URL}/${placeId}`,
+      `${GOOGLE_PLACES_BASE_URL}/${placeId}?languageCode=ko`,
       {
         method: "GET",
         headers: {
@@ -371,13 +375,7 @@ export class GooglePlacesFetcher {
   ): Promise<number> {
     const existingPlace = await storage.getPlaceByGoogleId(googlePlace.id);
 
-    const priceLevelMap: Record<string, number> = {
-      PRICE_LEVEL_FREE: 0,
-      PRICE_LEVEL_INEXPENSIVE: 1,
-      PRICE_LEVEL_MODERATE: 2,
-      PRICE_LEVEL_EXPENSIVE: 3,
-      PRICE_LEVEL_VERY_EXPENSIVE: 4,
-    };
+    // ⚠️ 2026-05-15 = priceLevel 폐기 (= price_eur 단일 SSOT)
 
     const photoUrls = googlePlace.photos?.slice(0, 10).map(p =>
       `https://places.googleapis.com/v1/${p.name}/media?maxWidthPx=1200&key=${this.getApiKey()}`
@@ -409,7 +407,6 @@ export class GooglePlacesFetcher {
       shortAddress: googlePlace.shortFormattedAddress,
       latitude: googlePlace.location.latitude,
       longitude: googlePlace.location.longitude,
-      priceLevel: googlePlace.priceLevel ? priceLevelMap[googlePlace.priceLevel] : undefined,
       photoUrls,
       openingHours: (openingHours && typeof openingHours === "object" && Object.keys(openingHours).length > 0) ? openingHours : undefined,
 
@@ -444,7 +441,6 @@ export class GooglePlacesFetcher {
           phoneNumber: placeData.phoneNumber,
           photoUrls: placeData.photoUrls,
           openingHours: placeData.openingHours,
-          priceLevel: placeData.priceLevel,
           businessStatus: placeData.businessStatus,
           buzzScore: placeData.buzzScore,
           lastDataSync: placeData.lastDataSync,
@@ -466,7 +462,6 @@ export class GooglePlacesFetcher {
       sourceUrl: googlePlace.googleMapsUri ?? null,
       rating: googlePlace.rating ?? null,
       reviewCount: googlePlace.userRatingCount ?? null,
-      priceLevel: googlePlace.priceLevel ? priceLevelMap[googlePlace.priceLevel] : null,
       rankingInCategory: null,
       isMichelinStar: false,
       michelinType: null,

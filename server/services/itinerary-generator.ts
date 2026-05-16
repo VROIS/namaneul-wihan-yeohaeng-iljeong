@@ -13,6 +13,8 @@ import { storage } from "../storage";
 import { db } from "../db";
 import { places, instagramHashtags, youtubePlaceMentions, naverBlogPosts, cities, tripAdvisorData, placeSeedRaw, reviews, geminiWebSearchCache, weatherCache, crisisAlerts } from "@shared/schema";
 import { eq, sql, ilike, and, desc, asc } from "drizzle-orm";
+// ⚠️ 수정금지(승인필요) 2026-05-15 = Google Places SKU 가드 (= SSOT §16)
+import { validateFieldMask } from "./shared/google-places-sku";
 
 // Lazy initialization - DB에서 API 키 로드 후 사용
 let ai: GoogleGenAI | null = null;
@@ -348,9 +350,8 @@ interface PlaceResult {
   tripAdvisorRating?: number;       // 1.0-5.0
   tripAdvisorReviewCount?: number;  // 총 리뷰 수
   tripAdvisorRanking?: string;      // "#5 of 1203"
-  // 실제 가격 추정 (EUR)
-  estimatedPriceEur?: number;       // 입장료 또는 식사 평균 가격
-  priceSource?: string;             // 가격 출처
+  // 실제 가격 추정 (EUR) — 2026-05-15 = price_eur 단일 SSOT (priceSource 폐기)
+  estimatedPriceEur?: number;       // 1인 입장료 + 1인 평균 식대 통합
   // Phase 1-3: 포토스팟 점수 (0-10)
   photoSpotScore?: number;
   photoTip?: string;
@@ -423,6 +424,8 @@ async function searchGooglePlaces(
       const requestBody = {
         includedTypes: [placeType],
         maxResultCount: 10,
+        // ⚠️ 수정금지(승인필요) 2026-05-15 = languageCode: 'ko' (= 한국어 displayName)
+        languageCode: 'ko',
         locationRestriction: coords ? {
           circle: {
             center: { latitude: coords.lat, longitude: coords.lng },
@@ -431,12 +434,15 @@ async function searchGooglePlaces(
         } : undefined,
       };
 
+      // ⚠️ FieldMask = Enterprise SKU = SSOT §16 허용. Atmosphere 금지.
+      const NEARBY_FIELD_MASK = "places.id,places.displayName,places.formattedAddress,places.location,places.types,places.userRatingCount,places.photos,places.googleMapsUri";
+      validateFieldMask(NEARBY_FIELD_MASK);
       const response = await fetch(searchUrl.toString(), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "X-Goog-Api-Key": apiKey,
-          "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,places.location,places.types,places.userRatingCount,places.photos,places.googleMapsUri",
+          "X-Goog-FieldMask": NEARBY_FIELD_MASK,
         },
         body: JSON.stringify(requestBody),
       });
@@ -761,24 +767,20 @@ async function enrichPlacesWithTripAdvisorAndPrices(
       .from(tripAdvisorData)
       .where(eq(tripAdvisorData.cityId, cityId));
 
-    // [V3 대통합] place_prices 직접 쿼리 제거 → place_seed_raw 단일 소스만 사용
-    // place_seed_raw 가격 (이미 preload되었으면 skip)
-    const seedRawPriceMap = new Map<string, { priceEur: number; priceSource: string }>();
+    // ⚠️ 2026-05-15 = price_eur 단일 SSOT (= priceSource 폐기)
+    const seedRawPriceMap = new Map<string, { priceEur: number }>();
 
     if (seedRawMap && seedRawMap.size > 0) {
-      // 🏭 [V3 최적화] 이미 사전 로드된 seedRawMap 활용 (DB 쿼리 생략)
       for (const [key, s] of seedRawMap.entries()) {
         if (s.priceEur != null) {
-          seedRawPriceMap.set(key, { priceEur: s.priceEur, priceSource: s.priceSource || 'place_seed_raw' });
+          seedRawPriceMap.set(key, { priceEur: s.priceEur });
         }
       }
     } else {
-      // fallback: 사전에 로드되지 않은 경우만 직접 쿼리
       const seedRawPrices = await db.select({
         nameEn: placeSeedRaw.nameEn,
         nameKo: placeSeedRaw.nameKo,
         priceEur: placeSeedRaw.priceEur,
-        priceSource: placeSeedRaw.priceSource,
       })
         .from(placeSeedRaw)
         .where(eq(placeSeedRaw.cityId, cityId));
@@ -786,8 +788,8 @@ async function enrichPlacesWithTripAdvisorAndPrices(
       for (const sr of seedRawPrices) {
         if (sr.priceEur != null) {
           const keyEn = sr.nameEn?.toLowerCase().trim();
-          if (keyEn) seedRawPriceMap.set(keyEn, { priceEur: sr.priceEur, priceSource: sr.priceSource || 'place_seed_raw' });
-          if (sr.nameKo) seedRawPriceMap.set(sr.nameKo.toLowerCase().trim(), { priceEur: sr.priceEur, priceSource: sr.priceSource || 'place_seed_raw' });
+          if (keyEn) seedRawPriceMap.set(keyEn, { priceEur: sr.priceEur });
+          if (sr.nameKo) seedRawPriceMap.set(sr.nameKo.toLowerCase().trim(), { priceEur: sr.priceEur });
         }
       }
     }
@@ -833,7 +835,6 @@ async function enrichPlacesWithTripAdvisorAndPrices(
       const freePlace = isFreePlace(place);
       if (freePlace) {
         updates.estimatedPriceEur = 0;
-        updates.priceSource = 'free';
         updates.priceEstimate = '무료';
       }
 
@@ -841,14 +842,13 @@ async function enrichPlacesWithTripAdvisorAndPrices(
         updates.tripAdvisorRating = ta.rating;
         updates.tripAdvisorReviewCount = ta.reviewCount;
         updates.tripAdvisorRanking = ta.rankingStr;
-        // TripAdvisor 리뷰 수가 많으면 vibeScore 보너스 (신뢰도 높은 장소)
         const reviewBonus = Math.min(1.5, Math.log10(ta.reviewCount + 1) * 0.3);
         updates.vibeScore = Math.min(10, place.vibeScore + reviewBonus);
         taMatched++;
       }
 
-      // [V3 대통합] place_seed_raw 단일 소스로 가격 적용 (place_prices 쿼리 제거)
-      if (!updates.estimatedPriceEur && !updates.priceSource && seedRawPriceMap.size > 0) {
+      // ⚠️ 2026-05-15 = price_eur 단일 SSOT
+      if (updates.estimatedPriceEur === undefined && seedRawPriceMap.size > 0) {
         const nameLower = place.name.toLowerCase().trim();
         let seedPrice = seedRawPriceMap.get(nameLower);
         if (!seedPrice) {
@@ -861,7 +861,6 @@ async function enrichPlacesWithTripAdvisorAndPrices(
         }
         if (seedPrice) {
           updates.estimatedPriceEur = seedPrice.priceEur;
-          updates.priceSource = seedPrice.priceSource;
           updates.priceEstimate = seedPrice.priceEur > 0 ? `€${Math.round(seedPrice.priceEur)}` : '무료';
           seedRawPriceMatched++;
         }
@@ -1282,13 +1281,9 @@ function generateSelectionReasons(place: PlaceResult): { reasons: string[]; conf
     dataPoints += 1;
   }
 
-  // 가격 정보
-  if (place.estimatedPriceEur !== undefined && place.priceSource) {
-    const sourceLabel = place.priceSource === 'myrealtrip' ? '마이리얼트립'
-      : place.priceSource === 'klook' ? '클룩'
-        : place.priceSource === 'tripdotcom' ? '트립닷컴'
-          : place.priceSource;
-    reasons.push(`${sourceLabel} 기준 약 EUR${Math.round(place.estimatedPriceEur)}`);
+  // 가격 정보 (= 2026-05-15 = price_eur 단일 SSOT)
+  if (place.estimatedPriceEur !== undefined && place.estimatedPriceEur > 0) {
+    reasons.push(`약 EUR${Math.round(place.estimatedPriceEur)}`);
     dataPoints += 1;
   }
 
@@ -1425,17 +1420,15 @@ function mapPlaceTypesToVibes(placeTypes: string[]): Vibe[] {
   return vibes.length > 0 ? vibes : ['Healing'];
 }
 
-function getPriceEstimate(priceLevel: number | undefined, travelStyle: TravelStyle): string {
-  const basePrice = priceLevel || 2;
-  const multipliers: Record<TravelStyle, number> = {
-    Luxury: 3,
-    Premium: 2,
-    Reasonable: 1,
-    Economic: 0.7,
+// ⚠️ 2026-05-15 = priceLevel 폐기 후 = travelStyle 만으로 추정
+function getPriceEstimate(_priceLevel: number | undefined, travelStyle: TravelStyle): string {
+  const labelByStyle: Record<TravelStyle, string> = {
+    Luxury: '비쌈',
+    Premium: '보통',
+    Reasonable: '보통',
+    Economic: '저렴함',
   };
-  const estimatedLevel = Math.round(basePrice * multipliers[travelStyle]);
-  const priceLabels = ['무료', '저렴함', '보통', '비쌈', '매우 비쌈'];
-  return priceLabels[Math.min(4, Math.max(0, estimatedLevel))] || '보통';
+  return labelByStyle[travelStyle] || '보통';
 }
 
 /**

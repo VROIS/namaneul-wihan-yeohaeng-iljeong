@@ -187,6 +187,7 @@ For each place include:
 - distance_km_from_center (haversine from CITY_CENTER, 1 decimal)
 - day_zone: "core" if distance_km_from_center <= 10 (day 1 walkable from city center)
          OR "outskirt" if 10 < distance_km_from_center <= 100 (day 2+ day-trip required)
+- estimated_price_eur (입장료 1인 EUR. 식당이면 1인당 평균. 무료=0. 확실하지 않으면 null. ⚠️ shopping 카테고리는 항상 null = 쇼핑은 1인당 가격 개념 없음)
 
 OUTPUT (strict JSON, no markdown fences):
 {
@@ -322,15 +323,15 @@ if (ARG.skipPhoto) {
       else queryParts.push(CITY_NAME, COUNTRY);   // = 주소 X 일 때 도시 + 국가 명시
       const textQuery = queryParts.join(' ');
 
+      // ⚠️ 수정금지(승인필요) 2026-05-15 = languageCode: 'ko' (= Gemini 한국어 ↔ TS 한국어 검증)
       const tsResp = await fetch('https://places.googleapis.com/v1/places:searchText', {
         method: 'POST',
         headers: {
           'X-Goog-Api-Key': GOOGLE_KEY,
-          'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.photos,places.userRatingCount,places.types,places.primaryType',
+          'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.photos,places.userRatingCount,places.types,places.primaryType,places.priceRange,places.googleMapsUri',
           'Content-Type': 'application/json',
-          'Accept-Language': 'en-US',
         },
-        body: JSON.stringify({ textQuery, pageSize: 1 }),
+        body: JSON.stringify({ textQuery, pageSize: 1, languageCode: 'ko' }),
         signal: AbortSignal.timeout(15000),
       });
       if (!tsResp.ok) { tsSkipNoMatch++; continue; }
@@ -350,6 +351,16 @@ if (ARG.skipPhoto) {
       }
       if (top.formattedAddress) p.address = top.formattedAddress;  // = TS 포맷팅 주소 우선
       if (top.displayName?.text && !p.name_local) p.name_local = top.displayName.text;
+
+      // ⚠️ 추가 = 2026-05-15 사용자 SSOT = TS priceRange.endPrice (= 비싼 쪽) 임시 저장
+      // = UPDATE/INSERT 단계에서 GREATEST(기존, Gemini, ts_price_eur) 비교용
+      if (top.priceRange?.endPrice?.units) {
+        p.ts_price_eur = parseFloat(top.priceRange.endPrice.units) || 0;
+      }
+      // ⚠️ 2026-05-15 = 13번째 SSOT = google_maps_uri = 최후의 보루
+      if (top.googleMapsUri) {
+        p.google_maps_uri = top.googleMapsUri;
+      }
 
       // PhotoMedia = 3차 DB 입력
       const photoName = top.photos?.[0]?.name;
@@ -445,8 +456,9 @@ if (!ARG.commit) {
     // ⚠️ 수정금지(승인필요) 2026-05-12 = 사용자 SSOT = 통합 매칭 = 시드 + AG3 공통
     // = 1/2/3순위: 행정주소 > 장소명 > 좌표 (= TS 전 = place_id 모름)
     // = 4순위 = TS+PM (= Google API = 비용 발생) = 매칭 실패 시에만
+    // ⚠️ 2026-05-15 = 5 단계 매칭 (= name_en + name_local + name_ko + google_maps_uri 모두 SELECT)
     const existRows = (await c.query(`
-      SELECT id, name_en, address, latitude::float AS lat, longitude::float AS lng
+      SELECT id, name_en, name_local, name_ko, address, google_maps_uri, latitude::float AS lat, longitude::float AS lng
       FROM place_seed_raw
       WHERE city_id = $1 AND seed_category NOT IN ('bts_venue','bts_army_zone','bts_merch_store')
     `, [CITY.id])).rows;
@@ -491,19 +503,32 @@ if (!ARG.commit) {
     let tmpRank = 9990000;
     for (const p of dedupRows) {
       tmpRank++;
-      // ⚠️ 수정금지(승인필요) 2026-05-12 = 사용자 SSOT = 통합 매칭 (= 시드 + AG3)
+      // ⚠️ 수정금지(승인필요) 2026-05-15 = 사용자 SSOT = 5 단계 매칭 (= 시드 + AG3 + upsertPlace)
       // = 1순위 행정주소 일치 (= 부분일치 흡수)
-      // = 2순위 장소명 일치 (= UNIQUE INDEX 동일 키 = lower trim)
-      // = 3순위 좌표 100m (= 보조 fallback)
-      // = 4순위 = 매칭 실패 → TS+PM 호출 (= 신규 발굴 분기)
-      const pNameKey = (p.name_en || '').trim().toLowerCase();
+      // = 2순위 google_maps_uri 일치 (= PID 없을 때 강력 매칭 키)
+      // = 3순위 좌표 10m
+      // = 4순위 이름 9 조합 (name_en/name_local/name_ko 셋 중 한 쌍 일치)
+      //   [[feedback_name_match_9_combinations]]
+      // = 5순위 = 매칭 실패 → TS+PM 호출 (= 신규 발굴 분기)
+      const normName = (s) => (s || '').trim().toLowerCase();
+      const pNames = [normName(p.name_en), normName(p.name_local), normName(p.name_ko)].filter(Boolean);
       const matched =
         existRows.find(e => addrMatch(e.address, p.address)) ||
-        existRows.find(e => pNameKey && e.name_en && e.name_en.trim().toLowerCase() === pNameKey) ||
-        existRows.find(e => e.lat != null && e.lng != null && dKm({ lat: e.lat, lng: e.lng }, { lat: p.lat, lng: p.lng }) < 0.01);
+        existRows.find(e => e.google_maps_uri && p.google_maps_uri && e.google_maps_uri === p.google_maps_uri) ||
+        existRows.find(e => e.lat != null && e.lng != null && dKm({ lat: e.lat, lng: e.lng }, { lat: p.lat, lng: p.lng }) < 0.01) ||
+        existRows.find(e => {
+          const eNames = [normName(e.name_en), normName(e.name_local), normName(e.name_ko)].filter(Boolean);
+          return pNames.some(pn => eNames.includes(pn));
+        });
       const catTags = p._cats || [p.cat];
       const photoUrls = p.google_place_id ? JSON.stringify([{ name: 'places/' + p.google_place_id + '/photos/' }]) : null;
       const categoryTags = JSON.stringify([p.cat]);
+
+      // ⚠️ 2026-05-15 = shopping 카테고리는 price_eur 자체 부적합 (= 사용자 SSOT)
+      // = 1인당 입장료/평균식대 개념 없음 = 강제 NULL
+      const priceEurForSql = p.cat === 'shopping'
+        ? 0
+        : Math.max(parseFloat(p.estimated_price_eur || 0), parseFloat(p.ts_price_eur || 0));
 
       if (matched) {
         // 헌법 §5 COALESCE 옛 우선: 검증된 image/좌표/place_id/name 보존
@@ -521,6 +546,7 @@ if (!ARG.commit) {
             longitude = COALESCE(longitude, $8),
             address = COALESCE(address, $9),
             google_review_count = COALESCE(google_review_count, $10),
+            google_maps_uri = COALESCE(google_maps_uri, $21),
             image_url = COALESCE(image_url, $15),
             image_attribution = COALESCE(image_attribution, $16),
             -- Gemini 우선 (큐레이션 메타)
@@ -529,6 +555,7 @@ if (!ARG.commit) {
             summary_ko = $19,
             day_zone = $13,
             distance_km_from_center = $14,
+            price_eur = GREATEST(COALESCE(price_eur, 0), $20::real),
             image_updated_at = NOW(),
             collection_phase = 'gemini3-2026-05',
             category_tags = (SELECT ARRAY(SELECT DISTINCT unnest(COALESCE(category_tags, ARRAY[]::text[]) || $17::text[]))),
@@ -537,15 +564,12 @@ if (!ARG.commit) {
         `, [matched.id, p.cat, p.rank,
           p.name_en, p.name_ko, p.name_local,
           p.lat, p.lng, p.address || null,
-          // ⚠️ 수정금지(승인필요) 2026-05-12 v3 = google_review_count/primary_type = TS 응답에서 보강된 값
           p.google_review_count || null, p.primary_type || null,
-          // ⚠️ 수정금지(승인필요) 2026-05-12 v3 = 컬럼 매핑
-          // = editorial_summary ← shortform_ko (= 코믹/위트 후킹 카피)
-          // = summary_ko ← selection_reason_ko (= 인스타/FOMO 사회적 검증)
           p.shortform_ko || null,
           p.day_zone || null, p.distance_km_from_center || null,
           p.image_url_final, null,
-          catTags, tmpRank, p.selection_reason_ko || null]);
+          catTags, tmpRank, p.selection_reason_ko || null,
+          priceEurForSql, p.google_maps_uri || null]);
         updated++;
       } else {
         await c.query(`
@@ -556,7 +580,8 @@ if (!ARG.commit) {
             google_review_count, google_primary_type,
             editorial_summary, summary_ko,
             day_zone, distance_km_from_center,
-            image_url, image_attribution,
+            image_url, image_attribution, price_eur,
+            google_maps_uri,
             collection_phase, category_tags, phase_tags,
             created_at, image_updated_at
           ) VALUES (
@@ -566,7 +591,8 @@ if (!ARG.commit) {
             $10, $11,
             $12, $19,
             $13, $14,
-            $15, $16,
+            $15, $16, $20,
+            $21,
             'gemini3-2026-05', $17::text[], ARRAY['gemini3','gemini3-2026-05']::text[],
             NOW(), NOW()
           )
@@ -579,23 +605,20 @@ if (!ARG.commit) {
             distance_km_from_center = EXCLUDED.distance_km_from_center,
             editorial_summary = EXCLUDED.editorial_summary,
             summary_ko = EXCLUDED.summary_ko,
-            -- ⚠️ 수정금지(승인필요) 2026-05-12 = 사용자 SSOT = WK 이미지 우선 보존
-            -- = 기존 image_url (= 87% WK) 있으면 그대로 → NULL 일 때만 새 Google 로 채움
-            -- = 점차적으로 WK → Google 교체 = 사용자 수동 결정 영역 (= 자동 덮어쓰기 X)
+            -- ⚠️ 사용자 SSOT = WK 이미지 우선 보존 = COALESCE 옛 우선
             image_url = COALESCE(place_seed_raw.image_url, EXCLUDED.image_url),
+            google_maps_uri = COALESCE(place_seed_raw.google_maps_uri, EXCLUDED.google_maps_uri),
+            price_eur = GREATEST(COALESCE(place_seed_raw.price_eur, 0), COALESCE(EXCLUDED.price_eur, 0)),
             phase_tags = (SELECT ARRAY(SELECT DISTINCT unnest(place_seed_raw.phase_tags || EXCLUDED.phase_tags)))
         `, [CITY.id, p.cat, p.rank,
           p.name_en, p.name_ko || null, p.name_local || null,
           p.lat, p.lng, p.address || null,
-          // ⚠️ 수정금지(승인필요) 2026-05-12 v3 = google_review_count/primary_type = TS 응답에서 보강된 값
           p.google_review_count || null, p.primary_type || null,
-          // ⚠️ 수정금지(승인필요) 2026-05-12 v3 = 컬럼 매핑
-          // = editorial_summary ← shortform_ko (= 코믹/위트 후킹 카피)
-          // = summary_ko ← selection_reason_ko (= 인스타/FOMO 사회적 검증)
           p.shortform_ko || null,
           p.day_zone || null, p.distance_km_from_center || null,
           p.image_url_final, null,
-          catTags, tmpRank, p.selection_reason_ko || null]);
+          catTags, tmpRank, p.selection_reason_ko || null,
+          priceEurForSql, p.google_maps_uri || null]);
         inserted++;
       }
     }

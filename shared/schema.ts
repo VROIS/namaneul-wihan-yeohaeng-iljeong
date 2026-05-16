@@ -125,7 +125,7 @@ export const places = pgTable("places", {
   shortAddress: text("short_address"),
   latitude: real("latitude").notNull(),
   longitude: real("longitude").notNull(),
-  priceLevel: integer("price_level"),
+  // ⚠️ 2026-05-15 = priceLevel 영구 폐기 (= place_seed_raw.price_eur 단일 SSOT)
   photoUrls: jsonb("photo_urls").$type<string[]>().default([]),
   openingHours: jsonb("opening_hours").$type<Record<string, string>>(),
 
@@ -215,7 +215,7 @@ export const placeDataSources = pgTable("place_data_sources", {
   sourceUrl: text("source_url"),
   rating: real("rating"),
   reviewCount: integer("review_count"),
-  priceLevel: integer("price_level"),
+  // ⚠️ 2026-05-15 = priceLevel 영구 폐기 (= place_seed_raw.price_eur 단일 SSOT)
   rankingInCategory: integer("ranking_in_category"),
   isMichelinStar: boolean("is_michelin_star").default(false),
   michelinType: text("michelin_type"),
@@ -646,13 +646,15 @@ export const placeSeedRaw = pgTable("place_seed_raw", {
   nubiReason: text("nubi_reason"),
   evidenceUrl: text("evidence_url"),
   evidenceVerified: boolean("evidence_verified").default(false),
-  // 3단계: MCP 가격 수집
+  // ⚠️ 2026-05-15 사용자 SSOT = price_eur 단일 컬럼 (= 1인 입장료/식사비 통합)
+  // = price_source / price_fetched_at = 영구 폐기 (SSOT §14 + 제15조)
   priceEur: real("price_eur"),           // 1인 입장료/식사비 (EUR), 0=무료
-  priceSource: text("price_source"),     // gemini_search, google_places, klook 등
-  priceFetchedAt: timestamp("price_fetched_at"),
 
   // 6단계: googlePlaceId 바코드 (places 테이블 100% 정확 연결용)
   googlePlaceId: text("google_place_id"),
+  // ⚠️ 수정금지(승인필요) 2026-05-15 = 13 번째 SSOT 요소 = google_maps_uri
+  // = 프론트엔드 "구글맵 바로가기" 버튼 = 최후의 보루 (lat/lng 폴백보다 정확)
+  googleMapsUri: text("google_maps_uri"),
 
   // 4단계: 통합 마스터 창고용 파생/집계 데이터
   bestImageUrl: text("best_image_url"),     // place_images 테이블 등에서 1순위로 확정된 이미지 URL

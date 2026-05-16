@@ -70,8 +70,8 @@ export function PlaceDetailModal({
   let embedUrl: string | null = null;
   if (keyReady) {
     if (hasKey && placeId && placeId.startsWith("ChIJ")) {
-      // ⭐ 1 순위 = place_id = 사진/평점/리뷰 카드 + 지도 = 100% 정확
-      embedUrl = `https://www.google.com/maps/embed/v1/place?key=${embedApiKey}&q=place_id:${placeId}`;
+      // ⭐ 1 순위 = place_id = 전체 Maps 페이지 = 사진/평점/리뷰 자동 큰 팝업 (= 2026-05-16 사용자 SSOT)
+      embedUrl = `https://www.google.com/maps/place/?q=place_id:${placeId}`;
     } else if (hasKey) {
       // 2 순위 = name + city 검색 (= 동명 회피 = lat/lng 보다 정확)
       const q = encodeURIComponent(cityName ? `${place.name}, ${cityName}` : place.name);

@@ -165,3 +165,205 @@ EXPO_PACKAGER_PROXY_URL=https://828b2285-99c5-4cc9-9bcd-a09cdff531bc-00-kzvu1v5x
 
 **이 규칙을 어기는 AI는 즉시 작업 중단됩니다.**
 **"몰랐다", "좋은 의도였다"는 변명이 되지 않습니다.**
+
+---
+
+## 제14조: ⚠️ place_seed_raw INSERT/UPDATE = upsertPlace() 만 사용 (2026-05-15 사용자 SSOT)
+
+> 모든 신규 행 추가/덮어쓰기는 **단일 함수 `upsertPlace()` 통과 강제**.
+> 직접 INSERT/UPDATE = 즉시 작업 중단.
+
+### ✅ 유일한 진입점
+
+```ts
+import { upsertPlace, upsertPlaces } from 'server/services/place-upsert';
+
+const r = await upsertPlace({
+  cityId: 19,
+  seedCategory: 'restaurant',
+  nameEn: 'Angelina',
+  address: '226 Rue de Rivoli, 75001 Paris, France',
+  latitude: 48.8651,
+  longitude: 2.3278,
+  googlePlaceId: 'ChIJ...',
+  priceEur: 30,
+  // ...
+});
+// r.action = 'inserted' | 'updated' | 'skipped'
+// r.matchedBy = 'pid' | 'address' | 'coords' | 'name' | 'none'
+```
+
+### 매칭 단계 (= 같은 장소 확률 순, 절대 변경 금지)
+
+| 순위 | 기준 | 확률 |
+|---|---|---|
+| **0** | google_place_id 일치 | ~100% |
+| **1** | 풀 주소 정규화 100% (= 번지 + 우편번호) | ~99% |
+| **2** | 좌표 10m | ~95% |
+| **3** | 장소명 LOWER+trim (= 보조, 체인 위험) | ~30-50% |
+
+### 매칭 시 UPDATE 정책
+
+- 식별 데이터 (= name/주소/좌표/PID/이미지/리뷰수) = **COALESCE 옛 우선** (= WK 이미지 87% 보존, 사용자 빈 화면 방지)
+- 가격 (price_eur) = **GREATEST 비싼 쪽** (= 사용자 신뢰 보호, 물가 항상 오름)
+- 카피 (summary_ko/editorial_summary) = **새 우선** (= Gemini 큐레이션 갱신)
+- tags = **UNION** (= 누적)
+
+### ❌ 절대 금지 (= 위반 즉시 작업 중단)
+
+| # | 금지 | 이유 |
+|---|---|---|
+| 1 | `db.insert(placeSeedRaw)` 직접 호출 | 매칭 우회 = 중복 행 발생 |
+| 2 | `INSERT INTO place_seed_raw ...` SQL 직접 | 동일 |
+| 3 | 임시 스크립트 _tmp_*.mjs 에서 직접 INSERT | 사용자 시스템 우회 |
+| 4 | "한 번만 우회" 명목 | 영구화됨 |
+
+### DB 트리거 최종 안전망
+
+`scripts/_migration-place-upsert-trigger-2026-05-15.mjs` 실행 시 = DB 단에서 = BEFORE INSERT 자동 검사 = AI/스크립트 누가 우회해도 EXCEPTION 발생.
+
+### 변경하려면?
+
+사용자 명시 승인 + 매칭 알고리즘 변경 = 헌법 변경 통제 절차 따름.
+
+---
+
+## 제15조: ⚠️ Google Places API SKU 등급 = Atmosphere 절대 금지 (2026-05-15 사용자 SSOT)
+
+> Google 공식 등급체계 + GCP 청구서 실측 (= 사용자님 직접 확인) = TS Enterprise = **€0.0299/호출**.
+> FieldMask 안에 들어간 필드 1 개라도 상위 SKU 면 = 전체 호출이 그 SKU 가격.
+
+### ✅ 허용 최고 SKU = **Enterprise** ($35/1K, 무료 1K/월)
+
+= 시스템 SSOT 필수 필드 포함:
+- `places.userRatingCount` (= 인기도 정렬 = `feedback_place_api_verified_pattern` 메모리)
+- `places.priceRange` (= 가격 SSOT = §14 = GREATEST)
+
+### ❌ 절대 금지 = **Enterprise + Atmosphere** ($40/1K, 무료 1K/월)
+
+33 필드 = `editorialSummary`, `reviews`, `generativeSummary`, `dineIn`, `takeout`, `delivery` 등.
+
+전체 목록 = [`docs/SEED_SSOT_2026-05-02.md`](docs/SEED_SSOT_2026-05-02.md) §16 참조.
+
+### 강제 가드 = `validateFieldMask()` 단일 진입점
+
+```ts
+import { validateFieldMask } from 'server/services/shared/google-places-sku';
+
+const FIELD_MASK = 'places.id,places.displayName,places.userRatingCount,places.priceRange';
+validateFieldMask(FIELD_MASK);  // Atmosphere 필드 감지 시 throw
+```
+
+### ❌ 절대 금지
+
+| # | 금지 | 이유 |
+|---|---|---|
+| 1 | Atmosphere 33 필드 사용 (= `editorialSummary` 등) | $40/1K 폭탄 (= Enterprise 대비 14% 추가) |
+| 2 | `validateFieldMask()` 우회 = 직접 `fetch('places.googleapis.com')` | 가드레일 무효화 = AI 미래 실수 무방비 |
+| 3 | PD (Place Details) + TS 동시 사용 | 같은 데이터 2 회 호출 = 비용 2 배 (= 2026-05-15 사용자 결정 = TS 단독) |
+| 4 | "한 번만 Atmosphere" 명목 | 영구화됨 = SSOT 깨짐 |
+
+### 변경하려면?
+
+사용자 명시 승인 + [`docs/SEED_SSOT_2026-05-02.md`](docs/SEED_SSOT_2026-05-02.md) §16 + §11 변경 통제 절차.
+
+---
+
+## 제16조: ⚠️ 폴더 구조 강제 + 1 회용 스크립트 금지 (2026-05-15 사용자 SSOT)
+
+> 1 달간 AI 마다 임시 스크립트 + 메가 파일 누적 = 사용자 명시 분노. **영구 컴포넌트만** 작성.
+
+### ✅ 표준 폴더 구조 (= SEED_SSOT §19 + 메모리 [[project_p0_architecture_handover]])
+
+```
+server/services/
+  ├─ shared/                          ← 단일 진입점 헬퍼 (= AI 재발명 차단)
+  │   ├─ prompts/                     (Gemini prompt = 1 글자 변경 금지)
+  │   ├─ google-places-sku.ts         ✅ Atmosphere 가드
+  │   ├─ geminiClient.ts              (= Gemini 단일 진입점)
+  │   ├─ ts-client.ts                 (= TS Enterprise + languageCode='ko' 자동)
+  │   ├─ matcher.ts                   (= 5 단계 + 9 조합 매칭 유일)
+  │   └─ image-pipeline.ts            (= PhotoMedia → Storage)
+  ├─ place-upsert.ts                  ✅ INSERT/UPDATE 단일 진입점
+  ├─ seed/                            ← 시드 발굴 컴포넌트
+  ├─ itinerary/                       ← 메인앱 여정 (= ag1~4)
+  ├─ shortform/                       (= 예정)
+  └─ legacy/                          (= 옛 메가 파일 백업만)
+```
+
+### ❌ 절대 금지 (= 위반 즉시 작업 중단)
+
+| # | 금지 | 이유 |
+|---|---|---|
+| 1 | **1 회용 임시 스크립트** (= `_migration-*.mjs`, `_diag-*.mjs` 새로 만들기) | AI 가 작성 → 결과만 보여줌 → 폐기 → 후임 다시 작성 = 1 달 반복 |
+| 2 | **메가 파일 추가** (= 1,000 줄+ 단일 파일) | pipeline-v3.ts (1.5K) + itinerary-generator.ts (2.5K) = 사용자 짜증 |
+| 3 | **shared/ 우회 = 직접 Gemini/TS 호출 코드 작성** | matcher 9 조합 + SKU 가드 + languageCode='ko' 누락 위험 |
+| 4 | **`db.insert(placeSeedRaw)` 직접** | upsertPlace() 단일 진입점 우회 = 중복 행 발생 (= 제14조) |
+| 5 | **"Recommended" 옵션 제시** | 사용자 분노 = €860 자산 비가역 (= [[feedback_db_860eur_cost_no_proposals]]) |
+| 6 | **AI 가 매번 매칭 코드 재발명** | shared/matcher.ts 단일 코드만 사용 |
+
+### 신규 작업 절차
+
+1. **shared/ 헬퍼 호출** (= geminiClient, ts-client, matcher, place-upsert)
+2. **새 컴포넌트** = `seed/` 또는 `itinerary/` 폴더 안에만 작성
+3. **CLI** = `scripts/seed-*.mjs` 한 줄 호출 = 다른 도시 동일 결과 보장
+4. **1 회용 정제 작업** = 컴포넌트 안의 영구 함수로 = 표준화
+
+### 세션 간 인수인계 = 메모리 + WORKLOG
+
+- 작업 시작 시 = `MEMORY.md` 자동 로드 (= 모든 메모리 인덱스)
+- 핵심 SSOT 메모리 = `project_p0_architecture_handover.md` (= 다음 작업 잠금)
+- 작업 정리 = `docs/WORKLOG.md` = 날짜 역순 누적 + 완료/다음 P0/P1/P2 명시
+
+### 변경하려면?
+
+사용자 명시 승인 + `docs/SEED_SSOT §19` + §11 변경 통제 절차.
+
+---
+
+## 제17조: ⚠️ 리팩토링 작업 원칙 (= 3 게이트 + 자율 모드, 2026-05-15 사용자 SSOT)
+
+> 모든 리팩토링 = 단계별 세분화 + 각 단계 종료 = **3 종 통과 후에만** 다음 단계. 미비 시 = Ralph-loop. 다음 단계 = **자율 모드**.
+
+### 작업 흐름 (= 절대 위반 금지)
+
+```
+단계 N 시작 → 코드 작성 → 3 종 통과 검증
+   ↓ (= 통과)
+다음 단계 N+1 = 자율 진행 (= 묻지 말고 시작)
+   ↓ (= 미비)
+/ralph-loop:ralph-loop 자동 반복 → 통과까지 보완
+```
+
+### 3 게이트 (= 모두 통과해야 단계 완료)
+
+| 게이트 | 명령 | 검증 |
+|---|---|---|
+| ① | `/simplify` | 재사용 / 품질 / 효율 |
+| ② | `/review` | 정확성 / 컨벤션 / 보안 |
+| ③ | `/vercel:react-best-practices` | React 패턴 / 성능 / 접근성 |
+
+### 단계 세분화 원칙
+
+- 1 단계 = 1 컴포넌트 (= ~200-300K 토큰)
+- 작은 책임 = 함수 1 개 또는 폴더 1 개
+- 다른 컴포넌트 안 깨짐
+
+### 자율 모드 (= 다음 단계 진행 방식)
+
+- 사용자가 단계 N 완료 = 다음 N+1 = AI 자율 시작
+- 옵션 제시 X / 권고 X / "다음 단계 진행할까요?" 묻기 X
+- 사용자 개입 = 멈춤 명시 또는 위반 발견 시만
+
+### ❌ 위반
+
+| # | 금지 |
+|---|---|
+| 1 | 3 게이트 통과 X 채로 다음 단계 진행 |
+| 2 | "다음 단계 진행해도 될까요?" 묻기 (= 자율 모드 위반) |
+| 3 | 1 단계에 컴포넌트 여러 개 묶기 (= 세분화 위반) |
+| 4 | Ralph-loop 안 쓰고 사용자에게 보완 요청 |
+
+### 변경하려면?
+
+사용자 명시 승인 + `[[feedback_refactor_workflow_3gate]]` 메모리 + §11 변경 통제.

@@ -418,11 +418,10 @@ Places: ${list}
 Return JSON array only (no markdown). For each place:
 - placeName: exact match to input (nameEn or nameKo)
 - priceEur: number in EUR (0 if free: park, square, plaza, viewpoint, garden)
-- priceSource: "gemini_search" or "official_website" or "klook" etc
 - confidence: 0.0-1.0
 
 Free places (광장, 공원, 거리, square, park, plaza, garden) must have priceEur: 0.
-Example: [{"placeName":"Eiffel Tower","priceEur":32,"priceSource":"official_website","confidence":0.9},{"placeName":"Trocadéro","priceEur":0,"priceSource":"gemini_search","confidence":0.95}]`;
+Example: [{"placeName":"Eiffel Tower","priceEur":32,"confidence":0.9},{"placeName":"Trocadéro","priceEur":0,"confidence":0.95}]`;
 }
 
 async function runStage3ForCityCategory(
@@ -459,8 +458,6 @@ async function runStage3ForCityCategory(
         if (FREE_KEYWORDS.test(row.nameEn || "")) {
           await db.update(placeSeedRaw).set({
             priceEur: 0,
-            priceSource: "mcp_free_keyword",
-            priceFetchedAt: new Date(),
           }).where(eq(placeSeedRaw.id, row.id));
           updatedRows++;
           continue;
@@ -470,12 +467,10 @@ async function runStage3ForCityCategory(
         const searchResult = await mcp.googleSearch(query, { num: 5 });
 
         let priceEur: number | null = null;
-        let priceSource = "mcp_search";
 
         const isFree = /free(?! cancellation)|무료|no (?:entrance |admission )?fee|free entry/i.test(searchResult);
         if (isFree) {
           priceEur = 0;
-          priceSource = "mcp_free_detected";
         } else {
           const priceMatch = searchResult.match(/(?:EUR|€)\s*([0-9]+(?:[.,][0-9]{1,2})?)/i)
             || searchResult.match(/([0-9]+(?:[.,][0-9]{1,2})?)\s*(?:EUR|€)/i);
@@ -488,8 +483,6 @@ async function runStage3ForCityCategory(
         if (priceEur !== null) {
           await db.update(placeSeedRaw).set({
             priceEur,
-            priceSource,
-            priceFetchedAt: new Date(),
           }).where(eq(placeSeedRaw.id, row.id));
           updatedRows++;
         }
@@ -927,7 +920,6 @@ async function runStage1ForCityCategory(city: TargetCity, category: SeedCategory
             googleImageCountNote: item.googleImageCountNote || null,
             imageUrl: item.imageUrl || null,
             priceEur: item.priceEur ?? null,
-            priceSource: item.priceEur !== undefined ? "stage1_search" : null,
             source: item.source || "mcp_google_search",
             sourceRank: null,
             sourceType: null,
@@ -946,7 +938,6 @@ async function runStage1ForCityCategory(city: TargetCity, category: SeedCategory
               googleImageCountNote: item.googleImageCountNote || null,
               imageUrl: item.imageUrl || null,
               priceEur: item.priceEur ?? null,
-              priceSource: item.priceEur !== undefined ? "stage1_search" : null,
               source: item.source || "mcp_google_search",
               sourceRank: null,
               sourceType: null,

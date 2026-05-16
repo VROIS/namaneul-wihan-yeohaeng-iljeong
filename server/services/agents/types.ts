@@ -93,8 +93,7 @@ export interface PlaceResult {
   tripAdvisorReviewCount?: number;
   tripAdvisorRanking?: string;
   estimatedPriceEur?: number;
-  priceSource?: string;
-  priceLevel?: number;  // places 테이블 (1~4, 0=무료) — resolvePrice용
+  // ⚠️ 2026-05-15 = priceSource / priceLevel 영구 폐기 (= price_eur 단일 SSOT)
   photoSpotScore?: number;
   photoTip?: string;
   bestPhotoTime?: string;

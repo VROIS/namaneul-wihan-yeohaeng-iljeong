@@ -314,18 +314,11 @@ export class ScoringEngine {
   }
   
   /**
-   * Style Bonus 계산: 예산 스타일과 장소 가격대 매칭
-   * 반환값: 0 ~ 1점
+   * Style Bonus 계산 — 2026-05-15 = priceLevel 폐기 후 단순화
+   * (= price_eur 단일 SSOT, 스타일 매칭은 슬롯 수/일 + 매트릭스 폴백으로 충분)
    */
-  private calculateStyleBonus(place: Place, travelStyle: TravelStyle): number {
-    const userPriceLevel = STYLE_PRICE_LEVEL[travelStyle];
-    const placePriceLevel = place.priceLevel || 2; // 기본값 2 (Reasonable)
-    
-    const difference = Math.abs(userPriceLevel - placePriceLevel);
-    
-    if (difference === 0) return 1.0;
-    if (difference === 1) return 0.5;
-    return 0;
+  private calculateStyleBonus(_place: Place, _travelStyle: TravelStyle): number {
+    return 0.5; // 중립 보너스
   }
   
   /**
@@ -482,9 +475,7 @@ export class ScoringEngine {
         if (vibeKeywords.includes("instagrammable") || vibeKeywords.includes("인스타그래머블")) {
           personaBonus += 0.5;
         }
-        if (place.priceLevel && place.priceLevel >= 3) {
-          personaBonus += 0.5;
-        }
+        // ⚠️ 2026-05-15 = priceLevel 폐기 (= price_eur 단일 SSOT)
       } else {
         if (vibeKeywords.includes("peaceful") || vibeKeywords.includes("평화로운")) {
           personaBonus += 1;

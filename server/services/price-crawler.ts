@@ -361,10 +361,7 @@ export async function crawlPricesForCity(cityId: number): Promise<{ success: boo
 
   for (const place of cityPlaces) {
     try {
-      if (place.priceLevel) {
-        await collectPriceFromGoogle(place.id, cityId, place.priceLevel, "EUR");
-        pricesCollected++;
-      }
+      // ⚠️ 2026-05-15 = priceLevel 폐기 (= price_eur 단일 SSOT). Google priceLevel 호출 X.
 
       if (place.type === "attraction" || place.type === "landmark") {
         await collectPriceFromGemini(

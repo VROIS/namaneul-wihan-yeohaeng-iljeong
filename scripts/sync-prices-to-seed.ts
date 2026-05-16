@@ -74,10 +74,7 @@ async function run() {
 
                 if (finalPrice !== null && finalPrice !== undefined) {
                     await db.update(placeSeedRaw)
-                        .set({
-                            priceEur: finalPrice,
-                            priceSource: bestPriceRow.source || 'place_prices_bridge'
-                        })
+                        .set({ priceEur: finalPrice })
                         .where(eq(placeSeedRaw.id, seed.id));
                     totalUpdated++;
                 } else {

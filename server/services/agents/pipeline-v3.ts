@@ -56,42 +56,23 @@ function sanitizePriceEur(raw: any): number {
   return Math.round(n * 100) / 100;
 }
 
-// ===== 5대 가격원칙: priceLevel → 2026 실제 물가 (EUR) =====
-function priceLevelToEur(level: number, meal?: 'lunch' | 'dinner'): number {
-  const map: Record<number, { lunch: number; dinner: number; entrance: number }> = {
-    0: { lunch: 0, dinner: 0, entrance: 0 },
-    1: { lunch: 12, dinner: 18, entrance: 8 },
-    2: { lunch: 22, dinner: 38, entrance: 15 },
-    3: { lunch: 40, dinner: 70, entrance: 25 },
-    4: { lunch: 65, dinner: 120, entrance: 50 },
-  };
-  if (meal) return map[level]?.[meal] ?? 0;
-  return map[level]?.entrance ?? 0;
-}
-
-/** ⚠️ 수정금지(승인필요) 2026-05-12 = 사용자 SSOT 단일 컬럼 price_eur 우선순위 명확화
- *  순차: 1) Gemini estimatedCostEur 우선 → 2) PD priceLevel × priceLevelToEur (= 최대값 비교)
- *        → 3) seed_raw priceEur (= 최대값 비교) → 4) 매트릭스 폴백 (= 식당 = MEAL_BUDGET / 비식당 = 0)
- *  = 3 자 최대값 + 매트릭스 폴백 = 비용 합산 원재료 = 사용자 SSOT
- *  = 패키지 투어 (viator/klook/tour) = Gemini 우선 (= 패키지 가격 무시) */
+/** ⚠️ 수정금지(승인필요) 2026-05-15 = 사용자 SSOT = price_eur 단일 컬럼 (SSOT §14 + 제15조)
+ *  순차: 1) Gemini estimatedCostEur 우선 → 2) seed_raw priceEur (= GREATEST 비싼 쪽)
+ *        → 3) 매트릭스 폴백 (= 식당 = MEAL_BUDGET / 비식당 = 0)
+ *  = priceLevel / priceSource 폐기 = price_eur 단일 SSOT */
 function resolvePrice(
   enrichedPrice: number,
   geminiPrice: number,
-  dbPlace: { priceLevel?: number; priceSource?: string } | null,
   isMeal: boolean = false,
   seedPriceEur: number = 0,
   mealType?: 'lunch' | 'dinner',
   travelStyle: TravelStyle = 'Reasonable',
 ): number {
-  const isPkgSource = dbPlace?.priceSource && ['viator', 'klook', 'tour', 'package'].some(k =>
-    dbPlace!.priceSource!.toLowerCase().includes(k)
-  );
-  const basePrice = isPkgSource ? geminiPrice : (enrichedPrice || geminiPrice);
-  const dbEstimate = dbPlace?.priceLevel ? priceLevelToEur(dbPlace.priceLevel, mealType) : 0;
-  // 3 자 최대값 (= 사용자 경험 보호: 실제보다 싸면 당혹감)
-  const max3 = Math.max(basePrice, dbEstimate, seedPriceEur);
-  if (max3 > 0) return max3;
-  // 모두 0 = 매트릭스 폴백 (= 사용자 SSOT 최후 보루)
+  const basePrice = enrichedPrice || geminiPrice;
+  // GREATEST 비싼 쪽 (= 사용자 신뢰 보호 = SSOT §14)
+  const max2 = Math.max(basePrice, seedPriceEur);
+  if (max2 > 0) return max2;
+  // 모두 0 = 매트릭스 폴백 (= 식당만)
   if (isMeal && mealType) {
     return MEAL_BUDGET[travelStyle]?.[mealType] ?? 0;
   }
@@ -443,10 +424,12 @@ ${dayRequirements}
 - Array order within each day = visit order
 - 점심(type="lunch") 12:00~13:30 / 저녁(type="dinner") 18:30~20:00
 - startTime/endTime 겹침 금지 (= 이동시간 반영)
+- 3 일+ 일정 시 = Day 2+ 한 날 = outskirt (= 도심에서 10-100km 외곽) day-trip 1-2 곳 포함 가능 (= 한국 여행객이 자주 찾는 외곽 명소/아울렛)
 
 [가격 원칙]
 - estimatedCostEur = ${nowYear}년 실제 입장료 (1인, EUR). 무료=0
 - 점심 1인 ~€${mealBudget.lunch}, 저녁 1인 ~€${mealBudget.dinner}
+- 활동(activity) = 1인 입장료 / 식당(lunch/dinner) = 1인당 평균. 확실하지 않으면 0
 
 For each place include:
 - name (English official name on Google Maps)
@@ -736,19 +719,17 @@ async function step2_enrichAndBuild(
     const seedNameKo = p.nameKo ? p.nameKo.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, "") : "";
     const seedData = preloaded.seedRawMap?.get(seedNameEn) || preloaded.seedRawMap?.get(seedNameKo);
 
-    // 5대 가격원칙: Gemini 우선, DB 검증(비싼 쪽), 패키지 투어 차단, seedPriceEur 3자 최고가
+    // ⚠️ 2026-05-15 = 사용자 SSOT = price_eur 단일 (= priceLevel/priceSource 폐기)
     const enrichedPrice = ta?.estimatedPriceEur ?? p.estimatedPriceEur ?? 0;
     const geminiPrice = p.estimatedPriceEur ?? 0;
-    const dbPlaceForPrice = { priceLevel: p.priceLevel, priceSource: ta?.priceSource ?? p.priceSource };
     const isMealSlot = (p as any).type === 'lunch' || (p as any).type === 'dinner';
-    // ⚠️ 수정금지(승인필요) 2026-05-12 = resolvePrice 우선순위 = mealType + travelStyle 전달 (= 매트릭스 폴백)
     const mealTypeForPrice: 'lunch' | 'dinner' | undefined =
       (p as any).type === 'lunch' ? 'lunch' :
       (p as any).type === 'dinner' ? 'dinner' :
       undefined;
     const styleForPrice = normalizeTravelStyle(formData.travelStyle);
     const resolvedPrice = resolvePrice(
-      enrichedPrice, geminiPrice, dbPlaceForPrice, isMealSlot,
+      enrichedPrice, geminiPrice, isMealSlot,
       seedData?.priceEur ?? 0,
       mealTypeForPrice, styleForPrice,
     );
@@ -762,7 +743,6 @@ async function step2_enrichAndBuild(
       tripAdvisorReviewCount: ta?.tripAdvisorReviewCount ?? p.tripAdvisorReviewCount,
       tripAdvisorRanking: ta?.tripAdvisorRanking ?? p.tripAdvisorRanking,
       estimatedPriceEur: resolvedPrice,
-      priceSource: resolvedPrice === 0 ? 'free' : (ta?.priceSource ?? p.priceSource),
       priceEstimate: resolvedPrice > 0 ? `€${Math.round(resolvedPrice)}` : (ta?.priceEstimate ?? p.priceEstimate ?? '무료'),
       vibeScore: Math.max(p.vibeScore, ta?.vibeScore ?? 0),
       // 포토스팟/패키지 투어

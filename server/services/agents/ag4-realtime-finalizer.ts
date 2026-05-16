@@ -112,7 +112,6 @@ export async function finalizeItinerary(
         tripAdvisorReviewCount: s.place.tripAdvisorReviewCount,
         tripAdvisorRanking: s.place.tripAdvisorRanking,
         estimatedPriceEur: s.place.estimatedPriceEur,
-        priceSource: s.place.priceSource,
         finalScore: s.place.finalScore,
         photoSpotScore: s.place.photoSpotScore,
         photoTip: s.place.photoTip,

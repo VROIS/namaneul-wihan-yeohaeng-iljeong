@@ -113,7 +113,9 @@ async function textSearchCategory(
     },
   };
 
-  const fieldMask = "places.id,places.displayName,places.formattedAddress,places.location,places.priceLevel,places.photos";
+  // ⚠️ 2026-05-15 = priceLevel 제거 (= SSOT §16 + 제15조 = Enterprise SKU 폭탄 차단)
+  // = price_eur 단일 SSOT 채택 = price_level 폐기
+  const fieldMask = "places.id,places.displayName,places.formattedAddress,places.location,places.photos";
 
   backfillTracker.recordApiCall();
 
@@ -275,7 +277,6 @@ export async function runGooglePlaceIdBackfill(): Promise<BackfillResult> {
         seedCategory: placeSeedRaw.seedCategory,
         placeId: placeSeedRaw.placeId,
         priceEur: placeSeedRaw.priceEur,
-        priceSource: placeSeedRaw.priceSource,
         bestImageUrl: placeSeedRaw.bestImageUrl,
         celebMention: placeSeedRaw.celebMention,
         googlePlaceId: placeSeedRaw.googlePlaceId,
@@ -334,15 +335,7 @@ export async function runGooglePlaceIdBackfill(): Promise<BackfillResult> {
           result.placeIdLinked++;
         }
 
-        if (apiPlace.priceLevel && apiPlace.priceLevel in PRICE_LEVEL_EUR) {
-          const googlePrice = PRICE_LEVEL_EUR[apiPlace.priceLevel];
-          const isEstimate = !matched.priceSource || matched.priceSource === "gemini_search";
-          if (!matched.priceEur || isEstimate) {
-            updates.priceEur = googlePrice;
-            updates.priceSource = "google_places_actual";
-            result.pricesSet++;
-          }
-        }
+        // ⚠️ 2026-05-15 = priceLevel FieldMask 폐기 = 가격 보강 X (= TS searchText 가 담당)
 
         if (!matched.bestImageUrl && !matched.celebMention && apiPlace.photos?.length) {
           const photoRef = apiPlace.photos[0].name;

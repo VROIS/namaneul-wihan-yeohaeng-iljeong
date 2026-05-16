@@ -12,14 +12,13 @@ export async function runStartupMigrations(): Promise<void> {
     await pool.query(`ALTER TABLE "users" REPLICA IDENTITY FULL;`);
     console.log("[Migration] ✅ users REPLICA IDENTITY FULL 적용 완료");
 
-    // 0004: place_seed_raw.price_eur, price_source, price_fetched_at
+    // 0004: place_seed_raw.price_eur (= 단일 SSOT, 2026-05-15 사용자 결정)
+    // ⚠️ price_source / price_fetched_at = 영구 폐기 (= SSOT §14 + 제15조 = price_eur 단일)
     await pool.query(`
       ALTER TABLE "place_seed_raw"
-        ADD COLUMN IF NOT EXISTS "price_eur" real,
-        ADD COLUMN IF NOT EXISTS "price_source" text,
-        ADD COLUMN IF NOT EXISTS "price_fetched_at" timestamp;
+        ADD COLUMN IF NOT EXISTS "price_eur" real;
     `);
-    console.log("[Migration] ✅ 0004 price_eur/price_source/price_fetched_at 적용 완료");
+    console.log("[Migration] ✅ 0004 price_eur 적용 완료");
 
     // 0006: cities.mcp_phases, place_seed_raw.collection_phase, image_url
     await pool.query(`
@@ -140,12 +139,19 @@ export async function runStartupMigrations(): Promise<void> {
     `);
     console.log("[Migration] 0014 multi-tag/image-meta/gemini3 컬럼 10개 추가 완료");
 
-    // 0015: celeb_mention 컬럼 추가 (schema.ts 동기화)
+    // 0015: google_maps_uri (= 2026-05-15 사용자 13 번째 SSOT 요소 = 최후의 보루)
+    await pool.query(`
+      ALTER TABLE place_seed_raw
+        ADD COLUMN IF NOT EXISTS google_maps_uri text;
+    `);
+    console.log("[Migration] 0015 google_maps_uri 컬럼 추가 완료");
+
+    // 0016: celeb_mention 컬럼 추가 (= Replit Agent 작업 보존, schema.ts 동기화)
     await pool.query(`
       ALTER TABLE place_seed_raw
         ADD COLUMN IF NOT EXISTS celeb_mention text;
     `);
-    console.log("[Migration] 0015 celeb_mention 컬럼 추가 완료");
+    console.log("[Migration] 0016 celeb_mention 컬럼 추가 완료");
   } catch (err) {
     console.warn("[Migration] 스킵 또는 실패:", (err as Error).message);
   }

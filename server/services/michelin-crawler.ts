@@ -124,7 +124,7 @@ export async function collectMichelinData(
       sourceUrl: result.url || null,
       rating: getMichelinRatingScore(result.michelinRating),
       reviewCount: null,
-      priceLevel: getMichelinPriceLevel(result.priceRange),
+      // ⚠️ 2026-05-15 = priceLevel 폐기 (= price_eur 단일 SSOT)
       rankingInCategory: null,
       isMichelinStar: result.michelinType === "star",
       michelinType: result.michelinRating,
