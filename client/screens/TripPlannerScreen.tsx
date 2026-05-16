@@ -54,7 +54,7 @@ import {
   PlaceAutocomplete,
   PlaceSelection,
 } from "@/components/PlaceAutocomplete";
-import { PlaceDetailModal } from "@/components/PlaceDetailModal";
+import { openPlaceInMaps } from "@/lib/openPlaceInMaps";
 import { isAuthenticated, getUserData, UserData } from "@/lib/auth";
 import { useTranslation } from "react-i18next";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
@@ -208,9 +208,6 @@ export default function TripPlannerScreen() {
   >([]);
   const [hotelModalDay, setHotelModalDay] = useState<number | null>(null); // 숙소 설정 모달이 열린 Day
   const [isReoptimizing, setIsReoptimizing] = useState(false);
-
-  // 📍 장소 상세 모달 (인앱 이미지 뷰어 + 지도)
-  const [selectedPlace, setSelectedPlace] = useState<any | null>(null);
 
   // 🎯 로그인된 사용자 정보 (birthDate 포함)
   const [currentUser, setCurrentUser] = useState<UserData | null>(null);
@@ -1694,7 +1691,7 @@ export default function TripPlannerScreen() {
                             )}
                           </View>
 
-                          {/* 장소 카드 - 클릭 시 인앱 상세 모달 열기 */}
+                          {/* 장소 카드 - 탭 시 외부 Google Maps 앱 즉시 호출 (= openPlaceInMaps) */}
                           <Pressable
                             style={[
                               styles.placeCard,
@@ -1704,10 +1701,10 @@ export default function TripPlannerScreen() {
                                 borderLeftColor: "#FF6B35",
                               },
                             ]}
-                            onPress={() => setSelectedPlace(place)}
+                            onPress={() => openPlaceInMaps(place)}
                           >
                             <View style={styles.placeCardContent}>
-                              {/* 썸네일 이미지 - 탭하면 인앱 모달에서 크게 보기 */}
+                              {/* 썸네일 이미지 */}
                               {/* ⚠️ 수정금지(승인필요) 2026-05-12 = BTS 1주일 SSOT = resolveImageSource (= UA + bucket + Platform 분기) */}
                               <View style={styles.placeThumbnail}>
                                 {place.image ? (
@@ -2223,14 +2220,6 @@ export default function TripPlannerScreen() {
             );
           })}
         </ScrollView>
-
-        {/* 📍 장소 상세 모달 (인앱 이미지 뷰어 + 지도) */}
-        <PlaceDetailModal
-          visible={!!selectedPlace}
-          onClose={() => setSelectedPlace(null)}
-          place={selectedPlace}
-          theme={theme}
-        />
 
         {/* 🏨 숙소 설정 모달 */}
         <Modal
