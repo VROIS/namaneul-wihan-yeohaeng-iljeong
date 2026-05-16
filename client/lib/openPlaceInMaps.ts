@@ -14,6 +14,8 @@ export interface PlaceForMaps {
   nameLocal?: string | null;
   nameKo?: string | null;
   address?: string | null;
+  // pipeline-v3.ts:643 = AG2 응답 풀주소 = geminiAddress 필드로 저장 (= place.address X)
+  geminiAddress?: string | null;
   // 옛 객체 호환 (= TripPlannerScreen 의 place = name 필드)
   name?: string | null;
 }
@@ -25,7 +27,8 @@ export interface PlaceForMaps {
  */
 export function openPlaceInMaps(p: PlaceForMaps): void {
   const name = p.nameEn || p.name || p.nameLocal || p.nameKo || '';
-  const query = encodeURIComponent(p.address ? `${name},${p.address}` : name);
+  const address = p.address || p.geminiAddress;
+  const query = encodeURIComponent(address ? `${name},${address}` : name);
 
   if (p.googlePlaceId && p.googlePlaceId.startsWith(GOOGLE_PLACE_ID_PREFIX)) {
     Linking.openURL(
