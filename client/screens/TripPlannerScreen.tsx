@@ -1876,7 +1876,7 @@ export default function TripPlannerScreen() {
                                   )}
 
                                 {/* 구글맵 바로가기 힌트 */}
-                                {(place.googleMapsUrl ||
+                                {!!(place.googleMapsUrl ||
                                   (place.lat && place.lng)) && (
                                     <View style={styles.googleMapsHint}>
                                       <Icon
