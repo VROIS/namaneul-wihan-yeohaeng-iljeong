@@ -1,7 +1,7 @@
-# NUBI (누비) - AI Travel App
+# TRIPIS - AI Travel App
 
 ## Overview
-NUBI is a React Native/Expo travel application with an Express backend. It provides AI-powered travel planning features, including place recommendations, weather info, exchange rates, and more. The app targets Korean-speaking users.
+TRIPIS (TRIP + JARVIS) is a React Native/Expo travel application with an Express backend. It provides AI-powered travel planning features, including place recommendations, weather info, exchange rates, and more. The app targets Korean-speaking users.
 
 ## Project Architecture
 - **Frontend**: React Native (Expo) with web export, served as static files from `/dist`

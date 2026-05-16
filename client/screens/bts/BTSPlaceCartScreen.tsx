@@ -106,7 +106,7 @@ function toFullUrl(url: string): string {
 // ═══════════════════════════════════════════════════════════════════════════
 // 메인앱 적용 주의: 메인앱 이미지 소스는 Wikimedia 외 (Google Places/Unsplash 등).
 // 각 소스의 공식 UA 정책 별도 확인 후 대응 (Track 2 조사 필요).
-const WIKIMEDIA_UA = "VibeTrip/1.0 (contact@vibetrip.app) Expo/54";
+const WIKIMEDIA_UA = "TRIPIS/1.0 (contact@vibetrip.app) Expo/54";
 
 // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1g: 스톡 폴백 제거. imageUrl 없으면 undefined → 빈 카드. 가짜 스톡 사진 절대 노출 안 함.
 // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1i: Wikimedia 요청에 User-Agent 헤더 부착.

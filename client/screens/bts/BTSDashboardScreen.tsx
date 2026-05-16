@@ -191,7 +191,7 @@ export default function BTSDashboardScreen() {
     const placeList = places.map((p) => `  ${p.startTime} ${p.name}`).join("\n");
     try {
       await Share.share({
-        message: `🎵 ${itinerary.title}\n\n${placeList}\n\n#NUBI #BTS투어 #방탄투어`,
+        message: `🎵 ${itinerary.title}\n\n${placeList}\n\n#TRIPIS #BTS투어 #방탄투어`,
       });
     } catch {}
   }, [itinerary, places]);

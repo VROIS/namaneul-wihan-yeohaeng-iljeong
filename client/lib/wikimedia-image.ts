@@ -21,7 +21,7 @@ const UNSPLASH_W_REGEX = /([?&])w=\d+/g;
 // 🔑 Wikimedia 공식 UA 정책 (= 1주일 디버깅 결과)
 // = "All API requests must have a distinguishing User-Agent header"
 // = 익명 UA (= Glide okhttp 기본) = 소프트 블록 = AOS 5/8 실패
-export const WIKIMEDIA_UA = "VibeTrip/1.0 (contact@vibetrip.app) Expo/54";
+export const WIKIMEDIA_UA = "TRIPIS/1.0 (contact@vibetrip.app) Expo/54";
 
 export function snapToWikimediaBucket(targetPx: number): number {
   return WIKIMEDIA_BUCKETS.find((b) => b >= targetPx) ?? 3840;

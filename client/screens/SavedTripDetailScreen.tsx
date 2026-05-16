@@ -167,7 +167,7 @@ export default function SavedTripDetailScreen() {
       Alert.alert(t("saved.videoDownloading"), t("saved.videoDownloadingMsg"));
 
       // 파일 다운로드
-      const filename = `nubi_trip_${itineraryId}_${Date.now()}.mp4`;
+      const filename = `tripis_trip_${itineraryId}_${Date.now()}.mp4`;
       const fileUri = (FileSystem as any).documentDirectory + filename;
 
       const downloadResult = await FileSystem.downloadAsync(videoUrl, fileUri);
@@ -175,7 +175,7 @@ export default function SavedTripDetailScreen() {
       if (downloadResult.status === 200) {
         // 갤러리에 저장
         const asset = await MediaLibrary.createAssetAsync(downloadResult.uri);
-        await MediaLibrary.createAlbumAsync("누비 여행", asset, false);
+        await MediaLibrary.createAlbumAsync("TRIPIS 여행", asset, false);
 
         Alert.alert(t("saved.videoSaveComplete"), t("saved.videoSaveCompleteMsg"));
       } else {

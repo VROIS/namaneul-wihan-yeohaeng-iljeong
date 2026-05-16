@@ -843,7 +843,7 @@ export default function TripPlannerScreen() {
         >
           <Icon name="x" size={24} color={theme.text} />
         </Pressable>
-        <Text style={[styles.title, { color: theme.text }]}>VibeTrip</Text>
+        <Text style={[styles.title, { color: theme.text }]}>TRIPIS</Text>
       </View>
 
       {/* 🎵 BTS 콘서트 투어 배너 */}
@@ -1291,7 +1291,7 @@ export default function TripPlannerScreen() {
           style={styles.loadingIcon}
         />
       </View>
-      <Text style={[styles.loadingTitle, { color: theme.text }]}>VibeTrip</Text>
+      <Text style={[styles.loadingTitle, { color: theme.text }]}>TRIPIS</Text>
       <Text style={[styles.loadingMessage, { color: theme.textSecondary }]}>
         {LOADING_MESSAGES[loadingStep]}
       </Text>

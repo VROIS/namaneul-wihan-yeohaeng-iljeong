@@ -19,7 +19,7 @@ export default function HomeStackNavigator() {
         name="Home"
         component={TripPlannerScreen}
         options={{
-          headerTitle: () => <HeaderTitle title="VibeTrip" showIcon />,
+          headerTitle: () => <HeaderTitle title="TRIPIS" showIcon />,
         }}
       />
     </Stack.Navigator>
