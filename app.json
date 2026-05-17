@@ -4,7 +4,7 @@
     "slug": "vibetrip",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/tripis-mark.png",
     "scheme": "vibetrip",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -14,8 +14,8 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#8B5CF6",
-        "foregroundImage": "./assets/images/icon.png"
+        "backgroundColor": "#FAF6EF",
+        "foregroundImage": "./assets/images/tripis-mark.png"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
@@ -23,7 +23,7 @@
     },
     "web": {
       "output": "single",
-      "favicon": "./assets/images/icon.png",
+      "favicon": "./assets/images/tripis-mark.png",
       "lang": "ko",
       "name": "TRIPIS - 나만의 여행",
       "description": "TRIPIS — AI가 내 취향에 맞게 설계하는 나만의 여행 플래너. 일정·숙소·맛집까지 한 번에."
@@ -32,12 +32,12 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
+          "image": "./assets/images/tripis-logo-mark.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#8B5CF6",
+          "backgroundColor": "#FAF6EF",
           "dark": {
-            "backgroundColor": "#1F2937"
+            "backgroundColor": "#0B0B0D"
           }
         }
       ],

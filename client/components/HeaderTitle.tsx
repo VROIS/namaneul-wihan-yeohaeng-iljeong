@@ -14,7 +14,7 @@ export function HeaderTitle({ title, showIcon = true }: HeaderTitleProps) {
     <View style={styles.container}>
       {showIcon && (
         <Image
-          source={require("../../assets/images/icon.png")}
+          source={require("../../assets/images/tripis-mark.png")}
           style={styles.icon}
           resizeMode="contain"
         />

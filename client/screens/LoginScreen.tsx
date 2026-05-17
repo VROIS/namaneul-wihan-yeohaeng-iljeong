@@ -11,9 +11,6 @@ import {
   KeyboardAvoidingView,
   Platform,
   Image,
-  Dimensions,
-  Animated,
-  Easing,
   Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -51,87 +48,6 @@ import {
 import { useTranslation } from "react-i18next";
 import { SUPPORTED_LANGS, changeLanguageAndPersist } from "../lib/i18n";
 
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
-
-const SLOGAN_KEY = "login.slogan";
-const TYPING_DELAY = 80;
-const ARC_AMPLITUDE = 8;
-
-function TypingSloganCard() {
-  const { t } = useTranslation();
-  const slogan = t(SLOGAN_KEY);
-  const [displayed, setDisplayed] = useState("");
-
-  useEffect(() => {
-    setDisplayed("");
-    let i = 0;
-    const id = setInterval(() => {
-      i++;
-      setDisplayed(slogan.slice(0, i));
-      if (i >= slogan.length) clearInterval(id);
-    }, TYPING_DELAY);
-    return () => clearInterval(id);
-  }, [slogan]);
-
-  const chars = displayed.split("");
-  const n = chars.length;
-
-  return (
-    <View style={sloganStyles.card}>
-      <View style={sloganStyles.iconLeft}>
-        <Icon name="brain" size={26} color="#8B5CF6" />
-      </View>
-      <View style={sloganStyles.arcContainer}>
-        {chars.map((ch, i) => {
-          const angle = n > 1 ? (2 * Math.PI * i) / Math.max(1, n - 1) : 0;
-          const translateY = -ARC_AMPLITUDE * Math.cos(angle);
-          return (
-            <Text
-              key={`${i}-${ch}`}
-              style={[sloganStyles.arcChar, { transform: [{ translateY }] }]}
-            >
-              {ch}
-            </Text>
-          );
-        })}
-      </View>
-      <View style={sloganStyles.iconRight}>
-        <Icon name="shield-check" size={26} color="#10B981" />
-      </View>
-    </View>
-  );
-}
-
-const sloganStyles = StyleSheet.create({
-  card: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(139, 92, 246, 0.06)",
-    borderRadius: 24,
-    borderWidth: 1,
-    borderColor: "rgba(139, 92, 246, 0.2)",
-    paddingVertical: Spacing.lg + 4,
-    paddingHorizontal: Spacing.xl,
-    marginHorizontal: Spacing.lg,
-    marginBottom: Spacing.md,
-    gap: Spacing.md,
-  },
-  iconLeft: { paddingRight: Spacing.sm },
-  iconRight: { paddingLeft: Spacing.sm },
-  arcContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    flex: 1,
-  },
-  arcChar: {
-    fontSize: 26,
-    fontFamily: Fonts.bold,
-    color: "#374151",
-    letterSpacing: 0.5,
-  },
-});
 
 export default function LoginScreen() {
   const { t, i18n } = useTranslation();
@@ -461,16 +377,18 @@ export default function LoginScreen() {
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* ── 슬로건 카드: 타이핑 효과 + 반원형 텍스트 + 아이콘 ── */}
-          <TypingSloganCard />
-
-          {/* ── NUBI 로고 (보조 요소, 27%) ── */}
-          <View style={styles.logoSection}>
+          {/* ── TRIPIS 통합 헤더 = 시안 = tripia-onboarding.jsx:35-45 ── */}
+          <View style={styles.tripisHeader}>
             <Image
-              source={require("../../assets/images/icon.png")}
-              style={styles.appLogo}
+              source={require("../../assets/images/tripis-mark.png")}
+              style={styles.tripisMark}
               resizeMode="contain"
             />
+            <View style={styles.tripisTitleRow}>
+              <Text style={styles.tripisTitle}>Tripis</Text>
+              <Text style={styles.tripisTitleKo}>트리피스</Text>
+            </View>
+            <Text style={styles.tripisSubtitle}>{t("login.slogan")}</Text>
           </View>
 
           {/* ── 구분선 ── */}
@@ -872,14 +790,42 @@ const styles = StyleSheet.create({
   flex: { flex: 1 },
   content: { paddingHorizontal: Spacing.xl },
 
-  /* ── 로고 ── */
-  logoSection: {
+  /* ── TRIPIS 통합 헤더 = 시안 tripia-onboarding.jsx:35-45 ── */
+  tripisHeader: {
     alignItems: "center",
-    marginBottom: Spacing.sm,
+    paddingVertical: Spacing.xl,
+    marginBottom: Spacing.md,
   },
-  appLogo: {
-    width: SCREEN_WIDTH * 0.27,
-    height: SCREEN_WIDTH * 0.27,
+  tripisMark: {
+    height: 120,
+    width: 120,
+    marginBottom: 24,
+  },
+  tripisTitleRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: 8,
+    marginBottom: 28,
+  },
+  tripisTitle: {
+    fontSize: 38,
+    fontWeight: "700",
+    letterSpacing: -1.2,
+    color: Brand.primary,
+    lineHeight: 38,
+  },
+  tripisTitleKo: {
+    fontSize: 14,
+    color: "#6B6459",
+    letterSpacing: 1,
+  },
+  tripisSubtitle: {
+    fontSize: 30,
+    lineHeight: 38,
+    fontWeight: "700",
+    letterSpacing: -0.6,
+    textAlign: "center",
+    color: "#1A1A1A",
   },
 
   /* ── 구분선 ── */
