@@ -21,6 +21,19 @@ import {
 // = AOS Samsung A36 5G Wikimedia 5/8 실패 → 8/8 3초 (= BTS 검증)
 import { Image } from "expo-image";
 import { resolveImageSource } from "@/lib/wikimedia-image";
+// ⚠️ 수정금지(승인필요) 2026-05-19 = 이미지 NULL placeholder = BTS 맵 마커 동일 SVG (= 사용자 SSOT)
+// = bts-marker-svg.ts 직접 import (= BTSPlaceMap 우회 = webview/Google Maps SDK 코드 번들 제외)
+import { SvgXml } from "react-native-svg";
+import { COLORS as BTS_MARKER_COLORS, LUCIDE as BTS_MARKER_LUCIDE } from "@/components/bts/bts-marker-svg";
+
+// ⚠️ 수정금지(승인필요) 2026-05-19 = 7 카테고리 SVG 모듈 레벨 사전 빌드 (= rendering-hoist-jsx + js-cache-function-results)
+// 매 슬롯 렌더마다 SVG 문자열 재생성 비용 0 = static lookup
+const BTS_PLACEHOLDER_SVG_BY_CAT: Record<string, string> = Object.fromEntries(
+  Object.keys(BTS_MARKER_LUCIDE).map((cat) => [
+    cat,
+    `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="18" fill="${BTS_MARKER_COLORS[cat] || '#666'}" stroke="white" stroke-width="3"/><g transform="translate(10,10) scale(0.8333)" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${BTS_MARKER_LUCIDE[cat]}</g></svg>`,
+  ])
+);
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -1546,9 +1559,11 @@ export default function TripPlannerScreen() {
                       Day {currentDay.day}
                     </Text>
                   </View>
-                  <View style={{ flex: 1 }}>
+                  <View style={{ flex: 1, minWidth: 0 }}>
                     <Text
                       style={[styles.dayHeaderTheme, { color: theme.text }]}
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
                     >
                       {(currentDay as any).theme || ""}
                     </Text>
@@ -1558,6 +1573,8 @@ export default function TripPlannerScreen() {
                           styles.dayHeaderCity,
                           { color: theme.textSecondary },
                         ]}
+                        numberOfLines={1}
+                        ellipsizeMode="tail"
                       >
                         {currentDay.city}
                       </Text>
@@ -1727,19 +1744,20 @@ export default function TripPlannerScreen() {
                                       },
                                     ]}
                                   >
-                                    <Icon
-                                      name={
-                                        isMealSlot || isMeal
-                                          ? "coffee"
-                                          : "map-pin"
-                                      }
-                                      size={20}
-                                      color={
-                                        isMealSlot
-                                          ? "#FF6B35"
-                                          : theme.textTertiary
-                                      }
-                                    />
+                                    {/* ⚠️ 수정금지(승인필요) 2026-05-19 = BTS 맵 마커 SVG 동일 사용 (= 사전 빌드 lookup) */}
+                                    {(() => {
+                                      const cat = (place as any).seedCategory || (isMealSlot || isMeal ? 'restaurant' : null);
+                                      const svg = cat ? BTS_PLACEHOLDER_SVG_BY_CAT[cat] : null;
+                                      return svg ? (
+                                        <SvgXml xml={svg} width={40} height={40} />
+                                      ) : (
+                                        <Icon
+                                          name={isMealSlot || isMeal ? "coffee" : "map-pin"}
+                                          size={20}
+                                          color={isMealSlot ? "#FF6B35" : theme.textTertiary}
+                                        />
+                                      );
+                                    })()}
                                   </View>
                                 )}
                               </View>
@@ -2871,6 +2889,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     borderRadius: BorderRadius.sm,
     gap: 4,
+    // ⚠️ 수정금지(승인필요) 2026-05-19 = 사용자 사고 (= dd99018 Icon 교체 시 누락) = 버튼 축소 X = 중앙 텍스트 짤림 방지
+    flexShrink: 0,
   },
   accommodationButtonText: {
     color: "#FFFFFF",

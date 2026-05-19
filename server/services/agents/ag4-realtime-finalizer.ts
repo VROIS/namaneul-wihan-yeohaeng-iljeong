@@ -102,11 +102,16 @@ export async function finalizeItinerary(
         endTime: s.endTime,
         isMealSlot: s.isMealSlot,
         mealType: s.mealType,
+        // ⚠️ 수정금지(승인필요) 2026-05-19 사용자 SSOT = 실제 place.priceEur 우선 = MEAL_BUDGET ceiling fallback
         mealPrice: s.isMealSlot
-          ? (s.mealType === 'lunch' ? mealBudget.lunch : mealBudget.dinner)
+          ? (s.place.estimatedPriceEur && s.place.estimatedPriceEur > 0
+              ? s.place.estimatedPriceEur
+              : (s.mealType === 'lunch' ? mealBudget.lunch : mealBudget.dinner))
           : undefined,
         mealPriceLabel: s.isMealSlot
-          ? (s.mealType === 'lunch' ? mealBudget.lunchLabel : mealBudget.dinnerLabel)
+          ? (s.place.estimatedPriceEur && s.place.estimatedPriceEur > 0
+              ? `€${s.place.estimatedPriceEur}`
+              : (s.mealType === 'lunch' ? mealBudget.lunchLabel : mealBudget.dinnerLabel))
           : undefined,
         tripAdvisorRating: s.place.tripAdvisorRating,
         tripAdvisorReviewCount: s.place.tripAdvisorReviewCount,

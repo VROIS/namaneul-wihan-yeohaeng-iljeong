@@ -18,6 +18,96 @@
 
 ---
 
+## 🔥 2026-05-19 — Paris 카테고리 재분류 47 + MEAL_BUDGET 4:6 split + BTS 마커 placeholder + Day 헤더 시정
+
+### ✅ 완료 작업 (= 영구 적용, 다음 세션에서 = 그대로 시작)
+
+**🔴 1) Paris 카테고리 재분류 47 행 (= AI 묘사 99% 정확 = 사용자 SSOT)**
+- 입력 = 전체 활성 455 행 직접 분석 (= summary_ko + editorial_summary)
+- 발견 = 47 행 오분류 (= attraction → restaurant 28, hotspot → restaurant 6 등)
+- PID 정정 1 행 (= id 61946 Square du Vert-Galant = PID 비움)
+- 트랜잭션 실행 = `scripts/_migration-paris-recategorize-2026-05-19.mjs` (= 로컬, git X)
+- 결과 = 활성 456 → **455** (= Place des Vosges DELETE 1) / 47 재분류 / restaurant 169 → 205 (+36)
+- 상세 = [`.claude/skills/raw-db-verify-and-complete/examples/paris-2026-05-19.md`](../.claude/skills/raw-db-verify-and-complete/examples/paris-2026-05-19.md)
+
+**🔴 2) MEAL_BUDGET 4:6 split SSOT (= 사용자 SSOT 2026-05-19)**
+- 옛 = 점심:저녁 비대칭 35:65 (= 8/15, 21/39, 39/72, 56/104)
+- 새 = **4:6 비율** (= Economic 16/24 daily 40, Reasonable 40/60 daily 100, Premium 120/180 daily 300, Luxury 120/180 daily 300+)
+- 사용자 직관 검증 = €16 이하 점심 = Paris 30 곳 충분 (= 베이커리/크레페리/카페/패스트)
+- 단일 SSOT = `server/services/agents/types.ts:135-140` (= itinerary-generator 자체 정의 폐기)
+
+**🔴 3) AG2-DB budget 격리 + 식당 정렬 SSOT 적용**
+- 식당 = `WHERE price_eur BETWEEN MEAL_BUDGET[style].min, max` (= tier 별 풀 격리)
+- 식당 = `ORDER BY desc(google_review_count)` (= 사용자 SSOT [[feedback_place_api_verified_pattern]] = userRatingCount 단일)
+- 비식당 = rank 1-20 유지
+- Paris 풀 = Economic 59 / Reasonable 118 / Premium 20 / Luxury 8 = 깔끔 격리
+
+**🔴 4) AG3 priceEur 컬럼 직접 사용 (= 옛 정규식 폐기)**
+- 옛 = `editorial_summary` "Max €N/person" 정규식 추출
+- 새 = `seed.priceEur` 단일 SSOT 컬럼 (= price_eur 컬럼 §14)
+- AG3 enrich = seedCategory 도 명시 보존 (= Gemini path 도 FE LUCIE 마커 활성화)
+
+**🔴 5) AG4 day-cost 실제 가격 합계 (= MEAL_BUDGET ceiling fallback)**
+- 옛 = `mealPrice = MEAL_BUDGET.lunch/dinner` (= 일률 ceiling)
+- 새 = `mealPrice = place.estimatedPriceEur` (= 실제 식당 가격) / fallback = MEAL_BUDGET ceiling
+- 일일 식비 합계 = 정확 (= 식당마다 다른 가격 반영)
+
+**🔴 6) BTS 맵 마커 = 메인앱 카드 placeholder 동일 적용 (= 사용자 SSOT)**
+- 사용자 명시 = "BTS 앱의 마커로 사용되는 것 그대로 빈 이미지창 안에 띄움"
+- 옛 = `<Icon name="map-pin"/>` (= 이미지 NULL placeholder = 단순 핀)
+- 새 = **BTS 맵 마커 SVG 동일** (= 7 카테고리 색상 원 + Lucide path = building/camera/ferris-wheel/mountain/droplet/shopping-bag/utensils)
+- 단일 SSOT = `client/components/bts/bts-marker-svg.ts` 신규 모듈 = BTSPlaceMap + TripPlannerScreen 양쪽 import
+- 모듈 레벨 사전 빌드 = `BTS_PLACEHOLDER_SVG_BY_CAT` (= rendering-hoist-jsx)
+
+**🔴 7) AI 임의 LUCIE 매핑 사고 시정 (= 헌법 §1)**
+- AI 가 임의로 Feather award/heart/zap/sun/shopping-bag 매핑 → 사용자 SSOT 위반
+- 즉시 롤백 + 정확 SSOT (= BTS 맵 마커 자체 Lucide SVG path) 로 교체
+- 사과 + 헌법 §1 (= 추측 매핑 금지) 재확인
+
+**🔴 8) Day 헤더 텍스트 짤림 시정 (= dd99018 사고)**
+- 원인 = `accommodationButton` flexShrink 누락 = 버튼 = 중앙 텍스트 공간 강탈
+- 시정 = `flexShrink: 0` + `numberOfLines={1} ellipsizeMode="tail"` + `minWidth: 0`
+- 위치 = `client/screens/TripPlannerScreen.tsx:1552-1573, 2882-2887`
+
+**🔴 9) SeedCategory literal union + bts-marker-svg 별도 모듈 (= 권고 4+5)**
+- `SeedCategory = 'bts_venue' | 'heritage' | ...` 8 enum (= types.ts:13-24)
+- `PlaceResult.seedCategory?: SeedCategory` (= 옛 string 폐기) = 타입 안전
+- COLORS + LUCIDE 자체 정의 = BTSPlaceMap 에서 폐기 → bts-marker-svg.ts 단일 SSOT
+- 효과 = TripPlannerScreen 번들에서 BTSPlaceMap 의 webview/Google Maps SDK 코드 배제
+
+### 3 게이트 검증 통과 (= §17)
+
+| 게이트 | 결과 | 권고 5 종 적용 |
+|---|---|---|
+| ① /simplify | 통과 | E1 ag2 ORDER BY ✓ / Q4 SeedCategory literal ✓ |
+| ② /review | 통과 | AG3 seedCategory 명시 ✓ |
+| ③ /vercel:react-best-practices | 통과 | HIGH SVG 사전 빌드 ✓ / MEDIUM bts-marker-svg 분리 ✓ |
+
+= 차단 결함 0 / 권고 1-5 모두 적용.
+
+### 보안 정리 (= .gitignore 강화)
+- 삭제 = `paris_audit.js`, `paris_detail.js`, `paris_final_audit.js`, `schema_check.js` (= **DB 비밀번호 하드코딩** = 이전 세션/다른 AI 흔적)
+- `.gitignore` 추가:
+  - `paris_*.js`, `schema_*.js` (= 보안 패턴)
+  - `scripts/_diag-*.mjs/.ts`, `scripts/_migration-*.mjs/.ts`, `scripts/_tmp_*.ts` (= 1 회용 차단)
+  - `!.claude/skills/` (= skill 디렉토리만 git 추적 환원)
+
+### 본 세션 변경 파일 (= 9 파일)
+- 백엔드 = `types.ts`, `ag2-gemini-recommender.ts`, `ag3-data-matcher.ts`, `ag4-realtime-finalizer.ts`, `itinerary-generator.ts`
+- 프론트 = `bts-marker-svg.ts` 신규, `BTSPlaceMap.tsx`, `TripPlannerScreen.tsx`
+- 문서 = `.claude/skills/raw-db-verify-and-complete/examples/paris-2026-05-19.md` 신규
+
+### 배포 결정
+- EAS UPDATE = **충분** (= JS 변경만, 네이티브 코드/의존성 변경 X)
+- APK 재빌드 = **불필요**
+
+### Paris DB 상태 (= 5-19 종료)
+- 활성 = **455** (= 카테고리 = restaurant 205 / attraction 69 / healing 55 / adventure 33 / heritage 32 / shopping 32 / hotspot 26 / bts 3)
+- 13 SSOT = name_en 100% / coord 88% / price_eur 94% / summary_ko 100% / editorial 100% / image_url 62% / pid 49% / uri 37%
+- 식당 풀 = Economic 59 / Reasonable 118 / Premium 20 / Luxury 8 (= 100% 가격 보유 = budget 매트릭스 격리 OK)
+
+---
+
 ## 🔥 2026-05-15 PM — €860 자산 보존 + 13 SSOT + 5 단계 매칭 + 중복 통합 + 아키텍처 §18/§19
 
 ### ✅ 완료 작업 (= 영구 적용, 다음 세션에서 = 그대로 시작)

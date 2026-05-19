@@ -9,7 +9,8 @@
  */
 
 import { GoogleGenAI } from "@google/genai";
-import type { AG1Output, PlaceResult } from './types';
+import type { AG1Output, PlaceResult, SeedCategory } from './types';
+import { MEAL_BUDGET } from './types';
 import {
   formatSentimentForPrompt,
 } from '../korean-sentiment-service';
@@ -20,7 +21,7 @@ import {
 // ⚠️ 수정금지(승인필요) 2026-05-06 = 사용자 의도 = AG2 데이터 출처 = place_seed_raw 우선
 import { db } from '../../db';
 import { placeSeedRaw } from '@shared/schema';
-import { eq, and, between, sql } from 'drizzle-orm';
+import { eq, and, between, desc, sql } from 'drizzle-orm';
 import { findCityUnified } from '../city-resolver';
 
 // Lazy initialization
@@ -153,11 +154,29 @@ async function fetchFromPlaceSeedRaw(skeleton: AG1Output): Promise<PlaceResult[]
 
   console.log(`[AG2-DB] 도시 "${cityResult.name}" (id=${cityId}) 카테고리 슬롯:`, catSlots);
 
+  // ⚠️ 수정금지(승인필요) 2026-05-19 = budget 매트릭스 (= 4:6 split)
+  // 식당 = travelStyle MEAL_BUDGET tier 별 price_eur 범위로 필터 = rank 제한 X
+  // 비식당 = rank 1-20 유지 (= FE 우선 노출 순위)
+  const budgetTier = MEAL_BUDGET[formData.travelStyle];
+  console.log(`[AG2-DB] travelStyle=${formData.travelStyle} = price €${budgetTier.min}-${budgetTier.max} (lunch ≤€${budgetTier.lunch} / dinner ≤€${budgetTier.dinner})`);
+
   // place_seed_raw 카테고리별 SELECT
   const allRows: any[] = [];
   try {
     for (const [cat, slots] of Object.entries(catSlots)) {
     if (slots <= 0) continue;
+    const isRestaurant = cat === 'restaurant';
+    const baseWhere = [
+      eq(placeSeedRaw.cityId, cityId),
+      eq(placeSeedRaw.collectionPhase, 'gemini3-2026-05'),
+      eq(placeSeedRaw.seedCategory, cat),
+    ];
+    // 식당 = budget tier 필터 / 비식당 = rank 1-20
+    if (isRestaurant) {
+      baseWhere.push(between(placeSeedRaw.priceEur, budgetTier.min, budgetTier.max));
+    } else {
+      baseWhere.push(between(placeSeedRaw.rank, 1, 20));
+    }
     const rows = await db.select({
       id: placeSeedRaw.id,
       nameEn: placeSeedRaw.nameEn,
@@ -172,15 +191,14 @@ async function fetchFromPlaceSeedRaw(skeleton: AG1Output): Promise<PlaceResult[]
       seedCategory: placeSeedRaw.seedCategory,
       rank: placeSeedRaw.rank,
       googleReviewCount: placeSeedRaw.googleReviewCount,
+      priceEur: placeSeedRaw.priceEur,
       dayZone: placeSeedRaw.dayZone,
       distanceKmFromCenter: placeSeedRaw.distanceKmFromCenter,
-    }).from(placeSeedRaw).where(and(
-      eq(placeSeedRaw.cityId, cityId),
-      eq(placeSeedRaw.collectionPhase, 'gemini3-2026-05'),
-      eq(placeSeedRaw.seedCategory, cat),
-      between(placeSeedRaw.rank, 1, 20),
-    )).orderBy(placeSeedRaw.rank).limit(slots);
-    console.log(`[AG2-DB] ${cat}: ${rows.length}/${slots} 행`);
+    // ⚠️ 수정금지(승인필요) 2026-05-19 = 식당 = userRatingCount DESC (= 사용자 SSOT feedback_place_api_verified_pattern) / 비식당 = rank
+    }).from(placeSeedRaw).where(and(...baseWhere))
+      .orderBy(isRestaurant ? desc(placeSeedRaw.googleReviewCount) : placeSeedRaw.rank)
+      .limit(slots);
+    console.log(`[AG2-DB] ${cat}: ${rows.length}/${slots} 행${isRestaurant ? ` (budget €${budgetTier.min}-${budgetTier.max})` : ''}`);
     allRows.push(...rows);
   }
   } catch (e: any) {
@@ -212,7 +230,9 @@ async function fetchFromPlaceSeedRaw(skeleton: AG1Output): Promise<PlaceResult[]
       tags: isFood ? ['restaurant', 'food'] : [],
       vibeTags: isFood ? ['Foodie' as const] : [],
       image: r.imageUrl || '',
-      priceEstimate: '',
+      priceEstimate: r.priceEur ? `€${r.priceEur}` : '',
+      estimatedPriceEur: r.priceEur ?? undefined,
+      seedCategory: r.seedCategory as SeedCategory,
       placeTypes: isFood ? ['restaurant'] : [],
       recommendedTime: 'afternoon',
       city: formData.destination,

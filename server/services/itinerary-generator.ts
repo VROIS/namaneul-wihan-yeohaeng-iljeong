@@ -15,6 +15,8 @@ import { places, instagramHashtags, youtubePlaceMentions, naverBlogPosts, cities
 import { eq, sql, ilike, and, desc, asc } from "drizzle-orm";
 // ⚠️ 수정금지(승인필요) 2026-05-15 = Google Places SKU 가드 (= SSOT §16)
 import { validateFieldMask } from "./shared/google-places-sku";
+// ⚠️ 수정금지(승인필요) 2026-05-19 = MEAL_BUDGET 단일 SSOT (= types.ts) = 자체 정의 폐기
+import { MEAL_BUDGET, type TravelStyle } from "./agents/types";
 
 // Lazy initialization - DB에서 API 키 로드 후 사용
 let ai: GoogleGenAI | null = null;
@@ -37,7 +39,7 @@ function getAI(): GoogleGenAI {
 }
 
 type Vibe = 'Healing' | 'Adventure' | 'Hotspot' | 'Foodie' | 'Romantic' | 'Culture';
-type TravelStyle = 'Luxury' | 'Premium' | 'Reasonable' | 'Economic';
+// ⚠️ 2026-05-19 = TravelStyle = types.ts SSOT 에서 import (= 위)
 // 여행 밀도: 빡빡하게(Packed) | 보통(Normal) | 여유롭게(Relaxed)
 // ⚠️ 프론트엔드 기준 'Normal' 사용 (Moderate 아님)
 type TravelPace = 'Packed' | 'Normal' | 'Relaxed';
@@ -101,24 +103,7 @@ const MEAL_SLOTS: MealSlotConfig[] = [
 // 3순위: 예산 범위 (점심35%/저녁65% 배분, 공개가격 최대값 기준)
 // 4순위: 유명세 가중치 (리뷰수50% + 한국리뷰30% + SNS20%)
 
-// TravelStyle별 식사 예산 (1인 기준, EUR)
-// 점심:저녁 = 35:65 비율 (유럽 현실 반영 - 점심 가볍게, 저녁 제대로)
-// ★ 항상 공개 가격 정보의 최대값 기준으로 적용
-const MEAL_BUDGET: Record<TravelStyle, {
-  dailyTotal: number;  // 일일 총액 (1인)
-  lunch: number;       // 점심 예산 (35%)
-  dinner: number;      // 저녁 예산 (65%)
-  lunchLabel: string;
-  dinnerLabel: string;
-  label: string;       // 호환용 (기존 코드)
-  min: number;         // 호환용
-  max: number;         // 호환용
-}> = {
-  Economic: { dailyTotal: 23, lunch: 8, dinner: 15, lunchLabel: '€8 이내', dinnerLabel: '€15 이내', label: '€23/일', min: 8, max: 15 },
-  Reasonable: { dailyTotal: 60, lunch: 21, dinner: 39, lunchLabel: '€21 이내', dinnerLabel: '€39 이내', label: '€60/일', min: 20, max: 40 },
-  Premium: { dailyTotal: 110, lunch: 39, dinner: 72, lunchLabel: '€39 이내', dinnerLabel: '€72 이내', label: '€110/일', min: 40, max: 70 },
-  Luxury: { dailyTotal: 160, lunch: 56, dinner: 104, lunchLabel: '€56 이내', dinnerLabel: '€104 이내', label: '€160/일', min: 60, max: 100 },
-};
+// ⚠️ 2026-05-19 = MEAL_BUDGET 자체 정의 폐기 = types.ts SSOT (= 4:6 split) 단일 import (= 위)
 
 /**
  * 장소가 식당/카페인지 확인

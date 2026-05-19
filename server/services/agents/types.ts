@@ -9,6 +9,18 @@ import type { KoreanSentimentData } from '../korean-sentiment-service';
 // ===== 기본 타입 =====
 export type Vibe = 'Healing' | 'Adventure' | 'Hotspot' | 'Foodie' | 'Romantic' | 'Culture';
 export type TravelStyle = 'Luxury' | 'Premium' | 'Reasonable' | 'Economic';
+
+// ⚠️ 수정금지(승인필요) 2026-05-19 = place_seed_raw.seed_category 8 enum (= BTS 마커 + LUCIE 캐릭터 1:1)
+// = SSOT = client/components/bts/bts-marker-svg.ts 의 COLORS/LUCIDE 키와 정확히 일치
+export type SeedCategory =
+  | 'bts_venue'
+  | 'heritage'
+  | 'hotspot'
+  | 'attraction'
+  | 'adventure'
+  | 'healing'
+  | 'shopping'
+  | 'restaurant';
 export type TravelPace = 'Packed' | 'Normal' | 'Relaxed';
 export type MobilityStyle = 'WalkMore' | 'Moderate' | 'Minimal';
 export type CurationFocus = 'Kids' | 'Parents' | 'Everyone' | 'Self';
@@ -93,6 +105,8 @@ export interface PlaceResult {
   tripAdvisorReviewCount?: number;
   tripAdvisorRanking?: string;
   estimatedPriceEur?: number;
+  // ⚠️ 2026-05-19 = seedCategory = FE LUCIE 카테고리 아이콘 매핑용 (= 이미지 NULL placeholder)
+  seedCategory?: SeedCategory;
   // ⚠️ 2026-05-15 = priceSource / priceLevel 영구 폐기 (= price_eur 단일 SSOT)
   photoSpotScore?: number;
   photoTip?: string;
@@ -130,10 +144,13 @@ export const MEAL_BUDGET: Record<TravelStyle, {
   min: number;
   max: number;
 }> = {
-  Economic: { dailyTotal: 23, lunch: 8, dinner: 15, lunchLabel: '€8 이내', dinnerLabel: '€15 이내', label: '€23/일', min: 8, max: 15 },
-  Reasonable: { dailyTotal: 60, lunch: 21, dinner: 39, lunchLabel: '€21 이내', dinnerLabel: '€39 이내', label: '€60/일', min: 20, max: 40 },
-  Premium: { dailyTotal: 110, lunch: 39, dinner: 72, lunchLabel: '€39 이내', dinnerLabel: '€72 이내', label: '€110/일', min: 40, max: 70 },
-  Luxury: { dailyTotal: 160, lunch: 56, dinner: 104, lunchLabel: '€56 이내', dinnerLabel: '€104 이내', label: '€160/일', min: 60, max: 100 },
+  // ⚠️ 수정금지(승인필요) 사용자 SSOT 2026-05-19 = 4:6 split (= 점심 40% / 저녁 60%)
+  // 일한도: Economic €40 / Reasonable €100 / Premium €300 / Luxury €300+
+  // min/max = 식당 1 회 식사 가격 범위 (= tier 별 격리 = dinner ceiling 까지 허용)
+  Economic: { dailyTotal: 40, lunch: 16, dinner: 24, lunchLabel: '€16 이내', dinnerLabel: '€24 이내', label: '€40/일', min: 0, max: 24 },
+  Reasonable: { dailyTotal: 100, lunch: 40, dinner: 60, lunchLabel: '€40 이내', dinnerLabel: '€60 이내', label: '€100/일', min: 25, max: 60 },
+  Premium: { dailyTotal: 300, lunch: 120, dinner: 180, lunchLabel: '€120 이내', dinnerLabel: '€180 이내', label: '€300/일', min: 61, max: 180 },
+  Luxury: { dailyTotal: 300, lunch: 120, dinner: 180, lunchLabel: '€120 이내', dinnerLabel: '€180 이내', label: '€300+/일', min: 181, max: 9999 },
 };
 
 export const DEFAULT_START_TIME = '09:00';

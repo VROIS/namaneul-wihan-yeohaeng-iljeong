@@ -84,9 +84,10 @@ scripts/migration-data/
 _agent/
 
 # Claude Code IDE 자산 (메모리/플랜/worktrees - 절대 push 금지)
-# 단, 슬래시 커맨드 (팀 공유 자산) 만 예외 = .claude/commands/ 허용
+# 단, 슬래시 커맨드 + 스킬 (팀 공유 자산) 만 예외
 .claude/*
 !.claude/commands/
+!.claude/skills/
 .claude/commands/*.local.md
 
 # Playwright MCP 캐시
@@ -126,7 +127,19 @@ _wiki_*.sql
 
 # 2026-05 디버깅 임시 스크립트
 scripts/_tmp_*.mjs
+scripts/_tmp_*.ts
 scripts/sql-*.mjs
+
+# 2026-05-19 1 회용 진단/마이그레이션 스크립트 (= 로컬 보관 = 영구 컴포넌트 아님)
+scripts/_diag-*.mjs
+scripts/_diag-*.ts
+scripts/_migration-*.mjs
+scripts/_migration-*.ts
+
+# 2026-05-19 보안 사고 = DB 비밀번호 하드코딩 파일 (= 절대 커밋 X)
+paris_*.js
+schema_check.js
+schema_*.js
 
 # 2026-05 임시 텍스트 메모 (사용자 작업 중간 산출물)
 docs/Skip to content.txt
@@ -149,3 +162,4 @@ docs/raw/
 docs/qa/
 docs/paris_qa.html
 .history
+tmp/

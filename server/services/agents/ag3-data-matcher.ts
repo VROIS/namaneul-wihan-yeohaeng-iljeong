@@ -21,7 +21,7 @@
 import { db } from '../../db';
 import { places, cities, celebrityPlaceEvidence, placeImages, placeSeedRaw } from '@shared/schema';
 import { eq, ilike, sql, inArray, and } from 'drizzle-orm';
-import type { AG1Output, AG3PreOutput, AG3Output, PlaceResult, ScheduleSlot } from './types';
+import type { AG1Output, AG3PreOutput, AG3Output, PlaceResult, ScheduleSlot, SeedCategory } from './types';
 import { findCityUnified, addPlaceAlias, type CityResolveResult } from '../city-resolver';
 // ⚠️ 수정금지(승인필요) 2026-05-15 = Google Places SKU 가드 (= SSOT §16)
 // = Enterprise+Atmosphere 33 필드 차단 = $40/1K 폭탄 방지
@@ -449,10 +449,8 @@ export async function matchPlacesWithDB(
       const seed = dbMatch;
       const reviewCount = seed.googleReviewCount ?? 0;
 
-      // ⚠️ 수정금지(승인필요) 2026-05-08 = 가격 필터 활성화
-      // editorial_summary 텍스트 "Max €N/person." 첫머리 = estimatedPriceEur 추출
-      const priceMatch = String(seed.editorialSummary || '').match(/max\s*€\s*(\d+)/i);
-      const estimatedPriceEur = priceMatch ? parseInt(priceMatch[1], 10) : undefined;
+      // ⚠️ 수정금지(승인필요) 2026-05-19 = price_eur 컬럼 단일 SSOT (= 옛 editorial_summary 정규식 폐기)
+      const estimatedPriceEur = seed.priceEur != null ? Number(seed.priceEur) : undefined;
 
       enriched.push({
         ...place,
@@ -465,6 +463,8 @@ export async function matchPlacesWithDB(
         lat: parseFloat(String(seed.latitude)) || place.lat,
         lng: parseFloat(String(seed.longitude)) || place.lng,
         estimatedPriceEur,  // ← 가격 필터 활성화
+        // ⚠️ 수정금지(승인필요) 2026-05-19 = Gemini path 도 FE LUCIE 마커 활성화 (= 사용자 SSOT)
+        seedCategory: seed.seedCategory as SeedCategory,
         selectionReasons: [
           ...(place.selectionReasons || []),
           `📊 사용자 검증 SSOT (rank ${seed.rank ?? '-'}, ${seed.collectionPhase}, 리뷰 ${reviewCount.toLocaleString()}개${estimatedPriceEur ? `, €${estimatedPriceEur}/인` : ''})`,

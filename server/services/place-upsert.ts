@@ -104,11 +104,20 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
     match = candidates.find((c) => c.googlePlaceId === p.googlePlaceId);
     if (match) matchedBy = 'pid';
   }
-  // 1순위 = 풀 주소 100%
+  // 1순위 = 풀 주소 100% + 이름 9 조합 한 쌍 일치 동시 (= 사용자 SSOT 2026-05-18)
+  // = 광역 주소 (= Disney Village 복합 상가) = 같은 주소 다른 식당 = 별도 행 보존
+  // = "주소 + 이름" 동시 일치만 = 같은 entity 매칭
   if (!match && p.address) {
     const np = normAddr(p.address);
     if (np.length >= 20) {
-      match = candidates.find((c) => c.address && normAddr(c.address) === np);
+      const normName1 = (s: string | null | undefined) => (s || '').trim().toLowerCase();
+      const pNames1 = [normName1(p.nameEn), normName1(p.nameLocal), normName1(p.nameKo)].filter(Boolean);
+      match = candidates.find((c) => {
+        if (!c.address || normAddr(c.address) !== np) return false;
+        if (pNames1.length === 0) return true; // 입력 이름 X = 주소만 매칭 (= 옛 동작 호환)
+        const cNames1 = [normName1(c.nameEn), normName1(c.nameLocal), normName1(c.nameKo)].filter(Boolean);
+        return pNames1.some((pn) => cNames1.includes(pn));
+      });
       if (match) matchedBy = 'address';
     }
   }
@@ -149,26 +158,24 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
   const phaseTags = p.phaseTags || [];
 
   if (match) {
-    // UPDATE = 사용자 SSOT
-    // = 검증된 식별 데이터 = COALESCE 옛 우선 (= WK 이미지 등 보존)
-    // = 가격 = GREATEST 비싼 쪽 (= 사용자 보호)
-    // = 카피 = 새 우선 (= 큐레이션 갱신)
-    // = tags = UNION (= 누적)
+    // UPDATE = 사용자 SSOT 2026-05-18 = "모든 정보 최신 덮어씀" (= 옛 COALESCE 옛 우선 폐기)
+    // = 모든 필드 = 새 값 있으면 새 / 없으면 옛 유지 (= COALESCE 새 → 옛 순서)
+    // = tags = UNION (= 누적 유지)
     await db.execute(sql`
       UPDATE place_seed_raw SET
-        name_en       = COALESCE(name_en, ${p.nameEn}),
-        name_ko       = COALESCE(name_ko, ${p.nameKo || null}),
-        name_local    = COALESCE(name_local, ${p.nameLocal || null}),
-        latitude      = COALESCE(latitude, ${p.latitude || null}::real),
-        longitude     = COALESCE(longitude, ${p.longitude || null}::real),
-        address       = COALESCE(address, ${p.address || null}),
-        google_place_id = COALESCE(google_place_id, ${p.googlePlaceId || null}),
-        google_review_count = COALESCE(google_review_count, ${p.googleReviewCount || null}::integer),
-        google_primary_type = COALESCE(google_primary_type, ${p.googlePrimaryType || null}),
-        google_maps_uri = COALESCE(google_maps_uri, ${p.googleMapsUri || null}),
-        image_url     = COALESCE(image_url, ${p.imageUrl || null}),
-        image_attribution = COALESCE(image_attribution, ${p.imageAttribution || null}),
-        price_eur     = GREATEST(COALESCE(price_eur, 0), COALESCE(${p.priceEur || 0}::real, 0)),
+        name_en       = COALESCE(${p.nameEn}, name_en),
+        name_ko       = COALESCE(${p.nameKo || null}, name_ko),
+        name_local    = COALESCE(${p.nameLocal || null}, name_local),
+        latitude      = COALESCE(${p.latitude || null}::real, latitude),
+        longitude     = COALESCE(${p.longitude || null}::real, longitude),
+        address       = COALESCE(${p.address || null}, address),
+        google_place_id = COALESCE(${p.googlePlaceId || null}, google_place_id),
+        google_review_count = COALESCE(${p.googleReviewCount || null}::integer, google_review_count),
+        google_primary_type = COALESCE(${p.googlePrimaryType || null}, google_primary_type),
+        google_maps_uri = COALESCE(${p.googleMapsUri || null}, google_maps_uri),
+        image_url     = COALESCE(${p.imageUrl || null}, image_url),
+        image_attribution = COALESCE(${p.imageAttribution || null}, image_attribution),
+        price_eur     = COALESCE(${p.priceEur || null}::real, price_eur),
         editorial_summary = COALESCE(${p.shortformKo || null}, editorial_summary),
         summary_ko        = COALESCE(${p.selectionReasonKo || null}, summary_ko),
         day_zone          = COALESCE(${p.dayZone || null}, day_zone),

@@ -1,0 +1,84 @@
+⚠️ 수정금지(승인필요) 2026-05-18 = 사용자 SSOT = 1 글자 변경 금지
+
+= Step 2 = 기존 raw 행 보강 prompt (= 본 세션 검증 = Paris 422 행 일괄 UPDATE)
+= 호출 설정 = _call-config.md 동일 (= gemini-3-flash-preview + googleSearch + temp 0.2 + maxToken 50000 + thinkingBudget 0)
+= Batch = 40 장소 / 1 호출 (= adaptive fallback 30/20/10)
+= 입력 = place_seed_raw 의 활성 행 = id ASC = 카테고리 무관 (= 사용자 SSOT = "우리 카테고리는 의미 없음")
+
+= 변수 치환:
+  ${CITY_ID} = cityId 정수 (= 예 19 = Paris)
+  ${BATCH_LEN} = 입력 곳수 (= 보통 40)
+  ${JSON_INPUT} = 입력 곳 JSON 배열 (= 아래 schema)
+
+= 입력 schema:
+  - id: number (= place_seed_raw.id = 응답 매칭 키)
+  - name_en: string (= 공식 영어명 = 변경 X)
+  - name_local: string | null
+  - name_ko: string | null
+  - address: string | null
+  - latitude: number | null
+  - longitude: number | null
+  - google_place_id: string | null
+  - seed_category: 'restaurant'|'attraction'|'healing'|'adventure'|'hotspot'|'heritage'|'shopping'
+
+══════════════════════════════════════════════════════════════════════════════
+PROMPT 본문 (= 1 글자 변경 금지):
+══════════════════════════════════════════════════════════════════════════════
+
+역할: 너는 한국인 여행자를 위한 [CITY_NAME] 장소 정보 보강 전문가야.
+
+⚠️ 응답 근거 = **Google Search 그라운딩 기반** = 최신/검증된 사실 (= 가격/주소/한국어 호칭) 만 사용 = 추정/환각 금지.
+
+목적: [CITY_NAME] (city_id=${CITY_ID}) 의 기존 장소 ${BATCH_LEN} 곳 = 누락 정보를 채우고 + 한국 관점 큐레이션을 작성한다.
+
+입력 = 각 장소 = JSON (= id 는 우리 place_seed_raw.id = 응답 매칭 키)
+  - id: number (= place_seed_raw.id = 응답에 정확히 매칭 필수)
+  - name_en: string (= 공식 영어명 = 변경 X)
+  - name_local: string | null
+  - name_ko: string | null
+  - address: string | null
+  - latitude: number | null
+  - longitude: number | null
+  - google_place_id: string | null
+  - seed_category: 'restaurant'|'attraction'|'healing'|'adventure'|'hotspot'|'heritage'|'shopping'
+
+응답 (= JSON 배열, 설명 텍스트 X):
+{
+  "places": [
+    {
+      "id": <입력 id 그대로 = place_seed_raw.id>,
+      "name_en": "<입력 그대로 = 변경 X>",
+      "name_local": "<현지 원어명 = 예 'Tour Eiffel' / 입력 있으면 검증 / 없으면 채움>",
+      "name_ko": "<한국 여행자 친숙 호칭 = 예 '에펠탑' / 입력 있으면 검증 / 없으면 채움>",
+      "address": "<번지 + 거리 + 우편번호 + 도시 + 국가 = 예 '5 Avenue Anatole France, 75007 Paris, France'>",
+      "latitude": <위도 6 자리 = 예 48.858370>,
+      "longitude": <경도 6 자리 = 예 2.294481>,
+      "summary_ko": "<한 줄 숏폼 대사 = 인스타/FOMO 사회적 검증 = 한국어 25 자 이내>",
+      "editorial_summary": "<한 줄 한국인 관점 선정 이유 = 코믹/위트 후킹 카피 = 한국어 35 자 이내>",
+      "estimated_price_eur": <1인 입장료 또는 평균 식대 EUR 숫자 = shopping 은 null>
+    }
+  ]
+}
+
+규칙:
+1. 모든 입력 id = 응답에 정확히 포함 (= 누락 0) ← id = 우리 place_seed_raw.id = 매칭 키
+2. name_en = 입력 그대로 (= 변경 절대 X = 매칭 키)
+3. 좌표 = 6 자리 소수 (= 예 48.858370, 2.294481)
+4. address = 번지부터 국가까지 완전 (= 부분 주소 X)
+5. summary_ko / editorial_summary = 한국어만 (= 영어 단어 혼용 X)
+6. estimated_price_eur = shopping 카테고리 = null 강제 / 그 외 = 합리적 EUR 정수
+7. 응답 = 위 JSON 만 (= 설명/주석/마크다운 X)
+
+입력 ${BATCH_LEN} 장소:
+${JSON_INPUT}
+
+══════════════════════════════════════════════════════════════════════════════
+응답 처리 (= 표준):
+══════════════════════════════════════════════════════════════════════════════
+
+= upsertPlace() 호환 매핑:
+  응답 summary_ko        → upsertPlace.selectionReasonKo (→ DB summary_ko)
+  응답 editorial_summary → upsertPlace.shortformKo (→ DB editorial_summary)
+  응답 estimated_price_eur → upsertPlace.priceEur (= shopping = null 강제)
+
+= dry-run 단계 = 응답 raw 저장 (= tmp/<city>-enrich-batch-<offset>.json) = 사용자 검수 후 UPDATE 명시.
