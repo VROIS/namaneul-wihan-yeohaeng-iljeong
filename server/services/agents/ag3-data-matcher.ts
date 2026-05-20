@@ -173,6 +173,7 @@ export async function preloadCityData(
           nameKo: placeSeedRaw.nameKo,
           nameLocal: placeSeedRaw.nameLocal,
           googlePlaceId: placeSeedRaw.googlePlaceId,
+          googleMapsUri: placeSeedRaw.googleMapsUri,
           imageUrl: placeSeedRaw.imageUrl,
           address: placeSeedRaw.address,
           latitude: placeSeedRaw.latitude,
@@ -220,6 +221,8 @@ export async function preloadCityData(
           if (keyLocalNoAcc && !seedRawMap.has(keyLocalNoAcc)) seedRawMap.set(keyLocalNoAcc, s);
           // ⚠️ 수정금지(승인필요) 사용자 의도 = google_place_id 기반 직접 매칭 키 추가
           if (s.googlePlaceId) seedRawMap.set(`pid:${s.googlePlaceId}`, s);
+          // ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT 5 단계 매칭 = google_maps_uri 추가 (= upsertPlace v2 §14 부합)
+          if (s.googleMapsUri) seedRawMap.set(`uri:${s.googleMapsUri}`, s);
           // ⚠️ 수정금지(승인필요) 사용자 의도 = address 기반 매칭 키 추가 (= 식당 동명 충돌 회피)
           if (s.address) {
             const addrKey = `addr:${s.address.toLowerCase().replace(/\s+/g, ' ').trim()}`;
@@ -281,12 +284,18 @@ export async function matchPlacesWithDB(
   const matchResults: MatchResult[] = [];
 
   for (const place of geminiPlaces) {
+    // ⚠️ 수정금지(승인필요) 2026-05-20 = DB-only path skip = AG2 가 이미 place_seed_raw 직접 = 매칭 불필요 (= 사용자 SSOT 병렬 극대화)
+    if (place.sourceType === 'DB Direct (Place Seed Raw)') {
+      matchResults.push({ place, dbMatch: place as any, needsGoogle: false });
+      matched++;
+      continue;
+    }
+
     const nameLower = place.name.toLowerCase().trim();
 
-    // ⚠️ 수정금지(승인필요) 2026-05-14 = 사용자 SSOT 통합 매칭 = 행정주소 > 이름 > 좌표 10m
-    // ⚠️ 수정금지(승인필요) 2026-05-15 = 사용자 SSOT 4 단계 (CLAUDE.md 제14조)
-    // = 0순위 PID > 1순위 풀주소 > 2순위 좌표 10m > 3순위 이름
-    // = 4순위 = TS+PM (= matchResults 의 needsGoogle = true 시 별도 단계)
+    // ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT 5 단계 (= CLAUDE.md 제14조 v2 + upsertPlace v2 부합)
+    // = 0순위 PID > 1순위 풀주소+이름 > 2순위 google_maps_uri > 3순위 좌표 10m > 4순위 이름
+    // = 5순위 = TS+PM (= matchResults 의 needsGoogle = true 시 별도 단계)
     let seedDirectMatch: any = null;
     const geminiAddress = (place as any).geminiAddress || (place as any).address;
     const placePid = (place as any).geminiPlaceId || (place as any).googlePlaceId;
@@ -340,7 +349,16 @@ export async function matchPlacesWithDB(
       }
     }
 
-    // 2 순위 = 좌표 10m 매칭 (= ~95%, 같은 건물)
+    // ⚠️ 수정금지(승인필요) 2026-05-20 = 2 순위 = google_maps_uri 매칭 (= 사용자 SSOT 5 단계 = upsertPlace v2)
+    if (!seedDirectMatch && (place as any).googleMapsUri && seedRawMap && seedRawMap.size > 0) {
+      const hit = seedRawMap.get(`uri:${(place as any).googleMapsUri}`);
+      if (hit) {
+        seedDirectMatch = hit;
+        console.log(`[AG3] 🔗 2순위 google_maps_uri 매칭: "${place.name}"`);
+      }
+    }
+
+    // 3 순위 = 좌표 10m 매칭 (= ~95%, 같은 건물)
     if (!seedDirectMatch && (place as any).lat && (place as any).lng && seedRawMap && seedRawMap.size > 0) {
       const pLat = parseFloat(String((place as any).lat));
       const pLng = parseFloat(String((place as any).lng));
@@ -357,14 +375,14 @@ export async function matchPlacesWithDB(
           const km = 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
           if (km < 0.01) {
             seedDirectMatch = val;
-            console.log(`[AG3] 📍 2순위 좌표 10m 매칭: "${place.name}"`);
+            console.log(`[AG3] 📍 3순위 좌표 10m 매칭: "${place.name}"`);
             break;
           }
         }
       }
     }
 
-    // 3 순위 = 이름 매칭 (= ~30-50%, 체인/지점 위험 = 보조)
+    // 4 순위 = 이름 매칭 (= ~30-50%, 체인/지점 위험 = 보조)
     if (!seedDirectMatch && seedRawMap && seedRawMap.size > 0) {
       const nameEn = nameLower;
       const nameLocal = ((place as any).nameLocal || '').toLowerCase().trim();
@@ -376,7 +394,7 @@ export async function matchPlacesWithDB(
       for (const k of tries) {
         if (!k) continue;
         const hit = seedRawMap.get(k);
-        if (hit) { seedDirectMatch = hit; console.log(`[AG3] 🏷 3순위 이름 매칭: "${place.name}" (key=${k.slice(0,30)})`); break; }
+        if (hit) { seedDirectMatch = hit; console.log(`[AG3] 🏷 4순위 이름 매칭: "${place.name}" (key=${k.slice(0,30)})`); break; }
       }
     }
 

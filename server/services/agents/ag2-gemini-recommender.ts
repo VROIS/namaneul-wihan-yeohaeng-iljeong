@@ -160,47 +160,49 @@ async function fetchFromPlaceSeedRaw(skeleton: AG1Output): Promise<PlaceResult[]
   const budgetTier = MEAL_BUDGET[formData.travelStyle];
   console.log(`[AG2-DB] travelStyle=${formData.travelStyle} = price €${budgetTier.min}-${budgetTier.max} (lunch ≤€${budgetTier.lunch} / dinner ≤€${budgetTier.dinner})`);
 
-  // place_seed_raw 카테고리별 SELECT
+  // ⚠️ 수정금지(승인필요) 2026-05-20 = Promise.all 병렬 = 7 카테고리 동시 SELECT (= 4x 속도 향상)
+  // 식당 = budget WHERE / 비식당 = rank 1-20 / ORDER BY = 식당 review DESC / 비식당 rank ASC
   const allRows: any[] = [];
   try {
-    for (const [cat, slots] of Object.entries(catSlots)) {
-    if (slots <= 0) continue;
-    const isRestaurant = cat === 'restaurant';
-    const baseWhere = [
-      eq(placeSeedRaw.cityId, cityId),
-      eq(placeSeedRaw.collectionPhase, 'gemini3-2026-05'),
-      eq(placeSeedRaw.seedCategory, cat),
-    ];
-    // 식당 = budget tier 필터 / 비식당 = rank 1-20
-    if (isRestaurant) {
-      baseWhere.push(between(placeSeedRaw.priceEur, budgetTier.min, budgetTier.max));
-    } else {
-      baseWhere.push(between(placeSeedRaw.rank, 1, 20));
-    }
-    const rows = await db.select({
-      id: placeSeedRaw.id,
-      nameEn: placeSeedRaw.nameEn,
-      nameKo: placeSeedRaw.nameKo,
-      googlePlaceId: placeSeedRaw.googlePlaceId,
-      address: placeSeedRaw.address,
-      latitude: placeSeedRaw.latitude,
-      longitude: placeSeedRaw.longitude,
-      imageUrl: placeSeedRaw.imageUrl,
-      summaryKo: placeSeedRaw.summaryKo,
-      editorialSummary: placeSeedRaw.editorialSummary,
-      seedCategory: placeSeedRaw.seedCategory,
-      rank: placeSeedRaw.rank,
-      googleReviewCount: placeSeedRaw.googleReviewCount,
-      priceEur: placeSeedRaw.priceEur,
-      dayZone: placeSeedRaw.dayZone,
-      distanceKmFromCenter: placeSeedRaw.distanceKmFromCenter,
-    // ⚠️ 수정금지(승인필요) 2026-05-19 = 식당 = userRatingCount DESC (= 사용자 SSOT feedback_place_api_verified_pattern) / 비식당 = rank
-    }).from(placeSeedRaw).where(and(...baseWhere))
-      .orderBy(isRestaurant ? desc(placeSeedRaw.googleReviewCount) : placeSeedRaw.rank)
-      .limit(slots);
-    console.log(`[AG2-DB] ${cat}: ${rows.length}/${slots} 행${isRestaurant ? ` (budget €${budgetTier.min}-${budgetTier.max})` : ''}`);
-    allRows.push(...rows);
-  }
+    const queries = Object.entries(catSlots)
+      .filter(([_, slots]) => slots > 0)
+      .map(async ([cat, slots]) => {
+        const isRestaurant = cat === 'restaurant';
+        const baseWhere = [
+          eq(placeSeedRaw.cityId, cityId),
+          eq(placeSeedRaw.collectionPhase, 'gemini3-2026-05'),
+          eq(placeSeedRaw.seedCategory, cat),
+        ];
+        if (isRestaurant) {
+          baseWhere.push(between(placeSeedRaw.priceEur, budgetTier.min, budgetTier.max));
+        } else {
+          baseWhere.push(between(placeSeedRaw.rank, 1, 20));
+        }
+        const rows = await db!.select({
+          id: placeSeedRaw.id,
+          nameEn: placeSeedRaw.nameEn,
+          nameKo: placeSeedRaw.nameKo,
+          googlePlaceId: placeSeedRaw.googlePlaceId,
+          address: placeSeedRaw.address,
+          latitude: placeSeedRaw.latitude,
+          longitude: placeSeedRaw.longitude,
+          imageUrl: placeSeedRaw.imageUrl,
+          summaryKo: placeSeedRaw.summaryKo,
+          editorialSummary: placeSeedRaw.editorialSummary,
+          seedCategory: placeSeedRaw.seedCategory,
+          rank: placeSeedRaw.rank,
+          googleReviewCount: placeSeedRaw.googleReviewCount,
+          priceEur: placeSeedRaw.priceEur,
+          dayZone: placeSeedRaw.dayZone,
+          distanceKmFromCenter: placeSeedRaw.distanceKmFromCenter,
+        }).from(placeSeedRaw).where(and(...baseWhere))
+          .orderBy(isRestaurant ? desc(placeSeedRaw.googleReviewCount) : placeSeedRaw.rank)
+          .limit(slots);
+        console.log(`[AG2-DB] ${cat}: ${rows.length}/${slots} 행${isRestaurant ? ` (budget €${budgetTier.min}-${budgetTier.max})` : ''}`);
+        return rows;
+      });
+    const results = await Promise.all(queries);
+    for (const rows of results) allRows.push(...rows);
   } catch (e: any) {
     console.error(`[AG2-DB] ❌ SELECT 실패:`, e.message);
     return null;
@@ -271,7 +273,10 @@ export async function generateRecommendations(skeleton: AG1Output): Promise<Plac
     }
     console.log('[AG2] ⚠ ready=true 였으나 카테고리별 데이터 부족 → Gemini fallback (예외)');
   } else {
-    console.log(`[AG2] ⚠ city='${cityCheck.cityName}' ready=false (${cityCheck.count} rows < ${READY_THRESHOLD}) → Gemini fallback (Geneva 패턴, auto-learn 저장 예정)`);
+    // ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT = MIX 일시정지 = ready=false 시 Gemini fallback X
+    // = 백엔드 MIX 구현 후 = 사용자 명시 시 재활성화 (= raw-db-verify-and-complete skill 9 prompt 적용)
+    console.error(`[AG2] ❌ city='${cityCheck.cityName}' MIX 모드 일시정지 (= ${cityCheck.count} rows < ${READY_THRESHOLD}). 발굴 도시만 지원. 신규 도시 = raw-db-verify-and-complete skill 적용 후 재시도.`);
+    throw new Error(`MIX_MODE_DISABLED: '${cityCheck.cityName}' 미발굴 도시 = 백엔드 일시정지 (= 사용자 SSOT 2026-05-20)`);
   }
 
   // 2. Fallback = Gemini (= 미발굴 도시 또는 DB 부족)

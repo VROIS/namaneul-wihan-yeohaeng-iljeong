@@ -321,6 +321,22 @@ function setupErrorHandler(app: express.Application) {
         log("[Server] Failed to load API keys from database:", error);
       }
 
+      // ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT = DB-only 도시 ready 검증 로그 (= 메인앱 분기 확실화)
+      try {
+        const { isCityReady } = await import("./services/agents/ag2-gemini-recommender");
+        const DB_ONLY_CITIES = ['Paris'];  // = 추후 list 확장 = Tokyo / Madrid 등
+        for (const cityName of DB_ONLY_CITIES) {
+          const check = await isCityReady(cityName);
+          if (check.ready) {
+            log(`[Server] ✅ DB-only city '${cityName}' (id=${check.cityId}) ready=true / ${check.count} rows`);
+          } else {
+            log(`[Server] ⚠️  DB-only city '${cityName}' ready=false / ${check.count} rows < threshold = MIX path 진입 시 = 차단됨`);
+          }
+        }
+      } catch (e) {
+        log("[Server] DB-only city ready check skip:", (e as Error).message);
+      }
+
       try {
         // ✅ [2026-02-08] 스케줄러 복구 - 비용 보호 적용 완료:
         // - place_seed_sync만 차단 (Google Places API 폭탄 주범)
