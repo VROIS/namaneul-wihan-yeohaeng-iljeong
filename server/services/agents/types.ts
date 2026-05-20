@@ -120,6 +120,8 @@ export interface PlaceResult {
   confidenceLevel?: 'high' | 'medium' | 'low' | 'minimal';
   // ⭐ 차별화 선정이유 (우리 데이터 기반, 프론트엔드에서 크게/진하게 표시)
   nubiReason?: string | null;
+  // ⚠️ 수정금지(승인필요) 2026-05-21 = Phase E = dayZone 필드 (= place_seed_raw.day_zone) = 일자별 zone 매칭
+  dayZone?: 'core' | 'outskirt' | null;
 }
 
 // ===== 상수 =====

@@ -46,8 +46,8 @@ export interface TransitResult {
   costTotal: number;      // = EUR / 그룹 총액 (= cost × companionCount)
 }
 
-/** Haversine 거리 = km */
-function haversineKm(
+/** Haversine 거리 = km (= 다른 모듈에서 재사용 = 헌법 §16 단일 SSOT) */
+export function haversineKm(
   lat1: number, lng1: number,
   lat2: number, lng2: number,
 ): number {

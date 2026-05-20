@@ -21,7 +21,7 @@ import { pickPlaceImage } from '../shared/place-image';
 // ⚠️ 수정금지(승인필요) 2026-05-06 = 사용자 의도 = AG2 데이터 출처 = place_seed_raw 우선
 import { db } from '../../db';
 import { placeSeedRaw } from '@shared/schema';
-import { eq, and, between, desc, sql } from 'drizzle-orm';
+import { eq, and, between, desc, asc, sql } from 'drizzle-orm';
 import { findCityUnified } from '../city-resolver';
 
 // Lazy initialization
@@ -160,47 +160,75 @@ async function fetchFromPlaceSeedRaw(skeleton: AG1Output): Promise<PlaceResult[]
   const budgetTier = MEAL_BUDGET[formData.travelStyle];
   console.log(`[AG2-DB] travelStyle=${formData.travelStyle} = price €${budgetTier.min}-${budgetTier.max} (lunch ≤€${budgetTier.lunch} / dinner ≤€${budgetTier.dinner})`);
 
-  // ⚠️ 수정금지(승인필요) 2026-05-20 = Promise.all 병렬 = 7 카테고리 동시 SELECT (= 4x 속도 향상)
-  // 식당 = budget WHERE / 비식당 = rank 1-20 / ORDER BY = 식당 review DESC / 비식당 rank ASC
+  // ⚠️ 수정금지(승인필요) 2026-05-21 = Phase E-1 = dayZone 균등 + 좌표 ORDER (= 사용자 SSOT)
+  // 식당 = budget WHERE + dayZone 균등 (= core 4 + outskirt 2 = 일자별 zone 매칭 자동)
+  // 비식당 = rank 1-20 + ORDER distance_km_from_center ASC (= 도심 → 외곽 자연 흐름)
+  const SELECT_COLS = {
+    id: placeSeedRaw.id,
+    nameEn: placeSeedRaw.nameEn,
+    nameKo: placeSeedRaw.nameKo,
+    googlePlaceId: placeSeedRaw.googlePlaceId,
+    googleMapsUri: placeSeedRaw.googleMapsUri,
+    address: placeSeedRaw.address,
+    latitude: placeSeedRaw.latitude,
+    longitude: placeSeedRaw.longitude,
+    imageUrl: placeSeedRaw.imageUrl,           // Google 1 순위
+    bestImageUrl: placeSeedRaw.bestImageUrl,    // WK/Wikidata SPARQL 2 순위
+    summaryKo: placeSeedRaw.summaryKo,
+    editorialSummary: placeSeedRaw.editorialSummary,
+    seedCategory: placeSeedRaw.seedCategory,
+    rank: placeSeedRaw.rank,
+    googleReviewCount: placeSeedRaw.googleReviewCount,
+    priceEur: placeSeedRaw.priceEur,
+    dayZone: placeSeedRaw.dayZone,
+    distanceKmFromCenter: placeSeedRaw.distanceKmFromCenter,
+  };
+
   const allRows: any[] = [];
   try {
     const queries = Object.entries(catSlots)
       .filter(([_, slots]) => slots > 0)
       .map(async ([cat, slots]) => {
         const isRestaurant = cat === 'restaurant';
+        if (isRestaurant) {
+          // ⚠️ 2026-05-21 = 식당 = dayZone 균등 (= 사용자 SSOT = 일자별 zone 매칭 자동)
+          // = restaurant 6 = core 4 + outskirt 2 (= dayCount=3 = Day 1 core 2 + Day 2 outskirt 2 + Day 3 core 2)
+          const coreSlots = Math.ceil(slots * (2 / 3));     // = 6 → 4 core
+          const outskirtSlots = slots - coreSlots;            // = 6 → 2 outskirt
+          const baseWhereCore = [
+            eq(placeSeedRaw.cityId, cityId),
+            eq(placeSeedRaw.collectionPhase, 'gemini3-2026-05'),
+            eq(placeSeedRaw.seedCategory, cat),
+            between(placeSeedRaw.priceEur, budgetTier.min, budgetTier.max),
+            eq(placeSeedRaw.dayZone, 'core'),
+          ];
+          const baseWhereOutskirt = [
+            eq(placeSeedRaw.cityId, cityId),
+            eq(placeSeedRaw.collectionPhase, 'gemini3-2026-05'),
+            eq(placeSeedRaw.seedCategory, cat),
+            between(placeSeedRaw.priceEur, budgetTier.min, budgetTier.max),
+            eq(placeSeedRaw.dayZone, 'outskirt'),
+          ];
+          const [coreRows, outskirtRows] = await Promise.all([
+            db!.select(SELECT_COLS).from(placeSeedRaw).where(and(...baseWhereCore))
+              .orderBy(desc(placeSeedRaw.googleReviewCount)).limit(coreSlots),
+            db!.select(SELECT_COLS).from(placeSeedRaw).where(and(...baseWhereOutskirt))
+              .orderBy(desc(placeSeedRaw.googleReviewCount)).limit(outskirtSlots),
+          ]);
+          console.log(`[AG2-DB] restaurant: core ${coreRows.length}/${coreSlots} + outskirt ${outskirtRows.length}/${outskirtSlots} (budget €${budgetTier.min}-${budgetTier.max})`);
+          return [...coreRows, ...outskirtRows];
+        }
+        // 비식당 = rank 1-20 + ORDER distance_km_from_center ASC (= 도심 → 외곽 자연)
         const baseWhere = [
           eq(placeSeedRaw.cityId, cityId),
           eq(placeSeedRaw.collectionPhase, 'gemini3-2026-05'),
           eq(placeSeedRaw.seedCategory, cat),
+          between(placeSeedRaw.rank, 1, 20),
         ];
-        if (isRestaurant) {
-          baseWhere.push(between(placeSeedRaw.priceEur, budgetTier.min, budgetTier.max));
-        } else {
-          baseWhere.push(between(placeSeedRaw.rank, 1, 20));
-        }
-        const rows = await db!.select({
-          id: placeSeedRaw.id,
-          nameEn: placeSeedRaw.nameEn,
-          nameKo: placeSeedRaw.nameKo,
-          googlePlaceId: placeSeedRaw.googlePlaceId,
-          googleMapsUri: placeSeedRaw.googleMapsUri,
-          address: placeSeedRaw.address,
-          latitude: placeSeedRaw.latitude,
-          longitude: placeSeedRaw.longitude,
-          imageUrl: placeSeedRaw.imageUrl,           // ⚠️ 2026-05-20 = Google 1 순위
-          bestImageUrl: placeSeedRaw.bestImageUrl,    // ⚠️ 2026-05-20 = WK/Wikidata SPARQL 2 순위 (= Google NULL 시 fallback)
-          summaryKo: placeSeedRaw.summaryKo,
-          editorialSummary: placeSeedRaw.editorialSummary,
-          seedCategory: placeSeedRaw.seedCategory,
-          rank: placeSeedRaw.rank,
-          googleReviewCount: placeSeedRaw.googleReviewCount,
-          priceEur: placeSeedRaw.priceEur,
-          dayZone: placeSeedRaw.dayZone,
-          distanceKmFromCenter: placeSeedRaw.distanceKmFromCenter,
-        }).from(placeSeedRaw).where(and(...baseWhere))
-          .orderBy(isRestaurant ? desc(placeSeedRaw.googleReviewCount) : placeSeedRaw.rank)
+        const rows = await db!.select(SELECT_COLS).from(placeSeedRaw).where(and(...baseWhere))
+          .orderBy(asc(placeSeedRaw.distanceKmFromCenter))
           .limit(slots);
-        console.log(`[AG2-DB] ${cat}: ${rows.length}/${slots} 행${isRestaurant ? ` (budget €${budgetTier.min}-${budgetTier.max})` : ''}`);
+        console.log(`[AG2-DB] ${cat}: ${rows.length}/${slots} 행 (ORDER distance ASC = 도심→외곽)`);
         return rows;
       });
     const results = await Promise.all(queries);
@@ -249,6 +277,8 @@ async function fetchFromPlaceSeedRaw(skeleton: AG1Output): Promise<PlaceResult[]
       googleMapsUri: r.googleMapsUri || '',
       // AG4 동선 최적화에 필요한 추가 정보
       userRatingCount: r.googleReviewCount || 0,
+      // ⚠️ 수정금지(승인필요) 2026-05-21 = Phase E = dayZone 매핑 (= 옛 (p as any) 캐스트 해결 = 무음 실패 방지)
+      dayZone: r.dayZone ?? null,
     } as any;
   });
   console.log(`[AG2-DB] ✅ DB 직접 = ${places.length}곳 (${Date.now() - _t0}ms, Gemini X, Google X)`);
