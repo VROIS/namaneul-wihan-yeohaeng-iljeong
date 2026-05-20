@@ -183,6 +183,7 @@ async function fetchFromPlaceSeedRaw(skeleton: AG1Output): Promise<PlaceResult[]
           nameEn: placeSeedRaw.nameEn,
           nameKo: placeSeedRaw.nameKo,
           googlePlaceId: placeSeedRaw.googlePlaceId,
+          googleMapsUri: placeSeedRaw.googleMapsUri,
           address: placeSeedRaw.address,
           latitude: placeSeedRaw.latitude,
           longitude: placeSeedRaw.longitude,
@@ -240,7 +241,10 @@ async function fetchFromPlaceSeedRaw(skeleton: AG1Output): Promise<PlaceResult[]
       city: formData.destination,
       region: '',
       koreanPopularityScore: 0,
-      googleMapsUrl: r.googlePlaceId ? `https://maps.google.com/?cid=${r.googlePlaceId}` : '',
+      // ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT = DB 의 google_maps_uri (= cid URL) 직접 사용 (= 100% 정확)
+      // = 옛 코드 = PID 를 cid 로 잘못 사용 (= PID 형식 ChIJ... ≠ CID decimal) = 시정
+      googleMapsUrl: r.googleMapsUri || '',
+      googleMapsUri: r.googleMapsUri || '',
       // AG4 동선 최적화에 필요한 추가 정보
       userRatingCount: r.googleReviewCount || 0,
     } as any;

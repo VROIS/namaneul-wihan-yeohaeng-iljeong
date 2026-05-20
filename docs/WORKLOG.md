@@ -18,6 +18,94 @@
 
 ---
 
+## 🔥 2026-05-20 — Paris DB-only 운영 준비 완성 + 보조 테이블 폐기 + skill 9 prompt + 3 check 영구 + TS 17 + 모달 0 순위 URI
+
+### ✅ 완료 작업 (= 영구 적용, 다음 세션에서 = 그대로 시작)
+
+**🔴 1) raw-db-verify-and-complete skill 9 prompt + 3 check 영구 구조 (= 커밋 75acbcf)**
+- 9 prompt 폴더 = 각 7 필수 요소 (= prompt/설정/산출물/실행/과정/후처리/보고서/교훈)
+  - Step 1 = 01-discover-6cats / Step 2 = 02-enrich-place / Step 3 = 03-downtown-restaurant
+  - Step 4 = 04-outskirt-restaurant / Step 5 = 05-text-recategorize
+  - Step 6 = **06-ts-pm-enrich** (= TS Enterprise + PhotoMedia ★ 신규)
+  - Step 7 = **07-merge-dups** (= 5 단계 매칭 + 중복 통합 = 알고리즘 ★ 신규)
+  - Step 8 = **08-wk-image-fill** (= Wikidata SPARQL 이미지 ★ 신규)
+  - 참조 = 09-main-app-itinerary (= pipeline-v3 inline = 미발굴 fallback)
+- checks/ = 01-coord-missing / 02-price-outlier / 03-outskirt-coverage (= 비용 0 DB SELECT 점검)
+- 옛 scripts/ 10 파일 폐기 (= 100% 흡수)
+
+**🔴 2) DB-only 운영 극대화 = 9 영역 강화 (= 커밋 796b85b)**
+- P0-1 = AG2-DB 7 카테고리 Promise.all 병렬 (= 4 배 속도)
+- P0-2 = MIX path 일시정지 가드 = `throw 'MIX_MODE_DISABLED'`
+- P1 = AG3 매칭 5 단계 = `google_maps_uri` 추가 (= 헌법 §14 v2 부합)
+- P2 = AG3 DB-only path = `sourceType='DB Direct'` 매칭 skip
+- P3 = 부팅 시 Paris READY count 검증 로그
+
+**🔴 3) Paris 보조 테이블 전체 폐기 (= [[feedback_3_table_architecture]] 부합)**
+- C-1 = 미매칭 부실 places 15 행 DELETE (= address NULL 옛 2026-02 잔재)
+- C-3 = Paris places 230 행 DELETE (= place_seed_raw 와 중복 = 93.5% 매칭 입증)
+- C-4 = `_places_to_seedraw_mapping` Paris 230 + orphan 15 DELETE
+- C-5-A = 보조 4 테이블 Paris 한정 폐기
+  - place_images Paris 3055 행
+  - place_prices Paris 7006 행
+  - place_nubi_reasons Paris 30 행
+  - place_data_sources orphan 150 행
+- 합계 = **10,731 행 폐기** (= place_seed_raw 538 = 변화 0 = 메인앱 영향 0)
+
+**🔴 4) 옛 archive `__arch` 마커 시정**
+- 72296 (= Wave in Paris) / 72304 (= Paris à Vélo) = `archived-merge-2026-05-20` 추가
+- 옛 AI 사고 = `name_en` 에 `__arch{id}` suffix 만 적용 / phase_tags 마커 X = 활성 검색에 잡힘 → 시정
+
+**🔴 5) Paris TOP 20 TS 보강 = 17 행 호출**
+- 6 카테고리 TOP 20 PID 누락 = 17 행 = TS Enterprise textSearch 호출
+- 15 행 UPDATE = PID + URI + 리뷰 + name_ko
+- 2 errors (= 62042 + 62054) = 사용자 확인 후 = 72304/72296 archive
+- 비용 = **€0.68 (= 17 × €0.04 = 사용자 실측 = 무료 한도 폐지 = 메모리 [[reference_google_places_2026]] 갱신 필요)**
+
+**🔴 6) Paris TOP 20 = 62042/62054 처리 (= 사용자 명시)**
+- 62054 Wave in Paris = **폐업** = phase_tags = `user-delete + closed-2026-05-20`
+- 62042 Paris à Vélo
+  - google_maps_uri = `https://maps.google.com/?cid=15293403726666350599` (= 사용자 Maps URL 검증 CID)
+  - 좌표 = 48.8611548, 2.3702731 (= 사용자 검증 ground truth)
+  - phase_tags = `user-verified-coord-2026-05-20`
+
+**🔴 7) 모달 코드 = google_maps_uri 0 순위 시정 (= 사용자 SSOT)**
+- `client/lib/openPlaceInMaps.ts` = 0 순위 = `Linking.openURL(uri)` 직접 (= 100% 정확)
+- `PlaceForMaps.googleMapsUri` 필드 추가
+- AG2-DB SELECT = `googleMapsUri` 컬럼 추가 + PlaceResult 변환 = `r.googleMapsUri` 직접 사용
+  - 옛 코드 = PID 를 cid 로 잘못 사용 (= invalid URL) = 시정
+
+**🔴 8) upsertPlace v2 가격 정책 = GREATEST 시정 (= 사용자 SSOT [[feedback_price_max_always]])**
+- 옛 = `COALESCE(new, old)` = 새 우선 (= 낮은 가격 덮어쓰기 = 신뢰 위반)
+- 새 = `COALESCE(GREATEST(new, old), new, old)` = 비싼 쪽 + COALESCE 안전망
+- 한쪽 NULL = 있는 쪽 / 둘 다 = 비싼 쪽
+
+**🔴 9) 활성 NOT 조건 = `archived-merge-2026-05-20` 일괄 추가**
+- skill 8 파일 (= 4 prompts/run.ts + 3 checks + 06 run.ts) = 모두 갱신
+- 본 세션 archive 마커 = 다음 호출 시 = 활성 SELECT 자동 제외
+
+### Paris DB-only 운영 = 100% 준비 완성
+
+| 검증 | 결과 |
+|---|---|
+| ① 속도 증가 | ✅ Promise.all 7 카테고리 = 4 배 (= 1-2 초 → ~0.5 초) |
+| ② 모든 슬롯 = 이미지 + 텍스트 | ✅ 비식당 TOP 20 = 97/97 = 100% / 식당 = LUCIE 포크나이프 fallback |
+| ③ 구글맵 모달 정확 | ✅ 0 순위 URI = 100% / PID = 96/97 / name+addr fallback |
+
+### Paris DB 최종 상태
+- 활성 = **454** (= 5-19 455 - 62054 폐업 1)
+- 6 카테고리 TOP 20 = **97 행** (= 비식당)
+- 식당 풀 = 205 (= Economic 59 / Reasonable 118 / Premium 20 / Luxury 8)
+- 보조 테이블 = **모두 폐기** (= places 0 + 매핑 0 + images 0 + prices 0 + nubi 0)
+
+### 사용자 SSOT 검증 통과
+- [[feedback_3_table_architecture]] = ✅ Paris 단일 SSOT 달성
+- [[feedback_price_max_always]] = ✅ GREATEST 시정
+- [[feedback_dedup_keep_priority]] = ✅ keep PID > 상세 이름 > 풍부도 > rank
+- [[user_perspective_logic_ai_cannot_invent]] = ✅ AI 검증 가드 50m 임의 → 사용자 10m 강제 시정
+- [[feedback_no_temp_viewer_clones]] = ✅ 1 회용 _diag/_migration = .gitignore 차단
+
+---
+
 ## 🔥 2026-05-19 — Paris 카테고리 재분류 47 + MEAL_BUDGET 4:6 split + BTS 마커 placeholder + Day 헤더 시정
 
 ### ✅ 완료 작업 (= 영구 적용, 다음 세션에서 = 그대로 시작)

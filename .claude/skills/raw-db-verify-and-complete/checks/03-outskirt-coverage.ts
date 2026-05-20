@@ -67,7 +67,7 @@ function haversineM(lat1: number, lng1: number, lat2: number, lng2: number): num
       SELECT id, seed_category, name_en, address, latitude, longitude, distance_km_from_center
       FROM place_seed_raw
       WHERE city_id = $1 AND seed_category = 'restaurant'
-        AND NOT (phase_tags && ARRAY['archived-merge-2026-05-18','archived-merge-2026-05-15','user-delete'])
+        AND NOT (phase_tags && ARRAY['archived-merge-2026-05-18','archived-merge-2026-05-15','archived-merge-2026-05-20','user-delete'])
     `, [cid])).rows;
 
     if (rows.length === 0) continue;

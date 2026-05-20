@@ -8,7 +8,7 @@
 // --photo 없으면 = TS 메타만 (= price/review/pid/mapsUri) UPDATE
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '../../../../..');
@@ -58,7 +58,7 @@ if (!cityId) { console.error('Usage: --city-id=<N> --date=<YYYY-MM-DD> --apply-s
     : null;
   const PLACES_KEY = keyRow?.key_value;
 
-  const { upsertPlace } = await import(path.join(ROOT, 'server/services/place-upsert.ts'));
+  const { upsertPlace } = await import(pathToFileURL(path.join(ROOT, 'server/services/place-upsert.ts')).href);
 
   // Supabase Storage 업로드용 (= REST API 직접 호출 = supabase-js 의존 회피)
   const SUPA_PROJECT = (process.env.SUPA_URL || '').match(/https:\/\/([^.]+)\.supabase\.co/)?.[1];

@@ -68,7 +68,7 @@ const CAT_PRICE_LIMIT: Record<string, number> = {
         MAX(price_eur)::int AS max_p
       FROM place_seed_raw
       WHERE city_id = $1
-        AND NOT (phase_tags && ARRAY['archived-merge-2026-05-18','archived-merge-2026-05-15','user-delete'])
+        AND NOT (phase_tags && ARRAY['archived-merge-2026-05-18','archived-merge-2026-05-15','archived-merge-2026-05-20','user-delete'])
         AND price_eur IS NOT NULL
       GROUP BY seed_category
     `, [cid])).rows;
@@ -85,7 +85,7 @@ const CAT_PRICE_LIMIT: Record<string, number> = {
         FROM place_seed_raw
         WHERE city_id = $1
           AND seed_category = $2
-          AND NOT (phase_tags && ARRAY['archived-merge-2026-05-18','archived-merge-2026-05-15','user-delete'])
+          AND NOT (phase_tags && ARRAY['archived-merge-2026-05-18','archived-merge-2026-05-15','archived-merge-2026-05-20','user-delete'])
           AND price_eur IS NOT NULL
           AND price_eur > $3
         ORDER BY price_eur DESC
@@ -97,7 +97,7 @@ const CAT_PRICE_LIMIT: Record<string, number> = {
           SELECT id, seed_category, rank, name_en, address, price_eur
           FROM place_seed_raw
           WHERE city_id = $1 AND seed_category = 'shopping'
-            AND NOT (phase_tags && ARRAY['archived-merge-2026-05-18','archived-merge-2026-05-15','user-delete'])
+            AND NOT (phase_tags && ARRAY['archived-merge-2026-05-18','archived-merge-2026-05-15','archived-merge-2026-05-20','user-delete'])
             AND price_eur IS NOT NULL
         `, [cid])).rows;
         outliers.push(...shopViolations.map((r: any) => ({ ...r, violation: 'shopping_null_required' })));

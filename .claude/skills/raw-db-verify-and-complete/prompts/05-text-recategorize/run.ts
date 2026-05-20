@@ -42,7 +42,7 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--batch=100]'); process.exit
            summary_ko, editorial_summary, address
     FROM place_seed_raw
     WHERE city_id = $1
-      AND NOT (phase_tags && ARRAY['archived-merge-2026-05-18','archived-merge-2026-05-15','user-delete'])
+      AND NOT (phase_tags && ARRAY['archived-merge-2026-05-18','archived-merge-2026-05-15','archived-merge-2026-05-20','user-delete'])
       AND (summary_ko IS NOT NULL OR editorial_summary IS NOT NULL)
     ORDER BY id
   `, [cityId])).rows;

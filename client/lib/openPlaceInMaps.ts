@@ -9,6 +9,8 @@ import { Linking } from 'react-native';
 const GOOGLE_PLACE_ID_PREFIX = 'ChIJ';
 
 export interface PlaceForMaps {
+  // ⚠️ 수정금지(승인필요) 2026-05-20 = 0 순위 = google_maps_uri (= cid URL = 100% 정확)
+  googleMapsUri?: string | null;
   googlePlaceId?: string | null;
   nameEn?: string | null;
   nameLocal?: string | null;
@@ -22,10 +24,17 @@ export interface PlaceForMaps {
 
 /**
  * Google Maps 공식 URL 호출 = api=1 필수.
- * = PID 있음 → query_place_id 추가 = 100% 정확 (= Sainte-Chapelle 스샷 동작)
- * = PID 없음 → name + address 텍스트 검색 (= 공식 권장)
+ * = 0 순위 google_maps_uri (= cid URL) = 100% 정확 = 직접 호출 (= 사용자 SSOT 2026-05-20)
+ * = 1 순위 PID = query_place_id 추가 = 100% 정확 (= Sainte-Chapelle 스샷 동작)
+ * = 2 순위 PID 없음 → name + address 텍스트 검색 (= 공식 권장)
  */
 export function openPlaceInMaps(p: PlaceForMaps): void {
+  // ⚠️ 수정금지(승인필요) 2026-05-20 = 0 순위 = google_maps_uri 직접 호출 (= 사용자 SSOT = TS 검증 cid URL)
+  if (p.googleMapsUri && p.googleMapsUri.startsWith('http')) {
+    Linking.openURL(p.googleMapsUri);
+    return;
+  }
+
   const name = p.nameEn || p.name || p.nameLocal || p.nameKo || '';
   const address = p.address || p.geminiAddress;
   const query = encodeURIComponent(address ? `${name},${address}` : name);
@@ -40,5 +49,5 @@ export function openPlaceInMaps(p: PlaceForMaps): void {
     Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${query}`);
     return;
   }
-  console.warn('[openPlaceInMaps] 빈 input = name + PID 모두 없음 = URL 호출 스킵', p);
+  console.warn('[openPlaceInMaps] 빈 input = name + PID + URI 모두 없음 = URL 호출 스킵', p);
 }

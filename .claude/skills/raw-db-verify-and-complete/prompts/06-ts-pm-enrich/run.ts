@@ -8,7 +8,7 @@
 // 산출물 = docs/raw/{city_id}/06-ts-pm-enrich-candidates-{YYYY-MM-DD}.json
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '../../../../..');
@@ -33,14 +33,17 @@ const FIELD_MASK = 'places.id,places.displayName,places.formattedAddress,places.
 
 (async () => {
   // SKU 가드 (= 헌법 §15)
-  const { validateFieldMask } = await import(path.join(ROOT, 'server/services/shared/google-places-sku.ts'));
+  const { validateFieldMask } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/google-places-sku.ts')).href);
   validateFieldMask(FIELD_MASK);
 
   const pg = await import('pg');
   const c = new (pg as any).default.Client({ connectionString: process.env.SUPA_URL || process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
   await c.connect();
   const city = (await c.query('SELECT name_en, country_code FROM cities WHERE id=$1', [cityId])).rows[0];
-  const keyRow = (await c.query(`SELECT key_value FROM api_keys WHERE key_name='GOOGLE_PLACES_API_KEY' AND is_active=true`)).rows[0];
+  // ⚠️ 2026-05-20 = 시스템 SSOT = GOOGLE_MAPS_API_KEY 단일 (= Maps + Places 공유 GCP 키)
+  const keyRow = (await c.query(
+    `SELECT key_value FROM api_keys WHERE key_name IN ('GOOGLE_MAPS_API_KEY','GOOGLE_PLACES_API_KEY') AND is_active=true ORDER BY key_name LIMIT 1`
+  )).rows[0];
 
   // 대상 = image NULL OR pid NULL + 식당/어드벤처 OR rank 1-20
   const rows = (await c.query(`
@@ -48,7 +51,7 @@ const FIELD_MASK = 'places.id,places.displayName,places.formattedAddress,places.
            google_place_id, image_url
     FROM place_seed_raw
     WHERE city_id = $1
-      AND NOT (phase_tags && ARRAY['archived-merge-2026-05-18','archived-merge-2026-05-15','user-delete'])
+      AND NOT (phase_tags && ARRAY['archived-merge-2026-05-18','archived-merge-2026-05-15','archived-merge-2026-05-20','user-delete'])
       AND ((image_url IS NULL OR image_url = '') OR google_place_id IS NULL)
       AND (seed_category IN ('restaurant', 'adventure') OR rank <= 20)
     ORDER BY seed_category, rank NULLS LAST

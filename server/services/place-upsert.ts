@@ -175,7 +175,9 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
         google_maps_uri = COALESCE(${p.googleMapsUri || null}, google_maps_uri),
         image_url     = COALESCE(${p.imageUrl || null}, image_url),
         image_attribution = COALESCE(${p.imageAttribution || null}, image_attribution),
-        price_eur     = COALESCE(${p.priceEur || null}::real, price_eur),
+        -- ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT [[feedback_price_max_always]] = GREATEST 비싼 쪽 + COALESCE 안전망
+        -- = 한 쪽만 있으면 = 있는 쪽 / 둘 다 있으면 = 비싼 쪽 덮어쓰기 (= 신뢰 보호 + 물가 항상 오름)
+        price_eur     = COALESCE(GREATEST(${p.priceEur || null}::real, price_eur), ${p.priceEur || null}::real, price_eur),
         editorial_summary = COALESCE(${p.shortformKo || null}, editorial_summary),
         summary_ko        = COALESCE(${p.selectionReasonKo || null}, summary_ko),
         day_zone          = COALESCE(${p.dayZone || null}, day_zone),

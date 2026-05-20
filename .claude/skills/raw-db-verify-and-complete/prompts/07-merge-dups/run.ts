@@ -62,7 +62,7 @@ function haversine(lat1: number, lng1: number, lat2: number, lng2: number): numb
            CASE WHEN image_url IS NOT NULL AND image_url != '' THEN 1 ELSE 0 END AS has_image
     FROM place_seed_raw
     WHERE city_id = $1
-      AND NOT (phase_tags && ARRAY['archived-merge-2026-05-18','archived-merge-2026-05-15','user-delete'])
+      AND NOT (phase_tags && ARRAY['archived-merge-2026-05-18','archived-merge-2026-05-15','archived-merge-2026-05-20','user-delete'])
     ORDER BY id
   `, [cityId])).rows;
   await c.end();
