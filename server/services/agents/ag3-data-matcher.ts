@@ -26,6 +26,8 @@ import { findCityUnified, addPlaceAlias, type CityResolveResult } from '../city-
 // ⚠️ 수정금지(승인필요) 2026-05-15 = Google Places SKU 가드 (= SSOT §16)
 // = Enterprise+Atmosphere 33 필드 차단 = $40/1K 폭탄 방지
 import { validateFieldMask } from '../shared/google-places-sku';
+// ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT = 이미지 폴백 단일 SSOT (= Google 1 > WK 2)
+import { pickPlaceImage } from '../shared/place-image';
 // ⚠️ 수정금지(승인필요) 2026-05-09 = AG3 saveNewPlacesToDB = 어제 21 식당 패턴 그대로 (= 자체 fetch = googlePlacesFetcher 사용 X)
 
 /** <img>로 사용 가능한 URL인지 (인스타 post URL, 네이버/티스토리 등 차단 도메인 제외) */
@@ -50,40 +52,9 @@ function isUsableImageUrl(url: string): boolean {
   return true; // 기타는 시도
 }
 
-/**
- * 일정 이미지 우선순위 (NUBI Handoff 규격):
- * 1순위: place_seed_raw.evidence_url (추천 근거이자 인스타 증거 사진)
- * 2순위: place_seed_raw.best_image_url (검증된 초고화질 마스터 이미지)
- * 3순위: place_seed_raw.image_url (1단계 기본 수집 이미지)
- * 4순위: places.photoUrls 및 place_images 통합 테이블
- */
-function resolvePlaceImage(
-  evidenceUrl?: string | null,         // 1순위: place_seed_raw.evidence_url
-  seedBestImageUrl?: string | null,    // 2순위: place_seed_raw.best_image_url
-  seedImageUrl?: string | null,        // 3순위: place_seed_raw.image_url
-  placeImageUrl?: string | null,       // 4-1순위: place_images 통합 테이블
-  photoUrls?: string[] | null,         // 4-2순위: places.photoUrls (구글)
-  ...fallbacks: (string | undefined | null)[]
-): string | undefined {
-  const pick = (url: string | undefined | null) => (url && isUsableImageUrl(url) ? url : undefined);
-  const pickFirst = (arr: string[] | null | undefined) => arr?.find((u) => isUsableImageUrl(u));
-
-  const e1 = pick(evidenceUrl);
-  if (e1) return e1;
-  const s1 = pick(seedBestImageUrl);
-  if (s1) return s1;
-  const s2 = pick(seedImageUrl);
-  if (s2) return s2;
-  const p1 = pick(placeImageUrl);
-  if (p1) return p1;
-  const photo = pickFirst(photoUrls || []);
-  if (photo) return photo;
-  for (const f of fallbacks) {
-    const v = pick(f);
-    if (v) return v;
-  }
-  return undefined;
-}
+// ⚠️ 수정금지(승인필요) 2026-05-20 = resolvePlaceImage 폐기 (= 사용자 SSOT = 2 컬럼만)
+// = 옛 = 4 컬럼 (evidenceUrl/bestImageUrl/imageUrl/photoUrls) = WK + Google 외 = 사용 X
+// = 새 = bestImageUrl (WK) > imageUrl (Google) 인라인 = AG2-DB:233 + AG3:488
 
 // Google Places API 키 + 💰 비용 보호
 import { apiCallTracker } from '../google-places';
@@ -174,7 +145,8 @@ export async function preloadCityData(
           nameLocal: placeSeedRaw.nameLocal,
           googlePlaceId: placeSeedRaw.googlePlaceId,
           googleMapsUri: placeSeedRaw.googleMapsUri,
-          imageUrl: placeSeedRaw.imageUrl,
+          imageUrl: placeSeedRaw.imageUrl,           // ⚠️ 2026-05-20 = Google 1 순위
+          bestImageUrl: placeSeedRaw.bestImageUrl,    // ⚠️ 2026-05-20 = WK/Wikidata SPARQL 2 순위 (= Google NULL 시 fallback)
           address: placeSeedRaw.address,
           latitude: placeSeedRaw.latitude,
           longitude: placeSeedRaw.longitude,
@@ -411,8 +383,9 @@ export async function matchPlacesWithDB(
         place.lat = parseFloat(String(seedDirectMatch.latitude));
         place.lng = parseFloat(String(seedDirectMatch.longitude));
       }
-      // 사용자 의도 = 정확한 우리 큐레이션 이미지 우선
-      if (seedDirectMatch.imageUrl) place.image = seedDirectMatch.imageUrl;
+      // ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT = 2 컬럼 우선순위 = Google (imageUrl) 1순위 > WK (bestImageUrl) 2순위
+      const seedImg = pickPlaceImage(seedDirectMatch);
+      if (seedImg) place.image = seedImg;
       // ⚠️ 수정금지(승인필요) 2026-05-14 = 모달 정확도 = 검증된 google_place_id 매핑 (= 핫픽스 3)
       // = 누락 시 = 모달 = name+city 검색 fallback = 인근 잘못된 장소 매칭 위험
       if (seedDirectMatch.googlePlaceId) (place as any).googlePlaceId = seedDirectMatch.googlePlaceId;
@@ -484,9 +457,8 @@ export async function matchPlacesWithDB(
         description: isDbDirect
           ? (place.description ?? '')
           : ((seed.summaryKo || seed.editorialSummary || place.description) ?? ''),
-        image: isDbDirect
-          ? (place.image || '')
-          : (seed.imageUrl || place.image || ''),
+        // ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT = pickPlaceImage 단일 SSOT (= Google 1 > WK 2)
+        image: isDbDirect ? (place.image || '') : (pickPlaceImage(seed) || place.image || ''),
         userRatingCount: reviewCount,
         confidenceScore: Math.max(place.confidenceScore, 7),
         googleMapsUrl: place.googleMapsUrl,
@@ -524,7 +496,8 @@ export async function matchPlacesWithDB(
         // 매칭 실패
         const seedDataFallback = getSeedData(place.name);
         unmatchedCount++;
-        const finalImg = (seedDataFallback?.evidenceUrl || seedDataFallback?.bestImageUrl || seedDataFallback?.imageUrl || place.image) ?? '';
+        // ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT = pickPlaceImage 단일 SSOT
+        const finalImg = (pickPlaceImage(seedDataFallback || {}) || place.image) ?? '';
         console.log(`[AG3-MATCH] ❌ Unmatched: "${place.name}" (Used seed image: ${finalImg ? 'Yes' : 'No'})`);
         enriched.push({
           ...place,
@@ -535,7 +508,8 @@ export async function matchPlacesWithDB(
     } else {
       const seedDataFallback = getSeedData(place.name);
       unmatchedCount++;
-      const finalImg = (seedDataFallback?.evidenceUrl || seedDataFallback?.bestImageUrl || seedDataFallback?.imageUrl || place.image) ?? '';
+      // ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT = 2 컬럼 우선순위 (= Google 1 > WK 2)
+      const finalImg = (pickPlaceImage(seedDataFallback || {}) || place.image) ?? '';
       console.log(`[AG3-MATCH] ❌ No DB/Google: "${place.name}" (Used seed image: ${finalImg ? 'Yes' : 'No'})`);
       enriched.push({
         ...place,

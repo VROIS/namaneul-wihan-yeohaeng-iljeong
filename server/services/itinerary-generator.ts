@@ -4,7 +4,8 @@ import {
   generateProtagonistSentence,
   generatePromptContext
 } from "./protagonist-generator";
-import { routeOptimizer } from "./route-optimizer";
+// ⚠️ 수정금지(승인필요) 2026-05-20 = Google Routes API 완전 폐기 (= 사용자 SSOT)
+import { calcTransitHaversine, type TravelMode } from "./agents/transit-haversine";
 import { storage } from "../storage";
 import { db } from "../db";
 import { places, instagramHashtags, youtubePlaceMentions, naverBlogPosts, cities, tripAdvisorData, placeSeedRaw, reviews, geminiWebSearchCache, weatherCache, crisisAlerts } from "@shared/schema";
@@ -686,13 +687,7 @@ async function _calculateKoreanPopularity_DEPRECATED(
  * 한국인 인기도 Enrichment (45/30/25 점수 제거)
  * nubiReason이 4단계 검증 통과 순서로 우선노출하므로, 점수 계산 생략.
  */
-async function enrichPlacesWithKoreanPopularity(
-  placesArr: PlaceResult[],
-  _cityName: string
-): Promise<PlaceResult[]> {
-  console.log(`[KoreanPopularity] ${placesArr.length}개 장소 — 45/30/25 제거, nubiReason 우선노출순서 사용`);
-  return placesArr.map(p => ({ ...p, koreanPopularityScore: 0 }));
-}
+// ⚠️ 수정금지(승인필요) 2026-05-20 = enrichPlacesWithKoreanPopularity 완전 폐기 (= 사용자 SSOT = place_seed_raw 만)
 
 // ===== 무료 장소 판별 (광장·공원·핫스팟) =====
 /** 패키지 투어 가격을 무료 장소에 적용하지 않기 위한 판별 */
@@ -709,278 +704,9 @@ function isPackageTourPriceSource(source: string | undefined): boolean {
   return ['viator', 'klook', 'tour', 'tripdotcom', 'package'].some(k => s.includes(k));
 }
 
-// ===== TripAdvisor 데이터 + 실제 가격 정보 통합 =====
-
-/**
- * DB에서 장소 이름 매칭으로 TripAdvisor 데이터와 가격 정보를 가져옴
- * → 일정표에 실제 평점, 리뷰 수, 예상 가격을 표시
- * → 광장·공원 등 무료 장소에는 패키지 투어 가격 적용 안 함
- */
-async function enrichPlacesWithTripAdvisorAndPrices(
-  placesArr: PlaceResult[],
-  cityName: string,
-  seedRawMap?: Map<string, any>
-): Promise<PlaceResult[]> {
-  if (!db) {
-    console.log('[TripAdvisor/Price] DB 미연결 - 보강 생략');
-    return placesArr;
-  }
-
-  try {
-    // 🔗 Agent Protocol: findCityUnified로 도시 검색
-    const { findCityUnified } = await import('./city-resolver');
-    const cityResult = await findCityUnified(cityName);
-
-    if (!cityResult) {
-      console.log(`[TripAdvisor/Price] 도시 "${cityName}" 미발견`);
-      return placesArr;
-    }
-    const cityId = cityResult.cityId;
-
-    // TripAdvisor 데이터 일괄 조회
-    const taData = await db.select({
-      placeId: tripAdvisorData.placeId,
-      rating: tripAdvisorData.tripAdvisorRating,
-      reviewCount: tripAdvisorData.tripAdvisorReviewCount,
-      ranking: tripAdvisorData.tripAdvisorRanking,
-      rankingTotal: tripAdvisorData.tripAdvisorRankingTotal,
-    })
-      .from(tripAdvisorData)
-      .where(eq(tripAdvisorData.cityId, cityId));
-
-    // ⚠️ 2026-05-15 = price_eur 단일 SSOT (= priceSource 폐기)
-    const seedRawPriceMap = new Map<string, { priceEur: number }>();
-
-    if (seedRawMap && seedRawMap.size > 0) {
-      for (const [key, s] of seedRawMap.entries()) {
-        if (s.priceEur != null) {
-          seedRawPriceMap.set(key, { priceEur: s.priceEur });
-        }
-      }
-    } else {
-      const seedRawPrices = await db.select({
-        nameEn: placeSeedRaw.nameEn,
-        nameKo: placeSeedRaw.nameKo,
-        priceEur: placeSeedRaw.priceEur,
-      })
-        .from(placeSeedRaw)
-        .where(eq(placeSeedRaw.cityId, cityId));
-
-      for (const sr of seedRawPrices) {
-        if (sr.priceEur != null) {
-          const keyEn = sr.nameEn?.toLowerCase().trim();
-          if (keyEn) seedRawPriceMap.set(keyEn, { priceEur: sr.priceEur });
-          if (sr.nameKo) seedRawPriceMap.set(sr.nameKo.toLowerCase().trim(), { priceEur: sr.priceEur });
-        }
-      }
-    }
-
-    // DB 장소 목록 (이름으로 매칭)
-    const dbPlaces = await db.select({ id: places.id, name: places.name, googlePlaceId: places.googlePlaceId })
-      .from(places)
-      .where(eq(places.cityId, cityId));
-
-    // 이름 기반 매칭 맵 생성
-    const placeIdByName = new Map<string, number>();
-    for (const p of dbPlaces) {
-      placeIdByName.set(p.name.toLowerCase(), p.id);
-      if (p.googlePlaceId) {
-        placeIdByName.set(p.googlePlaceId, p.id);
-      }
-    }
-
-    // TripAdvisor 맵 (placeId → data)
-    const taMap = new Map<number, { rating: number; reviewCount: number; rankingStr: string }>();
-    for (const ta of taData) {
-      if (ta.placeId && ta.rating) {
-        taMap.set(ta.placeId, {
-          rating: ta.rating,
-          reviewCount: ta.reviewCount || 0,
-          rankingStr: ta.ranking && ta.rankingTotal ? `#${ta.ranking} of ${ta.rankingTotal}` : '',
-        });
-      }
-    }
-
-    let taMatched = 0;
-    let seedRawPriceMatched = 0;
-
-    const enriched = placesArr.map(place => {
-      // 이름으로 DB placeId 찾기 (TripAdvisor용)
-      const dbPlaceId = placeIdByName.get(place.name.toLowerCase()) || placeIdByName.get(place.id);
-
-      const ta = dbPlaceId ? taMap.get(dbPlaceId) : undefined;
-
-      const updates: Partial<PlaceResult> = {};
-
-      // 광장·공원 등 무료 장소: 가격 없거나 0이면 무료로 고정
-      const freePlace = isFreePlace(place);
-      if (freePlace) {
-        updates.estimatedPriceEur = 0;
-        updates.priceEstimate = '무료';
-      }
-
-      if (ta) {
-        updates.tripAdvisorRating = ta.rating;
-        updates.tripAdvisorReviewCount = ta.reviewCount;
-        updates.tripAdvisorRanking = ta.rankingStr;
-        const reviewBonus = Math.min(1.5, Math.log10(ta.reviewCount + 1) * 0.3);
-        updates.vibeScore = Math.min(10, place.vibeScore + reviewBonus);
-        taMatched++;
-      }
-
-      // ⚠️ 2026-05-15 = price_eur 단일 SSOT
-      if (updates.estimatedPriceEur === undefined && seedRawPriceMap.size > 0) {
-        const nameLower = place.name.toLowerCase().trim();
-        let seedPrice = seedRawPriceMap.get(nameLower);
-        if (!seedPrice) {
-          for (const [key, val] of seedRawPriceMap) {
-            if (key.includes(nameLower) || nameLower.includes(key)) {
-              seedPrice = val;
-              break;
-            }
-          }
-        }
-        if (seedPrice) {
-          updates.estimatedPriceEur = seedPrice.priceEur;
-          updates.priceEstimate = seedPrice.priceEur > 0 ? `€${Math.round(seedPrice.priceEur)}` : '무료';
-          seedRawPriceMatched++;
-        }
-      }
-
-      return { ...place, ...updates };
-    });
-
-    console.log(`[TripAdvisor/Price] 보강 완료: TripAdvisor ${taMatched}곳, place_seed_raw 가격 ${seedRawPriceMatched}곳`);
-    return enriched;
-  } catch (error) {
-    console.error('[TripAdvisor/Price] 보강 실패:', error);
-    return placesArr;
-  }
-}
-
-/**
- * Phase 1-5: 포토스팟 + 패키지 투어 데이터로 장소 보강
- * DB의 geminiWebSearchCache 테이블에서 searchType = "photospot" / "package_tour" 조회
- */
-async function enrichPlacesWithPhotoAndTour(
-  placesArr: PlaceResult[],
-  cityName: string,
-  seedRawMap?: Map<string, any>
-): Promise<PlaceResult[]> {
-  if (!db) {
-    console.log('[Photo/Tour] DB 미연결 - 보강 생략');
-    return placesArr;
-  }
-
-  try {
-    // 🔗 Agent Protocol: findCityUnified로 도시 검색
-    const { findCityUnified } = await import('./city-resolver');
-    const cityResult = await findCityUnified(cityName);
-
-    if (!cityResult) return placesArr;
-    const cityId = cityResult.cityId;
-
-    // DB 장소 목록 (이름 매칭용) - 이미 seedRawMap이 있으면 굳이 places 또 쿼리할 필요 최소화
-    const placeIdByName = new Map<string, number>();
-
-    // [V3 최적화] 이미 preload된 정보를 우선 사용
-    if (seedRawMap && seedRawMap.size > 0) {
-      // 🏭 이미 seedRawMap 로딩 시 placeId 등이 매핑되어 있으므로 name 기반 lookup 생략 가능
-    }
-
-    const dbPlaces = await db.select({ id: places.id, name: places.name, googlePlaceId: places.googlePlaceId })
-      .from(places)
-      .where(eq(places.cityId, cityId));
-
-    for (const p of dbPlaces) {
-      placeIdByName.set(p.name.toLowerCase(), p.id);
-      if (p.googlePlaceId) placeIdByName.set(p.googlePlaceId, p.id);
-    }
-
-    // 포토스팟 데이터 일괄 조회 (searchType = "photospot")
-    const photospotData = await db.select({
-      placeId: geminiWebSearchCache.placeId,
-      extractedData: geminiWebSearchCache.extractedData,
-      confidenceScore: geminiWebSearchCache.confidenceScore,
-    })
-      .from(geminiWebSearchCache)
-      .where(and(
-        eq(geminiWebSearchCache.cityId, cityId),
-        eq(geminiWebSearchCache.searchType, 'photospot')
-      ));
-
-    // 패키지 투어 데이터 일괄 조회 (searchType = "package_tour")
-    const packageTourData = await db.select({
-      placeId: geminiWebSearchCache.placeId,
-      extractedData: geminiWebSearchCache.extractedData,
-      confidenceScore: geminiWebSearchCache.confidenceScore,
-    })
-      .from(geminiWebSearchCache)
-      .where(and(
-        eq(geminiWebSearchCache.cityId, cityId),
-        eq(geminiWebSearchCache.searchType, 'package_tour')
-      ));
-
-    // 맵 생성
-    const photospotMap = new Map<number, { score: number; photoTip?: string; bestTime?: string }>();
-    for (const ps of photospotData) {
-      if (ps.placeId) {
-        const data = ps.extractedData as any;
-        photospotMap.set(ps.placeId, {
-          score: data?.combinedScore || data?.photoSpotScore || (ps.confidenceScore || 0) * 10,
-          photoTip: data?.photoTip,
-          bestTime: data?.bestTime,
-        });
-      }
-    }
-
-    const packageTourMap = new Map<number, { included: boolean; mentionCount: number; mentionedBy: string[] }>();
-    for (const pt of packageTourData) {
-      if (pt.placeId) {
-        const data = pt.extractedData as any;
-        packageTourMap.set(pt.placeId, {
-          included: data?.isPackageTourIncluded || false,
-          mentionCount: data?.packageMentionCount || 0,
-          mentionedBy: Array.isArray(data?.mentionedBy) ? data.mentionedBy : [],
-        });
-      }
-    }
-
-    let photoMatched = 0;
-    let tourMatched = 0;
-
-    const enriched = placesArr.map(place => {
-      const dbPlaceId = placeIdByName.get(place.name.toLowerCase()) || placeIdByName.get(place.id);
-      if (!dbPlaceId) return place;
-
-      const updates: Partial<PlaceResult> = {};
-
-      const photo = photospotMap.get(dbPlaceId);
-      if (photo) {
-        updates.photoSpotScore = Math.min(10, photo.score);
-        updates.photoTip = photo.photoTip;
-        updates.bestPhotoTime = photo.bestTime;
-        photoMatched++;
-      }
-
-      const tour = packageTourMap.get(dbPlaceId);
-      if (tour) {
-        updates.isPackageTourIncluded = tour.included;
-        updates.packageMentionCount = tour.mentionCount;
-        (updates as any).packageMentionedBy = tour.mentionedBy;
-        tourMatched++;
-      }
-
-      return { ...place, ...updates };
-    });
-
-    console.log(`[Photo/Tour] 보강 완료: 포토스팟 ${photoMatched}곳, 패키지투어 ${tourMatched}곳 매칭`);
-    return enriched;
-  } catch (error) {
-    console.error('[Photo/Tour] 보강 실패:', error);
-    return placesArr;
-  }
-}
+// ⚠️ 수정금지(승인필요) 2026-05-20 = enrichPlacesWithTripAdvisorAndPrices + enrichPlacesWithPhotoAndTour 완전 폐기
+// = 사용자 SSOT [[feedback_latest_is_truth_delete_old]] = 옛 264 줄 dead code 완전 삭제 (= tripAdvisorData/geminiWebSearchCache/places 보조 의존 = 쓰레기)
+// = AG2-DB 가 place_seed_raw.priceEur + googleReviewCount + imageUrl + bestImageUrl 채움 = 충분
 
 // ===== Phase 1-7: 바이브별 동적 가중치 매트릭스 =====
 // 각 바이브가 선택되었을 때 6요소의 비중이 달라짐
@@ -2412,76 +2138,35 @@ async function regenerateDay(params: {
 
   const transits: any[] = [];
 
+  // ⚠️ 수정금지(승인필요) 2026-05-20 = Google Routes API 폐기 = Haversine 자체 계산 (= 사용자 SSOT)
   // 숙소 → 첫 장소
   let departureTransit: any;
   if (accommodationCoords && reordered.length > 0) {
-    try {
-      const route = await routeOptimizer.getRoute(
-        { id: 'accommodation', lat: accommodationCoords.lat, lng: accommodationCoords.lng, name: '숙소' },
-        { id: reordered[0].id, lat: reordered[0].lat, lng: reordered[0].lng, name: reordered[0].name },
-        travelMode
-      );
-      departureTransit = {
-        from: '🏨 숙소', to: reordered[0].name,
-        mode: travelMode.toLowerCase(),
-        modeLabel: travelMode === 'WALK' ? '도보' : travelMode === 'TRANSIT' ? '지하철' : '차량',
-        duration: Math.round(route.durationSeconds / 60),
-        durationText: `${Math.round(route.durationSeconds / 60)}분`,
-        distance: route.distanceMeters,
-        cost: Math.round(route.estimatedCost * 100) / 100,
-        costTotal: Math.round(route.estimatedCost * companionCount * 100) / 100,
-      };
-    } catch {
-      departureTransit = { from: '🏨 숙소', to: reordered[0]?.name || '', mode: 'walk', modeLabel: '이동', duration: 20, durationText: '약 20분', distance: 2000, cost: 0, costTotal: 0 };
-    }
+    departureTransit = calcTransitHaversine(
+      { lat: accommodationCoords.lat, lng: accommodationCoords.lng, name: '🏨 숙소' },
+      { lat: reordered[0].lat, lng: reordered[0].lng, name: reordered[0].name },
+      travelMode as TravelMode, companionCount,
+    );
   }
 
   // 장소 간 이동
   for (let i = 0; i < reordered.length - 1; i++) {
-    try {
-      const route = await routeOptimizer.getRoute(
-        { id: reordered[i].id, lat: reordered[i].lat, lng: reordered[i].lng, name: reordered[i].name },
-        { id: reordered[i + 1].id, lat: reordered[i + 1].lat, lng: reordered[i + 1].lng, name: reordered[i + 1].name },
-        travelMode
-      );
-      transits.push({
-        from: reordered[i].name, to: reordered[i + 1].name,
-        mode: travelMode.toLowerCase(),
-        modeLabel: travelMode === 'WALK' ? '도보' : travelMode === 'TRANSIT' ? '지하철' : '차량',
-        duration: Math.round(route.durationSeconds / 60),
-        durationText: `${Math.round(route.durationSeconds / 60)}분`,
-        distance: route.distanceMeters,
-        cost: Math.round(route.estimatedCost * 100) / 100,
-        costTotal: Math.round(route.estimatedCost * companionCount * 100) / 100,
-      });
-    } catch {
-      transits.push({ from: reordered[i].name, to: reordered[i + 1].name, mode: 'walk', modeLabel: '이동', duration: 15, durationText: '약 15분', distance: 1000, cost: 0, costTotal: 0 });
-    }
+    transits.push(calcTransitHaversine(
+      { lat: reordered[i].lat, lng: reordered[i].lng, name: reordered[i].name },
+      { lat: reordered[i + 1].lat, lng: reordered[i + 1].lng, name: reordered[i + 1].name },
+      travelMode as TravelMode, companionCount,
+    ));
   }
 
   // 마지막 장소 → 숙소
   let returnTransit: any;
   if (accommodationCoords && reordered.length > 0) {
     const last = reordered[reordered.length - 1];
-    try {
-      const route = await routeOptimizer.getRoute(
-        { id: last.id, lat: last.lat, lng: last.lng, name: last.name },
-        { id: 'accommodation', lat: accommodationCoords.lat, lng: accommodationCoords.lng, name: '숙소' },
-        travelMode
-      );
-      returnTransit = {
-        from: last.name, to: '🏨 숙소',
-        mode: travelMode.toLowerCase(),
-        modeLabel: travelMode === 'WALK' ? '도보' : travelMode === 'TRANSIT' ? '지하철' : '차량',
-        duration: Math.round(route.durationSeconds / 60),
-        durationText: `${Math.round(route.durationSeconds / 60)}분`,
-        distance: route.distanceMeters,
-        cost: Math.round(route.estimatedCost * 100) / 100,
-        costTotal: Math.round(route.estimatedCost * companionCount * 100) / 100,
-      };
-    } catch {
-      returnTransit = { from: last.name, to: '🏨 숙소', mode: 'walk', modeLabel: '이동', duration: 20, durationText: '약 20분', distance: 2000, cost: 0, costTotal: 0 };
-    }
+    returnTransit = calcTransitHaversine(
+      { lat: last.lat, lng: last.lng, name: last.name },
+      { lat: accommodationCoords.lat, lng: accommodationCoords.lng, name: '🏨 숙소' },
+      travelMode as TravelMode, companionCount,
+    );
   }
 
   const allTransits = [
@@ -2508,13 +2193,9 @@ export const itineraryGenerator = {
   regenerateDay,
 };
 
-// ===== Pipeline V3용 개별 Enrichment 함수 내보내기 =====
-// 크롤러 데이터(naverBlogPosts, tripAdvisorData, placePrices 등)를
-// places 배열에 통합하는 핵심 함수들
+// ⚠️ 수정금지(승인필요) 2026-05-20 = enrichmentFunctions = 3 enrichPlacesWith* 폐기 (= 사용자 SSOT = place_seed_raw 만)
+// = getRealityCheckForCity 만 유지 (= 날씨/위기 = 별도 도메인)
 export const enrichmentFunctions = {
-  enrichPlacesWithKoreanPopularity,
-  enrichPlacesWithTripAdvisorAndPrices,
-  enrichPlacesWithPhotoAndTour,
   getRealityCheckForCity,
 };
 

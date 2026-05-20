@@ -16,6 +16,8 @@ import {
   generateProtagonistSentence,
   generatePromptContext,
 } from '../protagonist-generator';
+// ⚠️ 수정금지(승인필요) 2026-05-20 = 이미지 폴백 단일 SSOT (= Google 1 > WK 2)
+import { pickPlaceImage } from '../shared/place-image';
 // ⚠️ 수정금지(승인필요) 2026-05-06 = 사용자 의도 = AG2 데이터 출처 = place_seed_raw 우선
 import { db } from '../../db';
 import { placeSeedRaw } from '@shared/schema';
@@ -185,7 +187,8 @@ async function fetchFromPlaceSeedRaw(skeleton: AG1Output): Promise<PlaceResult[]
           address: placeSeedRaw.address,
           latitude: placeSeedRaw.latitude,
           longitude: placeSeedRaw.longitude,
-          imageUrl: placeSeedRaw.imageUrl,
+          imageUrl: placeSeedRaw.imageUrl,           // ⚠️ 2026-05-20 = Google 1 순위
+          bestImageUrl: placeSeedRaw.bestImageUrl,    // ⚠️ 2026-05-20 = WK/Wikidata SPARQL 2 순위 (= Google NULL 시 fallback)
           summaryKo: placeSeedRaw.summaryKo,
           editorialSummary: placeSeedRaw.editorialSummary,
           seedCategory: placeSeedRaw.seedCategory,
@@ -230,7 +233,8 @@ async function fetchFromPlaceSeedRaw(skeleton: AG1Output): Promise<PlaceResult[]
       personaFitReason: r.summaryKo || '',
       tags: isFood ? ['restaurant', 'food'] : [],
       vibeTags: isFood ? ['Foodie' as const] : [],
-      image: r.imageUrl || '',
+      // ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT = pickPlaceImage 단일 SSOT (= Google 1 > WK 2)
+      image: pickPlaceImage(r),
       priceEstimate: r.priceEur ? `€${r.priceEur}` : '',
       estimatedPriceEur: r.priceEur ?? undefined,
       seedCategory: r.seedCategory as SeedCategory,

@@ -16,7 +16,8 @@
  * - 일일/인당 기준
  */
 
-import { routeOptimizer } from '../route-optimizer';
+// ⚠️ 수정금지(승인필요) 2026-05-20 = Google Routes API 완전 폐기 (= 사용자 SSOT = MIX 포함)
+import { calcTransitHaversine, type TravelMode } from './transit-haversine';
 import { db } from '../../db';
 import { exchangeRates } from '@shared/schema';
 import { eq, and } from 'drizzle-orm';
@@ -346,7 +347,7 @@ export async function finalizeItinerary(
 }
 
 /**
- * 두 지점 간 이동 정보 계산 (Google Routes API)
+ * 두 지점 간 이동 정보 = Haversine 자체 계산 (= Google Routes API 0)
  */
 async function getTransit(
   from: any,
@@ -355,49 +356,12 @@ async function getTransit(
   travelMode: 'WALK' | 'TRANSIT' | 'DRIVE',
   companionCount: number
 ): Promise<any> {
-  const fromId = typeof from.id === 'number' ? from.id : Math.abs(hashCode(from.id || from.name || fromName));
-  const toId = typeof to.id === 'number' ? to.id : Math.abs(hashCode(to.id || to.name || ''));
-
-  try {
-    const route = await routeOptimizer.getRoute(
-      { id: fromId, latitude: from.lat, longitude: from.lng, name: fromName } as any,
-      { id: toId, latitude: to.lat, longitude: to.lng, name: to.name } as any,
-      travelMode
-    );
-
-    const durationMinutes = Math.round(route.durationSeconds / 60);
-    return {
-      from: fromName.startsWith('🏨') ? fromName : from.name || fromName,
-      to: to.name || '',
-      mode: travelMode.toLowerCase(),
-      modeLabel: travelMode === 'WALK' ? '도보' : travelMode === 'TRANSIT' ? '지하철' : '차량',
-      duration: durationMinutes,
-      durationText: `${durationMinutes}분`,
-      distance: route.distanceMeters,
-      cost: Math.round(route.estimatedCost * 100) / 100,
-      costTotal: Math.round(route.estimatedCost * companionCount * 100) / 100,
-    };
-  } catch {
-    return {
-      from: fromName.startsWith('🏨') ? fromName : from.name || fromName,
-      to: to.name || '',
-      mode: 'walk',
-      modeLabel: '이동',
-      duration: 15,
-      durationText: '약 15분',
-      distance: 1000,
-      cost: 0,
-      costTotal: 0,
-    };
-  }
+  const result = calcTransitHaversine(
+    { lat: from.lat, lng: from.lng, name: fromName.startsWith('🏨') ? fromName : (from.name || fromName) },
+    { lat: to.lat, lng: to.lng, name: to.name || '' },
+    travelMode as TravelMode,
+    companionCount,
+  );
+  return result;
 }
 
-function hashCode(str: string): number {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash |= 0;
-  }
-  return hash;
-}

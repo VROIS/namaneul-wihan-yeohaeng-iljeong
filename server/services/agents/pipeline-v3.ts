@@ -20,9 +20,9 @@
  * 총 소요: 10~12초 목표
  */
 
-// ===== Google Routes API 플래그 (일시정지: false, 활성화: true) =====
-// 미래 프리미엄 "실현가능성 검증" 기능 용으로 보존
-const USE_GOOGLE_ROUTES = false;
+// ⚠️ 수정금지(승인필요) 2026-05-20 = Google Routes API 완전 폐기 = 모든 경로 (= 사용자 SSOT)
+// = MIX 도 = Gemini 1차 응답 동선 + Haversine 추정 = 외부 호출 0 / 비용 0
+// = routeOptimizer + USE_GOOGLE_ROUTES + try/Google 분기 = 모두 제거
 
 import { GoogleGenAI } from "@google/genai";
 import type { TripFormData, PlaceResult, DaySlotConfig, TravelPace, VibeWeight, TravelStyle } from './types';
@@ -31,8 +31,6 @@ import {
   calculateDayCount, calculateSlotsForDay, getCompanionCount,
 } from './types';
 import { preloadCityData, matchPlacesWithDB, saveNewPlacesToDB } from './ag3-data-matcher';
-// ⚠️ 수정금지(승인필요) 2026-05-20 = KoreanSentiment 완전 폐기 (= 사용자 SSOT)
-import { routeOptimizer } from '../route-optimizer';
 import {
   calculateTransportPrice, shouldApplyGuidePrice, calculateUberBlackHourly,
   getGuidePerPersonPerDay, round2,
@@ -56,27 +54,25 @@ function sanitizePriceEur(raw: any): number {
   return Math.round(n * 100) / 100;
 }
 
-/** ⚠️ 수정금지(승인필요) 2026-05-15 = 사용자 SSOT = price_eur 단일 컬럼 (SSOT §14 + 제15조)
- *  순차: 1) Gemini estimatedCostEur 우선 → 2) seed_raw priceEur (= GREATEST 비싼 쪽)
- *        → 3) 매트릭스 폴백 (= 식당 = MEAL_BUDGET / 비식당 = 0)
- *  = priceLevel / priceSource 폐기 = price_eur 단일 SSOT */
+/** ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT = price_eur 단일 컬럼 (SSOT §14 + 제15조)
+ *  순차: 1) Gemini estimatedCostEur > 2) seed_raw priceEur (= GREATEST 비싼 쪽)
+ *        > 3) 매트릭스 폴백 (= 식당 = MEAL_BUDGET / 비식당 = 0)
+ *  = 옛 enrichedPrice 파라미터 폐기 (= ta enrichment 폐기) = geminiPrice 단일 입력 */
 function resolvePrice(
-  enrichedPrice: number,
   geminiPrice: number,
   isMeal: boolean = false,
   seedPriceEur: number = 0,
   mealType?: 'lunch' | 'dinner',
   travelStyle: TravelStyle = 'Reasonable',
 ): number {
-  const basePrice = enrichedPrice || geminiPrice;
   // GREATEST 비싼 쪽 (= 사용자 신뢰 보호 = SSOT §14)
-  const max2 = Math.max(basePrice, seedPriceEur);
+  const max2 = Math.max(geminiPrice, seedPriceEur);
   if (max2 > 0) return max2;
   // 모두 0 = 매트릭스 폴백 (= 식당만)
   if (isMeal && mealType) {
     return MEAL_BUDGET[travelStyle]?.[mealType] ?? 0;
   }
-  return 0; // 비식당 = 무료 가정 (= AG2 가 0 응답 = 무료 인정)
+  return 0;
 }
 
 // ===== TravelStyle 정규화 (소문자→표준형) =====
@@ -128,18 +124,16 @@ interface GeminiDay {
 // =====================================================
 
 // ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT = DB-only / MIX 완전 분기 entry
-// = ready=true → DB-only 신규 파이프라인 (= Phase C 완성 후 활성화 / 현재 = MIX fallback)
+// = ready=true → DB-only 전용 파이프라인 (= pipeline-db-only.ts = Gemini/Routes/Sentiment/Verifier 0)
 // = ready=false → MIX (= 옛 V3 step1_geminiItinerary 흐름 = 사용자 명시 "MIX 결과가 더 낳음" 보존)
 export async function runPipelineV3(formData: TripFormData): Promise<any> {
   const { isCityReady } = await import('./ag2-gemini-recommender');
   const cityCheck = await isCityReady(formData.destination);
   if (cityCheck.ready) {
-    console.log(`\n[V3] ✅ city='${cityCheck.cityName}' ready=true (${cityCheck.count} rows)`);
-    // TODO Phase C = pipeline-db-only.ts 완성 후 = import + return runPipelineDbOnly(formData, cityCheck)
-    console.log(`[V3] ⏸️ DB-only 진입점 미완성 = MIX fallback (= Phase C 까지 임시)`);
-  } else {
-    console.log(`\n[V3] city='${cityCheck.cityName}' ready=false (${cityCheck.count} rows) → MIX 경로`);
+    const { runPipelineDbOnly } = await import('./pipeline-db-only');
+    return runPipelineDbOnly(formData, cityCheck);
   }
+  console.log(`\n[V3] city='${cityCheck.cityName}' ready=false (${cityCheck.count} rows) → MIX 경로`);
   return runPipelineMix(formData);
 }
 
@@ -673,8 +667,9 @@ async function step2_enrichAndBuild(
   }
   console.log(`[V3-Step2] DB 매칭 완료 (${Date.now() - _t0}ms)`);
 
-  // ── 2c. Enrichment 3종 + 환율 + 날씨 + 교통비: 전부 병렬 ──
-  const enrichFns = await getEnrichmentFunctions();
+  // ⚠️ 수정금지(승인필요) 2026-05-20 = enrichFns 3 종 (= KoreanPopularity / TripAdvisor / Photo+Tour) 완전 폐기
+  // = 사용자 SSOT = place_seed_raw 단일 테이블 + 보조 테이블 (places/tripAdvisorData/geminiWebSearchCache 등) = 쓰레기 = 폐기
+  // = matchedPlaces (= AG2-DB 의 PlaceResult) 그대로 사용 + getRealityCheckForCity (= 날씨/위기 = 별도 도메인) 유지
 
   // 💡 가용시간 자동 계산 (startTime~endTime, 기본 8시간)
   const startH = parseInt((formData.startTime || '09:00').split(':')[0]);
@@ -691,10 +686,8 @@ async function step2_enrichAndBuild(
   );
   console.log(`[V3-Step2] 📍 교통 카테고리: ${isGuideCategory ? 'A (드라이빙 가이드)' : 'B (대중교통)'}`);
 
-  const [enrichedKorean, enrichedTA, enrichedPhoto, eurToKrw, realityCheck, transportPrice] = await Promise.all([
-    enrichFns.enrichPlacesWithKoreanPopularity(matchedPlaces, preloaded.cityName),
-    enrichFns.enrichPlacesWithTripAdvisorAndPrices(matchedPlaces, preloaded.cityName, preloaded.seedRawMap),
-    enrichFns.enrichPlacesWithPhotoAndTour(matchedPlaces, preloaded.cityName, preloaded.seedRawMap),
+  const enrichFns = await getEnrichmentFunctions();  // = getRealityCheckForCity 만 사용
+  const [eurToKrw, realityCheck, transportPrice] = await Promise.all([
     getEurToKrwRate(),
     enrichFns.getRealityCheckForCity(formData.destination),
     // 💰 교통비 산정 (카테고리 자동 분류: 가이드 vs 대중교통)
@@ -705,14 +698,14 @@ async function step2_enrichAndBuild(
       travelStyle: (formData.travelStyle || 'Reasonable') as any,
       availableHours,
       dayCount,
-      isRegionalTravel: false, // TODO: 일별 판단 후 적용
+      isRegionalTravel: false,
     }).catch(err => {
       console.warn('[V3] 교통비 산정 실패, 기본값 사용:', err);
       return null;
     }),
   ]);
 
-  console.log(`[V3-Step2] Enrichment 6종 병렬 완료 (${Date.now() - _t0}ms)`);
+  console.log(`[V3-Step2] 환율 + 날씨 + 교통비 병렬 완료 (${Date.now() - _t0}ms)`);
   if (transportPrice) {
     console.log(`[V3-Step2] 💰 교통비: 카테고리 ${transportPrice.category} | 1인/일 €${transportPrice.perPersonPerDay}`);
   }
@@ -722,19 +715,13 @@ async function step2_enrichAndBuild(
   // 🌟 셀럽 TOP 10 방문 흔적 검색 (Gemini 웹검색, 병렬) - 성능 이슈로 완전 삭제
   const celebrityVisits = new Map<string, CelebrityVisit>();
 
-  // 각 장소별 nubiReason 데이터 수집 (DB 조회 포함, 병렬)
+  // ⚠️ 수정금지(승인필요) 2026-05-20 = 각 장소 = place_seed_raw 데이터 그대로 사용 (= ta/kr/ph 폐기)
   const finalPlaces = await Promise.all(matchedPlaces.map(async (p, i) => {
-    const kr = enrichedKorean[i];
-    const ta = enrichedTA[i];
-    const ph = enrichedPhoto[i];
-
     // seedRawMap 조회 (가격 + 인앱 링크용)
     const seedNameEn = p.name ? p.name.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, "") : "";
-    const seedNameKo = p.nameKo ? p.nameKo.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, "") : "";
-    const seedData = preloaded.seedRawMap?.get(seedNameEn) || preloaded.seedRawMap?.get(seedNameKo);
+    const seedData = preloaded.seedRawMap?.get(seedNameEn);
 
-    // ⚠️ 2026-05-15 = 사용자 SSOT = price_eur 단일 (= priceLevel/priceSource 폐기)
-    const enrichedPrice = ta?.estimatedPriceEur ?? p.estimatedPriceEur ?? 0;
+    // ⚠️ 수정금지(승인필요) 2026-05-20 = price_eur 단일 SSOT = place_seed_raw.priceEur 만 (= ta enrichment 폐기)
     const geminiPrice = p.estimatedPriceEur ?? 0;
     const isMealSlot = (p as any).type === 'lunch' || (p as any).type === 'dinner';
     const mealTypeForPrice: 'lunch' | 'dinner' | undefined =
@@ -743,29 +730,16 @@ async function step2_enrichAndBuild(
       undefined;
     const styleForPrice = normalizeTravelStyle(formData.travelStyle);
     const resolvedPrice = resolvePrice(
-      enrichedPrice, geminiPrice, isMealSlot,
+      geminiPrice, isMealSlot,
       seedData?.priceEur ?? 0,
       mealTypeForPrice, styleForPrice,
     );
 
     const merged = {
       ...p,
-      // 한국인 인기도
-      koreanPopularityScore: kr?.koreanPopularityScore ?? p.koreanPopularityScore,
-      // TripAdvisor + 가격 (resolvePrice 적용)
-      tripAdvisorRating: ta?.tripAdvisorRating ?? p.tripAdvisorRating,
-      tripAdvisorReviewCount: ta?.tripAdvisorReviewCount ?? p.tripAdvisorReviewCount,
-      tripAdvisorRanking: ta?.tripAdvisorRanking ?? p.tripAdvisorRanking,
+      // ⚠️ 2026-05-20 = ta/kr/ph 폐기 = place_seed_raw 데이터 그대로 (= p.<field>)
       estimatedPriceEur: resolvedPrice,
-      priceEstimate: resolvedPrice > 0 ? `€${Math.round(resolvedPrice)}` : (ta?.priceEstimate ?? p.priceEstimate ?? '무료'),
-      vibeScore: Math.max(p.vibeScore, ta?.vibeScore ?? 0),
-      // 포토스팟/패키지 투어
-      photoSpotScore: ph?.photoSpotScore ?? p.photoSpotScore,
-      photoTip: ph?.photoTip ?? p.photoTip,
-      bestPhotoTime: ph?.bestPhotoTime ?? p.bestPhotoTime,
-      isPackageTourIncluded: ph?.isPackageTourIncluded ?? p.isPackageTourIncluded,
-      packageMentionCount: ph?.packageMentionCount ?? p.packageMentionCount,
-      packageMentionedBy: (ph as any)?.packageMentionedBy,
+      priceEstimate: resolvedPrice > 0 ? `€${Math.round(resolvedPrice)}` : (p.priceEstimate ?? '무료'),
     };
 
     // ⭐ nubiReason: 순차 검색 — seedData는 위에서 이미 조회됨
@@ -1426,75 +1400,19 @@ function haversineTransit(
 }
 
 /**
- * 이동 정보 계산
- * USE_GOOGLE_ROUTES=true: Google Routes API 실측 (프리미엄 검증용)
- * USE_GOOGLE_ROUTES=false: Haversine 추정 (기본, 빠름)
+ * 이동 정보 계산 = Haversine 만 (= 사용자 SSOT = Google Routes 완전 폐기)
  */
 async function calcTransit(
   from: any, fromName: string, to: any,
   travelMode: 'WALK' | 'TRANSIT' | 'DRIVE', companionCount: number,
   transitNote?: string,
 ): Promise<any> {
-  // ── Haversine 모드 (기본) ──
-  if (!USE_GOOGLE_ROUTES) {
-    return haversineTransit(from, fromName, to, travelMode, companionCount, transitNote);
-  }
-
-  // ── Google Routes API 모드 (일시정지 — 미래 프리미엄 검증 기능) ──
-  const fromId = typeof from.id === 'number' ? from.id : Math.abs(hashCode(from.id || from.name || fromName));
-  const toId = typeof to.id === 'number' ? to.id : Math.abs(hashCode(to.id || to.name || ''));
-
-  if (!from.lat || !from.lng || !to.lat || !to.lng) {
-    return haversineTransit(from, fromName, to, travelMode, companionCount, transitNote);
-  }
-
-  try {
-    let actualMode = travelMode;
-    if (travelMode === 'WALK' && from.lat && to.lat) {
-      const straightDist = haversineMeters(from.lat, from.lng, to.lat, to.lng);
-      if (straightDist > 1500) actualMode = 'TRANSIT';
-    }
-
-    const route = await routeOptimizer.getRoute(
-      { id: fromId, latitude: from.lat, longitude: from.lng, name: fromName } as any,
-      { id: toId, latitude: to.lat, longitude: to.lng, name: to.name } as any,
-      actualMode,
-    );
-    const durationMinutes = Math.round(route.durationSeconds / 60);
-    const modeLabel = actualMode === 'WALK' ? '도보'
-      : actualMode === 'TRANSIT' ? '지하철/버스'
-        : '전용차량이동';
-    return {
-      from: from.name || fromName,
-      to: to.name || '',
-      mode: actualMode === 'DRIVE' ? 'guide' : actualMode.toLowerCase(),
-      modeLabel,
-      duration: durationMinutes,
-      durationText: `${durationMinutes}분`,
-      distance: route.distanceMeters,
-      cost: Math.round(route.estimatedCost * 100) / 100,
-      costTotal: Math.round(route.estimatedCost * companionCount * 100) / 100,
-      transitNote: transitNote || null,
-      isEstimated: false,
-    };
-  } catch {
-    return haversineTransit(from, fromName, to, travelMode, companionCount, transitNote);
-  }
+  return haversineTransit(from, fromName, to, travelMode, companionCount, transitNote);
 }
 
 /** 좌표 유효성 검증 */
 function isValidCoord(lat: number, lng: number): boolean {
   return lat !== 0 && lng !== 0 && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
-}
-
-/** 문자열 해시코드 */
-function hashCode(str: string): number {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = ((hash << 5) - hash) + str.charCodeAt(i);
-    hash |= 0;
-  }
-  return hash;
 }
 
 /** Gemini JSON 잘림 복구 */
