@@ -134,6 +134,19 @@ export async function runPipelineV3(formData: TripFormData): Promise<any> {
 
   console.log(`\n[V3] ===== Pipeline V3 (2단계) 시작 =====`);
 
+  // ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT = isCityReady 분기 (= Paris DB-only)
+  // = ready=true (= Paris 등 발굴 도시) → V2 orchestrator 위임 (= Gemini 0 호출 + 기존 slot 분배 + AG4 시간 매트릭스)
+  // = ready=false (= 미발굴) → MIX_MODE_DISABLED throw (= AG2 가 같은 결정을 다시 내림 = 명시 차단)
+  const { isCityReady } = await import('./ag2-gemini-recommender');
+  const cityCheck = await isCityReady(formData.destination);
+  if (cityCheck.ready) {
+    console.log(`[V3] ✅ city='${cityCheck.cityName}' ready=true (${cityCheck.count} rows) → V2 orchestrator 위임 (= Gemini 0)`);
+    const { runPipeline } = await import('./orchestrator');
+    return await runPipeline(formData);
+  }
+  console.log(`[V3] ❌ city='${cityCheck.cityName}' ready=false (${cityCheck.count} rows) = MIX 일시정지`);
+  throw new Error(`MIX_MODE_DISABLED: '${cityCheck.cityName}' 미발굴 도시 = V3 진입 차단 (= 사용자 SSOT 2026-05-20)`);
+
   // ===== 기본 계산 (AG1 역할 통합, <1ms) =====
   const dayCount = calculateDayCount(formData.startDate, formData.endDate);
   let travelPace: TravelPace = (formData.travelPace as TravelPace) || 'Normal';
