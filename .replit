@@ -56,7 +56,6 @@ args = "EXPO_PACKAGER_PROXY_URL=https://828b2285-99c5-4cc9-9bcd-a09cdff531bc-00-
 
 [[ports]]
 localPort = 5000
-externalPort = 80
 
 [[ports]]
 localPort = 8080
