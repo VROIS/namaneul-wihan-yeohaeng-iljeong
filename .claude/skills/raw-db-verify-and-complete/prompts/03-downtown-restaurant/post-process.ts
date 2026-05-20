@@ -1,0 +1,98 @@
+// ⚠️ 수정금지(승인필요) 2026-05-20 = 03-downtown-restaurant 후처리 + DB INSERT
+// = docs/raw/{city_id}/03-downtown-restaurant-{tier}-{date}.json 4 tier 읽음 → upsertPlace() INSERT
+//
+// 호출:
+//   npx tsx .claude/skills/raw-db-verify-and-complete/prompts/03-downtown-restaurant/post-process.ts --city-id=19 --date=2026-05-20 [--dry]
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const ROOT = path.resolve(__dirname, '../../../../..');
+process.chdir(ROOT);
+
+const argv = Object.fromEntries(process.argv.slice(2).map(a => a.replace(/^--/, '').split('=')).map(([k, v]) => [k, v ?? 'true']));
+const cityId = Number(argv['city-id'] || 0);
+const date = String(argv['date'] || new Date().toISOString().slice(0, 10));
+const dryRun = argv['dry'] === 'true';
+if (!cityId) { console.error('Usage: --city-id=<N> --date=<YYYY-MM-DD> [--dry]'); process.exit(1); }
+
+(async () => {
+  const envRaw = fs.readFileSync('.env', 'utf-8').replace(/^﻿/, '');
+  for (const line of envRaw.split(/\r?\n/)) {
+    const m = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/);
+    if (m && !process.env[m[1]]) {
+      let v = m[2].trim();
+      if (/^['"]/.test(v)) v = v.slice(1, -1);
+      process.env[m[1]] = v;
+    }
+  }
+
+  const rawDir = path.join(ROOT, 'docs', 'raw', String(cityId));
+  const tiers = ['economic', 'reasonable', 'premium', 'luxury'] as const;
+
+  function parseTier(text: string, key: string): any[] {
+    const start = text.indexOf('{');
+    if (start < 0) return [];
+    try { return JSON.parse(text.slice(start, text.lastIndexOf('}') + 1)).results?.[key] || []; } catch (e) { return []; }
+  }
+
+  const all: { tier: string; place: any }[] = [];
+  for (const tier of tiers) {
+    const p = path.join(rawDir, `03-downtown-restaurant-${tier}-${date}.json`);
+    if (!fs.existsSync(p)) { console.error(`✗ ${p} 미존재 = run.ts 먼저 실행`); process.exit(1); }
+    const j = JSON.parse(fs.readFileSync(p, 'utf-8'));
+    const list = parseTier(j.raw_text, tier);
+    console.log(`[${tier}] = ${list.length}`);
+    all.push(...list.map(place => ({ tier, place })));
+  }
+  console.log(`═══ 03-downtown-restaurant post-process ═══`);
+  console.log(`city_id = ${cityId}, date = ${date}, 합계 = ${all.length}`);
+
+  // 검증
+  const failed = all.filter(x => !(x.place.distance_km_from_center <= 10));
+  if (failed.length) {
+    console.error(`✗ distance_km_from_center > 10 위반 = ${failed.length} 행`);
+  }
+
+  if (dryRun) { console.log('\n=== DRY-RUN === sample:', all.slice(0, 3)); process.exit(0); }
+
+  const { upsertPlace } = await import(path.join(ROOT, 'server/services/place-upsert.ts'));
+  const today = new Date().toISOString().slice(0, 10);
+  let inserted = 0, updated = 0, skipped = 0, errors = 0;
+  const matchedBy: Record<string, number> = { pid: 0, address: 0, coords: 0, name: 0, none: 0 };
+
+  for (const { place: p } of all) {
+    try {
+      const r = await upsertPlace({
+        cityId,
+        seedCategory: 'restaurant',
+        rank: p.rank,
+        nameEn: p.name_en,
+        nameLocal: p.name_local || null,
+        nameKo: p.name_ko || null,
+        address: p.address || null,
+        latitude: null,
+        longitude: null,
+        selectionReasonKo: p.selection_reason_ko || null,
+        shortformKo: p.shortform_ko || null,
+        priceEur: p.price_eur_max ?? null,        // GREATEST 정책
+        dayZone: 'core',                            // 강제
+        distanceKmFromCenter: p.distance_km_from_center ?? null,
+        collectionPhase: 'gemini3-2026-05',
+        phaseTags: ['gemini3', 'gemini3-2026-05', `downtown-restaurant-${today}`],
+      });
+      if (r.action === 'inserted') inserted++;
+      else if (r.action === 'updated') updated++;
+      else skipped++;
+      matchedBy[r.matchedBy || 'none']++;
+    } catch (e: any) {
+      errors++;
+      console.error(`  ✗ ${p.name_en}: ${e.message}`);
+    }
+  }
+
+  console.log(`\n═══ 결과 ═══`);
+  console.log(`inserted = ${inserted} / updated = ${updated} / skipped = ${skipped} / errors = ${errors}`);
+  console.log(`매칭 단계:`, matchedBy);
+})();

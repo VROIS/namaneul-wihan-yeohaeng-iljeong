@@ -1,18 +1,7 @@
 ⚠️ 수정금지(승인필요) 2026-05-12 사용자 SSOT v3 = 1 글자 변경 금지
 
-= 별도 발굴 = 6 카테고리 시드 (= 식당 제외) prompt
-= 출처 = scripts/seed-gemini.mjs:156-206 (= 옛 검증 = Paris/Tokyo/Madrid 등 다수 도시 적용 완료)
-= 호출 설정 = _call-config.md 동일 (= gemini-3-flash-preview + googleSearch + temp 0.2 + maxToken 50000 + thinkingBudget 0)
-= 1 호출 = 6 카테고리 × 20 곳 = 총 120 곳 (= 응답 한계 8192 초과 위험 = 응답 잘림 복구 함수 필수)
-
-= 변수 치환:
-  ${CITY_NAME} = 도시 영문명 (= 예 Paris)
-  ${COUNTRY} = 국가 (= 예 France)
-  ${CITY_LAT} = 도심 위도 (= cities 테이블)
-  ${CITY_LNG} = 도심 경도
-
 ══════════════════════════════════════════════════════════════════════════════
-PROMPT 본문 (= 1 글자 변경 금지):
+PROMPT 본문:
 ══════════════════════════════════════════════════════════════════════════════
 
 You are a travel data assistant for KOREAN TRAVELERS.
@@ -66,17 +55,3 @@ OUTPUT (strict JSON, no markdown fences):
     "shopping":   [ ...20 items ]
   }
 }
-
-══════════════════════════════════════════════════════════════════════════════
-응답 처리 (= 표준):
-══════════════════════════════════════════════════════════════════════════════
-
-= 응답 토큰 한계 8192 초과 위험 (= 120 곳 × 평균 70 토큰 = 약 8400 토큰) = 잘림 복구 함수 필수
-= upsertPlace() 호환 매핑 (= enrich-place.txt 동일):
-  응답 selection_reason_ko → upsertPlace.selectionReasonKo (→ DB summary_ko)
-  응답 shortform_ko        → upsertPlace.shortformKo (→ DB editorial_summary)
-  응답 estimated_price_eur → upsertPlace.priceEur (= shopping = null 강제)
-  응답 day_zone            → upsertPlace.dayZone
-  응답 distance_km_from_center → upsertPlace.distanceKmFromCenter
-
-= 사용처 = 본 스킬 = **Step 1 의 사전 작업** = 신규 도시 = 본 prompt 먼저 호출 = raw 시드 발굴 후 = Step 1 적용.

@@ -1,0 +1,44 @@
+⚠️ 수정금지(승인필요) 2026-05-20 = Wikidata SPARQL query (= Gemini prompt 아님 = API 호출용)
+
+══════════════════════════════════════════════════════════════════════════════
+SPARQL QUERY (= run.ts 안 좌표 around 검색):
+══════════════════════════════════════════════════════════════════════════════
+
+SELECT ?place ?placeLabel ?placeDescription ?image ?coord ?instanceLabel WHERE {
+  SERVICE wikibase:around {
+    ?place wdt:P625 ?coord.
+    bd:serviceParam wikibase:center "Point(${LNG} ${LAT})"^^<http://www.opengis.net/ont/geosparql#wktLiteral>.
+    bd:serviceParam wikibase:radius "0.01".  # = 10m (= km 단위 = 0.01 km)
+  }
+  OPTIONAL { ?place wdt:P18 ?image }
+  OPTIONAL { ?place wdt:P31 ?instance. ?instance rdfs:label ?instanceLabel. FILTER(LANG(?instanceLabel) = "en") }
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en,fr,ko". }
+} LIMIT 15
+
+══════════════════════════════════════════════════════════════════════════════
+응답 파싱 (= run.ts 안):
+══════════════════════════════════════════════════════════════════════════════
+
+j.results.bindings = [
+  {
+    place: { value: "http://www.wikidata.org/entity/Q243" },      // → QID = Q243
+    placeLabel: { value: "Eiffel Tower" },
+    placeDescription: { value: "tower in Paris, France" },
+    image: { value: "http://commons.wikimedia.org/wiki/Special:FilePath/Tour Eiffel Wikimedia Commons.jpg" },
+    coord: { value: "Point(2.2944813 48.8583701)" },               // → 경도 위도 순서!
+    instanceLabel: { value: "tourist attraction" },
+  }
+]
+
+= 좌표 파싱 = "Point(LNG LAT)" → split → 경도 먼저
+= 이미지 URL = P18 = Wikimedia Commons File path
+
+══════════════════════════════════════════════════════════════════════════════
+카테고리 매칭 키워드 (= score +1 = 카테고리 일치 판단):
+══════════════════════════════════════════════════════════════════════════════
+
+attraction:  museum / park / zoo / aquarium / theme / tower / monument / observatory / church / palace
+healing:     park / garden / jardin / botanic / spa / forest
+hotspot:     square / place / viewpoint / plaza / street / avenue
+heritage:    museum / cathedral / basilica / church / palace / castle / monument / memorial / historic / tomb / fortress
+shopping:    market / department store / shopping center / mall / boutique / shop

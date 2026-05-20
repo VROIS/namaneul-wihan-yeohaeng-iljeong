@@ -1,28 +1,7 @@
 ⚠️ 수정금지(승인필요) 2026-05-18 = 사용자 SSOT = 1 글자 변경 금지
 
-= Step 2 = 기존 raw 행 보강 prompt (= 본 세션 검증 = Paris 422 행 일괄 UPDATE)
-= 호출 설정 = _call-config.md 동일 (= gemini-3-flash-preview + googleSearch + temp 0.2 + maxToken 50000 + thinkingBudget 0)
-= Batch = 40 장소 / 1 호출 (= adaptive fallback 30/20/10)
-= 입력 = place_seed_raw 의 활성 행 = id ASC = 카테고리 무관 (= 사용자 SSOT = "우리 카테고리는 의미 없음")
-
-= 변수 치환:
-  ${CITY_ID} = cityId 정수 (= 예 19 = Paris)
-  ${BATCH_LEN} = 입력 곳수 (= 보통 40)
-  ${JSON_INPUT} = 입력 곳 JSON 배열 (= 아래 schema)
-
-= 입력 schema:
-  - id: number (= place_seed_raw.id = 응답 매칭 키)
-  - name_en: string (= 공식 영어명 = 변경 X)
-  - name_local: string | null
-  - name_ko: string | null
-  - address: string | null
-  - latitude: number | null
-  - longitude: number | null
-  - google_place_id: string | null
-  - seed_category: 'restaurant'|'attraction'|'healing'|'adventure'|'hotspot'|'heritage'|'shopping'
-
 ══════════════════════════════════════════════════════════════════════════════
-PROMPT 본문 (= 1 글자 변경 금지):
+PROMPT 본문:
 ══════════════════════════════════════════════════════════════════════════════
 
 역할: 너는 한국인 여행자를 위한 [CITY_NAME] 장소 정보 보강 전문가야.
@@ -71,14 +50,3 @@ PROMPT 본문 (= 1 글자 변경 금지):
 
 입력 ${BATCH_LEN} 장소:
 ${JSON_INPUT}
-
-══════════════════════════════════════════════════════════════════════════════
-응답 처리 (= 표준):
-══════════════════════════════════════════════════════════════════════════════
-
-= upsertPlace() 호환 매핑:
-  응답 summary_ko        → upsertPlace.selectionReasonKo (→ DB summary_ko)
-  응답 editorial_summary → upsertPlace.shortformKo (→ DB editorial_summary)
-  응답 estimated_price_eur → upsertPlace.priceEur (= shopping = null 강제)
-
-= dry-run 단계 = 응답 raw 저장 (= tmp/<city>-enrich-batch-<offset>.json) = 사용자 검수 후 UPDATE 명시.

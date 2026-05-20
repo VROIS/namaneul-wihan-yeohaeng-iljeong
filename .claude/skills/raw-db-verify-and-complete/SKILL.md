@@ -1,86 +1,157 @@
 ---
 name: raw-db-verify-and-complete
-description: place_seed_raw 의 raw 시드 행 = 10 단계 = 검증 + Gemini 보강 + 5 단계 매칭 통합 + 외곽 보강 = 완성 행 생성. 도시 단위 = 한 줄 호출 = 동일 결과 보장 (= 헌법 §16 영구 컴포넌트). 본 세션 (= 2026-05-17/18 Paris) 검증 완료.
-args:
-  - city: 도시 영문명 (= 예 Paris / Tokyo / Madrid / Osaka)
+description: place_seed_raw 의 raw 시드 행 = 신규 도시 = 8 prompt 순차 + 1 참조 = 전체 RAW DB 완성 + 최적화 = 최종 목표 = DB-only 운영. 도시 단위 한 줄 호출 = 동일 결과 보장 (= 헌법 §16 영구 컴포넌트). 본 세션 (= 2026-05-17~20 Paris) 검증 완료.
+argument-hint: city-id (도시 ID 정수, 예 19 = Paris)
 ---
 
-# Step 1 = raw DB 검증 및 완성 과정 (= 10 단계)
+# raw-db-verify-and-complete — 사용자 SSOT 영구 스킬
 
-## 🔴 핵심 = `prompts/` 3 종 = 1 글자 변경 금지
+> ⚠️ 사용자 SSOT 2026-05-20 = 최종 목표 = **DB-only 운영** (= 외부 API 호출 0 = 메인앱 = `place_seed_raw` 직접 SELECT)
+> ⚠️ 각 prompt = **7 필수 요소 완비** (= prompt + 호출 설정 + 산출물 raw + 실행 스크립트 + 필수 과정 + 후처리 + 보고서 + 교훈)
 
-| # | 파일 | 용도 |
+## 🎯 최종 목표 = DB-only 운영
+
+= 신규 도시 = 본 skill 한 줄 호출 × 8 prompt 순차 실행 = `place_seed_raw` 완성 + 최적화
+= 메인앱 = **외부 API 호출 0** = DB 직접 SELECT + budget WHERE 필터 + 5 단계 매칭 (= 헌법 §14)
+= 06 (= 메인앱 prompt) = 옛 미발굴 도시 fallback only (= 발굴 완료 후 = 호출 X)
+
+## 🔴 핵심 = 8 prompt 폴더 + 1 참조 (= 1 글자 변경 금지)
+
+| Step | 폴더 | 용도 | 호출 횟수 | 출처 |
+|---:|---|---|---:|---|
+| **1** | [`prompts/01-discover-6cats/`](prompts/01-discover-6cats/) | 신규 도시 6 카테고리 TOP 20 발굴 (= 식당 제외) | 1 (Gemini) | 사용자 SSOT 2026-05-12 v3 |
+| **2** | [`prompts/02-enrich-place/`](prompts/02-enrich-place/) | 기존 raw 행 보강 (= batch 40 + adaptive fallback) | N/40 (Gemini) | 사용자 SSOT 2026-05-18 |
+| **3** | [`prompts/03-downtown-restaurant/`](prompts/03-downtown-restaurant/) | 도심 식당 시드 (= MEAL_BUDGET 4 tier × 30) | 4 (Gemini) | 사용자 SSOT 2026-05-20 |
+| **4** | [`prompts/04-outskirt-restaurant/`](prompts/04-outskirt-restaurant/) | 외곽 식당 시드 (= 30 LOW + 30 MID) | 2 (Gemini) | 사용자 SSOT 2026-05-18 |
+| **5** | [`prompts/05-text-recategorize/`](prompts/05-text-recategorize/) | 묘사 분석 = 카테고리 재분류 (= 본 세션 47 행 패턴) | N/100 (Gemini) | 사용자 SSOT 2026-05-19 |
+| **6** | [`prompts/06-ts-pm-enrich/`](prompts/06-ts-pm-enrich/) | Google Places TS Enterprise + PhotoMedia = 식당/어드벤처 image NULL + pid NULL 보강 | N (TS+PM) | 사용자 SSOT 2026-05-20 (= 헌법 §15) |
+| **7** | [`prompts/07-merge-dups/`](prompts/07-merge-dups/) | 5 단계 매칭 dry-run + 중복 통합 (= 알고리즘 = Gemini X) | 1 dry-run + N archive | 사용자 SSOT 2026-05-18 검증 |
+| **8** | [`prompts/08-wk-image-fill/`](prompts/08-wk-image-fill/) | Wikidata SPARQL 이미지 보강 (= 식당/어드벤처 제외) | N (WK 무료) | 사용자 SSOT 2026-05-19 검증 |
+| (참조) | [`prompts/09-main-app-itinerary/`](prompts/09-main-app-itinerary/) | **메인앱 여정 생성** = `pipeline-v3.ts:367-448` inline 유지 (= DB-only 미발굴 fallback) | 사용자 요청 시 | 사용자 SSOT 2026-05-15 |
+
+= **통일 호출 설정** = [`prompts/_call-config.md`](prompts/_call-config.md) (= 모델 gemini-3-flash-preview + tools googleSearch + temp 0.2/0.3 + maxToken 50000 + thinkingBudget 0)
+
+## 7 필수 요소 (= 각 폴더 안)
+
+| # | 요소 | 파일 |
 |---|---|---|
-| 1 | [`prompts/enrich-place.txt`](prompts/enrich-place.txt) | Step 2 = 기존 raw 행 보강 (= 40 batch / id ASC) |
-| 2 | [`prompts/outskirt-restaurant.txt`](prompts/outskirt-restaurant.txt) | Step 10 = 외곽 식당 시드 (= 30 LOW + 30 MID outskirt only) |
-| 3 | [`prompts/discover-6cats.txt`](prompts/discover-6cats.txt) | (별도) 6 카테고리 신규 발굴 (= 식당 제외) |
+| 1 | **프롬프트** (= 1 글자 변경 X) | `prompt.txt` |
+| 2 | **호출 설정** | `../_call-config.md` (= 공유) |
+| 3 | **산출물 원본** (= Gemini raw JSON) | `docs/raw/{city_id}/{prompt-id}-{tier}-{YYYY-MM-DD}.json` |
+| 4 | **실행 스크립트** | `run.ts` |
+| 5 | **필수 과정** | `process.md` |
+| 6 | **후처리 + DB INSERT/UPDATE** | `post-process.ts` |
+| 7 | **최종 보고서 템플릿** | `report.md` |
+| + | **교훈** | `lessons.md` |
+| + | **인덱스** | `README.md` |
 
-= **통일 호출 설정** = [`prompts/_call-config.md`](prompts/_call-config.md) = 모델/tools/temp/maxToken/thinkingBudget = 모든 도시 동일.
-
-## 10 단계 호출 순서 (= 한 줄씩)
+## 신규 도시 = 한 줄 호출 순서
 
 ```bash
-# Step 1. 사전조사 = 5 단계 매칭 dry-run + 통계
-npx tsx .claude/skills/raw-db-verify-and-complete/scripts/01-presurvey.ts --city=<CITY>
+CITY_ID=<N>  # = 예 19 = Paris / TODO Tokyo Madrid Osaka 등
 
-# Step 2. batch dry-run = Gemini 호출 (= adaptive fallback 40→30→20→10)
-npx tsx .claude/skills/raw-db-verify-and-complete/scripts/02-enrich-batch.ts --city=<CITY> --batch=40 --all
-# = tmp/<city>-enrich-batch-{0,40,80,...}.json 파일 저장 (= 사용자 검수)
+# Step 1. 신규 도시 6 카테고리 TOP 20 발굴 (= 1 호출)
+npx tsx .claude/skills/raw-db-verify-and-complete/prompts/01-discover-6cats/run.ts --city-id=$CITY_ID
+npx tsx .claude/skills/raw-db-verify-and-complete/prompts/01-discover-6cats/post-process.ts --city-id=$CITY_ID
 
-# Step 3. 의심 행 처리 (= 사용자 검수 후 명시 입력)
-npx tsx .claude/skills/raw-db-verify-and-complete/scripts/03-suspicious-fix.ts --city=<CITY> \
-  --delete=<id_list> --gemini-fix=<id_list> --city-change=<id:newCityId>
+# Step 2. 기존 raw 행 보강 (= batch 40 / id ASC)
+npx tsx .claude/skills/raw-db-verify-and-complete/prompts/02-enrich-place/run.ts --city-id=$CITY_ID --batch=40 --all
+npx tsx .claude/skills/raw-db-verify-and-complete/prompts/02-enrich-place/post-process.ts --city-id=$CITY_ID
 
-# Step 4. 일괄 UPDATE = Gemini 응답 최우선 덮어쓰기
-npx tsx .claude/skills/raw-db-verify-and-complete/scripts/04-bulk-update-cache.ts --city=<CITY>
+# Step 3. 도심 식당 발굴 (= 4 호출 = MEAL_BUDGET 4 tier)
+npx tsx .claude/skills/raw-db-verify-and-complete/prompts/03-downtown-restaurant/run.ts --city-id=$CITY_ID
+npx tsx .claude/skills/raw-db-verify-and-complete/prompts/03-downtown-restaurant/post-process.ts --city-id=$CITY_ID --date=<YYYY-MM-DD>
 
-# Step 5. 5 단계 매칭 재실행 + 의심 그룹 보고
-npx tsx .claude/skills/raw-db-verify-and-complete/scripts/05-dup-rerun.ts --city=<CITY>
-# = tmp/<city>-dup-groups.json 파일 저장 (= 사용자 검수)
+# Step 4. 외곽 식당 발굴 (= 2 호출 = LOW + MID)
+npx tsx .claude/skills/raw-db-verify-and-complete/prompts/04-outskirt-restaurant/run.ts \
+  --city-id=$CITY_ID --hints="<도시별 day-trip 명소 list>"
+npx tsx .claude/skills/raw-db-verify-and-complete/prompts/04-outskirt-restaurant/post-process.ts --city-id=$CITY_ID
 
-# Step 6. 명확 중복 통합 (= 사용자 명시 그룹 archive)
-npx tsx .claude/skills/raw-db-verify-and-complete/scripts/06-merge-clear-dups.ts --city=<CITY> --groups=<json_path>
+# Step 5. 텍스트 분석 = 카테고리 재분류 (= 사용자 cc2 검수 필수)
+npx tsx .claude/skills/raw-db-verify-and-complete/prompts/05-text-recategorize/run.ts --city-id=$CITY_ID
+# 사용자 검수 후
+npx tsx .claude/skills/raw-db-verify-and-complete/prompts/05-text-recategorize/post-process.ts --city-id=$CITY_ID --date=<YYYY-MM-DD> --apply
 
-# Step 7. 좌표 10m + cross-cat 의심 처리 (= 사용자 명시)
-npx tsx .claude/skills/raw-db-verify-and-complete/scripts/07-coord-10m-merge.ts --city=<CITY>
+# Step 6. TS Enterprise + PhotoMedia (= 식당/어드벤처 image NULL + pid NULL + rank 1-20 보강)
+npx tsx .claude/skills/raw-db-verify-and-complete/prompts/06-ts-pm-enrich/run.ts --city-id=$CITY_ID
+# 사용자 검수 후 (= --photo 옵션 = $0.007/행 추가 = 이미지 다운 + Storage 업로드)
+npx tsx .claude/skills/raw-db-verify-and-complete/prompts/06-ts-pm-enrich/post-process.ts \
+  --city-id=$CITY_ID --date=<YYYY-MM-DD> --apply-status=ok --photo
 
-# Step 8. 분류 오류 정정 + archive name_en suffix (= UNIQUE 충돌 해제)
-npx tsx .claude/skills/raw-db-verify-and-complete/scripts/08-category-fix.ts --city=<CITY>
+# Step 7. 5 단계 매칭 + 중복 통합 (= dry-run + 사용자 cc2 검수)
+npx tsx .claude/skills/raw-db-verify-and-complete/prompts/07-merge-dups/run.ts --city-id=$CITY_ID
+# 사용자 검수 후 = 명확 tier (= 0/1/2/3) 일괄 적용
+npx tsx .claude/skills/raw-db-verify-and-complete/prompts/07-merge-dups/post-process.ts \
+  --city-id=$CITY_ID --date=<YYYY-MM-DD> --apply-tiers=0,1,2,3
 
-# Step 9. 외곽 부족 진단 (= 도심 좌표 + 우편번호 분포)
-npx tsx .claude/skills/raw-db-verify-and-complete/scripts/09-outskirt-diagnose.ts --city=<CITY>
-
-# Step 10. 외곽 시드 발굴 + INSERT
-npx tsx .claude/skills/raw-db-verify-and-complete/scripts/10-outskirt-seed-insert.ts --city=<CITY> --apply
+# Step 8. Wikidata 이미지 보강 (= 식당/어드벤처 제외 + rank 21+/NULL + image NULL)
+npx tsx .claude/skills/raw-db-verify-and-complete/prompts/08-wk-image-fill/run.ts --city-id=$CITY_ID
+# 사용자 검수 후 = TRUST (= score ≥ 5) 일괄 적용
+npx tsx .claude/skills/raw-db-verify-and-complete/prompts/08-wk-image-fill/post-process.ts \
+  --city-id=$CITY_ID --date=<YYYY-MM-DD> --apply-status=trust
 ```
+
+## 산출물 표준 위치 (= 사용자 SSOT 2026-05-20)
+
+= 모든 도시 = `docs/raw/{city_id}/` 집결 (= `.gitignore` 로컬 보관)
+
+= 파일명 규칙 = `{prompt-id}-{prompt-name}-{tier-or-offset}-{YYYY-MM-DD}.json`
+
+= 예시: `docs/raw/19/02-enrich-place-batch-0-2026-05-17.json`
+
+## checks/ — 정기 점검 + 감사 (= 2026-05-20 신규)
+
+= `prompts/` 와 별개 = **호출 비용 0 (= DB SELECT only)** + 정기 데이터 품질 감사
+
+| # | 파일 | 용도 | 시정 prompt |
+|---|---|---|---|
+| 01 | [`checks/01-coord-missing.ts`](checks/01-coord-missing.ts) | 좌표 NULL 검출 | 02-enrich-place |
+| 02 | [`checks/02-price-outlier.ts`](checks/02-price-outlier.ts) | 가격 이상치 (= MEAL_BUDGET MAX + 카테고리 limit) | 02-enrich-place / 06-ts-pm-enrich |
+| 03 | [`checks/03-outskirt-coverage.ts`](checks/03-outskirt-coverage.ts) | 외곽 식당 부족 진단 (= 도심 75xxx + 좌표 ≤10km) | 04-outskirt-restaurant |
+
+```bash
+# 단일 도시 점검
+npx tsx .claude/skills/raw-db-verify-and-complete/checks/01-coord-missing.ts --city-id=19
+# 모든 도시 점검
+npx tsx .claude/skills/raw-db-verify-and-complete/checks/01-coord-missing.ts --all
+```
+
+= 산출물 = `docs/raw/{city_id}/_checks/{check-id}-{YYYY-MM-DD}.json`
+
+## 옛 scripts/ 폐기 (= 2026-05-20)
+
+= 옛 `scripts/01-presurvey.ts` ~ `10-outskirt-seed-insert.ts` 10 파일 = **모두 폐기** (= 새 prompts/0X-*/ 폴더로 100% 흡수)
+= 헌법 §16 "최신이 정답 + 옛것 완전 삭제" 부합
 
 ## DB 정책 변경 (= 본 스킬 사전 요구)
 
 본 스킬 사용 전 = **트리거 v2 적용 필수** (= 1 회만):
 
 ```bash
-# place_seed_raw_prevent_dup 함수 = 주소 + 이름 9 조합 동시 매칭 (= v2)
 psql $SUPA_URL -f .claude/skills/raw-db-verify-and-complete/db/trigger-v2.sql
 ```
 
-= [`db/upsert-place-v2-changes.md`](db/upsert-place-v2-changes.md) = `server/services/place-upsert.ts` 정책 변경 가이드 (= 헌법 §14 v2 = 2026-05-18 사용자 SSOT).
+= [`db/upsert-place-v2-changes.md`](db/upsert-place-v2-changes.md) = 헌법 §14 v2 = 2026-05-18 사용자 SSOT.
 
 ## 본 세션 결과 (= 검증 사례)
 
-= [`examples/paris-2026-05-18.md`](examples/paris-2026-05-18.md) = Paris 활성 426 → 456 (= 10 단계 검증 완료) + 외곽 식당 5 → 45 보강.
+- [`examples/paris-2026-05-18.md`](examples/paris-2026-05-18.md) = Paris 활성 426 → 456 (= Step 1-10 검증) + 외곽 식당 5 → 45
+- [`examples/paris-2026-05-19.md`](examples/paris-2026-05-19.md) = Paris 활성 456 → 455 + 카테고리 47 재분류 (= Step 11) + MEAL_BUDGET 4:6 split (= Step 12) + BTS 마커 placeholder + 3 게이트 통과
 
-## 의존성 (= 본 프로젝트 의존)
+## 의존성
 
-- `server/services/place-upsert.ts` v2 (= 정책 변경 후) = `upsertPlace()` 단일 진입점 (= 헌법 §14)
-- `server/services/shared/geminiClient.ts` = Gemini 호출 (= gemini-3-flash-preview + grounding)
+- `server/services/place-upsert.ts` v2 = `upsertPlace()` 단일 진입점 (= 헌법 §14)
+- `server/services/shared/geminiClient.ts` = Gemini 호출
 - `server/services/shared/api-keys-loader.ts` = `api_keys` DB → process.env
-- `server/services/seed/enrich-place.ts` = Step 2 batch enrichment 함수
-- `cities` 테이블 = 도시 좌표 + city_id 조회
+- `server/services/seed/enrich-place.ts` = Step 2 batch 함수
+- `cities` 테이블 = 도시 좌표 + city_id
 - `place_seed_raw` 테이블 = 메인 SSOT
+- `server/services/agents/types.ts:135-140` = MEAL_BUDGET 4 tier (= 03-downtown-restaurant 연동)
+- `server/services/shared/google-places-sku.ts` = `validateFieldMask()` (= 06-ts-pm-enrich FieldMask 가드 §15)
+- Supabase Storage `place-photos/` bucket (= 06-ts-pm-enrich PhotoMedia 업로드)
 
-## 다른 프로젝트 이식 시
+## 사용자 SSOT 잠금
 
-본 스킬 = 본 프로젝트 (= my-handy-guide2 = Supabase + place_seed_raw 스키마) 의존. 다른 프로젝트 적용 시:
-1. 위 의존성 (= upsertPlace + geminiClient + api-keys-loader + 스키마) 동일 작성
-2. 트리거 v2 = DB 적용
-3. `.env` 의 `SUPA_URL` + `api_keys` 테이블 = Gemini key 등록
+= [`CLAUDE.md`](../../../CLAUDE.md) 헌법 = §1 (= 승인 없는 수정 X) + §14 (= upsertPlace 단일 진입점) + §15 (= Atmosphere 금지) + §16 (= 영구 컴포넌트) + §17 (= 3 게이트)
+
+= [`docs/SEED_SSOT_2026-05-02.md`](../../../docs/SEED_SSOT_2026-05-02.md) = §1-§19 시드 발굴 헌법

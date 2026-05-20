@@ -1,0 +1,70 @@
+⚠️ 수정금지(승인필요) 2026-05-20 = TS Enterprise FieldMask + PhotoMedia 설정 (= Gemini prompt 아님 = API 호출용)
+
+══════════════════════════════════════════════════════════════════════════════
+TS Enterprise textSearch 호출 (= run.ts 안):
+══════════════════════════════════════════════════════════════════════════════
+
+POST https://places.googleapis.com/v1/places:searchText
+Headers:
+  Content-Type: application/json
+  X-Goog-Api-Key: ${GOOGLE_PLACES_API_KEY}
+  X-Goog-FieldMask: places.id,places.displayName,places.formattedAddress,places.location,places.userRatingCount,places.priceRange,places.priceLevel,places.photos,places.googleMapsUri,places.regularOpeningHours,places.types,places.primaryType
+
+Body:
+{
+  "textQuery": "${NAME_EN} ${ADDRESS}",
+  "languageCode": "ko",   // = 사용자 SSOT = displayName 한국어
+  "regionCode": "${COUNTRY_CODE}",  // = 예 FR
+  "locationBias": null,    // = 사용자 SSOT [[feedback_place_api_verified_pattern]] = bias X = 좌표는 textQuery 안에
+  "maxResultCount": 5
+}
+
+══════════════════════════════════════════════════════════════════════════════
+FieldMask 강제 가드 (= 헌법 §15):
+══════════════════════════════════════════════════════════════════════════════
+
+import { validateFieldMask } from 'server/services/shared/google-places-sku';
+
+const FIELD_MASK = 'places.id,places.displayName,places.formattedAddress,places.location,places.userRatingCount,places.priceRange,places.priceLevel,places.photos,places.googleMapsUri,places.regularOpeningHours,places.types,places.primaryType';
+validateFieldMask(FIELD_MASK);  // = Atmosphere 33 필드 감지 시 throw
+
+══════════════════════════════════════════════════════════════════════════════
+PhotoMedia 호출 (= post-process.ts 안):
+══════════════════════════════════════════════════════════════════════════════
+
+GET https://places.googleapis.com/v1/{photo_name}/media?maxWidthPx=800&key=${GOOGLE_PLACES_API_KEY}
+
+= photo_name = 응답 places[0].photos[0].name (= 형식 = "places/{id}/photos/{photo_id}")
+= 응답 = binary image (= JPEG)
+= Supabase Storage 업로드 = `place-photos/{cityId}/{rowId}-{timestamp}.jpg`
+= public URL = `https://{project}.supabase.co/storage/v1/object/public/place-photos/{cityId}/{rowId}-{timestamp}.jpg`
+
+══════════════════════════════════════════════════════════════════════════════
+응답 매핑 (= upsertPlace 호환):
+══════════════════════════════════════════════════════════════════════════════
+
+응답 places[0]                          → upsertPlace 필드
+─────────────────────────────────────── ────────────────────────────
+id                                       → googlePlaceId
+displayName.text                         → nameKo (= languageCode='ko')
+formattedAddress                         → address (= COALESCE 옛 우선)
+location.{latitude,longitude}            → latitude/longitude (= COALESCE 옛 우선)
+userRatingCount                          → googleReviewCount
+priceRange.endPrice.units                → priceEur (= GREATEST §14)
+priceLevel                               → (= 보조 = 폐기 §14)
+photos[0].name                           → PhotoMedia 호출 → image_url
+googleMapsUri                            → googleMapsUri (= 13 SSOT)
+regularOpeningHours.weekdayDescriptions  → (= 추가 보강 컬럼)
+types[]                                  → tags (UNION)
+primaryType                              → (= 보조)
+
+══════════════════════════════════════════════════════════════════════════════
+사용자 SSOT 패턴 (= 메모리 [[feedback_place_api_verified_pattern]]):
+══════════════════════════════════════════════════════════════════════════════
+
+= 8/8 100% 검증 패턴 (= 이전 BTS 도시 발굴 검증):
+  1. textQuery 안에 좌표 명시 X (= locationBias 없음)
+  2. languageCode='ko' 필수
+  3. userRatingCount DESC 정렬 (= 응답 5 중 가장 인기)
+  4. photos[].name 직접 사용 (= URI 변환 X)
+  5. priceRange.endPrice = €X = priceEur (= GREATEST §14)
