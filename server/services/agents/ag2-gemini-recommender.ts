@@ -8,12 +8,10 @@
  * - Gemini의 창의적 추천 능력은 유지하되, 작업량만 최소화
  */
 
+// ⚠️ 수정금지(승인필요) 2026-05-20 = KoreanSentiment 완전 폐기 (= 사용자 SSOT)
 import { GoogleGenAI } from "@google/genai";
 import type { AG1Output, PlaceResult, SeedCategory } from './types';
 import { MEAL_BUDGET } from './types';
-import {
-  formatSentimentForPrompt,
-} from '../korean-sentiment-service';
 import {
   generateProtagonistSentence,
   generatePromptContext,
@@ -286,7 +284,7 @@ export async function generateRecommendations(skeleton: AG1Output): Promise<Plac
   // 2. Fallback = Gemini (= 미발굴 도시 또는 DB 부족)
   console.log('[AG2] DB 충분 X → Gemini fallback 시작');
   const _t0 = Date.now();
-  const { formData, vibeWeights, requiredPlaceCount, koreanSentiment } = skeleton;
+  const { formData, vibeWeights, requiredPlaceCount } = skeleton;
 
   const apiKey = getGeminiApiKey();
   if (!apiKey) {
@@ -301,11 +299,6 @@ export async function generateRecommendations(skeleton: AG1Output): Promise<Plac
   const paceKorean = formData.travelPace === 'Packed' ? '빡빡하게'
     : formData.travelPace === 'Normal' ? '보통'
     : '여유롭게';
-
-  // 한국 감성 섹션 (있으면 추가)
-  const sentimentSection = koreanSentiment
-    ? formatSentimentForPrompt(koreanSentiment, formData.destination)
-    : '';
 
   // 주인공 컨텍스트
   const protagonistContext = generatePromptContext({
@@ -350,8 +343,9 @@ Example (Paris): {"places":[{"name":"Eiffel Tower","place_id":"ChIJLU7jZClu5kcR4
   try {
     console.log(`[AG2] 🤖 Gemini에 ${slotCount}곳 요청 (간소화 프롬프트 ${prompt.length}자)...`);
 
+    // ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT = 모델 3.0 통일 (= shared/geminiClient.ts SSOT)
     const response = await getAI().models.generateContent({
-      model: "gemini-2.5-flash",
+      model: "gemini-3-flash-preview",
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       config: {
         temperature: 0.7,

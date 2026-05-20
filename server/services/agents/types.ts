@@ -4,7 +4,7 @@
  * AG1(뼈대) → AG2(Gemini)||AG3pre(DB) → AG3(매칭) → AG4(실시간)
  */
 
-import type { KoreanSentimentData } from '../korean-sentiment-service';
+// ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT = KoreanSentiment 완전 폐기 (= 인프라/로우데이터 90% 오류)
 
 // ===== 기본 타입 =====
 export type Vibe = 'Healing' | 'Adventure' | 'Hotspot' | 'Foodie' | 'Romantic' | 'Culture';
@@ -167,7 +167,6 @@ export interface AG1Output {
   totalRequiredPlaces: number;
   requiredPlaceCount: number;
   companionCount: number;
-  koreanSentiment?: KoreanSentimentData;
 }
 
 // ===== AG3 사전 로드 출력 =====

@@ -9,6 +9,7 @@
  * - 출력: AG1Output (일정표 뼈대)
  */
 
+// ⚠️ 수정금지(승인필요) 2026-05-20 = KoreanSentiment 완전 폐기 (= 사용자 SSOT)
 import {
   type AG1Output,
   type TripFormData,
@@ -21,10 +22,6 @@ import {
   calculateSlotsForDay,
   calculateDayCount,
 } from './types';
-import {
-  getKoreanSentimentForCity,
-  type KoreanSentimentData,
-} from '../korean-sentiment-service';
 
 /**
  * Vibe 가중치 계산 (사용자 선택 순서 = 우선순위)
@@ -94,15 +91,6 @@ export async function buildSkeleton(formData: TripFormData): Promise<AG1Output> 
   const requiredPlaceCount = totalRequiredPlaces + 4; // 여유분
   const companionCount = getCompanionCount(formData.companionType || 'Solo');
 
-  // 한국 감성 데이터 로드
-  let koreanSentiment: KoreanSentimentData | undefined;
-  try {
-    koreanSentiment = await getKoreanSentimentForCity(formData.destination, vibes);
-    console.log(`[AG1] 한국 감성 보너스: +${koreanSentiment.totalBonus.toFixed(2)}`);
-  } catch (error) {
-    console.warn('[AG1] 한국 감성 데이터 로드 실패:', error);
-  }
-
   console.log(`[AG1] ===== 뼈대 생성 완료 (${Date.now() - _t0}ms) =====`);
   console.log(`[AG1] ${dayCount}일, ${totalRequiredPlaces}슬롯, 밀도: ${travelPace} (${paceConfig.slotDurationMinutes}분)`);
   daySlotsConfig.forEach(d => {
@@ -119,6 +107,5 @@ export async function buildSkeleton(formData: TripFormData): Promise<AG1Output> 
     totalRequiredPlaces,
     requiredPlaceCount,
     companionCount,
-    koreanSentiment,
   };
 }

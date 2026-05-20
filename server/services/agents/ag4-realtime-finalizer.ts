@@ -73,7 +73,8 @@ export async function finalizeItinerary(
 ): Promise<any> {
   const _t0 = Date.now();
   const { schedule, daySlotsConfig, travelPace } = ag3Output;
-  const { formData, companionCount, vibeWeights, koreanSentiment } = skeleton;
+  // ⚠️ 수정금지(승인필요) 2026-05-20 = KoreanSentiment 완전 폐기 (= 사용자 SSOT)
+  const { formData, companionCount, vibeWeights } = skeleton;
 
   // 이동 수단 결정
   const travelMode = formData.mobilityStyle === 'WalkMore' ? 'WALK' as const
@@ -217,13 +218,16 @@ export async function finalizeItinerary(
     const transportCostEur = allTransits.reduce((sum: number, t: any) => sum + (t.cost || 0), 0);
     const transportCostTotalEur = allTransits.reduce((sum: number, t: any) => sum + (t.costTotal || 0), 0);
 
-    // 일일 총비용
-    const dailyTotalEur = mealCostEur + entranceFeesEur + transportCostEur;
-    const dailyTotalKrw = Math.round(dailyTotalEur * eurToKrw);
-    const dailyPerPersonEur = companionCount > 0 ? Math.round(dailyTotalEur / companionCount * 100) / 100 : dailyTotalEur;
+    // ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT = price_eur 단일 = 1 인 단가 SSOT
+    // = 옛 = dailyTotalEur / companionCount = 1 인 합 또 ÷ N = 1/N 인 단가 (= 단위 혼동 버그 = €25/인)
+    // = 새 = dailyTotalEur 자체가 1 인 일일 합 = perPerson 그대로 / group = × companionCount
+    const dailyPerPersonEur = Math.round((mealCostEur + entranceFeesEur + transportCostEur) * 100) / 100;
+    const dailyGroupEur = Math.round(dailyPerPersonEur * companionCount * 100) / 100;
+    const dailyTotalEur = dailyPerPersonEur; // = 호환 (= 옛 변수명 유지 = budget UI 영향 X)
+    const dailyTotalKrw = Math.round(dailyGroupEur * eurToKrw);
     const dailyPerPersonKrw = Math.round(dailyPerPersonEur * eurToKrw);
 
-    totalTripCostEur += dailyTotalEur;
+    totalTripCostEur += dailyPerPersonEur;
 
     // ===== 좌표 유효성 검증 =====
     let invalidCoords = 0;
@@ -270,9 +274,11 @@ export async function finalizeItinerary(
     });
   }
 
-  // ===== 총 여행 비용 요약 =====
-  const totalTripCostKrw = Math.round(totalTripCostEur * eurToKrw);
-  const totalPerPersonEur = companionCount > 0 ? Math.round(totalTripCostEur / companionCount * 100) / 100 : totalTripCostEur;
+  // ⚠️ 수정금지(승인필요) 2026-05-20 = totalTripCostEur 누적 = 1 인 기준 (= 위 수정 후)
+  // = perPerson 그대로 / group = × companionCount (= 단위 일치)
+  const totalPerPersonEur = Math.round(totalTripCostEur * 100) / 100;
+  const totalGroupEur = Math.round(totalPerPersonEur * companionCount * 100) / 100;
+  const totalTripCostKrw = Math.round(totalGroupEur * eurToKrw);
   const totalPerPersonKrw = Math.round(totalPerPersonEur * eurToKrw);
 
   console.log(`[AG4] ✅ 실시간 완성 (${Date.now() - _t0}ms): ${days.length}일, ${schedule.length}곳`);
@@ -288,7 +294,6 @@ export async function finalizeItinerary(
     endTime: formData.endTime || '21:00',
     days,
     vibeWeights,
-    koreanSentimentBonus: koreanSentiment?.totalBonus || 0,
     companionType: formData.companionType,
     companionCount,
     travelStyle: formData.travelStyle,
@@ -335,7 +340,6 @@ export async function finalizeItinerary(
       companionCount,
       curationFocus: formData.curationFocus,
       generatedAt: new Date().toISOString(),
-      koreanSentimentApplied: !!koreanSentiment,
       pipelineVersion: 'v2-4agent',
     },
   };

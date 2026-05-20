@@ -31,7 +31,7 @@ import {
   calculateDayCount, calculateSlotsForDay, getCompanionCount,
 } from './types';
 import { preloadCityData, matchPlacesWithDB, saveNewPlacesToDB } from './ag3-data-matcher';
-import { getKoreanSentimentForCity, type KoreanSentimentData } from '../korean-sentiment-service';
+// ⚠️ 수정금지(승인필요) 2026-05-20 = KoreanSentiment 완전 폐기 (= 사용자 SSOT)
 import { routeOptimizer } from '../route-optimizer';
 import {
   calculateTransportPrice, shouldApplyGuidePrice, calculateUberBlackHourly,
@@ -127,25 +127,28 @@ interface GeminiDay {
 // 메인 파이프라인
 // =====================================================
 
+// ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT = DB-only / MIX 완전 분기 entry
+// = ready=true → DB-only 신규 파이프라인 (= Phase C 완성 후 활성화 / 현재 = MIX fallback)
+// = ready=false → MIX (= 옛 V3 step1_geminiItinerary 흐름 = 사용자 명시 "MIX 결과가 더 낳음" 보존)
 export async function runPipelineV3(formData: TripFormData): Promise<any> {
+  const { isCityReady } = await import('./ag2-gemini-recommender');
+  const cityCheck = await isCityReady(formData.destination);
+  if (cityCheck.ready) {
+    console.log(`\n[V3] ✅ city='${cityCheck.cityName}' ready=true (${cityCheck.count} rows)`);
+    // TODO Phase C = pipeline-db-only.ts 완성 후 = import + return runPipelineDbOnly(formData, cityCheck)
+    console.log(`[V3] ⏸️ DB-only 진입점 미완성 = MIX fallback (= Phase C 까지 임시)`);
+  } else {
+    console.log(`\n[V3] city='${cityCheck.cityName}' ready=false (${cityCheck.count} rows) → MIX 경로`);
+  }
+  return runPipelineMix(formData);
+}
+
+async function runPipelineMix(formData: TripFormData): Promise<any> {
   const _t0 = Date.now();
   const _timings: Record<string, number> = {};
   const _mark = (label: string) => { _timings[label] = Date.now() - _t0; };
 
-  console.log(`\n[V3] ===== Pipeline V3 (2단계) 시작 =====`);
-
-  // ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT = isCityReady 분기 (= Paris DB-only)
-  // = ready=true (= Paris 등 발굴 도시) → V2 orchestrator 위임 (= Gemini 0 호출 + 기존 slot 분배 + AG4 시간 매트릭스)
-  // = ready=false (= 미발굴) → MIX_MODE_DISABLED throw (= AG2 가 같은 결정을 다시 내림 = 명시 차단)
-  const { isCityReady } = await import('./ag2-gemini-recommender');
-  const cityCheck = await isCityReady(formData.destination);
-  if (cityCheck.ready) {
-    console.log(`[V3] ✅ city='${cityCheck.cityName}' ready=true (${cityCheck.count} rows) → V2 orchestrator 위임 (= Gemini 0)`);
-    const { runPipeline } = await import('./orchestrator');
-    return await runPipeline(formData);
-  }
-  console.log(`[V3] ❌ city='${cityCheck.cityName}' ready=false (${cityCheck.count} rows) = MIX 일시정지`);
-  throw new Error(`MIX_MODE_DISABLED: '${cityCheck.cityName}' 미발굴 도시 = V3 진입 차단 (= 사용자 SSOT 2026-05-20)`);
+  console.log(`[V3-MIX] ===== Pipeline MIX (= 옛 V3 step1 살리기) 시작 =====`);
 
   // ===== 기본 계산 (AG1 역할 통합, <1ms) =====
   const dayCount = calculateDayCount(formData.startDate, formData.endDate);
@@ -211,15 +214,14 @@ export async function runPipelineV3(formData: TripFormData): Promise<any> {
     step1_geminiItinerary(formData, dayCount, daySlotsConfig, vibeWeights),
     preloadCityData(formData.destination),
   ]);
-  const koreanSentiment = undefined;
 
   _mark('step1_parallel');
-  console.log(`[V3] Step1 완료 (${_timings['step1_parallel']}ms): Gemini ${geminiDays.length}일, DB ${preloaded.dbPlacesMap.size}키`);
+  console.log(`[V3-MIX] Step1 완료 (${_timings['step1_parallel']}ms): Gemini ${geminiDays.length}일, DB ${preloaded.dbPlacesMap.size}키`);
 
   // ===== Step 2: 데이터 채우기 =====
   const result = await step2_enrichAndBuild(
     geminiDays, formData, preloaded, daySlotsConfig,
-    dayCount, companionCount, travelPace, paceConfig, vibeWeights, koreanSentiment,
+    dayCount, companionCount, travelPace, paceConfig, vibeWeights,
   );
 
   _mark('step2_enrich');
@@ -610,7 +612,6 @@ async function step2_enrichAndBuild(
   travelPace: TravelPace,
   paceConfig: { slotDurationMinutes: number; maxSlotsPerDay: number },
   vibeWeights: VibeWeight[],
-  koreanSentiment?: KoreanSentimentData,
 ): Promise<any> {
   const _t0 = Date.now();
 
@@ -765,10 +766,6 @@ async function step2_enrichAndBuild(
       isPackageTourIncluded: ph?.isPackageTourIncluded ?? p.isPackageTourIncluded,
       packageMentionCount: ph?.packageMentionCount ?? p.packageMentionCount,
       packageMentionedBy: (ph as any)?.packageMentionedBy,
-      // 한국 감성 보너스
-      ...(koreanSentiment ? {
-        vibeScore: Math.min(10, (Math.max(p.vibeScore, ta?.vibeScore ?? 0)) + (koreanSentiment.totalBonus || 0) * 0.3),
-      } : {}),
     };
 
     // ⭐ nubiReason: 순차 검색 — seedData는 위에서 이미 조회됨
@@ -1171,7 +1168,6 @@ async function step2_enrichAndBuild(
     endTime: formData.endTime || DEFAULT_END_TIME,
     days,
     vibeWeights,
-    koreanSentimentBonus: koreanSentiment?.totalBonus || 0,
     companionType: formData.companionType,
     companionCount,
     travelStyle: formData.travelStyle,
@@ -1217,17 +1213,11 @@ async function step2_enrichAndBuild(
       availableHours,
       curationFocus: formData.curationFocus,
       generatedAt: new Date().toISOString(),
-      koreanSentimentApplied: !!koreanSentiment,
       pipelineVersion: 'v3-2step',
     },
   };
 
-  const { verifyItinerary } = await import('./itinerary-verifier');
-  const verifyResult = await verifyItinerary(result);
-  if (!verifyResult.passed) {
-    console.warn(`[V3] ❌ 일정 검증 미통과 (score=${verifyResult.score}) — 사용자 노출 차단`);
-    throw new Error('일정 검증 미통과');
-  }
+  // ⚠️ 수정금지(승인필요) 2026-05-20 = Verifier 완전 폐기 (= 사용자 SSOT = Gemini 0 강제)
   return result;
 }
 

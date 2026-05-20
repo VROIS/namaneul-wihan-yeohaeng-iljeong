@@ -18,6 +18,73 @@
 
 ---
 
+## 🔥 2026-05-20 PM = V3→V2 위임 미달 → 분석 9 사실 → Plan 작성 (= 다음 세션 인수)
+
+### ⚠️ 본 세션 변경 = 사용자 SSOT 7/7 미달 + 신규 거짓 발견
+
+**커밋 af1dcf5 (= 이미 push 됨)** = pipeline-v3.ts entry 에 V2 위임 추가 (= "Gemini 0" 주장):
+- Paris 호출 = V3 step1_geminiItinerary 우회 → V2 orchestrator (= runPipeline) 위임
+- 의도: Gemini API 0 호출 + 시간 단축
+- **사용자 검증 결과 = 26.8 초 (= 옛 22 초 보다 4.7 초 악화) + 인당 €25/일 (= 단위 혼동) + 식당 예산=5.0 동일 (= priceEur 손실) + 4 곳 이미지 누락 + 옛 dead code 1,082 줄 잔존**
+
+### 본 세션 분석 9 사실 (= 추정 X = 코드 line + 로그 매칭)
+
+| # | 사실 | 입증 file:line |
+|---|---|---|
+| 1 | **Verifier Gemini 호출** (= "Gemini 0" 거짓 + 옛 2.5 모델) | itinerary-verifier.ts:91-99 = `model: "gemini-2.5-flash"` |
+| 2 | **Routes API 27 호출 직렬** = AG4 16.2 초 | ag4-realtime-finalizer.ts:158-182 = 3N × 3 일 |
+| 3 | **priceEur 손실** = shape 불일치 | ag3-data-matcher.ts:471 = `seed.priceEur` (placeSeedRaw shape) ≠ `place.estimatedPriceEur` (PlaceResult shape) |
+| 4 | **이미지 4 곳 누락** = DB imageUrl NULL | ag2:235 `image: r.imageUrl \|\| ''` |
+| 5 | **dailyPerPersonEur 단위 혼동** | ag4:223 = 1 인 합 ÷ companionCount = 1/N 인 단가 |
+| 6 | **matched 이중 증가** = 52 곳 로그 | ag3:290 + ag3:466 = 26 × 2 |
+| 7 | **V3 dead code 1,082 줄** | pipeline-v3.ts:150-1232 = throw 이후 unreachable |
+| 8 | **CityResolver 6 회 중복** | findCityUnified 6 호출 = 캐시 X |
+| 9 | **finalScore 5.82 동일** | AG3 Enrichment 스킵 = fallback 점수 |
+
+### Plan 작성 = 승인됨 (= `C:\Users\hzino\.claude\plans\woolly-drifting-mountain.md`)
+
+= DB-only ↔ MIX 파이프라인 완전 분기 리팩토링.
+
+**사용자 SSOT 5 항목**:
+1. DB-only / MIX = 완전히 다른 파이프라인 = 별도 리팩토링
+2. DB-only = Gemini 호출 원천 차단 (= Verifier 포함)
+3. DB-only = Google Routes API 원천 차단 = Haversine 강제
+4. 컬럼별 직접 조회 = price_eur 단일 + 매칭 ID > PID > google_maps_uri > 풀주소+좌표 > 텍스트 + 없는 것은 없는 대로 OK
+5. MIX 경로 = 결과가 더 낳음 = 보존 (= V3 옛 step1 살리기)
+
+**사용자 결정 (= 본 세션)**:
+- AG3 shape + AG4 단위 = **MIX 도 함께 수정**
+- KoreanSentiment = **완전 폐기** (= 인프라/로우데이터 90% 오류)
+- Verifier = **완전 폐기** (= "Gemini 0" 강제 + 옛 2.5 모델)
+- Gemini 모델 = `gemini-3-flash-preview` 통일
+
+### Phase A 진행 중 = revert 완료 (= 다음 세션 0 부터)
+
+본 세션 partial 변경 = 시스템 불안정 (= 신규 4 TS 에러) = **git checkout 으로 원복**:
+- ag1-skeleton-builder.ts / ag2-gemini-recommender.ts / ag4-realtime-finalizer.ts / types.ts = 옛 상태
+
+### 다음 세션 시작 = Plan Phase A 부터
+
+**Phase A** (= 폐기 + 분기 명확화)
+- pipeline-v3.ts:137-149 V2 위임 폐기 + pipeline-v3.ts:150-1232 dead code → `runPipelineMix()` 함수 분리
+- orchestrator.ts:137-142 Verifier 호출 제거
+- itinerary-verifier.ts + korean-sentiment-service.ts = 완전 삭제
+- ag1-skeleton-builder.ts = KoreanSentiment 호출 + import 제거
+- 진입점 = runPipelineV3 안에서 isCityReady → DB-only / MIX 명확 분기
+
+**Phase B** (= MIX/DB-only 공통 버그 수정)
+- ag3-data-matcher.ts:290, 466, 471 = shape 버그 + matched 이중 증가
+- ag4-realtime-finalizer.ts:223, 275 = 단위 혼동 (÷ companionCount 제거 + 별도 group 컬럼)
+- ag2-gemini-recommender.ts:354 = 모델 `gemini-3-flash-preview`
+
+**Phase C** (= DB-only 파이프라인 신규)
+- pipeline-db-only.ts / ag3-db-direct.ts / ag4-db-finalize.ts / transit-haversine.ts
+
+**Phase D** (= Paris 검증 9 항목)
+- DB-only 진입 / Gemini 0 / Verifier 0 / Routes 0 / Sentiment 0 / 시간 < 1 초 / 비용 €0 / priceEur 변별력 / 이미지 NULL 그대로 / 단위 정합 / 모달 정확
+
+---
+
 ## 🔥 2026-05-20 — Paris DB-only 운영 준비 완성 + 보조 테이블 폐기 + skill 9 prompt + 3 check 영구 + TS 17 + 모달 0 순위 URI
 
 ### ✅ 완료 작업 (= 영구 적용, 다음 세션에서 = 그대로 시작)

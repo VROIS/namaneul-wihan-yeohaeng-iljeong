@@ -1,9 +1,5 @@
+// ⚠️ 수정금지(승인필요) 2026-05-20 = KoreanSentiment 완전 폐기 (= 사용자 SSOT)
 import { GoogleGenAI } from "@google/genai";
-import {
-  getKoreanSentimentForCity,
-  formatSentimentForPrompt,
-  KoreanSentimentData
-} from "./korean-sentiment-service";
 import {
   generateProtagonistSentence,
   generatePromptContext
@@ -1686,7 +1682,6 @@ async function generatePlacesWithGemini(
   formData: TripFormData,
   vibeWeights: { vibe: Vibe; weight: number; percentage: number }[],
   requiredPlaceCount: number = 12,
-  koreanSentiment?: KoreanSentimentData
 ): Promise<PlaceResult[]> {
   const vibeDescription = vibeWeights
     .map(v => `${v.vibe}(${v.percentage}%)`)
@@ -1699,11 +1694,6 @@ async function generatePlacesWithGemini(
 
   // 페이스 설정 (프론트엔드 기준 Normal)
   const paceConfig = PACE_CONFIG[formData.travelPace || 'Normal'];
-
-  // 한국 감성 데이터 섹션 (있으면 추가)
-  const sentimentSection = koreanSentiment
-    ? formatSentimentForPrompt(koreanSentiment, formData.destination)
-    : '';
 
   // ===== 📊 DB 수집 데이터 기반 인기 장소를 프롬프트에 주입 =====
   const dbPopularitySection = await getKoreanPopularPlacesForPrompt(formData.destination);
@@ -1744,8 +1734,6 @@ ${protagonistContext}
 - 이동 스타일: ${formData.mobilityStyle === 'WalkMore' ? '많이 걷기' : '이동 최소화'}
 - 동행: ${formData.companionType}, ${formData.companionCount}명
 
-${sentimentSection}
-
 【중요한 추천 기준 - 5단계 가중치】
 1. ⭐ 주인공 (위 "일정 생성의 주인공" 섹션 최우선 반영)
 2. 누구랑 (동행 타입에 맞는 장소 우선)
@@ -1761,8 +1749,6 @@ ${sentimentSection}
 
 【한국인 선호도 반영 - 최우선 규칙】
 한국인 여행자들이 실제로 많이 방문하고, SNS에서 인기 있는 장소를 최우선으로 추천해주세요.
-${koreanSentiment?.instagram.trendingHashtags.length ? `인기 해시태그: ${koreanSentiment.instagram.trendingHashtags.slice(0, 3).join(', ')}` : ''}
-${koreanSentiment?.naverBlog.keywords.length ? `자주 언급 키워드: ${koreanSentiment.naverBlog.keywords.slice(0, 3).join(', ')}` : ''}
 ${dbPopularitySection}
 
 【⚠️ 반드시 아래 JSON 형식으로만 응답하세요. 다른 텍스트 없이 JSON만 출력하세요.】
@@ -1968,17 +1954,10 @@ function optimizeCityOrder(cityGroups: Map<string, PlaceResult[]>): string[] {
  * 
  * 기존 4-Agent 순차 12~18초 → 2단계 병렬 5~9초
  */
+// ⚠️ 수정금지(승인필요) 2026-05-20 = Verifier 완전 폐기 = 1 회 재시도 제거 (= 사용자 SSOT)
 export async function generateItinerary(formData: TripFormData) {
   const { runPipelineV3 } = await import('./agents/pipeline-v3');
-  try {
-    return await runPipelineV3(formData as any);
-  } catch (err: any) {
-    if (err?.message === '일정 검증 미통과') {
-      console.warn('[generateItinerary] 검증 미통과 — 1회 재시도');
-      return await runPipelineV3(formData as any);
-    }
-    throw err;
-  }
+  return await runPipelineV3(formData as any);
 }
 
 /**
@@ -1993,7 +1972,6 @@ export const _enrichmentPipeline = {
       daySlotsConfig: { day: number; startTime: string; endTime: string; slots: number }[];
       travelPace: TravelPace;
       requiredPlaceCount: number;
-      koreanSentiment?: KoreanSentimentData;
     }
   ): Promise<{
     scoredPlaces: PlaceResult[];
@@ -2001,20 +1979,10 @@ export const _enrichmentPipeline = {
     realityCheck: { weather: string; crowd: string; status: string };
   }> {
     const vibes = formData.vibes || ['Foodie', 'Culture', 'Healing'];
-    const { daySlotsConfig, travelPace, requiredPlaceCount, koreanSentiment } = skeleton;
+    const { daySlotsConfig, travelPace, requiredPlaceCount } = skeleton;
 
     // ===== Enrichment 스킵 (속도 최우선: AG3 matchPlacesWithDB에서 이미 DB 데이터 보강됨) =====
-    // 한국인 인기도, TripAdvisor, 포토스팟은 DB 시딩 데이터에서 가져옴 (별도 쿼리 불필요)
-    // 향후 DB 시딩 완료 후 다시 활성화 가능
     console.log(`[AG3] Enrichment 스킵 (속도 우선, DB 보강 데이터 사용)`);
-
-    // 한국 감성 보너스 반영
-    if (koreanSentiment) {
-      placesArr = placesArr.map(p => ({
-        ...p,
-        vibeScore: p.vibeScore + (koreanSentiment?.totalBonus || 0) * 0.3,
-      }));
-    }
 
     // Phase 1-7: 데이터 등급 + 동적 가중치
     const dataGrade = detectDataGrade(placesArr);

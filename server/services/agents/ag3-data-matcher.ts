@@ -285,9 +285,9 @@ export async function matchPlacesWithDB(
 
   for (const place of geminiPlaces) {
     // ⚠️ 수정금지(승인필요) 2026-05-20 = DB-only path skip = AG2 가 이미 place_seed_raw 직접 = 매칭 불필요 (= 사용자 SSOT 병렬 극대화)
+    // ⚠️ 2026-05-20 = matched++ 제거 (= 옛 = 본 if + line 466 if(dbMatch) = 이중 증가 = 52 곳 로그 버그)
     if (place.sourceType === 'DB Direct (Place Seed Raw)') {
       matchResults.push({ place, dbMatch: place as any, needsGoogle: false });
-      matched++;
       continue;
     }
 
@@ -462,31 +462,45 @@ export async function matchPlacesWithDB(
 
     if (dbMatch) {
       // ⚠️ 수정금지(승인필요) 2026-05-06 = dbMatch = seedDirectMatch (= place_seed_raw 행)
-      // place_seed_raw shape 만 사용 = places 테이블 필드 (buzzScore, finalScore, priceLevel) 폐기
+      // ⚠️ 2026-05-20 = DB Direct path = dbMatch === place (PlaceResult shape) = 별도 처리
       matched++;
+      const isDbDirect = place.sourceType === 'DB Direct (Place Seed Raw)';
       const seed = dbMatch;
-      const reviewCount = seed.googleReviewCount ?? 0;
+      // ⚠️ 2026-05-20 = shape 분기 = DB Direct = PlaceResult.userRatingCount / dbMatch path = placeSeedRaw.googleReviewCount
+      const reviewCount = isDbDirect
+        ? ((place as any).userRatingCount ?? 0)
+        : (seed.googleReviewCount ?? 0);
 
-      // ⚠️ 수정금지(승인필요) 2026-05-19 = price_eur 컬럼 단일 SSOT (= 옛 editorial_summary 정규식 폐기)
-      const estimatedPriceEur = seed.priceEur != null ? Number(seed.priceEur) : undefined;
+      // ⚠️ 수정금지(승인필요) 2026-05-20 = shape 일치 강제 = priceEur 손실 버그 시정 (= 사용자 SSOT)
+      // = DB Direct = AG2-DB 가 PlaceResult.estimatedPriceEur 채움 / dbMatch path = placeSeedRaw.priceEur
+      const estimatedPriceEur = isDbDirect
+        ? (place.estimatedPriceEur != null ? Number(place.estimatedPriceEur) : undefined)
+        : (seed.priceEur != null ? Number(seed.priceEur) : undefined);
 
       enriched.push({
         ...place,
-        sourceType: 'Gemini AI + DB Enriched',
-        description: (seed.summaryKo || seed.editorialSummary || place.description) ?? '',
-        image: seed.imageUrl || place.image || '',
+        // ⚠️ 2026-05-20 = DB Direct = sourceType 유지 (= 'DB Direct (Place Seed Raw)') / dbMatch path = 'Gemini AI + DB Enriched'
+        sourceType: isDbDirect ? place.sourceType : 'Gemini AI + DB Enriched',
+        description: isDbDirect
+          ? (place.description ?? '')
+          : ((seed.summaryKo || seed.editorialSummary || place.description) ?? ''),
+        image: isDbDirect
+          ? (place.image || '')
+          : (seed.imageUrl || place.image || ''),
         userRatingCount: reviewCount,
         confidenceScore: Math.max(place.confidenceScore, 7),
         googleMapsUrl: place.googleMapsUrl,
-        lat: parseFloat(String(seed.latitude)) || place.lat,
-        lng: parseFloat(String(seed.longitude)) || place.lng,
-        estimatedPriceEur,  // ← 가격 필터 활성화
-        // ⚠️ 수정금지(승인필요) 2026-05-19 = Gemini path 도 FE LUCIE 마커 활성화 (= 사용자 SSOT)
-        seedCategory: seed.seedCategory as SeedCategory,
-        selectionReasons: [
-          ...(place.selectionReasons || []),
-          `📊 사용자 검증 SSOT (rank ${seed.rank ?? '-'}, ${seed.collectionPhase}, 리뷰 ${reviewCount.toLocaleString()}개${estimatedPriceEur ? `, €${estimatedPriceEur}/인` : ''})`,
-        ],
+        lat: isDbDirect ? place.lat : (parseFloat(String(seed.latitude)) || place.lat),
+        lng: isDbDirect ? place.lng : (parseFloat(String(seed.longitude)) || place.lng),
+        estimatedPriceEur,  // ← shape 분기 적용 (= priceEur 보존)
+        // ⚠️ 2026-05-20 = shape 분기 = DB Direct = AG2-DB 의 seedCategory / dbMatch path = placeSeedRaw.seedCategory
+        seedCategory: (isDbDirect ? place.seedCategory : seed.seedCategory) as SeedCategory,
+        selectionReasons: isDbDirect
+          ? (place.selectionReasons || [])
+          : [
+              ...(place.selectionReasons || []),
+              `📊 사용자 검증 SSOT (rank ${seed.rank ?? '-'}, ${seed.collectionPhase}, 리뷰 ${reviewCount.toLocaleString()}개${estimatedPriceEur ? `, €${estimatedPriceEur}/인` : ''})`,
+            ],
         confidenceLevel: 'high' as const,
       } as any);
     } else if (needsGoogle) {

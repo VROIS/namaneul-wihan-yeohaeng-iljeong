@@ -133,13 +133,7 @@ export async function runPipeline(formData: TripFormData): Promise<any> {
 
   _mark('AG4_finalize');
 
-  // ── 최종 일정 검증 (90% 이상만 프론트 전송, 미통과 시 500) ──
-  const { verifyItinerary } = await import('./itinerary-verifier');
-  const verifyResult = await verifyItinerary(result);
-  if (!verifyResult.passed) {
-    console.warn(`[Pipeline] ❌ 일정 검증 미통과 (score=${verifyResult.score}) — 사용자 노출 차단`);
-    throw new Error('일정 검증 미통과');
-  }
+  // ⚠️ 수정금지(승인필요) 2026-05-20 = Verifier 완전 폐기 (= 사용자 SSOT = Gemini 0 강제)
 
   // 타이밍 정보 추가
   result.metadata = {
