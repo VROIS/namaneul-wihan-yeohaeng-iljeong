@@ -207,9 +207,10 @@ export async function finalizeItinerary(
       return sum;
     }, 0);
 
-    // 입장료 합계
+    // ⚠️ 수정금지(승인필요) 2026-05-21 = 사용자 SSOT = priceEur 모든 값 합산 (= 0 = 무료 포함 / null = 제외)
+    // = 옛 `> 0` 조건 = 0(무료)/null 모두 제외 = healing/hotspot 거의 모두 누락 = 시정
     const entranceFeesEur = dayPlaces.reduce((sum: number, p: any) => {
-      if (!p.isMealSlot && p.estimatedPriceEur && p.estimatedPriceEur > 0) {
+      if (!p.isMealSlot && typeof p.estimatedPriceEur === 'number') {
         return sum + p.estimatedPriceEur;
       }
       return sum;

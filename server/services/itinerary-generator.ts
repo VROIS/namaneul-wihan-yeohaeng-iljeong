@@ -2004,25 +2004,24 @@ async function distributePlacesWithUserTime(
       else if (slotMidHour < 18) slotType = 'afternoon';
       else slotType = 'evening';
 
-      // === 1순위: 점심/저녁 슬롯 판정 (하루 각 1개만!) ===
-      // 핵심: 슬롯이 식사 시간대(점심 11:30~14:00, 저녁 17:30~20:30)와 겹치면 식사 슬롯
+      // ⚠️ 수정금지(승인필요) 2026-05-21 = 사용자 SSOT = 저녁 = 시간 고정 X = 일일 마지막 슬롯 = 무조건 dinner
+      // = 마지막 슬롯 = dinner 우선 (= lunch 보다 = 짧은 일정 = 점심 양보 = dinner 강제)
+      // = 점심 = 마지막 슬롯 외 + lunch window (= 11:30-14:00) 첫 매칭 슬롯
       let isMealSlot = false;
       let mealType: 'lunch' | 'dinner' | undefined;
 
       const lunchWindowStart = 11.5 * 60; // 11:30
       const lunchWindowEnd = 14 * 60;     // 14:00
-      const dinnerWindowStart = 17.5 * 60; // 17:30
-      const dinnerWindowEnd = 20.5 * 60;   // 20:30
+      const isLastSlot = slotIdx === slots - 1;
 
-      // 슬롯 중간 시점이 식사 창에 포함되면 식사 슬롯
-      if (slotMidMinutes >= lunchWindowStart && slotMidMinutes <= lunchWindowEnd && !lunchAssigned) {
-        isMealSlot = true;
-        mealType = 'lunch';
-        lunchAssigned = true;
-      } else if (slotMidMinutes >= dinnerWindowStart && slotMidMinutes <= dinnerWindowEnd && !dinnerAssigned) {
+      if (isLastSlot && !dinnerAssigned) {
         isMealSlot = true;
         mealType = 'dinner';
         dinnerAssigned = true;
+      } else if (slotMidMinutes >= lunchWindowStart && slotMidMinutes <= lunchWindowEnd && !lunchAssigned) {
+        isMealSlot = true;
+        mealType = 'lunch';
+        lunchAssigned = true;
       }
 
       let selectedPlace: PlaceResult;

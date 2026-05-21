@@ -65,11 +65,11 @@ export async function isCityReady(destination: string): Promise<{
     return { ready: false, cityId: null, cityName: destination, count: 0 };
   }
 
+  // ⚠️ 수정금지(승인필요) 2026-05-21 = 사용자 SSOT = collection_phase 완전 폐기 (= 같은 장소 = 다른 phase = 같은 데이터)
   const countRows = await db.select({
     count: sql<number>`COUNT(*)::int`,
   }).from(placeSeedRaw).where(and(
     eq(placeSeedRaw.cityId, cityId),
-    eq(placeSeedRaw.collectionPhase, 'gemini3-2026-05'),
     between(placeSeedRaw.rank, 1, 20),
   ));
   const count = Number(countRows[0]?.count || 0);
@@ -195,16 +195,15 @@ async function fetchFromPlaceSeedRaw(skeleton: AG1Output): Promise<PlaceResult[]
           // = restaurant 6 = core 4 + outskirt 2 (= dayCount=3 = Day 1 core 2 + Day 2 outskirt 2 + Day 3 core 2)
           const coreSlots = Math.ceil(slots * (2 / 3));     // = 6 → 4 core
           const outskirtSlots = slots - coreSlots;            // = 6 → 2 outskirt
+          // ⚠️ 수정금지(승인필요) 2026-05-21 = collection_phase 완전 폐기 (= 사용자 SSOT = 같은 장소 = 한 데이터)
           const baseWhereCore = [
             eq(placeSeedRaw.cityId, cityId),
-            eq(placeSeedRaw.collectionPhase, 'gemini3-2026-05'),
             eq(placeSeedRaw.seedCategory, cat),
             between(placeSeedRaw.priceEur, budgetTier.min, budgetTier.max),
             eq(placeSeedRaw.dayZone, 'core'),
           ];
           const baseWhereOutskirt = [
             eq(placeSeedRaw.cityId, cityId),
-            eq(placeSeedRaw.collectionPhase, 'gemini3-2026-05'),
             eq(placeSeedRaw.seedCategory, cat),
             between(placeSeedRaw.priceEur, budgetTier.min, budgetTier.max),
             eq(placeSeedRaw.dayZone, 'outskirt'),
@@ -219,9 +218,9 @@ async function fetchFromPlaceSeedRaw(skeleton: AG1Output): Promise<PlaceResult[]
           return [...coreRows, ...outskirtRows];
         }
         // 비식당 = rank 1-20 + ORDER distance_km_from_center ASC (= 도심 → 외곽 자연)
+        // ⚠️ 2026-05-21 = collection_phase 폐기 (= 사용자 SSOT)
         const baseWhere = [
           eq(placeSeedRaw.cityId, cityId),
-          eq(placeSeedRaw.collectionPhase, 'gemini3-2026-05'),
           eq(placeSeedRaw.seedCategory, cat),
           between(placeSeedRaw.rank, 1, 20),
         ];

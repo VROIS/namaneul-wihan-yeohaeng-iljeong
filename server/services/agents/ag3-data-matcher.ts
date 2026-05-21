@@ -161,19 +161,12 @@ export async function preloadCityData(
           priceEur: placeSeedRaw.priceEur,
           rank: placeSeedRaw.rank,
           seedCategory: placeSeedRaw.seedCategory,
-          collectionPhase: placeSeedRaw.collectionPhase,
         }).from(placeSeedRaw).where(and(
           eq(placeSeedRaw.cityId, cityId),
-          // ⚠️ 수정금지(승인필요) 2026-05-08 = 사용자 의도 = 자연 확대 식당 매칭 포함
-          // = restaurant = phase 무관 = 모든 곳 (= bts2026 정정 + 어제 INSERT rank 9100+ 또는 70345+ 포함)
-          // = 명소 = gemini3-2026-05 + auto-learn-2026-05 phase 만 (= top 20 또는 9000+)
-          sql`(
-            ${placeSeedRaw.seedCategory} = 'restaurant'
-            OR (
-              ${placeSeedRaw.collectionPhase} IN ('gemini3-2026-05', 'auto-learn-2026-05')
-              AND (${placeSeedRaw.collectionPhase} = 'auto-learn-2026-05' OR ${placeSeedRaw.rank} BETWEEN 1 AND 20)
-            )
-          )`
+          // ⚠️ 수정금지(승인필요) 2026-05-21 = 사용자 SSOT = collection_phase 완전 폐기
+          // = 같은 장소 = 다른 phase 수집 = 같은 데이터 (= 사람 1 = 이름/별명/사는곳/묘사 = 한 사람)
+          // = 비식당 = rank 1-20 (= 사용자 큐레이션 우선) / 식당 = 모든 행
+          sql`(${placeSeedRaw.seedCategory} = 'restaurant' OR ${placeSeedRaw.rank} BETWEEN 1 AND 20)`
         ));
         for (const s of seeds) {
           // ⚠️ 수정금지(승인필요) 2026-05-09 = 이름 매칭 보강 = 정규화 + 악센트 제거 (= 사용자 SSOT = 좌표 X, 이름+address ✓)
@@ -471,7 +464,7 @@ export async function matchPlacesWithDB(
           ? (place.selectionReasons || [])
           : [
               ...(place.selectionReasons || []),
-              `📊 사용자 검증 SSOT (rank ${seed.rank ?? '-'}, ${seed.collectionPhase}, 리뷰 ${reviewCount.toLocaleString()}개${estimatedPriceEur ? `, €${estimatedPriceEur}/인` : ''})`,
+              `📊 사용자 검증 SSOT (rank ${seed.rank ?? '-'}, 리뷰 ${reviewCount.toLocaleString()}개${estimatedPriceEur ? `, €${estimatedPriceEur}/인` : ''})`,
             ],
         confidenceLevel: 'high' as const,
       } as any);

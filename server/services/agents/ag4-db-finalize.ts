@@ -132,11 +132,12 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
       ...(returnTransit ? [returnTransit] : []),
     ];
 
-    // 일일 비용 = 1 인 기준 합 (= 사용자 SSOT = price_eur 단일 = 1 인)
+    // ⚠️ 수정금지(승인필요) 2026-05-21 = 사용자 SSOT = priceEur 모든 값 합산 (= 0 = 무료 포함 / null = 제외)
+    // = 옛 `> 0` 조건 = healing/hotspot priceEur=0 다수 누락 = 시정 = typeof === 'number'
     const mealCostEur = dayPlaces.reduce((sum: number, p: any) =>
       sum + (p.isMealSlot && p.mealPrice ? p.mealPrice : 0), 0);
     const entranceFeesEur = dayPlaces.reduce((sum: number, p: any) =>
-      sum + (!p.isMealSlot && p.estimatedPriceEur && p.estimatedPriceEur > 0 ? p.estimatedPriceEur : 0), 0);
+      sum + (!p.isMealSlot && typeof p.estimatedPriceEur === 'number' ? p.estimatedPriceEur : 0), 0);
     const transportCostEur = allTransits.reduce((sum: number, t: any) => sum + (t.cost || 0), 0);
 
     // ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT = price_eur 단일 = 1 인 단가 (= ÷ companionCount X)
@@ -173,10 +174,13 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
         totalDuration: allTransits.reduce((s: number, t: any) => s + t.duration, 0),
         totalCost: allTransits.reduce((s: number, t: any) => s + t.costTotal, 0),
       },
+      // ⚠️ 수정금지(승인필요) 2026-05-21 = MIX AG4 와 동일 형식 정합 (= 사용자 SSOT) = totalEur + totalKrw 추가 = FE 호환
       dailyCost: {
         mealEur: mealCostEur,
         entranceEur: entranceFeesEur,
         transportEur: transportCostEur,
+        totalEur: dailyPerPersonEur,  // = MIX 호환 = perPersonEur 동일 (= 1 인 기준 합)
+        totalKrw: dailyGroupKrw,       // = 그룹 KRW (= 사용자가 본 일일 합산)
         perPersonEur: dailyPerPersonEur,
         perPersonKrw: dailyPerPersonKrw,
         groupEur: dailyGroupEur,
