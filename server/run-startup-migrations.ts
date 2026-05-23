@@ -20,17 +20,17 @@ export async function runStartupMigrations(): Promise<void> {
     `);
     console.log("[Migration] ✅ 0004 price_eur 적용 완료");
 
-    // 0006: cities.mcp_phases, place_seed_raw.collection_phase, image_url
+    // ⚠️ 2026-05-23 = collection_phase 폐기 = phase_tags 배열로 대체
+    // 0006: cities.mcp_phases, image_url (collection_phase = DROP 완료)
     await pool.query(`
       ALTER TABLE "cities"
         ADD COLUMN IF NOT EXISTS "mcp_phases" jsonb DEFAULT '[]'::jsonb;
     `);
     await pool.query(`
       ALTER TABLE "place_seed_raw"
-        ADD COLUMN IF NOT EXISTS "collection_phase" text,
         ADD COLUMN IF NOT EXISTS "image_url" text;
     `);
-    console.log("[Migration] ✅ 0006 mcp_phases/collection_phase/image_url 적용 완료");
+    console.log("[Migration] ✅ 0006 mcp_phases/image_url 적용 완료");
 
     // 0007: cities.bts_rank (BTS 2026 공연 도시 1~34)
     await pool.query(`

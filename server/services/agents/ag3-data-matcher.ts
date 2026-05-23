@@ -19,10 +19,13 @@
  */
 
 import { db } from '../../db';
-import { places, cities, celebrityPlaceEvidence, placeImages, placeSeedRaw } from '@shared/schema';
+// ⚠️ 수정금지(승인필요) 2026-05-21 = celebrityPlaceEvidence DROP (= 1 행 폐기 = 사용자 SSOT) = import 제거
+// ⚠️ 2026-05-23 = places + placeImages import 제거 (= 사용자 SSOT = 보조 테이블 폐기 = PSR 단일)
+import { cities, placeSeedRaw } from '@shared/schema';
 import { eq, ilike, sql, inArray, and } from 'drizzle-orm';
 import type { AG1Output, AG3PreOutput, AG3Output, PlaceResult, ScheduleSlot, SeedCategory } from './types';
-import { findCityUnified, addPlaceAlias, type CityResolveResult } from '../city-resolver';
+// ⚠️ 2026-05-23 = addPlaceAlias import 제거 (= 폐기)
+import { findCityUnified, type CityResolveResult } from '../city-resolver';
 // ⚠️ 수정금지(승인필요) 2026-05-15 = Google Places SKU 가드 (= SSOT §16)
 // = Enterprise+Atmosphere 33 필드 차단 = $40/1K 폭탄 방지
 import { validateFieldMask } from '../shared/google-places-sku';
@@ -56,8 +59,7 @@ function isUsableImageUrl(url: string): boolean {
 // = 옛 = 4 컬럼 (evidenceUrl/bestImageUrl/imageUrl/photoUrls) = WK + Google 외 = 사용 X
 // = 새 = bestImageUrl (WK) > imageUrl (Google) 인라인 = AG2-DB:233 + AG3:488
 
-// Google Places API 키 + 💰 비용 보호
-import { apiCallTracker } from '../google-places';
+// ⚠️ 2026-05-23 = google-places.ts 파일 삭제 = apiCallTracker import 제거 (= 미사용)
 
 function getGoogleMapsApiKey(): string {
   return process.env.Google_maps_api_key || process.env.GOOGLE_MAPS_API_KEY || '';
@@ -674,10 +676,11 @@ export async function saveNewPlacesToDB(
   // 1. nextRank base 사전 계산 (= 카테고리별 1 회 = race condition 차단)
   const baseRanks: Record<string, number> = {};
   for (const cat of ['restaurant', 'attraction']) {
+    // ⚠️ 2026-05-23 = collection_phase 폐기 = phase_tags 'auto-learn%' 마커로 대체
     const r = await db!.execute(
       sql`SELECT COALESCE(MAX(rank), 8999) + 1 AS next_rank FROM place_seed_raw
           WHERE city_id = ${cityId} AND seed_category = ${cat}
-          AND collection_phase = 'auto-learn-2026-05'`
+          AND EXISTS (SELECT 1 FROM unnest(COALESCE(phase_tags, ARRAY[]::text[])) AS t WHERE t LIKE 'auto-learn%')`
     );
     baseRanks[cat] = (r as any).rows?.[0]?.next_rank ?? 9000;
   }
@@ -725,7 +728,6 @@ export async function saveNewPlacesToDB(
       await upsertPlace({
         cityId: cityId,
         seedCategory,
-        collectionPhase: 'auto-learn-2026-05',
         rank: nextRank,
         nameEn: place.name,
         nameKo: (place as any).nameKo || null,
@@ -746,6 +748,8 @@ export async function saveNewPlacesToDB(
 
       return { saved: 1, skipped: 0, enrichedByApi: 1, photoOk: imageUrl ? 1 : 0 };
     } catch (e) {
+      // ⚠️ 2026-05-23 = silent fail 가시화 (= 사용자 SSOT = "5월 6일 백필 미작동" 진단 결과)
+      console.error(`[AG3-SAVE] ❌ "${place.name}" 저장 실패:`, (e as Error).message);
       return { saved: 0, skipped: 0, enrichedByApi: 0, photoOk: 0, error: (e as Error).message };
     }
   }));

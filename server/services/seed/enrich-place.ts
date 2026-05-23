@@ -92,13 +92,8 @@ async function selectBatch(cityId: number, batchSize: number, offset: number) {
     .where(eq(placeSeedRaw.cityId, cityId))
     .orderBy(asc(placeSeedRaw.id));
 
-  const active = rows.filter(
-    (r) =>
-      !(r.phaseTags || []).some((t: any) =>
-        String(t).includes('archived-merge'),
-      ),
-  );
-  return active.slice(offset, offset + batchSize);
+  // ⚠️ 수정금지(승인필요) 2026-05-21 = archive 마커 폐기 (= 사용자 SSOT = 1 장소 = 1 행 정적)
+  return rows.slice(offset, offset + batchSize);
 }
 
 function buildPrompt(input: GeminiInputPlace[]): string {

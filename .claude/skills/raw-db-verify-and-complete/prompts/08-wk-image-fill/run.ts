@@ -108,7 +108,6 @@ async function wikidataAround(lat: number, lng: number): Promise<any[]> {
       AND seed_category NOT IN ('restaurant', 'adventure')
       AND (rank > 20 OR rank IS NULL)
       AND (image_url IS NULL OR image_url = '')
-      AND NOT (phase_tags && ARRAY['archived-merge-2026-05-18','archived-merge-2026-05-15','archived-merge-2026-05-20','user-delete'])
     ORDER BY seed_category, rank NULLS LAST
   `, [cityId])).rows;
   await c.end();

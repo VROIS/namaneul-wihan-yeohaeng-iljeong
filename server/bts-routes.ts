@@ -117,7 +117,8 @@ export function registerBtsRoutes(app: Express): void {
           and(
             eq(placeSeedRaw.cityId, cities.id),
             eq(placeSeedRaw.seedCategory, "bts_venue"),
-            eq(placeSeedRaw.collectionPhase, "bts2026")
+            // ⚠️ 2026-05-23 = collection_phase 폐기 = phase_tags 'bts2026' 마커로 대체
+            sql`'bts2026' = ANY(COALESCE(${placeSeedRaw.phaseTags}, ARRAY[]::text[]))`
           )
         )
         .where(isNotNull(cities.btsRank))
@@ -381,7 +382,8 @@ export function registerBtsRoutes(app: Express): void {
         .where(
           and(
             eq(placeSeedRaw.cityId, cityId),
-            eq(placeSeedRaw.collectionPhase, "bts2026"),
+            // ⚠️ 2026-05-23 = collection_phase 폐기 = phase_tags 'bts2026' 마커로 대체
+            sql`'bts2026' = ANY(COALESCE(${placeSeedRaw.phaseTags}, ARRAY[]::text[]))`,
             inArray(placeSeedRaw.id, ids)
           )
         );

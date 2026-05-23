@@ -73,21 +73,17 @@ if (!cityId) { console.error('Usage: --city-id=<N> --date=<YYYY-MM-DD> --apply-t
   await c.connect();
   await c.query('BEGIN');
 
+  // ⚠️ 수정금지(승인필요) 2026-05-21 = 사용자 SSOT = archive 마커 폐기 = 물리 DELETE (= 1 장소 = 1 행 정적)
   let archived = 0, errors = 0;
   try {
     for (const g of targets) {
       const keep = selectKeep(g.rows);
       const archiveIds = g.rows.filter((r: any) => r.id !== keep.id).map((r: any) => r.id);
       for (const aid of archiveIds) {
-        const r = await c.query(
-          `UPDATE place_seed_raw
-           SET phase_tags = array_cat(COALESCE(phase_tags, ARRAY[]::text[]), ARRAY[$2]::text[])
-           WHERE id = $1`,
-          [aid, `archived-merge-${date}`]
-        );
+        const r = await c.query(`DELETE FROM place_seed_raw WHERE id = $1`, [aid]);
         if (r.rowCount) {
           archived++;
-          console.log(`✓ archive id=${aid} (= keep id=${keep.id} '${keep.name_en}') [tier=${g.matched_tier}]`);
+          console.log(`✓ DELETE id=${aid} (= keep id=${keep.id} '${keep.name_en}') [tier=${g.matched_tier}]`);
         }
       }
     }

@@ -37,9 +37,11 @@ import {
   type TransportPricingResult, type GuidePriceResult, type TransitPriceResult, type UberBlackComparison,
 } from '../transport-pricing-service';
 import { db } from '../../db';
-import { exchangeRates, youtubePlaceMentions, youtubeVideos, youtubeChannels, naverBlogPosts, places, placeSeedRaw } from '@shared/schema';
+// ⚠️ 2026-05-23 = simplify P1 = dead import 제거 (= youtubePlaceMentions/youtubeVideos/youtubeChannels/naverBlogPosts/places = 본문 사용 0 = Step 4 DROP 시 빌드 깨짐 차단)
+import { exchangeRates, placeSeedRaw } from '@shared/schema';
 import { eq, and, sql, desc, asc } from 'drizzle-orm';
-import { findCelebrityVisitsForPlaces, type CelebrityVisit } from '../celebrity-tracker';
+// ⚠️ 2026-05-23 = celebrity-tracker 완전 폐기 (= 사용자 SSOT = celeb 검색 = 데이터 0)
+type CelebrityVisit = any;
 
 /**
  * Gemini 반환 가격 정제
@@ -712,7 +714,7 @@ async function step2_enrichAndBuild(
 
   // ── 2d. Enrichment 결과 병합 + 셀럽 방문 검색 + nubiReason 생성 ──
 
-  // 🌟 셀럽 TOP 10 방문 흔적 검색 (Gemini 웹검색, 병렬) - 성능 이슈로 완전 삭제
+  // ⚠️ 2026-05-23 = celebrity-tracker 폐기 = 빈 Map 유지 (= nubiReason 호출부 호환)
   const celebrityVisits = new Map<string, CelebrityVisit>();
 
   // ⚠️ 수정금지(승인필요) 2026-05-20 = 각 장소 = place_seed_raw 데이터 그대로 사용 (= ta/kr/ph 폐기)

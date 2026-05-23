@@ -1,22 +1,18 @@
+// ⚠️ 수정금지(승인필요) 2026-05-23 = 사용자 SSOT = PSR 단일 = 보조 테이블 의존 제거
+// = places 함수 본문 = PSR 사용 (= 시그니처 유지 = FE 호환)
+// = placeDataSources/weatherCache/routeCache/reviews/dataSyncLog/placePrices = 함수 삭제
 import {
   type User, type InsertUser,
   type City, type InsertCity,
-  type Place, type InsertPlace,
-  type PlaceDataSource,
-  type Review,
-  type WeatherCache,
+  type Place,
   type Itinerary, type InsertItinerary,
-  type RouteCache,
-  type DataSyncLog,
   type GuidePrice,
-  type PlacePrice,
   users, userProviders,
-  cities, places, placeDataSources, reviews,
-  weatherCache, itineraries, routeCache, dataSyncLog,
-  guidePrices, placePrices
+  cities, itineraries, placeSeedRaw,
+  guidePrices,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, gte, lte } from "drizzle-orm";
+import { eq, desc, and } from "drizzle-orm";
 
 // 참고: sql import는 필요 시 추가
 // requireDb() 함수 - 향후 DB 연결 검증 필요 시 사용
@@ -38,42 +34,14 @@ export interface IStorage {
   getCityByName(name: string, country: string): Promise<City | undefined>;
   createCity(city: InsertCity): Promise<City>;
 
-  // Places
-  getPlacesByCity(cityId: number, type?: string): Promise<Place[]>;
+  // Places = PSR 직접 (= 사용자 SSOT 2026-05-23)
   getPlace(id: number): Promise<Place | undefined>;
   getPlaceByGoogleId(googlePlaceId: string): Promise<Place | undefined>;
-  createPlace(place: InsertPlace): Promise<Place>;
-  updatePlaceScores(id: number, scores: { vibeScore?: number; buzzScore?: number; tasteVerifyScore?: number; realityPenalty?: number; finalScore?: number; tier?: number }): Promise<Place | undefined>;
-  updatePlaceData(id: number, data: Partial<InsertPlace>): Promise<Place | undefined>;
-  getTopPlaces(cityId: number, type: string, limit?: number): Promise<Place[]>;
-
-  // Place Data Sources
-  getPlaceDataSources(placeId: number): Promise<PlaceDataSource[]>;
-  upsertPlaceDataSource(data: Omit<PlaceDataSource, "id" | "fetchedAt">): Promise<PlaceDataSource>;
-
-  // Reviews
-  getReviewsByPlace(placeId: number): Promise<Review[]>;
-  getOriginatorReviews(placeId: number): Promise<Review[]>;
-  createReview(review: Omit<Review, "id" | "fetchedAt">): Promise<Review>;
-
-  // [DROPPED 0013] vibeAnalysis, realityChecks 테이블 삭제됨
-
-  // Weather
-  getWeatherCache(cityId: number, date: Date): Promise<WeatherCache | undefined>;
-  upsertWeatherCache(data: Omit<WeatherCache, "id" | "fetchedAt">): Promise<WeatherCache>;
 
   // Itineraries
   getUserItineraries(userId: string): Promise<Itinerary[]>;
   getItinerary(id: number): Promise<Itinerary | undefined>;
   createItinerary(itinerary: InsertItinerary): Promise<Itinerary>;
-  getItineraryItems(itineraryId: number): Promise<ItineraryItem[]>;
-
-  // Route Cache
-  getRouteCache(originId: number, destinationId: number, mode: string): Promise<RouteCache | undefined>;
-  upsertRouteCache(data: Omit<RouteCache, "id" | "fetchedAt">): Promise<RouteCache>;
-
-  // Sync Log
-  logDataSync(log: Omit<DataSyncLog, "id" | "startedAt">): Promise<DataSyncLog>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -160,125 +128,37 @@ export class DatabaseStorage implements IStorage {
     return newCity;
   }
 
-  // Places
-  async getPlacesByCity(cityId: number, type?: string): Promise<Place[]> {
-    if (type) {
-      return db.select().from(places).where(and(eq(places.cityId, cityId), eq(places.type, type as any))).orderBy(desc(places.finalScore));
-    }
-    return db.select().from(places).where(eq(places.cityId, cityId)).orderBy(desc(places.finalScore));
-  }
-
+  // ========================================
+  // Places = PSR 직접 (= 사용자 SSOT 2026-05-23 = PSR 단일 컬럼만 사용)
+  // = 옛 Place 필드 호환 매핑 (= nameEn → name, seedCategory → type, imageUrl → photoUrl)
+  // ========================================
   async getPlace(id: number): Promise<Place | undefined> {
-    const [place] = await db.select().from(places).where(eq(places.id, id));
-    return place || undefined;
+    const [psr] = await db.select().from(placeSeedRaw).where(eq(placeSeedRaw.id, id));
+    if (!psr) return undefined;
+    return {
+      ...psr,
+      name: psr.nameEn || psr.nameKo || "",
+      type: psr.seedCategory,
+      photoUrl: psr.imageUrl,
+      photoUrls: psr.photoUrls || [],
+    } as unknown as Place;
   }
 
   async getPlaceByGoogleId(googlePlaceId: string): Promise<Place | undefined> {
-    const [place] = await db.select().from(places).where(eq(places.googlePlaceId, googlePlaceId));
-    return place || undefined;
+    const [psr] = await db.select().from(placeSeedRaw).where(eq(placeSeedRaw.googlePlaceId, googlePlaceId));
+    if (!psr) return undefined;
+    return {
+      ...psr,
+      name: psr.nameEn || psr.nameKo || "",
+      type: psr.seedCategory,
+      photoUrl: psr.imageUrl,
+      photoUrls: psr.photoUrls || [],
+    } as unknown as Place;
   }
 
-  async createPlace(place: InsertPlace): Promise<Place> {
-    const [newPlace] = await db.insert(places).values(place).returning();
-    return newPlace;
-  }
-
-  async updatePlaceScores(id: number, scores: { vibeScore?: number; buzzScore?: number; tasteVerifyScore?: number; realityPenalty?: number; finalScore?: number; tier?: number }): Promise<Place | undefined> {
-    const [place] = await db.update(places).set({ ...scores, updatedAt: new Date() }).where(eq(places.id, id)).returning();
-    return place || undefined;
-  }
-
-  async updatePlaceData(id: number, data: Partial<InsertPlace>): Promise<Place | undefined> {
-    if (data == null || typeof data !== "object") return undefined;
-    // undefined 값 제거 (null은 유지 — 명시적으로 null로 설정 가능)
-    const cleanData: Record<string, any> = {};
-    for (const [key, value] of Object.entries(data)) {
-      if (value !== undefined) {
-        cleanData[key] = value;
-      }
-    }
-    if (Object.keys(cleanData).length === 0) return undefined;
-    cleanData.updatedAt = new Date();
-    const [place] = await db.update(places).set(cleanData).where(eq(places.id, id)).returning();
-    return place || undefined;
-  }
-
-  async getTopPlaces(cityId: number, type: string, limit: number = 10): Promise<Place[]> {
-    return db.select().from(places)
-      .where(and(eq(places.cityId, cityId), eq(places.type, type as any)))
-      .orderBy(desc(places.finalScore))
-      .limit(limit);
-  }
-
-  // Place Data Sources
-  async getPlaceDataSources(placeId: number): Promise<PlaceDataSource[]> {
-    return db.select().from(placeDataSources).where(eq(placeDataSources.placeId, placeId));
-  }
-
-  async upsertPlaceDataSource(data: Omit<PlaceDataSource, "id" | "fetchedAt">): Promise<PlaceDataSource> {
-    const existing = await db.select().from(placeDataSources)
-      .where(and(eq(placeDataSources.placeId, data.placeId), eq(placeDataSources.source, data.source)));
-
-    if (existing.length > 0) {
-      const [updated] = await db.update(placeDataSources)
-        .set({ ...data, fetchedAt: new Date() })
-        .where(eq(placeDataSources.id, existing[0].id))
-        .returning();
-      return updated;
-    }
-
-    const [created] = await db.insert(placeDataSources).values(data).returning();
-    return created;
-  }
-
-  // Reviews
-  async getReviewsByPlace(placeId: number): Promise<Review[]> {
-    return db.select().from(reviews).where(eq(reviews.placeId, placeId)).orderBy(desc(reviews.reviewDate));
-  }
-
-  async getOriginatorReviews(placeId: number): Promise<Review[]> {
-    return db.select().from(reviews)
-      .where(and(eq(reviews.placeId, placeId), eq(reviews.isOriginatorLanguage, true)))
-      .orderBy(desc(reviews.reviewDate));
-  }
-
-  async createReview(review: Omit<Review, "id" | "fetchedAt">): Promise<Review> {
-    const [newReview] = await db.insert(reviews).values(review).returning();
-    return newReview;
-  }
-
-  // Weather
-  async getWeatherCache(cityId: number, date: Date): Promise<WeatherCache | undefined> {
-    const startOfDay = new Date(date);
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(date);
-    endOfDay.setHours(23, 59, 59, 999);
-
-    const [weather] = await db.select().from(weatherCache)
-      .where(and(
-        eq(weatherCache.cityId, cityId),
-        gte(weatherCache.date, startOfDay),
-        lte(weatherCache.date, endOfDay)
-      ));
-    return weather || undefined;
-  }
-
-  async upsertWeatherCache(data: Omit<WeatherCache, "id" | "fetchedAt">): Promise<WeatherCache> {
-    const existing = await this.getWeatherCache(data.cityId, data.date);
-
-    if (existing) {
-      const [updated] = await db.update(weatherCache)
-        .set({ ...data, fetchedAt: new Date() })
-        .where(eq(weatherCache.id, existing.id))
-        .returning();
-      return updated;
-    }
-
-    const [created] = await db.insert(weatherCache).values(data).returning();
-    return created;
-  }
-
-  // Itineraries
+  // ========================================
+  // Itineraries (= itineraries.rawData JSON 사용 = 외래키 없음)
+  // ========================================
   async getUserItineraries(userId: string): Promise<Itinerary[]> {
     return db.select().from(itineraries)
       .where(eq(itineraries.userId, userId))
@@ -295,39 +175,9 @@ export class DatabaseStorage implements IStorage {
     return newItinerary;
   }
 
-  // Route Cache
-  async getRouteCache(originId: number, destinationId: number, mode: string): Promise<RouteCache | undefined> {
-    const [route] = await db.select().from(routeCache)
-      .where(and(
-        eq(routeCache.originPlaceId, originId),
-        eq(routeCache.destinationPlaceId, destinationId),
-        eq(routeCache.travelMode, mode)
-      ));
-    return route || undefined;
-  }
-
-  async upsertRouteCache(data: Omit<RouteCache, "id" | "fetchedAt">): Promise<RouteCache> {
-    const existing = await this.getRouteCache(data.originPlaceId, data.destinationPlaceId, data.travelMode);
-
-    if (existing) {
-      const [updated] = await db.update(routeCache)
-        .set({ ...data, fetchedAt: new Date() })
-        .where(eq(routeCache.id, existing.id))
-        .returning();
-      return updated;
-    }
-
-    const [created] = await db.insert(routeCache).values(data).returning();
-    return created;
-  }
-
-  // Sync Log
-  async logDataSync(log: Omit<DataSyncLog, "id" | "startedAt">): Promise<DataSyncLog> {
-    const [newLog] = await db.insert(dataSyncLog).values(log).returning();
-    return newLog;
-  }
-
+  // ========================================
   // Guide Prices
+  // ========================================
   async getGuidePrices(): Promise<GuidePrice[]> {
     return db.select().from(guidePrices).where(eq(guidePrices.isActive, true));
   }
@@ -336,32 +186,6 @@ export class DatabaseStorage implements IStorage {
     const [price] = await db.select().from(guidePrices)
       .where(and(eq(guidePrices.serviceType, serviceType), eq(guidePrices.isActive, true)));
     return price || undefined;
-  }
-
-  async upsertGuidePrice(data: Omit<GuidePrice, "id" | "createdAt">): Promise<GuidePrice> {
-    const existing = await this.getGuidePriceByType(data.serviceType);
-
-    if (existing) {
-      const [updated] = await db.update(guidePrices)
-        .set({ ...data, lastUpdated: new Date() })
-        .where(eq(guidePrices.id, existing.id))
-        .returning();
-      return updated;
-    }
-
-    const [created] = await db.insert(guidePrices).values(data).returning();
-    return created;
-  }
-
-  // Place Prices
-  async getPlacePrice(placeId: number, priceType: string): Promise<PlacePrice | undefined> {
-    const [price] = await db.select().from(placePrices)
-      .where(and(eq(placePrices.placeId, placeId), eq(placePrices.priceType, priceType)));
-    return price || undefined;
-  }
-
-  async getPlacePrices(placeId: number): Promise<PlacePrice[]> {
-    return db.select().from(placePrices).where(eq(placePrices.placeId, placeId));
   }
 }
 

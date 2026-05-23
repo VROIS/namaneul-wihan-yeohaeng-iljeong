@@ -152,9 +152,11 @@ console.table(summary);
 fs.writeFileSync(`${outDir}/summary.json`, JSON.stringify(summary, null, 2));
 console.log(`✅ 요약: ${outDir}/summary.json`);
 
-// 백그라운드 saveNewPlacesToDB (= setTimeout 100ms) 가 완료되기 까지 대기
-console.log('⏳ 백그라운드 자동 저장 대기 (5 초)...');
-await new Promise(r => setTimeout(r, 5000));
+// ⚠️ 2026-05-23 = 사용자 SSOT = 5 초 → 90 초 (= silent fail 차단)
+// = 5 월 6 일 5 초 대기 = TS searchText 20s + PhotoMedia 30s 미완료 = INSERT 0건 사고 (= 제네바 백필 미작동 진단)
+// = 백그라운드 saveNewPlacesToDB = TS(20s) + PM(30s) + Storage upload + upsertPlace = 최대 ~60s = 90s 충분
+console.log('⏳ 백그라운드 saveNewPlacesToDB 완료 대기 (90 초 = TS+PM+Storage+INSERT)...');
+await new Promise(r => setTimeout(r, 90000));
 console.log('✅ 자동 저장 완료');
 
 await c.end();

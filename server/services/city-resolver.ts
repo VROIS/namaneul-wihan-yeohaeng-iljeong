@@ -13,7 +13,8 @@
  */
 
 import { db } from '../db';
-import { cities, places } from '@shared/schema';
+// ⚠️ 2026-05-23 = places import 제거 (= 사용자 SSOT = PSR 단일 = findPlaceByName + addPlaceAlias 폐기)
+import { cities } from '@shared/schema';
 import { eq, ilike, sql } from 'drizzle-orm';
 
 // ===== 도시 영한 매핑 테이블 (하드코드 fallback) =====
@@ -274,96 +275,47 @@ export async function findCityUnified(input: string): Promise<CityResolveResult 
       };
     }
 
-    console.log(`[CityResolver] ❌ 도시 미발견: "${input}"`);
-    return null;
+    // ⚠️ 수정금지(승인필요) 2026-05-23 = 사용자 SSOT = 5 단계 = 신규 도시 자동 INSERT
+    // = 4 단계 모두 실패 = Gemini 메타 호출 → cities INSERT (= cities_id_seq 자동 발급)
+    // = 결과 = 다음 사용자 = 1단계 직접 매칭 = 외부 호출 0 = 영구 재활용
+    console.log(`[CityResolver] 🆕 4 단계 매칭 실패 = 신규 도시 자동 백필 시도: "${input}"`);
+    const { fetchCityMetaFromGemini } = await import('./shared/gemini-city-meta');
+    const meta = await fetchCityMetaFromGemini(input);
+    if (!meta) {
+      console.log(`[CityResolver] ❌ Gemini 메타 실패 = 도시 미존재 = null 반환: "${input}"`);
+      return null;
+    }
+    const [newCity] = await db.insert(cities).values({
+      name: meta.nameKo,
+      nameEn: meta.nameEn,
+      nameLocal: meta.nameLocal,
+      country: meta.country,
+      countryCode: meta.countryCode,
+      latitude: meta.latitude,
+      longitude: meta.longitude,
+      timezone: meta.timezone,
+      primaryLanguage: meta.primaryLanguage,
+      aliases: [input],
+    }).returning();
+    console.log(`[CityResolver] ✅ 신규 도시 자동 발급: ${newCity.name} (id=${newCity.id}, ${newCity.countryCode})`);
+    return {
+      cityId: newCity.id,
+      name: newCity.name,
+      nameEn: newCity.nameEn || meta.nameEn,
+      nameLocal: newCity.nameLocal || meta.nameLocal,
+      countryCode: newCity.countryCode,
+      latitude: newCity.latitude,
+      longitude: newCity.longitude,
+    };
   } catch (error) {
     console.error(`[CityResolver] 검색 오류 (${input}):`, error);
     return null;
   }
 }
 
-/**
- * 장소명으로 DB places 테이블에서 검색 (aliases 포함)
- * AG3 매칭 로직에서 사용
- */
-export async function findPlaceByName(
-  placeName: string,
-  cityId: number
-): Promise<any | null> {
-  if (!db) return null;
-
-  const nameLower = placeName.trim().toLowerCase();
-
-  try {
-    // 1. name 정확 매칭
-    const exact = await db.select().from(places)
-      .where(sql`${places.cityId} = ${cityId} AND LOWER(${places.name}) = ${nameLower}`)
-      .limit(1);
-    if (exact.length > 0) return exact[0];
-
-    // 2. displayNameKo 매칭
-    const koMatch = await db.select().from(places)
-      .where(sql`${places.cityId} = ${cityId} AND LOWER(COALESCE(${places.displayNameKo}, '')) = ${nameLower}`)
-      .limit(1);
-    if (koMatch.length > 0) return koMatch[0];
-
-    // 3. aliases 배열 검색
-    const aliasMatch = await db.select().from(places)
-      .where(sql`${places.cityId} = ${cityId} AND ${places.aliases}::jsonb @> ${JSON.stringify([placeName])}::jsonb`)
-      .limit(1);
-    if (aliasMatch.length > 0) return aliasMatch[0];
-
-    // 4. 부분 매칭 (포함 관계)
-    const partial = await db.select().from(places)
-      .where(sql`${places.cityId} = ${cityId} AND (
-        LOWER(${places.name}) LIKE ${`%${nameLower}%`} 
-        OR ${`%${nameLower}%`} LIKE CONCAT('%', LOWER(${places.name}), '%')
-      )`)
-      .limit(1);
-    if (partial.length > 0) return partial[0];
-
-    return null;
-  } catch (error) {
-    console.error(`[CityResolver] 장소 검색 오류 (${placeName}):`, error);
-    return null;
-  }
-}
-
-/**
- * 장소 별칭 자동 학습 - 매칭 성공 시 새 별칭을 aliases에 추가
- */
-export async function addPlaceAlias(placeId: number, newAlias: string): Promise<void> {
-  if (!db || !newAlias) return;
-
-  try {
-    // 현재 aliases 조회
-    const [place] = await db.select({ aliases: places.aliases, name: places.name })
-      .from(places)
-      .where(eq(places.id, placeId))
-      .limit(1);
-
-    if (!place) return;
-
-    const currentAliases: string[] = (place.aliases as string[]) || [];
-    const nameLower = newAlias.trim().toLowerCase();
-
-    // 이미 존재하거나 name과 동일하면 스킵
-    if (
-      currentAliases.some(a => a.toLowerCase() === nameLower) ||
-      place.name.toLowerCase() === nameLower
-    ) return;
-
-    // 새 별칭 추가
-    const updatedAliases = [...currentAliases, newAlias.trim()];
-    await db.update(places)
-      .set({ aliases: updatedAliases })
-      .where(eq(places.id, placeId));
-
-    console.log(`[CityResolver] 📝 별칭 학습: "${place.name}" += "${newAlias}"`);
-  } catch (e) {
-    // 학습 실패해도 무시
-  }
-}
+// ⚠️ 2026-05-23 = findPlaceByName + addPlaceAlias 완전 삭제
+// = 사용자 SSOT = places 테이블 폐기 = PSR 단일 = 매칭 = upsertPlace() 의 5 단계 매칭 사용
+// = 호출처 = 0건 (= grep 검증 완료 = 둘 다 dead code)
 
 /**
  * 영어 → 한국어 도시명 변환 (표시용)

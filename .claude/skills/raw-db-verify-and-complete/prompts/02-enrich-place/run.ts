@@ -44,7 +44,6 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--batch=40] [--offset=0] [--
     SELECT id, name_en, name_local, name_ko, address, latitude, longitude, google_place_id, seed_category
     FROM place_seed_raw
     WHERE city_id = $1
-      AND NOT (phase_tags && ARRAY['archived-merge-2026-05-18','archived-merge-2026-05-15','archived-merge-2026-05-20','user-delete'])
     ORDER BY id
   `, [cityId])).rows;
   await c.end();

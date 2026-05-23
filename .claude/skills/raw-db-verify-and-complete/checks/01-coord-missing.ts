@@ -50,7 +50,6 @@ if (!cityId && !all) { console.error('Usage: --city-id=<N> 또는 --all'); proce
       SELECT id, seed_category, rank, name_en, name_local, address
       FROM place_seed_raw
       WHERE city_id = $1
-        AND NOT (phase_tags && ARRAY['archived-merge-2026-05-18','archived-merge-2026-05-15','archived-merge-2026-05-20','user-delete'])
         AND (latitude IS NULL OR longitude IS NULL)
       ORDER BY seed_category, rank NULLS LAST
     `, [cid])).rows;
@@ -58,7 +57,6 @@ if (!cityId && !all) { console.error('Usage: --city-id=<N> 또는 --all'); proce
     const total = (await c.query(`
       SELECT COUNT(*)::int AS cnt FROM place_seed_raw
       WHERE city_id = $1
-        AND NOT (phase_tags && ARRAY['archived-merge-2026-05-18','archived-merge-2026-05-15','archived-merge-2026-05-20','user-delete'])
     `, [cid])).rows[0].cnt;
 
     if (missing.length > 0) {

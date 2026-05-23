@@ -23,7 +23,7 @@ import { eq, sql } from 'drizzle-orm';
 export interface UpsertPayload {
   cityId: number;
   seedCategory: string;  // 'restaurant' | 'attraction' | 'heritage' | ...
-  collectionPhase?: string;  // 기본 = 'auto-learn-2026-05'
+  // ⚠️ 2026-05-23 = collection_phase 폐기 = phaseTags 배열로 대체
   rank?: number;
   // 식별 키 (= 4 단계 매칭)
   googlePlaceId?: string | null;
@@ -78,11 +78,15 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
     return { action: 'skipped', rowId: null, matchedBy: 'none', reason: 'missing_required_fields' };
   }
 
-  // 같은 도시 활성 행 = 매칭 후보 SELECT
-  // ⚠️ 2026-05-15 = 5 단계 매칭 = PID/풀주소/google_maps_uri/좌표 10m/이름 9 조합
+  // ⚠️ 수정금지(승인필요) 2026-05-23 = 사용자 SSOT = 글로벌 매칭 (= cityId 무관)
+  // = PID/주소/URI/좌표 = 같은 장소 = 도시 무관 항상 동일 entity = 글로벌 후보
+  // = 이름 9 조합 만 = cityId 필터 유지 (= "Cafe de Paris" 체인 = 다른 도시는 별개 행)
+  // = 사용자 명시: "비록 도시는 다르더라도 같은 장소면 중복 판명됨"
+  // = 옵션 A = 첫 등록 cityId 영구 유지 (= UPDATE 시 cityId 미변경)
   const candidates = await db
     .select({
       id: placeSeedRaw.id,
+      cityId: placeSeedRaw.cityId,
       googlePlaceId: placeSeedRaw.googlePlaceId,
       googleMapsUri: placeSeedRaw.googleMapsUri,
       address: placeSeedRaw.address,
@@ -92,8 +96,7 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
       nameLocal: placeSeedRaw.nameLocal,
       nameKo: placeSeedRaw.nameKo,
     })
-    .from(placeSeedRaw)
-    .where(eq(placeSeedRaw.cityId, p.cityId));
+    .from(placeSeedRaw);
 
   // 5 단계 매칭
   let match: (typeof candidates)[0] | undefined;
@@ -142,11 +145,13 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
   // = [[feedback_name_match_9_combinations]]
   // = name_en + name_local + name_ko 3 × 3 = 9 조합 = 셋 중 한 쌍 일치 시 매칭
   // = 1/9 만 비교 = 중복 못 잡음 (= Eiffel Tower / Tour Eiffel / 에펠탑 별개로 남음)
+  // ⚠️ 2026-05-23 = 이름 매칭만 cityId 필터 유지 (= "Cafe de Paris" 체인 = 다른 도시는 별개 행)
   if (!match) {
     const normName = (s: string | null | undefined) => (s || '').trim().toLowerCase();
     const pNames = [normName(p.nameEn), normName(p.nameLocal), normName(p.nameKo)].filter(Boolean);
     if (pNames.length > 0) {
       match = candidates.find((c) => {
+        if (c.cityId !== p.cityId) return false;  // 이름 매칭만 = 같은 도시 강제
         const cNames = [normName(c.nameEn), normName(c.nameLocal), normName(c.nameKo)].filter(Boolean);
         return pNames.some((pn) => cNames.includes(pn));
       });
@@ -206,7 +211,7 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
       .values({
         cityId: p.cityId,
         seedCategory: p.seedCategory,
-        collectionPhase: p.collectionPhase || 'auto-learn-2026-05',
+        // ⚠️ 2026-05-23 = collection_phase 폐기 = phaseTags 만 사용
         rank: nextRank,
         nameEn: p.nameEn,
         nameKo: p.nameKo || null,

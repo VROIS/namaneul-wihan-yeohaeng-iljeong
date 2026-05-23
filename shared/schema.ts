@@ -487,20 +487,8 @@ export const instagramPhotos = pgTable("instagram_photos", {
   fetchedAt: timestamp("fetched_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
-// ===== 셀럽 성지순례 (핵심 차별화) =====
-// 20인 한국 셀럽 마스터 리스트 - Vibe 매칭용
-export const celebEvidence = pgTable("celeb_evidence", {
-  id: serial("id").primaryKey(),
-  rank: integer("rank").notNull().unique(),  // 1~20
-  name: text("name").notNull(),              // "리사"
-  instagramHandle: text("instagram_handle").notNull(),  // @lalalalisa_m
-  followerRange: text("follower_range"),     // "1억+"
-  persona: text("persona"),                  // "글로벌 1위, 방문지마다 리사 로드 형성"
-  vibes: jsonb("vibes").$type<string[]>().default([]),  // ["Hotspot","Romantic"] - 매칭용
-  isActive: boolean("is_active").default(true),
-  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-});
+// ⚠️ 2026-05-23 = celeb_evidence DROP 완료 (= 2026-05-21 폐기 결정 후속) = stub
+export const celebEvidence = null as any;
 
 // 이미지 통합 테이블 (인스타 우선) — instagram_photos, places.instagram_photo_urls, celebrity_place_evidence, places.photoUrls 통합
 export const placeImages = pgTable("place_images", {
@@ -515,19 +503,10 @@ export const placeImages = pgTable("place_images", {
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
-// 장소별 셀럽 인스타 흔적 - 이미지 최상순위 노출용
-export const celebrityPlaceEvidence = pgTable("celebrity_place_evidence", {
-  id: serial("id").primaryKey(),
-  placeId: integer("place_id").notNull().references(() => places.id, { onDelete: "cascade" }),
-  celebId: integer("celeb_id").notNull().references(() => celebEvidence.id, { onDelete: "cascade" }),
-  imageUrl: text("image_url"),               // 🎯 최상순위 노출 이미지
-  postUrl: text("post_url"),                 // 인스타 게시물 링크
-  postedAt: text("posted_at"),               // "24년 9월"
-  caption: text("caption"),
-  likeCount: integer("like_count"),
-  fetchedAt: timestamp("fetched_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-});
+// ⚠️ 수정금지(승인필요) 2026-05-21 = celebrityPlaceEvidence DROP (= 1 행 폐기 = 사용자 SSOT)
+// = celeb_mention 텍스트 (= place_seed_raw.celeb_mention) 로 통합
+// = stub export = TS 통과 + 런타임 = DROP 된 곳 사용 시 = 명확 fail
+export const celebrityPlaceEvidence = null as any;
 
 // 환율 캐시
 export const exchangeRates = pgTable("exchange_rates", {
@@ -609,20 +588,10 @@ export const geminiWebSearchCache = pgTable("gemini_web_search_cache", {
   fetchedAt: timestamp("fetched_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
-// nubiReason 배치 수집 결과 (10곳/회 Gemini + 4단계 검증)
-export const placeNubiReasons = pgTable("place_nubi_reasons", {
-  id: serial("id").primaryKey(),
-  placeId: integer("place_id").notNull().unique().references(() => places.id, { onDelete: "cascade" }),
-  cityId: integer("city_id").notNull().references(() => cities.id, { onDelete: "cascade" }),
-  placeName: text("place_name").notNull(),
-  sourceRank: integer("source_rank").notNull(), // 1~5
-  sourceType: text("source_type").notNull(), // instagram|youtube|naver_blog|package|travel_app
-  nubiReason: text("nubi_reason").notNull(),
-  evidenceUrl: text("evidence_url"),
-  verified: boolean("verified").default(false),
-  fetchedAt: timestamp("fetched_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-});
+// ⚠️ 수정금지(승인필요) 2026-05-21 = placeNubiReasons DROP (= 1 행 폐기 = 사용자 SSOT)
+// = nubi_reason / evidence_url / source_type / source_rank = place_seed_raw 자체 컬럼으로 통합
+// = stub export = TS 통과 + 런타임 = DROP 된 곳 사용 시 = 명확 fail
+export const placeNubiReasons = null as any;
 
 // MCP 1·2단계 통합 로우데이터 (도시×카테고리 장소 + 한국인 인지도)
 export const placeSeedRaw = pgTable("place_seed_raw", {
@@ -630,7 +599,7 @@ export const placeSeedRaw = pgTable("place_seed_raw", {
   placeId: integer("place_id").references(() => places.id, { onDelete: "set null" }), // places 매칭 시 브릿지 (가격·이미지 직연결)
   cityId: integer("city_id").notNull().references(() => cities.id, { onDelete: "cascade" }),
   seedCategory: text("seed_category").notNull(), // attraction|restaurant|healing|adventure|hotspot
-  collectionPhase: text("collection_phase"), // 수집 출처: bts2026 | france30 | europe30
+  // ⚠️ 2026-05-23 = collection_phase DROP = phase_tags 배열로 대체 (= 사용자 SSOT 2026-05-21)
   rank: integer("rank").notNull(),
   unifiedId: text("unified_id"), // 통합 고유 ID (예: 111R1)
   nameKo: text("name_ko"),

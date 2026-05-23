@@ -51,7 +51,6 @@ const FIELD_MASK = 'places.id,places.displayName,places.formattedAddress,places.
            google_place_id, image_url
     FROM place_seed_raw
     WHERE city_id = $1
-      AND NOT (phase_tags && ARRAY['archived-merge-2026-05-18','archived-merge-2026-05-15','archived-merge-2026-05-20','user-delete'])
       AND ((image_url IS NULL OR image_url = '') OR google_place_id IS NULL)
       AND (seed_category IN ('restaurant', 'adventure') OR rank <= 20)
     ORDER BY seed_category, rank NULLS LAST

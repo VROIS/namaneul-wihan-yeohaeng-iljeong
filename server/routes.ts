@@ -1,12 +1,7 @@
 import type { Express } from "express";
 import { createServer, type Server } from "node:http";
 import { storage } from "./storage";
-import { googlePlacesFetcher } from "./services/google-places";
-import { weatherFetcher } from "./services/weather";
-import { vibeProcessor } from "./services/vibe-processor";
-import { tasteVerifier } from "./services/taste-verifier";
-import { routeOptimizer } from "./services/route-optimizer";
-import { scoringEngine } from "./services/scoring-engine";
+// ⚠️ 2026-05-23 = googlePlacesFetcher + vibeProcessor + tasteVerifier import 제거 (= 파일 삭제 = 사용자 SSOT)
 import { itineraryGenerator } from "./services/itinerary-generator";
 import { getVideoGenerationTask } from "./services/seedance-video-generator";
 import { getTestVideoHtml } from "./test-video-ui";
@@ -115,135 +110,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Places
-  app.get("/api/cities/:cityId/places", async (req, res) => {
-    try {
-      const cityId = parseInt(req.params.cityId);
-      const type = req.query.type as string | undefined;
-      const places = await storage.getPlacesByCity(cityId, type);
-      res.json(places);
-    } catch (error) {
-      console.error("Error fetching places:", error);
-      res.status(500).json({ error: "Failed to fetch places" });
-    }
-  });
+  // ⚠️ 2026-05-23 = /api/cities/:cityId/places 완전 삭제 (= FE 호출 0 = storage.getPlacesByCity 의존 = Step 2 storage 정리 시 함수 삭제)
 
+  // ⚠️ 2026-05-23 = /api/places/:id = PSR 직접 (= storage.getPlace 본문 PSR 사용)
+  // = dataSources (= placeDataSources 의존) = 삭제
   app.get("/api/places/:id", async (req, res) => {
     try {
       const place = await storage.getPlace(parseInt(req.params.id));
       if (!place) {
         return res.status(404).json({ error: "Place not found" });
       }
-
-      const dataSources = await storage.getPlaceDataSources(place.id);
-
-      res.json({ ...place, dataSources });
+      res.json(place);
     } catch (error) {
       console.error("Error fetching place:", error);
       res.status(500).json({ error: "Failed to fetch place" });
     }
   });
 
-  // Top recommendations
-  app.get("/api/cities/:cityId/recommendations", async (req, res) => {
-    try {
-      const cityId = parseInt(req.params.cityId);
-      const type = (req.query.type as string) || "restaurant";
-      const limit = parseInt(req.query.limit as string) || 10;
-      const persona = (req.query.persona as "luxury" | "comfort") || "comfort";
+  // ⚠️ 2026-05-23 = /api/cities/:cityId/recommendations + /api/sync/city/* 완전 삭제
+  // = FE 호출 0 = scoringEngine (= weather/places 의존 = 폐기) + DEPRECATED endpoint 정리
 
-      const recommendations = await scoringEngine.getTopRecommendations(
-        cityId,
-        type as any,
-        limit,
-        persona
-      );
+  // ⚠️ 2026-05-23 = /api/sync/place/*/vibe + /taste 완전 삭제 (= vibe-processor + taste-verifier 파일 삭제 = 사용자 SSOT)
 
-      res.json(recommendations);
-    } catch (error) {
-      console.error("Error fetching recommendations:", error);
-      res.status(500).json({ error: "Failed to fetch recommendations" });
-    }
-  });
-
-  // Data sync endpoints
-  app.post("/api/sync/city/:cityId/places", async (req, res) => {
-    try {
-      const cityId = parseInt(req.params.cityId);
-      const city = await storage.getCity(cityId);
-
-      if (!city) {
-        return res.status(404).json({ error: "City not found" });
-      }
-
-      // ⚠️ 수정금지(승인필요) 2026-05-12 = 사용자 SSOT = searchText 폐기
-      // = googlePlacesFetcher.syncCityPlaces = searchText 사용 = Enterprise SKU 트리거
-      // = 시드 발굴은 = seed-gemini.mjs (= Place Details 표준) 사용
-      const types = req.body.types || ["restaurant", "attraction"];
-      return res.status(410).json({
-        error: 'DEPRECATED',
-        message: 'syncCityPlaces (searchText) = 2026-05-12 폐기 = scripts/seed-gemini.mjs (= Place Details Pro) 사용',
-        cityId, types,
-      });
-    } catch (error) {
-      console.error("Error syncing places:", error);
-      res.status(500).json({ error: "Failed to sync places" });
-    }
-  });
-
-  app.post("/api/sync/city/:cityId/scores", async (req, res) => {
-    try {
-      const cityId = parseInt(req.params.cityId);
-      const result = await scoringEngine.processCity(cityId);
-      res.json({ message: "Scoring completed", ...result });
-    } catch (error) {
-      console.error("Error processing scores:", error);
-      res.status(500).json({ error: "Failed to process scores" });
-    }
-  });
-
-  app.post("/api/sync/place/:placeId/vibe", async (req, res) => {
-    try {
-      const placeId = parseInt(req.params.placeId);
-      const result = await vibeProcessor.processPlaceVibe(placeId);
-      res.json({ message: "Vibe processing completed", ...result });
-    } catch (error) {
-      console.error("Error processing vibe:", error);
-      res.status(500).json({ error: "Failed to process vibe" });
-    }
-  });
-
-  app.post("/api/sync/place/:placeId/taste", async (req, res) => {
-    try {
-      const placeId = parseInt(req.params.placeId);
-      const result = await tasteVerifier.verifyRestaurant(placeId);
-      res.json({ message: "Taste verification completed", ...result });
-    } catch (error) {
-      console.error("Error verifying taste:", error);
-      res.status(500).json({ error: "Failed to verify taste" });
-    }
-  });
-
-  // Weather
-  app.get("/api/cities/:cityId/weather", async (req, res) => {
-    try {
-      const cityId = parseInt(req.params.cityId);
-      const weather = await weatherFetcher.getWeatherForCity(cityId);
-
-      if (!weather) {
-        return res.status(404).json({ error: "Weather data not available" });
-      }
-
-      res.json({
-        ...weather,
-        description: weatherFetcher.getWeatherDescription(weather.weatherCondition || ""),
-        severity: weatherFetcher.getPenaltySeverity(weather.penalty || 0),
-      });
-    } catch (error) {
-      console.error("Error fetching weather:", error);
-      res.status(500).json({ error: "Failed to fetch weather" });
-    }
-  });
+  // ⚠️ 2026-05-23 = /api/cities/:cityId/weather 완전 삭제 (= FE 호출 0 = weather.ts 파일도 삭제)
 
   // [DROPPED 0013] reality-checks 엔드포인트 삭제
 
@@ -617,67 +506,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Route optimization
-  app.post("/api/routes/optimize", async (req, res) => {
-    try {
-      const { placeIds, travelMode = "TRANSIT" } = req.body;
-
-      if (!placeIds || !Array.isArray(placeIds) || placeIds.length === 0) {
-        return res.status(400).json({ error: "placeIds array is required" });
-      }
-
-      const places = await Promise.all(
-        placeIds.map((id: number) => storage.getPlace(id))
-      );
-
-      const validPlaces = places.filter(Boolean);
-      if (validPlaces.length === 0) {
-        return res.status(404).json({ error: "No valid places found" });
-      }
-
-      const result = await routeOptimizer.optimizeRoute(validPlaces as any[], travelMode);
-
-      res.json({
-        ...result,
-        formattedDuration: routeOptimizer.formatDuration(result.totalDurationSeconds),
-        formattedDistance: routeOptimizer.formatDistance(result.totalDistanceMeters),
-      });
-    } catch (error) {
-      console.error("Error optimizing route:", error);
-      res.status(500).json({ error: "Failed to optimize route" });
-    }
-  });
-
-  app.post("/api/routes/compare", async (req, res) => {
-    try {
-      const { placeIds } = req.body;
-
-      if (!placeIds || !Array.isArray(placeIds) || placeIds.length === 0) {
-        return res.status(400).json({ error: "placeIds array is required" });
-      }
-
-      const places = await Promise.all(
-        placeIds.map((id: number) => storage.getPlace(id))
-      );
-
-      const validPlaces = places.filter(Boolean);
-      const comparison = await routeOptimizer.compareTransportModes(validPlaces as any[]);
-
-      const formattedComparison: Record<string, any> = {};
-      for (const [mode, result] of Object.entries(comparison)) {
-        formattedComparison[mode] = {
-          ...result,
-          formattedDuration: routeOptimizer.formatDuration(result.totalDurationSeconds),
-          formattedDistance: routeOptimizer.formatDistance(result.totalDistanceMeters),
-        };
-      }
-
-      res.json(formattedComparison);
-    } catch (error) {
-      console.error("Error comparing routes:", error);
-      res.status(500).json({ error: "Failed to compare routes" });
-    }
-  });
+  // ⚠️ 2026-05-23 = /api/routes/optimize + /compare 완전 삭제 (= 사용자 SSOT = FE 호출 0 + Google Routes API 비용 폭탄 차단)
+  // = route-optimizer.ts 파일 = 함께 삭제 = 메인앱 = transit-haversine.ts (= Haversine 자체 계산 = 외부 0) 사용
 
   // 사용자 언어 설정 업데이트 (i18n 동기화)
   app.patch("/api/users/:userId/preferred-language", async (req, res) => {
@@ -711,22 +541,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ⚠️ 2026-05-23 = itineraries.rawData JSON 사용 (= 외래키 없음 = items 별도 SELECT 불필요)
   app.get("/api/itineraries/:id", async (req, res) => {
     try {
       const itinerary = await storage.getItinerary(parseInt(req.params.id));
       if (!itinerary) {
         return res.status(404).json({ error: "Itinerary not found" });
       }
-
-      const items = await storage.getItineraryItems(itinerary.id);
-      const itemsWithPlaces = await Promise.all(
-        items.map(async (item) => {
-          const place = await storage.getPlace(item.placeId);
-          return { ...item, place };
-        })
-      );
-
-      res.json({ ...itinerary, items: itemsWithPlaces });
+      res.json(itinerary);
     } catch (error) {
       console.error("Error fetching itinerary:", error);
       res.status(500).json({ error: "Failed to fetch itinerary" });
