@@ -111,122 +111,11 @@ export const cities = pgTable("cities", {
 // Places (restaurants, attractions, etc.)
 // 🔗 Agent Protocol v1.0: 장소 식별 규약
 // googlePlaceId=글로벌유일키(바코드), name=Google공식명, displayNameKo=한국어표시명, aliases=별칭배열
-export const places = pgTable("places", {
-  id: serial("id").primaryKey(),
-  cityId: integer("city_id").notNull().references(() => cities.id, { onDelete: "cascade" }),
-  googlePlaceId: text("google_place_id").unique(),
-  name: text("name").notNull(),                    // Google Places 공식명 (예: "Tour Eiffel")
-  displayNameKo: text("display_name_ko"),          // 한국어 표시명 (예: "에펠탑")
-  aliases: jsonb("aliases").$type<string[]>().default([]),  // 별칭 배열 (예: ["에펠탑","Eiffel Tower"])
-  type: placeTypeEnum("type").notNull(),
-  cuisineType: text("cuisine_type"),
-  cuisineOriginCountry: text("cuisine_origin_country"),
-  address: text("address"),
-  shortAddress: text("short_address"),
-  latitude: real("latitude").notNull(),
-  longitude: real("longitude").notNull(),
-  // ⚠️ 2026-05-15 = priceLevel 영구 폐기 (= place_seed_raw.price_eur 단일 SSOT)
-  photoUrls: jsonb("photo_urls").$type<string[]>().default([]),
-  openingHours: jsonb("opening_hours").$type<Record<string, string>>(),
-
-  websiteUri: text("website_uri"),
-  googleMapsUri: text("google_maps_uri"),
-  phoneNumber: text("phone_number"),
-  editorialSummary: text("editorial_summary"),
-  businessStatus: text("business_status"),
-
-  // rating 컬럼은 실제 DB에서 삭제됨 → buzzScore(=rating*2, 0~10)로 대체
-  // rating: real("rating"),
-  userRatingCount: integer("user_rating_count"),
-
-  delivery: boolean("delivery"),
-  dineIn: boolean("dine_in"),
-  takeout: boolean("takeout"),
-  curbsidePickup: boolean("curbside_pickup"),
-  reservable: boolean("reservable"),
-
-  servesBeer: boolean("serves_beer"),
-  servesWine: boolean("serves_wine"),
-  servesBreakfast: boolean("serves_breakfast"),
-  servesBrunch: boolean("serves_brunch"),
-  servesLunch: boolean("serves_lunch"),
-  servesDinner: boolean("serves_dinner"),
-  servesVegetarianFood: boolean("serves_vegetarian_food"),
-  servesCoffee: boolean("serves_coffee"),
-  servesDessert: boolean("serves_dessert"),
-
-  goodForChildren: boolean("good_for_children"),
-  goodForGroups: boolean("good_for_groups"),
-  goodForWatchingSports: boolean("good_for_watching_sports"),
-
-  liveMusic: boolean("live_music"),
-  outdoorSeating: boolean("outdoor_seating"),
-  restroom: boolean("restroom"),
-  menuForChildren: boolean("menu_for_children"),
-  allowsDogs: boolean("allows_dogs"),
-
-  accessibilityOptions: jsonb("accessibility_options").$type<{
-    wheelchairAccessibleParking?: boolean;
-    wheelchairAccessibleEntrance?: boolean;
-    wheelchairAccessibleRestroom?: boolean;
-    wheelchairAccessibleSeating?: boolean;
-  }>(),
-  parkingOptions: jsonb("parking_options").$type<{
-    freeParkingLot?: boolean;
-    paidParkingLot?: boolean;
-    freeStreetParking?: boolean;
-    paidStreetParking?: boolean;
-    valetParking?: boolean;
-  }>(),
-  paymentOptions: jsonb("payment_options").$type<{
-    acceptsCreditCards?: boolean;
-    acceptsDebitCards?: boolean;
-    acceptsCashOnly?: boolean;
-    acceptsNfc?: boolean;
-  }>(),
-
-  instagramPhotoUrls: jsonb("instagram_photo_urls").$type<string[]>().default([]),
-  instagramHashtags: jsonb("instagram_hashtags").$type<string[]>().default([]),
-  instagramPostCount: integer("instagram_post_count").default(0),
-
-  vibeScore: real("vibe_score"),
-  buzzScore: real("buzz_score"),
-  tasteVerifyScore: real("taste_verify_score"),
-  realityPenalty: real("reality_penalty").default(0),
-  finalScore: real("final_score"),
-  tier: integer("tier"),
-  vibeKeywords: jsonb("vibe_keywords").$type<string[]>().default([]),
-  /** 시딩 카테고리: 명소(attraction), 맛집(restaurant), 힐링(healing), 모험(adventure), 핫스팟(hotspot). 1일 1카테고리·도시별 카운트용 */
-  seedCategory: text("seed_category"),
-  nameLocal: text("name_local"),
-  namesI18n: jsonb("names_i18n").$type<Record<string,string>>(),
-  isVerified: boolean("is_verified").default(false),
-  lastDataSync: timestamp("last_data_sync"),
-  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-});
-
-// Multi-source place data (3+ sources per place)
-export const placeDataSources = pgTable("place_data_sources", {
-  id: serial("id").primaryKey(),
-  placeId: integer("place_id").notNull().references(() => places.id, { onDelete: "cascade" }),
-  source: dataSourceEnum("source").notNull(),
-  sourceId: text("source_id"),
-  sourceUrl: text("source_url"),
-  rating: real("rating"),
-  reviewCount: integer("review_count"),
-  // ⚠️ 2026-05-15 = priceLevel 영구 폐기 (= place_seed_raw.price_eur 단일 SSOT)
-  rankingInCategory: integer("ranking_in_category"),
-  isMichelinStar: boolean("is_michelin_star").default(false),
-  michelinType: text("michelin_type"),
-  rawData: jsonb("raw_data"),
-  fetchedAt: timestamp("fetched_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-});
-
 // Reviews for language analysis (Original Taste Verification)
 export const reviews = pgTable("reviews", {
   id: serial("id").primaryKey(),
-  placeId: integer("place_id").notNull().references(() => places.id, { onDelete: "cascade" }),
+  // ⚠️ 수정금지(승인필요) 2026-05-24 = Step 4 DB DROP = places FK 제거 (= places 테이블 폐기 = 컬럼만 유지)
+  placeId: integer("place_id").notNull(),
   source: dataSourceEnum("source").notNull(),
   sourceReviewId: text("source_review_id"),
   language: text("language"),
@@ -242,24 +131,6 @@ export const reviews = pgTable("reviews", {
 
 // [DROPPED 0013] vibe_analysis — 0건, 미사용
 // [DROPPED 0013] reality_checks — 0건, 미사용
-
-// Weather data cache
-export const weatherCache = pgTable("weather_cache", {
-  id: serial("id").primaryKey(),
-  cityId: integer("city_id").notNull().references(() => cities.id, { onDelete: "cascade" }),
-  date: timestamp("date").notNull(),
-  temperature: real("temperature"),
-  feelsLike: real("feels_like"),
-  humidity: integer("humidity"),
-  weatherCondition: text("weather_condition"),
-  weatherIcon: text("weather_icon"),
-  precipitation: real("precipitation"),
-  windSpeed: real("wind_speed"),
-  uvIndex: integer("uv_index"),
-  penalty: real("penalty").default(0),
-  rawData: jsonb("raw_data"),
-  fetchedAt: timestamp("fetched_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-});
 
 // User itineraries
 export const itineraries = pgTable("itineraries", {
@@ -309,35 +180,6 @@ export const itineraries = pgTable("itineraries", {
 
 // [DROPPED 0013] itinerary_items — 0건, rawData JSON으로 대체됨
 
-// Route calculations cache
-export const routeCache = pgTable("route_cache", {
-  id: serial("id").primaryKey(),
-  originPlaceId: integer("origin_place_id").notNull().references(() => places.id, { onDelete: "cascade" }),
-  destinationPlaceId: integer("destination_place_id").notNull().references(() => places.id, { onDelete: "cascade" }),
-  travelMode: text("travel_mode").notNull(),
-  distanceMeters: integer("distance_meters"),
-  durationSeconds: integer("duration_seconds"),
-  durationInTraffic: integer("duration_in_traffic"),
-  estimatedCost: real("estimated_cost"),
-  polyline: text("polyline"),
-  steps: jsonb("steps"),
-  fetchedAt: timestamp("fetched_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-});
-
-// Data sync log for tracking updates
-export const dataSyncLog = pgTable("data_sync_log", {
-  id: serial("id").primaryKey(),
-  entityType: text("entity_type").notNull(),
-  entityId: integer("entity_id"),
-  entitySubType: text("entity_sub_type"), // 1일 1카테고리 추적 등 레거시 필드 유지
-  source: text("source"),
-  status: text("status").notNull(),
-  itemsProcessed: integer("items_processed").default(0),
-  itemsFailed: integer("items_failed").default(0),
-  errorMessage: text("error_message"),
-  startedAt: timestamp("started_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-  completedAt: timestamp("completed_at"),
-});
 
 // ========================================
 // 관리자 대시보드 테이블
@@ -363,150 +205,6 @@ export const apiServiceStatus = pgTable("api_service_status", {
   updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
-// YouTube 검증 채널 (화이트리스트)
-export const youtubeChannels = pgTable("youtube_channels", {
-  id: serial("id").primaryKey(),
-  channelId: text("channel_id").notNull().unique(),
-  channelName: text("channel_name").notNull(),
-  channelUrl: text("channel_url"),
-  thumbnailUrl: text("thumbnail_url"),
-  subscriberCount: integer("subscriber_count"),
-  videoCount: integer("video_count"),
-  category: text("category"),
-  trustWeight: real("trust_weight").default(1.0),
-  isActive: boolean("is_active").default(true),
-  lastVideoSyncAt: timestamp("last_video_sync_at"),
-  totalVideosSynced: integer("total_videos_synced").default(0),
-  totalPlacesMentioned: integer("total_places_mentioned").default(0),
-  addedBy: text("added_by"),
-  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-});
-
-// YouTube 영상 데이터
-export const youtubeVideos = pgTable("youtube_videos", {
-  id: serial("id").primaryKey(),
-  channelId: integer("channel_id").notNull().references(() => youtubeChannels.id, { onDelete: "cascade" }),
-  videoId: text("video_id").notNull().unique(),
-  title: text("title").notNull(),
-  description: text("description"),
-  publishedAt: timestamp("published_at"),
-  duration: integer("duration"),
-  viewCount: integer("view_count"),
-  likeCount: integer("like_count"),
-  commentCount: integer("comment_count"),
-  thumbnailUrl: text("thumbnail_url"),
-  hasTranscript: boolean("has_transcript").default(false),
-  transcriptText: text("transcript_text"),
-  extractedPlaces: jsonb("extracted_places").$type<string[]>(),
-  isProcessed: boolean("is_processed").default(false),
-  fetchedAt: timestamp("fetched_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-});
-
-// YouTube 영상-장소 매핑 (타임스탬프 포함)
-export const youtubePlaceMentions = pgTable("youtube_place_mentions", {
-  id: serial("id").primaryKey(),
-  videoId: integer("video_id").notNull().references(() => youtubeVideos.id, { onDelete: "cascade" }),
-  placeId: integer("place_id").references(() => places.id, { onDelete: "set null" }),
-  placeName: text("place_name").notNull(),
-  cityName: text("city_name"),
-  timestampStart: integer("timestamp_start"),
-  timestampEnd: integer("timestamp_end"),
-  sentiment: text("sentiment"),
-  summary: text("summary"),
-  confidence: real("confidence"),
-  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-});
-
-// 블로그 소스 (화이트리스트)
-export const blogSources = pgTable("blog_sources", {
-  id: serial("id").primaryKey(),
-  platform: text("platform").notNull(),
-  sourceName: text("source_name").notNull(),
-  sourceUrl: text("source_url"),
-  authorName: text("author_name"),
-  category: text("category"),
-  language: text("language").default("ko"),
-  trustWeight: real("trust_weight").default(1.0),
-  isActive: boolean("is_active").default(true),
-  lastSyncAt: timestamp("last_sync_at"),
-  totalPostsSynced: integer("total_posts_synced").default(0),
-  addedBy: text("added_by"),
-  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-});
-
-// Instagram 해시태그 추적
-export const instagramHashtags = pgTable("instagram_hashtags", {
-  id: serial("id").primaryKey(),
-  hashtag: text("hashtag").notNull().unique(),
-  postCount: integer("post_count"),
-  avgLikes: integer("avg_likes"),
-  avgComments: integer("avg_comments"),
-  topPostUrls: jsonb("top_post_urls").$type<string[]>(),
-  linkedPlaceId: integer("linked_place_id").references(() => places.id, { onDelete: "set null" }),
-  linkedCityId: integer("linked_city_id").references(() => cities.id, { onDelete: "set null" }),
-  category: text("category"),
-  isActive: boolean("is_active").default(true),
-  lastSyncAt: timestamp("last_sync_at"),
-  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-});
-
-// Instagram 위치 태그 추적
-export const instagramLocations = pgTable("instagram_locations", {
-  id: serial("id").primaryKey(),
-  locationId: text("location_id").notNull().unique(),
-  locationName: text("location_name").notNull(),
-  latitude: real("latitude"),
-  longitude: real("longitude"),
-  postCount: integer("post_count"),
-  topPostUrls: jsonb("top_post_urls").$type<string[]>(),
-  linkedPlaceId: integer("linked_place_id").references(() => places.id, { onDelete: "set null" }),
-  linkedCityId: integer("linked_city_id").references(() => cities.id, { onDelete: "set null" }),
-  isActive: boolean("is_active").default(true),
-  lastSyncAt: timestamp("last_sync_at"),
-  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-});
-
-// Instagram 수집된 사진 (Gemini Vision 분석용)
-export const instagramPhotos = pgTable("instagram_photos", {
-  id: serial("id").primaryKey(),
-  hashtagId: integer("hashtag_id").references(() => instagramHashtags.id, { onDelete: "cascade" }),
-  locationId: integer("location_id").references(() => instagramLocations.id, { onDelete: "cascade" }),
-  postUrl: text("post_url").notNull().unique(),
-  imageUrl: text("image_url"),
-  caption: text("caption"),
-  likeCount: integer("like_count"),
-  commentCount: integer("comment_count"),
-  postedAt: timestamp("posted_at"),
-  vibeScore: real("vibe_score"),
-  vibeKeywords: jsonb("vibe_keywords").$type<string[]>(),
-  isAnalyzed: boolean("is_analyzed").default(false),
-  fetchedAt: timestamp("fetched_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-});
-
-// ⚠️ 2026-05-23 = celeb_evidence DROP 완료 (= 2026-05-21 폐기 결정 후속) = stub
-export const celebEvidence = null as any;
-
-// 이미지 통합 테이블 (인스타 우선) — instagram_photos, places.instagram_photo_urls, celebrity_place_evidence, places.photoUrls 통합
-export const placeImages = pgTable("place_images", {
-  id: serial("id").primaryKey(),
-  placeId: integer("place_id").references(() => places.id, { onDelete: "cascade" }),
-  placeSeedRawId: integer("place_seed_raw_id").references(() => placeSeedRaw.id, { onDelete: "cascade" }),
-  cityId: integer("city_id").references(() => cities.id, { onDelete: "cascade" }),
-  sourceType: text("source_type").notNull(), // instagram | celebrity | google | wikimedia
-  url: text("url").notNull(),
-  sortOrder: integer("sort_order").notNull().default(1), // 1=인스타(최우선), 2=셀럽, 3=구글, 4=위키
-  fetchedAt: timestamp("fetched_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-});
-
-// ⚠️ 수정금지(승인필요) 2026-05-21 = celebrityPlaceEvidence DROP (= 1 행 폐기 = 사용자 SSOT)
-// = celeb_mention 텍스트 (= place_seed_raw.celeb_mention) 로 통합
-// = stub export = TS 통과 + 런타임 = DROP 된 곳 사용 시 = 명확 fail
-export const celebrityPlaceEvidence = null as any;
 
 // 환율 캐시
 export const exchangeRates = pgTable("exchange_rates", {
@@ -566,37 +264,12 @@ export const crisisAlerts = pgTable("crisis_alerts", {
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
-// Gemini Web Search 결과 캐시 (미슐랭/TripAdvisor)
-export const geminiWebSearchCache = pgTable("gemini_web_search_cache", {
-  id: serial("id").primaryKey(),
-  placeId: integer("place_id").references(() => places.id, { onDelete: "cascade" }),
-  cityId: integer("city_id").references(() => cities.id, { onDelete: "cascade" }),
-  searchQuery: text("search_query").notNull(),
-  searchType: text("search_type").notNull(), // michelin, tripadvisor, local_blog, expert_review
-  rawResult: jsonb("raw_result"), // Raw Gemini response
-  extractedData: jsonb("extracted_data").$type<{
-    michelinStars?: number;
-    michelinDescription?: string;
-    tripAdvisorRating?: number;
-    tripAdvisorReviewCount?: number;
-    expertReviews?: { source: string; rating: number; summary: string }[];
-    awards?: string[];
-  }>(),
-  confidenceScore: real("confidence_score"), // 0-1 confidence in extracted data
-  isVerified: boolean("is_verified").default(false),
-  expiresAt: timestamp("expires_at"),
-  fetchedAt: timestamp("fetched_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-});
-
-// ⚠️ 수정금지(승인필요) 2026-05-21 = placeNubiReasons DROP (= 1 행 폐기 = 사용자 SSOT)
-// = nubi_reason / evidence_url / source_type / source_rank = place_seed_raw 자체 컬럼으로 통합
-// = stub export = TS 통과 + 런타임 = DROP 된 곳 사용 시 = 명확 fail
-export const placeNubiReasons = null as any;
 
 // MCP 1·2단계 통합 로우데이터 (도시×카테고리 장소 + 한국인 인지도)
 export const placeSeedRaw = pgTable("place_seed_raw", {
   id: serial("id").primaryKey(),
-  placeId: integer("place_id").references(() => places.id, { onDelete: "set null" }), // places 매칭 시 브릿지 (가격·이미지 직연결)
+  // ⚠️ 수정금지(승인필요) 2026-05-24 = Step 4 DB DROP = places FK 제거 (= places 테이블 폐기 = 컬럼만 유지 = 옛 매칭 호환)
+  placeId: integer("place_id"),
   cityId: integer("city_id").notNull().references(() => cities.id, { onDelete: "cascade" }),
   seedCategory: text("seed_category").notNull(), // attraction|restaurant|healing|adventure|hotspot
   // ⚠️ 2026-05-23 = collection_phase DROP = phase_tags 배열로 대체 (= 사용자 SSOT 2026-05-21)
@@ -658,56 +331,6 @@ export const placeSeedRaw = pgTable("place_seed_raw", {
   geminiRank: integer("gemini_rank"),                     // Gemini 응답 순위 (rank 재정렬 우선 키)
 });
 
-// 가격 정보 로우 데이터 (다중 소스)
-export const placePrices = pgTable("place_prices", {
-  id: serial("id").primaryKey(),
-  placeId: integer("place_id").references(() => places.id, { onDelete: "cascade" }),
-  cityId: integer("city_id").references(() => cities.id, { onDelete: "cascade" }),
-  priceType: text("price_type").notNull(), // entrance_fee, meal_average, activity, transport, ticket
-  source: text("source").notNull(), // google_places, gemini_search, klook, viator, official_website
-  priceLow: real("price_low"), // 최저 가격
-  priceHigh: real("price_high"), // 최고 가격
-  priceAverage: real("price_average"), // 평균 가격
-  currency: text("currency").notNull().default("KRW"),
-  priceLabel: text("price_label"), // "성인 기준", "2인 기준" 등
-  sourceUrl: text("source_url"), // 원본 URL
-  rawData: jsonb("raw_data").$type<{
-    googlePriceLevel?: number;
-    klookProductId?: string;
-    viatorProductId?: string;
-    extractedText?: string;
-  }>(),
-  confidenceScore: real("confidence_score"), // 0-1 신뢰도
-  isVerified: boolean("is_verified").default(false),
-  expiresAt: timestamp("expires_at"), // 캐시 만료
-  fetchedAt: timestamp("fetched_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-});
-
-// 네이버 블로그 포스트
-export const naverBlogPosts = pgTable("naver_blog_posts", {
-  id: serial("id").primaryKey(),
-  placeId: integer("place_id").references(() => places.id, { onDelete: "cascade" }),
-  cityId: integer("city_id").references(() => cities.id, { onDelete: "cascade" }),
-  bloggerName: text("blogger_name"),
-  bloggerUrl: text("blogger_url"),
-  postTitle: text("post_title").notNull(),
-  postUrl: text("post_url").notNull().unique(),
-  postDate: timestamp("post_date"),
-  description: text("description"),
-  thumbnailUrl: text("thumbnail_url"),
-  extractedPlaces: jsonb("extracted_places").$type<{
-    placeName: string;
-    sentiment: "positive" | "neutral" | "negative";
-    keywords: string[];
-    rating?: number;
-  }[]>(),
-  sentimentScore: real("sentiment_score"),
-  trustWeight: real("trust_weight").default(0.5),
-  isProcessed: boolean("is_processed").default(false),
-  fetchedAt: timestamp("fetched_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-});
 
 // 가이드 서비스 가격 (Admin에서 수정 가능)
 // 💰 시간당 계산 수식: 총비용 = basePrice4h + (추가시간 × pricePerHour)
@@ -747,112 +370,16 @@ export const guidePrices = pgTable("guide_prices", {
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
-export const verificationStatusEnum = pgEnum("verification_status", ["pending", "in_review", "verified", "rejected"]);
 
-export const verificationRequests = pgTable("verification_requests", {
-  id: serial("id").primaryKey(),
-  itineraryId: integer("itinerary_id").notNull(),
-  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  itineraryData: jsonb("itinerary_data").notNull(),
-  userMessage: text("user_message"),
-  preferredDate: timestamp("preferred_date"),
-  contactEmail: text("contact_email"),
-  contactKakao: text("contact_kakao"),
-  status: verificationStatusEnum("status").default("pending"),
-  adminComment: text("admin_comment"),
-  placeRatings: jsonb("place_ratings").$type<Record<string, { checked: boolean; rating: number; comment?: string }>>(),
-  reviewedAt: timestamp("reviewed_at"),
-  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-});
+// ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = Step 4 DB DROP = 폐기된 21 테이블 relations + insert schema + type 모두 삭제
+// = 유지 = cities + users + itineraries + reviews + apiServiceStatus + exchangeRates + crisisAlerts + guidePrices + placeSeedRaw + apiKeys
 
-// 날씨 예보 캐시
-export const weatherForecast = pgTable("weather_forecast", {
-  id: serial("id").primaryKey(),
-  cityId: integer("city_id").references(() => cities.id, { onDelete: "cascade" }),
-  forecastDate: timestamp("forecast_date").notNull(),
-  tempMin: real("temp_min"),
-  tempMax: real("temp_max"),
-  humidity: integer("humidity"),
-  weatherMain: text("weather_main"),
-  weatherDescription: text("weather_description"),
-  weatherIcon: text("weather_icon"),
-  windSpeed: real("wind_speed"),
-  rainProbability: real("rain_probability"),
-  uvIndex: real("uv_index"),
-  airQualityIndex: integer("air_quality_index"),
-  realityPenalty: real("reality_penalty"),
-  fetchedAt: timestamp("fetched_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-});
-
-// TripAdvisor 데이터 (Gemini Search 수집)
-export const tripAdvisorData = pgTable("tripadvisor_data", {
-  id: serial("id").primaryKey(),
-  placeId: integer("place_id").references(() => places.id, { onDelete: "cascade" }),
-  cityId: integer("city_id").references(() => cities.id, { onDelete: "cascade" }),
-  tripAdvisorRating: real("tripadvisor_rating"), // 1-5
-  tripAdvisorReviewCount: integer("tripadvisor_review_count"),
-  tripAdvisorRanking: integer("tripadvisor_ranking"), // 순위
-  tripAdvisorRankingTotal: integer("tripadvisor_ranking_total"), // 전체 수
-  tripAdvisorCategory: text("tripadvisor_category"), // 카테고리 (e.g., "서울 관광지")
-  tripAdvisorUrl: text("tripadvisor_url"),
-  excellentReviews: integer("excellent_reviews"), // 5점 리뷰 수
-  veryGoodReviews: integer("very_good_reviews"), // 4점 리뷰 수
-  averageReviews: integer("average_reviews"), // 3점 리뷰 수
-  poorReviews: integer("poor_reviews"), // 2점 리뷰 수
-  terribleReviews: integer("terrible_reviews"), // 1점 리뷰 수
-  recentReviewSummary: text("recent_review_summary"), // 최근 리뷰 요약
-  travelersChoiceAward: boolean("travelers_choice_award").default(false),
-  rawData: jsonb("raw_data"),
-  confidenceScore: real("confidence_score"), // 0-1
-  expiresAt: timestamp("expires_at"),
-  fetchedAt: timestamp("fetched_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-});
-
-// 데이터 수집 스케줄
-export const dataCollectionSchedule = pgTable("data_collection_schedule", {
-  id: serial("id").primaryKey(),
-  taskName: text("task_name").notNull().unique(),
-  description: text("description"),
-  cronExpression: text("cron_expression").notNull(),
-  isEnabled: boolean("is_enabled").default(true),
-  lastRunAt: timestamp("last_run_at"),
-  lastStatus: text("last_status"),
-  lastDurationMs: integer("last_duration_ms"),
-  nextRunAt: timestamp("next_run_at"),
-  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-});
-
-// Relations
+// Relations (= 유지된 테이블만)
 export const citiesRelations = relations(cities, ({ many }) => ({
-  places: many(places),
-  weatherCache: many(weatherCache),
   itineraries: many(itineraries),
 }));
 
-export const placesRelations = relations(places, ({ one, many }) => ({
-  city: one(cities, {
-    fields: [places.cityId],
-    references: [cities.id],
-  }),
-  dataSources: many(placeDataSources),
-  reviews: many(reviews),
-}));
-
-export const placeDataSourcesRelations = relations(placeDataSources, ({ one }) => ({
-  place: one(places, {
-    fields: [placeDataSources.placeId],
-    references: [places.id],
-  }),
-}));
-
-export const reviewsRelations = relations(reviews, ({ one }) => ({
-  place: one(places, {
-    fields: [reviews.placeId],
-    references: [places.id],
-  }),
-}));
+export const reviewsRelations = relations(reviews, ({ one: _one }) => ({}));
 
 export const itinerariesRelations = relations(itineraries, ({ one }) => ({
   user: one(users, {
@@ -879,12 +406,6 @@ export const insertCitySchema = createInsertSchema(cities).omit({
   updatedAt: true,
 });
 
-export const insertPlaceSchema = createInsertSchema(places).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
 export const insertItinerarySchema = createInsertSchema(itineraries).omit({
   id: true,
   createdAt: true,
@@ -897,32 +418,16 @@ export type User = typeof users.$inferSelect;
 export type UserProvider = typeof userProviders.$inferSelect;
 export type City = typeof cities.$inferSelect;
 export type InsertCity = z.infer<typeof insertCitySchema>;
-export type Place = typeof places.$inferSelect;
-export type InsertPlace = z.infer<typeof insertPlaceSchema>;
-export type PlaceDataSource = typeof placeDataSources.$inferSelect;
 export type Review = typeof reviews.$inferSelect;
-export type WeatherCache = typeof weatherCache.$inferSelect;
 export type Itinerary = typeof itineraries.$inferSelect;
 export type InsertItinerary = z.infer<typeof insertItinerarySchema>;
-export type RouteCache = typeof routeCache.$inferSelect;
-export type DataSyncLog = typeof dataSyncLog.$inferSelect;
 
 // Admin Dashboard Types
 export type ApiServiceStatus = typeof apiServiceStatus.$inferSelect;
-export type YoutubeChannel = typeof youtubeChannels.$inferSelect;
-export type YoutubeVideo = typeof youtubeVideos.$inferSelect;
-export type YoutubePlaceMention = typeof youtubePlaceMentions.$inferSelect;
-export type BlogSource = typeof blogSources.$inferSelect;
 export type ExchangeRate = typeof exchangeRates.$inferSelect;
-export type DataCollectionSchedule = typeof dataCollectionSchedule.$inferSelect;
 export type CrisisAlert = typeof crisisAlerts.$inferSelect;
-export type GeminiWebSearchCache = typeof geminiWebSearchCache.$inferSelect;
-export type PlacePrice = typeof placePrices.$inferSelect;
-export type NaverBlogPost = typeof naverBlogPosts.$inferSelect;
-export type WeatherForecast = typeof weatherForecast.$inferSelect;
 export type PlaceSeedRaw = typeof placeSeedRaw.$inferSelect;
 export type GuidePrice = typeof guidePrices.$inferSelect;
-export type VerificationRequest = typeof verificationRequests.$inferSelect;
 
 // API 키 저장 테이블 (대시보드에서 관리)
 export const apiKeys = pgTable("api_keys", {
@@ -993,19 +498,6 @@ export const creditTransactions = pgTable("credit_transactions", {
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
 });
 
-// 캐시백 요청 (200크레딧=20유로)
-export const cashbackRequests = pgTable("cashback_requests", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
-  creditsAmount: integer("credits_amount").notNull(),
-  cashAmount: integer("cash_amount").notNull(), // 센트 단위 (2000=€20)
-  paymentMethod: varchar("payment_method").notNull(), // 'kakaopay' | 'bank_transfer'
-  paymentInfo: text("payment_info").notNull(),
-  status: varchar("status").notNull().default('pending'), // 'pending' | 'approved' | 'rejected'
-  adminNote: text("admin_note"),
-  processedAt: timestamp("processed_at"),
-  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-});
 
 // API 호출 로그 (비용 추적)
 export const apiLogs = pgTable("api_logs", {
@@ -1117,9 +609,6 @@ export const insertShareLinkSchema = createInsertSchema(shareLinks).omit({
 export const insertCreditTransactionSchema = createInsertSchema(creditTransactions).omit({
   id: true, createdAt: true,
 });
-export const insertCashbackRequestSchema = createInsertSchema(cashbackRequests).omit({
-  id: true, status: true, adminNote: true, processedAt: true, createdAt: true,
-});
 export const insertApiLogSchema = createInsertSchema(apiLogs).omit({
   id: true, createdAt: true,
 });
@@ -1149,8 +638,6 @@ export type ShareLink = typeof shareLinks.$inferSelect;
 export type InsertShareLink = z.infer<typeof insertShareLinkSchema>;
 export type CreditTransaction = typeof creditTransactions.$inferSelect;
 export type InsertCreditTransaction = z.infer<typeof insertCreditTransactionSchema>;
-export type CashbackRequest = typeof cashbackRequests.$inferSelect;
-export type InsertCashbackRequest = z.infer<typeof insertCashbackRequestSchema>;
 export type ApiLog = typeof apiLogs.$inferSelect;
 export type InsertApiLog = z.infer<typeof insertApiLogSchema>;
 export type UserActivityLog = typeof userActivityLogs.$inferSelect;

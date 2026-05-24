@@ -1,21 +1,20 @@
 ﻿/**
- * AG2: Gemini Creative Recommender (AI 최소 추천)
- * 소요: 5~8초 (현재 39초 대비 80% 감소)
- * 
- * 핵심 최적화:
- * - 현재: "27개 장소 전부 상세 정보 추천해줘" (프롬프트 2000자+, 응답 5000자+)
- * - 변경: "역할별 2~3곳 이름+한줄이유만" (프롬프트 500자, 응답 1000자)
- * - Gemini의 창의적 추천 능력은 유지하되, 작업량만 최소화
+ * ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = AG2 = DB-only 단일 진입점
+ *
+ * AG2: place_seed_raw 직접 SELECT (= Gemini 호출 0)
+ * = ready=true (= rank 1-20 ≥ 70 행) → fetchFromPlaceSeedRaw 반환
+ * = ready=false → throw MIX_MODE_DISABLED (= MIX path = pipeline-v3.ts step1_geminiItinerary 표준 prompt 사용)
+ *
+ * 폐기 (= 사용자 SSOT 2026-05-24 = 표준 prompt 단일 통일):
+ * - 옛 별도 간소화 prompt (= line 367-374) = lat/lng 누락 + place_id 환각 유도 = 삭제
+ * - 옛 Gemini fallback 본문 (= line 317-462) = DB-only 의도 위반 = 삭제
+ * - 옛 80% 부족 시 null 반환 (= line 241-244) = 부족해도 그대로 반환 (= 사용자 SSOT)
+ * - 옛 PlaceResult 변환 (= line 434-457 = lat/lng=0 + 점수 하드코딩) = 삭제
+ * - 옛 repairTruncatedJSON 함수 = 사용처 0 = 삭제
  */
 
-// ⚠️ 수정금지(승인필요) 2026-05-20 = KoreanSentiment 완전 폐기 (= 사용자 SSOT)
-import { GoogleGenAI } from "@google/genai";
 import type { AG1Output, PlaceResult, SeedCategory } from './types';
 import { MEAL_BUDGET } from './types';
-import {
-  generateProtagonistSentence,
-  generatePromptContext,
-} from '../protagonist-generator';
 // ⚠️ 수정금지(승인필요) 2026-05-20 = 이미지 폴백 단일 SSOT (= Google 1 > WK 2)
 import { pickPlaceImage } from '../shared/place-image';
 // ⚠️ 수정금지(승인필요) 2026-05-06 = 사용자 의도 = AG2 데이터 출처 = place_seed_raw 우선
@@ -23,22 +22,6 @@ import { db } from '../../db';
 import { placeSeedRaw } from '@shared/schema';
 import { eq, and, between, desc, asc, sql } from 'drizzle-orm';
 import { findCityUnified } from '../city-resolver';
-
-// Lazy initialization
-let ai: GoogleGenAI | null = null;
-
-function getGeminiApiKey(): string {
-  return process.env.AI_INTEGRATIONS_GEMINI_API_KEY || process.env.GEMINI_API_KEY || '';
-}
-
-function getAI(): GoogleGenAI {
-  if (!ai) {
-    const apiKey = getGeminiApiKey();
-    if (!apiKey) throw new Error('Gemini API 키가 없습니다.');
-    ai = new GoogleGenAI({ apiKey });
-  }
-  return ai;
-}
 
 /**
  * ⚠️ 수정금지(승인필요) 2026-05-07 = 사용자 명시 = 도시 입력 시점 분기 (백엔드만)
@@ -96,17 +79,25 @@ const VIBE_PRIMARY_CATEGORY: Record<string, string> = {
   Culture: 'heritage',
 };
 
-async function fetchFromPlaceSeedRaw(skeleton: AG1Output): Promise<PlaceResult[] | null> {
+async function fetchFromPlaceSeedRaw(
+  skeleton: AG1Output,
+  // ⚠️ 수정금지(승인필요) 2026-05-24 = isCityReady 결과 재사용 (= findCityUnified 2 회 호출 회피)
+  preResolvedCity?: { cityId: number; name: string },
+): Promise<PlaceResult[] | null> {
   const _t0 = Date.now();
   const { formData, vibeWeights, requiredPlaceCount } = skeleton;
   if (!db) return null;
 
-  // 도시 매칭
-  const cityResult = await findCityUnified(formData.destination);
-  const cityId = cityResult?.cityId;
+  let cityId: number | undefined = preResolvedCity?.cityId;
+  let cityName: string = preResolvedCity?.name ?? formData.destination;
   if (!cityId) {
-    console.log(`[AG2-DB] 도시 "${formData.destination}" 미발견 = Gemini fallback`);
-    return null;
+    const cityResult = await findCityUnified(formData.destination);
+    cityId = cityResult?.cityId;
+    cityName = cityResult?.name ?? formData.destination;
+    if (!cityId) {
+      console.log(`[AG2-DB] 도시 "${formData.destination}" 미발견 = Gemini fallback`);
+      return null;
+    }
   }
 
   // vibe → 카테고리 슬롯 분배
@@ -152,7 +143,7 @@ async function fetchFromPlaceSeedRaw(skeleton: AG1Output): Promise<PlaceResult[]
     catSlots[top] += (totalSlots - sum);
   }
 
-  console.log(`[AG2-DB] 도시 "${cityResult.name}" (id=${cityId}) 카테고리 슬롯:`, catSlots);
+  console.log(`[AG2-DB] 도시 "${cityName}" (id=${cityId}) 카테고리 슬롯:`, catSlots);
 
   // ⚠️ 수정금지(승인필요) 2026-05-19 = budget 매트릭스 (= 4:6 split)
   // 식당 = travelStyle MEAL_BUDGET tier 별 price_eur 범위로 필터 = rank 제한 X
@@ -237,11 +228,10 @@ async function fetchFromPlaceSeedRaw(skeleton: AG1Output): Promise<PlaceResult[]
     return null;
   }
 
-  // 충분 검증 = 80% 이상 채워야 사용 (= 부족 시 Gemini fallback)
-  if (allRows.length < totalSlots * 0.8) {
-    console.log(`[AG2-DB] 부족 (${allRows.length}/${totalSlots}) = Gemini fallback`);
-    return null;
-  }
+  // ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = 부족해도 그대로 반환 (= Gemini fallback X)
+  // = 옛 80% null 반환 = DB-only 의도 위반 (= ag2:317-462 Gemini fallback 호출) = 삭제
+  // = 빈 슬롯 가능 = 사용자 표시 = 솔직 (= 환각 채움 X)
+  console.log(`[AG2-DB] 행 수 = ${allRows.length}/${totalSlots} (= 부족해도 그대로 반환)`);
 
   // PlaceResult 형식 변환 (= AG3 호환)
   const places: PlaceResult[] = allRows.map((r: any, i: number) => {
@@ -285,233 +275,29 @@ async function fetchFromPlaceSeedRaw(skeleton: AG1Output): Promise<PlaceResult[]
 }
 
 /**
- * AG2 메인: 간소화된 Gemini 프롬프트로 장소 추천
+ * ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = AG2 메인 = DB-only 단일 분기
  *
- * 기존 대비 변경점:
- * 1. 좌표(lat/lng) 요청 제거 → AG3에서 DB 매칭으로 확보
- * 2. vibeScore, tags 등 메타데이터 제거 → AG3에서 계산
- * 3. 역할별(아침/점심/오후/저녁) 2~3곳만 이름+이유 요청
- * 4. 응답 크기 80% 축소 → API 응답 시간 대폭 단축
+ * 분기:
+ * - ready=true (= rank 1-20 ≥ 70 행) → fetchFromPlaceSeedRaw 결과 그대로 반환 (= Gemini 0)
+ * - ready=false → throw MIX_MODE_DISABLED (= MIX path = pipeline-v3.ts step1_geminiItinerary 처리)
  *
- * ⚠️ 수정금지(승인필요) 2026-05-06: place_seed_raw 우선 = 발굴 도시 = 0 비용
+ * 폐기 (= 2026-05-24):
+ * - 옛 80% 부족 시 Gemini fallback = 삭제 (= DB-only 의도 위반)
+ * - 옛 간소화 prompt (= lat/lng 누락 + place_id 환각 유도) = 삭제
+ * - 옛 PlaceResult 변환 (= lat/lng=0 + 점수 하드코딩) = 삭제
+ * - 옛 repairTruncatedJSON (= Gemini 응답 잘림 복구) = 삭제 (= 사용처 0)
  */
 export async function generateRecommendations(skeleton: AG1Output): Promise<PlaceResult[]> {
-  // ⚠️ 수정금지(승인필요) 2026-05-07 = 사용자 명시 = 도시 입력 시점 명시 분기
-  // = 진입 즉시 ready 판정 → 분기 결정 (= 데이터 검증 후 결정 X = 의도 명확화)
   const cityCheck = await isCityReady(skeleton.formData.destination);
-  if (cityCheck.ready) {
-    console.log(`[AG2] ✅ city='${cityCheck.cityName}' (id=${cityCheck.cityId}) ready=true (${cityCheck.count} rows ≥ ${READY_THRESHOLD}) → DB-only 경로`);
-    // 1. DB 우선 시도 (= 발굴 도시 = 외부 API 호출 0)
-    const dbResults = await fetchFromPlaceSeedRaw(skeleton);
-    if (dbResults && dbResults.length >= skeleton.requiredPlaceCount * 0.8) {
-      return dbResults;
-    }
-    console.log('[AG2] ⚠ ready=true 였으나 카테고리별 데이터 부족 → Gemini fallback (예외)');
-  } else {
-    // ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT = MIX 일시정지 = ready=false 시 Gemini fallback X
-    // = 백엔드 MIX 구현 후 = 사용자 명시 시 재활성화 (= raw-db-verify-and-complete skill 9 prompt 적용)
-    console.error(`[AG2] ❌ city='${cityCheck.cityName}' MIX 모드 일시정지 (= ${cityCheck.count} rows < ${READY_THRESHOLD}). 발굴 도시만 지원. 신규 도시 = raw-db-verify-and-complete skill 적용 후 재시도.`);
-    throw new Error(`MIX_MODE_DISABLED: '${cityCheck.cityName}' 미발굴 도시 = 백엔드 일시정지 (= 사용자 SSOT 2026-05-20)`);
+
+  if (!cityCheck.ready) {
+    console.error(`[AG2] ❌ city='${cityCheck.cityName}' MIX 모드 = ag2 처리 X (= ${cityCheck.count} rows < ${READY_THRESHOLD}) = MIX path = pipeline-v3.ts step1_geminiItinerary 표준 prompt 사용`);
+    throw new Error(`MIX_MODE_DISABLED: '${cityCheck.cityName}' 미발굴 도시 = ag2 처리 X (= 사용자 SSOT 2026-05-24)`);
   }
 
-  // 2. Fallback = Gemini (= 미발굴 도시 또는 DB 부족)
-  console.log('[AG2] DB 충분 X → Gemini fallback 시작');
-  const _t0 = Date.now();
-  const { formData, vibeWeights, requiredPlaceCount } = skeleton;
-
-  const apiKey = getGeminiApiKey();
-  if (!apiKey) {
-    console.error('[AG2] ❌ Gemini API 키 없음');
-    throw new Error('GEMINI_API_KEY_MISSING');
-  }
-
-  const vibeDescription = vibeWeights
-    .map(v => `${v.vibe}(${v.percentage}%)`)
-    .join(', ');
-
-  const paceKorean = formData.travelPace === 'Packed' ? '빡빡하게'
-    : formData.travelPace === 'Normal' ? '보통'
-    : '여유롭게';
-
-  // 주인공 컨텍스트
-  const protagonistContext = generatePromptContext({
-    curationFocus: (formData.curationFocus as any) || 'Everyone',
-    companionType: (formData.companionType as any) || 'Couple',
-    companionCount: formData.companionCount || 2,
-    companionAges: formData.companionAges,
-    vibes: vibeWeights.map(v => v.vibe),
-    destination: formData.destination,
-    birthDate: formData.birthDate,
-  });
-
-  const protagonistInfo = generateProtagonistSentence({
-    curationFocus: (formData.curationFocus as any) || 'Everyone',
-    companionType: (formData.companionType as any) || 'Couple',
-    companionCount: formData.companionCount || 2,
-    companionAges: formData.companionAges,
-    vibes: vibeWeights.map(v => v.vibe),
-    destination: formData.destination,
-    birthDate: formData.birthDate,
-  });
-
-  console.log(`[AG2] 🎯 주인공: ${protagonistInfo.sentence}`);
-
-  // ===== 🔗 Agent Protocol v1.0: 영어 공식명 강제 프롬프트 =====
-  // AG2 → AG3 통신: 구글맵 검색 가능한 영어 공식 명칭으로 전달
-  const slotCount = requiredPlaceCount;
-  const foodCount = Math.ceil(slotCount * 0.4); // 40% 식당
-  const activityCount = slotCount - foodCount;
-
-  // ⚠️ 수정금지(승인필요) 사용자 의도 = name + place_id + address 추가 매칭 정확도 향상
-  // 🔗 사용자 입력 도시 반경 100km 내외: Place Seed·AG3 매칭 범위와 동일하게 제한
-  const prompt = `Recommend exactly ${slotCount} real places in ${formData.destination} for Korean tourists.
-Important: Only recommend places within about 100km radius of the destination city (city center + suburbs). This matches our data coverage.
-Need: ${activityCount} attractions + ${foodCount} restaurants/cafes. Vibes: ${vibeDescription}. Group: ${formData.companionType} ${formData.companionCount}pax.
-
-Respond ONLY with this JSON (no markdown):
-{"places":[{"name":"Official English name on Google Maps","place_id":"Google Maps Place ID if you know it (else null)","address":"FULL street address with NUMBER + street + postal code + city (e.g. '15 Rue Robert de Flers, 75015 Paris'). NEVER use postal-code-only or vague addresses.","reason":"Korean 1-line reason","isFood":false}]}
-
-Example (Paris): {"places":[{"name":"Eiffel Tower","place_id":"ChIJLU7jZClu5kcR4PcOOO6p3I0","address":"Champ de Mars, 5 Av. Anatole France, 75007 Paris","reason":"파리 필수 랜드마크, 야경 명소","isFood":false},{"name":"Le Bouillon Chartier","place_id":"ChIJq0iVeyhu5kcR3Kn31xC9ZSo","address":"7 Rue du Faubourg Montmartre, 75009 Paris","reason":"100년 전통 파리 맛집, 가성비 최고","isFood":true}]}`;
-
-  try {
-    console.log(`[AG2] 🤖 Gemini에 ${slotCount}곳 요청 (간소화 프롬프트 ${prompt.length}자)...`);
-
-    // ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT = 모델 3.0 통일 (= shared/geminiClient.ts SSOT)
-    const response = await getAI().models.generateContent({
-      model: "gemini-3-flash-preview",
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      config: {
-        temperature: 0.7,
-        maxOutputTokens: 8192, // ⚠️ 수정금지(승인필요) 4096 → 8192 = place_id+address 추가로 잘림 방지
-        responseMimeType: "application/json",
-        // ⚠️ 수정금지(승인필요) 2026-05-06 thinking 비활성 = output 토큰 보호
-        // = Gemini 2.5 Flash thinking 이 출력 토큰 잠식 = MAX_TOKENS 잘림 사고 방지
-        thinkingConfig: { thinkingBudget: 0 } as any,
-      } as any,
-    });
-
-    // 디버그: 응답 상세 정보 로깅
-    const finishReason = (response as any).candidates?.[0]?.finishReason || 'unknown';
-    const text = response.text || "";
-    console.log(`[AG2] 🤖 Gemini 응답 수신 (${text.length}자, finishReason=${finishReason}, ${Date.now() - _t0}ms)`);
-    if (text.length < 200) {
-      console.log(`[AG2] 🔍 짧은 응답 전문: ${text}`);
-    }
-
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      console.error('[AG2] ❌ JSON 파싱 실패, 응답:', text.slice(0, 300));
-      return [];
-    }
-
-    // 🔗 JSON 잘림 복구 로직 (Gemini 응답이 잘릴 때 대비)
-    let result: any;
-    try {
-      result = JSON.parse(jsonMatch[0]);
-    } catch (parseError) {
-      console.warn('[AG2] ⚠️ JSON 파싱 오류, 복구 시도...');
-      result = repairTruncatedJSON(jsonMatch[0]);
-      if (!result) {
-        console.error('[AG2] ❌ JSON 복구 실패:', (parseError as Error).message);
-        return [];
-      }
-      console.log(`[AG2] ✅ JSON 복구 성공: ${result.places?.length || 0}곳`);
-    }
-
-    const placesRaw = result.places || [];
-
-    if (placesRaw.length === 0) {
-      console.warn('[AG2] ⚠️ Gemini가 0곳 반환');
-      return [];
-    }
-
-    console.log(`[AG2] ✅ Gemini ${placesRaw.length}곳 반환 (${Date.now() - _t0}ms)`);
-
-    // ⚠️ 수정금지(승인필요) place_id + address 추가 매핑 (AG3 매칭에 사용)
-    // 간소화된 응답 → PlaceResult 변환 (좌표는 AG3에서 DB 매칭으로 확보)
-    return placesRaw
-      .filter((p: any) => p.name)
-      .map((place: any, index: number) => ({
-        id: `gemini-v2-${Date.now()}-${index}`,
-        name: place.name,
-        // 🔗 사용자 의도: AG3 가 4-단계 매칭에 사용 (place_id 우선, 그다음 address)
-        geminiPlaceId: place.place_id && place.place_id !== 'null' ? place.place_id : '',
-        geminiAddress: place.address || '',
-        description: place.reason || '',
-        lat: place.lat || 0,  // AG3에서 DB 매칭으로 교체됨
-        lng: place.lng || 0,
-        vibeScore: 7,  // AG3에서 재계산
-        confidenceScore: 7,
-        sourceType: "Gemini AI V2",
-        personaFitReason: place.reason || "AI 추천 장소",
-        tags: place.isFood ? ['restaurant', 'food'] : [],
-        vibeTags: place.isFood ? ['Foodie' as const] : [],
-        image: "",
-        priceEstimate: "",
-        placeTypes: place.isFood ? ['restaurant'] : [],
-        recommendedTime: place.time || 'afternoon',
-        city: place.city || formData.destination,
-        region: place.region || "",
-        koreanPopularityScore: 0,
-        googleMapsUrl: "",
-      }));
-  } catch (error: any) {
-    if (error.message === 'GEMINI_API_KEY_MISSING') throw error;
-    console.error("[AG2] ❌ Gemini 실패:", error?.message || error);
-    return [];
-  }
-}
-
-/**
- * 잘린 JSON 복구 함수
- * Gemini가 maxOutputTokens에 의해 잘린 JSON을 최대한 복구
- * 
- * 예: {"places":[{"name":"A","reason":"B"},{"name":"C","rea
- * → {"places":[{"name":"A","reason":"B"}]}  (완성된 항목만 추출)
- */
-function repairTruncatedJSON(broken: string): { places: any[] } | null {
-  try {
-    // places 배열 시작 위치 찾기
-    const arrStart = broken.indexOf('[');
-    if (arrStart === -1) return null;
-
-    // 마지막 완전한 객체 끝 위치 찾기 (마지막 "}," 또는 "}")
-    let lastCompleteIdx = -1;
-    let braceDepth = 0;
-    let inString = false;
-    let escapeNext = false;
-
-    for (let i = arrStart + 1; i < broken.length; i++) {
-      const ch = broken[i];
-
-      if (escapeNext) { escapeNext = false; continue; }
-      if (ch === '\\') { escapeNext = true; continue; }
-      if (ch === '"') { inString = !inString; continue; }
-      if (inString) continue;
-
-      if (ch === '{') braceDepth++;
-      if (ch === '}') {
-        braceDepth--;
-        if (braceDepth === 0) {
-          lastCompleteIdx = i;
-        }
-      }
-    }
-
-    if (lastCompleteIdx === -1) return null;
-
-    // 완전한 부분만 추출하여 재조립
-    const repaired = broken.substring(0, lastCompleteIdx + 1) + ']}';
-
-    try {
-      return JSON.parse(repaired);
-    } catch {
-      // 한 번 더 시도: 마지막 쉼표 제거
-      const cleaned = repaired.replace(/,\s*\]/, ']');
-      return JSON.parse(cleaned);
-    }
-  } catch {
-    return null;
-  }
+  console.log(`[AG2] ✅ city='${cityCheck.cityName}' (id=${cityCheck.cityId}) ready=true (${cityCheck.count} rows ≥ ${READY_THRESHOLD}) → DB-only`);
+  // ⚠️ 수정금지(승인필요) 2026-05-24 = isCityReady 결과 전달 = findCityUnified 2 회 호출 회피
+  const dbResults = await fetchFromPlaceSeedRaw(skeleton, { cityId: cityCheck.cityId!, name: cityCheck.cityName });
+  return dbResults || [];
 }
 

@@ -1,11 +1,10 @@
 /**
- * ⚠️ 수정금지(승인필요) 2026-05-23 = 사용자 SSOT = 완전 재작성 (= 829 → ~120 줄)
- * = 옛 27 task = 모두 무용 (= 크롤러 전부 폐기 + MCP 실패 + wikimedia/opentripmap 0건)
+ * ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = Step 4 DB DROP = data_sync_log 테이블 폐기
+ * = 옛 INSERT 2 곳 = console.log 로 대체 (= cron 실행 로그 = stdout 만 = 영속 X)
  * = 유지 1 task = exchange_rate_sync (= Frankfurter 무료 + 30 통화 실시간)
  */
 import * as cron from "node-cron";
 import { db } from "../db";
-import { dataSyncLog } from "@shared/schema";
 
 type CronTask = ReturnType<typeof cron.schedule>;
 
@@ -53,30 +52,12 @@ export class DataScheduler {
         result = await this.runExchangeRateSync();
       }
 
-      await db.insert(dataSyncLog).values({
-        entityType: taskName,
-        source: "scheduler",
-        status: result.success ? "success" : "failed",
-        startedAt: startTime,
-        completedAt: new Date(),
-        itemsProcessed: result.itemsProcessed || 0,
-        itemsFailed: result.errors?.length || 0,
-        errorMessage: result.errors?.join("; "),
-      });
-
-      console.log(`[Scheduler] Task ${taskName} completed: ${result.success ? "success" : "failed"}`);
+      const elapsed = Date.now() - startTime.getTime();
+      console.log(`[Scheduler] Task ${taskName} ${result.success ? "✅" : "❌"} = ${result.itemsProcessed} 항목 / ${result.errors.length} 오류 / ${elapsed}ms`);
+      if (result.errors.length > 0) console.warn(`[Scheduler] errors:`, result.errors.join("; "));
     } catch (error: any) {
-      console.error(`[Scheduler] Task ${taskName} failed:`, error);
-      if (db) {
-        await db.insert(dataSyncLog).values({
-          entityType: taskName,
-          source: "scheduler",
-          status: "failed",
-          startedAt: startTime,
-          completedAt: new Date(),
-          errorMessage: error.message,
-        });
-      }
+      const elapsed = Date.now() - startTime.getTime();
+      console.error(`[Scheduler] Task ${taskName} ❌ FATAL (${elapsed}ms):`, error.message);
     }
   }
 

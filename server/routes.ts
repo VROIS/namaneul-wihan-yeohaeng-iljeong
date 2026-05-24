@@ -10,7 +10,7 @@ import { registerAuthRoutes } from "./auth";
 import { registerBtsRoutes } from "./bts-routes";
 import { registerGuideRoutes } from "./guide-routes";
 import { db } from "./db";
-import { instagramHashtags, cities, youtubeChannels, verificationRequests, itineraries } from "../shared/schema";
+import { cities, itineraries } from "../shared/schema";
 import { count, eq, desc, sql } from "drizzle-orm";
 import { users } from "../shared/schema";
 
@@ -793,92 +793,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
-  // Verification Request APIs
-  app.post("/api/verification/request", async (req, res) => {
-    try {
-      const { userId, itineraryData, userMessage, preferredDate, contactEmail, contactKakao } = req.body;
-
-      if (!userId || !itineraryData) {
-        return res.status(400).json({ error: "userId and itineraryData are required" });
-      }
-
-      const [request] = await db.insert(verificationRequests).values({
-        itineraryId: itineraryData.id || 0,
-        userId,
-        itineraryData,
-        userMessage,
-        preferredDate: preferredDate ? new Date(preferredDate) : null,
-        contactEmail,
-        contactKakao,
-        status: "pending",
-      }).returning();
-
-      res.json({ success: true, requestId: request.id });
-    } catch (error) {
-      console.error("Error creating verification request:", error);
-      res.status(500).json({ error: "Failed to create verification request" });
-    }
-  });
-
-  app.get("/api/verification/requests", async (req, res) => {
-    try {
-      const { userId, status } = req.query;
-
-      let query = db.select().from(verificationRequests);
-
-      if (userId) {
-        query = query.where(eq(verificationRequests.userId, userId as string));
-      }
-
-      const requests = await query.orderBy(desc(verificationRequests.createdAt));
-      res.json(requests);
-    } catch (error) {
-      console.error("Error fetching verification requests:", error);
-      res.status(500).json({ error: "Failed to fetch verification requests" });
-    }
-  });
-
-  app.get("/api/verification/requests/:id", async (req, res) => {
-    try {
-      const { id } = req.params;
-      const [request] = await db.select().from(verificationRequests).where(eq(verificationRequests.id, parseInt(id)));
-
-      if (!request) {
-        return res.status(404).json({ error: "Verification request not found" });
-      }
-
-      res.json(request);
-    } catch (error) {
-      console.error("Error fetching verification request:", error);
-      res.status(500).json({ error: "Failed to fetch verification request" });
-    }
-  });
-
-  app.patch("/api/verification/requests/:id", async (req, res) => {
-    try {
-      const { id } = req.params;
-      const { status, adminComment, placeRatings } = req.body;
-
-      const updateData: any = { updatedAt: new Date() };
-      if (status) updateData.status = status;
-      if (adminComment !== undefined) updateData.adminComment = adminComment;
-      if (placeRatings) updateData.placeRatings = placeRatings;
-      if (status === "verified" || status === "rejected") {
-        updateData.reviewedAt = new Date();
-      }
-
-      const [updated] = await db.update(verificationRequests)
-        .set(updateData)
-        .where(eq(verificationRequests.id, parseInt(id)))
-        .returning();
-
-      res.json(updated);
-    } catch (error) {
-      console.error("Error updating verification request:", error);
-      res.status(500).json({ error: "Failed to update verification request" });
-    }
-  });
-
   const httpServer = createServer(app);
 
   // 서버 시작 시 기본 데이터 자동 시드
@@ -889,76 +803,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
 async function autoSeedDefaultData() {
   try {
-    // 해시태그 테이블이 비어있으면 자동 시드
-    const [hashtagCount] = await db.select({ count: count() }).from(instagramHashtags);
-    if (hashtagCount.count === 0) {
-      console.log('[AutoSeed] Instagram 해시태그 테이블이 비어있습니다. 기본 데이터를 입력합니다...');
-      await seedDefaultInstagramHashtags();
-      console.log('[AutoSeed] Instagram 해시태그 시드 완료');
-    }
-
-    // 도시 테이블이 비어있으면 자동 시드
     const [cityCount] = await db.select({ count: count() }).from(cities);
     if (cityCount.count === 0) {
       console.log('[AutoSeed] 도시 테이블이 비어있습니다. 기본 데이터를 입력합니다...');
       await seedDefaultCities();
       console.log('[AutoSeed] 도시 시드 완료');
     }
-
-    // YouTube 채널 테이블이 비어있으면 자동 시드
-    const [channelCount] = await db.select({ count: count() }).from(youtubeChannels);
-    if (channelCount.count === 0) {
-      console.log('[AutoSeed] YouTube 채널 테이블이 비어있습니다. 기본 데이터를 입력합니다...');
-      await seedDefaultYouTubeChannels();
-      console.log('[AutoSeed] YouTube 채널 시드 완료');
-    }
   } catch (error) {
     console.error('[AutoSeed] 자동 시드 오류:', error);
   }
 }
 
-async function seedDefaultInstagramHashtags() {
-  const defaultHashtags = [
-    { hashtag: "#에펠탑", category: "landmark" },
-    { hashtag: "#toureiffel", category: "landmark" },
-    { hashtag: "#파리여행", category: "travel" },
-    { hashtag: "#파리맛집", category: "food" },
-    { hashtag: "#도쿄타워", category: "landmark" },
-    { hashtag: "#도쿄여행", category: "travel" },
-    { hashtag: "#도쿄맛집", category: "food" },
-    { hashtag: "#시부야", category: "landmark" },
-    { hashtag: "#센소지", category: "landmark" },
-    { hashtag: "#오사카여행", category: "travel" },
-    { hashtag: "#오사카맛집", category: "food" },
-    { hashtag: "#도톤보리", category: "landmark" },
-    { hashtag: "#서울여행", category: "travel" },
-    { hashtag: "#서울맛집", category: "food" },
-    { hashtag: "#경복궁", category: "landmark" },
-    { hashtag: "#남산타워", category: "landmark" },
-    { hashtag: "#홍대", category: "landmark" },
-    { hashtag: "#로마여행", category: "travel" },
-    { hashtag: "#콜로세움", category: "landmark" },
-    { hashtag: "#방콕여행", category: "travel" },
-    { hashtag: "#방콕맛집", category: "food" },
-    { hashtag: "#뉴욕여행", category: "travel" },
-    { hashtag: "#타임스퀘어", category: "landmark" },
-    { hashtag: "#런던여행", category: "travel" },
-    { hashtag: "#빅벤", category: "landmark" },
-    { hashtag: "#바르셀로나여행", category: "travel" },
-    { hashtag: "#사그라다파밀리아", category: "landmark" },
-    { hashtag: "#싱가포르여행", category: "travel" },
-    { hashtag: "#마리나베이샌즈", category: "landmark" },
-    { hashtag: "#홍콩여행", category: "travel" },
-    { hashtag: "#다낭여행", category: "travel" },
-    { hashtag: "#하노이여행", category: "travel" },
-  ];
-
-  for (const tag of defaultHashtags) {
-    try {
-      await db.insert(instagramHashtags).values(tag).onConflictDoNothing();
-    } catch (e) { }
-  }
-}
 
 async function seedDefaultCities() {
   const defaultCities = [
@@ -1065,18 +920,3 @@ async function seedDefaultCities() {
   }
 }
 
-async function seedDefaultYouTubeChannels() {
-  const defaultChannels = [
-    { channelId: "UC3mY_QDRF9lQvd_wXKfn", channelName: "성시경", channelUrl: "https://www.youtube.com/@sungsikyung", category: "food", trustWeight: 2.0 },
-    { channelId: "UC_BAEK_JONGWON", channelName: "백종원", channelUrl: "https://www.youtube.com/@paaborns", category: "food", trustWeight: 2.0 },
-    { channelId: "UCGrJqBQRypR7BMVp7lwnUUQ", channelName: "스트릿푸드파이터", channelUrl: "https://www.youtube.com/@StreetFoodFighter", category: "food", trustWeight: 2.0 },
-    { channelId: "UCsJ6RuBiTVLvNWb56-wr_aQ", channelName: "빠니보틀", channelUrl: "https://www.youtube.com/@ppanibottle", category: "travel", trustWeight: 1.9 },
-    { channelId: "UC_PARIS_OINOJA", channelName: "파리외노자", channelUrl: "https://www.youtube.com/@parisnoja", category: "travel", trustWeight: 1.9 },
-  ];
-
-  for (const channel of defaultChannels) {
-    try {
-      await db.insert(youtubeChannels).values(channel).onConflictDoNothing();
-    } catch (e) { }
-  }
-}

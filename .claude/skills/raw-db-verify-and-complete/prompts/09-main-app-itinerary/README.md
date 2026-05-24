@@ -1,20 +1,28 @@
-# 09-main-app-itinerary — 메인앱 자동 여정 생성 (= 참조 only)
+# 09-main-app-itinerary — 메인앱 자동 여정 생성
 
-> ⚠️ 수정금지(승인필요) 2026-05-15 = 사용자 SSOT §12 = pipeline-v3.ts inline 유지 = 본 폴더는 **참조만**
+> ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT 갱신 = **표준 prompt 파일 보관 + MIX 단일 통일**
+> (= 옛 SSOT 2026-05-20 "inline 유지 + skill 참조만" = **폐기** = 본 폴더에 원본 보관 SSOT 로 갱신)
 
-## 위치 (= 변경 X)
+## 표준 prompt (= SSOT)
+
+📄 **원본 파일** = [`STANDARD_PROMPT_2026-05-24.md`](STANDARD_PROMPT_2026-05-24.md)
+= 본 파일 + 코드 prompt 양쪽 1:1 일치 강제 (= 1 글자 변경 = Gemini 응답 변경 = 검증 후만).
+
+## 위치
 
 | 항목 | 위치 |
 |---|---|
-| **프롬프트 inline** | [`server/services/agents/pipeline-v3.ts:367-448`](../../../../../server/services/agents/pipeline-v3.ts#L367-L448) |
-| **호출 설정** | 동 파일 line 460-463 (= temp 0.3 + maxToken 8192 + thinkingBudget 0 + googleSearch) |
-| **응답 schema** | 동 파일 line 434-443 (= days[] = 활동/식사) |
+| **표준 prompt 원본** | [`STANDARD_PROMPT_2026-05-24.md`](STANDARD_PROMPT_2026-05-24.md) (= 본 폴더) |
+| **코드 inline** (= MIX path) | [`server/services/agents/pipeline-v3.ts:419-466`](../../../../../server/services/agents/pipeline-v3.ts#L419-L466) |
+| **호출 설정** | `pipeline-v3.ts:467-475` (= temp 0.3 + maxToken 8192 + thinkingBudget 0 + googleSearch) |
+| **응답 schema** | 9 필드 = name/nameKo/nameLocal/address/type/latitude/longitude/estimatedCostEur/selection_reason_ko/shortform_ko |
 
-## 사용자 SSOT 결정 (= 2026-05-20)
+## 사용자 SSOT 결정 (= 2026-05-24)
 
-> "메인앱 여정 prompt = pipeline-v3 inline → **현 위치 유지 + skill 참조만**"
+> "원본을 반드시 스킬에 표준 프롬프트로 오늘 날짜 기재하여 보관 + 파이프라인 MIX 경우 단일 프롬프트로 통일"
 
-= 사용자 명시 = inline 유지 / skill 안 별도 파일 X / 본 README 만 참조.
+= 본 폴더 = 원본 보관 SSOT / 코드 inline = 동기 사본 / MIX path = 본 prompt 단일 사용.
+= `ag2-gemini-recommender.ts` 의 별도 prompt = **폐기 대상** (= P0-1 단계 처리).
 
 ## 모델 + 설정 (= pipeline-v3.ts:460-463 동일)
 

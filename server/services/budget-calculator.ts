@@ -1,29 +1,19 @@
 ﻿/**
  * 예산 계산기 (Budget Calculator) - 소숫점 정밀 계산
- * 
- * 🎯 TravelStyle 기반 통합 비용 산정
- * 
+ *
+ * ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = Gemini 호출 + 캐시 = 완전 폐기
+ * = 입장료 = PSR.price_eur 단일 = PlaceForBudget.priceEur 직접 사용
+ * = 없으면 = null (= 0 비용 처리 = 환각 추정 X)
+ *
  * 비용 구성:
- * 1. 교통비 - transport-pricing-service.ts 연동 (소숫점 정밀)
- *    - 많이 걷기: 대중교통 실제 요금
- *    - 적당히: 대중교통 + 우버 실제 요금
- *    - 이동 최소화: 가이드 시간당 요금 (반일 4h 기본)
- * 
- * 2. 식사비 - TravelStyle별 고정 (Luxury €70, Premium €50, Reasonable €30, Economic €10)
- * 
- * 3. 입장료 - Gemini 실시간 검색 (사용자 신뢰의 원천)
- * 
- * 💰 마케팅 전략:
- * - Luxury/Premium: 드라이빙 가이드 가격 포함
- * - Reasonable/Economic: 드라이빙 가이드 가격 별도 표시 (신규 고객 창출)
- * 
- * ⚠️ 가격 정보는 가장 민감 → 소숫점까지 정확하게!
+ * 1. 교통비 - transport-pricing-service.ts 연동
+ * 2. 식사비 - TravelStyle별 고정
+ * 3. 입장료 - PlaceForBudget.priceEur (= PSR.price_eur 호출자 전달)
  */
 
 import { db } from '../db';
-import { guidePrices, geminiWebSearchCache } from '../../shared/schema';
+import { guidePrices } from '../../shared/schema';
 import { eq } from 'drizzle-orm';
-// 'and' import 제거 - 현재 미사용
 import { transportPricingService, round2 } from './transport-pricing-service';
 
 // === 타입 정의 ===
@@ -38,20 +28,6 @@ const MEAL_PRICES: Record<TravelStyle, { price: number; description: string }> =
   Premium: { price: 50, description: '트렌디 레스토랑' },
   Reasonable: { price: 30, description: '현지인 맛집' },
   Economic: { price: 10, description: '스트리트푸드/간편식' },
-};
-
-// === 입장료 기본값 (Gemini 검색 실패시 fallback) ===
-const DEFAULT_ENTRANCE_FEES: Record<string, number> = {
-  'museum': 15,
-  'art_gallery': 12,
-  'tourist_attraction': 10,
-  'amusement_park': 45,
-  'zoo': 25,
-  'aquarium': 22,
-  'spa': 35,
-  'landmark': 0,  // 대부분 무료
-  'church': 0,
-  'park': 0,
 };
 
 // === 인터페이스 ===
@@ -69,8 +45,9 @@ interface BudgetInput {
 interface PlaceForBudget {
   id: string;
   name: string;
-  type?: string;
-  placeTypes?: string[];
+  // ⚠️ 수정금지(승인필요) 2026-05-24 = PSR.price_eur 단일 SSOT (= Gemini 추정 폐기)
+  // = 호출자 (= routes.ts) = ag2-DB 결과 PlaceResult.estimatedPriceEur 전달 필수
+  priceEur?: number | null;
 }
 
 interface DailyBudgetBreakdown {
@@ -112,96 +89,11 @@ interface BudgetResult {
   dataSource: string;
 }
 
-/**
- * Gemini로 장소 입장료 실시간 검색
- */
-async function searchEntranceFeeWithGemini(placeName: string, destination: string): Promise<number | null> {
-  try {
-    // 캐시 확인 (7일 유효)
-    const cacheKey = `entrance_fee_${placeName}_${destination}`;
-    const cached = await db.select().from(geminiWebSearchCache)
-      .where(eq(geminiWebSearchCache.query, cacheKey))
-      .limit(1);
-    
-    if (cached.length > 0) {
-      const cacheAge = Date.now() - new Date(cached[0].createdAt).getTime();
-      if (cacheAge < 7 * 24 * 60 * 60 * 1000) {
-        const data = cached[0].result as { entranceFee?: number };
-        return data.entranceFee || null;
-      }
-    }
-    
-    // Gemini API 호출
-    const apiKey = process.env.GEMINI_API_KEY || process.env.AI_INTEGRATIONS_GEMINI_API_KEY;
-    if (!apiKey) return null;
-    
-    const { GoogleGenAI } = await import('@google/genai');
-    const ai = new GoogleGenAI({ apiKey });
-    
-    const prompt = `${destination}에 있는 "${placeName}"의 2026년 현재 입장료(성인 기준, EUR)를 알려주세요.
-무료인 경우 0, 모르면 null로 답해주세요.
-JSON 형식으로만 답해주세요: {"entranceFee": 숫자 또는 null, "source": "출처"}`;
-    
-    const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-    });
-    
-    const text = response.text || '';
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0]);
-      const fee = parsed.entranceFee;
-      
-      // 캐시 저장
-      await db.insert(geminiWebSearchCache).values({
-        query: cacheKey,
-        searchType: 'entrance_fee',
-        result: { entranceFee: fee, source: parsed.source },
-      }).onConflictDoNothing();
-      
-      return typeof fee === 'number' ? fee : null;
-    }
-  } catch (error) {
-    console.warn(`[Budget] 입장료 검색 실패: ${placeName}`, error);
-  }
-  return null;
-}
-
-/**
- * 장소 타입에서 기본 입장료 추정
- */
-function getDefaultEntranceFee(placeTypes: string[]): number {
-  for (const type of placeTypes) {
-    if (DEFAULT_ENTRANCE_FEES[type] !== undefined) {
-      return DEFAULT_ENTRANCE_FEES[type];
-    }
-  }
-  return 0;  // 기본값: 무료
-}
-
-/**
- * 입장료 조회 (Gemini 우선, fallback: 타입 기반 추정)
- */
-async function getEntranceFee(
-  place: PlaceForBudget, 
-  destination: string,
-  useRealtime: boolean = true
-): Promise<{ fee: number; source: 'gemini' | 'estimated' }> {
-  // 실시간 검색 시도
-  if (useRealtime) {
-    const geminiResult = await searchEntranceFeeWithGemini(place.name, destination);
-    if (geminiResult !== null) {
-      return { fee: geminiResult, source: 'gemini' };
-    }
-  }
-  
-  // Fallback: 타입 기반 추정
-  const types = place.placeTypes || (place.type ? [place.type] : []);
-  return { 
-    fee: getDefaultEntranceFee(types), 
-    source: 'estimated' 
-  };
+// ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = 입장료 = PSR.price_eur 단일
+// = Gemini 호출 / 캐시 / 타입 기반 추정 = 모두 완전 폐기
+// = null 시 = 0 (= 무료 가정 = 환각 추정 X)
+function getEntranceFeeFromPSR(place: PlaceForBudget): number {
+  return typeof place.priceEur === 'number' ? place.priceEur : 0;
 }
 
 /**
@@ -272,24 +164,18 @@ export async function calculateTravelBudget(input: BudgetInput): Promise<BudgetR
   const dailyMeals = round2(mealConfig.price * mealsPerDay * companionCount);
   const totalMeals = round2(dailyMeals * dayCount);
   
-  // === 3. 입장료 계산 (Gemini 실시간) ===
+  // === 3. 입장료 계산 (= PSR.price_eur 단일 SSOT = Gemini 호출 0)
   let totalEntranceFees = 0;
-  let geminiSourceCount = 0;
-  const destination = places.length > 0 ? '파리' : '';  // TODO: destination 전달받기
-  
   const placesPerDay = Math.ceil(places.length / dayCount);
-  
+
   for (let day = 1; day <= dayCount; day++) {
     const dayPlaces = places.slice((day - 1) * placesPerDay, day * placesPerDay);
     let dayEntranceFees = 0;
     const dayPlaceFees: { name: string; entranceFee: number }[] = [];
-    
     for (const place of dayPlaces) {
-      const { fee, source } = await getEntranceFee(place, destination, true);
-      const totalFee = fee * companionCount;
-      dayEntranceFees += totalFee;
+      const fee = getEntranceFeeFromPSR(place);
+      dayEntranceFees += fee * companionCount;
       dayPlaceFees.push({ name: place.name, entranceFee: fee });
-      if (source === 'gemini') geminiSourceCount++;
     }
     
     totalEntranceFees = round2(totalEntranceFees + dayEntranceFees);
@@ -337,11 +223,8 @@ export async function calculateTravelBudget(input: BudgetInput): Promise<BudgetR
   // === 6. 노트 생성 ===
   notes.push(`식사: ${mealConfig.description} (€${mealConfig.price}/끼/인 × ${mealsPerDay}끼)`);
   notes.push(`교통: ${transportResult.vehicleDescription}`);
-  
-  if (geminiSourceCount > 0) {
-    notes.push(`입장료: ${geminiSourceCount}개 장소 실시간 검색 적용`);
-  }
-  
+  notes.push(`입장료: PSR.price_eur 단일 SSOT (= Gemini 호출 0)`);
+
   // 교통비 상세 노트 추가
   if (transportResult.breakdown.transitDetails) {
     notes.push(`대중교통: €${transportResult.breakdown.transitDetails.totalTransit} (${transportResult.breakdown.transitDetails.tripCount}회/일)`);
@@ -372,7 +255,7 @@ export async function calculateTravelBudget(input: BudgetInput): Promise<BudgetR
     guideServiceComparison,
     currency: 'EUR',
     notes,
-    dataSource: geminiSourceCount > 0 ? 'realtime_gemini' : 'estimated',
+    dataSource: 'psr_price_eur',
   };
 }
 

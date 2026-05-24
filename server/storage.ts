@@ -1,10 +1,9 @@
-// ⚠️ 수정금지(승인필요) 2026-05-23 = 사용자 SSOT = PSR 단일 = 보조 테이블 의존 제거
-// = places 함수 본문 = PSR 사용 (= 시그니처 유지 = FE 호환)
+// ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = Step 4 DB DROP = places 테이블 폐기 = Place type → PlaceSeedRaw alias
 // = placeDataSources/weatherCache/routeCache/reviews/dataSyncLog/placePrices = 함수 삭제
 import {
   type User, type InsertUser,
   type City, type InsertCity,
-  type Place,
+  type PlaceSeedRaw as Place,
   type Itinerary, type InsertItinerary,
   type GuidePrice,
   users, userProviders,

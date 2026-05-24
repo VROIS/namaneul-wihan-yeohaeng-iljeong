@@ -408,16 +408,19 @@ async function step1_geminiItinerary(
       nowMonth >= 9 && nowMonth <= 11 ? '가을 시즌' :
         '겨울 시즌 (비수기, 일부 시설 단축운영)';
 
-  // ⚠️ 수정금지(승인필요) 2026-05-14 = 메인앱 v3 prompt 사용자 SSOT 확정
-  // = 시드 v3 톤 + 한국 여행자 컨텍스트 + 슬롯 매트릭스 + 동선 정렬
-  // = v3 핵심 신규 필드 = selection_reason_ko (FOMO) + shortform_ko (코믹/위트)
-  // = 컬럼 매핑: summary_ko ← selection_reason_ko / editorial_summary ← shortform_ko
-  // = 옛 ops 필드 (= type/startTime/endTime/estimatedCostEur) = AG3/AG4 호환 유지
-  // = 모델 = gemini-3-flash-preview + googleSearch grounding (= 시드와 통일)
-  // = Paris 시뮬 검증 = 15.7s / $0.0012 / 18 곳 (= docs/raw/mainapp-paris-v3.json)
+  // ⚠️ 수정금지(승인필요) 2026-05-24 = 메인앱 표준 prompt 사용자 SSOT
+  // = SSOT 원본 = .claude/skills/raw-db-verify-and-complete/prompts/09-main-app-itinerary/STANDARD_PROMPT_2026-05-24.md
+  // = 1 글자 변경 = Gemini 응답 변경 = 양쪽 파일 동기 강제
   const koreanTravelerStyle = `${companionDesc} ${headcount}명 / vibe=${formData.vibes?.join('+') || vibeNatural} / 페이스=${paceKo} / 스타일=${styleDesc}${ageDesc ? ` / 나이=${ageDesc}` : ''}`;
   const prompt = `You are a travel data assistant for KOREAN TRAVELERS (${nowYear}년 기준 최신 정보).
 Return STRICT machine-parseable JSON only (no prose, no markdown wrappers).
+
+⚠️ GROUNDING REQUIREMENT (= Gemini 3 + Google Search 강제):
+- All facts (place names, addresses, coordinates, prices, opening hours) MUST be verified via Google Search grounding.
+- No hallucinations. No made-up coordinates. No fabricated addresses.
+- If you cannot verify a fact via Google Search, SKIP that place — do NOT guess.
+
+TASK: Fill the provided slot matrix (categories + counts) and sort places within each day by minimum travel distance to generate the itinerary.
 
 CITY: ${formData.destination}
 RADIUS_KM: 100
@@ -432,9 +435,10 @@ ${dayRequirements}
 
 [동선 원칙]
 - 매일 ${formData.destination} 도시 중심부에서 출발·귀환, 같은 날 = 같은 구역 묶기
-- Array order within each day = visit order
-- 점심(type="lunch") 12:00~13:30 / 저녁(type="dinner") 18:30~20:00
-- startTime/endTime 겹침 금지 (= 이동시간 반영)
+- Array order within each day = visit order (= sorted by minimum travel distance from start)
+- DAILY MEAL RULE (= AG1 has already assigned these slots — DO NOT modify count or position):
+    * Each day MUST contain exactly 1 lunch (type="lunch") somewhere in the middle of the day.
+    * The FINAL slot of each day MUST be dinner (type="dinner").
 - 3 일+ 일정 시 = Day 2+ 한 날 = outskirt (= 도심에서 10-100km 외곽) day-trip 1-2 곳 포함 가능 (= 한국 여행객이 자주 찾는 외곽 명소/아울렛)
 
 [가격 원칙]
@@ -442,20 +446,21 @@ ${dayRequirements}
 - 점심 1인 ~€${mealBudget.lunch}, 저녁 1인 ~€${mealBudget.dinner}
 - 활동(activity) = 1인 입장료 / 식당(lunch/dinner) = 1인당 평균. 확실하지 않으면 0
 
-For each place include:
+For each place include (= ALL fields verified via Google Search grounding):
 - name (English official name on Google Maps)
 - nameKo (한국어 = 한국 여행자가 부르는 이름)
-- nameLocal (local language name = 예: 파리=Tour Eiffel)
-- address (FULL street address with NUMBER + street + postal code + city)
+- nameLocal (local language name = 예: 파리=Tour Eiffel) [= REQUIRED for Text Search forwarding + matching key, final DB column]
+- address (FULL street address with NUMBER + street + postal code + city) [= REQUIRED for Text Search forwarding + matching key, final DB column — verify via Google Search]
 - type ("activity" | "lunch" | "dinner")
-- startTime, endTime ("HH:MM")
+- latitude (= decimal 6 digits, e.g. 48.858370) [= REQUIRED for Text Search forwarding + matching key, final DB column — verify via Google Search, NO hallucination]
+- longitude (= decimal 6 digits, e.g. 2.294481) [= REQUIRED for Text Search forwarding + matching key, final DB column — verify via Google Search, NO hallucination]
 - estimatedCostEur (1 인 EUR)
 - selection_reason_ko (한국어 한 줄 = 한국 여행객 트렌드 = 인스타 성지/한국 vlog 등 사회적 검증)
 - shortform_ko (한국어 한 줄 = 장소에 대한 코믹/위트 = Claude 톤. 단순 정보 X = "프사각", "본전 뽑음" 같은 한국 슬랭)
 
 OUTPUT (strict JSON, no markdown fences):
 {"days":[{"day":1,"theme":"테마","places":[
-  {"name":"Eiffel Tower","nameKo":"에펠탑","nameLocal":"Tour Eiffel","address":"Champ de Mars, 5 Av. Anatole France, 75007 Paris","type":"activity","startTime":"10:00","endTime":"12:00","estimatedCostEur":29.4,"selection_reason_ko":"파리 인스타 인증샷 1순위 성지","shortform_ko":"파리 왔으면 외쳐줘야 국룰 '나 파리다!'"}
+  {"name":"Eiffel Tower","nameKo":"에펠탑","nameLocal":"Tour Eiffel","address":"Champ de Mars, 5 Av. Anatole France, 75007 Paris","type":"activity","latitude":48.858370,"longitude":2.294481,"estimatedCostEur":29.4,"selection_reason_ko":"파리 인스타 인증샷 1순위 성지","shortform_ko":"파리 왔으면 외쳐줘야 국룰 '나 파리다!'"}
 ]}]}`;
 
   try {

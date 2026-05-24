@@ -79,7 +79,8 @@ export async function runStartupMigrations(): Promise<void> {
       console.warn("[Migration] 0010 user_providers 스킵:", (e010 as Error).message);
     }
     // 0011: 다국어 장소명
-    await pool.query("ALTER TABLE place_seed_raw ADD COLUMN IF NOT EXISTS name_local text, ADD COLUMN IF NOT EXISTS names_i18n jsonb; ALTER TABLE places ADD COLUMN IF NOT EXISTS name_local text, ADD COLUMN IF NOT EXISTS names_i18n jsonb;");
+    // ⚠️ 수정금지(승인필요) 2026-05-24 = Step 4 DB DROP = places 폐기 (= ALTER places 제거)
+    await pool.query("ALTER TABLE place_seed_raw ADD COLUMN IF NOT EXISTS name_local text, ADD COLUMN IF NOT EXISTS names_i18n jsonb;");
     console.log("[Migration] 0011 name_local/names_i18n 적용 완료");
     // 0012: SSoT 통합 - place_seed_raw에 좌표/평점/리뷰수/사진 컬럼 추가
     await pool.query("ALTER TABLE place_seed_raw ADD COLUMN IF NOT EXISTS latitude real, ADD COLUMN IF NOT EXISTS longitude real, ADD COLUMN IF NOT EXISTS google_rating real, ADD COLUMN IF NOT EXISTS google_review_count integer, ADD COLUMN IF NOT EXISTS photo_urls jsonb, ADD COLUMN IF NOT EXISTS opening_hours jsonb, ADD COLUMN IF NOT EXISTS editorial_summary text;");
@@ -96,7 +97,8 @@ export async function runStartupMigrations(): Promise<void> {
     `);
     console.log("[Migration] 0013a 죽은 테이블 5개 DROP 완료");
 
-    // (b) 깨진 URL 정리 — Google API/인스타 CDN/example.com
+    // (b) 깨진 URL 정리 — Google API/인스타 CDN
+    // ⚠️ 수정금지(승인필요) 2026-05-24 = Step 4 DB DROP = place_images + celebrity_place_evidence 폐기 (= DELETE 제거)
     const cleanupResult = await pool.query(`
       UPDATE place_seed_raw SET best_image_url = NULL
         WHERE best_image_url LIKE '%places.googleapis.com%'
@@ -106,12 +108,6 @@ export async function runStartupMigrations(): Promise<void> {
         WHERE image_url LIKE '%places.googleapis.com%'
            OR image_url LIKE '%fbcdn.net%'
            OR image_url LIKE '%cdninstagram.com%';
-      DELETE FROM place_images WHERE url LIKE '%example.com%';
-      DELETE FROM place_images WHERE source_type = 'instagram'
-        AND (url LIKE '%fbcdn.net%' OR url LIKE '%cdninstagram.com%');
-      DELETE FROM celebrity_place_evidence
-        WHERE (post_url IS NULL OR post_url = '')
-          AND (image_url IS NULL OR image_url = '');
     `);
     console.log("[Migration] 0013b 깨진 URL 정리 완료");
 
