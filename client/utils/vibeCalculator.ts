@@ -6,7 +6,7 @@ const BASE_WEIGHTS: Record<Vibe, number> = {
   Hotspot: 15,
   Culture: 10,
   Adventure: 10,
-  Romantic: 5,
+  Shopping: 5,
 };
 
 const PROTAGONIST_ADJUSTMENTS: Record<CurationFocus, Partial<Record<Vibe, number>>> = {
@@ -60,7 +60,7 @@ export function getPreferredTimeSlots(vibe: Vibe): ('morning' | 'lunch' | 'after
     Hotspot: ['afternoon'],
     Culture: ['morning', 'afternoon'],
     Adventure: ['morning', 'afternoon'],
-    Romantic: ['evening'],
+    Shopping: ['afternoon', 'evening'],
   };
   return slotMapping[vibe];
 }

@@ -1,4 +1,6 @@
-export type Vibe = 'Healing' | 'Adventure' | 'Hotspot' | 'Foodie' | 'Romantic' | 'Culture';
+// ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = Romantic → Shopping 리네이밍
+// = 백엔드 ag2 VIBE_PRIMARY_CATEGORY 매핑 = Shopping: 'shopping' (= PSR shopping 카테고리)
+export type Vibe = 'Healing' | 'Adventure' | 'Hotspot' | 'Foodie' | 'Shopping' | 'Culture';
 
 export type TravelStyle = 'Luxury' | 'Premium' | 'Reasonable' | 'Economic';
 
@@ -202,7 +204,7 @@ export const VIBE_OPTIONS: { id: Vibe; label: string; labelKey: string; icon: st
   { id: 'Adventure', label: '모험', labelKey: 'options.adventure', icon: 'compass', baseWeight: 10 },
   { id: 'Hotspot', label: '핫스팟', labelKey: 'options.hotspot', icon: 'trending-up', baseWeight: 15 },
   { id: 'Foodie', label: '미식', labelKey: 'options.foodie', icon: 'coffee', baseWeight: 25 },
-  { id: 'Romantic', label: '로맨틱', labelKey: 'options.romantic', icon: 'heart', baseWeight: 5 },
+  { id: 'Shopping', label: '쇼핑', labelKey: 'options.shopping', icon: 'shopping-bag', baseWeight: 5 },
   { id: 'Culture', label: '문화/예술', labelKey: 'options.culture', icon: 'book-open', baseWeight: 10 },
 ];
 
