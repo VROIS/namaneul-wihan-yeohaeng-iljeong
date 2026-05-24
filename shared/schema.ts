@@ -156,7 +156,7 @@ export const itineraries = pgTable("itineraries", {
   companionType: text("companion_type").default("Couple"),   // Single, Couple, Family, ExtendedFamily, Group
   companionCount: integer("companion_count").default(2),
   companionAges: text("companion_ages"),                     // "5,8" 형태로 저장 (아이 나이)
-  vibes: jsonb("vibes").$type<string[]>().default([]),       // ['Romantic', 'Foodie'] 등
+  vibes: jsonb("vibes").$type<string[]>().default([]),       // ['Shopping', 'Foodie'] 등
   travelPace: text("travel_pace").default("Normal"),         // Packed, Normal, Relaxed
   mobilityStyle: text("mobility_style").default("Moderate"), // WalkMore, Moderate, Minimal
   mealLevel: text("meal_level").default("Local"),            // Michelin, Trendy, Local, Budget

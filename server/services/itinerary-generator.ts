@@ -36,7 +36,8 @@ function getAI(): GoogleGenAI {
   return ai;
 }
 
-type Vibe = 'Healing' | 'Adventure' | 'Hotspot' | 'Foodie' | 'Romantic' | 'Culture';
+// ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = Romantic → Shopping
+type Vibe = 'Healing' | 'Adventure' | 'Hotspot' | 'Foodie' | 'Shopping' | 'Culture';
 // ⚠️ 2026-05-19 = TravelStyle = types.ts SSOT 에서 import (= 위)
 // 여행 밀도: 빡빡하게(Packed) | 보통(Normal) | 여유롭게(Relaxed)
 // ⚠️ 프론트엔드 기준 'Normal' 사용 (Moderate 아님)
@@ -354,7 +355,7 @@ interface PlaceResult {
 
 // 시간대별 Vibe 친화도 (향후 고급 슬롯 매칭에 사용 예정)
 // interface TimeSlot { slot: 'morning' | 'lunch' | 'afternoon' | 'evening'; startTime: string; endTime: string; vibeAffinity: Vibe[]; }
-// const SLOT_VIBE_AFFINITY = { morning: ['Healing', 'Culture', 'Adventure'], lunch: ['Foodie'], afternoon: ['Hotspot', 'Culture', 'Adventure', 'Healing'], evening: ['Foodie', 'Romantic'] };
+// const SLOT_VIBE_AFFINITY = { morning: ['Healing', 'Culture', 'Adventure'], lunch: ['Foodie'], afternoon: ['Hotspot', 'Culture', 'Adventure', 'Healing', 'Shopping'], evening: ['Foodie', 'Shopping'] };
 
 /**
  * 분(minutes)을 HH:MM 형식으로 변환
@@ -366,7 +367,7 @@ function minutesToTime(minutes: number): string {
 }
 
 // 🎯 Vibe 기본 가중치 (향후 확장용, 현재 calculateVibeWeights에서 사용)
-// const BASE_WEIGHTS: Record<Vibe, number> = { Healing: 35, Foodie: 25, Hotspot: 15, Culture: 10, Adventure: 10, Romantic: 5 };
+// const BASE_WEIGHTS: Record<Vibe, number> = { Healing: 35, Foodie: 25, Hotspot: 15, Culture: 10, Adventure: 10, Shopping: 5 };
 // const PROTAGONIST_ADJUSTMENTS - 향후 고급 개인화에 사용 예정
 
 function calculateVibeWeights(selectedVibes: Vibe[], protagonist: CurationFocus) {
@@ -566,7 +567,7 @@ function generateSelectionReasons(place: PlaceResult): { reasons: string[]; conf
   if (place.vibeTags && place.vibeTags.length > 0 && reasons.length < 4) {
     const vibeLabels: Record<string, string> = {
       Healing: '힐링', Adventure: '모험', Hotspot: '핫플',
-      Foodie: '미식', Romantic: '로맨틱', Culture: '문화'
+      Foodie: '미식', Shopping: '쇼핑', Culture: '문화'
     };
     const tags = place.vibeTags.map(v => vibeLabels[v] || v).join(', ');
     reasons.push(`${tags} 분위기 매칭`);
@@ -610,7 +611,7 @@ function getPlaceTypesForVibes(vibes: Vibe[]): string[] {
     Adventure: ['tourist_attraction', 'hiking_area', 'amusement_park', 'zoo'],
     Hotspot: ['night_club', 'bar', 'shopping_mall', 'landmark'],
     Foodie: ['restaurant', 'cafe', 'bakery', 'food'],
-    Romantic: ['restaurant', 'park', 'museum', 'art_gallery'],
+    Shopping: ['shopping_mall', 'store', 'department_store', 'market'],
     Culture: ['museum', 'art_gallery', 'library', 'historical_landmark'],
   };
 
@@ -802,7 +803,7 @@ JSON 응답 형식 (엄격히 준수):
 - name: 반드시 실제 존재하는 장소명 (가상 장소 금지)
 - lat/lng: 반드시 실제 좌표 (0이면 안 됨)
 - vibeScore: 1~10 정수
-- vibeTags: 반드시 ["Healing","Adventure","Hotspot","Foodie","Romantic","Culture"] 중에서만 선택
+- vibeTags: 반드시 ["Healing","Adventure","Hotspot","Foodie","Shopping","Culture"] 중에서만 선택
 - recommendedTime: 반드시 "morning"|"lunch"|"afternoon"|"evening" 중 하나
 - 식당은 vibeTags에 반드시 "Foodie" 포함
 
@@ -872,7 +873,7 @@ ${formData.destination}의 실제 유명한 장소들을 추천해주세요. 정
           personaFitReason: place.personaFitReason || place.description || "AI가 추천한 장소",
           tags: Array.isArray(place.tags) ? place.tags : [],
           vibeTags: Array.isArray(place.vibeTags) ? place.vibeTags.filter((v: string) =>
-            ['Healing', 'Adventure', 'Hotspot', 'Foodie', 'Romantic', 'Culture'].includes(v)
+            ['Healing', 'Adventure', 'Hotspot', 'Foodie', 'Shopping', 'Culture'].includes(v)
           ) : [],
           image: "",
           priceEstimate: place.priceEstimate || "보통",

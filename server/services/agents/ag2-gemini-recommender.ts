@@ -70,16 +70,14 @@ export async function isCityReady(destination: string): Promise<{
  * = 발굴 도시 (= top 20 phase=gemini3-2026-05) 만 = 0.1초 + 0 비용
  * = 미발굴 도시 = null 반환 = Gemini fallback
  */
-// ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = Romantic → Shopping 리네이밍
-// = 사용자 vibe 버튼 자체 = "Shopping" (= PSR shopping 카테고리 = 명품/시장/아울렛)
-// = 옛 Romantic → 'hotspot' 매핑 변질 = 본질 해결 (= AG1 60/40 매트릭스 회복)
+// ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = Romantic 모든 흔적 삭제 + Shopping 1:1 매핑
+// = PSR seedCategory 7 종과 1:1 직접 대응 (= 가짜 매핑 X)
 const VIBE_PRIMARY_CATEGORY: Record<string, string> = {
   Foodie: 'restaurant',
   Healing: 'healing',
   Hotspot: 'hotspot',
   Adventure: 'adventure',
   Shopping: 'shopping',
-  Romantic: 'shopping',  // 호환 (= FE 옛 'Romantic' 키 전송 시 = shopping 매핑)
   Culture: 'heritage',
 };
 

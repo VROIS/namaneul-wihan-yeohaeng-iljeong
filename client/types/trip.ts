@@ -1,5 +1,4 @@
-// ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = Romantic → Shopping 리네이밍
-// = 백엔드 ag2 VIBE_PRIMARY_CATEGORY 매핑 = Shopping: 'shopping' (= PSR shopping 카테고리)
+// ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = Romantic 모든 흔적 삭제 + Shopping 1:1 (= PSR shopping 카테고리)
 export type Vibe = 'Healing' | 'Adventure' | 'Hotspot' | 'Foodie' | 'Shopping' | 'Culture';
 
 export type TravelStyle = 'Luxury' | 'Premium' | 'Reasonable' | 'Economic';

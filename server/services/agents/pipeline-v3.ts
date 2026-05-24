@@ -323,7 +323,7 @@ async function step1_geminiItinerary(
     Adventure: '모험·액티비티 (체험, 야외활동)',
     Hotspot: '핫스팟·SNS (인스타 명소, 트렌디한 곳)',
     Foodie: '미식·맛집 (현지 음식, 로컬 레스토랑)',
-    Romantic: '로맨틱·감성 (야경, 커플 명소)',
+    Shopping: '쇼핑 (명품 거리, 백화점, 시장, 아울렛)',
     Culture: '문화·역사 (미술관, 박물관, 유적지)',
   };
   const vibeNatural = vibeWeights

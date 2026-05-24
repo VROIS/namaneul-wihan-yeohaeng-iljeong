@@ -7,7 +7,7 @@
  * 1. curationFocus (Kids, Parents, Everyone, Self) - 누구를 위한 여행?
  * 2. companionType (Single, Couple, Family, ExtendedFamily, Group) - 누구랑?
  * 3. companionAges - 동반자 나이 (특히 아이, 부모님)
- * 4. vibes - 여행 취향 (Romantic, Foodie, Adventure 등)
+ * 4. vibes - 여행 취향 (Shopping, Foodie, Adventure 등)
  * 5. destination - 목적지
  * 
  * 출력 예시:
@@ -19,7 +19,7 @@
 
 type CurationFocus = 'Kids' | 'Parents' | 'Everyone' | 'Self';
 type CompanionType = 'Single' | 'Couple' | 'Family' | 'ExtendedFamily' | 'Group';
-type Vibe = 'Healing' | 'Adventure' | 'Hotspot' | 'Foodie' | 'Romantic' | 'Culture';
+type Vibe = 'Healing' | 'Adventure' | 'Hotspot' | 'Foodie' | 'Shopping' | 'Culture';
 
 interface ProtagonistInput {
   curationFocus: CurationFocus;
@@ -51,7 +51,7 @@ const VIBE_LABELS: Record<Vibe, string> = {
   Adventure: '모험',
   Hotspot: '핫스팟',
   Foodie: '미식',
-  Romantic: '로맨틱',
+  Shopping: '쇼핑',
   Culture: '문화/예술',
 };
 
@@ -371,8 +371,8 @@ export function generateProtagonistSentence(input: ProtagonistInput): Protagonis
   if (vibes.includes('Foodie')) {
     priorityNotes.push('미식 장소 - 한국인 입맛 고려');
   }
-  if (vibes.includes('Romantic')) {
-    priorityNotes.push('로맨틱 분위기 장소 우선');
+  if (vibes.includes('Shopping')) {
+    priorityNotes.push('쇼핑 명소 우선 (= 명품/시장/아울렛)');
   }
   if (vibes.includes('Adventure')) {
     priorityNotes.push('체험/액티비티 포함');
