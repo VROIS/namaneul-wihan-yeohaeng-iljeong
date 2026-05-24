@@ -118,24 +118,14 @@ function isFoodPlace(place: PlaceResult): boolean {
   return hasFoodTag || hasFoodType || nameHasFood;
 }
 
-// ===== 식당 전용 점수 계산 (속도 최적화: DB 쿼리 최소화) =====
-// AG3 matchPlacesWithDB에서 이미 DB 데이터를 보강했으므로 place 객체의 기존 데이터 활용
-// DB 쿼리 0회 → 즉시 반환
+// ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = 식당 점수 = PSR.rank 단일
+// = ag2-DB 가 tier 별 RC DESC 정렬 (= Economic 1~ / Reasonable 1001~ / High-end 2001~)
+// = rank 작을수록 높은 점수 (= 10 점 만점 = tier 안 1 등이 10)
 async function calculateRestaurantScore(place: PlaceResult): Promise<number> {
-  try {
-    // AG3에서 이미 보강된 데이터 활용 (DB 쿼리 불필요)
-    const confidenceScore = place.confidenceScore || 0;
-    const vibeScore = place.vibeScore || 0;
-    // koreanPopularity 제거 (45/30/25 폐기)
-    const finalScore = place.finalScore || 0;
-
-    // 간단 점수: 기존 보강 데이터 기반
-    const score = (confidenceScore * 0.5) + (vibeScore * 0.3) + (finalScore * 0.2);
-    return Math.min(10, Math.max(0, score));
-  } catch (error) {
-    console.warn(`[Restaurant] ${place.name} 점수 계산 실패:`, error);
-    return place.vibeScore || 5;
-  }
+  const rank = (place as any).rank ?? 999;
+  const tierOffset = rank >= 2001 ? 2000 : rank >= 1001 ? 1000 : 0;
+  const tierRank = rank - tierOffset;
+  return Math.max(0, Math.min(10, 11 - tierRank));
 }
 
 // ===== PlaceResult → Route Optimizer 호환 변환 =====
@@ -487,182 +477,13 @@ function isPackageTourPriceSource(source: string | undefined): boolean {
 // = 사용자 SSOT [[feedback_latest_is_truth_delete_old]] = 옛 264 줄 dead code 완전 삭제 (= tripAdvisorData/geminiWebSearchCache/places 보조 의존 = 쓰레기)
 // = AG2-DB 가 place_seed_raw.priceEur + googleReviewCount + imageUrl + bestImageUrl 채움 = 충분
 
-// ===== Phase 1-7: 바이브별 동적 가중치 매트릭스 =====
-// 각 바이브가 선택되었을 때 6요소의 비중이 달라짐
-// [koreanPop, photoSpot, verifiedFame, vibe, value, practical]
-const VIBE_WEIGHT_MATRIX: Record<Vibe, [number, number, number, number, number, number]> = {
-  Hotspot: [0.20, 0.35, 0.10, 0.15, 0.10, 0.10], // 포토스팟 최우선
-  Romantic: [0.25, 0.30, 0.10, 0.20, 0.08, 0.07], // 포토+분위기 감성
-  Culture: [0.15, 0.15, 0.30, 0.15, 0.15, 0.10], // 유명세(패키지/TA) 최우선
-  Foodie: [0.20, 0.10, 0.15, 0.10, 0.20, 0.25], // 가성비+실용(리뷰수) 우선
-  Healing: [0.10, 0.20, 0.10, 0.35, 0.10, 0.15], // 분위기(AI평가) 최우선
-  Adventure: [0.15, 0.15, 0.15, 0.25, 0.15, 0.15], // 균등+분위기 약간 높음
-};
+// ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = 점수 시스템 완전 폐기
+// = VIBE_WEIGHT_MATRIX + DATA_GRADE_ADJUSTMENT + detectDataGrade + calculateDynamicWeights + calculateFinalScore = 모두 삭제
+// = PSR.rank 단일 SSOT = ag2-DB 가 카테고리/tier 별 RC DESC 정렬 = 이미 정렬됨
+// = AG3 = `finalScore = Math.max(0, 21 - place.rank)` 단순 부여
 
-// ===== 데이터 등급별 보정 매트릭스 =====
-// 데이터 부족시 한국 데이터 의존도를 낮추고 AI/Google 의존도를 높임
-// [koreanPop, photoSpot, verifiedFame, vibe, value, practical]
-type DataGrade = 'A' | 'B' | 'C' | 'D';
-const DATA_GRADE_ADJUSTMENT: Record<DataGrade, [number, number, number, number, number, number]> = {
-  A: [1.0, 1.0, 1.0, 1.0, 1.0, 1.0], // 데이터 풍부: 원래 가중치 그대로
-  B: [0.7, 0.8, 1.0, 1.3, 0.9, 1.2], // 데이터 보통: 한국 데이터↓, AI↑
-  C: [0.3, 0.4, 0.8, 2.0, 0.5, 1.8], // 데이터 부족: AI+Google 크게 의존
-  D: [0.1, 0.1, 0.5, 2.5, 0.3, 2.2], // 데이터 없음: 거의 AI+Google만
-};
-
-/**
- * Phase 1-7: 데이터 등급 판단
- * 전체 장소 목록에서 한국 데이터가 얼마나 채워져 있는지 측정
- */
-function detectDataGrade(placesArr: PlaceResult[]): DataGrade {
-  if (placesArr.length === 0) return 'D';
-
-  let hasKoreanPop = 0;
-  let hasPhotoSpot = 0;
-  let hasVerifiedFame = 0;
-  let hasPrice = 0;
-
-  for (const p of placesArr) {
-    if (p.koreanPopularityScore && p.koreanPopularityScore > 0) hasKoreanPop++;
-    if (p.photoSpotScore && p.photoSpotScore > 0) hasPhotoSpot++;
-    if (p.isPackageTourIncluded || (p.tripAdvisorRating && p.tripAdvisorRating > 0)) hasVerifiedFame++;
-    if (p.estimatedPriceEur && p.estimatedPriceEur > 0) hasPrice++;
-  }
-
-  const total = placesArr.length;
-  const koreanRatio = hasKoreanPop / total;
-  const photoRatio = hasPhotoSpot / total;
-  const fameRatio = hasVerifiedFame / total;
-  const priceRatio = hasPrice / total;
-  const avgCoverage = (koreanRatio + photoRatio + fameRatio + priceRatio) / 4;
-
-  if (avgCoverage >= 0.4) return 'A'; // 40%+ 데이터 커버리지
-  if (avgCoverage >= 0.2) return 'B'; // 20%+
-  if (avgCoverage >= 0.05) return 'C'; // 5%+
-  return 'D'; // 거의 없음
-}
-
-/**
- * Phase 1-7: 바이브 기반 동적 가중치 계산
- * 사용자 선택 바이브 + 데이터 등급을 조합하여 최종 가중치 산출
- * 
- * @param vibes 사용자 선택 바이브 (1~3개, 순서 = 우선순위)
- * @param dataGrade 목적지의 데이터 밀도 등급
- * @returns 6요소 가중치 배열 (합계 = 1.0)
- */
-function calculateDynamicWeights(
-  vibes: Vibe[],
-  dataGrade: DataGrade
-): { koreanPop: number; photoSpot: number; verifiedFame: number; vibe: number; value: number; practical: number } {
-  // 1. 바이브 가중치 블렌딩 (선택 순서에 따른 우선순위)
-  const VIBE_PRIORITY: Record<number, number[]> = {
-    1: [1.0],
-    2: [0.60, 0.40],
-    3: [0.50, 0.30, 0.20],
-  };
-  const priorities = VIBE_PRIORITY[vibes.length] || [0.50, 0.30, 0.20];
-
-  // 블렌딩된 가중치 초기화
-  let blended: [number, number, number, number, number, number] = [0, 0, 0, 0, 0, 0];
-
-  for (let i = 0; i < vibes.length && i < 3; i++) {
-    const vibeMatrix = VIBE_WEIGHT_MATRIX[vibes[i]];
-    const priority = priorities[i];
-    for (let j = 0; j < 6; j++) {
-      blended[j] += vibeMatrix[j] * priority;
-    }
-  }
-
-  // 2. 데이터 등급 보정 적용
-  const adjustment = DATA_GRADE_ADJUSTMENT[dataGrade];
-  for (let j = 0; j < 6; j++) {
-    blended[j] *= adjustment[j];
-  }
-
-  // 3. 정규화 (합계 = 1.0)
-  const sum = blended.reduce((a, b) => a + b, 0);
-  if (sum > 0) {
-    for (let j = 0; j < 6; j++) {
-      blended[j] /= sum;
-    }
-  }
-
-  return {
-    koreanPop: blended[0],
-    photoSpot: blended[1],
-    verifiedFame: blended[2],
-    vibe: blended[3],
-    value: blended[4],
-    practical: blended[5],
-  };
-}
-
-/**
- * ⚠️ 2026-05-23 = weatherCache + crisisAlerts 의존 폐기 (= 사용자 SSOT)
- * = 기본값 반환 stub (= FE 영향 0 = 옛 응답 형식 유지)
- */
 async function getRealityCheckForCity(_destination: string): Promise<{ weather: string; crowd: string; status: string }> {
   return { weather: 'Sunny', crowd: 'Medium', status: 'Open' };
-}
-
-/**
- * Phase 1-5+1-7: 최종 종합 점수 계산 (동적 6요소 공식)
- * 
- * 기존 고정 공식 → 바이브+데이터 등급에 따라 가중치가 자동 조정
- * 
- * 예시:
- *   Hotspot + A등급 → 포토35% > 한국인기20% > 분위기15% > ...
- *   Healing + C등급 → 분위기70% > 실용27% > ... (한국데이터 거의 무시)
- */
-function calculateFinalScore(
-  place: PlaceResult,
-  weights: { koreanPop: number; photoSpot: number; verifiedFame: number; vibe: number; value: number; practical: number }
-): number {
-  // 1. 한국인 인기도 — 45/30/25 제거, nubiReason 우선노출순서 사용
-  const koreanPop = 0;
-
-  // 2. 포토스팟 점수 - enrichPlacesWithPhotoAndTour에서 세팅됨
-  const photoSpot = Math.min(10, place.photoSpotScore || 0);
-
-  // 3. 검증된 유명세 - 패키지 투어 + TripAdvisor
-  let verifiedFame = 0;
-  if (place.isPackageTourIncluded) {
-    verifiedFame += Math.min(5, 3 + (place.packageMentionCount || 0));
-  }
-  if (place.tripAdvisorRating) {
-    verifiedFame += place.tripAdvisorRating;
-  }
-  verifiedFame = Math.min(10, verifiedFame);
-
-  // 4. 분위기 점수 - Gemini AI + Google 평점 기반
-  const vibe = Math.min(10, place.vibeScore || 0);
-
-  // 5. 가성비 점수
-  let valueScore = 5;
-  if (place.estimatedPriceEur !== undefined && place.estimatedPriceEur > 0) {
-    valueScore = Math.max(2, 10 - Math.log10(place.estimatedPriceEur + 1) * 4);
-    if (place.tripAdvisorRating && place.tripAdvisorRating >= 4.0 && place.estimatedPriceEur < 30) {
-      valueScore = Math.min(10, valueScore + 2);
-    }
-  }
-
-  // 6. 실용성 점수
-  let practicalScore = 3;
-  if (place.tripAdvisorReviewCount) {
-    practicalScore = Math.min(10, Math.log10(place.tripAdvisorReviewCount + 1) * 3.3);
-  }
-  // koreanPop 제거 (45/30/25 점수 폐기)
-
-  // ===== 동적 가중치 합산 =====
-  const finalScore =
-    (koreanPop * weights.koreanPop) +
-    (photoSpot * weights.photoSpot) +
-    (verifiedFame * weights.verifiedFame) +
-    (vibe * weights.vibe) +
-    (valueScore * weights.value) +
-    (practicalScore * weights.practical);
-
-  return Math.min(10, finalScore);
 }
 
 /**
@@ -679,12 +500,14 @@ function generateSelectionReasons(place: PlaceResult): { reasons: string[]; conf
   // 한국인 인기도 (45/30/25 제거) — nubiReason에 구체적 출처 표시
 
   // Google 리뷰 수 (식당의 경우 가장 중요한 지표)
-  if (place.userRatingCount && place.userRatingCount > 100) {
-    const count = place.userRatingCount;
+  // ⚠️ 수정금지(승인필요) 2026-05-24 = PlaceResult 옛 type 의존 = as any (= ag2-DB 가 PSR.googleReviewCount 채움)
+  const _p = place as any;
+  if (_p.userRatingCount && _p.userRatingCount > 100) {
+    const count = _p.userRatingCount;
     const countText = count >= 10000 ? `${(count / 1000).toFixed(0)}K`
       : count >= 1000 ? `${(count / 1000).toFixed(1)}K`
         : count.toLocaleString();
-    reasons.push(`구글 리뷰 ${countText}개${place.rating ? ` (${place.rating.toFixed(1)}점)` : ''}`);
+    reasons.push(`구글 리뷰 ${countText}개${_p.rating ? ` (${_p.rating.toFixed(1)}점)` : ''}`);
     dataPoints += 2;
   }
 
@@ -1172,30 +995,25 @@ export const _enrichmentPipeline = {
     const vibes = formData.vibes || ['Foodie', 'Culture', 'Healing'];
     const { daySlotsConfig, travelPace, requiredPlaceCount } = skeleton;
 
-    // ===== Enrichment 스킵 (속도 최우선: AG3 matchPlacesWithDB에서 이미 DB 데이터 보강됨) =====
-    console.log(`[AG3] Enrichment 스킵 (속도 우선, DB 보강 데이터 사용)`);
+    // ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = 점수 시스템 완전 폐기
+    // = PSR.rank 단일 (= ag2-DB 가 카테고리/tier 별 RC 정렬 = 이미 SSOT)
+    // = 옛 calculateFinalScore + calculateDynamicWeights + VIBE_WEIGHT_MATRIX + detectDataGrade = 모두 폐기
+    console.log(`[AG3] PSR.rank 단일 SSOT (= 옛 점수 시스템 폐기) | 바이브: ${vibes.join(',')}`);
 
-    // Phase 1-7: 데이터 등급 + 동적 가중치
-    const dataGrade = detectDataGrade(placesArr);
-    const dynamicWeights = calculateDynamicWeights(vibes as Vibe[], dataGrade);
-
-    console.log(`[AG3] 데이터 등급: ${dataGrade} | 바이브: ${vibes.join(',')}`);
-
-    // 최종 점수 계산 + 정렬
     placesArr = placesArr.map(p => {
       const { reasons, confidence } = generateSelectionReasons(p);
+      const rank = (p as any).rank ?? 999;
       return {
         ...p,
-        finalScore: calculateFinalScore(p, dynamicWeights),
+        finalScore: Math.max(0, 21 - rank),
         selectionReasons: reasons,
         confidenceLevel: confidence,
       };
     }).sort((a, b) => (b.finalScore || 0) - (a.finalScore || 0))
       .slice(0, requiredPlaceCount + 5);
 
-    // 상위 5개 로그
     placesArr.slice(0, 5).forEach((p, i) => {
-      console.log(`[AG3]   #${i + 1} ${p.name}: finalScore=${(p.finalScore || 0).toFixed(2)}`);
+      console.log(`[AG3]   #${i + 1} ${p.name}: rank=${(p as any).rank ?? '?'} finalScore=${(p.finalScore || 0).toFixed(2)}`);
     });
 
     // 슬롯 분배
@@ -1375,6 +1193,8 @@ async function distributePlacesWithUserTime(
 
   // === 사용된 식당 ID 추적 (중복 배치 방지) ===
   const usedFoodIds = new Set<string>();
+  // ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = 전역 비식당 중복 차단 (= 일자 간 = Day 1 Eiffel + Day 3 Eiffel 사고 차단)
+  const usedNonFoodIds = new Set<string>();
 
   // === 기본 식당 placeholder 생성 함수 ===
   // ⚠️ 좌표: refPlace가 없거나 좌표가 0,0이면 같은 Day의 다른 장소 좌표 사용 (10875분 버그 방지)
@@ -1490,10 +1310,11 @@ async function distributePlacesWithUserTime(
       let selectedPlace: PlaceResult;
 
       if (isMealSlot) {
-        // ⚠️ 수정금지(승인필요) 2026-05-21 = 일자 zone 매칭 식당 풀 = 이전 슬롯 가까이 + 가격대 (= Phase E-3)
+        // ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = zone pool 만 = fallback 제거
+        // = 외곽 day 의 dinner = outskirt 식당만 (= core 식당 침투 차단 = 22km dinner 모순 시정)
+        // = zone pool 소진 시 = placeholder (= 외곽 식당 부족 가시화)
         const budgetMax = mealType === 'lunch' ? mealBudget.lunch : mealBudget.dinner;
-        const bestFood = selectBestRestaurant(dayFoodWithScores, prevPlaceInDay, budgetMax, usedFoodIds)
-          || selectBestRestaurant(foodWithScores, prevPlaceInDay, budgetMax, usedFoodIds); // zone 풀 소진 시 fallback
+        const bestFood = selectBestRestaurant(dayFoodWithScores, prevPlaceInDay, budgetMax, usedFoodIds);
 
         if (bestFood) {
           selectedPlace = bestFood.place;
@@ -1502,19 +1323,24 @@ async function distributePlacesWithUserTime(
           console.log(`[Itinerary] Day ${day} ${mealType}: ${selectedPlace.name} (${budgetLabel})`);
         } else {
           selectedPlace = createDefaultRestaurant(mealType!, prevPlaceInDay);
-          console.log(`[Itinerary] Day ${day} ${mealType}: placeholder 생성 (식당 후보 부족)`);
+          console.log(`[Itinerary] Day ${day} ${mealType}: placeholder 생성 (= zone='${dayZone}' 식당 부족)`);
         }
       } else {
-        // ⚠️ 수정금지(승인필요) 2026-05-21 = 일자 zone 풀에서 sequential (= 옛 단일 nonFoodIndex 폐기)
+        // ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = 전역 usedNonFoodIds = 일자 간 중복 차단
+        // = dayPool 의 이미 used 행 = skip (= 다른 일자 동일 zone 풀 = 같은 장소 중복 방지)
+        while (dayPoolIndex[dIdx] < dayPool.length && usedNonFoodIds.has(dayPool[dayPoolIndex[dIdx]].id)) {
+          dayPoolIndex[dIdx]++;
+        }
         if (dayPoolIndex[dIdx] < dayPool.length) {
           selectedPlace = dayPool[dayPoolIndex[dIdx]];
+          usedNonFoodIds.add(selectedPlace.id);
           dayPoolIndex[dIdx]++;
         } else {
-          // 본 일자 풀 소진 = fallback = 다른 일자 미사용 비식당 (= 빈 슬롯 방지)
-          const usedIds = new Set<string>(schedule.map(s => s.place.id));
-          const remainingNonFood = nonFoodPlaces.filter(p => !usedIds.has(p.id));
+          // 본 일자 풀 소진 = fallback = 전역 미사용 비식당 (= 옛 schedule 기반 → 전역 Set 기반)
+          const remainingNonFood = nonFoodPlaces.filter(p => !usedNonFoodIds.has(p.id));
           if (remainingNonFood.length > 0) {
             selectedPlace = remainingNonFood[0];
+            usedNonFoodIds.add(selectedPlace.id);
             console.log(`[Itinerary] Day ${day} slot ${slotIdx}: 일자 풀 소진 → 다른 일자 fallback: ${selectedPlace.name}`);
           } else {
             // 모든 비식당 소진 = 남은 식당 fallback

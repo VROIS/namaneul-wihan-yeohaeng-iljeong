@@ -70,12 +70,16 @@ export async function isCityReady(destination: string): Promise<{
  * = 발굴 도시 (= top 20 phase=gemini3-2026-05) 만 = 0.1초 + 0 비용
  * = 미발굴 도시 = null 반환 = Gemini fallback
  */
+// ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = Romantic → Shopping 리네이밍
+// = 사용자 vibe 버튼 자체 = "Shopping" (= PSR shopping 카테고리 = 명품/시장/아울렛)
+// = 옛 Romantic → 'hotspot' 매핑 변질 = 본질 해결 (= AG1 60/40 매트릭스 회복)
 const VIBE_PRIMARY_CATEGORY: Record<string, string> = {
   Foodie: 'restaurant',
   Healing: 'healing',
   Hotspot: 'hotspot',
   Adventure: 'adventure',
-  Romantic: 'hotspot',
+  Shopping: 'shopping',
+  Romantic: 'shopping',  // 호환 (= FE 옛 'Romantic' 키 전송 시 = shopping 매핑)
   Culture: 'heritage',
 };
 
@@ -208,18 +212,29 @@ async function fetchFromPlaceSeedRaw(
           console.log(`[AG2-DB] restaurant: core ${coreRows.length}/${coreSlots} + outskirt ${outskirtRows.length}/${outskirtSlots} (budget €${budgetTier.min}-${budgetTier.max})`);
           return [...coreRows, ...outskirtRows];
         }
-        // 비식당 = rank 1-20 + ORDER distance_km_from_center ASC (= 도심 → 외곽 자연)
-        // ⚠️ 2026-05-21 = collection_phase 폐기 (= 사용자 SSOT)
-        const baseWhere = [
+        // ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = 비식당 = 식당과 동일 day_zone 분리 SELECT
+        // = core 2/3 + outskirt 1/3 (= 식당 패턴 동일 = AG3 Day 2 outskirt pool 확보)
+        // = 옛 단일 풀 = day_zone 무관 = outskirt 자동 제외 = 사용자 진단 = 시스템 미반영 = 시정
+        const coreSlots = Math.ceil(slots * (2 / 3));
+        const outskirtSlots = slots - coreSlots;
+        const nonFoodWhereCore = [
           eq(placeSeedRaw.cityId, cityId),
           eq(placeSeedRaw.seedCategory, cat),
-          between(placeSeedRaw.rank, 1, 20),
+          eq(placeSeedRaw.dayZone, 'core'),
         ];
-        const rows = await db!.select(SELECT_COLS).from(placeSeedRaw).where(and(...baseWhere))
-          .orderBy(asc(placeSeedRaw.distanceKmFromCenter))
-          .limit(slots);
-        console.log(`[AG2-DB] ${cat}: ${rows.length}/${slots} 행 (ORDER distance ASC = 도심→외곽)`);
-        return rows;
+        const nonFoodWhereOutskirt = [
+          eq(placeSeedRaw.cityId, cityId),
+          eq(placeSeedRaw.seedCategory, cat),
+          eq(placeSeedRaw.dayZone, 'outskirt'),
+        ];
+        const [coreRows, outskirtRows] = await Promise.all([
+          db!.select(SELECT_COLS).from(placeSeedRaw).where(and(...nonFoodWhereCore))
+            .orderBy(asc(placeSeedRaw.rank)).limit(coreSlots),
+          db!.select(SELECT_COLS).from(placeSeedRaw).where(and(...nonFoodWhereOutskirt))
+            .orderBy(asc(placeSeedRaw.rank)).limit(outskirtSlots),
+        ]);
+        console.log(`[AG2-DB] ${cat}: core ${coreRows.length}/${coreSlots} + outskirt ${outskirtRows.length}/${outskirtSlots} (ORDER rank ASC)`);
+        return [...coreRows, ...outskirtRows];
       });
     const results = await Promise.all(queries);
     for (const rows of results) allRows.push(...rows);
@@ -244,8 +259,10 @@ async function fetchFromPlaceSeedRaw(
       description: r.summaryKo || r.editorialSummary || '',
       lat: parseFloat(String(r.latitude)) || 0,
       lng: parseFloat(String(r.longitude)) || 0,
-      vibeScore: 8,
-      confidenceScore: 9,
+      // ⚠️ 수정금지(승인필요) 2026-05-24 = vibeScore/confidenceScore 폐기 (= PSR.rank 단일 SSOT)
+      vibeScore: 0,
+      confidenceScore: 0,
+      rank: r.rank,
       sourceType: "DB Direct (Place Seed Raw)",
       personaFitReason: r.summaryKo || '',
       tags: isFood ? ['restaurant', 'food'] : [],
