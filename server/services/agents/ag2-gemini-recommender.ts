@@ -179,63 +179,36 @@ async function fetchFromPlaceSeedRaw(
     distanceKmFromCenter: placeSeedRaw.distanceKmFromCenter,
   };
 
+  // ⚠️ 수정금지(승인필요) 2026-05-24 = 식당 + 비식당 = day_zone 분리 SELECT 통합 헬퍼
+  // = core 2/3 + outskirt 1/3 (= 사용자 SSOT = AG3 Day 2 outskirt pool 확보)
+  // = 식당 = budget WHERE + RC DESC / 비식당 = rank ASC
+  const selectByDayZone = async (cat: string, slots: number) => {
+    const isRestaurant = cat === 'restaurant';
+    const coreSlots = Math.ceil(slots * (2 / 3));
+    const outskirtSlots = slots - coreSlots;
+    const baseWhere = [eq(placeSeedRaw.cityId, cityId), eq(placeSeedRaw.seedCategory, cat)];
+    if (isRestaurant) baseWhere.push(between(placeSeedRaw.priceEur, budgetTier.min, budgetTier.max));
+    const orderCol = isRestaurant
+      ? desc(placeSeedRaw.googleReviewCount)
+      : asc(placeSeedRaw.rank);
+    const [coreRows, outskirtRows] = await Promise.all([
+      db!.select(SELECT_COLS).from(placeSeedRaw)
+        .where(and(...baseWhere, eq(placeSeedRaw.dayZone, 'core')))
+        .orderBy(orderCol).limit(coreSlots),
+      db!.select(SELECT_COLS).from(placeSeedRaw)
+        .where(and(...baseWhere, eq(placeSeedRaw.dayZone, 'outskirt')))
+        .orderBy(orderCol).limit(outskirtSlots),
+    ]);
+    const budgetLabel = isRestaurant ? ` (budget €${budgetTier.min}-${budgetTier.max})` : ' (rank ASC)';
+    console.log(`[AG2-DB] ${cat}: core ${coreRows.length}/${coreSlots} + outskirt ${outskirtRows.length}/${outskirtSlots}${budgetLabel}`);
+    return [...coreRows, ...outskirtRows];
+  };
+
   const allRows: any[] = [];
   try {
     const queries = Object.entries(catSlots)
       .filter(([_, slots]) => slots > 0)
-      .map(async ([cat, slots]) => {
-        const isRestaurant = cat === 'restaurant';
-        if (isRestaurant) {
-          // ⚠️ 2026-05-21 = 식당 = dayZone 균등 (= 사용자 SSOT = 일자별 zone 매칭 자동)
-          // = restaurant 6 = core 4 + outskirt 2 (= dayCount=3 = Day 1 core 2 + Day 2 outskirt 2 + Day 3 core 2)
-          const coreSlots = Math.ceil(slots * (2 / 3));     // = 6 → 4 core
-          const outskirtSlots = slots - coreSlots;            // = 6 → 2 outskirt
-          // ⚠️ 수정금지(승인필요) 2026-05-21 = collection_phase 완전 폐기 (= 사용자 SSOT = 같은 장소 = 한 데이터)
-          const baseWhereCore = [
-            eq(placeSeedRaw.cityId, cityId),
-            eq(placeSeedRaw.seedCategory, cat),
-            between(placeSeedRaw.priceEur, budgetTier.min, budgetTier.max),
-            eq(placeSeedRaw.dayZone, 'core'),
-          ];
-          const baseWhereOutskirt = [
-            eq(placeSeedRaw.cityId, cityId),
-            eq(placeSeedRaw.seedCategory, cat),
-            between(placeSeedRaw.priceEur, budgetTier.min, budgetTier.max),
-            eq(placeSeedRaw.dayZone, 'outskirt'),
-          ];
-          const [coreRows, outskirtRows] = await Promise.all([
-            db!.select(SELECT_COLS).from(placeSeedRaw).where(and(...baseWhereCore))
-              .orderBy(desc(placeSeedRaw.googleReviewCount)).limit(coreSlots),
-            db!.select(SELECT_COLS).from(placeSeedRaw).where(and(...baseWhereOutskirt))
-              .orderBy(desc(placeSeedRaw.googleReviewCount)).limit(outskirtSlots),
-          ]);
-          console.log(`[AG2-DB] restaurant: core ${coreRows.length}/${coreSlots} + outskirt ${outskirtRows.length}/${outskirtSlots} (budget €${budgetTier.min}-${budgetTier.max})`);
-          return [...coreRows, ...outskirtRows];
-        }
-        // ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = 비식당 = 식당과 동일 day_zone 분리 SELECT
-        // = core 2/3 + outskirt 1/3 (= 식당 패턴 동일 = AG3 Day 2 outskirt pool 확보)
-        // = 옛 단일 풀 = day_zone 무관 = outskirt 자동 제외 = 사용자 진단 = 시스템 미반영 = 시정
-        const coreSlots = Math.ceil(slots * (2 / 3));
-        const outskirtSlots = slots - coreSlots;
-        const nonFoodWhereCore = [
-          eq(placeSeedRaw.cityId, cityId),
-          eq(placeSeedRaw.seedCategory, cat),
-          eq(placeSeedRaw.dayZone, 'core'),
-        ];
-        const nonFoodWhereOutskirt = [
-          eq(placeSeedRaw.cityId, cityId),
-          eq(placeSeedRaw.seedCategory, cat),
-          eq(placeSeedRaw.dayZone, 'outskirt'),
-        ];
-        const [coreRows, outskirtRows] = await Promise.all([
-          db!.select(SELECT_COLS).from(placeSeedRaw).where(and(...nonFoodWhereCore))
-            .orderBy(asc(placeSeedRaw.rank)).limit(coreSlots),
-          db!.select(SELECT_COLS).from(placeSeedRaw).where(and(...nonFoodWhereOutskirt))
-            .orderBy(asc(placeSeedRaw.rank)).limit(outskirtSlots),
-        ]);
-        console.log(`[AG2-DB] ${cat}: core ${coreRows.length}/${coreSlots} + outskirt ${outskirtRows.length}/${outskirtSlots} (ORDER rank ASC)`);
-        return [...coreRows, ...outskirtRows];
-      });
+      .map(([cat, slots]) => selectByDayZone(cat, slots));
     const results = await Promise.all(queries);
     for (const rows of results) allRows.push(...rows);
   } catch (e: any) {
@@ -259,9 +232,7 @@ async function fetchFromPlaceSeedRaw(
       description: r.summaryKo || r.editorialSummary || '',
       lat: parseFloat(String(r.latitude)) || 0,
       lng: parseFloat(String(r.longitude)) || 0,
-      // ⚠️ 수정금지(승인필요) 2026-05-24 = vibeScore/confidenceScore 폐기 (= PSR.rank 단일 SSOT)
-      vibeScore: 0,
-      confidenceScore: 0,
+      // ⚠️ 수정금지(승인필요) 2026-05-24 = PSR.rank 단일 SSOT (= 옛 vibeScore/confidenceScore 폐기 = type optional)
       rank: r.rank,
       sourceType: "DB Direct (Place Seed Raw)",
       personaFitReason: r.summaryKo || '',

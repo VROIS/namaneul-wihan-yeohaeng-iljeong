@@ -87,8 +87,12 @@ export interface PlaceResult {
   description: string;
   lat: number;
   lng: number;
-  vibeScore: number;
-  confidenceScore: number;
+  // ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = 점수 시스템 폐기 (= PSR.rank 단일)
+  // = vibeScore/confidenceScore = 옛 무용 (= 옛 코드 호환 = optional)
+  vibeScore?: number;
+  confidenceScore?: number;
+  // ⚠️ 수정금지(승인필요) 2026-05-24 = PSR.rank 단일 SSOT (= finalScore = 21 - rank)
+  rank?: number;
   sourceType: string;
   personaFitReason: string;
   tags: string[];

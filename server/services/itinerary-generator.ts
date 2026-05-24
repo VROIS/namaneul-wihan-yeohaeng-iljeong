@@ -118,13 +118,22 @@ function isFoodPlace(place: PlaceResult): boolean {
   return hasFoodTag || hasFoodType || nameHasFood;
 }
 
-// ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = 식당 점수 = PSR.rank 단일
-// = ag2-DB 가 tier 별 RC DESC 정렬 (= Economic 1~ / Reasonable 1001~ / High-end 2001~)
-// = rank 작을수록 높은 점수 (= 10 점 만점 = tier 안 1 등이 10)
+// ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = PSR rank tier offset (= ag2-DB SELECT 와 동기 강제)
+// = Economic = rank 1~ / Reasonable = rank 1001~ / High-end = rank 2001~
+const PSR_TIER_OFFSET = { Reasonable: 1000, HighEnd: 2000 } as const;
+const RANK_FALLBACK = 999;
+const NON_FOOD_MAX_RANK = 20;
+
+function getTierOffset(rank: number): number {
+  if (rank >= PSR_TIER_OFFSET.HighEnd + 1) return PSR_TIER_OFFSET.HighEnd;
+  if (rank >= PSR_TIER_OFFSET.Reasonable + 1) return PSR_TIER_OFFSET.Reasonable;
+  return 0;
+}
+
+// 식당 점수 = tier 안 1 등 = 10 점 / 20 등 = 0 점
 async function calculateRestaurantScore(place: PlaceResult): Promise<number> {
-  const rank = (place as any).rank ?? 999;
-  const tierOffset = rank >= 2001 ? 2000 : rank >= 1001 ? 1000 : 0;
-  const tierRank = rank - tierOffset;
+  const rank = place.rank ?? RANK_FALLBACK;
+  const tierRank = rank - getTierOffset(rank);
   return Math.max(0, Math.min(10, 11 - tierRank));
 }
 
@@ -304,8 +313,10 @@ interface PlaceResult {
   description: string;
   lat: number;
   lng: number;
-  vibeScore: number;
-  confidenceScore: number;
+  // ⚠️ 수정금지(승인필요) 2026-05-24 = PSR.rank 단일 SSOT (= 점수 시스템 폐기 cascade)
+  vibeScore?: number;
+  confidenceScore?: number;
+  rank?: number;
   sourceType: string;
   personaFitReason: string;
   tags: string[];
@@ -563,8 +574,8 @@ function generateSelectionReasons(place: PlaceResult): { reasons: string[]; conf
 
   // ===== 최소 2개 보장 (부족하면 실용적 이유 추가) =====
   if (reasons.length < 2) {
-    if (place.vibeScore > 5) {
-      reasons.push(`AI 분위기 분석 높은 평가 (${place.vibeScore.toFixed(1)}/10)`);
+    if ((place.vibeScore ?? 0) > 5) {
+      reasons.push(`AI 분위기 분석 높은 평가 (${place.vibeScore!.toFixed(1)}/10)`);
     }
     if (reasons.length < 2 && place.description) {
       reasons.push(place.description.length > 60 ? place.description.substring(0, 57) + '...' : place.description);
@@ -1002,10 +1013,10 @@ export const _enrichmentPipeline = {
 
     placesArr = placesArr.map(p => {
       const { reasons, confidence } = generateSelectionReasons(p);
-      const rank = (p as any).rank ?? 999;
+      const rank = p.rank ?? RANK_FALLBACK;
       return {
         ...p,
-        finalScore: Math.max(0, 21 - rank),
+        finalScore: Math.max(0, (NON_FOOD_MAX_RANK + 1) - rank),
         selectionReasons: reasons,
         confidenceLevel: confidence,
       };
@@ -1013,7 +1024,7 @@ export const _enrichmentPipeline = {
       .slice(0, requiredPlaceCount + 5);
 
     placesArr.slice(0, 5).forEach((p, i) => {
-      console.log(`[AG3]   #${i + 1} ${p.name}: rank=${(p as any).rank ?? '?'} finalScore=${(p.finalScore || 0).toFixed(2)}`);
+      console.log(`[AG3]   #${i + 1} ${p.name}: rank=${p.rank ?? '?'} finalScore=${(p.finalScore || 0).toFixed(2)}`);
     });
 
     // 슬롯 분배
