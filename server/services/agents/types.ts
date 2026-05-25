@@ -1,6 +1,6 @@
 /**
  * 4+1 에이전트 파이프라인 - 공통 타입 정의
- * 
+ *
  * AG1(뼈대) → AG2(Gemini)||AG3pre(DB) → AG3(매칭) → AG4(실시간)
  */
 
@@ -8,23 +8,29 @@
 
 // ===== 기본 타입 =====
 // ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = Romantic → Shopping (= PSR shopping 카테고리 1:1)
-export type Vibe = 'Healing' | 'Adventure' | 'Hotspot' | 'Foodie' | 'Shopping' | 'Culture';
-export type TravelStyle = 'Luxury' | 'Premium' | 'Reasonable' | 'Economic';
+export type Vibe =
+  | "Healing"
+  | "Adventure"
+  | "Hotspot"
+  | "Foodie"
+  | "Shopping"
+  | "Culture";
+export type TravelStyle = "Luxury" | "Premium" | "Reasonable" | "Economic";
 
 // ⚠️ 수정금지(승인필요) 2026-05-19 = place_seed_raw.seed_category 8 enum (= BTS 마커 + LUCIE 캐릭터 1:1)
 // = SSOT = client/components/bts/bts-marker-svg.ts 의 COLORS/LUCIDE 키와 정확히 일치
 export type SeedCategory =
-  | 'bts_venue'
-  | 'heritage'
-  | 'hotspot'
-  | 'attraction'
-  | 'adventure'
-  | 'healing'
-  | 'shopping'
-  | 'restaurant';
-export type TravelPace = 'Packed' | 'Normal' | 'Relaxed';
-export type MobilityStyle = 'WalkMore' | 'Moderate' | 'Minimal';
-export type CurationFocus = 'Kids' | 'Parents' | 'Everyone' | 'Self';
+  | "bts_venue"
+  | "heritage"
+  | "hotspot"
+  | "attraction"
+  | "adventure"
+  | "healing"
+  | "shopping"
+  | "restaurant";
+export type TravelPace = "Packed" | "Normal" | "Relaxed";
+export type MobilityStyle = "WalkMore" | "Moderate" | "Minimal";
+export type CurationFocus = "Kids" | "Parents" | "Everyone" | "Self";
 
 // ===== 설정 인터페이스 =====
 export interface PaceConfig {
@@ -33,7 +39,7 @@ export interface PaceConfig {
 }
 
 export interface MealSlotConfig {
-  type: 'lunch' | 'dinner';
+  type: "lunch" | "dinner";
   startHour: number;
   endHour: number;
 }
@@ -82,18 +88,17 @@ export interface TripFormData {
 }
 
 // ===== 장소 결과 =====
+// ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = 점수 시스템 + MIX path 완전 폐기
+// = PSR.rank 단일 SSOT = finalScore = max(0, 21 - rank)
+// = 옛 vibeScore / confidenceScore / koreanPopularityScore / tripAdvisorRating /
+//   photoSpotScore / isPackageTourIncluded = 모두 삭제 (= MIX 보조 의존 = 쓰레기)
 export interface PlaceResult {
   id: string;
   name: string;
   description: string;
   lat: number;
   lng: number;
-  // ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = 점수 시스템 폐기 (= PSR.rank 단일)
-  // = vibeScore/confidenceScore = 옛 무용 (= 옛 코드 호환 = optional)
-  vibeScore?: number;
-  confidenceScore?: number;
-  // ⚠️ 수정금지(승인필요) 2026-05-24 = PSR.rank 단일 SSOT (= finalScore = 21 - rank)
-  rank?: number;
+  rank?: number; // PSR.rank (= 단일 SSOT)
   sourceType: string;
   personaFitReason: string;
   tags: string[];
@@ -104,29 +109,15 @@ export interface PlaceResult {
   city?: string;
   region?: string;
   recommendedTime?: string;
-  koreanPopularityScore: number;
   googleMapsUrl: string;
-  tripAdvisorRating?: number;
-  tripAdvisorReviewCount?: number;
-  tripAdvisorRanking?: string;
-  estimatedPriceEur?: number;
-  // ⚠️ 2026-05-19 = seedCategory = FE LUCIE 카테고리 아이콘 매핑용 (= 이미지 NULL placeholder)
-  seedCategory?: SeedCategory;
-  // ⚠️ 2026-05-15 = priceSource / priceLevel 영구 폐기 (= price_eur 단일 SSOT)
-  photoSpotScore?: number;
-  photoTip?: string;
-  bestPhotoTime?: string;
-  isPackageTourIncluded?: boolean;
-  packageMentionCount?: number;
-  finalScore?: number;
-  buzzScore?: number;
-  userRatingCount?: number;
+  estimatedPriceEur?: number; // = PSR.price_eur 직접 복사 (= 사용자 SSOT)
+  seedCategory?: SeedCategory; // FE LUCIDE 아이콘 매핑
+  finalScore?: number; // = max(0, 21 - rank) = AG3 단순 부여
+  userRatingCount?: number; // = PSR.googleReviewCount (= 식당 정렬 보조)
   selectionReasons?: string[];
-  confidenceLevel?: 'high' | 'medium' | 'low' | 'minimal';
-  // ⭐ 차별화 선정이유 (우리 데이터 기반, 프론트엔드에서 크게/진하게 표시)
-  nubiReason?: string | null;
-  // ⚠️ 수정금지(승인필요) 2026-05-21 = Phase E = dayZone 필드 (= place_seed_raw.day_zone) = 일자별 zone 매칭
-  dayZone?: 'core' | 'outskirt' | null;
+  confidenceLevel?: "high" | "medium" | "low" | "minimal";
+  nubiReason?: string | null; // 차별화 선정이유 (= FE 진하게 표시)
+  dayZone?: "core" | "outskirt" | null; // PSR.day_zone (= 일자 zone 매칭)
 }
 
 // ===== 상수 =====
@@ -137,31 +128,70 @@ export const PACE_CONFIG: Record<TravelPace, PaceConfig> = {
 };
 
 export const MEAL_SLOTS: MealSlotConfig[] = [
-  { type: 'lunch', startHour: 12, endHour: 14 },
-  { type: 'dinner', startHour: 18, endHour: 20 },
+  { type: "lunch", startHour: 12, endHour: 14 },
+  { type: "dinner", startHour: 18, endHour: 20 },
 ];
 
-export const MEAL_BUDGET: Record<TravelStyle, {
-  dailyTotal: number;
-  lunch: number;
-  dinner: number;
-  lunchLabel: string;
-  dinnerLabel: string;
-  label: string;
-  min: number;
-  max: number;
-}> = {
+export const MEAL_BUDGET: Record<
+  TravelStyle,
+  {
+    dailyTotal: number;
+    lunch: number;
+    dinner: number;
+    lunchLabel: string;
+    dinnerLabel: string;
+    label: string;
+    min: number;
+    max: number;
+  }
+> = {
   // ⚠️ 수정금지(승인필요) 사용자 SSOT 2026-05-19 = 4:6 split (= 점심 40% / 저녁 60%)
   // 일한도: Economic €40 / Reasonable €100 / Premium €300 / Luxury €300+
   // min/max = 식당 1 회 식사 가격 범위 (= tier 별 격리 = dinner ceiling 까지 허용)
-  Economic: { dailyTotal: 40, lunch: 16, dinner: 24, lunchLabel: '€16 이내', dinnerLabel: '€24 이내', label: '€40/일', min: 0, max: 24 },
-  Reasonable: { dailyTotal: 100, lunch: 40, dinner: 60, lunchLabel: '€40 이내', dinnerLabel: '€60 이내', label: '€100/일', min: 25, max: 60 },
-  Premium: { dailyTotal: 300, lunch: 120, dinner: 180, lunchLabel: '€120 이내', dinnerLabel: '€180 이내', label: '€300/일', min: 61, max: 180 },
-  Luxury: { dailyTotal: 300, lunch: 120, dinner: 180, lunchLabel: '€120 이내', dinnerLabel: '€180 이내', label: '€300+/일', min: 181, max: 9999 },
+  Economic: {
+    dailyTotal: 40,
+    lunch: 16,
+    dinner: 24,
+    lunchLabel: "€16 이내",
+    dinnerLabel: "€24 이내",
+    label: "€40/일",
+    min: 0,
+    max: 24,
+  },
+  Reasonable: {
+    dailyTotal: 100,
+    lunch: 40,
+    dinner: 60,
+    lunchLabel: "€40 이내",
+    dinnerLabel: "€60 이내",
+    label: "€100/일",
+    min: 25,
+    max: 60,
+  },
+  Premium: {
+    dailyTotal: 300,
+    lunch: 120,
+    dinner: 180,
+    lunchLabel: "€120 이내",
+    dinnerLabel: "€180 이내",
+    label: "€300/일",
+    min: 61,
+    max: 180,
+  },
+  Luxury: {
+    dailyTotal: 300,
+    lunch: 120,
+    dinner: 180,
+    lunchLabel: "€120 이내",
+    dinnerLabel: "€180 이내",
+    label: "€300+/일",
+    min: 181,
+    max: 9999,
+  },
 };
 
-export const DEFAULT_START_TIME = '09:00';
-export const DEFAULT_END_TIME = '21:00';
+export const DEFAULT_START_TIME = "09:00";
+export const DEFAULT_END_TIME = "21:00";
 
 // ===== AG1 출력 =====
 export interface AG1Output {
@@ -200,7 +230,7 @@ export interface ScheduleSlot {
   startTime: string;
   endTime: string;
   isMealSlot: boolean;
-  mealType?: 'lunch' | 'dinner';
+  mealType?: "lunch" | "dinner";
 }
 
 // ===== AG3 출력 =====
@@ -215,21 +245,31 @@ export interface AG3Output {
 // ===== 인원수 계산 =====
 export function getCompanionCount(companionType: string): number {
   const mapping: Record<string, number> = {
-    Single: 1, Solo: 1, Couple: 2, Family: 4, ExtendedFamily: 8, Group: 10,
+    Single: 1,
+    Solo: 1,
+    Couple: 2,
+    Family: 4,
+    ExtendedFamily: 8,
+    Group: 10,
   };
   return mapping[companionType] || 1;
 }
 
 // ===== 슬롯 수 계산 =====
 export function calculateSlotsForDay(
-  startTime: string, endTime: string, pace: TravelPace
+  startTime: string,
+  endTime: string,
+  pace: TravelPace,
 ): number {
   const config = PACE_CONFIG[pace];
-  const [startH, startM] = startTime.split(':').map(Number);
-  const [endH, endM] = endTime.split(':').map(Number);
-  const availableMinutes = (endH * 60 + endM) - (startH * 60 + startM);
+  const [startH, startM] = startTime.split(":").map(Number);
+  const [endH, endM] = endTime.split(":").map(Number);
+  const availableMinutes = endH * 60 + endM - (startH * 60 + startM);
   if (availableMinutes <= 0) return 0;
-  return Math.min(Math.floor(availableMinutes / config.slotDurationMinutes), config.maxSlotsPerDay);
+  return Math.min(
+    Math.floor(availableMinutes / config.slotDurationMinutes),
+    config.maxSlotsPerDay,
+  );
 }
 
 // ===== 일수 계산 =====
@@ -244,5 +284,5 @@ export function calculateDayCount(startDate: string, endDate: string): number {
 export function minutesToTime(minutes: number): string {
   const hours = Math.floor(minutes / 60);
   const mins = minutes % 60;
-  return `${String(Math.min(23, hours)).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+  return `${String(Math.min(23, hours)).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
 }

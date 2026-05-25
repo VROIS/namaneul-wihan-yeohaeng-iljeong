@@ -2,10 +2,14 @@
 import { GoogleGenAI } from "@google/genai";
 import {
   generateProtagonistSentence,
-  generatePromptContext
+  generatePromptContext,
 } from "./protagonist-generator";
 // ⚠️ 수정금지(승인필요) 2026-05-20 = Google Routes API 완전 폐기 (= 사용자 SSOT)
-import { calcTransitHaversine, haversineKm, type TravelMode } from "./agents/transit-haversine";
+import {
+  calcTransitHaversine,
+  haversineKm,
+  type TravelMode,
+} from "./agents/transit-haversine";
 import { storage } from "../storage";
 import { db } from "../db";
 // ⚠️ 2026-05-23 = 폐기 테이블 import 모두 제거 (= 사용자 SSOT = PSR + cities 만)
@@ -20,30 +24,44 @@ import { MEAL_BUDGET, type TravelStyle } from "./agents/types";
 let ai: GoogleGenAI | null = null;
 
 function getGeminiApiKey(): string {
-  return process.env.AI_INTEGRATIONS_GEMINI_API_KEY || process.env.GEMINI_API_KEY || '';
+  return (
+    process.env.AI_INTEGRATIONS_GEMINI_API_KEY ||
+    process.env.GEMINI_API_KEY ||
+    ""
+  );
 }
 
 function getAI(): GoogleGenAI {
   if (!ai) {
     const apiKey = getGeminiApiKey();
     if (!apiKey) {
-      console.error('[Itinerary] ❌ Gemini API 키가 설정되지 않았습니다!');
-      throw new Error('Gemini API 키가 없습니다. 관리자 대시보드에서 API 키를 설정해주세요.');
+      console.error("[Itinerary] ❌ Gemini API 키가 설정되지 않았습니다!");
+      throw new Error(
+        "Gemini API 키가 없습니다. 관리자 대시보드에서 API 키를 설정해주세요.",
+      );
     }
     ai = new GoogleGenAI({ apiKey });
-    console.log(`[Itinerary] ✅ Gemini AI 초기화 완료 (키 길이: ${apiKey.length}자)`);
+    console.log(
+      `[Itinerary] ✅ Gemini AI 초기화 완료 (키 길이: ${apiKey.length}자)`,
+    );
   }
   return ai;
 }
 
 // ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = Romantic → Shopping
-type Vibe = 'Healing' | 'Adventure' | 'Hotspot' | 'Foodie' | 'Shopping' | 'Culture';
+type Vibe =
+  | "Healing"
+  | "Adventure"
+  | "Hotspot"
+  | "Foodie"
+  | "Shopping"
+  | "Culture";
 // ⚠️ 2026-05-19 = TravelStyle = types.ts SSOT 에서 import (= 위)
 // 여행 밀도: 빡빡하게(Packed) | 보통(Normal) | 여유롭게(Relaxed)
 // ⚠️ 프론트엔드 기준 'Normal' 사용 (Moderate 아님)
-type TravelPace = 'Packed' | 'Normal' | 'Relaxed';
-type MobilityStyle = 'WalkMore' | 'Moderate' | 'Minimal';
-type CurationFocus = 'Kids' | 'Parents' | 'Everyone' | 'Self';
+type TravelPace = "Packed" | "Normal" | "Relaxed";
+type MobilityStyle = "WalkMore" | "Moderate" | "Minimal";
+type CurationFocus = "Kids" | "Parents" | "Everyone" | "Self";
 
 // ===== 사용자 시간 기반 슬롯 생성 로직 =====
 // 핵심 규칙:
@@ -51,8 +69,8 @@ type CurationFocus = 'Kids' | 'Parents' | 'Everyone' | 'Self';
 // 2. 여행 밀도에 따라 슬롯 수 자동 계산
 // 3. 2일 이상: 첫날(출발시간~21:00), 중간(09:00~21:00 풀타임), 마지막(09:00~종료시간)
 interface PaceConfig {
-  slotDurationMinutes: number;  // 슬롯 당 소요시간 (이동시간 포함)
-  maxSlotsPerDay: number;       // 하루 최대 슬롯 수 (풀타임 12시간 기준)
+  slotDurationMinutes: number; // 슬롯 당 소요시간 (이동시간 포함)
+  maxSlotsPerDay: number; // 하루 최대 슬롯 수 (풀타임 12시간 기준)
 }
 
 // === 인원수 계산 (companionType 기반) ===
@@ -61,24 +79,24 @@ function getCompanionCount(companionType: string): number {
     Single: 1,
     Couple: 2,
     Family: 4,
-    ExtendedFamily: 8,  // 대가족 8명 (밴)
-    Group: 10,          // 친구 10명 (미니버스)
+    ExtendedFamily: 8, // 대가족 8명 (밴)
+    Group: 10, // 친구 10명 (미니버스)
   };
   return mapping[companionType] || 1;
 }
 
 const PACE_CONFIG: Record<TravelPace, PaceConfig> = {
   Packed: {
-    slotDurationMinutes: 90,    // 1시간 30분
-    maxSlotsPerDay: 8,          // 12h ÷ 1.5h = 8곳
+    slotDurationMinutes: 90, // 1시간 30분
+    maxSlotsPerDay: 8, // 12h ÷ 1.5h = 8곳
   },
   Normal: {
-    slotDurationMinutes: 120,   // 2시간
-    maxSlotsPerDay: 6,          // 12h ÷ 2h = 6곳
+    slotDurationMinutes: 120, // 2시간
+    maxSlotsPerDay: 6, // 12h ÷ 2h = 6곳
   },
   Relaxed: {
-    slotDurationMinutes: 150,   // 2시간 30분
-    maxSlotsPerDay: 4,          // 12h ÷ 2.5h ≈ 4곳
+    slotDurationMinutes: 150, // 2시간 30분
+    maxSlotsPerDay: 4, // 12h ÷ 2.5h ≈ 4곳
   },
 };
 
@@ -86,14 +104,14 @@ const PACE_CONFIG: Record<TravelPace, PaceConfig> = {
 // 점심(12:00~14:00), 저녁(18:00~20:00)은 무조건 식당 배치
 // 아침은 제외 (호텔 조식 등 가정)
 interface MealSlotConfig {
-  type: 'lunch' | 'dinner';
+  type: "lunch" | "dinner";
   startHour: number;
   endHour: number;
 }
 
 const MEAL_SLOTS: MealSlotConfig[] = [
-  { type: 'lunch', startHour: 12, endHour: 14 },
-  { type: 'dinner', startHour: 18, endHour: 20 },
+  { type: "lunch", startHour: 12, endHour: 14 },
+  { type: "dinner", startHour: 18, endHour: 20 },
 ];
 
 // ===== 식당 선정 4대 원칙 (1차 목표 확정) =====
@@ -108,13 +126,28 @@ const MEAL_SLOTS: MealSlotConfig[] = [
  * 장소가 식당/카페인지 확인
  */
 function isFoodPlace(place: PlaceResult): boolean {
-  const foodTags = ['restaurant', 'cafe', 'bakery', 'food', 'bar', 'bistro', 'brasserie'];
-  // ⚠️ vibeTags에 'Foodie'만 있는 것으로 식당 판단 금지! 
+  const foodTags = [
+    "restaurant",
+    "cafe",
+    "bakery",
+    "food",
+    "bar",
+    "bistro",
+    "brasserie",
+  ];
+  // ⚠️ vibeTags에 'Foodie'만 있는 것으로 식당 판단 금지!
   // AG2가 vibes에 Foodie 포함 시 관광지에도 Foodie 태그 부여 가능 → 모든 장소가 식당으로 분류되는 버그
   // 대신 tags, placeTypes, 이름으로만 판단 (더 정확)
-  const hasFoodTag = place.tags?.some(t => foodTags.includes(t.toLowerCase()));
-  const hasFoodType = place.placeTypes?.some(t => foodTags.includes(t.toLowerCase()));
-  const nameHasFood = /레스토랑|식당|카페|비스트로|브라세리|restaurant|cafe|bistro|boulangerie|pâtisserie/i.test(place.name);
+  const hasFoodTag = place.tags?.some((t) =>
+    foodTags.includes(t.toLowerCase()),
+  );
+  const hasFoodType = place.placeTypes?.some((t) =>
+    foodTags.includes(t.toLowerCase()),
+  );
+  const nameHasFood =
+    /레스토랑|식당|카페|비스트로|브라세리|restaurant|cafe|bistro|boulangerie|pâtisserie/i.test(
+      place.name,
+    );
 
   return hasFoodTag || hasFoodType || nameHasFood;
 }
@@ -141,9 +174,17 @@ async function calculateRestaurantScore(place: PlaceResult): Promise<number> {
 // ===== PlaceResult → Route Optimizer 호환 변환 =====
 // route-optimizer.ts는 Place 타입 (latitude/longitude)을 기대하지만
 // itinerary-generator에서는 PlaceResult (lat/lng)를 사용함
-function toRoutablePlace(p: PlaceResult): { id: number; latitude: number; longitude: number; name: string } {
+function toRoutablePlace(p: PlaceResult): {
+  id: number;
+  latitude: number;
+  longitude: number;
+  name: string;
+} {
   return {
-    id: typeof p.id === 'number' ? p.id : parseInt(p.id) || Math.abs(hashCode(p.id || p.name)),
+    id:
+      typeof p.id === "number"
+        ? p.id
+        : parseInt(p.id) || Math.abs(hashCode(p.id || p.name)),
     latitude: p.lat,
     longitude: p.lng,
     name: p.name,
@@ -155,58 +196,93 @@ function hashCode(str: string): number {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
     const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
+    hash = (hash << 5) - hash + char;
     hash |= 0;
   }
   return hash;
 }
 
+// ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = 동선 = "출발지 + N waypoint + 도착지"
+// = 3 fix: (A) Haversine 거리 (= 옛 Euclidean 폐기 = 위도 왜곡 33%)
+//          (B) NULL 좌표 행 = 사전 제외 + 마지막 슬롯 배치 (= "999km" 폭탄 0)
+//          (C) 출발지 + 도착지 anchor (= 호텔 출발/귀환 cycle = nearest-neighbor start + 2-opt 종점 anchor)
+// = Google Routes / Mapbox / or-tools = 외부 호출 0 = 자체 구현
+
+// Haversine 거리 (= 메터 단위 = 지구 곡률 반영)
+function _haversineKm(
+  a: { lat: number; lng: number },
+  b: { lat: number; lng: number },
+): number {
+  const R = 6371; // km
+  const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+  const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+  const lat1 = (a.lat * Math.PI) / 180;
+  const lat2 = (b.lat * Math.PI) / 180;
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+function _hasValidCoord(p: { lat: number; lng: number }): boolean {
+  return p.lat !== 0 && p.lng !== 0 && !isNaN(p.lat) && !isNaN(p.lng);
+}
+
 /**
- * 일별 장소 순서 동선 최적화 (nearest-neighbor + 순환)
- * 출발지(첫 장소) → 가장 가까운 순서로 재배열
- * 식사 슬롯 시간대는 유지하면서 관광 슬롯만 재정렬
+ * 일별 동선 최적화 = "출발지 + N waypoint + 도착지" 1 회 cycle
+ * - NULL 좌표 행 = 사전 제외 + 마지막에 그대로 배치 (= "999km" 폭탄 차단)
+ * - nearest-neighbor (출발지 시작) + 2-opt (종점 = 도착지 anchor)
+ * - Haversine 거리 = 위도 왜곡 0
  */
-function optimizeDayRoute(dayPlaces: PlaceResult[], departureCoords?: { lat: number; lng: number }): PlaceResult[] {
+function optimizeDayRoute(
+  dayPlaces: PlaceResult[],
+  departureCoords?: { lat: number; lng: number },
+  returnCoords?: { lat: number; lng: number }, // 미지정 시 = 출발지 = 호텔 cycle
+): PlaceResult[] {
   if (dayPlaces.length <= 2) return dayPlaces;
 
-  // 출발점 결정: 사용자 지정 좌표 또는 첫 번째 장소
-  let startLat = dayPlaces[0].lat;
-  let startLng = dayPlaces[0].lng;
-  if (departureCoords && departureCoords.lat && departureCoords.lng) {
-    startLat = departureCoords.lat;
-    startLng = departureCoords.lng;
+  // === Fix B = NULL 좌표 행 사전 제외 ===
+  const valid = dayPlaces.filter(_hasValidCoord);
+  const invalid = dayPlaces.filter((p) => !_hasValidCoord(p));
+  if (invalid.length > 0) {
+    console.warn(
+      `[RouteOpt] ⚠️ NULL 좌표 ${invalid.length}곳 = optimize 제외 + 마지막 배치: ${invalid.map((p) => p.name).join(", ")}`,
+    );
   }
+  if (valid.length <= 1) return [...valid, ...invalid];
 
-  // nearest-neighbor 알고리즘
-  const remaining = [...dayPlaces];
+  // === Fix C = 출발지/도착지 anchor ===
+  const start =
+    departureCoords && _hasValidCoord(departureCoords)
+      ? departureCoords
+      : { lat: valid[0].lat, lng: valid[0].lng };
+  const end =
+    returnCoords && _hasValidCoord(returnCoords) ? returnCoords : start;
+
+  // nearest-neighbor 시작 = 출발지에서 가장 가까운 행
+  const remaining = [...valid];
   const optimized: PlaceResult[] = [];
-
-  // 출발점에서 가장 가까운 장소부터 시작
-  let currentLat = startLat;
-  let currentLng = startLng;
+  let current = start;
 
   while (remaining.length > 0) {
     let nearestIdx = 0;
     let nearestDist = Infinity;
-
     for (let i = 0; i < remaining.length; i++) {
-      const dist = Math.sqrt(
-        Math.pow(currentLat - remaining[i].lat, 2) +
-        Math.pow(currentLng - remaining[i].lng, 2)
-      );
-      if (dist < nearestDist) {
-        nearestDist = dist;
+      const d = _haversineKm(current, remaining[i]);
+      if (d < nearestDist) {
+        nearestDist = d;
         nearestIdx = i;
       }
     }
-
     optimized.push(remaining[nearestIdx]);
-    currentLat = remaining[nearestIdx].lat;
-    currentLng = remaining[nearestIdx].lng;
+    current = {
+      lat: remaining[nearestIdx].lat,
+      lng: remaining[nearestIdx].lng,
+    };
     remaining.splice(nearestIdx, 1);
   }
 
-  // 2-opt 개선: 교차 경로 제거 (간단한 버전)
+  // === Fix A = 2-opt + Haversine (= 도착지 anchor) ===
   let improved = true;
   let iterations = 0;
   while (improved && iterations < 50) {
@@ -214,25 +290,15 @@ function optimizeDayRoute(dayPlaces: PlaceResult[], departureCoords?: { lat: num
     iterations++;
     for (let i = 0; i < optimized.length - 1; i++) {
       for (let j = i + 2; j < optimized.length; j++) {
-        const d1 = Math.sqrt(
-          Math.pow(optimized[i].lat - optimized[i + 1].lat, 2) +
-          Math.pow(optimized[i].lng - optimized[i + 1].lng, 2)
-        );
-        const d2 = Math.sqrt(
-          Math.pow(optimized[j].lat - (optimized[j + 1]?.lat || startLat), 2) +
-          Math.pow(optimized[j].lng - (optimized[j + 1]?.lng || startLng), 2)
-        );
-        const newD1 = Math.sqrt(
-          Math.pow(optimized[i].lat - optimized[j].lat, 2) +
-          Math.pow(optimized[i].lng - optimized[j].lng, 2)
-        );
-        const newD2 = Math.sqrt(
-          Math.pow(optimized[i + 1].lat - (optimized[j + 1]?.lat || startLat), 2) +
-          Math.pow(optimized[i + 1].lng - (optimized[j + 1]?.lng || startLng), 2)
-        );
-
+        const jNext =
+          j + 1 < optimized.length
+            ? { lat: optimized[j + 1].lat, lng: optimized[j + 1].lng }
+            : end; // 종점 = 도착지 anchor
+        const d1 = _haversineKm(optimized[i], optimized[i + 1]);
+        const d2 = _haversineKm(optimized[j], jNext);
+        const newD1 = _haversineKm(optimized[i], optimized[j]);
+        const newD2 = _haversineKm(optimized[i + 1], jNext);
         if (newD1 + newD2 < d1 + d2) {
-          // i+1부터 j까지 구간 뒤집기
           const segment = optimized.slice(i + 1, j + 1).reverse();
           optimized.splice(i + 1, j - i, ...segment);
           improved = true;
@@ -242,15 +308,18 @@ function optimizeDayRoute(dayPlaces: PlaceResult[], departureCoords?: { lat: num
   }
 
   if (iterations > 1) {
-    console.log(`[RouteOpt] 2-opt 개선 ${iterations}회 반복 완료`);
+    console.log(
+      `[RouteOpt] 2-opt 개선 ${iterations}회 반복 (= Haversine + ${start.lat.toFixed(3)},${start.lng.toFixed(3)} 출발 / ${end.lat.toFixed(3)},${end.lng.toFixed(3)} 귀환)`,
+    );
   }
 
-  return optimized;
+  // NULL 좌표 행 = 마지막 슬롯 배치 (= 일자 끝 = 호텔 인근)
+  return [...optimized, ...invalid];
 }
 
 // 기본 시작/종료 시간 (중간 날짜용)
-const DEFAULT_START_TIME = '09:00';
-const DEFAULT_END_TIME = '21:00';
+const DEFAULT_START_TIME = "09:00";
+const DEFAULT_END_TIME = "21:00";
 
 /**
  * 가용 시간으로 슬롯 수 계산
@@ -262,12 +331,12 @@ const DEFAULT_END_TIME = '21:00';
 function calculateSlotsForDay(
   startTime: string,
   endTime: string,
-  pace: TravelPace
+  pace: TravelPace,
 ): number {
   const config = PACE_CONFIG[pace];
 
-  const [startH, startM] = startTime.split(':').map(Number);
-  const [endH, endM] = endTime.split(':').map(Number);
+  const [startH, startM] = startTime.split(":").map(Number);
+  const [endH, endM] = endTime.split(":").map(Number);
 
   const startMinutes = startH * 60 + startM;
   const endMinutes = endH * 60 + endM;
@@ -308,16 +377,17 @@ interface TripFormData {
   }>;
 }
 
+// ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = 점수 시스템 + MIX path 완전 폐기
+// = PSR.rank 단일 SSOT = ag2-DB SELECT 가 카테고리/tier 별 RC DESC 정렬 = 이미 SSOT
+// = 옛 vibeScore / confidenceScore / koreanPopularityScore / tripAdvisorRating /
+//   photoSpotScore / isPackageTourIncluded = 모두 삭제 (= MIX 보조 = 쓰레기 의존)
 interface PlaceResult {
   id: string;
   name: string;
   description: string;
   lat: number;
   lng: number;
-  // ⚠️ 수정금지(승인필요) 2026-05-24 = PSR.rank 단일 SSOT (= 점수 시스템 폐기 cascade)
-  vibeScore?: number;
-  confidenceScore?: number;
-  rank?: number;
+  rank?: number; // PSR.rank (= 단일 SSOT)
   sourceType: string;
   personaFitReason: string;
   tags: string[];
@@ -327,30 +397,12 @@ interface PlaceResult {
   placeTypes: string[];
   city?: string;
   region?: string;
-  // Phase 1: 한국인 인기도 점수 (인스타45% + 유튜브30% + 블로그25%)
-  koreanPopularityScore: number;
-  // Phase 4: 구글맵 직접 링크
   googleMapsUrl: string;
-  // TripAdvisor 데이터 (DB에서 가져옴)
-  tripAdvisorRating?: number;       // 1.0-5.0
-  tripAdvisorReviewCount?: number;  // 총 리뷰 수
-  tripAdvisorRanking?: string;      // "#5 of 1203"
-  // 실제 가격 추정 (EUR) — 2026-05-15 = price_eur 단일 SSOT (priceSource 폐기)
-  estimatedPriceEur?: number;       // 1인 입장료 + 1인 평균 식대 통합
-  // Phase 1-3: 포토스팟 점수 (0-10)
-  photoSpotScore?: number;
-  photoTip?: string;
-  bestPhotoTime?: string;
-  // Phase 1-2: 패키지 투어 검증
-  isPackageTourIncluded?: boolean;
-  packageMentionCount?: number;
-  // Phase 1-5: 최종 종합 점수
-  finalScore?: number;
-  // Phase 1-6: 선정 이유 + 신뢰도
-  selectionReasons?: string[];        // 최소 2개 선정 이유
-  confidenceLevel?: 'high' | 'medium' | 'low' | 'minimal'; // 데이터 신뢰도
-  // ⚠️ 수정금지(승인필요) 2026-05-21 = Phase E = dayZone (= place_seed_raw.day_zone) = 일자별 zone 매칭
-  dayZone?: 'core' | 'outskirt' | null;
+  estimatedPriceEur?: number; // PSR.price_eur 직접 복사
+  finalScore?: number; // max(0, 21 - rank) = AG3 단순 부여
+  selectionReasons?: string[];
+  confidenceLevel?: "high" | "medium" | "low" | "minimal";
+  dayZone?: "core" | "outskirt" | null;
 }
 
 // 시간대별 Vibe 친화도 (향후 고급 슬롯 매칭에 사용 예정)
@@ -363,14 +415,17 @@ interface PlaceResult {
 function minutesToTime(minutes: number): string {
   const hours = Math.floor(minutes / 60);
   const mins = minutes % 60;
-  return `${String(Math.min(23, hours)).padStart(2, '0')}:${String(mins).padStart(2, '0')}`;
+  return `${String(Math.min(23, hours)).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
 }
 
 // 🎯 Vibe 기본 가중치 (향후 확장용, 현재 calculateVibeWeights에서 사용)
 // const BASE_WEIGHTS: Record<Vibe, number> = { Healing: 35, Foodie: 25, Hotspot: 15, Culture: 10, Adventure: 10, Shopping: 5 };
 // const PROTAGONIST_ADJUSTMENTS - 향후 고급 개인화에 사용 예정
 
-function calculateVibeWeights(selectedVibes: Vibe[], protagonist: CurationFocus) {
+function calculateVibeWeights(
+  selectedVibes: Vibe[],
+  protagonist: CurationFocus,
+) {
   if (selectedVibes.length === 0) return [];
 
   const PRIORITY_WEIGHTS: Record<number, number[]> = {
@@ -388,177 +443,54 @@ function calculateVibeWeights(selectedVibes: Vibe[], protagonist: CurationFocus)
   }));
 }
 
-async function searchGooglePlaces(
-  destination: string,
-  coords: { lat: number; lng: number } | undefined,
-  vibes: Vibe[],
-  travelStyle: TravelStyle
-): Promise<PlaceResult[]> {
-  const apiKey = process.env.Google_maps_api_key || process.env.GOOGLE_MAPS_API_KEY;
-
-  if (!apiKey) {
-    console.log("Google Maps API key not available, using AI-generated places");
-    return [];
-  }
-
-  const placeTypes = getPlaceTypesForVibes(vibes);
-  const results: PlaceResult[] = [];
-
-  for (const placeType of placeTypes.slice(0, 5)) {
-    try {
-      const searchUrl = new URL("https://places.googleapis.com/v1/places:searchNearby");
-
-      const requestBody = {
-        includedTypes: [placeType],
-        maxResultCount: 10,
-        // ⚠️ 수정금지(승인필요) 2026-05-15 = languageCode: 'ko' (= 한국어 displayName)
-        languageCode: 'ko',
-        locationRestriction: coords ? {
-          circle: {
-            center: { latitude: coords.lat, longitude: coords.lng },
-            radius: 10000
-          }
-        } : undefined,
-      };
-
-      // ⚠️ FieldMask = Enterprise SKU = SSOT §16 허용. Atmosphere 금지.
-      const NEARBY_FIELD_MASK = "places.id,places.displayName,places.formattedAddress,places.location,places.types,places.userRatingCount,places.photos,places.googleMapsUri";
-      validateFieldMask(NEARBY_FIELD_MASK);
-      const response = await fetch(searchUrl.toString(), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "X-Goog-Api-Key": apiKey,
-          "X-Goog-FieldMask": NEARBY_FIELD_MASK,
-        },
-        body: JSON.stringify(requestBody),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.places) {
-          for (const place of data.places) {
-            results.push({
-              id: place.id || `place-${Date.now()}-${Math.random()}`,
-              name: place.displayName?.text || "Unknown Place",
-              description: place.formattedAddress || "",
-              lat: place.location?.latitude || 0,
-              lng: place.location?.longitude || 0,
-              vibeScore: calculatePlaceVibeScore(place, vibes),
-              confidenceScore: Math.min(10, (place.userRatingCount || 0) / 100),
-              sourceType: "Google Places",
-              personaFitReason: getPersonaFitReason(place.types || [], vibes),
-              tags: place.types?.slice(0, 3) || [],
-              vibeTags: mapPlaceTypesToVibes(place.types || []),
-              image: place.photos?.[0]?.name
-                ? `https://places.googleapis.com/v1/${place.photos[0].name}/media?maxHeightPx=400&key=${apiKey}`
-                : "",
-              priceEstimate: getPriceEstimate(undefined, travelStyle),
-              placeTypes: place.types || [],
-              koreanPopularityScore: 0, // 이후 enrichPlacesWithKoreanPopularity에서 계산
-              googleMapsUrl: place.googleMapsUri || "", // Phase 4: 구글맵 직접 링크
-            });
-          }
-        }
-      }
-    } catch (error) {
-      console.error(`Failed to search for ${placeType}:`, error);
-    }
-  }
-
-  return results;
-}
-
-
-// ===== 무료 장소 판별 (광장·공원·핫스팟) =====
-/** 패키지 투어 가격을 무료 장소에 적용하지 않기 위한 판별 */
-function isFreePlace(place: { name?: string; nameKo?: string; placeTypes?: string[] }): boolean {
-  const text = `${place.name || ''} ${place.nameKo || ''}`.toLowerCase();
-  const freeKeywords = ['광장', '공원', '거리', 'square', 'park', 'plaza', 'place', 'viewpoint', '전망대', '산책로', 'gardens', 'garden'];
-  return freeKeywords.some(k => text.includes(k));
-}
-
-/** 패키지 투어/투어 상품 가격 소스인지 판별 (무료 장소에 적용 금지) */
-function isPackageTourPriceSource(source: string | undefined): boolean {
-  if (!source) return false;
-  const s = source.toLowerCase();
-  return ['viator', 'klook', 'tour', 'tripdotcom', 'package'].some(k => s.includes(k));
-}
-
-// ⚠️ 수정금지(승인필요) 2026-05-20 = enrichPlacesWithTripAdvisorAndPrices + enrichPlacesWithPhotoAndTour 완전 폐기
-// = 사용자 SSOT [[feedback_latest_is_truth_delete_old]] = 옛 264 줄 dead code 완전 삭제 (= tripAdvisorData/geminiWebSearchCache/places 보조 의존 = 쓰레기)
-// = AG2-DB 가 place_seed_raw.priceEur + googleReviewCount + imageUrl + bestImageUrl 채움 = 충분
+// ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = MIX path + 옛 점수 코드 완전 삭제
+// = 옛 searchGooglePlaces / isFreePlace / isPackageTourPriceSource / enrichPlacesWith* = 모두 폐기
+// = ag2-DB 가 place_seed_raw 직접 SELECT = Google Places / TripAdvisor / Gemini 호출 0
+// = DB-only path = pipeline-db-only.ts 단일 분기 (= MIX = ag2:throw MIX_MODE_DISABLED)
 
 // ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = 점수 시스템 완전 폐기
 // = VIBE_WEIGHT_MATRIX + DATA_GRADE_ADJUSTMENT + detectDataGrade + calculateDynamicWeights + calculateFinalScore = 모두 삭제
 // = PSR.rank 단일 SSOT = ag2-DB 가 카테고리/tier 별 RC DESC 정렬 = 이미 정렬됨
 // = AG3 = `finalScore = Math.max(0, 21 - place.rank)` 단순 부여
 
-async function getRealityCheckForCity(_destination: string): Promise<{ weather: string; crowd: string; status: string }> {
-  return { weather: 'Sunny', crowd: 'Medium', status: 'Open' };
+async function getRealityCheckForCity(
+  _destination: string,
+): Promise<{ weather: string; crowd: string; status: string }> {
+  return { weather: "Sunny", crowd: "Medium", status: "Open" };
 }
 
 /**
  * Phase 1-6: 선정 이유 생성 (최소 2개) + 신뢰도 레벨 판단
  * 데이터 기반 이유 → AI 기반 이유 → 실용적 이유 순으로 채움
  */
-function generateSelectionReasons(place: PlaceResult): { reasons: string[]; confidence: 'high' | 'medium' | 'low' | 'minimal' } {
+function generateSelectionReasons(place: PlaceResult): {
+  reasons: string[];
+  confidence: "high" | "medium" | "low" | "minimal";
+} {
   const reasons: string[] = [];
-  let dataPoints = 0; // 보유 데이터 수 (신뢰도 판단용)
+  let dataPoints = 0;
 
-  // ===== 데이터 기반 선정 이유 (구체적 출처 포함) =====
-  // 원칙: 첫 번째 이유 = 가장 강력한 데이터 근거 (예: "인스타 #에펠탑 1.2만 게시물")
-
-  // 한국인 인기도 (45/30/25 제거) — nubiReason에 구체적 출처 표시
-
-  // Google 리뷰 수 (식당의 경우 가장 중요한 지표)
-  // ⚠️ 수정금지(승인필요) 2026-05-24 = PlaceResult 옛 type 의존 = as any (= ag2-DB 가 PSR.googleReviewCount 채움)
+  // ⚠️ 수정금지(승인필요) 2026-05-24 = PSR.googleReviewCount = as any (= PlaceResult userRatingCount 옛 폐기 cascade)
   const _p = place as any;
   if (_p.userRatingCount && _p.userRatingCount > 100) {
     const count = _p.userRatingCount;
-    const countText = count >= 10000 ? `${(count / 1000).toFixed(0)}K`
-      : count >= 1000 ? `${(count / 1000).toFixed(1)}K`
-        : count.toLocaleString();
-    reasons.push(`구글 리뷰 ${countText}개${_p.rating ? ` (${_p.rating.toFixed(1)}점)` : ''}`);
+    const countText =
+      count >= 10000
+        ? `${(count / 1000).toFixed(0)}K`
+        : count >= 1000
+          ? `${(count / 1000).toFixed(1)}K`
+          : count.toLocaleString();
+    reasons.push(`구글 리뷰 ${countText}개`);
     dataPoints += 2;
   }
 
-  // 포토스팟
-  if (place.photoSpotScore && place.photoSpotScore > 5) {
-    reasons.push(`인기 포토스팟 (점수 ${place.photoSpotScore.toFixed(1)}/10)`);
-    dataPoints += 1;
-  }
-  if (place.photoTip) {
-    reasons.push(`촬영 팁: ${place.photoTip}`);
-  }
-
-  // 패키지 투어 포함
-  if (place.isPackageTourIncluded) {
-    const mentionTxt = place.packageMentionCount && place.packageMentionCount > 1
-      ? ` (${place.packageMentionCount}개 여행사 포함)` : '';
-    reasons.push(`한국 패키지 투어 포함 장소${mentionTxt}`);
-    dataPoints += 2;
-  }
-
-  // TripAdvisor
-  if (place.tripAdvisorRating && place.tripAdvisorRating >= 4.0) {
-    const reviewTxt = place.tripAdvisorReviewCount
-      ? ` (리뷰 ${place.tripAdvisorReviewCount.toLocaleString()}개)` : '';
-    reasons.push(`TripAdvisor ${place.tripAdvisorRating.toFixed(1)}점${reviewTxt}`);
-    dataPoints += 1;
-  }
-  if (place.tripAdvisorRanking) {
-    reasons.push(`TripAdvisor ${place.tripAdvisorRanking}`);
-    dataPoints += 1;
-  }
-
-  // 가격 정보 (= 2026-05-15 = price_eur 단일 SSOT)
+  // 가격 정보 (= PSR.price_eur 단일 SSOT)
   if (place.estimatedPriceEur !== undefined && place.estimatedPriceEur > 0) {
     reasons.push(`약 EUR${Math.round(place.estimatedPriceEur)}`);
     dataPoints += 1;
   }
 
-  // ===== AI/분위기 기반 이유 =====
+  // 페르소나 매칭 이유
   if (place.personaFitReason && reasons.length < 4) {
     reasons.push(place.personaFitReason);
   }
@@ -566,24 +498,27 @@ function generateSelectionReasons(place: PlaceResult): { reasons: string[]; conf
   // 바이브 태그 기반
   if (place.vibeTags && place.vibeTags.length > 0 && reasons.length < 4) {
     const vibeLabels: Record<string, string> = {
-      Healing: '힐링', Adventure: '모험', Hotspot: '핫플',
-      Foodie: '미식', Shopping: '쇼핑', Culture: '문화'
+      Healing: "힐링",
+      Adventure: "모험",
+      Hotspot: "핫플",
+      Foodie: "미식",
+      Shopping: "쇼핑",
+      Culture: "문화",
     };
-    const tags = place.vibeTags.map(v => vibeLabels[v] || v).join(', ');
+    const tags = place.vibeTags.map((v) => vibeLabels[v] || v).join(", ");
     reasons.push(`${tags} 분위기 매칭`);
   }
 
-  // ===== 최소 2개 보장 (부족하면 실용적 이유 추가) =====
+  // 최소 2개 보장
+  if (reasons.length < 2 && place.description) {
+    reasons.push(
+      place.description.length > 60
+        ? place.description.substring(0, 57) + "..."
+        : place.description,
+    );
+  }
   if (reasons.length < 2) {
-    if ((place.vibeScore ?? 0) > 5) {
-      reasons.push(`AI 분위기 분석 높은 평가 (${place.vibeScore!.toFixed(1)}/10)`);
-    }
-    if (reasons.length < 2 && place.description) {
-      reasons.push(place.description.length > 60 ? place.description.substring(0, 57) + '...' : place.description);
-    }
-    if (reasons.length < 2) {
-      reasons.push('여행 동선 최적화 기반 선정');
-    }
+    reasons.push("여행 동선 최적화 기반 선정");
   }
 
   // ===== 신뢰도 레벨 =====
@@ -591,319 +526,33 @@ function generateSelectionReasons(place: PlaceResult): { reasons: string[]; conf
   // medium: 2개 데이터 소스 또는 TripAdvisor 데이터 있음
   // low: 1개 데이터 소스
   // minimal: 데이터 없음, AI 추천만
-  let confidence: 'high' | 'medium' | 'low' | 'minimal';
+  let confidence: "high" | "medium" | "low" | "minimal";
   if (dataPoints >= 4) {
-    confidence = 'high';
+    confidence = "high";
   } else if (dataPoints >= 2) {
-    confidence = 'medium';
+    confidence = "medium";
   } else if (dataPoints >= 1) {
-    confidence = 'low';
+    confidence = "low";
   } else {
-    confidence = 'minimal';
+    confidence = "minimal";
   }
 
   return { reasons: reasons.slice(0, 5), confidence }; // 최대 5개
 }
 
-function getPlaceTypesForVibes(vibes: Vibe[]): string[] {
-  const vibeToPlaceTypes: Record<Vibe, string[]> = {
-    Healing: ['spa', 'park', 'natural_feature', 'beach'],
-    Adventure: ['tourist_attraction', 'hiking_area', 'amusement_park', 'zoo'],
-    Hotspot: ['night_club', 'bar', 'shopping_mall', 'landmark'],
-    Foodie: ['restaurant', 'cafe', 'bakery', 'food'],
-    Shopping: ['shopping_mall', 'store', 'department_store', 'market'],
-    Culture: ['museum', 'art_gallery', 'library', 'historical_landmark'],
-  };
-
-  const types = new Set<string>();
-  for (const vibe of vibes) {
-    for (const type of vibeToPlaceTypes[vibe] || []) {
-      types.add(type);
-    }
-  }
-  return Array.from(types);
-}
-
-/**
- * 장소의 Vibe 점수 계산
- * 
- * 🎯 가중치 적용 로직:
- * - 사용자가 선택한 vibes와 장소의 vibeTags 매칭도 반영
- * - 선택 순서에 따라 가중치: 1순위(50%) > 2순위(30%) > 3순위(20%)
- * - 2개 선택시: 60% : 40%
- */
-function calculatePlaceVibeScore(
-  place: any,
-  vibes: Vibe[],
-  vibeWeights?: { vibe: Vibe; weight: number; percentage: number }[]
-): number {
-  const rating = place.rating || 3;
-  const reviewCount = place.userRatingCount || 0;
-  const reviewBonus = Math.min(2, Math.log10(reviewCount + 1) * 0.5);
-
-  // 기본 점수 (평점 기반)
-  let baseScore = Math.min(8, rating * 1.2 + reviewBonus);
-
-  // 🎯 Vibe 매칭 보너스 (사용자 선택 가중치 적용)
-  const placeVibes = mapPlaceTypesToVibes(place.types || []);
-  let vibeMatchBonus = 0;
-
-  if (vibeWeights && vibeWeights.length > 0) {
-    // 가중치 기반 매칭
-    for (const vw of vibeWeights) {
-      if (placeVibes.includes(vw.vibe)) {
-        // 매칭되면 가중치만큼 보너스 (최대 2점)
-        vibeMatchBonus += (vw.weight * 2);
-      }
-    }
-  } else if (vibes.length > 0) {
-    // 가중치 없으면 단순 매칭 (fallback)
-    const matchCount = vibes.filter(v => placeVibes.includes(v)).length;
-    vibeMatchBonus = Math.min(2, matchCount * 0.7);
-  }
-
-  return Math.min(10, baseScore + vibeMatchBonus);
-}
-
-function getPersonaFitReason(placeTypes: string[], vibes: Vibe[]): string {
-  if (vibes.includes('Foodie') && placeTypes.some(t => ['restaurant', 'cafe', 'bakery'].includes(t))) {
-    return '미식 탐험에 완벽한 장소';
-  }
-  if (vibes.includes('Culture') && placeTypes.some(t => ['museum', 'art_gallery'].includes(t))) {
-    return '문화적 경험을 위한 최적의 선택';
-  }
-  if (vibes.includes('Healing') && placeTypes.some(t => ['spa', 'park'].includes(t))) {
-    return '힐링과 휴식을 위한 공간';
-  }
-  if (vibes.includes('Adventure') && placeTypes.some(t => ['tourist_attraction', 'amusement_park'].includes(t))) {
-    return '모험과 새로운 경험의 장소';
-  }
-  return '여행의 특별한 순간을 만들어줄 곳';
-}
-
-function mapPlaceTypesToVibes(placeTypes: string[]): Vibe[] {
-  const vibes: Vibe[] = [];
-  if (placeTypes.some(t => ['spa', 'park', 'beach'].includes(t))) vibes.push('Healing');
-  if (placeTypes.some(t => ['restaurant', 'cafe', 'bakery', 'food'].includes(t))) vibes.push('Foodie');
-  if (placeTypes.some(t => ['museum', 'art_gallery', 'library'].includes(t))) vibes.push('Culture');
-  if (placeTypes.some(t => ['tourist_attraction', 'amusement_park'].includes(t))) vibes.push('Adventure');
-  if (placeTypes.some(t => ['night_club', 'bar', 'shopping_mall'].includes(t))) vibes.push('Hotspot');
-  return vibes.length > 0 ? vibes : ['Healing'];
-}
-
-// ⚠️ 2026-05-15 = priceLevel 폐기 후 = travelStyle 만으로 추정
-function getPriceEstimate(_priceLevel: number | undefined, travelStyle: TravelStyle): string {
-  const labelByStyle: Record<TravelStyle, string> = {
-    Luxury: '비쌈',
-    Premium: '보통',
-    Reasonable: '보통',
-    Economic: '저렴함',
-  };
-  return labelByStyle[travelStyle] || '보통';
-}
-
-
-
-async function generatePlacesWithGemini(
-  formData: TripFormData,
-  vibeWeights: { vibe: Vibe; weight: number; percentage: number }[],
-  requiredPlaceCount: number = 12,
-): Promise<PlaceResult[]> {
-  const vibeDescription = vibeWeights
-    .map(v => `${v.vibe}(${v.percentage}%)`)
-    .join(', ');
-
-  // 여행 페이스 한글 변환 (프론트엔드 기준 Normal 사용)
-  const paceKorean = formData.travelPace === 'Packed' ? '빡빡하게'
-    : formData.travelPace === 'Normal' ? '보통'
-      : '여유롭게';
-
-  // 페이스 설정 (프론트엔드 기준 Normal)
-  const paceConfig = PACE_CONFIG[formData.travelPace || 'Normal'];
-
-  // ⚠️ 2026-05-23 = getKoreanPopularPlacesForPrompt 삭제 (= 인스타/유튜브/네이버 보조 테이블 폐기)
-  const dbPopularitySection = '';
-
-  // ===== 🎯 주인공 컨텍스트 생성 (가중치 1순위) =====
-  // birthDate: 사용자 본인 생년월일 → 가족 연령 추정에 활용
-  const protagonistContext = generatePromptContext({
-    curationFocus: (formData.curationFocus as any) || 'Everyone',
-    companionType: (formData.companionType as any) || 'Couple',
-    companionCount: formData.companionCount || 2,
-    companionAges: formData.companionAges,
-    vibes: vibeWeights.map(v => v.vibe),
-    destination: formData.destination,
-    birthDate: formData.birthDate,  // 🎯 사용자 연령 → Gemini 프롬프트
-  });
-
-  // 주인공 문장 (로그 및 저장용)
-  const protagonistInfo = generateProtagonistSentence({
-    curationFocus: (formData.curationFocus as any) || 'Everyone',
-    companionType: (formData.companionType as any) || 'Couple',
-    companionCount: formData.companionCount || 2,
-    companionAges: formData.companionAges,
-    vibes: vibeWeights.map(v => v.vibe),
-    destination: formData.destination,
-    birthDate: formData.birthDate,  // 🎯 사용자 연령
-  });
-
-  console.log(`[Itinerary] 🎯 주인공: ${protagonistInfo.sentence}`);
-
-  const prompt = `당신은 전문 여행 플래너입니다. 다음 조건에 맞는 ${formData.destination} 여행지를 추천해주세요.
-
-${protagonistContext}
-
-【사용자 여행 조건】
-- 바이브 선호: ${vibeDescription}
-- 여행 스타일: ${formData.travelStyle}
-- 여행 밀도: ${paceKorean} (하루 ${paceConfig.maxSlotsPerDay}곳, ${paceConfig.slotDurationMinutes}분 간격)
-- 이동 스타일: ${formData.mobilityStyle === 'WalkMore' ? '많이 걷기' : '이동 최소화'}
-- 동행: ${formData.companionType}, ${formData.companionCount}명
-
-【중요한 추천 기준 - 5단계 가중치】
-1. ⭐ 주인공 (위 "일정 생성의 주인공" 섹션 최우선 반영)
-2. 누구랑 (동행 타입에 맞는 장소 우선)
-3. 바이브 선호 (사용자가 선택한 취향 반영)
-4. 예산 수준 (${formData.travelStyle})
-5. 실제 정보 (영업 중인 곳, 리뷰 좋은 곳)
-
-【동선 최적화 규칙】
-1. 같은 도시/지역의 장소들을 연속 일자에 배치할 수 있도록 그룹핑
-2. 도시 간 이동이 필요한 경우, 인접한 도시끼리 묶기
-3. 각 장소에 반드시 city(도시명)와 region(지역/구역) 정보 포함
-4. 오전-점심-오후-저녁 시간대에 맞는 장소 배치 (식당은 점심/저녁에)
-
-【한국인 선호도 반영 - 최우선 규칙】
-한국인 여행자들이 실제로 많이 방문하고, SNS에서 인기 있는 장소를 최우선으로 추천해주세요.
-${dbPopularitySection}
-
-【⚠️ 반드시 아래 JSON 형식으로만 응답하세요. 다른 텍스트 없이 JSON만 출력하세요.】
-
-JSON 응답 형식 (엄격히 준수):
-{
-  "places": [
-    {
-      "name": "실제 존재하는 장소의 정확한 이름 (구글맵 검색 가능해야 함)",
-      "description": "한국인에게 인기인 구체적 이유 (예: 인스타 핫플, 유튜브 ○○채널 추천, 리뷰 1000+개)",
-      "city": "도시명",
-      "region": "지역/구역",
-      "lat": 48.8584,
-      "lng": 2.2945,
-      "vibeScore": 8,
-      "koreanPopularity": 9,
-      "tags": ["restaurant", "landmark"],
-      "vibeTags": ["Foodie", "Culture"],
-      "recommendedTime": "morning",
-      "priceEstimate": "€20-30"
-    }
-  ]
-}
-
-필수 규칙:
-- name: 반드시 실제 존재하는 장소명 (가상 장소 금지)
-- lat/lng: 반드시 실제 좌표 (0이면 안 됨)
-- vibeScore: 1~10 정수
-- vibeTags: 반드시 ["Healing","Adventure","Hotspot","Foodie","Shopping","Culture"] 중에서만 선택
-- recommendedTime: 반드시 "morning"|"lunch"|"afternoon"|"evening" 중 하나
-- 식당은 vibeTags에 반드시 "Foodie" 포함
-
-【🍽️ 식사 장소 필수 포함】
-- 전체 장소 중 최소 40%는 식당/카페/레스토랑으로 포함해주세요
-- 점심/저녁용 식당은 반드시 "Foodie" vibeTags에 포함
-- 현지인과 한국인 모두에게 인기 있는 맛집 우선
-
-${formData.destination}의 실제 유명한 장소들을 추천해주세요. 정확히 ${requiredPlaceCount}개 장소를 추천해주세요. 
-도시별로 균형있게 분배하고, 각 도시 내에서는 지역별로 묶어주세요.`;
-
-  try {
-    // API 키 존재 확인
-    const apiKey = getGeminiApiKey();
-    if (!apiKey) {
-      console.error('[Itinerary] ❌ Gemini API 키 없음 - AI 장소 생성 불가');
-      throw new Error('GEMINI_API_KEY_MISSING');
-    }
-
-    console.log(`[Itinerary] 🤖 Gemini에 ${requiredPlaceCount}개 장소 요청 중...`);
-
-    const response = await getAI().models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: [{ role: "user", parts: [{ text: prompt }] }],
-      config: {
-        thinkingConfig: { thinkingBudget: 0 },
-      } as any,
-    });
-
-    const text = response.text || "";
-    console.log(`[Itinerary] 🤖 Gemini 응답 수신 (${text.length}자)`);
-
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-
-    if (jsonMatch) {
-      const result = JSON.parse(jsonMatch[0]);
-      const placesRaw = result.places || [];
-
-      if (placesRaw.length === 0) {
-        console.warn('[Itinerary] ⚠️ Gemini가 장소를 0개 반환함');
-      } else {
-        console.log(`[Itinerary] ✅ Gemini가 ${placesRaw.length}개 장소 반환`);
-      }
-
-      // JSON 스키마 검증 - 각 장소에 필수 필드가 있는지 확인
-      return placesRaw
-        .filter((place: any) => {
-          if (!place.name) {
-            console.warn('[Itinerary] ⚠️ 이름 없는 장소 제외:', place);
-            return false;
-          }
-          if (!place.lat || !place.lng) {
-            console.warn(`[Itinerary] ⚠️ 좌표 없는 장소: ${place.name} (lat=${place.lat}, lng=${place.lng})`);
-            // 좌표 없어도 일단 포함 (0,0으로 대체)
-          }
-          return true;
-        })
-        .map((place: any, index: number) => ({
-          id: `gemini-${Date.now()}-${index}`,
-          name: place.name,
-          description: place.description || '',
-          lat: place.lat || 0,
-          lng: place.lng || 0,
-          vibeScore: Math.min(10, Math.max(1, place.vibeScore || 7)),
-          confidenceScore: 7,
-          sourceType: "Gemini AI",
-          personaFitReason: place.personaFitReason || place.description || "AI가 추천한 장소",
-          tags: Array.isArray(place.tags) ? place.tags : [],
-          vibeTags: Array.isArray(place.vibeTags) ? place.vibeTags.filter((v: string) =>
-            ['Healing', 'Adventure', 'Hotspot', 'Foodie', 'Shopping', 'Culture'].includes(v)
-          ) : [],
-          image: "",
-          priceEstimate: place.priceEstimate || "보통",
-          placeTypes: [],
-          recommendedTime: place.recommendedTime,
-          city: place.city || formData.destination,
-          region: place.region || "",
-          koreanPopularityScore: 0, // 이후 enrichPlacesWithKoreanPopularity에서 계산
-          googleMapsUrl: "", // Gemini 장소는 Google Maps URI 없음
-        }));
-    } else {
-      console.error('[Itinerary] ❌ Gemini 응답에서 JSON을 찾을 수 없음');
-      console.error('[Itinerary] 응답 내용 (첫 500자):', text.slice(0, 500));
-    }
-  } catch (error: any) {
-    if (error.message === 'GEMINI_API_KEY_MISSING') {
-      throw error; // API 키 없는 에러는 상위로 전파
-    }
-    console.error("[Itinerary] ❌ Gemini 장소 생성 실패:", error?.message || error);
-    console.error("[Itinerary] 에러 상세:", error?.status || 'N/A', error?.statusText || 'N/A');
-  }
-
-  return [];
-}
+// ⚠️ 수정금지(승인필요) 2026-05-24 = MIX path helper 모두 폐기
+// = 옛 getPlaceTypesForVibes / calculatePlaceVibeScore / getPersonaFitReason /
+//   mapPlaceTypesToVibes / getPriceEstimate = 모두 삭제
 
 function calculateDayCount(startDate: string, endDate: string): number {
-  console.log(`[Itinerary] Date inputs: startDate="${startDate}", endDate="${endDate}"`);
+  console.log(
+    `[Itinerary] Date inputs: startDate="${startDate}", endDate="${endDate}"`,
+  );
   const start = new Date(startDate);
   const end = new Date(endDate);
-  console.log(`[Itinerary] Parsed dates: start=${start.toISOString()}, end=${end.toISOString()}`);
+  console.log(
+    `[Itinerary] Parsed dates: start=${start.toISOString()}, end=${end.toISOString()}`,
+  );
   const diffTime = Math.abs(end.getTime() - start.getTime());
   const dayCount = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
   console.log(`[Itinerary] Calculated dayCount: ${dayCount}`);
@@ -914,7 +563,7 @@ function groupPlacesByCity(places: PlaceResult[]): Map<string, PlaceResult[]> {
   const cityGroups = new Map<string, PlaceResult[]>();
 
   for (const place of places) {
-    const city = place.city || 'Unknown';
+    const city = place.city || "Unknown";
     if (!cityGroups.has(city)) {
       cityGroups.set(city, []);
     }
@@ -924,13 +573,21 @@ function groupPlacesByCity(places: PlaceResult[]): Map<string, PlaceResult[]> {
   return cityGroups;
 }
 
-function calculateDistance(lat1: number, lng1: number, lat2: number, lng2: number): number {
+function calculateDistance(
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number,
+): number {
   const R = 6371;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLng = (lng2 - lng1) * Math.PI / 180;
-  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLng / 2) *
+      Math.sin(dLng / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 }
@@ -953,12 +610,17 @@ function optimizeCityOrder(cityGroups: Map<string, PlaceResult[]>): string[] {
     const lastCity = ordered[ordered.length - 1];
     const lastCoords = cityCoords.get(lastCity)!;
 
-    let nearestCity = '';
+    let nearestCity = "";
     let minDistance = Infinity;
 
     for (const city of remaining) {
       const coords = cityCoords.get(city)!;
-      const dist = calculateDistance(lastCoords.lat, lastCoords.lng, coords.lat, coords.lng);
+      const dist = calculateDistance(
+        lastCoords.lat,
+        lastCoords.lng,
+        coords.lat,
+        coords.lng,
+      );
       if (dist < minDistance) {
         minDistance = dist;
         nearestCity = city;
@@ -974,15 +636,15 @@ function optimizeCityOrder(cityGroups: Map<string, PlaceResult[]>): string[] {
 
 /**
  * ===== Pipeline V3: 2단계 파이프라인 진입점 =====
- * 
+ *
  * Step 1: Gemini 완전 일정 생성 (일차별/동선별, 3~5초)
  * Step 2: 데이터 채우기 (DB매칭+enrichment+실시간, 2~4초 병렬)
- * 
+ *
  * 기존 4-Agent 순차 12~18초 → 2단계 병렬 5~9초
  */
 // ⚠️ 수정금지(승인필요) 2026-05-20 = Verifier 완전 폐기 = 1 회 재시도 제거 (= 사용자 SSOT)
 export async function generateItinerary(formData: TripFormData) {
-  const { runPipelineV3 } = await import('./agents/pipeline-v3');
+  const { runPipelineV3 } = await import("./agents/pipeline-v3");
   return await runPipelineV3(formData as any);
 }
 
@@ -995,63 +657,102 @@ export const _enrichmentPipeline = {
     placesArr: PlaceResult[],
     formData: TripFormData,
     skeleton: {
-      daySlotsConfig: { day: number; startTime: string; endTime: string; slots: number }[];
+      daySlotsConfig: {
+        day: number;
+        startTime: string;
+        endTime: string;
+        slots: number;
+      }[];
       travelPace: TravelPace;
       requiredPlaceCount: number;
-    }
+    },
   ): Promise<{
     scoredPlaces: PlaceResult[];
-    schedule: { day: number; slot: string; place: PlaceResult; startTime: string; endTime: string; isMealSlot: boolean; mealType?: 'lunch' | 'dinner' }[];
+    schedule: {
+      day: number;
+      slot: string;
+      place: PlaceResult;
+      startTime: string;
+      endTime: string;
+      isMealSlot: boolean;
+      mealType?: "lunch" | "dinner";
+    }[];
     realityCheck: { weather: string; crowd: string; status: string };
   }> {
-    const vibes = formData.vibes || ['Foodie', 'Culture', 'Healing'];
+    const vibes = formData.vibes || ["Foodie", "Culture", "Healing"];
     const { daySlotsConfig, travelPace, requiredPlaceCount } = skeleton;
 
     // ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = 점수 시스템 완전 폐기
     // = PSR.rank 단일 (= ag2-DB 가 카테고리/tier 별 RC 정렬 = 이미 SSOT)
     // = 옛 calculateFinalScore + calculateDynamicWeights + VIBE_WEIGHT_MATRIX + detectDataGrade = 모두 폐기
-    console.log(`[AG3] PSR.rank 단일 SSOT (= 옛 점수 시스템 폐기) | 바이브: ${vibes.join(',')}`);
+    console.log(
+      `[AG3] PSR.rank 단일 SSOT (= 옛 점수 시스템 폐기) | 바이브: ${vibes.join(",")}`,
+    );
 
-    placesArr = placesArr.map(p => {
-      const { reasons, confidence } = generateSelectionReasons(p);
-      const rank = p.rank ?? RANK_FALLBACK;
-      return {
-        ...p,
-        finalScore: Math.max(0, (NON_FOOD_MAX_RANK + 1) - rank),
-        selectionReasons: reasons,
-        confidenceLevel: confidence,
-      };
-    }).sort((a, b) => (b.finalScore || 0) - (a.finalScore || 0))
+    placesArr = placesArr
+      .map((p) => {
+        const { reasons, confidence } = generateSelectionReasons(p);
+        const rank = p.rank ?? RANK_FALLBACK;
+        return {
+          ...p,
+          finalScore: Math.max(0, NON_FOOD_MAX_RANK + 1 - rank),
+          selectionReasons: reasons,
+          confidenceLevel: confidence,
+        };
+      })
+      .sort((a, b) => (b.finalScore || 0) - (a.finalScore || 0))
       .slice(0, requiredPlaceCount + 5);
 
     placesArr.slice(0, 5).forEach((p, i) => {
-      console.log(`[AG3]   #${i + 1} ${p.name}: rank=${p.rank ?? '?'} finalScore=${(p.finalScore || 0).toFixed(2)}`);
+      console.log(
+        `[AG3]   #${i + 1} ${p.name}: rank=${p.rank ?? "?"} finalScore=${(p.finalScore || 0).toFixed(2)}`,
+      );
     });
 
     // 슬롯 분배
-    console.log(`[AG3] 슬롯 분배 시작: ${placesArr.length}곳 → ${daySlotsConfig.length}일 (pace: ${travelPace})`);
-    console.log(`[AG3] 식당: ${placesArr.filter(p => isFoodPlace(p)).length}곳, 일반: ${placesArr.filter(p => !isFoodPlace(p)).length}곳`);
+    console.log(
+      `[AG3] 슬롯 분배 시작: ${placesArr.length}곳 → ${daySlotsConfig.length}일 (pace: ${travelPace})`,
+    );
+    console.log(
+      `[AG3] 식당: ${placesArr.filter((p) => isFoodPlace(p)).length}곳, 일반: ${placesArr.filter((p) => !isFoodPlace(p)).length}곳`,
+    );
 
     const schedule = await distributePlacesWithUserTime(
-      placesArr, daySlotsConfig, travelPace, formData.travelStyle || 'Reasonable'
+      placesArr,
+      daySlotsConfig,
+      travelPace,
+      formData.travelStyle || "Reasonable",
     );
 
     console.log(`[AG3] 슬롯 분배 완료: ${schedule.length}개`);
     if (schedule.length === 0) {
-      console.error(`[AG3] ❌ 슬롯 분배 결과 0개! placesArr: ${placesArr.length}곳, daySlotsConfig: ${JSON.stringify(daySlotsConfig)}`);
+      console.error(
+        `[AG3] ❌ 슬롯 분배 결과 0개! placesArr: ${placesArr.length}곳, daySlotsConfig: ${JSON.stringify(daySlotsConfig)}`,
+      );
       // 비상 조치: 식당 태그 관계없이 모든 장소를 균등 분배
       console.log(`[AG3] 🚨 비상 분배 실행...`);
       let emergencySlotIdx = 0;
       for (const dayConfig of daySlotsConfig) {
-        for (let i = 0; i < dayConfig.slots && emergencySlotIdx < placesArr.length; i++) {
+        for (
+          let i = 0;
+          i < dayConfig.slots && emergencySlotIdx < placesArr.length;
+          i++
+        ) {
           const place = placesArr[emergencySlotIdx++];
-          const startH = parseInt(dayConfig.startTime.split(':')[0]) + i * 2;
+          const startH = parseInt(dayConfig.startTime.split(":")[0]) + i * 2;
           schedule.push({
             day: dayConfig.day,
-            slot: startH < 12 ? 'morning' : startH < 14 ? 'lunch' : startH < 18 ? 'afternoon' : 'evening',
+            slot:
+              startH < 12
+                ? "morning"
+                : startH < 14
+                  ? "lunch"
+                  : startH < 18
+                    ? "afternoon"
+                    : "evening",
             place,
-            startTime: `${startH.toString().padStart(2, '0')}:00`,
-            endTime: `${(startH + 2).toString().padStart(2, '0')}:00`,
+            startTime: `${startH.toString().padStart(2, "0")}:00`,
+            endTime: `${(startH + 2).toString().padStart(2, "0")}:00`,
             isMealSlot: false,
             mealType: undefined,
           });
@@ -1063,12 +764,17 @@ export const _enrichmentPipeline = {
     // 동선 최적화
     const dayCount = daySlotsConfig.length;
     for (let d = 1; d <= dayCount; d++) {
-      const daySlots = schedule.filter(s => s.day === d);
-      const nonMealPlaces = daySlots.filter(s => !s.isMealSlot).map(s => s.place);
+      const daySlots = schedule.filter((s) => s.day === d);
+      const nonMealPlaces = daySlots
+        .filter((s) => !s.isMealSlot)
+        .map((s) => s.place);
 
       if (nonMealPlaces.length > 2) {
-        const dayAccom = formData.dayAccommodations?.find(a => a.day === d);
-        const depCoords = dayAccom?.coords || formData.accommodationCoords || formData.destinationCoords;
+        const dayAccom = formData.dayAccommodations?.find((a) => a.day === d);
+        const depCoords =
+          dayAccom?.coords ||
+          formData.accommodationCoords ||
+          formData.destinationCoords;
         const optimized = optimizeDayRoute(nonMealPlaces, depCoords);
 
         let optIdx = 0;
@@ -1090,7 +796,7 @@ export const _enrichmentPipeline = {
 
 /**
  * 사용자 시간 기반으로 장소를 슬롯에 분배
- * 
+ *
  * ===== 식당 선정 4대 원칙 (1차 목표 확정) =====
  * 1순위: 슬롯 강제 — 하루 점심 1개 + 저녁 1개, 그 외 슬롯에 식당 배치 불가
  * 2순위: 동선 고려 — 전후 장소와 가까운 식당 우선 선택
@@ -1099,25 +805,54 @@ export const _enrichmentPipeline = {
  */
 async function distributePlacesWithUserTime(
   places: PlaceResult[],
-  daySlotsConfig: { day: number; startTime: string; endTime: string; slots: number }[],
+  daySlotsConfig: {
+    day: number;
+    startTime: string;
+    endTime: string;
+    slots: number;
+  }[],
   travelPace: TravelPace,
-  travelStyle: TravelStyle = 'Reasonable'
-): Promise<{ day: number; slot: string; place: PlaceResult; startTime: string; endTime: string; isMealSlot: boolean; mealType?: 'lunch' | 'dinner' }[]> {
-  const schedule: { day: number; slot: string; place: PlaceResult; startTime: string; endTime: string; isMealSlot: boolean; mealType?: 'lunch' | 'dinner' }[] = [];
+  travelStyle: TravelStyle = "Reasonable",
+): Promise<
+  {
+    day: number;
+    slot: string;
+    place: PlaceResult;
+    startTime: string;
+    endTime: string;
+    isMealSlot: boolean;
+    mealType?: "lunch" | "dinner";
+  }[]
+> {
+  const schedule: {
+    day: number;
+    slot: string;
+    place: PlaceResult;
+    startTime: string;
+    endTime: string;
+    isMealSlot: boolean;
+    mealType?: "lunch" | "dinner";
+  }[] = [];
   const paceConfig = PACE_CONFIG[travelPace];
 
   // 🍽️ 식당/카페 장소 분리 (식당은 오직 점심/저녁 슬롯에만 사용)
-  const foodPlaces = places.filter(p => isFoodPlace(p));
-  const nonFoodPlaces = places.filter(p => !isFoodPlace(p));
+  const foodPlaces = places.filter((p) => isFoodPlace(p));
+  const nonFoodPlaces = places.filter((p) => !isFoodPlace(p));
 
-  console.log(`[Itinerary] 🍽️ 식사 장소: ${foodPlaces.length}곳, 일반 장소: ${nonFoodPlaces.length}곳 (총 ${places.length}곳)`);
+  console.log(
+    `[Itinerary] 🍽️ 식사 장소: ${foodPlaces.length}곳, 일반 장소: ${nonFoodPlaces.length}곳 (총 ${places.length}곳)`,
+  );
   if (foodPlaces.length > 0) {
-    console.log(`[Itinerary]   식당 목록: ${foodPlaces.map(p => `${p.name}(tags:${p.tags?.join(',') || '없음'})`).join(', ')}`);
+    console.log(
+      `[Itinerary]   식당 목록: ${foodPlaces.map((p) => `${p.name}(tags:${p.tags?.join(",") || "없음"})`).join(", ")}`,
+    );
   }
   if (nonFoodPlaces.length === 0) {
     console.error(`[Itinerary] ❌ 일반 장소 0곳! 전체 장소 태그 점검:`);
-    places.forEach(p => {
-      console.log(`  - ${p.name}: tags=${JSON.stringify(p.tags)}, placeTypes=${JSON.stringify(p.placeTypes)}, vibeTags=${JSON.stringify(p.vibeTags)}`);
+    places.forEach((p) => {
+      console.log(
+        `  - ${p.name}: tags=${JSON.stringify(p.tags)}, placeTypes=${JSON.stringify(p.placeTypes)}, vibeTags=${JSON.stringify(p.vibeTags)}`,
+      );
     });
   }
 
@@ -1125,26 +860,30 @@ async function distributePlacesWithUserTime(
   // = dayCount 기반 zone = Day 1 core / Day 2 outskirt / Day 3+ mixed = 자연 클러스터링
 
   const dayCount = daySlotsConfig.length;
-  const dayZoneMap: Array<'core' | 'outskirt' | 'mixed'> = [];
+  const dayZoneMap: Array<"core" | "outskirt" | "mixed"> = [];
   for (let d = 0; d < dayCount; d++) {
-    if (dayCount === 1) dayZoneMap.push('core');
-    else if (d === 0) dayZoneMap.push('core');
-    else if (d === 1) dayZoneMap.push('outskirt');
-    else dayZoneMap.push('mixed');
+    if (dayCount === 1) dayZoneMap.push("core");
+    else if (d === 0) dayZoneMap.push("core");
+    else if (d === 1) dayZoneMap.push("outskirt");
+    else dayZoneMap.push("mixed");
   }
-  console.log(`[Itinerary] 🗺️ 일자별 zone 매핑: ${dayZoneMap.map((z, i) => `Day ${i + 1}=${z}`).join(' / ')}`);
+  console.log(
+    `[Itinerary] 🗺️ 일자별 zone 매핑: ${dayZoneMap.map((z, i) => `Day ${i + 1}=${z}`).join(" / ")}`,
+  );
 
   // 비식당 + 식당 zone 분리 (= PlaceResult.dayZone = 'core' / 'outskirt' / null)
-  const coreNonFood = nonFoodPlaces.filter(p => p.dayZone !== 'outskirt');
-  const outskirtNonFood = nonFoodPlaces.filter(p => p.dayZone === 'outskirt');
-  const coreFood = foodPlaces.filter(p => p.dayZone !== 'outskirt');
-  const outskirtFood = foodPlaces.filter(p => p.dayZone === 'outskirt');
-  console.log(`[Itinerary] 🌿 비식당 zone: core ${coreNonFood.length} / outskirt ${outskirtNonFood.length} | 🍽️ 식당 zone: core ${coreFood.length} / outskirt ${outskirtFood.length}`);
+  const coreNonFood = nonFoodPlaces.filter((p) => p.dayZone !== "outskirt");
+  const outskirtNonFood = nonFoodPlaces.filter((p) => p.dayZone === "outskirt");
+  const coreFood = foodPlaces.filter((p) => p.dayZone !== "outskirt");
+  const outskirtFood = foodPlaces.filter((p) => p.dayZone === "outskirt");
+  console.log(
+    `[Itinerary] 🌿 비식당 zone: core ${coreNonFood.length} / outskirt ${outskirtNonFood.length} | 🍽️ 식당 zone: core ${coreFood.length} / outskirt ${outskirtFood.length}`,
+  );
 
   // 일자별 풀 = zone 정책 적용 (= mixed = core + outskirt 합쳐서 = nearest-neighbor)
   const dayPools: PlaceResult[][] = dayZoneMap.map((zone) => {
-    if (zone === 'core') return [...coreNonFood];
-    if (zone === 'outskirt') return [...outskirtNonFood];
+    if (zone === "core") return [...coreNonFood];
+    if (zone === "outskirt") return [...outskirtNonFood];
     return [...coreNonFood, ...outskirtNonFood]; // mixed
   });
 
@@ -1155,7 +894,13 @@ async function distributePlacesWithUserTime(
     foodWithScores.push({ place: fp, restaurantScore: score });
   }
 
-  console.log(`[Itinerary] 🍽️ 식당 점수 계산 완료 (${foodWithScores.length}곳, 상위: ${foodWithScores.sort((a, b) => b.restaurantScore - a.restaurantScore).slice(0, 3).map(f => `${f.place.name}=${f.restaurantScore.toFixed(1)}`).join(', ')})`);
+  console.log(
+    `[Itinerary] 🍽️ 식당 점수 계산 완료 (${foodWithScores.length}곳, 상위: ${foodWithScores
+      .sort((a, b) => b.restaurantScore - a.restaurantScore)
+      .slice(0, 3)
+      .map((f) => `${f.place.name}=${f.restaurantScore.toFixed(1)}`)
+      .join(", ")})`,
+  );
 
   // === 식사 예산 정보 (35:65 비율) ===
   const mealBudget = MEAL_BUDGET[travelStyle];
@@ -1169,14 +914,14 @@ async function distributePlacesWithUserTime(
     candidates: { place: PlaceResult; restaurantScore: number }[],
     prevPlace: PlaceResult | null,
     mealBudgetMax: number,
-    usedIds: Set<string>
+    usedIds: Set<string>,
   ): { place: PlaceResult; restaurantScore: number } | null {
     // 사용된 식당 제외
-    const available = candidates.filter(c => !usedIds.has(c.place.id));
+    const available = candidates.filter((c) => !usedIds.has(c.place.id));
     if (available.length === 0) return null;
 
     // 1. 가격대 필터 (= mealBudgetMax 초과 = 30% 이내 허용 = 그 외 제외)
-    const inBudget = available.filter(c => {
+    const inBudget = available.filter((c) => {
       const price = c.place.estimatedPriceEur;
       if (price === undefined || price <= 0) return true; // 가격 정보 X = 통과 (= 풀 자체 신뢰)
       return price <= mealBudgetMax * 1.3; // 30% 이내 초과 허용
@@ -1187,19 +932,24 @@ async function distributePlacesWithUserTime(
     // = 옛 Euclidean (= 평면 근사) = lng 거리 과대평가 (= 위도 48° → lng 1° = 74km ≠ lat 1° = 111km) = 시정
     if (!prevPlace || !prevPlace.lat || !prevPlace.lng) {
       const winner = pool[0];
-      console.log(`[Restaurant선정] ${winner.place.name}: 이전슬롯 X = 1등 (€${winner.place.estimatedPriceEur ?? '?'})`);
+      console.log(
+        `[Restaurant선정] ${winner.place.name}: 이전슬롯 X = 1등 (€${winner.place.estimatedPriceEur ?? "?"})`,
+      );
       return winner;
     }
 
-    const scored = pool.map(c => {
-      const distKm = (c.place.lat && c.place.lng)
-        ? haversineKm(prevPlace.lat, prevPlace.lng, c.place.lat, c.place.lng)
-        : 999;
+    const scored = pool.map((c) => {
+      const distKm =
+        c.place.lat && c.place.lng
+          ? haversineKm(prevPlace.lat, prevPlace.lng, c.place.lat, c.place.lng)
+          : 999;
       return { ...c, distKm };
     });
     scored.sort((a, b) => a.distKm - b.distKm);
     const winner = scored[0];
-    console.log(`[Restaurant선정] ${winner.place.name}: 거리=${winner.distKm.toFixed(2)}km (€${winner.place.estimatedPriceEur ?? '?'} ≤ €${mealBudgetMax})`);
+    console.log(
+      `[Restaurant선정] ${winner.place.name}: 거리=${winner.distKm.toFixed(2)}km (€${winner.place.estimatedPriceEur ?? "?"} ≤ €${mealBudgetMax})`,
+    );
     return winner;
   }
 
@@ -1210,10 +960,14 @@ async function distributePlacesWithUserTime(
 
   // === 기본 식당 placeholder 생성 함수 ===
   // ⚠️ 좌표: refPlace가 없거나 좌표가 0,0이면 같은 Day의 다른 장소 좌표 사용 (10875분 버그 방지)
-  function createDefaultRestaurant(type: 'lunch' | 'dinner', refPlace: PlaceResult | null): PlaceResult {
-    const typeLabel = type === 'lunch' ? '점심' : '저녁';
-    const budget = type === 'lunch' ? mealBudget.lunch : mealBudget.dinner;
-    const budgetLabel = type === 'lunch' ? mealBudget.lunchLabel : mealBudget.dinnerLabel;
+  function createDefaultRestaurant(
+    type: "lunch" | "dinner",
+    refPlace: PlaceResult | null,
+  ): PlaceResult {
+    const typeLabel = type === "lunch" ? "점심" : "저녁";
+    const budget = type === "lunch" ? mealBudget.lunch : mealBudget.dinner;
+    const budgetLabel =
+      type === "lunch" ? mealBudget.lunchLabel : mealBudget.dinnerLabel;
     // 좌표 결정: refPlace → 전체 장소 중 유효 좌표 → 기본값(파리 중심)
     let fallbackLat = 48.8566;
     let fallbackLng = 2.3522;
@@ -1222,7 +976,7 @@ async function distributePlacesWithUserTime(
       fallbackLng = refPlace.lng;
     } else {
       // 모든 장소 중 유효 좌표 찾기
-      const anyValid = places.find(p => p.lat !== 0 && p.lng !== 0);
+      const anyValid = places.find((p) => p.lat !== 0 && p.lng !== 0);
       if (anyValid) {
         fallbackLat = anyValid.lat;
         fallbackLng = anyValid.lng;
@@ -1234,20 +988,17 @@ async function distributePlacesWithUserTime(
       description: `${budgetLabel} 예산 내 현지 맛집 추천 (동선 고려)`,
       lat: fallbackLat,
       lng: fallbackLng,
-      vibeScore: 7,
-      confidenceScore: 6,
-      sourceType: 'Default',
+      sourceType: "Default",
       personaFitReason: `${budgetLabel} 예산에 맞는 현지 맛집`,
-      tags: ['restaurant', 'food'],
-      vibeTags: ['Foodie'],
-      image: '',
+      tags: ["restaurant", "food"],
+      vibeTags: ["Foodie"],
+      image: "",
       priceEstimate: budgetLabel,
-      placeTypes: ['restaurant'],
+      placeTypes: ["restaurant"],
       city: refPlace?.city,
       region: refPlace?.region,
-      koreanPopularityScore: 0,
-      googleMapsUrl: '',
-      estimatedPriceEur: budget, // 식사 예산을 입장료 대신 가격으로 설정
+      googleMapsUrl: "",
+      estimatedPriceEur: budget,
     };
   }
 
@@ -1257,25 +1008,30 @@ async function distributePlacesWithUserTime(
   for (let dIdx = 0; dIdx < daySlotsConfig.length; dIdx++) {
     const dayConfig = daySlotsConfig[dIdx];
     const { day, startTime, endTime, slots } = dayConfig;
-    const dayZone = dayZoneMap[dIdx];               // 본 일자 zone (= 'core' / 'outskirt' / 'mixed')
-    const dayPool = dayPools[dIdx];                  // 본 일자 비식당 풀
+    const dayZone = dayZoneMap[dIdx]; // 본 일자 zone (= 'core' / 'outskirt' / 'mixed')
+    const dayPool = dayPools[dIdx]; // 본 일자 비식당 풀
 
     // 본 일자 식당 풀 (= dayZone 매칭 + 부족 시 다른 zone fallback)
-    const primaryFoodPool: PlaceResult[] = dayZone === 'outskirt' ? outskirtFood
-      : dayZone === 'core' ? coreFood
-      : [...coreFood, ...outskirtFood];
-    const dayFoodWithScores = foodWithScores.filter(fs =>
-      primaryFoodPool.some(fp => fp.id === fs.place.id)
+    const primaryFoodPool: PlaceResult[] =
+      dayZone === "outskirt"
+        ? outskirtFood
+        : dayZone === "core"
+          ? coreFood
+          : [...coreFood, ...outskirtFood];
+    const dayFoodWithScores = foodWithScores.filter((fs) =>
+      primaryFoodPool.some((fp) => fp.id === fs.place.id),
     );
 
-    console.log(`[Itinerary] === Day ${day} (zone=${dayZone}) = 비식당 풀 ${dayPool.length} + 식당 풀 ${dayFoodWithScores.length} ===`);
+    console.log(
+      `[Itinerary] === Day ${day} (zone=${dayZone}) = 비식당 풀 ${dayPool.length} + 식당 풀 ${dayFoodWithScores.length} ===`,
+    );
 
     // === 1순위: 하루 점심 1개 + 저녁 1개 강제 (절대 규칙) ===
     let lunchAssigned = false;
     let dinnerAssigned = false;
 
-    const [startH, startM] = startTime.split(':').map(Number);
-    const [endH, endM] = endTime.split(':').map(Number);
+    const [startH, startM] = startTime.split(":").map(Number);
+    const [endH, endM] = endTime.split(":").map(Number);
     const dayStartMinutes = startH * 60 + startM;
     const dayEndMinutes = endH * 60 + endM;
 
@@ -1289,33 +1045,39 @@ async function distributePlacesWithUserTime(
 
       const slotStartMinutes = currentMinutes - paceConfig.slotDurationMinutes;
       const slotEndMinutes = currentMinutes;
-      const slotMidMinutes = Math.round((slotStartMinutes + slotEndMinutes) / 2);
+      const slotMidMinutes = Math.round(
+        (slotStartMinutes + slotEndMinutes) / 2,
+      );
       const slotMidHour = slotMidMinutes / 60;
-      const slotHour = parseInt(slotStart.split(':')[0]);
+      const slotHour = parseInt(slotStart.split(":")[0]);
 
-      let slotType: 'morning' | 'lunch' | 'afternoon' | 'evening';
-      if (slotMidHour < 12) slotType = 'morning';
-      else if (slotMidHour < 14.5) slotType = 'lunch';
-      else if (slotMidHour < 18) slotType = 'afternoon';
-      else slotType = 'evening';
+      let slotType: "morning" | "lunch" | "afternoon" | "evening";
+      if (slotMidHour < 12) slotType = "morning";
+      else if (slotMidHour < 14.5) slotType = "lunch";
+      else if (slotMidHour < 18) slotType = "afternoon";
+      else slotType = "evening";
 
       // ⚠️ 수정금지(승인필요) 2026-05-21 = 사용자 SSOT = 저녁 = 시간 고정 X = 일일 마지막 슬롯 = 무조건 dinner
       // = 마지막 슬롯 = dinner 우선 (= lunch 보다 = 짧은 일정 = 점심 양보 = dinner 강제)
       // = 점심 = 마지막 슬롯 외 + lunch window (= 11:30-14:00) 첫 매칭 슬롯
       let isMealSlot = false;
-      let mealType: 'lunch' | 'dinner' | undefined;
+      let mealType: "lunch" | "dinner" | undefined;
 
       const lunchWindowStart = 11.5 * 60; // 11:30
-      const lunchWindowEnd = 14 * 60;     // 14:00
+      const lunchWindowEnd = 14 * 60; // 14:00
       const isLastSlot = slotIdx === slots - 1;
 
       if (isLastSlot && !dinnerAssigned) {
         isMealSlot = true;
-        mealType = 'dinner';
+        mealType = "dinner";
         dinnerAssigned = true;
-      } else if (slotMidMinutes >= lunchWindowStart && slotMidMinutes <= lunchWindowEnd && !lunchAssigned) {
+      } else if (
+        slotMidMinutes >= lunchWindowStart &&
+        slotMidMinutes <= lunchWindowEnd &&
+        !lunchAssigned
+      ) {
         isMealSlot = true;
-        mealType = 'lunch';
+        mealType = "lunch";
         lunchAssigned = true;
       }
 
@@ -1325,22 +1087,38 @@ async function distributePlacesWithUserTime(
         // ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = zone pool 만 = fallback 제거
         // = 외곽 day 의 dinner = outskirt 식당만 (= core 식당 침투 차단 = 22km dinner 모순 시정)
         // = zone pool 소진 시 = placeholder (= 외곽 식당 부족 가시화)
-        const budgetMax = mealType === 'lunch' ? mealBudget.lunch : mealBudget.dinner;
-        const bestFood = selectBestRestaurant(dayFoodWithScores, prevPlaceInDay, budgetMax, usedFoodIds);
+        const budgetMax =
+          mealType === "lunch" ? mealBudget.lunch : mealBudget.dinner;
+        const bestFood = selectBestRestaurant(
+          dayFoodWithScores,
+          prevPlaceInDay,
+          budgetMax,
+          usedFoodIds,
+        );
 
         if (bestFood) {
           selectedPlace = bestFood.place;
           usedFoodIds.add(bestFood.place.id);
-          const budgetLabel = mealType === 'lunch' ? mealBudget.lunchLabel : mealBudget.dinnerLabel;
-          console.log(`[Itinerary] Day ${day} ${mealType}: ${selectedPlace.name} (${budgetLabel})`);
+          const budgetLabel =
+            mealType === "lunch"
+              ? mealBudget.lunchLabel
+              : mealBudget.dinnerLabel;
+          console.log(
+            `[Itinerary] Day ${day} ${mealType}: ${selectedPlace.name} (${budgetLabel})`,
+          );
         } else {
           selectedPlace = createDefaultRestaurant(mealType!, prevPlaceInDay);
-          console.log(`[Itinerary] Day ${day} ${mealType}: placeholder 생성 (= zone='${dayZone}' 식당 부족)`);
+          console.log(
+            `[Itinerary] Day ${day} ${mealType}: placeholder 생성 (= zone='${dayZone}' 식당 부족)`,
+          );
         }
       } else {
         // ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = 전역 usedNonFoodIds = 일자 간 중복 차단
         // = dayPool 의 이미 used 행 = skip (= 다른 일자 동일 zone 풀 = 같은 장소 중복 방지)
-        while (dayPoolIndex[dIdx] < dayPool.length && usedNonFoodIds.has(dayPool[dayPoolIndex[dIdx]].id)) {
+        while (
+          dayPoolIndex[dIdx] < dayPool.length &&
+          usedNonFoodIds.has(dayPool[dayPoolIndex[dIdx]].id)
+        ) {
           dayPoolIndex[dIdx]++;
         }
         if (dayPoolIndex[dIdx] < dayPool.length) {
@@ -1349,21 +1127,31 @@ async function distributePlacesWithUserTime(
           dayPoolIndex[dIdx]++;
         } else {
           // 본 일자 풀 소진 = fallback = 전역 미사용 비식당 (= 옛 schedule 기반 → 전역 Set 기반)
-          const remainingNonFood = nonFoodPlaces.filter(p => !usedNonFoodIds.has(p.id));
+          const remainingNonFood = nonFoodPlaces.filter(
+            (p) => !usedNonFoodIds.has(p.id),
+          );
           if (remainingNonFood.length > 0) {
             selectedPlace = remainingNonFood[0];
             usedNonFoodIds.add(selectedPlace.id);
-            console.log(`[Itinerary] Day ${day} slot ${slotIdx}: 일자 풀 소진 → 다른 일자 fallback: ${selectedPlace.name}`);
+            console.log(
+              `[Itinerary] Day ${day} slot ${slotIdx}: 일자 풀 소진 → 다른 일자 fallback: ${selectedPlace.name}`,
+            );
           } else {
             // 모든 비식당 소진 = 남은 식당 fallback
-            const remainingFood = foodWithScores.filter(f => !usedFoodIds.has(f.place.id));
+            const remainingFood = foodWithScores.filter(
+              (f) => !usedFoodIds.has(f.place.id),
+            );
             if (remainingFood.length > 0) {
               const fallback = remainingFood[0];
               selectedPlace = fallback.place;
               usedFoodIds.add(fallback.place.id);
-              console.log(`[Itinerary] Day ${day} slot ${slotIdx}: 모든 비식당 소진 → 식당 대체: ${selectedPlace.name}`);
+              console.log(
+                `[Itinerary] Day ${day} slot ${slotIdx}: 모든 비식당 소진 → 식당 대체: ${selectedPlace.name}`,
+              );
             } else {
-              console.log(`[Itinerary] Day ${day} slot ${slotIdx}: 모든 장소 소진, 남은 슬롯 스킵`);
+              console.log(
+                `[Itinerary] Day ${day} slot ${slotIdx}: 모든 장소 소진, 남은 슬롯 스킵`,
+              );
               continue;
             }
           }
@@ -1385,17 +1173,25 @@ async function distributePlacesWithUserTime(
   }
 
   // 식사 슬롯 검증 로그
-  const mealSlots = schedule.filter(s => s.isMealSlot);
-  const lunchCount = mealSlots.filter(s => s.mealType === 'lunch').length;
-  const dinnerCount = mealSlots.filter(s => s.mealType === 'dinner').length;
+  const mealSlots = schedule.filter((s) => s.isMealSlot);
+  const lunchCount = mealSlots.filter((s) => s.mealType === "lunch").length;
+  const dinnerCount = mealSlots.filter((s) => s.mealType === "dinner").length;
   const totalDays = daySlotsConfig.length;
-  console.log(`[Itinerary] 🍽️ 식사 배치 완료: ${totalDays}일 × (점심1+저녁1) = 점심${lunchCount}개 + 저녁${dinnerCount}개`);
-  console.log(`[Itinerary] 🍽️ 예산: 점심 ${mealBudget.lunchLabel}/인, 저녁 ${mealBudget.dinnerLabel}/인 (일일 총 €${mealBudget.dailyTotal}/인)`);
+  console.log(
+    `[Itinerary] 🍽️ 식사 배치 완료: ${totalDays}일 × (점심1+저녁1) = 점심${lunchCount}개 + 저녁${dinnerCount}개`,
+  );
+  console.log(
+    `[Itinerary] 🍽️ 예산: 점심 ${mealBudget.lunchLabel}/인, 저녁 ${mealBudget.dinnerLabel}/인 (일일 총 €${mealBudget.dailyTotal}/인)`,
+  );
 
   // 식당이 일반 슬롯에 들어갔는지 검증 (디버그)
-  const nonMealFoodSlots = schedule.filter(s => !s.isMealSlot && isFoodPlace(s.place));
+  const nonMealFoodSlots = schedule.filter(
+    (s) => !s.isMealSlot && isFoodPlace(s.place),
+  );
   if (nonMealFoodSlots.length > 0) {
-    console.log(`[Itinerary] ℹ️ 식당 ${nonMealFoodSlots.length}곳이 일반 슬롯에 대체 배치됨 (일반 장소 부족 시 정상)`);
+    console.log(
+      `[Itinerary] ℹ️ 식당 ${nonMealFoodSlots.length}곳이 일반 슬롯에 대체 배치됨 (일반 장소 부족 시 정상)`,
+    );
   }
 
   return schedule;
@@ -1411,7 +1207,13 @@ async function regenerateDay(params: {
   accommodationCoords?: { lat: number; lng: number };
   places: any[];
   formData?: any;
-}): Promise<{ day: number; places: any[]; departureTransit?: any; returnTransit?: any; transit?: any }> {
+}): Promise<{
+  day: number;
+  places: any[];
+  departureTransit?: any;
+  returnTransit?: any;
+  transit?: any;
+}> {
   const { day, accommodationCoords, places, formData } = params;
 
   if (!places || places.length === 0) {
@@ -1440,10 +1242,15 @@ async function regenerateDay(params: {
   }
 
   // 이동시간 재계산
-  const travelMode = formData?.mobilityStyle === 'WalkMore' ? 'WALK' as const
-    : formData?.mobilityStyle === 'Minimal' ? 'DRIVE' as const
-      : 'TRANSIT' as const;
-  const companionCount = formData ? getCompanionCount(formData.companionType || 'Solo') : 2;
+  const travelMode =
+    formData?.mobilityStyle === "WalkMore"
+      ? ("WALK" as const)
+      : formData?.mobilityStyle === "Minimal"
+        ? ("DRIVE" as const)
+        : ("TRANSIT" as const);
+  const companionCount = formData
+    ? getCompanionCount(formData.companionType || "Solo")
+    : 2;
 
   const transits: any[] = [];
 
@@ -1452,19 +1259,35 @@ async function regenerateDay(params: {
   let departureTransit: any;
   if (accommodationCoords && reordered.length > 0) {
     departureTransit = calcTransitHaversine(
-      { lat: accommodationCoords.lat, lng: accommodationCoords.lng, name: '🏨 숙소' },
+      {
+        lat: accommodationCoords.lat,
+        lng: accommodationCoords.lng,
+        name: "🏨 숙소",
+      },
       { lat: reordered[0].lat, lng: reordered[0].lng, name: reordered[0].name },
-      travelMode as TravelMode, companionCount,
+      travelMode as TravelMode,
+      companionCount,
     );
   }
 
   // 장소 간 이동
   for (let i = 0; i < reordered.length - 1; i++) {
-    transits.push(calcTransitHaversine(
-      { lat: reordered[i].lat, lng: reordered[i].lng, name: reordered[i].name },
-      { lat: reordered[i + 1].lat, lng: reordered[i + 1].lng, name: reordered[i + 1].name },
-      travelMode as TravelMode, companionCount,
-    ));
+    transits.push(
+      calcTransitHaversine(
+        {
+          lat: reordered[i].lat,
+          lng: reordered[i].lng,
+          name: reordered[i].name,
+        },
+        {
+          lat: reordered[i + 1].lat,
+          lng: reordered[i + 1].lng,
+          name: reordered[i + 1].name,
+        },
+        travelMode as TravelMode,
+        companionCount,
+      ),
+    );
   }
 
   // 마지막 장소 → 숙소
@@ -1473,8 +1296,13 @@ async function regenerateDay(params: {
     const last = reordered[reordered.length - 1];
     returnTransit = calcTransitHaversine(
       { lat: last.lat, lng: last.lng, name: last.name },
-      { lat: accommodationCoords.lat, lng: accommodationCoords.lng, name: '🏨 숙소' },
-      travelMode as TravelMode, companionCount,
+      {
+        lat: accommodationCoords.lat,
+        lng: accommodationCoords.lng,
+        name: "🏨 숙소",
+      },
+      travelMode as TravelMode,
+      companionCount,
     );
   }
 
@@ -1491,8 +1319,14 @@ async function regenerateDay(params: {
     returnTransit,
     transit: {
       transits: allTransits,
-      totalDuration: allTransits.reduce((sum: number, t: any) => sum + t.duration, 0),
-      totalCost: allTransits.reduce((sum: number, t: any) => sum + t.costTotal, 0),
+      totalDuration: allTransits.reduce(
+        (sum: number, t: any) => sum + t.duration,
+        0,
+      ),
+      totalCost: allTransits.reduce(
+        (sum: number, t: any) => sum + t.costTotal,
+        0,
+      ),
     },
   };
 }
@@ -1507,4 +1341,3 @@ export const itineraryGenerator = {
 export const enrichmentFunctions = {
   getRealityCheckForCity,
 };
-

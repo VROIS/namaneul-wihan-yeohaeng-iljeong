@@ -1,9 +1,9 @@
 /**
  * AG3: Data Matcher & Scorer (데이터 매칭/확정)
  * 🔗 Agent Protocol v1.0: 번역기 역할
- * 
+ *
  * 소요: 1~2초
- * 
+ *
  * 역할:
  * 1. AG3-pre: findCityUnified로 도시 매칭 + DB 장소 사전 로드 (병렬)
  * 2. AG2 추천 장소명(영어) → DB 매칭 (aliases 포함)
@@ -12,46 +12,66 @@
  * 5. 한국인 인기도, TripAdvisor, 포토스팟 점수 계산
  * 6. 동적 가중치 기반 최종 점수 산출
  * 7. 슬롯별 장소 확정 + 동선 최적화
- * 
+ *
  * 핵심: AG3 이후 모든 장소는 googlePlaceId(gid)로 식별
- * 
+ *
  * 의존: itinerary-generator.ts의 enrichment 함수들 사용
  */
 
-import { db } from '../../db';
+import { db } from "../../db";
 // ⚠️ 수정금지(승인필요) 2026-05-21 = celebrityPlaceEvidence DROP (= 1 행 폐기 = 사용자 SSOT) = import 제거
 // ⚠️ 2026-05-23 = places + placeImages import 제거 (= 사용자 SSOT = 보조 테이블 폐기 = PSR 단일)
-import { cities, placeSeedRaw } from '@shared/schema';
-import { eq, ilike, sql, inArray, and } from 'drizzle-orm';
-import type { AG1Output, AG3PreOutput, AG3Output, PlaceResult, ScheduleSlot, SeedCategory } from './types';
+import { cities, placeSeedRaw } from "@shared/schema";
+import { eq, ilike, sql, inArray, and } from "drizzle-orm";
+import type {
+  AG1Output,
+  AG3PreOutput,
+  AG3Output,
+  PlaceResult,
+  ScheduleSlot,
+  SeedCategory,
+} from "./types";
 // ⚠️ 2026-05-23 = addPlaceAlias import 제거 (= 폐기)
-import { findCityUnified, type CityResolveResult } from '../city-resolver';
+import { findCityUnified, type CityResolveResult } from "../city-resolver";
 // ⚠️ 수정금지(승인필요) 2026-05-15 = Google Places SKU 가드 (= SSOT §16)
 // = Enterprise+Atmosphere 33 필드 차단 = $40/1K 폭탄 방지
-import { validateFieldMask } from '../shared/google-places-sku';
+import { validateFieldMask } from "../shared/google-places-sku";
 // ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT = 이미지 폴백 단일 SSOT (= Google 1 > WK 2)
-import { pickPlaceImage } from '../shared/place-image';
+import { pickPlaceImage } from "../shared/place-image";
 // ⚠️ 수정금지(승인필요) 2026-05-09 = AG3 saveNewPlacesToDB = 어제 21 식당 패턴 그대로 (= 자체 fetch = googlePlacesFetcher 사용 X)
 
 /** <img>로 사용 가능한 URL인지 (인스타 post URL, 네이버/티스토리 등 차단 도메인 제외) */
 function isUsableImageUrl(url: string): boolean {
   const u = url.toLowerCase().trim();
   if (!u) return false;
-  if (u.includes('example.com')) return false;
+  if (u.includes("example.com")) return false;
   // 🚫 전멸 확인된 소스 차단 (0013 DB 정리와 동일)
   // ⚠️ 수정금지(승인필요) 2026-05-06 = 사용자 SSOT 통합 = Google CDN URL 허용
   // = 메인앱이 직접 로드 (Google Cloud Console HTTP referrer 제한 = 우리 도메인 만)
   // = Storage 다운로드/업로드 우회 = Cached Egress 0
   // (옛 차단 룰: places.googleapis.com / maps.googleapis.com 해제됨)
-  if (u.includes('fbcdn.net') || u.includes('cdninstagram') || u.includes('cdn.fbsbx.com')) return false;
+  if (
+    u.includes("fbcdn.net") ||
+    u.includes("cdninstagram") ||
+    u.includes("cdn.fbsbx.com")
+  )
+    return false;
   // 🚫 모바일 앱에서 Referer 체크로 렌더링 차단되는 도메인 제외
-  if (u.includes('naver.com') || u.includes('tistory.com') || u.includes('daum.net')) return false;
+  if (
+    u.includes("naver.com") ||
+    u.includes("tistory.com") ||
+    u.includes("daum.net")
+  )
+    return false;
   // instagram.com/p/xxx 또는 /reel/xxx (HTML) — /media/?size= 는 리다이렉트로 이미지 가능
-  if ((u.includes('instagram.com/p/') || u.includes('instagram.com/reel/')) && !u.includes('/media/'))
+  if (
+    (u.includes("instagram.com/p/") || u.includes("instagram.com/reel/")) &&
+    !u.includes("/media/")
+  )
     return false;
   // ✅ 영구 유효 소스
-  if (u.includes('wikimedia.org') || u.includes('wikipedia.org')) return true;
-  if (u.includes('i.ytimg.com') || u.includes('unsplash.com')) return true;
+  if (u.includes("wikimedia.org") || u.includes("wikipedia.org")) return true;
+  if (u.includes("i.ytimg.com") || u.includes("unsplash.com")) return true;
   return true; // 기타는 시도
 }
 
@@ -62,7 +82,9 @@ function isUsableImageUrl(url: string): boolean {
 // ⚠️ 2026-05-23 = google-places.ts 파일 삭제 = apiCallTracker import 제거 (= 미사용)
 
 function getGoogleMapsApiKey(): string {
-  return process.env.Google_maps_api_key || process.env.GOOGLE_MAPS_API_KEY || '';
+  return (
+    process.env.Google_maps_api_key || process.env.GOOGLE_MAPS_API_KEY || ""
+  );
 }
 
 /**
@@ -72,13 +94,20 @@ function getGoogleMapsApiKey(): string {
  */
 export async function preloadCityData(
   destination: string,
-  geminiPlaces?: PlaceResult[]
+  geminiPlaces?: PlaceResult[],
 ): Promise<AG3PreOutput> {
   const _t0 = Date.now();
 
   if (!db) {
-    console.log('[AG3-pre] DB 미연결');
-    return { cityId: null, dbPlacesMap: new Map(), cityName: destination, placeImageMap: new Map(), celebrityImageMap: new Map(), seedRawMap: new Map() };
+    console.log("[AG3-pre] DB 미연결");
+    return {
+      cityId: null,
+      dbPlacesMap: new Map(),
+      cityName: destination,
+      placeImageMap: new Map(),
+      celebrityImageMap: new Map(),
+      seedRawMap: new Map(),
+    };
   }
 
   try {
@@ -92,18 +121,23 @@ export async function preloadCityData(
 
     // 도시 미발견 시 좌표 기반 fallback
     if (!cityId && geminiPlaces && geminiPlaces.length > 0) {
-      const validPlaces = geminiPlaces.filter(p => p.lat && p.lng && p.lat !== 0);
+      const validPlaces = geminiPlaces.filter(
+        (p) => p.lat && p.lng && p.lat !== 0,
+      );
       if (validPlaces.length > 0) {
-        const avgLat = validPlaces.reduce((s, p) => s + p.lat, 0) / validPlaces.length;
-        const avgLng = validPlaces.reduce((s, p) => s + p.lng, 0) / validPlaces.length;
+        const avgLat =
+          validPlaces.reduce((s, p) => s + p.lat, 0) / validPlaces.length;
+        const avgLng =
+          validPlaces.reduce((s, p) => s + p.lng, 0) / validPlaces.length;
 
         const allCities = await db.select().from(cities);
-        let closestCity: typeof allCities[0] | null = null;
+        let closestCity: (typeof allCities)[0] | null = null;
         let closestDist = Infinity;
 
         for (const city of allCities) {
           const dist = Math.sqrt(
-            Math.pow(city.latitude - avgLat, 2) + Math.pow(city.longitude - avgLng, 2)
+            Math.pow(city.latitude - avgLat, 2) +
+              Math.pow(city.longitude - avgLng, 2),
           );
           if (dist < closestDist) {
             closestDist = dist;
@@ -113,7 +147,9 @@ export async function preloadCityData(
 
         if (closestCity && closestDist < 0.5) {
           cityId = closestCity.id;
-          console.log(`[AG3-pre] 📍 좌표 기반 매칭: "${destination}" → ${closestCity.name} (거리: ${closestDist.toFixed(3)})`);
+          console.log(
+            `[AG3-pre] 📍 좌표 기반 매칭: "${destination}" → ${closestCity.name} (거리: ${closestDist.toFixed(3)})`,
+          );
         }
       }
     }
@@ -126,10 +162,16 @@ export async function preloadCityData(
     // ↳ 데이터 (places, place_images) = 보존 = 추후 정리 가능
     const dbPlaces: { id: number; name: string }[] = [];
     if (cityId) {
-      const cityLabel = cityResult ? `${cityResult.name}/${cityResult.nameEn}` : destination;
-      console.log(`[AG3-pre] ✅ 도시 "${cityLabel}" (ID: ${cityId}) — places/place_images/celebrity 차단 (사용자 SSOT)`);
+      const cityLabel = cityResult
+        ? `${cityResult.name}/${cityResult.nameEn}`
+        : destination;
+      console.log(
+        `[AG3-pre] ✅ 도시 "${cityLabel}" (ID: ${cityId}) — places/place_images/celebrity 차단 (사용자 SSOT)`,
+      );
     } else {
-      console.log(`[AG3-pre] ⚠️ 도시 "${destination}" 미발견 (${Date.now() - _t0}ms)`);
+      console.log(
+        `[AG3-pre] ⚠️ 도시 "${destination}" 미발견 (${Date.now() - _t0}ms)`,
+      );
     }
 
     // 3. place_seed_raw = 단일 SSOT — ⚠️ 수정금지(승인필요) 2026-05-06 사용자 통합 결정
@@ -140,42 +182,55 @@ export async function preloadCityData(
       try {
         const _t1 = Date.now();
         // 사용자 SSOT 만 = top 20 검증 + 자동 학습 결과
-        const seeds = await db.select({
-          id: placeSeedRaw.id,
-          nameEn: placeSeedRaw.nameEn,
-          nameKo: placeSeedRaw.nameKo,
-          nameLocal: placeSeedRaw.nameLocal,
-          googlePlaceId: placeSeedRaw.googlePlaceId,
-          googleMapsUri: placeSeedRaw.googleMapsUri,
-          imageUrl: placeSeedRaw.imageUrl,           // ⚠️ 2026-05-20 = Google 1 순위
-          bestImageUrl: placeSeedRaw.bestImageUrl,    // ⚠️ 2026-05-20 = WK/Wikidata SPARQL 2 순위 (= Google NULL 시 fallback)
-          address: placeSeedRaw.address,
-          latitude: placeSeedRaw.latitude,
-          longitude: placeSeedRaw.longitude,
-          googleReviewCount: placeSeedRaw.googleReviewCount,
-          googlePrimaryType: placeSeedRaw.googlePrimaryType,
-          editorialSummary: placeSeedRaw.editorialSummary,
-          summaryKo: placeSeedRaw.summaryKo,
-          dayZone: placeSeedRaw.dayZone,
-          distanceKmFromCenter: placeSeedRaw.distanceKmFromCenter,
-          imageAttribution: placeSeedRaw.imageAttribution,
-          photoUrls: placeSeedRaw.photoUrls,
-          priceEur: placeSeedRaw.priceEur,
-          rank: placeSeedRaw.rank,
-          seedCategory: placeSeedRaw.seedCategory,
-        }).from(placeSeedRaw).where(and(
-          eq(placeSeedRaw.cityId, cityId),
-          // ⚠️ 수정금지(승인필요) 2026-05-21 = 사용자 SSOT = collection_phase 완전 폐기
-          // = 같은 장소 = 다른 phase 수집 = 같은 데이터 (= 사람 1 = 이름/별명/사는곳/묘사 = 한 사람)
-          // = 비식당 = rank 1-20 (= 사용자 큐레이션 우선) / 식당 = 모든 행
-          sql`(${placeSeedRaw.seedCategory} = 'restaurant' OR ${placeSeedRaw.rank} BETWEEN 1 AND 20)`
-        ));
+        const seeds = await db
+          .select({
+            id: placeSeedRaw.id,
+            nameEn: placeSeedRaw.nameEn,
+            nameKo: placeSeedRaw.nameKo,
+            nameLocal: placeSeedRaw.nameLocal,
+            googlePlaceId: placeSeedRaw.googlePlaceId,
+            googleMapsUri: placeSeedRaw.googleMapsUri,
+            imageUrl: placeSeedRaw.imageUrl, // ⚠️ 2026-05-20 = Google 1 순위
+            bestImageUrl: placeSeedRaw.bestImageUrl, // ⚠️ 2026-05-20 = WK/Wikidata SPARQL 2 순위 (= Google NULL 시 fallback)
+            address: placeSeedRaw.address,
+            latitude: placeSeedRaw.latitude,
+            longitude: placeSeedRaw.longitude,
+            googleReviewCount: placeSeedRaw.googleReviewCount,
+            googlePrimaryType: placeSeedRaw.googlePrimaryType,
+            editorialSummary: placeSeedRaw.editorialSummary,
+            summaryKo: placeSeedRaw.summaryKo,
+            dayZone: placeSeedRaw.dayZone,
+            distanceKmFromCenter: placeSeedRaw.distanceKmFromCenter,
+            imageAttribution: placeSeedRaw.imageAttribution,
+            photoUrls: placeSeedRaw.photoUrls,
+            priceEur: placeSeedRaw.priceEur,
+            rank: placeSeedRaw.rank,
+            seedCategory: placeSeedRaw.seedCategory,
+          })
+          .from(placeSeedRaw)
+          .where(
+            and(
+              eq(placeSeedRaw.cityId, cityId),
+              // ⚠️ 수정금지(승인필요) 2026-05-21 = 사용자 SSOT = collection_phase 완전 폐기
+              // = 같은 장소 = 다른 phase 수집 = 같은 데이터 (= 사람 1 = 이름/별명/사는곳/묘사 = 한 사람)
+              // = 비식당 = rank 1-20 (= 사용자 큐레이션 우선) / 식당 = 모든 행
+              sql`(${placeSeedRaw.seedCategory} = 'restaurant' OR ${placeSeedRaw.rank} BETWEEN 1 AND 20)`,
+            ),
+          );
         for (const s of seeds) {
           // ⚠️ 수정금지(승인필요) 2026-05-09 = 이름 매칭 보강 = 정규화 + 악센트 제거 (= 사용자 SSOT = 좌표 X, 이름+address ✓)
           // = 정규화 키 = 공백/문장부호 제거 + 소문자
           // = 악센트 제거 키 = "Sacré-Cœur" ↔ "Sacre Coeur" 호환
-          const norm = (name: string | null) => name ? name.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, "") : null;
-          const noAccent = (name: string | null) => name ? name.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, "") : null;
+          const norm = (name: string | null) =>
+            name ? name.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, "") : null;
+          const noAccent = (name: string | null) =>
+            name
+              ? name
+                  .normalize("NFD")
+                  .replace(/[̀-ͯ]/g, "")
+                  .toLowerCase()
+                  .replace(/[\s\p{P}\p{S}]+/gu, "")
+              : null;
           const keyEn = norm(s.nameEn);
           const keyKo = norm(s.nameKo);
           const keyLocal = norm((s as any).nameLocal);
@@ -183,31 +238,39 @@ export async function preloadCityData(
           const keyLocalNoAcc = noAccent((s as any).nameLocal);
           if (keyEn) seedRawMap.set(keyEn, s);
           if (keyKo) seedRawMap.set(keyKo, s);
-          if (keyLocal && !seedRawMap.has(keyLocal)) seedRawMap.set(keyLocal, s);
-          if (keyEnNoAcc && !seedRawMap.has(keyEnNoAcc)) seedRawMap.set(keyEnNoAcc, s);
-          if (keyLocalNoAcc && !seedRawMap.has(keyLocalNoAcc)) seedRawMap.set(keyLocalNoAcc, s);
+          if (keyLocal && !seedRawMap.has(keyLocal))
+            seedRawMap.set(keyLocal, s);
+          if (keyEnNoAcc && !seedRawMap.has(keyEnNoAcc))
+            seedRawMap.set(keyEnNoAcc, s);
+          if (keyLocalNoAcc && !seedRawMap.has(keyLocalNoAcc))
+            seedRawMap.set(keyLocalNoAcc, s);
           // ⚠️ 수정금지(승인필요) 사용자 의도 = google_place_id 기반 직접 매칭 키 추가
           if (s.googlePlaceId) seedRawMap.set(`pid:${s.googlePlaceId}`, s);
           // ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT 5 단계 매칭 = google_maps_uri 추가 (= upsertPlace v2 §14 부합)
           if (s.googleMapsUri) seedRawMap.set(`uri:${s.googleMapsUri}`, s);
           // ⚠️ 수정금지(승인필요) 사용자 의도 = address 기반 매칭 키 추가 (= 식당 동명 충돌 회피)
           if (s.address) {
-            const addrKey = `addr:${s.address.toLowerCase().replace(/\s+/g, ' ').trim()}`;
+            const addrKey = `addr:${s.address.toLowerCase().replace(/\s+/g, " ").trim()}`;
             seedRawMap.set(addrKey, s);
           }
         }
-        console.log(`[AG3-pre] 🏭 통합 전시매장(place_seed_raw) ${seeds.length}건 사전 로드 (${Date.now() - _t1}ms)`);
+        console.log(
+          `[AG3-pre] 🏭 통합 전시매장(place_seed_raw) ${seeds.length}건 사전 로드 (${Date.now() - _t1}ms)`,
+        );
       } catch (e) {
         console.warn(`[AG3-pre] seedData 로드 실패:`, (e as Error)?.message);
       }
     }
 
     // 도시 중심 좌표 (숙소 미입력 시 출발 기점으로 사용)
-    const cityCoords = (cityResult?.latitude && cityResult?.longitude)
-      ? { lat: cityResult.latitude, lng: cityResult.longitude }
-      : undefined;
+    const cityCoords =
+      cityResult?.latitude && cityResult?.longitude
+        ? { lat: cityResult.latitude, lng: cityResult.longitude }
+        : undefined;
     if (cityCoords) {
-      console.log(`[AG3-pre] 📍 도시 중심 좌표: ${cityCoords.lat.toFixed(4)}, ${cityCoords.lng.toFixed(4)}`);
+      console.log(
+        `[AG3-pre] 📍 도시 중심 좌표: ${cityCoords.lat.toFixed(4)}, ${cityCoords.lng.toFixed(4)}`,
+      );
     }
 
     return {
@@ -217,11 +280,18 @@ export async function preloadCityData(
       cityCoords,
       placeImageMap,
       celebrityImageMap,
-      seedRawMap
+      seedRawMap,
     };
   } catch (error) {
-    console.error('[AG3-pre] DB 사전 로드 실패:', error);
-    return { cityId: null, dbPlacesMap: new Map(), cityName: destination, placeImageMap: new Map(), celebrityImageMap: new Map(), seedRawMap: new Map() };
+    console.error("[AG3-pre] DB 사전 로드 실패:", error);
+    return {
+      cityId: null,
+      dbPlacesMap: new Map(),
+      cityName: destination,
+      placeImageMap: new Map(),
+      celebrityImageMap: new Map(),
+      seedRawMap: new Map(),
+    };
   }
 }
 
@@ -231,15 +301,21 @@ export async function preloadCityData(
 
 /**
  * AG3 메인: DB 매칭 + 좌표 보강 + Google Places 보충
- * 
+ *
  * AG2가 반환한 장소명을 DB와 매칭하여 실제 데이터를 삽입
  * DB에 없는 장소는 Google Places API로 좌표/사진 확보
  */
 export async function matchPlacesWithDB(
   geminiPlaces: PlaceResult[],
-  preloaded: AG3PreOutput
+  preloaded: AG3PreOutput,
 ): Promise<PlaceResult[]> {
-  const { dbPlacesMap, cityName, placeImageMap, celebrityImageMap, seedRawMap } = preloaded;
+  const {
+    dbPlacesMap,
+    cityName,
+    placeImageMap,
+    celebrityImageMap,
+    seedRawMap,
+  } = preloaded;
   const _t0 = Date.now();
 
   let matched = 0;
@@ -247,13 +323,17 @@ export async function matchPlacesWithDB(
   let unmatchedCount = 0;
 
   // === 1단계: DB 매칭 (동기, 빠름) ===
-  type MatchResult = { place: PlaceResult; dbMatch: any | null; needsGoogle: boolean };
+  type MatchResult = {
+    place: PlaceResult;
+    dbMatch: any | null;
+    needsGoogle: boolean;
+  };
   const matchResults: MatchResult[] = [];
 
   for (const place of geminiPlaces) {
     // ⚠️ 수정금지(승인필요) 2026-05-20 = DB-only path skip = AG2 가 이미 place_seed_raw 직접 = 매칭 불필요 (= 사용자 SSOT 병렬 극대화)
     // ⚠️ 2026-05-20 = matched++ 제거 (= 옛 = 본 if + line 466 if(dbMatch) = 이중 증가 = 52 곳 로그 버그)
-    if (place.sourceType === 'DB Direct (Place Seed Raw)') {
+    if (place.sourceType === "DB Direct (Place Seed Raw)") {
       matchResults.push({ place, dbMatch: place as any, needsGoogle: false });
       continue;
     }
@@ -264,9 +344,13 @@ export async function matchPlacesWithDB(
     // = 0순위 PID > 1순위 풀주소+이름 > 2순위 google_maps_uri > 3순위 좌표 10m > 4순위 이름
     // = 5순위 = TS+PM (= matchResults 의 needsGoogle = true 시 별도 단계)
     let seedDirectMatch: any = null;
-    const geminiAddress = (place as any).geminiAddress || (place as any).address;
-    const placePid = (place as any).geminiPlaceId || (place as any).googlePlaceId;
-    console.log(`[AG3-DEBUG] "${place.name}" pid=${placePid ? '✓' : '✗'} addr="${(geminiAddress || '').slice(0,60)}" seedMapSize=${seedRawMap?.size ?? 0}`);
+    const geminiAddress =
+      (place as any).geminiAddress || (place as any).address;
+    const placePid =
+      (place as any).geminiPlaceId || (place as any).googlePlaceId;
+    console.log(
+      `[AG3-DEBUG] "${place.name}" pid=${placePid ? "✓" : "✗"} addr="${(geminiAddress || "").slice(0, 60)}" seedMapSize=${seedRawMap?.size ?? 0}`,
+    );
 
     // 0 순위 = google_place_id 일치 (= ~100%, Google 발급 유일 ID)
     if (placePid && seedRawMap && seedRawMap.size > 0) {
@@ -285,16 +369,22 @@ export async function matchPlacesWithDB(
       const hasPostal = /\b\d{5}\b/.test(t);
       return hasStreet && hasPostal;
     };
-    if (!seedDirectMatch && geminiAddress && seedRawMap && seedRawMap.size > 0 && isSpecificAddress(geminiAddress)) {
-      const addrLower = geminiAddress.toLowerCase().replace(/\s+/g, ' ').trim();
+    if (
+      !seedDirectMatch &&
+      geminiAddress &&
+      seedRawMap &&
+      seedRawMap.size > 0 &&
+      isSpecificAddress(geminiAddress)
+    ) {
+      const addrLower = geminiAddress.toLowerCase().replace(/\s+/g, " ").trim();
       const nameSimilar = (rowNameEn: string | null) => {
         if (!rowNameEn) return true;
         const rn = rowNameEn.toLowerCase();
         const gn = nameLower;
         if (rn.includes(gn) || gn.includes(rn)) return true;
-        const rWords = rn.split(/\s+/).filter(w => w.length >= 3);
-        const gWords = gn.split(/\s+/).filter(w => w.length >= 3);
-        return rWords.some(w => gWords.includes(w));
+        const rWords = rn.split(/\s+/).filter((w) => w.length >= 3);
+        const gWords = gn.split(/\s+/).filter((w) => w.length >= 3);
+        return rWords.some((w) => gWords.includes(w));
       };
       const exact = seedRawMap.get(`addr:${addrLower}`);
       if (exact && nameSimilar(exact.nameEn)) {
@@ -303,7 +393,7 @@ export async function matchPlacesWithDB(
       }
       if (!seedDirectMatch) {
         for (const [key, val] of seedRawMap) {
-          if (!key.startsWith('addr:')) continue;
+          if (!key.startsWith("addr:")) continue;
           const dbAddr = key.slice(5);
           if (!isSpecificAddress(dbAddr)) continue;
           if (dbAddr.includes(addrLower) || addrLower.includes(dbAddr)) {
@@ -317,7 +407,12 @@ export async function matchPlacesWithDB(
     }
 
     // ⚠️ 수정금지(승인필요) 2026-05-20 = 2 순위 = google_maps_uri 매칭 (= 사용자 SSOT 5 단계 = upsertPlace v2)
-    if (!seedDirectMatch && (place as any).googleMapsUri && seedRawMap && seedRawMap.size > 0) {
+    if (
+      !seedDirectMatch &&
+      (place as any).googleMapsUri &&
+      seedRawMap &&
+      seedRawMap.size > 0
+    ) {
       const hit = seedRawMap.get(`uri:${(place as any).googleMapsUri}`);
       if (hit) {
         seedDirectMatch = hit;
@@ -326,19 +421,31 @@ export async function matchPlacesWithDB(
     }
 
     // 3 순위 = 좌표 10m 매칭 (= ~95%, 같은 건물)
-    if (!seedDirectMatch && (place as any).lat && (place as any).lng && seedRawMap && seedRawMap.size > 0) {
+    if (
+      !seedDirectMatch &&
+      (place as any).lat &&
+      (place as any).lng &&
+      seedRawMap &&
+      seedRawMap.size > 0
+    ) {
       const pLat = parseFloat(String((place as any).lat));
       const pLng = parseFloat(String((place as any).lng));
       if (!isNaN(pLat) && !isNaN(pLng) && pLat !== 0 && pLng !== 0) {
         for (const [key, val] of seedRawMap) {
-          if (!key.startsWith('addr:')) continue;
+          if (!key.startsWith("addr:")) continue;
           const vLat = parseFloat(String(val.latitude));
           const vLng = parseFloat(String(val.longitude));
           if (isNaN(vLat) || isNaN(vLng)) continue;
           // haversine < 10m
-          const R = 6371, toRad = (d: number) => d * Math.PI / 180;
-          const dLat = toRad(vLat - pLat), dLng = toRad(vLng - pLng);
-          const h = Math.sin(dLat/2)**2 + Math.cos(toRad(pLat))*Math.cos(toRad(vLat))*Math.sin(dLng/2)**2;
+          const R = 6371,
+            toRad = (d: number) => (d * Math.PI) / 180;
+          const dLat = toRad(vLat - pLat),
+            dLng = toRad(vLng - pLng);
+          const h =
+            Math.sin(dLat / 2) ** 2 +
+            Math.cos(toRad(pLat)) *
+              Math.cos(toRad(vLat)) *
+              Math.sin(dLng / 2) ** 2;
           const km = 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
           if (km < 0.01) {
             seedDirectMatch = val;
@@ -352,16 +459,32 @@ export async function matchPlacesWithDB(
     // 4 순위 = 이름 매칭 (= ~30-50%, 체인/지점 위험 = 보조)
     if (!seedDirectMatch && seedRawMap && seedRawMap.size > 0) {
       const nameEn = nameLower;
-      const nameLocal = ((place as any).nameLocal || '').toLowerCase().trim();
+      const nameLocal = ((place as any).nameLocal || "").toLowerCase().trim();
       const norm = (s: string) => s.replace(/[\s\p{P}\p{S}]+/gu, "");
-      const noAccent = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[\s\p{P}\p{S}]+/gu, "");
+      const noAccent = (s: string) =>
+        s
+          .normalize("NFD")
+          .replace(/[̀-ͯ]/g, "")
+          .replace(/[\s\p{P}\p{S}]+/gu, "");
       const tries: string[] = [];
-      if (nameEn) { tries.push(norm(nameEn)); tries.push(noAccent(nameEn)); }
-      if (nameLocal) { tries.push(norm(nameLocal)); tries.push(noAccent(nameLocal)); }
+      if (nameEn) {
+        tries.push(norm(nameEn));
+        tries.push(noAccent(nameEn));
+      }
+      if (nameLocal) {
+        tries.push(norm(nameLocal));
+        tries.push(noAccent(nameLocal));
+      }
       for (const k of tries) {
         if (!k) continue;
         const hit = seedRawMap.get(k);
-        if (hit) { seedDirectMatch = hit; console.log(`[AG3] 🏷 4순위 이름 매칭: "${place.name}" (key=${k.slice(0,30)})`); break; }
+        if (hit) {
+          seedDirectMatch = hit;
+          console.log(
+            `[AG3] 🏷 4순위 이름 매칭: "${place.name}" (key=${k.slice(0, 30)})`,
+          );
+          break;
+        }
       }
     }
 
@@ -383,13 +506,18 @@ export async function matchPlacesWithDB(
       if (seedImg) place.image = seedImg;
       // ⚠️ 수정금지(승인필요) 2026-05-14 = 모달 정확도 = 검증된 google_place_id 매핑 (= 핫픽스 3)
       // = 누락 시 = 모달 = name+city 검색 fallback = 인근 잘못된 장소 매칭 위험
-      if (seedDirectMatch.googlePlaceId) (place as any).googlePlaceId = seedDirectMatch.googlePlaceId;
-      if (seedDirectMatch.googleReviewCount) (place as any).userRatingCount = seedDirectMatch.googleReviewCount;
+      if (seedDirectMatch.googlePlaceId)
+        (place as any).googlePlaceId = seedDirectMatch.googlePlaceId;
+      if (seedDirectMatch.googleReviewCount)
+        (place as any).userRatingCount = seedDirectMatch.googleReviewCount;
       // ⚠️ 수정금지(승인필요) 2026-05-14 = v3 SSOT = 위트 카피 우선 (= shortform_ko = editorial_summary)
       // = description = editorialSummary 우선 → summary_ko 폴백 (= "프사각" "MZ들" 노출)
-      if (seedDirectMatch.editorialSummary) place.description = seedDirectMatch.editorialSummary;
-      else if (seedDirectMatch.summaryKo) place.description = seedDirectMatch.summaryKo;
-      if (seedDirectMatch.summaryKo) place.personaFitReason = seedDirectMatch.summaryKo;
+      if (seedDirectMatch.editorialSummary)
+        place.description = seedDirectMatch.editorialSummary;
+      else if (seedDirectMatch.summaryKo)
+        place.description = seedDirectMatch.summaryKo;
+      if (seedDirectMatch.summaryKo)
+        place.personaFitReason = seedDirectMatch.summaryKo;
       // 별도 marker 로 후속 enrichment 가 인식하도록
       (place as any).__seedDirectMatch = seedDirectMatch;
     }
@@ -399,10 +527,12 @@ export async function matchPlacesWithDB(
     matchResults.push({ place, dbMatch: seedDirectMatch || null, needsGoogle });
   }
 
-  console.log(`[AG3] DB 매칭 완료 (${Date.now() - _t0}ms): ${matchResults.filter(r => r.dbMatch).length}곳 매칭, ${matchResults.filter(r => r.needsGoogle).length}곳 Google 필요`);
+  console.log(
+    `[AG3] DB 매칭 완료 (${Date.now() - _t0}ms): ${matchResults.filter((r) => r.dbMatch).length}곳 매칭, ${matchResults.filter((r) => r.needsGoogle).length}곳 Google 필요`,
+  );
 
   // === 2단계: Google Places API 병렬 호출 (최대 5개 동시, 5초 타임아웃) ===
-  const googleNeeded = matchResults.filter(r => r.needsGoogle);
+  const googleNeeded = matchResults.filter((r) => r.needsGoogle);
   const googleResults = new Map<string, any>();
   // ⚠️ 수정금지(승인필요) 2026-05-15 = PD getPlaceDetailsById() 폐기 (= SSOT §16)
   // = TS searchText 와 중복 = saveNewPlacesToDB 의 TS 호출만 사용 (= 사용자 명시 결정).
@@ -418,7 +548,7 @@ export async function matchPlacesWithDB(
     if (seed) return seed;
     // dbMatch의 googlePlaceId로도 검색
     if (dbMatch?.googlePlaceId) {
-      for (const [, s] of (seedRawMap || new Map())) {
+      for (const [, s] of seedRawMap || new Map()) {
         if (s.googlePlaceId === dbMatch.googlePlaceId) return s;
       }
     }
@@ -432,7 +562,7 @@ export async function matchPlacesWithDB(
       // ⚠️ 수정금지(승인필요) 2026-05-06 = dbMatch = seedDirectMatch (= place_seed_raw 행)
       // ⚠️ 2026-05-20 = DB Direct path = dbMatch === place (PlaceResult shape) = 별도 처리
       matched++;
-      const isDbDirect = place.sourceType === 'DB Direct (Place Seed Raw)';
+      const isDbDirect = place.sourceType === "DB Direct (Place Seed Raw)";
       const seed = dbMatch;
       // ⚠️ 2026-05-20 = shape 분기 = DB Direct = PlaceResult.userRatingCount / dbMatch path = placeSeedRaw.googleReviewCount
       const reviewCount = isDbDirect
@@ -442,33 +572,45 @@ export async function matchPlacesWithDB(
       // ⚠️ 수정금지(승인필요) 2026-05-20 = shape 일치 강제 = priceEur 손실 버그 시정 (= 사용자 SSOT)
       // = DB Direct = AG2-DB 가 PlaceResult.estimatedPriceEur 채움 / dbMatch path = placeSeedRaw.priceEur
       const estimatedPriceEur = isDbDirect
-        ? (place.estimatedPriceEur != null ? Number(place.estimatedPriceEur) : undefined)
-        : (seed.priceEur != null ? Number(seed.priceEur) : undefined);
+        ? place.estimatedPriceEur != null
+          ? Number(place.estimatedPriceEur)
+          : undefined
+        : seed.priceEur != null
+          ? Number(seed.priceEur)
+          : undefined;
 
       enriched.push({
         ...place,
         // ⚠️ 2026-05-20 = DB Direct = sourceType 유지 (= 'DB Direct (Place Seed Raw)') / dbMatch path = 'Gemini AI + DB Enriched'
-        sourceType: isDbDirect ? place.sourceType : 'Gemini AI + DB Enriched',
+        sourceType: isDbDirect ? place.sourceType : "Gemini AI + DB Enriched",
         description: isDbDirect
-          ? (place.description ?? '')
-          : ((seed.summaryKo || seed.editorialSummary || place.description) ?? ''),
+          ? (place.description ?? "")
+          : ((seed.summaryKo || seed.editorialSummary || place.description) ??
+            ""),
         // ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT = pickPlaceImage 단일 SSOT (= Google 1 > WK 2)
-        image: isDbDirect ? (place.image || '') : (pickPlaceImage(seed) || place.image || ''),
+        image: isDbDirect
+          ? place.image || ""
+          : pickPlaceImage(seed) || place.image || "",
         userRatingCount: reviewCount,
-        confidenceScore: Math.max(place.confidenceScore, 7),
         googleMapsUrl: place.googleMapsUrl,
-        lat: isDbDirect ? place.lat : (parseFloat(String(seed.latitude)) || place.lat),
-        lng: isDbDirect ? place.lng : (parseFloat(String(seed.longitude)) || place.lng),
-        estimatedPriceEur,  // ← shape 분기 적용 (= priceEur 보존)
+        lat: isDbDirect
+          ? place.lat
+          : parseFloat(String(seed.latitude)) || place.lat,
+        lng: isDbDirect
+          ? place.lng
+          : parseFloat(String(seed.longitude)) || place.lng,
+        estimatedPriceEur, // ← shape 분기 적용 (= priceEur 보존)
         // ⚠️ 2026-05-20 = shape 분기 = DB Direct = AG2-DB 의 seedCategory / dbMatch path = placeSeedRaw.seedCategory
-        seedCategory: (isDbDirect ? place.seedCategory : seed.seedCategory) as SeedCategory,
+        seedCategory: (isDbDirect
+          ? place.seedCategory
+          : seed.seedCategory) as SeedCategory,
         selectionReasons: isDbDirect
-          ? (place.selectionReasons || [])
+          ? place.selectionReasons || []
           : [
               ...(place.selectionReasons || []),
-              `📊 사용자 검증 SSOT (rank ${seed.rank ?? '-'}, 리뷰 ${reviewCount.toLocaleString()}개${estimatedPriceEur ? `, €${estimatedPriceEur}/인` : ''})`,
+              `📊 사용자 검증 SSOT (rank ${seed.rank ?? "-"}, 리뷰 ${reviewCount.toLocaleString()}개${estimatedPriceEur ? `, €${estimatedPriceEur}/인` : ""})`,
             ],
-        confidenceLevel: 'high' as const,
+        confidenceLevel: "high" as const,
       } as any);
     } else if (needsGoogle) {
       const googleResult = googleResults.get(place.name);
@@ -479,12 +621,11 @@ export async function matchPlacesWithDB(
         // = sole SSOT = place_seed_raw → Google fallback 결과 그대로 사용
         enriched.push({
           ...place,
-          sourceType: 'Gemini AI + Google Places',
+          sourceType: "Gemini AI + Google Places",
           lat: googleResult.lat,
           lng: googleResult.lng,
-          image: googleResult.photoUrl || place.image || '',
+          image: googleResult.photoUrl || place.image || "",
           googleMapsUrl: googleResult.googleMapsUri || place.googleMapsUrl,
-          confidenceScore: Math.max(place.confidenceScore, (googleResult.userRatingCount || 0) > 0 ? Math.min(10, 5 + (googleResult.userRatingCount || 0) / 500) : 5),
           userRatingCount: googleResult.userRatingCount || 0,
         });
       } else {
@@ -492,11 +633,14 @@ export async function matchPlacesWithDB(
         const seedDataFallback = getSeedData(place.name);
         unmatchedCount++;
         // ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT = pickPlaceImage 단일 SSOT
-        const finalImg = (pickPlaceImage(seedDataFallback || {}) || place.image) ?? '';
-        console.log(`[AG3-MATCH] ❌ Unmatched: "${place.name}" (Used seed image: ${finalImg ? 'Yes' : 'No'})`);
+        const finalImg =
+          (pickPlaceImage(seedDataFallback || {}) || place.image) ?? "";
+        console.log(
+          `[AG3-MATCH] ❌ Unmatched: "${place.name}" (Used seed image: ${finalImg ? "Yes" : "No"})`,
+        );
         enriched.push({
           ...place,
-          sourceType: 'Gemini AI (New)',
+          sourceType: "Gemini AI (New)",
           image: finalImg,
         });
       }
@@ -504,11 +648,14 @@ export async function matchPlacesWithDB(
       const seedDataFallback = getSeedData(place.name);
       unmatchedCount++;
       // ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT = 2 컬럼 우선순위 (= Google 1 > WK 2)
-      const finalImg = (pickPlaceImage(seedDataFallback || {}) || place.image) ?? '';
-      console.log(`[AG3-MATCH] ❌ No DB/Google: "${place.name}" (Used seed image: ${finalImg ? 'Yes' : 'No'})`);
+      const finalImg =
+        (pickPlaceImage(seedDataFallback || {}) || place.image) ?? "";
+      console.log(
+        `[AG3-MATCH] ❌ No DB/Google: "${place.name}" (Used seed image: ${finalImg ? "Yes" : "No"})`,
+      );
       enriched.push({
         ...place,
-        sourceType: 'Gemini AI (New)',
+        sourceType: "Gemini AI (New)",
         image: finalImg,
       });
     }
@@ -517,38 +664,54 @@ export async function matchPlacesWithDB(
   // === 4단계: 이미지 빈칸 방지 — 선정된 장소는 반드시 사진 있어야 함 ===
   // Instagram 깨진 URL 사전 필터: instagram.com/p/xxx 형식은 실제 이미지 아님
   for (let i = 0; i < enriched.length; i++) {
-    const img = enriched[i].image || '';
-    if (img && img.includes('instagram.com/p/') && !img.includes('cdninstagram') && !img.includes('fbcdn.net')) {
-      enriched[i] = { ...enriched[i], image: '' };
+    const img = enriched[i].image || "";
+    if (
+      img &&
+      img.includes("instagram.com/p/") &&
+      !img.includes("cdninstagram") &&
+      !img.includes("fbcdn.net")
+    ) {
+      enriched[i] = { ...enriched[i], image: "" };
     }
   }
 
-  const needsPhoto = enriched.filter((p) => !p.image || p.image.trim() === '');
+  const needsPhoto = enriched.filter((p) => !p.image || p.image.trim() === "");
   if (needsPhoto.length > 0) {
     const _pt0 = Date.now();
     // Wikipedia REST API: 무료, 영구 URL — 유명 관광지 대부분 커버
-    const fetchWikipediaImage = async (placeName: string): Promise<string | null> => {
+    const fetchWikipediaImage = async (
+      placeName: string,
+    ): Promise<string | null> => {
       try {
-        const normalized = placeName.normalize('NFC').replace(/ /g, '_');
+        const normalized = placeName.normalize("NFC").replace(/ /g, "_");
         const encoded = encodeURIComponent(normalized);
-        const langs = ['en', 'ko']; // 영어 먼저, 없으면 한국어 시도
+        const langs = ["en", "ko"]; // 영어 먼저, 없으면 한국어 시도
         for (const lang of langs) {
-          const res = await Promise.race([
-            fetch(`https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encoded}`, {
-              headers: { 'User-Agent': 'NubiApp/1.0 (travel app; contact@nubi.app)' }
-            }),
-            new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000)), // 타임아웃 5초로 증대
-          ]) as any;
+          const res = (await Promise.race([
+            fetch(
+              `https://${lang}.wikipedia.org/api/rest_v1/page/summary/${encoded}`,
+              {
+                headers: {
+                  "User-Agent": "NubiApp/1.0 (travel app; contact@nubi.app)",
+                },
+              },
+            ),
+            new Promise<null>((resolve) =>
+              setTimeout(() => resolve(null), 5000),
+            ), // 타임아웃 5초로 증대
+          ])) as any;
           if (res?.ok) {
             const data = await res.json();
             const url = data.thumbnail?.source || data.originalimage?.source;
             // Wikipedia 이미지 해상도 업그레이드: /320px- → /800px-
-            const finalUrl = url ? url.replace(/\/\d+px-/, '/800px-') : null;
+            const finalUrl = url ? url.replace(/\/\d+px-/, "/800px-") : null;
             if (finalUrl && isUsableImageUrl(finalUrl)) return finalUrl;
           }
         }
         return null;
-      } catch { return null; }
+      } catch {
+        return null;
+      }
     };
 
     // ⚠️ 수정금지(승인필요) 2026-05-15 = 이미지 fallback = Wikipedia 만 (= PD 폐기 SSOT §16)
@@ -560,17 +723,23 @@ export async function matchPlacesWithDB(
         batch.map(async (p) => {
           const wikiUrl = await fetchWikipediaImage(p.name);
           if (wikiUrl && isUsableImageUrl(wikiUrl)) {
-            const idx = enriched.findIndex((e) => e.name === p.name && e.lat === p.lat);
+            const idx = enriched.findIndex(
+              (e) => e.name === p.name && e.lat === p.lat,
+            );
             if (idx >= 0) enriched[idx] = { ...enriched[idx], image: wikiUrl };
           }
-        })
+        }),
       );
     }
     const filled = enriched.filter((p) => p.image?.trim()).length;
-    console.log(`[AG3] 📷 이미지 보강: ${needsPhoto.length}곳 시도 → ${filled}/${enriched.length}곳 확보 (${Date.now() - _pt0}ms)`);
+    console.log(
+      `[AG3] 📷 이미지 보강: ${needsPhoto.length}곳 시도 → ${filled}/${enriched.length}곳 확보 (${Date.now() - _pt0}ms)`,
+    );
   }
 
-  console.log(`[AG3] 최종: ${matched}곳 DB, ${googleFetched}곳 Google, ${unmatchedCount}곳 원본 (${Date.now() - _t0}ms)`);
+  console.log(
+    `[AG3] 최종: ${matched}곳 DB, ${googleFetched}곳 Google, ${unmatchedCount}곳 원본 (${Date.now() - _t0}ms)`,
+  );
   return enriched;
 }
 
@@ -580,41 +749,52 @@ export async function matchPlacesWithDB(
  */
 export async function saveNewPlacesToDB(
   newPlaces: PlaceResult[],
-  cityId: number | null
+  cityId: number | null,
 ): Promise<void> {
   if (!db || !cityId) {
-    console.log(`[AG3-SAVE] skip cityId=${cityId} db=${!!db} count=${newPlaces.length}`);
+    console.log(
+      `[AG3-SAVE] skip cityId=${cityId} db=${!!db} count=${newPlaces.length}`,
+    );
     return;
   }
 
   // 디버그: sourceType 분포
   const srcTypes: Record<string, number> = {};
-  for (const p of newPlaces) srcTypes[p.sourceType || 'undef'] = (srcTypes[p.sourceType || 'undef'] || 0) + 1;
-  console.log(`[AG3-SAVE] cityId=${cityId} count=${newPlaces.length} sourceTypes=${JSON.stringify(srcTypes)}`);
+  for (const p of newPlaces)
+    srcTypes[p.sourceType || "undef"] =
+      (srcTypes[p.sourceType || "undef"] || 0) + 1;
+  console.log(
+    `[AG3-SAVE] cityId=${cityId} count=${newPlaces.length} sourceTypes=${JSON.stringify(srcTypes)}`,
+  );
 
   // DB에 이미 있는 장소('DB Enriched')를 제외한 나머지 저장
-  const toSave = newPlaces.filter(p =>
-    p.sourceType === 'Gemini AI (New)' ||
-    p.sourceType === 'Gemini AI + Google Places'
+  const toSave = newPlaces.filter(
+    (p) =>
+      p.sourceType === "Gemini AI (New)" ||
+      p.sourceType === "Gemini AI + Google Places",
   );
   if (toSave.length === 0) {
     console.log(`[AG3-SAVE] toSave=0 (= 모두 DB Enriched 또는 다른 type)`);
     return;
   }
 
-  console.log(`[AG3-SAVE] toSave=${toSave.length} 행 = 즉시 await searchText + PhotoMedia + Storage upload + INSERT 시작`);
+  console.log(
+    `[AG3-SAVE] toSave=${toSave.length} 행 = 즉시 await searchText + PhotoMedia + Storage upload + INSERT 시작`,
+  );
 
   // ⚠️ 수정금지(승인필요) 2026-05-09 = 도시 좌표 사전 조회 (= searchText locationBias 용)
-  let cityLat = 0, cityLng = 0, cityName = '';
+  let cityLat = 0,
+    cityLng = 0,
+    cityName = "";
   try {
     const cityRow = await db!.execute(
-      sql`SELECT name_en, latitude, longitude FROM cities WHERE id = ${cityId} LIMIT 1`
+      sql`SELECT name_en, latitude, longitude FROM cities WHERE id = ${cityId} LIMIT 1`,
     );
     const c = (cityRow as any).rows?.[0];
     if (c) {
       cityLat = parseFloat(c.latitude) || 0;
       cityLng = parseFloat(c.longitude) || 0;
-      cityName = c.name_en || '';
+      cityName = c.name_en || "";
     }
   } catch (e) {
     console.warn(`[AG3-SAVE] 도시 좌표 조회 실패`, (e as Error).message);
@@ -624,46 +804,73 @@ export async function saveNewPlacesToDB(
   // = scripts/_tmp_paris-rest-insert-21new.mjs:95-127 = 헌법 (memory: feedback_image_matching_polite_failure.md)
   // = searchText (7 필드 + maxResultCount=1 + timeout 20s + textQuery 안에 도시명)
   // = PhotoMedia binary 다운로드 + Supabase Storage 업로드 = 메인앱 안전 URL
-  const GOOGLE_KEY = process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_PLACES_API_KEY || '';
-  const SUPA_ANON = process.env.SUPABASE_ANON_KEY || '';
-  const SUPA_PUB = process.env.SUPABASE_PUBLIC_URL || 'https://wxebceflvuythuodemro.supabase.co';
+  const GOOGLE_KEY =
+    process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_PLACES_API_KEY || "";
+  const SUPA_ANON = process.env.SUPABASE_ANON_KEY || "";
+  const SUPA_PUB =
+    process.env.SUPABASE_PUBLIC_URL ||
+    "https://wxebceflvuythuodemro.supabase.co";
 
   // 어제 21 식당 패턴 = searchText (= 7 필드 + maxResultCount=1 + timeout 20s)
   // ⚠️ FieldMask = Enterprise SKU ($35/1K) = SSOT §16 허용. Atmosphere 추가 금지.
-  const SEARCH_TEXT_FIELD_MASK = 'places.id,places.displayName,places.location,places.photos,places.googleMapsUri,places.userRatingCount,places.formattedAddress,places.priceRange';
+  const SEARCH_TEXT_FIELD_MASK =
+    "places.id,places.displayName,places.location,places.photos,places.googleMapsUri,places.userRatingCount,places.formattedAddress,places.priceRange";
   validateFieldMask(SEARCH_TEXT_FIELD_MASK);
-  async function searchText(name: string, addr: string | undefined): Promise<any | null> {
+  async function searchText(
+    name: string,
+    addr: string | undefined,
+  ): Promise<any | null> {
     try {
-      const r = await fetch('https://places.googleapis.com/v1/places:searchText', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Goog-Api-Key': GOOGLE_KEY,
-          'X-Goog-FieldMask': SEARCH_TEXT_FIELD_MASK,
+      const r = await fetch(
+        "https://places.googleapis.com/v1/places:searchText",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Goog-Api-Key": GOOGLE_KEY,
+            "X-Goog-FieldMask": SEARCH_TEXT_FIELD_MASK,
+          },
+          // ⚠️ 수정금지(승인필요) 2026-05-15 = languageCode: 'ko' (= Gemini 한국어 ↔ TS 한국어 검증 가능)
+          body: JSON.stringify({
+            textQuery: addr ? `${name} ${addr}` : `${name} ${cityName}`,
+            maxResultCount: 1,
+            languageCode: "ko",
+          }),
+          signal: AbortSignal.timeout(20000),
         },
-        // ⚠️ 수정금지(승인필요) 2026-05-15 = languageCode: 'ko' (= Gemini 한국어 ↔ TS 한국어 검증 가능)
-        body: JSON.stringify({ textQuery: addr ? `${name} ${addr}` : `${name} ${cityName}`, maxResultCount: 1, languageCode: 'ko' }),
-        signal: AbortSignal.timeout(20000),
-      });
+      );
       if (!r.ok) return null;
-      const d = await r.json() as any;
+      const d = (await r.json()) as any;
       return d.places?.[0] || null;
-    } catch { return null; }
+    } catch {
+      return null;
+    }
   }
 
   // 어제 21 식당 패턴 = PhotoMedia binary 다운로드 + Storage 업로드
-  async function uploadPhoto(photoName: string, placeId: string, seedCategory: string): Promise<string | null> {
+  async function uploadPhoto(
+    photoName: string,
+    placeId: string,
+    seedCategory: string,
+  ): Promise<string | null> {
     const phUrl = `https://places.googleapis.com/v1/${photoName}/media?key=${GOOGLE_KEY}&maxHeightPx=800&maxWidthPx=1200`;
     const phResp = await fetch(phUrl, { signal: AbortSignal.timeout(30000) });
     if (!phResp.ok) return null;
     const ab = await phResp.arrayBuffer();
     const binary = Buffer.from(ab);
     const fileName = `${cityId}/${seedCategory}/${placeId}.jpg`;
-    const upResp = await fetch(`${SUPA_PUB}/storage/v1/object/place-images/${fileName}`, {
-      method: 'PUT',
-      headers: { 'Authorization': `Bearer ${SUPA_ANON}`, 'Content-Type': 'image/jpeg', 'x-upsert': 'true' },
-      body: binary,
-    });
+    const upResp = await fetch(
+      `${SUPA_PUB}/storage/v1/object/place-images/${fileName}`,
+      {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${SUPA_ANON}`,
+          "Content-Type": "image/jpeg",
+          "x-upsert": "true",
+        },
+        body: binary,
+      },
+    );
     if (!upResp.ok) return null;
     return `${SUPA_PUB}/storage/v1/object/public/place-images/${fileName}`;
   }
@@ -675,93 +882,128 @@ export async function saveNewPlacesToDB(
 
   // 1. nextRank base 사전 계산 (= 카테고리별 1 회 = race condition 차단)
   const baseRanks: Record<string, number> = {};
-  for (const cat of ['restaurant', 'attraction']) {
+  for (const cat of ["restaurant", "attraction"]) {
     // ⚠️ 2026-05-23 = collection_phase 폐기 = phase_tags 'auto-learn%' 마커로 대체
     const r = await db!.execute(
       sql`SELECT COALESCE(MAX(rank), 8999) + 1 AS next_rank FROM place_seed_raw
           WHERE city_id = ${cityId} AND seed_category = ${cat}
-          AND EXISTS (SELECT 1 FROM unnest(COALESCE(phase_tags, ARRAY[]::text[])) AS t WHERE t LIKE 'auto-learn%')`
+          AND EXISTS (SELECT 1 FROM unnest(COALESCE(phase_tags, ARRAY[]::text[])) AS t WHERE t LIKE 'auto-learn%')`,
     );
     baseRanks[cat] = (r as any).rows?.[0]?.next_rank ?? 9000;
   }
   const today = new Date().toISOString().slice(0, 10);
 
   // 2. 병렬 처리 (= searchText + PhotoMedia + Storage + INSERT)
-  const results = await Promise.all(toSave.map(async (place, i) => {
-    try {
-      const result = await searchText(place.name, (place as any).geminiAddress);
-      if (!result || !result.id || !result.location) return { saved: 0, skipped: 1, enrichedByApi: 0, photoOk: 0 };
+  const results = await Promise.all(
+    toSave.map(async (place, i) => {
+      try {
+        const result = await searchText(
+          place.name,
+          (place as any).geminiAddress,
+        );
+        if (!result || !result.id || !result.location)
+          return { saved: 0, skipped: 1, enrichedByApi: 0, photoOk: 0 };
 
-      const placeId: string = result.id;
-      const lat: number = result.location.latitude;
-      const lng: number = result.location.longitude;
-      if (!lat || !lng) return { saved: 0, skipped: 1, enrichedByApi: 0, photoOk: 0 };
+        const placeId: string = result.id;
+        const lat: number = result.location.latitude;
+        const lng: number = result.location.longitude;
+        if (!lat || !lng)
+          return { saved: 0, skipped: 1, enrichedByApi: 0, photoOk: 0 };
 
-      const seedCategory: string = place.tags?.includes('restaurant') ? 'restaurant'
-        : place.tags?.includes('food') ? 'restaurant'
-        : 'attraction';
+        const seedCategory: string = place.tags?.includes("restaurant")
+          ? "restaurant"
+          : place.tags?.includes("food")
+            ? "restaurant"
+            : "attraction";
 
-      let imageUrl: string | null = null;
-      const photoName = result.photos?.[0]?.name;
-      if (photoName) {
-        imageUrl = await uploadPhoto(photoName, placeId, seedCategory);
+        let imageUrl: string | null = null;
+        const photoName = result.photos?.[0]?.name;
+        if (photoName) {
+          imageUrl = await uploadPhoto(photoName, placeId, seedCategory);
+        }
+
+        // ⚠️ place 객체 직접 갱신 (= 호출자 baseline 반영, race X = 각 호출 자기 place 만)
+        place.lat = lat;
+        place.lng = lng;
+        place.image = imageUrl || "";
+        (place as any).googlePlaceId = placeId;
+        (place as any).geminiAddress =
+          result.formattedAddress || (place as any).geminiAddress;
+        place.userRatingCount = result.userRatingCount || 0;
+        console.log(
+          `[AG3-SAVE] 📡 "${place.name}" → (${lat}, ${lng}) img=${imageUrl ? "Storage" : "NULL"}`,
+        );
+
+        // ⚠️ 추가 = 2026-05-15 사용자 SSOT = TS priceRange.endPrice + Gemini = 비싼 쪽 max
+        const tsPriceEur = result.priceRange?.endPrice?.units
+          ? parseFloat(result.priceRange.endPrice.units)
+          : 0;
+        const geminiPriceEur = (place as any).estimatedPriceEur || 0;
+        const maxPriceEur = Math.max(tsPriceEur, geminiPriceEur);
+
+        const nextRank = baseRanks[seedCategory] + i;
+        // ⚠️ 수정금지(승인필요) 2026-05-15 = 사용자 SSOT = upsertPlace() 통과 강제 (= CLAUDE.md 제14조)
+        // = 4 단계 매칭 (PID > 풀주소 > 좌표10m > 이름) + COALESCE 옛 우선 + GREATEST 가격
+        const { upsertPlace } = await import("../place-upsert");
+        await upsertPlace({
+          cityId: cityId,
+          seedCategory,
+          rank: nextRank,
+          nameEn: place.name,
+          nameKo: (place as any).nameKo || null,
+          nameLocal: (place as any).nameLocal || null,
+          address:
+            result.formattedAddress || (place as any).geminiAddress || null,
+          latitude: lat,
+          longitude: lng,
+          imageUrl: imageUrl,
+          googlePlaceId: placeId,
+          googleMapsUri: result.googleMapsUri || null, // ⚠️ 2026-05-15 = 13번째 SSOT
+          shortformKo: place.description || null, // → editorial_summary
+          selectionReasonKo:
+            place.personaFitReason || place.description || null, // → summary_ko
+          googleReviewCount: result.userRatingCount || 0,
+          priceEur: maxPriceEur,
+          categoryTags: [seedCategory],
+          phaseTags: [`auto-learn-${today}`],
+        });
+
+        return {
+          saved: 1,
+          skipped: 0,
+          enrichedByApi: 1,
+          photoOk: imageUrl ? 1 : 0,
+        };
+      } catch (e) {
+        // ⚠️ 2026-05-23 = silent fail 가시화 (= 사용자 SSOT = "5월 6일 백필 미작동" 진단 결과)
+        console.error(
+          `[AG3-SAVE] ❌ "${place.name}" 저장 실패:`,
+          (e as Error).message,
+        );
+        return {
+          saved: 0,
+          skipped: 0,
+          enrichedByApi: 0,
+          photoOk: 0,
+          error: (e as Error).message,
+        };
       }
-
-      // ⚠️ place 객체 직접 갱신 (= 호출자 baseline 반영, race X = 각 호출 자기 place 만)
-      place.lat = lat;
-      place.lng = lng;
-      place.image = imageUrl || '';
-      (place as any).googlePlaceId = placeId;
-      (place as any).geminiAddress = result.formattedAddress || (place as any).geminiAddress;
-      place.userRatingCount = result.userRatingCount || 0;
-      console.log(`[AG3-SAVE] 📡 "${place.name}" → (${lat}, ${lng}) img=${imageUrl ? 'Storage' : 'NULL'}`);
-
-      // ⚠️ 추가 = 2026-05-15 사용자 SSOT = TS priceRange.endPrice + Gemini = 비싼 쪽 max
-      const tsPriceEur = result.priceRange?.endPrice?.units ? parseFloat(result.priceRange.endPrice.units) : 0;
-      const geminiPriceEur = (place as any).estimatedPriceEur || 0;
-      const maxPriceEur = Math.max(tsPriceEur, geminiPriceEur);
-
-      const nextRank = baseRanks[seedCategory] + i;
-      // ⚠️ 수정금지(승인필요) 2026-05-15 = 사용자 SSOT = upsertPlace() 통과 강제 (= CLAUDE.md 제14조)
-      // = 4 단계 매칭 (PID > 풀주소 > 좌표10m > 이름) + COALESCE 옛 우선 + GREATEST 가격
-      const { upsertPlace } = await import('../place-upsert');
-      await upsertPlace({
-        cityId: cityId,
-        seedCategory,
-        rank: nextRank,
-        nameEn: place.name,
-        nameKo: (place as any).nameKo || null,
-        nameLocal: (place as any).nameLocal || null,
-        address: result.formattedAddress || (place as any).geminiAddress || null,
-        latitude: lat,
-        longitude: lng,
-        imageUrl: imageUrl,
-        googlePlaceId: placeId,
-        googleMapsUri: result.googleMapsUri || null,  // ⚠️ 2026-05-15 = 13번째 SSOT
-        shortformKo: place.description || null,                            // → editorial_summary
-        selectionReasonKo: place.personaFitReason || place.description || null,  // → summary_ko
-        googleReviewCount: result.userRatingCount || 0,
-        priceEur: maxPriceEur,
-        categoryTags: [seedCategory],
-        phaseTags: [`auto-learn-${today}`],
-      });
-
-      return { saved: 1, skipped: 0, enrichedByApi: 1, photoOk: imageUrl ? 1 : 0 };
-    } catch (e) {
-      // ⚠️ 2026-05-23 = silent fail 가시화 (= 사용자 SSOT = "5월 6일 백필 미작동" 진단 결과)
-      console.error(`[AG3-SAVE] ❌ "${place.name}" 저장 실패:`, (e as Error).message);
-      return { saved: 0, skipped: 0, enrichedByApi: 0, photoOk: 0, error: (e as Error).message };
-    }
-  }));
+    }),
+  );
 
   // 3. 카운터 집계
-  const totals = results.reduce((acc, r: any) => ({
-    saved: acc.saved + r.saved,
-    skipped: acc.skipped + r.skipped,
-    enrichedByApi: acc.enrichedByApi + r.enrichedByApi,
-    photoOk: acc.photoOk + r.photoOk,
-    error: acc.error || r.error || '',
-  }), { saved: 0, skipped: 0, enrichedByApi: 0, photoOk: 0, error: '' });
+  const totals = results.reduce(
+    (acc, r: any) => ({
+      saved: acc.saved + r.saved,
+      skipped: acc.skipped + r.skipped,
+      enrichedByApi: acc.enrichedByApi + r.enrichedByApi,
+      photoOk: acc.photoOk + r.photoOk,
+      error: acc.error || r.error || "",
+    }),
+    { saved: 0, skipped: 0, enrichedByApi: 0, photoOk: 0, error: "" },
+  );
 
-  console.log(`[AG3] 🆕 saved=${totals.saved} skipped=${totals.skipped} apiEnriched=${totals.enrichedByApi} photoOk=${totals.photoOk} error="${totals.error}"`);
+  console.log(
+    `[AG3] 🆕 saved=${totals.saved} skipped=${totals.skipped} apiEnriched=${totals.enrichedByApi} photoOk=${totals.photoOk} error="${totals.error}"`,
+  );
 }
