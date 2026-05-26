@@ -11,12 +11,17 @@
  */
 export interface RouteInputJson {
   city_center: { lat: number; lng: number };
-  day_slots_config: Array<{
-    day: number;
-    slots: number;
-    start_time: string;
-    end_time: string;
-  }>;
+  /**
+   * ⚠️ 2026-05-26 = 사용자 SSOT = slots 강제 폐기
+   * = day_count + start_time + end_time + pace_minutes 동적만 inject
+   * = Gemini = 시간 범위 ÷ pace = 자연 슬롯 수 + 자연 시각 분배
+   */
+  trip_config: {
+    day_count: number;
+    start_time: string; // = formData.startTime (= 사용자 동적 입력)
+    end_time: string; // = formData.endTime (= 사용자 동적 입력)
+    pace_minutes: number; // = PACE_CONFIG[travelPace] (= 90/120/150)
+  };
   protagonist: {
     group_type: string; // "Single" | "Couple" | "Family" | ...
     group_label_ko: string; // 한국어 label = "1 인" / "커플" / ...
@@ -25,7 +30,6 @@ export interface RouteInputJson {
     age_desc?: string; // companionAges
     vibes: Array<{ vibe: string; weight: number; priority: number }>;
     transport_mode: "public_transit" | "private_driver_guide";
-    pace_label: string; // "90분/슬롯 × 8슬롯/일"
   };
   meal_budget_eur_per_person: {
     lunch: number;

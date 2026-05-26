@@ -130,8 +130,16 @@ export async function backfillFromRoute(
   console.log(
     `[Route-Backfill] ✅ ${summary.total}건 처리 = ${summary.inserted} INSERT / ${summary.updated} UPDATE / ${summary.skipped} skip`,
   );
-  if (summary.errors.length > 0 && summary.errors.length <= 5) {
-    summary.errors.forEach((err) => console.warn(`[Route-Backfill] ⚠️ ${err}`));
+  // ⚠️ 2026-05-26 = errors 항상 출력 (= 디버깅 = 옛 5 제한 폐기)
+  if (summary.errors.length > 0) {
+    summary.errors
+      .slice(0, 5)
+      .forEach((err) => console.warn(`[Route-Backfill] ⚠️ ${err}`));
+    if (summary.errors.length > 5) {
+      console.warn(
+        `[Route-Backfill] ⚠️ +${summary.errors.length - 5} more errors`,
+      );
+    }
   }
   return summary;
 }

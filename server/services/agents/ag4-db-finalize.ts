@@ -145,6 +145,26 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
   const slotDuration = skeleton.paceConfig.slotDurationMinutes;
   const mealBudget = MEAL_BUDGET[formData.travelStyle || "Reasonable"];
 
+  // ⚠️ 2026-05-26 = 사용자 SSOT = scene 검증 (= 안전망)
+  // = prompt 강제 + 코드 검증 양면 = 환각 차단
+  const globalPlaceIdCounts = new Map<string, number>();
+  for (const rd of routeResponse.days || []) {
+    for (const sc of rd.scenes || []) {
+      if (sc.place_id && !sc.place_id.startsWith("auto-")) {
+        globalPlaceIdCounts.set(
+          sc.place_id,
+          (globalPlaceIdCounts.get(sc.place_id) || 0) + 1,
+        );
+      }
+    }
+  }
+  const dupIds = [...globalPlaceIdCounts.entries()].filter(([, c]) => c > 1);
+  if (dupIds.length > 0) {
+    dupIds.forEach(([id, c]) =>
+      console.warn(`[AG4-DB] ⚠️ place_id 중복 (${c}회 사용): ${id}`),
+    );
+  }
+
   const days: any[] = [];
   let totalPerPersonEur = 0;
 
@@ -152,6 +172,22 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
     const dayConfig = daySlotsConfig.find((c) => c.day === d)!;
     const routeDay = routeResponse.days?.find((rd) => rd.day === d);
     const scenes = routeDay?.scenes || [];
+
+    // ⚠️ 2026-05-26 = 일자별 검증 = 사용자 SSOT 위반 검출
+    const lastScene = scenes[scenes.length - 1];
+    if (lastScene && lastScene.type !== "restaurant") {
+      console.warn(
+        `[AG4-DB] ⚠️ Day ${d} 마지막 슬롯 = activity (= 저녁 식당 강제 위반): ${lastScene.name_en || "(name null)"}`,
+      );
+    }
+    const nullNames = scenes.filter((s) => !s.name_en);
+    if (nullNames.length > 0) {
+      nullNames.forEach((s) =>
+        console.warn(
+          `[AG4-DB] ⚠️ Day ${d} scene name_en null: slot=${s.slot} type=${s.type} place_id=${s.place_id}`,
+        ),
+      );
+    }
 
     const dayPlaces = scenes.map((scene) => {
       const isAuto = scene.place_id?.startsWith("auto-");

@@ -60,6 +60,11 @@ export async function handleRouteRequest(
     console.log(
       `[Route] ✅ Gemini 응답 (${elapsedMs}ms): ${daysCount}일 × ${scenesCount}씬`,
     );
+    // ⚠️ 2026-05-26 디버깅 = scenario raw 응답 출력 (= 사용자 검증)
+    console.log(
+      `[Route] 🔍 RAW response:`,
+      JSON.stringify(result.data, null, 2).slice(0, 12000),
+    );
 
     return {
       ok: true,

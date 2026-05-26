@@ -96,7 +96,7 @@ export function buildRouteInputJson(
   places: PlaceResult[],
   cityCoords: { lat: number; lng: number } | undefined,
 ): RouteInputJson {
-  const { formData, vibeWeights, paceConfig, daySlotsConfig } = skeleton;
+  const { formData, vibeWeights, paceConfig } = skeleton;
 
   const companionType = formData.companionType || "Solo";
   const groupLabelKo = COMPANION_LABEL_KO[companionType] || "1 인 (= 솔로)";
@@ -107,22 +107,22 @@ export function buildRouteInputJson(
     formData.travelStyle,
   );
   const mealBudget = MEAL_BUDGET[formData.travelStyle || "Reasonable"];
-  const slotsPerDay = daySlotsConfig[0]?.slots || paceConfig.maxSlotsPerDay;
 
   return {
     city_center: resolveCityCenter(formData, cityCoords, places),
-    day_slots_config: daySlotsConfig.map((d) => ({
-      day: d.day,
-      slots: d.slots,
-      start_time: d.startTime,
-      end_time: d.endTime,
-    })),
+    // ⚠️ 2026-05-26 = 사용자 SSOT = slots 강제 폐기 = trip_config 동적만
+    // = Gemini = 시간 범위 ÷ pace = 자연 슬롯 수 + 자연 시각 분배
+    trip_config: {
+      day_count: skeleton.dayCount,
+      start_time: formData.startTime || "09:00",
+      end_time: formData.endTime || "21:00",
+      pace_minutes: paceConfig.slotDurationMinutes,
+    },
     protagonist: {
       group_type: companionType,
       group_label_ko: groupLabelKo,
       headcount,
       focus: focusKey,
-      // ⚠️ 2026-05-26 = 사용자 SSOT = 동선 전용 = focus_tone_ko / camera_subject 폐기 (= 시나리오 카피)
       age_desc: formData.companionAges || undefined,
       vibes: vibeWeights.map((v, i) => ({
         vibe: String(v.vibe),
@@ -130,7 +130,6 @@ export function buildRouteInputJson(
         priority: i + 1,
       })),
       transport_mode,
-      pace_label: `${paceConfig.slotDurationMinutes}분/슬롯 × ${slotsPerDay}슬롯/일`,
     },
     meal_budget_eur_per_person: {
       lunch: mealBudget.lunch,
@@ -166,11 +165,11 @@ export function generateRoutePrompt(
   cityCoords: { lat: number; lng: number } | undefined,
 ): { prompt: string; inputJson: RouteInputJson } {
   const inputJson = buildRouteInputJson(skeleton, places, cityCoords);
-  const { formData, paceConfig, daySlotsConfig } = skeleton;
+  const { formData, paceConfig } = skeleton;
   const mealBudget = MEAL_BUDGET[formData.travelStyle || "Reasonable"];
   const transportMode = inputJson.protagonist.transport_mode;
-  const slotsPerDay = daySlotsConfig[0]?.slots || paceConfig.maxSlotsPerDay;
   const nonRestaurantCount = inputJson.places.length;
+  const tc = inputJson.trip_config;
 
   // prettier-ignore
   const prompt = `# 역할
@@ -183,9 +182,14 @@ export function generateRoutePrompt(
 # 목표
 입력 ${nonRestaurantCount} 비식당 + 일자별 점심 + 저녁 식당 자동 발견
 
+# 시간 + 일자 (= 사용자 동적 입력)
+- ${tc.day_count} 일 / 출발 ${tc.start_time} ~ 종료 ${tc.end_time} / pace ${tc.pace_minutes} 분/슬롯
+- 일자별 슬롯 수 = 시간 범위 ÷ pace = 자연 계산 (= 강제 X = 동선 효율 따라 7-9 곳 자유)
+- 시각 분배 = 자유 (= 12:00 점심도 12:30 점심도 자연)
+
 # 식당 자동 발견 + DB 백필
-- 점심 = 일자 중간 + 그 시각 전후 활동 좌표 인근 + 1인 €${mealBudget.lunch} 이내 (= ${mealBudget.lunchLabel}).
-- 저녁 = 일자 마지막 슬롯 = 일자 마지막 활동 좌표 인근 + 1인 €${mealBudget.dinner} 이내 (= ${mealBudget.dinnerLabel}).
+- 점심 = 일자 중간 시각 (= 12:00-14:00) + 그 시각 전후 활동 좌표 인근 + 1인 €${mealBudget.lunch} 이내 (= ${mealBudget.lunchLabel}).
+- 저녁 = 일자 마지막 종착지 (= 18:00-21:00) + 일자 마지막 활동 좌표 인근 + 1인 €${mealBudget.dinner} 이내 (= ${mealBudget.dinnerLabel}).
 - ⚠️ Gemini 발견 식당 = 7 필드 반드시 (= name_local / address / lat / lng / **price_per_person_eur = 1 인 EUR 1 가지만** / **selection_reason_ko** / **shortform_ko**).
 - ⚠️ **price_for_2_eur 같은 2 인 가격 요청 X** (= Gemini 가 2 인 가격을 1 인 필드에 입력 위험 = 사용자 SSOT 2026-05-25 = 단위 모호 결함).
 - **selection_reason_ko** = 한국어 한 줄 = 인스타 성지/네이버 블로그/유튜브 vlog 사회적 검증 (→ DB summary_ko).
@@ -223,10 +227,11 @@ ${JSON.stringify(inputJson, null, 2)}
 
 # 핵심 원칙
 1. 입력 비식당 ${nonRestaurantCount} 곳 = 모두 응답 포함 (= 추가/제외 X).
-2. 식당 = Google Maps grounding 발견 + 5 필드 + 예산 이내.
-3. 동선 = city_center 출발/귀환 + 자연 cluster.
+2. 식당 = Google Maps grounding 발견 + 7 필드 + 예산 이내.
+3. 동선 = city_center 출발/귀환 + 자연 cluster + 최적 순서.
 4. 교통 = transport_mode="${transportMode}" = ${transportMode === 'private_driver_guide' ? '모든 hop 전용 차량 가이드' : '도보 + 메트로 + RER + 버스 조합'}.
-5. 페이스 = ${paceConfig.slotDurationMinutes}분/슬롯 × ${slotsPerDay}슬롯/일 = ${formData.travelPace}.
+5. 페이스 = ${paceConfig.slotDurationMinutes}분/슬롯 = ${formData.travelPace} (= 일자별 슬롯 수 자유 = 7-9 곳).
+6. 식당 = 마지막 종착지 (= 저녁) + 일자 중간 (= 점심).
 7. 응답 = JSON 만 (= markdown X).`;
 
   return { prompt, inputJson };

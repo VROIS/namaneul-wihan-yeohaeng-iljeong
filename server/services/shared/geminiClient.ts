@@ -62,10 +62,9 @@ export async function geminiJson<T = any>(
   // Google Search grounding (= 사용자 SSOT "구글서치/그라운딩 기반")
   if (opts?.googleSearch) {
     config.tools = [{ googleSearch: {} }];
-    // ⚠️ 수정금지(승인필요) 2026-05-26 = 사용자 SSOT = Gemini API 제약 우회
+    // ⚠️ 수정금지(승인필요) 2026-05-26 = Gemini API 제약 우회
     // = "Tool use with a response mime type: 'application/json' is unsupported" (= INVALID_ARGUMENT)
-    // = tools + responseMimeType 동시 호출 X = JSON mime 자동 제거 (= prompt 안 "JSON 만" 강제 + raw 응답 JSON 추출 로직 보유)
-    // = 실측 = gemini-2.5-flash-lite + tools + JSON mime = 400 에러 (= 2026-05-26 route 호출 실패)
+    // = tools + responseMimeType 동시 호출 X = JSON mime 자동 제거
     delete config.responseMimeType;
   }
 
