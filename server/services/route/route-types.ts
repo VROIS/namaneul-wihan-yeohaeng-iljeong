@@ -12,15 +12,14 @@
 export interface RouteInputJson {
   city_center: { lat: number; lng: number };
   /**
-   * ⚠️ 2026-05-26 = 사용자 SSOT = slots 강제 폐기
-   * = day_count + start_time + end_time + pace_minutes 동적만 inject
-   * = Gemini = 시간 범위 ÷ pace = 자연 슬롯 수 + 자연 시각 분배
+   * ⚠️ 2026-05-26 = 사용자 SSOT = 사용자 동적 입력만 = 시키지 않은 조건 inject X
+   * = pace = AG2 풀 수 결정 내부 코드만 = Gemini 무관 = inject 폐기
+   * = Gemini = 시간 범위 + 풀 크기 + 동선 효율 = 자연 슬롯 수 자체 결정
    */
   trip_config: {
     day_count: number;
-    start_time: string; // = formData.startTime (= 사용자 동적 입력)
-    end_time: string; // = formData.endTime (= 사용자 동적 입력)
-    pace_minutes: number; // = PACE_CONFIG[travelPace] (= 90/120/150)
+    start_time: string; // = formData.startTime
+    end_time: string; // = formData.endTime
   };
   protagonist: {
     group_type: string; // "Single" | "Couple" | "Family" | ...

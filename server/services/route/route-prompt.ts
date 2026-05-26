@@ -110,13 +110,12 @@ export function buildRouteInputJson(
 
   return {
     city_center: resolveCityCenter(formData, cityCoords, places),
-    // ⚠️ 2026-05-26 = 사용자 SSOT = slots 강제 폐기 = trip_config 동적만
-    // = Gemini = 시간 범위 ÷ pace = 자연 슬롯 수 + 자연 시각 분배
+    // ⚠️ 2026-05-26 = 사용자 SSOT = 사용자 동적 입력만 = 시키지 않은 조건 X
+    // = pace = inject 폐기 (= AG2 풀 수 결정 내부 코드만)
     trip_config: {
       day_count: skeleton.dayCount,
       start_time: formData.startTime || "09:00",
       end_time: formData.endTime || "21:00",
-      pace_minutes: paceConfig.slotDurationMinutes,
     },
     protagonist: {
       group_type: companionType,
@@ -183,9 +182,9 @@ export function generateRoutePrompt(
 입력 ${nonRestaurantCount} 비식당 + 일자별 점심 + 저녁 식당 자동 발견
 
 # 시간 + 일자 (= 사용자 동적 입력)
-- ${tc.day_count} 일 / 출발 ${tc.start_time} ~ 종료 ${tc.end_time} / pace ${tc.pace_minutes} 분/슬롯
-- 일자별 슬롯 수 = 시간 범위 ÷ pace = 자연 계산 (= 강제 X = 동선 효율 따라 7-9 곳 자유)
-- 시각 분배 = 자유 (= 12:00 점심도 12:30 점심도 자연)
+- ${tc.day_count} 일 / 출발 ${tc.start_time} ~ 종료 ${tc.end_time}
+- 일자별 슬롯 수 = 자유 (= 동선 효율 따라)
+- 시각 분배 = 자유
 
 # 식당 자동 발견 + DB 백필
 - 점심 = 일자 중간 시각 (= 12:00-14:00) + 그 시각 전후 활동 좌표 인근 + 1인 €${mealBudget.lunch} 이내 (= ${mealBudget.lunchLabel}).
@@ -230,9 +229,8 @@ ${JSON.stringify(inputJson, null, 2)}
 2. 식당 = Google Maps grounding 발견 + 7 필드 + 예산 이내.
 3. 동선 = city_center 출발/귀환 + 자연 cluster + 최적 순서.
 4. 교통 = transport_mode="${transportMode}" = ${transportMode === 'private_driver_guide' ? '모든 hop 전용 차량 가이드' : '도보 + 메트로 + RER + 버스 조합'}.
-5. 페이스 = ${paceConfig.slotDurationMinutes}분/슬롯 = ${formData.travelPace} (= 일자별 슬롯 수 자유 = 7-9 곳).
-6. 식당 = 마지막 종착지 (= 저녁) + 일자 중간 (= 점심).
-7. 응답 = JSON 만 (= markdown X).`;
+5. 식당 = 마지막 종착지 (= 저녁) + 일자 중간 (= 점심).
+6. 응답 = JSON 만 (= markdown X).`;
 
   return { prompt, inputJson };
 }
