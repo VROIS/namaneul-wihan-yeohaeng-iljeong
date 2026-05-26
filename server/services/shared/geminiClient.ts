@@ -6,9 +6,9 @@
  * = AI 재발명 차단 = 모든 Gemini 호출 = 이 함수만 통과
  */
 
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI } from "@google/genai";
 
-const MODEL_ID = 'gemini-3-flash-preview';
+const MODEL_ID = "gemini-3-flash-preview";
 const TEMPERATURE = 0.2;
 const MAX_OUTPUT_TOKENS = 50000;
 
@@ -19,8 +19,11 @@ function getAI(): GoogleGenAI {
     const apiKey =
       process.env.AI_INTEGRATIONS_GEMINI_API_KEY ||
       process.env.GEMINI_API_KEY ||
-      '';
-    if (!apiKey) throw new Error('Gemini API key missing (AI_INTEGRATIONS_GEMINI_API_KEY or GEMINI_API_KEY)');
+      "";
+    if (!apiKey)
+      throw new Error(
+        "Gemini API key missing (AI_INTEGRATIONS_GEMINI_API_KEY or GEMINI_API_KEY)",
+      );
     ai = new GoogleGenAI({ apiKey });
   }
   return ai;
@@ -53,30 +56,35 @@ export async function geminiJson<T = any>(
   const config: any = {
     temperature: opts?.temperature ?? TEMPERATURE,
     maxOutputTokens: opts?.maxOutputTokens ?? MAX_OUTPUT_TOKENS,
-    responseMimeType: 'application/json',
+    responseMimeType: "application/json",
     thinkingConfig: { thinkingBudget: 0 },
   };
   // Google Search grounding (= 사용자 SSOT "구글서치/그라운딩 기반")
   if (opts?.googleSearch) {
     config.tools = [{ googleSearch: {} }];
+    // ⚠️ 수정금지(승인필요) 2026-05-26 = 사용자 SSOT = Gemini API 제약 우회
+    // = "Tool use with a response mime type: 'application/json' is unsupported" (= INVALID_ARGUMENT)
+    // = tools + responseMimeType 동시 호출 X = JSON mime 자동 제거 (= prompt 안 "JSON 만" 강제 + raw 응답 JSON 추출 로직 보유)
+    // = 실측 = gemini-2.5-flash-lite + tools + JSON mime = 400 에러 (= 2026-05-26 route 호출 실패)
+    delete config.responseMimeType;
   }
 
   const response = await getAI().models.generateContent({
     model: opts?.model || MODEL_ID,
-    contents: [{ role: 'user', parts: [{ text: prompt }] }],
+    contents: [{ role: "user", parts: [{ text: prompt }] }],
     config,
   });
 
-  const raw = (response as any).text || '';
+  const raw = (response as any).text || "";
   const finishReason =
-    (response as any).candidates?.[0]?.finishReason || 'unknown';
+    (response as any).candidates?.[0]?.finishReason || "unknown";
 
   let data: T | null = null;
   let parseError: string | undefined;
   try {
     const m = raw.match(/\{[\s\S]*\}/);
     if (m) data = JSON.parse(m[0]) as T;
-    else parseError = 'no JSON object found in response';
+    else parseError = "no JSON object found in response";
   } catch (e: any) {
     parseError = e.message || String(e);
   }
