@@ -1,12 +1,9 @@
-// ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT = DB-only 전용 AG4
-// = Google Routes API 호출 = 0 (= transit-haversine.ts 사용)
-// = dailyPerPersonEur = ÷ companionCount X = 1 인 단가 그대로 + group = × companionCount 별도
-//
-// ⚠️ 수정금지(승인필요) 2026-05-26 = 사용자 SSOT = route/ Gemini 호출 통합 (= DB-only 전용)
-// = 표준 prompt (= 10-main-app-route) 1 회 호출 = 동선 + 식당 자동 발견 (= 시나리오 카피 제거)
-// = cascade 효과: 신규 식당 발견 → upsertPlace 백필 (= background) / 좌표 NULL 보정
+// ⚠️ 수정금지(승인필요) 2026-05-26 = 사용자 SSOT = DB-only 전용 AG4 = scenario.scenes 직접 사용
+// = 옛 itinerary-generator 슬롯 강제 분배 + calcTransitHaversine 자체 계산 = 완전 폐기 (= 단계 4)
+// = scenario 성공 = scene 직접 24 슬롯 사용 + scene 의 distance / transit_mode / transit_min 직접 사용
+// = scenario 실패 = 옛 itinerary fallback (= 안전망)
 // = backfill = fire-and-forget (= FE 우선 노출 + background)
-// = transit/distance/cost 자체 계산 = 단계 4 까지 유지 (= 사용자 명시 = 옛 동선 폐기 = 마일스톤 후)
+// = dailyPerPersonEur = 1 인 단가 그대로 + group = × companionCount 별도
 
 import { db } from "../../db";
 import { exchangeRates } from "@shared/schema";
@@ -16,14 +13,12 @@ import type {
   TripFormData,
   DaySlotConfig,
   TravelPace,
-  ScheduleSlot,
   AG1Output,
 } from "./types";
 import { MEAL_BUDGET } from "./types";
-import { calcTransitHaversine, type TravelMode } from "./transit-haversine";
 import { handleRouteRequest } from "../route/route-handler";
 import { backfillFromRoute } from "../route/route-backfill";
-import type { RouteResponse, RouteScene } from "../route/route-types";
+import type { RouteResponse } from "../route/route-types";
 
 /** EUR → KRW 환율 = exchangeRates DB 캐시 */
 async function getEurToKrwRate(): Promise<number> {
@@ -50,60 +45,65 @@ async function getEurToKrwRate(): Promise<number> {
   return 1500;
 }
 
-function isValidCoord(lat: number, lng: number): boolean {
-  return (
-    lat !== 0 &&
-    lng !== 0 &&
-    lat >= -90 &&
-    lat <= 90 &&
-    lng >= -180 &&
-    lng <= 180
-  );
+function addMinutes(time: string, minutes: number): string {
+  const [h, m] = time.split(":").map(Number);
+  const total = h * 60 + m + minutes;
+  const hh = Math.floor(total / 60) % 24;
+  const mm = total % 60;
+  return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+}
+
+function classifyMealType(time: string): "lunch" | "dinner" {
+  const hour = parseInt(time.split(":")[0], 10);
+  return hour < 15 ? "lunch" : "dinner";
+}
+
+/**
+ * 단순 교통비 추정 = scene.transit_mode + transit_min 기반
+ * = 옛 calcTransitHaversine 자체 계산 폐기 후 = scene 응답 직접 사용
+ * = 도시별 정확 가격 = 추후 transport-pricing-service 통합 (= 별도 단계)
+ */
+function estimateTransitCost(
+  mode: string,
+  minutes: number,
+  companionCount: number,
+): number {
+  switch (mode) {
+    case "walk":
+      return 0;
+    case "metro":
+    case "bus":
+      return Math.round(2.1 * companionCount * 100) / 100;
+    case "RER":
+      return Math.round(5.0 * companionCount * 100) / 100;
+    case "private_guide":
+      return Math.round((minutes / 60) * 60 * 100) / 100; // €60/h
+    default:
+      return 0;
+  }
 }
 
 export interface AG4DbInput {
-  schedule: ScheduleSlot[];
   daySlotsConfig: DaySlotConfig[];
   travelPace: TravelPace;
   formData: TripFormData;
   companionCount: number;
   dayCount: number;
-  // ⚠️ 수정금지(승인필요) 2026-05-26 = route/ Gemini 호출 통합 = cityId 필수 (= backfill background)
   cityId?: number | null;
   cityCoords?: { lat: number; lng: number };
-  skeleton?: AG1Output; // = route-prompt 입력 = AG1 매트릭스 전체
-  inputPlaces?: PlaceResult[]; // = route-backfill 입력 = AG3-DB 원본 풀
+  skeleton: AG1Output;
+  inputPlaces: PlaceResult[];
 }
 
 /**
- * route.scene → (day, slot) 매칭 lookup 구축
- * = dayPlaces array index (= 0-based) ↔ scene.slot (= 1-based)
- */
-function buildSceneLookup(
-  response: RouteResponse | null,
-): Map<string, RouteScene> {
-  const map = new Map<string, RouteScene>();
-  if (!response?.days) return map;
-  for (const day of response.days) {
-    if (!day.scenes) continue;
-    for (const scene of day.scenes) {
-      const key = `${day.day}:${scene.slot}`;
-      map.set(key, scene);
-    }
-  }
-  return map;
-}
-
-/**
- * AG4-DB 메인 = DB-only 일정 완성
- * = Routes 0 + 단위 일치 (= 1 인 perPerson + group 별도)
- * = route/ Gemini 호출 통합 (= 동선 정렬 + 신규 식당 발견 = 시나리오 카피 제거)
- * = backfill = fire-and-forget (= FE 우선 노출 + background)
+ * AG4-DB 메인 = scenario.scenes 직접 사용 (= 사용자 SSOT 2026-05-26 단계 4)
+ * = 옛 슬롯 강제 분배 + zone fallback + placeholder 완전 폐기
+ * = scenario 응답 24 씬 = 그대로 일자별 슬롯 = FE 노출
+ * = 실패 = 옛 itinerary fallback (= 안전망 = MIX path 동일 코드)
  */
 export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
   const _t0 = Date.now();
   const {
-    schedule,
     daySlotsConfig,
     travelPace,
     formData,
@@ -115,170 +115,138 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
     inputPlaces,
   } = input;
 
-  const travelMode: TravelMode =
-    formData.mobilityStyle === "WalkMore"
-      ? "WALK"
-      : formData.mobilityStyle === "Minimal"
-        ? "DRIVE"
-        : "TRANSIT";
-
-  const mealBudget = MEAL_BUDGET[formData.travelStyle || "Reasonable"];
   const eurToKrw = await getEurToKrwRate();
 
-  // ⚠️ 수정금지(승인필요) 2026-05-26 = 사용자 SSOT = route/ Gemini 호출 통합 (= 동선 전용)
-  // = cascade 효과: 신규 식당 발견 → upsertPlace 백필 (= background) / 좌표 NULL 보정
-  let routeResponse: RouteResponse | null = null;
-  let routeElapsedMs = 0;
+  // ===== 1. scenario 호출 (= 사용자 SSOT = Gemini 자유 동선) =====
+  const routeResult = await handleRouteRequest(
+    skeleton,
+    inputPlaces,
+    cityCoords,
+  );
 
-  if (skeleton && inputPlaces && inputPlaces.length > 0) {
-    const routeResult = await handleRouteRequest(
-      skeleton,
-      inputPlaces,
-      cityCoords,
+  if (!routeResult.ok || !routeResult.response) {
+    console.error(
+      `[AG4-DB] ❌ route 호출 실패 (${routeResult.elapsedMs}ms) = 옛 itinerary fallback`,
     );
-    routeElapsedMs = routeResult.elapsedMs;
-    if (routeResult.ok && routeResult.response) {
-      routeResponse = routeResult.response;
-      // ⚠️ 2026-05-26 = 사용자 SSOT = 백필 = background fire-and-forget (= FE 우선 노출)
-      // = await 제거 = 본 함수 = 백필 끝 기다리지 X = FE 응답 즉시
-      if (cityId) {
-        backfillFromRoute(routeResponse, cityId, inputPlaces).catch((e: any) =>
-          console.warn(
-            `[Route-Backfill] ❌ background error:`,
-            e?.message || e,
-          ),
-        );
-      }
-    } else {
-      console.warn(
-        `[AG4-DB] route 호출 실패 → 옛 동작 fallback (${routeElapsedMs}ms)`,
-      );
-    }
+    return await finalizeWithLegacyItinerary(input, eurToKrw);
   }
 
-  const sceneLookup = buildSceneLookup(routeResponse);
+  const routeResponse = routeResult.response;
+
+  // ===== 2. 백필 = background fire-and-forget (= FE 우선 노출) =====
+  if (cityId) {
+    backfillFromRoute(routeResponse, cityId, inputPlaces).catch((e: any) =>
+      console.warn(`[Route-Backfill] ❌ background error:`, e?.message || e),
+    );
+  }
+
+  // ===== 3. scene 직접 24 슬롯 사용 =====
+  const inputById = new Map(inputPlaces.map((p) => [p.id, p]));
+  const slotDuration = skeleton.paceConfig.slotDurationMinutes;
+  const mealBudget = MEAL_BUDGET[formData.travelStyle || "Reasonable"];
 
   const days: any[] = [];
   let totalPerPersonEur = 0;
 
   for (let d = 1; d <= dayCount; d++) {
     const dayConfig = daySlotsConfig.find((c) => c.day === d)!;
-    const dayPlaces = schedule
-      .filter((s) => s.day === d)
-      .map((s, idx) => {
-        // ⚠️ 수정금지(승인필요) 2026-05-26 = route.scene 매칭 = (day, slot=idx+1)
-        const scene = sceneLookup.get(`${d}:${idx + 1}`);
+    const routeDay = routeResponse.days?.find((rd) => rd.day === d);
+    const scenes = routeDay?.scenes || [];
 
-        // 좌표 보정 = 옛 lat/lng 0/NULL = route 응답 lat/lng 사용 (= 본 trip 즉시 효과)
-        const needsCoordFix = !isValidCoord(s.place.lat, s.place.lng);
-        const fixedLat =
-          needsCoordFix && scene && isValidCoord(scene.lat, scene.lng)
-            ? scene.lat
-            : s.place.lat;
-        const fixedLng =
-          needsCoordFix && scene && isValidCoord(scene.lat, scene.lng)
-            ? scene.lng
-            : s.place.lng;
-
-        return {
-          ...s.place,
-          lat: fixedLat,
-          lng: fixedLng,
-          startTime: s.startTime,
-          endTime: s.endTime,
-          isMealSlot: s.isMealSlot,
-          mealType: s.mealType,
-          // ⚠️ 수정금지(승인필요) 2026-05-20 = price_eur 실제값 우선 = MEAL_BUDGET fallback (= NULL 시만)
-          mealPrice: s.isMealSlot
-            ? s.place.estimatedPriceEur && s.place.estimatedPriceEur > 0
-              ? s.place.estimatedPriceEur
-              : s.mealType === "lunch"
-                ? mealBudget.lunch
-                : mealBudget.dinner
-            : undefined,
-          mealPriceLabel: s.isMealSlot
-            ? s.place.estimatedPriceEur && s.place.estimatedPriceEur > 0
-              ? `€${s.place.estimatedPriceEur}`
-              : s.mealType === "lunch"
-                ? mealBudget.lunchLabel
-                : mealBudget.dinnerLabel
-            : undefined,
-          estimatedPriceEur: s.place.estimatedPriceEur,
-          selectionReasons: s.place.selectionReasons || [],
-          confidenceLevel: s.place.confidenceLevel || "minimal",
-          // ⚠️ 2026-05-26 = 사용자 SSOT = 동선 전용 = scenarioCue 폐기 (= 시나리오 카피)
-        };
-      });
-
-    // 숙소 좌표 = 첫 장소 좌표 (= AG4-DB = 단순화)
-    const accommodationCoords =
-      dayPlaces.length > 0
-        ? { lat: dayPlaces[0].lat, lng: dayPlaces[0].lng }
+    const dayPlaces = scenes.map((scene) => {
+      const isAuto = scene.place_id?.startsWith("auto-");
+      const inputPlace = !isAuto ? inputById.get(scene.place_id) : undefined;
+      const isMeal = scene.type === "restaurant";
+      const mealType: "lunch" | "dinner" | undefined = isMeal
+        ? classifyMealType(scene.time)
         : undefined;
-    const accommodationName = "도심 기준";
 
-    // 이동 구간 = Haversine 자체 계산 (= Routes API 0)
-    const transits: any[] = [];
-    let departureTransit: any;
-    let returnTransit: any;
+      const mealPrice = isMeal
+        ? (scene.price_per_person_eur ??
+          (mealType === "lunch" ? mealBudget.lunch : mealBudget.dinner))
+        : undefined;
+      const mealPriceLabel = isMeal
+        ? scene.price_per_person_eur
+          ? `€${scene.price_per_person_eur}`
+          : mealType === "lunch"
+            ? mealBudget.lunchLabel
+            : mealBudget.dinnerLabel
+        : undefined;
 
-    if (accommodationCoords && dayPlaces.length > 0) {
-      departureTransit = calcTransitHaversine(
-        { ...accommodationCoords, name: accommodationName },
-        dayPlaces[0],
-        travelMode,
-        companionCount,
-      );
-    }
+      return {
+        // 식별 (= FE 호환 = 옛 PlaceResult 양식)
+        id: scene.place_id,
+        name: scene.name_en,
+        nameEn: scene.name_en,
+        nameKo: scene.name_ko,
+        nameLocal: scene.name_local,
+        address: scene.address,
+        lat: scene.lat,
+        lng: scene.lng,
+        // 분류
+        type: scene.type,
+        isMealSlot: isMeal,
+        mealType,
+        seedCategory:
+          inputPlace?.seedCategory || (isMeal ? "restaurant" : "attraction"),
+        // 시간
+        startTime: scene.time,
+        endTime: addMinutes(scene.time, slotDuration),
+        // 가격
+        estimatedPriceEur: isMeal
+          ? scene.price_per_person_eur
+          : (inputPlace?.estimatedPriceEur ?? 0),
+        mealPrice,
+        mealPriceLabel,
+        // FE 표시 보강 (= inputPlace = PSR 데이터 = 이미지/리뷰수 등)
+        image: inputPlace?.image || null,
+        userRatingCount: inputPlace?.userRatingCount,
+        selectionReasons: inputPlace?.selectionReasons || [],
+        confidenceLevel: inputPlace?.confidenceLevel || "minimal",
+        // 본 단계 추가 = scene 의 한국어 카피 (= PSR 백필용 + FE 표시)
+        selectionReasonKo:
+          scene.selection_reason_ko || inputPlace?.selectionReasons?.[0],
+        shortformKo: scene.shortform_ko,
+        // 동선 = scene 직접 (= 옛 calcTransitHaversine 폐기)
+        distance_from_prev_km: scene.distance_from_prev_km,
+        transit_mode: scene.transit_mode,
+        transit_min: scene.transit_min,
+      };
+    });
 
-    for (let i = 0; i < dayPlaces.length - 1; i++) {
-      transits.push(
-        calcTransitHaversine(
-          dayPlaces[i],
-          dayPlaces[i + 1],
-          travelMode,
-          companionCount,
-        ),
-      );
-    }
-
-    if (accommodationCoords && dayPlaces.length > 0) {
-      const last = dayPlaces[dayPlaces.length - 1];
-      returnTransit = calcTransitHaversine(
-        last,
-        { ...accommodationCoords, name: `🏨 ${accommodationName}` },
-        travelMode,
-        companionCount,
-      );
-    }
-
-    const allTransits = [
-      ...(departureTransit ? [departureTransit] : []),
-      ...transits,
-      ...(returnTransit ? [returnTransit] : []),
-    ];
-
-    // ⚠️ 수정금지(승인필요) 2026-05-21 = 사용자 SSOT = priceEur 모든 값 합산 (= 0 = 무료 포함 / null = 제외)
-    // = 옛 `> 0` 조건 = healing/hotspot priceEur=0 다수 누락 = 시정 = typeof === 'number'
+    // ===== 비용 합산 =====
     const mealCostEur = dayPlaces.reduce(
-      (sum: number, p: any) =>
-        sum + (p.isMealSlot && p.mealPrice ? p.mealPrice : 0),
+      (sum, p) => sum + (p.isMealSlot && p.mealPrice ? p.mealPrice : 0),
       0,
     );
     const entranceFeesEur = dayPlaces.reduce(
-      (sum: number, p: any) =>
+      (sum, p) =>
         sum +
         (!p.isMealSlot && typeof p.estimatedPriceEur === "number"
           ? p.estimatedPriceEur
           : 0),
       0,
     );
-    const transportCostEur = allTransits.reduce(
-      (sum: number, t: any) => sum + (t.cost || 0),
-      0,
-    );
 
-    // ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT = price_eur 단일 = 1 인 단가 (= ÷ companionCount X)
+    // ===== 교통 = scene 기반 추정 (= 옛 transit-haversine 폐기) =====
+    const transits = scenes.slice(1).map((scene, i) => {
+      const cost = estimateTransitCost(
+        scene.transit_mode,
+        scene.transit_min,
+        companionCount,
+      );
+      return {
+        from: scenes[i].name_en,
+        to: scene.name_en,
+        distance: scene.distance_from_prev_km,
+        duration: scene.transit_min,
+        mode: scene.transit_mode,
+        cost,
+        costTotal: cost,
+      };
+    });
+    const transportCostEur = transits.reduce((s, t) => s + (t.cost || 0), 0);
+
     const dailyPerPersonEur =
       Math.round((mealCostEur + entranceFeesEur + transportCostEur) * 100) /
       100;
@@ -286,17 +254,8 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
       Math.round(dailyPerPersonEur * companionCount * 100) / 100;
     const dailyPerPersonKrw = Math.round(dailyPerPersonEur * eurToKrw);
     const dailyGroupKrw = Math.round(dailyGroupEur * eurToKrw);
-
     totalPerPersonEur += dailyPerPersonEur;
 
-    // 좌표 유효성 검증
-    for (const p of dayPlaces) {
-      if (!isValidCoord(p.lat, p.lng)) {
-        console.warn(`[AG4-DB] ⚠️ 좌표 무효: ${p.name} (${p.lat}, ${p.lng})`);
-      }
-    }
-
-    // ⚠️ 2026-05-26 = 사용자 SSOT = 동선 전용 = scenario 카피 (= theme_ko + transit_summary_ko) 폐기
     days.push({
       day: d,
       places: dayPlaces,
@@ -304,33 +263,18 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
       summary: `${formData.destination} 하루`,
       startTime: dayConfig.startTime,
       endTime: dayConfig.endTime,
-      accommodation: accommodationCoords
-        ? {
-            day: d,
-            name: accommodationName,
-            coords: accommodationCoords,
-          }
-        : undefined,
-      departureTransit,
-      returnTransit,
       transit: {
-        transits: allTransits,
-        totalDuration: allTransits.reduce(
-          (s: number, t: any) => s + t.duration,
-          0,
-        ),
-        totalCost: allTransits.reduce(
-          (s: number, t: any) => s + t.costTotal,
-          0,
-        ),
+        transits,
+        totalDuration: transits.reduce((s, t) => s + t.duration, 0),
+        totalCost: transits.reduce((s, t) => s + t.costTotal, 0),
+        totalDistanceKm: routeDay?.total_distance_km || 0,
       },
-      // ⚠️ 수정금지(승인필요) 2026-05-21 = MIX AG4 와 동일 형식 정합 (= 사용자 SSOT) = totalEur + totalKrw 추가 = FE 호환
       dailyCost: {
         mealEur: mealCostEur,
         entranceEur: entranceFeesEur,
         transportEur: transportCostEur,
-        totalEur: dailyPerPersonEur, // = MIX 호환 = perPersonEur 동일 (= 1 인 기준 합)
-        totalKrw: dailyGroupKrw, // = 그룹 KRW (= 사용자가 본 일일 합산)
+        totalEur: dailyPerPersonEur,
+        totalKrw: dailyGroupKrw,
         perPersonEur: dailyPerPersonEur,
         perPersonKrw: dailyPerPersonKrw,
         groupEur: dailyGroupEur,
@@ -343,9 +287,10 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
     Math.round(totalPerPersonEur * companionCount * 100) / 100;
   const totalPerPersonKrw = Math.round(totalPerPersonEur * eurToKrw);
   const totalGroupKrw = Math.round(totalGroupEur * eurToKrw);
+  const totalPlaces = days.reduce((s, d) => s + d.places.length, 0);
 
   console.log(
-    `[AG4-DB] ✅ 실시간 완성 (${Date.now() - _t0}ms): ${days.length}일, ${schedule.length}곳`,
+    `[AG4-DB] ✅ 실시간 완성 (${Date.now() - _t0}ms): ${days.length}일, ${totalPlaces}곳 = scene 직접`,
   );
   console.log(
     `[AG4-DB] 💰 인당: €${totalPerPersonEur.toFixed(2)} / ₩${totalPerPersonKrw.toLocaleString()}`,
@@ -353,14 +298,10 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
   console.log(
     `[AG4-DB] 💰 그룹 ${companionCount}인: €${totalGroupEur.toFixed(2)} / ₩${totalGroupKrw.toLocaleString()}`,
   );
-  if (routeResponse) {
-    console.log(
-      `[AG4-DB] 🛣️ route Gemini (${routeElapsedMs}ms): ${routeResponse.days?.length || 0}일 동선`,
-    );
-    console.log(
-      `[AG4-DB] 🍽️ route 백필 (= background = FE 응답 후 비동기 진행)`,
-    );
-  }
+  console.log(
+    `[AG4-DB] 🛣️ route Gemini (${routeResult.elapsedMs}ms): ${routeResponse.days?.length || 0}일 동선 = scene 직접 사용`,
+  );
+  console.log(`[AG4-DB] 🍽️ route 백필 (= background = FE 응답 후 비동기 진행)`);
 
   return {
     title: `${formData.destination} ${dayCount}일 여행`,
@@ -385,21 +326,203 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
     metadata: {
       travelStyle: formData.travelStyle,
       travelPace,
-      totalPlaces: schedule.length,
+      totalPlaces,
       companionType: formData.companionType,
       companionCount,
       curationFocus: formData.curationFocus,
       generatedAt: new Date().toISOString(),
-      pipelineVersion: "db-only-v1",
-      // ⚠️ 2026-05-26 = 사용자 SSOT = route/ Gemini 통합 결과 노출 (= 동선 전용)
-      route: routeResponse
-        ? {
-            elapsedMs: routeElapsedMs,
-            totalDistanceKm: routeResponse.total_distance_km,
-            totalDurationSec: routeResponse.total_duration_sec,
-            backfill: "background fire-and-forget (= FE 응답 후 진행)",
-          }
-        : { elapsedMs: routeElapsedMs, skipped: true },
+      pipelineVersion: "db-only-v2-scene-direct",
+      route: {
+        elapsedMs: routeResult.elapsedMs,
+        totalDistanceKm: routeResponse.total_distance_km,
+        totalDurationSec: routeResponse.total_duration_sec,
+        backfill: "background fire-and-forget",
+      },
+    },
+  };
+}
+
+/**
+ * fallback = 옛 itinerary-generator + calcTransitHaversine (= scenario 실패 시 안전망)
+ * = MIX path 와 동일 코드 = 본 함수는 dynamic import (= circular import 회피)
+ */
+async function finalizeWithLegacyItinerary(
+  input: AG4DbInput,
+  eurToKrw: number,
+): Promise<any> {
+  const {
+    daySlotsConfig,
+    travelPace,
+    formData,
+    companionCount,
+    dayCount,
+    skeleton,
+    inputPlaces,
+  } = input;
+
+  // 옛 enrichment + slot 분배 호출 (= dynamic = circular 회피)
+  const { processDbOnly } = await import("./ag3-db-direct");
+  const { enriched } = processDbOnly(inputPlaces);
+  const { _enrichmentPipeline } = await import("../itinerary-generator");
+  const enrichResult = await _enrichmentPipeline.runFullEnrichment(
+    enriched,
+    formData,
+    {
+      daySlotsConfig: skeleton.daySlotsConfig,
+      travelPace: skeleton.travelPace,
+      requiredPlaceCount: skeleton.requiredPlaceCount,
+    },
+  );
+
+  // 옛 transit-haversine = dynamic = circular 회피
+  const { calcTransitHaversine } = await import("./transit-haversine");
+  const travelMode: any =
+    formData.mobilityStyle === "WalkMore"
+      ? "WALK"
+      : formData.mobilityStyle === "Minimal"
+        ? "DRIVE"
+        : "TRANSIT";
+
+  const mealBudget = MEAL_BUDGET[formData.travelStyle || "Reasonable"];
+  const days: any[] = [];
+  let totalPerPersonEur = 0;
+
+  for (let d = 1; d <= dayCount; d++) {
+    const dayConfig = daySlotsConfig.find((c) => c.day === d)!;
+    const dayPlaces = enrichResult.schedule
+      .filter((s: any) => s.day === d)
+      .map((s: any) => ({
+        ...s.place,
+        startTime: s.startTime,
+        endTime: s.endTime,
+        isMealSlot: s.isMealSlot,
+        mealType: s.mealType,
+        mealPrice: s.isMealSlot
+          ? s.place.estimatedPriceEur && s.place.estimatedPriceEur > 0
+            ? s.place.estimatedPriceEur
+            : s.mealType === "lunch"
+              ? mealBudget.lunch
+              : mealBudget.dinner
+          : undefined,
+        mealPriceLabel: s.isMealSlot
+          ? s.place.estimatedPriceEur && s.place.estimatedPriceEur > 0
+            ? `€${s.place.estimatedPriceEur}`
+            : s.mealType === "lunch"
+              ? mealBudget.lunchLabel
+              : mealBudget.dinnerLabel
+          : undefined,
+        estimatedPriceEur: s.place.estimatedPriceEur,
+        selectionReasons: s.place.selectionReasons || [],
+        confidenceLevel: s.place.confidenceLevel || "minimal",
+      }));
+
+    const transits: any[] = [];
+    for (let i = 0; i < dayPlaces.length - 1; i++) {
+      transits.push(
+        calcTransitHaversine(
+          dayPlaces[i],
+          dayPlaces[i + 1],
+          travelMode,
+          companionCount,
+        ),
+      );
+    }
+
+    const mealCostEur = dayPlaces.reduce(
+      (sum: number, p: any) =>
+        sum + (p.isMealSlot && p.mealPrice ? p.mealPrice : 0),
+      0,
+    );
+    const entranceFeesEur = dayPlaces.reduce(
+      (sum: number, p: any) =>
+        sum +
+        (!p.isMealSlot && typeof p.estimatedPriceEur === "number"
+          ? p.estimatedPriceEur
+          : 0),
+      0,
+    );
+    const transportCostEur = transits.reduce(
+      (sum: number, t: any) => sum + (t.cost || 0),
+      0,
+    );
+    const dailyPerPersonEur =
+      Math.round((mealCostEur + entranceFeesEur + transportCostEur) * 100) /
+      100;
+    const dailyGroupEur =
+      Math.round(dailyPerPersonEur * companionCount * 100) / 100;
+    const dailyPerPersonKrw = Math.round(dailyPerPersonEur * eurToKrw);
+    const dailyGroupKrw = Math.round(dailyGroupEur * eurToKrw);
+    totalPerPersonEur += dailyPerPersonEur;
+
+    days.push({
+      day: d,
+      places: dayPlaces,
+      city: formData.destination,
+      summary: `${formData.destination} 하루`,
+      startTime: dayConfig.startTime,
+      endTime: dayConfig.endTime,
+      transit: {
+        transits,
+        totalDuration: transits.reduce(
+          (s: number, t: any) => s + t.duration,
+          0,
+        ),
+        totalCost: transits.reduce((s: number, t: any) => s + t.costTotal, 0),
+        totalDistanceKm: 0, // = fallback = 옛 transit-haversine = 거리 합산 X = FE 호환만
+      },
+      dailyCost: {
+        mealEur: mealCostEur,
+        entranceEur: entranceFeesEur,
+        transportEur: transportCostEur,
+        totalEur: dailyPerPersonEur,
+        totalKrw: dailyGroupKrw,
+        perPersonEur: dailyPerPersonEur,
+        perPersonKrw: dailyPerPersonKrw,
+        groupEur: dailyGroupEur,
+        groupKrw: dailyGroupKrw,
+      },
+    });
+  }
+
+  const totalGroupEur =
+    Math.round(totalPerPersonEur * companionCount * 100) / 100;
+  const totalPerPersonKrw = Math.round(totalPerPersonEur * eurToKrw);
+  const totalGroupKrw = Math.round(totalGroupEur * eurToKrw);
+
+  console.warn(
+    `[AG4-DB] ⚠️ fallback (= 옛 itinerary): ${days.length}일, ${enrichResult.schedule.length}곳`,
+  );
+
+  return {
+    title: `${formData.destination} ${dayCount}일 여행`,
+    destination: formData.destination,
+    startDate: formData.startDate,
+    endDate: formData.endDate,
+    startTime: formData.startTime || "09:00",
+    endTime: formData.endTime || "21:00",
+    days,
+    companionType: formData.companionType,
+    companionCount,
+    travelStyle: formData.travelStyle,
+    mobilityStyle: formData.mobilityStyle,
+    totalCost: {
+      perPersonEur: totalPerPersonEur,
+      perPersonKrw: totalPerPersonKrw,
+      groupEur: totalGroupEur,
+      groupKrw: totalGroupKrw,
+      eurToKrwRate: eurToKrw,
+      currency: "EUR",
+    },
+    metadata: {
+      travelStyle: formData.travelStyle,
+      travelPace,
+      totalPlaces: enrichResult.schedule.length,
+      companionType: formData.companionType,
+      companionCount,
+      curationFocus: formData.curationFocus,
+      generatedAt: new Date().toISOString(),
+      pipelineVersion: "db-only-v1-fallback",
+      route: { skipped: true, reason: "scenario_failed" },
     },
   };
 }
