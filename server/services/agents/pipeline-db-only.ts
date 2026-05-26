@@ -66,7 +66,7 @@ export async function runPipelineDbOnly(
   _mark("SlotDistribute");
   console.log(`[DB-Only] 슬롯 분배 완료: ${enrichResult.schedule.length}슬롯`);
 
-  // ===== AG4-DB = Routes 0 + 단위 일치 + scenario/ Gemini 통합 (= 사용자 SSOT 2026-05-25) =====
+  // ===== AG4-DB = Routes 0 + 단위 일치 + route/ Gemini 통합 (= 사용자 SSOT 2026-05-26 = 동선 전용 + backfill background) =====
   // = DB-only 만 = MIX 와 다른 호출 (= 결함 4 종 cascade 해결)
   const result = await finalizeDbOnlyItinerary({
     schedule: enrichResult.schedule,
@@ -75,7 +75,7 @@ export async function runPipelineDbOnly(
     formData,
     companionCount: skeleton.companionCount,
     dayCount: skeleton.dayCount,
-    // ⚠️ 수정금지(승인필요) 2026-05-25 = scenario/ Gemini 호출 통합 = skeleton + inputPlaces + cityId 필수
+    // ⚠️ 수정금지(승인필요) 2026-05-26 = route/ Gemini 호출 통합 = skeleton + inputPlaces + cityId 필수 (= backfill background)
     cityId: cityCheck.cityId,
     skeleton,
     inputPlaces: placesArr,

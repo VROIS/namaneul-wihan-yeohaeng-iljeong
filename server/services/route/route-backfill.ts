@@ -1,27 +1,25 @@
-// ⚠️ 수정금지(승인필요) 2026-05-25 = 사용자 SSOT = Gemini 응답값만 사용 = TS+PM 우회 백필
+// ⚠️ 수정금지(승인필요) 2026-05-26 = 사용자 SSOT = Gemini 응답값만 사용 = TS+PM 우회 백필 (= background)
 // = 헌법 §14 = upsertPlace() 단일 진입점 강제 (= 직접 INSERT 금지)
-// = 사용자 SSOT 2026-05-25: "제미니응답값으로만 채움 우선 ts+pm하면 건당 0.5유로 * 13회= 6.5유로"
+// = 사용자 SSOT 2026-05-26: 백필 = background fire-and-forget = FE 응답 후
 // = 신규 식당 (= place_id="auto-*") = upsertPlace × N = 5 단계 매칭 자동
 // = 좌표 NULL 보정 = Gemini 응답 좌표 = upsertPlace UPDATE
+// = 시나리오 카피 (= subtitle_ko / narration_ko) 사용 제거 (= 동선 전용 = 본 필드 없음)
 
 import { upsertPlace } from "../place-upsert";
 import type { PlaceResult } from "../agents/types";
-import type {
-  ScenarioResponse,
-  ScenarioBackfillResult,
-} from "./scenario-types";
+import type { RouteResponse, RouteBackfillResult } from "./route-types";
 
 /**
- * Gemini 응답 → place_seed_raw 백필
+ * Gemini 응답 → place_seed_raw 백필 (= background fire-and-forget)
  * = "auto-*" place_id = 신규 식당 = upsertPlace INSERT (= 매칭 0 시) / UPDATE (= 매칭 시)
  * = 활동 (= 입력 id) = Gemini 응답 좌표 = 옛 좌표 NULL 보정 (= upsertPlace UPDATE)
  */
-export async function backfillFromScenario(
-  response: ScenarioResponse,
+export async function backfillFromRoute(
+  response: RouteResponse,
   cityId: number,
   inputPlaces: PlaceResult[],
-): Promise<ScenarioBackfillResult> {
-  const summary: ScenarioBackfillResult = {
+): Promise<RouteBackfillResult> {
+  const summary: RouteBackfillResult = {
     total: 0,
     inserted: 0,
     updated: 0,
@@ -35,7 +33,7 @@ export async function backfillFromScenario(
   const inputById = new Map(inputPlaces.map((p) => [p.id, p]));
 
   // 일자 = 동일 = 1 회 계산 = 루프 hoist
-  const phaseTagDate = `auto-scenario-${new Date().toISOString().slice(0, 10)}`;
+  const phaseTagDate = `auto-route-${new Date().toISOString().slice(0, 10)}`;
 
   for (const day of response.days) {
     if (!day.scenes) continue;
@@ -76,9 +74,10 @@ export async function backfillFromScenario(
             latitude: scene.lat,
             longitude: scene.lng,
             priceEur: scene.price_per_person_eur ?? null,
-            // ⚠️ shortformKo / selectionReasonKo = Gemini 카피 = scene 안 (= 보존)
-            shortformKo: scene.subtitle_ko || null,
-            selectionReasonKo: scene.narration_ko || null,
+            // ⚠️ 2026-05-26 = 사용자 SSOT = PSR 컬럼 채움 (= 09-main-app-itinerary 표준 매핑)
+            // = scene.selection_reason_ko → DB summary_ko / scene.shortform_ko → DB editorial_summary
+            selectionReasonKo: scene.selection_reason_ko || null,
+            shortformKo: scene.shortform_ko || null,
             categoryTags: ["restaurant"],
             phaseTags: [phaseTagDate],
           });
@@ -129,12 +128,10 @@ export async function backfillFromScenario(
   }
 
   console.log(
-    `[Scenario-Backfill] ✅ ${summary.total}건 처리 = ${summary.inserted} INSERT / ${summary.updated} UPDATE / ${summary.skipped} skip`,
+    `[Route-Backfill] ✅ ${summary.total}건 처리 = ${summary.inserted} INSERT / ${summary.updated} UPDATE / ${summary.skipped} skip`,
   );
   if (summary.errors.length > 0 && summary.errors.length <= 5) {
-    summary.errors.forEach((err) =>
-      console.warn(`[Scenario-Backfill] ⚠️ ${err}`),
-    );
+    summary.errors.forEach((err) => console.warn(`[Route-Backfill] ⚠️ ${err}`));
   }
   return summary;
 }

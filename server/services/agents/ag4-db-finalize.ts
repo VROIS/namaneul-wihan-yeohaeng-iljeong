@@ -2,9 +2,10 @@
 // = Google Routes API 호출 = 0 (= transit-haversine.ts 사용)
 // = dailyPerPersonEur = ÷ companionCount X = 1 인 단가 그대로 + group = × companionCount 별도
 //
-// ⚠️ 수정금지(승인필요) 2026-05-25 = 사용자 SSOT = scenario/ Gemini 호출 통합 (= DB-only 전용)
-// = 표준 prompt (= 10-main-app-route-scenario) 1 회 호출
-// = cascade 효과: 신규 식당 발견 → upsertPlace 백필 / 좌표 NULL 보정 / 시나리오 카피 추가
+// ⚠️ 수정금지(승인필요) 2026-05-26 = 사용자 SSOT = route/ Gemini 호출 통합 (= DB-only 전용)
+// = 표준 prompt (= 10-main-app-route) 1 회 호출 = 동선 + 식당 자동 발견 (= 시나리오 카피 제거)
+// = cascade 효과: 신규 식당 발견 → upsertPlace 백필 (= background) / 좌표 NULL 보정
+// = backfill = fire-and-forget (= FE 우선 노출 + background)
 // = transit/distance/cost 자체 계산 = 단계 4 까지 유지 (= 사용자 명시 = 옛 동선 폐기 = 마일스톤 후)
 
 import { db } from "../../db";
@@ -20,12 +21,9 @@ import type {
 } from "./types";
 import { MEAL_BUDGET } from "./types";
 import { calcTransitHaversine, type TravelMode } from "./transit-haversine";
-import { handleScenarioRequest } from "../scenario/scenario-handler";
-import { backfillFromScenario } from "../scenario/scenario-backfill";
-import type {
-  ScenarioResponse,
-  ScenarioScene,
-} from "../scenario/scenario-types";
+import { handleRouteRequest } from "../route/route-handler";
+import { backfillFromRoute } from "../route/route-backfill";
+import type { RouteResponse, RouteScene } from "../route/route-types";
 
 /** EUR → KRW 환율 = exchangeRates DB 캐시 */
 async function getEurToKrwRate(): Promise<number> {
@@ -70,21 +68,21 @@ export interface AG4DbInput {
   formData: TripFormData;
   companionCount: number;
   dayCount: number;
-  // ⚠️ 수정금지(승인필요) 2026-05-25 = scenario/ Gemini 호출 통합 = cityId 필수 (= backfill)
+  // ⚠️ 수정금지(승인필요) 2026-05-26 = route/ Gemini 호출 통합 = cityId 필수 (= backfill background)
   cityId?: number | null;
   cityCoords?: { lat: number; lng: number };
-  skeleton?: AG1Output; // = scenario-prompt 입력 = AG1 매트릭스 전체
-  inputPlaces?: PlaceResult[]; // = scenario-backfill 입력 = AG3-DB 원본 풀
+  skeleton?: AG1Output; // = route-prompt 입력 = AG1 매트릭스 전체
+  inputPlaces?: PlaceResult[]; // = route-backfill 입력 = AG3-DB 원본 풀
 }
 
 /**
- * scenario.scene → (day, slot) 매칭 lookup 구축
+ * route.scene → (day, slot) 매칭 lookup 구축
  * = dayPlaces array index (= 0-based) ↔ scene.slot (= 1-based)
  */
 function buildSceneLookup(
-  response: ScenarioResponse | null,
-): Map<string, ScenarioScene> {
-  const map = new Map<string, ScenarioScene>();
+  response: RouteResponse | null,
+): Map<string, RouteScene> {
+  const map = new Map<string, RouteScene>();
   if (!response?.days) return map;
   for (const day of response.days) {
     if (!day.scenes) continue;
@@ -99,7 +97,8 @@ function buildSceneLookup(
 /**
  * AG4-DB 메인 = DB-only 일정 완성
  * = Routes 0 + 단위 일치 (= 1 인 perPerson + group 별도)
- * = scenario/ Gemini 호출 통합 (= 동선 정렬 + 신규 식당 발견 + 시나리오 카피)
+ * = route/ Gemini 호출 통합 (= 동선 정렬 + 신규 식당 발견 = 시나리오 카피 제거)
+ * = backfill = fire-and-forget (= FE 우선 노출 + background)
  */
 export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
   const _t0 = Date.now();
@@ -126,46 +125,38 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
   const mealBudget = MEAL_BUDGET[formData.travelStyle || "Reasonable"];
   const eurToKrw = await getEurToKrwRate();
 
-  // ⚠️ 수정금지(승인필요) 2026-05-25 = 사용자 SSOT = scenario/ Gemini 호출 통합
-  // = 결함 4 종 cascade 해결: 좌표 NULL / 신규 식당 발견 / 시나리오 카피 / 동선 검증
-  let scenarioResponse: ScenarioResponse | null = null;
-  let scenarioElapsedMs = 0;
-  let scenarioBackfillSummary: {
-    inserted: number;
-    updated: number;
-    skipped: number;
-  } | null = null;
+  // ⚠️ 수정금지(승인필요) 2026-05-26 = 사용자 SSOT = route/ Gemini 호출 통합 (= 동선 전용)
+  // = cascade 효과: 신규 식당 발견 → upsertPlace 백필 (= background) / 좌표 NULL 보정
+  let routeResponse: RouteResponse | null = null;
+  let routeElapsedMs = 0;
 
   if (skeleton && inputPlaces && inputPlaces.length > 0) {
-    const scenarioResult = await handleScenarioRequest(
+    const routeResult = await handleRouteRequest(
       skeleton,
       inputPlaces,
       cityCoords,
     );
-    scenarioElapsedMs = scenarioResult.elapsedMs;
-    if (scenarioResult.ok && scenarioResult.response) {
-      scenarioResponse = scenarioResult.response;
-      // 백필 = 신규 식당 INSERT + 좌표 NULL UPDATE (= 다음 trip cascade)
+    routeElapsedMs = routeResult.elapsedMs;
+    if (routeResult.ok && routeResult.response) {
+      routeResponse = routeResult.response;
+      // ⚠️ 2026-05-26 = 사용자 SSOT = 백필 = background fire-and-forget (= FE 우선 노출)
+      // = await 제거 = 본 함수 = 백필 끝 기다리지 X = FE 응답 즉시
       if (cityId) {
-        const backfill = await backfillFromScenario(
-          scenarioResponse,
-          cityId,
-          inputPlaces,
+        backfillFromRoute(routeResponse, cityId, inputPlaces).catch((e: any) =>
+          console.warn(
+            `[Route-Backfill] ❌ background error:`,
+            e?.message || e,
+          ),
         );
-        scenarioBackfillSummary = {
-          inserted: backfill.inserted,
-          updated: backfill.updated,
-          skipped: backfill.skipped,
-        };
       }
     } else {
       console.warn(
-        `[AG4-DB] scenario 호출 실패 → 옛 동작 fallback (${scenarioElapsedMs}ms)`,
+        `[AG4-DB] route 호출 실패 → 옛 동작 fallback (${routeElapsedMs}ms)`,
       );
     }
   }
 
-  const sceneLookup = buildSceneLookup(scenarioResponse);
+  const sceneLookup = buildSceneLookup(routeResponse);
 
   const days: any[] = [];
   let totalPerPersonEur = 0;
@@ -175,10 +166,10 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
     const dayPlaces = schedule
       .filter((s) => s.day === d)
       .map((s, idx) => {
-        // ⚠️ 수정금지(승인필요) 2026-05-25 = scenario.scene 매칭 = (day, slot=idx+1)
+        // ⚠️ 수정금지(승인필요) 2026-05-26 = route.scene 매칭 = (day, slot=idx+1)
         const scene = sceneLookup.get(`${d}:${idx + 1}`);
 
-        // 좌표 보정 = 옛 lat/lng 0/NULL = scenario 응답 lat/lng 사용 (= 본 trip 즉시 효과)
+        // 좌표 보정 = 옛 lat/lng 0/NULL = route 응답 lat/lng 사용 (= 본 trip 즉시 효과)
         const needsCoordFix = !isValidCoord(s.place.lat, s.place.lng);
         const fixedLat =
           needsCoordFix && scene && isValidCoord(scene.lat, scene.lng)
@@ -215,15 +206,7 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
           estimatedPriceEur: s.place.estimatedPriceEur,
           selectionReasons: s.place.selectionReasons || [],
           confidenceLevel: s.place.confidenceLevel || "minimal",
-          // ⚠️ 수정금지(승인필요) 2026-05-25 = scenario/ Gemini 카피 = FE 시나리오 표시
-          scenarioCue: scene
-            ? {
-                visual_cue_ko: scene.visual_cue_ko,
-                narration_ko: scene.narration_ko,
-                subtitle_ko: scene.subtitle_ko,
-                theme_day_ko: undefined as string | undefined, // day-level 은 아래에서 별도
-              }
-            : undefined,
+          // ⚠️ 2026-05-26 = 사용자 SSOT = 동선 전용 = scenarioCue 폐기 (= 시나리오 카피)
         };
       });
 
@@ -313,16 +296,12 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
       }
     }
 
-    // ⚠️ 수정금지(승인필요) 2026-05-25 = scenario 응답 day 카피 (= theme_ko + transit_summary_ko)
-    const scenarioDay = scenarioResponse?.days?.find((sd) => sd.day === d);
-
+    // ⚠️ 2026-05-26 = 사용자 SSOT = 동선 전용 = scenario 카피 (= theme_ko + transit_summary_ko) 폐기
     days.push({
       day: d,
       places: dayPlaces,
       city: formData.destination,
-      summary: scenarioDay?.theme_ko || `${formData.destination} 하루`,
-      themeKo: scenarioDay?.theme_ko,
-      transitSummaryKo: scenarioDay?.transit_summary_ko,
+      summary: `${formData.destination} 하루`,
       startTime: dayConfig.startTime,
       endTime: dayConfig.endTime,
       accommodation: accommodationCoords
@@ -374,15 +353,13 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
   console.log(
     `[AG4-DB] 💰 그룹 ${companionCount}인: €${totalGroupEur.toFixed(2)} / ₩${totalGroupKrw.toLocaleString()}`,
   );
-  if (scenarioResponse) {
+  if (routeResponse) {
     console.log(
-      `[AG4-DB] 🎬 scenario Gemini (${scenarioElapsedMs}ms): ${scenarioResponse.days?.length || 0}일 시나리오`,
+      `[AG4-DB] 🛣️ route Gemini (${routeElapsedMs}ms): ${routeResponse.days?.length || 0}일 동선`,
     );
-    if (scenarioBackfillSummary) {
-      console.log(
-        `[AG4-DB] 🍽️ scenario 백필: INSERT ${scenarioBackfillSummary.inserted} / UPDATE ${scenarioBackfillSummary.updated} / SKIP ${scenarioBackfillSummary.skipped}`,
-      );
-    }
+    console.log(
+      `[AG4-DB] 🍽️ route 백필 (= background = FE 응답 후 비동기 진행)`,
+    );
   }
 
   return {
@@ -414,16 +391,15 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
       curationFocus: formData.curationFocus,
       generatedAt: new Date().toISOString(),
       pipelineVersion: "db-only-v1",
-      // ⚠️ 수정금지(승인필요) 2026-05-25 = scenario/ Gemini 통합 결과 노출
-      scenario: scenarioResponse
+      // ⚠️ 2026-05-26 = 사용자 SSOT = route/ Gemini 통합 결과 노출 (= 동선 전용)
+      route: routeResponse
         ? {
-            elapsedMs: scenarioElapsedMs,
-            protagonistSummaryKo: scenarioResponse.protagonist_summary_ko,
-            totalDistanceKm: scenarioResponse.total_distance_km,
-            totalDurationSec: scenarioResponse.total_duration_sec,
-            backfill: scenarioBackfillSummary,
+            elapsedMs: routeElapsedMs,
+            totalDistanceKm: routeResponse.total_distance_km,
+            totalDurationSec: routeResponse.total_duration_sec,
+            backfill: "background fire-and-forget (= FE 응답 후 진행)",
           }
-        : { elapsedMs: scenarioElapsedMs, skipped: true },
+        : { elapsedMs: routeElapsedMs, skipped: true },
     },
   };
 }
