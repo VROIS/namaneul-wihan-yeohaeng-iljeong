@@ -54,11 +54,15 @@ export async function backfillFromRoute(
         scene.lng <= 180;
 
       if (isAutoRestaurant) {
-        // 신규 식당 = upsertPlace INSERT/UPDATE (= 5 단계 매칭)
-        if (!scene.name_en || !scene.address || !validCoord) {
+        // ⚠️ 2026-05-26 = 사용자 SSOT = Gemini 응답 전체 그대로 입력 = 우리 조건 강제 X
+        // = name_en = 보조 이름 (= 추후 영어권 도시 자동 생성) = 강제 X
+        // = upsertPlace nameEn 자리 = name_en || name_local fallback (= 5 단계 매칭 자동 통과)
+        // = address + 좌표 (= 매칭 핵심) 만 강제
+        const sceneName = scene.name_en || scene.name_local;
+        if (!sceneName || !scene.address || !validCoord) {
           summary.skipped++;
           summary.errors.push(
-            `auto-restaurant missing required fields: ${scene.place_id}`,
+            `auto-restaurant missing core fields (name+address+coord): ${scene.place_id}`,
           );
           continue;
         }
@@ -67,7 +71,7 @@ export async function backfillFromRoute(
           const r = await upsertPlace({
             cityId,
             seedCategory: "restaurant",
-            nameEn: scene.name_en,
+            nameEn: sceneName, // = Gemini 응답 = name_en || name_local fallback
             nameKo: scene.name_ko || null,
             nameLocal: scene.name_local || null,
             address: scene.address,
@@ -75,7 +79,6 @@ export async function backfillFromRoute(
             longitude: scene.lng,
             priceEur: scene.price_per_person_eur ?? null,
             // ⚠️ 2026-05-26 = 사용자 SSOT = PSR 컬럼 채움 (= 09-main-app-itinerary 표준 매핑)
-            // = scene.selection_reason_ko → DB summary_ko / scene.shortform_ko → DB editorial_summary
             selectionReasonKo: scene.selection_reason_ko || null,
             shortformKo: scene.shortform_ko || null,
             categoryTags: ["restaurant"],

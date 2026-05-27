@@ -209,11 +209,13 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
             : mealBudget.dinnerLabel
         : undefined;
 
+      // ⚠️ 2026-05-26 = 사용자 SSOT = name_en = 보조 = name_local fallback (= FE 표시)
+      const displayName = scene.name_en || scene.name_local;
       return {
         // 식별 (= FE 호환 = 옛 PlaceResult 양식)
         id: scene.place_id,
-        name: scene.name_en,
-        nameEn: scene.name_en,
+        name: displayName,
+        nameEn: displayName,
         nameKo: scene.name_ko,
         nameLocal: scene.name_local,
         address: scene.address,

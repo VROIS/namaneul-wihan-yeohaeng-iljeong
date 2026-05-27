@@ -30,12 +30,14 @@ export interface RouteInputJson {
     vibes: Array<{ vibe: string; weight: number; priority: number }>;
     transport_mode: "public_transit" | "private_driver_guide";
   };
+  /**
+   * ⚠️ 2026-05-26 = 사용자 SSOT = 일한도 만 inject (= 점심:저녁 비율 강제 X)
+   * = MEAL_BUDGET[travelStyle] = 함수 호출 동적
+   * = Gemini = 일일 한도 내 = 동선 따른 식당 자유 선택
+   */
   meal_budget_eur_per_person: {
-    lunch: number;
-    dinner: number;
-    label: string;
-    lunchLabel: string;
-    dinnerLabel: string;
+    daily_total: number; // = MEAL_BUDGET[travelStyle].dailyTotal (= Economic 40 / Reasonable 100 / Premium 300 / Luxury 300+)
+    label: string; // = MEAL_BUDGET[travelStyle].label (= "€100/일")
   };
   places: Array<{
     id: string;

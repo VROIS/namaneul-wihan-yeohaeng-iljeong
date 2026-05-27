@@ -130,12 +130,10 @@ export function buildRouteInputJson(
       })),
       transport_mode,
     },
+    // ⚠️ 2026-05-26 = 사용자 SSOT = 일한도만 = 점심:저녁 비율 강제 X
     meal_budget_eur_per_person: {
-      lunch: mealBudget.lunch,
-      dinner: mealBudget.dinner,
+      daily_total: mealBudget.dailyTotal, // = 동적 = MEAL_BUDGET[travelStyle].dailyTotal
       label: mealBudget.label,
-      lunchLabel: mealBudget.lunchLabel,
-      dinnerLabel: mealBudget.dinnerLabel,
     },
     // ⚠️ 2026-05-26 = 사용자 SSOT = C = 식당 풀 제외 (= 제미니 자동 발견) + NULL 좌표 필터 제거 (= 카테고리 전체 풀)
     places: places
@@ -187,8 +185,9 @@ export function generateRoutePrompt(
 - 시각 분배 = 자유
 
 # 식당 자동 발견 + DB 백필
-- 점심 = 일자 중간 시각 (= 12:00-14:00) + 그 시각 전후 활동 좌표 인근 + 1인 €${mealBudget.lunch} 이내 (= ${mealBudget.lunchLabel}).
-- 저녁 = 일자 마지막 종착지 (= 18:00-21:00) + 일자 마지막 활동 좌표 인근 + 1인 €${mealBudget.dinner} 이내 (= ${mealBudget.dinnerLabel}).
+- 점심 = 일자 중간 시각 + 좌표 인근.
+- 저녁 = 일자 마지막 종착지 + 좌표 인근.
+- 식비 = 일일 한도 €${mealBudget.dailyTotal} (= ${mealBudget.label}) 내 자유 분배 (= 동선 따른 식당 선택 자유 = 점심/저녁 비율 강제 X).
 - ⚠️ Gemini 발견 식당 = 7 필드 반드시 (= name_local / address / lat / lng / **price_per_person_eur = 1 인 EUR 1 가지만** / **selection_reason_ko** / **shortform_ko**).
 - ⚠️ **price_for_2_eur 같은 2 인 가격 요청 X** (= Gemini 가 2 인 가격을 1 인 필드에 입력 위험 = 사용자 SSOT 2026-05-25 = 단위 모호 결함).
 - **selection_reason_ko** = 한국어 한 줄 = 인스타 성지/네이버 블로그/유튜브 vlog 사회적 검증 (→ DB summary_ko).
