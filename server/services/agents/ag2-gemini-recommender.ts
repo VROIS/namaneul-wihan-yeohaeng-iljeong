@@ -175,6 +175,8 @@ async function fetchFromPlaceSeedRaw(
     id: placeSeedRaw.id,
     nameEn: placeSeedRaw.nameEn,
     nameKo: placeSeedRaw.nameKo,
+    // ⚠️ 수정금지(승인필요) 2026-05-28 = 사용자 SSOT = nameLocal 추가 (= 옛 SELECT 누락 = buildRouteInputJson `name_local` 정확 inject)
+    nameLocal: placeSeedRaw.nameLocal,
     googlePlaceId: placeSeedRaw.googlePlaceId,
     googleMapsUri: placeSeedRaw.googleMapsUri,
     address: placeSeedRaw.address,
@@ -189,7 +191,7 @@ async function fetchFromPlaceSeedRaw(
     googleReviewCount: placeSeedRaw.googleReviewCount,
     priceEur: placeSeedRaw.priceEur,
     dayZone: placeSeedRaw.dayZone,
-    distanceKmFromCenter: placeSeedRaw.distanceKmFromCenter,
+    // = distanceKmFromCenter 2026-05-28 제거 = PlaceResult 매핑 X = 데드 컬럼 (= ag3/place-upsert 별도 SELECT)
   };
 
   // ⚠️ 수정금지(승인필요) 2026-05-24 = 식당 + 비식당 = day_zone 분리 SELECT 통합 헬퍼
@@ -284,6 +286,12 @@ async function fetchFromPlaceSeedRaw(
       userRatingCount: r.googleReviewCount || 0,
       // ⚠️ 수정금지(승인필요) 2026-05-21 = Phase E = dayZone 매핑
       dayZone: r.dayZone ?? null,
+      // = types.ts PlaceResult 5 신규 필드 매핑 (= 결함 5 해소 = ag4 활동 카피/주소)
+      nameKo: r.nameKo ?? null,
+      nameLocal: r.nameLocal ?? null,
+      address: r.address ?? null,
+      summaryKo: r.summaryKo ?? null,
+      editorialSummary: r.editorialSummary ?? null,
     } as any;
   });
   console.log(

@@ -135,18 +135,18 @@ export function buildRouteInputJson(
       daily_total: mealBudget.dailyTotal, // = 동적 = MEAL_BUDGET[travelStyle].dailyTotal
       label: mealBudget.label,
     },
-    // ⚠️ 2026-05-26 = 사용자 SSOT = C = 식당 풀 제외 (= 제미니 자동 발견) + NULL 좌표 필터 제거 (= 카테고리 전체 풀)
+    // ⚠️ 수정금지(승인필요) 2026-05-28 = 사용자 SSOT 3 번 명시 = 4 필수만 (= PLACE_INPUT_KEYS)
+    // = name_en / name_ko / type / seed_category / day_zone / rank 제거 (= AI 임의 추가 폐기 = 토큰 절약)
+    // = PSR 3 필수 (name_local / address / lat+lng) 다 있으면 다 / 없으면 null = Gemini 가 빈 필드 채워서 반환
+    // @see route-types.ts:PLACE_INPUT_KEYS (= silent drift 방지)
     places: places
       .filter((p) => p.seedCategory !== "restaurant")
       .map((p) => ({
-        id: p.id,
-        name_en: p.name || "",
-        name_ko: (p as any).nameKo || p.name || "",
-        name_local: (p as any).nameLocal || p.name || "",
-        address: (p as any).address || "",
+        id: p.id,                                  // = "db-${PSR.id}" = echo 매칭 키
+        name_local: p.nameLocal || null,           // = PSR.name_local (= 없으면 null = Gemini 채워줌)
+        address: p.address || null,                // = PSR.address (= 없으면 null = Gemini 채워줌)
         lat: p.lat,
         lng: p.lng,
-        type: "activity" as const,
       })),
   };
 }
@@ -173,16 +173,18 @@ export function generateRoutePrompt(
 너는 한국인 여행자를 위한 ${formData.destination} 동선 최적화 전문가다.
 
 # 너의 강점
-- Google Maps grounding = 실 도로 거리 + 동선 인근 식당 발견 + 정확 좌표/주소.
-- Google Search grounding = 한국 인스타/유튜브 트렌드 + 실 가격.
+- Google Search grounding = 한국 인스타/유튜브 트렌드 + 실 가격 + 실 주소 + 실 좌표 + 실 도로 거리.
+   ※ 옛 "Google Maps grounding" 표현 폐기 (= 2026-05-28 사용자 SSOT = Maps + Search 동시 작동 X 입증)
 
 # 목표
 입력 ${nonRestaurantCount} 비식당 + 일자별 점심 + 저녁 식당 자동 발견
+= 총 ${nonRestaurantCount + 2 * tc.day_count} 슬롯 = **빠짐없이** 모두 채워라 (= 활동 누락 X)
 
 # 시간 + 일자 (= 사용자 동적 입력)
 - ${tc.day_count} 일 / 출발 ${tc.start_time} ~ 종료 ${tc.end_time}
-- 일자별 슬롯 수 = 자유 (= 동선 효율 따라)
-- 시각 분배 = 자유
+- 총 슬롯 수 = ${nonRestaurantCount + 2 * tc.day_count} (= **반드시 응답**)
+- 일자별 슬롯 수 = 자유 (= 동선 효율 따라 = Gemini 자율)
+- 시각 분배 = 자유 (= 단, 슬롯 간 시각 연속 = 갭 X)
 
 # 식당 자동 발견 + DB 백필
 - 점심 = 일자 중간 시각 + 좌표 인근.
@@ -192,7 +194,11 @@ export function generateRoutePrompt(
 - ⚠️ **price_for_2_eur 같은 2 인 가격 요청 X** (= Gemini 가 2 인 가격을 1 인 필드에 입력 위험 = 사용자 SSOT 2026-05-25 = 단위 모호 결함).
 - **selection_reason_ko** = 한국어 한 줄 = 인스타 성지/네이버 블로그/유튜브 vlog 사회적 검증 (→ DB summary_ko).
 - **shortform_ko** = 한국어 한 줄 = 코믹/위트 후킹 = "프사각", "본전 뽑음" 한국 슬랭 (→ DB editorial_summary).
-- 모두 Google Maps grounding 검증 = 환각 금지.
+- 모두 Google Search grounding 검증 = 환각 금지.
+
+# 활동 응답 양식 (= 2026-05-28 사용자 SSOT 신규)
+- 활동 = address + name_local + price_per_person_eur 응답 (= 입장료/체험비 1 인 EUR = PSR 오류 정정 base = R3 백필).
+- 활동 = 카피 (selection_reason_ko / shortform_ko) 응답 X (= PSR 기존 데이터 사용).
 
 # 입력
 ${JSON.stringify(inputJson, null, 2)}
@@ -207,13 +213,13 @@ ${JSON.stringify(inputJson, null, 2)}
       "scenes": [
         {
           "slot": <number>, "time": "HH:MM", "type": "activity|restaurant",
-          "place_id": <입력 활동 = 입력 id / 식당 = "auto-lunch-dN" 또는 "auto-dinner-dN">,
-          "name_en": "<...>", "name_ko": "<...>", "name_local": "<...>",
-          "address": "<FULL = 식당 필수>",
+          "place_id": <입력 활동 = 입력 id "db-\${PSR.id}" / 식당 = "auto-lunch-dN" 또는 "auto-dinner-dN">,
+          "name_local": <활동 = 입력 echo 또는 보강 / 식당 = Gemini 생성>,
+          "address": "<FULL = 활동 + 식당 모두 필수>",
           "lat": <number>, "lng": <number>,
-          "price_per_person_eur": <식당만 = € 1인 EUR = 1 가지만 = 2 인 가격 X>,
+          "price_per_person_eur": <활동 + 식당 모두 = € 1인 EUR = 1 가지만 = 2 인 가격 X = 활동 = 입장료/체험비 / 식당 = 식사비 / 무료 = 0>,
           "distance_from_prev_km": <number>,
-          "transit_mode": "${transportMode === 'private_driver_guide' ? 'private_guide' : 'walk|metro|RER|bus'}",
+          "transit_mode": "${transportMode}",
           "transit_min": <number>,
           "selection_reason_ko": <식당만 = 한국어 한 줄 = 사회적 검증 = → DB summary_ko>,
           "shortform_ko": <식당만 = 한국어 한 줄 = 코믹/위트 한국 슬랭 = → DB editorial_summary>
@@ -224,12 +230,13 @@ ${JSON.stringify(inputJson, null, 2)}
 }
 
 # 핵심 원칙
-1. 입력 비식당 ${nonRestaurantCount} 곳 = 모두 응답 포함 (= 추가/제외 X).
-2. 식당 = Google Maps grounding 발견 + 7 필드 + 예산 이내.
+1. 입력 비식당 ${nonRestaurantCount} 곳 = 모두 응답 포함 (= 추가/제외 X). ⚠️ **예외 없음**.
+2. 식당 = Google Search grounding 발견 + 7 필드 + 예산 이내.
 3. 동선 = city_center 출발/귀환 + 자연 cluster + 최적 순서.
-4. 교통 = transport_mode="${transportMode}" = ${transportMode === 'private_driver_guide' ? '모든 hop 전용 차량 가이드' : '도보 + 메트로 + RER + 버스 조합'}.
+4. 교통 = transport_mode="${transportMode}" (= 2 분기 = public_transit / private_driver_guide 중 하나).
 5. 식당 = 마지막 종착지 (= 저녁) + 일자 중간 (= 점심).
-6. 응답 = JSON 만 (= markdown X).`;
+6. 응답 = JSON 만 (= markdown X).
+7. ⚠️ **총 슬롯 = ${nonRestaurantCount + 2 * tc.day_count} 강제 + 슬롯 간 시각 연속 (= 갭 X)**.`;
 
   return { prompt, inputJson };
 }

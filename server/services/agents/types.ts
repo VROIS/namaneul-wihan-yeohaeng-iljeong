@@ -95,6 +95,7 @@ export interface TripFormData {
 export interface PlaceResult {
   id: string;
   name: string;
+  // TODO 2026-05-28 = description / personaFitReason = 폐기 후보 (= summaryKo / editorialSummary SSOT)
   description: string;
   lat: number;
   lng: number;
@@ -118,6 +119,15 @@ export interface PlaceResult {
   confidenceLevel?: "high" | "medium" | "low" | "minimal";
   nubiReason?: string | null; // 차별화 선정이유 (= FE 진하게 표시)
   dayZone?: "core" | "outskirt" | null; // PSR.day_zone (= 일자 zone 매칭)
+  // ⚠️ 수정금지(승인필요) 2026-05-28 = 사용자 SSOT = 결함 5 해소 = ag4 활동 매핑 꼭 필요한 5 필드만
+  // = 옛 PlaceResult.description (= summary_ko || editorial_summary 머지) = 활동 카피 분리 안 됨 = 결함 5 원인
+  // = 옛 geminiPlaceId / googleMapsUri = as any cast 그대로 사용 (= 재발명 X)
+  // ⚠️ 내부 ag3-ag4 매핑 전용 = FE 직접 접근 금지 (= PSR 스키마 변경 시 FE breaking 방지)
+  nameKo?: string | null;            // = PSR.name_ko (= ag4 displayNameKo 매핑)
+  nameLocal?: string | null;         // = PSR.name_local (= ag4 displayNameLocal 매핑)
+  address?: string | null;           // = PSR.address (= ag4 displayAddress 매핑)
+  summaryKo?: string | null;         // = PSR.summary_ko (= ag4 활동 selectionReasonKo 매핑)
+  editorialSummary?: string | null;  // = PSR.editorial_summary (= ag4 활동 shortformKo 매핑)
 }
 
 // ===== 상수 =====

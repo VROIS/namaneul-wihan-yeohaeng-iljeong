@@ -18,6 +18,54 @@
 
 ---
 
+## 🔄 2026-05-27 = 새 대화창 인수인계 (= 1 달 누적 버벅거림 해소)
+
+### ✅ 2026-05-26~27 세션 완료 commit 7 종 (= route/ 컴포넌트 본질화)
+
+| commit | 내용 |
+|---|---|
+| `f47b010` | scenario/ 신규 + AG4 Gemini 호출 통합 (= 단계 2 시작) |
+| `974c03e` | scenario/ → **route/ rename** + 동선 전용 + PSR 카피 + gemini-2.5-flash-lite |
+| `e4340db` | geminiClient = tools + responseMimeType 동시 호출 자동 우회 (= API 제약 fix) |
+| `755409e` | ag4-db-finalize = **scenario.scenes 직접 사용** + 옛 슬롯 분배 강제 폐기 |
+| `891c88e` | trip_config 동적 + slots 강제 폐기 + scene 검증 안전망 |
+| `05d7b1a` | **pace inject 폐기** (= 사용자 SSOT = 시키지 않은 조건 X) |
+| `d265025` | **meal_budget 일한도만** + name_en 보조 fallback |
+
+= 모두 push 완료 + Replit deployment 작동 (= Paris 17 초 = JSON 응답 OK)
+
+### 🎯 미진행 = 4 영역 통합 fix (= MIX path 와 본질 통일) = 사용자 명시 대기
+
+**본질 발견** (= MIX path 분석 후):
+- MIX = **activity 도** Gemini 가 `selection_reason_ko` + `shortform_ko` + `estimatedCostEur` + `startTime/endTime` 모두 생성
+- DB-only 현 = restaurant 만 요청 = activity = Gemini 카피 0 = **빈칸** + €35 잘못된 PSR 데이터 + 시간 갭
+
+**FE 실 결함 (= 사용자 스샷)**:
+1. 활동 슬롯 요약/숏폼 = **빈칸** (= ag2 description 합쳐서 + ag4 inputPlace.selectionReasons 빈 배열)
+2. 활동 €35 = PSR DB 잘못된 데이터 (= 백화점/거리 = price_eur 잘못 입력)
+3. 오전 10:30 ~ 12:30 슬롯 **빈 시간** (= scene.endTime = addMinutes 자동 = MIX 처럼 Gemini 응답 X)
+
+**A 옵션 = 4 영역 통합 fix (= 사용자 명시 대기)**:
+1. `server/services/route/route-prompt.ts` + `.claude/skills/raw-db-verify-and-complete/prompts/10-main-app-route/STANDARD_PROMPT_2026-05-26_route-only.md` = scene 양식 통일 (= activity 도 `estimatedCostEur` + `selection_reason_ko` + `shortform_ko` + `endTime` 요청 = MIX 와 동일)
+2. `server/services/route/route-types.ts` = `RouteScene` = `endTime` + activity 도 카피 필드 optional
+3. `server/services/agents/ag4-db-finalize.ts` = activity = **scene 응답 카피/가격 사용** + `endTime` 사용 + inputPlace fallback
+4. `server/services/route/route-backfill.ts` = activity 도 백필 (= scene 응답으로 PSR UPDATE = `summary_ko` / `editorial_summary`)
+
+### 🔴 절대 위반 금지 (= 1 달 누적 = 사용자 SSOT 본질)
+
+- **prompt 임의 수정 X** = 코드와 같음 = 1 글자도 임의 수정 X = MD 와 1:1 동기
+- **시키지 않은 조건 inject X** = pace / 점심:저녁 비율 / slots 강제 = 모두 폐기
+- **결정적 매트릭스 = 코드 함수 / 자연어 카피 = LLM 자유** = 경계 명확
+- **모든 매트릭스 = 함수 호출 동적** = 하드코딩 X
+- **응답값 그대로 입력** = name_en || name_local fallback = 우리 조건 강제 X
+- **place_id = 우리 자체 id** = activity "db-${PSR.id}" / restaurant "auto-lunch-dN" = Gemini PID 환각 회피
+- **MIX path = 정답** = DB-only 도 = activity = Gemini 카피/가격/시간 모두 생성
+- **존댓말 + 한국어** = 반말 X (= MEMORY [[feedback_use_polite_korean]])
+- **임시응변 미봉책 X** = 전체 그림 + 콘솔 raw + 스샷 꼼꼼히 분석 후 본질 fix
+- **사용자 명시 후만 진행** = 임의 진행 X (= 헌법 §1)
+
+---
+
 ## 🔥 2026-05-20 PM = V3→V2 위임 미달 → 분석 9 사실 → Plan 작성 (= 다음 세션 인수)
 
 ### ⚠️ 본 세션 변경 = 사용자 SSOT 7/7 미달 + 신규 거짓 발견

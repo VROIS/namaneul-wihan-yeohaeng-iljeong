@@ -39,17 +39,28 @@ export interface RouteInputJson {
     daily_total: number; // = MEAL_BUDGET[travelStyle].dailyTotal (= Economic 40 / Reasonable 100 / Premium 300 / Luxury 300+)
     label: string; // = MEAL_BUDGET[travelStyle].label (= "€100/일")
   };
+  /**
+   * ⚠️ 수정금지(승인필요) 2026-05-28 = 사용자 SSOT 3 번 명시 = 4 필수만 (= 5 키 = PLACE_INPUT_KEYS)
+   * = name_en / name_ko / type / seed_category / day_zone / rank 제거 (= AI 임의 추가 폐기)
+   * = PSR 3 필수 (name_local / address / lat+lng) 다 있으면 다 / 없으면 null
+   * = Gemini 응답 규칙 = 빈 필드 채워서 반환 + 오류 정정 반환 = R3 백필 base
+   * @see PLACE_INPUT_KEYS (= silent drift 방지)
+   */
   places: Array<{
-    id: string;
-    name_en: string;
-    name_ko: string;
-    name_local: string;
-    address: string;
+    id: string;                       // = "db-${PSR.id}" = echo 매칭 키
+    name_local: string | null;        // = PSR.name_local (= 없으면 null)
+    address: string | null;           // = PSR.address (= 없으면 null)
     lat: number;
     lng: number;
-    type: "activity"; // = 비식당만 (= 식당은 Gemini 자동 발견)
   }>;
 }
+
+/**
+ * ⚠️ 수정금지(승인필요) 2026-05-28 = 사용자 SSOT 3 번 명시 = inputJson.places 5 키 단일 SSOT
+ * = buildRouteInputJson (= route-prompt.ts) + RouteInputJson.places 양식 + STANDARD_PROMPT.md 4 곳 = 동기 잠금
+ * = 변경 시 = 4 곳 모두 동기 (= silent drift 차단)
+ */
+export const PLACE_INPUT_KEYS = ["id", "name_local", "address", "lat", "lng"] as const;
 
 /** 응답 = 1 씬 (= 동선 + 식당 자동 발견만 = 시나리오 카피 0) */
 export interface RouteScene {
