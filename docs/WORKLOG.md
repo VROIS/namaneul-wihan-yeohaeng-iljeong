@@ -18,6 +18,62 @@
 
 ---
 
+## 🔥 2026-05-31 = 4 영역 통합 fix 완료 + route 모델 + 식당 중복 통합 (= 배포 검증 완료)
+
+### ✅ 완료 작업 (= commit 029aaaa + 2574ff0 + DB 반영)
+
+**🔴 1) inputJson.places 4 필수 양식 + PlaceResult 5 컬럼 (= commit 029aaaa)**
+- buildRouteInputJson.places = `id + name_local + address + lat + lng` 5 키만 (= name_en/name_ko/type/seed_category/day_zone/rank 제거 = 사용자 SSOT 3 번 명시 = 토큰 절약)
+- PlaceResult = `nameKo / nameLocal / address / summaryKo / editorialSummary` 5 명시 필드 (= 옛 as any cast 폐기 = ag4 활동 매핑 source)
+- AG2-DB SELECT_COLS = `nameLocal` 추가 (= 옛 누락) + distanceKmFromCenter 데드 제거
+- prompt 시정 = "Google Maps" → "Google Search" + 총 슬롯 강제 + 활동 address+price 응답 + 출력 schema name_en/name_ko 제거
+
+**🔴 2) place-upsert 5 단계 순차 매칭 + A 가드 (= commit 2574ff0)**
+- 순서 = PID > **Google Maps URI** > 풀주소+이름부분포함 > 좌표 10m > 로컬네임 9조합 (= URI 가 풀주소 앞 = cid 신뢰도)
+- 3순위 풀주소 = 정확일치 → **부분포함** (= "Le"/"L'" 접두사 표기차 흡수 = "Bouillon Chartier" ⊂ "Le Bouillon Chartier Grands Boulevards")
+- **A 가드** = 짧은쪽 < 6자 시 정확일치 (= 복합건물 "Bar"⊂"Bar Rouge" 오병합 방지)
+- nameKeys 헬퍼 (= en/local/ko 정규화 배열 4곳 통합) + MatchedBy 'uri' 추가
+
+**🔴 3) route 모델 = gemini-2.5-flash-lite → gemini-3-flash-preview (= commit 2574ff0)**
+- 3 모델 실측 벤치 (= 직접 Gemini 호출): lite 8.7초(카피 밋밋) / 2.5-flash 185초+파싱실패(탈락) / **3-flash-preview 8.9초(카피 위트)**
+- 속도 +0.2초(= 무의미) + 카피 위트 (= 시드 톤 "프사각/본전 뽑음" 재현) + tools+mime 파싱 안정
+- 시드 발굴(_call-config.md)과 동일 모델 = 카피 톤 통일
+
+**🔴 4) 파리 식당 중복 8 통합 (= DB 트랜잭션 = archive 마커)**
+- 알고리즘 4 그룹 (= 부용 샤르티에/피갈/브레즈 카페/아르페쥬) + LLM 의심 2 (= Le Petit Châtelet 악센트차 / Les Cocottes 같은주소) = 사용자 구글맵 육안 확정
+- 업체 바뀜 1 (= Les Cocottes Arc de Triomphe = user-closed 마커)
+- 활성 225 → **217** (= 8 정리) / keep = 옛것 (= PID 보유 + 카피 보존) / archive = phase_tags 마커 (= 삭제 X = 데이터 보존 + 매칭 candidate 유지)
+- 트랜잭션 = BEGIN → 카피 무변경 검증 → COMMIT
+
+**🔴 5) name_en null 워닝 노이즈 시정 (= ag4-db-finalize.ts)**
+- prompt 가 name_en 미요청 (= name_local 단일) = 옛 `!s.name_en` 워닝 = 모든 슬롯 노이즈
+- 시정 = `!name_local && !name_en && !inputPlace` (= 진짜 표시 이름 없을 때만)
+
+### 배포 후 검증 (= 사용자 Replit Republish 후 실 trip)
+
+| 항목 | 배포 전 (lite) | 배포 후 (3-flash-preview) |
+|---|---|---|
+| 카피 톤 | "현대적 분위기에서 코코트 요리" (설명조) | **"에펠탑 보고 밥 먹으면 파리 완성형 프사각"** (위트) |
+| route 파싱 | 간헐 실패 → fallback | **성공** (22씬) |
+| 백필 매칭 | 3 INSERT / 3 UPDATE | **0 INSERT / 6 UPDATE** (= 중복 신규 0) |
+| 매트릭스 | — | Family 8인 반영 ("부모님도 고기라 좋아하심") |
+
+### 파리 비식당 235 중복 체크 (= dry-run)
+- 알고리즘 1 그룹 = Stade de France (= 경기장/굿즈샵/광장) = **BTS 의도적 분리 = 유지** (= 통합 X)
+- 좌표 80m 의심 18 쌍 = 전부 다른 장소 = 중복 아님
+- = 비식당 = 통합 대상 0 (= 깨끗)
+
+### 입증 방법 (= 추측 X = 사실)
+- 3 모델 벤치 = DB 키 로드 + 직접 Gemini 호출 (= 로컬 sandbox off)
+- 중복 dry-run = pairwise Union-Find + 사용자 구글맵 육안
+- geminiClient 파싱 = greedy regex 시나리오 재현 (= position 11996 = trailing content = lite mime 제약 = 모델 변경으로 해소)
+
+### 🔜 다음 P0/P1
+- geminiClient JSON 파싱 견고화 (= brace-counting = 모든 모델 안전망) = 선택 (= 3-flash-preview 는 순수 JSON = 현재 안정)
+- 다른 도시 식당 중복 체크 (= 파리 외 = route 백필 누적 도시)
+
+---
+
 ## 🔄 2026-05-27 = 새 대화창 인수인계 (= 1 달 누적 버벅거림 해소)
 
 ### ✅ 2026-05-26~27 세션 완료 commit 7 종 (= route/ 컴포넌트 본질화)

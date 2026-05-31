@@ -177,14 +177,18 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
     const lastScene = scenes[scenes.length - 1];
     if (lastScene && lastScene.type !== "restaurant") {
       console.warn(
-        `[AG4-DB] ⚠️ Day ${d} 마지막 슬롯 = activity (= 저녁 식당 강제 위반): ${lastScene.name_en || "(name null)"}`,
+        `[AG4-DB] ⚠️ Day ${d} 마지막 슬롯 = activity (= 저녁 식당 강제 위반): ${lastScene.name_local || lastScene.name_en || "(name null)"}`,
       );
     }
-    const nullNames = scenes.filter((s) => !s.name_en);
-    if (nullNames.length > 0) {
-      nullNames.forEach((s) =>
+    // ⚠️ 2026-05-31 = 사용자 SSOT = prompt 가 name_en 미요청 (= name_local 단일) = 워닝 조건 시정
+    // = 진짜 결함 = 표시 이름(name_local) + 매칭(inputPlace) 둘 다 없을 때만 (= 옛 name_en 기준 노이즈 폐기)
+    const nameless = scenes.filter(
+      (s) => !s.name_local && !s.name_en && !inputById.get(s.place_id),
+    );
+    if (nameless.length > 0) {
+      nameless.forEach((s) =>
         console.warn(
-          `[AG4-DB] ⚠️ Day ${d} scene name_en null: slot=${s.slot} type=${s.type} place_id=${s.place_id}`,
+          `[AG4-DB] ⚠️ Day ${d} scene 표시 이름 없음: slot=${s.slot} type=${s.type} place_id=${s.place_id}`,
         ),
       );
     }
