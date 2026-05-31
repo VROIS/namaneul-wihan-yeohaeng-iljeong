@@ -2,13 +2,14 @@
  * ⚠️ 수정금지(승인필요) 2026-05-15 = 사용자 SSOT 단일 INSERT/UPDATE 시스템
  *
  * 모든 place_seed_raw INSERT/UPDATE = 반드시 이 함수만 통과한다.
- * = AI/스크립트/파이프라인 누가 호출해도 = 4 단계 매칭 강제 = 중복 차단.
+ * = AI/스크립트/파이프라인 누가 호출해도 = 5 단계 순차 매칭 강제 = 중복 차단.
  *
- * 매칭 단계 (= 같은 장소 확률 순):
- *   0순위 = google_place_id 일치 (= ~100%, Google 발급 유일 ID)
- *   1순위 = 풀 주소 정규화 100% (= ~99%, 번지+우편번호 일치)
- *   2순위 = 좌표 10m (= ~95%, 같은 건물)
- *   3순위 = 장소명 LOWER+trim (= ~30-50%, 체인/지점 위험)
+ * ⚠️ 수정금지(승인필요) 2026-05-28 = 사용자 SSOT = 5 단계 신뢰도 순 (= 매칭 알고리즘 = 헌법 제14조)
+ *   1순위 = google_place_id 일치 (= ~100%, Google 발급 유일 ID)
+ *   2순위 = google_maps_uri 일치 (= cid = PID 동등 강력)
+ *   3순위 = 풀 주소 정규화 100% + 이름 부분포함 (= 같은 식당 표기차 흡수 / Disney 복합상가 보존)
+ *   4순위 = 좌표 10m (= ~95%, 같은 건물)
+ *   5순위 = 로컬네임 9 조합 (= ~30-50%, 체인/지점 위험)
  *
  * UPDATE 정책 (= 사용자 SSOT):
  *   - 검증 데이터 (name/주소/좌표/PID/이미지/리뷰수) = COALESCE 옛 우선 (= WK 보존)
@@ -25,7 +26,7 @@ export interface UpsertPayload {
   seedCategory: string;  // 'restaurant' | 'attraction' | 'heritage' | ...
   // ⚠️ 2026-05-23 = collection_phase 폐기 = phaseTags 배열로 대체
   rank?: number;
-  // 식별 키 (= 4 단계 매칭)
+  // 식별 키 (= 5 단계 매칭)
   googlePlaceId?: string | null;
   address?: string | null;
   latitude?: number | null;
@@ -51,7 +52,8 @@ export interface UpsertPayload {
   phaseTags?: string[];
 }
 
-export type MatchedBy = 'pid' | 'address' | 'coords' | 'name' | 'none';
+// ⚠️ 수정금지(승인필요) 2026-05-28 = 사용자 SSOT = 5 단계 순차 매칭 = PID > URI > 풀주소 > 좌표 > 로컬네임
+export type MatchedBy = 'pid' | 'uri' | 'address' | 'coords' | 'name' | 'none';
 
 export interface UpsertResult {
   action: 'inserted' | 'updated' | 'skipped';
@@ -67,8 +69,15 @@ const normAddr = (s: string | null | undefined): string =>
     .replace(/\s+/g, ' ')
     .trim();
 
+// ⚠️ 2026-05-28 = 이름 정규화 단일 헬퍼 (= 3순위 풀주소 + 5순위 로컬네임 공용)
+const normName = (s: string | null | undefined): string => (s || '').trim().toLowerCase();
+
+// ⚠️ 2026-05-31 = 이름 3 종 (en/local/ko) 정규화 배열 = 9 조합 매칭 공용 (= 3순위 + 5순위 = 4 곳)
+const nameKeys = (x: { nameEn?: string | null; nameLocal?: string | null; nameKo?: string | null }): string[] =>
+  [normName(x.nameEn), normName(x.nameLocal), normName(x.nameKo)].filter(Boolean);
+
 /**
- * 단일 entry-point. 4 단계 매칭 + UPDATE 또는 INSERT.
+ * 단일 entry-point. 5 단계 순차 매칭 + UPDATE 또는 INSERT.
  */
 export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
   if (!db) {
@@ -98,39 +107,45 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
     })
     .from(placeSeedRaw);
 
-  // 5 단계 매칭
+  // ⚠️ 수정금지(승인필요) 2026-05-28 = 사용자 SSOT = 5 단계 순차 매칭 (= 신뢰도 순)
+  // = 1) PID > 2) Google Maps URI > 3) 풀주소+이름 부분포함 > 4) 좌표 10m > 5) 로컬네임 9 조합
   let match: (typeof candidates)[0] | undefined;
   let matchedBy: MatchedBy = 'none';
 
-  // 0순위 = PID
+  // 1순위 = PID (= ~100% = Google 발급 유일 ID)
   if (p.googlePlaceId) {
     match = candidates.find((c) => c.googlePlaceId === p.googlePlaceId);
     if (match) matchedBy = 'pid';
   }
-  // 1순위 = 풀 주소 100% + 이름 9 조합 한 쌍 일치 동시 (= 사용자 SSOT 2026-05-18)
-  // = 광역 주소 (= Disney Village 복합 상가) = 같은 주소 다른 식당 = 별도 행 보존
-  // = "주소 + 이름" 동시 일치만 = 같은 entity 매칭
+  // 2순위 = Google Maps URI (= cid = PID 동등 강력 = PID 없을 때 매칭 보강)
+  // ⚠️ 2026-05-28 = 풀주소보다 우선 (= cid 신뢰도 > 주소 표기 변동)
+  if (!match && p.googleMapsUri) {
+    match = candidates.find((c) => c.googleMapsUri === p.googleMapsUri);
+    if (match) matchedBy = 'uri';
+  }
+  // 3순위 = 풀주소 100% + 이름 부분포함 (= 사용자 SSOT 2026-05-28)
+  // = 풀주소 정규화 100% 일치 + 이름 한 쌍 포함관계 (= "Bouillon Chartier" ⊂ "Le Bouillon Chartier Grands Boulevards")
+  // = 같은 식당 표기차 (= Le/L' 접두사 + grounding 변동) = 매칭 / Disney 복합상가 (= 완전 다른 이름) = 별도 행 보존
   if (!match && p.address) {
     const np = normAddr(p.address);
     if (np.length >= 20) {
-      const normName1 = (s: string | null | undefined) => (s || '').trim().toLowerCase();
-      const pNames1 = [normName1(p.nameEn), normName1(p.nameLocal), normName1(p.nameKo)].filter(Boolean);
+      const pNames1 = nameKeys(p);
       match = candidates.find((c) => {
         if (!c.address || normAddr(c.address) !== np) return false;
         if (pNames1.length === 0) return true; // 입력 이름 X = 주소만 매칭 (= 옛 동작 호환)
-        const cNames1 = [normName1(c.nameEn), normName1(c.nameLocal), normName1(c.nameKo)].filter(Boolean);
-        return pNames1.some((pn) => cNames1.includes(pn));
+        const cNames1 = nameKeys(c);
+        // ⚠️ 2026-05-28 = 정확 일치 → 부분포함 (= 한 쪽이 다른 쪽을 포함 = 같은 식당 표기차 흡수)
+        // = A 가드 = 짧은 쪽 < 6자 = 정확 일치만 (= "Bar" ⊂ "Bar Rouge" 같은 복합건물 오병합 방지)
+        return pNames1.some((pn) =>
+          cNames1.some((cn) =>
+            Math.min(pn.length, cn.length) < 6 ? pn === cn : pn.includes(cn) || cn.includes(pn),
+          ),
+        );
       });
       if (match) matchedBy = 'address';
     }
   }
-  // ⚠️ 수정금지(승인필요) 2026-05-15 = 사용자 SSOT = google_maps_uri = 2순위 신규 추가
-  // = google_maps_uri 안의 cid = PID 동등 강력 = PID 없을 때 매칭 보강
-  if (!match && p.googleMapsUri) {
-    match = candidates.find((c) => c.googleMapsUri === p.googleMapsUri);
-    if (match) matchedBy = 'address'; // 'gmaps_uri' 매칭 → 주소급으로 분류
-  }
-  // 3순위 = 좌표 10m
+  // 4순위 = 좌표 10m (= 같은 건물)
   if (!match && p.latitude && p.longitude) {
     match = candidates.find(
       (c) =>
@@ -141,18 +156,15 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
     );
     if (match) matchedBy = 'coords';
   }
-  // ⚠️ 수정금지(승인필요) 2026-05-15 = 사용자 SSOT = 이름 매칭 9 조합 강제
-  // = [[feedback_name_match_9_combinations]]
-  // = name_en + name_local + name_ko 3 × 3 = 9 조합 = 셋 중 한 쌍 일치 시 매칭
-  // = 1/9 만 비교 = 중복 못 잡음 (= Eiffel Tower / Tour Eiffel / 에펠탑 별개로 남음)
+  // 5순위 = 로컬네임 9 조합 (= name_en + name_local + name_ko 3 × 3 = 셋 중 한 쌍 일치)
+  // = [[feedback_name_match_9_combinations]] = 1/9 만 비교 = 중복 못 잡음 (= Eiffel Tower / Tour Eiffel / 에펠탑 별개)
   // ⚠️ 2026-05-23 = 이름 매칭만 cityId 필터 유지 (= "Cafe de Paris" 체인 = 다른 도시는 별개 행)
   if (!match) {
-    const normName = (s: string | null | undefined) => (s || '').trim().toLowerCase();
-    const pNames = [normName(p.nameEn), normName(p.nameLocal), normName(p.nameKo)].filter(Boolean);
+    const pNames = nameKeys(p);
     if (pNames.length > 0) {
       match = candidates.find((c) => {
         if (c.cityId !== p.cityId) return false;  // 이름 매칭만 = 같은 도시 강제
-        const cNames = [normName(c.nameEn), normName(c.nameLocal), normName(c.nameKo)].filter(Boolean);
+        const cNames = nameKeys(c);
         return pNames.some((pn) => cNames.includes(pn));
       });
       if (match) matchedBy = 'name';
@@ -283,7 +295,7 @@ export async function upsertPlaces(payloads: UpsertPayload[]): Promise<{
     inserted: 0,
     updated: 0,
     skipped: 0,
-    byMatch: { pid: 0, address: 0, coords: 0, name: 0, none: 0 } as Record<MatchedBy, number>,
+    byMatch: { pid: 0, uri: 0, address: 0, coords: 0, name: 0, none: 0 } as Record<MatchedBy, number>,
     errors: [] as string[],
   };
   for (const p of payloads) {

@@ -8,13 +8,16 @@ import { generateRoutePrompt } from "./route-prompt";
 import type { RouteHandlerResult, RouteResponse } from "./route-types";
 
 /**
- * Gemini 호출 옵션 = route 전용 model (= 사용자 SSOT 2026-05-26)
- * = model gemini-2.5-flash-lite (= 가격 입력 $0.10 / 출력 $0.40 / 1M tokens = 가장 저렴)
- * = grounding 무료 한도 일 1,500 RPD (= 월 약 45,000 = 풍부)
- * = Google Search + Google Maps grounding GA 지원 (= gemini-3-flash-preview 한도 5,000/월 공유 대비 9 배)
+ * ⚠️ 수정금지(승인필요) 2026-05-31 = 사용자 SSOT = route 모델 = gemini-3-flash-preview
+ * = 3 모델 실측 벤치 (= 2026-05-31) 결과:
+ *   - gemini-2.5-flash-lite: 8.7초 / 파싱 OK / 카피 밋밋 (= 설명조)
+ *   - gemini-2.5-flash: 185초 / 파싱 실패 = 탈락
+ *   - gemini-3-flash-preview: 8.9초 / 파싱 OK / 카피 위트 (= 시드 톤 재현) ← 채택
+ * = 속도 = lite 와 0.2초 차 (= 무의미) + 카피 위트 + tools+mime 동시 가능 (= 파싱 안정)
+ * = 시드 발굴 (= _call-config.md) 과 동일 모델 = 카피 톤 통일 (= "프사각/본전 뽑음" 위트)
  * = temperature 0.3 / maxOutputTokens 50000 (= 표준 prompt _call-config 동일)
  */
-const ROUTE_MODEL_ID = "gemini-2.5-flash-lite";
+const ROUTE_MODEL_ID = "gemini-3-flash-preview";
 const ROUTE_TEMPERATURE = 0.3;
 const ROUTE_MAX_OUTPUT_TOKENS = 50000;
 
