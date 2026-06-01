@@ -308,6 +308,10 @@ export async function preloadCityData(
 export async function matchPlacesWithDB(
   geminiPlaces: PlaceResult[],
   preloaded: AG3PreOutput,
+  // ⚠️ 수정금지(승인필요) 2026-05-31 = 사용자 SSOT = 이미지 보강 background 화 옵션
+  // = skipImageEnrich=true = Wikipedia 이미지 보강(= 동기 ~9초) skip = FE 우선 노출
+  // = 이미지 = saveNewPlacesToDB (background = TS+PM) 가 DB 저장 = 다음 trip = DB hit
+  opts?: { skipImageEnrich?: boolean },
 ): Promise<PlaceResult[]> {
   const {
     dbPlacesMap,
@@ -675,7 +679,11 @@ export async function matchPlacesWithDB(
     }
   }
 
-  const needsPhoto = enriched.filter((p) => !p.image || p.image.trim() === "");
+  // ⚠️ 2026-05-31 = 사용자 SSOT = skipImageEnrich = Wikipedia 이미지 보강(동기 ~9초) skip = FE 우선
+  // = 이미지 = saveNewPlacesToDB (background) 가 확보 + DB 저장 (= 다음 trip = DB hit)
+  const needsPhoto = opts?.skipImageEnrich
+    ? []
+    : enriched.filter((p) => !p.image || p.image.trim() === "");
   if (needsPhoto.length > 0) {
     const _pt0 = Date.now();
     // Wikipedia REST API: 무료, 영구 URL — 유명 관광지 대부분 커버
@@ -750,6 +758,9 @@ export async function matchPlacesWithDB(
 export async function saveNewPlacesToDB(
   newPlaces: PlaceResult[],
   cityId: number | null,
+  // ⚠️ 수정금지(승인필요) 2026-06-01 = 사용자 SSOT = deferPersist=true 시 = fetch(TS+PM+Storage) await 완료 후 = DB INSERT(upsertPlace) 만 background
+  // = 첫 trip 이미지 FE 노출 최우선 / 백필(DB)은 background. false(기본)=옛 동작(fetch+INSERT 모두 inline). 롤백 = pipeline-v3 플래그 1줄
+  opts?: { deferPersist?: boolean },
 ): Promise<void> {
   if (!db || !cityId) {
     console.log(
@@ -943,9 +954,9 @@ export async function saveNewPlacesToDB(
 
         const nextRank = baseRanks[seedCategory] + i;
         // ⚠️ 수정금지(승인필요) 2026-05-15 = 사용자 SSOT = upsertPlace() 통과 강제 (= CLAUDE.md 제14조)
-        // = 4 단계 매칭 (PID > 풀주소 > 좌표10m > 이름) + COALESCE 옛 우선 + GREATEST 가격
-        const { upsertPlace } = await import("../place-upsert");
-        await upsertPlace({
+        // = 5 단계 매칭 (PID > URI > 풀주소 > 좌표10m > 이름) + COALESCE 옛 우선 + GREATEST 가격
+        // ⚠️ 2026-06-01 = upsert 즉시 await X = job 수집만 (= 아래 runUpserts 가 deferPersist 에 따라 background/await)
+        const job = {
           cityId: cityId,
           seedCategory,
           rank: nextRank,
@@ -966,13 +977,14 @@ export async function saveNewPlacesToDB(
           priceEur: maxPriceEur,
           categoryTags: [seedCategory],
           phaseTags: [`auto-learn-${today}`],
-        });
+        };
 
         return {
           saved: 1,
           skipped: 0,
           enrichedByApi: 1,
           photoOk: imageUrl ? 1 : 0,
+          job,
         };
       } catch (e) {
         // ⚠️ 2026-05-23 = silent fail 가시화 (= 사용자 SSOT = "5월 6일 백필 미작동" 진단 결과)
@@ -990,6 +1002,26 @@ export async function saveNewPlacesToDB(
       }
     }),
   );
+
+  // ⚠️ 수정금지(승인필요) 2026-06-01 = 사용자 SSOT = fetch(TS+PM+Storage) 완료 = place.image 세팅됨 (= FE 노출 준비 끝)
+  // = DB INSERT 만 분리 = deferPersist 시 background(백필) / 기본 await(= 옛 동작 보존 = 롤백)
+  // = upsertPlaces (= place-upsert.ts 배치 단일 진입점 = 순차 5단계 매칭 = 중복 방지 §14 + shared 재사용 §16)
+  const { upsertPlaces } = await import("../place-upsert");
+  const upsertJobs = results.map((r: any) => r.job).filter(Boolean);
+  const runUpserts = async () => {
+    const s = await upsertPlaces(upsertJobs);
+    console.log(
+      `[AG3-SAVE] 💾 DB INSERT 완료 = ins=${s.inserted} upd=${s.updated} skip=${s.skipped} (${upsertJobs.length}행)`,
+    );
+  };
+  if (opts?.deferPersist) {
+    // = FE 우선 = upsert background (await X). .catch = unhandled rejection 방어 (= upsertPlaces 자체는 per-row catch 라 throw X)
+    runUpserts().catch((e) =>
+      console.error("[AG3-SAVE] ⚠️ background upsert 실패:", (e as Error).message),
+    );
+  } else {
+    await runUpserts(); // = 기본 = 옛 동작 (응답 전 완료)
+  }
 
   // 3. 카운터 집계
   const totals = results.reduce(

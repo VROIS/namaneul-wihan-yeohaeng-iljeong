@@ -464,20 +464,28 @@ OUTPUT (strict JSON, no markdown fences):
 ]}]}`;
 
   try {
-    console.log(`[V3-Step1] 🤖 Gemini-3-flash-preview + grounding (${prompt.length}자)...`);
+    // ⚠️ 수정금지(승인필요) 2026-06-01 = 사용자 SSOT = grounding 토글 (= 실측: grounding +8초 / JSON ~13초 = 모델 동일)
+    // = false = responseMimeType JSON (빠름. 신규장소 = saveNewPlacesToDB 의 TS searchText 가 Google 재검증 = 환각 안전망)
+    // = true  = googleSearch grounding (정확, 무명도시 강함, 느림). 롤백 = 이 1줄 true
+    const STEP1_USE_GROUNDING = false;
+    const step1Config: any = {
+      temperature: 0.3,
+      maxOutputTokens: 8192,
+      thinkingConfig: { thinkingBudget: 0 },
+    };
+    if (STEP1_USE_GROUNDING) {
+      step1Config.tools = [{ googleSearch: {} }];
+    } else {
+      step1Config.responseMimeType = "application/json"; // = grounding off 시 = JSON 강제 (= 파싱 안정 + 속도)
+    }
+    console.log(
+      `[V3-Step1] 🤖 gemini-3-flash-preview ${STEP1_USE_GROUNDING ? "+ grounding" : "+ JSON"} (${prompt.length}자)...`,
+    );
 
-    // ⚠️ 수정금지(승인필요) 2026-05-14 = 모델/Tools 변경
-    // = gemini-2.5-flash (JSON mode) → gemini-3-flash-preview (grounding) = 시드 v3 와 통일
-    // = responseMimeType 제거 (= grounding 호환 X = prompt 에서 STRICT JSON 명시)
     const response = await getAI().models.generateContent({
       model: "gemini-3-flash-preview",
       contents: [{ role: "user", parts: [{ text: prompt }] }],
-      config: {
-        temperature: 0.3,
-        maxOutputTokens: 8192,
-        tools: [{ googleSearch: {} }],
-        thinkingConfig: { thinkingBudget: 0 },
-      } as any,
+      config: step1Config,
     });
 
     // gemini-2.5-flash: thinking 모드 시 응답이 parts 배열로 올 수 있음
@@ -666,8 +674,10 @@ async function step2_enrichAndBuild(
 
   console.log(`[V3-Step2] ${allPlaces.length}곳 PlaceResult 변환 완료`);
 
-  // ── 2b. DB 매칭 (좌표, 사진, 점수 보강) ──
-  const matchedPlaces = await matchPlacesWithDB(allPlaces, preloaded);
+  // ── 2b. DB 매칭 (좌표, 점수 보강) ──
+  // ⚠️ 수정금지(승인필요) 2026-05-31 = 사용자 SSOT = skipImageEnrich = Wikipedia 이미지 보강(동기 ~9초) skip
+  // = FE 우선 노출 (= DB-only 처럼) / 이미지 = saveNewPlacesToDB(background = TS+PM) 가 DB 저장 = 다음 trip = DB hit
+  const matchedPlaces = await matchPlacesWithDB(allPlaces, preloaded, { skipImageEnrich: true });
   const matchedMap = new Map<string, PlaceResult>();
   for (const mp of matchedPlaces) {
     matchedMap.set(mp.id, mp);
@@ -760,13 +770,19 @@ async function step2_enrichAndBuild(
     return merged;
   }));
 
-  // ⚠️ 수정금지(승인필요) 2026-05-14 = 사용자 SSOT = 백그라운드 = 응답 속도 ↑
-  // = await 제거 = saveNewPlacesToDB (= TS+PM + Storage + DB INSERT) = 응답 후 백그라운드
-  // = 첫 사용자 = 미매칭 행 이미지/pid NULL 노출 / 다음 사용자 = DB hit = 정확
-  // = 사용자 SSOT 본질 = "DB 자동 캐싱 = 시간 갈수록 호출 ↓"
-  saveNewPlacesToDB(finalPlaces, preloaded.cityId).catch(e =>
-    console.error('[V3-Step2] ⚠️ 백그라운드 saveNewPlacesToDB 실패:', e?.message || e)
-  );
+  // ⚠️ 수정금지(승인필요) 2026-06-01 = 사용자 SSOT = 이미지 FE 노출 토글 (= 실 trip 입증 후 롤백 1줄)
+  // = true  = fetch(TS+PM+Storage) await → 첫 trip 구글 이미지 노출(FE 최우선) + DB INSERT background(백필)
+  // = false = 옛 동작 = 전부 background (= 첫 trip 이미지 0, 다음 trip DB hit). 롤백 = 이 1줄 false
+  const AWAIT_NEW_PLACES_IMAGES = true;
+  if (AWAIT_NEW_PLACES_IMAGES) {
+    await saveNewPlacesToDB(finalPlaces, preloaded.cityId, { deferPersist: true }).catch(e =>
+      console.error('[V3-Step2] ⚠️ saveNewPlacesToDB(await fetch) 실패:', e?.message || e)
+    );
+  } else {
+    saveNewPlacesToDB(finalPlaces, preloaded.cityId).catch(e =>
+      console.error('[V3-Step2] ⚠️ 백그라운드 saveNewPlacesToDB 실패:', e?.message || e)
+    );
+  }
 
   // 최종 장소 맵 (= saveNewPlacesToDB 후 = 보강 결과 반영)
   const finalPlaceMap = new Map<string, PlaceResult>();
