@@ -778,11 +778,20 @@ export async function saveNewPlacesToDB(
     `[AG3-SAVE] cityId=${cityId} count=${newPlaces.length} sourceTypes=${JSON.stringify(srcTypes)}`,
   );
 
-  // DB에 이미 있는 장소('DB Enriched')를 제외한 나머지 저장
+  // ⚠️ 수정금지(승인필요) 2026-06-01 = 사용자 SSOT = bare 매칭(= DB Enriched 인데 PID/이미지/좌표 없음) = TS+PM 보강 포함
+  // = 스샷 입증 = bare 레거시 행 매칭 시 Google 보강 건너뛰어 = 이미지/좌표/모달 PID 셋 다 누락 + 모달 fuzzy 동명 다중 노출
+  // = searchText 가 풀주소로 정확한 장소 찾음 → upsertPlace COALESCE(옛 우선) = NULL 칸만 채움 = bare 행 영구 개선 (§14)
+  // = 완전 매칭 행(PID+이미지+좌표 보유)은 제외 = 추가 호출 0. 롤백 = ENRICH_BARE_MATCHES = false
+  const ENRICH_BARE_MATCHES = true;
+  const isBareMatch = (p: PlaceResult) =>
+    ENRICH_BARE_MATCHES &&
+    p.sourceType === "Gemini AI + DB Enriched" &&
+    (!(p as any).googlePlaceId || !p.image || !p.lat); // = 셋 중 하나라도 없으면 보강
   const toSave = newPlaces.filter(
     (p) =>
       p.sourceType === "Gemini AI (New)" ||
-      p.sourceType === "Gemini AI + Google Places",
+      p.sourceType === "Gemini AI + Google Places" ||
+      isBareMatch(p),
   );
   if (toSave.length === 0) {
     console.log(`[AG3-SAVE] toSave=0 (= 모두 DB Enriched 또는 다른 type)`);
@@ -960,7 +969,11 @@ export async function saveNewPlacesToDB(
           cityId: cityId,
           seedCategory,
           rank: nextRank,
-          nameEn: place.name,
+          // ⚠️ 수정금지(승인필요) 2026-06-01 = bare 매칭 = 매칭된 원행 이름으로 upsert
+          // = matchPlacesWithDB(느슨 norm/noAccent) ↔ upsertPlace 5순위(엄격 normName) 정규화 불일치 = 새 INSERT 중복 위험
+          // = 매칭된 원행 nameEn 사용 = upsertPlace 5순위 정확 재매칭 = 같은 행 UPDATE 보장 (= COALESCE 로 행 이름 보존)
+          // = 신규(미매칭) 장소 = __seedDirectMatch 없음 = place.name 그대로 (= 정상 INSERT)
+          nameEn: (place as any).__seedDirectMatch?.nameEn || place.name,
           nameKo: (place as any).nameKo || null,
           nameLocal: (place as any).nameLocal || null,
           address:
