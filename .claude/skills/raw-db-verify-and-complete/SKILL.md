@@ -21,8 +21,9 @@ argument-hint: city-id (도시 ID 정수, 예 19 = Paris)
 |---:|---|---|---:|---|
 | **1** | [`prompts/01-discover-6cats/`](prompts/01-discover-6cats/) | 신규 도시 6 카테고리 TOP 20 발굴 (= 식당 제외) | 1 (Gemini) | 사용자 SSOT 2026-05-12 v3 |
 | **2** | [`prompts/02-enrich-place/`](prompts/02-enrich-place/) | 기존 raw 행 보강 (= batch 40 + adaptive fallback) | N/40 (Gemini) | 사용자 SSOT 2026-05-18 |
-| **3** | [`prompts/03-downtown-restaurant/`](prompts/03-downtown-restaurant/) | 도심 식당 시드 (= MEAL_BUDGET 4 tier × 30) | 4 (Gemini) | 사용자 SSOT 2026-05-20 |
-| **4** | [`prompts/04-outskirt-restaurant/`](prompts/04-outskirt-restaurant/) | 외곽 식당 시드 (= 30 LOW + 30 MID) | 2 (Gemini) | 사용자 SSOT 2026-05-18 |
+| **3** | [`prompts/12-ts-discover-pool/`](prompts/12-ts-discover-pool/) | 🆕 **식당 발굴 = TS `--zone=downtown`** (= searchNearby POPULARITY + text + premium = 객관적 RC, 환각 X) = **03 Gemini 폐기 흡수** | ~7 (TS) | 사용자 SSOT 2026-06-02 |
+| **4** | [`prompts/12-ts-discover-pool/`](prompts/12-ts-discover-pool/) | 🆕 **식당 발굴 = TS `--zone=outskirt`** (= 명소별 circle) = **04 Gemini 폐기 흡수** | N (TS) | 사용자 SSOT 2026-06-02 |
+| (식당큐레이션) | [`prompts/13-restaurant-summary/`](prompts/13-restaurant-summary/) | 🆕 발굴 식당 = 한국 요약 2개 + 가격(unknown) = batch 40 (= 발굴≠큐레이션 분리) | N/40 (Gemini) | 사용자 SSOT 2026-06-02 |
 | **5** | [`prompts/05-text-recategorize/`](prompts/05-text-recategorize/) | 묘사 분석 = 카테고리 재분류 (= 본 세션 47 행 패턴) | N/100 (Gemini) | 사용자 SSOT 2026-05-19 |
 | **6** | [`prompts/06-ts-pm-enrich/`](prompts/06-ts-pm-enrich/) | Google Places TS Enterprise + PhotoMedia = 식당/어드벤처 image NULL + pid NULL 보강 | N (TS+PM) | 사용자 SSOT 2026-05-20 (= 헌법 §15) |
 | **7** | [`prompts/07-merge-dups/`](prompts/07-merge-dups/) | 5 단계 매칭 dry-run + 중복 통합 (= 알고리즘 = Gemini X) | 1 dry-run + N archive | 사용자 SSOT 2026-05-18 검증 |
@@ -58,14 +59,17 @@ npx tsx .claude/skills/raw-db-verify-and-complete/prompts/01-discover-6cats/post
 npx tsx .claude/skills/raw-db-verify-and-complete/prompts/02-enrich-place/run.ts --city-id=$CITY_ID --batch=40 --all
 npx tsx .claude/skills/raw-db-verify-and-complete/prompts/02-enrich-place/post-process.ts --city-id=$CITY_ID
 
-# Step 3. 도심 식당 발굴 (= 4 호출 = MEAL_BUDGET 4 tier)
-npx tsx .claude/skills/raw-db-verify-and-complete/prompts/03-downtown-restaurant/run.ts --city-id=$CITY_ID
-npx tsx .claude/skills/raw-db-verify-and-complete/prompts/03-downtown-restaurant/post-process.ts --city-id=$CITY_ID --date=<YYYY-MM-DD>
-
-# Step 4. 외곽 식당 발굴 (= 2 호출 = LOW + MID)
-npx tsx .claude/skills/raw-db-verify-and-complete/prompts/04-outskirt-restaurant/run.ts \
-  --city-id=$CITY_ID --hints="<도시별 day-trip 명소 list>"
-npx tsx .claude/skills/raw-db-verify-and-complete/prompts/04-outskirt-restaurant/post-process.ts --city-id=$CITY_ID
+# Step 3+4. 식당 발굴 = TS (= 03/04 Gemini 폐기 → 12-ts-discover-pool 통합 = 객관적 RC)
+#   = 시내(downtown) 3종 + 외곽(outskirt) 명소별 + 13 한국요약 + 이미지 = 전체 흐름 = prompts/12-ts-discover-pool/README.md
+#   사전 = destinations.ts 에 도시 구역(downtown 원형 + outskirt 명소) 추가
+npx tsx .../12-ts-discover-pool/run.ts --city-id=$CITY_ID --zone=downtown --method=nearby --label=nearby
+npx tsx .../12-ts-discover-pool/run.ts --city-id=$CITY_ID --zone=downtown --method=text --pages=3 --label=text
+npx tsx .../12-ts-discover-pool/run.ts --city-id=$CITY_ID --zone=downtown --method=text --pages=3 --price-levels=EXPENSIVE,VERY_EXPENSIVE --label=premium
+npx tsx .../12-ts-discover-pool/post-process.ts --city-id=$CITY_ID --zone=downtown --date=<YYYY-MM-DD> --apply
+npx tsx .../13-restaurant-summary/run.ts --city-id=$CITY_ID
+npx tsx .../13-restaurant-summary/post-process.ts --city-id=$CITY_ID --date=<YYYY-MM-DD> --apply
+npx tsx .../12-ts-discover-pool/image-pool.ts --city-id=$CITY_ID --zone=downtown --date=<YYYY-MM-DD> --apply
+#   (외곽 = --zone=outskirt 동일 흐름 = README 참조)
 
 # Step 5. 텍스트 분석 = 카테고리 재분류 (= 사용자 cc2 검수 필수)
 npx tsx .claude/skills/raw-db-verify-and-complete/prompts/05-text-recategorize/run.ts --city-id=$CITY_ID

@@ -18,6 +18,33 @@
 
 ---
 
+## 🔥 2026-06-02 = 파리 시내 식당 풀 220곳 + TS 3종 발굴 표준 (searchNearby POPULARITY)
+
+### ✅ 완료 (= DB 반영 + 12-ts-discover-pool 컴포넌트 표준화 = README.md 잠금)
+
+**🔴 1) TS 검색 도구 재정립 (= 공식문서 + 실측 검증, 추측 X)**
+- 인기/리뷰 발굴 = **searchNearby + rankPreference:POPULARITY** (= 진짜 인기순). searchText(관련성)는 Bouillon Pigalle(55k)·Pink Mamma(49k) 챔피언을 60위 안에 안 줌 = 우리 PSR RC 정렬 대조 + 직접 호출로 입증.
+- 검색당 상한 = searchText 60(20×3페이지) / searchNearby 20(페이지네이션 없음). SKU = 둘 다 Enterprise $35/1K, rankPreference·priceLevels는 필드 아님 = 비용 0 영향 (공식 가격표 확인). → [[reference_ts_searchnearby_popularity]]
+- Gemini 리뷰 숫자 = 환각 (Pink Mamma "22k" vs 실측 46k) = API 실측만 신뢰.
+
+**🔴 2) 시내 3종 합본 발굴 표준 (= run.ts/post-process/image-pool 확장)**
+- run.ts = `--method=text|nearby` + `--label`(파일변형) + `--price-levels`(searchText 가격필터) + `--pages`(nextPageToken) + `places.primaryType`(잡음판정).
+- 3종 = nearby(인기 20) + text(관련성 60) + premium(priceLevels 고급) → 병합.
+- post-process = zone 전 변형파일 병합 + 거리/폐업 + **primaryType 잡음필터**(백화점/영화관/호텔/박물관 제외=원 카테고리 유지) + **place_id·name_norm 중복제거** + tier×RC + upsertPlace(**UNIQUE 충돌 skip** + downtown=GREATEST 가격).
+- image-pool = 시내 **가격대별 RC 상위 quota**(eco20/reason40/premium20) PM = FE 노출분만. 외곽 명소별 fill-to-10 보존. = 런타임 백필(ag3 uploadPhoto)과 동일 Storage 프로세스 라인별 검증.
+
+**🔴 3) 파리 시내 풀 = 125 → 220곳**
+- 신규 94 INSERT + 28 UPDATE (= 챔피언·미슐랭 RC 갱신: Bouillon Pigalle 55k / Guy Savoy / La Tour d'Argent). **RC 24→124.**
+- 13-restaurant-summary = 94곳 한국 요약 2개 + 가격(unknown 27만, TS 67 보존). **summary/price = 100%.**
+- 이미지 PM 53곳 (= FE 노출 상위 72곳 완비). 비식당 5곳(Printemps/UGC/Generator/Galerie Vivienne/IMA) = 식당풀 제외=원 카테고리 유지. 동명 충돌 1 skip(Bouillon Chartier 기존 RC 48k 보존). **dup_pid 0.**
+
+### 🔜 다음 P0/P1
+- 다른 도시 시내 풀 = `destinations.ts` 추가 + 6단계 (= prompts/12-ts-discover-pool/README.md).
+- RC-null 96곳(옛 큐레이션 Frenchie 등) = RC순 자연 하위 (= 사용자 원칙). Bouillon Chartier 4행(76148/76159 RC-null) = 07-merge-dups 정리 선택.
+- 커밋/푸시 + Replit 배포 (= 사용자 지시 시).
+
+---
+
 ## 🔥 2026-05-31 = 4 영역 통합 fix 완료 + route 모델 + 식당 중복 통합 (= 배포 검증 완료)
 
 ### ✅ 완료 작업 (= commit 029aaaa + 2574ff0 + DB 반영)

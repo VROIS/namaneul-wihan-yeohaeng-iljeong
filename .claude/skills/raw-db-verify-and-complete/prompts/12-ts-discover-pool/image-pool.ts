@@ -17,10 +17,13 @@ for (const line of envRaw.split(/\r?\n/)) { const m = line.match(/^([A-Z_][A-Z0-
 const argv = Object.fromEntries(process.argv.slice(2).map(a => a.replace(/^--/, '').split('=')).map(([k, v]) => [k, v ?? 'true']));
 const cityId = Number(argv['city-id'] || 0);
 const date = String(argv['date'] || new Date().toISOString().slice(0, 10));
+const zone = String(argv['zone'] || 'outskirt');
 const TARGET = Number(argv['target'] || 10);
+// ⚠️ 수정금지(승인필요) 2026-06-02 = 시내(downtown) = 가격대별 RC 상위 quota (= FE 노출분만 PM = 사용자 SSOT). 외곽은 명소별 fill-to-target.
+const Q = { eco: Number(argv['eco'] || 20), reason: Number(argv['reason'] || 40), premium: Number(argv['premium'] || 20) };
 const apply = argv['apply'] === 'true';
 const pmLimit = argv['limit'] ? Number(argv['limit']) : null; // = PM 건당 과금 = 소량 먼저 검증용
-if (!cityId) { console.error('Usage: --city-id=<N> --date=<YYYY-MM-DD> [--target=10] [--apply]'); process.exit(1); }
+if (!cityId) { console.error('Usage: --city-id=<N> --date=<YYYY-MM-DD> [--zone=outskirt|downtown] [--target=10] [--eco=20 --reason=40 --premium=20] [--apply]'); process.exit(1); }
 
 const hkm = (a: any, b: any) => {
   const R = 6371, dLat = (b.lat - a.lat) * Math.PI / 180, dLng = (b.lng - a.lng) * Math.PI / 180;
@@ -30,51 +33,64 @@ const hkm = (a: any, b: any) => {
 const tier = (p: number | null) => p == null ? 'reason' : p <= 24 ? 'eco' : p <= 60 ? 'reason' : 'premium';
 
 (async () => {
-  const dests = DISCOVERY_ZONES[cityId]?.outskirt;
-  if (!dests?.length) { console.error(`city ${cityId} outskirt config 없음`); process.exit(1); }
+  const dests = DISCOVERY_ZONES[cityId]?.[zone];
+  if (!dests?.length) { console.error(`city ${cityId} zone '${zone}' config 없음`); process.exit(1); }
 
-  // 발굴 raw → place_id → photo_name
-  const rawPath = path.join(ROOT, 'docs', 'raw', String(cityId), `12-ts-discover-outskirt-${date}.json`);
-  if (!fs.existsSync(rawPath)) { console.error(`✗ ${rawPath} 미존재`); process.exit(1); }
-  const raw = JSON.parse(fs.readFileSync(rawPath, 'utf-8'));
+  // ⚠️ 2026-06-02 = zone 의 모든 변형 raw(nearby/text/premium/무label) 병합 = photo_name 수집
+  const rawDir = path.join(ROOT, 'docs', 'raw', String(cityId));
+  const rawFiles = fs.readdirSync(rawDir).filter((f) => f.startsWith(`12-ts-discover-${zone}`) && f.endsWith(`-${date}.json`));
+  if (!rawFiles.length) { console.error(`✗ ${rawDir}/12-ts-discover-${zone}*-${date}.json 미존재`); process.exit(1); }
   const photoByPid = new Map<string, string>();
-  for (const z of raw.zones) for (const p of z.places) if (p.place_id && p.photo_name) photoByPid.set(p.place_id, p.photo_name);
+  for (const f of rawFiles) { const raw = JSON.parse(fs.readFileSync(path.join(rawDir, f), 'utf-8')); for (const z of raw.zones) for (const p of z.places) if (p.place_id && p.photo_name) photoByPid.set(p.place_id, p.photo_name); }
 
   const pg = await import('pg');
   const c = new (pg as any).default.Client({ connectionString: process.env.SUPA_URL || process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
   await c.connect();
+  // ⚠️ 2026-06-02 = zone 분리 = downtown(시내=core/null) vs outskirt(외곽) = 같은 ts-pool 태그 공유라 day_zone 로 구분
+  const dzFilter = zone === 'downtown' ? "(day_zone='core' OR day_zone IS NULL)" : "day_zone='outskirt'";
   const pool = (await c.query(
     `SELECT id, name_en, google_place_id AS pid, latitude AS lat, longitude AS lng, price_eur::float8 AS price, google_review_count AS rc,
             (image_url IS NOT NULL AND image_url<>'') AS has_img
      FROM place_seed_raw
-     WHERE city_id=$1 AND seed_category='restaurant' AND 'ts-pool-${date}'=ANY(phase_tags) AND latitude IS NOT NULL`, [cityId])).rows;
+     WHERE city_id=$1 AND seed_category='restaurant' AND 'ts-pool-${date}'=ANY(phase_tags) AND ${dzFilter} AND latitude IS NOT NULL`, [cityId])).rows;
 
-  // 명소 배정 (= 최근접) + 명소별 fill-to-10
-  for (const p of pool) p._dest = dests.reduce((best, d) => {
-    const dist = hkm(d, p); return dist < best.dist ? { name: d.name, dist } : best;
-  }, { name: '', dist: Infinity }).name;
-  const byDest: Record<string, any[]> = {};
-  for (const p of pool) (byDest[p._dest] ||= []).push(p);
-
+  // ⚠️ 수정금지(승인필요) 2026-06-02 = 선정 = 시내(가격대별 RC 상위 quota) / 외곽(명소별 fill-to-target) = 둘 다 FE 노출분만 PM
   const selected: any[] = [];
-  for (const [d, arr] of Object.entries(byDest)) {
+  if (zone === 'downtown') {
+    // 시내 = 단일 구역 = 가격대별 RC 내림차순 상위 (eco/reason/premium quota)
     const t: Record<string, any[]> = { eco: [], reason: [], premium: [] };
-    for (const p of arr) t[tier(p.price)].push(p);
+    for (const p of pool) t[tier(p.price)].push(p);
     for (const k of Object.keys(t)) t[k].sort((a, b) => (b.rc || 0) - (a.rc || 0));
-    const eco = t.eco.slice(0, 4), prem = t.premium.slice(0, 2);
-    const reason = t.reason.slice(0, Math.max(0, TARGET - eco.length - prem.length));
-    const sel = [...eco, ...prem, ...reason];
-    sel.forEach(p => { p._destFinal = d; selected.push(p); });
+    selected.push(...t.eco.slice(0, Q.eco), ...t.reason.slice(0, Q.reason), ...t.premium.slice(0, Q.premium));
+    console.log(`═══ image-pool (city=${cityId}, zone=downtown, quota eco${Q.eco}/reason${Q.reason}/premium${Q.premium}) ═══`);
+    for (const k of ['eco', 'reason', 'premium']) {
+      const sel = selected.filter((p) => tier(p.price) === k);
+      console.log(`  ${k}: 후보 ${t[k].length} → 선정 상위 ${sel.length}/${(Q as any)[k]} (이미지필요 ${sel.filter((p) => !p.has_img && photoByPid.has(p.pid)).length})`);
+    }
+  } else {
+    // 외곽 = 명소별 (eco≤4 + premium≤2 + reason 채움) = TARGET/명소
+    for (const p of pool) p._dest = dests.reduce((best: any, d: any) => {
+      const dist = hkm(d, p); return dist < best.dist ? { name: d.name, dist } : best;
+    }, { name: '', dist: Infinity }).name;
+    const byDest: Record<string, any[]> = {};
+    for (const p of pool) (byDest[p._dest] ||= []).push(p);
+    for (const [d, arr] of Object.entries(byDest)) {
+      const t: Record<string, any[]> = { eco: [], reason: [], premium: [] };
+      for (const p of arr) t[tier(p.price)].push(p);
+      for (const k of Object.keys(t)) t[k].sort((a, b) => (b.rc || 0) - (a.rc || 0));
+      const eco = t.eco.slice(0, 4), prem = t.premium.slice(0, 2);
+      const reason = t.reason.slice(0, Math.max(0, TARGET - eco.length - prem.length));
+      [...eco, ...prem, ...reason].forEach((p) => { p._destFinal = d; selected.push(p); });
+    }
+    console.log(`═══ image-pool (city=${cityId}, zone=outskirt, target=${TARGET}/명소) ═══`);
+    for (const [d, arr] of Object.entries(byDest)) {
+      const sel = selected.filter((p) => p._destFinal === d);
+      console.log(`  ${d}: 배정 ${arr.length} → 선정 ${sel.length} (이미지필요 ${sel.filter((p) => !p.has_img && photoByPid.has(p.pid)).length})`);
+    }
   }
-  const needPm = selected.filter(p => !p.has_img && photoByPid.has(p.pid));
-  const noPhoto = selected.filter(p => !p.has_img && !photoByPid.has(p.pid));
-
-  console.log(`═══ image-pool (city=${cityId}, target=${TARGET}/명소) ═══`);
-  for (const [d, arr] of Object.entries(byDest)) {
-    const sel = selected.filter(p => p._destFinal === d);
-    console.log(`  ${d}: 배정 ${arr.length} → 선정 ${sel.length} (이미지필요 ${sel.filter(p => !p.has_img && photoByPid.has(p.pid)).length})`);
-  }
-  console.log(`\n선정 ${selected.length}곳 / PM 필요 ${needPm.length}곳 (€${(needPm.length * 0.007).toFixed(2)}) / 이미 이미지 ${selected.filter(p => p.has_img).length} / photo_name 없음 ${noPhoto.length}`);
+  const needPm = selected.filter((p) => !p.has_img && photoByPid.has(p.pid));
+  const noPhoto = selected.filter((p) => !p.has_img && !photoByPid.has(p.pid));
+  console.log(`\n선정 ${selected.length}곳 / PM 필요 ${needPm.length}곳 (€${(needPm.length * 0.007).toFixed(2)}) / 이미 이미지 ${selected.filter((p) => p.has_img).length} / photo_name 없음 ${noPhoto.length}`);
 
   if (!apply) { console.log(`\n=== DRY-RUN (PM·쓰기 0) === 실행: --apply`); await c.end(); return; }
 

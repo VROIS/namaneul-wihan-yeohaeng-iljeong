@@ -15,5 +15,12 @@ export const DISCOVERY_ZONES: Record<number, Record<string, Dest[]>> = {
       { name: '샹티이', lat: 49.193, lng: 2.470, radius: 3000 },
       { name: '생제르맹앙레', lat: 48.898, lng: 2.094, radius: 2500 },
     ],
+    // ⚠️ 수정금지(승인필요) 2026-06-02 = 시내 = 도심 단일 원형 (= 사용자 SSOT = 지역분할 X = 10km 범위만)
+    //   = 중심 노트르담/시청 (cities.id=19 = 48.8566/2.3522) + 반경 10km = 시내+근교 식당 전체 커버
+    //   = 검색어 = "Paris restaurant" (= 객관적/중립 = 맛집·한국인 편향 X) → 도시전체 구글 RC 순 → 우리가 분류
+    //   = 한국인 큐레이션(요약)은 13 Gemini 단계 = 이 발굴 단계는 객관적 검증자료만
+    downtown: [
+      { name: 'Paris', lat: 48.8566, lng: 2.3522, radius: 10000 },
+    ],
   },
 };

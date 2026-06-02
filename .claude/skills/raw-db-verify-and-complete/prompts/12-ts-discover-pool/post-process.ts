@@ -46,12 +46,29 @@ const hkm = (a: any, b: any) => {
 // ⚠️ 2026-06-02 = NFD 후 NFC 재결합 필수 (= 한글 자모분해 → 빈문자열 충돌 버그 방지). Latin 악센트만 제거.
 const norm = (s: string | null) => (s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').normalize('NFC').toLowerCase().replace(/[^a-z0-9가-힣]/g, '');
 const isGoogleImg = (url: string | null) => !!url && url.includes('/place-photos/');
+// ⚠️ 수정금지(승인필요) 2026-06-02 = 비식당 primaryType 블랙리스트 (= 사용자 SSOT = 백화점/영화관/호텔/박물관 = 원 카테고리 유지 = 식당풀 제외)
+//   = 블랙리스트 방식 = includedType=restaurant 라도 leak 되는 명백한 비식당만 제외 / 나머지(pastry_shop·gastropub·brewery·bar 등 음식)는 모두 유지 (= 진짜 음식점 안 놓침)
+const NON_FOOD_TYPES = new Set<string>(['department_store', 'shopping_mall', 'shopping_center', 'supermarket', 'grocery_store', 'convenience_store', 'clothing_store', 'store', 'movie_theater', 'performing_arts_theater', 'concert_hall', 'casino', 'bowling_alley', 'amusement_park', 'hotel', 'lodging', 'hostel', 'motel', 'resort_hotel', 'bed_and_breakfast', 'guest_house', 'extended_stay_hotel', 'museum', 'art_gallery', 'cultural_center', 'tourist_attraction', 'historical_landmark', 'monument', 'church', 'park', 'plaza', 'gym', 'spa', 'library', 'university', 'school', 'hospital', 'pharmacy', 'bank', 'gas_station', 'parking', 'train_station', 'subway_station']);
+const isFoodType = (t: string | null) => !!t && !NON_FOOD_TYPES.has(t);
+// ⚠️ 수정금지(승인필요) 2026-06-02 = 키별 RC 최고 1개만 유지(키 null=보존) + 줄면 로그 = place_id/name_norm 중복제거 공용
+function dedupMaxRC(items: any[], keyFn: (p: any) => string | null, label: string): any[] {
+  const best = new Map<string, any>(); const noKey: any[] = [];
+  for (const p of items) { const k = keyFn(p); if (!k) { noKey.push(p); continue; } const e = best.get(k); if (!e || (p.review_count || 0) > (e.review_count || 0)) best.set(k, p); }
+  const out = [...best.values(), ...noKey];
+  if (out.length < items.length) console.log(`${label}: ${items.length} → ${out.length}`);
+  return out;
+}
 const PM_CALL_EUR = 0.007;
 
 (async () => {
-  const inPath = path.join(ROOT, 'docs', 'raw', String(cityId), `12-ts-discover-${zone}-${date}.json`);
-  if (!fs.existsSync(inPath)) { console.error(`✗ ${inPath} 미존재 = run.ts 먼저`); process.exit(1); }
-  const raw = JSON.parse(fs.readFileSync(inPath, 'utf-8'));
+  // ⚠️ 수정금지(승인필요) 2026-06-02 = 합본 발굴 = zone 의 모든 변형 파일(nearby/text/premium/무label) 병합
+  const rawDir = path.join(ROOT, 'docs', 'raw', String(cityId));
+  const files = fs.readdirSync(rawDir).filter((f) => f.startsWith(`12-ts-discover-${zone}`) && f.endsWith(`-${date}.json`));
+  if (!files.length) { console.error(`✗ ${rawDir}/12-ts-discover-${zone}*-${date}.json 미존재 = run.ts 먼저`); process.exit(1); }
+  const mergedZones: any[] = [];
+  for (const f of files) { const j = JSON.parse(fs.readFileSync(path.join(rawDir, f), 'utf-8')); mergedZones.push(...(j.zones || [])); }
+  const raw = { zones: mergedZones };
+  console.log(`병합 raw ${files.length}개: ${files.join(' + ')}`);
   const TAG = `ts-pool-${date}`;
   const manualMap = new Map(Object.entries(MANUAL_PRICE_EUR).map(([k, v]) => [norm(k), v]));
 
@@ -74,7 +91,8 @@ const PM_CALL_EUR = 0.007;
 
   // ── ① 거리 + ② OPERATIONAL + ③ 수동가격 + ④ 가격대별 quota ──
   const kept: any[] = [];
-  const drop = { dist: 0, closed: 0 };
+  const drop = { dist: 0, closed: 0, nonfood: 0 };
+  const nonfoodList: string[] = [];
   let manualHit = 0;
   for (const z of raw.zones) {
     const radiusKm = (z.radius / 1000) * 1.5;
@@ -82,6 +100,7 @@ const PM_CALL_EUR = 0.007;
       if (!p.lat || !p.lng) return false;
       if (hkm(z.center, p) > radiusKm) { drop.dist++; return false; }
       if (p.business_status && p.business_status !== 'OPERATIONAL') { drop.closed++; return false; }
+      if (p.primary_type && !isFoodType(p.primary_type)) { drop.nonfood++; nonfoodList.push(`${p.name}(${p.primary_type})`); return false; }
       return true;
     });
     // 수동가격 override (= unknown 만)
@@ -90,6 +109,12 @@ const PM_CALL_EUR = 0.007;
     //   = 가격대별 quota(QUOTA)는 입력 단계가 아니라 이후 Gemini 요약 추출 단계에 적용
     //   = 중복은 upsertPlace 5단계가 자동 제거 (= dup PID 0 입증)
     for (const p of pass) kept.push({ ...p, zone: z.name, tier: tierOf(p.price_eur), distFromCity: Math.round(hkm(cityCenter, p) * 10) / 10 });
+  }
+  // ⚠️ 수정금지(승인필요) 2026-06-02 = 합본 발굴 = place_id + name_norm 중복 제거 (= RC 높은 1개 / 동명이점 UNIQUE 충돌 방지)
+  {
+    let d = dedupMaxRC(kept, (p) => p.place_id, '합본 내부 중복 제거(place_id)');
+    d = dedupMaxRC(d, (p) => norm(p.name), '동명 정규화 중복 제거(name_norm)');
+    kept.length = 0; kept.push(...d);
   }
 
   // ── ⑤ 중복 매칭 (= upsertPlace 근사) + PM 필요 판정 ──
@@ -111,8 +136,11 @@ const PM_CALL_EUR = 0.007;
   // ── ⑧ 삭제후보 ──
   const keptPids = new Set(kept.map((p) => p.place_id));
   const keptNames = new Set(kept.map((p) => norm(p.name)));
-  const outskirtEx = existing.filter((e: any) => e.day_zone === 'outskirt' || (e.lat && hkm(cityCenter, e) > 10));
-  const orphans = outskirtEx.filter((e: any) =>
+  // ⚠️ 수정금지(승인필요) 2026-06-02 = zone 스코프 = downtown(시내 ≤10km/core/null) vs outskirt(>10km)
+  const zoneEx = zone === 'downtown'
+    ? existing.filter((e: any) => e.day_zone === 'core' || e.day_zone == null || (e.lat && hkm(cityCenter, e) <= 10))
+    : existing.filter((e: any) => e.day_zone === 'outskirt' || (e.lat && hkm(cityCenter, e) > 10));
+  const orphans = zoneEx.filter((e: any) =>
     !(e.pid && keptPids.has(e.pid)) &&
     ![e.name_en, e.name_local, e.name_ko].some((n) => n && keptNames.has(norm(n))) &&
     !kept.find((p) => e.lat && e.lng && hkm(e, p) <= 0.01));
@@ -120,13 +148,14 @@ const PM_CALL_EUR = 0.007;
   // ── 보고 ──
   console.log(`═══ ts-discover post-process (city=${cityId} ${city?.name_en}, ${zone}, ${date}) ═══`);
   console.log(`입력 = broad (quota 미적용 / Gemini추출단계용 quota=${JSON.stringify(QUOTA)}) / 수동가격 적용 ${manualHit}곳`);
-  console.log(`raw ${raw.zones.length}명소 → 입력대상 ${kept.length}곳 (거리탈락 ${drop.dist} / 폐업 ${drop.closed} / broad)`);
+  console.log(`raw ${raw.zones.length}명소 → 입력대상 ${kept.length}곳 (거리탈락 ${drop.dist} / 폐업 ${drop.closed} / 비식당제외 ${drop.nonfood} / broad)`);
+  if (nonfoodList.length) console.log(`  비식당(원 카테고리 유지=식당풀 제외): ${[...new Set(nonfoodList)].join(', ')}`);
   console.log(`가격대(endPrice) = ${JSON.stringify(spread)}`);
   console.log(`\n[중복 先] UPDATE(기존) ${updP.length} / INSERT(신규) ${insP.length} (= 실제는 upsertPlace 5단계 = 더 매칭)`);
   console.log(`[비용 先] PM 필요 ${pmNeed.length} × €${PM_CALL_EUR} = €${(pmNeed.length * PM_CALL_EUR).toFixed(2)} / PM 절감 ${pmSave}곳`);
   console.log(`\n📝 unknown 가격필요 = ${needPrice.length}곳 (= manual-prices.ts 에 추가하면 tier 확정):`);
   needPrice.forEach((p) => console.log(`  - [${p.zone}] ${p.name} (리뷰 ${p.review_count}) ${p.address}`));
-  console.log(`\n🔴 삭제후보 = 기존 외곽 ${outskirtEx.length}곳 중 TS 미발견 ${orphans.length}곳:`);
+  console.log(`\n🔴 삭제후보 = 기존 ${zone} ${zoneEx.length}곳 중 TS 미발견 ${orphans.length}곳 (= 삭제 X = RC순 밀려남 = 보고만):`);
   orphans.slice(0, 15).forEach((e: any) => console.log(`  - ${e.id} ${e.name_en}`));
 
   // === 사전 조사 (= 사용자 SSOT 2026-06-02 = 중복/통합/가격/입지 완비 확인) ===
@@ -183,20 +212,27 @@ const PM_CALL_EUR = 0.007;
 
   console.log(`\n=== APPLY (photo=${downloadPhoto}) = PM 필요분(${pmNeed.length})만 + upsertPlace priceOverwrite + tag '${TAG}' ===`);
   let ins = 0, upd = 0, skip = 0, photoOk = 0;
+  const conflicts: string[] = [];
   for (const p of kept) {
     let imageUrl: string | undefined;
     if (downloadPhoto && p._pmNeed && p.photo_name) { const u = await pmUpload(p.photo_name, p.place_id); if (u) { imageUrl = u; photoOk++; } }
-    const r = await upsertPlace({
-      cityId, seedCategory: 'restaurant', nameEn: p.name, nameLocal: p.name,
-      address: p.address || null, latitude: p.lat, longitude: p.lng,
-      googlePlaceId: p.place_id, googleMapsUri: p.google_maps_uri || null,
-      googleReviewCount: p.review_count ?? null,
-      priceEur: p.price_eur ?? null, priceOverwrite: true,
-      imageUrl, dayZone: 'outskirt', distanceKmFromCenter: p.distFromCity,
-      categoryTags: ['restaurant'], phaseTags: [TAG],
-    });
-    if (r.action === 'inserted') ins++; else if (r.action === 'updated') upd++; else skip++;
+    try {
+      const r = await upsertPlace({
+        cityId, seedCategory: 'restaurant', nameEn: p.name, nameLocal: p.name,
+        address: p.address || null, latitude: p.lat, longitude: p.lng,
+        googlePlaceId: p.place_id, googleMapsUri: p.google_maps_uri || null,
+        googleReviewCount: p.review_count ?? null,
+        priceEur: p.price_eur ?? null, priceOverwrite: zone === 'outskirt', // ⚠️ 2026-06-02 = downtown=GREATEST(§price-max 준수=절대 안낮춤) / outskirt=덮어쓰기(오염청소)
+        imageUrl, dayZone: zone === 'downtown' ? 'core' : 'outskirt', distanceKmFromCenter: p.distFromCity,
+        categoryTags: ['restaurant'], phaseTags: [TAG],
+      });
+      if (r.action === 'inserted') ins++; else if (r.action === 'updated') upd++; else skip++;
+    } catch (e: any) {
+      // ⚠️ 2026-06-02 = 글로벌 UNIQUE(city_id, name_norm) 충돌 = 크래시 대신 skip + 기록 (= 기존 동명 행 보존)
+      conflicts.push(`${p.name} [${e.constraint || e.code || (e.message || '').slice(0, 50)}]`);
+    }
   }
   console.log(`✓ ins=${ins} / upd=${upd} / skip=${skip} / photo=${photoOk}/${pmNeed.length} (${kept.length}곳)`);
-  console.log(`🔴 삭제후보 ${orphans.length}곳 = '${TAG}' 없는 외곽 = 사용자 승인 후 별도 정리`);
+  if (conflicts.length) { console.log(`⚠️ UNIQUE 충돌 skip ${conflicts.length}곳 (= 기존 동명 행 보존 = 검수 필요):`); conflicts.forEach((x) => console.log(`   - ${x}`)); }
+  console.log(`🔴 삭제후보 ${orphans.length}곳 = '${TAG}' 없는 ${zone} = 사용자 승인 후 별도 정리`);
 })();
