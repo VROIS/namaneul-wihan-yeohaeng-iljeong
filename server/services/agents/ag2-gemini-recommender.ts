@@ -20,7 +20,7 @@ import { pickPlaceImage } from "../shared/place-image";
 // ⚠️ 수정금지(승인필요) 2026-05-06 = 사용자 의도 = AG2 데이터 출처 = place_seed_raw 우선
 import { db } from "../../db";
 import { placeSeedRaw } from "@shared/schema";
-import { eq, and, between, desc, asc, sql } from "drizzle-orm";
+import { eq, and, between, asc, sql } from "drizzle-orm";
 import { findCityUnified } from "../city-resolver";
 
 /**
@@ -209,8 +209,11 @@ async function fetchFromPlaceSeedRaw(
       baseWhere.push(
         between(placeSeedRaw.priceEur, budgetTier.min, budgetTier.max),
       );
+    // ⚠️ 수정금지(승인필요) 2026-06-02 = RC(리뷰수) 빈칸(NULL)은 맨 아래로 (NULLS LAST)
+    //   = Postgres DESC 기본 NULLS FIRST 면 RC 없는 옛 행이 위로 올라와 좋은 식당 밀어냄 → 방지
+    //   = RC 없는 미검증 옛 행 자동 배제 + 리뷰순 정렬 SSOT 정합 (= 사용자 SSOT)
     const orderCol = isRestaurant
-      ? desc(placeSeedRaw.googleReviewCount)
+      ? sql`${placeSeedRaw.googleReviewCount} DESC NULLS LAST`
       : asc(placeSeedRaw.rank);
     const [coreRows, outskirtRows] = await Promise.all([
       db!

@@ -43,6 +43,9 @@ export interface UpsertPayload {
   googlePrimaryType?: string | null;
   googleMapsUri?: string | null;  // 2026-05-15 = 13번째 SSOT = 최후의 보루
   priceEur?: number | null;
+  // ⚠️ 수정금지(승인필요) 2026-06-02 = true 시 가격도 새 값 덮어쓰기 (= TS discovery 풀 오염 청소 = €75 핫도그 등)
+  //   = 기본(false/미지정) = GREATEST 비싼 쪽 유지 ([[feedback_price_max_always]] = 물가 항상 오름). 스코프 한정 오버라이드.
+  priceOverwrite?: boolean;
   imageUrl?: string | null;
   imageAttribution?: string | null;
   dayZone?: string | null;
@@ -178,6 +181,11 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
     // UPDATE = 사용자 SSOT 2026-05-18 = "모든 정보 최신 덮어씀" (= 옛 COALESCE 옛 우선 폐기)
     // = 모든 필드 = 새 값 있으면 새 / 없으면 옛 유지 (= COALESCE 새 → 옛 순서)
     // = tags = UNION (= 누적 유지)
+    // ⚠️ 수정금지(승인필요) 2026-06-02 = priceOverwrite=true (= TS discovery 풀) → 가격도 새 값 덮어쓰기(오염 청소)
+    //   = false(기본) → GREATEST 비싼 쪽 유지 ([[feedback_price_max_always]] = 물가 항상 오름)
+    const priceExpr = p.priceOverwrite
+      ? sql`COALESCE(${p.priceEur || null}::real, price_eur)`
+      : sql`COALESCE(GREATEST(${p.priceEur || null}::real, price_eur), ${p.priceEur || null}::real, price_eur)`;
     await db.execute(sql`
       UPDATE place_seed_raw SET
         name_en       = COALESCE(${p.nameEn}, name_en),
@@ -194,7 +202,7 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
         image_attribution = COALESCE(${p.imageAttribution || null}, image_attribution),
         -- ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT [[feedback_price_max_always]] = GREATEST 비싼 쪽 + COALESCE 안전망
         -- = 한 쪽만 있으면 = 있는 쪽 / 둘 다 있으면 = 비싼 쪽 덮어쓰기 (= 신뢰 보호 + 물가 항상 오름)
-        price_eur     = COALESCE(GREATEST(${p.priceEur || null}::real, price_eur), ${p.priceEur || null}::real, price_eur),
+        price_eur     = ${priceExpr},
         editorial_summary = COALESCE(${p.shortformKo || null}, editorial_summary),
         summary_ko        = COALESCE(${p.selectionReasonKo || null}, summary_ko),
         day_zone          = COALESCE(${p.dayZone || null}, day_zone),

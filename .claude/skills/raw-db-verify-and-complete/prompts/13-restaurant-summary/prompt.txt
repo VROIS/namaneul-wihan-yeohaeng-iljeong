@@ -1,0 +1,21 @@
+⚠️ 수정금지(승인필요) 2026-06-02 = RC 있는 식당의 한국 감성 요약 2개 + 가격(blind 추정) 생성
+= 입력 = 이름/주소/리뷰수 (⚠️ 가격 미제공 = blind) / 출력 = summary_ko + editorial_summary + price_per_person_eur (= 🟢A Gemini 전용)
+= 가격 = 필수 응답 = Gemini 독립 추정 → post-process 가 TS 실값과 비교(검증) + null 행만 채움
+= 호출 설정 = 04/05 동일 = gemini-3-flash-preview + googleSearch + responseMimeType:json + temp0.2 + maxOutputTokens 50000
+= 04 표준 스펙 (04-outskirt-restaurant prompt.txt:38-39) 그대로:
+    · selection_reason_ko → summary_ko = 인스타 성지/네이버 블로그/유튜브 vlog 사회적 검증
+    · shortform_ko → editorial_summary = 코믹/위트 후킹 ("프사각","본전 뽑음" 한국 슬랭)
+
+══════════════════════════════════════════════════════════════════════════════
+PROMPT 본문:
+══════════════════════════════════════════════════════════════════════════════
+
+You are a restaurant copywriter for KOREAN TRAVELERS (⚠️ ${YEAR}년 기준 최신). Use Google Search grounding (= 한국 인스타/네이버 블로그/유튜브 트렌드 + Google Maps). 추정/환각 금지 = grounded fact 만.
+아래 식당들은 실재 검증된 식당(이름/주소/리뷰수)입니다. 각 식당에 한국어 카피 2개 + 1인당 가격을 작성.
+Return STRICT JSON array only (no markdown wrappers). Per restaurant, ONLY these fields:
+- id (echo the given id)
+- summary_ko (한국어 한 줄 = 왜 한국인이 가는지 = 인스타 성지/네이버 블로그/유튜브 vlog 사회적 검증 근거. 담백·정보형)
+- editorial_summary (한국어 한 줄 = 코믹/위트 후킹 = "프사각", "본전 뽑음" 같은 한국 슬랭 = 숏폼 톤)
+- price_per_person_eur (⚠️ 필수 = 1인당 평균 식사가 EUR **상한** = Google 그라운딩 독립 추정. 모르면 null)
+INPUT (${COUNT} restaurants): ${INPUT_JSON}
+OUTPUT (JSON array): [{"id":<n>,"summary_ko":"..","editorial_summary":"..","price_per_person_eur":<n|null>}]

@@ -104,6 +104,14 @@ export const TS_ATMOSPHERE_FIELDS = new Set<string>([
   'places.takeout',
 ]);
 
+// ⚠️ 수정금지(승인필요) 2026-06-02 = 전 앱 TS 호출 단일 표준 FieldMask (= §16 단일 진입점 = 사용자 SSOT)
+// = 9 필드 = Enterprise SKU 고정 ($35/1K, 무료 1K/월) = Atmosphere 0 = 파산 폭탄 없음
+// = PSR 실기록 8 컬럼 (id / name_ko / address / 좌표 / 리뷰수 / 가격 / 이미지 / mapsUri)
+//   + businessStatus (= 폐업·rename 판정 = Pro 등급 = SKU 안 올림)
+// = 변경 시 = 모든 호출처 동시 반영 + GCP 비용 영향 = 사용자 명시 승인 필수
+export const STANDARD_TS_FIELD_MASK =
+  'places.id,places.displayName,places.formattedAddress,places.location,places.userRatingCount,places.priceRange,places.photos,places.googleMapsUri,places.businessStatus';
+
 export type SkuTier = 'essentials' | 'pro' | 'enterprise' | 'atmosphere' | 'unknown';
 
 /** FieldMask 문자열을 받아 트리거되는 최고 SKU 반환 */

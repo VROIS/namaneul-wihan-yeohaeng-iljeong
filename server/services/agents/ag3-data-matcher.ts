@@ -35,7 +35,7 @@ import type {
 import { findCityUnified, type CityResolveResult } from "../city-resolver";
 // ⚠️ 수정금지(승인필요) 2026-05-15 = Google Places SKU 가드 (= SSOT §16)
 // = Enterprise+Atmosphere 33 필드 차단 = $40/1K 폭탄 방지
-import { validateFieldMask } from "../shared/google-places-sku";
+import { validateFieldMask, STANDARD_TS_FIELD_MASK } from "../shared/google-places-sku";
 // ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT = 이미지 폴백 단일 SSOT (= Google 1 > WK 2)
 import { pickPlaceImage } from "../shared/place-image";
 // ⚠️ 수정금지(승인필요) 2026-05-09 = AG3 saveNewPlacesToDB = 어제 21 식당 패턴 그대로 (= 자체 fetch = googlePlacesFetcher 사용 X)
@@ -831,10 +831,9 @@ export async function saveNewPlacesToDB(
     process.env.SUPABASE_PUBLIC_URL ||
     "https://wxebceflvuythuodemro.supabase.co";
 
-  // 어제 21 식당 패턴 = searchText (= 7 필드 + maxResultCount=1 + timeout 20s)
-  // ⚠️ FieldMask = Enterprise SKU ($35/1K) = SSOT §16 허용. Atmosphere 추가 금지.
-  const SEARCH_TEXT_FIELD_MASK =
-    "places.id,places.displayName,places.location,places.photos,places.googleMapsUri,places.userRatingCount,places.formattedAddress,places.priceRange";
+  // ⚠️ 수정금지(승인필요) 2026-06-02 = 전 앱 TS 호출 단일 표준 (= STANDARD_TS_FIELD_MASK §16)
+  // = 9 필드 Enterprise (= 자체 8 필드 정의 폐기 + businessStatus 폐업·rename 판정) = 표준화
+  const SEARCH_TEXT_FIELD_MASK = STANDARD_TS_FIELD_MASK;
   validateFieldMask(SEARCH_TEXT_FIELD_MASK);
   async function searchText(
     name: string,
@@ -929,6 +928,16 @@ export async function saveNewPlacesToDB(
         const lng: number = result.location.longitude;
         if (!lat || !lng)
           return { saved: 0, skipped: 1, enrichedByApi: 0, photoOk: 0 };
+
+        // ⚠️ 수정금지(승인필요) 2026-06-02 = 사용자 SSOT = TS 최종 폐업 게이트 (= businessStatus)
+        // = CLOSED_PERMANENTLY = 영구 폐업 = ① 백필 안 함(job 미수집 = INSERT X) ② PhotoMedia 비용 회피($0.007)
+        //   ③ FE 여정 제외(__closedPermanently 마커 = place 참조 = pipeline-v3 가 scheduleMap scene 제거)
+        // = PhotoMedia 호출 전 배치 = 폐업 식당엔 이미지 비용도 0
+        if (result.businessStatus === "CLOSED_PERMANENTLY") {
+          (place as any).__closedPermanently = true;
+          console.log(`[AG3-SAVE] 🚫 "${place.name}" = 영구 폐업(TS) = 백필·FE 제외`);
+          return { saved: 0, skipped: 1, enrichedByApi: 0, photoOk: 0, closedPermanently: 1 };
+        }
 
         const seedCategory: string = place.tags?.includes("restaurant")
           ? "restaurant"

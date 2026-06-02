@@ -784,6 +784,20 @@ async function step2_enrichAndBuild(
     );
   }
 
+  // ⚠️ 수정금지(승인필요) 2026-06-02 = 사용자 SSOT = 영구 폐업(TS) = FE 여정에서도 제외
+  // = saveNewPlacesToDB 가 __closedPermanently 마커 (= AWAIT_NEW_PLACES_IMAGES=true 일 때만 await 완료)
+  // = scheduleMap 의 해당 scene 제거 = 폐업 식당 FE 표시 0 (= 일별 스케줄 빌드 전이라 안전)
+  const closedIds = new Set(
+    finalPlaces.filter((p: any) => p.__closedPermanently).map((p: any) => p.id),
+  );
+  if (closedIds.size > 0) {
+    const before = scheduleMap.length;
+    for (let i = scheduleMap.length - 1; i >= 0; i--) {
+      if (closedIds.has(scheduleMap[i].placeId)) scheduleMap.splice(i, 1);
+    }
+    console.log(`[V3-Step2] 🚫 영구 폐업 ${closedIds.size}곳 = FE scene 제거 (${before}→${scheduleMap.length})`);
+  }
+
   // 최종 장소 맵 (= saveNewPlacesToDB 후 = 보강 결과 반영)
   const finalPlaceMap = new Map<string, PlaceResult>();
   for (const fp of finalPlaces) {
