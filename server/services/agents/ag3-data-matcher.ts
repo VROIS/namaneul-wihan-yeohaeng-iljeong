@@ -38,6 +38,8 @@ import { findCityUnified, type CityResolveResult } from "../city-resolver";
 import { validateFieldMask, STANDARD_TS_FIELD_MASK } from "../shared/google-places-sku";
 // ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT = 이미지 폴백 단일 SSOT (= Google 1 > WK 2)
 import { pickPlaceImage } from "../shared/place-image";
+// ⚠️ 2026-06-03 = 동일장소 5단계 매칭 = 공용 matcher.ts 단일 (= 헌법 §16, ag3 자체 0~4순위 폐기 → 정본 통일 + PID/URI veto)
+import { matchCandidate } from "../shared/matcher";
 // ⚠️ 수정금지(승인필요) 2026-05-09 = AG3 saveNewPlacesToDB = 어제 21 식당 패턴 그대로 (= 자체 fetch = googlePlacesFetcher 사용 X)
 
 /** <img>로 사용 가능한 URL인지 (인스타 post URL, 네이버/티스토리 등 차단 도메인 제외) */
@@ -334,6 +336,10 @@ export async function matchPlacesWithDB(
   };
   const matchResults: MatchResult[] = [];
 
+  // ⚠️ 2026-06-03 = 공용 matcher 후보 = seedRawMap 의 유니크 행(여러 키→같은 객체 참조) + cityId 주입(= 5순위 도시 강제)
+  const _cid = (preloaded.cityId ?? -1) as number;
+  const seedCands = Array.from(new Set(seedRawMap ? Array.from(seedRawMap.values()) : [])).map((r: any) => ({ ...r, cityId: _cid }));
+
   for (const place of geminiPlaces) {
     // ⚠️ 수정금지(승인필요) 2026-05-20 = DB-only path skip = AG2 가 이미 place_seed_raw 직접 = 매칭 불필요 (= 사용자 SSOT 병렬 극대화)
     // ⚠️ 2026-05-20 = matched++ 제거 (= 옛 = 본 if + line 466 if(dbMatch) = 이중 증가 = 52 곳 로그 버그)
@@ -342,155 +348,25 @@ export async function matchPlacesWithDB(
       continue;
     }
 
-    const nameLower = place.name.toLowerCase().trim();
-
-    // ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT 5 단계 (= CLAUDE.md 제14조 v2 + upsertPlace v2 부합)
-    // = 0순위 PID > 1순위 풀주소+이름 > 2순위 google_maps_uri > 3순위 좌표 10m > 4순위 이름
-    // = 5순위 = TS+PM (= matchResults 의 needsGoogle = true 시 별도 단계)
-    let seedDirectMatch: any = null;
-    const geminiAddress =
-      (place as any).geminiAddress || (place as any).address;
-    const placePid =
-      (place as any).geminiPlaceId || (place as any).googlePlaceId;
-    console.log(
-      `[AG3-DEBUG] "${place.name}" pid=${placePid ? "✓" : "✗"} addr="${(geminiAddress || "").slice(0, 60)}" seedMapSize=${seedRawMap?.size ?? 0}`,
-    );
-
-    // 0 순위 = google_place_id 일치 (= ~100%, Google 발급 유일 ID)
-    if (placePid && seedRawMap && seedRawMap.size > 0) {
-      const hit = seedRawMap.get(`pid:${placePid}`);
-      if (hit) {
-        seedDirectMatch = hit;
-        console.log(`[AG3] 🆔 0순위 PID 매칭: "${place.name}"`);
-      }
-    }
-
-    // 1 순위 = 풀 주소 = 번지 + 도로명 + 우편번호 (= 사용자 SSOT 풀 주소)
-    const isSpecificAddress = (a: string) => {
-      const t = a.trim();
-      // 사용자 SSOT 풀 주소 = 번지(1-9999) + 도로명 시작 알파 + 5자리 우편번호
-      const hasStreet = /^[1-9]\d{0,3}[a-zA-Z]?\s+[a-zA-ZÀ-ÿ]/.test(t);
-      const hasPostal = /\b\d{5}\b/.test(t);
-      return hasStreet && hasPostal;
-    };
-    if (
-      !seedDirectMatch &&
-      geminiAddress &&
-      seedRawMap &&
-      seedRawMap.size > 0 &&
-      isSpecificAddress(geminiAddress)
-    ) {
-      const addrLower = geminiAddress.toLowerCase().replace(/\s+/g, " ").trim();
-      const nameSimilar = (rowNameEn: string | null) => {
-        if (!rowNameEn) return true;
-        const rn = rowNameEn.toLowerCase();
-        const gn = nameLower;
-        if (rn.includes(gn) || gn.includes(rn)) return true;
-        const rWords = rn.split(/\s+/).filter((w) => w.length >= 3);
-        const gWords = gn.split(/\s+/).filter((w) => w.length >= 3);
-        return rWords.some((w) => gWords.includes(w));
-      };
-      const exact = seedRawMap.get(`addr:${addrLower}`);
-      if (exact && nameSimilar(exact.nameEn)) {
-        seedDirectMatch = exact;
-        console.log(`[AG3] 🏠 1순위 행정주소 정확 매칭: "${place.name}"`);
-      }
-      if (!seedDirectMatch) {
-        for (const [key, val] of seedRawMap) {
-          if (!key.startsWith("addr:")) continue;
-          const dbAddr = key.slice(5);
-          if (!isSpecificAddress(dbAddr)) continue;
-          if (dbAddr.includes(addrLower) || addrLower.includes(dbAddr)) {
-            if (!nameSimilar(val.nameEn)) continue;
-            seedDirectMatch = val;
-            console.log(`[AG3] 🏠 1순위 행정주소 부분 매칭: "${place.name}"`);
-            break;
-          }
-        }
-      }
-    }
-
-    // ⚠️ 수정금지(승인필요) 2026-05-20 = 2 순위 = google_maps_uri 매칭 (= 사용자 SSOT 5 단계 = upsertPlace v2)
-    if (
-      !seedDirectMatch &&
-      (place as any).googleMapsUri &&
-      seedRawMap &&
-      seedRawMap.size > 0
-    ) {
-      const hit = seedRawMap.get(`uri:${(place as any).googleMapsUri}`);
-      if (hit) {
-        seedDirectMatch = hit;
-        console.log(`[AG3] 🔗 2순위 google_maps_uri 매칭: "${place.name}"`);
-      }
-    }
-
-    // 3 순위 = 좌표 10m 매칭 (= ~95%, 같은 건물)
-    if (
-      !seedDirectMatch &&
-      (place as any).lat &&
-      (place as any).lng &&
-      seedRawMap &&
-      seedRawMap.size > 0
-    ) {
-      const pLat = parseFloat(String((place as any).lat));
-      const pLng = parseFloat(String((place as any).lng));
-      if (!isNaN(pLat) && !isNaN(pLng) && pLat !== 0 && pLng !== 0) {
-        for (const [key, val] of seedRawMap) {
-          if (!key.startsWith("addr:")) continue;
-          const vLat = parseFloat(String(val.latitude));
-          const vLng = parseFloat(String(val.longitude));
-          if (isNaN(vLat) || isNaN(vLng)) continue;
-          // haversine < 10m
-          const R = 6371,
-            toRad = (d: number) => (d * Math.PI) / 180;
-          const dLat = toRad(vLat - pLat),
-            dLng = toRad(vLng - pLng);
-          const h =
-            Math.sin(dLat / 2) ** 2 +
-            Math.cos(toRad(pLat)) *
-              Math.cos(toRad(vLat)) *
-              Math.sin(dLng / 2) ** 2;
-          const km = 2 * R * Math.asin(Math.min(1, Math.sqrt(h)));
-          if (km < 0.01) {
-            seedDirectMatch = val;
-            console.log(`[AG3] 📍 3순위 좌표 10m 매칭: "${place.name}"`);
-            break;
-          }
-        }
-      }
-    }
-
-    // 4 순위 = 이름 매칭 (= ~30-50%, 체인/지점 위험 = 보조)
-    if (!seedDirectMatch && seedRawMap && seedRawMap.size > 0) {
-      const nameEn = nameLower;
-      const nameLocal = ((place as any).nameLocal || "").toLowerCase().trim();
-      const norm = (s: string) => s.replace(/[\s\p{P}\p{S}]+/gu, "");
-      const noAccent = (s: string) =>
-        s
-          .normalize("NFD")
-          .replace(/[̀-ͯ]/g, "")
-          .replace(/[\s\p{P}\p{S}]+/gu, "");
-      const tries: string[] = [];
-      if (nameEn) {
-        tries.push(norm(nameEn));
-        tries.push(noAccent(nameEn));
-      }
-      if (nameLocal) {
-        tries.push(norm(nameLocal));
-        tries.push(noAccent(nameLocal));
-      }
-      for (const k of tries) {
-        if (!k) continue;
-        const hit = seedRawMap.get(k);
-        if (hit) {
-          seedDirectMatch = hit;
-          console.log(
-            `[AG3] 🏷 4순위 이름 매칭: "${place.name}" (key=${k.slice(0, 30)})`,
-          );
-          break;
-        }
-      }
-    }
+    // ⚠️ 2026-06-03 = 5 단계 매칭 = 공용 matcher.ts 단일 (= 자체 0~4순위 폐기 = upsertPlace/트리거와 동일 검증 + PID/URI veto)
+    //   = PID > URI > 풀주소+이름9조합 > 좌표10m > 로컬네임9조합. 단계 통과 시 다음 자동 스킵. 다른 PID/URI = 다른 장소.
+    const seedDirectMatch: any =
+      matchCandidate(
+        {
+          cityId: _cid,
+          googlePlaceId: (place as any).geminiPlaceId || (place as any).googlePlaceId || null,
+          googleMapsUri: (place as any).googleMapsUri || null,
+          address: (place as any).geminiAddress || (place as any).address || null,
+          latitude: (place as any).lat != null ? parseFloat(String((place as any).lat)) : null,
+          longitude: (place as any).lng != null ? parseFloat(String((place as any).lng)) : null,
+          nameEn: place.name || null,
+          nameLocal: (place as any).nameLocal || null,
+          nameKo: (place as any).nameKo || null,
+        },
+        seedCands,
+      ).match || null;
+    if (seedDirectMatch)
+      console.log(`[AG3] ✅ matcher 매칭: "${place.name}" → "${seedDirectMatch.nameEn}"`);
 
     // ⚠️ 수정금지(승인필요) 2026-05-06 사용자 SSOT = dbPlacesMap (places 테이블) 매칭 차단
     // = 옛 부패 데이터 (= WIKI 잘못된 사진, 동명 가게 잘못된 매칭) 사용 X

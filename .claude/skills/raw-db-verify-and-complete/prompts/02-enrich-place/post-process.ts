@@ -9,7 +9,7 @@
 //      = COALESCE 옛 우선 (= 식별 데이터) / GREATEST (= 가격) / 새 우선 (= 카피)
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '../../../../..');
@@ -55,13 +55,14 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--date=<YYYY-MM-DD>] [--dry]
   const pg = await import('pg');
   const c = new (pg as any).default.Client({ connectionString: process.env.SUPA_URL || process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
   await c.connect();
-  const { upsertPlace } = await import(path.join(ROOT, 'server/services/place-upsert.ts'));
+  const { upsertPlace } = await import(pathToFileURL(path.join(ROOT, 'server/services/place-upsert.ts')).href);
 
   let updated = 0, skipped = 0, errors = 0;
   for (const p of allPlaces) {
     if (!p.id || !p.name_en) { skipped++; continue; }
     try {
-      const existRow = (await c.query('SELECT seed_category FROM place_seed_raw WHERE id=$1', [p.id])).rows[0];
+      // ⚠️ 수정금지(승인필요) 2026-06-04 = 원본 식별자(PID/URI/name_en/주소/좌표)로 upsertPlace 5단계 매칭 (= id 직접 UPDATE 우회 금지 = 사용자 SSOT). Gemini=큐레이션만.
+      const existRow = (await c.query('SELECT seed_category, name_en, name_local, address, latitude, longitude, google_place_id, google_maps_uri FROM place_seed_raw WHERE id=$1', [p.id])).rows[0];
       if (!existRow) { skipped++; continue; }
       const cat = existRow.seed_category;
       const priceEur = cat === 'shopping' ? null : (p.estimated_price_eur ?? null);
@@ -69,14 +70,16 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--date=<YYYY-MM-DD>] [--dry]
       const r = await upsertPlace({
         cityId,
         seedCategory: cat,
-        nameEn: p.name_en,
-        nameLocal: p.name_local || null,
-        nameKo: p.name_ko || null,
-        address: p.address || null,
-        latitude: p.latitude ?? null,
-        longitude: p.longitude ?? null,
-        selectionReasonKo: p.summary_ko || null,           // → summary_ko
-        shortformKo: p.editorial_summary || null,           // → editorial_summary
+        nameEn: existRow.name_en,                              // 원본 = Gemini 이름변경 방지 = 매칭 키 보존
+        nameLocal: existRow.name_local || p.name_local || null,
+        nameKo: p.name_ko || null,                             // Gemini 큐레이션 = 결함 채움
+        address: existRow.address || p.address || null,        // 원본 우선
+        latitude: existRow.latitude ?? p.latitude ?? null,
+        longitude: existRow.longitude ?? p.longitude ?? null,
+        googlePlaceId: existRow.google_place_id || null,       // 원본 PID = 5단계 1순위 매칭
+        googleMapsUri: existRow.google_maps_uri || null,       // 원본 URI = 5단계 2순위
+        selectionReasonKo: p.summary_ko || null,               // → summary_ko
+        shortformKo: p.editorial_summary || null,               // → editorial_summary
         priceEur,
         collectionPhase: 'gemini3-2026-05',
       });

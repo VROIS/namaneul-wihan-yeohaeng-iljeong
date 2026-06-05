@@ -20,6 +20,10 @@ for (const line of envRaw.split(/\r?\n/)) {
 const argv = Object.fromEntries(process.argv.slice(2).map(a => a.replace(/^--/, '').split('=')).map(([k, v]) => [k, v ?? 'true']));
 const cityId = Number(argv['city-id'] || 0);
 const apply = argv['apply'] === 'true';
+// ⚠️ 수정금지(승인필요) 2026-06-03 = 카테고리/언어/이름 오버라이드 = 비식당 명소 이름복구 (예 --category=hotspot --names="A,B" --lang=fr)
+const category = argv['category'] ? String(argv['category']) : 'restaurant';
+const lang = argv['lang'] ? String(argv['lang']) : 'ko';
+const namesArg = argv['names'] ? String(argv['names']).split(',').map((s) => s.trim()).filter(Boolean) : null;
 const today = new Date().toISOString().slice(0, 10);
 if (!cityId) { console.error('Usage: --city-id=<N> [--apply]'); process.exit(1); }
 
@@ -35,7 +39,7 @@ const hkm = (a: any, b: any) => {
   const MASK = STANDARD_TS_FIELD_MASK + ',places.businessStatus';
   validateFieldMask(MASK);
 
-  const names = MANUAL_ADD[cityId] || [];
+  const names = namesArg || MANUAL_ADD[cityId] || [];
   if (!names.length) { console.error(`city ${cityId} MANUAL_ADD 없음`); process.exit(1); }
 
   const pg = await import('pg');
@@ -53,7 +57,7 @@ const hkm = (a: any, b: any) => {
     const r = await fetch('https://places.googleapis.com/v1/places:searchText', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': KEY, 'X-Goog-FieldMask': MASK },
-      body: JSON.stringify({ textQuery: name, includedType: 'restaurant', languageCode: 'ko', regionCode: city?.country_code || 'FR', pageSize: 1 }),
+      body: JSON.stringify({ textQuery: name, ...(category === 'restaurant' ? { includedType: 'restaurant' } : {}), languageCode: lang, regionCode: city?.country_code || 'FR', pageSize: 1 }),
       signal: AbortSignal.timeout(30000),
     });
     const j = await r.json() as any;
@@ -64,14 +68,14 @@ const hkm = (a: any, b: any) => {
     const dist = p.location ? Math.round(hkm(cityCenter, { lat: p.location.latitude, lng: p.location.longitude }) * 10) / 10 : null;
     console.log(`  ✓ "${name}" → ${p.displayName?.text} | 리뷰 ${p.userRatingCount} | €${price ?? '?'} | ${dist}km | ${p.businessStatus}`);
     jobs.push({
-      cityId, seedCategory: 'restaurant',
+      cityId, seedCategory: category,
       nameEn: p.displayName?.text, nameLocal: p.displayName?.text,
       address: p.formattedAddress, latitude: p.location?.latitude, longitude: p.location?.longitude,
       googlePlaceId: p.id, googleMapsUri: p.googleMapsUri || null,
       googleReviewCount: p.userRatingCount ?? null,
       priceEur: price, priceOverwrite: true,
-      dayZone: 'outskirt', distanceKmFromCenter: dist,
-      categoryTags: ['restaurant'], phaseTags: [`ts-pool-${today}`],
+      dayZone: (dist != null && dist <= 10) ? 'core' : 'outskirt', distanceKmFromCenter: dist,
+      categoryTags: [category], phaseTags: [`ts-${category}-recover-${today}`],
     });
   }
   await c.end();

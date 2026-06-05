@@ -18,6 +18,38 @@
 
 ---
 
+## 🔥 2026-06-04 = TS 단일 관문 시스템 + 파리 6 비식당 카테고리 사전준비 (DB-ONLY + NN+Haversine 토대)
+
+### ✅ 완료
+
+**🔴 1) TS 호출 = 코드 강제 단일 관문 (= 헌법: 문서 아닌 코드가 강제, 사용자 SSOT 2026-06-04)**
+- 앱 전체 TS 호출 = `searchText`/`searchNearby` **6곳**(ag3 라이브·12 발굴·06 검증·recover·p0-cron·seed-gemini) + 사진 6곳 = 전부 raw fetch + 제각각 FieldMask = 누수.
+- 신설 [`server/services/shared/ts-client.ts`](../server/services/shared/ts-client.ts) = `tsSearch()`(9요소 FieldMask **함수 내 박음 = 미만 throw**) + `tsPhoto()`(PhotoMedia→Storage, PUT+x-upsert, SUPABASE_PUBLIC_URL). 모듈 로드 시 9요소 결손 검증.
+- **9요소** = PID·로컬이름·풀주소·좌표·RC·가격·사진·mapsUri·영업상태. **rating 제외(안 씀)**. 입력 = 로컬이름→textQuery / 풀주소 / 좌표→locationBias ~앵커(보유분만). 범위 = locationRestriction 직사각형(발굴 10/100km) or 좌표앵커(검증). 상한 = searchText 60 / searchNearby 20.
+
+**🔴 2) 융합 백필 (= fetch→매처→upsert, AI 손 0)**
+- [`server/services/fill/ts-backfill.ts`](../server/services/fill/ts-backfill.ts) = PID 없는 행 → tsSearch(이름+좌표앵커) → top1 → upsertPlace(원본 이름=매칭키 + 새 9요소). 가짜 RC→진짜 교체.
+- [`server/services/fill/ts-photo-fill.ts`](../server/services/fill/ts-photo-fill.ts) = TOP20 이미지없는 행 → tsSearch(사진명) → tsPhoto → image_url.
+- [`fill-city.ts`](../.claude/skills/raw-db-verify-and-complete/fill-city.ts) = 단일 오케스트레이터(발굴→큐레이션→검증, spawn 방식, 미완 = 함수화/대시보드 후속).
+
+**🔴 3) 파리 6 비식당 카테고리 사전준비 = TOP20 14요소 거의 완성**
+- 발굴(강제 사각형 12-run) 5cat + 큐레이션(02 `--defects-only` 111곳 = name_ko/요약/숏폼/가격) + **57곳 TS 백필**(47 보강, dup0, 가짜RC 청소: The Game 15000→**3416**=#1→#7) + 이미지 23곳.
+- **병합 1곳**: Maison et Jardins de Claude Monet(45000 가짜 phantom) → Giverny(진짜 RC 25176) 병합 = healing 랭킹 정화. + 오분류 3곳(Loulou·Le Petit Bistrot→restaurant / UGC→attraction) 이동(삭제0, 데이터 보존). + 쇼핑 가격 전부 0(입장료 없음).
+- **결과**: TOP20 = ko/요약/숏폼/좌표/주소 **6cat 100%**, PID·이미지 **5cat 20/20**(adventure 17~18). **dup_pid 0.**
+- **랭킹 = `seed_category` 확정** (category_tags 는 발굴-누적 노이즈 = Disneyland=healing 등 = 정제 전 부적합). 전 행 category_tags 에 seed_category 보강(추가만).
+
+### ⚠️ 잔여 (다음 세션)
+- adventure: `HintHunt`(PID 충돌 ERR 반복) + `MindOut`(구글無) + uri 일부.
+- 원거리 7곳(Skydive 사무소 등) 케이스 판단. 백필 스킵 원인(매처 단독 정상 → 실제 후처리 다른행 간섭) 정밀 추적.
+
+### 🔴 다음 P0 (= "도시 이름만 입력" 자동 시스템 완성)
+1. 정규 3곳(12·06·ag3) → 관문 `tsSearch/tsPhoto` 교체 + raw fetch 6+6 제거 + 레거시(seed-gemini) 정리.
+2. `geminiCall()` 관문 (요약2+가격, 필수입력 강제, 40 batch, PID/URI 미전달).
+3. `fillCity` 함수화 + 관리자 대시보드(RN, 도시명 입력) + API.
+4. **Stage C = NN+Haversine 코드 동선** (= AG3 Gemini 동선 교체 = 이 깨끗한 PSR 위의 진짜 목표).
+
+---
+
 ## 🔥 2026-06-02 = 파리 시내 식당 풀 220곳 + TS 3종 발굴 표준 (searchNearby POPULARITY)
 
 ### ✅ 완료 (= DB 반영 + 12-ts-discover-pool 컴포넌트 표준화 = README.md 잠금)
@@ -38,10 +70,26 @@
 - 13-restaurant-summary = 94곳 한국 요약 2개 + 가격(unknown 27만, TS 67 보존). **summary/price = 100%.**
 - 이미지 PM 53곳 (= FE 노출 상위 72곳 완비). 비식당 5곳(Printemps/UGC/Generator/Galerie Vivienne/IMA) = 식당풀 제외=원 카테고리 유지. 동명 충돌 1 skip(Bouillon Chartier 기존 RC 48k 보존). **dup_pid 0.**
 
-### 🔜 다음 P0/P1
-- 다른 도시 시내 풀 = `destinations.ts` 추가 + 6단계 (= prompts/12-ts-discover-pool/README.md).
-- RC-null 96곳(옛 큐레이션 Frenchie 등) = RC순 자연 하위 (= 사용자 원칙). Bouillon Chartier 4행(76148/76159 RC-null) = 07-merge-dups 정리 선택.
-- 커밋/푸시 + Replit 배포 (= 사용자 지시 시).
+### ✅ 같은 날 후속 (= 통합 + 검증 + 커밋)
+- **03/04 Gemini 식당발굴 폐기 통합** → `prompts/_archived-2026-06-02/`. SKILL.md = 식당 발굴 Step 3/4 = **12(TS) 기준 갱신** (= 발굴=TS / 큐레이션=Gemini 13 분리). README.md 신규 (= 신규 도시 6단계 잠금).
+- **3 게이트 검증 통과** (§17): `/simplify`(dedupMaxRC 헬퍼 DRY 1건 + dry-run 무회귀 재확인) / `/code-review`(집중 3각도 = correctness 버그 0 + **외곽 path 회귀 0** + 설계노트) / `/vercel-react`(N/A = 백엔드 .ts).
+- **커밋/푸시 = `167d1e9`** (`ec2d020..167d1e9 main`). 오프라인 스킬이라 **Replit 배포 불필요** (앱 런타임 무변경 / 식당 220곳 = 이미 DB 라이브).
+
+### 🔜 다음 세션 P0 = Stage C = 완전 DB-ONLY 동선 최적화 (= 사용자 SSOT 2026-06-02 = 외부호출 0)
+> ⚠️ 정정(2026-06-02): Stage C 목표 = **로컬 NN + Haversine 자체 동선 생성** (= Gemini·Routes API 둘 다 제거). "로컬 NN+2opt"가 실은 정답 방향이었고, 아래 "HYBRID"는 **현 단계(②) = 대체 대상**이지 목표 아님.
+> 동선 진화 3단계: ① 단순거리=지그재그(폐기) → ② 현재=Gemini 동선+식당발견(품질OK/20초+비용) → ③ **Stage C=NN+Haversine 자체생성**(DB-only/빠름/€0).
+
+- **현 구현(②) = HYBRID = 대체 대상** (= `STANDARD_PROMPT_2026-05-26_route-only.md` + `server/services/route/route-prompt.ts:generateRoutePrompt`):
+  - **결정적(코드 함수)** = `PACE_CONFIG`(90/120/150분×8/6/4슬롯) + `MEAL_BUDGET` + `getCompanionCount` + `shouldApplyGuidePrice()`(public_transit/private_driver_guide) + `PRIORITY_WEIGHTS`
+  - **비결정적(Gemini)** = 동선 nearest-neighbor 정렬 + 점심/저녁 식당 **자동발견** + Google Search grounding
+  - **거리 = Haversine** (`transit-haversine.ts`, Routes API 0콜) / **모델 = `gemini-3-flash-preview`** (= 문서엔 lite 표기지만 코드+2026-05-31 벤치 = 3-flash-preview 가 최신)
+  - 입력 = **비식당 places만**(식당 제외) + trip_config + meal_budget(일한도만, 점심:저녁 비율 강제 X) / 출력 = `days[].scenes[]`(activity|restaurant, transit_mode/min, price_per_person_eur 1인)
+  - 위치 = route-prompt.ts + route-handler.ts + ag4-db-finalize.ts + route-backfill.ts(upsertPlace background)
+- **🔴 Stage C = 완전 로컬화** (= 위 ②의 Gemini를 통째로 대체). 구성 = `step→step→점심(풀)→step→…→저녁(풀)→종료`.
+  - 사전준비(✅완료) = PSR 좌표 + **식당 풀(tier×RC)** 풍부화 = 오늘 한 **시내 220 + 외곽 141** = 바로 이 토대 (= 로컬 알고리즘이 고를 식당이 풍부해야 함).
+  - 빌드 = ① 활동 **NN+Haversine 순서최적화**(지그재그 제거) ② 점심/저녁 **meal slot = 풀에서 근접+예산tier+RC SELECT** ③ transit = Haversine 거리/시간 ④ **Gemini 0 / Routes API 0**.
+  - 재사용 = 결정적 코드(PACE_CONFIG/MEAL_BUDGET/shouldApplyGuidePrice/PRIORITY_WEIGHTS) + `transit-haversine.ts`.
+- (기타) 다른 도시 = README 6단계. RC-null 96곳 = RC순 하위. Bouillon Chartier 76148/76159 = 07-merge 선택.
 
 ---
 

@@ -228,8 +228,9 @@ const r = await upsertPlace({
 
 ### 매칭 시 UPDATE 정책
 
-- 식별 데이터 (= name/주소/좌표/PID/이미지/리뷰수) = **COALESCE 옛 우선** (= WK 이미지 87% 보존, 사용자 빈 화면 방지)
-- 가격 (price_eur) = **GREATEST 비싼 쪽** (= 사용자 신뢰 보호, 물가 항상 오름)
+- 식별/검증 데이터 (= name/주소/좌표/PID/URI/리뷰수) = **COALESCE 새 우선** (= 최신 TS 가 가장 신뢰 = 사용자 SSOT 2026-06-03 확정). ⚠️ 옛 "옛 우선" 폐기 = 코드(place-upsert.ts)와 정합.
+- 이미지 (image_url) = **COALESCE 새 우선** (= 새 값 있을 때만 교체, 없으면 옛 보존 = WK 이미지 유지 = 빈 화면 방지)
+- 가격 (price_eur) = **GREATEST 비싼 쪽** (= 사용자 신뢰 보호, 물가 항상 오름 / priceOverwrite=true 시에만 새 값 덮기)
 - 카피 (summary_ko/editorial_summary) = **새 우선** (= Gemini 큐레이션 갱신)
 - tags = **UNION** (= 누적)
 

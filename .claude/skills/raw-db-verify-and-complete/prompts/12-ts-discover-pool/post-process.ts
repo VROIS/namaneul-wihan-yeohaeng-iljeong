@@ -32,7 +32,10 @@ const zone = String(argv['zone'] || 'outskirt');
 const date = String(argv['date'] || new Date().toISOString().slice(0, 10));
 const downloadPhoto = argv['photo'] === 'true';
 const apply = argv['apply'] === 'true';
-if (!cityId) { console.error('Usage: --city-id=<N> --zone=outskirt --date=<YYYY-MM-DD> [--photo] [--apply]'); process.exit(1); }
+// ⚠️ 수정금지(승인필요) 2026-06-03 = 비식당 카테고리 모드 = --category=hotspot --labels=hotspot,viewpoint,... (= 식당 흐름과 완전 분리)
+const category = argv['category'] ? String(argv['category']) : '';
+const labels = argv['labels'] ? String(argv['labels']).split(',').map((s) => s.trim()).filter(Boolean) : (category ? [category] : []);
+if (!cityId) { console.error('Usage: --city-id=<N> --zone=outskirt --date=<YYYY-MM-DD> [--photo] [--apply] [--category=hotspot --labels=hotspot,viewpoint]'); process.exit(1); }
 
 // ⚠️ 가격대별 quota (= 동선 최적화 풀 = 사용자 SSOT 2026-06-02 = eco4:reason4:premium2 + unknown2)
 // = Premium + Luxury 통합 (= MEAL_BUDGET 둘 다 €300/일 동일 등급 = 사용자 SSOT 2026-06-02)
@@ -63,6 +66,66 @@ const PM_CALL_EUR = 0.007;
 (async () => {
   // ⚠️ 수정금지(승인필요) 2026-06-02 = 합본 발굴 = zone 의 모든 변형 파일(nearby/text/premium/무label) 병합
   const rawDir = path.join(ROOT, 'docs', 'raw', String(cityId));
+
+  // ⚠️ 수정금지(승인필요) 2026-06-03 사용자 SSOT = 비식당 카테고리 모드 (early return)
+  //   = --labels 파일 병합 → 명백오류(렌탈listing/좌표無) 제외 → place_id+name_norm dedup → upsertPlace(seedCategory=category)
+  //   = 매칭=기존 검증·정정 / 미매칭=신규 발굴. 식당 전용(NON_FOOD/가격tier/QUOTA/PM/orphan)은 일절 미적용.
+  if (category) {
+    const labelRe = labels.map((l) => new RegExp(`^12-ts-discover-${zone}-${l}-\\d{4}-\\d{2}-\\d{2}\\.json$`));
+    const catFiles = fs.readdirSync(rawDir).filter((f) => labelRe.some((re) => re.test(f)));
+    if (!catFiles.length) { console.error(`✗ ${rawDir} 에 라벨 [${labels.join(',')}] 파일 없음`); process.exit(1); }
+    const merged: any[] = [];
+    for (const f of catFiles) { const j = JSON.parse(fs.readFileSync(path.join(rawDir, f), 'utf-8')); for (const z of (j.zones || [])) for (const p of (z.places || [])) merged.push(p); }
+    // 명백오류 = 숙박 렌탈 listing(장소 아님) + 좌표 없음 (= 사용자 SSOT "명백오류만 제외")
+    const isLodging = (n: string) => /personnes|chambres?|salles? de bain|canap[eé]-lit|\bBdR\b|appartement|studio meubl/i.test(n || '');
+    const errs = merged.filter((p) => !(p.lat && p.lng) || isLodging(p.name_local || p.name));
+    let clean = merged.filter((p) => !errs.includes(p));
+    clean = dedupMaxRC(clean, (p) => p.place_id, 'place_id 중복');
+    clean = dedupMaxRC(clean, (p) => norm(p.name_local || p.name), 'name_norm 중복');
+    clean.sort((a, b) => (b.review_count || 0) - (a.review_count || 0));
+
+    const pg2 = await import('pg');
+    const cc2 = new (pg2 as any).default.Client({ connectionString: process.env.SUPA_URL || process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+    await cc2.connect();
+    const cityRow = (await cc2.query('SELECT latitude, longitude FROM cities WHERE id=$1', [cityId])).rows[0];
+    const center = { lat: parseFloat(cityRow?.latitude) || 0, lng: parseFloat(cityRow?.longitude) || 0 };
+    // ⚠️ 2026-06-03 = 거리 필터 제거 = 범위는 run.ts 의 locationRestriction(강제 사각형)이 발굴 단계에서 보장 (= 임의 후처리 컷 폐기)
+    const exist = (await cc2.query(`SELECT id, name_en, name_local, name_ko, google_place_id AS pid, google_maps_uri AS uri, address, latitude AS lat, longitude AS lng FROM place_seed_raw WHERE city_id=$1 AND seed_category=$2`, [cityId, category])).rows;
+    // ⚠️ 수정금지(승인필요) 2026-06-03 = 미리보기 매칭 = 쓰기경로(upsertPlace)와 동일한 공용 matchCandidate 사용 = 보고치=실제 일치 (= 헌법 §16 + 단일검증 SSOT)
+    const { matchCandidate } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/matcher.ts')).href);
+    const existCands = exist.map((e: any) => ({ id: e.id, cityId, googlePlaceId: e.pid, googleMapsUri: e.uri, address: e.address, latitude: e.lat, longitude: e.lng, nameEn: e.name_en, nameLocal: e.name_local, nameKo: e.name_ko }));
+    const matchRow = (p: any): any => matchCandidate({
+      cityId, googlePlaceId: p.place_id, googleMapsUri: p.google_maps_uri || null, address: p.address || null,
+      latitude: p.lat, longitude: p.lng, nameEn: p.name_local || p.name, nameLocal: p.name_local || p.name, nameKo: null,
+    }, existCands).match || null;
+    for (const p of clean) p._m = matchRow(p);
+    const matched = clean.filter((p) => p._m), fresh = clean.filter((p) => !p._m);
+    console.log(`═══ 카테고리 모드 = ${category} (city=${cityId}, ${zone}, 파일 ${catFiles.length}: ${catFiles.join(', ')}) ═══`);
+    console.log(`병합 ${merged.length} → 명백오류 제외 ${errs.length}${errs.length ? ' (' + errs.map((p) => p.name_local || p.name).join(' / ') + ')' : ''} → dedup 후 ${clean.length}`);
+    console.log(`기존 ${category} ${exist.length}곳 | 매칭(검증·정정) ${matched.length} / 신규(발굴) ${fresh.length}`);
+    console.log(`RC순 상위20: ${clean.slice(0, 20).map((p) => `${p.name_local || p.name}(${p.review_count || 0})`).join(' · ')}`);
+    if (!apply) { console.log(`\n=== DRY-RUN (쓰기 0) === 실행: --apply`); await cc2.end(); return; }
+    await cc2.end();
+    const { upsertPlace } = await import(pathToFileURL(path.join(ROOT, 'server/services/place-upsert.ts')).href);
+    let ins = 0, upd = 0, skip = 0; const conflicts: string[] = [];
+    for (const p of clean) {
+      const dkm = Math.round(hkm(center, p) * 10) / 10;
+      try {
+        const r = await upsertPlace({
+          cityId, seedCategory: category, nameEn: p.name_local || p.name, nameLocal: p.name_local || p.name,
+          address: p.address || null, latitude: p.lat, longitude: p.lng,
+          googlePlaceId: p.place_id, googleMapsUri: p.google_maps_uri || null, googleReviewCount: p.review_count ?? null,
+          dayZone: dkm <= 10 ? 'core' : 'outskirt', distanceKmFromCenter: dkm,
+          categoryTags: [category], phaseTags: [`ts-${category}-${date}`],
+        });
+        if (r.action === 'inserted') ins++; else if (r.action === 'updated') upd++; else skip++;
+      } catch (e: any) { conflicts.push(`${p.name_local || p.name} [${e.constraint || e.code || (e.message || '').slice(0, 40)}]`); }
+    }
+    console.log(`✓ ins=${ins} / upd=${upd} / skip=${skip} (${clean.length}곳, seed_category=${category})`);
+    if (conflicts.length) { console.log(`⚠️ UNIQUE 충돌 skip ${conflicts.length}: ${conflicts.join(' / ')}`); }
+    return;
+  }
+
   const files = fs.readdirSync(rawDir).filter((f) => f.startsWith(`12-ts-discover-${zone}`) && f.endsWith(`-${date}.json`));
   if (!files.length) { console.error(`✗ ${rawDir}/12-ts-discover-${zone}*-${date}.json 미존재 = run.ts 먼저`); process.exit(1); }
   const mergedZones: any[] = [];

@@ -28,7 +28,9 @@ const cityId = Number(argv['city-id'] || 0);
 const batchSize = Number(argv['batch'] || 40);
 const startOffset = Number(argv['offset'] || 0);
 const limit = Number(argv['limit'] || 0);
-if (!cityId) { console.error('Usage: --city-id=<N> [--batch=40] [--offset=0] [--limit=N]'); process.exit(1); }
+// ⚠️ 수정금지(승인필요) 2026-06-04 = 결함 전용 모드 = 비식당 6카테고리 + 4요소(name_ko/summary_ko/editorial_summary/price) 중 1개라도 결함난 행만 (= 사용자 SSOT). 미지정 = 기존 전 행.
+const defectsOnly = argv['defects-only'] === 'true';
+if (!cityId) { console.error('Usage: --city-id=<N> [--batch=40] [--offset=0] [--limit=N] [--defects-only]'); process.exit(1); }
 
 (async () => {
   const pg = await import('pg');
@@ -40,10 +42,14 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--batch=40] [--offset=0] [--
   const GEMINI_KEY = keyRow.key_value;
 
   // 활성 행 SELECT id ASC
+  // ⚠️ 2026-06-04 = defects-only = 비식당 6카테고리 + 4요소 결함만 (식당=13-restaurant-summary 별도 / shopping 가격결함 제외=입장료 없음)
+  const defectWhere = `AND seed_category IN ('heritage','hotspot','attraction','adventure','healing','shopping')
+      AND ( name_ko IS NULL OR name_ko='' OR summary_ko IS NULL OR summary_ko=''
+         OR editorial_summary IS NULL OR editorial_summary='' OR (price_eur IS NULL AND seed_category <> 'shopping') )`;
   const rows = (await c.query(`
     SELECT id, name_en, name_local, name_ko, address, latitude, longitude, google_place_id, seed_category
     FROM place_seed_raw
-    WHERE city_id = $1
+    WHERE city_id = $1 ${defectsOnly ? defectWhere : ''}
     ORDER BY id
   `, [cityId])).rows;
   await c.end();
