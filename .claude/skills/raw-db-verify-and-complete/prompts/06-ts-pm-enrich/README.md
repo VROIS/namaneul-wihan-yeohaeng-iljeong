@@ -8,7 +8,7 @@
 
 | # | 요소 | 파일 | 상태 |
 |---|---|---|---|
-| 1 | **API 설정** (= Enterprise SKU 필드만) | [`prompt.txt`](prompt.txt) (= FieldMask 정의) | ✅ |
+| 1 | **API 설정** (= 9요소 관문) | [`prompt.txt`](prompt.txt) (= tsSearch/tsPhoto 호출 예시) | ✅ |
 | 2 | **호출 설정** | 본 README + `server/services/shared/ts-client.ts` 영구 컴포넌트 | ✅ |
 | 3 | **산출물 원본** | `docs/raw/{city_id}/06-ts-pm-enrich-candidates-{YYYY-MM-DD}.json` | ✅ |
 | 4 | **실행 스크립트** | [`run.ts`](run.ts) | ✅ |
@@ -21,15 +21,13 @@
 
 ### ✅ 허용 = **Enterprise SKU only** ($35/1K, 무료 1K/월)
 
-= 시스템 SSOT 필수 필드:
+= 9요소 (= server/services/shared/ts-client.ts 의 tsSearch() 관문이 함수 안에서 강제 = 미만 throw):
 - `places.id` / `places.displayName` / `places.formattedAddress` / `places.location`
 - `places.userRatingCount` (= 인기도)
 - `places.priceRange` (= 가격 SSOT = GREATEST §14)
-- `places.priceLevel` (= 보조)
 - `places.photos` (= PhotoMedia 호출용)
 - `places.googleMapsUri` (= 13 SSOT)
-- `places.regularOpeningHours`
-- `places.types` / `places.primaryType`
+- `places.businessStatus` (= 폐업 게이트)
 
 ### ❌ 절대 금지 = **Atmosphere 33 필드** ($40/1K)
 
@@ -62,7 +60,7 @@ WHERE city_id = $1
 1. 대상 행 SELECT
    ↓
 2. 각 행 = TS textSearch (= name_en + address)
-   = FieldMask = Enterprise SKU only (= validateFieldMask 강제)
+   = FieldMask = 9요소 관문 tsSearch() (= 함수내 강제 + validateFieldMask 내장)
    = languageCode='ko' (= displayName 한국어)
    ↓
 3. 응답 id 매칭 = 우리 google_place_id NULL → TS id 채움

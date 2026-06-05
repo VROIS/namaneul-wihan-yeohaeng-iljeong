@@ -13,7 +13,7 @@
 
 | 항목 | 값 |
 |---|---|
-| FieldMask | Enterprise 12 필드 (= validateFieldMask 통과) |
+| FieldMask | 9요소 관문 tsSearch() (= 함수내 강제 + validateFieldMask 통과) |
 | languageCode | 'ko' |
 | 호출 횟수 | `{N}` |
 | 평균 응답 시간 | `{N}` ms / 행 |

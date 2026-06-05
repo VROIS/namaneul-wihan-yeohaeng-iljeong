@@ -28,13 +28,14 @@ const argv = Object.fromEntries(process.argv.slice(2).map(a => a.replace(/^--/, 
 const cityId = Number(argv['city-id'] || 0);
 if (!cityId) { console.error('Usage: --city-id=<N>'); process.exit(1); }
 
-// FieldMask = Enterprise SKU only (= 헌법 §15)
-const FIELD_MASK = 'places.id,places.displayName,places.formattedAddress,places.location,places.userRatingCount,places.priceRange,places.priceLevel,places.photos,places.googleMapsUri,places.regularOpeningHours,places.types,places.primaryType';
+// ⚠️ 수정금지(승인필요) 2026-06-05 = 옛 자체 마스크 폐기 = 표준 9요소 관문(tsSearch) 으로 일원화
+//   = 옛 마스크는 businessStatus(영업상태) 누락 + priceLevel/openingHours/types/primaryType 잡음 4개 = 앱 전체 9요소 불일치 원인
+//   = 이제 tsSearch() 통과 = 어디서든 동일 9요소 (PID·이름·주소·좌표·리뷰수·가격·사진·mapsUri·영업상태)
 
 (async () => {
-  // SKU 가드 (= 헌법 §15)
-  const { validateFieldMask } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/google-places-sku.ts')).href);
-  validateFieldMask(FIELD_MASK);
+  // ⚠️ 수정금지(승인필요) 2026-06-05 = TS 호출 단일 관문 = tsSearch (= 9요소 FieldMask 함수내 박힘 = SKU 가드 내장)
+  const { tsSearch } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/ts-client.ts')).href);
+  const { STANDARD_TS_FIELD_MASK } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/google-places-sku.ts')).href);
 
   const pg = await import('pg');
   const c = new (pg as any).default.Client({ connectionString: process.env.SUPA_URL || process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
@@ -66,28 +67,26 @@ const FIELD_MASK = 'places.id,places.displayName,places.formattedAddress,places.
 
   console.log(`═══ 06-ts-pm-enrich dry-run ═══`);
   console.log(`city_id = ${cityId} (${city.name_en}), 대상 = ${rows.length} 행`);
-  console.log(`FieldMask = Enterprise SKU only (= validateFieldMask 통과)`);
+  console.log(`마스크 = 표준 9요소 관문(tsSearch) = 앱 전체 동일 (= SKU 가드 내장)`);
   console.log(`예상 비용 = ${rows.length} × $0.035 = $${(rows.length * 0.035).toFixed(2)} (= 무료 1K/월 적용 시 = $0)`);
 
-  async function tsSearch(name: string, addr: string | null) {
-    const textQuery = addr ? `${name} ${addr}` : name;
-    const resp = await fetch('https://places.googleapis.com/v1/places:searchText', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Goog-Api-Key': PLACES_KEY,
-        'X-Goog-FieldMask': FIELD_MASK,
-      },
-      body: JSON.stringify({
-        textQuery,
-        languageCode: 'ko',
+  // ⚠️ 수정금지(승인필요) 2026-06-05 = 관문 tsSearch 호출 래퍼 (= 옛 {status,places,error} 형태 보존 = 아래 루프 무변경)
+  //   = 입력 nameLocal+address → 좌표 없음 = textQuery "이름 주소" 결합 (= 옛 동작 동일) / maxResults=5 / 'ko' / regionCode
+  async function callTs(name: string, addr: string | null): Promise<{ status: number | string; places: any[]; error: any }> {
+    try {
+      const places = await tsSearch({
+        apiKey: PLACES_KEY,
+        method: 'searchText',
+        nameLocal: name,
+        address: addr,
         regionCode: city.country_code || undefined,
-        maxResultCount: 5,
-      }),
-      signal: AbortSignal.timeout(30000),
-    });
-    const j = await resp.json() as any;
-    return { status: resp.status, places: j.places || [], error: j.error };
+        languageCode: 'ko',
+        maxResults: 5,
+      });
+      return { status: 200, places, error: null };
+    } catch (e: any) {
+      return { status: 'error', places: [], error: { message: e?.message || String(e) } };
+    }
   }
 
   const results: any[] = [];
@@ -96,7 +95,7 @@ const FIELD_MASK = 'places.id,places.displayName,places.formattedAddress,places.
     if (!row.name_en) { results.push({ id: row.id, status: 'no_name' }); continue; }
 
     const t0 = Date.now();
-    const r = await tsSearch(row.name_en, row.address);
+    const r = await callTs(row.name_en, row.address);
     const dt = Date.now() - t0;
 
     if (r.status !== 200) {
@@ -114,25 +113,27 @@ const FIELD_MASK = 'places.id,places.displayName,places.formattedAddress,places.
       id: row.id, rank: row.rank, name: row.name_en, category: row.seed_category,
       our_pid: row.google_place_id, our_image: !!row.image_url,
       status: 'ok',
+      // ⚠️ 수정금지(승인필요) 2026-06-05 = 관문 TsPlace(9요소 매핑형) → 산출 JSON (= post-process 가 읽는 키 보존)
+      //   = businessStatus(9요소째) 추가 = 옛 마스크 누락분 복구 / 미사용 types 제거
       ts: {
-        place_id: top.id,
-        display_name_ko: top.displayName?.text,
-        address: top.formattedAddress,
-        lat: top.location?.latitude,
-        lng: top.location?.longitude,
-        review_count: top.userRatingCount,
-        price_eur: top.priceRange?.endPrice?.units ? parseFloat(top.priceRange.endPrice.units) : null,
-        photo_name: top.photos?.[0]?.name || null,
+        place_id: top.googlePlaceId,
+        display_name_ko: top.nameLocal,
+        address: top.address,
+        lat: top.latitude,
+        lng: top.longitude,
+        review_count: top.googleReviewCount,
+        price_eur: top.priceEur,
+        photo_name: top.photoName,
         google_maps_uri: top.googleMapsUri,
-        types: top.types || [],
+        business_status: top.businessStatus,
       },
     });
-    if (i % 10 === 0) console.log(`  [${i+1}/${rows.length}] ok = ${top.displayName?.text} (${dt}ms)`);
+    if (i % 10 === 0) console.log(`  [${i+1}/${rows.length}] ok = ${top.nameLocal} (${dt}ms)`);
   }
 
   const outPath = path.join(outDir, `06-ts-pm-enrich-candidates-${today}.json`);
   fs.writeFileSync(outPath, JSON.stringify({
-    meta: { city_id: cityId, called_at: new Date().toISOString(), input_rows: rows.length, field_mask: FIELD_MASK },
+    meta: { city_id: cityId, called_at: new Date().toISOString(), input_rows: rows.length, field_mask: STANDARD_TS_FIELD_MASK },
     results,
   }, null, 2));
 

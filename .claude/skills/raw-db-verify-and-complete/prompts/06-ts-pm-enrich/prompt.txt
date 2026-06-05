@@ -1,62 +1,64 @@
-⚠️ 수정금지(승인필요) 2026-05-20 = TS Enterprise FieldMask + PhotoMedia 설정 (= Gemini prompt 아님 = API 호출용)
+⚠️ 수정금지(승인필요) 2026-06-05 = TS/PhotoMedia 호출 = 단일 관문 tsSearch()/tsPhoto() 경유 (= Gemini prompt 아님 = API 호출용)
+= 2026-06-05 표준화: 자체 FieldMask 폐기 → server/services/shared/ts-client.ts 의 9요소 관문 통과 (= 앱 전체 ag3·12·06 동일 9요소)
 
 ══════════════════════════════════════════════════════════════════════════════
-TS Enterprise textSearch 호출 (= run.ts 안):
+TS textSearch 호출 (= run.ts 안 = 단일 관문 tsSearch()):
 ══════════════════════════════════════════════════════════════════════════════
 
-POST https://places.googleapis.com/v1/places:searchText
-Headers:
-  Content-Type: application/json
-  X-Goog-Api-Key: ${GOOGLE_PLACES_API_KEY}
-  X-Goog-FieldMask: places.id,places.displayName,places.formattedAddress,places.location,places.userRatingCount,places.priceRange,places.priceLevel,places.photos,places.googleMapsUri,places.regularOpeningHours,places.types,places.primaryType
+import { tsSearch } from 'server/services/shared/ts-client';
 
-Body:
-{
-  "textQuery": "${NAME_EN} ${ADDRESS}",
-  "languageCode": "ko",   // = 사용자 SSOT = displayName 한국어
-  "regionCode": "${COUNTRY_CODE}",  // = 예 FR
-  "locationBias": null,    // = 사용자 SSOT [[feedback_place_api_verified_pattern]] = bias X = 좌표는 textQuery 안에
-  "maxResultCount": 5
-}
+const places = await tsSearch({
+  apiKey: ${GOOGLE_PLACES_API_KEY},
+  method: 'searchText',
+  nameLocal: ${NAME_EN},            // = textQuery 에 이름
+  address: ${ADDRESS},              // = 좌표 없음 = "이름 주소" 결합 (= locationBias X)
+  regionCode: ${COUNTRY_CODE},      // = 예 FR
+  languageCode: 'ko',               // = 사용자 SSOT = displayName 한국어
+  maxResults: 5,
+});                                 // → TsPlace[] (= 응답 순서 userRatingCount DESC = 1등 선택)
 
 ══════════════════════════════════════════════════════════════════════════════
-FieldMask 강제 가드 (= 헌법 §15):
+FieldMask 강제 가드 (= 헌법 §15 + §16) = 관문 함수 내장:
 ══════════════════════════════════════════════════════════════════════════════
 
-import { validateFieldMask } from 'server/services/shared/google-places-sku';
-
-const FIELD_MASK = 'places.id,places.displayName,places.formattedAddress,places.location,places.userRatingCount,places.priceRange,places.priceLevel,places.photos,places.googleMapsUri,places.regularOpeningHours,places.types,places.primaryType';
-validateFieldMask(FIELD_MASK);  // = Atmosphere 33 필드 감지 시 throw
-
-══════════════════════════════════════════════════════════════════════════════
-PhotoMedia 호출 (= post-process.ts 안):
-══════════════════════════════════════════════════════════════════════════════
-
-GET https://places.googleapis.com/v1/{photo_name}/media?maxWidthPx=800&key=${GOOGLE_PLACES_API_KEY}
-
-= photo_name = 응답 places[0].photos[0].name (= 형식 = "places/{id}/photos/{photo_id}")
-= 응답 = binary image (= JPEG)
-= Supabase Storage 업로드 = `place-photos/{cityId}/{rowId}-{timestamp}.jpg`
-= public URL = `https://{project}.supabase.co/storage/v1/object/public/place-photos/{cityId}/{rowId}-{timestamp}.jpg`
+= 9요소 = PID / displayName / formattedAddress / location / userRatingCount / priceRange / photos / googleMapsUri / businessStatus
+  (= rating 평점 제외 = 안 씀)
+= tsSearch() 가 STANDARD_TS_FIELD_MASK(9요소) 를 함수 안에서 강제 + validateFieldMask(Atmosphere 차단) 자동 호출.
+= 호출부에서 FieldMask 직접 지정 / 자체 fetch('places.googleapis.com') 금지 (= 우회 = §16 위반).
 
 ══════════════════════════════════════════════════════════════════════════════
-응답 매핑 (= upsertPlace 호환):
+PhotoMedia 호출 (= post-process.ts 안 = 단일 관문 tsPhoto()):
 ══════════════════════════════════════════════════════════════════════════════
 
-응답 places[0]                          → upsertPlace 필드
-─────────────────────────────────────── ────────────────────────────
-id                                       → googlePlaceId
-displayName.text                         → nameKo (= languageCode='ko')
-formattedAddress                         → address (= COALESCE 옛 우선)
-location.{latitude,longitude}            → latitude/longitude (= COALESCE 옛 우선)
-userRatingCount                          → googleReviewCount
-priceRange.endPrice.units                → priceEur (= GREATEST §14)
-priceLevel                               → (= 보조 = 폐기 §14)
-photos[0].name                           → PhotoMedia 호출 → image_url
+import { tsPhoto } from 'server/services/shared/ts-client';
+
+const imageUrl = await tsPhoto({
+  apiKey: ${GOOGLE_PLACES_API_KEY},
+  photoName,                        // = TsPlace.photoName (= "places/{id}/photos/{photo_id}")
+  storageKey: ${SUPABASE_SERVICE_ROLE_KEY},
+  supaPublicUrl: 'https://{project}.supabase.co',
+  pathKey: `${cityId}/${rowId}-${Date.now()}`,  // = .jpg 자동 부착
+  bucket: 'place-photos',
+  maxWidthPx: 800,
+});
+
+= 내부 = PhotoMedia binary 다운(JPEG) → Supabase Storage 업로드(PUT+x-upsert) → public URL 반환
+= public URL = https://{project}.supabase.co/storage/v1/object/public/place-photos/{cityId}/{rowId}-{timestamp}.jpg
+
+══════════════════════════════════════════════════════════════════════════════
+응답 매핑 (= TsPlace 9요소 → upsertPlace 호환):
+══════════════════════════════════════════════════════════════════════════════
+
+TsPlace (관문 9요소 매핑형)              → upsertPlace 필드
+googlePlaceId                            → googlePlaceId (= COALESCE 새 우선 = 덮어쓰기)
+nameLocal (= 'ko' = 한국어)              → nameKo (= 새 우선)
+address                                  → address (= COALESCE 새 우선 = 덮어쓰기)
+latitude / longitude                     → latitude / longitude (= COALESCE 새 우선 = 덮어쓰기)
+googleReviewCount                        → googleReviewCount (= 새 우선)
+priceEur (= priceRange.endPrice.units)   → priceEur (= GREATEST §14)
+photoName                                → tsPhoto() 호출 → image_url (= 새 우선 = 새 있으면 교체, 없으면 옛 보존)
 googleMapsUri                            → googleMapsUri (= 13 SSOT)
-regularOpeningHours.weekdayDescriptions  → (= 추가 보강 컬럼)
-types[]                                  → tags (UNION)
-primaryType                              → (= 보조)
+businessStatus                           → (= 폐업 게이트 = 보조 / 미저장)
 
 ══════════════════════════════════════════════════════════════════════════════
 사용자 SSOT 패턴 (= 메모리 [[feedback_place_api_verified_pattern]]):

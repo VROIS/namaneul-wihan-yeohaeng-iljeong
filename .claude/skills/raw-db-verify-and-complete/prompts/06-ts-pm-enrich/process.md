@@ -12,7 +12,7 @@
 3. 각 행 = TS Enterprise textSearch 호출
    = textQuery = "${name_en} ${address}" (= 좌표 명시 X = locationBias null)
    = languageCode='ko' (= displayName 한국어)
-   = FieldMask = Enterprise SKU 12 필드 (= validateFieldMask 강제)
+   = FieldMask = 9요소 표준 관문 tsSearch() (= 함수내 강제 + validateFieldMask 내장)
    ↓
 4. 응답 places[] = 1 등 선택 (= 응답 순서 = userRatingCount DESC)
    ↓
@@ -44,9 +44,9 @@
 ## SKU §15 가드 (= 헌법 §15)
 
 ```ts
-import { validateFieldMask } from 'server/services/shared/google-places-sku';
-const FIELD_MASK = 'places.id,places.displayName,...';
-validateFieldMask(FIELD_MASK);  // Atmosphere 감지 시 throw
+import { tsSearch, tsPhoto } from 'server/services/shared/ts-client';
+// = 9요소 FieldMask + validateFieldMask(Atmosphere 차단) = 관문 함수 안에서 자동 강제
+// = 자체 FieldMask 작성 / 직접 fetch 금지 (= §16 우회 위반)
 ```
 
 = **회피 절대 금지** (= 직접 fetch / FieldMask 우회 = AI 미래 실수 위험 = 14% 비용 폭탄)
@@ -55,15 +55,15 @@ validateFieldMask(FIELD_MASK);  // Atmosphere 감지 시 throw
 
 | 응답 필드 | upsertPlace 필드 | DB 컬럼 | 정책 |
 |---|---|---|---|
-| `id` | `googlePlaceId` | `google_place_id` | COALESCE 옛 우선 |
+| `id` | `googlePlaceId` | `google_place_id` | COALESCE 새 우선 (= 덮어쓰기) |
 | `displayName.text` | `nameKo` | `name_ko` | 새 우선 (= 한국어 갱신) |
-| `formattedAddress` | `address` | `address` | COALESCE 옛 우선 |
-| `location.latitude` | `latitude` | `latitude` | COALESCE 옛 우선 |
+| `formattedAddress` | `address` | `address` | COALESCE 새 우선 (= 덮어쓰기) |
+| `location.latitude` | `latitude` | `latitude` | COALESCE 새 우선 (= 덮어쓰기) |
 | `userRatingCount` | `googleReviewCount` | `google_review_count` | 새 우선 |
 | `priceRange.endPrice.units` | `priceEur` | `price_eur` | **GREATEST 비싼 쪽** (= §14) |
-| `photos[0].name` → PhotoMedia → Storage URL | `imageUrl` | `image_url` | 옛 NULL 만 채움 |
-| `googleMapsUri` | `googleMapsUri` | `google_maps_uri` | COALESCE 옛 우선 |
-| `types[]` | (= phaseTags UNION) | `phase_tags` | UNION |
+| `photos[0].name` → PhotoMedia → Storage URL | `imageUrl` | `image_url` | 새 우선 (= 새 있으면 교체, 없으면 옛 보존) |
+| `googleMapsUri` | `googleMapsUri` | `google_maps_uri` | COALESCE 새 우선 (= 덮어쓰기) |
+| `businessStatus` | (= 폐업 게이트 = 보조) | (= 미저장) | CLOSED_PERMANENTLY 판정용 |
 
 ## 검증 조건
 

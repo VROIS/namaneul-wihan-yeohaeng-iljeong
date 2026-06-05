@@ -59,36 +59,28 @@ if (!cityId) { console.error('Usage: --city-id=<N> --date=<YYYY-MM-DD> --apply-s
   const PLACES_KEY = keyRow?.key_value;
 
   const { upsertPlace } = await import(pathToFileURL(path.join(ROOT, 'server/services/place-upsert.ts')).href);
+  // ⚠️ 수정금지(승인필요) 2026-06-05 = 사진 단일 관문 = tsPhoto (= PhotoMedia 다운 + Storage 업로드 일원화 = 앱 전체 동일 라인)
+  const { tsPhoto } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/ts-client.ts')).href);
 
   // Supabase Storage 업로드용 (= REST API 직접 호출 = supabase-js 의존 회피)
   const SUPA_PROJECT = (process.env.SUPA_URL || '').match(/https:\/\/([^.]+)\.supabase\.co/)?.[1];
   const STORAGE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
 
+  // ⚠️ 수정금지(승인필요) 2026-06-05 = 사진 = 관문 tsPhoto 일원화 (= 옛 raw fetch 2회 폐기)
+  //   = bucket=place-photos + 경로 ${cityId}/${rowId}-${ts} (.jpg 자동) = 옛 버킷·경로·공개URL 동일 / maxWidthPx=800 동일
+  //   = 업로드 = PUT+x-upsert (= ag3 검증 표준 = 옛 POST 대체, 동작 동일)
+  const SUPA_PUBLIC = SUPA_PROJECT ? `https://${SUPA_PROJECT}.supabase.co` : '';
   async function downloadAndUpload(photoName: string, rowId: number): Promise<string | null> {
-    if (!PLACES_KEY || !SUPA_PROJECT || !STORAGE_KEY) return null;
-    try {
-      const photoUrl = `https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=800&key=${PLACES_KEY}`;
-      const pr = await fetch(photoUrl, { signal: AbortSignal.timeout(30000) });
-      if (!pr.ok) return null;
-      const buf = Buffer.from(await pr.arrayBuffer());
-
-      const ts = Date.now();
-      const filePath = `${cityId}/${rowId}-${ts}.jpg`;
-      const upUrl = `https://${SUPA_PROJECT}.supabase.co/storage/v1/object/place-photos/${filePath}`;
-      const ur = await fetch(upUrl, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${STORAGE_KEY}`,
-          'Content-Type': 'image/jpeg',
-          'x-upsert': 'true',
-        },
-        body: buf,
-      });
-      if (!ur.ok) return null;
-      return `https://${SUPA_PROJECT}.supabase.co/storage/v1/object/public/place-photos/${filePath}`;
-    } catch (e) {
-      return null;
-    }
+    if (!PLACES_KEY || !SUPA_PUBLIC || !STORAGE_KEY) return null;
+    return await tsPhoto({
+      apiKey: PLACES_KEY,
+      photoName,
+      storageKey: STORAGE_KEY,
+      supaPublicUrl: SUPA_PUBLIC,
+      pathKey: `${cityId}/${rowId}-${Date.now()}`,
+      bucket: 'place-photos',
+      maxWidthPx: 800,
+    });
   }
 
   let updated = 0, photo_ok = 0, errors = 0;
@@ -112,7 +104,7 @@ if (!cityId) { console.error('Usage: --city-id=<N> --date=<YYYY-MM-DD> --apply-s
         googleMapsUri: r.ts?.google_maps_uri || null,
         googleReviewCount: r.ts?.review_count ?? null,
         priceEur: r.ts?.price_eur ?? null,
-        imageUrl: imageUrl || undefined,  // = undefined = COALESCE 옛 우선
+        imageUrl: imageUrl || undefined,  // = 새 우선 = 새 이미지 있으면 덮어씀, 없으면(undefined) 옛 보존
         collectionPhase: 'gemini3-2026-05',
       });
       if (result.action === 'updated' || result.action === 'inserted') updated++;
