@@ -6,8 +6,8 @@
 // = dailyPerPersonEur = 1 인 단가 그대로 + group = × companionCount 별도
 
 import { db } from "../../db";
-import { exchangeRates } from "@shared/schema";
-import { eq, and } from "drizzle-orm";
+import { exchangeRates, placeSeedRaw } from "@shared/schema";
+import { eq, and, sql } from "drizzle-orm";
 import type {
   PlaceResult,
   TripFormData,
@@ -75,11 +75,13 @@ function estimateTransitCost(
       return 0;
     case "metro":
     case "bus":
-      return Math.round(2.1 * companionCount * 100) / 100;
+      return 2.1; // ⚠️ 2026-06-06 = 1인 티켓 (= 1인당 = ×인원 제거 = 식비·입장료와 동일 기준)
     case "RER":
-      return Math.round(5.0 * companionCount * 100) / 100;
+      return 5.0; // 1인
+    case "guide":
     case "private_guide":
-      return Math.round((minutes / 60) * 60 * 100) / 100; // €60/h
+      // 전용차 = 1대 공유 = (€60/h × 시간) ÷ 인원 = 1인 share (= 구간 표시는 FE 가 숨김, 일 총합에만 반영)
+      return Math.round((((minutes / 60) * 60) / Math.max(1, companionCount)) * 100) / 100;
     default:
       return 0;
   }
@@ -122,8 +124,53 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
   // ===== 1. 동선 = 로컬 NN+Haversine 1차 (= DB-only 자체 해결, $0/~3ms) / Gemini = 안전장치 (= Stage C 2026-06-06) =====
   // ⚠️ 수정금지(승인필요) = 토글 USE_LOCAL_ROUTE: 기본 ON / 'false' 면 즉시 옛 Gemini-우선 롤백 (= 1초 롤백)
   const USE_LOCAL_ROUTE = process.env.USE_LOCAL_ROUTE !== "false";
+
+  // ⚠️ 2026-06-06 = DB-only 식당풀 = 도시 전체 식당(좌표 보유) DB 1회 조회 (= 가격 사전필터 X = 좌표 우선 SSOT)
+  //   → route-local 2차 = 슬롯 앵커 거리순 정렬(좌표 먼저) → 예산내 첫(가격 나중) 픽. (= AG2 식당 6곳 한계 극복)
+  let restaurantPool: PlaceResult[] = [];
+  if (USE_LOCAL_ROUTE && cityId && db) {
+    const rows = await db!
+      .select({
+        id: placeSeedRaw.id,
+        nameEn: placeSeedRaw.nameEn,
+        nameKo: placeSeedRaw.nameKo,
+        nameLocal: placeSeedRaw.nameLocal,
+        address: placeSeedRaw.address,
+        latitude: placeSeedRaw.latitude,
+        longitude: placeSeedRaw.longitude,
+        priceEur: placeSeedRaw.priceEur,
+        summaryKo: placeSeedRaw.summaryKo,
+        editorialSummary: placeSeedRaw.editorialSummary,
+        imageUrl: placeSeedRaw.imageUrl,
+        googleReviewCount: placeSeedRaw.googleReviewCount,
+      })
+      .from(placeSeedRaw)
+      .where(and(eq(placeSeedRaw.cityId, cityId), eq(placeSeedRaw.seedCategory, "restaurant")))
+      .orderBy(sql`${placeSeedRaw.googleReviewCount} DESC NULLS LAST`);
+    restaurantPool = rows
+      .filter((r) => r.latitude != null && Number(r.latitude) !== 0)
+      .map((r) => ({
+        id: `db-${r.id}`,
+        name: r.nameEn || "",
+        lat: Number(r.latitude),
+        lng: Number(r.longitude),
+        nameKo: r.nameKo,
+        nameLocal: r.nameLocal,
+        address: r.address,
+        estimatedPriceEur: r.priceEur != null ? Number(r.priceEur) : undefined,
+        summaryKo: r.summaryKo,
+        editorialSummary: r.editorialSummary,
+        image: r.imageUrl || "",
+        seedCategory: "restaurant",
+        userRatingCount: r.googleReviewCount || 0,
+      })) as unknown as PlaceResult[];
+    console.log(
+      `[AG4-DB] 🍽️ 식당풀 DB 조회 = ${restaurantPool.length}곳 (도시 전체, 가격 사전필터 X = 좌표 우선)`,
+    );
+  }
+
   let routeResult = USE_LOCAL_ROUTE
-    ? buildRouteLocal(skeleton, inputPlaces, cityCoords)
+    ? buildRouteLocal(skeleton, inputPlaces, cityCoords, restaurantPool)
     : await handleRouteRequest(skeleton, inputPlaces, cityCoords);
 
   // 로컬 1차가 실패/부족(일자 0 또는 씬 0) 시 → Gemini 안전장치 (= 빈 일정 방지 = 옛 동작 parity)
@@ -207,12 +254,20 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
       );
     }
 
-    const dayPlaces = scenes.map((scene) => {
+    // ⚠️ 2026-06-06 = mealType = 위치 기반 (= 일자 마지막 식당 scene = 저녁 / 그 외 = 점심)
+    //   = 짧은 날(활동 적음) 저녁이 13:00 등에 떨어져 classifyMealType(시각<15시)이 "점심"으로 오분류되는 버그 수정
+    const lastMealIdx = scenes.reduce(
+      (acc, s, i) => (s.type === "restaurant" ? i : acc),
+      -1,
+    );
+    const dayPlaces = scenes.map((scene, sceneIdx) => {
       const isAuto = scene.place_id?.startsWith("auto-");
       const inputPlace = !isAuto ? inputById.get(scene.place_id) : undefined;
       const isMeal = scene.type === "restaurant";
       const mealType: "lunch" | "dinner" | undefined = isMeal
-        ? classifyMealType(scene.time)
+        ? sceneIdx === lastMealIdx
+          ? "dinner"
+          : "lunch"
         : undefined;
 
       const mealPrice = isMeal
@@ -294,7 +349,7 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
       return {
         from: scenes[i].name_en,
         to: scene.name_en,
-        distance: scene.distance_from_prev_km,
+        distance: Math.round((scene.distance_from_prev_km || 0) * 1000), // ⚠️ 2026-06-06 = km→m (= FE ÷1000·MIX 미터 표준 정합 = "0.0km" 버그 수정)
         duration: scene.transit_min,
         mode: scene.transit_mode,
         cost,
@@ -326,6 +381,12 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
         totalDistanceKm: routeDay?.total_distance_km || 0,
       },
       dailyCost: {
+        // ⚠️ 2026-06-06 = FE 는 dc.breakdown.{...} 중첩을 읽음 (= MIX pipeline-v3 구조 일치) = 카테고리별 비용(교통/식사/입장료) 표시
+        breakdown: {
+          mealEur: mealCostEur,
+          entranceEur: entranceFeesEur,
+          transportEur: transportCostEur,
+        },
         mealEur: mealCostEur,
         entranceEur: entranceFeesEur,
         transportEur: transportCostEur,
@@ -527,6 +588,12 @@ async function finalizeWithLegacyItinerary(
         totalDistanceKm: 0, // = fallback = 옛 transit-haversine = 거리 합산 X = FE 호환만
       },
       dailyCost: {
+        // ⚠️ 2026-06-06 = FE 는 dc.breakdown.{...} 중첩을 읽음 (= MIX pipeline-v3 구조 일치) = 카테고리별 비용(교통/식사/입장료) 표시
+        breakdown: {
+          mealEur: mealCostEur,
+          entranceEur: entranceFeesEur,
+          transportEur: transportCostEur,
+        },
         mealEur: mealCostEur,
         entranceEur: entranceFeesEur,
         transportEur: transportCostEur,

@@ -148,6 +148,7 @@
     "estimatedTotal": "Est. €{{cost}} per person",
     "guideVehicle": "Private vehicle",
     "walking": "Walking",
+    "metro": "Metro",
     "btsBanner": "BTS Concert Tour Planner",
     "btsBannerSub": "Create a concert city journey with member vibes"
   },

@@ -1944,21 +1944,26 @@ export default function TripPlannerScreen() {
                                 ]}
                               >
                                 {(() => {
-                                  const mode =
+                                  // ⚠️ 2026-06-06 = mode 정규화 + 라벨 mode 파생 (= "항상 도보" 버그 수정)
+                                  const rawMode =
                                     transitInfo.mode ||
                                     transitInfo.modeLabel ||
                                     "walk";
-                                  const icon =
-                                    mode === "guide"
-                                      ? "🚗"
-                                      : mode === "metro"
-                                        ? "🚇"
-                                        : mode === "bus"
-                                          ? "🚌"
-                                          : "🚶";
-                                  const label =
-                                    mode === "guide"
-                                      ? t("trip.guideVehicle")
+                                  const isGuide =
+                                    rawMode === "guide" ||
+                                    rawMode === "private_guide"; // 전용차 정규화
+                                  const mode = isGuide ? "guide" : rawMode;
+                                  const icon = isGuide
+                                    ? "🚗"
+                                    : mode === "metro"
+                                      ? "🚇"
+                                      : mode === "bus"
+                                        ? "🚌"
+                                        : "🚶";
+                                  const label = isGuide
+                                    ? t("trip.guideVehicle")
+                                    : mode === "metro"
+                                      ? t("trip.metro")
                                       : transitInfo.modeLabel || t("trip.walking");
                                   const dur =
                                     transitInfo.durationText ||
@@ -1966,8 +1971,8 @@ export default function TripPlannerScreen() {
                                   const dist = transitInfo.distance
                                     ? `${(transitInfo.distance / 1000).toFixed(1)}km`
                                     : "";
-                                  // A타입(가이드): 구간 비용 안 보여줌 / B타입: 구간별 실제 비용
-                                  if (mode === "guide") {
+                                  // A타입(전용차): 구간 비용 안 보여줌(= 일 총합에 ÷인원) / B타입: 구간별 1인 비용
+                                  if (isGuide) {
                                     return `${icon} ${label} ${dur}${dist ? ` · ${dist}` : ""}`;
                                   }
                                   const cost = transitInfo.cost || 0;

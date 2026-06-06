@@ -148,6 +148,7 @@
     "estimatedTotal": "予想 €{{cost}}/人",
     "guideVehicle": "専用車",
     "walking": "徒歩",
+    "metro": "メトロ",
     "btsBanner": "BTSコンサートツアープランナー",
     "btsBannerSub": "メンバーのバイブでコンサート都市の旅を作ろう"
   },

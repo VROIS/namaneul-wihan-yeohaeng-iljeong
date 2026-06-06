@@ -1,22 +1,16 @@
-// ⚠️ 수정금지(승인필요) 2026-06-05 = NN+Haversine 로컬 동선 = handleRouteRequest(Gemini) 동형 대체 (= 사용자 SSOT)
-// = 입력 동일(skeleton, places, cityCoords) / 출력 동일(RouteResponse) = AG4-DB drop-in 가능
-// = 부품 재사용(헌법 §16, 재발명 X):
-//     · haversineKm / calcTransitHaversine  ← transit-haversine.ts (단일 Haversine SSOT)
-//     · pickRestaurantBySegment / pickRestaurantNearVenue ← route-matcher.ts (식당 거리선택 SSOT)
-// = Gemini 0 / 외부호출 0 / 비용 0 / 결정적(deterministic) → 시뮬 결과 = 라이브 결과 동일
-// = NN(최근접) + 2-opt 동선정렬 = 옛 optimizeDayRoute(itinerary-generator, 폐기경로 private) 알고리즘과 동일 = route 모듈 단일 전방 소스
+// ⚠️ 수정금지(승인필요) 2026-06-06 = DB-only 결정적 동선 빌더 v2 = handleRouteRequest(Gemini) 동형 대체 (= 사용자 SSOT)
+// = 2단계: ① 활동만 동선최적화(점심/저녁 슬롯 빈칸) → ② 식당 우선순위 삽입(인접성 → 가격, 순차)
+// = 부품 재사용(헌법 §16): haversineKm / calcTransitHaversine ← transit-haversine.ts (단일 Haversine SSOT)
+// = Gemini 0 / 외부호출 0 (= 식당풀은 ag4 가 DB 조회해 전달) / 결정적 → 시뮬 = 라이브 동일
+// = 동선 = Held-Karp 폐루프(중심 출발·귀환, 노드 ≤11) + NN/2-opt 폴백 = 출발<>종료 = 파리중심 앵커 (= 추후 숙소주소 입력 시 그 좌표로 전체 재최적화)
+// = 활동 = AG2 풀 top-rank 채택(슬롯 상한) / 식사 = 슬롯3 점심(활동2·4 최근접) + 마지막 저녁(최종활동·중심 최근접)
 import type { AG1Output, PlaceResult } from "../agents/types";
-import { minutesToTime } from "../agents/types";
+import { minutesToTime, MEAL_BUDGET } from "../agents/types";
 import {
   haversineKm,
   calcTransitHaversine,
   type TravelMode,
 } from "../agents/transit-haversine";
-import {
-  pickRestaurantBySegment,
-  pickRestaurantNearVenue,
-  type GeoPoint,
-} from "../route-matcher";
 import type {
   RouteResponse,
   RouteScene,
@@ -25,7 +19,7 @@ import type {
 
 type LatLng = { lat: number; lng: number };
 
-// 유효 좌표 = NULL/0 아님 (= NN 제외 대상 판정)
+// 유효 좌표 = NULL/0 아님
 const hasCoord = (p: { lat?: number | null; lng?: number | null }): boolean =>
   p.lat != null && p.lng != null && p.lat !== 0 && p.lng !== 0;
 
@@ -34,60 +28,91 @@ const toMin = (t: string): number => {
   return h * 60 + m;
 };
 
-// PlaceResult.id ("db-123") → 숫자 id (route-matcher GeoPoint 호환)
-const idNum = (id: string): number => {
-  const n = parseInt(String(id).replace(/^db-/, ""), 10);
-  return Number.isFinite(n) ? n : -1;
-};
-
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
 /**
- * 일자 1개 동선 정렬 = Nearest Neighbor + 2-opt + Haversine
- * = 출발(start)에서 가장 가까운 곳 순 방문(NN) → 교차(지그재그) 구간을 뒤집어 제거(2-opt) → 도착(end) anchor
- * = NULL 좌표 행은 제외 후 마지막에 배치 (= 999km 폭탄 방지)
+ * 일자 1개 동선 정렬 = 폐루프 최단경로 (= 중심 출발·귀환)
+ * = 노드 ≤11 = Held-Karp 정확해 / >11 = NN+2-opt 폴백
+ * = 종착이 중심 근처가 되도록 귀환비용 포함 (= 출발<>종료 중심 = 저녁/숙소 앵커 정합)
  */
-function orderByNN(items: PlaceResult[], start: LatLng, end: LatLng): PlaceResult[] {
+function orderByNN(items: PlaceResult[], center: LatLng): PlaceResult[] {
   const valid = items.filter(hasCoord);
   const invalid = items.filter((p) => !hasCoord(p));
   if (valid.length <= 1) return [...valid, ...invalid];
+  if (valid.length <= 11) return [...heldKarpPath(valid, center), ...invalid];
+  return [...nn2opt(valid, center), ...invalid];
+}
 
-  // 1) Nearest Neighbor = 출발지에서 가까운 순
+/**
+ * Held-Karp DP = 고정 시작(center)에서 전체 1회 방문 후 center 귀환 = 폐루프 최단.
+ * = dp[S][j] = center→…→j (S 방문완료) 최소비용. 답 = min_j (dp[full][j] + j→center). O(2^n·n²).
+ */
+function heldKarpPath(nodes: PlaceResult[], center: LatLng): PlaceResult[] {
+  const n = nodes.length;
+  if (n <= 1) return [...nodes];
+  const d0 = nodes.map((p) => haversineKm(center.lat, center.lng, p.lat, p.lng)); // center→j
+  const d = nodes.map((a) => nodes.map((b) => haversineKm(a.lat, a.lng, b.lat, b.lng))); // i→j
+  const FULL = 1 << n;
+  const dp = Array.from({ length: FULL }, () => new Float64Array(n).fill(Infinity));
+  const par = Array.from({ length: FULL }, () => new Int8Array(n).fill(-1));
+  for (let j = 0; j < n; j++) dp[1 << j][j] = d0[j];
+  for (let S = 1; S < FULL; S++) {
+    for (let j = 0; j < n; j++) {
+      if (!(S & (1 << j))) continue;
+      const base = dp[S][j];
+      if (base === Infinity) continue;
+      for (let kk = 0; kk < n; kk++) {
+        if (S & (1 << kk)) continue;
+        const nS = S | (1 << kk);
+        const cost = base + d[j][kk];
+        if (cost < dp[nS][kk]) { dp[nS][kk] = cost; par[nS][kk] = j; }
+      }
+    }
+  }
+  // 폐루프 = 마지막 노드 → center 귀환 비용 포함 (= 종착이 중심 근처)
+  let best = Infinity, endJ = 0;
+  for (let j = 0; j < n; j++) {
+    const total = dp[FULL - 1][j] + haversineKm(nodes[j].lat, nodes[j].lng, center.lat, center.lng);
+    if (total < best) { best = total; endJ = j; }
+  }
+  const path: PlaceResult[] = [];
+  let S = FULL - 1, j = endJ;
+  while (j !== -1) { path.push(nodes[j]); const pj = par[S][j]; S &= ~(1 << j); j = pj; }
+  return path.reverse();
+}
+
+/**
+ * NN + 2-opt 폴백 (= 노드 >11) = 폐루프(중심 출발·귀환) + 시작 엣지(center→첫노드) 목적함수 포함.
+ */
+function nn2opt(valid: PlaceResult[], center: LatLng): PlaceResult[] {
   const remaining = [...valid];
   const ordered: PlaceResult[] = [];
-  let cur: LatLng = start;
+  let cur: LatLng = center;
   while (remaining.length > 0) {
-    let bi = 0;
-    let bd = Infinity;
+    let bi = 0, bd = Infinity;
     for (let i = 0; i < remaining.length; i++) {
-      const d = haversineKm(cur.lat, cur.lng, remaining[i].lat, remaining[i].lng);
-      if (d < bd) {
-        bd = d;
-        bi = i;
-      }
+      const dd = haversineKm(cur.lat, cur.lng, remaining[i].lat, remaining[i].lng);
+      if (dd < bd) { bd = dd; bi = i; }
     }
     ordered.push(remaining[bi]);
     cur = { lat: remaining[bi].lat, lng: remaining[bi].lng };
     remaining.splice(bi, 1);
   }
-
-  // 2) 2-opt = 교차하는 두 구간 뒤집어 총거리 감소 시 채택 (최대 50회)
-  let improved = true;
-  let iter = 0;
+  let improved = true, iter = 0;
   while (improved && iter < 50) {
-    improved = false;
-    iter++;
-    for (let i = 0; i < ordered.length - 1; i++) {
+    improved = false; iter++;
+    for (let i = -1; i < ordered.length - 2; i++) {
+      // i = -1 = 시작 엣지(center→ordered[0]) 포함
+      const a: LatLng = i < 0 ? center : { lat: ordered[i].lat, lng: ordered[i].lng };
       for (let j = i + 2; j < ordered.length; j++) {
-        const jNext: LatLng =
-          j + 1 < ordered.length
-            ? { lat: ordered[j + 1].lat, lng: ordered[j + 1].lng }
-            : end; // 종점 = 도착지 anchor
-        const d1 = haversineKm(ordered[i].lat, ordered[i].lng, ordered[i + 1].lat, ordered[i + 1].lng);
-        const d2 = haversineKm(ordered[j].lat, ordered[j].lng, jNext.lat, jNext.lng);
-        const n1 = haversineKm(ordered[i].lat, ordered[i].lng, ordered[j].lat, ordered[j].lng);
-        const n2 = haversineKm(ordered[i + 1].lat, ordered[i + 1].lng, jNext.lat, jNext.lng);
-        if (n1 + n2 < d1 + d2) {
+        const isLast = j + 1 >= ordered.length;
+        const next: LatLng = isLast ? center : { lat: ordered[j + 1].lat, lng: ordered[j + 1].lng }; // 폐루프 귀환
+        const b = ordered[i + 1], c = ordered[j];
+        const d1 = haversineKm(a.lat, a.lng, b.lat, b.lng);
+        const d2 = haversineKm(c.lat, c.lng, next.lat, next.lng);
+        const n1 = haversineKm(a.lat, a.lng, c.lat, c.lng);
+        const n2 = haversineKm(b.lat, b.lng, next.lat, next.lng);
+        if (n1 + n2 < d1 + d2 - 1e-9) {
           const seg = ordered.slice(i + 1, j + 1).reverse();
           ordered.splice(i + 1, j - i, ...seg);
           improved = true;
@@ -95,7 +120,7 @@ function orderByNN(items: PlaceResult[], start: LatLng, end: LatLng): PlaceResul
       }
     }
   }
-  return [...ordered, ...invalid];
+  return ordered;
 }
 
 // 거리 + 이동수단(공공/도보 vs 전용차) → RouteScene.transit_mode + 시간계산용 TravelMode
@@ -126,27 +151,25 @@ function distFromCenter(items: PlaceResult[], center: LatLng): number {
 }
 
 /**
- * 활동을 dayCount 개 지리 군집으로 = 용량균형 k-means
- * = 각 군집 = 한 방향으로 압축 (= 반대방향 혼합 방지 = 지그재그 근절)
- * = farthest-first 초기화 → Lloyd 10회 → cap=ceil(n/k) 균형 재배정 (= 한 날 몰림 방지)
+ * 활동을 dayCount 개 지리 군집으로 = 용량균형 k-means (cap = ceil(n/k))
+ * = farthest-first 초기화 → Lloyd 10회 → 용량균형 재배정 (= 한 날 몰림 방지 + 먼 곳 인근끼리 묶음)
+ * = 입력 활동이 슬롯 상한(= n)으로 이미 잘려 옴 → cap = ceil(n/k) = 일자당 활동 슬롯 수
  */
-function clusterIntoDays(items: PlaceResult[], k: number, center: LatLng, balanced = true): PlaceResult[][] {
+function clusterIntoDays(items: PlaceResult[], k: number, center: LatLng): PlaceResult[][] {
   const pts = items.filter(hasCoord);
   if (k <= 1) return [pts];
   if (pts.length <= k) return Array.from({ length: k }, (_, i) => (pts[i] ? [pts[i]] : []));
 
   // 1) farthest-first 초기 centroid (= 서로 먼 씨앗 = 방향 분리)
   const centroids: LatLng[] = [];
-  let fi = 0,
-    fd = -1;
+  let fi = 0, fd = -1;
   pts.forEach((p, i) => {
-    const d = haversineKm(center.lat, center.lng, p.lat, p.lng);
-    if (d > fd) { fd = d; fi = i; }
+    const dd = haversineKm(center.lat, center.lng, p.lat, p.lng);
+    if (dd > fd) { fd = dd; fi = i; }
   });
   centroids.push({ lat: pts[fi].lat, lng: pts[fi].lng });
   while (centroids.length < k) {
-    let bi = 0,
-      bd = -1;
+    let bi = 0, bd = -1;
     pts.forEach((p, i) => {
       const dn = Math.min(...centroids.map((c) => haversineKm(c.lat, c.lng, p.lat, p.lng)));
       if (dn > bd) { bd = dn; bi = i; }
@@ -157,11 +180,10 @@ function clusterIntoDays(items: PlaceResult[], k: number, center: LatLng, balanc
   // 2) Lloyd 반복 (10회)
   for (let iter = 0; iter < 10; iter++) {
     const assign = pts.map((p) => {
-      let bi = 0,
-        bd = Infinity;
+      let bi = 0, bd = Infinity;
       centroids.forEach((c, ci) => {
-        const d = haversineKm(c.lat, c.lng, p.lat, p.lng);
-        if (d < bd) { bd = d; bi = ci; }
+        const dd = haversineKm(c.lat, c.lng, p.lat, p.lng);
+        if (dd < bd) { bd = dd; bi = ci; }
       });
       return bi;
     });
@@ -169,17 +191,6 @@ function clusterIntoDays(items: PlaceResult[], k: number, center: LatLng, balanc
       const grp = pts.filter((_, i) => assign[i] === ci);
       if (grp.length) centroids[ci] = centroidOf(grp);
     }
-  }
-
-  // 비균형 모드 = 순수 근접 배정 (= 외곽 방향 분리용 = 정반대 방향 군집 강제 병합 방지)
-  if (!balanced) {
-    const g: PlaceResult[][] = Array.from({ length: k }, () => []);
-    for (const p of pts) {
-      let bi = 0, bd = Infinity;
-      centroids.forEach((c, ci) => { const d = haversineKm(c.lat, c.lng, p.lat, p.lng); if (d < bd) { bd = d; bi = ci; } });
-      g[bi].push(p);
-    }
-    return g;
   }
 
   // 3) 용량균형 재배정 (cap=ceil(n/k)) = 확신(regret) 높은 점 먼저 = 한 날 몰림 방지
@@ -205,105 +216,25 @@ function clusterIntoDays(items: PlaceResult[], k: number, center: LatLng, balanc
   return groups;
 }
 
-// vibe → seed_category 주 매핑 (= 사용자 바이브와 맞는 카테고리에 가중)
-const VIBE_CAT: Record<string, string> = {
-  Culture: 'heritage', Healing: 'healing', Adventure: 'adventure',
-  Hotspot: 'hotspot', Attraction: 'attraction', Shopping: 'shopping', // = 미식(Foodie) 제거 → 즐길거리(attraction) (= 식당은 바이브 아님 = 자동 식사)
-};
-type VibeBoost = Record<string, number>; // category → 배수(>1 = 선호)
-
-// 가치(profit) = rank 점수 × 바이브 매칭배수 (낮은 rank=높은 가치 / 바이브 맞으면 ×배수)
-const profitOf = (p: PlaceResult, boost: VibeBoost = {}): number =>
-  Math.max(1, 21 - (p.rank ?? 20)) * (boost[p.seedCategory ?? ''] ?? 1);
-
-// 앵커 = 도시 최상위(rank≤3) + 사용자 바이브 매칭 = "하루 써서라도 가는 곳"(예: 문화여행의 Versailles) = 게이트 무조건 통과 + 외곽일 최우선
-const ANCHOR_RANK = 3;
-const isAnchor = (p: PlaceResult, boost: VibeBoost = {}): boolean =>
-  (p.rank ?? 99) <= ANCHOR_RANK && (boost[p.seedCategory ?? ''] ?? 1) > 1;
-
-const FAR_KM = 12;        // 도심에서 이 이상 = 외곽(당일치기 후보)
-const DROP_LAMBDA = 0.5;  // profit < 0.5 × 도심거리(km) = 가치<거리 = 제외 (= OR-Tools disjunction penalty=profit 의 순수 TS판)
-
 /**
- * ⚠️ 사용자 SSOT 2026-06-05 = TOPTW cluster-first + 가치/거리 선정 (= 딥리서치 검증 = Gavalas CSCRoutes + OR-Tools disjunction)
- * ① 가치/거리 게이트 = 멀고 가치 낮은 외곽 제외(= Giverny 75km 류) ② 외곽 당일치기 day 수 제한 = 가치합 상위 군집만(= 흩어진 외곽 전부 X)
- * ③ 중심은 남은 날로 k-means ④ 일자 용량 초과분 = 가치낮은 순 제외. → "빠짐없이 모두" 폐기 = 가치순 선택.
- * @returns dayGroups(날짜별 활동) + dropped(이번 트립 미포함 = 정직 표시)
- */
-function planDays(
-  activities: PlaceResult[],
-  dayCount: number,
-  caps: number[],
-  center: LatLng,
-  boost: VibeBoost = {},
-): { dayGroups: PlaceResult[][]; dropped: PlaceResult[] } {
-  const valid = activities.filter(hasCoord);
-  const dropped: PlaceResult[] = [];
-  const commute = (p: PlaceResult) => haversineKm(center.lat, center.lng, p.lat, p.lng);
-
-  // ① 중심/외곽 분리. 중심(FAR_KM 이내) = 전부 후보(= 용량 cap 이 추림, 거리게이트 적용 X = 중심 과잉제외 방지).
-  //    외곽 = 가치/거리 게이트 통과분만 (= 가치가 거리 정당화 / 앵커=바이브매칭 최상위는 무조건 통과).
-  const central = valid.filter((p) => commute(p) <= FAR_KM);
-  const far: PlaceResult[] = [];
-  for (const p of valid) {
-    if (commute(p) <= FAR_KM) continue; // 중심은 위에서 처리
-    if (isAnchor(p, boost) || profitOf(p, boost) >= DROP_LAMBDA * commute(p)) far.push(p);
-    else dropped.push(p); // 외곽인데 가치 < 거리 = 이번 트립 제외
-  }
-
-  // ③ 외곽 당일치기 day 수 = dayCount/3 내림(외곽 있을 때 최소 1) = 가치합 상위 군집만, 나머지 외곽 제외
-  const outskirtBudget = far.length ? Math.max(1, Math.floor(dayCount / 3)) : 0;
-  let outskirtDays: PlaceResult[][] = [];
-  if (outskirtBudget > 0) {
-    const fc = clusterIntoDays(far, Math.min(far.length, Math.max(outskirtBudget + 1, dayCount)), center, false)
-      .filter((c) => c.length)
-      // 앵커 포함 군집 최우선(= 바이브 아이콘은 무조건 당일치기) → 그다음 가치합
-      .map((c) => ({ c, val: c.reduce((s, p) => s + profitOf(p, boost), 0) + (c.some((p) => isAnchor(p, boost)) ? 1e6 : 0) }))
-      .sort((a, b) => b.val - a.val);
-    outskirtDays = fc.slice(0, outskirtBudget).map((x) => x.c);
-    for (const x of fc.slice(outskirtBudget)) dropped.push(...x.c);
-  } else {
-    dropped.push(...far);
-  }
-
-  // ④ 중심 = 남은 날 수로 k-means
-  const centralDayCount = Math.max(1, dayCount - outskirtDays.length);
-  const centralGroups = (central.length ? clusterIntoDays(central, centralDayCount, center) : [])
-    .filter((c, i) => i < centralDayCount)
-    .sort((a, b) => distFromCenter(a, center) - distFromCenter(b, center));
-
-  // ⑤ 날짜 배열 = 중심날(앞) + 외곽날(뒤), dayCount 로 맞춤
-  let dayGroups: PlaceResult[][] = [...centralGroups, ...outskirtDays].slice(0, dayCount);
-  while (dayGroups.length < dayCount) dayGroups.push([]);
-
-  // ⑥ 일자 용량 초과분 = 가치낮은 순 제외
-  dayGroups = dayGroups.map((g, i) => {
-    const cap = caps[i] ?? 99;
-    const sorted = [...g].sort((a, b) => profitOf(b, boost) - profitOf(a, boost));
-    if (sorted.length > cap) dropped.push(...sorted.slice(cap));
-    return sorted.slice(0, cap);
-  });
-
-  return { dayGroups, dropped };
-}
-
-/**
- * 로컬 동선 빌드 = handleRouteRequest(Gemini) 동형 대체
- * @param skeleton AG1 뼈대 (= 일자/슬롯/페이스/인원)
- * @param places AG2-DB 풀 (= 활동 + 식당, 좌표 보유)
- * @param cityCoords 도심 중심 = 매일 출발/귀환 anchor
- * @returns RouteHandlerResult (= ok / response: RouteResponse / elapsedMs)
+ * 로컬 동선 빌드 v2 = handleRouteRequest(Gemini) 동형 대체 (= 2단계: 활동 1차 / 식당 2차)
+ * @param skeleton AG1 뼈대 (= 일자/슬롯/페이스/인원/travelStyle)
+ * @param places AG2-DB 풀 (= 활동 후보, 좌표 보유)
+ * @param cityCoords 도심 중심 = 출발/종료 앵커 (= 추후 숙소주소로 교체)
+ * @param restaurantPool ag4 가 DB 조회한 예산 매칭 식당 전체풀 (= 2차 우선순위 삽입용). 없으면 places 내 식당 폴백.
  */
 export function buildRouteLocal(
   skeleton: AG1Output,
   places: PlaceResult[],
   cityCoords: LatLng | undefined,
+  restaurantPool?: PlaceResult[],
 ): RouteHandlerResult {
   const t0 = Date.now();
   const { formData, daySlotsConfig, paceConfig, companionCount } = skeleton;
   const slotDuration = paceConfig.slotDurationMinutes;
+  const mealBudget = MEAL_BUDGET[formData.travelStyle || "Reasonable"];
 
-  // 출발/귀환 기점 = 도심 중심 (없으면 formData 좌표 / 첫 유효 장소)
+  // 출발/종료 앵커 = 도심 중심 (= 추후 숙소주소 입력 시 그 좌표로 교체 = 전체 재최적화)
   const firstValid = places.find(hasCoord);
   const center: LatLng =
     cityCoords && hasCoord(cityCoords)
@@ -318,99 +249,90 @@ export function buildRouteLocal(
   const transport: "public_transit" | "private_driver_guide" =
     formData.mobilityStyle === "Minimal" ? "private_driver_guide" : "public_transit";
 
-  // 활동 / 식당 분리 (좌표 보유만)
-  const activities = places.filter((p) => p.seedCategory !== "restaurant" && hasCoord(p));
-  const restaurants = places.filter((p) => p.seedCategory === "restaurant" && hasCoord(p));
-  const restById = new Map<number, PlaceResult>();
-  const geoPool: GeoPoint[] = [];
-  for (const r of restaurants) {
-    const n = idNum(r.id);
-    if (n < 0) continue; // 비정상 id(= db-N 아님) = 매칭 충돌 방지 = 스킵
-    restById.set(n, r);
-    geoPool.push({ id: n, latitude: r.lat, longitude: r.lng });
-  }
+  // 활동 = 비식당, rank 높은 순, 슬롯 상한(= Σ(slots-2))까지 (= 유명 보존 = 베르사유, 버퍼 초과분 drop)
+  const maxActivities = daySlotsConfig.reduce((s, dc) => s + Math.max(1, dc.slots - 2), 0);
+  const activities = places
+    .filter((p) => p.seedCategory !== "restaurant" && hasCoord(p))
+    .sort((a, b) => (a.rank ?? 9999) - (b.rank ?? 9999))
+    .slice(0, maxActivities);
 
-  // 일자별 = 점심/저녁 유무 + 활동 용량(= 슬롯 - 식사)
-  const dayPlan = daySlotsConfig.map((dc) => {
-    const sMin = toMin(dc.startTime);
-    const eMin = toMin(dc.endTime);
-    const hasLunch = sMin <= 13 * 60 + 30 && eMin >= 13 * 60;
-    const hasDinner = eMin >= 18 * 60 + 30;
-    const activitySlots = Math.max(1, dc.slots - (hasLunch ? 1 : 0) - (hasDinner ? 1 : 0));
-    return { day: dc.day, startMin: sMin, hasLunch, hasDinner, activitySlots };
-  });
+  // 식당풀 = ag4 가 DB 조회해 전달(우선) / 없으면 places 내 식당(= sim 폴백)
+  const restaurants = (restaurantPool && restaurantPool.length
+    ? restaurantPool
+    : places.filter((p) => p.seedCategory === "restaurant")
+  ).filter(hasCoord);
 
-  // 바이브 가중 = 사용자 vibe 와 맞는 카테고리에 배수 (= profit 에 반영 = Versailles 문화 ↑)
-  const boost: VibeBoost = {};
-  for (const vw of skeleton.vibeWeights || []) {
-    const cat = VIBE_CAT[String(vw.vibe)];
-    if (cat) boost[cat] = 1 + (vw.weight ?? 0); // weight 0~1 → 배수 1~2
-  }
+  // 2차 식당 우선순위 픽 = [1순위] 인접성(앵커 최근접) 정렬 → [2순위] 그중 예산내 첫 (= 동시 아님, 순차) + 전역 중복 제외
+  const usedRest = new Set<string>();
+  const pickMealPriority = (anchors: LatLng[], priceCap: number): PlaceResult | null => {
+    const refs = anchors.filter((a) => a && a.lat != null && a.lat !== 0);
+    const useRefs = refs.length ? refs : [center];
+    const ranked = restaurants
+      .filter((r) => !usedRest.has(r.id))
+      .map((r) => ({ r, d: Math.min(...useRefs.map((a) => haversineKm(a.lat, a.lng, r.lat, r.lng))) }))
+      .sort((a, b) => a.d - b.d);
+    if (!ranked.length) return null;
+    const within = ranked.find((x) => (x.r.estimatedPriceEur ?? 0) <= priceCap); // 인접성순 첫 예산내
+    const pick = (within ?? ranked[0]).r; // 인근에 예산내 없으면 최근접 폴백 (= 한도 완화)
+    usedRest.add(pick.id);
+    return pick;
+  };
 
-  // ⚠️ 사용자 SSOT 2026-06-05 = TOPTW cluster-first + 가치/거리 선정 (= "빠짐없이 모두" 폐기, 딥리서치 검증)
-  //   = planDays: 가치<거리 외곽 제외 + 외곽 당일치기 제한(앵커 최우선) + 중심 k-means + 용량초과 제외 → dropped = "이번 트립 미포함"
-  const { dayGroups, dropped } = planDays(activities, dayPlan.length, dayPlan.map((d) => d.activitySlots), center, boost);
+  // 1차 = 활동 일자 배정 (= 좌표 용량균형 cluster) + 도심→외곽 정렬 (= 자연 흐름)
+  const dayGroups = clusterIntoDays(activities, daySlotsConfig.length, center)
+    .sort((a, b) => distFromCenter(a, center) - distFromCenter(b, center));
 
-  const usedRest = new Set<number>();
   const days: RouteResponse["days"] = [];
   let grandKm = 0;
   let grandSec = 0;
 
-  for (let di = 0; di < dayPlan.length; di++) {
-    const dp = dayPlan[di];
-    const dayActs0 = dayGroups[di] || [];
-    // 일자 내 재정렬 (도심 출발/귀환 anchor = 하루 한 바퀴)
-    const dayActs = orderByNN(dayActs0, center, center);
+  for (let di = 0; di < daySlotsConfig.length; di++) {
+    const dc = daySlotsConfig[di];
+    const dayActs = orderByNN(dayGroups[di] || [], center); // 폐루프 = 중심 출발·귀환
 
-    // 동선 시퀀스 = 활동 + (점심 = 중간 / 저녁 = 끝)
-    type Item = { p: PlaceResult; kind: "activity" | "restaurant" };
-    const seq: Item[] = dayActs.map((p) => ({ p, kind: "activity" as const }));
+    // 점심 = 슬롯3 (= 활동 2개 후) = 활동2·활동4 중 최근접 식당 (= detour 0)
+    const lunchIdx = Math.min(2, dayActs.length);
+    const aBefore = dayActs[lunchIdx - 1];
+    const aAfter = dayActs[lunchIdx];
+    const lunch = dayActs.length
+      ? pickMealPriority(
+          [aBefore, aAfter].filter(Boolean).map((p) => ({ lat: p.lat, lng: p.lng })),
+          mealBudget.lunch,
+        )
+      : null;
+    // 저녁 = 마지막 슬롯 = 최종활동·파리중심 중 최근접 (= 조회 폭 넓힘 = 중심 귀환 모델)
+    const lastAct = dayActs[dayActs.length - 1];
+    const dinner = dayActs.length
+      ? pickMealPriority(
+          lastAct ? [{ lat: lastAct.lat, lng: lastAct.lng }, center] : [center],
+          mealBudget.dinner,
+        )
+      : null;
 
-    // 식당이 그날 동선에서 MAX_MEAL_KM 보다 멀면 = 외곽 식당 DB 공백 = 끼우지 않음 (= 정직 = 30km 식당 왕복 방지)
-    const MAX_MEAL_KM = 6;
-    if (dp.hasLunch && dayActs.length >= 1) {
-      const mid = Math.max(1, Math.floor(dayActs.length / 2));
-      const a = dayActs[mid - 1];
-      const b = dayActs[mid] || a;
-      const pick = pickRestaurantBySegment(
-        geoPool,
-        { id: idNum(a.id), latitude: a.lat, longitude: a.lng },
-        { id: idNum(b.id), latitude: b.lat, longitude: b.lng },
-        [...usedRest],
-      );
-      if (pick && haversineKm(a.lat, a.lng, pick.latitude!, pick.longitude!) <= MAX_MEAL_KM) {
-        usedRest.add(pick.id);
-        seq.splice(mid, 0, { p: restById.get(pick.id)!, kind: "restaurant" });
-      }
-    }
-    if (dp.hasDinner && dayActs.length >= 1) {
-      const last = dayActs[dayActs.length - 1];
-      const pick = pickRestaurantNearVenue(
-        geoPool,
-        { id: idNum(last.id), latitude: last.lat, longitude: last.lng },
-        [...usedRest],
-      );
-      if (pick && haversineKm(last.lat, last.lng, pick.latitude!, pick.longitude!) <= MAX_MEAL_KM) {
-        usedRest.add(pick.id);
-        seq.push({ p: restById.get(pick.id)!, kind: "restaurant" });
-      }
-    }
+    // 시퀀스 조립 = 활동 + 점심(슬롯3) + 저녁(마지막)
+    const seq: { p: PlaceResult; rest: boolean }[] = [];
+    dayActs.forEach((act, idx) => {
+      if (idx === lunchIdx && lunch) seq.push({ p: lunch, rest: true });
+      seq.push({ p: act, rest: false });
+    });
+    if (lunch && lunchIdx >= dayActs.length) seq.push({ p: lunch, rest: true }); // 활동<2 = 점심 뒤에
+    if (dinner) seq.push({ p: dinner, rest: true });
 
-    // 씬 빌드 = 시간/거리/교통 (= calcTransitHaversine 재사용)
-    let t = dp.startMin;
+    // 고정 페이스 그리드 시각 (= startTime + i×슬롯간격, 이동시간 미반영 = 깔끔 시각) + 거리/교통(Haversine)
     let prev: LatLng = center;
     let dayKm = 0;
-    const scenes: RouteScene[] = [];
-    seq.forEach((it, i) => {
+    const startMin = toMin(dc.startTime);
+    const scenes: RouteScene[] = seq.map((it, i) => {
       const km = round2(haversineKm(prev.lat, prev.lng, it.p.lat, it.p.lng));
       const { mode, calc } = pickMode(km, transport);
       const tr = calcTransitHaversine(prev, { lat: it.p.lat, lng: it.p.lng }, calc, companionCount);
-      t += tr.duration;
-      const isRest = it.kind === "restaurant";
+      prev = { lat: it.p.lat, lng: it.p.lng };
+      dayKm += km;
+      grandSec += slotDuration * 60;
       const scene: RouteScene = {
         slot: i + 1,
-        time: minutesToTime(t),
-        type: isRest ? "restaurant" : "activity",
+        time: minutesToTime(startMin + i * slotDuration),
+        type: it.rest ? "restaurant" : "activity",
         place_id: it.p.id,
         name_en: it.p.name || "",
         name_ko: it.p.nameKo || "",
@@ -422,18 +344,13 @@ export function buildRouteLocal(
         transit_mode: mode,
         transit_min: tr.duration,
       };
-      if (isRest && it.p.estimatedPriceEur != null) scene.price_per_person_eur = it.p.estimatedPriceEur;
-      if (it.p.summaryKo) scene.selection_reason_ko = it.p.summaryKo; // → DB summary_ko
-      if (it.p.editorialSummary) scene.shortform_ko = it.p.editorialSummary; // → DB editorial_summary
-      scenes.push(scene);
-
-      dayKm += km;
-      grandSec += tr.duration * 60 + (isRest ? 90 : slotDuration) * 60;
-      t += isRest ? 90 : slotDuration; // 식사 90분 / 활동 = 페이스 슬롯
-      prev = { lat: it.p.lat, lng: it.p.lng };
+      if (it.rest && it.p.estimatedPriceEur != null) scene.price_per_person_eur = it.p.estimatedPriceEur;
+      if (it.p.summaryKo) scene.selection_reason_ko = it.p.summaryKo;
+      if (it.p.editorialSummary) scene.shortform_ko = it.p.editorialSummary;
+      return scene;
     });
 
-    days.push({ day: dp.day, total_distance_km: round2(dayKm), scenes });
+    days.push({ day: dc.day, total_distance_km: round2(dayKm), scenes });
     grandKm += dayKm;
   }
 
@@ -442,13 +359,11 @@ export function buildRouteLocal(
     total_distance_km: round2(grandKm),
     days,
   };
-  // 이번 트립 미포함(= 가치/거리 제외) = 정직 표시용 (AG4 는 무시 = 표준 필드 아님)
-  (response as any)._dropped = dropped.map((p) => ({ name: p.nameLocal || p.name, profit: Math.round(profitOf(p, boost)) }));
   return {
     ok: days.length > 0,
     response,
     raw: "",
-    finishReason: "local-nn-haversine",
+    finishReason: "local-nn-haversine-v2",
     elapsedMs: Date.now() - t0,
   };
 }
