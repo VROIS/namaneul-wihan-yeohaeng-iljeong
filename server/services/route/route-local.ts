@@ -272,8 +272,9 @@ export function buildRouteLocal(
       .map((r) => ({ r, d: Math.min(...useRefs.map((a) => haversineKm(a.lat, a.lng, r.lat, r.lng))) }))
       .sort((a, b) => a.d - b.d);
     if (!ranked.length) return null;
-    const within = ranked.find((x) => (x.r.estimatedPriceEur ?? 0) <= priceCap); // 인접성순 첫 예산내
-    const pick = (within ?? ranked[0]).r; // 인근에 예산내 없으면 최근접 폴백 (= 한도 완화)
+    // ⚠️ 인접성 우선(SSOT) → 가격 보조: known≤cap 또는 NULL(미상=거부불가) = 예산내 간주 / known>cap 만 제외
+    const within = ranked.find((x) => (x.r.estimatedPriceEur ?? 0) <= priceCap);
+    const pick = (within ?? ranked[0]).r; // 인근 예산내 0 시 = 최근접 폴백 (= 매일 2식 보장 = 빈 슬롯보다 나음)
     usedRest.add(pick.id);
     return pick;
   };
@@ -294,20 +295,18 @@ export function buildRouteLocal(
     const lunchIdx = Math.min(2, dayActs.length);
     const aBefore = dayActs[lunchIdx - 1];
     const aAfter = dayActs[lunchIdx];
-    const lunch = dayActs.length
-      ? pickMealPriority(
-          [aBefore, aAfter].filter(Boolean).map((p) => ({ lat: p.lat, lng: p.lng })),
-          mealBudget.lunch,
-        )
-      : null;
-    // 저녁 = 마지막 슬롯 = 최종활동·파리중심 중 최근접 (= 조회 폭 넓힘 = 중심 귀환 모델)
+    const lunch = pickMealPriority(
+      dayActs.length >= 1
+        ? [aBefore, aAfter].filter(Boolean).map((p) => ({ lat: p.lat, lng: p.lng }))
+        : [center], // ⚠️ 활동 0개(빈 날) = 중심 앵커 = 2식 보장
+      mealBudget.lunch,
+    );
+    // 저녁 = 마지막 슬롯 = 최종활동·파리중심 중 최근접 (= 조회 폭 넓힘 = 중심 귀환 모델). 빈 날 = 중심 앵커
     const lastAct = dayActs[dayActs.length - 1];
-    const dinner = dayActs.length
-      ? pickMealPriority(
-          lastAct ? [{ lat: lastAct.lat, lng: lastAct.lng }, center] : [center],
-          mealBudget.dinner,
-        )
-      : null;
+    const dinner = pickMealPriority(
+      lastAct ? [{ lat: lastAct.lat, lng: lastAct.lng }, center] : [center],
+      mealBudget.dinner,
+    );
 
     // 시퀀스 조립 = 활동 + 점심(슬롯3) + 저녁(마지막)
     const seq: { p: PlaceResult; rest: boolean }[] = [];

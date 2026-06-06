@@ -54,11 +54,7 @@ function addMinutes(time: string, minutes: number): string {
   const mm = total % 60;
   return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
 }
-
-function classifyMealType(time: string): "lunch" | "dinner" {
-  const hour = parseInt(time.split(":")[0], 10);
-  return hour < 15 ? "lunch" : "dinner";
-}
+// ⚠️ 2026-06-06 = classifyMealType(시각<15시 판정) = mealType 위치기반 전환으로 데드 = 제거
 
 /**
  * 단순 교통비 추정 = scene.transit_mode + transit_min 기반
