@@ -17,6 +17,8 @@ import type {
 } from "./types";
 import { MEAL_BUDGET } from "./types";
 import { handleRouteRequest } from "../route/route-handler";
+// ⚠️ 수정금지(승인필요) 2026-06-06 = DB-only 동선 1차 = 로컬 NN+Haversine (= Stage C) / Gemini = 안전장치
+import { buildRouteLocal } from "../route/route-local";
 import { backfillFromRoute } from "../route/route-backfill";
 import type { RouteResponse } from "../route/route-types";
 
@@ -117,16 +119,28 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
 
   const eurToKrw = await getEurToKrwRate();
 
-  // ===== 1. scenario 호출 (= 사용자 SSOT = Gemini 자유 동선) =====
-  const routeResult = await handleRouteRequest(
-    skeleton,
-    inputPlaces,
-    cityCoords,
-  );
+  // ===== 1. 동선 = 로컬 NN+Haversine 1차 (= DB-only 자체 해결, $0/~3ms) / Gemini = 안전장치 (= Stage C 2026-06-06) =====
+  // ⚠️ 수정금지(승인필요) = 토글 USE_LOCAL_ROUTE: 기본 ON / 'false' 면 즉시 옛 Gemini-우선 롤백 (= 1초 롤백)
+  const USE_LOCAL_ROUTE = process.env.USE_LOCAL_ROUTE !== "false";
+  let routeResult = USE_LOCAL_ROUTE
+    ? buildRouteLocal(skeleton, inputPlaces, cityCoords)
+    : await handleRouteRequest(skeleton, inputPlaces, cityCoords);
+
+  // 로컬 1차가 실패/부족(일자 0 또는 씬 0) 시 → Gemini 안전장치 (= 빈 일정 방지 = 옛 동작 parity)
+  const localScenes =
+    routeResult.response?.days?.reduce((s, d) => s + (d.scenes?.length || 0), 0) || 0;
+  const localInsufficient =
+    USE_LOCAL_ROUTE && (!routeResult.ok || !routeResult.response?.days?.length || localScenes === 0);
+  if (localInsufficient) {
+    console.log(`[AG4-DB] ⚠️ 로컬 동선 부족/실패 → Gemini 안전장치 호출`);
+    routeResult = await handleRouteRequest(skeleton, inputPlaces, cityCoords);
+  } else if (USE_LOCAL_ROUTE) {
+    console.log(`[AG4-DB] ✅ 동선 = 로컬 NN+Haversine (${routeResult.elapsedMs}ms, Gemini 0)`);
+  }
 
   if (!routeResult.ok || !routeResult.response) {
     console.error(
-      `[AG4-DB] ❌ route 호출 실패 (${routeResult.elapsedMs}ms) = 옛 itinerary fallback`,
+      `[AG4-DB] ❌ route 실패 (${routeResult.elapsedMs}ms) = 옛 itinerary fallback`,
     );
     return await finalizeWithLegacyItinerary(input, eurToKrw);
   }

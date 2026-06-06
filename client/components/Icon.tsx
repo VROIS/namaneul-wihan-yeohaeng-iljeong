@@ -52,6 +52,13 @@ import {
   X,
   XCircle,
   Zap,
+  ShoppingBag,
+  Ticket,
+  Camera,
+  FerrisWheel,
+  Flower2,
+  Landmark,
+  Mountain,
 } from "lucide-react-native";
 import { useColorScheme } from "react-native";
 import { Colors } from "@/constants/theme";
@@ -107,6 +114,13 @@ const ICON_MAP: Record<string, React.ComponentType<LucideProps>> = {
   X,
   XCircle,
   Zap,
+  ShoppingBag, // = 쇼핑
+  Ticket,
+  Camera,      // = 핫스팟 (= 마커와 통일)
+  FerrisWheel, // = 즐길거리 (= 마커와 통일)
+  Flower2,     // = 힐링 (= 마커와 통일)
+  Landmark,    // = 문화/예술 (= 마커와 통일)
+  Mountain,    // = 모험 (= 마커와 통일)
 };
 
 // ⚠️ 수정금지(승인필요) — kebab-case → PascalCase 변환

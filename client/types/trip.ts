@@ -1,5 +1,7 @@
 // ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = Romantic 모든 흔적 삭제 + Shopping 1:1 (= PSR shopping 카테고리)
-export type Vibe = 'Healing' | 'Adventure' | 'Hotspot' | 'Foodie' | 'Shopping' | 'Culture';
+// ⚠️ 수정금지(승인필요) 2026-06-06 = 미식(Foodie) 버튼 제거 → 즐길거리(Attraction) 추가 (= 식사는 예산으로 반영 = 자동)
+// = 'Foodie' 는 타입에 유지(내부 식당 vibeTag 전용, 버튼 X) / 'Attraction'(즐길거리) = 신규 버튼 + seed_category 'attraction'
+export type Vibe = 'Healing' | 'Adventure' | 'Hotspot' | 'Foodie' | 'Shopping' | 'Culture' | 'Attraction';
 
 export type TravelStyle = 'Luxury' | 'Premium' | 'Reasonable' | 'Economic';
 
@@ -199,12 +201,12 @@ export interface Itinerary {
 }
 
 export const VIBE_OPTIONS: { id: Vibe; label: string; labelKey: string; icon: string; baseWeight: number }[] = [
-  { id: 'Healing', label: '힐링', labelKey: 'options.healing', icon: 'heart', baseWeight: 35 },
-  { id: 'Adventure', label: '모험', labelKey: 'options.adventure', icon: 'compass', baseWeight: 10 },
-  { id: 'Hotspot', label: '핫스팟', labelKey: 'options.hotspot', icon: 'trending-up', baseWeight: 15 },
-  { id: 'Foodie', label: '미식', labelKey: 'options.foodie', icon: 'coffee', baseWeight: 25 },
+  { id: 'Healing', label: '힐링', labelKey: 'options.healing', icon: 'flower-2', baseWeight: 35 },
+  { id: 'Adventure', label: '모험', labelKey: 'options.adventure', icon: 'mountain', baseWeight: 10 },
+  { id: 'Hotspot', label: '핫스팟', labelKey: 'options.hotspot', icon: 'camera', baseWeight: 15 },
+  { id: 'Attraction', label: '즐길거리', labelKey: 'options.attraction', icon: 'ferris-wheel', baseWeight: 15 },
   { id: 'Shopping', label: '쇼핑', labelKey: 'options.shopping', icon: 'shopping-bag', baseWeight: 5 },
-  { id: 'Culture', label: '문화/예술', labelKey: 'options.culture', icon: 'book-open', baseWeight: 10 },
+  { id: 'Culture', label: '문화/예술', labelKey: 'options.culture', icon: 'landmark', baseWeight: 10 },
 ];
 
 // 여행 스타일 = Premium/Luxury 선택시 가이드 가격 포함 (마케팅 접점)

@@ -76,12 +76,13 @@ export async function isCityReady(destination: string): Promise<{
 // ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = Romantic 모든 흔적 삭제 + Shopping 1:1 매핑
 // = PSR seedCategory 7 종과 1:1 직접 대응 (= 가짜 매핑 X)
 const VIBE_PRIMARY_CATEGORY: Record<string, string> = {
-  Foodie: "restaurant",
+  Foodie: "restaurant", // = 내부 식당태그 유지(버튼 X)
   Healing: "healing",
   Hotspot: "hotspot",
   Adventure: "adventure",
   Shopping: "shopping",
   Culture: "heritage",
+  Attraction: "attraction", // = 즐길거리(신규 버튼) → 테마파크·유람선·아쿠아리움·체험전시
 };
 
 async function fetchFromPlaceSeedRaw(

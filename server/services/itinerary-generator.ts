@@ -55,7 +55,8 @@ type Vibe =
   | "Hotspot"
   | "Foodie"
   | "Shopping"
-  | "Culture";
+  | "Culture"
+  | "Attraction"; // = 즐길거리(seed_category 'attraction') = agents/types Vibe 와 동기 (2026-06-06)
 // ⚠️ 2026-05-19 = TravelStyle = types.ts SSOT 에서 import (= 위)
 // 여행 밀도: 빡빡하게(Packed) | 보통(Normal) | 여유롭게(Relaxed)
 // ⚠️ 프론트엔드 기준 'Normal' 사용 (Moderate 아님)

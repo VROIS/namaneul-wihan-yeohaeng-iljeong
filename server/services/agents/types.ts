@@ -14,7 +14,8 @@ export type Vibe =
   | "Hotspot"
   | "Foodie"
   | "Shopping"
-  | "Culture";
+  | "Culture"
+  | "Attraction"; // = 즐길거리(seed_category 'attraction') 신규 / Foodie=내부 식당태그 유지
 export type TravelStyle = "Luxury" | "Premium" | "Reasonable" | "Economic";
 
 // ⚠️ 수정금지(승인필요) 2026-05-19 = place_seed_raw.seed_category 8 enum (= BTS 마커 + LUCIE 캐릭터 1:1)

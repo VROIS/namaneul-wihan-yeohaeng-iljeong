@@ -7,6 +7,7 @@ const BASE_WEIGHTS: Record<Vibe, number> = {
   Culture: 10,
   Adventure: 10,
   Shopping: 5,
+  Attraction: 15, // = 즐길거리(테마파크·유람선·아쿠아리움·체험전시)
 };
 
 const PROTAGONIST_ADJUSTMENTS: Record<CurationFocus, Partial<Record<Vibe, number>>> = {
@@ -61,6 +62,7 @@ export function getPreferredTimeSlots(vibe: Vibe): ('morning' | 'lunch' | 'after
     Culture: ['morning', 'afternoon'],
     Adventure: ['morning', 'afternoon'],
     Shopping: ['afternoon', 'evening'],
+    Attraction: ['morning', 'afternoon'],
   };
   return slotMapping[vibe];
 }
