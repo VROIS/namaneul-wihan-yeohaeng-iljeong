@@ -163,3 +163,6 @@ docs/qa/
 docs/paris_qa.html
 .history
 tmp/
+
+# 2026-06-07 앱 화면 캡처 PDF (= 로컬 전용 보관, 커밋 X / 추적된 PDF 0개라 안전)
+_seed_raw/**/*.pdf
