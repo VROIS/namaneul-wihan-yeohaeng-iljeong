@@ -31,7 +31,7 @@ const method = String(argv['method'] || 'text');
 // ⚠️ 수정금지(승인필요) 2026-06-03 = 카테고리 모드 = 01-discover-6cats 정의를 textQuery 로 그대로 (= 타입 fabricate 금지 = 사용자 SSOT). searchText 전용.
 const CATEGORY_QUERIES: Record<string, string> = {
   heritage: 'historical sites and museums',
-  hotspot: 'photogenic viewpoints, panoramic photo spots',
+  hotspot: 'photogenic viewpoints, panoramic photo spots, rooftop and terraces',
   attraction: 'theme parks, zoos, aquariums',
   adventure: 'adventure places and activity spots',
   healing: 'parks, gardens, peaceful nature',
@@ -69,17 +69,27 @@ const rectFromCenter = (lat: number, lng: number, km: number) => {
     await import(pathToFileURL(path.join(ROOT, 'server/services/shared/google-places-sku.ts')).href);
   validateFieldMask(STANDARD_TS_FIELD_MASK); // = Atmosphere 차단 §15
 
-  const dests = DISCOVERY_ZONES[cityId]?.[zone];
-  if (!dests?.length) { console.error(`city ${cityId} zone '${zone}' 명소 config 없음 = destinations.ts 추가 필요`); process.exit(1); }
-
   const pg = await import('pg');
   const c = new (pg as any).default.Client({ connectionString: process.env.SUPA_URL || process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
   await c.connect();
-  const city = (await c.query('SELECT name_en, country_code FROM cities WHERE id=$1', [cityId])).rows[0];
+  const city = (await c.query('SELECT name_en, country_code, latitude, longitude FROM cities WHERE id=$1', [cityId])).rows[0];
   const keyRow = (await c.query(`SELECT key_value FROM api_keys WHERE key_name IN ('GOOGLE_MAPS_API_KEY','GOOGLE_PLACES_API_KEY') AND is_active=true ORDER BY key_name LIMIT 1`)).rows[0];
   await c.end();
   const KEY = keyRow?.key_value || process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_PLACES_API_KEY;
   if (!KEY) { console.error('Google key 미존재 = api_keys DB 확인'); process.exit(1); }
+
+  // ⚠️ 수정금지(승인필요) 2026-06-07 = 신규도시 자동화(사용자 SSOT "도시명만 입력") = destinations config 없으면 cities 좌표 폴백
+  //   downtown(6cat 100km 사각형 + 도심식당 10km) = 중심좌표만 필요 = cities 에 있음 (완전신규는 #04 gemini-city-meta 가 먼저 cities 생성)
+  //   outskirt(명소별 원)만 curated 필요 → config 없으면 Gemini 04 로 발굴
+  let dests = DISCOVERY_ZONES[cityId]?.[zone];
+  if (!dests?.length) {
+    if (zone === 'downtown' && city?.latitude != null && city?.longitude != null) {
+      dests = [{ name: city.name_en, lat: Number(city.latitude), lng: Number(city.longitude), radius: 10000 }];
+      console.log(`ℹ️ destinations.ts 에 city ${cityId} 없음 → cities 좌표 폴백 (${city.name_en} ${city.latitude},${city.longitude}, 10km)`);
+    } else {
+      console.error(`city ${cityId} zone '${zone}' config 없음 = outskirt 는 destinations.ts 또는 Gemini 04 필요 (downtown 은 cities 좌표 자동)`); process.exit(1);
+    }
+  }
 
   const today = new Date().toISOString().slice(0, 10);
   const outDir = path.join(ROOT, 'docs', 'raw', String(cityId));

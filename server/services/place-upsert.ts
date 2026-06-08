@@ -2,14 +2,17 @@
  * ⚠️ 수정금지(승인필요) 2026-05-15 = 사용자 SSOT 단일 INSERT/UPDATE 시스템
  *
  * 모든 place_seed_raw INSERT/UPDATE = 반드시 이 함수만 통과한다.
- * = AI/스크립트/파이프라인 누가 호출해도 = 5 단계 순차 매칭 강제 = 중복 차단.
+ * = AI/스크립트/파이프라인 누가 호출해도 = 7 단계 순차 매칭 강제 = 중복 차단.
  *
- * ⚠️ 수정금지(승인필요) 2026-05-28 = 사용자 SSOT = 5 단계 신뢰도 순 (= 매칭 알고리즘 = 헌법 제14조)
+ * ⚠️ 수정금지(승인필요) 2026-06-08 = 사용자 SSOT = 7 단계 신뢰도 순 (= 매칭 알고리즘 = 헌법 제14조)
+ *   [불변(확정=병합) 1~5]
  *   1순위 = google_place_id 일치 (= ~100%, Google 발급 유일 ID)
  *   2순위 = google_maps_uri 일치 (= cid = PID 동등 강력)
- *   3순위 = 풀 주소 정규화 100% + 이름 부분포함 (= 같은 식당 표기차 흡수 / Disney 복합상가 보존)
+ *   3순위 = 풀 주소 정규화 100% + 로컬이름 판별 (= 같은 주소 2장소 = 로컬이름으로 구분)
  *   4순위 = 좌표 10m (= ~95%, 같은 건물)
- *   5순위 = 로컬네임 9 조합 (= ~30-50%, 체인/지점 위험)
+ *   5순위 = 로컬이름(name_local) (= 원어명 = 불변 = 확정)
+ *   [가변(의심=새저장+'중복의심' 메모) 6~7]
+ *   6순위 = 영어명(name_en) / 7순위 = 한국어명(name_ko) (= 표현 가변 = 자동병합 X)
  *
  * UPDATE 정책 (= 사용자 SSOT 2026-06-03 = 최신 우선 확정):
  *   - 식별/검증 데이터 (name/주소/좌표/PID/URI/리뷰수) = COALESCE 새 우선 (= 최신 TS 가 가장 신뢰)
@@ -65,13 +68,15 @@ export interface UpsertResult {
   action: 'inserted' | 'updated' | 'skipped';
   rowId: number | null;
   matchedBy: MatchedBy;
+  // ⚠️ 2026-06-08 = 가변(영어·한국어명)만 일치 = 유사의심 = 자동병합 X = 새 행 + '중복의심' 메모 (= 사용자 SSOT)
+  suspect?: boolean;
   reason?: string;
 }
 
 // ⚠️ 2026-06-03 = normAddr / normName / nameKeys = shared/matcher.ts 로 이관 (= 매칭 정규화 1벌 공용)
 
 /**
- * 단일 entry-point. 5 단계 순차 매칭 + UPDATE 또는 INSERT.
+ * 단일 entry-point. 7 단계 순차 매칭 (불변1~5 병합 / 의심6~7 신규) + UPDATE 또는 INSERT.
  */
 export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
   if (!db) {
@@ -101,15 +106,19 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
     })
     .from(placeSeedRaw);
 
-  // ⚠️ 2026-06-03 = 5 단계 순차 매칭 = shared/matcher.ts 단일 공용 (= 정본 = 모든 경로 동일 검증, 헌법 §14/§16)
-  //   = 1)PID > 2)URI > 3)풀주소+이름9조합 > 4)좌표10m > 5)로컬네임9조합 + samePlace(PID/URI veto)
-  //   = 단계 통과(매칭) 시 다음 자동 스킵. PID/URI 다르면 = 확정 다른 장소 = 보조매칭 제외.
-  const { match, matchedBy } = matchCandidate(p, candidates);
+  // ⚠️ 2026-06-08 = 7 단계 순차 매칭 = shared/matcher.ts 단일 공용 (= 정본 = 모든 경로 동일 검증, 헌법 §14/§16)
+  //   = [불변]1)PID > 2)URI > 3)풀주소+로컬이름 > 4)좌표10m > 5)로컬이름 / [가변]6)영어명 > 7)한국어명 + samePlace(PID/URI veto)
+  //   = 단계 통과(매칭) 시 다음 자동 스킵. 불변1~5=병합 / 가변6~7=새저장+'중복의심'. PID/URI 다르면 = 확정 다른 장소 = 보조매칭 제외.
+  const { match, matchedBy, tier } = matchCandidate(p, candidates);
 
   const categoryTags = p.categoryTags && p.categoryTags.length > 0 ? p.categoryTags : [p.seedCategory];
-  const phaseTags = p.phaseTags || [];
+  // ⚠️ 2026-06-08 = 7단계 = 불변(확정) 1~5 매칭만 병합(UPDATE). 가변(의심) 6~7 = 자동병합 X = 새 행 + '중복의심' 메모.
+  const suspect = !!match && tier === 'suspect';
+  const phaseTags = suspect
+    ? [...(p.phaseTags || []), '중복의심', `의심대상-${match!.id}`]
+    : (p.phaseTags || []);
 
-  if (match) {
+  if (match && tier === 'confirmed') {
     // UPDATE = 사용자 SSOT 2026-05-18 = "모든 정보 최신 덮어씀" (= 옛 COALESCE 옛 우선 폐기)
     // = 모든 필드 = 새 값 있으면 새 / 없으면 옛 유지 (= COALESCE 새 → 옛 순서)
     // = tags = UNION (= 누적 유지)
@@ -148,15 +157,14 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
   }
 
   // INSERT = 미매칭 = 신규 행
-  // ⚠️ rank 자동 부여 = (city_id, seed_category) 별 MAX + 1 (= UNIQUE 충돌 방지)
-  let nextRank = p.rank;
-  if (!nextRank) {
-    const maxRow = await db
-      .select({ max: sql<number>`COALESCE(MAX(${placeSeedRaw.rank}), 0)` })
-      .from(placeSeedRaw)
-      .where(sql`${placeSeedRaw.cityId} = ${p.cityId} AND ${placeSeedRaw.seedCategory} = ${p.seedCategory}`);
-    nextRank = (Number(maxRow[0]?.max) || 0) + 1;
-  }
+  // ⚠️ 수정금지(승인필요) 2026-06-08 사용자 SSOT = rank 은 입력단(문지기) 무시 = 신규는 항상 placeholder(MAX+1=바닥).
+  //   = Gemini 가(假)랭킹/p.rank 안 봄(= 입력순서일 뿐). 최종 rank = 별도 단일 권위체 fill/rc-rerank.ts 가 RC DESC NULLS LAST 로 확정.
+  //   = (city_id, seed_category, rank) UNIQUE 충돌 방지용 임시 자리. RC 확보 후 rc-rerank 가 1..N 재배치.
+  const maxRow = await db
+    .select({ max: sql<number>`COALESCE(MAX(${placeSeedRaw.rank}), 0)` })
+    .from(placeSeedRaw)
+    .where(sql`${placeSeedRaw.cityId} = ${p.cityId} AND ${placeSeedRaw.seedCategory} = ${p.seedCategory}`);
+  const nextRank = (Number(maxRow[0]?.max) || 0) + 1;
   try {
     const inserted = await db
       .insert(placeSeedRaw)
@@ -190,7 +198,8 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
     return {
       action: 'inserted',
       rowId: inserted[0]?.id || null,
-      matchedBy: 'none',
+      matchedBy,
+      suspect,
     };
   } catch (e: any) {
     // 안전망 = UNIQUE INDEX (= 이름 1단계) 충돌 시 = 한 번 더 매칭 시도 (= 동시 INSERT race)
@@ -207,7 +216,7 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
         return {
           action: 'skipped',
           rowId: retry[0].id,
-          matchedBy: 'name',
+          matchedBy: 'name_local',
           reason: 'race_conflict_resolved',
         };
       }
@@ -228,6 +237,7 @@ export async function upsertPlaces(payloads: UpsertPayload[]): Promise<{
   inserted: number;
   updated: number;
   skipped: number;
+  suspect: number;
   byMatch: Record<MatchedBy, number>;
   errors: string[];
 }> {
@@ -235,13 +245,15 @@ export async function upsertPlaces(payloads: UpsertPayload[]): Promise<{
     inserted: 0,
     updated: 0,
     skipped: 0,
-    byMatch: { pid: 0, uri: 0, address: 0, coords: 0, name: 0, none: 0 } as Record<MatchedBy, number>,
+    suspect: 0,
+    byMatch: { pid: 0, uri: 0, address: 0, coords: 0, name_local: 0, name_en: 0, name_ko: 0, none: 0 } as Record<MatchedBy, number>,
     errors: [] as string[],
   };
   for (const p of payloads) {
     try {
       const r = await upsertPlace(p);
       summary[r.action]++;
+      if (r.suspect) summary.suspect++;
       summary.byMatch[r.matchedBy]++;
       if (r.reason && r.action === 'skipped') summary.errors.push(r.reason);
     } catch (e: any) {

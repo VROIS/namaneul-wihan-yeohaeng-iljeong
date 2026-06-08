@@ -33,7 +33,7 @@ const RADIUS_KM = 0.01;  // = 10m (= 사용자 SSOT)
 const CAT_KEYWORDS: Record<string, string[]> = {
   attraction: ['museum', 'park', 'zoo', 'aquarium', 'theme', 'tower', 'monument', 'observatory', 'church', 'palace'],
   healing: ['park', 'garden', 'jardin', 'botanic', 'spa', 'forest'],
-  hotspot: ['square', 'place', 'viewpoint', 'plaza', 'street', 'avenue'],
+  hotspot: ['square', 'place', 'viewpoint', 'plaza', 'street', 'avenue', 'rooftop', 'terrace'],
   heritage: ['museum', 'cathedral', 'basilica', 'church', 'palace', 'castle', 'monument', 'memorial', 'historic', 'tomb', 'fortress'],
   shopping: ['market', 'department store', 'shopping center', 'mall', 'boutique', 'shop'],
 };

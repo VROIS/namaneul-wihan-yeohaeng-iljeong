@@ -1,4 +1,5 @@
 ⚠️ 수정금지(승인필요) 2026-05-12 사용자 SSOT v3 = 1 글자 변경 금지
+⚠️ 2026-06-07 사용자 승인 변경 = hotspot 에 'rooftop and terraces' 추가 (= 한국인 진정한 사진명소 = 05-text-recategorize 와 동기)
 
 ══════════════════════════════════════════════════════════════════════════════
 PROMPT 본문:
@@ -20,7 +21,7 @@ ordered by KOREAN TRAVELERS' popularity (= 인스타 성지, 한국 블로그 �
 
 Categories:
 1. heritage    — historical sites and museums
-2. hotspot     — photogenic viewpoints, panoramic photo spots
+2. hotspot     — photogenic viewpoints, panoramic photo spots, rooftop and terraces
 3. attraction  — tourist attractions (theme parks, zoos, aquariums)
 4. adventure   — adventure places and activity spots
 5. healing     — parks, gardens, peaceful nature spots

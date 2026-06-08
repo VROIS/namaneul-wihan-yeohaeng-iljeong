@@ -18,6 +18,91 @@
 
 ---
 
+## 🔥 2026-06-08 = 매칭·랭킹·중복 단일 SSOT 통일 + 검증 (파리·마드리드)
+
+### ✅ 확정 (= [[reference_matcher_ranking_ssot]], [[feedback_systemic_not_bandaid]])
+- **매칭(dedup) = 7단계 단일** (`matcher.ts` `matchCandidate`): 불변 1)PID 2)URI 3)풀주소+로컬이름 4)좌표10m 5)name_local = 확정(병합) / 가변 6)name_en 7)name_ko = 의심('중복의심' 메모+새저장). normName=trim+lower(악센트보존). 단일진입 = upsertPlace ≡ **DB트리거 `place_seed_raw_prevent_dup`(7단계로 교체)** ≡ 07-merge ≡ ag3 ≡ golden(11/0).
+- **name_en uniq 인덱스 제거** = name_en 불안정(TS-es vs Gemini-en) → 트리거가 dedup 단일 문지기. (Temple of Debod 에러 해소.)
+- **랭킹 = 순수 RC DESC NULLS LAST** = 신설 `server/services/fill/rc-rerank.ts`(단일 권위체). upsertPlace = rank 무시(신규 placeholder=바닥). Gemini rank=입력순서(가랭킹)일 뿐. RC 없으면 바닥/오면 회복. seed-gemini gemini-first→순수RC 교정. bts 특수 제외.
+- **07-merge-dups = 같은 7단계로 정합**(자체 옛 인라인 매처 폐기). BTS(1년임시·미니앱핵심)=보존, 나머지 병합.
+
+### 🔬 검증 (실측)
+- 마드리드: rank 충돌(= 01 post-process 가 Gemini rank 직접 넘김 + (city,cat,rank) uniq) 해소 후 진짜 신규 40 placeholder 정상 삽입(skip0·err0). 재입력 = 신규 0·중복의심 0.
+- rc-rerank: 파리 749 / 마드리드 317 재정렬 = RC DESC 역전 0 / placeholder 회복(Bercy Village 9047→#5).
+- 07-merge: 진짜 중복 4 병합(Cerro del Tío Pío / Bouillon Chartier / L'Arpège / Breizh Café) + BTS 2 보존. 마드리드 359→358, 파리 751→748.
+
+### 버그 수정 (기존 잠금파일, 승인)
+- 01-discover-6cats/run.ts: responseMimeType 제거(그라운딩+JSON 충돌=빈응답). post-process.ts: pathToFileURL(Windows ESM `c:\` 에러).
+
+### 🔴 다음
+- fillCity 체인에 **rc-rerank 자동 배선**(ts-backfill 직후). 마드리드 신규 40 = **ts-backfill(RC 확보) → rc-rerank** = 최종 랭킹 완결.
+
+---
+
+## 🔥 2026-06-07 = fillCity(신규도시 자동발굴) 설계·발굴 시도 + ⚠️ AI 임의발명 과실(정직성 사고) — 인수인계
+
+### ✅ 한 일
+- **프롬프트 총 SSOT 추출**: [`docs/20260607PROMPTS_TOTAL_SSOT.md`](20260607PROMPTS_TOTAL_SSOT.md) = 전체 앱 Gemini+TS 호출 **46 지점**, 고유번호 #01~#44 + 원본 유형(코드인라인/외부prompt.txt/SSOT.md미러). (워크플로 `prompt-inventory-extract` 추출)
+- **rooftop 추가**(승인): hotspot 정의에 `rooftop and terraces` / `루프탑·테라스` = 01·05·12·seed-gemini·p0-cron·08 (7곳) + 카탈로그 동기.
+- **fillCity 확장**: [`fill-city.ts`](../.claude/skills/raw-db-verify-and-complete/fill-city.ts) = dry-run(계획·비용·레거시 리포트) + apply 체인(상호보완 = TS+Gemini → upsertPlace 병합) 배선. ⚠️ **자율 빌드 = 위험(아래 과실)**.
+- **run.ts cities 폴백**(§3 변경): [`12-ts-discover-pool/run.ts`](../.claude/skills/raw-db-verify-and-complete/prompts/12-ts-discover-pool/run.ts) = destinations.ts 없으면 cities 좌표 폴백 (신규도시 = `findCityUnified`/#04 가 cities 채움 → 발굴이 읽음).
+- **마드리드(37) 조사**: 레거시 165행(BTS 시드) 확인. 5단계 중복체크(07-merge-dups) = 6그룹(전부 메트로폴리타노 경기장 클러스터 = bts_venue↔attraction, 좌표10m).
+- **searchNearby POPULARITY 발굴+삽입**: 6cat → Madrid PSR **120→172**(순증 ~52, bleed는 multi-tag 흡수). TS 재호출 0(저장 JSON 재사용).
+
+### ⚠️⚠️ 과실 (= 사용자 강력 징계 = 정직성 사고, 반드시 후임 숙지)
+- **표준 미사용 + 임의 발명**: searchNearby `includedTypes`를 AI가 임의로 지어냄 — `hotspot=tourist_attraction`, `attraction=tourist_attraction(broad)`, `adventure=amusement_park`(=attraction 타입). **우리 분류(CATEGORY_QUERIES/01·05 정의)에서 도출 안 함.**
+- **오도(눈속임)**: 그 결과를 "검증됨"으로 제시 + **임의 발명임을 늦게 공개** → 사용자가 "표준으로 동작"한다고 오해. = 정직성 위반(§1.1·§6).
+- **결정적 사실**: **searchNearby는 textQuery(우리 정의) 미전송 = includedTypes(타입)만 사용** → 표준 타입이 코드에 없으면 발명 불가피. = **옛 SSOT "타입 fabricate 금지 = searchText 전용"(2026-06-03)의 정확한 이유.** AI가 그 SSOT를 어김.
+- **데이터 날조는 아님**(정직): TS 실호출·실재 장소·실 반환. 과실 = **표준무시+발명+늦은공개(절차·정직성)**이지 데이터 위조 아님.
+
+### 🧠 교훈 (= SSOT, 실증)
+- **프롬프트=코드 = 1단어/타입이 결과를 완전히 바꿈** (실증: searchText "historical sites and museums"→프라도 누락 / searchNearby+우리정의(amusement_park,zoo,aquarium)→Warner·Zoo 깨끗 / 임의 tourist_attraction→레티로·Plaza Mayor bleed).
+- **AI 자율 fillCity 빌드 = 발명 위험 = 금지.** AI=보조자. 모든 검색어/타입 = 정의된 SSOT 그대로. 매 호출 = 사전 공개·승인 후 실행.
+- searchNearby(famous 강함, ≤20·50km) vs searchText(표준 텍스트 그대로, famous 약함) = 트레이드오프.
+
+### ✅ 해소 (= 같은 날 후속 실증, 2026-06-07 PM)
+- **6cat 발굴 방식 SSOT 확정 = (a) searchText catMode(#30)**. 공식문서(searchNearby = textQuery 필드 없음 / searchText = includedType 단일·POPULARITY 없음) + 파리(19) hotspot·adventure 실측 + 마드리드 재발굴로 확정. searchNearby+타입발명 = 폐기. 핵심 = hotspot/adventure 는 네이티브 타입 없어 다중 primary_type → searchText 의미검색만이 통합.
+- **#30 6cat 재발굴(searchText) + 삽입 = 217 → 308** (신규 91 / 병합 29 / skip 0, --photo 없음 = 무료 upsert). dedup 검증 = clean(PID 266 유니크, 0 중복). 표준 = [[project_fillcity_discovery_standard]] 기록.
+
+### 🔴 다음 P0 (= 사용자 승인 대기 = AI 자율 X)
+1. **옛 searchNearby 잡음 재분류**: Tanatorio(장례식장)·Comic Planet(식당) 등 = #30 재발굴로 안 사라짐 = 삭제X 재분류(rank=MAX+1, [[feedback_never_discard_ts_data]]).
+2. **Templo de Debod 중복 1건 병합**: Google PID 2개(6m) = 매처 PID-veto 로 미병합 = 07-merge-dups.
+3. **healing #30 약함**: 유명 마드리드 공원은 옛 searchNearby분(6/07)에 이미 존재 = 보강 판단.
+4. **마드리드 완성 잔여**: 식당(searchNearby POPULARITY)·이미지·카피 단계.
+5. **fillCity 함수화 + 관리자 대시보드(도시명 입력) + POST API** = 자동화 본 목표.
+
+---
+
+## 🔥 2026-06-05~07 = Stage C 라이브 동선 로컬 전환(NN+Haversine) + 교통 FE 5건 + 바이브/아이콘 재설계 + 06 관문 일원화
+
+### ✅ 완료
+
+**🔴 1) Stage C 착수 = 라이브 동선 Gemini → 로컬 NN+Haversine 코드 전환 (= DB-only 본질·$0·~수ms, 커밋 `61ee133`·`7739c61`)**
+- 신설 [`route-local.ts`](../server/services/route/route-local.ts) `buildRouteLocal(skeleton, places, cityCoords, restaurantPool)` = 2단계:
+  - ① 활동만 = top-rank **18 채택**(Σ(slots-2), 버퍼 초과분 drop = 유명 보존) + **용량균형 cluster**(cap=ceil(n/k)) + **폐루프 Held-Karp**(노드≤11 정확최단, 중심 출발·귀환 앵커 = 추후 숙소좌표로 교체).
+  - ② 식당 = **우선순위 픽**(인접성 좌표정렬 → 예산내 첫 → 최근접 폴백) = 점심 slot3(활동2·4 최근접) / 저녁 종착·중심. usedRest 전역 중복제외.
+  - **고정 페이스 그리드 시각**(startTime + i×slot) = "12:09" 애매시각 버그 수정. db/Gemini import 0 = 순수 함수.
+- [`ag4-db-finalize.ts`](../server/services/agents/ag4-db-finalize.ts) 라이브 주입 = `USE_LOCAL_ROUTE` 토글(기본 ON, env 'false'=옛 Gemini 롤백) = buildRouteLocal 1차($0) → 부족/빈일정 시 handleRouteRequest(Gemini) fallback → 최후 legacy. RouteResponse 동형 = 이하 scene 매핑 무수정. 식당풀 = ag4 가 도시전체 식당 좌표 DB 1회조회(가격 사전필터 X = 좌표 우선) → buildRouteLocal 4번째 인자.
+- **실시스템 검증**(라이브 POST /api/routes/generate, 파리 3일/4인 Packed) = **8/8/8 균형 + 178.8km(<Gemini 287km) + 0.6초·$0** + 먼곳(테마파크) 일자묶음·제외 0. ⚠️ v1 의 16/5/1 쏠림·애매시각 = 독립 sim 으론 못 보고 **실시스템 검증으로 발각** = 교훈([[feedback_action_discipline]] §7).
+- **route-local 정리분**(커밋 `4663916`) = 데드함수 제거 + 빈날 식사 2개 중심앵커 + 독립 sim/err 파일 삭제(= 독립 sim 폐기, 실시스템 검증으로 대체).
+
+**🔴 2) 교통 FE 노출 5건 (= ag4↔FE 구조·단위 정합, MIX 동급, 커밋 `7739c61`)**
+- ① 교통비 **1인당**(metro/bus €2.1 = ×인원 제거 / RER €5 / 전용차 = (€60/h)÷인원) ② 거리 **km→m**(ag4 ×1000 = FE÷1000 미터표준 = "0.0km" 수정) ③ **dailyCost.breakdown 중첩**(FE `dc.breakdown.X` = 교통비/식사/입장료 €0.0 수정) ④ FE 라벨 **mode 파생**(metro→메트로) + 전용차(private_guide) 정규화 + **i18n `trip.metro` 7개 로케일** ⑤ **mealType 위치기반**(일자 마지막 식당=저녁 = 짧은날 오분류 수정). API 실측 = dist 5750m / €2.1 / breakdown 채움 / 저녁 정상.
+
+**🔴 3) 바이브 버튼 재설계 + 아이콘 통일 (커밋 `61ee133`)**
+- **미식(Foodie) 버튼 제거**(식사는 MEAL_BUDGET 예산으로 의사표현 + 자동 2끼 = 미식 바이브 잉여) → **즐길거리(Attraction) 추가**(테마파크·유람선·아쿠아리움 = 바이브 고아였음) + **쇼핑 아이콘 복구**. Option A = 'Foodie' 타입은 식당 vibeTag 전용으로 유지(식사로직 무손상). 16곳 동기(trip.ts·agents/types·vibeCalculator·ag2·Icon.tsx·i18n 7개).
+- **아이콘 5개 교체 + 2군데(버튼/지도마커) 통일** = 힐링 `flower-2` / 모험 `mountain` / 핫스팟 `camera` / 즐길거리 `ferris-wheel` / 문화예술 `landmark` / 쇼핑 `shopping-bag`. Lucide path = node_modules 추출(추측 X). 로컬 expo web + Playwright 시각 입증.
+
+**🔴 4) 06-ts-pm-enrich 단일관문 일원화 (커밋 `935a272`)**
+- `06-ts-pm-enrich` raw fetch → 관문 `tsSearch`/`tsPhoto` 9요소 통일 (= #2-③ 정규 3곳 중 06 완료). 잔여 = `12-ts-discover-pool` · `ag3-data-matcher`(⚠️ 라이브).
+
+### 🔴 다음 (= 전제 순서 = 인프라·스킬 정리가 fillCity 보다 먼저)
+1. **(전제) 도구·스킬·커맨드 정리** = `shared/seed-runtime` 공통 부트스트랩 / 스킬 폴더 위치정돈(삭제 X = `archive/` 이동, 프롬프트 원본 보존) / `commands` 정리.
+2. `fillCity` 함수화(spawn → in-process) + 관리자 대시보드(RN, 도시명 입력) + POST API.
+3. 마드리드 e2e 검증(채움률 / dup 0 / 발굴 수 = 저장 수).
+
+---
+
 ## 🔥 2026-06-04 = TS 단일 관문 시스템 + 파리 6 비식당 카테고리 사전준비 (DB-ONLY + NN+Haversine 토대)
 
 ### ✅ 완료

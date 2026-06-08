@@ -1,6 +1,6 @@
 // ⚠️ 수정금지(승인필요) 2026-06-04 = fillCity 단일 오케스트레이터 (= 헌법 §16 Phase B = 사용자 SSOT)
 // = 한 도시 raw DB 채우기 전 파이프라인을 "한 줄"로. 도시ID만 바꾸면 300번 동일 동작.
-// = 모든 쓰기는 단일 5단계 매처(shared/matcher.ts) + upsertPlace 통과 (= 신규 INSERT / 기존 UPDATE 자동 분기).
+// = 모든 쓰기는 단일 7단계 매처(shared/matcher.ts) + upsertPlace 통과 (= 신규 INSERT / 기존 UPDATE 자동 분기).
 //
 // 단계 (= 전부 기존 컴포넌트 = 재발명 0):
 //   ① 발굴   = 12-ts-discover-pool (6 비식당 카테고리 강제사각형 searchText) → match/upsert
@@ -30,9 +30,11 @@ const cityId = Number(argv['city-id'] || 0);
 const apply = argv['apply'] === 'true';
 const lang = argv['lang'] ? String(argv['lang']) : 'ko';
 const zone = argv['zone'] ? String(argv['zone']) : 'downtown';
-const only = argv['only'] ? String(argv['only']).split(',').map((s) => s.trim()) : ['discover', 'curate', 'enrich', 'verify'];
+// ⚠️ 수정금지(승인필요) 2026-06-07 = 상호보완 체인 6 단계 (= 사용자 SSOT) = discover(TS+Gemini)→curate(Gemini카피)→backfill(TS PID)→photo(TOP20)→restaurant(TS+Gemini)→verify
+const only = argv['only'] ? String(argv['only']).split(',').map((s) => s.trim()) : ['discover', 'curate', 'backfill', 'photo', 'restaurant', 'verify'];
+const outskirtHints = argv['outskirt-hints'] ? String(argv['outskirt-hints']) : '';  // = 04 외곽식당 Gemini 발굴용 day-trip 명소 (미제공 = TS 외곽만 = 04 스킵)
 const today = new Date().toISOString().slice(0, 10);
-if (!cityId) { console.error('Usage: --city-id=<N> [--apply] [--lang=fr] [--zone=downtown] [--only=discover,curate,enrich,verify]'); process.exit(1); }
+if (!cityId) { console.error('Usage: --city-id=<N> [--apply] [--lang=fr] [--zone=downtown] [--outskirt-hints="Toledo / Segovia"] [--only=discover,curate,backfill,photo,restaurant,verify]'); process.exit(1); }
 
 const CATS = ['heritage', 'hotspot', 'attraction', 'adventure', 'healing', 'shopping'];
 const P = (rel: string) => path.join(SKILL, rel);
@@ -51,37 +53,73 @@ function run(label: string, script: string, args: string[]) {
 
   if (!apply) {
     // ── DRY = 무료 = 계획 + 비용 추정 + 현재 14요소 리포트 (API 호출 0) ──
-    console.log(`\n[계획] --apply 시 실행 단계:`);
-    if (only.includes('discover')) console.log(`  ① 발굴 = 12-pool × ${CATS.length}카테고리 searchText (≈€${(CATS.length * 0.03).toFixed(2)}) → upsert`);
-    if (only.includes('curate'))   console.log(`  ② 큐레이션 = 02-enrich --defects-only (결함행 → Gemini, ≈무료)`);
-    if (only.includes('enrich'))   console.log(`  ③ TS검증+이미지 = 06-ts-pm-enrich (PID/이미지 NULL → TS+PhotoMedia, ≈€0.035+0.007/행)`);
-    console.log(`\n[현재 상태] 6 카테고리 TOP20 칸별 채움률 (= 목표 = 14요소 완비):`);
+    // ⚠️ 수정금지(승인필요) 2026-06-07 = 상호보완 체인(TS 객관 + Gemini 한국선호) 계획 + 레거시 병합 투명성 (= 사용자 SSOT)
+    console.log(`\n[계획] --apply 시 = 상호보완 체인 (TS 객관 RC + Gemini 한국선호) → upsertPlace 7단계 병합:`);
+    console.log(`\n  Ⓐ 6 카테고리 (${CATS.join('·')}):`);
+    console.log(`     1. TS 발굴(12 searchText 카테고리정의 ×6) ∥ Gemini 발굴(01 한국선호 = TS가 못 잡는 곳)`);
+    console.log(`     2. → upsertPlace 7단계 = 기존 레거시와 병합(중복 0) / 진짜 신규만 INSERT`);
+    console.log(`     3. Gemini 카피 보강(02 --defects-only) + TS PID/가격 보강(ts-backfill)`);
+    console.log(`     4. RC순 랭킹 → 카테고리별 TOP20 이미지 PM(ts-photo-fill --top=20)`);
+    console.log(`\n  Ⓑ 식당:`);
+    console.log(`     도심 = TS(12 downtown 합본) + Gemini(03 가격tier) → 병합 → 카피(13) → TOP20 PM`);
+    console.log(`     외곽 = Gemini(04 명소주변) + TS(12 outskirt 재검증) → 병합 → 카피(13) → TOP20 PM`);
+    console.log(`\n  공통: 모든 쓰기 = upsertPlace 단일진입(§14) = COALESCE 새우선·GREATEST 가격 = 레거시 자동 업그레이드`);
+    console.log(`\n[예상 비용] TS 발굴 ~€0.5 + PID 보강 ~€1.5 + 이미지 PM ~€1.2 + Gemini 무료 ≈ €3~5`);
+    console.log(`\n[현재 PSR 레거시 = 병합 대상]`);
     await verifyReport();
-    console.log(`\n→ 실행하려면: --apply 추가`);
+    console.log(`\n⚠️ 위 레거시 위에 최신 검증자료를 덮어씀 = 중복 아님(매칭 병합). 실제 "병합 vs 신규" 수치 = 발굴 후 post-process dry 에서 쓰기 0으로 표시.`);
+    console.log(`\n→ 실행: --apply 추가 (먼저 --only=discover 소량 권장)`);
     return;
   }
 
-  // ── APPLY = 전체 파이프라인 ──
+  // ── APPLY = 상호보완 전체 체인 (= 사용자 SSOT 2026-06-07 = TS 객관 + Gemini 한국선호 → upsertPlace 7단계 자동병합) ──
   if (only.includes('discover')) {
-    for (const cat of CATS) run(`① 발굴 ${cat}`, 'prompts/12-ts-discover-pool/run.ts',
-      [`--city-id=${cityId}`, `--category=${cat}`, `--zone=${zone}`, `--lang=${lang}`, '--per=20', '--pages=1']);
-    for (const cat of CATS) run(`① upsert ${cat}`, 'prompts/12-ts-discover-pool/post-process.ts',
-      [`--city-id=${cityId}`, `--category=${cat}`, `--zone=${zone}`, `--date=${today}`, '--apply']);
+    // Ⓐ-1 발굴 = TS(searchText 카테고리정의 ×6) + Gemini(01 한국선호 = TS 미발굴 보완)
+    for (const cat of CATS) run(`Ⓐ TS발굴 ${cat}`, 'prompts/12-ts-discover-pool/run.ts',
+      [`--city-id=${cityId}`, `--category=${cat}`, '--zone=downtown', `--lang=${lang}`, '--per=20', '--pages=1']);
+    run(`Ⓐ Gemini발굴 6cat`, 'prompts/01-discover-6cats/run.ts', [`--city-id=${cityId}`]);
+    // Ⓐ-2 합침 = upsertPlace 7단계 매칭 (TS + Gemini = 같은 장소 병합 / 신규만 INSERT)
+    for (const cat of CATS) run(`Ⓐ TS병합 ${cat}`, 'prompts/12-ts-discover-pool/post-process.ts',
+      [`--city-id=${cityId}`, `--category=${cat}`, '--zone=downtown', `--date=${today}`, '--apply']);
+    run(`Ⓐ Gemini병합 6cat`, 'prompts/01-discover-6cats/post-process.ts', [`--city-id=${cityId}`, `--date=${today}`]);
   }
   if (only.includes('curate')) {
-    run(`② 큐레이션 발굴`, 'prompts/02-enrich-place/run.ts', [`--city-id=${cityId}`, '--batch=40', '--defects-only']);
-    run(`② 큐레이션 적용`, 'prompts/02-enrich-place/post-process.ts', [`--city-id=${cityId}`, `--date=${today}`]);
+    // Ⓐ-3a Gemini 한국어 카피 보강 (= name_ko/summary/editorial/price 결손행)
+    run(`Ⓐ Gemini카피 발굴`, 'prompts/02-enrich-place/run.ts', [`--city-id=${cityId}`, '--batch=40', '--defects-only']);
+    run(`Ⓐ Gemini카피 적용`, 'prompts/02-enrich-place/post-process.ts', [`--city-id=${cityId}`, `--date=${today}`]);
   }
-  if (only.includes('enrich')) {
-    run(`③ TS검증+이미지 발굴`, 'prompts/06-ts-pm-enrich/run.ts', [`--city-id=${cityId}`]);
-    run(`③ TS검증+이미지 적용`, 'prompts/06-ts-pm-enrich/post-process.ts',
-      [`--city-id=${cityId}`, `--date=${today}`, '--apply-status=ok', '--photo']);
+  if (only.includes('backfill')) {
+    // Ⓐ-3b TS PID/URI/가격 보강 (= PID 결손행 = Gemini 환각 방지 = 객관 검증, 6 비식당)
+    run(`Ⓐ TS보강(PID/가격)`, '../../../server/services/fill/ts-backfill.ts', [`--city-id=${cityId}`, `--lang=${lang}`, '--apply']);
+  }
+  if (only.includes('photo')) {
+    // Ⓐ-4 이미지 PM = 6 카테고리 RC순 TOP20 (= 비용 통제)
+    run(`Ⓐ 이미지 TOP20`, '../../../server/services/fill/ts-photo-fill.ts', [`--city-id=${cityId}`, `--lang=${lang}`, '--top=20', '--apply']);
+  }
+  if (only.includes('restaurant')) {
+    // Ⓑ 식당 = TS(객관 RC) + Gemini(한국선호) 상호보완
+    // 도심 = TS 3종 합본(nearby POPULARITY + text60 + premium) + Gemini 가격tier(03 복귀)
+    run(`Ⓑ 도심 TS nearby`, 'prompts/12-ts-discover-pool/run.ts', [`--city-id=${cityId}`, '--zone=downtown', '--method=nearby', '--label=nearby', `--lang=${lang}`]);
+    run(`Ⓑ 도심 TS text60`, 'prompts/12-ts-discover-pool/run.ts', [`--city-id=${cityId}`, '--zone=downtown', '--method=text', '--pages=3', '--label=text', `--lang=${lang}`]);
+    run(`Ⓑ 도심 TS premium`, 'prompts/12-ts-discover-pool/run.ts', [`--city-id=${cityId}`, '--zone=downtown', '--method=text', '--pages=3', '--price-levels=EXPENSIVE,VERY_EXPENSIVE', '--label=premium', `--lang=${lang}`]);
+    run(`Ⓑ 도심 Gemini(03)`, 'prompts/_archived-2026-06-02/03-downtown-restaurant/run.ts', [`--city-id=${cityId}`]);
+    run(`Ⓑ 도심 병합(TS+PM)`, 'prompts/12-ts-discover-pool/post-process.ts', [`--city-id=${cityId}`, '--zone=downtown', `--date=${today}`, '--apply', '--photo']);
+    run(`Ⓑ 도심 Gemini병합(03)`, 'prompts/_archived-2026-06-02/03-downtown-restaurant/post-process.ts', [`--city-id=${cityId}`, `--date=${today}`]);
+    // 외곽 = TS(destinations.ts 명소별) + Gemini(04 복귀, --outskirt-hints 제공 시)
+    run(`Ⓑ 외곽 TS`, 'prompts/12-ts-discover-pool/run.ts', [`--city-id=${cityId}`, '--zone=outskirt', `--lang=${lang}`]);
+    if (outskirtHints) run(`Ⓑ 외곽 Gemini(04)`, 'prompts/_archived-2026-06-02/04-outskirt-restaurant/run.ts', [`--city-id=${cityId}`, `--hints=${outskirtHints}`]);
+    else console.log(`\n  ⚠️ 외곽 Gemini(04) 스킵 = --outskirt-hints 미제공 (TS 외곽만 진행)`);
+    run(`Ⓑ 외곽 병합(TS+PM)`, 'prompts/12-ts-discover-pool/post-process.ts', [`--city-id=${cityId}`, '--zone=outskirt', `--date=${today}`, '--apply', '--photo']);
+    if (outskirtHints) run(`Ⓑ 외곽 Gemini병합(04)`, 'prompts/_archived-2026-06-02/04-outskirt-restaurant/post-process.ts', [`--city-id=${cityId}`, `--date=${today}`]);
+    // 식당 한국어 카피 (13 = RC 있는 식당 요약 2개 + 가격)
+    run(`Ⓑ 식당 카피(13) 발굴`, 'prompts/13-restaurant-summary/run.ts', [`--city-id=${cityId}`]);
+    run(`Ⓑ 식당 카피(13) 적용`, 'prompts/13-restaurant-summary/post-process.ts', [`--city-id=${cityId}`, `--date=${today}`, '--apply']);
   }
   if (only.includes('verify')) {
-    console.log(`\n━━━━━━ ④ 검증 리포트 (6 카테고리 TOP20 14요소) ━━━━━━`);
+    console.log(`\n━━━━━━ 검증 리포트 (6 카테고리 TOP20 14요소) ━━━━━━`);
     await verifyReport();
   }
-  console.log(`\n✓ fillCity ${cityId} 완료. (재분류 05 / 중복통합 07 = 사용자 검수 별도)`);
+  console.log(`\n✓ fillCity ${cityId} 완료. (재분류 05 / 중복통합 07 = 인위적 병합 = 사용자 최종 검수 별도)`);
 })();
 
 // 6 카테고리 TOP20 칸별 채움률 (= 비용 0)

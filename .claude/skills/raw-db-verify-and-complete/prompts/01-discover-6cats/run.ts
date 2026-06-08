@@ -81,7 +81,7 @@ const dryRun = argv['dry'] === 'true';
         generationConfig: {
           temperature: 0.2,
           maxOutputTokens: 50000,
-          responseMimeType: 'application/json',
+          // ⚠️ 수정금지(승인필요) 2026-06-07 사용자 승인 = responseMimeType 제거 = 그라운딩(googleSearch tools) + mime 'application/json' 동시 호출 불가(INVALID_ARGUMENT) = geminiClient.ts:68 정합. prompt.txt "STRICT JSON" 지시 + 아래 parse() 잘림복구가 JSON 보장. (= 빈 응답 버그 수정)
           thinkingConfig: { thinkingBudget: 0 },
         },
       }),

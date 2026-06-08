@@ -33,12 +33,12 @@ check('4 PID없는후보 좌표매칭', r4.matchedBy === 'coords' && r4.match?.i
 // 5) ⭐ 같은 이름 + 다른 PID = 안 합침 (= 이름 단계도 PID veto)
 const r5 = matchCandidate({ cityId: 19, googlePlaceId: 'PID_OTHER', nameLocal: 'Place du Trocadéro' }, C);
 check('5 같은이름 다른PID = 별개(none)', r5.matchedBy === 'none' && !r5.match);
-// 6) 이름 9조합 (PID 없음, local 일치)
+// 6) 로컬이름 매칭 (PID 없음, name_local 일치) = 불변 = 확정
 const r6 = matchCandidate({ cityId: 19, nameLocal: 'Place du Trocadéro' }, C);
-check('6 이름9조합 매칭(local)', r6.matchedBy === 'name' && r6.match?.id === 3);
-// 7) 동명 체인 = cityId 강제 (= 다른 도시 별개 행)
+check('6 로컬이름 매칭(불변=확정)', r6.matchedBy === 'name_local' && r6.tier === 'confirmed' && r6.match?.id === 3);
+// 7) 영어명 매칭 = 가변 = 의심 + 동명 체인 cityId 강제 (= 다른 도시 별개 행)
 const r7 = matchCandidate({ cityId: 20, nameEn: 'Angelina' }, C);
-check('7 동명 다른도시 = id4(cityId강제)', r7.matchedBy === 'name' && r7.match?.id === 4);
+check('7 영어명 매칭(가변=의심) + cityId강제 id4', r7.matchedBy === 'name_en' && r7.tier === 'suspect' && r7.match?.id === 4);
 // 8) 풀주소 + 이름 부분포함
 const r8 = matchCandidate({ cityId: 19, address: '1 Parv. de la Défense, 92800 Puteaux', nameEn: 'Grande Arche' }, C);
 check('8 주소+이름부분포함 매칭', r8.matchedBy === 'address' && r8.match?.id === 1);

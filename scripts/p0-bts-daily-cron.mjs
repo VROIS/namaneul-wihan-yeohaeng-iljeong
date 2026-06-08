@@ -232,7 +232,7 @@ const CATEGORY_KEYWORDS = {
   attraction: 'tourist attraction landmark',
   healing: 'park spa wellness',
   adventure: 'adventure activities outdoor',
-  hotspot: 'popular tourist spot',
+  hotspot: 'popular tourist spot, rooftop and terraces',
   heritage: 'historical site heritage',
 };
 

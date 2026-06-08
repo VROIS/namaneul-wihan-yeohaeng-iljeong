@@ -169,7 +169,7 @@ ordered by KOREAN TRAVELERS' popularity (= 인스타 성지, 한국 블로그 �
 
 Categories:
 1. heritage    — historical sites and museums
-2. hotspot     — photogenic viewpoints, panoramic photo spots
+2. hotspot     — photogenic viewpoints, panoramic photo spots, rooftop and terraces
 3. attraction  — tourist attractions (theme parks, zoos, aquariums)
 4. adventure   — adventure places and activity spots
 5. healing     — parks, gardens, peaceful nature spots
@@ -634,7 +634,7 @@ if (!ARG.commit) {
       await c.query(`
         WITH ranked AS (
           SELECT id, ROW_NUMBER() OVER (
-            ORDER BY gemini_rank ASC NULLS LAST, google_review_count DESC NULLS LAST, id
+            ORDER BY google_review_count DESC NULLS LAST, id
           ) AS rk
           FROM place_seed_raw WHERE city_id = $1 AND seed_category = $2
         )

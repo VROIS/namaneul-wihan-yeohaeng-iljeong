@@ -9,7 +9,7 @@
 //      = §15 = shopping = price_eur null 강제
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '../../../../..');
@@ -62,7 +62,8 @@ const dryRun = argv['dry'] === 'true';
   if (!parsed) { console.error('✗ JSON 파싱 실패'); process.exit(1); }
 
   // 3. upsertPlace 단일 진입점 호출
-  const { upsertPlace } = await import(path.join(ROOT, 'server/services/place-upsert.ts'));
+  // ⚠️ 수정금지(승인필요) 2026-06-07 사용자 승인 = Windows ESM 호환 = pathToFileURL 로 file:// URL 변환 (= 형제 12/post-process 와 동일, c:\ 경로 import ERR_UNSUPPORTED_ESM_URL_SCHEME 수정). 로직·프롬프트 무관.
+  const { upsertPlace } = await import(pathToFileURL(path.join(ROOT, 'server/services/place-upsert.ts')).href);
   const today = new Date().toISOString().slice(0, 10);
 
   const cats = ['heritage', 'hotspot', 'attraction', 'adventure', 'healing', 'shopping'];
