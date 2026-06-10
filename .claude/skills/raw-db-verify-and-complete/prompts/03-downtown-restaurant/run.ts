@@ -85,7 +85,7 @@ const TIER_SPECS = {
           generationConfig: {
             temperature: 0.2,
             maxOutputTokens: 50000,
-            responseMimeType: 'application/json',
+            // ⚠️ 수정금지(승인필요) 2026-06-08 사용자 승인 = responseMimeType 제거 = 그라운딩(googleSearch) + mime 'application/json' 동시 불가(INVALID_ARGUMENT = #06 빈응답 버그) = geminiClient.ts:68 정합. prompt "STRICT JSON" 지시 + parseTier() 잘림복구가 JSON 보장.
             thinkingConfig: { thinkingBudget: 0 },
           },
         }),

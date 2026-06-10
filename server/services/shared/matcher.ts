@@ -56,6 +56,40 @@ export const normAddr = (s: string | null | undefined): string =>
     .replace(/\s+/g, ' ')
     .trim();
 
+// ⚠️ 수정금지(승인필요) 2026-06-10 = 주소 토큰화 + 약어확장 (= Gemini 약어 "C."→calle·구區 segment 변형 흡수, 재입력 매처미스 0 목표).
+//   = 등급규칙(tier 정책) 불변 = tier3 "동일 주소 판정"만 강화(정확매칭 실패 시 토큰부분집합 보조). 악센트 제거 + / º 구분자 처리.
+const ADDR_ABBR: Record<string, string> = {
+  c: 'calle', cl: 'calle',
+  av: 'avenida', avd: 'avenida', avda: 'avenida',
+  pza: 'plaza', plza: 'plaza', pl: 'plaza',
+  ctra: 'carretera', crta: 'carretera',
+  gta: 'glorieta',
+  bd: 'boulevard', bld: 'boulevard', bvd: 'boulevard', blvd: 'boulevard',
+};
+const STREET_STOP = new Set(['de', 'del', 'la', 'el', 'los', 'las', 'y', 'd']); // 연결어 = 부분집합 판정서 무게 0
+const addrTokens = (s: string | null | undefined): string[] =>
+  (s || '')
+    .toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')           // 악센트 제거 (chamartín→chamartin)
+    .replace(/[.,;:!?'"()[\]{}\/º°ª]/g, ' ')
+    .replace(/\s+/g, ' ').trim()
+    .split(' ')
+    .map((t) => ADDR_ABBR[t] || t)
+    .filter(Boolean);
+// 토큰 부분집합 = 작은쪽 의미토큰 전부가 큰쪽에 포함 + 우편번호(5자리)·번지(숫자) 공유 = 같은 주소(약어/구segment 변형 흡수, 오병합 방지)
+const addrSubsetMatch = (a: string | null | undefined, b: string | null | undefined): boolean => {
+  const ta = addrTokens(a), tb = addrTokens(b);
+  if (ta.length < 3 || tb.length < 3) return false;
+  const setA = new Set(ta), setB = new Set(tb);
+  const [small, big] = ta.length <= tb.length ? [ta, setB] : [tb, setA];
+  if (!small.filter((t) => !STREET_STOP.has(t)).every((t) => big.has(t))) return false;
+  const postalOf = (s: Set<string>) => [...s].find((t) => /^\d{5}$/.test(t));
+  const pa = postalOf(setA), pb = postalOf(setB);
+  if (!pa || pa !== pb) return false;                             // 우편번호 동일 강제 (= 같은 거리 다른 동네 차단)
+  const hasNum = (s: Set<string>) => [...s].some((t) => /^\d{1,4}$/.test(t));
+  return hasNum(setA) && hasNum(setB);                            // 번지 존재 (= 거리 전체 아님)
+};
+
 // 이름 정규화 (= 3·5·6·7순위 공용) = trim + 소문자
 //   ⚠️ 2026-06-03 = DB 트리거 `LOWER(TRIM)` 과 **동일 식**으로 통일 (= 앱↔DB 일관성 = 사용자 SSOT)
 //   (= 악센트 무시는 앱↔DB 불일치 유발하므로 미채택 = 악센트 변형은 PID/좌표/주소 단계가 커버.)
@@ -101,7 +135,9 @@ export function matchCandidate<C extends MatchCandidate>(
       const pl = normName(p.nameLocal);
       match = candidates.find((c) => {
         if (!samePlace(c, p)) return false; // = PID/URI 다르면 다른 장소
-        if (!c.address || normAddr(c.address) !== np) return false;
+        if (!c.address) return false;
+        // 정확 매칭(기존) OR 토큰부분집합(약어 "C."→calle·구segment 변형 흡수 = 2026-06-10, 우편번호+번지 공유 강제 = 오병합 방지)
+        if (normAddr(c.address) !== np && !addrSubsetMatch(c.address, p.address)) return false;
         if (!pl) return true; // 로컬이름 없으면 주소만 매칭 (= 옛 동작 호환)
         const cNames = nameKeys(c);
         return cNames.some((cn) => (Math.min(pl.length, cn.length) < 6 ? pl === cn : pl.includes(cn) || cn.includes(pl)));

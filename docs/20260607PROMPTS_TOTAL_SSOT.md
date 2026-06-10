@@ -1,0 +1,1310 @@
+# 전체 앱 Gemini + TS 호출 프롬프트 총 SSOT (2026-06-07)
+
+> **목적**: 전체 앱의 **Gemini 프롬프트 원본 전부 + TS 호출(헤더·설정·조건) 전부**를 한 곳에 추출 = 3개월 실증으로 최적화된 코드급 근본 자산. Gemini→TS 전환·스킬 정리의 기준.
+> **추출 방법**: 코드베이스 전수 grep + 영역별 병렬 추출(워크플로 `prompt-inventory-extract`, 8 에이전트) + 누락 비평. 총 **46 호출지점**(Gemini 26 + TS 18 + archived 2).
+> **표기 규칙**:
+> - **인라인 프롬프트**(코드 안 템플릿) = verbatim 그대로 수록 (1글자도 안 바꿈). 검증 = `file:line` 대조.
+> - **외부 잠긴 프롬프트**(`prompt.txt` / `STANDARD_PROMPT*.md`) = 원본 파일이 진본 = **링크로 가리킴**(중복 truth 방지). 클릭해 직접 열람.
+> - 삭제/중복 정리 = 사용자 직접 (이 파일은 추출 카탈로그).
+
+---
+
+## 0. 한눈 요약 = "가져오는 값은 비슷한데 헤더가 전부 다름"
+
+### Gemini (26곳) 차이 축
+| 축 | 실제 차이 |
+|---|---|
+| **단일관문(`geminiClient.geminiJson`) 통과** | 큐레이션·도시메타·동선·seed enrich **4곳만** / **22곳 우회** (server/gemini.ts 8·bts-gemini·스킬 raw fetch·scripts) |
+| **모델** | `gemini-3-flash-preview`(주력) / `gemini-2.5-flash`(admin 테스트) / `gemini-2.5-flash-preview-tts`(TTS) / `gemini-2.0-flash`(BTS 동선) / `gemini-1.5-flash`(test-crisis) |
+| **grounding(googleSearch)** | ON = 큐레이션·도시메타·동선·01·02·05·13·seed·seed-gemini / OFF = MIX step1 여정(`STEP1_USE_GROUNDING=false`)·드림스튜디오·BTS·테스트 |
+| **temperature** | 0.2(관문기본·스킬) / 0.3(MIX step1·동선 override) / 미설정(드림·BTS·테스트) |
+| **JSON 강제** | responseMimeType(관문·step1) / responseSchema 객체(드림스튜디오) / grounding 시 mime 제거 / 평문(공유설명·스크립트최적화) |
+| **maxOutputTokens** | 50000(관문·스킬·동선) / 8192(MIX step1) / 4000(vibetrip 원본) / 미설정(드림·BTS) |
+| **thinkingBudget** | 0(거의 전부) / 1500(vibetrip 원본만) |
+
+### TS (18곳) 차이 축
+| 축 | 실제 차이 |
+|---|---|
+| **단일관문(`ts-client` tsSearch/tsPhoto) 통과** | ts-backfill·ts-photo·06 / **우회 raw fetch** = ag3(라이브)·12-discover·recover·seed-gemini·p0-cron |
+| **FieldMask** | 9요소 STANDARD 통일(관문·12·06·ag3) / **레거시 상이** = seed-gemini(+types/primaryType, §15 가드 없음)·p0-cron(6필드 다른 마스크+자체 가드) |
+| **검색방식** | searchText(관련성 ≤60) / searchNearby(POPULARITY ≤20) |
+| **범위** | rectangle(발굴 사각형) / locationBias circle(검증 앵커) / circle(인근) |
+| **languageCode** | 'ko'(대부분) / 발굴만 `--lang`(파리=fr) |
+
+### 9요소 STANDARD FieldMask (= `google-places-sku.ts`, 모든 관문 공통, Atmosphere 0)
+```
+places.id,places.displayName,places.formattedAddress,places.location,places.userRatingCount,places.priceRange,places.photos,places.googleMapsUri,places.businessStatus
+```
+(= PID·로컬명·풀주소·좌표·리뷰수·가격·사진·mapsUri·영업상태. **rating 평점 제외**.)
+
+---
+
+# 📑 마스터 목차 (= 고유번호로 호칭 = "#41 삭제" / "#30 사용")
+
+> 모든 프롬프트 = **고유 일련번호 #01~#44**. 본문 섹션 제목도 같은 번호. 이 번호로 명령하세요.
+
+| # | 이름 | 엔진 | 모델/방식 | 상태 | 파일:라인 |
+|---|---|---|---|---|---|
+| **#01** | geminiJson() 단일 게이트웨이 | Gemini | gemini-3-flash-preview | live | server/services/shared/geminiClient.ts:52 |
+| **#02** | MIX step1 여정 생성 (미발굴 도시) | Gemini | gemini-3-flash-preview / grounding OFF | live | server/services/agents/pipeline-v3.ts:485 |
+| **#03** | 동선 최적화 handleRouteRequest | Gemini | gemini-3-flash-preview / grounding ON | live | server/services/route/route-handler.ts:36 (프롬프트=route-prompt.ts) |
+| **#04** | 도시 메타 백필 fetchCityMetaFromGemini | Gemini | gemini-3-flash-preview / grounding ON | live | server/services/shared/gemini-city-meta.ts:22 |
+| **#05** | 숏폼 시나리오 통합 (11) | Gemini | gemini-3-flash-preview | ⚠️봉쇄(호출0) | 11-main-app-scenario/STANDARD_PROMPT_2026-05-25.md |
+| **#06** | 01 비식당 6카테고리 발굴 | Gemini | gemini-3-flash-preview / grounding ON | live(12로 대체) | 01-discover-6cats/run.ts + prompt.txt |
+| **#07** | 02 장소 보강 큐레이션 (라이브 게이트웨이) | Gemini | gemini-3-flash-preview / grounding ON | live | gemini-curate.ts:51 + 02-enrich-place/prompt.txt |
+| **#08** | 05 식당 재검증 | Gemini | gemini-3-flash-preview / grounding ON | live | 05-restaurant-reverify/run.ts + prompt.txt |
+| **#09** | 05 텍스트 재분류 (⚠️05 번호충돌) | Gemini | gemini-3-flash-preview / grounding ON | live | 05-text-recategorize/run.ts + prompt.txt |
+| **#10** | 13 식당 요약+가격 blind | Gemini | gemini-3-flash-preview / grounding ON | live | 13-restaurant-summary/run.ts + prompt.txt |
+| **#11** | 드림스튜디오 페르소나 스크립트 | Gemini | gemini-3-flash-preview | live | server/gemini.ts:13 |
+| **#12** | 드림스튜디오 페르소나 TTS | Gemini | gemini-2.5-flash-preview-tts | live | server/gemini.ts:128 |
+| **#13** | 위치기반 가이드 콘텐츠 | Gemini | gemini-3-flash-preview / systemInstruction | live | server/gemini.ts:203 |
+| **#14** | 공유링크 설명 | Gemini | gemini-3-flash-preview / 평문 | live | server/gemini.ts:304 |
+| **#15** | 드림샷 영화급 프롬프트 | Gemini | gemini-3-flash-preview / enum schema | live | server/gemini.ts:343 |
+| **#16** | 음성 스크립트 최적화 | Gemini | gemini-3-flash-preview / 평문 | live | server/gemini.ts:425 |
+| **#17** | 텍스트 분석+대사 | Gemini | gemini-3-flash-preview | live | server/gemini.ts:472 |
+| **#18** | 이미지 분석+대사 | Gemini | gemini-3-flash-preview | live | server/gemini.ts:585 |
+| **#19** | BTS 동선 최적화 | Gemini | gemini-2.0-flash | legacy | server/services/bts-gemini.ts:79 |
+| **#20** | seed enrich (파리 DB-only Step1) | Gemini | gemini-3-flash-preview / grounding ON | live | server/services/seed/enrich-place.ts:174 |
+| **#21** | SEED v3 6카테고리 (mjs) | Gemini | gemini-3-flash-preview / grounding ON | legacy | scripts/seed-gemini.mjs:209 |
+| **#22** | admin API 키 테스트 | Gemini | gemini-2.5-flash | tool(헬스체크) | server/admin-routes.ts:648 |
+| **#23** | 파리 일정 테스트 (test_gemini+test_trip) | Gemini | gemini-2.5-flash | reference | scripts/test_gemini.ts·test_trip.ts |
+| **#24** | Gemini 연결 테스트 (NUBI) | Gemini | gemini-1.5-flash (옛SDK) | reference | scripts/test-crisis.js:70 |
+| **#25** | VibeTrip 원본 일정 생성 | Gemini | gemini-3-flash-preview / thinkingBudget 1500 | reference | reference/vibetrip-original/services/geminiService.ts:32 |
+| **#26** | tsSearch 단일 게이트웨이 | TS | searchText/searchNearby | live | server/services/shared/ts-client.ts:81 |
+| **#27** | tsPhoto 단일 게이트웨이 | TS | PhotoMedia→Storage | live | server/services/shared/ts-client.ts:129 |
+| **#28** | ts-backfill (PID 없는 행 보강) | TS | searchText | live | server/services/fill/ts-backfill.ts:60 |
+| **#29** | ts-photo-fill (이미지 채움) | TS | searchText→PhotoMedia | live | server/services/fill/ts-photo-fill.ts:67 |
+| **#30** | 발굴레시피① 인기도 카테고리 TOP20 | TS | searchText catMode + 사각형 | tool | 12-ts-discover-pool/run.ts |
+| **#31** | 발굴레시피② 외곽 식당 지역별 TOP20 | TS | searchText zone=outskirt circle | tool | 12-ts-discover-pool/run.ts |
+| **#32** | 발굴레시피③ 도심 신규식당 60 합본 | TS | nearby POPULARITY + text60 + premium | tool | 12-ts-discover-pool/run.ts |
+| **#33** | 12 run.ts 발굴 엔진 (③ 공통구현) | TS | searchText/searchNearby raw | tool · ⚠️관문우회 | 12-ts-discover-pool/run.ts:127 |
+| **#34** | 12 recover-by-name (이름직접) | TS | searchText raw | tool · ⚠️관문우회 | 12-ts-discover-pool/recover-by-name.ts:57 |
+| **#35** | 12 image-pool (PM, TS검색0) | TS | PhotoMedia | tool | 12-ts-discover-pool/image-pool.ts:111 |
+| **#36** | 12 post-process (PM+upsert, TS검색0) | TS | PhotoMedia | tool | 12-ts-discover-pool/post-process.ts:265 |
+| **#37** | 06 ts-pm-enrich 발굴/검증 (관문) | TS | tsSearch searchText | tool | 06-ts-pm-enrich/run.ts:77 |
+| **#38** | 06 post-process (tsPhoto 관문) | TS | tsPhoto | tool | 06-ts-pm-enrich/post-process.ts:75 |
+| **#39** | ag3 saveNewPlacesToDB (신규/bare) | TS | searchText raw | ⚠️live·관문우회 | server/services/agents/ag3-data-matcher.ts:719 |
+| **#40** | ag3 matchCandidate 5단계 (외부0) | TS | DB 매칭 | live | server/services/agents/ag3-data-matcher.ts:354 |
+| **#41** | seed-gemini STEP2 TextSearch+PM | TS | searchText raw (types/primaryType+가드없음) | legacy | scripts/seed-gemini.mjs:327 |
+| **#42** | p0-bts-daily-cron searchText+PM | TS | searchText raw (6필드 자체마스크) | legacy | scripts/p0-bts-daily-cron.mjs:123 |
+| **#43** | 07 중복통합 (결정론, 프롬프트 예비) | 비-LLM | 5단계 매칭 (Gemini 미사용) | live | 07-merge-dups/run.ts:80 |
+| **#44** | 08 Wikidata 이미지 (SPARQL) | 비-LLM | SPARQL (Gemini 미사용) | live | 08-wk-image-fill/run.ts:68 |
+
+> **단일관문 우회(정리 후보)**: Gemini = #11~#18(드림스튜디오)·#19·#21·#06·#08·#09·#10 / TS = #33·#34·#39·#41·#42.
+> **명백한 폐기 후보**: #19·#21·#41·#42(legacy) / #22(헬스체크) / #23·#24·#25(reference).
+
+## 🧬 원본 유형 = "어디서 왔나 + 편집/삭제 시 진본 위치" (= 매번 안 찾아도 됨)
+
+> 프롬프트를 고치거나 지울 때 = 아래 "진본"만 건드리면 됨. (목차 `파일:라인` = 위치 / 아래 = 원본 종류)
+
+| 유형 | 진본(여기만 편집) | 해당 # |
+|---|---|---|
+| **① 코드 인라인** (코드 파일 = 유일 진본) | 그 코드 파일의 해당 라인 | #04·#11~#18·#19·#20·#21·#22·#23·#24·#25·#44(SPARQL) |
+| **② 외부 prompt.txt** (.txt = 진본, 코드는 `readFileSync` split) | 스킬 `prompts/<폴더>/prompt.txt` | #06·#07·#08·#09·#10·#43 |
+| **③ 코드 인라인 + SSOT .md 미러** (⚠️ 양쪽 1:1 동기 = 둘 다 갱신) | 코드(=실행) + `STANDARD_PROMPT*.md`(=원본보관) | #02(↔09.md)·#03(↔10.md) |
+| **④ SSOT .md 만** (라이브 코드 없음 = 봉쇄) | `11-main-app-scenario/STANDARD_PROMPT_2026-05-25.md` | #05 |
+| **⑤ raw fetch / 설정만** (LLM 프롬프트 텍스트 없음 = FieldMask·textQuery 조립) | 해당 코드 파일 | #01(게이트웨이)·#26~#42 |
+
+**유형별 핵심 메모**:
+- **②가 진본 패턴 = 가장 안전**: #06~#10 = 코드가 .txt를 읽음 → **.txt 1글자만 바꾸면 반영**(코드 무수정). #07(02-enrich)은 CLI(run.ts) + 라이브(gemini-curate.ts) **둘 다** 같은 .txt를 읽음 = 1곳 수정 = 양쪽 적용.
+- **③은 위험 = 2곳 동기 필수**: #02·#03은 프롬프트가 코드에 인라인이고 .md는 "원본 보관용 복사본". 코드를 고치면 .md도 같이 고쳐야 1:1 유지(헌법 §3). ⚠️ #03은 모델까지 코드≠.md 불일치 상태(본문 #03 참조).
+- **①은 코드가 곧 프롬프트**: #11~#25 = 그 함수 안 템플릿 문자열이 전부 = 그 파일만 편집.
+- **⑤는 프롬프트가 없음**: TS 호출(#26~#42)·SPARQL(#44) = 자연어 프롬프트 아님 = FieldMask/검색방식/조건 = 코드 편집.
+
+> ⚠️ **이 문서는 2026-06-07 스냅샷**: `파일:라인`의 라인번호는 코드 수정 시 밀릴 수 있음(파일경로·함수명은 안정). 라인이 어긋나면 함수명으로 찾으면 됨.
+
+---
+
+# A. GEMINI 호출 (26곳)
+
+## Gemini 게이트웨이 (#01)
+
+### #01 · `geminiJson()` — 모든 Gemini JSON 호출 단일 진입점
+- **파일**: `server/services/shared/geminiClient.ts:52` · **상태**: live · **모델**: `gemini-3-flash-preview` (MODEL_ID)
+- **프롬프트**: 없음 (호출자 인자 전달만)
+- **설정 (verbatim)**: `config = { temperature: opts?.temperature ?? 0.2, maxOutputTokens: opts?.maxOutputTokens ?? 50000, responseMimeType: "application/json", thinkingConfig: { thinkingBudget: 0 } }`. `opts.googleSearch=true` 시 → `config.tools = [{ googleSearch: {} }]` 추가 + `delete config.responseMimeType` (= tools+JSON mime 동시불가 INVALID_ARGUMENT 우회). `contents = [{ role:"user", parts:[{ text: prompt }] }]`. responseSchema 없음. API key = `AI_INTEGRATIONS_GEMINI_API_KEY || GEMINI_API_KEY`. 파싱 = `raw.match(/\{[\s\S]*\}/)` 첫 JSON. SDK = `@google/genai`.
+- **조건**: shared/ 모든 Gemini 호출(curate, city-meta 등)이 이 함수만 통과. ⚠️ 수정금지(승인필요). 상수 MODEL_ID/TEMPERATURE=0.2/MAX_OUTPUT_TOKENS=50000.
+
+## Gemini 메인앱 라이브 — 여정/동선 (#02~#05)
+
+### #02 · MIX step1 여정 생성 (ready=false 경로)
+- **파일**: `server/services/agents/pipeline-v3.ts:485` · **상태**: live · **모델**: `gemini-3-flash-preview`
+- **프롬프트 원본**: 인라인 lines 415-464 (SSOT 원본 = [`09-main-app-itinerary/STANDARD_PROMPT_2026-05-24.md`](../.claude/skills/raw-db-verify-and-complete/prompts/09-main-app-itinerary/STANDARD_PROMPT_2026-05-24.md), 1:1 동기 강제)
+- **설정 (verbatim)**: temperature=0.3 / maxOutputTokens=8192 / thinkingBudget=0 / **`STEP1_USE_GROUNDING=false`**(라인 470) → responseMimeType="application/json"(JSON 강제, tools 없음 = **grounding OFF**). 토글 true 시 = tools=[{googleSearch:{}}] + mime 제거. 파싱 = parts(text && !thought) → ```json fence 제거 → `/\{[\s\S]*\}/` → JSON.parse, 실패 시 repairTruncatedJSON.
+- **조건**: `runPipelineV3` → `isCityReady(destination).ready=false`(미발굴 도시) → runPipelineMix. 입력 = TripFormData → AG1 평문화(koreanTravelerStyle/seasonNote/dayRequirements 슬롯매트릭스). ready=true 면 호출 안 됨(pipeline-db-only). 환각 안전망 = saveNewPlacesToDB TS 재검증.
+- **verbatim 프롬프트**:
+```
+You are a travel data assistant for KOREAN TRAVELERS (${nowYear}년 기준 최신 정보).
+Return STRICT machine-parseable JSON only (no prose, no markdown wrappers).
+
+⚠️ GROUNDING REQUIREMENT (= Gemini 3 + Google Search 강제):
+- All facts (place names, addresses, coordinates, prices, opening hours) MUST be verified via Google Search grounding.
+- No hallucinations. No made-up coordinates. No fabricated addresses.
+- If you cannot verify a fact via Google Search, SKIP that place — do NOT guess.
+
+TASK: Fill the provided slot matrix (categories + counts) and sort places within each day by minimum travel distance to generate the itinerary.
+
+CITY: ${formData.destination}
+RADIUS_KM: 100
+TARGET_AUDIENCE: Korean travelers (= 한국 인스타/블로그/유튜브 트렌드 기준)
+
+[USER CONTEXT — AG1 보강]
+${koreanTravelerStyle}
+계절: ${seasonNote} / 큐레이션: ${focusDesc}
+
+[SLOT MATRIX — AG1 결정]
+${dayRequirements}
+
+[동선 원칙]
+- 매일 ${formData.destination} 도시 중심부에서 출발·귀환, 같은 날 = 같은 구역 묶기
+- Array order within each day = visit order (= sorted by minimum travel distance from start)
+- DAILY MEAL RULE (= AG1 has already assigned these slots — DO NOT modify count or position):
+    * Each day MUST contain exactly 1 lunch (type="lunch") somewhere in the middle of the day.
+    * The FINAL slot of each day MUST be dinner (type="dinner").
+- 3 일+ 일정 시 = Day 2+ 한 날 = outskirt (= 도심에서 10-100km 외곽) day-trip 1-2 곳 포함 가능 (= 한국 여행객이 자주 찾는 외곽 명소/아울렛)
+
+[가격 원칙]
+- estimatedCostEur = ${nowYear}년 실제 입장료 (1인, EUR). 무료=0
+- 점심 1인 ~€${mealBudget.lunch}, 저녁 1인 ~€${mealBudget.dinner}
+- 활동(activity) = 1인 입장료 / 식당(lunch/dinner) = 1인당 평균. 확실하지 않으면 0
+
+For each place include (= ALL fields verified via Google Search grounding):
+- name (English official name on Google Maps)
+- nameKo (한국어 = 한국 여행자가 부르는 이름)
+- nameLocal (local language name = 예: 파리=Tour Eiffel) [= REQUIRED for Text Search forwarding + matching key, final DB column]
+- address (FULL street address with NUMBER + street + postal code + city) [= REQUIRED for Text Search forwarding + matching key, final DB column — verify via Google Search]
+- type ("activity" | "lunch" | "dinner")
+- latitude (= decimal 6 digits, e.g. 48.858370) [= REQUIRED for Text Search forwarding + matching key, final DB column — verify via Google Search, NO hallucination]
+- longitude (= decimal 6 digits, e.g. 2.294481) [= REQUIRED for Text Search forwarding + matching key, final DB column — verify via Google Search, NO hallucination]
+- estimatedCostEur (1 인 EUR)
+- selection_reason_ko (한국어 한 줄 = 한국 여행객 트렌드 = 인스타 성지/한국 vlog 등 사회적 검증)
+- shortform_ko (한국어 한 줄 = 장소에 대한 코믹/위트 = Claude 톤. 단순 정보 X = "프사각", "본전 뽑음" 같은 한국 슬랭)
+
+OUTPUT (strict JSON, no markdown fences):
+{"days":[{"day":1,"theme":"테마","places":[
+  {"name":"Eiffel Tower","nameKo":"에펠탑","nameLocal":"Tour Eiffel","address":"Champ de Mars, 5 Av. Anatole France, 75007 Paris","type":"activity","latitude":48.858370,"longitude":2.294481,"estimatedCostEur":29.4,"selection_reason_ko":"파리 인스타 인증샷 1순위 성지","shortform_ko":"파리 왔으면 외쳐줘야 국룰 '나 파리다!'"}
+]}]}
+```
+
+### #03 · 동선 최적화 `handleRouteRequest` (geminiClient 경유)
+- **파일**: `server/services/route/route-handler.ts:36` (프롬프트 정의 = `server/services/route/route-prompt.ts:172-239` `generateRoutePrompt`) · **상태**: live · **모델**: `gemini-3-flash-preview`
+- **프롬프트 원본**: 인라인 (SSOT 원본 = [`10-main-app-route/STANDARD_PROMPT_2026-05-26_route-only.md`](../.claude/skills/raw-db-verify-and-complete/prompts/10-main-app-route/STANDARD_PROMPT_2026-05-26_route-only.md), 1:1 동기) · ⚠️ route-prompt.ts/route-types.ts = §3 수정금지
+- ⚠️ **모델 불일치 (= 코드≠SSOT)**: 이 SSOT `.md`(2026-05-26)는 모델 `gemini-2.5-flash-lite` 지정(입력 1/5·출력 1/7.5 비용근거)인데 **라이브 코드(route-handler.ts)는 `gemini-3-flash-preview` 사용** = 코드가 SSOT 미반영. (정리 시 판단 필요)
+- **설정 (verbatim)**: `geminiJson<RouteResponse>(prompt, { model:"gemini-3-flash-preview", temperature:0.3, maxOutputTokens:50000, googleSearch:true })` → 게이트웨이 내부 = tools=[{googleSearch:{}}] + responseMimeType 삭제 = **grounding ON + JSON mime 없음**. 입력 inputJson = places.filter(seedCategory!=='restaurant') 4~5필드만 + trip_config + protagonist(transport_mode public_transit|private_driver_guide) + meal_budget + city_center.
+- **조건**: DB-only path 동선 생성(표준 prompt 직접). 식당은 제외 = Gemini 가 점심/저녁 자동 발견. 출발/귀환 anchor = accommodationCoords > cityCoords > places[0]. ⚠️ 단 라이브 동선은 현재 route-local(코드) 1차 + 이건 fallback (= WORKLOG 2026-06-06).
+- **verbatim 프롬프트**:
+```
+# 역할
+너는 한국인 여행자를 위한 ${formData.destination} 동선 최적화 전문가다.
+
+# 너의 강점
+- Google Search grounding = 한국 인스타/유튜브 트렌드 + 실 가격 + 실 주소 + 실 좌표 + 실 도로 거리.
+   ※ 옛 "Google Maps grounding" 표현 폐기 (= 2026-05-28 사용자 SSOT = Maps + Search 동시 작동 X 입증)
+
+# 목표
+입력 ${nonRestaurantCount} 비식당 + 일자별 점심 + 저녁 식당 자동 발견
+= 총 ${nonRestaurantCount + 2 * tc.day_count} 슬롯 = **빠짐없이** 모두 채워라 (= 활동 누락 X)
+
+# 시간 + 일자 (= 사용자 동적 입력)
+- ${tc.day_count} 일 / 출발 ${tc.start_time} ~ 종료 ${tc.end_time}
+- 총 슬롯 수 = ${nonRestaurantCount + 2 * tc.day_count} (= **반드시 응답**)
+- 일자별 슬롯 수 = 자유 (= 동선 효율 따라 = Gemini 자율)
+- 시각 분배 = 자유 (= 단, 슬롯 간 시각 연속 = 갭 X)
+
+# 식당 자동 발견 + DB 백필
+- 점심 = 일자 중간 시각 + 좌표 인근.
+- 저녁 = 일자 마지막 종착지 + 좌표 인근.
+- 식비 = 일일 한도 €${mealBudget.dailyTotal} (= ${mealBudget.label}) 내 자유 분배 (= 동선 따른 식당 선택 자유 = 점심/저녁 비율 강제 X).
+- ⚠️ Gemini 발견 식당 = 7 필드 반드시 (= name_local / address / lat / lng / **price_per_person_eur = 1 인 EUR 1 가지만** / **selection_reason_ko** / **shortform_ko**).
+- ⚠️ **price_for_2_eur 같은 2 인 가격 요청 X** (= Gemini 가 2 인 가격을 1 인 필드에 입력 위험 = 사용자 SSOT 2026-05-25 = 단위 모호 결함).
+- **selection_reason_ko** = 한국어 한 줄 = 인스타 성지/네이버 블로그/유튜브 vlog 사회적 검증 (→ DB summary_ko).
+- **shortform_ko** = 한국어 한 줄 = 코믹/위트 후킹 = "프사각", "본전 뽑음" 한국 슬랭 (→ DB editorial_summary).
+- 모두 Google Search grounding 검증 = 환각 금지.
+
+# 활동 응답 양식 (= 2026-05-28 사용자 SSOT 신규)
+- 활동 = address + name_local + price_per_person_eur 응답 (= 입장료/체험비 1 인 EUR = PSR 오류 정정 base = R3 백필).
+- 활동 = 카피 (selection_reason_ko / shortform_ko) 응답 X (= PSR 기존 데이터 사용).
+
+# 입력
+${JSON.stringify(inputJson, null, 2)}
+
+# 출력 양식 (= JSON 만, no markdown wrappers)
+{
+  "total_duration_sec": <number>,
+  "total_distance_km": <number>,
+  "days": [
+    {
+      "day": <number>, "total_distance_km": <number>,
+      "scenes": [
+        {
+          "slot": <number>, "time": "HH:MM", "type": "activity|restaurant",
+          "place_id": <입력 활동 = 입력 id "db-${PSR.id}" / 식당 = "auto-lunch-dN" 또는 "auto-dinner-dN">,
+          "name_local": <활동 = 입력 echo 또는 보강 / 식당 = Gemini 생성>,
+          "address": "<FULL = 활동 + 식당 모두 필수>",
+          "lat": <number>, "lng": <number>,
+          "price_per_person_eur": <활동 + 식당 모두 = € 1인 EUR = 1 가지만 = 2 인 가격 X = 활동 = 입장료/체험비 / 식당 = 식사비 / 무료 = 0>,
+          "distance_from_prev_km": <number>,
+          "transit_mode": "${transportMode}",
+          "transit_min": <number>,
+          "selection_reason_ko": <식당만 = 한국어 한 줄 = 사회적 검증 = → DB summary_ko>,
+          "shortform_ko": <식당만 = 한국어 한 줄 = 코믹/위트 한국 슬랭 = → DB editorial_summary>
+        }
+      ]
+    }
+  ]
+}
+
+# 핵심 원칙
+1. 입력 비식당 ${nonRestaurantCount} 곳 = 모두 응답 포함 (= 추가/제외 X). ⚠️ **예외 없음**.
+2. 식당 = Google Search grounding 발견 + 7 필드 + 예산 이내.
+3. 동선 = city_center 출발/귀환 + 자연 cluster + 최적 순서.
+4. 교통 = transport_mode="${transportMode}" (= 2 분기 = public_transit / private_driver_guide 중 하나).
+5. 식당 = 마지막 종착지 (= 저녁) + 일자 중간 (= 점심).
+6. 응답 = JSON 만 (= markdown X).
+7. ⚠️ **총 슬롯 = ${nonRestaurantCount + 2 * tc.day_count} 강제 + 슬롯 간 시각 연속 (= 갭 X)**.
+```
+
+### #04 · 도시 메타 백필 `fetchCityMetaFromGemini()`
+- **파일**: `server/services/shared/gemini-city-meta.ts:22` · **상태**: live · **모델**: `gemini-3-flash-preview` (게이트웨이 경유)
+- **프롬프트 원본**: 인라인 lines 23-46
+- **설정 (verbatim)**: `geminiJson<any>(prompt, { googleSearch: true })` = grounding ON, mime 제거, temp 0.2, maxOut 50000, thinkingBudget 0. 검증 = `data.exists!==false && nameEn && latitude && longitude && countryCode` 모두 있어야 반환.
+- **조건**: 신규 도시 자동 백필(city-resolver 5단계 = cities INSERT 직전). 입력 = 사용자가 친 도시명. ⚠️ 수정금지(승인필요) 2026-05-23.
+- **verbatim 프롬프트**:
+```
+역할: 너는 도시 메타데이터 전문가야.
+
+⚠️ 응답 근거 = **Google Search 그라운딩 기반** = 검증된 사실만 사용 = 추정/환각 금지.
+
+목적: 사용자 입력 "${input}" 가 실제 존재하는 도시인지 판별 + 메타데이터 반환.
+
+응답 (= JSON, 설명 X):
+{
+  "exists": true,
+  "nameKo": "<한국 여행자 친숙 호칭 = 예 '피사'>",
+  "nameEn": "<공식 영어명 = 예 'Pisa'>",
+  "nameLocal": "<현지 원어명 = 예 'Pisa'>",
+  "countryCode": "<ISO 2 문자 = 예 'IT'>",
+  "country": "<국가 한국어 = 예 '이탈리아'>",
+  "latitude": <도심 위도 6 자리 = 예 43.722840>,
+  "longitude": <도심 경도 6 자리 = 예 10.401690>,
+  "timezone": "<IANA = 예 'Europe/Rome'>",
+  "primaryLanguage": "<ISO 2 문자 = 예 'it'>"
+}
+
+존재하지 않는 도시 = { "exists": false }
+
+입력: "${input}"
+```
+
+### #05 · 메인앱 숏폼 시나리오 통합 (11-main-app-scenario, ⚠️ 현재 봉쇄=라이브 호출 0)
+- **파일(SSOT)**: [`11-main-app-scenario/STANDARD_PROMPT_2026-05-25.md`](../.claude/skills/raw-db-verify-and-complete/prompts/11-main-app-scenario/STANDARD_PROMPT_2026-05-25.md) · **상태**: reserved (= `/api/itineraries/:id/video/prompts` 봉쇄 = `generateScenarioPrompt` 예정 = 라이브 호출지점 0, grep 미발견) · **모델**: `gemini-3-flash-preview`
+- **설정 (.md SSOT)**: temperature 0.3 / maxOutputTokens 50000 / thinkingBudget 0 / tools=[{googleSearch:{}}] / timeout 420000. (= 10-route가 이 시나리오에서 동선만 분리한 경량판 = 시나리오 카피 6필드는 여기 잔존)
+- **조건**: 동선 + 숏폼 영상 24씬(1장소=1씬=6초) 통합 = 시나리오 카피(narration/visual_cue/subtitle/theme/transit_summary/protagonist_summary) 포함. 10-route는 이 6필드를 제거해 속도 단축한 분리판.
+- **프롬프트 본문 (verbatim, ⚠️수정금지 2026-05-25)**:
+```
+# 역할
+너는 한국인 여행자를 위한 ${formData.destination} 동선 + 숏폼 영상 시나리오 전문가다.
+
+# 너의 강점
+- Google Maps grounding = 실 도로 거리 + 동선 인근 식당 발견 + 정확 좌표/주소.
+- Google Search grounding = 한국 인스타/유튜브 트렌드 + 실 가격.
+
+# 목표
+입력 ${places.length} 비식당 + 일자별 점심 + 저녁 식당 자동 발견 = 동선 + 1 장소 = 1 씬 = 6초 한국어 시나리오.
+
+# 식당 자동 발견 + DB 백필
+- 점심 = 일자 중간 + 그 시각 전후 활동 좌표 인근 + 1인 €${mealBudget.lunch} 이내 (= ${mealBudget.lunchLabel}).
+- 저녁 = 일자 마지막 슬롯 = 일자 마지막 활동 좌표 인근 + 1인 €${mealBudget.dinner} 이내 (= ${mealBudget.dinnerLabel}).
+- ⚠️ Gemini 발견 식당 = 4 필드 반드시 (= name_local / address / lat / lng / **price_per_person_eur = 1 인 EUR 1 가지만**).
+- ⚠️ **price_for_2_eur 같은 2 인 가격 요청 X** (= Gemini 가 2 인 가격을 1 인 필드에 입력 위험 = 사용자 SSOT 2026-05-25 = 단위 모호 결함).
+- 모두 Google Maps grounding 검증 = 환각 금지.
+
+# 입력
+${JSON.stringify(inputJson, null, 2)}
+
+# Tone Sample (= forWhom="${formData.forWhom}" = ${focus.tone_ko})
+${focus.sample_narration}
+카메라 = ${focus.camera_subject}
+
+# 출력 양식 (= JSON 만, no markdown wrappers)
+{
+  "total_duration_sec": <number>,
+  "total_distance_km": <number>,
+  "protagonist_summary_ko": "<주인공 한 줄 = ${companionGroup.label_ko} ${formData.ageDesc} 반영>",
+  "days": [
+    {
+      "day": <number>, "theme_ko": "<10-15자>", "total_distance_km": <number>,
+      "transit_summary_ko": "<${transportMode === 'private_driver_guide' ? "'전용 차량 가이드 N hop = N분'" : "'도보 N hop + 메트로/RER N분'"}>",
+      "scenes": [
+        {
+          "slot": <number>, "time": "HH:MM", "type": "activity|restaurant",
+          "place_id": <입력 활동 = 입력 id / 식당 = "auto-lunch-dN" 또는 "auto-dinner-dN">,
+          "name_en": "<...>", "name_ko": "<...>", "name_local": "<...>",
+          "address": "<FULL = 식당 필수>",
+          "lat": <number>, "lng": <number>,
+          "price_per_person_eur": <식당만 = € 1인 EUR = 1 가지만 = 2 인 가격 X>,
+          "distance_from_prev_km": <number>,
+          "transit_mode": "${transportMode === 'private_driver_guide' ? 'private_guide' : 'walk|metro|RER|bus'}",
+          "transit_min": <number>,
+          "visual_cue_ko": "<10-15자 = 카메라 + 분위기 = ${focus.camera_subject} 반영>",
+          "narration_ko": "<6초 = 18-25 음절 + ${focus.tone_ko} + 슬랭 OK>",
+          "subtitle_ko": "<10-15자 + 이모지 1>"
+        }
+      ]
+    }
+  ]
+}
+
+# 핵심 원칙
+1. 입력 비식당 ${places.length} 곳 = 모두 응답 포함 (= 추가/제외 X).
+2. 식당 = Google Maps grounding 발견 + 5 필드 + 예산 이내.
+3. 동선 = city_center 출발/귀환 + 자연 cluster.
+4. 교통 = transport_mode="${transportMode}" = ${transportMode === 'private_driver_guide' ? '모든 hop 전용 차량 가이드' : '도보 + 메트로 + RER + 버스 조합'}.
+5. 페이스 = ${paceConfig.slotDurationMinutes}분/슬롯 × ${slotsPerDay}슬롯/일 = ${formData.travelPace}.
+6. 시나리오 톤 = ${focus.tone_ko} + age "${formData.ageDesc}" + 슬랭 OK.
+7. 응답 = JSON 만 (= markdown X).
+```
+
+## Gemini 스킬 발굴/큐레이션 도구 (#06~#10, prompt.txt 본문 verbatim 인라인)
+
+> 공통 raw fetch: `POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_KEY}` / `tools=[{googleSearch:{}}]` (**grounding ON**) / `generationConfig={ temperature:0.2, maxOutputTokens:50000, responseMimeType:'application/json', thinkingConfig:{thinkingBudget:0} }` / `AbortSignal.timeout(420000)` / responseSchema 없음(prompt.txt 내부 JSON 계약). ⚠️ **단일관문 미통과(직접 fetch)**.
+
+### #06 · 01 비식당 6카테고리 발굴 (discover-6cats)
+- **파일**: `.claude/skills/.../01-discover-6cats/run.ts:73-90` · **상태**: live(but fillCity 미사용 = 12 TS 발굴로 대체) · **모델**: `gemini-3-flash-preview`
+- **프롬프트 원본**: [`01-discover-6cats/prompt.txt`](../.claude/skills/raw-db-verify-and-complete/prompts/01-discover-6cats/prompt.txt) (split('════')[2] 본문 / 치환 ${CITY_NAME} ${COUNTRY} ${CITY_LAT} ${CITY_LNG})
+- **프롬프트 본문 (verbatim, ⚠️수정금지 v3 = 1글자 변경 금지)**:
+```
+You are a travel data assistant for KOREAN TRAVELERS.
+Return STRICT machine-parseable JSON only (no prose, no markdown wrappers).
+
+CITY: ${CITY_NAME}
+COUNTRY: ${COUNTRY}
+CITY_CENTER: { lat: ${CITY_LAT}, lng: ${CITY_LNG} }
+RADIUS_KM: 100
+TARGET_AUDIENCE: Korean travelers (= 한국 인스타/블로그/유튜브 트렌드 기준)
+
+For each of the 6 categories below, return TOP 20 most famous places
+ordered by KOREAN TRAVELERS' popularity (= 인스타 성지, 한국 블로그 빈도,
+유튜브 vlog 등장 빈도 우선 = NOT Western tourist ranking).
+(Note: restaurant category is intentionally excluded — separate prompt with price-tier classification.)
+
+Categories:
+1. heritage    — historical sites and museums
+2. hotspot     — photogenic viewpoints, panoramic photo spots, rooftop and terraces
+3. attraction  — tourist attractions (theme parks, zoos, aquariums)
+4. adventure   — adventure places and activity spots
+5. healing     — parks, gardens, peaceful nature spots
+6. shopping    — shopping places and markets
+
+For each place include:
+- rank (1-20, Korean traveler popularity order)
+- name_en (English official name)
+- name_local (local language name, if different — for TS matching)
+- name_ko (Korean name commonly used by Korean travelers)
+- lat, lng (decimal degrees)
+- address (FULL street address with NUMBER + street + postal code + city)
+- selection_reason_ko (한국어 한 줄 = 한국 여행객 사이 트렌드 = 인스타 성지/최근 핫한 지역/한국 vlog 노출 빈도 등 사회적 검증 근거)
+- shortform_ko (한국어 한 줄 = 장소에 대한 코믹/위트 있는 설명 = 감성/재미 후킹 카피 = Claude 톤. 단순 정보 X, 짧고 강하게)
+- distance_km_from_center (haversine from CITY_CENTER, 1 decimal)
+- day_zone: "core" if distance_km_from_center <= 10 (day 1 walkable from city center)
+         OR "outskirt" if 10 < distance_km_from_center <= 100 (day 2+ day-trip required)
+- estimated_price_eur (입장료 1인 EUR. 식당이면 1인당 평균. 무료=0. 확실하지 않으면 null. ⚠️ shopping 카테고리는 항상 null = 쇼핑은 1인당 가격 개념 없음)
+
+OUTPUT (strict JSON, no markdown fences):
+{
+  "city": "${CITY_NAME}",
+  "country": "${COUNTRY}",
+  "center": { "lat": ${CITY_LAT}, "lng": ${CITY_LNG} },
+  "radius_km": 100,
+  "results": {
+    "heritage":   [ ...20 items ],
+    "hotspot":    [ ...20 items ],
+    "attraction": [ ...20 items ],
+    "adventure":  [ ...20 items ],
+    "healing":    [ ...20 items ],
+    "shopping":   [ ...20 items ]
+  }
+}
+```
+- **설정**: 위 공통 + batch 없음(도시 1콜) + 잘림복구 parse(). 기대 = results.{6cats} 각 20개=120.
+- **조건**: CLI `--city-id=N [--dry]`. 입력 = cities(name_en/country/lat/lng). 산출 = docs/raw/{id}/01-*.json → post-process upsert.
+
+### #07 · 02 장소 보강 큐레이션 (enrich-place) ⭐ 라이브 게이트웨이도 사용
+- **파일(CLI)**: `.claude/skills/.../02-enrich-place/run.ts:68-93` · **파일(라이브)**: `server/services/shared/gemini-curate.ts:51` (`geminiCurate()`) · **상태**: live · **모델**: `gemini-3-flash-preview`
+- **프롬프트 원본**: [`02-enrich-place/prompt.txt`](../.claude/skills/raw-db-verify-and-complete/prompts/02-enrich-place/prompt.txt) (split(/═{30,}/)[2] 3번째 청크 / 치환 ${CITY_NAME} ${CITY_ID} ${YEAR} ${BATCH_LEN} ${JSON_INPUT})
+- **프롬프트 본문 (verbatim, ⚠️수정금지 2026-05-18 = 1글자 변경 금지)**:
+```
+역할: 너는 한국인 여행자를 위한 [CITY_NAME] 장소 정보 보강 전문가야.
+
+⚠️ 응답 근거 = **Google Search 그라운딩 기반** = 최신/검증된 사실 (= 가격/주소/한국어 호칭) 만 사용 = 추정/환각 금지.
+
+목적: [CITY_NAME] (city_id=${CITY_ID}) 의 기존 장소 ${BATCH_LEN} 곳 = 누락 정보를 채우고 + 한국 관점 큐레이션을 작성한다.
+
+입력 = 각 장소 = JSON (= id 는 우리 place_seed_raw.id = 응답 매칭 키)
+  - id: number (= place_seed_raw.id = 응답에 정확히 매칭 필수)
+  - name_en: string (= 공식 영어명 = 변경 X)
+  - name_local: string | null
+  - name_ko: string | null
+  - address: string | null
+  - latitude: number | null
+  - longitude: number | null
+  - google_place_id: string | null
+  - seed_category: 'restaurant'|'attraction'|'healing'|'adventure'|'hotspot'|'heritage'|'shopping'
+
+응답 (= JSON 배열, 설명 텍스트 X):
+{
+  "places": [
+    {
+      "id": <입력 id 그대로 = place_seed_raw.id>,
+      "name_en": "<입력 그대로 = 변경 X>",
+      "name_local": "<현지 원어명 = 예 'Tour Eiffel' / 입력 있으면 검증 / 없으면 채움>",
+      "name_ko": "<한국 여행자 친숙 호칭 = 예 '에펠탑' / 입력 있으면 검증 / 없으면 채움>",
+      "address": "<번지 + 거리 + 우편번호 + 도시 + 국가 = 예 '5 Avenue Anatole France, 75007 Paris, France'>",
+      "latitude": <위도 6 자리 = 예 48.858370>,
+      "longitude": <경도 6 자리 = 예 2.294481>,
+      "summary_ko": "<한 줄 숏폼 대사 = 인스타/FOMO 사회적 검증 = 한국어 25 자 이내>",
+      "editorial_summary": "<한 줄 한국인 관점 선정 이유 = 코믹/위트 후킹 카피 = 한국어 35 자 이내>",
+      "estimated_price_eur": <1인 입장료 또는 평균 식대 EUR 숫자 = shopping 은 null>
+    }
+  ]
+}
+
+규칙:
+1. 모든 입력 id = 응답에 정확히 포함 (= 누락 0) ← id = 우리 place_seed_raw.id = 매칭 키
+2. name_en = 입력 그대로 (= 변경 절대 X = 매칭 키)
+3. 좌표 = 6 자리 소수 (= 예 48.858370, 2.294481)
+4. address = 번지부터 국가까지 완전 (= 부분 주소 X)
+5. summary_ko / editorial_summary = 한국어만 (= 영어 단어 혼용 X)
+6. estimated_price_eur = shopping 카테고리 = null 강제 / 그 외 = 합리적 EUR 정수
+7. 응답 = 위 JSON 만 (= 설명/주석/마크다운 X)
+
+입력 ${BATCH_LEN} 장소:
+${JSON_INPUT}
+```
+- **설정 (verbatim)**: `geminiJson(prompt, { googleSearch:true })` = grounding ON. 배치 = FALLBACK `[40,30,20,10]` adaptive (size=40 시작, `places.length===0 || missing>5` 시 축소 재시도). 입력 필드 = `{id, name_en, name_local, name_ko, address, latitude, longitude, seed_category}` (**PID/URI 미전달 = 환각 방지**). 출력 4요소 = `{id, name_ko, summary_ko, editorial_summary, estimated_price_eur}`. 잘림복구 parsePlaces().
+- **조건**: raw-db enrich 단계. CLI `--defects-only` = 4요소 결손행만. 라이브 = place_seed_raw 행 + cityName/cityId → upsertPlace 융합. ⚠️ 수정금지(승인필요) 2026-06-05 = tsSearch 대칭 관문.
+
+### #08 · 05 식당 재검증 (restaurant-reverify)
+- **파일**: `.claude/skills/.../05-restaurant-reverify/run.ts:59-92` · **상태**: live · **모델**: `gemini-3-flash-preview`
+- **프롬프트 원본**: [`05-restaurant-reverify/prompt.txt`](../.claude/skills/raw-db-verify-and-complete/prompts/05-restaurant-reverify/prompt.txt) (split 78자 ══ [2] / 치환 ${YEAR} ${COUNT} ${INPUT_JSON})
+- **프롬프트 본문 (verbatim, ⚠️수정금지 2026-06-01 = 1글자 변경 금지)**:
+```
+You are a restaurant data verifier for KOREAN TRAVELERS. ⚠️ AS OF ${YEAR} (현재 시점) — verify CURRENT status via Google Search grounding (Google Maps).
+⚠️ 핵심: 각 식당이 ${YEAR}년 현재 **정상 영업 중**인지 Google Maps 에서 확인. 추정/환각 금지 = 검증된 사실만.
+Return STRICT JSON array only (no markdown wrappers). Per restaurant, ONLY these fields:
+- id (echo the given id)
+- closure_status: 정확히 4 값 중 하나 (= Google Maps 현 상태):
+    · "operating"           = ${YEAR} 현재 정상 영업 중
+    · "temporarily_closed"  = 일시 휴업 (= 재개업 예정) = Google Maps "임시 휴업 / Temporarily closed"
+    · "permanently_gone"    = 영구 폐업 + 같은 주소에 후속 식당 없음 = "폐업 / Permanently closed" + 빈 자리/타용도
+    · "renamed"             = 폐업했으나 같은 주소에 **다른 이름의 새 식당**으로 바뀜 (= 리브랜드, 예: Hardware Société → BON JO)
+  ⚠️ 불확실하거나 Google Maps 확인 불가 = "permanently_gone" (보수적).
+- renamed_to: closure_status="renamed" 일 때만 = 같은 주소의 **새 식당 공식명** (예: "BON JO"); 그 외 = null
+- name_local (Google Maps 공식 현지명. renamed 면 = 새 식당명 기준)
+- address (FULL Google Maps address: number + street + postal code + city)
+- lat, lng (Google Maps 좌표, decimal 6 자리; 못 찾으면 null)
+- price_per_person_eur (1인당 평균 식사가 EUR, grounded; operating/renamed = 현(새) 식당 기준; 모르면 null)
+INPUT (${COUNT} restaurants): ${INPUT_JSON}
+OUTPUT (JSON array): [{"id":<n>,"closure_status":"operating|temporarily_closed|permanently_gone|renamed","renamed_to":<str|null>,"name_local":"..","address":"..","lat":<n|null>,"lng":<n|null>,"price_per_person_eur":<n|null>}]
+```
+- **설정**: 공통 + 재시도 attempt 1~3(3000ms 대기) + batch 40. parseArr 배열|{results:[]} / `closure_status` 필드(operating 외=폐업후보).
+- **조건**: CLI `--city-id=N [--year] [--batch] [--ids]`. 입력 = seed_category='restaurant' AND NOT(PID+URI 보유) = TS 미검증 식당. --ids = 폐업후보 재분류.
+
+### #09 · 05 텍스트 기반 재분류 (text-recategorize) ⚠️ 원본 폴더 05 번호충돌
+- **파일**: `.claude/skills/.../05-text-recategorize/run.ts:60-115` · **상태**: live · **모델**: `gemini-3-flash-preview`
+- **프롬프트 원본**: [`05-text-recategorize/prompt.txt`](../.claude/skills/raw-db-verify-and-complete/prompts/05-text-recategorize/prompt.txt) (split('════')[2] / 치환 ${CITY_NAME} ${CITY_ID} ${BATCH_LEN} ${JSON_INPUT})
+- **프롬프트 본문 (verbatim, ⚠️수정금지 2026-05-23 = 01 카테고리 정의와 1글자 일치 강제)**:
+```
+역할: 너는 한국인 여행자 장소 DB 의 카테고리 정정 전문가야.
+
+⚠️ 응답 근거 = **입력 묘사 텍스트 (summary_ko + editorial_summary)** 만 사용 = 외부 검색/추정 금지.
+
+목적: ${CITY_NAME} (city_id=${CITY_ID}) 의 활성 장소 ${BATCH_LEN} 곳 = 각 행의 묘사 분석 후 = **현재 seed_category vs 적정 카테고리** 비교 → 정정 후보 list 응답.
+
+카테고리 정의 (= 시드 발굴 SSOT 01-discover-6cats/prompt.txt:22-27 와 동일 = 7 종):
+- heritage: 역사 건축 + 박물관 / 미술관 (= historical sites AND museums) = 궁/성/교회/대성당/수도원/모뉴먼트 + 모든 박물관/미술관
+- hotspot: 사진 명소 + 뷰포인트 + 루프탑·테라스 + 광장 + 다리 + 힙한 거리 + 카페 (= 카페가 명소 의미일 때)
+- attraction: 놀이공원 + 동물원 + 수족관 + 타워 + 명소 (= theme parks/zoos/aquariums)
+- adventure: 액티비티 + 스릴 + 모험 + 영화관 + 스포츠
+- healing: 공원 + 정원 + 온천 + 스파 + 숲 + 자연 휴양 + 숙소 (= 호텔)
+- shopping: 매장 + 마켓 + 백화점 + 콘셉트 스토어
+- restaurant: 식당 + 카페 + 베이커리 + 파티세리 + 디저트가게 + 바
+
+⚠️ 판단 원칙 (= 사용자 SSOT):
+1. **묘사 99% 정확** = summary_ko + editorial_summary 의 단어 = 가장 신뢰
+2. **이름** (= name_en) = 보조 단서 (= "Café"/"Restaurant" 단어 우선 restaurant)
+3. **현재 카테고리** = 옛 분류 = 의심 가능 (= 묘사와 다르면 정정)
+4. **호텔** (= healing 안 호텔) = 사용자 SSOT B2 = healing 유지 (= 별도 accommodation 카테고리 X)
+
+입력 = 각 행 = JSON (= id 는 매칭 키):
+  - id: number
+  - current_category: string (= 현재 seed_category)
+  - name_en: string
+  - name_local: string | null
+  - summary_ko: string | null
+  - editorial_summary: string | null
+  - address: string | null
+
+응답 (= JSON 배열, 설명 텍스트 X):
+{
+  "recategorize": [
+    {
+      "id": <id>,
+      "current_category": "<옛 카테고리>",
+      "suggested_category": "<적정 카테고리 = 7 종 중 1>",
+      "confidence": <0.0 ~ 1.0>,
+      "reason_ko": "<한국어 한 줄 = 묘사 인용 + 판단 근거>"
+    }
+  ]
+}
+
+규칙:
+1. **정정 후보만 응답** = current == suggested = 응답 안 포함 (= 변경 없음)
+2. confidence < 0.7 = 응답 안 포함 (= 명확한 경우만)
+3. 모든 입력 id 분석 = 정정 후보만 응답 = 사용자 검수 후 트랜잭션 적용
+
+입력 ${BATCH_LEN} 장소:
+${JSON_INPUT}
+```
+- **설정**: 공통 + batch **100** + parseRecat `{recategorize:[...]}`.
+- **조건**: CLI `--city-id=N [--batch=100]`. 입력 = (summary_ko OR editorial_summary 있는 행) = 묘사로 카테고리 오분류 정정. ⚠️ AI 자율 트랜잭션 X = 사용자 cc2 검수 후 post-process --apply.
+
+### #10 · 13 식당 요약+가격 blind 추정 (restaurant-summary)
+- **파일**: `.claude/skills/.../13-restaurant-summary/run.ts:56-96` · **상태**: live · **모델**: `gemini-3-flash-preview`
+- **프롬프트 원본**: [`13-restaurant-summary/prompt.txt`](../.claude/skills/raw-db-verify-and-complete/prompts/13-restaurant-summary/prompt.txt) (split 78자 ══ [2] / 치환 ${YEAR} ${COUNT} ${INPUT_JSON})
+- **프롬프트 본문 (verbatim, ⚠️수정금지 2026-06-02 = 1글자 변경 금지)**:
+```
+You are a restaurant copywriter for KOREAN TRAVELERS (⚠️ ${YEAR}년 기준 최신). Use Google Search grounding (= 한국 인스타/네이버 블로그/유튜브 트렌드 + Google Maps). 추정/환각 금지 = grounded fact 만.
+아래 식당들은 실재 검증된 식당(이름/주소/리뷰수)입니다. 각 식당에 한국어 카피 2개 + 1인당 가격을 작성.
+Return STRICT JSON array only (no markdown wrappers). Per restaurant, ONLY these fields:
+- id (echo the given id)
+- summary_ko (한국어 한 줄 = 왜 한국인이 가는지 = 인스타 성지/네이버 블로그/유튜브 vlog 사회적 검증 근거. 담백·정보형)
+- editorial_summary (한국어 한 줄 = 코믹/위트 후킹 = "프사각", "본전 뽑음" 같은 한국 슬랭 = 숏폼 톤)
+- price_per_person_eur (⚠️ 필수 = 1인당 평균 식사가 EUR **상한** = Google 그라운딩 독립 추정. 모르면 null)
+INPUT (${COUNT} restaurants): ${INPUT_JSON}
+OUTPUT (JSON array): [{"id":<n>,"summary_ko":"..","editorial_summary":"..","price_per_person_eur":<n|null>}]
+```
+- **설정**: 공통 + 재시도 1~3 + batch 40. 응답 = summary_ko/editorial_summary/price_per_person_eur(**blind 추정=검증용**).
+- **조건**: CLI `--city-id=N`. 입력 = seed_category='restaurant' AND RC>0 AND summary_ko NULL = TS풀 신규식당. ⚠️ **입력 JSON 가격 미포함(blind)** = TS 실가격은 비교용만. post-process = 요약 UPDATE + 가격 null 행만(TS 가격 보존).
+
+## Gemini 드림스튜디오 (#11~#18, `server/gemini.ts`) — 단일관문 미통과 (독자 GoogleGenAI, apiKey 직접)
+
+### #11 · 페르소나 스크립트 `generatePersonaScript()`
+- **파일**: `server/gemini.ts:13` · **상태**: live · **모델**: `gemini-3-flash-preview`
+- **설정 (verbatim)**: `config = { responseMimeType:"application/json", responseSchema:{ type:"object", properties:{ text, persona, mood (string) }, required:["text","persona","mood"] } }`. temperature 미지정. tools 없음. contents = [inlineData(imageBase64, image/jpeg), instruction+persona]. voiceName ko:Kore/en:Puck/ja:Aoede/zh:Charon.
+- **조건**: 이미지 base64 + language(기본 ko) + persona? → 이미지 주인공 1인칭 대사.
+- **verbatim 프롬프트** (언어별 instruction):
+```
+[ko.instruction]
+당신은 이 이미지 속 주인공(음식, 건물, 예술품, 풍경 등)입니다.
+1인칭 시점으로 자신을 소개하고 이야기를 들려주세요.
+15-30초 분량(한국어 80-120자)으로 감정이 담긴 대사를 작성하세요.
+
+예시:
+- 와인: "안녕, 나는 1892년 보르도에서 태어났어. 130년 동안 이 지하 저장고에서..."
+- 에펠탑: "파리의 밤하늘 아래, 나는 매일 수백만 개의 불빛으로 반짝이지..."
+- 초밥: "나는 오늘 아침 츠키지 시장에서 갓 잡힌 참치야..."
+
+JSON 형식으로 응답:
+{
+  "text": "1인칭 대사",
+  "persona": "피사체 정체 (와인병, 에펠탑 등)",
+  "mood": "분위기 (nostalgic, proud, mysterious, cheerful 등)"
+}
+
+[en.instruction]
+You are the subject in this image (food, building, artwork, landmark, etc).
+Introduce yourself in first person and tell your story.
+Write an emotional 15-30 second monologue (80-120 words).
+
+Examples:
+- Wine: "Hello, I was born in Bordeaux in 1892. For 130 years in this cellar..."
+- Eiffel Tower: "Under the Paris night sky, I sparkle with millions of lights..."
+- Sushi: "I'm the freshest tuna from Tsukiji market this morning..."
+
+Respond in JSON:
+{
+  "text": "first person monologue",
+  "persona": "identity (wine bottle, Eiffel Tower, etc)",
+  "mood": "mood (nostalgic, proud, mysterious, cheerful, etc)"
+}
+
+[ja.instruction]
+あなたはこの画像の主人公です（食べ物、建物、芸術品、風景など）。
+一人称で自己紹介し、物語を語ってください。
+15-30秒分（80-120文字）の感情的なモノローグを書いてください。
+
+JSON形式で回答:
+{
+  "text": "一人称のセリフ",
+  "persona": "被写体の正体",
+  "mood": "雰囲気"
+}
+
+[zh.instruction]
+你是这张图片中的主角（食物、建筑、艺术品、风景等）。
+用第一人称介绍自己并讲述你的故事。
+写一段15-30秒的独白（80-120字）。
+
+以JSON格式回复:
+{
+  "text": "第一人称独白",
+  "persona": "主体身份",
+  "mood": "氛围"
+}
+
+[contents 두번째 part]
+langConfig.instruction + (persona ? `\n지정된 페르소나: ${persona}` : '')
+```
+
+### #12 · 페르소나 TTS `generatePersonaVoice()`
+- **파일**: `server/gemini.ts:128` · **상태**: live · **모델**: `gemini-2.5-flash-preview-tts` (유일 비 flash-preview)
+- **설정 (verbatim)**: `config = { responseModalities:[Modality.AUDIO], speechConfig:{ voiceConfig:{ prebuiltVoiceConfig:{ voiceName } } } }`. voiceName 기본 'Kore'. mood 기본 'cheerful'. 응답 = parts[0].inlineData → {audioBase64, mimeType}.
+- **조건**: text + voiceName + mood → TTS. generatePersonaScript 대사 변환.
+- **verbatim 프롬프트**:
+```
+[moodInstructions]
+nostalgic: 'Speak with a warm, nostalgic tone, as if reminiscing about cherished memories.'
+proud: 'Speak with pride and confidence, celebrating your history and significance.'
+mysterious: 'Speak with an enigmatic, intriguing tone that draws listeners in.'
+cheerful: 'Speak with a bright, welcoming tone full of enthusiasm.'
+peaceful: 'Speak with a calm, serene voice that brings tranquility.'
+dramatic: 'Speak with theatrical intensity and emotional depth.'
+
+[fullPrompt]
+${moodPrompt}
+
+Say the following:
+"${text}"
+```
+
+### #13 · 위치기반 가이드 콘텐츠 `generateLocationBasedContent()`
+- **파일**: `server/gemini.ts:203` · **상태**: live · **모델**: `gemini-3-flash-preview`
+- **설정 (verbatim)**: `config = { systemInstruction: systemPrompt, responseMimeType:"application/json", responseSchema:{ properties:{ title, description, tips(array), culturalNotes, bestTimeToVisit, accessibility }, required:["title","description","tips"] } }`. **systemInstruction 사용 유일 호출**. contents = [inlineData(image), user텍스트].
+- **조건**: 이미지 + locationInfo + language → 가이드 콘텐츠.
+- **verbatim 프롬프트**:
+```
+[systemPrompt]
+You are a professional travel guide content creator. 
+Analyze the provided image and location information to create detailed, accurate guide content.
+Location: ${locationInfo.locationName || `${locationInfo.latitude}, ${locationInfo.longitude}`}
+Respond in ${targetLanguage} with JSON format:
+{
+  "title": "string - catchy, descriptive title",
+  "description": "string - detailed description of the place",
+  "tips": ["string array - practical tips for visitors"],
+  "culturalNotes": "string - cultural significance or background",
+  "bestTimeToVisit": "string - optimal visiting times",
+  "accessibility": "string - accessibility information"
+}
+
+[user contents 두번째 part]
+Create a comprehensive travel guide for this location. 
+Location coordinates: ${locationInfo.latitude}, ${locationInfo.longitude}
+${locationInfo.locationName ? `Location name: ${locationInfo.locationName}` : ''}
+
+Please provide accurate, helpful information that would be valuable for travelers visiting this place.
+```
+
+### #14 · 공유링크 설명 `generateShareLinkDescription()`
+- **파일**: `server/gemini.ts:304` · **상태**: live · **모델**: `gemini-3-flash-preview`
+- **설정**: config 없음 = **평문 텍스트 응답**(mime/schema 미지정). contents=prompt. 반환 = response.text || 폴백.
+- **verbatim 프롬프트**:
+```
+Create an engaging description for a shared travel guide collection in ${targetLanguage}.
+Collection name: ${linkName}
+Included locations:
+${guideDescriptions}
+
+Create a compelling description that would entice people to explore these locations.
+```
+
+### #15 · 드림샷 영화급 프롬프트 `generateCinematicPrompt()`
+- **파일**: `server/gemini.ts:343` · **상태**: live · **모델**: `gemini-3-flash-preview`
+- **설정 (verbatim)**: `config = { responseMimeType:"application/json", responseSchema:{ properties:{ imagePrompt, audioScript, mood(enum:["cinematic","commercial","documentary","artistic"]), lighting(enum:["golden-hour","natural","studio","dramatic"]), angle(enum:["close-up","medium-shot","wide-shot","aerial"]) }, required:[5] } }`. **enum 제약 사용**.
+- **verbatim 프롬프트**:
+```
+당신은 세계적인 여행 사진작가이자 영화감독입니다.
+
+원본 여행 정보:
+- 장소: ${originalGuide.locationName || originalGuide.title}
+- 설명: ${originalGuide.description}
+- 위도/경도: ${originalGuide.latitude}, ${originalGuide.longitude}
+
+다음 조건으로 영화급 이미지를 위한 상세한 프롬프트를 생성해주세요:
+- 분위기: ${userPreferences.mood || 'adventure'}
+- 스타일: ${userPreferences.style || 'movie'}
+- 시간대: ${userPreferences.timeOfDay || 'golden-hour'}
+
+출력 형식 (JSON):
+{
+  "imagePrompt": "상세한 이미지 생성 프롬프트 (영문, 200자 이상)",
+  "audioScript": "감정적이고 매력적인 한국어 내레이션 스크립트 (50-100자)",
+  "mood": "cinematic/commercial/documentary/artistic 중 하나",
+  "lighting": "golden-hour/natural/studio/dramatic 중 하나", 
+  "angle": "close-up/medium-shot/wide-shot/aerial 중 하나"
+}
+
+핵심 요구사항:
+1. 사용자가 주인공이 되어 그 장소에 있는 것처럼 자연스럽게
+2. 영화나 광고 같은 프로페셔널한 구도와 조명
+3. 해당 여행지의 특색과 문화가 드러나게
+4. 감정적으로 몰입할 수 있는 스토리텔링
+```
+
+### #16 · 음성 스크립트 최적화 `optimizeAudioScript()`
+- **파일**: `server/gemini.ts:425` · **상태**: live · **모델**: `gemini-3-flash-preview`
+- **설정**: config 없음 = **평문 텍스트**. targetEmotion 기본 'inspiring'(enum excited|peaceful|inspiring|nostalgic). 반환 = text.trim() || originalScript.
+- **verbatim 프롬프트**:
+```
+당신은 전문 성우이자 여행 콘텐츠 전문가입니다.
+
+원본 스크립트: "${originalScript}"
+목표 감정: ${targetEmotion}
+
+다음 조건으로 음성 녹음에 최적화된 스크립트로 개선해주세요:
+1. 자연스러운 한국어 발음과 리듬감
+2. ${targetEmotion} 감정이 잘 드러나는 톤
+3. 15-30초 분량 (80-120자)
+4. 여행의 감동과 스토리가 담긴 내용
+5. 사용자가 직접 말하기 쉬운 문장 구조
+
+개선된 스크립트만 출력해주세요:
+```
+
+### #17 · 텍스트 분석+대사 `analyzeTextAndGenerateScript()`
+- **파일**: `server/gemini.ts:472` · **상태**: live · **모델**: `gemini-3-flash-preview`
+- **설정 (verbatim)**: `config = { responseMimeType:"application/json", responseSchema:{ properties:{ category, categoryKo, persona, protagonist, mood, script, keywords(array), videoPrompt, useOriginalImage(boolean) }, required:[9] } }`. charCount = duration<=8?'40-60':duration<=15?'80-100':'100-120'. contents=prompt(텍스트만). description 최대 1000자 truncate.
+- **verbatim 프롬프트**:
+```
+당신은 콘텐츠 분석 및 AI 영상 제작 전문가입니다.
+다음 설명을 분석하고 1인칭 시점의 ${duration}초 분량(${charCount}자) 한국어 대사를 작성하세요.
+
+[분석할 설명]
+"${description.substring(0, 1000)}"
+
+═══════════════════════════════════════
+📌 카테고리 분류 기준 (반드시 준수):
+═══════════════════════════════════════
+- artwork: 그림, 회화, 조각상, 예술작품, 박물관 전시품, 미술관 작품, 동상, 석상, 스핑크스, 피라미드 벽화
+  → 🎯 주인공: 작품 자체 또는 작품 속 인물/피사체 (원본 이미지 사용)
+  → 예: 스핑크스 → "스핑크스 석상", 모나리자 → "모나리자", 다비드상 → "다비드 석상"
+  
+- landmark: 건물, 유적지, 자연명소, 도시풍경, 관광지, 거리
+  → 🎯 주인공: 여행 가이드 (아바타가 배경 앞에서 설명)
+
+- food_drink: 음식, 와인, 술, 카페, 레스토랑, 요리
+  → 🎯 주인공: 여행 가이드 (아바타가 배경 앞에서 설명)
+
+═══════════════════════════════════════
+📌 작업 순서:
+═══════════════════════════════════════
+1. 위 기준으로 카테고리 분류
+2. 핵심 키워드 3-5개 추출
+3. 페르소나 정의 (예: 모나리자, 에펠탑, 100년 된 와인 등)
+4. 🎯 주인공(protagonist) 명시: artwork면 피사체 명칭, 그 외면 "여행 가이드"
+5. 분위기 선정 (nostalgic, proud, mysterious, cheerful, peaceful, dramatic)
+6. 1인칭 한국어 대사 작성 - 주인공이 직접 말하는 형식
+7. 영상 제작 프롬프트 작성 (영어로)
+
+⚠️ 중요: 대사는 반드시 한국어로 작성하세요!
+⚠️ 금지 단어 (AI 정책 위반): 혁명, 전쟁, 폭력, 무기, 총, 칼, 피, 죽음, 살인, 시위, 폭동, 테러
+
+JSON 형식으로 응답:
+{
+  "category": "artwork 또는 landmark 또는 food_drink",
+  "categoryKo": "작품/유적지/음식및술",
+  "persona": "피사체 정체 (한국어)",
+  "protagonist": "영상에서 말하는 주인공 - artwork면 피사체명(예: 스핑크스 석상), 그 외면 여행 가이드",
+  "mood": "분위기",
+  "script": "한국어 1인칭 대사 (${charCount}자)",
+  "keywords": ["키워드1", "키워드2", "키워드3"],
+  "videoPrompt": "영어 영상 프롬프트: artwork면 'The [persona] speaks with gentle expression, subtle movements' / 그 외면 'Tour guide explains with friendly gestures in front of the background'",
+  "useOriginalImage": true/false (artwork면 true, 그 외면 false)
+}
+```
+
+### #18 · 이미지 분석+대사 `analyzeImageAndGenerateScript()`
+- **파일**: `server/gemini.ts:585` · **상태**: live · **모델**: `gemini-3-flash-preview`
+- **설정**: A4-7과 동일 schema. contents = [inlineData(image), prompt]. (텍스트 차이: '초상화','다리','디저트' 추가)
+- **verbatim 프롬프트**:
+```
+당신은 이미지 분석 및 AI 영상 제작 전문가입니다.
+이 이미지를 분석하고 1인칭 시점의 ${duration}초 분량(${charCount}자) 한국어 대사를 작성하세요.
+
+═══════════════════════════════════════
+📌 카테고리 분류 기준 (반드시 준수):
+═══════════════════════════════════════
+- artwork: 그림, 회화, 조각상, 예술작품, 박물관 전시품, 미술관 작품, 초상화, 동상, 석상, 스핑크스
+  → 🎯 주인공: 작품 자체 또는 작품 속 인물/피사체 (원본 이미지 사용)
+  → 예: 스핑크스 → "스핑크스 석상", 모나리자 → "모나리자", 다비드상 → "다비드 석상"
+  
+- landmark: 건물, 유적지, 자연명소, 도시풍경, 관광지, 거리, 다리
+  → 🎯 주인공: 여행 가이드 (아바타가 배경 앞에서 설명)
+
+- food_drink: 음식, 와인, 술, 카페, 레스토랑, 요리, 디저트
+  → 🎯 주인공: 여행 가이드 (아바타가 배경 앞에서 설명)
+
+═══════════════════════════════════════
+📌 작업 순서:
+═══════════════════════════════════════
+1. 이미지를 보고 위 기준으로 카테고리 분류
+2. 핵심 키워드 3-5개 추출
+3. 페르소나 정의 (이미지 속 주인공)
+4. 🎯 주인공(protagonist) 명시: artwork면 피사체 명칭, 그 외면 "여행 가이드"
+5. 분위기 선정 (nostalgic, proud, mysterious, cheerful, peaceful, dramatic)
+6. 1인칭 한국어 대사 작성 - 주인공이 직접 말하는 형식
+7. 영상 제작 프롬프트 작성 (영어로)
+
+⚠️ 중요: 대사는 반드시 한국어로 작성하세요!
+⚠️ 금지 단어 (AI 정책 위반): 혁명, 전쟁, 폭력, 무기, 총, 칼, 피, 죽음, 살인, 시위, 폭동, 테러
+
+JSON 형식으로 응답:
+{
+  "category": "artwork 또는 landmark 또는 food_drink",
+  "categoryKo": "작품/유적지/음식및술",
+  "persona": "피사체 정체 (한국어)",
+  "protagonist": "영상에서 말하는 주인공 - artwork면 피사체명(예: 스핑크스 석상), 그 외면 여행 가이드",
+  "mood": "분위기",
+  "script": "한국어 1인칭 대사 (${charCount}자)",
+  "keywords": ["키워드1", "키워드2", "키워드3"],
+  "videoPrompt": "영어 영상 프롬프트: artwork면 'The [persona] speaks with gentle expression, subtle movements' / 그 외면 'Tour guide explains with friendly gestures in front of the background'",
+  "useOriginalImage": true/false (artwork면 true, 그 외면 false)
+}
+```
+
+## Gemini BTS / seed / 레거시 / 테스트 (#19~#25)
+
+### #19 · BTS 동선 최적화 `optimizeBTSRoute()`
+- **파일**: `server/services/bts-gemini.ts:79` · **상태**: legacy · **모델**: `gemini-2.0-flash`
+- **설정**: `gemini.models.generateContent({ model, contents:prompt })` — generationConfig/temperature/responseSchema/tools 없음. JSON 배열 계약(text.match(/\[[\s\S]*\]/)). 독자 getAI. API키 없으면 fallbackOptimization(09:30~21:30 고정).
+- **verbatim 프롬프트**:
+```
+You are a travel route optimizer for ${cityName}.
+A "${characterName}" style traveler selected these places:
+
+${placeList}
+
+Optimize the visit order for:
+1. Minimal travel time between places
+2. Appropriate meal timing (lunch around 12:00-13:00, dinner around 18:00-19:00)
+3. Opening hours consideration (museums usually 10-18, restaurants 11-22)
+
+Respond in JSON array format only, no explanation:
+[{
+  "id": <place id>,
+  "suggestedOrder": <1-based order>,
+  "startTime": "<HH:MM>",
+  "endTime": "<HH:MM>",
+  "estimatedDuration": "<e.g. 1.5h>",
+  "travelTip": "<one short tip in Korean, max 30 chars>"
+}]
+```
+
+### #20 · seed enrich `enrichPlaceByGemini` (파리 DB-only Step1)
+- **파일**: `server/services/seed/enrich-place.ts:174` · **상태**: live · **모델**: `gemini-3-flash-preview` (게이트웨이 경유)
+- **설정 (verbatim)**: `geminiJson(prompt, { googleSearch:true })` = grounding ON, 기본값(temp 0.2/maxOut 50000/thinkingBudget 0). 응답 = {places:[{id, name_en, name_local, name_ko, address, lat, lng, summary_ko, editorial_summary, estimated_price_eur}]}. dryRun 기본 true. 주석상 adaptive 40→30→20→10.
+- **조건**: cityId(19=Paris) 활성 행 batch(40) → upsertPlace 1차 덮어쓰기(shopping=price null). 헌법 §14/§16 준수.
+- **verbatim 프롬프트**:
+```
+역할: 너는 한국인 여행자를 위한 파리 장소 정보 보강 전문가야.
+
+⚠️ 응답 근거 = **Google Search 그라운딩 기반** = 최신/검증된 사실 (= 가격/주소/한국어 호칭) 만 사용 = 추정/환각 금지.
+
+목적: 파리 (city_id=19) 의 기존 장소 ${input.length} 곳 = 누락 정보를 채우고 + 한국 관점 큐레이션을 작성한다.
+
+입력 = 각 장소 = JSON (= id 는 우리 place_seed_raw.id = 응답 매칭 키)
+  - id: number (= place_seed_raw.id = 응답에 정확히 매칭 필수)
+  - name_en: string (= 공식 영어명 = 변경 X)
+  - name_local: string | null
+  - name_ko: string | null
+  - address: string | null
+  - latitude: number | null
+  - longitude: number | null
+  - google_place_id: string | null
+  - seed_category: 'restaurant'|'attraction'|'healing'|'adventure'|'hotspot'|'heritage'|'shopping'
+
+응답 (= JSON 배열, 설명 텍스트 X):
+{
+  "places": [
+    {
+      "id": <입력 id 그대로 = place_seed_raw.id>,
+      "name_en": "<입력 그대로 = 변경 X>",
+      "name_local": "<현지 원어명 = 예 'Tour Eiffel' / 입력 있으면 검증 / 없으면 채움>",
+      "name_ko": "<한국 여행자 친숙 호칭 = 예 '에펠탑' / 입력 있으면 검증 / 없으면 채움>",
+      "address": "<번지 + 거리 + 우편번호 + 도시 + 국가 = 예 '5 Avenue Anatole France, 75007 Paris, France'>",
+      "latitude": <위도 6 자리 = 예 48.858370>,
+      "longitude": <경도 6 자리 = 예 2.294481>,
+      "summary_ko": "<한 줄 숏폼 대사 = 인스타/FOMO 사회적 검증 = 한국어 25 자 이내>",
+      "editorial_summary": "<한 줄 한국인 관점 선정 이유 = 코믹/위트 후킹 카피 = 한국어 35 자 이내>",
+      "estimated_price_eur": <1인 입장료 또는 평균 식대 EUR 숫자 = shopping 은 null>
+    }
+  ]
+}
+
+규칙:
+1. 모든 입력 id = 응답에 정확히 포함 (= 누락 0) ← id = 우리 place_seed_raw.id = 매칭 키
+2. name_en = 입력 그대로 (= 변경 절대 X = 매칭 키)
+3. 좌표 = 6 자리 소수 (= 예 48.858370, 2.294481)
+4. address = 번지부터 국가까지 완전 (= 부분 주소 X)
+5. summary_ko / editorial_summary = 한국어만 (= 영어 단어 혼용 X)
+6. estimated_price_eur = shopping 카테고리 = null 강제 / 그 외 = 합리적 EUR 정수
+7. 응답 = 위 JSON 만 (= 설명/주석/마크다운 X)
+
+입력 ${input.length} 장소:
+${JSON.stringify(input, null, 2)}
+```
+
+### #21 · SEED v3 6카테고리 (scripts/seed-gemini.mjs STEP1)
+- **파일**: `scripts/seed-gemini.mjs:209` · **상태**: legacy (§16 위반 1회용 mjs) · **모델**: `gemini-3-flash-preview`
+- **설정**: REST 직접 fetch + tools=[{googleSearch:{}}] + generationConfig{temp 0.2, maxOut 50000, thinkingBudget 0}. AbortSignal.timeout(420000). 비용식 promptToken*0.075/1e6 + candidatesToken*0.30/1e6.
+- **verbatim 프롬프트**:
+```
+You are a travel data assistant for KOREAN TRAVELERS.
+Return STRICT machine-parseable JSON only (no prose, no markdown wrappers).
+
+CITY: ${CITY_NAME}
+COUNTRY: ${COUNTRY}
+CITY_CENTER: { lat: ${CITY.lat}, lng: ${CITY.lng} }
+RADIUS_KM: 100
+TARGET_AUDIENCE: Korean travelers (= 한국 인스타/블로그/유튜브 트렌드 기준)
+
+For each of the 6 categories below, return TOP 20 most famous places
+ordered by KOREAN TRAVELERS' popularity (= 인스타 성지, 한국 블로그 빈도,
+유튜브 vlog 등장 빈도 우선 = NOT Western tourist ranking).
+(Note: restaurant category is intentionally excluded — separate prompt with price-tier classification.)
+
+Categories:
+1. heritage    — historical sites and museums
+2. hotspot     — photogenic viewpoints, panoramic photo spots, rooftop and terraces
+3. attraction  — tourist attractions (theme parks, zoos, aquariums)
+4. adventure   — adventure places and activity spots
+5. healing     — parks, gardens, peaceful nature spots
+6. shopping    — shopping places and markets
+
+For each place include:
+- rank (1-20, Korean traveler popularity order)
+- name_en (English official name)
+- name_local (local language name, if different — for TS matching)
+- name_ko (Korean name commonly used by Korean travelers)
+- lat, lng (decimal degrees)
+- address (FULL street address with NUMBER + street + postal code + city)
+- selection_reason_ko (한국어 한 줄 = 한국 여행객 사이 트렌드 = 인스타 성지/최근 핫한 지역/한국 vlog 노출 빈도 등 사회적 검증 근거)
+- shortform_ko (한국어 한 줄 = 장소에 대한 코믹/위트 있는 설명 = 감성/재미 후킹 카피 = Claude 톤. 단순 정보 X, 짧고 강하게)
+- distance_km_from_center (haversine from CITY_CENTER, 1 decimal)
+- day_zone: "core" if distance_km_from_center <= 10 (day 1 walkable from city center)
+         OR "outskirt" if 10 < distance_km_from_center <= 100 (day 2+ day-trip required)
+- estimated_price_eur (입장료 1인 EUR. 식당이면 1인당 평균. 무료=0. 확실하지 않으면 null. ⚠️ shopping 카테고리는 항상 null = 쇼핑은 1인당 가격 개념 없음)
+
+OUTPUT (strict JSON, no markdown fences):
+{
+  "city": "${CITY_NAME}",
+  "country": "${COUNTRY}",
+  "center": { "lat": ${CITY.lat}, "lng": ${CITY.lng} },
+  "radius_km": 100,
+  "results": {
+    "heritage":   [ ...20 items ],
+    "hotspot":    [ ...20 items ],
+    "attraction": [ ...20 items ],
+    "adventure":  [ ...20 items ],
+    "healing":    [ ...20 items ],
+    "shopping":   [ ...20 items ]
+  }
+}
+```
+
+### #22 · admin API 키 테스트 — **모델**: `gemini-2.5-flash` · `server/admin-routes.ts:648` · status=tool
+- 프롬프트 = `Say 'API test successful' in Korean` (헬스체크). generationConfig 없음.
+
+### #23 · test_gemini.ts / test_trip.ts — **모델**: `gemini-2.5-flash` · status=reference (1회용 테스트)
+- 동일 고정 프롬프트: `2026 2월25일 오전10시부터 2026 2월27일 16시까지 프랑스 파리. 아이들 2명을 위한 모험적인 곳과 명소 (구글 리뷰 상위순). 식사는 한국인 입맛에 맞는 합리적 비용의 프랑스 현지식. 소요시간/이동시간/예상비용(EUR) 포함` (출력만 파일 vs console 차이)
+
+### #24 · test-crisis.js — **모델**: `gemini-1.5-flash` (옛 SDK @google/generative-ai) · status=reference
+- 프롬프트 = `Say "Hello, NUBI!" in Korean.` (헬스체크)
+
+### #25 · vibetrip 원본 `generateItinerary` — `reference/vibetrip-original/services/geminiService.ts:32` · status=reference · **모델**: `gemini-3-flash-preview`
+- **설정 (verbatim)**: `config = { systemInstruction:"당신은 한국어만 사용하는 고정밀 여행 스케줄러입니다.", responseMimeType:"application/json", tools:[{googleSearch:{}}], maxOutputTokens:4000, thinkingConfig:{thinkingBudget:1500} }`. **thinkingBudget=1500(유일 비0), maxOut=4000.**
+- **verbatim 프롬프트**:
+```
+당신은 세계 최고의 고정밀 여행 에이전트입니다.
+  **중요: 반드시 모든 응답(summary 포함)은 한국어로만 작성하세요.**
+
+  [미션]
+  ${destination} 여행을 위한 렌터카식 정밀 시간표를 작성하세요.
+  - 시작일: ${startDate}, 종료일: ${endDate}
+  - 동행: ${companion.type} (${companion.detail.ages.join(',')}세 포함)
+  - 가중치: ${priority}, 감성: ${vibes.join(', ')}
+
+  [데이터 무결성 규칙]
+  1. 각 장소의 'startTime', 'endTime'은 HH:mm 형식으로 촘촘하게 배치하세요.
+  2. 'lat', 'lng' 좌표는 구글 맵 마커 생성을 위해 실제 위치와 일치해야 합니다.
+  3. 'summary'는 해당 날짜의 전체 흐름을 한국어로 3문장 이내 요약하세요.
+  4. 'realityCheck'는 googleSearch를 통해 실제 해당 날씨와 운영 여부를 확인한 결과여야 합니다.
+```
+
+---
+
+# B. TS (Google Places) 호출 (18곳)
+
+## TS 게이트웨이 + 융합 백필 (#26~#29, `ts-client.ts` = 진본 관문)
+
+### #26 · `tsSearch()` — 모든 Places 검색 단일 진입점
+- **파일**: `server/services/shared/ts-client.ts:81` · **상태**: live
+- **엔드포인트**: `isNearby ? places:searchNearby : places:searchText`. method = req.method.
+- **헤더 (verbatim)**: `'Content-Type':'application/json', 'X-Goog-Api-Key':req.apiKey, 'X-Goog-FieldMask': STANDARD_TS_FIELD_MASK`(= 9요소, 모듈로드 시 REQUIRED_9 결손검사 + validateFieldMask Atmosphere throw).
+- **body (verbatim)**:
+  - searchText: `{ textQuery, pageSize:cap, languageCode, [regionCode], [priceLevels], ...loc }`. cap=`min(maxResults ?? 20, 60)`.
+  - searchNearby: `{ includedTypes:req.includedTypes||['restaurant'], maxResultCount:cap, rankPreference:'POPULARITY', languageCode, [regionCode], ...loc }`. cap=`min(maxResults ?? 20, 20)`. **rankPreference 고정 POPULARITY**.
+  - textQuery = `req.textQuery ?? (hasCoord ? (nameLocal||'') : [nameLocal,address].filter(Boolean).join(' '))`.
+  - languageCode = `req.languageCode || 'ko'`.
+  - **범위(loc) 우선순위**: (1) rectangleKm+좌표 → locationRestriction.rectangle (latD=km/111, lngD=km/(111·cos)); (2) nearby+circleRadiusM → locationRestriction.circle radius=min(50000,m); (3) anchorRadiusM → locationBias.circle radius=anchorRadiusM(동명 차단); (4) circleRadiusM → locationBias.circle min(50000,m).
+- **응답 매핑**: 9요소 → TsPlace (PID/nameLocal/address/lat/lng/RC/priceEur(=priceRange.endPrice.units)/photoName/mapsUri/businessStatus). **rating 제외**.
+- **조건**: 앱 전체 모든 Places 검색 유일 진입점. 호출자 = ts-backfill, ts-photo-fill, 06, gemini-curate(아님 — gemini), ag3(아님 — 우회). timeout 30000.
+
+### #27 · `tsPhoto()` — PhotoMedia → Supabase Storage 단일 진입점
+- **파일**: `server/services/shared/ts-client.ts:129` · **상태**: live
+- **호출1 (verbatim)**: `GET https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=${maxWidthPx ?? 800}&key=${apiKey}`. timeout 30000. FieldMask 없음(미디어).
+- **호출2 (verbatim)**: `PUT ${supaPublicUrl}/storage/v1/object/${bucket}/${pathKey}.jpg` (bucket 기본 'place-images'), headers `{ Authorization: Bearer ${storageKey}, 'Content-Type':'image/jpeg', 'x-upsert':'true' }`. 반환 = public URL.
+- **조건**: 모든 사진 다운+저장 유일 진입점. 호출자 = ts-photo-fill, 06 post-process.
+
+### #28 · `ts-backfill.ts` — PID 없는 행 TS 재검증·보강
+- **파일**: `server/services/fill/ts-backfill.ts:60` · **상태**: live (관문 경유)
+- **호출 (verbatim)**: `tsSearch({ method:'searchText', regionCode:city.country_code||'FR', languageCode:lang, nameLocal:row.name_local||row.name_en, address:row.address, latitude/longitude, anchorRadiusM:(lat!=null?100:undefined), maxResults:1 })`. ANCHOR_M=100m.
+- **후처리**: no_match skip / businessStatus!=='OPERATIONAL' skip / dist>2km suspicious. upsertPlace(nameEn=매칭키 고정, priceOverwrite=false=GREATEST).
+- **조건**: CLI `--city-id [--apply] [--lang] [--category]`. 대상 = 6 비식당 카테고리 AND google_place_id IS NULL. 행당 1콜 €0.0299.
+
+### #29 · `ts-photo-fill.ts` — TOP20 이미지 없는 행 (이미지 채움)
+- **파일**: `server/services/fill/ts-photo-fill.ts:67` · **상태**: live (tsSearch→tsPhoto 2단 관문)
+- **호출 (verbatim)**: `tsSearch({ method:'searchText', regionCode, languageCode:lang, nameLocal:row.name_local||row.name_en, lat/lng, anchorRadiusM:100, maxResults:1 })` (address 미전달=이름+앵커) → `tsPhoto({ photoName:top1.photoName, pathKey:`${cityId}/${seed_category}/${pid||id}`, maxWidthPx:800 })`.
+- **조건**: CLI `--city-id [--apply] [--top=20]`. 대상 = 6 비식당 RC DESC TOP20 중 image_url/best_image_url/photo_urls 전부 NULL. 행당 €0.037.
+
+## TS 스킬 발굴/검증 도구 (#30~#38)
+
+### 발굴 3대 레시피 = #30·#31·#32 (12 ts-discover-pool, verbatim, 최근 파리 생성분) ⭐
+> 같은 `run.ts` 엔진이지만 **인자 조합 = 3가지 별개 레시피**. 출처 = [`12-ts-discover-pool/README.md`](../.claude/skills/raw-db-verify-and-complete/prompts/12-ts-discover-pool/README.md)(잠금 표준) + run.ts:107-125 body. **공통**: 정렬 = RC(userRatingCount) DESC, FieldMask = 9요소 STANDARD + `,places.primaryType`(잡음판정), regionCode = `country_code||'FR'`, timeout 30000, 결과 = `docs/raw/{cityId}/12-ts-discover-{zone}{-label}-{date}.json`.
+>
+> **검색방식 SSOT (입증됨)**: 인기/리뷰 발굴 = **searchNearby POPULARITY(≤20, 페이지네이션 없음)** = 리뷰 5만 챔피언(Bouillon Pigalle)을 searchText(관련성)는 놓침. 넓이 = **searchText(≤60 = 20×3 페이지 nextPageToken)**. 가격필터(`priceLevels`) = **searchText 전용**(searchNearby엔 없음). → 못 합쳐서 합본.
+
+#### #30 · 인기도 카테고리별 TOP20 (비식당 6카테고리, searchText catMode + 강제 사각형)
+- **CLI**: `npx tsx .../12-ts-discover-pool/run.ts --city-id=N --category=<heritage|hotspot|attraction|adventure|healing|shopping> --zone=downtown --lang=fr --per=20 --pages=1`
+- **textQuery (verbatim CATEGORY_QUERIES, 1글자 변경 금지)**:
+```
+heritage:   'historical sites and museums'
+hotspot:    'photogenic viewpoints, panoramic photo spots, rooftop and terraces'
+attraction: 'theme parks, zoos, aquariums'
+adventure:  'adventure places and activity spots'
+healing:    'parks, gardens, peaceful nature'
+shopping:   'shopping places and markets'
+```
+- **body (verbatim, catMode)**: `{ textQuery: CATEGORY_QUERIES[category], locationRestriction: { rectangle: rectFromCenter(d.lat, d.lng, 100) }, pageSize: per(=20), languageCode: lang, regionCode }` — ⚠️ catMode = `includedType` 강제 **안 함**(Google 자율 해석) + 범위 = **강제 사각형(rectangle, 범위 밖 안 줌)** + radiusOverride 기본 = **100000(100km)** = PSR day-trip 스코프. RC DESC → TOP20.
+
+#### #31 · 외곽 식당 지역별 TOP20 (zone=outskirt, 명소별 circle)
+- **CLI**: `npx tsx .../12-ts-discover-pool/run.ts --city-id=N --zone=outskirt` (method=text 기본, 명소당 1콜)
+- **입력 = 지역 리스트**: `destinations.ts` `DISCOVERY_ZONES[cityId].outskirt` = `[{ name:'<명소>', lat, lng, radius }, ...]` (= day-trip 명소별).
+- **body (verbatim, 식당모드)**: `{ textQuery: `${d.name} restaurant`, includedType: 'restaurant', locationBias: { circle: { center:{ latitude:d.lat, longitude:d.lng }, radius: Math.min(50000, d.radius) } }, pageSize: per(=20), languageCode: lang, regionCode }` — 명소별 circle(locationBias=선호) + RC DESC TOP20.
+
+#### #32 · 도심 신규식당 60 합본 (zone=downtown, 3종 = nearby + text60 + premium)
+- **CLI 3콜 (verbatim, README 표준)**:
+```bash
+# 1. nearby = 인기 챔피언 (POPULARITY 20)
+run.ts --city-id=N --zone=downtown --method=nearby --label=nearby
+# 2. text = 관련성 넓이 (60 = 20×3 페이지)
+run.ts --city-id=N --zone=downtown --method=text --pages=3 --label=text
+# 3. premium = 고급 가격필터 (searchText 전용)
+run.ts --city-id=N --zone=downtown --method=text --pages=3 --price-levels=EXPENSIVE,VERY_EXPENSIVE --label=premium
+# → post-process.ts 병합(잡음필터+name-dedup+tier×RC) → upsert
+```
+- **body ①nearby (verbatim)**: `{ includedTypes: ['restaurant'], maxResultCount: Math.min(per,20), rankPreference: 'POPULARITY', locationRestriction: { circle: { center, radius: Math.min(50000, d.radius) } }, languageCode, regionCode }` (검색어 없음 = 구글 인기순).
+- **body ②text (verbatim)**: `{ textQuery: `${d.name} restaurant`, includedType: 'restaurant', locationBias: { circle: { center, radius: Math.min(50000, d.radius) } }, pageSize: per, languageCode, regionCode }` + `pageToken`(maxPages=3=60) + FieldMask에 `,nextPageToken` 추가.
+- **body ③premium (verbatim)**: ②text + `priceLevels: ['PRICE_LEVEL_EXPENSIVE','PRICE_LEVEL_VERY_EXPENSIVE']`.
+- **downtown 입력**: `destinations.ts` `DISCOVERY_ZONES[cityId].downtown` = `[{ name:'<City>', lat:<중심>, lng:<중심>, radius:10000 }]`(도심 단일 원형). 가격 = GREATEST(절대 안 낮춤).
+
+### #33 · 12 run.ts 발굴 엔진 (위 #30~#32 공통 구현)
+- **파일**: `.claude/skills/.../12-ts-discover-pool/run.ts:127` · **상태**: tool · ⚠️ **raw fetch(관문 우회)**
+- **엔드포인트**: `places:searchText`(method='text' 기본) | `places:searchNearby`(method='nearby').
+- **FieldMask (verbatim)**: `STANDARD_TS_FIELD_MASK + ',places.primaryType'`(=baseMask, 잡음판정용) + 페이지네이션 시 `,nextPageToken`.
+- **body (verbatim)**:
+  - searchNearby: `{ includedTypes(--included-types 기본 ['restaurant']), maxResultCount:min(per,20), rankPreference:'POPULARITY', locationRestriction:{circle:{center,radius:min(50000, radiusOverride??d.radius)}}, languageCode:lang, regionCode:country_code||'FR' }`.
+  - searchText: `{ textQuery: catMode? effQuery : `${d.name} restaurant`, (식당)includedType:'restaurant', (catMode)locationRestriction.rectangle(rectFromCenter) else locationBias.circle, pageSize:per(20), languageCode, regionCode, [priceLevels] }`.
+  - radiusOverride = `--radius || (catMode?100000:null)`. 페이지네이션 nextPageToken `--pages`(기본 1), 토큰 대기 2000ms.
+- **textQuery 정의 (verbatim, 1글자 변경 금지)**:
+```
+const CATEGORY_QUERIES: Record<string, string> = {
+  heritage: 'historical sites and museums',
+  hotspot: 'photogenic viewpoints, panoramic photo spots, rooftop and terraces',
+  attraction: 'theme parks, zoos, aquariums',
+  adventure: 'adventure places and activity spots',
+  healing: 'parks, gardens, peaceful nature',
+  shopping: 'shopping places and markets',
+};
+// 식당 모드: `${d.name} restaurant`
+```
+- **조건**: CLI 발굴 진입점. 입력 = destinations.ts DISCOVERY_ZONES. dry → docs/raw/{id}/12-*.json. 행당 €0.0299.
+
+### #34 · 12 recover-by-name (이름직접 보강)
+- **파일**: `.claude/skills/.../12-ts-discover-pool/recover-by-name.ts:57` · **상태**: tool · ⚠️ raw fetch
+- **body (verbatim)**: `{ textQuery:name, (restaurant)includedType:'restaurant', languageCode:lang, regionCode:country_code||'FR', pageSize:1 }`. FieldMask = STANDARD + `,places.businessStatus`(중복명시). top1만. businessStatus!=='OPERATIONAL' skip. `--apply` 시 upsertPlace(priceOverwrite:true).
+- **조건**: 발굴 놓친 명소 이름 직접 복구. 입력 = MANUAL_ADD[cityId] 또는 `--names`.
+
+### #35 · 12 image-pool (PhotoMedia, TS검색 0)
+- **파일**: `.claude/skills/.../12-ts-discover-pool/image-pool.ts:111` · **상태**: tool
+- **설정**: TS searchText 호출 0 = 발굴 raw의 photo_name 재사용. PhotoMedia GET `maxHeightPx=800&maxWidthPx=1200` → Storage PUT place-images. 동시 CONC=10. 선정 = downtown(가격대 quota eco20/reason40/premium20) | outskirt(명소별 fill-to-10). PM €0.007/곳.
+
+### #36 · 12 post-process (PhotoMedia + upsert, TS검색 0)
+- **파일**: `.claude/skills/.../12-ts-discover-pool/post-process.ts:265` · **상태**: tool
+- **설정**: run.ts raw 후처리. PhotoMedia(--photo, place-photos 버킷, Date.now() 파일명). 식당흐름 = 거리필터 hkm≤radius×1.5 + OPERATIONAL + NON_FOOD 블랙리스트 + 수동가격 + dedup(place_id,name_norm) + tier QUOTA{Eco4,Reason4,Premium2,unknown2} → upsertPlace. 카테고리모드 = 공용 matchCandidate(서버 matcher.ts) 미리보기 → upsertPlace.
+
+### #37 · 06 ts-pm-enrich 발굴/검증 (관문 경유)
+- **파일**: `.claude/skills/.../06-ts-pm-enrich/run.ts:77` · **상태**: tool (✅ 2026-06-05 tsSearch 관문 일원화)
+- **호출 (verbatim)**: `tsSearch({ method:'searchText', nameLocal:name, address:addr, regionCode:country_code, languageCode:'ko', maxResults:5 })`. textQuery=이름+주소(좌표없음). top1 → JSON.ts 9요소. €0.035/행.
+- **조건**: CLI `--city-id`. 대상 = (image_url NULL OR PID NULL) AND (seed_category IN ('restaurant','adventure') OR rank<=20).
+
+### #38 · 06 ts-pm-enrich post-process (tsPhoto 관문)
+- **파일**: `.claude/skills/.../06-ts-pm-enrich/post-process.ts:75` · **상태**: tool
+- **호출 (verbatim)**: `tsPhoto({ photoName, pathKey:`${cityId}/${rowId}-${Date.now()}`, bucket:'place-photos', maxWidthPx:800 })` → upsertPlace(imageUrl 새우선). €0.007/행.
+- **조건**: CLI `--apply-status=ok [--photo] [--apply-ids]`.
+
+## TS 라이브 매처 ag3 (#39~#40, 메인앱 핫패스)
+
+### #39 · ag3 `saveNewPlacesToDB` searchText (신규/bare 보강) ⚠️ 라이브 raw fetch
+- **파일**: `server/services/agents/ag3-data-matcher.ts:719` · **상태**: live · ⚠️ **관문 미경유 = 자체 fetch**
+- **FieldMask**: `SEARCH_TEXT_FIELD_MASK = STANDARD_TS_FIELD_MASK`(9요소, validateFieldMask 강제).
+- **body (verbatim)**: `{ textQuery: addr ? `${name} ${addr}` : `${name} ${cityName}`(=도시명 textQuery 안에), maxResultCount:1, languageCode:'ko' }`. timeout 20000. businessStatus==='CLOSED_PERMANENTLY' → 마커+제외. PhotoMedia GET maxHeight800/Width1200 → place-images PUT(Bearer SUPABASE_ANON_KEY). 가격 = max(TS,Gemini). Promise.all 병렬. upsertPlaces(deferPersist background).
+- **조건**: 라이브 여정 생성 중 자동. 트리거 = matchPlacesWithDB 후 toSave(신규 'Gemini AI (New)'|'+Google Places'|bareMatch 결손, ENRICH_BARE_MATCHES=true). 완전매칭 행 = 호출 0(비용 절감).
+- **verbatim 코드**:
+```ts
+async function searchText(name: string, addr: string | undefined): Promise<any | null> {
+  try {
+    const r = await fetch("https://places.googleapis.com/v1/places:searchText", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": GOOGLE_KEY,
+        "X-Goog-FieldMask": SEARCH_TEXT_FIELD_MASK,
+      },
+      // ⚠️ 수정금지(승인필요) 2026-05-15 = languageCode: 'ko'
+      body: JSON.stringify({
+        textQuery: addr ? `${name} ${addr}` : `${name} ${cityName}`,
+        maxResultCount: 1,
+        languageCode: "ko",
+      }),
+      signal: AbortSignal.timeout(20000),
+    });
+    if (!r.ok) return null;
+    const d = (await r.json()) as any;
+    return d.places?.[0] || null;
+  } catch { return null; }
+}
+```
+
+### #40 · ag3 `matchCandidate` 5단계 (raw fetch 0 = DB 매칭)
+- **파일**: `server/services/agents/ag3-data-matcher.ts:354` · **상태**: live (외부 호출 0)
+- **설정**: 공용 matchCandidate(`server/services/shared/matcher.ts`, §16 단일 매처) = 5단계: PID > URI > 풀주소+이름9조합 > 좌표10m > 로컬네임9조합(PID/URI veto). 후보 = preloadCityData seedRawMap(name norm + noAccent 9조합). SQL = `SELECT ... WHERE city_id=$1 AND (seed_category='restaurant' OR rank BETWEEN 1 AND 20)`.
+- **조건**: 매칭 성공 = 좌표/이미지/PID/리뷰/카피 즉시 주입(Google 회피) / 실패 = needsGoogle → B3-1.
+
+## TS 레거시 / cron (#41~#42)
+
+### #41 · seed-gemini STEP2 TextSearch + PhotoMedia
+- **파일**: `scripts/seed-gemini.mjs:327`(검색) `:284`(사진) · **상태**: legacy · ⚠️ raw fetch
+- **FieldMask (verbatim)**: `'places.id,places.displayName,places.formattedAddress,places.location,places.photos,places.userRatingCount,places.types,places.primaryType,places.priceRange,places.googleMapsUri'` (= **types/primaryType 추가 + §15 validateFieldMask 가드 미적용**).
+- **body**: `{ textQuery, pageSize:1, languageCode:'ko' }`. textQuery = `[name_en, address||(CITY,COUNTRY)].join(' ')` (좌표 X). rate sleep(6000)=분당10. ts_price=priceRange.endPrice.units. PhotoMedia GET maxHeight800/Width1200 → place-images PUT(Bearer SUPA_ANON).
+- **조건**: STEP1 Gemini 결과 검증(가짜 place_id 폐기 후 AG3 매칭).
+
+### #42 · p0-bts-daily-cron searchText + PhotoMedia
+- **파일**: `scripts/p0-bts-daily-cron.mjs:123`(검색) `:166`(사진) · **상태**: legacy · ⚠️ raw fetch + **자체 마스크/가드**
+- **FieldMask (verbatim)**: `'places.id,places.displayName,places.location,places.photos,places.userRatingCount,places.googleMapsUri'` (6필드) + 자체 validateFieldMask(ALLOWED 화이트리스트 + ATMOSPHERE 33 차단).
+- **body**: `{ textQuery, pageSize:1, languageCode:'ko' }` + locationBias(city.lat/lng → circle radius 50000).
+- **textQuery 조립 (verbatim, 2026-04-29 SSOT)**: `[name_en, CATEGORY_KEYWORDS[seed_category], coordStr(`${lat},${lng}` 6자리), locStr(city,state(US),country)].filter(Boolean).join(' ')`.
+- **CATEGORY_KEYWORDS (verbatim)**: `{ restaurant:'restaurant', shopping:'shopping mall', attraction:'tourist attraction landmark', healing:'park spa wellness', adventure:'adventure activities outdoor', hotspot:'popular tourist spot, rooftop and terraces', heritage:'historical site heritage' }`.
+- **cap**: SEARCH_DAILY_LIMIT=40 / PHOTOS_DAILY_LIMIT=40. 429 → 60초 retry. PhotoMedia GET maxHeight1200/Width1600 → place-images PUT(Bearer SUPABASE_ANON_KEY).
+- **조건**: BTS 일일 이미지 cron(2026-04-27 SSOT). 입력 = collection_phase='bts2026' VIBE 6cat×5 + restaurant×10. **searchNearby 호출 X(안전장치#2)**.
+
+---
+
+# C. 비-LLM 결정론 (프롬프트 없음, 참고)
+
+### #43 · 07 중복 통합 (merge-dups) — `.claude/skills/.../07-merge-dups/run.ts:80` · 외부 API 0 (결정론)
+- 순수 TS 결정론 5단계 매칭(upsertPlace v2 알고리즘 inline). prompt.txt 존재하나 run.ts 미사용. normName(NFD+결합문자제거) / haversine R=6371000.
+- **프롬프트 원본 (= 예비 = 의심 그룹 4순위 매칭 시 호출용, 현 run.ts 미사용)**: [`07-merge-dups/prompt.txt`](../.claude/skills/raw-db-verify-and-complete/prompts/07-merge-dups/prompt.txt) (⚠️수정금지 2026-05-20). **verbatim**:
+```
+역할: 너는 한국인 여행자 장소 DB 의 중복 행 판단 전문가야.
+
+⚠️ 응답 근거 = **입력 행 묘사 + 주소** 만 사용 = 외부 검색/추정 금지.
+
+목적: ${CITY_NAME} (city_id=${CITY_ID}) 의 의심 중복 그룹 ${GROUP_LEN} 개 = 각 그룹 = 같은 장소 vs 다른 장소 (= 체인 지점) 판단.
+
+판단 원칙 (= 사용자 SSOT):
+1. **같은 이름 + 다른 주소** = 체인 지점 = **모두 보존** (= 식당의 경우)
+2. **같은 이름 + 같은 주소** = 같은 장소 = 통합 후보
+3. **같은 PID** = 항상 같은 장소 = 통합 (= 본 단계 X = 0순위 자동 처리됨)
+4. **광역 주소 + 다른 이름** = 별도 행 (= Disney Village = 각 매장 별도)
+
+입력 = 의심 그룹 list (= 각 그룹 = 같은 4순위 매칭 = 이름 LOWER+trim 동일):
+  [
+    {
+      "group_key": "<이름 normalized>",
+      "rows": [
+        { "id": <id>, "name_en": "...", "name_local": "...", "address": "...", "summary_ko": "...", "editorial_summary": "..." }
+      ]
+    }
+  ]
+
+응답 (= JSON 배열):
+{
+  "decisions": [
+    {
+      "group_key": "<입력 그대로>",
+      "verdict": "<merge | keep_all | partial_merge>",
+      "merge_rows": [<archive 대상 id list>],
+      "keep_row": <보존 id>,
+      "reason_ko": "<한국어 한 줄 = 판단 근거>"
+    }
+  ]
+}
+
+규칙:
+1. verdict = "merge" = 모든 행 같은 장소 = keep_row 외 모두 archive
+2. verdict = "keep_all" = 모두 다른 장소 (= 체인) = 변경 X
+3. verdict = "partial_merge" = 일부만 같은 장소 = merge_rows 명시
+4. keep_row = PID 보유 우선 → 상세 이름 → 풍부도 (= 사용자 SSOT [[feedback_dedup_keep_priority]])
+5. confidence < 0.8 = "keep_all" 권장 (= 의심 시 보존)
+
+입력 ${GROUP_LEN} 그룹:
+${GROUPS_JSON}
+```
+
+### #44 · 08 Wikidata 이미지 (wk-image-fill) — `.claude/skills/.../08-wk-image-fill/run.ts:68` · Gemini 0 (SPARQL)
+- Wikidata SPARQL (around 10m, LIMIT 15). 채점 = 거리+이름매칭+카테고리+이미지 → trust/verify/reject.
+- **SPARQL (verbatim)**:
+```
+SELECT ?place ?placeLabel ?placeDescription ?image ?coord ?instanceLabel WHERE {
+  SERVICE wikibase:around {
+    ?place wdt:P625 ?coord.
+    bd:serviceParam wikibase:center "Point(${lng} ${lat})"^^<http://www.opengis.net/ont/geosparql#wktLiteral>.
+    bd:serviceParam wikibase:radius "${RADIUS_KM}".
+  }
+  OPTIONAL { ?place wdt:P18 ?image }
+  OPTIONAL { ?place wdt:P31 ?instance. ?instance rdfs:label ?instanceLabel. FILTER(LANG(?instanceLabel) = "en") }
+  SERVICE wikibase:label { bd:serviceParam wikibase:language "en,fr,ko". }
+} LIMIT 15
+```
+
+---
+
+# D. 누락검증 결과 (= 전수성 보장)
+
+### D-1. 03/04 식당 발굴 (= 2026-06-08 un-archive = prompts/ 라이브 복귀)
+- `03-downtown-restaurant/run.ts` + `prompt.txt` = callGemini raw fetch + prompt.txt 진본. **도심 식당 = Gemini 가격tier ∥ 12-pool #32 합본(searchNearby20+text60+premium)** 상호보완.
+- `04-outskirt-restaurant/run.ts` + `prompt.txt` = 동일 패턴 + **범용 타입힌트 표준화**(2026-06-08, 도시명 0). **외곽 식당 = Gemini ∥ fill/outskirt-ts-fill**(town 자동추출→geocode→searchNearby POP).
+- (= 2026-06-08 = _archived-2026-06-02 → prompts/ 복귀 = ROOT 버그 근본해소 + 상호보완 발굴 라이브. 옛 "폐기" 프레이밍 철회.)
+
+### D-2. 거짓양성 (= 실제 호출 아님, 제외 확인)
+- `server/services/itinerary-generator.ts` = GoogleGenAI import + getAI() 정의하나 **호출 0**(runPipelineV3 위임만) = 죽은 scaffolding.
+- `server/run-startup-migrations.ts` = `places.googleapis.com`이 SQL LIKE 필터 안에만 = API 호출 0.
+- `apify-import.ts` / `fill-city.ts`(spawn 오케스트레이터) / `manual-additions.ts` / `manual-prices.ts` / `destinations.ts` = 주석·데이터·spawn뿐.
+- `09/10/11 STANDARD_PROMPT_*.md` = .md 문서(= 라이브 코드 등가물은 A2-1/A2-2에 인라인 수록).
+- `route-local.ts` / `route-backfill.ts` = 결정론·upsert 코드 = Gemini/TS 호출 0.
+
+---
+
+> **추출 출처**: 워크플로 `prompt-inventory-extract`(run `wf_a3e79845-48c`, 8 에이전트, 697K 토큰, 82 tool use). 인라인 verbatim = 에이전트가 소스 파일에서 그대로 추출(검증 = file:line 대조). 외부 prompt.txt/.md = 링크(진본). **삭제·중복 정리 = 사용자 직접.**

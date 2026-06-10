@@ -6,6 +6,7 @@
 //   ⚠️ rating(평점) 제외 = 우리는 안 씀.
 // = 이유: TS 는 유료(€0.0299/콜) → 한 번에 9요소 전부 받아 옛값 덮어씀(최신검증 유지).
 import { STANDARD_TS_FIELD_MASK, validateFieldMask } from './google-places-sku';
+import { saveRaw } from './save-raw';
 
 // ── 9요소 강제 = 모듈 로드 시 1회 검증 (= 마스크가 변질돼 9 미만이면 즉시 throw = 호출 자체 불가) ──
 const REQUIRED_9 = [
@@ -52,6 +53,8 @@ export interface TsSearchReq {
   priceLevels?: string[];     // searchText 가격필터
   maxResults?: number;        // searchText ≤60 / searchNearby ≤20
   timeoutMs?: number;
+  cityId?: number;            // ⚠️ raw 저장 폴더 = docs/raw/{cityId}/ts-raw/ (미지정 시 _misc)
+  rawTag?: string;            // raw 파일명 태그 (= 호출 맥락 식별, 미지정 시 textQuery/nameLocal)
 }
 
 // 중심+반경(km) → 강제 사각형 viewport
@@ -73,6 +76,19 @@ const mapPlace = (p: any): TsPlace => ({
   googleMapsUri: p.googleMapsUri ?? null,
   businessStatus: p.businessStatus ?? null,
 });
+
+// ⚠️ 수정금지(승인필요) 2026-06-09 사용자 SSOT = 외부호출 raw 저장 강제 (= 코드로). 단일 관문에 박아 모든 tsSearch 가 응답 원본을 저장 후 반환.
+//   저장소 = Supabase Storage 'raw-responses' 버킷(shared/save-raw) = 발굴·런타임 둘 다 동작(FS 비의존). apiKey 는 raw 에 저장 안 함(비밀).
+async function saveTsRaw(method: string, req: TsSearchReq, raw: any): Promise<void> {
+  const { apiKey, ...reqSafe } = req;
+  await saveRaw({
+    source: 'ts',
+    contextId: req.cityId,
+    tag: req.rawTag || req.textQuery || req.nameLocal || method,
+    request: reqSafe,
+    raw,
+  });
+}
 
 /**
  * 단일 TS 검색 관문 = 9요소 강제. 앱의 모든 searchText/searchNearby 는 이 함수만 통과.
@@ -112,6 +128,7 @@ export async function tsSearch(req: TsSearchReq): Promise<TsPlace[]> {
   });
   const j = (await resp.json()) as any;
   if (!resp.ok) throw new Error(`[tsSearch] ${resp.status} ${j?.error?.message || JSON.stringify(j?.error || {})}`);
+  await saveTsRaw(req.method, req, j);   // ⚠️ 외부호출 = raw 저장 강제 (DB 입력 전 선행 보존 = 소 안 잃음)
   return (j.places || []).map(mapPlace);
 }
 

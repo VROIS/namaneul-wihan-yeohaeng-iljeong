@@ -77,7 +77,7 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--batch=40] [--offset=0] [--
           generationConfig: {
             temperature: 0.2,
             maxOutputTokens: 50000,
-            responseMimeType: 'application/json',
+            // ⚠️ 2026-06-09 = responseMimeType 제거 = grounding(googleSearch)+json mime 동시 불가(빈응답 버그) = geminiClient.ts:68 정합. prompt STRICT JSON + 아래 잘림복구가 보장.
             thinkingConfig: { thinkingBudget: 0 },
           },
         }),

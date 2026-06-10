@@ -12,7 +12,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(__dirname, '../../../../..');
+const ROOT = path.resolve(__dirname, '../../../../..');  // ⚠️ 2026-06-08 = prompts/04 un-archive 복귀 = 상위 5 (표준 스킬 위치 = 아카이브 ROOT 버그 근본해소)
 process.chdir(ROOT);
 
 const envRaw = fs.readFileSync('.env', 'utf-8').replace(/^﻿/, '');
@@ -27,9 +27,11 @@ for (const line of envRaw.split(/\r?\n/)) {
 
 const argv = Object.fromEntries(process.argv.slice(2).map(a => a.replace(/^--/, '').split('=')).map(([k, v]) => [k, v ?? 'true']));
 const cityId = Number(argv['city-id'] || 0);
-const hints = String(argv['hints'] || '');
+// ⚠️ 수정금지(승인필요) 2026-06-08 = 범용 표준 = 도시명·지명 0 = Gemini 자가발굴 (B 시뮬 입증). --hints 미제공 = 이 표준 타입.
+const UNIVERSAL_OUTSKIRT_TYPES = '역사 구시가 도시 / 궁전·성·유적 / 자연·국립공원 / 즐길거리(놀이공원·액티비티) / 쇼핑몰';
+const hints = String(argv['hints'] || UNIVERSAL_OUTSKIRT_TYPES);
 const year = String(argv['year'] || new Date().getFullYear());
-if (!cityId || !hints) { console.error('Usage: --city-id=<N> --hints="<도시별 day-trip 명소>"'); process.exit(1); }
+if (!cityId) { console.error('Usage: --city-id=<N> [--hints="타입 override(선택)"]'); process.exit(1); }
 
 (async () => {
   // 1. 도시 + Gemini key
@@ -87,7 +89,7 @@ if (!cityId || !hints) { console.error('Usage: --city-id=<N> --hints="<도시별
           generationConfig: {
             temperature: 0.2,
             maxOutputTokens: 50000,
-            responseMimeType: 'application/json',
+            // ⚠️ 수정금지(승인필요) 2026-06-08 사용자 승인 = responseMimeType 제거 = 그라운딩(googleSearch) + mime 'application/json' 동시 불가(INVALID_ARGUMENT = #06 빈응답 버그) = geminiClient.ts:68 정합. prompt "STRICT JSON" 지시 + parseTier() 잘림복구가 JSON 보장.
             thinkingConfig: { thinkingBudget: 0 },
           },
         }),

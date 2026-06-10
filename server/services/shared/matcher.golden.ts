@@ -47,5 +47,16 @@ check('9a samePlace 다른PID=false', samePlace({ googlePlaceId: 'A' }, { google
 check('9b samePlace PID없음=true', samePlace({ googlePlaceId: null }, { googlePlaceId: 'B' }) === true);
 check('9c samePlace 다른URI=false', samePlace({ googleMapsUri: 'X' }, { googleMapsUri: 'Y' }) === false);
 
+// ⭐ 2026-06-10 = 주소 약어("C."→Calle) + 구區 segment 변형 흡수 (= 박물관 76534↔77182 재입력 중복 재발 방지, 매처 갭 회귀)
+const C2: MatchCandidate[] = [
+  { id: 10, cityId: 37, googlePlaceId: 'PID_MUSEO', googleMapsUri: null, address: 'C. de José Gutiérrez Abascal, 2, Chamartín, 28006 Madrid', latitude: 40.4412, longitude: -3.69019, nameEn: 'Museo Nacional de Ciencias Naturales (MNCN) - CSIC', nameLocal: 'Museo Nacional de Ciencias Naturales (MNCN) - CSIC', nameKo: '국립 자연과학 박물관' },
+];
+// 10) 약어 + 구segment 다른 같은 주소 = address 확정매칭 (= 병합)
+const r10 = matchCandidate({ cityId: 37, address: 'Calle de José Gutiérrez Abascal, 2, 28006 Madrid', nameLocal: 'Museo Nacional de Ciencias Naturales' }, C2);
+check('10 주소약어+구변형 = address 확정매칭', r10.matchedBy === 'address' && r10.tier === 'confirmed' && r10.match?.id === 10);
+// 11) ⭐ 같은 거리·우편 다른 번지(99) = 주소 안 합침 (= 토큰부분집합 오병합 방지)
+const r11 = matchCandidate({ cityId: 37, address: 'Calle de José Gutiérrez Abascal, 99, 28006 Madrid', nameLocal: 'Museo Nacional de Ciencias Naturales' }, C2);
+check('11 같은거리 다른번지 = 주소매칭 안함', r11.matchedBy !== 'address');
+
 console.log(`\n═══ matcher 골든 = ${pass} pass / ${fail} fail ═══`);
 if (fail > 0) process.exit(1);

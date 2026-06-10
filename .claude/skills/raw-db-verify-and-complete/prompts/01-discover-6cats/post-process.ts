@@ -66,6 +66,24 @@ const dryRun = argv['dry'] === 'true';
   const { upsertPlace } = await import(pathToFileURL(path.join(ROOT, 'server/services/place-upsert.ts')).href);
   const today = new Date().toISOString().slice(0, 10);
 
+  // ⚠️ 수정금지(승인필요) 2026-06-10 = --dry = matcher.ts(matchCandidate) 시뮬레이션 = 재입력 매처미스 측정 (쓰기 0·외부호출 0).
+  //   none 인데 DB 에 유사명 존재 = 매처미스(= 고쳐야 할 진짜 중복) / 없으면 정상 신규.
+  let dryExisting: any[] = [];
+  let matchCandidate: any;
+  if (dryRun) {
+    ({ matchCandidate } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/matcher.ts')).href));
+    const pg = await import('pg');
+    const dc = new (pg as any).default.Client({ connectionString: process.env.SUPA_URL || process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+    await dc.connect();
+    dryExisting = (await dc.query(
+      `SELECT id, city_id AS "cityId", name_en AS "nameEn", name_local AS "nameLocal", name_ko AS "nameKo", address,
+              latitude::float8 AS latitude, longitude::float8 AS longitude, google_place_id AS "googlePlaceId", google_maps_uri AS "googleMapsUri"
+       FROM place_seed_raw WHERE city_id=$1`, [cityId])).rows;
+    await dc.end();
+  }
+  const dryMiss: string[] = [];
+  let dryWouldMatch = 0, dryWouldInsert = 0;
+
   const cats = ['heritage', 'hotspot', 'attraction', 'adventure', 'healing', 'shopping'];
   let inserted = 0, updated = 0, skipped = 0, errors = 0;
   const matchedBy: Record<string, number> = { pid: 0, address: 0, coords: 0, name: 0, none: 0 };
@@ -77,6 +95,23 @@ const dryRun = argv['dry'] === 'true';
       try {
         // shopping = price_eur null 강제 (= §15)
         const priceEur = cat === 'shopping' ? null : (p.estimated_price_eur ?? null);
+
+        // ⚠️ 수정금지(승인필요) 2026-06-09/10 = --dry = 쓰기 0 + matcher.ts 시뮬레이션 (옛 버그: dryRun 미사용으로 실제 썼음).
+        if (dryRun) {
+          const mr = matchCandidate(
+            { cityId, googlePlaceId: null, googleMapsUri: null, address: p.address || null, latitude: p.lat ?? null, longitude: p.lng ?? null, nameEn: p.name_en, nameLocal: p.name_local || null, nameKo: p.name_ko || null },
+            dryExisting,
+          );
+          if (mr.match) { dryWouldMatch++; }
+          else {
+            const key = String(p.name_local || p.name_en || '').trim().toLowerCase();
+            const dup = key.length >= 4 ? dryExisting.find((e: any) =>
+              [e.nameEn, e.nameLocal, e.nameKo].some((n: any) => n && (String(n).toLowerCase().includes(key) || key.includes(String(n).toLowerCase())))) : null;
+            if (dup) dryMiss.push(`${p.name_local || p.name_en} → DB id=${dup.id} "${dup.nameLocal || dup.nameEn}"`);
+            else dryWouldInsert++;
+          }
+          continue;
+        }
 
         const r = await upsertPlace({
           cityId,
@@ -107,12 +142,20 @@ const dryRun = argv['dry'] === 'true';
     }
   }
 
-  console.log(`\n═══ 결과 ═══`);
-  console.log(`inserted = ${inserted}`);
-  console.log(`updated  = ${updated}`);
-  console.log(`skipped  = ${skipped}`);
-  console.log(`errors   = ${errors}`);
-  console.log(`매칭 단계:`, matchedBy);
+  if (dryRun) {
+    console.log(`\n═══ 결과 (DRY = matcher.ts 시뮬, 쓰기 0·외부호출 0) ═══`);
+    console.log(`would-match(기존 병합)   = ${dryWouldMatch}`);
+    console.log(`would-insert 정상신규     = ${dryWouldInsert}`);
+    console.log(`🔴 매처미스(DB에 있는데 못합침 = 고칠 중복) = ${dryMiss.length}`);
+    dryMiss.forEach((m) => console.log(`   - ${m}`));
+  } else {
+    console.log(`\n═══ 결과 ═══`);
+    console.log(`inserted = ${inserted}`);
+    console.log(`updated  = ${updated}`);
+    console.log(`skipped  = ${skipped}`);
+    console.log(`errors   = ${errors}`);
+    console.log(`매칭 단계:`, matchedBy);
+  }
 
   console.log(`\n✓ Step 1 후처리 완료. 보고서 = report.md 템플릿 채워서 docs/raw/${cityId}/01-discover-6cats-report.md 저장 권장.`);
   process.exit(0);

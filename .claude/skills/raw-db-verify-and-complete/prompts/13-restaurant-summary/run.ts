@@ -58,7 +58,7 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--year=2026] [--batch=40] [-
       try {
         const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_KEY}`,
           { method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], tools: [{ googleSearch: {} }], generationConfig: { temperature: 0.2, maxOutputTokens: 50000, responseMimeType: 'application/json', thinkingConfig: { thinkingBudget: 0 } } }),
+            body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], tools: [{ googleSearch: {} }], generationConfig: { temperature: 0.2, maxOutputTokens: 50000, thinkingConfig: { thinkingBudget: 0 } } }), // ⚠️ 2026-06-09 = responseMimeType 제거(grounding+json 동시 빈응답 버그) = parseArr 가 JSON 보장
             signal: AbortSignal.timeout(420000) });
         const j = await resp.json() as any;
         return { text: (j.candidates?.[0]?.content?.parts || []).map((p: any) => p.text || '').join(''), finish: j.candidates?.[0]?.finishReason || 'UNKNOWN', usage: j.usageMetadata || {} };

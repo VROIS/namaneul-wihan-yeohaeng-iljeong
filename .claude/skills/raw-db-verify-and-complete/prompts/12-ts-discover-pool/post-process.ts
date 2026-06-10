@@ -149,23 +149,25 @@ const PM_CALL_EUR = 0.007;
   const city = (await c.query('SELECT name_en, latitude, longitude FROM cities WHERE id=$1', [cityId])).rows[0];
   const cityCenter = { lat: parseFloat(city?.latitude) || 0, lng: parseFloat(city?.longitude) || 0 };
   const existing = (await c.query(
-    `SELECT id, name_en, name_local, name_ko, google_place_id AS pid, latitude AS lat, longitude AS lng, day_zone, image_url, phase_tags
+    `SELECT id, name_en, name_local, name_ko, google_place_id AS pid, google_maps_uri AS uri, address, latitude AS lat, longitude AS lng, day_zone, image_url, phase_tags
      FROM place_seed_raw WHERE city_id=$1 AND seed_category='restaurant'`, [cityId])).rows;
+  // ⚠️ 수정금지(승인필요) 2026-06-10 = 식당 미리보기 매칭 = 단일 matcher.ts(matchCandidate)로 통일 (= 옛 자체 matchRow[pid/좌표/이름] 폐기 = 헌법 §16, catMode·upsert·refeed-verify 와 동일 매처).
+  const { matchCandidate } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/matcher.ts')).href);
+  const existCands = existing.map((e: any) => ({ id: e.id, cityId, googlePlaceId: e.pid, googleMapsUri: e.uri, address: e.address, latitude: e.lat, longitude: e.lng, nameEn: e.name_en, nameLocal: e.name_local, nameKo: e.name_ko, image_url: e.image_url }));
 
   // ── ① 거리 + ② OPERATIONAL + ③ 수동가격 + ④ 가격대별 quota ──
   const kept: any[] = [];
-  const drop = { dist: 0, closed: 0, nonfood: 0 };
+  const drop = { noCoord: 0, closed: 0, nonfood: 0 };  // ⚠️ (B) 2026-06-10 = noCoord/nonfood=제외+로그 / closed=입력+플래그 카운트 (거리=드롭 폐기=입력)
   const nonfoodList: string[] = [];
   let manualHit = 0;
   for (const z of raw.zones) {
-    const radiusKm = (z.radius / 1000) * 1.5;
+    // ⚠️ 수정금지(승인필요) 2026-06-10 (B정책) = 잡것(좌표없음·비식당)만 제외+로그 / 진짜 장소(폐업·거리초과)는 입력하되 플래그 (= 누수 0 + DB오염 0). 옛 좌표없음 silent drop + 거리 드롭 폐기.
     const pass = z.places.filter((p: any) => {
-      if (!p.lat || !p.lng) return false;
-      if (hkm(z.center, p) > radiusKm) { drop.dist++; return false; }
-      if (p.business_status && p.business_status !== 'OPERATIONAL') { drop.closed++; return false; }
-      if (p.primary_type && !isFoodType(p.primary_type)) { drop.nonfood++; nonfoodList.push(`${p.name}(${p.primary_type})`); return false; }
-      return true;
+      if (!p.lat || !p.lng) { drop.noCoord++; nonfoodList.push(`${p.name}(좌표없음)`); return false; }      // 좌표없음 = 잡것 = 제외+로그(옛 silent 수정)
+      if (p.primary_type && !isFoodType(p.primary_type)) { drop.nonfood++; nonfoodList.push(`${p.name}(${p.primary_type})`); return false; }  // 비식당 = 원 카테고리로 들어감 = 식당풀 제외+로그
+      return true;   // 폐업·거리초과 = 진짜 장소 = 통과(입력)
     });
+    for (const p of pass) { p._closed = !!(p.business_status && p.business_status !== 'OPERATIONAL'); if (p._closed) drop.closed++; }  // (B) 폐업 = 입력하되 마커(PM·FE 제외용)
     // 수동가격 override (= unknown 만)
     for (const p of pass) if (p.price_eur == null) { const o = manualMap.get(norm(p.name)); if (o != null) { p.price_eur = o; manualHit++; } }
     // ⚠️ 수정금지(승인필요) 2026-06-02 = 입력 = broad (= 거리/영업 필터된 전부, quota 컷 없음 = 사용자 SSOT)
@@ -180,14 +182,12 @@ const PM_CALL_EUR = 0.007;
     kept.length = 0; kept.push(...d);
   }
 
-  // ── ⑤ 중복 매칭 (= upsertPlace 근사) + PM 필요 판정 ──
-  const matchRow = (p: any): any => {
-    if (p.place_id) { const m = existing.find((e: any) => e.pid === p.place_id); if (m) return m; }
-    const m2 = existing.find((e: any) => e.lat && e.lng && hkm(e, p) <= 0.01); if (m2) return m2;
-    const np = norm(p.name);
-    return (np ? existing.find((e: any) => [e.name_en, e.name_local, e.name_ko].some((n) => n && norm(n) === np)) : null) || null;
-  };
-  for (const p of kept) { p._match = matchRow(p); p._pmNeed = !p._match || !isGoogleImg(p._match.image_url); }
+  // ── ⑤ 중복 매칭 = 단일 matcher.ts(matchCandidate) = 쓰기경로(upsertPlace)와 동일 = 보고치=실제 (= §16, 2026-06-10 자체 matchRow 폐기) ──
+  const matchRow = (p: any): any => matchCandidate({
+    cityId, googlePlaceId: p.place_id || null, googleMapsUri: p.google_maps_uri || null, address: p.address || null,
+    latitude: p.lat ?? null, longitude: p.lng ?? null, nameEn: p.name_local || p.name, nameLocal: p.name_local || p.name, nameKo: null,
+  }, existCands).match || null;
+  for (const p of kept) { p._match = matchRow(p); p._pmNeed = !p._closed && (!p._match || !isGoogleImg(p._match.image_url)); }  // (B) 폐업 = PM 안 함(이미지 비용 절약)
   const updP = kept.filter((p) => p._match), insP = kept.filter((p) => !p._match);
   const pmNeed = kept.filter((p) => p._pmNeed), pmSave = kept.length - pmNeed.length;
 
@@ -211,7 +211,7 @@ const PM_CALL_EUR = 0.007;
   // ── 보고 ──
   console.log(`═══ ts-discover post-process (city=${cityId} ${city?.name_en}, ${zone}, ${date}) ═══`);
   console.log(`입력 = broad (quota 미적용 / Gemini추출단계용 quota=${JSON.stringify(QUOTA)}) / 수동가격 적용 ${manualHit}곳`);
-  console.log(`raw ${raw.zones.length}명소 → 입력대상 ${kept.length}곳 (거리탈락 ${drop.dist} / 폐업 ${drop.closed} / 비식당제외 ${drop.nonfood} / broad)`);
+  console.log(`raw ${raw.zones.length}명소 → 입력대상 ${kept.length}곳 ((B) 좌표없음 제외 ${drop.noCoord} / 비식당 제외 ${drop.nonfood} / 폐업 입력+플래그 ${drop.closed} / 거리초과도 입력 = 누수0)`);
   if (nonfoodList.length) console.log(`  비식당(원 카테고리 유지=식당풀 제외): ${[...new Set(nonfoodList)].join(', ')}`);
   console.log(`가격대(endPrice) = ${JSON.stringify(spread)}`);
   console.log(`\n[중복 先] UPDATE(기존) ${updP.length} / INSERT(신규) ${insP.length} (= 실제는 upsertPlace 5단계 = 더 매칭)`);
@@ -286,8 +286,8 @@ const PM_CALL_EUR = 0.007;
         googlePlaceId: p.place_id, googleMapsUri: p.google_maps_uri || null,
         googleReviewCount: p.review_count ?? null,
         priceEur: p.price_eur ?? null, priceOverwrite: zone === 'outskirt', // ⚠️ 2026-06-02 = downtown=GREATEST(§price-max 준수=절대 안낮춤) / outskirt=덮어쓰기(오염청소)
-        imageUrl, dayZone: zone === 'downtown' ? 'core' : 'outskirt', distanceKmFromCenter: p.distFromCity,
-        categoryTags: ['restaurant'], phaseTags: [TAG],
+        imageUrl, dayZone: (p.distFromCity != null && p.distFromCity <= 10) ? 'core' : 'outskirt', distanceKmFromCenter: p.distFromCity,  // (B) 실제 거리로 zone (거리초과 입력분 = outskirt)
+        categoryTags: ['restaurant'], phaseTags: [TAG, ...(p._closed ? ['closed'] : [])],  // (B) 폐업 = 'closed' 태그(FE 제외용)
       });
       if (r.action === 'inserted') ins++; else if (r.action === 'updated') upd++; else skip++;
     } catch (e: any) {

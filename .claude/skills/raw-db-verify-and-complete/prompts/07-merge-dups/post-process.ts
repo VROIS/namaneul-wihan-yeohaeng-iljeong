@@ -74,16 +74,40 @@ if (!cityId) { console.error('Usage: --city-id=<N> --date=<YYYY-MM-DD> --apply-t
   await c.query('BEGIN');
 
   // ⚠️ 수정금지(승인필요) 2026-05-21 = 사용자 SSOT = archive 마커 폐기 = 물리 DELETE (= 1 장소 = 1 행 정적)
-  let archived = 0, errors = 0;
+  let archived = 0, merged = 0, errors = 0;
   try {
     for (const g of targets) {
       const keep = selectKeep(g.rows);
       const archiveIds = g.rows.filter((r: any) => r.id !== keep.id).map((r: any) => r.id);
       for (const aid of archiveIds) {
+        // ⚠️ 수정금지(승인필요) 2026-06-09 사용자 승인 = 병합 = 무손실 UNION 후 DELETE (= 옛 "DELETE만"은 데이터 손실 버그였음)
+        //   패자(l) 가치 데이터를 승자(k) 빈칸에 흡수 = §14 병합정책 준수:
+        //   가격·RC = GREATEST(비싼쪽/많은쪽 보존, [[feedback_price_max_always]]) / 카피·이름·좌표·이미지 = keep-우선 COALESCE(빈칸만 채움) / 태그 = UNION 누적
+        //   = keep 은 절대 잃지 않고 = loser 의 비어있지-않은 값만 보존 = [[feedback_never_discard_ts_data]]
+        const u = await c.query(`
+          UPDATE place_seed_raw k SET
+            price_eur           = GREATEST(k.price_eur, l.price_eur),
+            google_review_count = GREATEST(k.google_review_count, l.google_review_count),
+            summary_ko          = COALESCE(NULLIF(k.summary_ko, ''),        NULLIF(l.summary_ko, '')),
+            editorial_summary   = COALESCE(NULLIF(k.editorial_summary, ''), NULLIF(l.editorial_summary, '')),
+            name_ko             = COALESCE(NULLIF(k.name_ko, ''),           NULLIF(l.name_ko, '')),
+            name_local          = COALESCE(NULLIF(k.name_local, ''),        NULLIF(l.name_local, '')),
+            address             = COALESCE(NULLIF(k.address, ''),           NULLIF(l.address, '')),
+            image_url           = COALESCE(NULLIF(k.image_url, ''),         NULLIF(l.image_url, '')),
+            best_image_url      = COALESCE(NULLIF(k.best_image_url, ''),    NULLIF(l.best_image_url, '')),
+            google_maps_uri     = COALESCE(NULLIF(k.google_maps_uri, ''),   NULLIF(l.google_maps_uri, '')),
+            photo_urls          = CASE WHEN jsonb_typeof(k.photo_urls) = 'array' AND jsonb_array_length(k.photo_urls) > 0 THEN k.photo_urls ELSE l.photo_urls END,
+            latitude            = COALESCE(k.latitude, l.latitude),
+            longitude           = COALESCE(k.longitude, l.longitude),
+            category_tags       = (SELECT array_agg(DISTINCT t) FROM unnest(COALESCE(k.category_tags, '{}') || COALESCE(l.category_tags, '{}')) AS t),
+            phase_tags          = (SELECT array_agg(DISTINCT t) FROM unnest(COALESCE(k.phase_tags, '{}') || COALESCE(l.phase_tags, '{}')) AS t)
+          FROM place_seed_raw l
+          WHERE k.id = $1 AND l.id = $2`, [keep.id, aid]);
+        if (u.rowCount) merged++;
         const r = await c.query(`DELETE FROM place_seed_raw WHERE id = $1`, [aid]);
         if (r.rowCount) {
           archived++;
-          console.log(`✓ DELETE id=${aid} (= keep id=${keep.id} '${keep.name_en}') [tier=${g.matched_tier}]`);
+          console.log(`✓ MERGE+DELETE id=${aid} → keep id=${keep.id} '${keep.name_en}' [tier=${g.matched_tier}] (무손실 UNION)`);
         }
       }
     }
@@ -97,5 +121,5 @@ if (!cityId) { console.error('Usage: --city-id=<N> --date=<YYYY-MM-DD> --apply-t
   await c.end();
 
   console.log(`\n═══ 결과 ═══`);
-  console.log(`archived = ${archived} / errors = ${errors}`);
+  console.log(`merged(무손실 흡수) = ${merged} / archived(DELETE) = ${archived} / errors = ${errors}`);
 })();

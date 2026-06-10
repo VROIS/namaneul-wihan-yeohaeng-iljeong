@@ -44,10 +44,9 @@ OUTPUT (strict JSON, no markdown fences):
 ${OUTPUT_SPEC}
 
 ══════════════════════════════════════════════════════════════════════════════
-OUTSKIRT_HINTS 도시별 예시:
+OUTSKIRT_HINTS = 범용 표준 타입 (= 도시명·지명 0 = 전 도시 일괄, 2026-06-08 B 시뮬 입증):
 ══════════════════════════════════════════════════════════════════════════════
 
-Paris: Versailles / Disneyland Paris (Chessy) / Val d'Europe (Serris) / Saint-Denis / Boulogne-Billancourt / Vincennes / Saint-Germain-en-Laye / Fontainebleau / Chantilly / Auvers-sur-Oise / Giverny / 기타 Île-de-France
-Tokyo: Yokohama / Kamakura / Nikko / Hakone / 후지산 주변 (Kawaguchiko) / Mt. Takao / Odaiba 외곽
-Madrid: Toledo / Segovia / Alcalá de Henares / El Escorial / Aranjuez / Chinchón / Manzanares el Real
-(= 다른 도시 = 호출 시 = 도시별 day-trip 명소 list 명시)
+역사 구시가 도시 / 궁전·성·유적 / 자연·국립공원 / 즐길거리(놀이공원·액티비티) / 쇼핑몰
+(= Gemini 가 이 타입의 한국인 day-trip 명소를 도심 10-100km 에서 직접 발굴 = 특정 지명 미제공 = 범용.)
+(= 옛 도시별 town list[Paris/Tokyo/Madrid] = 1회성 = 폐기. run.ts UNIVERSAL_OUTSKIRT_TYPES 기본값.)

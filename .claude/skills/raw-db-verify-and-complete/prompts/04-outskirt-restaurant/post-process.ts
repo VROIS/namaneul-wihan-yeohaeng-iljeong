@@ -7,10 +7,10 @@
 // 정책 = §14 upsertPlace 단일 진입점 + §15 가격 GREATEST + day_zone 강제 'outskirt'
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(__dirname, '../../../../..');
+const ROOT = path.resolve(__dirname, '../../../../..');  // ⚠️ 2026-06-08 = prompts/04 un-archive 복귀 = 상위 5 (표준 스킬 위치 = 아카이브 ROOT 버그 근본해소)
 process.chdir(ROOT);
 
 const argv = Object.fromEntries(process.argv.slice(2).map(a => a.replace(/^--/, '').split('=')).map(([k, v]) => [k, v ?? 'true']));
@@ -66,11 +66,11 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--date=<YYYY-MM-DD>] [--dry]
   }
 
   // upsertPlace INSERT
-  const { upsertPlace } = await import(path.join(ROOT, 'server/services/place-upsert.ts'));
+  const { upsertPlace } = await import(pathToFileURL(path.join(ROOT, 'server/services/place-upsert.ts')).href);  // ⚠️ 2026-06-08 = Windows ESM file:// 변환 (ERR_UNSUPPORTED_ESM_URL_SCHEME 수정, 01-discover/post 와 동일)
   const today = new Date().toISOString().slice(0, 10);
 
   let inserted = 0, updated = 0, skipped = 0, errors = 0;
-  const matchedBy: Record<string, number> = { pid: 0, address: 0, coords: 0, name: 0, none: 0 };
+  const matchedBy: Record<string, number> = { pid: 0, uri: 0, address: 0, coords: 0, name_local: 0, name_en: 0, name_ko: 0, none: 0 };  // ⚠️ 2026-06-08 = 7단계 매처 키 정합
 
   for (const p of all) {
     try {

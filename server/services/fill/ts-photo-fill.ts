@@ -40,6 +40,11 @@ const ANCHOR_M = 100;
   if (!KEY) { await c.end(); console.error('Google key 미존재'); process.exit(1); }
   if (apply && (!supaPublicUrl || !storageKey)) { await c.end(); console.error(`Storage 설정 미비 (url=${supaPublicUrl}, key=${!!storageKey}) = 업로드 불가`); process.exit(1); }
 
+  // ⚠️ 수정금지(승인필요) 2026-06-10 = PM(유료) 전 Storage 무료 재링크 = 결제된 고아 이미지 재활용 (storage-image-relink, §16 / [[feedback_internal_first_recover]])
+  const { relinkStorageImages } = await import(pathToFileURL(path.join(ROOT, 'server/services/fill/storage-image-relink.ts')).href);
+  const relink = await relinkStorageImages({ cityId, apply, client: c, categories: cats });
+  if (relink.relinkable) console.log(`[재링크] storage 매칭 ${relink.relinkable}곳 ${apply ? `= ${relink.relinked} 무료 채움` : '(--apply 시 무료)'} → PM 대상 제외`);
+
   const rows = (await c.query(`
     WITH ranked AS (
       SELECT id, seed_category, name_en, name_local, latitude::float8 AS lat, longitude::float8 AS lng, google_place_id,
@@ -49,7 +54,7 @@ const ANCHOR_M = 100;
     )
     SELECT id, seed_category, name_en, name_local, lat, lng, google_place_id FROM ranked
     WHERE rn <= $3 AND image_url IS NULL AND best_image_url IS NULL AND (photo_urls IS NULL OR jsonb_array_length(photo_urls)=0)
-    ORDER BY seed_category`, [cityId, cats, top])).rows;
+    ORDER BY seed_category`, [cityId, cats, top])).rows.filter((r: any) => !relink.matchedIds.has(r.id));
 
   console.log(`═══ ts-photo-fill (city ${cityId} ${city?.name_en}) = TOP${top} 이미지없음 ${rows.length}곳 = €${(rows.length * 0.037).toFixed(2)} ═══`);
   if (!apply) {
@@ -66,6 +71,7 @@ const ANCHOR_M = 100;
     try {
       const ts = await tsSearch({
         apiKey: KEY, method: 'searchText', regionCode: city?.country_code || 'FR', languageCode: lang,
+        cityId, rawTag: `photo-${row.name_local || row.name_en || row.id}`,
         nameLocal: row.name_local || row.name_en, latitude: row.lat ?? null, longitude: row.lng ?? null,
         anchorRadiusM: row.lat != null ? ANCHOR_M : undefined, maxResults: 1,
       });

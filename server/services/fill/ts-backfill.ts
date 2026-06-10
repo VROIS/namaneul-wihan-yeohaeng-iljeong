@@ -19,7 +19,9 @@ const cityId = Number(argv['city-id'] || 0);
 const apply = argv['apply'] === 'true';
 const lang = argv['lang'] ? String(argv['lang']) : 'ko';
 const cats = argv['category'] ? String(argv['category']).split(',').map((s) => s.trim()) : ['heritage', 'hotspot', 'attraction', 'adventure', 'healing', 'shopping'];
-if (!cityId) { console.error('Usage: --city-id=<N> [--apply] [--lang=fr] [--category=heritage,...]'); process.exit(1); }
+// ⚠️ 2026-06-09 사용자 승인 = --ids 추가형 필터 = 특정 행 id 만 타깃(= 풀 전체 backfill 금지 시 = 노출 대상 no-PID 만 검증). 없으면 기존 동작 불변.
+const ids = argv['ids'] ? String(argv['ids']).split(',').map((s) => Number(s.trim())).filter((n) => Number.isFinite(n) && n > 0) : null;
+if (!cityId) { console.error('Usage: --city-id=<N> [--apply] [--lang=fr] [--category=heritage,...] [--ids=1,2,3]'); process.exit(1); }
 
 const ANCHOR_M = 100; // 좌표 앵커 반경(m) = 동명 다른장소 차단 (= 사용자 ~10m 내외 의도 / 100m 실용 앵커)
 const hkm = (a: any, b: any) => {
@@ -44,7 +46,8 @@ const hkm = (a: any, b: any) => {
     `SELECT id, seed_category, name_en, name_local, address, latitude::float8 AS lat, longitude::float8 AS lng, google_review_count AS rc
      FROM place_seed_raw
      WHERE city_id=$1 AND seed_category = ANY($2::text[]) AND google_place_id IS NULL
-     ORDER BY seed_category, google_review_count DESC NULLS LAST`, [cityId, cats])).rows;
+     ${ids ? 'AND id = ANY($3::int[])' : ''}
+     ORDER BY seed_category, google_review_count DESC NULLS LAST`, ids ? [cityId, cats, ids] : [cityId, cats])).rows;
 
   console.log(`═══ ts-backfill (city ${cityId} ${city?.name_en}) = PID 없는 ${rows.length}곳 = €${(rows.length * 0.0299).toFixed(2)} ═══`);
   if (!apply) {
@@ -59,6 +62,7 @@ const hkm = (a: any, b: any) => {
     try {
       const ts = await tsSearch({
         apiKey: KEY, method: 'searchText', regionCode: city?.country_code || 'FR', languageCode: lang,
+        cityId, rawTag: `backfill-${row.name_en || row.id}`,
         nameLocal: row.name_local || row.name_en, address: row.address,
         latitude: row.lat ?? null, longitude: row.lng ?? null,
         anchorRadiusM: row.lat != null ? ANCHOR_M : undefined, maxResults: 1,

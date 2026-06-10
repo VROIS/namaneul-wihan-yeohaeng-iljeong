@@ -5,7 +5,7 @@
 //   npx tsx .claude/skills/raw-db-verify-and-complete/prompts/03-downtown-restaurant/post-process.ts --city-id=19 --date=2026-05-20 [--dry]
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '../../../../..');
@@ -57,10 +57,10 @@ if (!cityId) { console.error('Usage: --city-id=<N> --date=<YYYY-MM-DD> [--dry]')
 
   if (dryRun) { console.log('\n=== DRY-RUN === sample:', all.slice(0, 3)); process.exit(0); }
 
-  const { upsertPlace } = await import(path.join(ROOT, 'server/services/place-upsert.ts'));
+  const { upsertPlace } = await import(pathToFileURL(path.join(ROOT, 'server/services/place-upsert.ts')).href);  // ⚠️ 2026-06-08 = Windows ESM file:// 변환 (ERR_UNSUPPORTED_ESM_URL_SCHEME 수정)
   const today = new Date().toISOString().slice(0, 10);
   let inserted = 0, updated = 0, skipped = 0, errors = 0;
-  const matchedBy: Record<string, number> = { pid: 0, address: 0, coords: 0, name: 0, none: 0 };
+  const matchedBy: Record<string, number> = { pid: 0, uri: 0, address: 0, coords: 0, name_local: 0, name_en: 0, name_ko: 0, none: 0 };  // ⚠️ 2026-06-08 = 7단계 매처 키 정합
 
   for (const { place: p } of all) {
     try {

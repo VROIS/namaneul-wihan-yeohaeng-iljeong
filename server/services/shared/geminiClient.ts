@@ -7,6 +7,7 @@
  */
 
 import { GoogleGenAI } from "@google/genai";
+import { saveRaw } from "./save-raw";
 
 const MODEL_ID = "gemini-3-flash-preview";
 const TEMPERATURE = 0.2;
@@ -35,6 +36,9 @@ export interface GeminiJsonOptions {
   maxOutputTokens?: number;
   /** = 사용자 SSOT (= 2026-05-17) = 구글 서치 그라운딩 활성 (= tools) */
   googleSearch?: boolean;
+  /** ⚠️ raw 저장 맥락 (= shared/save-raw) = cityId(발굴) 또는 미지정→'runtime'(동선·메인앱). + 파일명 태그 */
+  contextId?: string | number | null;
+  rawTag?: string | null;
 }
 
 export interface GeminiJsonResult<T = any> {
@@ -87,6 +91,15 @@ export async function geminiJson<T = any>(
   } catch (e: any) {
     parseError = e.message || String(e);
   }
+
+  // ⚠️ 외부호출 raw 저장 강제 (= 사용/DB 입력 전 선행) = 발굴·런타임(동선·메인앱) 둘 다 = Supabase Storage. best-effort.
+  await saveRaw({
+    source: "gemini",
+    contextId: opts?.contextId,
+    tag: opts?.rawTag || (opts?.googleSearch ? "grounded" : "json"),
+    request: { prompt, model: opts?.model || MODEL_ID, googleSearch: !!opts?.googleSearch },
+    raw: { text: raw, finishReason },
+  });
 
   return { raw, data, finishReason, parseError };
 }
