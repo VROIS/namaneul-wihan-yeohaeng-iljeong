@@ -343,7 +343,7 @@ export function buildRouteLocal(
         transit_mode: mode,
         transit_min: tr.duration,
       };
-      if (it.rest && it.p.estimatedPriceEur != null) scene.price_per_person_eur = it.p.estimatedPriceEur;
+      if (it.rest && it.p.estimatedPriceEur != null) scene.price_eur = it.p.estimatedPriceEur;
       if (it.p.summaryKo) scene.selection_reason_ko = it.p.summaryKo;
       if (it.p.editorialSummary) scene.shortform_ko = it.p.editorialSummary;
       return scene;

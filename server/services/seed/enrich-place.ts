@@ -37,7 +37,7 @@ interface GeminiOutputPlace {
   longitude: number | null;
   summary_ko: string | null;
   editorial_summary: string | null;
-  estimated_price_eur: number | null;
+  price_eur: number | null;
 }
 
 interface GeminiResponse {
@@ -127,7 +127,7 @@ function buildPrompt(input: GeminiInputPlace[]): string {
       "longitude": <경도 6 자리 = 예 2.294481>,
       "summary_ko": "<한 줄 숏폼 대사 = 인스타/FOMO 사회적 검증 = 한국어 25 자 이내>",
       "editorial_summary": "<한 줄 한국인 관점 선정 이유 = 코믹/위트 후킹 카피 = 한국어 35 자 이내>",
-      "estimated_price_eur": <1인 입장료 또는 평균 식대 EUR 숫자 = shopping 은 null>
+      "price_eur": <1인 입장료 또는 평균 식대 EUR 숫자 = shopping 은 null>
     }
   ]
 }
@@ -138,7 +138,7 @@ function buildPrompt(input: GeminiInputPlace[]): string {
 3. 좌표 = 6 자리 소수 (= 예 48.858370, 2.294481)
 4. address = 번지부터 국가까지 완전 (= 부분 주소 X)
 5. summary_ko / editorial_summary = 한국어만 (= 영어 단어 혼용 X)
-6. estimated_price_eur = shopping 카테고리 = null 강제 / 그 외 = 합리적 EUR 정수
+6. price_eur = shopping 카테고리 = null 강제 / 그 외 = 합리적 EUR 정수
 7. 응답 = 위 JSON 만 (= 설명/주석/마크다운 X)
 
 입력 ${input.length} 장소:
@@ -210,8 +210,8 @@ export async function enrichPlaceByGemini(
         const isShopping = orig.seedCategory === 'shopping';
         const priceEur = isShopping
           ? null
-          : p.estimated_price_eur != null
-            ? p.estimated_price_eur
+          : p.price_eur != null
+            ? p.price_eur
             : null;
         const r = await upsertPlace({
           cityId,

@@ -42,9 +42,9 @@ if (!cityId) { console.error('Usage: --city-id=<N> --date=<YYYY-MM-DD> [--apply]
   for (const v of valid) {
     const row: any = cur.get(v.id);
     if (!row) continue;
-    if (row.p == null) { if (v.price_per_person_eur != null) priceFill++; continue; }
-    if (v.price_per_person_eur == null) continue;
-    const diff = Math.abs(v.price_per_person_eur - row.p);
+    if (row.p == null) { if (v.price_eur != null) priceFill++; continue; }
+    if (v.price_eur == null) continue;
+    const diff = Math.abs(v.price_eur - row.p);
     if (diff === 0) d0++; else if (diff <= 5) d5++; else if (diff <= 10) d10++; else d10p++;
   }
   const cmpN = d0 + d5 + d10 + d10p;
@@ -66,7 +66,7 @@ if (!cityId) { console.error('Usage: --city-id=<N> --date=<YYYY-MM-DD> [--apply]
            editorial_summary = COALESCE(NULLIF($3,''), editorial_summary),
            price_eur = COALESCE(price_eur, $4::real)
          WHERE id=$1 AND city_id=$5 AND seed_category='restaurant'`,
-        [v.id, v.summary_ko || null, v.editorial_summary || null, v.price_per_person_eur ?? null, cityId]);
+        [v.id, v.summary_ko || null, v.editorial_summary || null, v.price_eur ?? null, cityId]);
       upd += r.rowCount || 0;
     }
     if (upd !== valid.length) { await c.query('ROLLBACK'); console.error(`✗ 건수 불일치 (upd=${upd} != ${valid.length}) = ROLLBACK`); await c.end(); process.exit(1); }

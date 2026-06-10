@@ -51,11 +51,11 @@ if (!cityId) { console.error('Usage: --city-id=<N> --date=<YYYY-MM-DD> [--apply]
   // 가격 변경 미리보기 (= 표본)
   const upIds = ups.map(u => u.id);
   const cur = new Map((upIds.length ? (await c.query(`SELECT id, price_eur::float8 p, (latitude IS NULL) noc FROM place_seed_raw WHERE id = ANY($1::int[])`, [upIds])).rows : []).map((r: any) => [r.id, r]));
-  const priceChanged = ups.filter(u => u.price_per_person_eur != null && cur.get(u.id) && Math.abs((cur.get(u.id) as any).p - u.price_per_person_eur) >= 5);
+  const priceChanged = ups.filter(u => u.price_eur != null && cur.get(u.id) && Math.abs((cur.get(u.id) as any).p - u.price_eur) >= 5);
   const coordFilled = ups.filter(u => u.lat && cur.get(u.id) && (cur.get(u.id) as any).noc);
   console.log(`\n✏️ 덮어쓰기 ${ups.length} 곳 = 좌표 신규충전 ${coordFilled.length} / 가격변경(±5€↑) ${priceChanged.length}`);
   console.log(`  가격 변경 표본:`);
-  priceChanged.slice(0, 8).forEach(u => console.log(`    ${u.id} ${u.name_local}: €${(cur.get(u.id) as any).p} → €${u.price_per_person_eur}`));
+  priceChanged.slice(0, 8).forEach(u => console.log(`    ${u.id} ${u.name_local}: €${(cur.get(u.id) as any).p} → €${u.price_eur}`));
 
   if (!apply) {
     console.log(`\n=== DRY-RUN (쓰기 0) === 실행하려면 --apply`);
@@ -76,7 +76,7 @@ if (!cityId) { console.error('Usage: --city-id=<N> --date=<YYYY-MM-DD> [--apply]
            name_local = COALESCE($4, name_local), address = COALESCE($5, address),
            price_eur = COALESCE($6::real, price_eur)
          WHERE id=$1 AND city_id=$7 AND seed_category='restaurant'`,
-        [u.id, u.lat ?? null, u.lng ?? null, u.name_local ?? null, u.address ?? null, u.price_per_person_eur ?? null, cityId]);
+        [u.id, u.lat ?? null, u.lng ?? null, u.name_local ?? null, u.address ?? null, u.price_eur ?? null, cityId]);
       upN += r.rowCount || 0;
     }
     const after = (await c.query(`SELECT count(*)::int n FROM place_seed_raw WHERE city_id=$1 AND seed_category='restaurant'`, [cityId])).rows[0].n;

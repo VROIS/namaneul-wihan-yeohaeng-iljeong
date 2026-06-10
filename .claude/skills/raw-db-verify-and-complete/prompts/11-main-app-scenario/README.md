@@ -74,7 +74,7 @@
     scenes: [{
       slot, time, type, place_id, name_en, name_ko, name_local,
       address, lat, lng,
-      price_per_person_eur,    // ⚠️ 식당만 = 1 인 EUR 1 가지만 (= 2 인 가격 X = 단위 모호 결함 차단 2026-05-25)
+      price_eur,    // ⚠️ 식당만 = 1 인 EUR 1 가지만 (= 2 인 가격 X = 단위 모호 결함 차단 2026-05-25)
       distance_from_prev_km, transit_mode, transit_min,
       visual_cue_ko, narration_ko, subtitle_ko,
     }]
@@ -140,7 +140,7 @@ for (const scene of response.scenes) {
       cityId, seedCategory: 'restaurant',
       nameEn: scene.name_en, nameLocal: scene.name_local,
       address: scene.address, latitude: scene.lat, longitude: scene.lng,
-      priceEur: scene.price_per_person_eur,  // ⚠️ PSR 단위 = 1인
+      priceEur: scene.price_eur,  // ⚠️ PSR 단위 = 1인
     });
     // = 5 단계 매칭 자동 (= PID/주소/좌표/이름 9조합)
     // = 매칭 → UPDATE (= COALESCE 옛 우선 + GREATEST 가격)

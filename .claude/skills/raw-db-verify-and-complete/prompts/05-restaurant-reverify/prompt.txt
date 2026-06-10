@@ -27,6 +27,6 @@ Return STRICT JSON array only (no markdown wrappers). Per restaurant, ONLY these
 - name_local (Google Maps 공식 현지명. renamed 면 = 새 식당명 기준)
 - address (FULL Google Maps address: number + street + postal code + city)
 - lat, lng (Google Maps 좌표, decimal 6 자리; 못 찾으면 null)
-- price_per_person_eur (1인당 평균 식사가 EUR, grounded; operating/renamed = 현(새) 식당 기준; 모르면 null)
+- price_eur (1인당 평균 식사가 EUR, grounded; operating/renamed = 현(새) 식당 기준; 모르면 null)
 INPUT (${COUNT} restaurants): ${INPUT_JSON}
-OUTPUT (JSON array): [{"id":<n>,"closure_status":"operating|temporarily_closed|permanently_gone|renamed","renamed_to":<str|null>,"name_local":"..","address":"..","lat":<n|null>,"lng":<n|null>,"price_per_person_eur":<n|null>}]
+OUTPUT (JSON array): [{"id":<n>,"closure_status":"operating|temporarily_closed|permanently_gone|renamed","renamed_to":<str|null>,"name_local":"..","address":"..","lat":<n|null>,"lng":<n|null>,"price_eur":<n|null>}]

@@ -94,7 +94,7 @@ const dryRun = argv['dry'] === 'true';
     for (const p of places) {
       try {
         // shopping = price_eur null 강제 (= §15)
-        const priceEur = cat === 'shopping' ? null : (p.estimated_price_eur ?? null);
+        const priceEur = cat === 'shopping' ? null : (p.price_eur ?? null);
 
         // ⚠️ 수정금지(승인필요) 2026-06-09/10 = --dry = 쓰기 0 + matcher.ts 시뮬레이션 (옛 버그: dryRun 미사용으로 실제 썼음).
         if (dryRun) {

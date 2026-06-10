@@ -17,7 +17,7 @@
  * UPDATE 정책 (= 사용자 SSOT 2026-06-03 = 최신 우선 확정):
  *   - 식별/검증 데이터 (name/주소/좌표/PID/URI/리뷰수) = COALESCE 새 우선 (= 최신 TS 가 가장 신뢰)
  *   - 이미지 = COALESCE 새 우선 (= 새 값 있을 때만 교체, 없으면 옛 값 보존)
- *   - 가격 = GREATEST 비싼 쪽 (= 신뢰 보호 / priceOverwrite=true 시에만 새 값 덮기)
+ *   - 가격 = COALESCE 새 우선 (= 최신최우선 = 전 컬럼 동일. 옛 GREATEST 폐기 2026-06-10 = 레거시 garbage 영구잠금 버그 해소)
  *   - 카피 (summary_ko/editorial_summary) = 새 우선 (= 큐레이션 갱신)
  *   - tags = UNION (= 누적)
  */
@@ -122,11 +122,12 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
     // UPDATE = 사용자 SSOT 2026-05-18 = "모든 정보 최신 덮어씀" (= 옛 COALESCE 옛 우선 폐기)
     // = 모든 필드 = 새 값 있으면 새 / 없으면 옛 유지 (= COALESCE 새 → 옛 순서)
     // = tags = UNION (= 누적 유지)
-    // ⚠️ 수정금지(승인필요) 2026-06-02 = priceOverwrite=true (= TS discovery 풀) → 가격도 새 값 덮어쓰기(오염 청소)
-    //   = false(기본) → GREATEST 비싼 쪽 유지 ([[feedback_price_max_always]] = 물가 항상 오름)
-    const priceExpr = p.priceOverwrite
-      ? sql`COALESCE(${p.priceEur || null}::real, price_eur)`
-      : sql`COALESCE(GREATEST(${p.priceEur || null}::real, price_eur), ${p.priceEur || null}::real, price_eur)`;
+    // ⚠️ 수정금지(승인필요) 2026-06-10 사용자 SSOT = 가격 = 최신최우선(COALESCE 새-우선) = 전 컬럼 동일 원칙.
+    //   = 옛 GREATEST(비싼 쪽, 2026-05-15 SSOT) 폐기 = 레거시 garbage(€88K) 영구잠금 버그 근본해소.
+    //   = 출처(price_source) 있는 최신 입력이 정답(물가 상승분도 최신 재입력이 반영). priceOverwrite = 무의미화(기본이 새-우선).
+    // ⚠️ 수정금지(승인필요) 2026-06-11 사용자 SSOT = `?? null` 사용(옛 `|| null` 폐기) = 가격 0(무료) 보존.
+    //   = `0 || null`=null 이면 무료 장소가 옛 garbage 가격을 못 덮는 버그(프롬프트는 "무료=0" 지시, 파서는 `?? null`로 0 살림). 0은 정상 가격.
+    const priceExpr = sql`COALESCE(${p.priceEur ?? null}::real, price_eur)`;
     await db.execute(sql`
       UPDATE place_seed_raw SET
         name_en       = COALESCE(${p.nameEn}, name_en),
@@ -141,8 +142,8 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
         google_maps_uri = COALESCE(${p.googleMapsUri || null}, google_maps_uri),
         image_url     = COALESCE(${p.imageUrl || null}, image_url),
         image_attribution = COALESCE(${p.imageAttribution || null}, image_attribution),
-        -- ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT [[feedback_price_max_always]] = GREATEST 비싼 쪽 + COALESCE 안전망
-        -- = 한 쪽만 있으면 = 있는 쪽 / 둘 다 있으면 = 비싼 쪽 덮어쓰기 (= 신뢰 보호 + 물가 항상 오름)
+        -- ⚠️ 수정금지(승인필요) 2026-06-10 = 가격 = 최신최우선(COALESCE 새-우선). 새 값 있으면 새 / 없으면 옛 보존.
+        -- = 옛 GREATEST 폐기(레거시 garbage 영구잠금 해소). 최신 재입력이 물가/정정 모두 반영.
         price_eur     = ${priceExpr},
         editorial_summary = COALESCE(${p.shortformKo || null}, editorial_summary),
         summary_ko        = COALESCE(${p.selectionReasonKo || null}, summary_ko),
@@ -185,7 +186,7 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
         googlePrimaryType: p.googlePrimaryType || null,
         imageUrl: p.imageUrl || null,
         imageAttribution: p.imageAttribution || null,
-        priceEur: p.priceEur || null,
+        priceEur: p.priceEur ?? null,  // ⚠️ 수정금지(승인필요) 2026-06-11 = `?? null`(옛 `||` 폐기) = 무료(0) 신규 장소도 0 저장(NULL 아님)
         editorialSummary: p.shortformKo || null,
         summaryKo: p.selectionReasonKo || null,
         dayZone: p.dayZone || null,

@@ -106,14 +106,14 @@
 - 점심 = 일자 중간 시각 + 좌표 인근.
 - 저녁 = 일자 마지막 종착지 + 좌표 인근.
 - 식비 = 일일 한도 €${mealBudget.dailyTotal} (= ${mealBudget.label}) 내 자유 분배 (= 동선 따른 식당 선택 자유 = 점심/저녁 비율 강제 X).
-- ⚠️ Gemini 발견 식당 = 7 필드 반드시 (= name_local / address / lat / lng / **price_per_person_eur = 1 인 EUR 1 가지만** / **selection_reason_ko** / **shortform_ko**).
+- ⚠️ Gemini 발견 식당 = 7 필드 반드시 (= name_local / address / lat / lng / **price_eur = 1 인 EUR 1 가지만** / **selection_reason_ko** / **shortform_ko**).
 - ⚠️ **price_for_2_eur 같은 2 인 가격 요청 X** (= Gemini 가 2 인 가격을 1 인 필드에 입력 위험 = 사용자 SSOT 2026-05-25 = 단위 모호 결함).
 - **selection_reason_ko** = 한국어 한 줄 = 인스타 성지/네이버 블로그/유튜브 vlog 사회적 검증 (→ DB summary_ko).
 - **shortform_ko** = 한국어 한 줄 = 코믹/위트 후킹 = "프사각", "본전 뽑음" 한국 슬랭 (→ DB editorial_summary).
 - 모두 Google Search grounding 검증 = 환각 금지.
 
 # 활동 응답 양식 (= 2026-05-28 사용자 SSOT 신규)
-- 활동 = `address` + `name_local` + `price_per_person_eur` 응답 (= 입장료/체험비 1 인 EUR = PSR 오류 정정 base = R3 백필).
+- 활동 = `address` + `name_local` + `price_eur` 응답 (= 입장료/체험비 1 인 EUR = PSR 오류 정정 base = R3 백필).
 - 활동 = 카피 (selection_reason_ko / shortform_ko) 응답 X (= PSR 기존 데이터 사용).
 
 # 입력
@@ -133,7 +133,7 @@ ${JSON.stringify(inputJson, null, 2)}
           "name_local": <활동 = 입력 echo 또는 보강 / 식당 = Gemini 생성>,
           "address": "<FULL = 활동 + 식당 모두 필수>",
           "lat": <number>, "lng": <number>,
-          "price_per_person_eur": <활동 + 식당 모두 = € 1인 EUR = 1 가지만 = 2 인 가격 X = 활동 = 입장료/체험비 / 식당 = 식사비 / 무료 = 0>,
+          "price_eur": <활동 + 식당 모두 = € 1인 EUR = 1 가지만 = 2 인 가격 X = 활동 = 입장료/체험비 / 식당 = 식사비 / 무료 = 0>,
           "distance_from_prev_km": <number>,
           "transit_mode": "${transportMode}",
           "transit_min": <number>,
@@ -212,7 +212,7 @@ ${JSON.stringify(inputJson, null, 2)}
 | `days[].scenes[].name_en/ko/local` | 입력 그대로 (활동) / Gemini (식당) | |
 | `days[].scenes[].address` | 입력 그대로 / Gemini grounding | 식당 = FULL 필수 |
 | `days[].scenes[].lat/lng` | 입력 그대로 / Gemini grounding | 6 자리 |
-| `days[].scenes[].price_per_person_eur` | Gemini (= 식당만) | **1 인 EUR = 1 가지만** |
+| `days[].scenes[].price_eur` | Gemini (= 식당만) | **1 인 EUR = 1 가지만** |
 | `days[].scenes[].distance_from_prev_km` | Gemini (= Google Maps) | hop |
 | `days[].scenes[].transit_mode` | Gemini (= transport_mode 분기) | walk/metro/RER/bus / private_guide |
 | `days[].scenes[].transit_min` | Gemini (= Google Maps) | |
@@ -230,7 +230,7 @@ for each newRestaurant:
   upsertPlace({
     cityId, seedCategory: 'restaurant',
     nameEn, nameLocal, address, latitude, longitude,
-    priceEur: price_per_person_eur,
+    priceEur: price_eur,
   })
        ↓
   5 단계 매칭 자동 (= 헌법 §14 단일 진입점)

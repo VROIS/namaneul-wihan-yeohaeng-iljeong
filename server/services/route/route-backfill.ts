@@ -77,7 +77,7 @@ export async function backfillFromRoute(
             address: scene.address,
             latitude: scene.lat,
             longitude: scene.lng,
-            priceEur: scene.price_per_person_eur ?? null,
+            priceEur: scene.price_eur ?? null,
             // ⚠️ 2026-05-26 = 사용자 SSOT = PSR 컬럼 채움 (= 09-main-app-itinerary 표준 매핑)
             selectionReasonKo: scene.selection_reason_ko || null,
             shortformKo: scene.shortform_ko || null,

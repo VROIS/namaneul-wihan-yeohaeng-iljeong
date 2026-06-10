@@ -32,7 +32,7 @@ For each place include only:
 - name_local (local language name, if different — for TS matching)
 - name_ko (한국 여행자가 부르는 이름)
 - address (FULL: 번지 + 거리 + 우편번호 + 도시 + 국가)
-- price_eur_max (1인당 평균 EUR, 상한가. 확실하지 않으면 null)
+- price_eur (1인당 평균 EUR, 상한가. 확실하지 않으면 null)
 - distance_km_from_center (haversine from CITY_CENTER, 1 decimal, > 10)
 - day_zone: "outskirt" (= 강제)
 - selection_reason_ko (한국어 한 줄 = 인스타 성지/네이버 블로그/유튜브 vlog 사회적 검증. → DB summary_ko)

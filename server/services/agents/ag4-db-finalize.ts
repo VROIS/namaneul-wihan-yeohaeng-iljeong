@@ -267,12 +267,12 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
         : undefined;
 
       const mealPrice = isMeal
-        ? (scene.price_per_person_eur ??
+        ? (scene.price_eur ??
           (mealType === "lunch" ? mealBudget.lunch : mealBudget.dinner))
         : undefined;
       const mealPriceLabel = isMeal
-        ? scene.price_per_person_eur
-          ? `€${scene.price_per_person_eur}`
+        ? scene.price_eur
+          ? `€${scene.price_eur}`
           : mealType === "lunch"
             ? mealBudget.lunchLabel
             : mealBudget.dinnerLabel
@@ -301,7 +301,7 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
         endTime: addMinutes(scene.time, slotDuration),
         // 가격
         estimatedPriceEur: isMeal
-          ? scene.price_per_person_eur
+          ? scene.price_eur
           : (inputPlace?.estimatedPriceEur ?? 0),
         mealPrice,
         mealPriceLabel,

@@ -57,7 +57,7 @@ function sanitizePriceEur(raw: any): number {
 }
 
 /** ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT = price_eur 단일 컬럼 (SSOT §14 + 제15조)
- *  순차: 1) Gemini estimatedCostEur > 2) seed_raw priceEur (= GREATEST 비싼 쪽)
+ *  순차: 1) Gemini price_eur > 2) seed_raw priceEur (= GREATEST 비싼 쪽)
  *        > 3) 매트릭스 폴백 (= 식당 = MEAL_BUDGET / 비식당 = 0)
  *  = 옛 enrichedPrice 파라미터 폐기 (= ta enrichment 폐기) = geminiPrice 단일 입력 */
 function resolvePrice(
@@ -112,7 +112,7 @@ interface GeminiPlace {
   selection_reason_ko?: string;  // ⚠️ 2026-05-14 v3 신규 = 인스타/FOMO = → summary_ko
   shortform_ko?: string;          // ⚠️ 2026-05-14 v3 신규 = 코믹/위트 = → editorial_summary
   transitNote?: string; // 이전 장소에서 이 장소까지 이동 방법 (Gemini 생성)
-  estimatedCostEur: number;
+  price_eur: number;
 }
 
 interface GeminiDay {
@@ -442,7 +442,7 @@ ${dayRequirements}
 - 3 일+ 일정 시 = Day 2+ 한 날 = outskirt (= 도심에서 10-100km 외곽) day-trip 1-2 곳 포함 가능 (= 한국 여행객이 자주 찾는 외곽 명소/아울렛)
 
 [가격 원칙]
-- estimatedCostEur = ${nowYear}년 실제 입장료 (1인, EUR). 무료=0
+- price_eur = ${nowYear}년 실제 입장료 (1인, EUR). 무료=0
 - 점심 1인 ~€${mealBudget.lunch}, 저녁 1인 ~€${mealBudget.dinner}
 - 활동(activity) = 1인 입장료 / 식당(lunch/dinner) = 1인당 평균. 확실하지 않으면 0
 
@@ -454,13 +454,13 @@ For each place include (= ALL fields verified via Google Search grounding):
 - type ("activity" | "lunch" | "dinner")
 - latitude (= decimal 6 digits, e.g. 48.858370) [= REQUIRED for Text Search forwarding + matching key, final DB column — verify via Google Search, NO hallucination]
 - longitude (= decimal 6 digits, e.g. 2.294481) [= REQUIRED for Text Search forwarding + matching key, final DB column — verify via Google Search, NO hallucination]
-- estimatedCostEur (1 인 EUR)
+- price_eur (1 인 EUR)
 - selection_reason_ko (한국어 한 줄 = 한국 여행객 트렌드 = 인스타 성지/한국 vlog 등 사회적 검증)
 - shortform_ko (한국어 한 줄 = 장소에 대한 코믹/위트 = Claude 톤. 단순 정보 X = "프사각", "본전 뽑음" 같은 한국 슬랭)
 
 OUTPUT (strict JSON, no markdown fences):
 {"days":[{"day":1,"theme":"테마","places":[
-  {"name":"Eiffel Tower","nameKo":"에펠탑","nameLocal":"Tour Eiffel","address":"Champ de Mars, 5 Av. Anatole France, 75007 Paris","type":"activity","latitude":48.858370,"longitude":2.294481,"estimatedCostEur":29.4,"selection_reason_ko":"파리 인스타 인증샷 1순위 성지","shortform_ko":"파리 왔으면 외쳐줘야 국룰 '나 파리다!'"}
+  {"name":"Eiffel Tower","nameKo":"에펠탑","nameLocal":"Tour Eiffel","address":"Champ de Mars, 5 Av. Anatole France, 75007 Paris","type":"activity","latitude":48.858370,"longitude":2.294481,"price_eur":29.4,"selection_reason_ko":"파리 인스타 인증샷 1순위 성지","shortform_ko":"파리 왔으면 외쳐줘야 국룰 '나 파리다!'"}
 ]}]}`;
 
   try {
@@ -577,7 +577,7 @@ OUTPUT (strict JSON, no markdown fences):
               type: p.type,
               startTime: p.startTime,
               endTime: p.endTime,
-              estimatedCostEur: (p as any).estimatedCostEur,
+              price_eur: (p as any).price_eur,
               reason: p.reason,
             })) || [],
           })),
@@ -653,13 +653,13 @@ async function step2_enrichAndBuild(
         tags: isMeal ? ['restaurant', 'food'] : [],
         vibeTags: isMeal ? ['Foodie' as const] : [],
         image: '',
-        priceEstimate: sanitizePriceEur(gPlace.estimatedCostEur) > 0 ? `€${sanitizePriceEur(gPlace.estimatedCostEur)}` : '무료',
+        priceEstimate: sanitizePriceEur(gPlace.price_eur) > 0 ? `€${sanitizePriceEur(gPlace.price_eur)}` : '무료',
         placeTypes: isMeal ? ['restaurant'] : ['tourist_attraction'],
         recommendedTime: gPlace.startTime < '12:00' ? 'morning' : gPlace.startTime < '17:00' ? 'afternoon' : 'evening',
         city: formData.destination,
         koreanPopularityScore: 0,
         googleMapsUrl: '',
-        estimatedPriceEur: sanitizePriceEur(gPlace.estimatedCostEur),
+        estimatedPriceEur: sanitizePriceEur(gPlace.price_eur),
         // ⚠️ 수정금지(승인필요) 2026-05-14 = AG3 매칭용 + DB INSERT 매핑
         // = geminiAddress = 행정주소 (= 1순위 매칭 키)
         // = nameKo/nameLocal = saveNewPlacesToDB INSERT 매핑 (= 한국어/원어명 누락 방지)
@@ -844,8 +844,8 @@ async function step2_enrichAndBuild(
         mealType: s.gPlace.type === 'lunch' ? 'lunch' as const : s.gPlace.type === 'dinner' ? 'dinner' as const : undefined,
         // 원칙 1+2: Gemini 가격 최우선, 0이면 mealBudget fallback
         mealPrice: isMeal
-          ? (s.gPlace.estimatedCostEur > 0
-            ? s.gPlace.estimatedCostEur
+          ? (s.gPlace.price_eur > 0
+            ? s.gPlace.price_eur
             : (s.gPlace.type === 'lunch' ? mealBudget.lunch : mealBudget.dinner))
           : undefined,
         mealPriceLabel: isMeal ? (s.gPlace.type === 'lunch' ? mealBudget.lunchLabel : mealBudget.dinnerLabel) : undefined,

@@ -91,7 +91,7 @@
 # 식당 자동 발견 + DB 백필
 - 점심 = 일자 중간 + 그 시각 전후 활동 좌표 인근 + 1인 €${mealBudget.lunch} 이내 (= ${mealBudget.lunchLabel}).
 - 저녁 = 일자 마지막 슬롯 = 일자 마지막 활동 좌표 인근 + 1인 €${mealBudget.dinner} 이내 (= ${mealBudget.dinnerLabel}).
-- ⚠️ Gemini 발견 식당 = 4 필드 반드시 (= name_local / address / lat / lng / **price_per_person_eur = 1 인 EUR 1 가지만**).
+- ⚠️ Gemini 발견 식당 = 4 필드 반드시 (= name_local / address / lat / lng / **price_eur = 1 인 EUR 1 가지만**).
 - ⚠️ **price_for_2_eur 같은 2 인 가격 요청 X** (= Gemini 가 2 인 가격을 1 인 필드에 입력 위험 = 사용자 SSOT 2026-05-25 = 단위 모호 결함).
 - 모두 Google Maps grounding 검증 = 환각 금지.
 
@@ -118,7 +118,7 @@ ${focus.sample_narration}
           "name_en": "<...>", "name_ko": "<...>", "name_local": "<...>",
           "address": "<FULL = 식당 필수>",
           "lat": <number>, "lng": <number>,
-          "price_per_person_eur": <식당만 = € 1인 EUR = 1 가지만 = 2 인 가격 X>,
+          "price_eur": <식당만 = € 1인 EUR = 1 가지만 = 2 인 가격 X>,
           "distance_from_prev_km": <number>,
           "transit_mode": "${transportMode === 'private_driver_guide' ? 'private_guide' : 'walk|metro|RER|bus'}",
           "transit_min": <number>,
@@ -188,7 +188,7 @@ ${focus.sample_narration}
 | `days[].scenes[].name_en/ko/local` | 입력 그대로 (활동) / Gemini (식당) | |
 | `days[].scenes[].address` | 입력 그대로 / Gemini grounding | 식당 = FULL 필수 |
 | `days[].scenes[].lat/lng` | 입력 그대로 / Gemini grounding | 6 자리 |
-| `days[].scenes[].price_per_person_eur` | Gemini (= 식당만) | **1 인 EUR = 1 가지만** (= 2 인 가격 요청 X = 단위 모호 결함 차단) |
+| `days[].scenes[].price_eur` | Gemini (= 식당만) | **1 인 EUR = 1 가지만** (= 2 인 가격 요청 X = 단위 모호 결함 차단) |
 | `days[].scenes[].distance_from_prev_km` | Gemini (= Google Maps) | hop |
 | `days[].scenes[].transit_mode` | Gemini (= transport_mode 분기) | walk/metro/RER/bus / private_guide |
 | `days[].scenes[].transit_min` | Gemini (= Google Maps) | |
@@ -207,7 +207,7 @@ for each newRestaurant:
   upsertPlace({
     cityId, seedCategory: 'restaurant',
     nameEn, nameLocal, address, latitude, longitude,
-    priceEur: price_per_person_eur,  // ⚠️ PSR 단위 = 1인
+    priceEur: price_eur,  // ⚠️ PSR 단위 = 1인
     ...
   })
        ↓

@@ -76,7 +76,7 @@ if (!cityId) { console.error('Usage: --city-id=<N> --date=<YYYY-MM-DD> [--dry]')
         longitude: null,
         selectionReasonKo: p.selection_reason_ko || null,
         shortformKo: p.shortform_ko || null,
-        priceEur: p.price_eur_max ?? null,        // GREATEST 정책
+        priceEur: p.price_eur ?? null,        // GREATEST 정책
         dayZone: 'core',                            // 강제
         distanceKmFromCenter: p.distance_km_from_center ?? null,
         collectionPhase: 'gemini3-2026-05',

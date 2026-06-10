@@ -89,7 +89,7 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--year=2026] [--batch=40] [-
     console.log(`      [id] G추정 vs TS실값 | summary // editorial`);
     parsed.slice(0, 12).forEach((p: any) => {
       const ts = tsPrice.get(p.id);
-      const g = p.price_per_person_eur;
+      const g = p.price_eur;
       const diff = (g != null && ts != null) ? ` (Δ${g - ts >= 0 ? '+' : ''}${Math.round(g - ts)})` : '';
       console.log(`      [${p.id}] G€${g ?? '?'} vs TS€${ts ?? 'null'}${diff} | ${p.summary_ko} // ${p.editorial_summary}`);
     });

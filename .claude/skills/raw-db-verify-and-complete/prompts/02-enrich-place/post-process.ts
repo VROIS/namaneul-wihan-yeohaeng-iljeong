@@ -65,7 +65,7 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--date=<YYYY-MM-DD>] [--dry]
       const existRow = (await c.query('SELECT seed_category, name_en, name_local, address, latitude, longitude, google_place_id, google_maps_uri FROM place_seed_raw WHERE id=$1', [p.id])).rows[0];
       if (!existRow) { skipped++; continue; }
       const cat = existRow.seed_category;
-      const priceEur = cat === 'shopping' ? null : (p.estimated_price_eur ?? null);
+      const priceEur = cat === 'shopping' ? null : (p.price_eur ?? null);
 
       const r = await upsertPlace({
         cityId,

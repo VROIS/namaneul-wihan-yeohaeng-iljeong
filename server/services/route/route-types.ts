@@ -75,7 +75,7 @@ export interface RouteScene {
   lat: number;
   lng: number;
   /** ⚠️ 식당만 = 1 인 EUR = 1 가지만 (= 2 인 가격 X) */
-  price_per_person_eur?: number;
+  price_eur?: number;
   distance_from_prev_km: number;
   transit_mode: "walk" | "metro" | "RER" | "bus" | "private_guide";
   transit_min: number;

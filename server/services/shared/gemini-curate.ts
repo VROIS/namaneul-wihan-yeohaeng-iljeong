@@ -27,7 +27,7 @@ export interface GeminiCurateOutput {
   nameKo: string | null;
   summaryKo: string | null;        // ← summary_ko (한국 트렌드/사회적 검증)
   editorialSummary: string | null; // ← editorial_summary (코믹/위트 후킹)
-  priceEur: number | null;         // ← estimated_price_eur (1인 입장료/식대, shopping=null)
+  priceEur: number | null;         // ← price_eur (1인 입장료/식대, shopping=null)
 }
 
 // 잘림 복구 파서 (= _call-config 표준)
@@ -89,7 +89,7 @@ export async function geminiCurate(
         nameKo: p.name_ko || null,
         summaryKo: p.summary_ko || null,
         editorialSummary: p.editorial_summary || null,
-        priceEur: p.estimated_price_eur ?? null,
+        priceEur: p.price_eur ?? null,
       });
     }
     i += batch.length;
