@@ -39,12 +39,7 @@ export async function runStartupMigrations(): Promise<void> {
     `);
     console.log("[Migration] ✅ 0007 bts_rank 적용 완료");
 
-    // 0008: place_seed_raw.place_id (places 브릿지, 가격·이미지 직연결)
-    await pool.query(`
-      ALTER TABLE "place_seed_raw"
-        ADD COLUMN IF NOT EXISTS "place_id" integer;
-    `);
-    console.log("[Migration] ✅ 0008 place_seed_raw.place_id 적용 완료");
+    // ⚠️ 수정금지(승인필요) 2026-06-11 = 0008 place_id 부팅마이그 제거 (= place_id 컬럼 DROP = 헛바퀴, 좀비 부활 차단)
 
     // 0009: place_seed_raw.google_place_id (바코드: places 테이블 100% 정확 연결)
     await pool.query(`
@@ -80,10 +75,12 @@ export async function runStartupMigrations(): Promise<void> {
     }
     // 0011: 다국어 장소명
     // ⚠️ 수정금지(승인필요) 2026-05-24 = Step 4 DB DROP = places 폐기 (= ALTER places 제거)
-    await pool.query("ALTER TABLE place_seed_raw ADD COLUMN IF NOT EXISTS name_local text, ADD COLUMN IF NOT EXISTS names_i18n jsonb;");
-    console.log("[Migration] 0011 name_local/names_i18n 적용 완료");
+    // ⚠️ 2026-06-11 = names_i18n 토큰 제거 (= DROP, 좀비 차단). name_local 만 보존.
+    await pool.query("ALTER TABLE place_seed_raw ADD COLUMN IF NOT EXISTS name_local text;");
+    console.log("[Migration] 0011 name_local 적용 완료");
     // 0012: SSoT 통합 - place_seed_raw에 좌표/평점/리뷰수/사진 컬럼 추가
-    await pool.query("ALTER TABLE place_seed_raw ADD COLUMN IF NOT EXISTS latitude real, ADD COLUMN IF NOT EXISTS longitude real, ADD COLUMN IF NOT EXISTS google_rating real, ADD COLUMN IF NOT EXISTS google_review_count integer, ADD COLUMN IF NOT EXISTS photo_urls jsonb, ADD COLUMN IF NOT EXISTS opening_hours jsonb, ADD COLUMN IF NOT EXISTS editorial_summary text;");
+    // ⚠️ 2026-06-11 = google_rating/photo_urls 토큰 제거 (= DROP, 좀비 차단). 나머지 보존.
+    await pool.query("ALTER TABLE place_seed_raw ADD COLUMN IF NOT EXISTS latitude real, ADD COLUMN IF NOT EXISTS longitude real, ADD COLUMN IF NOT EXISTS google_review_count integer, ADD COLUMN IF NOT EXISTS opening_hours jsonb, ADD COLUMN IF NOT EXISTS editorial_summary text;");
     console.log("[Migration] 0012 SSoT 통합 컬럼 적용 완료");
 
     // 0013: DB 정리 + SSoT 인앱 링크 컬럼
@@ -100,10 +97,6 @@ export async function runStartupMigrations(): Promise<void> {
     // (b) 깨진 URL 정리 — Google API/인스타 CDN
     // ⚠️ 수정금지(승인필요) 2026-05-24 = Step 4 DB DROP = place_images + celebrity_place_evidence 폐기 (= DELETE 제거)
     const cleanupResult = await pool.query(`
-      UPDATE place_seed_raw SET best_image_url = NULL
-        WHERE best_image_url LIKE '%places.googleapis.com%'
-           OR best_image_url LIKE '%fbcdn.net%'
-           OR best_image_url LIKE '%cdninstagram.com%';
       UPDATE place_seed_raw SET image_url = NULL
         WHERE image_url LIKE '%places.googleapis.com%'
            OR image_url LIKE '%fbcdn.net%'
@@ -111,13 +104,7 @@ export async function runStartupMigrations(): Promise<void> {
     `);
     console.log("[Migration] 0013b 깨진 URL 정리 완료");
 
-    // (c) SSoT 인앱 링크 컬럼 추가
-    await pool.query(`
-      ALTER TABLE place_seed_raw
-        ADD COLUMN IF NOT EXISTS instagram_post_url text,
-        ADD COLUMN IF NOT EXISTS tiktok_post_url text;
-    `);
-    console.log("[Migration] 0013c instagram_post_url/tiktok_post_url 컬럼 추가 완료");
+    // ⚠️ 수정금지(승인필요) 2026-06-11 = 0013c instagram/tiktok_post_url 부팅마이그 제거 (= DROP = 인스타 가짜 폐기, 좀비 차단)
 
     // 0014: multi-tag SSOT + 이미지 메타 + gemini3 표준화 17필드
     await pool.query(`
@@ -142,12 +129,7 @@ export async function runStartupMigrations(): Promise<void> {
     `);
     console.log("[Migration] 0015 google_maps_uri 컬럼 추가 완료");
 
-    // 0016: celeb_mention 컬럼 추가 (= Replit Agent 작업 보존, schema.ts 동기화)
-    await pool.query(`
-      ALTER TABLE place_seed_raw
-        ADD COLUMN IF NOT EXISTS celeb_mention text;
-    `);
-    console.log("[Migration] 0016 celeb_mention 컬럼 추가 완료");
+    // ⚠️ 수정금지(승인필요) 2026-06-11 = 0016 celeb_mention 부팅마이그 제거 (= DROP = 헛바퀴, 좀비 차단)
   } catch (err) {
     console.warn("[Migration] 스킵 또는 실패:", (err as Error).message);
   }

@@ -16,13 +16,7 @@ async function check() {
 
         console.log("\n[1] place_seed_raw 컬럼 목록:");
         console.table(res.rows);
-
-        const countRes = await db.execute(sql`SELECT count(*) FROM place_seed_raw WHERE unified_id IS NOT NULL`);
-        console.log(`\n[2] unified_id가 채워진 행 수: ${countRes.rows[0].count}`);
-
-        const sample = await db.execute(sql`SELECT id, name_ko, unified_id FROM place_seed_raw WHERE unified_id IS NOT NULL LIMIT 5`);
-        console.log("\n[3] 데이터 샘플:");
-        console.table(sample.rows);
+        // ⚠️ 2026-06-11 = unified_id 진단 블록 제거 (= DROP된 헛바퀴)
 
     } catch (e) {
         console.error("\n❌ 진단 중 오류 발생:", e);

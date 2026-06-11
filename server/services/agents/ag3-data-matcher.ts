@@ -192,8 +192,7 @@ export async function preloadCityData(
             nameLocal: placeSeedRaw.nameLocal,
             googlePlaceId: placeSeedRaw.googlePlaceId,
             googleMapsUri: placeSeedRaw.googleMapsUri,
-            imageUrl: placeSeedRaw.imageUrl, // ⚠️ 2026-05-20 = Google 1 순위
-            bestImageUrl: placeSeedRaw.bestImageUrl, // ⚠️ 2026-05-20 = WK/Wikidata SPARQL 2 순위 (= Google NULL 시 fallback)
+            imageUrl: placeSeedRaw.imageUrl, // ⚠️ 2026-06-11 = image_url(구글 PM) 1종 (best_image_url 폐기)
             address: placeSeedRaw.address,
             latitude: placeSeedRaw.latitude,
             longitude: placeSeedRaw.longitude,
@@ -204,7 +203,6 @@ export async function preloadCityData(
             dayZone: placeSeedRaw.dayZone,
             distanceKmFromCenter: placeSeedRaw.distanceKmFromCenter,
             imageAttribution: placeSeedRaw.imageAttribution,
-            photoUrls: placeSeedRaw.photoUrls,
             priceEur: placeSeedRaw.priceEur,
             rank: placeSeedRaw.rank,
             seedCategory: placeSeedRaw.seedCategory,

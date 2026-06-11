@@ -118,7 +118,8 @@ type TimelineCardProps = {
     endTime: string;
     priceEstimate: string;
     tags: string[];
-    nubiReason: string | null;
+    // ⚠️ 2026-06-11 = nubiReason 폐기 → summaryKo 흡수통합 (후킹 숏폼 차별점)
+    summaryKo: string | null;
   };
   index: number;
   isLast: boolean;
@@ -166,9 +167,9 @@ function TimelineCard({ place, index, isLast }: TimelineCardProps) {
           ) : null}
         </View>
 
-        {place.nubiReason && (
+        {place.summaryKo && (
           <Text style={styles.timelineReason} numberOfLines={2}>
-            💡 {place.nubiReason}
+            💡 {place.summaryKo}
           </Text>
         )}
       </View>

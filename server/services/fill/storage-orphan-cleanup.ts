@@ -39,8 +39,6 @@ const BUCKET = 'place-images';
     WHERE o.bucket_id=$2 AND o.name LIKE $1::text || '/%'
       AND NOT EXISTS(SELECT 1 FROM place_seed_raw p WHERE p.city_id=$1 AND (
         p.image_url LIKE '%' || o.name || '%'
-        OR p.best_image_url LIKE '%' || o.name || '%'
-        OR p.photo_urls::text LIKE '%' || o.name || '%'
       ))
   `, [cityId, BUCKET])).rows;
   await c.end();

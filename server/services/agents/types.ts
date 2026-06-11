@@ -118,7 +118,7 @@ export interface PlaceResult {
   userRatingCount?: number; // = PSR.googleReviewCount (= 식당 정렬 보조)
   selectionReasons?: string[];
   confidenceLevel?: "high" | "medium" | "low" | "minimal";
-  nubiReason?: string | null; // 차별화 선정이유 (= FE 진하게 표시)
+  // ⚠️ 수정금지(승인필요) 2026-06-11 = nubiReason 폐기 (= 헛바퀴) → summary_ko 흡수통합. 타입 제거로 컴파일러가 잔존 사용처 강제 노출.
   dayZone?: "core" | "outskirt" | null; // PSR.day_zone (= 일자 zone 매칭)
   // ⚠️ 수정금지(승인필요) 2026-05-28 = 사용자 SSOT = 결함 5 해소 = ag4 활동 매핑 꼭 필요한 5 필드만
   // = 옛 PlaceResult.description (= summary_ko || editorial_summary 머지) = 활동 카피 분리 안 됨 = 결함 5 원인

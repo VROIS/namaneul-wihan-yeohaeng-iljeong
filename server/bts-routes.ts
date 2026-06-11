@@ -23,12 +23,12 @@ const PLACE_COLS = {
   seedCategory: placeSeedRaw.seedCategory,
   categoryTags: placeSeedRaw.categoryTags,
   imageUrl: placeSeedRaw.imageUrl,
-  bestImageUrl: placeSeedRaw.bestImageUrl,
+  // ⚠️ 2026-06-11 = best_image_url DROP = 이미지 image_url(구글 PM) 1종 통일
   priceEur: placeSeedRaw.priceEur,
-  nubiReason: placeSeedRaw.nubiReason,
+  // ⚠️ 2026-06-11 = nubiReason/googleRating 헛바퀴 폐기 → summary_ko(후킹 숏폼 차별점) 흡수통합
+  summaryKo: placeSeedRaw.summaryKo,
   latitude: placeSeedRaw.latitude,
   longitude: placeSeedRaw.longitude,
-  googleRating: placeSeedRaw.googleRating,
   googleReviewCount: placeSeedRaw.googleReviewCount,
   editorialSummary: placeSeedRaw.editorialSummary,
   openingHours: placeSeedRaw.openingHours,
@@ -72,7 +72,7 @@ async function isImageAlive(url: string | null | undefined): Promise<boolean> {
 function effectiveImage(p: PlaceRow | null | undefined): string | null {
   if (!p) return null;
   // ⚠️ 정규화된 URL 으로 alive 검증 = 응답 URL 과 동일 보장
-  return normalizeImageUrl(p.bestImageUrl || p.imageUrl || null, 1280);
+  return normalizeImageUrl(p.imageUrl || null, 1280);
 }
 // ⚠️ 수정금지(승인필요) — 2026-05-07: HEAD 검증 = Replit 서버 외부 fetch 차단/timeout 환경에서 = 모든 row false 사고.
 // → DB 정규화 후 = 깨진 URL 거의 0 → HEAD 검증 폐기 + 첫 eligible 반환 (fail-open).
@@ -221,7 +221,7 @@ export function registerBtsRoutes(app: Express): void {
       // = 도시 = 통합 최종 top 시드. 카테고리 태그만 사용. 정렬 = rank ASC (= 최종 랭킹순) + reviewCount DESC.
       const cityFilter = eq(placeSeedRaw.cityId, cityId);
       // 안전장치: imageUrl NULL row 자동 skip
-      const imageNotNull = sql`COALESCE(${placeSeedRaw.bestImageUrl}, ${placeSeedRaw.imageUrl}) IS NOT NULL`;
+      const imageNotNull = sql`${placeSeedRaw.imageUrl} IS NOT NULL`;
       const dbi = db;
       // ⚠️ 수정금지(승인필요) — 2026-05-07 사용자 SSOT: vibe 슬롯 = "순수 vibe" row만.
       // category_tags=["heritage","restaurant"] 같은 다중 tag row는 = lunch/dinner 자리만 사용.
@@ -306,7 +306,7 @@ export function registerBtsRoutes(app: Express): void {
       // 클라이언트 변환 로직 폐기 → server normalize 1 회 → 모든 도시/카테고리/신규 row 동일 적용.
       const slots = slotPlaces.map((p, i) => {
         if (!p) return { slot: i + 1, id: null };
-        const rawUrl = p.bestImageUrl || p.imageUrl || null;
+        const rawUrl = p.imageUrl || null;
         return {
           slot: i + 1,
           id: p.id,
@@ -315,7 +315,7 @@ export function registerBtsRoutes(app: Express): void {
           seedCategory: p.seedCategory,
           imageUrl: normalizeImageUrl(rawUrl, 1280),
           priceEur: p.priceEur,
-          nubiReason: p.nubiReason,
+          summaryKo: p.summaryKo,
           latitude: p.latitude != null ? Number(p.latitude) : null,
           longitude: p.longitude != null ? Number(p.longitude) : null,
         };
@@ -371,9 +371,8 @@ export function registerBtsRoutes(app: Express): void {
           nameEn: placeSeedRaw.nameEn,
           seedCategory: placeSeedRaw.seedCategory,
           imageUrl: placeSeedRaw.imageUrl,
-          bestImageUrl: placeSeedRaw.bestImageUrl,
           priceEur: placeSeedRaw.priceEur,
-          nubiReason: placeSeedRaw.nubiReason,
+          summaryKo: placeSeedRaw.summaryKo,
           // ⚠️ 수정금지(승인필요) — 좌표 추가 (지도 표시 + 동선 계산용)
           latitude: placeSeedRaw.latitude,
           longitude: placeSeedRaw.longitude,
@@ -395,7 +394,7 @@ export function registerBtsRoutes(app: Express): void {
         name: s.nameKo || s.nameEn,
         category: s.seedCategory || "attraction",
         priceEur: s.priceEur,
-        nubiReason: s.nubiReason,
+        summaryKo: s.summaryKo,
       }));
 
       const optimized = await optimizeBTSRoute(
@@ -410,7 +409,7 @@ export function registerBtsRoutes(app: Express): void {
         return {
           id: `bts-${opt.id}`,
           name: opt.name,
-          description: opt.travelTip || seed?.nubiReason || "",
+          description: opt.travelTip || seed?.summaryKo || "",
           startTime: opt.startTime,
           endTime: opt.endTime,
           lat: 0,
@@ -418,13 +417,13 @@ export function registerBtsRoutes(app: Express): void {
           vibeScore: 8,
           confidenceScore: 0.9,
           sourceType: "bts",
-          personaFitReason: seed?.nubiReason || "",
+          personaFitReason: seed?.summaryKo || "",
           tags: [seed?.seedCategory || ""],
           vibeTags: [],
-          image: seed?.bestImageUrl || seed?.imageUrl || "",
+          image: seed?.imageUrl || "",
           priceEstimate: seed?.priceEur != null ? `€${seed.priceEur}` : "",
           estimatedPriceEur: seed?.priceEur ?? 0,
-          nubiReason: seed?.nubiReason ?? null,
+          summaryKo: seed?.summaryKo ?? null,
           estimatedDuration: opt.estimatedDuration,
         };
       });

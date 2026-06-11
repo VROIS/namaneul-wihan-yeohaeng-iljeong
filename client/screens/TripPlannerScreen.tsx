@@ -1849,31 +1849,8 @@ export default function TripPlannerScreen() {
                                   </Text>
                                 </View>
 
-                                {/* ⭐ 선정이유 (nubiReason) — 가장 중요한 차별화 포인트 */}
-                                {(place as any).nubiReason &&
-                                  (place as any).nubiReason !==
-                                  "Nubi AI 데이터 검증 추천" && (
-                                    <View
-                                      style={{
-                                        backgroundColor: "#FFF8E1",
-                                        borderRadius: 6,
-                                        paddingHorizontal: 8,
-                                        paddingVertical: 4,
-                                        marginTop: 4,
-                                        alignSelf: "flex-start",
-                                      }}
-                                    >
-                                      <Text
-                                        style={{
-                                          fontSize: 12,
-                                          fontFamily: Fonts.bold,
-                                          color: "#E65100",
-                                        }}
-                                      >
-                                        ⭐ {(place as any).nubiReason}
-                                      </Text>
-                                    </View>
-                                  )}
+                                {/* ⚠️ 2026-06-11 = 옛 nubiReason 블록(헛바퀴·as any 데드) 제거 = summary_ko 흡수통합.
+                                    차별점(후킹 숏폼 한줄요약) = 아래 description(= ag3가 DB summaryKo로 덮어씀)이 단일 노출. */}
 
                                 {/* ⚠️ 수정금지(승인필요) 2026-05-09 = 숓품식 한 줄 소개 (= DB summaryKo) 우선 노출 = 사용자 SSOT */}
                                 {/* description = ag3-data-matcher.ts:495 에서 DB summaryKo 로 덮어쓰기 = 우선 노출 / 없으면 AG2 reason fallback */}

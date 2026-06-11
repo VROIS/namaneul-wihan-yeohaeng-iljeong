@@ -183,8 +183,7 @@ async function fetchFromPlaceSeedRaw(
     address: placeSeedRaw.address,
     latitude: placeSeedRaw.latitude,
     longitude: placeSeedRaw.longitude,
-    imageUrl: placeSeedRaw.imageUrl, // Google 1 순위
-    bestImageUrl: placeSeedRaw.bestImageUrl, // WK/Wikidata SPARQL 2 순위
+    imageUrl: placeSeedRaw.imageUrl, // ⚠️ 2026-06-11 = image_url(구글 PM) 1종 (best_image_url 폐기)
     summaryKo: placeSeedRaw.summaryKo,
     editorialSummary: placeSeedRaw.editorialSummary,
     seedCategory: placeSeedRaw.seedCategory,

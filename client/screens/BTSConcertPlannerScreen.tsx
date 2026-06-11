@@ -32,7 +32,7 @@ const MEMBERS = [
 ];
 
 type BtsCity = { id: number; nameKo: string; nameEn: string; btsRank: number };
-type BtsPlace = { id: number; nameKo: string | null; nameEn: string; imageUrl: string | null; nubiReason: string | null };
+type BtsPlace = { id: number; nameKo: string | null; nameEn: string; imageUrl: string | null; summaryKo: string | null };
 type ItineraryDay = { day: number; places: Array<{ name: string; startTime: string; description: string; image?: string }>; city: string };
 
 export default function BTSConcertPlannerScreen() {

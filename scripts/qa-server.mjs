@@ -73,10 +73,10 @@ async function apiPlaces(res, params) {
       name_en, name_ko, name_local,
       latitude::float AS lat, longitude::float AS lng,
       address, google_review_count, image_url,
-      editorial_summary AS summary_en, summary_ko, nubi_reason,
+      editorial_summary AS summary_en, summary_ko,
       day_zone, distance_km_from_center
     FROM place_seed_raw
-    WHERE city_id = $1 AND collection_phase IN ('gemini3-2026-05','bts2026')
+    WHERE city_id = $1 AND (phase_tags && ARRAY['gemini3-2026-05','bts2026'])
       AND seed_category = ANY($2)
       AND latitude IS NOT NULL
     ORDER BY seed_category, rank
@@ -106,10 +106,10 @@ async function apiSearch(res, params) {
       p.name_en, p.name_ko, p.name_local,
       p.latitude::float AS lat, p.longitude::float AS lng,
       p.address, p.google_review_count, p.image_url,
-      p.editorial_summary AS summary_en, p.summary_ko, p.nubi_reason,
+      p.editorial_summary AS summary_en, p.summary_ko,
       p.day_zone, p.distance_km_from_center
     FROM place_seed_raw p JOIN cities c ON c.id = p.city_id
-    WHERE c.name_en = ANY($1) AND p.collection_phase IN ('gemini3-2026-05','bts2026')
+    WHERE c.name_en = ANY($1) AND (p.phase_tags && ARRAY['gemini3-2026-05','bts2026'])
       AND p.seed_category = ANY($2)
       AND p.latitude IS NOT NULL
       AND (

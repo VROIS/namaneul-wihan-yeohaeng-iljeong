@@ -268,26 +268,17 @@ export const crisisAlerts = pgTable("crisis_alerts", {
 // MCP 1·2단계 통합 로우데이터 (도시×카테고리 장소 + 한국인 인지도)
 export const placeSeedRaw = pgTable("place_seed_raw", {
   id: serial("id").primaryKey(),
-  // ⚠️ 수정금지(승인필요) 2026-05-24 = Step 4 DB DROP = places FK 제거 (= places 테이블 폐기 = 컬럼만 유지 = 옛 매칭 호환)
-  placeId: integer("place_id"),
+  // ⚠️ 수정금지(승인필요) 2026-06-11 = place_id(옛 places FK) DROP = 헛바퀴(google_place_id 가 진짜 연결)
   cityId: integer("city_id").notNull().references(() => cities.id, { onDelete: "cascade" }),
   seedCategory: text("seed_category").notNull(), // attraction|restaurant|healing|adventure|hotspot
   // ⚠️ 2026-05-23 = collection_phase DROP = phase_tags 배열로 대체 (= 사용자 SSOT 2026-05-21)
   rank: integer("rank").notNull(),
-  unifiedId: text("unified_id"), // 통합 고유 ID (예: 111R1)
+  // ⚠️ 수정금지(승인필요) 2026-06-11 = 헛바퀴 9컬럼 DROP (원재료 소진 = 미사용 = FE 재구성 예정)
+  //   = unified_id/google_*_note 3/source/source_rank/source_type/evidence_verified/naver_blog_count 정의 제거 (= DB DROP 동반).
   nameKo: text("name_ko"),
   nameEn: text("name_en").notNull(),
-  googleSearchNote: text("google_search_note"),
-  googleReviewCountNote: text("google_review_count_note"),
-  googleImageCountNote: text("google_image_count_note"),
   imageUrl: text("image_url"), // 대표 이미지 1개 URL
-  source: text("source"),
-  // 2단계 보강
-  sourceRank: integer("source_rank"),
-  sourceType: text("source_type"), // instagram|youtube|naver_blog|package|travel_app
-  nubiReason: text("nubi_reason"),
-  evidenceUrl: text("evidence_url"),
-  evidenceVerified: boolean("evidence_verified").default(false),
+  // ⚠️ 수정금지(승인필요) 2026-06-11 = nubi_reason → summary_ko 흡수통합 / evidence_url DROP (= 헛바퀴)
   // ⚠️ 2026-05-15 사용자 SSOT = price_eur 단일 컬럼 (= 1인 입장료/식사비 통합)
   // = price_source / price_fetched_at = 영구 폐기 (SSOT §14 + 제15조)
   priceEur: real("price_eur"),           // 1인 입장료/식사비 (EUR), 0=무료
@@ -299,23 +290,20 @@ export const placeSeedRaw = pgTable("place_seed_raw", {
   googleMapsUri: text("google_maps_uri"),
 
   // 4단계: 통합 마스터 창고용 파생/집계 데이터
-  bestImageUrl: text("best_image_url"),     // place_images 테이블 등에서 1순위로 확정된 이미지 URL
-  celebMention: text("celeb_mention"),      // 방문한 셀럽 이름 (예: "리사")
-  naverBlogCount: integer("naver_blog_count"), // 네이버 블로그 누적 리뷰 수
+  // ⚠️ 수정금지(승인필요) 2026-06-11 = best_image_url DROP = 이미지 image_url(구글 PM) 1종 통일 (고아·비PM 2순위 폴백 폐기)
+  // ⚠️ 수정금지(승인필요) 2026-06-11 = celeb_mention DROP (= 헛바퀴, ag3 미프로젝션 데드)
+  // ⚠️ 수정금지(승인필요) 2026-06-11 = naver_blog_count DROP (= 네이버 수집 파이프라인 폐기 = 헛바퀴)
   vibeKeywords: jsonb("vibe_keywords").$type<string[]>(), // 분위기 키워드 배열
   // SSoT 통합: places 테이블에서 역수집한 데이터
   latitude: real("latitude"),
   longitude: real("longitude"),
-  googleRating: real("google_rating"),
+  // ⚠️ 수정금지(승인필요) 2026-06-11 = google_rating DROP (= 별점 비노출 정책 = 헛바퀴)
   googleReviewCount: integer("google_review_count"),
-  photoUrls: jsonb("photo_urls").$type<string[]>(),
+  // ⚠️ 수정금지(승인필요) 2026-06-11 = photo_urls DROP = 이미지 image_url(구글 PM) 1종 통일 (고아·버그 폐기)
   openingHours: jsonb("opening_hours").$type<Record<string, string>>(),
   editorialSummary: text("editorial_summary"),
   nameLocal: text("name_local"),
-  namesI18n: jsonb("names_i18n").$type<Record<string,string>>(),
-  // SSoT 인앱 링크 (유효성 검증된 게시글 URL만 저장)
-  instagramPostUrl: text("instagram_post_url"),
-  tiktokPostUrl: text("tiktok_post_url"),
+  // ⚠️ 수정금지(승인필요) 2026-06-11 = names_i18n(고유명사 번역 무의미) / instagram·tiktok_post_url(인스타 가짜 폐기) DROP = 헛바퀴
   // ⚠️ 수정금지(승인필요) — 2026-04-30: multi-tag SSOT (1 장소 = N 카테고리)
   phaseTags: text("phase_tags").array(),       // ['bts2026'] 등 수집 phase 태그
   categoryTags: text("category_tags").array(), // ['heritage','hotspot','attraction'] 등 다중 카테고리 태그

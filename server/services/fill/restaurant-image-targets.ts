@@ -47,8 +47,8 @@ function pct(sortedAsc: number[], p: number): number {
   return sortedAsc[i];
 }
 
-const imgMissing = (r: any): boolean =>
-  !r.image_url && !r.best_image_url && (!r.photo_urls || (Array.isArray(r.photo_urls) && r.photo_urls.length === 0));
+// ⚠️ 2026-06-11 = best_image_url/photo_urls 폐기 = 이미지 image_url(구글 PM) 1종 통일
+const imgMissing = (r: any): boolean => !r.image_url;
 const num = (v: any): number | null => (v == null ? null : Number(v));
 
 (async () => {
@@ -63,7 +63,7 @@ const num = (v: any): number | null => (v == null ? null : Number(v));
     `SELECT id, city_id AS "cityId", name_en AS "nameEn", name_local AS "nameLocal", name_ko AS "nameKo",
             address, latitude::float8 AS lat, longitude::float8 AS lng, day_zone AS zone, price_eur AS price,
             google_place_id AS "googlePlaceId", google_maps_uri AS "googleMapsUri",
-            google_review_count AS rc, image_url, best_image_url, photo_urls
+            google_review_count AS rc, image_url
      FROM place_seed_raw WHERE city_id=$1 AND seed_category='restaurant'`, [cityId])).rows;
 
   // 1) 백분위 띠 경계 (구역별 = 도심·외곽 분포 분리, §8.2②)

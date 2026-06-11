@@ -34,7 +34,7 @@ export async function relinkStorageImages(opts: {
         ORDER BY (o.name LIKE p.city_id || '/' || p.seed_category || '/%') DESC, o.name LIMIT 1) AS obj
     FROM place_seed_raw p
     WHERE p.city_id = $1 AND p.google_place_id IS NOT NULL
-      AND p.image_url IS NULL AND p.best_image_url IS NULL${useCat ? ' AND p.seed_category = ANY($3::text[])' : ''}
+      AND p.image_url IS NULL${useCat ? ' AND p.seed_category = ANY($3::text[])' : ''}
   `, params)).rows;
 
   const byCat: Record<string, { hit: number; miss: number }> = {};

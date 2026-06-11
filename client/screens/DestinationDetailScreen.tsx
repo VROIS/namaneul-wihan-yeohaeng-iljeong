@@ -61,7 +61,7 @@ export default function DestinationDetailScreen() {
           <Image
             source={{
               uri:
-                place?.photoUrls?.[0] ||
+                place?.photoUrl ||
                 "https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b",
             }}
             style={styles.heroImage}

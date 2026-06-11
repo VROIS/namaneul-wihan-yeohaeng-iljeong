@@ -139,7 +139,7 @@ export class DatabaseStorage implements IStorage {
       name: psr.nameEn || psr.nameKo || "",
       type: psr.seedCategory,
       photoUrl: psr.imageUrl,
-      photoUrls: psr.photoUrls || [],
+      // ⚠️ 2026-06-11 = photo_urls DROP = 이미지 image_url(구글 PM) 1종 통일
     } as unknown as Place;
   }
 
@@ -151,7 +151,7 @@ export class DatabaseStorage implements IStorage {
       name: psr.nameEn || psr.nameKo || "",
       type: psr.seedCategory,
       photoUrl: psr.imageUrl,
-      photoUrls: psr.photoUrls || [],
+      // ⚠️ 2026-06-11 = photo_urls DROP = 이미지 image_url(구글 PM) 1종 통일
     } as unknown as Place;
   }
 

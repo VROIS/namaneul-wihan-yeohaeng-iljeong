@@ -48,12 +48,12 @@ const ANCHOR_M = 100;
   const rows = (await c.query(`
     WITH ranked AS (
       SELECT id, seed_category, name_en, name_local, latitude::float8 AS lat, longitude::float8 AS lng, google_place_id,
-        image_url, best_image_url, photo_urls,
+        image_url,
         row_number() OVER (PARTITION BY seed_category ORDER BY google_review_count DESC NULLS LAST) AS rn
       FROM place_seed_raw WHERE city_id=$1 AND seed_category = ANY($2::text[])
     )
     SELECT id, seed_category, name_en, name_local, lat, lng, google_place_id FROM ranked
-    WHERE rn <= $3 AND image_url IS NULL AND best_image_url IS NULL AND (photo_urls IS NULL OR jsonb_array_length(photo_urls)=0)
+    WHERE rn <= $3 AND image_url IS NULL
     ORDER BY seed_category`, [cityId, cats, top])).rows.filter((r: any) => !relink.matchedIds.has(r.id));
 
   console.log(`═══ ts-photo-fill (city ${cityId} ${city?.name_en}) = TOP${top} 이미지없음 ${rows.length}곳 = €${(rows.length * 0.037).toFixed(2)} ═══`);

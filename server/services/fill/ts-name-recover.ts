@@ -25,7 +25,8 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--apply] [--lang=es] [--cate
 
 const RADIUS_M = 60; // 행 좌표 = 그 장소 좌표 → 60m searchNearby = PID 매칭 확실
 const TYPE_OF: Record<string, string> = { restaurant: 'restaurant' };
-const isInternal = (r: any) => r.source !== 'wikipedia_api' && r.name_en && r.name_en.trim() !== '';
+// ⚠️ 2026-06-11 = source 컬럼 DROP(헛바퀴) = wikipedia_api 필터 제거. name_en 존재만 판정.
+const isInternal = (r: any) => r.name_en && r.name_en.trim() !== '';
 
 (async () => {
   const { tsSearch } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/ts-client.ts')).href);
@@ -38,7 +39,7 @@ const isInternal = (r: any) => r.source !== 'wikipedia_api' && r.name_en && r.na
   const KEY = ((await c.query(`SELECT key_value FROM api_keys WHERE key_name IN ('GOOGLE_MAPS_API_KEY','GOOGLE_PLACES_API_KEY') AND is_active=true ORDER BY key_name LIMIT 1`)).rows[0]?.key_value) || process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_PLACES_API_KEY;
 
   const rows = (await c.query(
-    `SELECT id, seed_category, name_en, source, latitude::float8 AS lat, longitude::float8 AS lng, google_place_id AS pid
+    `SELECT id, seed_category, name_en, latitude::float8 AS lat, longitude::float8 AS lng, google_place_id AS pid
      FROM place_seed_raw
      WHERE city_id=$1 AND seed_category = ANY($2::text[])
        AND google_place_id IS NOT NULL AND google_place_id <> ''

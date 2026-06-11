@@ -759,10 +759,11 @@ async function step2_enrichAndBuild(
       priceEstimate: resolvedPrice > 0 ? `€${Math.round(resolvedPrice)}` : (p.priceEstimate ?? '무료'),
     };
 
-    // ⭐ nubiReason: 순차 검색 — seedData는 위에서 이미 조회됨
-    merged.nubiReason = await generateNubiReasonV2(
+    // ⚠️ 수정금지(승인필요) 2026-06-11 = summary_ko 흡수통합 = 후킹 숏폼 한줄요약(차별점) 단일 소스.
+    //   = 옛 nubiReason 이름 폐기 → summaryKo 통일. seedData.summaryKo 우선 → 구글 리뷰수 폴백.
+    merged.summaryKo = await generateNubiReasonV2(
       p.id, p.name, preloaded.cityName,
-      celebrityVisits.get(p.id) || null,
+      null,
       merged,
       seedData
     );
@@ -852,14 +853,9 @@ async function step2_enrichAndBuild(
         // Gemini의 한국어 이름 + 현지 원어명 + 추천이유
         nameKo: s.gPlace.nameKo,
         nameLocal: s.gPlace.nameLocal || null,
-        // ⭐ nubiReason: 우리 데이터 기반 차별화 선정이유 (크게/진하게 표시)
-        nubiReason: enrichedPlace.nubiReason || null,
-        // ⭐ nubiReason 메타데이터 — place_seed_raw에서 직접 (DB 추가 쿼리 0회)
-        nubiEvidenceUrl: placeSeed?.evidenceUrl || null,
-        nubiReasonSource: placeSeed?.sourceType || null,
-        // ⭐ 인앱 링크 (유효성 검증된 URL만 저장됨 — 없으면 버튼 숨김)
-        instagramPostUrl: placeSeed?.instagramPostUrl || null,
-        tiktokPostUrl: placeSeed?.tiktokPostUrl || null,
+        // ⚠️ 수정금지(승인필요) 2026-06-11 = summary_ko 흡수통합 = 후킹 숏폼 한줄요약(차별점, 진하게 표시).
+        //   = 옛 nubiReason/nubiEvidenceUrl(evidence_url)/nubiReasonSource(source_type)/instagram·tiktokPostUrl = 헛바퀴 컬럼 폐기 동반 제거.
+        summaryKo: enrichedPlace.summaryKo || null,
         // Gemini AI 요약 (보통 글씨로 표시)
         geminiReason: s.gPlace.reason || '',
         // Gemini가 생성한 교통편 안내 (강화 프롬프트 v3.1)
@@ -1258,47 +1254,16 @@ async function generateNubiReasonV2(
   seedData?: any
 ): Promise<string> {
   try {
-    // ── 🌟 Priority 0: place_seed_raw DB (1초 즉시 반환) ──
-    if (seedData && seedData.nubiReason) {
-      console.log(`[NubiReason] ✅ SeedRaw hit: ${placeName} → ${seedData.nubiReason}`);
-      return seedData.nubiReason;
+    // ⚠️ 수정금지(승인필요) 2026-06-11 사용자 SSOT = summary_ko 흡수통합 (= 후킹 숏폼 한줄요약 = 앱 차별점).
+    //   = 옛 nubi_reason/celeb_mention/패키지 순위 = 전부 헛바퀴(데드) 폐기 → summary_ko(ag3 SELECT:203 프로젝션) 단일 소스.
+    //   = summary_ko 없으면 구글 리뷰수 폴백.
+    if (seedData && seedData.summaryKo) {
+      return seedData.summaryKo;
     }
 
-    // ── 1순위: 셀럽 방문 흔적 (기존 캐시) ──
-    if (celebrityVisit && celebrityVisit.found) {
-      const group = celebrityVisit.celebrityGroup ? `(${celebrityVisit.celebrityGroup})` : '';
-      return `${celebrityVisit.celebrityName}${group} ${celebrityVisit.date} 게시`;
-    }
-
-    // ── 2순위: 유튜버/셀럽 언급 (seedRaw) ──
-    if (seedData && seedData.celebMention) {
-      return seedData.celebMention;
-    }
-
-    // ── 3순위: 네이버 블로그 건수 (seedRaw) ──
-    if (seedData && seedData.naverBlogCount > 0) {
-      return `네이버 블로그 ${seedData.naverBlogCount.toLocaleString()}건`;
-    }
-
-    // ── 4순위: 패키지투어 (하나투어/모두투어 등) ──
-    if (mergedData.isPackageTourIncluded) {
-      const mentionedBy = mergedData.packageMentionedBy;
-      if (Array.isArray(mentionedBy) && mentionedBy.length > 0) {
-        return `${mentionedBy.slice(0, 2).join('·')} 필수코스`;
-      }
-      return '한국 패키지투어 필수코스';
-    }
-
-    // ── 5순위: [V3 대통합] place_prices 직접 쿼리 제거 → place_seed_raw 단일 소스만 사용
-    // (여행앱 데이터는 place_seed_raw.nubiReason 등에 통합되어 있음)
-
-    // ── 6순위 (최종): 구글 리뷰 수 ──
+    // ── 폴백: 구글 리뷰 수 ──
     const reviewCount = mergedData.userRatingCount || 0;
-    if (reviewCount >= 10000) {
-      return `구글 리뷰 ${reviewCount.toLocaleString()}개`;
-    } else if (reviewCount >= 1000) {
-      return `구글 리뷰 ${reviewCount.toLocaleString()}개`;
-    } else if (reviewCount >= 50) {
+    if (reviewCount >= 50) {
       return `구글 리뷰 ${reviewCount.toLocaleString()}개`;
     }
 
@@ -1489,11 +1454,4 @@ function repairTruncatedJSON(broken: string): { days: GeminiDay[] } | null {
     return null;
   }
 }
-
-// =====================================================
-// ⭐ nubiReason 메타데이터 헬퍼 (evidenceUrl, sourceType)
-// =====================================================
-
-// getNubiEvidenceUrl, getNubiSourceType 제거 (2026-02-21)
-// place_seed_raw.evidenceUrl / sourceType을 seedRawMap에서 직접 조회 → DB 쿼리 0회
 

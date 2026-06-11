@@ -154,7 +154,7 @@ async function verifyReport() {
       COUNT(*) FILTER (WHERE summary_ko IS NOT NULL AND summary_ko<>'') AS sumko,
       COUNT(*) FILTER (WHERE editorial_summary IS NOT NULL AND editorial_summary<>'') AS edi,
       COUNT(*) FILTER (WHERE price_eur IS NOT NULL) AS price,
-      COUNT(*) FILTER (WHERE COALESCE(image_url,best_image_url) IS NOT NULL OR (photo_urls IS NOT NULL AND jsonb_array_length(photo_urls)>0)) AS img,
+      COUNT(*) FILTER (WHERE image_url IS NOT NULL) AS img,
       COUNT(*) FILTER (WHERE google_place_id IS NOT NULL) AS pid,
       COUNT(*) FILTER (WHERE latitude IS NOT NULL) AS coord,
       COUNT(*) FILTER (WHERE address IS NOT NULL) AS addr
