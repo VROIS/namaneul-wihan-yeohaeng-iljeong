@@ -7,7 +7,7 @@
 
 import { db } from "../../db";
 import { exchangeRates, placeSeedRaw } from "@shared/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, isNotNull } from "drizzle-orm";
 import type {
   PlaceResult,
   TripFormData,
@@ -141,7 +141,9 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
         googleReviewCount: placeSeedRaw.googleReviewCount,
       })
       .from(placeSeedRaw)
-      .where(and(eq(placeSeedRaw.cityId, cityId), eq(placeSeedRaw.seedCategory, "restaurant")))
+      // ⚠️ 2026-06-12 = isNotNull(priceEur) = 가격 미검증 식당 식사후보 제외 (= La Chinata류 garbage 차단 + 매트릭스 폴백 발동 원천 봉쇄)
+      //   = zone/거리 필터는 넣지 않음 (= 100km 전체 = 당일치기 방향 날의 현지 식당 필요 = 사용자 SSOT)
+      .where(and(eq(placeSeedRaw.cityId, cityId), eq(placeSeedRaw.seedCategory, "restaurant"), isNotNull(placeSeedRaw.priceEur)))
       .orderBy(sql`${placeSeedRaw.googleReviewCount} DESC NULLS LAST`);
     restaurantPool = rows
       .filter((r) => r.latitude != null && Number(r.latitude) !== 0)
@@ -161,7 +163,7 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
         userRatingCount: r.googleReviewCount || 0,
       })) as unknown as PlaceResult[];
     console.log(
-      `[AG4-DB] 🍽️ 식당풀 DB 조회 = ${restaurantPool.length}곳 (도시 전체, 가격 사전필터 X = 좌표 우선)`,
+      `[AG4-DB] 🍽️ 식당풀 DB 조회 = ${restaurantPool.length}곳 (도시 전체, 가격보유 식당만 = NULL 제외 = 매트릭스 폴백 차단)`,
     );
   }
 
@@ -266,6 +268,10 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
           : "lunch"
         : undefined;
 
+      // ⚠️ 2026-06-12 = 매트릭스 폴백 = 안전망(유지)이나 정상 경로(식당풀 isNotNull(priceEur))에선 0건이어야 함. 발생 시 = 데이터 결손 신호 = warn.
+      if (isMeal && scene.price_eur == null) {
+        console.warn(`[AG4-DB] ⚠️ meal price 매트릭스 폴백 발생 = ${scene.name_local || scene.name_en || scene.place_id} (= PSR price_eur NULL = 식당풀 게이트 누수 점검)`);
+      }
       const mealPrice = isMeal
         ? (scene.price_eur ??
           (mealType === "lunch" ? mealBudget.lunch : mealBudget.dinner))
@@ -306,7 +312,8 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
         mealPrice,
         mealPriceLabel,
         // FE 표시 보강 (= inputPlace = PSR 데이터 = 이미지/리뷰수 등)
-        image: inputPlace?.image || null,
+        // ⚠️ 2026-06-12 = 식당풀 픽(inputPlace 밖) = scene.image(route-local 이 PSR image_url 탑재) fallback = 식당 이미지 노출
+        image: inputPlace?.image || (scene as any).image || null,
         userRatingCount: inputPlace?.userRatingCount,
         selectionReasons: inputPlace?.selectionReasons || [],
         confidenceLevel: inputPlace?.confidenceLevel || "minimal",

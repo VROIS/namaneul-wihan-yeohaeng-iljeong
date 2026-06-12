@@ -83,6 +83,8 @@ export interface RouteScene {
   selection_reason_ko?: string;
   /** ⚠️ 신규 식당 백필 = → DB editorial_summary (= 09-main-app-itinerary 표준과 동일) */
   shortform_ko?: string;
+  /** ⚠️ 2026-06-12 = 로컬 동선 빌더 전용 = PSR image_url 전달 (= 식당풀 픽은 inputPlaces 밖이라 이미지 단절 해소). Gemini 응답 스키마 아님(로컬 내부 필드). */
+  image?: string;
 }
 
 /** 응답 = 1 일 */

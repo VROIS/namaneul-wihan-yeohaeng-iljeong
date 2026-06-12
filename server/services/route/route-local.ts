@@ -16,6 +16,8 @@ import type {
   RouteScene,
   RouteHandlerResult,
 } from "./route-types";
+// ⚠️ 2026-06-12 = 정본 동선(NN체인+간격절단+Day1도심 / 일내 귀소동선) = k-means 지그재그 해소 (USE_SECTOR_ROUTE 토글, 1초 롤백)
+import { sectorIntoDays, orderHoming } from "./route-sector";
 
 type LatLng = { lat: number; lng: number };
 
@@ -262,9 +264,11 @@ export function buildRouteLocal(
     : places.filter((p) => p.seedCategory === "restaurant")
   ).filter(hasCoord);
 
-  // 2차 식당 우선순위 픽 = [1순위] 인접성(앵커 최근접) 정렬 → [2순위] 그중 예산내 첫 (= 동시 아님, 순차) + 전역 중복 제외
+  // 2차 식당 우선순위 픽 = [1순위] 인접성(앵커 최근접) 정렬 → [2순위] 가격대 "구간"(min~max) 내 최근접 + 전역 중복 제외
+  // ⚠️ 2026-06-12 = 가격대 구간 필터 = 사용자 예산등급 풀 (= 상한만 쓰면 Premium 도 싼 식당 뽑힘 = 등급 무의미 버그 수정).
+  //   = priceMin~priceCap 구간 내 최근접 우선 → 없으면 상한이하 최근접 폴백 → 그것도 없으면 최근접(빈슬롯 방지).
   const usedRest = new Set<string>();
-  const pickMealPriority = (anchors: LatLng[], priceCap: number): PlaceResult | null => {
+  const pickMealPriority = (anchors: LatLng[], priceMin: number, priceCap: number): PlaceResult | null => {
     const refs = anchors.filter((a) => a && a.lat != null && a.lat !== 0);
     const useRefs = refs.length ? refs : [center];
     const ranked = restaurants
@@ -272,16 +276,24 @@ export function buildRouteLocal(
       .map((r) => ({ r, d: Math.min(...useRefs.map((a) => haversineKm(a.lat, a.lng, r.lat, r.lng))) }))
       .sort((a, b) => a.d - b.d);
     if (!ranked.length) return null;
-    // ⚠️ 인접성 우선(SSOT) → 가격 보조: known≤cap 또는 NULL(미상=거부불가) = 예산내 간주 / known>cap 만 제외
-    const within = ranked.find((x) => (x.r.estimatedPriceEur ?? 0) <= priceCap);
-    const pick = (within ?? ranked[0]).r; // 인근 예산내 0 시 = 최근접 폴백 (= 매일 2식 보장 = 빈 슬롯보다 나음)
+    // ⚠️ 2026-06-12 = 하한 클램프 = Luxury 점심(min181 > 점심상한120) 역전 방어 = min 을 상한 이하로 (= 등급 필터 무력화 버그 수정)
+    const lo = Math.min(priceMin, priceCap);
+    const inBand = ranked.find((x) => x.r.estimatedPriceEur != null && x.r.estimatedPriceEur >= lo && x.r.estimatedPriceEur <= priceCap);
+    const within = inBand || ranked.find((x) => x.r.estimatedPriceEur != null && x.r.estimatedPriceEur <= priceCap);
+    const pick = (within ?? ranked[0]).r; // 구간·예산내 0 시 = 최근접 폴백 (= 매일 2식 보장)
     usedRest.add(pick.id);
     return pick;
   };
 
-  // 1차 = 활동 일자 배정 (= 좌표 용량균형 cluster) + 도심→외곽 정렬 (= 자연 흐름)
-  const dayGroups = clusterIntoDays(activities, daySlotsConfig.length, center)
-    .sort((a, b) => distFromCenter(a, center) - distFromCenter(b, center));
+  // 1차 = 활동 일자 배정 (= NN체인+간격절단+Day1도심, route-sector 정본)
+  // ⚠️ 2026-06-12 = 기본 = 정본(좌표 최인접 묶음 = 붙은곳 보존 + Day1 도심 = 귀소 본능) / USE_SECTOR_ROUTE='false' = 옛 k-means 롤백
+  //   = slotsPerDay = 일자별 활동 한도(= slots-2). sectorIntoDays 가 내부에서 Day1 도심 정렬까지 수행(= 추가 sort 불필요).
+  const USE_SECTOR_ROUTE = process.env.USE_SECTOR_ROUTE !== "false";
+  const slotsPerDay = daySlotsConfig.map((dc) => Math.max(1, dc.slots - 2));
+  const dayGroups = USE_SECTOR_ROUTE
+    ? sectorIntoDays(activities, slotsPerDay, center)
+    : clusterIntoDays(activities, daySlotsConfig.length, center)
+        .sort((a, b) => distFromCenter(a, center) - distFromCenter(b, center));
 
   const days: RouteResponse["days"] = [];
   let grandKm = 0;
@@ -289,7 +301,10 @@ export function buildRouteLocal(
 
   for (let di = 0; di < daySlotsConfig.length; di++) {
     const dc = daySlotsConfig[di];
-    const dayActs = orderByNN(dayGroups[di] || [], center); // 폐루프 = 중심 출발·귀환
+    // ⚠️ 2026-06-12 = 정본 = orderHoming(최외곽 1코스 → 도심/숙소 귀환 = 귀소 본능) / 롤백 = orderByNN(폐루프)
+    const dayActs = USE_SECTOR_ROUTE
+      ? orderHoming(dayGroups[di] || [], center)
+      : orderByNN(dayGroups[di] || [], center);
 
     // 점심 = 슬롯3 (= 활동 2개 후) = 활동2·활동4 중 최근접 식당 (= detour 0)
     const lunchIdx = Math.min(2, dayActs.length);
@@ -299,12 +314,14 @@ export function buildRouteLocal(
       dayActs.length >= 1
         ? [aBefore, aAfter].filter(Boolean).map((p) => ({ lat: p.lat, lng: p.lng }))
         : [center], // ⚠️ 활동 0개(빈 날) = 중심 앵커 = 2식 보장
+      mealBudget.min, // 가격대 하한 (= 등급 구간)
       mealBudget.lunch,
     );
     // 저녁 = 마지막 슬롯 = 최종활동·파리중심 중 최근접 (= 조회 폭 넓힘 = 중심 귀환 모델). 빈 날 = 중심 앵커
     const lastAct = dayActs[dayActs.length - 1];
     const dinner = pickMealPriority(
       lastAct ? [{ lat: lastAct.lat, lng: lastAct.lng }, center] : [center],
+      mealBudget.min, // 가격대 하한 (= 등급 구간)
       mealBudget.dinner,
     );
 
@@ -346,6 +363,7 @@ export function buildRouteLocal(
       if (it.rest && it.p.estimatedPriceEur != null) scene.price_eur = it.p.estimatedPriceEur;
       if (it.p.summaryKo) scene.selection_reason_ko = it.p.summaryKo;
       if (it.p.editorialSummary) scene.shortform_ko = it.p.editorialSummary;
+      if (it.p.image) scene.image = it.p.image; // ⚠️ 2026-06-12 = PSR image_url 전달 (= 식당풀 픽 이미지 단절 해소)
       return scene;
     });
 
