@@ -71,6 +71,12 @@ function parseGemini(t: string): any | null {
     return out;
   };
 
+  // ⚠️ 2026-06-13 = 매처미스 분류 정밀화 = DB 의 PID 집합 (= raw PID 가 DB 에 실재하는지 교차확인)
+  //   = 옛 결함: 매칭 실패 항목을 "이름 부분일치"로만 dup 판정 → PID 다른 동명 다른 장소(Loulou/Le Marais 등)를
+  //     "고칠 중복"으로 거짓 양성. matcher 는 PID veto 로 올바르게 다른장소 판정했는데 보고가 오분류.
+  //   = 신규칙: raw PID 가 DB 에 실재 = 진짜 매처미스(고칠 구멍) / raw PID 가 DB 에 없음(또는 PID 무) = 정상신규(동명 다른 장소).
+  const dbPidSet = new Set<string>(existing.map((e: any) => e.googlePlaceId).filter(Boolean));
+
   let tPlaces = 0, tMatch = 0, tMiss = 0, tNew = 0;
   const missList: string[] = [];
   const newList: string[] = [];
@@ -83,11 +89,15 @@ function parseGemini(t: string): any | null {
       if (!(pl.nameEn || pl.nameLocal)) continue;
       const r = matchCandidate(pl, existing);
       if (r.match) { m++; continue; }
-      const key = String(pl.nameLocal || pl.nameEn || '').toLowerCase().trim();
-      const dup = key.length >= 4 ? existing.find((e: any) => [e.nameEn, e.nameLocal, e.nameKo]
-        .some((n: any) => n && (String(n).toLowerCase().includes(key) || key.includes(String(n).toLowerCase())))) : null;
-      if (dup) { miss++; missList.push(`${f}: "${pl.nameLocal || pl.nameEn}" → DB id=${dup.id} "${dup.nameLocal || dup.nameEn}"`); }
-      else { nw++; newList.push(`${f}: "${pl.nameLocal || pl.nameEn}" (${pl.address || '주소X'})`); }
+      // ⚠️ 2026-06-13 = 매칭 실패 분류 = PID 실재 여부 (= 이름 부분일치 폐기 = PID veto 무시 거짓양성 제거).
+      //   = raw PID 가 DB 에 실재하는데 match 실패 = 🔴진짜 매처미스(같은 PID 못 잡음 = 고칠 구멍).
+      //   = raw PID 가 DB 에 없음(또는 PID 무) = 정상신규(= 동명 다른 장소 = Google 이 다른 PID 부여 = 합치면 안 됨).
+      if (pl.googlePlaceId && dbPidSet.has(pl.googlePlaceId)) {
+        const dupRow = existing.find((e: any) => e.googlePlaceId === pl.googlePlaceId);
+        miss++; missList.push(`${f}: "${pl.nameLocal || pl.nameEn}" PID=${pl.googlePlaceId} → DB id=${dupRow?.id} (PID 동일인데 매칭 실패)`);
+      } else {
+        nw++; newList.push(`${f}: "${pl.nameLocal || pl.nameEn}" (${pl.address || '주소X'}${pl.googlePlaceId ? `, PID=${pl.googlePlaceId} DB무` : ', PID무'})`);
+      }
     }
     tPlaces += places.length; tMatch += m; tMiss += miss; tNew += nw;
     console.log(`${f.replace(`-${argv['date'] || ''}`, '').slice(0, 42).padEnd(44)} | ${String(places.length).padStart(4)} | ${String(m).padStart(4)} | ${String(miss).padStart(4)} | ${String(nw).padStart(4)}`);

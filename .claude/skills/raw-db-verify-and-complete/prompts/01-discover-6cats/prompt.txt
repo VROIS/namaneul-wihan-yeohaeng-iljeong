@@ -1,5 +1,6 @@
 ⚠️ 수정금지(승인필요) 2026-05-12 사용자 SSOT v3 = 1 글자 변경 금지
 ⚠️ 2026-06-07 사용자 승인 변경 = hotspot 에 'rooftop and terraces' 추가 (= 한국인 진정한 사진명소 = 05-text-recategorize 와 동기)
+⚠️ 2026-06-12 사용자 승인 변경 = 카피 필드명 통폐합 = selection_reason_ko→summary_ko / shortform_ko→editorial_summary (= 실제 DB 컬럼명 통일 = 별칭 폐기 = 후처리 변환 제거)
 
 ══════════════════════════════════════════════════════════════════════════════
 PROMPT 본문:
@@ -34,8 +35,8 @@ For each place include:
 - name_ko (Korean name commonly used by Korean travelers)
 - lat, lng (decimal degrees)
 - address (FULL street address with NUMBER + street + postal code + city)
-- selection_reason_ko (한국어 한 줄 = 한국 여행객 사이 트렌드 = 인스타 성지/최근 핫한 지역/한국 vlog 노출 빈도 등 사회적 검증 근거)
-- shortform_ko (한국어 한 줄 = 장소에 대한 코믹/위트 있는 설명 = 감성/재미 후킹 카피 = Claude 톤. 단순 정보 X, 짧고 강하게)
+- summary_ko (한국어 한 줄 = 한국 여행객 사이 트렌드 = 인스타 성지/최근 핫한 지역/한국 vlog 노출 빈도 등 사회적 검증 근거)
+- editorial_summary (한국어 한 줄 = 장소에 대한 코믹/위트 있는 설명 = 감성/재미 후킹 카피 = Claude 톤. 단순 정보 X, 짧고 강하게)
 - distance_km_from_center (haversine from CITY_CENTER, 1 decimal)
 - day_zone: "core" if distance_km_from_center <= 10 (day 1 walkable from city center)
          OR "outskirt" if 10 < distance_km_from_center <= 100 (day 2+ day-trip required)

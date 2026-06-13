@@ -151,7 +151,10 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
         distance_km_from_center = COALESCE(${p.distanceKmFromCenter || null}::real, distance_km_from_center),
         category_tags     = (SELECT ARRAY(SELECT DISTINCT unnest(COALESCE(category_tags, ARRAY[]::text[]) || ${sql.raw(`ARRAY[${categoryTags.map((s) => `'${s.replace(/'/g, "''")}'`).join(',')}]::text[]`)}))),
         phase_tags        = (SELECT ARRAY(SELECT DISTINCT unnest(COALESCE(phase_tags, ARRAY[]::text[]) || ${sql.raw(`ARRAY[${phaseTags.length === 0 ? "" : phaseTags.map((s) => `'${s.replace(/'/g, "''")}'`).join(',')}]::text[]`)}))),
-        image_updated_at  = NOW()
+        -- ⚠️ 수정금지(승인필요) 2026-06-12 = image_updated_at = 새 image_url 있을 때만 NOW() (= 옛 무조건 NOW() 폐기)
+        --   = 버그: 이미지 다운로드 실패(imageUrl 없음)에도 타임스탬프만 찍혀 "처리됨"으로 위장 → image_url NULL인데 image_updated_at 찍힘 = 결손 은폐.
+        --   = 수정: imageUrl 있을 때만 갱신 = "이미지 채워진 시각" 정확 의미 = 미래 누수 방지 (= 사장님 SSOT 2026-06-12 시스템 결함 수정).
+        image_updated_at  = CASE WHEN ${p.imageUrl || null}::text IS NOT NULL THEN NOW() ELSE image_updated_at END
       WHERE id = ${match.id}
     `);
     return { action: 'updated', rowId: match.id, matchedBy };

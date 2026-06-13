@@ -123,8 +123,9 @@ const dryRun = argv['dry'] === 'true';
           address: p.address || null,
           latitude: p.lat ?? null,
           longitude: p.lng ?? null,
-          selectionReasonKo: p.selection_reason_ko || null,  // → summary_ko
-          shortformKo: p.shortform_ko || null,                // → editorial_summary
+          // ⚠️ 2026-06-12 카피 필드명 통폐합 = 응답 키 summary_ko/editorial_summary (= DB 컬럼명) 우선, 옛 raw(selection_reason_ko/shortform_ko) fallback = 손실 0
+          selectionReasonKo: p.summary_ko ?? p.selection_reason_ko ?? null,  // → summary_ko
+          shortformKo: p.editorial_summary ?? p.shortform_ko ?? null,        // → editorial_summary
           priceEur,
           dayZone: p.day_zone || null,
           distanceKmFromCenter: p.distance_km_from_center ?? null,

@@ -37,12 +37,18 @@ if (!cityId) { console.error('Usage: --city-id=<N> --date=<YYYY-MM-DD> --apply-s
   const inPath = path.join(ROOT, 'docs', 'raw', String(cityId), `06-ts-pm-enrich-candidates-${date}.json`);
   if (!fs.existsSync(inPath)) { console.error(`✗ ${inPath} 미존재 = run.ts 먼저 실행`); process.exit(1); }
   const j = JSON.parse(fs.readFileSync(inPath, 'utf-8'));
-  const candidates = (j.results || []).filter((r: any) =>
+  const selected = (j.results || []).filter((r: any) =>
     applyStatus.includes(r.status) || applyIds.includes(r.id)
   );
+  // ⚠️ 수정금지(승인필요) 2026-06-12 = businessStatus 폐업 필터 (= ts-backfill 과 일관 = 사용자 SSOT 갈래 2)
+  //   = businessStatus = 유동적 정보 = DB 컬럼 저장 X = 영업중(OPERATIONAL)만 upsert 통과 = 폐업/임시휴업 제외.
+  //   = run.ts 가 raw 에 business_status 저장(9요소째) → 여기서 읽어 필터. (옛 = 미필터 = 폐업도 입력되던 버그.)
+  const closedOut = selected.filter((r: any) => r.ts?.business_status && r.ts.business_status !== 'OPERATIONAL');
+  const candidates = selected.filter((r: any) => !r.ts?.business_status || r.ts.business_status === 'OPERATIONAL');
 
   console.log(`═══ 06-ts-pm-enrich post-process ═══`);
   console.log(`city_id = ${cityId}, date = ${date}, photo download = ${downloadPhoto}`);
+  if (closedOut.length) console.log(`🚫 폐업/휴업 제외 = ${closedOut.length}곳: ${closedOut.map((r: any) => `${r.name}(${r.ts.business_status})`).join(', ')}`);
   console.log(`적용 대상 = ${candidates.length} 행`);
 
   if (!apply) {

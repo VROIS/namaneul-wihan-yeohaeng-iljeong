@@ -182,8 +182,8 @@ For each place include:
 - name_ko (Korean name commonly used by Korean travelers)
 - lat, lng (decimal degrees)
 - address (FULL street address with NUMBER + street + postal code + city)
-- selection_reason_ko (한국어 한 줄 = 한국 여행객 사이 트렌드 = 인스타 성지/최근 핫한 지역/한국 vlog 노출 빈도 등 사회적 검증 근거)
-- shortform_ko (한국어 한 줄 = 장소에 대한 코믹/위트 있는 설명 = 감성/재미 후킹 카피 = Claude 톤. 단순 정보 X, 짧고 강하게)
+- summary_ko (한국어 한 줄 = 한국 여행객 사이 트렌드 = 인스타 성지/최근 핫한 지역/한국 vlog 노출 빈도 등 사회적 검증 근거)
+- editorial_summary (한국어 한 줄 = 장소에 대한 코믹/위트 있는 설명 = 감성/재미 후킹 카피 = Claude 톤. 단순 정보 X, 짧고 강하게)
 - distance_km_from_center (haversine from CITY_CENTER, 1 decimal)
 - day_zone: "core" if distance_km_from_center <= 10 (day 1 walkable from city center)
          OR "outskirt" if 10 < distance_km_from_center <= 100 (day 2+ day-trip required)
@@ -565,10 +565,10 @@ if (!ARG.commit) {
           p.name_en, p.name_ko, p.name_local,
           p.lat, p.lng, p.address || null,
           p.google_review_count || null, p.primary_type || null,
-          p.shortform_ko || null,
+          p.editorial_summary ?? p.shortform_ko ?? null,
           p.day_zone || null, p.distance_km_from_center || null,
           p.image_url_final, null,
-          catTags, tmpRank, p.selection_reason_ko || null,
+          catTags, tmpRank, p.summary_ko ?? p.selection_reason_ko ?? null,
           priceEurForSql, p.google_maps_uri || null]);
         updated++;
       } else {
@@ -614,10 +614,10 @@ if (!ARG.commit) {
           p.name_en, p.name_ko || null, p.name_local || null,
           p.lat, p.lng, p.address || null,
           p.google_review_count || null, p.primary_type || null,
-          p.shortform_ko || null,
+          p.editorial_summary ?? p.shortform_ko ?? null,
           p.day_zone || null, p.distance_km_from_center || null,
           p.image_url_final, null,
-          catTags, tmpRank, p.selection_reason_ko || null,
+          catTags, tmpRank, p.summary_ko ?? p.selection_reason_ko ?? null,
           priceEurForSql, p.google_maps_uri || null]);
         inserted++;
       }

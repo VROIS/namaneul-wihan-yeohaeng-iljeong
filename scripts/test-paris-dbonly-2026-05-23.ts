@@ -1,7 +1,7 @@
-// ⚠️ 2026-05-23 = Step 3 후 = Paris DB-only 검증 (= 비용 €0 = ready 도시)
-// 목적: Step 3 = 32 파일 삭제 후 = 메인앱 파이프라인 = 정상 작동 입증
-// 입증: Paris 호출 = isCityReady=true → DB-only 모드 → TS/PM 호출 0 → 비용 €0
-
+// ⚠️ 2026-05-23 = Paris DB-only 검증 (= 비용 €0 = ready 도시)
+// ⚠️ 2026-06-13 입증확장 = 식당 노출 버그 입증 = 예산 3종(Eco/Reason/Premium) × 3일 생성 →
+//   나온 식당이 PSR 내 RC 순위 몇 위인지(전체 + 가격대구간 내) 출력 + 여정 식당 scene 제시.
+//   = 사장님 입증: "현재는 전체 식당풀 인접픽 → 랭킹밖 부실식당 노출" 사실 측정. DB 쓰기 0.
 import fs from 'fs';
 import pg from 'pg';
 
@@ -23,60 +23,68 @@ async function main() {
     if (!process.env[r.key_name]) process.env[r.key_name] = r.key_value;
   }
 
-  // BEFORE PSR Paris
-  const before = await c.query(`SELECT COUNT(*)::int n FROM place_seed_raw WHERE city_id = 19`);
-  console.log(`[BEFORE] PSR Paris 행 = ${before.rows[0].n}`);
+  // PSR 파리 식당 = RC DESC 순위 사전 적재 (= 나온 식당이 몇 위인지 대조용)
+  const rest = (await c.query(`
+    SELECT id, name_en, name_local, price_eur::float8 AS price, google_review_count AS rc,
+           (image_url IS NOT NULL AND image_url NOT ILIKE '%wiki%') AS has_img,
+           (google_place_id IS NOT NULL) AS has_pid,
+           ROW_NUMBER() OVER (ORDER BY google_review_count DESC NULLS LAST) AS rc_rank_all
+    FROM place_seed_raw WHERE city_id=19 AND seed_category='restaurant' AND price_eur IS NOT NULL
+    ORDER BY google_review_count DESC NULLS LAST`)).rows;
+  const bandOf = (p: number) => p <= 24 ? 'Economic' : p <= 60 ? 'Reasonable' : p <= 180 ? 'Premium' : 'Luxury';
+  const bandRank: Record<string, number> = {};
+  const restByDbId = new Map<number, any>();
+  for (const r of rest) {
+    const b = bandOf(Number(r.price));
+    bandRank[b] = (bandRank[b] || 0) + 1;
+    r.band = b; r.band_rank = bandRank[b];
+    restByDbId.set(r.id, r);
+  }
+  const totalRest = rest.length;
+  const bandTotals: Record<string, number> = {};
+  for (const r of rest) bandTotals[r.band] = (bandTotals[r.band] || 0) + 1;
+  console.log(`[PSR] 파리 식당(가격보유) = ${totalRest}곳 / 가격대: ${Object.entries(bandTotals).map(([k,v])=>`${k}=${v}`).join(' ')}`);
 
   const { runPipelineV3 } = await import('../server/services/agents/pipeline-v3.js');
-  const formData = {
-    destination: 'Paris',
-    destinationCoords: { lat: 48.8566, lng: 2.3522 },
-    startDate: '2026-06-01',
-    endDate: '2026-06-02',
-    startTime: '10:00',
-    endTime: '21:00',
-    vibes: ['Hotspot'],
-    travelPace: 'Normal',
-    travelStyle: 'Reasonable',
-    mobilityStyle: 'Walking',
-    companionType: 'Couple',
-    companionCount: 2,
-    curationFocus: 'Everyone',
-    birthDate: '1990-01-01',
-    language: 'ko',
-  };
+  const STYLES: Array<'Economic'|'Reasonable'|'Premium'> = ['Economic', 'Reasonable', 'Premium'];
 
-  console.log(`\n▶ Paris 호출 (= ready 도시 = DB-only 모드 기대)`);
-  const t0 = Date.now();
-  try {
-    const result = await runPipelineV3(formData as any);
-    const elapsed = Date.now() - t0;
-    console.log(`✅ 완료 (${(elapsed / 1000).toFixed(1)}초)`);
-    const places = result.places || (result.days?.[0]?.places ? result.days.flatMap((d: any) => d.places || []) : []);
-    console.log(`총 장소 = ${places.length}`);
-    if (places.length > 0) {
-      const withImg = places.filter((p: any) => p.image).length;
-      const withCoord = places.filter((p: any) => p.lat && p.lng && p.lat !== 0).length;
-      console.log(`  이미지 채움 = ${withImg}/${places.length}`);
-      console.log(`  좌표 채움 = ${withCoord}/${places.length}`);
-      const sourceCounts: Record<string, number> = {};
-      for (const p of places) {
-        const src = p.sourceType || 'unknown';
-        sourceCounts[src] = (sourceCounts[src] || 0) + 1;
+  for (const style of STYLES) {
+    const formData = {
+      destination: 'Paris',
+      destinationCoords: { lat: 48.8566, lng: 2.3522 },
+      startDate: '2026-06-01', endDate: '2026-06-03',  // = 3일
+      startTime: '10:00', endTime: '21:00',
+      vibes: ['Hotspot'], travelPace: 'Normal',
+      travelStyle: style,                                 // = 예산 3종 루프
+      mobilityStyle: 'Walking', companionType: 'Couple', companionCount: 2,
+      curationFocus: 'Everyone', birthDate: '1990-01-01', language: 'ko',
+    };
+    console.log(`\n══════════ 예산=${style} / 파리 3일 ══════════`);
+    const t0 = Date.now();
+    try {
+      const result: any = await runPipelineV3(formData as any);
+      const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+      const days = result.days || [];
+      console.log(`✅ 완료 (${elapsed}초) / ${days.length}일`);
+      for (const d of days) {
+        for (const p of (d.places || d.scenes || [])) {
+          const isRest = p.type === 'restaurant' || p.seedCategory === 'restaurant';
+          if (!isRest) continue;
+          const mId = String(p.place_id || p.id || '').match(/db-(\d+)/);
+          const dbId = mId ? Number(mId[1]) : null;
+          const row = dbId ? restByDbId.get(dbId) : null;
+          const nm = p.name_local || p.nameLocal || p.name || p.name_en || '(?)';
+          if (row) {
+            console.log(`  🍽️ Day${d.day} ${nm} | €${row.price} ${row.band} | RC전체 ${row.rc_rank_all}/${totalRest}위 · ${row.band}구간 ${row.band_rank}/${bandTotals[row.band]}위 | ${row.has_img?'이미지O':'❌이미지X'} ${row.has_pid?'':'❌PIDX'} (RC ${row.rc ?? 'NULL'})`);
+          } else {
+            console.log(`  🍽️ Day${d.day} ${nm} | (PSR 매칭 실패 = dbId ${dbId})`);
+          }
+        }
       }
-      console.log(`  sourceType:`, sourceCounts);
+    } catch (e: any) {
+      console.error(`❌ 실패:`, e?.message || e);
     }
-  } catch (e: any) {
-    console.error(`❌ 실패:`, e?.message || e);
   }
-
-  // 10초 대기 (= 백그라운드 호출 0 보장 시간)
-  await new Promise(r => setTimeout(r, 10000));
-
-  // AFTER PSR Paris
-  const after = await c.query(`SELECT COUNT(*)::int n FROM place_seed_raw WHERE city_id = 19`);
-  console.log(`\n[AFTER] PSR Paris 행 = ${after.rows[0].n} (= 기대 = ${before.rows[0].n} 변화 0 = DB-only 입증)`);
-  console.log(after.rows[0].n === before.rows[0].n ? '✅ PSR 변화 0 = DB-only 모드 작동 = 비용 €0' : `⚠️ ${after.rows[0].n - before.rows[0].n} 행 추가`);
 
   await c.end();
 }

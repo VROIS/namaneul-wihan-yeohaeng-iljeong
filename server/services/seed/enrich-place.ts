@@ -38,6 +38,7 @@ interface GeminiOutputPlace {
   summary_ko: string | null;
   editorial_summary: string | null;
   price_eur: number | null;
+  distance_km_from_center: number | null;  // ⚠️ 2026-06-12 = 도심거리 = 모든 enrich 필수요소 (= 동선 최적화 기본)
 }
 
 interface GeminiResponse {
@@ -127,7 +128,8 @@ function buildPrompt(input: GeminiInputPlace[]): string {
       "longitude": <경도 6 자리 = 예 2.294481>,
       "summary_ko": "<한 줄 숏폼 대사 = 인스타/FOMO 사회적 검증 = 한국어 25 자 이내>",
       "editorial_summary": "<한 줄 한국인 관점 선정 이유 = 코믹/위트 후킹 카피 = 한국어 35 자 이내>",
-      "price_eur": <1인 입장료 또는 평균 식대 EUR 숫자 = shopping 은 null>
+      "price_eur": <1인 입장료 또는 평균 식대 EUR 숫자 = shopping 은 null>,
+      "distance_km_from_center": <도심 중심으로부터 직선거리 km = haversine = 소수 1 자리 = 예 2.4>
     }
   ]
 }
@@ -139,7 +141,8 @@ function buildPrompt(input: GeminiInputPlace[]): string {
 4. address = 번지부터 국가까지 완전 (= 부분 주소 X)
 5. summary_ko / editorial_summary = 한국어만 (= 영어 단어 혼용 X)
 6. price_eur = shopping 카테고리 = null 강제 / 그 외 = 합리적 EUR 정수
-7. 응답 = 위 JSON 만 (= 설명/주석/마크다운 X)
+7. distance_km_from_center = 도심 중심으로부터 직선거리 km (= haversine, 소수 1 자리, 필수)
+8. 응답 = 위 JSON 만 (= 설명/주석/마크다운 X)
 
 입력 ${input.length} 장소:
 ${JSON.stringify(input, null, 2)}
@@ -226,6 +229,8 @@ export async function enrichPlaceByGemini(
           priceEur: priceEur != null ? priceEur : undefined,
           selectionReasonKo: p.summary_ko || undefined,
           shortformKo: p.editorial_summary || undefined,
+          // ⚠️ 2026-06-12 = 도심거리 = 모든 enrich 필수요소 전달 (= 동선 최적화 기본, place-upsert COALESCE 새우선)
+          distanceKmFromCenter: p.distance_km_from_center != null ? p.distance_km_from_center : undefined,
         });
         if (r.action === 'inserted') inserted++;
         else if (r.action === 'updated') updated++;

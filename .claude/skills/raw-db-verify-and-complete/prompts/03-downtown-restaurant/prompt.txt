@@ -1,4 +1,5 @@
 ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT (= 04-outskirt 대칭 + MEAL_BUDGET 4 tier) = 1 글자 변경 금지
+⚠️ 2026-06-12 사용자 승인 변경 = 카피 필드명 통폐합 = selection_reason_ko→summary_ko / shortform_ko→editorial_summary (= 실제 DB 컬럼명 통일 = 별칭 폐기)
 
 ══════════════════════════════════════════════════════════════════════════════
 PROMPT 본문:
@@ -35,8 +36,8 @@ For each place include only:
 - price_eur (1인당 평균 EUR 상한가. 확실하지 않으면 null)
 - distance_km_from_center (haversine from CITY_CENTER, 1 decimal, <= 10)
 - day_zone: "core" (= 강제)
-- selection_reason_ko (한국어 한 줄 = 인스타 성지/네이버 블로그/유튜브 vlog 사회적 검증. → DB summary_ko)
-- shortform_ko (한국어 한 줄 = 코믹/위트 후킹 = "프사각", "본전 뽑음" 한국 슬랭. → DB editorial_summary)
+- summary_ko (한국어 한 줄 = 인스타 성지/네이버 블로그/유튜브 vlog 사회적 검증. = DB summary_ko)
+- editorial_summary (한국어 한 줄 = 코믹/위트 후킹 = "프사각", "본전 뽑음" 한국 슬랭. = DB editorial_summary)
 
 (Note: place_id / lat / lng / review_count / types / primary_type are NOT requested.)
 

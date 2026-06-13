@@ -48,7 +48,9 @@ function pct(sortedAsc: number[], p: number): number {
 }
 
 // ⚠️ 2026-06-11 = best_image_url/photo_urls 폐기 = 이미지 image_url(구글 PM) 1종 통일
-const imgMissing = (r: any): boolean => !r.image_url;
+// ⚠️ 2026-06-12 = 이미지 결손 = NULL OR WK(위키미디어) = 사용자 SSOT (WK = 환각 오노출 = 파리 식당에 외부 URL, [[feedback_image_matching_polite_failure]]).
+//   = Google Photo + Storage 만 안전 = WK 도 Google 로 교체. (옛 = NULL 만 = WK 환각 방치.)
+const imgMissing = (r: any): boolean => !r.image_url || /wiki/i.test(r.image_url);
 const num = (v: any): number | null => (v == null ? null : Number(v));
 
 (async () => {

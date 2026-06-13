@@ -45,6 +45,8 @@ const ANCHOR_M = 100;
   const relink = await relinkStorageImages({ cityId, apply, client: c, categories: cats });
   if (relink.relinkable) console.log(`[재링크] storage 매칭 ${relink.relinkable}곳 ${apply ? `= ${relink.relinked} 무료 채움` : '(--apply 시 무료)'} → PM 대상 제외`);
 
+  // ⚠️ 2026-06-12 = 대상 = image_url NULL OR WK(위키미디어) = 사용자 SSOT (WK = 환각 오노출 = 파리 명소에 뉴욕/LA 사진 실측, [[feedback_image_matching_polite_failure]]/[[feedback_llm_hallucination_metadata]]).
+  //   = Google Photo + Storage 만 안전 = WK 도 Google 로 교체. (옛 = NULL 만 = WK 환각 방치 버그.)
   const rows = (await c.query(`
     WITH ranked AS (
       SELECT id, seed_category, name_en, name_local, latitude::float8 AS lat, longitude::float8 AS lng, google_place_id,
@@ -53,7 +55,7 @@ const ANCHOR_M = 100;
       FROM place_seed_raw WHERE city_id=$1 AND seed_category = ANY($2::text[])
     )
     SELECT id, seed_category, name_en, name_local, lat, lng, google_place_id FROM ranked
-    WHERE rn <= $3 AND image_url IS NULL
+    WHERE rn <= $3 AND (image_url IS NULL OR image_url LIKE '%wiki%')
     ORDER BY seed_category`, [cityId, cats, top])).rows.filter((r: any) => !relink.matchedIds.has(r.id));
 
   console.log(`═══ ts-photo-fill (city ${cityId} ${city?.name_en}) = TOP${top} 이미지없음 ${rows.length}곳 = €${(rows.length * 0.037).toFixed(2)} ═══`);

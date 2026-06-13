@@ -6,8 +6,8 @@
 // = dailyPerPersonEur = 1 인 단가 그대로 + group = × companionCount 별도
 
 import { db } from "../../db";
-import { exchangeRates, placeSeedRaw } from "@shared/schema";
-import { eq, and, sql, isNotNull } from "drizzle-orm";
+import { exchangeRates } from "@shared/schema";
+import { eq, and, sql } from "drizzle-orm";
 import type {
   PlaceResult,
   TripFormData,
@@ -121,31 +121,31 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
   // ⚠️ 수정금지(승인필요) = 토글 USE_LOCAL_ROUTE: 기본 ON / 'false' 면 즉시 옛 Gemini-우선 롤백 (= 1초 롤백)
   const USE_LOCAL_ROUTE = process.env.USE_LOCAL_ROUTE !== "false";
 
-  // ⚠️ 2026-06-06 = DB-only 식당풀 = 도시 전체 식당(좌표 보유) DB 1회 조회 (= 가격 사전필터 X = 좌표 우선 SSOT)
-  //   → route-local 2차 = 슬롯 앵커 거리순 정렬(좌표 먼저) → 예산내 첫(가격 나중) 픽. (= AG2 식당 6곳 한계 극복)
+  // ⚠️ 수정금지(승인필요) 2026-06-13 사용자 SSOT = DB-only 식당풀 = 가격대 구간별 RC TOP 만 (= eco20/reason40/premium20, zone 구분 없이 도시 전체)
+  //   = 옛 버그(2026-06-06): 가격보유 식당 전체(410곳)를 풀로 넘김 → route-local 이 인접픽 → RC 랭킹 밖(300위권~바닥)
+  //     이미지/PID 없는 부실 식당이 동선에 노출됨(2026-06-13 시뮬 입증: Mokus 402위, Le Chateaubriand 316위 노출).
+  //   = 수정: 가격대 구간(MEAL_BUDGET 경계 = eco≤24 / reason 25~60 / premium 61~180 / luxury 181+)별로
+  //     RC DESC ROW_NUMBER ≤ 구간정원(20/40/20/20)만 풀에 포함. rank 는 rc-rerank 가 이미 RC 반영 → TOP = 완비 식당.
+  //   → route-local 2차 = 이 TOP 풀에서 슬롯 앵커 거리순 인접픽 (= 부실 바닥식당 원천 제외).
   let restaurantPool: PlaceResult[] = [];
   if (USE_LOCAL_ROUTE && cityId && db) {
-    const rows = await db!
-      .select({
-        id: placeSeedRaw.id,
-        nameEn: placeSeedRaw.nameEn,
-        nameKo: placeSeedRaw.nameKo,
-        nameLocal: placeSeedRaw.nameLocal,
-        address: placeSeedRaw.address,
-        latitude: placeSeedRaw.latitude,
-        longitude: placeSeedRaw.longitude,
-        priceEur: placeSeedRaw.priceEur,
-        summaryKo: placeSeedRaw.summaryKo,
-        editorialSummary: placeSeedRaw.editorialSummary,
-        imageUrl: placeSeedRaw.imageUrl,
-        googleReviewCount: placeSeedRaw.googleReviewCount,
-      })
-      .from(placeSeedRaw)
-      // ⚠️ 2026-06-12 = isNotNull(priceEur) = 가격 미검증 식당 식사후보 제외 (= La Chinata류 garbage 차단 + 매트릭스 폴백 발동 원천 봉쇄)
-      //   = zone/거리 필터는 넣지 않음 (= 100km 전체 = 당일치기 방향 날의 현지 식당 필요 = 사용자 SSOT)
-      .where(and(eq(placeSeedRaw.cityId, cityId), eq(placeSeedRaw.seedCategory, "restaurant"), isNotNull(placeSeedRaw.priceEur)))
-      .orderBy(sql`${placeSeedRaw.googleReviewCount} DESC NULLS LAST`);
-    restaurantPool = rows
+    const rows = (await db!.execute(sql`
+      WITH banded AS (
+        SELECT id, name_en AS "nameEn", name_ko AS "nameKo", name_local AS "nameLocal", address,
+               latitude, longitude, price_eur AS "priceEur", summary_ko AS "summaryKo",
+               editorial_summary AS "editorialSummary", image_url AS "imageUrl",
+               google_review_count AS "googleReviewCount",
+               CASE WHEN price_eur <= 24 THEN 20 WHEN price_eur <= 60 THEN 40 WHEN price_eur <= 180 THEN 20 ELSE 20 END AS quota,
+               ROW_NUMBER() OVER (
+                 PARTITION BY CASE WHEN price_eur <= 24 THEN 'eco' WHEN price_eur <= 60 THEN 'reason' WHEN price_eur <= 180 THEN 'premium' ELSE 'luxury' END
+                 ORDER BY google_review_count DESC NULLS LAST
+               ) AS band_rn
+        FROM place_seed_raw
+        WHERE city_id = ${cityId} AND seed_category = 'restaurant' AND price_eur IS NOT NULL
+      )
+      SELECT * FROM banded WHERE band_rn <= quota ORDER BY "googleReviewCount" DESC NULLS LAST
+    `)) as unknown as { rows: Array<Record<string, any>> };
+    restaurantPool = (rows.rows || [])
       .filter((r) => r.latitude != null && Number(r.latitude) !== 0)
       .map((r) => ({
         id: `db-${r.id}`,
@@ -163,7 +163,7 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
         userRatingCount: r.googleReviewCount || 0,
       })) as unknown as PlaceResult[];
     console.log(
-      `[AG4-DB] 🍽️ 식당풀 DB 조회 = ${restaurantPool.length}곳 (도시 전체, 가격보유 식당만 = NULL 제외 = 매트릭스 폴백 차단)`,
+      `[AG4-DB] 🍽️ 식당풀 DB 조회 = ${restaurantPool.length}곳 (= 가격대구간별 RC TOP eco20/reason40/premium20/luxury20, 부실 바닥식당 제외)`,
     );
   }
 

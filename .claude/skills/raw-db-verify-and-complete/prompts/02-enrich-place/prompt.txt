@@ -1,4 +1,5 @@
 ⚠️ 수정금지(승인필요) 2026-05-18 = 사용자 SSOT = 1 글자 변경 금지
+⚠️ 2026-06-12 사용자 승인 변경 = distance_km_from_center 응답 추가 (= 도심거리 = 모든 enrich 필수요소 = 동선 최적화 기본 = 발굴 01-discover 와 동기)
 
 ══════════════════════════════════════════════════════════════════════════════
 PROMPT 본문:
@@ -34,7 +35,8 @@ PROMPT 본문:
       "longitude": <경도 6 자리 = 예 2.294481>,
       "summary_ko": "<한 줄 숏폼 대사 = 인스타/FOMO 사회적 검증 = 한국어 25 자 이내>",
       "editorial_summary": "<한 줄 한국인 관점 선정 이유 = 코믹/위트 후킹 카피 = 한국어 35 자 이내>",
-      "price_eur": <1인 입장료 또는 평균 식대 EUR 숫자 = shopping 은 null>
+      "price_eur": <1인 입장료 또는 평균 식대 EUR 숫자 = shopping 은 null>,
+      "distance_km_from_center": <도심 중심으로부터 직선거리 km = haversine = 소수 1 자리 = 예 2.4>
     }
   ]
 }
@@ -46,7 +48,8 @@ PROMPT 본문:
 4. address = 번지부터 국가까지 완전 (= 부분 주소 X)
 5. summary_ko / editorial_summary = 한국어만 (= 영어 단어 혼용 X)
 6. price_eur = shopping 카테고리 = null 강제 / 그 외 = 합리적 EUR 정수
-7. 응답 = 위 JSON 만 (= 설명/주석/마크다운 X)
+7. distance_km_from_center = 도심 중심으로부터 직선거리 km (= haversine, 소수 1 자리, 필수)
+8. 응답 = 위 JSON 만 (= 설명/주석/마크다운 X)
 
 입력 ${BATCH_LEN} 장소:
 ${JSON_INPUT}

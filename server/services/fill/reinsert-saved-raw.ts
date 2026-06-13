@@ -2,6 +2,8 @@
 //   = 6형식 전부 처리: 01-discover(results[cat]) / 02-enrich(places, id) / 03·04-restaurant(results[tier]) / 13-restaurant(parsed, id) / 12-TS(zones[].places, PID).
 //   = 모두 upsertPlace 경유(§14, 5단계 매칭) = 정리된 29컬럼에 정확히 꽂히는지 + 고아/신규 매칭 검증.
 //   = 가격 4종 옛이름(estimated_price_eur/price_per_person_eur/price_eur_max) + price_eur 전부 fallback. 0 보존(?? null).
+// ⚠️ 2026-06-13 사용자 승인 = 결손 배선 추가 = distance_km_from_center(raw 값 또는 도시중심 좌표 haversine, 외부호출 0) + image_url(완성형 URL 보존).
+//   = 재입력 시 도심거리·이미지 결손이 실제 UPDATE 되게 = 사장님 입증 ②(결손 채움). photo_name 리소스명은 외부호출 필요라 제외.
 // 호출: npx tsx server/services/fill/reinsert-saved-raw.ts --city-id=37 [--apply]
 //   --apply 없으면 = dry = 파싱·매칭대상만, DB 쓰기 0.  외부호출 0 (로컬→DB).
 import fs from 'fs';
@@ -32,7 +34,8 @@ const parseRawText = (rt: string): any => {
   return JSON.parse(t.trim());
 };
 
-type Job = { src: string; cat?: string; id?: number; nameEn?: string; nameLocal?: string; nameKo?: string; address?: string; lat?: number; lng?: number; pid?: string; mapsUri?: string; rc?: number; priceEur: number | null; summaryKo?: string; shortformKo?: string; photoName?: string };
+// ⚠️ 2026-06-13 = 결손 배선 추가 = distC(도심거리) + imageUrl(완성형 URL 보존). 도심거리 = raw 값 우선, 없으면 좌표로 haversine(외부호출 0).
+type Job = { src: string; cat?: string; id?: number; nameEn?: string; nameLocal?: string; nameKo?: string; address?: string; lat?: number; lng?: number; pid?: string; mapsUri?: string; rc?: number; priceEur: number | null; summaryKo?: string; shortformKo?: string; photoName?: string; distC?: number; imageUrl?: string };
 
 const collect = (): Job[] => {
   const jobs: Job[] = [];
@@ -61,6 +64,9 @@ const collect = (): Job[] => {
         rc: num(p.review_count ?? p.userRatingCount ?? p.google_review_count),
         priceEur: price(p), summaryKo: p.summary_ko || p.selection_reason_ko, shortformKo: p.editorial_summary || p.shortform_ko,
         photoName: p.photo_name,
+        // ⚠️ 2026-06-13 = 도심거리 = raw 값 우선(없으면 main 에서 좌표로 haversine), 이미지 = 완성형 URL 만(photo_name 리소스명은 외부호출 필요라 제외)
+        distC: num(p.distance_km_from_center) ?? undefined,
+        imageUrl: (p.image_url && /^https?:/.test(String(p.image_url))) ? String(p.image_url) : undefined,
       });
     }
   }
@@ -69,11 +75,24 @@ const collect = (): Job[] => {
 
 (async () => {
   const { upsertPlace } = await import(pathToFileURL(path.join(ROOT, 'server/services/place-upsert.ts')).href);
+  // ⚠️ 2026-06-13 = 도심거리 계산 = 단일 SSOT haversineKm 재사용 (= 헌법 §16 재발명 금지)
+  const { haversineKm } = await import(pathToFileURL(path.join(ROOT, 'server/services/agents/transit-haversine.ts')).href);
   const pg = await import('pg');
   const c = new (pg as any).default.Client({ connectionString: process.env.SUPA_URL || process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
   await c.connect();
 
+  // ⚠️ 2026-06-13 = 도시 중심좌표 = 도심거리 결손 보강용 (raw 에 distance_km_from_center 없으면 좌표로 계산 = 외부호출 0, 사장님 "도심거리 무조건 저장")
+  const cityRow = (await c.query('SELECT latitude::float8 AS lat, longitude::float8 AS lng FROM cities WHERE id=$1', [cityId])).rows[0];
+
   const jobs = collect();
+  // 도심거리 결손 보강 = raw 에 없고 좌표 있으면 = haversine(도시중심, 장소좌표) = 외부호출 0
+  if (cityRow?.lat != null) {
+    for (const j of jobs) {
+      if (j.distC == null && j.lat != null && j.lng != null) {
+        j.distC = Math.round(haversineKm(cityRow.lat, cityRow.lng, j.lat, j.lng) * 10) / 10;
+      }
+    }
+  }
   // ⚠️ 수정금지(승인필요) 2026-06-11 = id 보유 raw(02-enrich/13-restaurant) = DB 기존 행의 "검증된 식별 앵커"로 upsert
   //   = 옛 버그: raw 의 Gemini 식별자(name/주소 부정확)로 매칭 → 197곳 신규 누수. 이제 PID/주소/cat = DB 것 = 1·3순위 확정 병합.
   //   = 콘텐츠(가격/요약/이름갱신)만 raw 것 = "id가 가리키는 행을 보강한다"의 정확한 구현.
@@ -138,6 +157,8 @@ const collect = (): Job[] => {
           address: j.address, latitude: j.lat, longitude: j.lng,
           googlePlaceId: j.pid, googleMapsUri: j.mapsUri, googleReviewCount: j.rc,
           priceEur: j.priceEur, selectionReasonKo: j.summaryKo, shortformKo: j.shortformKo,
+          // ⚠️ 2026-06-13 = 결손 배선 = 도심거리(raw 또는 haversine 계산) + 이미지(완성형 URL 보존) = place-upsert COALESCE 새우선
+          distanceKmFromCenter: j.distC, imageUrl: j.imageUrl,
         });
         action[r?.action || 'done'] = (action[r?.action || 'done'] || 0) + 1;
         if (r?.action === 'inserted') insertedLog.push(`${j.src} | ${j.nameEn}${r?.suspect ? ' [중복의심]' : ' [진짜신규]'}`);
