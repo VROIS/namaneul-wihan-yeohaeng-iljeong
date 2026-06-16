@@ -5,10 +5,10 @@
 // 호출:
 //   npx tsx .claude/skills/raw-db-verify-and-complete/prompts/01-discover-6cats/run.ts --city-id=19 [--dry]
 //
-// 산출물 = docs/raw/{city_id}/01-discover-6cats.json (= post-process.ts 입력)
+// 산출물 = docs/raw/{city_id}/{YYYY-MM-DD}_01-discover-6cats.json (= 날짜앞 표준, raw-filename.ts / post-process.ts 입력)
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '../../../../..');
@@ -94,11 +94,17 @@ const dryRun = argv['dry'] === 'true';
   const usage = j.usageMetadata || {};
   console.log(`\n호출 = ${Date.now() - t0} ms / finishReason = ${finishReason} / 토큰 = ${usage.totalTokenCount || '?'}`);
 
-  // 5. 산출물 raw 저장 (= docs/raw/{city_id}/01-discover-6cats-{YYYY-MM-DD}.json)
+  // 5. 산출물 raw 저장 (= docs/raw/{city_id}/{YYYY-MM-DD}_01-discover-6cats.json)
   const today = new Date().toISOString().slice(0, 10);
   const outDir = path.join(ROOT, 'docs', 'raw', String(cityId));
   fs.mkdirSync(outDir, { recursive: true });
-  const outPath = path.join(outDir, `01-discover-6cats-${today}.json`);
+  // ⚠️ 2026-06-15 = 파일명 단일 표준(raw-filename.ts) = {date}_01-discover-6cats.json (날짜앞)
+  // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = versionedName 으로 외부응답(raw_text)만 해싱 → 내용동일=덮어쓰기 / 다르면 _N
+  const { rawName, rawHash, versionedName } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/raw-filename.ts')).href);
+  // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = 기존파일 raw_text 부분만 md5 (meta 제외 = 비교 기준 동일)
+  const hashOf = (p: string): string | null => { try { return rawHash(JSON.parse(fs.readFileSync(p, 'utf-8')).raw_text); } catch { return null; } };
+  // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = 해싱대상 = 외부응답(raw_text)만 (meta/called_at 제외)
+  const outPath = path.join(outDir, versionedName(outDir, rawName(1, 'discover-6cats', undefined, today), rawHash(text), hashOf));
   fs.writeFileSync(outPath, JSON.stringify({
     meta: {
       city_id: cityId,

@@ -66,13 +66,15 @@ const PM_CALL_EUR = 0.007;
 (async () => {
   // ⚠️ 수정금지(승인필요) 2026-06-02 = 합본 발굴 = zone 의 모든 변형 파일(nearby/text/premium/무label) 병합
   const rawDir = path.join(ROOT, 'docs', 'raw', String(cityId));
+  // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = 카테고리/식당 두 reader 공용 = base(zone-label)별 최신 _N 1개로 축약 = 중복집계 0
+  const { latestVersionedByBase } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/raw-filename.ts')).href);
 
   // ⚠️ 수정금지(승인필요) 2026-06-03 사용자 SSOT = 비식당 카테고리 모드 (early return)
   //   = --labels 파일 병합 → 명백오류(렌탈listing/좌표無) 제외 → place_id+name_norm dedup → upsertPlace(seedCategory=category)
   //   = 매칭=기존 검증·정정 / 미매칭=신규 발굴. 식당 전용(NON_FOOD/가격tier/QUOTA/PM/orphan)은 일절 미적용.
   if (category) {
-    const labelRe = labels.map((l) => new RegExp(`^12-ts-discover-${zone}-${l}-\\d{4}-\\d{2}-\\d{2}\\.json$`));
-    const catFiles = fs.readdirSync(rawDir).filter((f) => labelRe.some((re) => re.test(f)));
+    const labelRe = labels.map((l) => new RegExp(`^\\d{4}-\\d{2}-\\d{2}_12-ts-discover_${zone}-${l}(_\\d+)?\\.json$`));  // ⚠️ 수정금지(승인필요) — raw 파일명 표준화: 날짜앞 {date}_12-ts-discover_zone(-label) 형식 / (_\d+)?=버전순번 _N 포착(2026-06-16 SSOT)
+    const catFiles = latestVersionedByBase(fs.readdirSync(rawDir).filter((f) => labelRe.some((re) => re.test(f))));  // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = label(zone-label)별 최신 _N 1개로 축약 = 중복집계 0
     if (!catFiles.length) { console.error(`✗ ${rawDir} 에 라벨 [${labels.join(',')}] 파일 없음`); process.exit(1); }
     const merged: any[] = [];
     for (const f of catFiles) { const j = JSON.parse(fs.readFileSync(path.join(rawDir, f), 'utf-8')); for (const z of (j.zones || [])) for (const p of (z.places || [])) merged.push(p); }
@@ -126,8 +128,9 @@ const PM_CALL_EUR = 0.007;
     return;
   }
 
-  const files = fs.readdirSync(rawDir).filter((f) => f.startsWith(`12-ts-discover-${zone}`) && f.endsWith(`-${date}.json`));
-  if (!files.length) { console.error(`✗ ${rawDir}/12-ts-discover-${zone}*-${date}.json 미존재 = run.ts 먼저`); process.exit(1); }
+  // ⚠️ 수정금지(승인필요) — raw 파일명 표준화: 날짜앞 {date}_12-ts-discover_zone(-label) 형식 / startsWith 는 _N 도 잡으니 latestVersionedByBase 로 zone-label별 최신 1개 축약(2026-06-16 SSOT) = 중복집계 0
+  const files = latestVersionedByBase(fs.readdirSync(rawDir).filter((f) => f.startsWith(`${date}_12-ts-discover_${zone}`) && f.endsWith('.json')));
+  if (!files.length) { console.error(`✗ ${rawDir}/${date}_12-ts-discover_${zone}*.json 미존재 = run.ts 먼저`); process.exit(1); }
   const mergedZones: any[] = [];
   for (const f of files) { const j = JSON.parse(fs.readFileSync(path.join(rawDir, f), 'utf-8')); mergedZones.push(...(j.zones || [])); }
   const raw = { zones: mergedZones };

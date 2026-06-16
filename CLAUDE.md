@@ -222,6 +222,7 @@ const r = await upsertPlace({
 | 순위 | 기준 | 확률 |
 |---|---|---|
 | **0** | google_place_id 일치 | ~100% |
+<!-- ⚠️ 수정금지(승인필요) — matcher PID veto 제거 동기화(2026-06-15 SSOT): PID 가 달라도 보조매칭(주소·좌표·로컬이름) 일치 시 = 같은 장소(우리 PID 오류 = TS 교정). PID 차이는 더이상 veto 아님. URI(cid)만 veto 유지. (이 veto 정책 변경은 아래 "변경하려면?" = 헌법 변경 통제 = 사용자 명시 승인 대상) -->
 | **1** | 풀 주소 정규화 100% (= 번지 + 우편번호) | ~99% |
 | **2** | 좌표 10m | ~95% |
 | **3** | 장소명 LOWER+trim (= 보조, 체인 위험) | ~30-50% |
@@ -392,3 +393,67 @@ server/services/
 ### 변경하려면?
 
 사용자 명시 승인 + `[[feedback_refactor_workflow_3gate]]` 메모리 + §11 변경 통제.
+
+---
+
+## 제18조: ⚠️ 외부호출 raw 산출물 형식 = 단일 표준 (2026-06-16 사용자 SSOT)
+
+> 모든 유료 외부호출(TS·Gemini)의 응답 raw = 돈·자산. 형식·경로·저장 위치가 이미 `save-raw.ts` 에 잠금됨.
+> 이 조항 = 그 잠금을 헌법으로 명문화. 우회·형식 변경 = 즉시 작업 중단.
+
+### ✅ 유일한 저장 관문 = `saveRaw()` (= `server/services/shared/save-raw.ts`)
+
+- 모든 외부 클라이언트(`ts-client.ts` / `geminiClient.ts`)가 응답 직후 이 함수로 저장 강제.
+- 직접 `fetch().then(저장 안 함)` = 관문 우회 = **금지** (= raw 누락 = 비용 증발 = 은폐 위험).
+
+### ✅ 파일 규칙 (= save-raw.ts 36줄 = 절대 변경 금지)
+
+```
+{cityId}/{YYYY-MM-DD}_{source}-{tag}.json
+```
+
+| 요소 | 값 | 비고 |
+|---|---|---|
+| **위치** | 로컬 `docs/raw/{cityId}/` + Storage `raw-responses/{cityId}/` | **2 곳 동형** (= 비용 보호 + 재활용) |
+| **cityId** | 발굴 = 도시 id / cityId 없는 호출(동선·메인앱) = `runtime` | |
+| **날짜** | `YYYY-MM-DD` (= 앞) | 같은 날 같은 tag + **같은 raw 내용** = 덮어쓰기 = 중복0. **raw 내용 다르면** = `_1`/`_2` 버전 순번 분리 보존(손실0) |
+| **source** | `ts` \| `gemini` | |
+| **tag** | 호출 맥락 식별(영숫자, `-` 치환, 48자) | 미지정 = `call` |
+
+### ✅ 내용 형식 (= pretty 들여쓰기 2 = 사람 눈 검수 가능)
+
+```json
+{
+  "savedAt": "<ISO>",
+  "source": "ts | gemini",
+  "contextId": "<cityId | runtime>",
+  "request": { "prompt": "...", "model": "...", ... },
+  "raw": { "parsed": {...}, "text": "...", "finishReason": "..." }
+}
+```
+
+= `request` = 프롬프트 원본 통째로 (= 사장님 byte 검수 = 임의삽입/누락 적발).
+= `raw` = 외부 응답 원본 (= 진짜 raw = 환각·오류도 그대로 보존 = 추후 대조).
+
+### ✅ 버전 순번 (2026-06-16 사장님 SSOT)
+
+- 같은 날 같은 tag 재호출 시 = 로컬 `docs/raw` 기준 `md5(raw)` 비교.
+  - **동일** = 1 개 파일 덮어쓰기 (= 중복0).
+  - **상이** = `_N`(= `_1`/`_2`...) 버전 순번 분리 보존 (= raw 손실0 = 다른 결과는 비가역 자산).
+- 규칙 SSOT = `server/services/shared/raw-filename.ts` 의 `rawHash` / `versionedName` (= `storage-raw-restructure` 로직 흡수 = 재발명0).
+- `saveRaw()` + debug-dump 양쪽에 동일 적용 (= 단일 SSOT = 경로 어디든 같은 순번 규칙).
+
+### ❌ 절대 금지 (= 위반 즉시 작업 중단)
+
+| # | 금지 | 이유 |
+|---|---|---|
+| 1 | minified(한 줄) 저장 | 사장님 원본 검수 불가 = 은폐 (= 선임 구속사유) |
+| 2 | 로컬 1 곳만 / Storage 1 곳만 | 2 곳 동형 깨짐 = 재활용·비용보호 무효 |
+| 3 | 파일명에 시각(HH-mm-ss) 추가 | 같은 호출이 매번 새 파일 = 중복 누적 (단, 내용이 실제 다를 때의 `_N` 버전 순번은 허용 = 위 버전 순번 소절) |
+| 4 | `saveRaw()` 우회 = 직접 외부 fetch 후 미저장 | raw 누락 = 유료 결과 증발 |
+| 5 | `request`/`raw` 구조 임의 변경·필드 누락 | 대조·재현 불가 |
+
+### 변경하려면?
+
+사용자 명시 승인 + `save-raw.ts` 의 `// ⚠️ 수정금지` 잠금 주석 + §11 변경 통제.
+= 관련 메모리 [[feedback_external_call_raw_2places_visible]] · [[feedback_prompt_is_code_show_before_apply]].

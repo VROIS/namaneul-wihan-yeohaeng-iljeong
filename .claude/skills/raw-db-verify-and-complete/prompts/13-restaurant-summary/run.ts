@@ -2,12 +2,12 @@
 // = 대상 = google_review_count>0 AND summary_ko 비어있음 (= TS풀 신규) → 40 배치 → Gemini(가격 미입력=blind) → raw 저장
 // = 가격 = 필수 응답 = TS 실값과 비교(검증) / post-process 가 null 행만 채움 (= TS 가격 덮어쓰기 X)
 // = 호출 설정 = 04/05 동일 = gemini-3-flash-preview + googleSearch + json + temp0.2 + maxOutputTokens 50000 + timeout 420s
-// = 산출물: docs/raw/{city_id}/13-restaurant-summary-batch{N}-{YYYY-MM-DD}.json
+// = 산출물: docs/raw/{city_id}/{YYYY-MM-DD}_13-restaurant-summary_batch{N}.json (= 날짜앞 표준, raw-filename.ts)
 // 호출:
 //   npx tsx .../13-restaurant-summary/run.ts --city-id=19 [--year=2026] [--batch=40] [--limit=8]
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '../../../../..');
@@ -44,6 +44,9 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--year=2026] [--batch=40] [-
   const today = new Date().toISOString().slice(0, 10);
   const outDir = path.join(ROOT, 'docs', 'raw', String(cityId));
   fs.mkdirSync(outDir, { recursive: true });
+  // ⚠️ 2026-06-15 = 파일명 단일 표준(raw-filename.ts) = {date}_13-restaurant-summary_batch{N}.json (날짜앞)
+  // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = versionedName/rawHash 로 같은 batch 재호출 = _N 순번 보존(손실0)·내용동일=덮어쓰기
+  const { rawName, rawHash, versionedName } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/raw-filename.ts')).href);
   const body = fs.readFileSync(path.join(__dirname, 'prompt.txt'), 'utf-8')
     .split('══════════════════════════════════════════════════════════════════════════════')[2] || '';
 
@@ -82,7 +85,13 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--year=2026] [--batch=40] [-
     const r = await callGemini(prompt);
     const parsed = parseArr(r!.text);
     totalParsed += parsed.length;
-    const outPath = path.join(outDir, `13-restaurant-summary-batch${b + 1}-${today}.json`);
+    // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = 해싱대상=외부응답 raw_text 만(meta 제외) → 같은 batch 재호출 무손실
+    const stemFile = rawName(13, 'restaurant-summary', `batch${b + 1}`, today);
+    const newHash = rawHash(r!.text);
+    const fileName = versionedName(outDir, stemFile, newHash, (p: string) => {
+      try { return rawHash(JSON.parse(fs.readFileSync(p, 'utf-8')).raw_text); } catch { return null; }
+    });
+    const outPath = path.join(outDir, fileName);
     fs.writeFileSync(outPath, JSON.stringify({ meta: { city_id: cityId, batch: b + 1, of: batches.length, called_at: new Date().toISOString(), finish: r!.finish, usage: r!.usage, input_ids: batches[b].map(x => x.id) }, raw_text: r!.text, parsed }, null, 2));
     console.log(`    ${Date.now() - t0}ms / ${r!.finish} / 토큰 ${r!.usage.totalTokenCount || '?'} / 파싱 ${parsed.length} → ${path.basename(outPath)}`);
     // 샘플 = 가격 검증 (Gemini blind vs TS 실값) + 요약

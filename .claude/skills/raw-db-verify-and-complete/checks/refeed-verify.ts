@@ -47,11 +47,12 @@ function parseGemini(t: string): any | null {
   await c.end();
 
   const dir = path.join(ROOT, 'docs', 'raw', String(cityId));
-  const files = fs.readdirSync(dir)
+  // ⚠️ 수정금지(승인필요) — raw 파일명 표준+버전순번 정합(2026-06-16 SSOT, 1번 누락분) = 발굴 raw 4종(12-ts-discover/01/03/04) 재입력. 날짜앞 표준 {date}_{NN-step}_... 앵커(옛 {step 시작} 앵커=신규파일 0건 매칭=리더 침묵 버그) + latestVersionedByBase 로 base별 최신 _N 1개 축약(같은 발굴 중복집계 0)
+  const { latestVersionedByBase } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/raw-filename.ts')).href);
+  const files = latestVersionedByBase(fs.readdirSync(dir)
     .filter((f) => /\.json$/.test(f)
-      && /^(12-ts-discover|01-discover-6cats|03-downtown-restaurant|04-outskirt-restaurant)/.test(f)
-      && !/report|pretty|sim/.test(f))
-    .sort();
+      && /^\d{4}-\d{2}-\d{2}_(12-ts-discover|01-discover-6cats|03-downtown-restaurant|04-outskirt-restaurant)/.test(f)
+      && !/report|pretty|sim/.test(f)));
 
   // 한 파일 → 후보 장소 배열 (= matcher.ts MatchInput 형)
   const placesOf = (file: string): any[] => {
@@ -73,7 +74,7 @@ function parseGemini(t: string): any | null {
 
   // ⚠️ 2026-06-13 = 매처미스 분류 정밀화 = DB 의 PID 집합 (= raw PID 가 DB 에 실재하는지 교차확인)
   //   = 옛 결함: 매칭 실패 항목을 "이름 부분일치"로만 dup 판정 → PID 다른 동명 다른 장소(Loulou/Le Marais 등)를
-  //     "고칠 중복"으로 거짓 양성. matcher 는 PID veto 로 올바르게 다른장소 판정했는데 보고가 오분류.
+  //     "고칠 중복"으로 거짓 양성. matcher 는 URI veto 로 다른장소 판정했는데 보고가 오분류. (⚠️ 수정금지(승인필요) — PID veto 제거 텍스트 정합(2026-06-15 SSOT))
   //   = 신규칙: raw PID 가 DB 에 실재 = 진짜 매처미스(고칠 구멍) / raw PID 가 DB 에 없음(또는 PID 무) = 정상신규(동명 다른 장소).
   const dbPidSet = new Set<string>(existing.map((e: any) => e.googlePlaceId).filter(Boolean));
 

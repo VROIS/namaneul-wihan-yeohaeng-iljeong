@@ -4,12 +4,12 @@
 // 호출:
 //   npx tsx .claude/skills/raw-db-verify-and-complete/prompts/04-outskirt-restaurant/run.ts --city-id=19 --hints="Versailles / Disneyland Paris / ..." [--year=2026]
 //
-// 산출물:
-//   docs/raw/{city_id}/04-outskirt-restaurant-low.json
-//   docs/raw/{city_id}/04-outskirt-restaurant-mid.json
+// 산출물: (= 날짜앞 표준, raw-filename.ts)
+//   docs/raw/{city_id}/{YYYY-MM-DD}_04-outskirt-restaurant_low.json
+//   docs/raw/{city_id}/{YYYY-MM-DD}_04-outskirt-restaurant_mid.json
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '../../../../..');  // ⚠️ 2026-06-08 = prompts/04 un-archive 복귀 = 상위 5 (표준 스킬 위치 = 아카이브 ROOT 버그 근본해소)
@@ -116,13 +116,19 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--hints="타입 override(선
   }
 
   const today = new Date().toISOString().slice(0, 10);
+  // ⚠️ 2026-06-15 = 파일명 단일 표준(raw-filename.ts) = {date}_04-outskirt-restaurant_{tier}.json (날짜앞)
+  // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = low/mid 파일별 versionedName(외부응답 raw_text만 해싱)
+  const { rawName, rawHash, versionedName } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/raw-filename.ts')).href);
+  // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = 기존파일 raw_text 부분만 md5 (meta 제외)
+  const hashOf = (p: string): string | null => { try { return rawHash(JSON.parse(fs.readFileSync(p, 'utf-8')).raw_text); } catch { return null; } };
 
   // 3. 호출 1 = LOW
   console.log('\n--- 호출 1 = 30 LOW ---');
   const t1 = Date.now();
   const r1 = await callGemini(build('low', ''));
   console.log(`${Date.now() - t1} ms / ${r1.finishReason} / 토큰 ${r1.usage.totalTokenCount}`);
-  fs.writeFileSync(path.join(outDir, `04-outskirt-restaurant-low-${today}.json`), JSON.stringify({
+  // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = 해싱대상 = 외부응답(r1.text)만 (meta/called_at 제외)
+  fs.writeFileSync(path.join(outDir, versionedName(outDir, rawName(4, 'outskirt-restaurant', 'low', today), rawHash(r1.text), hashOf)), JSON.stringify({
     meta: { city_id: cityId, called_at: new Date().toISOString(), finish_reason: r1.finishReason, usage: r1.usage },
     raw_text: r1.text,
   }, null, 2));
@@ -137,7 +143,8 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--hints="타입 override(선
   const t2 = Date.now();
   const r2 = await callGemini(build('mid', excludeStr));
   console.log(`${Date.now() - t2} ms / ${r2.finishReason} / 토큰 ${r2.usage.totalTokenCount}`);
-  fs.writeFileSync(path.join(outDir, `04-outskirt-restaurant-mid-${today}.json`), JSON.stringify({
+  // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = 해싱대상 = 외부응답(r2.text)만 (meta/called_at/exclude_count 제외)
+  fs.writeFileSync(path.join(outDir, versionedName(outDir, rawName(4, 'outskirt-restaurant', 'mid', today), rawHash(r2.text), hashOf)), JSON.stringify({
     meta: { city_id: cityId, called_at: new Date().toISOString(), finish_reason: r2.finishReason, usage: r2.usage, exclude_count: lowList.length },
     raw_text: r2.text,
   }, null, 2));

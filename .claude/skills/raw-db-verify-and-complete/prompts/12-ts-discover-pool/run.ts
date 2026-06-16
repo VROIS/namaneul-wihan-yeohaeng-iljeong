@@ -1,7 +1,7 @@
 // ⚠️ 수정금지(승인필요) 2026-06-02 = ts-discover-pool 발굴 진입점 (= 명소별 TS discovery → 리뷰순 raw)
 // = STANDARD_TS_FIELD_MASK (9필드 Enterprise, validateFieldMask 강제) + includedType=restaurant + circle + languageCode=ko
 // = 과금 = 요청당 (per-request) = 명소당 1콜 = ~20곳 (= reference_ts_batch_discovery 메모리)
-// = 산출물: docs/raw/{cityId}/12-ts-discover-{zone}-{YYYY-MM-DD}.json (= DB 안 건드림 = dry)
+// = 산출물: docs/raw/{cityId}/{YYYY-MM-DD}_12-ts-discover_{zone}{-label}.json (= 날짜앞 표준, raw-filename.ts / DB 안 건드림 = dry)
 // 호출:
 //   npx tsx .claude/skills/raw-db-verify-and-complete/prompts/12-ts-discover-pool/run.ts --city-id=19 [--zone=outskirt] [--per=20]
 // 다음 = post-process.ts (= OPERATIONAL 필터 + PhotoMedia + upsertPlace 5단계 + 07-merge-dups)
@@ -170,7 +170,16 @@ const rectFromCenter = (lat: number, lng: number, km: number) => {
     console.log(`   top3: ${places.slice(0, 3).map((p: any) => `${p.name}(${p.review_count})`).join(' · ')}`);
   }
 
-  const outPath = path.join(outDir, `12-ts-discover-${zone}${label ? '-' + label : ''}-${today}.json`);
+  // ⚠️ 2026-06-15 = 파일명 단일 표준(raw-filename.ts) = {date}_12-ts-discover_{zone}{-label}.json (날짜앞)
+  // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = versionedName/rawHash 로 같은 zone 재호출 = _N 순번 보존(손실0)·내용동일=덮어쓰기
+  const { rawName, rawHash, versionedName } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/raw-filename.ts')).href);
+  // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = 해싱대상=외부응답 zones 만(meta 제외) → 같은 zone 재호출 무손실
+  const stemFile = rawName(12, 'ts-discover', `${zone}${label ? '-' + label : ''}`, today);
+  const newHash = rawHash(zonesOut);
+  const fileName = versionedName(outDir, stemFile, newHash, (p: string) => {
+    try { return rawHash(JSON.parse(fs.readFileSync(p, 'utf-8')).zones); } catch { return null; }
+  });
+  const outPath = path.join(outDir, fileName);
   fs.writeFileSync(outPath, JSON.stringify({
     meta: { city_id: cityId, zone, per, pages: maxPages, method, category, text_query: catMode ? effQuery : null, lang, ...(isNearby ? { included_types: includedTypes } : {}), radius_override: radiusOverride, field_mask: STANDARD_TS_FIELD_MASK, called_date: today, dest_count: dests.length },
     zones: zonesOut,

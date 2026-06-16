@@ -34,7 +34,13 @@ const dryRun = argv['dry'] === 'true';
   }
 
   // 1. 산출물 raw 읽기 (= --date 명시 또는 오늘 날짜)
-  const inPath = path.join(ROOT, 'docs', 'raw', String(cityId), `01-discover-6cats-${date}.json`);
+  // ⚠️ 수정금지(승인필요) — raw 파일명 표준화: 날짜앞 rawName 형식
+  // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = latestVersioned 로 _N 계열 중 최신 1개 읽기
+  const { rawName, latestVersioned } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/raw-filename.ts')).href);
+  const rawDir = path.join(ROOT, 'docs', 'raw', String(cityId));
+  // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = 무순번 stem 계열 최신 = latestVersioned(없으면 null=기존 에러)
+  const latest = latestVersioned(rawDir, rawName(1, 'discover-6cats', undefined, date));
+  const inPath = latest ? path.join(rawDir, latest) : path.join(rawDir, rawName(1, 'discover-6cats', undefined, date));
   if (!fs.existsSync(inPath)) { console.error(`✗ ${inPath} 미존재 = run.ts 먼저 실행`); process.exit(1); }
   const raw = JSON.parse(fs.readFileSync(inPath, 'utf-8'));
   console.log(`═══ 01-discover-6cats post-process ═══`);

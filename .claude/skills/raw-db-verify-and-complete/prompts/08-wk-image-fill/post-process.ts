@@ -11,7 +11,7 @@
 // - image_url 기존 NULL 만 (= 옛 이미지 덮어쓰기 금지)
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '../../../../..');
@@ -36,7 +36,13 @@ if (!cityId) { console.error('Usage: --city-id=<N> --date=<YYYY-MM-DD> --apply-s
     }
   }
 
-  const inPath = path.join(ROOT, 'docs', 'raw', String(cityId), `08-wk-image-fill-candidates-${date}.json`);
+  // ⚠️ 수정금지(승인필요) — raw 파일명 표준화: 날짜앞 rawName 형식
+  // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = latestVersioned 로 candidates _N 계열 최신 1개 읽기
+  const { rawName, latestVersioned } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/raw-filename.ts')).href);
+  const rawDir = path.join(ROOT, 'docs', 'raw', String(cityId));
+  // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = candidates stem 계열 최신(없으면 무순번명=기존 미존재 에러 유지)
+  const latest = latestVersioned(rawDir, rawName(8, 'wk-image-fill', 'candidates', date));
+  const inPath = latest ? path.join(rawDir, latest) : path.join(rawDir, rawName(8, 'wk-image-fill', 'candidates', date));
   if (!fs.existsSync(inPath)) { console.error(`✗ ${inPath} 미존재 = run.ts 먼저 실행`); process.exit(1); }
   const j = JSON.parse(fs.readFileSync(inPath, 'utf-8'));
   const results = (j.results || []).filter((r: any) => r.best && r.best.image);

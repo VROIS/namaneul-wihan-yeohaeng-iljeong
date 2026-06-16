@@ -7,7 +7,7 @@
 //   npx tsx .../02-enrich-place/run.ts --city-id=19 [--batch=40] [--offset=0] [--limit=N]
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '../../../../..');
@@ -56,8 +56,14 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--batch=40] [--offset=0] [--
 
   const slice = limit ? rows.slice(startOffset, startOffset + limit) : rows.slice(startOffset);
   const today = new Date().toISOString().slice(0, 10);
+  // ⚠️ 2026-06-16 사장님 승인 = prompt.txt grounding 줄 "${YEAR}년 ${MONTH}월 현재 시점" 동적 치환용 (= 최신 강제, gemini-curate.ts 정합)
+  const year = String(new Date().getFullYear());
+  const month = String(new Date().getMonth() + 1);
   const outDir = path.join(ROOT, 'docs', 'raw', String(cityId));
   fs.mkdirSync(outDir, { recursive: true });
+  // ⚠️ 2026-06-15 = 파일명 단일 표준(raw-filename.ts) = {date}_02-enrich-place_batch-{offset}.json (날짜앞)
+  // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = versionedName/rawHash 로 같은 batch 재호출 = _N 순번 보존(손실0)·내용동일=덮어쓰기
+  const { rawName, rawHash, versionedName } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/raw-filename.ts')).href);
 
   console.log(`═══ 02-enrich-place ═══`);
   console.log(`city_id = ${cityId} (${city.name_en}), 활성 = ${rows.length}, offset = ${startOffset}, 처리 = ${slice.length}, batch = ${batchSize}`);
@@ -122,7 +128,10 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--batch=40] [--offset=0] [--
       .replace(/\$\{CITY_NAME\}/g, city.name_en)
       .replace(/\[CITY_NAME\]/g, city.name_en)
       .replace(/\$\{CITY_ID\}/g, String(cityId))
+      .replace(/\$\{YEAR\}/g, year)         // ⚠️ 2026-06-16 = 동적 현재 년 (grounding 줄)
+      .replace(/\$\{MONTH\}/g, month)       // ⚠️ 2026-06-16 = 동적 현재 월 (grounding 줄)
       .replace(/\$\{BATCH_LEN\}/g, String(batch.length))
+      // ⚠️ 2026-06-16 사장님 승인 = seed_category 입력 제거 (= id 에 이미 분류 + 카테고리 주면 shopping 가격 오염 실증). shopping null = post-process 저장단계 처리.
       .replace(/\$\{JSON_INPUT\}/g, JSON.stringify(batch.map((r: any) => ({
         id: r.id,
         name_en: r.name_en,
@@ -132,7 +141,6 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--batch=40] [--offset=0] [--
         latitude: r.latitude,
         longitude: r.longitude,
         google_place_id: r.google_place_id,
-        seed_category: r.seed_category,
       }))));
 
     console.log(`\n--- batch offset=${offset}, size=${batch.length} ---`);
@@ -156,11 +164,17 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--batch=40] [--offset=0] [--
       }
     }
 
-    fs.writeFileSync(path.join(outDir, `02-enrich-place-batch-${offset}-${today}.json`), JSON.stringify({
+    // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = 해싱대상=외부응답 places 만(meta 제외) → 같은 batch 재호출 무손실
+    const stemFile = rawName(2, 'enrich-place', `batch-${offset}`, today);
+    const newHash = rawHash(places);
+    const fileName = versionedName(outDir, stemFile, newHash, (p: string) => {
+      try { return rawHash(JSON.parse(fs.readFileSync(p, 'utf-8')).places); } catch { return null; }
+    });
+    fs.writeFileSync(path.join(outDir, fileName), JSON.stringify({
       meta: { city_id: cityId, offset, batch_len: batch.length, called_at: new Date().toISOString(), finish_reason: r.finishReason, usage: r.usage },
       places,
     }, null, 2));
-    console.log(`✓ 저장 = offset ${offset} (= ${places.length} 응답)`);
+    console.log(`✓ 저장 = offset ${offset} (= ${places.length} 응답) → ${fileName}`);
 
     batchCount++;
     totalPlaces += places.length;

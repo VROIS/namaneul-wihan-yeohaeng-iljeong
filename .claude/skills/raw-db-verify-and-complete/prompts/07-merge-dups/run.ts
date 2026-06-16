@@ -5,7 +5,7 @@
 //   ⚠️ 병합 실행(post-process keep 원칙: PID>상세이름>풍부도>rank, 삭제)은 무수정 = 출력 포맷(groups: group_key/matched_tier/rows) 호환 유지.
 //
 // 호출: npx tsx .../07-merge-dups/run.ts --city-id=19
-// 산출물 = docs/raw/{city_id}/07-merge-dups-groups-{YYYY-MM-DD}.json
+// 산출물 = docs/raw/{city_id}/{YYYY-MM-DD}_07-merge-dups_groups.json (= 날짜앞 표준, raw-filename.ts)
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
@@ -95,7 +95,13 @@ const TIER_LABEL = ['PID', 'URI', '주소+로컬이름', '좌표10m', '로컬이
   }
   groups.sort((a, b) => a.matched_tier - b.matched_tier);
 
-  const outPath = path.join(outDir, `07-merge-dups-groups-${today}.json`);
+  // ⚠️ 2026-06-15 = 파일명 단일 표준(raw-filename.ts) = {date}_07-merge-dups_groups.json (날짜앞)
+  // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = versionedName 으로 산출물(groups)만 해싱 → 내용동일=덮어쓰기 / 다르면 _N
+  const { rawName, rawHash, versionedName } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/raw-filename.ts')).href);
+  // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = 기존파일 groups 부분만 md5 (meta 제외)
+  const hashOf = (p: string): string | null => { try { return rawHash(JSON.parse(fs.readFileSync(p, 'utf-8')).groups); } catch { return null; } };
+  // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = 해싱대상 = 산출물(groups)만 (meta/called_at 제외)
+  const outPath = path.join(outDir, versionedName(outDir, rawName(7, 'merge-dups', 'groups', today), rawHash(groups), hashOf));
   fs.writeFileSync(outPath, JSON.stringify({
     meta: { city_id: cityId, called_at: new Date().toISOString(), active_rows: rows.length, group_count: groups.length, matcher: '7step-matcher.ts' },
     groups,

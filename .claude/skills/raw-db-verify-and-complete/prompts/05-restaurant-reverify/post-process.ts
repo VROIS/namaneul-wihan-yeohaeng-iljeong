@@ -1,5 +1,5 @@
 // ⚠️ 수정금지(승인필요) 2026-06-01 = 05-restaurant-reverify 후처리 = 폐업 삭제 + 컬럼 덮어쓰기
-// = docs/raw/{city_id}/05-restaurant-reverify-batch{N}-{date}.json 읽음 →
+// = docs/raw/{city_id}/{date}_05-restaurant-reverify_batch{N}.json 읽음 →
 //     operating=false → 완전 DELETE (= 사용자 SSOT 2026-06-01)
 //     operating=true  → latitude/longitude/name_local/address/price_eur 덮어쓰기 (= Gemini 최신, COALESCE 새 우선)
 // = id 기준 직접 UPDATE/DELETE (= 알려진 행 = 매칭 불필요 = 중복위험 0 = §14 목적 충족)
@@ -9,7 +9,7 @@
 //   (--apply 없으면 = dry-run = 쓰기 0)
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url'; // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = latestVersionedByBase 동적 import 용 pathToFileURL 추가
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '../../../../..');
@@ -25,8 +25,11 @@ if (!cityId) { console.error('Usage: --city-id=<N> --date=<YYYY-MM-DD> [--apply]
 
 (async () => {
   const rawDir = path.join(ROOT, 'docs', 'raw', String(cityId));
-  const files = fs.readdirSync(rawDir).filter(f => f.startsWith('05-restaurant-reverify-batch') && f.endsWith(`-${date}.json`)).sort();
-  if (!files.length) { console.error(`✗ ${rawDir}/05-restaurant-reverify-batch*-${date}.json 미존재 = run.ts 먼저`); process.exit(1); }
+  // ⚠️ 수정금지(승인필요) — raw 파일명 표준화: 날짜앞 {date}_NN-step_content 형식
+  // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = latestVersionedByBase 로 같은 batch 의 _N 중복 축약(batchN별 최신 1개) = 중복집계 0
+  const { latestVersionedByBase } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/raw-filename.ts')).href);
+  const files = latestVersionedByBase(fs.readdirSync(rawDir).filter(f => f.startsWith(`${date}_05-restaurant-reverify_batch`) && f.endsWith('.json')));
+  if (!files.length) { console.error(`✗ ${rawDir}/${date}_05-restaurant-reverify_batch*.json 미존재 = run.ts 먼저`); process.exit(1); }
 
   const all: any[] = [];
   for (const f of files) { const j = JSON.parse(fs.readFileSync(path.join(rawDir, f), 'utf-8')); all.push(...(j.parsed || [])); }

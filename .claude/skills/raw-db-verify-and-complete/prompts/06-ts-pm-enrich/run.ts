@@ -5,7 +5,7 @@
 // 호출:
 //   npx tsx .../06-ts-pm-enrich/run.ts --city-id=19
 //
-// 산출물 = docs/raw/{city_id}/06-ts-pm-enrich-candidates-{YYYY-MM-DD}.json
+// 산출물 = docs/raw/{city_id}/{YYYY-MM-DD}_06-ts-pm-enrich_candidates.json (= 날짜앞 표준, raw-filename.ts)
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
@@ -46,14 +46,32 @@ if (!cityId) { console.error('Usage: --city-id=<N>'); process.exit(1); }
     `SELECT key_value FROM api_keys WHERE key_name IN ('GOOGLE_MAPS_API_KEY','GOOGLE_PLACES_API_KEY') AND is_active=true ORDER BY key_name LIMIT 1`
   )).rows[0];
 
-  // 대상 = image NULL OR pid NULL + 식당/어드벤처 OR rank 1-20
-  const rows = (await c.query(`
-    SELECT id, seed_category, rank, name_en, name_local, address, latitude, longitude,
-           google_place_id, image_url
+  // ⚠️ 수정금지(승인필요) 2026-06-13 사용자 SSOT = 식당 대상 = 30/90/30 노출풀 결손만 (= 비용 신중 = 풀밖 바닥식당 호출 X)
+  //   = 식당 = 가격대구간(eco≤24 30 / reason 25~60 90 / premium 61+ 30, luxury 통합) RC DESC ROW_NUMBER ≤ 구간정원 AND (image 결손 OR pid 결손)
+  //   = 비식당(6 카테고리) = 기존 유지 = rank≤20 AND (image 결손 OR pid 결손). adventure 도 rank≤20 으로 일원화(옛 전체 → 풀 기준).
+  //   = 이미지결손 = image_url NULL/빈 OR WK(위키미디어 환각) = #29/ts-photo-fill 과 동일 기준.
+  // ⚠️ 수정금지(승인필요) 2026-06-14 = 식당 대상 = 즉석계산 단일 쿼리 (= PSR rc-rerank 가 RC 랭킹 자동 관리, 풀 고정 불필요)
+  //   = 식당 = 가격대별 ROW_NUMBER 30/90/30 AND 결손조건 / 비식당 = rank≤20 AND 결손조건 / $1=cityId 만
+  const rows: any[] = (await c.query(`
+    WITH rest AS (
+      SELECT id, seed_category, rank, name_en, name_local, address, latitude, longitude, google_place_id, image_url,
+             ROW_NUMBER() OVER (
+               PARTITION BY CASE WHEN price_eur <= 24 THEN 'eco' WHEN price_eur <= 60 THEN 'reason' ELSE 'premium' END
+               ORDER BY google_review_count DESC NULLS LAST
+             ) AS band_rn,
+             CASE WHEN price_eur <= 24 THEN 30 WHEN price_eur <= 60 THEN 90 ELSE 30 END AS band_quota
+      FROM place_seed_raw
+      WHERE city_id = $1 AND seed_category = 'restaurant' AND price_eur IS NOT NULL
+    )
+    SELECT id, seed_category, rank, name_en, name_local, address, latitude, longitude, google_place_id, image_url
+    FROM rest
+    WHERE band_rn <= band_quota
+      AND (image_url IS NULL OR image_url = '' OR image_url LIKE '%wiki%' OR google_place_id IS NULL)
+    UNION ALL
+    SELECT id, seed_category, rank, name_en, name_local, address, latitude, longitude, google_place_id, image_url
     FROM place_seed_raw
-    WHERE city_id = $1
-      AND ((image_url IS NULL OR image_url = '') OR google_place_id IS NULL)
-      AND (seed_category IN ('restaurant', 'adventure') OR rank <= 20)
+    WHERE city_id = $1 AND seed_category <> 'restaurant' AND rank <= 20
+      AND (image_url IS NULL OR image_url = '' OR image_url LIKE '%wiki%' OR google_place_id IS NULL)
     ORDER BY seed_category, rank NULLS LAST
   `, [cityId])).rows;
   await c.end();
@@ -131,7 +149,18 @@ if (!cityId) { console.error('Usage: --city-id=<N>'); process.exit(1); }
     if (i % 10 === 0) console.log(`  [${i+1}/${rows.length}] ok = ${top.nameLocal} (${dt}ms)`);
   }
 
-  const outPath = path.join(outDir, `06-ts-pm-enrich-candidates-${today}.json`);
+  // ⚠️ 2026-06-15 = 파일명 단일 표준(raw-filename.ts) = {date}_06-ts-pm-enrich_candidates.json (날짜앞)
+  // ⚠️ 수정금지(승인필요) — raw 버전순번/06 reader 정합(2026-06-16 SSOT)
+  //   = (2) 버전순번 = versionedName 으로 첫=무순번 / 이후=_N+1 / 내용동일(rawHash 같음)=덮어쓰기.
+  //   = 해싱대상 = 외부응답 results 부분만 (meta/called_at 절대 제외 = 진짜 중복 판별).
+  //   = hashOf = 기존 파일 열어서 j.results 의 rawHash (= writer 와 동일 외부응답 부분 기준).
+  const { rawName, versionedName, rawHash } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/raw-filename.ts')).href);
+  const stemFile = rawName(6, 'ts-pm-enrich', 'candidates', today);                                // = 무순번 기본 파일명(신표준)
+  const hashOf = (p: string): string | null => {                                                   // = 기존 파일 results 부분만 해시
+    try { return rawHash(JSON.parse(fs.readFileSync(p, 'utf-8')).results); } catch { return null; }
+  };
+  const outName = versionedName(outDir, stemFile, rawHash(results), hashOf);                        // = 버전순번 적용 파일명
+  const outPath = path.join(outDir, outName);
   fs.writeFileSync(outPath, JSON.stringify({
     meta: { city_id: cityId, called_at: new Date().toISOString(), input_rows: rows.length, field_mask: STANDARD_TS_FIELD_MASK },
     results,

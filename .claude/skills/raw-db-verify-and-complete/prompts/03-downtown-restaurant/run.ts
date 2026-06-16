@@ -5,10 +5,10 @@
 //   npx tsx .claude/skills/raw-db-verify-and-complete/prompts/03-downtown-restaurant/run.ts --city-id=19 [--year=2026]
 //
 // 산출물:
-//   docs/raw/{city_id}/03-downtown-restaurant-{tier}-{YYYY-MM-DD}.json
+//   docs/raw/{city_id}/{YYYY-MM-DD}_03-downtown-restaurant_{tier}.json (= 날짜앞 표준, raw-filename.ts)
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '../../../../..');
@@ -50,6 +50,11 @@ const TIER_SPECS = {
   const today = new Date().toISOString().slice(0, 10);
   const outDir = path.join(ROOT, 'docs', 'raw', String(cityId));
   fs.mkdirSync(outDir, { recursive: true });
+  // ⚠️ 2026-06-15 = 파일명 단일 표준(raw-filename.ts) = {date}_03-downtown-restaurant_{tier}.json (날짜앞)
+  // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = tier 파일별 versionedName(외부응답 raw_text만 해싱)
+  const { rawName, rawHash, versionedName } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/raw-filename.ts')).href);
+  // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = 기존파일 raw_text 부분만 md5 (meta 제외)
+  const hashOf = (p: string): string | null => { try { return rawHash(JSON.parse(fs.readFileSync(p, 'utf-8')).raw_text); } catch { return null; } };
 
   console.log(`═══ 03-downtown-restaurant ═══`);
   console.log(`city_id = ${cityId} (${city.name_en}), year = ${year}, today = ${today}`);
@@ -116,7 +121,8 @@ const TIER_SPECS = {
     const t0 = Date.now();
     const r = await callGemini(build(tier, excludeStr));
     console.log(`${Date.now() - t0} ms / ${r.finishReason} / 토큰 ${r.usage.totalTokenCount || '?'}`);
-    const outPath = path.join(outDir, `03-downtown-restaurant-${tier}-${today}.json`);
+    // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = 해싱대상 = 외부응답(r.text)만 (meta/called_at/exclude_count 제외)
+    const outPath = path.join(outDir, versionedName(outDir, rawName(3, 'downtown-restaurant', tier, today), rawHash(r.text), hashOf));
     fs.writeFileSync(outPath, JSON.stringify({
       meta: { city_id: cityId, tier, called_at: new Date().toISOString(), finish_reason: r.finishReason, usage: r.usage, exclude_count: accumulated.length },
       raw_text: r.text,

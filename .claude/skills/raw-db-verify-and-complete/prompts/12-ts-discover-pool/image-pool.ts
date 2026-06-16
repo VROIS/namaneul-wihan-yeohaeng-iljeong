@@ -6,7 +6,7 @@
 //   (--apply 없으면 = dry-run = 대상 목록만, 쓰기·PM 0)
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';  // ⚠️ 수정금지(승인필요) — raw 파일명 표준+버전순번 정합(2026-06-16 SSOT, 1번 누락분) = latestVersionedByBase 동적 import 용 pathToFileURL 추가
 import { DISCOVERY_ZONES } from './destinations';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -38,8 +38,10 @@ const tier = (p: number | null) => p == null ? 'reason' : p <= 24 ? 'eco' : p <=
 
   // ⚠️ 2026-06-02 = zone 의 모든 변형 raw(nearby/text/premium/무label) 병합 = photo_name 수집
   const rawDir = path.join(ROOT, 'docs', 'raw', String(cityId));
-  const rawFiles = fs.readdirSync(rawDir).filter((f) => f.startsWith(`12-ts-discover-${zone}`) && f.endsWith(`-${date}.json`));
-  if (!rawFiles.length) { console.error(`✗ ${rawDir}/12-ts-discover-${zone}*-${date}.json 미존재`); process.exit(1); }
+  // ⚠️ 수정금지(승인필요) — raw 파일명 표준+버전순번 정합(2026-06-16 SSOT, 1번 누락분) = post-process.ts:132(식당모드)와 동일 패턴 = 날짜앞 {date}_12-ts-discover_{zone}(-label) startsWith + latestVersionedByBase 로 base(zone-label)별 최신 _N 1개 축약(중복집계 0)
+  const { latestVersionedByBase } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/raw-filename.ts')).href);
+  const rawFiles = latestVersionedByBase(fs.readdirSync(rawDir).filter((f) => f.startsWith(`${date}_12-ts-discover_${zone}`) && f.endsWith('.json')));
+  if (!rawFiles.length) { console.error(`✗ ${rawDir}/${date}_12-ts-discover_${zone}*.json 미존재`); process.exit(1); }
   const photoByPid = new Map<string, string>();
   for (const f of rawFiles) { const raw = JSON.parse(fs.readFileSync(path.join(rawDir, f), 'utf-8')); for (const z of raw.zones) for (const p of z.places) if (p.place_id && p.photo_name) photoByPid.set(p.place_id, p.photo_name); }
 

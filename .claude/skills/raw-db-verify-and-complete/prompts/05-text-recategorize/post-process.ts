@@ -1,5 +1,5 @@
 // ⚠️ 수정금지(승인필요) 2026-05-20 = 05-text-recategorize 후처리 트랜잭션
-// = 05-text-recategorize-suggestions-{date}.json 읽음 → BEGIN/COMMIT 트랜잭션 UPDATE
+// = {date}_05-text-recategorize_suggestions.json 읽음 → BEGIN/COMMIT 트랜잭션 UPDATE
 // = rank 자동 재할당 (= MAX+1) = UNIQUE INDEX 충돌 방지
 //
 // 호출 (= 사용자 명시 후만):
@@ -8,7 +8,7 @@
 // 디폴트 = dry-run (= --apply 명시 없으면 트랜잭션 실행 X)
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '../../../../..');
@@ -31,7 +31,13 @@ if (!cityId) { console.error('Usage: --city-id=<N> --date=<YYYY-MM-DD> [--apply]
     }
   }
 
-  const inPath = path.join(ROOT, 'docs', 'raw', String(cityId), `05-text-recategorize-suggestions-${date}.json`);
+  // ⚠️ 수정금지(승인필요) — raw 파일명 표준화: 날짜앞 rawName 형식
+  // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = suggestions 만 latestVersioned 로 _N 계열 최신 1개 읽기 (batch 는 write-only)
+  const { rawName, latestVersioned } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/raw-filename.ts')).href);
+  const rawDir = path.join(ROOT, 'docs', 'raw', String(cityId));
+  // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = suggestions stem 계열 최신(없으면 무순번명=기존 미존재 에러 유지)
+  const latest = latestVersioned(rawDir, rawName(5, 'text-recategorize', 'suggestions', date));
+  const inPath = latest ? path.join(rawDir, latest) : path.join(rawDir, rawName(5, 'text-recategorize', 'suggestions', date));
   if (!fs.existsSync(inPath)) { console.error(`✗ ${inPath} 미존재 = run.ts 먼저 실행`); process.exit(1); }
   const j = JSON.parse(fs.readFileSync(inPath, 'utf-8'));
   const suggestions = (j.suggestions || []).filter((s: any) => s.confidence >= 0.7);

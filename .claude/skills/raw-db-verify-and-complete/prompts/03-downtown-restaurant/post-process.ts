@@ -1,5 +1,5 @@
 // ⚠️ 수정금지(승인필요) 2026-05-20 = 03-downtown-restaurant 후처리 + DB INSERT
-// = docs/raw/{city_id}/03-downtown-restaurant-{tier}-{date}.json 4 tier 읽음 → upsertPlace() INSERT
+// = docs/raw/{city_id}/{date}_03-downtown-restaurant_{tier}.json 4 tier 읽음 → upsertPlace() INSERT
 //
 // 호출:
 //   npx tsx .claude/skills/raw-db-verify-and-complete/prompts/03-downtown-restaurant/post-process.ts --city-id=19 --date=2026-05-20 [--dry]
@@ -29,6 +29,9 @@ if (!cityId) { console.error('Usage: --city-id=<N> --date=<YYYY-MM-DD> [--dry]')
   }
 
   const rawDir = path.join(ROOT, 'docs', 'raw', String(cityId));
+  // ⚠️ 수정금지(승인필요) — raw 파일명 표준화: 날짜앞 rawName 형식
+  // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = tier 별 latestVersioned 로 _N 계열 최신 1개 읽기
+  const { rawName, latestVersioned } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/raw-filename.ts')).href);
   const tiers = ['economic', 'reasonable', 'premium', 'luxury'] as const;
 
   function parseTier(text: string, key: string): any[] {
@@ -39,7 +42,9 @@ if (!cityId) { console.error('Usage: --city-id=<N> --date=<YYYY-MM-DD> [--dry]')
 
   const all: { tier: string; place: any }[] = [];
   for (const tier of tiers) {
-    const p = path.join(rawDir, `03-downtown-restaurant-${tier}-${date}.json`);
+    // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = tier stem 계열 최신(없으면 무순번명=기존 에러 유지)
+    const latest = latestVersioned(rawDir, rawName(3, 'downtown-restaurant', tier, date));
+    const p = latest ? path.join(rawDir, latest) : path.join(rawDir, rawName(3, 'downtown-restaurant', tier, date));  // ⚠️ 수정금지(승인필요) — raw 파일명 표준화: 날짜앞 rawName 형식
     if (!fs.existsSync(p)) { console.error(`✗ ${p} 미존재 = run.ts 먼저 실행`); process.exit(1); }
     const j = JSON.parse(fs.readFileSync(p, 'utf-8'));
     const list = parseTier(j.raw_text, tier);

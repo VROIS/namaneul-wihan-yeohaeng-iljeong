@@ -1,12 +1,12 @@
 // ⚠️ 수정금지(승인필요) 2026-06-01 = 05-restaurant-reverify 실행 진입점 (= 미검증 식당 재검증/채움)
 // = 대상 = city 의 restaurant 중 PID+URI 미보유(= TS 미검증) 행 → 40 배치 → Gemini 3.0 grounding → raw 저장
-// = 산출물: docs/raw/{city_id}/05-restaurant-reverify-batch{N}-{YYYY-MM-DD}.json
+// = 산출물: docs/raw/{city_id}/{YYYY-MM-DD}_05-restaurant-reverify_{tag}{N}.json (= 날짜앞 표준, raw-filename.ts)
 // 호출:
 //   npx tsx .claude/skills/raw-db-verify-and-complete/prompts/05-restaurant-reverify/run.ts --city-id=19 [--year=2026] [--batch=40]
 // 다음 = post-process.ts (= upsertPlace 덮어쓰기 + 폐업 archive)
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '../../../../..');
@@ -46,6 +46,9 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--year=2026] [--batch=40] [-
   const today = new Date().toISOString().slice(0, 10);
   const outDir = path.join(ROOT, 'docs', 'raw', String(cityId));
   fs.mkdirSync(outDir, { recursive: true });
+  // ⚠️ 2026-06-15 = 파일명 단일 표준(raw-filename.ts) = {date}_05-restaurant-reverify_{tag}{N}.json (날짜앞)
+  // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = versionedName/rawHash 로 같은 batch 재호출 = _N 순번 보존(손실0)·내용동일=덮어쓰기
+  const { rawName, rawHash, versionedName } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/raw-filename.ts')).href);
 
   const body = fs.readFileSync(path.join(__dirname, 'prompt.txt'), 'utf-8')
     .split('══════════════════════════════════════════════════════════════════════════════')[2] || '';
@@ -86,7 +89,13 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--year=2026] [--batch=40] [-
     const closed = parsed.filter((p: any) => p.closure_status && p.closure_status !== 'operating').length;
     totalParsed += parsed.length; totalClosed += closed;
     const tag = idsArg ? 'reclass' : 'batch'; // --ids = 재분류 = 1차 batch 파일 안 덮음
-    const outPath = path.join(outDir, `05-restaurant-reverify-${tag}${b + 1}-${today}.json`);
+    // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = 해싱대상=외부응답 raw_text 만(meta 제외) → 같은 batch 재호출 무손실
+    const stemFile = rawName(5, 'restaurant-reverify', `${tag}${b + 1}`, today);
+    const newHash = rawHash(r.text);
+    const fileName = versionedName(outDir, stemFile, newHash, (p: string) => {
+      try { return rawHash(JSON.parse(fs.readFileSync(p, 'utf-8')).raw_text); } catch { return null; }
+    });
+    const outPath = path.join(outDir, fileName);
     fs.writeFileSync(outPath, JSON.stringify({ meta: { city_id: cityId, batch: b + 1, of: batches.length, called_at: new Date().toISOString(), finish: r.finish, usage: r.usage, input_ids: batches[b].map(x => x.id) }, raw_text: r.text, parsed }, null, 2));
     console.log(`    ${Date.now() - t0}ms / ${r.finish} / 토큰 ${r.usage.totalTokenCount || '?'} / 파싱 ${parsed.length} / 폐업 ${closed} → ${path.basename(outPath)}`);
   }

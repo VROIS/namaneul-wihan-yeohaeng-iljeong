@@ -4,10 +4,10 @@
 // 호출:
 //   npx tsx .../08-wk-image-fill/run.ts --city-id=19
 //
-// 산출물 = docs/raw/{city_id}/08-wk-image-fill-candidates-{YYYY-MM-DD}.json
+// 산출물 = docs/raw/{city_id}/{YYYY-MM-DD}_08-wk-image-fill_candidates.json (= 날짜앞 표준, raw-filename.ts)
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '../../../../..');
@@ -165,7 +165,13 @@ async function wikidataAround(lat: number, lng: number): Promise<any[]> {
     if (i % 10 === 0) console.log(`  ${i + 1}/${rows.length} 처리 중...`);
   }
 
-  const outPath = path.join(outDir, `08-wk-image-fill-candidates-${today}.json`);
+  // ⚠️ 2026-06-15 = 파일명 단일 표준(raw-filename.ts) = {date}_08-wk-image-fill_candidates.json (날짜앞)
+  // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = versionedName 으로 외부응답 산출물(results)만 해싱 → 내용동일=덮어쓰기 / 다르면 _N
+  const { rawName, rawHash, versionedName } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/raw-filename.ts')).href);
+  // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = 기존파일 results 부분만 md5 (meta 제외)
+  const hashOf = (p: string): string | null => { try { return rawHash(JSON.parse(fs.readFileSync(p, 'utf-8')).results); } catch { return null; } };
+  // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = 해싱대상 = 외부응답 산출물(results)만 (meta/called_at 제외)
+  const outPath = path.join(outDir, versionedName(outDir, rawName(8, 'wk-image-fill', 'candidates', today), rawHash(results), hashOf));
   fs.writeFileSync(outPath, JSON.stringify({
     meta: { city_id: cityId, called_at: new Date().toISOString(), input_rows: rows.length, radius_km: RADIUS_KM },
     results,

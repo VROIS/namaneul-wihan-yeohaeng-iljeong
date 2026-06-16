@@ -6,7 +6,7 @@
 //   npx tsx .claude/skills/raw-db-verify-and-complete/prompts/05-text-recategorize/run.ts --city-id=19 [--batch=100]
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '../../../../..');
@@ -50,6 +50,13 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--batch=100]'); process.exit
   const today = new Date().toISOString().slice(0, 10);
   const outDir = path.join(ROOT, 'docs', 'raw', String(cityId));
   fs.mkdirSync(outDir, { recursive: true });
+  // ⚠️ 2026-06-15 = 파일명 단일 표준(raw-filename.ts) = {date}_05-text-recategorize_{batch-N|suggestions}.json (날짜앞)
+  // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = batch(외부응답 raw_text)·suggestions(통합 suggestions) 파일별 versionedName
+  const { rawName, rawHash, versionedName } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/raw-filename.ts')).href);
+  // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = 기존 batch 파일 raw_text 부분만 md5 (meta 제외)
+  const hashOfText = (p: string): string | null => { try { return rawHash(JSON.parse(fs.readFileSync(p, 'utf-8')).raw_text); } catch { return null; } };
+  // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = 기존 suggestions 파일 suggestions 부분만 md5 (meta 제외)
+  const hashOfSugg = (p: string): string | null => { try { return rawHash(JSON.parse(fs.readFileSync(p, 'utf-8')).suggestions); } catch { return null; } };
 
   console.log(`═══ 05-text-recategorize ═══`);
   console.log(`city_id = ${cityId} (${city.name_en}), 활성 행 = ${rows.length}, batch = ${batchSize}, today = ${today}`);
@@ -104,7 +111,8 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--batch=100]'); process.exit
     const r = await callGemini(prompt);
     console.log(`${Date.now() - t0} ms / ${r.finishReason} / 토큰 ${r.usage.totalTokenCount || '?'}`);
 
-    const outPath = path.join(outDir, `05-text-recategorize-batch-${offset}-${today}.json`);
+    // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = 해싱대상 = 외부응답(r.text)만 (meta/offset/called_at 제외). batch 도 보존 적용(reader 는 suggestions 만 읽음).
+    const outPath = path.join(outDir, versionedName(outDir, rawName(5, 'text-recategorize', `batch-${offset}`, today), rawHash(r.text), hashOfText));
     fs.writeFileSync(outPath, JSON.stringify({
       meta: { city_id: cityId, offset, batch_len: batch.length, called_at: new Date().toISOString(), finish_reason: r.finishReason, usage: r.usage },
       raw_text: r.text,
@@ -115,7 +123,8 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--batch=100]'); process.exit
   }
 
   // 통합 suggestions 저장 (= 사용자 검수용)
-  const mergedPath = path.join(outDir, `05-text-recategorize-suggestions-${today}.json`);
+  // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = 해싱대상 = 통합 suggestions 부분만 (meta/called_at 제외)
+  const mergedPath = path.join(outDir, versionedName(outDir, rawName(5, 'text-recategorize', 'suggestions', today), rawHash(allSuggestions), hashOfSugg));
   fs.writeFileSync(mergedPath, JSON.stringify({
     meta: { city_id: cityId, called_at: new Date().toISOString(), total_input: rows.length, total_suggestions: allSuggestions.length },
     suggestions: allSuggestions,

@@ -1,5 +1,5 @@
 // ⚠️ 수정금지(승인필요) 2026-06-02 = 13-restaurant-summary 후처리 = 요약2개 UPDATE + 가격 null 만 채움(TS 보존) + 가격 검증
-// = 13-restaurant-summary-batch{N}-{date}.json 읽음 → id 기준 직접 UPDATE (= 알려진 행 = 매칭 불필요)
+// = {date}_13-restaurant-summary_batch{N}.json 읽음 → id 기준 직접 UPDATE (= 알려진 행 = 매칭 불필요)
 //   · summary_ko / editorial_summary = COALESCE(새, 옛) (= 비어있던 87곳 채움)
 //   · price_eur = COALESCE(옛, Gemini) (= TS 실값 보존 / null 행만 Gemini 상한값 채움)
 //   · 가격 검증 = Gemini blind 추정 vs TS 실값 차이 분포 (= 신뢰도 리포트)
@@ -8,7 +8,7 @@
 //   npx tsx .../13-restaurant-summary/post-process.ts --city-id=19 --date=2026-06-02 [--apply]
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url'; // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = latestVersionedByBase 동적 import 용 pathToFileURL 추가
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '../../../../..');
@@ -23,8 +23,11 @@ if (!cityId) { console.error('Usage: --city-id=<N> --date=<YYYY-MM-DD> [--apply]
 
 (async () => {
   const rawDir = path.join(ROOT, 'docs', 'raw', String(cityId));
-  const files = fs.readdirSync(rawDir).filter(f => f.startsWith('13-restaurant-summary-batch') && f.endsWith(`-${date}.json`)).sort();
-  if (!files.length) { console.error(`✗ ${rawDir}/13-restaurant-summary-batch*-${date}.json 미존재 = run.ts 먼저`); process.exit(1); }
+  // ⚠️ 수정금지(승인필요) — raw 파일명 표준화: 날짜앞 {date}_NN-step_content 형식
+  // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = latestVersionedByBase 로 같은 batch 의 _N 중복 축약(batchN별 최신 1개) = 중복집계 0
+  const { latestVersionedByBase } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/raw-filename.ts')).href);
+  const files = latestVersionedByBase(fs.readdirSync(rawDir).filter(f => f.startsWith(`${date}_13-restaurant-summary_batch`) && f.endsWith('.json')));
+  if (!files.length) { console.error(`✗ ${rawDir}/${date}_13-restaurant-summary_batch*.json 미존재 = run.ts 먼저`); process.exit(1); }
   const all: any[] = [];
   for (const f of files) { const j = JSON.parse(fs.readFileSync(path.join(rawDir, f), 'utf-8')); all.push(...(j.parsed || [])); }
   const valid = all.filter(x => x.id && (x.summary_ko || x.editorial_summary));

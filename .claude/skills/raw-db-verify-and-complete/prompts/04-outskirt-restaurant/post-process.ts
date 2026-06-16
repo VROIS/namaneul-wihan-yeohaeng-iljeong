@@ -1,5 +1,5 @@
 // ⚠️ 수정금지(승인필요) 2026-05-20 = 04-outskirt-restaurant 후처리 + DB INSERT
-// = docs/raw/{city_id}/04-outskirt-restaurant-{low,mid}.json 읽음 → upsertPlace() INSERT
+// = docs/raw/{city_id}/{date}_04-outskirt-restaurant_{low,mid}.json 읽음 → upsertPlace() INSERT
 //
 // 호출:
 //   npx tsx .claude/skills/raw-db-verify-and-complete/prompts/04-outskirt-restaurant/post-process.ts --city-id=19 [--dry]
@@ -31,8 +31,14 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--date=<YYYY-MM-DD>] [--dry]
   }
 
   const rawDir = path.join(ROOT, 'docs', 'raw', String(cityId));
-  const lowPath = path.join(rawDir, `04-outskirt-restaurant-low-${date}.json`);
-  const midPath = path.join(rawDir, `04-outskirt-restaurant-mid-${date}.json`);
+  // ⚠️ 수정금지(승인필요) — raw 파일명 표준화: 날짜앞 rawName 형식
+  // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = low/mid 별 latestVersioned 로 _N 계열 최신 1개 읽기
+  const { rawName, latestVersioned } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/raw-filename.ts')).href);
+  // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = zone stem 계열 최신(없으면 무순번명=기존 미존재 에러 유지)
+  const lowLatest = latestVersioned(rawDir, rawName(4, 'outskirt-restaurant', 'low', date));
+  const midLatest = latestVersioned(rawDir, rawName(4, 'outskirt-restaurant', 'mid', date));
+  const lowPath = lowLatest ? path.join(rawDir, lowLatest) : path.join(rawDir, rawName(4, 'outskirt-restaurant', 'low', date));  // ⚠️ 수정금지(승인필요) — raw 파일명 표준화: 날짜앞 rawName 형식
+  const midPath = midLatest ? path.join(rawDir, midLatest) : path.join(rawDir, rawName(4, 'outskirt-restaurant', 'mid', date));  // ⚠️ 수정금지(승인필요) — raw 파일명 표준화: 날짜앞 rawName 형식
   if (!fs.existsSync(lowPath) || !fs.existsSync(midPath)) {
     console.error(`✗ ${lowPath} 또는 ${midPath} 미존재 = run.ts 먼저 실행`); process.exit(1);
   }

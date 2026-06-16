@@ -34,8 +34,15 @@ if (!cityId) { console.error('Usage: --city-id=<N> --date=<YYYY-MM-DD> --apply-s
     }
   }
 
-  const inPath = path.join(ROOT, 'docs', 'raw', String(cityId), `06-ts-pm-enrich-candidates-${date}.json`);
-  if (!fs.existsSync(inPath)) { console.error(`✗ ${inPath} 미존재 = run.ts 먼저 실행`); process.exit(1); }
+  // ⚠️ 수정금지(승인필요) — raw 버전순번/06 reader 정합(2026-06-16 SSOT)
+  //   = (1) 옛 하드코딩명 '06-ts-pm-enrich-candidates-{date}.json' 폐기 → writer(run.ts) 신표준 rawName(6,...) 으로 정합 (07-merge 패턴).
+  //   = (3) 버전순번 = latestVersioned 로 stem 계열(_N) 중 최신 1개 선택. 없으면 기존 미존재 에러.
+  const { rawName, latestVersioned } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/raw-filename.ts')).href);
+  const inDir = path.join(ROOT, 'docs', 'raw', String(cityId));                                    // = 산출물 폴더(불변)
+  const stemFile = rawName(6, 'ts-pm-enrich', 'candidates', date);                                 // = 무순번 기본 파일명(신표준)
+  const inName = latestVersioned(inDir, stemFile);                                                 // = stem 계열 최신 1개(_N 포함) 또는 null
+  if (!inName) { console.error(`✗ ${path.join(inDir, stemFile)} 미존재 = run.ts 먼저 실행`); process.exit(1); }
+  const inPath = path.join(inDir, inName);
   const j = JSON.parse(fs.readFileSync(inPath, 'utf-8'));
   const selected = (j.results || []).filter((r: any) =>
     applyStatus.includes(r.status) || applyIds.includes(r.id)
@@ -59,8 +66,11 @@ if (!cityId) { console.error('Usage: --city-id=<N> --date=<YYYY-MM-DD> --apply-s
   const pg = await import('pg');
   const c = new (pg as any).default.Client({ connectionString: process.env.SUPA_URL || process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
   await c.connect();
+  // ⚠️ 수정금지(승인필요) 2026-06-14 사용자 SSOT = 키 조회 = run.ts(line46)·#29 ts-photo-fill 과 동일화 (= 불일치 버그 해소)
+  //   = 옛 'GOOGLE_PLACES_API_KEY' 단독 = DB엔 GOOGLE_MAPS_API_KEY만 있어 키 못 찾음 → 이미지 항상 0 버그.
+  //   = 시스템 SSOT = GOOGLE_MAPS_API_KEY 단일(Maps+Places 공유 GCP 키) = IN (...) 둘 다 조회.
   const keyRow = downloadPhoto
-    ? (await c.query(`SELECT key_value FROM api_keys WHERE key_name='GOOGLE_PLACES_API_KEY' AND is_active=true`)).rows[0]
+    ? (await c.query(`SELECT key_value FROM api_keys WHERE key_name IN ('GOOGLE_MAPS_API_KEY','GOOGLE_PLACES_API_KEY') AND is_active=true ORDER BY key_name LIMIT 1`)).rows[0]
     : null;
   const PLACES_KEY = keyRow?.key_value;
 
@@ -69,22 +79,26 @@ if (!cityId) { console.error('Usage: --city-id=<N> --date=<YYYY-MM-DD> --apply-s
   const { tsPhoto } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/ts-client.ts')).href);
 
   // Supabase Storage 업로드용 (= REST API 직접 호출 = supabase-js 의존 회피)
-  const SUPA_PROJECT = (process.env.SUPA_URL || '').match(/https:\/\/([^.]+)\.supabase\.co/)?.[1];
-  const STORAGE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
+  // ⚠️ 수정금지(승인필요) 2026-06-14 사용자 SSOT = SUPA_PUBLIC 도출 = save-raw.ts·tsPhoto 와 동일화 (= 불일치 버그 해소)
+  //   = 옛 SUPA_URL 정규식 추출 = .env SUPA_URL 이 postgresql:// 접속문자열이라 매칭 실패 → SUPA_PUBLIC='' → Storage 업로드 Invalid URL → 이미지 0 버그.
+  //   = 시스템 SSOT = SUPABASE_PUBLIC_URL 환경변수 단일 + 하드코딩 fallback (= save-raw line21 동일).
+  const STORAGE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY;
 
-  // ⚠️ 수정금지(승인필요) 2026-06-05 = 사진 = 관문 tsPhoto 일원화 (= 옛 raw fetch 2회 폐기)
-  //   = bucket=place-photos + 경로 ${cityId}/${rowId}-${ts} (.jpg 자동) = 옛 버킷·경로·공개URL 동일 / maxWidthPx=800 동일
-  //   = 업로드 = PUT+x-upsert (= ag3 검증 표준 = 옛 POST 대체, 동작 동일)
-  const SUPA_PUBLIC = SUPA_PROJECT ? `https://${SUPA_PROJECT}.supabase.co` : '';
-  async function downloadAndUpload(photoName: string, rowId: number): Promise<string | null> {
+  // ⚠️ 수정금지(승인필요) 2026-06-14 사장님 SSOT = PM 저장경로 = {cityId}/{category}/{PID} (PID 결정적).
+  //   = 원칙: PID 있어야만 구글이미지 인정 → PID 없으면 PM 자체 불성립(Storage 입력 X = WK 폴백 유지).
+  //   = 경로 = PID 결정적 → row 가 바뀌어도(merge/rename) storage-image-relink 가 항상 찾음 = 고아 영구 방지 = Storage↔DB image_url 일치.
+  //   = 옛 {cityId}/{rowId}-{ts} 폐기(= rowId·타임스탬프 비결정적 = row 바뀌면 고아 = relink 불가 = 밑빠진독 원인, [[feedback_internal_first_recover]]).
+  //   = 업로드 = tsPhoto 단일 관문(PUT+x-upsert) = bucket place-images, maxWidthPx=800 동일.
+  const SUPA_PUBLIC = process.env.SUPABASE_PUBLIC_URL || 'https://wxebceflvuythuodemro.supabase.co';
+  async function downloadAndUpload(photoName: string, category: string, pid: string): Promise<string | null> {
     if (!PLACES_KEY || !SUPA_PUBLIC || !STORAGE_KEY) return null;
     return await tsPhoto({
       apiKey: PLACES_KEY,
       photoName,
       storageKey: STORAGE_KEY,
       supaPublicUrl: SUPA_PUBLIC,
-      pathKey: `${cityId}/${rowId}-${Date.now()}`,
-      bucket: 'place-photos',
+      pathKey: `${cityId}/${category}/${pid}`,
+      bucket: 'place-images',
       maxWidthPx: 800,
     });
   }
@@ -93,8 +107,10 @@ if (!cityId) { console.error('Usage: --city-id=<N> --date=<YYYY-MM-DD> --apply-s
   for (const r of candidates) {
     try {
       let imageUrl: string | null = null;
-      if (downloadPhoto && r.ts?.photo_name) {
-        imageUrl = await downloadAndUpload(r.ts.photo_name, r.id);
+      // ⚠️ 수정금지(승인필요) 2026-06-14 사장님 SSOT = PID 있어야만 구글이미지 성립 → PID 없으면 PM 스킵(= 구글이미지 불성립, WK 폴백 유지).
+      //   = 경로가 PID 결정적이므로 PID 없는 행은 Storage 입력 대상 자체가 아님.
+      if (downloadPhoto && r.ts?.photo_name && r.ts?.place_id) {
+        imageUrl = await downloadAndUpload(r.ts.photo_name, r.category, r.ts.place_id);
         if (imageUrl) photo_ok++;
       }
 

@@ -20,7 +20,7 @@ export interface GeminiCurateInput {
   address?: string | null;
   latitude?: number | null;
   longitude?: number | null;
-  seedCategory: string;
+  seedCategory?: string;  // ⚠️ 2026-06-16 = Gemini 입력에서 제외(카테고리 안 줌) = optional 로 정합. shopping price=null 은 호출자 저장단계 처리.
 }
 export interface GeminiCurateOutput {
   id: number;
@@ -58,23 +58,27 @@ export async function geminiCurate(
   if (!valid.length) return [];
   const body = fs.readFileSync(PROMPT_PATH, 'utf-8').split(/═{30,}/)[2] || '';
   const year = opts?.year || String(new Date().getFullYear());
+  // ⚠️ 수정금지(승인필요) 2026-06-16 사장님 승인 = ${MONTH} 동적 치환 = 호출 시점 이번 달 (getMonth 는 0부터 = +1). prompt.txt grounding 줄 "${YEAR}년 ${MONTH}월 현재 시점" = 최신 강제.
+  const month = String(new Date().getMonth() + 1);
   const out: GeminiCurateOutput[] = [];
 
   let i = 0;
   let size = FALLBACK[0];
   while (i < valid.length) {
     const batch = valid.slice(i, i + size);
-    // ⚠️ 입력 = PID/URI 제외 (= 환각 방지). id=매칭키 / seed_category=문맥.
+    // ⚠️ 입력 = PID/URI 제외 (= 환각 방지). id=매칭키.
+    // ⚠️ 2026-06-16 사장님 승인 = seed_category 입력 제거 (= id 에 이미 분류 + 카테고리 주면 shopping 에서 식당/바 가격 오염 실증). shopping price=null 은 호출자 저장단계 처리.
     const input = batch.map((r) => ({
       id: r.id, name_en: r.nameEn, name_local: r.nameLocal ?? null, name_ko: r.nameKo ?? null,
-      address: r.address ?? null, latitude: r.latitude ?? null, longitude: r.longitude ?? null, seed_category: r.seedCategory,
+      address: r.address ?? null, latitude: r.latitude ?? null, longitude: r.longitude ?? null,
     }));
     const prompt = body
       .replace(/\$\{CITY_NAME\}/g, cityName).replace(/\[CITY_NAME\]/g, cityName)
-      .replace(/\$\{CITY_ID\}/g, String(cityId)).replace(/\$\{YEAR\}/g, year)
+      .replace(/\$\{CITY_ID\}/g, String(cityId)).replace(/\$\{YEAR\}/g, year).replace(/\$\{MONTH\}/g, month)
       .replace(/\$\{BATCH_LEN\}/g, String(batch.length)).replace(/\$\{JSON_INPUT\}/g, JSON.stringify(input));
 
-    const r = await geminiJson(prompt, { googleSearch: true });
+    // ⚠️ 2026-06-16 사장님 SSOT = contextId(cityId)+rawTag = raw 가 docs/raw/{cityId}/ 도시폴더 저장(= TS 동형, runtime 폴더 방지).
+    const r = await geminiJson(prompt, { googleSearch: true, contextId: cityId, rawTag: 'enrich-curate' });
     const places = (r.data?.places && Array.isArray(r.data.places)) ? r.data.places : parsePlaces(r.raw);
     const missing = batch.filter((b) => !places.find((p: any) => p.id === b.id)).length;
 

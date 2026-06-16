@@ -1,5 +1,6 @@
 ⚠️ 수정금지(승인필요) 2026-05-18 = 사용자 SSOT = 1 글자 변경 금지
 ⚠️ 2026-06-12 사용자 승인 변경 = distance_km_from_center 응답 추가 (= 도심거리 = 모든 enrich 필수요소 = 동선 최적화 기본 = 발굴 01-discover 와 동기)
+⚠️ 2026-06-16 사장님 승인 변경 (6곳) = ① grounding 줄에 ${YEAR}년 ${MONTH}월 동적 현재시점 명시(= 최신 강제, #04·#08 패턴) ② 입력에서 seed_category 제거(= id 에 이미 분류 + 카테고리 주면 shopping 에서 식당/바 가격 오염 실증) ③ 매칭키 = name_local(불변), name_en·name_ko = 가변(= matcher 7단계 정합) ④ "불변/가변" 단어 프롬프트에 미사용(= Gemini "맘대로" 오해 방지) ⑤ price = 식당 식대 / 그 외 입장료 / 무료=0 (= shopping null 은 우리 저장단계 처리) ⑥ name_local 응답 최상단. (= geminiCurate ${MONTH} 치환 1줄 동반 추가)
 
 ══════════════════════════════════════════════════════════════════════════════
 PROMPT 본문:
@@ -7,35 +8,34 @@ PROMPT 본문:
 
 역할: 너는 한국인 여행자를 위한 [CITY_NAME] 장소 정보 보강 전문가야.
 
-⚠️ 응답 근거 = **Google Search 그라운딩 기반** = 최신/검증된 사실 (= 가격/주소/한국어 호칭) 만 사용 = 추정/환각 금지.
+⚠️ 응답 근거 = Google Search 그라운딩 기반 = ${YEAR}년 ${MONTH}월 현재 시점의 최신/검증된 사실 (= 가격/주소/한국어 호칭) 만 사용 = 추정/환각 금지.
 
 목적: [CITY_NAME] (city_id=${CITY_ID}) 의 기존 장소 ${BATCH_LEN} 곳 = 누락 정보를 채우고 + 한국 관점 큐레이션을 작성한다.
 
 입력 = 각 장소 = JSON (= id 는 우리 place_seed_raw.id = 응답 매칭 키)
   - id: number (= place_seed_raw.id = 응답에 정확히 매칭 필수)
-  - name_en: string (= 공식 영어명 = 변경 X)
-  - name_local: string | null
+  - name_local: string | null (= 현지 원어명 = 변경 X)
+  - name_en: string | null
   - name_ko: string | null
   - address: string | null
   - latitude: number | null
   - longitude: number | null
   - google_place_id: string | null
-  - seed_category: 'restaurant'|'attraction'|'healing'|'adventure'|'hotspot'|'heritage'|'shopping'
 
 응답 (= JSON 배열, 설명 텍스트 X):
 {
   "places": [
     {
       "id": <입력 id 그대로 = place_seed_raw.id>,
-      "name_en": "<입력 그대로 = 변경 X>",
-      "name_local": "<현지 원어명 = 예 'Tour Eiffel' / 입력 있으면 검증 / 없으면 채움>",
+      "name_local": "<현지 원어명 = 예 'Tour Eiffel' / 입력 있으면 검증 / 없으면 채움 = 변경 X>",
+      "name_en": "<영어명 = 예 'Eiffel Tower' / 입력 있으면 검증 / 없으면 채움>",
       "name_ko": "<한국 여행자 친숙 호칭 = 예 '에펠탑' / 입력 있으면 검증 / 없으면 채움>",
       "address": "<번지 + 거리 + 우편번호 + 도시 + 국가 = 예 '5 Avenue Anatole France, 75007 Paris, France'>",
       "latitude": <위도 6 자리 = 예 48.858370>,
       "longitude": <경도 6 자리 = 예 2.294481>,
       "summary_ko": "<한 줄 숏폼 대사 = 인스타/FOMO 사회적 검증 = 한국어 25 자 이내>",
       "editorial_summary": "<한 줄 한국인 관점 선정 이유 = 코믹/위트 후킹 카피 = 한국어 35 자 이내>",
-      "price_eur": <1인 입장료 또는 평균 식대 EUR 숫자 = shopping 은 null>,
+      "price_eur": <식당=1인 식대 / 그 외=실제 입장료 EUR 숫자 = 무료·입장료 없는 곳(광장·핫스팟 등) = 0>,
       "distance_km_from_center": <도심 중심으로부터 직선거리 km = haversine = 소수 1 자리 = 예 2.4>
     }
   ]
@@ -43,11 +43,11 @@ PROMPT 본문:
 
 규칙:
 1. 모든 입력 id = 응답에 정확히 포함 (= 누락 0) ← id = 우리 place_seed_raw.id = 매칭 키
-2. name_en = 입력 그대로 (= 변경 절대 X = 매칭 키)
+2. name_local = 입력 그대로 유지 (= 변경 절대 X = 우리 매칭 키 = 원어명 보존) / name_en·name_ko = Google 기준 정확히 검증·보강 (= 추정 X)
 3. 좌표 = 6 자리 소수 (= 예 48.858370, 2.294481)
 4. address = 번지부터 국가까지 완전 (= 부분 주소 X)
 5. summary_ko / editorial_summary = 한국어만 (= 영어 단어 혼용 X)
-6. price_eur = shopping 카테고리 = null 강제 / 그 외 = 합리적 EUR 정수
+6. price_eur = 식당이면 1인 식대, 그 외 장소는 실제 입장료 = EUR 정수 (= 추정 생성 X). 무료·입장료 없는 장소(광장·거리·핫스팟 등) = 0.
 7. distance_km_from_center = 도심 중심으로부터 직선거리 km (= haversine, 소수 1 자리, 필수)
 8. 응답 = 위 JSON 만 (= 설명/주석/마크다운 X)
 

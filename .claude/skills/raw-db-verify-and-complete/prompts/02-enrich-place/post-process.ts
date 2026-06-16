@@ -1,5 +1,5 @@
 // ⚠️ 수정금지(승인필요) 2026-05-20 = 02-enrich-place 후처리 + DB UPDATE
-// = docs/raw/{city_id}/02-enrich-place-batch-*-{date}.json 모두 읽음 → upsertPlace() v2 단일 진입점 UPDATE
+// = docs/raw/{city_id}/{date}_02-enrich-place_batch-*.json 모두 읽음 → upsertPlace() v2 단일 진입점 UPDATE
 //
 // 호출:
 //   npx tsx .../02-enrich-place/post-process.ts --city-id=19 [--date=<YYYY-MM-DD>] [--dry]
@@ -34,10 +34,13 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--date=<YYYY-MM-DD>] [--dry]
 
   const rawDir = path.join(ROOT, 'docs', 'raw', String(cityId));
   if (!fs.existsSync(rawDir)) { console.error(`✗ ${rawDir} 미존재`); process.exit(1); }
-  const files = fs.readdirSync(rawDir).filter(f => f.startsWith('02-enrich-place-batch-') && f.endsWith(`-${date}.json`)).sort();
+  // ⚠️ 수정금지(승인필요) — raw 파일명 표준화: 날짜앞 {date}_NN-step_content 형식
+  // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = latestVersionedByBase 로 같은 batch 의 _N 중복 축약(batch-offset별 최신 1개) = 중복집계 0
+  const { latestVersionedByBase } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/raw-filename.ts')).href);
+  const files = latestVersionedByBase(fs.readdirSync(rawDir).filter(f => f.startsWith(`${date}_02-enrich-place_batch-`) && f.endsWith('.json')));
   console.log(`═══ 02-enrich-place post-process ═══`);
   console.log(`city_id = ${cityId}, date = ${date}, batch 파일 = ${files.length}`);
-  if (files.length === 0) { console.error(`✗ docs/raw/${cityId}/02-enrich-place-batch-*-${date}.json 미존재 = run.ts 먼저 실행`); process.exit(1); }
+  if (files.length === 0) { console.error(`✗ docs/raw/${cityId}/${date}_02-enrich-place_batch-*.json 미존재 = run.ts 먼저 실행`); process.exit(1); }
 
   const allPlaces: any[] = [];
   for (const f of files) {
