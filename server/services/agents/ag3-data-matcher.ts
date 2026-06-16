@@ -38,7 +38,8 @@ import { findCityUnified, type CityResolveResult } from "../city-resolver";
 import { validateFieldMask, STANDARD_TS_FIELD_MASK } from "../shared/google-places-sku";
 // ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT = 이미지 폴백 단일 SSOT (= Google 1 > WK 2)
 import { pickPlaceImage } from "../shared/place-image";
-// ⚠️ 2026-06-03 = 동일장소 5단계 매칭 = 공용 matcher.ts 단일 (= 헌법 §16, ag3 자체 0~4순위 폐기 → 정본 통일 + PID/URI veto)
+// ⚠️ 수정금지(승인필요) — PID veto 제거 텍스트 정합(2026-06-15 SSOT)
+// ⚠️ 2026-06-03 = 동일장소 5단계 매칭 = 공용 matcher.ts 단일 (= 헌법 §16, ag3 자체 0~4순위 폐기 → 정본 통일 + URI veto(PID veto 제거))
 import { matchCandidate } from "../shared/matcher";
 // ⚠️ 수정금지(승인필요) 2026-05-09 = AG3 saveNewPlacesToDB = 어제 21 식당 패턴 그대로 (= 자체 fetch = googlePlacesFetcher 사용 X)
 
@@ -346,8 +347,9 @@ export async function matchPlacesWithDB(
       continue;
     }
 
-    // ⚠️ 2026-06-03 = 5 단계 매칭 = 공용 matcher.ts 단일 (= 자체 0~4순위 폐기 = upsertPlace/트리거와 동일 검증 + PID/URI veto)
-    //   = PID > URI > 풀주소+이름9조합 > 좌표10m > 로컬네임9조합. 단계 통과 시 다음 자동 스킵. 다른 PID/URI = 다른 장소.
+    // ⚠️ 수정금지(승인필요) — PID veto 제거 텍스트 정합(2026-06-15 SSOT)
+    // ⚠️ 2026-06-03 = 5 단계 매칭 = 공용 matcher.ts 단일 (= 자체 0~4순위 폐기 = upsertPlace/트리거와 동일 검증 + URI veto(PID veto 제거))
+    //   = PID > URI > 풀주소+이름9조합 > 좌표10m > 로컬네임9조합. 단계 통과 시 다음 자동 스킵. 다른 URI = 다른 장소(PID 차이는 veto 아님, 2026-06-15 SSOT).
     const seedDirectMatch: any =
       matchCandidate(
         {

@@ -107,8 +107,8 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
     .from(placeSeedRaw);
 
   // ⚠️ 2026-06-08 = 7 단계 순차 매칭 = shared/matcher.ts 단일 공용 (= 정본 = 모든 경로 동일 검증, 헌법 §14/§16)
-  //   = [불변]1)PID > 2)URI > 3)풀주소+로컬이름 > 4)좌표10m > 5)로컬이름 / [가변]6)영어명 > 7)한국어명 + samePlace(PID/URI veto)
-  //   = 단계 통과(매칭) 시 다음 자동 스킵. 불변1~5=병합 / 가변6~7=새저장+'중복의심'. PID/URI 다르면 = 확정 다른 장소 = 보조매칭 제외.
+  //   = [불변]1)PID > 2)URI > 3)풀주소+로컬이름 > 4)좌표10m > 5)로컬이름 / [가변]6)영어명 > 7)한국어명 + samePlace(URI veto만, 2026-06-15 PID veto 제거)
+  //   = 단계 통과(매칭) 시 다음 자동 스킵. 불변1~5=병합 / 가변6~7=새저장+'중복의심'. ⚠️ PID 달라도 주소·좌표·로컬이름 같으면 같은 장소(우리 PID 오류=TS 교정). URI 다르면만 다른 장소.
   const { match, matchedBy, tier } = matchCandidate(p, candidates);
 
   const categoryTags = p.categoryTags && p.categoryTags.length > 0 ? p.categoryTags : [p.seedCategory];

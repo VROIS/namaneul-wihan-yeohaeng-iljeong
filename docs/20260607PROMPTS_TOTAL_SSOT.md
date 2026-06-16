@@ -1201,7 +1201,7 @@ async function searchText(name: string, addr: string | undefined): Promise<any |
 
 ### #40 · ag3 `matchCandidate` 5단계 (raw fetch 0 = DB 매칭)
 - **파일**: `server/services/agents/ag3-data-matcher.ts:354` · **상태**: live (외부 호출 0)
-- **설정**: 공용 matchCandidate(`server/services/shared/matcher.ts`, §16 단일 매처) = 5단계: PID > URI > 풀주소+이름9조합 > 좌표10m > 로컬네임9조합(PID/URI veto). 후보 = preloadCityData seedRawMap(name norm + noAccent 9조합). SQL = `SELECT ... WHERE city_id=$1 AND (seed_category='restaurant' OR rank BETWEEN 1 AND 20)`.
+- **설정**: 공용 matchCandidate(`server/services/shared/matcher.ts`, §16 단일 매처) = 5단계: PID > URI > 풀주소+이름9조합 > 좌표10m > 로컬네임9조합(URI veto, PID veto 제거 2026-06-15). 후보 = preloadCityData seedRawMap(name norm + noAccent 9조합). SQL = `SELECT ... WHERE city_id=$1 AND (seed_category='restaurant' OR rank BETWEEN 1 AND 20)`.
 - **조건**: 매칭 성공 = 좌표/이미지/PID/리뷰/카피 즉시 주입(Google 회피) / 실패 = needsGoogle → B3-1.
 
 ## TS 레거시 / cron (#41~#42)

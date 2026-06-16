@@ -1,8 +1,9 @@
 -- ⚠️ 수정금지(승인필요) 2026-06-03 = place_seed_raw 동일성/중복방지 DDL 단일 SSOT (= 헌법 §14)
 -- = 라이브 DB 현행 정의 복원(= 소실됐던 원본) + 2026-06-03 PID/URI veto 추가.
 -- = 정규화 = lower(trim(name_en)) = server/services/shared/matcher.ts normName 과 동일 식 (= 앱↔DB 정합).
+-- ⚠️ 수정금지(승인필요) — matcher PID veto 제거 동기화(2026-06-15 SSOT)
 -- = 트리거 = shared/matcher.ts 5단계와 동형: PID(0) > 주소+이름9조합(1) > 좌표10m(2) > 이름 UNIQUE(3).
---   핵심: PID/URI 둘 다 있고 서로 다르면 = 확정 다른 장소 = 보조(주소·좌표) 차단 안 함 (= samePlace veto).
+--   핵심: URI(cid) 둘 다 있고 서로 다르면 = 확정 다른 장소 = 보조(주소·좌표) 차단 (= samePlace veto). PID 차이는 더이상 veto 아님(우리 PID 오류=TS 교정, 2026-06-15).
 -- 적용: Supabase apply_migration 또는 psql $SUPA_URL -f server/db/migrations/place-identity.sql
 
 -- ── 1) 글로벌 UNIQUE = (city_id, lower(trim(name_en))) = 도시 내 동명 1행 (= matcher 5순위 + race 안전망) ──
@@ -29,14 +30,14 @@ BEGIN
   END IF;
 
   -- 1순위 = 풀 주소 정규화 100% + 이름 9 조합 한 쌍 동시 (= 2026-05-18)
-  -- ⚠️ 2026-06-03 = PID/URI 둘 다 있고 서로 다르면 = 확정 다른 장소 = 차단 안 함 (= shared/matcher.ts samePlace 동형)
+  -- ⚠️ 수정금지(승인필요) — matcher PID veto 제거 동기화(2026-06-15 SSOT): URI(cid) 다르면 = 확정 다른 장소 = 차단 (= shared/matcher.ts samePlace 동형). PID 차이는 더이상 veto 아님(우리 PID 오류=TS 교정, 2026-06-15).
   IF NEW.address IS NOT NULL AND LENGTH(TRIM(NEW.address)) >= 20 THEN
     SELECT id INTO matched_id FROM place_seed_raw
     WHERE city_id = NEW.city_id
       AND address IS NOT NULL
       AND LOWER(REGEXP_REPLACE(address, '[\s\.,;:!?''"()\[\]{}]+', ' ', 'g')) =
           LOWER(REGEXP_REPLACE(NEW.address, '[\s\.,;:!?''"()\[\]{}]+', ' ', 'g'))
-      AND NOT (google_place_id IS NOT NULL AND google_place_id <> '' AND NEW.google_place_id IS NOT NULL AND NEW.google_place_id <> '' AND google_place_id <> NEW.google_place_id)
+      -- ⚠️ 수정금지(승인필요) — matcher PID veto 제거 동기화(2026-06-15 SSOT): PID 차이 veto 삭제, URI(cid) veto 만 유지
       AND NOT (google_maps_uri IS NOT NULL AND google_maps_uri <> '' AND NEW.google_maps_uri IS NOT NULL AND NEW.google_maps_uri <> '' AND google_maps_uri <> NEW.google_maps_uri)
       AND (
         LOWER(TRIM(COALESCE(name_en, ''))) = LOWER(TRIM(COALESCE(NEW.name_en, '__NULL__')))
@@ -56,14 +57,14 @@ BEGIN
   END IF;
 
   -- 2순위 = 좌표 10m (= 같은 건물)
-  -- ⚠️ 2026-06-03 = PID/URI 다르면 = 확정 다른 장소 = 차단 안 함 (= 같은 건물 다른 장소 별개 행, 개선문↔La promenade 사고 방지)
+  -- ⚠️ 수정금지(승인필요) — matcher PID veto 제거 동기화(2026-06-15 SSOT): URI(cid) 다르면 = 확정 다른 장소 = 차단 (= 같은 건물 다른 장소 별개 행, 개선문↔La promenade 사고 방지). PID 차이는 더이상 veto 아님(우리 PID 오류=TS 교정, 2026-06-15).
   IF NEW.latitude IS NOT NULL AND NEW.longitude IS NOT NULL THEN
     SELECT id INTO matched_id FROM place_seed_raw
     WHERE city_id = NEW.city_id
       AND latitude IS NOT NULL AND longitude IS NOT NULL
       AND ABS(latitude - NEW.latitude) < 0.0001
       AND ABS(longitude - NEW.longitude) < 0.0001
-      AND NOT (google_place_id IS NOT NULL AND google_place_id <> '' AND NEW.google_place_id IS NOT NULL AND NEW.google_place_id <> '' AND google_place_id <> NEW.google_place_id)
+      -- ⚠️ 수정금지(승인필요) — matcher PID veto 제거 동기화(2026-06-15 SSOT): PID 차이 veto 삭제, URI(cid) veto 만 유지
       AND NOT (google_maps_uri IS NOT NULL AND google_maps_uri <> '' AND NEW.google_maps_uri IS NOT NULL AND NEW.google_maps_uri <> '' AND google_maps_uri <> NEW.google_maps_uri)
     LIMIT 1;
     IF matched_id IS NOT NULL THEN

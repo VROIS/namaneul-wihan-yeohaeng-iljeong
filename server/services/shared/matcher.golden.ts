@@ -2,7 +2,8 @@
  * ⚠️ 2026-06-03 = matcher.ts 골든 검증 (= 300도시 일관성 안전망, 헌법 §17)
  * 실행: npx tsx server/services/shared/matcher.golden.ts
  * = 매처가 1벌로 통합된 뒤 = 이 1개 테스트가 전 경로(upsert/ag3/트리거/발굴) 동작 보증.
- * = 핵심: PID/URI 다르면 = 같은 좌표·이름이어도 별개(none) = 오병합 0 (개선문↔La promenade 사고 재발 방지).
+ * // ⚠️ 수정금지(승인필요) — matcher PID veto 제거 동기화(2026-06-15 SSOT)
+ * = 핵심: PID 달라도 주소/좌표/로컬이름 일치 = 같은 장소(우리 PID 오류 가정 = TS 교정) = 병합. URI(cid)만 veto. 오병합 안전선 = 다른 주소·다른 좌표·다른 로컬이름 (id 50/65/67 등) = 여전히 별개.
  */
 import { matchCandidate, samePlace, type MatchCandidate } from './matcher';
 
@@ -24,15 +25,21 @@ const C: MatchCandidate[] = [
 check('1 PID 매칭', matchCandidate({ cityId: 19, googlePlaceId: 'PID_ARCHE', nameEn: 'x' }, C).matchedBy === 'pid');
 // 2) URI 매칭
 check('2 URI 매칭', matchCandidate({ cityId: 19, googleMapsUri: 'cid_arche', nameEn: 'x' }, C).matchedBy === 'uri');
-// 3) ⭐ 같은 좌표 + 다른 PID = 절대 안 합침 (= 개선문↔La promenade 사고 핵심)
+// 3) ⭐ 같은 좌표 + 다른 PID = coords 병합 (= 우리 PID 오류 가정 = TS 교정)
+// ⚠️ 수정금지(승인필요) — matcher PID veto 제거 동기화(2026-06-15 SSOT) — PID 차이 veto 폐기 → 좌표 10m 일치만으로 병합. 진짜 다른 장소 안전선은 아래 r3b(다른 좌표)·r9d(다른 URI)로 재구축.
 const r3 = matchCandidate({ cityId: 19, googlePlaceId: 'PID_PROMENADE', latitude: 48.8926, longitude: 2.2361, nameEn: 'La promenade' }, C);
-check('3 같은좌표 다른PID = 별개(none)', r3.matchedBy === 'none' && !r3.match);
+check('3 같은좌표 다른PID = coords 병합(우리 PID 오류 교정)', r3.matchedBy === 'coords' && r3.match?.id === 1);
+// 3b) ⭐ 보강 안전선 = 진짜 다른 장소(좌표 10m 밖 + 다른 이름 + 다른 PID) = 여전히 별개(none)
+// ⚠️ 수정금지(승인필요) — matcher PID veto 제거 동기화(2026-06-15 SSOT) — 옛 개선문↔La promenade 오병합 방지선 재설계: PID 가 아니라 '좌표가 실제로 다름'으로 별개 판정.
+const r3b = matchCandidate({ cityId: 19, googlePlaceId: 'PID_PROMENADE', latitude: 48.9100, longitude: 2.2600, nameEn: 'La promenade' }, C);
+check('3b 다른좌표 다른PID 다른이름 = 별개(none)', r3b.matchedBy === 'none' && !r3b.match);
 // 4) PID 없는 후보 + 좌표 일치 = coords 매칭 (= TS 가 미검증 행에 PID 채움)
 const r4 = matchCandidate({ cityId: 19, googlePlaceId: 'PID_NEW', latitude: 48.8651, longitude: 2.3278, nameEn: 'Angelina' }, C);
 check('4 PID없는후보 좌표매칭', r4.matchedBy === 'coords' && r4.match?.id === 2);
-// 5) ⭐ 같은 이름 + 다른 PID = 안 합침 (= 이름 단계도 PID veto)
+// 5) ⭐ 같은 로컬이름 + 다른 PID = name_local 병합 (= 로컬이름 불변 = 같은 장소 = 우리 PID 오류 교정)
+// ⚠️ 수정금지(승인필요) — matcher PID veto 제거 동기화(2026-06-15 SSOT) — 이름 단계 PID veto 폐기 → name_local 불변 일치 + cityId 일치만으로 병합(confirmed). 다른 도시 동명은 cityId 강제로 여전히 차단(테스트 7).
 const r5 = matchCandidate({ cityId: 19, googlePlaceId: 'PID_OTHER', nameLocal: 'Place du Trocadéro' }, C);
-check('5 같은이름 다른PID = 별개(none)', r5.matchedBy === 'none' && !r5.match);
+check('5 같은이름(로컬) 다른PID = name_local 병합(우리 PID 오류 교정)', r5.matchedBy === 'name_local' && r5.tier === 'confirmed' && r5.match?.id === 3);
 // 6) 로컬이름 매칭 (PID 없음, name_local 일치) = 불변 = 확정
 const r6 = matchCandidate({ cityId: 19, nameLocal: 'Place du Trocadéro' }, C);
 check('6 로컬이름 매칭(불변=확정)', r6.matchedBy === 'name_local' && r6.tier === 'confirmed' && r6.match?.id === 3);
@@ -43,9 +50,10 @@ check('7 영어명 매칭(가변=의심) + cityId강제 id4', r7.matchedBy === '
 const r8 = matchCandidate({ cityId: 19, address: '1 Parv. de la Défense, 92800 Puteaux', nameEn: 'Grande Arche' }, C);
 check('8 주소+이름부분포함 매칭', r8.matchedBy === 'address' && r8.match?.id === 1);
 // 9) samePlace 단위
-check('9a samePlace 다른PID=false', samePlace({ googlePlaceId: 'A' }, { googlePlaceId: 'B' }) === false);
+check('9a samePlace 다른PID=true(PID veto 제거)', samePlace({ googlePlaceId: 'A' }, { googlePlaceId: 'B' }) === true); // ⚠️ 수정금지(승인필요) — matcher PID veto 제거 동기화(2026-06-15 SSOT) — PID 차이가 더 이상 별개 근거가 아님
 check('9b samePlace PID없음=true', samePlace({ googlePlaceId: null }, { googlePlaceId: 'B' }) === true);
-check('9c samePlace 다른URI=false', samePlace({ googleMapsUri: 'X' }, { googleMapsUri: 'Y' }) === false);
+check('9c samePlace 다른URI=false', samePlace({ googleMapsUri: 'X' }, { googleMapsUri: 'Y' }) === false); // ⚠️ 수정금지(승인필요) — matcher PID veto 제거 동기화(2026-06-15 SSOT) — URI(cid) veto 는 그대로 유지 = 마지막 안전선
+check('9d samePlace 같은URI=true', samePlace({ googleMapsUri: 'X' }, { googleMapsUri: 'X' }) === true); // ⚠️ 수정금지(승인필요) — matcher PID veto 제거 동기화(2026-06-15 SSOT) — URI 같으면 PID 무관 같은 장소(병합 정합 보강)
 
 // ⭐ 2026-06-10 = 주소 약어("C."→Calle) + 구區 segment 변형 흡수 (= 박물관 76534↔77182 재입력 중복 재발 방지, 매처 갭 회귀)
 const C2: MatchCandidate[] = [

@@ -2,6 +2,8 @@
 -- = place_seed_raw_prevent_dup 트리거 함수 = BEFORE INSERT
 -- = 1 순위 매칭 = 풀 주소 100% + 이름 9 조합 한 쌍 동시 (= v1 = 주소 단독 → v2 = 주소 + 이름)
 -- = 광역 주소 (= Disney Village 복합 상가) 같은 주소 다른 식당 = 별도 행 보존
+-- ⚠️ 수정금지(승인필요) — PID veto 제거 텍스트 정합(2026-06-15 SSOT)
+-- = server/db/migrations/place-identity.sql(정본)과 동형으로 URI(cid) veto 추가. URI 둘 다 있고 다르면 = 확정 다른 장소 = 보조(주소·좌표) 차단. PID 차이는 veto 아님(우리 PID 오류=TS 교정, 2026-06-15).
 -- 적용 = psql $SUPA_URL -f trigger-v2.sql
 
 CREATE OR REPLACE FUNCTION public.place_seed_raw_prevent_dup()
@@ -23,12 +25,15 @@ BEGIN
 
   -- 1순위 v2 = 풀 주소 정규화 100% + 이름 9 조합 한 쌍 동시 (= 사용자 SSOT 2026-05-18)
   -- = 광역 주소 (= Disney Village 복합 상가) 같은 주소 다른 식당 = 분리 보존
+  -- ⚠️ 수정금지(승인필요) — PID veto 제거 텍스트 정합(2026-06-15 SSOT): URI(cid) 다르면 = 확정 다른 장소 = 차단 (= shared/matcher.ts samePlace 동형). PID 차이는 더이상 veto 아님(우리 PID 오류=TS 교정, 2026-06-15).
   IF NEW.address IS NOT NULL AND LENGTH(TRIM(NEW.address)) >= 20 THEN
     SELECT id INTO matched_id FROM place_seed_raw
     WHERE city_id = NEW.city_id
       AND address IS NOT NULL
       AND LOWER(REGEXP_REPLACE(address, '[\s\.,;:!?''"()\[\]{}]+', ' ', 'g')) =
           LOWER(REGEXP_REPLACE(NEW.address, '[\s\.,;:!?''"()\[\]{}]+', ' ', 'g'))
+      -- ⚠️ 수정금지(승인필요) — PID veto 제거 텍스트 정합(2026-06-15 SSOT): PID 차이 veto 삭제, URI(cid) veto 만 유지
+      AND NOT (google_maps_uri IS NOT NULL AND google_maps_uri <> '' AND NEW.google_maps_uri IS NOT NULL AND NEW.google_maps_uri <> '' AND google_maps_uri <> NEW.google_maps_uri)
       AND (
         LOWER(TRIM(COALESCE(name_en, ''))) = LOWER(TRIM(COALESCE(NEW.name_en, '__NULL__')))
         OR LOWER(TRIM(COALESCE(name_local, ''))) = LOWER(TRIM(COALESCE(NEW.name_local, '__NULL__')))
@@ -46,13 +51,16 @@ BEGIN
     END IF;
   END IF;
 
-  -- 2순위 = 좌표 10m (= 변경 X)
+  -- 2순위 = 좌표 10m (= 같은 건물)
+  -- ⚠️ 수정금지(승인필요) — PID veto 제거 텍스트 정합(2026-06-15 SSOT): URI(cid) 다르면 = 확정 다른 장소 = 차단 (= 같은 건물 다른 장소 별개 행, 개선문↔La promenade 사고 방지). PID 차이는 더이상 veto 아님(우리 PID 오류=TS 교정, 2026-06-15).
   IF NEW.latitude IS NOT NULL AND NEW.longitude IS NOT NULL THEN
     SELECT id INTO matched_id FROM place_seed_raw
     WHERE city_id = NEW.city_id
       AND latitude IS NOT NULL AND longitude IS NOT NULL
       AND ABS(latitude - NEW.latitude) < 0.0001
       AND ABS(longitude - NEW.longitude) < 0.0001
+      -- ⚠️ 수정금지(승인필요) — PID veto 제거 텍스트 정합(2026-06-15 SSOT): PID 차이 veto 삭제, URI(cid) veto 만 유지
+      AND NOT (google_maps_uri IS NOT NULL AND google_maps_uri <> '' AND NEW.google_maps_uri IS NOT NULL AND NEW.google_maps_uri <> '' AND google_maps_uri <> NEW.google_maps_uri)
     LIMIT 1;
     IF matched_id IS NOT NULL THEN
       RAISE EXCEPTION 'place_seed_raw INSERT 차단 = 좌표 10m 매칭 행 id=% 존재 = upsertPlace() 사용 강제 (= 사용자 SSOT 2026-05-15)', matched_id;

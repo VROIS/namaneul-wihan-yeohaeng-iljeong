@@ -11,7 +11,7 @@
  *   = 옛 순서(좌표4>로컬이름5) 교체: 좌표 = LLM 316m 편향 실측(2026-06-11 리서치+마드리드 실측 27% 10m초과)
  *     = 도심밀집 오병합 위험 → 로컬이름(불변 고유명사) 아래 5순위로 강등.
  * 핵심 원칙:
- *   - PID/URI 둘 다 있고 서로 다르면 = 확정 다른 장소 = 보조매칭(3~7) 제외 (samePlace veto).
+ *   - URI(cid) 둘 다 있고 서로 다르면 = 확정 다른 장소 = 보조매칭(3~7) 제외 (samePlace veto). ⚠️ 2026-06-15 PID 는 veto 제거(우리 PID 오류 가능 = TS 가 교정).
  *   - 불변 1~5 중 하나라도 일치 = 같은 장소(확정 = 병합). (= 같은 좌표 다른 장소 = 별개 1행, [[feedback_multitag_ssot]])
  *   - 6·7(영어·한국어명)만 일치 = 표현이 가변(원어→번역 제각각) = 유사의심 = 자동병합 X = 새로 저장 + 검수표시.
  *   - "있는 쪽 승리"(2026-06-11 사용자 SSOT) = 한 단계에서 매칭 후보 여럿 → 신뢰요소(PID>URI>주소>좌표)
@@ -167,12 +167,15 @@ const nameTokensMatch = (a: string[], b: string[]): boolean => {
   return false;
 };
 
-// ⚠️ PID/URI 둘 다 있고 서로 다르면 = 확정 다른 장소 = 보조매칭(주소·좌표·이름) 제외 (= 사용자 SSOT 2026-06-03)
+// ⚠️ 수정금지(승인필요) 2026-06-15 사장님 SSOT (= 헌법 §14 변경, 사장님 명시 결정) = samePlace veto 에서 PID 제거:
+//   = PID 는 "우리가 틀릴 수 있는 요소"다. 근거: TS 에 로컬이름·풀주소·좌표(1~3 힌트)를 다 줬는데도 다른 PID 를 주면 = 우리 PID 오류
+//     (= TS = 검증된 최신). 또 PID 입력 전 단계(발굴·enrich)는 PID 없이 주소·로컬이름·좌표로 이미 중복체크함 = PID 는 중복판정 절대기준 아님.
+//   = 따라서 PID 가 달라도 보조매칭(주소+로컬이름·좌표)이 일치하면 = 같은 장소(우리 PID 오류) = 매칭 = id 위에 9요소 덮어 교정.
+//   = URI(cid)만 veto 유지 (= cid 는 더 강한 고유 = 다르면 다른 장소 안전선). (옛: PID 다르면 = 확정 다른장소 = 폐기)
 export const samePlace = (
   c: { googlePlaceId?: string | null; googleMapsUri?: string | null },
   p: { googlePlaceId?: string | null; googleMapsUri?: string | null },
 ): boolean =>
-  !(c.googlePlaceId && p.googlePlaceId && c.googlePlaceId !== p.googlePlaceId) &&
   !(c.googleMapsUri && p.googleMapsUri && c.googleMapsUri !== p.googleMapsUri);
 
 // ⚠️ 수정금지(승인필요) 2026-06-11 = "있는 쪽 승리" (= 사용자 SSOT §14). 한 단계에서 매칭 후보 여럿 → 신뢰요소 최다 보유 1개 keep.
@@ -225,7 +228,7 @@ export function matchCandidate<C extends MatchCandidate>(
     if (np.length >= 20) {
       const pl = normName(p.nameLocal);
       match = pickBest(candidates.filter((c) => {
-        if (!samePlace(c, p)) return false; // = PID/URI 다르면 다른 장소
+        if (!samePlace(c, p)) return false; // ⚠️ 수정금지(승인필요) — matcher PID veto 제거 동기화(2026-06-15 SSOT) = URI 다르면 다른 장소
         if (!c.address) return false;
         // 정확 매칭(기존) OR 토큰부분집합(약어 "C."→calle·구segment 변형 흡수 = 2026-06-10, 우편번호+번지 공유 강제 = 오병합 방지)
         if (normAddr(c.address) !== np && !addrSubsetMatch(c.address, p.address)) return false;
@@ -264,7 +267,7 @@ export function matchCandidate<C extends MatchCandidate>(
   if (!match && p.latitude && p.longitude) {
     match = pickBest(candidates.filter(
       (c) =>
-        samePlace(c, p) && // = PID/URI 다르면 다른 장소 (= 같은 좌표 오병합 방지)
+        samePlace(c, p) && // ⚠️ 수정금지(승인필요) — matcher PID veto 제거 동기화(2026-06-15 SSOT) = URI 다르면 다른 장소 (= 같은 좌표 오병합 방지)
         c.latitude != null &&
         c.longitude != null &&
         Math.abs(Number(c.latitude) - p.latitude!) < 0.0001 &&
