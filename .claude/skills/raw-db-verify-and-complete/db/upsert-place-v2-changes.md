@@ -100,7 +100,7 @@ WHERE id = ${match.id}
 
 ## 트리거 동기 변경
 
-**필수** = `db/trigger-v2.sql` 동시 적용 (= upsertPlace v2 + 트리거 v2 = 두 곳 모두 새 정책).
+**필수** = `server/db/migrations/place-identity.sql` 동시 적용 (= upsertPlace v2 + 트리거 v2 = 두 곳 모두 새 정책).
 
 = 트리거 v1 만 적용 = upsertPlace v2 의 신규 INSERT (= Disney Village 다른 식당) = 트리거 차단 = 모순.
 = upsertPlace v2 만 = 트리거 v1 = 차단 = INSERT 실패.

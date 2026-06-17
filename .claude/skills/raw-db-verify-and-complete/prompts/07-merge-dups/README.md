@@ -37,7 +37,7 @@
 - **본 세션 (= 5-18) Paris Step 5-7 검증** = 27 그룹 / 38 행 흡수 가능
 - **사용자 검수 후 archive** = Paris 16 행 (= 5-18) + 2 좌표 10m (= 5-18) = 활성 426 → 407 → 405
 - **알고리즘 위치** = `server/services/place-upsert.ts:73-251` (= upsertPlace v2)
-- **트리거** = `place_seed_raw_prevent_dup` v2 (= [`../../db/trigger-v2.sql`](../../db/trigger-v2.sql))
+- **트리거** = `place_seed_raw_prevent_dup` v2 (= [`server/db/migrations/place-identity.sql`](../../../../../server/db/migrations/place-identity.sql))
 
 ## 변경하려면?
 

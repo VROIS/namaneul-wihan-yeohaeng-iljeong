@@ -132,7 +132,7 @@ npx tsx .claude/skills/raw-db-verify-and-complete/checks/01-coord-missing.ts --a
 본 스킬 사용 전 = **트리거 v2 적용 필수** (= 1 회만):
 
 ```bash
-psql $SUPA_URL -f .claude/skills/raw-db-verify-and-complete/db/trigger-v2.sql
+psql $SUPA_URL -f server/db/migrations/place-identity.sql
 ```
 
 = [`db/upsert-place-v2-changes.md`](db/upsert-place-v2-changes.md) = 헌법 §14 v2 = 2026-05-18 사용자 SSOT.
