@@ -35,10 +35,8 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--year=2026] [--batch=40] [-
   const today = new Date().toISOString().slice(0, 10);
   // ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유 (= 직독 폐기). 채움(05-restaurant-reverify) = 도시 있음 + 행 있음(true).
   // = 출입증(키이름·도시id·날짜·행있음) 검문 통과해야만 키 발급. 미달 = throw = 외부호출 불가.
-  const GEMINI_KEY = (await c.query(
-    `SELECT public.issue_api_key('GEMINI_API_KEY', $1, $2, true) AS k`,
-    [cityId, today],
-  )).rows[0]?.k;
+  const { issueApiKey } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/issue-api-key.ts')).href);
+  const GEMINI_KEY = await issueApiKey(c, 'GEMINI_API_KEY', cityId, today, true);
   // 대상 = --ids 제공 시 해당 id / 미제공 시 PID+URI 미보유(= TS 미검증) restaurant
   const rows = idsArg
     ? (await c.query(`SELECT id, name_en, address FROM place_seed_raw WHERE id = ANY($1::int[]) ORDER BY rank`, [idsArg])).rows

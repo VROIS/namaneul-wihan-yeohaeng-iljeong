@@ -352,7 +352,8 @@ async function processRow(db, row, city, googleKey, supabaseUrl, supabaseKey) {
     // ⚠️ 2026-06-18 사장님 SSOT = GOOGLE_MAPS 키 = 출입증 관문 issue_api_key() 경유 (= 직독 폐기). BTS = 발굴 = 도시 있음 + 행 없음(false).
     // = SUPABASE_ANON_KEY / SUPABASE_URL 은 Storage 인증 = 외부호출 키 아님 = getApiKey 직독 유지(건드리지 않음).
     const today = new Date().toISOString().slice(0, 10);
-    const googleKey = (await db.query(`SELECT public.issue_api_key('GOOGLE_MAPS_API_KEY', $1, $2, false) AS k`, [city.id, today])).rows[0]?.k;
+    const { issueApiKey } = await import(new URL('../server/services/shared/issue-api-key.ts', import.meta.url).href);
+    const googleKey = await issueApiKey(db, 'GOOGLE_MAPS_API_KEY', city.id, today, false);
     if (!googleKey) throw new Error('GOOGLE_MAPS_API_KEY 미발급 = 출입증 검문 미달 또는 api_keys DB 확인');
     let supabaseKey, supabaseUrl;
     if (!DRY_RUN) {

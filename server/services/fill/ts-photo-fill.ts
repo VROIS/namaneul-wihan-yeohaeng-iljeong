@@ -36,10 +36,8 @@ const ANCHOR_M = 100;
   // ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유 (= 직독 폐기). 사진 채움 = 채움 = 도시 있음 + 행 있음(true).
   // = 출입증(키이름·도시id·날짜·행있음) 검문 통과해야만 키 발급. 미달 = throw = 외부호출 불가.
   const today = new Date().toISOString().slice(0, 10);
-  const KEY = (await c.query(
-    `SELECT public.issue_api_key('GOOGLE_MAPS_API_KEY', $1, $2, true) AS k`,
-    [cityId, today],
-  )).rows[0]?.k;
+  const { issueApiKey } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/issue-api-key.ts')).href);
+  const KEY = await issueApiKey(c, 'GOOGLE_MAPS_API_KEY', cityId, today, true);
   // ⚠️ 2026-06-04 = image-pool 검증 패턴 = SUPABASE_PUBLIC_URL 전체 URL (단일 프로젝트 = 모든 도시 공용) + SERVICE_ROLE
   const supaPublicUrl = process.env.SUPABASE_PUBLIC_URL || 'https://wxebceflvuythuodemro.supabase.co';
   const storageKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY;

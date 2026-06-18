@@ -52,10 +52,8 @@ function townOf(address: string | null): string | null {
   // ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유 (= 직독 폐기). 외곽식당 보충 = 채움 = 도시 있음 + 행 있음(true).
   // = 출입증(키이름·도시id·날짜·행있음) 검문 통과해야만 키 발급. 미달 = throw = 외부호출 불가.
   const today = new Date().toISOString().slice(0, 10);
-  const KEY = (await c.query(
-    `SELECT public.issue_api_key('GOOGLE_MAPS_API_KEY', $1, $2, true) AS k`,
-    [cityId, today],
-  )).rows[0]?.k;
+  const { issueApiKey } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/issue-api-key.ts')).href);
+  const KEY = await issueApiKey(c, 'GOOGLE_MAPS_API_KEY', cityId, today, true);
   if (!KEY) { await c.end(); console.error('Google key 미존재'); process.exit(1); }
   const REGION = city.country_code || 'ES';
   const countrySuffix = city.country ? `, ${city.country}` : '';

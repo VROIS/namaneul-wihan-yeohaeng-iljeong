@@ -50,10 +50,8 @@ const hkm = (a: any, b: any) => {
   const cityCenter = { lat: parseFloat(city?.latitude) || 0, lng: parseFloat(city?.longitude) || 0 };
   // ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유 (= 직독 폐기). 발굴(이름복구) = 도시 있음 + 행 없음(false = 신규 발견).
   // = 출입증(키이름·도시id·날짜·행없음) 검문 통과해야만 키 발급. 미달 = throw = 외부호출 불가.
-  const KEY = (await c.query(
-    `SELECT public.issue_api_key('GOOGLE_MAPS_API_KEY', $1, $2, false) AS k`,
-    [cityId, today],
-  )).rows[0]?.k;
+  const { issueApiKey } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/issue-api-key.ts')).href);
+  const KEY = await issueApiKey(c, 'GOOGLE_MAPS_API_KEY', cityId, today, false);
   if (!KEY) { console.error('Google key 미존재'); process.exit(1); }
 
   console.log(`═══ recover-by-name (city=${cityId} ${city?.name_en}, ${names.length}곳) = €${(names.length * 0.0299).toFixed(2)} ═══`);

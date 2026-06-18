@@ -44,10 +44,8 @@ if (!cityId) { console.error('Usage: --city-id=<N>'); process.exit(1); }
   // ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유 (= 직독 폐기). TS 보강 = 채움 = 도시 있음 + 행 있음(true).
   // = 출입증(키이름·도시id·날짜·행있음) 검문 통과해야만 키 발급. 미달 = throw = 외부호출 불가.
   const today = new Date().toISOString().slice(0, 10);
-  const PLACES_KEY = (await c.query(
-    `SELECT public.issue_api_key('GOOGLE_MAPS_API_KEY', $1, $2, true) AS k`,
-    [cityId, today],
-  )).rows[0]?.k;
+  const { issueApiKey } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/issue-api-key.ts')).href);
+  const PLACES_KEY = await issueApiKey(c, 'GOOGLE_MAPS_API_KEY', cityId, today, true);
 
   // ⚠️ 수정금지(승인필요) 2026-06-13 사용자 SSOT = 식당 대상 = 30/90/30 노출풀 결손만 (= 비용 신중 = 풀밖 바닥식당 호출 X)
   //   = 식당 = 가격대구간(eco≤24 30 / reason 25~60 90 / premium 61+ 30, luxury 통합) RC DESC ROW_NUMBER ≤ 구간정원 AND (image 결손 OR pid 결손)

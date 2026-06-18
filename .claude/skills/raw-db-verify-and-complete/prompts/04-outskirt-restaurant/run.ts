@@ -45,10 +45,8 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--hints="타입 override(선
   // ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유 (= 직독 폐기). 외곽식당 발굴(04-outskirt) = 도시 있음 + 행 없음(false = 신규 발견).
   // = 출입증(키이름·도시id·날짜·행없음) 검문 통과해야만 키 발급. 미달 = throw = 외부호출 불가.
   const today = new Date().toISOString().slice(0, 10);
-  const GEMINI_KEY = (await c.query(
-    `SELECT public.issue_api_key('GEMINI_API_KEY', $1, $2, false) AS k`,
-    [cityId, today],
-  )).rows[0]?.k;
+  const { issueApiKey } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/issue-api-key.ts')).href);
+  const GEMINI_KEY = await issueApiKey(c, 'GEMINI_API_KEY', cityId, today, false);
   await c.end();
   if (!GEMINI_KEY) { console.error('Gemini key 미발급 = 출입증 검문 미달 또는 api_keys DB 확인'); process.exit(1); }
 

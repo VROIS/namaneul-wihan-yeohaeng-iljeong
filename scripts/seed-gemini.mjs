@@ -106,8 +106,9 @@ const CITY_KEY = CITY_NAME.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_
 // = SUPABASE_ANON_KEY 는 Storage 인증 = 외부호출 키 아님 = 직독 유지(건드리지 않음).
 // ──────────────────────────────────────────────────────────────────────────
 const today = new Date().toISOString().slice(0, 10);
-const GEMINI_KEY = (await c.query(`SELECT public.issue_api_key('GEMINI_API_KEY', $1, $2, false) AS k`, [CITY.id, today])).rows[0]?.k;
-const GOOGLE_KEY = (await c.query(`SELECT public.issue_api_key('GOOGLE_MAPS_API_KEY', $1, $2, false) AS k`, [CITY.id, today])).rows[0]?.k;
+const { issueApiKey } = await import(new URL('../server/services/shared/issue-api-key.ts', import.meta.url).href);
+const GEMINI_KEY = await issueApiKey(c, 'GEMINI_API_KEY', CITY.id, today, false);
+const GOOGLE_KEY = await issueApiKey(c, 'GOOGLE_MAPS_API_KEY', CITY.id, today, false);
 const SUPA_ANON = (await c.query(`SELECT key_value FROM api_keys WHERE key_name='SUPABASE_ANON_KEY' AND is_active=true`)).rows[0].key_value;
 const SUPA_PUB = process.env.SUPABASE_PUBLIC_URL || 'https://wxebceflvuythuodemro.supabase.co';
 

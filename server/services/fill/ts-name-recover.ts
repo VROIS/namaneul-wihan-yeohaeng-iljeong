@@ -40,10 +40,8 @@ const isInternal = (r: any) => r.name_en && r.name_en.trim() !== '';
   // ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유 (= 직독·process.env 폴백 폐기). name_local 채움 = 채움 = 도시 있음 + 행 있음(true).
   // = 출입증(키이름·도시id·날짜·행있음) 검문 통과해야만 키 발급. 미달 = throw = 외부호출 불가.
   const today = new Date().toISOString().slice(0, 10);
-  const KEY = (await c.query(
-    `SELECT public.issue_api_key('GOOGLE_MAPS_API_KEY', $1, $2, true) AS k`,
-    [cityId, today],
-  )).rows[0]?.k;
+  const { issueApiKey } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/issue-api-key.ts')).href);
+  const KEY = await issueApiKey(c, 'GOOGLE_MAPS_API_KEY', cityId, today, true);
 
   const rows = (await c.query(
     `SELECT id, seed_category, name_en, latitude::float8 AS lat, longitude::float8 AS lng, google_place_id AS pid
