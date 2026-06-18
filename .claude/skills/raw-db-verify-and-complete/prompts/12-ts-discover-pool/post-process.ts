@@ -98,7 +98,8 @@ const PM_CALL_EUR = 0.007;
     const existCands = exist.map((e: any) => ({ id: e.id, cityId, googlePlaceId: e.pid, googleMapsUri: e.uri, address: e.address, latitude: e.lat, longitude: e.lng, nameEn: e.name_en, nameLocal: e.name_local, nameKo: e.name_ko }));
     const matchRow = (p: any): any => matchCandidate({
       cityId, googlePlaceId: p.place_id, googleMapsUri: p.google_maps_uri || null, address: p.address || null,
-      latitude: p.lat, longitude: p.lng, nameEn: p.name_local || p.name, nameLocal: p.name_local || p.name, nameKo: null,
+      // ⚠️ 수정금지(승인필요) — TS displayName→name_en (2026-06-17 사장님 SSOT) = name_local은 Gemini전용 = TS는 nameLocal=null (place-upsert COALESCE가 기존 Gemini값 보존)
+      latitude: p.lat, longitude: p.lng, nameEn: p.name_local || p.name, nameLocal: null, nameKo: null,
     }, existCands).match || null;
     for (const p of clean) p._m = matchRow(p);
     const matched = clean.filter((p) => p._m), fresh = clean.filter((p) => !p._m);
@@ -114,7 +115,8 @@ const PM_CALL_EUR = 0.007;
       const dkm = Math.round(hkm(center, p) * 10) / 10;
       try {
         const r = await upsertPlace({
-          cityId, seedCategory: category, nameEn: p.name_local || p.name, nameLocal: p.name_local || p.name,
+          // ⚠️ 수정금지(승인필요) — TS displayName→name_en (2026-06-17 사장님 SSOT) = name_local은 Gemini전용 = TS는 nameLocal=null (place-upsert COALESCE가 기존 Gemini값 보존)
+          cityId, seedCategory: category, nameEn: p.name_local || p.name, nameLocal: null,
           address: p.address || null, latitude: p.lat, longitude: p.lng,
           googlePlaceId: p.place_id, googleMapsUri: p.google_maps_uri || null, googleReviewCount: p.review_count ?? null,
           dayZone: dkm <= 10 ? 'core' : 'outskirt', distanceKmFromCenter: dkm,
@@ -188,7 +190,8 @@ const PM_CALL_EUR = 0.007;
   // ── ⑤ 중복 매칭 = 단일 matcher.ts(matchCandidate) = 쓰기경로(upsertPlace)와 동일 = 보고치=실제 (= §16, 2026-06-10 자체 matchRow 폐기) ──
   const matchRow = (p: any): any => matchCandidate({
     cityId, googlePlaceId: p.place_id || null, googleMapsUri: p.google_maps_uri || null, address: p.address || null,
-    latitude: p.lat ?? null, longitude: p.lng ?? null, nameEn: p.name_local || p.name, nameLocal: p.name_local || p.name, nameKo: null,
+    // ⚠️ 수정금지(승인필요) — TS displayName→name_en (2026-06-17 사장님 SSOT) = name_local은 Gemini전용 = TS는 nameLocal=null (place-upsert COALESCE가 기존 Gemini값 보존)
+    latitude: p.lat ?? null, longitude: p.lng ?? null, nameEn: p.name_local || p.name, nameLocal: null, nameKo: null,
   }, existCands).match || null;
   for (const p of kept) { p._match = matchRow(p); p._pmNeed = !p._closed && (!p._match || !isGoogleImg(p._match.image_url)); }  // (B) 폐업 = PM 안 함(이미지 비용 절약)
   const updP = kept.filter((p) => p._match), insP = kept.filter((p) => !p._match);
@@ -255,8 +258,12 @@ const PM_CALL_EUR = 0.007;
   if (!apply) { console.log(`\n=== DRY-RUN (쓰기 0) === 실행: --apply --photo`); await c.end(); return; }
 
   // ── ⑦ APPLY ──
-  const keyRow = downloadPhoto ? (await c.query(`SELECT key_value FROM api_keys WHERE key_name IN ('GOOGLE_MAPS_API_KEY','GOOGLE_PLACES_API_KEY') AND is_active=true ORDER BY key_name LIMIT 1`)).rows[0] : null;
-  const PLACES_KEY = keyRow?.key_value || process.env.GOOGLE_MAPS_API_KEY;
+  // ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유 (= 직독 폐기). PM 이미지 = 채움 = 도시 있음 + 행 있음(true).
+  // = 출입증(키이름·도시id·날짜·행있음) 검문 통과해야만 키 발급. 미달 = throw = 외부호출 불가.
+  const PLACES_KEY = downloadPhoto ? (await c.query(
+    `SELECT public.issue_api_key('GOOGLE_MAPS_API_KEY', $1, $2, true) AS k`,
+    [cityId, date],
+  )).rows[0]?.k : null;
   const SUPA_PROJECT = (process.env.SUPA_URL || process.env.SUPABASE_PUBLIC_URL || '').match(/https:\/\/([^.]+)\.supabase\.co/)?.[1] || 'wxebceflvuythuodemro';
   const STORAGE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_KEY;
   await c.end();
@@ -284,7 +291,8 @@ const PM_CALL_EUR = 0.007;
     if (downloadPhoto && p._pmNeed && p.photo_name) { const u = await pmUpload(p.photo_name, p.place_id); if (u) { imageUrl = u; photoOk++; } }
     try {
       const r = await upsertPlace({
-        cityId, seedCategory: 'restaurant', nameEn: p.name, nameLocal: p.name,
+        // ⚠️ 수정금지(승인필요) — TS displayName→name_en (2026-06-17 사장님 SSOT) = name_local은 Gemini전용 = TS는 nameLocal=null (place-upsert COALESCE가 기존 Gemini값 보존)
+        cityId, seedCategory: 'restaurant', nameEn: p.name, nameLocal: null,
         address: p.address || null, latitude: p.lat, longitude: p.lng,
         googlePlaceId: p.place_id, googleMapsUri: p.google_maps_uri || null,
         googleReviewCount: p.review_count ?? null,

@@ -30,7 +30,15 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--year=2026] [--batch=40] [-
   const pg = await import('pg');
   const c = new pg.default.Client({ connectionString: process.env.SUPA_URL || process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
   await c.connect();
-  const keyRow = (await c.query(`SELECT key_value FROM api_keys WHERE key_name='GEMINI_API_KEY' AND is_active=true`)).rows[0];
+  const city = (await c.query('SELECT name_en FROM cities WHERE id=$1', [cityId])).rows[0];
+  if (!city) { await c.end(); console.error('city 미존재'); process.exit(1); }
+  const today = new Date().toISOString().slice(0, 10);
+  // ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유 (= 직독 폐기). 채움(05-restaurant-reverify) = 도시 있음 + 행 있음(true).
+  // = 출입증(키이름·도시id·날짜·행있음) 검문 통과해야만 키 발급. 미달 = throw = 외부호출 불가.
+  const GEMINI_KEY = (await c.query(
+    `SELECT public.issue_api_key('GEMINI_API_KEY', $1, $2, true) AS k`,
+    [cityId, today],
+  )).rows[0]?.k;
   // 대상 = --ids 제공 시 해당 id / 미제공 시 PID+URI 미보유(= TS 미검증) restaurant
   const rows = idsArg
     ? (await c.query(`SELECT id, name_en, address FROM place_seed_raw WHERE id = ANY($1::int[]) ORDER BY rank`, [idsArg])).rows
@@ -40,10 +48,7 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--year=2026] [--batch=40] [-
            AND NOT (google_place_id IS NOT NULL AND google_place_id<>'' AND google_maps_uri IS NOT NULL AND google_maps_uri<>'')
          ORDER BY rank`, [cityId])).rows;
   await c.end();
-  if (!keyRow?.key_value) { console.error('Gemini key 미존재'); process.exit(1); }
-  const GEMINI_KEY = keyRow.key_value;
-
-  const today = new Date().toISOString().slice(0, 10);
+  if (!GEMINI_KEY) { console.error('Gemini key 미존재'); process.exit(1); }
   const outDir = path.join(ROOT, 'docs', 'raw', String(cityId));
   fs.mkdirSync(outDir, { recursive: true });
   // ⚠️ 2026-06-15 = 파일명 단일 표준(raw-filename.ts) = {date}_05-restaurant-reverify_{tag}{N}.json (날짜앞)
@@ -81,7 +86,10 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--year=2026] [--batch=40] [-
   let totalParsed = 0, totalClosed = 0;
   for (let b = 0; b < batches.length; b++) {
     const input = batches[b].map(r => ({ id: r.id, name: r.name_en, our_address: r.address }));
-    const prompt = body.replace(/\$\{YEAR\}/g, year).replace(/\$\{COUNT\}/g, String(input.length)).replace(/\$\{INPUT_JSON\}/g, JSON.stringify(input));
+    // ⚠️ 2026-06-18 사장님 승인 = 출입증(${API_PASS}) 동적 조립 (= ${YEAR} 방식). 형식 = 3요소 칸 고정(도시·행·날짜).
+    // = 05-restaurant-reverify = 채움 = 행=있음(채움). 도시 = 이름(id). 날짜 = 호출시점.
+    const apiPass = `[API-PASS] 도시=${city.name_en}(${cityId}) / 행=있음(채움) / 날짜=${today}`;
+    const prompt = body.replace(/\$\{YEAR\}/g, year).replace(/\$\{API_PASS\}/g, apiPass).replace(/\$\{COUNT\}/g, String(input.length)).replace(/\$\{INPUT_JSON\}/g, JSON.stringify(input));
     const t0 = Date.now();
     console.log(`--- 배치 ${b + 1}/${batches.length} (${input.length}곳) 호출...`);
     const r = await callGemini(prompt);

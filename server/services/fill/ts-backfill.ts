@@ -17,7 +17,8 @@ for (const line of envRaw.split(/\r?\n/)) {
 const argv = Object.fromEntries(process.argv.slice(2).map((a) => a.replace(/^--/, '').split('=')).map(([k, v]) => [k, v ?? 'true']));
 const cityId = Number(argv['city-id'] || 0);
 const apply = argv['apply'] === 'true';
-const lang = argv['lang'] ? String(argv['lang']) : 'ko';
+// ⚠️ 수정금지(승인필요) — languageCode 제거(2026-06-17 사장님 SSOT) = --lang 명시 시에만 사용, 미지정 = undefined(ts-client 가 키 생략 = 한국어 강제 안 함)
+const lang = argv['lang'] ? String(argv['lang']) : undefined;
 const cats = argv['category'] ? String(argv['category']).split(',').map((s) => s.trim()) : ['heritage', 'hotspot', 'attraction', 'adventure', 'healing', 'shopping'];
 // ⚠️ 2026-06-09 사용자 승인 = --ids 추가형 필터 = 특정 행 id 만 타깃(= 풀 전체 backfill 금지 시 = 노출 대상 no-PID 만 검증). 없으면 기존 동작 불변.
 const ids = argv['ids'] ? String(argv['ids']).split(',').map((s) => Number(s.trim())).filter((n) => Number.isFinite(n) && n > 0) : null;
@@ -38,8 +39,13 @@ const hkm = (a: any, b: any) => {
   await c.connect();
   const city = (await c.query('SELECT name_en, country_code FROM cities WHERE id=$1', [cityId])).rows[0];
   if (!city) { await c.end(); console.error(`✗ city ${cityId} 미존재 = 중단 (잘못된 city-id 가 FR 기본값으로 오염되는 것 방지)`); process.exit(1); }
-  const keyRow = (await c.query(`SELECT key_value FROM api_keys WHERE key_name IN ('GOOGLE_MAPS_API_KEY','GOOGLE_PLACES_API_KEY') AND is_active=true ORDER BY key_name LIMIT 1`)).rows[0];
-  const KEY = keyRow?.key_value || process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_PLACES_API_KEY;
+  // ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유 (= 직독 폐기). TS 재검증·보강 = 채움 = 도시 있음 + 행 있음(true).
+  // = 출입증(키이름·도시id·날짜·행있음) 검문 통과해야만 키 발급. 미달 = throw = 외부호출 불가.
+  const today = new Date().toISOString().slice(0, 10);
+  const KEY = (await c.query(
+    `SELECT public.issue_api_key('GOOGLE_MAPS_API_KEY', $1, $2, true) AS k`,
+    [cityId, today],
+  )).rows[0]?.k;
   if (!KEY) { await c.end(); console.error('Google key 미존재'); process.exit(1); }
 
   const rows = (await c.query(
@@ -74,14 +80,16 @@ const hkm = (a: any, b: any) => {
       const suspicious = dist != null && dist > 2;
       const r = await upsertPlace({
         cityId, seedCategory: row.seed_category,
-        nameEn: row.name_en, nameLocal: top.nameLocal || row.name_local, address: top.address || row.address,
+        // ⚠️ 수정금지(승인필요) — TS displayName→name_en (2026-06-17 사장님 SSOT) = name_local은 Gemini전용
+        nameEn: top.nameEn || row.name_en, nameLocal: null, address: top.address || row.address,
         latitude: top.latitude, longitude: top.longitude,
         googlePlaceId: top.googlePlaceId, googleMapsUri: top.googleMapsUri,
         googleReviewCount: top.googleReviewCount, priceEur: top.priceEur, priceOverwrite: false,
       });
       if (r.action === 'updated' || r.action === 'inserted') upd++;
       if (suspicious) far++;
-      report.push(`  ${suspicious ? '⚠️원거리' : '✓'} ${row.name_en} → ${top.nameLocal} | RC ${row.rc ?? '?'}→${top.googleReviewCount} | ${dist ?? '?'}km | ${r.action}(${r.matchedBy})`);
+      // ⚠️ 수정금지(승인필요) — TS displayName→name_en (2026-06-17 사장님 SSOT) = name_local은 Gemini전용
+      report.push(`  ${suspicious ? '⚠️원거리' : '✓'} ${row.name_en} → ${top.nameEn} | RC ${row.rc ?? '?'}→${top.googleReviewCount} | ${dist ?? '?'}km | ${r.action}(${r.matchedBy})`);
     } catch (e: any) { report.push(`  ✗ ERR ${row.name_en}: ${e.message}`); }
   }
   await c.end();

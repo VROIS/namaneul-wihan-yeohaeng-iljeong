@@ -22,7 +22,8 @@ const cityId = Number(argv['city-id'] || 0);
 const apply = argv['apply'] === 'true';
 // ⚠️ 수정금지(승인필요) 2026-06-03 = 카테고리/언어/이름 오버라이드 = 비식당 명소 이름복구 (예 --category=hotspot --names="A,B" --lang=fr)
 const category = argv['category'] ? String(argv['category']) : 'restaurant';
-const lang = argv['lang'] ? String(argv['lang']) : 'ko';
+// ⚠️ 수정금지(승인필요) — languageCode 제거(2026-06-17 사장님 SSOT) = displayName 한국어 강제 안 함. --lang 명시 시에만 그 값 사용, 미지정이면 null = body 에서 languageCode 키 생략.
+const lang = argv['lang'] ? String(argv['lang']) : null;
 const namesArg = argv['names'] ? String(argv['names']).split(',').map((s) => s.trim()).filter(Boolean) : null;
 const today = new Date().toISOString().slice(0, 10);
 if (!cityId) { console.error('Usage: --city-id=<N> [--apply]'); process.exit(1); }
@@ -47,8 +48,12 @@ const hkm = (a: any, b: any) => {
   await c.connect();
   const city = (await c.query('SELECT name_en, country_code, latitude, longitude FROM cities WHERE id=$1', [cityId])).rows[0];
   const cityCenter = { lat: parseFloat(city?.latitude) || 0, lng: parseFloat(city?.longitude) || 0 };
-  const keyRow = (await c.query(`SELECT key_value FROM api_keys WHERE key_name IN ('GOOGLE_MAPS_API_KEY','GOOGLE_PLACES_API_KEY') AND is_active=true ORDER BY key_name LIMIT 1`)).rows[0];
-  const KEY = keyRow?.key_value || process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_PLACES_API_KEY;
+  // ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유 (= 직독 폐기). 발굴(이름복구) = 도시 있음 + 행 없음(false = 신규 발견).
+  // = 출입증(키이름·도시id·날짜·행없음) 검문 통과해야만 키 발급. 미달 = throw = 외부호출 불가.
+  const KEY = (await c.query(
+    `SELECT public.issue_api_key('GOOGLE_MAPS_API_KEY', $1, $2, false) AS k`,
+    [cityId, today],
+  )).rows[0]?.k;
   if (!KEY) { console.error('Google key 미존재'); process.exit(1); }
 
   console.log(`═══ recover-by-name (city=${cityId} ${city?.name_en}, ${names.length}곳) = €${(names.length * 0.0299).toFixed(2)} ═══`);
@@ -57,7 +62,8 @@ const hkm = (a: any, b: any) => {
     const r = await fetch('https://places.googleapis.com/v1/places:searchText', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': KEY, 'X-Goog-FieldMask': MASK },
-      body: JSON.stringify({ textQuery: name, ...(category === 'restaurant' ? { includedType: 'restaurant' } : {}), languageCode: lang, regionCode: city?.country_code || 'FR', pageSize: 1 }),
+      // ⚠️ 수정금지(승인필요) — languageCode 제거(2026-06-17 사장님 SSOT) = lang(=--lang) 있을 때만 키 삽입, 없으면 생략(한국어 강제 안 함)
+      body: JSON.stringify({ textQuery: name, ...(category === 'restaurant' ? { includedType: 'restaurant' } : {}), ...(lang ? { languageCode: lang } : {}), regionCode: city?.country_code || 'FR', pageSize: 1 }),
       signal: AbortSignal.timeout(30000),
     });
     const j = await r.json() as any;
@@ -69,7 +75,8 @@ const hkm = (a: any, b: any) => {
     console.log(`  ✓ "${name}" → ${p.displayName?.text} | 리뷰 ${p.userRatingCount} | €${price ?? '?'} | ${dist}km | ${p.businessStatus}`);
     jobs.push({
       cityId, seedCategory: category,
-      nameEn: p.displayName?.text, nameLocal: p.displayName?.text,
+      // ⚠️ 수정금지(승인필요) — TS displayName→name_en (2026-06-17 사장님 SSOT) = name_local은 Gemini전용 = displayName(영어)은 name_en만, name_local=null
+      nameEn: p.displayName?.text, nameLocal: null,
       address: p.formattedAddress, latitude: p.location?.latitude, longitude: p.location?.longitude,
       googlePlaceId: p.id, googleMapsUri: p.googleMapsUri || null,
       googleReviewCount: p.userRatingCount ?? null,

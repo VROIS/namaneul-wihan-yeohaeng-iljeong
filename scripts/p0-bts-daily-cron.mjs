@@ -117,8 +117,8 @@ function buildLocationStr(city, cc) {
 // ━━━━━━ Google searchText (place_id + photoName) ━━━━━━
 async function searchTextOnce(textQuery, apiKey, locationBias) {
   validateFieldMask(FIELD_MASK);
-  // ⚠️ 수정금지(승인필요) 2026-05-15 = languageCode: 'ko' (= 한국어 displayName)
-  const body = { textQuery, pageSize: 1, languageCode: 'ko' };
+  // ⚠️ 수정금지(승인필요) — languageCode 제거(2026-06-17 사장님 SSOT) = 한국어 displayName 강제 안 함(키 미삽입 = TS 현지 기본)
+  const body = { textQuery, pageSize: 1 };
   if (locationBias) body.locationBias = locationBias;
   return await fetch('https://places.googleapis.com/v1/places:searchText', {
     method: 'POST',
@@ -340,8 +340,20 @@ async function processRow(db, row, city, googleKey, supabaseUrl, supabaseKey) {
   await db.connect();
 
   try {
-    // 1) API 키 + 도시
-    const googleKey = await getApiKey(db, 'GOOGLE_MAPS_API_KEY');
+    // 1) 도시 → API 키 (⚠️ 2026-06-18 = 도시 먼저 = 출입증 도시id 필요)
+    const cr = await db.query(
+      'SELECT id, name_en, country_code, latitude, longitude FROM cities WHERE LOWER(name_en) = LOWER($1) LIMIT 1',
+      [CITY_ARG]
+    );
+    if (!cr.rows.length) throw new Error(`도시 없음: ${CITY_ARG}`);
+    const city = cr.rows[0];
+    console.log(`   ✓ 도시 = ${city.name_en} (id=${city.id}, ${city.country_code})`);
+
+    // ⚠️ 2026-06-18 사장님 SSOT = GOOGLE_MAPS 키 = 출입증 관문 issue_api_key() 경유 (= 직독 폐기). BTS = 발굴 = 도시 있음 + 행 없음(false).
+    // = SUPABASE_ANON_KEY / SUPABASE_URL 은 Storage 인증 = 외부호출 키 아님 = getApiKey 직독 유지(건드리지 않음).
+    const today = new Date().toISOString().slice(0, 10);
+    const googleKey = (await db.query(`SELECT public.issue_api_key('GOOGLE_MAPS_API_KEY', $1, $2, false) AS k`, [city.id, today])).rows[0]?.k;
+    if (!googleKey) throw new Error('GOOGLE_MAPS_API_KEY 미발급 = 출입증 검문 미달 또는 api_keys DB 확인');
     let supabaseKey, supabaseUrl;
     if (!DRY_RUN) {
       // ⚠️ 수정금지(승인필요) — 2026-04-27 사용자 결정: ANON key + RLS 정책 우회
@@ -364,14 +376,6 @@ async function processRow(db, row, city, googleKey, supabaseUrl, supabaseKey) {
         }
       }
     }
-
-    const cr = await db.query(
-      'SELECT id, name_en, country_code, latitude, longitude FROM cities WHERE LOWER(name_en) = LOWER($1) LIMIT 1',
-      [CITY_ARG]
-    );
-    if (!cr.rows.length) throw new Error(`도시 없음: ${CITY_ARG}`);
-    const city = cr.rows[0];
-    console.log(`   ✓ 도시 = ${city.name_en} (id=${city.id}, ${city.country_code})`);
 
     // 2) 카테고리별 상위 N row 수집 (사용자 SSOT)
     const tasks = [];

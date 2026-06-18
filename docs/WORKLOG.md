@@ -18,6 +18,44 @@
 
 ---
 
+## 🔥 2026-06-18 = 출입증(API-PASS) 검문소 시스템 = 외부호출 키 단일 관문 (스크립트 한정)
+
+### 🎯 목적 (= 사장님 진단)
+AI 가 사장님 요구를 처리할 때 **표준(출입증) 안 거치고 임의/과하게 외부호출**하는 것 차단 (= [[incident_46_violation_confession_2026-06-16]] PM 65건 무단지출 재발 방지). **AI 는 해커 아님 = 사장님 요구로만 움직임** → 부팅로더 제거·Proxy·임시키 = 과대망상 = 안 함. 진짜 = "사장님 작업을 검문소 거치게".
+
+### ✅ 확정 = 두 짝
+1. **DB 검문소 함수** `public.issue_api_key(p_key_name, p_city_id, p_input_date, p_has_row)` = SECURITY DEFINER (= 라이브 설치 + 레포 SQL `server/db/migrations/2026-06-18_apipass-issue-key.sql` byte 정합 §19). 검문 = 3요소 다 "있나/없나"(true/false):
+   - 키이름 = api_keys 미존재 자동 차단 (= source 화이트리스트 X = 과설계 제거 = 구글맵·검색·영상 등 무제한)
+   - 날짜 = YYYY-MM-DD 형식
+   - 도시 = 있음(>0=cities 검증)/없음(NULL=완전 신규 도시 면제 = 행과 동일 판별)
+   - 행 = 있음(채움=그 도시 행 확인)/없음(발굴 면제)
+   - 통과 -> api_keys 키 반환 / 미달 -> RAISE EXCEPTION
+2. **출입증 헤더** `${API_PASS}` = Gemini prompt.txt 7곳 본문 최상단 (= `${nowYear}` 방식 동적 치환). 형식 `[API-PASS] 도시=이름(id) / 행=있음(채움)|없음(발굴) / 날짜=오늘`. 각 장소 id 는 입력 JSON 본문에 이미 필수(= 헤더는 있나/없나 표식만).
+
+### 🔬 적용 = 스크립트 20곳 (= AI 가 도는 발굴·채움·레거시)
+- api_keys 직독(`SELECT key_value FROM api_keys`) -> 검문소 경유(`SELECT public.issue_api_key(...)`) 전면 치환. process.env 폴백·옛 keyRow 완전 삭제(§19).
+- 발굴(false): 01·03·04·12run·12recover·seed-gemini·p0-cron. 채움(true): 02·05reverify·05text·06·12post·12image·13·fill/* 전 5종.
+- split 버그 2곳 수정(01·05text = 71자 하드코딩 -> `/═{30,}/` 정규식, prompt.txt 78자 불일치 해소).
+
+### ⛔ 안 건드림 (= 사장님 결정)
+- **라이브앱**(#02 pipeline-v3·#03 route-handler·#04 gemini-city-meta·#39 ag3·geminiClient) = 그대로. 이유 = db·cityId 없어 구조 건드리면 메인앱 휘젓기 사고 위험(지난 세션). 사장님 "라이브앱 원래대로 둬".
+- **부팅로더**(server/index.ts:296) = 그대로. 라이브앱이 process.env 키 받아야 하므로.
+- 드림스튜디오(#11~18)·BTS(#19)·테스트(#22~25) = 외부호출이나 막을 대상 아님.
+
+### 🔬 입증 (외부호출 0, 키값 노출 0)
+- DB 함수: 정식(파리·행있음·오늘) -> 키 발급 / 가짜(날짜·도시·키이름) -> 차단. 신규 도시 null -> 통과(면제).
+- 02-enrich·03-downtown: 실제 쓰는 검문소 호출 줄 실행 = 정식 통과 / 가짜 도시 차단.
+- 게이트 2종(/review·/simplify) 통과 = 직독0·today순서·§19잔재0·SQL보안·라이브앱무변경. tsc 회귀 0(233).
+
+### ⚠️ 정직한 한계
+부팅로더 살아있으니 AI 가 마음먹고 `process.env` 직독하면 우회 가능(실증함). 단 AI 는 해커 아님 = 사장님 요구로만 움직이니, 표준 스크립트가 검문소 경유 = 정상 작업은 다 출입증 거침. 완전 물리차단(부팅로더 제거)은 라이브앱과 충돌이라 보류.
+
+### 🔴 다음 (미커밋 -> 사장님 커밋 후)
+- 라이브앱 검문소 경유 = 별도 세션 신중히(db·cityId 구조 선결).
+- 헬퍼 묶기(buildApiPass 7곳) = 사장님 결정 사항(실익 한계적).
+
+---
+
 ## 🔥 2026-06-08 = 매칭·랭킹·중복 단일 SSOT 통일 + 검증 (파리·마드리드)
 
 ### ✅ 확정 (= [[reference_matcher_ranking_ssot]], [[feedback_systemic_not_bandaid]])

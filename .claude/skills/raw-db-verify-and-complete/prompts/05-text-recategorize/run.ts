@@ -32,9 +32,15 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--batch=100]'); process.exit
   const c = new pg.default.Client({ connectionString: process.env.SUPA_URL || process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
   await c.connect();
   const city = (await c.query('SELECT name_en FROM cities WHERE id=$1', [cityId])).rows[0];
-  const keyRow = (await c.query(`SELECT key_value FROM api_keys WHERE key_name='GEMINI_API_KEY' AND is_active=true`)).rows[0];
-  if (!city || !keyRow?.key_value) { await c.end(); console.error('city/Gemini key 미존재'); process.exit(1); }
-  const GEMINI_KEY = keyRow.key_value;
+  if (!city) { await c.end(); console.error('city 미존재'); process.exit(1); }
+  const today = new Date().toISOString().slice(0, 10);
+  // ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유 (= 직독 폐기). 채움(05-text-recategorize) = 도시 있음 + 행 있음(true).
+  // = 출입증(키이름·도시id·날짜·행있음) 검문 통과해야만 키 발급. 미달 = throw = 외부호출 불가.
+  const GEMINI_KEY = (await c.query(
+    `SELECT public.issue_api_key('GEMINI_API_KEY', $1, $2, true) AS k`,
+    [cityId, today],
+  )).rows[0]?.k;
+  if (!GEMINI_KEY) { await c.end(); console.error('Gemini key 미존재'); process.exit(1); }
 
   // 활성 행 SELECT (= 묘사 있는 행만)
   const rows = (await c.query(`
@@ -47,7 +53,6 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--batch=100]'); process.exit
   `, [cityId])).rows;
   await c.end();
 
-  const today = new Date().toISOString().slice(0, 10);
   const outDir = path.join(ROOT, 'docs', 'raw', String(cityId));
   fs.mkdirSync(outDir, { recursive: true });
   // ⚠️ 2026-06-15 = 파일명 단일 표준(raw-filename.ts) = {date}_05-text-recategorize_{batch-N|suggestions}.json (날짜앞)
@@ -61,8 +66,9 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--batch=100]'); process.exit
   console.log(`═══ 05-text-recategorize ═══`);
   console.log(`city_id = ${cityId} (${city.name_en}), 활성 행 = ${rows.length}, batch = ${batchSize}, today = ${today}`);
 
+  // ⚠️ 2026-06-18 = 구분선 자릿수 무관 정규식 split (= 옛 71자 하드코딩 vs prompt.txt 78자 불일치 버그 수정 = 02-enrich 정합)
   const promptTpl = fs.readFileSync(path.join(__dirname, 'prompt.txt'), 'utf-8')
-    .split('═══════════════════════════════════════════════════════════════════════')[2] || '';
+    .split(/═{30,}/)[2] || '';
 
   async function callGemini(prompt: string) {
     const resp = await fetch(
@@ -100,9 +106,13 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--batch=100]'); process.exit
   const allSuggestions: any[] = [];
   for (let offset = 0; offset < rows.length; offset += batchSize) {
     const batch = rows.slice(offset, offset + batchSize);
+    // ⚠️ 2026-06-18 사장님 승인 = 출입증(${API_PASS}) 동적 조립 (= ${YEAR} 방식). 형식 = 3요소 칸 고정(도시·행·날짜).
+    // = 05-text-recategorize = 채움(재분류) = 행=있음(채움). 도시 = 이름(id). 날짜 = 호출시점.
+    const apiPass = `[API-PASS] 도시=${city.name_en}(${cityId}) / 행=있음(채움) / 날짜=${today}`;
     const prompt = promptTpl
       .replace(/\$\{CITY_NAME\}/g, city.name_en)
       .replace(/\$\{CITY_ID\}/g, String(cityId))
+      .replace(/\$\{API_PASS\}/g, apiPass)
       .replace(/\$\{BATCH_LEN\}/g, String(batch.length))
       .replace(/\$\{JSON_INPUT\}/g, JSON.stringify(batch));
 

@@ -21,7 +21,8 @@ for (const line of envRaw.split(/\r?\n/)) {
 const argv = Object.fromEntries(process.argv.slice(2).map((a) => a.replace(/^--/, '').split('=')).map(([k, v]) => [k, v ?? 'true']));
 const cityId = Number(argv['city-id'] || 0);
 const apply = argv['apply'] === 'true';
-const lang = argv['lang'] ? String(argv['lang']) : 'ko';
+// ⚠️ 수정금지(승인필요) — languageCode 제거(2026-06-17 사장님 SSOT) = --lang 명시 시에만 사용, 미지정 = undefined(ts-client 가 키 생략 = 한국어 강제 안 함)
+const lang = argv['lang'] ? String(argv['lang']) : undefined;
 if (!cityId) { console.error('Usage: --city-id=<N> [--apply] [--lang=es]'); process.exit(1); }
 
 const ANCHOR_M = 100;
@@ -132,7 +133,13 @@ const num = (v: any): number | null => (v == null ? null : Number(v));
   // 5) PM 집행 (--apply) = TS검증(필요시) → tsPhoto → upsertPlace(imageUrl)
   const { tsSearch, tsPhoto } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/ts-client.ts')).href);
   const { upsertPlace } = await import(pathToFileURL(path.join(ROOT, 'server/services/place-upsert.ts')).href);
-  const KEY = ((await c.query(`SELECT key_value FROM api_keys WHERE key_name IN ('GOOGLE_MAPS_API_KEY','GOOGLE_PLACES_API_KEY') AND is_active=true ORDER BY key_name LIMIT 1`)).rows[0]?.key_value) || process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_PLACES_API_KEY;
+  // ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유 (= 직독·process.env 폴백 폐기). 식당 이미지 채움 = 채움 = 도시 있음 + 행 있음(true).
+  // = 출입증(키이름·도시id·날짜·행있음) 검문 통과해야만 키 발급. 미달 = throw = 외부호출 불가.
+  const today = new Date().toISOString().slice(0, 10);
+  const KEY = (await c.query(
+    `SELECT public.issue_api_key('GOOGLE_MAPS_API_KEY', $1, $2, true) AS k`,
+    [cityId, today],
+  )).rows[0]?.k;
   const supaPublicUrl = process.env.SUPABASE_PUBLIC_URL || 'https://wxebceflvuythuodemro.supabase.co';
   const storageKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY;
   if (!KEY || !storageKey) { await c.end(); console.error(`✗ KEY/Storage 설정 미비 = 업로드 불가`); process.exit(1); }
@@ -152,7 +159,8 @@ const num = (v: any): number | null => (v == null ? null : Number(v));
       const imageUrl = await tsPhoto({ apiKey: KEY, photoName: top.photoName, storageKey, supaPublicUrl, pathKey: `${cityId}/restaurant/${row.googlePlaceId || top.googlePlaceId || row.id}`, maxWidthPx: 800 });
       if (!imageUrl) { err++; report.push(`  ✗ 업로드실패: ${row.nameLocal || row.nameEn}`); continue; }
       const r = await upsertPlace({
-        cityId, seedCategory: 'restaurant', nameEn: row.nameEn, nameLocal: top.nameLocal || row.nameLocal, address: top.address || row.address,
+        // ⚠️ 수정금지(승인필요) — TS displayName→name_en (2026-06-17 사장님 SSOT) = name_local은 Gemini전용
+        cityId, seedCategory: 'restaurant', nameEn: top.nameEn || row.nameEn, nameLocal: null, address: top.address || row.address,
         latitude: num(row.lat) ?? top.latitude, longitude: num(row.lng) ?? top.longitude,
         googlePlaceId: row.googlePlaceId || top.googlePlaceId || null, googleMapsUri: top.googleMapsUri,
         googleReviewCount: top.googleReviewCount, priceEur: top.priceEur, priceOverwrite: false, imageUrl, dayZone: row.zone,

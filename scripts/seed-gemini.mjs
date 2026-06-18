@@ -71,13 +71,8 @@ const c = new pg.Client({
 });
 await c.connect();
 
-const GEMINI_KEY = (await c.query(`SELECT key_value FROM api_keys WHERE key_name='GEMINI_API_KEY' AND is_active=true`)).rows[0].key_value;
-const GOOGLE_KEY = (await c.query(`SELECT key_value FROM api_keys WHERE key_name='GOOGLE_MAPS_API_KEY' AND is_active=true`)).rows[0].key_value;
-const SUPA_ANON = (await c.query(`SELECT key_value FROM api_keys WHERE key_name='SUPABASE_ANON_KEY' AND is_active=true`)).rows[0].key_value;
-const SUPA_PUB = process.env.SUPABASE_PUBLIC_URL || 'https://wxebceflvuythuodemro.supabase.co';
-
 // ──────────────────────────────────────────────────────────────────────────
-// 도시 정보 SELECT (name_en + country_code → 영문)
+// 도시 정보 SELECT (name_en + country_code → 영문) = ⚠️ 2026-06-18 = 키 발급보다 먼저(출입증 도시id 필요)
 // ──────────────────────────────────────────────────────────────────────────
 const COUNTRY_EN = {
   FR: 'France', GB: 'United Kingdom', UK: 'United Kingdom', US: 'USA', DE: 'Germany',
@@ -104,6 +99,17 @@ const CITY = cityRow;
 const CITY_NAME = CITY.name_en || CITY.name;  // 영문 우선
 const COUNTRY = COUNTRY_EN[CITY.country_code] || CITY.country;
 const CITY_KEY = CITY_NAME.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+
+// ──────────────────────────────────────────────────────────────────────────
+// API key 로드 = ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유 (= 직독 폐기)
+// = 시드 발굴(seed-gemini) = 도시 있음 + 행 없음(false = 신규 발견). 출입증 검문 통과해야만 키 발급.
+// = SUPABASE_ANON_KEY 는 Storage 인증 = 외부호출 키 아님 = 직독 유지(건드리지 않음).
+// ──────────────────────────────────────────────────────────────────────────
+const today = new Date().toISOString().slice(0, 10);
+const GEMINI_KEY = (await c.query(`SELECT public.issue_api_key('GEMINI_API_KEY', $1, $2, false) AS k`, [CITY.id, today])).rows[0]?.k;
+const GOOGLE_KEY = (await c.query(`SELECT public.issue_api_key('GOOGLE_MAPS_API_KEY', $1, $2, false) AS k`, [CITY.id, today])).rows[0]?.k;
+const SUPA_ANON = (await c.query(`SELECT key_value FROM api_keys WHERE key_name='SUPABASE_ANON_KEY' AND is_active=true`)).rows[0].key_value;
+const SUPA_PUB = process.env.SUPABASE_PUBLIC_URL || 'https://wxebceflvuythuodemro.supabase.co';
 
 console.log('═══ SEED SSOT 2026-05-02 — ' + CITY_NAME + ', ' + COUNTRY + ' ═══');
 console.log('city_id: ' + CITY.id + ', center: (' + CITY.lat + ', ' + CITY.lng + ')');
@@ -323,7 +329,7 @@ if (ARG.skipPhoto) {
       else queryParts.push(CITY_NAME, COUNTRY);   // = 주소 X 일 때 도시 + 국가 명시
       const textQuery = queryParts.join(' ');
 
-      // ⚠️ 수정금지(승인필요) 2026-05-15 = languageCode: 'ko' (= Gemini 한국어 ↔ TS 한국어 검증)
+      // ⚠️ 수정금지(승인필요) — languageCode 제거(2026-06-17 사장님 SSOT) = displayName 한국어 강제 안 함
       const tsResp = await fetch('https://places.googleapis.com/v1/places:searchText', {
         method: 'POST',
         headers: {
@@ -331,7 +337,7 @@ if (ARG.skipPhoto) {
           'X-Goog-FieldMask': 'places.id,places.displayName,places.formattedAddress,places.location,places.photos,places.userRatingCount,places.types,places.primaryType,places.priceRange,places.googleMapsUri',
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ textQuery, pageSize: 1, languageCode: 'ko' }),
+        body: JSON.stringify({ textQuery, pageSize: 1 }),
         signal: AbortSignal.timeout(15000),
       });
       if (!tsResp.ok) { tsSkipNoMatch++; continue; }
@@ -350,7 +356,8 @@ if (ARG.skipPhoto) {
         p.lng = top.location.longitude;
       }
       if (top.formattedAddress) p.address = top.formattedAddress;  // = TS 포맷팅 주소 우선
-      if (top.displayName?.text && !p.name_local) p.name_local = top.displayName.text;
+      // ⚠️ 수정금지(승인필요) — TS displayName→name_en (2026-06-17 사장님 SSOT) = name_local은 Gemini전용 = displayName(영어)은 name_en에만 폴백
+      if (top.displayName?.text && !p.name_en) p.name_en = top.displayName.text;
 
       // ⚠️ 추가 = 2026-05-15 사용자 SSOT = TS priceRange.endPrice (= 비싼 쪽) 임시 저장
       // = UPDATE/INSERT 단계에서 GREATEST(기존, Gemini, ts_price_eur) 비교용

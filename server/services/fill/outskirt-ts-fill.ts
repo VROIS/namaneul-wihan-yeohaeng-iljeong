@@ -22,7 +22,8 @@ const apply = argv['apply'] === 'true';
 const topN = Number(argv['top'] || 5);
 const radiusM = Number(argv['radius'] || 8000);
 const per = Number(argv['per'] || 20);
-const lang = argv['lang'] ? String(argv['lang']) : 'ko';
+// ⚠️ 수정금지(승인필요) — languageCode 제거(2026-06-17 사장님 SSOT) = --lang 명시 시에만 사용, 미지정 = undefined(ts-client 가 키 생략 = 한국어 강제 안 함)
+const lang = argv['lang'] ? String(argv['lang']) : undefined;
 if (!cityId) { console.error('Usage: --city-id=<N> [--apply] [--top=5] [--radius=8000] [--per=20] [--lang=es]'); process.exit(1); }
 
 // 주소 → town 추출 = 표준 "..., 우편번호 town, 국가" = 국가 직전 세그먼트 - 우편번호 (= 범용, 지명 하드코딩 0)
@@ -48,12 +49,16 @@ function townOf(address: string | null): string | null {
   await c.connect();
   const city = (await c.query('SELECT name_en, country, country_code FROM cities WHERE id=$1', [cityId])).rows[0];
   if (!city) { await c.end(); console.error(`✗ city ${cityId} 미존재`); process.exit(1); }
-  const keyRow = (await c.query(`SELECT key_value FROM api_keys WHERE key_name IN ('GOOGLE_MAPS_API_KEY','GOOGLE_PLACES_API_KEY') AND is_active=true ORDER BY key_name LIMIT 1`)).rows[0];
-  const KEY = keyRow?.key_value || process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_PLACES_API_KEY;
+  // ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유 (= 직독 폐기). 외곽식당 보충 = 채움 = 도시 있음 + 행 있음(true).
+  // = 출입증(키이름·도시id·날짜·행있음) 검문 통과해야만 키 발급. 미달 = throw = 외부호출 불가.
+  const today = new Date().toISOString().slice(0, 10);
+  const KEY = (await c.query(
+    `SELECT public.issue_api_key('GOOGLE_MAPS_API_KEY', $1, $2, true) AS k`,
+    [cityId, today],
+  )).rows[0]?.k;
   if (!KEY) { await c.end(); console.error('Google key 미존재'); process.exit(1); }
   const REGION = city.country_code || 'ES';
   const countrySuffix = city.country ? `, ${city.country}` : '';
-  const today = new Date().toISOString().slice(0, 10);
 
   // 1. 외곽 식당(Gemini 발굴) 주소 → town 추출 + 식당수 집계 (= 한국선호 강도)
   const rows = (await c.query(
@@ -95,7 +100,8 @@ function townOf(address: string | null): string | null {
       for (const p of pool) {
         const r = await upsertPlace({
           cityId, seedCategory: 'restaurant',
-          nameEn: p.nameLocal, nameLocal: p.nameLocal, address: p.address,
+          // ⚠️ 수정금지(승인필요) — TS displayName→name_en (2026-06-17 사장님 SSOT) = name_local은 Gemini전용
+          nameEn: p.nameEn, nameLocal: null, address: p.address,
           latitude: p.latitude, longitude: p.longitude,
           googlePlaceId: p.googlePlaceId, googleMapsUri: p.googleMapsUri,
           googleReviewCount: p.googleReviewCount, priceEur: p.priceEur, priceOverwrite: false,

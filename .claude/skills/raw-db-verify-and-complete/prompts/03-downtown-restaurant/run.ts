@@ -42,12 +42,19 @@ const TIER_SPECS = {
   const c = new pg.default.Client({ connectionString: process.env.SUPA_URL || process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
   await c.connect();
   const city = (await c.query('SELECT name_en, country, latitude, longitude FROM cities WHERE id=$1', [cityId])).rows[0];
-  const keyRow = (await c.query(`SELECT key_value FROM api_keys WHERE key_name='GEMINI_API_KEY' AND is_active=true`)).rows[0];
-  await c.end();
-  if (!city || !keyRow?.key_value) { console.error('city/Gemini key 미존재'); process.exit(1); }
-  const GEMINI_KEY = keyRow.key_value;
-
+  if (!city) { await c.end(); console.error('city 미존재'); process.exit(1); }
+  // ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유 (= 직독 폐기). 식당 발굴(03-downtown) = 도시 있음 + 행 없음(false = 신규 발견).
+  // = 출입증(키이름·도시id·날짜·행없음) 검문 통과해야만 키 발급. 미달 = throw = 외부호출 불가.
   const today = new Date().toISOString().slice(0, 10);
+  const GEMINI_KEY = (await c.query(
+    `SELECT public.issue_api_key('GEMINI_API_KEY', $1, $2, false) AS k`,
+    [cityId, today],
+  )).rows[0]?.k;
+  await c.end();
+  if (!GEMINI_KEY) { console.error('Gemini key 미발급 = 출입증 검문 미달 또는 api_keys DB 확인'); process.exit(1); }
+
+  // ⚠️ 2026-06-18 사장님 승인 = 출입증(${API_PASS}) 동적 조립 (= 발굴 = 행=없음). 형식 = 3요소 칸 고정(도시·행·날짜).
+  const apiPass = `[API-PASS] 도시=${city.name_en}(${cityId}) / 행=없음(발굴) / 날짜=${today}`;
   const outDir = path.join(ROOT, 'docs', 'raw', String(cityId));
   fs.mkdirSync(outDir, { recursive: true });
   // ⚠️ 2026-06-15 = 파일명 단일 표준(raw-filename.ts) = {date}_03-downtown-restaurant_{tier}.json (날짜앞)
@@ -67,6 +74,7 @@ const TIER_SPECS = {
     const TIER_SPEC = TIER_SPECS[tier].spec;
     const OUTPUT_SPEC = `{ "results": { "${tier}": [ ...30 ] } }`;
     return promptTpl
+      .replace(/\$\{API_PASS\}/g, apiPass)  // ⚠️ 2026-06-18 = 출입증 헤더 동적 치환 (= 표준 프롬프트 통과 증표)
       .replace(/\$\{CITY_NAME\}/g, city.name_en)
       .replace(/\$\{COUNTRY\}/g, city.country)
       .replace(/\$\{CITY_LAT\}/g, String(city.latitude))

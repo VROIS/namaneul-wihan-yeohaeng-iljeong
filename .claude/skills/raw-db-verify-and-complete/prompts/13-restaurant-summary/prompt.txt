@@ -5,10 +5,13 @@
 = 04 표준 스펙 (04-outskirt-restaurant prompt.txt:38-39) 그대로:
     · selection_reason_ko → summary_ko = 인스타 성지/네이버 블로그/유튜브 vlog 사회적 검증
     · shortform_ko → editorial_summary = 코믹/위트 후킹 ("프사각","본전 뽑음" 한국 슬랭)
+⚠️ 2026-06-18 사장님 승인 변경 = 본문 최상단 ${API_PASS} 출입증 헤더 추가 (= 표준 프롬프트 통과 증표 = AI 임의호출 차단 = ${YEAR} 방식 동적 치환, run.ts 치환 동반)
 
 ══════════════════════════════════════════════════════════════════════════════
 PROMPT 본문:
 ══════════════════════════════════════════════════════════════════════════════
+
+${API_PASS}
 
 You are a restaurant copywriter for KOREAN TRAVELERS (⚠️ ${YEAR}년 기준 최신). Use Google Search grounding (= 한국 인스타/네이버 블로그/유튜브 트렌드 + Google Maps). 추정/환각 금지 = grounded fact 만.
 아래 식당들은 실재 검증된 식당(이름/주소/리뷰수)입니다. 각 식당에 한국어 카피 2개 + 1인당 가격을 작성.

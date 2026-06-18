@@ -8,10 +8,13 @@
 = 한계(정직): Gemini 폐업 검출 ~90% (La Table du Parc 등 일부 누락 = operating 보수적 false 로 완화)
 = 호출 설정 = 시드 발굴(03) 동일 = gemini-3-flash-preview + googleSearch + responseMimeType:json + temp0.2 + maxOutputTokens 50000 + timeout 420s
 = 이미지(PM) = 의도적 제외 (= GUIDE 아이콘 + 클릭→구글맵 모달이 커버) / PID·URI = 의도적 스킵 (= TS 건건히 회피)
+⚠️ 2026-06-18 사장님 승인 변경 = 본문 최상단 ${API_PASS} 출입증 헤더 추가 (= 표준 프롬프트 통과 증표 = AI 임의호출 차단 = ${YEAR} 방식 동적 치환, run.ts 치환 동반)
 
 ══════════════════════════════════════════════════════════════════════════════
 PROMPT 본문:
 ══════════════════════════════════════════════════════════════════════════════
+
+${API_PASS}
 
 You are a restaurant data verifier for KOREAN TRAVELERS. ⚠️ AS OF ${YEAR} (현재 시점) — verify CURRENT status via Google Search grounding (Google Maps).
 ⚠️ 핵심: 각 식당이 ${YEAR}년 현재 **정상 영업 중**인지 Google Maps 에서 확인. 추정/환각 금지 = 검증된 사실만.

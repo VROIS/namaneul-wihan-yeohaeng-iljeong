@@ -49,8 +49,8 @@ const priceLevels = argv['price-levels'] ? String(argv['price-levels']).split(',
 const includedTypes = argv['included-types'] ? String(argv['included-types']).split(',').map((s) => s.trim()).filter(Boolean) : ['restaurant'];
 // ⚠️ 수정금지(승인필요) 2026-06-03 = 반경 오버라이드 = PSR 스코프 맞춤. 카테고리(searchText)=강제 사각형(locationRestriction, 크기제한 없음)=도심 100km(PSR day-trip). searchNearby 원형은 API 하드캡 50000(아래 Math.min 클램프).
 const radiusOverride = argv['radius'] ? Number(argv['radius']) : (catMode ? 100000 : null);
-// ⚠️ 수정금지(승인필요) 2026-06-03 = displayName 언어 = 식당 'ko'(SSOT) / 카테고리는 name_local(현지명=프랑스어 등) 위해 현지어 명시 (예 Paris=--lang=fr). 미지정 = 'ko'.
-const lang = argv['lang'] ? String(argv['lang']) : 'ko';
+// ⚠️ 수정금지(승인필요) — languageCode 제거(2026-06-17 사장님 SSOT) = displayName 한국어 강제 안 함. --lang 명시(예 Paris=--lang=fr) 시에만 그 값 사용, 미지정이면 null = body 에서 languageCode 키 생략.
+const lang = argv['lang'] ? String(argv['lang']) : null;
 if (!cityId) { console.error('Usage: --city-id=<N> [--zone=outskirt|downtown] [--per=20] [--pages=1] [--method=text|nearby] [--label=x] [--price-levels=EXPENSIVE,VERY_EXPENSIVE] [--included-types=observation_deck,...] [--radius=50000] [--category=heritage|hotspot|attraction|adventure|healing|shopping]'); process.exit(1); }
 if (category && !CATEGORY_QUERIES[category]) { console.error(`--category 는 ${Object.keys(CATEGORY_QUERIES).join('|')} 중 하나`); process.exit(1); }
 
@@ -73,9 +73,14 @@ const rectFromCenter = (lat: number, lng: number, km: number) => {
   const c = new (pg as any).default.Client({ connectionString: process.env.SUPA_URL || process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
   await c.connect();
   const city = (await c.query('SELECT name_en, country_code, latitude, longitude FROM cities WHERE id=$1', [cityId])).rows[0];
-  const keyRow = (await c.query(`SELECT key_value FROM api_keys WHERE key_name IN ('GOOGLE_MAPS_API_KEY','GOOGLE_PLACES_API_KEY') AND is_active=true ORDER BY key_name LIMIT 1`)).rows[0];
+  // ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유 (= 직독 폐기). 발굴(ts-discover-pool) = 도시 있음 + 행 없음(false = 신규 발견).
+  // = 출입증(키이름·도시id·날짜·행없음) 검문 통과해야만 키 발급. 미달 = throw = 외부호출 불가.
+  const today = new Date().toISOString().slice(0, 10);
+  const KEY = (await c.query(
+    `SELECT public.issue_api_key('GOOGLE_MAPS_API_KEY', $1, $2, false) AS k`,
+    [cityId, today],
+  )).rows[0]?.k;
   await c.end();
-  const KEY = keyRow?.key_value || process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_PLACES_API_KEY;
   if (!KEY) { console.error('Google key 미존재 = api_keys DB 확인'); process.exit(1); }
 
   // ⚠️ 수정금지(승인필요) 2026-06-07 = 신규도시 자동화(사용자 SSOT "도시명만 입력") = destinations config 없으면 cities 좌표 폴백
@@ -91,7 +96,6 @@ const rectFromCenter = (lat: number, lng: number, km: number) => {
     }
   }
 
-  const today = new Date().toISOString().slice(0, 10);
   const outDir = path.join(ROOT, 'docs', 'raw', String(cityId));
   fs.mkdirSync(outDir, { recursive: true });
 
@@ -120,7 +124,8 @@ const rectFromCenter = (lat: number, lng: number, km: number) => {
         maxResultCount: Math.min(per, 20),
         rankPreference: 'POPULARITY',
         locationRestriction: { circle: { center: { latitude: d.lat, longitude: d.lng }, radius: Math.min(50000, radiusOverride ?? d.radius) } },
-        languageCode: lang, regionCode: city?.country_code || 'FR',
+        // ⚠️ 수정금지(승인필요) — languageCode 제거(2026-06-17 사장님 SSOT) = lang(=--lang) 있을 때만 키 삽입, 없으면 생략(한국어 강제 안 함)
+        ...(lang ? { languageCode: lang } : {}), regionCode: city?.country_code || 'FR',
       } : {
         // ⚠️ searchText = 객관적 발굴 = 중립 "restaurant" (= 관련성 정렬 / 한국인 큐레이션은 13 Gemini)
         //   = price-levels 주면 가격필터 (= Premium = searchNearby엔 없는 기능 = searchText 전용)
@@ -130,7 +135,8 @@ const rectFromCenter = (lat: number, lng: number, km: number) => {
         ...(catMode
           ? { locationRestriction: { rectangle: rectFromCenter(d.lat, d.lng, (radiusOverride ?? d.radius) / 1000) } }
           : { locationBias: { circle: { center: { latitude: d.lat, longitude: d.lng }, radius: Math.min(50000, radiusOverride ?? d.radius) } } }),
-        pageSize: per, languageCode: lang, regionCode: city?.country_code || 'FR',
+        // ⚠️ 수정금지(승인필요) — languageCode 제거(2026-06-17 사장님 SSOT) = lang(=--lang) 있을 때만 키 삽입, 없으면 생략(한국어 강제 안 함)
+        pageSize: per, ...(lang ? { languageCode: lang } : {}), regionCode: city?.country_code || 'FR',
         ...(priceLevels ? { priceLevels } : {}),
       };
       if (!isNearby && pageToken) body.pageToken = pageToken;
@@ -151,7 +157,8 @@ const rectFromCenter = (lat: number, lng: number, km: number) => {
     const places = rawPlaces
       .filter((p: any) => { if (!p.id || seen.has(p.id)) return false; seen.add(p.id); return true; })
       .map((p: any) => ({
-        place_id: p.id, name: p.displayName?.text, name_local: p.displayName?.text, address: p.formattedAddress,
+        // ⚠️ 수정금지(승인필요) — TS displayName→name_en (2026-06-17 사장님 SSOT) = name_local은 Gemini전용 = TS는 name_local=null (post-process가 name 키를 nameEn으로 씀)
+        place_id: p.id, name: p.displayName?.text, name_local: null, address: p.formattedAddress,
         lat: p.location?.latitude, lng: p.location?.longitude,
         review_count: p.userRatingCount ?? null,
         price_eur: p.priceRange?.endPrice?.units ? parseFloat(p.priceRange.endPrice.units) : null,

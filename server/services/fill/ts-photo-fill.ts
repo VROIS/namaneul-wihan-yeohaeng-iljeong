@@ -17,7 +17,8 @@ for (const line of envRaw.split(/\r?\n/)) {
 const argv = Object.fromEntries(process.argv.slice(2).map((a) => a.replace(/^--/, '').split('=')).map(([k, v]) => [k, v ?? 'true']));
 const cityId = Number(argv['city-id'] || 0);
 const apply = argv['apply'] === 'true';
-const lang = argv['lang'] ? String(argv['lang']) : 'ko';
+// ⚠️ 수정금지(승인필요) — languageCode 제거(2026-06-17 사장님 SSOT) = --lang 명시 시에만 사용, 미지정 = undefined(ts-client 가 키 생략 = 한국어 강제 안 함)
+const lang = argv['lang'] ? String(argv['lang']) : undefined;
 const top = Number(argv['top'] || 20);
 const cats = ['heritage', 'hotspot', 'attraction', 'adventure', 'healing', 'shopping'];
 if (!cityId) { console.error('Usage: --city-id=<N> [--apply] [--lang=fr] [--top=20]'); process.exit(1); }
@@ -32,8 +33,13 @@ const ANCHOR_M = 100;
   await c.connect();
   const city = (await c.query('SELECT name_en, country_code FROM cities WHERE id=$1', [cityId])).rows[0];
   if (!city) { await c.end(); console.error(`✗ city ${cityId} 미존재 = 중단`); process.exit(1); }
-  const keyRow = (await c.query(`SELECT key_value FROM api_keys WHERE key_name IN ('GOOGLE_MAPS_API_KEY','GOOGLE_PLACES_API_KEY') AND is_active=true ORDER BY key_name LIMIT 1`)).rows[0];
-  const KEY = keyRow?.key_value || process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_PLACES_API_KEY;
+  // ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유 (= 직독 폐기). 사진 채움 = 채움 = 도시 있음 + 행 있음(true).
+  // = 출입증(키이름·도시id·날짜·행있음) 검문 통과해야만 키 발급. 미달 = throw = 외부호출 불가.
+  const today = new Date().toISOString().slice(0, 10);
+  const KEY = (await c.query(
+    `SELECT public.issue_api_key('GOOGLE_MAPS_API_KEY', $1, $2, true) AS k`,
+    [cityId, today],
+  )).rows[0]?.k;
   // ⚠️ 2026-06-04 = image-pool 검증 패턴 = SUPABASE_PUBLIC_URL 전체 URL (단일 프로젝트 = 모든 도시 공용) + SERVICE_ROLE
   const supaPublicUrl = process.env.SUPABASE_PUBLIC_URL || 'https://wxebceflvuythuodemro.supabase.co';
   const storageKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY;

@@ -41,11 +41,19 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--hints="타입 override(선
   const city = (await c.query(
     'SELECT name_en, country, latitude, longitude FROM cities WHERE id=$1', [cityId]
   )).rows[0];
-  const keyRow = (await c.query(`SELECT key_value FROM api_keys WHERE key_name='GEMINI_API_KEY' AND is_active=true`)).rows[0];
+  if (!city) { await c.end(); console.error('city 미존재'); process.exit(1); }
+  // ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유 (= 직독 폐기). 외곽식당 발굴(04-outskirt) = 도시 있음 + 행 없음(false = 신규 발견).
+  // = 출입증(키이름·도시id·날짜·행없음) 검문 통과해야만 키 발급. 미달 = throw = 외부호출 불가.
+  const today = new Date().toISOString().slice(0, 10);
+  const GEMINI_KEY = (await c.query(
+    `SELECT public.issue_api_key('GEMINI_API_KEY', $1, $2, false) AS k`,
+    [cityId, today],
+  )).rows[0]?.k;
   await c.end();
-  if (!city || !keyRow?.key_value) { console.error('city/Gemini key 미존재'); process.exit(1); }
-  const GEMINI_KEY = keyRow.key_value;
+  if (!GEMINI_KEY) { console.error('Gemini key 미발급 = 출입증 검문 미달 또는 api_keys DB 확인'); process.exit(1); }
 
+  // ⚠️ 2026-06-18 사장님 승인 = 출입증(${API_PASS}) 동적 조립 (= 발굴 = 행=없음). 형식 = 3요소 칸 고정(도시·행·날짜).
+  const apiPass = `[API-PASS] 도시=${city.name_en}(${cityId}) / 행=없음(발굴) / 날짜=${today}`;
   const outDir = path.join(ROOT, 'docs', 'raw', String(cityId));
   fs.mkdirSync(outDir, { recursive: true });
 
@@ -65,6 +73,7 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--hints="타입 override(선
       ? '{ "results": { "low": [ ...30 ] } }'
       : '{ "results": { "mid": [ ...30 ] } }';
     return promptTpl
+      .replace(/\$\{API_PASS\}/g, apiPass)  // ⚠️ 2026-06-18 = 출입증 헤더 동적 치환 (= 표준 프롬프트 통과 증표)
       .replace(/\$\{CITY_NAME\}/g, city.name_en)
       .replace(/\$\{COUNTRY\}/g, city.country)
       .replace(/\$\{CITY_LAT\}/g, String(city.latitude))
@@ -115,7 +124,6 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--hints="타입 override(선
     }
   }
 
-  const today = new Date().toISOString().slice(0, 10);
   // ⚠️ 2026-06-15 = 파일명 단일 표준(raw-filename.ts) = {date}_04-outskirt-restaurant_{tier}.json (날짜앞)
   // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = low/mid 파일별 versionedName(외부응답 raw_text만 해싱)
   const { rawName, rawHash, versionedName } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/raw-filename.ts')).href);

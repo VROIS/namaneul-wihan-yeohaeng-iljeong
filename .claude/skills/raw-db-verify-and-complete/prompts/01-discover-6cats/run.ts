@@ -41,20 +41,30 @@ const dryRun = argv['dry'] === 'true';
   )).rows[0];
   if (!city) { console.error(`city_id=${cityId} 미존재`); process.exit(1); }
 
-  // 2. Gemini key 로드 (= DB)
-  const keyRow = (await c.query(`SELECT key_value FROM api_keys WHERE key_name='GEMINI_API_KEY' AND is_active=true`)).rows[0];
+  // 2. Gemini key 로드 (= 출입증 관문 issue_api_key() 경유 = 직독 폐기)
+  // ⚠️ 2026-06-18 사장님 SSOT = 발굴(01-discover-6cats) = 도시 있음 + 행 없음(false = 신규 발견).
+  // = 출입증(키이름·도시id·날짜·행없음) 검문 통과해야만 키 발급. 미달 = throw = 외부호출 불가.
+  const today = new Date().toISOString().slice(0, 10);
+  const GEMINI_KEY = (await c.query(
+    `SELECT public.issue_api_key('GEMINI_API_KEY', $1, $2, false) AS k`,
+    [cityId, today],
+  )).rows[0]?.k;
   await c.end();
-  if (!keyRow?.key_value) { console.error('GEMINI_API_KEY 미발견'); process.exit(1); }
-  const GEMINI_KEY = keyRow.key_value;
+  if (!GEMINI_KEY) { console.error('GEMINI_API_KEY 미발견'); process.exit(1); }
 
   // 3. prompt 치환
+  // ⚠️ 2026-06-18 사장님 승인 = 출입증(${API_PASS}) 동적 조립 (= 발굴 = 행=없음). 형식 = 3요소 칸 고정(도시·행·날짜).
+  // = 01-discover-6cats = 발굴 = 행=없음(발굴 = 신규 발견). 도시 = 이름(id). 날짜 = 호출시점.
+  const apiPass = `[API-PASS] 도시=${city.name_en}(${cityId}) / 행=없음(발굴) / 날짜=${today}`;
   const promptTpl = fs.readFileSync(path.join(__dirname, 'prompt.txt'), 'utf-8');
   const prompt = promptTpl
     .replace(/\$\{CITY_NAME\}/g, city.name_en)
     .replace(/\$\{COUNTRY\}/g, city.country)
     .replace(/\$\{CITY_LAT\}/g, String(city.latitude))
     .replace(/\$\{CITY_LNG\}/g, String(city.longitude))
-    .split('═══════════════════════════════════════════════════════════════════════')[2] || promptTpl;
+    .replace(/\$\{API_PASS\}/g, apiPass)
+    // ⚠️ 2026-06-18 = 구분선 자릿수 무관 정규식 split (= 옛 71자 하드코딩 vs prompt.txt 78자 불일치 방지 = 02-enrich 정합)
+    .split(/═{30,}/)[2] || promptTpl;
 
   console.log(`═══ 01-discover-6cats ═══`);
   console.log(`city_id = ${cityId} (${city.name_en}, ${city.country})`);
@@ -95,7 +105,6 @@ const dryRun = argv['dry'] === 'true';
   console.log(`\n호출 = ${Date.now() - t0} ms / finishReason = ${finishReason} / 토큰 = ${usage.totalTokenCount || '?'}`);
 
   // 5. 산출물 raw 저장 (= docs/raw/{city_id}/{YYYY-MM-DD}_01-discover-6cats.json)
-  const today = new Date().toISOString().slice(0, 10);
   const outDir = path.join(ROOT, 'docs', 'raw', String(cityId));
   fs.mkdirSync(outDir, { recursive: true });
   // ⚠️ 2026-06-15 = 파일명 단일 표준(raw-filename.ts) = {date}_01-discover-6cats.json (날짜앞)

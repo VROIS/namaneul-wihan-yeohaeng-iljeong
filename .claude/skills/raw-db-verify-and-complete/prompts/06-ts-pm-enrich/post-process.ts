@@ -66,13 +66,11 @@ if (!cityId) { console.error('Usage: --city-id=<N> --date=<YYYY-MM-DD> --apply-s
   const pg = await import('pg');
   const c = new (pg as any).default.Client({ connectionString: process.env.SUPA_URL || process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
   await c.connect();
-  // ⚠️ 수정금지(승인필요) 2026-06-14 사용자 SSOT = 키 조회 = run.ts(line46)·#29 ts-photo-fill 과 동일화 (= 불일치 버그 해소)
-  //   = 옛 'GOOGLE_PLACES_API_KEY' 단독 = DB엔 GOOGLE_MAPS_API_KEY만 있어 키 못 찾음 → 이미지 항상 0 버그.
-  //   = 시스템 SSOT = GOOGLE_MAPS_API_KEY 단일(Maps+Places 공유 GCP 키) = IN (...) 둘 다 조회.
-  const keyRow = downloadPhoto
-    ? (await c.query(`SELECT key_value FROM api_keys WHERE key_name IN ('GOOGLE_MAPS_API_KEY','GOOGLE_PLACES_API_KEY') AND is_active=true ORDER BY key_name LIMIT 1`)).rows[0]
+  // ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유 (= 직독 폐기). PM 이미지 = 채움 = 도시 있음 + 행 있음(true).
+  // = 출입증(키이름·도시id·날짜·행있음) 검문 통과해야만 키 발급. 미달 = throw = 외부호출 불가.
+  const PLACES_KEY = downloadPhoto
+    ? (await c.query(`SELECT public.issue_api_key('GOOGLE_MAPS_API_KEY', $1, $2, true) AS k`, [cityId, date])).rows[0]?.k
     : null;
-  const PLACES_KEY = keyRow?.key_value;
 
   const { upsertPlace } = await import(pathToFileURL(path.join(ROOT, 'server/services/place-upsert.ts')).href);
   // ⚠️ 수정금지(승인필요) 2026-06-05 = 사진 단일 관문 = tsPhoto (= PhotoMedia 다운 + Storage 업로드 일원화 = 앱 전체 동일 라인)
@@ -117,8 +115,11 @@ if (!cityId) { console.error('Usage: --city-id=<N> --date=<YYYY-MM-DD> --apply-s
       const result = await upsertPlace({
         cityId,
         seedCategory: r.category,
-        nameEn: r.name,
-        nameKo: r.ts?.display_name_ko || null,
+        // ⚠️ 수정금지(승인필요) — TS displayName→name_en (2026-06-17 사장님 SSOT) = name_local은 Gemini전용
+        //   = TS displayName(영어)을 name_en 칸으로(새 우선, place-upsert COALESCE). TS 결과 없으면 기존 r.name(name_en) 폴백 = 필수필드 보장.
+        nameEn: r.ts?.display_name_en || r.name,
+        //   = TS는 name_ko 안 채움(=Gemini전용) → null 전달 = place-upsert COALESCE가 기존 Gemini name_ko 보존.
+        nameKo: null,
         address: r.ts?.address || null,
         latitude: r.ts?.lat ?? null,
         longitude: r.ts?.lng ?? null,

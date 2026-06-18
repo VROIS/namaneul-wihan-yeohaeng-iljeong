@@ -41,10 +41,13 @@ if (!cityId) { console.error('Usage: --city-id=<N>'); process.exit(1); }
   const c = new (pg as any).default.Client({ connectionString: process.env.SUPA_URL || process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
   await c.connect();
   const city = (await c.query('SELECT name_en, country_code FROM cities WHERE id=$1', [cityId])).rows[0];
-  // ⚠️ 2026-05-20 = 시스템 SSOT = GOOGLE_MAPS_API_KEY 단일 (= Maps + Places 공유 GCP 키)
-  const keyRow = (await c.query(
-    `SELECT key_value FROM api_keys WHERE key_name IN ('GOOGLE_MAPS_API_KEY','GOOGLE_PLACES_API_KEY') AND is_active=true ORDER BY key_name LIMIT 1`
-  )).rows[0];
+  // ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유 (= 직독 폐기). TS 보강 = 채움 = 도시 있음 + 행 있음(true).
+  // = 출입증(키이름·도시id·날짜·행있음) 검문 통과해야만 키 발급. 미달 = throw = 외부호출 불가.
+  const today = new Date().toISOString().slice(0, 10);
+  const PLACES_KEY = (await c.query(
+    `SELECT public.issue_api_key('GOOGLE_MAPS_API_KEY', $1, $2, true) AS k`,
+    [cityId, today],
+  )).rows[0]?.k;
 
   // ⚠️ 수정금지(승인필요) 2026-06-13 사용자 SSOT = 식당 대상 = 30/90/30 노출풀 결손만 (= 비용 신중 = 풀밖 바닥식당 호출 X)
   //   = 식당 = 가격대구간(eco≤24 30 / reason 25~60 90 / premium 61+ 30, luxury 통합) RC DESC ROW_NUMBER ≤ 구간정원 AND (image 결손 OR pid 결손)
@@ -76,10 +79,8 @@ if (!cityId) { console.error('Usage: --city-id=<N>'); process.exit(1); }
   `, [cityId])).rows;
   await c.end();
 
-  if (!keyRow?.key_value) { console.error('GOOGLE_PLACES_API_KEY 미존재 = api_keys DB 확인'); process.exit(1); }
-  const PLACES_KEY = keyRow.key_value;
+  if (!PLACES_KEY) { console.error('GOOGLE_MAPS_API_KEY 미발급 = 출입증 검문 미달 또는 api_keys DB 확인'); process.exit(1); }
 
-  const today = new Date().toISOString().slice(0, 10);
   const outDir = path.join(ROOT, 'docs', 'raw', String(cityId));
   fs.mkdirSync(outDir, { recursive: true });
 
@@ -98,7 +99,7 @@ if (!cityId) { console.error('Usage: --city-id=<N>'); process.exit(1); }
         nameLocal: name,
         address: addr,
         regionCode: city.country_code || undefined,
-        languageCode: 'ko',
+        // ⚠️ 수정금지(승인필요) — languageCode 제거(2026-06-17 사장님 SSOT) = displayName 한국어 강제 안 함
         maxResults: 5,
       });
       return { status: 200, places, error: null };
@@ -135,7 +136,8 @@ if (!cityId) { console.error('Usage: --city-id=<N>'); process.exit(1); }
       //   = businessStatus(9요소째) 추가 = 옛 마스크 누락분 복구 / 미사용 types 제거
       ts: {
         place_id: top.googlePlaceId,
-        display_name_ko: top.nameLocal,
+        // ⚠️ 수정금지(승인필요) — TS displayName→name_en (2026-06-17 사장님 SSOT) = name_local은 Gemini전용
+        display_name_en: top.nameEn,
         address: top.address,
         lat: top.latitude,
         lng: top.longitude,
@@ -146,7 +148,8 @@ if (!cityId) { console.error('Usage: --city-id=<N>'); process.exit(1); }
         business_status: top.businessStatus,
       },
     });
-    if (i % 10 === 0) console.log(`  [${i+1}/${rows.length}] ok = ${top.nameLocal} (${dt}ms)`);
+    // ⚠️ 수정금지(승인필요) — TS displayName→name_en (2026-06-17 사장님 SSOT) = name_local은 Gemini전용
+    if (i % 10 === 0) console.log(`  [${i+1}/${rows.length}] ok = ${top.nameEn} (${dt}ms)`);
   }
 
   // ⚠️ 2026-06-15 = 파일명 단일 표준(raw-filename.ts) = {date}_06-ts-pm-enrich_candidates.json (날짜앞)

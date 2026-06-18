@@ -37,9 +37,14 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--batch=40] [--offset=0] [--
   const c = new (pg as any).default.Client({ connectionString: process.env.SUPA_URL || process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
   await c.connect();
   const city = (await c.query('SELECT name_en FROM cities WHERE id=$1', [cityId])).rows[0];
-  const keyRow = (await c.query(`SELECT key_value FROM api_keys WHERE key_name='GEMINI_API_KEY' AND is_active=true`)).rows[0];
-  if (!city || !keyRow?.key_value) { await c.end(); console.error('city/Gemini key 미존재'); process.exit(1); }
-  const GEMINI_KEY = keyRow.key_value;
+  if (!city) { await c.end(); console.error('city 미존재'); process.exit(1); }
+  const today = new Date().toISOString().slice(0, 10);
+  // ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유 (= 직독 폐기). 채움(02-enrich) = 도시 있음 + 행 있음(true).
+  // = 출입증(키이름·도시id·날짜·행있음) 검문 통과해야만 키 발급. 미달 = throw = 외부호출 불가.
+  const GEMINI_KEY = (await c.query(
+    `SELECT public.issue_api_key('GEMINI_API_KEY', $1, $2, true) AS k`,
+    [cityId, today],
+  )).rows[0]?.k;
 
   // 활성 행 SELECT id ASC
   // ⚠️ 2026-06-04 = defects-only = 비식당 6카테고리 + 4요소 결함만 (식당=13-restaurant-summary 별도 / shopping 가격결함 제외=입장료 없음)
@@ -55,7 +60,6 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--batch=40] [--offset=0] [--
   await c.end();
 
   const slice = limit ? rows.slice(startOffset, startOffset + limit) : rows.slice(startOffset);
-  const today = new Date().toISOString().slice(0, 10);
   // ⚠️ 2026-06-16 사장님 승인 = prompt.txt grounding 줄 "${YEAR}년 ${MONTH}월 현재 시점" 동적 치환용 (= 최신 강제, gemini-curate.ts 정합)
   const year = String(new Date().getFullYear());
   const month = String(new Date().getMonth() + 1);
@@ -124,12 +128,17 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--batch=40] [--offset=0] [--
   for (let i = 0; i < slice.length; ) {
     const batch = slice.slice(i, i + currSize);
     const offset = startOffset + i;
+    // ⚠️ 2026-06-18 사장님 승인 = 출입증(${API_PASS}) 동적 조립 (= ${YEAR} 방식). 형식 = 3요소 칸 고정(도시·행·날짜).
+    // = 행 칸 = "있음(채움)/없음(발굴)" 표식만(true/false). 실제 각 장소 id = 입력 JSON 본문에 필수(= 일일이 열거 X).
+    // = 02-enrich = 채움 = 행=있음. 도시 = 이름(id). 날짜 = 호출시점.
+    const apiPass = `[API-PASS] 도시=${city.name_en}(${cityId}) / 행=있음(채움) / 날짜=${today}`;
     const prompt = promptTpl
       .replace(/\$\{CITY_NAME\}/g, city.name_en)
       .replace(/\[CITY_NAME\]/g, city.name_en)
       .replace(/\$\{CITY_ID\}/g, String(cityId))
       .replace(/\$\{YEAR\}/g, year)         // ⚠️ 2026-06-16 = 동적 현재 년 (grounding 줄)
       .replace(/\$\{MONTH\}/g, month)       // ⚠️ 2026-06-16 = 동적 현재 월 (grounding 줄)
+      .replace(/\$\{API_PASS\}/g, apiPass)  // ⚠️ 2026-06-18 = 출입증 헤더 동적 치환 (= 표준 프롬프트 통과 증표)
       .replace(/\$\{BATCH_LEN\}/g, String(batch.length))
       // ⚠️ 2026-06-16 사장님 승인 = seed_category 입력 제거 (= id 에 이미 분류 + 카테고리 주면 shopping 가격 오염 실증). shopping null = post-process 저장단계 처리.
       .replace(/\$\{JSON_INPUT\}/g, JSON.stringify(batch.map((r: any) => ({

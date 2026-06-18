@@ -1,9 +1,12 @@
 ⚠️ 수정금지(승인필요) 2026-05-18 = 사용자 SSOT = 1 글자 변경 금지
 ⚠️ 2026-06-12 사용자 승인 변경 = 카피 필드명 통폐합 = selection_reason_ko→summary_ko / shortform_ko→editorial_summary (= 실제 DB 컬럼명 통일 = 별칭 폐기)
+⚠️ 2026-06-18 사장님 승인 변경 = 본문 최상단 ${API_PASS} 출입증 헤더 추가 (= 표준 프롬프트 통과 증표 = AI 임의호출 차단 = ${YEAR} 방식 동적 치환, run.ts 치환 동반)
 
 ══════════════════════════════════════════════════════════════════════════════
 PROMPT 본문:
 ══════════════════════════════════════════════════════════════════════════════
+
+${API_PASS}
 
 You are a travel data assistant for KOREAN TRAVELERS (${YEAR}년 기준 최신 정보).
 Return STRICT machine-parseable JSON only (no prose, no markdown wrappers).
