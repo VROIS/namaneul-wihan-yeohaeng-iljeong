@@ -135,33 +135,32 @@
 - **입증(2026-06-08)** = 마드리드 04 → Toledo 18 / Segovia 14 / Aranjuez 9 / Chinchón 7 / El Escorial 6 = town 추출 깔끔. (단 타입힌트 "쇼핑몰/즐길거리" 범용화는 B′ 시뮬에서 최종 확인.)
 - ⚠️ **구현 = 1회성 스크립트 X = shared 컴포넌트**(12-pool 의 `destinations.ts` 의존 제거 → Gemini-town + geocode 입력) = §16/⑧ 정합. **POP 원칙 유지**(searchText 직접쿼리=RELEVANCE = 비채택).
 
-### 8.2 식당 FE 이미지 노출 = 도시상대 가격띠 quota (= 2026-06-09 확정, 전 도시 자동)
+### 8.2 식당 결손보강 추출 범위 = #45 WF 확정 (2026-06-20 사장님 SSOT)
 
-> 식당은 6 비식당의 단일 RC TOP20 과 다름. **도시별 실제 가격 분포 + 예산 tier × RC quota**.
-> 고정 EUR 띠(€0-24/25-60/…)는 도시 물가를 무시(파리 €25 ≠ 리스본 €25) → **폐기**.
+<!-- ⚠️ 2026-06-20 §19 완전교체 = 옛 §8.2(도심80/백분위/외곽town quota·restaurant-image-targets.ts) 완전삭제 = #45 WF 실증확정 로직으로 1벌 통일. 옛 도심/외곽 구분·백분위 경계 = 폐기. -->
 
-**① 물가지수 = 외부 X = 그 도시 식당들의 실제 가격 분포(자체 데이터)**
-- 가장 객관적·세밀·최신·무비용 = 식당별 실제 TS/Google 가격(`price_eur`) 이미 보유. 외부 지수(Numbeo/PPP)는 도시 평균 1개 = 거칠고 비용·의존 추가 = **비채택**.
-- **자동·최신** = `price_eur` = TS 갱신 + GREATEST(최신) → `fill-city` 실행마다 분포 재계산 = 인덱스 관리 0.
+> 식당 추출 = **도심/외곽 구분 없음 = 그 도시 `restaurant` 카테고리 전체**가 대상.
+> 가격대(band)별 풀 안 순위로 추출 (= #45 결손보강 WF `scripts/fill45-defect-repair.ts` 추출 SQL = 정본).
 
-**② 띠 경계 = 도시·구역별 가격 분포 백분위 (구역 분리)**
-- Economic = 하위 25%(≤p25) / Reasonable = 중간 50%(p25~p75) / **Premium+Luxury 통합** = 상위 25%(≥p75).
-- 도심(core)·외곽(outskirt) **분포 별도** 계산 (= 도심이 더 비쌈 = 마드리드 도심 p25 €30 / 외곽 €22 입증).
+**① band(가격대) = 가격으로 SQL 분류 (PSR에 band 컬럼 없음 = 조건검색)**
+- eco(경제적) = `price_eur ≤ 24` / reason(합리적) = `25~60` / premium·luxury = `60+`.
+- SQL = `CASE WHEN price_eur<=24 THEN 'eco' WHEN price_eur<=60 THEN 'reason' ELSE 'premium' END`.
 
-**③ quota = 1:2:1 (= 백분위 25/50/25 와 일치)**
-- 도심: 총 **80** = Economic 20 / Reasonable 40 / Premium+Lux 20 (각 tier 내 RC DESC).
-- 외곽: **자격 town(식당수 ≥6) × 고정 2/4/2**(eco2 / reason4 / prem+lux2 = town당 8, RC DESC). **"완전 가변" = 자격 town 개수가 데이터로 결정**(1~3곳 잡음 town 제외 / 마드리드 = 6 town: Toledo·Segovia·Aranjuez·El Escorial·Chinchón·Las Rozas), town당 깊이는 고정 8. tier 풀<quota = 있는 만큼.
+**② 추출 = band별 풀 안 RC순(=rank) 상위 N**
+- eco 풀 **상위 30** / reason 풀 **상위 90** / premium·luxury 풀 **상위 30**.
+- = `ROW_NUMBER() OVER (PARTITION BY band ORDER BY rank ASC)` ≤ 30/90/30. (rank = autorank 트리거가 RC DESC 자동 = §7).
+- ⚠️ **band 풀 안 순위지 전체 rank 아님** = 전체 rank 188위도 reason 풀 안에선 90 안일 수 있음(정상).
 
-**④ 시스템화 = 상수 + 함수 1개 (전 도시 동일, 1회용 X)**
-- 상수 = `{ downtown:{eco20,reason40,premLux20}=80, outskirt:{minTownRestaurants:6, perTown:{eco2,reason4,premLux2}=8} }`. **외곽 자격 town 개수 = 데이터 결정(가변)**, town당 = 고정 8. 띠 경계 = ②의 도시 분포 백분위.
-- 함수 `fill/restaurant-image-targets.ts` = 도시 데이터에서 분포·town 자동 → quota 선정 → **이미지 없는 행만** → PM.
-- `ts-photo-fill`(6 비식당)과 **형제** = 같은 PM 라인(`tsSearch`→`tsPhoto`→`upsertPlace`) 공유. town 추출 = §8.1 재사용. 경계 = 자체 분포. **재발명 0**.
-- **이미지 집행 = 2 분기**(2026-06-09 사용자 SSOT): **PID 있음 = 바로 PM**(Place Details photos→PhotoMedia, 재검색·매칭위험 0) / **PID 없음 = TS searchText 검증 → PM**(매칭위험↑). = 검증된 곳 재검색 안 함 = 호출·위험 최소. (마드리드 169 = 163 PM-only + 6 TS+PM, 후자 전부 외곽.)
-- 엣지: tier 풀<quota = 있는 만큼 / 자격 town(≥6) 없음 = 외곽 skip / town내 tier 부족 = 옆 tier 보충 or 적게.
+**③ 6cat(비식당) = rank 1~20** (= §1 RC순 TOP20, 식당과 별개).
 
-**⑤ ⚠️ 동선 예산과 분리**: route `MEAL_BUDGET`(€40/100/300) = 사용자 **지갑=절대값** = 그대로. 본 8.2 = **FE 노출/이미지 분포 전용**. (동선 예산 도시상대화 = 별도 결정 미정.)
+**④ 결손 판정 = 12요소 중 하나라도 빔** = 그 행 전체를 WF(Gemini→TS→PM)로 보강.
+- 이미지 결손 = `image_url IS NULL OR NOT LIKE '%place-images%'`(구글 PM 외 = WK·외부 = 결손).
 
-**입증(마드리드 2026-06-09)**: **노출 ≈243**(6cat 120 + 도심 80 + 외곽 43 = 자격 6 town×~8). 이미지 결손 = 52 + 74 + 43 = **169 PM**(dedup 게이트 후 ~160) × €0.037 ≈ **€6.2**. ⚠️ **완비 대상 = 이 노출 243곳만**(풀 전체 backfill 불필요 = 사용자 SSOT). 도심 p25/중간/p75 = €30/€55/€90, 외곽 = €22/€40/€50. (⚠️ 본 169 산출은 **절대띠 근사** = quota 주도라 수치 안정 / 실제 컴포넌트 = **② 백분위 적용** = 우리 데이터 실분포, 외부지표 X.)
+**⑤ 실시간 유지 = 업데이트마다 순위 변동 정상**: TS가 최신 RC 덮어씀 → autorank 트리거가 즉시 rank 재배치 → 다음 추출은 그 시점 실시간. "옛 rank/새 rank" 없음 = 매 시점이 실시간 현재.
+
+**⑥ ⚠️ 동선 예산과 분리**: route `MEAL_BUDGET`(€40/100/300) = 사용자 지갑=절대값 = 그대로. 본 §8.2 = 결손보강 추출 전용.
+
+**입증(2026-06-20)**: 파리·마드리드 #45 WF 실행 = 추출(band 30/90/30)→Gemini→TS→PM→2곳저장 정상. 멱등성 = 재실행 시 추출 0(결손 0=완비). PID 중복 6쌍 = 07-merge 인위병합 해소. = 두 도시 완비 입증.
 
 ---
 

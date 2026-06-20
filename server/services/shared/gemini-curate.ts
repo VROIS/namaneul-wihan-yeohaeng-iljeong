@@ -52,7 +52,7 @@ export async function geminiCurate(
   cityName: string,
   cityId: number,
   rows: GeminiCurateInput[],
-  opts?: { year?: string },
+  opts?: { year?: string; apiKey?: string },  // ⚠️ 2026-06-19 = apiKey = 출입증 발급 키 직독(결손보강 WF). 미지정 시 env(라이브앱 무영향).
 ): Promise<GeminiCurateOutput[]> {
   const valid = rows.filter((r) => r.id && r.nameEn); // = 매칭 키 필수
   if (!valid.length) return [];
@@ -72,13 +72,17 @@ export async function geminiCurate(
       id: r.id, name_en: r.nameEn, name_local: r.nameLocal ?? null, name_ko: r.nameKo ?? null,
       address: r.address ?? null, latitude: r.latitude ?? null, longitude: r.longitude ?? null,
     }));
+    // ⚠️ 수정금지(승인필요) 2026-06-18 = 출입증(${API_PASS}) 동적 조립·치환 = 02-enrich/run.ts 와 동일 패턴(prompt.txt 헤더에 박힘).
+    //   = 큐레이션 = 채움 = 행=있음. 도시=이름(id). 날짜=호출시점. (run.ts/gemini-curate 양쪽 동반 치환 = prompt.txt 주석 정합)
+    const apiPass = `[API-PASS] 도시=${cityName}(${cityId}) / 행=있음(채움) / 날짜=${new Date().toISOString().slice(0, 10)}`;
     const prompt = body
       .replace(/\$\{CITY_NAME\}/g, cityName).replace(/\[CITY_NAME\]/g, cityName)
       .replace(/\$\{CITY_ID\}/g, String(cityId)).replace(/\$\{YEAR\}/g, year).replace(/\$\{MONTH\}/g, month)
+      .replace(/\$\{API_PASS\}/g, apiPass)
       .replace(/\$\{BATCH_LEN\}/g, String(batch.length)).replace(/\$\{JSON_INPUT\}/g, JSON.stringify(input));
 
     // ⚠️ 2026-06-16 사장님 SSOT = contextId(cityId)+rawTag = raw 가 docs/raw/{cityId}/ 도시폴더 저장(= TS 동형, runtime 폴더 방지).
-    const r = await geminiJson(prompt, { googleSearch: true, contextId: cityId, rawTag: 'enrich-curate' });
+    const r = await geminiJson(prompt, { googleSearch: true, contextId: cityId, rawTag: 'enrich-curate', apiKey: opts?.apiKey });
     const places = (r.data?.places && Array.isArray(r.data.places)) ? r.data.places : parsePlaces(r.raw);
     const missing = batch.filter((b) => !places.find((p: any) => p.id === b.id)).length;
 

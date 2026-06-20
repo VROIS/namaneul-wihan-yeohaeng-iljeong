@@ -33,7 +33,10 @@ for (const line of envRaw.split(/\r?\n/)) {
 const argv = Object.fromEntries(process.argv.slice(2).map(a => a.replace(/^--/, '').split('=')).map(([k, v]) => [k, v ?? 'true']));
 const cityId = Number(argv['city-id'] || 0);
 const apply = argv['apply'] === 'true';
-const lang = argv['lang'] ? String(argv['lang']) : 'ko';
+// ⚠️ 수정금지(승인필요) — languageCode 제거(2026-06-17 사장님 SSOT) = --lang 명시 시에만 전달, 미지정 = 미전달(하위 컴포넌트가 키 생략 = 한국어 강제 안 함)
+const lang = argv['lang'] ? String(argv['lang']) : undefined;
+// ⚠️ 수정금지(승인필요) — languageCode 제거(2026-06-17 사장님 SSOT) = --lang 미지정 시 자식에 --lang 인자 자체를 안 넘김(`--lang=undefined` 문자열 오전달 방지). 명시 시에만 ['--lang=<값>'].
+const langArg = lang ? [`--lang=${lang}`] : [];
 const zone = argv['zone'] ? String(argv['zone']) : 'downtown';
 // ⚠️ 수정금지(승인필요) 2026-06-07 = 상호보완 체인 6 단계 (= 사용자 SSOT) = discover(TS+Gemini)→curate(Gemini카피)→backfill(TS PID)→photo(TOP20)→restaurant(TS+Gemini)→verify
 const only = argv['only'] ? String(argv['only']).split(',').map((s) => s.trim()) : ['discover', 'curate', 'backfill', 'photo', 'restaurant', 'verify'];
@@ -88,7 +91,7 @@ function run(label: string, script: string, args: string[], retries = 2) {
   if (only.includes('discover')) {
     // Ⓐ-1 발굴 = TS(searchText 카테고리정의 ×6) + Gemini(01 한국선호 = TS 미발굴 보완)
     for (const cat of CATS) run(`Ⓐ TS발굴 ${cat}`, 'prompts/12-ts-discover-pool/run.ts',
-      [`--city-id=${cityId}`, `--category=${cat}`, '--zone=downtown', `--lang=${lang}`, '--per=20', '--pages=1']);
+      [`--city-id=${cityId}`, `--category=${cat}`, '--zone=downtown', ...langArg, '--per=20', '--pages=1']);
     run(`Ⓐ Gemini발굴 6cat`, 'prompts/01-discover-6cats/run.ts', [`--city-id=${cityId}`]);
     // Ⓐ-2 합침 = upsertPlace 7단계 매칭 (TS + Gemini = 같은 장소 병합 / 신규만 INSERT)
     for (const cat of CATS) run(`Ⓐ TS병합 ${cat}`, 'prompts/12-ts-discover-pool/post-process.ts',
@@ -102,23 +105,23 @@ function run(label: string, script: string, args: string[], retries = 2) {
   }
   if (only.includes('backfill')) {
     // Ⓐ-3b TS PID/URI/가격 보강 (= PID 결손행 = Gemini 환각 방지 = 객관 검증, 6 비식당)
-    run(`Ⓐ TS보강(PID/가격)`, '../../../server/services/fill/ts-backfill.ts', [`--city-id=${cityId}`, `--lang=${lang}`, '--apply']);
+    run(`Ⓐ TS보강(PID/가격)`, '../../../server/services/fill/ts-backfill.ts', [`--city-id=${cityId}`, ...langArg, '--apply']);
   }
   if (only.includes('photo')) {
     // Ⓐ-4 이미지 PM = 6 카테고리 RC순 TOP20 (= 비용 통제)
-    run(`Ⓐ 이미지 TOP20`, '../../../server/services/fill/ts-photo-fill.ts', [`--city-id=${cityId}`, `--lang=${lang}`, '--top=20', '--apply']);
+    run(`Ⓐ 이미지 TOP20`, '../../../server/services/fill/ts-photo-fill.ts', [`--city-id=${cityId}`, ...langArg, '--top=20', '--apply']);
   }
   if (only.includes('restaurant')) {
     // Ⓑ 식당 = TS(객관 RC) + Gemini(한국선호) 상호보완
     // 도심 = TS 3종 합본(nearby POPULARITY + text60 + premium) + Gemini 가격tier(03 복귀)
-    run(`Ⓑ 도심 TS nearby`, 'prompts/12-ts-discover-pool/run.ts', [`--city-id=${cityId}`, '--zone=downtown', '--method=nearby', '--label=nearby', `--lang=${lang}`]);
-    run(`Ⓑ 도심 TS text60`, 'prompts/12-ts-discover-pool/run.ts', [`--city-id=${cityId}`, '--zone=downtown', '--method=text', '--pages=3', '--label=text', `--lang=${lang}`]);
-    run(`Ⓑ 도심 TS premium`, 'prompts/12-ts-discover-pool/run.ts', [`--city-id=${cityId}`, '--zone=downtown', '--method=text', '--pages=3', '--price-levels=EXPENSIVE,VERY_EXPENSIVE', '--label=premium', `--lang=${lang}`]);
+    run(`Ⓑ 도심 TS nearby`, 'prompts/12-ts-discover-pool/run.ts', [`--city-id=${cityId}`, '--zone=downtown', '--method=nearby', '--label=nearby', ...langArg]);
+    run(`Ⓑ 도심 TS text60`, 'prompts/12-ts-discover-pool/run.ts', [`--city-id=${cityId}`, '--zone=downtown', '--method=text', '--pages=3', '--label=text', ...langArg]);
+    run(`Ⓑ 도심 TS premium`, 'prompts/12-ts-discover-pool/run.ts', [`--city-id=${cityId}`, '--zone=downtown', '--method=text', '--pages=3', '--price-levels=EXPENSIVE,VERY_EXPENSIVE', '--label=premium', ...langArg]);
     run(`Ⓑ 도심 Gemini(03)`, 'prompts/03-downtown-restaurant/run.ts', [`--city-id=${cityId}`]);
     run(`Ⓑ 도심 병합(TS+PM)`, 'prompts/12-ts-discover-pool/post-process.ts', [`--city-id=${cityId}`, '--zone=downtown', `--date=${today}`, '--apply', '--photo']);
     run(`Ⓑ 도심 Gemini병합(03)`, 'prompts/03-downtown-restaurant/post-process.ts', [`--city-id=${cityId}`, `--date=${today}`]);
     // 외곽 = TS(destinations.ts 명소별) + Gemini(04 복귀, --outskirt-hints 제공 시)
-    run(`Ⓑ 외곽 TS`, 'prompts/12-ts-discover-pool/run.ts', [`--city-id=${cityId}`, '--zone=outskirt', `--lang=${lang}`]);
+    run(`Ⓑ 외곽 TS`, 'prompts/12-ts-discover-pool/run.ts', [`--city-id=${cityId}`, '--zone=outskirt', ...langArg]);
     if (outskirtHints) run(`Ⓑ 외곽 Gemini(04)`, 'prompts/04-outskirt-restaurant/run.ts', [`--city-id=${cityId}`, `--hints=${outskirtHints}`]);
     else console.log(`\n  ⚠️ 외곽 Gemini(04) 스킵 = --outskirt-hints 미제공 (TS 외곽만 진행)`);
     run(`Ⓑ 외곽 병합(TS+PM)`, 'prompts/12-ts-discover-pool/post-process.ts', [`--city-id=${cityId}`, '--zone=outskirt', `--date=${today}`, '--apply', '--photo']);

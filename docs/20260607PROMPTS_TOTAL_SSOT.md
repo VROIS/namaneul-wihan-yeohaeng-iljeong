@@ -60,7 +60,7 @@ places.id,places.displayName,places.formattedAddress,places.location,places.user
 | 묶음 | 호출 | 채움/발굴 |
 |---|---|---|
 | 발굴 | #06(01)·#30~33(12run)·#34(recover)·#21·#41(seed-gemini)·#42(cron)·#08↔03·04 식당발굴 | 발굴 false |
-| 채움 | #07(02)·#08(05reverify)·#09(05text)·#10(13)·#28(ts-backfill)·#29(ts-photo)·#37·#38(06)·12 image·post | 채움 true |
+| 채움 | #07(02)·#08(05reverify)·#09(05text)·#10(13)·#28(ts-backfill)·#29(ts-photo)·#37·#38(06)·12 image·post·**#45(결손보강 WF = Gemini+TS+PM 3종)** | 채움 true |
 
 ### ⛔ 안 막음 (= 사장님 결정)
 라이브앱(#02·#03·#04·#39) = 그대로(db·cityId 없어 구조 위험) / 부팅로더 = 그대로(메인앱 키) / 드림스튜디오(#11~18)·BTS(#19)·테스트(#22~25).
@@ -122,6 +122,7 @@ places.id,places.displayName,places.formattedAddress,places.location,places.user
 | **#42** | p0-bts-daily-cron searchText+PM | TS | searchText raw (6필드 자체마스크) | legacy | [p0-bts-daily-cron.mjs:123](../scripts/p0-bts-daily-cron.mjs) |
 | **#43** | 07 중복통합 (결정론, 프롬프트 예비) | 비-LLM | 5단계 매칭 (Gemini 미사용) | live | [07/run.ts:80](../.claude/skills/raw-db-verify-and-complete/prompts/07-merge-dups/run.ts) |
 | **#44** | 08 Wikidata 이미지 (SPARQL) | 비-LLM | SPARQL (Gemini 미사용) | live | [08/run.ts:68](../.claude/skills/raw-db-verify-and-complete/prompts/08-wk-image-fill/run.ts) |
+| **#45** | 결손보강·보정 WF (1행 1결손→행 전체 Gemini→TS→PM 보강) | 복합(Gemini+TS+PM) | 추출(6cat TOP20+식당 band 30/90/30)→Gemini카피→TS 9요소→PM이미지→2곳저장 | live(실증완료) | [fill45-defect-repair.ts](../scripts/fill45-defect-repair.ts) |
 
 > **단일관문 우회(정리 후보)**: Gemini = #11~#18(드림스튜디오)·#19·#21·#06·#08·#09·#10 / TS = #33·#34·#39·#41·#42.
 > **명백한 폐기 후보**: #19·#21·#41·#42(legacy) / #22(헬스체크) / #23·#24·#25(reference).
@@ -152,11 +153,13 @@ places.id,places.displayName,places.formattedAddress,places.location,places.user
 
 ## Gemini 게이트웨이 (#01)
 
-### #01 · `geminiJson()` — 모든 Gemini JSON 호출 단일 진입점
+### #01 · `geminiJson()` — 사용자 메인앱(라이브) Gemini 진입점 (= process.env 직독)
+<!-- ⚠️ 2026-06-20 §19 모순제거 = 옛 "모든 Gemini 호출 단일 진입점" 문구 삭제. process.env 직독 = FE 사용자 입력 경로 전용(메인앱 동선·도시메타·seed). 관리자 백그라운드(#07·#45 결손보강·발굴) = 출입증 직독이라 이 함수 안 거침 = "모든"이 아님. -->
 - **파일**: `server/services/shared/geminiClient.ts:52` · **상태**: live · **모델**: `gemini-3-flash-preview` (MODEL_ID)
-- **프롬프트**: 없음 (호출자 인자 전달만)
-- **설정 (verbatim)**: `config = { temperature: opts?.temperature ?? 0.2, maxOutputTokens: opts?.maxOutputTokens ?? 50000, responseMimeType: "application/json", thinkingConfig: { thinkingBudget: 0 } }`. `opts.googleSearch=true` 시 → `config.tools = [{ googleSearch: {} }]` 추가 + `delete config.responseMimeType` (= tools+JSON mime 동시불가 INVALID_ARGUMENT 우회). `contents = [{ role:"user", parts:[{ text: prompt }] }]`. responseSchema 없음. API key = `AI_INTEGRATIONS_GEMINI_API_KEY || GEMINI_API_KEY`. 파싱 = `raw.match(/\{[\s\S]*\}/)` 첫 JSON. SDK = `@google/genai`.
-- **조건**: shared/ 모든 Gemini 호출(curate, city-meta 등)이 이 함수만 통과. ⚠️ 수정금지(승인필요). 상수 MODEL_ID/TEMPERATURE=0.2/MAX_OUTPUT_TOKENS=50000.
+- **호출 주체**: **사용자(FE 입력)** = 메인앱 동선·도시메타·seed = **process.env 직독**(출입증 불필요). ⚠️ 관리자 백그라운드(#07·#45)는 출입증 직독이라 **이 함수 안 거침**.
+- **프롬프트**: 없음 (호출자 인자 전달만 = 게이트웨이/배관, 프롬프트는 각 호출 #가 보관).
+- **설정 (verbatim)**: `config = { temperature: opts?.temperature ?? 0.2, maxOutputTokens: opts?.maxOutputTokens ?? 50000, responseMimeType: "application/json", thinkingConfig: { thinkingBudget: 0 } }`. `opts.googleSearch=true` 시 → `config.tools = [{ googleSearch: {} }]` 추가 + `delete config.responseMimeType` (= tools+JSON mime 동시불가 INVALID_ARGUMENT 우회). `contents = [{ role:"user", parts:[{ text: prompt }] }]`. responseSchema 없음. API key = `AI_INTEGRATIONS_GEMINI_API_KEY || GEMINI_API_KEY`(process.env). 파싱 = `raw.match(/\{[\s\S]*\}/)` 첫 JSON. SDK = `@google/genai`.
+- **조건**: 사용자 메인앱 Gemini 호출(#02·#03·#04·#20 = 동선·도시메타·seed)이 이 함수 통과. ⚠️ 수정금지(승인필요). 상수 MODEL_ID/TEMPERATURE=0.2/MAX_OUTPUT_TOKENS=50000. **관리자 백그라운드(#07·#45)는 별도 = 출입증 직독.**
 
 ## Gemini 메인앱 라이브 — 여정/동선 (#02~#05)
 
@@ -1321,6 +1324,192 @@ SELECT ?place ?placeLabel ?placeDescription ?image ?coord ?instanceLabel WHERE {
   SERVICE wikibase:label { bd:serviceParam wikibase:language "en,fr,ko". }
 } LIMIT 15
 ```
+
+---
+
+# E. 복합 워크플로우 (Gemini+TS+PM 조합 오케스트레이터)
+
+## #45 · 결손보강·보정 WF (관리자 백그라운드 = 출입증 필수)
+
+- **파일**: `scripts/fill45-defect-repair.ts` · **상태**: live(실증완료 2026-06-20 파리·마드리드) · **호출 주체**: **관리자(사장님)가 요구할 때만** = 백그라운드 = process.env 우회 0 = **출입증 직독 필수**(FE 사용자 입력 아님).
+- **용도**: 이미 발굴된 도시의 **결손 행(12요소 중 하나라도 빔)을 행 전체 보강** = "1결손이라도 → Gemini→TS→PM 통째 1번 더 가져와 덮어쓰기". 멱등성(재실행 시 추출 0=완비).
+- **호출 명령**: `npx tsx scripts/fill45-defect-repair.ts --city-id=N` (DRY=무료) / `--apply`(외부호출) / `--only-id=ID`(단일 행 격리).
+
+### [2] Gemini 카피 = 02-enrich/prompt.txt (= #07 과 동일 진본, 새 프롬프트 0)
+- **호출**: `geminiCurate(city.name_en, cityId, rows, { apiKey: geminiKey })` (geminiKey = `issueApiKey(c,'GEMINI_API_KEY',cityId,날짜,true)` 출입증 직독).
+- **프롬프트 원본**: [`02-enrich-place/prompt.txt`](../.claude/skills/raw-db-verify-and-complete/prompts/02-enrich-place/prompt.txt) (split(/═{30,}/)[2] / 치환 ${API_PASS} ${CITY_NAME} ${CITY_ID} ${YEAR} ${MONTH} ${BATCH_LEN} ${JSON_INPUT}).
+- **프롬프트 본문 (verbatim, ⚠️수정금지 2026-05-18 = 1글자 변경 금지)**:
+```
+${API_PASS}
+
+역할: 너는 한국인 여행자를 위한 [CITY_NAME] 장소 정보 보강 전문가야.
+
+⚠️ 응답 근거 = Google Search 그라운딩 기반 = ${YEAR}년 ${MONTH}월 현재 시점의 최신/검증된 사실 (= 가격/주소/한국어 호칭) 만 사용 = 추정/환각 금지.
+
+목적: [CITY_NAME] (city_id=${CITY_ID}) 의 기존 장소 ${BATCH_LEN} 곳 = 누락 정보를 채우고 + 한국 관점 큐레이션을 작성한다.
+
+입력 = 각 장소 = JSON (= id 는 우리 place_seed_raw.id = 응답 매칭 키)
+  - id: number (= place_seed_raw.id = 응답에 정확히 매칭 필수)
+  - name_local: string | null (= 현지 원어명 = 변경 X)
+  - name_en: string | null
+  - name_ko: string | null
+  - address: string | null
+  - latitude: number | null
+  - longitude: number | null
+  - google_place_id: string | null
+
+응답 (= JSON 배열, 설명 텍스트 X):
+{
+  "places": [
+    {
+      "id": <입력 id 그대로 = place_seed_raw.id>,
+      "name_local": "<현지 원어명 = 예 'Tour Eiffel' / 입력 있으면 검증 / 없으면 채움 = 변경 X>",
+      "name_en": "<영어명 = 예 'Eiffel Tower' / 입력 있으면 검증 / 없으면 채움>",
+      "name_ko": "<한국 여행자 친숙 호칭 = 예 '에펠탑' / 입력 있으면 검증 / 없으면 채움>",
+      "address": "<번지 + 거리 + 우편번호 + 도시 + 국가 = 예 '5 Avenue Anatole France, 75007 Paris, France'>",
+      "latitude": <위도 6 자리 = 예 48.858370>,
+      "longitude": <경도 6 자리 = 예 2.294481>,
+      "summary_ko": "<한 줄 숏폼 대사 = 인스타/FOMO 사회적 검증 = 한국어 25 자 이내>",
+      "editorial_summary": "<한 줄 한국인 관점 선정 이유 = 코믹/위트 후킹 카피 = 한국어 35 자 이내>",
+      "price_eur": <식당=1인 식대 / 그 외=실제 입장료 EUR 숫자 = 무료·입장료 없는 곳(광장·핫스팟 등) = 0>,
+      "distance_km_from_center": <도심 중심으로부터 직선거리 km = haversine = 소수 1 자리 = 예 2.4>
+    }
+  ]
+}
+
+규칙:
+1. 모든 입력 id = 응답에 정확히 포함 (= 누락 0) ← id = 우리 place_seed_raw.id = 매칭 키
+2. name_local = 입력 그대로 유지 (= 변경 절대 X = 우리 매칭 키 = 원어명 보존) / name_en·name_ko = Google 기준 정확히 검증·보강 (= 추정 X)
+3. 좌표 = 6 자리 소수 (= 예 48.858370, 2.294481)
+4. address = 번지부터 국가까지 완전 (= 부분 주소 X)
+5. summary_ko / editorial_summary = 한국어만 (= 영어 단어 혼용 X)
+6. price_eur = 식당이면 1인 식대, 그 외 장소는 실제 입장료 = EUR 정수 (= 추정 생성 X). 무료·입장료 없는 장소(광장·거리·핫스팟 등) = 0.
+7. distance_km_from_center = 도심 중심으로부터 직선거리 km (= haversine, 소수 1 자리, 필수)
+8. 응답 = 위 JSON 만 (= 설명/주석/마크다운 X)
+
+입력 ${BATCH_LEN} 장소:
+${JSON_INPUT}
+```
+- 출입증 헤더 `${API_PASS}` = `[API-PASS] 도시=${cityName}(${cityId}) / 행=있음(채움) / 날짜=${오늘}` 동적치환(gemini-curate.ts:79). 출력 = name_ko·summary_ko·editorial_summary·price_eur·name_local·distance.
+- **설정(verbatim)**: gemini-3-flash-preview / grounding ON(googleSearch) / temperature 0.2 / maxOutputTokens 50000 / batch 적응형(40→30→20→10) / contextId=cityId rawTag='enrich-curate'.
+
+### [3] TS 9요소 검증·교정 = #26 게이트웨이 경유 (건건, 결손행마다 1콜)
+- **호출 (verbatim, ⚠️수정금지)**:
+```js
+const cur = (await c.query('SELECT name_local, name_en, address, latitude::float8 AS lat, longitude::float8 AS lng FROM place_seed_raw WHERE id=$1', [r.id])).rows[0] || r;
+const hint = cur.name_local || cur.name_en || r.name_local || r.name_en;
+const tsKey = await issueApiKey(c, 'GOOGLE_MAPS_API_KEY', cityId, inputDate, true); // 출입증 직독(채움 hasRow=true)
+const ts = await tsSearch({
+  apiKey: tsKey, method: 'searchText', regionCode: city.country_code || 'FR',
+  cityId, ourId: r.id, rawTag: `fill-${hint || r.id}`,
+  nameLocal: hint, address: cur.address ?? r.address,
+  latitude: cur.lat ?? r.lat ?? null, longitude: cur.lng ?? r.lng ?? null,
+  anchorRadiusM: (cur.lat ?? r.lat) != null ? 100 : undefined, maxResults: 1,
+  localSkipRaw: true,  // 건건 raw 로컬 skip = 스토리지만(끝에 모음 1파일)
+});
+const t1 = ts[0]; // top1 = 9요소 매핑형 TsPlace
+```
+- **FieldMask**: `ts-client.ts` STANDARD_TS_FIELD_MASK 9요소 (= #26). hint = name_local||name_en. anchorRadiusM=100m(동명 차단). maxResults=1.
+- **후처리 = 우리 id 직행 UPDATE (verbatim, ⚠️수정금지 = 매칭 X = 빗나감 0)**:
+```sql
+UPDATE place_seed_raw SET
+  name_en = COALESCE($2, name_en),          -- TS displayName(영어)→name_en (2026-06-17, name_local은 Gemini전용)
+  address = COALESCE($3, address),
+  latitude = COALESCE($4::real, latitude),
+  longitude = COALESCE($5::real, longitude),
+  google_place_id = COALESCE($6, google_place_id),   -- TS가 준 PID = 우리 PID 오류 교정(matcher veto 제거)
+  google_maps_uri = COALESCE($7, google_maps_uri),
+  google_review_count = COALESCE($8::integer, google_review_count),
+  updated_at = NOW()
+WHERE id=$1   -- 우리 id 직행 = 목적지 정해진 단순 삽입(빗나감 0). UPDATE라 트리거 미발동(신규 INSERT 아님).
+```
+- 파라미터 = `[r.id, t1.nameEn, t1.address, t1.latitude, t1.longitude, t1.googlePlaceId, t1.googleMapsUri, t1.googleReviewCount]`. no_match = skip + tsResults에 status='no_match' 기록.
+
+### [4] PM 이미지 = #27 tsPhoto 경유 + 무료재링크 우선 (결손분만)
+- **무료재링크 우선 (verbatim) = 결제분 재활용 = PM 누수 차단**:
+```js
+const relink = await relinkStorageImages({ cityId, apply, client: c, categories: [...SIXCAT, 'restaurant'] });
+// relink.matchedIds 에 든 행 = 무료로 채워짐 = PM 제외(continue).
+```
+- **PM 호출 (verbatim, ⚠️수정금지) = 무료재링크 안 된 + place-images 없는 행만**:
+```js
+const cur = (await c.query('SELECT image_url, google_place_id, seed_category FROM place_seed_raw WHERE id=$1', [r.id])).rows[0];
+if (cur && cur.image_url && cur.image_url.includes('place-images')) continue; // 이미 있음 = PM 불필요
+const t1 = tsByOurId.get(r.id);
+if (!t1 || !t1.photoName) { imgNoPhoto++; continue; } // 사진 없음 = skip
+const pid = t1.googlePlaceId || cur?.google_place_id;
+const pmKey = await issueApiKey(c, 'GOOGLE_MAPS_API_KEY', cityId, inputDate, true); // 출입증 직독
+const imageUrl = await tsPhoto({ apiKey: pmKey, photoName: t1.photoName, storageKey, supaPublicUrl,
+  pathKey: `${cityId}/${cur?.seed_category||r.seed_category}/${pid}`, maxWidthPx: 800 });
+// → 우리 id 직행 UPDATE: image_url=$2, image_updated_at=NOW() WHERE id=$1
+```
+- **호출 = #27 그대로**: PhotoMedia GET → Storage PUT place-images. photo = `t1.photoName`(photos[0] = 대표 1장). maxWidthPx=800. 무료재링크(`storage-image-relink.ts`) 우선이라 실제 PM = 최종 소수만(결손분 필터 4중: 무료재링크∉ + place-images없음 + photoName있음).
+
+### 저장 = §18 (TS 모음 1파일 = 06형태)
+- TS raw = 건건 로컬 skip(`localSkipRaw:true`) + 끝에 06형태 모음 1파일 `{date}_45-ts-defect-repair_candidates.json`(results 배열, photo_name 1개). Gemini raw = 로컬+스토리지 2곳. 이미지 = Storage place-images 1곳.
+- **매칭 = X = id 직행 UPDATE**(`WHERE id=$1`) = 목적지 정해진 단순 삽입(빗나감 0).
+
+### #45 고유 = 추출 SQL (verbatim = 이것만 #45 진본 = 재발명 금지)
+- 풀 = **6cat TOP20(rank 1~20) ∪ 식당 band 30/90/30** (도심/외곽 구분 없음 = 도시 전체 restaurant). band = 가격 분류(eco≤24/reason≤60/premium). BTS 제외.
+```sql
+WITH base AS (
+  SELECT id, name_local, name_en, address,
+         latitude::float8 AS lat, longitude::float8 AS lng,
+         price_eur::float8 AS price_eur, google_review_count AS rc,
+         google_place_id, google_maps_uri, seed_category, rank, image_url,
+         distance_km_from_center, summary_ko, editorial_summary,
+         CASE WHEN price_eur <= 24 THEN 'eco' WHEN price_eur <= 60 THEN 'reason' ELSE 'premium' END AS band
+  FROM place_seed_raw WHERE city_id=$1
+    AND seed_category NOT IN ('bts_army_zone','bts_merch_store','bts_venue')
+    AND ($3::bigint IS NULL OR id=$3::bigint)
+),
+sixcat AS (
+  SELECT id, name_local, name_en, address, lat, lng, price_eur, rc, google_place_id, google_maps_uri, seed_category,
+         image_url, distance_km_from_center, summary_ko, editorial_summary
+  FROM base WHERE seed_category = ANY($2::text[]) AND rank BETWEEN 1 AND 20
+),
+rest_ranked AS (
+  SELECT *, ROW_NUMBER() OVER (PARTITION BY band ORDER BY rank ASC) AS band_rn
+  FROM base WHERE seed_category='restaurant' AND price_eur IS NOT NULL
+),
+rest AS (
+  SELECT id, name_local, name_en, address, lat, lng, price_eur, rc, google_place_id, google_maps_uri, seed_category,
+         image_url, distance_km_from_center, summary_ko, editorial_summary
+  FROM rest_ranked WHERE band_rn <= CASE band WHEN 'eco' THEN 30 WHEN 'reason' THEN 90 ELSE 30 END
+),
+pool AS (SELECT * FROM sixcat UNION SELECT * FROM rest)
+SELECT id, name_local, name_en, address, lat, lng, price_eur, rc, google_place_id, google_maps_uri, seed_category,
+       image_url, distance_km_from_center, summary_ko, editorial_summary,
+       ARRAY_REMOVE(ARRAY[
+         CASE WHEN google_place_id IS NULL THEN 'pid' END,
+         CASE WHEN rc IS NULL THEN 'rc' END,
+         CASE WHEN image_url IS NULL OR image_url='' OR image_url NOT LIKE '%place-images%' THEN 'image' END,
+         CASE WHEN google_maps_uri IS NULL OR google_maps_uri='' THEN 'uri' END,
+         CASE WHEN lat IS NULL OR lng IS NULL THEN 'coords' END,
+         CASE WHEN address IS NULL OR address='' THEN 'addr' END,
+         CASE WHEN price_eur IS NULL AND seed_category <> 'shopping' THEN 'price' END,
+         CASE WHEN name_local IS NULL OR name_local='' THEN 'name_local' END,
+         CASE WHEN distance_km_from_center IS NULL THEN 'distance' END,
+         CASE WHEN summary_ko IS NULL OR summary_ko='' THEN 'summary_ko' END,
+         CASE WHEN editorial_summary IS NULL OR editorial_summary='' THEN 'editorial' END
+       ], NULL) AS missing
+FROM pool
+WHERE (
+     google_place_id IS NULL OR rc IS NULL
+  OR image_url IS NULL OR image_url='' OR image_url NOT LIKE '%place-images%'
+  OR google_maps_uri IS NULL OR google_maps_uri=''
+  OR lat IS NULL OR lng IS NULL OR address IS NULL OR address=''
+  OR (price_eur IS NULL AND seed_category <> 'shopping')
+  OR name_local IS NULL OR name_local=''
+  OR distance_km_from_center IS NULL
+  OR summary_ko IS NULL OR summary_ko='' OR editorial_summary IS NULL OR editorial_summary=''
+)
+ORDER BY seed_category, rc DESC NULLS LAST
+ORDER BY seed_category, rc DESC NULLS LAST
+```
+- **결손 12요소**: pid·rc·image(place-images 외=결손)·uri·coords·addr·price(shopping 제외)·name_local·distance·summary_ko·editorial.
+- **순서**: Gemini(1콜 배치) → TS(건건, RC·PID 교정) → PM(무료재링크→남은 결손만). 출입증 3단계(Gemini·TS·PM 각 `issueApiKey(c,키,cityId,날짜,hasRow=true)`).
+- **실시간 랭킹**: TS가 RC 덮어씀 → autorank 트리거가 rank 즉시 재배치(§7) = 추출 시점 실시간(옛/새 rank 없음).
 
 ---
 

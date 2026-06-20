@@ -15,17 +15,21 @@ const MAX_OUTPUT_TOKENS = 50000;
 
 let ai: GoogleGenAI | null = null;
 
-function getAI(): GoogleGenAI {
+// ⚠️ 수정금지(승인필요) 2026-06-20 사장님 SSOT = #01 = 키 받는 순수 배관(무판단).
+//   = 카드(키) 판단은 호출자가 함: 사용자 메인앱(#02·#03·#04·#20) = 키 미전달 → process.env / 관리자 백그라운드(#07·#45) = issueApiKey 출입증 키를 인자로 전달.
+//   = 인자 전달 시 매번 새 클라이언트(키 섞임 방지). 미전달 시 env singleton 캐시(기존 동작).
+function getAI(apiKey?: string): GoogleGenAI {
+  if (apiKey) return new GoogleGenAI({ apiKey });
   if (!ai) {
-    const apiKey =
+    const envKey =
       process.env.AI_INTEGRATIONS_GEMINI_API_KEY ||
       process.env.GEMINI_API_KEY ||
       "";
-    if (!apiKey)
+    if (!envKey)
       throw new Error(
         "Gemini API key missing (AI_INTEGRATIONS_GEMINI_API_KEY or GEMINI_API_KEY)",
       );
-    ai = new GoogleGenAI({ apiKey });
+    ai = new GoogleGenAI({ apiKey: envKey });
   }
   return ai;
 }
@@ -39,6 +43,8 @@ export interface GeminiJsonOptions {
   /** ⚠️ raw 저장 맥락 (= shared/save-raw) = cityId(발굴) 또는 미지정→'runtime'(동선·메인앱). + 파일명 태그 */
   contextId?: string | number | null;
   rawTag?: string | null;
+  /** ⚠️ 2026-06-20 사장님 SSOT = 출입증 발급 키(관리자 백그라운드 #07·#45). 미전달 시 process.env(사용자 메인앱). = #01 무판단 배관, 카드 판단은 호출자가. */
+  apiKey?: string;
 }
 
 export interface GeminiJsonResult<T = any> {
@@ -72,7 +78,7 @@ export async function geminiJson<T = any>(
     delete config.responseMimeType;
   }
 
-  const response = await getAI().models.generateContent({
+  const response = await getAI(opts?.apiKey).models.generateContent({
     model: opts?.model || MODEL_ID,
     contents: [{ role: "user", parts: [{ text: prompt }] }],
     config,

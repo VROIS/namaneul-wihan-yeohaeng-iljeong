@@ -21,6 +21,9 @@ export interface SaveRawOpts {
   tag?: string | null;                // 호출 맥락 식별(파일명) — 미지정 시 'call'
   request: any;                       // 호출 입력 (= 비밀 제외, 재현용)
   raw: any;                           // 외부 응답 원본 (= 진짜 raw)
+  // ⚠️ 수정금지(승인필요) 2026-06-19 사장님 SSOT = 건건 raw 로컬 skip(스토리지만) = 로컬 폴더 가독성·공간 낭비 방지.
+  //   = 기본 false(기존대로 로컬+스토리지 2곳). true 시 로컬 쓰기만 건너뜀 = §18 원본보존은 스토리지가 담당.
+  localSkip?: boolean;
 }
 
 export async function saveRaw(opts: SaveRawOpts): Promise<void> {
@@ -77,7 +80,8 @@ export async function saveRaw(opts: SaveRawOpts): Promise<void> {
 
     // ⚠️ 수정금지(승인필요) 2026-06-15 사장님 SSOT = 로컬 2곳째 저장 (= Storage 와 동일 파일규칙 = 추후 재활용·비용보호).
     //   = docs/raw/{cityId}/{date}_{source}-{tag}.json (= filePath 와 동형). 배포 읽기전용 FS = 조용히 skip(best-effort).
-    try {
+    //   ⚠️ 2026-06-19 사장님 SSOT = localSkip=true(건건 TS) 시 로컬 생략 = 스토리지(위 PUT)만 보존 = 로컬 폴더 깔끔.
+    if (!opts.localSkip) try {
       const localPath = path.join(localRawRoot, filePath); // ⚠️ 수정금지(승인필요) 2026-06-16 = 버전판정과 동일 localRawRoot 기준 (= cwd 비의존, 두 곳 기준 통일). filePath = `${ctx}/${date}_${source}-${tag}.json`
       fs.mkdirSync(path.dirname(localPath), { recursive: true });
       fs.writeFileSync(localPath, body);

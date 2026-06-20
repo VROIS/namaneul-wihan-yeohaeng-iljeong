@@ -23,7 +23,9 @@ const REQUIRED_9 = [
 // 9요소 응답 (= 우리 컬럼 매핑형)
 export interface TsPlace {
   googlePlaceId: string | null;   // id
-  nameLocal: string | null;       // displayName.text
+  // ⚠️ 수정금지(승인필요) — TS displayName→name_en (2026-06-17 사장님 SSOT) = name_local은 Gemini전용
+  nameEn: string | null;          // displayName.text (= languageCode 미지정=영어 → name_en 컬럼)
+  nameLocal: string | null;       // ⚠️ 수정금지(승인필요) — TS displayName→name_en (2026-06-17 사장님 SSOT) = name_local은 Gemini전용 (= 하위호환 유지, TS는 항상 null)
   address: string | null;         // formattedAddress
   latitude: number | null;        // location.latitude
   longitude: number | null;       // location.longitude
@@ -38,7 +40,7 @@ export interface TsSearchReq {
   apiKey: string;
   method: 'searchText' | 'searchNearby';
   regionCode?: string;
-  languageCode?: string;      // 기본 'ko'
+  languageCode?: string;      // ⚠️ 수정금지(승인필요) — languageCode 제거(2026-06-17 사장님 SSOT) = 미지정 시 키 생략(한국어 강제 안 함), 명시(예 'fr') 시에만 사용
   // 입력 (보유분만 = TS 정확도↑):
   nameLocal?: string;         // searchText textQuery (= 로컬이름, 단독 = 주소와 안 합침)
   address?: string | null;    // 좌표 없을 때만 textQuery 보조
@@ -55,6 +57,12 @@ export interface TsSearchReq {
   timeoutMs?: number;
   cityId?: number;            // ⚠️ raw 저장 폴더 = docs/raw/{cityId}/ts-raw/ (미지정 시 _misc)
   rawTag?: string;            // raw 파일명 태그 (= 호출 맥락 식별, 미지정 시 textQuery/nameLocal)
+  localSkipRaw?: boolean;     // ⚠️ 2026-06-19 사장님 SSOT = 건건 raw 로컬 생략(스토리지만) = 호출자가 모음 1파일 따로 만들 때. 미지정=기존대로 2곳.
+  ourId?: number;             // ⚠️ 2026-06-16 사장님 SSOT = 우리 place_seed_raw.id = raw.request 에 보존(매칭키) = 재입력 가능. (호출 동작 영향 0 = passthrough)
+  // ⚠️ 수정금지(승인필요) 2026-06-16 사장님 SSOT = 관문(issueApiKey) 통과 증표.
+  //   = ts-client 는 순수 HTTP 모듈 유지(db 주입 X) → 호출자가 api-gate.issueApiKey 로 키 받고 gated:true 세팅.
+  //   = 기본 undefined = 하위호환(옛 호출 그대로). env TS_GATE_ENFORCE='1' 일 때만 검사(=점진 전환 후 차단).
+  gated?: boolean;
 }
 
 // 중심+반경(km) → 강제 사각형 viewport
@@ -66,7 +74,9 @@ const rectFromCenter = (lat: number, lng: number, km: number) => {
 
 const mapPlace = (p: any): TsPlace => ({
   googlePlaceId: p.id ?? null,
-  nameLocal: p.displayName?.text ?? null,
+  // ⚠️ 수정금지(승인필요) — TS displayName→name_en (2026-06-17 사장님 SSOT) = name_local은 Gemini전용
+  nameEn: p.displayName?.text ?? null,   // displayName(영어) → name_en 컬럼
+  nameLocal: null,                       // TS는 로컬이름 안 줌 = null (place-upsert COALESCE가 기존 Gemini값 보존)
   address: p.formattedAddress ?? null,
   latitude: p.location?.latitude ?? null,
   longitude: p.location?.longitude ?? null,
@@ -87,6 +97,8 @@ async function saveTsRaw(method: string, req: TsSearchReq, raw: any): Promise<vo
     tag: req.rawTag || req.textQuery || req.nameLocal || method,
     request: reqSafe,
     raw,
+    // ⚠️ 2026-06-19 사장님 SSOT = 건건 raw 로컬 skip(스토리지만) = 호출자가 localSkipRaw=true 시. 미지정=기존대로 2곳.
+    localSkip: req.localSkipRaw,
   });
 }
 
@@ -96,7 +108,16 @@ async function saveTsRaw(method: string, req: TsSearchReq, raw: any): Promise<vo
  */
 export async function tsSearch(req: TsSearchReq): Promise<TsPlace[]> {
   if (!req.apiKey) throw new Error('[tsSearch] apiKey 필수');
-  const lang = req.languageCode || 'ko';
+  // ⚠️ 수정금지(승인필요) 2026-06-16 사장님 SSOT = 관문 수동 강제(soft-assert).
+  //   = env TS_GATE_ENFORCE='1' 일 때만 검사 → gated≠true(=issueApiKey 미통과)면 throw = 우회 차단.
+  //   = env 미설정(현 Replit/로컬 전부) = no-op = 하위호환 100% (옛 호출 동작 0 변경).
+  //   = ts-client 는 db 미보유 순수 HTTP 모듈이므로 실제 검문(cities/psr SELECT)은 호출자 issueApiKey 가 수행.
+  if (process.env.TS_GATE_ENFORCE === '1' && req.gated !== true) {
+    throw new Error('[tsSearch] 관문 미통과 = issueApiKey 로 발급한 키만 허용 (req.gated=true 필요)');
+  }
+  // ⚠️ 수정금지(승인필요) — languageCode 제거(2026-06-17 사장님 SSOT) = displayName 한국어 강제 안 함
+  //   = req.languageCode 명시(예 'fr') 시에만 사용, 미지정이면 undefined = body 에서 languageCode 키 생략(TS 현지 기본).
+  const lang = req.languageCode;
   const isNearby = req.method === 'searchNearby';
   const cap = Math.min(req.maxResults ?? 20, isNearby ? 20 : 60);
   const hasCoord = req.latitude != null && req.longitude != null;
@@ -115,9 +136,10 @@ export async function tsSearch(req: TsSearchReq): Promise<TsPlace[]> {
   const textQuery = req.textQuery
     ?? (hasCoord ? (req.nameLocal || '') : [req.nameLocal, req.address].filter(Boolean).join(' '));
 
+  // ⚠️ 수정금지(승인필요) — languageCode 제거(2026-06-17 사장님 SSOT) = lang(=req.languageCode) 있을 때만 키 삽입, 없으면 생략(한국어 강제 안 함)
   const body: any = isNearby
-    ? { includedTypes: req.includedTypes || ['restaurant'], maxResultCount: cap, rankPreference: 'POPULARITY', languageCode: lang, ...(req.regionCode ? { regionCode: req.regionCode } : {}), ...loc }
-    : { textQuery, pageSize: cap, languageCode: lang, ...(req.regionCode ? { regionCode: req.regionCode } : {}), ...(req.priceLevels ? { priceLevels: req.priceLevels } : {}), ...loc };
+    ? { includedTypes: req.includedTypes || ['restaurant'], maxResultCount: cap, rankPreference: 'POPULARITY', ...(lang ? { languageCode: lang } : {}), ...(req.regionCode ? { regionCode: req.regionCode } : {}), ...loc }
+    : { textQuery, pageSize: cap, ...(lang ? { languageCode: lang } : {}), ...(req.regionCode ? { regionCode: req.regionCode } : {}), ...(req.priceLevels ? { priceLevels: req.priceLevels } : {}), ...loc };
 
   const endpoint = isNearby ? 'places:searchNearby' : 'places:searchText';
   const resp = await fetch(`https://places.googleapis.com/v1/${endpoint}`, {
@@ -140,11 +162,19 @@ export interface TsPhotoReq {
   pathKey: string;         // 저장 경로 (예 `${cityId}/${cat}/${pid}`) — .jpg 자동 부착
   bucket?: string;         // 기본 'place-images'
   maxWidthPx?: number;
+  // ⚠️ 수정금지(승인필요) 2026-06-16 사장님 SSOT = 관문(issueApiKey) 통과 증표 (= tsSearch 와 동일 원리).
+  //   = 기본 undefined = 하위호환. env TS_GATE_ENFORCE='1' 일 때만 검사. PM 키('pm')도 동일 issueApiKey 경유.
+  gated?: boolean;
 }
 
 /** 단일 사진 관문 = PhotoMedia 다운 + Supabase Storage 업로드(PUT+x-upsert) → 공개 URL. 모든 사진 호출은 이 함수만. */
 export async function tsPhoto(req: TsPhotoReq): Promise<string | null> {
   if (!req.apiKey || !req.photoName || !req.storageKey || !req.supaPublicUrl) return null;
+  // ⚠️ 수정금지(승인필요) 2026-06-16 사장님 SSOT = 관문 수동 강제(soft-assert).
+  //   = env TS_GATE_ENFORCE='1' 일 때만 검사 → gated≠true 면 return null(=tsPhoto 기존 '에러=null' 계약 유지).
+  //     (throw 로 바꾸면 06 post-process / restaurant-image-targets 의 if(!imageUrl) 분기 의미가 변질됨)
+  //   = env 미설정 = no-op = 하위호환 100%.
+  if (process.env.TS_GATE_ENFORCE === '1' && req.gated !== true) return null;
   const bucket = req.bucket || 'place-images';
   try {
     const photoUrl = `https://places.googleapis.com/v1/${req.photoName}/media?maxWidthPx=${req.maxWidthPx ?? 800}&key=${req.apiKey}`;
