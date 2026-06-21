@@ -44,7 +44,7 @@
 |---|---|---|
 | `name_en`/`name_local`/`name_ko` | `nameEn`/`nameLocal`/`nameKo` | 표준 |
 | `address` | `address` | - |
-| `price_eur_max` | `priceEur` | **GREATEST 비싼 쪽** (= §14) |
+| `price_eur_max` | `priceEur` | **COALESCE 새 우선** (= 최신최우선 §14) |
 | `distance_km_from_center` | `distanceKmFromCenter` | <= 10 (= 도심 강제) |
 | `day_zone` | `dayZone` | "core" (= 강제) |
 | `selection_reason_ko` | `selectionReasonKo` | → summary_ko |

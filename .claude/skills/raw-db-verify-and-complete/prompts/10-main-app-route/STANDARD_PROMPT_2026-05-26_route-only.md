@@ -235,7 +235,7 @@ for each newRestaurant:
        ↓
   5 단계 매칭 자동 (= 헌법 §14 단일 진입점)
        ↓
-  매칭 → UPDATE (= COALESCE 옛 우선 + GREATEST 가격)
+  매칭 → UPDATE (= COALESCE 새 우선 + 가격 COALESCE 새우선)
   매칭 0 → INSERT (= day_zone 자동)
 ```
 

@@ -52,7 +52,7 @@
 | `latitude`/`longitude` | `latitude`/`longitude` | (좌표) | COALESCE 옛 우선 |이것도 최신우선임
 | `summary_ko` | `selectionReasonKo` | `summary_ko` | 새 우선 (= Gemini 큐레이션 갱신) |
 | `editorial_summary` | `shortformKo` | `editorial_summary` | 새 우선 |
-| `estimated_price_eur` | `priceEur` | `price_eur` | **GREATEST 비싼 쪽** (= §14) / shopping 강제 null |
+| `estimated_price_eur` | `priceEur` | `price_eur` | **COALESCE 새 우선** (= 최신최우선 §14) / shopping 강제 null |
 
 ## 검증 조건
 

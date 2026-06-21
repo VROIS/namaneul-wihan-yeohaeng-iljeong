@@ -217,7 +217,7 @@ for each newRestaurant:
     2. 좌표 10m
     3. 이름 9 조합 (= name_en/local/ko × LOWER+trim, noAccent, no spaces)
        ↓
-  매칭 → UPDATE (= COALESCE 옛 우선 + GREATEST 가격)
+  매칭 → UPDATE (= COALESCE 새 우선 + 가격 COALESCE 새우선)
   매칭 0 → INSERT (= day_zone 자동 = core/outskirt 거리 기준)
 ```
 

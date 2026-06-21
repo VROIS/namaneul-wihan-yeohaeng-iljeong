@@ -57,7 +57,7 @@ function sanitizePriceEur(raw: any): number {
 }
 
 /** ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT = price_eur 단일 컬럼 (SSOT §14 + 제15조)
- *  순차: 1) Gemini price_eur > 2) seed_raw priceEur (= GREATEST 비싼 쪽)
+ *  순차: 1) Gemini price_eur(최신) > 2) seed_raw priceEur (= COALESCE 새 우선 = 최신최우선, 옛 GREATEST 비싼쪽 폐기 2026-06-10)
  *        > 3) 매트릭스 폴백 (= 식당 = MEAL_BUDGET / 비식당 = 0)
  *  = 옛 enrichedPrice 파라미터 폐기 (= ta enrichment 폐기) = geminiPrice 단일 입력 */
 function resolvePrice(
@@ -67,9 +67,9 @@ function resolvePrice(
   mealType?: 'lunch' | 'dinner',
   travelStyle: TravelStyle = 'Reasonable',
 ): number {
-  // GREATEST 비싼 쪽 (= 사용자 신뢰 보호 = SSOT §14)
-  const max2 = Math.max(geminiPrice, seedPriceEur);
-  if (max2 > 0) return max2;
+  // ⚠️ 수정금지(승인필요) 2026-06-20 = 최신최우선(COALESCE 새 우선) = Gemini(최신 호출값) 있으면 Gemini, 없으면 seed_raw 보존 (= §14, 옛 GREATEST 비싼쪽 폐기 2026-06-10)
+  const resolved = geminiPrice > 0 ? geminiPrice : seedPriceEur;
+  if (resolved > 0) return resolved;
   // 모두 0 = 매트릭스 폴백 (= 식당만)
   if (isMeal && mealType) {
     return MEAL_BUDGET[travelStyle]?.[mealType] ?? 0;

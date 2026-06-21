@@ -41,7 +41,7 @@
 
 - 통합 시 = 옛 행 = `phase_tags` 에 `archived-merge-{YYYY-MM-DD}` 추가
 - 식별 데이터 = COALESCE 옛 우선 (= 보존 = name_en/주소/좌표)
-- 가격 = GREATEST 비싼 쪽 (= §14)
+- 가격 = COALESCE 새 우선 (= 최신최우선 = §14, 옛 GREATEST 폐기 2026-06-10)
 - 카피 = 새 우선 (= Gemini 큐레이션 갱신)
 - tags = UNION (= 누적)
 

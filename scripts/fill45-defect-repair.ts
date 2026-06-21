@@ -12,6 +12,7 @@
 // 호출: npx tsx scripts/fill45-defect-repair.ts --city-id=19 [--only-id=N] [--apply]
 //   --apply 없으면 DRY (= 추출 + 결손분포 + PM 예상 출력, DB·Storage·외부호출 0).
 //   --only-id=N = 단일 행 격리 실증 (사장님 승인 2026-06-16). 미지정 시 전체 풀(기존 불변).
+//   ⚠️ 삭제 2026-06-21 = 옛 "--all-restaurants(식당전부)·--from-raw(raw재입력)" 두 플래그 = AI 임시 끼워넣기 = 사장님 SSOT "원복" = 완전삭제(§19·§16). #45 = 항상 band 30/90/30(=150) 단일.
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
@@ -29,6 +30,8 @@ const cityId = Number(argv['city-id'] || 19);
 const apply = argv['apply'] === 'true';
 // ⚠️ 수정금지(승인필요) = --only-id=N = 단일 행 격리 실증용 (사장님 승인 2026-06-16). 미지정 시 전체 풀(기존 동작 불변).
 const onlyId = argv['only-id'] ? Number(argv['only-id']) : null;
+// ⚠️ 삭제 2026-06-21 = 옛 "const allRestaurants(--all-restaurants)·const fromRaw(--from-raw)" 두 선언 = AI 임시 끼워넣기 = 사장님 SSOT "원복" = 완전삭제(§19·§16).
+//   = #45 식당 범위 = 항상 band 30/90/30(=150) 단일(추출 SQL rest CTE). raw 재입력 모드 폐기 = 항상 순수 Gemini·TS·PM 외부호출.
 // ⚠️ 수정금지(승인필요) = 출입증 키발급 날짜 inputDate (= YYYY-MM-DD = issue-api-key.ts 검문 형식). 함수 상단 1회 선언 = 모든 issueApiKey 호출 공유.
 const inputDate = new Date().toISOString().slice(0, 10);
 const SIXCAT = ['heritage', 'hotspot', 'attraction', 'adventure', 'healing', 'shopping'];
@@ -71,6 +74,7 @@ const ANCHOR_M = 100;
       SELECT *, ROW_NUMBER() OVER (PARTITION BY band ORDER BY rank ASC) AS band_rn
       FROM base WHERE seed_category='restaurant' AND price_eur IS NOT NULL
     ),
+    -- ⚠️ 삭제 2026-06-21 = 옛 "$4(--all-restaurants) 식당전부 UNION 분기"(2026-06-20 AI 임시) 완전삭제 = 사장님 SSOT "원복"(§19). 식당 = band 30/90/30 단일.
     rest AS (
       SELECT id, name_local, name_en, address, lat, lng, price_eur, rc, google_place_id, google_maps_uri, seed_category,
              image_url, distance_km_from_center, summary_ko, editorial_summary
@@ -120,6 +124,7 @@ const ANCHOR_M = 100;
   // [2 Gemini 1차 덮어쓰기] = 결손 전부 = geminiCurate 1콜(배치) -> name_ko·summary·editorial·price.
   //   사장님 SSOT = Gemini 먼저 = 다음 TS 검색 힌트 정확도 상승. id 양방향 보존(prompt.txt). 카테고리 안 줌(shopping null = 우리 저장단계).
   // ⚠️ 수정금지(승인필요) 2026-06-19 = Gemini 키 = 출입증 직독(채움 hasRow=true) = TS·PM 과 동일 방식 = process.env 우회 0.
+  // ⚠️ 삭제 2026-06-21 = 옛 "if(fromRaw){저장raw 재입력}else{...}" 분기(2026-06-20 AI 임시) 완전삭제 = 사장님 SSOT "원복"(§19). 항상 순수 geminiCurate 외부호출.
   const geminiKey = await issueApiKey(c, 'GEMINI_API_KEY', cityId, inputDate, true);
   const { geminiCurate } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/gemini-curate.ts')).href);
   const curated = await geminiCurate(city.name_en, cityId, rows.map((r: any) => ({
@@ -133,14 +138,25 @@ const ANCHOR_M = 100;
     if (!g) { console.log(`  ! Gemini 응답없음 id=${r.id} ${r.name_local}`); continue; }
     const priceEur = r.seed_category === 'shopping' ? null : (g.priceEur ?? null);
     // ⚠️ 사장님 SSOT 2026-06-16 = 우리 id 직행 UPDATE (= 매칭 X). id=탄생 고유이름=불변 목적지 = 매칭(upsertPlace)이 다른 행으로 빗나감 방지. 신규 INSERT 없음.
+    // ⚠️ 수정금지(승인필요) 2026-06-20 사장님 SSOT = 선별 금지 = Gemini 응답 전 필드 → 대응 컬럼 새 우선(COALESCE 새값,기존) 순서대로 덮어쓰기.
+    //   옛 4컬럼만 SET(name_ko/summary/editorial/price) = AI 선별 = name_local·distance·address·좌표 누락 사고 = 완전삭제(§19).
+    //   = Gemini만 주는 요소(name_local·distance·price)가 여기서 채워짐 / name_en 은 1차(뒤 TS displayName 이 최종 덮음). §14 새우선.
     const u = await c.query(`UPDATE place_seed_raw SET
-        name_ko = COALESCE(NULLIF($2,''), name_ko),
-        summary_ko = COALESCE(NULLIF($3,''), summary_ko),
-        editorial_summary = COALESCE(NULLIF($4,''), editorial_summary),
-        price_eur = COALESCE($5::real, price_eur),
+        name_local = COALESCE(NULLIF($2,''), name_local),
+        name_en = COALESCE(NULLIF($3,''), name_en),
+        name_ko = COALESCE(NULLIF($4,''), name_ko),
+        address = COALESCE(NULLIF($5,''), address),
+        latitude = COALESCE($6::real, latitude),
+        longitude = COALESCE($7::real, longitude),
+        summary_ko = COALESCE(NULLIF($8,''), summary_ko),
+        editorial_summary = COALESCE(NULLIF($9,''), editorial_summary),
+        price_eur = COALESCE($10::real, price_eur),
+        distance_km_from_center = COALESCE($11::numeric, distance_km_from_center),
         updated_at = NOW()
       WHERE id=$1`,
-      [r.id, g.nameKo ?? null, g.summaryKo ?? null, g.editorialSummary ?? null, priceEur]);
+      [r.id, g.nameLocal ?? null, g.nameEn ?? null, g.nameKo ?? null, g.address ?? null,
+       g.latitude ?? null, g.longitude ?? null, g.summaryKo ?? null, g.editorialSummary ?? null,
+       priceEur, g.distanceKmFromCenter ?? null]);
     if (u.rowCount) copyDone++;
     console.log(`  + Gemini id=${r.id} ${r.name_local} (직행 ${u.rowCount ? 'OK' : 'NO'})`);
   }
@@ -153,6 +169,7 @@ const ANCHOR_M = 100;
   const tsByOurId = new Map<number, any>();
   // ⚠️ 수정금지(승인필요) 2026-06-19 사장님 SSOT = TS 산출물 = 06 형태 모음(건건 X 보여줌) = results 배열 1파일. photo_name 1개(photos[0]), 정제 9요소만.
   const tsResults: any[] = [];
+  // ⚠️ 삭제 2026-06-21 = 옛 "tsRawById 로드 + 루프 내 if(fromRaw){저장raw 매핑}else{...}" 분기(2026-06-20 AI 임시) 완전삭제 = 사장님 SSOT "원복"(§19). 항상 순수 tsSearch 외부호출.
   for (const r of rows) {
     try {
       const cur = (await c.query('SELECT name_local, name_en, address, latitude::float8 AS lat, longitude::float8 AS lng FROM place_seed_raw WHERE id=$1', [r.id])).rows[0] || r;
@@ -182,6 +199,10 @@ const ANCHOR_M = 100;
         },
       });
       // ⚠️ 사장님 SSOT 2026-06-16 = 우리 id 직행 UPDATE = TS 전 응답값(PID 포함) 그대로 이 행에 덮음. PID 바뀌어도 id 불변 = 무조건 여기다. 매칭 X = 빗나감 X.
+      // ⚠️ 수정금지(승인필요) 2026-06-20 사장님 SSOT = 선별 금지 = TS 응답 전 필드 → 대응 컬럼 새 우선 덮어쓰기(중복요소 = Gemini 1차 → TS 가 뒤=최신=덮음, price 포함 동일 취급).
+      //   가격 = 새 우선 덮어쓰기(=최신최우선). 옛 GREATEST(비싼쪽) 정책 = 폐기됨(project_price_eur_ssot) = 들고오지 마라. shopping=price 안 줌 정합.
+      //   TS price 는 거의 null = 그땐 COALESCE 가 기존 Gemini price 보존 / TS 가 주면 더 최신이라 덮음 = 자동 정합.
+      const priceEur = r.seed_category === 'shopping' ? null : (t1.priceEur ?? null);
       const u = await c.query(`UPDATE place_seed_raw SET
         -- ⚠️ 수정금지(승인필요) — TS displayName→name_en (2026-06-17 사장님 SSOT) = name_local은 Gemini전용 (= TS displayName(영어)을 name_en 칸으로 직행 UPDATE)
         name_en = COALESCE($2, name_en),
@@ -191,10 +212,11 @@ const ANCHOR_M = 100;
         google_place_id = COALESCE($6, google_place_id),
         google_maps_uri = COALESCE($7, google_maps_uri),
         google_review_count = COALESCE($8::integer, google_review_count),
+        price_eur = COALESCE($9::real, price_eur),
         updated_at = NOW()
       WHERE id=$1`,
       // ⚠️ 수정금지(승인필요) — TS displayName→name_en (2026-06-17 사장님 SSOT) = name_local은 Gemini전용 (= TS결과 .nameLocal→.nameEn = TS는 nameLocal=null이므로 nameEn 읽어야 깨짐 방지)
-      [r.id, t1.nameEn ?? null, t1.address ?? null, t1.latitude ?? null, t1.longitude ?? null, t1.googlePlaceId ?? null, t1.googleMapsUri ?? null, t1.googleReviewCount ?? null]);
+      [r.id, t1.nameEn ?? null, t1.address ?? null, t1.latitude ?? null, t1.longitude ?? null, t1.googlePlaceId ?? null, t1.googleMapsUri ?? null, t1.googleReviewCount ?? null, priceEur]);
       if (u.rowCount) tsDone++;
       // ⚠️ 수정금지(승인필요) — TS displayName→name_en (2026-06-17 사장님 SSOT) = name_local은 Gemini전용
       console.log(`  + TS id=${r.id} ${t1.nameEn || hint} (직행 ${u.rowCount ? 'OK' : 'NO'})`);
@@ -221,6 +243,7 @@ const ANCHOR_M = 100;
   if (relink.relinkable) console.log(`[무료 재링크] Storage 매칭 ${relink.relinkable}곳 = ${relink.relinked} 무료 채움 -> PM 제외`);
 
   let imgDone = 0, imgNoPhoto = 0;
+  // ⚠️ 삭제 2026-06-21 = 옛 "if(fromRaw){PM skip}+if(fromRaw)break"(2026-06-20 AI 임시) 완전삭제 = 사장님 SSOT "원복"(§19). 항상 무료재링크→PM 순수 진행.
   for (const r of rows) {
     if (relink.matchedIds.has(r.id)) continue; // 무료재링크로 채워짐 = PM 제외
     const cur = (await c.query('SELECT image_url, google_place_id, seed_category FROM place_seed_raw WHERE id=$1', [r.id])).rows[0];

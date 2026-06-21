@@ -49,8 +49,8 @@ export interface UpsertPayload {
   googlePrimaryType?: string | null;
   googleMapsUri?: string | null;  // 2026-05-15 = 13번째 SSOT = 최후의 보루
   priceEur?: number | null;
-  // ⚠️ 수정금지(승인필요) 2026-06-02 = true 시 가격도 새 값 덮어쓰기 (= TS discovery 풀 오염 청소 = €75 핫도그 등)
-  //   = 기본(false/미지정) = GREATEST 비싼 쪽 유지 ([[feedback_price_max_always]] = 물가 항상 오름). 스코프 한정 오버라이드.
+  // ⚠️ 수정금지(승인필요) 2026-06-20 = 옛 "기본=GREATEST 비싼 쪽 유지"(feedback_price_max_always) 주석 폐기 = 코드(:130·147 새우선)와 불일치 = §19 정합.
+  //   현재 = 기본이 이미 새 우선(COALESCE) = priceOverwrite 무의미화(2026-06-10 GREATEST 폐기). 하위호환 인자로만 잔존(동작 영향 0).
   priceOverwrite?: boolean;
   imageUrl?: string | null;
   imageAttribution?: string | null;

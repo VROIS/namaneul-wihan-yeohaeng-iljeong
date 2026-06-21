@@ -40,7 +40,7 @@
 | `name_local` | `nameLocal` | `name_local` | - |
 | `name_ko` | `nameKo` | `name_ko` | - |
 | `address` | `address` | `address` | - |
-| `price_eur_max` | `priceEur` | `price_eur` | **GREATEST 비싼 쪽** (= §14) |
+| `price_eur_max` | `priceEur` | `price_eur` | **COALESCE 새 우선** (= 최신최우선 §14) |
 | `selection_reason_ko` | `selectionReasonKo` | `summary_ko` | - |
 | `shortform_ko` | `shortformKo` | `editorial_summary` | - |
 | `day_zone` | `dayZone` | `day_zone` | (= 강제 "outskirt") |

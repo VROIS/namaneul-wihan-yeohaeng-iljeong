@@ -24,7 +24,7 @@
 = 9요소 (= server/services/shared/ts-client.ts 의 tsSearch() 관문이 함수 안에서 강제 = 미만 throw):
 - `places.id` / `places.displayName` / `places.formattedAddress` / `places.location`
 - `places.userRatingCount` (= 인기도)
-- `places.priceRange` (= 가격 SSOT = GREATEST §14)
+- `places.priceRange` (= 가격 SSOT = COALESCE 새우선 §14)
 - `places.photos` (= PhotoMedia 호출용)
 - `places.googleMapsUri` (= 13 SSOT)
 - `places.businessStatus` (= 폐업 게이트)
@@ -72,7 +72,7 @@ WHERE city_id = $1
    ↓
 6. Storage public URL = image_url 채움
    ↓
-7. priceRange.endPrice = priceEur (= GREATEST §14)
+7. priceRange.endPrice = priceEur (= COALESCE 새우선 §14)
    ↓
 8. upsertPlace() 호출 (= 5 단계 매칭 자동)
 ```

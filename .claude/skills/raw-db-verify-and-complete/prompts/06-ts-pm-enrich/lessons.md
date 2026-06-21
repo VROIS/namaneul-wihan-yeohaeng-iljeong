@@ -29,10 +29,10 @@
 - 효과 = AOS Glide / iOS 모두 CORS / UA 차단 없음
 - bucket = `place-photos/` (= 사용자 SSOT [[reference_db_image_assets]])
 
-### L6. priceRange.endPrice = GREATEST (= 헌법 §14)
+### L6. priceRange.endPrice = COALESCE 새우선 (= 헌법 §14, 옛 GREATEST 폐기 2026-06-10)
 - 옛 = priceLevel 1-4 = 사용자 SSOT §14 폐기 (= 너무 모호)
-- 새 = `priceRange.endPrice.units` = €X 정확값 = GREATEST 비싼 쪽
-- 예 = TS 응답 €50 / DB 옛 €30 → GREATEST = €50 적용
+- 새 = `priceRange.endPrice.units` = €X 정확값 = COALESCE 새 우선(최신최우선)
+- 예 = TS 응답 €50(최신) / DB 옛 €30 → COALESCE 새우선 = €50 적용(최신 TS 신뢰)
 
 ### L7. 무료 1K/월 한도 활용
 - TS Enterprise = 무료 1K/월

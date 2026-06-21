@@ -82,7 +82,7 @@ if (!cityId) { console.error('Usage: --city-id=<N> --date=<YYYY-MM-DD> [--dry]')
         // ⚠️ 2026-06-12 카피 필드명 통폐합 = 응답 키 summary_ko/editorial_summary (= DB 컬럼명) 우선, 옛 raw fallback = 손실 0
         selectionReasonKo: p.summary_ko ?? p.selection_reason_ko ?? null,
         shortformKo: p.editorial_summary ?? p.shortform_ko ?? null,
-        priceEur: p.price_eur ?? null,        // GREATEST 정책
+        priceEur: p.price_eur ?? null,        // COALESCE 새우선(최신최우선) 정책
         dayZone: 'core',                            // 강제
         distanceKmFromCenter: p.distance_km_from_center ?? null,
         collectionPhase: 'gemini3-2026-05',

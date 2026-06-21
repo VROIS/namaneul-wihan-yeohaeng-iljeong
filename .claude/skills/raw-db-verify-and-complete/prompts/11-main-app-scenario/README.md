@@ -143,7 +143,7 @@ for (const scene of response.scenes) {
       priceEur: scene.price_eur,  // ⚠️ PSR 단위 = 1인
     });
     // = 5 단계 매칭 자동 (= PID/주소/좌표/이름 9조합)
-    // = 매칭 → UPDATE (= COALESCE 옛 우선 + GREATEST 가격)
+    // = 매칭 → UPDATE (= COALESCE 새 우선 + 가격 COALESCE 새우선)
     // = 매칭 0 → INSERT (= day_zone 자동)
   }
 }

@@ -22,12 +22,21 @@ export interface GeminiCurateInput {
   longitude?: number | null;
   seedCategory?: string;  // ⚠️ 2026-06-16 = Gemini 입력에서 제외(카테고리 안 줌) = optional 로 정합. shopping price=null 은 호출자 저장단계 처리.
 }
+// ⚠️ 수정금지(승인필요) 2026-06-20 사장님 SSOT = 선별 금지 = Gemini 응답 전 필드 포함(02-enrich/prompt.txt 응답 10요소 그대로).
+//   옛 4필드만 추출(name_ko/summary/editorial/price) = AI 선별 = name_local·distance·address·좌표 누락 사고 = 완전삭제(§19).
+//   = Gemini만 주는 요소(name_local·distance·가격) 가 여기 다 실려야 #45 가 새우선 덮어쓰기로 필수컬럼 자동 완비.
 export interface GeminiCurateOutput {
   id: number;
-  nameKo: string | null;
-  summaryKo: string | null;        // ← summary_ko (한국 트렌드/사회적 검증)
-  editorialSummary: string | null; // ← editorial_summary (코믹/위트 후킹)
-  priceEur: number | null;         // ← price_eur (1인 입장료/식대, shopping=null)
+  nameLocal: string | null;            // ← name_local (현지 원어명 = Gemini 전용)
+  nameEn: string | null;               // ← name_en (영어명, 1차 = TS displayName 이 최종 덮음)
+  nameKo: string | null;               // ← name_ko (한국 친숙 호칭)
+  address: string | null;              // ← address
+  latitude: number | null;             // ← latitude
+  longitude: number | null;            // ← longitude
+  summaryKo: string | null;            // ← summary_ko (한국 트렌드/사회적 검증)
+  editorialSummary: string | null;     // ← editorial_summary (코믹/위트 후킹)
+  priceEur: number | null;             // ← price_eur (1인 입장료/식대, shopping=null)
+  distanceKmFromCenter: number | null; // ← distance_km_from_center (도심거리 = 동선 최적화 재료 = Gemini 전용)
 }
 
 // 잘림 복구 파서 (= _call-config 표준)
@@ -91,13 +100,21 @@ export async function geminiCurate(
       size = FALLBACK[FALLBACK.indexOf(size) + 1];
       continue;
     }
+    // ⚠️ 수정금지(승인필요) 2026-06-20 사장님 SSOT = 선별 금지 = 응답 전 필드 그대로 꺼냄(prompt.txt 응답 10요소).
+    //   옛 4필드만 꺼냄 = AI 선별 = name_local·distance·address·좌표 버려짐 사고 = 완전삭제(§19).
     for (const p of places) {
       out.push({
         id: p.id,
+        nameLocal: p.name_local || null,
+        nameEn: p.name_en || null,
         nameKo: p.name_ko || null,
+        address: p.address || null,
+        latitude: p.latitude ?? null,
+        longitude: p.longitude ?? null,
         summaryKo: p.summary_ko || null,
         editorialSummary: p.editorial_summary || null,
         priceEur: p.price_eur ?? null,
+        distanceKmFromCenter: p.distance_km_from_center ?? null,
       });
     }
     i += batch.length;

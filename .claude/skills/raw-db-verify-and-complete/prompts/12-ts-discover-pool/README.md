@@ -12,7 +12,7 @@
 - **가격필터(priceLevels) = searchText 전용** (searchNearby엔 없음). POPULARITY = searchNearby 전용. → 둘을 한 콜에 못 합침.
 - **잡음 필터**: `primaryType` 블랙리스트(department_store/movie_theater/hotel/museum 등) = 식당 아님 = 식당풀 제외 = 원 카테고리(shopping/hotel) 유지 (= 1장소1row, [[feedback_single_db_no_app_specific_columns]]).
 - **글로벌 UNIQUE(city_id, name_norm)**: 동명 1개만(RC 높은쪽) + INSERT 충돌 시 skip(크래시 X, 기존 행 보존).
-- **가격 = GREATEST** (시내, 절대 안 낮춤 = [[feedback_price_max_always]]) / 외곽 = 덮어쓰기(오염청소).
+- **가격 = COALESCE 새 우선(최신최우선)** = 새 값 있으면 덮고 없으면 기존 보존 (= 옛 GREATEST·feedback_price_max_always 폐기 2026-06-10). 외곽 = priceOverwrite 명시 덮어쓰기(오염청소).
 - **이미지 PM = FE 노출분만** = 가격대별 RC 상위 quota (시내 eco20/reason40/premium20). 런타임 백필(ag3 uploadPhoto)과 **동일 프로세스** = place-images 버킷 + PUT + `{cityId}/{cat}/{PID}.jpg`. 로컬은 SERVICE_ROLE(ANON 비어있음) / Replit 런타임은 ANON. 병렬 10개씩.
 
 ## 시내(downtown) 표준 — 3종 합본 발굴

@@ -1,6 +1,6 @@
 // ⚠️ 수정금지(승인필요) 2026-06-04 = fill/ts-backfill = PID 없는 행 TS 재검증·보강 (= 06 method 의 관문판, 융합)
 // = 관문 tsSearch(이름+좌표앵커) → top1 → upsertPlace(원본 name_en=매칭키 + 새 9요소) = AI 손 0 (fetch→매처→upsert 융합)
-// = 가짜 RC → 진짜 RC 교체 / PID·좌표·주소·mapsUri 채움 / 가격 GREATEST / 이미지는 #4(tsPhoto) 별도 / CLOSED skip
+// = 가짜 RC → 진짜 RC 교체 / PID·좌표·주소·mapsUri 채움 / 가격 COALESCE 새우선(최신최우선, 옛 GREATEST 폐기 2026-06-10) / 이미지는 #4(tsPhoto) 별도 / CLOSED skip
 // 호출: npx tsx server/services/fill/ts-backfill.ts --city-id=19 [--apply] [--lang=fr] [--category=heritage,...]
 import fs from 'fs';
 import path from 'path';

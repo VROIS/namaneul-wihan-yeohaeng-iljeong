@@ -50,7 +50,7 @@ if (!match && p.address) {
 
 **v1 (옛)**:
 - 검증된 식별 데이터 (name/주소/좌표/PID/이미지/리뷰수) = `COALESCE(<old>, <new>)` = 옛 우선
-- 가격 = `GREATEST(old, new)` = 비싼 쪽
+- 가격 = `COALESCE(새값, 기존)` = 최신최우선 (옛 GREATEST 비싼쪽 폐기 2026-06-10)
 - 카피 (summary_ko/editorial_summary) = `COALESCE(<new>, <old>)` = 새 우선
 - tags = UNION
 

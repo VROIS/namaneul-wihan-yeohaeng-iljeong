@@ -23,7 +23,7 @@
 7. post-process.ts:
    a. PhotoMedia 호출 (= photos[0].name) = binary 다운
    b. Supabase Storage 업로드 (= place-photos/{cityId}/{rowId}-{ts}.jpg)
-   c. upsertPlace() = image_url + pid + priceEur (GREATEST) + reviewCount + mapsUri 갱신
+   c. upsertPlace() = image_url + pid + priceEur (COALESCE 새우선) + reviewCount + mapsUri 갱신
 ```
 
 ## 대상 행 카테고리 (= 사용자 SSOT [[feedback_wikidata_first_not_google]])
@@ -60,7 +60,7 @@ import { tsSearch, tsPhoto } from 'server/services/shared/ts-client';
 | `formattedAddress` | `address` | `address` | COALESCE 새 우선 (= 덮어쓰기) |
 | `location.latitude` | `latitude` | `latitude` | COALESCE 새 우선 (= 덮어쓰기) |
 | `userRatingCount` | `googleReviewCount` | `google_review_count` | 새 우선 |
-| `priceRange.endPrice.units` | `priceEur` | `price_eur` | **GREATEST 비싼 쪽** (= §14) |
+| `priceRange.endPrice.units` | `priceEur` | `price_eur` | **COALESCE 새 우선** (= 최신최우선 §14) |
 | `photos[0].name` → PhotoMedia → Storage URL | `imageUrl` | `image_url` | 새 우선 (= 새 있으면 교체, 없으면 옛 보존) |
 | `googleMapsUri` | `googleMapsUri` | `google_maps_uri` | COALESCE 새 우선 (= 덮어쓰기) |
 | `businessStatus` | (= 폐업 게이트 = 보조) | (= 미저장) | CLOSED_PERMANENTLY 판정용 |

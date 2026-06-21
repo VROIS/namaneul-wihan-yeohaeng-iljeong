@@ -122,7 +122,7 @@ places.id,places.displayName,places.formattedAddress,places.location,places.user
 | **#42** | p0-bts-daily-cron searchText+PM | TS | searchText raw (6필드 자체마스크) | legacy | [p0-bts-daily-cron.mjs:123](../scripts/p0-bts-daily-cron.mjs) |
 | **#43** | 07 중복통합 (결정론, 프롬프트 예비) | 비-LLM | 5단계 매칭 (Gemini 미사용) | live | [07/run.ts:80](../.claude/skills/raw-db-verify-and-complete/prompts/07-merge-dups/run.ts) |
 | **#44** | 08 Wikidata 이미지 (SPARQL) | 비-LLM | SPARQL (Gemini 미사용) | live | [08/run.ts:68](../.claude/skills/raw-db-verify-and-complete/prompts/08-wk-image-fill/run.ts) |
-| **#45** | 결손보강·보정 WF (1행 1결손→행 전체 Gemini→TS→PM 보강) | 복합(Gemini+TS+PM) | 추출(6cat TOP20+식당 band 30/90/30)→Gemini카피→TS 9요소→PM이미지→2곳저장 | live(실증완료) | [fill45-defect-repair.ts](../scripts/fill45-defect-repair.ts) |
+| **#45** | 결손보강·보정 WF (1행 1결손→행 전체 Gemini→TS→PM 보강) | 복합(Gemini+TS+PM) | 추출(6cat TOP20+식당 band 30/90/30 또는 `--all-restaurants`=식당전부)→Gemini 전11필드 새우선→TS 전필드 새우선→PM이미지→2곳저장 | live(실증완료) | [fill45-defect-repair.ts](../scripts/fill45-defect-repair.ts) |
 
 > **단일관문 우회(정리 후보)**: Gemini = #11~#18(드림스튜디오)·#19·#21·#06·#08·#09·#10 / TS = #33·#34·#39·#41·#42.
 > **명백한 폐기 후보**: #19·#21·#41·#42(legacy) / #22(헬스체크) / #23·#24·#25(reference).
@@ -468,56 +468,59 @@ OUTPUT (strict JSON, no markdown fences):
 ### #07 · 02 장소 보강 큐레이션 (enrich-place) ⭐ 라이브 게이트웨이도 사용
 - **파일(CLI)**: `.claude/skills/.../02-enrich-place/run.ts:68-93` · **파일(라이브)**: `server/services/shared/gemini-curate.ts:51` (`geminiCurate()`) · **상태**: live · **모델**: `gemini-3-flash-preview`
 - **프롬프트 원본**: [`02-enrich-place/prompt.txt`](../.claude/skills/raw-db-verify-and-complete/prompts/02-enrich-place/prompt.txt) (split(/═{30,}/)[2] 3번째 청크 / 치환 ${CITY_NAME} ${CITY_ID} ${YEAR} ${BATCH_LEN} ${JSON_INPUT})
-- **프롬프트 본문 (verbatim, ⚠️수정금지 2026-05-18 = 1글자 변경 금지)**:
+- **프롬프트 본문 (verbatim, ⚠️수정금지 2026-05-18 + 2026-06-12 distance 추가 + 2026-06-16 6변경 + 2026-06-18 API_PASS = 1글자 변경 금지 = 실제 prompt.txt 와 동기화 2026-06-20)**:
 ```
+${API_PASS}
+
 역할: 너는 한국인 여행자를 위한 [CITY_NAME] 장소 정보 보강 전문가야.
 
-⚠️ 응답 근거 = **Google Search 그라운딩 기반** = 최신/검증된 사실 (= 가격/주소/한국어 호칭) 만 사용 = 추정/환각 금지.
+⚠️ 응답 근거 = Google Search 그라운딩 기반 = ${YEAR}년 ${MONTH}월 현재 시점의 최신/검증된 사실 (= 가격/주소/한국어 호칭) 만 사용 = 추정/환각 금지.
 
 목적: [CITY_NAME] (city_id=${CITY_ID}) 의 기존 장소 ${BATCH_LEN} 곳 = 누락 정보를 채우고 + 한국 관점 큐레이션을 작성한다.
 
 입력 = 각 장소 = JSON (= id 는 우리 place_seed_raw.id = 응답 매칭 키)
   - id: number (= place_seed_raw.id = 응답에 정확히 매칭 필수)
-  - name_en: string (= 공식 영어명 = 변경 X)
-  - name_local: string | null
+  - name_local: string | null (= 현지 원어명 = 변경 X)
+  - name_en: string | null
   - name_ko: string | null
   - address: string | null
   - latitude: number | null
   - longitude: number | null
   - google_place_id: string | null
-  - seed_category: 'restaurant'|'attraction'|'healing'|'adventure'|'hotspot'|'heritage'|'shopping'
 
 응답 (= JSON 배열, 설명 텍스트 X):
 {
   "places": [
     {
       "id": <입력 id 그대로 = place_seed_raw.id>,
-      "name_en": "<입력 그대로 = 변경 X>",
-      "name_local": "<현지 원어명 = 예 'Tour Eiffel' / 입력 있으면 검증 / 없으면 채움>",
+      "name_local": "<현지 원어명 = 예 'Tour Eiffel' / 입력 있으면 검증 / 없으면 채움 = 변경 X>",
+      "name_en": "<영어명 = 예 'Eiffel Tower' / 입력 있으면 검증 / 없으면 채움>",
       "name_ko": "<한국 여행자 친숙 호칭 = 예 '에펠탑' / 입력 있으면 검증 / 없으면 채움>",
       "address": "<번지 + 거리 + 우편번호 + 도시 + 국가 = 예 '5 Avenue Anatole France, 75007 Paris, France'>",
       "latitude": <위도 6 자리 = 예 48.858370>,
       "longitude": <경도 6 자리 = 예 2.294481>,
       "summary_ko": "<한 줄 숏폼 대사 = 인스타/FOMO 사회적 검증 = 한국어 25 자 이내>",
       "editorial_summary": "<한 줄 한국인 관점 선정 이유 = 코믹/위트 후킹 카피 = 한국어 35 자 이내>",
-      "price_eur": <1인 입장료 또는 평균 식대 EUR 숫자 = shopping 은 null>
+      "price_eur": <식당=1인 식대 / 그 외=실제 입장료 EUR 숫자 = 무료·입장료 없는 곳(광장·핫스팟 등) = 0>,
+      "distance_km_from_center": <도심 중심으로부터 직선거리 km = haversine = 소수 1 자리 = 예 2.4>
     }
   ]
 }
 
 규칙:
 1. 모든 입력 id = 응답에 정확히 포함 (= 누락 0) ← id = 우리 place_seed_raw.id = 매칭 키
-2. name_en = 입력 그대로 (= 변경 절대 X = 매칭 키)
+2. name_local = 입력 그대로 유지 (= 변경 절대 X = 우리 매칭 키 = 원어명 보존) / name_en·name_ko = Google 기준 정확히 검증·보강 (= 추정 X)
 3. 좌표 = 6 자리 소수 (= 예 48.858370, 2.294481)
 4. address = 번지부터 국가까지 완전 (= 부분 주소 X)
 5. summary_ko / editorial_summary = 한국어만 (= 영어 단어 혼용 X)
-6. price_eur = shopping 카테고리 = null 강제 / 그 외 = 합리적 EUR 정수
-7. 응답 = 위 JSON 만 (= 설명/주석/마크다운 X)
+6. price_eur = 식당이면 1인 식대, 그 외 장소는 실제 입장료 = EUR 정수 (= 추정 생성 X). 무료·입장료 없는 장소(광장·거리·핫스팟 등) = 0.
+7. distance_km_from_center = 도심 중심으로부터 직선거리 km (= haversine, 소수 1 자리, 필수)
+8. 응답 = 위 JSON 만 (= 설명/주석/마크다운 X)
 
 입력 ${BATCH_LEN} 장소:
 ${JSON_INPUT}
 ```
-- **설정 (verbatim)**: `geminiJson(prompt, { googleSearch:true })` = grounding ON. 배치 = FALLBACK `[40,30,20,10]` adaptive (size=40 시작, `places.length===0 || missing>5` 시 축소 재시도). 입력 필드 = `{id, name_en, name_local, name_ko, address, latitude, longitude, seed_category}` (**PID/URI 미전달 = 환각 방지**). 출력 4요소 = `{id, name_ko, summary_ko, editorial_summary, price_eur}`. 잘림복구 parsePlaces().
+- **설정 (verbatim, ⚠️ 동기화 2026-06-20 = 선별 폐기 = 응답 전 필드 반환)**: `geminiJson(prompt, { googleSearch:true, apiKey })` = grounding ON. 배치 = FALLBACK `[40,30,20,10]` adaptive (size=40 시작, `places.length===0 || missing>5` 시 축소 재시도). 입력 필드 = `{id, name_en, name_local, name_ko, address, latitude, longitude}` (**PID/URI·seed_category 미전달 = 환각 방지·가격 오염 방지**). **출력 = 응답 전 필드 11요소 = `{id, name_local, name_en, name_ko, address, latitude, longitude, summary_ko, editorial_summary, price_eur, distance_km_from_center}`** (= 옛 "출력 4요소" 선별 폐기 2026-06-20 = name_local·distance·address·좌표 누락 사고 = §19. Gemini만 주는 요소 name_local·distance·price 가 여기 다 실려 #45 가 새우선 덮어쓰기로 필수컬럼 자동완비). `${API_PASS}`·`${MONTH}` 동적 치환. 잘림복구 parsePlaces().
 - **조건**: raw-db enrich 단계. CLI `--defects-only` = 4요소 결손행만. 라이브 = place_seed_raw 행 + cityName/cityId → upsertPlace 융합. ⚠️ 수정금지(승인필요) 2026-06-05 = tsSearch 대칭 관문.
 
 ### #08 · 05 식당 재검증 (restaurant-reverify)
@@ -1106,7 +1109,7 @@ OUTPUT (strict JSON, no markdown fences):
 ### #28 · `ts-backfill.ts` — PID 없는 행 TS 재검증·보강
 - **파일**: `server/services/fill/ts-backfill.ts:60` · **상태**: live (관문 경유)
 - **호출 (verbatim)**: `tsSearch({ method:'searchText', regionCode:city.country_code||'FR', languageCode:lang, nameLocal:row.name_local||row.name_en, address:row.address, latitude/longitude, anchorRadiusM:(lat!=null?100:undefined), maxResults:1 })`. ANCHOR_M=100m.
-- **후처리**: no_match skip / businessStatus!=='OPERATIONAL' skip / dist>2km suspicious. upsertPlace(nameEn=매칭키 고정, priceOverwrite=false=GREATEST).
+- **후처리**: no_match skip / businessStatus!=='OPERATIONAL' skip / dist>2km suspicious. upsertPlace(nameEn=매칭키 고정, priceOverwrite=false=COALESCE 새우선).
 - **조건**: CLI `--city-id [--apply] [--lang] [--category]`. 대상 = 6 비식당 카테고리 AND google_place_id IS NULL. 행당 1콜 €0.0299.
 
 ### #29 · `ts-photo-fill.ts` — TOP20 이미지 없는 행 (이미지 채움)
@@ -1153,7 +1156,7 @@ run.ts --city-id=N --zone=downtown --method=text --pages=3 --price-levels=EXPENS
 - **body ①nearby (verbatim)**: `{ includedTypes: ['restaurant'], maxResultCount: Math.min(per,20), rankPreference: 'POPULARITY', locationRestriction: { circle: { center, radius: Math.min(50000, d.radius) } }, languageCode, regionCode }` (검색어 없음 = 구글 인기순).
 - **body ②text (verbatim)**: `{ textQuery: `${d.name} restaurant`, includedType: 'restaurant', locationBias: { circle: { center, radius: Math.min(50000, d.radius) } }, pageSize: per, languageCode, regionCode }` + `pageToken`(maxPages=3=60) + FieldMask에 `,nextPageToken` 추가.
 - **body ③premium (verbatim)**: ②text + `priceLevels: ['PRICE_LEVEL_EXPENSIVE','PRICE_LEVEL_VERY_EXPENSIVE']`.
-- **downtown 입력**: `destinations.ts` `DISCOVERY_ZONES[cityId].downtown` = `[{ name:'<City>', lat:<중심>, lng:<중심>, radius:10000 }]`(도심 단일 원형). 가격 = GREATEST(절대 안 낮춤).
+- **downtown 입력**: `destinations.ts` `DISCOVERY_ZONES[cityId].downtown` = `[{ name:'<City>', lat:<중심>, lng:<중심>, radius:10000 }]`(도심 단일 원형). 가격 = COALESCE 새우선(최신최우선).
 
 ### #33 · 12 run.ts 발굴 엔진 (위 #30~#32 공통 구현)
 - **파일**: `.claude/skills/.../12-ts-discover-pool/run.ts:127` · **상태**: tool · ⚠️ **raw fetch(관문 우회)**
@@ -1332,8 +1335,8 @@ SELECT ?place ?placeLabel ?placeDescription ?image ?coord ?instanceLabel WHERE {
 ## #45 · 결손보강·보정 WF (관리자 백그라운드 = 출입증 필수)
 
 - **파일**: `scripts/fill45-defect-repair.ts` · **상태**: live(실증완료 2026-06-20 파리·마드리드) · **호출 주체**: **관리자(사장님)가 요구할 때만** = 백그라운드 = process.env 우회 0 = **출입증 직독 필수**(FE 사용자 입력 아님).
-- **용도**: 이미 발굴된 도시의 **결손 행(12요소 중 하나라도 빔)을 행 전체 보강** = "1결손이라도 → Gemini→TS→PM 통째 1번 더 가져와 덮어쓰기". 멱등성(재실행 시 추출 0=완비).
-- **호출 명령**: `npx tsx scripts/fill45-defect-repair.ts --city-id=N` (DRY=무료) / `--apply`(외부호출) / `--only-id=ID`(단일 행 격리).
+- **용도**: 이미 발굴된 도시의 **결손 행(12요소 중 하나라도 빔)을 행 전체 보강** = "1결손이라도 → Gemini→TS→PM 통째 1번 더 가져와 덮어쓰기". 다시 돌려도 안전(완비된 도시 = 추출 0 = 외부호출 0).
+- **호출 명령**: `npx tsx scripts/fill45-defect-repair.ts --city-id=N` (DRY=무료) / `--apply`(외부호출) / `--only-id=ID`(단일 행 격리) / `--all-restaurants`(식당 풀 작은 도시=식당 전부, 2026-06-20).
 
 ### [2] Gemini 카피 = 02-enrich/prompt.txt (= #07 과 동일 진본, 새 프롬프트 0)
 - **호출**: `geminiCurate(city.name_en, cityId, rows, { apiKey: geminiKey })` (geminiKey = `issueApiKey(c,'GEMINI_API_KEY',cityId,날짜,true)` 출입증 직독).
@@ -1390,8 +1393,26 @@ ${API_PASS}
 입력 ${BATCH_LEN} 장소:
 ${JSON_INPUT}
 ```
-- 출입증 헤더 `${API_PASS}` = `[API-PASS] 도시=${cityName}(${cityId}) / 행=있음(채움) / 날짜=${오늘}` 동적치환(gemini-curate.ts:79). 출력 = name_ko·summary_ko·editorial_summary·price_eur·name_local·distance.
+- 출입증 헤더 `${API_PASS}` = `[API-PASS] 도시=${cityName}(${cityId}) / 행=있음(채움) / 날짜=${오늘}` 동적치환(gemini-curate.ts:79).
 - **설정(verbatim)**: gemini-3-flash-preview / grounding ON(googleSearch) / temperature 0.2 / maxOutputTokens 50000 / batch 적응형(40→30→20→10) / contextId=cityId rawTag='enrich-curate'.
+- **출력 = 응답 전 11필드 (선별 폐기 2026-06-20)**: `geminiCurate()` 가 `{id, nameLocal, nameEn, nameKo, address, latitude, longitude, summaryKo, editorialSummary, priceEur, distanceKmFromCenter}` 반환(gemini-curate.ts:25-31·94-102). 옛 "4필드만 추출(nameKo/summary/editorial/price)" = AI 선별 = name_local·distance·address·좌표 버려짐 사고 = §19 완전삭제.
+- **후처리 = 우리 id 직행 UPDATE (verbatim, ⚠️수정금지 = Gemini 응답 전 필드 새우선, 선별 폐기 2026-06-20)**:
+```sql
+UPDATE place_seed_raw SET
+  name_local = COALESCE(NULLIF($2,''), name_local),   -- Gemini만 주는 요소(원어명)
+  name_en = COALESCE(NULLIF($3,''), name_en),         -- 1차(뒤 TS displayName 이 최종 덮음)
+  name_ko = COALESCE(NULLIF($4,''), name_ko),
+  address = COALESCE(NULLIF($5,''), address),
+  latitude = COALESCE($6::real, latitude),
+  longitude = COALESCE($7::real, longitude),
+  summary_ko = COALESCE(NULLIF($8,''), summary_ko),
+  editorial_summary = COALESCE(NULLIF($9,''), editorial_summary),
+  price_eur = COALESCE($10::real, price_eur),         -- shopping=null 강제(호출자)
+  distance_km_from_center = COALESCE($11::numeric, distance_km_from_center),  -- Gemini만 주는 요소(도심거리=동선 재료)
+  updated_at = NOW()
+WHERE id=$1   -- 우리 id 직행(매칭 X = 빗나감 0). 신규 INSERT 없음.
+```
+- 파라미터 = `[r.id, g.nameLocal, g.nameEn, g.nameKo, g.address, g.latitude, g.longitude, g.summaryKo, g.editorialSummary, (shopping?null:g.priceEur), g.distanceKmFromCenter]`.
 
 ### [3] TS 9요소 검증·교정 = #26 게이트웨이 경유 (건건, 결손행마다 1콜)
 - **호출 (verbatim, ⚠️수정금지)**:
@@ -1410,7 +1431,7 @@ const ts = await tsSearch({
 const t1 = ts[0]; // top1 = 9요소 매핑형 TsPlace
 ```
 - **FieldMask**: `ts-client.ts` STANDARD_TS_FIELD_MASK 9요소 (= #26). hint = name_local||name_en. anchorRadiusM=100m(동명 차단). maxResults=1.
-- **후처리 = 우리 id 직행 UPDATE (verbatim, ⚠️수정금지 = 매칭 X = 빗나감 0)**:
+- **후처리 = 우리 id 직행 UPDATE (verbatim, ⚠️수정금지 = 매칭 X = 빗나감 0 = TS 응답 전 필드 새우선, 선별 폐기 2026-06-20)**:
 ```sql
 UPDATE place_seed_raw SET
   name_en = COALESCE($2, name_en),          -- TS displayName(영어)→name_en (2026-06-17, name_local은 Gemini전용)
@@ -1420,10 +1441,12 @@ UPDATE place_seed_raw SET
   google_place_id = COALESCE($6, google_place_id),   -- TS가 준 PID = 우리 PID 오류 교정(matcher veto 제거)
   google_maps_uri = COALESCE($7, google_maps_uri),
   google_review_count = COALESCE($8::integer, google_review_count),
+  price_eur = COALESCE($9::real, price_eur),  -- TS price(거의 null)=새우선(최신최우선). null이면 Gemini값 보존. shopping=null. 2026-06-20 추가.
   updated_at = NOW()
 WHERE id=$1   -- 우리 id 직행 = 목적지 정해진 단순 삽입(빗나감 0). UPDATE라 트리거 미발동(신규 INSERT 아님).
 ```
-- 파라미터 = `[r.id, t1.nameEn, t1.address, t1.latitude, t1.longitude, t1.googlePlaceId, t1.googleMapsUri, t1.googleReviewCount]`. no_match = skip + tsResults에 status='no_match' 기록.
+- 파라미터 = `[r.id, t1.nameEn, t1.address, t1.latitude, t1.longitude, t1.googlePlaceId, t1.googleMapsUri, t1.googleReviewCount, (seed_category==='shopping'?null:t1.priceEur)]`. no_match = skip + tsResults에 status='no_match' 기록.
+- ⚠️ TS는 `nameLocal=null`·distance 없음(= Gemini 담당) = 안 건드림. **중복요소(name_en·address·좌표·price)는 Gemini 1차 → TS가 뒤에 덮어 최종 = TS 값**(= 순서가 처리, [[reference_gemini_ts_field_overwrite_order]]).
 
 ### [4] PM 이미지 = #27 tsPhoto 경유 + 무료재링크 우선 (결손분만)
 - **무료재링크 우선 (verbatim) = 결제분 재활용 = PM 누수 차단**:
@@ -1449,8 +1472,9 @@ const imageUrl = await tsPhoto({ apiKey: pmKey, photoName: t1.photoName, storage
 - TS raw = 건건 로컬 skip(`localSkipRaw:true`) + 끝에 06형태 모음 1파일 `{date}_45-ts-defect-repair_candidates.json`(results 배열, photo_name 1개). Gemini raw = 로컬+스토리지 2곳. 이미지 = Storage place-images 1곳.
 - **매칭 = X = id 직행 UPDATE**(`WHERE id=$1`) = 목적지 정해진 단순 삽입(빗나감 0).
 
-### #45 고유 = 추출 SQL (verbatim = 이것만 #45 진본 = 재발명 금지)
-- 풀 = **6cat TOP20(rank 1~20) ∪ 식당 band 30/90/30** (도심/외곽 구분 없음 = 도시 전체 restaurant). band = 가격 분류(eco≤24/reason≤60/premium). BTS 제외.
+### #45 고유 = 추출 SQL (verbatim = 이것만 #45 진본 = 재발명 금지 = 코드 동기화 2026-06-20)
+- 풀 = **6cat TOP20(rank 1~20) ∪ 식당** (도심/외곽 구분 없음 = 도시 전체 restaurant). BTS 제외.
+- **식당 분기 (`--all-restaurants` 플래그 = $4, 2026-06-20 사장님 SSOT)**: `$4=true`(풀 작은 도시 브뤼셀·런던·뮌헨 등) = **식당 전부**(price 결손 포함, band 미적용 = #45 후 보정·채워짐) / `$4=false`(파리·마드리드 식당 400+) = **band 30/90/30**(price 있는 식당, eco≤24/reason≤60/premium = 가격분류) 유지 = 불변.
 ```sql
 WITH base AS (
   SELECT id, name_local, name_en, address,
@@ -1472,10 +1496,15 @@ rest_ranked AS (
   SELECT *, ROW_NUMBER() OVER (PARTITION BY band ORDER BY rank ASC) AS band_rn
   FROM base WHERE seed_category='restaurant' AND price_eur IS NOT NULL
 ),
+-- 식당 분기: $4(--all-restaurants)=true → 식당 전부(price NULL 포함) / =false → band 30/90/30 (불변)
 rest AS (
   SELECT id, name_local, name_en, address, lat, lng, price_eur, rc, google_place_id, google_maps_uri, seed_category,
          image_url, distance_km_from_center, summary_ko, editorial_summary
-  FROM rest_ranked WHERE band_rn <= CASE band WHEN 'eco' THEN 30 WHEN 'reason' THEN 90 ELSE 30 END
+  FROM base WHERE seed_category='restaurant' AND $4::boolean = true
+  UNION
+  SELECT id, name_local, name_en, address, lat, lng, price_eur, rc, google_place_id, google_maps_uri, seed_category,
+         image_url, distance_km_from_center, summary_ko, editorial_summary
+  FROM rest_ranked WHERE $4::boolean = false AND band_rn <= CASE band WHEN 'eco' THEN 30 WHEN 'reason' THEN 90 ELSE 30 END
 ),
 pool AS (SELECT * FROM sixcat UNION SELECT * FROM rest)
 SELECT id, name_local, name_en, address, lat, lng, price_eur, rc, google_place_id, google_maps_uri, seed_category,

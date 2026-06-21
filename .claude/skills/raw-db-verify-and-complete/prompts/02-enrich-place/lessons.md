@@ -19,7 +19,7 @@
 
 ### L4. COALESCE 옛 우선 vs 새 우선 (= 컬럼별 다름)
 - 식별 데이터 (= name_en/주소/좌표/PID/이미지/리뷰수) = **COALESCE 옛 우선** (= 신뢰 보호)
-- 가격 (price_eur) = **GREATEST 비싼 쪽** (= §14)
+- 가격 (price_eur) = **COALESCE 새 우선** (= 최신최우선 §14, 옛 GREATEST 폐기 2026-06-10)
 - 카피 (summary_ko/editorial_summary) = **새 우선** (= Gemini 큐레이션 갱신)
 - 태그 = **UNION** (= 누적)
 

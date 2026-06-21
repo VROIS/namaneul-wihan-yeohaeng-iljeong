@@ -22,10 +22,10 @@
 - 새 = prompt 안 = `day_zone: "outskirt" (= 강제)` 명시 + post-process 가드
 - 효과 = AG4 동선 계산 시 = day 2+ day-trip slot 으로 자동 분리
 
-### L5. price_eur_max = 상한가 (= GREATEST 정책 부합)
-- 옛 = `estimated_price_eur` = 평균값 = GREATEST 정책과 불일치
-- 새 = `price_eur_max` = 상한가 = 사용자 SSOT [[feedback_price_max_always]] 부합
-- 효과 = AG2 식당 풀 선택 시 = 사용자 신뢰 보호 (= 더 비싼 쪽 = 안전)
+### L5. price_eur_max = 상한가 (= 최신최우선 새우선 정책)
+- 옛 = `estimated_price_eur` = 평균값 (폐기)
+- 새 = `price_eur_max` = 상한가 = 최신 Gemini/TS 값으로 COALESCE 새우선 덮어쓰기(최신최우선)
+- 효과 = AG2 식당 풀 선택 시 = 최신 재호출이 물가/정정 반영 (= 옛 "비싼 쪽·feedback_price_max_always" 폐기 2026-06-10)
 
 ### L6. shortform_ko = 한국 슬랭 사용 (= "프사각", "본전 뽑음")
 - 옛 = 영어 + 한국어 혼용 = 어색한 카피

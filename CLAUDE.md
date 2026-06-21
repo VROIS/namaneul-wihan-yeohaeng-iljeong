@@ -231,7 +231,7 @@ const r = await upsertPlace({
 
 - 식별/검증 데이터 (= name/주소/좌표/PID/URI/리뷰수) = **COALESCE 새 우선** (= 최신 TS 가 가장 신뢰 = 사용자 SSOT 2026-06-03 확정). ⚠️ 옛 "옛 우선" 폐기 = 코드(place-upsert.ts)와 정합.
 - 이미지 (image_url) = **COALESCE 새 우선** (= 새 값 있을 때만 교체, 없으면 옛 보존 = WK 이미지 유지 = 빈 화면 방지)
-- 가격 (price_eur) = **GREATEST 비싼 쪽** (= 사용자 신뢰 보호, 물가 항상 오름 / priceOverwrite=true 시에만 새 값 덮기)
+- 가격 (price_eur) = **COALESCE 새 우선** (= 최신최우선 = 전 컬럼 동일. 옛 "GREATEST 비싼 쪽" 폐기 2026-06-10 = 레거시 garbage(€88K) 영구잠금 버그 해소 / 코드 place-upsert.ts:130·147 정합 = §19 동기화 2026-06-20)
 - 카피 (summary_ko/editorial_summary) = **새 우선** (= Gemini 큐레이션 갱신)
 - tags = **UNION** (= 누적)
 
@@ -263,7 +263,7 @@ const r = await upsertPlace({
 
 = 시스템 SSOT 필수 필드 포함:
 - `places.userRatingCount` (= 인기도 정렬 = `feedback_place_api_verified_pattern` 메모리)
-- `places.priceRange` (= 가격 SSOT = §14 = GREATEST)
+- `places.priceRange` (= 가격 SSOT = §14 = COALESCE 새 우선 / 옛 "GREATEST" 폐기 2026-06-20 = §14 정합)
 
 ### ❌ 절대 금지 = **Enterprise + Atmosphere** ($40/1K, 무료 1K/월)
 

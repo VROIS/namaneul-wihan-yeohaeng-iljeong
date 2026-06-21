@@ -52,7 +52,7 @@ Priority 6: 구글 리뷰 수
 +  : undefined,
 ```
 
-### 원칙 3: 유료만 DB 검증, 비싼 쪽 노출
+### 원칙 3: 유료만 DB 검증, 최신값 노출 (= COALESCE 새우선, 옛 "비싼 쪽" 폐기 2026-06-10)
 
 **[pipeline-v3.ts:449](file:///c:/Users/SY%20Lee/Desktop/nubi-clean/server/services/agents/pipeline-v3.ts#L449)** 수정:
 ```diff
@@ -64,9 +64,8 @@ Priority 6: 구글 리뷰 수
 function resolvePrice(geminiPrice: number, dbPlace: any): number {
   if (geminiPrice === 0) return 0;  // 원칙2: 무료 유지
   if (!dbPlace?.priceLevel) return geminiPrice;  // DB 없으면 Gemini
-  // 원칙3: 비싼 쪽 (2026 인상 반영)
-  const dbEstimate = priceLevelToEur(dbPlace.priceLevel);
-  return Math.max(geminiPrice, dbEstimate);  
+  // 원칙3: 최신최우선 (= Gemini 최신값 우선, 옛 "비싼 쪽 Math.max" 폐기 2026-06-10)
+  return geminiPrice;  
 }
 ```
 

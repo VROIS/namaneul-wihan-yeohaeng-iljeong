@@ -41,18 +41,21 @@
 | **단일 관문** | `shared/geminiClient.ts` | `shared/ts-client.ts` (9요소 강제 + Atmosphere 차단 §15) |
 
 → **Gemini = "무엇을(한국선호) + 어떤 카피로" / TS = "진짜인가 + 객관사실"**.
-→ **병합** = 같은 장소면 `upsertPlace` 7단계가 **한 행**으로 (COALESCE 새우선 · 가격 GREATEST · tags UNION).
+→ **병합** = 같은 장소면 `upsertPlace` 7단계가 **한 행**으로 (COALESCE 새우선 · 가격 COALESCE 새우선 · tags UNION).
 → **랭킹** = TS 의 **RC** = 유일 기준.
 
 ---
 
-## 3. 표준 프로세스 (개념 = 4 + 이미지 전 dedup 필수 게이트)
+## 3. 표준 프로세스 (개념 = ⓪ #45 사전정제 + 발굴 + 이미지 게이트)
 
 ```
-[레거시 PSR = ⓪ 사전정제]  →  발굴  →  보충  →  추출  →  07-merge dedup(필수)  →  최종 이미지(PM)
+[⓪ #45 결손보강·보정(repair)]  →  발굴  →  보충  →  추출  →  07-merge dedup(필수)  →  최종 이미지(PM)
 ```
 
-- **⓪ 사전정제(레거시 도시 한정, 2026-06-09 사용자 SSOT)** = 완전 0 도시가 아니라 옛 PSR이 있으면 **먼저 정제 후 시작**: ① 가짜 RC null(PID없는데 RC=비-TS, §7) ② 07-merge dedup(BTS안전) ③ 폐업 드롭 + 정크삭제 + 미스명복구. = 더러운 데이터 위에 발굴·이미지 쌓기 금지(마드리드 실증 = 레거시 162 + 가짜RC + 중복이 전 과정 오염). from-zero 도시 = skip.
+- **⓪ #45 결손보강·보정 (= fillCity 의 repair 단계 = 사장님 SSOT 2026-06-20)** = 발굴 전, 기존 PSR 의 **결손 행(12요소 중 하나라도 빔)을 행 전체 보강**(추출 band 30/90/30 → Gemini→TS→PM→2곳저장, §8.2 + 카탈로그 #45).
+  - **두 용도 = 한 컴포넌트** = (a) fillCity 전체 WF 의 **⓪ 사전정제 단계**(발굴 전 자동 선행) / (b) **독립 1회용** = `fill-city.ts --only=repair`(완비 도시 재점검, 예 파리·마드리드).
+  - **재발명 0** = 영구 컴포넌트 [`scripts/fill45-defect-repair.ts`](../scripts/fill45-defect-repair.ts) 연결만. 다시 돌려도 안전(완비 시 추출 0 = 외부호출 0).
+  - ⚠️ 옛 ⓪ "가짜RC null·07-merge·폐업드롭·미스명복구" 개별 정제 = #45 안에서 행 전체 refresh 로 흡수(중복정리 07-merge 는 이미지 전 별도 게이트 유지). from-zero 도시 = 결손 0 = skip.
 - ⚠️ **도시 실행 분기 (미래 재정립, 2026-06-09 사용자 SSOT)**: **레거시-존재 도시**(현 60+도시·BTS = 전부 ~150장소 레거시 있음) = ① **정제 자동화 후 발굴** or ② **완전삭제 후 발굴**(둘 중 = 다음 도시 진행 시 결정) / **0(빈) 도시** = 바로 발굴(현재 없음). **정비=의심 검수가 사람(LLM+사용자) 필요 = one-time 반수동 → 그 후 자동화 hands-off** (= 자동화 전제 = 레거시 near-complete 정비). **현 목표 = 마드리드 완성 + 컴포넌트 시스템화 입증**, 레거시 정제법 = 다음 도시에 재정립.
 - **발굴** = 7카테고리 전부 TS ∥ Gemini. **식당도 발굴 단계** = 다른 카테고리처럼, 단 **최대풀**(§8 동선최적화).
 - **보충** = Gemini 카피(요약2+가격) + TS backfill(PID/RC/좌표 = Gemini 환각 검증). **식당 카피(13) 자동 포함**.
@@ -66,7 +69,7 @@
 
 | # | 단계 | 컴포넌트 | 소스 | 역할 |
 |---|---|---|---|---|
-| ⓪-pre | 정제(레거시 도시) | RC가드(§7) + `07-merge` dedup | DB/TS | 옛 PSR 있으면 **발굴 전**: 가짜RC null + 중복병합(BTS안전) + 폐업드롭. from-zero=skip |
+| **⓪ repair** | **결손보강·보정 (#45)** | [`scripts/fill45-defect-repair.ts`](../scripts/fill45-defect-repair.ts) | Gemini+TS+PM | **발굴 전 사전정제 / 독립 1회용**(`--only=repair`). 결손행 추출(band 30/90/30)→Gemini카피→TS 9요소→PM이미지→2곳저장. 다시 돌려도 안전(완비=추출0). |
 | ⓪ | city-meta | `shared/gemini-city-meta.ts` | Gemini | (신규도시) `cities` 좌표 행 생성 = downtown 발굴 전제 |
 | ① | discover | `12-ts-discover-pool` ∥ `01-discover-6cats` | TS ∥ Gemini | 6cat 발굴 → `upsertPlace` 7단계 병합 / 신규 placeholder rank |
 | ② | curate | `02-enrich-place --defects-only` | Gemini | 요약2 + 가격 결손행 보강 |
@@ -86,7 +89,7 @@
 | 책임 | 단일 진입점 | 규칙 |
 |---|---|---|
 | 매칭(동일장소) | `shared/matcher.ts` `matchCandidate` | 7단계 (= DB 트리거 ≡ `upsertPlace` ≡ `07-merge` ≡ ag3 동일 1벌) |
-| 쓰기(INSERT/UPDATE) | `place-upsert.ts` `upsertPlace` | COALESCE 새우선 / GREATEST 가격 / UNION tags / **rank placeholder** |
+| 쓰기(INSERT/UPDATE) | `place-upsert.ts` `upsertPlace` | COALESCE 새우선 / 가격 COALESCE 새우선 / UNION tags / **rank placeholder** |
 | TS 호출 | `shared/ts-client.ts` `tsSearch`·`tsPhoto` | 9요소 FieldMask 강제 + Atmosphere 차단(§15) |
 | Gemini 호출 | `shared/geminiClient.ts` | gemini-3-flash, grounding |
 | SKU 가드 | `shared/google-places-sku.ts` `validateFieldMask` | Enterprise 한도, Atmosphere throw |
@@ -160,7 +163,7 @@
 
 **⑥ ⚠️ 동선 예산과 분리**: route `MEAL_BUDGET`(€40/100/300) = 사용자 지갑=절대값 = 그대로. 본 §8.2 = 결손보강 추출 전용.
 
-**입증(2026-06-20)**: 파리·마드리드 #45 WF 실행 = 추출(band 30/90/30)→Gemini→TS→PM→2곳저장 정상. 멱등성 = 재실행 시 추출 0(결손 0=완비). PID 중복 6쌍 = 07-merge 인위병합 해소. = 두 도시 완비 입증.
+**입증(2026-06-20)**: 파리·마드리드 #45 WF 실행 = 추출(band 30/90/30)→Gemini→TS→PM→2곳저장 정상. 다시 돌려도 안전 = 재실행 시 추출 0(결손 0=완비). PID 중복 6쌍 = 07-merge 인위병합 해소. = 두 도시 완비 입증.
 
 ---
 
@@ -185,10 +188,15 @@
 
 **현재 (CLI)**:
 ```
+# 전체 WF (repair 사전정제 → 발굴 → ... → verify)
 npx tsx .claude/skills/raw-db-verify-and-complete/fill-city.ts --city-id=N [--apply] \
-  [--only=discover,curate,backfill,photo,restaurant,verify] [--lang=fr] [--outskirt-hints="Toledo / Segovia"]
+  [--only=repair,discover,curate,backfill,photo,restaurant,verify] [--lang=fr] [--outskirt-hints="Toledo / Segovia"]
+
+# 독립 1회용 = #45 결손보강·보정만 (완비 도시 재점검)
+npx tsx .claude/skills/raw-db-verify-and-complete/fill-city.ts --city-id=N --only=repair --apply
+# (또는 직접) npx tsx scripts/fill45-defect-repair.ts --city-id=N [--apply] [--only-id=ID]
 ```
-- `--apply` 없으면 = **DRY**(비용추정 + 완비 리포트, API 0).
+- `--apply` 없으면 = **DRY**(비용추정 + 완비 리포트, API 0). repair(#45) 단독 DRY = `fill45-defect-repair.ts --city-id=N`(결손 분포 표시).
 
 **다음 (FE 관리자 대시보드)**:
 - `/admin` 독립 HTML → `POST /api/admin/fillcity {cityId, only?}` → 백그라운드 spawn → 진행률 + 완비 리포트 표시.
@@ -213,15 +221,16 @@ npx tsx .claude/skills/raw-db-verify-and-complete/fill-city.ts --city-id=N [--ap
 
 | # | 단계 | 컴포넌트 | 상태 | 검증 기준 |
 |---|---|---|---|---|
+| **⓪ repair** | **#45 결손보강·보정** | [`scripts/fill45-defect-repair.ts`](../scripts/fill45-defect-repair.ts) | ✅ **파리·마드리드 완비+다시돌려도 안전(2026-06-20)** | 추출(band 30/90/30)→Gemini→TS→PM→2곳저장. 재실행 추출0. fill-city ⓪ 연결+독립 1회용. 카탈로그 #45 등재 |
 | 0 | city-meta (신규도시) | gemini-city-meta(#04) | ⬜ 미배선 | cities 행 자동 생성 |
 | 1 | 발굴 6비식당 | TS #30 ∥ Gemini #06 | ✅ 마드리드(359) | 행수↑·중복0 |
 | 2 | 발굴 식당 도심 | TS #32 합본 ∥ Gemini 03 | ✅ 마드리드 도심 242(Gemini 91 + TS 108, dedup) | 도심 식당 풀 |
 | 3 | 발굴 식당 외곽 | Gemini 04(범용타입) → town추출 → **fill/outskirt-ts-fill** | ✅ 마드리드 219(RC 42→142, 신규75+백필25, geocode 5/5, config0) | town별 searchNearby POP |
-| 4 | 보충 | Gemini #02 + TS #28 backfill | ⬜ **식당 102 RC/PID/좌표 결손** | 검증값 채움 |
-| 5 | 추출/랭킹 | fill/rc-rerank | ✅ 파리·마드리드 | RC DESC 역전0 |
-| 6 | 이미지 | 비식당=ts-photo-fill TOP20 / 식당=`fill/restaurant-image-targets`(§8.2 도시상대띠) | ✅ **마드리드 165/165**(식당113+비식당52, 실패0, €6.28, 2026-06-09) | 컴포넌트 신규 빌드+DRY+apply 실증 |
-| 7 | 중복정리 | 07-merge(#43) | ✅ 파리 | 진짜병합+BTS보존 |
-| **8** | **🔴 시스템화 리팩토링** | ⓐgeminiJson 통일 ⓑshared/skill-runtime ⓒ**name_en 전면제거**(=name_local 보편키, 영어권 자동커버) ⓓmatcher name_local 토큰매칭(접두어 흡수) ⓔ12-pool "삭제후보" 로직수정(상호보완) ⓕ07-merge BTS제외 | 🔄 03/04 un-archive ✅ / 나머지 ⬜ | 보일러플레이트 0·게이트웨이 강제·영어 의존 0 |
+| 4 | 보충 | **#45 가 흡수**(Gemini #02 + TS #28) | ✅ **#45 로 통합(2026-06-20)** | 결손행 행 전체 refresh |
+| 5 | 추출/랭킹 | fill/rc-rerank + autorank 트리거 | ✅ 파리·마드리드 | RC DESC 역전0. 실시간(§8.2⑤) |
+| 6 | 이미지 | **#45 PM**(무료재링크→남은 결손만, photo 1개) | ✅ **#45 로 통합(2026-06-20)** = 파리·마드리드 | photos[0] 대표 1장 |
+| 7 | 중복정리 | 07-merge(#43) | ✅ **파리 PID중복 6쌍 병합(2026-06-20)** | 진짜병합+BTS보존 |
+| **8** | **🔴 시스템화 리팩토링** | ⓐgeminiJson(#01=키받는 배관·무판단) ⓑshared/skill-runtime ⓒname_en 전면제거 ⓓmatcher name_local 토큰매칭 ⓔ12-pool 삭제후보 로직수정 ⓕ07-merge BTS제외 | 🔄 **출입증(#01배관·api-gate→issue-api-key)·#45통합 ✅(2026-06-20)** / matcher중복·ag3 ko제거 ⬜ | 보일러플레이트 0·게이트웨이 강제·영어 의존 0 |
 
 ### 버그로그 (= 재발견 방지 / 🩹 = ⑧이 근본 흡수)
 | 버그 | 위치 | 상태 |
@@ -238,7 +247,24 @@ npx tsx .claude/skills/raw-db-verify-and-complete/fill-city.ts --city-id=N [--ap
 | 07-merge 검증 = 두 도시 거의 깨끗 + ⑧ 실증 | 마드리드/파리 07-merge dry(2026-06-09) | ✅ 파리 확정1 / 마드리드 확정8(진짜6+BTS오탐1+경계1)·의심11. 의심 중 **실중복3**(로컬이름 접미사차=tier4 놓침→⑧4 토큰매칭이면 확정승격) + **name_en환각 오탐4**(→⑧8a면 소멸) = ⑧ 4·4'·5·8a 실데이터 입증 |
 | (A) NULL-RC 외곽 채움 6곳 TS검증 = ⑧4·dedup 실증 | `ts-backfill --ids`(신규 추가형 필터, 사용자 승인) | ✅ 2026-06-09: 3 깨끗채움(Volapié1780·VIPS4557·Sibuya1874) / 1 폐업드롭(Café&Tapas) / **2 기존행 중복폭로**(Casa Duque 76837=기존76919 / Amura 76815→신규77178 중복의심). 원인=이름부분불일치 → **⑧4 토큰매칭 필요 + PM전 dedup 필수** 재확인. ⚠️ 77178 신규1행(중복의심 플래그=설계대로) |
 
-### 🔴 즉시재개점 (2026-06-09)
+### 🔴🔴 즉시재개점 (2026-06-20 = 최신 = 이것부터)
+
+- **#45 결손보강·보정 WF 완성·커밋·푸시**(커밋 `c8543ef`): 추출(6cat TOP20 ∪ 식당 band 30/90/30)→Gemini(02-enrich)→TS(9요소 건건)→PM(무료재링크→남은결손)→2곳저장(TS 06형태 모음 1파일). 우리 id 직행 UPDATE(매칭X=빗나감0). 다시 돌려도 안전 = 재실행 추출0. **파리·마드리드 완비 실증**.
+- **출입증 구조 확정**(사장님 SSOT = 사용자 env / 관리자 출입증): #01 geminiClient = 키 받는 무판단 배관(apiKey 인자=관리자 출입증 / 미전달=사용자 메인앱 env). gemini-curate·ts-client·save-raw = 관리자 백그라운드 전용 옵션(출입증·localSkip). 카탈로그 #01 모순문구("모든 단일진입점") 제거.
+- **파리 PID 중복 6쌍 인위병합**(07-merge): 60341·61994·62024·62042·72286·62069 keep / 77595~77601 삭제. 원인 = 옛 ag3 languageCode:'ko'로 한국어가 name_local에 들어가 매칭 깨짐.
+- **#45 ↔ fillCity 연결**: fill-city.ts `only` 맨 앞 'repair' = ⓪ 사전정제(발굴 전 자동) + 독립 1회용(`--only=repair`). 재발명0 = run() 틀에 한 줄.
+- **문서 정합**: 카탈로그 #45 E섹션 verbatim 등재(Gemini프롬프트+TS+PM+SQL) / PRD §3·§4·§8.2·§11·§13 #45 반영.
+- **미커밋**: fill-city.ts(repair 연결) + FILLCITY_PRD.md(이 갱신). = 커밋 대기.
+
+### 🔴 다음 P0 (사장님 판단 대기)
+1. **다음 도시 결손보강**(#45) = 6/30 전 Egress 여유 시(유료 전환 회피). 단 이미지 PM = Egress 무거움 = 신중.
+2. **ag3 languageCode:'ko' 제거** = name_en 정합(한국어 오염 차단) = 라이브앱 = 사장님 예외승인됨, 별도 신중.
+3. **matcher 중복**(트리거 ≡ matcher.ts 2벌) = §19 정합 = ⑧ 단계.
+4. **city-meta(⓪) 미배선** = 신규도시 자동.
+
+---
+
+### 즉시재개점 (2026-06-09 = 이력)
 - **완료 = 마드리드 발굴 + 보충**: 식당 **42→418**(도심 242=Gemini03+TS#32합본 / 외곽 176=Gemini04+outskirt-ts-fill, RC 264) + 6cat 313. **보충(②/④)** = 02(비식당)+13(식당)으로 추천·감성 빈곳 **325→4**(321 채움) + 식당가격 34 채움. **객관 검증 통과**(02 post:73-80 = 식별값 기존우선 = 좌표·주소·이름 무손상 / id 매칭 / 13 = TS 가격 보존). 내용 정확성 = Gemini 그라운딩 신뢰(AI 판단 X). 신규 `fill/outskirt-ts-fill.ts`. 03/04 un-archive. 04 범용표준화. 01/02/03/04/13 responseMimeType 빈응답버그 제거.
 - **미커밋(대규모, working tree만 = "시스템화+실증 후 커밋" 원칙)**: 03/04 un-archive(이동+ROOT복귀+post수정) + 04표준화 + `fill/outskirt-ts-fill.ts`(신규) + 01/02/03/04/13 responseMimeType 제거 + fill-city/PRD/catalog 경로 + hotspot rooftop 동기화 + 메모리.
 - ⚠️ **matcher.ts = 원본 그대로**(⑧ stage4 매처수정 = MatchedBy 1줄 시도 후 **즉시 원복** = 반쪽 안 남김. 설계는 §14 + plan `~/.claude/plans/serialized-spinning-frog.md` 에 대기).

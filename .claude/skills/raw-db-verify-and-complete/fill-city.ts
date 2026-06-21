@@ -38,8 +38,11 @@ const lang = argv['lang'] ? String(argv['lang']) : undefined;
 // ⚠️ 수정금지(승인필요) — languageCode 제거(2026-06-17 사장님 SSOT) = --lang 미지정 시 자식에 --lang 인자 자체를 안 넘김(`--lang=undefined` 문자열 오전달 방지). 명시 시에만 ['--lang=<값>'].
 const langArg = lang ? [`--lang=${lang}`] : [];
 const zone = argv['zone'] ? String(argv['zone']) : 'downtown';
-// ⚠️ 수정금지(승인필요) 2026-06-07 = 상호보완 체인 6 단계 (= 사용자 SSOT) = discover(TS+Gemini)→curate(Gemini카피)→backfill(TS PID)→photo(TOP20)→restaurant(TS+Gemini)→verify
-const only = argv['only'] ? String(argv['only']).split(',').map((s) => s.trim()) : ['discover', 'curate', 'backfill', 'photo', 'restaurant', 'verify'];
+// ⚠️ 삭제 2026-06-21 = 옛 "allRestaurantsArg(--all-restaurants 패스스루)"(2026-06-20 AI 임시) 완전삭제 = 사장님 SSOT "원복"(§19). #45 = 항상 band 30/90/30 단일(플래그 X).
+// ⚠️ 수정금지(승인필요) 2026-06-20 = 사전정제(#45 결손보강) 맨 앞 삽입 = 사장님 SSOT.
+//   = repair(#45 결손보강·보정) → discover(TS+Gemini) → curate → backfill → photo → restaurant → verify.
+//   = repair 단독 = `--only=repair` (1회용 보정 = 파리·마드리드 재점검). 전체 = repair 가 발굴 전 사전정제로 자동 선행.
+const only = argv['only'] ? String(argv['only']).split(',').map((s) => s.trim()) : ['repair', 'discover', 'curate', 'backfill', 'photo', 'restaurant', 'verify'];
 const outskirtHints = argv['outskirt-hints'] ? String(argv['outskirt-hints']) : '';  // = 04 외곽식당 Gemini 발굴용 day-trip 명소 (미제공 = TS 외곽만 = 04 스킵)
 const today = new Date().toISOString().slice(0, 10);
 if (!cityId) { console.error('Usage: --city-id=<N> [--apply] [--lang=fr] [--zone=downtown] [--outskirt-hints="Toledo / Segovia"] [--only=discover,curate,backfill,photo,restaurant,verify]'); process.exit(1); }
@@ -48,7 +51,7 @@ const CATS = ['heritage', 'hotspot', 'attraction', 'adventure', 'healing', 'shop
 const P = (rel: string) => path.join(SKILL, rel);
 
 // ⚠️ 수정금지(승인필요) 2026-06-10 = 컴포넌트 CLI 실행 = 재시도(전이성 API 오류) + 실패해도 전체 중단 X (= 무인 30분 실행 중 1단계 실패가 전체를 안 죽임). 끝에 실패 요약 → 해당 단계만 재실행.
-//   = raw 저장 + 단일 매처 멱등이라 재실행 안전(중복 0). 옛 "실패 시 process.exit(1)" 폐기.
+//   = raw 저장 + 단일 매처라 다시 돌려도 안전(이미 있으면 중복 0). 옛 "실패 시 process.exit(1)" 폐기.
 const failures: string[] = [];
 function run(label: string, script: string, args: string[], retries = 2) {
   console.log(`\n━━━━━━ ${label} ━━━━━━`);
@@ -68,17 +71,18 @@ function run(label: string, script: string, args: string[], retries = 2) {
 
   if (!apply) {
     // ── DRY = 무료 = 계획 + 비용 추정 + 현재 14요소 리포트 (API 호출 0) ──
-    // ⚠️ 수정금지(승인필요) 2026-06-07 = 상호보완 체인(TS 객관 + Gemini 한국선호) 계획 + 레거시 병합 투명성 (= 사용자 SSOT)
-    console.log(`\n[계획] --apply 시 = 상호보완 체인 (TS 객관 RC + Gemini 한국선호) → upsertPlace 7단계 병합:`);
+    // ⚠️ 수정금지(승인필요) 2026-06-20 = Gemini 우선 체인 계획 (= 옛 "TS먼저 ∥ Gemini" 안내 삭제 = run 순서 정합).
+    console.log(`\n[계획] --apply 시 = Gemini 우선 체인 (Gemini 선정·힌트·name_local·가격 → TS 9요소 검증) → upsertPlace 7단계:`);
+    console.log(`\n  ⓪ repair(#45) = 기존 결손행 Gemini→TS→PM 보강 (완비 시 추출 0 = 다시 돌려도 외부호출 0)`);
     console.log(`\n  Ⓐ 6 카테고리 (${CATS.join('·')}):`);
-    console.log(`     1. TS 발굴(12 searchText 카테고리정의 ×6) ∥ Gemini 발굴(01 한국선호 = TS가 못 잡는 곳)`);
+    console.log(`     1. Gemini 발굴(01 한국선호=선정·힌트) → TS 발굴·검증(12 searchText ×6=9요소)`);
     console.log(`     2. → upsertPlace 7단계 = 기존 레거시와 병합(중복 0) / 진짜 신규만 INSERT`);
     console.log(`     3. Gemini 카피 보강(02 --defects-only) + TS PID/가격 보강(ts-backfill)`);
     console.log(`     4. RC순 랭킹 → 카테고리별 TOP20 이미지 PM(ts-photo-fill --top=20)`);
-    console.log(`\n  Ⓑ 식당:`);
-    console.log(`     도심 = TS(12 downtown 합본) + Gemini(03 가격tier) → 병합 → 카피(13) → TOP20 PM`);
-    console.log(`     외곽 = Gemini(04 명소주변) + TS(12 outskirt 재검증) → 병합 → 카피(13) → TOP20 PM`);
-    console.log(`\n  공통: 모든 쓰기 = upsertPlace 단일진입(§14) = COALESCE 새우선·GREATEST 가격 = 레거시 자동 업그레이드`);
+    console.log(`\n  Ⓑ 식당 (Gemini 우선):`);
+    console.log(`     도심 = Gemini(03 가격tier·선정) → TS 3종(검증) → 병합 → 카피(13) → PM`);
+    console.log(`     외곽 = Gemini(04 town 선정=범용자동) → TS(그 town 검증) → 병합 → 카피(13) → PM`);
+    console.log(`\n  공통: 모든 쓰기 = upsertPlace 단일진입(§14) = COALESCE 새우선(가격 포함 최신최우선) = 레거시 자동 업그레이드`);
     console.log(`\n[예상 비용] TS 발굴 ~€0.5 + PID 보강 ~€1.5 + 이미지 PM ~€1.2 + Gemini 무료 ≈ €3~5`);
     console.log(`\n[현재 PSR 레거시 = 병합 대상]`);
     await verifyReport();
@@ -88,15 +92,24 @@ function run(label: string, script: string, args: string[], retries = 2) {
   }
 
   // ── APPLY = 상호보완 전체 체인 (= 사용자 SSOT 2026-06-07 = TS 객관 + Gemini 한국선호 → upsertPlace 7단계 자동병합) ──
+  // ⚠️ 수정금지(승인필요) 2026-06-20 = ⓪ 사전정제 = #45 결손보강·보정 (= 발굴 전 기존 데이터 결손 채움 / 독립 1회용 = --only=repair).
+  //   = 재발명 0 = 영구 컴포넌트 scripts/fill45-defect-repair.ts 연결만. 추출(6cat TOP20 + 식당 band 30/90/30 = 270)→Gemini 전필드→TS 전필드→PM→2곳저장.
+  //   = 완비 시 추출 0 (= 같은 도시 다시 돌려도 외부호출 0). ⚠️ 삭제 2026-06-21 = 옛 "--all-restaurants 패스스루"(AI 임시) 완전삭제 = 사장님 SSOT "원복"(§19).
+  if (only.includes('repair')) {
+    run(`⓪ 결손보강·보정(#45)`, '../../../scripts/fill45-defect-repair.ts', [`--city-id=${cityId}`, ...(apply ? ['--apply'] : [])]);
+  }
   if (only.includes('discover')) {
-    // Ⓐ-1 발굴 = TS(searchText 카테고리정의 ×6) + Gemini(01 한국선호 = TS 미발굴 보완)
+    // ⚠️ 수정금지(승인필요) 2026-06-20 사장님 SSOT = Gemini 우선 발굴 순서 (= 옛 TS먼저 폐기).
+    //   = Gemini(01)가 선정·TS검색힌트(장소명)·name_local·가격 먼저 줌 → TS(12-pool)가 그 힌트로 객관 9요소 검증. (PRD §2 정합)
+    // Ⓐ-1 Gemini 발굴 = 01 한국선호(인스타·블로그·유튜브) = "무엇을" 선정
+    run(`Ⓐ Gemini발굴 6cat`, 'prompts/01-discover-6cats/run.ts', [`--city-id=${cityId}`]);
+    // Ⓐ-2 TS 발굴·검증 = searchText 카테고리정의 ×6 = "진짜인가 + 객관 9요소"
     for (const cat of CATS) run(`Ⓐ TS발굴 ${cat}`, 'prompts/12-ts-discover-pool/run.ts',
       [`--city-id=${cityId}`, `--category=${cat}`, '--zone=downtown', ...langArg, '--per=20', '--pages=1']);
-    run(`Ⓐ Gemini발굴 6cat`, 'prompts/01-discover-6cats/run.ts', [`--city-id=${cityId}`]);
-    // Ⓐ-2 합침 = upsertPlace 7단계 매칭 (TS + Gemini = 같은 장소 병합 / 신규만 INSERT)
+    // Ⓐ-3 합침 = upsertPlace 7단계 매칭 (Gemini + TS = 같은 장소 병합 / 신규만 INSERT)
+    run(`Ⓐ Gemini병합 6cat`, 'prompts/01-discover-6cats/post-process.ts', [`--city-id=${cityId}`, `--date=${today}`]);
     for (const cat of CATS) run(`Ⓐ TS병합 ${cat}`, 'prompts/12-ts-discover-pool/post-process.ts',
       [`--city-id=${cityId}`, `--category=${cat}`, '--zone=downtown', `--date=${today}`, '--apply']);
-    run(`Ⓐ Gemini병합 6cat`, 'prompts/01-discover-6cats/post-process.ts', [`--city-id=${cityId}`, `--date=${today}`]);
   }
   if (only.includes('curate')) {
     // Ⓐ-3a Gemini 한국어 카피 보강 (= name_ko/summary/editorial/price 결손행)
@@ -112,20 +125,21 @@ function run(label: string, script: string, args: string[], retries = 2) {
     run(`Ⓐ 이미지 TOP20`, '../../../server/services/fill/ts-photo-fill.ts', [`--city-id=${cityId}`, ...langArg, '--top=20', '--apply']);
   }
   if (only.includes('restaurant')) {
-    // Ⓑ 식당 = TS(객관 RC) + Gemini(한국선호) 상호보완
-    // 도심 = TS 3종 합본(nearby POPULARITY + text60 + premium) + Gemini 가격tier(03 복귀)
+    // ⚠️ 수정금지(승인필요) 2026-06-20 사장님 SSOT = Gemini 우선 식당 발굴 (= 옛 TS먼저 폐기).
+    //   = Gemini(03 도심·04 외곽town)가 선정·가격tier·name_local·외곽town 먼저 줌 → TS가 그 힌트로 9요소 검증.
+    // 도심 = Gemini(03 가격tier) 먼저 → TS 3종(nearby POPULARITY + text60 + premium = Gemini 힌트로 검증)
+    run(`Ⓑ 도심 Gemini(03)`, 'prompts/03-downtown-restaurant/run.ts', [`--city-id=${cityId}`]);
     run(`Ⓑ 도심 TS nearby`, 'prompts/12-ts-discover-pool/run.ts', [`--city-id=${cityId}`, '--zone=downtown', '--method=nearby', '--label=nearby', ...langArg]);
     run(`Ⓑ 도심 TS text60`, 'prompts/12-ts-discover-pool/run.ts', [`--city-id=${cityId}`, '--zone=downtown', '--method=text', '--pages=3', '--label=text', ...langArg]);
     run(`Ⓑ 도심 TS premium`, 'prompts/12-ts-discover-pool/run.ts', [`--city-id=${cityId}`, '--zone=downtown', '--method=text', '--pages=3', '--price-levels=EXPENSIVE,VERY_EXPENSIVE', '--label=premium', ...langArg]);
-    run(`Ⓑ 도심 Gemini(03)`, 'prompts/03-downtown-restaurant/run.ts', [`--city-id=${cityId}`]);
-    run(`Ⓑ 도심 병합(TS+PM)`, 'prompts/12-ts-discover-pool/post-process.ts', [`--city-id=${cityId}`, '--zone=downtown', `--date=${today}`, '--apply', '--photo']);
     run(`Ⓑ 도심 Gemini병합(03)`, 'prompts/03-downtown-restaurant/post-process.ts', [`--city-id=${cityId}`, `--date=${today}`]);
-    // 외곽 = TS(destinations.ts 명소별) + Gemini(04 복귀, --outskirt-hints 제공 시)
-    run(`Ⓑ 외곽 TS`, 'prompts/12-ts-discover-pool/run.ts', [`--city-id=${cityId}`, '--zone=outskirt', ...langArg]);
-    if (outskirtHints) run(`Ⓑ 외곽 Gemini(04)`, 'prompts/04-outskirt-restaurant/run.ts', [`--city-id=${cityId}`, `--hints=${outskirtHints}`]);
-    else console.log(`\n  ⚠️ 외곽 Gemini(04) 스킵 = --outskirt-hints 미제공 (TS 외곽만 진행)`);
-    run(`Ⓑ 외곽 병합(TS+PM)`, 'prompts/12-ts-discover-pool/post-process.ts', [`--city-id=${cityId}`, '--zone=outskirt', `--date=${today}`, '--apply', '--photo']);
-    if (outskirtHints) run(`Ⓑ 외곽 Gemini병합(04)`, 'prompts/04-outskirt-restaurant/post-process.ts', [`--city-id=${cityId}`, `--date=${today}`]);
+    run(`Ⓑ 도심 병합(TS+PM)`, 'prompts/12-ts-discover-pool/post-process.ts', [`--city-id=${cityId}`, '--zone=downtown', `--date=${today}`, '--apply', '--photo']);
+    // 외곽 = Gemini(04 범용 자동 = 식당 발굴: 이름·주소·가격, 좌표는 안 줌) → 04병합 DB INSERT → outskirt-ts-fill(DB 주소→town 추출→town 이름으로 TS geocode+searchNearby 검증)
+    // ⚠️ 수정금지(승인필요) 2026-06-21 사장님 SSOT = 옛 "Ⓑ 외곽 TS(12 --zone=outskirt 좌표 zone) + 외곽 병합(12 outskirt)" 완전삭제(§19) = destinations.ts 좌표 요구 = 브뤼셀 없으면 실패한 옛 방식.
+    //   = 외곽은 좌표 zone 아니라 "Gemini 발굴 식당 주소 → town 이름 추출 → 그 town 이름으로 TS" = outskirt-ts-fill.ts(영구 컴포넌트, 2026-06-08) 가 진짜 로직. 04병합이 먼저(DB에 외곽식당 있어야 주소 읽음).
+    run(`Ⓑ 외곽 Gemini(04)`, 'prompts/04-outskirt-restaurant/run.ts', [`--city-id=${cityId}`, ...(outskirtHints ? [`--hints=${outskirtHints}`] : [])]);
+    run(`Ⓑ 외곽 Gemini병합(04)`, 'prompts/04-outskirt-restaurant/post-process.ts', [`--city-id=${cityId}`, `--date=${today}`]);
+    run(`Ⓑ 외곽 TS(town이름→검증)`, '../../../server/services/fill/outskirt-ts-fill.ts', [`--city-id=${cityId}`, ...langArg, '--apply']);
     // 식당 한국어 카피 (13 = RC 있는 식당 요약 2개 + 가격)
     run(`Ⓑ 식당 카피(13) 발굴`, 'prompts/13-restaurant-summary/run.ts', [`--city-id=${cityId}`]);
     run(`Ⓑ 식당 카피(13) 적용`, 'prompts/13-restaurant-summary/post-process.ts', [`--city-id=${cityId}`, `--date=${today}`, '--apply']);

@@ -839,16 +839,16 @@ export async function saveNewPlacesToDB(
           `[AG3-SAVE] 📡 "${place.name}" → (${lat}, ${lng}) img=${imageUrl ? "Storage" : "NULL"}`,
         );
 
-        // ⚠️ 추가 = 2026-05-15 사용자 SSOT = TS priceRange.endPrice + Gemini = 비싼 쪽 max
+        // ⚠️ 수정금지(승인필요) 2026-06-20 = TS priceRange.endPrice(최신 검증) 우선, 없으면 Gemini = COALESCE 새 우선(최신최우선). 옛 "비싼 쪽 max"(2026-05-15) 폐기 = §14 정합(GREATEST 폐기 2026-06-10). place-upsert 가 이미 새우선이라 여기서 비싼쪽 강제 = §14 위반 잔재였음.
         const tsPriceEur = result.priceRange?.endPrice?.units
           ? parseFloat(result.priceRange.endPrice.units)
           : 0;
         const geminiPriceEur = (place as any).estimatedPriceEur || 0;
-        const maxPriceEur = Math.max(tsPriceEur, geminiPriceEur);
+        const newPriceEur = tsPriceEur > 0 ? tsPriceEur : geminiPriceEur;
 
         const nextRank = baseRanks[seedCategory] + i;
         // ⚠️ 수정금지(승인필요) 2026-05-15 = 사용자 SSOT = upsertPlace() 통과 강제 (= CLAUDE.md 제14조)
-        // = 5 단계 매칭 (PID > URI > 풀주소 > 좌표10m > 이름) + COALESCE 옛 우선 + GREATEST 가격
+        // = 7 단계 매칭 (PID > URI > 풀주소 > 좌표10m > 이름) + COALESCE 새 우선 + 가격 COALESCE 새 우선(최신최우선)
         // ⚠️ 2026-06-01 = upsert 즉시 await X = job 수집만 (= 아래 runUpserts 가 deferPersist 에 따라 background/await)
         const job = {
           cityId: cityId,
@@ -872,7 +872,7 @@ export async function saveNewPlacesToDB(
           selectionReasonKo:
             place.personaFitReason || place.description || null, // → summary_ko
           googleReviewCount: result.userRatingCount || 0,
-          priceEur: maxPriceEur,
+          priceEur: newPriceEur,
           categoryTags: [seedCategory],
           phaseTags: [`auto-learn-${today}`],
         };
