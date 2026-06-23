@@ -24,7 +24,8 @@ const cats = argv['category'] ? String(argv['category']).split(',').map((s) => s
 const ids = argv['ids'] ? String(argv['ids']).split(',').map((s) => Number(s.trim())).filter((n) => Number.isFinite(n) && n > 0) : null;
 if (!cityId) { console.error('Usage: --city-id=<N> [--apply] [--lang=fr] [--category=heritage,...] [--ids=1,2,3]'); process.exit(1); }
 
-const ANCHOR_M = 100; // 좌표 앵커 반경(m) = 동명 다른장소 차단 (= 사용자 ~10m 내외 의도 / 100m 실용 앵커)
+// ⚠️ 수정금지(승인필요) 2026-06-23 사장님 SSOT = 좌표 앵커 = 무조건 10m (= 매칭기준 10m 동일 = 도심밀집 환각차단). 옛 100m="실용앵커" AI임의 폐기(§19).
+const ANCHOR_M = 10;
 const hkm = (a: any, b: any) => {
   const R = 6371, dLat = (b.lat - a.lat) * Math.PI / 180, dLng = (b.lng - a.lng) * Math.PI / 180;
   const x = Math.sin(dLat / 2) ** 2 + Math.cos(a.lat * Math.PI / 180) * Math.cos(b.lat * Math.PI / 180) * Math.sin(dLng / 2) ** 2;

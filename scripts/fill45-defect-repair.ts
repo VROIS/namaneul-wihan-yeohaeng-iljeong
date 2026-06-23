@@ -35,7 +35,7 @@ const onlyId = argv['only-id'] ? Number(argv['only-id']) : null;
 // ⚠️ 수정금지(승인필요) = 출입증 키발급 날짜 inputDate (= YYYY-MM-DD = issue-api-key.ts 검문 형식). 함수 상단 1회 선언 = 모든 issueApiKey 호출 공유.
 const inputDate = new Date().toISOString().slice(0, 10);
 const SIXCAT = ['heritage', 'hotspot', 'attraction', 'adventure', 'healing', 'shopping'];
-const ANCHOR_M = 100;
+const ANCHOR_M = 10; // ⚠️ 수정금지(승인필요) 2026-06-23 사장님 SSOT = 좌표 앵커 무조건 10m(매칭기준 동일=도심밀집 환각차단). 옛 100m AI임의 폐기(§19).
 
 (async () => {
   const pg = await import('pg');

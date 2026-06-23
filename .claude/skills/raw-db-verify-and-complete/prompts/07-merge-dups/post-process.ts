@@ -72,7 +72,7 @@ if (!cityId) { console.error('Usage: --city-id=<N> --date=<YYYY-MM-DD> --apply-t
   // ⚠️ 수정금지(승인필요) 2026-06-15 사장님 SSOT = keep 판정용 DB 메타 (= groups.json 엔 RC/updated_at/name_local 없음 → DB 직조회)
   const allIds = [...new Set(targets.flatMap((g: any) => g.rows.map((r: any) => r.id)))];
   const metaRows = allIds.length ? (await c.query(
-    `SELECT id, seed_category, name_local, google_place_id, google_review_count, updated_at
+    `SELECT id, seed_category, name_local, name_en, name_ko, google_place_id, google_review_count, updated_at
      FROM place_seed_raw WHERE id = ANY($1)`, [allIds])).rows : [];
   const meta = new Map<number, any>(metaRows.map((m: any) => [m.id, m]));
 
@@ -99,16 +99,21 @@ if (!cityId) { console.error('Usage: --city-id=<N> --date=<YYYY-MM-DD> --apply-t
   const stripName = (s: string | null): string[] =>
     (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
       .replace(/[.,;:!?'"()[\]{}\/&-]/g, ' ').replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+  // ⚠️ 수정금지(승인필요) 2026-06-22 사장님 SSOT = 이름 토큰 = name_local·name_en·name_ko 합집합 (= run.ts 매처 nameKeys 와 정합, §19·§20).
+  //   = 옛 결함: name_local 만 봄 → 신규 발굴행(name_local=null, name_en만 있음)이 항상 "토큰 0 = 다른장소" 오판 = run 이 잡은 진짜중복(Circolo 등)을 post 가 막음(매처≠안전망 불일치).
+  //   = 수정: 세 이름칸 토큰 합집합 = run 매처와 동일 기준 = name_local null 이어도 name_en 으로 공유 판정. (= grnTokens)
+  const grnTokens = (m: any): Set<string> =>
+    new Set([...stripName(m?.name_local), ...stripName(m?.name_en), ...stripName(m?.name_ko)]);
   function autoExcludeReason(g: any): string | null {
     if (applyGroups.includes(g.group_key)) return null; // 명시 그룹 = 검수완료 = 통과
     const cats = new Set(g.rows.map((r: any) => meta.get(r.id)?.seed_category || r.seed_category));
     if ([...cats].some((s) => String(s).startsWith('bts_'))) return 'BTS 보존(자동병합 금지)';
     if (cats.size > 1) return `교차카테고리(${[...cats].join('/')})`;
-    // name_local 토큰 = 한 그룹 내 어느 쌍이라도 공유 토큰 0 = 다른장소 의심
-    const names = g.rows.map((r: any) => new Set(stripName(meta.get(r.id)?.name_local)));
+    // ⚠️ 2026-06-22 = 이름(3칸 합집합) 토큰 = 한 그룹 내 어느 쌍이라도 공유 토큰 0 = 다른장소 의심 (= run 매처 정합).
+    const names = g.rows.map((r: any) => grnTokens(meta.get(r.id)));
     for (let i = 0; i < names.length; i++) for (let j = i + 1; j < names.length; j++) {
       const shared = [...names[i]].some((t) => names[j].has(t));
-      if (!shared) return 'name_local 토큰 불일치(다른장소 의심)';
+      if (!shared) return '이름 토큰 불일치(다른장소 의심)';
     }
     return null;
   }

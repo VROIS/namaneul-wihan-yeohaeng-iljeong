@@ -25,7 +25,7 @@ const apply = argv['apply'] === 'true';
 const lang = argv['lang'] ? String(argv['lang']) : undefined;
 if (!cityId) { console.error('Usage: --city-id=<N> [--apply] [--lang=es]'); process.exit(1); }
 
-const ANCHOR_M = 100;
+const ANCHOR_M = 10; // ⚠️ 수정금지(승인필요) 2026-06-23 사장님 SSOT = 좌표 앵커 무조건 10m(매칭기준 동일=도심밀집 환각차단). 옛 100m AI임의 폐기(§19).
 // §8.2 ③ quota = 1:2:1 (= 백분위 25/50/25 와 일치)
 const DOWNTOWN: Record<string, number> = { eco: 20, reason: 40, prem: 20 }; // 도심 총 80
 const OUTSKIRT: Record<string, number> = { eco: 2, reason: 4, prem: 2 };     // 외곽 town당 8

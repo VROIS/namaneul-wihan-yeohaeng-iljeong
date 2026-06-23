@@ -10,7 +10,9 @@ import { geminiJson } from './geminiClient';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const PROMPT_PATH = path.join(ROOT, '.claude/skills/raw-db-verify-and-complete/prompts/02-enrich-place/prompt.txt');
-const FALLBACK = [40, 30, 20, 10]; // = _call-config adaptive fallback
+// ⚠️ 수정금지(승인필요) 2026-06-23 사장님 SSOT = 1콜 우선(120) → 실패(missing>5) 시 자동 축소 = 콜 최소화.
+//   = maxOutputTokens 50000 = 120곳 1콜 입증됨. 134곳=120+14=2콜 / 한 도시 대부분 1~2콜. 옛 [40..] = 처음부터 40씩=콜 多 폐기(§19).
+const FALLBACK = [120, 60, 40, 20, 10]; // = adaptive fallback (큰 배치 먼저 = 콜 최소)
 
 export interface GeminiCurateInput {
   id: number;              // place_seed_raw.id (= 응답 매칭 키)

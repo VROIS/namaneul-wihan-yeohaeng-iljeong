@@ -42,7 +42,10 @@ const zone = argv['zone'] ? String(argv['zone']) : 'downtown';
 // ⚠️ 수정금지(승인필요) 2026-06-20 = 사전정제(#45 결손보강) 맨 앞 삽입 = 사장님 SSOT.
 //   = repair(#45 결손보강·보정) → discover(TS+Gemini) → curate → backfill → photo → restaurant → verify.
 //   = repair 단독 = `--only=repair` (1회용 보정 = 파리·마드리드 재점검). 전체 = repair 가 발굴 전 사전정제로 자동 선행.
-const only = argv['only'] ? String(argv['only']).split(',').map((s) => s.trim()) : ['repair', 'discover', 'curate', 'backfill', 'photo', 'restaurant', 'verify'];
+// ⚠️ 수정금지(승인필요) 2026-06-23 사장님 SSOT = 'cleanse'(정제) 맨 앞 = #45 이전 독립 단계(섞지 말 것).
+//   = 정제(#1b fillcity-step1b) = 전체 행 Gemini 재검증 → 이름·가격·칸오입력 교정 + 결손가격 채움 → 새덮어쓰기.
+//   = 이후 발굴·#45 = 결손률↓ + 가격오류·이상행 미리잡힘 = 이중체크. (옛 #1a 환각삭제 = #1b 흡수 폐기 §19)
+const only = argv['only'] ? String(argv['only']).split(',').map((s) => s.trim()) : ['cleanse', 'repair', 'discover', 'curate', 'backfill', 'photo', 'restaurant', 'verify'];
 const outskirtHints = argv['outskirt-hints'] ? String(argv['outskirt-hints']) : '';  // = 04 외곽식당 Gemini 발굴용 day-trip 명소 (미제공 = TS 외곽만 = 04 스킵)
 const today = new Date().toISOString().slice(0, 10);
 if (!cityId) { console.error('Usage: --city-id=<N> [--apply] [--lang=fr] [--zone=downtown] [--outskirt-hints="Toledo / Segovia"] [--only=discover,curate,backfill,photo,restaurant,verify]'); process.exit(1); }
@@ -73,6 +76,7 @@ function run(label: string, script: string, args: string[], retries = 2) {
     // ── DRY = 무료 = 계획 + 비용 추정 + 현재 14요소 리포트 (API 호출 0) ──
     // ⚠️ 수정금지(승인필요) 2026-06-20 = Gemini 우선 체인 계획 (= 옛 "TS먼저 ∥ Gemini" 안내 삭제 = run 순서 정합).
     console.log(`\n[계획] --apply 시 = Gemini 우선 체인 (Gemini 선정·힌트·name_local·가격 → TS 9요소 검증) → upsertPlace 7단계:`);
+    console.log(`\n  ① cleanse(정제) = 전체 행 Gemini 재검증(이름·가격·칸오입력 교정 + 결손가격 채움) → 새덮어쓰기. #45 이전 독립(섞지 말 것). Gemini 만(TS·PM 0) ~1-2콜`);
     console.log(`\n  ⓪ repair(#45) = 기존 결손행 Gemini→TS→PM 보강 (완비 시 추출 0 = 다시 돌려도 외부호출 0)`);
     console.log(`\n  Ⓐ 6 카테고리 (${CATS.join('·')}):`);
     console.log(`     1. Gemini 발굴(01 한국선호=선정·힌트) → TS 발굴·검증(12 searchText ×6=9요소)`);
@@ -92,6 +96,13 @@ function run(label: string, script: string, args: string[], retries = 2) {
   }
 
   // ── APPLY = 상호보완 전체 체인 (= 사용자 SSOT 2026-06-07 = TS 객관 + Gemini 한국선호 → upsertPlace 7단계 자동병합) ──
+  // ⚠️ 수정금지(승인필요) 2026-06-23 사장님 SSOT = ① 정제(cleanse) = 발굴·#45 보다 먼저 = 전체 행 Gemini 재검증.
+  //   = 전체 행 → 힌트(name 3종·주소·좌표) 다 줌 → Gemini 가 (사람처럼) 판단 → 이름·가격·칸오입력 교정 + 결손가격 채움 → 전필드 새덮어쓰기.
+  //   = #45 이전 독립 단계(섞지 말 것). 정제 후 발굴·#45 = 결손률↓ + 가격오류·이상행 미리잡힘 = 이중체크.
+  //   = 재발명 0 = 영구 컴포넌트 scripts/fillcity-step1b-fix-pollution.ts 연결만. Gemini 만(TS·PM 0) = 도시당 1~2콜.
+  if (only.includes('cleanse')) {
+    run(`① 정제(전체 재검증)`, '../../../scripts/fillcity-step1b-fix-pollution.ts', [`--city-id=${cityId}`, ...(apply ? ['--apply'] : [])]);
+  }
   // ⚠️ 수정금지(승인필요) 2026-06-20 = ⓪ 사전정제 = #45 결손보강·보정 (= 발굴 전 기존 데이터 결손 채움 / 독립 1회용 = --only=repair).
   //   = 재발명 0 = 영구 컴포넌트 scripts/fill45-defect-repair.ts 연결만. 추출(6cat TOP20 + 식당 band 30/90/30 = 270)→Gemini 전필드→TS 전필드→PM→2곳저장.
   //   = 완비 시 추출 0 (= 같은 도시 다시 돌려도 외부호출 0). ⚠️ 삭제 2026-06-21 = 옛 "--all-restaurants 패스스루"(AI 임시) 완전삭제 = 사장님 SSOT "원복"(§19).

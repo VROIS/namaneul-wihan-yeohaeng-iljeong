@@ -23,7 +23,7 @@ const top = Number(argv['top'] || 20);
 const cats = ['heritage', 'hotspot', 'attraction', 'adventure', 'healing', 'shopping'];
 if (!cityId) { console.error('Usage: --city-id=<N> [--apply] [--lang=fr] [--top=20]'); process.exit(1); }
 
-const ANCHOR_M = 100;
+const ANCHOR_M = 10; // ⚠️ 수정금지(승인필요) 2026-06-23 사장님 SSOT = 좌표 앵커 무조건 10m(매칭기준 동일=도심밀집 환각차단). 옛 100m AI임의 폐기(§19).
 
 (async () => {
   const { tsSearch, tsPhoto } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/ts-client.ts')).href);

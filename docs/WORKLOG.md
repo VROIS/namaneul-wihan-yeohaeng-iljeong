@@ -18,6 +18,49 @@
 
 ---
 
+## 🔥 2026-06-23 = 정제 단계 시스템화(cleanse=전체 Gemini 재검증) + 진입분기(120) + 좌표10m + 07-merge표준 + 통일PSR 헌법
+
+**배경**: 메인앱 동선에 가격오염(1인 €59만)·이름환각(Detroit·Chicago) 노출 발견. 근원 = #45 가 "결손(빈칸)"만 추출 → "오염(틀린값)"은 사각지대(영구 안 고쳐짐). 옛 gemini3(5월) 가격환각이 런던·브뤼셀·뮌헨에 잔존.
+
+**✅ 정제 단계 = #1b 시스템화·4도시 실증 (= scripts/fillcity-step1b-fix-pollution.ts 신규)**:
+- 사장님 SSOT = "전체 행 → Gemini에 힌트(name3종·주소·좌표) 다 줌 → Gemini가 사람처럼 판단(가격오염·이름환각·칸오입력 교정+결손가격) → 전필드 새덮어쓰기". = 오염추출 SQL 폐기(어떤게 오염인지 SQL은 모름=AI임의). Gemini만(TS·PM 0)=도시당 1~2콜.
+- **실증**: 런던28·브뤼셀16·뮌헨17곳 정정. 박물관 €504,210(뮌헨)→€175 / Magnificent Mile→Tate Modern / Atlanta→Manneken Pis / South Side Chicago→Lift 109 / Detroit→Tower Bridge. 비식당 price>200 오염 = 0. 전필드 새덮어쓰기 = DB 실제반영(updated_at·name·price 입증, 셀렉 아님).
+- **shopping price = NULL 강제**(§15) = 옛 COALESCE(null,기존) 버그(Harrods €148800 잔존) 수정.
+- **옛 #1a "환각행 AI 인위 삭제"(fillcity-step1-cleanse.ts) 완전삭제(§19)** = #1b 흡수. 힌트 1개라도 있으면 Gemini 판단 = 삭제 불필요.
+
+**✅ 진입 분기 = 행수 120 (메인앱 MIX↔db-only 처럼, 실증)**: 비BTS 총행수≥120=변형(정제→식당발굴→#45=메인) / <120=풀(6cat발굴부터). 런던452·뮌헨134·라스베거스151=변형 / 마르세유113·제네바45=풀. fillCity 메인동작=레거시도시(0자료 극히 드묾).
+
+**✅ 좌표 = 무조건 10m**: 검색 앵커 100m = AI 임의("실용앵커") 폐기(§19) → ANCHOR_M=10 전수통일(ts-backfill·ts-photo·restaurant-image·fill45). 매칭(트리거·matcher)도 10m = 도심밀집 환각차단.
+
+**✅ 07-merge 후처리 표준화**: meta SELECT에 name_en·name_ko 추가 + 안전망 토큰 = name_local만→3칸 합집합(run.ts 매처 nameKeys 정합, §19·§20). 옛 결함: 신규행 name_local=null이면 안전망이 진짜중복(Circolo 등)을 "다른장소"로 오판해 못 막던 것. 런던 식당 중복 13쌍 병합 정리(예외 1회용).
+
+**✅ gemini-curate FALLBACK = [120,60,40,20,10]**: 1콜 우선(120, maxOut 50000) → missing>5 시 자동축소 = 콜 최소. 옛 [40..] 폐기(§19).
+
+**✅ WF 삽입**: fill-city.ts `only` 맨앞 'cleanse' = `fill-city --apply` 한 줄에 정제 포함. #45에 섞었던 --discover 분기 = git 복원으로 제거(사장님 "섞지 말 것" = 정제는 #45 이전 독립).
+
+**✅ 헌법 §20 신설**: 통일 PSR 파이프라인(모든 외부호출 WF 동일 양식으로 PSR 집결) = CLAUDE.md 제20조 + 메모리 feedback_unified_psr_pipeline.
+
+**🔵 문서**: PRD §3-A 전면 갱신(진입분기+정제 시스템+ANCHOR10m+§20) / 메모리 project_existing_city_fillcity_flow·feedback_unified_psr_pipeline 신규·갱신.
+
+**🔴 긴급 컨텍스트**: Supabase Egress 15.09/5.5GB 초과(6/25 유예) = 주범 = 내 MCP 대량조회(개발단계=사장님·나만 사용). 대응 = 검증조회 직접접속(pg) 전환 = Egress 절감. cycle 리셋(공식: 다음 billing cycle 시작 시 egress 0) → 무료 5GB 커버 가능(실사용자 0).
+
+**⛔ 이번 세션 AI 과실**: 옆길로 샘(정제 설계 중 #45 건드림) / "60개·40곳" 등 잘린숫자 단정(사장님 폭로) / 마무리 안하고 다음일 / town 매칭 시도로 마드리드 26건 깰 뻔(원복) / #45 "153 적용" 거짓 우려(실제는 16곳만 추출제외=정상). = 시스템 믿고 한 줄·전수확인·마무리 우선.
+
+## 🔥 2026-06-21 (후속) = 기존자료 도시 운영 흐름 확정 = PRD §3-A 신설
+
+**배경**: fillCity 는 "완전 0자료 신규도시" 기준 설계. 실제 운영은 거의 다 **이미 일부 자료(6cat = Gemini 시드발굴 완료, 식당만 적음)가 있는 기존 도시** = 그 변형 흐름을 **계속 반복**. 이를 빠짐없이 기록 = 최종 문서화.
+
+**✅ 사장님 확정 = 기존자료 도시 반복 3단계 (= PRD §3-A SSOT):**
+1. **정제** = AI 인위 판단(내 손, 자동화 아님) = 완전 오매칭/누가 봐도 오류·오염 행 삭제(예: 완전 다른 나라 행). ⚠️ 유일한 AI 개입 단계 = **삭제 전 사장님 보고**(비가역). 옆도시·체인은 정상(삭제 X) = [[feedback_outskirt_daytrip_pool_intended]].
+2. **식당발굴** = `fill-city.ts --city-id=N --only=restaurant --apply` = ⚠️⚠️ **절대 AI 개입 없는 자동화**. 6cat 안 건드림(이미 있음). 도심(Gemini03+TS3종)∥외곽(Gemini04+outskirt-ts-fill)→병합→카피13→이미지. = 시스템 믿고 한 줄, 잘라쓰기 금지.
+3. **#45 도시전체** = `scripts/fill45-defect-repair.ts --city-id=N --apply` = 도시 전체 결손행 보강 → **최종 최소 270 + 결손 없는 행**. 완비 시 추출0 = 재실행 안전.
+
+**코드 순서와의 차이(§19 충돌 아님)**: fill-city 의 `only` 기본 = `repair`(#45)가 **맨 앞** = "0자료 신규도시" 전체 1줄용. 기존자료 운영 = 위 3단계 분리 실행 = **#45가 맨 마지막**. = 같은 컴포넌트, 호출 조합만 다름(코드 변경 0).
+
+**✅ 문서 갱신**: PRD §3-A 신설(verbatim 기록) + §3 도시분기 문구 확정(옛 "둘 중 미정" §19 삭제) + §13 즉시재개점 갱신. **미커밋 없음**(2026-06-21 본작업은 커밋 `7f60f98`, 이 문서갱신만 working tree).
+
+---
+
 ## 🔥 2026-06-21 = 브뤼셀 fillCity + GREATEST 전수정리 + #45 원복 + Gemini SDK 로컬 SSL 이슈(미해결)
 
 **✅ 완료(미커밋, tsc 233 무회귀):**
