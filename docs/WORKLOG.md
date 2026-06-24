@@ -40,6 +40,8 @@
 
 **✅ 9) 07-merge = 폐기 아니라 보관**(1회용 필요시): 트리거가 시스템으로 중복을 막으니 상시 컴포넌트 불필요(§20).
 
+**✅ 10) AG3 외과수술 = 메인앱 MIX 백그라운드를 fillCity/#45 와 통일(§18·§20)**: `server/services/agents/ag3-data-matcher.ts` `saveNewPlacesToDB` 의 inline `searchText`/`uploadPhoto`(2026-05-09 임시스크립트 복붙 잔재)를 **완전삭제(§19)** 후 검증된 #45 단일 관문 `tsSearch`/`tsPhoto`(`shared/ts-client`)로 외과교체. diff +43/-91. **효과**: GAP1 해소 = TS raw 가 로컬 `docs/raw` + Storage `raw-responses` 2곳 자동저장(tsSearch 내부 `saveRaw` 강제 §18 = 재입력 자산). 옛 inline 엔 raw 저장 없었음. 반환필드 약 8곳 매핑(`id`→`googlePlaceId`·`location`→`latitude/longitude`·`formattedAddress`→`address`·`userRatingCount`→`googleReviewCount`·`priceRange`→`priceEur`·`photos[0].name`→`photoName`). **보존**: 출입증 env 직독(GAP2=라이브 메인앱 의도)·FE 우선노출·deferPersist·languageCode 영어·이미지 800px(#45 정합). AG3 PSR INSERT/UPDATE 도 prevent_dup 트리거(이번세션 A+B 확장) 경유 = 중복차단 동일. 검증: tsc 신규0·빌드성공·가드0·적대검증 깨짐0·5게이트 통과.
+
 **🔴 다음 P0**: ① 뮌헨 외 도시 fillCity(런던·브뤼셀 완성) ② `repair.ts` dupOwner 단일행 실증(B 경로) ③ Supabase Egress 6/25 리셋 후 직접접속 영구화.
 
 ## 🔥 2026-06-23 = 정제 단계 시스템화(cleanse=전체 Gemini 재검증) + 진입분기(120) + 좌표10m + 07-merge표준 + 통일PSR 헌법

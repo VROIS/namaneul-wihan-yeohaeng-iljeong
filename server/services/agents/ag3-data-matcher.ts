@@ -33,9 +33,9 @@ import type {
 } from "./types";
 // ⚠️ 2026-05-23 = addPlaceAlias import 제거 (= 폐기)
 import { findCityUnified, type CityResolveResult } from "../city-resolver";
-// ⚠️ 수정금지(승인필요) 2026-05-15 = Google Places SKU 가드 (= SSOT §16)
-// = Enterprise+Atmosphere 33 필드 차단 = $40/1K 폭탄 방지
-import { validateFieldMask, STANDARD_TS_FIELD_MASK } from "../shared/google-places-sku";
+// ⚠️ 수정금지(승인필요) 2026-06-24 §18·§20 = TS 호출 단일 관문(tsSearch·tsPhoto) = raw 2곳 자동저장 + 9요소·SKU 자체강제
+// = inline searchText/uploadPhoto(임시스크립트 복붙 잔재) 완전삭제 후 검증된 #45 방식으로 외과교체 (옛 SKU 가드 import 도 헬퍼 내장으로 제거 = §19)
+import { tsSearch, tsPhoto } from "../shared/ts-client";
 // ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT = 이미지 폴백 단일 SSOT (= Google 1 > WK 2)
 import { pickPlaceImage } from "../shared/place-image";
 // ⚠️ 수정금지(승인필요) — PID veto 제거 텍스트 정합(2026-06-15 SSOT)
@@ -673,28 +673,25 @@ export async function saveNewPlacesToDB(
     `[AG3-SAVE] toSave=${toSave.length} 행 = 즉시 await searchText + PhotoMedia + Storage upload + INSERT 시작`,
   );
 
-  // ⚠️ 수정금지(승인필요) 2026-05-09 = 도시 좌표 사전 조회 (= searchText locationBias 용)
+  // ⚠️ 수정금지(승인필요) 2026-05-09 = 도시 좌표 사전 조회 (= tsSearch 좌표앵커 latitude/longitude 용)
+  // ⚠️ 2026-06-24 §19 = cityName 지역변수 삭제(옛 inline searchText 의 textQuery 도시명 fallback 전용 = 외과교체로 불필요)
   let cityLat = 0,
-    cityLng = 0,
-    cityName = "";
+    cityLng = 0;
   try {
     const cityRow = await db!.execute(
-      sql`SELECT name_en, latitude, longitude FROM cities WHERE id = ${cityId} LIMIT 1`,
+      sql`SELECT latitude, longitude FROM cities WHERE id = ${cityId} LIMIT 1`,
     );
     const c = (cityRow as any).rows?.[0];
     if (c) {
       cityLat = parseFloat(c.latitude) || 0;
       cityLng = parseFloat(c.longitude) || 0;
-      cityName = c.name_en || "";
     }
   } catch (e) {
     console.warn(`[AG3-SAVE] 도시 좌표 조회 실패`, (e as Error).message);
   }
 
-  // ⚠️ 수정금지(승인필요) 2026-05-09 = 사용자 명시 = 어제 신규 21 식당 INSERT 패턴 그대로 클론
-  // = scripts/_tmp_paris-rest-insert-21new.mjs:95-127 = 헌법 (memory: feedback_image_matching_polite_failure.md)
-  // = searchText (7 필드 + maxResultCount=1 + timeout 20s + textQuery 안에 도시명)
-  // = PhotoMedia binary 다운로드 + Supabase Storage 업로드 = 메인앱 안전 URL
+  // ⚠️ 수정금지(승인필요) = tsSearch/tsPhoto 호출 인자로 넘기는 env 직독 (= 출입증 GAP2 안 건드림 = 그대로 유지)
+  // ⚠️ 2026-06-24 §19 = 옛 inline 클론 설명 주석(_tmp_*.mjs / 7필드 maxResultCount=1) 삭제 = 외과교체로 무효
   const GOOGLE_KEY =
     process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_PLACES_API_KEY || "";
   const SUPA_ANON = process.env.SUPABASE_ANON_KEY || "";
@@ -702,68 +699,8 @@ export async function saveNewPlacesToDB(
     process.env.SUPABASE_PUBLIC_URL ||
     "https://wxebceflvuythuodemro.supabase.co";
 
-  // ⚠️ 수정금지(승인필요) 2026-06-02 = 전 앱 TS 호출 단일 표준 (= STANDARD_TS_FIELD_MASK §16)
-  // = 9 필드 Enterprise (= businessStatus 폐업·rename 판정) = 표준화
-  const SEARCH_TEXT_FIELD_MASK = STANDARD_TS_FIELD_MASK;
-  validateFieldMask(SEARCH_TEXT_FIELD_MASK);
-  async function searchText(
-    name: string,
-    addr: string | undefined,
-  ): Promise<any | null> {
-    try {
-      const r = await fetch(
-        "https://places.googleapis.com/v1/places:searchText",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "X-Goog-Api-Key": GOOGLE_KEY,
-            "X-Goog-FieldMask": SEARCH_TEXT_FIELD_MASK,
-          },
-          // ⚠️ 수정금지(승인필요) 2026-05-15 = languageCode: 'ko' (= Gemini 한국어 ↔ TS 한국어 검증 가능)
-          body: JSON.stringify({
-            textQuery: addr ? `${name} ${addr}` : `${name} ${cityName}`,
-            maxResultCount: 1,
-            languageCode: "ko",
-          }),
-          signal: AbortSignal.timeout(20000),
-        },
-      );
-      if (!r.ok) return null;
-      const d = (await r.json()) as any;
-      return d.places?.[0] || null;
-    } catch {
-      return null;
-    }
-  }
-
-  // 어제 21 식당 패턴 = PhotoMedia binary 다운로드 + Storage 업로드
-  async function uploadPhoto(
-    photoName: string,
-    placeId: string,
-    seedCategory: string,
-  ): Promise<string | null> {
-    const phUrl = `https://places.googleapis.com/v1/${photoName}/media?key=${GOOGLE_KEY}&maxHeightPx=800&maxWidthPx=1200`;
-    const phResp = await fetch(phUrl, { signal: AbortSignal.timeout(30000) });
-    if (!phResp.ok) return null;
-    const ab = await phResp.arrayBuffer();
-    const binary = Buffer.from(ab);
-    const fileName = `${cityId}/${seedCategory}/${placeId}.jpg`;
-    const upResp = await fetch(
-      `${SUPA_PUB}/storage/v1/object/place-images/${fileName}`,
-      {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${SUPA_ANON}`,
-          "Content-Type": "image/jpeg",
-          "x-upsert": "true",
-        },
-        body: binary,
-      },
-    );
-    if (!upResp.ok) return null;
-    return `${SUPA_PUB}/storage/v1/object/public/place-images/${fileName}`;
-  }
+  // ⚠️ 수정금지(승인필요) 2026-06-24 §18·§20 = inline searchText/uploadPhoto(임시스크립트 복붙 잔재) 완전삭제
+  //   = TS 호출·사진 업로드는 검증된 단일 관문 tsSearch()/tsPhoto()(shared/ts-client) 로 외과교체 (= raw 2곳 자동저장 §18, 9요소·SKU 헬퍼 자체강제, languageCode 미지정=displayName→name_en 정합 2026-06-17)
 
   // ⚠️ 수정금지(승인필요) 2026-05-09 = Promise.all 병렬화 (= simplify HIGH 권장)
   // = 순차 14~21 초 → 병렬 ~3.5 초 (= 4~6 배 단축)
@@ -787,16 +724,25 @@ export async function saveNewPlacesToDB(
   const results = await Promise.all(
     toSave.map(async (place, i) => {
       try {
-        const result = await searchText(
-          place.name,
-          (place as any).geminiAddress,
-        );
-        if (!result || !result.id || !result.location)
+        // ⚠️ 2026-06-24 §18·§20 = 단일 관문 tsSearch (= raw 2곳 자동저장). 반환 = TsPlace[] = [0] 채택.
+        const tsArr = await tsSearch({
+          apiKey: GOOGLE_KEY,
+          method: "searchText",
+          cityId,
+          nameLocal: place.name,
+          address: (place as any).geminiAddress || undefined,
+          latitude: cityLat || undefined,
+          longitude: cityLng || undefined,
+          rawTag: `ag3-${place.name}`,
+        });
+        const result = tsArr?.[0];
+        // = 결과없음(빈배열/undefined) = skip (= inline 옛 null 분기 정합)
+        if (!result || !result.googlePlaceId)
           return { saved: 0, skipped: 1, enrichedByApi: 0, photoOk: 0 };
 
-        const placeId: string = result.id;
-        const lat: number = result.location.latitude;
-        const lng: number = result.location.longitude;
+        const placeId: string = result.googlePlaceId;
+        const lat = result.latitude;
+        const lng = result.longitude;
         if (!lat || !lng)
           return { saved: 0, skipped: 1, enrichedByApi: 0, photoOk: 0 };
 
@@ -817,9 +763,17 @@ export async function saveNewPlacesToDB(
             : "attraction";
 
         let imageUrl: string | null = null;
-        const photoName = result.photos?.[0]?.name;
+        const photoName = result.photoName;
         if (photoName) {
-          imageUrl = await uploadPhoto(photoName, placeId, seedCategory);
+          // ⚠️ 2026-06-24 §18·§20 = 단일 관문 tsPhoto (= PhotoMedia 다운 + Storage 업로드, maxWidthPx 800 = #45 정합)
+          imageUrl = await tsPhoto({
+            apiKey: GOOGLE_KEY,
+            photoName,
+            storageKey: SUPA_ANON,
+            supaPublicUrl: SUPA_PUB,
+            pathKey: `${cityId}/${seedCategory}/${placeId}`,
+            maxWidthPx: 800,
+          });
         }
 
         // ⚠️ place 객체 직접 갱신 (= 호출자 baseline 반영, race X = 각 호출 자기 place 만)
@@ -828,16 +782,14 @@ export async function saveNewPlacesToDB(
         place.image = imageUrl || "";
         (place as any).googlePlaceId = placeId;
         (place as any).geminiAddress =
-          result.formattedAddress || (place as any).geminiAddress;
-        place.userRatingCount = result.userRatingCount || 0;
+          result.address || (place as any).geminiAddress;
+        place.userRatingCount = result.googleReviewCount || 0;
         console.log(
           `[AG3-SAVE] 📡 "${place.name}" → (${lat}, ${lng}) img=${imageUrl ? "Storage" : "NULL"}`,
         );
 
         // ⚠️ 수정금지(승인필요) 2026-06-20 = TS priceRange.endPrice(최신 검증) 우선, 없으면 Gemini = COALESCE 새 우선(최신최우선). 옛 "비싼 쪽 max"(2026-05-15) 폐기 = §14 정합(GREATEST 폐기 2026-06-10). place-upsert 가 이미 새우선이라 여기서 비싼쪽 강제 = §14 위반 잔재였음.
-        const tsPriceEur = result.priceRange?.endPrice?.units
-          ? parseFloat(result.priceRange.endPrice.units)
-          : 0;
+        const tsPriceEur = result.priceEur || 0;
         const geminiPriceEur = (place as any).estimatedPriceEur || 0;
         const newPriceEur = tsPriceEur > 0 ? tsPriceEur : geminiPriceEur;
 
@@ -857,7 +809,7 @@ export async function saveNewPlacesToDB(
           nameKo: (place as any).nameKo || null,
           nameLocal: (place as any).nameLocal || null,
           address:
-            result.formattedAddress || (place as any).geminiAddress || null,
+            result.address || (place as any).geminiAddress || null,
           latitude: lat,
           longitude: lng,
           imageUrl: imageUrl,
@@ -866,7 +818,7 @@ export async function saveNewPlacesToDB(
           shortformKo: place.description || null, // → editorial_summary
           selectionReasonKo:
             place.personaFitReason || place.description || null, // → summary_ko
-          googleReviewCount: result.userRatingCount || 0,
+          googleReviewCount: result.googleReviewCount || 0,
           priceEur: newPriceEur,
           categoryTags: [seedCategory],
           phaseTags: [`auto-learn-${today}`],
