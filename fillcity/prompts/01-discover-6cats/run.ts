@@ -3,7 +3,7 @@
 // = prompt.txt 치환 + _call-config.md 표준 호출 + docs/raw/{city_id}/01-discover-6cats.json 저장
 //
 // 호출:
-//   npx tsx .claude/skills/raw-db-verify-and-complete/prompts/01-discover-6cats/run.ts --city-id=19 [--dry]
+//   npx tsx fillcity/prompts/01-discover-6cats/run.ts --city-id=19 [--dry]
 //
 // 산출물 = docs/raw/{city_id}/{YYYY-MM-DD}_01-discover-6cats.json (= 날짜앞 표준, raw-filename.ts / post-process.ts 입력)
 import fs from 'fs';
@@ -11,7 +11,7 @@ import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(__dirname, '../../../../..');
+const ROOT = path.resolve(__dirname, '../../..');
 process.chdir(ROOT);
 
 // .env 로드
@@ -41,7 +41,7 @@ const dryRun = argv['dry'] === 'true';
   )).rows[0];
   if (!city) { console.error(`city_id=${cityId} 미존재`); process.exit(1); }
 
-  // 2. Gemini key 로드 (= 출입증 관문 issue_api_key() 경유 = 직독 폐기)
+  // 2. Gemini key 로드 (= 출입증 관문 issue_api_key() 경유)
   // ⚠️ 2026-06-18 사장님 SSOT = 발굴(01-discover-6cats) = 도시 있음 + 행 없음(false = 신규 발견).
   // = 출입증(키이름·도시id·날짜·행없음) 검문 통과해야만 키 발급. 미달 = throw = 외부호출 불가.
   const today = new Date().toISOString().slice(0, 10);
@@ -61,7 +61,7 @@ const dryRun = argv['dry'] === 'true';
     .replace(/\$\{CITY_LAT\}/g, String(city.latitude))
     .replace(/\$\{CITY_LNG\}/g, String(city.longitude))
     .replace(/\$\{API_PASS\}/g, apiPass)
-    // ⚠️ 2026-06-18 = 구분선 자릿수 무관 정규식 split (= 옛 71자 하드코딩 vs prompt.txt 78자 불일치 방지 = 02-enrich 정합)
+    // ⚠️ 2026-06-18 = 구분선 자릿수 무관 정규식 split (= prompt.txt 자릿수 불일치 방지 = 02-enrich 정합)
     .split(/═{30,}/)[2] || promptTpl;
 
   console.log(`═══ 01-discover-6cats ═══`);
@@ -154,5 +154,5 @@ const dryRun = argv['dry'] === 'true';
   console.log(`  합계 = ${total} / 120`);
 
   console.log(`\n✓ Step 1 완료. 다음 = post-process.ts (= upsertPlace 통한 INSERT) 실행:`);
-  console.log(`  npx tsx .claude/skills/raw-db-verify-and-complete/prompts/01-discover-6cats/post-process.ts --city-id=${cityId}`);
+  console.log(`  npx tsx fillcity/prompts/01-discover-6cats/post-process.ts --city-id=${cityId}`);
 })();

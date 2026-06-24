@@ -6,7 +6,7 @@
 //
 // 정책 = 헌법 §14 = upsertPlace() 단일 진입점
 //      = §15 = shopping = price_eur null 강제
-//      = COALESCE 새 우선 (= 식별 데이터·가격 = 최신최우선) / 새 우선 (= 카피) (옛 "옛 우선·GREATEST" 폐기 2026-06-10)
+//      = COALESCE 새 우선 (= 식별 데이터·가격 = 최신최우선) / 새 우선 (= 카피)
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';

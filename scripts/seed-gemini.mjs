@@ -361,7 +361,7 @@ if (ARG.skipPhoto) {
       if (top.displayName?.text && !p.name_en) p.name_en = top.displayName.text;
 
       // ⚠️ 2026-06-20 = TS priceRange.endPrice 임시 저장 (= priceEurForSql = max(Gemini, ts) 산출용)
-      // = UPDATE/INSERT 단계에서 priceEurForSql 산출 후 기존 행은 COALESCE 새 우선으로 덮음(최신최우선, 옛 GREATEST 폐기 2026-06-10)
+      // = UPDATE/INSERT 단계에서 priceEurForSql 산출 후 기존 행은 COALESCE 새 우선으로 덮음(최신최우선)
       if (top.priceRange?.endPrice?.units) {
         p.ts_price_eur = parseFloat(top.priceRange.endPrice.units) || 0;
       }
@@ -563,7 +563,7 @@ if (!ARG.commit) {
             summary_ko = $19,
             day_zone = $13,
             distance_km_from_center = $14,
-            -- ⚠️ 수정금지(승인필요) 2026-06-20 = 가격 = COALESCE 새 우선(최신최우선). 옛 GREATEST(비싼쪽) 폐기 2026-06-10(레거시 garbage 영구잠금 해소). $20=priceEurForSql(Gemini·TS max, 둘다 없으면 0)이라 NULLIF(0) 으로 부재시 기존 보존.
+            -- ⚠️ 수정금지(승인필요) 2026-06-20 = 가격 = COALESCE 새 우선(최신최우선). $20=priceEurForSql(Gemini·TS max, 둘다 없으면 0)이라 NULLIF(0) 으로 부재시 기존 보존.
             price_eur = COALESCE(NULLIF($20::real, 0), price_eur),
             image_updated_at = NOW(),
             collection_phase = 'gemini3-2026-05',
@@ -617,7 +617,7 @@ if (!ARG.commit) {
             -- ⚠️ 사용자 SSOT = WK 이미지 우선 보존 = COALESCE 옛 우선
             image_url = COALESCE(place_seed_raw.image_url, EXCLUDED.image_url),
             google_maps_uri = COALESCE(place_seed_raw.google_maps_uri, EXCLUDED.google_maps_uri),
-            -- ⚠️ 수정금지(승인필요) 2026-06-20 = 가격 = COALESCE 새 우선(최신최우선). 옛 GREATEST(비싼쪽) 폐기 2026-06-10. EXCLUDED.price_eur=$20(Gemini·TS max, 둘다 없으면 0) = NULLIF(0) 으로 부재시 기존 보존.
+            -- ⚠️ 수정금지(승인필요) 2026-06-20 = 가격 = COALESCE 새 우선(최신최우선). EXCLUDED.price_eur=$20(Gemini·TS max, 둘다 없으면 0) = NULLIF(0) 으로 부재시 기존 보존.
             price_eur = COALESCE(NULLIF(EXCLUDED.price_eur, 0), place_seed_raw.price_eur),
             phase_tags = (SELECT ARRAY(SELECT DISTINCT unnest(place_seed_raw.phase_tags || EXCLUDED.phase_tags)))
         `, [CITY.id, p.cat, p.rank,

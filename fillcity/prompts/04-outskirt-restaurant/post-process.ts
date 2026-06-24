@@ -2,15 +2,15 @@
 // = docs/raw/{city_id}/{date}_04-outskirt-restaurant_{low,mid}.json 읽음 → upsertPlace() INSERT
 //
 // 호출:
-//   npx tsx .claude/skills/raw-db-verify-and-complete/prompts/04-outskirt-restaurant/post-process.ts --city-id=19 [--dry]
+//   npx tsx fillcity/prompts/04-outskirt-restaurant/post-process.ts --city-id=19 [--dry]
 //
-// 정책 = §14 upsertPlace 단일 진입점 + 가격 COALESCE 새우선(최신최우선, 옛 GREATEST 폐기 2026-06-10) + day_zone 강제 'outskirt'
+// 정책 = §14 upsertPlace 단일 진입점 + 가격 COALESCE 새우선(최신최우선) + day_zone 강제 'outskirt'
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(__dirname, '../../../../..');  // ⚠️ 2026-06-08 = prompts/04 un-archive 복귀 = 상위 5 (표준 스킬 위치 = 아카이브 ROOT 버그 근본해소)
+const ROOT = path.resolve(__dirname, '../../..');  // ⚠️ 2026-06-08 = prompts/04 un-archive 복귀 = 상위 5 (표준 스킬 위치 = 아카이브 ROOT 버그 근본해소)
 process.chdir(ROOT);
 
 const argv = Object.fromEntries(process.argv.slice(2).map(a => a.replace(/^--/, '').split('=')).map(([k, v]) => [k, v ?? 'true']));

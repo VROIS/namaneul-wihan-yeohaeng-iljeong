@@ -1,17 +1,28 @@
 # fillCity PRD — 도시명 1입력 → 자동 발굴·완성
 
 > 사용자 SSOT 확정 2026-06-08. = fillCity 백그라운드 로직의 단일 기준 문서.
-> 구현체 = `.claude/skills/raw-db-verify-and-complete/fill-city.ts` (오케스트레이터) + 아래 컴포넌트.
+> 구현체 = `fillcity/fill-city.ts` (오케스트레이터) + 아래 컴포넌트.
 > 변경 = 사용자 명시 승인 (헌법 §14/§15/§16/§17 + 메모리 `reference_matcher_ranking_ssot` 정합).
 
 ---
 
 ## 0. 목적 / 범위
 
+> 🔴🔴 **본질 = "채우기(fill)"이지 "완전 발굴"이 아니다 (= 2026-06-23 사장님 SSOT).**
+> fillCity 의 기준 도시 = **이미 Gemini 1차 시드발굴된 "레거시 도시"(비BTS 행수 ≥ 120)**.
+> 완전 0자료 도시 = **희박**(파리·마드리드·런던·브뤼셀·라스베거스·뮌헨·제네바 = 전부 4~5월 발굴 흔적) = **부차**(§3 풀 갈래).
+> = "도시명 1입력 → 0부터 전부 발굴"이 아니라, **이미 있는 행을 정제·채워 완비**하는 게 메인동작(§3-A).
+
 - **입력**: 도시명(또는 city_id) **1개**.
 - **출력**: `place_seed_raw` 에 그 도시의 **카테고리별 TOP20 × "완비 요소"** = 외부호출 0(**db-only**)으로 동선/메인앱이 구동되는 핵심 재료.
 - **최종 형태**: FE **관리자 대시보드**(독립 HTML, `/admin`)의 1버튼 → 백그라운드 실행. (현재 = CLI `fill-city.ts`)
 - **비범위**: 메인앱 여정 생성(ag1~4), 숏폼 = 별개 시스템.
+
+### 🔴 DB 접속 = 직접접속(pg) 강제 = MCP 사용 금지 (2026-06-23 사장님 SSOT)
+- **모든 fillCity 조회·검증·쓰기 = `pg` Client 직접접속**(= scripts 의 `new pg.default.Client({ connectionString, ssl })` 패턴) = **MCP `execute_sql` 사용 금지**.
+- **이유**: AI 의 MCP 대량조회 = Supabase **Egress 폭증**의 주범(2026-06-23 Egress 15GB 초과 = Free 5GB 초과 사고). 개발단계(실사용자 0 = 사장님·AI 만 씀)에서 MCP 가 응답을 전부 네트워크로 빼냄.
+- **검증조회 = §16 영구 도구화** = 1회용 `_tmp_*.mjs` 금지 = `scripts/` 또는 `server/services/fill/` 의 영구 컴포넌트로 직접접속.
+- = 관련 메모리 [[project_session_handover_2026-06-23]] · [[feedback_no_temp_viewer_clones]].
 
 ---
 
@@ -46,64 +57,91 @@
 
 ---
 
-## 3. 표준 프로세스 (개념 = ⓪ #45 사전정제 + 발굴 + 이미지 게이트)
+## 3. 표준 프로세스 — ⚠️ 0자료 신규도시(부차·희박) 전용 (메인동작 = §3-A)
+
+> 🔴 **메인동작(레거시 도시) 정본 = §3-A 의 "한 덩어리 WF" = 정제 → 식당발굴 → #45 → 07-merge(입증).**
+> 아래 §3 은 **완전 0자료 신규도시(행수<120, 극히 드묾)** 전용 = 정제할 행이 없어 6cat 발굴부터 시작하는 풀 갈래. 순서가 §3-A 와 다른 건 "발굴할 행이 아예 없어서"다.
 
 ```
-[⓪ #45 결손보강·보정(repair)]  →  발굴  →  보충  →  추출  →  07-merge dedup(필수)  →  최종 이미지(PM)
+[① 정제(cleanse)]  →  발굴  →  보충  →  추출  →  [⓪ #45 결손보강·보정(repair)]  →  07-merge dedup  →  최종 이미지(PM)
 ```
 
-- **⓪ #45 결손보강·보정 (= fillCity 의 repair 단계 = 사장님 SSOT 2026-06-20)** = 발굴 전, 기존 PSR 의 **결손 행(12요소 중 하나라도 빔)을 행 전체 보강**(추출 band 30/90/30 → Gemini→TS→PM→2곳저장, §8.2 + 카탈로그 #45).
-  - **두 용도 = 한 컴포넌트** = (a) fillCity 전체 WF 의 **⓪ 사전정제 단계**(발굴 전 자동 선행) / (b) **독립 1회용** = `fill-city.ts --only=repair`(완비 도시 재점검, 예 파리·마드리드).
-  - **재발명 0** = 영구 컴포넌트 [`scripts/fill45-defect-repair.ts`](../scripts/fill45-defect-repair.ts) 연결만. 다시 돌려도 안전(완비 시 추출 0 = 외부호출 0).
-  - ⚠️ 옛 ⓪ "가짜RC null·07-merge·폐업드롭·미스명복구" 개별 정제 = #45 안에서 행 전체 refresh 로 흡수(중복정리 07-merge 는 이미지 전 별도 게이트 유지). from-zero 도시 = 결손 0 = skip.
-- ⚠️ **도시 실행 분기 (확정 2026-06-21 사장님 SSOT = §3-A)**: 실제 운영은 거의 다 **기존자료 도시**(6cat 이미 Gemini 시드발굴됨 = 식당만 적음) = **§3-A 의 3단계 흐름**(정제[AI 인위 삭제] → 식당발굴[`--only=restaurant` 자동] → #45 전체[결손보강]) 을 **반복**한다. **0(빈) 도시** = §3·§4 의 repair-맨앞 전체 1줄. (옛 "① 정제자동화 vs ② 완전삭제 = 둘 중 미정" 문구 = §19 삭제 = §3-A 로 확정.)
+> ⚠️ 정정(§19): 옛 도식 "정제 → #45 → 발굴"은 **틀림** = 발굴 전엔 보강할 행이 없음. 정본 순서 = **정제 → 발굴 → #45**(= §3-A 메인동작과 동일 = #45 는 발굴된 풀의 결손을 마지막에 메움).
+
+- **① 정제 (cleanse) = #45 이전 독립 선행 단계 (= 사장님 SSOT 2026-06-23)** = 발굴·#45 앞에서 **그 도시 전체 행(BTS 제외)을 Gemini 1콜(=#07/#46 = 02-enrich prompt.txt)로 재검증** = 가격오염(박물관 €13만 환각)·이름환각(Magnificent Mile→Tate Modern)·칸오입력·결손가격을 행 전체 보고 교정 → 전필드 새덮어쓰기(shopping price=NULL §15). Gemini 만(TS·PM 0) = 도시당 1~2콜(120/콜).
+  - **#45 와 다름**: #45 는 "결손(빈칸)"만 추출 = "값 있는데 틀림(오염)"은 사각지대(추출 제외). **정제가 그 오염을 잡는다** = #45 이전 선행 = 섞지 말 것.
+  - **재발명 0** = 영구 컴포넌트 [`fillcity/cleanse.ts`](../fillcity/cleanse.ts) = `fill-city.ts --only=cleanse`. 카탈로그 #46(본문 #07).
+  - **실증(2026-06-23)**: 런던 28·브뤼셀 16·뮌헨 17곳 정정. 최대 €504,210→€175. 비식당 price>200 오염 0. (상세 = §3-A.)
+- **⓪ #45 결손보강·보정 (= fillCity 의 repair 단계 = 사장님 SSOT 2026-06-20)** = **발굴 뒤**, 기존 PSR 의 **결손 행(12요소 중 하나라도 빔)을 행 전체 보강**(추출 band 30/90/30 → Gemini→TS→PM→2곳저장, §8.2 + 카탈로그 #45).
+  - **두 용도 = 한 컴포넌트** = (a) WF 의 **결손보강 단계**(발굴 뒤 = 정본 3번째 단계 §3-A) / (b) **독립 1회용** = `fill-city.ts --only=repair`(완비 도시 재점검, 예 파리·마드리드).
+  - **재발명 0** = 영구 컴포넌트 [`fillcity/repair.ts`](../fillcity/repair.ts) 연결만. 다시 돌려도 안전(완비 시 추출 0 = 외부호출 0).
+  - ⚠️ 옛 ⓪ "가짜RC null·07-merge·폐업드롭·미스명복구" 개별 정제 = #45 안에서 행 전체 refresh 로 흡수. from-zero 도시 = 결손 0 = skip. (옛 "발굴 전 사전정제" 표현 = §19 삭제 = #45 는 발굴 뒤가 정본.)
+- ⚠️ **도시 실행 분기 (확정 2026-06-23 사장님 SSOT = §3-A)**: 실제 운영은 거의 다 **레거시 도시**(6cat 이미 Gemini 시드발굴됨 = 식당만 적음, 행수≥120) = **§3-A 의 한 덩어리 WF**(1.정제[전체행 Gemini 재검증] → 2.식당발굴[`--only=restaurant` 자동] → 3.#45[결손보강] → 4.07-merge[입증]) 을 **반복**한다. **0(빈) 도시**(행수<120, 희박) = §3 풀 갈래(cleanse → 발굴 → 보충 → #45). (옛 "정제[AI 인위 삭제]"·"repair-맨앞" 문구 = §19 삭제 = 정제는 전체 재검증·#45 는 발굴 뒤로 확정.)
 - **발굴** = 7카테고리 전부 TS ∥ Gemini. **식당도 발굴 단계** = 다른 카테고리처럼, 단 **최대풀**(§8 동선최적화).
-- **보충** = Gemini 카피(요약2+가격) + TS backfill(PID/RC/좌표 = Gemini 환각 검증). **식당 카피(13) 자동 포함**.
+- **보충** = #45 가 통째로 흡수(요약2·가격·PID·RC·좌표·이미지 = 한 행 Gemini→TS→PM). ⚠️ 옛 "Gemini 카피(02 curate) + TS backfill + 식당 카피(13)" 분리 = §19 삭제 = #45 1벌로 일원화.
 - **추출** = **DB 내부 자동 RC DESC** → 카테고리별 **TOP20 부상** (= 인위 X, §7).
 - **최종 이미지 삽입** = **비식당 = 카테고리별 RC TOP20** / **식당 = §8.2 도시상대 가격띠 quota** = 비용통제 자연 발생.
 - **07-merge dedup = 이미지(PM) 직전 필수 게이트**(2026-06-09 사용자 SSOT) = 중복 그룹은 **keep 1행만 PM 대상** → **PM 호출 최소화**(같은 장소 이미지 중복 결제 방지). fill-city 가 **강제**(옵션 아님). ⚠️ BTS 좌표오탐 제외(⑧ stage5) 선행 필수.
 
 ---
 
-## 3-A. 🔴🔴 기존자료 도시 운영 흐름 = 진입 분기 + 3단계 (= 반복 SSOT, 2026-06-23 사장님 확정·실증)
+## 3-A. 🔴🔴 [메인동작] 레거시 도시 운영 흐름 = 진입 분기 + 3단계 (= 반복 SSOT, 2026-06-23 사장님 확정·실증)
 
-> **§3(표준 프로세스)은 "완전 0자료 신규도시" 기준이다. 그러나 실제 운영은 거의 다 "레거시(이미 Gemini 1차 시드발굴된) 도시"** = 이 변형 흐름이 **fillCity 의 메인동작**(0자료는 극히 드묾). 실증: 파리·마드리드·런던·브뤼셀·라스베거스·뮌헨 = 전부 4~5월 Gemini 발굴 흔적(생성일) 있음.
+> 🔴 **이것이 fillCity 의 본질·메인동작이다 (= §3 "완전 0자료 신규도시"는 부차·희박).**
+> = "도시명 1입력 → 0부터 전부 발굴(완전 발굴)"이 아니라, **말 그대로 fill(채우기)** = 이미 Gemini 1차 시드발굴된 행을 **정제·채워 완비**.
+> 실증: 파리·마드리드·런던·브뤼셀·라스베거스·뮌헨·제네바 = 전부 4~5월 Gemini 발굴 흔적(생성일) 있음 = **0자료는 극히 드묾**.
 
 ### 🔀 진입 분기 (= 메인앱 MIX↔db-only 처럼, 행수 120 기준 = 2026-06-23 실증)
 - **비BTS 총 행수(식당 포함) ≥ 120 = [변형 갈래]** = 1차 발굴됨 = **정제 → 식당발굴 → #45** (= 메인). 실증: 런던452·뮌헨134·라스베거스151.
 - **< 120 = [풀 갈래]** = 1차 발굴 불완전(일부 cat 0) = 6cat 부족분 발굴부터 → 변형 합류. 실증: 마르세유113(heritage·shop 0)·제네바45(5cat 0).
 - 근거: Gemini 1차 발굴(TOP20 요청)이 제대로 되면 = 도시특성으로 일부 cat 적어도(뮌헨 adventure 6) 합계는 120 넘음. 안 넘으면 = 발굴 누락.
 
-### 변형 갈래 3단계 (= 순서 = 사장님 SSOT 2026-06-23)
+### 🔴🔴 시스템화 = 한 덩어리 WF (= 사장님 SSOT 정본, 2026-06-23 = 이 순서가 정본)
+
+> 도시 id 만 입력 → **AI 개입 0** → 동일 프롬프트·동일 코드로 아래 순서대로. = `fill-city.ts` 가 이 한 덩어리.
 
 ```
-1. 정제 (cleanse) = ⚠️ 전체 시스템 (AI 인위 아님) = #45 이전 독립 단계 (섞지 말 것)
-   → `fill-city.ts --only=cleanse --apply` (= scripts/fillcity-step1b-fix-pollution.ts)
-   → 전체 행 → Gemini 에 힌트(name 3종·주소·좌표) 있는 대로 다 줌 → Gemini 가 (사람처럼) 판단:
-       · 가격 오염(박물관 €13만 = 옛 gemini3 환각) → 정상값 교정
-       · 이름 환각/칸 오입력(Magnificent Mile→Tate Modern, Atlanta→Manneken Pis) → 교정
-       · 결손 가격도 채움
-   → 전필드 새덮어쓰기(셀렉 X). shopping price = NULL 강제(§15). Gemini 만(TS·PM 0) = 도시당 1~2콜(120/콜).
-   → 실증(2026-06-23): 런던28·브뤼셀16·뮌헨17곳 정정. 최대 €504,210(뮌헨 박물관)→€175. 비식당 price>200 오염 = 0.
-   → ⚠️ 옛 "#1a 환각 행 AI 인위 삭제" = #1b 가 흡수 폐기(§19). 힌트 1개라도 있으면 Gemini 가 판단 = 삭제 불필요.
+도시 id 입력 → AI 개입 0 → 동일 프롬프트·동일 코드:
 
-2. 식당 발굴 = ⚠️⚠️ AI 개입 0 자동화
-   → `fill-city.ts --city-id=N --only=restaurant --apply`
-   → 6cat 안 건드림. 도심(Gemini03+TS3종) ∥ 외곽(Gemini04+outskirt-ts-fill) → 병합 → 카피13 → 이미지
-   → 식당 = Gemini·TS 둘 다 독자발굴(= TS nearby POPULARITY 가 Gemini 놓친 인기식당 잡음 = 최대풀 §8).
+  1. 정제 (cleanse) = 환각 삭제 = 1도시 전체행 Gemini 1콜로 해결
+       → 사용된 프롬프트 = 종합 카탈로그 등재(#46=#07)
+  2. 식당 발굴 = (통일 표준 ②) = 현재 몇 개 가져오는지 프롬프트 확인
+  3. #45 = (통일 표준 ①) = 결손보강·보정
+  4. 07-merge = 통일이면 불필요 = 입증 대상
+       → DB 트리거(prevent_dup 7단계) 중복차단 입증되면 = 1회용·임시로만 운영
 
-3. #45 도시 전체 = 결손보강·보정 (그대로, 섞지 말 것)
-   → `fill-city.ts --city-id=N --only=repair --apply` (= scripts/fill45-defect-repair.ts)
-   → 추출(6cat TOP20 + 식당 band 30/90/30 = 270) 결손행 → Gemini→TS→PM → 최종 270 결손0.
-   → 정제 후라 결손률↓ + 가격오류·이상행 미리잡힘 = 이중체크.
+  = fill-city.ts 가 이 한 덩어리
 ```
+
+#### 각 단계 상세
+
+**1. 정제 (cleanse) = 환각 삭제 = 전체행 Gemini 1콜** = #45 이전 독립 단계(섞지 말 것)
+- `fill-city.ts --only=cleanse --apply` (= fillcity/cleanse.ts)
+- 1도시 전체 행(BTS 제외) → Gemini 1콜(힌트 name3종·주소·좌표 다 줌) → 가격오염(박물관 €13만 환각 교정)·이름환각/칸오입력(Magnificent Mile→Tate Modern, Atlanta→Manneken Pis)·결손가격 = 행 전체 보고 교정 → 전필드 새덮어쓰기(셀렉 X, shopping price=NULL §15). Gemini 만(TS·PM 0) = 도시당 1~2콜(120/콜).
+- 📋 **사용된 프롬프트 = 종합 카탈로그 등재**(2026-06-23 사장님 SSOT) = `docs/20260607PROMPTS_TOTAL_SSOT.md` **#46**(= #07 prompt.txt 재사용 = 새 프롬프트 아님 §19) verbatim = byte 검수.
+- 실증(2026-06-23): 런던28·브뤼셀16·뮌헨17곳 정정. 최대 €504,210→€175. 비식당 price>200 오염 = 0.
+
+**2. 식당 발굴 = (통일 표준 ②) = AI 개입 0 자동** = 현재 몇 개 가져오는지 프롬프트 확인
+- `fill-city.ts --only=restaurant --apply`. 6cat 안 건드림. 도심(Gemini03+TS3종) ∥ 외곽(Gemini04+outskirt-ts-fill) → 병합. (카피·가격·이미지 = 다음 단계 #45 가 통째로 = 옛 카피13 삭제 §19·§20.)
+- 📊 **현재 가져오는 개수(사실 확인 2026-06-23 프롬프트 직독)**: Gemini 도심(03) = 4 tier(eco·reason·prem·lux) × 30 = **최대 120곳(4콜)** / Gemini 외곽(04) = 2 tier(low·mid) × 30 = **최대 60곳(2콜)** / TS(12-pool) = searchNearby POPULARITY **~20곳/명소**(town 외곽 5 = ~100). = 병합 후 그 도시 restaurant 풀(§8.2 band 30/90/30 추출).
+
+**3. #45 = (통일 표준 ①) = 결손보강·보정** (그대로, 섞지 말 것)
+- `fill-city.ts --only=repair --apply` (= fillcity/repair.ts)
+- 추출(6cat TOP20 + 식당 band 30/90/30 = 270) 결손행 → Gemini→TS→PM → 최종 270 결손0. 정제 후라 결손률↓ = 이중체크.
+
+**4. 07-merge = 통일이면 불필요 = 입증 대상**
+- DB 트리거(`place_seed_raw_prevent_dup` 7단계)가 INSERT 단에서 중복을 막는 게 정본. **트리거 중복차단이 입증되면 = 07-merge 상시 게이트 아님 = 1회용·임시로만** 운영(옛 발굴 잔존 청소 시에만 수동 1회).
+- **입증 방법(다음 P0)**: 정제·발굴·#45 의 모든 INSERT 후 직접접속 SELECT 로 "중복 0" 확인 → 입증되면 §4 표의 "07-merge 필수 게이트"를 "1회용"으로 강등.
 
 ### 한 줄 전체 자동 = `fill-city.ts --city-id=N --apply`
-- `only` 기본값 = `[cleanse, repair, discover, curate, backfill, photo, restaurant, verify]` = **cleanse(정제)가 맨 앞** = 전체 자동.
-- 단계 분리 실행 = `--only=cleanse` / `--only=restaurant` / `--only=repair` (= 사장님 단계별 집행 시).
+- 단계 분리 실행(사장님 단계별 집행 시) = `--only=cleanse`(1.정제) / `--only=restaurant`(2.식당발굴) / `--only=repair`(3.#45).
+- ⚠️ **코드 `only` 기본 순서 = 정합 필요(다음 작업)**: 현재 코드 `only` 기본값 = `[cleanse, repair, discover, curate, backfill, photo, restaurant, verify]`(= 0자료 신규도시용 순서). **레거시 메인동작 정본 = 정제 → 식당발굴 → #45 → 07-merge** 와 순서가 다름(repair 가 restaurant 앞 + discover·curate·backfill·photo 는 0자료 풀 갈래용). = 코드 순서를 사장님 정본에 맞추는 건 별도 승인 후 집행.
 
-### 07-merge(사후 중복병합) = 통일 지켜지면 불필요 (헌법 §20)
-- 정제·발굴·#45 통일 양식이면 시스템이 중복을 안 만듦 = 07-merge 상시 X. (2026-06-22 런던 식당 21쌍 = 옛 발굴 잔존 1회용 정리뿐.)
+### 07-merge(사후 중복병합) = DB 트리거 입증되면 1회용·임시 운영 (헌법 §20, 2026-06-23 사장님 SSOT)
+- **원칙**: 중복 차단은 **DB 트리거(`place_seed_raw_prevent_dup` 7단계)**가 INSERT 단에서 막는 게 정본. 07-merge(사후 병합)는 그 백업이 아니라 **트리거가 입증되기 전까지의 임시·1회용**.
+- **= 트리거 중복차단이 실증되면 = 07-merge 는 상시 게이트 아님 = 1회용으로만 운영**(옛 발굴이 남긴 기존 중복 청소 시에만 수동 1회). 통일 양식(§20)이면 애초에 중복을 안 만듦.
+- 실증 예: 2026-06-22 런던 식당 21쌍 = 옛 발굴 잔존 1회용 정리뿐(상시 X).
+- **입증 대상(다음 P0)**: 트리거가 정제·발굴·#45 의 모든 INSERT 를 7단계로 막는지 = 직접접속 SELECT 로 "중복 0" 확인 → 입증되면 §4 표의 "07-merge 필수 게이트"를 "1회용"으로 강등.
 - 07-merge 후처리 = 표준화 완료(meta name_en 추가 + 안전망 3칸 이름토큰 = run 매처 정합, 2026-06-23).
 
 ### 좌표 기준 = 무조건 10m (= 검색 앵커·매칭 동일, 2026-06-23 사장님 SSOT)
@@ -116,18 +154,23 @@
 
 ---
 
-## 4. 구현 체인 (= `fill-city.ts`, 6단계 + ⓪)
+## 4. 구현 체인 (= `fill-city.ts` 컴포넌트 인벤토리)
 
-| # | 단계 | 컴포넌트 | 소스 | 역할 |
-|---|---|---|---|---|
-| **⓪ repair** | **결손보강·보정 (#45)** | [`scripts/fill45-defect-repair.ts`](../scripts/fill45-defect-repair.ts) | Gemini+TS+PM | **발굴 전 사전정제 / 독립 1회용**(`--only=repair`). 결손행 추출(band 30/90/30)→Gemini카피→TS 9요소→PM이미지→2곳저장. 다시 돌려도 안전(완비=추출0). |
-| ⓪ | city-meta | `shared/gemini-city-meta.ts` | Gemini | (신규도시) `cities` 좌표 행 생성 = downtown 발굴 전제 |
-| ① | discover | `12-ts-discover-pool` ∥ `01-discover-6cats` | TS ∥ Gemini | 6cat 발굴 → `upsertPlace` 7단계 병합 / 신규 placeholder rank |
-| ② | curate | `02-enrich-place --defects-only` | Gemini | 요약2 + 가격 결손행 보강 |
-| ③ | backfill | `fill/ts-backfill` | TS | PID/RC/가격 결손행(= Gemini 환각 검증) |
-| ④ | photo | `fill/ts-photo-fill --top=20` | TS | 카테고리별 RC TOP20 이미지(PhotoMedia→Storage) |
-| ⑤ | restaurant | 도심[`12-pool` 3종 + `03`] ∥ 외곽[`12-pool` + `04`] → `13` 카피 | TS ∥ Gemini | 식당 최대풀 → 병합 → 카피 → **이미지 = §8.2 도시상대 가격띠 quota**(단일 TOP20 아님) |
-| ⑥ | verify | `verifyReport()` | DB | TOP20 완비 리포트(비용 0) |
+> 🔴 **메인동작(레거시) 정본 순서 = §3-A "한 덩어리 WF" = 1.정제(cleanse) → 2.식당발굴(restaurant) → 3.#45(repair) → 4.07-merge(입증).**
+> 아래 표는 **컴포넌트 목록**이다(0자료 풀 갈래의 discover·curate·backfill·photo 포함). 레거시 메인동작은 cleanse·restaurant·repair 3개만 순서대로 쓴다.
+
+| 단계(소속) | 컴포넌트 | 소스 | 역할 |
+|---|---|---|---|
+| **1. cleanse**(메인) | **정제 (전체행 재검증, #46=#07)** | [`fillcity/cleanse.ts`](../fillcity/cleanse.ts) | **맨 처음**(`--only=cleanse`). 전체행(BTS제외)→geminiCurate(=02-enrich)→가격오염·이름환각·칸오입력 교정→id직행 전필드 새덮어쓰기(shopping price=NULL). TS·PM 0 = 도시당 1~2콜. |
+| **2. restaurant**(메인) | 도심[`12-pool` 3종 + `03`] ∥ 외곽[`12-pool` + `04`] | TS ∥ Gemini | 식당 최대풀(Gemini 도심120+외곽60, TS ~20/명소) → 병합 (= 새 행 발굴만, 카피·가격·이미지는 다음 #45 가 통째로. 옛 `13` 카피 삭제 §19·§20). |
+| **3. repair**(메인) | **결손보강·보정 (#45)** | [`fillcity/repair.ts`](../fillcity/repair.ts) | **발굴 뒤**(`--only=repair`). 결손행 추출(6cat TOP20+식당 band 30/90/30)→Gemini→TS→PM→2곳저장. 다시 돌려도 안전(완비=추출0). |
+| **4. 07-merge**(메인=입증) | 07-merge-dups(#43) | 비-LLM | 통일이면 불필요 = **DB 트리거 입증되면 1회용·임시**(§3-A 4단계). |
+| (풀 갈래) city-meta | `shared/gemini-city-meta.ts` | Gemini | (0자료 신규도시) `cities` 좌표 행 생성 = downtown 발굴 전제 |
+| (풀 갈래) discover | `12-ts-discover-pool` ∥ `01-discover-6cats` | TS ∥ Gemini | (0자료) 6cat 발굴 → `upsertPlace` 7단계 병합 |
+| (풀 갈래) curate | `02-enrich-place --defects-only` | Gemini | (0자료) 요약2 + 가격 결손행 보강 |
+| (풀 갈래) backfill | `fill/ts-backfill` | TS | (0자료) PID/RC/가격 결손행(= Gemini 환각 검증) |
+| (풀 갈래) photo | `fill/ts-photo-fill --top=20` | TS | (0자료) 카테고리별 RC TOP20 이미지 |
+| verify | `verifyReport()` | DB | TOP20 완비 리포트(비용 0) |
 
 - **랭킹(추출)** = `fill/rc-rerank` = backfill 후 자동 = RC DESC NULLS LAST.
 - **07-merge-dups** = **이미지(④⑤) 직전 필수 게이트**(강제) = 중복 keep 1행만 PM = 호출 최소화 + 검수. (옛 "필요시만" 폐기, 2026-06-09 사용자 SSOT)
@@ -173,7 +216,7 @@
 
 - **최대풀** = TS 3종(searchNearby POPULARITY + searchText60 + premium 가격필터) + Gemini(03 도심 가격tier / 04 외곽 명소주변).
 - **이유**: 동선최적화가 식당을 **이중 교차**(① 활동 근접[좌표] ② 예산 tier[가격])로 선택 → 각 끼니·예산대마다 가까운 식당 필요 → **풀이 클수록 동선 품질↑**.
-- 식당 **카피(13)** = RC 후 = ②보충에 흡수(별도 단계 아님).
+- 식당 카피·가격·이미지 = **#45 가 통째로 흡수**(별도 단계 아님). ⚠️ 옛 "카피(13)" 컴포넌트 = §19·§20 완전삭제(2026-06-23) = #45 Gemini 라운드에 포함.
 
 ### 8.1 외곽 식당 = town 자동 시스템화 (= destinations.ts 폐기, 2026-06-08 확정)
 
@@ -194,7 +237,7 @@
 <!-- ⚠️ 2026-06-20 §19 완전교체 = 옛 §8.2(도심80/백분위/외곽town quota·restaurant-image-targets.ts) 완전삭제 = #45 WF 실증확정 로직으로 1벌 통일. 옛 도심/외곽 구분·백분위 경계 = 폐기. -->
 
 > 식당 추출 = **도심/외곽 구분 없음 = 그 도시 `restaurant` 카테고리 전체**가 대상.
-> 가격대(band)별 풀 안 순위로 추출 (= #45 결손보강 WF `scripts/fill45-defect-repair.ts` 추출 SQL = 정본).
+> 가격대(band)별 풀 안 순위로 추출 (= #45 결손보강 WF `fillcity/repair.ts` 추출 SQL = 정본).
 
 **① band(가격대) = 가격으로 SQL 분류 (PSR에 band 컬럼 없음 = 조건검색)**
 - eco(경제적) = `price_eur ≤ 24` / reason(합리적) = `25~60` / premium·luxury = `60+`.
@@ -229,9 +272,10 @@
 
 - **shared 관문**: matcher · place-upsert · ts-client · geminiClient · google-places-sku · gemini-city-meta · gemini-curate · place-image · api-keys-loader
 - **fill**: ts-backfill · ts-photo-fill · rc-rerank
-- **prompts(발굴/카피)**: 01-discover-6cats · 02-enrich-place · 12-ts-discover-pool · 13-restaurant-summary · 03-downtown-restaurant · 04-outskirt-restaurant (= 2026-06-08 un-archive = prompts/ 복귀, ROOT 근본해소)
+- **prompts(발굴/카피)**: 01-discover-6cats · 02-enrich-place · 12-ts-discover-pool · 03-downtown-restaurant · 04-outskirt-restaurant (⚠️ 13-restaurant-summary = 2026-06-23 §19·§20 완전삭제 = #45 흡수)
 - **fill/(영구 TS 컴포넌트)**: ts-backfill · ts-photo-fill · rc-rerank · **outskirt-ts-fill**(2026-06-08 = town 자동 시스템화, §8.1)
 - **prompts(검수/정제)**: 05-text-recategorize · 05-restaurant-reverify · 07-merge-dups · 08-wk-image-fill · 06-ts-pm-enrich(레거시)
+- **정제·결손보강(scripts, 영구 컴포넌트)**: **fillcity-step1b-fix-pollution**(① 정제 = #46=#07 재사용) · fill45-defect-repair(⓪ #45)
 
 ---
 
@@ -239,15 +283,19 @@
 
 **현재 (CLI)**:
 ```
-# 전체 WF (repair 사전정제 → 발굴 → ... → verify)
-npx tsx .claude/skills/raw-db-verify-and-complete/fill-city.ts --city-id=N [--apply] \
-  [--only=repair,discover,curate,backfill,photo,restaurant,verify] [--lang=fr] [--outskirt-hints="Toledo / Segovia"]
+# 전체 WF (① 정제 → ⓪ repair → 발굴 → ... → verify) = only 기본 맨앞 cleanse
+npx tsx fillcity/fill-city.ts --city-id=N [--apply] \
+  [--only=cleanse,repair,discover,curate,backfill,photo,restaurant,verify] [--lang=fr] [--outskirt-hints="Toledo / Segovia"]
 
-# 독립 1회용 = #45 결손보강·보정만 (완비 도시 재점검)
-npx tsx .claude/skills/raw-db-verify-and-complete/fill-city.ts --city-id=N --only=repair --apply
-# (또는 직접) npx tsx scripts/fill45-defect-repair.ts --city-id=N [--apply] [--only-id=ID]
+# 레거시 도시(메인동작) 단계 분리 = ① 정제 → ② 식당발굴 → ③ #45 (§3-A)
+npx tsx fillcity/fill-city.ts --city-id=N --only=cleanse --apply     # ① 정제(전체행 재검증)
+npx tsx fillcity/fill-city.ts --city-id=N --only=restaurant --apply  # ② 식당발굴(AI 개입0)
+npx tsx fillcity/fill-city.ts --city-id=N --only=repair --apply      # ③ #45 결손보강
+
+# (또는 직접) npx tsx fillcity/cleanse.ts --city-id=N [--apply]   # ① 정제 단독
+# (또는 직접) npx tsx fillcity/repair.ts --city-id=N [--apply] [--only-id=ID]            # ⓪ #45 단독
 ```
-- `--apply` 없으면 = **DRY**(비용추정 + 완비 리포트, API 0). repair(#45) 단독 DRY = `fill45-defect-repair.ts --city-id=N`(결손 분포 표시).
+- `--apply` 없으면 = **DRY**(비용추정 + 완비 리포트, API 0). cleanse(① 정제) 단독 DRY = `fillcity-step1b-fix-pollution.ts --city-id=N`(전체행 목록, 외부호출 0). repair(#45) 단독 DRY = `fill45-defect-repair.ts --city-id=N`(결손 분포 표시).
 
 **다음 (FE 관리자 대시보드)**:
 - `/admin` 독립 HTML → `POST /api/admin/fillcity {cityId, only?}` → 백그라운드 spawn → 진행률 + 완비 리포트 표시.
@@ -272,7 +320,7 @@ npx tsx .claude/skills/raw-db-verify-and-complete/fill-city.ts --city-id=N --onl
 
 | # | 단계 | 컴포넌트 | 상태 | 검증 기준 |
 |---|---|---|---|---|
-| **⓪ repair** | **#45 결손보강·보정** | [`scripts/fill45-defect-repair.ts`](../scripts/fill45-defect-repair.ts) | ✅ **파리·마드리드 완비+다시돌려도 안전(2026-06-20)** | 추출(band 30/90/30)→Gemini→TS→PM→2곳저장. 재실행 추출0. fill-city ⓪ 연결+독립 1회용. 카탈로그 #45 등재 |
+| **⓪ repair** | **#45 결손보강·보정** | [`fillcity/repair.ts`](../fillcity/repair.ts) | ✅ **파리·마드리드 완비+다시돌려도 안전(2026-06-20)** | 추출(band 30/90/30)→Gemini→TS→PM→2곳저장. 재실행 추출0. fill-city ⓪ 연결+독립 1회용. 카탈로그 #45 등재 |
 | 0 | city-meta (신규도시) | gemini-city-meta(#04) | ⬜ 미배선 | cities 행 자동 생성 |
 | 1 | 발굴 6비식당 | TS #30 ∥ Gemini #06 | ✅ 마드리드(359) | 행수↑·중복0 |
 | 2 | 발굴 식당 도심 | TS #32 합본 ∥ Gemini 03 | ✅ 마드리드 도심 242(Gemini 91 + TS 108, dedup) | 도심 식당 풀 |
@@ -300,7 +348,7 @@ npx tsx .claude/skills/raw-db-verify-and-complete/fill-city.ts --city-id=N --onl
 
 ### 🔴🔴 즉시재개점 (2026-06-21 = 최신 = 이것부터)
 
-- **기존자료 도시 운영 흐름 = §3-A 신설·확정**(사장님 SSOT): 거의 모든 도시 = 6cat 이미 Gemini 시드발굴됨 = 식당만 적음 → **반복 3단계 = ① 정제(AI 인위 오염행 삭제, 삭제 전 보고) → ② 식당발굴(`fill-city --only=restaurant --apply` = AI 개입0 자동) → ③ #45 도시전체(`fill45-defect-repair --city-id=N --apply`) = 최소270 결손0**. 코드의 repair-맨앞 1줄 = "0자료 신규도시"용. = 컴포넌트 동일, 호출 조합만 다름(코드변경 아님).
+- **레거시 도시 운영 흐름 = §3-A 확정**(사장님 SSOT, 2026-06-23 갱신): 거의 모든 도시 = 6cat 이미 Gemini 시드발굴됨(행수≥120) = 식당만 적음 → **반복 3단계 = ① 정제(`--only=cleanse --apply` = 전체행 Gemini 재검증 = AI 인위삭제 아님 = §19) → ② 식당발굴(`--only=restaurant --apply` = AI 개입0 자동) → ③ #45 도시전체(`--only=repair --apply`) = 최소270 결손0**. = 컴포넌트 동일, 호출 조합만 다름(코드변경 아님).
 - **미커밋 없음**(working tree clean) = 2026-06-21 브뤼셀·GREATEST·#45원복 = 커밋 `7f60f98` 에 들어감.
 
 ### 🔴🔴 즉시재개점 (2026-06-20 = 이력)

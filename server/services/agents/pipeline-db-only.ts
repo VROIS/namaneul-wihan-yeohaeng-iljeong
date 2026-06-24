@@ -44,7 +44,7 @@ export async function runPipelineDbOnly(
   );
 
   // ===== AG4-DB = scenario.scenes 직접 사용 (= 사용자 SSOT 단계 4) =====
-  // = 옛 AG3 + 슬롯 강제 분배 = 폐기 = ag4 안 scenario 호출 = 자유 동선
+  // = ag4 안 scenario 호출 = 자유 동선
   // = 백필 = background fire-and-forget = FE 우선 노출
   const result = await finalizeDbOnlyItinerary({
     daySlotsConfig: skeleton.daySlotsConfig,

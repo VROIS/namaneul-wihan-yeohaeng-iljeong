@@ -58,7 +58,7 @@ function addMinutes(time: string, minutes: number): string {
 
 /**
  * 단순 교통비 추정 = scene.transit_mode + transit_min 기반
- * = 옛 calcTransitHaversine 자체 계산 폐기 후 = scene 응답 직접 사용
+ * = scene 응답 직접 사용
  * = 도시별 정확 가격 = 추후 transport-pricing-service 통합 (= 별도 단계)
  */
 function estimateTransitCost(
@@ -97,9 +97,8 @@ export interface AG4DbInput {
 
 /**
  * AG4-DB 메인 = scenario.scenes 직접 사용 (= 사용자 SSOT 2026-05-26 단계 4)
- * = 옛 슬롯 강제 분배 + zone fallback + placeholder 완전 폐기
  * = scenario 응답 24 씬 = 그대로 일자별 슬롯 = FE 노출
- * = 실패 = 옛 itinerary fallback (= 안전망 = MIX path 동일 코드)
+ * = 실패 = itinerary fallback (= 안전망 = MIX path 동일 코드)
  */
 export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
   const _t0 = Date.now();
@@ -171,7 +170,7 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
     ? buildRouteLocal(skeleton, inputPlaces, cityCoords, restaurantPool)
     : await handleRouteRequest(skeleton, inputPlaces, cityCoords);
 
-  // 로컬 1차가 실패/부족(일자 0 또는 씬 0) 시 → Gemini 안전장치 (= 빈 일정 방지 = 옛 동작 parity)
+  // 로컬 1차가 실패/부족(일자 0 또는 씬 0) 시 → Gemini 안전장치 (= 빈 일정 방지)
   const localScenes =
     routeResult.response?.days?.reduce((s, d) => s + (d.scenes?.length || 0), 0) || 0;
   const localInsufficient =
@@ -240,7 +239,7 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
       );
     }
     // ⚠️ 2026-05-31 = 사용자 SSOT = prompt 가 name_en 미요청 (= name_local 단일) = 워닝 조건 시정
-    // = 진짜 결함 = 표시 이름(name_local) + 매칭(inputPlace) 둘 다 없을 때만 (= 옛 name_en 기준 노이즈 폐기)
+    // = 진짜 결함 = 표시 이름(name_local) + 매칭(inputPlace) 둘 다 없을 때만
     const nameless = scenes.filter(
       (s) => !s.name_local && !s.name_en && !inputById.get(s.place_id),
     );
@@ -287,7 +286,7 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
       // ⚠️ 2026-05-26 = 사용자 SSOT = name_en = 보조 = name_local fallback (= FE 표시)
       const displayName = scene.name_en || scene.name_local;
       return {
-        // 식별 (= FE 호환 = 옛 PlaceResult 양식)
+        // 식별 (= FE 호환 = PlaceResult 양식)
         id: scene.place_id,
         name: displayName,
         nameEn: displayName,
@@ -321,7 +320,7 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
         selectionReasonKo:
           scene.selection_reason_ko || inputPlace?.selectionReasons?.[0],
         shortformKo: scene.shortform_ko,
-        // 동선 = scene 직접 (= 옛 calcTransitHaversine 폐기)
+        // 동선 = scene 직접
         distance_from_prev_km: scene.distance_from_prev_km,
         transit_mode: scene.transit_mode,
         transit_min: scene.transit_min,
@@ -342,7 +341,7 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
       0,
     );
 
-    // ===== 교통 = scene 기반 추정 (= 옛 transit-haversine 폐기) =====
+    // ===== 교통 = scene 기반 추정 =====
     const transits = scenes.slice(1).map((scene, i) => {
       const cost = estimateTransitCost(
         scene.transit_mode,
@@ -463,7 +462,7 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
 }
 
 /**
- * fallback = 옛 itinerary-generator + calcTransitHaversine (= scenario 실패 시 안전망)
+ * fallback = itinerary-generator + calcTransitHaversine (= scenario 실패 시 안전망)
  * = MIX path 와 동일 코드 = 본 함수는 dynamic import (= circular import 회피)
  */
 async function finalizeWithLegacyItinerary(
@@ -480,7 +479,7 @@ async function finalizeWithLegacyItinerary(
     inputPlaces,
   } = input;
 
-  // 옛 enrichment + slot 분배 호출 (= dynamic = circular 회피)
+  // enrichment + slot 분배 호출 (= dynamic = circular 회피)
   const { processDbOnly } = await import("./ag3-db-direct");
   const { enriched } = processDbOnly(inputPlaces);
   const { _enrichmentPipeline } = await import("../itinerary-generator");
@@ -494,7 +493,7 @@ async function finalizeWithLegacyItinerary(
     },
   );
 
-  // 옛 transit-haversine = dynamic = circular 회피
+  // transit-haversine = dynamic = circular 회피
   const { calcTransitHaversine } = await import("./transit-haversine");
   const travelMode: any =
     formData.mobilityStyle === "WalkMore"
@@ -588,7 +587,7 @@ async function finalizeWithLegacyItinerary(
           0,
         ),
         totalCost: transits.reduce((s: number, t: any) => s + t.costTotal, 0),
-        totalDistanceKm: 0, // = fallback = 옛 transit-haversine = 거리 합산 X = FE 호환만
+        totalDistanceKm: 0, // = fallback = transit-haversine = 거리 합산 X = FE 호환만
       },
       dailyCost: {
         // ⚠️ 2026-06-06 = FE 는 dc.breakdown.{...} 중첩을 읽음 (= MIX pipeline-v3 구조 일치) = 카테고리별 비용(교통/식사/입장료) 표시

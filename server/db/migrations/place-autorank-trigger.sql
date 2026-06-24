@@ -9,7 +9,7 @@
 -- = BTS army_zone/merch_store = rank=1 고정 보존 = 제외 (= rc-rerank EXCLUDE 동일).
 -- = 재귀방지: 내부 UPDATE 는 rank 만 변경 = 트리거 UPDATE OF 목록(google_review_count, seed_category, city_id) 밖
 --             = 재발화 안 됨 (+ pg_trigger_depth() 안전망).
--- = 문지기(place_seed_raw_prevent_dup) = BEFORE INSERT 전용 = 본 AFTER 트리거와 무충돌(rank-UPDATE 는 문지기 미발화).
+-- = 문지기(place_seed_raw_prevent_dup) = BEFORE INSERT OR UPDATE = rank-UPDATE 도 발화하나 pg_trigger_depth()>1 면제 = 무충돌 (2026-06-24 §20).
 -- 적용 = psql $SUPA_URL -f server/db/migrations/place-autorank-trigger.sql
 
 CREATE OR REPLACE FUNCTION public.place_seed_raw_autorank()

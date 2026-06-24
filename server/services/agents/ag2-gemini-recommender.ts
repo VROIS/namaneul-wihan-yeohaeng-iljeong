@@ -4,13 +4,6 @@
  * AG2: place_seed_raw 직접 SELECT (= Gemini 호출 0)
  * = ready=true (= rank 1-20 ≥ 70 행) → fetchFromPlaceSeedRaw 반환
  * = ready=false → throw MIX_MODE_DISABLED (= MIX path = pipeline-v3.ts step1_geminiItinerary 표준 prompt 사용)
- *
- * 폐기 (= 사용자 SSOT 2026-05-24 = 표준 prompt 단일 통일):
- * - 옛 별도 간소화 prompt (= line 367-374) = lat/lng 누락 + place_id 환각 유도 = 삭제
- * - 옛 Gemini fallback 본문 (= line 317-462) = DB-only 의도 위반 = 삭제
- * - 옛 80% 부족 시 null 반환 (= line 241-244) = 부족해도 그대로 반환 (= 사용자 SSOT)
- * - 옛 PlaceResult 변환 (= line 434-457 = lat/lng=0 + 점수 하드코딩) = 삭제
- * - 옛 repairTruncatedJSON 함수 = 사용처 0 = 삭제
  */
 
 import type { AG1Output, PlaceResult, SeedCategory } from "./types";
@@ -176,14 +169,14 @@ async function fetchFromPlaceSeedRaw(
     id: placeSeedRaw.id,
     nameEn: placeSeedRaw.nameEn,
     nameKo: placeSeedRaw.nameKo,
-    // ⚠️ 수정금지(승인필요) 2026-05-28 = 사용자 SSOT = nameLocal 추가 (= 옛 SELECT 누락 = buildRouteInputJson `name_local` 정확 inject)
+    // ⚠️ 수정금지(승인필요) 2026-05-28 = 사용자 SSOT = nameLocal (= buildRouteInputJson `name_local` 정확 inject)
     nameLocal: placeSeedRaw.nameLocal,
     googlePlaceId: placeSeedRaw.googlePlaceId,
     googleMapsUri: placeSeedRaw.googleMapsUri,
     address: placeSeedRaw.address,
     latitude: placeSeedRaw.latitude,
     longitude: placeSeedRaw.longitude,
-    imageUrl: placeSeedRaw.imageUrl, // ⚠️ 2026-06-11 = image_url(구글 PM) 1종 (best_image_url 폐기)
+    imageUrl: placeSeedRaw.imageUrl, // ⚠️ 2026-06-11 = image_url(구글 PM) 1종
     summaryKo: placeSeedRaw.summaryKo,
     editorialSummary: placeSeedRaw.editorialSummary,
     seedCategory: placeSeedRaw.seedCategory,
@@ -251,7 +244,6 @@ async function fetchFromPlaceSeedRaw(
   }
 
   // ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = 부족해도 그대로 반환 (= Gemini fallback X)
-  // = 옛 80% null 반환 = DB-only 의도 위반 (= ag2:317-462 Gemini fallback 호출) = 삭제
   // = 빈 슬롯 가능 = 사용자 표시 = 솔직 (= 환각 채움 X)
   console.log(
     `[AG2-DB] 행 수 = ${allRows.length}/${totalSlots} (= 부족해도 그대로 반환)`,
@@ -268,7 +260,7 @@ async function fetchFromPlaceSeedRaw(
       description: r.summaryKo || r.editorialSummary || "",
       lat: parseFloat(String(r.latitude)) || 0,
       lng: parseFloat(String(r.longitude)) || 0,
-      // ⚠️ 수정금지(승인필요) 2026-05-24 = PSR.rank 단일 SSOT (= 옛 점수 시스템 cascade 폐기)
+      // ⚠️ 수정금지(승인필요) 2026-05-24 = PSR.rank 단일 SSOT
       rank: r.rank,
       sourceType: "DB Direct (Place Seed Raw)",
       personaFitReason: r.summaryKo || "",
@@ -309,12 +301,6 @@ async function fetchFromPlaceSeedRaw(
  * 분기:
  * - ready=true (= rank 1-20 ≥ 70 행) → fetchFromPlaceSeedRaw 결과 그대로 반환 (= Gemini 0)
  * - ready=false → throw MIX_MODE_DISABLED (= MIX path = pipeline-v3.ts step1_geminiItinerary 처리)
- *
- * 폐기 (= 2026-05-24):
- * - 옛 80% 부족 시 Gemini fallback = 삭제 (= DB-only 의도 위반)
- * - 옛 간소화 prompt (= lat/lng 누락 + place_id 환각 유도) = 삭제
- * - 옛 PlaceResult 변환 (= lat/lng=0 + 점수 하드코딩) = 삭제
- * - 옛 repairTruncatedJSON (= Gemini 응답 잘림 복구) = 삭제 (= 사용처 0)
  */
 export async function generateRecommendations(
   skeleton: AG1Output,

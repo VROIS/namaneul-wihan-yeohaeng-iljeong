@@ -1849,8 +1849,7 @@ export default function TripPlannerScreen() {
                                   </Text>
                                 </View>
 
-                                {/* ⚠️ 2026-06-11 = 옛 nubiReason 블록(헛바퀴·as any 데드) 제거 = summary_ko 흡수통합.
-                                    차별점(후킹 숏폼 한줄요약) = 아래 description(= ag3가 DB summaryKo로 덮어씀)이 단일 노출. */}
+                                {/* 차별점(후킹 숏폼 한줄요약) = 아래 description(= ag3가 DB summaryKo로 덮어씀)이 단일 노출. */}
 
                                 {/* ⚠️ 수정금지(승인필요) 2026-05-09 = 숓품식 한 줄 소개 (= DB summaryKo) 우선 노출 = 사용자 SSOT */}
                                 {/* description = ag3-data-matcher.ts:495 에서 DB summaryKo 로 덮어쓰기 = 우선 노출 / 없으면 AG2 reason fallback */}
@@ -2474,7 +2473,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  resultTitle: { fontSize: 20, fontFamily: Fonts.bold }, // 18 → 20
+  resultTitle: { fontSize: 20, fontFamily: Fonts.bold },
 
   // 📊 요약 섹션 1: 날짜 + 장소수 + 총예산
   tripSummaryRow: {
@@ -2599,9 +2598,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: Spacing.sm,
     marginHorizontal: Spacing.md,
-    paddingVertical: Spacing.lg, // md → lg
+    paddingVertical: Spacing.lg,
     paddingHorizontal: Spacing.lg,
-    borderRadius: BorderRadius.lg, // md → lg
+    borderRadius: BorderRadius.lg,
     marginBottom: Spacing.lg,
   },
   summaryText: {
@@ -2610,22 +2609,22 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.bold,
     color: "#FFFFFF",
     lineHeight: 22,
-  }, // 13 → 15
+  },
 
   // 📍 장소 목록
   placesList: { paddingHorizontal: Spacing.sm },
   placeItem: { flexDirection: "row", marginBottom: Spacing.sm }, // 간격 최소화
 
   // 🔢 타임라인 (좌측 번호)
-  timelineLeft: { width: 44, alignItems: "center" }, // 40 → 44
+  timelineLeft: { width: 44, alignItems: "center" },
   placeNumber: {
     width: 36,
     height: 36,
     borderRadius: 18,
     justifyContent: "center",
     alignItems: "center",
-  }, // 32 → 36
-  placeNumberText: { color: "#FFFFFF", fontSize: 15, fontFamily: Fonts.bold }, // 14 → 15
+  },
+  placeNumberText: { color: "#FFFFFF", fontSize: 15, fontFamily: Fonts.bold },
   timelineLine: { flex: 1, width: 2, marginVertical: Spacing.xs },
 
   // 🏷️ 장소 카드
@@ -2640,23 +2639,23 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: Spacing.sm, // xs → sm
+    marginBottom: Spacing.sm,
   },
-  placeName: { fontSize: 18, fontFamily: Fonts.bold, flex: 1 }, // 16 → 18
+  placeName: { fontSize: 18, fontFamily: Fonts.bold, flex: 1 },
   scoreBadge: {
-    paddingHorizontal: Spacing.md, // sm → md
-    paddingVertical: 4, // 2 → 4
-    borderRadius: BorderRadius.sm, // xs → sm
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.sm,
     marginLeft: Spacing.sm,
   },
-  scoreText: { fontSize: 14, fontFamily: Fonts.bold }, // 12 → 14
+  scoreText: { fontSize: 14, fontFamily: Fonts.bold },
 
   // 🕐 시간
   placeTimeRow: {
     flexDirection: "row",
     alignItems: "center",
-    gap: Spacing.sm, // xs → sm
-    marginBottom: Spacing.sm, // xs → sm
+    gap: Spacing.sm,
+    marginBottom: Spacing.sm,
   },
   placeTimeText: { fontSize: 14, fontFamily: Fonts.semiBold },
 
@@ -2682,18 +2681,18 @@ const styles = StyleSheet.create({
   vibeTagsRow: {
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: Spacing.sm, // xs → sm
-    marginBottom: Spacing.sm, // xs → sm
+    gap: Spacing.sm,
+    marginBottom: Spacing.sm,
   },
   vibeTag: {
-    paddingHorizontal: Spacing.md, // sm → md
-    paddingVertical: 4, // 2 → 4
-    borderRadius: BorderRadius.sm, // xs → sm
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 4,
+    borderRadius: BorderRadius.sm,
   },
-  vibeTagText: { fontSize: 12, fontFamily: Fonts.bold }, // 10 → 12
+  vibeTagText: { fontSize: 12, fontFamily: Fonts.bold },
 
   // 📝 장소 설명
-  placeReason: { fontSize: 14, lineHeight: 20 }, // 13/18 → 14/20
+  placeReason: { fontSize: 14, lineHeight: 20 },
 
   // 🖼️ 장소 카드 내부 레이아웃
   placeCardContent: {

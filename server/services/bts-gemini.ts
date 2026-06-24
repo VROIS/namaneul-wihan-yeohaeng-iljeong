@@ -24,7 +24,6 @@ export type PlaceForOptimization = {
   name: string;
   category: string;
   priceEur: number | null;
-  // ⚠️ 2026-06-11 = nubiReason 폐기 → summary_ko 흡수통합
 };
 
 export type OptimizedPlace = PlaceForOptimization & {

@@ -1,15 +1,15 @@
-// ⚠️ 영구 컴포넌트 2026-06-08 = 사용자 SSOT = 외곽 식당 town 자동 시스템화 (= destinations.ts 폐기, FILLCITY_PRD §8.1)
+// ⚠️ 영구 컴포넌트 2026-06-08 = 사용자 SSOT = 외곽 식당 town 자동 시스템화 (FILLCITY_PRD §8.1, §19)
 // = Gemini 04 발굴 외곽식당(day_zone='outskirt') 주소에서 town 추출 → top-N town → TS geocode → searchNearby POP → upsertPlace
 // = 입력 = DB(Gemini 발굴) / 좌표 = TS geocode(searchText) / 풀 = searchNearby POPULARITY(카탈로그 #26/#32 표준) / 쓰기 = upsertPlace(§14)
 // = 도시별 수동 config(destinations.ts) 불필요 = 도시명만으로 자동 = 범용.
-// 호출: npx tsx server/services/fill/outskirt-ts-fill.ts --city-id=37 [--apply] [--top=5] [--radius=8000] [--per=20] [--lang=es]
+// 호출: npx tsx fillcity/steps/outskirt-ts-fill.ts --city-id=37 [--apply] [--top=5] [--radius=8000] [--per=20] [--lang=es]
 //   (--apply 없으면 = DRY = town 추출 + top-N + 비용추정, TS 호출 0)
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(__dirname, '../../..');
+const ROOT = path.resolve(__dirname, '../..');
 process.chdir(ROOT);
 const envRaw = fs.readFileSync('.env', 'utf-8').replace(/^﻿/, '');
 for (const line of envRaw.split(/\r?\n/)) {
@@ -49,7 +49,7 @@ function townOf(address: string | null): string | null {
   await c.connect();
   const city = (await c.query('SELECT name_en, country, country_code FROM cities WHERE id=$1', [cityId])).rows[0];
   if (!city) { await c.end(); console.error(`✗ city ${cityId} 미존재`); process.exit(1); }
-  // ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유 (= 직독 폐기). 외곽식당 보충 = 채움 = 도시 있음 + 행 있음(true).
+  // ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유 (§19). 외곽식당 보충 = 채움 = 도시 있음 + 행 있음(true).
   // = 출입증(키이름·도시id·날짜·행있음) 검문 통과해야만 키 발급. 미달 = throw = 외부호출 불가.
   const today = new Date().toISOString().slice(0, 10);
   const { issueApiKey } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/issue-api-key.ts')).href);

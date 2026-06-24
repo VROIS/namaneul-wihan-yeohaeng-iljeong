@@ -66,7 +66,7 @@ if (!cityId) { console.error('Usage: --city-id=<N> --date=<YYYY-MM-DD> --apply-s
   const pg = await import('pg');
   const c = new (pg as any).default.Client({ connectionString: process.env.SUPA_URL || process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
   await c.connect();
-  // ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유 (= 직독 폐기). PM 이미지 = 채움 = 도시 있음 + 행 있음(true).
+  // ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유. PM 이미지 = 채움 = 도시 있음 + 행 있음(true).
   // = 출입증(키이름·도시id·날짜·행있음) 검문 통과해야만 키 발급. 미달 = throw = 외부호출 불가.
   const { issueApiKey } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/issue-api-key.ts')).href);
   const PLACES_KEY = downloadPhoto ? await issueApiKey(c, 'GOOGLE_MAPS_API_KEY', cityId, date, true) : null;

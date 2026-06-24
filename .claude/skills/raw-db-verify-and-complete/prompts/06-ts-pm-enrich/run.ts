@@ -41,7 +41,7 @@ if (!cityId) { console.error('Usage: --city-id=<N>'); process.exit(1); }
   const c = new (pg as any).default.Client({ connectionString: process.env.SUPA_URL || process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
   await c.connect();
   const city = (await c.query('SELECT name_en, country_code FROM cities WHERE id=$1', [cityId])).rows[0];
-  // ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유 (= 직독 폐기). TS 보강 = 채움 = 도시 있음 + 행 있음(true).
+  // ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유. TS 보강 = 채움 = 도시 있음 + 행 있음(true).
   // = 출입증(키이름·도시id·날짜·행있음) 검문 통과해야만 키 발급. 미달 = throw = 외부호출 불가.
   const today = new Date().toISOString().slice(0, 10);
   const { issueApiKey } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/issue-api-key.ts')).href);

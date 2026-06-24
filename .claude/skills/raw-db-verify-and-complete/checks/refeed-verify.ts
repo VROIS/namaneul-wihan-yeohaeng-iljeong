@@ -90,7 +90,7 @@ function parseGemini(t: string): any | null {
       if (!(pl.nameEn || pl.nameLocal)) continue;
       const r = matchCandidate(pl, existing);
       if (r.match) { m++; continue; }
-      // ⚠️ 2026-06-13 = 매칭 실패 분류 = PID 실재 여부 (= 이름 부분일치 폐기 = PID veto 무시 거짓양성 제거).
+      // ⚠️ 2026-06-13 = 매칭 실패 분류 = PID 실재 여부.
       //   = raw PID 가 DB 에 실재하는데 match 실패 = 🔴진짜 매처미스(같은 PID 못 잡음 = 고칠 구멍).
       //   = raw PID 가 DB 에 없음(또는 PID 무) = 정상신규(= 동명 다른 장소 = Google 이 다른 PID 부여 = 합치면 안 됨).
       if (pl.googlePlaceId && dbPidSet.has(pl.googlePlaceId)) {

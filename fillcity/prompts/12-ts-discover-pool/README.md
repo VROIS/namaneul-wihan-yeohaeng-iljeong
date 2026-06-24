@@ -28,9 +28,8 @@ npx tsx .../12-ts-discover-pool/run.ts --city-id=$CITY --zone=downtown --method=
 # 4. 병합 + 잡음필터 + name-dedup + tier×RC = upsert (dry-run 먼저, 그 후 --apply)
 npx tsx .../12-ts-discover-pool/post-process.ts --city-id=$CITY --zone=downtown --date=$DATE          # dry-run
 npx tsx .../12-ts-discover-pool/post-process.ts --city-id=$CITY --zone=downtown --date=$DATE --apply  # 반영
-# 5. 한국 요약 2개 + 가격(unknown만) = 13번 (RC>0 & summary 없는 식당, batch 40)
-npx tsx .../13-restaurant-summary/run.ts --city-id=$CITY
-npx tsx .../13-restaurant-summary/post-process.ts --city-id=$CITY --date=$DATE --apply
+# 5. 한국 요약 2개 + 가격 + 이미지 = #45 결손보강 WF 가 통째로 (= 옛 13-restaurant-summary 삭제 2026-06-23 §19·§20 = #45 흡수)
+#    npx tsx scripts/fill45-defect-repair.ts --city-id=$CITY --apply
 # 6. 이미지 PM = FE 노출분 (가격대별 RC 상위). --limit=3 테스트 먼저 권장
 npx tsx .../12-ts-discover-pool/image-pool.ts --city-id=$CITY --zone=downtown --date=$DATE --apply --limit=3
 npx tsx .../12-ts-discover-pool/image-pool.ts --city-id=$CITY --zone=downtown --date=$DATE --apply   # --eco=20 --reason=40 --premium=20 기본

@@ -50,7 +50,7 @@ function useCharacterLayout() {
   return useMemo(() => {
     const avatarSize = Math.max(Math.round(Math.min(sw, sh) * 0.28), 96);
     const rx = (sw - avatarSize) / 2 - 12;
-    const ry = rx * 1.2; // 세로 1.2배 (기존 1.4 → 1.2, 하단 여유 확보)
+    const ry = rx * 1.2; // 세로 1.2배 (하단 여유 확보)
     const areaW = 2 * rx + avatarSize;
     const areaH = 2 * ry + avatarSize;
     const heroSize = Math.round(avatarSize * 2.4); // 중앙 overlay = 썸네일 2.4배

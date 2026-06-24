@@ -17,8 +17,8 @@
 // └────────────────────────────────────────────────────────────────────────┘
 //
 // 호출:
-//   npx tsx scripts/fillcity-step1b-fix-pollution.ts --city-id=24            # DRY = 오염행 목록만(외부호출 0)
-//   npx tsx scripts/fillcity-step1b-fix-pollution.ts --city-id=24 --apply    # Gemini 1콜 정정 → 새덮어쓰기
+//   npx tsx fillcity/cleanse.ts --city-id=24            # DRY = 오염행 목록만(외부호출 0)
+//   npx tsx fillcity/cleanse.ts --city-id=24 --apply    # Gemini 1콜 정정 → 새덮어쓰기
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
@@ -90,7 +90,6 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--apply]'); process.exit(1);
         summary_ko = COALESCE(NULLIF($8,''), summary_ko),
         editorial_summary = COALESCE(NULLIF($9,''), editorial_summary),
         -- ⚠️ 수정금지(승인필요) 2026-06-23 사장님 SSOT = shopping = price 강제 NULL (§15 = 쇼핑 1인가격 개념없음).
-        --   = 옛 COALESCE(null, 기존) 버그: shopping 정정값 null → 기존 오염(€148800) 보존 = 안 지워짐(Harrods 등).
         --   = $12(isShopping) true 면 무조건 NULL SET / false 면 Gemini값 새우선 COALESCE.
         price_eur = CASE WHEN $12::boolean THEN NULL ELSE COALESCE($10::real, price_eur) END,
         distance_km_from_center = COALESCE($11::numeric, distance_km_from_center),

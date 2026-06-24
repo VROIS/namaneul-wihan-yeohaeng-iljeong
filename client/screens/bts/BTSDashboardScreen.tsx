@@ -118,7 +118,7 @@ type TimelineCardProps = {
     endTime: string;
     priceEstimate: string;
     tags: string[];
-    // ⚠️ 2026-06-11 = nubiReason 폐기 → summaryKo 흡수통합 (후킹 숏폼 차별점)
+    // 후킹 숏폼 차별점 = 한줄요약
     summaryKo: string | null;
   };
   index: number;

@@ -18,7 +18,7 @@ import { fileURLToPath, pathToFileURL } from 'url';
 import { MANUAL_PRICE_EUR } from './manual-prices';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(__dirname, '../../../../..');
+const ROOT = path.resolve(__dirname, '../../..');
 process.chdir(ROOT);
 const envRaw = fs.readFileSync('.env', 'utf-8').replace(/^﻿/, '');
 for (const line of envRaw.split(/\r?\n/)) {
@@ -91,7 +91,7 @@ const PM_CALL_EUR = 0.007;
     await cc2.connect();
     const cityRow = (await cc2.query('SELECT latitude, longitude FROM cities WHERE id=$1', [cityId])).rows[0];
     const center = { lat: parseFloat(cityRow?.latitude) || 0, lng: parseFloat(cityRow?.longitude) || 0 };
-    // ⚠️ 2026-06-03 = 거리 필터 제거 = 범위는 run.ts 의 locationRestriction(강제 사각형)이 발굴 단계에서 보장 (= 임의 후처리 컷 폐기)
+    // ⚠️ 2026-06-03 = 거리 필터 제거 = 범위는 run.ts 의 locationRestriction(강제 사각형)이 발굴 단계에서 보장
     const exist = (await cc2.query(`SELECT id, name_en, name_local, name_ko, google_place_id AS pid, google_maps_uri AS uri, address, latitude AS lat, longitude AS lng FROM place_seed_raw WHERE city_id=$1 AND seed_category=$2`, [cityId, category])).rows;
     // ⚠️ 수정금지(승인필요) 2026-06-03 = 미리보기 매칭 = 쓰기경로(upsertPlace)와 동일한 공용 matchCandidate 사용 = 보고치=실제 일치 (= 헌법 §16 + 단일검증 SSOT)
     const { matchCandidate } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/matcher.ts')).href);
@@ -162,13 +162,13 @@ const PM_CALL_EUR = 0.007;
 
   // ── ① 거리 + ② OPERATIONAL + ③ 수동가격 + ④ 가격대별 quota ──
   const kept: any[] = [];
-  const drop = { noCoord: 0, closed: 0, nonfood: 0 };  // ⚠️ (B) 2026-06-10 = noCoord/nonfood=제외+로그 / closed=입력+플래그 카운트 (거리=드롭 폐기=입력)
+  const drop = { noCoord: 0, closed: 0, nonfood: 0 };  // ⚠️ (B) 2026-06-10 = noCoord/nonfood=제외+로그 / closed=입력+플래그 카운트 (거리=입력)
   const nonfoodList: string[] = [];
   let manualHit = 0;
   for (const z of raw.zones) {
     // ⚠️ 수정금지(승인필요) 2026-06-10 (B정책) = 잡것(좌표없음·비식당)만 제외+로그 / 진짜 장소(폐업·거리초과)는 입력하되 플래그 (= 누수 0 + DB오염 0). 옛 좌표없음 silent drop + 거리 드롭 폐기.
     const pass = z.places.filter((p: any) => {
-      if (!p.lat || !p.lng) { drop.noCoord++; nonfoodList.push(`${p.name}(좌표없음)`); return false; }      // 좌표없음 = 잡것 = 제외+로그(옛 silent 수정)
+      if (!p.lat || !p.lng) { drop.noCoord++; nonfoodList.push(`${p.name}(좌표없음)`); return false; }      // 좌표없음 = 잡것 = 제외+로그
       if (p.primary_type && !isFoodType(p.primary_type)) { drop.nonfood++; nonfoodList.push(`${p.name}(${p.primary_type})`); return false; }  // 비식당 = 원 카테고리로 들어감 = 식당풀 제외+로그
       return true;   // 폐업·거리초과 = 진짜 장소 = 통과(입력)
     });
@@ -187,7 +187,7 @@ const PM_CALL_EUR = 0.007;
     kept.length = 0; kept.push(...d);
   }
 
-  // ── ⑤ 중복 매칭 = 단일 matcher.ts(matchCandidate) = 쓰기경로(upsertPlace)와 동일 = 보고치=실제 (= §16, 2026-06-10 자체 matchRow 폐기) ──
+  // ── ⑤ 중복 매칭 = 단일 matcher.ts(matchCandidate) = 쓰기경로(upsertPlace)와 동일 = 보고치=실제 (= §16, 2026-06-10) ──
   const matchRow = (p: any): any => matchCandidate({
     cityId, googlePlaceId: p.place_id || null, googleMapsUri: p.google_maps_uri || null, address: p.address || null,
     // ⚠️ 수정금지(승인필요) — TS displayName→name_en (2026-06-17 사장님 SSOT) = name_local은 Gemini전용 = TS는 nameLocal=null (place-upsert COALESCE가 기존 Gemini값 보존)
@@ -258,7 +258,7 @@ const PM_CALL_EUR = 0.007;
   if (!apply) { console.log(`\n=== DRY-RUN (쓰기 0) === 실행: --apply --photo`); await c.end(); return; }
 
   // ── ⑦ APPLY ──
-  // ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유 (= 직독 폐기). PM 이미지 = 채움 = 도시 있음 + 행 있음(true).
+  // ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유. PM 이미지 = 채움 = 도시 있음 + 행 있음(true).
   // = 출입증(키이름·도시id·날짜·행있음) 검문 통과해야만 키 발급. 미달 = throw = 외부호출 불가.
   const { issueApiKey } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/issue-api-key.ts')).href);
   const PLACES_KEY = downloadPhoto ? await issueApiKey(c, 'GOOGLE_MAPS_API_KEY', cityId, date, true) : null;
@@ -294,7 +294,7 @@ const PM_CALL_EUR = 0.007;
         address: p.address || null, latitude: p.lat, longitude: p.lng,
         googlePlaceId: p.place_id, googleMapsUri: p.google_maps_uri || null,
         googleReviewCount: p.review_count ?? null,
-        priceEur: p.price_eur ?? null, priceOverwrite: false, // ⚠️ 2026-06-20 = 가격 = COALESCE 새 우선(최신최우선) 단일정책 = priceOverwrite 무의미화(place-upsert 기본이 새우선, 옛 GREATEST·downtown특례 폐기 2026-06-10). p.price_eur 있으면 덮고 없으면 기존 보존.
+        priceEur: p.price_eur ?? null, priceOverwrite: false, // ⚠️ 2026-06-20 = 가격 = COALESCE 새 우선(최신최우선) 단일정책 = priceOverwrite 무의미화(place-upsert 기본이 새우선). p.price_eur 있으면 덮고 없으면 기존 보존.
         imageUrl, dayZone: (p.distFromCity != null && p.distFromCity <= 10) ? 'core' : 'outskirt', distanceKmFromCenter: p.distFromCity,  // (B) 실제 거리로 zone (거리초과 입력분 = outskirt)
         categoryTags: ['restaurant'], phaseTags: [TAG, ...(p._closed ? ['closed'] : [])],  // (B) 폐업 = 'closed' 태그(FE 제외용)
       });

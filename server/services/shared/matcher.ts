@@ -211,7 +211,7 @@ export function matchCandidate<C extends MatchCandidate>(
   let matchedBy: MatchedBy = 'none';
   let tierOverride: MatchTier | null = null; // 2026-06-11 = 가변이름 + 주소 보강증거 = confirmed 승격용
 
-  // ⚠️ 전 단계 공통(2026-06-11) = .find(첫매칭) 폐기 → filter + pickBest = "있는 쪽 승리"
+  // ⚠️ 전 단계 공통(2026-06-11) = filter + pickBest = "있는 쪽 승리" (§19)
   // 1순위 = PID (= ~100%, Google 발급 유일 ID)
   if (p.googlePlaceId) {
     match = pickBest(candidates.filter((c) => c.googlePlaceId === p.googlePlaceId));

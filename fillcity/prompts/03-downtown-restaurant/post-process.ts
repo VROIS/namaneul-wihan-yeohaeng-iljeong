@@ -2,13 +2,13 @@
 // = docs/raw/{city_id}/{date}_03-downtown-restaurant_{tier}.json 4 tier 읽음 → upsertPlace() INSERT
 //
 // 호출:
-//   npx tsx .claude/skills/raw-db-verify-and-complete/prompts/03-downtown-restaurant/post-process.ts --city-id=19 --date=2026-05-20 [--dry]
+//   npx tsx fillcity/prompts/03-downtown-restaurant/post-process.ts --city-id=19 --date=2026-05-20 [--dry]
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(__dirname, '../../../../..');
+const ROOT = path.resolve(__dirname, '../../..');
 process.chdir(ROOT);
 
 const argv = Object.fromEntries(process.argv.slice(2).map(a => a.replace(/^--/, '').split('=')).map(([k, v]) => [k, v ?? 'true']));

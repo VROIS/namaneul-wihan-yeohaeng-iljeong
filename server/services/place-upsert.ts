@@ -17,7 +17,7 @@
  * UPDATE 정책 (= 사용자 SSOT 2026-06-03 = 최신 우선 확정):
  *   - 식별/검증 데이터 (name/주소/좌표/PID/URI/리뷰수) = COALESCE 새 우선 (= 최신 TS 가 가장 신뢰)
  *   - 이미지 = COALESCE 새 우선 (= 새 값 있을 때만 교체, 없으면 옛 값 보존)
- *   - 가격 = COALESCE 새 우선 (= 최신최우선 = 전 컬럼 동일. 옛 GREATEST 폐기 2026-06-10 = 레거시 garbage 영구잠금 버그 해소)
+ *   - 가격 = COALESCE 새 우선 (= 최신최우선 = 전 컬럼 동일 = 레거시 garbage 영구잠금 버그 해소, 2026-06-10 §19)
  *   - 카피 (summary_ko/editorial_summary) = 새 우선 (= 큐레이션 갱신)
  *   - tags = UNION (= 누적)
  */
@@ -30,7 +30,7 @@ import { matchCandidate, type MatchedBy } from './shared/matcher';
 export interface UpsertPayload {
   cityId: number;
   seedCategory: string;  // 'restaurant' | 'attraction' | 'heritage' | ...
-  // ⚠️ 2026-05-23 = collection_phase 폐기 = phaseTags 배열로 대체
+  // ⚠️ 2026-05-23 = 분류 단계 = phaseTags 배열 사용 (§19)
   rank?: number;
   // 식별 키 (= 5 단계 매칭)
   googlePlaceId?: string | null;
@@ -49,8 +49,8 @@ export interface UpsertPayload {
   googlePrimaryType?: string | null;
   googleMapsUri?: string | null;  // 2026-05-15 = 13번째 SSOT = 최후의 보루
   priceEur?: number | null;
-  // ⚠️ 수정금지(승인필요) 2026-06-20 = 옛 "기본=GREATEST 비싼 쪽 유지"(feedback_price_max_always) 주석 폐기 = 코드(:130·147 새우선)와 불일치 = §19 정합.
-  //   현재 = 기본이 이미 새 우선(COALESCE) = priceOverwrite 무의미화(2026-06-10 GREATEST 폐기). 하위호환 인자로만 잔존(동작 영향 0).
+  // ⚠️ 수정금지(승인필요) 2026-06-20 = 가격 = 기본이 새 우선(COALESCE :130·147) (§19 정합).
+  //   현재 = priceOverwrite = 무의미 = 하위호환 인자로만 잔존(동작 영향 0).
   priceOverwrite?: boolean;
   imageUrl?: string | null;
   imageAttribution?: string | null;
@@ -119,14 +119,14 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
     : (p.phaseTags || []);
 
   if (match && tier === 'confirmed') {
-    // UPDATE = 사용자 SSOT 2026-05-18 = "모든 정보 최신 덮어씀" (= 옛 COALESCE 옛 우선 폐기)
+    // UPDATE = 사용자 SSOT 2026-05-18 = "모든 정보 최신 덮어씀" (§19)
     // = 모든 필드 = 새 값 있으면 새 / 없으면 옛 유지 (= COALESCE 새 → 옛 순서)
     // = tags = UNION (= 누적 유지)
     // ⚠️ 수정금지(승인필요) 2026-06-10 사용자 SSOT = 가격 = 최신최우선(COALESCE 새-우선) = 전 컬럼 동일 원칙.
-    //   = 옛 GREATEST(비싼 쪽, 2026-05-15 SSOT) 폐기 = 레거시 garbage(€88K) 영구잠금 버그 근본해소.
-    //   = 출처(price_source) 있는 최신 입력이 정답(물가 상승분도 최신 재입력이 반영). priceOverwrite = 무의미화(기본이 새-우선).
-    // ⚠️ 수정금지(승인필요) 2026-06-11 사용자 SSOT = `?? null` 사용(옛 `|| null` 폐기) = 가격 0(무료) 보존.
-    //   = `0 || null`=null 이면 무료 장소가 옛 garbage 가격을 못 덮는 버그(프롬프트는 "무료=0" 지시, 파서는 `?? null`로 0 살림). 0은 정상 가격.
+    //   = 레거시 garbage(€88K) 영구잠금 버그 근본해소 (§19).
+    //   = 출처(price_source) 있는 최신 입력이 정답(물가 상승분도 최신 재입력이 반영). priceOverwrite = 무의미(기본이 새-우선).
+    // ⚠️ 수정금지(승인필요) 2026-06-11 사용자 SSOT = `?? null` 사용 = 가격 0(무료) 보존 (§19).
+    //   = 무료 장소(0)가 garbage 가격을 덮도록 보장(프롬프트는 "무료=0" 지시, 파서는 `?? null`로 0 살림). 0은 정상 가격.
     const priceExpr = sql`COALESCE(${p.priceEur ?? null}::real, price_eur)`;
     await db.execute(sql`
       UPDATE place_seed_raw SET
@@ -143,7 +143,7 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
         image_url     = COALESCE(${p.imageUrl || null}, image_url),
         image_attribution = COALESCE(${p.imageAttribution || null}, image_attribution),
         -- ⚠️ 수정금지(승인필요) 2026-06-10 = 가격 = 최신최우선(COALESCE 새-우선). 새 값 있으면 새 / 없으면 옛 보존.
-        -- = 옛 GREATEST 폐기(레거시 garbage 영구잠금 해소). 최신 재입력이 물가/정정 모두 반영.
+        -- = 레거시 garbage 영구잠금 해소(§19). 최신 재입력이 물가/정정 모두 반영.
         price_eur     = ${priceExpr},
         editorial_summary = COALESCE(${p.shortformKo || null}, editorial_summary),
         summary_ko        = COALESCE(${p.selectionReasonKo || null}, summary_ko),
@@ -151,9 +151,8 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
         distance_km_from_center = COALESCE(${p.distanceKmFromCenter || null}::real, distance_km_from_center),
         category_tags     = (SELECT ARRAY(SELECT DISTINCT unnest(COALESCE(category_tags, ARRAY[]::text[]) || ${sql.raw(`ARRAY[${categoryTags.map((s) => `'${s.replace(/'/g, "''")}'`).join(',')}]::text[]`)}))),
         phase_tags        = (SELECT ARRAY(SELECT DISTINCT unnest(COALESCE(phase_tags, ARRAY[]::text[]) || ${sql.raw(`ARRAY[${phaseTags.length === 0 ? "" : phaseTags.map((s) => `'${s.replace(/'/g, "''")}'`).join(',')}]::text[]`)}))),
-        -- ⚠️ 수정금지(승인필요) 2026-06-12 = image_updated_at = 새 image_url 있을 때만 NOW() (= 옛 무조건 NOW() 폐기)
-        --   = 버그: 이미지 다운로드 실패(imageUrl 없음)에도 타임스탬프만 찍혀 "처리됨"으로 위장 → image_url NULL인데 image_updated_at 찍힘 = 결손 은폐.
-        --   = 수정: imageUrl 있을 때만 갱신 = "이미지 채워진 시각" 정확 의미 = 미래 누수 방지 (= 사장님 SSOT 2026-06-12 시스템 결함 수정).
+        -- ⚠️ 수정금지(승인필요) 2026-06-12 = image_updated_at = 새 image_url 있을 때만 NOW() (§19)
+        --   = imageUrl 있을 때만 갱신 = "이미지 채워진 시각" 정확 의미 = 결손 은폐·미래 누수 방지 (= 사장님 SSOT 2026-06-12 시스템 결함 수정).
         image_updated_at  = CASE WHEN ${p.imageUrl || null}::text IS NOT NULL THEN NOW() ELSE image_updated_at END
       WHERE id = ${match.id}
     `);
@@ -175,7 +174,7 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
       .values({
         cityId: p.cityId,
         seedCategory: p.seedCategory,
-        // ⚠️ 2026-05-23 = collection_phase 폐기 = phaseTags 만 사용
+        // ⚠️ 2026-05-23 = 분류 단계 = phaseTags 만 사용 (§19)
         rank: nextRank,
         nameEn: p.nameEn,
         nameKo: p.nameKo || null,
@@ -189,7 +188,7 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
         googlePrimaryType: p.googlePrimaryType || null,
         imageUrl: p.imageUrl || null,
         imageAttribution: p.imageAttribution || null,
-        priceEur: p.priceEur ?? null,  // ⚠️ 수정금지(승인필요) 2026-06-11 = `?? null`(옛 `||` 폐기) = 무료(0) 신규 장소도 0 저장(NULL 아님)
+        priceEur: p.priceEur ?? null,  // ⚠️ 수정금지(승인필요) 2026-06-11 = `?? null` = 무료(0) 신규 장소도 0 저장(NULL 아님) (§19)
         editorialSummary: p.shortformKo || null,
         summaryKo: p.selectionReasonKo || null,
         dayZone: p.dayZone || null,

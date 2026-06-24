@@ -11,7 +11,7 @@ import { geminiJson } from './geminiClient';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
 const PROMPT_PATH = path.join(ROOT, '.claude/skills/raw-db-verify-and-complete/prompts/02-enrich-place/prompt.txt');
 // ⚠️ 수정금지(승인필요) 2026-06-23 사장님 SSOT = 1콜 우선(120) → 실패(missing>5) 시 자동 축소 = 콜 최소화.
-//   = maxOutputTokens 50000 = 120곳 1콜 입증됨. 134곳=120+14=2콜 / 한 도시 대부분 1~2콜. 옛 [40..] = 처음부터 40씩=콜 多 폐기(§19).
+//   = maxOutputTokens 50000 = 120곳 1콜 입증됨. 134곳=120+14=2콜 / 한 도시 대부분 1~2콜 = 콜 최소화(§19).
 const FALLBACK = [120, 60, 40, 20, 10]; // = adaptive fallback (큰 배치 먼저 = 콜 최소)
 
 export interface GeminiCurateInput {
@@ -24,8 +24,7 @@ export interface GeminiCurateInput {
   longitude?: number | null;
   seedCategory?: string;  // ⚠️ 2026-06-16 = Gemini 입력에서 제외(카테고리 안 줌) = optional 로 정합. shopping price=null 은 호출자 저장단계 처리.
 }
-// ⚠️ 수정금지(승인필요) 2026-06-20 사장님 SSOT = 선별 금지 = Gemini 응답 전 필드 포함(02-enrich/prompt.txt 응답 10요소 그대로).
-//   옛 4필드만 추출(name_ko/summary/editorial/price) = AI 선별 = name_local·distance·address·좌표 누락 사고 = 완전삭제(§19).
+// ⚠️ 수정금지(승인필요) 2026-06-20 사장님 SSOT = 선별 금지 = Gemini 응답 전 필드 포함(02-enrich/prompt.txt 응답 10요소 그대로) (§19).
 //   = Gemini만 주는 요소(name_local·distance·가격) 가 여기 다 실려야 #45 가 새우선 덮어쓰기로 필수컬럼 자동 완비.
 export interface GeminiCurateOutput {
   id: number;
@@ -102,8 +101,7 @@ export async function geminiCurate(
       size = FALLBACK[FALLBACK.indexOf(size) + 1];
       continue;
     }
-    // ⚠️ 수정금지(승인필요) 2026-06-20 사장님 SSOT = 선별 금지 = 응답 전 필드 그대로 꺼냄(prompt.txt 응답 10요소).
-    //   옛 4필드만 꺼냄 = AI 선별 = name_local·distance·address·좌표 버려짐 사고 = 완전삭제(§19).
+    // ⚠️ 수정금지(승인필요) 2026-06-20 사장님 SSOT = 선별 금지 = 응답 전 필드 그대로 꺼냄(prompt.txt 응답 10요소) (§19).
     for (const p of places) {
       out.push({
         id: p.id,

@@ -83,7 +83,7 @@ validateFieldMask(FIELD_MASK);
 // ━━━━━━ 일일 한도 ━━━━━━
 // ⚠️ 수정금지(승인필요) — 2026-04-28 사용자 승인: 30 → 40 상향
 // 사유: Google quota 50/50 (대시보드 상향) + 도시당 40 = vibe 5×6 + restaurant 10 = 1 cron 1 일 처리
-// 효과: 1 도시 = 1 일 자동 (이전 = 30 cap = 2 runs/도시 = 1.3 일/도시)
+// 효과: 1 도시 = 1 일 자동
 const SEARCH_DAILY_LIMIT = 40;
 const PHOTOS_DAILY_LIMIT = 40;
 let searchCalls = 0, photoCalls = 0;
@@ -223,9 +223,8 @@ async function selectTopNByCategory(db, cityId, category, topN) {
   return r.rows;
 }
 
-// ━━━━━━ 카테고리 키워드 (사용자 SSOT 본질 정정 2026-04-29) ━━━━━━
-// 이전: textQuery = "El Cardenal, Mexico City, Mexico" = 모호 매칭 → photoName 못 받음
-// 정정: textQuery = "El Cardenal restaurant 19.4337,-99.1353 Mexico City, Mexico" = 정확
+// ━━━━━━ 카테고리 키워드 (사용자 SSOT 2026-04-29) ━━━━━━
+// textQuery = "El Cardenal restaurant 19.4337,-99.1353 Mexico City, Mexico" = 정확 매칭
 const CATEGORY_KEYWORDS = {
   restaurant: 'restaurant',
   shopping: 'shopping mall',
@@ -239,9 +238,8 @@ const CATEGORY_KEYWORDS = {
 // ━━━━━━ row 1 개 처리 ━━━━━━
 async function processRow(db, row, city, googleKey, supabaseUrl, supabaseKey) {
   const locStr = buildLocationStr(city.name_en, city.country_code);
-  // ⚠️ 수정금지(승인필요) — 2026-04-29 사용자 SSOT 본질 정정: 좌표 + 카테고리 키워드 추가
-  // 이전 결함: name + city + country = 모호 매칭 (예: "El Cardenal" 동명 다른 가게)
-  // 정정: name + categoryKw + 좌표 6자리 + city + country = 정확 매칭 보장
+  // ⚠️ 수정금지(승인필요) — 2026-04-29 사용자 SSOT: 좌표 + 카테고리 키워드 추가
+  // textQuery = name + categoryKw + 좌표 6자리 + city + country = 정확 매칭 보장
   const categoryKw = CATEGORY_KEYWORDS[row.seed_category] || '';
   const coordStr = (row.latitude && row.longitude) ? `${row.latitude},${row.longitude}` : '';
   const textQuery = [row.name_en, categoryKw, coordStr, locStr]

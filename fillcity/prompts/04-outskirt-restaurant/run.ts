@@ -2,7 +2,7 @@
 // = 호출 1 = 30 LOW (= ≤€30) / 호출 2 = 30 MID (= €30-80) + EXCLUDE_LIST 안 호출 1 응답 명시
 //
 // 호출:
-//   npx tsx .claude/skills/raw-db-verify-and-complete/prompts/04-outskirt-restaurant/run.ts --city-id=19 --hints="Versailles / Disneyland Paris / ..." [--year=2026]
+//   npx tsx fillcity/prompts/04-outskirt-restaurant/run.ts --city-id=19 --hints="Versailles / Disneyland Paris / ..." [--year=2026]
 //
 // 산출물: (= 날짜앞 표준, raw-filename.ts)
 //   docs/raw/{city_id}/{YYYY-MM-DD}_04-outskirt-restaurant_low.json
@@ -12,7 +12,7 @@ import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(__dirname, '../../../../..');  // ⚠️ 2026-06-08 = prompts/04 un-archive 복귀 = 상위 5 (표준 스킬 위치 = 아카이브 ROOT 버그 근본해소)
+const ROOT = path.resolve(__dirname, '../../..');  // ⚠️ 2026-06-08 = prompts/04 un-archive 복귀 = 상위 5 (표준 스킬 위치 = 아카이브 ROOT 버그 근본해소)
 process.chdir(ROOT);
 
 const envRaw = fs.readFileSync('.env', 'utf-8').replace(/^﻿/, '');
@@ -42,7 +42,7 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--hints="타입 override(선
     'SELECT name_en, country, latitude, longitude FROM cities WHERE id=$1', [cityId]
   )).rows[0];
   if (!city) { await c.end(); console.error('city 미존재'); process.exit(1); }
-  // ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유 (= 직독 폐기). 외곽식당 발굴(04-outskirt) = 도시 있음 + 행 없음(false = 신규 발견).
+  // ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유. 외곽식당 발굴(04-outskirt) = 도시 있음 + 행 없음(false = 신규 발견).
   // = 출입증(키이름·도시id·날짜·행없음) 검문 통과해야만 키 발급. 미달 = throw = 외부호출 불가.
   const today = new Date().toISOString().slice(0, 10);
   const { issueApiKey } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/issue-api-key.ts')).href);
@@ -159,5 +159,5 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--hints="타입 override(선
 
   console.log(`\n═══ 합계 = ${lowList.length + midList.length} / 60 ═══`);
   console.log(`다음 = post-process.ts (= upsertPlace INSERT) 실행:`);
-  console.log(`  npx tsx .claude/skills/raw-db-verify-and-complete/prompts/04-outskirt-restaurant/post-process.ts --city-id=${cityId}`);
+  console.log(`  npx tsx fillcity/prompts/04-outskirt-restaurant/post-process.ts --city-id=${cityId}`);
 })();

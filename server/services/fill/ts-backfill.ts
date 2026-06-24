@@ -40,7 +40,7 @@ const hkm = (a: any, b: any) => {
   await c.connect();
   const city = (await c.query('SELECT name_en, country_code FROM cities WHERE id=$1', [cityId])).rows[0];
   if (!city) { await c.end(); console.error(`✗ city ${cityId} 미존재 = 중단 (잘못된 city-id 가 FR 기본값으로 오염되는 것 방지)`); process.exit(1); }
-  // ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유 (= 직독 폐기). TS 재검증·보강 = 채움 = 도시 있음 + 행 있음(true).
+  // ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유 (§19). TS 재검증·보강 = 채움 = 도시 있음 + 행 있음(true).
   // = 출입증(키이름·도시id·날짜·행있음) 검문 통과해야만 키 발급. 미달 = throw = 외부호출 불가.
   const today = new Date().toISOString().slice(0, 10);
   const { issueApiKey } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/issue-api-key.ts')).href);

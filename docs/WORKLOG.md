@@ -18,11 +18,35 @@
 
 ---
 
+## 🔥 2026-06-24 = fillcity 독립폴더 이동 + 진입분기120 자동 + 트리거 A+B(중복 원천차단) + §20 셀렉제거 + §19 기계가드 + 뮌헨 실증
+
+**배경**: fillCity 코드가 `.claude/skills/` 와 `scripts/`, `server/services/fill/` 에 흩어져 있어 한 덩어리로 안 보임. 같은 PSR 로 모이는 WF 인데 폴더가 갈라져 옛방식 잔존 위험(§20). + 트리거(prevent_dup)가 BEFORE INSERT 만이라 UPDATE 경로 중복은 못 막던 사각지대.
+
+**✅ 1) fillCity 독립폴더 이동 = 루트 `fillcity/` (git mv 33파일 = 이력보존)**: `.claude/skills/.../fill-city.ts`+prompts(01·03·04·12) + `scripts/`(fill45-defect-repair→`repair.ts`, fillcity-step1b-fix-pollution→`cleanse.ts`) + `server/services/fill/`(outskirt-ts-fill·raw-bucket-sync→`fillcity/steps/`) → 루트 `fillcity/` 한 덩어리. 런타임 ROOT 경로 재계산(`ROOT=resolve(SKILL,'..')` 1단계). DRY 실증.
+
+**✅ 2) 진입분기 자동 = 행수 120** (§3-A): `fill-city.ts` `--only` 미지정 시 비BTS 행수 SELECT → ≥120=변형 갈래[정제→식당발굴→#45] / <120=풀 갈래[+6cat발굴]. 명시(`--only=...`)는 사람 단계지정 우선.
+
+**✅ 3) 정본 순서 + §20 셀렉제거**: `only` 정본순서 `cleanse,discover,restaurant,repair,verify`. 식당발굴 PM 제거(PM=#45 만, 조건부 §20). 옛 curate/backfill/photo 3블록 + 13-restaurant-summary + image-pool + restaurant-image-targets + ts-photo-fill **완전삭제(§19)** = 칸채움 단일화(발굴=새행 / #45=통째).
+
+**✅ 4) 트리거 A+B = 중복 원천차단**: `place-identity.sql` prevent_dup = `BEFORE INSERT` → `BEFORE INSERT OR UPDATE` + 자기행 제외(`c.id <> COALESCE(NEW.id,-1)` 불변1~7) + 깊이가드(`pg_trigger_depth()>1` 면제 = autorank 동형). `repair.ts` B = TS 강매칭키(PID/URI/좌표) 직행 UPDATE 전 PID 선검사 + 트리거 EXCEPTION try/catch 그 행만 스킵·continue. **라이브+레포 동시 적용(§19)**. 뮌헨 재입력 = PID중복 0 유지 입증.
+
+**✅ 5) §19 박제 기계 차단 가드 신규**: `scripts/guard-no-old-artifacts.mjs`(정규식 박제 감지 = 옛내용 인용주석·취소선·폴백분기) + git `pre-commit` hook(`--staged`) 등록. 전체앱 박제 전수정리(코드 0바이트, 주석만). `--all` 가드 exit 0 입증.
+
+**✅ 6) 뮌헨(39) WF 실행 = 실증**: 12분38초, 식당 41→212곳, 6cat 완비, 비용 약 €71(PM €64.5 주). 기존 PID중복 14그룹 = 트리거가 못 막는 옛 잔재 = 인위 1회 DELETE 청소 → 이후 트리거가 미래 중복 차단 입증.
+
+**✅ 7) 5단계 검증**: tsc 신규0 / 빌드성공 / 가드0 / simplify / review 통과 + 수정 4건(repair try/catch 보강, §19 스테일 3건).
+
+**✅ 8) fillcity 진단도구 신규**(직접접속 §16, MCP금지=Egress 절감): `status·dups·dups-detail·check-trigger·apply-dup-trigger·verify-dup-trigger·dup-trigger-baseline`.
+
+**✅ 9) 07-merge = 폐기 아니라 보관**(1회용 필요시): 트리거가 시스템으로 중복을 막으니 상시 컴포넌트 불필요(§20).
+
+**🔴 다음 P0**: ① 뮌헨 외 도시 fillCity(런던·브뤼셀 완성) ② `repair.ts` dupOwner 단일행 실증(B 경로) ③ Supabase Egress 6/25 리셋 후 직접접속 영구화.
+
 ## 🔥 2026-06-23 = 정제 단계 시스템화(cleanse=전체 Gemini 재검증) + 진입분기(120) + 좌표10m + 07-merge표준 + 통일PSR 헌법
 
 **배경**: 메인앱 동선에 가격오염(1인 €59만)·이름환각(Detroit·Chicago) 노출 발견. 근원 = #45 가 "결손(빈칸)"만 추출 → "오염(틀린값)"은 사각지대(영구 안 고쳐짐). 옛 gemini3(5월) 가격환각이 런던·브뤼셀·뮌헨에 잔존.
 
-**✅ 정제 단계 = #1b 시스템화·4도시 실증 (= scripts/fillcity-step1b-fix-pollution.ts 신규)**:
+**✅ 정제 단계 = #1b 시스템화·4도시 실증 (= fillcity/cleanse.ts 신규)**:
 - 사장님 SSOT = "전체 행 → Gemini에 힌트(name3종·주소·좌표) 다 줌 → Gemini가 사람처럼 판단(가격오염·이름환각·칸오입력 교정+결손가격) → 전필드 새덮어쓰기". = 오염추출 SQL 폐기(어떤게 오염인지 SQL은 모름=AI임의). Gemini만(TS·PM 0)=도시당 1~2콜.
 - **실증**: 런던28·브뤼셀16·뮌헨17곳 정정. 박물관 €504,210(뮌헨)→€175 / Magnificent Mile→Tate Modern / Atlanta→Manneken Pis / South Side Chicago→Lift 109 / Detroit→Tower Bridge. 비식당 price>200 오염 = 0. 전필드 새덮어쓰기 = DB 실제반영(updated_at·name·price 입증, 셀렉 아님).
 - **shopping price = NULL 강제**(§15) = 옛 COALESCE(null,기존) 버그(Harrods €148800 잔존) 수정.
@@ -50,12 +74,13 @@
 
 **배경**: fillCity 는 "완전 0자료 신규도시" 기준 설계. 실제 운영은 거의 다 **이미 일부 자료(6cat = Gemini 시드발굴 완료, 식당만 적음)가 있는 기존 도시** = 그 변형 흐름을 **계속 반복**. 이를 빠짐없이 기록 = 최종 문서화.
 
-**✅ 사장님 확정 = 기존자료 도시 반복 3단계 (= PRD §3-A SSOT):**
-1. **정제** = AI 인위 판단(내 손, 자동화 아님) = 완전 오매칭/누가 봐도 오류·오염 행 삭제(예: 완전 다른 나라 행). ⚠️ 유일한 AI 개입 단계 = **삭제 전 사장님 보고**(비가역). 옆도시·체인은 정상(삭제 X) = [[feedback_outskirt_daytrip_pool_intended]].
-2. **식당발굴** = `fill-city.ts --city-id=N --only=restaurant --apply` = ⚠️⚠️ **절대 AI 개입 없는 자동화**. 6cat 안 건드림(이미 있음). 도심(Gemini03+TS3종)∥외곽(Gemini04+outskirt-ts-fill)→병합→카피13→이미지. = 시스템 믿고 한 줄, 잘라쓰기 금지.
-3. **#45 도시전체** = `scripts/fill45-defect-repair.ts --city-id=N --apply` = 도시 전체 결손행 보강 → **최종 최소 270 + 결손 없는 행**. 완비 시 추출0 = 재실행 안전.
+**✅ 사장님 확정 = 레거시 도시 반복 한 덩어리 WF (= PRD §3-A SSOT, 2026-06-23 갱신):**
+1. **정제(cleanse)** = `fill-city.ts --city-id=N --only=cleanse --apply` = 전체행 Gemini 재검증(가격오염·이름환각·칸오입력 교정 + 결손가격) → 전필드 새덮어쓰기. ⚠️ 전체 시스템(AI 인위 삭제 아님 = §19). TS·PM 0 = 1~2콜.
+2. **식당발굴** = `fill-city.ts --city-id=N --only=restaurant --apply` = ⚠️⚠️ **절대 AI 개입 없는 자동화**. 6cat 안 건드림. 도심(Gemini03+TS3종)∥외곽(Gemini04+outskirt-ts-fill)→병합(= **새 행 발굴만**. 카피·가격·이미지는 #45 가 통째로 = 옛 카피13 삭제 §19·§20). = 시스템 믿고 한 줄.
+3. **#45 도시전체** = `fill-city.ts --city-id=N --only=repair --apply` = 발굴된 풀의 결손행을 한 행 Gemini→TS→PM 통째로 새덮어쓰기 → **최종 최소 270 + 결손 없는 행**. 완비 시 추출0 = 재실행 안전.
+4. **07-merge** = DB 트리거(prevent_dup) 입증되면 1회용·임시(§20).
 
-**코드 순서와의 차이(§19 충돌 아님)**: fill-city 의 `only` 기본 = `repair`(#45)가 **맨 앞** = "0자료 신규도시" 전체 1줄용. 기존자료 운영 = 위 3단계 분리 실행 = **#45가 맨 마지막**. = 같은 컴포넌트, 호출 조합만 다름(코드 변경 0).
+**2026-06-23 코드 정합 완료(미커밋)**: ① fill-city `only` 정본순서(`cleanse,discover,restaurant,repair,verify`) = repair 가 restaurant 뒤. ② **옛 curate/backfill/photo 3블록 완전삭제**(§19·§20 = #45 흡수). ③ **옛 13-restaurant-summary 컴포넌트 완전삭제**(폴더+fill-city호출+카탈로그#10+SKILL+PRD = #45 흡수, price 옛우선 위반 소멸). = 칸채움 단일화 = 발굴(새행) + #45(통째). tsc 0, DRY 입증.
 
 **✅ 문서 갱신**: PRD §3-A 신설(verbatim 기록) + §3 도시분기 문구 확정(옛 "둘 중 미정" §19 삭제) + §13 즉시재개점 갱신. **미커밋 없음**(2026-06-21 본작업은 커밋 `7f60f98`, 이 문서갱신만 working tree).
 
@@ -83,7 +108,7 @@
 ## 🔥 2026-06-20 = #45 결손보강 WF 완성·커밋 + BTS 3도시 fillCity 착수(진행중)
 
 ### ✅ 완료·커밋 (커밋 `c8543ef` 푸시)
-- **#45 결손보강·보정 WF 완성** = [`scripts/fill45-defect-repair.ts`](../scripts/fill45-defect-repair.ts) = 추출(6cat TOP20 ∪ 식당 band 30/90/30)→Gemini(02-enrich)→TS(9요소 건건)→PM(무료재링크→남은결손)→2곳저장(TS 06형태 모음1파일). 우리 id 직행 UPDATE(매칭X). 다시 돌려도 안전(완비=추출0). **파리·마드리드 완비 실증**.
+- **#45 결손보강·보정 WF 완성** = [`fillcity/repair.ts`](../fillcity/repair.ts) = 추출(6cat TOP20 ∪ 식당 band 30/90/30)→Gemini(02-enrich)→TS(9요소 건건)→PM(무료재링크→남은결손)→2곳저장(TS 06형태 모음1파일). 우리 id 직행 UPDATE(매칭X). 다시 돌려도 안전(완비=추출0). **파리·마드리드 완비 실증**.
 - **출입증 구조** = #01 geminiClient = 키 받는 무판단 배관(apiKey 인자=관리자 출입증 / 미전달=사용자 메인앱 env). 카탈로그 #01 모순문구("모든 단일진입점") 제거.
 - **파리 PID중복 6쌍 인위병합**(07-merge, 77595~77601 삭제). 원인 = 옛 ag3 languageCode:'ko' 한국어가 name_local 오염.
 - **#45↔fillCity 연결** = fill-city.ts `only` 맨 앞 'repair' = ⓪사전정제 + 독립(`--only=repair`). 재발명0.
@@ -184,8 +209,8 @@ AI 가 사장님 요구를 처리할 때 **표준(출입증) 안 거치고 임�
 ### ✅ 한 일
 - **프롬프트 총 SSOT 추출**: [`docs/20260607PROMPTS_TOTAL_SSOT.md`](20260607PROMPTS_TOTAL_SSOT.md) = 전체 앱 Gemini+TS 호출 **46 지점**, 고유번호 #01~#44 + 원본 유형(코드인라인/외부prompt.txt/SSOT.md미러). (워크플로 `prompt-inventory-extract` 추출)
 - **rooftop 추가**(승인): hotspot 정의에 `rooftop and terraces` / `루프탑·테라스` = 01·05·12·seed-gemini·p0-cron·08 (7곳) + 카탈로그 동기.
-- **fillCity 확장**: [`fill-city.ts`](../.claude/skills/raw-db-verify-and-complete/fill-city.ts) = dry-run(계획·비용·레거시 리포트) + apply 체인(상호보완 = TS+Gemini → upsertPlace 병합) 배선. ⚠️ **자율 빌드 = 위험(아래 과실)**.
-- **run.ts cities 폴백**(§3 변경): [`12-ts-discover-pool/run.ts`](../.claude/skills/raw-db-verify-and-complete/prompts/12-ts-discover-pool/run.ts) = destinations.ts 없으면 cities 좌표 폴백 (신규도시 = `findCityUnified`/#04 가 cities 채움 → 발굴이 읽음).
+- **fillCity 확장**: [`fill-city.ts`](../fillcity/fill-city.ts) = dry-run(계획·비용·레거시 리포트) + apply 체인(상호보완 = TS+Gemini → upsertPlace 병합) 배선. ⚠️ **자율 빌드 = 위험(아래 과실)**.
+- **run.ts cities 폴백**(§3 변경): [`12-ts-discover-pool/run.ts`](../fillcity/prompts/12-ts-discover-pool/run.ts) = destinations.ts 없으면 cities 좌표 폴백 (신규도시 = `findCityUnified`/#04 가 cities 채움 → 발굴이 읽음).
 - **마드리드(37) 조사**: 레거시 165행(BTS 시드) 확인. 5단계 중복체크(07-merge-dups) = 6그룹(전부 메트로폴리타노 경기장 클러스터 = bts_venue↔attraction, 좌표10m).
 - **searchNearby POPULARITY 발굴+삽입**: 6cat → Madrid PSR **120→172**(순증 ~52, bleed는 multi-tag 흡수). TS 재호출 0(저장 JSON 재사용).
 
@@ -255,7 +280,7 @@ AI 가 사장님 요구를 처리할 때 **표준(출입증) 안 거치고 임�
 **🔴 2) 융합 백필 (= fetch→매처→upsert, AI 손 0)**
 - [`server/services/fill/ts-backfill.ts`](../server/services/fill/ts-backfill.ts) = PID 없는 행 → tsSearch(이름+좌표앵커) → top1 → upsertPlace(원본 이름=매칭키 + 새 9요소). 가짜 RC→진짜 교체.
 - [`server/services/fill/ts-photo-fill.ts`](../server/services/fill/ts-photo-fill.ts) = TOP20 이미지없는 행 → tsSearch(사진명) → tsPhoto → image_url.
-- [`fill-city.ts`](../.claude/skills/raw-db-verify-and-complete/fill-city.ts) = 단일 오케스트레이터(발굴→큐레이션→검증, spawn 방식, 미완 = 함수화/대시보드 후속).
+- [`fill-city.ts`](../fillcity/fill-city.ts) = 단일 오케스트레이터(발굴→큐레이션→검증, spawn 방식, 미완 = 함수화/대시보드 후속).
 
 **🔴 3) 파리 6 비식당 카테고리 사전준비 = TOP20 14요소 거의 완성**
 - 발굴(강제 사각형 12-run) 5cat + 큐레이션(02 `--defects-only` 111곳 = name_ko/요약/숏폼/가격) + **57곳 TS 백필**(47 보강, dup0, 가짜RC 청소: The Game 15000→**3416**=#1→#7) + 이미지 23곳.
@@ -346,7 +371,7 @@ AI 가 사장님 요구를 처리할 때 **표준(출입증) 안 거치고 임�
 - 트랜잭션 = BEGIN → 카피 무변경 검증 → COMMIT
 
 **🔴 5) name_en null 워닝 노이즈 시정 (= ag4-db-finalize.ts)**
-- prompt 가 name_en 미요청 (= name_local 단일) = 옛 `!s.name_en` 워닝 = 모든 슬롯 노이즈
+- prompt 가 name_en 미요청 (= name_local 단일) = 영어명 없음 워닝이 모든 슬롯에 노이즈로 뜸 (2026 §19 정정)
 - 시정 = `!name_local && !name_en && !inputPlace` (= 진짜 표시 이름 없을 때만)
 
 ### 배포 후 검증 (= 사용자 Replit Republish 후 실 trip)
@@ -854,7 +879,7 @@ server/services/itinerary/
 | `server/services/agents/ag3-data-matcher.ts` | (1) `priceEur` SELECT 추가 (= preloadCityData) / (2) FieldMask 2 곳 = `priceRange` 추가 / (3) `saveNewPlacesToDB` = `upsertPlace()` 호출 교체 / (4) 4 단계 매칭 = 0순위 PID 추가 + 좌표/이름 순서 정정 |
 | `server/services/agents/pipeline-v3.ts` | (1) prompt = `estimatedCostEur` 가격 원칙 강화 / (2) [동선 원칙] = "Day 2+ outskirt" 1 줄 추가 |
 | `scripts/seed-gemini.mjs` | (1) prompt = `estimated_price_eur` 응답 필드 1 줄 추가 / (2) STEP 2 FieldMask = `places.priceRange` 추가 / (3) UPDATE/INSERT = `price_eur = COALESCE(NULLIF(새값,0), 기존)` 새우선 (= 당시 GREATEST → 2026-06-10 폐기) |
-| `server/services/itinerary-generator.ts` | 옛 `priceSource` 컬럼 참조 제거 (= DROP 후 SQL 에러 방지) |
+| `server/services/itinerary-generator.ts` | 가격 출처 컬럼 참조 제거 (= DROP 후 SQL 에러 방지, 2026-06-11 §19) |
 | `docs/SEED_SSOT_2026-05-02.md` | **§12 메인앱 잠금 + §13 단일 INSERT 시스템 + §14 가격 정책** 신설 |
 | `CLAUDE.md` | **제14조** = upsertPlace() 통과 강제 |
 
@@ -1025,7 +1050,7 @@ server/services/itinerary/
 | 8 | P2 | PlaceDetailModal null state → enum/객체 |
 | 9 | P2 | PlaceDetailModal URL 빌더 → 헬퍼 추출 |
 | 10 | P3 | 주석 "WHAT" → "WHY" 압축 |
-| 11 | P3 | GeminiPlace 인터페이스 = 옛 `reason` 필드 제거 |
+| 11 | P3 | GeminiPlace 인터페이스 = 폐기 필드 제거 (2026 §19) |
 | 12 | P3 | AG3 매칭 4+ 중첩 → `matchByAddress()` 추출 |
 
 ### 🎯 다음 세션 핵심 작업 = **BTS 지도 패턴 = 메인앱 여정 지도 적용** (사용자 SSOT 2026-05-14)

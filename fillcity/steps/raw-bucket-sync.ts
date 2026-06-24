@@ -1,13 +1,13 @@
 // ⚠️ 영구 컴포넌트 2026-06-10 = docs/raw/{city} raw 파일 → Supabase Storage 'raw-responses' 버킷 동기화(영구 백업).
 //   = 발굴 raw 가 로컬 PC 에만 있는 누수 차단 = "필수 raw 버킷 저장"(사용자 완성 기준). 외부호출 0 = Storage PUT 만.
 //   = 발굴 후 오케스트레이터가 호출 → 버킷에 항상 최신 raw. 버킷이 진짜 토대(PC/DB 날아가도 재입력 가능).
-//   호출: npx tsx server/services/fill/raw-bucket-sync.ts --city-id=37 [--apply]
+//   호출: npx tsx fillcity/steps/raw-bucket-sync.ts --city-id=37 [--apply]
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(__dirname, '../../..');
+const ROOT = path.resolve(__dirname, '../..');
 process.chdir(ROOT);
 const envRaw = fs.readFileSync('.env', 'utf-8').replace(/^﻿/, '');
 for (const line of envRaw.split(/\r?\n/)) {

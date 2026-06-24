@@ -3,7 +3,7 @@
 // = 원인: 07-merge 병합 / ts-name-recover 재생성 으로 row 가 바뀌며 image_url 유실 → 결제된 이미지가 link 끊긴 채 방치(고아).
 // = 내부 우선 복구 [[feedback_internal_first_recover]]. 재링크 후에도 storage 에 없는 것만 PM(유료).
 // = 쓰기 = upsertPlace 단일 진입점(§14). 같은 카테고리 폴더 우선, 없으면 타 폴더 PID 매칭(멀티태그 이미지 재활용).
-// = 배선: ts-photo-fill / restaurant-image-targets 가 PM 직전 relinkStorageImages() 호출 → matchedIds 는 PM 대상에서 제외.
+// = 배선: #45 결손보강 WF (fillcity/repair.ts) 가 PM 직전 relinkStorageImages() 호출 → matchedIds 는 PM 대상에서 제외 (2026-06-24 §19).
 // 직접 실행(전 도시 일괄): npx tsx server/services/fill/storage-image-relink.ts --city-id=37 [--apply]
 import fs from 'fs';
 import path from 'path';
@@ -13,7 +13,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '../../..');
 const BUCKET = 'place-images';
 
-// ── 재사용 함수 = PM 전 무료 재링크 (ts-photo-fill / restaurant-image-targets 가 import) ──
+// ── 재사용 함수 = PM 전 무료 재링크 (#45 결손보강 WF 가 import) ──
 //   client = 호출자의 pg Client (열린 상태) · categories = 한정(예: ['restaurant']) 없으면 전체
 //   반환 matchedIds = storage 에 있는(=PM 불필요) row id → 호출자가 PM 대상에서 제외
 export async function relinkStorageImages(opts: {
@@ -48,8 +48,7 @@ export async function relinkStorageImages(opts: {
   // = 그중 현재 image_url 이 그 Storage 를 정확히 가리키지 않는 행 = "무조건 교체" 실행 대상 (WK/NULL/OTHER/깨진 STORAGE_LINK).
   const hits = hasStorage.filter((r: any) => r.cur_url !== storageUrl(r.obj));
 
-  // ⚠️ 2026-06-14 = 집계 의미 정정: hit = 실제 교체대상(hits = Storage 있는데 URL 불일치) / linked = 이미 정상 링크(쓰기 0) / miss = PM 필요(Storage 없음).
-  //   = 옛 결함: hit 이 hasStorage(정상 링크 포함) 를 세어 "재링크 가능" 이 폭증(파리 restaurant 171 등 = 오해 유발). hits 기준으로 정정.
+  // ⚠️ 2026-06-14 = 집계 의미: hit = 실제 교체대상(hits = Storage 있는데 URL 불일치) / linked = 이미 정상 링크(쓰기 0) / miss = PM 필요(Storage 없음). (§19)
   const hitIds = new Set<number>(hits.map((r: any) => r.id));
   const byCat: Record<string, { hit: number; linked: number; miss: number }> = {};
   for (const r of rows) {

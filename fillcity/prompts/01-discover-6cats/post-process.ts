@@ -3,7 +3,7 @@
 // = docs/raw/{city_id}/01-discover-6cats.json 읽음 → upsertPlace() v2 단일 진입점 INSERT
 //
 // 호출:
-//   npx tsx .claude/skills/raw-db-verify-and-complete/prompts/01-discover-6cats/post-process.ts --city-id=19 [--dry]
+//   npx tsx fillcity/prompts/01-discover-6cats/post-process.ts --city-id=19 [--dry]
 //
 // 정책 = 헌법 §14 = upsertPlace() 단일 진입점 (= 5 단계 매칭 자동)
 //      = §15 = shopping = price_eur null 강제
@@ -12,7 +12,7 @@ import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(__dirname, '../../../../..');
+const ROOT = path.resolve(__dirname, '../../..');
 process.chdir(ROOT);
 
 const argv = Object.fromEntries(process.argv.slice(2).map(a => a.replace(/^--/, '').split('=')).map(([k, v]) => [k, v ?? 'true']));

@@ -1,5 +1,4 @@
 // ⚠️ 수정금지(승인필요) = #45 = 식당+6cat 결손 완비 워크플로우 (사장님 SSOT 재작성 2026-06-16 = (가) 방식)
-// = 전임/옛 과오 폐기: 임의 메가파일(391줄)·재입력 모드·PID 가드·직접 SQL UPDATE·임의 프롬프트 = 전부 제거.
 // = 원칙(사장님 SSOT 2026-06-16): AI 는 시스템을 만들 일에 소설 쓰지 않는다 = 검증된 컴포넌트만 호출하는 얇은 진입점.
 //
 //   [1 추출]   그 시점 PSR 에서 SQL 로 대상 = 우리 id 목록 (= 라이브 재계산 X, 저장된 rank 그대로).
@@ -9,10 +8,10 @@
 //   [3 이미지] relinkStorageImages() (= 결제된 고아 Storage 무료 재링크 = PM 누수 차단) → 남은 결손만 tsSearch+tsPhoto(관문) PM.
 //   [4 저장]   upsertPlace() (= DB 문지기 단일 진입점 = 7단계 매칭). 직접 SQL X. raw 2곳 저장 = 관문 자동(save-raw).
 //
-// 호출: npx tsx scripts/fill45-defect-repair.ts --city-id=19 [--only-id=N] [--apply]
+// 호출: npx tsx fillcity/repair.ts --city-id=19 [--only-id=N] [--apply]
 //   --apply 없으면 DRY (= 추출 + 결손분포 + PM 예상 출력, DB·Storage·외부호출 0).
 //   --only-id=N = 단일 행 격리 실증 (사장님 승인 2026-06-16). 미지정 시 전체 풀(기존 불변).
-//   ⚠️ 삭제 2026-06-21 = 옛 "--all-restaurants(식당전부)·--from-raw(raw재입력)" 두 플래그 = AI 임시 끼워넣기 = 사장님 SSOT "원복" = 완전삭제(§19·§16). #45 = 항상 band 30/90/30(=150) 단일.
+//   #45 = 항상 band 30/90/30(=150) 단일. (사장님 SSOT "원복" 2026-06-21 §19·§16)
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath, pathToFileURL } from 'url';
@@ -30,19 +29,17 @@ const cityId = Number(argv['city-id'] || 19);
 const apply = argv['apply'] === 'true';
 // ⚠️ 수정금지(승인필요) = --only-id=N = 단일 행 격리 실증용 (사장님 승인 2026-06-16). 미지정 시 전체 풀(기존 동작 불변).
 const onlyId = argv['only-id'] ? Number(argv['only-id']) : null;
-// ⚠️ 삭제 2026-06-21 = 옛 "const allRestaurants(--all-restaurants)·const fromRaw(--from-raw)" 두 선언 = AI 임시 끼워넣기 = 사장님 SSOT "원복" = 완전삭제(§19·§16).
-//   = #45 식당 범위 = 항상 band 30/90/30(=150) 단일(추출 SQL rest CTE). raw 재입력 모드 폐기 = 항상 순수 Gemini·TS·PM 외부호출.
+// #45 식당 범위 = 항상 band 30/90/30(=150) 단일(추출 SQL rest CTE) = 항상 순수 Gemini·TS·PM 외부호출. (사장님 SSOT "원복" 2026-06-21 §19·§16)
 // ⚠️ 수정금지(승인필요) = 출입증 키발급 날짜 inputDate (= YYYY-MM-DD = issue-api-key.ts 검문 형식). 함수 상단 1회 선언 = 모든 issueApiKey 호출 공유.
 const inputDate = new Date().toISOString().slice(0, 10);
 const SIXCAT = ['heritage', 'hotspot', 'attraction', 'adventure', 'healing', 'shopping'];
-const ANCHOR_M = 10; // ⚠️ 수정금지(승인필요) 2026-06-23 사장님 SSOT = 좌표 앵커 무조건 10m(매칭기준 동일=도심밀집 환각차단). 옛 100m AI임의 폐기(§19).
+const ANCHOR_M = 10; // ⚠️ 수정금지(승인필요) 2026-06-23 사장님 SSOT = 좌표 앵커 무조건 10m(매칭기준 동일=도심밀집 환각차단).
 
 (async () => {
   const pg = await import('pg');
   const c = new (pg as any).default.Client({ connectionString: process.env.SUPA_URL || process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
   await c.connect();
-  // ⚠️ 수정금지(승인필요) 2026-06-18 교체 = 옛 "api_keys 직접 SELECT → env 뿌리기"(출입증 우회) 폐기 = §19.
-  //   = 외부호출 3종(Gemini·TS·PM) 키는 각 단계 직전 issueApiKey 로만 발급(= 채움 hasRow=true 검문). 부팅로더식 일괄 직독 X.
+  // ⚠️ 수정금지(승인필요) 2026-06-18 = 외부호출 3종(Gemini·TS·PM) 키는 각 단계 직전 issueApiKey 로만 발급(= 채움 hasRow=true 검문). 부팅로더식 일괄 직독 X.
   const { issueApiKey } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/issue-api-key.ts')).href);
   const city = (await c.query('SELECT name_en, country_code FROM cities WHERE id=$1', [cityId])).rows[0];
   if (!city) { await c.end(); console.error(`X city ${cityId} 미존재`); process.exit(1); }
@@ -74,7 +71,7 @@ const ANCHOR_M = 10; // ⚠️ 수정금지(승인필요) 2026-06-23 사장님 S
       SELECT *, ROW_NUMBER() OVER (PARTITION BY band ORDER BY rank ASC) AS band_rn
       FROM base WHERE seed_category='restaurant' AND price_eur IS NOT NULL
     ),
-    -- ⚠️ 삭제 2026-06-21 = 옛 "$4(--all-restaurants) 식당전부 UNION 분기"(2026-06-20 AI 임시) 완전삭제 = 사장님 SSOT "원복"(§19). 식당 = band 30/90/30 단일.
+    -- 식당 = band 30/90/30 단일. (사장님 SSOT "원복" 2026-06-21 §19)
     rest AS (
       SELECT id, name_local, name_en, address, lat, lng, price_eur, rc, google_place_id, google_maps_uri, seed_category,
              image_url, distance_km_from_center, summary_ko, editorial_summary
@@ -118,13 +115,13 @@ const ANCHOR_M = 10; // ⚠️ 수정금지(승인필요) 2026-06-23 사장님 S
   // [채움 계획] = 사장님 SSOT 2026-06-16 = 결손 행 "전부"를 Gemini·TS 양쪽 통째로 (구별 X). 순서 = Gemini 1차 → TS → 이미지 최종.
   console.log(`[채움 계획] 전체 ${rows.length}곳 = Gemini 1콜(1차 덮어쓰기) -> TS ${rows.length}콜(검증·PID교정) -> 이미지 최종(무료재링크->PM)`);
   if (!apply) { console.log(`\n=== DRY 완료 (--apply 로 Gemini->TS->이미지 집행) ===`); await c.end(); return; }
-  // ⚠️ 수정금지(승인필요) 2026-06-18 = 외부호출 키는 각 단계 issueApiKey 가 발급(미달=throw). 여기선 Storage 업로드용 storageKey 만 사전 점검(옛 KEY 가드 폐기 = §19).
+  // ⚠️ 수정금지(승인필요) 2026-06-18 = 외부호출 키는 각 단계 issueApiKey 가 발급(미달=throw). 여기선 Storage 업로드용 storageKey 만 사전 점검.
   if (!storageKey) { console.error('X Storage 키 미설정 = 이미지 업로드 불가'); await c.end(); return; }
 
   // [2 Gemini 1차 덮어쓰기] = 결손 전부 = geminiCurate 1콜(배치) -> name_ko·summary·editorial·price.
   //   사장님 SSOT = Gemini 먼저 = 다음 TS 검색 힌트 정확도 상승. id 양방향 보존(prompt.txt). 카테고리 안 줌(shopping null = 우리 저장단계).
   // ⚠️ 수정금지(승인필요) 2026-06-19 = Gemini 키 = 출입증 직독(채움 hasRow=true) = TS·PM 과 동일 방식 = process.env 우회 0.
-  // ⚠️ 삭제 2026-06-21 = 옛 "if(fromRaw){저장raw 재입력}else{...}" 분기(2026-06-20 AI 임시) 완전삭제 = 사장님 SSOT "원복"(§19). 항상 순수 geminiCurate 외부호출.
+  // 항상 순수 geminiCurate 외부호출. (사장님 SSOT "원복" 2026-06-21 §19)
   const geminiKey = await issueApiKey(c, 'GEMINI_API_KEY', cityId, inputDate, true);
   const { geminiCurate } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/gemini-curate.ts')).href);
   const curated = await geminiCurate(city.name_en, cityId, rows.map((r: any) => ({
@@ -139,7 +136,6 @@ const ANCHOR_M = 10; // ⚠️ 수정금지(승인필요) 2026-06-23 사장님 S
     const priceEur = r.seed_category === 'shopping' ? null : (g.priceEur ?? null);
     // ⚠️ 사장님 SSOT 2026-06-16 = 우리 id 직행 UPDATE (= 매칭 X). id=탄생 고유이름=불변 목적지 = 매칭(upsertPlace)이 다른 행으로 빗나감 방지. 신규 INSERT 없음.
     // ⚠️ 수정금지(승인필요) 2026-06-20 사장님 SSOT = 선별 금지 = Gemini 응답 전 필드 → 대응 컬럼 새 우선(COALESCE 새값,기존) 순서대로 덮어쓰기.
-    //   옛 4컬럼만 SET(name_ko/summary/editorial/price) = AI 선별 = name_local·distance·address·좌표 누락 사고 = 완전삭제(§19).
     //   = Gemini만 주는 요소(name_local·distance·price)가 여기서 채워짐 / name_en 은 1차(뒤 TS displayName 이 최종 덮음). §14 새우선.
     const u = await c.query(`UPDATE place_seed_raw SET
         name_local = COALESCE(NULLIF($2,''), name_local),
@@ -169,12 +165,12 @@ const ANCHOR_M = 10; // ⚠️ 수정금지(승인필요) 2026-06-23 사장님 S
   const tsByOurId = new Map<number, any>();
   // ⚠️ 수정금지(승인필요) 2026-06-19 사장님 SSOT = TS 산출물 = 06 형태 모음(건건 X 보여줌) = results 배열 1파일. photo_name 1개(photos[0]), 정제 9요소만.
   const tsResults: any[] = [];
-  // ⚠️ 삭제 2026-06-21 = 옛 "tsRawById 로드 + 루프 내 if(fromRaw){저장raw 매핑}else{...}" 분기(2026-06-20 AI 임시) 완전삭제 = 사장님 SSOT "원복"(§19). 항상 순수 tsSearch 외부호출.
+  // 항상 순수 tsSearch 외부호출. (사장님 SSOT "원복" 2026-06-21 §19)
   for (const r of rows) {
     try {
       const cur = (await c.query('SELECT name_local, name_en, address, latitude::float8 AS lat, longitude::float8 AS lng FROM place_seed_raw WHERE id=$1', [r.id])).rows[0] || r;
       const hint = cur.name_local || cur.name_en || r.name_local || r.name_en;
-      // ⚠️ 수정금지(승인필요) 2026-06-18 교체 = TS 외부호출 직전 출입증 키발급 (= 채움 hasRow=true: 도시·행 검문 통과 시에만 키). 옛 객체인자 폐기 = §19.
+      // ⚠️ 수정금지(승인필요) 2026-06-18 = TS 외부호출 직전 출입증 키발급 (= 채움 hasRow=true: 도시·행 검문 통과 시에만 키).
       const tsKey = await issueApiKey(c, 'GOOGLE_MAPS_API_KEY', cityId, inputDate, true);
       // ⚠️ 수정금지(승인필요) — languageCode 제거(2026-06-17 사장님 SSOT) = displayName 한국어 강제 안 함
       const ts = await tsSearch({
@@ -198,11 +194,48 @@ const ANCHOR_M = 10; // ⚠️ 수정금지(승인필요) 2026-06-23 사장님 S
           photo_name: t1.photoName, google_maps_uri: t1.googleMapsUri, business_status: t1.businessStatus,
         },
       });
+      // ⚠️ 수정금지(승인필요) 2026-06-24 사장님 SSOT (B = PID 선검사) = TS가 준 강매칭키(PID/URI/좌표)가
+      //   같은 city 다른 행(id<>r.id)에 이미 있으면 = 이 행에 직행하면 트리거(BEFORE INSERT OR UPDATE 불변1·2·4) EXCEPTION 으로 죽음.
+      //   = 강매칭키는 직행 안 하고(스킵) 로그 = 중복 안 만들고 EXCEPTION 회피. 약필드(name_en·주소·RC·price)는 그대로 갱신.
+      //   = 진짜 같은 장소면 기존 그 행이 정답 = 이 행은 다음 청소(병합)에서 정리. = §20 통일 PSR(애초에 중복 안 만듦).
+      let dupOwner: number | null = null;
+      if (t1.googlePlaceId) {
+        const q = await c.query(`SELECT id FROM place_seed_raw WHERE city_id=$1 AND google_place_id=$2 AND id<>$3 LIMIT 1`, [cityId, t1.googlePlaceId, r.id]);
+        if (q.rows[0]) dupOwner = q.rows[0].id;
+      }
+      if (!dupOwner && t1.googleMapsUri) {
+        const q = await c.query(`SELECT id FROM place_seed_raw WHERE city_id=$1 AND google_maps_uri=$2 AND id<>$3 LIMIT 1`, [cityId, t1.googleMapsUri, r.id]);
+        if (q.rows[0]) dupOwner = q.rows[0].id;
+      }
+      if (!dupOwner && t1.latitude != null && t1.longitude != null) {
+        const q = await c.query(`SELECT id FROM place_seed_raw WHERE city_id=$1 AND latitude IS NOT NULL AND longitude IS NOT NULL AND ABS(latitude-$2::real)<0.0001 AND ABS(longitude-$3::real)<0.0001 AND id<>$4 LIMIT 1`, [cityId, t1.latitude, t1.longitude, r.id]);
+        if (q.rows[0]) dupOwner = q.rows[0].id;
+      }
       // ⚠️ 사장님 SSOT 2026-06-16 = 우리 id 직행 UPDATE = TS 전 응답값(PID 포함) 그대로 이 행에 덮음. PID 바뀌어도 id 불변 = 무조건 여기다. 매칭 X = 빗나감 X.
       // ⚠️ 수정금지(승인필요) 2026-06-20 사장님 SSOT = 선별 금지 = TS 응답 전 필드 → 대응 컬럼 새 우선 덮어쓰기(중복요소 = Gemini 1차 → TS 가 뒤=최신=덮음, price 포함 동일 취급).
-      //   가격 = 새 우선 덮어쓰기(=최신최우선). 옛 GREATEST(비싼쪽) 정책 = 폐기됨(project_price_eur_ssot) = 들고오지 마라. shopping=price 안 줌 정합.
+      //   가격 = 새 우선 덮어쓰기(=최신최우선, project_price_eur_ssot). shopping=price 안 줌 정합.
       //   TS price 는 거의 null = 그땐 COALESCE 가 기존 Gemini price 보존 / TS 가 주면 더 최신이라 덮음 = 자동 정합.
       const priceEur = r.seed_category === 'shopping' ? null : (t1.priceEur ?? null);
+      if (dupOwner) {
+        // ⚠️ 수정금지(승인필요) 2026-06-24 (B) = 강매칭키는 dupOwner(기존 행) 이 이미 보유 = 직행하면 트리거 차단 = 강매칭키 직행 스킵.
+        //   = 약필드만 갱신(name_en·주소·RC·price = 비강매칭키 = 트리거 불변에 안 걸림). PID/URI/좌표는 안 건드림.
+        // ⚠️ 수정금지(승인필요) 2026-06-24 §19 = 약필드 UPDATE 도 트리거(BEFORE INSERT OR UPDATE)가 NEW.address(TS주소≈dupOwner) + 미변경 name_local 을
+        //   재평가 = 불변3(주소+로컬이름)·불변5(로컬이름) RAISE EXCEPTION(P0001) 가능 = try/catch 로 그 행만 스킵·continue(나머지 계속).
+        try {
+          const u = await c.query(`UPDATE place_seed_raw SET
+            name_en = COALESCE($2, name_en),
+            address = COALESCE($3, address),
+            google_review_count = COALESCE($4::integer, google_review_count),
+            price_eur = COALESCE($5::real, price_eur),
+            updated_at = NOW()
+          WHERE id=$1`, [r.id, t1.nameEn ?? null, t1.address ?? null, t1.googleReviewCount ?? null, priceEur]);
+          if (u.rowCount) tsDone++;
+          console.log(`  ! TS id=${r.id} ${t1.nameEn || hint} = PID/좌표 중복(기존 id=${dupOwner}) = 강매칭키 직행 스킵(약필드만 갱신, 트리거 EXCEPTION 회피)`);
+        } catch (e: any) {
+          console.log(`  ! TS id=${r.id} ${t1.nameEn || hint} = 트리거 중복차단(기존 id=${dupOwner}, ${e.code || ''}) = 그 행 스킵(다음 청소에서 병합)`);
+        }
+        continue;
+      }
       const u = await c.query(`UPDATE place_seed_raw SET
         -- ⚠️ 수정금지(승인필요) — TS displayName→name_en (2026-06-17 사장님 SSOT) = name_local은 Gemini전용 (= TS displayName(영어)을 name_en 칸으로 직행 UPDATE)
         name_en = COALESCE($2, name_en),
@@ -243,7 +276,7 @@ const ANCHOR_M = 10; // ⚠️ 수정금지(승인필요) 2026-06-23 사장님 S
   if (relink.relinkable) console.log(`[무료 재링크] Storage 매칭 ${relink.relinkable}곳 = ${relink.relinked} 무료 채움 -> PM 제외`);
 
   let imgDone = 0, imgNoPhoto = 0;
-  // ⚠️ 삭제 2026-06-21 = 옛 "if(fromRaw){PM skip}+if(fromRaw)break"(2026-06-20 AI 임시) 완전삭제 = 사장님 SSOT "원복"(§19). 항상 무료재링크→PM 순수 진행.
+  // 항상 무료재링크→PM 순수 진행. (사장님 SSOT "원복" 2026-06-21 §19)
   for (const r of rows) {
     if (relink.matchedIds.has(r.id)) continue; // 무료재링크로 채워짐 = PM 제외
     const cur = (await c.query('SELECT image_url, google_place_id, seed_category FROM place_seed_raw WHERE id=$1', [r.id])).rows[0];
@@ -252,7 +285,7 @@ const ANCHOR_M = 10; // ⚠️ 수정금지(승인필요) 2026-06-23 사장님 S
     if (!t1 || !t1.photoName) { imgNoPhoto++; continue; }
     try {
       const pid = t1.googlePlaceId || cur?.google_place_id;
-      // ⚠️ 수정금지(승인필요) 2026-06-18 = PM 외부호출(3단계) 출입증 = 채움 hasRow=true 검문 통과 시에만 키. 옛 KEY 직접SELECT 폐기 = §19.
+      // ⚠️ 수정금지(승인필요) 2026-06-18 = PM 외부호출(3단계) 출입증 = 채움 hasRow=true 검문 통과 시에만 키.
       const pmKey = await issueApiKey(c, 'GOOGLE_MAPS_API_KEY', cityId, inputDate, true);
       const imageUrl = await tsPhoto({ apiKey: pmKey, photoName: t1.photoName, storageKey, supaPublicUrl, pathKey: `${cityId}/${cur?.seed_category || r.seed_category}/${pid}`, maxWidthPx: 800 });
       if (!imageUrl) { console.log(`  X 업로드실패 id=${r.id} ${r.name_local}`); continue; }

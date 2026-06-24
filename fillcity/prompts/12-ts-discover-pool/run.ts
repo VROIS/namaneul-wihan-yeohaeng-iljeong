@@ -3,7 +3,7 @@
 // = 과금 = 요청당 (per-request) = 명소당 1콜 = ~20곳 (= reference_ts_batch_discovery 메모리)
 // = 산출물: docs/raw/{cityId}/{YYYY-MM-DD}_12-ts-discover_{zone}{-label}.json (= 날짜앞 표준, raw-filename.ts / DB 안 건드림 = dry)
 // 호출:
-//   npx tsx .claude/skills/raw-db-verify-and-complete/prompts/12-ts-discover-pool/run.ts --city-id=19 [--zone=outskirt] [--per=20]
+//   npx tsx fillcity/prompts/12-ts-discover-pool/run.ts --city-id=19 [--zone=outskirt] [--per=20]
 // 다음 = post-process.ts (= OPERATIONAL 필터 + PhotoMedia + upsertPlace 5단계 + 07-merge-dups)
 import fs from 'fs';
 import path from 'path';
@@ -11,7 +11,7 @@ import { fileURLToPath, pathToFileURL } from 'url';
 import { DISCOVERY_ZONES } from './destinations';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(__dirname, '../../../../..');
+const ROOT = path.resolve(__dirname, '../../..');
 process.chdir(ROOT);
 
 const envRaw = fs.readFileSync('.env', 'utf-8').replace(/^﻿/, '');
@@ -73,7 +73,7 @@ const rectFromCenter = (lat: number, lng: number, km: number) => {
   const c = new (pg as any).default.Client({ connectionString: process.env.SUPA_URL || process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
   await c.connect();
   const city = (await c.query('SELECT name_en, country_code, latitude, longitude FROM cities WHERE id=$1', [cityId])).rows[0];
-  // ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유 (= 직독 폐기). 발굴(ts-discover-pool) = 도시 있음 + 행 없음(false = 신규 발견).
+  // ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유. 발굴(ts-discover-pool) = 도시 있음 + 행 없음(false = 신규 발견).
   // = 출입증(키이름·도시id·날짜·행없음) 검문 통과해야만 키 발급. 미달 = throw = 외부호출 불가.
   const today = new Date().toISOString().slice(0, 10);
   const { issueApiKey } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/issue-api-key.ts')).href);

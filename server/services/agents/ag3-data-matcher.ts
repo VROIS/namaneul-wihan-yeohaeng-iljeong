@@ -52,7 +52,6 @@ function isUsableImageUrl(url: string): boolean {
   // ⚠️ 수정금지(승인필요) 2026-05-06 = 사용자 SSOT 통합 = Google CDN URL 허용
   // = 메인앱이 직접 로드 (Google Cloud Console HTTP referrer 제한 = 우리 도메인 만)
   // = Storage 다운로드/업로드 우회 = Cached Egress 0
-  // (옛 차단 룰: places.googleapis.com / maps.googleapis.com 해제됨)
   if (
     u.includes("fbcdn.net") ||
     u.includes("cdninstagram") ||
@@ -78,9 +77,8 @@ function isUsableImageUrl(url: string): boolean {
   return true; // 기타는 시도
 }
 
-// ⚠️ 수정금지(승인필요) 2026-05-20 = resolvePlaceImage 폐기 (= 사용자 SSOT = 2 컬럼만)
-// = 옛 = 4 컬럼 (evidenceUrl/bestImageUrl/imageUrl/photoUrls) = WK + Google 외 = 사용 X
-// = 새 = bestImageUrl (WK) > imageUrl (Google) 인라인 = AG2-DB:233 + AG3:488
+// ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT = 이미지 = 2 컬럼만
+// = bestImageUrl (WK) > imageUrl (Google) 인라인 = AG2-DB:233 + AG3:488
 
 // ⚠️ 2026-05-23 = google-places.ts 파일 삭제 = apiCallTracker import 제거 (= 미사용)
 
@@ -180,7 +178,6 @@ export async function preloadCityData(
     // 3. place_seed_raw = 단일 SSOT — ⚠️ 수정금지(승인필요) 2026-05-06 사용자 통합 결정
     //    필수 조건 = collection_phase='gemini3-2026-05' AND rank BETWEEN 1 AND 20
     //    + auto-learn-2026-05 phase (Google fallback 자동 학습 결과)
-    //    옛 france30/europe30/etc phase = 검증 X = 매칭 대상 X
     if (cityId) {
       try {
         const _t1 = Date.now();
@@ -193,7 +190,7 @@ export async function preloadCityData(
             nameLocal: placeSeedRaw.nameLocal,
             googlePlaceId: placeSeedRaw.googlePlaceId,
             googleMapsUri: placeSeedRaw.googleMapsUri,
-            imageUrl: placeSeedRaw.imageUrl, // ⚠️ 2026-06-11 = image_url(구글 PM) 1종 (best_image_url 폐기)
+            imageUrl: placeSeedRaw.imageUrl, // ⚠️ 2026-06-11 = image_url(구글 PM) 1종
             address: placeSeedRaw.address,
             latitude: placeSeedRaw.latitude,
             longitude: placeSeedRaw.longitude,
@@ -341,7 +338,7 @@ export async function matchPlacesWithDB(
 
   for (const place of geminiPlaces) {
     // ⚠️ 수정금지(승인필요) 2026-05-20 = DB-only path skip = AG2 가 이미 place_seed_raw 직접 = 매칭 불필요 (= 사용자 SSOT 병렬 극대화)
-    // ⚠️ 2026-05-20 = matched++ 제거 (= 옛 = 본 if + line 466 if(dbMatch) = 이중 증가 = 52 곳 로그 버그)
+    // ⚠️ 2026-05-20 = 여기서 matched++ 안 함 (= line 466 if(dbMatch) 와 이중 증가 방지)
     if (place.sourceType === "DB Direct (Place Seed Raw)") {
       matchResults.push({ place, dbMatch: place as any, needsGoogle: false });
       continue;
@@ -369,9 +366,7 @@ export async function matchPlacesWithDB(
       console.log(`[AG3] ✅ matcher 매칭: "${place.name}" → "${seedDirectMatch.nameEn}"`);
 
     // ⚠️ 수정금지(승인필요) 2026-05-06 사용자 SSOT = dbPlacesMap (places 테이블) 매칭 차단
-    // = 옛 부패 데이터 (= WIKI 잘못된 사진, 동명 가게 잘못된 매칭) 사용 X
     // = seedDirectMatch (= place_seed_raw place_id/address) 만 신뢰
-    // 1~3. 옛 dbPlacesMap fuzzy/partial 매칭 = 모두 폐기
     let dbMatch: any = undefined;
 
     // ⚠️ 수정금지(승인필요) seedDirectMatch 적용 = 좌표 + 이미지 + pid 즉시 채움 (Google 호출 회피)
@@ -599,7 +594,7 @@ export async function matchPlacesWithDB(
     };
 
     // ⚠️ 수정금지(승인필요) 2026-05-15 = 이미지 fallback = Wikipedia 만 (= PD 폐기 SSOT §16)
-    // = 이전 = Wikipedia → PD photo 2 단계. 현재 = Wikipedia 만 (= TS saveNewPlacesToDB 가 이미지 확보 담당).
+    // = Wikipedia 만 (= TS saveNewPlacesToDB 가 이미지 확보 담당).
     const BATCH_SIZE = 5;
     for (let i = 0; i < needsPhoto.length; i += BATCH_SIZE) {
       const batch = needsPhoto.slice(i, i + BATCH_SIZE);
@@ -635,7 +630,7 @@ export async function saveNewPlacesToDB(
   newPlaces: PlaceResult[],
   cityId: number | null,
   // ⚠️ 수정금지(승인필요) 2026-06-01 = 사용자 SSOT = deferPersist=true 시 = fetch(TS+PM+Storage) await 완료 후 = DB INSERT(upsertPlace) 만 background
-  // = 첫 trip 이미지 FE 노출 최우선 / 백필(DB)은 background. false(기본)=옛 동작(fetch+INSERT 모두 inline). 롤백 = pipeline-v3 플래그 1줄
+  // = 첫 trip 이미지 FE 노출 최우선 / 백필(DB)은 background. false(기본)=fetch+INSERT 모두 inline. 롤백 = pipeline-v3 플래그 1줄
   opts?: { deferPersist?: boolean },
 ): Promise<void> {
   if (!db || !cityId) {
@@ -708,7 +703,7 @@ export async function saveNewPlacesToDB(
     "https://wxebceflvuythuodemro.supabase.co";
 
   // ⚠️ 수정금지(승인필요) 2026-06-02 = 전 앱 TS 호출 단일 표준 (= STANDARD_TS_FIELD_MASK §16)
-  // = 9 필드 Enterprise (= 자체 8 필드 정의 폐기 + businessStatus 폐업·rename 판정) = 표준화
+  // = 9 필드 Enterprise (= businessStatus 폐업·rename 판정) = 표준화
   const SEARCH_TEXT_FIELD_MASK = STANDARD_TS_FIELD_MASK;
   validateFieldMask(SEARCH_TEXT_FIELD_MASK);
   async function searchText(
@@ -778,7 +773,7 @@ export async function saveNewPlacesToDB(
   // 1. nextRank base 사전 계산 (= 카테고리별 1 회 = race condition 차단)
   const baseRanks: Record<string, number> = {};
   for (const cat of ["restaurant", "attraction"]) {
-    // ⚠️ 2026-05-23 = collection_phase 폐기 = phase_tags 'auto-learn%' 마커로 대체
+    // ⚠️ 2026-05-23 = phase_tags 'auto-learn%' 마커 기준 (= 자동 학습 결과)
     const r = await db!.execute(
       sql`SELECT COALESCE(MAX(rank), 8999) + 1 AS next_rank FROM place_seed_raw
           WHERE city_id = ${cityId} AND seed_category = ${cat}
@@ -918,7 +913,7 @@ export async function saveNewPlacesToDB(
       console.error("[AG3-SAVE] ⚠️ background upsert 실패:", (e as Error).message),
     );
   } else {
-    await runUpserts(); // = 기본 = 옛 동작 (응답 전 완료)
+    await runUpserts(); // = 기본 = 응답 전 완료
   }
 
   // 3. 카운터 집계

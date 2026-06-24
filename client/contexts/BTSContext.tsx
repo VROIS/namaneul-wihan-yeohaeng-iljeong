@@ -23,7 +23,6 @@ export type BTSPlace = {
   seedCategory: string | null;
   imageUrl: string | null;
   priceEur: number | null;
-  // ⚠️ 2026-06-11 = nubiReason 폐기 → summary_ko 흡수통합
   // ⚠️ 수정금지(승인필요) — 2026-05-06 Screen 4 카트→지도 = WebView 마커용 좌표
   latitude?: number | null;
   longitude?: number | null;
@@ -38,7 +37,7 @@ export type BTSItineraryPlace = {
   image: string;
   priceEstimate: string;
   tags: string[];
-  // ⚠️ 2026-06-11 = nubiReason 폐기 → summaryKo 흡수통합 (후킹 숏폼 차별점)
+  // 후킹 숏폼 차별점 = 한줄요약
   summaryKo: string | null;
 };
 

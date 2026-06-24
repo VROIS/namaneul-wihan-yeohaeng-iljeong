@@ -108,7 +108,7 @@ interface GeminiPlace {
   type: 'activity' | 'lunch' | 'dinner' | 'cafe';
   startTime: string;
   endTime: string;
-  reason?: string;      // = 옛 필드 (= optional, v3 에서 selection_reason_ko 로 대체)
+  reason?: string;      // = optional (= selection_reason_ko 폴백)
   selection_reason_ko?: string;  // ⚠️ 2026-05-14 v3 신규 = 인스타/FOMO = → summary_ko
   shortform_ko?: string;          // ⚠️ 2026-05-14 v3 신규 = 코믹/위트 = → editorial_summary
   transitNote?: string; // 이전 장소에서 이 장소까지 이동 방법 (Gemini 생성)
@@ -755,7 +755,7 @@ async function step2_enrichAndBuild(
 
     const merged = {
       ...p,
-      // ⚠️ 2026-05-20 = ta/kr/ph 폐기 = place_seed_raw 데이터 그대로 (= p.<field>)
+      // ⚠️ 2026-05-20 = place_seed_raw 데이터 그대로 (= p.<field>)
       estimatedPriceEur: resolvedPrice,
       priceEstimate: resolvedPrice > 0 ? `€${Math.round(resolvedPrice)}` : (p.priceEstimate ?? '무료'),
     };
@@ -1403,7 +1403,7 @@ function haversineTransit(
 }
 
 /**
- * 이동 정보 계산 = Haversine 만 (= 사용자 SSOT = Google Routes 완전 폐기)
+ * 이동 정보 계산 = Haversine 만 (= 사용자 SSOT)
  */
 async function calcTransit(
   from: any, fromName: string, to: any,

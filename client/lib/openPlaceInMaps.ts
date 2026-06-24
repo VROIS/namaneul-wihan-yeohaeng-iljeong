@@ -18,7 +18,7 @@ export interface PlaceForMaps {
   address?: string | null;
   // pipeline-v3.ts:643 = AG2 응답 풀주소 = geminiAddress 필드로 저장 (= place.address X)
   geminiAddress?: string | null;
-  // 옛 객체 호환 (= TripPlannerScreen 의 place = name 필드)
+  // TripPlannerScreen 의 place = name 필드 수용
   name?: string | null;
 }
 

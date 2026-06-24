@@ -60,7 +60,7 @@ places.id,places.displayName,places.formattedAddress,places.location,places.user
 | 묶음 | 호출 | 채움/발굴 |
 |---|---|---|
 | 발굴 | #06(01)·#30~33(12run)·#34(recover)·#21·#41(seed-gemini)·#42(cron)·#08↔03·04 식당발굴 | 발굴 false |
-| 채움 | #07(02)·#08(05reverify)·#09(05text)·#10(13)·#28(ts-backfill)·#29(ts-photo)·#37·#38(06)·12 image·post·**#45(결손보강 WF = Gemini+TS+PM 3종)** | 채움 true |
+| 채움 | #07(02)·#08(05reverify)·#09(05text)·#28(ts-backfill)·#29(ts-photo)·#37·#38(06)·12 image·post·**#45(결손보강 WF = Gemini+TS+PM 3종)** | 채움 true |  <!-- #10(13) 삭제 2026-06-23 §19·§20 = #45 흡수 -->
 
 ### ⛔ 안 막음 (= 사장님 결정)
 라이브앱(#02·#03·#04·#39) = 그대로(db·cityId 없어 구조 위험) / 부팅로더 = 그대로(메인앱 키) / 드림스튜디오(#11~18)·BTS(#19)·테스트(#22~25).
@@ -82,12 +82,11 @@ places.id,places.displayName,places.formattedAddress,places.location,places.user
 | **#02** | MIX step1 여정 생성 (미발굴 도시) | Gemini | gemini-3-flash-preview / grounding OFF | live | [pipeline-v3.ts:485](../server/services/agents/pipeline-v3.ts) |
 | **#03** | 동선 최적화 handleRouteRequest | Gemini | gemini-3-flash-preview / grounding ON | live | [route-prompt.ts](../server/services/route/route-prompt.ts) |
 | **#04** | 도시 메타 백필 fetchCityMetaFromGemini | Gemini | gemini-3-flash-preview / grounding ON | live | [gemini-city-meta.ts:22](../server/services/shared/gemini-city-meta.ts) |
-| **#05** | 숏폼 시나리오 통합 (11) | Gemini | gemini-3-flash-preview | ⚠️봉쇄(호출0) | [11/STANDARD_PROMPT](../.claude/skills/raw-db-verify-and-complete/prompts/11-main-app-scenario/STANDARD_PROMPT_2026-05-25.md) |
-| **#06** | 01 비식당 6카테고리 발굴 | Gemini | gemini-3-flash-preview / grounding ON | live(12로 대체) | [01/prompt.txt](../.claude/skills/raw-db-verify-and-complete/prompts/01-discover-6cats/prompt.txt) |
-| **#07** | 02 장소 보강 큐레이션 (라이브 게이트웨이) | Gemini | gemini-3-flash-preview / grounding ON | live | [02/prompt.txt](../.claude/skills/raw-db-verify-and-complete/prompts/02-enrich-place/prompt.txt) · [gemini-curate.ts](../server/services/shared/gemini-curate.ts) |
-| **#08** | 05 식당 재검증 | Gemini | gemini-3-flash-preview / grounding ON | live | [05-reverify/prompt.txt](../.claude/skills/raw-db-verify-and-complete/prompts/05-restaurant-reverify/prompt.txt) |
-| **#09** | 05 텍스트 재분류 (⚠️05 번호충돌) | Gemini | gemini-3-flash-preview / grounding ON | live | [05-text/prompt.txt](../.claude/skills/raw-db-verify-and-complete/prompts/05-text-recategorize/prompt.txt) |
-| **#10** | 13 식당 요약+가격 blind | Gemini | gemini-3-flash-preview / grounding ON | live | [13/prompt.txt](../.claude/skills/raw-db-verify-and-complete/prompts/13-restaurant-summary/prompt.txt) |
+| **#05** | 숏폼 시나리오 통합 (11) | Gemini | gemini-3-flash-preview | ⚠️봉쇄(호출0) | [11/STANDARD_PROMPT](../fillcity/prompts/11-main-app-scenario/STANDARD_PROMPT_2026-05-25.md) |
+| **#06** | 01 비식당 6카테고리 발굴 | Gemini | gemini-3-flash-preview / grounding ON | live(12로 대체) | [01/prompt.txt](../fillcity/prompts/01-discover-6cats/prompt.txt) |
+| **#07** | 02 장소 보강 큐레이션 (라이브 게이트웨이) | Gemini | gemini-3-flash-preview / grounding ON | live | [02/prompt.txt](../fillcity/prompts/02-enrich-place/prompt.txt) · [gemini-curate.ts](../server/services/shared/gemini-curate.ts) |
+| **#08** | 05 식당 재검증 | Gemini | gemini-3-flash-preview / grounding ON | live | [05-reverify/prompt.txt](../fillcity/prompts/05-restaurant-reverify/prompt.txt) |
+| **#09** | 05 텍스트 재분류 (⚠️05 번호충돌) | Gemini | gemini-3-flash-preview / grounding ON | live | [05-text/prompt.txt](../fillcity/prompts/05-text-recategorize/prompt.txt) |
 | **#11** | 드림스튜디오 페르소나 스크립트 | Gemini | gemini-3-flash-preview | live | [gemini.ts:13](../server/gemini.ts) |
 | **#12** | 드림스튜디오 페르소나 TTS | Gemini | gemini-2.5-flash-preview-tts | live | [gemini.ts:128](../server/gemini.ts) |
 | **#13** | 위치기반 가이드 콘텐츠 | Gemini | gemini-3-flash-preview / systemInstruction | live | [gemini.ts:203](../server/gemini.ts) |
@@ -106,25 +105,26 @@ places.id,places.displayName,places.formattedAddress,places.location,places.user
 | **#26** | tsSearch 단일 게이트웨이 | TS | searchText/searchNearby | live | [ts-client.ts:81](../server/services/shared/ts-client.ts) |
 | **#27** | tsPhoto 단일 게이트웨이 | TS | PhotoMedia→Storage | live | [ts-client.ts:129](../server/services/shared/ts-client.ts) |
 | **#28** | ts-backfill (PID 없는 행 보강) | TS | searchText | live | [ts-backfill.ts:60](../server/services/fill/ts-backfill.ts) |
-| **#29** | ts-photo-fill (이미지 채움) | TS | searchText→PhotoMedia | live | [ts-photo-fill.ts:67](../server/services/fill/ts-photo-fill.ts) |
-| **#30** | 발굴레시피① 인기도 카테고리 TOP20 | TS | searchText catMode + 사각형 | tool | [12/run.ts](../.claude/skills/raw-db-verify-and-complete/prompts/12-ts-discover-pool/run.ts) |
-| **#31** | 발굴레시피② 외곽 식당 지역별 TOP20 | TS | searchText zone=outskirt circle | tool | [12/run.ts](../.claude/skills/raw-db-verify-and-complete/prompts/12-ts-discover-pool/run.ts) |
-| **#32** | 발굴레시피③ 도심 신규식당 60 합본 | TS | nearby POPULARITY + text60 + premium | tool | [12/run.ts](../.claude/skills/raw-db-verify-and-complete/prompts/12-ts-discover-pool/run.ts) |
-| **#33** | 12 run.ts 발굴 엔진 (③ 공통구현) | TS | searchText/searchNearby raw | tool · ⚠️관문우회 | [12/run.ts:127](../.claude/skills/raw-db-verify-and-complete/prompts/12-ts-discover-pool/run.ts) |
-| **#34** | 12 recover-by-name (이름직접) | TS | searchText raw | tool · ⚠️관문우회 | [recover-by-name.ts:57](../.claude/skills/raw-db-verify-and-complete/prompts/12-ts-discover-pool/recover-by-name.ts) |
-| **#35** | 12 image-pool (PM, TS검색0) | TS | PhotoMedia | tool | [image-pool.ts:111](../.claude/skills/raw-db-verify-and-complete/prompts/12-ts-discover-pool/image-pool.ts) |
-| **#36** | 12 post-process (PM+upsert, TS검색0) | TS | PhotoMedia | tool | [12/post-process.ts:265](../.claude/skills/raw-db-verify-and-complete/prompts/12-ts-discover-pool/post-process.ts) |
-| **#37** | 06 ts-pm-enrich 발굴/검증 (관문) | TS | tsSearch searchText | tool | [06/run.ts:77](../.claude/skills/raw-db-verify-and-complete/prompts/06-ts-pm-enrich/run.ts) |
-| **#38** | 06 post-process (tsPhoto 관문) | TS | tsPhoto | tool | [06/post-process.ts:75](../.claude/skills/raw-db-verify-and-complete/prompts/06-ts-pm-enrich/post-process.ts) |
+| #29 | ts-photo-fill = **삭제(2026-06-23 §19·§20)** | — | — | deleted | 이미지 = #45 흡수 = 파일 완전삭제 |
+| **#30** | 발굴레시피① 인기도 카테고리 TOP20 | TS | searchText catMode + 사각형 | tool | [12/run.ts](../fillcity/prompts/12-ts-discover-pool/run.ts) |
+| **#31** | 발굴레시피② 외곽 식당 지역별 TOP20 | TS | searchText zone=outskirt circle | tool | [12/run.ts](../fillcity/prompts/12-ts-discover-pool/run.ts) |
+| **#32** | 발굴레시피③ 도심 신규식당 60 합본 | TS | nearby POPULARITY + text60 + premium | tool | [12/run.ts](../fillcity/prompts/12-ts-discover-pool/run.ts) |
+| **#33** | 12 run.ts 발굴 엔진 (③ 공통구현) | TS | searchText/searchNearby raw | tool · ⚠️관문우회 | [12/run.ts:127](../fillcity/prompts/12-ts-discover-pool/run.ts) |
+| **#34** | 12 recover-by-name (이름직접) | TS | searchText raw | tool · ⚠️관문우회 | [recover-by-name.ts:57](../fillcity/prompts/12-ts-discover-pool/recover-by-name.ts) |
+| #35 | 12 image-pool = **삭제(2026-06-23 §19·§20)** | — | — | deleted | 이미지 = #45 흡수 = 파일 완전삭제 |
+| **#36** | 12 post-process (PM+upsert, TS검색0) | TS | PhotoMedia | tool | [12/post-process.ts:265](../fillcity/prompts/12-ts-discover-pool/post-process.ts) |
+| **#37** | 06 ts-pm-enrich 발굴/검증 (관문) | TS | tsSearch searchText | tool | [06/run.ts:77](../fillcity/prompts/06-ts-pm-enrich/run.ts) |
+| **#38** | 06 post-process (tsPhoto 관문) | TS | tsPhoto | tool | [06/post-process.ts:75](../fillcity/prompts/06-ts-pm-enrich/post-process.ts) |
 | **#39** | ag3 saveNewPlacesToDB (신규/bare) | TS | searchText raw | ⚠️live·관문우회 | [ag3-data-matcher.ts:719](../server/services/agents/ag3-data-matcher.ts) |
 | **#40** | ag3 matchCandidate 5단계 (외부0) | TS | DB 매칭 | live | [ag3-data-matcher.ts:354](../server/services/agents/ag3-data-matcher.ts) |
 | **#41** | seed-gemini STEP2 TextSearch+PM | TS | searchText raw (types/primaryType+가드없음) | legacy | [seed-gemini.mjs:327](../scripts/seed-gemini.mjs) |
 | **#42** | p0-bts-daily-cron searchText+PM | TS | searchText raw (6필드 자체마스크) | legacy | [p0-bts-daily-cron.mjs:123](../scripts/p0-bts-daily-cron.mjs) |
-| **#43** | 07 중복통합 (결정론, 프롬프트 예비) | 비-LLM | 5단계 매칭 (Gemini 미사용) | live | [07/run.ts:80](../.claude/skills/raw-db-verify-and-complete/prompts/07-merge-dups/run.ts) |
-| **#44** | 08 Wikidata 이미지 (SPARQL) | 비-LLM | SPARQL (Gemini 미사용) | live | [08/run.ts:68](../.claude/skills/raw-db-verify-and-complete/prompts/08-wk-image-fill/run.ts) |
-| **#45** | 결손보강·보정 WF (1행 1결손→행 전체 Gemini→TS→PM 보강) | 복합(Gemini+TS+PM) | 추출(6cat TOP20+식당 band 30/90/30 또는 `--all-restaurants`=식당전부)→Gemini 전11필드 새우선→TS 전필드 새우선→PM이미지→2곳저장 | live(실증완료) | [fill45-defect-repair.ts](../scripts/fill45-defect-repair.ts) |
+| **#43** | 07 중복통합 (결정론, 프롬프트 예비) | 비-LLM | 5단계 매칭 (Gemini 미사용) | live | [07/run.ts:80](../fillcity/prompts/07-merge-dups/run.ts) |
+| **#44** | 08 Wikidata 이미지 (SPARQL) | 비-LLM | SPARQL (Gemini 미사용) | live | [08/run.ts:68](../fillcity/prompts/08-wk-image-fill/run.ts) |
+| **#45** | 결손보강·보정 WF (1행 1결손→행 전체 Gemini→TS→PM 보강) | 복합(Gemini+TS+PM) | 추출(6cat TOP20+식당 band 30/90/30 또는 `--all-restaurants`=식당전부)→Gemini 전11필드 새우선→TS 전필드 새우선→PM이미지→2곳저장 | live(실증완료) | [fill45-defect-repair.ts](../fillcity/repair.ts) |
+| **#46** | #1b 정제(cleanse) = 전체 행 재검증 (#07 프롬프트 재사용 = 새 프롬프트 아님) | Gemini | 전체행(BTS제외)→geminiCurate(=02-enrich/prompt.txt)→가격오염·이름환각·칸오입력 교정→id직행 전필드 새덮어쓰기(shopping price=NULL) = TS·PM 0 | live(실증완료) | [fillcity-step1b-fix-pollution.ts](../fillcity/cleanse.ts) · 본문 = **#07** (같은 prompt.txt) |
 
-> **단일관문 우회(정리 후보)**: Gemini = #11~#18(드림스튜디오)·#19·#21·#06·#08·#09·#10 / TS = #33·#34·#39·#41·#42.
+> **단일관문 우회(정리 후보)**: Gemini = #11~#18(드림스튜디오)·#19·#21·#06·#08·#09 / TS = #33·#34·#39·#41·#42.  <!-- #10 삭제(2026-06-23) -->
 > **명백한 폐기 후보**: #19·#21·#41·#42(legacy) / #22(헬스체크) / #23·#24·#25(reference).
 
 ## 🧬 원본 유형 = "어디서 왔나 + 편집/삭제 시 진본 위치" (= 매번 안 찾아도 됨)
@@ -134,13 +134,13 @@ places.id,places.displayName,places.formattedAddress,places.location,places.user
 | 유형 | 진본(여기만 편집) | 해당 # |
 |---|---|---|
 | **① 코드 인라인** (코드 파일 = 유일 진본) | 그 코드 파일의 해당 라인 | #04·#11~#18·#19·#20·#21·#22·#23·#24·#25·#44(SPARQL) |
-| **② 외부 prompt.txt** (.txt = 진본, 코드는 `readFileSync` split) | 스킬 `prompts/<폴더>/prompt.txt` | #06·#07·#08·#09·#10·#43 |
+| **② 외부 prompt.txt** (.txt = 진본, 코드는 `readFileSync` split) | 스킬 `prompts/<폴더>/prompt.txt` | #06·#07·#08·#09·#43 |  <!-- #10 삭제(2026-06-23) -->
 | **③ 코드 인라인 + SSOT .md 미러** (⚠️ 양쪽 1:1 동기 = 둘 다 갱신) | 코드(=실행) + `STANDARD_PROMPT*.md`(=원본보관) | #02(↔09.md)·#03(↔10.md) |
 | **④ SSOT .md 만** (라이브 코드 없음 = 봉쇄) | `11-main-app-scenario/STANDARD_PROMPT_2026-05-25.md` | #05 |
 | **⑤ raw fetch / 설정만** (LLM 프롬프트 텍스트 없음 = FieldMask·textQuery 조립) | 해당 코드 파일 | #01(게이트웨이)·#26~#42 |
 
 **유형별 핵심 메모**:
-- **②가 진본 패턴 = 가장 안전**: #06~#10 = 코드가 .txt를 읽음 → **.txt 1글자만 바꾸면 반영**(코드 무수정). #07(02-enrich)은 CLI(run.ts) + 라이브(gemini-curate.ts) **둘 다** 같은 .txt를 읽음 = 1곳 수정 = 양쪽 적용.
+- **②가 진본 패턴 = 가장 안전**: #06~#09 = 코드가 .txt를 읽음 → **.txt 1글자만 바꾸면 반영**(코드 무수정). #07(02-enrich)은 CLI(run.ts) + 라이브(gemini-curate.ts) **둘 다** 같은 .txt를 읽음 = 1곳 수정 = 양쪽 적용. (#10=13 삭제 2026-06-23)
 - **③은 위험 = 2곳 동기 필수**: #02·#03은 프롬프트가 코드에 인라인이고 .md는 "원본 보관용 복사본". 코드를 고치면 .md도 같이 고쳐야 1:1 유지(헌법 §3). ⚠️ #03은 모델까지 코드≠.md 불일치 상태(본문 #03 참조).
 - **①은 코드가 곧 프롬프트**: #11~#25 = 그 함수 안 템플릿 문자열이 전부 = 그 파일만 편집.
 - **⑤는 프롬프트가 없음**: TS 호출(#26~#42)·SPARQL(#44) = 자연어 프롬프트 아님 = FieldMask/검색방식/조건 = 코드 편집.
@@ -165,7 +165,7 @@ places.id,places.displayName,places.formattedAddress,places.location,places.user
 
 ### #02 · MIX step1 여정 생성 (ready=false 경로)
 - **파일**: `server/services/agents/pipeline-v3.ts:485` · **상태**: live · **모델**: `gemini-3-flash-preview`
-- **프롬프트 원본**: 인라인 lines 415-464 (SSOT 원본 = [`09-main-app-itinerary/STANDARD_PROMPT_2026-05-24.md`](../.claude/skills/raw-db-verify-and-complete/prompts/09-main-app-itinerary/STANDARD_PROMPT_2026-05-24.md), 1:1 동기 강제)
+- **프롬프트 원본**: 인라인 lines 415-464 (SSOT 원본 = [`09-main-app-itinerary/STANDARD_PROMPT_2026-05-24.md`](../fillcity/prompts/09-main-app-itinerary/STANDARD_PROMPT_2026-05-24.md), 1:1 동기 강제)
 - **설정 (verbatim)**: temperature=0.3 / maxOutputTokens=8192 / thinkingBudget=0 / **`STEP1_USE_GROUNDING=false`**(라인 470) → responseMimeType="application/json"(JSON 강제, tools 없음 = **grounding OFF**). 토글 true 시 = tools=[{googleSearch:{}}] + mime 제거. 파싱 = parts(text && !thought) → ```json fence 제거 → `/\{[\s\S]*\}/` → JSON.parse, 실패 시 repairTruncatedJSON.
 - **조건**: `runPipelineV3` → `isCityReady(destination).ready=false`(미발굴 도시) → runPipelineMix. 입력 = TripFormData → AG1 평문화(koreanTravelerStyle/seasonNote/dayRequirements 슬롯매트릭스). ready=true 면 호출 안 됨(pipeline-db-only). 환각 안전망 = saveNewPlacesToDB TS 재검증.
 - **verbatim 프롬프트**:
@@ -224,7 +224,7 @@ OUTPUT (strict JSON, no markdown fences):
 
 ### #03 · 동선 최적화 `handleRouteRequest` (geminiClient 경유)
 - **파일**: `server/services/route/route-handler.ts:36` (프롬프트 정의 = `server/services/route/route-prompt.ts:172-239` `generateRoutePrompt`) · **상태**: live · **모델**: `gemini-3-flash-preview`
-- **프롬프트 원본**: 인라인 (SSOT 원본 = [`10-main-app-route/STANDARD_PROMPT_2026-05-26_route-only.md`](../.claude/skills/raw-db-verify-and-complete/prompts/10-main-app-route/STANDARD_PROMPT_2026-05-26_route-only.md), 1:1 동기) · ⚠️ route-prompt.ts/route-types.ts = §3 수정금지
+- **프롬프트 원본**: 인라인 (SSOT 원본 = [`10-main-app-route/STANDARD_PROMPT_2026-05-26_route-only.md`](../fillcity/prompts/10-main-app-route/STANDARD_PROMPT_2026-05-26_route-only.md), 1:1 동기) · ⚠️ route-prompt.ts/route-types.ts = §3 수정금지
 - ⚠️ **모델 불일치 (= 코드≠SSOT)**: 이 SSOT `.md`(2026-05-26)는 모델 `gemini-2.5-flash-lite` 지정(입력 1/5·출력 1/7.5 비용근거)인데 **라이브 코드(route-handler.ts)는 `gemini-3-flash-preview` 사용** = 코드가 SSOT 미반영. (정리 시 판단 필요)
 - **설정 (verbatim)**: `geminiJson<RouteResponse>(prompt, { model:"gemini-3-flash-preview", temperature:0.3, maxOutputTokens:50000, googleSearch:true })` → 게이트웨이 내부 = tools=[{googleSearch:{}}] + responseMimeType 삭제 = **grounding ON + JSON mime 없음**. 입력 inputJson = places.filter(seedCategory!=='restaurant') 4~5필드만 + trip_config + protagonist(transport_mode public_transit|private_driver_guide) + meal_budget + city_center.
 - **조건**: DB-only path 동선 생성(표준 prompt 직접). 식당은 제외 = Gemini 가 점심/저녁 자동 발견. 출발/귀환 anchor = accommodationCoords > cityCoords > places[0]. ⚠️ 단 라이브 동선은 현재 route-local(코드) 1차 + 이건 fallback (= WORKLOG 2026-06-06).
@@ -333,7 +333,7 @@ ${JSON.stringify(inputJson, null, 2)}
 ```
 
 ### #05 · 메인앱 숏폼 시나리오 통합 (11-main-app-scenario, ⚠️ 현재 봉쇄=라이브 호출 0)
-- **파일(SSOT)**: [`11-main-app-scenario/STANDARD_PROMPT_2026-05-25.md`](../.claude/skills/raw-db-verify-and-complete/prompts/11-main-app-scenario/STANDARD_PROMPT_2026-05-25.md) · **상태**: reserved (= `/api/itineraries/:id/video/prompts` 봉쇄 = `generateScenarioPrompt` 예정 = 라이브 호출지점 0, grep 미발견) · **모델**: `gemini-3-flash-preview`
+- **파일(SSOT)**: [`11-main-app-scenario/STANDARD_PROMPT_2026-05-25.md`](../fillcity/prompts/11-main-app-scenario/STANDARD_PROMPT_2026-05-25.md) · **상태**: reserved (= `/api/itineraries/:id/video/prompts` 봉쇄 = `generateScenarioPrompt` 예정 = 라이브 호출지점 0, grep 미발견) · **모델**: `gemini-3-flash-preview`
 - **설정 (.md SSOT)**: temperature 0.3 / maxOutputTokens 50000 / thinkingBudget 0 / tools=[{googleSearch:{}}] / timeout 420000. (= 10-route가 이 시나리오에서 동선만 분리한 경량판 = 시나리오 카피 6필드는 여기 잔존)
 - **조건**: 동선 + 숏폼 영상 24씬(1장소=1씬=6초) 통합 = 시나리오 카피(narration/visual_cue/subtitle/theme/transit_summary/protagonist_summary) 포함. 10-route는 이 6필드를 제거해 속도 단축한 분리판.
 - **프롬프트 본문 (verbatim, ⚠️수정금지 2026-05-25)**:
@@ -401,13 +401,13 @@ ${focus.sample_narration}
 7. 응답 = JSON 만 (= markdown X).
 ```
 
-## Gemini 스킬 발굴/큐레이션 도구 (#06~#10, prompt.txt 본문 verbatim 인라인)
+## Gemini 스킬 발굴/큐레이션 도구 (#06~#09, prompt.txt 본문 verbatim 인라인) <!-- #10=13 삭제 2026-06-23 §19·§20 -->
 
 > 공통 raw fetch: `POST https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_KEY}` / `tools=[{googleSearch:{}}]` (**grounding ON**) / `generationConfig={ temperature:0.2, maxOutputTokens:50000, responseMimeType:'application/json', thinkingConfig:{thinkingBudget:0} }` / `AbortSignal.timeout(420000)` / responseSchema 없음(prompt.txt 내부 JSON 계약). ⚠️ **단일관문 미통과(직접 fetch)**.
 
 ### #06 · 01 비식당 6카테고리 발굴 (discover-6cats)
 - **파일**: `.claude/skills/.../01-discover-6cats/run.ts:73-90` · **상태**: live(but fillCity 미사용 = 12 TS 발굴로 대체) · **모델**: `gemini-3-flash-preview`
-- **프롬프트 원본**: [`01-discover-6cats/prompt.txt`](../.claude/skills/raw-db-verify-and-complete/prompts/01-discover-6cats/prompt.txt) (split('════')[2] 본문 / 치환 ${CITY_NAME} ${COUNTRY} ${CITY_LAT} ${CITY_LNG})
+- **프롬프트 원본**: [`01-discover-6cats/prompt.txt`](../fillcity/prompts/01-discover-6cats/prompt.txt) (split('════')[2] 본문 / 치환 ${CITY_NAME} ${COUNTRY} ${CITY_LAT} ${CITY_LNG})
 - **프롬프트 본문 (verbatim, ⚠️수정금지 v3 = 1글자 변경 금지)**:
 ```
 You are a travel data assistant for KOREAN TRAVELERS.
@@ -467,7 +467,7 @@ OUTPUT (strict JSON, no markdown fences):
 
 ### #07 · 02 장소 보강 큐레이션 (enrich-place) ⭐ 라이브 게이트웨이도 사용
 - **파일(CLI)**: `.claude/skills/.../02-enrich-place/run.ts:68-93` · **파일(라이브)**: `server/services/shared/gemini-curate.ts:51` (`geminiCurate()`) · **상태**: live · **모델**: `gemini-3-flash-preview`
-- **프롬프트 원본**: [`02-enrich-place/prompt.txt`](../.claude/skills/raw-db-verify-and-complete/prompts/02-enrich-place/prompt.txt) (split(/═{30,}/)[2] 3번째 청크 / 치환 ${CITY_NAME} ${CITY_ID} ${YEAR} ${BATCH_LEN} ${JSON_INPUT})
+- **프롬프트 원본**: [`02-enrich-place/prompt.txt`](../fillcity/prompts/02-enrich-place/prompt.txt) (split(/═{30,}/)[2] 3번째 청크 / 치환 ${CITY_NAME} ${CITY_ID} ${YEAR} ${BATCH_LEN} ${JSON_INPUT})
 - **프롬프트 본문 (verbatim, ⚠️수정금지 2026-05-18 + 2026-06-12 distance 추가 + 2026-06-16 6변경 + 2026-06-18 API_PASS = 1글자 변경 금지 = 실제 prompt.txt 와 동기화 2026-06-20)**:
 ```
 ${API_PASS}
@@ -520,12 +520,24 @@ ${API_PASS}
 입력 ${BATCH_LEN} 장소:
 ${JSON_INPUT}
 ```
-- **설정 (verbatim, ⚠️ 동기화 2026-06-20 = 선별 폐기 = 응답 전 필드 반환)**: `geminiJson(prompt, { googleSearch:true, apiKey })` = grounding ON. 배치 = FALLBACK `[40,30,20,10]` adaptive (size=40 시작, `places.length===0 || missing>5` 시 축소 재시도). 입력 필드 = `{id, name_en, name_local, name_ko, address, latitude, longitude}` (**PID/URI·seed_category 미전달 = 환각 방지·가격 오염 방지**). **출력 = 응답 전 필드 11요소 = `{id, name_local, name_en, name_ko, address, latitude, longitude, summary_ko, editorial_summary, price_eur, distance_km_from_center}`** (= 옛 "출력 4요소" 선별 폐기 2026-06-20 = name_local·distance·address·좌표 누락 사고 = §19. Gemini만 주는 요소 name_local·distance·price 가 여기 다 실려 #45 가 새우선 덮어쓰기로 필수컬럼 자동완비). `${API_PASS}`·`${MONTH}` 동적 치환. 잘림복구 parsePlaces().
+- **설정 (verbatim, ⚠️ 동기화 2026-06-23 = 선별 폐기 = 응답 전 필드 반환)**: `geminiJson(prompt, { googleSearch:true, apiKey })` = grounding ON. 배치 = FALLBACK `[120,60,40,20,10]` adaptive (size=120 시작 = 1콜 우선, `places.length===0 || missing>5` 시 축소 재시도. ⚠️ 옛 `[40,30,20,10]` = 처음부터 40씩 = 콜 多 폐기 §19 = gemini-curate.ts:15 정합). 입력 필드 = `{id, name_en, name_local, name_ko, address, latitude, longitude}` (**PID/URI·seed_category 미전달 = 환각 방지·가격 오염 방지**). **출력 = 응답 전 필드 11요소 = `{id, name_local, name_en, name_ko, address, latitude, longitude, summary_ko, editorial_summary, price_eur, distance_km_from_center}`** (= 옛 "출력 4요소" 선별 폐기 2026-06-20 = name_local·distance·address·좌표 누락 사고 = §19. Gemini만 주는 요소 name_local·distance·price 가 여기 다 실려 #45 가 새우선 덮어쓰기로 필수컬럼 자동완비). `${API_PASS}`·`${MONTH}` 동적 치환. 잘림복구 parsePlaces().
 - **조건**: raw-db enrich 단계. CLI `--defects-only` = 4요소 결손행만. 라이브 = place_seed_raw 행 + cityName/cityId → upsertPlace 융합. ⚠️ 수정금지(승인필요) 2026-06-05 = tsSearch 대칭 관문.
+
+#### 🔴 #07 의 두 번째 용도 = #1b 정제(cleanse) = "전체 행 재검증" (2026-06-23 사장님 SSOT)
+> ⚠️ **#1b 정제는 새 프롬프트가 아니다 = 위 #07(02-enrich) prompt.txt 를 그대로 재사용**(§19 = 옛것 공존 안 만듦 = 프롬프트 1벌). **차이는 "어떤 행을 주느냐"뿐**:
+- **#07 보충(curate)** = 결손행(빈칸 있는 행)만 추려 줌 → 빈칸 채움.
+- **#1b 정제(cleanse)** = **그 도시 전체 행(BTS 제외)을 통째로** 줌 → Gemini 가 **행 전체를 보고** 재검증:
+  - **가격 오염** 교정(박물관 €13만 = 옛 gemini3 환각 → 정상 입장료). = 위 prompt.txt 규칙 6(price_eur = 입장료/식대 EUR) 이 환각값을 정상값으로 덮음.
+  - **이름 환각/칸 오입력** 교정(Magnificent Mile→Tate Modern, Atlanta→Manneken Pis). = 규칙 2(name_en·name_ko 정확 검증) + name_local 보존.
+  - **결손 가격**도 채움. shopping price = 우리 저장단계 NULL 강제(§15).
+- **= AI 가 "이 행이 오염인가" 패턴(price>200 등)으로 추리지 않음** = Gemini 가 행 전체 보고 판단(그라운딩 ON = 정확). 어떤 게 오염인지 SQL 로 거르는 것 = AI 임의 = 폐기(§19).
+- **호출**: `geminiCurate(cityName, cityId, 전체행, { apiKey })` = 위와 같은 함수·같은 prompt.txt. 배치 = FALLBACK `[120,60,40,20,10]` = 도시당 1~2콜(120/콜). TS·PM 0(= Gemini 만).
+- **구현체**: [`fillcity/cleanse.ts`](../fillcity/cleanse.ts) (전체행 SELECT → geminiCurate → id 직행 전필드 새덮어쓰기). fill-city `--only=cleanse`.
+- **실증(2026-06-23)**: 런던 28·브뤼셀 16·뮌헨 17곳 정정. 최대 €504,210(뮌헨 박물관)→€175. 비식당 price>200 오염 = 0. = PRD §3-A 1단계.
 
 ### #08 · 05 식당 재검증 (restaurant-reverify)
 - **파일**: `.claude/skills/.../05-restaurant-reverify/run.ts:59-92` · **상태**: live · **모델**: `gemini-3-flash-preview`
-- **프롬프트 원본**: [`05-restaurant-reverify/prompt.txt`](../.claude/skills/raw-db-verify-and-complete/prompts/05-restaurant-reverify/prompt.txt) (split 78자 ══ [2] / 치환 ${YEAR} ${COUNT} ${INPUT_JSON})
+- **프롬프트 원본**: [`05-restaurant-reverify/prompt.txt`](../fillcity/prompts/05-restaurant-reverify/prompt.txt) (split 78자 ══ [2] / 치환 ${YEAR} ${COUNT} ${INPUT_JSON})
 - **프롬프트 본문 (verbatim, ⚠️수정금지 2026-06-01 = 1글자 변경 금지)**:
 ```
 You are a restaurant data verifier for KOREAN TRAVELERS. ⚠️ AS OF ${YEAR} (현재 시점) — verify CURRENT status via Google Search grounding (Google Maps).
@@ -551,7 +563,7 @@ OUTPUT (JSON array): [{"id":<n>,"closure_status":"operating|temporarily_closed|p
 
 ### #09 · 05 텍스트 기반 재분류 (text-recategorize) ⚠️ 원본 폴더 05 번호충돌
 - **파일**: `.claude/skills/.../05-text-recategorize/run.ts:60-115` · **상태**: live · **모델**: `gemini-3-flash-preview`
-- **프롬프트 원본**: [`05-text-recategorize/prompt.txt`](../.claude/skills/raw-db-verify-and-complete/prompts/05-text-recategorize/prompt.txt) (split('════')[2] / 치환 ${CITY_NAME} ${CITY_ID} ${BATCH_LEN} ${JSON_INPUT})
+- **프롬프트 원본**: [`05-text-recategorize/prompt.txt`](../fillcity/prompts/05-text-recategorize/prompt.txt) (split('════')[2] / 치환 ${CITY_NAME} ${CITY_ID} ${BATCH_LEN} ${JSON_INPUT})
 - **프롬프트 본문 (verbatim, ⚠️수정금지 2026-05-23 = 01 카테고리 정의와 1글자 일치 강제)**:
 ```
 역할: 너는 한국인 여행자 장소 DB 의 카테고리 정정 전문가야.
@@ -608,23 +620,7 @@ ${JSON_INPUT}
 - **설정**: 공통 + batch **100** + parseRecat `{recategorize:[...]}`.
 - **조건**: CLI `--city-id=N [--batch=100]`. 입력 = (summary_ko OR editorial_summary 있는 행) = 묘사로 카테고리 오분류 정정. ⚠️ AI 자율 트랜잭션 X = 사용자 cc2 검수 후 post-process --apply.
 
-### #10 · 13 식당 요약+가격 blind 추정 (restaurant-summary)
-- **파일**: `.claude/skills/.../13-restaurant-summary/run.ts:56-96` · **상태**: live · **모델**: `gemini-3-flash-preview`
-- **프롬프트 원본**: [`13-restaurant-summary/prompt.txt`](../.claude/skills/raw-db-verify-and-complete/prompts/13-restaurant-summary/prompt.txt) (split 78자 ══ [2] / 치환 ${YEAR} ${COUNT} ${INPUT_JSON})
-- **프롬프트 본문 (verbatim, ⚠️수정금지 2026-06-02 = 1글자 변경 금지)**:
-```
-You are a restaurant copywriter for KOREAN TRAVELERS (⚠️ ${YEAR}년 기준 최신). Use Google Search grounding (= 한국 인스타/네이버 블로그/유튜브 트렌드 + Google Maps). 추정/환각 금지 = grounded fact 만.
-아래 식당들은 실재 검증된 식당(이름/주소/리뷰수)입니다. 각 식당에 한국어 카피 2개 + 1인당 가격을 작성.
-Return STRICT JSON array only (no markdown wrappers). Per restaurant, ONLY these fields:
-- id (echo the given id)
-- summary_ko (한국어 한 줄 = 왜 한국인이 가는지 = 인스타 성지/네이버 블로그/유튜브 vlog 사회적 검증 근거. 담백·정보형)
-- editorial_summary (한국어 한 줄 = 코믹/위트 후킹 = "프사각", "본전 뽑음" 같은 한국 슬랭 = 숏폼 톤)
-- price_eur (⚠️ 필수 = 1인당 평균 식사가 EUR **상한** = Google 그라운딩 독립 추정. 모르면 null)
-INPUT (${COUNT} restaurants): ${INPUT_JSON}
-OUTPUT (JSON array): [{"id":<n>,"summary_ko":"..","editorial_summary":"..","price_eur":<n|null>}]
-```
-- **설정**: 공통 + 재시도 1~3 + batch 40. 응답 = summary_ko/editorial_summary/price_eur(**blind 추정=검증용**).
-- **조건**: CLI `--city-id=N`. 입력 = seed_category='restaurant' AND RC>0 AND summary_ko NULL = TS풀 신규식당. ⚠️ **입력 JSON 가격 미포함(blind)** = TS 실가격은 비교용만. post-process = 요약 UPDATE + 가격 null 행만(TS 가격 보존).
+> #10(13 식당 요약+가격) = 삭제됨 (2026-06-23 §19·§20 = #45 결손보강 WF 가 흡수 = 중복).
 
 ## Gemini 드림스튜디오 (#11~#18, `server/gemini.ts`) — 단일관문 미통과 (독자 GoogleGenAI, apiKey 직접)
 
@@ -1120,7 +1116,7 @@ OUTPUT (strict JSON, no markdown fences):
 ## TS 스킬 발굴/검증 도구 (#30~#38)
 
 ### 발굴 3대 레시피 = #30·#31·#32 (12 ts-discover-pool, verbatim, 최근 파리 생성분) ⭐
-> 같은 `run.ts` 엔진이지만 **인자 조합 = 3가지 별개 레시피**. 출처 = [`12-ts-discover-pool/README.md`](../.claude/skills/raw-db-verify-and-complete/prompts/12-ts-discover-pool/README.md)(잠금 표준) + run.ts:107-125 body. **공통**: 정렬 = RC(userRatingCount) DESC, FieldMask = 9요소 STANDARD + `,places.primaryType`(잡음판정), regionCode = `country_code||'FR'`, timeout 30000, 결과 = `docs/raw/{cityId}/12-ts-discover-{zone}{-label}-{date}.json`.
+> 같은 `run.ts` 엔진이지만 **인자 조합 = 3가지 별개 레시피**. 출처 = [`12-ts-discover-pool/README.md`](../fillcity/prompts/12-ts-discover-pool/README.md)(잠금 표준) + run.ts:107-125 body. **공통**: 정렬 = RC(userRatingCount) DESC, FieldMask = 9요소 STANDARD + `,places.primaryType`(잡음판정), regionCode = `country_code||'FR'`, timeout 30000, 결과 = `docs/raw/{cityId}/12-ts-discover-{zone}{-label}-{date}.json`.
 >
 > **검색방식 SSOT (입증됨)**: 인기/리뷰 발굴 = **searchNearby POPULARITY(≤20, 페이지네이션 없음)** = 리뷰 5만 챔피언(Bouillon Pigalle)을 searchText(관련성)는 놓침. 넓이 = **searchText(≤60 = 20×3 페이지 nextPageToken)**. 가격필터(`priceLevels`) = **searchText 전용**(searchNearby엔 없음). → 못 합쳐서 합본.
 
@@ -1264,7 +1260,7 @@ async function searchText(name: string, addr: string | undefined): Promise<any |
 
 ### #43 · 07 중복 통합 (merge-dups) — `.claude/skills/.../07-merge-dups/run.ts:80` · 외부 API 0 (결정론)
 - 순수 TS 결정론 5단계 매칭(upsertPlace v2 알고리즘 inline). prompt.txt 존재하나 run.ts 미사용. normName(NFD+결합문자제거) / haversine R=6371000.
-- **프롬프트 원본 (= 예비 = 의심 그룹 4순위 매칭 시 호출용, 현 run.ts 미사용)**: [`07-merge-dups/prompt.txt`](../.claude/skills/raw-db-verify-and-complete/prompts/07-merge-dups/prompt.txt) (⚠️수정금지 2026-05-20). **verbatim**:
+- **프롬프트 원본 (= 예비 = 의심 그룹 4순위 매칭 시 호출용, 현 run.ts 미사용)**: [`07-merge-dups/prompt.txt`](../fillcity/prompts/07-merge-dups/prompt.txt) (⚠️수정금지 2026-05-20). **verbatim**:
 ```
 역할: 너는 한국인 여행자 장소 DB 의 중복 행 판단 전문가야.
 
@@ -1334,13 +1330,13 @@ SELECT ?place ?placeLabel ?placeDescription ?image ?coord ?instanceLabel WHERE {
 
 ## #45 · 결손보강·보정 WF (관리자 백그라운드 = 출입증 필수)
 
-- **파일**: `scripts/fill45-defect-repair.ts` · **상태**: live(실증완료 2026-06-20 파리·마드리드) · **호출 주체**: **관리자(사장님)가 요구할 때만** = 백그라운드 = process.env 우회 0 = **출입증 직독 필수**(FE 사용자 입력 아님).
+- **파일**: `fillcity/repair.ts` · **상태**: live(실증완료 2026-06-20 파리·마드리드) · **호출 주체**: **관리자(사장님)가 요구할 때만** = 백그라운드 = process.env 우회 0 = **출입증 직독 필수**(FE 사용자 입력 아님).
 - **용도**: 이미 발굴된 도시의 **결손 행(12요소 중 하나라도 빔)을 행 전체 보강** = "1결손이라도 → Gemini→TS→PM 통째 1번 더 가져와 덮어쓰기". 다시 돌려도 안전(완비된 도시 = 추출 0 = 외부호출 0).
-- **호출 명령**: `npx tsx scripts/fill45-defect-repair.ts --city-id=N` (DRY=무료) / `--apply`(외부호출) / `--only-id=ID`(단일 행 격리) / `--all-restaurants`(식당 풀 작은 도시=식당 전부, 2026-06-20).
+- **호출 명령**: `npx tsx fillcity/repair.ts --city-id=N` (DRY=무료) / `--apply`(외부호출) / `--only-id=ID`(단일 행 격리) / `--all-restaurants`(식당 풀 작은 도시=식당 전부, 2026-06-20).
 
 ### [2] Gemini 카피 = 02-enrich/prompt.txt (= #07 과 동일 진본, 새 프롬프트 0)
 - **호출**: `geminiCurate(city.name_en, cityId, rows, { apiKey: geminiKey })` (geminiKey = `issueApiKey(c,'GEMINI_API_KEY',cityId,날짜,true)` 출입증 직독).
-- **프롬프트 원본**: [`02-enrich-place/prompt.txt`](../.claude/skills/raw-db-verify-and-complete/prompts/02-enrich-place/prompt.txt) (split(/═{30,}/)[2] / 치환 ${API_PASS} ${CITY_NAME} ${CITY_ID} ${YEAR} ${MONTH} ${BATCH_LEN} ${JSON_INPUT}).
+- **프롬프트 원본**: [`02-enrich-place/prompt.txt`](../fillcity/prompts/02-enrich-place/prompt.txt) (split(/═{30,}/)[2] / 치환 ${API_PASS} ${CITY_NAME} ${CITY_ID} ${YEAR} ${MONTH} ${BATCH_LEN} ${JSON_INPUT}).
 - **프롬프트 본문 (verbatim, ⚠️수정금지 2026-05-18 = 1글자 변경 금지)**:
 ```
 ${API_PASS}

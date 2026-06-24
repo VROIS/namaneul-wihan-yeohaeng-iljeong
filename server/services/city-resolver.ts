@@ -313,9 +313,7 @@ export async function findCityUnified(input: string): Promise<CityResolveResult 
   }
 }
 
-// ⚠️ 2026-05-23 = findPlaceByName + addPlaceAlias 완전 삭제
-// = 사용자 SSOT = places 테이블 폐기 = PSR 단일 = 매칭 = upsertPlace() 의 5 단계 매칭 사용
-// = 호출처 = 0건 (= grep 검증 완료 = 둘 다 dead code)
+// ⚠️ 2026-05-23 = 사용자 SSOT = PSR 단일 = 장소 매칭 = upsertPlace() 의 5 단계 매칭 사용
 
 /**
  * 영어 → 한국어 도시명 변환 (표시용)

@@ -1127,7 +1127,7 @@ async function distributePlacesWithUserTime(
           usedNonFoodIds.add(selectedPlace.id);
           dayPoolIndex[dIdx]++;
         } else {
-          // 본 일자 풀 소진 = fallback = 전역 미사용 비식당 (= 옛 schedule 기반 → 전역 Set 기반)
+          // 본 일자 풀 소진 = fallback = 전역 미사용 비식당 (= 전역 Set 기반)
           const remainingNonFood = nonFoodPlaces.filter(
             (p) => !usedNonFoodIds.has(p.id),
           );

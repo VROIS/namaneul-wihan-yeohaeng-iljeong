@@ -39,13 +39,13 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--batch=40] [--offset=0] [--
   const city = (await c.query('SELECT name_en FROM cities WHERE id=$1', [cityId])).rows[0];
   if (!city) { await c.end(); console.error('city 미존재'); process.exit(1); }
   const today = new Date().toISOString().slice(0, 10);
-  // ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유 (= 직독 폐기). 채움(02-enrich) = 도시 있음 + 행 있음(true).
+  // ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유. 채움(02-enrich) = 도시 있음 + 행 있음(true).
   // = 출입증(키이름·도시id·날짜·행있음) 검문 통과해야만 키 발급. 미달 = throw = 외부호출 불가.
   const { issueApiKey } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/issue-api-key.ts')).href);
   const GEMINI_KEY = await issueApiKey(c, 'GEMINI_API_KEY', cityId, today, true);
 
   // 활성 행 SELECT id ASC
-  // ⚠️ 2026-06-04 = defects-only = 비식당 6카테고리 + 4요소 결함만 (식당=13-restaurant-summary 별도 / shopping 가격결함 제외=입장료 없음)
+  // ⚠️ 2026-06-04 = defects-only = 비식당 6카테고리 + 4요소 결함만 (식당 카피·가격 = #45 결손보강 WF 가 통째로 = 2026-06-23 §19·§20 / shopping 가격결함 제외=입장료 없음)
   const defectWhere = `AND seed_category IN ('heritage','hotspot','attraction','adventure','healing','shopping')
       AND ( name_ko IS NULL OR name_ko='' OR summary_ko IS NULL OR summary_ko=''
          OR editorial_summary IS NULL OR editorial_summary='' OR (price_eur IS NULL AND seed_category <> 'shopping') )`;

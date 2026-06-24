@@ -34,7 +34,7 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--batch=100]'); process.exit
   const city = (await c.query('SELECT name_en FROM cities WHERE id=$1', [cityId])).rows[0];
   if (!city) { await c.end(); console.error('city 미존재'); process.exit(1); }
   const today = new Date().toISOString().slice(0, 10);
-  // ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유 (= 직독 폐기). 채움(05-text-recategorize) = 도시 있음 + 행 있음(true).
+  // ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유. 채움(05-text-recategorize) = 도시 있음 + 행 있음(true).
   // = 출입증(키이름·도시id·날짜·행있음) 검문 통과해야만 키 발급. 미달 = throw = 외부호출 불가.
   const { issueApiKey } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/issue-api-key.ts')).href);
   const GEMINI_KEY = await issueApiKey(c, 'GEMINI_API_KEY', cityId, today, true);
@@ -64,7 +64,7 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--batch=100]'); process.exit
   console.log(`═══ 05-text-recategorize ═══`);
   console.log(`city_id = ${cityId} (${city.name_en}), 활성 행 = ${rows.length}, batch = ${batchSize}, today = ${today}`);
 
-  // ⚠️ 2026-06-18 = 구분선 자릿수 무관 정규식 split (= 옛 71자 하드코딩 vs prompt.txt 78자 불일치 버그 수정 = 02-enrich 정합)
+  // ⚠️ 2026-06-18 = 구분선 자릿수 무관 정규식 split (= prompt.txt 자릿수 불일치 버그 수정 = 02-enrich 정합)
   const promptTpl = fs.readFileSync(path.join(__dirname, 'prompt.txt'), 'utf-8')
     .split(/═{30,}/)[2] || '';
 

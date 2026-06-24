@@ -26,7 +26,7 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--apply] [--lang=es] [--cate
 
 const RADIUS_M = 60; // 행 좌표 = 그 장소 좌표 → 60m searchNearby = PID 매칭 확실
 const TYPE_OF: Record<string, string> = { restaurant: 'restaurant' };
-// ⚠️ 2026-06-11 = source 컬럼 DROP(헛바퀴) = wikipedia_api 필터 제거. name_en 존재만 판정.
+// ⚠️ 2026-06-11 = name_en 존재만 판정 (§19)
 const isInternal = (r: any) => r.name_en && r.name_en.trim() !== '';
 
 (async () => {
@@ -37,7 +37,7 @@ const isInternal = (r: any) => r.name_en && r.name_en.trim() !== '';
   await c.connect();
   const city = (await c.query('SELECT name_en, country_code FROM cities WHERE id=$1', [cityId])).rows[0];
   if (!city) { await c.end(); console.error(`✗ city ${cityId} 미존재`); process.exit(1); }
-  // ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유 (= 직독·process.env 폴백 폐기). name_local 채움 = 채움 = 도시 있음 + 행 있음(true).
+  // ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유 (§19). name_local 채움 = 채움 = 도시 있음 + 행 있음(true).
   // = 출입증(키이름·도시id·날짜·행있음) 검문 통과해야만 키 발급. 미달 = throw = 외부호출 불가.
   const today = new Date().toISOString().slice(0, 10);
   const { issueApiKey } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/issue-api-key.ts')).href);

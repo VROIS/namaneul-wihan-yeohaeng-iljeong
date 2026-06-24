@@ -248,7 +248,6 @@ export async function finalizeItinerary(
     }, 0);
 
     // ⚠️ 수정금지(승인필요) 2026-05-21 = 사용자 SSOT = priceEur 모든 값 합산 (= 0 = 무료 포함 / null = 제외)
-    // = 옛 `> 0` 조건 = 0(무료)/null 모두 제외 = healing/hotspot 거의 모두 누락 = 시정
     const entranceFeesEur = dayPlaces.reduce((sum: number, p: any) => {
       if (!p.isMealSlot && typeof p.estimatedPriceEur === "number") {
         return sum + p.estimatedPriceEur;
@@ -267,14 +266,13 @@ export async function finalizeItinerary(
     );
 
     // ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT = price_eur 단일 = 1 인 단가 SSOT
-    // = 옛 = dailyTotalEur / companionCount = 1 인 합 또 ÷ N = 1/N 인 단가 (= 단위 혼동 버그 = €25/인)
-    // = 새 = dailyTotalEur 자체가 1 인 일일 합 = perPerson 그대로 / group = × companionCount
+    // = dailyTotalEur 자체가 1 인 일일 합 = perPerson 그대로 / group = × companionCount
     const dailyPerPersonEur =
       Math.round((mealCostEur + entranceFeesEur + transportCostEur) * 100) /
       100;
     const dailyGroupEur =
       Math.round(dailyPerPersonEur * companionCount * 100) / 100;
-    const dailyTotalEur = dailyPerPersonEur; // = 호환 (= 옛 변수명 유지 = budget UI 영향 X)
+    const dailyTotalEur = dailyPerPersonEur; // = 호환 (= 변수명 유지 = budget UI 영향 X)
     const dailyTotalKrw = Math.round(dailyGroupEur * eurToKrw);
     const dailyPerPersonKrw = Math.round(dailyPerPersonEur * eurToKrw);
 
