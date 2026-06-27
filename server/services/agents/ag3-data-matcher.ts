@@ -385,12 +385,13 @@ export async function matchPlacesWithDB(
         (place as any).googlePlaceId = seedDirectMatch.googlePlaceId;
       if (seedDirectMatch.googleReviewCount)
         (place as any).userRatingCount = seedDirectMatch.googleReviewCount;
-      // ⚠️ 수정금지(승인필요) 2026-05-14 = v3 SSOT = 위트 카피 우선 (= shortform_ko = editorial_summary)
-      // = description = editorialSummary 우선 → summary_ko 폴백 (= "프사각" "MZ들" 노출)
+      // ⚠️ 수정금지(승인필요) 2026-06-24 사용자 SSOT = 슬롯 한줄요약 = editorial_summary 단일 (모든 경로 통일).
+      //   MIX(Gemini+DB 매칭) 경로도 editorialSummary 를 채워 FE(editorialSummary 단일 노출)로 전달.
+      //   place.description = saveNewPlacesToDB 백필(DB editorial_summary 역기입) 입력으로만 보전, FE 노출 아님.
+      //   place.personaFitReason = summary_ko = saveNewPlacesToDB 백필(DB summary_ko 역기입=숏폼 재료) 입력으로만 보전, FE 노출 아님.
       if (seedDirectMatch.editorialSummary)
-        place.description = seedDirectMatch.editorialSummary;
-      else if (seedDirectMatch.summaryKo)
-        place.description = seedDirectMatch.summaryKo;
+        (place as any).editorialSummary = seedDirectMatch.editorialSummary;
+      place.description = seedDirectMatch.editorialSummary || seedDirectMatch.summaryKo || place.description;
       if (seedDirectMatch.summaryKo)
         place.personaFitReason = seedDirectMatch.summaryKo;
       // 별도 marker 로 후속 enrichment 가 인식하도록

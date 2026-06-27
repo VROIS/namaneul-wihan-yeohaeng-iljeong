@@ -854,11 +854,11 @@ async function step2_enrichAndBuild(
         // Gemini의 한국어 이름 + 현지 원어명 + 추천이유
         nameKo: s.gPlace.nameKo,
         nameLocal: s.gPlace.nameLocal || null,
-        // ⚠️ 수정금지(승인필요) 2026-06-11 = summary_ko 흡수통합 = 후킹 숏폼 한줄요약(차별점, 진하게 표시).
-        //   = 옛 nubiReason/nubiEvidenceUrl(evidence_url)/nubiReasonSource(source_type)/instagram·tiktokPostUrl = 헛바퀴 컬럼 폐기 동반 제거.
+        // summary_ko = 숏폼 재료 = 보전 (FE 슬롯 노출 아님, 추후 숏폼 생성용). ⚠️ 수정금지(승인필요) 2026-06-24 사용자 SSOT.
         summaryKo: enrichedPlace.summaryKo || null,
-        // Gemini AI 요약 (보통 글씨로 표시)
-        geminiReason: s.gPlace.reason || '',
+        // ⚠️ 수정금지(승인필요) 2026-06-24 사용자 SSOT = 슬롯 한줄요약 = editorial_summary 단일 (모든 경로 통일).
+        //   = 옛 geminiReason(Gemini reason)·description·personaFitReason 노출 경로 완전 삭제(§19).
+        editorialSummary: enrichedPlace.editorialSummary || null,
         // Gemini가 생성한 교통편 안내 (강화 프롬프트 v3.1)
         transitNote: s.gPlace.transitNote || null,
         // 부가 정보

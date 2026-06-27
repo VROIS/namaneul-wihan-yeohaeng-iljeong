@@ -316,10 +316,10 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
         userRatingCount: inputPlace?.userRatingCount,
         selectionReasons: inputPlace?.selectionReasons || [],
         confidenceLevel: inputPlace?.confidenceLevel || "minimal",
-        // 본 단계 추가 = scene 의 한국어 카피 (= PSR 백필용 + FE 표시)
-        selectionReasonKo:
-          scene.selection_reason_ko || inputPlace?.selectionReasons?.[0],
-        shortformKo: scene.shortform_ko,
+        // ⚠️ 수정금지(승인필요) 2026-06-24 사용자 SSOT = 슬롯 한줄요약 = editorial_summary 단일 (모든 경로 통일).
+        //   route-local 이 scene.shortform_ko 에 PSR.editorial_summary 를 탑재 → FE 노출용 editorialSummary 단일 매핑.
+        //   옛 selectionReasonKo/shortformKo 노출 필드 완전 삭제(§19). scene.selection_reason_ko(=summary_ko) = 숏폼 재료 = route-backfill 백필 경로로만 보전.
+        editorialSummary: scene.shortform_ko || null,
         // 동선 = scene 직접
         distance_from_prev_km: scene.distance_from_prev_km,
         transit_mode: scene.transit_mode,

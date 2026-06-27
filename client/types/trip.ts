@@ -56,7 +56,8 @@ export interface TripFormData {
 export interface Place {
   id: string;
   name: string;
-  description: string;
+  // ⚠️ 2026-06-24 사용자 SSOT = 슬롯 한줄요약 = editorial_summary 단일 (모든 경로 통일). 옛 description·personaFitReason·geminiReason 한줄요약 경로 완전 삭제(§19). summary_ko = 숏폼 재료 = 별도 보전(이 타입엔 없음).
+  editorialSummary?: string;
   startTime: string;
   endTime: string;
   lat: number;
@@ -64,7 +65,6 @@ export interface Place {
   vibeScore: number;
   confidenceScore: number;
   sourceType: string;
-  personaFitReason: string;
   tags: string[];
   vibeTags?: Vibe[];
   city?: string;
@@ -90,8 +90,6 @@ export interface Place {
   koreanPopularityScore?: number;
   // Phase 4: 구글맵 직접 링크 (클릭 시 구글맵 열기)
   googleMapsUrl?: string;
-  // 차별점 = 후킹 숏폼 한줄요약 / Gemini AI 요약 추천 설명 (보통 글씨)
-  geminiReason?: string;
 }
 
 // 🚇 이동 구간 정보

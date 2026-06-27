@@ -879,7 +879,8 @@ export default function TripPlannerScreen() {
         }}
         onPress={() => (navigation as any).navigate("BTSLanding")} // ⚠️ 수정금지(승인필요) — 배너→BTS 랜딩(18KB) 연결
       >
-        <Text style={{ fontSize: 28 }}>💜</Text>
+        {/* ⚠️ 2026-06-24 = 💜 이모지 제거 → Lucide heart (= 디자인 SSOT §1-3 이모지금지 / §8 Lucide만, ICON_MAP 기존 Heart 사용 = 보호파일 미변경). 보라색 = BTS 보라해 유지 */}
+        <Icon name="heart" size={24} color="#A78BFA" />
         <View style={{ flex: 1 }}>
           <Text style={{ color: "#A78BFA", fontFamily: "Pretendard-Bold", fontSize: 14 }}>
             {t("trip.btsBanner")}
@@ -1366,7 +1367,7 @@ export default function TripPlannerScreen() {
                 )
                 .join("\n\n");
               Alert.alert(
-                `⚠️ ${itinerary.destination} ${t("trip.crisisTitle")}`,
+                `${itinerary.destination} ${t("trip.crisisTitle")}`,
                 `${itinerary.crisisAlerts!.length}개의 주의사항:\n\n${alertMessages}`,
                 [{ text: t("common.confirm"), style: "default" }],
               );
@@ -1462,38 +1463,19 @@ export default function TripPlannerScreen() {
                     .map((v) => getVibeLabel(v.vibe))
                     .join(" & ") || "힐링";
 
-                // 예: "👨‍👩‍👧‍👦 가족(4명)의 부모님을 위한 힐링 & 미식 여행"
+                // 예: "가족(4명)의 부모님을 위한 힐링 & 미식 여행" (이모지 금지 = 디자인 SSOT §1-3)
                 const count =
                   itinerary.companionCount || formData.companionCount || 2;
-                return `👨‍👩‍👧‍👦 ${companionLabel}(${count}명)의 ${focusLabel}을 위한 ${vibes} 여행`;
+                // ⚠️ 수정금지(승인필요) 2026-06-24 = 한국어 조사(을/를) 받침 판정 = focusLabel 마지막 글자 받침 유무
+                //   = "나을"(X) 버그 수정 → 받침 없으면 "를", 있으면 "을" (= 한국어 언어에서만 적용, 타 언어는 조사 없음)
+                const lastChar = focusLabel.charCodeAt(focusLabel.length - 1);
+                const hasFinalConsonant =
+                  lastChar >= 0xac00 && lastChar <= 0xd7a3 && (lastChar - 0xac00) % 28 !== 0;
+                const objParticle = hasFinalConsonant ? "을" : "를";
+                return `${companionLabel}(${count}명)의 ${focusLabel}${objParticle} 위한 ${vibes} 여행`;
               })()}
             </Text>
-            {/* 💰 예상 비용 표시 (1인 기준, 일별 합산) */}
-            <View style={styles.estimatedCostBadge}>
-              <Text style={styles.estimatedCostText}>
-                {(() => {
-                  const totalPerPerson = (itinerary.days || []).reduce(
-                    (sum: number, d: any) =>
-                      sum + (d.dailyCost?.perPersonEur || 0),
-                    0,
-                  );
-                  if (totalPerPerson > 0) {
-                    return `1인 €${totalPerPerson.toFixed(0)} (${(itinerary.days || []).length}일)`;
-                  }
-                  const dayCount = itinerary.days?.length || 1;
-                  const styleMultiplier: Record<string, number> = {
-                    Luxury: 400,
-                    Premium: 250,
-                    Reasonable: 150,
-                    Economic: 80,
-                  };
-                  const perDay =
-                    styleMultiplier[itinerary.travelStyle || "Reasonable"] ||
-                    150;
-                  return `예상 1인 €${(dayCount * perDay).toLocaleString()}`;
-                })()}
-              </Text>
-            </View>
+            {/* ⚠️ 2026-06-24 사용자 SSOT = 1인 가격 배지 삭제 (요약섹션1 "1인 €N"과 중복, §19 완전삭제) */}
           </View>
         </View>
 
@@ -1762,9 +1744,9 @@ export default function TripPlannerScreen() {
                                 )}
                               </View>
 
-                              {/* 장소 정보 */}
+                              {/* ⚠️ 수정금지(승인필요) 2026-06-24 사용자 SSOT = 슬롯 6요소 + 순서 고정 = ①로컬네임(메인) ②한국이름(보조) ③시간 ④구글리뷰 ⑤한줄요약(editorial_summary, 차별화) ⑥가격(필수). 그외 노출·구글맵힌트줄 완전삭제(§19). 카드 탭 = 구글맵 열기 동작 유지. */}
                               <View style={styles.placeInfo}>
-                                {/* 장소명: 한국어명 (영문명) */}
+                                {/* ① 로컬네임 (메인 = 크게) + 식사 프리픽스 */}
                                 <View style={styles.placeHeader}>
                                   <Text
                                     style={[
@@ -1775,19 +1757,17 @@ export default function TripPlannerScreen() {
                                   >
                                     {isMealSlot
                                       ? mealType === "lunch"
-                                        ? `🍽️ [${t("trip.lunch")}] `
-                                        : `🍽️ [${t("trip.dinner")}] `
-                                      : isMeal
-                                        ? "🍽️ "
-                                        : ""}
-                                    {(place as any).nameKo || place.name}
+                                        ? `[${t("trip.lunch")}] `
+                                        : `[${t("trip.dinner")}] `
+                                      : ""}
+                                    {(place as any).nameLocal || place.name}
                                   </Text>
                                 </View>
+                                {/* ② 한국이름 (보조 = 작게) */}
                                 {(() => {
-                                  const userLangName = (place as any).nameKo || place.name;
                                   const localName = (place as any).nameLocal || place.name;
-                                  const secondary = (place as any).nameLocal ? localName : place.name;
-                                  return secondary && secondary !== userLangName ? (
+                                  const koName = (place as any).nameKo;
+                                  return koName && koName !== localName ? (
                                     <Text
                                       style={{
                                         fontSize: 11,
@@ -1795,20 +1775,12 @@ export default function TripPlannerScreen() {
                                         marginBottom: 2,
                                       }}
                                     >
-                                      {secondary}
+                                      {koName}
                                     </Text>
                                   ) : null;
                                 })()}
 
-                                {/* ⚠️ 수정금지(승인필요) 2026-05-09 = 별점(vibeScore) 폐기 + RC(google_review_count) 표시 (= 사용자 SSOT) */}
-                                {/* ⚠️ Vercel React Best Practices = rendering-conditional-render = ternary > && */}
-                                {(place as any).userRatingCount > 0 ? (
-                                  <Text style={styles.placeStars}>
-                                    ⭐ rc {(place as any).userRatingCount.toLocaleString()}
-                                  </Text>
-                                ) : null}
-
-                                {/* 시간 */}
+                                {/* ③ 시간 */}
                                 <View style={styles.placeTimeRow}>
                                   <Icon
                                     name="clock"
@@ -1825,7 +1797,30 @@ export default function TripPlannerScreen() {
                                   </Text>
                                 </View>
 
-                                {/* 가격 정보 */}
+                                {/* ④ 구글리뷰 (별점 폐기 = RC만, 사용자 SSOT) */}
+                                {(place as any).userRatingCount > 0 ? (
+                                  <View style={styles.placeStars}>
+                                    <Icon name="star" size={12} color={theme.textSecondary} />
+                                    <Text style={styles.placeStarsText}>
+                                      {t("trip.googleReviews")} {(place as any).userRatingCount.toLocaleString()}
+                                    </Text>
+                                  </View>
+                                ) : null}
+
+                                {/* ⑤ 한줄요약 = editorial_summary 단일 (차별화 포인트). 옛 description·geminiReason·personaFitReason·summaryKo 노출 완전삭제(§19). summary_ko = 숏폼 재료 = 별도 보전. */}
+                                {!!(place as any).editorialSummary && (
+                                  <Text
+                                    style={[
+                                      styles.placeReason,
+                                      { color: theme.textSecondary },
+                                    ]}
+                                    numberOfLines={2}
+                                  >
+                                    {(place as any).editorialSummary}
+                                  </Text>
+                                )}
+
+                                {/* ⑥ 가격 (슬롯마다 필수 = 맨 아래) = 식사비 또는 입장료 */}
                                 <View style={styles.placePriceRow}>
                                   <Icon
                                     name={isMeal ? "credit-card" : "tag"}
@@ -1839,55 +1834,15 @@ export default function TripPlannerScreen() {
                                     ]}
                                   >
                                     {isMeal
-                                      ? `💰 식사: €${place.mealPrice || "??"}`
+                                      ? `식사: €${place.mealPrice || "??"}`
                                       : (place as any).estimatedPriceEur > 0 &&
                                         (place as any).estimatedPriceEur < 500
-                                        ? `🎫 €${(place as any).estimatedPriceEur}`
+                                        ? `€${(place as any).estimatedPriceEur}`
                                         : entranceFee > 0 && entranceFee < 500
-                                          ? `🎫 €${entranceFee}`
-                                          : `🎫 ${place.priceEstimate || t("common.free")}`}
+                                          ? `€${entranceFee}`
+                                          : `${place.priceEstimate || t("common.free")}`}
                                   </Text>
                                 </View>
-
-                                {/* 차별점(후킹 숏폼 한줄요약) = 아래 description(= ag3가 DB summaryKo로 덮어씀)이 단일 노출. */}
-
-                                {/* ⚠️ 수정금지(승인필요) 2026-05-09 = 숓품식 한 줄 소개 (= DB summaryKo) 우선 노출 = 사용자 SSOT */}
-                                {/* description = ag3-data-matcher.ts:495 에서 DB summaryKo 로 덮어쓰기 = 우선 노출 / 없으면 AG2 reason fallback */}
-                                {((place as any).description ||
-                                  (place as any).geminiReason ||
-                                  place.personaFitReason) && (
-                                    <Text
-                                      style={[
-                                        styles.placeReason,
-                                        { color: theme.textSecondary },
-                                      ]}
-                                      numberOfLines={2}
-                                    >
-                                      {(place as any).description ||
-                                        (place as any).geminiReason ||
-                                        place.personaFitReason}
-                                    </Text>
-                                  )}
-
-                                {/* 구글맵 바로가기 힌트 */}
-                                {!!(place.googleMapsUrl ||
-                                  (place.lat && place.lng)) && (
-                                    <View style={styles.googleMapsHint}>
-                                      <Icon
-                                        name="external-link"
-                                        size={10}
-                                        color={Brand.primary}
-                                      />
-                                      <Text
-                                        style={[
-                                          styles.googleMapsHintText,
-                                          { color: Brand.primary },
-                                        ]}
-                                      >
-                                        {t("trip.openGoogleMaps")}
-                                      </Text>
-                                    </View>
-                                  )}
                               </View>
                             </View>
                           </Pressable>
@@ -1929,13 +1884,7 @@ export default function TripPlannerScreen() {
                                     rawMode === "guide" ||
                                     rawMode === "private_guide"; // 전용차 정규화
                                   const mode = isGuide ? "guide" : rawMode;
-                                  const icon = isGuide
-                                    ? "🚗"
-                                    : mode === "metro"
-                                      ? "🚇"
-                                      : mode === "bus"
-                                        ? "🚌"
-                                        : "🚶";
+                                  // ⚠️ 2026-06-24 = 🚗🚇🚌🚶 이모지 제거 (= 디자인 SSOT §1-3 이모지금지). 앞의 navigation Lucide 아이콘 + label 텍스트로 수단 구분.
                                   const label = isGuide
                                     ? t("trip.guideVehicle")
                                     : mode === "metro"
@@ -1949,10 +1898,10 @@ export default function TripPlannerScreen() {
                                     : "";
                                   // A타입(전용차): 구간 비용 안 보여줌(= 일 총합에 ÷인원) / B타입: 구간별 1인 비용
                                   if (isGuide) {
-                                    return `${icon} ${label} ${dur}${dist ? ` · ${dist}` : ""}`;
+                                    return `${label} ${dur}${dist ? ` · ${dist}` : ""}`;
                                   }
                                   const cost = transitInfo.cost || 0;
-                                  return `${icon} ${label} ${dur}${dist ? ` · ${dist}` : ""}${cost > 0 ? ` · €${cost.toFixed(2)}` : ""}`;
+                                  return `${label} ${dur}${dist ? ` · ${dist}` : ""}${cost > 0 ? ` · €${cost.toFixed(2)}` : ""}`;
                                 })()}
                               </Text>
                             </View>
@@ -1995,7 +1944,7 @@ export default function TripPlannerScreen() {
                           { color: theme.textSecondary },
                         ]}
                       >
-                        {currentDay.returnTransit.from} → 🏨 {t("trip.returnToHotel")} (
+                        {currentDay.returnTransit.from} → {t("trip.returnToHotel")} (
                         {currentDay.returnTransit.durationText})
                       </Text>
                     </View>
@@ -2053,7 +2002,7 @@ export default function TripPlannerScreen() {
                             )}
                           {td.category === "transit" && td.guideUpsell && (
                             <Text style={{ fontSize: 11, color: "#666" }}>
-                              💡 드라이빙 가이드 이용시 1인 €
+                              드라이빙 가이드 이용시 1인 €
                               {td.guideUpsell.perPersonPerDay}/일
                             </Text>
                           )}
@@ -2147,64 +2096,6 @@ export default function TripPlannerScreen() {
                     </View>
                   );
                 })()}
-
-                {/* 🏨 전문가 연결 CTA (숙소 미설정 시, 마지막 날에만 표시) */}
-                {dayIdx === (itinerary.days?.length || 1) - 1 &&
-                  !dayAccommodations.find((a) => a.day === currentDay?.day) &&
-                  !currentDay?.accommodation && (
-                    <Pressable
-                      style={[
-                        styles.expertCta,
-                        {
-                          backgroundColor: `${Brand.primary}10`,
-                          borderColor: `${Brand.primary}30`,
-                        },
-                      ]}
-                      onPress={() => {
-                        Alert.alert(
-                          t("trip.expertConsult"),
-                          t("trip.expertConsultMsg"),
-                          [
-                            { text: t("trip.expertConsultLater"), style: "cancel" },
-                            {
-                              text: t("trip.expertConsultBtn"),
-                              onPress: () =>
-                                console.log("[TripPlanner] Expert CTA pressed"),
-                            },
-                          ],
-                        );
-                      }}
-                    >
-                      <Icon
-                        name="message-circle"
-                        size={18}
-                        color={Brand.primary}
-                      />
-                      <View style={styles.expertCtaContent}>
-                        <Text
-                          style={[
-                            styles.expertCtaTitle,
-                            { color: Brand.primary },
-                          ]}
-                        >
-                          {t("trip.bestAccommodation")}
-                        </Text>
-                        <Text
-                          style={[
-                            styles.expertCtaSubtitle,
-                            { color: theme.textSecondary },
-                          ]}
-                        >
-                          {t("trip.expertRecommend")}
-                        </Text>
-                      </View>
-                      <Icon
-                        name="chevron-right"
-                        size={18}
-                        color={Brand.primary}
-                      />
-                    </Pressable>
-                  )}
 
                 {/* Day 구분선 */}
                 {dayIdx < (itinerary.days?.length || 1) - 1 && (
@@ -2526,18 +2417,6 @@ const styles = StyleSheet.create({
     gap: 8,
     flexWrap: "wrap",
   },
-  estimatedCostBadge: {
-    backgroundColor: "#FF6B35",
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  estimatedCostText: {
-    color: "#FFFFFF",
-    fontSize: 12,
-    fontFamily: Fonts.bold,
-  },
-
   // 🗺️ 지도 섹션
   mapSection: {
     marginHorizontal: Spacing.sm,
@@ -2659,11 +2538,14 @@ const styles = StyleSheet.create({
   },
   placeTimeText: { fontSize: 14, fontFamily: Fonts.semiBold },
 
-  // ⭐ 별점
+  // RC(리뷰수) 행 = Lucide star + 텍스트 (= 이모지 제거, 시간행과 동일 패턴)
   placeStars: {
-    fontSize: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.xs,
     marginBottom: Spacing.xs,
   },
+  placeStarsText: { fontSize: 12 },
 
   // 💰 가격
   placePriceRow: {
@@ -2720,18 +2602,6 @@ const styles = StyleSheet.create({
   },
   placeInfo: {
     flex: 1,
-  },
-
-  // 🗺️ 구글맵 바로가기 힌트
-  googleMapsHint: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    marginTop: 4,
-  },
-  googleMapsHintText: {
-    fontSize: 11,
-    fontFamily: Fonts.semiBold,
   },
 
   // 🚇 이동 구간
@@ -2892,29 +2762,6 @@ const styles = StyleSheet.create({
   reoptimizeText: {
     fontSize: 12,
     fontFamily: Fonts.semiBold,
-  },
-  // 전문가 CTA
-  expertCta: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    marginHorizontal: 12,
-    marginTop: 12,
-    borderRadius: BorderRadius.md,
-    borderWidth: 1,
-    gap: 12,
-  },
-  expertCtaContent: {
-    flex: 1,
-  },
-  expertCtaTitle: {
-    fontSize: 14,
-    fontFamily: Fonts.bold,
-  },
-  expertCtaSubtitle: {
-    fontSize: 12,
-    marginTop: 2,
   },
   // 숙소 모달
   hotelModalOverlay: {
