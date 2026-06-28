@@ -226,6 +226,7 @@ export default function TripPlannerScreen() {
   const slotLayoutsRef = useRef<Record<string, number>>({});
   // 🗺️ 2026-06-28 = 지도 = 스크롤 따라 보이는 Day 자동 전환 (= Day별 시작 y 기록 + onScroll 감지 → 그 Day 슬롯+숙소깃발)
   const dayLayoutsRef = useRef<Record<number, number>>({});
+  const placesListOffsetRef = useRef<Record<number, number>>({});
   const [currentMapDay, setCurrentMapDay] = useState(1);
 
   // 🎯 로그인된 사용자 정보 (birthDate 포함)
@@ -1668,7 +1669,12 @@ export default function TripPlannerScreen() {
                   </View>
                 </View>
 
-                <View style={styles.placesList}>
+                <View
+                  style={styles.placesList}
+                  onLayout={(e) => {
+                    placesListOffsetRef.current[currentDay.day] = e.nativeEvent.layout.y;
+                  }}
+                >
                   {places.map((place, index) => {
                     // ⚠️ 수정금지(승인필요) 2026-05-09 = 별점(vibeScore) 폐기 = userRatingCount(rc) 만 사용 (= 사용자 SSOT)
 
@@ -1705,18 +1711,9 @@ export default function TripPlannerScreen() {
                         key={place.id}
                         // 🗺️ 2026-06-28 = 지도 마커 클릭 → 이 슬롯으로 스크롤 (= ScrollView 기준 절대 y 기록)
                         onLayout={(e) => {
-                          const node = e.currentTarget as any;
-                          const scroll = resultScrollRef.current as any;
-                          if (node?.measureLayout && scroll) {
-                            const scrollNode = (scroll.getInnerViewNode?.() || scroll.getScrollableNode?.() || scroll);
-                            try {
-                              node.measureLayout(
-                                scrollNode,
-                                (_x: number, y: number) => { slotLayoutsRef.current[String(place.id)] = y; },
-                                () => {},
-                              );
-                            } catch {}
-                          }
+                          const dayY = dayLayoutsRef.current[currentDay.day] ?? 0;
+                          const listY = placesListOffsetRef.current[currentDay.day] ?? 0;
+                          slotLayoutsRef.current[String(place.id)] = dayY + listY + e.nativeEvent.layout.y;
                         }}
                       >
                         {/* 장소 카드 */}
