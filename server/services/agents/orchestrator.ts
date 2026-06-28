@@ -123,7 +123,8 @@ export async function runPipeline(formData: TripFormData): Promise<any> {
     scoredPlaces: placesArr,
     daySlotsConfig: skeleton.daySlotsConfig,
     travelPace: skeleton.travelPace,
-    vibes: formData.vibes || ['Foodie', 'Culture', 'Healing'],
+    // ⚠️ 수정금지(승인필요) 2026-06-28 사용자 SSOT = vibes 빈값 폴백 = 옛 Foodie→Shopping 교체(§19, 버튼 폐기).
+    vibes: formData.vibes || ['Shopping', 'Culture', 'Healing'],
   };
 
   // 날씨/위기 데이터 조회 (enrichment에서 가져옴)

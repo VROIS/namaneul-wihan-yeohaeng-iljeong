@@ -152,7 +152,8 @@ async function runPipelineMix(formData: TripFormData): Promise<any> {
   if (travelPace === 'Moderate' as any) travelPace = 'Normal';
   const paceConfig = PACE_CONFIG[travelPace];
   const companionCount = getCompanionCount(formData.companionType || 'Solo');
-  const vibes = formData.vibes || ['Foodie', 'Culture', 'Healing'];
+  // ⚠️ 수정금지(승인필요) 2026-06-28 사용자 SSOT = vibes 빈값 폴백 = 정식 6 vibe 만 (옛 Foodie→Shopping 교체, §19 완전삭제). Foodie 는 버튼 폐기됨(즐길거리=Attraction / 쇼핑=Shopping). 헤더 "미식" 오염 차단.
+  const vibes = formData.vibes || ['Shopping', 'Culture', 'Healing'];
 
   // ⚠️ 수정금지(승인필요) 2026-05-09 = sourceMode 분기 인프라 (= 사용자 SSOT)
   // = 'mixed' (현재 = DB 매칭 + Gemini 호출 + auto-learn 보강) = OFF 상태

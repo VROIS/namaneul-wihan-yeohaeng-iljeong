@@ -47,7 +47,8 @@ function calculateVibeWeights(selectedVibes: string[], _protagonist: string) {
 export async function buildSkeleton(formData: TripFormData): Promise<AG1Output> {
   const _t0 = Date.now();
 
-  const vibes = formData.vibes || ['Foodie', 'Culture', 'Healing'];
+  // ⚠️ 수정금지(승인필요) 2026-06-28 사용자 SSOT = vibes 빈값 폴백 = 옛 Foodie→Shopping 교체(§19, 버튼 폐기). 헤더 "미식" 오염 차단.
+  const vibes = formData.vibes || ['Shopping', 'Culture', 'Healing'];
   const curationFocus = formData.curationFocus || 'Everyone';
   const vibeWeights = calculateVibeWeights(vibes, curationFocus);
 

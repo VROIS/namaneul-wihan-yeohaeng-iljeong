@@ -266,7 +266,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         destination: "Paris",
         startDate: "2026-03-01",
         endDate: "2026-03-01",
-        vibes: ["Foodie"] as any,
+        vibes: ["Shopping"] as any, // ⚠️ 2026-06-28 = 옛 Foodie 버튼폐기 → 정식 vibe(Shopping)로 교체(§19)
         curationFocus: "Everyone" as any,
         companionType: "Single",
         companionCount: 1,
@@ -657,6 +657,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           : new Date(),
         endDate: req.body.endDate ? new Date(req.body.endDate) : new Date(),
         personaType: styleToPersonaType[req.body.travelStyle] || "comfort", // 소문자 매핑
+        // ⚠️ 수정금지(승인필요) 2026-06-24 = travel_style 컬럼도 persona_type enum (= luxury/comfort/economic) 강제.
+        //   = FE가 "reasonable"(travelStyle 소문자) 전송 → ...req.body 가 그대로 펼쳐 enum 위반 500 버그 수정 (= 같은 매핑 재사용).
+        travelStyle: styleToPersonaType[req.body.travelStyle] || "comfort",
         // 🩹 [2026-01-26] raw_data 저장 (없으면 빈 객체)
         rawData: req.body.rawData || {},
       };

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import {
   View,
   StyleSheet,
@@ -62,7 +62,8 @@ import {
   getVibeLabel,
 } from "@/utils/vibeCalculator";
 import { apiRequest } from "@/lib/query-client";
-import { InteractiveMap } from "@/components/InteractiveMap";
+// ⚠️ 2026-06-28 사용자 SSOT = 토글 InteractiveMap → 고정 ItineraryMap(BTSPlaceMap 패턴: 웹/앱 동일·마커클릭·동선라인폐기·출발깃발) 교체(§19)
+import ItineraryMap from "@/components/ItineraryMap";
 import {
   PlaceAutocomplete,
   PlaceSelection,
@@ -71,7 +72,6 @@ import { openPlaceInMaps } from "@/lib/openPlaceInMaps";
 import { isAuthenticated, getUserData, UserData } from "@/lib/auth";
 import { useTranslation } from "react-i18next";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
-import { useMapToggle } from "@/contexts/MapToggleContext";
 
 let DateTimePicker: any = null;
 if (Platform.OS !== "web") {
@@ -203,7 +203,7 @@ export default function TripPlannerScreen() {
   const [tempDate, setTempDate] = useState(new Date());
   const [showWebInput, setShowWebInput] = useState<PickerMode>(null);
   const [pendingGenerate, setPendingGenerate] = useState(false);
-  const { showMap } = useMapToggle(); // 🗺️ 지도 토글 (Context에서 가져옴)
+  // ⚠️ 2026-06-28 = 지도 고정섹션化(토글 폐기) = 옛 useMapToggle/showMap 삭제(§19). 지도는 항상 표시.
   const { t, i18n } = useTranslation();
 
   const LOADING_MESSAGES = useMemo(
@@ -221,6 +221,12 @@ export default function TripPlannerScreen() {
   >([]);
   const [hotelModalDay, setHotelModalDay] = useState<number | null>(null); // 숙소 설정 모달이 열린 Day
   const [isReoptimizing, setIsReoptimizing] = useState(false);
+  // 🗺️ 2026-06-28 = 지도 마커 클릭 → 해당 슬롯 스크롤 (= ScrollView ref + 슬롯별 y좌표 기록)
+  const resultScrollRef = useRef<ScrollView | null>(null);
+  const slotLayoutsRef = useRef<Record<string, number>>({});
+  // 🗺️ 2026-06-28 = 지도 = 스크롤 따라 보이는 Day 자동 전환 (= Day별 시작 y 기록 + onScroll 감지 → 그 Day 슬롯+숙소깃발)
+  const dayLayoutsRef = useRef<Record<number, number>>({});
+  const [currentMapDay, setCurrentMapDay] = useState(1);
 
   // 🎯 로그인된 사용자 정보 (birthDate 포함)
   const [currentUser, setCurrentUser] = useState<UserData | null>(null);
@@ -1456,10 +1462,10 @@ export default function TripPlannerScreen() {
                   itinerary.companionType || formData.companionType || "Couple";
                 const companionLabel = companionLabels[companionType] || t("labels.companionFamily");
 
-                // 바이브에서 주요 2개 추출
+                // ⚠️ 수정금지(승인필요) 2026-06-28 사용자 SSOT = 선택한 vibe 전부 표시(최대 3개). 옛 slice(0,2)(상위 2개만) 폐기(§19) = 3번째 선호도 누락 버그 수정.
                 const vibes =
                   itinerary.vibeWeights
-                    ?.slice(0, 2)
+                    ?.slice(0, 3)
                     .map((v) => getVibeLabel(v.vibe))
                     .join(" & ") || "힐링";
 
@@ -1479,30 +1485,60 @@ export default function TripPlannerScreen() {
           </View>
         </View>
 
-        {/* 🗺️ 지도 섹션 - showMap 토글에 따라 표시/숨김 (전체 날 장소 표시) */}
-        {showMap && (
-          <View style={styles.mapSection}>
-            <InteractiveMap
-              places={(itinerary.days || [])
-                .flatMap((d) => d.places || [])
-                .map((p) => ({
-                  id: p.id,
-                  name: p.name,
+        {/* ⚠️ 수정금지(승인필요) 2026-06-28 사용자 SSOT = 지도 고정섹션(항상표시, 토글폐기 §19) = BTS 패턴.
+            전 슬롯 마커 + 마커클릭→슬롯 스크롤 + 출발 깃발(숙소 미설정=도심중심 / 설정=숙소). 동선 polyline 폐기. */}
+        <View style={styles.mapSection}>
+          <ItineraryMap
+            places={(() => {
+              // 🗺️ 지도 = 스크롤로 보이는 현재 Day(currentMapDay)의 슬롯만 표시
+              const day = (itinerary.days || []).find((d) => d.day === currentMapDay) || itinerary.days?.[0];
+              // ⚠️ slot 번호 = 카드 번호(index+1)와 일치 = 좌표결손 거르기 전에 index 매김 (마커배지≠카드번호 버그 방지)
+              return (day?.places || [])
+                .map((p, i) => ({
+                  id: String(p.id),
+                  name: (p as any).nameLocal || p.name,
+                  seedCategory: (p as any).seedCategory || null,
                   lat: p.lat,
                   lng: p.lng,
-                  vibeScore: p.vibeScore,
-                  startTime: p.startTime,
-                  endTime: p.endTime,
-                }))}
-              height={Math.min(220, Dimensions.get("window").height * 0.25)}
-            />
-          </View>
-        )}
+                  slot: i + 1,
+                }))
+                .filter((p) => p.lat != null && p.lng != null);
+            })()}
+            start={(() => {
+              // 출발 깃발 = 현재 Day(currentMapDay) 숙소 ?? 도시중심(destinationCoords)
+              const dayAccom =
+                dayAccommodations.find((a) => a.day === currentMapDay) ||
+                ((itinerary.days || []).find((d) => d.day === currentMapDay) as any)?.accommodation;
+              if (dayAccom?.coords?.lat) {
+                return { lat: dayAccom.coords.lat, lng: dayAccom.coords.lng, label: `${t("trip.departure")}: ${dayAccom.name}` };
+              }
+              const c = formData.destinationCoords;
+              if (c?.lat) return { lat: c.lat, lng: c.lng, label: `${t("trip.departure")}: ${t("trip.departureCityCenter", { destination: itinerary.destination })}` };
+              return null;
+            })()}
+            onMarkerPress={(id) => {
+              const y = slotLayoutsRef.current[id];
+              if (y != null) resultScrollRef.current?.scrollTo({ y: Math.max(0, y - 80), animated: true });
+            }}
+            height={Math.min(260, Dimensions.get("window").height * 0.3)}
+          />
+        </View>
 
         <ScrollView
+          ref={resultScrollRef}
           style={styles.resultScrollView}
           contentContainerStyle={{ paddingBottom: insets.bottom + Spacing.lg }}
           showsVerticalScrollIndicator={false}
+          scrollEventThrottle={100}
+          onScroll={(e) => {
+            // 🗺️ 스크롤 위치 기준 = 화면 상단에 보이는 Day 감지 → 지도 그 Day로 자동 전환
+            const y = e.nativeEvent.contentOffset.y + 100; // 지도 높이만큼 보정
+            let day = 1;
+            for (const [d, top] of Object.entries(dayLayoutsRef.current)) {
+              if (y >= top) day = Number(d);
+            }
+            if (day !== currentMapDay) setCurrentMapDay(day);
+          }}
         >
           {/* 재최적화 중 로딩 */}
           {isReoptimizing && (
@@ -1523,7 +1559,13 @@ export default function TripPlannerScreen() {
           {(itinerary.days || []).map((currentDay, dayIdx) => {
             const places = currentDay?.places || [];
             return (
-              <View key={dayIdx}>
+              <View
+                key={dayIdx}
+                // 🗺️ 2026-06-28 = Day별 시작 y 기록 (= 스크롤 감지로 지도 Day 자동 전환)
+                onLayout={(e) => {
+                  dayLayoutsRef.current[currentDay.day] = e.nativeEvent.layout.y;
+                }}
+              >
                 {/* Day 구분 헤더 */}
                 <View
                   style={[
@@ -1659,7 +1701,24 @@ export default function TripPlannerScreen() {
                       place.entranceFeeTotal || entranceFee * companionCount;
 
                     return (
-                      <View key={place.id}>
+                      <View
+                        key={place.id}
+                        // 🗺️ 2026-06-28 = 지도 마커 클릭 → 이 슬롯으로 스크롤 (= ScrollView 기준 절대 y 기록)
+                        onLayout={(e) => {
+                          const node = e.currentTarget as any;
+                          const scroll = resultScrollRef.current as any;
+                          if (node?.measureLayout && scroll) {
+                            const scrollNode = (scroll.getInnerViewNode?.() || scroll.getScrollableNode?.() || scroll);
+                            try {
+                              node.measureLayout(
+                                scrollNode,
+                                (_x: number, y: number) => { slotLayoutsRef.current[String(place.id)] = y; },
+                                () => {},
+                              );
+                            } catch {}
+                          }
+                        }}
+                      >
                         {/* 장소 카드 */}
                         <View style={styles.placeItem}>
                           {/* 타임라인 좌측 - 🍽️ 식사 슬롯은 주황색 강조 */}

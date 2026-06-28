@@ -406,10 +406,6 @@ interface PlaceResult {
   dayZone?: "core" | "outskirt" | null;
 }
 
-// 시간대별 Vibe 친화도 (향후 고급 슬롯 매칭에 사용 예정)
-// interface TimeSlot { slot: 'morning' | 'lunch' | 'afternoon' | 'evening'; startTime: string; endTime: string; vibeAffinity: Vibe[]; }
-// const SLOT_VIBE_AFFINITY = { morning: ['Healing', 'Culture', 'Adventure'], lunch: ['Foodie'], afternoon: ['Hotspot', 'Culture', 'Adventure', 'Healing', 'Shopping'], evening: ['Foodie', 'Shopping'] };
-
 /**
  * 분(minutes)을 HH:MM 형식으로 변환
  */
@@ -418,10 +414,6 @@ function minutesToTime(minutes: number): string {
   const mins = minutes % 60;
   return `${String(Math.min(23, hours)).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
 }
-
-// 🎯 Vibe 기본 가중치 (향후 확장용, 현재 calculateVibeWeights에서 사용)
-// const BASE_WEIGHTS: Record<Vibe, number> = { Healing: 35, Foodie: 25, Hotspot: 15, Culture: 10, Adventure: 10, Shopping: 5 };
-// const PROTAGONIST_ADJUSTMENTS - 향후 고급 개인화에 사용 예정
 
 function calculateVibeWeights(
   selectedVibes: Vibe[],
@@ -680,7 +672,8 @@ export const _enrichmentPipeline = {
     }[];
     realityCheck: { weather: string; crowd: string; status: string };
   }> {
-    const vibes = formData.vibes || ["Foodie", "Culture", "Healing"];
+    // ⚠️ 수정금지(승인필요) 2026-06-28 사용자 SSOT = vibes 빈값 폴백 = 옛 Foodie→Shopping 교체(§19, 버튼 폐기).
+    const vibes = formData.vibes || ["Shopping", "Culture", "Healing"];
     const { daySlotsConfig, travelPace, requiredPlaceCount } = skeleton;
 
     // ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = 점수 시스템 완전 폐기

@@ -18,7 +18,35 @@
 
 ---
 
-## 🔥 2026-06-24 = fillcity 독립폴더 이동 + 진입분기120 자동 + 트리거 A+B(중복 원천차단) + §20 셀렉제거 + §19 기계가드 + 뮌헨 실증
+## 🔥 2026-06-28 = 메인앱 여정 결과화면(C) FE 대청소 + 지도 고정섹션(BTS패턴) 신규
+
+**배경**: 사장님 FE 위주 작업 지시. 운영앱(my-guide.replit.app)에서 파리 여정 실제 생성 → Chrome DevTools로 전 화면 눈으로 진단 → 디자인 SSOT(이모지 금지) 위반·한줄요약 누락·슬롯 순서 등 다수 발견. 슈퍼파워(brainstorming) + 단답 Q&A로 요구 확정 후 단계별 구현·5단계검증.
+
+**✅ 커밋 `90f0de9` (단계1·2 + 작업1·2 = 배포·시각검증 완료)**:
+- **이모지 전멸(디자인 SSOT §1-3 "이모지 절대금지", §8 Lucide만)**: TripPlannerScreen 렌더 이모지(🍽🎫💰⭐🚇🚗🏨📊💡💜⚠) + i18n 7개 언어 trip 네임스페이스 이모지 16키씩 전수제거. 깨진 이모지(러시아국기·박스) 지저분함 해소. Storage·DB 무관 코드만.
+- **"rc"(개발자약어) → "구글 리뷰"** (i18n googleReviews 7개 언어 신규). ⭐→Lucide star.
+- **"나을" 한국어 조사버그** → 받침판정 "나를/부모님을".
+- **숙소 전문가 CTA 완전삭제**(블록+스타일4+i18n 6키×7언어, §19).
+- **한줄요약 = editorial_summary 단일통일(모든 경로)**: FE·MIX(pipeline-v3·ag3)·DB-only(ag4-db-finalize) 3경로 통일. 옛 description·geminiReason·personaFitReason·selectionReasonKo·shortformKo 노출경로 완전삭제(§19). summary_ko = 숏폼 재료 = 백필경로 보전(용도 다름, 사장님 SSOT). ag3 MIX매칭 빈칸버그 수정.
+- **C-B 중복 가격배지 삭제**(요약섹션1 "1인 €N"만, 섹션2 estimatedCostBadge §19삭제).
+- **C-E 슬롯 6요소 재정렬**: ①로컬네임(메인,크게) ②한국이름(보조,작게) ③시간 ④구글리뷰 ⑤한줄요약 ⑥가격(필수,맨아래). 구글맵힌트줄 삭제(카드탭 동작 유지).
+
+**✅ 배포 후 사장님 웹 스크린샷 3문제 진단 + 수정 (미커밋)**:
+- **①이미지 안뜸** = Supabase Storage **402 exceed_egress_quota**(코드 아님). DB(Postgres)·Storage(egress) 별도서비스 = 이미지(용량큼)가 먼저 한도 초과. 사장님 결제/쿼터 영역(7/1 재시도 확인).
+- **②1인 가격배지 중복** = 현 배포본엔 이미 없음(작업1 반영). 사장님 스샷 = 옛버전/브라우저 캐시(강력새로고침으로 해결 확인).
+- **③Foodie 카테고리 잔재** = 버튼 폐기됐는데 백엔드 폴백 `['Foodie',...]`이 강제주입 → 헤더 "미식" 오염. 폴백 5곳(pipeline-v3·ag1·orchestrator·itinerary-generator·routes) **Foodie→Shopping 교체(§19)**. 죽은 주석 박제(itinerary-generator SLOT_VIBE_AFFINITY·BASE_WEIGHTS) 삭제. 식당 vibeTag·타입 Foodie는 보전(2026-06-06 의도).
+- **저장 enum 버그** = `POST /api/itineraries 500 invalid enum persona_type:"reasonable"`. itineraries.travel_style 컬럼=persona_type enum인데 req.body의 "reasonable" 그대로 들어감. routes.ts에 travelStyle도 styleToPersonaType 변환 추가(기존 매핑 재사용).
+- **C-B 3번째 vibe 누락** = `slice(0,2)` → `slice(0,3)` (선택한 vibe 전부 표시, 최대3개).
+
+**✅ 작업3+4+항목5 통합 = 지도 고정섹션 신규 (미커밋)**:
+- 설계: `docs/superpowers/specs/2026-06-28-map-accommodation-save-design.md` (단답 Q×9로 확정).
+- 신규 `client/components/itinerary-map-html.ts`(앱 WebView용 HTML) + `ItineraryMap.tsx`(웹 div+SDK / 앱 WebView+SDK 분기) = BTSPlaceMap 패턴 일반화.
+- TripPlannerScreen: 토글 InteractiveMap → **고정 ItineraryMap**(항상표시). 전 슬롯 카테고리 마커+슬롯번호, **출발 깃발 마커**(Day1숙소 ?? 도시중심), **마커클릭→슬롯 스크롤**(measureLayout), **동선 polyline 폐기**, 웹/앱 동일. API키=/api/bts/map-config 재사용.
+- 숙소 좌표 = 구글 검색(외부, 우리DB 아님) → 받아온 coords를 깃발 마커로. 동선 재최적화 = 기존 regenerateDay(순서만, 장소고정) 재사용.
+
+**🔴 다음**: ①미커밋분 5단계검증 후 커밋 → 배포 → 지도 시각검증(웹에서 뜨는지·마커클릭·깃발). ②showMap 미사용·"지도"토글탭 정리(시각검증 후). ③숙소→깃발이동 실증. ④비용/교통(C-F €875) 산정로직 연구(보류). ⑤이미지 402(사장님 Supabase).
+
+
 
 **배경**: fillCity 코드가 `.claude/skills/` 와 `scripts/`, `server/services/fill/` 에 흩어져 있어 한 덩어리로 안 보임. 같은 PSR 로 모이는 WF 인데 폴더가 갈라져 옛방식 잔존 위험(§20). + 트리거(prevent_dup)가 BEFORE INSERT 만이라 UPDATE 경로 중복은 못 막던 사각지대.
 
