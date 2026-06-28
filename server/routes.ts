@@ -118,13 +118,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ⚠️ 2026-05-23 = /api/places/:id = PSR 직접 (= storage.getPlace 본문 PSR 사용)
   // = dataSources (= placeDataSources 의존) = 삭제
-  app.get("/api/places/:id", async (req, res, next) => {
-    // ⚠️ 수정금지(승인필요) 2026-06-28 = :id 가 숫자 아니면(예 "autocomplete"/"details") next() = 뒤 구체 라우트로 넘김.
-    //   = 라우트 순서상 :id(121) 가 autocomplete(352)/details(400) 보다 먼저라 가로채던 500 버그(parseInt→NaN→DB 정수에러) 수정.
-    const id = parseInt(req.params.id, 10);
-    if (Number.isNaN(id)) return next();
+  app.get("/api/places/:id", async (req, res) => {
     try {
-      const place = await storage.getPlace(id);
+      const place = await storage.getPlace(parseInt(req.params.id));
       if (!place) {
         return res.status(404).json({ error: "Place not found" });
       }

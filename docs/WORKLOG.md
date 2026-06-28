@@ -44,11 +44,7 @@
 - TripPlannerScreen: 토글 InteractiveMap → **고정 ItineraryMap**(항상표시). 전 슬롯 카테고리 마커+슬롯번호, **출발 깃발 마커**(Day1숙소 ?? 도시중심), **마커클릭→슬롯 스크롤**(measureLayout), **동선 polyline 폐기**, 웹/앱 동일. API키=/api/bts/map-config 재사용.
 - 숙소 좌표 = 구글 검색(외부, 우리DB 아님) → 받아온 coords를 깃발 마커로. 동선 재최적화 = 기존 regenerateDay(순서만, 장소고정) 재사용.
 
-**✅ 추가 버그픽스(커밋 b442ac7 후)**: 숙소 autocomplete 500 = 라우트 순서 충돌. `/api/places/:id`(parseInt)가 `/api/places/autocomplete`보다 먼저 정의되어 "autocomplete"를 id로 받아 NaN→DB 정수에러. `:id` 핸들러에 NaN 가드 + `next()` 추가(비숫자=뒤 구체라우트로). 기존 잠복버그(2026-05-23 :id), 숙소 실사용으로 드러남. tsc 회귀0.
-
-**⚠️ 배포 주의**: GitHub 푸시 ≠ 운영 반영. b442ac7·autocomplete픽스 = **Replit republish 必**. republish 전엔 운영=옛버전(지도 토글·"Expo Go에서 확인"·autocomplete 500 그대로 보임).
-
-**🔴 다음**: ①Replit republish → 지도 시각검증(웹에서 뜨는지·Day전환·깃발·마커클릭) + 숙소 autocomplete 200 확인. ②숙소→깃발이동 실증. ③비용 €588~875(외곽 입장료) = C-F 교통/비용 산정로직 연구(보류). ④이미지 402(사장님 Supabase egress).
+**🔴 다음**: ①미커밋분 5단계검증 후 커밋 → 배포 → 지도 시각검증(웹에서 뜨는지·마커클릭·깃발). ②showMap 미사용·"지도"토글탭 정리(시각검증 후). ③숙소→깃발이동 실증. ④비용/교통(C-F €875) 산정로직 연구(보류). ⑤이미지 402(사장님 Supabase).
 
 
 
