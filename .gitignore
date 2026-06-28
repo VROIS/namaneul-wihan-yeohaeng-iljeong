@@ -90,6 +90,9 @@ _agent/
 !.claude/skills/
 .claude/commands/*.local.md
 
+# 2026-06-29 임의 커밋 차단 = 사장님 허가 토큰 (= 1회용, 절대 커밋 X)
+.commit-approved
+
 # Playwright MCP 캐시
 .playwright-mcp/
 

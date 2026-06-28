@@ -228,6 +228,8 @@ export default function TripPlannerScreen() {
   const dayLayoutsRef = useRef<Record<number, number>>({});
   const placesListOffsetRef = useRef<Record<number, number>>({});
   const [currentMapDay, setCurrentMapDay] = useState(1);
+  // 🗺️ 2026-06-28 사용자 SSOT = 슬롯(이미지外) 터치 → 지도 그 마커 포커스 (= 양방향 연동, 썸네일터치=외부구글맵 분리)
+  const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
 
   // 🎯 로그인된 사용자 정보 (birthDate 포함)
   const [currentUser, setCurrentUser] = useState<UserData | null>(null);
@@ -855,6 +857,8 @@ export default function TripPlannerScreen() {
         },
       ]}
       showsVerticalScrollIndicator={false}
+      // 🏨 2026-06-29 사용자 SSOT = iOS 키보드 떠 있어도 숙소 자동완성 드롭다운 선택 가능 (= RN 기본 'never' → 첫탭이 키보드닫기에 소비되어 선택 불가 버그). 웹과 동일 동작(입력→드롭다운→선택).
+      keyboardShouldPersistTaps="handled"
     >
       <View style={styles.header}>
         <Pressable
@@ -1518,9 +1522,12 @@ export default function TripPlannerScreen() {
               return null;
             })()}
             onMarkerPress={(id) => {
+              // 마커 클릭 → 그 슬롯으로 스크롤 + 선택 강조(양방향)
+              setSelectedSlotId(id);
               const y = slotLayoutsRef.current[id];
               if (y != null) resultScrollRef.current?.scrollTo({ y: Math.max(0, y - 80), animated: true });
             }}
+            selectedSlotId={selectedSlotId}
             height={Math.min(260, Dimensions.get("window").height * 0.3)}
           />
         </View>
@@ -1746,8 +1753,8 @@ export default function TripPlannerScreen() {
                             )}
                           </View>
 
-                          {/* 장소 카드 - 탭 시 외부 Google Maps 앱 즉시 호출 (= openPlaceInMaps) */}
-                          <Pressable
+                          {/* 🗺️ 2026-06-28 사용자 SSOT = 카드 탭 분리(충돌해소): 썸네일 터치=외부 구글맵 / 슬롯 본문 터치=지도 그 마커 포커스. 카드 전체 Pressable 폐기(§19). */}
+                          <View
                             style={[
                               styles.placeCard,
                               {
@@ -1756,12 +1763,14 @@ export default function TripPlannerScreen() {
                                 borderLeftColor: "#FF6B35",
                               },
                             ]}
-                            onPress={() => openPlaceInMaps(place)}
                           >
                             <View style={styles.placeCardContent}>
-                              {/* 썸네일 이미지 */}
+                              {/* 썸네일 이미지 = 터치 시 외부 Google Maps 앱 호출 (= openPlaceInMaps) */}
                               {/* ⚠️ 수정금지(승인필요) 2026-05-12 = BTS 1주일 SSOT = resolveImageSource (= UA + bucket + Platform 분기) */}
-                              <View style={styles.placeThumbnail}>
+                              <Pressable
+                                style={styles.placeThumbnail}
+                                onPress={() => openPlaceInMaps(place)}
+                              >
                                 {place.image ? (
                                   <Image
                                     source={resolveImageSource(place.image, "card")}
@@ -1798,10 +1807,14 @@ export default function TripPlannerScreen() {
                                     })()}
                                   </View>
                                 )}
-                              </View>
+                              </Pressable>
 
-                              {/* ⚠️ 수정금지(승인필요) 2026-06-24 사용자 SSOT = 슬롯 6요소 + 순서 고정 = ①로컬네임(메인) ②한국이름(보조) ③시간 ④구글리뷰 ⑤한줄요약(editorial_summary, 차별화) ⑥가격(필수). 그외 노출·구글맵힌트줄 완전삭제(§19). 카드 탭 = 구글맵 열기 동작 유지. */}
-                              <View style={styles.placeInfo}>
+                              {/* ⚠️ 수정금지(승인필요) 2026-06-24 사용자 SSOT = 슬롯 6요소 + 순서 고정 = ①로컬네임(메인) ②한국이름(보조) ③시간 ④구글리뷰 ⑤한줄요약(editorial_summary, 차별화) ⑥가격(필수). 그외 노출·구글맵힌트줄 완전삭제(§19). */}
+                              {/* 🗺️ 2026-06-28 = 슬롯 본문 터치 = 지도 그 마커 포커스(선택) = 양방향 연동. (썸네일 터치만 외부 구글맵) */}
+                              <Pressable
+                                style={styles.placeInfo}
+                                onPress={() => setSelectedSlotId(String(place.id))}
+                              >
                                 {/* ① 로컬네임 (메인 = 크게) + 식사 프리픽스 */}
                                 <View style={styles.placeHeader}>
                                   <Text
@@ -1899,9 +1912,9 @@ export default function TripPlannerScreen() {
                                           : `${place.priceEstimate || t("common.free")}`}
                                   </Text>
                                 </View>
-                              </View>
+                              </Pressable>
                             </View>
-                          </Pressable>
+                          </View>
                         </View>
 
                         {/* 🚇 이동 구간 표시 */}

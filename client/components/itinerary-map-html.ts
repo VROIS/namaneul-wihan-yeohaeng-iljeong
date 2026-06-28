@@ -58,13 +58,14 @@ body { background: #f8f7fb; font-family: -apple-system, "Segoe UI", "Malgun Goth
   let startData = null;
   const markers = {};   // id -> google.maps.Marker
   let placesById = {};
+  let selectedId = null;   // 🗺️ 2026-06-28 = 현재 선택 슬롯 id (= 슬롯 본문 터치 → focusSlot)
 
-  // 마커 SVG = 원형 + 카테고리 아이콘 + 슬롯 번호(start 면 라벨)
-  function makeIcon(cat, isStart, slot) {
+  // 마커 SVG = 원형 + 카테고리 아이콘 + 슬롯 번호(start 면 라벨). isSelected = 선택 슬롯 강조(확대).
+  function makeIcon(cat, isStart, slot, isSelected) {
     const color = COLORS[cat] || '#666';
     const path = LUCIDE[cat] || '<circle cx="12" cy="12" r="6"/>';
-    const size = isStart ? 50 : 40;
-    const iconSize = isStart ? 26 : 20;
+    const size = isStart ? 50 : (isSelected ? 54 : 40);
+    const iconSize = isStart ? 26 : (isSelected ? 28 : 20);
     const off = (size - iconSize) / 2;
     const sc = iconSize / 24;
     // 슬롯 번호 = 우상단 작은 흰 배지 (start 는 번호 없음)
@@ -101,7 +102,7 @@ body { background: #f8f7fb; font-family: -apple-system, "Segoe UI", "Malgun Goth
     startMarker = new google.maps.Marker({
       position: { lat: Number(startData.lat), lng: Number(startData.lng) },
       map,
-      icon: makeIcon('start', true, null),
+      icon: makeIcon('start', true, null, false),
       title: startData.label || '출발',
       zIndex: 999,
     });
@@ -131,13 +132,28 @@ body { background: #f8f7fb; font-family: -apple-system, "Segoe UI", "Malgun Goth
       const m = new google.maps.Marker({
         position: { lat: Number(p.lat), lng: Number(p.lng) },
         map,
-        icon: makeIcon(p.seedCategory || 'attraction', false, p.slot),
+        icon: makeIcon(p.seedCategory || 'attraction', false, p.slot, p.id === selectedId),
         title: p.name || '',
       });
       m.addListener('click', (function(pid) { return function() { postRN({ type: 'marker', id: pid }); }; })(p.id));
       markers[p.id] = m;
     }
     fitBounds();
+  };
+
+  // 🗺️ 2026-06-28 = 슬롯 본문 터치 → 그 마커 포커스(panTo+확대+강조) = RN injectJavaScript 호출. id=null 이면 선택 해제.
+  window.focusSlot = function(id) {
+    // 이전 선택 = 기본 아이콘 복원
+    if (selectedId && selectedId !== id && markers[selectedId]) {
+      const prev = placesById[selectedId];
+      if (prev) markers[selectedId].setIcon(makeIcon(prev.seedCategory || 'attraction', false, prev.slot, false));
+    }
+    selectedId = id;
+    if (!id || !markers[id]) return;
+    const cur = placesById[id];
+    if (cur) markers[id].setIcon(makeIcon(cur.seedCategory || 'attraction', false, cur.slot, true));
+    map.panTo(markers[id].getPosition());
+    if (map.getZoom() < 14) map.setZoom(15);
   };
 
   window.initItinMap = function() {

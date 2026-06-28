@@ -118,9 +118,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ⚠️ 2026-05-23 = /api/places/:id = PSR 직접 (= storage.getPlace 본문 PSR 사용)
   // = dataSources (= placeDataSources 의존) = 삭제
-  app.get("/api/places/:id", async (req, res) => {
+  app.get("/api/places/:id", async (req, res, next) => {
+    // ⚠️ 2026-06-28 = :id 가 정수 아니면(예 "autocomplete"/"details") 다음 라우트로 위임 (= NaN→getPlace(NaN)→DB 22P02 500 버그 차단).
+    //   원인 = 이 라우트가 /api/places/autocomplete·details 보다 먼저 정의 = Express 가 "autocomplete"를 :id 로 선매칭.
+    const id = parseInt(req.params.id);
+    if (Number.isNaN(id)) return next();
     try {
-      const place = await storage.getPlace(parseInt(req.params.id));
+      const place = await storage.getPlace(id);
       if (!place) {
         return res.status(404).json({ error: "Place not found" });
       }

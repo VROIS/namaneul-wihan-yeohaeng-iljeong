@@ -16,6 +16,8 @@ type Props = {
   places: ItinMapPlace[];
   start: ItinMapStart | null;
   onMarkerPress: (id: string) => void;
+  // 🗺️ 2026-06-28 = 슬롯 본문 터치 → 그 마커 포커스(panTo+확대+강조) = 양방향 연동
+  selectedSlotId?: string | null;
   height?: number;
   tint?: string;
 };
@@ -71,11 +73,12 @@ const LUCIDE: Record<string, string> = {
   culture: SSOT_LUCIDE.heritage,
 };
 
-function makeWebIcon(google: any, cat: string, isStart: boolean, slot: number | null) {
+function makeWebIcon(google: any, cat: string, isStart: boolean, slot: number | null, isSelected = false) {
   const color = COLORS[cat] || "#666";
   const path = LUCIDE[cat] || '<circle cx="12" cy="12" r="6"/>';
-  const size = isStart ? 50 : 40;
-  const iconSize = isStart ? 26 : 20;
+  // 🗺️ 2026-06-28 = 선택된 슬롯 마커 = 크게(확대 강조)
+  const size = isStart ? 50 : isSelected ? 54 : 40;
+  const iconSize = isStart ? 26 : isSelected ? 28 : 20;
   const off = (size - iconSize) / 2;
   const sc = iconSize / 24;
   let badge = "";
@@ -100,11 +103,15 @@ function makeWebIcon(google: any, cat: string, isStart: boolean, slot: number | 
 // ============================================================
 // Web 분기 = 직접 div + Google Maps SDK
 // ============================================================
-function ItineraryMapWeb({ places, start, onMarkerPress, height = 240, tint = "#2563eb", apiKey }: Props & { apiKey: string }) {
+function ItineraryMapWeb({ places, start, onMarkerPress, selectedSlotId, height = 240, tint = "#2563eb", apiKey }: Props & { apiKey: string }) {
   const mapDivRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
   const startMarkerRef = useRef<any>(null);
   const markersRef = useRef<Record<string, any>>({});
+  // 🗺️ 2026-06-28 = 이전 선택 마커 id (= 선택 해제 시 기본 아이콘 복원용)
+  const prevSelectedRef = useRef<string | null>(null);
+  // 마커별 메타(cat·slot) 보관 = 선택/해제 시 makeWebIcon 재계산 (= 마커 재생성 없이 setIcon)
+  const markerMetaRef = useRef<Record<string, { cat: string; slot: number | null }>>({});
   const [mapReady, setMapReady] = useState(false);
 
   useEffect(() => {
@@ -153,16 +160,19 @@ function ItineraryMapWeb({ places, start, onMarkerPress, height = 240, tint = "#
       markersRef.current[id]?.setMap(null);
       delete markersRef.current[id];
     }
+    markerMetaRef.current = {};
     for (const p of places) {
       if (p.lat == null || p.lng == null) continue;
+      const cat = p.seedCategory || "attraction";
       const m = new google.maps.Marker({
         position: { lat: Number(p.lat), lng: Number(p.lng) },
         map: mapRef.current,
-        icon: makeWebIcon(google, p.seedCategory || "attraction", false, p.slot),
+        icon: makeWebIcon(google, cat, false, p.slot),
         title: p.name || "",
       });
       m.addListener("click", () => onMarkerPress(p.id));
       markersRef.current[p.id] = m;
+      markerMetaRef.current[p.id] = { cat, slot: p.slot };
     }
 
     // fitBounds
@@ -173,6 +183,28 @@ function ItineraryMapWeb({ places, start, onMarkerPress, height = 240, tint = "#
     if (count === 1) { mapRef.current.setCenter(b.getCenter()); mapRef.current.setZoom(13); }
     else if (count > 1) { mapRef.current.fitBounds(b, { top: 50, right: 50, bottom: 50, left: 50 }); }
   }, [mapReady, places, start, onMarkerPress]);
+
+  // 🗺️ 2026-06-28 = 선택 슬롯 강조 전담(마커 재생성 분리 = 깜빡임 방지): 이전선택 복원 → 새선택 panTo+확대+setIcon
+  useEffect(() => {
+    if (!mapReady || !mapRef.current) return;
+    const google = (window as any).google;
+    if (!google) return;
+    // 이전 선택 마커 = 기본 아이콘 복원
+    const prevId = prevSelectedRef.current;
+    if (prevId && prevId !== selectedSlotId && markersRef.current[prevId]) {
+      const meta = markerMetaRef.current[prevId];
+      if (meta) markersRef.current[prevId].setIcon(makeWebIcon(google, meta.cat, false, meta.slot, false));
+    }
+    // 새 선택 마커 = 강조 아이콘 + panTo + 확대
+    if (selectedSlotId && markersRef.current[selectedSlotId]) {
+      const meta = markerMetaRef.current[selectedSlotId];
+      const m = markersRef.current[selectedSlotId];
+      if (meta) m.setIcon(makeWebIcon(google, meta.cat, false, meta.slot, true));
+      mapRef.current.panTo(m.getPosition());
+      if (mapRef.current.getZoom() < 14) mapRef.current.setZoom(15);
+    }
+    prevSelectedRef.current = selectedSlotId ?? null;
+  }, [mapReady, selectedSlotId]);
 
   return (
     <View style={[styles.container, { height }]}>
@@ -189,7 +221,7 @@ function ItineraryMapWeb({ places, start, onMarkerPress, height = 240, tint = "#
 // ============================================================
 // Native 분기 = react-native-webview
 // ============================================================
-function ItineraryMapNative({ places, start, onMarkerPress, height = 240, tint = "#2563eb", apiKey }: Props & { apiKey: string }) {
+function ItineraryMapNative({ places, start, onMarkerPress, selectedSlotId, height = 240, tint = "#2563eb", apiKey }: Props & { apiKey: string }) {
   const { WebView } = require("react-native-webview") as typeof import("react-native-webview");
   const webRef = useRef<any>(null);
   const [mapReady, setMapReady] = useState(false);
@@ -202,6 +234,14 @@ function ItineraryMapNative({ places, start, onMarkerPress, height = 240, tint =
       `window.syncItinerary(${JSON.stringify(payload)}); true;`,
     );
   }, [mapReady, places, start]);
+
+  // 🗺️ 2026-06-28 = 슬롯 본문 터치 → 그 마커 포커스(panTo+확대+강조) = WebView window.focusSlot 호출
+  useEffect(() => {
+    if (!mapReady) return;
+    webRef.current?.injectJavaScript(
+      `window.focusSlot(${JSON.stringify(selectedSlotId ?? null)}); true;`,
+    );
+  }, [mapReady, selectedSlotId]);
 
   function onMessage(e: any) {
     try {
