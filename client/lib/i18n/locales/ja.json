@@ -110,7 +110,7 @@
     "crisisConfirm": "OK、作成する",
     "reoptimizing": "宿泊先に基づいてルートを再最適化中...",
     "reoptimizeFailed": "ルートの再最適化に失敗しました。宿泊先情報は保存されました。",
-    "accommodationSet": "ホテル",
+    "accommodationSet": "宿泊先を変更",
     "accommodationSetup": "ホテルを設定",
     "departure": "出発",
     "departureCityCenter": "{{destination}}市内中心",

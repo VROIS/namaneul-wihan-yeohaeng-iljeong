@@ -67,6 +67,14 @@
 - ⚠️ 배포 전 미입증 = 코드논리·검증까지. 실작동(prefill·도시제한·숙소고정·깃발)은 배포 후 운영 실증 필요(사장님 "배포전 입증못하면 소설" 지적).
 - 메모리 [[feedback_use_google_widget_not_custom_autocomplete]]·[[reference_google_places_new_quota_pricing]]·[[feedback_inspect_prod_thoroughly_not_lazy]] 신규.
 
+**✅ 운영 실증 검수(Chrome DevTools 전수, 사장님 "꼼꼼히") + 사장님 추가지적 4건 수정**:
+- 실증 = 배포본(번들 cityPrefix有·locationRestriction無) / 입력칸 "Paris " 자동 prefill 떴음 / "Paris Novotel" → 전부 파리 노보텔만(전세계 차단) / API 200·429 0 / 선택→GetPlace 200 / 일정생성 후 깃발·출발바·숙소버튼 전Day "Novotel Paris..." 고정 = A단계 작동. (네트워크·콘솔·스냅샷 전수, 단편신호 단정 안 함)
+- **#1·#2** = 숙소 버튼 설정됨 라벨 "숙소/Hotel"(어디 숙소인지 불명) → **"숙소 변경/Change Hotel"** 7언어(ko·en·ja·fr·zh·es·de, accommodationSet). Day별 동일키 자동 통일. 출발바 숙소명 표시는 현행 유지(정상).
+- **#3** = 아이폰 웹 첫 로드 시 구글위젯·지도섹션 안 뜨고 무한루프(새로고침하면 정상, BTS 지도는 항상 정상). 원인규명(2에이전트 일치) = 첫로드 시 서버 응답 준비 전 map-config fetch 일시실패(transient) → 옛 catch가 setApiKey 안 함 → apiKey 영구 null → 무한 ActivityIndicator. BTS는 부모가 미리 키 fetch+prop주입이라 안 걸림. 수정 = ItineraryMap·PlaceAutocompleteWidget 둘 다 map-config fetch에 **재시도(backoff [0,800,1600,3200,5000]ms)** = 자동 복구. 서버 bts-routes.ts(⚠️수정금지 보호)는 미변경, 클라 재시도만으로 해소.
+- **#4** = 위젯이 호텔만 검색(주소·에어비앤비 주소 안 나옴). 원인(공식문서 리서치) = includedPrimaryTypes:['lodging']=호텔만. 수정 = **미지정**(생략) = 구글 기본 전체타입 = 호텔+주소 전부 검색. 위젯 기본값 lodging→미지정, 두 사용처 prop 제거.
+- 5단계검증 = tsc 248(회귀0) / §19 통과 / review BLOCKER0·MAJOR0(재시도 cancelled가드·폴백·i18n·두위젯동일 OK, MINOR 주석정확성 수정) / simplify 개선없음(재시도 헬퍼추출 과함=현행적정).
+- ⚠️ 실작동(첫로드 무한루프 해소·호텔+주소·버튼)은 배포 후 운영 실증 필요. #3은 아이폰 실기기 최종확인(콜드스타트 AI 재현 불가).
+
 ---
 
 ## 🔥 2026-06-28 = 메인앱 여정 결과화면(C) FE 대청소 + 지도 고정섹션(BTS패턴) 신규

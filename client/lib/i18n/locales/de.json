@@ -110,7 +110,7 @@
     "crisisConfirm": "OK, Erstellen",
     "reoptimizing": "Route wird basierend auf der Unterkunft neu optimiert...",
     "reoptimizeFailed": "Neuoptimierung fehlgeschlagen. Unterkunftsinformationen wurden gespeichert.",
-    "accommodationSet": "Hotel",
+    "accommodationSet": "Hotel ändern",
     "accommodationSetup": "Hotel festlegen",
     "departure": "Abfahrt",
     "departureCityCenter": "{{destination}} Stadtzentrum",

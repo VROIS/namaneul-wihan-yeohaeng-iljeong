@@ -110,7 +110,7 @@
     "crisisConfirm": "OK, Generate",
     "reoptimizing": "Re-optimizing route based on accommodation...",
     "reoptimizeFailed": "Route re-optimization failed. Accommodation info has been saved.",
-    "accommodationSet": "Hotel",
+    "accommodationSet": "Change Hotel",
     "accommodationSetup": "Set Hotel",
     "departure": "Departure",
     "departureCityCenter": "{{destination}} city center",

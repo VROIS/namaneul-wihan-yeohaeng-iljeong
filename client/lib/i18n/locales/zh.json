@@ -110,7 +110,7 @@
     "crisisConfirm": "确定，生成",
     "reoptimizing": "根据住宿重新优化路线...",
     "reoptimizeFailed": "路线重新优化失败。住宿信息已保存。",
-    "accommodationSet": "酒店",
+    "accommodationSet": "更改住宿",
     "accommodationSetup": "设置酒店",
     "departure": "出发",
     "departureCityCenter": "{{destination}}市中心",

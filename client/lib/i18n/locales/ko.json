@@ -110,7 +110,7 @@
     "crisisConfirm": "확인 후 생성",
     "reoptimizing": "숙소 기준 동선 재최적화 중...",
     "reoptimizeFailed": "동선 재최적화에 실패했습니다. 숙소 정보는 저장되었습니다.",
-    "accommodationSet": "숙소",
+    "accommodationSet": "숙소 변경",
     "accommodationSetup": "숙소 설정",
     "departure": "출발",
     "departureCityCenter": "{{destination}} 도심 기준",

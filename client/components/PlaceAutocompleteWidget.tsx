@@ -11,7 +11,8 @@ export type { PlaceAutoSelection };
 
 type Props = {
   onSelect: (place: PlaceAutoSelection) => void;
-  includedPrimaryTypes?: string; // 숙소 = 'lodging'
+  // 🏨 2026-06-29 = 미지정 기본 = 호텔+주소 전부 검색. (특정 타입만 원하면 지정, 숙소검색은 미지정이 정답=호텔+에어비앤비주소)
+  includedPrimaryTypes?: string;
   // 🏨 2026-06-29 사용자 SSOT(구글맵 실증) = 입력칸에 도시명 prefill(예 "Paris ") → 사용자가 뒤에 숙소명 = "Paris 노보텔" = 그 도시만. (좌표 불필요)
   cityPrefix?: string;
   placeholder?: string;
@@ -23,7 +24,7 @@ type Props = {
 // ============================================================
 // Web 분기 = div + Google Maps SDK 직접 (PlaceAutocompleteElement)
 // ============================================================
-function PlaceAutocompleteWeb({ onSelect, includedPrimaryTypes = "lodging", cityPrefix, placeholder, language = "ko", height = 56, tint = "#2563eb", apiKey }: Props & { apiKey: string }) {
+function PlaceAutocompleteWeb({ onSelect, includedPrimaryTypes, cityPrefix, placeholder, language = "ko", height = 56, tint = "#2563eb", apiKey }: Props & { apiKey: string }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const [ready, setReady] = useState(false);
   // onSelect = 최신 콜백 ref 보관 (= 부모 인라인 콜백이라도 위젯 재생성 안 함 = 입력중 초기화 방지, review MAJOR)
@@ -105,7 +106,7 @@ function PlaceAutocompleteWeb({ onSelect, includedPrimaryTypes = "lodging", city
 // ============================================================
 // Native 분기 = react-native-webview
 // ============================================================
-function PlaceAutocompleteNative({ onSelect, includedPrimaryTypes = "lodging", cityPrefix, placeholder, language = "ko", height, tint = "#2563eb", apiKey }: Props & { apiKey: string }) {
+function PlaceAutocompleteNative({ onSelect, includedPrimaryTypes, cityPrefix, placeholder, language = "ko", height, tint = "#2563eb", apiKey }: Props & { apiKey: string }) {
   const { WebView } = require("react-native-webview") as typeof import("react-native-webview");
   const [ready, setReady] = useState(false);
   // 🏨 2026-06-29 = WebView 동적높이 (= 고정 280px 빈공간 결함 해소): 위젯이 resize로 알려준 높이만큼만 차지.
@@ -159,14 +160,22 @@ export default function PlaceAutocompleteWidget(props: Props) {
 
   useEffect(() => {
     let cancelled = false;
+    // 🏨 2026-06-29 = map-config fetch 재시도(backoff). 아이폰 첫 로드 시 서버 응답 준비 전 fetch 일시 실패(transient)
+    //   → 옛: catch에서 setApiKey 안 함 → apiKey 영구 null → 무한 스피너(위젯 안뜸). 재시도로 해소(새로고침하면 정상이던 증상).
+    //   응답 = { googleMapsApiKey } (= ItineraryMap 정합).
     (async () => {
-      try {
-        const res = await apiRequest("GET", "/api/bts/map-config");
-        const data = await res.json();
-        // ⚠️ /api/bts/map-config 응답 = { googleMapsApiKey } (= ItineraryMap 정합)
-        if (!cancelled) setApiKey(data.googleMapsApiKey || null);
-      } catch (e) {
-        console.warn("[PlaceAutocompleteWidget] map-config fetch 실패:", e);
+      const delays = [0, 800, 1600, 3200, 5000];
+      for (let i = 0; i < delays.length; i++) {
+        if (cancelled) return;
+        if (delays[i] > 0) await new Promise((r) => setTimeout(r, delays[i]));
+        try {
+          const res = await apiRequest("GET", "/api/bts/map-config");
+          const data = await res.json();
+          if (cancelled) return;
+          if (data.googleMapsApiKey) { setApiKey(data.googleMapsApiKey); return; }
+        } catch (e) {
+          console.warn(`[PlaceAutocompleteWidget] map-config fetch 실패(시도 ${i + 1}/${delays.length}):`, e);
+        }
       }
     })();
     return () => { cancelled = true; };

@@ -110,7 +110,7 @@
     "crisisConfirm": "OK, Générer",
     "reoptimizing": "Réoptimisation de l'itinéraire selon l'hébergement...",
     "reoptimizeFailed": "Échec de la réoptimisation. Les informations d'hébergement ont été enregistrées.",
-    "accommodationSet": "Hôtel",
+    "accommodationSet": "Changer d'hôtel",
     "accommodationSetup": "Définir l'hôtel",
     "departure": "Départ",
     "departureCityCenter": "Centre-ville de {{destination}}",

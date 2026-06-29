@@ -12,7 +12,7 @@ export type PlaceAutoSelection = {
 
 type Opts = {
   apiKey: string;
-  // 숙소검색 = 'lodging' (호텔만).
+  // 🏨 2026-06-29 = 미지정 기본 = 호텔+주소 전부 검색(숙소검색 정답). 특정 타입만 원할 때만 지정.
   includedPrimaryTypes?: string;
   // 🏨 2026-06-29 사용자 SSOT(구글맵 실증 정답) = 위젯 입력칸에 도시명 prefill(예 "Paris ") → 사용자가 뒤에 숙소명 입력 = "Paris 노보텔" = 구글맵에 도시명 치는 것과 동일 = 그 도시만. (좌표·locationRestriction 불필요)
   cityPrefix?: string;
@@ -23,7 +23,7 @@ type Opts = {
 export const PLACE_AUTOCOMPLETE_HTML = (opts: Opts): string => {
   const {
     apiKey,
-    includedPrimaryTypes = "lodging",
+    includedPrimaryTypes = "",
     cityPrefix = "",
     placeholder = "",
     language = "ko",

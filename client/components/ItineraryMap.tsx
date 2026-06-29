@@ -284,14 +284,22 @@ export default function ItineraryMap(props: Props) {
 
   useEffect(() => {
     let cancelled = false;
+    // 🗺️ 2026-06-29 = map-config fetch 재시도(backoff). 아이폰 첫 로드 시 서버가 아직 응답 준비 전이라 fetch가
+    //   일시 실패(transient) → 옛: catch에서 setApiKey 안 함 → apiKey 영구 null → 무한 스피너. 재시도로 해소(새로고침하면 정상이던 증상).
+    //   응답 = { googleMapsApiKey } (BTSPlaceCart 정합). data.key(X) = 영구 null 버그.
     (async () => {
-      try {
-        const res = await apiRequest("GET", "/api/bts/map-config");
-        const data = await res.json();
-        // ⚠️ /api/bts/map-config 응답 = { googleMapsApiKey } (BTSPlaceCart 정합). data.key(X) = 영구 null 버그.
-        if (!cancelled) setApiKey(data.googleMapsApiKey || null);
-      } catch (e) {
-        console.warn("[ItineraryMap] map-config fetch 실패:", e);
+      const delays = [0, 800, 1600, 3200, 5000]; // 콜드스타트 503은 수 초 내 200 전환
+      for (let i = 0; i < delays.length; i++) {
+        if (cancelled) return;
+        if (delays[i] > 0) await new Promise((r) => setTimeout(r, delays[i]));
+        try {
+          const res = await apiRequest("GET", "/api/bts/map-config");
+          const data = await res.json();
+          if (cancelled) return;
+          if (data.googleMapsApiKey) { setApiKey(data.googleMapsApiKey); return; }
+        } catch (e) {
+          console.warn(`[ItineraryMap] map-config fetch 실패(시도 ${i + 1}/${delays.length}):`, e);
+        }
       }
     })();
     return () => { cancelled = true; };

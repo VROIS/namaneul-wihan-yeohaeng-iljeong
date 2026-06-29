@@ -954,9 +954,9 @@ export default function TripPlannerScreen() {
 
       {/* 🏨 숙소 (선택적) = 구글 공식 위젯(PlaceAutocompleteElement) WebView. 자체 입력창+드롭다운 폐기(§19). */}
       <View style={[styles.section, { zIndex: 15 }]}>
+        {/* 🏨 2026-06-29 = includedPrimaryTypes 미지정 = 호텔+주소+에어비앤비 주소 전부 검색(옛 lodging단독=호텔만 나오던 버그 폐기). */}
         <PlaceAutocompleteWidget
           placeholder={t("trip.accommodation")}
-          includedPrimaryTypes="lodging"
           language={i18n.language || "ko"}
           // 🏨 2026-06-29 = 도시명 prefill(구글맵 방식) = 입력 도시 "Paris " → 사용자가 뒤에 숙소명 = 그 도시만.
           cityPrefix={formData.destination ? `${formData.destination} ` : undefined}
@@ -1685,9 +1685,9 @@ export default function TripPlannerScreen() {
                     선택 → handleSetDayAccommodation(동선 재최적화 + dayAccommodations) → 출발바에 숙소명 + 지도 깃발 자동. */}
                 {hotelModalDay === currentDay?.day && (
                   <View style={{ marginHorizontal: 12, marginBottom: 8, zIndex: 50 }}>
+                    {/* 🏨 2026-06-29 = includedPrimaryTypes 미지정 = 호텔+주소 전부 검색 (옛 lodging단독=호텔만 버그 폐기). */}
                     <PlaceAutocompleteWidget
                       placeholder={t("trip.hotelSearchPlaceholder")}
-                      includedPrimaryTypes="lodging"
                       language={i18n.language || "ko"}
                       // 🏨 2026-06-29 = 도시명 prefill(구글맵 방식) = 그 도시 "Paris " → 사용자가 뒤에 숙소명 = 그 도시만.
                       cityPrefix={itinerary?.destination ? `${itinerary.destination} ` : undefined}

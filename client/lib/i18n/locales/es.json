@@ -110,7 +110,7 @@
     "crisisConfirm": "OK, Generar",
     "reoptimizing": "Reoptimizando la ruta según el alojamiento...",
     "reoptimizeFailed": "Error en la reoptimización. La información de alojamiento ha sido guardada.",
-    "accommodationSet": "Hotel",
+    "accommodationSet": "Cambiar hotel",
     "accommodationSetup": "Configurar hotel",
     "departure": "Salida",
     "departureCityCenter": "Centro de {{destination}}",
