@@ -554,6 +554,26 @@ export default function TripPlannerScreen() {
         // 🚨 위기 정보 포함
         crisisAlerts: crisisCheck.hasAlerts ? result.crisisAlerts : undefined,
       });
+
+      // 🏨 2026-06-29 사용자 SSOT = A단계: 입력화면에서 정한 숙소 = 전체 Day의 출발·도착 기점으로 고정.
+      //   formData.accommodationCoords(사용자 선택) 있으면 → 모든 Day의 dayAccommodations 초기 세팅
+      //   → "숙소 설정" 버튼·출발바·지도 깃발이 그 주소로 고정 표시 (옛: 입력숙소가 여정에 전혀 연결 안 됨).
+      //   미입력이면 안 넣음 = 백엔드가 도심 기점으로 동선 생성 + 출발바는 "도심 기준" 폴백 표시.
+      if (formData.accommodationCoords?.lat && formData.accommodationName) {
+        // 생성된 모든 Day에 입력 숙소를 그 Day 번호로 동일 적용 (= 출발·도착 기점 고정)
+        const days = result.days || [];
+        setDayAccommodations(
+          days.map((d: any): DayAccommodation => ({
+            day: d.day,
+            name: formData.accommodationName!,
+            address: formData.accommodationAddress || "",
+            coords: formData.accommodationCoords!,
+            placeId: formData.accommodationPlaceId,
+          })),
+        );
+      } else {
+        setDayAccommodations([]);
+      }
       setScreen("Result");
     } catch (error: any) {
       clearInterval(interval);
@@ -938,11 +958,8 @@ export default function TripPlannerScreen() {
           placeholder={t("trip.accommodation")}
           includedPrimaryTypes="lodging"
           language={i18n.language || "ko"}
-          locationBias={
-            formData.destinationCoords
-              ? `${formData.destinationCoords.lat},${formData.destinationCoords.lng}`
-              : undefined
-          }
+          // 🏨 2026-06-29 = 도시명 prefill(구글맵 방식) = 입력 도시 "Paris " → 사용자가 뒤에 숙소명 = 그 도시만.
+          cityPrefix={formData.destination ? `${formData.destination} ` : undefined}
           onSelect={(place: PlaceSelection) => {
             setFormData((prev) => ({
               ...prev,
@@ -1672,11 +1689,8 @@ export default function TripPlannerScreen() {
                       placeholder={t("trip.hotelSearchPlaceholder")}
                       includedPrimaryTypes="lodging"
                       language={i18n.language || "ko"}
-                      locationBias={
-                        formData.destinationCoords
-                          ? `${formData.destinationCoords.lat},${formData.destinationCoords.lng}`
-                          : undefined
-                      }
+                      // 🏨 2026-06-29 = 도시명 prefill(구글맵 방식) = 그 도시 "Paris " → 사용자가 뒤에 숙소명 = 그 도시만.
+                      cityPrefix={itinerary?.destination ? `${itinerary.destination} ` : undefined}
                       onSelect={(place: PlaceSelection) => {
                         handleSetDayAccommodation(currentDay.day, place);
                         setHotelModalDay(null);

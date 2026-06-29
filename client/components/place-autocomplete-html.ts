@@ -12,10 +12,10 @@ export type PlaceAutoSelection = {
 
 type Opts = {
   apiKey: string;
-  // 숙소검색 = 'lodging' (호텔만). 도시검색 = '(cities)' 대신 신규는 includedPrimaryTypes 미지정 + region.
+  // 숙소검색 = 'lodging' (호텔만).
   includedPrimaryTypes?: string;
-  // 도시 근처 우선 (= "lat,lng")
-  locationBias?: string;
+  // 🏨 2026-06-29 사용자 SSOT(구글맵 실증 정답) = 위젯 입력칸에 도시명 prefill(예 "Paris ") → 사용자가 뒤에 숙소명 입력 = "Paris 노보텔" = 구글맵에 도시명 치는 것과 동일 = 그 도시만. (좌표·locationRestriction 불필요)
+  cityPrefix?: string;
   placeholder?: string;
   language?: string;
 };
@@ -24,15 +24,10 @@ export const PLACE_AUTOCOMPLETE_HTML = (opts: Opts): string => {
   const {
     apiKey,
     includedPrimaryTypes = "lodging",
-    locationBias = "",
+    cityPrefix = "",
     placeholder = "",
     language = "ko",
   } = opts;
-  // locationBias "lat,lng" 파싱 (= 빈값이면 미적용)
-  const biasParts = locationBias.split(",").map((s) => s.trim());
-  const biasLat = biasParts.length === 2 ? Number(biasParts[0]) : null;
-  const biasLng = biasParts.length === 2 ? Number(biasParts[1]) : null;
-  const hasBias = biasLat != null && !Number.isNaN(biasLat) && biasLng != null && !Number.isNaN(biasLng);
 
   return `<!DOCTYPE html>
 <html lang="${language}"><head><meta charset="UTF-8">
@@ -62,6 +57,20 @@ gmp-place-autocomplete { width: 100%; display: block; }
     }
   }
 
+  // 🏨 2026-06-29 = WebView 동적높이 (= 빈공간 결함 해소): 입력칸일 땐 작게, 드롭다운 펼치면 크게.
+  //   입력 포커스 중 = 드롭다운 공간 확보(300px), 비포커스 = 입력칸 높이만큼. RN이 resize 받아 WebView 높이 조절.
+  var DROPDOWN_SPACE = 300;
+  var focused = false;
+  function reportHeight() {
+    var input = document.getElementById("wrap");
+    var base = input ? Math.ceil(input.getBoundingClientRect().height) : 56;
+    var h = focused ? Math.max(base, DROPDOWN_SPACE) : base;
+    postRN({ type: "resize", height: h });
+  }
+  // 포커스 = 드롭다운 뜰 수 있으니 공간 확보 / blur = 입력칸만 (지연 = 항목 탭 먼저 처리)
+  document.addEventListener("focusin", function() { focused = true; reportHeight(); });
+  document.addEventListener("focusout", function() { setTimeout(function() { focused = false; reportHeight(); }, 200); });
+
   // 구글 Maps JS SDK 동적 로드 (= places 라이브러리)
   (g=>{var h,a,k,p="The Google Maps JavaScript API",c="google",l="importLibrary",q="__ib__",m=document,b=window;b=b[c]||(b[c]={});var d=b.maps||(b.maps={}),r=new Set,e=new URLSearchParams,u=()=>h||(h=new Promise(async(f,n)=>{await (a=m.createElement("script"));e.set("libraries",[...r]+"");for(k in g)e.set(k.replace(/[A-Z]/g,t=>"_"+t[0].toLowerCase()),g[k]);e.set("callback",c+".maps."+q);a.src="https://maps.googleapis.com/maps/api/js?"+e;d[q]=f;a.onerror=()=>h=n(Error(p+" could not load."));a.nonce=m.querySelector("script[nonce]")?.nonce||"";m.head.append(a)}));d[l]?console.warn(p+" only loads once. Ignoring:",g):d[l]=(f,...n)=>r.add(f)&&u().then(()=>d[l](f,...n))})({key:"${apiKey}",v:"weekly",language:"${language}"});
 
@@ -72,7 +81,7 @@ gmp-place-autocomplete { width: 100%; display: block; }
         includedPrimaryTypes ? `{ includedPrimaryTypes: ["${includedPrimaryTypes}"] }` : "{}"
       });
       ${placeholder ? `try { ac.placeholder = ${JSON.stringify(placeholder)}; } catch(e) {}` : ""}
-      ${hasBias ? `ac.locationBias = { radius: 30000, center: { lat: ${biasLat}, lng: ${biasLng} } };` : ""}
+      ${cityPrefix ? `try { ac.value = ${JSON.stringify(cityPrefix)}; } catch(e) {}` : ""}
       document.getElementById("wrap").insertBefore(ac, document.getElementById("err"));
 
       // 선택 이벤트 = gmp-select (신규 위젯 표준)
@@ -93,6 +102,14 @@ gmp-place-autocomplete { width: 100%; display: block; }
           postRN({ type: "error", message: "fetchFields 실패: " + (e && e.message) });
         }
       });
+
+      // 위젯 추가 후 초기 높이 보고 + 내부 변화 감시(ResizeObserver = 위젯/드롭다운 레이아웃 변동)
+      reportHeight();
+      try {
+        var ro = new ResizeObserver(function() { reportHeight(); });
+        ro.observe(document.getElementById("wrap"));
+        ro.observe(document.body);
+      } catch (e) {}
 
       postRN({ type: "ready" });
     } catch (e) {

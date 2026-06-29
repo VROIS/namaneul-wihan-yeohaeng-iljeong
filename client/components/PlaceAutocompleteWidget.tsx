@@ -12,7 +12,8 @@ export type { PlaceAutoSelection };
 type Props = {
   onSelect: (place: PlaceAutoSelection) => void;
   includedPrimaryTypes?: string; // 숙소 = 'lodging'
-  locationBias?: string; // "lat,lng" = 도시 근처 우선
+  // 🏨 2026-06-29 사용자 SSOT(구글맵 실증) = 입력칸에 도시명 prefill(예 "Paris ") → 사용자가 뒤에 숙소명 = "Paris 노보텔" = 그 도시만. (좌표 불필요)
+  cityPrefix?: string;
   placeholder?: string;
   language?: string;
   height?: number; // WebView 높이 (= 입력 + 드롭다운 펼침 공간)
@@ -22,7 +23,7 @@ type Props = {
 // ============================================================
 // Web 분기 = div + Google Maps SDK 직접 (PlaceAutocompleteElement)
 // ============================================================
-function PlaceAutocompleteWeb({ onSelect, includedPrimaryTypes = "lodging", locationBias, placeholder, language = "ko", height = 56, tint = "#2563eb", apiKey }: Props & { apiKey: string }) {
+function PlaceAutocompleteWeb({ onSelect, includedPrimaryTypes = "lodging", cityPrefix, placeholder, language = "ko", height = 56, tint = "#2563eb", apiKey }: Props & { apiKey: string }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const [ready, setReady] = useState(false);
   // onSelect = 최신 콜백 ref 보관 (= 부모 인라인 콜백이라도 위젯 재생성 안 함 = 입력중 초기화 방지, review MAJOR)
@@ -58,10 +59,8 @@ function PlaceAutocompleteWeb({ onSelect, includedPrimaryTypes = "lodging", loca
           includedPrimaryTypes ? { includedPrimaryTypes: [includedPrimaryTypes] } : {},
         );
         try { if (placeholder) (ac as any).placeholder = placeholder; } catch {}
-        if (locationBias) {
-          const [la, ln] = locationBias.split(",").map((s) => Number(s.trim()));
-          if (!Number.isNaN(la) && !Number.isNaN(ln)) (ac as any).locationBias = { radius: 30000, center: { lat: la, lng: ln } };
-        }
+        // 🏨 도시명 prefill = "Paris " → 사용자가 뒤에 숙소명 = "Paris 노보텔" = 그 도시만 (구글맵 방식)
+        if (cityPrefix) { try { (ac as any).value = cityPrefix; } catch {} }
         (ac as any).style.width = "100%";
         host.innerHTML = "";
         host.appendChild(ac);
@@ -89,7 +88,7 @@ function PlaceAutocompleteWeb({ onSelect, includedPrimaryTypes = "lodging", loca
       .catch((e) => console.warn("[PlaceAutocompleteWidget-web] SDK 실패:", e));
 
     return () => { cancelled = true; };
-  }, [apiKey, includedPrimaryTypes, locationBias, placeholder, language]);
+  }, [apiKey, includedPrimaryTypes, cityPrefix, placeholder, language]);
 
   return (
     <View style={[styles.container, { minHeight: height }]}>
@@ -106,26 +105,31 @@ function PlaceAutocompleteWeb({ onSelect, includedPrimaryTypes = "lodging", loca
 // ============================================================
 // Native 분기 = react-native-webview
 // ============================================================
-function PlaceAutocompleteNative({ onSelect, includedPrimaryTypes = "lodging", locationBias, placeholder, language = "ko", height = 280, tint = "#2563eb", apiKey }: Props & { apiKey: string }) {
+function PlaceAutocompleteNative({ onSelect, includedPrimaryTypes = "lodging", cityPrefix, placeholder, language = "ko", height, tint = "#2563eb", apiKey }: Props & { apiKey: string }) {
   const { WebView } = require("react-native-webview") as typeof import("react-native-webview");
   const [ready, setReady] = useState(false);
+  // 🏨 2026-06-29 = WebView 동적높이 (= 고정 280px 빈공간 결함 해소): 위젯이 resize로 알려준 높이만큼만 차지.
+  const [webHeight, setWebHeight] = useState(56);
   const html = useMemo(
-    () => PLACE_AUTOCOMPLETE_HTML({ apiKey, includedPrimaryTypes, locationBias, placeholder, language }),
-    [apiKey, includedPrimaryTypes, locationBias, placeholder, language],
+    () => PLACE_AUTOCOMPLETE_HTML({ apiKey, includedPrimaryTypes, cityPrefix, placeholder, language }),
+    [apiKey, includedPrimaryTypes, cityPrefix, placeholder, language],
   );
 
   function onMessage(e: any) {
     try {
       const data = JSON.parse(e.nativeEvent.data || "{}");
       if (data.type === "ready") setReady(true);
-      else if (data.type === "select") {
+      else if (data.type === "resize" && typeof data.height === "number") {
+        // 입력칸(작게) ↔ 드롭다운 펼침(크게) = 컨텐츠만큼만 (빈공간 제거)
+        setWebHeight(Math.max(48, Math.min(340, Math.ceil(data.height))));
+      } else if (data.type === "select") {
         onSelect({ placeId: data.placeId, name: data.name, address: data.address, coords: data.coords });
       } else if (data.type === "error") console.warn("[PlaceAutocompleteWidget] WebView error:", data.message);
     } catch {}
   }
 
   return (
-    <View style={[styles.container, { height }]}>
+    <View style={[styles.container, { height: height ?? webHeight }]}>
       <WebView
         key={apiKey}
         originWhitelist={["*"]}

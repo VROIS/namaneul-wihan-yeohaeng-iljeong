@@ -57,6 +57,16 @@
 
 **✅ CLAUDE.md 제21조 신규** = FE 수정 = Chrome DevTools 직접 시각검증 필수(배포후 운영웹). iOS 앱은 AI 직접시뮬 불가(Windows) → 웹검증(AI)+iOS실기기(사장님).
 
+**✅ 숙소 위젯 ABC 단계 = 도시제한 + 입력숙소 여정연결 (사장님 실증 기반)**:
+- 운영 Chrome DevTools 꼼꼼 정독으로 진단(사장님 "대충보지말고 꼼꼼히"): 위젯 정상 작동(input·드롭다운·선택 GetPlace 200) 확인. 단 ① 전세계 뜸(파리인데 뭄바이·런던) ② 입력숙소가 여정 깃발/출발바에 미반영 ③ 429(분당 quota 10 소진=콘솔 응답본문 quota_limit_value:10 실측, per day 아님→사장님 분당 1000 상향=429 해소 실증).
+- **A** = 입력화면 숙소(formData.accommodation*) → 여정 생성 직후 dayAccommodations 전 Day 초기세팅 = 출발·도착 기점 고정 + 숙소설정버튼/출발바/깃발 표시. (옛: 입력숙소가 여정에 전혀 연결 안 됨 = 사장님 지적 로직부재 신설). 미입력=[]=백엔드 도심기점.
+- **B** = 결과화면 깃발 start = dayAccommodations.find ?? day.accommodation 폴백(기존 정합, 백엔드가 day마다 도심좌표 제공).
+- **C** = 도시 제한 = **위젯 value에 도시명 prefill**(구글맵 방식, 사장님 구글맵 직접 실증 정답). 입력 "Paris " → 사용자가 뒤에 숙소명 = "Paris 노보텔" = 그 도시만. AI가 처음 짠 locationRestriction(좌표 circle)·regionCode = 과한 설계 = 전면삭제(§19, 잔존0). cityPrefix 1개로 단순화.
+- 추가: 앱 WebView 동적높이(resize postMessage + ResizeObserver = 고정280px 빈공간 결함 해소) + 웹 onSelect useRef(재생성 방지).
+- 5단계검증 = tsc 248(회귀0) / §19 잔존0 통과 / review 적대검증 BLOCKER0·MAJOR0(인젝션 JSON.stringify 안전·day매핑·null가드·폴백 OK) / simplify 1건(죽은 day:0 제거).
+- ⚠️ 배포 전 미입증 = 코드논리·검증까지. 실작동(prefill·도시제한·숙소고정·깃발)은 배포 후 운영 실증 필요(사장님 "배포전 입증못하면 소설" 지적).
+- 메모리 [[feedback_use_google_widget_not_custom_autocomplete]]·[[reference_google_places_new_quota_pricing]]·[[feedback_inspect_prod_thoroughly_not_lazy]] 신규.
+
 ---
 
 ## 🔥 2026-06-28 = 메인앱 여정 결과화면(C) FE 대청소 + 지도 고정섹션(BTS패턴) 신규
