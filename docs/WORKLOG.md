@@ -45,6 +45,18 @@
 
 **⚠️ 미검증**: 웹/iOS 실작동 시각검증 = 미실행(로컬 서버 미기동). 사장님 결정 = 웹먼저검증→커밋→iOS실기기. RN 전용(focusSlot WebView)은 iOS 실기기에서만 최종확인 가능.
 
+**✅ Chrome DevTools 운영 시각검증(60c881f 배포본, 파리 DB-only)**: ① 마커클릭→슬롯 스크롤 작동(scrollTop 0→142) / ② 슬롯본문 터치→지도 panTo(중심 48.8624,2.2492=Bois de Boulogne, 외부맵 탭 안열림=카드분리 성공) / 지도 SDK 실렌더(gmStyleNodes 12, 마커 5). = 슬롯↔지도 양방향 웹 작동 확인.
+
+**✅ 숙소 자동완성 = 구글 공식 위젯(PlaceAutocompleteElement)로 전면 교체 (사장님 SSOT: 자체 autocomplete 과설계 폐기, 구글것 100% 활용)**:
+- 진단(Chrome DevTools 실측) = 자체 드롭다운 0개 원인 = 레거시 API가 types 복수값(lodging|establishment) 불허(lodging 단일=5개 정상). + RN ScrollView 안 드롭다운 선택 불가(keyboardShouldPersistTaps). = 자체 입력창+드롭다운+프록시+모달 전부 과설계(§16). 외부리서치 = 구글 신규 공식 PlaceAutocompleteElement(2025.3.1~ 레거시 신규불가)는 웹전용 → WebView 탑재로 웹앱 동일.
+- 신규 `client/components/place-autocomplete-html.ts`(구글 위젯 WebView HTML, gmp-select→fetchFields→postMessage) + `PlaceAutocompleteWidget.tsx`(웹 div+SDK / 앱 WebView 래퍼, API키 /api/bts/map-config). ItineraryMap 패턴.
+- 삭제(§19) = `PlaceAutocomplete.tsx`(자체 컴포넌트) + 인앱 숙소 모달(Modal 53줄) + 모달 스타일 5종. 옛것 완전삭제, 삭제사유 주석만.
+- 배선 = 입력화면 숙소칸 + Day헤더 "숙소설정" 버튼(출발바 아래 인라인 위젯 토글, hotelModalDay 재활용) → 선택 → handleSetDayAccommodation(동선 재최적화)→dayAccommodations→ItineraryMap start 깃발 자동(배선 기존, 깃발 안뜨던건 선택자체가 안됐던것).
+- 5단계검증 = tsc 248(모달삭제로 -2, 신규에러0) / §19 신규2파일 통과 / simplify(importLibrary 3중호출→init() 직접) 반영 / review 적대검증 BLOCKER0·MAJOR1(웹 useEffect onSelect 의존성→위젯재생성)→onSelectRef 보관 수정. 공식API 100%일치.
+- 메모리 [[feedback_use_google_widget_not_custom_autocomplete]] 신규.
+
+**✅ CLAUDE.md 제21조 신규** = FE 수정 = Chrome DevTools 직접 시각검증 필수(배포후 운영웹). iOS 앱은 AI 직접시뮬 불가(Windows) → 웹검증(AI)+iOS실기기(사장님).
+
 ---
 
 ## 🔥 2026-06-28 = 메인앱 여정 결과화면(C) FE 대청소 + 지도 고정섹션(BTS패턴) 신규

@@ -64,10 +64,10 @@ import {
 import { apiRequest } from "@/lib/query-client";
 // ⚠️ 2026-06-28 사용자 SSOT = 토글 InteractiveMap → 고정 ItineraryMap(BTSPlaceMap 패턴: 웹/앱 동일·마커클릭·동선라인폐기·출발깃발) 교체(§19)
 import ItineraryMap from "@/components/ItineraryMap";
-import {
-  PlaceAutocomplete,
-  PlaceSelection,
-} from "@/components/PlaceAutocomplete";
+// ⚠️ 2026-06-29 사용자 SSOT = 자체 PlaceAutocomplete(입력창+드롭다운+프록시 과설계) 폐기(§19) → 구글 공식 위젯(PlaceAutocompleteElement) WebView 100% 활용
+import PlaceAutocompleteWidget, {
+  type PlaceAutoSelection as PlaceSelection,
+} from "@/components/PlaceAutocompleteWidget";
 import { openPlaceInMaps } from "@/lib/openPlaceInMaps";
 import { isAuthenticated, getUserData, UserData } from "@/lib/auth";
 import { useTranslation } from "react-i18next";
@@ -219,7 +219,7 @@ export default function TripPlannerScreen() {
   const [dayAccommodations, setDayAccommodations] = useState<
     DayAccommodation[]
   >([]);
-  const [hotelModalDay, setHotelModalDay] = useState<number | null>(null); // 숙소 설정 모달이 열린 Day
+  const [hotelModalDay, setHotelModalDay] = useState<number | null>(null); // 🏨 숙소 설정 구글 위젯이 인라인으로 펼쳐진 Day (= 모달 폐기 §19, 토글 상태 재활용)
   const [isReoptimizing, setIsReoptimizing] = useState(false);
   // 🗺️ 2026-06-28 = 지도 마커 클릭 → 해당 슬롯 스크롤 (= ScrollView ref + 슬롯별 y좌표 기록)
   const resultScrollRef = useRef<ScrollView | null>(null);
@@ -932,23 +932,17 @@ export default function TripPlannerScreen() {
         </Text>
       </View>
 
-      {/* 🏨 숙소 (선택적 — 초행자는 나중에 결과화면에서 설정 가능) */}
+      {/* 🏨 숙소 (선택적) = 구글 공식 위젯(PlaceAutocompleteElement) WebView. 자체 입력창+드롭다운 폐기(§19). */}
       <View style={[styles.section, { zIndex: 15 }]}>
-        <PlaceAutocomplete
+        <PlaceAutocompleteWidget
           placeholder={t("trip.accommodation")}
-          value={formData.accommodationName || ""}
-          icon="home"
-          types="lodging|establishment"
-          theme={theme}
-          zIndex={15}
-          disabled={!formData.destination}
+          includedPrimaryTypes="lodging"
+          language={i18n.language || "ko"}
           locationBias={
             formData.destinationCoords
               ? `${formData.destinationCoords.lat},${formData.destinationCoords.lng}`
               : undefined
           }
-          radiusBias="30000"
-          helperText={t("trip.accommodationHint")}
           onSelect={(place: PlaceSelection) => {
             setFormData((prev) => ({
               ...prev,
@@ -958,16 +952,10 @@ export default function TripPlannerScreen() {
               accommodationPlaceId: place.placeId,
             }));
           }}
-          onClear={() => {
-            setFormData((prev) => ({
-              ...prev,
-              accommodationName: undefined,
-              accommodationAddress: undefined,
-              accommodationCoords: undefined,
-              accommodationPlaceId: undefined,
-            }));
-          }}
         />
+        <Text style={[styles.sectionSubtitle, { color: theme.textTertiary, marginTop: 4, marginLeft: 4 }]}>
+          {t("trip.accommodationHint")}
+        </Text>
       </View>
 
       <View style={styles.section}>
@@ -1676,6 +1664,27 @@ export default function TripPlannerScreen() {
                   </View>
                 </View>
 
+                {/* 🏨 2026-06-29 사용자 SSOT = 인앱 모달 폐기(§19) → "숙소 설정" 버튼 누르면 그 자리에 구글 공식 위젯 인라인 표시.
+                    선택 → handleSetDayAccommodation(동선 재최적화 + dayAccommodations) → 출발바에 숙소명 + 지도 깃발 자동. */}
+                {hotelModalDay === currentDay?.day && (
+                  <View style={{ marginHorizontal: 12, marginBottom: 8, zIndex: 50 }}>
+                    <PlaceAutocompleteWidget
+                      placeholder={t("trip.hotelSearchPlaceholder")}
+                      includedPrimaryTypes="lodging"
+                      language={i18n.language || "ko"}
+                      locationBias={
+                        formData.destinationCoords
+                          ? `${formData.destinationCoords.lat},${formData.destinationCoords.lng}`
+                          : undefined
+                      }
+                      onSelect={(place: PlaceSelection) => {
+                        handleSetDayAccommodation(currentDay.day, place);
+                        setHotelModalDay(null);
+                      }}
+                    />
+                  </View>
+                )}
+
                 <View
                   style={styles.placesList}
                   onLayout={(e) => {
@@ -2179,61 +2188,7 @@ export default function TripPlannerScreen() {
             );
           })}
         </ScrollView>
-
-        {/* 🏨 숙소 설정 모달 */}
-        <Modal
-          visible={hotelModalDay !== null}
-          animationType="slide"
-          transparent={true}
-          onRequestClose={() => setHotelModalDay(null)}
-        >
-          <View style={styles.hotelModalOverlay}>
-            <View
-              style={[
-                styles.hotelModalContent,
-                { backgroundColor: theme.backgroundDefault },
-              ]}
-            >
-              <View style={styles.hotelModalHeader}>
-                <Text style={[styles.hotelModalTitle, { color: theme.text }]}>
-                  {t("trip.hotelSetupTitle", { day: hotelModalDay })}
-                </Text>
-                <Pressable onPress={() => setHotelModalDay(null)}>
-                  <Icon name="x" size={24} color={theme.text} />
-                </Pressable>
-              </View>
-              <Text
-                style={[
-                  styles.hotelModalSubtitle,
-                  { color: theme.textSecondary },
-                ]}
-              >
-                {t("trip.hotelSetupHint")}
-              </Text>
-              <View style={{ zIndex: 100, marginTop: 16 }}>
-                <PlaceAutocomplete
-                  placeholder={t("trip.hotelSearchPlaceholder")}
-                  value=""
-                  icon="home"
-                  types="lodging|establishment"
-                  theme={theme}
-                  zIndex={100}
-                  locationBias={
-                    formData.destinationCoords
-                      ? `${formData.destinationCoords.lat},${formData.destinationCoords.lng}`
-                      : undefined
-                  }
-                  radiusBias="30000"
-                  onSelect={(place: PlaceSelection) => {
-                    if (hotelModalDay) {
-                      handleSetDayAccommodation(hotelModalDay, place);
-                    }
-                  }}
-                />
-              </View>
-            </View>
-          </View>
-        </Modal>
+        {/* 🏨 2026-06-29 = 인앱 숙소 모달 완전삭제(§19) → Day헤더 "숙소 설정" 버튼이 출발바 아래 구글 위젯 인라인 토글로 대체 */}
       </View>
     );
   };
@@ -2832,29 +2787,5 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: Fonts.semiBold,
   },
-  // 숙소 모달
-  hotelModalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    justifyContent: "flex-end",
-  },
-  hotelModalContent: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 24,
-    minHeight: 300,
-  },
-  hotelModalHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 4,
-  },
-  hotelModalTitle: {
-    fontSize: 18,
-    fontFamily: Fonts.bold,
-  },
-  hotelModalSubtitle: {
-    fontSize: 13,
-  },
+  // 🏨 숙소 모달 스타일 5종 삭제 = 인앱 모달 폐기로 미사용(§19, 2026-06-29). 구글 위젯 인라인으로 대체.
 });

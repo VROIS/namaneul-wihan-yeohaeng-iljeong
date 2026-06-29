@@ -547,3 +547,34 @@ server/services/
 ### 변경하려면?
 
 = 사장님 명시 승인 + 관련 메모리 [[feedback_unified_psr_pipeline]] · [[feedback_gemini_ts_pm_order_absolute]] · [[reference_gemini_ts_field_overwrite_order]].
+
+---
+
+## 제21조: ⚠️ FE 수정 = Chrome DevTools 직접 시각검증 필수 (2026-06-29 사장님 SSOT)
+
+> 모든 FE(프론트엔드) 수정 = 배포 후 **AI 가 Chrome DevTools 로 운영 웹에서 직접 눈으로 확인**해야 완료. 코드만 고치고 "될 것 같다" = 금지(§1·§11 정합).
+
+### ✅ 필수 절차 (= FE 수정 시 예외 없음)
+
+1. **운영본 배포 확인** = 사장님이 "운영 업뎃됨" 확인 또는 배포 완료.
+2. **Chrome DevTools 접속** = `https://my-guide.replit.app` 운영 웹 직접 열기 (= chrome-devtools MCP).
+3. **실제 재현** = 수정한 화면/기능까지 직접 조작(여정 생성·슬롯 터치·드롭다운 등). 인증 필요 시 = 프로필 "로그인 없이 둘러보기".
+4. **눈으로 검증** = 스크린샷 + 콘솔(에러) + 네트워크(API). 수정이 실제 작동하는지 확인.
+5. **결과 보고** = 작동/미작동을 스크린샷·사실로 보고. 캐시 의심 시 = 캐시 우회(§ [[feedback_prod_bundle_cache_misdiagnosis]]).
+
+### ❌ 절대 금지
+
+| # | 금지 | 이유 |
+|---|---|---|
+| 1 | 코드만 고치고 시각검증 없이 "완료" 보고 | 실제 작동 미확인 = 거짓 완료 |
+| 2 | "웹에서 되니 앱도 될 것" 추정으로 검증 생략 | §11 위반 = 추측 |
+| 3 | 운영 미배포 상태인데 테스트 강행 | 검증 대상 없음 = 날뛰기(2026-06-29 사고) |
+
+### 한계 (= 정직 명시)
+
+- **iOS/Android 앱 = AI 직접 시뮬 불가**(Windows = iOS 시뮬레이터 불가). 웹(Chrome DevTools)으로 RN 공통 JS 로직 검증 + RN 전용 동작(WebView·keyboardShouldPersistTaps 등)은 공식문서로 확정 → **iOS 실기기 최종확인 = 사장님 몫**.
+- = 웹먼저검증(AI) → 커밋 → iOS실기기(사장님) 순.
+
+### 변경하려면?
+
+= 사장님 명시 승인. = §12 RALPH LOOP 4번(스크린샷 시각검증) 강화·명문화.
