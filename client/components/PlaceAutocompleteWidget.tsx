@@ -124,7 +124,7 @@ function PlaceAutocompleteNative({ onSelect, includedPrimaryTypes, cityPrefix, p
         // 입력칸(작게) ↔ 드롭다운 펼침(크게) = 컨텐츠만큼만 (빈공간 제거)
         setWebHeight(Math.max(48, Math.min(340, Math.ceil(data.height))));
       } else if (data.type === "select") {
-        // 🎹 2026-06-30 = 선택 순간 RN 키보드 닫기(BTS 랜딩 Keyboard.dismiss 동일 API) = HTML내 blur의 2차 안전망. 삼성폰 AOS 키보드 잔존 방지.
+        // 🎹 2026-06-30 = 웹/iOS 보조 키보드 닫기(RN Keyboard.dismiss). ⚠️ 삼성폰 AOS WebView 키보드엔 안 먹힘(실기기 실증) → AOS는 호출측 위젯 재마운트(key변경)가 실제 해결. 여기 dismiss는 웹·iOS 보조망.
         Keyboard.dismiss();
         onSelect({ placeId: data.placeId, name: data.name, address: data.address, coords: data.coords });
       } else if (data.type === "error") console.warn("[PlaceAutocompleteWidget] WebView error:", data.message);

@@ -230,6 +230,9 @@ export default function TripPlannerScreen() {
   const [currentMapDay, setCurrentMapDay] = useState(1);
   // 🗺️ 2026-06-28 사용자 SSOT = 슬롯(이미지外) 터치 → 지도 그 마커 포커스 (= 양방향 연동, 썸네일터치=외부구글맵 분리)
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
+  // 🎹 2026-06-30 = 첫화면 숙소위젯 "껐다 켜기" 키 = 선택 후 이 값 증가 → 위젯 재마운트(입력창 사라졌다 재생성) → 키보드 자동 닫힘.
+  //   여정속 위젯은 선택 시 setHotelModalDay(null)로 언마운트돼 이미 키보드 닫힘(최선). 첫화면은 위젯이 상주해 안 닫혀서 이 방식으로 동일 효과. WebView 키보드는 RN Keyboard.dismiss가 못 내림(실기기 실증) → 재마운트가 정답.
+  const [inputWidgetKey, setInputWidgetKey] = useState(0);
 
   // 🎯 로그인된 사용자 정보 (birthDate 포함)
   const [currentUser, setCurrentUser] = useState<UserData | null>(null);
@@ -957,6 +960,8 @@ export default function TripPlannerScreen() {
       <View style={[styles.section, { zIndex: 15 }]}>
         {/* 🏨 2026-06-29 = includedPrimaryTypes 미지정 = 호텔+주소+에어비앤비 주소 전부 검색(옛 lodging단독=호텔만 나오던 버그 폐기). */}
         <PlaceAutocompleteWidget
+          // 🎹 2026-06-30 = 선택 후 key 변경으로 위젯 "껐다 켜기" → 입력창 재생성 → iOS·AOS 둘 다 키보드 자동 닫힘(여정속 언마운트와 동일 효과).
+          key={inputWidgetKey}
           placeholder={t("trip.accommodation")}
           language={i18n.language || "ko"}
           // 🏨 2026-06-29 = 도시명 prefill(구글맵 방식) = 입력 도시 "Paris " → 사용자가 뒤에 숙소명 = 그 도시만.
@@ -969,6 +974,8 @@ export default function TripPlannerScreen() {
               accommodationCoords: place.coords,
               accommodationPlaceId: place.placeId,
             }));
+            // 🎹 선택 완료 = 위젯 재마운트로 키보드 닫기(WebView 키보드는 RN dismiss 안 먹혀 이 방식이 정답, 실기기 실증)
+            setInputWidgetKey((k) => k + 1);
           }}
         />
         <Text style={[styles.sectionSubtitle, { color: theme.textTertiary, marginTop: 4, marginLeft: 4 }]}>
