@@ -18,6 +18,30 @@
 
 ---
 
+## 🔥 2026-07-02 = 숙소위젯 iOS 키보드 가림 근본해결(전체화면 Modal) + 첫화면 섹션 선택후 사라짐
+
+**배경**: 커밋 153fd76(첫화면 재마운트=키보드닫기) 배포 후 사장님 iOS·AOS 실기기 실증으로 새 사실 규명. AI 4회 워크플로우 조사(각 4각도 병렬+적대검증)로 근본원인 확정. 이전 AI 시도(BTS blur·dismiss·재마운트) 전부 헛다리로 판명 → §19 완전삭제.
+
+**✅ 근본원인 규명(AOS vs iOS 키보드 처리 차이)**:
+- **AOS(잘됨)** = 키보드 뜨면 화면 자체가 축소(adjustResize) → 위젯이 위로 밀려 입력창 최상단·후보 넓게. = 사장님 "AOS 2군데 다 자동닫힘·잘됨"의 진짜 원리(위젯기능 아님, 안드로이드 창축소).
+- **iOS(안됨)** = 키보드 떠도 화면 안줄고 아래만 덮음(WKWebView 설계, meta로도 흉내불가). → 위젯이 원위치(지도아래 중간 top≈506)에 그대로 → 키보드가 지도아래 여정섹션 전체 덮어 후보 가림.
+- 사장님 확정 = 후보B(Day 상단스크롤) 무의미(지도 고정260px+키보드가 그 아래 전체덮음=틈 없음). "드롭다운 위로 띄우기"=구글 closed Shadow DOM이라 불가.
+
+**✅ #1 첫화면 숙소섹션 = 선택하면 완전히 사라짐(사장님 SSOT)**:
+- 안내문 "나중에 입력해도 됨" 명시대로 = 선택 시 `!formData.accommodationName &&`로 섹션 언마운트 → 키보드 자동닫힘 + prefill "Paris" 리셋문제 소멸(여정속 언마운트와 동일). 안 고르면 파리도심 자동(이전동작).
+- §19 완전삭제 = 부작용 있던 재마운트 key방식(껐다켜기시 prefill이 선택값 덮음) + 무용한 Keyboard.dismiss(WebView 못내림 실증) + html blur = 3종 삭제.
+
+**✅ #2 iOS 여정속 위젯 = 전체화면 Modal 승격(AOS 축소효과 강제)**:
+- iOS만(`Platform.OS==='ios'`) "숙소 설정" 시 위젯을 지도 위까지 덮는 전체화면 RN Modal로 띄움 → 입력창 최상단 + 후보 키보드위 공간확보(AOS와 동일효과). AOS/웹은 인라인 그대로(안건드림).
+- §19 위반 아님 = 구글위젯(PlaceAutocompleteWidget) 그대로, "담는 그릇"만 iOS 전체화면 Modal(renderPicker iOS Modal 패턴 재사용). 자체 입력창 재발명 아님. hotelModalDay state·선택배선 재사용.
+- 파일 1개(TripPlannerScreen.tsx) + 스타일2개(hotelIosModal). 위젯부품·지도·선택로직·첫화면·AOS 무수정.
+
+**검증(5단계)**: ① tsc248(회귀0) ② §19가드PASS ③ Expo웹빌드exit0 ④ simplify(검증패턴재사용·재발명0) ⑤ review(BLOCKER0·null가드·AOS무영향).
+
+**미해결/다음**: iOS 실기기 최종확인=사장님 몫(에뮬로 키보드 재현불가, §21). 1단계(전체화면Modal)로 부족시 2단계=WebView HTML visualViewport로 후보높이 미세보정(Ralph). 커밋대기.
+
+---
+
 ## 🔥 2026-06-30 = FE 후속(#1 vibe기본값 Foodie→Shopping / #2 삼성폰 키보드 BTS패턴 이식 / #2 상단여백=구글 shadow 조정불가 확정)
 
 **배경**: 8aa95f3 배포 후 사장님 운영 지적 + AI Chrome DevTools 모바일에뮬(삼성폰 SM-S918B 위장) 직접 재현. **핵심 발견 = 안드로이드(삼성폰) FE문제를 배포후 크롬 에뮬로 AI가 직접 재현·검증 가능**(로컬X·iOS시뮬X 중간). iOS는 잘 되는편, 문제는 항상 AOS 삼성폰. = 메모리 [[reference_android_repro_chrome_emulation]] 신규.

@@ -230,9 +230,6 @@ export default function TripPlannerScreen() {
   const [currentMapDay, setCurrentMapDay] = useState(1);
   // 🗺️ 2026-06-28 사용자 SSOT = 슬롯(이미지外) 터치 → 지도 그 마커 포커스 (= 양방향 연동, 썸네일터치=외부구글맵 분리)
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
-  // 🎹 2026-06-30 = 첫화면 숙소위젯 "껐다 켜기" 키 = 선택 후 이 값 증가 → 위젯 재마운트(입력창 사라졌다 재생성) → 키보드 자동 닫힘.
-  //   여정속 위젯은 선택 시 setHotelModalDay(null)로 언마운트돼 이미 키보드 닫힘(최선). 첫화면은 위젯이 상주해 안 닫혀서 이 방식으로 동일 효과. WebView 키보드는 RN Keyboard.dismiss가 못 내림(실기기 실증) → 재마운트가 정답.
-  const [inputWidgetKey, setInputWidgetKey] = useState(0);
 
   // 🎯 로그인된 사용자 정보 (birthDate 포함)
   const [currentUser, setCurrentUser] = useState<UserData | null>(null);
@@ -957,31 +954,33 @@ export default function TripPlannerScreen() {
       </View>
 
       {/* 🏨 숙소 (선택적) = 구글 공식 위젯(PlaceAutocompleteElement) WebView. 자체 입력창+드롭다운 폐기(§19). */}
-      <View style={[styles.section, { zIndex: 15 }]}>
-        {/* 🏨 2026-06-29 = includedPrimaryTypes 미지정 = 호텔+주소+에어비앤비 주소 전부 검색(옛 lodging단독=호텔만 나오던 버그 폐기). */}
-        <PlaceAutocompleteWidget
-          // 🎹 2026-06-30 = 선택 후 key 변경으로 위젯 "껐다 켜기" → 입력창 재생성 → iOS·AOS 둘 다 키보드 자동 닫힘(여정속 언마운트와 동일 효과).
-          key={inputWidgetKey}
-          placeholder={t("trip.accommodation")}
-          language={i18n.language || "ko"}
-          // 🏨 2026-06-29 = 도시명 prefill(구글맵 방식) = 입력 도시 "Paris " → 사용자가 뒤에 숙소명 = 그 도시만.
-          cityPrefix={formData.destination ? `${formData.destination} ` : undefined}
-          onSelect={(place: PlaceSelection) => {
-            setFormData((prev) => ({
-              ...prev,
-              accommodationName: place.name,
-              accommodationAddress: place.address,
-              accommodationCoords: place.coords,
-              accommodationPlaceId: place.placeId,
-            }));
-            // 🎹 선택 완료 = 위젯 재마운트로 키보드 닫기(WebView 키보드는 RN dismiss 안 먹혀 이 방식이 정답, 실기기 실증)
-            setInputWidgetKey((k) => k + 1);
-          }}
-        />
-        <Text style={[styles.sectionSubtitle, { color: theme.textTertiary, marginTop: 4, marginLeft: 4 }]}>
-          {t("trip.accommodationHint")}
-        </Text>
-      </View>
+      {/* 🎹 2026-06-30 사용자 SSOT = 숙소 선택하면 이 섹션 완전히 사라짐(안내문 "나중에 입력해도 됨" 명시대로).
+          → 위젯 언마운트 = 키보드 자동 닫힘(iOS·AOS) + prefill "Paris" 리셋 문제 소멸 = 여정속 언마운트와 동일 방식.
+          안 고르면 = 파리 도심 자동설정(이전 동작 그대로). 나중 변경 = 여정속 "숙소 변경" 버튼. (옛 재마운트 key방식 폐기 = 껐다켜기하면 prefill이 선택값 덮는 부작용, §19) */}
+      {!formData.accommodationName && (
+        <View style={[styles.section, { zIndex: 15 }]}>
+          {/* 🏨 2026-06-29 = includedPrimaryTypes 미지정 = 호텔+주소+에어비앤비 주소 전부 검색(옛 lodging단독=호텔만 나오던 버그 폐기). */}
+          <PlaceAutocompleteWidget
+            placeholder={t("trip.accommodation")}
+            language={i18n.language || "ko"}
+            // 🏨 2026-06-29 = 도시명 prefill(구글맵 방식) = 입력 도시 "Paris " → 사용자가 뒤에 숙소명 = 그 도시만.
+            cityPrefix={formData.destination ? `${formData.destination} ` : undefined}
+            onSelect={(place: PlaceSelection) => {
+              // 선택 저장 → accommodationName 채워짐 → 위 조건으로 이 섹션 언마운트 = 키보드 자동 닫힘
+              setFormData((prev) => ({
+                ...prev,
+                accommodationName: place.name,
+                accommodationAddress: place.address,
+                accommodationCoords: place.coords,
+                accommodationPlaceId: place.placeId,
+              }));
+            }}
+          />
+          <Text style={[styles.sectionSubtitle, { color: theme.textTertiary, marginTop: 4, marginLeft: 4 }]}>
+            {t("trip.accommodationHint")}
+          </Text>
+        </View>
+      )}
 
       <View style={styles.section}>
         <View style={styles.row}>
@@ -1690,8 +1689,9 @@ export default function TripPlannerScreen() {
                 </View>
 
                 {/* 🏨 2026-06-29 사용자 SSOT = 인앱 모달 폐기(§19) → "숙소 설정" 버튼 누르면 그 자리에 구글 공식 위젯 인라인 표시.
-                    선택 → handleSetDayAccommodation(동선 재최적화 + dayAccommodations) → 출발바에 숙소명 + 지도 깃발 자동. */}
-                {hotelModalDay === currentDay?.day && (
+                    선택 → handleSetDayAccommodation(동선 재최적화 + dayAccommodations) → 출발바에 숙소명 + 지도 깃발 자동.
+                    🎹 2026-07-02 = AOS/웹만 인라인(키보드시 화면축소=adjustResize로 위젯 위로밀림=정상). iOS는 화면 안줄어 인라인이 키보드에 가림 → 아래 renderHotelWidgetIosModal 전체화면 Modal로 분기(§19: 구글위젯 그대로, 담는 그릇만 iOS 전체화면). */}
+                {Platform.OS !== "ios" && hotelModalDay === currentDay?.day && (
                   <View style={{ marginHorizontal: 12, marginBottom: 8, zIndex: 50 }}>
                     {/* 🏨 2026-06-29 = includedPrimaryTypes 미지정 = 호텔+주소 전부 검색 (옛 lodging단독=호텔만 버그 폐기). */}
                     <PlaceAutocompleteWidget
@@ -2210,7 +2210,38 @@ export default function TripPlannerScreen() {
             );
           })}
         </ScrollView>
-        {/* 🏨 2026-06-29 = 인앱 숙소 모달 완전삭제(§19) → Day헤더 "숙소 설정" 버튼이 출발바 아래 구글 위젯 인라인 토글로 대체 */}
+        {/* 🏨 2026-06-29 = 인앱 숙소 모달 완전삭제(§19) → Day헤더 "숙소 설정" 버튼이 출발바 아래 구글 위젯 인라인 토글로 대체 (AOS/웹) */}
+
+        {/* 🎹 2026-07-02 사용자 SSOT = iOS 전용 전체화면 위젯 Modal.
+            iOS는 키보드 떠도 화면 안줄어(WKWebView 설계) → 인라인 위젯(지도 아래 중간)이 키보드에 가림.
+            AOS는 화면축소(adjustResize)로 위젯이 위로밀려 정상 → iOS만 이 Modal로 위젯을 화면 최상단 전체화면에 띄워 동일효과(입력창 맨위+후보 키보드위 공간).
+            §19: 구글 위젯(PlaceAutocompleteWidget) 그대로, "담는 그릇"만 iOS 전체화면 Modal (renderPicker iOS 패턴 재사용). 자체 입력창 재발명 아님. */}
+        {Platform.OS === "ios" && hotelModalDay != null && (
+          <Modal visible transparent animationType="slide" onRequestClose={() => setHotelModalDay(null)}>
+            <View style={[styles.hotelIosModal, { backgroundColor: theme.backgroundRoot, paddingTop: insets.top + Spacing.sm }]}>
+              <View style={styles.hotelIosModalHeader}>
+                <Pressable onPress={() => setHotelModalDay(null)} style={styles.headerButton}>
+                  <Icon name="x" size={24} color={theme.text} />
+                </Pressable>
+                <Text style={[styles.pickerTitle, { color: theme.text }]}>
+                  {t("trip.accommodation")}
+                </Text>
+                <View style={styles.headerButton} />
+              </View>
+              <View style={{ marginHorizontal: 12, marginTop: 8, zIndex: 50 }}>
+                <PlaceAutocompleteWidget
+                  placeholder={t("trip.hotelSearchPlaceholder")}
+                  language={i18n.language || "ko"}
+                  cityPrefix={itinerary?.destination ? `${itinerary.destination} ` : undefined}
+                  onSelect={(place: PlaceSelection) => {
+                    if (hotelModalDay != null) handleSetDayAccommodation(hotelModalDay, place);
+                    setHotelModalDay(null);
+                  }}
+                />
+              </View>
+            </View>
+          </Modal>
+        )}
       </View>
     );
   };
@@ -2334,6 +2365,15 @@ const styles = StyleSheet.create({
   pickerCancel: { fontSize: 16, fontFamily: Fonts.semiBold },
   pickerTitle: { fontSize: 16, fontFamily: Fonts.bold },
   pickerConfirm: { fontSize: 16, fontFamily: Fonts.bold },
+  // 🎹 2026-07-02 = iOS 숙소위젯 전체화면 Modal (입력창 최상단 = 키보드 위 후보공간 확보, AOS adjustResize 효과 강제)
+  hotelIosModal: { flex: 1 },
+  hotelIosModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: Spacing.md,
+    paddingBottom: Spacing.sm,
+  },
   webPickerModal: {
     position: "absolute",
     bottom: 0,

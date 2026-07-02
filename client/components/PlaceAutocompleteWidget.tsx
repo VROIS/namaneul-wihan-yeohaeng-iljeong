@@ -3,7 +3,7 @@
 //   웹 = div+SDK 직접 / 앱 = react-native-webview. ItineraryMap 패턴 동일. API키 = /api/bts/map-config.
 //   선택 → onSelect(name·address·coords) → 호출측이 handleSetDayAccommodation 등으로 전달 → 지도 깃발 자동.
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, StyleSheet, View, Platform, Keyboard } from "react-native";
+import { ActivityIndicator, StyleSheet, View, Platform } from "react-native";
 import { apiRequest } from "@/lib/query-client";
 import { PLACE_AUTOCOMPLETE_HTML, type PlaceAutoSelection } from "./place-autocomplete-html";
 
@@ -124,8 +124,7 @@ function PlaceAutocompleteNative({ onSelect, includedPrimaryTypes, cityPrefix, p
         // 입력칸(작게) ↔ 드롭다운 펼침(크게) = 컨텐츠만큼만 (빈공간 제거)
         setWebHeight(Math.max(48, Math.min(340, Math.ceil(data.height))));
       } else if (data.type === "select") {
-        // 🎹 2026-06-30 = 웹/iOS 보조 키보드 닫기(RN Keyboard.dismiss). ⚠️ 삼성폰 AOS WebView 키보드엔 안 먹힘(실기기 실증) → AOS는 호출측 위젯 재마운트(key변경)가 실제 해결. 여기 dismiss는 웹·iOS 보조망.
-        Keyboard.dismiss();
+        // 선택 → 호출측이 이 위젯을 언마운트(첫화면=섹션숨김 / 여정속=setHotelModalDay null) = 입력창 사라져 키보드 자동 닫힘(iOS·AOS). RN Keyboard.dismiss는 WebView 키보드 못 내려 무용(실기기 실증)이라 제거(§19).
         onSelect({ placeId: data.placeId, name: data.name, address: data.address, coords: data.coords });
       } else if (data.type === "error") console.warn("[PlaceAutocompleteWidget] WebView error:", data.message);
     } catch {}

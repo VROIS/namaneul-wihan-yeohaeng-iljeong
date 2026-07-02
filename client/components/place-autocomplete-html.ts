@@ -86,9 +86,7 @@ gmp-place-autocomplete { width: 100%; display: block; }
 
       // 선택 이벤트 = gmp-select (신규 위젯 표준)
       ac.addEventListener("gmp-select", async function(ev) {
-        // 🎹 2026-06-30 = 선택(입력 완성) 순간 키보드 자동 닫기 = BTS 랜딩 패턴(생년월일 8자리 완성 시 Keyboard.dismiss) 이식.
-        //   삼성폰 AOS = '이동'버튼만 있어 안 닫힘 → 웹 표준 blur로 강제 닫기(iOS done버튼 없이도). RN쪽 Keyboard.dismiss가 2차 안전망.
-        try { if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); } catch (e) {}
+        // 선택 → RN 호출측이 이 WebView(위젯)를 언마운트 = 입력창 사라져 키보드 자동 닫힘. (옛 blur 강제닫기 폐기 = 언마운트가 처리 = §19)
         try {
           const pred = ev.placePrediction;
           const place = pred.toPlace();
