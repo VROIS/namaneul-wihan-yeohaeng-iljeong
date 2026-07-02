@@ -3,7 +3,7 @@
 //   웹 = div+SDK 직접 / 앱 = react-native-webview. ItineraryMap 패턴 동일. API키 = /api/bts/map-config.
 //   선택 → onSelect(name·address·coords) → 호출측이 handleSetDayAccommodation 등으로 전달 → 지도 깃발 자동.
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, StyleSheet, View, Platform } from "react-native";
+import { ActivityIndicator, StyleSheet, View, Platform, Keyboard } from "react-native";
 import { apiRequest } from "@/lib/query-client";
 import { PLACE_AUTOCOMPLETE_HTML, type PlaceAutoSelection } from "./place-autocomplete-html";
 
@@ -124,6 +124,8 @@ function PlaceAutocompleteNative({ onSelect, includedPrimaryTypes, cityPrefix, p
         // 입력칸(작게) ↔ 드롭다운 펼침(크게) = 컨텐츠만큼만 (빈공간 제거)
         setWebHeight(Math.max(48, Math.min(340, Math.ceil(data.height))));
       } else if (data.type === "select") {
+        // 🎹 2026-06-30 = 선택 순간 RN 키보드 닫기(BTS 랜딩 Keyboard.dismiss 동일 API) = HTML내 blur의 2차 안전망. 삼성폰 AOS 키보드 잔존 방지.
+        Keyboard.dismiss();
         onSelect({ placeId: data.placeId, name: data.name, address: data.address, coords: data.coords });
       } else if (data.type === "error") console.warn("[PlaceAutocompleteWidget] WebView error:", data.message);
     } catch {}

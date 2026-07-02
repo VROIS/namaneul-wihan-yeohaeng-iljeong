@@ -18,6 +18,33 @@
 
 ---
 
+## 🔥 2026-06-30 = FE 후속(#1 vibe기본값 Foodie→Shopping / #2 삼성폰 키보드 BTS패턴 이식 / #2 상단여백=구글 shadow 조정불가 확정)
+
+**배경**: 8aa95f3 배포 후 사장님 운영 지적 + AI Chrome DevTools 모바일에뮬(삼성폰 SM-S918B 위장) 직접 재현. **핵심 발견 = 안드로이드(삼성폰) FE문제를 배포후 크롬 에뮬로 AI가 직접 재현·검증 가능**(로컬X·iOS시뮬X 중간). iOS는 잘 되는편, 문제는 항상 AOS 삼성폰. = 메모리 [[reference_android_repro_chrome_emulation]] 신규.
+
+**✅ #1 = 헤더 "& Foodie/미식" 기본값 고정 버그 수정**:
+- 증상(PC·모바일 공통) = vibe 2개+ 골라도 헤더에 "& Foodie" 계속 나옴.
+- 원인규명(코드추적) = [`TripPlannerScreen.tsx:248`] 초기값 `vibes: ["Healing", "Foodie"]`에 Foodie 박힘. Foodie=버튼 폐기됨(즐길거리=Attraction 대체, 2026-06-06)→`toggleVibe`로 끌 방법 없음→유령값이 vibes배열에 영구잔존→백엔드 vibeWeights→헤더 오염. = §19 미완(백엔드 폴백 5곳은 Foodie→Shopping 고쳤으나 FE 초기값만 누락, WORKLOG:96).
+- 수정 = `["Healing", "Foodie"]` → **`["Healing", "Shopping"]`**(사장님 정정 SSOT = Foodie자리 Shopping대체·Healing은 원래값 유지). §19 완전삭제. 백엔드 폴백 5곳과 정합.
+
+**✅ #2 키보드 = 삼성폰 AOS 선택후 키보드 잔존 → BTS 랜딩 검증패턴 이식**:
+- 증상 = iOS는 키보드 'done'버튼으로 닫힘 / 삼성폰 AOS는 '이동'버튼뿐 → 선택후 키보드 안 닫혀 다음 섹션 가림. (웹 크롬 에뮬 재현 = 선택시 정상 닫힘 → 앱 WebView 전용 문제 확정. react-native-webview 안드로이드 blur 미인식 알려진 이슈.)
+- 사장님 지목 = "가장 이상적 = BTS 미니앱 인트로 생년월일 입력후 자동 키보드 닫힘 구조". = 검증된 구현 재사용(재발명 금지).
+- BTS 원리 확인 = [`BTSLandingScreen.tsx:157-159`] 생년월일 8자리 완성 시 `Keyboard.dismiss()`. 우리 케이스 "완성"=장소선택(gmp-select).
+- 수정(2중) = ① [`place-autocomplete-html.ts`] gmp-select 콜백 맨앞 `document.activeElement.blur()`(웹표준 키보드 닫기) + ② [`PlaceAutocompleteWidget.tsx`] select 메시지 수신 시 `Keyboard.dismiss()`(BTS 동일 API=2차 안전망, import 추가).
+- ⚠️ 삼성폰 실기기 최종확인 = 사장님 몫(에뮬로 실제 AOS 소프트키보드 재현 불가, §21 한계).
+
+**❌ #2 상단여백(오버레이 안 위젯이 top:0 붙음) = 구글 shadow DOM = 조정 불가(정직 결론)**:
+- 사장님 추정 = "오버레이 페이지 안 구성요소 설정으로 여백 가능할듯".
+- DOM 직접 측정 = 오버레이 `div top:0 h:800 padding:0 margin:0`, **내부 입력칸·후보=closed shadow DOM**(children 비어보임·input 접근불가) = 우리 CSS/JS로 top·padding **원천 조정 불가**. 공식문서도 이 오버레이 제어수단 미제공.
+- = 구글맵·에어비앤비 등 모든 앱이 쓰는 구글 위젯 모바일 표준 전체화면 오버레이. 억지 조정=위젯 버리고 자체구현(§19 폐기) 회귀. → **A안(그대로=업계표준) 확정**.
+
+**검증(5단계)**: ① tsc 248(베이스라인 동일·stash대조 회귀0) ② §19 가드 3파일 PASS ③ Expo 웹 빌드 성공(exit0·Exported dist·번들 index-a05eef58) ④ simplify(외과적 8줄·재발명0) ⑤ review(BLOCKER0·null가드·await전 blur순서 정확). diff=8+/2-.
+
+**미해결/다음**: 배포후 운영 실증(#1 헤더 미식 사라짐) + 삼성폰 실기기(#2 키보드). 커밋대기.
+
+---
+
 ## 🔥 2026-06-29 = 슬롯↔지도 양방향 연동 + 숙소 드롭다운(iOS) + Replit 동기화 + 임의커밋 차단장치
 
 **배경**: 사장님 SSOT = 지도 인터랙티브 충돌(슬롯 카드 전체 터치 → 외부 구글맵 = 마커연동과 충돌). + iOS 앱에서 숙소 자동완성 드롭다운 안 뜸. + Replit(원격)에 iOS 스크롤수정 커밋 존재 → 가져와 동기화.

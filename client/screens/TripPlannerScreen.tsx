@@ -245,7 +245,8 @@ export default function TripPlannerScreen() {
     startTime: "09:00",
     endDate: formatDate(new Date(Date.now() + 2 * 24 * 60 * 60 * 1000)),
     endTime: "21:00",
-    vibes: ["Healing", "Foodie"],
+    // 🎯 2026-06-30 = 초기 기본값 Foodie→Shopping 대체(§19, 사장님 SSOT). Foodie=버튼 폐기됨→toggleVibe로 끌 방법 없음→유령값이 vibes배열에 영구잔존→헤더 "& 미식" 오염 버그. Healing은 원래값 유지, Foodie자리를 실재버튼 Shopping이 대체. (백엔드 폴백 5곳도 동일히 Foodie→Shopping, WORKLOG:96 정합)
+    vibes: ["Healing", "Shopping"],
     travelStyle: "Reasonable", // 기본값
     travelPace: "Relaxed",
     mobilityStyle: "WalkMore",
