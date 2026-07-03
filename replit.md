@@ -33,6 +33,14 @@ TRIPIS (TRIP + JARVIS) is a React Native/Expo travel application with an Express
 - `REPLIT_EXPO_DEV_DOMAIN` 환경변수에서 확인 가능 (Replit이 자동 제공)
 - Expo Go QR 코드: `exp://828b2285-99c5-4cc9-9bcd-a09cdff531bc-00-kzvu1v5xhevl.expo.sisko.replit.dev:8081`
 
+## 자동 빌드/재시작 (Post-Merge Automation)
+- 신규 커밋이 main에 merge되면 `scripts/post-merge.sh`가 **플랫폼에 의해 자동 실행**됨 (Agent 수동 개입 불필요)
+- 스크립트 동작: `npm install` → `.local/last_built_sha`와 현재 HEAD diff → `server/`,`shared/` 변경 시 `npm run server:build` / `client/`,`assets/`,`app.json` 변경 시 `npx expo export --platform web` → 빌드된 SHA 기록
+- 이후 플랫폼의 워크플로우 reconciliation이 실행 중인 워크플로우를 자동 재시작
+- 설정: `.replit`의 `[postMerge]` 섹션 (`scriptPath = "scripts/post-merge.sh"`, `timeoutMs = 180000`)
+- **남은 수동 단계**: 실제 배포(Publish) 버튼 클릭은 플랫폼 정책상 사용자가 직접 눌러야 함 (Agent가 대신 배포 불가) — Agent는 `suggest_deploy`로 안내만 가능
+- 실패 시 Agent가 자동으로 알림을 받아 조치함 (`post_merge_setup` 스킬 참조)
+
 ## Development Workflow
 - Backend: `npx tsx server/index.ts` (starts Express server on port 5000)
 - Frontend (Expo Go): 아래 워크플로우 명령어 참조

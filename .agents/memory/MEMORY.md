@@ -1,0 +1,1 @@
+- [Post-merge auto build/restart](post-merge-automation.md) — repeated "sync new commits, build, restart" requests are now automated via the post-merge platform hook; only Publish click remains manual.
