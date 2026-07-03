@@ -33,13 +33,12 @@ TRIPIS (TRIP + JARVIS) is a React Native/Expo travel application with an Express
 - `REPLIT_EXPO_DEV_DOMAIN` 환경변수에서 확인 가능 (Replit이 자동 제공)
 - Expo Go QR 코드: `exp://828b2285-99c5-4cc9-9bcd-a09cdff531bc-00-kzvu1v5xhevl.expo.sisko.replit.dev:8081`
 
-## 자동 빌드/재시작 (Post-Merge Automation)
-- 신규 커밋이 main에 merge되면 `scripts/post-merge.sh`가 **플랫폼에 의해 자동 실행**됨 (Agent 수동 개입 불필요)
-- 스크립트 동작: `npm install` → `.local/last_built_sha`와 현재 HEAD diff → `server/`,`shared/` 변경 시 `npm run server:build` / `client/`,`assets/`,`app.json` 변경 시 `npx expo export --platform web` → 빌드된 SHA 기록
-- 이후 플랫폼의 워크플로우 reconciliation이 실행 중인 워크플로우를 자동 재시작
-- 설정: `.replit`의 `[postMerge]` 섹션 (`scriptPath = "scripts/post-merge.sh"`, `timeoutMs = 180000`)
-- **남은 수동 단계**: 실제 배포(Publish) 버튼 클릭은 플랫폼 정책상 사용자가 직접 눌러야 함 (Agent가 대신 배포 불가) — Agent는 `suggest_deploy`로 안내만 가능
-- 실패 시 Agent가 자동으로 알림을 받아 조치함 (`post_merge_setup` 스킬 참조)
+## 빌드/재시작 자동화 — 적용 범위 한정 (중요, 정정됨)
+- `scripts/post-merge.sh`와 `.replit`의 `[postMerge]` 설정(`scriptPath`, `timeoutMs`)은 준비되어 있으나, **Replit 공식 문서 기준으로 이 훅은 Replit "Task 시스템"(Agent가 격리 환경에서 작업 후 승인을 거쳐 main에 반영하는 방식)에만 자동 실행이 보장됨**
+- **이 프로젝트는 외부(Cursor 등)에서 작업 후 GitHub에 푸시 → Replit 화면의 Git 탭 Pull/Sync 버튼으로 가져오는 방식**을 사용 중이며, 이 경로에서 `[postMerge]` 훅이 자동 실행된다는 근거는 문서에 없음 (미확인)
+- Git 레벨 `post-merge` 훅 설치도 시도했으나, **main agent는 `.git` 내부(config, hooks) 수정이 플랫폼에 의해 차단됨** ("destructive git operation") → 이 경로로도 우회 불가
+- **결론**: 신규 커밋을 Pull한 뒤에는 여전히 사용자가 Agent에게 알려야 하며, 그 다음부터 diff 확인 → 조건부 빌드(`npm run server:build` / `npx expo export --platform web`) → 워크플로우 재시작(순서: Start application → Start Frontend) → 검증 → `suggest_deploy` 안내는 Agent가 빠르게 처리
+- 배포(Publish) 버튼 클릭은 항상 사용자가 직접 수행해야 함 (Agent 대행 불가)
 
 ## Development Workflow
 - Backend: `npx tsx server/index.ts` (starts Express server on port 5000)
