@@ -18,6 +18,28 @@
 
 ---
 
+## 🔥 2026-07-03 = 저장여정 프로필 노출 버그 + 재저장 덮어쓰기 + 저장버튼 실시간 동기화 + 카드 삭제
+
+**배경**: 사장님 iOS 실기기 = 저장은 되나 프로필 카드 안 뜸 + 같은 일정 저장 시 DB·카드 계속 중복 = 낭비. Chrome DevTools 아이폰12 에뮬 + DB Pooler 직접 SELECT + 운영 웹 네트워크 캡처로 실측 확정(추측 아님).
+
+**근본원인(실측)**: ①클라이언트가 `userId:"guest_browse"` 전송 → 서버가 무시하고 `admin` 고정 저장(DB에 admin 실측 다수행) → 프로필은 `guest_browse`로 조회(0행) = 불일치 = 빈 화면. ②저장버튼 = 누르면 영구 녹색잠금(옛) = "저장됨" 신호가 실제와 안 맞음. ③같은 파리 일정을 **매번 새로 생성→저장하면 새 카드** = DB 중복 8개(id 13~20 동일 여정) 실측.
+
+**✅ 구현(파일: ProfileScreen·TripPlannerScreen·routes.ts·storage.ts)**:
+- **A 프로필 노출**: 조회 user_id `guest_browse`→**`admin` 통일**(서버 저장이 admin 고정이라 일치) + `useEffect([])`→`useFocusEffect`(진입마다 refetch). = 카드 등장.
+- **B 저장버튼 동기화**: `savedItineraryId`(영구잠금) 폐기→⟳스피너(isSaving=네트워크 실시간 동기화)→✓체크(완료순간)→💾복귀(0.5초 justSaved, 타이머 cleanup). Alert '저장완료' 팝업 폐기(과설계). = "저장 시점과 연동"(사장님 SSOT).
+- **C 재저장 덮어쓰기**: `currentItineraryId`(복원/저장성공 시 세팅, 신규생성 시 null 리셋). 있으면 `PUT /api/itineraries/{id}`(전체 새덮어쓰기=셀렉 아님, updated_at NOW), 없으면 `POST`(새 행). buildItineraryData/ensureAdminUser 헬퍼 POST/PUT 공유(§16). = 한 화면 연속저장·복원후저장 = 카드 1개(실측 PUT 200, admin 행수 안늘어남).
+- **D 카드 삭제**: 카드 우측 상단 **X 항상표시**→터치 즉시 삭제(확인 없음=홈페이지 닫기처럼). 낙관적(FE 먼저 제거=레이턴시0 → DELETE 백그라운드 → 실패 시 복원). `DELETE /api/itineraries/:id`+`storage.deleteItinerary`. = 쌓인 중복 사용자 직접 정리(§ DB 비가역=AI 임의삭제 안함).
+
+**핵심원칙**: user_id admin 고정 유지(§9 프로모션)·매칭키 과설계 금지(사장님 "여정 id에 다 들어있다"=현재 id로 판별, 자동매칭 X)·삭제로 중복정리(자동 아님)·DB스키마 안건드림.
+
+**⚠️ 오판 정정(정직)**: 세션 중 "웹은 재저장 완벽"이라 단정했으나 = 틀림. id=19 하나만 보고 오판. 사장님 스크린샷(여행 17)+DB집계로 = 매번 새생성 저장이 새 카드 쌓임 = 중복 8개 실측. 사장님 지적("id 유지 안함")이 근원 = 삭제로 방향 확정.
+
+**검증(5단계 진행)**: tsc(회귀0·기존 transit/video 비교 에러는 무관 라인밀림)·§19가드 PASS·Expo웹빌드exit0. simplify/review·배포후 아이폰12 실증 진행중.
+
+**미해결/다음**: 배포후 실증(X 즉시삭제·DB삭제·중첩 Pressable stopPropagation RN 동작·재저장 PUT). 쌓인 옛중복 8개=사용자 삭제기능으로 정리. 커밋 = A·B·C는 75dc8cc 커밋됨 / D(삭제)=미커밋. cityId=1·프로필 전체재구현·2번 교통비=별도.
+
+---
+
 ## 🔥 2026-07-03 = 저장여정 복원(프로필 나의여정 카드 → 여정 생성화면 그대로 재현)
 
 **배경**: 저장(💾)→DB는 되나 프로필 "나의여정" 카드 탭 시 SavedTripDetail(요약+영상만, 지도·슬롯 없음)로 감 = 생성화면 그대로 재현 불가. DB itineraries 단일테이블 직접접속 실측(id·user_id·raw_data jsonb, 숙소 전용컬럼 없음) + 프로필 화면 코드 확인 후 §12 플랜승인. spec [2026-06-24-fe-itinerary-structure-map] 연장선.

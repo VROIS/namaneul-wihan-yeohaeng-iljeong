@@ -41,6 +41,8 @@ import {
   changeLanguageAndPersist,
 } from "@/lib/i18n";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
+// ⚠️ 2026-07-03 = 결과화면 요약헤더와 동일한 vibe 한국어 라벨 = 카드 요약 일관성(영어 노출 버그 수정). 공용 함수 재사용(재발명 금지 §16).
+import { getVibeLabel } from "@/utils/vibeCalculator";
 
 // 저장된 일정 타입
 interface SavedItinerary {
@@ -66,7 +68,8 @@ function shortDateCard(d?: string): string {
   return m ? `${m[1].slice(2)}년 ${m[2]}-${m[3]}` : d.slice(0, 10);
 }
 
-// 🗂️ 2026-07-03 = 카드 요약문장 = "가족(4명)의 모두를 위한 힐링 & 쇼핑" (결과화면 요약섹션2 위계 간결화). i18n 라벨 사용.
+// ⚠️ 2026-07-03 사장님 SSOT = 카드 요약 = 여정 결과화면 요약헤더(요약섹션2)를 그대로 재현 = 일관성.
+//   결과화면과 동일: comp(N명)의 focus을/를 위한 [vibe 한국어 최대3 &연결] 여행. getVibeLabel=한국어 라벨(영어 노출 버그 수정), 받침 조사(을/를) 동일.
 function summaryLineCard(trip: SavedItinerary, t: (k: string) => string): string {
   const companionLabels: Record<string, string> = {
     Single: t("labels.companionSingle"),
@@ -83,8 +86,13 @@ function summaryLineCard(trip: SavedItinerary, t: (k: string) => string): string
   };
   const comp = companionLabels[trip.companionType] || t("labels.companionFamily");
   const focus = focusLabels[trip.curationFocus] || t("labels.curationEveryone");
-  const vibes = (trip.vibes || []).slice(0, 2).join(" & ");
-  return `${comp}(${trip.companionCount}명)의 ${focus} · ${vibes}`;
+  const vibes =
+    (trip.vibes || []).slice(0, 3).map((v) => getVibeLabel(v as any)).join(" & ") || "힐링";
+  const lastChar = focus.charCodeAt(focus.length - 1);
+  const hasFinalConsonant =
+    lastChar >= 0xac00 && lastChar <= 0xd7a3 && (lastChar - 0xac00) % 28 !== 0;
+  const objParticle = hasFinalConsonant ? "을" : "를";
+  return `${comp}(${trip.companionCount}명)의 ${focus}${objParticle} 위한 ${vibes} 여행`;
 }
 
 export default function ProfileScreen() {
@@ -146,6 +154,19 @@ export default function ProfileScreen() {
       };
     }, []),
   );
+
+  // ⚠️ 2026-07-03 사장님 SSOT = 카드 우측 상단 X = 확인 팝업 없이 즉시 삭제(범용 홈페이지 닫기 버튼처럼). 목록에서 바로 제거(낙관적) + 서버 DELETE. 실패 시 그 항목만 복원.
+  const handleDeleteTrip = async (id: number) => {
+    const removed = savedTrips.find((t) => t.id === id); // 실패 시 되살릴 항목만 보관
+    setSavedTrips((list) => list.filter((t) => t.id !== id)); // 즉시 화면에서 제거
+    try {
+      await apiRequest("DELETE", `/api/itineraries/${id}`);
+    } catch (e) {
+      console.error("[Profile] 여정 삭제 실패:", e);
+      // 함수형 롤백 = 그 항목만 복원(연속 삭제 시 다른 삭제분 안 건드림). 이미 있으면 무시.
+      if (removed) setSavedTrips((list) => (list.some((t) => t.id === id) ? list : [...list, removed]));
+    }
+  };
 
   const handleLanguageChange = async (code: string) => {
     await changeLanguageAndPersist(code);
@@ -342,6 +363,17 @@ export default function ProfileScreen() {
                     <Icon name="film" size={12} color="#FFFFFF" />
                   </View>
                 )}
+                {/* ⚠️ 2026-07-03 사장님 SSOT = 카드 우측 상단 X = 항상 표시, 터치 시 즉시 삭제(확인 없음). 카드 탭(복원)과 분리 위해 절대위치+전파차단. */}
+                <Pressable
+                  style={styles.cardDeleteBtn}
+                  hitSlop={8}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    handleDeleteTrip(trip.id);
+                  }}
+                >
+                  <Icon name="x" size={14} color={theme.textSecondary} />
+                </Pressable>
               </Pressable>
             ))}
           </ScrollView>
@@ -775,8 +807,23 @@ const styles = StyleSheet.create({
   tripCard: {
     width: 190,
     padding: Spacing.md,
+    // ⚠️ 2026-07-03 = X 삭제버튼 절대위치 기준(우측 상단). 도시명이 X와 안 겹치게 우측 여백 확보.
+    position: "relative",
+    paddingRight: Spacing.md + 20,
     borderRadius: BorderRadius.md,
     marginRight: Spacing.md,
+  },
+  // ⚠️ 2026-07-03 사장님 SSOT = 카드 우측 상단 X = 항상 표시, 즉시 삭제. 글라스 미니멀(은은한 반투명 원). 이모지 금지 = Lucide x 아이콘.
+  cardDeleteBtn: {
+    position: "absolute",
+    top: 6,
+    right: 6,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: "rgba(120,120,128,0.12)",
+    justifyContent: "center",
+    alignItems: "center",
   },
   tripCardHeader: {
     flexDirection: "row",

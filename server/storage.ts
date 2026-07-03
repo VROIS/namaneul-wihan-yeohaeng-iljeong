@@ -43,6 +43,8 @@ export interface IStorage {
   createItinerary(itinerary: InsertItinerary): Promise<Itinerary>;
   // ⚠️ 2026-07-03 = 복원한 여정 재저장(숙소변경→동선변경) = 같은 행 덮어쓰기(여정1→여정1.1). 새 여정은 createItinerary(새 행).
   updateItinerary(id: number, data: Partial<InsertItinerary>): Promise<Itinerary | undefined>;
+  // ⚠️ 2026-07-03 사장님 SSOT = 프로필 카드 X버튼 = 불필요/중복 여정 사용자 직접 삭제(쌓임 정리). 삭제 행수 반환(0=없는 id).
+  deleteItinerary(id: number): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -183,6 +185,12 @@ export class DatabaseStorage implements IStorage {
       .set({ ...data, updatedAt: new Date() })
       .where(eq(itineraries.id, id)).returning();
     return updated || undefined;
+  }
+
+  // ⚠️ 2026-07-03 사장님 SSOT = 프로필 카드 X버튼 = 여정 삭제. 삭제된 행 반환 → 길이로 삭제수 판정(0=없는 id).
+  async deleteItinerary(id: number): Promise<number> {
+    const deleted = await db.delete(itineraries).where(eq(itineraries.id, id)).returning({ id: itineraries.id });
+    return deleted.length;
   }
 
   // ========================================

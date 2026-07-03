@@ -52,7 +52,7 @@
 
 | 코드 | 섹션 | 상태 |
 |---|---|---|
-| B-A | 헤더바(←/저장💾) | ✅ 저장버튼 3상태(save→⟳스피너→✓초록) |
+| B-A | 헤더바(←/저장💾) | ✅ 저장버튼 = ⟳스피너(저장중=네트워크 실시간 동기화)→✓초록체크(완료순간 0.5초)→💾복귀. Alert팝업 없음. 복원여정/한화면 재저장=같은 id 덮어쓰기(PUT), 신규=새 카드(POST) |
 | B-B | 요약섹션1(기간·장소·예산) | ✅ 날짜아이콘제거·연도축약("26년 07-03") |
 | B-C | 요약섹션2(요약문장) | ✅ 이모지 제거·오타 수정 |
 | B-D | 지도 고정섹션 | ✅ ItineraryMap(BTS패턴)·마커클릭↔슬롯·숙소깃발·동선라인폐기 |
@@ -88,7 +88,7 @@ TRIPIS  [BTS콘서트투어]
 [여행 N][방문 N][저장 N]  ← 통계 3칸 (레이아웃 재구현시 정리)
 ─────────────────────────
 나의 여정  ← 가로스크롤 카드
-┌──────────────┐  ← width 190, 4요소 텍스트(메인앱 폰트 통일)
+┌────────────[X]┐  ← 우측상단 X 항상표시, 터치 즉시삭제(확인없음)
 │ Paris         │  ← 1.도시 (Fonts.bold 16)
 │ 26년 07-03~07-05│  ← 2.기간 (Fonts.semiBold 12)
 │ 1인 €211      │  ← 3.예산 (Brand.primary bold 13)
@@ -100,19 +100,25 @@ TRIPIS  [BTS콘서트투어]
 여행 스타일 / 설정 (재구현시 정리)
 ```
 
-### 저장→복원 파이프라인 (✅ 2026-07-03 완료)
+### 저장→복원→재저장→삭제 파이프라인 (✅ 2026-07-03)
 ```
-결과화면 저장버튼(💾) 클릭
-  → 버튼: save → ⟳스피너(isSaving) → ✓초록(savedItineraryId)
-  → POST /api/itineraries (rawData=여정통째+숙소병합)
-  → DB itineraries 테이블 새 행 INSERT (id·user_id='admin'·raw_data jsonb)
-  → 프로필 "나의 여정"에 카드로 등장
-  → 카드 탭 → navigate("Main",{screen:"Home",params:{itineraryId}})
-  → TripPlanner GET /api/itineraries/{id} → setItinerary(rawData) → renderResult 그대로
-     + 숙소깃발(days[].accommodation) + formData(저장스칼라) 복원
+[신규 저장] 결과화면 💾 → ⟳스피너(네트워크 실시간) → ✓체크(완료순간) → 💾복귀
+  → POST /api/itineraries (userId 서버가 'admin' 고정, rawData=여정통째+숙소병합)
+  → DB 새 행 INSERT → currentItineraryId=id 기억 → 프로필 카드 등장
+
+[복원] 카드 탭 → navigate("Main",{screen:"Home",params:{itineraryId}})
+  → GET /api/itineraries/{id} → setItinerary(rawData) → renderResult 그대로
+     + 숙소깃발(days[].accommodation) + formData(스칼라) + currentItineraryId=id
+
+[재저장] 복원/저장된 화면서 💾 (숙소·동선 변경 후) 
+  → currentItineraryId 있음 → PUT /api/itineraries/{id} = 같은 행 전체 새덮어쓰기(셀렉X, updated_at NOW)
+  → 카드 안 늘어남(중복0). 신규생성(일정생성 버튼)은 currentItineraryId=null → 새 카드.
+
+[삭제] 카드 X 터치 → 즉시(확인없음) → FE 먼저 목록제거(레이턴시0) → DELETE /api/itineraries/{id} 백그라운드 → 실패 시 복원
 ```
 
-**DB itineraries (단일테이블, 직접접속 실측)**: id(PK)·user_id·city_id(=1고정 TODO)·title·start/end_date·raw_data(jsonb=여정통째)·조건컬럼들. **숙소 전용컬럼 없음** → raw_data.days[].accommodation에 저장.
+**DB itineraries (단일테이블, Pooler 직접접속 실측)**: id(PK)·user_id(='admin' 서버 강제)·city_id(=1고정 TODO)·title·start/end_date·raw_data(jsonb=여정통째)·updated_at·조건컬럼들. **숙소 전용컬럼 없음** → raw_data.days[].accommodation에 저장.
+- **중복 원인(실측)**: 옛 코드 = 저장마다 무조건 POST(새 행) = 같은 파리 일정 여러 카드 누적. 새 코드 = 현재 id 있으면 PUT 덮어쓰기 / 신규만 POST. **자동 매칭 안 함**(사장님 SSOT="여정 id에 다 들어있음"). 쌓인 옛 중복 = 사용자가 X로 직접 정리.
 
 ---
 
@@ -127,7 +133,8 @@ TRIPIS  [BTS콘서트투어]
 
 | # | 작업 | 위치 | 상태 |
 |---|---|---|---|
-| 1 | ✅ **저장여정 복원** (프로필 카드→여정화면 재현) | ProfileScreen·TripPlanner·MainTabNav | **2026-07-03 완료(커밋대기)** |
+| 1 | ✅ **저장여정 복원**(카드→여정 재현) + 프로필노출버그(admin 통일) + 저장버튼 동기화 + 재저장 덮어쓰기 | ProfileScreen·TripPlanner·MainTabNav·routes·storage | **2026-07-03 완료** (75dc8cc 커밋) |
+| 1-b | 🔶 **카드 삭제**(X 즉시삭제) = 중복 사용자 직접정리 | ProfileScreen·routes·storage | **구현완료·미커밋** = 배포후 실증(X 전파차단·즉시삭제·DB삭제) |
 | 2 | 🔴 **교통비 산정** = €2.10 고정·공식 3개 분산(§19·§20 위반) | ag4-db-finalize·transport-pricing·route-local | 요금철학 결정후 착수 |
 | 3 | 프로필 전체 레이아웃 재구현(통계·영상·스타일·설정) | ProfileScreen | 별도 |
 | 4 | cityId=1 고정 동적매핑 | routes.ts·TripPlanner | 별도 |

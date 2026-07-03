@@ -694,6 +694,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ⚠️ 2026-07-03 사장님 SSOT = 프로필 카드 X버튼 = 여정 삭제(불필요/중복 카드 정리). 없는 id면 404.
+  app.delete("/api/itineraries/:id", async (req, res) => {
+    try {
+      const id = parseInt(req.params.id);
+      const count = await storage.deleteItinerary(id);
+      if (count === 0) {
+        return res.status(404).json({ error: "Itinerary not found" });
+      }
+      console.log(`[Itinerary] Deleted: id=${id}`);
+      res.json({ deleted: true, id });
+    } catch (error: any) {
+      console.error("Error deleting itinerary:", error?.message || error);
+      res
+        .status(500)
+        .json({ error: "Failed to delete itinerary", details: error?.message });
+    }
+  });
+
   // 테스트 UI 서빙
   app.get("/test-video", (req, res) => {
     res.send(getTestVideoHtml());
