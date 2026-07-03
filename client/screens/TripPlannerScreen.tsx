@@ -92,6 +92,13 @@ function formatDate(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+// 🗓️ 2026-07-03 = 요약헤더 날짜 축약 "2026-07-03"→"26년 07-03" (연도 2자리+년, 390px 가격잘림 방지). 형식 다르면 원본 그대로.
+function shortDate(isoDate: string): string {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate || "");
+  if (!m) return isoDate || "";
+  return `${m[1].slice(2)}년 ${m[2]}-${m[3]}`;
+}
+
 function formatTime(date: Date): string {
   const hours = String(date.getHours()).padStart(2, "0");
   const minutes = String(date.getMinutes()).padStart(2, "0");
@@ -306,54 +313,65 @@ export default function TripPlannerScreen() {
     day: number,
     place: PlaceSelection,
   ) => {
-    const newAccom: DayAccommodation = {
-      day,
-      name: place.name,
-      address: place.address,
-      coords: place.coords,
-      placeId: place.placeId,
-    };
+    // 🏨 2026-07-03 사용자 SSOT = 숙소는 여행 전체 공통(A안). 변경한 Day + 그 이후 Day 전부에 적용, 이전 Day는 유지.
+    //   예: Day2에서 B호텔 변경 → Day2·Day3=B, Day1=옛숙소 유지(2일차에 숙소 옮기는 실제 동선). 첫입력 숙소는 전 Day 기본값(A단계).
+    const targetDays = (itinerary?.days || [])
+      .map((d) => d.day)
+      .filter((dNum) => dNum >= day);
 
-    // Day별 숙소 배열 업데이트
+    // Day별 숙소 배열 = 변경Day 이상(>=)은 전부 새 숙소로 교체, 이전Day는 그대로
     setDayAccommodations((prev) => {
-      const filtered = prev.filter((a) => a.day !== day);
-      return [...filtered, newAccom];
+      const kept = prev.filter((a) => a.day < day);
+      const applied: DayAccommodation[] = targetDays.map((dNum) => ({
+        day: dNum,
+        name: place.name,
+        address: place.address,
+        coords: place.coords,
+        placeId: place.placeId,
+      }));
+      return [...kept, ...applied];
     });
 
-    // 서버에 동선 재최적화 요청
+    // 서버에 동선 재최적화 요청 = 변경Day~마지막Day 각각(출발점 새숙소로 = 실시간 여정 갱신)
     if (itinerary && place.coords.lat && place.coords.lng) {
       setIsReoptimizing(true);
       try {
-        const currentDay = itinerary.days?.find((d) => d.day === day);
-        if (currentDay) {
+        for (const dNum of targetDays) {
+          const targetDay = itinerary.days?.find((d) => d.day === dNum);
+          if (!targetDay) continue;
           const response = await apiRequest(
             "POST",
             "/api/routes/regenerate-day",
             {
-              day,
+              day: dNum,
               accommodationCoords: place.coords,
-              places: currentDay.places,
+              places: targetDay.places,
               formData,
             },
           );
           const result = await response.json();
-
-          // itinerary의 해당 Day 업데이트
+          const newAccom: DayAccommodation = {
+            day: dNum,
+            name: place.name,
+            address: place.address,
+            coords: place.coords,
+            placeId: place.placeId,
+          };
+          // itinerary의 해당 Day 업데이트 (각 Day 결과 즉시 반영 = 실시간)
           setItinerary((prev) => {
             if (!prev) return prev;
-            const updatedDays = prev.days.map((d) => {
-              if (d.day === day) {
-                return {
-                  ...d,
-                  places: result.places || d.places,
-                  accommodation: newAccom,
-                  departureTransit: result.departureTransit,
-                  returnTransit: result.returnTransit,
-                  transit: (result as any).transit || (d as any).transit,
-                };
-              }
-              return d;
-            });
+            const updatedDays = prev.days.map((d) =>
+              d.day === dNum
+                ? {
+                    ...d,
+                    places: result.places || d.places,
+                    accommodation: newAccom,
+                    departureTransit: result.departureTransit,
+                    returnTransit: result.returnTransit,
+                    transit: (result as any).transit || (d as any).transit,
+                  }
+                : d,
+            );
             return { ...prev, days: updatedDays };
           });
         }
@@ -1406,9 +1424,9 @@ export default function TripPlannerScreen() {
           ]}
         >
           <View style={styles.tripSummaryItem}>
-            <Icon name="calendar" size={14} color={theme.textSecondary} />
+            {/* 🗓️ 2026-07-03 사용자 SSOT = 날짜 아이콘 제거(숫자가 곧 날짜=중복) + 연도 축약 "2026-07-03"→"26년 07-03"(390px 가격잘림 방지=반응형 공간확보) */}
             <Text style={[styles.tripSummaryText, { color: theme.text }]}>
-              {itinerary.startDate} ~ {itinerary.endDate}
+              {shortDate(itinerary.startDate)} ~ {shortDate(itinerary.endDate)}
             </Text>
           </View>
           <View style={styles.tripSummaryItem}>
