@@ -17,7 +17,8 @@ import { useMapToggle } from "@/contexts/MapToggleContext";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 export type MainTabParamList = {
-  Home: undefined;
+  // 🗂️ 2026-07-03 = itineraryId 있으면 저장여정 복원(프로필 나의여정 카드 탭 → 여정화면 그대로). 없으면 신규 생성(기존).
+  Home: { itineraryId?: number } | undefined;
   Map: undefined;
   Verify: undefined; // 검증 센터 (센터 위치)
   Profile: undefined;

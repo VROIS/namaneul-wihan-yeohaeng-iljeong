@@ -55,6 +55,36 @@ interface SavedItinerary {
   travelPace: string;
   videoStatus?: string;
   videoUrl?: string;
+  // 🗂️ 2026-07-03 = 목록 API가 SELECT * = rawData 포함(storage.getUserItineraries). 카드 4요소(도시·기간·예산·요약)용.
+  rawData?: { destination?: string; days?: Array<{ dailyCost?: { perPersonEur?: number } }> };
+}
+
+// 🗂️ 2026-07-03 = 카드 날짜 축약 "2026-07-03"/"...T..."→"26년 07-03" (메인앱 요약헤더 표기 통일). 형식 다르면 앞 10자.
+function shortDateCard(d?: string): string {
+  if (!d) return "";
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(d);
+  return m ? `${m[1].slice(2)}년 ${m[2]}-${m[3]}` : d.slice(0, 10);
+}
+
+// 🗂️ 2026-07-03 = 카드 요약문장 = "가족(4명)의 모두를 위한 힐링 & 쇼핑" (결과화면 요약섹션2 위계 간결화). i18n 라벨 사용.
+function summaryLineCard(trip: SavedItinerary, t: (k: string) => string): string {
+  const companionLabels: Record<string, string> = {
+    Single: t("labels.companionSingle"),
+    Couple: t("labels.companionCouple"),
+    Family: t("labels.companionFamily"),
+    ExtendedFamily: t("labels.companionExtended"),
+    Group: t("labels.companionGroup"),
+  };
+  const focusLabels: Record<string, string> = {
+    Kids: t("labels.curationKids"),
+    Parents: t("labels.curationParents"),
+    Everyone: t("labels.curationEveryone"),
+    Self: t("labels.curationSelf"),
+  };
+  const comp = companionLabels[trip.companionType] || t("labels.companionFamily");
+  const focus = focusLabels[trip.curationFocus] || t("labels.curationEveryone");
+  const vibes = (trip.vibes || []).slice(0, 2).join(" & ");
+  return `${comp}(${trip.companionCount}명)의 ${focus} · ${vibes}`;
 }
 
 export default function ProfileScreen() {
@@ -258,66 +288,51 @@ export default function ProfileScreen() {
                   { backgroundColor: theme.backgroundDefault },
                 ]}
                 onPress={() =>
-                  navigation.navigate("SavedTripDetail", {
-                    itineraryId: trip.id,
-                  })
+                  // 🗂️ 2026-07-03 사용자 SSOT = 나의여정 카드 탭 → 여정 생성화면(Home) 그대로 재현(SavedTripDetail 요약전용 아님).
+                  //   Main(탭)의 Home으로 itineraryId 전달 → TripPlanner가 GET으로 raw_data 불러와 renderResult 복원. (나의영상 카드는 SavedTripDetail 유지)
+                  navigation.navigate("Main", {
+                    screen: "Home",
+                    params: { itineraryId: trip.id },
+                  } as any)
                 }
               >
-                <View style={styles.tripCardHeader}>
-                  <View
-                    style={[
-                      styles.tripCardIcon,
-                      { backgroundColor: `${Brand.primary}20` },
-                    ]}
-                  >
-                    <Icon name="map-pin" size={20} color={Brand.primary} />
-                  </View>
-                  {trip.videoStatus === "succeeded" && (
-                    <View style={styles.videoReadyBadge}>
-                      <Icon name="film" size={12} color="#FFFFFF" />
-                    </View>
-                  )}
-                </View>
+                {/* 🗂️ 2026-07-03 사용자 SSOT = 여정 생성화면 헤더 4요소(도시·기간·예산·요약) 텍스트. 폰트·색=메인앱 통일(Fonts=Pretendard·Brand·textSecondary). */}
+                {/* 1. 도시 = rawData.destination 우선, 없으면 title */}
                 <Text
-                  style={[styles.tripCardTitle, { color: theme.text }]}
+                  style={[styles.cardCity, { color: theme.text }]}
                   numberOfLines={1}
                 >
-                  {trip.title}
+                  {trip.rawData?.destination || trip.title}
                 </Text>
-                <Text
-                  style={[styles.tripCardDate, { color: theme.textSecondary }]}
-                >
-                  {trip.startDate?.split("T")[0]} ~{" "}
-                  {trip.endDate?.split("T")[0]}
+                {/* 2. 기간 = 26년 07-03 ~ 07-05 (메인앱 shortDate 동일 표기) */}
+                <Text style={[styles.cardMeta, { color: theme.textSecondary }]}>
+                  {shortDateCard(trip.startDate)} ~ {shortDateCard(trip.endDate)}
                 </Text>
-                <View style={styles.tripCardTags}>
-                  <View
-                    style={[
-                      styles.tripTag,
-                      { backgroundColor: `${Brand.primary}15` },
-                    ]}
-                  >
-                    <Text
-                      style={[styles.tripTagText, { color: Brand.primary }]}
-                    >
-                      {trip.companionCount}명
+                {/* 3. 예산 = 1인 €N (rawData.days[].dailyCost.perPersonEur 합산) */}
+                {(() => {
+                  const per = (trip.rawData?.days || []).reduce(
+                    (s, d) => s + (d.dailyCost?.perPersonEur || 0),
+                    0,
+                  );
+                  if (per <= 0) return null;
+                  return (
+                    <Text style={[styles.cardBudget, { color: Brand.primary }]}>
+                      {t("common.perPerson")} €{per.toFixed(0)}
                     </Text>
+                  );
+                })()}
+                {/* 4. 요약 = 동행(N명)·대상·vibe 조합 (결과화면 요약섹션2 위계) */}
+                <Text
+                  style={[styles.cardSummary, { color: theme.text }]}
+                  numberOfLines={2}
+                >
+                  {summaryLineCard(trip, t)}
+                </Text>
+                {trip.videoStatus === "succeeded" && (
+                  <View style={styles.videoReadyBadge}>
+                    <Icon name="film" size={12} color="#FFFFFF" />
                   </View>
-                  {trip.vibes?.[0] && (
-                    <View
-                      style={[
-                        styles.tripTag,
-                        { backgroundColor: `${Brand.secondary}15` },
-                      ]}
-                    >
-                      <Text
-                        style={[styles.tripTagText, { color: Brand.secondary }]}
-                      >
-                        {trip.vibes[0]}
-                      </Text>
-                    </View>
-                  )}
-                </View>
+                )}
               </Pressable>
             ))}
           </ScrollView>
@@ -749,7 +764,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: Spacing.lg,
   },
   tripCard: {
-    width: 160,
+    width: 190,
     padding: Spacing.md,
     borderRadius: BorderRadius.md,
     marginRight: Spacing.md,
@@ -779,6 +794,27 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: Fonts.bold,
     marginBottom: Spacing.xs,
+  },
+  // 🗂️ 2026-07-03 = 나의여정 카드 4요소 = 메인앱 요약헤더 폰트·색 통일(Fonts=Pretendard, tripSummaryText=semiBold12 / tripDescriptionText=bold14 위계)
+  cardCity: {
+    fontSize: 16,
+    fontFamily: Fonts.bold,
+    marginBottom: 2,
+  },
+  cardMeta: {
+    fontSize: 12,
+    fontFamily: Fonts.semiBold,
+    marginBottom: 2,
+  },
+  cardBudget: {
+    fontSize: 13,
+    fontFamily: Fonts.bold,
+    marginBottom: Spacing.xs,
+  },
+  cardSummary: {
+    fontSize: 12,
+    fontFamily: Fonts.medium,
+    lineHeight: 16,
   },
   tripCardDate: {
     fontSize: 12,

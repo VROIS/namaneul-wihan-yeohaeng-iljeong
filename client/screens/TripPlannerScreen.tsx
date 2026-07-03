@@ -35,7 +35,8 @@ const BTS_PLACEHOLDER_SVG_BY_CAT: Record<string, string> = Object.fromEntries(
   ])
 );
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useNavigation, useFocusEffect } from "@react-navigation/native";
+import { useNavigation, useFocusEffect, useRoute } from "@react-navigation/native";
+import type { RouteProp } from "@react-navigation/native";
 import { LinearGradient } from "expo-linear-gradient";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Brand, Colors, Spacing, BorderRadius, Fonts } from "@/constants/theme";
@@ -72,6 +73,7 @@ import { openPlaceInMaps } from "@/lib/openPlaceInMaps";
 import { isAuthenticated, getUserData, UserData } from "@/lib/auth";
 import { useTranslation } from "react-i18next";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
+import type { MainTabParamList } from "@/navigation/MainTabNavigator";
 
 let DateTimePicker: any = null;
 if (Platform.OS !== "web") {
@@ -199,6 +201,9 @@ export default function TripPlannerScreen() {
   const insets = useSafeAreaInsets();
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  // 🗂️ 2026-07-03 = 저장여정 복원용 route param(itineraryId). 프로필 나의여정 카드 탭 시 전달됨.
+  const route = useRoute<RouteProp<MainTabParamList, "Home">>();
+  const restoreItineraryId = route.params?.itineraryId;
 
   const [screen, setScreen] = useState<ScreenState>("Input");
   const [loadingStep, setLoadingStep] = useState(0);
@@ -280,6 +285,55 @@ export default function TripPlannerScreen() {
     };
     loadUserData();
   }, []);
+
+  // 🗂️ 2026-07-03 사용자 SSOT = 저장여정 복원. 프로필 "나의 여정" 카드 탭 → itineraryId 전달 → GET으로 raw_data 불러와
+  //   여정 생성화면(renderResult) 그대로 재현. setItinerary(rawData) + 숙소깃발(dayAccommodations) + 요약헤더용 formData 스칼라 복원 + Result 전환.
+  useEffect(() => {
+    if (!restoreItineraryId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await apiRequest("GET", `/api/itineraries/${restoreItineraryId}`);
+        const data = await res.json();
+        if (cancelled) return;
+        const raw = data?.rawData;
+        if (!raw || !raw.days) {
+          console.warn("[TripPlanner] 저장여정 복원 실패: rawData 없음", restoreItineraryId);
+          return;
+        }
+        // 여정 본문 복원 = renderResult가 이 state로 그림
+        setItinerary(raw as Itinerary);
+        // 숙소 깃발·출발바 복원 = raw_data.days[].accommodation
+        const accoms: DayAccommodation[] = (raw.days || [])
+          .filter((d: any) => d.accommodation?.coords?.lat)
+          .map((d: any) => ({
+            day: d.day,
+            name: d.accommodation.name,
+            address: d.accommodation.address || "",
+            coords: d.accommodation.coords,
+            placeId: d.accommodation.placeId,
+          }));
+        setDayAccommodations(accoms);
+        // 요약헤더가 참조하는 formData 스칼라 복원(저장된 컬럼 → 헤더 문장·가격 정상 표시)
+        setFormData((prev) => ({
+          ...prev,
+          destination: raw.destination || prev.destination,
+          companionType: data.companionType || prev.companionType,
+          companionCount: data.companionCount ?? prev.companionCount,
+          curationFocus: data.curationFocus || prev.curationFocus,
+          vibes: Array.isArray(data.vibes) && data.vibes.length ? data.vibes : prev.vibes,
+          travelStyle: data.travelStyle || prev.travelStyle,
+          travelPace: data.travelPace || prev.travelPace,
+          mobilityStyle: data.mobilityStyle || prev.mobilityStyle,
+        }));
+        setSavedItineraryId(restoreItineraryId); // 이미 저장됨 = 저장버튼 중복저장 방지
+        setScreen("Result");
+      } catch (e) {
+        console.warn("[TripPlanner] 저장여정 복원 오류:", e);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [restoreItineraryId]);
 
   useEffect(() => {
     if (screen === "Loading") {
@@ -642,6 +696,18 @@ export default function TripPlannerScreen() {
       const userData = await getUserData();
       if (!userData) return;
 
+      // 🏨 2026-07-03 사용자 SSOT = 저장시점 숙소 보관. dayAccommodations를 raw_data.days[].accommodation에 병합
+      //   → 복원 시 숙소 깃발·출발바 재현(DB 숙소전용 컬럼 없음 = raw_data JSON에만). 숙소 미설정 Day는 그대로.
+      const rawWithAccom = {
+        ...itinerary,
+        days: (itinerary.days || []).map((d) => {
+          const acc = dayAccommodations.find((a) => a.day === d.day);
+          return acc
+            ? { ...d, accommodation: { name: acc.name, address: acc.address, coords: acc.coords, placeId: acc.placeId } }
+            : d;
+        }),
+      };
+
       // 일정 데이터 구성
       const saveData = {
         userId: userData.id,
@@ -658,8 +724,8 @@ export default function TripPlannerScreen() {
         travelPace: formData.travelPace,
         mobilityStyle: formData.mobilityStyle,
         status: "saved",
-        // 🩹 [2026-01-26] 영상 생성을 위한 원본 데이터 전체 저장
-        rawData: itinerary,
+        // 🩹 [2026-01-26] 영상 생성을 위한 원본 데이터 전체 저장 + 🏨 2026-07-03 숙소 병합본
+        rawData: rawWithAccom,
       };
 
       const response = await apiRequest("POST", "/api/itineraries", saveData);

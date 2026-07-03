@@ -18,6 +18,24 @@
 
 ---
 
+## 🔥 2026-07-03 = 저장여정 복원(프로필 나의여정 카드 → 여정 생성화면 그대로 재현)
+
+**배경**: 저장(💾)→DB는 되나 프로필 "나의여정" 카드 탭 시 SavedTripDetail(요약+영상만, 지도·슬롯 없음)로 감 = 생성화면 그대로 재현 불가. DB itineraries 단일테이블 직접접속 실측(id·user_id·raw_data jsonb, 숙소 전용컬럼 없음) + 프로필 화면 코드 확인 후 §12 플랜승인. spec [2026-06-24-fe-itinerary-structure-map] 연장선.
+
+**✅ 구현(파일3: TripPlannerScreen·ProfileScreen·MainTabNavigator, 새화면0)**:
+- **A 복원입구**: MainTabParamList.Home에 optional `itineraryId`. TripPlanner useRoute→param 있으면 GET /api/itineraries/{id}→rawData→setItinerary(renderResult 그대로) + days[].accommodation→setDayAccommodations(깃발) + 저장스칼라→formData(요약헤더) + savedItineraryId(중복저장방지) + setScreen(Result). param 없으면 신규생성 동일(무영향).
+- **B 카드탭**: ProfileScreen 나의여정 카드 onPress SavedTripDetail→`navigate("Main",{screen:"Home",params:{itineraryId}})`. 나의영상 카드=SavedTripDetail 유지(영상 별개, 지금 안 건드림).
+- **C 카드4요소+폰트통일**: 아이콘/제목/태그 → **도시·기간·예산(1인€N)·요약문장** 텍스트. 폰트·색 메인앱 요약헤더 통일(Fonts=Pretendard bold/semiBold·Brand.primary). 헬퍼 shortDateCard("26년 07-03")·summaryLineCard(동행·대상·vibe). 예산=목록API SELECT*(rawData 포함=storage.getUserItineraries)→days[].dailyCost.perPersonEur 합산.
+- **D 숙소보관**: 저장시 dayAccommodations를 raw_data.days[].accommodation 병합(DB 숙소컬럼 없음=JSON에만). 미설정 Day 원본유지. 복원 필터(coords.lat)와 정합.
+
+**핵심원칙**: DB스키마 안건드림(raw_data jsonb, 숙소컬럼 신설X)·새화면0(renderResult 재활용)·영상/통계/설정 레이아웃 안건드림(프로필 재구현시 별도).
+
+**검증(5단계)**: tsc248(회귀0·기존에러2개는 무관 라인밀림)·§19가드3파일PASS·Expo웹빌드exit0·simplify(재발명0)·review(BLOCKER0·복원가드·nested nav).
+
+**미해결/다음**: 배포후 아이폰12 에뮬 실증(생성→저장→프로필카드4요소→탭→여정재현·숙소깃발). ⚠️§11 renderResult formData 참조범위=에뮬 렌더테스트로 헤더·가격 정상 확정. cityId=1고정·프로필 전체레이아웃재구현·2번 교통비=별도. 커밋대기.
+
+---
+
 ## 🔥 2026-07-03 = 숙소 전체Day 유지·변경로직(A안) + 요약헤더 날짜 축약·아이콘제거(반응형 가격잘림 방지)
 
 **배경**: iOS 여정속 Modal 구현확인(사장님 실기기) 후 FE 마무리. 사장님 실기기·아이폰12 에뮬 실증으로 3건 확정.
