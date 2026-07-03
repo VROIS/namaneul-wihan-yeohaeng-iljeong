@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   StyleSheet,
@@ -12,7 +12,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { LinearGradient } from "expo-linear-gradient";
 
@@ -107,36 +107,45 @@ export default function ProfileScreen() {
   const [isAuth, setIsAuth] = useState(false);
   const [showLanguageModal, setShowLanguageModal] = useState(false);
 
-  // 저장된 일정 불러오기
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        const authenticated = await isAuthenticated();
-        setIsAuth(authenticated);
+  // 🗂️ 2026-07-03 = 프로필 진입마다 저장여정 목록 refetch (useFocusEffect) = 여정 저장 직후 프로필 탭 오면 방금 카드가 바로 보임.
+  //   조회 user_id = 'admin' 고정 = 서버 POST /api/itineraries 가 user_id를 'admin'으로 강제 저장(§9 로그인 제거)하므로 조회도 일치시켜야 목록이 뜸.
+  //   (나중 로그인 복원 시 = 저장/조회 둘 다 userData.id 로 동시 교체 = §19.)
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+      const loadData = async () => {
+        try {
+          const authenticated = await isAuthenticated();
+          if (cancelled) return;
+          setIsAuth(authenticated);
 
-        if (authenticated) {
-          const userData = await getUserData();
-          setUser(userData);
+          if (authenticated) {
+            const userData = await getUserData();
+            if (cancelled) return;
+            setUser(userData);
 
-          if (userData) {
             const response = await apiRequest(
               "GET",
-              `/api/users/${userData.id}/itineraries`,
+              `/api/users/admin/itineraries`,
             );
             const trips = await response.json();
+            if (cancelled) return;
             setSavedTrips(trips || []);
+          } else {
+            setSavedTrips([]);
           }
-        } else {
-          setSavedTrips([]);
+        } catch (error) {
+          console.error("[Profile] 로드 오류:", error);
+        } finally {
+          if (!cancelled) setIsLoadingTrips(false);
         }
-      } catch (error) {
-        console.error("[Profile] 로드 오류:", error);
-      } finally {
-        setIsLoadingTrips(false);
-      }
-    };
-    loadData();
-  }, []);
+      };
+      loadData();
+      return () => {
+        cancelled = true;
+      };
+    }, []),
+  );
 
   const handleLanguageChange = async (code: string) => {
     await changeLanguageAndPersist(code);

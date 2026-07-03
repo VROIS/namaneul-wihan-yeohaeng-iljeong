@@ -225,7 +225,14 @@ export default function TripPlannerScreen() {
 
   // 💾 일정 저장 상태
   const [isSaving, setIsSaving] = useState(false);
-  const [savedItineraryId, setSavedItineraryId] = useState<number | null>(null);
+  // ⚠️ 2026-07-03 사장님 UX SSOT = 저장버튼 = 누르면 영구 잠김(옛) 아님 = 저장 성공 시 녹색 체크(✓) 0.5초(초최단) 보여준 뒤 원래 💾로 복귀 = 다시 저장 가능.
+  //   Alert '저장 완료' 팝업 = 과설계라 제거(사장님 SSOT) = 녹색체크 되었다가 원복 = 사용자 인지 충분.
+  //   justSaved = 그 일시 피드백 플래그만. (복원된 여정도 그냥 💾 = 재저장 가능 = savedItineraryId 잠금 개념 폐기 §19.)
+  const [justSaved, setJustSaved] = useState(false);
+  const justSavedTimer = useRef<ReturnType<typeof setTimeout> | null>(null); // 언마운트/재저장 시 타이머 정리용
+  // ⚠️ 2026-07-03 사장님 SSOT = 재저장 판별용 여정 DB id. 복원(프로필 카드 탭)/저장 성공 시 세팅 = 이 화면 재저장 시 같은 행 덮어쓰기(PUT).
+  //   null = 신규 여정 = 저장 시 새 행(POST). (버튼 잠금 아님 = justSaved 와 별개.)
+  const [currentItineraryId, setCurrentItineraryId] = useState<number | null>(null);
 
   // 🏨 Day별 숙소 설정 상태
   const [dayAccommodations, setDayAccommodations] = useState<
@@ -263,6 +270,13 @@ export default function TripPlannerScreen() {
     travelPace: "Relaxed",
     mobilityStyle: "WalkMore",
   });
+
+  // ⚠️ 2026-07-03 = 저장 성공 녹색체크 타이머 언마운트 정리 = 언마운트 후 setState 방지.
+  useEffect(() => {
+    return () => {
+      if (justSavedTimer.current) clearTimeout(justSavedTimer.current);
+    };
+  }, []);
 
   // 🎯 로그인된 사용자 정보 로드 → formData.birthDate 자동 설정
   // 🔧 테스트용: 로그인 없이도 기본값 설정
@@ -326,7 +340,9 @@ export default function TripPlannerScreen() {
           travelPace: data.travelPace || prev.travelPace,
           mobilityStyle: data.mobilityStyle || prev.mobilityStyle,
         }));
-        setSavedItineraryId(restoreItineraryId); // 이미 저장됨 = 저장버튼 중복저장 방지
+        // ⚠️ 2026-07-03 사장님 UX = 복원된 여정도 저장버튼은 그냥 💾(재저장 가능). 옛 "중복저장 방지 잠금" 폐기 §19.
+        //   재저장 시 같은 행 덮어쓰기(여정1→여정1.1) 위해 이 여정의 DB id 기억.
+        setCurrentItineraryId(restoreItineraryId);
         setScreen("Result");
       } catch (e) {
         console.warn("[TripPlanner] 저장여정 복원 오류:", e);
@@ -571,6 +587,8 @@ export default function TripPlannerScreen() {
       return; // 사용자가 취소함
     }
 
+    // ⚠️ 2026-07-03 사장님 SSOT = 새로 생성하는 여정은 새 카드(POST). 복원 id 리셋 = 이전 복원 여정 덮어쓰기 방지.
+    setCurrentItineraryId(null);
     setScreen("Loading");
     setLoadingStep(0);
 
@@ -728,17 +746,21 @@ export default function TripPlannerScreen() {
         rawData: rawWithAccom,
       };
 
-      const response = await apiRequest("POST", "/api/itineraries", saveData);
+      // ⚠️ 2026-07-03 사장님 SSOT = 복원 여정(currentItineraryId 있음) 재저장 = 같은 행 덮어쓰기(PUT=여정1→여정1.1). 신규 = 새 행(POST).
+      const response = currentItineraryId
+        ? await apiRequest("PUT", `/api/itineraries/${currentItineraryId}`, saveData)
+        : await apiRequest("POST", "/api/itineraries", saveData);
       const saved = await response.json();
 
       if (saved.id) {
-        setSavedItineraryId(saved.id);
-        Alert.alert(
-          t("trip.saveComplete"),
-          t("trip.saveCompleteMsg"),
-          [{ text: t("common.confirm"), style: "default" }],
-        );
-        console.log(`[TripPlanner] 💾 일정 저장 완료: id=${saved.id}`);
+        const wasOverwrite = !!currentItineraryId;
+        // 저장한 여정 id 기억 = 이 화면서 또 저장하면 같은 행 덮어쓰기(중복 카드 방지).
+        setCurrentItineraryId(saved.id);
+        // ⚠️ 2026-07-03 사장님 UX = 저장 성공 → 녹색 체크(✓) 0.5초 노출 후 원래 💾로 자동 복귀(Alert 팝업 없음). 이전 타이머 있으면 정리(재저장 연타).
+        if (justSavedTimer.current) clearTimeout(justSavedTimer.current);
+        setJustSaved(true);
+        justSavedTimer.current = setTimeout(() => setJustSaved(false), 500);
+        console.log(`[TripPlanner] 💾 일정 저장 완료: id=${saved.id} (${wasOverwrite ? "덮어쓰기" : "신규"})`);
       }
     } catch (error) {
       console.error("[TripPlanner] 저장 오류:", error);
@@ -1441,21 +1463,22 @@ export default function TripPlannerScreen() {
           <Text style={[styles.resultTitle, { color: theme.text }]}>
             {itinerary.destination}
           </Text>
+          {/* ⚠️ 2026-07-03 사장님 UX = 저장 성공 시 justSaved 1.8초 = 녹색 체크(✓) → 원래 💾 복귀. 저장중(isSaving)만 비활성 = 재저장 항상 가능. */}
           <Pressable
             style={[
               styles.headerButton,
-              savedItineraryId && { backgroundColor: "#22c55e" },
+              justSaved && { backgroundColor: "#22c55e" },
             ]}
             onPress={handleSaveItinerary}
-            disabled={isSaving || !!savedItineraryId}
+            disabled={isSaving}
           >
             {isSaving ? (
               <ActivityIndicator size="small" color={theme.text} />
             ) : (
               <Icon
-                name={savedItineraryId ? "check" : "save"}
+                name={justSaved ? "check" : "save"}
                 size={22}
-                color={savedItineraryId ? "#FFFFFF" : theme.text}
+                color={justSaved ? "#FFFFFF" : theme.text}
               />
             )}
           </Pressable>

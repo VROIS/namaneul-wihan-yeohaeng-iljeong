@@ -41,6 +41,8 @@ export interface IStorage {
   getUserItineraries(userId: string): Promise<Itinerary[]>;
   getItinerary(id: number): Promise<Itinerary | undefined>;
   createItinerary(itinerary: InsertItinerary): Promise<Itinerary>;
+  // ⚠️ 2026-07-03 = 복원한 여정 재저장(숙소변경→동선변경) = 같은 행 덮어쓰기(여정1→여정1.1). 새 여정은 createItinerary(새 행).
+  updateItinerary(id: number, data: Partial<InsertItinerary>): Promise<Itinerary | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -172,6 +174,15 @@ export class DatabaseStorage implements IStorage {
   async createItinerary(itinerary: InsertItinerary): Promise<Itinerary> {
     const [newItinerary] = await db.insert(itineraries).values(itinerary).returning();
     return newItinerary;
+  }
+
+  // ⚠️ 2026-07-03 사장님 SSOT = 여정 재저장 = 같은 행 전체 새덮어쓰기(셀렉 아님 = raw_data·조건 전부 현재 화면 최신값). 변하는 것 = 내용 + 저장시점(updated_at). id·created_at 유지. 없는 id면 undefined.
+  //   updatedAt = NOW 명시 = schema $onUpdate 없어 UPDATE 시 자동 갱신 안 됨 = "저장 시점만 변하는 구조" 보장.
+  async updateItinerary(id: number, data: Partial<InsertItinerary>): Promise<Itinerary | undefined> {
+    const [updated] = await db.update(itineraries)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(itineraries.id, id)).returning();
+    return updated || undefined;
   }
 
   // ========================================
