@@ -67,6 +67,7 @@ dev/
 !eas.json
 !babel.config.json
 !client/lib/i18n/locales/*.json
+!server/data/*.json
 
 # migrations meta (auto-generated)
 migrations/meta/
