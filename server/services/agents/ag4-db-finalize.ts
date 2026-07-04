@@ -21,6 +21,8 @@ import { handleRouteRequest } from "../route/route-handler";
 import { buildRouteLocal } from "../route/route-local";
 import { backfillFromRoute } from "../route/route-backfill";
 import type { RouteResponse } from "../route/route-types";
+// ⚠️ 2026-07-04 사장님 SSOT = 드라이빙 가이드 가격 = 재발명 금지(§16) = MIX 경로(pipeline-v3.ts)와 동일한 단일 SSOT 재사용.
+import { shouldApplyGuidePrice, calculateTransportPrice } from "../transport-pricing-service";
 
 /** EUR → KRW 환율 = exchangeRates DB 캐시 */
 async function getEurToKrwRate(): Promise<number> {
@@ -57,15 +59,13 @@ function addMinutes(time: string, minutes: number): string {
 // ⚠️ 2026-06-06 = classifyMealType(시각<15시 판정) = mealType 위치기반 전환으로 데드 = 제거
 
 /**
- * ⚠️ 2026-07-04 사장님 SSOT = 전 도시 대중교통 실요금 반영 불가 → metro/bus/RER 구간당 €3 균일화(예상치, 물가 높은 도시까지 커버).
+ * ⚠️ 2026-07-04 사장님 SSOT = 대중교통(walk/metro/bus/RER) 구간당 균일 예상가만 처리.
+ *   = 전 도시 실요금 반영 불가 → metro/bus/RER €3 균일(물가 높은 도시까지 커버).
  *   = FE는 이 값을 슬롯 단위로 노출하지 않고 일별 합계에만 "(예상)" 라벨과 함께 표시(TripPlannerScreen.tsx 교통비 칸).
- *   = 드라이빙 가이드(guide/private_guide) 분기는 실시간 기반 실가격 계산이라 변경 없음.
+ *   = 드라이빙 가이드(guide/private_guide)는 이 함수가 처리하지 않음 → transport-pricing-service.calculateTransportPrice()
+ *     하루 1회 호출로 대체(호출부 참조). 구간별 개별 계산은 반일요금 개념이 없어 비현실적으로 싸게 나오는 결함이라 완전 삭제(§16 재사용).
  */
-function estimateTransitCost(
-  mode: string,
-  minutes: number,
-  companionCount: number,
-): number {
+function estimateTransitCost(mode: string): number {
   switch (mode) {
     case "walk":
       return 0;
@@ -73,13 +73,33 @@ function estimateTransitCost(
     case "bus":
     case "RER":
       return 3; // 1인, 구간당 균일 예상가(물가 높은 도시 커버)
-    case "guide":
-    case "private_guide":
-      // 전용차 = 1대 공유 = (€60/h × 시간) ÷ 인원 = 1인 share (= 구간 표시는 FE 가 숨김, 일 총합에만 반영)
-      return Math.round((((minutes / 60) * 60) / Math.max(1, companionCount)) * 100) / 100;
     default:
       return 0;
   }
+}
+
+/**
+ * ⚠️ 2026-07-04 사장님 SSOT = 드라이빙 가이드 하루 1인 교통비(§0 = 메인경로·legacy fallback 공통 SSOT, 중복 금지).
+ *   dayConfig 가용시간(시작~종료) 기준 calculateTransportPrice() 1회 호출.
+ */
+async function guideCostPerPersonPerDay(
+  dayConfig: { startTime: string; endTime: string },
+  formData: TripFormData,
+  companionCount: number,
+  dayCount: number,
+): Promise<number> {
+  const [startH, startM] = (dayConfig.startTime || "09:00").split(":").map(Number);
+  const [endH, endM] = (dayConfig.endTime || "21:00").split(":").map(Number);
+  const availableHours = Math.max(4, Math.round(((endH * 60 + endM - (startH * 60 + startM)) / 60) * 100) / 100);
+  const priceResult = await calculateTransportPrice({
+    companionType: formData.companionType as any,
+    companionCount,
+    mobilityStyle: formData.mobilityStyle,
+    travelStyle: formData.travelStyle,
+    availableHours,
+    dayCount,
+  });
+  return priceResult.category === "guide" ? priceResult.perPersonPerDay : 0;
 }
 
 export interface AG4DbInput {
@@ -340,13 +360,12 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
       0,
     );
 
-    // ===== 교통 = scene 기반 추정 =====
+    // ===== 교통 = 대중교통 구간별 추정 + 드라이빙 가이드 하루 1회 실가격 =====
+    // ⚠️ 2026-07-04 사장님 SSOT = 드라이빙 가이드는 구간별 계산 금지(반일요금 개념 없어 비현실적으로 쌈, §0 옛것 완전삭제).
+    //   MIX 경로와 동일한 shouldApplyGuidePrice + calculateTransportPrice 재사용(§16) = 하루 가용시간 기준 1회 계산.
+    const isGuideDay = shouldApplyGuidePrice(formData.mobilityStyle, formData.travelStyle);
     const transits = scenes.slice(1).map((scene, i) => {
-      const cost = estimateTransitCost(
-        scene.transit_mode,
-        scene.transit_min,
-        companionCount,
-      );
+      const cost = isGuideDay ? 0 : estimateTransitCost(scene.transit_mode); // 가이드 = 구간 표시 FE 숨김, 일 총합에만 반영
       return {
         from: scenes[i].name_en,
         to: scene.name_en,
@@ -357,7 +376,9 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
         costTotal: cost,
       };
     });
-    const transportCostEur = transits.reduce((s, t) => s + (t.cost || 0), 0);
+    const transportCostEur = isGuideDay
+      ? await guideCostPerPersonPerDay(dayConfig, formData, companionCount, dayCount)
+      : transits.reduce((s, t) => s + (t.cost || 0), 0);
 
     const dailyPerPersonEur =
       Math.round((mealCostEur + entranceFeesEur + transportCostEur) * 100) /
@@ -474,6 +495,7 @@ async function finalizeWithLegacyItinerary(
     formData,
     companionCount,
     dayCount,
+    cityCoords,
     skeleton,
     inputPlaces,
   } = input;
@@ -494,12 +516,13 @@ async function finalizeWithLegacyItinerary(
 
   // transit-haversine = dynamic = circular 회피
   const { calcTransitHaversine } = await import("./transit-haversine");
-  const travelMode: any =
-    formData.mobilityStyle === "WalkMore"
+  // ⚠️ 2026-07-04 사장님 SSOT = 옛 "Minimal만 DRIVE" 3분기 완전삭제(§0) → shouldApplyGuidePrice 단일 SSOT로 메인경로와 통일(§19 공존금지).
+  const isGuideFallback = shouldApplyGuidePrice(formData.mobilityStyle, formData.travelStyle);
+  const travelMode: any = isGuideFallback
+    ? "DRIVE"
+    : formData.mobilityStyle === "WalkMore"
       ? "WALK"
-      : formData.mobilityStyle === "Minimal"
-        ? "DRIVE"
-        : "TRANSIT";
+      : "TRANSIT";
 
   const mealBudget = MEAL_BUDGET[formData.travelStyle || "Reasonable"];
   const days: any[] = [];
@@ -537,11 +560,13 @@ async function finalizeWithLegacyItinerary(
     const transits: any[] = [];
     for (let i = 0; i < dayPlaces.length - 1; i++) {
       transits.push(
+        // ⚠️ 2026-07-04 사장님 SSOT = cityCoords 전달 = DRIVE 모드 도심/외곽 속도 분기(30/70km/h), 메인경로와 통일(§19).
         calcTransitHaversine(
           dayPlaces[i],
           dayPlaces[i + 1],
           travelMode,
           companionCount,
+          cityCoords,
         ),
       );
     }
@@ -559,10 +584,17 @@ async function finalizeWithLegacyItinerary(
           : 0),
       0,
     );
-    const transportCostEur = transits.reduce(
-      (sum: number, t: any) => sum + (t.cost || 0),
-      0,
-    );
+    // ⚠️ 2026-07-04 사장님 SSOT = 드라이빙 가이드 = 구간별 haversine cost(옛 km×€0.5) 완전삭제 → 메인경로와 동일 헬퍼로 하루 1회 실가격(§0 중복금지, §16 재사용).
+    let transportCostEur: number;
+    if (isGuideFallback) {
+      transportCostEur = await guideCostPerPersonPerDay(dayConfig, formData, companionCount, dayCount);
+      transits.forEach((t: any) => { t.cost = 0; t.costTotal = 0; }); // 구간 표시 FE 숨김, 일 총합에만 반영
+    } else {
+      transportCostEur = transits.reduce(
+        (sum: number, t: any) => sum + (t.cost || 0),
+        0,
+      );
+    }
     const dailyPerPersonEur =
       Math.round((mealCostEur + entranceFeesEur + transportCostEur) * 100) /
       100;

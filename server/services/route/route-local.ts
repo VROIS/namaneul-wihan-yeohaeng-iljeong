@@ -224,7 +224,7 @@ function clusterIntoDays(items: PlaceResult[], k: number, center: LatLng): Place
  * 로컬 동선 빌드 v2 = handleRouteRequest(Gemini) 동형 대체 (= 2단계: 활동 1차 / 식당 2차)
  * @param skeleton AG1 뼈대 (= 일자/슬롯/페이스/인원/travelStyle)
  * @param places AG2-DB 풀 (= 활동 후보, 좌표 보유)
- * @param cityCoords 도심 중심 = 출발/종료 앵커 (= 추후 숙소주소로 교체)
+ * @param cityCoords 도심 중심 = 출발/종료 앵커 (숙소좌표 있으면 formData.accommodationCoords 우선, 2026-07-04)
  * @param restaurantPool ag4 가 DB 조회한 예산 매칭 식당 전체풀 (= 2차 우선순위 삽입용). 없으면 places 내 식당 폴백.
  */
 export function buildRouteLocal(
@@ -238,16 +238,19 @@ export function buildRouteLocal(
   const slotDuration = paceConfig.slotDurationMinutes;
   const mealBudget = MEAL_BUDGET[formData.travelStyle || "Reasonable"];
 
-  // 출발/종료 앵커 = 도심 중심 (= 추후 숙소주소 입력 시 그 좌표로 교체 = 전체 재최적화)
+  // ⚠️ 2026-07-04 사장님 SSOT = 출발/종료 앵커 = 숙소 좌표 최우선(§14 A안=여행 전체 공통 숙소) → 없으면 도심 중심.
+  //   지도 숙소깃발·슬롯순서 변경은 이미 실시간 연동인데 동선 최적화(center)만 도심 고정이던 결함 수정(§0).
   const firstValid = places.find(hasCoord);
   const center: LatLng =
-    cityCoords && hasCoord(cityCoords)
-      ? cityCoords
-      : formData.destinationCoords && hasCoord(formData.destinationCoords)
-        ? formData.destinationCoords
-        : firstValid
-          ? { lat: firstValid.lat, lng: firstValid.lng }
-          : { lat: 0, lng: 0 };
+    formData.accommodationCoords && hasCoord(formData.accommodationCoords)
+      ? formData.accommodationCoords
+      : cityCoords && hasCoord(cityCoords)
+        ? cityCoords
+        : formData.destinationCoords && hasCoord(formData.destinationCoords)
+          ? formData.destinationCoords
+          : firstValid
+            ? { lat: firstValid.lat, lng: firstValid.lng }
+            : { lat: 0, lng: 0 };
 
   // ⚠️ 2026-07-04 사장님 SSOT = 드라이빙 가이드 = 이동(Minimal·Moderate) OR 예산(Premium·Luxury) 중 하나라도 = 무조건 가이드(본업 퍼널).
   //   = Gemini·MIX 경로와 동일한 shouldApplyGuidePrice 단일 SSOT 적용(옛 "Minimal만" 판정 완전 삭제 §19). travelStyle=예산도 반영.
@@ -346,7 +349,8 @@ export function buildRouteLocal(
     const scenes: RouteScene[] = seq.map((it, i) => {
       const km = round2(haversineKm(prev.lat, prev.lng, it.p.lat, it.p.lng));
       const { mode, calc } = pickMode(km, transport);
-      const tr = calcTransitHaversine(prev, { lat: it.p.lat, lng: it.p.lng }, calc, companionCount);
+      // ⚠️ 2026-07-04 사장님 SSOT = center(도시중심)를 넘겨 DRIVE 모드 도심/외곽 속도 분기(30/70km/h) 적용.
+      const tr = calcTransitHaversine(prev, { lat: it.p.lat, lng: it.p.lng }, calc, companionCount, center);
       prev = { lat: it.p.lat, lng: it.p.lng };
       dayKm += km;
       grandSec += slotDuration * 60;

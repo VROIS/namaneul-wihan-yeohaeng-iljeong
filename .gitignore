@@ -85,14 +85,18 @@ scripts/migration-data/
 _agent/
 
 # Claude Code IDE 자산 (메모리/플랜/worktrees - 절대 push 금지)
-# 단, 슬래시 커맨드 + 스킬 (팀 공유 자산) 만 예외
+# 단, 슬래시 커맨드 + 스킬 + settings.json(팀 공유 자산 = git rebase/reset 차단 훅 등) 만 예외
 .claude/*
 !.claude/commands/
 !.claude/skills/
+!.claude/settings.json
 .claude/commands/*.local.md
 
 # 2026-06-29 임의 커밋 차단 = 사장님 허가 토큰 (= 1회용, 절대 커밋 X)
 .commit-approved
+
+# 2026-07-04 rebase/reset 차단 = 사장님 허가 토큰 (= 1회용, 절대 커밋 X)
+.history-rewrite-approved
 
 # Playwright MCP 캐시
 .playwright-mcp/

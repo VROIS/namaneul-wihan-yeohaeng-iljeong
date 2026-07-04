@@ -59,13 +59,32 @@ export function sectorIntoDays(items: PlaceResult[], slotsPerDay: number[], cent
   const gaps: number[] = [];
   for (let i = 0; i < n - 1; i++) gaps.push(haversineKm(chain[i].lat, chain[i].lng, chain[i + 1].lat, chain[i + 1].lng));
 
+  // ⚠️ 2026-07-04 사장님 SSOT = 후보 총량이 목표(Σ slotsPerDay)보다 부족할 때, 마지막 날에 부족분이 몰리는 결함 수정(§0).
+  //   = 부족분을 전 Day에 균등 비례 축소해 배분(마지막 날만 텅 비는 현상 방지). 후보 충분하면 원래 슬롯 그대로(기존 검증 로직 불변).
+  const totalDemand = slotsPerDay.reduce((s, v) => s + Math.max(1, v), 0);
+  const shortage = Math.max(0, totalDemand - n);
+  const effectiveSlots = shortage === 0
+    ? slotsPerDay
+    : (() => {
+        // 부족분(shortage)만큼 각 Day에서 균등히 1개씩 순환 차감(큰 Day부터) = 특정 Day만 0으로 몰리지 않게.
+        const arr = slotsPerDay.map((v) => Math.max(1, v));
+        let remain = shortage;
+        while (remain > 0) {
+          const maxIdx = arr.reduce((mi, v, i) => (v > arr[mi] ? i : mi), 0);
+          if (arr[maxIdx] <= 1) break; // 모든 Day가 최소 1까지 내려가면 중단(0개 Day 방지)
+          arr[maxIdx] -= 1;
+          remain -= 1;
+        }
+        return arr;
+      })();
+
   // ② 절단 = 도심 날은 활동 +1 더 담고(가까워 많이 소화) 외곽 날은 적게 = 거리별 자연 차등 (사용자 SSOT 2026-06-12).
   //   = 그룹 시작이 도심 밀집(평균 ≤ CITY_KM)이면 cap+CITY_BONUS(=활동7), 외곽이면 baseCap(=활동6). 붙은 곳(<NEAR_KM) 경계는 ±1 당겨 분리 회피.
   //   = 도심이 NN 체인상 한 덩어리로 모이므로 도심 날이 더 채워지고 외곽 날이 5~6 으로 줄어듦(= 직전 라이브 9/8/7 의도형).
   const groups: PlaceResult[][] = [];
   let start = 0;
   for (let d = 0; d < k - 1; d++) {
-    const baseCap = Math.max(1, slotsPerDay[d]);
+    const baseCap = Math.max(1, effectiveSlots[d]);
     // 이 그룹 시작 구간(baseCap+CITY_BONUS 만큼)의 평균 중심거리로 도심/외곽 판정
     const peek = chain.slice(start, start + baseCap + CITY_BONUS);
     const avgKm = peek.reduce((s, p) => s + distFrom(p, center), 0) / (peek.length || 1);

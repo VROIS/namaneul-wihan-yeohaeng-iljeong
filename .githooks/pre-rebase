@@ -1,0 +1,9 @@
+#!/bin/sh
+# ⚠️ 수정금지(승인필요) 2026-07-04 사장님 SSOT = rebase 물리 차단 (AI 무심결 rebase 사고 재발 방지).
+# = 허가 토큰(.history-rewrite-approved) 없거나 만료면 rebase 거부.
+# = 2026-07-04 사고(AI 무심결 rebase → Replit 저장소 꼬임 → EAS 배포 마비 → $20+ 손실) 재발 방지.
+#
+# ⚠️ 이 파일은 버전관리됨(.githooks/) = 다른 clone(Replit 등)에도 함께 전달됨.
+#    단, 활성화하려면 clone 에서 `git config core.hooksPath .githooks` 1회 실행 필요.
+#    (git hooks 는 .git/hooks/ 안이면 clone 에 안 따라가므로 .githooks/ 버전관리 + hooksPath 로 우회)
+node scripts/guard-no-history-rewrite.mjs check || exit 1

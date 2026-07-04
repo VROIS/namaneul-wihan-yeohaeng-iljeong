@@ -9,13 +9,16 @@ export type TravelMode = 'WALK' | 'TRANSIT' | 'DRIVE';
  * 평균 속도 (= 도시 + 교통체증 반영 = 사용자 SSOT)
  * = WALK 5 km/h (= 보행 속도)
  * = TRANSIT 25 km/h (= 도시 지하철/버스 평균 = 환승 포함)
- * = DRIVE 35 km/h (= 도시 차량 평균 = 신호 + 정체)
+ * = DRIVE = 도심반경 10km 이내 30km/h · 밖 70km/h (2026-07-04 사장님 SSOT, TomTom/Sanef 실측 기반 리서치 확정).
+ *   도시중심 좌표(cityCenter) 없이 호출 시 = 도심 기준값(DRIVE_URBAN) 사용.
  */
-const AVG_SPEED_KMH: Record<TravelMode, number> = {
+const AVG_SPEED_KMH: Record<Exclude<TravelMode, 'DRIVE'>, number> = {
   WALK: 5,
   TRANSIT: 25,
-  DRIVE: 35,
 };
+const CITY_RADIUS_KM = 10;
+const DRIVE_URBAN_KMH = 30;
+const DRIVE_SUBURBAN_KMH = 70;
 
 /**
  * 교통비 단가 EUR/km (= 유럽 기준)
@@ -62,16 +65,31 @@ export function haversineKm(
 
 /**
  * 두 지점 간 이동 = Haversine + 평균 속도 (= Routes API 0)
+ * = DRIVE 모드 + cityCenter 주어지면: 구간 중점↔도심 거리로 도심(10km 이내 30km/h)/외곽(70km/h) 분기.
+ *   cityCenter 없이 호출 = 기존 도심 기준값(30km/h) 사용(호출부 수정 불필요, 하위호환).
  */
 export function calcTransitHaversine(
   from: { lat: number; lng: number; name?: string },
   to: { lat: number; lng: number; name?: string },
   mode: TravelMode = 'WALK',
   companionCount = 1,
+  cityCenter?: { lat: number; lng: number },
 ): TransitResult {
   const km = haversineKm(from.lat, from.lng, to.lat, to.lng);
   const meters = Math.round(km * 1000);
-  const speedKmh = AVG_SPEED_KMH[mode];
+  let speedKmh: number;
+  if (mode === 'DRIVE') {
+    if (cityCenter) {
+      const midLat = (from.lat + to.lat) / 2;
+      const midLng = (from.lng + to.lng) / 2;
+      const distFromCenter = haversineKm(cityCenter.lat, cityCenter.lng, midLat, midLng);
+      speedKmh = distFromCenter <= CITY_RADIUS_KM ? DRIVE_URBAN_KMH : DRIVE_SUBURBAN_KMH;
+    } else {
+      speedKmh = DRIVE_URBAN_KMH;
+    }
+  } else {
+    speedKmh = AVG_SPEED_KMH[mode];
+  }
   const durationMin = Math.round((km / speedKmh) * 60);
   const costPerPerson = km > 0
     ? Math.round((BASE_FARE_EUR[mode] + km * COST_PER_KM_EUR[mode]) * 100) / 100
