@@ -29,8 +29,10 @@ try {
 
 // ⚠️ 위험 패턴 = git rebase(모든 형태, "git -c x rebase" 처럼 옵션이 끼어도 잡히게 완화) / git reset --hard 계열.
 //   git reset --soft/--mixed(비파괴)나 파일 경로 지정 reset은 차단하지 않음(과잉차단 방지).
+//   ⚠️ 2026-07-04 오탐 보정 = "rebase" 앞이 "-"(= --no-rebase, --rebase=false 등 rebase를 끄는 안전 옵션)면 차단 안 함.
+//   = git pull --no-rebase(=merge, 원격병합 정석)가 "rebase" 단어 때문에 막히던 오탐 해소. 실제 위험은 하위명령 "git rebase"뿐.
 const DANGEROUS_PATTERNS = [
-  /\bgit\b.*\brebase\b/i,
+  /\bgit\b.*(?<!-)(?<!-no-)\brebase\b/i,
   /\bgit\b.*\breset\b.*--hard\b/i,
 ];
 
