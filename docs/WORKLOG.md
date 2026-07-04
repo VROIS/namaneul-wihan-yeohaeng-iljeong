@@ -18,6 +18,27 @@
 
 ---
 
+## 🔥 2026-07-04 = "AI 의견"(핵심 마케팅) 오버레이 로딩 UX + 크레딧 고지 + 교통비 재산정 + 다국어
+
+**배경**: "AI 의견" = 앱 핵심 마케팅 포인트 = 생성된 여정을 Gemini 그라운딩으로 비평적 재평가(실현가능·동선·**1인당 대중교통+식비+입장료 일일합산**·주의). 이번 세션 = ①로딩 UX(응답 8~9초 여백) ②크레딧 고지(5크레딧) ③교통비 재산정 문서반영 ④다국어 마무리 + 5단계검증 + 문서화. 이전 세션의 AI 의견 BE(핸들러/프롬프트/라우트)·FE(오버레이 리포트)는 실제 Gemini 3회 호출로 실증 완료(한국어·영어·가격구조), 이번엔 미완이던 로딩 UX·크레딧을 마감.
+
+**✅ 구현(파일: TripPlannerScreen + i18n 7개)**:
+- **A 로딩 UX(사장님 SSOT)**: 버튼→오버레이 **화면전환 후** 그 안에서 로딩. Gemini 그라운딩=스트리밍 아님(8~9초 뒤 JSON 한방)=진짜 진행률 물리적으로 없음 → 퍼센트 막대바(가짜숫자=역효과) 폐기, **부정형 흐름 바(Animated)+시간기반 정직한 단계문구**(loadingStep1~4, 2.5초 간격, 마지막단계는 응답늦어도 유지)+대기 정당화 힌트(loadingHint). `AiOpinionLoading` 컴포넌트(기존 CrisisAlertBanner의 Animated.loop 패턴 재사용§16). 흐름 바=onLayout 트랙폭 실측 후 px translateX(useNativeDriver 안정), 측정전(trackW=0)=바 숨김(멈춤신호 방지). 이모지·퍼센트숫자 없음.
+- **B 크레딧 고지**: 5크레딧(`AI_OPINION_CREDIT_COST` 상수, 10유로=20회) = **로딩 중엔 감춤, 결과 하단에만 조용히**(textTertiary, creditNote `{{count}}`). 차감 로직 자체=추후 크레딧 시스템(표시만 선행).
+- **C 교통비 재산정**(이전 세션 코드 = 이번 문서반영): `ag4-db-finalize.ts estimateTransitCost()` metro/bus/RER 전부 `return 2.5`(구간당). 슬롯단위 금액 표시삭제(거리·시간만), 일별합계만 "€N(예상)". 드라이빙 가이드·MIX경로(transport-pricing-service)는 안건드림.
+- **C-2 교통수단 = 예산+이동 바이버로 드라이빙 가이드 분기 복원(사장님 SSOT 2026-07-04)**: 크롬DevTools 아이폰12로 운영본 직접 여정생성 실증 = 전부 metro/도보만, 예산 무시 확인. 조사 = DB-only 경로(route-local.ts:251)가 `mobilityStyle==="Minimal"` 하나만 봄(travelStyle=예산 무시). Gemini·MIX 경로는 `shouldApplyGuidePrice(이동,예산)` 두축 정상. **사장님 SSOT = 드라이빙 가이드=본업 퍼널 = 4가지(이동 Minimal·Moderate OR 예산 Premium·Luxury) 중 하나라도=무조건 가이드**. 수정4파일: ①transport-pricing-service.ts shouldApplyGuidePrice 죽은 drivemore삭제(§19)→moderate추가 ②route-local.ts:251 Minimal단일→shouldApplyGuidePrice(3경로 단일SSOT정합, §3보호=사장님 최신승인) ③ag4:75 교통비€2.5→€3(물가 높은도시 커버) ④TripPlannerScreen 슬롯라벨 3분기(도보/대중교통/드라이빙가이드)+i18n walking복원 7개국어. 매트릭스 실증=많이걷기+합리적/경제적만 대중교통, 나머지10조합 가이드. tsc새에러0·§19가드PASS.
+- **C-3 크레딧 차감 설계확정·구현보류(사장님 SSOT 2026-07-04)**: AI의견=5크레딧·전문가검증=10크레딧, 여정생성/저장=무료. **재발명0 = 기존 `server/creditService.ts` `useCredits()` 1줄**(users.credits차감+credit_transactions원장 INSERT 자동). 공유원장=다른앱(legacy-guide/public 구글·애플 배포중)과 병합예정. 결과본문=raw_data.verification(재열람 getItinerary $0). **컬럼 신설 불필요**(차감이력=원장, 본문=verification). 앵커=routes.ts AI의견라우트 handleAiOpinionRequest 직전 🪙TODO 상세주석. 구현보류=현 admin고정(§9)이라 사용자별 차감 무의미=병합·로그인정식화 시점. 메모리 [[project_credit_deduction_design]].
+- **C-4 프로필 과설계 진단(배포앱 profile.html 대조, 코드수정0)**: 배포앱=크레딧경제 핵심(잔액·충전10EUR·거래내역·요금제·캐시백·계정삭제). 현재앱 프로필 **군더더기=여행스타일persona(아바타색만 바꿈, 여정 무연결 죽은코드)·통계3칸(저장=여행 중복, 방문=엉뚱)·나의영상(영상없으면 영구숨김)·설정 죽은버튼4개(결제더미alert·알림·개인정보·도움말 onPress없음)**. **현재앱 결핍=크레딧 UI 통째 없음**(병합시 배포앱서 이식필수=수익구조). 프로필 재구현 SSOT=배포앱 최소구성.
+- **D 다국어**: loadingStep1~4·loadingHint·creditNote = 7개 로케일(ko/en/ja/fr/zh/es/de) 한 벌 추가, 옛 `aiOpinion.loading` 키 완전삭제(§19). Gemini는 language 전달받아 그 언어로 직접작문(번역기 아님), FE 필드명은 언어중립.
+
+**핵심원칙**: 진짜 진행률 없으니 가짜 퍼센트 금지(§1 정직)·크레딧은 병주고 약강매 아닌 조용한 고지·기존 애니패턴 재사용(재발명§16)·i18n 한 벌(7×키셋 정합)·옛키 완전삭제(§19).
+
+**검증(3게이트+5단계)**: JSON 7개 유효·새키 한벌 정합·옛 loading키 완전제거 확인. tsc 새에러0(기존 transit 에러는 내 범위밖=안건드림, 라인밀림만). §19가드 PASS. **/review**=6중점(메모리누수·step경계·interpolate·deps·i18n정합·{{count}}보간) 전부 통과, {{count}}는 실제 i18next 실행으로 키안깨짐 실증. **/simplify**=버그1건 발견·반영(첫프레임 바 정지방지+바폭 SSOT 스타일↔코드 이중정의 제거→코드 barW 단일). 애니 로직 스크래치패드 시뮬 검증(흐름바 왕복·단계타이머 8~9초 매칭).
+
+**미해결/다음**: **배포후 아이폰12 에뮬 실증(§21)** = ②버튼 활성조건(Result만)·오버레이 로딩 흐름바·단계문구 전환·8~9초 후 리포트 fade·크레딧 하단표시·7개국어. 커밋 = 사장님 지시 대기(미커밋 = verify/신규폴더 포함 다수). 크레딧 실차감·프로필 전체재구현·cityId=1 동적매핑 = 별도.
+
+---
+
 ## 🔥 2026-07-03 = 저장여정 프로필 노출 버그 + 재저장 덮어쓰기 + 저장버튼 실시간 동기화 + 카드 삭제
 
 **배경**: 사장님 iOS 실기기 = 저장은 되나 프로필 카드 안 뜸 + 같은 일정 저장 시 DB·카드 계속 중복 = 낭비. Chrome DevTools 아이폰12 에뮬 + DB Pooler 직접 SELECT + 운영 웹 네트워크 캡처로 실측 확정(추측 아님).

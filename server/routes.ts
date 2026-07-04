@@ -1,8 +1,11 @@
 import type { Express } from "express";
 import { createServer, type Server } from "node:http";
+import { createHash } from "node:crypto";
 import { storage } from "./storage";
 // ⚠️ 2026-05-23 = googlePlacesFetcher + vibeProcessor + tasteVerifier import 제거 (= 파일 삭제 = 사용자 SSOT)
 import { itineraryGenerator } from "./services/itinerary-generator";
+// ⚠️ 2026-07-03 사장님 SSOT = "AI 의견" 기능 = 여정 재평가 단일 핸들러
+import { handleAiOpinionRequest } from "./services/verify/ai-opinion-handler";
 import { getVideoGenerationTask } from "./services/seedance-video-generator";
 import { getTestVideoHtml } from "./test-video-ui";
 import { registerAdminRoutes } from "./admin-routes";
@@ -15,6 +18,20 @@ import { count, eq, desc, sql } from "drizzle-orm";
 import { users } from "../shared/schema";
 
 const BRAND_PRIMARY = "#6366F1";
+
+// ⚠️ 2026-07-03 사장님 SSOT = "AI 의견" 캐싱용 여정 지문. 도시+일자+장소명 순서만 반영(이미지 등 무관 필드 제외) = 숙소변경→동선변경 시에만 달라져 재호출.
+function computeItineraryFingerprint(itinerary: any): string {
+  const material = {
+    destination: itinerary.destination,
+    startDate: itinerary.startDate,
+    endDate: itinerary.endDate,
+    days: (itinerary.days || []).map((d: any) => ({
+      day: d.day,
+      places: (d.places || []).map((p: any) => ({ name: p.name, lat: p.lat, lng: p.lng, startTime: p.startTime })),
+    })),
+  };
+  return createHash("sha1").update(JSON.stringify(material)).digest("hex");
+}
 
 function getEmptyMapHtml(): string {
   return `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;display:flex;align-items:center;justify-content:center;height:100vh;font-family:-apple-system,sans-serif;background:#f5f5f5}.msg{color:#666;font-size:14px}</style></head><body><div class="msg">장소 좌표 없음</div></body></html>`;
@@ -679,6 +696,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const id = parseInt(req.params.id);
       await ensureAdminUser();
       const itineraryData = buildItineraryData(req.body);
+
+      // ⚠️ 2026-07-03 = 재저장은 여정 내용 전체 새덮어쓰기(§19 셀렉 금지, 여기까지 그대로)이나,
+      //   AI 의견 캐시(rawData.verification)는 여정 내용과 무관한 부가 캐시라 fp가 같으면(=내용 실제로 안 바뀜) 보존.
+      //   fp 다르면(=places/시간 등 변경) 캐시 폐기 = 다음 AI 의견 요청 시 자동 재호출.
+      const prevItinerary = await storage.getItinerary(id);
+      const prevVerification = (prevItinerary?.rawData as any)?.verification;
+      if (prevVerification && itineraryData.rawData) {
+        const newFp = computeItineraryFingerprint(itineraryData.rawData);
+        if (prevVerification.fp === newFp) {
+          (itineraryData.rawData as any).verification = prevVerification;
+        }
+      }
+
       console.log(`[Itinerary] Updating id=${id} (재저장 덮어쓰기)...`);
       const updated = await storage.updateItinerary(id, itineraryData);
       if (!updated) {
@@ -709,6 +739,89 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res
         .status(500)
         .json({ error: "Failed to delete itinerary", details: error?.message });
+    }
+  });
+
+  // ⚠️ 2026-07-03 사장님 SSOT = "AI 의견" 기능. 여정을 Gemini에 통째로 보내 비평적 재평가.
+  //   캐싱 = raw_data.verification 서브키(여정 지문 fp 동일하면 재호출 안 함 = 비용 0). 새 컬럼/테이블 금지.
+  app.post("/api/itineraries/ai-opinion", async (req, res) => {
+    try {
+      const { itineraryId, itinerary, language } = req.body;
+      if (!itinerary || !Array.isArray(itinerary.days)) {
+        return res.status(400).json({ error: "itinerary(days[]) required" });
+      }
+
+      // ⚠️ 2026-07-03 사장님 SSOT = 동적 콘텐츠(AI 의견 본문) 다국어 대응. 언어가 다르면 캐시도 다시 생성해야 하므로 fp에 언어 포함.
+      const fp = `${computeItineraryFingerprint(itinerary)}:${language || "ko"}`;
+
+      // 저장된 여정이면 캐시 확인 (여정 안 바뀌었으면 Gemini 재호출 없이 반환 = $0)
+      // ⚠️ 2026-07-03 = existingForCache 보관 = 캐시미스 시 저장 단계에서 재사용(DB 재조회 1회 절약)
+      let existingForCache: Awaited<ReturnType<typeof storage.getItinerary>> | undefined;
+      if (itineraryId) {
+        existingForCache = await storage.getItinerary(parseInt(itineraryId));
+        const cached = (existingForCache?.rawData as any)?.verification;
+        if (cached && cached.fp === fp) {
+          console.log(`[AiOpinion] 캐시 반환: itineraryId=${itineraryId} (Gemini 호출 없음)`);
+          return res.json({ ...cached.result, cached: true });
+        }
+      }
+
+      const opinionInput = {
+        destination: itinerary.destination,
+        startDate: itinerary.startDate,
+        endDate: itinerary.endDate,
+        companionType: itinerary.companionType,
+        companionCount: itinerary.companionCount,
+        curationFocus: itinerary.curationFocus,
+        // ⚠️ 2026-07-03 = route-prompt.ts buildRouteInputJson()과 동일 = vibeWeights(vibe+weight+percentage) 배열 그대로 전달(이름만 뽑아 가중치 버리지 않음)
+        vibeWeights: (itinerary.vibeWeights || []).map((v: any) => ({ vibe: v.vibe, weight: v.weight, percentage: v.percentage })),
+        travelStyle: itinerary.travelStyle,
+        mobilityStyle: itinerary.mobilityStyle,
+        days: (itinerary.days || []).map((d: any) => ({
+          day: d.day,
+          // ⚠️ 2026-07-03 = Place 타입(client/types/trip.ts) 실제 필드만 사용. entranceFee=입장료, mealPrice=식사가격.
+          //   프롬프트가 안 쓰는 address/type/lat/lng는 안 보냄(토큰 절약).
+          places: (d.places || []).map((p: any) => ({
+            name: p.name,
+            startTime: p.startTime,
+            endTime: p.endTime,
+            priceEur: p.entranceFee ?? p.mealPrice,
+          })),
+        })),
+        // ⚠️ 2026-07-03 사장님 SSOT = pipeline-v3.ts langMap 패턴 재사용 = 앱 현재 언어로 Gemini가 직접 작문(번역기 아님).
+        language: language || "ko",
+      };
+
+      // 🪙 TODO(크레딧 차감) 2026-07-04 설계확정·구현보류(두 앱 병합/로그인 정식화 시점) — AI가 나중에 헤매지 않게 앵커.
+      //   여기가 유료 차감 지점 = 이 줄에 도달 = 캐시 미스(위 763줄에서 히트는 이미 return) = 실제 Gemini 유료 호출.
+      //   ✅ 재발명 금지 = 기존 자산 그대로: server/creditService.ts 의 creditService.useCredits() 1줄.
+      //   구현 시(이 handleAiOpinionRequest 호출 "직전"에 배치 = 잔액 부족이면 호출 자체 차단):
+      //     const charge = await creditService.useCredits(userId, 5, 'AI 의견', String(itineraryId));
+      //     if (!charge.success) return res.status(402).json({ error: 'insufficient_credits', message: charge.message, balance: charge.balance });
+      //   = users.credits -= 5 + credit_transactions INSERT(type:'usage', amount:-5, referenceId=여정id) 자동(공유 원장).
+      //   ⚠️ 캐시 히트(재열람)는 위에서 이미 return되어 여기 안 옴 = 재차감 없음(무료 재열람). 여정 저장(무료)도 이 라우트 안 탐.
+      //   ⚠️ 전제: userId = 실제 로그인 사용자(현재는 §9 프로모션으로 'admin' 고정). 병합/로그인 정식화 후 req 사용자 id로.
+      //   결과 본문 보관·재열람 = raw_data.verification(아래 806줄) 그대로 = 프로필 카드 탭 시 getItinerary(id)에 딸려옴($0).
+      //   상세 설계 = docs/WORKLOG.md 2026-07-04 항목 + 메모리 [[project_credit_deduction_design]].
+      const result = await handleAiOpinionRequest(opinionInput);
+      if (!result.ok || !result.response) {
+        return res.status(502).json({ error: "AI opinion generation failed", details: result.parseError });
+      }
+
+      // 저장된 여정이면 raw_data.verification에 결과 병합(캐시 저장). 미저장 신규 여정은 즉석 반환만.
+      //   ⚠️ existingForCache 재사용(캐시확인 시 이미 조회함) = DB 재조회 1회 절약.
+      if (itineraryId) {
+        const target = existingForCache || (await storage.getItinerary(parseInt(itineraryId)));
+        if (target) {
+          const rawData = { ...(target.rawData as any), verification: { fp, result: result.response, generatedAt: new Date().toISOString() } };
+          await storage.updateItinerary(parseInt(itineraryId), { rawData } as any);
+        }
+      }
+
+      res.json({ ...result.response, cached: false });
+    } catch (error: any) {
+      console.error("Error generating AI opinion:", error?.message || error);
+      res.status(500).json({ error: "Failed to generate AI opinion", details: error?.message });
     }
   });
 

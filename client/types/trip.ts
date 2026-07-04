@@ -96,7 +96,7 @@ export interface Place {
 export interface TransitInfo {
   from: string;
   to: string;
-  mode: 'walk' | 'metro' | 'bus' | 'uber' | 'taxi' | 'guide';
+  mode: 'walk' | 'metro' | 'bus' | 'uber' | 'taxi' | 'guide' | 'private_guide';
   modeLabel: string;           // "지하철", "도보", "우버" 등
   duration: number;            // 분 단위
   durationText: string;        // "15분"
