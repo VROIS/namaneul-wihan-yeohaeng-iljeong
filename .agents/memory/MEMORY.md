@@ -1,1 +1,2 @@
 - [Post-merge auto build/restart — scope limited](post-merge-automation.md) — the platform's post-merge hook only fires reliably for Replit's Task system, NOT for external-git-push + Git-tab-Pull workflows; agent still can't touch .git internals.
+- [Metro config blockList danger](metro-config-blocklist-danger.md) — never add a metro.config.js resolver.blockList to this project; it silently broke EAS/CI builds by matching node_modules/**/dist paths.
