@@ -57,9 +57,9 @@ function addMinutes(time: string, minutes: number): string {
 // ⚠️ 2026-06-06 = classifyMealType(시각<15시 판정) = mealType 위치기반 전환으로 데드 = 제거
 
 /**
- * 단순 교통비 추정 = scene.transit_mode + transit_min 기반
- * = scene 응답 직접 사용
- * = 도시별 정확 가격 = 추후 transport-pricing-service 통합 (= 별도 단계)
+ * ⚠️ 2026-07-04 사장님 SSOT = 전 도시 대중교통 실요금 반영 불가 → metro/bus/RER 구간당 €3 균일화(예상치, 물가 높은 도시까지 커버).
+ *   = FE는 이 값을 슬롯 단위로 노출하지 않고 일별 합계에만 "(예상)" 라벨과 함께 표시(TripPlannerScreen.tsx 교통비 칸).
+ *   = 드라이빙 가이드(guide/private_guide) 분기는 실시간 기반 실가격 계산이라 변경 없음.
  */
 function estimateTransitCost(
   mode: string,
@@ -71,9 +71,8 @@ function estimateTransitCost(
       return 0;
     case "metro":
     case "bus":
-      return 2.1; // ⚠️ 2026-06-06 = 1인 티켓 (= 1인당 = ×인원 제거 = 식비·입장료와 동일 기준)
     case "RER":
-      return 5.0; // 1인
+      return 3; // 1인, 구간당 균일 예상가(물가 높은 도시 커버)
     case "guide":
     case "private_guide":
       // 전용차 = 1대 공유 = (€60/h × 시간) ÷ 인원 = 1인 share (= 구간 표시는 FE 가 숨김, 일 총합에만 반영)

@@ -65,6 +65,8 @@ import {
 import { apiRequest } from "@/lib/query-client";
 // ⚠️ 2026-06-28 사용자 SSOT = 토글 InteractiveMap → 고정 ItineraryMap(BTSPlaceMap 패턴: 웹/앱 동일·마커클릭·동선라인폐기·출발깃발) 교체(§19)
 import ItineraryMap from "@/components/ItineraryMap";
+// ⚠️ 2026-07-03 = 하단탭 "AI 의견" 버튼이 현재 여정을 알기 위한 배관(새 Context 만들지 않고 기존 확장 재사용)
+import { useMapToggle } from "@/contexts/MapToggleContext";
 // ⚠️ 2026-06-29 사용자 SSOT = 자체 PlaceAutocomplete(입력창+드롭다운+프록시 과설계) 폐기(§19) → 구글 공식 위젯(PlaceAutocompleteElement) WebView 100% 활용
 import PlaceAutocompleteWidget, {
   type PlaceAutoSelection as PlaceSelection,
@@ -86,6 +88,10 @@ type PickerMode = "startDate" | "startTime" | "endDate" | "endTime" | null;
 // LOADING_MESSAGES moved inside component for i18n
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
+
+// 🧠 2026-07-04 사장님 SSOT = AI 의견 1회 호출 = 5크레딧 차감(10유로 충전=20회). 결과 하단에만 조용히 표시.
+//   차감 로직 자체는 추후 크레딧 시스템 도입 시 서버가 확정 = 여기선 표시용 상수(한 곳 관리).
+const AI_OPINION_CREDIT_COST = 5;
 
 function formatDate(date: Date): string {
   const year = date.getFullYear();
@@ -195,6 +201,115 @@ const crisisStyles = StyleSheet.create({
   },
 });
 
+// 🧠 2026-07-04 사장님 SSOT = AI 의견(5크레딧 유료호출) 오버레이 로딩 UX.
+//   Gemini 그라운딩 호출 = 스트리밍 아님(8~9초 뒤 JSON 한 방) = 진짜 진행률 물리적으로 없음.
+//   → 퍼센트 막대바(가짜 숫자=역효과) 대신, 부정형(indeterminate) 흐름 바 + 시간 기반 정직한 단계 문구.
+//   단계 문구 = 실제 파이프라인에 매칭(살펴봄→그라운딩→검토→정리). 마지막 단계는 응답 늦어도 계속 유지.
+//   크레딧(5) 언급 = 로딩 중엔 없음(사장님 SSOT), 결과 하단에만 조용히.
+function AiOpinionLoading({ theme }: { theme: (typeof Colors)["light"] }) {
+  const { t } = useTranslation();
+  // 흐름 바 = 좌→우 반복 이동(멈춤 아님 신호). 기존 CrisisAlertBanner의 Animated.loop 패턴 재사용(§16).
+  const flowAnim = React.useRef(new Animated.Value(0)).current;
+  // 트랙 폭 실측(onLayout) = translateX를 퍼센트 아닌 숫자 px로 이동(useNativeDriver 안정, RN 부정형 바 표준).
+  const [trackW, setTrackW] = React.useState(0);
+  // 단계 인덱스 = 2.5초 간격 전진, 마지막 단계에서 멈춤(응답이 늦어도 어색하지 않게).
+  const [step, setStep] = React.useState(0);
+  const STEP_KEYS = [
+    "aiOpinion.loadingStep1",
+    "aiOpinion.loadingStep2",
+    "aiOpinion.loadingStep3",
+    "aiOpinion.loadingStep4",
+  ];
+
+  React.useEffect(() => {
+    const flow = Animated.loop(
+      Animated.timing(flowAnim, {
+        toValue: 1,
+        duration: 1200,
+        easing: Easing.inOut(Easing.ease),
+        useNativeDriver: true,
+      }),
+    );
+    flow.start();
+    return () => flow.stop();
+  }, [flowAnim]);
+
+  React.useEffect(() => {
+    // 마지막 단계(3)에 도달하면 더 전진 안 함 = 그 문구에 머무름.
+    const timer = setInterval(() => {
+      setStep((prev) => (prev < STEP_KEYS.length - 1 ? prev + 1 : prev));
+    }, 2500);
+    return () => clearInterval(timer);
+  }, []);
+
+  // 흐름 바(폭=트랙40%) = 왼쪽 밖(-barW px)에서 오른쪽 밖(trackW px)까지 왕복 = 부정형 로딩.
+  const barW = trackW * 0.4;
+  const translateX = flowAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-barW, trackW],
+  });
+
+  return (
+    <View style={aiLoadingStyles.container}>
+      <View
+        style={[aiLoadingStyles.track, { backgroundColor: theme.border }]}
+        onLayout={(e) => setTrackW(e.nativeEvent.layout.width)}
+      >
+        <Animated.View
+          style={[
+            aiLoadingStyles.bar,
+            {
+              backgroundColor: Brand.primary,
+              width: barW,
+              // 트랙폭 측정(onLayout) 전 첫 프레임 = trackW 0 = 바를 숨김(왼쪽 정지처럼 보이는 것 방지, 멈춤신호 X).
+              opacity: trackW === 0 ? 0 : 1,
+              transform: [{ translateX }],
+            },
+          ]}
+        />
+      </View>
+      <Text style={[aiLoadingStyles.stepText, { color: theme.text }]}>
+        {t(STEP_KEYS[step])}
+      </Text>
+      <Text style={[aiLoadingStyles.hintText, { color: theme.textTertiary }]}>
+        {t("aiOpinion.loadingHint")}
+      </Text>
+    </View>
+  );
+}
+
+const aiLoadingStyles = StyleSheet.create({
+  container: {
+    paddingVertical: Spacing["3xl"],
+    paddingHorizontal: Spacing.xl,
+    alignItems: "center",
+  },
+  track: {
+    width: "70%",
+    height: 3,
+    borderRadius: 2,
+    overflow: "hidden",
+    marginBottom: Spacing.xl,
+  },
+  bar: {
+    // 폭 = 코드의 barW(=trackW*0.4) 인라인 지정으로 일원화(SSOT 이중정의 방지).
+    height: "100%",
+    borderRadius: 2,
+  },
+  stepText: {
+    fontSize: 15,
+    fontFamily: Fonts.semiBold,
+    textAlign: "center",
+  },
+  hintText: {
+    fontSize: 12,
+    fontFamily: Fonts.sans,
+    textAlign: "center",
+    marginTop: Spacing.sm,
+    lineHeight: 18,
+  },
+});
+
 export default function TripPlannerScreen() {
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? "light"];
@@ -215,7 +330,8 @@ export default function TripPlannerScreen() {
   const [tempDate, setTempDate] = useState(new Date());
   const [showWebInput, setShowWebInput] = useState<PickerMode>(null);
   const [pendingGenerate, setPendingGenerate] = useState(false);
-  // ⚠️ 2026-06-28 = 지도 고정섹션化(토글 폐기) = 옛 useMapToggle/showMap 삭제(§19). 지도는 항상 표시.
+  // ⚠️ 2026-07-03 = 지도는 항상 고정 표시(showMap 미사용). setCurrentItinerary만 사용 = 하단탭 "AI 의견" 버튼 활성화·검증대상 전달.
+  const { setCurrentItinerary, aiOpinionRequestedAt, clearAiOpinionRequest } = useMapToggle();
   const { t, i18n } = useTranslation();
 
   const LOADING_MESSAGES = useMemo(
@@ -240,6 +356,11 @@ export default function TripPlannerScreen() {
   >([]);
   const [hotelModalDay, setHotelModalDay] = useState<number | null>(null); // 🏨 숙소 설정 구글 위젯이 인라인으로 펼쳐진 Day (= 모달 폐기 §19, 토글 상태 재활용)
   const [isReoptimizing, setIsReoptimizing] = useState(false);
+  // 🧠 2026-07-03 사장님 SSOT = "AI 의견" 결과 오버레이 상태(하단탭 버튼→여정 화면 위 오버레이, 새 화면 아님).
+  const [aiOpinionVisible, setAiOpinionVisible] = useState(false);
+  const [aiOpinionLoading, setAiOpinionLoading] = useState(false);
+  const [aiOpinionData, setAiOpinionData] = useState<any>(null);
+  const [aiOpinionError, setAiOpinionError] = useState<string | null>(null);
   // 🗺️ 2026-06-28 = 지도 마커 클릭 → 해당 슬롯 스크롤 (= ScrollView ref + 슬롯별 y좌표 기록)
   const resultScrollRef = useRef<ScrollView | null>(null);
   const slotLayoutsRef = useRef<Record<string, number>>({});
@@ -277,6 +398,45 @@ export default function TripPlannerScreen() {
       if (justSavedTimer.current) clearTimeout(justSavedTimer.current);
     };
   }, []);
+
+  // 🧠 2026-07-03 사장님 SSOT = 하단탭 "AI 의견" 버튼 신호 수신 → 오버레이 열고 Gemini 재평가 호출(캐시는 서버가 판정).
+  useEffect(() => {
+    if (!aiOpinionRequestedAt || !itinerary) return;
+    let cancelled = false;
+    setAiOpinionVisible(true);
+    setAiOpinionLoading(true);
+    setAiOpinionError(null);
+    (async () => {
+      try {
+        // ⚠️ 2026-07-03 사장님 SSOT = 현재 앱 언어를 함께 전달 = Gemini가 그 언어로 직접 작문(번역기 아님, pipeline-v3.ts langMap 패턴).
+        const res = await apiRequest("POST", "/api/itineraries/ai-opinion", {
+          itineraryId: currentItineraryId,
+          itinerary,
+          language: i18n.language,
+        });
+        const data = await res.json();
+        if (cancelled) return;
+        setAiOpinionData(data);
+      } catch (e: any) {
+        if (cancelled) return;
+        console.error("[TripPlanner] AI 의견 조회 실패:", e);
+        setAiOpinionError(t("aiOpinion.error"));
+      } finally {
+        if (!cancelled) setAiOpinionLoading(false);
+        clearAiOpinionRequest();
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [aiOpinionRequestedAt]);
+
+  // ⚠️ 2026-07-03 사장님 SSOT = "이 화면에 지도 섹션(필수 요소)이 있는가"로 판단 = screen==="Result"일 때만 활성.
+  //   지도(ItineraryMap)도 renderResult() 안에서 screen==="Result"일 때만 그려짐(:2574) = 동일 조건 재사용.
+  //   itinerary 유무만으로는 안 됨(결과화면 뒤로가기 후 Input에서도 itinerary가 남아있어 오작동).
+  useEffect(() => {
+    setCurrentItinerary(screen === "Result" ? itinerary : null, screen === "Result" ? currentItineraryId : null);
+  }, [screen, itinerary, currentItineraryId, setCurrentItinerary]);
 
   // 🎯 로그인된 사용자 정보 로드 → formData.birthDate 자동 설정
   // 🔧 테스트용: 로그인 없이도 기본값 설정
@@ -2082,33 +2242,27 @@ export default function TripPlannerScreen() {
                                 ]}
                               >
                                 {(() => {
-                                  // ⚠️ 2026-06-06 = mode 정규화 + 라벨 mode 파생 (= "항상 도보" 버그 수정)
+                                  // ⚠️ 2026-07-04 사장님 SSOT = 교통수단 구분 = 3가지(도보 / 대중교통 / 드라이빙 가이드).
+                                  //   백엔드 mode(walk / metro / private_guide) 3종을 그대로 3분기 라벨로. 세부수단(bus/RER)은 대중교통에 흡수.
                                   const rawMode =
                                     transitInfo.mode ||
                                     transitInfo.modeLabel ||
-                                    "walk";
-                                  const isGuide =
-                                    rawMode === "guide" ||
-                                    rawMode === "private_guide"; // 전용차 정규화
-                                  const mode = isGuide ? "guide" : rawMode;
-                                  // ⚠️ 2026-06-24 = 🚗🚇🚌🚶 이모지 제거 (= 디자인 SSOT §1-3 이모지금지). 앞의 navigation Lucide 아이콘 + label 텍스트로 수단 구분.
-                                  const label = isGuide
-                                    ? t("trip.guideVehicle")
-                                    : mode === "metro"
-                                      ? t("trip.metro")
-                                      : transitInfo.modeLabel || t("trip.walking");
+                                    "";
+                                  // 3분기 = 중첩 삼항 회피(헌법) = if로 label 결정. 드라이빙 가이드(전용차) → 도보 → 그 외 대중교통.
+                                  let label = t("trip.transitPublic");
+                                  if (rawMode === "guide" || rawMode === "private_guide") {
+                                    label = t("trip.drivingGuide");
+                                  } else if (rawMode === "walk") {
+                                    label = t("trip.walking");
+                                  }
                                   const dur =
                                     transitInfo.durationText ||
                                     `${transitInfo.duration || 0}분`;
                                   const dist = transitInfo.distance
                                     ? `${(transitInfo.distance / 1000).toFixed(1)}km`
                                     : "";
-                                  // A타입(전용차): 구간 비용 안 보여줌(= 일 총합에 ÷인원) / B타입: 구간별 1인 비용
-                                  if (isGuide) {
-                                    return `${label} ${dur}${dist ? ` · ${dist}` : ""}`;
-                                  }
-                                  const cost = transitInfo.cost || 0;
-                                  return `${label} ${dur}${dist ? ` · ${dist}` : ""}${cost > 0 ? ` · €${cost.toFixed(2)}` : ""}`;
+                                  // ⚠️ 2026-07-03 사장님 SSOT = 구간당 균일 예상가로 슬롯 단위 금액 표시 제거(일별합계에만 "(예상)").
+                                  return `${label} ${dur}${dist ? ` · ${dist}` : ""}`;
                                 })()}
                               </Text>
                             </View>
@@ -2273,7 +2427,8 @@ export default function TripPlannerScreen() {
                               { color: theme.text },
                             ]}
                           >
-                            €{transportEur.toFixed(1)}
+                            {/* ⚠️ 2026-07-04 사장님 SSOT = 대중교통 구간당 €3 균일 예상가 기반 합산 = "(예상)" 명시로 정직 표기 */}
+                            €{transportEur.toFixed(1)} ({t("trip.estimated")})
                           </Text>
                         </View>
                       </View>
@@ -2345,6 +2500,178 @@ export default function TripPlannerScreen() {
                     setHotelModalDay(null);
                   }}
                 />
+              </View>
+            </View>
+          </Modal>
+        )}
+
+        {/* 🧠 2026-07-03 사장님 SSOT = "AI 의견" 결과 오버레이. 새 화면 아님 = 여정 화면 위 반투명 dim + 닫기(X) 버튼(기존 hotel Modal 패턴 재활용). */}
+        {aiOpinionVisible && (
+          <Modal visible transparent animationType="fade" onRequestClose={() => setAiOpinionVisible(false)}>
+            <View style={styles.pickerModalOverlay}>
+              <View
+                style={[
+                  styles.aiOpinionSheet,
+                  { backgroundColor: theme.backgroundRoot, paddingBottom: insets.bottom + Spacing.md },
+                ]}
+              >
+                <View style={styles.hotelIosModalHeader}>
+                  <View style={styles.headerButton} />
+                  <Text style={[styles.pickerTitle, { color: theme.text }]}>
+                    {t("aiOpinion.title")}
+                  </Text>
+                  <Pressable onPress={() => setAiOpinionVisible(false)} style={styles.headerButton}>
+                    <Icon name="x" size={24} color={theme.text} />
+                  </Pressable>
+                </View>
+
+                {aiOpinionLoading ? (
+                  // 🧠 2026-07-04 사장님 SSOT = 화면전환 후 오버레이 안에서 단계 안내(흐름 바 + 정직한 단계 문구).
+                  <AiOpinionLoading theme={theme} />
+                ) : aiOpinionError ? (
+                  <Text style={[styles.aiOpinionLoadingText, { color: theme.textSecondary, padding: Spacing.lg }]}>
+                    {aiOpinionError}
+                  </Text>
+                ) : aiOpinionData ? (
+                  // ⚠️ 2026-07-03 사장님 SSOT = 상세페이지형 리포트(카드 나열 아님). 이모지 금지. 버튼/링크 추가 금지(하단탭 5개로 충분).
+                  //   전문가 유도 = 클릭 버튼 아닌 마지막 문단의 자연스러운 한 문장("현지 전문가에게 다시 물어보세요" 톤).
+                  <ScrollView style={{ maxHeight: "85%" }} contentContainerStyle={{ padding: Spacing.lg }}>
+                    {/* 1. 실현 가능성 */}
+                    <View style={styles.aiOpinionSection}>
+                      <View style={styles.aiOpinionSectionHeader}>
+                        <Text style={[styles.aiOpinionSectionTitle, { color: theme.text }]}>
+                          {t("aiOpinion.feasibility")}
+                        </Text>
+                        <Text
+                          style={[
+                            styles.aiOpinionVerdict,
+                            {
+                              color:
+                                aiOpinionData.feasibility?.verdict === "ok"
+                                  ? "#22c55e"
+                                  : aiOpinionData.feasibility?.verdict === "risky"
+                                    ? "#ef4444"
+                                    : "#f59e0b",
+                            },
+                          ]}
+                        >
+                          {t(`aiOpinion.verdict.${aiOpinionData.feasibility?.verdict}`)}
+                        </Text>
+                      </View>
+                      <Text style={[styles.aiOpinionBody, { color: theme.textSecondary }]}>
+                        {aiOpinionData.feasibility?.reason}
+                      </Text>
+                    </View>
+                    <View style={[styles.aiOpinionDivider, { backgroundColor: theme.border }]} />
+
+                    {/* 2. 동선 점검 */}
+                    <View style={styles.aiOpinionSection}>
+                      <Text style={[styles.aiOpinionSectionTitle, { color: theme.text }]}>
+                        {t("aiOpinion.routeReview")}
+                      </Text>
+                      {(aiOpinionData.route_review?.issues || []).map((issue: string, idx: number) => (
+                        <Text key={`issue-${idx}`} style={[styles.aiOpinionBody, { color: theme.textSecondary }]}>
+                          {issue}
+                        </Text>
+                      ))}
+                      {(aiOpinionData.route_review?.optimization || []).length > 0 && (
+                        <Text style={[styles.aiOpinionSubheading, { color: theme.text }]}>
+                          {t("aiOpinion.optimization")}
+                        </Text>
+                      )}
+                      {(aiOpinionData.route_review?.optimization || []).map((opt: string, idx: number) => (
+                        <Text key={`opt-${idx}`} style={[styles.aiOpinionBody, { color: theme.textSecondary }]}>
+                          {opt}
+                        </Text>
+                      ))}
+                    </View>
+                    <View style={[styles.aiOpinionDivider, { backgroundColor: theme.border }]} />
+
+                    {/* 3. 예상 비용 = 사장님 SSOT: 일자별 1인당 대중교통비+식비+입장료 합산(가장 민감한 항목) */}
+                    <View style={styles.aiOpinionSection}>
+                      <Text style={[styles.aiOpinionSectionTitle, { color: theme.text }]}>
+                        {t("aiOpinion.priceCheck")}
+                      </Text>
+                      {(aiOpinionData.price_check?.daily || []).map((d: any, idx: number) => (
+                        <View key={`day-${idx}`} style={styles.aiOpinionDayBlock}>
+                          <Text style={[styles.aiOpinionSubheading, { color: theme.text }]}>
+                            Day {d.day}
+                          </Text>
+                          <View style={styles.aiOpinionPriceRow}>
+                            <Text style={[styles.aiOpinionBody, { color: theme.textSecondary }]}>
+                              {t("aiOpinion.transport")}
+                            </Text>
+                            <Text style={[styles.aiOpinionBody, { color: theme.text }]}>€{d.transport_eur}</Text>
+                          </View>
+                          <View style={styles.aiOpinionPriceRow}>
+                            <Text style={[styles.aiOpinionBody, { color: theme.textSecondary }]}>
+                              {t("aiOpinion.meals")}
+                            </Text>
+                            <Text style={[styles.aiOpinionBody, { color: theme.text }]}>€{d.meals_eur}</Text>
+                          </View>
+                          <View style={styles.aiOpinionPriceRow}>
+                            <Text style={[styles.aiOpinionBody, { color: theme.textSecondary }]}>
+                              {t("aiOpinion.entrance")}
+                            </Text>
+                            <Text style={[styles.aiOpinionBody, { color: theme.text }]}>€{d.entrance_eur}</Text>
+                          </View>
+                          <View style={styles.aiOpinionPriceRow}>
+                            <Text style={[styles.aiOpinionSubheading, { color: theme.text }]}>
+                              {t("aiOpinion.dayTotal")}
+                            </Text>
+                            <Text style={[styles.aiOpinionSubheading, { color: Brand.primary }]}>
+                              €{d.total_eur}
+                            </Text>
+                          </View>
+                        </View>
+                      ))}
+                      <View style={[styles.aiOpinionPriceRow, { marginTop: Spacing.sm }]}>
+                        <Text style={[styles.aiOpinionSectionTitle, { color: theme.text }]}>
+                          {t("aiOpinion.total")}
+                        </Text>
+                        <Text style={[styles.aiOpinionSectionTitle, { color: Brand.primary }]}>
+                          €{aiOpinionData.price_check?.total_est_eur}
+                        </Text>
+                      </View>
+                      <Text style={[styles.aiOpinionEstimateNote, { color: theme.textTertiary }]}>
+                        {t("aiOpinion.estimateNote")}
+                      </Text>
+                    </View>
+
+                    {/* 4. 주의사항 */}
+                    {(aiOpinionData.cautions || []).length > 0 && (
+                      <>
+                        <View style={[styles.aiOpinionDivider, { backgroundColor: theme.border }]} />
+                        <View style={styles.aiOpinionSection}>
+                          <Text style={[styles.aiOpinionSectionTitle, { color: theme.text }]}>
+                            {t("aiOpinion.cautions")}
+                          </Text>
+                          {aiOpinionData.cautions.map((c: string, idx: number) => (
+                            <Text key={`caution-${idx}`} style={[styles.aiOpinionBody, { color: theme.textSecondary }]}>
+                              {c}
+                            </Text>
+                          ))}
+                        </View>
+                      </>
+                    )}
+
+                    {/* 현지 전문가 안내 = 클릭 유도 버튼 아닌 자연스러운 마무리 문장(하단탭에 이미 전문가검증 있음) */}
+                    {aiOpinionData.expert_hint && (
+                      <>
+                        <View style={[styles.aiOpinionDivider, { backgroundColor: theme.border }]} />
+                        <View style={styles.aiOpinionSection}>
+                          <Text style={[styles.aiOpinionBody, { color: theme.textSecondary, fontStyle: "italic" }]}>
+                            {aiOpinionData.expert_hint}
+                          </Text>
+                        </View>
+                      </>
+                    )}
+                    {/* 🧠 2026-07-04 사장님 SSOT = 크레딧(5) 차감 = 로딩 중엔 감춤, 결과 하단에만 조용히(textTertiary). */}
+                    <Text style={[styles.aiOpinionEstimateNote, { color: theme.textTertiary, marginTop: Spacing.lg }]}>
+                      {t("aiOpinion.creditNote", { count: AI_OPINION_CREDIT_COST })}
+                    </Text>
+                  </ScrollView>
+                ) : null}
               </View>
             </View>
           </Modal>
@@ -2957,4 +3284,62 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.semiBold,
   },
   // 🏨 숙소 모달 스타일 5종 삭제 = 인앱 모달 폐기로 미사용(§19, 2026-06-29). 구글 위젯 인라인으로 대체.
+  // 🧠 2026-07-03 사장님 SSOT = "AI 의견" 결과 오버레이 스타일(글라스미니멀·이모지금지).
+  // ⚠️ 2026-07-03 사장님 SSOT = 상세페이지형 리포트(카드 나열 아님, 구분선으로 섹션 분리). 이모지 금지. 별도 버튼/링크 없음(하단탭 5개로 충분).
+  aiOpinionSheet: {
+    borderTopLeftRadius: BorderRadius.xl,
+    borderTopRightRadius: BorderRadius.xl,
+    maxHeight: "88%",
+    paddingTop: Spacing.md,
+  },
+  aiOpinionLoadingText: {
+    fontSize: 13,
+    fontFamily: Fonts.medium,
+    marginTop: Spacing.sm,
+    textAlign: "center",
+  },
+  aiOpinionSection: {
+    paddingVertical: Spacing.md,
+  },
+  aiOpinionSectionHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  aiOpinionSectionTitle: {
+    fontSize: 16,
+    fontFamily: Fonts.bold,
+  },
+  aiOpinionSubheading: {
+    fontSize: 14,
+    fontFamily: Fonts.semiBold,
+    marginTop: Spacing.sm,
+  },
+  aiOpinionVerdict: {
+    fontSize: 15,
+    fontFamily: Fonts.bold,
+  },
+  aiOpinionBody: {
+    fontSize: 14,
+    fontFamily: Fonts.sans,
+    marginTop: 6,
+    lineHeight: 21,
+  },
+  aiOpinionDivider: {
+    height: 1,
+    width: "100%",
+  },
+  aiOpinionDayBlock: {
+    marginTop: Spacing.md,
+  },
+  aiOpinionPriceRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: 4,
+  },
+  aiOpinionEstimateNote: {
+    fontSize: 11,
+    fontFamily: Fonts.sans,
+    marginTop: Spacing.sm,
+  },
 });

@@ -18,6 +18,8 @@ import type {
 } from "./route-types";
 // ⚠️ 2026-06-12 = 정본 동선(NN체인+간격절단+Day1도심 / 일내 귀소동선) = k-means 지그재그 해소 (USE_SECTOR_ROUTE 토글, 1초 롤백)
 import { sectorIntoDays, orderHoming } from "./route-sector";
+// ⚠️ 2026-07-04 사장님 SSOT = 드라이빙 가이드 판별 단일 SSOT(Gemini·MIX 경로와 동일 함수 = 3경로 정합, §16 재발명 금지).
+import { shouldApplyGuidePrice } from "../transport-pricing-service";
 
 type LatLng = { lat: number; lng: number };
 
@@ -247,9 +249,12 @@ export function buildRouteLocal(
           ? { lat: firstValid.lat, lng: firstValid.lng }
           : { lat: 0, lng: 0 };
 
-  // 이동수단 = Minimal(거동 불편) → 전용차 / 그 외 → 대중교통
+  // ⚠️ 2026-07-04 사장님 SSOT = 드라이빙 가이드 = 이동(Minimal·Moderate) OR 예산(Premium·Luxury) 중 하나라도 = 무조건 가이드(본업 퍼널).
+  //   = Gemini·MIX 경로와 동일한 shouldApplyGuidePrice 단일 SSOT 적용(옛 "Minimal만" 판정 완전 삭제 §19). travelStyle=예산도 반영.
   const transport: "public_transit" | "private_driver_guide" =
-    formData.mobilityStyle === "Minimal" ? "private_driver_guide" : "public_transit";
+    shouldApplyGuidePrice(formData.mobilityStyle, formData.travelStyle)
+      ? "private_driver_guide"
+      : "public_transit";
 
   // 활동 = 비식당, rank 높은 순, 슬롯 상한(= Σ(slots-2))까지 (= 유명 보존 = 베르사유, 버퍼 초과분 drop)
   const maxActivities = daySlotsConfig.reduce((s, dc) => s + Math.max(1, dc.slots - 2), 0);

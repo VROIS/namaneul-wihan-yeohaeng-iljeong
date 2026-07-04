@@ -42,7 +42,8 @@ export default function MainTabNavigator() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
   const theme = Colors[colorScheme ?? "light"];
-  const { showMap, toggleMap } = useMapToggle();
+  // ⚠️ 2026-07-03 사장님 SSOT = 지도는 결과화면 고정섹션이라 하단 지도토글 버튼(showMap)은 죽은 버튼 = "AI 의견" 버튼으로 교체.
+  const { currentItinerary, requestAiOpinion } = useMapToggle();
   // ⚠️ 수정금지(승인필요) — 삼성폰 하단 3버튼 겹침 방지 (SafeArea 여백)
   const insets = useSafeAreaInsets();
   const rootNavigation =
@@ -60,7 +61,7 @@ export default function MainTabNavigator() {
         iconName = "edit-3";
         break;
       case "Map":
-        iconName = "map";
+        iconName = "brain"; // ⚠️ 2026-07-03 = "AI 의견" 아이콘(Lucide, 이모지 금지). Icon.tsx 기존 매핑 재사용.
         break;
       case "Verify":
         iconName = "check-circle"; // ✅ 전문가 검증
@@ -130,26 +131,26 @@ export default function MainTabNavigator() {
             headerShown: false,
           }}
         />
-        {/* 🗺️ 지도 토글 버튼 (화면 이동 없이 일정표 내 지도 표시/숨김) */}
+        {/* 🧠 AI 의견 (여정 생성 후에만 활성. 지도는 결과화면 고정섹션이라 이 탭 자리를 대체함) */}
         <Tab.Screen
           name="Map"
           component={MapTogglePlaceholder}
           options={{
-            tabBarLabel: t("tab.map"),
+            tabBarLabel: t("tab.aiOpinion"),
             headerShown: false,
-            // 지도 활성화 상태에 따라 아이콘 색상 변경
-            tabBarIcon: ({ focused }) => (
+            // 여정 없으면 비활성(회색), 있으면 활성(브랜드색)
+            tabBarIcon: () => (
               <Icon
-                name={showMap ? "x" : "map"}
+                name="brain"
                 size={24}
-                color={showMap ? Brand.primary : theme.textTertiary}
+                color={currentItinerary ? Brand.primary : theme.textTertiary}
               />
             ),
           }}
           listeners={{
             tabPress: (e) => {
-              e.preventDefault(); // 화면 이동 방지
-              toggleMap(); // 지도 토글
+              e.preventDefault(); // 화면 이동 방지(결과화면 위 오버레이로 표시)
+              if (currentItinerary) requestAiOpinion(); // 여정 없으면 무동작(비활성)
             },
           }}
         />

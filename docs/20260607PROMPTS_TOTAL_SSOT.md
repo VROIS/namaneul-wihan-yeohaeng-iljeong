@@ -83,6 +83,7 @@ places.id,places.displayName,places.formattedAddress,places.location,places.user
 | **#03** | 동선 최적화 handleRouteRequest | Gemini | gemini-3-flash-preview / grounding ON | live | [route-prompt.ts](../server/services/route/route-prompt.ts) |
 | **#04** | 도시 메타 백필 fetchCityMetaFromGemini | Gemini | gemini-3-flash-preview / grounding ON | live | [gemini-city-meta.ts:22](../server/services/shared/gemini-city-meta.ts) |
 | **#05** | 숏폼 시나리오 통합 (11) | Gemini | gemini-3-flash-preview | ⚠️봉쇄(호출0) | [11/STANDARD_PROMPT](../fillcity/prompts/11-main-app-scenario/STANDARD_PROMPT_2026-05-25.md) |
+| **#05B** | "AI 의견" 여정 비평 재평가 handleAiOpinionRequest | Gemini | gemini-3-flash-preview / grounding ON | live | [ai-opinion-prompt.ts](../server/services/verify/ai-opinion-prompt.ts) · [ai-opinion-handler.ts](../server/services/verify/ai-opinion-handler.ts) |
 | **#06** | 01 비식당 6카테고리 발굴 | Gemini | gemini-3-flash-preview / grounding ON | live(12로 대체) | [01/prompt.txt](../fillcity/prompts/01-discover-6cats/prompt.txt) |
 | **#07** | 02 장소 보강 큐레이션 (라이브 게이트웨이) | Gemini | gemini-3-flash-preview / grounding ON | live | [02/prompt.txt](../fillcity/prompts/02-enrich-place/prompt.txt) · [gemini-curate.ts](../server/services/shared/gemini-curate.ts) |
 | **#08** | 05 식당 재검증 | Gemini | gemini-3-flash-preview / grounding ON | live | [05-reverify/prompt.txt](../fillcity/prompts/05-restaurant-reverify/prompt.txt) |
@@ -400,6 +401,55 @@ ${focus.sample_narration}
 6. 시나리오 톤 = ${focus.tone_ko} + age "${formData.ageDesc}" + 슬랭 OK.
 7. 응답 = JSON 만 (= markdown X).
 ```
+
+### #05B · "AI 의견" 여정 비평 재평가 `handleAiOpinionRequest` (geminiClient 경유) [2026-07-04 신규]
+- **파일**: `server/services/verify/ai-opinion-handler.ts` (프롬프트 정의 = `server/services/verify/ai-opinion-prompt.ts` `generateAiOpinionPrompt`) · **상태**: live · **모델**: `gemini-3-flash-preview`
+- **설정**: temperature 0.2 / maxOutputTokens 50000 / googleSearch ON(그라운딩) / rawTag `ai-opinion` / contextId `runtime` (= geminiJson 단일관문 경유, §16)
+- **조건**: 사용자가 결과화면 하단 "AI 의견"(②탭 brain) 버튼 터치 시 = 완성된 여정을 통째로 Gemini에 보내 **가장 비평적·적대적 관점**으로 재평가. 핵심 = **1인당 하루 총비용(대중교통+식비+입장료)을 구글 그라운딩으로 실요금 검증**. 캐싱 = `raw_data.verification`(여정지문 fp + 언어 동일하면 재호출 X = $0). 사용자 차감 = 5크레딧(추후 크레딧 시스템).
+- **프롬프트 원본**: 인라인 (아래 verbatim = `ai-opinion-prompt.ts:96-132` 1:1). `${...}` = 런타임 치환(언어지시·여정 JSON). vibe 등은 하드코딩 번역맵 없이 `buildAiOpinionInputJson()`이 실제 데이터를 JSON으로 그대로 실음(route-prompt 패턴).
+
+```
+# 역할
+당신은 여행 전문가이자 냉정한 비평가입니다.
+
+# 언어
+${langInstruction}
+
+# 목표
+아래 확정된 여행 일정을 검토하고, 가장 비평적·적대적인 관점으로 평가하세요.
+실현 불가능한 부분, 비효율적인 동선, 과잉 일정, 놓친 위험 요소를 냉정하게 지적하세요.
+사용자가 실제로 갔을 때 실패할 지점을 앞서 경고해야 합니다.
+
+# 검증 원칙
+- 모든 사실(가격·영업시간·거리)은 반드시 구글 검색(Google Search grounding)으로 검증하세요.
+- 확인 안 된 추측은 금지합니다.
+- protagonist.vibes = 사용자가 선택한 여행 취향(vibe id + 가중치 + 우선순위). 이 취향에 실제로 맞는 일정인지도 평가하세요.
+
+# 가격 검증 (가장 중요 = 사용자가 가장 민감하게 보는 항목)
+일자(day)별로 "1인당 하루 총비용"을 계산하세요. 하루 총비용 = 대중교통비 + 식비 + 입장료 의 합산입니다.
+- 대중교통비: 그 날 장소 간 이동 횟수만큼 현지 대중교통(지하철/버스) 실제 요금을 구글 검색으로 확인해 합산하세요.
+- 식비: 입력에 price_eur가 있는 장소(식당)는 그 값을 우선 쓰되, 실제 시세와 차이가 크면 구글 검색으로 보정하세요.
+- 입장료: 입력에 price_eur가 없는 장소는 실제 입장료를 구글 검색으로 확인하세요(무료면 0).
+
+# 입력
+${JSON.stringify(inputJson, null, 2)}
+
+# 출력 형식 (반드시 이 JSON 구조만 반환, 마크다운/설명 텍스트 금지)
+# ⚠️ verdict 값("ok"|"caution"|"risky")과 필드명은 그대로 영문 유지. 값 안의 문장/텍스트만 지정된 언어로 작성.
+{
+  "feasibility": { "verdict": "ok" | "caution" | "risky", "reason": "이유 설명 문장" },
+  "route_review": { "issues": ["동선/일정 문제점 목록"], "optimization": ["최적화 제안 목록"] },
+  "price_check": {
+    "daily": [{ "day": 숫자, "transport_eur": 숫자, "meals_eur": 숫자, "entrance_eur": 숫자, "total_eur": 숫자 }],
+    "total_est_eur": 숫자
+  },
+  "cautions": ["주의사항 목록"],
+  "expert_hint": "더 확실한 검증이 필요하면 현지 전문가에게 물어보길 권하는 자연스러운 한 문장"
+}
+```
+
+> **입력 JSON 구조**(`buildAiOpinionInputJson`) = `{ trip{destination,start_date,end_date}, protagonist{companion_type,headcount,focus,vibes[{vibe,weight,priority}],travel_style,mobility_style,travel_pace}, days[{day,places[{name,start_time,end_time,price_eur}]}] }`. **번역맵 없음** = vibe/동행 값 원본 그대로 = Gemini 문맥 해석(사장님 SSOT).
+> **언어지시(`langInstruction`)** = `LANG_INSTRUCTION[language]` 7종 = ko "반드시 한국어로만 답하세요." / en "Answer entirely in English." / ja "必ず日本語で答えてください。" / fr "Répondez entièrement en français." / zh "请完全用中文回答。" / es "Responda completamente en español." / de "Antworten Sie vollständig auf Deutsch." (= pipeline-v3 langMap 패턴 복제, i18n SUPPORTED_LANGS 정합)
 
 ## Gemini 스킬 발굴/큐레이션 도구 (#06~#09, prompt.txt 본문 verbatim 인라인) <!-- #10=13 삭제 2026-06-23 §19·§20 -->
 

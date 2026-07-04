@@ -152,8 +152,9 @@ export function round2(num: number): number {
 }
 
 /**
- * 가이드 카테고리 판별
- * mobilityStyle = Minimal OR travelStyle = Premium/Luxury → 가이드
+ * ⚠️ 2026-07-04 사장님 SSOT = 드라이빙 가이드 판별 = 아래 4가지 중 하나라도 = 무조건 가이드(사장님 본업 퍼널).
+ *   이동 = Minimal(이동최소화) OR Moderate(적당히) / 예산 = Premium OR Luxury.
+ *   = 많이걷기(WalkMore) + 합리적/경제적 조합만 대중교통, 나머지는 전부 드라이빙 가이드.
  */
 export function shouldApplyGuidePrice(
   mobilityStyle: MobilityStyle,
@@ -161,7 +162,7 @@ export function shouldApplyGuidePrice(
 ): boolean {
   const ms = (mobilityStyle || '').toLowerCase();
   const ts = (travelStyle || '').toLowerCase();
-  return ms === 'minimal' || ms === 'drivemore'
+  return ms === 'minimal' || ms === 'moderate'
     || ts === 'premium' || ts === 'luxury';
 }
 
