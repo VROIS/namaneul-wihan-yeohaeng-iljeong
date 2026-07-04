@@ -40,6 +40,13 @@ TRIPIS (TRIP + JARVIS) is a React Native/Expo travel application with an Express
 - **결론**: 신규 커밋을 Pull한 뒤에는 여전히 사용자가 Agent에게 알려야 하며, 그 다음부터 diff 확인 → 조건부 빌드(`npm run server:build` / `npx expo export --platform web`) → 워크플로우 재시작(순서: Start application → Start Frontend) → 검증 → `suggest_deploy` 안내는 Agent가 빠르게 처리
 - 배포(Publish) 버튼 클릭은 항상 사용자가 직접 수행해야 함 (Agent 대행 불가)
 
+## `git push` 자동화 — 최종 결정 (확정, 앞으로 재검토 불필요)
+- 여러 태스크(#10, #11, #13)에서 반복 확인됨: 격리된 task-agent 컨테이너에서 `origin`(GitHub 연결됨)으로 `git push`를 실행하면 **항상 401 인증 오류**로 실패함. GitHub 연결을 재연결해도 동일하게 실패함.
+- 원인: Replit의 `replit-git-askpass` 헬퍼가 사용자의 **살아있는 브라우저 세션**에 떠 있는 로컬 릴레이(포트 8284)를 통해 GitHub OAuth 토큰을 가져오는데, 이 릴레이는 백그라운드 task-agent 컨테이너의 네트워크에서 접근 불가능함. 자세한 내용: `.agents/memory/github-push-requires-live-session.md`
+- PAT(Personal Access Token)를 시크릿으로 저장해 자동 푸시를 구성하는 방안도 검토했으나 **채택하지 않음** — agent(main/task 모두)는 `.git`/remote 설정 변경 같은 git 작업 자체가 플랫폼 정책상 금지되어 있어(버전 관리는 플랫폼이 전담), 토큰 기반 credential helper를 agent가 직접 구성/실행하는 것 자체가 불가능함.
+- **최종 결정**: `git push`(GitHub `origin`으로의 최종 푸시)는 **항상 사용자가 Replit Git 탭에서 직접 클릭**해야 함. 앞으로 어떤 태스크에도 "GitHub에 푸시까지 완료" 를 자동화 목표로 넣지 말 것 — task agent는 로컬 merge/rebase, diff 확인, 빌드/재시작, 검증까지만 수행하고, 마지막 푸시는 항상 사용자에게 안내하고 넘긴다.
+- 이 결정은 재조사 없이 그대로 따를 것. 새로운 Replit 플랫폼 기능(예: 서버사이드 PAT 연동)이 생기기 전까지는 유효함.
+
 ## Development Workflow
 - Backend: `npx tsx server/index.ts` (starts Express server on port 5000)
 - Frontend (Expo Go): 아래 워크플로우 명령어 참조
@@ -85,3 +92,4 @@ EXPO_PACKAGER_PROXY_URL=https://828b2285-99c5-4cc9-9bcd-a09cdff531bc-00-kzvu1v5x
 - 2026-02-24: Initial Replit setup - configured port 5000, CORS for Replit proxy, cache headers, PostgreSQL database, deployment config
 - 2026-04-13: Expo Go Replit 표준화 — app.config.js 삭제, serveExpoManifest() 제거, EXPO_PUBLIC_DOMAIN 설정, REACT_NATIVE_PACKAGER_HOSTNAME=*.expo.sisko.replit.dev 고정, 워크플로우 명령어 확정
 - 2026-04-26: Expo Go 커맨드 재확정 — REACT_NATIVE_PACKAGER_HOSTNAME → EXPO_PACKAGER_PROXY_URL 전환 (포트 자동화 원칙: Metro가 :8081 강제 부착하는 구식 방식 폐기, Replit 프록시 자동 라우팅으로 일원화)
+- 2026-07-04: `git push` 자동화 최종 결정 — PAT 기반 자동 푸시는 채택하지 않고, 최종 GitHub 푸시는 항상 사용자가 Git 탭에서 직접 수행하는 것으로 확정 (task agent는 로컬 merge/빌드/검증까지만 담당)
