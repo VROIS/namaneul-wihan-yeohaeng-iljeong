@@ -1,0 +1,12 @@
+---
+name: GitHub HTTPS push needs a live browser session, not just an isolated task-agent container
+description: Explains why `git push origin main` to a GitHub-connected `origin` remote can fail from an isolated task-agent container even though `git fetch`/`git merge` work fine there.
+---
+
+Unlike `fetch`/`merge` (which a genuine isolated task-agent container can run successfully — see `git-write-ops-blocked-for-main-agent.md`), pushing to an `origin` remote that points at `https://github.com/...` depends on Replit's `replit-git-askpass` helper calling a **local relay service on port 8284** (`curl localhost:8284/<session>/github/token`) to fetch the user's connected GitHub OAuth token. That relay is tied to a live interactive Replit session (the user's open browser tab), not to the git repo itself.
+
+**Why:** In an isolated task-agent execution, `REPLIT_ASKPASS_PID2_SESSION` may still be set, but the port-8284 relay it points to is unreachable (curl hangs/times out), so GitHub receives an empty/invalid credential and returns 401 ("Password authentication is not supported for Git operations").
+
+**How to apply:** If a task requires pushing to a GitHub-backed `origin` from a task-agent container and the push fails with a 401 auth error immediately after a clean local merge, don't keep retrying the same `git push` — that's a structural gap, not a flaky failure. Options, in order of preference: (1) do all safe local prep (merge, verify ancestry, build/workflow sanity checks) and hand off the final `git push` to the user via the Replit Git pane's own Push button, which runs in their live session and works; (2) ask the user for a GitHub Personal Access Token stored as a secret and use it directly in the remote URL/credential helper for a fully agent-driven push, if they want that instead of manual clicking.
+
+**Update:** Confirmed the failure is NOT about whether the GitHub connection itself is stale — even after the user fully disconnected and reconnected GitHub in Git pane Settings (Connections section showed "Active" plus a correct Commit-author binding), `git push` from this task-agent container still hung/timed out. The port-8284 relay is simply unreachable from this container's network namespace regardless of account-side auth state. Don't spend more turns trying to "fix" the connection from the agent side — the push must happen from the user's own live Git pane click.
