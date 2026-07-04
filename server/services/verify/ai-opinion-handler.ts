@@ -23,7 +23,6 @@ export interface AiOpinionResponse {
   route_review: { issues: string[]; optimization: string[] };
   price_check: { daily: AiOpinionDailyPrice[]; total_est_eur: number };
   cautions: string[];
-  expert_hint: string;
 }
 
 export interface AiOpinionHandlerResult {

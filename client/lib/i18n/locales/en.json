@@ -285,7 +285,8 @@
     "total": "Total Estimate",
     "estimateNote": "AI estimate — actual costs may vary",
     "error": "Failed to load AI opinion",
-    "creditNote": "This review used {{count}} credits"
+    "creditNote": "This review used {{count}} credits",
+    "expertCta": "This AI opinion is for reference only. Verify again with a local expert before your trip."
   },
   "labels": {
     "curationKids": "Kids",

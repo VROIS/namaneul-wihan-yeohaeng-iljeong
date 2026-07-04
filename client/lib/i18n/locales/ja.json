@@ -285,7 +285,8 @@
     "total": "合計予想額",
     "estimateNote": "AI推定値のため実際と異なる場合があります",
     "error": "AI意見を取得できませんでした",
-    "creditNote": "この検討に{{count}}クレジットを使用しました"
+    "creditNote": "この検討に{{count}}クレジットを使用しました",
+    "expertCta": "AIの意見は参考用です。ご旅行前に現地の専門家に再度ご確認ください。"
   },
   "labels": {
     "curationKids": "子ども",

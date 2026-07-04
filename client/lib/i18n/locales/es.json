@@ -285,7 +285,8 @@
     "total": "Total estimado",
     "estimateNote": "Estimación de IA — los costos reales pueden variar",
     "error": "No se pudo cargar la opinión de la IA",
-    "creditNote": "Este análisis usó {{count}} créditos"
+    "creditNote": "Este análisis usó {{count}} créditos",
+    "expertCta": "Esta opinión de IA es solo de referencia. Verifícala con un experto local antes de tu viaje."
   },
   "labels": {
     "curationKids": "Niños",

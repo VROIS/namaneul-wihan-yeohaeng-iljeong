@@ -127,7 +127,6 @@ ${JSON.stringify(inputJson, null, 2)}
     "daily": [{ "day": 숫자, "transport_eur": 숫자, "meals_eur": 숫자, "entrance_eur": 숫자, "total_eur": 숫자 }],
     "total_est_eur": 숫자
   },
-  "cautions": ["주의사항 목록"],
-  "expert_hint": "더 확실한 검증이 필요하면 현지 전문가에게 물어보길 권하는 자연스러운 한 문장"
+  "cautions": ["주의사항 목록"]
 }`;
 }

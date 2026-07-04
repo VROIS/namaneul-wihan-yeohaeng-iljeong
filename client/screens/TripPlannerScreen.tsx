@@ -477,6 +477,8 @@ export default function TripPlannerScreen() {
         }
         // 여정 본문 복원 = renderResult가 이 state로 그림
         setItinerary(raw as Itinerary);
+        // 🧠 2026-07-04 = 저장돼 있던 AI 의견 결과를 state로 복원 = 안 열고 재저장해도 [C]가 다시 박제(캐시 유실 방지). 없으면 null.
+        setAiOpinionData((raw as any).verification?.result ?? null);
         // 숙소 깃발·출발바 복원 = raw_data.days[].accommodation
         const accoms: DayAccommodation[] = (raw.days || [])
           .filter((d: any) => d.accommodation?.coords?.lat)
@@ -599,6 +601,9 @@ export default function TripPlannerScreen() {
                     departureTransit: result.departureTransit,
                     returnTransit: result.returnTransit,
                     transit: (result as any).transit || (d as any).transit,
+                    // 🧠 2026-07-04 사장님 SSOT = 화면이 읽는 가격·교통표시 갱신 = 숙소 재계산 후 가이드칩·교통비 실제 반영(버그① 해소).
+                    dailyCost: (result as any).dailyCost || (d as any).dailyCost,
+                    transportDisplay: (result as any).transportDisplay || (d as any).transportDisplay,
                   }
                 : d,
             );
@@ -795,6 +800,8 @@ export default function TripPlannerScreen() {
         formData.curationFocus,
       );
 
+      // 🧠 2026-07-04 = 새 여정 생성 = 옛 여정 AI 의견 state 폐기(다른 여정에 오박제 방지 = 저장 시 [C]가 옛 결과를 새 여정에 싣는 사고 차단).
+      setAiOpinionData(null);
       setItinerary({
         title: result.title || `${formData.destination} ${t("profile.trips")}`,
         destination: result.destination || formData.destination,
@@ -874,6 +881,9 @@ export default function TripPlannerScreen() {
       const userData = await getUserData();
       if (!userData) return;
 
+      // 🧠 2026-07-04 = 저장할 AI 의견 본문 = 화면 state에서 cached 플래그만 제외한 순수 결과(BE 직접캐시 저장분과 동일 모양 통일 §20).
+      const { cached: _c, ...aiOpinionResult } = (aiOpinionData || {}) as any;
+
       // 🏨 2026-07-03 사용자 SSOT = 저장시점 숙소 보관. dayAccommodations를 raw_data.days[].accommodation에 병합
       //   → 복원 시 숙소 깃발·출발바 재현(DB 숙소전용 컬럼 없음 = raw_data JSON에만). 숙소 미설정 Day는 그대로.
       const rawWithAccom = {
@@ -884,6 +894,11 @@ export default function TripPlannerScreen() {
             ? { ...d, accommodation: { name: acc.name, address: acc.address, coords: acc.coords, placeId: acc.placeId } }
             : d;
         }),
+        // 🧠 2026-07-04 사장님 SSOT = 화면에 뜬 AI 의견 결과(유료 Gemini)를 여정 저장에 함께 박제(구글이미지 스토리지 박제와 동일 원리).
+        //   → 복원 후 첫 클릭도 캐시 히트($0). fp는 BE(buildItineraryData)가 이 rawData로 서버 SSOT 계산(FE는 fp 재발명 금지 §16).
+        //   language는 응답 본문에 없으므로 지금 앱 언어를 함께 실음(BE fp의 :language 접미와 일치). AI 의견 안 봤으면(null) 미포함 = POST 종전 동작 동일.
+        //   cached 플래그는 벗겨 순수 본문만 저장 = BE 직접캐시 경로(result.response)와 동일 모양 = 저장 형태 1벌 통일(§20).
+        ...(aiOpinionData ? { verificationResult: { result: aiOpinionResult, language: i18n.language } } : {}),
       };
 
       // 일정 데이터 구성
@@ -2655,17 +2670,14 @@ export default function TripPlannerScreen() {
                       </>
                     )}
 
-                    {/* 현지 전문가 안내 = 클릭 유도 버튼 아닌 자연스러운 마무리 문장(하단탭에 이미 전문가검증 있음) */}
-                    {aiOpinionData.expert_hint && (
-                      <>
-                        <View style={[styles.aiOpinionDivider, { backgroundColor: theme.border }]} />
-                        <View style={styles.aiOpinionSection}>
-                          <Text style={[styles.aiOpinionBody, { color: theme.textSecondary, fontStyle: "italic" }]}>
-                            {aiOpinionData.expert_hint}
-                          </Text>
-                        </View>
-                      </>
-                    )}
+                    {/* 🧠 2026-07-04 사장님 SSOT = "현지 전문가에게 다시 검증하세요"는 이 앱의 목적 = 무조건 고정 표시(세이브존처럼 하드코딩).
+                        Gemini 자유생성 문구 폐기 = 2026-07-04 §19. 고정 i18n 문구(expertCta) 1벌만 항상 렌더. */}
+                    <View style={[styles.aiOpinionDivider, { backgroundColor: theme.border }]} />
+                    <View style={styles.aiOpinionSection}>
+                      <Text style={[styles.aiOpinionBody, { color: theme.textSecondary, fontStyle: "italic" }]}>
+                        {t("aiOpinion.expertCta")}
+                      </Text>
+                    </View>
                     {/* 🧠 2026-07-04 사장님 SSOT = 크레딧(5) 차감 = 로딩 중엔 감춤, 결과 하단에만 조용히(textTertiary). */}
                     <Text style={[styles.aiOpinionEstimateNote, { color: theme.textTertiary, marginTop: Spacing.lg }]}>
                       {t("aiOpinion.creditNote", { count: AI_OPINION_CREDIT_COST })}

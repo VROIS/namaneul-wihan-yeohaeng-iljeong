@@ -19,6 +19,16 @@ import { eq, sql, ilike, and, desc, asc } from "drizzle-orm";
 import { validateFieldMask } from "./shared/google-places-sku";
 // ⚠️ 수정금지(승인필요) 2026-05-19 = MEAL_BUDGET 단일 SSOT (= types.ts) = 자체 정의 폐기
 import { MEAL_BUDGET, type TravelStyle } from "./agents/types";
+// ⚠️ 2026-07-04 사장님 SSOT = 숙소 재계산(regenerate)의 교통 판별·가격·표시 = 최초생성(pipeline-v3/ag4)과 동일 SSOT 재사용(§16 재발명금지).
+//   = shouldApplyGuidePrice(이동+예산) 단일 판별 / calculateTransportPrice(가이드·대중교통 1인1일 SSOT) / calculateUberBlackHourly(가이드 비교값).
+import {
+  shouldApplyGuidePrice,
+  calculateTransportPrice,
+  calculateUberBlackHourly,
+  round2,
+  type GuidePriceResult,
+  type TransitPriceResult,
+} from "./transport-pricing-service";
 
 // Lazy initialization - DB에서 API 키 로드 후 사용
 let ai: GoogleGenAI | null = null;
@@ -1207,6 +1217,9 @@ async function regenerateDay(params: {
   departureTransit?: any;
   returnTransit?: any;
   transit?: any;
+  // ⚠️ 2026-07-04 사장님 SSOT = 화면이 실제 읽는 가격·교통표시 = 반드시 반환(없으면 숙소 재계산해도 칩·가격 stale = 버그 미해결).
+  dailyCost?: any;
+  transportDisplay?: any;
 }> {
   const { day, accommodationCoords, places, formData } = params;
 
@@ -1235,13 +1248,20 @@ async function regenerateDay(params: {
     }
   }
 
-  // 이동시간 재계산
-  const travelMode =
-    formData?.mobilityStyle === "WalkMore"
-      ? ("WALK" as const)
-      : formData?.mobilityStyle === "Minimal"
-        ? ("DRIVE" as const)
-        : ("TRANSIT" as const);
+  // ⚠️ 2026-07-04 사장님 SSOT = 옛 "mobilityStyle만 3분기(WalkMore/Minimal/그외)" 완전삭제(§19) → shouldApplyGuidePrice(이동+예산) 단일 SSOT.
+  //   = 최초생성(route-local·pipeline-v3·ag4)과 동일 판별 = 숙소 재계산해도 프리미엄/럭셔리·이동최소는 드라이빙 가이드 유지(버그① 해소).
+  const isGuideDay = shouldApplyGuidePrice(formData?.mobilityStyle, formData?.travelStyle);
+  const travelMode: TravelMode = isGuideDay
+    ? "DRIVE"
+    : formData?.mobilityStyle === "WalkMore"
+      ? "WALK"
+      : "TRANSIT";
+  // 화면 3분기(도보/대중교통/드라이빙 가이드) 정합용 표시 mode. calc 결과 'drive'는 화면이 인식 못 하므로 여기서 private_guide로 덮음(pipeline-v3:963 정합).
+  const feMode: "walk" | "metro" | "private_guide" = isGuideDay
+    ? "private_guide"
+    : travelMode === "WALK"
+      ? "walk"
+      : "metro";
   const companionCount = formData
     ? getCompanionCount(formData.companionType || "Solo")
     : 2;
@@ -1249,25 +1269,31 @@ async function regenerateDay(params: {
   const transits: any[] = [];
 
   // ⚠️ 수정금지(승인필요) 2026-05-20 = Google Routes API 폐기 = Haversine 자체 계산 (= 사용자 SSOT)
+  // ⚠️ 2026-07-04 사장님 SSOT = 3개 호출 모두 5번째 인자 center(=숙소좌표) 전달 = DRIVE 도심/외곽 30·70km/h 분기 적용(최초생성 정합, 버그② 해소).
+  //   반환 mode = feMode로 덮음 = 화면 3분기(도보/대중교통/드라이빙 가이드) 정합(calc의 'drive'는 화면이 대중교통으로 오인, 버그③ 해소).
   // 숙소 → 첫 장소
   let departureTransit: any;
   if (accommodationCoords && reordered.length > 0) {
-    departureTransit = calcTransitHaversine(
-      {
-        lat: accommodationCoords.lat,
-        lng: accommodationCoords.lng,
-        name: "🏨 숙소",
-      },
-      { lat: reordered[0].lat, lng: reordered[0].lng, name: reordered[0].name },
-      travelMode as TravelMode,
-      companionCount,
-    );
+    departureTransit = {
+      ...calcTransitHaversine(
+        {
+          lat: accommodationCoords.lat,
+          lng: accommodationCoords.lng,
+          name: "🏨 숙소",
+        },
+        { lat: reordered[0].lat, lng: reordered[0].lng, name: reordered[0].name },
+        travelMode,
+        companionCount,
+        accommodationCoords,
+      ),
+      mode: feMode,
+    };
   }
 
   // 장소 간 이동
   for (let i = 0; i < reordered.length - 1; i++) {
-    transits.push(
-      calcTransitHaversine(
+    transits.push({
+      ...calcTransitHaversine(
         {
           lat: reordered[i].lat,
           lng: reordered[i].lng,
@@ -1278,26 +1304,32 @@ async function regenerateDay(params: {
           lng: reordered[i + 1].lng,
           name: reordered[i + 1].name,
         },
-        travelMode as TravelMode,
+        travelMode,
         companionCount,
+        accommodationCoords,
       ),
-    );
+      mode: feMode,
+    });
   }
 
   // 마지막 장소 → 숙소
   let returnTransit: any;
   if (accommodationCoords && reordered.length > 0) {
     const last = reordered[reordered.length - 1];
-    returnTransit = calcTransitHaversine(
-      { lat: last.lat, lng: last.lng, name: last.name },
-      {
-        lat: accommodationCoords.lat,
-        lng: accommodationCoords.lng,
-        name: "🏨 숙소",
-      },
-      travelMode as TravelMode,
-      companionCount,
-    );
+    returnTransit = {
+      ...calcTransitHaversine(
+        { lat: last.lat, lng: last.lng, name: last.name },
+        {
+          lat: accommodationCoords.lat,
+          lng: accommodationCoords.lng,
+          name: "🏨 숙소",
+        },
+        travelMode,
+        companionCount,
+        accommodationCoords,
+      ),
+      mode: feMode,
+    };
   }
 
   const allTransits = [
@@ -1306,6 +1338,86 @@ async function regenerateDay(params: {
     ...(returnTransit ? [returnTransit] : []),
   ];
 
+  // ⚠️ 2026-07-04 사장님 SSOT = 교통비·표시 = 최초생성(pipeline-v3:955~1066)과 동일 조립 = calculateTransportPrice 단일 SSOT(§16).
+  //   옛 "구간 km × 정액" 합산 완전삭제(§0·§19). 가이드 하루요금·대중교통 하루요금 모두 이 함수가 1인1일로 계산.
+  const start = formData?.startTime || "09:00";
+  const end = formData?.endTime || "21:00";
+  const [sh, sm] = start.split(":").map(Number);
+  const [eh, em] = end.split(":").map(Number);
+  const availableHours = Math.max(4, round2((eh * 60 + em - (sh * 60 + sm)) / 60));
+  // ⚠️ 2026-07-04 사장님 SSOT = dayCount = 최초생성과 동일 계산(calculateDayCount, 로컬 SSOT) = startDate~endDate에서 도출.
+  //   옛 "formData?.dayCount||1" 폐기(§19) = 그 필드는 formData에 없어 항상 1 = 5일+ 대중교통 여정에서 최초생성(Navigo 주간권)과 값 어긋남(§16/§20 위반).
+  const dayCount = formData?.startDate && formData?.endDate
+    ? calculateDayCount(formData.startDate, formData.endDate)
+    : 1;
+
+  // ⚠️ calculateTransportPrice는 companionType/mobilityStyle/travelStyle 필수(undefined면 내부 COMPANION_TO_TRANSPORT[undefined] 크래시).
+  //   최초생성(pipeline-v3:714~717)과 동일 기본값으로 채움 = 계약 충족(방어 남발 아님, 함수 필수 입력).
+  const priceResult = await calculateTransportPrice({
+    companionType: (formData?.companionType || "Couple") as any,
+    companionCount,
+    mobilityStyle: (formData?.mobilityStyle || "Moderate") as any,
+    travelStyle: (formData?.travelStyle || "Reasonable") as any,
+    availableHours,
+    dayCount,
+  });
+  const transportPerPersonPerDay = priceResult.perPersonPerDay || 0;
+
+  let transportDisplay: any;
+  if (isGuideDay) {
+    // 가이드: 구간별 비용 화면 숨김(일 총합만), 우버블랙 비교 조립(pipeline-v3:957~1013 정합)
+    allTransits.forEach((t: any) => { t.cost = 0; t.costTotal = 0; });
+    const routeSegments = allTransits.map((t: any) => {
+      const hasRealData = t.distance > 0 && t.duration > 0;
+      return {
+        distanceKm: hasRealData ? round2((t.distance || 0) / 1000) : 3.0,
+        durationMin: hasRealData ? (t.duration || 0) : 12,
+      };
+    });
+    const uberBlackComp = routeSegments.length > 0
+      ? calculateUberBlackHourly(availableHours, routeSegments, companionCount)
+      : null;
+    // KRW 필드는 제외 = 화면이 € 단독 표시(KRW 미참조 grep 0건) = 죽은 값 미복제(§0·§19). 환율 상수 재발명도 소멸(§16).
+    transportDisplay = {
+      category: "guide" as const,
+      perPersonPerDay: transportPerPersonPerDay,
+      uberBlackComparison: uberBlackComp ? {
+        perPersonPerDay: uberBlackComp.perPersonPerDay,
+        totalDistanceKm: uberBlackComp.totalDistanceKm,
+        totalDurationMin: uberBlackComp.totalDurationMin,
+      } : null,
+      vehicleDescription: priceResult.category === "guide"
+        ? (priceResult as GuidePriceResult).vehicleDescription : "전용 차량",
+      notes: priceResult.notes || [],
+    };
+  } else {
+    // 대중교통: 구간 상세 유지 + 가이드 업셀(클릭 가능) 조립(pipeline-v3:1014~1046 정합)
+    const guideUpsell = priceResult.category === "transit"
+      ? (priceResult as TransitPriceResult).guideUpsell : null;
+    transportDisplay = {
+      category: "transit" as const,
+      perPersonPerDay: transportPerPersonPerDay,
+      method: priceResult.category === "transit"
+        ? (priceResult as TransitPriceResult).method : "대중교통",
+      details: priceResult.category === "transit"
+        ? (priceResult as TransitPriceResult).details : "",
+      guideUpsell: guideUpsell ? {
+        perPersonPerDay: guideUpsell.perPersonPerDay,
+        vehicleDescription: guideUpsell.vehicleDescription,
+        clickable: true,
+      } : null,
+      notes: priceResult.notes || [],
+    };
+  }
+
+  // 식사·입장료 = 장소 집합 불변(순서만 바뀜) → 재계산 안전. 화면(dc.breakdown) 구조 그대로(pipeline-v3:1052~1065 정합).
+  const mealEur = reordered.reduce((s: number, p: any) => s + (p.isMealSlot && p.mealPrice ? p.mealPrice : 0), 0);
+  const entranceEur = reordered.reduce(
+    (s: number, p: any) => s + (!p.isMealSlot && typeof p.estimatedPriceEur === "number" && p.estimatedPriceEur > 0 && p.estimatedPriceEur < 500 ? p.estimatedPriceEur : 0),
+    0,
+  );
+  const perPersonEur = round2(mealEur + entranceEur + transportPerPersonPerDay);
+
   return {
     day,
     places: reordered,
@@ -1313,15 +1425,15 @@ async function regenerateDay(params: {
     returnTransit,
     transit: {
       transits: allTransits,
-      totalDuration: allTransits.reduce(
-        (sum: number, t: any) => sum + t.duration,
-        0,
-      ),
-      totalCost: allTransits.reduce(
-        (sum: number, t: any) => sum + t.costTotal,
-        0,
-      ),
+      totalDuration: allTransits.reduce((sum: number, t: any) => sum + t.duration, 0),
+      totalCost: allTransits.reduce((sum: number, t: any) => sum + t.costTotal, 0),
     },
+    // ⚠️ 화면(요약헤더·일별카드)이 실제 읽는 두 필드 = 반드시 반환(없으면 숙소 재계산해도 가격·가이드칩 stale = 버그 미해결). KRW 미참조라 EUR만.
+    dailyCost: {
+      perPersonEur,
+      breakdown: { mealEur, entranceEur, transportEur: transportPerPersonPerDay },
+    },
+    transportDisplay,
   };
 }
 

@@ -285,7 +285,8 @@
     "total": "Geschätzte Gesamtsumme",
     "estimateNote": "KI-Schätzung — tatsächliche Kosten können abweichen",
     "error": "KI-Meinung konnte nicht geladen werden",
-    "creditNote": "Diese Analyse hat {{count}} Credits verwendet"
+    "creditNote": "Diese Analyse hat {{count}} Credits verwendet",
+    "expertCta": "Diese KI-Meinung dient nur als Orientierung. Lassen Sie sie vor Ihrer Reise von einem lokalen Experten prüfen."
   },
   "labels": {
     "curationKids": "Kinder",

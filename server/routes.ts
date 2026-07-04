@@ -653,6 +653,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       reasonable: "comfort",
       economic: "comfort", // 🩹 [2026-01-26] DB Enum 불일치 방지
     };
+    // 🧠 2026-07-04 사장님 SSOT = AI 의견 결과 박제(구글이미지 스토리지 박제와 동일 원리). FE가 rawData.verificationResult(본문+언어)를 실으면
+    //   여기서 fp를 서버 단일 SSOT로 계산해 rawData.verification으로 봉인. POST·PUT 공통 1벌(§16 재발명금지·§20 통일).
+    //   → 저장 후 복원 → 첫 AI 의견 클릭도 fp 일치 = Gemini 재호출 $0(cached:true). fp는 저장될 rawData 그대로 계산 = 복원 시 fp와 정의상 동일.
+    //   verificationResult(임시 전달키)는 구조분해로 애초에 rawData에서 분리 = DB에 절대 안 새어나감(delete 방어 불필요 = §0 가벼움).
+    const { verificationResult: vr, ...rawData } = (body.rawData || {}) as any; // 🩹 [2026-01-26] raw_data 저장 (없으면 빈 객체)
+    if (vr?.result) {
+      const fp = `${computeItineraryFingerprint(rawData)}:${vr.language || "ko"}`;
+      (rawData as any).verification = { fp, result: vr.result, generatedAt: new Date().toISOString() };
+    }
     return {
       ...body,
       userId: "admin", // 🔧 로그인 제거: userId를 'admin'으로 고정
@@ -660,7 +669,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       endDate: body.endDate ? new Date(body.endDate) : new Date(),
       personaType: styleToPersonaType[body.travelStyle] || "comfort",
       travelStyle: styleToPersonaType[body.travelStyle] || "comfort",
-      rawData: body.rawData || {}, // 🩹 [2026-01-26] raw_data 저장 (없으면 빈 객체)
+      rawData,
     };
   };
 
@@ -695,19 +704,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const id = parseInt(req.params.id);
       await ensureAdminUser();
+      // 🧠 2026-07-04 = AI 의견 캐시 봉인은 buildItineraryData 단일 지점(§16). 재저장 시 FE가 verificationResult를 실으면
+      //   현재 내용 fp로 재봉인(내용 안 바뀌면 같은 fp = 캐시 유지, 바뀌면 새 fp = 다음 클릭에 정상 재호출). 옛 fp 보존 분기 폐기 §19(그 분기는
+      //   newFp에 :language 미부착이라 저장 fp와 절대 불일치 = 죽은 코드였음). DB 재조회 1회도 제거 = 더 가벼움 §0.
       const itineraryData = buildItineraryData(req.body);
-
-      // ⚠️ 2026-07-03 = 재저장은 여정 내용 전체 새덮어쓰기(§19 셀렉 금지, 여기까지 그대로)이나,
-      //   AI 의견 캐시(rawData.verification)는 여정 내용과 무관한 부가 캐시라 fp가 같으면(=내용 실제로 안 바뀜) 보존.
-      //   fp 다르면(=places/시간 등 변경) 캐시 폐기 = 다음 AI 의견 요청 시 자동 재호출.
-      const prevItinerary = await storage.getItinerary(id);
-      const prevVerification = (prevItinerary?.rawData as any)?.verification;
-      if (prevVerification && itineraryData.rawData) {
-        const newFp = computeItineraryFingerprint(itineraryData.rawData);
-        if (prevVerification.fp === newFp) {
-          (itineraryData.rawData as any).verification = prevVerification;
-        }
-      }
 
       console.log(`[Itinerary] Updating id=${id} (재저장 덮어쓰기)...`);
       const updated = await storage.updateItinerary(id, itineraryData);
