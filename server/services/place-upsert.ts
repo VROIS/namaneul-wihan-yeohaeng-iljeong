@@ -30,6 +30,10 @@ import { matchCandidate, type MatchedBy } from './shared/matcher';
 export interface UpsertPayload {
   cityId: number;
   seedCategory: string;  // 'restaurant' | 'attraction' | 'heritage' | ...
+  // ⚠️ 수정금지(승인필요) 2026-07-06 사장님 SSOT = rowId 직행 UPDATE(#45 repair.ts WHERE id=$1 방식).
+  //   = 있으면 7단계 매칭 완전 스킵하고 그 행에 직행 UPDATE. 발굴 후 "방금 INSERT한 신규행을 TS검증값으로 되덮을 때" 재매칭 실패(name_local·좌표 결손 시 중복 INSERT) 원천차단.
+  //   = 없으면(기본) 옛 동작 그대로 = 7단계 매칭 후 UPDATE/INSERT.
+  targetRowId?: number | null;
   // ⚠️ 2026-05-23 = 분류 단계 = phaseTags 배열 사용 (§19)
   rank?: number;
   // 식별 키 (= 5 단계 매칭)
@@ -82,6 +86,39 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
   }
   if (!p.cityId || !p.seedCategory || !p.nameEn) {
     return { action: 'skipped', rowId: null, matchedBy: 'none', reason: 'missing_required_fields' };
+  }
+
+  // ⚠️ 수정금지(승인필요) 2026-07-06 사장님 SSOT = targetRowId 직행 UPDATE(#45 repair.ts WHERE id=$1 방식).
+  //   = 발굴 후 "방금 INSERT한 신규행을 TS검증값으로 되덮을 때" = 7단계 매칭 스킵하고 그 행 직행 = 재매칭 실패(name_local·좌표 결손) 중복 INSERT 원천차단.
+  //   = COALESCE 새우선 §14갱신 동일(아래 매칭 UPDATE 와 같은 컬럼셋). tags=UNION. image_updated_at=이미지 있을때만.
+  if (p.targetRowId != null) {
+    const catTags = p.categoryTags && p.categoryTags.length > 0 ? p.categoryTags : [p.seedCategory];
+    const phTags = p.phaseTags || [];
+    await db.execute(sql`
+      UPDATE place_seed_raw SET
+        name_en       = COALESCE(${p.nameEn ?? null}, name_en),
+        name_ko       = COALESCE(${p.nameKo ?? null}, name_ko),
+        name_local    = COALESCE(${p.nameLocal ?? null}, name_local),
+        latitude      = COALESCE(${p.latitude ?? null}::real, latitude),
+        longitude     = COALESCE(${p.longitude ?? null}::real, longitude),
+        address       = COALESCE(${p.address ?? null}, address),
+        google_place_id = COALESCE(${p.googlePlaceId ?? null}, google_place_id),
+        google_review_count = COALESCE(${p.googleReviewCount ?? null}::integer, google_review_count),
+        google_primary_type = COALESCE(${p.googlePrimaryType ?? null}, google_primary_type),
+        google_maps_uri = COALESCE(${p.googleMapsUri ?? null}, google_maps_uri),
+        image_url     = COALESCE(${p.imageUrl ?? null}, image_url),
+        image_attribution = COALESCE(${p.imageAttribution ?? null}, image_attribution),
+        price_eur     = COALESCE(${p.priceEur ?? null}::real, price_eur),
+        editorial_summary = COALESCE(${p.shortformKo ?? null}, editorial_summary),
+        summary_ko        = COALESCE(${p.selectionReasonKo ?? null}, summary_ko),
+        day_zone          = COALESCE(${p.dayZone ?? null}, day_zone),
+        distance_km_from_center = COALESCE(${p.distanceKmFromCenter ?? null}::real, distance_km_from_center),
+        category_tags     = (SELECT ARRAY(SELECT DISTINCT unnest(COALESCE(category_tags, ARRAY[]::text[]) || ${sql.raw(`ARRAY[${catTags.map((s) => `'${s.replace(/'/g, "''")}'`).join(',')}]::text[]`)}))),
+        phase_tags        = (SELECT ARRAY(SELECT DISTINCT unnest(COALESCE(phase_tags, ARRAY[]::text[]) || ${sql.raw(`ARRAY[${phTags.length === 0 ? "" : phTags.map((s) => `'${s.replace(/'/g, "''")}'`).join(',')}]::text[]`)}))),
+        image_updated_at  = CASE WHEN ${p.imageUrl || null}::text IS NOT NULL THEN NOW() ELSE image_updated_at END
+      WHERE id = ${p.targetRowId}
+    `);
+    return { action: 'updated', rowId: p.targetRowId, matchedBy: 'none' };
   }
 
   // ⚠️ 수정금지(승인필요) 2026-05-23 = 사용자 SSOT = 글로벌 매칭 (= cityId 무관)

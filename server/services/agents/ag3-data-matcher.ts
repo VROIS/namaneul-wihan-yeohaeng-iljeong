@@ -577,13 +577,61 @@ export async function saveNewPlacesToDB(
   });
   const today = new Date().toISOString().slice(0, 10);
 
-  // 2. 병렬 처리 (= searchText + PhotoMedia + Storage + INSERT)
-  const results = await Promise.all(
+  // ⚠️ 수정금지(승인필요) 2026-07-05 사장님 SSOT = #45(fillcity/repair.ts) 방식 = 발굴 후 "신규만" enrich 2단계 분리.
+  //   순서 = ① Gemini 전체 upsert(있으면 UPDATE / 없으면 INSERT) → ② 신규(action='inserted')만 추출 → ③ 그 신규만 TS+PM → 재UPDATE.
+  //   = 옛 "22곳 전부 TS+PM 먼저 → 배치 upsertPlaces 나중" 폐기(§19). 매칭행/흡수행 유료 재호출 0(재과금 원천차단, 니스 €17 사고 코드원인 해소).
+  const { upsertPlace } = await import("../place-upsert");
+
+  // ── ① Gemini 전체 upsert(TS/PM 0회) = 셀렉없이 전체 새덮어쓰기. 매칭행=UPDATE / 진짜 신규=INSERT ──
+  //   = job 은 Gemini/매칭행(seedDirectMatch 주입) 값만. rank 는 upsertPlace INSERT 가 자체 재계산(place-upsert.ts:155) = job.rank 무시 = race 무해.
+  const stage1 = await Promise.all(
     toSave.map(async (place, i) => {
+      const seedCategory: string = (place as any).seedCategory
+        || (place.tags?.includes("restaurant") || place.tags?.includes("food") ? "restaurant" : "attraction");
+      // 🧠 좌표 = Gemini(place.lat/lng, ag3 매칭단계서 seed 폴백됨). 없으면 null(= 신규 INSERT 후 ③ TS 가 채움).
+      const gLat = (place as any).lat && (place as any).lat !== 0 ? (place as any).lat : null;
+      const gLng = (place as any).lng && (place as any).lng !== 0 ? (place as any).lng : null;
+      const job = {
+        cityId,
+        seedCategory,
+        rank: baseRanks[seedCategory] + i,
+        nameEn: (place as any).__seedDirectMatch?.nameEn || place.name,
+        nameKo: (place as any).nameKo ?? null,
+        nameLocal: (place as any).nameLocal ?? null,
+        address: (place as any).geminiAddress ?? null,
+        latitude: gLat,
+        longitude: gLng,
+        imageUrl: place.image || null,
+        googlePlaceId: (place as any).googlePlaceId ?? null,
+        shortformKo: place.description ?? null,                                  // → editorial_summary
+        selectionReasonKo: place.personaFitReason ?? place.description ?? null,  // → summary_ko
+        priceEur: (place as any).estimatedPriceEur || 0,
+        categoryTags: [seedCategory],
+        phaseTags: [`auto-learn-${today}`],
+        distanceKmFromCenter: (place as any).distanceKmFromCenter ?? null,
+      };
       try {
-        // ⚠️ 2026-06-24 §18·§20 = 단일 관문 tsSearch (= raw 2곳 자동저장). 반환 = TsPlace[] = [0] 채택.
-        // 🧠 2026-07-05 사장님 SSOT = Gemini 정확좌표를 TS 앵커 힌트로(§20). 옛 "도시중심(cityLat/cityLng) 단독" 폐기(§19)
-        //   = 동명 다른도시 장소 오매칭(리모주→페르비냥 396km) 원천차단. Gemini 좌표 있으면 10km 앵커, 없으면 도시중심 폴백(repair.ts:181 정합).
+        const r = await upsertPlace(job as any);
+        return { place, seedCategory, action: r.action, rowId: r.rowId };
+      } catch (e) {
+        console.error(`[AG3-SAVE] ❌ "${place.name}" Gemini upsert 실패:`, (e as Error).message);
+        return { place, seedCategory, action: "skipped" as const, rowId: null, error: (e as Error).message };
+      }
+    }),
+  );
+  const g1 = stage1.reduce((a, r: any) => { a[r.action] = (a[r.action] || 0) + 1; return a; }, {} as Record<string, number>);
+  console.log(`[AG3-SAVE] ① Gemini 전체 upsert = ins=${g1.inserted || 0} upd=${g1.updated || 0} skip=${g1.skipped || 0} (${stage1.length}행)`);
+
+  // ── ② 신규만 추출 = action='inserted' 인 것만 = 진짜 DB 에 없던 곳(매칭·흡수·race 는 제외 = 유료호출 0) ──
+  const newRows = stage1.filter((r: any) => r.action === "inserted" && r.rowId != null);
+  console.log(`[AG3-SAVE] ② 신규 추출 = ${newRows.length}곳 = TS+PM 대상 (매칭·흡수 ${stage1.length - newRows.length}곳 = 유료호출 0)`);
+
+  // ── ③ 신규만 TS+PM → ① 신규 rowId 직행 UPDATE = #45 순서(Gemini 힌트로 TS 검증). ──
+  //   = 재UPDATE 는 targetRowId(① 신규 rowId) 직행 = matcher 재매칭 안 씀 = name_local·좌표 결손 신규도 중복 INSERT 불가(§14).
+  const results = await Promise.all(
+    newRows.map(async ({ place, seedCategory, rowId }: any) => {
+      try {
+        // ⚠️ 2026-06-24 §18·§20 = 단일 관문 tsSearch (= raw 2곳 자동저장). Gemini 좌표 있으면 10m 앵커, 없으면 도시중심 폴백.
         const gLat = (place as any).lat && (place as any).lat !== 0 ? (place as any).lat : (cityLat || undefined);
         const gLng = (place as any).lng && (place as any).lng !== 0 ? (place as any).lng : (cityLng || undefined);
         const hasGeminiCoord = (place as any).lat && (place as any).lat !== 0;
@@ -591,51 +639,35 @@ export async function saveNewPlacesToDB(
           apiKey: GOOGLE_KEY,
           method: "searchText",
           cityId,
-          // 🧠 2026-07-05 사장님 SSOT(§20) = TS 힌트 = 진짜 로컬명(Gemini nameLocal) 전달. 옛 place.name(name_en) 대체 폐기(§19 = 셀렉 제거).
-          //   = name_local 없을 때만 name_en 폴백(빈 textQuery 방지). ts-client textQuery=[nameLocal,address] = 로컬명+주소+좌표앵커 3요소 다 넘김.
+          // 🧠 §20 = TS 힌트 = 로컬명(Gemini nameLocal)+주소+좌표앵커. name_local 없을 때만 name_en 폴백(빈 textQuery 방지).
           nameLocal: (place as any).nameLocal || place.name,
           address: (place as any).geminiAddress || undefined,
           latitude: gLat,
           longitude: gLng,
-          // ⚠️ 수정금지(승인필요) 2026-06-23 사장님 SSOT = 좌표 앵커 무조건 10m(repair.ts:36 ANCHOR_M 동일 = 동명 다른장소 차단 기준 단일).
-          //   = 2026-07-05 최초 반영 시 10000(10km)으로 오기(review 지적 CONFIRMED) → 10m 로 정정. §16 재발명 금지 = 값도 SSOT 그대로.
+          // ⚠️ 수정금지(승인필요) 2026-06-23 사장님 SSOT = 좌표 앵커 무조건 10m(repair.ts:36 ANCHOR_M 동일).
           anchorRadiusM: hasGeminiCoord ? 10 : undefined,
           rawTag: `ag3-${place.name}`,
         });
         const result = tsArr?.[0];
 
-        // 🧠 2026-07-05 새철학 = Gemini 먼저 upsert = TS 실패해도 Gemini 유료값(좌표/name_local/주소/거리)으로 job 생성 §14갱신/§19.
-        //   = TS 결과/좌표 없으면 return skip 방식(=Gemini 버림) 폐기 = 2026-07-05 §19. TS 성공 시 그 위에 검증값(PID·좌표·RC·priceRange) 덮음(새것 우선).
-        // 🧠 2026-07-05 새철학 = 폐업 게이트도 TS 있을 때만 적용(TS 없으면 판단 불가 = Gemini 로 저장). PhotoMedia 는 TS photoName 있을 때만.
+        // 폐업(TS) = FE·백필 제외. TS 없으면 이미 ① 에서 Gemini 로 저장됨(추가 갱신 없이 종료).
         if (result?.businessStatus === "CLOSED_PERMANENTLY") {
           (place as any).__closedPermanently = true;
           console.log(`[AG3-SAVE] 🚫 "${place.name}" = 영구 폐업(TS) = 백필·FE 제외`);
-          return { saved: 0, skipped: 1, enrichedByApi: 0, photoOk: 0, closedPermanently: 1 };
+          return { enrichedByApi: 0, photoOk: 0, closedPermanently: 1 };
         }
+        if (!result) return { enrichedByApi: 0, photoOk: 0 };  // TS 미검색 = ① Gemini 저장분 유지
 
-        // 좌표 = TS 검증값 우선, 없으면 Gemini(place.lat/lng). 둘 다 없으면 = 앵커 불가 = skip(진짜 저장할 게 없음).
-        const lat = (result?.latitude && result.latitude !== 0) ? result.latitude
-          : ((place as any).lat && (place as any).lat !== 0 ? (place as any).lat : null);
-        const lng = (result?.longitude && result.longitude !== 0) ? result.longitude
-          : ((place as any).lng && (place as any).lng !== 0 ? (place as any).lng : null);
-        if (!lat || !lng)
-          return { saved: 0, skipped: 1, enrichedByApi: 0, photoOk: 0 };
+        const lat = (result.latitude && result.latitude !== 0) ? result.latitude : ((place as any).lat || null);
+        const lng = (result.longitude && result.longitude !== 0) ? result.longitude : ((place as any).lng || null);
+        const placeId: string | null = result.googlePlaceId || (place as any).googlePlaceId || null;
 
-        // PID = TS 검증값 우선, 없으면 Gemini/매칭행(seedDirectMatch 주입값). null 가능(= URI/주소/좌표/이름 매칭에 위임).
-        const placeId: string | null = result?.googlePlaceId || (place as any).googlePlaceId || null;
-
-        // 🧠 2026-07-05 새철학 = Gemini seed_category(6종) 보존 = 없으면 식당태그→restaurant, 아니면 attraction 폴백.
-        const seedCategory: string = (place as any).seedCategory
-          || (place.tags?.includes("restaurant") || place.tags?.includes("food") ? "restaurant" : "attraction");
-
-        // 이미지 = TS photoName 있을 때만 PM(구글 검증 이미지 새덮어쓰기), 없으면 Gemini/seed 이미지(place.image) 유지 = 유료값 안 버림.
+        // 이미지 = TS photoName 있을 때만 PM(구글 검증 이미지 새덮어쓰기).
         let imageUrl: string | null = null;
-        const photoName = result?.photoName;
-        if (photoName && placeId) {
-          // ⚠️ §18·§20 = 단일 관문 tsPhoto (= PhotoMedia 다운 + Storage 업로드, maxWidthPx 800 = #45 정합)
+        if (result.photoName && placeId) {
           imageUrl = await tsPhoto({
             apiKey: GOOGLE_KEY,
-            photoName,
+            photoName: result.photoName,
             storageKey: SUPA_ANON,
             supaPublicUrl: SUPA_PUB,
             pathKey: `${cityId}/${seedCategory}/${placeId}`,
@@ -644,108 +676,64 @@ export async function saveNewPlacesToDB(
         }
         const finalImage = imageUrl || place.image || null;
 
-        // ⚠️ place 객체 직접 갱신 (= 호출자 baseline 반영, race X = 각 호출 자기 place 만)
-        place.lat = lat;
-        place.lng = lng;
+        // ④ FE 배선 = place 객체 직접 갱신(신규만) = TS 검증 좌표/이미지 최신 반영.
+        if (lat && lng) { place.lat = lat; place.lng = lng; }
         place.image = finalImage || "";
         if (placeId) (place as any).googlePlaceId = placeId;
-        (place as any).geminiAddress =
-          result?.address || (place as any).geminiAddress;
-        if (result?.googleReviewCount != null) place.userRatingCount = result.googleReviewCount;
+        (place as any).geminiAddress = result.address || (place as any).geminiAddress;
+        if (result.googleReviewCount != null) place.userRatingCount = result.googleReviewCount;
         console.log(
-          `[AG3-SAVE] 📡 "${place.name}" → (${lat}, ${lng}) pid=${placeId ? "TS/Gemini" : "NONE"} img=${imageUrl ? "Storage" : (place.image ? "Gemini" : "NULL")}`,
+          `[AG3-SAVE] 📡 신규 "${place.name}" → (${lat}, ${lng}) pid=${placeId ? "TS" : "NONE"} img=${imageUrl ? "Storage" : (place.image ? "Gemini" : "NULL")}`,
         );
 
-        // 가격 = TS priceRange.endPrice(최신 검증) 우선, 없으면 Gemini = COALESCE 새 우선(최신최우선) §14.
-        const tsPriceEur = result?.priceEur || 0;
-        const geminiPriceEur = (place as any).estimatedPriceEur || 0;
-        const newPriceEur = tsPriceEur > 0 ? tsPriceEur : geminiPriceEur;
-
-        const nextRank = baseRanks[seedCategory] + i;
-        // ⚠️ 수정금지(승인필요) §14 = upsertPlace() 통과 강제 = 7단계 매칭(PID>URI>풀주소>좌표10m>이름) + COALESCE 새 우선.
-        //   = upsert 즉시 await X = job 수집만 (= 아래 runUpserts 가 deferPersist 에 따라 background/await).
-        // 🧠 2026-07-05 새철학 = name_en = TS displayName(검증) 우선, 없으면 매칭행 nameEn, 없으면 place.name §14갱신.
-        //   = name_local/name_ko 는 별도 컬럼 = 절대 교차대체 금지.
-        const job = {
-          cityId: cityId,
+        // ③-b 재UPDATE = TS 검증값을 ① 신규 rowId 에 직행 UPDATE(#45 repair.ts WHERE id=$1 방식, targetRowId).
+        //   = matcher 재매칭 안 씀 = name_local·주소·좌표 결손 신규도 중복 INSERT 원천차단(§14). COALESCE 새우선.
+        const newPriceEur = (result.priceEur || 0) > 0 ? result.priceEur : ((place as any).estimatedPriceEur || 0);
+        const job2 = {
+          targetRowId: rowId,                                    // = ① 신규 rowId 직행 = 재매칭 실패 불가
+          cityId,
           seedCategory,
-          rank: nextRank,
-          nameEn: result?.nameEn || (place as any).__seedDirectMatch?.nameEn || place.name,
+          rank: baseRanks[seedCategory],
+          nameEn: result.nameEn || place.name,
           nameKo: (place as any).nameKo ?? null,
           nameLocal: (place as any).nameLocal ?? null,
-          address: result?.address ?? (place as any).geminiAddress ?? null,
+          address: result.address ?? (place as any).geminiAddress ?? null,
           latitude: lat,
           longitude: lng,
           imageUrl: finalImage,
           googlePlaceId: placeId,
-          googleMapsUri: result?.googleMapsUri ?? null,
-          shortformKo: place.description ?? null, // → editorial_summary
-          selectionReasonKo: place.personaFitReason ?? place.description ?? null, // → summary_ko
-          googleReviewCount: result?.googleReviewCount ?? 0,
+          googleMapsUri: result.googleMapsUri ?? null,
+          shortformKo: place.description ?? null,
+          selectionReasonKo: place.personaFitReason ?? place.description ?? null,
+          googleReviewCount: result.googleReviewCount ?? 0,
           priceEur: newPriceEur,
           categoryTags: [seedCategory],
           phaseTags: [`auto-learn-${today}`],
-          // 🧠 2026-07-05 새철학 = Gemini 도심거리 저장(§20 전필드) = 결손컬럼 채움 = 동선재료 보존.
           distanceKmFromCenter: (place as any).distanceKmFromCenter ?? null,
         };
+        const doUpdate = async () => { await upsertPlace(job2 as any); };  // = targetRowId 직행 = 항상 그 행 UPDATE
+        // deferPersist = TS 검증값 재UPDATE(DB write)만 background(FE 는 위 place mutate 로 이미 노출). 기본 = await.
+        if (opts?.deferPersist) doUpdate().catch((e) => console.error(`[AG3-SAVE] ⚠️ 재UPDATE 실패 "${place.name}":`, (e as Error).message));
+        else await doUpdate();
 
-        return {
-          saved: 1,
-          skipped: 0,
-          enrichedByApi: result ? 1 : 0,
-          photoOk: imageUrl ? 1 : 0,
-          job,
-        };
+        return { enrichedByApi: 1, photoOk: imageUrl ? 1 : 0 };
       } catch (e) {
-        // ⚠️ 2026-05-23 = silent fail 가시화 (= 사용자 SSOT = "5월 6일 백필 미작동" 진단 결과)
-        console.error(
-          `[AG3-SAVE] ❌ "${place.name}" 저장 실패:`,
-          (e as Error).message,
-        );
-        return {
-          saved: 0,
-          skipped: 0,
-          enrichedByApi: 0,
-          photoOk: 0,
-          error: (e as Error).message,
-        };
+        console.error(`[AG3-SAVE] ❌ 신규 "${place.name}" TS+PM 실패:`, (e as Error).message);
+        return { enrichedByApi: 0, photoOk: 0, error: (e as Error).message };
       }
     }),
   );
 
-  // ⚠️ 수정금지(승인필요) 2026-06-01 = 사용자 SSOT = fetch(TS+PM+Storage) 완료 = place.image 세팅됨 (= FE 노출 준비 끝)
-  // = DB INSERT 만 분리 = deferPersist 시 background(백필) / 기본 await(= 옛 동작 보존 = 롤백)
-  // = upsertPlaces (= place-upsert.ts 배치 단일 진입점 = 순차 5단계 매칭 = 중복 방지 §14 + shared 재사용 §16)
-  const { upsertPlaces } = await import("../place-upsert");
-  const upsertJobs = results.map((r: any) => r.job).filter(Boolean);
-  const runUpserts = async () => {
-    const s = await upsertPlaces(upsertJobs);
-    console.log(
-      `[AG3-SAVE] 💾 DB INSERT 완료 = ins=${s.inserted} upd=${s.updated} skip=${s.skipped} (${upsertJobs.length}행)`,
-    );
-  };
-  if (opts?.deferPersist) {
-    // = FE 우선 = upsert background (await X). .catch = unhandled rejection 방어 (= upsertPlaces 자체는 per-row catch 라 throw X)
-    runUpserts().catch((e) =>
-      console.error("[AG3-SAVE] ⚠️ background upsert 실패:", (e as Error).message),
-    );
-  } else {
-    await runUpserts(); // = 기본 = 응답 전 완료
-  }
-
-  // 3. 카운터 집계
+  // 집계 = ① upsert(ins/upd/skip) + ③ 신규 TS/PM 성공수(apiEnriched/photoOk).
   const totals = results.reduce(
     (acc, r: any) => ({
-      saved: acc.saved + r.saved,
-      skipped: acc.skipped + r.skipped,
-      enrichedByApi: acc.enrichedByApi + r.enrichedByApi,
-      photoOk: acc.photoOk + r.photoOk,
+      enrichedByApi: acc.enrichedByApi + (r.enrichedByApi || 0),
+      photoOk: acc.photoOk + (r.photoOk || 0),
       error: acc.error || r.error || "",
     }),
-    { saved: 0, skipped: 0, enrichedByApi: 0, photoOk: 0, error: "" },
+    { enrichedByApi: 0, photoOk: 0, error: "" },
   );
-
   console.log(
-    `[AG3] 🆕 saved=${totals.saved} skipped=${totals.skipped} apiEnriched=${totals.enrichedByApi} photoOk=${totals.photoOk} error="${totals.error}"`,
+    `[AG3] 🆕 신규 ${newRows.length}곳 = apiEnriched=${totals.enrichedByApi} photoOk=${totals.photoOk} error="${totals.error}" (매칭·흡수 ${stage1.length - newRows.length}곳 = 유료호출 0)`,
   );
 }
