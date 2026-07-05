@@ -104,7 +104,7 @@ async function saveTsRaw(method: string, req: TsSearchReq, raw: any): Promise<vo
 
 /**
  * 단일 TS 검색 관문 = 9요소 강제. 앱의 모든 searchText/searchNearby 는 이 함수만 통과.
- * 범위 우선순위: 사각형(발굴) > 좌표앵커(검증) > 원. 좌표 있으면 textQuery=로컬이름(단독), 없으면 이름+주소.
+ * 범위 우선순위: 사각형(발굴) > 좌표앵커(검증) > 원. textQuery = 보유한 이름+주소 전부 합침(좌표 유무 무관).
  */
 export async function tsSearch(req: TsSearchReq): Promise<TsPlace[]> {
   if (!req.apiKey) throw new Error('[tsSearch] apiKey 필수');
@@ -133,8 +133,12 @@ export async function tsSearch(req: TsSearchReq): Promise<TsPlace[]> {
     loc = { locationBias: { circle: { center: { latitude: req.latitude, longitude: req.longitude }, radius: Math.min(50000, req.circleRadiusM) } } };
   }
 
+  // ⚠️ 수정금지(승인필요) 2026-07-05 사장님 SSOT = 로컬이름+풀주소+좌표(10m 앵커) 3요소 전부 Google 에 제공.
+  //   = 옛 "좌표 있으면 이름 단독"(2026-06-XX) 폐기(§19) = locationBias 는 가중치일 뿐 강제필터가 아니라
+  //     이름만 보내면 동명·유사이름 원거리 업체가 최상위로 반환될 위험(리모주 실호출로 351km 오매칭 실증).
+  //     이름+주소를 textQuery 에 합치면 Google 자체 텍스트매칭이 정답을 최상위로 올림(실호출 검증 완료).
   const textQuery = req.textQuery
-    ?? (hasCoord ? (req.nameLocal || '') : [req.nameLocal, req.address].filter(Boolean).join(' '));
+    ?? [req.nameLocal, req.address].filter(Boolean).join(' ');
 
   // ⚠️ 수정금지(승인필요) — languageCode 제거(2026-06-17 사장님 SSOT) = lang(=req.languageCode) 있을 때만 키 삽입, 없으면 생략(한국어 강제 안 함)
   const body: any = isNearby

@@ -64,6 +64,10 @@ ${koreanTravelerStyle}
 [SLOT MATRIX — AG1 결정]
 ${dayRequirements}
 
+[CATEGORY MATRIX — 전체 여정 카테고리별 곳수 (= 사용자 vibe 반영, 반드시 이 비율로 선정)] (2026-07-05 추가)
+${categoryMatrix}
+- 각 place 의 seed_category 는 위 카테고리 중 하나로 정확히 지정 (heritage=문화/유산, healing=힐링/자연, hotspot=핫플, adventure=모험/액티비티, shopping=쇼핑, attraction=즐길거리/체험, restaurant=식당). 식사=restaurant.
+
 [동선 원칙]
 - 매일 ${formData.destination} 도시 중심부에서 출발·귀환, 같은 날 = 같은 구역 묶기
 - Array order within each day = visit order (= sorted by minimum travel distance from start)
@@ -83,15 +87,17 @@ For each place include (= ALL fields verified via Google Search grounding):
 - nameLocal (local language name = 예: 파리=Tour Eiffel) [= REQUIRED for Text Search forwarding + matching key, final DB column]
 - address (FULL street address with NUMBER + street + postal code + city) [= REQUIRED for Text Search forwarding + matching key, final DB column — verify via Google Search]
 - type ("activity" | "lunch" | "dinner")
+- seed_category (= 위 CATEGORY MATRIX 중 하나 = heritage|healing|hotspot|adventure|shopping|attraction|restaurant. 식사=restaurant) [= final DB column, 카테고리 보존 필수] (2026-07-05 추가)
 - latitude (= decimal 6 digits, e.g. 48.858370) [= REQUIRED for Text Search forwarding + matching key, final DB column — verify via Google Search, NO hallucination]
 - longitude (= decimal 6 digits, e.g. 2.294481) [= REQUIRED for Text Search forwarding + matching key, final DB column — verify via Google Search, NO hallucination]
 - estimatedCostEur (1 인 EUR)
+- distance_km_from_center (= 도심 중심으로부터 직선거리 km = haversine = 소수 1 자리 = 동선 최적화 기본 필수) (2026-07-05 추가)
 - selection_reason_ko (한국어 한 줄 = 한국 여행객 트렌드 = 인스타 성지/한국 vlog 등 사회적 검증)
 - shortform_ko (한국어 한 줄 = 장소에 대한 코믹/위트 = Claude 톤. 단순 정보 X = "프사각", "본전 뽑음" 같은 한국 슬랭)
 
 OUTPUT (strict JSON, no markdown fences):
 {"days":[{"day":1,"theme":"테마","places":[
-  {"name":"Eiffel Tower","nameKo":"에펠탑","nameLocal":"Tour Eiffel","address":"Champ de Mars, 5 Av. Anatole France, 75007 Paris","type":"activity","latitude":48.858370,"longitude":2.294481,"estimatedCostEur":29.4,"selection_reason_ko":"파리 인스타 인증샷 1순위 성지","shortform_ko":"파리 왔으면 외쳐줘야 국룰 '나 파리다!'"}
+  {"name":"Eiffel Tower","nameKo":"에펠탑","nameLocal":"Tour Eiffel","address":"Champ de Mars, 5 Av. Anatole France, 75007 Paris","type":"activity","seed_category":"attraction","latitude":48.858370,"longitude":2.294481,"estimatedCostEur":29.4,"distance_km_from_center":2.4,"selection_reason_ko":"파리 인스타 인증샷 1순위 성지","shortform_ko":"파리 왔으면 외쳐줘야 국룰 '나 파리다!'"}
 ]}]}
 ```
 

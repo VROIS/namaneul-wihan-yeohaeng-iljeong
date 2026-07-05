@@ -2,7 +2,7 @@
  * ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = AG2 = DB-only 단일 진입점
  *
  * AG2: place_seed_raw 직접 SELECT (= Gemini 호출 0)
- * = ready=true (= rank 1-20 ≥ 70 행) → fetchFromPlaceSeedRaw 반환
+ * = ready=true (= 전체 행수 ≥ 300) → fetchFromPlaceSeedRaw 반환
  * = ready=false → throw MIX_MODE_DISABLED (= MIX path = pipeline-v3.ts step1_geminiItinerary 표준 prompt 사용)
  */
 
@@ -19,13 +19,15 @@ import { findCityUnified } from "../city-resolver";
 /**
  * ⚠️ 수정금지(승인필요) 2026-05-07 = 사용자 명시 = 도시 입력 시점 분기 (백엔드만)
  * 도시 ready 판정 = 발굴 도시인지 미발굴 도시인지
- * = 발굴 (= place_seed_raw phase='gemini3-2026-05' rank 1-20 ≥ 70 행) → DB-only 경로
+ * = 발굴 (= place_seed_raw 전체 행수 ≥ 300) → DB-only 경로
  * = 미발굴 → Gemini + Google fallback + auto-learn 저장 (= Geneva 패턴)
  *
- * 임계값 70 = 7 카테고리 × 10 = 사용자 합의 = 충분 기준
+ * 🧠 2026-07-05 사장님 SSOT = 임계값 = 전체 행수 300 (= 도시특성 반영: 뮌헨 vs 보르도 식당 부족 차이가
+ *   후보군 포함 발굴 결과에 나타남 = 보통 완성도시는 300 이상). 옛 "rank 1-20 ≥ 70"(2026-05-07) 폐기(§19)
+ *   = rank 조건 제거 = place_seed_raw 의 city_id 별 전체 행수로 판정 (= 복잡할 이유 없음, 사장님 명시).
  * 프론트 UI 노출 X (= 사용자 명시 = 별도 안내 페이지 존재)
  */
-const READY_THRESHOLD = 70;
+const READY_THRESHOLD = 300;
 
 export async function isCityReady(destination: string): Promise<{
   ready: boolean;
@@ -43,14 +45,13 @@ export async function isCityReady(destination: string): Promise<{
   }
 
   // ⚠️ 수정금지(승인필요) 2026-05-21 = 사용자 SSOT = collection_phase 완전 폐기 (= 같은 장소 = 다른 phase = 같은 데이터)
+  // 🧠 2026-07-05 사장님 SSOT = 전체 행수 COUNT (= 후보군 포함). 옛 rank 1-20 제한(2026-05-07) 폐기(§19) = 도시특성이 전체 발굴량에 반영됨.
   const countRows = await db
     .select({
       count: sql<number>`COUNT(*)::int`,
     })
     .from(placeSeedRaw)
-    .where(
-      and(eq(placeSeedRaw.cityId, cityId), between(placeSeedRaw.rank, 1, 20)),
-    );
+    .where(eq(placeSeedRaw.cityId, cityId));
   const count = Number(countRows[0]?.count || 0);
   return {
     ready: count >= READY_THRESHOLD,
@@ -68,7 +69,7 @@ export async function isCityReady(destination: string): Promise<{
  */
 // ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = Romantic 모든 흔적 삭제 + Shopping 1:1 매핑
 // = PSR seedCategory 7 종과 1:1 직접 대응 (= 가짜 매핑 X)
-const VIBE_PRIMARY_CATEGORY: Record<string, string> = {
+export const VIBE_PRIMARY_CATEGORY: Record<string, string> = {
   Foodie: "restaurant", // = 내부 식당태그 유지(버튼 X)
   Healing: "healing",
   Hotspot: "hotspot",
@@ -77,6 +78,50 @@ const VIBE_PRIMARY_CATEGORY: Record<string, string> = {
   Culture: "heritage",
   Attraction: "attraction", // = 즐길거리(신규 버튼) → 테마파크·유람선·아쿠아리움·체험전시
 };
+
+// 🧠 2026-07-05 사장님 SSOT = vibe → 6카테고리 슬롯 분배 = 단일 SSOT(§16 재발명금지). DB-only(fetchFromPlaceSeedRaw)와 MIX(pipeline-v3 프롬프트) 공용.
+//   = 옛날엔 이 로직이 ag2 안에 인라인이라 MIX 가 못 씀 → 순수함수 추출 = DB-only 동작 불변(내부이동) + MIX 가 카테고리별 개수를 Gemini 에 전달 가능.
+//   = 식당 cap(일자×2 = 점심+저녁), 비식당 vibe 비율 재조정, 정수화·합계보정 = 기존 로직 그대로.
+export function computeCatSlots(
+  // 🧠 2026-07-05 = readonly + 구조적 최소필드(vibe/weight) = VibeWeight[](percentage 초과필드·Vibe→string 넓힘)를 캐스트 없이 수용 = 호출부 `as any` 제거
+  vibeWeights: readonly { vibe: string; weight: number }[],
+  totalSlots: number,
+  dayCount: number,
+): Record<string, number> {
+  const catSlots: Record<string, number> = {};
+  for (const vw of vibeWeights) {
+    const primary = VIBE_PRIMARY_CATEGORY[vw.vibe] || "attraction";
+    catSlots[primary] = (catSlots[primary] || 0) + vw.weight * totalSlots;
+  }
+  // 식당 = 2/일자 cap (= 점심 1 + 저녁 1)
+  const restaurantCap = dayCount * 2;
+  if (!catSlots.restaurant || catSlots.restaurant < dayCount) {
+    catSlots.restaurant = Math.min(restaurantCap, Math.ceil(totalSlots * 0.4));
+  }
+  // 식당 cap 적용 (= 초과 분 = 비식당 으로 재분배)
+  if (catSlots.restaurant > restaurantCap) {
+    const overflow = catSlots.restaurant - restaurantCap;
+    catSlots.restaurant = restaurantCap;
+    const nr = Object.keys(catSlots).filter((k) => k !== "restaurant");
+    const nrTotal = nr.reduce((s, k) => s + (catSlots[k] || 0), 0) || 1;
+    for (const k of nr) catSlots[k] = (catSlots[k] || 0) + overflow * (catSlots[k] / nrTotal);
+  }
+  // 비식당 비율 재조정 (= 식당 정해진 후, 나머지 = 사용자 vibe 비율)
+  const nonRest = Object.keys(catSlots).filter((k) => k !== "restaurant");
+  const nonRestSum = nonRest.reduce((s, k) => s + (catSlots[k] || 0), 0);
+  const targetNonRest = totalSlots - catSlots.restaurant;
+  if (nonRestSum > 0) {
+    for (const k of nonRest) catSlots[k] = Math.round(((catSlots[k] || 0) / nonRestSum) * targetNonRest);
+  }
+  // 정수화 + 합계 보정
+  for (const k of Object.keys(catSlots)) catSlots[k] = Math.max(1, Math.round(catSlots[k]));
+  const sum = Object.values(catSlots).reduce((s, n) => s + n, 0);
+  if (sum !== totalSlots) {
+    const top = Object.entries(catSlots).sort((a, b) => b[1] - a[1])[0][0];
+    catSlots[top] += totalSlots - sum;
+  }
+  return catSlots;
+}
 
 async function fetchFromPlaceSeedRaw(
   skeleton: AG1Output,
@@ -101,53 +146,10 @@ async function fetchFromPlaceSeedRaw(
     }
   }
 
-  // vibe → 카테고리 슬롯 분배
+  // 🧠 2026-07-05 사장님 SSOT = vibe → 카테고리 슬롯 분배 = computeCatSlots 단일 SSOT(§16). 옛 인라인 계산 폐기(§19) = 로직 그대로 함수로 이동(DB-only 동작 불변).
   const totalSlots = requiredPlaceCount;
-  const catSlots: Record<string, number> = {};
-  for (const vw of vibeWeights) {
-    const primary = VIBE_PRIMARY_CATEGORY[vw.vibe] || "attraction";
-    catSlots[primary] = (catSlots[primary] || 0) + vw.weight * totalSlots;
-  }
-  // ⚠️ 수정금지(승인필요) 2026-05-06 = 사용자 SSOT = 식당 = 2/일자 cap (= 점심 1 + 저녁 1)
-  // = AG4 MEAL_SLOTS = lunch (12~14) + dinner (18~20) 만 식당 slot 인식
-  // = 초과 식당 = 일반 slot 으로 강제 변환 = 저녁 2번 사고 발생 → 식당 자체 cap 필요
   const dayCount = skeleton.dayCount || skeleton.daySlotsConfig?.length || 3;
-  const restaurantCap = dayCount * 2; // = 점심 + 저녁
-  if (!catSlots.restaurant || catSlots.restaurant < dayCount) {
-    catSlots.restaurant = Math.min(restaurantCap, Math.ceil(totalSlots * 0.4));
-  }
-  // 식당 cap 적용 (= 초과 분 = 비식당 으로 재분배)
-  if (catSlots.restaurant > restaurantCap) {
-    const overflow = catSlots.restaurant - restaurantCap;
-    catSlots.restaurant = restaurantCap;
-    // 다른 카테고리 비율로 재분배
-    const nonRest = Object.keys(catSlots).filter((k) => k !== "restaurant");
-    const nonRestTotal =
-      nonRest.reduce((s, k) => s + (catSlots[k] || 0), 0) || 1;
-    for (const k of nonRest) {
-      catSlots[k] =
-        (catSlots[k] || 0) + overflow * (catSlots[k] / nonRestTotal);
-    }
-  }
-  // 비식당 비율 재조정 (= 식당 정해진 후, 나머지 = 사용자 vibe 비율 따름)
-  const nonRest = Object.keys(catSlots).filter((k) => k !== "restaurant");
-  const nonRestSum = nonRest.reduce((s, k) => s + (catSlots[k] || 0), 0);
-  const targetNonRest = totalSlots - catSlots.restaurant;
-  if (nonRestSum > 0) {
-    for (const k of nonRest) {
-      catSlots[k] = Math.round(
-        ((catSlots[k] || 0) / nonRestSum) * targetNonRest,
-      );
-    }
-  }
-  // 정수화 + 합계 보정
-  for (const k of Object.keys(catSlots))
-    catSlots[k] = Math.max(1, Math.round(catSlots[k]));
-  const sum = Object.values(catSlots).reduce((s, n) => s + n, 0);
-  if (sum !== totalSlots) {
-    const top = Object.entries(catSlots).sort((a, b) => b[1] - a[1])[0][0];
-    catSlots[top] += totalSlots - sum;
-  }
+  const catSlots = computeCatSlots(vibeWeights, totalSlots, dayCount);
 
   console.log(
     `[AG2-DB] 도시 "${cityName}" (id=${cityId}) 카테고리 슬롯:`,
@@ -299,7 +301,7 @@ async function fetchFromPlaceSeedRaw(
  * ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = AG2 메인 = DB-only 단일 분기
  *
  * 분기:
- * - ready=true (= rank 1-20 ≥ 70 행) → fetchFromPlaceSeedRaw 결과 그대로 반환 (= Gemini 0)
+ * - ready=true (= 전체 행수 ≥ 300) → fetchFromPlaceSeedRaw 결과 그대로 반환 (= Gemini 0)
  * - ready=false → throw MIX_MODE_DISABLED (= MIX path = pipeline-v3.ts step1_geminiItinerary 처리)
  */
 export async function generateRecommendations(

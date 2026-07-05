@@ -354,6 +354,9 @@ export async function matchPlacesWithDB(
           googlePlaceId: (place as any).geminiPlaceId || (place as any).googlePlaceId || null,
           googleMapsUri: (place as any).googleMapsUri || null,
           address: (place as any).geminiAddress || (place as any).address || null,
+          // ⚠️ 수정금지(승인필요) 2026-07-05 사장님 SSOT = 좌표(10m 앵커)는 매칭에 반드시 넘김.
+          //   = 이유: 도시가 아닌 오지·풀주소가 명확히 정립 안 된 곳에서 좌표 = 이름/주소가 안 맞아도 통하는 만국 통용 매칭키.
+          //   = matcher 5순위 좌표(10m)는 name_local/PID/URI/주소 다 실패 시에만 도달 + URI veto 로 오병합 차단 = 안전. 임의 제거 금지.
           latitude: (place as any).lat != null ? parseFloat(String((place as any).lat)) : null,
           longitude: (place as any).lng != null ? parseFloat(String((place as any).lng)) : null,
           nameEn: place.name || null,
@@ -369,30 +372,30 @@ export async function matchPlacesWithDB(
     // = seedDirectMatch (= place_seed_raw place_id/address) 만 신뢰
     let dbMatch: any = undefined;
 
-    // ⚠️ 수정금지(승인필요) seedDirectMatch 적용 = 좌표 + 이미지 + pid 즉시 채움 (Google 호출 회피)
+    // 🧠 2026-07-05 사장님 SSOT = 매칭 시 Gemini 새값 우선 + DB 옛값은 빈칸 폴백만(§20). 옛 "DB옛값 무조건 덮음"(역방향) 폐기(§19).
+    //   = 매칭 = 같은 장소 확인 = Gemini 최신 좌표/요약/카테고리를 살리고, place 가 비었을 때만 seed 로 채움. PID/리뷰수는 검증된 seed 우선(§14 = TS 검증값 신뢰).
     if (seedDirectMatch) {
-      // 시드의 좌표 즉시 주입 (= needsGoogle 회피)
-      if (seedDirectMatch.latitude && seedDirectMatch.longitude) {
+      // 좌표 = Gemini 있으면 유지, 없을(0) 때만 seed 폴백
+      if ((!place.lat || place.lat === 0) && seedDirectMatch.latitude && seedDirectMatch.longitude) {
         place.lat = parseFloat(String(seedDirectMatch.latitude));
         place.lng = parseFloat(String(seedDirectMatch.longitude));
       }
-      // ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT = 2 컬럼 우선순위 = Google (imageUrl) 1순위 > WK (bestImageUrl) 2순위
-      const seedImg = pickPlaceImage(seedDirectMatch);
-      if (seedImg) place.image = seedImg;
-      // ⚠️ 수정금지(승인필요) 2026-05-14 = 모달 정확도 = 검증된 google_place_id 매핑 (= 핫픽스 3)
-      // = 누락 시 = 모달 = name+city 검색 fallback = 인근 잘못된 장소 매칭 위험
+      // 이미지 = place 비었을 때만 seed (= Google 1 > WK 2)
+      if (!place.image) {
+        const seedImg = pickPlaceImage(seedDirectMatch);
+        if (seedImg) place.image = seedImg;
+      }
+      // PID/리뷰수 = 검증된 seed 우선 유지(§14 = TS 검증 = 최신 신뢰). 모달 정확도.
       if (seedDirectMatch.googlePlaceId)
         (place as any).googlePlaceId = seedDirectMatch.googlePlaceId;
       if (seedDirectMatch.googleReviewCount)
         (place as any).userRatingCount = seedDirectMatch.googleReviewCount;
-      // ⚠️ 수정금지(승인필요) 2026-06-24 사용자 SSOT = 슬롯 한줄요약 = editorial_summary 단일 (모든 경로 통일).
-      //   MIX(Gemini+DB 매칭) 경로도 editorialSummary 를 채워 FE(editorialSummary 단일 노출)로 전달.
-      //   place.description = saveNewPlacesToDB 백필(DB editorial_summary 역기입) 입력으로만 보전, FE 노출 아님.
-      //   place.personaFitReason = summary_ko = saveNewPlacesToDB 백필(DB summary_ko 역기입=숏폼 재료) 입력으로만 보전, FE 노출 아님.
-      if (seedDirectMatch.editorialSummary)
+      // 요약/이유 = Gemini 있으면 유지, 없을 때만 seed 폴백(§20 = Gemini 최신 큐레이션 우선).
+      if (!(place as any).editorialSummary && seedDirectMatch.editorialSummary)
         (place as any).editorialSummary = seedDirectMatch.editorialSummary;
-      place.description = seedDirectMatch.editorialSummary || seedDirectMatch.summaryKo || place.description;
-      if (seedDirectMatch.summaryKo)
+      if (!place.description)
+        place.description = seedDirectMatch.editorialSummary || seedDirectMatch.summaryKo || place.description;
+      if (!place.personaFitReason && seedDirectMatch.summaryKo)
         place.personaFitReason = seedDirectMatch.summaryKo;
       // 별도 marker 로 후속 enrichment 가 인식하도록
       (place as any).__seedDirectMatch = seedDirectMatch;
@@ -455,31 +458,34 @@ export async function matchPlacesWithDB(
           ? Number(seed.priceEur)
           : undefined;
 
+      // 🧠 2026-07-05 사장님 SSOT = 매칭 시 Gemini 새값 우선 + seed 빈칸 폴백(§20). 옛 "seed(DB옛값) 우선" 역방향 폐기(§19).
+      //   = description/image/lat/lng/seedCategory = place(Gemini) 우선, 비었을 때만 seed. PID·리뷰수·priceEur = 검증된 seed 우선 유지(§14 TS 신뢰).
+      //   = DB Direct(AG2-DB place_seed_raw 직행)는 seed가 곧 우리 검증데이터 = 그대로.
       enriched.push({
         ...place,
-        // ⚠️ 2026-05-20 = DB Direct = sourceType 유지 (= 'DB Direct (Place Seed Raw)') / dbMatch path = 'Gemini AI + DB Enriched'
+        // = DB Direct = sourceType 유지 / dbMatch path = 'Gemini AI + DB Enriched'
         sourceType: isDbDirect ? place.sourceType : "Gemini AI + DB Enriched",
         description: isDbDirect
           ? (place.description ?? "")
-          : ((seed.summaryKo || seed.editorialSummary || place.description) ??
-            ""),
-        // ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT = pickPlaceImage 단일 SSOT (= Google 1 > WK 2)
+          : ((place.description || seed.summaryKo || seed.editorialSummary) ?? ""),
+        // 이미지 = place(Gemini/Google) 우선, 없으면 seed (= Google 1 > WK 2)
         image: isDbDirect
           ? place.image || ""
-          : pickPlaceImage(seed) || place.image || "",
+          : place.image || pickPlaceImage(seed) || "",
         userRatingCount: reviewCount,
         googleMapsUrl: place.googleMapsUrl,
+        // 좌표 = Gemini 우선(있으면), 없을 때만 seed
         lat: isDbDirect
           ? place.lat
-          : parseFloat(String(seed.latitude)) || place.lat,
+          : (place.lat && place.lat !== 0 ? place.lat : parseFloat(String(seed.latitude)) || place.lat),
         lng: isDbDirect
           ? place.lng
-          : parseFloat(String(seed.longitude)) || place.lng,
-        estimatedPriceEur, // ← shape 분기 적용 (= priceEur 보존)
-        // ⚠️ 2026-05-20 = shape 분기 = DB Direct = AG2-DB 의 seedCategory / dbMatch path = placeSeedRaw.seedCategory
+          : (place.lng && place.lng !== 0 ? place.lng : parseFloat(String(seed.longitude)) || place.lng),
+        estimatedPriceEur, // ← shape 분기 적용 (= priceEur 보존, seed 검증값 우선 §14)
+        // 카테고리 = Gemini seed_category(6종) 우선, 없을 때만 seed 옛값(§20 = Gemini 최신 분류 존중).
         seedCategory: (isDbDirect
           ? place.seedCategory
-          : seed.seedCategory) as SeedCategory,
+          : ((place as any).seedCategory || seed.seedCategory)) as SeedCategory,
         selectionReasons: isDbDirect
           ? place.selectionReasons || []
           : [
@@ -709,16 +715,23 @@ export async function saveNewPlacesToDB(
   // = race-safe rank = 카테고리별 base + 인덱스 (= MAX(rank) 사전 1 회)
 
   // 1. nextRank base 사전 계산 (= 카테고리별 1 회 = race condition 차단)
+  // 🧠 2026-07-05 사장님 SSOT = 6종 카테고리 전부 rank base 계산(§20 = Gemini 6종 보존). 옛 "restaurant/attraction 2종"만 폐기(§19).
+  // ⚠️ 2026-07-05 = review CONFIRMED 성능회귀 = 옛 for...of 순차 await(DB왕복 7회) → Promise.all 병렬(1왕복, §0 가벼움 정합)
+  const CATS = ["restaurant", "attraction", "heritage", "healing", "hotspot", "adventure", "shopping"];
+  const baseRankRows = await Promise.all(
+    CATS.map((cat) =>
+      // ⚠️ 2026-05-23 = phase_tags 'auto-learn%' 마커 기준 (= 자동 학습 결과)
+      db!.execute(
+        sql`SELECT COALESCE(MAX(rank), 8999) + 1 AS next_rank FROM place_seed_raw
+            WHERE city_id = ${cityId} AND seed_category = ${cat}
+            AND EXISTS (SELECT 1 FROM unnest(COALESCE(phase_tags, ARRAY[]::text[])) AS t WHERE t LIKE 'auto-learn%')`,
+      ),
+    ),
+  );
   const baseRanks: Record<string, number> = {};
-  for (const cat of ["restaurant", "attraction"]) {
-    // ⚠️ 2026-05-23 = phase_tags 'auto-learn%' 마커 기준 (= 자동 학습 결과)
-    const r = await db!.execute(
-      sql`SELECT COALESCE(MAX(rank), 8999) + 1 AS next_rank FROM place_seed_raw
-          WHERE city_id = ${cityId} AND seed_category = ${cat}
-          AND EXISTS (SELECT 1 FROM unnest(COALESCE(phase_tags, ARRAY[]::text[])) AS t WHERE t LIKE 'auto-learn%')`,
-    );
-    baseRanks[cat] = (r as any).rows?.[0]?.next_rank ?? 9000;
-  }
+  CATS.forEach((cat, i) => {
+    baseRanks[cat] = (baseRankRows[i] as any).rows?.[0]?.next_rank ?? 9000;
+  });
   const today = new Date().toISOString().slice(0, 10);
 
   // 2. 병렬 처리 (= searchText + PhotoMedia + Storage + INSERT)
@@ -726,14 +739,22 @@ export async function saveNewPlacesToDB(
     toSave.map(async (place, i) => {
       try {
         // ⚠️ 2026-06-24 §18·§20 = 단일 관문 tsSearch (= raw 2곳 자동저장). 반환 = TsPlace[] = [0] 채택.
+        // 🧠 2026-07-05 사장님 SSOT = Gemini 정확좌표를 TS 앵커 힌트로(§20). 옛 "도시중심(cityLat/cityLng) 단독" 폐기(§19)
+        //   = 동명 다른도시 장소 오매칭(리모주→페르비냥 396km) 원천차단. Gemini 좌표 있으면 10km 앵커, 없으면 도시중심 폴백(repair.ts:181 정합).
+        const gLat = (place as any).lat && (place as any).lat !== 0 ? (place as any).lat : (cityLat || undefined);
+        const gLng = (place as any).lng && (place as any).lng !== 0 ? (place as any).lng : (cityLng || undefined);
+        const hasGeminiCoord = (place as any).lat && (place as any).lat !== 0;
         const tsArr = await tsSearch({
           apiKey: GOOGLE_KEY,
           method: "searchText",
           cityId,
           nameLocal: place.name,
           address: (place as any).geminiAddress || undefined,
-          latitude: cityLat || undefined,
-          longitude: cityLng || undefined,
+          latitude: gLat,
+          longitude: gLng,
+          // ⚠️ 수정금지(승인필요) 2026-06-23 사장님 SSOT = 좌표 앵커 무조건 10m(repair.ts:36 ANCHOR_M 동일 = 동명 다른장소 차단 기준 단일).
+          //   = 2026-07-05 최초 반영 시 10000(10km)으로 오기(review 지적 CONFIRMED) → 10m 로 정정. §16 재발명 금지 = 값도 SSOT 그대로.
+          anchorRadiusM: hasGeminiCoord ? 10 : undefined,
           rawTag: `ag3-${place.name}`,
         });
         const result = tsArr?.[0];
@@ -757,12 +778,15 @@ export async function saveNewPlacesToDB(
           return { saved: 0, skipped: 1, enrichedByApi: 0, photoOk: 0, closedPermanently: 1 };
         }
 
-        const seedCategory: string = place.tags?.includes("restaurant")
-          ? "restaurant"
-          : place.tags?.includes("food")
-            ? "restaurant"
-            : "attraction";
+        // 🧠 2026-07-05 사장님 SSOT = Gemini seed_category(6종) 보존(§20). 옛 "restaurant/attraction 2종 뭉갬" 폐기(§19)
+        //   = Gemini 가 heritage/healing/shopping 등으로 분류한 걸 그대로 저장 = 카테고리 정확. 없으면 식당태그→restaurant, 아니면 attraction 폴백.
+        const seedCategory: string = (place as any).seedCategory
+          || (place.tags?.includes("restaurant") || place.tags?.includes("food") ? "restaurant" : "attraction");
 
+        // ⚠️ 수정금지(승인필요) 2026-07-05 사장님 SSOT = 중복판단 = PID 유무 단일기준.
+        //   = 여기 도달 = toSave = PID 없는 행(신규 or bare-match). PID 없는데 이미지 있음 = WK/가짜 미검증 이미지 = 신뢰불가
+        //     → PM 으로 구글 검증 이미지 새덮어쓰기 교체가 목적(§20 전체 새덮어쓰기). = 그래서 photoName 있으면 무조건 PM.
+        //   = 완전매칭행(PID+이미지+좌표 보유)은 위 toSave 필터에서 이미 제외 = TS·PM 0회 = 재활용(중복비용 없음).
         let imageUrl: string | null = null;
         const photoName = result.photoName;
         if (photoName) {
@@ -823,6 +847,8 @@ export async function saveNewPlacesToDB(
           priceEur: newPriceEur,
           categoryTags: [seedCategory],
           phaseTags: [`auto-learn-${today}`],
+          // 🧠 2026-07-05 사장님 SSOT = Gemini 도심거리 저장(§20 전필드) = 결손컬럼(distance_km_from_center) 채움 = 동선재료 보존.
+          distanceKmFromCenter: (place as any).distanceKmFromCenter ?? null,
         };
 
         return {

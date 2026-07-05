@@ -31,6 +31,10 @@ import {
   calculateDayCount, calculateSlotsForDay, getCompanionCount,
 } from './types';
 import { preloadCityData, matchPlacesWithDB, saveNewPlacesToDB } from './ag3-data-matcher';
+// 🧠 2026-07-05 = computeCatSlots 정적 import(§0 가벼움) = 옛 함수내 동적 await import 폐기(§19). ag2→pipeline-v3 역참조 없음 = 순환참조 무관.
+import { computeCatSlots } from './ag2-gemini-recommender';
+// 🧠 2026-07-05 사장님 SSOT = MIX Gemini(#02) raw 저장 관문(§18). 옛 getAI 직접호출 = raw 미저장(비용증발) 폐기(§19). TS(ag3)는 이미 관문경유 저장됨 = Gemini만 누락이었음.
+import { saveRaw } from '../shared/save-raw';
 import {
   calculateTransportPrice, shouldApplyGuidePrice, calculateUberBlackHourly,
   getGuidePerPersonPerDay, round2,
@@ -106,6 +110,12 @@ interface GeminiPlace {
   nameLocal?: string;   // 현지 원어명 (예: "Tour Eiffel", "Colosseo")
   address?: string;     // ⚠️ 2026-05-14 v3 = AG3 통합 매칭 1 순위 (= 행정주소)
   type: 'activity' | 'lunch' | 'dinner' | 'cafe';
+  // 🧠 2026-07-05 사장님 SSOT = Gemini 응답 전체 새덮어쓰기(§20 셀렉금지). 프롬프트가 이미 요구하는 값을 버리지 말고 살림(실호출 4/4 확인).
+  //   = seed_category(6종 = 카테고리 보존), latitude/longitude(정확좌표 = TS 힌트 = 동명오매칭 방지), distance_km_from_center(도심거리 = 동선재료).
+  seed_category?: string; // heritage/healing/hotspot/adventure/shopping/attraction/restaurant
+  latitude?: number;
+  longitude?: number;
+  distance_km_from_center?: number;
   startTime: string;
   endTime: string;
   reason?: string;      // = optional (= selection_reason_ko 폴백)
@@ -353,6 +363,15 @@ async function step1_geminiItinerary(
     : formData.travelPace === 'Relaxed' ? '여유롭게 (장소당 150분, 느긋하게)'
       : '보통 속도 (장소당 120분)';
 
+  // 🧠 2026-07-05 사장님 SSOT = vibe → 6카테고리 슬롯 배분을 프롬프트에 전달(§20 = catSlots 단일 SSOT ag2 재사용).
+  //   = 옛날엔 "관광 X + 식사 Y" 2종으로만 전달 → Gemini 가 카테고리 모름 → attraction/restaurant 로 뭉개짐(리모주 사고).
+  //   = 이제 "heritage 2곳·shopping 1곳·healing 1곳..." 명시 → 각 place 가 seed_category(6종) 답함 → DB 저장 시 카테고리 보존.
+  const totalSlots = daySlotsConfig.reduce((s, d) => s + d.slots, 0);
+  const catSlots = computeCatSlots(vibeWeights, totalSlots, dayCount);
+  const nonRestCats = Object.entries(catSlots).filter(([k]) => k !== 'restaurant');
+  const categoryMatrix = nonRestCats.map(([cat, n]) => `${cat} ${n}곳`).join(', ')
+    + (catSlots.restaurant ? ` / 식당(restaurant) ${catSlots.restaurant}곳` : '');
+
   // 일별 요구사항 (식사 시간 제약 자동 계산)
   const dayRequirements = daySlotsConfig.map(d => {
     const startH = parseInt(d.startTime.split(':')[0]);
@@ -434,6 +453,11 @@ ${koreanTravelerStyle}
 [SLOT MATRIX — AG1 결정]
 ${dayRequirements}
 
+[CATEGORY MATRIX — 전체 여정 카테고리별 곳수 (= 사용자 vibe 반영, 반드시 이 비율로 선정)]
+${categoryMatrix}
+- 각 place 의 seed_category 는 위 카테고리 중 하나로 정확히 지정 (heritage=문화/유산, healing=힐링/자연, hotspot=핫플, adventure=모험/액티비티, shopping=쇼핑, attraction=즐길거리/체험, restaurant=식당).
+- 식사(lunch/dinner) = seed_category="restaurant".
+
 [동선 원칙]
 - 매일 ${formData.destination} 도시 중심부에서 출발·귀환, 같은 날 = 같은 구역 묶기
 - Array order within each day = visit order (= sorted by minimum travel distance from start)
@@ -453,6 +477,7 @@ For each place include (= ALL fields verified via Google Search grounding):
 - nameLocal (local language name = 예: 파리=Tour Eiffel) [= REQUIRED for Text Search forwarding + matching key, final DB column]
 - address (FULL street address with NUMBER + street + postal code + city) [= REQUIRED for Text Search forwarding + matching key, final DB column — verify via Google Search]
 - type ("activity" | "lunch" | "dinner")
+- seed_category (= 위 CATEGORY MATRIX 중 하나 = heritage|healing|hotspot|adventure|shopping|attraction|restaurant. 식사=restaurant) [= final DB column, 카테고리 보존 필수]
 - latitude (= decimal 6 digits, e.g. 48.858370) [= REQUIRED for Text Search forwarding + matching key, final DB column — verify via Google Search, NO hallucination]
 - longitude (= decimal 6 digits, e.g. 2.294481) [= REQUIRED for Text Search forwarding + matching key, final DB column — verify via Google Search, NO hallucination]
 - price_eur (1 인 EUR)
@@ -462,7 +487,7 @@ For each place include (= ALL fields verified via Google Search grounding):
 
 OUTPUT (strict JSON, no markdown fences):
 {"days":[{"day":1,"theme":"테마","places":[
-  {"name":"Eiffel Tower","nameKo":"에펠탑","nameLocal":"Tour Eiffel","address":"Champ de Mars, 5 Av. Anatole France, 75007 Paris","type":"activity","latitude":48.858370,"longitude":2.294481,"price_eur":29.4,"distance_km_from_center":2.4,"selection_reason_ko":"파리 인스타 인증샷 1순위 성지","shortform_ko":"파리 왔으면 외쳐줘야 국룰 '나 파리다!'"}
+  {"name":"Eiffel Tower","nameKo":"에펠탑","nameLocal":"Tour Eiffel","address":"Champ de Mars, 5 Av. Anatole France, 75007 Paris","type":"activity","seed_category":"attraction","latitude":48.858370,"longitude":2.294481,"price_eur":29.4,"distance_km_from_center":2.4,"selection_reason_ko":"파리 인스타 인증샷 1순위 성지","shortform_ko":"파리 왔으면 외쳐줘야 국룰 '나 파리다!'"}
 ]}]}`;
 
   try {
@@ -500,6 +525,18 @@ OUTPUT (strict JSON, no markdown fences):
       .join('') || response.text || "";
     const finishReason = candidate?.finishReason || 'unknown';
     console.log(`[V3-Step1] 🤖 응답 수신 (${text.length}자, finish=${finishReason}, parts=${parts.length}, ${Date.now() - _t0}ms)`);
+
+    // 🧠 2026-07-05 사장님 SSOT = MIX Gemini raw 저장(§18) = 스토리지 raw-responses/runtime/{날짜}_gemini-mix-step1.json.
+    //   = TS(ag3)는 이미 관문경유 저장(cityId 확정된 시점) → Gemini만 누락이었음(비용증발). saveRaw 자체가 never-throw best-effort(save-raw.ts) = 별도 try/catch 불필요(§0).
+    //   = cityId 는 이 시점(step1) 에서 미확정(preloadCityData 와 병렬 = 재사용 불가, 재조회는 미발굴도시에서 유료 Gemini+INSERT 중복유발) → contextId=null = runtime 폴백(§18 규칙 그대로).
+    //   = await X = fire-and-forget(§0 가벼움) = 여정생성은 사용자 응답 hot-path = Storage PUT 지연(최대 15s)이 응답 막지 않게 백그라운드 저장. .catch = unhandled rejection 방어(saveRaw 자체는 never-throw).
+    void saveRaw({
+      source: 'gemini',
+      contextId: null,
+      tag: 'mix-step1',
+      request: { prompt, model: 'gemini-3-flash-preview', grounding: STEP1_USE_GROUNDING },
+      raw: { text, finishReason },
+    }).catch(() => {});
 
     if (text.length < 100) {
       console.warn(`[V3-Step1] ⚠️ 짧은 응답: ${text}`);
@@ -644,14 +681,16 @@ async function step2_enrichAndBuild(
         id: placeId,
         name: gPlace.name || 'Unknown Place',
         description: desc,
-        lat: 0,
-        lng: 0,
+        // 🧠 2026-07-05 사장님 SSOT = Gemini 정확좌표 살림(옛 lat:0/lng:0 폐기 §19). = matchCandidate 매칭키 + saveNewPlacesToDB TS 앵커 힌트 = 동명오매칭 방지.
+        lat: gPlace.latitude ?? 0,
+        lng: gPlace.longitude ?? 0,
         vibeScore: 7,
         confidenceScore: 5,
-        // ⚠️ 수정금지(승인필요) 2026-05-14 = saveNewPlacesToDB 필터 호환 = 'Gemini AI (New)' 유지
+        // ⚠️ 2026-05-14 = saveNewPlacesToDB 필터 호환 = 'Gemini AI (New)' 유지
         // = 'Gemini V3' 로 변경 시 = 필터 통과 X = toSave=0 = DB 자동 캐싱 X (= 운영 검증 시 발견)
         sourceType: 'Gemini AI (New)',
         personaFitReason: persona,
+        // 🧠 2026-07-05 사장님 SSOT = Gemini seed_category(6종) 보존 = ag3 저장 시 restaurant/attraction 2종 뭉갬 대신 이 값 사용(지점4). 식사는 restaurant.
         tags: isMeal ? ['restaurant', 'food'] : [],
         vibeTags: isMeal ? ['Foodie' as const] : [],
         image: '',
@@ -662,12 +701,15 @@ async function step2_enrichAndBuild(
         koreanPopularityScore: 0,
         googleMapsUrl: '',
         estimatedPriceEur: sanitizePriceEur(gPlace.price_eur),
-        // ⚠️ 수정금지(승인필요) 2026-05-14 = AG3 매칭용 + DB INSERT 매핑
+        // ⚠️ 2026-05-14 = AG3 매칭용 + DB INSERT 매핑
         // = geminiAddress = 행정주소 (= 1순위 매칭 키)
         // = nameKo/nameLocal = saveNewPlacesToDB INSERT 매핑 (= 한국어/원어명 누락 방지)
         geminiAddress: gPlace.address || '',
         nameKo: gPlace.nameKo || null,
         nameLocal: gPlace.nameLocal || null,
+        // 🧠 2026-07-05 사장님 SSOT = Gemini 도심거리·카테고리 살림(§20) = saveNewPlacesToDB job 전필드 저장(지점4) = 결손컬럼 채움.
+        distanceKmFromCenter: gPlace.distance_km_from_center ?? null,
+        seedCategory: isMeal ? 'restaurant' : (gPlace.seed_category || null),
       } as any;
       allPlaces.push(place);
       scheduleMap.push({ day: gDay.day, gPlace, placeId });
