@@ -83,7 +83,7 @@ const hkm = (a: any, b: any) => {
         nameEn: top.nameEn || row.name_en, nameLocal: null, address: top.address || row.address,
         latitude: top.latitude, longitude: top.longitude,
         googlePlaceId: top.googlePlaceId, googleMapsUri: top.googleMapsUri,
-        googleReviewCount: top.googleReviewCount, priceEur: top.priceEur, priceOverwrite: false,
+        googleReviewCount: top.googleReviewCount, priceEur: top.priceEur,
       });
       if (r.action === 'updated' || r.action === 'inserted') upd++;
       if (suspicious) far++;

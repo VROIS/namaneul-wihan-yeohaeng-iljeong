@@ -78,7 +78,7 @@ const hkm = (a: any, b: any) => {
       address: p.formattedAddress, latitude: p.location?.latitude, longitude: p.location?.longitude,
       googlePlaceId: p.id, googleMapsUri: p.googleMapsUri || null,
       googleReviewCount: p.userRatingCount ?? null,
-      priceEur: price, priceOverwrite: true,
+      priceEur: price,
       dayZone: (dist != null && dist <= 10) ? 'core' : 'outskirt', distanceKmFromCenter: dist,
       categoryTags: [category], phaseTags: [`ts-${category}-recover-${today}`],
     });

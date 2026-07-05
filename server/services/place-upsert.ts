@@ -14,12 +14,12 @@
  *   [가변(의심=새저장+'중복의심' 메모) 6~7]
  *   6순위 = 영어명(name_en) / 7순위 = 한국어명(name_ko) (= 표현 가변 = 자동병합 X)
  *
- * UPDATE 정책 (= 사용자 SSOT 2026-06-03 = 최신 우선 확정):
- *   - 식별/검증 데이터 (name/주소/좌표/PID/URI/리뷰수) = COALESCE 새 우선 (= 최신 TS 가 가장 신뢰)
- *   - 이미지 = COALESCE 새 우선 (= 새 값 있을 때만 교체, 없으면 옛 값 보존)
- *   - 가격 = COALESCE 새 우선 (= 최신최우선 = 전 컬럼 동일 = 레거시 garbage 영구잠금 버그 해소, 2026-06-10 §19)
- *   - 카피 (summary_ko/editorial_summary) = 새 우선 (= 큐레이션 갱신)
- *   - tags = UNION (= 누적)
+ * UPDATE 정책 (= 사장님 SSOT 2026-07-05 §14갱신 = 모든 정보 무조건 새것 우선, 예외없음):
+ *   - 전 컬럼 = 응답에 온 값이면 무조건 새값으로 덮음 = COALESCE(새값, 컬럼) 구조 = 새값 있으면 항상 이김.
+ *   - COALESCE 를 남기는 유일한 이유 = 발굴 부분단계(예: storage-image-relink 는 imageUrl 만 넘김) 안전.
+ *     = job 에 안 온 컬럼(undefined→`?? null`)만 뼈대(옛값) 보존 = 부분갱신이 다른 컬럼을 NULL 로 미는 파괴 방지.
+ *     = 즉 "온 값=새것 강제 / 안 온 컬럼=뼈대 유지" (= 새우선과 발굴안전을 동시 충족).
+ *   - tags = UNION (= 누적 = 멀티태그 SSOT).
  */
 import { db } from '../db';
 import { placeSeedRaw } from '@shared/schema';
@@ -49,9 +49,7 @@ export interface UpsertPayload {
   googlePrimaryType?: string | null;
   googleMapsUri?: string | null;  // 2026-05-15 = 13번째 SSOT = 최후의 보루
   priceEur?: number | null;
-  // ⚠️ 수정금지(승인필요) 2026-06-20 = 가격 = 기본이 새 우선(COALESCE :130·147) (§19 정합).
-  //   현재 = priceOverwrite = 무의미 = 하위호환 인자로만 잔존(동작 영향 0).
-  priceOverwrite?: boolean;
+  // 🗑️ 2026-07-05 = priceOverwrite 인자 제거 = 무의미(동작 영향 0) 데드 인자 = 가격도 새우선 단일정책 §14갱신/§19
   imageUrl?: string | null;
   imageAttribution?: string | null;
   dayZone?: string | null;
@@ -119,36 +117,30 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
     : (p.phaseTags || []);
 
   if (match && tier === 'confirmed') {
-    // UPDATE = 사용자 SSOT 2026-05-18 = "모든 정보 최신 덮어씀" (§19)
-    // = 모든 필드 = 새 값 있으면 새 / 없으면 옛 유지 (= COALESCE 새 → 옛 순서)
-    // = tags = UNION (= 누적 유지)
-    // ⚠️ 수정금지(승인필요) 2026-06-10 사용자 SSOT = 가격 = 최신최우선(COALESCE 새-우선) = 전 컬럼 동일 원칙.
-    //   = 레거시 garbage(€88K) 영구잠금 버그 근본해소 (§19).
-    //   = 출처(price_source) 있는 최신 입력이 정답(물가 상승분도 최신 재입력이 반영). priceOverwrite = 무의미(기본이 새-우선).
-    // ⚠️ 수정금지(승인필요) 2026-06-11 사용자 SSOT = `?? null` 사용 = 가격 0(무료) 보존 (§19).
-    //   = 무료 장소(0)가 garbage 가격을 덮도록 보장(프롬프트는 "무료=0" 지시, 파서는 `?? null`로 0 살림). 0은 정상 가격.
-    const priceExpr = sql`COALESCE(${p.priceEur ?? null}::real, price_eur)`;
+    // ⚠️ 수정금지(승인필요) UPDATE = 사장님 SSOT 2026-07-05 §14갱신 = 모든 정보 무조건 새것 우선(예외없음).
+    //   = COALESCE(새값, 컬럼) = 응답에 온 값이면 항상 새값이 이김(= 새우선). tags = UNION(누적).
+    //   = COALESCE 를 유지하는 이유는 오직 발굴 부분단계 안전: job 에 안 온 컬럼(undefined→`?? null`)만
+    //     뼈대(옛값) 보존해 storage-image-relink(imageUrl 만 넘김) 같은 부분갱신이 다른 컬럼을 NULL 로 미는 것 방지.
+    //   = 가격도 동일 = 새값 있으면 무조건 덮음(레거시 garbage 영구잠금 버그 해소). `?? null` 로 0(무료)도 정상 새값 보존.
     await db.execute(sql`
       UPDATE place_seed_raw SET
-        name_en       = COALESCE(${p.nameEn}, name_en),
-        name_ko       = COALESCE(${p.nameKo || null}, name_ko),
-        name_local    = COALESCE(${p.nameLocal || null}, name_local),
-        latitude      = COALESCE(${p.latitude || null}::real, latitude),
-        longitude     = COALESCE(${p.longitude || null}::real, longitude),
-        address       = COALESCE(${p.address || null}, address),
-        google_place_id = COALESCE(${p.googlePlaceId || null}, google_place_id),
-        google_review_count = COALESCE(${p.googleReviewCount || null}::integer, google_review_count),
-        google_primary_type = COALESCE(${p.googlePrimaryType || null}, google_primary_type),
-        google_maps_uri = COALESCE(${p.googleMapsUri || null}, google_maps_uri),
-        image_url     = COALESCE(${p.imageUrl || null}, image_url),
-        image_attribution = COALESCE(${p.imageAttribution || null}, image_attribution),
-        -- ⚠️ 수정금지(승인필요) 2026-06-10 = 가격 = 최신최우선(COALESCE 새-우선). 새 값 있으면 새 / 없으면 옛 보존.
-        -- = 레거시 garbage 영구잠금 해소(§19). 최신 재입력이 물가/정정 모두 반영.
-        price_eur     = ${priceExpr},
-        editorial_summary = COALESCE(${p.shortformKo || null}, editorial_summary),
-        summary_ko        = COALESCE(${p.selectionReasonKo || null}, summary_ko),
-        day_zone          = COALESCE(${p.dayZone || null}, day_zone),
-        distance_km_from_center = COALESCE(${p.distanceKmFromCenter || null}::real, distance_km_from_center),
+        name_en       = COALESCE(${p.nameEn ?? null}, name_en),
+        name_ko       = COALESCE(${p.nameKo ?? null}, name_ko),
+        name_local    = COALESCE(${p.nameLocal ?? null}, name_local),
+        latitude      = COALESCE(${p.latitude ?? null}::real, latitude),
+        longitude     = COALESCE(${p.longitude ?? null}::real, longitude),
+        address       = COALESCE(${p.address ?? null}, address),
+        google_place_id = COALESCE(${p.googlePlaceId ?? null}, google_place_id),
+        google_review_count = COALESCE(${p.googleReviewCount ?? null}::integer, google_review_count),
+        google_primary_type = COALESCE(${p.googlePrimaryType ?? null}, google_primary_type),
+        google_maps_uri = COALESCE(${p.googleMapsUri ?? null}, google_maps_uri),
+        image_url     = COALESCE(${p.imageUrl ?? null}, image_url),
+        image_attribution = COALESCE(${p.imageAttribution ?? null}, image_attribution),
+        price_eur     = COALESCE(${p.priceEur ?? null}::real, price_eur),
+        editorial_summary = COALESCE(${p.shortformKo ?? null}, editorial_summary),
+        summary_ko        = COALESCE(${p.selectionReasonKo ?? null}, summary_ko),
+        day_zone          = COALESCE(${p.dayZone ?? null}, day_zone),
+        distance_km_from_center = COALESCE(${p.distanceKmFromCenter ?? null}::real, distance_km_from_center),
         category_tags     = (SELECT ARRAY(SELECT DISTINCT unnest(COALESCE(category_tags, ARRAY[]::text[]) || ${sql.raw(`ARRAY[${categoryTags.map((s) => `'${s.replace(/'/g, "''")}'`).join(',')}]::text[]`)}))),
         phase_tags        = (SELECT ARRAY(SELECT DISTINCT unnest(COALESCE(phase_tags, ARRAY[]::text[]) || ${sql.raw(`ARRAY[${phaseTags.length === 0 ? "" : phaseTags.map((s) => `'${s.replace(/'/g, "''")}'`).join(',')}]::text[]`)}))),
         -- ⚠️ 수정금지(승인필요) 2026-06-12 = image_updated_at = 새 image_url 있을 때만 NOW() (§19)
@@ -176,23 +168,24 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
         seedCategory: p.seedCategory,
         // ⚠️ 2026-05-23 = 분류 단계 = phaseTags 만 사용 (§19)
         rank: nextRank,
+        // 🧠 2026-07-05 사장님 SSOT(§20) = 셀렉/꼼수(|| null) 제거 = 응답값 그대로 새삽입. ?? null = 응답에 없는 컬럼만 NULL(0·빈값은 온 값 그대로).
         nameEn: p.nameEn,
-        nameKo: p.nameKo || null,
-        nameLocal: p.nameLocal || null,
-        latitude: p.latitude || null,
-        longitude: p.longitude || null,
-        address: p.address || null,
-        googlePlaceId: p.googlePlaceId || null,
-        googleMapsUri: p.googleMapsUri || null,
-        googleReviewCount: p.googleReviewCount || null,
-        googlePrimaryType: p.googlePrimaryType || null,
-        imageUrl: p.imageUrl || null,
-        imageAttribution: p.imageAttribution || null,
-        priceEur: p.priceEur ?? null,  // ⚠️ 수정금지(승인필요) 2026-06-11 = `?? null` = 무료(0) 신규 장소도 0 저장(NULL 아님) (§19)
-        editorialSummary: p.shortformKo || null,
-        summaryKo: p.selectionReasonKo || null,
-        dayZone: p.dayZone || null,
-        distanceKmFromCenter: p.distanceKmFromCenter || null,
+        nameKo: p.nameKo ?? null,
+        nameLocal: p.nameLocal ?? null,
+        latitude: p.latitude ?? null,
+        longitude: p.longitude ?? null,
+        address: p.address ?? null,
+        googlePlaceId: p.googlePlaceId ?? null,
+        googleMapsUri: p.googleMapsUri ?? null,
+        googleReviewCount: p.googleReviewCount ?? null,
+        googlePrimaryType: p.googlePrimaryType ?? null,
+        imageUrl: p.imageUrl ?? null,
+        imageAttribution: p.imageAttribution ?? null,
+        priceEur: p.priceEur ?? null,
+        editorialSummary: p.shortformKo ?? null,
+        summaryKo: p.selectionReasonKo ?? null,
+        dayZone: p.dayZone ?? null,
+        distanceKmFromCenter: p.distanceKmFromCenter ?? null,
         categoryTags,
         phaseTags,
       } as any)
@@ -205,7 +198,9 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
       suspect,
     };
   } catch (e: any) {
-    // 안전망 = UNIQUE INDEX (= 이름 1단계) 충돌 시 = 한 번 더 매칭 시도 (= 동시 INSERT race)
+    // 안전망 = UNIQUE INDEX uniq_psr_global_city_name (= city_id + lower(trim(name_en))) 충돌 = 동시 INSERT race.
+    //   = 충돌 축이 name_en 이므로 그 행을 되찾아 skip. 🗑️ 2026-07-05 = matchedBy 라벨 'name_local'→'name_en' 교정
+    //     = UNIQUE 축(name_en)과 다른 거짓 라벨 제거 = 집계 정합 §19 (재SELECT 도 UNIQUE 축 동일 = 7단계 정합).
     if (String(e?.message || '').includes('uniq_psr_global_city_name')) {
       const retry = await db
         .select({ id: placeSeedRaw.id })
@@ -219,7 +214,7 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
         return {
           action: 'skipped',
           rowId: retry[0].id,
-          matchedBy: 'name_local',
+          matchedBy: 'name_en',
           reason: 'race_conflict_resolved',
         };
       }

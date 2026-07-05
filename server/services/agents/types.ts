@@ -220,15 +220,10 @@ export interface AG1Output {
 // ===== AG3 사전 로드 출력 =====
 export interface AG3PreOutput {
   cityId: number | null;
-  dbPlacesMap: Map<string, any>;
+  // 🗑️ 2026-07-05 삭제 = dbPlacesMap/placeImageMap/celebrityImageMap = §14가 places매칭 차단해 항상 빈맵 = 죽은뼈대 §0/§19
   cityName: string;
   /** DB cities 테이블의 도시 중심 좌표 (숙소 미입력 시 출발 기점으로 사용) */
   cityCoords?: { lat: number; lng: number };
-  /** placeId → place_images 통합 이미지 URL (인스타 우선) */
-  placeImageMap?: Map<number, string>;
-  /** placeId → 셀럽 인스타 이미지 URL (place_images 미포함 시 fallback) */
-  celebrityImageMap?: Map<number, string>;
-
   /** nameEn/nameKo → place_seed_raw (가격, 인스타이미지 등 통합 메타데이터) */
   seedRawMap?: Map<string, any>;
 }

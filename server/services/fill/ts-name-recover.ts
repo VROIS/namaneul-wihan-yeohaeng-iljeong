@@ -86,7 +86,7 @@ const isInternal = (r: any) => r.name_en && r.name_en.trim() !== '';
         // ⚠️ 수정금지(승인필요) — TS displayName→name_en (2026-06-17 사장님 SSOT) = name_local은 Gemini전용
         nameEn: match.nameEn, nameLocal: null, address: match.address,
         latitude: match.latitude ?? row.lat, longitude: match.longitude ?? row.lng,
-        googleMapsUri: match.googleMapsUri, googleReviewCount: match.googleReviewCount, priceEur: match.priceEur, priceOverwrite: false,
+        googleMapsUri: match.googleMapsUri, googleReviewCount: match.googleReviewCount, priceEur: match.priceEur,
       });
       // ⚠️ 수정금지(승인필요) — TS displayName→name_en (2026-06-17 사장님 SSOT) = name_local은 Gemini전용
       if (r.action === 'updated') { tsFixed++; report.push(`  ✓[TS] "${row.name_en}" → "${match.nameEn}"`); }

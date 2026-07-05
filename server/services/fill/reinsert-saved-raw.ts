@@ -37,6 +37,36 @@ const parseRawText = (rt: string): any => {
 // ⚠️ 2026-06-13 = 결손 배선 추가 = distC(도심거리) + imageUrl(완성형 URL 보존). 도심거리 = raw 값 우선, 없으면 좌표로 haversine(외부호출 0).
 type Job = { src: string; cat?: string; id?: number; nameEn?: string; nameLocal?: string; nameKo?: string; address?: string; lat?: number; lng?: number; pid?: string; mapsUri?: string; rc?: number; priceEur: number | null; summaryKo?: string; shortformKo?: string; photoName?: string; distC?: number; imageUrl?: string };
 
+// 🧠 2026-07-05 사장님 SSOT = 입력순서 절대 = Gemini → TS (실제 순서). Gemini("무엇을" name_local·nameKo·seed_category·요약·거리) 먼저 새덮어쓰기 → TS(검증 name_en·좌표·PID·RC) 다음 덮음.
+//   = runtime 폴더의 MIX Gemini raw = contextId 'runtime'(cityId 미확정 저장) → prompt "CITY: <이름>" 로 도시 식별. cityName 인자로 필터.
+const collectGeminiRuntime = (cityNameArg: string): Job[] => {
+  const jobs: Job[] = [];
+  const rdir = path.join(ROOT, 'docs', 'raw', 'runtime');
+  if (!fs.existsSync(rdir) || !cityNameArg) return jobs;
+  for (const f of fs.readdirSync(rdir).filter((x) => x.includes('gemini-mix-step1') && x.endsWith('.json'))) {
+    let d: any; try { d = JSON.parse(fs.readFileSync(path.join(rdir, f), 'utf-8')); } catch { continue; }
+    const prompt = d?.request?.prompt || '';
+    const m = prompt.match(/CITY:\s*([^\n]+)/);
+    if (!m || m[1].trim().toLowerCase() !== cityNameArg.toLowerCase()) continue;  // 이 도시 아니면 skip
+    let j: any; try { j = parseRawText(d?.raw?.text || ''); } catch { continue; }
+    const tag = f.replace(/-2026.*$/, '').replace('.json', '');
+    for (const day of (j?.days || [])) for (const p of (day?.places || [])) {
+      if (!p || typeof p !== 'object') continue;
+      const isMeal = p.type === 'lunch' || p.type === 'dinner';
+      jobs.push({
+        src: `gemini:${tag}`,
+        cat: isMeal ? 'restaurant' : (p.seed_category || undefined),
+        nameEn: p.name, nameLocal: p.nameLocal, nameKo: p.nameKo,
+        address: p.address, lat: num(p.latitude), lng: num(p.longitude),
+        rc: undefined, priceEur: p.price_eur == null ? null : Number(p.price_eur),  // 0(무료) 보존
+        summaryKo: p.selection_reason_ko, shortformKo: p.shortform_ko,
+        distC: num(p.distance_km_from_center) ?? undefined,
+      });
+    }
+  }
+  return jobs;
+};
+
 const collect = (): Job[] => {
   const jobs: Job[] = [];
   const dir = path.join(ROOT, 'docs', 'raw', String(cityId));
@@ -44,6 +74,33 @@ const collect = (): Job[] => {
     let d: any; try { d = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf-8')); } catch { continue; }
     const tag = f.split('-2026')[0].split('.')[0];
     const metaCat = d?.meta?.category; // 12-TS = meta.category (zone 응답엔 cat 없음)
+    // 🧠 2026-07-05 사장님 SSOT = §18 saveRaw TS 형식(ts-ag3 = MIX 여정생성 中 TS 응답) 재입력 추가.
+    //   = request(우리 로컬명·주소·좌표 힌트) + raw.places[0](TS 검증 PID·displayName·좌표·RC·photos)가 한 파일 = 골격 재구성 가능(외부호출 0).
+    //   = 니스처럼 발굴(01/12) 안 거친 MIX 도시의 결손 골격을 저장raw 만으로 채움. TS 응답 필드명(displayName.text/location/id)은 발굴형식과 달라 별도 매핑.
+    if (d?.request && Array.isArray(d?.raw?.places) && d.raw.places.length) {
+      const req = d.request;
+      for (const tp of d.raw.places) {
+        if (!tp || typeof tp !== 'object') continue;
+        const pr = tp.priceRange?.endPrice?.units;
+        jobs.push({
+          src: tag,
+          cat: undefined,                                     // seed_category = PID 로 DB 조회(아래 noCatPids) 흡수
+          nameEn: tp.displayName?.text,                       // TS 검증명 = name_en
+          nameLocal: req.nameLocal,                           // 우리가 보낸 로컬명(Gemini) = name_local
+          address: tp.formattedAddress || req.address,
+          lat: num(tp.location?.latitude ?? req.latitude),
+          lng: num(tp.location?.longitude ?? req.longitude),
+          pid: tp.id,
+          mapsUri: tp.googleMapsUri,
+          rc: num(tp.userRatingCount),
+          priceEur: pr == null ? null : Number(pr),
+          photoName: tp.photos?.[0]?.name,
+          distC: undefined,                                   // main 에서 좌표로 haversine
+          imageUrl: undefined,
+        });
+      }
+      continue;                                               // 이 파일 처리 완료 = 아래 발굴형식 분기 skip
+    }
     // 형식 분기
     let groups: { cat?: string; arr: any[] }[] = [];
     if (Array.isArray(d?.places)) groups = [{ arr: d.places }];                                  // 02-enrich (id, cat=DB조회)
@@ -82,9 +139,11 @@ const collect = (): Job[] => {
   await c.connect();
 
   // ⚠️ 2026-06-13 = 도시 중심좌표 = 도심거리 결손 보강용 (raw 에 distance_km_from_center 없으면 좌표로 계산 = 외부호출 0, 사장님 "도심거리 무조건 저장")
-  const cityRow = (await c.query('SELECT latitude::float8 AS lat, longitude::float8 AS lng FROM cities WHERE id=$1', [cityId])).rows[0];
+  // 🧠 2026-07-05 = name_en 추가 조회 = runtime Gemini raw(CITY:<이름>) 도시 필터용.
+  const cityRow = (await c.query('SELECT name_en, latitude::float8 AS lat, longitude::float8 AS lng FROM cities WHERE id=$1', [cityId])).rows[0];
 
-  const jobs = collect();
+  // 🧠 2026-07-05 사장님 SSOT = 입력순서 절대 Gemini → TS. Gemini(runtime, 도시필터) 먼저 + TS/발굴(collect) 다음 = 같은 장소가 Gemini 새덮어쓰기 후 TS 검증덮음.
+  const jobs = [...collectGeminiRuntime(cityRow?.name_en || ''), ...collect()];
   // 도심거리 결손 보강 = raw 에 없고 좌표 있으면 = haversine(도시중심, 장소좌표) = 외부호출 0
   if (cityRow?.lat != null) {
     for (const j of jobs) {

@@ -102,7 +102,7 @@ function townOf(address: string | null): string | null {
           nameEn: p.nameEn, nameLocal: null, address: p.address,
           latitude: p.latitude, longitude: p.longitude,
           googlePlaceId: p.googlePlaceId, googleMapsUri: p.googleMapsUri,
-          googleReviewCount: p.googleReviewCount, priceEur: p.priceEur, priceOverwrite: false,
+          googleReviewCount: p.googleReviewCount, priceEur: p.priceEur,
           dayZone: 'outskirt', phaseTags: ['ts-searchnearby', `outskirt-ts-${today}`],
         });
         if (r.action === 'inserted') ins++; else if (r.action === 'updated') upd++; else skp++;

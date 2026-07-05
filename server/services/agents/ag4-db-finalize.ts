@@ -1,13 +1,14 @@
-// ⚠️ 수정금지(승인필요) 2026-05-26 = 사용자 SSOT = DB-only 전용 AG4 = scenario.scenes 직접 사용
+// ⚠️ 수정금지(승인필요) 2026-05-26 = 사용자 SSOT = DB-only 전용 AG4 = scene 직접 사용
 // = 옛 itinerary-generator 슬롯 강제 분배 + calcTransitHaversine 자체 계산 = 완전 폐기 (= 단계 4)
-// = scenario 성공 = scene 직접 24 슬롯 사용 + scene 의 distance / transit_mode / transit_min 직접 사용
-// = scenario 실패 = 옛 itinerary fallback (= 안전망)
+// = 동선 = buildRouteLocal(로컬 NN+Haversine) 단일 SSOT = scene 직접 24 슬롯 + scene 의 distance / transit_mode / transit_min 직접 사용
+// 🗑️ 2026-07-05 = 옛 Gemini/legacy fallback 서술 = "새||옛" 폴백 박제 = 삭제 §0/§19
 // = backfill = fire-and-forget (= FE 우선 노출 + background)
 // = dailyPerPersonEur = 1 인 단가 그대로 + group = × companionCount 별도
 
 import { db } from "../../db";
-import { exchangeRates } from "@shared/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
+// 🧠 2026-07-05 = 환율 EUR→KRW 단일 SSOT import(§16, 로컬 3벌 복붙 폐기)
+import { getEurToKrwRate } from "../exchange-rate";
 import type {
   PlaceResult,
   TripFormData,
@@ -16,38 +17,14 @@ import type {
   AG1Output,
 } from "./types";
 import { MEAL_BUDGET } from "./types";
-import { handleRouteRequest } from "../route/route-handler";
-// ⚠️ 수정금지(승인필요) 2026-06-06 = DB-only 동선 1차 = 로컬 NN+Haversine (= Stage C) / Gemini = 안전장치
+// ⚠️ 수정금지(승인필요) 2026-06-06 = DB-only 동선 = 로컬 NN+Haversine (= Stage C) 단일 SSOT
+// 🗑️ 2026-07-05 = handleRouteRequest(Gemini) import·RouteResponse(미사용) import = 옛 폴백 잔재 = 삭제 §0/§19
 import { buildRouteLocal } from "../route/route-local";
 import { backfillFromRoute } from "../route/route-backfill";
-import type { RouteResponse } from "../route/route-types";
 // ⚠️ 2026-07-04 사장님 SSOT = 드라이빙 가이드 가격 = 재발명 금지(§16) = MIX 경로(pipeline-v3.ts)와 동일한 단일 SSOT 재사용.
 import { shouldApplyGuidePrice, calculateTransportPrice } from "../transport-pricing-service";
 
-/** EUR → KRW 환율 = exchangeRates DB 캐시 */
-async function getEurToKrwRate(): Promise<number> {
-  try {
-    if (!db) return 1500;
-    const [rate] = await db
-      .select()
-      .from(exchangeRates)
-      .where(
-        and(
-          eq(exchangeRates.baseCurrency, "KRW"),
-          eq(exchangeRates.targetCurrency, "EUR"),
-        ),
-      )
-      .limit(1);
-    if (rate && rate.rate > 0) {
-      const eurToKrw = Math.round(1 / rate.rate);
-      console.log(`[AG4-DB] 💱 €1 = ₩${eurToKrw.toLocaleString()}`);
-      return eurToKrw;
-    }
-  } catch (error) {
-    console.warn("[AG4-DB] 환율 조회 실패, 기본값 사용:", error);
-  }
-  return 1500;
-}
+// 🗑️ 2026-07-05 = getEurToKrwRate 로컬정의 삭제 = shared/exchange-rate.ts 단일 SSOT 통합(§16 재발명금지, 3벌→1벌)
 
 function addMinutes(time: string, minutes: number): string {
   const [h, m] = time.split(":").map(Number);
@@ -56,7 +33,6 @@ function addMinutes(time: string, minutes: number): string {
   const mm = total % 60;
   return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
 }
-// ⚠️ 2026-06-06 = classifyMealType(시각<15시 판정) = mealType 위치기반 전환으로 데드 = 제거
 
 /**
  * ⚠️ 2026-07-04 사장님 SSOT = 대중교통(walk/metro/bus/RER) 구간당 균일 예상가만 처리.
@@ -115,9 +91,9 @@ export interface AG4DbInput {
 }
 
 /**
- * AG4-DB 메인 = scenario.scenes 직접 사용 (= 사용자 SSOT 2026-05-26 단계 4)
- * = scenario 응답 24 씬 = 그대로 일자별 슬롯 = FE 노출
- * = 실패 = itinerary fallback (= 안전망 = MIX path 동일 코드)
+ * AG4-DB 메인 = buildRouteLocal 동선 → scene 직접 사용 (= 사용자 SSOT 2026-05-26 단계 4)
+ * = 로컬 동선 24 씬 = 그대로 일자별 슬롯 = FE 노출
+ * 🗑️ 2026-07-05 = 옛 "실패 = itinerary fallback(안전망)" 서술 = 삭제 §0/§19
  */
 export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
   const _t0 = Date.now();
@@ -133,11 +109,10 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
     inputPlaces,
   } = input;
 
-  const eurToKrw = await getEurToKrwRate();
+  const eurToKrw = await getEurToKrwRate('[AG4-DB]');
 
-  // ===== 1. 동선 = 로컬 NN+Haversine 1차 (= DB-only 자체 해결, $0/~3ms) / Gemini = 안전장치 (= Stage C 2026-06-06) =====
-  // ⚠️ 수정금지(승인필요) = 토글 USE_LOCAL_ROUTE: 기본 ON / 'false' 면 즉시 옛 Gemini-우선 롤백 (= 1초 롤백)
-  const USE_LOCAL_ROUTE = process.env.USE_LOCAL_ROUTE !== "false";
+  // ===== 1. 동선 = 로컬 NN+Haversine 단일 SSOT (= DB-only 자체 해결, $0/~3ms) (= Stage C 2026-06-06) =====
+  // 🗑️ 2026-07-05 = USE_LOCAL_ROUTE 롤백 토글 + Gemini 우선 삼항 = "새||옛" 폴백 = 삭제 §0/§19 (buildRouteLocal 단일 경로)
 
   // ⚠️ 수정금지(승인필요) 2026-06-13 사용자 SSOT = DB-only 식당풀 = 가격대 구간별 RC TOP 만 (= eco20/reason40/premium20, zone 구분 없이 도시 전체)
   //   = 옛 버그(2026-06-06): 가격보유 식당 전체(410곳)를 풀로 넘김 → route-local 이 인접픽 → RC 랭킹 밖(300위권~바닥)
@@ -146,7 +121,7 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
   //     RC DESC ROW_NUMBER ≤ 구간정원(20/40/20/20)만 풀에 포함. rank 는 rc-rerank 가 이미 RC 반영 → TOP = 완비 식당.
   //   → route-local 2차 = 이 TOP 풀에서 슬롯 앵커 거리순 인접픽 (= 부실 바닥식당 원천 제외).
   let restaurantPool: PlaceResult[] = [];
-  if (USE_LOCAL_ROUTE && cityId && db) {
+  if (cityId && db) {
     const rows = (await db!.execute(sql`
       WITH banded AS (
         SELECT id, name_en AS "nameEn", name_ko AS "nameKo", name_local AS "nameLocal", address,
@@ -185,27 +160,16 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
     );
   }
 
-  let routeResult = USE_LOCAL_ROUTE
-    ? buildRouteLocal(skeleton, inputPlaces, cityCoords, restaurantPool)
-    : await handleRouteRequest(skeleton, inputPlaces, cityCoords);
+  // 🗑️ 2026-07-05 = 옛 Gemini 삼항·localInsufficient 재호출·legacy fallback = "새||옛" 폴백 = 삭제 §0/§19
+  const routeResult = buildRouteLocal(skeleton, inputPlaces, cityCoords, restaurantPool);
+  console.log(`[AG4-DB] ✅ 동선 = 로컬 NN+Haversine (${routeResult.elapsedMs}ms, Gemini 0)`);
 
-  // 로컬 1차가 실패/부족(일자 0 또는 씬 0) 시 → Gemini 안전장치 (= 빈 일정 방지)
-  const localScenes =
-    routeResult.response?.days?.reduce((s, d) => s + (d.scenes?.length || 0), 0) || 0;
-  const localInsufficient =
-    USE_LOCAL_ROUTE && (!routeResult.ok || !routeResult.response?.days?.length || localScenes === 0);
-  if (localInsufficient) {
-    console.log(`[AG4-DB] ⚠️ 로컬 동선 부족/실패 → Gemini 안전장치 호출`);
-    routeResult = await handleRouteRequest(skeleton, inputPlaces, cityCoords);
-  } else if (USE_LOCAL_ROUTE) {
-    console.log(`[AG4-DB] ✅ 동선 = 로컬 NN+Haversine (${routeResult.elapsedMs}ms, Gemini 0)`);
-  }
-
+  // buildRouteLocal 은 daySlotsConfig 를 순회해 days 를 채우므로 정상 뼈대면 항상 ok.
+  // !ok = daySlotsConfig 자체가 비어있는 malformed 뼈대뿐 → 옛 파이프라인 부활 없이 명확한 에러(§0).
   if (!routeResult.ok || !routeResult.response) {
-    console.error(
-      `[AG4-DB] ❌ route 실패 (${routeResult.elapsedMs}ms) = 옛 itinerary fallback`,
+    throw new Error(
+      `[AG4-DB] 로컬 동선 생성 실패 (days=0) = daySlotsConfig 비정상 = 뼈대 점검 필요 (elapsedMs=${routeResult.elapsedMs})`,
     );
-    return await finalizeWithLegacyItinerary(input, eurToKrw);
   }
 
   const routeResponse = routeResult.response;
@@ -481,204 +445,4 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
   };
 }
 
-/**
- * fallback = itinerary-generator + calcTransitHaversine (= scenario 실패 시 안전망)
- * = MIX path 와 동일 코드 = 본 함수는 dynamic import (= circular import 회피)
- */
-async function finalizeWithLegacyItinerary(
-  input: AG4DbInput,
-  eurToKrw: number,
-): Promise<any> {
-  const {
-    daySlotsConfig,
-    travelPace,
-    formData,
-    companionCount,
-    dayCount,
-    cityCoords,
-    skeleton,
-    inputPlaces,
-  } = input;
-
-  // enrichment + slot 분배 호출 (= dynamic = circular 회피)
-  const { processDbOnly } = await import("./ag3-db-direct");
-  const { enriched } = processDbOnly(inputPlaces);
-  const { _enrichmentPipeline } = await import("../itinerary-generator");
-  const enrichResult = await _enrichmentPipeline.runFullEnrichment(
-    enriched,
-    formData,
-    {
-      daySlotsConfig: skeleton.daySlotsConfig,
-      travelPace: skeleton.travelPace,
-      requiredPlaceCount: skeleton.requiredPlaceCount,
-    },
-  );
-
-  // transit-haversine = dynamic = circular 회피
-  const { calcTransitHaversine } = await import("./transit-haversine");
-  // ⚠️ 2026-07-04 사장님 SSOT = 옛 "Minimal만 DRIVE" 3분기 완전삭제(§0) → shouldApplyGuidePrice 단일 SSOT로 메인경로와 통일(§19 공존금지).
-  const isGuideFallback = shouldApplyGuidePrice(formData.mobilityStyle, formData.travelStyle);
-  const travelMode: any = isGuideFallback
-    ? "DRIVE"
-    : formData.mobilityStyle === "WalkMore"
-      ? "WALK"
-      : "TRANSIT";
-
-  const mealBudget = MEAL_BUDGET[formData.travelStyle || "Reasonable"];
-  const days: any[] = [];
-  let totalPerPersonEur = 0;
-
-  for (let d = 1; d <= dayCount; d++) {
-    const dayConfig = daySlotsConfig.find((c) => c.day === d)!;
-    const dayPlaces = enrichResult.schedule
-      .filter((s: any) => s.day === d)
-      .map((s: any) => ({
-        ...s.place,
-        startTime: s.startTime,
-        endTime: s.endTime,
-        isMealSlot: s.isMealSlot,
-        mealType: s.mealType,
-        mealPrice: s.isMealSlot
-          ? s.place.estimatedPriceEur && s.place.estimatedPriceEur > 0
-            ? s.place.estimatedPriceEur
-            : s.mealType === "lunch"
-              ? mealBudget.lunch
-              : mealBudget.dinner
-          : undefined,
-        mealPriceLabel: s.isMealSlot
-          ? s.place.estimatedPriceEur && s.place.estimatedPriceEur > 0
-            ? `€${s.place.estimatedPriceEur}`
-            : s.mealType === "lunch"
-              ? mealBudget.lunchLabel
-              : mealBudget.dinnerLabel
-          : undefined,
-        estimatedPriceEur: s.place.estimatedPriceEur,
-        selectionReasons: s.place.selectionReasons || [],
-        confidenceLevel: s.place.confidenceLevel || "minimal",
-      }));
-
-    const transits: any[] = [];
-    for (let i = 0; i < dayPlaces.length - 1; i++) {
-      transits.push(
-        // ⚠️ 2026-07-04 사장님 SSOT = cityCoords 전달 = DRIVE 모드 도심/외곽 속도 분기(30/70km/h), 메인경로와 통일(§19).
-        calcTransitHaversine(
-          dayPlaces[i],
-          dayPlaces[i + 1],
-          travelMode,
-          companionCount,
-          cityCoords,
-        ),
-      );
-    }
-
-    const mealCostEur = dayPlaces.reduce(
-      (sum: number, p: any) =>
-        sum + (p.isMealSlot && p.mealPrice ? p.mealPrice : 0),
-      0,
-    );
-    const entranceFeesEur = dayPlaces.reduce(
-      (sum: number, p: any) =>
-        sum +
-        (!p.isMealSlot && typeof p.estimatedPriceEur === "number"
-          ? p.estimatedPriceEur
-          : 0),
-      0,
-    );
-    // ⚠️ 2026-07-04 사장님 SSOT = 드라이빙 가이드 = 구간별 haversine cost(옛 km×€0.5) 완전삭제 → 메인경로와 동일 헬퍼로 하루 1회 실가격(§0 중복금지, §16 재사용).
-    let transportCostEur: number;
-    if (isGuideFallback) {
-      transportCostEur = await guideCostPerPersonPerDay(dayConfig, formData, companionCount, dayCount);
-      transits.forEach((t: any) => { t.cost = 0; t.costTotal = 0; }); // 구간 표시 FE 숨김, 일 총합에만 반영
-    } else {
-      transportCostEur = transits.reduce(
-        (sum: number, t: any) => sum + (t.cost || 0),
-        0,
-      );
-    }
-    const dailyPerPersonEur =
-      Math.round((mealCostEur + entranceFeesEur + transportCostEur) * 100) /
-      100;
-    const dailyGroupEur =
-      Math.round(dailyPerPersonEur * companionCount * 100) / 100;
-    const dailyPerPersonKrw = Math.round(dailyPerPersonEur * eurToKrw);
-    const dailyGroupKrw = Math.round(dailyGroupEur * eurToKrw);
-    totalPerPersonEur += dailyPerPersonEur;
-
-    days.push({
-      day: d,
-      places: dayPlaces,
-      city: formData.destination,
-      summary: `${formData.destination} 하루`,
-      startTime: dayConfig.startTime,
-      endTime: dayConfig.endTime,
-      transit: {
-        transits,
-        totalDuration: transits.reduce(
-          (s: number, t: any) => s + t.duration,
-          0,
-        ),
-        totalCost: transits.reduce((s: number, t: any) => s + t.costTotal, 0),
-        totalDistanceKm: 0, // = fallback = transit-haversine = 거리 합산 X = FE 호환만
-      },
-      dailyCost: {
-        // ⚠️ 2026-06-06 = FE 는 dc.breakdown.{...} 중첩을 읽음 (= MIX pipeline-v3 구조 일치) = 카테고리별 비용(교통/식사/입장료) 표시
-        breakdown: {
-          mealEur: mealCostEur,
-          entranceEur: entranceFeesEur,
-          transportEur: transportCostEur,
-        },
-        mealEur: mealCostEur,
-        entranceEur: entranceFeesEur,
-        transportEur: transportCostEur,
-        totalEur: dailyPerPersonEur,
-        totalKrw: dailyGroupKrw,
-        perPersonEur: dailyPerPersonEur,
-        perPersonKrw: dailyPerPersonKrw,
-        groupEur: dailyGroupEur,
-        groupKrw: dailyGroupKrw,
-      },
-    });
-  }
-
-  const totalGroupEur =
-    Math.round(totalPerPersonEur * companionCount * 100) / 100;
-  const totalPerPersonKrw = Math.round(totalPerPersonEur * eurToKrw);
-  const totalGroupKrw = Math.round(totalGroupEur * eurToKrw);
-
-  console.warn(
-    `[AG4-DB] ⚠️ fallback (= 옛 itinerary): ${days.length}일, ${enrichResult.schedule.length}곳`,
-  );
-
-  return {
-    title: `${formData.destination} ${dayCount}일 여행`,
-    destination: formData.destination,
-    startDate: formData.startDate,
-    endDate: formData.endDate,
-    startTime: formData.startTime || "09:00",
-    endTime: formData.endTime || "21:00",
-    days,
-    companionType: formData.companionType,
-    companionCount,
-    travelStyle: formData.travelStyle,
-    mobilityStyle: formData.mobilityStyle,
-    totalCost: {
-      perPersonEur: totalPerPersonEur,
-      perPersonKrw: totalPerPersonKrw,
-      groupEur: totalGroupEur,
-      groupKrw: totalGroupKrw,
-      eurToKrwRate: eurToKrw,
-      currency: "EUR",
-    },
-    metadata: {
-      travelStyle: formData.travelStyle,
-      travelPace,
-      totalPlaces: enrichResult.schedule.length,
-      companionType: formData.companionType,
-      companionCount,
-      curationFocus: formData.curationFocus,
-      generatedAt: new Date().toISOString(),
-      pipelineVersion: "db-only-v1-fallback",
-      route: { skipped: true, reason: "scenario_failed" },
-    },
-  };
-}
+// 🗑️ 2026-07-05 = finalizeWithLegacyItinerary(201줄) 전체 삭제 = 옛 _enrichmentPipeline 슬롯강제분배 dynamic import 부활 = 헤더가 "완전폐기" 선언한 걸 fallback으로 되살림 = 똥덮기 §0/§19. 동선 실패 = buildRouteLocal 단일 SSOT 에서 명확한 에러(위 참조).

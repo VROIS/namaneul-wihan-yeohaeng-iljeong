@@ -1,28 +1,7 @@
 /**
- * Pipeline V3: 2단계 일정 생성 파이프라인
- *
- * ┌─────────────────────────────────────────────────────────┐
- * │ Step 1: Gemini 완전 일정 생성 (강화 프롬프트)            │
- * │   • 도시 중심 출발/종료, 지리 동선 최적화                │
- * │   • 교통편 명시, 2026 최신 입장료, 계절 반영             │
- * │   • 식사 배치, 이동시간 추정 모두 Gemini 처리            │
- * ├─────────────────────────────────────────────────────────┤
- * │ Step 2: NUBI 차별화 데이터 삽입 (병렬)                  │
- * │   • DB 매칭: places → 사진, 점수, 좌표                  │
- * │   • nubiReason, 셀럽사진, 한국 OTA 가격                 │
- * │   • 이동시간: Haversine 추정 (Google Routes 일시정지)    │
- * └─────────────────────────────────────────────────────────┘
- *
- * Google Routes API: USE_GOOGLE_ROUTES=false 로 일시정지
- *   → 미래 프리미엄 기능 ("실현가능성 검증") 용으로 보존
- *   → 소도시/비주류 지역 실측 필요 시 플래그 전환
- *
- * 총 소요: 10~12초 목표
+ * Pipeline V3 (MIX): Step1 Gemini 일정 생성 → Step2 DB매칭·교통비·스케줄 빌드.
+ * 이동시간 = 외부호출0 Haversine 추정.
  */
-
-// ⚠️ 수정금지(승인필요) 2026-05-20 = Google Routes API 완전 폐기 = 모든 경로 (= 사용자 SSOT)
-// = MIX 도 = Gemini 1차 응답 동선 + Haversine 추정 = 외부 호출 0 / 비용 0
-// = routeOptimizer + USE_GOOGLE_ROUTES + try/Google 분기 = 모두 제거
 
 import { GoogleGenAI } from "@google/genai";
 import type { TripFormData, PlaceResult, DaySlotConfig, TravelPace, VibeWeight, TravelStyle } from './types';
@@ -41,11 +20,11 @@ import {
   type TransportPricingResult, type GuidePriceResult, type TransitPriceResult, type UberBlackComparison,
 } from '../transport-pricing-service';
 import { db } from '../../db';
-// ⚠️ 2026-05-23 = simplify P1 = dead import 제거 (= youtubePlaceMentions/youtubeVideos/youtubeChannels/naverBlogPosts/places = 본문 사용 0 = Step 4 DROP 시 빌드 깨짐 차단)
-import { exchangeRates, placeSeedRaw } from '@shared/schema';
+import { placeSeedRaw } from '@shared/schema';
 import { eq, and, sql, desc, asc } from 'drizzle-orm';
-// ⚠️ 2026-05-23 = celebrity-tracker 완전 폐기 (= 사용자 SSOT = celeb 검색 = 데이터 0)
-type CelebrityVisit = any;
+// 🧠 2026-07-05 = 환율 EUR→KRW 단일 SSOT import(§16, 로컬 3벌 복붙 폐기)
+import { getEurToKrwRate } from '../exchange-rate';
+// 🗑️ 2026-07-05 삭제 = CelebrityVisit 타입 = celebrity 폐기잔재(호출0) §0/§19
 
 /**
  * Gemini 반환 가격 정제
@@ -60,10 +39,7 @@ function sanitizePriceEur(raw: any): number {
   return Math.round(n * 100) / 100;
 }
 
-/** ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT = price_eur 단일 컬럼 (SSOT §14 + 제15조)
- *  순차: 1) Gemini price_eur(최신) > 2) seed_raw priceEur (= COALESCE 새 우선 = 최신최우선, 옛 GREATEST 비싼쪽 폐기 2026-06-10)
- *        > 3) 매트릭스 폴백 (= 식당 = MEAL_BUDGET / 비식당 = 0)
- *  = 옛 enrichedPrice 파라미터 폐기 (= ta enrichment 폐기) = geminiPrice 단일 입력 */
+/** ⚠️ 수정금지(승인필요) = price_eur 단일 SSOT = 최신최우선(Gemini > seed_raw > 매트릭스폴백) §14 */
 function resolvePrice(
   geminiPrice: number,
   isMeal: boolean = false,
@@ -71,7 +47,6 @@ function resolvePrice(
   mealType?: 'lunch' | 'dinner',
   travelStyle: TravelStyle = 'Reasonable',
 ): number {
-  // ⚠️ 수정금지(승인필요) 2026-06-20 = 최신최우선(COALESCE 새 우선) = Gemini(최신 호출값) 있으면 Gemini, 없으면 seed_raw 보존 (= §14, 옛 GREATEST 비싼쪽 폐기 2026-06-10)
   const resolved = geminiPrice > 0 ? geminiPrice : seedPriceEur;
   if (resolved > 0) return resolved;
   // 모두 0 = 매트릭스 폴백 (= 식당만)
@@ -118,7 +93,7 @@ interface GeminiPlace {
   distance_km_from_center?: number;
   startTime: string;
   endTime: string;
-  reason?: string;      // = optional (= selection_reason_ko 폴백)
+  // 🗑️ 2026-07-05 삭제 = reason 필드 = 프롬프트 미요청(항상 undefined = 死데이터) §0/§19
   selection_reason_ko?: string;  // ⚠️ 2026-05-14 v3 신규 = 인스타/FOMO = → summary_ko
   shortform_ko?: string;          // ⚠️ 2026-05-14 v3 신규 = 코믹/위트 = → editorial_summary
   transitNote?: string; // 이전 장소에서 이 장소까지 이동 방법 (Gemini 생성)
@@ -158,18 +133,14 @@ async function runPipelineMix(formData: TripFormData): Promise<any> {
 
   // ===== 기본 계산 (AG1 역할 통합, <1ms) =====
   const dayCount = calculateDayCount(formData.startDate, formData.endDate);
-  let travelPace: TravelPace = (formData.travelPace as TravelPace) || 'Normal';
-  if (travelPace === 'Moderate' as any) travelPace = 'Normal';
+  // 🗑️ 2026-07-05 삭제 = 'Moderate'→'Normal' 재매핑 = 옛 pace값(FE 미전송 = 죽은분기) §0/§19
+  const travelPace: TravelPace = (formData.travelPace as TravelPace) || 'Normal';
   const paceConfig = PACE_CONFIG[travelPace];
   const companionCount = getCompanionCount(formData.companionType || 'Solo');
   // ⚠️ 수정금지(승인필요) 2026-06-28 사용자 SSOT = vibes 빈값 폴백 = 정식 6 vibe 만 (옛 Foodie→Shopping 교체, §19 완전삭제). Foodie 는 버튼 폐기됨(즐길거리=Attraction / 쇼핑=Shopping). 헤더 "미식" 오염 차단.
   const vibes = formData.vibes || ['Shopping', 'Culture', 'Healing'];
 
-  // ⚠️ 수정금지(승인필요) 2026-05-09 = sourceMode 분기 인프라 (= 사용자 SSOT)
-  // = 'mixed' (현재 = DB 매칭 + Gemini 호출 + auto-learn 보강) = OFF 상태
-  // = 'db-only' (미래 = 9 발굴 도시 검증 충분 시 = 외부 호출 0) = 사용자 토글 ON 시 활성
-  // = AG1 → AG2 → AG3 → AG4 = 모든 후속 인식 = result.metadata 에 포함
-  const sourceMode: 'mixed' | 'db-only' = (formData as any).sourceMode === 'db-only' ? 'db-only' : 'mixed';
+  // 🗑️ 2026-07-05 삭제 = sourceMode 토글 = 라우팅은 cityCheck.ready 담당(안 도는 분기) §0/§19
 
   // Vibe 가중치 계산
   const PRIORITY_WEIGHTS: Record<number, number[]> = { 1: [100], 2: [60, 40], 3: [50, 30, 20] };
@@ -223,7 +194,8 @@ async function runPipelineMix(formData: TripFormData): Promise<any> {
   ]);
 
   _mark('step1_parallel');
-  console.log(`[V3-MIX] Step1 완료 (${_timings['step1_parallel']}ms): Gemini ${geminiDays.length}일, DB ${preloaded.dbPlacesMap.size}키`);
+  // 🗑️ 2026-07-05 삭제 = dbPlacesMap.size 참조 → seedRawMap.size(실제 시드 후보 수) = 죽은맵 제거 정합 §0/§19
+  console.log(`[V3-MIX] Step1 완료 (${_timings['step1_parallel']}ms): Gemini ${geminiDays.length}일, seed ${preloaded.seedRawMap?.size ?? 0}키`);
 
   // ===== Step 2: 데이터 채우기 =====
   const result = await step2_enrichAndBuild(
@@ -244,7 +216,7 @@ async function runPipelineMix(formData: TripFormData): Promise<any> {
     _timings,
     _totalMs: Date.now() - _t0,
     _pipelineVersion: 'v3-2step',
-    sourceMode,  // = AG1 분기 결정 (= 2026-05-09)
+    // 🗑️ 2026-07-05 삭제 = sourceMode 메타 노출 = 죽은 토글 §0/§19
 
     // ⭐ 신규 추적 메타 (= 2026-05-14)
     _matching: {
@@ -261,7 +233,7 @@ async function runPipelineMix(formData: TripFormData): Promise<any> {
         : '미매칭 없음 = 백그라운드 작업 없음',
     },
     _geminiModel: 'gemini-3-flash-preview',
-    _matchingAlgorithm: 'address > name > coords10m (= v3 2026-05-14)',
+    // 🗑️ 2026-07-05 삭제 = _matchingAlgorithm 문자열 = 옛 3단계 인용(현 matcher 7단계와 불일치) §0/§19
   };
 
   console.log(`[V3] ===== Pipeline V3 완료 (${Date.now() - _t0}ms) =====`);
@@ -491,22 +463,16 @@ OUTPUT (strict JSON, no markdown fences):
 ]}]}`;
 
   try {
-    // ⚠️ 수정금지(승인필요) 2026-06-01 = 사용자 SSOT = grounding 토글 (= 실측: grounding +8초 / JSON ~13초 = 모델 동일)
-    // = false = responseMimeType JSON (빠름. 신규장소 = saveNewPlacesToDB 의 TS searchText 가 Google 재검증 = 환각 안전망)
-    // = true  = googleSearch grounding (정확, 무명도시 강함, 느림). 롤백 = 이 1줄 true
-    const STEP1_USE_GROUNDING = false;
+    // 🗑️ 2026-07-05 삭제 = STEP1_USE_GROUNDING 토글 + grounding else분기 = false고정 데드경로(JSON경로 1벌만) §0/§19
+    // responseMimeType JSON = 파싱안정+속도 (신규장소 환각 안전망 = saveNewPlacesToDB TS searchText 재검증)
     const step1Config: any = {
       temperature: 0.3,
       maxOutputTokens: 8192,
       thinkingConfig: { thinkingBudget: 0 },
+      responseMimeType: "application/json",
     };
-    if (STEP1_USE_GROUNDING) {
-      step1Config.tools = [{ googleSearch: {} }];
-    } else {
-      step1Config.responseMimeType = "application/json"; // = grounding off 시 = JSON 강제 (= 파싱 안정 + 속도)
-    }
     console.log(
-      `[V3-Step1] 🤖 gemini-3-flash-preview ${STEP1_USE_GROUNDING ? "+ grounding" : "+ JSON"} (${prompt.length}자)...`,
+      `[V3-Step1] 🤖 gemini-3-flash-preview + JSON (${prompt.length}자)...`,
     );
 
     const response = await getAI().models.generateContent({
@@ -534,7 +500,7 @@ OUTPUT (strict JSON, no markdown fences):
       source: 'gemini',
       contextId: null,
       tag: 'mix-step1',
-      request: { prompt, model: 'gemini-3-flash-preview', grounding: STEP1_USE_GROUNDING },
+      request: { prompt, model: 'gemini-3-flash-preview', grounding: false },
       raw: { text, finishReason },
     }).catch(() => {});
 
@@ -578,54 +544,7 @@ OUTPUT (strict JSON, no markdown fences):
       return [];
     }
 
-    // ⚠️ 수정금지(승인필요) 2026-05-09 = 사용자 SSOT = AG2 1차 응답 raw 보관 (= 검수용)
-    // = ENV DEBUG_PIPELINE_SNAPSHOT=1 일 때만 저장
-    if (process.env.DEBUG_PIPELINE_SNAPSHOT === '1') {
-      try {
-        const fs = await import('fs');
-        const path = await import('path');
-        const outDir = `docs/db-only-${new Date().toISOString().slice(0, 10)}-gemini`;
-        if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
-        const outPath = path.join(outDir, 'ag2-raw.json');
-        fs.writeFileSync(outPath, JSON.stringify({
-          timestamp: new Date().toISOString(),
-          formData_summary: {
-            destination: formData.destination,
-            startDate: formData.startDate,
-            endDate: formData.endDate,
-            startTime: formData.startTime,
-            endTime: formData.endTime,
-            companionType: formData.companionType,
-            companionCount: formData.companionCount,
-            curationFocus: formData.curationFocus,
-            travelPace: formData.travelPace,
-            travelStyle: formData.travelStyle,
-            mobilityStyle: formData.mobilityStyle,
-            vibes: formData.vibes,
-          },
-          prompt,
-          raw_response: result,
-          days_summary: days.map(d => ({
-            day: d.day,
-            theme: d.theme,
-            placeCount: d.places?.length || 0,
-            places: d.places?.map(p => ({
-              name: p.name,
-              nameKo: (p as any).nameKo,
-              nameLocal: (p as any).nameLocal,
-              type: p.type,
-              startTime: p.startTime,
-              endTime: p.endTime,
-              price_eur: (p as any).price_eur,
-              reason: p.reason,
-            })) || [],
-          })),
-        }, null, 2));
-        console.log(`[V3-Step1] 📝 AG2 raw 보관: ${outPath}`);
-      } catch (e) {
-        console.warn(`[V3-Step1] AG2 raw 보관 실패:`, (e as Error).message);
-      }
-    }
+    // 🗑️ 2026-07-05 삭제 = DEBUG_PIPELINE_SNAPSHOT 로컬 dump = saveRaw(§18) 이중저장 관문우회 §0/§19
 
     // 검증: 각 일의 장소 수/식사 체크
     for (const day of days) {
@@ -672,11 +591,10 @@ async function step2_enrichAndBuild(
     for (const gPlace of gDay.places) {
       const isMeal = gPlace.type === 'lunch' || gPlace.type === 'dinner';
       const placeId = `v3-d${gDay.day}-${allPlaces.length}`;
-      // ⚠️ 수정금지(승인필요) 2026-05-14 = v3 신규 필드 우선 매핑
-      // = description = shortform_ko (= 후킹 카피) → 옛 reason 폴백
-      // = personaFitReason = selection_reason_ko (= 인스타/FOMO) → 옛 reason 폴백
-      const desc = gPlace.shortform_ko || gPlace.reason || '';
-      const persona = gPlace.selection_reason_ko || gPlace.reason || 'AI 추천 장소';
+      // description=shortform_ko(후킹카피)→DB editorial_summary / personaFitReason=selection_reason_ko(인스타/FOMO)→DB summary_ko
+      // 🗑️ 2026-07-05 삭제 = gPlace.reason 폴백 = 프롬프트 미요청 필드(항상 undefined = 死데이터) §0/§19
+      const desc = gPlace.shortform_ko || '';
+      const persona = gPlace.selection_reason_ko || 'AI 추천 장소';
       const place: PlaceResult = {
         id: placeId,
         name: gPlace.name || 'Unknown Place',
@@ -722,15 +640,10 @@ async function step2_enrichAndBuild(
   // ⚠️ 수정금지(승인필요) 2026-05-31 = 사용자 SSOT = skipImageEnrich = Wikipedia 이미지 보강(동기 ~9초) skip
   // = FE 우선 노출 (= DB-only 처럼) / 이미지 = saveNewPlacesToDB(background = TS+PM) 가 DB 저장 = 다음 trip = DB hit
   const matchedPlaces = await matchPlacesWithDB(allPlaces, preloaded, { skipImageEnrich: true });
-  const matchedMap = new Map<string, PlaceResult>();
-  for (const mp of matchedPlaces) {
-    matchedMap.set(mp.id, mp);
-  }
+  // 🗑️ 2026-07-05 삭제 = matchedMap = finalPlaceMap 폴백용 데드맵(finalPlaces 가 동일 id 전부 보유) §0/§19
   console.log(`[V3-Step2] DB 매칭 완료 (${Date.now() - _t0}ms)`);
 
-  // ⚠️ 수정금지(승인필요) 2026-05-20 = enrichFns 3 종 (= KoreanPopularity / TripAdvisor / Photo+Tour) 완전 폐기
-  // = 사용자 SSOT = place_seed_raw 단일 테이블 + 보조 테이블 (places/tripAdvisorData/geminiWebSearchCache 등) = 쓰레기 = 폐기
-  // = matchedPlaces (= AG2-DB 의 PlaceResult) 그대로 사용 + getRealityCheckForCity (= 날씨/위기 = 별도 도메인) 유지
+  // 🗑️ 2026-07-05 삭제 = enrichFns 3종 폐기서술 = getRealityCheckForCity(날씨/위기)만 사용 §0/§19
 
   // 💡 가용시간 자동 계산 (startTime~endTime, 기본 8시간)
   const startH = parseInt((formData.startTime || '09:00').split(':')[0]);
@@ -749,7 +662,7 @@ async function step2_enrichAndBuild(
 
   const enrichFns = await getEnrichmentFunctions();  // = getRealityCheckForCity 만 사용
   const [eurToKrw, realityCheck, transportPrice] = await Promise.all([
-    getEurToKrwRate(),
+    getEurToKrwRate('[V3]'),
     enrichFns.getRealityCheckForCity(formData.destination),
     // 💰 교통비 산정 (카테고리 자동 분류: 가이드 vs 대중교통)
     calculateTransportPrice({
@@ -771,13 +684,9 @@ async function step2_enrichAndBuild(
     console.log(`[V3-Step2] 💰 교통비: 카테고리 ${transportPrice.category} | 1인/일 €${transportPrice.perPersonPerDay}`);
   }
 
-  // ── 2d. Enrichment 결과 병합 + 셀럽 방문 검색 + nubiReason 생성 ──
-
-  // ⚠️ 2026-05-23 = celebrity-tracker 폐기 = 빈 Map 유지 (= nubiReason 호출부 호환)
-  const celebrityVisits = new Map<string, CelebrityVisit>();
-
-  // ⚠️ 수정금지(승인필요) 2026-05-20 = 각 장소 = place_seed_raw 데이터 그대로 사용 (= ta/kr/ph 폐기)
-  const finalPlaces = await Promise.all(matchedPlaces.map(async (p, i) => {
+  // ── 2d. 병합 + summaryKo 생성 ──
+  // 🗑️ 2026-07-05 삭제 = celebrityVisits 빈맵 = celebrity 폐기잔재(읽는 곳 없음) §0/§19
+  const finalPlaces = await Promise.all(matchedPlaces.map(async (p) => {
     // seedRawMap 조회 (가격 + 인앱 링크용)
     const seedNameEn = p.name ? p.name.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, "") : "";
     const seedData = preloaded.seedRawMap?.get(seedNameEn);
@@ -798,39 +707,28 @@ async function step2_enrichAndBuild(
 
     const merged = {
       ...p,
-      // ⚠️ 2026-05-20 = place_seed_raw 데이터 그대로 (= p.<field>)
+      // 🗑️ 2026-07-05 삭제 = priceEstimate 옛 p.priceEstimate raw 폴백 = 이중소스 → resolvePrice 단일결과만 §0/§19
       estimatedPriceEur: resolvedPrice,
-      priceEstimate: resolvedPrice > 0 ? `€${Math.round(resolvedPrice)}` : (p.priceEstimate ?? '무료'),
+      priceEstimate: resolvedPrice > 0 ? `€${Math.round(resolvedPrice)}` : '무료',
     };
 
-    // ⚠️ 수정금지(승인필요) 2026-06-11 = summary_ko 흡수통합 = 후킹 숏폼 한줄요약(차별점) 단일 소스.
-    //   = 옛 nubiReason 이름 폐기 → summaryKo 통일. seedData.summaryKo 우선 → 구글 리뷰수 폴백.
-    merged.summaryKo = await generateNubiReasonV2(
-      p.id, p.name, preloaded.cityName,
-      null,
-      merged,
-      seedData
-    );
+    // ⚠️ 수정금지(승인필요) 2026-06-11 = summary_ko = 후킹 숏폼 한줄요약(앱 차별점) 단일 소스 = seedData.summaryKo 우선 → 구글 리뷰수 폴백.
+    // 🗑️ 2026-07-05 삭제 = generateNubiReasonV2 40줄 async껍데기 = 실질 1줄 로직 인라인화(호출부·정의 통삭) §0/§19
+    const reviewCount = (merged as any).userRatingCount || 0;
+    merged.summaryKo = seedData?.summaryKo
+      || (reviewCount >= 50 ? `구글 리뷰 ${reviewCount.toLocaleString()}개` : '데이터 수집 중');
 
     return merged;
   }));
 
-  // ⚠️ 수정금지(승인필요) 2026-06-01 = 사용자 SSOT = 이미지 FE 노출 토글 (= 실 trip 입증 후 롤백 1줄)
-  // = true  = fetch(TS+PM+Storage) await → 첫 trip 구글 이미지 노출(FE 최우선) + DB INSERT background(백필)
-  // = false = 옛 동작 = 전부 background (= 첫 trip 이미지 0, 다음 trip DB hit). 롤백 = 이 1줄 false
-  const AWAIT_NEW_PLACES_IMAGES = true;
-  if (AWAIT_NEW_PLACES_IMAGES) {
-    await saveNewPlacesToDB(finalPlaces, preloaded.cityId, { deferPersist: true }).catch(e =>
-      console.error('[V3-Step2] ⚠️ saveNewPlacesToDB(await fetch) 실패:', e?.message || e)
-    );
-  } else {
-    saveNewPlacesToDB(finalPlaces, preloaded.cityId).catch(e =>
-      console.error('[V3-Step2] ⚠️ 백그라운드 saveNewPlacesToDB 실패:', e?.message || e)
-    );
-  }
+  // 🗑️ 2026-07-05 삭제 = AWAIT_NEW_PLACES_IMAGES 토글 + else background분기 = true고정 데드경로(await 1벌만) §0/§19
+  // fetch(TS+PM+Storage) await → 첫 trip 구글 이미지 노출(FE 최우선) + DB INSERT background(백필)
+  await saveNewPlacesToDB(finalPlaces, preloaded.cityId, { deferPersist: true }).catch(e =>
+    console.error('[V3-Step2] ⚠️ saveNewPlacesToDB(await fetch) 실패:', e?.message || e)
+  );
 
   // ⚠️ 수정금지(승인필요) 2026-06-02 = 사용자 SSOT = 영구 폐업(TS) = FE 여정에서도 제외
-  // = saveNewPlacesToDB 가 __closedPermanently 마커 (= AWAIT_NEW_PLACES_IMAGES=true 일 때만 await 완료)
+  // = __closedPermanently 마커 = TS 성공(위 await fetch 완료) 시에만 세팅 = TS 종속(뼈대 유지)
   // = scheduleMap 의 해당 scene 제거 = 폐업 식당 FE 표시 0 (= 일별 스케줄 빌드 전이라 안전)
   const closedIds = new Set(
     finalPlaces.filter((p: any) => p.__closedPermanently).map((p: any) => p.id),
@@ -866,7 +764,7 @@ async function step2_enrichAndBuild(
     // 이 날의 스케줄
     const dayScheduleItems = scheduleMap.filter(s => s.day === d);
     const dayPlaces = dayScheduleItems.map(s => {
-      const enrichedPlace = finalPlaceMap.get(s.placeId) || matchedMap.get(s.placeId)!;
+      const enrichedPlace = finalPlaceMap.get(s.placeId)!;
       const isMeal = s.gPlace.type === 'lunch' || s.gPlace.type === 'dinner';
       // 프론트 전달 시 불필요한 0값 필드 제거 (React Native에서 {0}이 "0" 텍스트로 표시되는 문제 방지)
       const { finalScore, buzzScore, ...safePlace } = enrichedPlace as any;
@@ -887,12 +785,8 @@ async function step2_enrichAndBuild(
         // 식사 정보
         isMealSlot: isMeal,
         mealType: s.gPlace.type === 'lunch' ? 'lunch' as const : s.gPlace.type === 'dinner' ? 'dinner' as const : undefined,
-        // 원칙 1+2: Gemini 가격 최우선, 0이면 mealBudget fallback
-        mealPrice: isMeal
-          ? (s.gPlace.price_eur > 0
-            ? s.gPlace.price_eur
-            : (s.gPlace.type === 'lunch' ? mealBudget.lunch : mealBudget.dinner))
-          : undefined,
+        // 🗑️ 2026-07-05 삭제 = mealPrice 옛 s.gPlace.price_eur raw 재산정(resolvePrice 우회) → resolvePrice 단일결과(estimatedPriceEur) 재사용 §0/§19
+        mealPrice: isMeal ? (enrichedPlace.estimatedPriceEur ?? undefined) : undefined,
         mealPriceLabel: isMeal ? (s.gPlace.type === 'lunch' ? mealBudget.lunchLabel : mealBudget.dinnerLabel) : undefined,
         // Gemini의 한국어 이름 + 현지 원어명 + 추천이유
         nameKo: s.gPlace.nameKo,
@@ -1276,59 +1170,8 @@ async function step2_enrichAndBuild(
 // 헬퍼 함수들
 // =====================================================
 
-/**
- * ⭐ nubiReason V2: 순차 검색 — 위에서부터 찾으면 멈추고 "구체적 이름+날짜" 표시
- * 
- * 우선순위 (키워드 검색처럼 위에서 순서대로):
- * 1순위: 셀럽 TOP 10 방문 → "제니(BLACKPINK) 24년 9월 게시"
- * 2순위: 유튜버 18인 언급 → "빠니보틀 24년 11월 소개"
- * 3순위: 네이버 블로그   → "네이버 블로그 890건"
- * 4순위: 패키지투어 4사  → "하나투어·모두투어 필수코스"
- * 5순위: 여행앱 TOP 3   → "마이리얼트립 4.8점 (320건)"
- * 6순위: 구글 리뷰       → "구글 리뷰 284,095개"
- * 
- * 이 문구 = 앱의 광고 카피 = 핵심 차별화
- */
-async function generateNubiReasonV2(
-  placeId: string,
-  placeName: string,
-  cityName: string,
-  celebrityVisit: CelebrityVisit | null,
-  mergedData: any,
-  seedData?: any
-): Promise<string> {
-  try {
-    // ⚠️ 수정금지(승인필요) 2026-06-11 사용자 SSOT = summary_ko 흡수통합 (= 후킹 숏폼 한줄요약 = 앱 차별점).
-    //   = 옛 nubi_reason/celeb_mention/패키지 순위 = 전부 헛바퀴(데드) 폐기 → summary_ko(ag3 SELECT:203 프로젝션) 단일 소스.
-    //   = summary_ko 없으면 구글 리뷰수 폴백.
-    if (seedData && seedData.summaryKo) {
-      return seedData.summaryKo;
-    }
-
-    // ── 폴백: 구글 리뷰 수 ──
-    const reviewCount = mergedData.userRatingCount || 0;
-    if (reviewCount >= 50) {
-      return `구글 리뷰 ${reviewCount.toLocaleString()}개`;
-    }
-
-    // 모든 순위에서 못 찾은 경우
-    return '데이터 수집 중';
-  } catch (error) {
-    console.warn(`[NubiReason] ${placeName} 생성 실패:`, error);
-    return '데이터 수집 중';
-  }
-}
-
-/** 날짜를 "24년 9월" 형태로 변환 */
-function formatKoreanDate(date: Date): string {
-  try {
-    const y = date.getFullYear() % 100;
-    const m = date.getMonth() + 1;
-    return `${y}년 ${m}월`;
-  } catch {
-    return '';
-  }
-}
+// 🗑️ 2026-07-05 삭제 = generateNubiReasonV2 40줄 async껍데기(+옛 6순위 셀럽 JSDoc박제) = 실질 1줄(summaryKo??리뷰수) 호출부 인라인화 §0/§19
+// 🗑️ 2026-07-05 삭제 = formatKoreanDate(날짜 "24년 9월" 변환) = 호출0 죽은함수(옛 nubiReason 셀럽날짜용, summary_ko 단일화로 폐기) §0/§19
 
 /** Enrichment 함수 동적 import (순환 참조 방지) */
 async function getEnrichmentFunctions() {
@@ -1336,25 +1179,7 @@ async function getEnrichmentFunctions() {
   return mod.enrichmentFunctions;
 }
 
-/** EUR → KRW 환율 조회 (DB 캐시) */
-async function getEurToKrwRate(): Promise<number> {
-  try {
-    if (!db) return 1500;
-    const [rate] = await db
-      .select()
-      .from(exchangeRates)
-      .where(and(eq(exchangeRates.baseCurrency, 'KRW'), eq(exchangeRates.targetCurrency, 'EUR')))
-      .limit(1);
-    if (rate && rate.rate > 0) {
-      const eurToKrw = Math.round(1 / rate.rate);
-      console.log(`[V3] 💱 €1 = ₩${eurToKrw.toLocaleString()}`);
-      return eurToKrw;
-    }
-  } catch (error) {
-    console.warn('[V3] 환율 조회 실패, 기본값 사용:', error);
-  }
-  return 1500;
-}
+// 🗑️ 2026-07-05 = getEurToKrwRate 로컬정의 삭제 = shared/exchange-rate.ts 단일 SSOT 로 통합(§16 재발명금지, 3벌→1벌)
 
 /**
  * Haversine 직선거리 계산 (미터)
@@ -1405,7 +1230,6 @@ function haversineTransit(
   let speedKmh: number;
   let actualMode: string;
   let modeLabel: string;
-  let costPerPerson = 0;
 
   if (travelMode === 'DRIVE') {
     speedKmh = 28;
@@ -1425,11 +1249,11 @@ function haversineTransit(
     speedKmh = 20;
     actualMode = 'transit';
     modeLabel = transitNote ? '대중교통' : '지하철/버스';
-    costPerPerson = 2.0; // 유럽 평균 1회권 €2.0
   }
 
   const durationMinutes = Math.max(5, Math.round((roadMeters / 1000) / speedKmh * 60));
 
+  // 🗑️ 2026-07-05 삭제 = 구간 €2.0 하드코딩 = transport-pricing-service(교통비 SSOT)와 별개 이중소스 → 구간비용 0(SSOT 단일) §0/§16
   return {
     from: fromLabel,
     to: toLabel,
@@ -1438,8 +1262,8 @@ function haversineTransit(
     duration: durationMinutes,
     durationText: `약 ${durationMinutes}분`,
     distance: roadMeters,
-    cost: costPerPerson,
-    costTotal: costPerPerson * companionCount,
+    cost: 0,
+    costTotal: 0,
     transitNote: transitNote || null,
     isEstimated: true, // Haversine 추정값 표시 플래그
   };

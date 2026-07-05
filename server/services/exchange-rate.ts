@@ -166,3 +166,24 @@ export class ExchangeRateFetcher {
 }
 
 export const exchangeRateFetcher = new ExchangeRateFetcher();
+
+// 🧠 2026-07-05 = EUR→KRW 환율 조회 단일 SSOT(§16 재발명금지). 옛 pipeline-v3·ag4-db·ag4-realtime 3벌 복붙 폐기 → 이 1벌로 통합.
+//   = DB 캐시(exchangeRates KRW→EUR) 읽어 역수. 실패/미조회 = 기본값 1500. 호출자별 로그태그는 인자로.
+export async function getEurToKrwRate(logTag = ''): Promise<number> {
+  try {
+    if (!db) return 1500;
+    const [rate] = await db
+      .select()
+      .from(exchangeRates)
+      .where(and(eq(exchangeRates.baseCurrency, 'KRW'), eq(exchangeRates.targetCurrency, 'EUR')))
+      .limit(1);
+    if (rate && rate.rate > 0) {
+      const eurToKrw = Math.round(1 / rate.rate);
+      if (logTag) console.log(`${logTag} 💱 €1 = ₩${eurToKrw.toLocaleString()}`);
+      return eurToKrw;
+    }
+  } catch (error) {
+    console.warn(`${logTag} 환율 조회 실패, 기본값 사용:`, error);
+  }
+  return 1500;
+}
