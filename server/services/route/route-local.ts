@@ -9,6 +9,7 @@ import { minutesToTime, MEAL_BUDGET } from "../agents/types";
 import {
   haversineKm,
   calcTransitHaversine,
+  pickTransitMode,
   type TravelMode,
 } from "../agents/transit-haversine";
 import type {
@@ -127,15 +128,7 @@ function nn2opt(valid: PlaceResult[], center: LatLng): PlaceResult[] {
   return ordered;
 }
 
-// 거리 + 이동수단(공공/도보 vs 전용차) → RouteScene.transit_mode + 시간계산용 TravelMode
-function pickMode(
-  km: number,
-  transport: "public_transit" | "private_driver_guide",
-): { mode: RouteScene["transit_mode"]; calc: TravelMode } {
-  if (transport === "private_driver_guide") return { mode: "private_guide", calc: "DRIVE" };
-  if (km <= 1.0) return { mode: "walk", calc: "WALK" }; // 1km 이내 = 도보
-  return { mode: "metro", calc: "TRANSIT" };
-}
+// 🗑️ 2026-07-06 = pickMode 로컬정의 삭제 = transit-haversine.pickTransitMode 단일 SSOT 이동(§16, MIX·DB-only 공통) §19
 
 // 군집 평균 좌표(centroid)
 function centroidOf(items: PlaceResult[]): LatLng {
@@ -348,7 +341,7 @@ export function buildRouteLocal(
     const startMin = toMin(dc.startTime);
     const scenes: RouteScene[] = seq.map((it, i) => {
       const km = round2(haversineKm(prev.lat, prev.lng, it.p.lat, it.p.lng));
-      const { mode, calc } = pickMode(km, transport);
+      const { mode, calc } = pickTransitMode(km, transport === "private_driver_guide");
       // ⚠️ 2026-07-04 사장님 SSOT = center(도시중심)를 넘겨 DRIVE 모드 도심/외곽 속도 분기(30/70km/h) 적용.
       const tr = calcTransitHaversine(prev, { lat: it.p.lat, lng: it.p.lng }, calc, companionCount, center);
       prev = { lat: it.p.lat, lng: it.p.lng };

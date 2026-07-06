@@ -37,6 +37,40 @@ const BASE_FARE_EUR: Record<TravelMode, number> = {
   DRIVE: 0,
 };
 
+/**
+ * ⚠️ 2026-07-06 사장님 SSOT = 대중교통 구간당 균일 예상가 = 단일 SSOT(§16).
+ *   = walk €0 / metro·bus·RER €3 균일(물가 높은 도시까지 커버) / 그 외 €0.
+ *   = DB-only(ag4-db-finalize) + MIX(pipeline-v3) 두 경로 공통 = 재발명 금지(옛 ag4 로컬정의 이동).
+ *   = 드라이빙 가이드는 이 함수가 처리하지 않음 → transport-pricing-service.calculateTransportPrice() 하루 1회.
+ */
+export function estimateTransitCost(mode: string): number {
+  switch (mode) {
+    case "walk":
+      return 0;
+    case "metro":
+    case "bus":
+    case "RER":
+      return 3;
+    default:
+      return 0;
+  }
+}
+
+/**
+ * ⚠️ 2026-07-06 사장님 SSOT = 거리(km) → 이동수단 결정 = 단일 SSOT(§16).
+ *   = 가이드 = private_guide/DRIVE / 1km 이내 = 도보(walk/WALK) / 초과 = metro/TRANSIT.
+ *   = DB-only(route-local pickMode) + MIX(pipeline-v3) 두 경로 공통 = 재발명 금지(옛 MIX haversineTransit 자체판정 완전삭제 §19).
+ *   = mode = FE 표시용(walk/metro/private_guide), calc = 시간계산용 TravelMode(WALK/TRANSIT/DRIVE).
+ */
+export function pickTransitMode(
+  km: number,
+  isGuide: boolean,
+): { mode: 'walk' | 'metro' | 'private_guide'; calc: TravelMode } {
+  if (isGuide) return { mode: 'private_guide', calc: 'DRIVE' };
+  if (km <= 1.0) return { mode: 'walk', calc: 'WALK' };
+  return { mode: 'metro', calc: 'TRANSIT' };
+}
+
 export interface TransitResult {
   from: string;
   to: string;

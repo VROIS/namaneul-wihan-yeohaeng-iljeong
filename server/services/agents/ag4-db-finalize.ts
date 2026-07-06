@@ -17,12 +17,15 @@ import type {
   AG1Output,
 } from "./types";
 import { MEAL_BUDGET } from "./types";
+// ⚠️ 2026-07-06 사장님 SSOT = 대중교통 구간당 균일 예상가 = 단일 SSOT(§16) = transit-haversine 로 이동(옛 ag4 로컬정의 삭제) = MIX·DB-only 공통.
+import { estimateTransitCost } from "./transit-haversine";
 // ⚠️ 수정금지(승인필요) 2026-06-06 = DB-only 동선 = 로컬 NN+Haversine (= Stage C) 단일 SSOT
 // 🗑️ 2026-07-05 = handleRouteRequest(Gemini) import·RouteResponse(미사용) import = 옛 폴백 잔재 = 삭제 §0/§19
 import { buildRouteLocal } from "../route/route-local";
 import { backfillFromRoute } from "../route/route-backfill";
 // ⚠️ 2026-07-04 사장님 SSOT = 드라이빙 가이드 가격 = 재발명 금지(§16) = MIX 경로(pipeline-v3.ts)와 동일한 단일 SSOT 재사용.
-import { shouldApplyGuidePrice, calculateTransportPrice } from "../transport-pricing-service";
+// ⚠️ 2026-07-06 사장님 SSOT = 가이드 하루요금 = guideCostForDay 공용 SSOT(옛 로컬 guideCostPerPersonPerDay 승격, 3경로 공유 §16).
+import { shouldApplyGuidePrice, guideCostForDay } from "../transport-pricing-service";
 
 // 🗑️ 2026-07-05 = getEurToKrwRate 로컬정의 삭제 = shared/exchange-rate.ts 단일 SSOT 통합(§16 재발명금지, 3벌→1벌)
 
@@ -34,49 +37,9 @@ function addMinutes(time: string, minutes: number): string {
   return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
 }
 
-/**
- * ⚠️ 2026-07-04 사장님 SSOT = 대중교통(walk/metro/bus/RER) 구간당 균일 예상가만 처리.
- *   = 전 도시 실요금 반영 불가 → metro/bus/RER €3 균일(물가 높은 도시까지 커버).
- *   = FE는 이 값을 슬롯 단위로 노출하지 않고 일별 합계에만 "(예상)" 라벨과 함께 표시(TripPlannerScreen.tsx 교통비 칸).
- *   = 드라이빙 가이드(guide/private_guide)는 이 함수가 처리하지 않음 → transport-pricing-service.calculateTransportPrice()
- *     하루 1회 호출로 대체(호출부 참조). 구간별 개별 계산은 반일요금 개념이 없어 비현실적으로 싸게 나오는 결함이라 완전 삭제(§16 재사용).
- */
-function estimateTransitCost(mode: string): number {
-  switch (mode) {
-    case "walk":
-      return 0;
-    case "metro":
-    case "bus":
-    case "RER":
-      return 3; // 1인, 구간당 균일 예상가(물가 높은 도시 커버)
-    default:
-      return 0;
-  }
-}
+// 🗑️ 2026-07-06 = estimateTransitCost 로컬정의 삭제 = transit-haversine.ts 단일 SSOT 이동(§16 재발명금지, MIX·DB-only 공통) §19
 
-/**
- * ⚠️ 2026-07-04 사장님 SSOT = 드라이빙 가이드 하루 1인 교통비(§0 = 메인경로·legacy fallback 공통 SSOT, 중복 금지).
- *   dayConfig 가용시간(시작~종료) 기준 calculateTransportPrice() 1회 호출.
- */
-async function guideCostPerPersonPerDay(
-  dayConfig: { startTime: string; endTime: string },
-  formData: TripFormData,
-  companionCount: number,
-  dayCount: number,
-): Promise<number> {
-  const [startH, startM] = (dayConfig.startTime || "09:00").split(":").map(Number);
-  const [endH, endM] = (dayConfig.endTime || "21:00").split(":").map(Number);
-  const availableHours = Math.max(4, Math.round(((endH * 60 + endM - (startH * 60 + startM)) / 60) * 100) / 100);
-  const priceResult = await calculateTransportPrice({
-    companionType: formData.companionType as any,
-    companionCount,
-    mobilityStyle: formData.mobilityStyle,
-    travelStyle: formData.travelStyle,
-    availableHours,
-    dayCount,
-  });
-  return priceResult.category === "guide" ? priceResult.perPersonPerDay : 0;
-}
+// 🗑️ 2026-07-06 = guideCostPerPersonPerDay 로컬정의 삭제 §19 = transport-pricing-service.guideCostForDay 단일 SSOT 승격(3경로 공유, MIX/숙소재계산이 못써서 flat 재발명하던 결함 근본해결).
 
 export interface AG4DbInput {
   daySlotsConfig: DaySlotConfig[];
@@ -341,7 +304,7 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
       };
     });
     const transportCostEur = isGuideDay
-      ? await guideCostPerPersonPerDay(dayConfig, formData, companionCount, dayCount)
+      ? await guideCostForDay({ dayConfig, companionType: formData.companionType as any, companionCount, mobilityStyle: formData.mobilityStyle, travelStyle: formData.travelStyle, dayCount })
       : transits.reduce((s, t) => s + (t.cost || 0), 0);
 
     const dailyPerPersonEur =

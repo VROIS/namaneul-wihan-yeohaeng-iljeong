@@ -18,6 +18,78 @@
 
 ---
 
+## 🔥 2026-07-06(심야) = 드라이빙 가이드(본업 퍼널) 일일 교통비 = DB-only 정합 (사장님 지적)
+
+**배경**: 위 6종 정합에서 대중교통 구간합산만 맞추고 **가이드 일일 교통비의 날짜별 계산을 놓침**(사장님 지적). 가이드 = 앱 본업 퍼널이라 핵심.
+
+**🔴 근본(워크플로우 3경로 대조로 수치 확정)**:
+- DB-only(정답 ag4): 날짜 루프 안에서 그 날 dayConfig(첫날/막날 버퍼 반영)로 `guideCostPerPersonPerDay` **매일 재계산**.
+- MIX/숙소재계산: 여정 전체 availableHours 1개로 1회 → **매일 flat**. 첫날/막날 버퍼 미반영.
+- 실측: 사용자 첫날 14시 도착 시 옛 MIX=3일 전부 7h로 €630(과소), 정답=첫날만 7h·나머지 12h €930. 가이드 요금이 틀림.
+- 추가 함정: 버퍼 정의도 다름(MIX ±60분 산술 vs DB-only DEFAULT 치환). **사장님 = DB-only(DEFAULT 치환) 정답 확정.**
+
+**✅ 정합(§16 공용 SSOT 승격)**:
+- `transport-pricing-service.ts`에 `guideCostForDay`(가이드 하루요금 = ag4 로컬 승격) + `buildDayConfig`(ag1 버퍼 규칙) 공용 export.
+- **ag4**: 로컬 guideCostPerPersonPerDay 삭제(§19) → guideCostForDay 호출.
+- **MIX(pipeline-v3)**: ①daySlotsConfig 생성을 buildDayConfig로 교체(±60분 삭제 §19) ②날짜 루프 안에서 그 날 dayConfig로 guideCostForDay 재계산 ③transportSummary 총액을 일별 합(Σ)으로 정합.
+- **숙소재계산(itinerary-generator)**: buildDayConfig(day,dayCount)로 그 날 dayConfig 재현 → guideCostForDay 날짜별 계산.
+- = 가이드 판별(shouldApplyGuidePrice)은 이미 3경로 통일됨. 이번엔 판별 후 일일 교통비 계산을 통일 = 가이드 본업 퍼널 정확.
+
+**검증**: tsc 246(새에러0)·서버빌드·§19가드 4파일·외부호출0 시뮬(3일 날짜별 요금 확증).
+
+---
+
+## 🔥 2026-07-06(저녁) = MIX 정합 = DB-only 기준 6종 결함 해소 (외부호출 0 시뮬 + ralph loop)
+
+**배경**: 위 유료 실증으로 확증된 MIX 결함 6종을, 유료 재호출 0으로(있는 로우 재활용) DB-only(정답) 방식에 정합. 사장님 SSOT = "MIX는 Gemini가 정한 22곳·순서·식당 유지, 우리 동선/교통비/시간 계산 로직만 부분 적용"(§16 단일 SSOT).
+
+**✅ 근본 통일(§16 재발명 제거)**:
+- `estimateTransitCost`(구간 €3 균일)·`pickTransitMode`(1km 도보/초과 metro) = `transit-haversine.ts` 공용 SSOT로 이동. ag4·route-local·pipeline-v3 셋이 import = 3벌→1벌.
+- MIX 자체 `haversineTransit`/`calcTransit`/`haversineMeters`/`travelMode`(mobilityStyle 편향) 완전삭제(§19).
+
+**✅ 6종 결함 해소** (니스 Day1 실좌표 시뮬 검증, 파리 정답 대조):
+- ① 슬롯시간: slot 순서 그리드 계산(startTime + i×슬롯간격) + type/nameEn/dist/mode flat 역주입 (옛 s.gPlace.startTime=undefined 삭제).
+- ② transits n-1: departure/return을 transits 배열서 빼고 별도필드로(옛 n+1 = 숙소가 [0]에 낌 해소).
+- ③ 도보편향: pickTransitMode(1km 거리기준, mobilityStyle 무관) = 2.21km→metro(옛 2km 임계·전부도보 해소). 니스 walk4/metro2.
+- ④ 교통비: 대중교통 = betweenTransits 구간별 estimateTransitCost 합산(€6 가변, 옛 €8.6 flat 해소). 가이드는 flat 유지(반일요금 없음).
+- ⑤ 마커: 매칭행=DB 발굴 검증 seedCategory 우선(식당은 restaurant 강제), 신규만 Gemini값. 교정 10곳·식당보존 3곳(옛 Gemini 편향 6/7 불일치 해소).
+- ⑥ raw 미저장: fire-and-forget(void)→await. Gemini raw는 step2와 Promise.all 병렬(속도영향0), TS raw는 순차 await = 배포서버서 안 잘림(§18 자산보장).
+
+**✅ review(서브에이전트) ship-blocker 2건 수정**: BUG1(buildTransit durationText 누락 → FE departure/return "→undefined") + BUG2(숙소좌표 없을 때 자기이동 spurious row → hasAccommodation 가드).
+
+**✅ 5단계 검증(§12)**: tsc 246(baseline·새에러0)·서버빌드420kb·Expo exit0·simplify(§16우수)·review(로직 CLEAN)·§19가드 통과.
+
+**✅ 잔여 경로 통일(§20, 사장님 지시)**: `itinerary-generator.ts` regenerateDay(저장여정 열어 숙소 재계산 경로)도 MIX·DB-only와 동일 계산법으로 정합. 옛 `travelMode/feMode`(하루 전체 고정 mode) 완전삭제(§19) → 구간별 `pickTransitMode`(1km) + `estimateTransitCost` 구간합산. transits=between(n-1). = 결함③④ 같은 근본이 이 경로에 잔존하던 것 제거 = 3경로(MIX·DB-only·숙소재계산) 완전 정합. 니스 좌표 시뮬 확증(walk4/metro2·€6 구간합산).
+
+**정합된 4파일**: transit-haversine.ts(공용함수)·pipeline-v3.ts(MIX)·ag3-data-matcher.ts(마커)·itinerary-generator.ts(숙소재계산). ag4·route-local은 import 전환.
+
+**✅ 워크플로우 다각검증(3서브에이전트: FE계약·회귀·§16정합)**: FE 계약 OK(transits n-1·durationText·필드명 1:1)·회귀 없음·**§16 잔존 재발명 1건 발견제거**(itinerary-generator `_haversineKm` = 공용 haversineKm 중복정의를 optimizeDayRoute가 live 호출 → 로컬삭제·5곳 공용함수 전환). = 순서최적화까지 3경로 완전 단일 SSOT.
+
+**최종 5단계 검증**: tsc 246(새에러0)·서버빌드420kb·§19가드 6파일 통과.
+
+**보관**: docs/raw/_verify/2026-07-06_MIX정합_6종결함해소_시뮬보고서.md
+
+---
+
+## 🔥 2026-07-06(오후) = 유료 실증 = Paris(DB-only 기준)↔Nice(MIX) 결함 6종 확증 (Chrome DevTools)
+
+**배경**: 사장님 지시 = 비용 들여도 꼭 할 실증. DB-only(파리)=정답 기준, MIX(니스)가 벗어난 결함 전수 목록화. 운영 my-guide.replit.app 아이폰12 에뮬, 동일조건(3일·빡빡·많이걷기·합리적·힐링/쇼핑).
+
+**✅ 실증 결과 = MIX 결함 6종 데이터 확증** (보관: docs/raw/_verify/):
+- 생성시간 = 파리 ~3초(무료) / 니스 29.1초(_totalMs 29127, 유료·신규3곳만 TS+PM).
+- **①슬롯 시간 미표시**: 니스 place에 startTime/endTime 없음(파리는 있음) → 화면 시간 안 뜸. (MIX 슬롯 누락필드=nameEn·address·type·startTime·endTime·distance_from_prev_km·transit_mode·transit_min)
+- **②transits off-by-one**: 니스 transits 8/places 7=n+1(숙소출발이 [0]에 낌), 파리 8/9=n-1 정상 → 교통 라벨 한 칸 밀림.
+- **③전부 도보**: 니스 walk16/transit9(2km walk 임계), 파리 metro16/walk5(1km metro). 니스 2.6km인데 도보 표시.
+- **④교통비 €8.6 고정**: 니스 [8.6,8.6,8.6] 3일 고정(구간무관), 파리 [15,18,15] 가변(구간별€3 합산). transits[].cost 니스=0/파리=3.
+- **⑤마커 부정확(관찰)**: seedCategory 필드는 실림, but Gemini값 편향(shopping/healing 쏠림). DB-only는 검증값이라 정확.
+- **🔴⑥raw 미저장 = 근본확정(내 코드, 배포탓 아님)**: 서버로그(사장님 Replit Console 제공) = cityId 44정상·빌드정상(Cannot find module 없음)·Gemini upsert ins=3정상·신규3곳 TS+PM정상. **but saveCollectedRaw 로그 0 + Storage 미저장.** ← 내가 raw저장을 `void saveCollectedRaw().catch(()=>{})` **fire-and-forget**으로 만듦 = 로컬(프로세스 안죽음)=저장O / 배포서버=응답 후 백그라운드 PUT 완료전 잘림=미저장. (saveCollectedRaw 코드자체는 정상=직접실행 저장성공 확인). 정정: 앞서 "배포 미반영/7076552 이전코드"라 한 건 **틀림**=`_backgroundSave`는 내 최신코드 필드=배포는 최신(61c6a58) 맞음.
+  = **해결 = void→await 전환**(pipeline-v3:213 Gemini + ag3:748 TS모음). FE노출용 place mutate 이미 끝나 화면 안늦음, PUT ~수백ms만. await 전환후 배포→니스생성 raw남으면 확정.
+
+**보관**: docs/raw/_verify/ (paris·nice response.json·스크린샷2·STEP0·종합보고서). 핸드오버 [[project_session_handover_2026-07-06-mix-defects]].
+**다음(수정 사장님 승인후)**: ①슬롯시간 ②off-by-one ③전부도보 ④교통비고정 = MIX(pipeline-v3) DB-only정합 / ⑥ raw await전환(최급) / ⑤ seedCategory편향(별개). 교훈=배포탓2회→내코드(fire-and-forget)근본 [[feedback_trace_to_source_not_middle]].
+
+---
+
 ## 🔥 2026-07-06 = MIX 재과금 근본해결(식당 nameLocal 강제) + raw 저장 자동화(도시id폴더·사장님 예시형식) + runtime 개판 정리
 
 **배경**: 니스 여정 재생성 시 ①완비행(이미 DB에 PID·이미지·좌표 완비된 행)이 신규로 오분류돼 TS+PM 헛과금(22콜 중 18곳 낭비) + 중복 3쌍 생성 ②Gemini/TS raw가 도시id 폴더 아닌 `runtime/`에 개판으로 쌓임. superpowers systematic-debugging으로 근본 규명 = 둘 다 **내 코드 구멍**(외부탓 아님, 사장님 지적).
@@ -37,9 +109,11 @@
 - 사장님 방식 = 자동화 만들고 그 위에 runtime 옛 raw 재통과 = 정리+검증 동시. 외부호출 0.
 - Storage+로컬 runtime의 리모주 raw 5개→`132/`, 니스 1개→`44/` 재통과+이동(버전순번 _N 분리=손실0), 내 테스트더미 2개 삭제. runtime = `2026-06-16_gemini-grounded`(mix아님 별개)만 잔존.
 
-**검증(5단계 §12)**: tsc 246 baseline(신규0)·§19가드 3파일·서버빌드 434kb·Expo dist·simplify·review. 입증=runtime 니스raw 재통과→`44/2026-07-06_90-mix-gemini_step1.json`(meta+rawResponse+parsedPlaces10곳) 로컬+Storage 저장 확인.
+**검증(5단계 §12)**: tsc 246 baseline(신규0)·§19가드 3파일·서버빌드 434kb·Expo dist·simplify(간결정합)·review(CONFIRMED버그0). 입증=runtime 니스raw 재통과→`44/2026-07-06_90-mix-gemini_step1.json`(meta+rawResponse+parsedPlaces10곳) 로컬+Storage 저장 확인.
 
-**미완(다음)**: 결손매칭행 TS보강 여부(사장님 결정)·니스 중복3쌍 청소·배포후 재과금 실증(22→3~4콜)·DB트리거 PID게이트 갱신. 근본교훈 = [[feedback_trace_to_source_not_middle]](backward trace 중간서 멈추고 외부탓 금지 = 소스=내코드까지).
+**커밋·푸시 완료**: `7076552`(6파일 159+/19-) + merge `61c6a58` + push(rebase금지 merge만). GitHub `## main...origin/main` 동기화. 사장님 Replit Pull→배포 대기.
+
+**미완(다음 세션)**: ①배포후 재과금 실증(니스 재생성 = 완비행 오분류 사라져 22→3~4콜 확인) ②결손매칭행 TS보강 여부(사장님 결정) ③니스 중복3쌍 청소(le comptoir du marché 72537·78580 등) ④DB트리거 PID게이트 갱신 ⑤배포서버 버전순번 무력화(review PLAUSIBLE=설계한계, 별도개선). 근본교훈 = [[feedback_trace_to_source_not_middle]](backward trace 중간서 멈추고 외부탓 금지 = 소스=내코드까지 = 외부탓 3번→사장님이 "니가 셀렉함" 밀어줘야 진범 도달).
 
 ---
 

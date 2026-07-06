@@ -7,8 +7,12 @@ import { GoogleGenAI } from "@google/genai";
 import type { TripFormData, PlaceResult, DaySlotConfig, TravelPace, VibeWeight, TravelStyle } from './types';
 import {
   PACE_CONFIG, MEAL_BUDGET, DEFAULT_START_TIME, DEFAULT_END_TIME,
-  calculateDayCount, calculateSlotsForDay, getCompanionCount,
+  calculateDayCount, calculateSlotsForDay, getCompanionCount, minutesToTime,
 } from './types';
+// ⚠️ 2026-07-06 사장님 SSOT = MIX 이동/거리/비용 = DB-only(route-local) 계산법 단일 SSOT 재사용(§16). 옛 자체 haversineTransit 재발명 완전삭제 §19.
+import {
+  haversineKm, calcTransitHaversine, pickTransitMode, estimateTransitCost,
+} from './transit-haversine';
 import { preloadCityData, matchPlacesWithDB, saveNewPlacesToDB } from './ag3-data-matcher';
 // 🧠 2026-07-05 = computeCatSlots 정적 import(§0 가벼움) = 옛 함수내 동적 await import 폐기(§19). ag2→pipeline-v3 역참조 없음 = 순환참조 무관.
 import { computeCatSlots } from './ag2-gemini-recommender';
@@ -17,7 +21,7 @@ import { computeCatSlots } from './ag2-gemini-recommender';
 import { saveCollectedRaw } from '../shared/save-collected-raw';
 import {
   calculateTransportPrice, shouldApplyGuidePrice, calculateUberBlackHourly,
-  getGuidePerPersonPerDay, round2,
+  guideCostForDay, buildDayConfig, round2,
   type TransportPricingResult, type GuidePriceResult, type TransitPriceResult, type UberBlackComparison,
 } from '../transport-pricing-service';
 import { db } from '../../db';
@@ -152,33 +156,16 @@ async function runPipelineMix(formData: TripFormData): Promise<any> {
     percentage: weights[i],
   }));
 
-  // 일별 슬롯 계산 (출발 +60분 버퍼, 귀환 -60분 버퍼)
+  // ⚠️ 2026-07-06 사장님 SSOT = 일별 가용시각 = buildDayConfig 단일 SSOT(DB-only ag1 버퍼 규칙: 첫날=사용자시작~기본종료 / 막날=기본시작~사용자종료 / 중간=기본~기본 / 1일=사용자그대로).
+  //   = 옛 MIX ±60분 산술 완전삭제(§19) → 최초생성이 DB-only와 동일 dayConfig = 가이드 날짜별 요금·슬롯 정합(§16/§20).
   const userStartTime = formData.startTime || DEFAULT_START_TIME;
   const userEndTime = formData.endTime || DEFAULT_END_TIME;
   const daySlotsConfig: DaySlotConfig[] = [];
 
-  // HH:MM 문자열에 분 추가/차감
-  const addMinutesToTime = (time: string, minutes: number): string => {
-    const [h, m] = time.split(':').map(Number);
-    const total = h * 60 + m + minutes;
-    const nh = Math.floor(total / 60) % 24;
-    const nm = total % 60;
-    return `${String(nh).padStart(2, '0')}:${String(nm).padStart(2, '0')}`;
-  };
-  // 첫날: 출발시간+60분이 실제 관광 시작 (공항/기차역 → 숙소 체크인 시간 확보)
-  // 마지막날: 귀환시간-60분이 실제 관광 종료 (공항 이동 여유)
-  const day1Start = addMinutesToTime(userStartTime, 60);
-  const lastDayEnd = addMinutesToTime(userEndTime, -60);
-
   for (let d = 1; d <= dayCount; d++) {
-    let dayStart = DEFAULT_START_TIME;
-    let dayEnd = DEFAULT_END_TIME;
-    if (dayCount === 1) { dayStart = day1Start; dayEnd = lastDayEnd; }
-    else if (d === 1) { dayStart = day1Start; }
-    else if (d === dayCount) { dayEnd = lastDayEnd; }
-
-    const slots = calculateSlotsForDay(dayStart, dayEnd, travelPace);
-    daySlotsConfig.push({ day: d, startTime: dayStart, endTime: dayEnd, slots });
+    const dc = buildDayConfig(d, dayCount, userStartTime, userEndTime, DEFAULT_START_TIME, DEFAULT_END_TIME);
+    const slots = calculateSlotsForDay(dc.startTime, dc.endTime, travelPace);
+    daySlotsConfig.push({ day: d, startTime: dc.startTime, endTime: dc.endTime, slots });
   }
 
   const totalSlots = daySlotsConfig.reduce((sum, d) => sum + d.slots, 0);
@@ -200,8 +187,10 @@ async function runPipelineMix(formData: TripFormData): Promise<any> {
 
   // 🧠 2026-07-06 사장님 SSOT = MIX Gemini raw 저장(§18) = 도시id 폴더 + {meta,rawResponse,parsedPlaces}(사장님 예시형식).
   //   = cityId 는 preloadCityData(findCityUnified, 신규도시 자동INSERT)가 확정 = 이 시점(Promise.all 후) 사용가능. rawText 는 step1 이 days.__rawText 로 전달.
-  //   ⚠️ FE 우선 노출 = raw 저장은 후처리(await X = fire-and-forget) = 사용자 응답 hot-path 안 막음(속도). saveCollectedRaw 자체 never-throw.
-  if (preloaded.cityId) {
+  //   ⚠️ 2026-07-06 근본수정 = 옛 fire-and-forget(void..catch) = 배포서버(Replit)서 응답 후 PUT 완료전 잘림 = raw 미저장(비용증발 §18) 근본.
+  //     → step2 와 병렬 await 로 전환(§18 자산보장). raw 저장(수백ms) ⊂ step2(수십초) = FE 응답 지연 0(속도 유지) + 배포서버서 안 잘림.
+  const geminiRawSave = (async () => {
+    if (!preloaded.cityId) return;
     const rawText = (geminiDays as any).__rawText || '';
     const finishReason = (geminiDays as any).__finishReason || 'unknown';
     let parsedPlaces: any[] = []; let parseError: string | null = null;
@@ -210,29 +199,33 @@ async function runPipelineMix(formData: TripFormData): Promise<any> {
       const pj = m ? JSON.parse(m[0]) : {};
       for (const dd of (pj.days || [])) for (const p of (dd.places || [])) parsedPlaces.push({ day: dd.day, theme: dd.theme, ...p });
     } catch (e) { parseError = (e as Error).message; }
-    void saveCollectedRaw({
+    await saveCollectedRaw({
       cityId: preloaded.cityId, stepNum: 90, stepName: 'mix-gemini', content: 'step1', hashKey: 'rawResponse',
       body: {
         meta: { cityId: preloaded.cityId, destination: formData.destination, finishReason, parseError, parsedCount: parsedPlaces.length, timestamp: new Date().toISOString() },
         rawResponse: rawText,
         parsedPlaces,
       },
-    }).catch(() => {});
-  }
+    });
+  })().catch((e) => console.warn('[V3] Gemini raw 저장 실패:', (e as Error)?.message));
 
-  // ===== Step 2: 데이터 채우기 =====
-  const result = await step2_enrichAndBuild(
-    geminiDays, formData, preloaded, daySlotsConfig,
-    dayCount, companionCount, travelPace, paceConfig, vibeWeights,
-  );
+  // ===== Step 2: 데이터 채우기 (Gemini raw 저장과 병렬 = raw 보장 + 속도 영향 0) =====
+  const [result] = await Promise.all([
+    step2_enrichAndBuild(
+      geminiDays, formData, preloaded, daySlotsConfig,
+      dayCount, companionCount, travelPace, paceConfig, vibeWeights,
+    ),
+    geminiRawSave,
+  ]);
 
   _mark('step2_enrich');
 
   // ⚠️ 수정금지(승인필요) 2026-05-14 = 사용자 SSOT = 추적 메타 강화 (= Replit 서버 콘솔 접근 X 우회)
   // = 클라이언트 DevTools 콘솔에서 response.metadata 직접 확인 = 백엔드 동작 추적
-  const finalPlaces = result.places || [];
-  const unmatchedCount = finalPlaces.filter((p: any) => !p.googlePlaceId).length;
-  const matchedCount = finalPlaces.length - unmatchedCount;
+  // ⚠️ 2026-07-06 = 집계 = step2 metadata(_matched/_unmatched, finalPlaces 기준) 사용. 옛 result.places(항상 빈값→total:0 오집계) 폐기 §19.
+  const totalPlaces = (result.metadata as any)?.totalPlaces || 0;
+  const matchedCount = (result.metadata as any)?._matched || 0;
+  const unmatchedCount = (result.metadata as any)?._unmatched || 0;
 
   result.metadata = {
     ...result.metadata,
@@ -243,10 +236,10 @@ async function runPipelineMix(formData: TripFormData): Promise<any> {
 
     // ⭐ 신규 추적 메타 (= 2026-05-14)
     _matching: {
-      total: finalPlaces.length,
+      total: totalPlaces,
       matched: matchedCount,
       unmatched: unmatchedCount,
-      matchRate: finalPlaces.length > 0 ? Math.round((matchedCount * 100) / finalPlaces.length) : 0,
+      matchRate: totalPlaces > 0 ? Math.round((matchedCount * 100) / totalPlaces) : 0,
     },
     _backgroundSave: {
       started: unmatchedCount > 0,
@@ -767,11 +760,7 @@ async function step2_enrichAndBuild(
 
   // ── 2e. 일별 스케줄 구성 + 이동시간 계산 ──
   const mealBudget = MEAL_BUDGET[normalizeTravelStyle(formData.travelStyle)];
-  // 교통 카테고리에 따라 이동 모드 결정
-  // A카테고리(가이드) → DRIVE, B카테고리(대중교통) → TRANSIT/WALK
-  const travelMode = isGuideCategory ? 'DRIVE' as const
-    : formData.mobilityStyle === 'WalkMore' ? 'WALK' as const
-      : 'TRANSIT' as const;
+  // 🗑️ 2026-07-06 = travelMode(mobilityStyle 힌트) 완전삭제 §19 = pickTransitMode 가 거리(1km)로 mode 결정(DB-only 동형) = mobilityStyle 편향(전부 도보) 결함 근본제거.
 
   const days: any[] = [];
   let totalTripCostEur = 0;
@@ -781,7 +770,11 @@ async function step2_enrichAndBuild(
 
     // 이 날의 스케줄
     const dayScheduleItems = scheduleMap.filter(s => s.day === d);
-    const dayPlaces = dayScheduleItems.map(s => {
+    // ⚠️ 2026-07-06 사장님 SSOT = 슬롯 시각 = slot 순서 그리드 계산(startTime + i×슬롯간격) = DB-only(ag4:288 scene.time) 동형(§16).
+    //   = 옛 s.gPlace.startTime(Gemini raw엔 startTime 없음 = 항상 undefined = 슬롯시간 미표시 결함) 완전삭제 §19.
+    const dayStartMin = (() => { const [h, m] = (dayConfig.startTime || '09:00').split(':').map(Number); return h * 60 + m; })();
+    const slotDur = paceConfig.slotDurationMinutes;
+    const dayPlaces = dayScheduleItems.map((s, slotIdx) => {
       const enrichedPlace = finalPlaceMap.get(s.placeId)!;
       const isMeal = s.gPlace.type === 'lunch' || s.gPlace.type === 'dinner';
       // 프론트 전달 시 불필요한 0값 필드 제거 (React Native에서 {0}이 "0" 텍스트로 표시되는 문제 방지)
@@ -797,9 +790,12 @@ async function step2_enrichAndBuild(
         // 0이 아닌 경우만 포함
         ...(finalScore ? { finalScore } : {}),
         ...(buzzScore ? { buzzScore } : {}),
-        // Gemini가 정한 시간
-        startTime: s.gPlace.startTime,
-        endTime: s.gPlace.endTime,
+        // ⚠️ 2026-07-06 = 슬롯 시각 = 그리드 계산(DB-only 동형). startTime + slotIdx×슬롯간격.
+        startTime: minutesToTime(dayStartMin + slotIdx * slotDur),
+        endTime: minutesToTime(dayStartMin + (slotIdx + 1) * slotDur),
+        // ⚠️ 2026-07-06 = FE 슬롯 필드 = DB-only 동형(type/nameEn flat). 옛 MIX 누락 보완 §16.
+        type: isMeal ? 'restaurant' as const : 'activity' as const,
+        nameEn: (enrichedPlace as any).nameEn || enrichedPlace.name,
         // 식사 정보
         isMealSlot: isMeal,
         mealType: s.gPlace.type === 'lunch' ? 'lunch' as const : s.gPlace.type === 'dinner' ? 'dinner' as const : undefined,
@@ -850,50 +846,58 @@ async function step2_enrichAndBuild(
       accommodationName = '도심 기준';
     }
 
-    // ── 이동 구간 병렬 계산 ──
-    // Haversine 추정(USE_GOOGLE_ROUTES=false) → 즉시 반환, 외부 API 호출 없음
-    const transitPromises: Promise<any>[] = [];
+    // ── 이동 구간 계산 = DB-only(route-local) 계산법 단일 SSOT(§16) ──
+    // ⚠️ 2026-07-06 사장님 SSOT = 거리(haversineKm) → pickTransitMode(1km 도보/초과 metro, mobilityStyle 무관) → calcTransitHaversine.
+    //   = 옛 haversineTransit(2km 도보임계·mobilityStyle 힌트·cost 0 하드코딩) 완전삭제 §19 = 파리(DB-only)와 동일 표시.
+    //   = 구간 = 숙소→place[0], place[i]→[i+1], place[last]→숙소. transits 배열 = place 간(betweenTransits)만 = n-1(FE transits[index]=place[i] 나가는 이동).
+    // ⚠️ 2026-07-06 = center = 거리계산 앵커. 숙소/도심좌표 있으면 그것(= departure/return 별도필드 표시), 없으면 place[0] 폴백(= 역주입·간격계산용, departure/return 필드는 억제 = 옛 동작 보존).
+    const hasAccommodation = !!accommodationCoords;
+    const center = accommodationCoords || (dayPlaces[0] ? { lat: dayPlaces[0].lat, lng: dayPlaces[0].lng } : undefined);
+    // 한 구간 계산 = 거리 + mode + 시간 + 구간비용(대중교통 균일 예상가).
+    const buildTransit = (from: { lat: number; lng: number }, fromName: string, to: { lat: number; lng: number }, toName: string) => {
+      const km = round2(haversineKm(from.lat, from.lng, to.lat, to.lng));
+      const { mode, calc } = pickTransitMode(km, isGuideCategory);
+      const tr = calcTransitHaversine({ ...from, name: fromName }, { ...to, name: toName }, calc, companionCount, center);
+      const cost = isGuideCategory ? 0 : estimateTransitCost(mode);  // 가이드 = 구간표시 숨김·일합계만 / 대중교통 = 구간 균일예상가
+      return {
+        from: fromName, to: toName,
+        distance: Math.round(km * 1000),  // m (FE ÷1000 표준)
+        duration: tr.duration,
+        durationText: `${tr.duration}분`,  // ⚠️ 2026-07-06 = FE departure/return 이 폴백없이 읽음(TripPlannerScreen) = 필수.
+        mode,
+        modeLabel: mode === 'walk' ? '도보' : mode === 'private_guide' ? '전용차량이동' : '지하철/버스',
+        cost, costTotal: cost,
+        km,  // place 역주입용(내부)
+      };
+    };
 
-    // 숙소/도심 → 첫 장소
-    if (accommodationCoords && dayPlaces.length > 0) {
-      transitPromises.push(
-        calcTransit(accommodationCoords, `🏨 ${accommodationName}`, dayPlaces[0], travelMode, companionCount,
-          dayPlaces[0].transitNote || undefined)
-      );
-    }
+    // 숙소/도심 → 첫 장소 (= 별도 필드 departureTransit, transits 배열엔 미포함). 숙소/도심좌표 있을 때만(place[0] 자기이동 방지 = 옛 동작).
+    const departureTransit = hasAccommodation && center && dayPlaces.length > 0
+      ? buildTransit(center, `🏨 ${accommodationName}`, dayPlaces[0], dayPlaces[0].name)
+      : undefined;
 
-    // 장소 간 이동 (연속)
-    for (let i = 0; i < dayPlaces.length - 1; i++) {
-      transitPromises.push(
-        calcTransit(dayPlaces[i], dayPlaces[i].name, dayPlaces[i + 1], travelMode, companionCount,
-          dayPlaces[i + 1].transitNote || undefined)
-      );
-    }
-
-    // 마지막 장소 → 숙소/도심
-    if (accommodationCoords && dayPlaces.length > 0) {
-      const last = dayPlaces[dayPlaces.length - 1];
-      transitPromises.push(
-        calcTransit(
-          last, last.name,
-          { lat: accommodationCoords.lat, lng: accommodationCoords.lng, name: `🏨 ${accommodationName}`, id: 'accommodation' } as any,
-          travelMode, companionCount,
-        )
-      );
-    }
-
-    // 전부 병렬 실행
-    const allTransitResults = await Promise.all(transitPromises);
-
-    // Transit 분리
-    let tIdx = 0;
-    const departureTransit = accommodationCoords && dayPlaces.length > 0 ? allTransitResults[tIdx++] : undefined;
+    // 장소 간 이동 (연속) = transits 배열 = n-1
     const betweenTransits: any[] = [];
     for (let i = 0; i < dayPlaces.length - 1; i++) {
-      betweenTransits.push(allTransitResults[tIdx++]);
+      betweenTransits.push(buildTransit(dayPlaces[i], dayPlaces[i].name, dayPlaces[i + 1], dayPlaces[i + 1].name));
     }
-    const returnTransit = accommodationCoords && dayPlaces.length > 0 ? allTransitResults[tIdx++] : undefined;
 
+    // 마지막 장소 → 숙소/도심 (= 별도 필드 returnTransit). 숙소/도심좌표 있을 때만.
+    const returnTransit = hasAccommodation && center && dayPlaces.length > 0
+      ? buildTransit(dayPlaces[dayPlaces.length - 1], dayPlaces[dayPlaces.length - 1].name, center, `🏨 ${accommodationName}`)
+      : undefined;
+
+    // ⚠️ 2026-07-06 = place 에 이동 필드 flat 역주입 = DB-only(ag4:307) 동형. place[i] 로 들어오는 이동 = departure(i=0) / betweenTransits[i-1].
+    dayPlaces.forEach((p: any, i: number) => {
+      const inbound = i === 0 ? departureTransit : betweenTransits[i - 1];
+      if (inbound) {
+        p.distance_from_prev_km = inbound.km;
+        p.transit_mode = inbound.mode;
+        p.transit_min = inbound.duration;
+      }
+    });
+
+    // 일 총합·우버비교용 = 전 구간(departure+between+return). transits 배열(FE)엔 between 만.
     const allTransits = [
       ...(departureTransit ? [departureTransit] : []),
       ...betweenTransits,
@@ -910,8 +914,9 @@ async function step2_enrichAndBuild(
 
     if (isGuideCategory) {
       // ── 카테고리 A: 드라이빙 가이드 ──
-      // 구간별 이동: 전부 "전용차량이동"으로 덮어쓰기
-      displayTransits = allTransits.map(t => ({
+      // ⚠️ 2026-07-06 = transits 배열(FE) = place 간(betweenTransits)만 = n-1(DB-only 동형). departure/return = 별도 필드.
+      //   구간별 이동: 전부 "전용차량이동"으로 덮어쓰기
+      displayTransits = betweenTransits.map(t => ({
         from: t.from,
         to: t.to,
         mode: 'guide',
@@ -923,10 +928,12 @@ async function step2_enrichAndBuild(
         costTotal: 0,  // 구간별 비용 안 보여줌
       }));
 
-      // 1인 1일 가이드 가격
-      const guidePP = transportPrice?.category === 'guide'
-        ? (transportPrice as GuidePriceResult).perPersonPerDay
-        : 0;
+      // ⚠️ 2026-07-06 사장님 SSOT = 가이드 1인 1일 가격 = 그 날 dayConfig 가용시간 기준 재계산(DB-only ag4:328 동형, §16 guideCostForDay 공용).
+      //   = 옛 전체 availableHours flat(첫날/막날 버퍼 미반영 = 1인 €30 과다) 완전삭제 §19. 반일요금 없어 구간합산 아닌 하루 1회.
+      const guidePP = await guideCostForDay({
+        dayConfig, companionType: (formData.companionType || 'Couple') as any, companionCount,
+        mobilityStyle: (formData.mobilityStyle || 'Moderate') as any, travelStyle: (formData.travelStyle || 'Reasonable') as any, dayCount,
+      });
       transportPerPersonPerDay = guidePP;
 
       // 우버블랙 비교: 실제 경로 + 좌표 없는 구간 추정값 포함
@@ -967,16 +974,17 @@ async function step2_enrichAndBuild(
       console.log(`[V3-Day${d}] 🚗 가이드 1인/일 €${guidePP} | 우버블랙 1인/일 €${uberBlackComp?.perPersonPerDay || '?'}`);
     } else {
       // ── 카테고리 B: 대중교통 ──
-      // 구간별 이동: 상세 그대로 (도보/메트로/버스 - 실시간 실제 가격)
-      displayTransits = allTransits;
+      // ⚠️ 2026-07-06 = transits 배열(FE) = place 간(betweenTransits)만 = n-1(DB-only 동형). departure/return = 별도 필드.
+      //   구간별 이동: 상세 그대로 (도보/메트로/버스 - 구간 균일 예상가).
+      displayTransits = betweenTransits;
 
-      // 1인 1일 대중교통 가격
-      const transitPP = transportPrice?.category === 'transit'
-        ? (transportPrice as TransitPriceResult).perPersonPerDay
-        : 0;
+      // ⚠️ 2026-07-06 사장님 SSOT = 대중교통 1인 1일 교통비 = 구간별 estimateTransitCost 합산(DB-only ag4:345 동형, §16).
+      //   = 옛 calculateTransportPrice(여정당 flat €8.6) 완전삭제 §19 = 파리(구간합산 가변)와 동일 기준.
+      //   = 구간 = place 간(betweenTransits)만 합산(DB-only transits.reduce = scenes.slice(1) 동형 = departure/return 제외).
+      const transitPP = betweenTransits.reduce((s: number, t: any) => s + (t.cost || 0), 0);
       transportPerPersonPerDay = transitPP;
 
-      // 업셀: 가이드 이용시 가격 (클릭 가능)
+      // 업셀: 가이드 이용시 가격 (클릭 가능) = 마케팅 업셀 유지(calculateTransportPrice 부가정보).
       const guideUpsell = transportPrice?.category === 'transit'
         ? (transportPrice as TransitPriceResult).guideUpsell
         : null;
@@ -1050,9 +1058,11 @@ async function step2_enrichAndBuild(
         ? (returnTransit ? { ...returnTransit, mode: 'guide', modeLabel: '전용차량이동', cost: 0, costTotal: 0 } : undefined)
         : returnTransit,
       transit: {
+        // ⚠️ 2026-07-06 = 총합 = transits 배열(betweenTransits, n-1) 기준 = DB-only(ag4:365) 동형. departure/return 은 별도 필드.
         transits: displayTransits,
-        totalDuration: allTransits.reduce((sum: number, t: any) => sum + t.duration, 0),
-        totalDistanceKm: round2(allTransits.reduce((sum: number, t: any) => sum + ((t.distance || 0) / 1000), 0)),
+        totalDuration: betweenTransits.reduce((sum: number, t: any) => sum + t.duration, 0),
+        totalCost: betweenTransits.reduce((sum: number, t: any) => sum + (t.costTotal || 0), 0),
+        totalDistanceKm: round2(betweenTransits.reduce((sum: number, t: any) => sum + ((t.distance || 0) / 1000), 0)),
       },
       // 💰 일일 비용 (1인 기준 - OTA 방식)
       dailyCost: {
@@ -1084,16 +1094,19 @@ async function step2_enrichAndBuild(
   // ── 최종 응답 빌드 (프론트엔드 호환 형식) ──
   const paceLabel = travelPace === 'Packed' ? '빡빡하게' : travelPace === 'Normal' ? '보통' : '여유롭게';
 
+  // ⚠️ 2026-07-06 = 요약 총액 = 일별 합(Σ dailyCost.transportEur) = 가이드 날짜별 요금(첫날/막날 버퍼로 다름)과 days 정합. 옛 perPersonPerDay×dayCount(flat) 폐기 §19.
+  const transportTotalEur = round2(days.reduce((s: number, d: any) => s + (d.dailyCost?.breakdown?.transportEur || 0), 0));
+  const transportAvgPerDay = dayCount > 0 ? round2(transportTotalEur / dayCount) : 0;
   // 교통비 요약 (카테고리별)
   const transportSummary = transportPrice ? (() => {
     if (transportPrice.category === 'guide') {
       const gp = transportPrice as GuidePriceResult;
       return {
         category: 'guide' as const,
-        perPersonPerDay: gp.perPersonPerDay,
-        perPersonPerDayKrw: Math.round(gp.perPersonPerDay * eurToKrw),
-        perPersonTotal: round2(gp.perPersonPerDay * dayCount),
-        perPersonTotalKrw: Math.round(gp.perPersonPerDay * dayCount * eurToKrw),
+        perPersonPerDay: transportAvgPerDay,  // 날짜별 요금 평균(대표값)
+        perPersonPerDayKrw: Math.round(transportAvgPerDay * eurToKrw),
+        perPersonTotal: transportTotalEur,     // 일별 합(정확)
+        perPersonTotalKrw: Math.round(transportTotalEur * eurToKrw),
         vehicleDescription: gp.vehicleDescription,
         availableHours: gp.availableHours,
         includes200km: gp.includes200km,
@@ -1104,10 +1117,11 @@ async function step2_enrichAndBuild(
       const tp = transportPrice as TransitPriceResult;
       return {
         category: 'transit' as const,
-        perPersonPerDay: tp.perPersonPerDay,
-        perPersonPerDayKrw: Math.round(tp.perPersonPerDay * eurToKrw),
-        perPersonTotal: round2(tp.perPersonPerDay * dayCount),
-        perPersonTotalKrw: Math.round(tp.perPersonPerDay * dayCount * eurToKrw),
+        // ⚠️ 2026-07-06 = 대중교통도 일별 합(구간합산) 기준 = days 정합. perPersonPerDay=평균 대표값.
+        perPersonPerDay: transportAvgPerDay,
+        perPersonPerDayKrw: Math.round(transportAvgPerDay * eurToKrw),
+        perPersonTotal: transportTotalEur,
+        perPersonTotalKrw: Math.round(transportTotalEur * eurToKrw),
         method: tp.method,
         details: tp.details,
         guideUpsell: {
@@ -1177,6 +1191,10 @@ async function step2_enrichAndBuild(
       curationFocus: formData.curationFocus,
       generatedAt: new Date().toISOString(),
       pipelineVersion: 'v3-2step',
+      // ⚠️ 2026-07-06 = 매칭 집계 = finalPlaces 기준(step2 내부 = 실제 여정 장소). 옛 외부 result.places(항상 빈값 → total:0 오집계) 폐기 §19.
+      //   = googlePlaceId 있음 = DB 매칭 완료 / 없음 = 신규(TS+PM 대상 = 백그라운드 저장).
+      _matched: finalPlaces.filter((p: any) => p.googlePlaceId).length,
+      _unmatched: finalPlaces.filter((p: any) => !p.googlePlaceId).length,
     },
   };
 
@@ -1199,104 +1217,9 @@ async function getEnrichmentFunctions() {
 
 // 🗑️ 2026-07-05 = getEurToKrwRate 로컬정의 삭제 = shared/exchange-rate.ts 단일 SSOT 로 통합(§16 재발명금지, 3벌→1벌)
 
-/**
- * Haversine 직선거리 계산 (미터)
- * Google Routes API 없이 좌표만으로 거리 추정
- */
-function haversineMeters(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6371000;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLng = (lng2 - lng1) * Math.PI / 180;
-  const a = Math.sin(dLat / 2) ** 2
-    + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
+// 🗑️ 2026-07-06 = haversineMeters 로컬정의 삭제 §19 = 거리계산 = transit-haversine.haversineKm 단일 SSOT(§16) = 옛 haversineTransit 전용이라 동반삭제.
 
-/**
- * Haversine 기반 이동시간 추정
- * 직선거리 × 1.35 (도로 우회 계수) ÷ 평균속도
- * 정확도: ±5분 (도시 내 이동 기준, 여행 앱 허용 오차 내)
- */
-function haversineTransit(
-  from: any, fromName: string, to: any,
-  travelMode: 'WALK' | 'TRANSIT' | 'DRIVE', companionCount: number,
-  transitNote?: string,
-): any {
-  const fromLabel = from.name || fromName;
-  const toLabel = to.name || '';
-
-  // 좌표 없으면 기본값
-  if (!from.lat || !from.lng || !to.lat || !to.lng ||
-      from.lat === 0 || from.lng === 0 || to.lat === 0 || to.lng === 0) {
-    const defaultMode = travelMode === 'DRIVE' ? 'guide' : 'transit';
-    const defaultLabel = travelMode === 'DRIVE' ? '전용차량이동' : '이동';
-    return {
-      from: fromLabel, to: toLabel,
-      mode: defaultMode, modeLabel: defaultLabel,
-      duration: 15, durationText: '약 15분',
-      distance: 1500, cost: 0, costTotal: 0,
-      transitNote: transitNote || null,
-      isEstimated: true,
-    };
-  }
-
-  const straightMeters = haversineMeters(from.lat, from.lng, to.lat, to.lng);
-  // 도로 우회 계수 1.35 적용 (유럽 도시 실측 기준)
-  const roadMeters = Math.round(straightMeters * 1.35);
-
-  // 이동수단별 평균 속도 (km/h) → 분 계산
-  let speedKmh: number;
-  let actualMode: string;
-  let modeLabel: string;
-
-  if (travelMode === 'DRIVE') {
-    speedKmh = 28;
-    actualMode = 'guide';
-    modeLabel = '전용차량이동';
-  } else if (straightMeters < 800) {
-    // 800m 미만: 도보
-    speedKmh = 5;
-    actualMode = 'walk';
-    modeLabel = '도보';
-  } else if (straightMeters < 2000 && travelMode === 'WALK') {
-    speedKmh = 5;
-    actualMode = 'walk';
-    modeLabel = '도보';
-  } else {
-    // 대중교통 (지하철/버스) — 환승·대기 포함 평균 20km/h
-    speedKmh = 20;
-    actualMode = 'transit';
-    modeLabel = transitNote ? '대중교통' : '지하철/버스';
-  }
-
-  const durationMinutes = Math.max(5, Math.round((roadMeters / 1000) / speedKmh * 60));
-
-  // 🗑️ 2026-07-05 삭제 = 구간 €2.0 하드코딩 = transport-pricing-service(교통비 SSOT)와 별개 이중소스 → 구간비용 0(SSOT 단일) §0/§16
-  return {
-    from: fromLabel,
-    to: toLabel,
-    mode: actualMode,
-    modeLabel,
-    duration: durationMinutes,
-    durationText: `약 ${durationMinutes}분`,
-    distance: roadMeters,
-    cost: 0,
-    costTotal: 0,
-    transitNote: transitNote || null,
-    isEstimated: true, // Haversine 추정값 표시 플래그
-  };
-}
-
-/**
- * 이동 정보 계산 = Haversine 만 (= 사용자 SSOT)
- */
-async function calcTransit(
-  from: any, fromName: string, to: any,
-  travelMode: 'WALK' | 'TRANSIT' | 'DRIVE', companionCount: number,
-  transitNote?: string,
-): Promise<any> {
-  return haversineTransit(from, fromName, to, travelMode, companionCount, transitNote);
-}
+// 🗑️ 2026-07-06 = haversineTransit + calcTransit 완전삭제 §19 = MIX 이동계산 = transit-haversine(calcTransitHaversine·pickTransitMode·estimateTransitCost) 단일 SSOT(§16) = DB-only(route-local) 동형. 옛 2km 도보임계·mobilityStyle 편향·cost 0 하드코딩 = 결함③④ 근본 제거.
 
 /** 좌표 유효성 검증 */
 function isValidCoord(lat: number, lng: number): boolean {

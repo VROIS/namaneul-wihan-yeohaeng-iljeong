@@ -373,10 +373,14 @@ export async function matchPlacesWithDB(
           ? place.lng
           : (place.lng && place.lng !== 0 ? place.lng : parseFloat(String(seed.longitude)) || place.lng),
         estimatedPriceEur,
-        // 카테고리 = Gemini seed_category(6종) 우선, 없을 때만 seed 폴백
+        // ⚠️ 2026-07-06 사장님 SSOT = 매칭행 카테고리 = 식사슬롯이면 restaurant 강제(DB-only ag4:286 동형), 아니면 DB 발굴 검증값(seed.seedCategory) 우선 = 마커 정확.
+        //   = Gemini seedCategory 는 편향(shopping/healing 쏠림, 6/7 불일치)이라 마커 부정확 근본 → 검증행 있으면 그 분류가 SSOT. 식당은 검증값이 attraction이어도 식당 마커 보존.
+        //   = seedCategory 만 §14(Gemini 우선) 예외 = "id(발굴검증)에 분류" 원칙([[feedback_no_category_to_gemini_price]]). 신규(미매칭)만 Gemini값.
         seedCategory: (isDbDirect
           ? place.seedCategory
-          : ((place as any).seedCategory || seed.seedCategory)) as SeedCategory,
+          : ((place as any).seedCategory === "restaurant"
+              ? "restaurant"
+              : (seed.seedCategory || (place as any).seedCategory))) as SeedCategory,
         selectionReasons: isDbDirect
           ? place.selectionReasons || []
           : [
@@ -744,15 +748,16 @@ export async function saveNewPlacesToDB(
   );
 
   // 🧠 2026-07-06 사장님 SSOT = TS raw 06형태 모음 1파일(#45 repair.ts:259-271) = 도시id 폴더 로컬+Storage 2곳(§18).
-  //   ⚠️ FE 우선 노출 = raw 저장은 후처리(await X = fire-and-forget) = 사용자 응답 hot-path 안 막음(속도). saveCollectedRaw 자체 never-throw.
+  //   ⚠️ 2026-07-06 근본수정 = 옛 fire-and-forget(void..catch) = 배포서버(Replit)서 응답 후 PUT 완료전 잘림 = TS raw 미저장(비용증발 §18) 근본.
+  //     → await 로 전환(§18 자산보장). 이 함수는 상위(pipeline-v3)서 이미 await 호출 = FE 노출은 TS+PM fetch 완료로 이미 보장 = raw 저장(수백ms)은 그 뒤 미미.
   if (tsResults.length) {
-    void saveCollectedRaw({
+    await saveCollectedRaw({
       cityId, stepNum: 6, stepName: "ts-pm-enrich", content: "candidates", hashKey: "results",
       body: {
         meta: { city_id: cityId, called_at: new Date().toISOString(), input_rows: newRows.length, photo: "대표 1장(photo_name=photos[0])" },
         results: tsResults,
       },
-    }).catch(() => {});
+    }).catch((e) => console.warn('[AG3] TS raw 저장 실패:', (e as Error)?.message));
   }
 
   // 집계 = ① upsert(ins/upd/skip) + ③ 신규 TS/PM 성공수(apiEnriched/photoOk).
