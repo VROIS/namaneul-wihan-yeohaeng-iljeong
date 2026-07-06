@@ -84,7 +84,7 @@ ${categoryMatrix}
 For each place include (= ALL fields verified via Google Search grounding):
 - name (English official name on Google Maps)
 - nameKo (한국어 = 한국 여행자가 부르는 이름)
-- nameLocal (local language name = 예: 파리=Tour Eiffel) [= REQUIRED for Text Search forwarding + matching key, final DB column]
+- nameLocal (local language name = 예: 파리=Tour Eiffel) [= REQUIRED for ALL places INCLUDING restaurants (식당도 반드시). If the restaurant's official name is already in the local language (예: "Le Comptoir du Marché"), copy that same name into nameLocal — never leave nameLocal empty. = Text Search forwarding + matching key, final DB column] (2026-07-06 식당 강제 추가)
 - address (FULL street address with NUMBER + street + postal code + city) [= REQUIRED for Text Search forwarding + matching key, final DB column — verify via Google Search]
 - type ("activity" | "lunch" | "dinner")
 - seed_category (= 위 CATEGORY MATRIX 중 하나 = heritage|healing|hotspot|adventure|shopping|attraction|restaurant. 식사=restaurant) [= final DB column, 카테고리 보존 필수] (2026-07-05 추가)
@@ -97,7 +97,8 @@ For each place include (= ALL fields verified via Google Search grounding):
 
 OUTPUT (strict JSON, no markdown fences):
 {"days":[{"day":1,"theme":"테마","places":[
-  {"name":"Eiffel Tower","nameKo":"에펠탑","nameLocal":"Tour Eiffel","address":"Champ de Mars, 5 Av. Anatole France, 75007 Paris","type":"activity","seed_category":"attraction","latitude":48.858370,"longitude":2.294481,"estimatedCostEur":29.4,"distance_km_from_center":2.4,"selection_reason_ko":"파리 인스타 인증샷 1순위 성지","shortform_ko":"파리 왔으면 외쳐줘야 국룰 '나 파리다!'"}
+  {"name":"Eiffel Tower","nameKo":"에펠탑","nameLocal":"Tour Eiffel","address":"Champ de Mars, 5 Av. Anatole France, 75007 Paris","type":"activity","seed_category":"attraction","latitude":48.858370,"longitude":2.294481,"estimatedCostEur":29.4,"distance_km_from_center":2.4,"selection_reason_ko":"파리 인스타 인증샷 1순위 성지","shortform_ko":"파리 왔으면 외쳐줘야 국룰 '나 파리다!'"},
+  {"name":"Le Comptoir du Marché","nameKo":"르 콩투아 뒤 마르쉐","nameLocal":"Le Comptoir du Marché","address":"8 Rue de la Loge, 06300 Nice, France","type":"lunch","seed_category":"restaurant","latitude":43.697415,"longitude":7.276451,"estimatedCostEur":35,"distance_km_from_center":0.8,"selection_reason_ko":"구시가지 시장 근처 가성비 미쉐린 맛집","shortform_ko":"예약 안 하면 자리 없음 주의"}
 ]}]}
 ```
 

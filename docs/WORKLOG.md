@@ -18,6 +18,31 @@
 
 ---
 
+## 🔥 2026-07-06 = MIX 재과금 근본해결(식당 nameLocal 강제) + raw 저장 자동화(도시id폴더·사장님 예시형식) + runtime 개판 정리
+
+**배경**: 니스 여정 재생성 시 ①완비행(이미 DB에 PID·이미지·좌표 완비된 행)이 신규로 오분류돼 TS+PM 헛과금(22콜 중 18곳 낭비) + 중복 3쌍 생성 ②Gemini/TS raw가 도시id 폴더 아닌 `runtime/`에 개판으로 쌓임. superpowers systematic-debugging으로 근본 규명 = 둘 다 **내 코드 구멍**(외부탓 아님, 사장님 지적).
+
+**✅ A. 식당 nameLocal 프롬프트 강제 (재과금·중복 근본)**:
+- **근본**: MIX Gemini 프롬프트(#02) OUTPUT 예시가 activity("Eiffel Tower") 1개뿐 = 식당 예시 없음 → Gemini가 식당(lunch/dinner) nameLocal을 통째 누락(raw 실측 = 식당 4곳 전부 nameLocal undefined). nameLocal 없으면 matcher가 name_en(tier=suspect=가변)으로만 매칭 → **완비행도 신규 INSERT로 오분류**(matcher.ts:119 confirmed만 UPDATE). = 헛과금 + 중복. (실측 A/B/C 실험: nameLocal 있으면 name_local/confirmed = 병합).
+- **수정**: nameLocal 지시에 "식당도 반드시, 상호명이 이미 현지어면 그대로 nameLocal 복사, 절대 비우지마" + OUTPUT 예시에 식당(restaurant "Le Comptoir du Marché") 1개 추가. **3곳 1:1 동기(§3)**: pipeline-v3.ts:449·462 + `.claude/skills/.../09-main-app-itinerary/STANDARD_PROMPT_2026-05-24.md` + `docs/20260607PROMPTS_TOTAL_SSOT.md` #02.
+
+**✅ B. raw 저장 자동화 (도시id 폴더 + 사장님 예시형식, 앞으로 300도시 자동)**:
+- **근본**: pipeline-v3:500 Gemini saveRaw가 `contextId:null=runtime` 폴백(cityId 미확정 착각 = 내 헛소리, 실제는 findCityUnified가 신규도시 자동INSERT로 항상 확정) + saveRaw 봉투형식({request,raw})은 사장님 예시형식(parsedPlaces) 불가. ag3 TS raw는 건건(장소 수만큼 파일) = 모음 아님. 이미지는 `place-images/{cityId}/{cat}/` 이미 정상.
+- **신설**: `server/services/shared/save-collected-raw.ts` = save-raw.ts PUT블록 추출(§16 복붙) = 도시id 폴더 + `{meta,rawResponse,parsedPlaces}`(Gemini) / `{meta,results[]}`(TS) 형식 + 로컬+Storage 2곳(§18, 배포 읽기전용FS 대응 Storage 필수) + versionedName 버전순번(손실0).
+- **pipeline-v3**: 옛 saveRaw(runtime 봉투) 삭제(§19), step1이 rawText를 days에 비열거속성 부착 → Promise.all 후 preloaded.cityId 확정 시점에 saveCollectedRaw(cityId 폴더+parsedPlaces). **⚠️ FE 우선 노출 = fire-and-forget(void ...catch())** = 사용자 응답 hot-path 안 막음(속도, 사장님 SSOT).
+- **ag3**: TS raw = #45(repair.ts:259-271) 복붙 = tsSearch에 localSkipRaw:true(건건 로컬skip) + tsResults 06형태 수집 + 끝에 saveCollectedRaw 모음1파일. fire-and-forget.
+- **자동화 = 앞으로 모든 도시가 자동으로 도시id 폴더 저장** = 인위 정리 불필요(사장님 "300개 도시 감당" SSOT).
+
+**✅ C. runtime 개판 1회 정리 (자동화 위에 옛 raw 재통과 = 입증)**:
+- 사장님 방식 = 자동화 만들고 그 위에 runtime 옛 raw 재통과 = 정리+검증 동시. 외부호출 0.
+- Storage+로컬 runtime의 리모주 raw 5개→`132/`, 니스 1개→`44/` 재통과+이동(버전순번 _N 분리=손실0), 내 테스트더미 2개 삭제. runtime = `2026-06-16_gemini-grounded`(mix아님 별개)만 잔존.
+
+**검증(5단계 §12)**: tsc 246 baseline(신규0)·§19가드 3파일·서버빌드 434kb·Expo dist·simplify·review. 입증=runtime 니스raw 재통과→`44/2026-07-06_90-mix-gemini_step1.json`(meta+rawResponse+parsedPlaces10곳) 로컬+Storage 저장 확인.
+
+**미완(다음)**: 결손매칭행 TS보강 여부(사장님 결정)·니스 중복3쌍 청소·배포후 재과금 실증(22→3~4콜)·DB트리거 PID게이트 갱신. 근본교훈 = [[feedback_trace_to_source_not_middle]](backward trace 중간서 멈추고 외부탓 금지 = 소스=내코드까지).
+
+---
+
 ## 🔥 2026-07-04 = "AI 의견"(핵심 마케팅) 오버레이 로딩 UX + 크레딧 고지 + 교통비 재산정 + 다국어
 
 **배경**: "AI 의견" = 앱 핵심 마케팅 포인트 = 생성된 여정을 Gemini 그라운딩으로 비평적 재평가(실현가능·동선·**1인당 대중교통+식비+입장료 일일합산**·주의). 이번 세션 = ①로딩 UX(응답 8~9초 여백) ②크레딧 고지(5크레딧) ③교통비 재산정 문서반영 ④다국어 마무리 + 5단계검증 + 문서화. 이전 세션의 AI 의견 BE(핸들러/프롬프트/라우트)·FE(오버레이 리포트)는 실제 Gemini 3회 호출로 실증 완료(한국어·영어·가격구조), 이번엔 미완이던 로딩 UX·크레딧을 마감.

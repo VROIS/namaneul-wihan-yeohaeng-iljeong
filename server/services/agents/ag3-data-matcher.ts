@@ -35,6 +35,8 @@ import { tsSearch, tsPhoto } from "../shared/ts-client";
 import { pickPlaceImage } from "../shared/place-image";
 // ⚠️ 수정금지(승인필요) §16 = 동일장소 7단계 매칭 = 공용 matcher.ts 단일 (= URI veto)
 import { matchCandidate } from "../shared/matcher";
+// ⚠️ 수정금지(승인필요) 2026-07-06 사장님 SSOT = TS raw 모음 1파일(#45 방식) 저장 = 도시id 폴더 로컬+Storage 2곳(§18).
+import { saveCollectedRaw } from "../shared/save-collected-raw";
 
 /** <img>로 사용 가능한 URL인지 (인스타 post URL, 네이버/티스토리 등 차단 도메인 제외) */
 function isUsableImageUrl(url: string): boolean {
@@ -628,6 +630,8 @@ export async function saveNewPlacesToDB(
 
   // ── ③ 신규만 TS+PM → ① 신규 rowId 직행 UPDATE = #45 순서(Gemini 힌트로 TS 검증). ──
   //   = 재UPDATE 는 targetRowId(① 신규 rowId) 직행 = matcher 재매칭 안 씀 = name_local·좌표 결손 신규도 중복 INSERT 불가(§14).
+  // ⚠️ 수정금지(승인필요) 2026-07-06 사장님 SSOT = TS raw 모음 1파일(#45 repair.ts:167 방식) = 건건 로컬skip + 끝에 06형태 results 배열 1파일(§18).
+  const tsResults: any[] = [];
   const results = await Promise.all(
     newRows.map(async ({ place, seedCategory, rowId }: any) => {
       try {
@@ -647,8 +651,22 @@ export async function saveNewPlacesToDB(
           // ⚠️ 수정금지(승인필요) 2026-06-23 사장님 SSOT = 좌표 앵커 무조건 10m(repair.ts:36 ANCHOR_M 동일).
           anchorRadiusM: hasGeminiCoord ? 10 : undefined,
           rawTag: `ag3-${place.name}`,
+          // ⚠️ 2026-07-06 §18 = 건건 raw 로컬 skip(Storage 건건은 관문이 보존) = 아래 tsResults 모음 1파일이 로컬 조회용(repair.ts:183 동일).
+          localSkipRaw: true,
         });
         const result = tsArr?.[0];
+
+        // 🧠 2026-07-06 = 06형태 모음 수집(#45 repair.ts:186-196) = 정제 9요소 + photo_name 1개(photos[0]). 원본 photos 통째 X.
+        tsResults.push({
+          id: rowId, name: place.name, category: seedCategory, our_pid: (place as any).googlePlaceId ?? null,
+          status: result ? "ok" : "no_match",
+          ts: result ? {
+            place_id: result.googlePlaceId, display_name_en: result.nameEn, address: result.address,
+            lat: result.latitude, lng: result.longitude, review_count: result.googleReviewCount,
+            price_eur: result.priceEur, photo_name: result.photoName, google_maps_uri: result.googleMapsUri,
+            business_status: result.businessStatus,
+          } : null,
+        });
 
         // 폐업(TS) = FE·백필 제외. TS 없으면 이미 ① 에서 Gemini 로 저장됨(추가 갱신 없이 종료).
         if (result?.businessStatus === "CLOSED_PERMANENTLY") {
@@ -719,10 +737,23 @@ export async function saveNewPlacesToDB(
         return { enrichedByApi: 1, photoOk: imageUrl ? 1 : 0 };
       } catch (e) {
         console.error(`[AG3-SAVE] ❌ 신규 "${place.name}" TS+PM 실패:`, (e as Error).message);
+        tsResults.push({ id: rowId, name: place.name, category: seedCategory, status: "error", error: (e as Error).message });
         return { enrichedByApi: 0, photoOk: 0, error: (e as Error).message };
       }
     }),
   );
+
+  // 🧠 2026-07-06 사장님 SSOT = TS raw 06형태 모음 1파일(#45 repair.ts:259-271) = 도시id 폴더 로컬+Storage 2곳(§18).
+  //   ⚠️ FE 우선 노출 = raw 저장은 후처리(await X = fire-and-forget) = 사용자 응답 hot-path 안 막음(속도). saveCollectedRaw 자체 never-throw.
+  if (tsResults.length) {
+    void saveCollectedRaw({
+      cityId, stepNum: 6, stepName: "ts-pm-enrich", content: "candidates", hashKey: "results",
+      body: {
+        meta: { city_id: cityId, called_at: new Date().toISOString(), input_rows: newRows.length, photo: "대표 1장(photo_name=photos[0])" },
+        results: tsResults,
+      },
+    }).catch(() => {});
+  }
 
   // 집계 = ① upsert(ins/upd/skip) + ③ 신규 TS/PM 성공수(apiEnriched/photoOk).
   const totals = results.reduce(

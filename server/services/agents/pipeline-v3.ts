@@ -13,7 +13,8 @@ import { preloadCityData, matchPlacesWithDB, saveNewPlacesToDB } from './ag3-dat
 // 🧠 2026-07-05 = computeCatSlots 정적 import(§0 가벼움) = 옛 함수내 동적 await import 폐기(§19). ag2→pipeline-v3 역참조 없음 = 순환참조 무관.
 import { computeCatSlots } from './ag2-gemini-recommender';
 // 🧠 2026-07-05 사장님 SSOT = MIX Gemini(#02) raw 저장 관문(§18). 옛 getAI 직접호출 = raw 미저장(비용증발) 폐기(§19). TS(ag3)는 이미 관문경유 저장됨 = Gemini만 누락이었음.
-import { saveRaw } from '../shared/save-raw';
+// 🧠 2026-07-06 사장님 SSOT = MIX Gemini raw = 도시id 폴더 + {meta,rawResponse,parsedPlaces}(사장님 예시형식) 저장 = saveCollectedRaw 단일 헬퍼(§18 2곳). 옛 saveRaw(runtime 봉투) 폐기 §19.
+import { saveCollectedRaw } from '../shared/save-collected-raw';
 import {
   calculateTransportPrice, shouldApplyGuidePrice, calculateUberBlackHourly,
   getGuidePerPersonPerDay, round2,
@@ -196,6 +197,28 @@ async function runPipelineMix(formData: TripFormData): Promise<any> {
   _mark('step1_parallel');
   // 🗑️ 2026-07-05 삭제 = dbPlacesMap.size 참조 → seedRawMap.size(실제 시드 후보 수) = 죽은맵 제거 정합 §0/§19
   console.log(`[V3-MIX] Step1 완료 (${_timings['step1_parallel']}ms): Gemini ${geminiDays.length}일, seed ${preloaded.seedRawMap?.size ?? 0}키`);
+
+  // 🧠 2026-07-06 사장님 SSOT = MIX Gemini raw 저장(§18) = 도시id 폴더 + {meta,rawResponse,parsedPlaces}(사장님 예시형식).
+  //   = cityId 는 preloadCityData(findCityUnified, 신규도시 자동INSERT)가 확정 = 이 시점(Promise.all 후) 사용가능. rawText 는 step1 이 days.__rawText 로 전달.
+  //   ⚠️ FE 우선 노출 = raw 저장은 후처리(await X = fire-and-forget) = 사용자 응답 hot-path 안 막음(속도). saveCollectedRaw 자체 never-throw.
+  if (preloaded.cityId) {
+    const rawText = (geminiDays as any).__rawText || '';
+    const finishReason = (geminiDays as any).__finishReason || 'unknown';
+    let parsedPlaces: any[] = []; let parseError: string | null = null;
+    try {
+      const m = rawText.replace(/```json|```/g, '').match(/\{[\s\S]*\}/);
+      const pj = m ? JSON.parse(m[0]) : {};
+      for (const dd of (pj.days || [])) for (const p of (dd.places || [])) parsedPlaces.push({ day: dd.day, theme: dd.theme, ...p });
+    } catch (e) { parseError = (e as Error).message; }
+    void saveCollectedRaw({
+      cityId: preloaded.cityId, stepNum: 90, stepName: 'mix-gemini', content: 'step1', hashKey: 'rawResponse',
+      body: {
+        meta: { cityId: preloaded.cityId, destination: formData.destination, finishReason, parseError, parsedCount: parsedPlaces.length, timestamp: new Date().toISOString() },
+        rawResponse: rawText,
+        parsedPlaces,
+      },
+    }).catch(() => {});
+  }
 
   // ===== Step 2: 데이터 채우기 =====
   const result = await step2_enrichAndBuild(
@@ -446,7 +469,7 @@ ${categoryMatrix}
 For each place include (= ALL fields verified via Google Search grounding):
 - name (English official name on Google Maps)
 - nameKo (한국어 = 한국 여행자가 부르는 이름)
-- nameLocal (local language name = 예: 파리=Tour Eiffel) [= REQUIRED for Text Search forwarding + matching key, final DB column]
+- nameLocal (local language name = 예: 파리=Tour Eiffel) [= REQUIRED for ALL places INCLUDING restaurants (식당도 반드시). If the restaurant's official name is already in the local language (예: "Le Comptoir du Marché"), copy that same name into nameLocal — never leave nameLocal empty. = Text Search forwarding + matching key, final DB column]
 - address (FULL street address with NUMBER + street + postal code + city) [= REQUIRED for Text Search forwarding + matching key, final DB column — verify via Google Search]
 - type ("activity" | "lunch" | "dinner")
 - seed_category (= 위 CATEGORY MATRIX 중 하나 = heritage|healing|hotspot|adventure|shopping|attraction|restaurant. 식사=restaurant) [= final DB column, 카테고리 보존 필수]
@@ -459,7 +482,8 @@ For each place include (= ALL fields verified via Google Search grounding):
 
 OUTPUT (strict JSON, no markdown fences):
 {"days":[{"day":1,"theme":"테마","places":[
-  {"name":"Eiffel Tower","nameKo":"에펠탑","nameLocal":"Tour Eiffel","address":"Champ de Mars, 5 Av. Anatole France, 75007 Paris","type":"activity","seed_category":"attraction","latitude":48.858370,"longitude":2.294481,"price_eur":29.4,"distance_km_from_center":2.4,"selection_reason_ko":"파리 인스타 인증샷 1순위 성지","shortform_ko":"파리 왔으면 외쳐줘야 국룰 '나 파리다!'"}
+  {"name":"Eiffel Tower","nameKo":"에펠탑","nameLocal":"Tour Eiffel","address":"Champ de Mars, 5 Av. Anatole France, 75007 Paris","type":"activity","seed_category":"attraction","latitude":48.858370,"longitude":2.294481,"price_eur":29.4,"distance_km_from_center":2.4,"selection_reason_ko":"파리 인스타 인증샷 1순위 성지","shortform_ko":"파리 왔으면 외쳐줘야 국룰 '나 파리다!'"},
+  {"name":"Le Comptoir du Marché","nameKo":"르 콩투아 뒤 마르쉐","nameLocal":"Le Comptoir du Marché","address":"8 Rue de la Loge, 06300 Nice, France","type":"lunch","seed_category":"restaurant","latitude":43.697415,"longitude":7.276451,"price_eur":35,"distance_km_from_center":0.8,"selection_reason_ko":"구시가지 시장 근처 가성비 미쉐린 맛집","shortform_ko":"예약 안 하면 자리 없음 주의"}
 ]}]}`;
 
   try {
@@ -492,17 +516,8 @@ OUTPUT (strict JSON, no markdown fences):
     const finishReason = candidate?.finishReason || 'unknown';
     console.log(`[V3-Step1] 🤖 응답 수신 (${text.length}자, finish=${finishReason}, parts=${parts.length}, ${Date.now() - _t0}ms)`);
 
-    // 🧠 2026-07-05 사장님 SSOT = MIX Gemini raw 저장(§18) = 스토리지 raw-responses/runtime/{날짜}_gemini-mix-step1.json.
-    //   = TS(ag3)는 이미 관문경유 저장(cityId 확정된 시점) → Gemini만 누락이었음(비용증발). saveRaw 자체가 never-throw best-effort(save-raw.ts) = 별도 try/catch 불필요(§0).
-    //   = cityId 는 이 시점(step1) 에서 미확정(preloadCityData 와 병렬 = 재사용 불가, 재조회는 미발굴도시에서 유료 Gemini+INSERT 중복유발) → contextId=null = runtime 폴백(§18 규칙 그대로).
-    //   = await X = fire-and-forget(§0 가벼움) = 여정생성은 사용자 응답 hot-path = Storage PUT 지연(최대 15s)이 응답 막지 않게 백그라운드 저장. .catch = unhandled rejection 방어(saveRaw 자체는 never-throw).
-    void saveRaw({
-      source: 'gemini',
-      contextId: null,
-      tag: 'mix-step1',
-      request: { prompt, model: 'gemini-3-flash-preview', grounding: false },
-      raw: { text, finishReason },
-    }).catch(() => {});
+    // 🗑️ 2026-07-06 삭제 = 여기 saveRaw(contextId:null=runtime·봉투형식) 폐기 = cityId 미확정 시점이라 runtime 개판저장 §19.
+    //   = raw 저장은 호출부(runPipelineMix)에서 Promise.all 후 preloaded.cityId 확정 시점에 saveCollectedRaw 로(도시폴더+parsedPlaces). rawText 는 아래 days 에 부착해 전달.
 
     if (text.length < 100) {
       console.warn(`[V3-Step1] ⚠️ 짧은 응답: ${text}`);
@@ -557,6 +572,9 @@ OUTPUT (strict JSON, no markdown fences):
     }
 
     console.log(`[V3-Step1] ✅ Gemini ${days.length}일 완전 일정 생성 (${Date.now() - _t0}ms)`);
+    // 🧠 2026-07-06 사장님 SSOT = rawText/finishReason 를 days 에 비열거 속성 부착 = 반환타입(GeminiDay[]) 불변 + 호출부가 Promise.all 후 cityId 확정 시점에 raw 저장(도시폴더).
+    Object.defineProperty(days, '__rawText', { value: text, enumerable: false });
+    Object.defineProperty(days, '__finishReason', { value: finishReason, enumerable: false });
     return days;
   } catch (error: any) {
     if (error.message === 'GEMINI_API_KEY_MISSING') throw error;
