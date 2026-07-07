@@ -71,12 +71,17 @@ export async function saveRaw(opts: SaveRawOpts): Promise<void> {
       raw: opts.raw,
     }, null, 2);
 
-    await fetch(`${supaPublicUrl}/storage/v1/object/${BUCKET}/${filePath}`, {
+    // ⚠️ 2026-07-07 무성실패 제거(사장님 승인) = fetch 는 HTTP 4xx/5xx 예외 안 던짐 → response.ok 확인 강제(raw 증발 로그0 재발방지).
+    const resp = await fetch(`${supaPublicUrl}/storage/v1/object/${BUCKET}/${filePath}`, {
       method: 'PUT',
       headers: { Authorization: `Bearer ${storageKey}`, 'Content-Type': 'application/json', 'x-upsert': 'true' },
       body,
       signal: AbortSignal.timeout(15000),
     });
+    if (!resp.ok) {
+      const eb = await resp.text().catch(() => '');
+      console.error(`[saveRaw] ❌ Storage PUT 실패 ${resp.status} = ${BUCKET}/${filePath} = ${eb.slice(0, 200)}`);
+    }
 
     // ⚠️ 수정금지(승인필요) 2026-06-15 사장님 SSOT = 로컬 2곳째 저장 (= Storage 와 동일 파일규칙 = 추후 재활용·비용보호).
     //   = docs/raw/{cityId}/{date}_{source}-{tag}.json (= filePath 와 동형). 배포 읽기전용 FS = 조용히 skip(best-effort).

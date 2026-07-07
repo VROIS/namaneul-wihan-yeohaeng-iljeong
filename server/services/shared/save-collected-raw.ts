@@ -46,13 +46,19 @@ export async function saveCollectedRaw(opts: SaveCollectedRawOpts): Promise<void
     const text = JSON.stringify(opts.body, null, 2); // pretty(사장님 눈 검수)
 
     // ① Storage PUT (= 배포서버에서도 안 증발 = 필수). save-raw.ts:74-79 복붙.
+    // ⚠️ 2026-07-07 무성실패 제거 = fetch 는 HTTP 4xx/5xx 를 예외로 안 던짐 → response.ok 확인 강제.
+    //   (근본사고: raw-responses 버킷 ANON 정책 없어 403 → 결과 미확인 → catch 로 삼켜 raw 증발 로그0. 정책 복제 + 이 가드로 재발방지.)
     if (storageKey && supaPublicUrl) {
-      await fetch(`${supaPublicUrl}/storage/v1/object/${BUCKET}/${filePath}`, {
+      const resp = await fetch(`${supaPublicUrl}/storage/v1/object/${BUCKET}/${filePath}`, {
         method: 'PUT',
         headers: { Authorization: `Bearer ${storageKey}`, 'Content-Type': 'application/json', 'x-upsert': 'true' },
         body: text,
         signal: AbortSignal.timeout(15000),
       });
+      if (!resp.ok) {
+        const body = await resp.text().catch(() => '');
+        console.error(`[saveCollectedRaw] ❌ Storage PUT 실패 ${resp.status} = ${BUCKET}/${filePath} = ${body.slice(0, 200)}`);
+      }
     }
     // ② 로컬 write (= 조회용. 배포 읽기전용 FS = 조용히 skip). save-raw.ts:84-90 복붙.
     try {
