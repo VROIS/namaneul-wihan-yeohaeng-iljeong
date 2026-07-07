@@ -83,6 +83,12 @@ EXPO_PACKAGER_PROXY_URL=https://828b2285-99c5-4cc9-9bcd-a09cdff531bc-00-kzvu1v5x
 - 값: `https://828b2285-99c5-4cc9-9bcd-a09cdff531bc-00-kzvu1v5xhevl.sisko.replit.dev`
 - `client/lib/query-client.ts`에서 `Constants.expoConfig?.extra?.apiDomain` 폴백 복원 금지
 
+## 빌드 자동화 구조 (확정)
+
+- **개발 워크플로우** (`Start application`): `npx tsx server/index.ts` → TypeScript 직접 실행, server:build 불필요
+- **운영 Publish**: `.replit [deployment] build = ["npm", "run", "build"]` → Replit이 Publish 시 자동으로 `npm run server:build && npx expo export --platform web` 실행 후 배포, 수동 빌드 불필요
+- **동기화 사이클**: server:build / expo export 수동 실행 불필요. 변경 후 워크플로우 재시작만 하면 개발 환경 반영, Publish하면 운영 반영
+
 ## Deployment
 - Build: `npm run server:build && npx expo export --platform web`
 - Run: `node server_dist/index.js`
