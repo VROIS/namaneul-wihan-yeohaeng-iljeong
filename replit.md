@@ -83,17 +83,11 @@ EXPO_PACKAGER_PROXY_URL=https://828b2285-99c5-4cc9-9bcd-a09cdff531bc-00-kzvu1v5x
 - 값: `https://828b2285-99c5-4cc9-9bcd-a09cdff531bc-00-kzvu1v5xhevl.sisko.replit.dev`
 - `client/lib/query-client.ts`에서 `Constants.expoConfig?.extra?.apiDomain` 폴백 복원 금지
 
-## ⚠️ 백엔드 변경 시 server:build 필수 (확정, 절대 빠뜨리지 말 것)
+## 빌드 자동화 구조 (확정)
 
-- `.replit` run 설정: `["node", "server_dist/index.js"]` → **운영은 TypeScript 소스가 아닌 esbuild 번들을 실행**
-- `server/*.ts` 변경 후 `npm run server:build`를 실행하지 않으면 운영에 반영되지 않음
-- **동기화 사이클 표준 순서**:
-  1. `git diff --stat` 로 변경 파일 확인
-  2. `server/` 변경 있으면 → `npm run server:build` (항상)
-  3. `client/` / `app.json` / `package.json` 변경 있으면 → `npx expo export --platform web`
-  4. 빌드 후 grep으로 핵심 심볼 존재 확인
-  5. Start application 재시작 → Start Frontend 재시작 (순서 엄수)
-- "백엔드만 변경이라 빌드 불필요"는 **틀린 판단** — server:build는 항상 필요
+- **개발 워크플로우** (`Start application`): `npx tsx server/index.ts` → TypeScript 직접 실행, server:build 불필요
+- **운영 Publish**: `.replit [deployment] build = ["npm", "run", "build"]` → Replit이 Publish 시 자동으로 `npm run server:build && npx expo export --platform web` 실행 후 배포, 수동 빌드 불필요
+- **동기화 사이클**: server:build / expo export 수동 실행 불필요. 변경 후 워크플로우 재시작만 하면 개발 환경 반영, Publish하면 운영 반영
 
 ## Deployment
 - Build: `npm run server:build && npx expo export --platform web`

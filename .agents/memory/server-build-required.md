@@ -1,17 +1,32 @@
 ---
-name: server:build required for every backend change
-description: .replit runs node server_dist/index.js (esbuild bundle), NOT tsx; any server/*.ts change must be bundled first.
+name: Build automation structure
+description: How dev workflow and production deployment handle builds — no manual build needed in either case.
 ---
 
-**Rule:** Every `server/*.ts` change requires `npm run server:build` before it is reflected in production or the dev workflow. "Backend-only change, no build needed" is always wrong.
+**Rule:** Do NOT manually run `npm run server:build` or `npx expo export --platform web` as part of the sync cycle. Both environments handle builds automatically.
 
-**Why:** `.replit` run command is `["node", "server_dist/index.js"]`. The running process is the esbuild bundle in `server_dist/`, not the TypeScript source. Restarting the workflow without rebuilding serves stale code.
+**Why:** Confirmed via `.replit` config and Replit official docs.
 
-**How to apply:**
-- Sync cycle standard order:
-  1. `git diff --stat <prev> HEAD -- server/ client/ app.json package.json`
-  2. `server/` changed → `npm run server:build` (always, no exceptions)
-  3. `client/` / `app.json` / `package.json` changed → `npx expo export --platform web`
-  4. Grep a key symbol from the new code in `server_dist/index.js` to confirm bundle is fresh
-  5. Restart Start application → then Start Frontend (never simultaneously)
-- Build verification example: `grep -c "loadSeedRawMap" server_dist/index.js` — must return > 0
+**How it works:**
+
+| Environment | Run command | Build needed? |
+|---|---|---|
+| Dev workflow (`Start application`) | `npx tsx server/index.ts` | ❌ — tsx runs TypeScript directly |
+| Production (`my-guide.replit.app`) | `node server_dist/index.js` | ✅ — but Replit auto-runs it at Publish time |
+
+**`.replit` deployment config:**
+```toml
+[deployment]
+build = ["npm", "run", "build"]   ← auto-runs at every Publish
+run   = ["node", "server_dist/index.js"]
+```
+
+`npm run build` = `npm run server:build && npx expo export --platform web` — both server bundle and frontend dist are rebuilt automatically at Publish.
+
+**Standard sync cycle (correct):**
+1. `git diff --stat <prev> HEAD` — check what changed
+2. Restart `Start application` (backend change reflected immediately via tsx)
+3. If `client/` / `app.json` changed → restart `Start Frontend` too (Metro picks up changes)
+4. Hit Publish → Replit handles full build + deploy automatically
+
+**What NOT to do:** Do not add a manual `npm run server:build` step to the sync cycle — it was a mistake based on misreading the `.replit` run command as the dev workflow command (it is only the production run command).
