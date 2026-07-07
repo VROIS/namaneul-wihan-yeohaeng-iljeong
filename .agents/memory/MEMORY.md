@@ -1,3 +1,4 @@
+- [server:build required for every backend change](server-build-required.md) — .replit runs `node server_dist/index.js`; server/*.ts changes NEVER reflected without `npm run server:build` first.
 - [Post-merge auto build/restart — scope limited](post-merge-automation.md) — the platform's post-merge hook only fires reliably for Replit's Task system, NOT for external-git-push + Git-tab-Pull workflows; agent still can't touch .git internals.
 - [Metro config blockList danger](metro-config-blocklist-danger.md) — never add a metro.config.js resolver.blockList to this project; it silently broke EAS/CI builds by matching node_modules/**/dist paths.
 - [Git write ops blocked for main agent](git-write-ops-blocked-for-main-agent.md) — merge/rebase/fetch/lockfile cleanup hard-fail as "destructive" for main agent only; a real isolated task-agent container CAN run them successfully.
