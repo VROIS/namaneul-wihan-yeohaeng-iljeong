@@ -103,7 +103,11 @@ const collect = (): Job[] => {
     }
     // 형식 분기
     let groups: { cat?: string; arr: any[] }[] = [];
-    if (Array.isArray(d?.places)) groups = [{ arr: d.places }];                                  // 02-enrich (id, cat=DB조회)
+    // ⚠️ 2026-07-07 사장님 승인 = saveCollectedRaw 형식({meta,rawResponse,parsedPlaces}) 재입력 추가.
+    //   = 02-enrich·MIX Gemini(90-mix)가 이 형식으로 저장 = parsedPlaces = 파싱된 배열(id 또는 name 앵커). 옛 collect 는 d.places 만 봐서 이 형식 누락(파리·본느 재입력 0곳 근본).
+    //   = cat 미지정 = 아래 p.seed_category 폴백 or id/pid DB 조회 흡수(기존 로직). MIX Gemini(name 앵커)도 p.name 폴백(line 아래)으로 커버.
+    if (Array.isArray(d?.parsedPlaces)) groups = [{ arr: d.parsedPlaces }];                       // 02-enrich·MIX Gemini (parsedPlaces, id/name 앵커)
+    else if (Array.isArray(d?.places)) groups = [{ arr: d.places }];                             // 02-enrich (구형 places, id, cat=DB조회)
     else if (Array.isArray(d?.parsed)) groups = [{ cat: 'restaurant', arr: d.parsed }];          // 13-restaurant (id, 식당)
     else if (Array.isArray(d?.zones)) groups = d.zones.flatMap((z: any) => [{ cat: metaCat, arr: z.places || [] }]); // 12-TS (pid, meta.category)
     else if (typeof d?.raw_text === 'string') {                                                   // 01/03/04 (raw_text)
