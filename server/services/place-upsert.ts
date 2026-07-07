@@ -34,8 +34,7 @@ export interface UpsertPayload {
   //   = 있으면 7단계 매칭 완전 스킵하고 그 행에 직행 UPDATE. 발굴 후 "방금 INSERT한 신규행을 TS검증값으로 되덮을 때" 재매칭 실패(name_local·좌표 결손 시 중복 INSERT) 원천차단.
   //   = 없으면(기본) 옛 동작 그대로 = 7단계 매칭 후 UPDATE/INSERT.
   targetRowId?: number | null;
-  // ⚠️ 2026-05-23 = 분류 단계 = phaseTags 배열 사용 (§19)
-  rank?: number;
+  // 🗑️ 2026-07-07 개정헌법(사장님) = rank 필드 삭제 §19 = upsertPlace 는 랭킹을 받지도·넣지도 않음. 랭킹은 DB autorank 트리거(RC순)가 전담.
   // 식별 키 (= 5 단계 매칭)
   googlePlaceId?: string | null;
   address?: string | null;
@@ -188,23 +187,14 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
     return { action: 'updated', rowId: match.id, matchedBy };
   }
 
-  // INSERT = 미매칭 = 신규 행
-  // ⚠️ 수정금지(승인필요) 2026-06-08 사용자 SSOT = rank 은 입력단(문지기) 무시 = 신규는 항상 placeholder(MAX+1=바닥).
-  //   = Gemini 가(假)랭킹/p.rank 안 봄(= 입력순서일 뿐). 최종 rank = 별도 단일 권위체 fill/rc-rerank.ts 가 RC DESC NULLS LAST 로 확정.
-  //   = (city_id, seed_category, rank) UNIQUE 충돌 방지용 임시 자리. RC 확보 후 rc-rerank 가 1..N 재배치.
-  const maxRow = await db
-    .select({ max: sql<number>`COALESCE(MAX(${placeSeedRaw.rank}), 0)` })
-    .from(placeSeedRaw)
-    .where(sql`${placeSeedRaw.cityId} = ${p.cityId} AND ${placeSeedRaw.seedCategory} = ${p.seedCategory}`);
-  const nextRank = (Number(maxRow[0]?.max) || 0) + 1;
+  // INSERT = 미매칭 = 신규 행 = 전체 응답값 그대로 새삽입.
+  // ⚠️ 개정헌법 2026-07-07 사장님 = rank 는 앱이 안 넣음(랭킹 코드 완전삭제 §19/§16). rank nullable + DB autorank 트리거(RC순) 단일 권위가 INSERT 후 배정.
   try {
     const inserted = await db
       .insert(placeSeedRaw)
       .values({
         cityId: p.cityId,
         seedCategory: p.seedCategory,
-        // ⚠️ 2026-05-23 = 분류 단계 = phaseTags 만 사용 (§19)
-        rank: nextRank,
         // 🧠 2026-07-05 사장님 SSOT(§20) = 셀렉/꼼수(|| null) 제거 = 응답값 그대로 새삽입. ?? null = 응답에 없는 컬럼만 NULL(0·빈값은 온 값 그대로).
         nameEn: p.nameEn,
         nameKo: p.nameKo ?? null,
@@ -235,27 +225,7 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
       suspect,
     };
   } catch (e: any) {
-    // 안전망 = UNIQUE INDEX uniq_psr_global_city_name (= city_id + lower(trim(name_en))) 충돌 = 동시 INSERT race.
-    //   = 충돌 축이 name_en 이므로 그 행을 되찾아 skip. 🗑️ 2026-07-05 = matchedBy 라벨 'name_local'→'name_en' 교정
-    //     = UNIQUE 축(name_en)과 다른 거짓 라벨 제거 = 집계 정합 §19 (재SELECT 도 UNIQUE 축 동일 = 7단계 정합).
-    if (String(e?.message || '').includes('uniq_psr_global_city_name')) {
-      const retry = await db
-        .select({ id: placeSeedRaw.id })
-        .from(placeSeedRaw)
-        .where(
-          sql`${placeSeedRaw.cityId} = ${p.cityId}
-              AND LOWER(TRIM(${placeSeedRaw.nameEn})) = LOWER(TRIM(${p.nameEn || ''}))`,
-        )
-        .limit(1);
-      if (retry[0]?.id) {
-        return {
-          action: 'skipped',
-          rowId: retry[0].id,
-          matchedBy: 'name_en',
-          reason: 'race_conflict_resolved',
-        };
-      }
-    }
+    // 최후 안전망 = INSERT 예외 시 skip(응답 안 죽임). rank 는 nullable+트리거 배정이라 rank 충돌 없음(2026-07-07 §19). = 실제 도달 드묾.
     return {
       action: 'skipped',
       rowId: null,

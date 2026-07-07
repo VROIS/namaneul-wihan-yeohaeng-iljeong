@@ -75,6 +75,62 @@ function isUsableImageUrl(url: string): boolean {
 // 🗑️ 2026-07-05 삭제 = getGoogleMapsApiKey() = 호출 0곳 데드코드 §0/§19. 이미지 폴백은 pickPlaceImage 단일 SSOT 담당.
 
 /**
+ * ⚠️ 2026-07-07 사장님 SSOT = place_seed_raw 도시 전체를 seedRawMap 으로 로드(§16 단일 SSOT).
+ *   = preloadCityData(최초 1회) + saveNewPlacesToDB 1차저장 후 재조회(신규 반영) 공통 사용.
+ *   = 슬롯을 저장된 PSR 에서 구성(DB-only 동형)하려면 1차저장 후 이 함수로 재조회해 신규 23곳 포함된 최신 맵 확보.
+ */
+export async function loadSeedRawMap(cityId: number): Promise<Map<string, any>> {
+  const seedRawMap = new Map<string, any>();
+  if (!db) return seedRawMap;
+  const seeds = await db
+    .select({
+      id: placeSeedRaw.id,
+      nameEn: placeSeedRaw.nameEn,
+      nameKo: placeSeedRaw.nameKo,
+      nameLocal: placeSeedRaw.nameLocal,
+      googlePlaceId: placeSeedRaw.googlePlaceId,
+      googleMapsUri: placeSeedRaw.googleMapsUri,
+      imageUrl: placeSeedRaw.imageUrl,
+      address: placeSeedRaw.address,
+      latitude: placeSeedRaw.latitude,
+      longitude: placeSeedRaw.longitude,
+      googleReviewCount: placeSeedRaw.googleReviewCount,
+      googlePrimaryType: placeSeedRaw.googlePrimaryType,
+      editorialSummary: placeSeedRaw.editorialSummary,
+      summaryKo: placeSeedRaw.summaryKo,
+      dayZone: placeSeedRaw.dayZone,
+      distanceKmFromCenter: placeSeedRaw.distanceKmFromCenter,
+      imageAttribution: placeSeedRaw.imageAttribution,
+      priceEur: placeSeedRaw.priceEur,
+      rank: placeSeedRaw.rank,
+      seedCategory: placeSeedRaw.seedCategory,
+    })
+    .from(placeSeedRaw)
+    .where(eq(placeSeedRaw.cityId, cityId));
+  for (const s of seeds) {
+    // ⚠️ 수정금지(승인필요) 2026-05-09 = 이름 매칭 보강 = 정규화 + 악센트 제거 (좌표 X, 이름+address ✓)
+    const norm = (name: string | null) =>
+      name ? name.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, "") : null;
+    const noAccent = (name: string | null) =>
+      name ? name.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, "") : null;
+    const keyEn = norm(s.nameEn);
+    const keyKo = norm(s.nameKo);
+    const keyLocal = norm((s as any).nameLocal);
+    const keyEnNoAcc = noAccent(s.nameEn);
+    const keyLocalNoAcc = noAccent((s as any).nameLocal);
+    if (keyEn) seedRawMap.set(keyEn, s);
+    if (keyKo) seedRawMap.set(keyKo, s);
+    if (keyLocal && !seedRawMap.has(keyLocal)) seedRawMap.set(keyLocal, s);
+    if (keyEnNoAcc && !seedRawMap.has(keyEnNoAcc)) seedRawMap.set(keyEnNoAcc, s);
+    if (keyLocalNoAcc && !seedRawMap.has(keyLocalNoAcc)) seedRawMap.set(keyLocalNoAcc, s);
+    if (s.googlePlaceId) seedRawMap.set(`pid:${s.googlePlaceId}`, s);
+    if (s.googleMapsUri) seedRawMap.set(`uri:${s.googleMapsUri}`, s);
+    if (s.address) seedRawMap.set(`addr:${s.address.toLowerCase().replace(/\s+/g, " ").trim()}`, s);
+  }
+  return seedRawMap;
+}
+
+/**
  * AG3-pre: 도시 DB 데이터 사전 로드
  * 🔗 Agent Protocol v1.0: findCityUnified로 도시 매칭 (영어/한국어/별칭 모두 OK)
  * AG2(Gemini)와 병렬 실행하여 대기시간 활용
@@ -95,92 +151,19 @@ export async function preloadCityData(
     // 🗑️ 2026-07-05 삭제 = 도시 미발견시 전도시 좌표평균 최근접 fallback = findCityUnified 단일 SSOT §16/§19
     const cityResult = await findCityUnified(destination);
     const cityId: number | null = cityResult?.cityId || null;
-    // 🗑️ 2026-07-05 삭제 = dbPlacesMap·placeImageMap·celebrityImageMap 빈맵 = §14가 places매칭 차단해 항상 빈맵 = 죽은뼈대 §0/§19
-    const seedRawMap = new Map<string, any>();
-
-    // 🗑️ 2026-07-05 삭제 = places/place_images/celebrity 3테이블 차단 인용 + dbPlaces 빈배열·cityLabel 죽은변수 = 박제 §19
+    // 🗑️ 2026-07-07 = seed SELECT+맵구성 = loadSeedRawMap 단일 SSOT 추출(§16/§19) = preload·1차저장후 재조회 공용.
+    let seedRawMap = new Map<string, any>();
     if (cityId) {
       console.log(`[AG3-pre] ✅ 도시 (ID: ${cityId}) 매칭 = place_seed_raw 단일 SSOT`);
-    } else {
-      console.log(
-        `[AG3-pre] ⚠️ 도시 "${destination}" 미발견 (${Date.now() - _t0}ms)`,
-      );
-    }
-
-    // 3. place_seed_raw = 단일 SSOT
-    // 🧠 2026-07-05 새철학 = 후보풀 rank 1-20 제한 제거 = 완비행(rank 9000+, 유료자산)도 매칭 후보 포함 §14갱신
-    if (cityId) {
       try {
         const _t1 = Date.now();
-        const seeds = await db
-          .select({
-            id: placeSeedRaw.id,
-            nameEn: placeSeedRaw.nameEn,
-            nameKo: placeSeedRaw.nameKo,
-            nameLocal: placeSeedRaw.nameLocal,
-            googlePlaceId: placeSeedRaw.googlePlaceId,
-            googleMapsUri: placeSeedRaw.googleMapsUri,
-            imageUrl: placeSeedRaw.imageUrl, // ⚠️ 2026-06-11 = image_url(구글 PM) 1종
-            address: placeSeedRaw.address,
-            latitude: placeSeedRaw.latitude,
-            longitude: placeSeedRaw.longitude,
-            googleReviewCount: placeSeedRaw.googleReviewCount,
-            googlePrimaryType: placeSeedRaw.googlePrimaryType,
-            editorialSummary: placeSeedRaw.editorialSummary,
-            summaryKo: placeSeedRaw.summaryKo,
-            dayZone: placeSeedRaw.dayZone,
-            distanceKmFromCenter: placeSeedRaw.distanceKmFromCenter,
-            imageAttribution: placeSeedRaw.imageAttribution,
-            priceEur: placeSeedRaw.priceEur,
-            rank: placeSeedRaw.rank,
-            seedCategory: placeSeedRaw.seedCategory,
-          })
-          .from(placeSeedRaw)
-          // 🧠 2026-07-05 새철학 = rank 1-20 필터 제거 = city 전체 행이 매칭 후보 = 완비행(유료자산) 재활용 §14갱신/§19
-          .where(eq(placeSeedRaw.cityId, cityId));
-        for (const s of seeds) {
-          // ⚠️ 수정금지(승인필요) 2026-05-09 = 이름 매칭 보강 = 정규화 + 악센트 제거 (= 사용자 SSOT = 좌표 X, 이름+address ✓)
-          // = 정규화 키 = 공백/문장부호 제거 + 소문자
-          // = 악센트 제거 키 = "Sacré-Cœur" ↔ "Sacre Coeur" 호환
-          const norm = (name: string | null) =>
-            name ? name.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, "") : null;
-          const noAccent = (name: string | null) =>
-            name
-              ? name
-                  .normalize("NFD")
-                  .replace(/[̀-ͯ]/g, "")
-                  .toLowerCase()
-                  .replace(/[\s\p{P}\p{S}]+/gu, "")
-              : null;
-          const keyEn = norm(s.nameEn);
-          const keyKo = norm(s.nameKo);
-          const keyLocal = norm((s as any).nameLocal);
-          const keyEnNoAcc = noAccent(s.nameEn);
-          const keyLocalNoAcc = noAccent((s as any).nameLocal);
-          if (keyEn) seedRawMap.set(keyEn, s);
-          if (keyKo) seedRawMap.set(keyKo, s);
-          if (keyLocal && !seedRawMap.has(keyLocal))
-            seedRawMap.set(keyLocal, s);
-          if (keyEnNoAcc && !seedRawMap.has(keyEnNoAcc))
-            seedRawMap.set(keyEnNoAcc, s);
-          if (keyLocalNoAcc && !seedRawMap.has(keyLocalNoAcc))
-            seedRawMap.set(keyLocalNoAcc, s);
-          // ⚠️ 수정금지(승인필요) 사용자 의도 = google_place_id 기반 직접 매칭 키 추가
-          if (s.googlePlaceId) seedRawMap.set(`pid:${s.googlePlaceId}`, s);
-          // ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT 5 단계 매칭 = google_maps_uri 추가 (= upsertPlace v2 §14 부합)
-          if (s.googleMapsUri) seedRawMap.set(`uri:${s.googleMapsUri}`, s);
-          // ⚠️ 수정금지(승인필요) 사용자 의도 = address 기반 매칭 키 추가 (= 식당 동명 충돌 회피)
-          if (s.address) {
-            const addrKey = `addr:${s.address.toLowerCase().replace(/\s+/g, " ").trim()}`;
-            seedRawMap.set(addrKey, s);
-          }
-        }
-        console.log(
-          `[AG3-pre] 🏭 통합 전시매장(place_seed_raw) ${seeds.length}건 사전 로드 (${Date.now() - _t1}ms)`,
-        );
+        seedRawMap = await loadSeedRawMap(cityId);
+        console.log(`[AG3-pre] 🏭 통합 전시매장(place_seed_raw) ${seedRawMap.size}키 사전 로드 (${Date.now() - _t1}ms)`);
       } catch (e) {
         console.warn(`[AG3-pre] seedData 로드 실패:`, (e as Error)?.message);
       }
+    } else {
+      console.log(`[AG3-pre] ⚠️ 도시 "${destination}" 미발견 (${Date.now() - _t0}ms)`);
     }
 
     // 도시 중심 좌표 (숙소 미입력 시 출발 기점으로 사용)
@@ -561,26 +544,8 @@ export async function saveNewPlacesToDB(
   // ⚠️ 수정금지(승인필요) 2026-05-09 = Promise.all 병렬화 (= simplify HIGH 권장)
   // = 순차 14~21 초 → 병렬 ~3.5 초 (= 4~6 배 단축)
   // = Google API rate limit (= 분당 600) = 4~6 호출 = 충분 여유
-  // = race-safe rank = 카테고리별 base + 인덱스 (= MAX(rank) 사전 1 회)
 
-  // 1. nextRank base 사전 계산 (= 카테고리별 1 회 = race condition 차단)
-  // 🧠 2026-07-05 사장님 SSOT = 6종 카테고리 전부 rank base 계산(§20 = Gemini 6종 보존). 옛 "restaurant/attraction 2종"만 폐기(§19).
-  // ⚠️ 2026-07-05 = review CONFIRMED 성능회귀 = 옛 for...of 순차 await(DB왕복 7회) → Promise.all 병렬(1왕복, §0 가벼움 정합)
-  const CATS = ["restaurant", "attraction", "heritage", "healing", "hotspot", "adventure", "shopping"];
-  const baseRankRows = await Promise.all(
-    CATS.map((cat) =>
-      // ⚠️ 2026-05-23 = phase_tags 'auto-learn%' 마커 기준 (= 자동 학습 결과)
-      db!.execute(
-        sql`SELECT COALESCE(MAX(rank), 8999) + 1 AS next_rank FROM place_seed_raw
-            WHERE city_id = ${cityId} AND seed_category = ${cat}
-            AND EXISTS (SELECT 1 FROM unnest(COALESCE(phase_tags, ARRAY[]::text[])) AS t WHERE t LIKE 'auto-learn%')`,
-      ),
-    ),
-  );
-  const baseRanks: Record<string, number> = {};
-  CATS.forEach((cat, i) => {
-    baseRanks[cat] = (baseRankRows[i] as any).rows?.[0]?.next_rank ?? 9000;
-  });
+  // 🗑️ 2026-07-07 개정헌법(사장님) = rank(랭킹) 사전계산 블록 완전삭제 §19. 코드는 랭킹 한 자도 안 넣음 = 받은 응답만 저장 = 랭킹은 이후 DB autorank 트리거(RC순)가 알아서.
   const today = new Date().toISOString().slice(0, 10);
 
   // ⚠️ 수정금지(승인필요) 2026-07-05 사장님 SSOT = #45(fillcity/repair.ts) 방식 = 발굴 후 "신규만" enrich 2단계 분리.
@@ -589,42 +554,42 @@ export async function saveNewPlacesToDB(
   const { upsertPlace } = await import("../place-upsert");
 
   // ── ① Gemini 전체 upsert(TS/PM 0회) = 셀렉없이 전체 새덮어쓰기. 매칭행=UPDATE / 진짜 신규=INSERT ──
-  //   = job 은 Gemini/매칭행(seedDirectMatch 주입) 값만. rank 는 upsertPlace INSERT 가 자체 재계산(place-upsert.ts:155) = job.rank 무시 = race 무해.
-  const stage1 = await Promise.all(
-    toSave.map(async (place, i) => {
-      const seedCategory: string = (place as any).seedCategory
-        || (place.tags?.includes("restaurant") || place.tags?.includes("food") ? "restaurant" : "attraction");
-      // 🧠 좌표 = Gemini(place.lat/lng, ag3 매칭단계서 seed 폴백됨). 없으면 null(= 신규 INSERT 후 ③ TS 가 채움).
-      const gLat = (place as any).lat && (place as any).lat !== 0 ? (place as any).lat : null;
-      const gLng = (place as any).lng && (place as any).lng !== 0 ? (place as any).lng : null;
-      const job = {
-        cityId,
-        seedCategory,
-        rank: baseRanks[seedCategory] + i,
-        nameEn: (place as any).__seedDirectMatch?.nameEn || place.name,
-        nameKo: (place as any).nameKo ?? null,
-        nameLocal: (place as any).nameLocal ?? null,
-        address: (place as any).geminiAddress ?? null,
-        latitude: gLat,
-        longitude: gLng,
-        imageUrl: place.image || null,
-        googlePlaceId: (place as any).googlePlaceId ?? null,
-        shortformKo: place.description ?? null,                                  // → editorial_summary
-        selectionReasonKo: place.personaFitReason ?? place.description ?? null,  // → summary_ko
-        priceEur: (place as any).estimatedPriceEur || 0,
-        categoryTags: [seedCategory],
-        phaseTags: [`auto-learn-${today}`],
-        distanceKmFromCenter: (place as any).distanceKmFromCenter ?? null,
-      };
-      try {
-        const r = await upsertPlace(job as any);
-        return { place, seedCategory, action: r.action, rowId: r.rowId };
-      } catch (e) {
-        console.error(`[AG3-SAVE] ❌ "${place.name}" Gemini upsert 실패:`, (e as Error).message);
-        return { place, seedCategory, action: "skipped" as const, rowId: null, error: (e as Error).message };
-      }
-    }),
-  );
+  //   = job 은 Gemini/매칭행(seedDirectMatch 주입) 값만 = 받은 응답 그대로 저장.
+  //   🗑️ 2026-07-07 개정헌법(사장님) = 랭킹(rank) 코드 한 자도 안 넣음 §19. 받은 응답만 저장하면 알아서 컬럼에 들어가고, 랭킹은 이후 DB autorank 트리거(RC순)가 함.
+  const stage1: Array<{ place: any; seedCategory: string; action: string; rowId: number | null; error?: string }> = [];
+  for (let i = 0; i < toSave.length; i++) {
+    const place = toSave[i];
+    const seedCategory: string = (place as any).seedCategory
+      || (place.tags?.includes("restaurant") || place.tags?.includes("food") ? "restaurant" : "attraction");
+    // 🧠 좌표 = Gemini(place.lat/lng, ag3 매칭단계서 seed 폴백됨). 없으면 null(= 신규 INSERT 후 ③ TS 가 채움).
+    const gLat = (place as any).lat && (place as any).lat !== 0 ? (place as any).lat : null;
+    const gLng = (place as any).lng && (place as any).lng !== 0 ? (place as any).lng : null;
+    const job = {
+      cityId,
+      seedCategory,
+      nameEn: (place as any).__seedDirectMatch?.nameEn || place.name,
+      nameKo: (place as any).nameKo ?? null,
+      nameLocal: (place as any).nameLocal ?? null,
+      address: (place as any).geminiAddress ?? null,
+      latitude: gLat,
+      longitude: gLng,
+      imageUrl: place.image || null,
+      googlePlaceId: (place as any).googlePlaceId ?? null,
+      shortformKo: place.description ?? null,                                  // → editorial_summary
+      selectionReasonKo: place.personaFitReason ?? place.description ?? null,  // → summary_ko
+      priceEur: (place as any).estimatedPriceEur || 0,
+      categoryTags: [seedCategory],
+      phaseTags: [`auto-learn-${today}`],
+      distanceKmFromCenter: (place as any).distanceKmFromCenter ?? null,
+    };
+    try {
+      const r = await upsertPlace(job as any);
+      stage1.push({ place, seedCategory, action: r.action, rowId: r.rowId });
+    } catch (e) {
+      console.error(`[AG3-SAVE] ❌ "${place.name}" Gemini upsert 실패:`, (e as Error).message);
+      stage1.push({ place, seedCategory, action: "skipped", rowId: null, error: (e as Error).message });
+    }
+  }
   const g1 = stage1.reduce((a, r: any) => { a[r.action] = (a[r.action] || 0) + 1; return a; }, {} as Record<string, number>);
   console.log(`[AG3-SAVE] ① Gemini 전체 upsert = ins=${g1.inserted || 0} upd=${g1.updated || 0} skip=${g1.skipped || 0} (${stage1.length}행)`);
 
@@ -715,7 +680,6 @@ export async function saveNewPlacesToDB(
           targetRowId: rowId,                                    // = ① 신규 rowId 직행 = 재매칭 실패 불가
           cityId,
           seedCategory,
-          rank: baseRanks[seedCategory],
           nameEn: result.nameEn || place.name,
           nameKo: (place as any).nameKo ?? null,
           nameLocal: (place as any).nameLocal ?? null,

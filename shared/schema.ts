@@ -271,8 +271,8 @@ export const placeSeedRaw = pgTable("place_seed_raw", {
   // ⚠️ 수정금지(승인필요) 2026-06-11 = place_id(옛 places FK) DROP = 헛바퀴(google_place_id 가 진짜 연결)
   cityId: integer("city_id").notNull().references(() => cities.id, { onDelete: "cascade" }),
   seedCategory: text("seed_category").notNull(), // attraction|restaurant|healing|adventure|hotspot
-  // ⚠️ 2026-05-23 = collection_phase DROP = phase_tags 배열로 대체 (= 사용자 SSOT 2026-05-21)
-  rank: integer("rank").notNull(),
+  // ⚠️ 개정헌법 2026-07-07 사장님 = rank nullable §19(DB↔레포 동기화). 코드는 랭킹 안 넣음 = 신규는 rank NULL 로 INSERT → AFTER autorank 트리거가 RC순 확정.
+  rank: integer("rank"),
   // ⚠️ 수정금지(승인필요) 2026-06-11 = 헛바퀴 9컬럼 DROP (원재료 소진 = 미사용 = FE 재구성 예정)
   //   = unified_id/google_*_note 3/source/source_rank/source_type/evidence_verified/naver_blog_count 정의 제거 (= DB DROP 동반).
   nameKo: text("name_ko"),

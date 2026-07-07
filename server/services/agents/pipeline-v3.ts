@@ -13,7 +13,7 @@ import {
 import {
   haversineKm, calcTransitHaversine, pickTransitMode, estimateTransitCost,
 } from './transit-haversine';
-import { preloadCityData, matchPlacesWithDB, saveNewPlacesToDB } from './ag3-data-matcher';
+import { preloadCityData, matchPlacesWithDB, saveNewPlacesToDB, loadSeedRawMap } from './ag3-data-matcher';
 // 🧠 2026-07-05 = computeCatSlots 정적 import(§0 가벼움) = 옛 함수내 동적 await import 폐기(§19). ag2→pipeline-v3 역참조 없음 = 순환참조 무관.
 import { computeCatSlots } from './ag2-gemini-recommender';
 // 🧠 2026-07-05 사장님 SSOT = MIX Gemini(#02) raw 저장 관문(§18). 옛 getAI 직접호출 = raw 미저장(비용증발) 폐기(§19). TS(ag3)는 이미 관문경유 저장됨 = Gemini만 누락이었음.
@@ -738,6 +738,18 @@ async function step2_enrichAndBuild(
     console.error('[V3-Step2] ⚠️ saveNewPlacesToDB(await fetch) 실패:', e?.message || e)
   );
 
+  // ⚠️ 2026-07-07 사장님 SSOT = 1차 저장 후 PSR 재조회 = 슬롯을 저장된 PSR 에서 구성(DB-only 동형, §16 loadSeedRawMap).
+  //   = ①단계 Gemini 전체 upsert(순차 await 완료) 로 23곳이 이미 PSR 확정 → 재조회로 신규 포함 최신 맵 확보 → 슬롯이 editorialSummary·nameKo·RC·image 를 저장 PSR 에서 flat.
+  //   = 옛 슬롯이 Gemini place(부분mutate)만 봐서 editorialSummary·nameKo 누락(에비앙 슬롯 제미니요소 안뜸) 근본해결.
+  if (preloaded.cityId) {
+    try {
+      preloaded.seedRawMap = await loadSeedRawMap(preloaded.cityId);
+      console.log(`[V3-Step2] 🔄 1차저장 후 PSR 재조회 = ${preloaded.seedRawMap.size}키 (슬롯 = 저장 PSR flat)`);
+    } catch (e) {
+      console.warn('[V3-Step2] PSR 재조회 실패(슬롯은 place 폴백):', (e as Error)?.message);
+    }
+  }
+
   // ⚠️ 수정금지(승인필요) 2026-06-02 = 사용자 SSOT = 영구 폐업(TS) = FE 여정에서도 제외
   // = __closedPermanently 마커 = TS 성공(위 await fetch 완료) 시에만 세팅 = TS 종속(뼈대 유지)
   // = scheduleMap 의 해당 scene 제거 = 폐업 식당 FE 표시 0 (= 일별 스케줄 빌드 전이라 안전)
@@ -780,10 +792,14 @@ async function step2_enrichAndBuild(
       // 프론트 전달 시 불필요한 0값 필드 제거 (React Native에서 {0}이 "0" 텍스트로 표시되는 문제 방지)
       const { finalScore, buzzScore, ...safePlace } = enrichedPlace as any;
 
-      // seedRawMap에서 직접 조회 (DB 추가 쿼리 없음 — place_seed_raw 1회 로드로 모두 해결)
+      // ⚠️ 2026-07-07 사장님 SSOT = 슬롯 = 1차저장 PSR(placeSeed) 우선 flat 매핑(DB-only ag4:234-273 동형). 저장된 검증행에서 editorialSummary·nameKo·RC·image.
+      //   = 재조회된 seedRawMap(신규 포함)에서 PID > 이름 순 조회. 없으면 enrichedPlace(place mutate)·s.gPlace 폴백.
       const placeNameEn = enrichedPlace.name ? enrichedPlace.name.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, "") : "";
       const placeNameKo = (enrichedPlace as any).nameKo ? (enrichedPlace as any).nameKo.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, "") : "";
-      const placeSeed = preloaded.seedRawMap?.get(placeNameEn) || preloaded.seedRawMap?.get(placeNameKo);
+      const placeSeed = (enrichedPlace as any).googlePlaceId
+        ? preloaded.seedRawMap?.get(`pid:${(enrichedPlace as any).googlePlaceId}`)
+        : undefined;
+      const seed = placeSeed || preloaded.seedRawMap?.get(placeNameEn) || preloaded.seedRawMap?.get(placeNameKo);
 
       return {
         ...safePlace,
@@ -795,21 +811,25 @@ async function step2_enrichAndBuild(
         endTime: minutesToTime(dayStartMin + (slotIdx + 1) * slotDur),
         // ⚠️ 2026-07-06 = FE 슬롯 필드 = DB-only 동형(type/nameEn flat). 옛 MIX 누락 보완 §16.
         type: isMeal ? 'restaurant' as const : 'activity' as const,
-        nameEn: (enrichedPlace as any).nameEn || enrichedPlace.name,
+        nameEn: seed?.nameEn || (enrichedPlace as any).nameEn || enrichedPlace.name,
         // 식사 정보
         isMealSlot: isMeal,
         mealType: s.gPlace.type === 'lunch' ? 'lunch' as const : s.gPlace.type === 'dinner' ? 'dinner' as const : undefined,
         // 🗑️ 2026-07-05 삭제 = mealPrice 옛 s.gPlace.price_eur raw 재산정(resolvePrice 우회) → resolvePrice 단일결과(estimatedPriceEur) 재사용 §0/§19
-        mealPrice: isMeal ? (enrichedPlace.estimatedPriceEur ?? undefined) : undefined,
+        mealPrice: isMeal ? ((seed?.priceEur ?? enrichedPlace.estimatedPriceEur) ?? undefined) : undefined,
         mealPriceLabel: isMeal ? (s.gPlace.type === 'lunch' ? mealBudget.lunchLabel : mealBudget.dinnerLabel) : undefined,
-        // Gemini의 한국어 이름 + 현지 원어명 + 추천이유
-        nameKo: s.gPlace.nameKo,
-        nameLocal: s.gPlace.nameLocal || null,
-        // summary_ko = 숏폼 재료 = 보전 (FE 슬롯 노출 아님, 추후 숏폼 생성용). ⚠️ 수정금지(승인필요) 2026-06-24 사용자 SSOT.
-        summaryKo: enrichedPlace.summaryKo || null,
-        // ⚠️ 수정금지(승인필요) 2026-06-24 사용자 SSOT = 슬롯 한줄요약 = editorial_summary 단일 (모든 경로 통일).
-        //   = 옛 geminiReason(Gemini reason)·description·personaFitReason 노출 경로 완전 삭제(§19).
-        editorialSummary: enrichedPlace.editorialSummary || null,
+        // ⚠️ 2026-07-07 = 저장 PSR 우선(DB-only 동형) → Gemini(s.gPlace) 폴백.
+        // ⚠️ 2026-07-07 = Gemini 전용 요소(nameKo·nameLocal·summaryKo·editorialSummary) = 저장 PSR(seed) 우선 → Gemini 폴백. TS가 안 건드리는 값.
+        nameKo: seed?.nameKo || s.gPlace.nameKo,
+        nameLocal: seed?.nameLocal || s.gPlace.nameLocal || null,
+        // ⚠️ 2026-07-07 = RC·image = TS 검증값(enrichedPlace = place mutate, Storage 이미지) 우선 → 저장 PSR 폴백.
+        //   = 신규는 ③재UPDATE(TS→DB)가 deferPersist background = 재조회 시점 PSR 엔 아직 Gemini값(RC null·이미지 Gemini) = seed 먼저 쓰면 TS Storage 이미지 가려짐(review 지적). enrichedPlace(TS mutate, await 완료) 우선이 정답.
+        userRatingCount: (enrichedPlace as any).userRatingCount ?? seed?.googleReviewCount,
+        image: enrichedPlace.image || seed?.imageUrl || '',
+        // summary_ko = 숏폼 재료 = 보전(FE 슬롯 노출 아님, 추후 숏폼). PSR 우선.
+        summaryKo: seed?.summaryKo || enrichedPlace.summaryKo || null,
+        // ⚠️ 수정금지(승인필요) 2026-06-24 사용자 SSOT = 슬롯 한줄요약 = editorial_summary 단일. 2026-07-07 = 저장 PSR(seed.editorialSummary) 우선 = DB-only(ag4:268 scene.shortform_ko) 동형. 옛 enrichedPlace만 봐서 누락되던 것 해결.
+        editorialSummary: seed?.editorialSummary || enrichedPlace.editorialSummary || null,
         // Gemini가 생성한 교통편 안내 (강화 프롬프트 v3.1)
         transitNote: s.gPlace.transitNote || null,
         // 부가 정보

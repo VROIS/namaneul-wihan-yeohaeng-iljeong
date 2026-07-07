@@ -18,6 +18,59 @@
 
 ---
 
+## 🔥 2026-07-07 = 신규도시 여정 근본해결 = rank 코드삭제(nullable) + 슬롯 PSR flat 매핑 (사장님 evian 시험)
+
+**배경**: 에비앙(신규도시) 여정 = 화면 23곳이나 DB 4곳만 저장 + 슬롯에 제미니 요소(설명·한글이름) 안 뜸. 사장님 evian 시험으로 니스(기존도시)에선 안 드러나던 결함 노출.
+
+**🔴 근본 (DB 실측 + 워크플로우 규명, AI가 rank race로 3번 오진단 → 사장님이 "리랭킹 기준"·"순차"·"DB-only 복붙"으로 진범 지목):**
+- 근본1 = 1차 저장 실패. rank 는 `(city_id,seed_category,rank)` UNIQUE + NOT NULL 인데, upsertPlace 가 앱단 MAX+1 로 rank 계산 → 같은 카테고리 여럿이 같은 값 → 충돌 → 카테고리당 1곳만 생존(23→4). **랭킹은 DB autorank 트리거(RC순)가 이미 하는데 앱이 또 계산 = 이중화(§19/§16 위반).**
+- 근본2 = 슬롯이 Gemini place(부분 mutate)에서 구성 → editorialSummary·nameKo 누락. DB-only(ag4)는 저장된 PSR 에서 flat 매핑인데 MIX 는 아님.
+
+**✅ 수정 (사장님 SSOT = 코드 랭킹 완전삭제 + 순차 1차저장 + DB-only 복붙):**
+- **DB**: `rank DROP NOT NULL`(실측 입증 후 적용). rank nullable = 병렬이어도 NULL 다중허용(NULLS DISTINCT)로 충돌0. 트리거(AFTER INSERT)가 RC순 rank 배정. **트리거는 안 건드림.**
+- **schema.ts:275**: `rank` nullable(§19 DB↔레포 동기화).
+- **place-upsert.ts**: 앱단 rank 계산(MAX+1)·rank 필드·UpsertPayload.rank 완전삭제. INSERT 는 응답값만(rank 트리거 전담). 죽은 catch 정정.
+- **ag3-data-matcher.ts**: baseRanks·job.rank·job2.rank 삭제. `loadSeedRawMap` 함수 추출(§16 = preload·재조회 공용). ①단계 순차(for-of) 유지 = 재과금 방지(병렬이면 형제중복 다 신규추출→재과금, 사장님 반문).
+- **pipeline-v3.ts**: 1차 저장 후 `loadSeedRawMap` 재조회 → 슬롯을 저장 PSR 우선 flat 매핑(DB-only ag4:234-273 동형). editorialSummary·nameKo·nameLocal·summaryKo = seed(PSR) 우선 / RC·image = enrichedPlace(TS mutate) 우선(review Finding#1 반영).
+
+**✅ 실측 입증 (외부호출 0, DB 오염 0)**: 에비앙류 23곳 upsertPlace → DB 23곳 전부 저장(옛 4곳). rank nullable+트리거 RC순 배정 확인(트랜잭션 롤백). 슬롯 PSR 매핑 7/7 nameKo·editorialSummary·RC 실림. 유료 재생성 안 함(사장님 10유로 아낌).
+
+**✅ 5단계 검증**: tsc 246(새에러0)·서버빌드·Expo·§19가드·simplify(4건 중 주석2건 반영)·review(크래시0, image순서 교정).
+
+**속도(20→10초) 결정**: 병목 = Gemini 19초(65%)·①순차 2-4초(유지=재과금방지)·이미지 await 2-4초. 사장님 = **①순차 유지 + 이미지 await 유지(첫화면 이미지 우선)**. 이미지 background 안 함. Gemini 단축은 별도.
+
+**보관**: docs/raw/_verify/2026-07-07_MIX슬롯_PSR재조회_DB-only복붙_근본.md, 2026-07-06_evian_신규도시_20곳증발_근본.md
+
+**교훈**: DB 실측만 진실(코드주석·서브에이전트 rank race 다 오판). 사장님 "순차·DB-only복붙·슬롯구조파악·마커=Gemini좌표"가 처음부터 정답. AI가 상상으로 rank·unmatched·default 헤맴.
+
+---
+
+## 🔥 2026-07-06(심야2) = 신규도시 여정 20곳 DB 증발 = 1차 저장 순차화 (사장님 evian 시험)
+
+**배경**: 사장님이 evian(신규도시)으로 실증 = 니스(기존도시)만 보면 안 드러나는 결함 탐지. DB 실측으로 근본 규명.
+
+**🔴 사실(DB 실측)**: 에비앙(id=133, 신규 0행) Gemini 여정 24곳 → 로그 `ins=4 upd=0 skip=20` → DB엔 **4행만**(각 카테고리당 1개, 전부 rank=1). 여정 화면 20곳(Source Cachat·Palais Lumière·Yvoire 등) DB에 없음.
+
+**🔴 근본(DB 4중 확정)**:
+- 실 UNIQUE = `place_seed_raw_city_cat_rank_uk (city_id, seed_category, rank)` 1개뿐. 코드가 참조하던 `uniq_psr_global_city_name`(name_en)은 **DB에 없음**(죽은 분기).
+- ag3 ① Gemini 전체 upsert가 24곳 **Promise.all 병렬** INSERT → upsertPlace가 `MAX(rank)+1` placeholder 계산 → 병렬이라 같은 카테고리 동시에 같은 rank → (city,cat,rank) UNIQUE 충돌 → catch가 rank충돌 미처리 → insert_error skip → 카테고리당 1등만 생존.
+- 니스는 기존행 UPDATE(rank 재계산 안함)라 충돌 0 = 안 드러남. 신규도시만.
+
+**✅ 수정(사장님 지적 = 순차)**:
+- ag3-data-matcher.ts ① Gemini 전체 upsert = `Promise.all → 순차(for-of)` §19. 순차면 각 INSERT가 직전 MAX 읽어 rank 1,2,3.. 순증 = 충돌 0 = 24곳 전부 저장.
+- ③ 신규 TS+PM 재UPDATE는 targetRowId 직행(rank 안건드림) = 병렬 유지(성능).
+- place-upsert:238 죽은 catch(존재안하는 name_en 제약) 삭제·§19 교정.
+
+**검증**: tsc 246(새에러0)·§19가드·서버빌드·시뮬(shopping 8곳 병렬=1생존/순차=8전부, 에비앙 24곳 순차=전부).
+
+**기존 결함**(내 정합과 무관, Promise.all·rank는 a86ad77·7076552부터). **다음=재배포후 신규도시 재생성 `ins=24 skip=0` 실증.** 에비앙 기존 4행=결손(재생성시 20곳 추가).
+
+**교훈**: 사장님이 "순차 안해서"로 정확규정, 나는 rank race 기술용어로 돌아 엉뚱하게 봄. 서브에이전트·코드주석 다 틀림, **DB 실측만 진실**.
+
+**보관**: docs/raw/_verify/2026-07-06_evian_신규도시_20곳증발_근본.md
+
+---
+
 ## 🔥 2026-07-06(심야) = 드라이빙 가이드(본업 퍼널) 일일 교통비 = DB-only 정합 (사장님 지적)
 
 **배경**: 위 6종 정합에서 대중교통 구간합산만 맞추고 **가이드 일일 교통비의 날짜별 계산을 놓침**(사장님 지적). 가이드 = 앱 본업 퍼널이라 핵심.
