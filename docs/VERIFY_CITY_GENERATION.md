@@ -5,6 +5,24 @@
 
 ---
 
+## 🔴 다음 시험 = 지난 본느 시험 빠뜨린 항목 (2026-07-07 심야 = raw 근본해결 후 이번엔 반드시)
+
+> 지난 본느 시험(옛 번들·RLS 전)은 채점 60/100. **아래가 미완/오답이었음. 이번엔 채운다.**
+
+| # | 지난 실패 | 이번 확인 방법 |
+|---|---|---|
+| **A. raw Storage 저장** | Storage raw-responses/{cityId} **0개(증발)** | RLS 고침 → 생성 후 Storage에 `90-mix-gemini`(Gemini)·`06-ts-pm-enrich`(TS) 뜨는지. 직접접속 list. |
+| **B. raw 로컬 동기화** | 미확인 | 생성 후 `npx tsx fillcity/steps/raw-local-pull.ts --city-id=N` → docs/raw/{cityId} 폴더 생성 → 사장님 열람 |
+| **C. 호출횟수** | "신규 1곳" **오독**(실제 신규도시=전부 호출) | PSR created_at 로 신규수 확인 = Gemini 1 / TS N / PM N. `_matching`은 매칭수지 호출수 아님 |
+| **D. 생성시간** | 41.8초=이전 2배 악화인데 "체감정합"으로 얼버무림 | 응답 metadata `_totalMs` 정밀. 목표 10초(별도 개선). 얼버무림 금지 |
+| **E. PSR 재입력** | 미완 | `raw-storage-recall --reinsert` = Storage raw → PSR (재과금0). 재입력 가능 확인 |
+
+**대원칙(사장님):** Storage=원재료 SSOT. 어느 경로(운영·Chrome)든 저장 → pull(로컬 열람)·reinsert(PSR)로 언제든 회수. [[reference_raw_storage_rls_and_recall_skill]]
+
+**시험 전제:** my-guide.replit.app = **Publish(재배포) 먼저** (코드 반영). RLS는 DB라 이미 적용. [[reference_replit_backend_needs_server_build]]
+
+---
+
 ## ⚠️ 대전제 (위반 = 이중과금·시험무효)
 
 1. **생성 조작 = 사장님이 손으로.** 운영 웹에서 생성 버튼을 사장님이 누름. AI는 前/後 캡처·검증만. 유료 외부호출 타이밍을 사장님이 통제.

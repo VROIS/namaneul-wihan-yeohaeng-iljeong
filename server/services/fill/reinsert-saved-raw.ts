@@ -118,8 +118,9 @@ const collect = (): Job[] => {
     for (const g of groups) for (const p of g.arr) {
       if (!p || typeof p !== 'object') continue;
       jobs.push({
+        // ⚠️ 수정금지(승인필요) 2026-07-07 사장님 = 셀렉 금지(§18) = MIX Gemini raw 는 카멜케이스(nameLocal·nameKo) → 스네이크만 읽던 옛 셀렉이 로컬명 버려 매칭요소 상실 → 중복 INSERT 근본. 카멜 폴백으로 전체값 빠짐없이.
         src: tag, cat: g.cat || p.seed_category || p.price_tier,
-        id: num(p.id), nameEn: p.name_en || p.name, nameLocal: p.name_local, nameKo: p.name_ko,
+        id: num(p.id), nameEn: p.name_en || p.name, nameLocal: p.name_local ?? p.nameLocal, nameKo: p.name_ko ?? p.nameKo,
         address: p.address || p.formattedAddress, lat: num(p.lat ?? p.latitude), lng: num(p.lng ?? p.longitude),
         pid: p.place_id || p.google_place_id, mapsUri: p.google_maps_uri || p.googleMapsUri,
         rc: num(p.review_count ?? p.userRatingCount ?? p.google_review_count),

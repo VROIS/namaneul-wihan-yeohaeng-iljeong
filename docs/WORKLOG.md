@@ -18,6 +18,30 @@
 
 ---
 
+## 🔥 2026-07-07(심야) = raw 증발 근본해결 + raw-storage-recall 스킬 (사장님 본느 Chrome 시험)
+
+**증상(사장님 본느 신규도시 Chrome DevTools 시험):** 운영앱 여정생성 후 Storage raw-responses/{cityId} 비어있음 = 유료 Gemini·TS raw 증발. 이미지·PSR·DB는 저장됨.
+
+**근본(실측 확정 = 6번 외부탓 헤맨 후):**
+- raw-responses 버킷에 **ANON INSERT RLS 정책 없음** → 운영(api_keys=ANON키만, SERVICE_ROLE 없음)이 raw PUT=403. place-images 는 anon 정책 3개 있어 성공.
+- save-raw/save-collected-raw 가 PUT 결과(resp.ok) 미확인 + catch 로 삼켜 **무성 증발**(로그0). 서버로그에 raw 실패 안뜸.
+- 배포·번들·자동동기화 다 헛다리(사장님 "리모주는?"·"파리 봐라"·"흉내말고 입증"·"Replit은 배포만"으로 실측 유도).
+
+**해결(3목표 전부 실증, 외부호출0·오염0):**
+- ① Storage 저장 = raw-responses 에 anon insert/select/update 정책(place-images 복제 §16). **실증 ANON PUT 403→200.** 라이브+레포SQL(§19). 커밋 727d7ca.
+- ② 로컬 열람 = `fillcity/steps/raw-local-pull.ts` 신규(raw-bucket-sync 역방향). Storage→docs/raw 다운로드. **실증 파리19 175개·77777 시뮬.** 커밋 5bc9583.
+- ③ PSR 재입력 = reinsert-saved-raw.ts 에 **parsedPlaces 형식 분기 추가**(02-enrich·MIX Gemini 주요형식인데 옛 collect 는 d.places 만 봐서 누락=파리·본느 재입력0곳 근본). **실증 본느78657 마커 raw→PSR 반영.** 커밋 5bc9583.
+- 무성실패 제거 = save-collected-raw·save-raw PUT 후 !resp.ok console.error(재발 즉시발각).
+- 스킬 `.claude/skills/raw-storage-recall/SKILL.md` = pull/reinsert/both 한줄호출.
+
+**핵심 = Storage 원재료 SSOT.** 어느 경로(운영·Chrome·발굴)로 저장되든 Storage 에 모임 → 언제든 pull(열람)·reinsert(재과금0 재입력).
+
+**5단계 검증 통과**(tsc·서버빌드·simplify·review·§19가드). raw 형식 = 사장님 정본샘플(02-enrich=`{meta,rawResponse,parsedPlaces}`, 06-ts-pm=`{meta,results}`) 일치확인.
+
+**다음(사장님 배포 후 시험):** 운영앱 완전신규도시 생성 → Storage저장 → pull → 로컬확인. 지난시험 빠뜨린 항목+채점표 기준 준비(아래 별도).
+
+---
+
 ## 🔥 2026-07-07 = 신규도시 여정 근본해결 = rank 코드삭제(nullable) + 슬롯 PSR flat 매핑 (사장님 evian 시험)
 
 **배경**: 에비앙(신규도시) 여정 = 화면 23곳이나 DB 4곳만 저장 + 슬롯에 제미니 요소(설명·한글이름) 안 뜸. 사장님 evian 시험으로 니스(기존도시)에선 안 드러나던 결함 노출.

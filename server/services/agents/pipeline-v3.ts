@@ -750,19 +750,7 @@ async function step2_enrichAndBuild(
     }
   }
 
-  // ⚠️ 수정금지(승인필요) 2026-06-02 = 사용자 SSOT = 영구 폐업(TS) = FE 여정에서도 제외
-  // = __closedPermanently 마커 = TS 성공(위 await fetch 완료) 시에만 세팅 = TS 종속(뼈대 유지)
-  // = scheduleMap 의 해당 scene 제거 = 폐업 식당 FE 표시 0 (= 일별 스케줄 빌드 전이라 안전)
-  const closedIds = new Set(
-    finalPlaces.filter((p: any) => p.__closedPermanently).map((p: any) => p.id),
-  );
-  if (closedIds.size > 0) {
-    const before = scheduleMap.length;
-    for (let i = scheduleMap.length - 1; i >= 0; i--) {
-      if (closedIds.has(scheduleMap[i].placeId)) scheduleMap.splice(i, 1);
-    }
-    console.log(`[V3-Step2] 🚫 영구 폐업 ${closedIds.size}곳 = FE scene 제거 (${before}→${scheduleMap.length})`);
-  }
+  // 🗑️ 2026-07-08 사장님 = 폐업 슬롯 splice 완전삭제 = 슬롯은 그 무엇도 줄일 권한 없음(무단 감소 로직) §19. 슬롯 = scheduleMap = Gemini 곳수 항상 보존.
 
   // 최종 장소 맵 (= saveNewPlacesToDB 후 = 보강 결과 반영)
   const finalPlaceMap = new Map<string, PlaceResult>();
