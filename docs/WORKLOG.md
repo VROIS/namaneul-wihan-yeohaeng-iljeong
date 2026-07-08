@@ -18,6 +18,42 @@
 
 ---
 
+## 🔥 2026-07-08 = 슬롯 24→23·22 누락 원인규명 (사장님 여정 전수체크) — 수정은 결정 대기
+
+**증상(사장님 전수체크):** 지금까지 생성된 여정 전부가 지정 슬롯(예 24곳)보다 23·22곳으로 저장. 폐업과 무관하게 전부 발생.
+
+**대전제(사장님 판정):** Gemini는 요청분(raw 확인)을 다 채워서 줌. 누락 주체는 **우리 파이프라인 조립 단계(ag)**.
+
+**itineraries 테이블 25건 직접실측 쿼리(재사용용):**
+```sql
+SELECT id, title,
+  (SELECT array_agg(dd->>'startTime' || '~' || (dd->>'endTime') || '(' || jsonb_array_length(dd->'places') || ')')
+   FROM jsonb_array_elements(raw_data->'days') dd) AS day_times
+FROM itineraries ORDER BY id DESC LIMIT 25;
+```
+
+**원인 3겹 (실측 확정):**
+- **A(누락 아님) = ag1 지정 슬롯수 자체가 시간·페이스로 여정마다 다름.** `calculateSlotsForDay`(types.ts:265-279) = `min(가용분÷페이스분, 상한)`. 첫날=사용자시작~21시 / 막날=9시~사용자종료(transport-pricing-service.ts:548-560). Nice(id32)[7,8,7]=10~21시·9~20시 빡빡(90분) 지정값 그대로=누락0. 니스(id29)[5,6,5]=보통(120분) 지정값=누락0.
+  - 판독표: 9~21시(12h) 빡빡=8칸 · 보통=6칸 · 여유=4칸. 10~21시(11h) 빡빡=7칸 · 보통=5칸.
+- **B(진짜 조립 누락) = 폐업 splice.** Andorra(35)·Beaune(34)=지정 8·8·8=24, Gemini 24 채움 → 저장 [8,7,8]=23=한 날만 -1. 안도라=Juberri 폐업행 splice로 무단삭제 입증(2026-07-07 세션). **커밋 ac42e70(2026-07-08)으로 pipeline-v3 폐업 splice 완전삭제 완료 — 단 Publish 미배포.** 사장님이 확인한 여정 전부 옛 코드 생성분 = Publish 후 재생성부터 감소 0 기대.
+- **C(잔존 구멍, 실행 대기) = 조립단계 가드 0.**
+  1. day값 이탈 무언 드롭: `scheduleMap.filter(s => s.day === d)`(d=1..dayCount) — Gemini place의 day가 범위 밖이면 조용히 버려짐(현재 raw는 깨끗하나 가드 없음).
+  2. 개수 보존 검증 부재: Gemini 곳수=scheduleMap=FE days 총합 대조가 어디에도 없음 → 조립 누락이 무언 통과(이번 사태 늦은 발각의 근본).
+  3. 수정 제외 확정: DB-only 풀 부족 시 미달 = 기존 SSOT("빈 슬롯=솔직") 유지, matcher·트리거·ag4 불변.
+
+**다음(사장님 결정 후 실행):** 플랜 파일에 Opus 4.8 실행 TODO 보관 = `C:\Users\hzino\.claude\plans\twinkling-wiggling-boole.md`. 대상 = `pipeline-v3.ts` 조립부 1파일만. T1 day이탈 재배정(버림 금지) + T2 개수보존 3자대조(발각 전용, 삭제·보정 없음). 금지 = Gemini 재요청 추가(사장님 정정 = Gemini는 다 채움), 슬롯 줄이는 로직.
+
+**입증 방식 확정(사장님 "입증 못하면 소설"):** 실행 시 T3-b로 DB접속0·외부호출0 시뮬 병행. 저장된 안도라 raw(docs/raw/135)로 순수조립부(2a+T1+T2)만 격리 재현.
+
+**실행 완료(2026-07-08, 사장님 "목표달성까지 전부진행"):**
+- **T1(day이탈 재배정) = 폐기.** 시뮬 실행 중 실측 반박: `scheduleMap.push({ day: gDay.day, ... })`(pipeline-v3.ts:644)는 개별 place가 아니라 **그룹(gDay)의 day**를 씀. 개별 place.day를 범위밖으로 조작해도 조립에 영향 0(케이스 B 실행 확인). T1은 애초에 발생 불가능한 시나리오 방어 = 죽은코드 §0 위반 = 구현 안 함.
+- **T2(개수보존 3자대조) = 구현+검증 완료.** pipeline-v3.ts:1096 근처(days 빌드 완료 직후)에 Gemini원본=scheduleMap=FE days 총합 대조 추가. 불일치 시 `console.error`+`metadata._assemblyLoss` 기록(삭제·보정 없음=발각전용).
+  - 케이스 A(정상 안도라 raw) 시뮬: `gemini=24 schedule=24 fe=24` 전부일치, 오탐0.
+  - 케이스 C(scheduleMap 1곳 인위제거) 시뮬: `_assemblyLoss 감지: gemini=24 schedule=23 fe=23` 정확 포착 + 실체(어느 장소인지)까지 지목.
+- tsc·§19가드·서버빌드 통과.
+
+---
+
 ## 🔥 2026-07-07(심야) = raw 증발 근본해결 + raw-storage-recall 스킬 (사장님 본느 Chrome 시험)
 
 **증상(사장님 본느 신규도시 Chrome DevTools 시험):** 운영앱 여정생성 후 Storage raw-responses/{cityId} 비어있음 = 유료 Gemini·TS raw 증발. 이미지·PSR·DB는 저장됨.

@@ -1097,6 +1097,16 @@ async function step2_enrichAndBuild(
   console.log(`[V3-Step2] 💰 1인 총 비용: €${totalPerPersonEur} / ₩${totalPerPersonKrw.toLocaleString()}`);
   console.log(`[V3-Step2] 💰 1인 1일 평균: €${perPersonPerDay}`);
 
+  // ⚠️ 2026-07-08 사장님 SSOT = 개수보존 3자대조(발각 전용, 보정·삭제 없음) = Gemini 원본 곳수 = scheduleMap = FE days 총합.
+  //   슬롯은 그 무엇도 줄일 권한 없음(§19). 불일치는 조립 단계 어딘가의 무언 손실 = 즉시 발각.
+  const geminiPlaceCount = geminiDays.reduce((s, gd) => s + (gd.places?.length || 0), 0);
+  const feDayPlaceCount = days.reduce((s: number, d: any) => s + d.places.length, 0);
+  let assemblyLoss: { gemini: number; schedule: number; fe: number } | null = null;
+  if (geminiPlaceCount !== scheduleMap.length || scheduleMap.length !== feDayPlaceCount) {
+    assemblyLoss = { gemini: geminiPlaceCount, schedule: scheduleMap.length, fe: feDayPlaceCount };
+    console.error(`[V3-Step2] ⚠️ _assemblyLoss 감지: gemini=${geminiPlaceCount} schedule=${scheduleMap.length} fe=${feDayPlaceCount}`);
+  }
+
   // ⚠️ 수정금지(승인필요) 2026-05-09 = saveNewPlacesToDB = 위로 이동 (= days 빌드 전) = 중복 호출 X
 
   // ── 최종 응답 빌드 (프론트엔드 호환 형식) ──
@@ -1203,6 +1213,8 @@ async function step2_enrichAndBuild(
       //   = googlePlaceId 있음 = DB 매칭 완료 / 없음 = 신규(TS+PM 대상 = 백그라운드 저장).
       _matched: finalPlaces.filter((p: any) => p.googlePlaceId).length,
       _unmatched: finalPlaces.filter((p: any) => !p.googlePlaceId).length,
+      // ⚠️ 2026-07-08 사장님 SSOT = 개수보존 3자대조 결과. null = 정상(보존). 있으면 조립단계 무언손실 = 즉시발각(은폐0).
+      _assemblyLoss: assemblyLoss,
     },
   };
 
