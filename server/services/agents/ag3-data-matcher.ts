@@ -137,7 +137,8 @@ export async function loadSeedRawMap(cityId: number): Promise<Map<string, any>> 
  */
 export async function preloadCityData(
   destination: string,
-  // 🗑️ 2026-07-05 삭제 = geminiPlaces 인자 = 좌표평균 fallback 전용이었음(그 fallback 삭제) = 死파라미터 §0/§19
+  // ⚠️ 수정금지(승인필요) 2026-07-08 사장님 SSOT = 도시중심좌표(불변키) 전달 = findCityUnified 좌표10m 매칭 최우선(중복도시·재발굴 차단).
+  destinationCoords?: { lat: number; lng: number } | null,
 ): Promise<AG3PreOutput> {
   const _t0 = Date.now();
 
@@ -147,9 +148,8 @@ export async function preloadCityData(
   }
 
   try {
-    // 1. 🔗 통합 도시 검색 (영어 "Paris" → 한국어 "파리" DB 모두 매칭)
-    // 🗑️ 2026-07-05 삭제 = 도시 미발견시 전도시 좌표평균 최근접 fallback = findCityUnified 단일 SSOT §16/§19
-    const cityResult = await findCityUnified(destination);
+    // 1. 🔗 통합 도시 검색 = 좌표(불변키) 10m 최우선 → 이름 유사어 순 (findCityUnified 단일 SSOT §16)
+    const cityResult = await findCityUnified(destination, destinationCoords);
     const cityId: number | null = cityResult?.cityId || null;
     // 🗑️ 2026-07-07 = seed SELECT+맵구성 = loadSeedRawMap 단일 SSOT 추출(§16/§19) = preload·1차저장후 재조회 공용.
     let seedRawMap = new Map<string, any>();
@@ -221,9 +221,22 @@ export async function matchPlacesWithDB(
   };
   const matchResults: MatchResult[] = [];
 
-  // ⚠️ 2026-06-03 = 공용 matcher 후보 = seedRawMap 의 유니크 행(여러 키→같은 객체 참조) + cityId 주입(= 5순위 도시 강제)
+  // ⚠️ 수정금지(승인필요) 2026-07-09 사장님 SSOT = 매칭 후보 = 전체 PSR 글로벌(도시무관) = place-upsert.ts:128 동일 방식(§16).
+  //   = 옛 "seedRawMap(도시한정) + cityId 강제주입" 폐기 2026-07-09 §19: 같은 장소가 다른 도시 여정에서 재발굴되던 재과금 근본.
+  //   = 매칭용 후보(식별 9컬럼)는 글로벌, 슬롯표시용 seedRawMap 은 도시한정 그대로(메모리·표시 분리). 병합 rowId 는 아래 stage 에서 slot 으로 전달.
+  //   식별 9컬럼(매칭) + 표시 4컬럼(RC·요약·이미지 = 매칭직후 place 채움용, 도시무관 재활용 = stranded 해소).
   const _cid = (preloaded.cityId ?? -1) as number;
-  const seedCands = Array.from(new Set(seedRawMap ? Array.from(seedRawMap.values()) : [])).map((r: any) => ({ ...r, cityId: _cid }));
+  const seedCands: any[] = db
+    ? await db.select({
+        id: placeSeedRaw.id, cityId: placeSeedRaw.cityId,
+        googlePlaceId: placeSeedRaw.googlePlaceId, googleMapsUri: placeSeedRaw.googleMapsUri,
+        address: placeSeedRaw.address, latitude: placeSeedRaw.latitude, longitude: placeSeedRaw.longitude,
+        nameEn: placeSeedRaw.nameEn, nameLocal: placeSeedRaw.nameLocal, nameKo: placeSeedRaw.nameKo,
+        googleReviewCount: placeSeedRaw.googleReviewCount, editorialSummary: placeSeedRaw.editorialSummary,
+        summaryKo: placeSeedRaw.summaryKo, imageUrl: placeSeedRaw.imageUrl,
+        priceEur: placeSeedRaw.priceEur, rank: placeSeedRaw.rank, seedCategory: placeSeedRaw.seedCategory,
+      }).from(placeSeedRaw)
+    : [];
 
   for (const place of geminiPlaces) {
     // ⚠️ 수정금지(승인필요) 2026-05-20 = DB-only path skip = AG2 가 이미 place_seed_raw 직접 = 매칭 불필요 (= 사용자 SSOT 병렬 극대화)
@@ -370,6 +383,10 @@ export async function matchPlacesWithDB(
               ...(place.selectionReasons || []),
               `📊 사용자 검증 SSOT (rank ${seed.rank ?? "-"}, 리뷰 ${reviewCount.toLocaleString()}개${estimatedPriceEur ? `, €${estimatedPriceEur}/인` : ""})`,
             ],
+        // ⚠️ 수정금지(승인필요) 2026-07-09 사장님 SSOT = 도시무관 매칭 = 매칭행 표시필드(editorialSummary·summaryKo)를 enrichedPlace 에 실음.
+        //   = 타도시 병합행은 슬롯빌드의 seedRawMap(도시한정)에 없어 못 읽음(stranded) → enrichedPlace 폴백으로 도시무관 노출(degrade 해소). place(Gemini) 우선, seed 폴백.
+        editorialSummary: isDbDirect ? (place as any).editorialSummary : ((place as any).editorialSummary || seed.editorialSummary || null),
+        summaryKo: isDbDirect ? (place as any).summaryKo : ((place as any).summaryKo || seed.summaryKo || null),
         confidenceLevel: "high" as const,
       } as any);
     } else {

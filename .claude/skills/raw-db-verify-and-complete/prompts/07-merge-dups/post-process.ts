@@ -24,13 +24,15 @@ process.chdir(ROOT);
 
 const argv = Object.fromEntries(process.argv.slice(2).map(a => a.replace(/^--/, '').split('=')).map(([k, v]) => [k, v ?? 'true']));
 const cityId = Number(argv['city-id'] || 0);
+// ⚠️ 수정금지(승인필요) 2026-07-09 사장님 SSOT = --global = run.ts --global 산출물(docs/raw/_global) 로드 = 크로스도시 중복 병합. run.ts 와 대칭.
+const globalMode = argv['global'] === 'true';
 const date = String(argv['date'] || new Date().toISOString().slice(0, 10));
 const applyTiers = (argv['apply-tiers'] || '').split(',').filter(Boolean).map(Number);
 const applyGroups = (argv['apply-groups'] || '').split(',').filter(Boolean);
 // ⚠️ 2026-06-15 = --dry 플래그 = tier/group 지정해도 실행 안 함(=병합 전 검수 미리보기). 안전기본 = 미리보기 후 --dry 빼야 실제 병합.
 const dry = argv['dry'] === 'true';
 const apply = !dry && (argv['apply'] === 'true' || applyTiers.length > 0 || applyGroups.length > 0);
-if (!cityId) { console.error('Usage: --city-id=<N> --date=<YYYY-MM-DD> --apply-tiers=0,1,2,3,4 [--apply-groups=key1,...] [--dry]'); process.exit(1); }
+if (!cityId && !globalMode) { console.error('Usage: --city-id=<N> | --global --date=<YYYY-MM-DD> --apply-tiers=0,1,2,3,4 [--apply-groups=key1,...] [--dry]'); process.exit(1); }
 
 (async () => {
   const envRaw = fs.readFileSync('.env', 'utf-8').replace(/^﻿/, '');
@@ -47,7 +49,7 @@ if (!cityId) { console.error('Usage: --city-id=<N> --date=<YYYY-MM-DD> --apply-t
   // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = latestVersioned 로 groups _N 계열 최신 1개 읽기
   const { pathToFileURL } = await import('url');
   const { rawName, latestVersioned } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/raw-filename.ts')).href);
-  const rawDir = path.join(ROOT, 'docs', 'raw', String(cityId));
+  const rawDir = path.join(ROOT, 'docs', 'raw', globalMode ? '_global' : String(cityId));
   // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = groups stem 계열 최신(없으면 무순번명=기존 미존재 에러 유지)
   const latest = latestVersioned(rawDir, rawName(7, 'merge-dups', 'groups', date));
   const inPath = latest ? path.join(rawDir, latest) : path.join(rawDir, rawName(7, 'merge-dups', 'groups', date));
@@ -145,28 +147,43 @@ if (!cityId) { console.error('Usage: --city-id=<N> --date=<YYYY-MM-DD> --apply-t
       if (ex) { skipped++; console.log(`⏭  SKIP [${g.group_key}] tier=${g.matched_tier} = ${ex} (강제하려면 --apply-groups=${g.group_key})`); continue; }
       const keep = selectKeep(g.rows);
       const archiveIds = g.rows.filter((r: any) => r.id !== keep.id).map((r: any) => r.id);
+      // ⚠️ 수정금지(승인필요) 2026-06-15 사장님 SSOT = 병합 정책 (= 최신 TS 가 가장 정답):
+      //   ① TS 호출 필수 9요소(= 헌법 = id/userRatingCount/photos/googleMapsUri/businessStatus/location/formattedAddress/priceRange/displayName)
+      //      → 우리 컬럼(PID·RC·image_url·google_maps_uri·좌표·address·price_eur·name_local) = keep(최신TS) 값 그대로 = loser 흡수 X(옛TS 완전 폐기).
+      //   ② 그 외 = Gemini 큐레이션 요소(summary_ko/editorial_summary/name_ko) = keep 우선 COALESCE(빈칸만 loser 보충 = 무손실 [[feedback_never_discard_ts_data]]).
+      //   ③ 태그 = UNION 누적.
+      // ⚠️ 수정금지(승인필요) 2026-07-09 사장님 SSOT = loser 전량 DELETE → keeper UPDATE 1회 순서 (= 도시무관 트리거 마비 회피).
+      //   근거: prevent_dup 트리거 도시무관 후 = 클러스터 loser(같은 PID/좌표)가 하나라도 살아있는 채로 keeper UPDATE 하면 불변1~5 걸려 EXCEPTION(마비).
+      //   = 3행+ 클러스터(loser≥2)에서 loser 하나씩 DELETE→UPDATE 반복하면 첫 UPDATE 시 나머지 loser 생존→마비. → loser 전량 먼저 삭제.
+      //   = DELETE 는 트리거 대상 아님(BEFORE INSERT OR UPDATE만, 실측입증) → loser 전량 삭제 → 클러스터 중복 0 → keeper UPDATE 통과.
+      //   = 옛 "loser 하나씩 DELETE+UPDATE" 폐기 2026-07-09 §19. 흡수값(전 loser)은 DELETE 시 RETURNING 으로 캡처 후 병합.
+      // ① 클러스터 loser 전량 DELETE + 흡수값 캡처 (트리거 미발동 = 안전, 순서무관). summary/editorial/name_ko = 첫 비어있지않은값, 태그 = 전량 UNION.
+      let capKo: string | null = null, capEd: string | null = null, capNk: string | null = null;
+      const capCat: string[] = [], capPh: string[] = [];
       for (const aid of archiveIds) {
-        // ⚠️ 수정금지(승인필요) 2026-06-15 사장님 SSOT = 병합 정책 (= 최신 TS 가 가장 정답):
-        //   ① TS 호출 필수 9요소(= 헌법 = id/userRatingCount/photos/googleMapsUri/businessStatus/location/formattedAddress/priceRange/displayName)
-        //      → 우리 컬럼(PID·RC·image_url·google_maps_uri·좌표·address·price_eur·name_local) = keep(최신TS) 값 그대로 = loser 흡수 X(옛TS 완전 폐기).
-        //      = keep 이 곧 최신 TS = 이 9요소가 모두 최신 상태. 이후 필요시 PM 으로 이미지 추가 채움.
-        //   ② 그 외 = Gemini 큐레이션 요소(summary_ko/editorial_summary/name_ko) = keep 우선 COALESCE(빈칸만 loser 보충 = 무손실 [[feedback_never_discard_ts_data]]).
-        //   ③ 태그 = UNION 누적. (= image_url/가격도 9요소라 GREATEST·loser보충 폐기 = keep 최신값만.)
+        const del = await c.query(`DELETE FROM place_seed_raw WHERE id = $1 RETURNING summary_ko, editorial_summary, name_ko, category_tags, phase_tags`, [aid]);
+        const cap = del.rows[0]; // aid = selectKeep 가 g.rows 에서 뽑은 실재 loser = 항상 1행
+        if (del.rowCount) {
+          archived++;
+          if (!capKo && cap.summary_ko) capKo = cap.summary_ko;              // 빈칸보충 = 첫 loser 값만
+          if (!capEd && cap.editorial_summary) capEd = cap.editorial_summary;
+          if (!capNk && cap.name_ko) capNk = cap.name_ko;
+          if (Array.isArray(cap.category_tags)) capCat.push(...cap.category_tags); // 태그 = 전 loser UNION
+          if (Array.isArray(cap.phase_tags)) capPh.push(...cap.phase_tags);
+        }
+      }
+      // ② keeper UPDATE 1회 = 전 loser 흡수값 병합 (keep 빈칸만 보충 = 무손실). 클러스터 중복 0 = 트리거 통과.
+      if (archiveIds.length > 0) {
         const u = await c.query(`
           UPDATE place_seed_raw k SET
-            summary_ko          = COALESCE(NULLIF(k.summary_ko, ''),        NULLIF(l.summary_ko, '')),
-            editorial_summary   = COALESCE(NULLIF(k.editorial_summary, ''), NULLIF(l.editorial_summary, '')),
-            name_ko             = COALESCE(NULLIF(k.name_ko, ''),           NULLIF(l.name_ko, '')),
-            category_tags       = (SELECT array_agg(DISTINCT t) FROM unnest(COALESCE(k.category_tags, '{}') || COALESCE(l.category_tags, '{}')) AS t),
-            phase_tags          = (SELECT array_agg(DISTINCT t) FROM unnest(COALESCE(k.phase_tags, '{}') || COALESCE(l.phase_tags, '{}')) AS t)
-          FROM place_seed_raw l
-          WHERE k.id = $1 AND l.id = $2`, [keep.id, aid]);
+            summary_ko          = COALESCE(NULLIF(k.summary_ko, ''),        NULLIF($2::text, '')),
+            editorial_summary   = COALESCE(NULLIF(k.editorial_summary, ''), NULLIF($3::text, '')),
+            name_ko             = COALESCE(NULLIF(k.name_ko, ''),           NULLIF($4::text, '')),
+            category_tags       = (SELECT array_agg(DISTINCT t) FROM unnest(COALESCE(k.category_tags, '{}') || $5::text[]) AS t),
+            phase_tags          = (SELECT array_agg(DISTINCT t) FROM unnest(COALESCE(k.phase_tags, '{}') || $6::text[]) AS t)
+          WHERE k.id = $1`, [keep.id, capKo, capEd, capNk, capCat, capPh]);
         if (u.rowCount) merged++;
-        const r = await c.query(`DELETE FROM place_seed_raw WHERE id = $1`, [aid]);
-        if (r.rowCount) {
-          archived++;
-          console.log(`✓ MERGE+DELETE id=${aid} → keep id=${keep.id} '${keep.name_en}' [tier=${g.matched_tier}] (keep=최신TS 승)`);
-        }
+        console.log(`✓ MERGE keep id=${keep.id} '${keep.name_en}' ← loser [${archiveIds.join(',')}] [tier=${g.matched_tier}] (loser전량삭제→keeper1회UPDATE, 트리거안전)`);
       }
     }
     await c.query('COMMIT');

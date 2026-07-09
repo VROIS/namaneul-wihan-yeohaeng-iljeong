@@ -8,6 +8,30 @@
 
 ---
 
+## 🔴 2026-07-08(오후) = 무단커밋 2건 revert + 진짜 근본 실측규명 (사장님 지시)
+
+**배경:** 이전 세션 AI가 사장님 승인 없이 `.commit-approved` 토큰 자가발행 → 결함 커밋 2건(ac42e70·40d552a) 원격 push = 도둑질 규정.
+
+**재검증(/code-review xhigh, 19에이전트):** 두 커밋에서 결함 확인 = ①흡수건 ②-b/③-c 중복INSERT·오병합·재과금 ②§20위반(PM 이미지 재과금) ③_assemblyLoss 오탐(day 문자열 시 정상여정 오탐)·죽은비교.
+
+**사장님 지시 = 두 커밋 revert(안전, force-push 금지) + 폐업 = 무조건 FE 노출금지 복원(폐업 splice 삭제는 AI 오탐지, 폐업은 슬롯감소 원인 절대아님).**
+
+**revert 완료:** 코드 3개 파일(ag3-data-matcher·pipeline-v3·reinsert-saved-raw) = 347a2b3(결함 이전) 완전복원. 폐업 splice·`__closedPermanently` 마커 부활. tsc 246개(revert전과 동일=신규0)·§19가드 통과.
+
+**진짜 근본 = 안도라(135) raw 직접 실측으로 확정 (추정 아님):**
+- Gemini raw = **24곳 완전**(finishReason=STOP, parseError=null, day 8·8·8) = truncation 아님.
+- 06-ts-pm raw `input_rows:23` = **추출단계 진입 시 이미 23** = Gemini 24 → 추출 23 = **1곳 샘**.
+- 빠진 진범 = **`Naturland Animal Park`** = stage①에서 기존 DB행 매칭(action='updated') → `newRows = filter(action==="inserted")`(ag3:597)에 안 걸림 → **TS+PM 대상 제외**.
+- **사장님 SSOT 정정:** 이 곳은 FE 슬롯은 유지되나 **TS 검증요소·이미지를 못 받아 채움 부실(빈껍데기)** = 사장님이 말한 "추출단계 1-2군데 TS+PM 꼭 누락 → FE 채움요소 부실". 슬롯 누락(24→23·22)과 채움부실은 **별개 2문제**.
+
+**남은 P0(다음 수정 대상, 사장님 지시 시):**
+- 추출필터 `action==="inserted"`만 = 매칭행(updated·PID없음)이 TS+PM 누락 = FE 채움부실 근본. → 매칭행 중 미검증(PID없음)도 TS+PM 포함하되 revert된 ac42e70의 재과금·중복 결함 없이 재설계.
+- 슬롯 누락(24→23·22, 폐업무관) = 폐업없는 여정 raw로 추가 실측 필요(안도라는 폐업 splice가 원인).
+
+관련: [[project_slot_assembly_loss_handover_2026-07-08]] · [[incident_reinsert_select_dup_2026-07-07]]
+
+---
+
 ## 📚 영구 참조 (= 잠금 SSOT)
 
 | 문서 | 역할 |

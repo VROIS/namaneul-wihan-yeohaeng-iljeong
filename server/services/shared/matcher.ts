@@ -247,13 +247,16 @@ export function matchCandidate<C extends MatchCandidate>(
       if (match) matchedBy = 'address';
     }
   }
-  // 4·6·7순위 = 이름 (로컬=불변 4순위 > 영어=의심 6 > 한국어=의심 7)
-  //   = 입력 이름 1개를 후보의 어느 이름칸(en/local/ko)과든 비교 (= 옛 9조합 집합 동일, 우선순위만 부여) + cityId 강제(체인 다른도시 별개행).
-  //   veto = samePlace(PID게이트) 단일 = 양쪽 PID 있고 PID/URI 다르면 차단, PID 없으면 이름+cityId 로 매칭 §14재갱신.
-  // 🗑️ 2026-07-05 = relaxUri·coordsCloseTo 제거 = PID게이트(samePlace)가 URI 완화 대체 = 한벌 §16/§19
-  const nameStep = (key: string, by: MatchedBy) => {
+  // ⚠️ 수정금지(승인필요) 2026-07-09 사장님 SSOT = 4·6·7순위 = 이름 (로컬=불변 4순위 > 영어=의심 6 > 한국어=의심 7)
+  //   = 입력 이름 1개를 후보의 어느 이름칸(en/local/ko)과든 비교 (= 9조합 집합, 우선순위만 부여).
+  //   = 도시무관 범위 (사장님 "name_local만" SSOT 2026-07-09 §19):
+  //     • name_local(4, 불변=병합) = 도시무관 = 크로스도시 겹침 18개뿐 실측 = 재과금 근본 차단(같은 장소 재활용).
+  //     • name_en/ko(6·7, 의심=메모) = 도시한정 유지 = 도시무관화하면 'Genoa'·'Cathedral' 등 일반명이
+  //       크로스도시 의심그룹 9,826개 폭발(실측) = 순수 노이즈, 병합도 안 함 = 실익0. 도시 내 의심만 유의미.
+  //   veto = samePlace(PID게이트) 단일 = 양쪽 PID 있고 PID/URI 다르면 차단, PID 없으면 이름으로 매칭 §14재갱신.
+  const nameStep = (key: string, by: MatchedBy, cityGuard: boolean) => {
     if (match || !key) return;
-    const found = pickBest(candidates.filter((c) => samePlace(c, p) && c.cityId === p.cityId && nameKeys(c).includes(key)));
+    const found = pickBest(candidates.filter((c) => samePlace(c, p) && (!cityGuard || c.cityId === p.cityId) && nameKeys(c).includes(key)));
     if (found) {
       match = found; matchedBy = by;
       // ⚠️ 수정금지(승인필요) 2026-06-11 = suspect 승격 (= 사용자 SSOT "있는 쪽 승리" 연장 = 증거 조합)
@@ -266,8 +269,8 @@ export function matchCandidate<C extends MatchCandidate>(
       }
     }
   };
-  // 4순위 = 로컬이름(name_local) = 불변(확정) (= 2026-06-11 사용자 SSOT: 좌표보다 신뢰 우위 = 고유명사 불변)
-  nameStep(normName(p.nameLocal), 'name_local'); // veto=samePlace(PID게이트) 단일 §14재갱신
+  // 4순위 = 로컬이름(name_local) = 불변(확정) = 도시무관(cityGuard=false, 재과금 근본 차단)
+  nameStep(normName(p.nameLocal), 'name_local', false); // veto=samePlace(PID게이트) 단일 §14재갱신
 
   // 5순위 = 좌표 10m (= 같은 건물. 2026-06-11 = 로컬이름 아래로 강등: LLM 좌표 316m 편향·도심밀집 오병합 위험)
   if (!match && p.latitude && p.longitude) {
@@ -281,8 +284,8 @@ export function matchCandidate<C extends MatchCandidate>(
     }));
     if (match) matchedBy = 'coords';
   }
-  nameStep(normName(p.nameEn), 'name_en');        // 6순위 = 가변(의심) — 주소 보강증거 있으면 confirmed 승격
-  nameStep(normName(p.nameKo), 'name_ko');        // 7순위 = 가변(의심) — 동일
+  nameStep(normName(p.nameEn), 'name_en', true);  // 6순위 = 가변(의심) = 도시한정(cityGuard=true, 일반명 크로스도시 노이즈 방지)
+  nameStep(normName(p.nameKo), 'name_ko', true);  // 7순위 = 가변(의심) = 도시한정
 
   return { match, matchedBy, tier: tierOverride ?? tierOf(matchedBy) };
 }

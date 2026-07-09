@@ -120,7 +120,8 @@ interface GeminiDay {
 // = ready=false → MIX (= 옛 V3 step1_geminiItinerary 흐름 = 사용자 명시 "MIX 결과가 더 낳음" 보존)
 export async function runPipelineV3(formData: TripFormData): Promise<any> {
   const { isCityReady } = await import('./ag2-gemini-recommender');
-  const cityCheck = await isCityReady(formData.destination);
+  // ⚠️ 2026-07-08 사장님 SSOT = destinationCoords(불변키) 전달 = ready 판정 좌표우선 = "본느"도 기존 도시 잡아 DB-only 재활용(재발굴 차단).
+  const cityCheck = await isCityReady(formData.destination, formData.destinationCoords);
   if (cityCheck.ready) {
     const { runPipelineDbOnly } = await import('./pipeline-db-only');
     return runPipelineDbOnly(formData, cityCheck);
@@ -178,7 +179,8 @@ async function runPipelineMix(formData: TripFormData): Promise<any> {
 
   const [geminiDays, preloaded] = await Promise.all([
     step1_geminiItinerary(formData, dayCount, daySlotsConfig, vibeWeights),
-    preloadCityData(formData.destination),
+    // ⚠️ 2026-07-08 사장님 SSOT = destinationCoords(도시중심좌표=불변키) 전달 = 좌표10m 매칭 = 중복도시·재발굴 차단.
+    preloadCityData(formData.destination, formData.destinationCoords),
   ]);
 
   _mark('step1_parallel');

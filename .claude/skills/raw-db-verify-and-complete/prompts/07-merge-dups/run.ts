@@ -22,7 +22,10 @@ for (const line of envRaw.split(/\r?\n/)) {
 
 const argv = Object.fromEntries(process.argv.slice(2).map((a) => a.replace(/^--/, '').split('=')).map(([k, v]) => [k, v ?? 'true']));
 const cityId = Number(argv['city-id'] || 0);
-if (!cityId) { console.error('Usage: --city-id=<N>'); process.exit(1); }
+// ⚠️ 수정금지(승인필요) 2026-07-09 사장님 SSOT = --global = 도시무관(크로스도시) 중복 탐지 모드.
+//   = 같은 장소가 다른 도시에 재발굴된 중복(재과금 근본)을 07-merge(영구 컴포넌트)가 통합. matcher 는 이미 도시무관이라 후보만 글로벌 로드.
+const globalMode = argv['global'] === 'true';
+if (!cityId && !globalMode) { console.error('Usage: --city-id=<N> | --global'); process.exit(1); }
 
 // matchedBy → tier 번호/라벨 (= post-process --apply-tiers 호환). 0~4 = 불변(확정) / 5·6 = 가변(의심)
 const TIER: Record<string, number> = { pid: 0, uri: 1, address: 2, coords: 3, name_local: 4, name_en: 5, name_ko: 6 };
@@ -35,21 +38,26 @@ const TIER_LABEL = ['PID', 'URI', '주소+로컬이름', '좌표10m', '로컬이
   const pg = await import('pg');
   const c = new (pg as any).default.Client({ connectionString: process.env.SUPA_URL || process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
   await c.connect();
-  const city = (await c.query('SELECT name_en FROM cities WHERE id=$1', [cityId])).rows[0];
-  const rows = (await c.query(`
+  const city = cityId ? (await c.query('SELECT name_en FROM cities WHERE id=$1', [cityId])).rows[0] : null;
+  // ⚠️ 2026-07-09 = --global = 전체 PSR(도시무관) 로드 = 크로스도시 중복 통합. --city-id = 그 도시만(기존 동작).
+  const SELECT_COLS = `
     SELECT id, city_id AS "cityId", name_en AS "nameEn", name_local AS "nameLocal", name_ko AS "nameKo",
            address, latitude::float8 AS latitude, longitude::float8 AS longitude,
            google_place_id AS "googlePlaceId", google_maps_uri AS "googleMapsUri",
            seed_category, rank, summary_ko,
            CASE WHEN image_url IS NOT NULL AND image_url <> '' THEN 1 ELSE 0 END AS has_image
-    FROM place_seed_raw WHERE city_id = $1 ORDER BY id`, [cityId])).rows;
+    FROM place_seed_raw`;
+  const rows = (await c.query(
+    globalMode ? `${SELECT_COLS} ORDER BY id` : `${SELECT_COLS} WHERE city_id = $1 ORDER BY id`,
+    globalMode ? [] : [cityId],
+  )).rows;
   await c.end();
 
   const today = new Date().toISOString().slice(0, 10);
-  const outDir = path.join(ROOT, 'docs', 'raw', String(cityId));
+  const outDir = path.join(ROOT, 'docs', 'raw', globalMode ? '_global' : String(cityId));
   fs.mkdirSync(outDir, { recursive: true });
-  console.log(`═══ 07-merge-dups dry-run (7단계 통일 matcher.ts) ═══`);
-  console.log(`city_id = ${cityId} (${city?.name_en}), 활성 = ${rows.length}`);
+  console.log(`═══ 07-merge-dups dry-run (7단계 통일 matcher.ts)${globalMode ? ' [GLOBAL 도시무관]' : ''} ═══`);
+  console.log(globalMode ? `전체 PSR 활성 = ${rows.length} (크로스도시 중복 탐지)` : `city_id = ${cityId} (${city?.name_en}), 활성 = ${rows.length}`);
 
   // union-find = 불변(confirmed) 중복 클러스터
   const parent = new Map<number, number>();

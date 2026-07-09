@@ -83,6 +83,26 @@ TRIPIS  [BTS콘서트투어]
 - ✅ iOS 여정속 숙소위젯 = 전체화면 Modal(키보드 가림 해결). AOS/웹=인라인.
 - ✅ vibe 기본값 = 힐링+쇼핑 (Foodie 폐기).
 
+### 🔴 C-계획: 목적지 입력창 = 숙소와 동일한 구글 위젯 1개로 통일 (전면개편 시)
+
+> **문제(실측 입증 = 라이브 DB)**: 현재 목적지는 **자유 텍스트**(`TripPlannerScreen.tsx:1214`), `destinationCoords`는 매 입력마다 `undefined`로 리셋(:1219). → city-resolver 4단계 텍스트 부분매칭(`city-resolver.ts:286-291`)이 **부분열 겹침을 도시 유사어로 오인** = 재앙.
+> - 한글: 니스→**베니스**(니스⊂베니스), 본→**리스본**, 본머스→본. 칸↔캉(다른도시)·본↔본느(같은도시) 텍스트로 구분 불가.
+> - 알파벳(더 심각): **Nice(정확철자)→Venice**(Ve*nice*), Nce→**Florence**(Flore*nce*), 오탈자 Beune·Venise→**null→MIX 재발굴=재과금**.
+> - = 텍스트로는 도시 식별 근본 불가. **좌표만이 유일한 근본해결**(실측: 니스 좌표→정확히 Nice, 본→Beaune, 오매칭 0).
+
+**개편 방향 = 목적지도 숙소와 동일하게 구글 위젯 1개** (사장님 SSOT 2026-07-09):
+- 사용자가 "본"·"Nice"·"Nce"·"Venise" 무엇을 쳐도 → **구글 위젯 유사어 드롭다운**이 정확한 도시 제시(Beaune/Bournemouth 구분) → 선택 → **도시중심 좌표** 확보.
+- 그 좌표로 city-resolver **0단계 좌표매칭**(`:155-174`, 10m) = 도시무관 정확 구분. 4단계 텍스트매칭(오매칭 진원지) **도달 전 확정**.
+- **위젯 2개(도시+숙소)는 UX 나쁨**(사장님) = 안 늘림. 숙소 위젯은 **여정 결과화면 안**으로(B-E "숙소설정/변경" 버튼, 이미 존재). 즉 입력화면 위젯 = 목적지 1개.
+- 목적지 위젯 = 숙소 위젯(`PlaceAutocompleteWidget`) **재사용**(§16 재발명0). `includedPrimaryTypes=['(cities)']`로 도시만 필터, `onSelect`에서 `destination`+`destinationCoords` 동시 세팅.
+
+**서버 = 이미 완비 = 입력화면만 좌표 공급하면 전 체인 활성화**:
+- `isCityReady`(`ag2:46`)·`preloadCityData`(`ag3:152`)·`findCityUnified`(`city-resolver:138`) = 전부 `destinationCoords` 받도록 배선 완료. 병목 = 입력화면이 좌표 안 줌(:1219) 하나.
+- DB-only/MIX 분기(`pipeline-v3:124`)의 실축 = cityId. 좌표로 cityId 정확확정 = **엉뚱도시 DB-only·못찾음 MIX재발굴 원천차단**.
+
+**주의**: city-resolver 4단계 텍스트매칭은 개편 전까지 **현행 유지**(좌표 오면 0단계가 우회하므로 안 건드림). 개편 시 좌표 확보되면 4단계는 좌표 없을 때 폴백으로만.
+= 설계근거 `docs/superpowers/specs/2026-07-08-city-match-by-coords-design.md` · 메모리 [[project_city_input_coords_needed_planner_revamp]].
+
 ---
 
 ## D. ④프로필 — 나의 여정 [2026-07-03 신규 = 저장여정 복원]
@@ -210,6 +230,7 @@ TRIPIS  [BTS콘서트투어]
 | 3 | 🔶 **AI 의견**(핵심 마케팅) = 오버레이 로딩UX+리포트4섹션+크레딧고지+다국어 | verify/·routes·MapToggleContext·MainTabNav·TripPlanner·i18n7 | **2026-07-04 구현완료·미커밋** = 배포후 실증(§21) |
 | 4 | 프로필 재구현 = 군더더기삭제(persona·죽은설정)+**크레딧 UI 이식**(배포앱 profile.html 기준) | ProfileScreen | 별도(병합 연계) |
 | 5 | cityId=1 고정 동적매핑 | routes.ts·TripPlanner | 별도 |
+| 5-b | **목적지 입력창 = 구글 위젯 1개 통일**(텍스트 부분열 오매칭 근본해결=좌표확보). 숙소위젯은 결과화면 안으로. 서버 좌표인프라 완비=입력화면만 공급 | TripPlanner(C-계획)·PlaceAutocompleteWidget재사용 | **전면개편 시**(§C-계획, 실측입증완료) |
 | 6 | 크레딧 차감 = **설계확정·구현보류**(creditService.useCredits 재사용, 앵커=routes.ts TODO). 실차감=병합·로그인정식화 시점 | creditService·routes | 보류(설계완료) |
 | 7 | 두 앱 병합(공유 크레딧) = legacy-guide/public(배포앱)의 크레딧·결제·프로필을 현재앱에 통합 | 전역 | 별도(대형) |
 

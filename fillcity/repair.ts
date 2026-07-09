@@ -194,21 +194,23 @@ const ANCHOR_M = 10; // ⚠️ 수정금지(승인필요) 2026-06-23 사장님 S
           photo_name: t1.photoName, google_maps_uri: t1.googleMapsUri, business_status: t1.businessStatus,
         },
       });
-      // ⚠️ 수정금지(승인필요) 2026-06-24 사장님 SSOT (B = PID 선검사) = TS가 준 강매칭키(PID/URI/좌표)가
-      //   같은 city 다른 행(id<>r.id)에 이미 있으면 = 이 행에 직행하면 트리거(BEFORE INSERT OR UPDATE 불변1·2·4) EXCEPTION 으로 죽음.
+      // ⚠️ 수정금지(승인필요) 2026-07-09 사장님 SSOT (B = PID 선검사 = 도시무관) = TS가 준 강매칭키(PID/URI/좌표)가
+      //   전체 PSR 어느 행(id<>r.id, 도시 무관)에 이미 있으면 = 이 행에 직행하면 트리거(도시무관 불변1·2·4) EXCEPTION 으로 죽음.
+      //   = 도시무관(city_id 조건 폐기 2026-07-09 §19): 같은 장소가 다른 도시에 이미 있으면 그걸 재활용 = 재과금 근본 차단. matcher/트리거 동형(§16).
       //   = 강매칭키는 직행 안 하고(스킵) 로그 = 중복 안 만들고 EXCEPTION 회피. 약필드(name_en·주소·RC·price)는 그대로 갱신.
       //   = 진짜 같은 장소면 기존 그 행이 정답 = 이 행은 다음 청소(병합)에서 정리. = §20 통일 PSR(애초에 중복 안 만듦).
       let dupOwner: number | null = null;
       if (t1.googlePlaceId) {
-        const q = await c.query(`SELECT id FROM place_seed_raw WHERE city_id=$1 AND google_place_id=$2 AND id<>$3 LIMIT 1`, [cityId, t1.googlePlaceId, r.id]);
+        const q = await c.query(`SELECT id FROM place_seed_raw WHERE google_place_id=$1 AND id<>$2 LIMIT 1`, [t1.googlePlaceId, r.id]);
         if (q.rows[0]) dupOwner = q.rows[0].id;
       }
       if (!dupOwner && t1.googleMapsUri) {
-        const q = await c.query(`SELECT id FROM place_seed_raw WHERE city_id=$1 AND google_maps_uri=$2 AND id<>$3 LIMIT 1`, [cityId, t1.googleMapsUri, r.id]);
+        const q = await c.query(`SELECT id FROM place_seed_raw WHERE google_maps_uri=$1 AND id<>$2 LIMIT 1`, [t1.googleMapsUri, r.id]);
         if (q.rows[0]) dupOwner = q.rows[0].id;
       }
       if (!dupOwner && t1.latitude != null && t1.longitude != null) {
-        const q = await c.query(`SELECT id FROM place_seed_raw WHERE city_id=$1 AND latitude IS NOT NULL AND longitude IS NOT NULL AND ABS(latitude-$2::real)<0.0001 AND ABS(longitude-$3::real)<0.0001 AND id<>$4 LIMIT 1`, [cityId, t1.latitude, t1.longitude, r.id]);
+        // ⚠️ 2026-07-09 = 위도 BETWEEN(sargable) = idx_psr_latitude 인덱스 활용(경도 ABS 필터). ABS(위도)=non-sargable 풀스캔 회피. 논리 동일.
+        const q = await c.query(`SELECT id FROM place_seed_raw WHERE latitude BETWEEN $1::real - 0.0001 AND $1::real + 0.0001 AND longitude IS NOT NULL AND ABS(longitude-$2::real)<0.0001 AND id<>$3 LIMIT 1`, [t1.latitude, t1.longitude, r.id]);
         if (q.rows[0]) dupOwner = q.rows[0].id;
       }
       // ⚠️ 사장님 SSOT 2026-06-16 = 우리 id 직행 UPDATE = TS 전 응답값(PID 포함) 그대로 이 행에 덮음. PID 바뀌어도 id 불변 = 무조건 여기다. 매칭 X = 빗나감 X.

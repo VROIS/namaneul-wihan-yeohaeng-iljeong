@@ -2,15 +2,26 @@
 -- = 라이브 DB 현행 정의 복원(= 소실됐던 원본) + 2026-06-03 PID/URI veto 추가.
 -- = 정규화 = lower(trim(name_en)) = server/services/shared/matcher.ts normName 과 동일 식 (= 앱↔DB 정합).
 -- ⚠️ 수정금지(승인필요) — matcher PID veto 제거 동기화(2026-06-15 SSOT)
--- = 트리거 = shared/matcher.ts 5단계와 동형: PID(0) > 주소+이름9조합(1) > 좌표10m(2) > 이름 UNIQUE(3).
+-- = 트리거 = shared/matcher.ts 7단계와 동형(§16 matcher≡트리거): PID > URI > 주소+로컬이름 > 좌표10m > 로컬이름 / 영어명·한국어명(의심메모).
 --   핵심: URI(cid) 둘 다 있고 서로 다르면 = 확정 다른 장소 = 보조(주소·좌표) 차단 (= samePlace veto). PID 차이는 더이상 veto 아님(우리 PID 오류=TS 교정, 2026-06-15).
+-- ⚠️ 수정금지(승인필요) 2026-07-09 사장님 SSOT = 불변1~5(병합)만 도시무관(글로벌) = city_id 조건 폐기 §19. 의심6~7(name_en/ko 메모)은 도시한정 유지.
+--   = 같은 장소가 다른 도시 여정에서 재발굴되던 재과금 근본 제거(불변1~5). 6·7 도시무관은 일반명 노이즈 9,826 폭발이라 제외. matcher.ts 와 byte 동형(§16).
 -- 적용: Supabase apply_migration 또는 psql $SUPA_URL -f server/db/migrations/place-identity.sql
--- = 라이브 DB 정본(7단계, 2026-06-08 마이그 7step) 과 byte 동기화. 구버전 4단계 삭제(제19조)
+-- = 라이브 DB 정본과 byte 동기화(§19 DB↔레포).
 
--- ── 1) 글로벌 UNIQUE = (city_id, lower(trim(name_en))) = 도시 내 동명 1행 (= matcher 5순위 + race 안전망) ──
+-- ── 1) UNIQUE = (city_id, lower(trim(name_en))) = 도시 내 동명 1행 race 안전망 ──
+--   ⚠️ 2026-07-09 = 도시무관 매칭과 무충돌: 이 인덱스는 "같은 도시 내 name_en 중복"만 막고 다른 도시 동명(체인)은 허용.
+--   = name_en 은 매칭 병합기준 아님(suspect) → 크로스도시 동명은 별개 행이 정상 = 인덱스 city_id 스코프 유지가 맞음(트리거 도시무관과 층위 다름).
 CREATE UNIQUE INDEX IF NOT EXISTS uniq_psr_global_city_name
   ON public.place_seed_raw USING btree (city_id, lower(TRIM(BOTH FROM name_en)))
   WHERE ((name_en IS NOT NULL) AND (TRIM(BOTH FROM name_en) <> ''::text));
+
+-- ── 1-b) 도시무관 매칭키 인덱스 (= 트리거 불변1·2·4 + ag3 후보조회 + repair dupOwner 풀스캔 해소) ──
+--   ⚠️ 2026-07-09 = 도시무관화(city_id 조건 제거)로 PID/URI/좌표 조회가 Seq Scan(전체행) 됨 → btree 인덱스로 Index Scan 전환(실측 입증).
+--   = 등가검색 PID/URI 는 결정적 개선. 좌표는 위도 btree 로 후보 좁힘(경도 필터). NULL 다수라 부분인덱스.
+CREATE INDEX IF NOT EXISTS idx_psr_google_place_id ON public.place_seed_raw (google_place_id) WHERE google_place_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_psr_google_maps_uri ON public.place_seed_raw (google_maps_uri) WHERE google_maps_uri IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_psr_latitude ON public.place_seed_raw (latitude) WHERE latitude IS NOT NULL;
 
 -- ── 2) BEFORE INSERT OR UPDATE 중복방지 트리거 함수 (= upsertPlace 우회 직접 INSERT/UPDATE 차단 = 헌법 §14 안전망, 2026-06-24 §20 확장) ──
 CREATE OR REPLACE FUNCTION public.place_seed_raw_prevent_dup()
@@ -35,15 +46,17 @@ BEGIN
   -- ⚠️ 수정금지(승인필요) 2026-06-24 사장님 SSOT = BEFORE INSERT OR UPDATE 확장 = 자기행 제외(c.id <> COALESCE(NEW.id,-1)) 전 불변 필수.
   --   = UPDATE 시 NEW.id 가 자기 자신과 충돌(전수 마비) 차단. INSERT 는 NEW.id NULL = COALESCE -1 폴백 = 기존 동작 무변경.
 
-  -- 1) PID (자기행 제외)
+  -- ⚠️ 수정금지(승인필요) 2026-07-09 사장님 SSOT = 도시무관(글로벌) 매칭 = 불변1~5 city_id 조건 폐기 2026-07-09 §19.
+  --   = 같은 장소가 다른 도시 여정에서 재발굴되던 재과금 근본 제거. matcher.ts 와 동형(§16 matcher≡트리거). name_local 크로스도시 겹침 18개뿐=안전.
+  -- 1) PID (자기행 제외, 도시무관)
   IF NEW.google_place_id IS NOT NULL AND NEW.google_place_id <> '' THEN
-    SELECT id INTO matched_id FROM place_seed_raw WHERE city_id = NEW.city_id AND google_place_id = NEW.google_place_id AND id <> COALESCE(NEW.id, -1) LIMIT 1;
+    SELECT id INTO matched_id FROM place_seed_raw WHERE google_place_id = NEW.google_place_id AND id <> COALESCE(NEW.id, -1) LIMIT 1;
     IF matched_id IS NOT NULL THEN RAISE EXCEPTION '[중복차단] 불변1 PID 일치 id=% = upsertPlace() 사용', matched_id; END IF;
   END IF;
 
-  -- 2) URI (자기행 제외)
+  -- 2) URI (자기행 제외, 도시무관)
   IF NEW.google_maps_uri IS NOT NULL AND NEW.google_maps_uri <> '' THEN
-    SELECT id INTO matched_id FROM place_seed_raw WHERE city_id = NEW.city_id AND google_maps_uri = NEW.google_maps_uri AND id <> COALESCE(NEW.id, -1) LIMIT 1;
+    SELECT id INTO matched_id FROM place_seed_raw WHERE google_maps_uri = NEW.google_maps_uri AND id <> COALESCE(NEW.id, -1) LIMIT 1;
     IF matched_id IS NOT NULL THEN RAISE EXCEPTION '[중복차단] 불변2 URI 일치 id=%', matched_id; END IF;
   END IF;
 
@@ -51,7 +64,7 @@ BEGIN
   v_addr := TRIM(REGEXP_REPLACE(REGEXP_REPLACE(LOWER(COALESCE(NEW.address,'')), '[.,;:!?''"()\[\]{}]', ' ', 'g'), '\s+', ' ', 'g'));
   IF LENGTH(v_addr) >= 20 THEN
     SELECT c.id INTO matched_id FROM place_seed_raw c
-    WHERE c.city_id = NEW.city_id AND c.address IS NOT NULL AND c.id <> COALESCE(NEW.id, -1)
+    WHERE c.address IS NOT NULL AND c.id <> COALESCE(NEW.id, -1)
       AND TRIM(REGEXP_REPLACE(REGEXP_REPLACE(LOWER(c.address), '[.,;:!?''"()\[\]{}]', ' ', 'g'), '\s+', ' ', 'g')) = v_addr
       AND NOT (c.google_maps_uri IS NOT NULL AND c.google_maps_uri<>'' AND NEW.google_maps_uri IS NOT NULL AND NEW.google_maps_uri<>'' AND c.google_maps_uri<>NEW.google_maps_uri)
       AND (v_local = '' OR EXISTS (
@@ -63,26 +76,30 @@ BEGIN
   END IF;
 
   -- 4) 좌표 10m (자기행 제외)
+  -- ⚠️ 2026-07-09 = 위도 BETWEEN(sargable) = idx_psr_latitude 인덱스로 후보 좁힘(경도는 ABS 필터). ABS(위도) 는 non-sargable=풀스캔(실측 1983ms→0.09ms).
+  --   = BETWEEN x±0.0001 ≡ ABS(x)<0.0001 논리 동일. 결과 무변경, 성능만 개선.
   IF NEW.latitude IS NOT NULL AND NEW.longitude IS NOT NULL THEN
     SELECT c.id INTO matched_id FROM place_seed_raw c
-    WHERE c.city_id = NEW.city_id AND c.latitude IS NOT NULL AND c.longitude IS NOT NULL AND c.id <> COALESCE(NEW.id, -1)
-      AND ABS(c.latitude - NEW.latitude) < 0.0001 AND ABS(c.longitude - NEW.longitude) < 0.0001
+    WHERE c.latitude BETWEEN NEW.latitude - 0.0001 AND NEW.latitude + 0.0001 AND c.longitude IS NOT NULL AND c.id <> COALESCE(NEW.id, -1)
+      AND ABS(c.longitude - NEW.longitude) < 0.0001
       AND NOT (c.google_maps_uri IS NOT NULL AND c.google_maps_uri<>'' AND NEW.google_maps_uri IS NOT NULL AND NEW.google_maps_uri<>'' AND c.google_maps_uri<>NEW.google_maps_uri)
     LIMIT 1;
     IF matched_id IS NOT NULL THEN RAISE EXCEPTION '[중복차단] 불변4 좌표10m 일치 id=%', matched_id; END IF;
   END IF;
 
-  -- 5) 로컬이름 (자기행 제외)
+  -- 5) 로컬이름 (자기행 제외, 도시무관)
   IF v_local <> '' THEN
     SELECT c.id INTO matched_id FROM place_seed_raw c
-    WHERE c.city_id = NEW.city_id AND c.id <> COALESCE(NEW.id, -1)
+    WHERE c.id <> COALESCE(NEW.id, -1)
       AND NOT (c.google_maps_uri IS NOT NULL AND c.google_maps_uri<>'' AND NEW.google_maps_uri IS NOT NULL AND NEW.google_maps_uri<>'' AND c.google_maps_uri<>NEW.google_maps_uri)
       AND v_local IN (LOWER(TRIM(COALESCE(c.name_en,''))), LOWER(TRIM(COALESCE(c.name_local,''))), LOWER(TRIM(COALESCE(c.name_ko,''))))
     LIMIT 1;
     IF matched_id IS NOT NULL THEN RAISE EXCEPTION '[중복차단] 불변5 로컬이름 일치 id=%', matched_id; END IF;
   END IF;
 
-  -- 6·7) 영어명/한국어명 (가변=의심) = 차단 X = '중복의심' 메모 + 통과 (자기행 제외)
+  -- ⚠️ 수정금지(승인필요) 2026-07-09 사장님 SSOT = 6·7 영어명/한국어명(가변=의심 '중복의심' 메모만) = 도시한정 유지(city_id = NEW.city_id).
+  --   = 도시무관화하면 'Genoa'·'Cathedral' 등 일반명이 크로스도시 의심그룹 9,826개 폭발(실측) = 순수 노이즈. 병합도 안 하니 실익0.
+  --   = matcher.ts nameStep name_en/ko cityGuard=true 와 동형(§16). 불변1~5(병합)만 도시무관.
   matched_id := NULL;
   IF v_en <> '' THEN
     SELECT c.id INTO matched_id FROM place_seed_raw c

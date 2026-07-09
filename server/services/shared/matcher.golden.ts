@@ -45,9 +45,10 @@ check('5 같은이름(로컬) 양쪽PID다름 = 다른 장소(none, PID게이트
 // 6) 로컬이름 매칭 (PID 없음, name_local 일치) = 불변 = 확정
 const r6 = matchCandidate({ cityId: 19, nameLocal: 'Place du Trocadéro' }, C);
 check('6 로컬이름 매칭(불변=확정)', r6.matchedBy === 'name_local' && r6.tier === 'confirmed' && r6.match?.id === 3);
-// 7) 영어명 매칭 = 가변 = 의심 + 동명 체인 cityId 강제 (= 다른 도시 별개 행)
+// 7) 영어명 매칭 = 가변 = 의심 = 도시한정 유지 (name_en/ko cityGuard=true = 일반명 크로스도시 노이즈 방지, 2026-07-09).
+//   입력 cityId 20 → 같은 도시 id4(cityId20)만 매칭. id2(cityId19)는 도시 다르니 제외.
 const r7 = matchCandidate({ cityId: 20, nameEn: 'Angelina' }, C);
-check('7 영어명 매칭(가변=의심) + cityId강제 id4', r7.matchedBy === 'name_en' && r7.tier === 'suspect' && r7.match?.id === 4);
+check('7 영어명 매칭(가변=의심) 도시한정 id4', r7.matchedBy === 'name_en' && r7.tier === 'suspect' && r7.match?.id === 4);
 // 8) 풀주소 + 이름 부분포함
 const r8 = matchCandidate({ cityId: 19, address: '1 Parv. de la Défense, 92800 Puteaux', nameEn: 'Grande Arche' }, C);
 check('8 주소+이름부분포함 매칭', r8.matchedBy === 'address' && r8.match?.id === 1);
@@ -139,6 +140,20 @@ check('22 Botero 승격 = name_en + 주소보강 = confirmed', r22.matchedBy ===
 // 23) ⭐ 승격 금지 = name_en exact 지만 주소 비보강(다른 도시권) = suspect 유지
 const r23 = matchCandidate({ cityId: 37, address: 'C. Orégano, 45004 Toledo', nameEn: 'Restaurante Matilde' }, C4);
 check('23 Matilde = 주소 비보강 = suspect 유지', r23.matchedBy === 'name_en' && r23.tier === 'suspect' && r23.match?.id === 67);
+
+// ⭐ 2026-07-09 = 도시무관(글로벌) 매칭 회귀 = 같은 장소가 다른 도시 행으로 재활용되는지(재과금 차단 근본)
+const C5: MatchCandidate[] = [
+  // 디종(city 64) 기존 행 = PID·좌표 보유 (재활용 대상)
+  { id: 72734, cityId: 64, googlePlaceId: 'PID_PALAIS', googleMapsUri: null, address: 'Pl. de la Liberation, 21000 Dijon', latitude: 47.3216, longitude: 5.0414, nameEn: 'Palais des Ducs', nameLocal: 'Palais des Ducs et des Etats de Bourgogne', nameKo: null },
+  // 니스(city 44) 무관 행 (노이즈)
+  { id: 78657, cityId: 134, googlePlaceId: 'PID_HOSPICE', googleMapsUri: null, address: 'Rue Hotel-Dieu, 21200 Beaune', latitude: 47.024, longitude: 4.840, nameEn: 'Hospices de Beaune', nameLocal: 'Hospices de Beaune', nameKo: null },
+];
+// 24) ⭐ 크로스도시 PID = 도시무관 재활용 (Beaune 여정 입력이 디종 행에 PID매칭 = 재발굴 차단)
+const r24 = matchCandidate({ cityId: 134, googlePlaceId: 'PID_PALAIS', nameEn: 'Palace of the Dukes' }, C5);
+check('24 크로스도시 PID = 도시무관 재활용(재과금0)', r24.matchedBy === 'pid' && r24.match?.id === 72734);
+// 25) ⭐ 크로스도시 좌표10m = PID없어도 도시무관 재활용 (신규도시 Gemini 전형: PID없이 좌표+로컬명)
+const r25 = matchCandidate({ cityId: 134, googlePlaceId: null, latitude: 47.3216, longitude: 5.0414, nameLocal: 'Palais des Ducs et des Etats de Bourgogne' }, C5);
+check('25 크로스도시 좌표/로컬명 = 도시무관 재활용', r25.match?.id === 72734 && (r25.matchedBy === 'coords' || r25.matchedBy === 'name_local'));
 
 console.log(`\n═══ matcher 골든 = ${pass} pass / ${fail} fail ═══`);
 if (fail > 0) process.exit(1);

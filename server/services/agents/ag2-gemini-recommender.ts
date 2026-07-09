@@ -29,7 +29,12 @@ import { findCityUnified } from "../city-resolver";
  */
 const READY_THRESHOLD = 300;
 
-export async function isCityReady(destination: string): Promise<{
+export async function isCityReady(
+  destination: string,
+  // ⚠️ 수정금지(승인필요) 2026-07-08 사장님 SSOT = 도시중심좌표(불변키) = ready 판정(DB-only vs MIX 라우팅)도 좌표 우선.
+  //   = "본느"≠"본" 이름실패로 ready=false→MIX→재발굴 사고 근본. 좌표10m 로 기존도시 잡으면 ready 판정 정확.
+  destinationCoords?: { lat: number; lng: number } | null,
+): Promise<{
   ready: boolean;
   cityId: number | null;
   cityName: string;
@@ -38,7 +43,7 @@ export async function isCityReady(destination: string): Promise<{
   if (!db)
     return { ready: false, cityId: null, cityName: destination, count: 0 };
 
-  const cityResult = await findCityUnified(destination);
+  const cityResult = await findCityUnified(destination, destinationCoords);
   const cityId = cityResult?.cityId;
   if (!cityId) {
     return { ready: false, cityId: null, cityName: destination, count: 0 };
@@ -135,7 +140,8 @@ async function fetchFromPlaceSeedRaw(
   let cityId: number | undefined = preResolvedCity?.cityId;
   let cityName: string = preResolvedCity?.name ?? formData.destination;
   if (!cityId) {
-    const cityResult = await findCityUnified(formData.destination);
+    // ⚠️ 2026-07-08 사장님 SSOT = 좌표(불변키) 전달 = 중복도시·재발굴 차단.
+    const cityResult = await findCityUnified(formData.destination, formData.destinationCoords);
     cityId = cityResult?.cityId;
     cityName = cityResult?.name ?? formData.destination;
     if (!cityId) {
@@ -307,7 +313,8 @@ async function fetchFromPlaceSeedRaw(
 export async function generateRecommendations(
   skeleton: AG1Output,
 ): Promise<PlaceResult[]> {
-  const cityCheck = await isCityReady(skeleton.formData.destination);
+  // ⚠️ 2026-07-08 사장님 SSOT = 좌표(불변키) 전달 = DB-only↔MIX 예외없이 모두 좌표 우선.
+  const cityCheck = await isCityReady(skeleton.formData.destination, skeleton.formData.destinationCoords);
 
   if (!cityCheck.ready) {
     console.error(

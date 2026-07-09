@@ -128,11 +128,15 @@ export interface CityResolveResult {
 
 /**
  * 통합 도시 검색 - 모든 에이전트가 이 함수 하나만 사용
- * 
+ *
  * @param input - "Paris", "파리", "巴黎" 등 어떤 언어든 OK
+ * @param coords - ⚠️ 사장님 SSOT 2026-07-08 = 도시중심좌표(불변키). 있으면 좌표 10m 매칭이 최우선(이름 무관 = 중복도시·재발굴 원천차단).
  * @returns CityResolveResult 또는 null
  */
-export async function findCityUnified(input: string): Promise<CityResolveResult | null> {
+export async function findCityUnified(
+  input: string,
+  coords?: { lat: number; lng: number } | null,
+): Promise<CityResolveResult | null> {
   if (!db || !input) return null;
 
   // ===== 전처리: "파리, 프랑스" → "파리", "Paris, France" → "Paris" =====
@@ -145,6 +149,30 @@ export async function findCityUnified(input: string): Promise<CityResolveResult 
   const inputLower = cleaned.toLowerCase();
 
   try {
+    // ⚠️ 수정금지(승인필요) 2026-07-08 사장님 SSOT = 0단계 = 도시중심좌표(불변키) 10m 매칭 최우선.
+    //   = 도시 동일성은 언어/철자(가변)가 아니라 좌표(불변)로 판정("본느"≠"본" 이름실패로 중복 city 생성+21건 재발굴 사고 근본).
+    //   = 좌표 10m(0.0001, place 매칭 불변4와 동일 임계) 이내면 같은 도시 확정 = 즉시 재활용 = 이름 무관.
+    if (coords && coords.lat != null && coords.lng != null) {
+      const near = await db.select().from(cities)
+        .where(sql`ABS(${cities.latitude} - ${coords.lat}) < 0.0001 AND ABS(${cities.longitude} - ${coords.lng}) < 0.0001`)
+        .orderBy(cities.id)
+        .limit(1);
+      if (near.length > 0) {
+        const city = near[0];
+        const enLocal = CITY_EN_LOCAL_MAP[city.name] || { nameEn: city.nameEn || city.name, nameLocal: city.nameLocal || city.name };
+        console.log(`[CityResolver] ✅ 좌표 10m 매칭(불변키): "${input}" → ${city.name} (ID: ${city.id})`);
+        return {
+          cityId: city.id,
+          name: city.name,
+          nameEn: city.nameEn || enLocal.nameEn,
+          nameLocal: city.nameLocal || enLocal.nameLocal,
+          countryCode: city.countryCode,
+          latitude: city.latitude,
+          longitude: city.longitude,
+        };
+      }
+    }
+
     // ===== 1단계: DB에서 직접 검색 (nameEn, name, nameLocal) =====
     const dbResults = await db.select().from(cities)
       .where(
@@ -251,19 +279,24 @@ export async function findCityUnified(input: string): Promise<CityResolveResult 
       }
     }
 
-    // ===== 4단계: 부분 매칭 (ilike) =====
-    const partialResults = await db.select().from(cities)
-      .where(
-        sql`LOWER(${cities.name}) LIKE ${`%${inputLower}%`}
-         OR LOWER(COALESCE(${cities.nameEn}, '')) LIKE ${`%${inputLower}%`}
-         OR LOWER(COALESCE(${cities.nameLocal}, '')) LIKE ${`%${inputLower}%`}`
-      )
-      .limit(1);
+    // ===== 4단계: 유사어 부분 매칭 (양방향 ilike) =====
+    // ⚠️ 수정금지(승인필요) 2026-07-08 사장님 SSOT = 한국 초행여행자가 정확명칭 모름("본느" vs "본") = 유사어 검색.
+    //   = 양방향: 입력⊂DB명(옛) + DB명⊂입력(신규) 둘 다 = "본느" LIKE '%본%' 로 "본" 잡음. 좌표(0단계) 없을 때 보조.
+    //   = LENGTH>=2 가드 = 1글자 오매칭 방지. 좌표매칭이 최우선이라 이 단계 오매칭 위험은 좌표 없는 경우로 한정.
+    const partialResults = inputLower.length >= 2
+      ? await db.select().from(cities)
+          .where(
+            sql`LOWER(${cities.name}) LIKE ${`%${inputLower}%`} OR ${inputLower} LIKE '%' || LOWER(${cities.name}) || '%'
+             OR LOWER(COALESCE(${cities.nameEn}, '')) LIKE ${`%${inputLower}%`} OR (LENGTH(COALESCE(${cities.nameEn},''))>=2 AND ${inputLower} LIKE '%' || LOWER(${cities.nameEn}) || '%')
+             OR LOWER(COALESCE(${cities.nameLocal}, '')) LIKE ${`%${inputLower}%`} OR (LENGTH(COALESCE(${cities.nameLocal},''))>=2 AND ${inputLower} LIKE '%' || LOWER(${cities.nameLocal}) || '%')`
+          )
+          .limit(1)
+      : [];
 
     if (partialResults.length > 0) {
       const city = partialResults[0];
       const enLocal = CITY_EN_LOCAL_MAP[city.name] || { nameEn: city.nameEn || city.name, nameLocal: city.nameLocal || city.name };
-      console.log(`[CityResolver] ✅ 부분 매칭: "${input}" → ${city.name} (ID: ${city.id})`);
+      console.log(`[CityResolver] ✅ 유사어 부분 매칭: "${input}" → ${city.name} (ID: ${city.id})`);
       return {
         cityId: city.id,
         name: city.name,
