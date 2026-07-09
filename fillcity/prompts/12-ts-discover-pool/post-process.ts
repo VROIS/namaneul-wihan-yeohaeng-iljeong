@@ -270,7 +270,8 @@ const PM_CALL_EUR = 0.007;
   async function pmUpload(photoName: string, key: string): Promise<string | null> {
     if (!PLACES_KEY || !STORAGE_KEY) return null;
     try {
-      const pr = await fetch(`https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=800&key=${PLACES_KEY}`, { signal: AbortSignal.timeout(30000) });
+      // maxWidthPx=400 = 사진 해상도 SSOT(ts-client PHOTO_MAX_WIDTH_PX 정합, 2026-07-09 사장님). 이 파일은 관문 우회 직접 fetch(별개 §16 이슈)라 값 직접.
+      const pr = await fetch(`https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=400&key=${PLACES_KEY}`, { signal: AbortSignal.timeout(30000) });
       if (!pr.ok) return null;
       const buf = Buffer.from(await pr.arrayBuffer());
       const fp = `${cityId}/${key}-${Date.now()}.jpg`;

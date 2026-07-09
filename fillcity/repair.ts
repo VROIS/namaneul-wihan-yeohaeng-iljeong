@@ -194,50 +194,12 @@ const ANCHOR_M = 10; // ⚠️ 수정금지(승인필요) 2026-06-23 사장님 S
           photo_name: t1.photoName, google_maps_uri: t1.googleMapsUri, business_status: t1.businessStatus,
         },
       });
-      // ⚠️ 수정금지(승인필요) 2026-07-09 사장님 SSOT (B = PID 선검사 = 도시무관) = TS가 준 강매칭키(PID/URI/좌표)가
-      //   전체 PSR 어느 행(id<>r.id, 도시 무관)에 이미 있으면 = 이 행에 직행하면 트리거(도시무관 불변1·2·4) EXCEPTION 으로 죽음.
-      //   = 도시무관(city_id 조건 폐기 2026-07-09 §19): 같은 장소가 다른 도시에 이미 있으면 그걸 재활용 = 재과금 근본 차단. matcher/트리거 동형(§16).
-      //   = 강매칭키는 직행 안 하고(스킵) 로그 = 중복 안 만들고 EXCEPTION 회피. 약필드(name_en·주소·RC·price)는 그대로 갱신.
-      //   = 진짜 같은 장소면 기존 그 행이 정답 = 이 행은 다음 청소(병합)에서 정리. = §20 통일 PSR(애초에 중복 안 만듦).
-      let dupOwner: number | null = null;
-      if (t1.googlePlaceId) {
-        const q = await c.query(`SELECT id FROM place_seed_raw WHERE google_place_id=$1 AND id<>$2 LIMIT 1`, [t1.googlePlaceId, r.id]);
-        if (q.rows[0]) dupOwner = q.rows[0].id;
-      }
-      if (!dupOwner && t1.googleMapsUri) {
-        const q = await c.query(`SELECT id FROM place_seed_raw WHERE google_maps_uri=$1 AND id<>$2 LIMIT 1`, [t1.googleMapsUri, r.id]);
-        if (q.rows[0]) dupOwner = q.rows[0].id;
-      }
-      if (!dupOwner && t1.latitude != null && t1.longitude != null) {
-        // ⚠️ 2026-07-09 = 위도 BETWEEN(sargable) = idx_psr_latitude 인덱스 활용(경도 ABS 필터). ABS(위도)=non-sargable 풀스캔 회피. 논리 동일.
-        const q = await c.query(`SELECT id FROM place_seed_raw WHERE latitude BETWEEN $1::real - 0.0001 AND $1::real + 0.0001 AND longitude IS NOT NULL AND ABS(longitude-$2::real)<0.0001 AND id<>$3 LIMIT 1`, [t1.latitude, t1.longitude, r.id]);
-        if (q.rows[0]) dupOwner = q.rows[0].id;
-      }
-      // ⚠️ 사장님 SSOT 2026-06-16 = 우리 id 직행 UPDATE = TS 전 응답값(PID 포함) 그대로 이 행에 덮음. PID 바뀌어도 id 불변 = 무조건 여기다. 매칭 X = 빗나감 X.
+      // ⚠️ 사장님 SSOT 2026-06-16·2026-07-09 = 우리 id 직행 UPDATE = TS 전 응답값(PID 포함) 그대로 이 행에 덮음. PID 바뀌어도 id 불변 = 무조건 여기다. 매칭·중복재판별 X = 빗나감 X.
+      //   = dupOwner 선조회 폐기 2026-07-09 §19(사장님 SSOT "어디로 갈지 아는 id 에서 결손만 찾아 그 행으로 직행", ag3 와 통일): 추출[1]에서 이미 결손 행의 id 확정 → 여기선 그 id 에 결손만 직행으로 채움.
+      //     TS 가 준 PID 가 타도시 기존 행과 충돌하면(같은 장소가 이미 다른 도시에 있음) = 트리거(도시무관 불변1/2/4)가 EXCEPTION → 아래 바깥 try/catch(그 행만 스킵). 그 원행이 정답 = 이 결손행은 07-merge 병합 대상(§20).
       // ⚠️ 수정금지(승인필요) 2026-06-20 사장님 SSOT = 선별 금지 = TS 응답 전 필드 → 대응 컬럼 새 우선 덮어쓰기(중복요소 = Gemini 1차 → TS 가 뒤=최신=덮음, price 포함 동일 취급).
-      //   가격 = 새 우선 덮어쓰기(=최신최우선, project_price_eur_ssot). shopping=price 안 줌 정합.
-      //   TS price 는 거의 null = 그땐 COALESCE 가 기존 Gemini price 보존 / TS 가 주면 더 최신이라 덮음 = 자동 정합.
+      //   가격 = 새 우선 덮어쓰기(=최신최우선, project_price_eur_ssot). shopping=price 안 줌 정합. TS price 거의 null = COALESCE 가 기존 Gemini price 보존.
       const priceEur = r.seed_category === 'shopping' ? null : (t1.priceEur ?? null);
-      if (dupOwner) {
-        // ⚠️ 수정금지(승인필요) 2026-06-24 (B) = 강매칭키는 dupOwner(기존 행) 이 이미 보유 = 직행하면 트리거 차단 = 강매칭키 직행 스킵.
-        //   = 약필드만 갱신(name_en·주소·RC·price = 비강매칭키 = 트리거 불변에 안 걸림). PID/URI/좌표는 안 건드림.
-        // ⚠️ 수정금지(승인필요) 2026-06-24 §19 = 약필드 UPDATE 도 트리거(BEFORE INSERT OR UPDATE)가 NEW.address(TS주소≈dupOwner) + 미변경 name_local 을
-        //   재평가 = 불변3(주소+로컬이름)·불변5(로컬이름) RAISE EXCEPTION(P0001) 가능 = try/catch 로 그 행만 스킵·continue(나머지 계속).
-        try {
-          const u = await c.query(`UPDATE place_seed_raw SET
-            name_en = COALESCE($2, name_en),
-            address = COALESCE($3, address),
-            google_review_count = COALESCE($4::integer, google_review_count),
-            price_eur = COALESCE($5::real, price_eur),
-            updated_at = NOW()
-          WHERE id=$1`, [r.id, t1.nameEn ?? null, t1.address ?? null, t1.googleReviewCount ?? null, priceEur]);
-          if (u.rowCount) tsDone++;
-          console.log(`  ! TS id=${r.id} ${t1.nameEn || hint} = PID/좌표 중복(기존 id=${dupOwner}) = 강매칭키 직행 스킵(약필드만 갱신, 트리거 EXCEPTION 회피)`);
-        } catch (e: any) {
-          console.log(`  ! TS id=${r.id} ${t1.nameEn || hint} = 트리거 중복차단(기존 id=${dupOwner}, ${e.code || ''}) = 그 행 스킵(다음 청소에서 병합)`);
-        }
-        continue;
-      }
       const u = await c.query(`UPDATE place_seed_raw SET
         -- ⚠️ 수정금지(승인필요) — TS displayName→name_en (2026-06-17 사장님 SSOT) = name_local은 Gemini전용 (= TS displayName(영어)을 name_en 칸으로 직행 UPDATE)
         name_en = COALESCE($2, name_en),
@@ -289,7 +251,7 @@ const ANCHOR_M = 10; // ⚠️ 수정금지(승인필요) 2026-06-23 사장님 S
       const pid = t1.googlePlaceId || cur?.google_place_id;
       // ⚠️ 수정금지(승인필요) 2026-06-18 = PM 외부호출(3단계) 출입증 = 채움 hasRow=true 검문 통과 시에만 키.
       const pmKey = await issueApiKey(c, 'GOOGLE_MAPS_API_KEY', cityId, inputDate, true);
-      const imageUrl = await tsPhoto({ apiKey: pmKey, photoName: t1.photoName, storageKey, supaPublicUrl, pathKey: `${cityId}/${cur?.seed_category || r.seed_category}/${pid}`, maxWidthPx: 800 });
+      const imageUrl = await tsPhoto({ apiKey: pmKey, photoName: t1.photoName, storageKey, supaPublicUrl, pathKey: `${cityId}/${cur?.seed_category || r.seed_category}/${pid}` }); // maxWidthPx 미지정 = 관문 기본 400(§16 단일 SSOT)
       if (!imageUrl) { console.log(`  X 업로드실패 id=${r.id} ${r.name_local}`); continue; }
       // ⚠️ 사장님 SSOT 2026-06-16 = 우리 id 직행 UPDATE = 이미지 이 행에 직행. 매칭 X.
       const u = await c.query(`UPDATE place_seed_raw SET image_url=$2, image_updated_at=NOW(), updated_at=NOW() WHERE id=$1`, [r.id, imageUrl]);

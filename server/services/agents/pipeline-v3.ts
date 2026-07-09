@@ -284,33 +284,11 @@ async function step1_geminiItinerary(
     ageDesc = `${age}세`;
   }
 
-  // ② 동행 유형
-  const companionTypeKo: Record<string, string> = {
-    Solo: '혼자', Single: '혼자',
-    Couple: '연인/부부 둘이',
-    Family: '가족과 함께',
-    ExtendedFamily: '대가족(조부모 포함)',
-    Group: '친구/단체',
-  };
-  const companionDesc = companionTypeKo[formData.companionType || 'Couple'] || formData.companionType;
-
-  // ③ 동행 인원
+  // 🗑️ 2026-07-09 사장님 SSOT = companionTypeKo·focusKo 하드코딩 번역맵 삭제 §19 = 옛 AI 과설계(Gemini 응답요소에 없는 설명글).
+  //   = 동행유형·큐레이션초점도 원본값(companionType·curationFocus) 그대로 Gemini 전달 = 자유해석([[feedback_dynamic_function_not_hardcoded_map]]). agesDesc(죽은코드) 삭제.
+  const companionDesc = formData.companionType || 'Couple';   // 원본값(Solo/Couple/Family/Group...) 그대로
   const headcount = formData.companionCount || 2;
-
-  // ④ 동행 연령대
-  let agesDesc = '';
-  if (formData.companionAges) {
-    agesDesc = `동행자 연령: ${formData.companionAges}`;
-  }
-
-  // ⑤ 큐레이션 초점
-  const focusKo: Record<string, string> = {
-    Kids: '아이들이 즐길 수 있는 곳 중심 (놀이·체험·아이스크림)',
-    Parents: '부모님이 편안한 곳 중심 (걷기 쉬운·쉼터·전통)',
-    Everyone: '모든 연령이 함께 즐기는 곳 (균형있게)',
-    Self: '나 자신을 위한 힐링·취향 코스',
-  };
-  const focusDesc = focusKo[formData.curationFocus || 'Everyone'] || '모든 연령이 함께 즐기는 곳';
+  const focusDesc = formData.curationFocus || 'Everyone';     // 원본값(Kids/Parents/Everyone/Self) 그대로
 
   // ⑥ 여행지 (destination) - 직접 사용
 
@@ -318,40 +296,9 @@ async function step1_geminiItinerary(
   const startDate = formData.startDate;
   const endDate = formData.endDate;
 
-  // ⑧ 바이브 (Vibes) - 자연어 변환
-  const vibeKo: Record<string, string> = {
-    Healing: '힐링·휴식 (조용한 정원, 카페, 산책)',
-    Adventure: '모험·액티비티 (체험, 야외활동)',
-    Hotspot: '핫스팟·SNS (인스타 명소, 트렌디한 곳)',
-    Foodie: '미식·맛집 (현지 음식, 로컬 레스토랑)',
-    Shopping: '쇼핑 (명품 거리, 백화점, 시장, 아울렛)',
-    Culture: '문화·역사 (미술관, 박물관, 유적지)',
-  };
-  const vibeNatural = vibeWeights
-    .map(v => `${vibeKo[v.vibe] || v.vibe} ${v.percentage}%`)
-    .join(', ');
-
-  // ⑨ 여행 스타일 (예산)
-  const styleKo: Record<string, string> = {
-    Economic: '알뜰하게 (저예산, 길거리음식·무료명소 위주)',
-    Reasonable: '적정하게 (가성비 맛집, 합리적 예산)',
-    Premium: '프리미엄 (미쉐린·파인다이닝, 좋은 레스토랑)',
-    Luxury: '럭셔리 (최고급, 가격 무관)',
-  };
-  const styleDesc = styleKo[formData.travelStyle || 'Reasonable'] || '적정하게';
-
-  // 추가: 이동방식
-  const mobilityKo: Record<string, string> = {
-    WalkMore: '많이 걷기 (도보 + 대중교통, 골목골목 탐방)',
-    Moderate: '적당히 (대중교통 위주, 먼 거리는 우버)',
-    Minimal: '이동 최소화 (전용차량/택시, 편하게)',
-  };
-  const mobilityDesc = mobilityKo[formData.mobilityStyle || 'Moderate'] || '적당히';
-
-  // 추가: 여행 밀도
-  const paceKo = formData.travelPace === 'Packed' ? '빡빡하게 (장소당 90분, 알차게)'
-    : formData.travelPace === 'Relaxed' ? '여유롭게 (장소당 150분, 느긋하게)'
-      : '보통 속도 (장소당 120분)';
+  // 🗑️ 2026-07-09 사장님 SSOT = vibeKo·styleKo·mobilityKo·paceKo 하드코딩 번역맵 4개 완전삭제 §19 = 옛 AI 과설계.
+  //   = Gemini 응답요소에 없는 것(사람 읽는 설명글) = 삭제. 원본값(vibes·travelStyle·travelPace)을 그대로 프롬프트에 실어 Gemini 해석([[feedback_dynamic_function_not_hardcoded_map]]).
+  //   = 실제 로직(카테고리 배분 catSlots·페이스 90/120/150분·예산)은 이미 다른 곳서 동적 처리 = 이 설명맵은 장식(죽은코드·도달불가폴백)이었음.
 
   // 🧠 2026-07-05 사장님 SSOT = vibe → 6카테고리 슬롯 배분을 프롬프트에 전달(§20 = catSlots 단일 SSOT ag2 재사용).
   //   = 옛날엔 "관광 X + 식사 Y" 2종으로만 전달 → Gemini 가 카테고리 모름 → attraction/restaurant 로 뭉개짐(리모주 사고).
@@ -421,7 +368,8 @@ async function step1_geminiItinerary(
   // ⚠️ 수정금지(승인필요) 2026-05-24 = 메인앱 표준 prompt 사용자 SSOT
   // = SSOT 원본 = .claude/skills/raw-db-verify-and-complete/prompts/09-main-app-itinerary/STANDARD_PROMPT_2026-05-24.md
   // = 1 글자 변경 = Gemini 응답 변경 = 양쪽 파일 동기 강제
-  const koreanTravelerStyle = `${companionDesc} ${headcount}명 / vibe=${formData.vibes?.join('+') || vibeNatural} / 페이스=${paceKo} / 스타일=${styleDesc}${ageDesc ? ` / 나이=${ageDesc}` : ''}`;
+  // 🗑️ 2026-07-09 사장님 SSOT = vibe/페이스/스타일 = 하드코딩 번역맵 폐기 §19 → 원본값 그대로(Gemini 해석). vibes·travelPace·travelStyle 원본 = route-prompt 동적 패턴.
+  const koreanTravelerStyle = `${companionDesc} ${headcount}명 / vibe=${(formData.vibes || []).join('+')} / 페이스=${formData.travelPace || 'Normal'} / 스타일=${formData.travelStyle || 'Reasonable'}${ageDesc ? ` / 나이=${ageDesc}` : ''}`;
   const prompt = `You are a travel data assistant for KOREAN TRAVELERS (${nowYear}년 기준 최신 정보).
 Return STRICT machine-parseable JSON only (no prose, no markdown wrappers).
 

@@ -85,7 +85,7 @@ if (!cityId) { console.error('Usage: --city-id=<N> --date=<YYYY-MM-DD> --apply-s
   //   = 원칙: PID 있어야만 구글이미지 인정 → PID 없으면 PM 자체 불성립(Storage 입력 X = WK 폴백 유지).
   //   = 경로 = PID 결정적 → row 가 바뀌어도(merge/rename) storage-image-relink 가 항상 찾음 = 고아 영구 방지 = Storage↔DB image_url 일치.
   //   = 옛 {cityId}/{rowId}-{ts} 폐기(= rowId·타임스탬프 비결정적 = row 바뀌면 고아 = relink 불가 = 밑빠진독 원인, [[feedback_internal_first_recover]]).
-  //   = 업로드 = tsPhoto 단일 관문(PUT+x-upsert) = bucket place-images, maxWidthPx=800 동일.
+  //   = 업로드 = tsPhoto 단일 관문(PUT+x-upsert) = bucket place-images, 해상도 = 관문 기본 PHOTO_MAX_WIDTH_PX(400) 단일 SSOT(2026-07-09).
   const SUPA_PUBLIC = process.env.SUPABASE_PUBLIC_URL || 'https://wxebceflvuythuodemro.supabase.co';
   async function downloadAndUpload(photoName: string, category: string, pid: string): Promise<string | null> {
     if (!PLACES_KEY || !SUPA_PUBLIC || !STORAGE_KEY) return null;
@@ -96,7 +96,7 @@ if (!cityId) { console.error('Usage: --city-id=<N> --date=<YYYY-MM-DD> --apply-s
       supaPublicUrl: SUPA_PUBLIC,
       pathKey: `${cityId}/${category}/${pid}`,
       bucket: 'place-images',
-      maxWidthPx: 800,
+      // maxWidthPx 미지정 = 관문 기본 PHOTO_MAX_WIDTH_PX(400) = 사진 해상도 단일 SSOT(§16, 2026-07-09 사장님).
     });
   }
 

@@ -34,7 +34,8 @@ import { tsSearch, tsPhoto } from "../shared/ts-client";
 // ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT = 이미지 폴백 단일 SSOT (= Google 1 > WK 2)
 import { pickPlaceImage } from "../shared/place-image";
 // ⚠️ 수정금지(승인필요) §16 = 동일장소 7단계 매칭 = 공용 matcher.ts 단일 (= URI veto)
-import { matchCandidate } from "../shared/matcher";
+// ⚠️ 2026-07-09 = 후보 사전인덱스(pre-bucket) = 도시무관 전체PSR 매칭 4.3초→0.1초 (§16 matcher SSOT).
+import { matchCandidate, buildCandidateIndex, candidatesFor } from "../shared/matcher";
 // ⚠️ 수정금지(승인필요) 2026-07-06 사장님 SSOT = TS raw 모음 1파일(#45 방식) 저장 = 도시id 폴더 로컬+Storage 2곳(§18).
 import { saveCollectedRaw } from "../shared/save-collected-raw";
 
@@ -238,6 +239,10 @@ export async function matchPlacesWithDB(
       }).from(placeSeedRaw)
     : [];
 
+  // ⚠️ 2026-07-09 사장님 SSOT = 후보 1회 사전인덱스 = place 마다 전체 filter(12,769행×24곳) 회피 → 관련 후보 서브셋만 matchCandidate 에 전달(§16).
+  //   = 도시무관화 부작용(매칭 4.3초) 근본해소. 매칭 결과 불변(7단계 키 합집합 = 보수적 후보).
+  const candIndex = buildCandidateIndex(seedCands);
+
   for (const place of geminiPlaces) {
     // ⚠️ 수정금지(승인필요) 2026-05-20 = DB-only path skip = AG2 가 이미 place_seed_raw 직접 = 매칭 불필요 (= 사용자 SSOT 병렬 극대화)
     // ⚠️ 2026-05-20 = 여기서 matched++ 안 함 (= line 466 if(dbMatch) 와 이중 증가 방지)
@@ -249,24 +254,22 @@ export async function matchPlacesWithDB(
     // ⚠️ 수정금지(승인필요) — PID veto 제거 텍스트 정합(2026-06-15 SSOT)
     // ⚠️ 2026-06-03 = 5 단계 매칭 = 공용 matcher.ts 단일 (= 자체 0~4순위 폐기 = upsertPlace/트리거와 동일 검증 + URI veto(PID veto 제거))
     //   = PID > URI > 풀주소+이름9조합 > 좌표10m > 로컬네임9조합. 단계 통과 시 다음 자동 스킵. 다른 URI = 다른 장소(PID 차이는 veto 아님, 2026-06-15 SSOT).
-    const seedDirectMatch: any =
-      matchCandidate(
-        {
-          cityId: _cid,
-          googlePlaceId: (place as any).geminiPlaceId || (place as any).googlePlaceId || null,
-          googleMapsUri: (place as any).googleMapsUri || null,
-          address: (place as any).geminiAddress || (place as any).address || null,
-          // ⚠️ 수정금지(승인필요) 2026-07-05 사장님 SSOT = 좌표(10m 앵커)는 매칭에 반드시 넘김.
-          //   = 이유: 도시가 아닌 오지·풀주소가 명확히 정립 안 된 곳에서 좌표 = 이름/주소가 안 맞아도 통하는 만국 통용 매칭키.
-          //   = matcher 5순위 좌표(10m)는 name_local/PID/URI/주소 다 실패 시에만 도달 + URI veto 로 오병합 차단 = 안전. 임의 제거 금지.
-          latitude: (place as any).lat != null ? parseFloat(String((place as any).lat)) : null,
-          longitude: (place as any).lng != null ? parseFloat(String((place as any).lng)) : null,
-          nameEn: place.name || null,
-          nameLocal: (place as any).nameLocal || null,
-          nameKo: (place as any).nameKo || null,
-        },
-        seedCands,
-      ).match || null;
+    // ⚠️ 수정금지(승인필요) 2026-07-05 사장님 SSOT = 좌표(10m 앵커)는 매칭에 반드시 넘김.
+    //   = 이유: 도시가 아닌 오지·풀주소가 명확히 정립 안 된 곳에서 좌표 = 이름/주소가 안 맞아도 통하는 만국 통용 매칭키.
+    //   = matcher 5순위 좌표(10m)는 name_local/PID/URI/주소 다 실패 시에만 도달 + URI veto 로 오병합 차단 = 안전. 임의 제거 금지.
+    const matchInput = {
+      cityId: _cid,
+      googlePlaceId: (place as any).geminiPlaceId || (place as any).googlePlaceId || null,
+      googleMapsUri: (place as any).googleMapsUri || null,
+      address: (place as any).geminiAddress || (place as any).address || null,
+      latitude: (place as any).lat != null ? parseFloat(String((place as any).lat)) : null,
+      longitude: (place as any).lng != null ? parseFloat(String((place as any).lng)) : null,
+      nameEn: place.name || null,
+      nameLocal: (place as any).nameLocal || null,
+      nameKo: (place as any).nameKo || null,
+    };
+    // ⚠️ 2026-07-09 = 전체 seedCands 대신 사전인덱스로 좁힌 후보 서브셋만 전달(매칭결과 불변, 4.3초→0.1초).
+    const seedDirectMatch: any = matchCandidate(matchInput, candidatesFor(candIndex, matchInput)).match || null;
     if (seedDirectMatch)
       console.log(`[AG3] ✅ matcher 매칭: "${place.name}" → "${seedDirectMatch.nameEn}"`);
 
@@ -495,8 +498,8 @@ export async function matchPlacesWithDB(
 export async function saveNewPlacesToDB(
   newPlaces: PlaceResult[],
   cityId: number | null,
-  // ⚠️ 수정금지(승인필요) 2026-06-01 = 사용자 SSOT = deferPersist=true 시 = fetch(TS+PM+Storage) await 완료 후 = DB INSERT(upsertPlace) 만 background
-  // = 첫 trip 이미지 FE 노출 최우선 / 백필(DB)은 background. false(기본)=fetch+INSERT 모두 inline. 롤백 = pipeline-v3 플래그 1줄
+  // ⚠️ 수정금지(승인필요) 2026-06-01 = 사용자 SSOT = deferPersist=true 시 = fetch(TS+PM+Storage) await 완료 후 = DB write(upsertPlace)만 곳별 즉시 X, 함수 끝에서 한꺼번에 await.
+  // = 첫 trip 이미지 FE 노출 최우선 / DB write 는 뒤로 미루되 함수 반환 전 await Promise.allSettled 로 완료(증발 0, 대안2 2026-07-09). false(기본)=fetch+write 모두 곳별 즉시 await.
   opts?: { deferPersist?: boolean },
 ): Promise<void> {
   if (!db || !cityId) {
@@ -609,32 +612,33 @@ export async function saveNewPlacesToDB(
   const g1 = stage1.reduce((a, r: any) => { a[r.action] = (a[r.action] || 0) + 1; return a; }, {} as Record<string, number>);
   console.log(`[AG3-SAVE] ① Gemini 전체 upsert = ins=${g1.inserted || 0} upd=${g1.updated || 0} skip=${g1.skipped || 0} (${stage1.length}행)`);
 
-  // ── ② TS+PM 대상 추출 = 신규(inserted) + PID 없는 매칭행(updated) ──
+  // ── ② TS+PM 대상 추출 = 신규(inserted) + 결손 매칭행(updated) ──
   //   🧠 2026-07-08 사장님 SSOT = Gemini가 채운 슬롯 전부 검증 보장. 옛 "inserted만" = 형제 좌표흡수(updated)된 멀쩡한 곳이 TS+PM 누락(안도라 Animal Park 사고) = 완전삭제 §19.
-  //   = PID 이미 보유한 매칭행(기존 도시 재활용)만 skip = #45 재과금0 유지.
+  //   ⚠️ 수정금지(승인필요) 2026-07-09 사장님 SSOT = 흡수행 결손 판정 = PID **또는** 구글이미지(image_url) 없으면 TS+PM 대상 = fillcity repair.ts:99 정본 복붙(§16 재발명0).
+  //     = 옛 "PID 없음만" 폐기 §19: PID 보유하나 이미지가 place-images(구글 검증) 아닌 흡수행(WK·Gemini 이미지)이 TS+PM 누락되던 결함. 도시무관 재활용행이 진짜 구글이미지 못 받던 근본.
   const newRows = stage1.filter((r: any) => r.action === "inserted" && r.rowId != null);
-  // ②-b 흡수·매칭행 중 PID 없는 것 = 검증 안 된 행 = TS 대상 (배치 SELECT 1회 판정)
   const updatedRows = stage1.filter((r: any) => r.action === "updated" && r.rowId != null);
   let absorbedRows: typeof updatedRows = [];
   if (updatedRows.length > 0 && db) {
     const ids = [...new Set(updatedRows.map((r: any) => r.rowId))];
-    const pidRows = await db.select({ id: placeSeedRaw.id, googlePlaceId: placeSeedRaw.googlePlaceId })
+    const chk = await db.select({ id: placeSeedRaw.id, googlePlaceId: placeSeedRaw.googlePlaceId, imageUrl: placeSeedRaw.imageUrl })
       .from(placeSeedRaw).where(inArray(placeSeedRaw.id, ids as number[]));
-    const pidById = new Map(pidRows.map((r: any) => [r.id, r.googlePlaceId]));
-    absorbedRows = updatedRows.filter((r: any) => !pidById.get(r.rowId));
+    // 결손 = PID 없음 OR 구글이미지(place-images) 아님 (repair.ts:99 = image_url NOT LIKE '%place-images%')
+    const missById = new Map(chk.map((r: any) => [r.id, !r.googlePlaceId || !r.imageUrl || !String(r.imageUrl).includes('place-images')]));
+    absorbedRows = updatedRows.filter((r: any) => missById.get(r.rowId));
   }
+  // mode = raw 산출물(tsResults, §18) 에 실리는 신규/흡수 구분 라벨 전용(사장님 눈검수용). 처리 로직은 신규·흡수 동일(자기 rowId 직행) = 분기 안 함.
   const tsTargets = [
     ...newRows.map((r: any) => ({ ...r, mode: "new" as const })),
     ...absorbedRows.map((r: any) => ({ ...r, mode: "absorbed" as const })),
   ];
-  console.log(`[AG3-SAVE] ② TS+PM 대상 = 신규 ${newRows.length} + 흡수(PID없음) ${absorbedRows.length} = ${tsTargets.length}곳 (PID 보유 매칭행 ${updatedRows.length - absorbedRows.length}곳 = 유료호출 0)`);
+  console.log(`[AG3-SAVE] ② TS+PM 대상 = 신규 ${newRows.length} + 흡수(PID또는이미지 결손) ${absorbedRows.length} = ${tsTargets.length}곳 (PID+이미지 완비 매칭행 ${updatedRows.length - absorbedRows.length}곳 = 유료호출 0)`);
 
-  // ── ③ 대상 전부 TS+PM = 신규 → rowId 직행 UPDATE / 흡수건 → TS PID 포함 전체 퍼널 재투입(§20 깔대기). ──
-  //   = 신규 재UPDATE 는 targetRowId 직행(§14 재매칭 실패 불가) / 흡수건 = TS PID가 붙어 matcher PID게이트로 형제와 구분 = 자기 행 확보.
+  // ── ③ 대상(신규+흡수) 전부 TS+PM = 자기 rowId 직행 UPDATE(신규·흡수 통일). ──
+  //   = ①에서 이미 Gemini 요소로 id 확정(흡수는 트리거가 원행 id 로 UPDATE) → ③은 그 확정 id 칸의 결손(TS 9요소+이미지)만 targetRowId 직행으로 채움(§14 재매칭 실패 불가, 재매칭·중복재판별 안 함 = 사장님 SSOT).
   // ⚠️ 수정금지(승인필요) 2026-07-06 사장님 SSOT = TS raw 모음 1파일(#45 repair.ts:167 방식) = 건건 로컬skip + 끝에 06형태 results 배열 1파일(§18).
   const tsResults: any[] = [];
-  const job2Promises: Promise<void>[] = [];                     // defer 모드 job2 완료 추적 = ③-c 흡수건 재투입 순서보장
-  const absorbedJobs: Array<{ name: string; job3: any }> = [];  // 흡수건 퍼널 재투입 페이로드(실행 = ③-c)
+  const job2Promises: Promise<void>[] = [];                     // defer 모드 rowId 직행 UPDATE = 함수 끝에서 await Promise.allSettled 로 응답 전 완료(증발 0)
   const results = await Promise.all(
     tsTargets.map(async ({ place, seedCategory, rowId, mode }: any) => {
       try {
@@ -681,33 +685,31 @@ export async function saveNewPlacesToDB(
         const lng = (result.longitude && result.longitude !== 0) ? result.longitude : ((place as any).lng || null);
         const placeId: string | null = result.googlePlaceId || (place as any).googlePlaceId || null;
 
-        // 이미지 = TS photoName 있을 때만 PM(구글 검증 이미지 새덮어쓰기). 폐업 = PM만 스킵(사장님 필터구조).
-        let imageUrl: string | null = null;
+        // ⚠️ 수정금지(승인필요) 2026-07-09 사장님 SSOT = 대안2 = 곳당 TS→PM 을 응답 전에 await 완료(사진 증발 0). 곳끼리는 Promise.all 병렬(속도).
+        //   근거(시뮬 실증 2026-07-09): 사진을 fire-and-forget 하면 배포서버(서버리스)가 HTTP 응답 후 프로세스 회수 = 응답순간 사진 0/5 = 유료 사진 전량 증발.
+        //   로컬 PC 에선 이벤트루프가 계속 돌아 완주 = 증발이 안 보임 = 배포서버서만 터짐(과거 raw 증발 bb685d9 동일 메커니즘). → 응답 전 await 로 되돌림.
+        //   속도 상쇄: 사진 400px(PHOTO_MAX_WIDTH_PX, 데이터 1/4)로 다운·저장이 4배 빨라 await 지연 최소화 + 곳끼리 병렬.
+        let photoImage: string | null = null; // 이 곳의 TS 사진(Storage) 결과 = 아래서 await 채움
         if (result.photoName && placeId && !isClosedPermanently) {
-          imageUrl = await tsPhoto({
-            apiKey: GOOGLE_KEY,
-            photoName: result.photoName,
-            storageKey: SUPA_ANON,
-            supaPublicUrl: SUPA_PUB,
+          photoImage = await tsPhoto({
+            apiKey: GOOGLE_KEY, photoName: result.photoName, storageKey: SUPA_ANON, supaPublicUrl: SUPA_PUB,
             pathKey: `${cityId}/${seedCategory}/${placeId}`,
-            maxWidthPx: 800,
-          });
+            // maxWidthPx 미지정 = 관문 기본 PHOTO_MAX_WIDTH_PX(400) = 사진 해상도 단일 SSOT(§16, 2026-07-09 사장님).
+          }).catch((e) => { console.error(`[AG3-SAVE] ⚠️ 사진 실패 "${place.name}":`, (e as Error).message); return null; });
         }
-        const finalImage = imageUrl || place.image || null;
+        const finalImage = photoImage || place.image || null; // TS 사진 우선(구글 검증), 없으면 Gemini 폴백
 
-        // ④ FE 배선 = place 객체 직접 갱신(신규·흡수건 공통) = TS 검증 좌표/이미지 최신 반영.
+        // ④ FE 배선 = place 객체 직접 갱신(신규·흡수건 공통) = TS 검증 좌표·PID·주소·RC·사진 즉시 반영.
         if (lat && lng) { place.lat = lat; place.lng = lng; }
         place.image = finalImage || "";
         if (placeId) (place as any).googlePlaceId = placeId;
         (place as any).geminiAddress = result.address || (place as any).geminiAddress;
         if (result.googleReviewCount != null) place.userRatingCount = result.googleReviewCount;
         console.log(
-          `[AG3-SAVE] 📡 신규 "${place.name}" → (${lat}, ${lng}) pid=${placeId ? "TS" : "NONE"} img=${imageUrl ? "Storage" : (place.image ? "Gemini" : "NULL")}`,
+          `[AG3-SAVE] 📡 신규 "${place.name}" → (${lat}, ${lng}) pid=${placeId ? "TS" : "NONE"} img=${photoImage ? "PM(Storage)" : (place.image ? "Gemini" : "NULL")}`,
         );
 
-        // ③-b 저장 = TS 검증값 전체(Gemini+TS = §20 깔대기).
-        //   mode=new = ① 신규 rowId 직행 UPDATE(targetRowId, §14 재매칭 실패 불가). COALESCE 새우선.
-        //   mode=absorbed = targetRowId 없이 퍼널 재투입 페이로드 적재(실행 = ③-c = 형제 PID 착지 후) = TS PID로 자기 행 확보.
+        // ③-b 저장 = TS 검증값 전체(Gemini+TS = §20 깔대기) = 신규·흡수 공통 자기 rowId 직행 UPDATE(targetRowId, §14 재매칭 실패 불가). COALESCE 새우선.
         const newPriceEur = (result.priceEur || 0) > 0 ? result.priceEur : ((place as any).estimatedPriceEur || 0);
         const jobBase = {
           cityId,
@@ -730,17 +732,22 @@ export async function saveNewPlacesToDB(
           phaseTags: isClosedPermanently ? [`auto-learn-${today}`, "영구폐업"] : [`auto-learn-${today}`],
           distanceKmFromCenter: (place as any).distanceKmFromCenter ?? null,
         };
-        if (mode === "new") {
-          const job2 = { targetRowId: rowId, ...jobBase };       // = ① 신규 rowId 직행 = 재매칭 실패 불가
-          const doUpdate = async () => { await upsertPlace(job2 as any); };
-          // deferPersist = 재UPDATE(DB write)만 background(FE 는 위 place mutate 로 이미 노출) + promise 추적(③-c 순서보장). 기본 = await.
-          if (opts?.deferPersist) job2Promises.push(doUpdate().catch((e) => console.error(`[AG3-SAVE] ⚠️ 재UPDATE 실패 "${place.name}":`, (e as Error).message)));
-          else await doUpdate();
-        } else {
-          absorbedJobs.push({ name: place.name, job3: jobBase }); // targetRowId 없음 = 퍼널(upsertPlace)이 PID게이트로 INSERT/병합 결정
-        }
+        // ⚠️ 수정금지(승인필요) 2026-07-09 사장님 SSOT = 신규·흡수 통일 = 전부 자기 rowId 직행(targetRowId=rowId) = 재매칭·중복재판별 절대 안 함.
+        //   사장님 SSOT(line 453·459): "신규든 병합이든 모든행 우리 id 상태에서 결손을 보강하여 해당 id 칸을 채움. 모든 TS+PM 요소는 어디로 갈지 아는 상태."
+        //   = ① Gemini upsert 단계에서 트리거가 이미 중복(흡수)을 판별해 그 원행 id 로 UPDATE 완료 → ① 이후 모든 행은 각자 확정된 id 보유. ②는 그 id 에 결손(TS 9요소+이미지)만 직행으로 채움.
+        //   = dupOwner 재조회 폐기 2026-07-09 §19: 중복판별은 ① 트리거가 이미 함 → ②에서 또 dupOwner SELECT = 트리거 재발명(§16 위반) + 사장님 "②는 재매칭 아님" 정면위반.
+        //     트리거 라이브면 같은 강매칭키 2행은 ①에서 애초에 못 생김 → ① 통과행은 정의상 dupOwner 없음 = 재조회는 항상 null = 죽은 코드였음.
+        const job2 = { targetRowId: rowId, ...jobBase }; // 전부 자기 id 직행(§14 재매칭 실패 불가)
+        const doUpdate = async () => {
+          try { await upsertPlace(job2 as any); }
+          catch (e) { console.log(`[AG3-SAVE] ⚠️ "${place.name}" 직행 실패(${(e as Error).message}) = 그 행 스킵`); }
+        };
+        // deferPersist = 재UPDATE(DB write)를 곳별로 즉시 await 하지 않고 job2Promises 에 모아 함수 끝에서 한꺼번에 await(FE 는 위 place mutate 로 이미 노출, DB write 는 응답 전 완료 = 증발 0). 기본(false) = 곳별 즉시 await.
+        //   = 사진(imageUrl)은 위에서 이미 await 완료되어 jobBase.imageUrl 에 담김 = 이 doUpdate 한 번으로 TS 9요소+사진 함께 저장(별도 사진 UPDATE 불필요).
+        if (opts?.deferPersist) job2Promises.push(doUpdate());
+        else await doUpdate();
 
-        return { enrichedByApi: 1, photoOk: imageUrl ? 1 : 0 };
+        return { enrichedByApi: 1, photoOk: photoImage ? 1 : 0 }; // 사진 성공 여부 = 위 await tsPhoto 결과
       } catch (e) {
         console.error(`[AG3-SAVE] ❌ 신규 "${place.name}" TS+PM 실패:`, (e as Error).message);
         tsResults.push({ id: rowId, name: place.name, category: seedCategory, status: "error", error: (e as Error).message });
@@ -749,19 +756,10 @@ export async function saveNewPlacesToDB(
     }),
   );
 
-  // ── ③-c 흡수건 퍼널 재투입 = 형제 job2(PID 재UPDATE) 완료 후 실행 = PID게이트 확실 작동(race 방지). 흡수건끼리도 순차. ──
-  if (absorbedJobs.length > 0) {
-    const runAbsorbed = async () => {
-      await Promise.allSettled(job2Promises);
-      for (const { name, job3 } of absorbedJobs) {
-        try {
-          const r = await upsertPlace(job3 as any);
-          console.log(`[AG3-SAVE] ③-c 흡수건 "${name}" 퍼널 재투입 = ${r?.action} row=${r?.rowId}`);
-        } catch (e) { console.error(`[AG3-SAVE] ⚠️ 흡수건 "${name}" 재투입 실패:`, (e as Error).message); }
-      }
-    };
-    if (opts?.deferPersist) runAbsorbed().catch((e) => console.error("[AG3-SAVE] ⚠️ 흡수건 체인 실패:", (e as Error).message));
-    else await runAbsorbed();
+  // 🗑️ 2026-07-09 = ③-c 흡수건 퍼널 재투입 완전삭제 §19 = 흡수건도 위에서 rowId 직행(재매칭 X) 통일 = 별도 재투입 불필요(사장님 SSOT).
+  //   deferPersist 모드 = job2Promises(DB write) 완료 대기(FE 는 place mutate 로 이미 노출). 사진은 위 Promise.all 안에서 이미 await 완료(증발 0).
+  if (opts?.deferPersist && job2Promises.length > 0) {
+    await Promise.allSettled(job2Promises);
   }
 
   // 🧠 2026-07-06 사장님 SSOT = TS raw 06형태 모음 1파일(#45 repair.ts:259-271) = 도시id 폴더 로컬+Storage 2곳(§18).

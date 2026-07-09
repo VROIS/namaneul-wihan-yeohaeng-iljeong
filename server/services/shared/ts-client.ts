@@ -8,6 +8,11 @@
 import { STANDARD_TS_FIELD_MASK, validateFieldMask } from './google-places-sku';
 import { saveRaw } from './save-raw';
 
+// ⚠️ 수정금지(승인필요) 2026-07-09 사장님 SSOT = 사진 저장 해상도 단일 상수 = 구글 PhotoMedia 다운 시점부터 작게(내부 축소, Supabase 변환 유료 안 씀).
+//   = FE 표시 실측: 메인앱 썸네일 56px, BTS 궤도카드 80×140px, BTS 하단 화면폭(~800px). 사장님 "BTS 하단 흐려져도 됨" → 400px 균형(800 대비 데이터 1/4 = 다운·저장·FE로딩 4배 빠름).
+//   = 모든 사진 호출(ag3·repair·발굴스킬)이 이 관문(tsPhoto) 통과 = 이 상수 1곳으로 전체 통일(§16, 800 하드코딩 5곳 드리프트 폐기 §19).
+export const PHOTO_MAX_WIDTH_PX = 400;
+
 // ── 9요소 강제 = 모듈 로드 시 1회 검증 (= 마스크가 변질돼 9 미만이면 즉시 throw = 호출 자체 불가) ──
 const REQUIRED_9 = [
   'places.id', 'places.displayName', 'places.formattedAddress', 'places.location',
@@ -181,7 +186,7 @@ export async function tsPhoto(req: TsPhotoReq): Promise<string | null> {
   if (process.env.TS_GATE_ENFORCE === '1' && req.gated !== true) return null;
   const bucket = req.bucket || 'place-images';
   try {
-    const photoUrl = `https://places.googleapis.com/v1/${req.photoName}/media?maxWidthPx=${req.maxWidthPx ?? 800}&key=${req.apiKey}`;
+    const photoUrl = `https://places.googleapis.com/v1/${req.photoName}/media?maxWidthPx=${req.maxWidthPx ?? PHOTO_MAX_WIDTH_PX}&key=${req.apiKey}`;
     const pr = await fetch(photoUrl, { signal: AbortSignal.timeout(30000) });
     if (!pr.ok) return null;
     const buf = Buffer.from(await pr.arrayBuffer());

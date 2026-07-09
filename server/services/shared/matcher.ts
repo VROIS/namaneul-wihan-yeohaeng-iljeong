@@ -289,3 +289,52 @@ export function matchCandidate<C extends MatchCandidate>(
 
   return { match, matchedBy, tier: tierOverride ?? tierOf(matchedBy) };
 }
+
+// ⚠️ 수정금지(승인필요) 2026-07-09 사장님 SSOT = 후보 사전인덱스(pre-bucket) = 전체 PSR 도시무관 매칭 성능 (§16 매칭 SSOT 여기 1곳).
+//   = 문제: 도시무관화로 후보가 전체 PSR(1.2만행) → matchCandidate 가 place 마다 전체를 filter = 24곳×150만비교 = 4.3초(디종 실측).
+//   = 해결: 후보를 1회만 인덱싱(PID·URI·name·좌표셀·우편) → 각 place 는 자기 키의 후보 서브셋(수십개)만 matchCandidate 에 넘김.
+//   = 매칭 결과 불변 보장: matcher 7단계가 찾을 수 있는 후보는 전부 서브셋에 포함(보수적). matchCandidate 로직 무변경.
+//     PID/URI = 등가 Map / name(en·local·ko 9조합) = 정규화 Map / 좌표10m = 0.0001 그리드셀 ±1 / 주소3순위 = 우편 동일강제(matcher.ts:116)라 우편 Map.
+const GRID = 0.0001; // 좌표 셀 크기 = matcher 좌표10m 임계와 동일
+const cellKey = (lat: number, lng: number) => `${Math.round(lat / GRID)}:${Math.round(lng / GRID)}`;
+const postalKeys = (addr: string | null | undefined): string[] => {
+  const out: string[] = [];
+  for (const t of new Set(addrTokens(addr))) { const m = t.match(/(?<!\d)\d{5}(?!\d)/); if (m) out.push(m[0]); }
+  return out;
+};
+export interface CandidateIndex<C extends MatchCandidate> {
+  byPid: Map<string, C[]>;
+  byUri: Map<string, C[]>;
+  byName: Map<string, C[]>;   // name_en·local·ko 정규화 → 행들 (9조합 대응)
+  byCell: Map<string, C[]>;   // 좌표 그리드셀
+  byPostal: Map<string, C[]>; // 우편번호 (주소 3순위 버킷)
+  all: C[];
+}
+export function buildCandidateIndex<C extends MatchCandidate>(cands: C[]): CandidateIndex<C> {
+  const byPid = new Map<string, C[]>(), byUri = new Map<string, C[]>(), byName = new Map<string, C[]>(),
+        byCell = new Map<string, C[]>(), byPostal = new Map<string, C[]>();
+  const push = (m: Map<string, C[]>, k: string, c: C) => { const a = m.get(k); if (a) a.push(c); else m.set(k, [c]); };
+  for (const c of cands) {
+    if (c.googlePlaceId) push(byPid, c.googlePlaceId, c);
+    if (c.googleMapsUri) push(byUri, c.googleMapsUri, c);
+    for (const nk of nameKeys(c)) push(byName, nk, c);
+    if (c.latitude != null && c.longitude != null) push(byCell, cellKey(Number(c.latitude), Number(c.longitude)), c);
+    for (const pk of postalKeys(c.address)) push(byPostal, pk, c);
+  }
+  return { byPid, byUri, byName, byCell, byPostal, all: cands };
+}
+// 이 입력(p)에 대해 matchCandidate 가 검사할 수 있는 후보 서브셋 = 7단계 키의 합집합(중복 제거).
+export function candidatesFor<C extends MatchCandidate>(idx: CandidateIndex<C>, p: MatchInput): C[] {
+  const seen = new Set<number>(), out: C[] = [];
+  const add = (arr?: C[]) => { if (arr) for (const c of arr) if (!seen.has(c.id)) { seen.add(c.id); out.push(c); } };
+  if (p.googlePlaceId) add(idx.byPid.get(p.googlePlaceId));                        // 1순위 PID
+  if (p.googleMapsUri) add(idx.byUri.get(p.googleMapsUri));                        // 2순위 URI
+  for (const pk of postalKeys(p.address)) add(idx.byPostal.get(pk));              // 3순위 주소(우편 동일강제)
+  for (const nk of [normName(p.nameLocal), normName(p.nameEn), normName(p.nameKo)]) // 4·6·7순위 이름(9조합)
+    if (nk) add(idx.byName.get(nk));
+  if (p.latitude != null && p.longitude != null) {                                // 5순위 좌표10m = 셀 ±1(인접 흡수)
+    const ci = Math.round(p.latitude / GRID), cj = Math.round(p.longitude / GRID);
+    for (let di = -1; di <= 1; di++) for (let dj = -1; dj <= 1; dj++) add(idx.byCell.get(`${ci + di}:${cj + dj}`));
+  }
+  return out;
+}

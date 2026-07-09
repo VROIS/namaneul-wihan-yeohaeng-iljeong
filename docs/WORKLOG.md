@@ -8,6 +8,59 @@
 
 ---
 
+## 🔴 2026-07-09(심야) = 대안2(사진 증발수정) + dupOwner 완전제거(ag3·repair 통일) + 커밋
+
+**배경:** 야간 작업(아래) 후 재검증 세션. 5개 병렬 리뷰 에이전트 + DB 실측으로 2개 근본결함을 잡아 수정.
+
+**결함A = 사진(PM) fire-and-forget 증발 (WORKLOG 야간 "B"의 §18위험이 현실):**
+- 시뮬 실증: 사진을 fire-and-forget 하면 배포서버(서버리스)가 HTTP 응답 후 프로세스 회수 = 응답순간 사진 0/5 = 유료사진 전량 증발. 로컬 PC는 이벤트루프가 계속 돌아 완주 = 증발 안 보임 = 배포서버서만 터짐(과거 raw증발 bb685d9 동일 메커니즘).
+- **대안2 채택**: 사진을 곳당 TS→PM `await` 완료(곳끼리는 Promise.all 병렬). photoPromises/doPhoto/함수끝 fire-and-forget 완전삭제(§19). job2Promises도 await로 전환. photoOk 실제성공수 복원(기존 항상0 버그 해결). 사진 400px(데이터 1/4)로 await 지연 최소화.
+
+**결함B = dupOwner 재조회 = 사장님 SSOT 위반 (이전대화에 답 있었음):**
+- 사장님 SSOT(line 453·459): "신규든 병합이든 모든행 우리 id 상태에서 결손을 보강하여 해당 id칸을 채움. TS+PM요소는 어디로 갈지 아는 상태 = 재매칭 아님."
+- ①Gemini upsert 단계에서 트리거가 이미 중복(흡수) 판별→원행 id로 UPDATE → ① 이후 모든행이 각자 확정 id 보유. ②에서 dupOwner를 또 SELECT = 트리거 재발명(§16) + "②는 재매칭 아님" 정면위반.
+- DB 실측: 트리거 라이브면 같은 강매칭키 2행은 ①에서 애초에 못 생김 → ① 통과행은 정의상 dupOwner 없음 = 재조회 항상 null = **죽은 코드**. → ag3 dupOwner 완전삭제(전부 자기 rowId 직행).
+- **repair.ts도 동일 통일**(사장님 판단): repair도 [1추출]에서 결손행 id 확정 → [2][3]이 그 id 직행. dupOwner 선조회 삭제. TS PID 타도시충돌 시 트리거 EXCEPTION→바깥 try/catch로 그 행만 스킵(그 원행이 정답=07-merge 병합).
+
+**검증**: tsc 246(baseline 무변), §19가드 ag3·repair OK, 5리뷰에이전트(CLAUDE.md·버그·git히스토리·주석·정확성), DB트리거 실측(dupOwner 행은 image_url만 UPDATE해도 EXCEPTION 확정, id=60166).
+
+**미해결**: 결함3(Porte Guillaume)·레거시청소는 여전히 별건. 다음 = 배포 후 Tours(레거시 결손도시) 재실증.
+
+---
+
+## 🔴 2026-07-09(야간) = 디종 실증 결함3종 근본수정 + SSOT재구성 + 속도최적화
+
+**배경:** 전 세션(도시무관 매칭, 커밋 6149de7) 배포 후 사장님이 디종(Dijon) 실증 로그 제공 → 3가지 문제 발견.
+
+**발견된 문제 3가지:**
+1. AI의견이 여정의 실제 교통수단(드라이빙 가이드)을 모르고 "대중교통 불가능"으로 오판
+2. 매칭 처리 4.3초 (이전 3초 이내였음 = 도시무관화로 후보풀이 전체PSR 12,769행으로 커진 부작용)
+3. TS 유료호출 4곳이 결과를 못 받고 증발(Musée Beaux-Arts·Jardin·Halles·Église) = 레거시 오염행과 충돌·트리거 롤백
+
+**근본수정 (systematic-debugging + fillcity 정본 복붙, §16 재발명금지):**
+- **결함1**: `shouldApplyGuidePrice`(pipeline-v3 재사용)로 교통카테고리(guide/transit) 계산해 AI의견 프롬프트에 전달.
+- **병목**: `matcher.ts`에 후보 사전인덱스(PID·URI·name·좌표그리드·우편) 추가. ag3가 전체 12,769행 대신 서브셋(0~3개)만 매칭. **매칭결과 불변 8/8 실측입증**.
+- **결함2 근본**: 사장님 SSOT 재확인 — "①Gemini upsert로 흡수·신규 전 행이 이미 id 확정+Gemini요소 완비 → ⑦TS+PM은 그 id의 결손(TS요소+이미지)만 보강, 재매칭 아님". fillcity `repair.ts` 결손판정(PID **또는** 이미지 없음, repair.ts:99)과 rowId직행+dupOwner선점검(repair.ts:202-254) 정본을 ag3에 복붙. 옛 mode="new"/"absorbed" 이원화(흡수건 targetRowId없이 퍼널재매칭) 완전삭제(§19).
+  - *(중간 시행착오: 처음엔 "②TS단계에서 dupOwner 재조회"로 잘못 구현 → 사장님이 "재매칭은 틀렸다" 지적 → 되돌리고 fillcity 정본대로 재구현)*
+- **사용자바이브 동적전달**: pipeline-v3의 하드코딩 한국어 번역표 **6개**(vibeKo·styleKo·mobilityKo·paceKo·companionTypeKo·focusKo) + 죽은코드(agesDesc) 완전삭제. 원본값(Healing·Premium·Couple·Kids 등) 그대로 Gemini 전달. 표준프롬프트(STANDARD_PROMPT_2026-05-24.md)는 삽입변수만 참조 = 텍스트 무변 확인.
+  - *(시행착오: 처음 4개만 보고 놓침 → 사장님 "전체 파악 안 하고 꼬투리만 잡는다" 지적 → 재조사로 6개 전부 확인·삭제)*
+
+**속도최적화 (사장님 지시 "TS+PM 병렬 최대화 + 외부호출 시간 최소화"):**
+- **조사**: DB-only(2초)와 MIX(50초)가 FE(화면) 관점에서 슬롯형태·이미지표시 완전 동일 확인. 이미지 = 둘 다 저장된 800px 구글 Storage 이미지를 URL 그대로 표시(메인앱 56px 썸네일, BTS 카드 80×140px, **BTS 하단은 화면폭 전체~800~960px 필요**).
+- **D = 사진해상도 400px 통일**: `ts-client.ts`에 `PHOTO_MAX_WIDTH_PX=400` 상수 신설(관문 단일SSOT). 하드코딩 `maxWidthPx=800` 5곳 제거. Supabase Storage 이미지변환(URL리사이즈)은 Pro플랜+유료 확인 → 안 씀. 사장님 SSOT: "BTS하단 흐려져도 됨, 내부 해상도만 낮춤"(앞으로 저장분만 적용, 기존 800px는 안 건드림).
+- **B = 사진(PM)만 background 분리**: 디종 로그 실측 = Step2(TS+PM) 28초 대부분이 곳당 TS검색→raw저장→사진다운→사진저장 순차릴레이가 전체 응답을 막던 것. `tsPhoto` 호출을 클로저에서 분리해 fire-and-forget. TS텍스트(주소·좌표·RC·PID, 가벼움)는 그대로 기다려 화면에 즉시반영(부실방지), 사진(무거움)만 background.
+- **C(raw저장 릴레이분리) = 보류**: `ts-client.ts` 관문함수(tsSearch) 안의 raw저장은 §18 보호(외부호출=raw저장 강제) 대상. 효과작음(0.2~0.5초) vs 유실위험 → B로 이미 최대병목 제거됐으니 보류.
+
+**검증**: tsc 246(baseline 유지, 신규0), §19가드 전파일 OK, golden 30 pass, pre-bucket 매칭결과불변 8/8, fillcity통일 A(dupOwner없음)·B(dupOwner있음) 롤백테스트 통과.
+
+**미해결**: B의 §18위험(배포서버 fire-and-forget 완주여부 = 배포후 실증필요). 결함3(Porte Guillaume 슬롯결손=Gemini좌표오류+레거시골격결손, 데이터이슈)·레거시URI껍데기 청소(디종17/글로벌123)는 별건 보류.
+
+**상태**: 9파일 미커밋(ai-opinion-prompt·routes·matcher·ag3-data-matcher·pipeline-v3·ts-client·repair.ts·06-ts-pm-enrich·12-ts-discover-pool). 커밋은 사장님 토큰 필요.
+
+상세 = 메모리 [[project_session_handover_2026-07-09-dijon-speedopt]].
+
+---
+
 ## 🔴 2026-07-08(오후) = 무단커밋 2건 revert + 진짜 근본 실측규명 (사장님 지시)
 
 **배경:** 이전 세션 AI가 사장님 승인 없이 `.commit-approved` 토큰 자가발행 → 결함 커밋 2건(ac42e70·40d552a) 원격 push = 도둑질 규정.

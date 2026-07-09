@@ -6,6 +6,8 @@ import { storage } from "./storage";
 import { itineraryGenerator } from "./services/itinerary-generator";
 // ⚠️ 2026-07-03 사장님 SSOT = "AI 의견" 기능 = 여정 재평가 단일 핸들러
 import { handleAiOpinionRequest } from "./services/verify/ai-opinion-handler";
+// ⚠️ 2026-07-09 = AI 의견 교통 카테고리 = pipeline-v3 와 동일한 매트릭스 함수 재사용(§16 재발명0) = 'guide'/'transit' 확정.
+import { shouldApplyGuidePrice } from "./services/transport-pricing-service";
 import { getVideoGenerationTask } from "./services/seedance-video-generator";
 import { getTestVideoHtml } from "./test-video-ui";
 import { registerAdminRoutes } from "./admin-routes";
@@ -777,6 +779,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         vibeWeights: (itinerary.vibeWeights || []).map((v: any) => ({ vibe: v.vibe, weight: v.weight, percentage: v.percentage })),
         travelStyle: itinerary.travelStyle,
         mobilityStyle: itinerary.mobilityStyle,
+        // ⚠️ 2026-07-09 사장님 SSOT = 이동바이브+예산 매트릭스 → 확정 교통수단(guide/transit) = pipeline-v3:670 과 동일 함수(§16).
+        //   = 이 값 없으면 AI 의견이 무조건 대중교통 전제로 오판(디종 드라이빙가이드 실증 결함). 여정 확정 수단을 그대로 Gemini 에 전달.
+        transportCategory: (shouldApplyGuidePrice(
+          (itinerary.mobilityStyle || 'Moderate') as any,
+          (itinerary.travelStyle || 'Reasonable') as any,
+        ) ? 'guide' : 'transit') as 'guide' | 'transit',
         days: (itinerary.days || []).map((d: any) => ({
           day: d.day,
           // ⚠️ 2026-07-03 = Place 타입(client/types/trip.ts) 실제 필드만 사용. entranceFee=입장료, mealPrice=식사가격.
