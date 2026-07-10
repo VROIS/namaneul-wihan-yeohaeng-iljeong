@@ -570,7 +570,12 @@ export async function saveNewPlacesToDB(
 
   // ⚠️ 수정금지(승인필요) 2026-07-08 사장님 SSOT = 순서 = ① Gemini 전체 upsert → ② TS+PM 대상 = 신규(inserted) + PID 없는 매칭행(updated) → ③ TS+PM → 저장.
   //   = Gemini가 채운 슬롯 전부 검증 보장(옛 "신규만" = 흡수건 검증누락 = 폐기 2026-07-08 §19). PID 보유 매칭행만 skip = 재과금 원천차단(니스 €17 사고 코드원인 해소) 유지.
-  const { upsertPlace } = await import("../place-upsert");
+  const { upsertPlace, loadMatchCandidates } = await import("../place-upsert");
+
+  // ⚠️ 수정금지(승인필요) 2026-07-10 사장님 SSOT = 매칭 후보 명단 = 배치 시작 때 1회만 읽고 전 곳 재사용.
+  //   = 옛 "upsertPlace 가 곳마다 전행 재SELECT(1회 3.0초 실측 = 24곳 ~17초)" = 매칭·저장 지연 근본 = 폐기 2026-07-10 §19.
+  //   = 신규 INSERT 는 아래 루프에서 명단에 즉시 추가 = 같은 배치 안 중복 인지(옛 매회 재조회와 동일 결과) 보존.
+  const batchCands = await loadMatchCandidates();
 
   // ── ① Gemini 전체 upsert(TS/PM 0회) = 셀렉없이 전체 새덮어쓰기. 매칭행=UPDATE / 진짜 신규=INSERT ──
   //   = job 은 Gemini/매칭행(seedDirectMatch 주입) 값만 = 받은 응답 그대로 저장.
@@ -602,7 +607,8 @@ export async function saveNewPlacesToDB(
       distanceKmFromCenter: (place as any).distanceKmFromCenter ?? null,
     };
     try {
-      const r = await upsertPlace(job as any);
+      // 명단 갱신(신규 추가·병합 반영)은 관문(upsertPlace syncCandidateList)이 소유 = 호출자는 넘기기만(§16).
+      const r = await upsertPlace({ ...job, candidates: batchCands } as any);
       stage1.push({ place, seedCategory, action: r.action, rowId: r.rowId });
     } catch (e) {
       console.error(`[AG3-SAVE] ❌ "${place.name}" Gemini upsert 실패:`, (e as Error).message);

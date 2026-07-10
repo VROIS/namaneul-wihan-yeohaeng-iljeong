@@ -23,6 +23,16 @@ CREATE INDEX IF NOT EXISTS idx_psr_google_place_id ON public.place_seed_raw (goo
 CREATE INDEX IF NOT EXISTS idx_psr_google_maps_uri ON public.place_seed_raw (google_maps_uri) WHERE google_maps_uri IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_psr_latitude ON public.place_seed_raw (latitude) WHERE latitude IS NOT NULL;
 
+-- ── 1-c) 트리거 검사식 표현식 인덱스 4종 (2026-07-10 라이브 적용분과 동기화 §19) ──
+--   ⚠️ 수정금지(승인필요) 2026-07-10 사장님 SSOT = 도시무관화로 불변3(주소정규식)·불변5~7(이름검사)이 전행 Seq Scan
+--   (실측 주소 3,164ms·이름 3,635ms/회 = 매칭·저장 21초의 범인) → 트리거 검사식 "그대로"의 표현식 인덱스로 ms 전환
+--   (실측 주소 1.36ms·이름 5.85ms, 트리거 IN 구문이 자동으로 BitmapOr 로 탐 = 로직 변경 0).
+--   ⚠️ 식이 트리거 본문과 1글자라도 다르면 인덱스를 안 탐 = 표현식 임의 변경 금지.
+CREATE INDEX IF NOT EXISTS idx_psr_addr_norm ON public.place_seed_raw (TRIM(REGEXP_REPLACE(REGEXP_REPLACE(LOWER(address), '[.,;:!?''"()\[\]{}]', ' ', 'g'), '\s+', ' ', 'g')));
+CREATE INDEX IF NOT EXISTS idx_psr_name_en_norm ON public.place_seed_raw (LOWER(TRIM(COALESCE(name_en,''))));
+CREATE INDEX IF NOT EXISTS idx_psr_name_local_norm ON public.place_seed_raw (LOWER(TRIM(COALESCE(name_local,''))));
+CREATE INDEX IF NOT EXISTS idx_psr_name_ko_norm ON public.place_seed_raw (LOWER(TRIM(COALESCE(name_ko,''))));
+
 -- ── 2) BEFORE INSERT OR UPDATE 중복방지 트리거 함수 (= upsertPlace 우회 직접 INSERT/UPDATE 차단 = 헌법 §14 안전망, 2026-06-24 §20 확장) ──
 CREATE OR REPLACE FUNCTION public.place_seed_raw_prevent_dup()
  RETURNS trigger

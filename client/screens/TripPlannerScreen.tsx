@@ -809,6 +809,14 @@ export default function TripPlannerScreen() {
         endDate: result.endDate || formData.endDate,
         vibeWeights: result.vibeWeights || vibeWeights,
         days: result.days || [],
+        // ⚠️ 수정금지(승인필요) 2026-07-10 사장님 SSOT = 응답의 교통·동행 확정값을 셀렉 없이 보존(§20).
+        //   = 이걸 버리면 AI의견 서버가 값 없음→기본값 재계산→대중교통 여정이 전용차(guide)로 변질(투르 실증 결함).
+        //   = metadata 는 통째 보존(부분 추출 금지) = transportCategory(1차 매트릭스 확정 교통수단)·curationFocus 등 후속 소비자가 그대로 읽음.
+        companionType: result.companionType,
+        companionCount: result.companionCount,
+        travelStyle: result.travelStyle,
+        mobilityStyle: result.mobilityStyle,
+        metadata: result.metadata,
         // 🚨 위기 정보 포함
         crisisAlerts: crisisCheck.hasAlerts ? result.crisisAlerts : undefined,
       });

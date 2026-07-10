@@ -187,6 +187,9 @@ export interface Itinerary {
   companionCount?: number;
   travelStyle?: TravelStyle;
   mobilityStyle?: MobilityStyle;
+  // ⚠️ 수정금지(승인필요) 2026-07-10 사장님 SSOT = 생성 응답 metadata 통째 보존(§20 셀렉 금지) = 후속 호출(AI의견 등)이 그대로 사용.
+  //   = transportCategory = 1차 생성 매트릭스가 확정한 교통수단(guide=드라이빙가이드/transit=대중교통) = 재계산 금지(누락·변질 차단).
+  metadata?: { transportCategory?: "guide" | "transit"; curationFocus?: string; travelPace?: string; [key: string]: any };
   // 🏨 숙소 정보 (공통 숙소 or Day별 개별 숙소)
   accommodation?: {
     name: string;

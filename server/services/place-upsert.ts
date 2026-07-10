@@ -25,7 +25,7 @@ import { db } from '../db';
 import { placeSeedRaw } from '@shared/schema';
 import { eq, sql } from 'drizzle-orm';
 // ⚠️ 2026-06-03 = 동일장소 5단계 매칭 = 공용 matcher.ts 단일 (= 헌법 §16, 흩어진 매처 통합)
-import { matchCandidate, type MatchedBy } from './shared/matcher';
+import { matchCandidate, type MatchedBy, type MatchCandidate } from './shared/matcher';
 
 export interface UpsertPayload {
   cityId: number;
@@ -60,10 +60,60 @@ export interface UpsertPayload {
   // 분류
   categoryTags?: string[];
   phaseTags?: string[];
+  // ⚠️ 수정금지(승인필요) 2026-07-10 사장님 SSOT = 배치 호출자(ag3 등)가 loadMatchCandidates()로 1회만 읽은 후보 명단 재사용.
+  //   = 미전달 시 이 함수가 직접 1회 읽음(단건 호출 동일 동작). 곳마다 전행 재SELECT(1회 3.0초 실측 = 24곳 ~17초)가 근본 원인.
+  candidates?: MatchCandidate[];
+}
+
+// ⚠️ 수정금지(승인필요) 2026-07-10 사장님 SSOT = 매칭 후보 읽기 단일 함수(§16 1벌) = upsertPlace 내부 + 배치 호출자(ag3·upsertPlaces) 공용.
+//   = 반드시 전행(도시무관 글로벌) = §14 "같은 장소면 도시 달라도 중복" 불변. cityId 필터 추가 금지(크로스도시 재과금 재발).
+//   = 타입 = matcher.ts MatchCandidate 그대로(재발명 0).
+export async function loadMatchCandidates(): Promise<MatchCandidate[]> {
+  if (!db) return [];
+  return (await db
+    .select({
+      id: placeSeedRaw.id,
+      cityId: placeSeedRaw.cityId,
+      googlePlaceId: placeSeedRaw.googlePlaceId,
+      googleMapsUri: placeSeedRaw.googleMapsUri,
+      address: placeSeedRaw.address,
+      latitude: placeSeedRaw.latitude,
+      longitude: placeSeedRaw.longitude,
+      nameEn: placeSeedRaw.nameEn,
+      nameLocal: placeSeedRaw.nameLocal,
+      nameKo: placeSeedRaw.nameKo,
+    })
+    .from(placeSeedRaw)) as MatchCandidate[];
 }
 
 // ⚠️ 2026-06-03 = MatchedBy = shared/matcher.ts 단일 정의 재노출 (= 기존 import 처 호환)
 export type { MatchedBy };
+
+// ⚠️ 수정금지(승인필요) 2026-07-10 사장님 SSOT = 호출자 명단(p.candidates) 동기화 1벌 = 관문(upsertPlace)이 소유(§16).
+//   = INSERT = 새 행 식별자 추가 / UPDATE = 새값(new-wins, §14) 병합 = 배치의 후속 매칭이 방금 쓴 PID·이름·좌표를 인지
+//   = 매회 재조회 방식과 동일한 신선도 보장(재조회 방식 자체는 폐기 = 2026-07-10 §19). 호출자가 직접 push(누락 위험) = 금지.
+function syncCandidateList(p: UpsertPayload, rowId: number, inserted: boolean): void {
+  if (!p.candidates) return;
+  if (inserted) {
+    p.candidates.push({
+      id: rowId, cityId: p.cityId,
+      googlePlaceId: p.googlePlaceId ?? null, googleMapsUri: p.googleMapsUri ?? null,
+      address: p.address ?? null, latitude: p.latitude ?? null, longitude: p.longitude ?? null,
+      nameEn: p.nameEn ?? null, nameLocal: p.nameLocal ?? null, nameKo: p.nameKo ?? null,
+    });
+    return;
+  }
+  const c = p.candidates.find((x) => x.id === rowId);
+  if (!c) return;
+  c.googlePlaceId = p.googlePlaceId ?? c.googlePlaceId;
+  c.googleMapsUri = p.googleMapsUri ?? c.googleMapsUri;
+  c.address = p.address ?? c.address;
+  c.latitude = p.latitude ?? c.latitude;
+  c.longitude = p.longitude ?? c.longitude;
+  c.nameEn = p.nameEn ?? c.nameEn;
+  c.nameLocal = p.nameLocal ?? c.nameLocal;
+  c.nameKo = p.nameKo ?? c.nameKo;
+}
 
 export interface UpsertResult {
   action: 'inserted' | 'updated' | 'skipped';
@@ -125,20 +175,8 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
   // = 이름 9 조합 만 = cityId 필터 유지 (= "Cafe de Paris" 체인 = 다른 도시는 별개 행)
   // = 사용자 명시: "비록 도시는 다르더라도 같은 장소면 중복 판명됨"
   // = 옵션 A = 첫 등록 cityId 영구 유지 (= UPDATE 시 cityId 미변경)
-  const candidates = await db
-    .select({
-      id: placeSeedRaw.id,
-      cityId: placeSeedRaw.cityId,
-      googlePlaceId: placeSeedRaw.googlePlaceId,
-      googleMapsUri: placeSeedRaw.googleMapsUri,
-      address: placeSeedRaw.address,
-      latitude: placeSeedRaw.latitude,
-      longitude: placeSeedRaw.longitude,
-      nameEn: placeSeedRaw.nameEn,
-      nameLocal: placeSeedRaw.nameLocal,
-      nameKo: placeSeedRaw.nameKo,
-    })
-    .from(placeSeedRaw);
+  // ⚠️ 2026-07-10 사장님 SSOT = 호출자가 준 명단 재사용, 없으면 1회 직접 읽기(loadMatchCandidates 1벌 §16).
+  const candidates = p.candidates ?? await loadMatchCandidates();
 
   // ⚠️ 2026-06-08 = 7 단계 순차 매칭 = shared/matcher.ts 단일 공용 (= 정본 = 모든 경로 동일 검증, 헌법 §14/§16)
   //   = [불변]1)PID > 2)URI > 3)풀주소+로컬이름 > 4)좌표10m > 5)로컬이름 / [가변]6)영어명 > 7)한국어명 + samePlace(URI veto만, 2026-06-15 PID veto 제거)
@@ -184,6 +222,7 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
         image_updated_at  = CASE WHEN ${p.imageUrl || null}::text IS NOT NULL THEN NOW() ELSE image_updated_at END
       WHERE id = ${match.id}
     `);
+    syncCandidateList(p, match.id, false);
     return { action: 'updated', rowId: match.id, matchedBy };
   }
 
@@ -218,13 +257,25 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
       } as any)
       .returning({ id: placeSeedRaw.id });
 
+    const newId = inserted[0]?.id || null;
+    if (newId != null) syncCandidateList(p, newId, true);
     return {
       action: 'inserted',
-      rowId: inserted[0]?.id || null,
+      rowId: newId,
       matchedBy,
       suspect,
     };
   } catch (e: any) {
+    // ⚠️ 수정금지(승인필요) 2026-07-10 사장님 SSOT = DB 트리거(prevent_dup) = 최종 매처(§14 최종 안전망)를 따라감.
+    //   = 명단 스냅샷이 못 본 같은 장소(동시 요청의 방금 INSERT 등)를 트리거가 '[중복차단] ... id=N' 예외로 알려주면
+    //   = 그 원행 id 직행 UPDATE 로 전환(같은 장소 병합) = 옛 "skipped 처리 = 그 슬롯 검증·사진 통째 소실" 폐기 2026-07-10 §19.
+    const dup = /\[중복차단\][^]*?id=(\d+)/.exec(e?.message || '');
+    if (dup) {
+      const dupId = Number(dup[1]);
+      const r = await upsertPlace({ ...p, candidates: undefined, targetRowId: dupId });
+      syncCandidateList(p, dupId, false);
+      return { ...r, reason: 'trigger_dup_recovered' };
+    }
     // 최후 안전망 = INSERT 예외 시 skip(응답 안 죽임). rank 는 nullable+트리거 배정이라 rank 충돌 없음(2026-07-07 §19). = 실제 도달 드묾.
     return {
       action: 'skipped',
@@ -254,9 +305,12 @@ export async function upsertPlaces(payloads: UpsertPayload[]): Promise<{
     byMatch: { pid: 0, uri: 0, address: 0, coords: 0, name_local: 0, name_en: 0, name_ko: 0, none: 0 } as Record<MatchedBy, number>,
     errors: [] as string[],
   };
+  // ⚠️ 수정금지(승인필요) 2026-07-10 사장님 SSOT = 후보 명단 = 배치당 1회만 읽고 전 곳 재사용(관문이 INSERT/UPDATE마다 동기화).
+  //   = 옛 "곳마다 전행 재SELECT(1회 3.0초 실측)" 폐기 2026-07-10 §19.
+  const shared = payloads.length > 0 ? await loadMatchCandidates() : [];
   for (const p of payloads) {
     try {
-      const r = await upsertPlace(p);
+      const r = await upsertPlace({ ...p, candidates: p.candidates ?? shared });
       summary[r.action]++;
       if (r.suspect) summary.suspect++;
       summary.byMatch[r.matchedBy]++;

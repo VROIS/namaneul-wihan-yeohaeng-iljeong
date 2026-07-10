@@ -396,6 +396,9 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
       companionType: formData.companionType,
       companionCount,
       curationFocus: formData.curationFocus,
+      // ⚠️ 수정금지(승인필요) 2026-07-10 사장님 SSOT = 확정 교통수단 = MIX(pipeline-v3:1157)와 동형 방출(§20 전수).
+      //   = 이 값이 없으면 AI의견이 DB-only 가이드 여정을 대중교통 전제로 오판(서버 재계산 폐기 2026-07-10과 세트).
+      transportCategory: shouldApplyGuidePrice(formData.mobilityStyle, formData.travelStyle) ? "guide" : "transit",
       generatedAt: new Date().toISOString(),
       pipelineVersion: "db-only-v2-scene-direct",
       route: {

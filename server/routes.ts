@@ -6,8 +6,6 @@ import { storage } from "./storage";
 import { itineraryGenerator } from "./services/itinerary-generator";
 // ⚠️ 2026-07-03 사장님 SSOT = "AI 의견" 기능 = 여정 재평가 단일 핸들러
 import { handleAiOpinionRequest } from "./services/verify/ai-opinion-handler";
-// ⚠️ 2026-07-09 = AI 의견 교통 카테고리 = pipeline-v3 와 동일한 매트릭스 함수 재사용(§16 재발명0) = 'guide'/'transit' 확정.
-import { shouldApplyGuidePrice } from "./services/transport-pricing-service";
 import { getVideoGenerationTask } from "./services/seedance-video-generator";
 import { getTestVideoHtml } from "./test-video-ui";
 import { registerAdminRoutes } from "./admin-routes";
@@ -774,17 +772,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         endDate: itinerary.endDate,
         companionType: itinerary.companionType,
         companionCount: itinerary.companionCount,
-        curationFocus: itinerary.curationFocus,
+        // ⚠️ 2026-07-10 = curationFocus 도 metadata 단일 관례(FE 통째 보존)에서 읽음. 옛 top-level 읽기 = 항상 undefined(셀렉 누락) = 폐기 §19.
+        curationFocus: itinerary.metadata?.curationFocus,
         // ⚠️ 2026-07-03 = route-prompt.ts buildRouteInputJson()과 동일 = vibeWeights(vibe+weight+percentage) 배열 그대로 전달(이름만 뽑아 가중치 버리지 않음)
         vibeWeights: (itinerary.vibeWeights || []).map((v: any) => ({ vibe: v.vibe, weight: v.weight, percentage: v.percentage })),
         travelStyle: itinerary.travelStyle,
         mobilityStyle: itinerary.mobilityStyle,
-        // ⚠️ 2026-07-09 사장님 SSOT = 이동바이브+예산 매트릭스 → 확정 교통수단(guide/transit) = pipeline-v3:670 과 동일 함수(§16).
-        //   = 이 값 없으면 AI 의견이 무조건 대중교통 전제로 오판(디종 드라이빙가이드 실증 결함). 여정 확정 수단을 그대로 Gemini 에 전달.
-        transportCategory: (shouldApplyGuidePrice(
-          (itinerary.mobilityStyle || 'Moderate') as any,
-          (itinerary.travelStyle || 'Reasonable') as any,
-        ) ? 'guide' : 'transit') as 'guide' | 'transit',
+        // ⚠️ 수정금지(승인필요) 2026-07-10 사장님 SSOT = 교통수단 = 1차 생성 매트릭스 확정값(응답 metadata, FE가 통째 보존)을 그대로 사용.
+        //   서버 재계산·기본값 = 폐기 2026-07-10 §19: 값 누락 시 기본값 'Moderate'가 매트릭스를 guide로 뒤집어
+        //   대중교통 여정(€527)을 전용차 기준(€1,126)으로 오판(투르 실증). 매트릭스는 1차 생성 때 1회만.
+        //   guide/transit 외 값 = 버림(프롬프트 오염 방지) → 프롬프트 보수 기본(transit).
+        transportCategory: (itinerary.metadata?.transportCategory === 'guide' || itinerary.metadata?.transportCategory === 'transit'
+          ? itinerary.metadata.transportCategory
+          : undefined) as 'guide' | 'transit' | undefined,
         days: (itinerary.days || []).map((d: any) => ({
           day: d.day,
           // ⚠️ 2026-07-03 = Place 타입(client/types/trip.ts) 실제 필드만 사용. entranceFee=입장료, mealPrice=식사가격.

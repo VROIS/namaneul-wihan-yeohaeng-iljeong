@@ -54,3 +54,25 @@ CREATE TRIGGER place_seed_raw_autorank_trigger
   ON place_seed_raw
   FOR EACH ROW
   EXECUTE FUNCTION public.place_seed_raw_autorank();
+
+-- ── 쓰기 번호표 = PSR 쓰기 직렬화 (2026-07-10 라이브 적용분과 동기화 §19) ──
+-- ⚠️ 수정금지(승인필요) 2026-07-10 사장님 SSOT = 같은 순간 PSR 쓰기 문장 1개만(문장 시작 전 선취득 = 행 잠금보다 먼저).
+--   = autorank 가 행 1개 갱신에도 (city,cat) 버킷 전체 rank 를 재작성하므로, 병렬 쓰기끼리 잠금이 엉켜
+--     40P01 deadlock 으로 저장이 소실되던 결함(투르 heritage 4곳 실측) 차단.
+--   = 모래상자 입증(2026-07-10): 번호표 무 = 병렬 12건 중 5건 deadlock / 유 = 20건 실패 0 + 쓰기 1건 4,581ms→257ms.
+--   = 랭킹/매칭 로직 무관(동시성만). pg_advisory_xact_lock = 트랜잭션 끝에 자동 해제·재진입 안전.
+CREATE OR REPLACE FUNCTION public.place_seed_raw_write_gate()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+  -- ⚠️ 수정금지(승인필요) 2026-07-10 = PSR 쓰기 직렬화 번호표 = 랭킹/매칭 로직 무관(동시성만). 제거 시 병렬 저장 deadlock(40P01) 재발.
+  PERFORM pg_advisory_xact_lock(hashtext('psr-write'));
+  RETURN NULL;
+END; $function$;
+
+DROP TRIGGER IF EXISTS place_seed_raw_write_gate_trigger ON public.place_seed_raw;
+CREATE TRIGGER place_seed_raw_write_gate_trigger
+  BEFORE INSERT OR UPDATE OR DELETE ON public.place_seed_raw
+  FOR EACH STATEMENT
+  EXECUTE FUNCTION place_seed_raw_write_gate();
