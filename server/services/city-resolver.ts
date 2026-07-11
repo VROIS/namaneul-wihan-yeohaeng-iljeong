@@ -318,6 +318,31 @@ export async function findCityUnified(
       console.log(`[CityResolver] ❌ Gemini 메타 실패 = 도시 미존재 = null 반환: "${input}"`);
       return null;
     }
+
+    // ⚠️ 수정금지(승인필요) 2026-07-11 사장님 SSOT = 백필 재조회 = INSERT 전 기존 도시 확인(중복 발급 원천차단).
+    //   = 몽셀미셀 사고(2026-07-10, 몽생미셸 75↔137 중복 발급) 근본수정: 오타 입력은 1~4단계 이름검색을 다 빠져나가지만
+    //     Gemini 메타가 정답(이름 3종 + 중심좌표)을 주므로, 그 정답으로 재조회 = 이름 정확일치 OR 좌표 1km(사장님 확정 반경).
+    //   = 발견 시 = INSERT 대신 입력어를 그 도시 aliases 에 등록 → 다음부터 2단계 유사어 매칭 = Gemini 호출 0 = 영구 재활용.
+    const existing = await findExistingCityByMeta(meta);
+    if (existing) {
+      await db.update(cities)
+        .set({
+          aliases: sql`(COALESCE(${cities.aliases}, '[]'::jsonb) || ${JSON.stringify([input])}::jsonb)`,
+          updatedAt: new Date(),
+        })
+        .where(sql`${cities.id} = ${existing.id} AND NOT (COALESCE(${cities.aliases}, '[]'::jsonb) @> ${JSON.stringify([input])}::jsonb)`);
+      console.log(`[CityResolver] ✅ 백필 재조회 매칭: "${input}" → ${existing.name} (ID: ${existing.id}) = 유사어 등록 = 신규 발급 0`);
+      return {
+        cityId: existing.id,
+        name: existing.name,
+        nameEn: existing.nameEn || meta.nameEn,
+        nameLocal: existing.nameLocal || meta.nameLocal,
+        countryCode: existing.countryCode,
+        latitude: existing.latitude,
+        longitude: existing.longitude,
+      };
+    }
+
     const [newCity] = await db.insert(cities).values({
       name: meta.nameKo,
       nameEn: meta.nameEn,
@@ -347,6 +372,32 @@ export async function findCityUnified(
 }
 
 // ⚠️ 2026-05-23 = 사용자 SSOT = PSR 단일 = 장소 매칭 = upsertPlace() 의 5 단계 매칭 사용
+
+// ⚠️ 수정금지(승인필요) 2026-07-11 사장님 SSOT = 백필 전용 기존 도시 재조회 (5단계에서만 사용).
+//   = 매칭 기준 2가지: ①이름 3종(한/영/현지) 정확일치 + 국가코드 일치 필수(동명이도시 오흡수 차단 = 독일 Bonn→프랑스 Beaune '본' 리뷰 실증)
+//     ②중심좌표 1km 이내(공용 haversineKm = §16 단일 SSOT 재사용, 좌표=국가 무관 불변키).
+//   = 반경 1km 근거: 실측상 별개 이웃도시 최소 간격 5.2km(모나코↔에즈) = 1km 는 오흡수 0 + 진짜 중복(몽생미셸 0.0km) 100% 포착.
+//   = cities 전량 읽기(~140행 소형 테이블 + 백필은 4단계 전실패 시에만 발동 = 무해). 동수 매칭 시 큰 id(최신) 우선 = §14 새것우선.
+export async function findExistingCityByMeta(meta: {
+  nameKo: string; nameEn: string; nameLocal: string; countryCode: string; latitude: number; longitude: number;
+}) {
+  if (!db) return null;
+  const norm = (x: string | null | undefined) => (x || '').trim().toLowerCase();
+  const names = [meta.nameKo, meta.nameEn, meta.nameLocal].map(norm).filter(n => n.length > 0);
+  const cc = (meta.countryCode || '').trim().toUpperCase();
+  const hasCoord = Number.isFinite(meta.latitude) && Number.isFinite(meta.longitude);
+  if ((names.length === 0 || cc.length === 0) && !hasCoord) return null;
+  const { haversineKm } = await import('./agents/transit-haversine');
+  const all = await db.select().from(cities);
+  const hits = all.filter(c =>
+    (names.length > 0 && cc.length > 0
+      && (c.countryCode || '').trim().toUpperCase() === cc
+      && [c.name, c.nameEn, c.nameLocal].some(x => { const v = norm(x); return v.length > 0 && names.includes(v); }))
+    || (hasCoord && haversineKm(Number(c.latitude), Number(c.longitude), meta.latitude, meta.longitude) < 1.0)
+  );
+  hits.sort((a, b) => b.id - a.id);
+  return hits[0] ?? null;
+}
 
 /**
  * 영어 → 한국어 도시명 변환 (표시용)
