@@ -8,6 +8,7 @@ import type { TripFormData, PlaceResult, DaySlotConfig, TravelPace, VibeWeight, 
 import {
   PACE_CONFIG, MEAL_BUDGET, DEFAULT_START_TIME, DEFAULT_END_TIME,
   calculateDayCount, calculateSlotsForDay, getCompanionCount, minutesToTime,
+  SEED_CATEGORIES,
 } from './types';
 // ⚠️ 2026-07-06 사장님 SSOT = MIX 이동/거리/비용 = DB-only(route-local) 계산법 단일 SSOT 재사용(§16). 옛 자체 haversineTransit 재발명 완전삭제 §19.
 import {
@@ -552,6 +553,8 @@ async function step2_enrichAndBuild(
     for (const gPlace of gDay.places) {
       const isMeal = gPlace.type === 'lunch' || gPlace.type === 'dinner';
       const placeId = `v3-d${gDay.day}-${allPlaces.length}`;
+      // 슬롯 카테고리 = 식사=restaurant 고정 / 그 외 = Gemini seed_category 화이트리스트 통과분만(환각값 null).
+      const slotCat = isMeal ? 'restaurant' : (SEED_CATEGORIES.has(gPlace.seed_category || '') ? gPlace.seed_category : null);
       // description=shortform_ko(후킹카피)→DB editorial_summary / personaFitReason=selection_reason_ko(인스타/FOMO)→DB summary_ko
       // 🗑️ 2026-07-05 삭제 = gPlace.reason 폴백 = 프롬프트 미요청 필드(항상 undefined = 死데이터) §0/§19
       const desc = gPlace.shortform_ko || '';
@@ -588,7 +591,11 @@ async function step2_enrichAndBuild(
         nameLocal: gPlace.nameLocal || null,
         // 🧠 2026-07-05 사장님 SSOT = Gemini 도심거리·카테고리 살림(§20) = saveNewPlacesToDB job 전필드 저장(지점4) = 결손컬럼 채움.
         distanceKmFromCenter: gPlace.distance_km_from_center ?? null,
-        seedCategory: isMeal ? 'restaurant' : (gPlace.seed_category || null),
+        // ⚠️ 수정금지(승인필요) 2026-07-11 사장님 SSOT = 슬롯 카테고리 1회 계산(중복식 드리프트 방지) + SEED_CATEGORIES 화이트리스트 검증
+        //   (등재 외 Gemini 환각값 = null = 마커 회색퇴화·category_tags 오염 차단).
+        //   = slotCategory(취향, AG1 매트릭스→Gemini 이행값) = 매칭행 검증값으로 안 바뀌는 표시 전용 = FE 마커·카드 아이콘 소스.
+        seedCategory: slotCat,
+        slotCategory: slotCat,
       } as any;
       allPlaces.push(place);
       scheduleMap.push({ day: gDay.day, gPlace, placeId });

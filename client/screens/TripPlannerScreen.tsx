@@ -1804,7 +1804,9 @@ export default function TripPlannerScreen() {
                 .map((p, i) => ({
                   id: String(p.id),
                   name: (p as any).nameLocal || p.name,
-                  seedCategory: (p as any).seedCategory || null,
+                  // ⚠️ 수정금지(승인필요) 2026-07-11 사장님 SSOT = 마커 = 취향 슬롯 카테고리(slotCategory) 우선 = "이 여정에서의 역할" 표시.
+                  //   = 없으면(옛 저장본·DB-only) 검증 seedCategory 폴백.
+                  seedCategory: (p as any).slotCategory || (p as any).seedCategory || null,
                   lat: p.lat,
                   lng: p.lng,
                   slot: i + 1,
@@ -2113,8 +2115,9 @@ export default function TripPlannerScreen() {
                                     ]}
                                   >
                                     {/* ⚠️ 수정금지(승인필요) 2026-05-19 = BTS 맵 마커 SVG 동일 사용 (= 사전 빌드 lookup) */}
+                                    {/* ⚠️ 수정금지(승인필요) 2026-07-11 사장님 SSOT = 카드 아이콘도 취향 슬롯 카테고리(slotCategory) 우선 = 지도 마커와 동일 소스(§16). */}
                                     {(() => {
-                                      const cat = (place as any).seedCategory || (isMealSlot || isMeal ? 'restaurant' : null);
+                                      const cat = (place as any).slotCategory || (place as any).seedCategory || (isMealSlot || isMeal ? 'restaurant' : null);
                                       const svg = cat ? BTS_PLACEHOLDER_SVG_BY_CAT[cat] : null;
                                       return svg ? (
                                         <SvgXml xml={svg} width={40} height={40} />

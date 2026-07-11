@@ -29,6 +29,11 @@ export type SeedCategory =
   | "healing"
   | "shopping"
   | "restaurant";
+// ⚠️ 수정금지(승인필요) 2026-07-11 = SeedCategory 런타임 화이트리스트 1벌(§16) = Gemini 자유문자열(seed_category) 검증용.
+//   = 등재 외 값(예: 'museum' 환각) = null 처리 = 마커 회색퇴화·category_tags 오염 차단.
+export const SEED_CATEGORIES: ReadonlySet<string> = new Set([
+  "bts_venue", "heritage", "hotspot", "attraction", "adventure", "healing", "shopping", "restaurant",
+]);
 export type TravelPace = "Packed" | "Normal" | "Relaxed";
 export type MobilityStyle = "WalkMore" | "Moderate" | "Minimal";
 export type CurationFocus = "Kids" | "Parents" | "Everyone" | "Self";
@@ -114,6 +119,9 @@ export interface PlaceResult {
   googleMapsUrl: string;
   estimatedPriceEur?: number; // = PSR.price_eur 직접 복사 (= 사용자 SSOT)
   seedCategory?: SeedCategory; // FE LUCIDE 아이콘 매핑
+  // ⚠️ 수정금지(승인필요) 2026-07-11 사장님 SSOT = 취향 슬롯 카테고리 = AG1 배정(computeCatSlots 매트릭스)→Gemini 이행값 보존(표시 전용).
+  //   = 매칭행의 검증 seedCategory 로 덮이지 않음 = "이 여정에서 이 장소의 역할"(예: 앙부아즈성=유적이자 사진명소) = FE 마커·카드 아이콘 소스.
+  slotCategory?: SeedCategory;
   finalScore?: number; // = max(0, 21 - rank) = AG3 단순 부여
   userRatingCount?: number; // = PSR.googleReviewCount (= 식당 정렬 보조)
   selectionReasons?: string[];

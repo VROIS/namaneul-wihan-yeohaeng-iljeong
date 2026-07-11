@@ -63,6 +63,10 @@ export interface UpsertPayload {
   // ⚠️ 수정금지(승인필요) 2026-07-10 사장님 SSOT = 배치 호출자(ag3 등)가 loadMatchCandidates()로 1회만 읽은 후보 명단 재사용.
   //   = 미전달 시 이 함수가 직접 1회 읽음(단건 호출 동일 동작). 곳마다 전행 재SELECT(1회 3.0초 실측 = 24곳 ~17초)가 근본 원인.
   candidates?: MatchCandidate[];
+  // ⚠️ 수정금지(승인필요) 2026-07-11 사장님 SSOT = 좌표 쓰기 보호 = true 면 기존 행 좌표(NULL·0 제외)를 유지하고 빈칸·0만 채움.
+  //   = Gemini(미검증) 좌표 쓰기 전용 플래그(ag3 ①) = 환각좌표가 검증행을 오염 → 다음 판 좌표10m이 딴 장소 흡수(투르 78796 실증) 차단.
+  //   = 매칭에는 payload 좌표 그대로 사용(좌표10m 재식별 보존) = 쓰기만 보호. TS 검증 쓰기(③ 등) = 플래그 없음 = 새것우선 그대로.
+  preserveExistingCoords?: boolean;
 }
 
 // ⚠️ 수정금지(승인필요) 2026-07-10 사장님 SSOT = 매칭 후보 읽기 단일 함수(§16 1벌) = upsertPlace 내부 + 배치 호출자(ag3·upsertPlaces) 공용.
@@ -108,8 +112,12 @@ function syncCandidateList(p: UpsertPayload, rowId: number, inserted: boolean): 
   c.googlePlaceId = p.googlePlaceId ?? c.googlePlaceId;
   c.googleMapsUri = p.googleMapsUri ?? c.googleMapsUri;
   c.address = p.address ?? c.address;
-  c.latitude = p.latitude ?? c.latitude;
-  c.longitude = p.longitude ?? c.longitude;
+  // 좌표 = DB 와 동일한 보호(preserveExistingCoords = 기존 유효좌표 유지, 빈칸·0만 채움) = 명단·DB 동형.
+  const keepCoord = p.preserveExistingCoords && c.latitude != null && Number(c.latitude) !== 0;
+  if (!keepCoord) {
+    c.latitude = p.latitude ?? c.latitude;
+    c.longitude = p.longitude ?? c.longitude;
+  }
   c.nameEn = p.nameEn ?? c.nameEn;
   c.nameLocal = p.nameLocal ?? c.nameLocal;
   c.nameKo = p.nameKo ?? c.nameKo;
@@ -148,8 +156,8 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
         name_en       = COALESCE(${p.nameEn ?? null}, name_en),
         name_ko       = COALESCE(${p.nameKo ?? null}, name_ko),
         name_local    = COALESCE(${p.nameLocal ?? null}, name_local),
-        latitude      = COALESCE(${p.latitude ?? null}::real, latitude),
-        longitude     = COALESCE(${p.longitude ?? null}::real, longitude),
+        latitude      = ${p.preserveExistingCoords ? sql`COALESCE(NULLIF(latitude, 0), ${p.latitude ?? null}::real, latitude)` : sql`COALESCE(${p.latitude ?? null}::real, latitude)`},
+        longitude     = ${p.preserveExistingCoords ? sql`COALESCE(NULLIF(longitude, 0), ${p.longitude ?? null}::real, longitude)` : sql`COALESCE(${p.longitude ?? null}::real, longitude)`},
         address       = COALESCE(${p.address ?? null}, address),
         google_place_id = COALESCE(${p.googlePlaceId ?? null}, google_place_id),
         google_review_count = COALESCE(${p.googleReviewCount ?? null}::integer, google_review_count),
@@ -201,8 +209,8 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
         name_en       = COALESCE(${p.nameEn ?? null}, name_en),
         name_ko       = COALESCE(${p.nameKo ?? null}, name_ko),
         name_local    = COALESCE(${p.nameLocal ?? null}, name_local),
-        latitude      = COALESCE(${p.latitude ?? null}::real, latitude),
-        longitude     = COALESCE(${p.longitude ?? null}::real, longitude),
+        latitude      = ${p.preserveExistingCoords ? sql`COALESCE(NULLIF(latitude, 0), ${p.latitude ?? null}::real, latitude)` : sql`COALESCE(${p.latitude ?? null}::real, latitude)`},
+        longitude     = ${p.preserveExistingCoords ? sql`COALESCE(NULLIF(longitude, 0), ${p.longitude ?? null}::real, longitude)` : sql`COALESCE(${p.longitude ?? null}::real, longitude)`},
         address       = COALESCE(${p.address ?? null}, address),
         google_place_id = COALESCE(${p.googlePlaceId ?? null}, google_place_id),
         google_review_count = COALESCE(${p.googleReviewCount ?? null}::integer, google_review_count),

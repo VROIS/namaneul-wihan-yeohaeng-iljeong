@@ -585,7 +585,10 @@ export async function saveNewPlacesToDB(
     const place = toSave[i];
     const seedCategory: string = (place as any).seedCategory
       || (place.tags?.includes("restaurant") || place.tags?.includes("food") ? "restaurant" : "attraction");
-    // 🧠 좌표 = Gemini(place.lat/lng, ag3 매칭단계서 seed 폴백됨). 없으면 null(= 신규 INSERT 후 ③ TS 가 채움).
+    const slotCat: string | null = (place as any).slotCategory ?? null; // 취향 슬롯 카테고리(파이프라인 2a 화이트리스트 통과분)
+    // ⚠️ 수정금지(승인필요) 2026-07-11 사장님 SSOT = Gemini 좌표는 job 에 그대로 실어 매칭(좌표10m 재식별)에는 쓰되,
+    //   쓰기 보호는 관문 플래그(preserveExistingCoords)가 담당(§16 1벌 = ag3 매칭·관문 자체매칭·트리거흡수 세 문 모두 동일 보호).
+    //   = 옛 "job 좌표 제거 게이트" = 폐기 2026-07-11 §19(좌표로만 재식별되는 레거시 행의 매칭을 부숨 = 리뷰 적발).
     const gLat = (place as any).lat && (place as any).lat !== 0 ? (place as any).lat : null;
     const gLng = (place as any).lng && (place as any).lng !== 0 ? (place as any).lng : null;
     const job = {
@@ -602,9 +605,13 @@ export async function saveNewPlacesToDB(
       shortformKo: place.description ?? null,                                  // → editorial_summary
       selectionReasonKo: place.personaFitReason ?? place.description ?? null,  // → summary_ko
       priceEur: (place as any).estimatedPriceEur || 0,
-      categoryTags: [seedCategory],
+      // ⚠️ 수정금지(승인필요) 2026-07-11 사장님 SSOT = 취향 슬롯 카테고리(slotCategory)도 태그로 축적(UNION §14) = 장소 다면성(앙부아즈=heritage+hotspot).
+      categoryTags: slotCat && slotCat !== seedCategory ? [seedCategory, slotCat] : [seedCategory],
       phaseTags: [`auto-learn-${today}`],
       distanceKmFromCenter: (place as any).distanceKmFromCenter ?? null,
+      // ⚠️ 수정금지(승인필요) 2026-07-11 사장님 SSOT = ① Gemini 쓰기 = 좌표 보호 플래그 = 행에 검증좌표 있으면 유지(빈칸·0만 채움).
+      //   = Gemini 환각좌표(식당에 정원좌표, 투르 78796 실증)가 행에 박혀 다음 판 좌표10m이 딴 장소를 흡수하던 오염 연쇄 차단.
+      preserveExistingCoords: true,
     };
     try {
       // 명단 갱신(신규 추가·병합 반영)은 관문(upsertPlace syncCandidateList)이 소유 = 호출자는 넘기기만(§16).
@@ -724,8 +731,10 @@ export async function saveNewPlacesToDB(
           nameKo: (place as any).nameKo ?? null,
           nameLocal: (place as any).nameLocal ?? null,
           address: result.address ?? (place as any).geminiAddress ?? null,
-          latitude: lat,
-          longitude: lng,
+          // ⚠️ 수정금지(승인필요) 2026-07-11 사장님 SSOT = DB 좌표 = TS 검증값만. TS 무좌표 시 null = 행 좌표 유지(COALESCE).
+          //   = 옛 "Gemini 좌표 폴백을 DB에 기록" = 폐기 2026-07-11 §19(환각좌표가 targetRowId 직행으로 검증행 오염 = 리뷰 적발). Gemini 폴백(lat/lng)은 FE 표시 전용.
+          latitude: (result.latitude && result.latitude !== 0) ? result.latitude : null,
+          longitude: (result.longitude && result.longitude !== 0) ? result.longitude : null,
           imageUrl: finalImage,
           googlePlaceId: placeId,
           googleMapsUri: result.googleMapsUri ?? null,
