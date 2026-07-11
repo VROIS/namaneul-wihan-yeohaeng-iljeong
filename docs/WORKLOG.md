@@ -8,6 +8,27 @@
 
 ---
 
+## 🔴 2026-07-11 = 사진 분리 수술 + Gemini 슬림 + 도시 백필 중복차단 (몽셀미셀 사고 후속, 작업트리 미커밋)
+
+**배경**: 몽셀미셸(2026-07-10) 도시 중복발급(75↔137) + 생성 40초 사고. 사장님 4항목 순서 지시.
+
+**🔒 재발명 기계 차단 = [`scripts/guard-no-reinvention.mjs`](../scripts/guard-no-reinvention.mjs) (등재만 하면 안 읽고 재발명 = §19 처럼 기계화)**
+- `server/services/fill/` = 결손별 단독 도구 카탈로그. `--catalog` = 파일 헤더 1줄 실시간 생성(문서 드리프트 0). `--staged` = pre-commit 배선 = 후임이 기존 능력(이미지채우기·TS보강·랭킹·raw재입력·카테고리이동)을 owner 아닌 곳에서 재발명 시 커밋 차단 + 기존 도구 안내. CLAUDE.md §16 명문화.
+
+**🔴 신설 영구 컴포넌트 = [`server/services/fill/image-backfill.ts`](../server/services/fill/image-backfill.ts) (사진 사후 일괄 보강 단독 CLI, 위 가드가 재발명 차단)**
+- **역할**: 사진 분리 수술의 짝. 생성 중 PM(사진) 0(ag3=TS까지만) → 이미지 결손을 도시 단위로 한꺼번에 채우는 단독 도구(스킬 아님, 형제=ts-backfill·storage-image-relink 와 동형 CLI).
+- **순서**(비용최소): ①PID보유·이미지결손 추출(repair.ts:99 정본) → ②무료 재링크(relinkStorageImages §16) → ③저장 raw(docs/raw/{cityId})의 photoName 재활용=PM만(TS 재호출 0) → ④raw에도 없으면 보고만 / `--allow-ts` 시 TS 1콜 후 PM(전요소 기록 §20).
+- **CLI**: `npx tsx server/services/fill/image-backfill.ts --city-id=N [--apply] [--allow-ts] [--limit=50]`. 옵션 없음=DRY(외부호출 0·쓰기 0 미리보기). 쓰기=upsertPlace(§14, targetRowId 직행). 기존 부품 조립=재발명 0.
+- **실증**(아를 138 신규생성): DRY 21곳 전부 raw→PM·TS필요 0(€10.5). 파리 19 = 239대상/159 raw재활용/80 TS필요. 5단계검증서 결함 4건(ANON→SERVICE_ROLE 키·폐업 제외·최신raw 우선·RC ?? null) 수정.
+
+**사진 분리 수술**(ag3-data-matcher·pipeline-v3·TripPlannerScreen): 생성 중 tsPhoto+Storage 완전 제거(②추출=PID또는이미지 결손 직전로직 유지, PM만 차단). imageUrl 미기록(§14 부분갱신=뼈대보존). FE=이미지 없는 슬롯 전부 아이콘+'구글맵 정보'(무분기=DB-only 오류 대비 포함). raw photoName 보존=사후 PM 재료.
+
+**Gemini 슬림**(pipeline-v3 Step1 프롬프트): 축약키 12필드(n/k/l/a/t/c/y/x/p/d/r/s)+꾸밈글 18자 상한. 수신부 SLIM_KEYS 원명 복원(하류·DB 불변). **A/B 실호출 실증=응답 25%↓·22.3→16.5초(26%↓)·12필드 결손0**. 아를 완주=내부 34.9→23.6초. **3곳 동기**=코드+표준md(09)+카탈로그(#02, byte 일치). 드리프트 발견=문서 2벌이 구본이었음.
+
+**도시 백필 중복차단**(city-resolver, 커밋 9496635=푸시대기): Gemini 메타 수신직후 findExistingCityByMeta 재조회(이름3종+국가일치 OR 좌표1km·haversineKm §16) → 발견 시 유사어 등록(INSERT 0). 빈 도시 75 삭제완료. 시뮬 6/6(Bonn→Beaune 오흡수 차단).
+
+---
+
 ## 🔴 2026-07-09(심야) = 대안2(사진 증발수정) + dupOwner 완전제거(ag3·repair 통일) + 커밋
 
 **배경:** 야간 작업(아래) 후 재검증 세션. 5개 병렬 리뷰 에이전트 + DB 실측으로 2개 근본결함을 잡아 수정.

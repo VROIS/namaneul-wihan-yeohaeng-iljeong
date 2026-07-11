@@ -368,6 +368,15 @@ server/services/
 3. **CLI** = `scripts/seed-*.mjs` 한 줄 호출 = 다른 도시 동일 결과 보장
 4. **1 회용 정제 작업** = 컴포넌트 안의 영구 함수로 = 표준화
 
+### 🔒 재발명 기계 차단 = 글이 아니라 코드로 강제 (2026-07-11 사장님 SSOT)
+
+> 근본: 등재(WORKLOG·SSOT)만 하면 후임이 **안 읽고 재발명**함(사장님 실증). = §19 를 기계화한 것과 동일 = 글 아닌 기계로 막음.
+
+- **가드 = `scripts/guard-no-reinvention.mjs`** = `server/services/fill/` = 결손별 단독 도구 카탈로그. 후임이 기존 도구의 능력(이미지 채우기·TS 보강·랭킹·raw 재입력·카테고리 이동)을 **owner 파일이 아닌 곳에서 새로 짜면** 정규식 자동 감지 → 커밋 차단(exit 1) + 기존 도구 안내.
+- **카탈로그 열람** = `node scripts/guard-no-reinvention.mjs --catalog` = fill/ 파일 헤더 1줄을 코드에서 실시간 생성 = 항상 최신(문서 드리프트 0).
+- **배선** = git pre-commit(`--staged` = 신규 추가줄만 검사). 새 능력의 도구가 정말 필요하면(기존과 능력이 다르면) = 가드 CAPABILITIES 에 1줄 등재 후 커밋.
+- = 이미지 결손 채우기 = `server/services/fill/image-backfill.ts`(무료 재링크→raw photoName 재활용→PM, CLI `--city-id=N [--apply]`). 새로 만들지 말 것.
+
 ### 세션 간 인수인계 = 메모리 + WORKLOG
 
 - 작업 시작 시 = `MEMORY.md` 자동 로드 (= 모든 메모리 인덱스)

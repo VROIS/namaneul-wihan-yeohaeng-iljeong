@@ -196,16 +196,15 @@ async function runPipelineMix(formData: TripFormData): Promise<any> {
     if (!preloaded.cityId) return;
     const rawText = (geminiDays as any).__rawText || '';
     const finishReason = (geminiDays as any).__finishReason || 'unknown';
-    let parsedPlaces: any[] = []; let parseError: string | null = null;
-    try {
-      const m = rawText.replace(/```json|```/g, '').match(/\{[\s\S]*\}/);
-      const pj = m ? JSON.parse(m[0]) : {};
-      for (const dd of (pj.days || [])) for (const p of (dd.places || [])) parsedPlaces.push({ day: dd.day, theme: dd.theme, ...p });
-    } catch (e) { parseError = (e as Error).message; }
+    // ⚠️ 수정금지(승인필요) 2026-07-11 사장님 SSOT = parsedPlaces = step1 복원 결과(geminiDays = SLIM_KEYS 원명 복원 완료)에서 구성.
+    //   옛 "rawText 독자 재파싱" 폐기 = 2026-07-11 §19 = 슬림키가 raw 에 박혀 재입력(reinsert-saved-raw) 미인식되는 회귀(리뷰 적발) 차단.
+    //   = 복원 지점 1벌(step1 수신부)만 존재 + rawResponse(원문)는 그대로 보존(§18).
+    const parsedPlaces: any[] = [];
+    for (const dd of geminiDays as any[]) for (const p of (dd.places || [])) parsedPlaces.push({ day: dd.day, theme: dd.theme, ...p });
     await saveCollectedRaw({
       cityId: preloaded.cityId, stepNum: 90, stepName: 'mix-gemini', content: 'step1', hashKey: 'rawResponse',
       body: {
-        meta: { cityId: preloaded.cityId, destination: formData.destination, finishReason, parseError, parsedCount: parsedPlaces.length, timestamp: new Date().toISOString() },
+        meta: { cityId: preloaded.cityId, destination: formData.destination, finishReason, parsedCount: parsedPlaces.length, timestamp: new Date().toISOString() },
         rawResponse: rawText,
         parsedPlaces,
       },
@@ -244,12 +243,13 @@ async function runPipelineMix(formData: TripFormData): Promise<any> {
       unmatched: unmatchedCount,
       matchRate: totalPlaces > 0 ? Math.round((matchedCount * 100) / totalPlaces) : 0,
     },
-    _backgroundSave: {
+    // _save = 저장 요약 메타(옛 백그라운드 키명 폐기 = 2026-07-11 §19, 읽는 곳 0 = 무해)
+    _save: {
       started: unmatchedCount > 0,
       targetCount: unmatchedCount,
       note: unmatchedCount > 0
-        ? `${unmatchedCount} 곳 = TS+PM + Storage + DB INSERT 백그라운드 진행 중 (응답 후 완료)`
-        : '미매칭 없음 = 백그라운드 작업 없음',
+        ? `${unmatchedCount} 곳 = TS + DB INSERT 응답 전 완료 (이미지 = 사후 일괄 2026-07-11)`
+        : '미매칭 없음 = 저장 작업 없음',
     },
     _geminiModel: 'gemini-3-flash-preview',
     // 🗑️ 2026-07-05 삭제 = _matchingAlgorithm 문자열 = 옛 3단계 인용(현 matcher 7단계와 불일치) §0/§19
@@ -366,9 +366,9 @@ async function step1_geminiItinerary(
       nowMonth >= 9 && nowMonth <= 11 ? '가을 시즌' :
         '겨울 시즌 (비수기, 일부 시설 단축운영)';
 
-  // ⚠️ 수정금지(승인필요) 2026-05-24 = 메인앱 표준 prompt 사용자 SSOT
-  // = SSOT 원본 = .claude/skills/raw-db-verify-and-complete/prompts/09-main-app-itinerary/STANDARD_PROMPT_2026-05-24.md
-  // = 1 글자 변경 = Gemini 응답 변경 = 양쪽 파일 동기 강제
+  // ⚠️ 수정금지(승인필요) 2026-07-11 = 메인앱 표준 prompt 사장님 SSOT = 슬림본(축약키 12필드 + 꾸밈글 18자 상한, A/B 실호출 실증 = 26% 단축·결손 0)
+  // = SSOT 원본 = .claude/skills/raw-db-verify-and-complete/prompts/09-main-app-itinerary/STANDARD_PROMPT_2026-05-24.md + 카탈로그 docs/20260607PROMPTS_TOTAL_SSOT.md #02
+  // = 1 글자 변경 = Gemini 응답 변경 = 세 파일 동기 강제. 축약키 = 아래 수신부 SLIM_KEYS 가 원명 복원(하류·DB 컬럼 불변)
   // 🗑️ 2026-07-09 사장님 SSOT = vibe/페이스/스타일 = 하드코딩 번역맵 폐기 §19 → 원본값 그대로(Gemini 해석). vibes·travelPace·travelStyle 원본 = route-prompt 동적 패턴.
   const koreanTravelerStyle = `${companionDesc} ${headcount}명 / vibe=${(formData.vibes || []).join('+')} / 페이스=${formData.travelPace || 'Normal'} / 스타일=${formData.travelStyle || 'Reasonable'}${ageDesc ? ` / 나이=${ageDesc}` : ''}`;
   const prompt = `You are a travel data assistant for KOREAN TRAVELERS (${nowYear}년 기준 최신 정보).
@@ -394,40 +394,40 @@ ${dayRequirements}
 
 [CATEGORY MATRIX — 전체 여정 카테고리별 곳수 (= 사용자 vibe 반영, 반드시 이 비율로 선정)]
 ${categoryMatrix}
-- 각 place 의 seed_category 는 위 카테고리 중 하나로 정확히 지정 (heritage=문화/유산, healing=힐링/자연, hotspot=핫플, adventure=모험/액티비티, shopping=쇼핑, attraction=즐길거리/체험, restaurant=식당).
-- 식사(lunch/dinner) = seed_category="restaurant".
+- 각 place 의 c(카테고리)는 위 카테고리 중 하나로 정확히 지정 (heritage=문화/유산, healing=힐링/자연, hotspot=핫플, adventure=모험/액티비티, shopping=쇼핑, attraction=즐길거리/체험, restaurant=식당).
+- 식사(lunch/dinner) = c="restaurant".
 
 [동선 원칙]
 - 매일 ${formData.destination} 도시 중심부에서 출발·귀환, 같은 날 = 같은 구역 묶기
 - Array order within each day = visit order (= sorted by minimum travel distance from start)
 - DAILY MEAL RULE (= AG1 has already assigned these slots — DO NOT modify count or position):
-    * Each day MUST contain exactly 1 lunch (type="lunch") somewhere in the middle of the day.
-    * The FINAL slot of each day MUST be dinner (type="dinner").
+    * Each day MUST contain exactly 1 lunch (t="lunch") somewhere in the middle of the day.
+    * The FINAL slot of each day MUST be dinner (t="dinner").
 - 3 일+ 일정 시 = Day 2+ 한 날 = outskirt (= 도심에서 10-100km 외곽) day-trip 1-2 곳 포함 가능 (= 한국 여행객이 자주 찾는 외곽 명소/아울렛)
 
 [가격 원칙]
-- price_eur = ${nowYear}년 실제 입장료 (1인, EUR). 무료=0
+- p = ${nowYear}년 실제 입장료 (1인, EUR). 무료=0
 - 점심 1인 ~€${mealBudget.lunch}, 저녁 1인 ~€${mealBudget.dinner}
 - 활동(activity) = 1인 입장료 / 식당(lunch/dinner) = 1인당 평균. 확실하지 않으면 0
 
-For each place include (= ALL fields verified via Google Search grounding):
-- name (English official name on Google Maps)
-- nameKo (한국어 = 한국 여행자가 부르는 이름)
-- nameLocal (local language name = 예: 파리=Tour Eiffel) [= REQUIRED for ALL places INCLUDING restaurants (식당도 반드시). If the restaurant's official name is already in the local language (예: "Le Comptoir du Marché"), copy that same name into nameLocal — never leave nameLocal empty. = Text Search forwarding + matching key, final DB column]
-- address (FULL street address with NUMBER + street + postal code + city) [= REQUIRED for Text Search forwarding + matching key, final DB column — verify via Google Search]
-- type ("activity" | "lunch" | "dinner")
-- seed_category (= 위 CATEGORY MATRIX 중 하나 = heritage|healing|hotspot|adventure|shopping|attraction|restaurant. 식사=restaurant) [= final DB column, 카테고리 보존 필수]
-- latitude (= decimal 6 digits, e.g. 48.858370) [= REQUIRED for Text Search forwarding + matching key, final DB column — verify via Google Search, NO hallucination]
-- longitude (= decimal 6 digits, e.g. 2.294481) [= REQUIRED for Text Search forwarding + matching key, final DB column — verify via Google Search, NO hallucination]
-- price_eur (1 인 EUR)
-- distance_km_from_center (= 도심 중심으로부터 직선거리 km = haversine = 소수 1 자리 = 동선 최적화 기본 필수)
-- selection_reason_ko (한국어 한 줄 = 한국 여행객 트렌드 = 인스타 성지/한국 vlog 등 사회적 검증)
-- shortform_ko (한국어 한 줄 = 장소에 대한 코믹/위트 = Claude 톤. 단순 정보 X = "프사각", "본전 뽑음" 같은 한국 슬랭)
+For each place include (= ALL fields verified via Google Search grounding, 키는 아래 축약형 그대로 사용):
+- n (English official name on Google Maps)
+- k (한국어 = 한국 여행자가 부르는 이름)
+- l (local language name = 예: 파리=Tour Eiffel) [= REQUIRED for ALL places INCLUDING restaurants (식당도 반드시). If the restaurant's official name is already in the local language (예: "Le Comptoir du Marché"), copy that same name into l — never leave l empty. = Text Search forwarding + matching key, final DB column]
+- a (FULL street address with NUMBER + street + postal code + city) [= REQUIRED for Text Search forwarding + matching key, final DB column — verify via Google Search]
+- t ("activity" | "lunch" | "dinner")
+- c (= 위 CATEGORY MATRIX 중 하나 = heritage|healing|hotspot|adventure|shopping|attraction|restaurant. 식사=restaurant) [= final DB column, 카테고리 보존 필수]
+- y (latitude = decimal 6 digits, e.g. 48.858370) [= REQUIRED for Text Search forwarding + matching key, final DB column — verify via Google Search, NO hallucination]
+- x (longitude = decimal 6 digits, e.g. 2.294481) [= 위 y 와 동일 요건]
+- p (1 인 EUR)
+- d (= 도심 중심으로부터 직선거리 km = haversine = 소수 1 자리 = 동선 최적화 기본 필수)
+- r (한국어 한 줄 = 최대 18자 = 선정 이유 = 한국 여행객 트렌드 = 인스타 성지/한국 vlog 등 사회적 검증)
+- s (한국어 한 줄 = 최대 18자 = 장소에 대한 코믹/위트 = Claude 톤. 단순 정보 X = "프사각", "본전 뽑음" 같은 한국 슬랭)
 
 OUTPUT (strict JSON, no markdown fences):
 {"days":[{"day":1,"theme":"테마","places":[
-  {"name":"Eiffel Tower","nameKo":"에펠탑","nameLocal":"Tour Eiffel","address":"Champ de Mars, 5 Av. Anatole France, 75007 Paris","type":"activity","seed_category":"attraction","latitude":48.858370,"longitude":2.294481,"price_eur":29.4,"distance_km_from_center":2.4,"selection_reason_ko":"파리 인스타 인증샷 1순위 성지","shortform_ko":"파리 왔으면 외쳐줘야 국룰 '나 파리다!'"},
-  {"name":"Le Comptoir du Marché","nameKo":"르 콩투아 뒤 마르쉐","nameLocal":"Le Comptoir du Marché","address":"8 Rue de la Loge, 06300 Nice, France","type":"lunch","seed_category":"restaurant","latitude":43.697415,"longitude":7.276451,"price_eur":35,"distance_km_from_center":0.8,"selection_reason_ko":"구시가지 시장 근처 가성비 미쉐린 맛집","shortform_ko":"예약 안 하면 자리 없음 주의"}
+  {"n":"Eiffel Tower","k":"에펠탑","l":"Tour Eiffel","a":"Champ de Mars, 5 Av. Anatole France, 75007 Paris","t":"activity","c":"attraction","y":48.858370,"x":2.294481,"p":29.4,"d":2.4,"r":"파리 인증샷 1순위 성지","s":"나 파리다 국룰"},
+  {"n":"Le Comptoir du Marché","k":"르 콩투아 뒤 마르쉐","l":"Le Comptoir du Marché","a":"8 Rue de la Loge, 06300 Nice, France","t":"lunch","c":"restaurant","y":43.697415,"x":7.276451,"p":35,"d":0.8,"r":"시장 근처 가성비 미쉐린","s":"예약 없으면 자리 없음"}
 ]}]}`;
 
   try {
@@ -494,6 +494,16 @@ OUTPUT (strict JSON, no markdown fences):
         return [];
       }
       console.log(`[V3-Step1] ✅ JSON 복구 성공: ${result.days?.length || 0}일`);
+    }
+
+    // ⚠️ 수정금지(승인필요) 2026-07-11 사장님 SSOT = 슬림 프롬프트 축약키 → 원명 복원 = 수신부 단일 지점(하류 GeminiPlace·DB 컬럼 불변).
+    const SLIM_KEYS: Record<string, string> = { n: 'name', k: 'nameKo', l: 'nameLocal', a: 'address', t: 'type', c: 'seed_category', y: 'latitude', x: 'longitude', p: 'price_eur', d: 'distance_km_from_center', r: 'selection_reason_ko', s: 'shortform_ko' };
+    for (const d of result.days || []) {
+      d.places = (d.places || []).map((pl: any) => {
+        const out: any = {};
+        for (const [key, v] of Object.entries(pl)) out[SLIM_KEYS[key] || key] = v;
+        return out;
+      });
     }
 
     const days: GeminiDay[] = result.days || [];
@@ -606,7 +616,7 @@ async function step2_enrichAndBuild(
 
   // ── 2b. DB 매칭 (좌표, 점수 보강) ──
   // ⚠️ 수정금지(승인필요) 2026-05-31 = 사용자 SSOT = skipImageEnrich = Wikipedia 이미지 보강(동기 ~9초) skip
-  // = FE 우선 노출 (= DB-only 처럼) / 이미지 = saveNewPlacesToDB(background = TS+PM) 가 DB 저장 = 다음 trip = DB hit
+  // = FE 우선 노출 (= DB-only 처럼) / 이미지 = fill/image-backfill(사후 일괄) 이 DB 저장 = 다음 trip = DB hit (2026-07-11)
   const matchedPlaces = await matchPlacesWithDB(allPlaces, preloaded, { skipImageEnrich: true });
   // 🗑️ 2026-07-05 삭제 = matchedMap = finalPlaceMap 폴백용 데드맵(finalPlaces 가 동일 id 전부 보유) §0/§19
   console.log(`[V3-Step2] DB 매칭 완료 (${Date.now() - _t0}ms)`);
@@ -690,7 +700,7 @@ async function step2_enrichAndBuild(
   }));
 
   // 🗑️ 2026-07-05 삭제 = AWAIT_NEW_PLACES_IMAGES 토글 + else background분기 = true고정 데드경로(await 1벌만) §0/§19
-  // fetch(TS+PM+Storage) await → 첫 trip 구글 이미지 노출(FE 최우선) + DB INSERT background(백필)
+  // fetch(TS) await = PID·검증요소 응답 전 확보(증발 0). 이미지 = 사후 일괄(2026-07-11 사진 분리 수술) = FE 아이콘 폴백
   await saveNewPlacesToDB(finalPlaces, preloaded.cityId, { deferPersist: true }).catch(e =>
     console.error('[V3-Step2] ⚠️ saveNewPlacesToDB(await fetch) 실패:', e?.message || e)
   );
@@ -1167,7 +1177,7 @@ async function step2_enrichAndBuild(
       generatedAt: new Date().toISOString(),
       pipelineVersion: 'v3-2step',
       // ⚠️ 2026-07-06 = 매칭 집계 = finalPlaces 기준(step2 내부 = 실제 여정 장소). 옛 외부 result.places(항상 빈값 → total:0 오집계) 폐기 §19.
-      //   = googlePlaceId 있음 = DB 매칭 완료 / 없음 = 신규(TS+PM 대상 = 백그라운드 저장).
+      //   = googlePlaceId 있음 = DB 매칭 완료 / 없음 = 신규(TS 대상 = 응답 전 저장).
       _matched: finalPlaces.filter((p: any) => p.googlePlaceId).length,
       _unmatched: finalPlaces.filter((p: any) => !p.googlePlaceId).length,
       // ⚠️ 2026-07-08 사장님 SSOT = 개수보존 3자대조 결과. null = 정상(보존). 있으면 조립단계 무언손실 = 즉시발각(은폐0).

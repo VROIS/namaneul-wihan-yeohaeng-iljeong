@@ -79,7 +79,7 @@ places.id,places.displayName,places.formattedAddress,places.location,places.user
 | # | 이름 | 엔진 | 모델/방식 | 상태 | 원본(클릭) |
 |---|---|---|---|---|---|
 | **#01** | geminiJson() 단일 게이트웨이 | Gemini | gemini-3-flash-preview | live | [geminiClient.ts:52](../server/services/shared/geminiClient.ts) |
-| **#02** | MIX step1 여정 생성 (미발굴 도시) | Gemini | gemini-3-flash-preview / grounding OFF | live | [pipeline-v3.ts:485](../server/services/agents/pipeline-v3.ts) |
+| **#02** | MIX step1 여정 생성 (미발굴 도시, 슬림 12필드 2026-07-11) | Gemini | gemini-3-flash-preview / grounding OFF | live | [pipeline-v3.ts:375](../server/services/agents/pipeline-v3.ts) |
 | **#03** | 동선 최적화 handleRouteRequest | Gemini | gemini-3-flash-preview / grounding ON | live | [route-prompt.ts](../server/services/route/route-prompt.ts) |
 | **#04** | 도시 메타 백필 fetchCityMetaFromGemini | Gemini | gemini-3-flash-preview / grounding ON | live | [gemini-city-meta.ts:22](../server/services/shared/gemini-city-meta.ts) |
 | **#05** | 숏폼 시나리오 통합 (11) | Gemini | gemini-3-flash-preview | ⚠️봉쇄(호출0) | [11/STANDARD_PROMPT](../fillcity/prompts/11-main-app-scenario/STANDARD_PROMPT_2026-05-25.md) |
@@ -164,11 +164,12 @@ places.id,places.displayName,places.formattedAddress,places.location,places.user
 
 ## Gemini 메인앱 라이브 — 여정/동선 (#02~#05)
 
-### #02 · MIX step1 여정 생성 (ready=false 경로)
-- **파일**: `server/services/agents/pipeline-v3.ts:485` · **상태**: live · **모델**: `gemini-3-flash-preview`
-- **프롬프트 원본**: 인라인 lines 415-464 (SSOT 원본 = [`09-main-app-itinerary/STANDARD_PROMPT_2026-05-24.md`](fillcity/prompts/09-main-app-itinerary/STANDARD_PROMPT_2026-05-24), 1:1 동기 강제)
-- **설정 (verbatim)**: temperature=0.3 / maxOutputTokens=8192 / thinkingBudget=0 / **`STEP1_USE_GROUNDING=false`**(라인 470) → responseMimeType="application/json"(JSON 강제, tools 없음 = **grounding OFF**). 토글 true 시 = tools=[{googleSearch:{}}] + mime 제거. 파싱 = parts(text && !thought) → ```json fence 제거 → `/\{[\s\S]*\}/` → JSON.parse, 실패 시 repairTruncatedJSON.
-- **조건**: `runPipelineV3` → `isCityReady(destination).ready=false`(미발굴 도시) → runPipelineMix. 입력 = TripFormData → AG1 평문화(koreanTravelerStyle/seasonNote/dayRequirements 슬롯매트릭스). ready=true 면 호출 안 됨(pipeline-db-only). 환각 안전망 = saveNewPlacesToDB TS 재검증.
+### #02 · MIX step1 여정 생성 (ready=false 경로) — 슬림본 2026-07-11
+- **파일**: `server/services/agents/pipeline-v3.ts:375-432` · **상태**: live · **모델**: `gemini-3-flash-preview`
+- **프롬프트 원본**: 인라인 lines 375-432 (SSOT 원본 = [`09-main-app-itinerary/STANDARD_PROMPT_2026-05-24.md`](../.claude/skills/raw-db-verify-and-complete/prompts/09-main-app-itinerary/STANDARD_PROMPT_2026-05-24.md), 코드·표준md·본 카탈로그 3곳 동기 강제)
+- **설정 (verbatim)**: temperature=0.3 / maxOutputTokens=8192 / thinkingBudget=0 / responseMimeType="application/json"(JSON 강제, tools 없음 = **grounding OFF** — 문구 지시만, 환각 안전망 = saveNewPlacesToDB TS 재검증). 파싱 = parts(text && !thought) → ```json fence 제거 → `/\{[\s\S]*\}/` → JSON.parse, 실패 시 repairTruncatedJSON → **SLIM_KEYS 원명 복원**(n→name … s→shortform_ko, 수신부 단일 지점 = 하류 불변).
+- **조건**: `runPipelineV3` → `isCityReady(destination).ready=false`(미발굴 도시) → runPipelineMix. 입력 = TripFormData → AG1 평문화(koreanTravelerStyle/seasonNote/dayRequirements/categoryMatrix). ready=true 면 호출 안 됨(pipeline-db-only).
+- **슬림 실증 (2026-07-11 A/B 실호출)**: 응답 12,637→9,483자(25% 감축) = 시간 22.3→16.5초(26% 단축) + 12필드 결손 0 + 꾸밈글 18자 상한 준수.
 - **verbatim 프롬프트**:
 ```
 You are a travel data assistant for KOREAN TRAVELERS (${nowYear}년 기준 최신 정보).
@@ -192,35 +193,42 @@ ${koreanTravelerStyle}
 [SLOT MATRIX — AG1 결정]
 ${dayRequirements}
 
+[CATEGORY MATRIX — 전체 여정 카테고리별 곳수 (= 사용자 vibe 반영, 반드시 이 비율로 선정)]
+${categoryMatrix}
+- 각 place 의 c(카테고리)는 위 카테고리 중 하나로 정확히 지정 (heritage=문화/유산, healing=힐링/자연, hotspot=핫플, adventure=모험/액티비티, shopping=쇼핑, attraction=즐길거리/체험, restaurant=식당).
+- 식사(lunch/dinner) = c="restaurant".
+
 [동선 원칙]
 - 매일 ${formData.destination} 도시 중심부에서 출발·귀환, 같은 날 = 같은 구역 묶기
 - Array order within each day = visit order (= sorted by minimum travel distance from start)
 - DAILY MEAL RULE (= AG1 has already assigned these slots — DO NOT modify count or position):
-    * Each day MUST contain exactly 1 lunch (type="lunch") somewhere in the middle of the day.
-    * The FINAL slot of each day MUST be dinner (type="dinner").
+    * Each day MUST contain exactly 1 lunch (t="lunch") somewhere in the middle of the day.
+    * The FINAL slot of each day MUST be dinner (t="dinner").
 - 3 일+ 일정 시 = Day 2+ 한 날 = outskirt (= 도심에서 10-100km 외곽) day-trip 1-2 곳 포함 가능 (= 한국 여행객이 자주 찾는 외곽 명소/아울렛)
 
 [가격 원칙]
-- price_eur = ${nowYear}년 실제 입장료 (1인, EUR). 무료=0
+- p = ${nowYear}년 실제 입장료 (1인, EUR). 무료=0
 - 점심 1인 ~€${mealBudget.lunch}, 저녁 1인 ~€${mealBudget.dinner}
 - 활동(activity) = 1인 입장료 / 식당(lunch/dinner) = 1인당 평균. 확실하지 않으면 0
 
-For each place include (= ALL fields verified via Google Search grounding):
-- name (English official name on Google Maps)
-- nameKo (한국어 = 한국 여행자가 부르는 이름)
-- nameLocal (local language name = 예: 파리=Tour Eiffel) [= REQUIRED for ALL places INCLUDING restaurants (식당도 반드시). If the restaurant's official name is already in the local language (예: "Le Comptoir du Marché"), copy that same name into nameLocal — never leave nameLocal empty. = Text Search forwarding + matching key, final DB column]
-- address (FULL street address with NUMBER + street + postal code + city) [= REQUIRED for Text Search forwarding + matching key, final DB column — verify via Google Search]
-- type ("activity" | "lunch" | "dinner")
-- latitude (= decimal 6 digits, e.g. 48.858370) [= REQUIRED for Text Search forwarding + matching key, final DB column — verify via Google Search, NO hallucination]
-- longitude (= decimal 6 digits, e.g. 2.294481) [= REQUIRED for Text Search forwarding + matching key, final DB column — verify via Google Search, NO hallucination]
-- price_eur (1 인 EUR)
-- selection_reason_ko (한국어 한 줄 = 한국 여행객 트렌드 = 인스타 성지/한국 vlog 등 사회적 검증)
-- shortform_ko (한국어 한 줄 = 장소에 대한 코믹/위트 = Claude 톤. 단순 정보 X = "프사각", "본전 뽑음" 같은 한국 슬랭)
+For each place include (= ALL fields verified via Google Search grounding, 키는 아래 축약형 그대로 사용):
+- n (English official name on Google Maps)
+- k (한국어 = 한국 여행자가 부르는 이름)
+- l (local language name = 예: 파리=Tour Eiffel) [= REQUIRED for ALL places INCLUDING restaurants (식당도 반드시). If the restaurant's official name is already in the local language (예: "Le Comptoir du Marché"), copy that same name into l — never leave l empty. = Text Search forwarding + matching key, final DB column]
+- a (FULL street address with NUMBER + street + postal code + city) [= REQUIRED for Text Search forwarding + matching key, final DB column — verify via Google Search]
+- t ("activity" | "lunch" | "dinner")
+- c (= 위 CATEGORY MATRIX 중 하나 = heritage|healing|hotspot|adventure|shopping|attraction|restaurant. 식사=restaurant) [= final DB column, 카테고리 보존 필수]
+- y (latitude = decimal 6 digits, e.g. 48.858370) [= REQUIRED for Text Search forwarding + matching key, final DB column — verify via Google Search, NO hallucination]
+- x (longitude = decimal 6 digits, e.g. 2.294481) [= 위 y 와 동일 요건]
+- p (1 인 EUR)
+- d (= 도심 중심으로부터 직선거리 km = haversine = 소수 1 자리 = 동선 최적화 기본 필수)
+- r (한국어 한 줄 = 최대 18자 = 선정 이유 = 한국 여행객 트렌드 = 인스타 성지/한국 vlog 등 사회적 검증)
+- s (한국어 한 줄 = 최대 18자 = 장소에 대한 코믹/위트 = Claude 톤. 단순 정보 X = "프사각", "본전 뽑음" 같은 한국 슬랭)
 
 OUTPUT (strict JSON, no markdown fences):
 {"days":[{"day":1,"theme":"테마","places":[
-  {"name":"Eiffel Tower","nameKo":"에펠탑","nameLocal":"Tour Eiffel","address":"Champ de Mars, 5 Av. Anatole France, 75007 Paris","type":"activity","latitude":48.858370,"longitude":2.294481,"price_eur":29.4,"selection_reason_ko":"파리 인스타 인증샷 1순위 성지","shortform_ko":"파리 왔으면 외쳐줘야 국룰 '나 파리다!'"},
-  {"name":"Le Comptoir du Marché","nameKo":"르 콩투아 뒤 마르쉐","nameLocal":"Le Comptoir du Marché","address":"8 Rue de la Loge, 06300 Nice, France","type":"lunch","latitude":43.697415,"longitude":7.276451,"price_eur":35,"selection_reason_ko":"구시가지 시장 근처 가성비 미쉐린 맛집","shortform_ko":"예약 안 하면 자리 없음 주의"}
+  {"n":"Eiffel Tower","k":"에펠탑","l":"Tour Eiffel","a":"Champ de Mars, 5 Av. Anatole France, 75007 Paris","t":"activity","c":"attraction","y":48.858370,"x":2.294481,"p":29.4,"d":2.4,"r":"파리 인증샷 1순위 성지","s":"나 파리다 국룰"},
+  {"n":"Le Comptoir du Marché","k":"르 콩투아 뒤 마르쉐","l":"Le Comptoir du Marché","a":"8 Rue de la Loge, 06300 Nice, France","t":"lunch","c":"restaurant","y":43.697415,"x":7.276451,"p":35,"d":0.8,"r":"시장 근처 가성비 미쉐린","s":"예약 없으면 자리 없음"}
 ]}]}
 ```
 

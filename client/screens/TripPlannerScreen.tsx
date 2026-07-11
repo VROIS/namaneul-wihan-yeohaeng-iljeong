@@ -2116,11 +2116,12 @@ export default function TripPlannerScreen() {
                                   >
                                     {/* ⚠️ 수정금지(승인필요) 2026-05-19 = BTS 맵 마커 SVG 동일 사용 (= 사전 빌드 lookup) */}
                                     {/* ⚠️ 수정금지(승인필요) 2026-07-11 사장님 SSOT = 카드 아이콘도 취향 슬롯 카테고리(slotCategory) 우선 = 지도 마커와 동일 소스(§16). */}
+                                    {/* ⚠️ 수정금지(승인필요) 2026-07-11 사장님 SSOT = 이미지 없이 아이콘 뜨는 모든 슬롯 = 아이콘 밑 '구글맵 정보' 문구(분기 없음 = MIX 신규는 당연, DB-only 도 누락·오류 대비. 썸네일 터치 = openPlaceInMaps 기존 연동). */}
                                     {(() => {
                                       const cat = (place as any).slotCategory || (place as any).seedCategory || (isMealSlot || isMeal ? 'restaurant' : null);
                                       const svg = cat ? BTS_PLACEHOLDER_SVG_BY_CAT[cat] : null;
                                       return svg ? (
-                                        <SvgXml xml={svg} width={40} height={40} />
+                                        <SvgXml xml={svg} width={30} height={30} />
                                       ) : (
                                         <Icon
                                           name={isMealSlot || isMeal ? "coffee" : "map-pin"}
@@ -2129,6 +2130,7 @@ export default function TripPlannerScreen() {
                                         />
                                       );
                                     })()}
+                                    <Text style={{ fontSize: 8, lineHeight: 10, marginTop: 1, color: theme.textTertiary }}>구글맵 정보</Text>
                                   </View>
                                 )}
                               </Pressable>
