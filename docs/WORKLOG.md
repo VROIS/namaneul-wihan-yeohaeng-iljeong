@@ -8,6 +8,24 @@
 
 ---
 
+## 🔴 2026-07-12 = 고유명사 매칭(불변6) = 레거시 오염행 흡수로 신규 id 억제 (랭스 실증, matcher.ts+트리거 동기)
+
+**배경**: 랭스(88) 실증서 옛 레거시 껍데기행(Palais **de** Tau ↔ 신규 Palais **du** Tau, 오역 name_ko "폼페리우스 궁전")이 흡수 안 되고 신규 중복 저장 = "옛것 남고 행수 무한증가"(사장님 지적). 근본 = 매칭 5단계(PID·URI·주소·좌표·로컬이름)로 못 잡는 이름 미세차이(de/du·접두어·오역).
+
+**해결 = 매칭 7단계에 "불변6 고유명사" 추가 (사장님 SSOT)**
+- **원칙 = "첫 글자 대문자 = 고유명사"(라틴문자권 공통, 언어 무관)**. 옛 불어 GENERIC 사전 하드코딩 = 완전삭제 §19(1회용=타언어 안됨, 사장님 지적). 소문자시작(de/la/of/the/&)만 제거, 대문자시작 토큰만 남겨 소문자화·악센트제거·정렬조인.
+- 흡수: Palais de/du Tau(palaistau)·Moët &/et Chandon(chandonmoet). 오병합 0: Notre-Dame de Paris(damenotreparis)≠Paris(paris) 자동분리(일반명사 안 걷어내도 고유부가 다름).
+- **name_ko(한글) 제외** = 대문자 원칙 불가 + 오염 name_ko(박물관 name_ko가 "거리"로 오염 → 실제 거리와 오병합) 근본차단. 라틴이름(en/local)만.
+- 순위 = 불변1~5(PID·URI·주소·좌표10m·로컬이름) 다 없을 때만 발동. PID veto(samePlace) 유지 = 양쪽 PID 다르면 차단.
+
+**3곳 동기(§16)**: [`matcher.ts`](../server/services/shared/matcher.ts) properNameKey/properKeys/matchCandidate 불변6 + [`place-identity.sql`](../server/db/migrations/place-identity.sql) psr_proper_key + 트리거 불변6(라이브 적용). 07-merge·place-upsert = matcher import 자동반영(수정 0). JS↔SQL byte 동형 실측 확인.
+
+**실증(사장님 프로세스: 07-merge apply→트리거동기→재입력)**: 랭스 5쌍 병합(Palais Tau·Taittinger·Moët·Veuve Clicquot·Les Crayères) 125→120행. 다도시 DRY(루앙·라로셸·디종·투르·베르사유): 진짜 장소 오병합 0(잡힌 건 위키파편 껍데기끼리=무해). 5단계검증(21에이전트)+리뷰 실측반박=진짜위험은 한글 name_ko 1건뿐(수정완료). tsc 246·§19가드·서버빌드·웹빌드 통과.
+
+**남은 것(별건)**: 위키파편 껍데기(라로셸·루앙 등 도시 전체 미발굴)=재발굴 필요. 디종 식당↔광장=tier3좌표 기존이슈(고유명사 무관).
+
+---
+
 ## 🔴 2026-07-11 = 사진 분리 수술 + Gemini 슬림 + 도시 백필 중복차단 (몽셀미셀 사고 후속, 작업트리 미커밋)
 
 **배경**: 몽셀미셸(2026-07-10) 도시 중복발급(75↔137) + 생성 40초 사고. 사장님 4항목 순서 지시.

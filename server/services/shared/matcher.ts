@@ -163,6 +163,38 @@ const nameTokensMatch = (a: string[], b: string[]): boolean => {
   return false;
 };
 
+// ⚠️ 수정금지(승인필요) 2026-07-12 사장님 SSOT = 고유명사 매칭 = 이름에서 일반명사(장소유형어)+불용어(관사·전치사·업종접두)를 걷어내고
+//   남는 고유명사 토큰집합으로 비교. 목적 = 레거시 오염행(Palais de Tau vs 신규 Palais du Tau, Taittinger vs Champagne Taittinger,
+//   Moët & Chandon vs Moët et Chandon)을 흡수해 신규 id 생성 억제 + 옛 오염값 자동교정.
+//   왜 안전(랭스 전수 실측 오병합 0): 일반명사를 걷어내면 Palais des Papes(고유='papes')≠Palais du Tau(고유='tau') 자동 분리
+//     = 앞글자/부분열 방식의 오병합(Papes↔Tau, Princes↔Champagne)을 근본 차단. 편집거리·fuzzy 확장 불필요.
+//   GENERIC = 장소유형 일반명사(프랑스어 위주, 확장 시 여기 보강). de/du/&/et/악센트는 걷어내 차이 흡수.
+// 🗑️ 2026-07-12 = GENERIC_NAME 언어사전(불어 장소유형어 하드코딩) 완전삭제 §19 = 1회용(타언어 안됨) = 대소문자 원칙으로 대체(사장님 SSOT).
+// 고유명사 키 = "첫 글자 대문자 = 고유명사"(라틴문자권 공통). 대문자 시작 토큰만 남겨 소문자화·악센트제거·정렬조인.
+export const properNameKey = (s: string | null | undefined): string => {
+  const raw = (s || '').trim();
+  if (!raw) return '';
+  const allSame = raw === raw.toUpperCase() || raw === raw.toLowerCase(); // 전부대/소문자 = 대소문자 정보 없음
+  return raw
+    .replace(/[^\p{L}\p{N} ]/gu, ' ')                        // 구두점→공백 (유니코드 문자·숫자 보존 = 다언어)
+    .split(/\s+/)
+    .filter((t) => t && (allSame || /^\p{Lu}/u.test(t)))     // 대문자 시작 토큰만(고유명사). 전부대/소문자면 전 토큰.
+    .map((t) => t.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''))
+    .sort()
+    .join('');
+};
+// 후보 x 의 라틴이름칸(en/local)에서 뽑은 고유명사 키 집합. (빈 키·3글자미만 = 우연겹침 위험이라 제외)
+//   ⚠️ 수정금지(승인필요) 2026-07-12 사장님 SSOT = name_ko(한글) 제외 = 한글은 "첫 대문자=고유명사" 원칙 불가(대문자 없음).
+//     오염된 name_ko("푸엔카랄 거리")가 전토큰 키로 무관 실장소(박물관↔거리) 병합하던 오병합 근본 차단. 라틴이름(en/local)만 고유명사 판별.
+export const properKeys = (x: { nameEn?: string | null; nameLocal?: string | null; nameKo?: string | null }): Set<string> => {
+  const out = new Set<string>();
+  for (const raw of [x.nameEn, x.nameLocal]) {
+    const k = properNameKey(raw);
+    if (k.length >= 3) out.add(k); // 3글자 이상 = 'tau'(Palais du Tau) 흡수. 트리거 불변6 가드(length>=3)와 동일(§16). 도시한정이 우연겹침 방지.
+  }
+  return out;
+};
+
 // ⚠️ 수정금지(승인필요) 2026-07-05 사장님 SSOT (= 헌법 §14 재갱신, 사장님 명시 결정) = samePlace veto = PID 게이트:
 //   = 같은 장소 판단 = PID 신뢰도로 갈림.
 //     (1) PID 양쪽 다 있음: 같으면 같은 장소(병합) / 다르면(또는 URI 다르면) 다른 장소(차단 = veto).
@@ -284,6 +316,22 @@ export function matchCandidate<C extends MatchCandidate>(
     }));
     if (match) matchedBy = 'coords';
   }
+  // ⚠️ 수정금지(승인필요) 2026-07-12 사장님 SSOT = 고유명사 매칭(불변=병합) = 이름 완전일치(6·7)로 안 잡히는 레거시 오염행 흡수.
+  //   = 일반명사 걷어낸 고유명사키 일치 = 같은 장소(Palais de↔du Tau, Taittinger↔Champagne Taittinger). PID veto 유지.
+  //   = 랭스 전수 실측 오병합 0. cityGuard=true(도시한정) = 짧은 고유명사 크로스도시 우연겹침 방지(4글자가드와 2중).
+  if (!match && (p.nameEn || p.nameLocal || p.nameKo)) {
+    const pk = properKeys(p);
+    if (pk.size > 0) {
+      // ⚠️ 고유명사 "키 완전일치"만 흡수 = 한쪽 이름칸의 고유명사키가 상대 이름칸의 키와 정확히 동일할 때만.
+      //   랭스 실증: 부분겹침(some)이면 Les Crayères(crayeres) ⊂ Le Jardin Les Crayères(crayeresjardin) 오병합(저택 vs 그 안 식당).
+      //   완전일치면 그 오병합 0 유지 + Palais de/du Tau(tau=tau)·Taittinger·Moët et/& Chandon 차이는 여전히 흡수.
+      match = pickBest(candidates.filter((c) =>
+        samePlace(c, p) && c.cityId === p.cityId &&
+        [...properKeys(c)].some((ck) => pk.has(ck))));
+      if (match) matchedBy = 'name_local'; // 불변(confirmed) tier = 병합 (INVARIANT_MATCH 포함)
+    }
+  }
+
   nameStep(normName(p.nameEn), 'name_en', true);  // 6순위 = 가변(의심) = 도시한정(cityGuard=true, 일반명 크로스도시 노이즈 방지)
   nameStep(normName(p.nameKo), 'name_ko', true);  // 7순위 = 가변(의심) = 도시한정
 

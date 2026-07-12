@@ -34,6 +34,26 @@ CREATE INDEX IF NOT EXISTS idx_psr_name_local_norm ON public.place_seed_raw (LOW
 CREATE INDEX IF NOT EXISTS idx_psr_name_ko_norm ON public.place_seed_raw (LOWER(TRIM(COALESCE(name_ko,''))));
 
 -- ── 2) BEFORE INSERT OR UPDATE 중복방지 트리거 함수 (= upsertPlace 우회 직접 INSERT/UPDATE 차단 = 헌법 §14 안전망, 2026-06-24 §20 확장) ──
+-- ⚠️ 수정금지(승인필요) 2026-07-12 사장님 SSOT = 고유명사 키 함수 = 이름에서 일반명사(장소유형어)+불용어를 걷어내고 남는 고유명사만 정렬조인.
+--   = matcher.ts properNameKey 와 동형(§16 앱↔DB 1벌). 목적 = 레거시 오염행 흡수(Palais de↔du Tau, Taittinger↔Champagne Taittinger).
+--   = 오병합 0 근거: 일반명사 제거로 Palais des Papes(papes)≠Palais du Tau(tau) 자동분리. GENERIC 은 matcher.ts GENERIC_NAME 와 동일 목록.
+CREATE OR REPLACE FUNCTION public.psr_proper_key(nm text)
+ RETURNS text LANGUAGE sql IMMUTABLE AS $$
+  -- "첫 글자 대문자 = 고유명사"(라틴문자권 공통, matcher.ts properNameKey 동형). 대문자 시작 토큰만 남겨 소문자화·악센트제거·정렬조인.
+  -- 전부대/소문자 이름(대소문자 정보 없음)은 전 토큰 사용. 구두점→공백(원본 대소문자 보존 위해 lower 는 필터 뒤에).
+  WITH toks AS (
+    SELECT tok, (nm = upper(nm) OR nm = lower(nm)) AS all_same
+    FROM unnest(string_to_array(regexp_replace(coalesce(nm,''), '[^\wÀ-ÿ ]', ' ', 'g'), ' ')) AS tok
+    WHERE tok <> ''
+  )
+  SELECT string_agg(k, '' ORDER BY k) FROM (
+    SELECT lower(translate(tok,'ÀÁÂÃÄÅÇÈÉÊËÌÍÎÏÑÒÓÔÕÖÙÚÛÜÝàáâãäåçèéêëìíîïñòóôõöùúûüýœ',
+                               'aaaaaaceeeeiiiinooooouuuuyaaaaaaceeeeiiiinooooouuuuyo')) AS k
+    FROM toks
+    WHERE all_same OR tok ~ '^[A-ZÀ-Þ]'   -- 대문자 시작(고유명사)만. 전부대/소문자면 전 토큰.
+  ) x;
+$$;
+
 CREATE OR REPLACE FUNCTION public.place_seed_raw_prevent_dup()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -107,7 +127,25 @@ BEGIN
     IF matched_id IS NOT NULL THEN RAISE EXCEPTION '[중복차단] 불변5 로컬이름 일치 id=%', matched_id; END IF;
   END IF;
 
-  -- ⚠️ 수정금지(승인필요) 2026-07-09 사장님 SSOT = 6·7 영어명/한국어명(가변=의심 '중복의심' 메모만) = 도시한정 유지(city_id = NEW.city_id).
+  -- ⚠️ 수정금지(승인필요) 2026-07-12 사장님 SSOT = 불변6 고유명사 일치(병합) = 이름 완전일치(5)로 못 잡는 레거시 오염행 흡수.
+  --   = "첫 대문자=고유명사"(psr_proper_key) 키가 후보 라틴이름칸(en/local)과 완전일치 = 같은 장소(Palais de↔du Tau 등). 도시한정(짧은키 우연겹침 방지).
+  --   = name_ko(한글) 제외 = 대문자 원칙 불가 + 오염 name_ko(박물관↔거리) 오병합 근본차단. matcher.ts properKeys(en/local만)와 동형(§16).
+  DECLARE
+    k_en text := public.psr_proper_key(NEW.name_en);
+    k_local text := public.psr_proper_key(NEW.name_local);
+  BEGIN
+    IF COALESCE(length(k_en),0) >= 3 OR COALESCE(length(k_local),0) >= 3 THEN
+      SELECT c.id INTO matched_id FROM place_seed_raw c
+      WHERE c.city_id = NEW.city_id AND c.id <> COALESCE(NEW.id, -1)
+        AND NOT (c.google_maps_uri IS NOT NULL AND c.google_maps_uri<>'' AND NEW.google_maps_uri IS NOT NULL AND NEW.google_maps_uri<>'' AND c.google_maps_uri<>NEW.google_maps_uri)
+        AND ARRAY(SELECT k FROM unnest(ARRAY[k_en,k_local]) k WHERE length(k)>=3)
+            && ARRAY(SELECT k FROM unnest(ARRAY[public.psr_proper_key(c.name_en),public.psr_proper_key(c.name_local)]) k WHERE length(k)>=3)
+      LIMIT 1;
+      IF matched_id IS NOT NULL THEN RAISE EXCEPTION '[중복차단] 불변6 고유명사 일치 id=%', matched_id; END IF;
+    END IF;
+  END;
+
+  -- ⚠️ 수정금지(승인필요) 2026-07-09 사장님 SSOT = 7·8 영어명/한국어명(가변=의심 '중복의심' 메모만) = 도시한정 유지(city_id = NEW.city_id).
   --   = 도시무관화하면 'Genoa'·'Cathedral' 등 일반명이 크로스도시 의심그룹 9,826개 폭발(실측) = 순수 노이즈. 병합도 안 하니 실익0.
   --   = matcher.ts nameStep name_en/ko cityGuard=true 와 동형(§16). 불변1~5(병합)만 도시무관.
   matched_id := NULL;
