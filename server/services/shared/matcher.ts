@@ -163,14 +163,22 @@ const nameTokensMatch = (a: string[], b: string[]): boolean => {
   return false;
 };
 
-// ⚠️ 수정금지(승인필요) 2026-07-12 사장님 SSOT = 고유명사 매칭 = 이름에서 일반명사(장소유형어)+불용어(관사·전치사·업종접두)를 걷어내고
-//   남는 고유명사 토큰집합으로 비교. 목적 = 레거시 오염행(Palais de Tau vs 신규 Palais du Tau, Taittinger vs Champagne Taittinger,
-//   Moët & Chandon vs Moët et Chandon)을 흡수해 신규 id 생성 억제 + 옛 오염값 자동교정.
-//   왜 안전(랭스 전수 실측 오병합 0): 일반명사를 걷어내면 Palais des Papes(고유='papes')≠Palais du Tau(고유='tau') 자동 분리
-//     = 앞글자/부분열 방식의 오병합(Papes↔Tau, Princes↔Champagne)을 근본 차단. 편집거리·fuzzy 확장 불필요.
-//   GENERIC = 장소유형 일반명사(프랑스어 위주, 확장 시 여기 보강). de/du/&/et/악센트는 걷어내 차이 흡수.
-// 🗑️ 2026-07-12 = GENERIC_NAME 언어사전(불어 장소유형어 하드코딩) 완전삭제 §19 = 1회용(타언어 안됨) = 대소문자 원칙으로 대체(사장님 SSOT).
-// 고유명사 키 = "첫 글자 대문자 = 고유명사"(라틴문자권 공통). 대문자 시작 토큰만 남겨 소문자화·악센트제거·정렬조인.
+// ⚠️ 수정금지(승인필요) 2026-07-12 사장님 SSOT = 고유명사 매칭 = "첫 글자 대문자=고유명사"(라틴문자권 공통) + 전세계 공통 업종/시설어 최소사전.
+//   대문자 시작 토큰만 남기되, 그중 업종/시설어(GENERIC_FACILITY)는 대문자여도 걷어냄 = Champagne Taittinger→taittinger 흡수(Taittinger와 동일키).
+//   왜 안전(랭스 실측): 업종어 걷어내 "Boulingrin"·"Saint-Remi"만 남는 다른시설(Brasserie↔Halles, Basilique↔Musée)은 둘 다 PID 보유 → PID veto(불변1)가 차단 = 오병합 0.
+//   GENERIC_FACILITY = 전세계 공통 업종/시설 일반명사만(지명·고유명 아님). 언어 무관 확장.
+const GENERIC_FACILITY = new Set([
+  'restaurant', 'brasserie', 'bistro', 'cafe', 'bar', 'hotel', 'auberge', 'taverne', 'pub', 'pizzeria', 'trattoria',
+  'museum', 'musee', 'gallery', 'galerie', 'galeries', 'theatre', 'theater', 'opera', 'cinema',
+  'palais', 'chateau', 'castle', 'manor', 'villa', 'domaine', 'maison', 'house', 'abbaye', 'abbey', 'couvent', 'monastere', 'monastery',
+  'basilique', 'basilica', 'cathedrale', 'cathedral', 'eglise', 'church', 'chapelle', 'chapel', 'temple', 'mosquee', 'synagogue',
+  'parc', 'park', 'jardin', 'garden', 'square', 'place', 'plaza', 'forest', 'foret', 'bois',
+  'tour', 'tower', 'pont', 'bridge', 'porte', 'gate', 'phare', 'lighthouse', 'fontaine', 'fountain', 'statue', 'monument',
+  'avenue', 'rue', 'street', 'boulevard', 'allee', 'chemin', 'route', 'promenade', 'quai',
+  'magasin', 'store', 'boutique', 'marche', 'market', 'halles', 'centre', 'center', 'mall',
+  'champagne', 'cave', 'caves', 'vignoble', 'winery', 'distillerie',
+]);
+// 고유명사 키 = 대문자 시작 토큰만 남겨 소문자화·악센트제거 후 업종/시설어 제거 → 정렬조인.
 export const properNameKey = (s: string | null | undefined): string => {
   const raw = (s || '').trim();
   if (!raw) return '';
@@ -180,6 +188,7 @@ export const properNameKey = (s: string | null | undefined): string => {
     .split(/\s+/)
     .filter((t) => t && (allSame || /^\p{Lu}/u.test(t)))     // 대문자 시작 토큰만(고유명사). 전부대/소문자면 전 토큰.
     .map((t) => t.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''))
+    .filter((t) => !GENERIC_FACILITY.has(t))                 // 업종/시설어(대문자여도) 제거 = Champagne 등
     .sort()
     .join('');
 };

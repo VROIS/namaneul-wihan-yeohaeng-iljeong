@@ -51,7 +51,19 @@ CREATE OR REPLACE FUNCTION public.psr_proper_key(nm text)
                                'aaaaaaceeeeiiiinooooouuuuyaaaaaaceeeeiiiinooooouuuuyo')) AS k
     FROM toks
     WHERE all_same OR tok ~ '^[A-ZÀ-Þ]'   -- 대문자 시작(고유명사)만. 전부대/소문자면 전 토큰.
-  ) x;
+  ) x
+  -- 업종/시설어(대문자여도 걷어냄) = matcher.ts GENERIC_FACILITY 와 동형. Champagne Taittinger→taittinger 흡수. 오병합은 PID veto 차단.
+  WHERE k NOT IN (
+    'restaurant','brasserie','bistro','cafe','bar','hotel','auberge','taverne','pub','pizzeria','trattoria',
+    'museum','musee','gallery','galerie','galeries','theatre','theater','opera','cinema',
+    'palais','chateau','castle','manor','villa','domaine','maison','house','abbaye','abbey','couvent','monastere','monastery',
+    'basilique','basilica','cathedrale','cathedral','eglise','church','chapelle','chapel','temple','mosquee','synagogue',
+    'parc','park','jardin','garden','square','place','plaza','forest','foret','bois',
+    'tour','tower','pont','bridge','porte','gate','phare','lighthouse','fontaine','fountain','statue','monument',
+    'avenue','rue','street','boulevard','allee','chemin','route','promenade','quai',
+    'magasin','store','boutique','marche','market','halles','centre','center','mall',
+    'champagne','cave','caves','vignoble','winery','distillerie'
+  );
 $$;
 
 CREATE OR REPLACE FUNCTION public.place_seed_raw_prevent_dup()
@@ -130,6 +142,7 @@ BEGIN
   -- ⚠️ 수정금지(승인필요) 2026-07-12 사장님 SSOT = 불변6 고유명사 일치(병합) = 이름 완전일치(5)로 못 잡는 레거시 오염행 흡수.
   --   = "첫 대문자=고유명사"(psr_proper_key) 키가 후보 라틴이름칸(en/local)과 완전일치 = 같은 장소(Palais de↔du Tau 등). 도시한정(짧은키 우연겹침 방지).
   --   = name_ko(한글) 제외 = 대문자 원칙 불가 + 오염 name_ko(박물관↔거리) 오병합 근본차단. matcher.ts properKeys(en/local만)와 동형(§16).
+  --   veto = matcher.ts samePlace(PID게이트, 214행)와 동형 = 양쪽 PID 있고 (PID 다름 OR 양쪽 URI 있고 URI 다름) = 다른 장소(차단). 옛 URI-only veto = 폐기 2026-07-12 §19(Golden Gate Bridge↔Park 오병합 근본).
   DECLARE
     k_en text := public.psr_proper_key(NEW.name_en);
     k_local text := public.psr_proper_key(NEW.name_local);
@@ -137,7 +150,9 @@ BEGIN
     IF COALESCE(length(k_en),0) >= 3 OR COALESCE(length(k_local),0) >= 3 THEN
       SELECT c.id INTO matched_id FROM place_seed_raw c
       WHERE c.city_id = NEW.city_id AND c.id <> COALESCE(NEW.id, -1)
-        AND NOT (c.google_maps_uri IS NOT NULL AND c.google_maps_uri<>'' AND NEW.google_maps_uri IS NOT NULL AND NEW.google_maps_uri<>'' AND c.google_maps_uri<>NEW.google_maps_uri)
+        AND NOT (c.google_place_id IS NOT NULL AND c.google_place_id<>'' AND NEW.google_place_id IS NOT NULL AND NEW.google_place_id<>''
+                 AND (c.google_place_id<>NEW.google_place_id
+                      OR (c.google_maps_uri IS NOT NULL AND c.google_maps_uri<>'' AND NEW.google_maps_uri IS NOT NULL AND NEW.google_maps_uri<>'' AND c.google_maps_uri<>NEW.google_maps_uri)))
         AND ARRAY(SELECT k FROM unnest(ARRAY[k_en,k_local]) k WHERE length(k)>=3)
             && ARRAY(SELECT k FROM unnest(ARRAY[public.psr_proper_key(c.name_en),public.psr_proper_key(c.name_local)]) k WHERE length(k)>=3)
       LIMIT 1;

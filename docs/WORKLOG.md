@@ -24,6 +24,18 @@
 
 **남은 것(별건)**: 위키파편 껍데기(라로셸·루앙 등 도시 전체 미발굴)=재발굴 필요. 디종 식당↔광장=tier3좌표 기존이슈(고유명사 무관).
 
+### 🔴 후속 3종 (같은 날, 랭스 재실증) = ①업종어 사전 ②이미지결손 삭제 ③불변6 PID veto (미커밋)
+
+**① 업종어 사전(GENERIC_FACILITY 90단어)** = "대문자=고유명사" 원칙에 전세계 공통 업종/시설어(restaurant·brasserie·museum·palais·champagne·halles 등, 지명 아님)를 대문자여도 걷어냄. 근거 = 랭스 실증서 Champagne Taittinger↔Taittinger, Halles↔Brasserie du Boulingrin 이 고유부(Boulingrin) 같은데 업종어 때문에 키 달라 흡수 실패. 사전 추가 후 taittinger·boulingrin 로 흡수. matcher.ts GENERIC_FACILITY ↔ SQL psr_proper_key WHERE 90단어 완전일치(실측)·JS↔라이브DB 10건 동일키 입증.
+
+**② ag3 이미지 결손 조건 완전삭제(§19, 사장님 3회 강조)** = ag3:640 TS대상 판정 = 옛 `!PID || !imageUrl || !place-images` → 새 `!googlePlaceId`(PID 없음만). 근본 = 사진분리 수술로 생성 중 이미지 항상 NULL → 흡수 완비행도 매판 "이미지 결손"으로 오판 → TS 재과금(랭스 실측 흡수 23곳 전부 TS=24콜). 삭제 후 예측 = TS 3콜(PID결손 흡수 2 + 신규 1). imageUrl select도 제거. 이미지는 fill/image-backfill(사후 일괄) 전담.
+
+**③ 불변6 PID veto 추가(리뷰 발견 → 사장님 승인)** = 트리거 불변6이 URI-only veto라 JS samePlace(PID게이트)와 불일치(§16 위반) = Golden Gate Bridge↔Park(둘다 PID·URI없음) 오병합 위험. 옛 URI-only veto 완전삭제 §19 → matcher.ts samePlace 동형(양쪽 PID 있고 PID/URI 다르면 차단). 라이브+레포 동시 적용. 실측: 둘다PID 177쌍 병합차단, 정상 흡수 유지.
+
+**좌표 게이트는 넣지 않음(폐기 검토)** = 넣으면 Taittinger↔Champagne Taittinger(87m=매장vs셀러)가 10m 초과로 흡수 깨짐 = 사장님 목표(오염 레거시 이름흡수) 무너짐. 사장님 논지 = 불변요소 1개라도 있으면 상위단계서 판정, 고유명사 매칭은 불변요소 전무한 껍데기 흡수가 목적. 실측 = 껍데기 같은키 141쌍 중 136(96.5%)이 불변요소 전무, 불변요소 보유 5쌍은 전부 진짜 같은장소(Bateaux Mouches·Le Pavillon·Notre-Dame Dijon 등)=오병합 0.
+
+**5단계 검증**: tsc 커밋3파일 새에러 0(전체246=기존 storage/stripe)·서버빌드·웹빌드 통과·코드리뷰 결함0·§19§16가드 통과·JS↔SQL 동형 실측.
+
 ---
 
 ## 🔴 2026-07-11 = 사진 분리 수술 + Gemini 슬림 + 도시 백필 중복차단 (몽셀미셀 사고 후속, 작업트리 미커밋)

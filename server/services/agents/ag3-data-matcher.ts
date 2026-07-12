@@ -623,21 +623,19 @@ export async function saveNewPlacesToDB(
   const g1 = stage1.reduce((a, r: any) => { a[r.action] = (a[r.action] || 0) + 1; return a; }, {} as Record<string, number>);
   console.log(`[AG3-SAVE] ① Gemini 전체 upsert = ins=${g1.inserted || 0} upd=${g1.updated || 0} skip=${g1.skipped || 0} (${stage1.length}행)`);
 
-  // ── ② TS 대상 추출 = 신규(inserted) + 결손 매칭행(updated) ──
-  //   🧠 2026-07-08 사장님 SSOT = Gemini가 채운 슬롯 전부 검증 보장. 옛 "inserted만" = 형제 좌표흡수(updated)된 멀쩡한 곳이 TS 누락(안도라 Animal Park 사고) = 완전삭제 §19.
-  //   ⚠️ 수정금지(승인필요) 2026-07-09 사장님 SSOT = 흡수행 결손 판정 = PID **또는** 구글이미지(image_url) 없으면 TS 대상 = fillcity repair.ts:99 정본 복붙(§16 재발명0).
-  //     = 옛 "PID 없음만" 폐기 §19: PID 보유하나 이미지가 place-images(구글 검증) 아닌 흡수행(WK·Gemini 이미지)이 TS 누락되던 결함. 도시무관 재활용행이 진짜 구글이미지 못 받던 근본.
-  //   ⚠️ 수정금지(승인필요) 2026-07-11 사장님 SSOT = 사진 분리 수술 = 병합→추출→호출(TS)까지 직전 로직 그대로, PM(사진 다운로드)만 차단.
-  //     = 이미지 결손행의 TS 호출은 유지 = raw 에 photoName 축적 = fill/image-backfill(사후 일괄)이 TS 재호출 0으로 PM. 완비행(PID+이미지) = 호출 0 그대로.
+  // ── ② TS 대상 추출 = 신규(inserted) + PID 결손 매칭행(updated) ──
+  //   🧠 2026-07-08 사장님 SSOT = Gemini가 채운 슬롯 전부 검증 보장. 옛 "inserted만" = 형제 좌표흡수(updated)된 멀쩡한 곳이 TS 누락(안도라 사고) = 완전삭제 §19.
+  //   ⚠️ 수정금지(승인필요) 2026-07-12 사장님 SSOT(3회 강조) = 흡수행 결손 판정 = **PID 없음만**. 이미지 결손 조건 완전삭제 §19.
+  //     = 옛 "PID 또는 이미지(place-images) 결손"(2026-07-09) 폐기 = 2026-07-12: 사진 분리 수술로 생성 중 이미지 항상 없음 → 흡수행 전부 "이미지 결손"으로 오판 →
+  //       완비 흡수행도 매판 TS 재호출(랭스 실증: 흡수16곳 전부 TS = 재과금+속도 안 빨라진 근본). 이미지는 fill/image-backfill(사후 일괄) 전담 = TS 대상 판정과 무관.
   const newRows = stage1.filter((r: any) => r.action === "inserted" && r.rowId != null);
   const updatedRows = stage1.filter((r: any) => r.action === "updated" && r.rowId != null);
   let absorbedRows: typeof updatedRows = [];
   if (updatedRows.length > 0 && db) {
     const ids = [...new Set(updatedRows.map((r: any) => r.rowId))];
-    const chk = await db.select({ id: placeSeedRaw.id, googlePlaceId: placeSeedRaw.googlePlaceId, imageUrl: placeSeedRaw.imageUrl })
+    const chk = await db.select({ id: placeSeedRaw.id, googlePlaceId: placeSeedRaw.googlePlaceId })
       .from(placeSeedRaw).where(inArray(placeSeedRaw.id, ids as number[]));
-    // 결손 = PID 없음 OR 구글이미지(place-images) 아님 (repair.ts:99 = image_url NOT LIKE '%place-images%')
-    const missById = new Map(chk.map((r: any) => [r.id, !r.googlePlaceId || !r.imageUrl || !String(r.imageUrl).includes('place-images')]));
+    const missById = new Map(chk.map((r: any) => [r.id, !r.googlePlaceId])); // 결손 = PID 없음만(이미지 무관)
     absorbedRows = updatedRows.filter((r: any) => missById.get(r.rowId));
   }
   // mode = raw 산출물(tsResults, §18) 에 실리는 신규/흡수 구분 라벨 전용(사장님 눈검수용). 처리 로직은 신규·흡수 동일(자기 rowId 직행) = 분기 안 함.
@@ -645,7 +643,7 @@ export async function saveNewPlacesToDB(
     ...newRows.map((r: any) => ({ ...r, mode: "new" as const })),
     ...absorbedRows.map((r: any) => ({ ...r, mode: "absorbed" as const })),
   ];
-  console.log(`[AG3-SAVE] ② TS 대상 = 신규 ${newRows.length} + 흡수(PID또는이미지 결손) ${absorbedRows.length} = ${tsTargets.length}곳 (PID+이미지 완비 매칭행 ${updatedRows.length - absorbedRows.length}곳 = 유료호출 0, PM = 사후 일괄)`);
+  console.log(`[AG3-SAVE] ② TS 대상 = 신규 ${newRows.length} + 흡수(PID 결손) ${absorbedRows.length} = ${tsTargets.length}곳 (PID 완비 매칭행 ${updatedRows.length - absorbedRows.length}곳 = 유료호출 0, 이미지 = 사후 일괄)`);
 
   // ── ③ 대상(신규+흡수) 전부 TS = 자기 rowId 직행 UPDATE(신규·흡수 통일). ──
   //   = ①에서 이미 Gemini 요소로 id 확정(흡수는 트리거가 원행 id 로 UPDATE) → ③은 그 확정 id 칸의 결손(TS 9요소)만 targetRowId 직행으로 채움(§14 재매칭 실패 불가, 재매칭·중복재판별 안 함 = 사장님 SSOT).
