@@ -11,6 +11,7 @@ import DestinationDetailScreen from "@/screens/DestinationDetailScreen";
 import OnboardingScreen from "@/screens/OnboardingScreen";
 import LoginScreen from "@/screens/LoginScreen";
 import ExpertInquiryDetailScreen from "@/screens/expert/ExpertInquiryDetailScreen"; // 전문가 문의 상세(2026-07-13) = 옛 VerificationRequestScreen 대체 §19
+import ExpertProfileEditScreen from "@/screens/expert/ExpertProfileEditScreen"; // 현지전문가 본인 프로필 편집(2026-07-13)
 import SavedTripDetailScreen from "@/screens/SavedTripDetailScreen";
 import AdminScreen from "@/screens/AdminScreen";
 import BTSConcertPlannerScreen from "@/screens/BTSConcertPlannerScreen";
@@ -29,6 +30,7 @@ export type RootStackParamList = {
   Login: undefined;
   DestinationDetail: { placeId: number };
   ExpertInquiryDetail: { id: string }; // 전문가 문의 상세(2026-07-13) = 옛 VerificationRequest 대체 §19
+  ExpertProfileEdit: undefined; // 현지전문가 본인 프로필 편집(2026-07-13)
   SavedTripDetail: { itineraryId: number };
   AdminModal: undefined;
   BTSConcertPlanner: undefined;
@@ -142,6 +144,14 @@ export default function RootStackNavigator() {
       <Stack.Screen
         name="ExpertInquiryDetail"
         component={ExpertInquiryDetailScreen}
+        options={{
+          presentation: "card",
+          headerShown: false,
+        }}
+      />
+      <Stack.Screen
+        name="ExpertProfileEdit"
+        component={ExpertProfileEditScreen}
         options={{
           presentation: "card",
           headerShown: false,

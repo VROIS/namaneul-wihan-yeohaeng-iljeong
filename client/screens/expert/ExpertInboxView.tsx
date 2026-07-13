@@ -44,9 +44,12 @@ export default function ExpertInboxView({ navigation }: any) {
 
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
-      {/* 고정 헤더 */}
+      {/* 고정 헤더 = 제목 + 프로필 편집 진입(2026-07-13) */}
       <View style={[styles.header, { paddingTop: insets.top + Spacing.sm, borderBottomColor: theme.border }]}>
         <Text style={[styles.title, { color: theme.text }]}>{t("expert.answerBox")}</Text>
+        <Pressable onPress={() => navigation?.navigate?.("ExpertProfileEdit")} hitSlop={10} style={styles.editBtn}>
+          <Icon name="user" size={22} color={Brand.primary} />
+        </Pressable>
       </View>
 
       <ScrollView
@@ -99,7 +102,8 @@ export default function ExpertInboxView({ navigation }: any) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { paddingHorizontal: Spacing.lg, paddingBottom: Spacing.md, borderBottomWidth: StyleSheet.hairlineWidth },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: Spacing.lg, paddingBottom: Spacing.md, borderBottomWidth: StyleSheet.hairlineWidth },
+  editBtn: { width: 36, height: 36, justifyContent: "center", alignItems: "center" },
   title: { fontSize: 28, fontFamily: Fonts.bold, letterSpacing: -0.5 },
   scroll: { flex: 1 },
   flex1: { flex: 1 },

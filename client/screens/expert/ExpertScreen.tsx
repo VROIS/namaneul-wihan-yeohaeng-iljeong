@@ -14,9 +14,12 @@ import { Colors, Spacing, BorderRadius, Brand, Fonts } from "@/constants/theme";
 import Icon from "@/components/Icon";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useMapToggle } from "@/contexts/MapToggleContext";
-import { submitInquiry, listInquiries, getMyRole, type Inquiry } from "./expertApi";
+import { submitInquiry, listInquiries, getMyRole, getExpertProfile, type Inquiry, type ExpertProfile } from "./expertApi";
 import { statusStyle } from "./statusStyle";
 import ExpertInboxView from "./ExpertInboxView";
+
+// 전문가 문의 크레딧 = AI 의견과 동일 방식으로 사전 안내(2026-07-13 사장님). 실제 차감은 로그인 정식화 후(§9 프로모션).
+const EXPERT_INQUIRY_CREDIT_COST = 10;
 
 export default function ExpertScreen({ navigation }: any) {
   const { t } = useTranslation();
@@ -31,6 +34,8 @@ export default function ExpertScreen({ navigation }: any) {
   const [inquiries, setInquiries] = useState<Inquiry[]>([]);
   // 역할 분기 = expert/admin 이면 답변함(시안 C), user 면 문의작성(시안 A). null=조회중.
   const [isExpert, setIsExpert] = useState<boolean | null>(null);
+  // 전문가 본인 프로필(닉네임/경력/자기소개/캐릭터) = 소개카드에 반영. 없으면 i18n 기본문구 폴백.
+  const [profile, setProfile] = useState<ExpertProfile | null>(null);
   // 마운트 가드(리뷰 2026-07-13) = onSubmit 후 reload 가 언마운트 후 setState 방지.
   const mounted = useRef(true);
   useEffect(() => () => { mounted.current = false; }, []);
@@ -47,6 +52,7 @@ export default function ExpertScreen({ navigation }: any) {
     let alive = true;
     getMyRole().then((role) => { if (alive) setIsExpert(role === "expert" || role === "admin"); }).catch(() => { if (alive) setIsExpert(false); });
     listInquiries().then((r) => { if (alive) setInquiries(r); }).catch(() => { if (alive) setInquiries([]); });
+    getExpertProfile().then(({ profile }) => { if (alive) setProfile(profile); }).catch(() => {});
     return () => { alive = false; };
   }, []));
   const reload = useCallback(() => {
@@ -70,7 +76,11 @@ export default function ExpertScreen({ navigation }: any) {
         Alert.alert(t("expert.sentTitle"), t("expert.sentMsg"));
         reload();
       } else if (r.error === "login_required") {
-        Alert.alert(t("expert.loginTitle"), t("expert.loginMsg"));
+        // ⚠️ 수정금지(승인필요) 2026-07-13 = 로그인 안내에 [로그인하기] 버튼 추가 → 로그인화면 이동(확인만 뜨고 안 넘어가던 결함 수정 §19). Login = RootStack 등록됨.
+        Alert.alert(t("expert.loginTitle"), t("expert.loginMsg"), [
+          { text: t("common.cancel"), style: "cancel" },
+          { text: t("expert.goLogin"), onPress: () => navigation?.navigate?.("Login") },
+        ]);
       } else {
         Alert.alert(t("common.error"), t("expert.sendError"));
       }
@@ -94,12 +104,13 @@ export default function ExpertScreen({ navigation }: any) {
         contentContainerStyle={{ padding: Spacing.lg, paddingBottom: insets.bottom + 55 + Spacing.lg }}
         showsVerticalScrollIndicator={false}
       >
-        {/* 소개 카드 */}
+        {/* 소개 카드 = 전문가 본인 프로필(있으면) / 없으면 기본 i18n 문구 (2026-07-13) */}
         <View style={[styles.card, { backgroundColor: `${Brand.primary}0D` }]}>
-          <View style={styles.avatar}><Text style={styles.avatarText}>{t("expert.introInitial")}</Text></View>
+          <View style={styles.avatar}><Text style={styles.avatarText}>{profile?.character || t("expert.introInitial")}</Text></View>
           <View style={styles.flex1}>
-            <Text style={[styles.cardTitle, { color: theme.text }]}>{t("expert.introName")}</Text>
-            <Text style={[styles.cardSub, { color: theme.textSecondary }]}>{t("expert.introDesc")}</Text>
+            <Text style={[styles.cardTitle, { color: theme.text }]}>{profile?.nickname || t("expert.introName")}</Text>
+            <Text style={[styles.cardSub, { color: theme.textSecondary }]}>{profile?.career || t("expert.introDesc")}</Text>
+            {profile?.bio ? <Text style={[styles.cardBio, { color: theme.textTertiary }]} numberOfLines={3}>{profile.bio}</Text> : null}
           </View>
         </View>
 
@@ -143,6 +154,8 @@ export default function ExpertScreen({ navigation }: any) {
           {submitting ? <ActivityIndicator color="#FFF" /> : <Icon name="send" size={18} color="#FFF" />}
           <Text style={styles.submitText}>{t("expert.submit")}</Text>
         </Pressable>
+        {/* 크레딧 안내 = AI 의견 팝업과 동일 패턴(2026-07-13 사장님). 실제 차감은 로그인 정식화 후(§9). */}
+        <Text style={[styles.creditNote, { color: theme.textTertiary }]}>{t("expert.creditNote", { count: EXPERT_INQUIRY_CREDIT_COST })}</Text>
 
         {/* 내 문의함 (구분선으로 섹션 분리) */}
         <View style={[styles.divider, { borderTopColor: theme.border }]} />
@@ -191,6 +204,7 @@ const styles = StyleSheet.create({
   avatarText: { color: "#FFF", fontFamily: Fonts.bold, fontSize: 18 },
   cardTitle: { fontSize: 16, fontFamily: Fonts.bold, marginBottom: 2 },
   cardSub: { fontSize: 13, fontFamily: Fonts.medium },
+  cardBio: { fontSize: 12, fontFamily: Fonts.medium, marginTop: 4 },
   sectionTitle: { fontSize: 16, fontFamily: Fonts.bold, marginBottom: Spacing.sm },
   sectionSub: { fontSize: 12, fontFamily: Fonts.medium },
   attachTitle: { fontSize: 18, fontFamily: Fonts.bold },
@@ -200,6 +214,7 @@ const styles = StyleSheet.create({
   input: { padding: Spacing.md, borderRadius: BorderRadius.md, fontSize: 15, fontFamily: Fonts.medium, minHeight: 100, textAlignVertical: "top", marginBottom: Spacing.md },
   submitBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: Spacing.sm, height: Spacing.buttonHeight, borderRadius: BorderRadius.md },
   submitText: { color: "#FFF", fontSize: 16, fontFamily: Fonts.bold },
+  creditNote: { fontSize: 12, fontFamily: Fonts.medium, textAlign: "center", marginTop: Spacing.sm },
   divider: { borderTopWidth: StyleSheet.hairlineWidth, marginVertical: Spacing.xl },
   emptyText: { fontSize: 14, fontFamily: Fonts.medium, textAlign: "center", paddingVertical: Spacing.lg },
   inquiryCard: { flexDirection: "row", alignItems: "center", gap: Spacing.sm, padding: Spacing.md, borderRadius: BorderRadius.md, marginBottom: Spacing.sm },

@@ -331,7 +331,7 @@ export default function TripPlannerScreen() {
   const [showWebInput, setShowWebInput] = useState<PickerMode>(null);
   const [pendingGenerate, setPendingGenerate] = useState(false);
   // ⚠️ 2026-07-03 = 지도는 항상 고정 표시(showMap 미사용). setCurrentItinerary만 사용 = 하단탭 "AI 의견" 버튼 활성화·검증대상 전달.
-  const { setCurrentItinerary, aiOpinionRequestedAt, clearAiOpinionRequest } = useMapToggle();
+  const { setCurrentItinerary, aiOpinionRequestedAt, clearAiOpinionRequest, requestAiOpinion } = useMapToggle();
   const { t, i18n } = useTranslation();
 
   const LOADING_MESSAGES = useMemo(
@@ -2499,6 +2499,28 @@ export default function TripPlannerScreen() {
               </View>
             );
           })}
+
+          {/* ⚠️ 수정금지(승인필요) 2026-07-13 사장님 SSOT = 여정 결과화면(지도섹션=Result) 하단 = 현지전문가 문의 / AI 의견 바로가기.
+              7/3 "링크금지" 해제(사장님 2026-07-13 승인). 판별=screen==="Result"(지도섹션) 재사용 = 라이브·저장 여정 공용. */}
+          <View style={styles.expertFooter}>
+            <Text style={[styles.expertFooterCta, { color: theme.textSecondary }]}>{t("trip.footerCta")}</Text>
+            <View style={styles.expertFooterRow}>
+              <Pressable
+                style={[styles.expertFooterBtn, { borderColor: theme.border }]}
+                onPress={() => requestAiOpinion()}
+              >
+                <Icon name="brain" size={18} color={Brand.primary} />
+                <Text style={[styles.expertFooterBtnText, { color: theme.text }]}>{t("trip.footerAiOpinion")}</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.expertFooterBtn, styles.expertFooterBtnPrimary]}
+                onPress={() => (navigation as any).navigate("Verify")}
+              >
+                <Icon name="award" size={18} color="#FFFFFF" />
+                <Text style={[styles.expertFooterBtnText, { color: "#FFFFFF" }]}>{t("trip.footerExpert")}</Text>
+              </Pressable>
+            </View>
+          </View>
         </ScrollView>
         {/* 🏨 2026-06-29 = 인앱 숙소 모달 완전삭제(§19) → Day헤더 "숙소 설정" 버튼이 출발바 아래 구글 위젯 인라인 토글로 대체 (AOS/웹) */}
 
@@ -3015,6 +3037,13 @@ const styles = StyleSheet.create({
 
   // 📜 스크롤 영역
   resultScrollView: { flex: 1 },
+  // 2026-07-13 = 결과화면 하단 현지전문가/AI 바로가기 (Brand.primary·Lucide·글라스미니멀)
+  expertFooter: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg, paddingBottom: Spacing.md, gap: Spacing.sm },
+  expertFooterCta: { fontSize: 13, fontFamily: Fonts.medium, textAlign: "center" },
+  expertFooterRow: { flexDirection: "row", gap: Spacing.sm },
+  expertFooterBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: Spacing.xs, height: Spacing.buttonHeight, borderRadius: BorderRadius.md, borderWidth: 1, borderColor: "transparent" },
+  expertFooterBtnPrimary: { backgroundColor: Brand.primary, borderColor: Brand.primary },
+  expertFooterBtnText: { fontSize: 14, fontFamily: Fonts.semiBold },
 
   // ✅ CTA 버튼
   summaryBox: {

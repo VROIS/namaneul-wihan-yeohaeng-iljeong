@@ -272,4 +272,25 @@ export function registerAuthRoutes(app: Express) {
             res.status(500).json({ error: "Failed to fetch user data" });
         }
     });
+
+    // ⚠️ 수정금지(승인필요) 2026-07-13 = 관리자 로그인 = 비번 서버검증 → 관리자 세션 토큰 발급(§16 = 기존 Bearer 인증 재사용).
+    //   관리자 = 현지전문가(사장님) 계정 = role='admin'. 비번을 서버로 옮겨 앱 번들서 제거 = 보안↑. ADMIN_PASSWORD/ADMIN_USER_ID = Replit Secrets 우선.
+    //   ⚠️ 출시 전 필수(2026-07-14 코드리뷰 = 사장님 B안): ADMIN_PASSWORD 시크릿을 새 비번으로 설정 후 기본값 'nubi2026' 제거. 현재 기본값은 옛 번들 노출값 = 임시(§9 프로모션 = 테스트용). 미설정 유지 시 옛 APK 로 관리자 탈취 가능.
+    app.post("/api/admin/login", async (req, res) => {
+        try {
+            const { password } = req.body;
+            const expected = process.env.ADMIN_PASSWORD || "nubi2026";
+            if (!password || password !== expected) {
+                return res.status(401).json({ success: false, error: "invalid_password" });
+            }
+            const adminId = process.env.ADMIN_USER_ID || "google_103229431780116955364"; // 사장님 구글 계정 = 관리자
+            const admin = await storage.getUser(adminId);
+            if (!admin) {
+                return res.status(500).json({ success: false, error: "admin_account_missing" });
+            }
+            res.json({ success: true, user: admin, token: "simple_auth_token_v1_" + admin.id });
+        } catch (error) {
+            res.status(500).json({ success: false, error: "server_error" });
+        }
+    });
 }

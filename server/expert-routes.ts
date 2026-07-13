@@ -5,7 +5,7 @@
 import type { Express, Request } from "express";
 import { db as _db } from "./db";
 import { expertInquiries, users } from "@shared/schema";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, or } from "drizzle-orm";
 import { notificationService } from "./notificationService";
 
 // db 널 가드 = place-upsert 'db_unavailable' 규약과 동일 취지(각 핸들러 try/catch가 500 처리)
@@ -186,6 +186,55 @@ export function registerExpertRoutes(app: Express): void {
     } catch (e: any) {
       console.error("[Expert] 답변 실패:", e?.message);
       res.status(500).json({ error: "Failed to update inquiry" });
+    }
+  });
+
+  // ── 6) 전문가 공개 프로필 = GET /api/expert/profile (미인증 공개) = 소개카드 표시용. 단일 전문가(사장님=is_admin 우선). ──
+  app.get("/api/expert/profile", async (_req, res) => {
+    try {
+      const [u] = await db().select({ profile: users.expertProfile, displayName: users.displayName })
+        .from(users)
+        .where(or(eq(users.role, "admin"), eq(users.role, "expert")))
+        .orderBy(desc(users.isAdmin))
+        .limit(1);
+      res.json({ profile: (u?.profile as any) || null, displayName: u?.displayName || null });
+    } catch (e: any) {
+      res.json({ profile: null, displayName: null });
+    }
+  });
+
+  // ── 6-2) 전문가 본인 프로필 = GET /api/expert/profile/me (expert·admin) = 편집화면 프리필용.
+  //   리뷰 2026-07-13 = 공용 대표전문가(is_admin 우선)가 아니라 "로그인한 본인" 행 = 전문가 다수 시 정체성 덮어쓰기 방지.
+  app.get("/api/expert/profile/me", async (req, res) => {
+    try {
+      const authId = getUserIdFromReq(req);
+      if (!authId) return res.status(401).json({ error: "login_required" });
+      const role = await getRole(authId);
+      if (role !== "expert" && role !== "admin") return res.status(403).json({ error: "expert_only" });
+      const [u] = await db().select({ profile: users.expertProfile, displayName: users.displayName })
+        .from(users).where(eq(users.id, authId));
+      res.json({ profile: (u?.profile as any) || null, displayName: u?.displayName || null });
+    } catch (e: any) {
+      res.status(500).json({ error: "Failed to fetch profile" });
+    }
+  });
+
+  // ── 7) 전문가 본인 프로필 저장 = PATCH /api/expert/profile = expert·admin 전용 ──
+  app.patch("/api/expert/profile", async (req, res) => {
+    try {
+      const authId = getUserIdFromReq(req);
+      if (!authId) return res.status(401).json({ error: "login_required" });
+      const role = await getRole(authId);
+      if (role !== "expert" && role !== "admin") return res.status(403).json({ error: "expert_only" });
+      const { nickname, career, bio, character } = req.body || {};
+      const s = (v: unknown, n: number) => (typeof v === "string" && v.trim() !== "" ? v.slice(0, n) : undefined);
+      const profile = { nickname: s(nickname, 40), career: s(career, 60), bio: s(bio, 300), character: s(character, 20) };
+      const [u] = await db().update(users).set({ expertProfile: profile })
+        .where(eq(users.id, authId)).returning({ profile: users.expertProfile });
+      res.json({ success: true, profile: (u?.profile as any) || null });
+    } catch (e: any) {
+      console.error("[Expert] 프로필 저장 실패:", e?.message);
+      res.status(500).json({ error: "Failed to save profile" });
     }
   });
 }

@@ -18,8 +18,7 @@ import Icon from "@/components/Icon";
 import { Colors, Spacing, Brand } from "@/constants/theme";
 import ThemedText from "@/components/ThemedText";
 import { getApiUrl } from "@/lib/query-client";
-
-const ADMIN_PASSWORD = "nubi2026";
+import { saveAuth } from "@/lib/auth"; // ⚠️ 관리자 로그인 성공 시 세션 저장 → 전문가 탭이 관리자 인식 = 문의답변 프리패스(2026-07-13)
 
 export default function AdminScreen() {
   const colorScheme = useColorScheme();
@@ -34,16 +33,48 @@ export default function AdminScreen() {
 
   const adminUrl = `${getApiUrl()}/admin`;
 
-  const handleLogin = useCallback(() => {
-    if (password === ADMIN_PASSWORD) {
-      setIsAuthenticated(true);
-      setError("");
+  // ⚠️ 수정금지(승인필요) 2026-07-13 = 비번을 서버(/api/admin/login)에서 검증(§19 클라 비번상수 폐기) → 성공 시 관리자 세션 저장.
+  //   이래야 전문가 탭이 관리자로 인식해 문의답변 프리패스 + 대시보드 열림.
+  const handleLogin = useCallback(async () => {
+    if (!password || isLoading) return;
+    setIsLoading(true);
+    setError("");
+    try {
+      const res = await fetch(`${getApiUrl()}/api/admin/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.success && data.token) {
+        await saveAuth({
+          id: data.user.id,
+          email: data.user.email,
+          displayName: data.user.displayName,
+          name: data.user.displayName,
+          provider: (data.user.provider || "google") as "kakao" | "google" | "whatsapp",
+          language: data.user.preferredLanguage || "ko",
+          birthDate: data.user.birthDate || "1990-01-01",
+          isPaid: data.user.isPaid,
+          token: data.token,
+        });
+        setIsAuthenticated(true);
+        setPassword("");
+      } else if (res.status === 401) {
+        setError("비밀번호가 틀렸습니다");
+        setPassword("");
+      } else {
+        // 리뷰 2026-07-13 = 500(관리자계정 없음 등)을 "비번 틀림"으로 오표시하던 것 분리 = 원인 오인 방지.
+        setError("관리자 로그인 오류입니다 (서버 설정 확인)");
+        setPassword("");
+      }
+    } catch {
+      setError("서버 연결 실패");
       setPassword("");
-    } else {
-      setError("비밀번호가 틀렸습니다");
-      setPassword("");
+    } finally {
+      setIsLoading(false);
     }
-  }, [password]);
+  }, [password, isLoading]);
 
   const handleClose = useCallback(() => {
     setIsAuthenticated(false);
@@ -118,11 +149,16 @@ export default function AdminScreen() {
             ) : null}
 
             <TouchableOpacity
-              style={[styles.loginButton, { backgroundColor: Brand.primary }]}
+              style={[styles.loginButton, { backgroundColor: Brand.primary, opacity: isLoading ? 0.6 : 1 }]}
               onPress={handleLogin}
               activeOpacity={0.8}
+              disabled={isLoading}
             >
-              <ThemedText style={styles.loginButtonText}>로그인</ThemedText>
+              {isLoading ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <ThemedText style={styles.loginButtonText}>로그인</ThemedText>
+              )}
             </TouchableOpacity>
           </View>
         </KeyboardAvoidingView>

@@ -52,6 +52,8 @@ export const users = pgTable("users", {
   // ⚠️ 수정금지(승인필요) 2026-07-13 사장님 SSOT = 역할 분기(전문가 기능) = 'user' | 'expert' | 'admin'.
   //   현지 전문가 다수 대비: 전문가로 로그인 시 전문가 탭이 답변함 모드로 전환. is_admin은 배포앱 원서버가 사용 중이라 유지(신규 코드는 role만 읽음).
   role: varchar("role").default('user'),
+  // ⚠️ 2026-07-13 사장님 SSOT = 현지 전문가 본인 프로필(닉네임/경력/자기소개/캐릭터) = 전문가 탭 소개카드 표시. role='expert'/'admin' 계정만 편집.
+  expertProfile: jsonb("expert_profile").$type<{ nickname?: string; career?: string; bio?: string; character?: string }>(),
   referredBy: varchar("referred_by"),
   referralCode: varchar("referral_code").unique(),
   subscriptionStatus: varchar("subscription_status").default('active'),

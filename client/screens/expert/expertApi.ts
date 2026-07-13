@@ -119,3 +119,34 @@ export async function tabBadgeCount(): Promise<number> {
   }
   return unreadCount();
 }
+
+// ── 현지 전문가 프로필(닉네임/경력/자기소개/캐릭터) = 소개카드 표시·편집(2026-07-13). ──
+export interface ExpertProfile {
+  nickname?: string;
+  career?: string;
+  bio?: string;
+  character?: string;
+}
+
+// 공개 조회(미인증) = 소개카드용(대표 전문가). 없으면 null → 화면이 i18n 기본문구로 폴백.
+export async function getExpertProfile(): Promise<{ profile: ExpertProfile | null; displayName: string | null }> {
+  const res = await req("GET", "/api/expert/profile");
+  if (!res.ok) return { profile: null, displayName: null };
+  return (await res.json().catch(() => ({ profile: null, displayName: null }))) as { profile: ExpertProfile | null; displayName: string | null };
+}
+
+// 본인 조회(expert·admin) = 편집화면 프리필용 = 로그인한 본인 행(대표전문가 아님, 리뷰 2026-07-13).
+export async function getMyExpertProfile(): Promise<{ profile: ExpertProfile | null; displayName: string | null }> {
+  const res = await req("GET", "/api/expert/profile/me");
+  if (!res.ok) return { profile: null, displayName: null };
+  return (await res.json().catch(() => ({ profile: null, displayName: null }))) as { profile: ExpertProfile | null; displayName: string | null };
+}
+
+// 본인 저장(expert·admin) = 백엔드가 role 검사.
+export async function saveExpertProfile(p: ExpertProfile): Promise<{ ok: boolean; error?: string }> {
+  const res = await req("PATCH", "/api/expert/profile", p);
+  if (res.ok) return { ok: true };
+  if (res.status === 401) return { ok: false, error: "login_required" };
+  if (res.status === 403) return { ok: false, error: "expert_only" };
+  return { ok: false, error: "server_error" };
+}
