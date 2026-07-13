@@ -47,7 +47,8 @@ export async function getUserData(): Promise<UserData | null> {
       birthDate: "1990-01-01",
       ageGroup: "30대",
       isPaid: true,
-      token: "mock_token_for_dev",
+      // 2026-07-13 = DEV 목업 토큰도 실제 형식(simple_auth_token_v1_+id) = DEV에서 /api/auth/me·role 조회 등 실제 인증경로 작동(옛 'mock_token_for_dev'=인증불가 폐기 §19).
+      token: "simple_auth_token_v1_local_dev_user",
     };
   }
   try {

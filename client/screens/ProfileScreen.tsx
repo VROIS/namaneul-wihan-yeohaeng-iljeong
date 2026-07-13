@@ -507,6 +507,12 @@ export default function ProfileScreen() {
           ]}
         >
           {[
+            // 2026-07-13 = 내 문의함 바로가기(사장님 SSOT) = 전문가 탭(하단 내문의함)으로 이동. 전문가 문의 답변 확인.
+            {
+              icon: "award",
+              label: t("expert.myInbox"),
+              onPress: () => (navigation as any).navigate("Verify"),
+            },
             {
               icon: "credit-card",
               label: "결제 수단 및 내역",
@@ -528,13 +534,13 @@ export default function ProfileScreen() {
             },
             { icon: "shield", label: "개인정보 보호" },
             { icon: "help-circle", label: "도움말" },
-          ].map((item, index) => (
+          ].map((item, index, arr) => (
             <Pressable
               key={index}
               onPress={item.onPress}
               style={[
                 styles.menuItem,
-                index < 6 && {
+                index < arr.length - 1 && {
                   borderBottomWidth: 1,
                   borderBottomColor: theme.border,
                 },

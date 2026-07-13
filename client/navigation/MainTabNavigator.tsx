@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { StyleSheet, Platform, useColorScheme, View } from "react-native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { BlurView } from "expo-blur";
@@ -12,7 +12,8 @@ import Icon from "@/components/Icon";
 import { Brand, Colors } from "@/constants/theme";
 import TripPlannerScreen from "@/screens/TripPlannerScreen";
 import ProfileScreen from "@/screens/ProfileScreen";
-import VerificationRequestScreen from "@/screens/VerificationRequestScreen";
+import ExpertScreen from "@/screens/expert/ExpertScreen"; // 전문가 탭(2026-07-13) = 옛 VerificationRequestScreen 대체 §19
+import { tabBadgeCount } from "@/screens/expert/expertApi"; // 시안 D = 전문가 탭 배지 = 역할별(사용자=안읽은답변/전문가=대기문의)
 import { useMapToggle } from "@/contexts/MapToggleContext";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
@@ -48,6 +49,16 @@ export default function MainTabNavigator() {
   const insets = useSafeAreaInsets();
   const rootNavigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+
+  // ⚠️ 2026-07-13 = 전문가 탭 배지(시안 D) = 답변 안 읽은 수. 초기 1회 + 30초 폴링(경량).
+  const [expertBadge, setExpertBadge] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    const load = () => tabBadgeCount().then((n) => { if (alive) setExpertBadge(n); }).catch(() => {});
+    load();
+    const iv = setInterval(load, 30000);
+    return () => { alive = false; clearInterval(iv); };
+  }, []);
 
   const getTabBarIcon = (
     routeName: string,
@@ -154,13 +165,14 @@ export default function MainTabNavigator() {
             },
           }}
         />
-        {/* ✅ 전문가 검증 (센터) */}
+        {/* ✅ 전문가 (센터) = 현지 전문가 문의(2026-07-13) */}
         <Tab.Screen
           name="Verify"
-          component={VerificationRequestScreen}
+          component={ExpertScreen}
           options={{
             tabBarLabel: t("tab.expert"),
-            headerTitle: t("verify.title"),
+            headerShown: false, // ExpertScreen 이 자체 헤더 렌더(Home 과 동일) = 네이티브 헤더 이중표시 방지(리뷰 2026-07-13)
+            tabBarBadge: expertBadge > 0 ? expertBadge : undefined, // 시안 D = 답변 안 읽은 수(0이면 숨김)
           }}
         />
         {/* 👤 프로필 */}

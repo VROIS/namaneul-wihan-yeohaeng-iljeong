@@ -8,6 +8,28 @@
 
 ---
 
+## 🔴 2026-07-13 = 전문가 탭(현지 전문가 문의) 배포 수준 완성 + 껍데기 청소 + 스토리지 정리 (전부 미커밋 = 작업트리)
+
+### ① 전문가 탭(현지 전문가 문의) = 4장 구성안 배포 수준 완성 (미커밋)
+**배경**: 하단 중간 '전문가' 탭 = 앱 핵심 마케팅 포인트. FE 제출폼만 있고 서버 접수처 없어 404로 죽던 미완성 기능. 폼 진입경로도 없어 사장님이 한 번도 못 봄. 배포앱("내손안에 가이드") 백엔드(알림·크레딧·로그인·PWA)가 이 레포에 병합됐으나 휴면 → 전부 재사용(§16 재발명0).
+**설계**: 계획서·시안 = `docs/2026-07-13 전문가탭 구현계획.md` + `docs/design/`(시안 4화면 HTML+실제화면 11장 PNG). 배포앱 100% 정독(9-요원 WF).
+**DB(라이브 적용)**: `users.role`(user/expert/admin) + `expert_inquiries`(질문+답변 1행, status=admin규약 통일) + `itineraries` PK 복구(라이브에 PK 없던 결함). FK=user CASCADE·itinerary SET NULL·expert SET NULL.
+**BE(신규 `server/expert-routes.ts` 5라우트)**: 접수/목록(전문가=전체·일반=본인)/unread-count/상세(열람=읽음처리)/PATCH답변(requireExpert+notificationService 알림1줄). status 'verified'→'answered' 통일(§19). notificationService VAPID 가드(키없으면 푸시스킵·인앱저장은 정상)+web-push 설치. CORS PATCH 추가(웹 preflight 필수).
+**FE(별도 폴더 `client/screens/expert/` = 다른파일 안섞기)**: ExpertScreen(role분기: 사용자 문의작성+내문의함 / 전문가 답변함)·ExpertInboxView(상태필터+수신목록)·ExpertInquiryDetailScreen(말풍선, 전문가면 답변입력+상태버튼)·expertApi(자체 Bearer 헬퍼, 실토큰만)·statusStyle. 디자인=메인앱 TripPlannerScreen 토큰(Pretendard·#4285F4·Lucide·이모지0). 모바일=고정헤더+KeyboardAware+SafeArea+탭바여백. 탭 배지=역할별(사용자 안읽은답변/전문가 대기문의). 프로필 '내문의함' 바로가기(사장님 "둘 다"). 옛 VerificationRequestScreen 삭제 §19. i18n 7언어.
+**입증(Playwright 모바일 390x844 + DB 실측)**: 사용자 문의→내문의함 답변완료배지→상세 답변보기→읽음처리(실토큰 DB true) / 전문가 로그인→답변함 대기2필터→답변작성·전송→answered+expert_reply+expert_id+여행자알림 / 전문가배지 대기3 / 프로필→전문가탭 / FK id45 저장.
+**작업중 발견·수정**: 전문가 자기것만보임(listInquiries userId제거)·CORS PATCH누락(웹답변차단)·DEV목업토큰 인증불가(실형식화, __DEV__게이트)·itineraryId 항상null(currentItineraryId로). 코드리뷰 4라운드 전건수정.
+**검증**: tsc 내코드0(stash대조 14=14=기존사전에러만)·서버빌드·웹빌드(Exported dist)·§19·§16가드 통과. 테스트데이터 잔여0.
+**역할게이트 되돌림**: 관리자대시보드는 AdminScreen에 이미 비번보호(ADMIN_PASSWORD) → 내 역할게이트 불필요+프로필 리팩토링 충돌 → ProfileScreen 게이트 완전복구(내문의함 1줄만 잔존).
+**남은것**: 크레딧 차감(로그인 정식화 후)·admin 대시보드 서버인증(결정⑧)·AI의견문구→전문가탭 링크(7/3 SSOT변경)·웹푸시 VAPID(2차)·계정매핑(두앱 한크레딧).
+
+### ② 랭스 껍데기 청소 + 도시별 이미지채우기 구조 (07-merge, DB적용)
+- 껍데기(Taittinger 78920 등)는 입력-매칭 못없앰(유령행)=07-merge DB내부병합만 해법. 랭스 Taittinger병합+위키조각2삭제 137→134. 함정2: 교차카테고리 안전망이 진짜껍데기 청소막음(--apply-groups명시)·고유명사키 우연겹침. 근본=지금수정 작동중=새껍데기 안생김(6485껍데기 99.95% 옛재고)=도시별 이미지채우면 DB-only(따로 자가정제 설계 불필요, 사장님 SSOT).
+
+### ③ 스토리지 정리 (Storage API, 실행)
+- place-images 고아 478개/152MB 삭제(818→666MB). 4중 안전검증(경로·PID·실경로존재·비PID참조) 삭제금지0. 신규 `scripts/storage-orphan-cleanup.mjs`(§16 DB실시간재계산·Storage API .remove=protect_delete 우회정식). 대시보드 용량표시는 배치집계라 지연(SQL·HTTP404로 실삭제 확인).
+
+---
+
 ## 🔴 2026-07-12 = 고유명사 매칭(불변6) = 레거시 오염행 흡수로 신규 id 억제 (랭스 실증, matcher.ts+트리거 동기)
 
 **배경**: 랭스(88) 실증서 옛 레거시 껍데기행(Palais **de** Tau ↔ 신규 Palais **du** Tau, 오역 name_ko "폼페리우스 궁전")이 흡수 안 되고 신규 중복 저장 = "옛것 남고 행수 무한증가"(사장님 지적). 근본 = 매칭 5단계(PID·URI·주소·좌표·로컬이름)로 못 잡는 이름 미세차이(de/du·접두어·오역).

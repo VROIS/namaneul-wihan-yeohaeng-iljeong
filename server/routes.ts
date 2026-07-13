@@ -12,6 +12,7 @@ import { registerAdminRoutes } from "./admin-routes";
 import { registerAuthRoutes } from "./auth";
 import { registerBtsRoutes } from "./bts-routes";
 import { registerGuideRoutes } from "./guide-routes";
+import { registerExpertRoutes } from "./expert-routes"; // 전문가 문의 API (2026-07-13, docs/2026-07-13 전문가탭 구현계획.md)
 import { db } from "./db";
 import { cities, itineraries } from "../shared/schema";
 import { count, eq, desc, sql } from "drizzle-orm";
@@ -96,6 +97,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerAuthRoutes(app);
   registerBtsRoutes(app);
   registerGuideRoutes(app); // 내손안에 가이드 API (Phase 4 구현)
+  registerExpertRoutes(app); // 전문가 문의 API (2026-07-13)
 
   // Cities
   app.get("/api/cities", async (req, res) => {

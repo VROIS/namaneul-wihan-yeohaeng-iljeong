@@ -29,7 +29,7 @@ function setupCors(app: express.Application) {
   app.use((req, res, next) => {
     const origin = req.header("origin");
     res.header("Access-Control-Allow-Origin", origin || "*");
-    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS"); // PATCH = 전문가 답변/admin 상태변경(2026-07-13). 웹 preflight 필수.
     res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
     res.header("Access-Control-Allow-Credentials", "true");
 

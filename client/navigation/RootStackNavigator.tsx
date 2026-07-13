@@ -10,7 +10,7 @@ import MainTabNavigator from "@/navigation/MainTabNavigator";
 import DestinationDetailScreen from "@/screens/DestinationDetailScreen";
 import OnboardingScreen from "@/screens/OnboardingScreen";
 import LoginScreen from "@/screens/LoginScreen";
-import VerificationRequestScreen from "@/screens/VerificationRequestScreen";
+import ExpertInquiryDetailScreen from "@/screens/expert/ExpertInquiryDetailScreen"; // 전문가 문의 상세(2026-07-13) = 옛 VerificationRequestScreen 대체 §19
 import SavedTripDetailScreen from "@/screens/SavedTripDetailScreen";
 import AdminScreen from "@/screens/AdminScreen";
 import BTSConcertPlannerScreen from "@/screens/BTSConcertPlannerScreen";
@@ -21,7 +21,6 @@ import BTSWorldMapScreen from "@/screens/bts/BTSWorldMapScreen";
 // import { BTSLandingScreenC } from "@/screens/BTSLandingScreenC"; // C안 보관
 // import { BTSLandingScreenA1 } from "@/screens/BTSLandingScreenA1"; // A1안 보관
 import { Colors } from "@/constants/theme";
-import { Itinerary } from "@/types/trip";
 import { isAuthenticated } from "@/lib/auth";
 
 export type RootStackParamList = {
@@ -29,7 +28,7 @@ export type RootStackParamList = {
   Onboarding: undefined;
   Login: undefined;
   DestinationDetail: { placeId: number };
-  VerificationRequest: { itinerary: Itinerary };
+  ExpertInquiryDetail: { id: string }; // 전문가 문의 상세(2026-07-13) = 옛 VerificationRequest 대체 §19
   SavedTripDetail: { itineraryId: number };
   AdminModal: undefined;
   BTSConcertPlanner: undefined;
@@ -141,8 +140,8 @@ export default function RootStackNavigator() {
         }}
       />
       <Stack.Screen
-        name="VerificationRequest"
-        component={VerificationRequestScreen}
+        name="ExpertInquiryDetail"
+        component={ExpertInquiryDetailScreen}
         options={{
           presentation: "card",
           headerShown: false,

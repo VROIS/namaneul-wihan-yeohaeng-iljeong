@@ -3344,7 +3344,7 @@
     const VERIFICATION_STATUS_MAP = {
       'pending': { label: '대기중', color: '#f59e0b', bg: 'rgba(245,158,11,0.2)' },
       'in_review': { label: '검토중', color: '#3b82f6', bg: 'rgba(59,130,246,0.2)' },
-      'verified': { label: '완료', color: '#22c55e', bg: 'rgba(34,197,94,0.2)' },
+      'answered': { label: '답변완료', color: '#22c55e', bg: 'rgba(34,197,94,0.2)' },
       'rejected': { label: '거절', color: '#ef4444', bg: 'rgba(239,68,68,0.2)' }
     };
     
@@ -3503,7 +3503,7 @@
           const createdAt = new Date(req.createdAt).toLocaleDateString('ko-KR');
           
           return `
-            <div class="service-item" style="display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 16px; cursor: pointer;" onclick="openVerificationDetail(${req.id})">
+            <div class="service-item" style="display: grid; grid-template-columns: auto 1fr auto auto; align-items: center; gap: 16px; cursor: pointer;" onclick="openVerificationDetail('${req.id}')">
               <span style="padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; background: ${status.bg}; color: ${status.color};">
                 ${status.label}
               </span>
@@ -3593,13 +3593,13 @@
           </div>
           
           <div style="border-top: 1px solid rgba(255,255,255,0.1); padding-top: 16px;">
-            <div style="font-size: 14px; font-weight: 600; margin-bottom: 8px;">관리자 코멘트</div>
-            <textarea id="admin-comment-${req.id}" class="form-input" style="width: 100%; min-height: 80px; margin-bottom: 12px;" placeholder="사용자에게 전달할 코멘트를 입력하세요...">${req.adminComment || ''}</textarea>
-            
+            <div style="font-size: 14px; font-weight: 600; margin-bottom: 8px;">전문가 답변</div>
+            <textarea id="admin-comment-${req.id}" class="form-input" style="width: 100%; min-height: 80px; margin-bottom: 12px;" placeholder="사용자에게 전달할 답변을 입력하세요...">${req.expertReply || ''}</textarea>
+
             <div style="display: flex; gap: 8px; justify-content: flex-end;">
-              <button class="btn btn-secondary" onclick="updateVerificationStatus(${req.id}, 'in_review')">검토중</button>
-              <button class="btn" style="background: rgba(239,68,68,0.2); color: #ef4444;" onclick="updateVerificationStatus(${req.id}, 'rejected')">거절</button>
-              <button class="btn btn-primary" onclick="updateVerificationStatus(${req.id}, 'verified')">검증 완료</button>
+              <button class="btn btn-secondary" onclick="updateVerificationStatus('${req.id}', 'in_review')">검토중</button>
+              <button class="btn" style="background: rgba(239,68,68,0.2); color: #ef4444;" onclick="updateVerificationStatus('${req.id}', 'rejected')">거절</button>
+              <button class="btn btn-primary" onclick="updateVerificationStatus('${req.id}', 'answered')">답변 완료</button>
             </div>
           </div>
         `;
@@ -3625,7 +3625,7 @@
         if (res.ok) {
           closeVerificationModal();
           loadVerifications();
-          alert(status === 'verified' ? '검증이 완료되었습니다' : '상태가 업데이트되었습니다');
+          alert(status === 'answered' ? '답변이 전송되었습니다' : '상태가 업데이트되었습니다');
         } else {
           alert('업데이트에 실패했습니다');
         }

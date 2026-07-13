@@ -14,9 +14,18 @@ import { notifications, pushSubscriptions } from '@shared/schema';
 import { eq, and } from 'drizzle-orm';
 import webpush from 'web-push';
 
+// ⚠️ 수정금지(승인필요) 2026-07-13 사장님 SSOT = VAPID 가드 = 키 있으면 웹푸시 활성, 없으면 푸시만 스킵(인앱 알림 DB저장은 정상 = 1차 릴리스).
+//   2차에서 원서버(Replit Secrets) VAPID 키쌍 회수해 env 넣으면 푸시 자동 활성. 키쌍은 FE 하드코딩 공개키와 쌍 유지 필수(다르면 기존 구독 전부 무효).
+const VAPID_PUBLIC = process.env.VAPID_PUBLIC_KEY;
+const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY;
+const pushEnabled = !!(VAPID_PUBLIC && VAPID_PRIVATE);
+if (pushEnabled) {
+  webpush.setVapidDetails('mailto:dbstour1@gmail.com', VAPID_PUBLIC!, VAPID_PRIVATE!);
+}
+
 export interface NotificationPayload {
   userId?: string | null;
-  type: 'reward' | 'content' | 'event' | 'update' | 'urgent';
+  type: 'reward' | 'content' | 'event' | 'update' | 'urgent' | 'expert'; // 'expert' = 전문가 답변 도착(2026-07-13)
   title: string;
   message: string;
   icon?: string;
@@ -54,6 +63,7 @@ export class NotificationService {
    * 특정 유저에게 푸시 알림 발송
    */
   async sendPushToUser(userId: string, payload: PushPayload): Promise<{ success: boolean; sent: number; failed: number }> {
+    if (!pushEnabled) return { success: false, sent: 0, failed: 0 }; // VAPID 미설정 = 푸시 스킵(인앱 알림은 이미 저장됨)
     const subscriptions = await db.select()
       .from(pushSubscriptions)
       .where(eq(pushSubscriptions.userId, userId));
@@ -104,6 +114,7 @@ export class NotificationService {
    * 모든 유저에게 푸시 알림 발송 (전체 공지)
    */
   async sendPushToAll(payload: PushPayload): Promise<{ sent: number; failed: number }> {
+    if (!pushEnabled) return { sent: 0, failed: 0 }; // VAPID 미설정 = 푸시 스킵
     const allSubscriptions = await db.select()
       .from(pushSubscriptions);
     
