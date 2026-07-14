@@ -115,9 +115,7 @@ export default function ProfileScreen() {
   const [isAuth, setIsAuth] = useState(false);
   const [showLanguageModal, setShowLanguageModal] = useState(false);
 
-  // 🗂️ 2026-07-03 = 프로필 진입마다 저장여정 목록 refetch (useFocusEffect) = 여정 저장 직후 프로필 탭 오면 방금 카드가 바로 보임.
-  //   조회 user_id = 'admin' 고정 = 서버 POST /api/itineraries 가 user_id를 'admin'으로 강제 저장(§9 로그인 제거)하므로 조회도 일치시켜야 목록이 뜸.
-  //   (나중 로그인 복원 시 = 저장/조회 둘 다 userData.id 로 동시 교체 = §19.)
+  // ⚠️ 사장님 SSOT 2026-07-14 = 프로필 진입마다 저장여정 목록 refetch (useFocusEffect). 조회 user_id = 로그인 본인(userData.id) = 저장(POST가 본인ID로 저장)과 한 쌍(§19). 옛 'admin' 고정 폐기(§9 잔재).
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
@@ -134,7 +132,7 @@ export default function ProfileScreen() {
 
             const response = await apiRequest(
               "GET",
-              `/api/users/admin/itineraries`,
+              `/api/users/${encodeURIComponent(userData?.id || "admin")}/itineraries`,
             );
             const trips = await response.json();
             if (cancelled) return;

@@ -666,7 +666,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     return {
       ...body,
-      userId: "admin", // 🔧 로그인 제거: userId를 'admin'으로 고정
+      // ⚠️ 사장님 SSOT 2026-07-14 = 여정은 로그인 본인 ID(users.id)로 저장 = 전문가가 연락할 상대·푸시 대상 특정. 옛 'admin' 강제 폐기 §19(§9 로그인제거 잔재).
+      //   FE(handleSaveItinerary)가 userData.id 를 실어 보냄. 없으면(비로그인 경로) 'admin' 폴백 = 둘러보기 안전. 다른 컬럼 = body 그대로.
+      userId: body.userId || "admin",
       startDate: body.startDate ? new Date(body.startDate) : new Date(),
       endDate: body.endDate ? new Date(body.endDate) : new Date(),
       personaType: styleToPersonaType[body.travelStyle] || "comfort",
@@ -675,20 +677,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     };
   };
 
-  const ensureAdminUser = async () => {
-    const existingUser = await storage.getUser("admin");
-    if (!existingUser) {
-      console.log(`[Itinerary] Admin user not found, creating...`);
-      await storage.createUser({ username: "admin", password: "admin", displayName: "관리자" });
-      console.log(`[Itinerary] Admin user created`);
-    }
-  };
+  // ⚠️ 사장님 SSOT 2026-07-14 = 옛 ensureAdminUser 폐기 §19. id='admin'을 못 찾아 매번 새 유저를 찍어 유령유저 69개 양산하던 버그의 근원. 여정은 본인ID로 저장 = admin 행 불필요(itineraries.user_id FK 없음).
 
   app.post("/api/itineraries", async (req, res) => {
     try {
-      await ensureAdminUser();
       const itineraryData = buildItineraryData(req.body);
-      console.log(`[Itinerary] Creating for admin user...`);
+      console.log(`[Itinerary] Creating itinerary for user=${itineraryData.userId}...`);
       const itinerary = await storage.createItinerary(itineraryData);
       console.log(`[Itinerary] Created successfully: id=${itinerary.id}`);
       res.status(201).json(itinerary);
@@ -705,7 +699,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/itineraries/:id", async (req, res) => {
     try {
       const id = parseInt(req.params.id);
-      await ensureAdminUser();
       // 🧠 2026-07-04 = AI 의견 캐시 봉인은 buildItineraryData 단일 지점(§16). 재저장 시 FE가 verificationResult를 실으면
       //   현재 내용 fp로 재봉인(내용 안 바뀌면 같은 fp = 캐시 유지, 바뀌면 새 fp = 다음 클릭에 정상 재호출). 옛 fp 보존 분기 폐기 §19(그 분기는
       //   newFp에 :language 미부착이라 저장 fp와 절대 불일치 = 죽은 코드였음). DB 재조회 1회도 제거 = 더 가벼움 §0.

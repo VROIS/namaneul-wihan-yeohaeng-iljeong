@@ -14,6 +14,13 @@ interface MapToggleContextType {
   aiOpinionRequestedAt: number | null;
   requestAiOpinion: () => void;
   clearAiOpinionRequest: () => void;
+  // ⚠️ 사장님 SSOT 2026-07-14 = 하단탭 "전문가" 버튼 → 여정화면 위 오버레이(AI의견과 동일 패턴). 별도 화면 아님(§16 재사용·§19 옛 탭화면 폐기).
+  expertRequestedAt: number | null;
+  requestExpert: () => void;
+  clearExpertRequest: () => void;
+  // ⚠️ 사장님 SSOT 2026-07-14 = 오버레이 안에서 문의접수·답변전송 직후 = 하단 탭 배지 즉시 갱신 신호(오버레이는 navigation state를 안 바꿔 폴링으로만 반영되던 지연 제거 §19). 실시간 피드백.
+  expertDataChangedAt: number | null;
+  bumpExpertData: () => void;
 }
 
 const MapToggleContext = createContext<MapToggleContextType>({
@@ -26,6 +33,11 @@ const MapToggleContext = createContext<MapToggleContextType>({
   aiOpinionRequestedAt: null,
   requestAiOpinion: () => {},
   clearAiOpinionRequest: () => {},
+  expertRequestedAt: null,
+  requestExpert: () => {},
+  clearExpertRequest: () => {},
+  expertDataChangedAt: null,
+  bumpExpertData: () => {},
 });
 
 export function MapToggleProvider({ children }: { children: React.ReactNode }) {
@@ -33,6 +45,8 @@ export function MapToggleProvider({ children }: { children: React.ReactNode }) {
   const [currentItinerary, setCurrentItineraryState] = useState<Itinerary | null>(null);
   const [currentItineraryId, setCurrentItineraryId] = useState<number | null>(null);
   const [aiOpinionRequestedAt, setAiOpinionRequestedAt] = useState<number | null>(null);
+  const [expertRequestedAt, setExpertRequestedAt] = useState<number | null>(null);
+  const [expertDataChangedAt, setExpertDataChangedAt] = useState<number | null>(null);
 
   const toggleMap = useCallback(() => {
     setShowMap((prev) => !prev);
@@ -50,6 +64,17 @@ export function MapToggleProvider({ children }: { children: React.ReactNode }) {
   const clearAiOpinionRequest = useCallback(() => {
     setAiOpinionRequestedAt(null);
   }, []);
+  // ⚠️ 사장님 SSOT 2026-07-14 = 전문가 오버레이 트리거(AI의견과 동일 트릭 = 매 요청 새 타임스탬프 → 같은 화면 재클릭도 useEffect 재실행).
+  const requestExpert = useCallback(() => {
+    setExpertRequestedAt(Date.now());
+  }, []);
+  const clearExpertRequest = useCallback(() => {
+    setExpertRequestedAt(null);
+  }, []);
+  // 오버레이 안 문의접수·답변전송 직후 = 배지 즉시 재조회 트리거(타임스탬프 변화 = MainTabNavigator가 감지).
+  const bumpExpertData = useCallback(() => {
+    setExpertDataChangedAt(Date.now());
+  }, []);
 
   return (
     <MapToggleContext.Provider
@@ -57,6 +82,8 @@ export function MapToggleProvider({ children }: { children: React.ReactNode }) {
         showMap, toggleMap, setShowMap,
         currentItinerary, currentItineraryId, setCurrentItinerary,
         aiOpinionRequestedAt, requestAiOpinion, clearAiOpinionRequest,
+        expertRequestedAt, requestExpert, clearExpertRequest,
+        expertDataChangedAt, bumpExpertData,
       }}
     >
       {children}

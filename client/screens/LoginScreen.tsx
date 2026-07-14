@@ -32,6 +32,7 @@ import {
   socialLoginWithKakao,
   whatsappOtpSend,
   whatsappOtpVerify,
+  emailLogin,
 } from "../lib/auth";
 import {
   useGoogleAuthRequest,
@@ -314,7 +315,7 @@ export default function LoginScreen() {
       phoneNumber: whatsappPhone,
       otp: whatsappOtp,
       birthDate: birthDateStr!,
-      language: selectedLanguage.code,
+      language: i18n.language, // ⚠️ 2026-07-14 = 선언 안 된 selectedLanguage.code 참조 버그 수정(§19). i18n.language 단일 소스.
       deviceType: Platform.OS === "web" ? "web" : "mobile",
     });
     setOauthLoading(false);
@@ -342,6 +343,32 @@ export default function LoginScreen() {
       }
     } else {
       await handleSocialLogin("kakao");
+    }
+  };
+
+  // ⚠️ 사장님 SSOT 2026-07-14 = 개발단계 이메일 로그인 = 구글 OAuth(웹 400) 우회. 메일 넣으면 그 계정으로 로그인(사장님 메일=admin).
+  const [emailInput, setEmailInput] = useState("");
+  const [emailLoading, setEmailLoading] = useState(false);
+  // ⚠️ 2026-07-14 = 웹(WebView)에서 Alert.alert 이 안 떠서 로그인 실패·검증 안내가 안 보임 = "눌러도 반응 없음"의 원인. 웹 = window.alert, 앱 = Alert.alert(§19).
+  const notify = (msg: string) => {
+    if (Platform.OS === "web") { if (typeof window !== "undefined") window.alert(msg); }
+    else Alert.alert(msg);
+  };
+  const handleEmailLogin = async () => {
+    const email = emailInput.trim();
+    if (!email || !email.includes("@")) { notify(t("login.emailInvalid")); return; }
+    setEmailLoading(true);
+    try {
+      const r = await emailLogin(email);
+      if (r.success) {
+        navigation.reset({ index: 0, routes: [{ name: "Main" }] });
+      } else if (r.error === "email_not_found") {
+        notify(t("login.emailNotFound"));
+      } else {
+        notify(t("login.emailLoginFailed"));
+      }
+    } finally {
+      setEmailLoading(false);
     }
   };
 
@@ -571,6 +598,30 @@ export default function LoginScreen() {
                 {t("login.googleStart")}
               </Text>
             </Pressable>
+
+            {/* ⚠️ 사장님 SSOT 2026-07-14 = 개발단계 이메일 로그인(구글 OAuth 웹 400 우회). 메일 넣으면 그 계정으로 로그인(사장님 메일=admin). 로그인 정식화 때 폐기 §19. */}
+            <View style={styles.emailLoginBox}>
+              <Text style={[styles.emailLoginLabel, { color: theme.textTertiary }]}>{t("login.emailDevLabel")}</Text>
+              <View style={styles.emailLoginRow}>
+                <TextInput
+                  style={[styles.emailInput, { backgroundColor: theme.backgroundDefault, color: theme.text, borderColor: theme.border }]}
+                  placeholder={t("login.emailPlaceholder")}
+                  placeholderTextColor={theme.textTertiary}
+                  value={emailInput}
+                  onChangeText={setEmailInput}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  editable={!emailLoading}
+                />
+                <Pressable
+                  style={({ pressed }) => [styles.emailLoginBtn, { backgroundColor: Brand.primary, opacity: (emailLoading || !emailInput.trim()) ? 0.5 : pressed ? 0.8 : 1 }]}
+                  onPress={handleEmailLogin}
+                  disabled={emailLoading || !emailInput.trim()}
+                >
+                  <Text style={styles.emailLoginBtnText}>{t("login.emailLoginBtn")}</Text>
+                </Pressable>
+              </View>
+            </View>
 
             {/* 로그인 없이 둘러보기 (테스트용) */}
             <Pressable
@@ -893,6 +944,13 @@ const styles = StyleSheet.create({
 
   /* ── 소셜 버튼 ── */
   socialSection: { gap: Spacing.md, paddingBottom: Spacing.lg },
+  // 개발단계 이메일 로그인(2026-07-14)
+  emailLoginBox: { gap: Spacing.xs, marginTop: Spacing.sm },
+  emailLoginLabel: { fontSize: 12, fontFamily: Fonts.medium, textAlign: "center" },
+  emailLoginRow: { flexDirection: "row", gap: Spacing.sm },
+  emailInput: { flex: 1, height: 48, paddingHorizontal: Spacing.md, borderRadius: BorderRadius.md, borderWidth: 1, fontSize: 14, fontFamily: Fonts.medium },
+  emailLoginBtn: { paddingHorizontal: Spacing.lg, height: 48, borderRadius: BorderRadius.md, alignItems: "center", justifyContent: "center" },
+  emailLoginBtnText: { color: "#FFF", fontSize: 14, fontFamily: Fonts.bold },
   socialButton: {
     flexDirection: "row",
     alignItems: "center",

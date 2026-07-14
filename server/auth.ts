@@ -275,7 +275,7 @@ export function registerAuthRoutes(app: Express) {
 
     // ⚠️ 수정금지(승인필요) 2026-07-13 = 관리자 로그인 = 비번 서버검증 → 관리자 세션 토큰 발급(§16 = 기존 Bearer 인증 재사용).
     //   관리자 = 현지전문가(사장님) 계정 = role='admin'. 비번을 서버로 옮겨 앱 번들서 제거 = 보안↑. ADMIN_PASSWORD/ADMIN_USER_ID = Replit Secrets 우선.
-    //   ⚠️ 출시 전 필수(2026-07-14 코드리뷰 = 사장님 B안): ADMIN_PASSWORD 시크릿을 새 비번으로 설정 후 기본값 'nubi2026' 제거. 현재 기본값은 옛 번들 노출값 = 임시(§9 프로모션 = 테스트용). 미설정 유지 시 옛 APK 로 관리자 탈취 가능.
+    //   관리자 인식(2026-07-14 사장님 모델 = 다른 배포앱과 동일) = 이 비번 OR 구글 로그인(사장님 계정 role='admin') 둘 다 가능. 관리자 대시보드만 비번으로 막는 방식. ADMIN_PASSWORD 시크릿 설정 시 기본값 대체(선택).
     app.post("/api/admin/login", async (req, res) => {
         try {
             const { password } = req.body;
@@ -289,6 +289,29 @@ export function registerAuthRoutes(app: Express) {
                 return res.status(500).json({ success: false, error: "admin_account_missing" });
             }
             res.json({ success: true, user: admin, token: "simple_auth_token_v1_" + admin.id });
+        } catch (error) {
+            res.status(500).json({ success: false, error: "server_error" });
+        }
+    });
+
+    // ⚠️ 사장님 SSOT 2026-07-14 = 개발단계 이메일 로그인 = 구글 OAuth(웹 리다이렉트 설정 문제로 400) 우회.
+    //   메일 입력 → 그 메일의 users 행으로 로그인(사장님 메일=admin 자동 인식). 기존 세션 토큰(§16 = /api/auth/me 와 동일 Bearer) 발급.
+    //   ⚠️ 임시(개발용) = 로그인 정식화(프로필 리팩토링) 때 구글 OAuth 정상화하면 폐기 §19. 비번 없음 = 개발단계 한정.
+    app.post("/api/auth/email-login", async (req, res) => {
+        try {
+            const { email } = req.body;
+            if (!email || typeof email !== "string" || !email.includes("@")) {
+                return res.status(400).json({ success: false, error: "email_required" });
+            }
+            const user = await storage.getUserByEmail(email);
+            if (!user) {
+                return res.status(404).json({ success: false, error: "email_not_found" });
+            }
+            res.json({
+                success: true,
+                user: { id: user.id, username: user.username, displayName: user.displayName, provider: user.provider, birthDate: user.birthDate, language: user.preferredLanguage, isPaid: user.isPaid, planType: user.planType, role: user.role },
+                token: "simple_auth_token_v1_" + user.id,
+            });
         } catch (error) {
             res.status(500).json({ success: false, error: "server_error" });
         }

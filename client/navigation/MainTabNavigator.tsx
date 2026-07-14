@@ -12,8 +12,8 @@ import Icon from "@/components/Icon";
 import { Brand, Colors } from "@/constants/theme";
 import TripPlannerScreen from "@/screens/TripPlannerScreen";
 import ProfileScreen from "@/screens/ProfileScreen";
-import ExpertScreen from "@/screens/expert/ExpertScreen"; // 전문가 탭(2026-07-13) = 옛 VerificationRequestScreen 대체 §19
-import { tabBadgeCount } from "@/screens/expert/expertApi"; // 시안 D = 전문가 탭 배지 = 역할별(사용자=안읽은답변/전문가=대기문의)
+// ⚠️ 사장님 SSOT 2026-07-14 = 전문가 = 여정화면 위 오버레이(AI의견과 동일). 옛 별도탭 화면 폐기 §19 = 탭은 트리거만(requestExpert).
+import { tabBadgeCount, getMyRole } from "@/screens/expert/expertApi"; // 전문가 탭 배지 = 역할별(사용자=안읽은답변/전문가=대기문의) + 역할(탭 활성 분기)
 import { useMapToggle } from "@/contexts/MapToggleContext";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
@@ -44,21 +44,33 @@ export default function MainTabNavigator() {
   const isDark = colorScheme === "dark";
   const theme = Colors[colorScheme ?? "light"];
   // ⚠️ 2026-07-03 사장님 SSOT = 지도는 결과화면 고정섹션이라 하단 지도토글 버튼(showMap)은 죽은 버튼 = "AI 의견" 버튼으로 교체.
-  const { currentItinerary, requestAiOpinion } = useMapToggle();
+  const { currentItinerary, requestAiOpinion, requestExpert, expertDataChangedAt } = useMapToggle();
   // ⚠️ 수정금지(승인필요) — 삼성폰 하단 3버튼 겹침 방지 (SafeArea 여백)
   const insets = useSafeAreaInsets();
   const rootNavigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   // ⚠️ 2026-07-13 = 전문가 탭 배지(시안 D) = 답변 안 읽은 수. 초기 1회 + 30초 폴링(경량).
+  //   ⚠️ 사장님 SSOT 2026-07-14 = 답변 전송·문의 열람 직후 배지 즉시 갱신 = 화면 이동(navigation state 변화)마다 재조회 추가(30초 지연 stale 제거 §19).
   const [expertBadge, setExpertBadge] = useState(0);
+  // ⚠️ 사장님 SSOT 2026-07-14 = 역할=전문가/관리자면 [전문가]탭 항상 활성(자기 여정 없어도 답변함 진입 가능). 사용자는 여정 있을 때만.
+  const [isExpertRole, setIsExpertRole] = useState(false);
   useEffect(() => {
     let alive = true;
     const load = () => tabBadgeCount().then((n) => { if (alive) setExpertBadge(n); }).catch(() => {});
     load();
+    getMyRole().then((r) => { if (alive) setIsExpertRole(r === "expert" || r === "admin"); }).catch(() => {});
     const iv = setInterval(load, 30000);
-    return () => { alive = false; clearInterval(iv); };
-  }, []);
+    const unsub = rootNavigation.addListener("state", load); // 화면 이동마다 = 답변 후 복귀·문의 열람 직후 즉시 반영
+    return () => { alive = false; clearInterval(iv); unsub(); };
+  }, [rootNavigation]);
+  // ⚠️ 사장님 SSOT 2026-07-14 = 오버레이 안 문의접수·답변전송 직후 = 배지 즉시 재조회(오버레이는 navigation state 안 바꿔서 위 리스너로는 안 걸림 = 실시간 피드백 §19).
+  useEffect(() => {
+    if (!expertDataChangedAt) return;
+    let alive = true;
+    tabBadgeCount().then((n) => { if (alive) setExpertBadge(n); }).catch(() => {});
+    return () => { alive = false; };
+  }, [expertDataChangedAt]);
 
   const getTabBarIcon = (
     routeName: string,
@@ -165,14 +177,28 @@ export default function MainTabNavigator() {
             },
           }}
         />
-        {/* ✅ 전문가 (센터) = 현지 전문가 문의(2026-07-13) */}
+        {/* ✅ 전문가 (센터) = 현지 전문가 문의 = 여정화면 위 오버레이(AI의견과 동일). 화면 이동 아님 = 탭은 트리거만(2026-07-14 사장님 SSOT). */}
         <Tab.Screen
           name="Verify"
-          component={ExpertScreen}
+          component={MapTogglePlaceholder}
           options={{
             tabBarLabel: t("tab.expert"),
-            headerShown: false, // ExpertScreen 이 자체 헤더 렌더(Home 과 동일) = 네이티브 헤더 이중표시 방지(리뷰 2026-07-13)
-            tabBarBadge: expertBadge > 0 ? expertBadge : undefined, // 시안 D = 답변 안 읽은 수(0이면 숨김)
+            headerShown: false,
+            tabBarBadge: expertBadge > 0 ? expertBadge : undefined, // 답변 안 읽은 수/대기 문의 수(0이면 숨김)
+            // ⚠️ 사장님 SSOT 2026-07-14 = 전문가/관리자면 항상 활성(여정 없어도 답변함). 사용자는 여정 있을 때만(문의는 여정 필요).
+            tabBarIcon: () => (
+              <Icon
+                name="check-circle"
+                size={24}
+                color={(currentItinerary || isExpertRole) ? Brand.primary : theme.textTertiary}
+              />
+            ),
+          }}
+          listeners={{
+            tabPress: (e) => {
+              e.preventDefault(); // 화면 이동 방지(여정 결과화면 위 오버레이로 표시)
+              if (currentItinerary || isExpertRole) requestExpert(); // 전문가는 여정 없어도 답변함. 사용자는 여정 있을 때만.
+            },
           }}
         />
         {/* 👤 프로필 */}

@@ -67,6 +67,8 @@ import { apiRequest } from "@/lib/query-client";
 import ItineraryMap from "@/components/ItineraryMap";
 // ⚠️ 2026-07-03 = 하단탭 "AI 의견" 버튼이 현재 여정을 알기 위한 배관(새 Context 만들지 않고 기존 확장 재사용)
 import { useMapToggle } from "@/contexts/MapToggleContext";
+import ExpertSheet from "@/screens/expert/ExpertSheet"; // 전문가 오버레이 시트(2026-07-14 = AI의견처럼 여정화면 위)
+import SnapSheet from "@/components/SnapSheet"; // 배경 여정 보이는 드래그 스냅 시트(peek↔full, 2026-07-14 리서치)
 // ⚠️ 2026-06-29 사용자 SSOT = 자체 PlaceAutocomplete(입력창+드롭다운+프록시 과설계) 폐기(§19) → 구글 공식 위젯(PlaceAutocompleteElement) WebView 100% 활용
 import PlaceAutocompleteWidget, {
   type PlaceAutoSelection as PlaceSelection,
@@ -331,7 +333,7 @@ export default function TripPlannerScreen() {
   const [showWebInput, setShowWebInput] = useState<PickerMode>(null);
   const [pendingGenerate, setPendingGenerate] = useState(false);
   // ⚠️ 2026-07-03 = 지도는 항상 고정 표시(showMap 미사용). setCurrentItinerary만 사용 = 하단탭 "AI 의견" 버튼 활성화·검증대상 전달.
-  const { setCurrentItinerary, aiOpinionRequestedAt, clearAiOpinionRequest, requestAiOpinion } = useMapToggle();
+  const { setCurrentItinerary, aiOpinionRequestedAt, clearAiOpinionRequest, requestAiOpinion, expertRequestedAt, clearExpertRequest, requestExpert } = useMapToggle();
   const { t, i18n } = useTranslation();
 
   const LOADING_MESSAGES = useMemo(
@@ -361,6 +363,8 @@ export default function TripPlannerScreen() {
   const [aiOpinionLoading, setAiOpinionLoading] = useState(false);
   const [aiOpinionData, setAiOpinionData] = useState<any>(null);
   const [aiOpinionError, setAiOpinionError] = useState<string | null>(null);
+  // ⚠️ 사장님 SSOT 2026-07-14 = "전문가" 오버레이 = AI의견과 동일(여정화면 위 시트). 데이터는 ExpertSheet가 자체 로드 = loading/data state 불필요.
+  const [expertVisible, setExpertVisible] = useState(false);
   // 🗺️ 2026-06-28 = 지도 마커 클릭 → 해당 슬롯 스크롤 (= ScrollView ref + 슬롯별 y좌표 기록)
   const resultScrollRef = useRef<ScrollView | null>(null);
   const slotLayoutsRef = useRef<Record<string, number>>({});
@@ -431,6 +435,13 @@ export default function TripPlannerScreen() {
     };
   }, [aiOpinionRequestedAt]);
 
+  // ⚠️ 사장님 SSOT 2026-07-14 = "전문가" 오버레이 열기 = AI의견과 동일 트릭(타임스탬프 변화 감지). 유료 fetch 없음 = 시트만 열고 clear. ExpertSheet가 자체 로드.
+  useEffect(() => {
+    if (!expertRequestedAt) return;
+    setExpertVisible(true);
+    clearExpertRequest();
+  }, [expertRequestedAt]);
+
   // ⚠️ 2026-07-03 사장님 SSOT = "이 화면에 지도 섹션(필수 요소)이 있는가"로 판단 = screen==="Result"일 때만 활성.
   //   지도(ItineraryMap)도 renderResult() 안에서 screen==="Result"일 때만 그려짐(:2574) = 동일 조건 재사용.
   //   itinerary 유무만으로는 안 됨(결과화면 뒤로가기 후 Input에서도 itinerary가 남아있어 오작동).
@@ -460,58 +471,51 @@ export default function TripPlannerScreen() {
     loadUserData();
   }, []);
 
-  // 🗂️ 2026-07-03 사용자 SSOT = 저장여정 복원. 프로필 "나의 여정" 카드 탭 → itineraryId 전달 → GET으로 raw_data 불러와
-  //   여정 생성화면(renderResult) 그대로 재현. setItinerary(rawData) + 숙소깃발(dayAccommodations) + 요약헤더용 formData 스칼라 복원 + Result 전환.
+  // 🗂️ 2026-07-03 사용자 SSOT = 저장여정 복원 = 단일 함수(§16). 프로필 "나의 여정" 카드 탭·전문가 답변함 문의 탭 공용.
+  //   itineraryId → GET raw_data → 여정 결과화면(renderResult) 재현. setItinerary + 숙소깃발 + 요약헤더 formData 스칼라 + Result 전환.
+  const restoreItineraryById = useCallback(async (targetId: number) => {
+    try {
+      const res = await apiRequest("GET", `/api/itineraries/${targetId}`);
+      const data = await res.json();
+      const raw = data?.rawData;
+      if (!raw || !raw.days) {
+        console.warn("[TripPlanner] 저장여정 복원 실패: rawData 없음", targetId);
+        return;
+      }
+      setItinerary(raw as Itinerary);
+      setAiOpinionData((raw as any).verification?.result ?? null);
+      const accoms: DayAccommodation[] = (raw.days || [])
+        .filter((d: any) => d.accommodation?.coords?.lat)
+        .map((d: any) => ({
+          day: d.day,
+          name: d.accommodation.name,
+          address: d.accommodation.address || "",
+          coords: d.accommodation.coords,
+          placeId: d.accommodation.placeId,
+        }));
+      setDayAccommodations(accoms);
+      setFormData((prev) => ({
+        ...prev,
+        destination: raw.destination || prev.destination,
+        companionType: data.companionType || prev.companionType,
+        companionCount: data.companionCount ?? prev.companionCount,
+        curationFocus: data.curationFocus || prev.curationFocus,
+        vibes: Array.isArray(data.vibes) && data.vibes.length ? data.vibes : prev.vibes,
+        travelStyle: data.travelStyle || prev.travelStyle,
+        travelPace: data.travelPace || prev.travelPace,
+        mobilityStyle: data.mobilityStyle || prev.mobilityStyle,
+      }));
+      setCurrentItineraryId(targetId);
+      setScreen("Result");
+    } catch (e) {
+      console.warn("[TripPlanner] 저장여정 복원 오류:", e);
+    }
+  }, []);
+
   useEffect(() => {
     if (!restoreItineraryId) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await apiRequest("GET", `/api/itineraries/${restoreItineraryId}`);
-        const data = await res.json();
-        if (cancelled) return;
-        const raw = data?.rawData;
-        if (!raw || !raw.days) {
-          console.warn("[TripPlanner] 저장여정 복원 실패: rawData 없음", restoreItineraryId);
-          return;
-        }
-        // 여정 본문 복원 = renderResult가 이 state로 그림
-        setItinerary(raw as Itinerary);
-        // 🧠 2026-07-04 = 저장돼 있던 AI 의견 결과를 state로 복원 = 안 열고 재저장해도 [C]가 다시 박제(캐시 유실 방지). 없으면 null.
-        setAiOpinionData((raw as any).verification?.result ?? null);
-        // 숙소 깃발·출발바 복원 = raw_data.days[].accommodation
-        const accoms: DayAccommodation[] = (raw.days || [])
-          .filter((d: any) => d.accommodation?.coords?.lat)
-          .map((d: any) => ({
-            day: d.day,
-            name: d.accommodation.name,
-            address: d.accommodation.address || "",
-            coords: d.accommodation.coords,
-            placeId: d.accommodation.placeId,
-          }));
-        setDayAccommodations(accoms);
-        // 요약헤더가 참조하는 formData 스칼라 복원(저장된 컬럼 → 헤더 문장·가격 정상 표시)
-        setFormData((prev) => ({
-          ...prev,
-          destination: raw.destination || prev.destination,
-          companionType: data.companionType || prev.companionType,
-          companionCount: data.companionCount ?? prev.companionCount,
-          curationFocus: data.curationFocus || prev.curationFocus,
-          vibes: Array.isArray(data.vibes) && data.vibes.length ? data.vibes : prev.vibes,
-          travelStyle: data.travelStyle || prev.travelStyle,
-          travelPace: data.travelPace || prev.travelPace,
-          mobilityStyle: data.mobilityStyle || prev.mobilityStyle,
-        }));
-        // ⚠️ 2026-07-03 사장님 UX = 복원된 여정도 저장버튼은 그냥 💾(재저장 가능). 옛 "중복저장 방지 잠금" 폐기 §19.
-        //   재저장 시 같은 행 덮어쓰기(여정1→여정1.1) 위해 이 여정의 DB id 기억.
-        setCurrentItineraryId(restoreItineraryId);
-        setScreen("Result");
-      } catch (e) {
-        console.warn("[TripPlanner] 저장여정 복원 오류:", e);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [restoreItineraryId]);
+    restoreItineraryById(restoreItineraryId);
+  }, [restoreItineraryId, restoreItineraryById]);
 
   useEffect(() => {
     if (screen === "Loading") {
@@ -944,6 +948,8 @@ export default function TripPlannerScreen() {
         setJustSaved(true);
         justSavedTimer.current = setTimeout(() => setJustSaved(false), 500);
         console.log(`[TripPlanner] 💾 일정 저장 완료: id=${saved.id} (${wasOverwrite ? "덮어쓰기" : "신규"})`);
+        // ⚠️ 사장님 SSOT 2026-07-14 = 전문가 문의 footer 가 저장 성공 여부로 이동 판단(비로그인=미저장이면 문의탭으로 안 넘김). 저장 id 반환.
+        return saved.id as number;
       }
     } catch (error) {
       console.error("[TripPlanner] 저장 오류:", error);
@@ -951,6 +957,7 @@ export default function TripPlannerScreen() {
     } finally {
       setIsSaving(false);
     }
+    return null; // 미저장(비로그인·오류·응답에 id 없음) = 문의탭 이동 안 함.
   };
 
   useFocusEffect(
@@ -2514,7 +2521,8 @@ export default function TripPlannerScreen() {
               </Pressable>
               <Pressable
                 style={[styles.expertFooterBtn, styles.expertFooterBtnPrimary]}
-                onPress={() => (navigation as any).navigate("Verify")}
+                // ⚠️ 사장님 SSOT 2026-07-14 = 전문가 문의 = AI의견과 동일 = 여정화면 위 오버레이 열기(requestExpert). 화면 이동·수동저장 아님. 문의 시 여정 자동저장은 ExpertSheet 안에서(saveItineraryForInquiry). §19.
+                onPress={() => requestExpert()}
               >
                 <Icon name="award" size={18} color="#FFFFFF" />
                 <Text style={[styles.expertFooterBtnText, { color: "#FFFFFF" }]}>{t("trip.footerExpert")}</Text>
@@ -2556,36 +2564,19 @@ export default function TripPlannerScreen() {
         )}
 
         {/* 🧠 2026-07-03 사장님 SSOT = "AI 의견" 결과 오버레이. 새 화면 아님 = 여정 화면 위 반투명 dim + 닫기(X) 버튼(기존 hotel Modal 패턴 재활용). */}
-        {aiOpinionVisible && (
-          <Modal visible transparent animationType="fade" onRequestClose={() => setAiOpinionVisible(false)}>
-            <View style={styles.pickerModalOverlay}>
-              <View
-                style={[
-                  styles.aiOpinionSheet,
-                  { backgroundColor: theme.backgroundRoot, paddingBottom: insets.bottom + Spacing.md },
-                ]}
-              >
-                <View style={styles.hotelIosModalHeader}>
-                  <View style={styles.headerButton} />
-                  <Text style={[styles.pickerTitle, { color: theme.text }]}>
-                    {t("aiOpinion.title")}
-                  </Text>
-                  <Pressable onPress={() => setAiOpinionVisible(false)} style={styles.headerButton}>
-                    <Icon name="x" size={24} color={theme.text} />
-                  </Pressable>
-                </View>
-
-                {aiOpinionLoading ? (
-                  // 🧠 2026-07-04 사장님 SSOT = 화면전환 후 오버레이 안에서 단계 안내(흐름 바 + 정직한 단계 문구).
-                  <AiOpinionLoading theme={theme} />
-                ) : aiOpinionError ? (
-                  <Text style={[styles.aiOpinionLoadingText, { color: theme.textSecondary, padding: Spacing.lg }]}>
-                    {aiOpinionError}
-                  </Text>
-                ) : aiOpinionData ? (
-                  // ⚠️ 2026-07-03 사장님 SSOT = 상세페이지형 리포트(카드 나열 아님). 이모지 금지. 버튼/링크 추가 금지(하단탭 5개로 충분).
-                  //   전문가 유도 = 클릭 버튼 아닌 마지막 문단의 자연스러운 한 문장("현지 전문가에게 다시 물어보세요" 톤).
-                  <ScrollView style={{ maxHeight: "85%" }} contentContainerStyle={{ padding: Spacing.lg }}>
+        {/* ⚠️ 사장님 SSOT 2026-07-14 = AI 의견 오버레이 = 전문가와 완전 동일한 SnapSheet(첫노출 half + 드래그 + 스크롤). 옛 고정 Modal(fade, 88%) 폐기 §19. */}
+        <SnapSheet visible={aiOpinionVisible} onClose={() => setAiOpinionVisible(false)} title={t("aiOpinion.title")}>
+          {aiOpinionLoading ? (
+            // 🧠 2026-07-04 사장님 SSOT = 화면전환 후 오버레이 안에서 단계 안내(흐름 바 + 정직한 단계 문구).
+            <AiOpinionLoading theme={theme} />
+          ) : aiOpinionError ? (
+            <Text style={[styles.aiOpinionLoadingText, { color: theme.textSecondary, padding: Spacing.lg }]}>
+              {aiOpinionError}
+            </Text>
+          ) : aiOpinionData ? (
+            // ⚠️ 2026-07-03 사장님 SSOT = 상세페이지형 리포트(카드 나열 아님). 이모지 금지. 버튼/링크 추가 금지(하단탭 5개로 충분).
+            //   전문가 유도 = 클릭 버튼 아닌 마지막 문단의 자연스러운 한 문장("현지 전문가에게 다시 물어보세요" 톤). ScrollView flex:1 = 시트 높이에 맞춰 스크롤(§19).
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: Spacing.lg }}>
                     {/* 1. 실현 가능성 */}
                     <View style={styles.aiOpinionSection}>
                       <View style={styles.aiOpinionSectionHeader}>
@@ -2714,15 +2705,12 @@ export default function TripPlannerScreen() {
                       </Text>
                     </View>
                     {/* 🧠 2026-07-04 사장님 SSOT = 크레딧(5) 차감 = 로딩 중엔 감춤, 결과 하단에만 조용히(textTertiary). */}
-                    <Text style={[styles.aiOpinionEstimateNote, { color: theme.textTertiary, marginTop: Spacing.lg }]}>
-                      {t("aiOpinion.creditNote", { count: AI_OPINION_CREDIT_COST })}
-                    </Text>
-                  </ScrollView>
-                ) : null}
-              </View>
-            </View>
-          </Modal>
-        )}
+              <Text style={[styles.aiOpinionEstimateNote, { color: theme.textTertiary, marginTop: Spacing.lg }]}>
+                {t("aiOpinion.creditNote", { count: AI_OPINION_CREDIT_COST })}
+              </Text>
+            </ScrollView>
+          ) : null}
+        </SnapSheet>
       </View>
     );
   };
@@ -2732,6 +2720,27 @@ export default function TripPlannerScreen() {
       {screen === "Input" && renderInput()}
       {screen === "Loading" && renderLoading()}
       {screen === "Result" && renderResult()}
+
+      {/* ⚠️ 사장님 SSOT 2026-07-14 = "전문가" 오버레이 = 배경 여정 보이는 드래그 스냅 시트(SnapSheet). 최상위 렌더(어느 화면이든) = 전문가는 여정 없어도 답변함.
+          아래로 드래그→peek(뒤 여정 상세히 봄), 위로 드래그/헤더탭→full(작성), X/맨아래스와이프→닫힘. 시트 본문 = ExpertSheet(자체 상태머신). §16·§19. */}
+      <SnapSheet visible={expertVisible} onClose={() => setExpertVisible(false)} title={t("expert.title")}>
+        <ExpertSheet
+          onClose={() => setExpertVisible(false)}
+          onOpenItinerary={(itineraryId) => {
+            // [여정 전체 보기] = 시트 닫고 그 여정 원본으로 복원(배경 전환).
+            setExpertVisible(false);
+            restoreItineraryById(itineraryId);
+          }}
+          onRestoreBackground={(itineraryId) => {
+            // 답변대기 문의 누름 = 그 여정을 배경에 복원(시트 열린 채) = 실제 여정 보며 답변(restore-by-id).
+            restoreItineraryById(itineraryId);
+          }}
+          onRequestLogin={() => {
+            setExpertVisible(false);
+            navigation.navigate("Login");
+          }}
+        />
+      </SnapSheet>
     </View>
   );
 }
@@ -3038,7 +3047,8 @@ const styles = StyleSheet.create({
   // 📜 스크롤 영역
   resultScrollView: { flex: 1 },
   // 2026-07-13 = 결과화면 하단 현지전문가/AI 바로가기 (Brand.primary·Lucide·글라스미니멀)
-  expertFooter: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg, paddingBottom: Spacing.md, gap: Spacing.sm },
+  // paddingBottom = 탭바(약 55px) 확보 = 하단 버튼이 고정 탭바에 가리지 않게(운영 실증 2026-07-14 발견 수정).
+  expertFooter: { paddingHorizontal: Spacing.lg, paddingTop: Spacing.lg, paddingBottom: Spacing.md + 56, gap: Spacing.sm },
   expertFooterCta: { fontSize: 13, fontFamily: Fonts.medium, textAlign: "center" },
   expertFooterRow: { flexDirection: "row", gap: Spacing.sm },
   expertFooterBtn: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: Spacing.xs, height: Spacing.buttonHeight, borderRadius: BorderRadius.md, borderWidth: 1, borderColor: "transparent" },

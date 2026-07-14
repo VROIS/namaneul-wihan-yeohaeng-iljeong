@@ -8,6 +8,22 @@
 
 ---
 
+## 🔴 2026-07-14 (2) = 전문가·AI의견 오버레이 동일화(SnapSheet) + 비로그인 배지가드 + GitHub WF 복구 + dead삭제·정리
+
+**배경**: 사장님 지적 = ①오버레이가 배경 여정을 가림(전문가·AI의견 둘 다) ②AI의견은 스크롤만·전문가는 드래그만 = 불일치 ③커밋 전 GitHub WF 오류 ④사용자로 접속 불가(전부 admin 인식).
+
+- **① 배경 보이는 스냅 시트(SnapSheet 신설)**: `client/components/SnapSheet.tsx` = reanimated4+gesture-handler 직접 구현(@gorhom 금지=reanimated4 충돌, [[reference_snap_sheet_reanimated4_not_gorhom]]). top기반 시트(스냅마다 높이 달라짐=본문 ScrollView가 그 높이에 맞춰 스크롤). 스냅 4지점: full/half/peek/닫힘. 첫 노출=half(지도 하단). dim은 full일때만·half이하=배경터치통과.
+- **② AI의견·전문가 완전 동일화**: 둘 다 같은 SnapSheet 사용. AI의견 고정Modal→SnapSheet 교체(TripPlannerScreen). 첫노출 중간(half)+드래그+스크롤 = 둘 다 동일. Playwright 실증(half 오픈·본문 스크롤·배경 지도 유지).
+- **③ 비로그인 배지 API 가드**(사장님 승인): `expertApi.ts tabBadgeCount` 맨앞에 실토큰 없으면 return 0 → 비로그인 시 auth/me·verification/requests 호출 자체 안 함(401 스팸 제거). 실증: 비로그인 verification/requests 0회, 로그인 200 OK.
+- **④ GitHub WF 복구**(커밋 2f3f4c3 push): 원인=`package-lock.json:17707` web-push resolved URL이 Replit 내부주소(`package-firewall.replit.local`)로 오염(7/13 Replit web-push 설치 부작용) → GitHub Actions(Azure) npm ci 접근불가(EAI_AGAIN) → exit1 = EAS·APK 전부 실패(8bb59c8부터). 수정=공식 `registry.npmjs.org`로 교체(integrity 해시=공식값 일치 검증). push 후 EAS Update 통과(added 1207 packages)=복구 입증.
+- **⑤ dead code 삭제(§19)**: 오버레이 재설계로 죽은 `ExpertScreen.tsx`+`ExpertInboxView.tsx` 완전삭제(워크플로 Trace→Verify 적대검증=CONFIRMED-DEAD). ⚠️`ExpertInquiryDetailScreen`은 RootStack에 살아있어 유지(삭제=앱붕괴, 워크플로가 잡음). 잔존 심볼명 주석 5곳 정리. PNG 검증스샷 52개=.gitignore(/*.png)+삭제.
+- **⑥ 사용자 접속 문제 해결**: 사장님 계정 dbstour1@gmail.com=DB role='admin' 고정이라 항상 관리자. → role='user' 테스트계정 `user-test@gmail.com`(id d5ab9191, 크레딧140) 생성. email로그인 실증(user↔admin 구분 확인). 구글400=콘솔설정=사장님만. [[feedback_dev_stage_open_access_not_bug]]
+- **검증 5단계**: ①tsc 이번세션 신규0 ②서버빌드 exit0 ③웹빌드 exit0 ④시뮬(로컬서버+Playwright=전문가 오버레이 파리여정 위 half 정상, 콘솔에러0) ⑤어드버서리 코드리뷰 워크플로(14요원). 코드리뷰 지적(게스트가 admin여정 노출·게스트 프로필UI)=**사장님 방침 "개발단계=전부 보게/지금상태유지"=수정안함**([[feedback_dev_stage_open_access_not_bug]]).
+- **APK 재설치 정책**(사장님 SSOT 2026-07-14): 이번세션=네이티브 파일 변경0 → APK 재설치 불필요, EAS Update만(앱 껐다켜기로 반영). APK 자동빌드는 그냥 둠(최종 빌드 1번이 그때까지 전부 반영=중간 빌드 안 깔아도 무손해). AI가 "네이티브 뼈대 변경=APK 재설치 필수" 순간만 콕 알려줌.
+- **남은것(다음)**: 크레딧 실차감(로그인 정식화 후), 웹푸시 VAPID 배선, iOS 실기기 최종확인(사장님), MEMORY.md 슬림화(146개 인덱스 비대).
+
+---
+
 ## 🔴 2026-07-14 = 전문가 기능 5대 결함/보강 = 관리자 프리패스·여정하단 링크·크레딧안내·로그인이동·전문가 프로필편집
 
 **배경**: 배포본 실사용서 사장님 지적 5건. 크롬 직접확인 시도했으나 chrome-devtools MCP 브라우저 실행 30분 멈춤 ×2(로컬 Chrome 프로필 충돌 추정 = 이 환경 실행불가) → 코드(파일:라인)로 원인 전수 확정. 배포 후 크롬 실화면 입증은 재배포(Publish) 후.
@@ -18,8 +34,8 @@
 - **④ 로그인 이동**: 문의 login_required Alert에 [로그인하기]→navigate("Login")(확인만 뜨고 안 넘어가던 결함 수정).
 - **⑤ 전문가 본인 프로필 편집**: `users.expert_profile jsonb` 신설(라이브 ALTER 적용). 서버 GET(공개 소개카드)·GET /me(본인 프리필)·PATCH(본인 저장) 3라우트. 신규 `ExpertProfileEditScreen`(닉네임/경력/자기소개/캐릭터). ExpertScreen 소개카드 동적표시(없으면 i18n 폴백). 답변함 헤더 편집진입. RootStack 등록. i18n 7언어(goLogin/creditNote/footer*/editProfile/pf*).
 - **검증 5단계**: ①tsc 새에러0(기존 transit·provider 2개만) ②서버빌드 exit0 ③웹빌드 exit0(Expo export) ④DB시뮬(컬럼·role·라우트쿼리·jsonb) ⑤어드버서리 코드리뷰 워크플로우(14요원·4각도→반증검증, 후보10→확정6).
-- **리뷰 반영(4건 수정)**: 아이콘 chevron-left→arrow-left(Icon맵 미등록=안보임), 프로필 프리필을 본인값으로(GET /me 신설 = 전문가 다수 시 남의 정체성 덮어씀 방지), 관리자로그인 500을 "비번틀림" 오표시 분리, 로그인 스피너. 보안1건(nubi2026 노출+무제한)=사장님 B안(출시전 시크릿 전환).
-- **남은것(다음)**: 출시전 ADMIN_PASSWORD 시크릿 전환, 크레딧 실차감(로그인 정식화 후), 배포 후 크롬 실화면 입증(5화면), AI의견↔전문가탭 추가연동.
+- **리뷰 반영(4건 수정)**: 아이콘 chevron-left→arrow-left(Icon맵 미등록=안보임), 프로필 프리필을 본인값으로(GET /me 신설 = 전문가 다수 시 남의 정체성 덮어씀 방지), 관리자로그인 500을 "비번틀림" 오표시 분리, 로그인 스피너. 보안1건(nubi2026 노출)=**사장님 확정 2026-07-14 = dev 단계 과한 걱정 = 시크릿 강제 안 함**(관리자 대시보드=비번 + 구글인증=관리자 = 다른 배포앱 동일 표준). server/auth.ts 주석 = 경고 아닌 사실 메모로 완화.
+- **남은것(다음)**: 크레딧 실차감(로그인 정식화 후), 배포 후 크롬 실화면 입증(5화면), AI의견↔전문가탭 추가연동.
 
 ---
 

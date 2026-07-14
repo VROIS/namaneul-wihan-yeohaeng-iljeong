@@ -33,6 +33,8 @@ export default function ExpertInquiryDetailScreen({ route, navigation }: any) {
   const [isExpert, setIsExpert] = useState(false);
   const [reply, setReply] = useState("");
   const [sending, setSending] = useState(false);
+  // ⚠️ 사장님 SSOT 2026-07-14 = 답변완료 문의는 입력창 대신 "답변완료" 표시. [답변 수정]을 눌러야 입력창 열림(옛: 답변완료여도 입력창 항상 표시 = "또 답변함" 혼란 폐기 §19).
+  const [editing, setEditing] = useState(false);
   // 마운트 가드(리뷰 2026-07-13) = onReply 후 reload 가 언마운트 후 setState 하는 것 방지.
   const mounted = useRef(true);
   useEffect(() => () => { mounted.current = false; }, []);
@@ -52,8 +54,15 @@ export default function ExpertInquiryDetailScreen({ route, navigation }: any) {
     try {
       const r = await replyInquiry(id, reply.trim(), status);
       if (r.ok) {
-        Alert.alert(t("expert.replySentTitle"), t("expert.replySentMsg"));
-        load(); // 갱신(mounted 가드 내장)
+        // ⚠️ 사장님 SSOT 2026-07-14 = 답변완료/거절 = 즉시 답변함 목록으로 자동 복귀(goBack). 옛(그 자리 멈춤·리턴 없음) 폐기 §19.
+        //   ⚠️ 웹(WebView)에서는 버튼 있는 Alert.alert 이 안 뜸(RN-web 한계) = 복귀를 Alert 콜백에 걸면 안 됨 → goBack 직접 호출.
+        //   목록(답변함)은 useFocusEffect 로 자동 재조회 = 방금 답변건이 '답변완료'로 갱신·배지 반영. 검토중만 = 계속 작업하니 화면 유지.
+        if (status === "in_review") {
+          load();
+          Alert.alert(t("expert.replySentTitle"), t("expert.replySentMsg"));
+        } else {
+          navigation.goBack();
+        }
       } else {
         Alert.alert(t("common.error"), t("expert.sendError"));
       }
@@ -86,12 +95,27 @@ export default function ExpertInquiryDetailScreen({ route, navigation }: any) {
           contentContainerStyle={{ padding: Spacing.lg, paddingBottom: insets.bottom + Spacing.xl }}
           showsVerticalScrollIndicator={false}
         >
-          {/* 첨부 여정 요약 */}
-          {inq.itineraryData ? (
+          {/* ⚠️ 사장님 SSOT(2026-07-14) = 전문가·사용자 둘 다 첨부 여정을 "여정 ID로 DB에서 원본(지도+상세카드+메타+AI의견)" 다시 열람 = 프로필 카드와 동일 restore-by-id.
+              사용자는 문의 화면을 정확히 기억 못 하니 답변 보며 여정 재열람 필수. 스냅샷/축약 폐기 §19. */}
+          {inq.itineraryId ? (
+            <Pressable
+              style={[styles.attachFull, { backgroundColor: theme.backgroundDefault, borderColor: theme.border }]}
+              onPress={() => (navigation as any).navigate("Main", { screen: "Home", params: { itineraryId: inq.itineraryId } })}
+            >
+              <View style={styles.flex1}>
+                <Text style={[styles.attachHead, { color: theme.text }]}>{t("expert.attachItinerary")}</Text>
+                <Text style={[styles.attachMeta, { color: theme.textTertiary }]}>
+                  {inq.itineraryData?.destination || "-"} · {inq.itineraryData?.dayCount || 0}{t("expert.daysPlaces", { places: inq.itineraryData?.totalPlaces || 0 })}
+                </Text>
+                <Text style={[styles.attachOpen, { color: Brand.primary }]}>{t("expert.viewFullItinerary")}</Text>
+              </View>
+              <Icon name="chevron-right" size={20} color={theme.textTertiary} />
+            </Pressable>
+          ) : inq.itineraryData ? (
             <View style={[styles.attach, { backgroundColor: theme.backgroundDefault }]}>
               <Icon name="map-pin" size={14} color={theme.textTertiary} />
               <Text style={[styles.attachText, { color: theme.textSecondary }]} numberOfLines={1}>
-                {t("expert.attachSummary", { dest: inq.itineraryData.destination || "-", days: inq.itineraryData.days || 0, places: inq.itineraryData.totalPlaces || 0 })}
+                {t("expert.attachSummary", { dest: inq.itineraryData.destination || "-", days: inq.itineraryData.dayCount || inq.itineraryData.days || 0, places: inq.itineraryData.totalPlaces || 0 })}
               </Text>
             </View>
           ) : null}
@@ -117,8 +141,19 @@ export default function ExpertInquiryDetailScreen({ route, navigation }: any) {
             </View>
           ) : null}
 
-          {/* 전문가/관리자 = 답변 입력 + 상태 버튼(시안 C 상세) */}
-          {isExpert ? (
+          {/* ⚠️ 사장님 SSOT 2026-07-14 = 답변완료(status==='answered')면 = 입력창 대신 "답변완료" + [답변 수정] 버튼. 수정 눌러야 입력창(아래). 미답변이면 바로 입력창. */}
+          {isExpert && inq.status === "answered" && !editing ? (
+            <View style={[styles.replyBox, { borderTopColor: theme.border }]}>
+              <View style={[styles.doneRow, { backgroundColor: `${theme.success}12` }]}>
+                <Icon name="check-circle" size={18} color={theme.success} />
+                <Text style={[styles.doneText, { color: theme.success }]}>{t("expert.alreadyAnswered")}</Text>
+              </View>
+              <Pressable style={[styles.editBtn, { borderColor: theme.border }]} onPress={() => setEditing(true)}>
+                <Icon name="edit-3" size={16} color={theme.text} />
+                <Text style={[styles.editText, { color: theme.text }]}>{t("expert.editReply")}</Text>
+              </Pressable>
+            </View>
+          ) : isExpert ? (
             <View style={[styles.replyBox, { borderTopColor: theme.border }]}>
               <Text style={[styles.replyLabel, { color: theme.text }]}>{t("expert.writeReply")}</Text>
               <TextInput
@@ -151,6 +186,7 @@ export default function ExpertInquiryDetailScreen({ route, navigation }: any) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  flex1: { flex: 1 },
   header: { flexDirection: "row", alignItems: "center", gap: Spacing.sm, paddingHorizontal: Spacing.md, paddingBottom: Spacing.md, borderBottomWidth: StyleSheet.hairlineWidth },
   backBtn: { width: 32, height: 32, justifyContent: "center", alignItems: "center" },
   headerTitle: { flex: 1, fontSize: 18, fontFamily: Fonts.bold },
@@ -161,6 +197,11 @@ const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
   attach: { flexDirection: "row", alignItems: "center", gap: Spacing.xs, padding: Spacing.sm, borderRadius: BorderRadius.sm, marginBottom: Spacing.lg },
   attachText: { flex: 1, fontSize: 12, fontFamily: Fonts.medium },
+  // 시안 C = 전문가 첨부 여정 = 누르면 결과화면 원본(지도+상세카드) 이동(2026-07-14)
+  attachFull: { flexDirection: "row", alignItems: "center", padding: Spacing.md, borderRadius: BorderRadius.md, borderWidth: StyleSheet.hairlineWidth, marginBottom: Spacing.lg },
+  attachHead: { fontSize: 14, fontFamily: Fonts.bold },
+  attachMeta: { fontSize: 12, fontFamily: Fonts.medium, marginTop: 2 },
+  attachOpen: { fontSize: 12, fontFamily: Fonts.semiBold, marginTop: Spacing.sm },
   from: { fontSize: 11, fontFamily: Fonts.medium, marginBottom: 4 },
   bubble: { maxWidth: "88%", padding: Spacing.md, borderRadius: BorderRadius.md, marginBottom: Spacing.lg },
   bubbleMe: { alignSelf: "flex-end", borderBottomRightRadius: 4 },
@@ -171,6 +212,11 @@ const styles = StyleSheet.create({
   waitingText: { fontSize: 13, fontFamily: Fonts.semiBold },
   replyBox: { borderTopWidth: StyleSheet.hairlineWidth, paddingTop: Spacing.lg, marginTop: Spacing.sm },
   replyLabel: { fontSize: 14, fontFamily: Fonts.bold, marginBottom: Spacing.sm },
+  // 답변완료 상태 표시 + 수정 버튼(2026-07-14)
+  doneRow: { flexDirection: "row", alignItems: "center", gap: Spacing.sm, padding: Spacing.md, borderRadius: BorderRadius.md, marginBottom: Spacing.md },
+  doneText: { fontSize: 14, fontFamily: Fonts.bold },
+  editBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, height: Spacing.buttonHeight, borderRadius: BorderRadius.md, borderWidth: StyleSheet.hairlineWidth },
+  editText: { fontSize: 14, fontFamily: Fonts.semiBold },
   replyInput: { padding: Spacing.md, borderRadius: BorderRadius.md, fontSize: 15, fontFamily: Fonts.medium, minHeight: 90, textAlignVertical: "top", marginBottom: Spacing.md },
   replyActions: { flexDirection: "row", gap: Spacing.sm },
   actBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 4, height: Spacing.buttonHeight, borderRadius: BorderRadius.md, paddingHorizontal: Spacing.md },

@@ -179,3 +179,6 @@ _seed_raw/**/*.pdf
 .tmp.driveupload/
 
 attached_assets/
+
+# 2026-07-14 = 루트 최상위 검증용 스크린샷 PNG (= Playwright/DevTools 실증 캡처 = 로컬 전용, 레포 오염 방지). 앱 에셋은 assets/ 안에 있어 무관.
+/*.png

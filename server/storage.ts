@@ -11,7 +11,7 @@ import {
   guidePrices,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, sql, ne } from "drizzle-orm";
 
 // 참고: sql import는 필요 시 추가
 // requireDb() 함수 - 향후 DB 연결 검증 필요 시 사용
@@ -20,6 +20,7 @@ export interface IStorage {
   // Users
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
   getUserByProvider(provider: string, providerId: string): Promise<User | undefined>;
   getUserByBirthDate(birthDate: string): Promise<User | undefined>;
   linkProvider(userId: string, provider: string, providerId: string): Promise<void>;
@@ -56,6 +57,12 @@ export class DatabaseStorage implements IStorage {
 
   async getUserByUsername(username: string): Promise<User | undefined> {
     const [user] = await db.select().from(users).where(eq(users.username, username));
+    return user || undefined;
+  }
+
+  // ⚠️ 사장님 SSOT 2026-07-14 = 이메일로 사용자 조회(개발단계 메일 로그인용). DB 단 대소문자 무시(lower 비교).
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(sql`lower(${users.email}) = ${email.trim().toLowerCase()}`);
     return user || undefined;
   }
 
@@ -163,8 +170,9 @@ export class DatabaseStorage implements IStorage {
   // Itineraries (= itineraries.rawData JSON 사용 = 외래키 없음)
   // ========================================
   async getUserItineraries(userId: string): Promise<Itinerary[]> {
+    // ⚠️ 사장님 SSOT 2026-07-14 = 프로필 '나의 여정'은 사용자가 실제 저장(💾)한 것만 = status='inquiry'(전문가 문의용 자동저장)는 제외(사용자가 저장 안 했으니 프로필 카드에 안 뜸). 전문가는 여정 id로 restore-by-id 로 봄.
     return db.select().from(itineraries)
-      .where(eq(itineraries.userId, userId))
+      .where(and(eq(itineraries.userId, userId), ne(itineraries.status, "inquiry")))
       .orderBy(desc(itineraries.createdAt));
   }
 

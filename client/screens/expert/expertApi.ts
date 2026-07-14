@@ -37,6 +37,35 @@ async function req(method: string, path: string, body?: unknown): Promise<Respon
   });
 }
 
+// ⚠️ 사장님 SSOT 2026-07-14 = 문의 시 여정이 아직 저장 안 됐으면(currentItineraryId null) 여기서 BE에 저장(POST /api/itineraries) → id 확보 → 문의가 그 id에 연결(전문가·사용자 restore-by-id 원본 열람). 옛: 저장 안 하면 itineraryId=null → 여정 안 보임(사장님 지적) 폐기 §19.
+//   저장 페이로드 = 화면 여정(currentItinerary) 그대로. userId=본인. buildItineraryData(서버)가 나머지 정규화. 실패 시 null 반환(문의는 itineraryData 요약으로라도 진행).
+export async function saveItineraryForInquiry(itin: any): Promise<number | null> {
+  if (!itin) return null;
+  const user = await getUserData();
+  if (!user?.id) return null;
+  try {
+    const saveData = {
+      userId: user.id,
+      cityId: 1,
+      title: `${itin.destination || "여정"} 문의`,
+      startDate: itin.startDate,
+      endDate: itin.endDate,
+      travelStyle: (itin.travelStyle || "comfort").toLowerCase(),
+      companionType: itin.companionType,
+      companionCount: itin.companionCount,
+      // ⚠️ 사장님 SSOT 2026-07-14 = status='inquiry' = 전문가 체크용 저장(전문가가 추후 이 여정 봄)이지만 사용자가 저장한 게 아니므로 프로필 '나의 여정' 카드엔 안 뜸(프로필 조회는 status='saved'만). 사용자 저장(💾)은 별개.
+      status: "inquiry",
+      rawData: itin, // 여정 본문 통째로(days·좌표·AI의견 등) = restore-by-id 원본
+    };
+    const res = await req("POST", "/api/itineraries", saveData);
+    if (!res.ok) return null;
+    const j = await res.json();
+    return typeof j.id === "number" ? j.id : null;
+  } catch {
+    return null;
+  }
+}
+
 // ── 사용자: 문의 접수(여정+AI의견 스냅샷 첨부) ──
 export async function submitInquiry(input: {
   userMessage: string;
@@ -110,14 +139,22 @@ export async function getMyRole(): Promise<"user" | "expert" | "admin"> {
   return (u?.role === "expert" || u?.role === "admin") ? u.role : "user";
 }
 
-// ── 탭 배지 수 = 역할별(리뷰 2026-07-13). 사용자 = 안 읽은 답변 수 / 전문가·관리자 = 대기+검토중 받은 문의 수(응답 대기 신호). ──
+// ── 탭 배지 수 = 역할별. ⚠️ 사장님 SSOT 2026-07-14 = 실시간 접수/답변 신호.
+//   전문가·관리자 = 대기+검토중 받은 문의 수(응답 대기 신호).
+//   사용자 = 진행중 문의(접수됨=pending·검토중=in_review) + 안 읽은 답변(answered 미열람). = 문의 즉시 배지로 "접수됨"을 인식(옛: 안읽은답변만 = 문의 직후 배지0 = 접수 인식불가 폐기 §19).
 export async function tabBadgeCount(): Promise<number> {
+  // ⚠️ 사장님 승인 2026-07-14 = 비로그인(실형식 토큰 없음)이면 배지 API(auth/me·verification/requests) 자체를 안 부름 → 401 로그·불필요 서버호출 제거. 배지는 로그인해야 의미. 옛: 무조건 호출 → 비로그인 401 스팸 폐기 §19.
+  const user = await getUserData();
+  if (!user?.token || !user.token.startsWith("simple_auth_token_v1_")) return 0;
   const role = await getMyRole();
+  const list = await listInquiries();
   if (role === "expert" || role === "admin") {
-    const list = await listInquiries();
     return list.filter((q) => q.status === "pending" || q.status === "in_review").length;
   }
-  return unreadCount();
+  // 사용자 = 본인 문의만 조회됨(백엔드가 신원으로 강제). 진행중 + 안읽은답변.
+  return list.filter((q) =>
+    q.status === "pending" || q.status === "in_review" || (q.status === "answered" && !q.isReadByUser)
+  ).length;
 }
 
 // ── 현지 전문가 프로필(닉네임/경력/자기소개/캐릭터) = 소개카드 표시·편집(2026-07-13). ──

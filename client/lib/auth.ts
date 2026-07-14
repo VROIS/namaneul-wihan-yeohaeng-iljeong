@@ -36,6 +36,18 @@ export async function isAuthenticated(): Promise<boolean> {
 }
 
 export async function getUserData(): Promise<UserData | null> {
+  // ⚠️ 사장님 SSOT 2026-07-14 = 실제 로그인(저장된 @vibetrip_user)이 있으면 항상 그것을 우선 반환 = 메일/구글 로그인이 DEV 에서도 실제로 반영됨(옛: DEV 목업이 실 로그인을 덮어 admin 이 무시되던 버그 폐기 §19).
+  //   저장된 사용자가 없을 때만(비로그인) DEV 편의 목업 폴백.
+  try {
+    const data = await AsyncStorage.getItem(USER_KEY);
+    if (data) {
+      const parsed = JSON.parse(data);
+      // 게스트(둘러보기)는 실 계정 아님 = DEV 목업 폴백 대상으로 취급(아래).
+      if (parsed && parsed.id && parsed.id !== "guest_browse") return parsed;
+    }
+  } catch {
+    // 저장 조회 실패 = 아래 폴백
+  }
   if (__DEV__ && BYPASS_AUTH_IN_DEV) {
     return {
       id: "local_dev_user",
@@ -51,12 +63,7 @@ export async function getUserData(): Promise<UserData | null> {
       token: "simple_auth_token_v1_local_dev_user",
     };
   }
-  try {
-    const data = await AsyncStorage.getItem(USER_KEY);
-    return data ? JSON.parse(data) : null;
-  } catch {
-    return null;
-  }
+  return null;
 }
 
 export async function saveAuth(userData: UserData): Promise<void> {
@@ -73,6 +80,29 @@ export async function clearAuth(): Promise<void> {
     await AsyncStorage.multiRemove([AUTH_KEY, USER_KEY]);
   } catch (error) {
     console.error("Failed to clear auth:", error);
+  }
+}
+
+// ⚠️ 사장님 SSOT 2026-07-14 = 개발단계 이메일 로그인 = 구글 OAuth(웹 400) 우회. 메일만 넣으면 그 계정으로 로그인(사장님 메일=admin).
+//   ⚠️ 임시(개발용) = 로그인 정식화 때 폐기 §19. 기존 saveAuth·UserData 재사용(§16).
+export async function emailLogin(email: string): Promise<{ success: boolean; user?: UserData; error?: string }> {
+  try {
+    const response = await fetch(`${getApiUrl()}/api/auth/email-login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    const result = await response.json();
+    if (response.ok && result.success) {
+      const userData: UserData = { ...result.user, token: result.token };
+      await saveAuth(userData);
+      return { success: true, user: userData };
+    }
+    if (response.status === 404) return { success: false, error: "email_not_found" };
+    return { success: false, error: result.error || "로그인 실패" };
+  } catch (error) {
+    console.error("Email login error:", error);
+    return { success: false, error: "서버 연결 실패" };
   }
 }
 
