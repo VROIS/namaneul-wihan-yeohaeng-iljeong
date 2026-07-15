@@ -4,8 +4,7 @@ import { getApiUrl } from "./query-client";
 const AUTH_KEY = "@vibetrip_auth";
 const USER_KEY = "@vibetrip_user";
 
-// 로컬 개발 환경에서 빠른 테스트를 위해 인증 우회를 활성화합니다.
-const BYPASS_AUTH_IN_DEV = true;
+// ⚠️ 사장님 SSOT 2026-07-15 = 실제 로그인만 = 저장 토큰 유무로만 판정. DEV 자동로그인 목업 완전삭제 §19(로그아웃 무효·로그인실패 은폐 근본원인).
 
 export interface UserData {
   id: string;
@@ -18,15 +17,14 @@ export interface UserData {
   ageGroup?: string;
   isPaid?: boolean;
   planType?: string;
+  role?: string; // user | expert | admin = 전문가/관리자 화면 분기(서버 toClientUser 가 실어줌)
   token?: string;
   createdAt?: string;
 }
 
 
 export async function isAuthenticated(): Promise<boolean> {
-  if (__DEV__ && BYPASS_AUTH_IN_DEV) {
-    return true;
-  }
+  // 저장 토큰(@vibetrip_auth) 존재로만 판정 = 실제 로그인/로그아웃이 정확히 반영.
   try {
     const token = await AsyncStorage.getItem(AUTH_KEY);
     return token !== null;
@@ -36,32 +34,15 @@ export async function isAuthenticated(): Promise<boolean> {
 }
 
 export async function getUserData(): Promise<UserData | null> {
-  // ⚠️ 사장님 SSOT 2026-07-14 = 실제 로그인(저장된 @vibetrip_user)이 있으면 항상 그것을 우선 반환 = 메일/구글 로그인이 DEV 에서도 실제로 반영됨(옛: DEV 목업이 실 로그인을 덮어 admin 이 무시되던 버그 폐기 §19).
-  //   저장된 사용자가 없을 때만(비로그인) DEV 편의 목업 폴백.
+  // ⚠️ 사장님 SSOT 2026-07-15 = 저장된 실계정(@vibetrip_user)만 반환. 게스트(둘러보기)·비로그인 = null. DEV 목업 폴백 완전삭제 §19.
   try {
     const data = await AsyncStorage.getItem(USER_KEY);
     if (data) {
       const parsed = JSON.parse(data);
-      // 게스트(둘러보기)는 실 계정 아님 = DEV 목업 폴백 대상으로 취급(아래).
       if (parsed && parsed.id && parsed.id !== "guest_browse") return parsed;
     }
   } catch {
-    // 저장 조회 실패 = 아래 폴백
-  }
-  if (__DEV__ && BYPASS_AUTH_IN_DEV) {
-    return {
-      id: "local_dev_user",
-      email: "local@example.com",
-      name: "로컬 개발자",
-      displayName: "로컬 개발자",
-      provider: "kakao",
-      language: "ko",
-      birthDate: "1990-01-01",
-      ageGroup: "30대",
-      isPaid: true,
-      // 2026-07-13 = DEV 목업 토큰도 실제 형식(simple_auth_token_v1_+id) = DEV에서 /api/auth/me·role 조회 등 실제 인증경로 작동(옛 'mock_token_for_dev'=인증불가 폐기 §19).
-      token: "simple_auth_token_v1_local_dev_user",
-    };
+    // 저장 조회 실패 = 비로그인 취급
   }
   return null;
 }

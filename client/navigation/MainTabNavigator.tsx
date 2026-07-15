@@ -84,10 +84,10 @@ export default function MainTabNavigator() {
         iconName = "edit-3";
         break;
       case "Map":
-        iconName = "brain"; // ⚠️ 2026-07-03 = "AI 의견" 아이콘(Lucide, 이모지 금지). Icon.tsx 기존 매핑 재사용.
+        iconName = "bot"; // ⚠️ 사장님 SSOT 2026-07-15 = "AI 의견" = bot(로봇) = AI. 옛 brain 은 전문가 검증으로 이관 §19.
         break;
       case "Verify":
-        iconName = "check-circle"; // ✅ 전문가 검증
+        iconName = "brain"; // ⚠️ 사장님 SSOT 2026-07-15 = "전문가 검증" = brain(사람 전문가의 판단). 옛 check-circle 폐기 §19.
         break;
       case "Profile":
         iconName = "user";
@@ -164,7 +164,7 @@ export default function MainTabNavigator() {
             // 여정 없으면 비활성(회색), 있으면 활성(브랜드색)
             tabBarIcon: () => (
               <Icon
-                name="brain"
+                name="bot"
                 size={24}
                 color={currentItinerary ? Brand.primary : theme.textTertiary}
               />
@@ -188,7 +188,7 @@ export default function MainTabNavigator() {
             // ⚠️ 사장님 SSOT 2026-07-14 = 전문가/관리자면 항상 활성(여정 없어도 답변함). 사용자는 여정 있을 때만(문의는 여정 필요).
             tabBarIcon: () => (
               <Icon
-                name="check-circle"
+                name="brain"
                 size={24}
                 color={(currentItinerary || isExpertRole) ? Brand.primary : theme.textTertiary}
               />

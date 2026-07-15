@@ -60,6 +60,24 @@ async function findOrCreateUser(params: {
   });
 }
 
+// ⚠️ 사장님 SSOT 2026-07-15 = 모든 로그인 응답의 user 객체 = 이 함수 1벌만(§0.3·§16). 옛 5곳 제각각(name·email 누락 → 프로필 빈칸 / google·kakao 는 role 까지 누락) 폐기 §19.
+//   클라 UserData(client/lib/auth.ts) 와 필드 일치 = 프로필 이름·이메일 표시 + role 로 전문가/관리자 분기.
+function toClientUser(user: User) {
+    return {
+        id: user.id,
+        name: user.displayName,       // 프로필 표시명(ProfileScreen 이 읽는 필드)
+        email: user.email,            // 프로필 이메일
+        username: user.username,
+        displayName: user.displayName,
+        provider: user.provider,
+        birthDate: user.birthDate,
+        language: user.preferredLanguage,
+        isPaid: user.isPaid,
+        planType: user.planType,
+        role: user.role,              // 사용자/전문가/관리자 분기
+    };
+}
+
 // 카카오: accessToken으로 /v2/user/me 호출 (REST API 키 불필요)
 
 // WhatsApp OTP: 일시정지 시 비활성화 (출시 전 WHATSAPP_OTP_ENABLED=false)
@@ -102,7 +120,7 @@ export function registerAuthRoutes(app: Express) {
             });
             res.json({
                 success: true,
-                user: { id: user.id, username: user.username, displayName: user.displayName, provider: user.provider, birthDate: user.birthDate, language: user.preferredLanguage, isPaid: user.isPaid, planType: user.planType },
+                user: toClientUser(user),
                 token: "simple_auth_token_v1_" + user.id,
             });
         } catch (e: any) {
@@ -143,7 +161,7 @@ export function registerAuthRoutes(app: Express) {
             });
             res.json({
                 success: true,
-                user: { id: user.id, username: user.username, displayName: user.displayName, provider: user.provider, birthDate: user.birthDate, language: user.preferredLanguage, isPaid: user.isPaid, planType: user.planType },
+                user: toClientUser(user),
                 token: "simple_auth_token_v1_" + user.id,
             });
         } catch (e: any) {
@@ -203,7 +221,7 @@ export function registerAuthRoutes(app: Express) {
             });
             res.json({
                 success: true,
-                user: { id: user.id, username: user.username, displayName: user.displayName, provider: user.provider, birthDate: user.birthDate, language: user.preferredLanguage, isPaid: user.isPaid, planType: user.planType },
+                user: toClientUser(user),
                 token: "simple_auth_token_v1_" + user.id,
             });
         } catch (e: any) {
@@ -234,16 +252,7 @@ export function registerAuthRoutes(app: Express) {
             // 4. 응답 (실제 운영 환경에선 JWT 토큰 생성 후 반환)
             res.json({
                 success: true,
-                user: {
-                    id: user.id,
-                    username: user.username,
-                    displayName: user.displayName,
-                    provider: user.provider,
-                    birthDate: user.birthDate,
-                    language: user.preferredLanguage,
-                    isPaid: user.isPaid,
-                    planType: user.planType,
-                },
+                user: toClientUser(user),
                 token: "simple_auth_token_v1_" + user.id, // 임시 토큰
             });
         } catch (error: any) {
@@ -288,7 +297,8 @@ export function registerAuthRoutes(app: Express) {
             if (!admin) {
                 return res.status(500).json({ success: false, error: "admin_account_missing" });
             }
-            res.json({ success: true, user: admin, token: "simple_auth_token_v1_" + admin.id });
+            // ⚠️ 사장님 SSOT 2026-07-15 = 다른 로그인과 동일하게 toClientUser 1벌(§0.3). 옛 `user: admin`(users 행 통째 = password 등 전 컬럼 반환 + role 손매핑 누락) 폐기 §19.
+            res.json({ success: true, user: toClientUser(admin), token: "simple_auth_token_v1_" + admin.id });
         } catch (error) {
             res.status(500).json({ success: false, error: "server_error" });
         }
@@ -309,7 +319,7 @@ export function registerAuthRoutes(app: Express) {
             }
             res.json({
                 success: true,
-                user: { id: user.id, username: user.username, displayName: user.displayName, provider: user.provider, birthDate: user.birthDate, language: user.preferredLanguage, isPaid: user.isPaid, planType: user.planType, role: user.role },
+                user: toClientUser(user),
                 token: "simple_auth_token_v1_" + user.id,
             });
         } catch (error) {

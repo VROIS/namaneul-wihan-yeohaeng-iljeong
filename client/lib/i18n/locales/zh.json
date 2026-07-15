@@ -121,7 +121,7 @@
     "departure": "出发",
     "footerCta": "让本地专家确认此行程，或查看 AI 意见",
     "footerAiOpinion": "AI 意见",
-    "footerExpert": "咨询专家",
+    "footerExpert": "专家验证",
     "departureCityCenter": "{{destination}}市中心",
     "returnToHotel": "返回酒店",
     "dailySummary": "第{{day}}天合计（每人）",
@@ -270,7 +270,7 @@
     "plan": "计划",
     "map": "地图",
     "aiOpinion": "AI意见",
-    "expert": "专家",
+    "expert": "专家验证",
     "profile": "我的",
     "settings": "设置"
   },

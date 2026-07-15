@@ -26,7 +26,7 @@ async function req(method: string, path: string, body?: unknown): Promise<Respon
   const user = await getUserData();
   const headers: Record<string, string> = {};
   if (body) headers["Content-Type"] = "application/json; charset=utf-8";
-  // 실제 형식 토큰(simple_auth_token_v1_+id)일 때만 Bearer 첨부. DEV 목업도 2026-07-13부터 실형식이라 첨부됨(local_dev_user 로 인증).
+  // 실제 형식 토큰(simple_auth_token_v1_+id)일 때만 Bearer 첨부. 비로그인=토큰 없음=미첨부(서버 401).
   if (user?.token && user.token.startsWith("simple_auth_token_v1_")) {
     headers["Authorization"] = `Bearer ${user.token}`;
   }

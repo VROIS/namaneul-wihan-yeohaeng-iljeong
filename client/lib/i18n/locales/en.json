@@ -121,7 +121,7 @@
     "departure": "Departure",
     "footerCta": "Have this itinerary checked by a local expert, or see the AI's opinion",
     "footerAiOpinion": "AI opinion",
-    "footerExpert": "Ask an expert",
+    "footerExpert": "Expert Review",
     "departureCityCenter": "{{destination}} city center",
     "returnToHotel": "Return to hotel",
     "dailySummary": "Day {{day}} Total (per person)",
@@ -270,7 +270,7 @@
     "plan": "Plan",
     "map": "Map",
     "aiOpinion": "AI Opinion",
-    "expert": "Expert",
+    "expert": "Expert Review",
     "profile": "Profile",
     "settings": "Settings"
   },

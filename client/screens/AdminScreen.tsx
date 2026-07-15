@@ -47,17 +47,9 @@ export default function AdminScreen() {
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.success && data.token) {
-        await saveAuth({
-          id: data.user.id,
-          email: data.user.email,
-          displayName: data.user.displayName,
-          name: data.user.displayName,
-          provider: (data.user.provider || "google") as "kakao" | "google" | "whatsapp",
-          language: data.user.preferredLanguage || "ko",
-          birthDate: data.user.birthDate || "1990-01-01",
-          isPaid: data.user.isPaid,
-          token: data.token,
-        });
+        // ⚠️ 사장님 SSOT 2026-07-15 = 서버 toClientUser 응답을 그대로 저장(§0.3 = 손매핑 2벌 폐기 §19).
+        //   옛 손매핑은 role 을 안 넘겨 비번 관리자 세션의 role 이 undefined 였음(= 전문가 답변함 분기 실패 위험).
+        await saveAuth({ ...data.user, token: data.token });
         setIsAuthenticated(true);
         setPassword("");
       } else if (res.status === 401) {

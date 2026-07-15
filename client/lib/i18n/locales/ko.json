@@ -121,7 +121,7 @@
     "departure": "출발",
     "footerCta": "이 여정, 현지 전문가에게 확인받거나 AI 의견을 볼까요?",
     "footerAiOpinion": "AI 의견",
-    "footerExpert": "전문가 문의",
+    "footerExpert": "전문가 검증",
     "departureCityCenter": "{{destination}} 도심 기준",
     "returnToHotel": "숙소 복귀",
     "dailySummary": "{{day}}일차 합계 (1인)",
@@ -330,7 +330,7 @@
     "plan": "일정",
     "map": "지도",
     "aiOpinion": "AI 의견",
-    "expert": "전문가",
+    "expert": "전문가 검증",
     "profile": "프로필",
     "settings": "설정"
   },

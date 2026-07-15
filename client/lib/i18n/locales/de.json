@@ -121,7 +121,7 @@
     "departure": "Abfahrt",
     "footerCta": "Diesen Reiseplan von einem lokalen Experten prüfen lassen oder KI-Meinung ansehen",
     "footerAiOpinion": "KI-Meinung",
-    "footerExpert": "Experten fragen",
+    "footerExpert": "Expertenprüfung",
     "departureCityCenter": "{{destination}} Stadtzentrum",
     "returnToHotel": "Zurück zum Hotel",
     "dailySummary": "Tag {{day}} Gesamt (pro Person)",
@@ -270,7 +270,7 @@
     "plan": "Plan",
     "map": "Karte",
     "aiOpinion": "KI-Meinung",
-    "expert": "Experte",
+    "expert": "Expertenprüfung",
     "profile": "Profil",
     "settings": "Einstellungen"
   },

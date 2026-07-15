@@ -309,6 +309,39 @@ export default function ExpertSheet({ onClose, onOpenItinerary, onRestoreBackgro
           </View>
         </View>
 
+        {/* ⚠️ 사장님 SSOT 2026-07-15 = 사용자도 진입 즉시 '내 문의함(본인 문의 목록)'이 먼저 = 관리자 답변함(목록 먼저)과 동작 통일. 새 문의 작성은 그 아래. BE는 이미 본인 것만 반환(expert-routes 신원필터). */}
+        {/* 내 문의함 = 본인 문의 목록(먼저) */}
+        <Text style={[styles.sectionTitle, { color: theme.text, marginTop: Spacing.md }]}>{t("expert.myInbox")}</Text>
+        {inquiries.length === 0 ? (
+          <Text style={[styles.emptyText, { color: theme.textTertiary }]}>{t("expert.inboxEmpty")}</Text>
+        ) : (
+          inquiries.map((q) => {
+            const st = statusStyle(q.status, theme, t);
+            const dest = q.itineraryData?.destination || t("expert.inquiry");
+            const unread = q.status === "answered" && !q.isReadByUser;
+            return (
+              <Pressable
+                key={q.id}
+                style={[styles.inquiryCard, { backgroundColor: theme.backgroundDefault }]}
+                onPress={() => openInquiry(q)}
+              >
+                {unread ? <View style={styles.unreadDot} /> : null}
+                <View style={styles.flex1}>
+                  <Text style={[styles.inquiryTitle, { color: theme.text }]} numberOfLines={1}>{dest}</Text>
+                  <Text style={[styles.inquiryPreview, { color: theme.textSecondary }]} numberOfLines={1}>{q.userMessage}</Text>
+                </View>
+                <View style={[styles.badge, { backgroundColor: st.bg }]}>
+                  <Text style={[styles.badgeText, { color: st.fg }]}>{st.label}</Text>
+                </View>
+                <Icon name="chevron-right" size={18} color={theme.textTertiary} />
+              </Pressable>
+            );
+          })
+        )}
+
+        {/* 새 문의 작성 = 목록 아래 */}
+        <View style={[styles.divider, { borderTopColor: theme.border }]} />
+
         {/* 여정 첨부 카드 */}
         {itin ? (
           <View style={[styles.attachCard, { backgroundColor: theme.backgroundDefault }]}>
@@ -351,36 +384,6 @@ export default function ExpertSheet({ onClose, onOpenItinerary, onRestoreBackgro
         </Pressable>
         {/* 크레딧 안내 = AI 의견 팝업과 동일 패턴. 실제 차감은 로그인 정식화 후(§9). */}
         <Text style={[styles.creditNote, { color: theme.textTertiary }]}>{t("expert.creditNote", { count: EXPERT_INQUIRY_CREDIT_COST })}</Text>
-
-        {/* 내 문의함 */}
-        <View style={[styles.divider, { borderTopColor: theme.border }]} />
-        <Text style={[styles.sectionTitle, { color: theme.text }]}>{t("expert.myInbox")}</Text>
-        {inquiries.length === 0 ? (
-          <Text style={[styles.emptyText, { color: theme.textTertiary }]}>{t("expert.inboxEmpty")}</Text>
-        ) : (
-          inquiries.map((q) => {
-            const st = statusStyle(q.status, theme, t);
-            const dest = q.itineraryData?.destination || t("expert.inquiry");
-            const unread = q.status === "answered" && !q.isReadByUser;
-            return (
-              <Pressable
-                key={q.id}
-                style={[styles.inquiryCard, { backgroundColor: theme.backgroundDefault }]}
-                onPress={() => openInquiry(q)}
-              >
-                {unread ? <View style={styles.unreadDot} /> : null}
-                <View style={styles.flex1}>
-                  <Text style={[styles.inquiryTitle, { color: theme.text }]} numberOfLines={1}>{dest}</Text>
-                  <Text style={[styles.inquiryPreview, { color: theme.textSecondary }]} numberOfLines={1}>{q.userMessage}</Text>
-                </View>
-                <View style={[styles.badge, { backgroundColor: st.bg }]}>
-                  <Text style={[styles.badgeText, { color: st.fg }]}>{st.label}</Text>
-                </View>
-                <Icon name="chevron-right" size={18} color={theme.textTertiary} />
-              </Pressable>
-            );
-          })
-        )}
       </KeyboardAwareScrollViewCompat>
     </View>
   );

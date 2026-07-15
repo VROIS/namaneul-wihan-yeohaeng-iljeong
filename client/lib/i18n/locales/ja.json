@@ -121,7 +121,7 @@
     "departure": "出発",
     "footerCta": "この旅程を現地の専門家に確認、またはAIの意見を見る",
     "footerAiOpinion": "AIの意見",
-    "footerExpert": "専門家に相談",
+    "footerExpert": "専門家の検証",
     "departureCityCenter": "{{destination}}市内中心",
     "returnToHotel": "ホテルに戻る",
     "dailySummary": "{{day}}日目合計（1人あたり）",
@@ -270,7 +270,7 @@
     "plan": "プラン",
     "map": "地図",
     "aiOpinion": "AI意見",
-    "expert": "専門家",
+    "expert": "専門家検証",
     "profile": "プロフィール",
     "settings": "設定"
   },
