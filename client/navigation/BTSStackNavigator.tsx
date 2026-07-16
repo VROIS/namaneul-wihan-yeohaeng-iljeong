@@ -8,9 +8,9 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 
 import { BTSProvider } from "@/contexts/BTSContext";
 import BTSCharacterSelectScreen from "@/screens/bts/BTSCharacterSelectScreen";
-import BTSPlaceCartScreen from "@/screens/bts/BTSPlaceCartScreen";
+import BTSPlaceCartScreen from "@/screens/bts/place-cart/BTSPlaceCartScreen";
 import BTSLoadingScreen from "@/screens/bts/BTSLoadingScreen";
-import BTSDashboardScreen from "@/screens/bts/BTSDashboardScreen";
+import BTSDashboardScreen from "@/screens/bts/dashboard/BTSDashboardScreen";
 
 export type BTSStackParamList = {
   BTSCharacterSelect: undefined;

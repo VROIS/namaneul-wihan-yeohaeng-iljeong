@@ -1,6 +1,6 @@
 import React from "react";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import TripPlannerScreen from "@/screens/TripPlannerScreen";
+import TripPlannerScreen from "@/screens/trip-planner/TripPlannerScreen";
 import { HeaderTitle } from "@/components/HeaderTitle";
 import { useScreenOptions } from "@/hooks/useScreenOptions";
 

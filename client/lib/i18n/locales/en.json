@@ -203,24 +203,6 @@
     "travelPace": "Pace",
     "vibes": "Vibes"
   },
-  "plan": {
-    "companionTitle": "Who are you traveling with?",
-    "companionHint": "We'll recommend a customized trip based on your companion",
-    "companionAges": "Companion ages (comma-separated)",
-    "companionAgesPlaceholder": "e.g. 10, 13, 55, 59",
-    "focusTitle": "Who is the VIP of this trip?",
-    "focusHint": "The itinerary changes based on who it's for",
-    "destinationTitle": "Where are you going?",
-    "destinationHint": "Enter a city or country",
-    "destinationPlaceholder": "e.g. Paris, France",
-    "datesTitle": "When are you leaving?",
-    "datesHint": "Select start and end times like a car rental",
-    "vibesTitle": "What vibe do you want?",
-    "vibesHint": "You can select multiple",
-    "styleTitle": "Choose your travel style",
-    "styleHint": "Select a style that matches your budget and taste",
-    "createTrip": "Create Itinerary"
-  },
   "destination": {
     "loading": "Loading...",
     "noAddress": "No address info",

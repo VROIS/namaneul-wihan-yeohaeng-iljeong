@@ -1,6 +1,6 @@
 /**
  * ⚠️ 수정금지(승인필요) 2026-05-12 = BTS 1주일 디버깅 SSOT = 공통 helper 추출
- * = 출처: client/screens/bts/BTSPlaceCartScreen.tsx:53-136
+ * = 출처: client/screens/bts/place-cart/utils.ts
  * = 메인앱 + BTS 자식앱 = 동일 helper 사용 = WK URL 로드 보장
  *
  * 5 핵심:

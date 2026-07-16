@@ -203,24 +203,6 @@
     "travelPace": "节奏",
     "vibes": "风格"
   },
-  "plan": {
-    "companionTitle": "和谁一起旅行？",
-    "companionHint": "我们将根据同行人推荐定制行程",
-    "companionAges": "同行人年龄（用逗号分隔）",
-    "companionAgesPlaceholder": "例如：10, 13, 55, 59",
-    "focusTitle": "这次旅行的VIP是谁？",
-    "focusHint": "行程会根据关注对象而变化",
-    "destinationTitle": "去哪里？",
-    "destinationHint": "输入城市或国家",
-    "destinationPlaceholder": "例如：巴黎、法国",
-    "datesTitle": "什么时候出发？",
-    "datesHint": "像租车一样选择出发和结束时间",
-    "vibesTitle": "想要什么样的旅行氛围？",
-    "vibesHint": "可以多选",
-    "styleTitle": "选择旅行风格",
-    "styleHint": "选择符合预算和品味的风格",
-    "createTrip": "创建行程"
-  },
   "destination": {
     "loading": "加载中...",
     "noAddress": "无地址信息",

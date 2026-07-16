@@ -3,27 +3,19 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 //
 // 원본: 내손안에 가이드/server/routes.ts (~95 엔드포인트)
-// 참고 파일:
-//   - server/gemini.ts — Gemini AI (사진→해설)
-//   - server/creditService.ts — 크레딧 로직
-//   - server/profileRoutes.ts — 결제/크레딧 API
-//   - server/stripeClient.ts — Stripe 연동
-//   - server/notificationService.ts — 알림
-//   - server/webhookHandlers.ts — Stripe 웹훅
-//   - server/standard-template.ts — 공유페이지 HTML
-//   - server/googleAuth.ts — Google OAuth
-//   - server/kakaoAuth.ts — Kakao OAuth
-//   - server/appleAuth.ts — Apple OAuth
+// 레거시 참고 파일 = 원본은 레거시 레포(내손안에 가이드)에 보존, 이 레포 사본은 미사용으로 삭제 = 2026-07-15 §19
+// (크레딧 로직 = server/creditService.ts 는 재사용 예정으로 유지)
+//
+// 인증 = 이미 server/auth.ts 1벌로 구현·운영 중(재구현 금지 §16)
 //
 // Phase 4 구현 시 아래 카테고리별로 엔드포인트 추가:
 //   1. 가이드 CRUD (6개)
-//   2. 공유/공유페이지 (9개)
-//   3. 크레딧/결제 (5개)
+//   2. 공유/공유페이지 (9개) (참조 구현 = 레거시 레포에 보존, 이 레포 사본은 삭제됨 §19)
+//   3. 크레딧/결제 (5개) (참조 구현 = 레거시 레포에 보존, 이 레포 사본은 삭제됨 §19)
 //   4. 알림/푸시 (9개)
 //   5. 관리자 (27개)
 //   6. AI/Gemini (1개)
 //   7. 음성/TTS (3개)
-//   8. 인증 (4개)
 
 import type { Express } from "express";
 

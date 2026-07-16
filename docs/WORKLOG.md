@@ -8,6 +8,112 @@
 
 ---
 
+## 🔴🔴 2026-07-16 (2) = 발견 5건 정리 + **2단계(죽은 영상코드 삭제) 완료** (사장님 "계속해" 승인. 미커밋 = 작업트리)
+
+서브에이전트 6요원 위임, 메인 = 검수·오케스트레이션만.
+
+### 삭제(§19 완전삭제, 전부 "호출자 0" 전수 grep + 반박검증 후)
+- **2단계 = Kling/Seedance 영상코드 6파일 1,127줄**: `klingai.ts`(226)·`seedance-video-generator.ts`(430)·`test-video-ui.ts`(151)·`client/components/VideoGenerator.tsx`(240, 고아)+딸린 고아 테스트스크립트 2개(80). `video-routes.ts` 167→78(503 스텁 4개+/test-video 삭제). **보존** = 5단계 Omni Flash 재배선용 폴링 인프라(`itineraries.videoTaskId/videoStatus/videoUrl` 컬럼 + 상태조회 2라우트) — 죽은 외부API 의존만 끊고 DB read-only로 최소 조정(실기동 200 확인).
+- **plan-modal 죽은 화면 9파일 858줄** + 전용 **i18n 죽은키 16개×7언어(112키)**: importer 0·내비 등록 0 = 원본부터 고아. 7언어 JSON 파싱·나머지 15섹션 무손 실측.
+- **죽은 budget 라우트군 671줄**: `/api/budget/preview·calculate·compare` 3개(호출자 0 + **기존부터 500 크래시**) + `budget-calculator.ts`(323) + 고아 `france-transport-service.ts`(257). ※ 앱 여정 가격은 전혀 다른 경로(pipeline-v3-day-builder/ag4 → transport-pricing-service 직접) = 무영향 실측.
+- **호출자 0 admin 라우트**: exchange-rates·transport-france 파일째(9종)·guide-prices test/calculate·trip-alerts/check. (`GET /api/trip-alerts` = 여정생성 실사용 = 무손 보존)
+- **옛 대시보드 UI**: `admin-dashboard.html` 3,638→1,698줄(서버에 없는 옛 크롤러 엔드포인트 호출 UI = 데이터소스·동기화로그·위기정보 탭 등 통삭제).
+
+### 수정(기존 결함)
+- 🔴 **`GET /api/admin/dashboard` 500 → 200 복구**: `db.execute()` 반환이 배열이 아닌데 배열 구조분해 → "not iterable" 크래시(HEAD와 byte 동일 = **분리 이전부터 있던 기존 결함**). 드라이버 반환 shape 실측 후 구조분해 제거. **실검증 = 실데이터 표시**(도시 119 / 장소 12,913 / 이미지 9,509·가격 4,375·요약 3,612·PID 5,687 / 환율 30, dbConnected true — 전에는 전부 0).
+- **§16 중복 해소**: `/api/budget/calculate` 두 벌(admin판이 먼저 등록돼 실행 중, itinerary판 그림자) → 둘 다 죽은 것으로 판명돼 양쪽 완전삭제. (요원이 코드에 남긴 "어느 쪽이 실행 중" 주석이 **사실과 반대**임을 오케스트레이터가 원본 등록순서 실측으로 적발 → 교정)
+
+### 새로 발견된 기존 결함(사장님 결정 대기)
+- **admin 대시보드 "검증 요청" 탭 = 죽은 옛 UI**: 인증 토큰 없이 `/api/verification/requests` 호출 → 401 → `requests.map is not a function`. **HEAD도 동일 = 한 번도 작동한 적 없음**. 대체재 = 앱 내 전문가 답변함(`client/screens/expert/`, Bearer 인증 + role 게이트, 7/13~14 배포 완료) = 최신 정본. → "최신이 정답" 원칙으로 삭제 진행.
+- `POST /api/budget/calculate` 500의 근인 = `budget-calculator` ↔ `transport-pricing-service` 계약 불일치(HEAD 시점부터). 라우트군 자체를 삭제해 해소.
+
+### 검증
+tsc **188→161**(삭제분만큼 감소, 신규 0) / 서버빌드 exit0 / 실기동 스모크(health·cities·trip-alerts·itineraries·/admin 전부 200, 삭제 라우트 404, 각 2회) / **§21 시각검증**: 관리자 대시보드 4탭 렌더·전환·복귀 정상(스샷 `admin-dashboard-after-cleanup.png`), 앱 화면 2회 재현(입력·프로필·저장여정 복원·전문가 오버레이, 콘솔 에러 0).
+
+**오늘 누계 삭제 = 약 9,300줄**(레거시 13파일 6,668 + 영상 1,127 + plan-modal 858 + budget 671 + admin 라우트/HTML 등). **500줄 초과 파일 0건 유지.**
+
+---
+
+## 🔴🔴 2026-07-16 (1) = 1단계 코드슬림화 **완료** = 500줄 초과 22건 → **0건**(예외 1 제외). 서브에이전트 16요원 병렬 (미커밋 = 작업트리)
+
+**사장님 지시** = "최대한 서브에이전트 동원해 속도 올려라". 메인 = 오케스트레이션·검수만, 코딩 = 전량 Sonnet 요원 위임.
+
+- **배치A(5요원 병렬)**: `itinerary-generator`(1,404→진입38+itinerary/ 8모듈) / `pipeline-v3`(1,253→168+5모듈) / `routes.ts` 시드데이터(1,721→1,049, 도시 하드코딩 672줄→`config/default-cities-seed*` 3파일) / `LoginScreen`(1,056→login/ 5파일) / `ProfileScreen`(923→profile/ 11파일).
+- **배치B(11요원 병렬)**: `routes.ts` 라우트군(1,049→**50줄** + city-place/itinerary/video/misc-routes 4파일, 영상6종은 무수정 이동) / `admin-routes`(768→21+admin/ 5파일) / `ag3-data-matcher`(790→shim 27+4모듈, 매칭SSOT 무손) / `transport-pricing-service`(604→197+transport/ 4모듈) / `shared/schema.ts`(674→**shared/schema/ 10파일**+배럴index, 기존 import 전부 무변경·drizzle.config 1줄만) / `ExpertSheet`(755→381+3) / `BTSPlaceCart`(1,017→place-cart/ 6) / `PlanModal`(773→plan-modal/ 9) / `SavedTripDetail`(645→saved-trip/ 3) / `Onboarding`(630→onboarding/ 3) / `BTSDashboard`(587→dashboard/ 6).
+- **importer 7곳 오케스트레이터 일괄 적용**(요원 동시편집 충돌 방지 = 요원은 보고만): RootStackNavigator(Login·Onboarding·SavedTrip), MainTab+ProfileStack(Profile), BTSStack(PlaceCart·Dashboard).
+- **검증(5단계, 이중)**: tsc **188 = 에러 시그니처 multiset 완전동일**(경로 무시 대조, 신규 0) / 서버빌드 exit0 / 웹빌드 / 실기동 스모크(health·cities·trip-alerts·/admin 200, 옛 프로세스 잔존 함정 2회 발각→강제종료 후 재측정) / **Playwright 시각회귀 2회 재현**(입력·프로필·저장여정 복원·전문가 오버레이, 콘솔 신규에러 0) / 카탈로그 22→**0건**.
+- **3게이트(§17)**: 어드버서리 리뷰 워크플로(6관점 18요원, 원본 git HEAD byte 대조) = **치명·중대 0**, 확정 minor 4건 → 즉시 수정·재검수: ①`admin/dashboard-routes` 템플릿 `__dirname` 1순위 후보가 이동으로 무효화(dev cwd 의존 잠재회귀) → `../templates` 로 교정(/admin 200 실증) ②`transport-pricing-service` 배럴에서 `UberBlackComparison` export 누락 복원 ③`wikimedia-image.ts` 죽은 경로 포인터 갱신(→place-cart/utils.ts) ④`ExpertSheet` 미사용 import 제거.
+
+### 🔎 이번 조사로 발견된 **기존 결함·정리 후보**(이번 분리와 무관, 사장님 결정 대기)
+1. **`GET /api/admin/dashboard` = 500 에러(기존)**: `const [fillRow] = await db.execute(...)` = 반환값이 배열이 아니라 구조분해 실패("not iterable"). **원본(HEAD)과 byte 동일 = 분리 이전부터 깨져 있던 결함** 실증. → 수정 승인 시 1줄.
+2. **`client/screens/plan-modal/` = 죽은 화면**: importer 0(내비게이션 등록조차 없음) — 원본부터 고아. → 폴더째 삭제 후보.
+3. **`/api/budget/calculate` 두 벌 공존**(admin/misc-routes vs itinerary-routes) = admin이 먼저 등록돼 실행, 다른 쪽은 그림자(§16 위반). → 1벌 정리 후보.
+4. **호출자 0 admin 라우트 11개**(환율·프랑스교통 7종·guide-prices test/calculate·trip-alerts/check). → §19 삭제 후보.
+5. **`server/templates/admin-dashboard.html`이 서버에 없는 엔드포인트 다수 호출**(crisis-alerts·scheduler·instagram = 옛 대시보드 UI 잔존).
+
+**다음**: 위 1~5 정리(사장님 결정) → 2단계(Kling/Seedance 죽은 영상코드 삭제) → 3단계(가이드탭).
+
+---
+
+## 🔴 2026-07-15 (4) = 죽은 레거시 13파일 6,668줄 완전삭제 (전수조사+반박검증 후, 사장님 "지장 없으면 모두 삭제" 원칙 집행. 미커밋 = 작업트리)
+
+**사장님 지시** = 카탈로그 파일들 기능 설명 + "구현된 동작에 지장 없으면 모두 삭제 원칙" + "옛 주석(7월 이전 승인) = AI 판단으로 과감히 진행, 최신이 정답".
+
+- **조사 방식**: 워크플로 23요원 = 카탈로그 9건+레거시 7건 각각 ①기능 ②실사용 경로 전수 실측(정적/동적 import·서버 기동체인·package.json·.replit·CI·**운영번들 server_dist 물리 포함 여부**) → "삭제가능" 판정 전건 반박검증(CONFIRMED-DEAD 12/12).
+- **삭제 13파일(6,668줄)**: standard-template(1,839 레거시 공유페이지 생성기)·html-template(611 §3잠금이었으나 사장님 당월 명시 승인)·gemini(700 드림샷 죽은함수)·profileRoutes(616)·googleAuth(220)·kakaoAuth(217)·appleAuth(231 passport 패키지 자체가 없어 로드=크래시)·replitAuth(183)·stripeClient(91)·webhookHandlers(26)·seed-gemini.mjs(1,210 옛 발굴CLI=fillcity가 계승)·build.js(550 옛 Koyeb 포장도구)·html-parser(174 standard-template 전용 고아). + 죽은 스킬 `.claude/commands/seed-city.md` 삭제, package.json 고아 스크립트 2줄, guide-routes 참고주석·SEED_SSOT 옛 진입점 문구 §19 정리.
+- **유지(제 판단)**: `server/creditService.ts` = 7월 확정 설계(전문가 10크레딧·숏폼 비용통제)가 재사용을 전제한 예약 자산 = 최신 결정이 보존을 가리킴.
+- **검증(이중)**: tsc 245→**188**(삭제 파일들의 기존 에러만큼 감소, 신규 0) / 서버빌드 exit0 / **서버 실기동 스모크**(옛 프로세스 잔존 함정 발견→강제종료 후 재부팅, /api/health·/api/cities 2회 정상) / 카탈로그 22→**15건** / §19 가드 통과. 실행 = 서브에이전트(Sonnet) 위임 + 메인 검수.
+- **남은 분리대상(사용중 확정)**: routes.ts(1,721 = 기본도시 시드데이터 670줄이 40%)·admin-routes.ts(768 부분사용=미사용 라우트 있음)·schema.ts(674 drizzle 다중파일 분리 안전 확인) + 화면 파일들.
+- **사장님 확인 1건**: CLAUDE.md §3 보호목록에 삭제된 googleAuth/kakaoAuth/html-template 3줄 잔존 — 헌법이라 제가 안 건드림. 사장님 승인 시 목록에서 제거.
+
+---
+
+## 🔴 2026-07-15 (3) = 통합 1단계 착수 = 500줄 가드 신설 + TripPlannerScreen 3,415줄→16파일 완전분리 (미커밋 = 작업트리)
+
+**마스터플랜 1단계(코드슬림화) 첫 실행.** 전부 순수 분리(기능·동작 변경 0), 사장님 지시대로 코딩은 서브에이전트 위임 + 메인은 오케스트레이션·검수.
+
+- **① 가드 신설**: `scripts/guard-max-file-lines.mjs` = §0 가벼움 기계화(§19·§16 가드 계열 4번째, pre-commit 배선). 규칙 = 신규 파일 500줄 초과 차단 + 기존 초과 파일은 "증량 시만" 차단(이행기 버그수정 허용). `--catalog` = 진행추적. 4시나리오(신규초과/신규정상/기존불변/기존증량) 이중검증 실측.
+- **② 카탈로그 실측 = 500줄 초과 22건**(계획서 초기 14건은 git pathspec 누락 — routes.ts 1,721·standard-template.ts 1,839·admin-routes 768·profileRoutes 616·html-template 611(§3보호!)·schema.ts 674·seed-gemini.mjs 1,210·build.js 550 추가 발견). 처리범위 = 사장님 결정 대기(계획서 갱신).
+- **③ TripPlannerScreen 분리**: 3,415줄 단일파일 → `client/screens/trip-planner/` 16파일(전부 ≤500줄): 조립(47) + InputStep(469)/LoadingStep(79)/ResultStep(356) + hooks 6개(useTripPlanner 232 + pickers/accommodations/aiOpinionOverlay/save/generate) + components 7개(CrisisAlertBanner/AiOpinionLoading/DateTimePickers/DaySection/PlaceSlotCard/DailyTotal/AiOpinionSheet) + styles 2개 + utils. 원본 sed 라인슬라이스 = JSX 본문 바이트 동일. importer 2곳(HomeStack/MainTab) 경로만 교체, 옛 파일 완전삭제(§19).
+- **④ §19 부수 삭제**: 미사용 스타일 23키(102줄, 키수 대조 147-23=124 무손실 입증) + 미사용 state activeDay + 미사용 import 5종(Linking·formatVibeWeightsSummary·TravelPace/MobilityStyle/TravelStyle 타입 — 원본 전체 사용처 0 grep 실측).
+- **⑤ 검증 5종 전부 통과**: tsc = 베이스라인 245와 **에러셋 완전동등**(신규 0, 이동한 기존 1건은 파일경로만 변경) / 서버빌드 / 웹빌드(expo export) / Playwright 시각회귀(Input·Result 상하단·전문가오버레이·저장 "id=77 덮어쓰기" 실증, 리로드 2회 재현, 콘솔 신규에러 0) / §19·§16 가드 16파일 통과.
+- **⑥ 3게이트(§17)**: 어드버서리 리뷰 워크플로(5관점 find→반박검증, 요원 15) = critical/major **0**, minor 4건(죽은 key prop 2·불필요 Fragment 1·옛 함수명 주석 4곳) → 서브에이전트(Sonnet) 수정 위임 → 검수 재실측(tsc 245 유지·가드·재빌드·화면 재확인) 완료.
+- **남은것(다음)**: 1-B 계속 = itinerary-generator.ts(1,404) → pipeline-v3.ts(1,253) → LoginScreen(1,056) 순. 커밋 = 사장님 지시 시(§10, 커밋 시 옛 파일 삭제 스테이징 포함 = `git add -A`).
+
+---
+
+## 🔴🔴 2026-07-15 (2) = Tripis×내손안에 가이드 통합 마스터플랜 확정 (계획만, 코드 착수 전)
+
+**배경**: 사장님 큰그림 공개 = 정식배포 중인 "내손안에 가이드"(`com.sonanie.guide`, 구글+애플 심사통과·운영중)와 개발중인 Tripis(`com.vibetrip.app`, 미배포)를 하나로 합쳐 스토어 재심사 없이 업데이트로 위장배포. 백서(`docs/01_제품기획-PRD/2026-04-11_백서-v1.2.md`) 실현 시점 판단.
+
+- **리서치**: 레거시 레포(`C:\Users\hzino\Desktop\내손안에 가이드`) 정독 = 카메라UI(순수RN, WebView 비의존)+온디바이스AI 네이티브 모듈뼈대(`litert-bridge`, 추론코드 주석처리 스켈레톤) 이미 존재(2026-04-05 "자비스AI" 시나리오 문서 설계 확정). Play 앱서명 활성화(구글이 진짜키 보관)·애플계정 인증서 재발급 가능 실측 확인 = 신원교체 기술전제 충족.
+- **기술 확정**: 온디바이스 AI = **Gemma 4 E2B**(사장님 직접체험 확정), 숏폼 = **Gemini Omni Flash**(`gemini-omni-flash-preview`, 공식문서 대조하여 잘못된 3rd-party 정보 교정).
+- **사장님 추가지시 반영**: ①Tripis 전체 코드(ts/tsx 실측 37,550줄)를 신규기능 얹기 **전에** 1파일 500줄 이하로 완전분리(기계적 가드 `guard-max-file-lines.mjs` 신설, `client/screens/expert/` 패턴 확장) — 500줄 초과 14개 파일 실측 확정 ②계획서는 임시 plan파일이 아닌 레포 파일이 정본(휘발 방지) ③단계별 상세 todolist+Ralph-loop(3게이트 미통과=자동반복)+이중검증 후에만 커밋+각 단계 5단계검증 필수 보고.
+- **최종 계획서**: `docs/2026-07-15 Tripis-내손안에가이드 통합 실행계획.md` (6단계: ①코드슬림화 ②죽은코드정리 ③가이드탭이식 ④온디바이스AI ⑤여정숏폼 ⑥신원교체+배포). 사장님 승인 완료(2026-07-15).
+- **남은것(다음)**: 1단계(코드슬림화) 착수 — `guard-max-file-lines.mjs` 작성 후 `TripPlannerScreen.tsx`(3,415줄)부터 분리.
+
+---
+
+## 🔴 2026-07-15 = 로그인 DEV목업 완전삭제 + 로그인응답 toClientUser 1벌통일 + '전문가 검증' 문구·아이콘 (커밋 9dc61c1 → merge 08d2c4b push, EAS Update 성공)
+
+**배경**: 사장님 지적 = ①user-test/dbstour1 메일로 로그인해도 항상 '로컬 개발자'로 뜨고 로그아웃해도 그대로 ②전문가 버튼 누르면 본인 문의로 바로 가야 함 ③하단 '전문가' 버튼이 직관적이지 않음(→'전문가 검증').
+
+- **① 확정 흐름(사장님 SSOT)** = 앱 접속 → 여정생성 클릭 → 비로그인이면 **로그인 화면** → 메일 로그인하면 **강제 로그아웃 전까지 유지** → 로그아웃하면 **비로그인 유지**. 진짜 로그인(구글·카톡·애플) 붙여도 이 흐름 그대로. **3단계 브라우저 실증 완료.**
+- **② DEV 목업 완전삭제(§19)** = `client/lib/auth.ts` 3지점(BYPASS_AUTH_IN_DEV 상수 / isAuthenticated() 무조건 true / getUserData() 'local_dev_user' 폴백). 이게 "항상 로컬개발자·로그아웃 무효·로그인 실패 은폐"의 근본. 이제 저장 토큰·실계정만 판정. UserData 에 role 명시.
+- **③ 로그인 응답 1벌 통일(§0.3·§16)** = `server/auth.ts` 에 `toClientUser()` 신설 → google/kakao/whatsapp/social-login/email-login/**admin-login** 6곳 전부 사용. 옛 제각각(name·email 누락 → **프로필 이름·이메일 빈칸** / google·kakao·admin **role 누락** / admin 은 `user: admin` = **users 행 통째 = password 노출**) 폐기 §19. `AdminScreen` 손매핑(2벌) 제거 → 응답 그대로 저장(role 포함).
+- **④ 전문가 검증 시트** = 사용자도 진입 즉시 **'내 문의함(본인 문의 목록)' 먼저** = 관리자 답변함(목록 먼저)과 동작 통일(BE 는 이미 신원으로 본인 것만 반환). 새 문의 작성은 목록 아래.
+- **⑤ 문구·아이콘(사장님 SSOT)** = '전문가'/'전문가 문의' → **'전문가 검증'**(하단탭+여정하단 CTA, 7개 언어. 하드코딩 없이 전부 i18n = 딱 2줄씩). 아이콘 = **AI 의견 = bot(로봇) / 전문가 검증 = brain(사람 전문가의 판단)**. `Icon.tsx` 에 Bot 등록(번들 축소 위해 명시 import 구조). 탭·여정하단 아이콘 통일(옛 check-circle·award 폐기 §19). 색 = 기존 유지(여정 있으면 파랑/없으면 회색).
+- **검증 5단계 + 가드**: ①tsc 신규0(기존 51행 provider·transit 은 내 diff 밖 = git diff 로 입증) ②서버빌드(`server_dist/index.js` 생성 + toClientUser 6곳 반영 확인) ③웹빌드 ④시뮬(로그인 3단계·탭 라벨·아이콘·게스트 저장 안내 실증) ⑤어드버서리 코드리뷰 WF → **결함 3건 CONFIRMED**. §19·§16 가드 통과.
+- **코드리뷰 결함 → 2건 즉시 수정(사장님 지시)**:
+  - **게스트 저장 먹통**(= 목업삭제가 만든 회귀) = 게스트는 isAuthenticated()=true / getUserData()=null → `if(!userData) return;` 로 **저장도 안내도 없이 조용히 종료**. → 저장 판정을 **실계정 1벌**로 통일 + 웹은 window.confirm(ExpertSheet 패턴 §16). 실증: 안내 실제로 뜸.
+  - **admin/login 우회** = 위 ③에 포함(password 노출 제거 + role 추가). 실측: role=admin·password 미노출 확인.
+  - **[보류] 소셜 신규가입 email 미저장** = `findOrCreateUser` 가 email 을 받지도 저장하지도 않음 → 구글·카톡 신규 계정은 email NULL = 프로필 이메일 빈칸 + 개발용 메일로그인 영구 404. **사장님 결정 = 진짜 로그인 정식화 때 함께 처리.**
+- **개발단계 방침(사장님 SSOT 재확인)**: 게스트("로그인 없이 둘러보기")가 **여정생성 게이트를 통과**하는 것(토큰만 있어 isAuthenticated=true) = **지금처럼 통과 유지** = 결함 아님. 로그인 정식화 때 정리. [[feedback_dev_stage_open_access_not_bug]]
+- **배포**: 네이티브 변경 0 → **APK 재설치 불필요**, EAS Update 만 자동 실행(성공, Web·iOS·Android 번들 게시) = 앱 껐다 켜면 반영.
+- **남은것(다음)**: 진짜 로그인(구글+카톡+애플) 연구 = 완성 모듈이 통째로 있는 게 아니라 조각 분산(passport 벌 4파일=패키지 8종 미설치로 死코드 / fetch 벌=구글·카톡만 작동·애플 없음 / bts-app=인증로직 0인 시연 껍데기). 구글 400(콘솔 redirect_uri)·카톡 키·애플 개발자계정($99·p8) = 사장님만 발급 가능. 크레딧 실차감, 웹푸시 VAPID.
+
+---
+
 ## 🔴 2026-07-14 (2) = 전문가·AI의견 오버레이 동일화(SnapSheet) + 비로그인 배지가드 + GitHub WF 복구 + dead삭제·정리
 
 **배경**: 사장님 지적 = ①오버레이가 배경 여정을 가림(전문가·AI의견 둘 다) ②AI의견은 스크롤만·전문가는 드래그만 = 불일치 ③커밋 전 GitHub WF 오류 ④사용자로 접속 불가(전부 admin 인식).

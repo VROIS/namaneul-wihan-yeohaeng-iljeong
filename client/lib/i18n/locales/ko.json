@@ -203,24 +203,6 @@
     "travelPace": "일정 밀도",
     "vibes": "바이브"
   },
-  "plan": {
-    "companionTitle": "누구와 함께 떠나시나요?",
-    "companionHint": "동행을 선택하면 맞춤 여행을 추천해 드립니다",
-    "companionAges": "동행자 나이 (쉼표로 구분)",
-    "companionAgesPlaceholder": "예: 10, 13, 55, 59",
-    "focusTitle": "이번 여행의 주인공은?",
-    "focusHint": "누구를 위한 여행인지에 따라 일정이 달라집니다",
-    "destinationTitle": "어디로 떠나시나요?",
-    "destinationHint": "도시 또는 나라를 입력해주세요",
-    "destinationPlaceholder": "예: 파리, 프랑스",
-    "datesTitle": "언제 떠나시나요?",
-    "datesHint": "렌터카처럼 시작 시간과 종료 시간까지 선택하세요",
-    "vibesTitle": "어떤 분위기를 원하시나요?",
-    "vibesHint": "여러 개 선택할 수 있습니다",
-    "styleTitle": "여행 스타일을 선택하세요",
-    "styleHint": "예산과 취향에 맞는 스타일을 선택해주세요",
-    "createTrip": "여정 생성하기"
-  },
   "destination": {
     "loading": "로딩 중...",
     "noAddress": "주소 정보 없음",

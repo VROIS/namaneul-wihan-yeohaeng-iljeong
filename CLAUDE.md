@@ -78,12 +78,10 @@
 
 - `// ⚠️ 수정금지(승인필요)` 주석이 달린 코드는 **사용자 서면 승인 없이 절대 수정 금지**
 - 보호 대상 파일:
-  - `server/googleAuth.ts`
-  - `server/kakaoAuth.ts`
-  - `server/html-template.ts`
   - `public/service-worker.js`
   - `public/sw-share.js`
   - `public/index.js` 내 OAuth 콜백, Featured 캐싱 로직
+  - (googleAuth·kakaoAuth·html-template 3건 = 미배선 레거시 사본으로 삭제 = 2026-07-15 사장님 승인 §19. 현행 로그인 = `server/auth.ts` 1벌)
 
 ## 제4조: 질문보다 경청
 

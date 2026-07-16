@@ -8,11 +8,11 @@ import {
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import MainTabNavigator from "@/navigation/MainTabNavigator";
 import DestinationDetailScreen from "@/screens/DestinationDetailScreen";
-import OnboardingScreen from "@/screens/OnboardingScreen";
-import LoginScreen from "@/screens/LoginScreen";
+import OnboardingScreen from "@/screens/onboarding/OnboardingScreen";
+import LoginScreen from "@/screens/login/LoginScreen";
 import ExpertInquiryDetailScreen from "@/screens/expert/ExpertInquiryDetailScreen"; // 전문가 문의 상세(2026-07-13) = 옛 VerificationRequestScreen 대체 §19
 import ExpertProfileEditScreen from "@/screens/expert/ExpertProfileEditScreen"; // 현지전문가 본인 프로필 편집(2026-07-13)
-import SavedTripDetailScreen from "@/screens/SavedTripDetailScreen";
+import SavedTripDetailScreen from "@/screens/saved-trip/SavedTripDetailScreen";
 import AdminScreen from "@/screens/AdminScreen";
 import BTSConcertPlannerScreen from "@/screens/BTSConcertPlannerScreen";
 import BTSStackNavigator from "@/navigation/BTSStackNavigator";

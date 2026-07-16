@@ -1,0 +1,318 @@
+// Step1 Gemini 완전 일정 생성 + JSON 잘림 복구 헬퍼 = pipeline-v3 분리(2026-07-15 §0 슬림화, 순수 이동)
+import type { TripFormData, DaySlotConfig, VibeWeight } from './types';
+import { MEAL_BUDGET, SEED_CATEGORIES } from './types';
+import { computeCatSlots } from './ag2-gemini-recommender';
+import { getAI, normalizeTravelStyle, type GeminiPlace, type GeminiDay } from './pipeline-v3-types';
+
+// =====================================================
+// Step 1: Gemini 완전 일정 생성
+// =====================================================
+
+export async function step1_geminiItinerary(
+  formData: TripFormData,
+  dayCount: number,
+  daySlotsConfig: DaySlotConfig[],
+  vibeWeights: VibeWeight[],
+): Promise<GeminiDay[]> {
+  const _t0 = Date.now();
+  const mealBudget = MEAL_BUDGET[normalizeTravelStyle(formData.travelStyle)];
+
+  // ===== 사용자 입력 9가지를 자연어로 상세 평문화 =====
+
+  // ① 생년월일 → 나이 계산
+  let ageDesc = '';
+  if (formData.birthDate) {
+    const birth = new Date(formData.birthDate);
+    const age = new Date().getFullYear() - birth.getFullYear();
+    ageDesc = `${age}세`;
+  }
+
+  // 🗑️ 2026-07-09 사장님 SSOT = companionTypeKo·focusKo 하드코딩 번역맵 삭제 §19 = 옛 AI 과설계(Gemini 응답요소에 없는 설명글).
+  //   = 동행유형·큐레이션초점도 원본값(companionType·curationFocus) 그대로 Gemini 전달 = 자유해석([[feedback_dynamic_function_not_hardcoded_map]]). agesDesc(죽은코드) 삭제.
+  const companionDesc = formData.companionType || 'Couple';   // 원본값(Solo/Couple/Family/Group...) 그대로
+  const headcount = formData.companionCount || 2;
+  const focusDesc = formData.curationFocus || 'Everyone';     // 원본값(Kids/Parents/Everyone/Self) 그대로
+
+  // ⑥ 여행지 (destination) - 직접 사용
+
+  // ⑦ 여행 기간
+  const startDate = formData.startDate;
+  const endDate = formData.endDate;
+
+  // 🗑️ 2026-07-09 사장님 SSOT = vibeKo·styleKo·mobilityKo·paceKo 하드코딩 번역맵 4개 완전삭제 §19 = 옛 AI 과설계.
+  //   = Gemini 응답요소에 없는 것(사람 읽는 설명글) = 삭제. 원본값(vibes·travelStyle·travelPace)을 그대로 프롬프트에 실어 Gemini 해석([[feedback_dynamic_function_not_hardcoded_map]]).
+  //   = 실제 로직(카테고리 배분 catSlots·페이스 90/120/150분·예산)은 이미 다른 곳서 동적 처리 = 이 설명맵은 장식(죽은코드·도달불가폴백)이었음.
+
+  // 🧠 2026-07-05 사장님 SSOT = vibe → 6카테고리 슬롯 배분을 프롬프트에 전달(§20 = catSlots 단일 SSOT ag2 재사용).
+  //   = 옛날엔 "관광 X + 식사 Y" 2종으로만 전달 → Gemini 가 카테고리 모름 → attraction/restaurant 로 뭉개짐(리모주 사고).
+  //   = 이제 "heritage 2곳·shopping 1곳·healing 1곳..." 명시 → 각 place 가 seed_category(6종) 답함 → DB 저장 시 카테고리 보존.
+  const totalSlots = daySlotsConfig.reduce((s, d) => s + d.slots, 0);
+  const catSlots = computeCatSlots(vibeWeights, totalSlots, dayCount);
+  const nonRestCats = Object.entries(catSlots).filter(([k]) => k !== 'restaurant');
+  const categoryMatrix = nonRestCats.map(([cat, n]) => `${cat} ${n}곳`).join(', ')
+    + (catSlots.restaurant ? ` / 식당(restaurant) ${catSlots.restaurant}곳` : '');
+
+  // 일별 요구사항 (식사 시간 제약 자동 계산)
+  const dayRequirements = daySlotsConfig.map(d => {
+    const startH = parseInt(d.startTime.split(':')[0]);
+    const endH = parseInt(d.endTime.split(':')[0]);
+    // 점심: 가용시간에 12:00~13:30 포함되면
+    const hasLunchWindow = startH <= 12 && endH >= 13;
+    // 저녁: 가용시간에 18:30~20:00 포함되면
+    const hasDinnerWindow = startH <= 18 && endH >= 20;
+    const mealCount = (hasLunchWindow ? 1 : 0) + (hasDinnerWindow ? 1 : 0);
+    const activityCount = Math.max(0, d.slots - mealCount);
+
+    let mealNote = '';
+    if (hasLunchWindow && hasDinnerWindow) {
+      mealNote = '점심 12:00~13:30 사이 배치, 저녁 18:30~20:00 사이 배치';
+    } else if (hasLunchWindow) {
+      mealNote = '점심 12:00~13:30 사이 배치 (저녁 시간 없음)';
+    } else if (hasDinnerWindow) {
+      mealNote = '저녁 18:30~20:00 사이 배치 (점심 시간 없음)';
+    } else {
+      mealNote = '식사 시간 범위 밖 — 카페/간식만';
+    }
+
+    return `Day ${d.day}: ${d.startTime} 출발 ~ ${d.endTime} 마무리, 총 ${d.slots}곳 (관광 ${activityCount} + 식사 ${mealCount}) → ${mealNote}`;
+  }).join('\n');
+
+  // 출력 언어 (일정 텍스트: nameKo, reason, theme 등)
+  const outputLang = (formData as any).language || 'ko';
+  const langMap: Record<string, { name: string; prompt: string }> = {
+    ko: { name: '한국어', prompt: 'nameKo=한국어 장소명, reason=한국어 추천이유 (이동수단+시간+핵심이유, 60자 이내), theme=한국어 테마' },
+    en: { name: 'English', prompt: 'nameKo=English place name (or local name), reason=English recommendation reason (transport+time+key point, 60 chars), theme=English theme' },
+    ja: { name: '日本語', prompt: 'nameKo=日本語の場所名, reason=日本語の推薦理由 (移動手段+時間+ポイント, 60字以内), theme=日本語テーマ' },
+    fr: { name: 'Français', prompt: 'nameKo=Nom du lieu en français, reason=Raison de recommandation en français (transport+temps+point clé, 60 caractères), theme=Thème en français' },
+    zh: { name: '中文', prompt: 'nameKo=中文场所名, reason=中文推荐理由 (交通+时间+要点, 60字以内), theme=中文主题' },
+    es: { name: 'Español', prompt: 'nameKo=Nombre del lugar en español, reason=Razón de recomendación en español (transporte+tiempo+punto clave, 60 caracteres), theme=Tema en español' },
+    de: { name: 'Deutsch', prompt: 'nameKo=Deutscher Ortsname, reason=Deutsche Empfehlungsbegründung (Verkehr+Zeit+Kernpunkt, 60 Zeichen), theme=Deutsches Thema' },
+  };
+  const langSpec = langMap[outputLang] || langMap.ko;
+
+  // 날짜를 "3월 1일" 형태로 (한국어 자연어용)
+  const formatDateShort = (d: string) => {
+    if (!d || d.length < 10) return d;
+    const [y, m, day] = d.split('-');
+    const month = parseInt(m || '0', 10);
+    const dayNum = parseInt(day || '0', 10);
+    return `${month}월 ${dayNum}일`;
+  };
+  const dateRangeText = `${startDate ? formatDateShort(startDate) : ''}부터 ${endDate ? formatDateShort(endDate) : ''}까지`;
+
+  // 현재 연도/월 (2026 최신 정보 반영 지시용)
+  const nowYear = new Date().getFullYear();
+  const nowMonth = new Date().getMonth() + 1;
+  const seasonNote = nowMonth >= 3 && nowMonth <= 5 ? '봄 시즌' :
+    nowMonth >= 6 && nowMonth <= 8 ? '여름 시즌 (성수기, 인파 많음)' :
+      nowMonth >= 9 && nowMonth <= 11 ? '가을 시즌' :
+        '겨울 시즌 (비수기, 일부 시설 단축운영)';
+
+  // ⚠️ 수정금지(승인필요) 2026-07-11 = 메인앱 표준 prompt 사장님 SSOT = 슬림본(축약키 12필드 + 꾸밈글 18자 상한, A/B 실호출 실증 = 26% 단축·결손 0)
+  // = SSOT 원본 = .claude/skills/raw-db-verify-and-complete/prompts/09-main-app-itinerary/STANDARD_PROMPT_2026-05-24.md + 카탈로그 docs/20260607PROMPTS_TOTAL_SSOT.md #02
+  // = 1 글자 변경 = Gemini 응답 변경 = 세 파일 동기 강제. 축약키 = 아래 수신부 SLIM_KEYS 가 원명 복원(하류·DB 컬럼 불변)
+  // 🗑️ 2026-07-09 사장님 SSOT = vibe/페이스/스타일 = 하드코딩 번역맵 폐기 §19 → 원본값 그대로(Gemini 해석). vibes·travelPace·travelStyle 원본 = route-prompt 동적 패턴.
+  const koreanTravelerStyle = `${companionDesc} ${headcount}명 / vibe=${(formData.vibes || []).join('+')} / 페이스=${formData.travelPace || 'Normal'} / 스타일=${formData.travelStyle || 'Reasonable'}${ageDesc ? ` / 나이=${ageDesc}` : ''}`;
+  const prompt = `You are a travel data assistant for KOREAN TRAVELERS (${nowYear}년 기준 최신 정보).
+Return STRICT machine-parseable JSON only (no prose, no markdown wrappers).
+
+⚠️ GROUNDING REQUIREMENT (= Gemini 3 + Google Search 강제):
+- All facts (place names, addresses, coordinates, prices, opening hours) MUST be verified via Google Search grounding.
+- No hallucinations. No made-up coordinates. No fabricated addresses.
+- If you cannot verify a fact via Google Search, SKIP that place — do NOT guess.
+
+TASK: Fill the provided slot matrix (categories + counts) and sort places within each day by minimum travel distance to generate the itinerary.
+
+CITY: ${formData.destination}
+RADIUS_KM: 100
+TARGET_AUDIENCE: Korean travelers (= 한국 인스타/블로그/유튜브 트렌드 기준)
+
+[USER CONTEXT — AG1 보강]
+${koreanTravelerStyle}
+계절: ${seasonNote} / 큐레이션: ${focusDesc}
+
+[SLOT MATRIX — AG1 결정]
+${dayRequirements}
+
+[CATEGORY MATRIX — 전체 여정 카테고리별 곳수 (= 사용자 vibe 반영, 반드시 이 비율로 선정)]
+${categoryMatrix}
+- 각 place 의 c(카테고리)는 위 카테고리 중 하나로 정확히 지정 (heritage=문화/유산, healing=힐링/자연, hotspot=핫플, adventure=모험/액티비티, shopping=쇼핑, attraction=즐길거리/체험, restaurant=식당).
+- 식사(lunch/dinner) = c="restaurant".
+
+[동선 원칙]
+- 매일 ${formData.destination} 도시 중심부에서 출발·귀환, 같은 날 = 같은 구역 묶기
+- Array order within each day = visit order (= sorted by minimum travel distance from start)
+- DAILY MEAL RULE (= AG1 has already assigned these slots — DO NOT modify count or position):
+    * Each day MUST contain exactly 1 lunch (t="lunch") somewhere in the middle of the day.
+    * The FINAL slot of each day MUST be dinner (t="dinner").
+- 3 일+ 일정 시 = Day 2+ 한 날 = outskirt (= 도심에서 10-100km 외곽) day-trip 1-2 곳 포함 가능 (= 한국 여행객이 자주 찾는 외곽 명소/아울렛)
+
+[가격 원칙]
+- p = ${nowYear}년 실제 입장료 (1인, EUR). 무료=0
+- 점심 1인 ~€${mealBudget.lunch}, 저녁 1인 ~€${mealBudget.dinner}
+- 활동(activity) = 1인 입장료 / 식당(lunch/dinner) = 1인당 평균. 확실하지 않으면 0
+
+For each place include (= ALL fields verified via Google Search grounding, 키는 아래 축약형 그대로 사용):
+- n (English official name on Google Maps)
+- k (한국어 = 한국 여행자가 부르는 이름)
+- l (local language name = 예: 파리=Tour Eiffel) [= REQUIRED for ALL places INCLUDING restaurants (식당도 반드시). If the restaurant's official name is already in the local language (예: "Le Comptoir du Marché"), copy that same name into l — never leave l empty. = Text Search forwarding + matching key, final DB column]
+- a (FULL street address with NUMBER + street + postal code + city) [= REQUIRED for Text Search forwarding + matching key, final DB column — verify via Google Search]
+- t ("activity" | "lunch" | "dinner")
+- c (= 위 CATEGORY MATRIX 중 하나 = heritage|healing|hotspot|adventure|shopping|attraction|restaurant. 식사=restaurant) [= final DB column, 카테고리 보존 필수]
+- y (latitude = decimal 6 digits, e.g. 48.858370) [= REQUIRED for Text Search forwarding + matching key, final DB column — verify via Google Search, NO hallucination]
+- x (longitude = decimal 6 digits, e.g. 2.294481) [= 위 y 와 동일 요건]
+- p (1 인 EUR)
+- d (= 도심 중심으로부터 직선거리 km = haversine = 소수 1 자리 = 동선 최적화 기본 필수)
+- r (한국어 한 줄 = 최대 18자 = 선정 이유 = 한국 여행객 트렌드 = 인스타 성지/한국 vlog 등 사회적 검증)
+- s (한국어 한 줄 = 최대 18자 = 장소에 대한 코믹/위트 = Claude 톤. 단순 정보 X = "프사각", "본전 뽑음" 같은 한국 슬랭)
+
+OUTPUT (strict JSON, no markdown fences):
+{"days":[{"day":1,"theme":"테마","places":[
+  {"n":"Eiffel Tower","k":"에펠탑","l":"Tour Eiffel","a":"Champ de Mars, 5 Av. Anatole France, 75007 Paris","t":"activity","c":"attraction","y":48.858370,"x":2.294481,"p":29.4,"d":2.4,"r":"파리 인증샷 1순위 성지","s":"나 파리다 국룰"},
+  {"n":"Le Comptoir du Marché","k":"르 콩투아 뒤 마르쉐","l":"Le Comptoir du Marché","a":"8 Rue de la Loge, 06300 Nice, France","t":"lunch","c":"restaurant","y":43.697415,"x":7.276451,"p":35,"d":0.8,"r":"시장 근처 가성비 미쉐린","s":"예약 없으면 자리 없음"}
+]}]}`;
+
+  try {
+    // 🗑️ 2026-07-05 삭제 = STEP1_USE_GROUNDING 토글 + grounding else분기 = false고정 데드경로(JSON경로 1벌만) §0/§19
+    // responseMimeType JSON = 파싱안정+속도 (신규장소 환각 안전망 = saveNewPlacesToDB TS searchText 재검증)
+    const step1Config: any = {
+      temperature: 0.3,
+      maxOutputTokens: 8192,
+      thinkingConfig: { thinkingBudget: 0 },
+      responseMimeType: "application/json",
+    };
+    console.log(
+      `[V3-Step1] 🤖 gemini-3-flash-preview + JSON (${prompt.length}자)...`,
+    );
+
+    const response = await getAI().models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      config: step1Config,
+    });
+
+    // gemini-2.5-flash: thinking 모드 시 응답이 parts 배열로 올 수 있음
+    const candidate = (response as any).candidates?.[0];
+    const parts = candidate?.content?.parts || [];
+    // parts 중 text 타입만 추출 (thought 타입 제외)
+    let text = parts
+      .filter((p: any) => p.text && !p.thought)
+      .map((p: any) => p.text)
+      .join('') || response.text || "";
+    const finishReason = candidate?.finishReason || 'unknown';
+    console.log(`[V3-Step1] 🤖 응답 수신 (${text.length}자, finish=${finishReason}, parts=${parts.length}, ${Date.now() - _t0}ms)`);
+
+    // 🗑️ 2026-07-06 삭제 = 여기 saveRaw(contextId:null=runtime·봉투형식) 폐기 = cityId 미확정 시점이라 runtime 개판저장 §19.
+    //   = raw 저장은 호출부(runPipelineMix)에서 Promise.all 후 preloaded.cityId 확정 시점에 saveCollectedRaw 로(도시폴더+parsedPlaces). rawText 는 아래 days 에 부착해 전달.
+
+    if (text.length < 100) {
+      console.warn(`[V3-Step1] ⚠️ 짧은 응답: ${text}`);
+    }
+
+    // ── Markdown code fence 제거 ──
+    // Gemini가 ```json ... ``` 으로 감싸서 응답하는 경우 처리
+    text = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      console.error('[V3-Step1] ❌ JSON 블록 없음');
+      console.error('[V3-Step1] 원문 앞 200자:', text.substring(0, 200));
+      return [];
+    }
+
+    let result: any;
+    try {
+      result = JSON.parse(jsonMatch[0]);
+    } catch (parseErr: any) {
+      console.warn(`[V3-Step1] ⚠️ JSON 파싱 오류 (${parseErr.message}), 복구 시도...`);
+      // 디버그: 파싱 실패 위치 근처 출력
+      const pos = parseInt(String(parseErr.message).match(/position (\d+)/)?.[1] || '0');
+      if (pos > 0) {
+        console.warn(`[V3-Step1] 오류 위치 주변: ...${jsonMatch[0].substring(Math.max(0, pos - 50), pos + 50)}...`);
+      }
+      result = repairTruncatedJSON(jsonMatch[0]);
+      if (!result) {
+        console.error('[V3-Step1] ❌ JSON 복구 실패');
+        return [];
+      }
+      console.log(`[V3-Step1] ✅ JSON 복구 성공: ${result.days?.length || 0}일`);
+    }
+
+    // ⚠️ 수정금지(승인필요) 2026-07-11 사장님 SSOT = 슬림 프롬프트 축약키 → 원명 복원 = 수신부 단일 지점(하류 GeminiPlace·DB 컬럼 불변).
+    const SLIM_KEYS: Record<string, string> = { n: 'name', k: 'nameKo', l: 'nameLocal', a: 'address', t: 'type', c: 'seed_category', y: 'latitude', x: 'longitude', p: 'price_eur', d: 'distance_km_from_center', r: 'selection_reason_ko', s: 'shortform_ko' };
+    for (const d of result.days || []) {
+      d.places = (d.places || []).map((pl: any) => {
+        const out: any = {};
+        for (const [key, v] of Object.entries(pl)) out[SLIM_KEYS[key] || key] = v;
+        return out;
+      });
+    }
+
+    const days: GeminiDay[] = result.days || [];
+
+    if (days.length === 0) {
+      console.warn('[V3-Step1] ⚠️ Gemini가 0일 반환');
+      return [];
+    }
+
+    // 🗑️ 2026-07-05 삭제 = DEBUG_PIPELINE_SNAPSHOT 로컬 dump = saveRaw(§18) 이중저장 관문우회 §0/§19
+
+    // 검증: 각 일의 장소 수/식사 체크
+    for (const day of days) {
+      const hasLunch = day.places?.some(p => p.type === 'lunch');
+      const hasDinner = day.places?.some(p => p.type === 'dinner');
+      const placeCount = day.places?.length || 0;
+      if (!hasLunch) console.warn(`[V3-Step1] ⚠️ Day ${day.day} 점심 없음`);
+      if (!hasDinner) console.warn(`[V3-Step1] ⚠️ Day ${day.day} 저녁 없음`);
+      console.log(`[V3-Step1]   Day ${day.day} "${day.theme}": ${placeCount}곳 (🍽️${day.places?.filter(p => p.type === 'lunch' || p.type === 'dinner').length || 0}식사)`);
+    }
+
+    console.log(`[V3-Step1] ✅ Gemini ${days.length}일 완전 일정 생성 (${Date.now() - _t0}ms)`);
+    // 🧠 2026-07-06 사장님 SSOT = rawText/finishReason 를 days 에 비열거 속성 부착 = 반환타입(GeminiDay[]) 불변 + 호출부가 Promise.all 후 cityId 확정 시점에 raw 저장(도시폴더).
+    Object.defineProperty(days, '__rawText', { value: text, enumerable: false });
+    Object.defineProperty(days, '__finishReason', { value: finishReason, enumerable: false });
+    return days;
+  } catch (error: any) {
+    if (error.message === 'GEMINI_API_KEY_MISSING') throw error;
+    console.error(`[V3-Step1] ❌ Gemini 실패: ${error?.message}`);
+    return [];
+  }
+}
+
+/** Gemini JSON 잘림 복구 */
+export function repairTruncatedJSON(broken: string): { days: GeminiDay[] } | null {
+  try {
+    const arrStart = broken.indexOf('[');
+    if (arrStart === -1) return null;
+
+    let lastCompleteIdx = -1;
+    let braceDepth = 0;
+    let inString = false;
+    let escapeNext = false;
+
+    for (let i = arrStart + 1; i < broken.length; i++) {
+      const ch = broken[i];
+      if (escapeNext) { escapeNext = false; continue; }
+      if (ch === '\\') { escapeNext = true; continue; }
+      if (ch === '"') { inString = !inString; continue; }
+      if (inString) continue;
+      if (ch === '{') braceDepth++;
+      if (ch === '}') {
+        braceDepth--;
+        if (braceDepth === 0) lastCompleteIdx = i;
+      }
+    }
+
+    if (lastCompleteIdx === -1) return null;
+
+    const repaired = broken.substring(0, lastCompleteIdx + 1) + ']}';
+    try {
+      return JSON.parse(repaired);
+    } catch {
+      const cleaned = repaired.replace(/,\s*\]/, ']');
+      return JSON.parse(cleaned);
+    }
+  } catch {
+    return null;
+  }
+}

@@ -203,24 +203,6 @@
     "travelPace": "ペース",
     "vibes": "テーマ"
   },
-  "plan": {
-    "companionTitle": "誰と旅行しますか？",
-    "companionHint": "同行者に合わせたおすすめプランを作成します",
-    "companionAges": "同行者の年齢（カンマ区切り）",
-    "companionAgesPlaceholder": "例：10, 13, 55, 59",
-    "focusTitle": "この旅の主役は誰ですか？",
-    "focusHint": "誰を中心にするかで日程が変わります",
-    "destinationTitle": "どこに行きますか？",
-    "destinationHint": "都市名または国名を入力",
-    "destinationPlaceholder": "例：パリ、フランス",
-    "datesTitle": "いつ出発しますか？",
-    "datesHint": "レンタカーのように出発と終了時間を選択",
-    "vibesTitle": "どんな雰囲気の旅にしますか？",
-    "vibesHint": "複数選択できます",
-    "styleTitle": "旅のスタイルを選択",
-    "styleHint": "予算と好みに合ったスタイルを選択",
-    "createTrip": "日程を作成"
-  },
   "destination": {
     "loading": "読み込み中...",
     "noAddress": "住所情報なし",

@@ -203,24 +203,6 @@
     "travelPace": "Ritmo",
     "vibes": "Vibes"
   },
-  "plan": {
-    "companionTitle": "¿Con quién viajas?",
-    "companionHint": "Recomendaremos un viaje personalizado según tu acompañante",
-    "companionAges": "Edades de los acompañantes (separadas por comas)",
-    "companionAgesPlaceholder": "ej. 10, 13, 55, 59",
-    "focusTitle": "¿Quién es el VIP de este viaje?",
-    "focusHint": "El itinerario cambia según a quién va dirigido",
-    "destinationTitle": "¿A dónde vas?",
-    "destinationHint": "Ingresa una ciudad o país",
-    "destinationPlaceholder": "ej. París, Francia",
-    "datesTitle": "¿Cuándo sales?",
-    "datesHint": "Selecciona horarios como al alquilar un coche",
-    "vibesTitle": "¿Qué ambiente quieres?",
-    "vibesHint": "Puedes seleccionar varios",
-    "styleTitle": "Elige tu estilo de viaje",
-    "styleHint": "Selecciona un estilo acorde a tu presupuesto y gustos",
-    "createTrip": "Crear itinerario"
-  },
   "destination": {
     "loading": "Cargando...",
     "noAddress": "Sin información de dirección",

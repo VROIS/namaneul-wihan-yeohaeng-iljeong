@@ -10,8 +10,8 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import Icon from "@/components/Icon";
 
 import { Brand, Colors } from "@/constants/theme";
-import TripPlannerScreen from "@/screens/TripPlannerScreen";
-import ProfileScreen from "@/screens/ProfileScreen";
+import TripPlannerScreen from "@/screens/trip-planner/TripPlannerScreen";
+import ProfileScreen from "@/screens/profile/ProfileScreen";
 // ⚠️ 사장님 SSOT 2026-07-14 = 전문가 = 여정화면 위 오버레이(AI의견과 동일). 옛 별도탭 화면 폐기 §19 = 탭은 트리거만(requestExpert).
 import { tabBadgeCount, getMyRole } from "@/screens/expert/expertApi"; // 전문가 탭 배지 = 역할별(사용자=안읽은답변/전문가=대기문의) + 역할(탭 활성 분기)
 import { useMapToggle } from "@/contexts/MapToggleContext";
