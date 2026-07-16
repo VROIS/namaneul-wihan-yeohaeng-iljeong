@@ -61,8 +61,13 @@ export default function MainTabNavigator() {
     load();
     getMyRole().then((r) => { if (alive) setIsExpertRole(r === "expert" || r === "admin"); }).catch(() => {});
     const iv = setInterval(load, 30000);
-    const unsub = rootNavigation.addListener("state", load); // 화면 이동마다 = 답변 후 복귀·문의 열람 직후 즉시 반영
-    return () => { alive = false; clearInterval(iv); unsub(); };
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    const debouncedLoad = () => {
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(load, 1000);
+    };
+    const unsub = rootNavigation.addListener("state", debouncedLoad); // 화면 이동마다 배지 갱신 (1초 디바운스 = state 이벤트 스팸 방지)
+    return () => { alive = false; clearInterval(iv); if (debounceTimer) clearTimeout(debounceTimer); unsub(); };
   }, [rootNavigation]);
   // ⚠️ 사장님 SSOT 2026-07-14 = 오버레이 안 문의접수·답변전송 직후 = 배지 즉시 재조회(오버레이는 navigation state 안 바꿔서 위 리스너로는 안 걸림 = 실시간 피드백 §19).
   useEffect(() => {
