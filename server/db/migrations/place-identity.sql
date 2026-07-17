@@ -4,8 +4,8 @@
 -- ⚠️ 수정금지(승인필요) — matcher PID veto 제거 동기화(2026-06-15 SSOT)
 -- = 트리거 = shared/matcher.ts 7단계와 동형(§16 matcher≡트리거): PID > URI > 주소+로컬이름 > 좌표10m > 로컬이름 / 영어명·한국어명(의심메모).
 --   핵심: URI(cid) 둘 다 있고 서로 다르면 = 확정 다른 장소 = 보조(주소·좌표) 차단 (= samePlace veto). PID 차이는 더이상 veto 아님(우리 PID 오류=TS 교정, 2026-06-15).
--- ⚠️ 수정금지(승인필요) 2026-07-09 사장님 SSOT = 불변1~5(병합)만 도시무관(글로벌) = city_id 조건 폐기 §19. 의심6~7(name_en/ko 메모)은 도시한정 유지.
---   = 같은 장소가 다른 도시 여정에서 재발굴되던 재과금 근본 제거(불변1~5). 6·7 도시무관은 일반명 노이즈 9,826 폭발이라 제외. matcher.ts 와 byte 동형(§16).
+-- ⚠️ 수정금지(승인필요) 2026-07-17 사장님 SSOT = 불변1~5(병합) = 도시무관(글로벌) / 6·7·8 = 같은도시 OR 100km(같은장소 물리 상한) §19.
+--   = 같은 장소가 다른 도시 여정에서 재발굴되던 재과금 근본 제거(불변1~5). 전면 도시무관은 일반명 노이즈 9,826 폭발 실측이라 6~8 은 100km 상한 유지. matcher.ts 와 byte 동형(§16).
 -- 적용: Supabase apply_migration 또는 psql $SUPA_URL -f server/db/migrations/place-identity.sql
 -- = 라이브 DB 정본과 byte 동기화(§19 DB↔레포).
 
@@ -83,6 +83,10 @@ BEGIN
   --   cascade 는 rank(정렬값)만 바꾸고 식별컬럼(PID·URI·좌표·이름)은 절대 안 바꿈 = 검문 불필요 = 면제 안전.
   --   = autorank 의 'pg_trigger_depth() > 1 RETURN NULL' 가드와 동형. depth=1(사용자 직접 INSERT/UPDATE)만 검문.
   IF pg_trigger_depth() > 1 THEN RETURN NEW; END IF;
+  -- ⚠️ 수정금지(승인필요) 2026-07-18 사장님 SSOT = 우리 id 확정행 직행(ag3 ③ TS) = prevent_dup 만 외과적 면제(중복검사 불필요 = 이미 우리 id).
+  --   = place-upsert targetRowId 직행이 SET LOCAL app.skip_dup_check='on' 로만 이 검문 스킵. 매칭·INSERT 는 플래그 없음 = 중복 보호 유지.
+  --   = replica 방식(모든 트리거 우회) 폐기 §19 = write_gate(데드락방지)·autorank(랭킹) 는 살려야 = 이 트리거만 정확히 끔.
+  IF current_setting('app.skip_dup_check', true) = 'on' THEN RETURN NEW; END IF;
   -- 사용자 SSOT 2026-06-15 = matcher.ts 와 동일 = veto 는 URI(cid)만 (PID 제거 = 우리 PID 오류 가능 = TS 교정).
   -- 불변(확정=차단) 1)PID 2)URI 3)풀주소+로컬이름 4)좌표10m 5)로컬이름 / 가변(의심=통과+메모) 6)영어명 7)한국어명
   -- ⚠️ 수정금지(승인필요) 2026-06-24 사장님 SSOT = BEFORE INSERT OR UPDATE 확장 = 자기행 제외(c.id <> COALESCE(NEW.id,-1)) 전 불변 필수.
@@ -140,7 +144,7 @@ BEGIN
   END IF;
 
   -- ⚠️ 수정금지(승인필요) 2026-07-12 사장님 SSOT = 불변6 고유명사 일치(병합) = 이름 완전일치(5)로 못 잡는 레거시 오염행 흡수.
-  --   = "첫 대문자=고유명사"(psr_proper_key) 키가 후보 라틴이름칸(en/local)과 완전일치 = 같은 장소(Palais de↔du Tau 등). 도시한정(짧은키 우연겹침 방지).
+  --   = "첫 대문자=고유명사"(psr_proper_key) 키가 후보 라틴이름칸(en/local)과 완전일치 = 같은 장소(Palais de↔du Tau 등). 같은도시 OR 100km(짧은키 우연겹침 방지 = 물리 상한).
   --   = name_ko(한글) 제외 = 대문자 원칙 불가 + 오염 name_ko(박물관↔거리) 오병합 근본차단. matcher.ts properKeys(en/local만)와 동형(§16).
   --   veto = matcher.ts samePlace(PID게이트, 214행)와 동형 = 양쪽 PID 있고 (PID 다름 OR 양쪽 URI 있고 URI 다름) = 다른 장소(차단). 옛 URI-only veto = 폐기 2026-07-12 §19(Golden Gate Bridge↔Park 오병합 근본).
   DECLARE
@@ -149,7 +153,13 @@ BEGIN
   BEGIN
     IF COALESCE(length(k_en),0) >= 3 OR COALESCE(length(k_local),0) >= 3 THEN
       SELECT c.id INTO matched_id FROM place_seed_raw c
-      WHERE c.city_id = NEW.city_id AND c.id <> COALESCE(NEW.id, -1)
+      WHERE c.id <> COALESCE(NEW.id, -1)
+        -- 2026-07-17 사장님 SSOT = 도시한정 → 같은도시 OR 100km(같은장소 물리 상한) = matcher 와 1벌 §19
+        AND ( c.city_id = NEW.city_id
+              OR ( NEW.latitude IS NOT NULL AND NEW.latitude <> 0 AND NEW.longitude IS NOT NULL AND NEW.longitude <> 0
+                   AND c.latitude IS NOT NULL AND c.latitude <> 0 AND c.longitude IS NOT NULL AND c.longitude <> 0
+                   AND sqrt( power((c.latitude::float - NEW.latitude::float)*111320, 2)
+                           + power((c.longitude::float - NEW.longitude::float)*111320*cos(radians((c.latitude::float + NEW.latitude::float)/2)), 2) ) <= 100000 ) )
         AND NOT (c.google_place_id IS NOT NULL AND c.google_place_id<>'' AND NEW.google_place_id IS NOT NULL AND NEW.google_place_id<>''
                  AND (c.google_place_id<>NEW.google_place_id
                       OR (c.google_maps_uri IS NOT NULL AND c.google_maps_uri<>'' AND NEW.google_maps_uri IS NOT NULL AND NEW.google_maps_uri<>'' AND c.google_maps_uri<>NEW.google_maps_uri)))
@@ -160,20 +170,32 @@ BEGIN
     END IF;
   END;
 
-  -- ⚠️ 수정금지(승인필요) 2026-07-09 사장님 SSOT = 7·8 영어명/한국어명(가변=의심 '중복의심' 메모만) = 도시한정 유지(city_id = NEW.city_id).
-  --   = 도시무관화하면 'Genoa'·'Cathedral' 등 일반명이 크로스도시 의심그룹 9,826개 폭발(실측) = 순수 노이즈. 병합도 안 하니 실익0.
-  --   = matcher.ts nameStep name_en/ko cityGuard=true 와 동형(§16). 불변1~5(병합)만 도시무관.
+  -- ⚠️ 수정금지(승인필요) 2026-07-17 사장님 SSOT = 7·8 영어명/한국어명(가변=의심 '중복의심' 메모만) = 같은도시 OR 100km(같은장소 물리 상한).
+  --   = 전면 도시무관은 'Genoa'·'Cathedral' 등 일반명이 크로스도시 의심그룹 9,826개 폭발(실측) = 순수 노이즈라 100km 상한 유지.
+  --   = matcher.ts nameStep name_en/ko 와 동형(§16).
   matched_id := NULL;
   IF v_en <> '' THEN
     SELECT c.id INTO matched_id FROM place_seed_raw c
-    WHERE c.city_id = NEW.city_id AND c.id <> COALESCE(NEW.id, -1)
+    WHERE c.id <> COALESCE(NEW.id, -1)
+      -- 2026-07-17 사장님 SSOT = 도시한정 → 같은도시 OR 100km(같은장소 물리 상한) = matcher 와 1벌 §19
+      AND ( c.city_id = NEW.city_id
+            OR ( NEW.latitude IS NOT NULL AND NEW.latitude <> 0 AND NEW.longitude IS NOT NULL AND NEW.longitude <> 0
+                 AND c.latitude IS NOT NULL AND c.latitude <> 0 AND c.longitude IS NOT NULL AND c.longitude <> 0
+                 AND sqrt( power((c.latitude::float - NEW.latitude::float)*111320, 2)
+                         + power((c.longitude::float - NEW.longitude::float)*111320*cos(radians((c.latitude::float + NEW.latitude::float)/2)), 2) ) <= 100000 ) )
       AND NOT (c.google_maps_uri IS NOT NULL AND c.google_maps_uri<>'' AND NEW.google_maps_uri IS NOT NULL AND NEW.google_maps_uri<>'' AND c.google_maps_uri<>NEW.google_maps_uri)
       AND v_en IN (LOWER(TRIM(COALESCE(c.name_en,''))), LOWER(TRIM(COALESCE(c.name_local,''))), LOWER(TRIM(COALESCE(c.name_ko,''))))
     LIMIT 1;
   END IF;
   IF matched_id IS NULL AND v_ko <> '' THEN
     SELECT c.id INTO matched_id FROM place_seed_raw c
-    WHERE c.city_id = NEW.city_id AND c.id <> COALESCE(NEW.id, -1)
+    WHERE c.id <> COALESCE(NEW.id, -1)
+      -- 2026-07-17 사장님 SSOT = 도시한정 → 같은도시 OR 100km(같은장소 물리 상한) = matcher 와 1벌 §19
+      AND ( c.city_id = NEW.city_id
+            OR ( NEW.latitude IS NOT NULL AND NEW.latitude <> 0 AND NEW.longitude IS NOT NULL AND NEW.longitude <> 0
+                 AND c.latitude IS NOT NULL AND c.latitude <> 0 AND c.longitude IS NOT NULL AND c.longitude <> 0
+                 AND sqrt( power((c.latitude::float - NEW.latitude::float)*111320, 2)
+                         + power((c.longitude::float - NEW.longitude::float)*111320*cos(radians((c.latitude::float + NEW.latitude::float)/2)), 2) ) <= 100000 ) )
       AND NOT (c.google_maps_uri IS NOT NULL AND c.google_maps_uri<>'' AND NEW.google_maps_uri IS NOT NULL AND NEW.google_maps_uri<>'' AND c.google_maps_uri<>NEW.google_maps_uri)
       AND v_ko IN (LOWER(TRIM(COALESCE(c.name_en,''))), LOWER(TRIM(COALESCE(c.name_local,''))), LOWER(TRIM(COALESCE(c.name_ko,''))))
     LIMIT 1;

@@ -199,7 +199,7 @@ export const properKeys = (x: { nameEn?: string | null; nameLocal?: string | nul
   const out = new Set<string>();
   for (const raw of [x.nameEn, x.nameLocal]) {
     const k = properNameKey(raw);
-    if (k.length >= 3) out.add(k); // 3글자 이상 = 'tau'(Palais du Tau) 흡수. 트리거 불변6 가드(length>=3)와 동일(§16). 도시한정이 우연겹침 방지.
+    if (k.length >= 3) out.add(k); // 3글자 이상 = 'tau'(Palais du Tau) 흡수. 트리거 불변6 가드(length>=3)와 동일(§16). 반경조건(같은 도시 OR 100km)이 우연겹침 방지(2026-07-17).
   }
   return out;
 };
@@ -219,6 +219,25 @@ export const samePlace = (
     (c.googlePlaceId !== p.googlePlaceId ||                             // PID 다름 = 다른 장소(URI 무관)
       (!!c.googleMapsUri && !!p.googleMapsUri && c.googleMapsUri !== p.googleMapsUri))); // 또는 URI 다름 = 다른 장소
 // 🗑️ 2026-07-05 = samePlaceRelaxed 삭제 = PID게이트(samePlace)가 완화 대체 = 한벌 §16/§19
+
+// ⚠️ 수정금지(승인필요) 2026-07-17 사장님 SSOT = 같은장소 반경조건(100km) = 이름매칭(6·7·고유명사)의 도시번호 단독 한정 대체.
+//   장소는 도시 소유가 아니라 지리적 실체(베르사유궁전 = 파리 풀에서 매칭돼도 1곳) = 도심 100km = 외곽(day-trip) 풀과 동일 철학.
+//   판정 = 같은 도시(cityId 동일) → 무조건 통과(기존 동작 100% 유지)
+//        OR 양쪽 좌표 유효(null 아니고 0 아님) AND 등장방형 근사 거리 ≤ 100,000m → 통과(크로스도시 확장)
+//   = 순수 확장(퇴행 0). 크로스도시 + 좌표 없음 = 불통과.
+//   ⚠️ 이 거리식 = DB 트리거와 byte 동형 1벌 유지 (§16·§20) = 식 임의 변경 금지.
+export const nearSamePlaceRadius = (
+  c: { cityId: number; latitude?: number | string | null; longitude?: number | string | null },
+  p: { cityId: number; latitude?: number | string | null; longitude?: number | string | null },
+): boolean => {
+  if (c.cityId === p.cityId) return true; // 같은 도시 = 무조건 통과 = 기존 동작 보존
+  const latA = Number(c.latitude), lngA = Number(c.longitude), latB = Number(p.latitude), lngB = Number(p.longitude);
+  const ok = (v: unknown, n: number) => v != null && Number.isFinite(n) && n !== 0; // 좌표 유효 = null 아니고 0 아님
+  if (!ok(c.latitude, latA) || !ok(c.longitude, lngA) || !ok(p.latitude, latB) || !ok(p.longitude, lngB)) return false;
+  const dLat = (latA - latB) * 111320;
+  const dLng = (lngA - lngB) * 111320 * Math.cos((((latA + latB) / 2) * Math.PI) / 180);
+  return Math.sqrt(dLat * dLat + dLng * dLng) <= 100000;
+};
 
 // ⚠️ 수정금지(승인필요) = "있는 쪽 승리" (= 사용자 SSOT §14). 한 단계에서 매칭 후보 여럿 → 신뢰요소 최다 보유 1개 keep.
 //   = first-match(.find) 폐기 = DB 배열순(SELECT ORDER BY 부재 = 비결정) 종속 제거.
@@ -290,14 +309,15 @@ export function matchCandidate<C extends MatchCandidate>(
   }
   // ⚠️ 수정금지(승인필요) 2026-07-09 사장님 SSOT = 4·6·7순위 = 이름 (로컬=불변 4순위 > 영어=의심 6 > 한국어=의심 7)
   //   = 입력 이름 1개를 후보의 어느 이름칸(en/local/ko)과든 비교 (= 9조합 집합, 우선순위만 부여).
-  //   = 도시무관 범위 (사장님 "name_local만" SSOT 2026-07-09 §19):
-  //     • name_local(4, 불변=병합) = 도시무관 = 크로스도시 겹침 18개뿐 실측 = 재과금 근본 차단(같은 장소 재활용).
-  //     • name_en/ko(6·7, 의심=메모) = 도시한정 유지 = 도시무관화하면 'Genoa'·'Cathedral' 등 일반명이
-  //       크로스도시 의심그룹 9,826개 폭발(실측) = 순수 노이즈, 병합도 안 함 = 실익0. 도시 내 의심만 유의미.
+  //   = 범위:
+  //     • name_local(4, 불변=병합) = 무제한(도시무관) = 크로스도시 겹침 18개뿐 실측 = 재과금 근본 차단(같은 장소 재활용).
+  //     • name_en/ko(6·7, 의심=메모)·고유명사 = 같은장소 반경조건 = nearSamePlaceRadius(같은 도시 OR 100km 이내)
+  //       (도시번호 단독 한정 폐기 = 2026-07-17 사장님 SSOT = 장소는 지리적 실체 = 순수 확장·퇴행0).
+  //       'Genoa'·'Cathedral' 등 일반명의 크로스도시 의심그룹 폭발(9,826개 실측)은 100km 가드가 차단 = 근교만 통과.
   //   veto = samePlace(PID게이트) 단일 = 양쪽 PID 있고 PID/URI 다르면 차단, PID 없으면 이름으로 매칭 §14재갱신.
-  const nameStep = (key: string, by: MatchedBy, cityGuard: boolean) => {
+  const nameStep = (key: string, by: MatchedBy, nearGuard: boolean) => {
     if (match || !key) return;
-    const found = pickBest(candidates.filter((c) => samePlace(c, p) && (!cityGuard || c.cityId === p.cityId) && nameKeys(c).includes(key)));
+    const found = pickBest(candidates.filter((c) => samePlace(c, p) && (!nearGuard || nearSamePlaceRadius(c, p)) && nameKeys(c).includes(key)));
     if (found) {
       match = found; matchedBy = by;
       // ⚠️ 수정금지(승인필요) 2026-06-11 = suspect 승격 (= 사용자 SSOT "있는 쪽 승리" 연장 = 증거 조합)
@@ -327,7 +347,8 @@ export function matchCandidate<C extends MatchCandidate>(
   }
   // ⚠️ 수정금지(승인필요) 2026-07-12 사장님 SSOT = 고유명사 매칭(불변=병합) = 이름 완전일치(6·7)로 안 잡히는 레거시 오염행 흡수.
   //   = 일반명사 걷어낸 고유명사키 일치 = 같은 장소(Palais de↔du Tau, Taittinger↔Champagne Taittinger). PID veto 유지.
-  //   = 랭스 전수 실측 오병합 0. cityGuard=true(도시한정) = 짧은 고유명사 크로스도시 우연겹침 방지(4글자가드와 2중).
+  //   = 랭스 전수 실측 오병합 0. 범위 = nearSamePlaceRadius(같은 도시 OR 100km 이내, 2026-07-17 사장님 SSOT)
+  //     = 원거리 짧은 고유명사 크로스도시 우연겹침은 100km 가드가 방지(3글자가드와 2중).
   if (!match && (p.nameEn || p.nameLocal || p.nameKo)) {
     const pk = properKeys(p);
     if (pk.size > 0) {
@@ -335,14 +356,14 @@ export function matchCandidate<C extends MatchCandidate>(
       //   랭스 실증: 부분겹침(some)이면 Les Crayères(crayeres) ⊂ Le Jardin Les Crayères(crayeresjardin) 오병합(저택 vs 그 안 식당).
       //   완전일치면 그 오병합 0 유지 + Palais de/du Tau(tau=tau)·Taittinger·Moët et/& Chandon 차이는 여전히 흡수.
       match = pickBest(candidates.filter((c) =>
-        samePlace(c, p) && c.cityId === p.cityId &&
+        samePlace(c, p) && nearSamePlaceRadius(c, p) &&
         [...properKeys(c)].some((ck) => pk.has(ck))));
       if (match) matchedBy = 'name_local'; // 불변(confirmed) tier = 병합 (INVARIANT_MATCH 포함)
     }
   }
 
-  nameStep(normName(p.nameEn), 'name_en', true);  // 6순위 = 가변(의심) = 도시한정(cityGuard=true, 일반명 크로스도시 노이즈 방지)
-  nameStep(normName(p.nameKo), 'name_ko', true);  // 7순위 = 가변(의심) = 도시한정
+  nameStep(normName(p.nameEn), 'name_en', true);  // 6순위 = 가변(의심) = 반경조건(같은 도시 OR 100km, 원거리 일반명 노이즈 차단)
+  nameStep(normName(p.nameKo), 'name_ko', true);  // 7순위 = 가변(의심) = 반경조건(같은 도시 OR 100km)
 
   return { match, matchedBy, tier: tierOverride ?? tierOf(matchedBy) };
 }

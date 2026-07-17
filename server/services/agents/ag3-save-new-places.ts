@@ -257,7 +257,9 @@ export async function saveNewPlacesToDB(
         //   = ① Gemini upsert 단계에서 트리거가 이미 중복(흡수)을 판별해 그 원행 id 로 UPDATE 완료 → ① 이후 모든 행은 각자 확정된 id 보유. ②는 그 id 에 결손(TS 9요소)만 직행으로 채움.
         //   = dupOwner 재조회 폐기 2026-07-09 §19: 중복판별은 ① 트리거가 이미 함 → ②에서 또 dupOwner SELECT = 트리거 재발명(§16 위반) + 사장님 "②는 재매칭 아님" 정면위반.
         //     트리거 라이브면 같은 강매칭키 2행은 ①에서 애초에 못 생김 → ① 통과행은 정의상 dupOwner 없음 = 재조회는 항상 null = 죽은 코드였음.
-        const job2 = { targetRowId: rowId, ...jobBase }; // 전부 자기 id 직행(§14 재매칭 실패 불가)
+        // ⚠️ 수정금지(승인필요) 2026-07-17 사장님 SSOT = followTriggerDup=true = 트리거(최종 매처)가 '[중복차단] id=N' 판정 시
+        //   그 원행(N)으로 병합 = Gemini+TS 합본이 원행에 감 = 직행 차단분 TS 결과 폐기(디종 4/10콜 실측) 해소(§14).
+        const job2 = { targetRowId: rowId, followTriggerDup: true, ...jobBase }; // 전부 자기 id 직행(§14 재매칭 실패 불가)
         const doUpdate = async () => {
           try { await upsertPlace(job2 as any); }
           catch (e) { console.log(`[AG3-SAVE] ⚠️ "${place.name}" 직행 실패(${(e as Error).message}) = 그 행 스킵`); }

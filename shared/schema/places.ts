@@ -72,6 +72,10 @@ export const placeSeedRaw = pgTable("place_seed_raw", {
   imageAttribution: text("image_attribution"), // "Photo via Google Places (placeId)"
   imageUpdatedAt: timestamp("image_updated_at"),
   createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  // ⚠️ 수정금지(승인필요) 2026-07-16 = updated_at 레포 등재 §19(DB↔레포 동기화) = DB 실측 nullable+default now() 그대로 반영.
+  //   = 이 등재와 무관하게 db:push 는 여전히 절대 금지: DB 실측 33컬럼 vs 이 스키마 28컬럼 불일치 + latitude/longitude/distance_km_from_center 가
+  //     DB numeric ↔ 이 스키마 real 로 어긋나 있어, push 시 좌표 정밀도가 깎여 좌표10m 매칭의 근거 데이터가 손상된다.
+  updatedAt: timestamp("updated_at").default(sql`now()`),
   // ⚠️ 수정금지(승인필요) — 2026-05-04 사용자 SSOT: gemini3-2026-05 표준화 17 필드 추가 (메인앱 통합 진입점)
   summaryKo: text("summary_ko"),                          // 한국어 감성 요약 (NUBI 카피, 숏폼 KO)
   dayZone: text("day_zone"),                              // core (≤10km) / outskirt (10-100km)

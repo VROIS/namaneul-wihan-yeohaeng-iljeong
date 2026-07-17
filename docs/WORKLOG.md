@@ -8,6 +8,38 @@
 
 ---
 
+## 🔴🔴 2026-07-17~18 = 돈샘/속도 정밀수정 + **여정 풀·매칭 동적출발점(100km) 근본개편** (사장님 실시간 지휘, 5단계+3게이트 전수, 미커밋→이 커밋)
+
+> 메인=검수·오케스트레이션·DB, 요원=조사·수정. 모든 DB검증 = **DO+강제RAISE 롤백**(운영 무손상). 외부 유료호출 0(Storage raw 재활용).
+
+### A. 사장님 답이 근본 = TS 직행 트리거 면제 (돈샘 4/10콜 폐기 해소)
+- **문제**: MIX ② TS 결과를 우리 id 확정행에 직행 UPDATE 하는데 트리거(prevent_dup)가 다른 쌍둥이 URI/PID 로 막아 **유료 TS 결과 폐기**(디종 4/10콜=40%). 근본 = "우리 id 확정 = 중복검사 불필요인데 트리거가 막음".
+- **해법(사장님)**: `place-upsert.ts` targetRowId 직행(followTriggerDup=true=ag3 ③)만 `SET LOCAL app.skip_dup_check='on'` 로 **prevent_dup 만 외과적 면제** + 트리거에 가드 1줄(`current_setting`). **replica 방식은 폐기**(코드리뷰 적발: replica 는 write_gate(데드락방지)·autorank(랭킹)까지 끔 = 실측 t→f). 플래그는 prevent_dup 만 끔 = 실측 write_gate·autorank 살아있음(t/t).
+- **실증**: Storage 디종 06 raw(우리 id + TS 9요소 보존) 재입력 = 78774·78770 PID·RC 채워짐(action=updated), 롤백 무손상.
+
+### B. 여정 풀·매칭 = 도시번호 → 동적 출발점(숙소>도심) 100km (§16 기존 accommodationCoords 재사용)
+- **원칙(사장님)**: 장소는 도시 소유 아님 = 이중도시·숙소중간이면 그 기점 100km 공유(한 장소가 디종·본 양쪽에서 보임). `pool-radius.ts` 신규 = `getPoolContext(cityId, startCoords?)`. ag2·ag4 가 accommodationCoords 넘김. **MIX Gemini 프롬프트도 출발점=좌표 정본**(주소는 Gemini 재지오코딩 오차 = 좌표가 정확, 사장님 지적).
+- **matcher.ts·트리거 불변6·7·8**: 도시한정 → `같은도시 OR 100km`(byte 동형 1벌). name_local(4순위)은 무제한 그대로.
+- **풀스캔 선필터**(코드리뷰): `sqrt` 앞 위도/경도 BETWEEN 박스(idx_psr_latitude sargable) = 814ms→146ms 5.5배↑, 정확성 무변경(선필터 전후 풀크기 동일). 경도박스=`0.9/cos(위도)` 동적 = 위도81°까지 커버(고위도 누락 0).
+- **실증**: getPoolContext 실코드 = 미지정 도심(766) / 숙소기점(800). 디종 140→173(본 소속 Loiseau des Ducs 등장), 파리 DB-only 2회 Gemini/Google 0콜.
+
+### C. 트리거 흡수 회수(2026-07-10 원형 복원) + updated_at + db풀 + auth/me
+- **recoverTriggerDup** = 트리거 '[중복차단] id=N' → 그 원행 N 흡수(§14). ※내가 만든 클러스터붕괴(keep-priority·진행삭제·8회루프)는 **사장님 "확립 안 됨" 지적으로 폐기** = 원형만.
+- **updated_at=NOW()** 2곳(place-upsert.ts:177/234) + schema 등재 = 재활용/새덮기 추적 복구(upsertPlace만 누락이었음). **db.ts** idleTimeoutMillis 35000 + pool.on('error')(크래시 차단). **expertApi getMyRole** = 서버 auth/me → 로컬 role(호출 소멸).
+
+### 검증 (§17 3게이트 전수 = 왜곡 없이)
+- **/simplify**(4관점) → 풀스캔·동적출발점 고침. **/review**(correctness+헌법) → 결함 3건(replica→플래그 / 고위도박스 / seed-loader keyLocal 최신승자) 전부 해결·실증. **/vercel:react-best** → client=순수 TS 1파일(getMyRole)·호출부 4곳 전부 useEffect/async = 안티패턴 0.
+- **§19/§16/§0 가드** 12파일 전수 통과. **tsc 161(신규0)·서버빌드·웹빌드** 통과. **트리거 라이브 적용**(플래그 방식) + 레포 place-identity.sql 동기화(§19).
+
+### ⚠️ 미완/다음 세션 (§ 명시)
+- **[사장님 결정] matcher.ts 이중설계 제거 = 파이프라인 재설계**: matcher(코드 7단계 매칭)와 트리거(DB 매칭)가 2벌 = 사장님 "과설계·이중" 지적. 근본 = 1차 Gemini 입력을 "INSERT 시도→막히면 트리거 준 N 흡수"로 통일하고 matcher 매칭판정 제거(정규화·채우기 도구만 남겨 `place-enrich.ts`로 개명, 사장님 확정). ag3-match-core 슬롯배분이 매칭결과 쓰는지 실측 선행 필요.
+- **[사장님 결정] pipeline v3 ag1~4 과분할 통합**: 실제는 step1/step2 2단계인데 ag3 가 6조각. ag1=1ms 인라인 흡수됨.
+- **[사장님 판정] TS 단가 SSOT 2벌 충돌**: 메모리(2026-06-16 청구서실측 €0.3) ↔ ts-client.ts:7·CLAUDE.md§15(€0.0299) = 낭비액 €1.2/€0.12 갈림.
+- **[미완] MIX skip=2 근본**: 레거시 쌍둥이 클러스터(전체 23개=46행, 크로스도시 5) = 매칭이 못 찾아 skip. 회수(N흡수)로 완화되나 핑퐁(72747↔78776 상호지목) 2-사이클은 원형 회수로 미해결(재시도1회 후 skip). 근본 = 위 matcher 재설계 or 기존 중복 청소(07merge, 상시 아님).
+- **[진행중] 레거시 도시 정리** = 도시무관 병합으로 city_id 어긋난 행(Loiseau des Ducs=본134 소속 등) 다수. 풀 100km 로 노출은 됨.
+
+---
+
 ## 🔴🔴 2026-07-16 (2) = 발견 5건 정리 + **2단계(죽은 영상코드 삭제) 완료** (사장님 "계속해" 승인. 미커밋 = 작업트리)
 
 서브에이전트 6요원 위임, 메인 = 검수·오케스트레이션만.

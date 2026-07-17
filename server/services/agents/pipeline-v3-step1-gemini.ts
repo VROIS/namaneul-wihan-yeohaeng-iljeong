@@ -113,6 +113,12 @@ export async function step1_geminiItinerary(
   // = 1 글자 변경 = Gemini 응답 변경 = 세 파일 동기 강제. 축약키 = 아래 수신부 SLIM_KEYS 가 원명 복원(하류·DB 컬럼 불변)
   // 🗑️ 2026-07-09 사장님 SSOT = vibe/페이스/스타일 = 하드코딩 번역맵 폐기 §19 → 원본값 그대로(Gemini 해석). vibes·travelPace·travelStyle 원본 = route-prompt 동적 패턴.
   const koreanTravelerStyle = `${companionDesc} ${headcount}명 / vibe=${(formData.vibes || []).join('+')} / 페이스=${formData.travelPace || 'Normal'} / 스타일=${formData.travelStyle || 'Reasonable'}${ageDesc ? ` / 나이=${ageDesc}` : ''}`;
+  // ⚠️ 2026-07-17 사장님 SSOT = 출발점 = 동적(숙소 입력 시 그 좌표, 미입력 시 도시 중심부). 도심 고정 폐기 §19.
+  //   = 좌표가 정본(BE 가 구글위젯 해석값을 이미 보유) = Gemini 재지오코딩 오차 0 + d(haversine)·y/x 좌표기계와 동종. 이름은 사람용 라벨만(거리계산 X).
+  //   = pool-radius 동적 출발점(accommodationCoords)과 동일 원칙 = 여정 동선·외곽거리 기준을 숙소로 통일.
+  const startPoint = formData.accommodationCoords?.lat && formData.accommodationCoords?.lng
+    ? `출발점 좌표 (${formData.accommodationCoords.lat.toFixed(6)}, ${formData.accommodationCoords.lng.toFixed(6)})${formData.accommodationName ? ` = 숙소 "${formData.accommodationName}"` : ''}`
+    : `${formData.destination} 도시 중심부`;
   const prompt = `You are a travel data assistant for KOREAN TRAVELERS (${nowYear}년 기준 최신 정보).
 Return STRICT machine-parseable JSON only (no prose, no markdown wrappers).
 
@@ -140,12 +146,12 @@ ${categoryMatrix}
 - 식사(lunch/dinner) = c="restaurant".
 
 [동선 원칙]
-- 매일 ${formData.destination} 도시 중심부에서 출발·귀환, 같은 날 = 같은 구역 묶기
+- 매일 ${startPoint}에서 출발·귀환, 같은 날 = 같은 구역 묶기
 - Array order within each day = visit order (= sorted by minimum travel distance from start)
 - DAILY MEAL RULE (= AG1 has already assigned these slots — DO NOT modify count or position):
     * Each day MUST contain exactly 1 lunch (t="lunch") somewhere in the middle of the day.
     * The FINAL slot of each day MUST be dinner (t="dinner").
-- 3 일+ 일정 시 = Day 2+ 한 날 = outskirt (= 도심에서 10-100km 외곽) day-trip 1-2 곳 포함 가능 (= 한국 여행객이 자주 찾는 외곽 명소/아울렛)
+- 3 일+ 일정 시 = Day 2+ 한 날 = outskirt (= 출발점에서 10-100km 외곽) day-trip 1-2 곳 포함 가능 (= 한국 여행객이 자주 찾는 외곽 명소/아울렛)
 
 [가격 원칙]
 - p = ${nowYear}년 실제 입장료 (1인, EUR). 무료=0
@@ -162,7 +168,7 @@ For each place include (= ALL fields verified via Google Search grounding, 키�
 - y (latitude = decimal 6 digits, e.g. 48.858370) [= REQUIRED for Text Search forwarding + matching key, final DB column — verify via Google Search, NO hallucination]
 - x (longitude = decimal 6 digits, e.g. 2.294481) [= 위 y 와 동일 요건]
 - p (1 인 EUR)
-- d (= 도심 중심으로부터 직선거리 km = haversine = 소수 1 자리 = 동선 최적화 기본 필수)
+- d (= 출발점(위 동선 원칙 기준)으로부터 직선거리 km = haversine = 소수 1 자리 = 동선 최적화 기본 필수)
 - r (한국어 한 줄 = 최대 18자 = 선정 이유 = 한국 여행객 트렌드 = 인스타 성지/한국 vlog 등 사회적 검증)
 - s (한국어 한 줄 = 최대 18자 = 장소에 대한 코믹/위트 = Claude 톤. 단순 정보 X = "프사각", "본전 뽑음" 같은 한국 슬랭)
 

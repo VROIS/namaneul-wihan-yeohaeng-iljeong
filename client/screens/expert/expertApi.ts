@@ -131,19 +131,17 @@ export async function replyInquiry(id: string, expertReply: string, status: Inqu
   return { ok: false, error: "server_error" };
 }
 
-// ── 내 역할 조회 = 기존 /api/auth/me(Bearer) 재사용 = role 컬럼 읽음(전문가/관리자 화면 분기용). 실패/미로그인 = 'user'. ──
+// ── 내 역할 조회 = 로그인 시 이미 폰에 저장된 role 을 그대로 읽음(서버 재조회 삭제 = 2026-07-16 §0 사장님 SSOT). 미로그인/role 없음 = 'user'. ──
 export async function getMyRole(): Promise<"user" | "expert" | "admin"> {
-  const res = await req("GET", "/api/auth/me");
-  if (!res.ok) return "user";
-  const u = await res.json().catch(() => ({}));
-  return (u?.role === "expert" || u?.role === "admin") ? u.role : "user";
+  const user = await getUserData();
+  return (user?.role === "expert" || user?.role === "admin") ? user.role : "user";
 }
 
 // ── 탭 배지 수 = 역할별. ⚠️ 사장님 SSOT 2026-07-14 = 실시간 접수/답변 신호.
 //   전문가·관리자 = 대기+검토중 받은 문의 수(응답 대기 신호).
 //   사용자 = 진행중 문의(접수됨=pending·검토중=in_review) + 안 읽은 답변(answered 미열람). = 문의 즉시 배지로 "접수됨"을 인식(옛: 안읽은답변만 = 문의 직후 배지0 = 접수 인식불가 폐기 §19).
 export async function tabBadgeCount(): Promise<number> {
-  // ⚠️ 사장님 승인 2026-07-14 = 비로그인(실형식 토큰 없음)이면 배지 API(auth/me·verification/requests) 자체를 안 부름 → 401 로그·불필요 서버호출 제거. 배지는 로그인해야 의미. 옛: 무조건 호출 → 비로그인 401 스팸 폐기 §19.
+  // ⚠️ 사장님 승인 2026-07-14 = 비로그인(실형식 토큰 없음)이면 배지 API(verification/requests) 자체를 안 부름 → 401 로그·불필요 서버호출 제거. 배지는 로그인해야 의미. 옛: 무조건 호출 → 비로그인 401 스팸 폐기 §19.
   const user = await getUserData();
   if (!user?.token || !user.token.startsWith("simple_auth_token_v1_")) return 0;
   const role = await getMyRole();

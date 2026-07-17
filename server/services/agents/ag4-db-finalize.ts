@@ -26,6 +26,8 @@ import { backfillFromRoute } from "../route/route-backfill";
 // ⚠️ 2026-07-04 사장님 SSOT = 드라이빙 가이드 가격 = 재발명 금지(§16) = MIX 경로(pipeline-v3.ts)와 동일한 단일 SSOT 재사용.
 // ⚠️ 2026-07-06 사장님 SSOT = 가이드 하루요금 = guideCostForDay 공용 SSOT(옛 로컬 guideCostPerPersonPerDay 승격, 3경로 공유 §16).
 import { shouldApplyGuidePrice, guideCostForDay } from "../transport-pricing-service";
+// ⚠️ 2026-07-17 사장님 확정 = 식당풀 = (city_id=요청도시) ∪ (중심 100km) 합집합 = shared/pool-radius 단일 SSOT(§16)
+import { getPoolContext } from "../shared/pool-radius";
 
 // 🗑️ 2026-07-05 = getEurToKrwRate 로컬정의 삭제 = shared/exchange-rate.ts 단일 SSOT 통합(§16 재발명금지, 3벌→1벌)
 
@@ -85,6 +87,9 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
   //   → route-local 2차 = 이 TOP 풀에서 슬롯 앵커 거리순 인접픽 (= 부실 바닥식당 원천 제외).
   let restaurantPool: PlaceResult[] = [];
   if (cityId && db) {
+    // ⚠️ 2026-07-17 사장님 확정 = 풀 = (city_id=요청도시) ∪ (좌표 유효 100km 이내) 합집합(§16 pool-radius)
+    //   = 크로스도시 시내 식당 포함(실증: 본(134) 소속 디종 시내 Loiseau des Ducs 가 디종 풀에서 안 보이던 결함 해소)
+    const { where: poolWhere } = await getPoolContext(cityId, cityCoords); // 2026-07-17 = 기점 = 동적 출발점(cityCoords = 숙소>도심, day-builder 우선순위 반영값)
     const rows = (await db!.execute(sql`
       WITH banded AS (
         SELECT id, name_en AS "nameEn", name_ko AS "nameKo", name_local AS "nameLocal", address,
@@ -97,7 +102,7 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
                  ORDER BY google_review_count DESC NULLS LAST
                ) AS band_rn
         FROM place_seed_raw
-        WHERE city_id = ${cityId} AND seed_category = 'restaurant' AND price_eur IS NOT NULL
+        WHERE (${poolWhere}) AND seed_category = 'restaurant' AND price_eur IS NOT NULL
       )
       SELECT * FROM banded WHERE band_rn <= quota ORDER BY "googleReviewCount" DESC NULLS LAST
     `)) as unknown as { rows: Array<Record<string, any>> };

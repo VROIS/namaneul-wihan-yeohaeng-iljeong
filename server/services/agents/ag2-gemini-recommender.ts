@@ -13,8 +13,10 @@ import { pickPlaceImage } from "../shared/place-image";
 // ⚠️ 수정금지(승인필요) 2026-05-06 = 사용자 의도 = AG2 데이터 출처 = place_seed_raw 우선
 import { db } from "../../db";
 import { placeSeedRaw } from "@shared/schema";
-import { eq, and, between, asc, sql } from "drizzle-orm";
+import { eq, and, between, sql } from "drizzle-orm";
 import { findCityUnified } from "../city-resolver";
+// ⚠️ 2026-07-17 사장님 확정 = 슬롯 풀 = (city_id=요청도시) ∪ (중심 100km) 합집합 = shared/pool-radius 단일 SSOT(§16)
+import { getPoolContext, recalcCrossCityZone } from "../shared/pool-radius";
 
 /**
  * ⚠️ 수정금지(승인필요) 2026-05-07 = 사용자 명시 = 도시 입력 시점 분기 (백엔드만)
@@ -151,6 +153,10 @@ async function fetchFromPlaceSeedRaw(
       return null;
     }
   }
+  // ⚠️ 2026-07-17 사장님 확정 = 풀 컨텍스트(중심좌표 + 합집합 WHERE) 1회 확보 = 아래 카테고리별 SELECT 공용
+  const cid: number = cityId;
+  // 2026-07-17 = 기점 = 동적 출발점(숙소 입력 시 그 좌표 = 이중도시·숙소중간 100km 공유). 미입력 = getPoolContext 가 도시중심 폴백.
+  const { center, where: poolWhere } = await getPoolContext(cid, (formData as any).accommodationCoords ?? null);
 
   // 🧠 2026-07-05 사장님 SSOT = vibe → 카테고리 슬롯 분배 = computeCatSlots 단일 SSOT(§16). 옛 인라인 계산 폐기(§19) = 로직 그대로 함수로 이동(DB-only 동작 불변).
   const totalSlots = requiredPlaceCount;
@@ -170,11 +176,12 @@ async function fetchFromPlaceSeedRaw(
     `[AG2-DB] travelStyle=${formData.travelStyle} = price €${budgetTier.min}-${budgetTier.max} (lunch ≤€${budgetTier.lunch} / dinner ≤€${budgetTier.dinner})`,
   );
 
-  // ⚠️ 수정금지(승인필요) 2026-05-21 = Phase E-1 = dayZone 균등 + 좌표 ORDER (= 사용자 SSOT)
+  // ⚠️ 수정금지(승인필요) 2026-05-21 = Phase E-1 = dayZone 균등 (= 사용자 SSOT)
   // 식당 = budget WHERE + dayZone 균등 (= core 4 + outskirt 2 = 일자별 zone 매칭 자동)
-  // 비식당 = rank 1-20 + ORDER distance_km_from_center ASC (= 도심 → 외곽 자연 흐름)
   const SELECT_COLS = {
     id: placeSeedRaw.id,
+    // ⚠️ 2026-07-17 = cityId 프로젝션 추가 = 크로스도시 행 판별(zone 재계산·로그) 용
+    cityId: placeSeedRaw.cityId,
     nameEn: placeSeedRaw.nameEn,
     nameKo: placeSeedRaw.nameKo,
     // ⚠️ 수정금지(승인필요) 2026-05-28 = 사용자 SSOT = nameLocal (= buildRouteInputJson `name_local` 정확 inject)
@@ -195,48 +202,45 @@ async function fetchFromPlaceSeedRaw(
     // = distanceKmFromCenter 2026-05-28 제거 = PlaceResult 매핑 X = 데드 컬럼 (= ag3/place-upsert 별도 SELECT)
   };
 
-  // ⚠️ 수정금지(승인필요) 2026-05-24 = 식당 + 비식당 = day_zone 분리 SELECT 통합 헬퍼
+  // ⚠️ 수정금지(승인필요) 2026-07-17 사장님 확정 = 식당 + 비식당 = 합집합 풀 + 유효 zone 분리 통합 헬퍼(§16 pool-radius)
+  // = 풀 = (city_id=요청도시) ∪ (좌표 유효 100km 이내) = 순수 확장(자기도시 행 손실 0) = 장소는 글로벌(도시번호 소유 아님)
+  // = 크로스도시 행 day_zone = 요청 도시 중심 기준 메모리 재계산(core ≤10km / outskirt 10~100km) = DB 쓰기 절대 없음
+  // = 자기도시 행 = 저장 day_zone 그대로 + zone NULL 행 풀 제외(기존 동작 보존)
   // = core 2/3 + outskirt 1/3 (= 사용자 SSOT = AG3 Day 2 outskirt pool 확보)
-  // = 식당 = budget WHERE + RC DESC / 비식당 = rank ASC
+  // = 정렬 = 식당 RC DESC NULLS LAST(2026-06-02 SSOT 유지) / 비식당 rank ASC NULLS LAST + 동순위 RC DESC(크로스도시 rank 혼합 대비)
   const selectByDayZone = async (cat: string, slots: number) => {
     const isRestaurant = cat === "restaurant";
     const coreSlots = Math.ceil(slots * (2 / 3));
     const outskirtSlots = slots - coreSlots;
-    const baseWhere = [
-      eq(placeSeedRaw.cityId, cityId),
-      eq(placeSeedRaw.seedCategory, cat),
-    ];
+    const baseWhere = [poolWhere, eq(placeSeedRaw.seedCategory, cat)];
     if (isRestaurant)
       baseWhere.push(
         between(placeSeedRaw.priceEur, budgetTier.min, budgetTier.max),
       );
-    // ⚠️ 수정금지(승인필요) 2026-06-02 = RC(리뷰수) 빈칸(NULL)은 맨 아래로 (NULLS LAST)
-    //   = Postgres DESC 기본 NULLS FIRST 면 RC 없는 옛 행이 위로 올라와 좋은 식당 밀어냄 → 방지
-    //   = RC 없는 미검증 옛 행 자동 배제 + 리뷰순 정렬 SSOT 정합 (= 사용자 SSOT)
-    const orderCol = isRestaurant
-      ? sql`${placeSeedRaw.googleReviewCount} DESC NULLS LAST`
-      : asc(placeSeedRaw.rank);
-    const [coreRows, outskirtRows] = await Promise.all([
-      db!
-        .select(SELECT_COLS)
-        .from(placeSeedRaw)
-        .where(and(...baseWhere, eq(placeSeedRaw.dayZone, "core")))
-        .orderBy(orderCol)
-        .limit(coreSlots),
-      db!
-        .select(SELECT_COLS)
-        .from(placeSeedRaw)
-        .where(and(...baseWhere, eq(placeSeedRaw.dayZone, "outskirt")))
-        .orderBy(orderCol)
-        .limit(outskirtSlots),
-    ]);
+    const rows: any[] = await db!
+      .select(SELECT_COLS)
+      .from(placeSeedRaw)
+      .where(and(...baseWhere));
+    for (const r of rows) recalcCrossCityZone(r, cid, center);
+    const rc = (r: any) => r.googleReviewCount ?? -1;
+    rows.sort(
+      isRestaurant
+        ? (a, b) => rc(b) - rc(a)
+        : (a, b) =>
+            (a.rank ?? Number.MAX_SAFE_INTEGER) - (b.rank ?? Number.MAX_SAFE_INTEGER) ||
+            rc(b) - rc(a),
+    );
+    const coreRows = rows.filter((r) => r.dayZone === "core").slice(0, coreSlots);
+    const outskirtRows = rows.filter((r) => r.dayZone === "outskirt").slice(0, outskirtSlots);
+    const picked = [...coreRows, ...outskirtRows];
+    const crossCount = picked.filter((r) => r.cityId !== cid).length;
     const budgetLabel = isRestaurant
       ? ` (budget €${budgetTier.min}-${budgetTier.max})`
       : " (rank ASC)";
     console.log(
-      `[AG2-DB] ${cat}: core ${coreRows.length}/${coreSlots} + outskirt ${outskirtRows.length}/${outskirtSlots}${budgetLabel}`,
+      `[AG2-DB] ${cat}: core ${coreRows.length}/${coreSlots} + outskirt ${outskirtRows.length}/${outskirtSlots}${budgetLabel}${crossCount ? ` [크로스도시 ${crossCount}곳 포함]` : ""}`,
     );
-    return [...coreRows, ...outskirtRows];
+    return picked;
   };
 
   const allRows: any[] = [];
