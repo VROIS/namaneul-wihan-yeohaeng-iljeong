@@ -93,19 +93,10 @@ const PM_CALL_EUR = 0.007;
     const center = { lat: parseFloat(cityRow?.latitude) || 0, lng: parseFloat(cityRow?.longitude) || 0 };
     // ⚠️ 2026-06-03 = 거리 필터 제거 = 범위는 run.ts 의 locationRestriction(강제 사각형)이 발굴 단계에서 보장
     const exist = (await cc2.query(`SELECT id, name_en, name_local, name_ko, google_place_id AS pid, google_maps_uri AS uri, address, latitude AS lat, longitude AS lng FROM place_seed_raw WHERE city_id=$1 AND seed_category=$2`, [cityId, category])).rows;
-    // ⚠️ 수정금지(승인필요) 2026-06-03 = 미리보기 매칭 = 쓰기경로(upsertPlace)와 동일한 공용 matchCandidate 사용 = 보고치=실제 일치 (= 헌법 §16 + 단일검증 SSOT)
-    const { matchCandidate } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/matcher.ts')).href);
-    const existCands = exist.map((e: any) => ({ id: e.id, cityId, googlePlaceId: e.pid, googleMapsUri: e.uri, address: e.address, latitude: e.lat, longitude: e.lng, nameEn: e.name_en, nameLocal: e.name_local, nameKo: e.name_ko }));
-    const matchRow = (p: any): any => matchCandidate({
-      cityId, googlePlaceId: p.place_id, googleMapsUri: p.google_maps_uri || null, address: p.address || null,
-      // ⚠️ 수정금지(승인필요) — TS displayName→name_en (2026-06-17 사장님 SSOT) = name_local은 Gemini전용 = TS는 nameLocal=null (place-upsert COALESCE가 기존 Gemini값 보존)
-      latitude: p.lat, longitude: p.lng, nameEn: p.name_local || p.name, nameLocal: null, nameKo: null,
-    }, existCands).match || null;
-    for (const p of clean) p._m = matchRow(p);
-    const matched = clean.filter((p) => p._m), fresh = clean.filter((p) => !p._m);
+    // ⚠️ 2026-07-18 사장님 SSOT = 미리보기 매칭(matchCandidate) 삭제 §19 = 중복 판정은 DB 트리거 단일 관문 전담(신규/흡수 = --apply 때 확정).
     console.log(`═══ 카테고리 모드 = ${category} (city=${cityId}, ${zone}, 파일 ${catFiles.length}: ${catFiles.join(', ')}) ═══`);
     console.log(`병합 ${merged.length} → 명백오류 제외 ${errs.length}${errs.length ? ' (' + errs.map((p) => p.name_local || p.name).join(' / ') + ')' : ''} → dedup 후 ${clean.length}`);
-    console.log(`기존 ${category} ${exist.length}곳 | 매칭(검증·정정) ${matched.length} / 신규(발굴) ${fresh.length}`);
+    console.log(`기존 ${category} ${exist.length}곳 | upsert 후보 ${clean.length} (신규/흡수 판정 = --apply 때 트리거)`);
     console.log(`RC순 상위20: ${clean.slice(0, 20).map((p) => `${p.name_local || p.name}(${p.review_count || 0})`).join(' · ')}`);
     if (!apply) { console.log(`\n=== DRY-RUN (쓰기 0) === 실행: --apply`); await cc2.end(); return; }
     await cc2.end();
@@ -156,9 +147,10 @@ const PM_CALL_EUR = 0.007;
   const existing = (await c.query(
     `SELECT id, name_en, name_local, name_ko, google_place_id AS pid, google_maps_uri AS uri, address, latitude AS lat, longitude AS lng, day_zone, image_url, phase_tags
      FROM place_seed_raw WHERE city_id=$1 AND seed_category='restaurant'`, [cityId])).rows;
-  // ⚠️ 수정금지(승인필요) 2026-06-10 = 식당 미리보기 매칭 = 단일 matcher.ts(matchCandidate)로 통일 (= 옛 자체 matchRow[pid/좌표/이름] 폐기 = 헌법 §16, catMode·upsert·refeed-verify 와 동일 매처).
-  const { matchCandidate } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/matcher.ts')).href);
-  const existCands = existing.map((e: any) => ({ id: e.id, cityId, googlePlaceId: e.pid, googleMapsUri: e.uri, address: e.address, latitude: e.lat, longitude: e.lng, nameEn: e.name_en, nameLocal: e.name_local, nameKo: e.name_ko, image_url: e.image_url }));
+  // ⚠️ 2026-07-18 사장님 SSOT = 미리보기 매칭(matchCandidate) 삭제 §19 = 중복 판정은 DB 트리거 단일 관문 전담.
+  //   = 여기 남는 조회 = PM 비용 최적화 전용(PID 로 기존 행 이미지 유무만 조회 = "이미 이미지 있으면 PM 스킵"). 매칭(어느 행과 같은가) 아님 = PID 직조회로 충분.
+  const existByPid = new Map<string, any>();
+  for (const e of existing) if (e.pid) existByPid.set(e.pid, e);
 
   // ── ① 거리 + ② OPERATIONAL + ③ 수동가격 + ④ 가격대별 quota ──
   const kept: any[] = [];
@@ -187,13 +179,8 @@ const PM_CALL_EUR = 0.007;
     kept.length = 0; kept.push(...d);
   }
 
-  // ── ⑤ 중복 매칭 = 단일 matcher.ts(matchCandidate) = 쓰기경로(upsertPlace)와 동일 = 보고치=실제 (= §16, 2026-06-10) ──
-  const matchRow = (p: any): any => matchCandidate({
-    cityId, googlePlaceId: p.place_id || null, googleMapsUri: p.google_maps_uri || null, address: p.address || null,
-    // ⚠️ 수정금지(승인필요) — TS displayName→name_en (2026-06-17 사장님 SSOT) = name_local은 Gemini전용 = TS는 nameLocal=null (place-upsert COALESCE가 기존 Gemini값 보존)
-    latitude: p.lat ?? null, longitude: p.lng ?? null, nameEn: p.name_local || p.name, nameLocal: null, nameKo: null,
-  }, existCands).match || null;
-  for (const p of kept) { p._match = matchRow(p); p._pmNeed = !p._closed && (!p._match || !isGoogleImg(p._match.image_url)); }  // (B) 폐업 = PM 안 함(이미지 비용 절약)
+  // ── ⑤ PM 비용 최적화 = PID 로 기존 행 조회(이미지 있으면 PM 스킵). 중복 판정 아님(트리거 전담) = PID 직조회 §19 2026-07-18 ──
+  for (const p of kept) { p._match = p.place_id ? existByPid.get(p.place_id) || null : null; p._pmNeed = !p._closed && (!p._match || !isGoogleImg(p._match.image_url)); }  // (B) 폐업 = PM 안 함(이미지 비용 절약)
   const updP = kept.filter((p) => p._match), insP = kept.filter((p) => !p._match);
   const pmNeed = kept.filter((p) => p._pmNeed), pmSave = kept.length - pmNeed.length;
 

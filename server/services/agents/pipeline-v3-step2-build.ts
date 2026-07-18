@@ -1,7 +1,10 @@
 // Step2 데이터 채우기 + 최종 빌드 = pipeline-v3 분리(2026-07-15 §0 슬림화, 순수 이동)
 import type { TripFormData, PlaceResult, DaySlotConfig, TravelPace, VibeWeight } from './types';
 import { SEED_CATEGORIES, DEFAULT_START_TIME, DEFAULT_END_TIME } from './types';
-import { matchPlacesWithDB, saveNewPlacesToDB, loadSeedRawMap, preloadCityData } from './ag3-data-matcher';
+// ⚠️ 2026-07-18 §0/§19 = ag3-data-matcher(재export 허브) 삭제 = 실제 파일 직접 import(껍데기 도려내기).
+import { matchPlacesWithDB } from './ag3-match-core';
+import { saveNewPlacesToDB } from './ag3-save-new-places';
+import { preloadCityData } from './ag3-seed-loader';
 import {
   calculateTransportPrice, shouldApplyGuidePrice, round2,
   type GuidePriceResult, type TransitPriceResult,
@@ -47,7 +50,7 @@ export async function step2_enrichAndBuild(
         id: placeId,
         name: gPlace.name || 'Unknown Place',
         description: desc,
-        // 🧠 2026-07-05 사장님 SSOT = Gemini 정확좌표 살림(옛 lat:0/lng:0 폐기 §19). = matchCandidate 매칭키 + saveNewPlacesToDB TS 앵커 힌트 = 동명오매칭 방지.
+        // 🧠 2026-07-05 사장님 SSOT = Gemini 정확좌표 살림(옛 lat:0/lng:0 폐기 §19). = 트리거 좌표10m 판정 + saveNewPlacesToDB TS 앵커 힌트 = 동명오매칭 방지(코드 매칭 삭제 2026-07-18 §19).
         lat: gPlace.latitude ?? 0,
         lng: gPlace.longitude ?? 0,
         vibeScore: 7,
@@ -88,10 +91,9 @@ export async function step2_enrichAndBuild(
 
   console.log(`[V3-Step2] ${allPlaces.length}곳 PlaceResult 변환 완료`);
 
-  // ── 2b. DB 매칭 (좌표, 점수 보강) ──
-  // ⚠️ 수정금지(승인필요) 2026-05-31 = 사용자 SSOT = skipImageEnrich = Wikipedia 이미지 보강(동기 ~9초) skip
-  // = FE 우선 노출 (= DB-only 처럼) / 이미지 = fill/image-backfill(사후 일괄) 이 DB 저장 = 다음 trip = DB hit (2026-07-11)
-  const matchedPlaces = await matchPlacesWithDB(allPlaces, preloaded, { skipImageEnrich: true });
+  // ── 2b. place 통과 + seed 이미지 폴백 (매칭은 트리거 단일 관문 §19) ──
+  // 🗑️ 2026-07-18 §0/§19 = skipImageEnrich 옵션 삭제 = 생성 중 Wikipedia 실시간 보강(죽은코드·옛레거시) 완전제거. 이미지 = fill/image-backfill 사후 일괄(2026-07-11 사진 분리 수술).
+  const matchedPlaces = await matchPlacesWithDB(allPlaces, preloaded);
   // 🗑️ 2026-07-05 삭제 = matchedMap = finalPlaceMap 폴백용 데드맵(finalPlaces 가 동일 id 전부 보유) §0/§19
   console.log(`[V3-Step2] DB 매칭 완료 (${Date.now() - _t0}ms)`);
 
@@ -179,17 +181,7 @@ export async function step2_enrichAndBuild(
     console.error('[V3-Step2] ⚠️ saveNewPlacesToDB(await fetch) 실패:', e?.message || e)
   );
 
-  // ⚠️ 2026-07-07 사장님 SSOT = 1차 저장 후 PSR 재조회 = 슬롯을 저장된 PSR 에서 구성(DB-only 동형, §16 loadSeedRawMap).
-  //   = ①단계 Gemini 전체 upsert(순차 await 완료) 로 23곳이 이미 PSR 확정 → 재조회로 신규 포함 최신 맵 확보 → 슬롯이 editorialSummary·nameKo·RC·image 를 저장 PSR 에서 flat.
-  //   = 옛 슬롯이 Gemini place(부분mutate)만 봐서 editorialSummary·nameKo 누락(에비앙 슬롯 제미니요소 안뜸) 근본해결.
-  if (preloaded.cityId) {
-    try {
-      preloaded.seedRawMap = await loadSeedRawMap(preloaded.cityId);
-      console.log(`[V3-Step2] 🔄 1차저장 후 PSR 재조회 = ${preloaded.seedRawMap.size}키 (슬롯 = 저장 PSR flat)`);
-    } catch (e) {
-      console.warn('[V3-Step2] PSR 재조회 실패(슬롯은 place 폴백):', (e as Error)?.message);
-    }
-  }
+  // 🗑️ 2026-07-18 삭제 = 1차저장 후 loadSeedRawMap 재조회 = 슬롯이 place 직접(흡수 RETURNING·Gemini·TS 로 완비)이라 불필요 §0/§19. day-builder 가 저장 PSR 재매칭하던 419키 SELECT 제거.
 
   // 🗑️ 2026-07-08 사장님 = 폐업 슬롯 splice 완전삭제 = 슬롯은 그 무엇도 줄일 권한 없음(무단 감소 로직) §19. 슬롯 = scheduleMap = Gemini 곳수 항상 보존.
 

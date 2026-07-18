@@ -14,7 +14,8 @@ import { isValidCoord } from './pipeline-v3-helpers';
 
 export interface DayBuilderDeps {
   formData: TripFormData;
-  preloaded: { seedRawMap?: Map<string, any>; cityCoords?: { lat: number; lng: number }; cityName?: string };
+  // 🗑️ 2026-07-18 = seedRawMap 제거 = 슬롯 place 직접(재조회 폐기) 로 day-builder 가 seedRawMap 미사용 §0/§19.
+  preloaded: { cityCoords?: { lat: number; lng: number }; cityName?: string };
   geminiDays: GeminiDay[];
   scheduleMap: { day: number; gPlace: GeminiPlace; placeId: string }[];
   finalPlaceMap: Map<string, PlaceResult>;
@@ -51,14 +52,10 @@ export async function buildDayResult(d: number, deps: DayBuilderDeps): Promise<{
     // 프론트 전달 시 불필요한 0값 필드 제거 (React Native에서 {0}이 "0" 텍스트로 표시되는 문제 방지)
     const { finalScore, buzzScore, ...safePlace } = enrichedPlace as any;
 
-    // ⚠️ 2026-07-07 사장님 SSOT = 슬롯 = 1차저장 PSR(placeSeed) 우선 flat 매핑(DB-only ag4:234-273 동형). 저장된 검증행에서 editorialSummary·nameKo·RC·image.
-    //   = 재조회된 seedRawMap(신규 포함)에서 PID > 이름 순 조회. 없으면 enrichedPlace(place mutate)·s.gPlace 폴백.
-    const placeNameEn = enrichedPlace.name ? enrichedPlace.name.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, "") : "";
-    const placeNameKo = (enrichedPlace as any).nameKo ? (enrichedPlace as any).nameKo.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, "") : "";
-    const placeSeed = (enrichedPlace as any).googlePlaceId
-      ? preloaded.seedRawMap?.get(`pid:${(enrichedPlace as any).googlePlaceId}`)
-      : undefined;
-    const seed = placeSeed || preloaded.seedRawMap?.get(placeNameEn) || preloaded.seedRawMap?.get(placeNameKo);
+    // ⚠️ 2026-07-18 사장님 SSOT = 슬롯 = enrichedPlace(place) 직접 flat = 재조회(loadSeedRawMap) 폐기 §0/§19.
+    //   근본: 흡수(트리거 dup) 시 원행 재활용데이터(nameKo·nameLocal·summaryKo·editorialSummary·RC·image·좌표)를 RETURNING 으로 place 에 이미 입힘(ag3-save).
+    //   = 신규는 Gemini(place)값 그대로. 둘 다 place 에 완비 = 저장 PSR 재조회(419키 SELECT + PID/이름 재매칭) 불필요. TS mutate 값도 place 에 있음.
+    const ep = enrichedPlace as any;
 
     return {
       ...safePlace,
@@ -70,25 +67,21 @@ export async function buildDayResult(d: number, deps: DayBuilderDeps): Promise<{
       endTime: minutesToTime(dayStartMin + (slotIdx + 1) * slotDur),
       // ⚠️ 2026-07-06 = FE 슬롯 필드 = DB-only 동형(type/nameEn flat). 옛 MIX 누락 보완 §16.
       type: isMeal ? 'restaurant' as const : 'activity' as const,
-      nameEn: seed?.nameEn || (enrichedPlace as any).nameEn || enrichedPlace.name,
+      nameEn: ep.nameEn || enrichedPlace.name,
       // 식사 정보
       isMealSlot: isMeal,
       mealType: s.gPlace.type === 'lunch' ? 'lunch' as const : s.gPlace.type === 'dinner' ? 'dinner' as const : undefined,
-      // 🗑️ 2026-07-05 삭제 = mealPrice 옛 s.gPlace.price_eur raw 재산정(resolvePrice 우회) → resolvePrice 단일결과(estimatedPriceEur) 재사용 §0/§19
-      mealPrice: isMeal ? ((seed?.priceEur ?? enrichedPlace.estimatedPriceEur) ?? undefined) : undefined,
+      mealPrice: isMeal ? (enrichedPlace.estimatedPriceEur ?? undefined) : undefined,
       mealPriceLabel: isMeal ? (s.gPlace.type === 'lunch' ? mealBudget.lunchLabel : mealBudget.dinnerLabel) : undefined,
-      // ⚠️ 2026-07-07 = 저장 PSR 우선(DB-only 동형) → Gemini(s.gPlace) 폴백.
-      // ⚠️ 2026-07-07 = Gemini 전용 요소(nameKo·nameLocal·summaryKo·editorialSummary) = 저장 PSR(seed) 우선 → Gemini 폴백. TS가 안 건드리는 값.
-      nameKo: seed?.nameKo || s.gPlace.nameKo,
-      nameLocal: seed?.nameLocal || s.gPlace.nameLocal || null,
-      // ⚠️ 2026-07-07 = RC·image = TS 검증값(enrichedPlace = place mutate, Storage 이미지) 우선 → 저장 PSR 폴백.
-      //   = 신규는 ③재UPDATE(TS→DB)가 deferPersist background = 재조회 시점 PSR 엔 아직 Gemini값(RC null·이미지 Gemini) = seed 먼저 쓰면 TS Storage 이미지 가려짐(review 지적). enrichedPlace(TS mutate, await 완료) 우선이 정답.
-      userRatingCount: (enrichedPlace as any).userRatingCount ?? seed?.googleReviewCount,
-      image: enrichedPlace.image || seed?.imageUrl || '',
-      // summary_ko = 숏폼 재료 = 보전(FE 슬롯 노출 아님, 추후 숏폼). PSR 우선.
-      summaryKo: seed?.summaryKo || enrichedPlace.summaryKo || null,
-      // ⚠️ 수정금지(승인필요) 2026-06-24 사용자 SSOT = 슬롯 한줄요약 = editorial_summary 단일. 2026-07-07 = 저장 PSR(seed.editorialSummary) 우선 = DB-only(ag4:268 scene.shortform_ko) 동형. 옛 enrichedPlace만 봐서 누락되던 것 해결.
-      editorialSummary: seed?.editorialSummary || enrichedPlace.editorialSummary || null,
+      // ⚠️ 2026-07-18 = 전 표시필드 = place 직접(흡수 RETURNING·Gemini·TS mutate 로 완비). Gemini(s.gPlace) 폴백만.
+      nameKo: ep.nameKo || s.gPlace.nameKo,
+      nameLocal: ep.nameLocal || s.gPlace.nameLocal || null,
+      userRatingCount: ep.userRatingCount,
+      image: enrichedPlace.image || '',
+      // summary_ko = 숏폼 재료 = 보전(FE 슬롯 노출 아님, 추후 숏폼).
+      summaryKo: ep.summaryKo || null,
+      // ⚠️ 수정금지(승인필요) 2026-06-24 사용자 SSOT = 슬롯 한줄요약 = editorial_summary 단일.
+      editorialSummary: ep.editorialSummary || null,
       // Gemini가 생성한 교통편 안내 (강화 프롬프트 v3.1)
       transitNote: s.gPlace.transitNote || null,
       // 부가 정보

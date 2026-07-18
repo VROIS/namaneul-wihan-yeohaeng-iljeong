@@ -47,8 +47,8 @@ export interface TsSearchReq {
   regionCode?: string;
   languageCode?: string;      // ⚠️ 수정금지(승인필요) — languageCode 제거(2026-06-17 사장님 SSOT) = 미지정 시 키 생략(한국어 강제 안 함), 명시(예 'fr') 시에만 사용
   // 입력 (보유분만 = TS 정확도↑):
-  nameLocal?: string;         // searchText textQuery (= 로컬이름, 단독 = 주소와 안 합침)
-  address?: string | null;    // 좌표 없을 때만 textQuery 보조
+  nameLocal?: string;         // searchText textQuery (= 로컬이름 단독 = 좌표는 아래 anchorRadiusM locationBias 로만)
+  address?: string | null;    // ⚠️ 2026-07-18 §19 = textQuery 조립에서 안 씀(주소 합치면 premise 오매칭). repair.ts/skill 잔존 소비자 위해 필드만 유지 = 통일 시 삭제.
   latitude?: number | null;   // 좌표 앵커
   longitude?: number | null;
   textQuery?: string;         // 카테고리/명소 발굴 쿼리 (= nameLocal 대신 직접 지정)
@@ -109,7 +109,7 @@ async function saveTsRaw(method: string, req: TsSearchReq, raw: any): Promise<vo
 
 /**
  * 단일 TS 검색 관문 = 9요소 강제. 앱의 모든 searchText/searchNearby 는 이 함수만 통과.
- * 범위 우선순위: 사각형(발굴) > 좌표앵커(검증) > 원. textQuery = 보유한 이름+주소 전부 합침(좌표 유무 무관).
+ * 범위 우선순위: 사각형(발굴) > 좌표앵커(검증) > 원. textQuery = 로컬명 단독(주소 합침 금지 = 2026-07-18 §19), 좌표는 locationBias 로만.
  */
 export async function tsSearch(req: TsSearchReq): Promise<TsPlace[]> {
   if (!req.apiKey) throw new Error('[tsSearch] apiKey 필수');
@@ -138,12 +138,14 @@ export async function tsSearch(req: TsSearchReq): Promise<TsPlace[]> {
     loc = { locationBias: { circle: { center: { latitude: req.latitude, longitude: req.longitude }, radius: Math.min(50000, req.circleRadiusM) } } };
   }
 
-  // ⚠️ 수정금지(승인필요) 2026-07-05 사장님 SSOT = 로컬이름+풀주소+좌표(10m 앵커) 3요소 전부 Google 에 제공.
-  //   = 옛 "좌표 있으면 이름 단독"(2026-06-XX) 폐기(§19) = locationBias 는 가중치일 뿐 강제필터가 아니라
-  //     이름만 보내면 동명·유사이름 원거리 업체가 최상위로 반환될 위험(리모주 실호출로 351km 오매칭 실증).
-  //     이름+주소를 textQuery 에 합치면 Google 자체 텍스트매칭이 정답을 최상위로 올림(실호출 검증 완료).
-  const textQuery = req.textQuery
-    ?? [req.nameLocal, req.address].filter(Boolean).join(' ');
+  // ⚠️ 수정금지(승인필요) 2026-07-18 사장님 SSOT = textQuery = 로컬명 단독(주소 합침·영어명 폴백 금지) + 좌표는 locationBias(넓게=오차흡수).
+  //   = 옛 "이름+주소 합침"(2026-07-05) 폐기(§19) = Fort Thüngen 실호출 실증: 주소 합치면 Google 이 주소텍스트에 낚여 그 좌표 premise(주소건물)를 반환 = 요새(RC 2361)를 놓침(RC 0 오매칭).
+  //   = 정답 = 로컬명만 보내고 좌표 locationBias(1000m)로 근처 가중 = Google 텍스트매칭이 정답을 최상위로 올림(Fort Thüngen 3조합 실증 RC 2361 정확).
+  const textQuery = req.textQuery ?? req.nameLocal;
+  // ⚠️ 2026-07-18 = searchText 는 textQuery 필수. null/빈값(로컬명 누락)이면 Google 400 = 조용한 실패 대신 명확한 에러(?? 는 null 통과하므로 여기서 방어). searchNearby 는 textQuery 안 씀 = 무관.
+  if (!isNearby && (!textQuery || String(textQuery).trim() === '')) {
+    throw new Error('[tsSearch] searchText = textQuery(로컬명) 필수 = null/빈값 = 호출부에서 로컬명 없는 곳 스킵 필요');
+  }
 
   // ⚠️ 수정금지(승인필요) — languageCode 제거(2026-06-17 사장님 SSOT) = lang(=req.languageCode) 있을 때만 키 삽입, 없으면 생략(한국어 강제 안 함)
   const body: any = isNearby

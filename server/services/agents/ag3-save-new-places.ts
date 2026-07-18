@@ -86,25 +86,20 @@ export async function saveNewPlacesToDB(
 
   // ⚠️ 수정금지(승인필요) 2026-07-08 사장님 SSOT = 순서 = ① Gemini 전체 upsert → ② TS 대상 = 신규(inserted) + PID 없는 매칭행(updated) → ③ TS → 저장. (PM = 사후 일괄 2026-07-11)
   //   = Gemini가 채운 슬롯 전부 검증 보장(옛 "신규만" = 흡수건 검증누락 = 폐기 2026-07-08 §19). PID 보유 매칭행만 skip = 재과금 원천차단(니스 €17 사고 코드원인 해소) 유지.
-  const { upsertPlace, loadMatchCandidates } = await import("../place-upsert");
+  const { upsertPlace } = await import("../place-upsert");
+  // 🗑️ 2026-07-18 삭제 = loadMatchCandidates(전체 PSR SELECT) + batchCands = 매칭 폐기(트리거 단일) 로 후보명단 불필요 §0/§19.
 
-  // ⚠️ 수정금지(승인필요) 2026-07-10 사장님 SSOT = 매칭 후보 명단 = 배치 시작 때 1회만 읽고 전 곳 재사용.
-  //   = 옛 "upsertPlace 가 곳마다 전행 재SELECT(1회 3.0초 실측 = 24곳 ~17초)" = 매칭·저장 지연 근본 = 폐기 2026-07-10 §19.
-  //   = 신규 INSERT 는 아래 루프에서 명단에 즉시 추가 = 같은 배치 안 중복 인지(옛 매회 재조회와 동일 결과) 보존.
-  const batchCands = await loadMatchCandidates();
-
-  // ── ① Gemini 전체 upsert(TS/PM 0회) = 셀렉없이 전체 새덮어쓰기. 매칭행=UPDATE / 진짜 신규=INSERT ──
+  // ── ① Gemini 전체 INSERT 시도(TS/PM 0회) = 응답값 그대로. 트리거가 중복이면 흡수(RETURNING 재활용). ──
   //   = job 은 Gemini/매칭행(seedDirectMatch 주입) 값만 = 받은 응답 그대로 저장.
   //   🗑️ 2026-07-07 개정헌법(사장님) = 랭킹(rank) 코드 한 자도 안 넣음 §19. 받은 응답만 저장하면 알아서 컬럼에 들어가고, 랭킹은 이후 DB autorank 트리거(RC순)가 함.
-  const stage1: Array<{ place: any; seedCategory: string; action: string; rowId: number | null; error?: string }> = [];
-  for (let i = 0; i < toSave.length; i++) {
-    const place = toSave[i];
+  // ⚠️ 수정금지(승인필요) 2026-07-18 사장님 SSOT = 매칭 폐기(트리거 단일) 후 = 곳마다 독립(공유 후보명단 없음) = Promise.all 병렬(옛 순차 for+await=곳당 90ms×N 직렬 폐기 §0/§19).
+  //   = 각 곳 = "INSERT 시도 → 트리거 판정" 독립. 중복인지는 DB 트리거 담당 = 앱 공유상태 0. 같은 배치 쌍둥이 동시 INSERT = 둘 다 흡수(같은 원행) = 정합성 유지.
+  const stage1 = await Promise.all(toSave.map(async (place: any) => {
     const seedCategory: string = (place as any).seedCategory
       || (place.tags?.includes("restaurant") || place.tags?.includes("food") ? "restaurant" : "attraction");
     const slotCat: string | null = (place as any).slotCategory ?? null; // 취향 슬롯 카테고리(파이프라인 2a 화이트리스트 통과분)
     // ⚠️ 수정금지(승인필요) 2026-07-11 사장님 SSOT = Gemini 좌표는 job 에 그대로 실어 매칭(좌표10m 재식별)에는 쓰되,
     //   쓰기 보호는 관문 플래그(preserveExistingCoords)가 담당(§16 1벌 = ag3 매칭·관문 자체매칭·트리거흡수 세 문 모두 동일 보호).
-    //   = 옛 "job 좌표 제거 게이트" = 폐기 2026-07-11 §19(좌표로만 재식별되는 레거시 행의 매칭을 부숨 = 리뷰 적발).
     const gLat = (place as any).lat && (place as any).lat !== 0 ? (place as any).lat : null;
     const gLng = (place as any).lng && (place as any).lng !== 0 ? (place as any).lng : null;
     const job = {
@@ -126,18 +121,28 @@ export async function saveNewPlacesToDB(
       phaseTags: [`auto-learn-${today}`],
       distanceKmFromCenter: (place as any).distanceKmFromCenter ?? null,
       // ⚠️ 수정금지(승인필요) 2026-07-11 사장님 SSOT = ① Gemini 쓰기 = 좌표 보호 플래그 = 행에 검증좌표 있으면 유지(빈칸·0만 채움).
-      //   = Gemini 환각좌표(식당에 정원좌표, 투르 78796 실증)가 행에 박혀 다음 판 좌표10m이 딴 장소를 흡수하던 오염 연쇄 차단.
       preserveExistingCoords: true,
     };
     try {
-      // 명단 갱신(신규 추가·병합 반영)은 관문(upsertPlace syncCandidateList)이 소유 = 호출자는 넘기기만(§16).
-      const r = await upsertPlace({ ...job, candidates: batchCands } as any);
-      stage1.push({ place, seedCategory, action: r.action, rowId: r.rowId });
+      const r = await upsertPlace({ ...job } as any);
+      // ⚠️ 수정금지(승인필요) 2026-07-18 사장님 SSOT = 트리거 흡수 시 원행 재활용데이터(RETURNING)를 place 에 입힘 = 옛 matchCandidate "매칭행→place" 재활용 대체. §14 새것우선: place 빈칸만 폴백.
+      const en = r.enriched;
+      if (en) {
+        if (!place.image && en.imageUrl) place.image = en.imageUrl;
+        if (!(place as any).userRatingCount && en.googleReviewCount != null) (place as any).userRatingCount = en.googleReviewCount;
+        if (!(place as any).googlePlaceId && en.googlePlaceId) (place as any).googlePlaceId = en.googlePlaceId;
+        if (!(place as any).nameKo && en.nameKo) (place as any).nameKo = en.nameKo;
+        if (!(place as any).nameLocal && en.nameLocal) (place as any).nameLocal = en.nameLocal;
+        if (!(place as any).editorialSummary && en.editorialSummary) (place as any).editorialSummary = en.editorialSummary;
+        if (!(place as any).summaryKo && en.summaryKo) (place as any).summaryKo = en.summaryKo;
+        if ((!place.lat || place.lat === 0) && en.latitude && en.longitude) { place.lat = en.latitude; place.lng = en.longitude; }
+      }
+      return { place, seedCategory, action: r.action, rowId: r.rowId };
     } catch (e) {
       console.error(`[AG3-SAVE] ❌ "${place.name}" Gemini upsert 실패:`, (e as Error).message);
-      stage1.push({ place, seedCategory, action: "skipped", rowId: null, error: (e as Error).message });
+      return { place, seedCategory, action: "skipped", rowId: null as number | null, error: (e as Error).message };
     }
-  }
+  }));
   const g1 = stage1.reduce((a, r: any) => { a[r.action] = (a[r.action] || 0) + 1; return a; }, {} as Record<string, number>);
   console.log(`[AG3-SAVE] ① Gemini 전체 upsert = ins=${g1.inserted || 0} upd=${g1.updated || 0} skip=${g1.skipped || 0} (${stage1.length}행)`);
 
@@ -171,6 +176,13 @@ export async function saveNewPlacesToDB(
   const results = await Promise.all(
     tsTargets.map(async ({ place, seedCategory, rowId, mode }: any) => {
       try {
+        // ⚠️ 수정금지(승인필요) 2026-07-18 사장님 SSOT = TS textQuery = 로컬명 단독(영어명 절대 금지 §19). 로컬명 없으면(Gemini 누락) = TS 스킵(빈 textQuery 400 방지 + 영어명 오염 금지). ① Gemini 저장분 유지.
+        const nameLocal = (place as any).nameLocal;
+        if (!nameLocal || String(nameLocal).trim() === "") {
+          console.log(`[AG3-SAVE] ⏭️ "${place.name}" = nameLocal 없음(Gemini 누락) = TS 스킵(영어명 오염 금지)`);
+          tsResults.push({ id: rowId, name: place.name, category: seedCategory, mode, our_pid: (place as any).googlePlaceId ?? null, status: "no_local_name", ts: null });
+          return { enrichedByApi: 0 };
+        }
         // ⚠️ 2026-06-24 §18·§20 = 단일 관문 tsSearch (= raw 2곳 자동저장). Gemini 좌표 있으면 10m 앵커, 없으면 도시중심 폴백.
         const gLat = (place as any).lat && (place as any).lat !== 0 ? (place as any).lat : (cityLat || undefined);
         const gLng = (place as any).lng && (place as any).lng !== 0 ? (place as any).lng : (cityLng || undefined);
@@ -179,13 +191,13 @@ export async function saveNewPlacesToDB(
           apiKey: GOOGLE_KEY,
           method: "searchText",
           cityId,
-          // 🧠 §20 = TS 힌트 = 로컬명(Gemini nameLocal)+주소+좌표앵커. name_local 없을 때만 name_en 폴백(빈 textQuery 방지).
-          nameLocal: (place as any).nameLocal || place.name,
-          address: (place as any).geminiAddress || undefined,
+          // ⚠️ 수정금지(승인필요) 2026-07-18 사장님 SSOT = TS 힌트 = 로컬명 단독(위에서 null 가드 통과 = 값 확정). 영어명 폴백·주소 합침 금지 §19.
+          //   = Fort Thüngen 실증: 로컬명만 보내고 좌표 locationBias 넓게(오차흡수) = Google 텍스트매칭이 정답을 최상위(RC 2361). 영어명·주소 넣으면 premise 오매칭(RC 0).
+          nameLocal,
           latitude: gLat,
           longitude: gLng,
-          // ⚠️ 수정금지(승인필요) 2026-06-23 사장님 SSOT = 좌표 앵커 무조건 10m(repair.ts:36 ANCHOR_M 동일).
-          anchorRadiusM: hasGeminiCoord ? 10 : undefined,
+          // ⚠️ 수정금지(승인필요) 2026-07-18 사장님 SSOT = 좌표 앵커 1000m(locationBias = 강제필터 아닌 가중치 = Gemini 좌표 오차 흡수). 옛 10m(2026-06-23) 폐기 = 주소건물 오매칭 유발.
+          anchorRadiusM: hasGeminiCoord ? 1000 : undefined,
           rawTag: `ag3-${place.name}`,
           // ⚠️ 2026-07-06 §18 = 건건 raw 로컬 skip(Storage 건건은 관문이 보존) = 아래 tsResults 모음 1파일이 로컬 조회용(repair.ts:183 동일).
           localSkipRaw: true,

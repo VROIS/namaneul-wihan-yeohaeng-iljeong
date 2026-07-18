@@ -8,7 +8,8 @@ import {
   PACE_CONFIG, DEFAULT_START_TIME, DEFAULT_END_TIME,
   calculateDayCount, calculateSlotsForDay, getCompanionCount,
 } from './types';
-import { preloadCityData } from './ag3-data-matcher';
+// ⚠️ 2026-07-18 §0/§19 = ag3-data-matcher(재export 허브) 삭제 = 실제 파일 직접 import(껍데기 도려내기).
+import { preloadCityData } from './ag3-seed-loader';
 // 🧠 2026-07-05 사장님 SSOT = MIX Gemini(#02) raw 저장 관문(§18). 옛 getAI 직접호출 = raw 미저장(비용증발) 폐기(§19). TS(ag3)는 이미 관문경유 저장됨 = Gemini만 누락이었음.
 // 🧠 2026-07-06 사장님 SSOT = MIX Gemini raw = 도시id 폴더 + {meta,rawResponse,parsedPlaces}(사장님 예시형식) 저장 = saveCollectedRaw 단일 헬퍼(§18 2곳). 옛 saveRaw(runtime 봉투) 폐기 §19.
 import { saveCollectedRaw } from '../shared/save-collected-raw';

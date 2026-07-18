@@ -25,7 +25,7 @@ argument-hint: city-id (도시 ID 정수, 예 19 = Paris)
 | **4** | [`prompts/12-ts-discover-pool/`](prompts/12-ts-discover-pool/) | 🆕 **식당 발굴 = TS `--zone=outskirt`** (= 명소별 circle) | N (TS) | 사용자 SSOT 2026-06-02 |
 | **5** | [`prompts/05-text-recategorize/`](prompts/05-text-recategorize/) | 묘사 분석 = 카테고리 재분류 (= 본 세션 47 행 패턴) | N/100 (Gemini) | 사용자 SSOT 2026-05-19 |
 | **6** | [`prompts/06-ts-pm-enrich/`](prompts/06-ts-pm-enrich/) | Google Places TS Enterprise + PhotoMedia = 식당/어드벤처 image NULL + pid NULL 보강 | N (TS+PM) | 사용자 SSOT 2026-05-20 (= 헌법 §15) |
-| **7** | [`prompts/07-merge-dups/`](prompts/07-merge-dups/) | 5 단계 매칭 dry-run + 중복 통합 (= 알고리즘 = Gemini X) | 1 dry-run + N archive | 사용자 SSOT 2026-05-18 검증 |
+| ~~7~~ | (삭제 2026-07-18 §19) | 중복 통합 = DB 트리거(place_seed_raw_prevent_dup) 단일 관문이 입력 시점에 전담 = 사후 병합 상시 불필요(§20). 코드 매칭(matcher.ts) 삭제. 기존 오염 청소가 필요하면 그때 트리거 기반 1회성 재작성 | — | — |
 | **8** | [`prompts/08-wk-image-fill/`](prompts/08-wk-image-fill/) | Wikidata SPARQL 이미지 보강 (= 식당/어드벤처 제외) | N (WK 무료) | 사용자 SSOT 2026-05-19 검증 |
 | (참조) | [`prompts/09-main-app-itinerary/`](prompts/09-main-app-itinerary/) | **메인앱 여정 생성** = `pipeline-v3.ts:367-448` inline 유지 (= DB-only 미발굴 fallback) | 사용자 요청 시 | 사용자 SSOT 2026-05-15 |
 
@@ -80,11 +80,7 @@ npx tsx .claude/skills/raw-db-verify-and-complete/prompts/06-ts-pm-enrich/run.ts
 npx tsx .claude/skills/raw-db-verify-and-complete/prompts/06-ts-pm-enrich/post-process.ts \
   --city-id=$CITY_ID --date=<YYYY-MM-DD> --apply-status=ok --photo
 
-# Step 7. 5 단계 매칭 + 중복 통합 (= dry-run + 사용자 cc2 검수)
-npx tsx .claude/skills/raw-db-verify-and-complete/prompts/07-merge-dups/run.ts --city-id=$CITY_ID
-# 사용자 검수 후 = 명확 tier (= 0/1/2/3) 일괄 적용
-npx tsx .claude/skills/raw-db-verify-and-complete/prompts/07-merge-dups/post-process.ts \
-  --city-id=$CITY_ID --date=<YYYY-MM-DD> --apply-tiers=0,1,2,3
+# Step 7. (삭제 2026-07-18 §19) 중복 통합 = DB 트리거 단일 관문이 입력 시점 전담(§20) = 사후 병합 스크립트 불필요. 코드 매칭(matcher.ts) 삭제.
 
 # Step 8. Wikidata 이미지 보강 (= 식당/어드벤처 제외 + rank 21+/NULL + image NULL)
 npx tsx .claude/skills/raw-db-verify-and-complete/prompts/08-wk-image-fill/run.ts --city-id=$CITY_ID

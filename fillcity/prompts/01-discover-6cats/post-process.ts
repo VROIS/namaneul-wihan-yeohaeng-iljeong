@@ -72,23 +72,9 @@ const dryRun = argv['dry'] === 'true';
   const { upsertPlace } = await import(pathToFileURL(path.join(ROOT, 'server/services/place-upsert.ts')).href);
   const today = new Date().toISOString().slice(0, 10);
 
-  // ⚠️ 수정금지(승인필요) 2026-06-10 = --dry = matcher.ts(matchCandidate) 시뮬레이션 = 재입력 매처미스 측정 (쓰기 0·외부호출 0).
-  //   none 인데 DB 에 유사명 존재 = 매처미스(= 고쳐야 할 진짜 중복) / 없으면 정상 신규.
-  let dryExisting: any[] = [];
-  let matchCandidate: any;
-  if (dryRun) {
-    ({ matchCandidate } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/matcher.ts')).href));
-    const pg = await import('pg');
-    const dc = new (pg as any).default.Client({ connectionString: process.env.SUPA_URL || process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
-    await dc.connect();
-    dryExisting = (await dc.query(
-      `SELECT id, city_id AS "cityId", name_en AS "nameEn", name_local AS "nameLocal", name_ko AS "nameKo", address,
-              latitude::float8 AS latitude, longitude::float8 AS longitude, google_place_id AS "googlePlaceId", google_maps_uri AS "googleMapsUri"
-       FROM place_seed_raw WHERE city_id=$1`, [cityId])).rows;
-    await dc.end();
-  }
-  const dryMiss: string[] = [];
-  let dryWouldMatch = 0, dryWouldInsert = 0;
+  // ⚠️ 수정금지(승인필요) 2026-07-18 사장님 SSOT = --dry = upsert 시도 후보 목록만 표시(쓰기 0). 옛 matchCandidate(코드매칭) 시뮬 삭제 §19.
+  //   = 중복 판정은 DB 트리거 단일 관문(place_seed_raw_prevent_dup) 전담 = "매처미스" 개념 소멸(관문이 모든 입력 판정). 실제 어디로 갈지 = --apply 때 트리거가 판정 + matchedBy 로그.
+  let dryPlan = 0;
 
   const cats = ['heritage', 'hotspot', 'attraction', 'adventure', 'healing', 'shopping'];
   let inserted = 0, updated = 0, skipped = 0, errors = 0;
@@ -102,22 +88,8 @@ const dryRun = argv['dry'] === 'true';
         // shopping = price_eur null 강제 (= §15)
         const priceEur = cat === 'shopping' ? null : (p.price_eur ?? null);
 
-        // ⚠️ 수정금지(승인필요) 2026-06-09/10 = --dry = 쓰기 0 + matcher.ts 시뮬레이션 (옛 버그: dryRun 미사용으로 실제 썼음).
-        if (dryRun) {
-          const mr = matchCandidate(
-            { cityId, googlePlaceId: null, googleMapsUri: null, address: p.address || null, latitude: p.lat ?? null, longitude: p.lng ?? null, nameEn: p.name_en, nameLocal: p.name_local || null, nameKo: p.name_ko || null },
-            dryExisting,
-          );
-          if (mr.match) { dryWouldMatch++; }
-          else {
-            const key = String(p.name_local || p.name_en || '').trim().toLowerCase();
-            const dup = key.length >= 4 ? dryExisting.find((e: any) =>
-              [e.nameEn, e.nameLocal, e.nameKo].some((n: any) => n && (String(n).toLowerCase().includes(key) || key.includes(String(n).toLowerCase())))) : null;
-            if (dup) dryMiss.push(`${p.name_local || p.name_en} → DB id=${dup.id} "${dup.nameLocal || dup.nameEn}"`);
-            else dryWouldInsert++;
-          }
-          continue;
-        }
+        // ⚠️ 2026-07-18 = --dry = 쓰기 0 = upsert 시도 후보만 카운트(판정은 --apply 때 트리거). 옛 코드매칭 시뮬 삭제 §19.
+        if (dryRun) { dryPlan++; continue; }
 
         const r = await upsertPlace({
           cityId,
@@ -150,11 +122,8 @@ const dryRun = argv['dry'] === 'true';
   }
 
   if (dryRun) {
-    console.log(`\n═══ 결과 (DRY = matcher.ts 시뮬, 쓰기 0·외부호출 0) ═══`);
-    console.log(`would-match(기존 병합)   = ${dryWouldMatch}`);
-    console.log(`would-insert 정상신규     = ${dryWouldInsert}`);
-    console.log(`🔴 매처미스(DB에 있는데 못합침 = 고칠 중복) = ${dryMiss.length}`);
-    dryMiss.forEach((m) => console.log(`   - ${m}`));
+    console.log(`\n═══ 결과 (DRY = 쓰기 0·외부호출 0) ═══`);
+    console.log(`upsert 시도 후보 = ${dryPlan}곳 (실제 신규/흡수 판정 = --apply 때 트리거)`);
   } else {
     console.log(`\n═══ 결과 ═══`);
     console.log(`inserted = ${inserted}`);

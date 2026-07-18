@@ -54,6 +54,45 @@
 - **순차 upsert 1,435ms → 트리거 흡수 ~1.2초**
 - **재조회 17ms 제거 가능** (4번 place 직접)
 
+## 3-2. 전체 데이터 흐름 다이어그램 (실측 기반 확정, 코딩 전 SSOT)
+
+### 현재 흐름 (매칭 3벌 = 병목)
+```
+Gemini 24곳 응답
+  │
+  ▼ [ag3-match-core] ── 전체PSR SELECT(12,936행 2,800ms) + matchCandidate 판정 ①벌
+  │   매칭되면 place 에 seed 데이터 입힘(이미지·RC·PID·요약 = 재활용)
+  ▼ [ag3-save] ① Gemini 순차 upsert 24곳(곳당 90ms=1,435ms)
+  │   └ upsertPlace 도 loadMatchCandidates(전체SELECT) + matchCandidate ②벌 → 트리거 ③벌
+  ▼ [ag3-save] ② TS 대상(신규+흡수) ③ TS 병렬 → place mutate(RC·좌표·PID) + rowId 직행 UPDATE
+  ▼ [step2-build] loadSeedRawMap 재조회(405키) ← 텍스트4필드용
+  ▼ [day-builder] 슬롯 = place(RC·image·좌표) + seed재조회(nameKo·nameLocal·summaryKo·editorialSummary)
+```
+= 매칭 3벌(ag3 + upsertPlace + 트리거) 기준 드리프트 → 중복 신규생성 사고 + 전체SELECT 2벌 = 병목.
+
+### 새 흐름 (매칭 1벌 = 트리거만, 슬림)
+```
+Gemini 24곳 응답 → PlaceResult 변환
+  │
+  ▼ 각 곳 INSERT 시도 (매칭판정·전체SELECT 없음)
+  │   ├ 성공 = 신규 행(rowId)
+  │   └ 트리거 [중복차단] id=N(100km 단일판정) → recoverTriggerDup = 그 원행 흡수
+  │        흡수 시 = 원행(N)의 재활용데이터(이미지·RC·nameKo·nameLocal·summaryKo·editorialSummary)를
+  │        ★ RETURNING 으로 받아 place 에 입힘 (매칭이 하던 재활용을 트리거 흡수가 대체)
+  ▼ 신규·흡수 곳 = TS 병렬 → place mutate(RC·좌표·PID·image) + 그 rowId 직행 UPDATE
+  ▼ 슬롯 = place 직접 (재조회 없음 = 텍스트4필드도 위 RETURNING 으로 place 에 이미 있음)
+```
+
+### ★ 핵심 = "재활용 데이터를 어디서 place 로 가져오나" (매칭 제거의 유일 난점 해소)
+- **현재**: ag3-match-core 의 matchCandidate 가 seed 를 찾아 place 에 입힘 + day-builder 가 재조회 seedRawMap 에서 텍스트4필드.
+- **새 방식**: INSERT→트리거흡수 시 `recoverTriggerDup` 이 흡수 대상 행(N)을 **`UPDATE ... RETURNING image_url, google_review_count, name_ko, name_local, summary_ko, editorial_summary`** 로 받아 place 에 입힘. = 매칭 없이도 재활용 데이터 확보. day-builder 재조회 불필요.
+- = **매칭 판정 0벌(트리거만) + 전체SELECT 0 + 재조회 0** = 병목 4,235ms 전부 제거, 재활용은 RETURNING 으로 보존.
+
+### 검증 포인트 (시뮬로 입증할 것)
+1. 흡수 시 재활용데이터(이미지·RC·텍스트4필드)가 place → 슬롯에 정상 노출 (현재와 동일 화면)
+2. 중복 0 (트리거 100km 단일판정 = 기준 드리프트 없음)
+3. Step2 ~2초 (매칭SELECT·순차upsert·재조회 제거)
+
 ## 4. 도려낼 것 (§0 과감히)
 - `matcher.ts`의 `matchCandidate`(269-375행) = 매칭 판정 블록 → 제거 (트리거가 대체)
 - `ag3-match-core.ts`의 전체 PSR SELECT(57-67) + candIndex(71) = 제거

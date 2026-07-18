@@ -25,7 +25,7 @@ import { db } from '../db';
 import { placeSeedRaw } from '@shared/schema';
 import { eq, sql } from 'drizzle-orm';
 // ⚠️ 2026-06-03 = 동일장소 5단계 매칭 = 공용 matcher.ts 단일 (= 헌법 §16, 흩어진 매처 통합)
-import { matchCandidate, type MatchedBy, type MatchCandidate } from './shared/matcher';
+import { type MatchedBy } from './shared/place-enrich';
 
 export interface UpsertPayload {
   cityId: number;
@@ -63,68 +63,15 @@ export interface UpsertPayload {
   // 분류
   categoryTags?: string[];
   phaseTags?: string[];
-  // ⚠️ 수정금지(승인필요) 2026-07-10 사장님 SSOT = 배치 호출자(ag3 등)가 loadMatchCandidates()로 1회만 읽은 후보 명단 재사용.
-  //   = 미전달 시 이 함수가 직접 1회 읽음(단건 호출 동일 동작). 곳마다 전행 재SELECT(1회 3.0초 실측 = 24곳 ~17초)가 근본 원인.
-  candidates?: MatchCandidate[];
   // ⚠️ 수정금지(승인필요) 2026-07-11 사장님 SSOT = 좌표 쓰기 보호 = true 면 기존 행 좌표(NULL·0 제외)를 유지하고 빈칸·0만 채움.
   //   = Gemini(미검증) 좌표 쓰기 전용 플래그(ag3 ①) = 환각좌표가 검증행을 오염 → 다음 판 좌표10m이 딴 장소 흡수(투르 78796 실증) 차단.
   //   = 매칭에는 payload 좌표 그대로 사용(좌표10m 재식별 보존) = 쓰기만 보호. TS 검증 쓰기(③ 등) = 플래그 없음 = 새것우선 그대로.
   preserveExistingCoords?: boolean;
 }
 
-// ⚠️ 수정금지(승인필요) 2026-07-10 사장님 SSOT = 매칭 후보 읽기 단일 함수(§16 1벌) = upsertPlace 내부 + 배치 호출자(ag3·upsertPlaces) 공용.
-//   = 반드시 전행(도시무관 글로벌) = §14 "같은 장소면 도시 달라도 중복" 불변. cityId 필터 추가 금지(크로스도시 재과금 재발).
-//   = 타입 = matcher.ts MatchCandidate 그대로(재발명 0).
-export async function loadMatchCandidates(): Promise<MatchCandidate[]> {
-  if (!db) return [];
-  return (await db
-    .select({
-      id: placeSeedRaw.id,
-      cityId: placeSeedRaw.cityId,
-      googlePlaceId: placeSeedRaw.googlePlaceId,
-      googleMapsUri: placeSeedRaw.googleMapsUri,
-      address: placeSeedRaw.address,
-      latitude: placeSeedRaw.latitude,
-      longitude: placeSeedRaw.longitude,
-      nameEn: placeSeedRaw.nameEn,
-      nameLocal: placeSeedRaw.nameLocal,
-      nameKo: placeSeedRaw.nameKo,
-    })
-    .from(placeSeedRaw)) as MatchCandidate[];
-}
-
-// ⚠️ 2026-06-03 = MatchedBy = shared/matcher.ts 단일 정의 재노출 (= 기존 import 처 호환)
+// ⚠️ 2026-07-18 = MatchedBy = shared/place-enrich.ts 단일 정의 재노출 (= 옛 matcher.ts 삭제 §19, 기존 import 처 호환)
 export type { MatchedBy };
-
-// ⚠️ 수정금지(승인필요) 2026-07-10 사장님 SSOT = 호출자 명단(p.candidates) 동기화 1벌 = 관문(upsertPlace)이 소유(§16).
-//   = INSERT = 새 행 식별자 추가 / UPDATE = 새값(new-wins, §14) 병합 = 배치의 후속 매칭이 방금 쓴 PID·이름·좌표를 인지
-//   = 매회 재조회 방식과 동일한 신선도 보장(재조회 방식 자체는 폐기 = 2026-07-10 §19). 호출자가 직접 push(누락 위험) = 금지.
-function syncCandidateList(p: UpsertPayload, rowId: number, inserted: boolean): void {
-  if (!p.candidates) return;
-  if (inserted) {
-    p.candidates.push({
-      id: rowId, cityId: p.cityId,
-      googlePlaceId: p.googlePlaceId ?? null, googleMapsUri: p.googleMapsUri ?? null,
-      address: p.address ?? null, latitude: p.latitude ?? null, longitude: p.longitude ?? null,
-      nameEn: p.nameEn ?? null, nameLocal: p.nameLocal ?? null, nameKo: p.nameKo ?? null,
-    });
-    return;
-  }
-  const c = p.candidates.find((x) => x.id === rowId);
-  if (!c) return;
-  c.googlePlaceId = p.googlePlaceId ?? c.googlePlaceId;
-  c.googleMapsUri = p.googleMapsUri ?? c.googleMapsUri;
-  c.address = p.address ?? c.address;
-  // 좌표 = DB 와 동일한 보호(preserveExistingCoords = 기존 유효좌표 유지, 빈칸·0만 채움) = 명단·DB 동형.
-  const keepCoord = p.preserveExistingCoords && c.latitude != null && Number(c.latitude) !== 0;
-  if (!keepCoord) {
-    c.latitude = p.latitude ?? c.latitude;
-    c.longitude = p.longitude ?? c.longitude;
-  }
-  c.nameEn = p.nameEn ?? c.nameEn;
-  c.nameLocal = p.nameLocal ?? c.nameLocal;
-  c.nameKo = p.nameKo ?? c.nameKo;
-}
+// 🗑️ 2026-07-18 삭제 = loadMatchCandidates(전체 PSR SELECT) + syncCandidateList(candidates 동기화) = 매칭 폐기(트리거 단일) 로 후보명단 개념 소멸 §0/§19.
 
 export interface UpsertResult {
   action: 'inserted' | 'updated' | 'skipped';
@@ -133,6 +80,14 @@ export interface UpsertResult {
   // ⚠️ 2026-06-08 = 가변(영어·한국어명)만 일치 = 유사의심 = 자동병합 X = 새 행 + '중복의심' 메모 (= 사용자 SSOT)
   suspect?: boolean;
   reason?: string;
+  // ⚠️ 수정금지(승인필요) 2026-07-18 사장님 SSOT = 매칭 3벌 폐기 재설계 = 트리거 흡수(recoverTriggerDup) 시 원행의 재활용 데이터(RETURNING).
+  //   = 옛 ag3-match-core matchCandidate 가 하던 "매칭행 데이터를 place 에 입힘"을 흡수가 대체 = 매칭 판정 없이 재활용 보존. 흡수 아니면 undefined.
+  enriched?: {
+    imageUrl: string | null; googleReviewCount: number | null;
+    nameKo: string | null; nameLocal: string | null;
+    summaryKo: string | null; editorialSummary: string | null;
+    googlePlaceId: string | null; latitude: number | null; longitude: number | null;
+  };
 }
 
 // ⚠️ 수정금지(승인필요) 2026-07-17 사장님 SSOT = 직행 UPDATE SQL 1벌(§16) = targetRowId 직행·회수 병합 공용.
@@ -164,6 +119,8 @@ function buildDirectUpdateSql(p: UpsertPayload, targetId: number) {
         image_updated_at  = CASE WHEN ${p.imageUrl || null}::text IS NOT NULL THEN NOW() ELSE image_updated_at END,
         updated_at        = NOW()
       WHERE id = ${targetId}
+      -- ⚠️ 2026-07-18 = 흡수(트리거 dup)·직행 UPDATE 후 그 행의 재활용 데이터 반환 = 매칭 폐기 후 place 재활용(§16 매칭 대체).
+      RETURNING image_url, google_review_count, name_ko, name_local, summary_ko, editorial_summary, google_place_id, latitude, longitude
     `;
 }
 
@@ -176,18 +133,17 @@ async function recoverTriggerDup(p: UpsertPayload, e: any): Promise<UpsertResult
   if (!dup) return null;
   const dupId = Number(dup[1]);
   try {
-    const r = await upsertPlace({ ...p, candidates: undefined, targetRowId: dupId, followTriggerDup: false });
-    syncCandidateList(p, dupId, false);
+    const r = await upsertPlace({ ...p, targetRowId: dupId, followTriggerDup: false });
     return { ...r, reason: 'trigger_dup_recovered' };
   } catch (e2: any) {
     return { action: 'skipped', rowId: null, matchedBy: 'none', reason: `trigger_dup_recover_failed: ${e2?.message || String(e2)}` };
   }
 }
 
-// ⚠️ 2026-06-03 = normAddr / normName / nameKeys = shared/matcher.ts 로 이관 (= 매칭 정규화 1벌 공용)
+// ⚠️ 2026-07-18 = 정규화 유틸(normAddr/normName/nameKeys)은 shared/place-enrich.ts (= 옛 matcher.ts 삭제 §19).
 
 /**
- * 단일 entry-point. 7 단계 순차 매칭 (불변1~5 병합 / 의심6~7 신규) + UPDATE 또는 INSERT.
+ * 단일 entry-point. 코드 매칭 없음(트리거 단일 관문 §19) = INSERT 시도 → 트리거 중복차단 시 recoverTriggerDup 로 그 행 흡수, 아니면 신규.
  */
 export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
   if (!db) {
@@ -219,79 +175,32 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
     if ((res.rowCount ?? 0) === 0) {
       return { action: 'skipped', rowId: null, matchedBy: 'none', reason: 'target_row_deleted' };
     }
+    // 2026-07-18 = RETURNING 재활용 데이터(매칭 폐기 후 place 재활용, §16). undefined 안전 (RETURNING 없는 경로 대비).
+    const row = (res as any).rows?.[0];
+    return {
+      action: 'updated', rowId: p.targetRowId, matchedBy: 'none',
+      enriched: row ? {
+        imageUrl: row.image_url ?? null, googleReviewCount: row.google_review_count ?? null,
+        nameKo: row.name_ko ?? null, nameLocal: row.name_local ?? null,
+        summaryKo: row.summary_ko ?? null, editorialSummary: row.editorial_summary ?? null,
+        googlePlaceId: row.google_place_id ?? null,
+        latitude: row.latitude != null ? Number(row.latitude) : null,
+        longitude: row.longitude != null ? Number(row.longitude) : null,
+      } : undefined,
+    };
     } catch (e: any) {
       // 면제(followTriggerDup) 는 직행이 안 막히므로 여기 도달 시 = 다른 예외 = 그대로 전파(image-backfill "정확히 그 행에만 기록" 의미 보존).
       throw e;
     }
-    return { action: 'updated', rowId: p.targetRowId, matchedBy: 'none' };
   }
 
-  // ⚠️ 수정금지(승인필요) 2026-05-23 = 사용자 SSOT = 글로벌 매칭 (= cityId 무관)
-  // = PID/주소/URI/좌표 = 같은 장소 = 도시 무관 항상 동일 entity = 글로벌 후보
-  // = 이름 9 조합 만 = cityId 필터 유지 (= "Cafe de Paris" 체인 = 다른 도시는 별개 행)
-  // = 사용자 명시: "비록 도시는 다르더라도 같은 장소면 중복 판명됨"
-  // = 옵션 A = 첫 등록 cityId 영구 유지 (= UPDATE 시 cityId 미변경)
-  // ⚠️ 2026-07-10 사장님 SSOT = 호출자가 준 명단 재사용, 없으면 1회 직접 읽기(loadMatchCandidates 1벌 §16).
-  const candidates = p.candidates ?? await loadMatchCandidates();
-
-  // ⚠️ 2026-06-08 = 7 단계 순차 매칭 = shared/matcher.ts 단일 공용 (= 정본 = 모든 경로 동일 검증, 헌법 §14/§16)
-  //   = [불변]1)PID > 2)URI > 3)풀주소+로컬이름 > 4)좌표10m > 5)로컬이름 / [가변]6)영어명 > 7)한국어명 + samePlace(URI veto만, 2026-06-15 PID veto 제거)
-  //   = 단계 통과(매칭) 시 다음 자동 스킵. 불변1~5=병합 / 가변6~7=새저장+'중복의심'. ⚠️ PID 달라도 주소·좌표·로컬이름 같으면 같은 장소(우리 PID 오류=TS 교정). URI 다르면만 다른 장소.
-  const { match, matchedBy, tier } = matchCandidate(p, candidates);
-
+  // ⚠️ 수정금지(승인필요) 2026-07-18 사장님 SSOT = 매칭 3벌 폐기 = 코드 매칭(loadMatchCandidates 전체SELECT + matchCandidate) 완전삭제 §19.
+  //   = 근본: 매칭이 코드+트리거 2벌 = 기준 드리프트로 "합쳐질 중복이 신규 생성"되는 사고(사장님 실증). = INSERT만 시도, 매칭은 트리거 1벌(100km 단일판정).
+  //   = 막히면 recoverTriggerDup(트리거가 준 id=N 흡수, RETURNING 재활용). matchedBy='none'/suspect 개념 폐기(트리거가 판정).
   const categoryTags = p.categoryTags && p.categoryTags.length > 0 ? p.categoryTags : [p.seedCategory];
-  // ⚠️ 2026-06-08 = 7단계 = 불변(확정) 1~5 매칭만 병합(UPDATE). 가변(의심) 6~7 = 자동병합 X = 새 행 + '중복의심' 메모.
-  const suspect = !!match && tier === 'suspect';
-  const phaseTags = suspect
-    ? [...(p.phaseTags || []), '중복의심', `의심대상-${match!.id}`]
-    : (p.phaseTags || []);
+  const phaseTags = p.phaseTags || [];
 
-  if (match && tier === 'confirmed') {
-    // ⚠️ 수정금지(승인필요) UPDATE = 사장님 SSOT 2026-07-05 §14갱신 = 모든 정보 무조건 새것 우선(예외없음).
-    //   = COALESCE(새값, 컬럼) = 응답에 온 값이면 항상 새값이 이김(= 새우선). tags = UNION(누적).
-    //   = COALESCE 를 유지하는 이유는 오직 발굴 부분단계 안전: job 에 안 온 컬럼(undefined→`?? null`)만
-    //     뼈대(옛값) 보존해 storage-image-relink(imageUrl 만 넘김) 같은 부분갱신이 다른 컬럼을 NULL 로 미는 것 방지.
-    //   = 가격도 동일 = 새값 있으면 무조건 덮음(레거시 garbage 영구잠금 버그 해소). `?? null` 로 0(무료)도 정상 새값 보존.
-    try {
-    await db.execute(sql`
-      UPDATE place_seed_raw SET
-        name_en       = COALESCE(${p.nameEn ?? null}, name_en),
-        name_ko       = COALESCE(${p.nameKo ?? null}, name_ko),
-        name_local    = COALESCE(${p.nameLocal ?? null}, name_local),
-        latitude      = ${p.preserveExistingCoords ? sql`COALESCE(NULLIF(latitude, 0), ${p.latitude ?? null}::real, latitude)` : sql`COALESCE(${p.latitude ?? null}::real, latitude)`},
-        longitude     = ${p.preserveExistingCoords ? sql`COALESCE(NULLIF(longitude, 0), ${p.longitude ?? null}::real, longitude)` : sql`COALESCE(${p.longitude ?? null}::real, longitude)`},
-        address       = COALESCE(${p.address ?? null}, address),
-        google_place_id = COALESCE(${p.googlePlaceId ?? null}, google_place_id),
-        google_review_count = COALESCE(${p.googleReviewCount ?? null}::integer, google_review_count),
-        google_primary_type = COALESCE(${p.googlePrimaryType ?? null}, google_primary_type),
-        google_maps_uri = COALESCE(${p.googleMapsUri ?? null}, google_maps_uri),
-        image_url     = COALESCE(${p.imageUrl ?? null}, image_url),
-        image_attribution = COALESCE(${p.imageAttribution ?? null}, image_attribution),
-        price_eur     = COALESCE(${p.priceEur ?? null}::real, price_eur),
-        editorial_summary = COALESCE(${p.shortformKo ?? null}, editorial_summary),
-        summary_ko        = COALESCE(${p.selectionReasonKo ?? null}, summary_ko),
-        day_zone          = COALESCE(${p.dayZone ?? null}, day_zone),
-        distance_km_from_center = COALESCE(${p.distanceKmFromCenter ?? null}::real, distance_km_from_center),
-        category_tags     = (SELECT ARRAY(SELECT DISTINCT unnest(COALESCE(category_tags, ARRAY[]::text[]) || ${sql.raw(`ARRAY[${categoryTags.map((s) => `'${s.replace(/'/g, "''")}'`).join(',')}]::text[]`)}))),
-        phase_tags        = (SELECT ARRAY(SELECT DISTINCT unnest(COALESCE(phase_tags, ARRAY[]::text[]) || ${sql.raw(`ARRAY[${phaseTags.length === 0 ? "" : phaseTags.map((s) => `'${s.replace(/'/g, "''")}'`).join(',')}]::text[]`)}))),
-        -- ⚠️ 수정금지(승인필요) 2026-06-12 = image_updated_at = 새 image_url 있을 때만 NOW() (§19)
-        --   = imageUrl 있을 때만 갱신 = "이미지 채워진 시각" 정확 의미 = 결손 은폐·미래 누수 방지 (= 사장님 SSOT 2026-06-12 시스템 결함 수정).
-        image_updated_at  = CASE WHEN ${p.imageUrl || null}::text IS NOT NULL THEN NOW() ELSE image_updated_at END,
-        -- ⚠️ 수정금지(승인필요) 2026-07-16 = updated_at 무기록 결함 수정 §19 (재활용/새덮어쓰기 추적 복구)
-        updated_at        = NOW()
-      WHERE id = ${match.id}
-    `);
-    } catch (e: any) {
-      // 매칭 UPDATE 도 트리거(최종 매처) '[중복차단] id=N' 판정 회수 = 그 원행 N 으로 흡수(§14, 2026-07-10). 중복차단 아닌 예외 = 그대로 전파.
-      const r = await recoverTriggerDup(p, e);
-      if (r) return r;
-      throw e;
-    }
-    syncCandidateList(p, match.id, false);
-    return { action: 'updated', rowId: match.id, matchedBy };
-  }
-
-  // INSERT = 미매칭 = 신규 행 = 전체 응답값 그대로 새삽입.
+  // INSERT = 신규 행 = 전체 응답값 그대로 새삽입. 트리거가 중복이면 recoverTriggerDup 흡수.
   // ⚠️ 개정헌법 2026-07-07 사장님 = rank 는 앱이 안 넣음(랭킹 코드 완전삭제 §19/§16). rank nullable + DB autorank 트리거(RC순) 단일 권위가 INSERT 후 배정.
   try {
     const inserted = await db
@@ -323,13 +232,7 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
       .returning({ id: placeSeedRaw.id });
 
     const newId = inserted[0]?.id || null;
-    if (newId != null) syncCandidateList(p, newId, true);
-    return {
-      action: 'inserted',
-      rowId: newId,
-      matchedBy,
-      suspect,
-    };
+    return { action: 'inserted', rowId: newId, matchedBy: 'none' };
   } catch (e: any) {
     // ⚠️ 수정금지(승인필요) 2026-07-10 사장님 SSOT = DB 트리거(prevent_dup) = 최종 매처(§14 최종 안전망)를 따라감.
     //   = 명단 스냅샷이 못 본 같은 장소(동시 요청의 방금 INSERT 등)를 트리거가 '[중복차단] ... id=N' 예외로 알려주면
@@ -347,39 +250,4 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
   }
 }
 
-/**
- * 배치 = 여러 곳 한 번에 (= 시드 / 메인앱 응답 후 사용)
- */
-export async function upsertPlaces(payloads: UpsertPayload[]): Promise<{
-  inserted: number;
-  updated: number;
-  skipped: number;
-  suspect: number;
-  byMatch: Record<MatchedBy, number>;
-  errors: string[];
-}> {
-  const summary = {
-    inserted: 0,
-    updated: 0,
-    skipped: 0,
-    suspect: 0,
-    byMatch: { pid: 0, uri: 0, address: 0, coords: 0, name_local: 0, name_en: 0, name_ko: 0, none: 0 } as Record<MatchedBy, number>,
-    errors: [] as string[],
-  };
-  // ⚠️ 수정금지(승인필요) 2026-07-10 사장님 SSOT = 후보 명단 = 배치당 1회만 읽고 전 곳 재사용(관문이 INSERT/UPDATE마다 동기화).
-  //   = 옛 "곳마다 전행 재SELECT(1회 3.0초 실측)" 폐기 2026-07-10 §19.
-  const shared = payloads.length > 0 ? await loadMatchCandidates() : [];
-  for (const p of payloads) {
-    try {
-      const r = await upsertPlace({ ...p, candidates: p.candidates ?? shared });
-      summary[r.action]++;
-      if (r.suspect) summary.suspect++;
-      summary.byMatch[r.matchedBy]++;
-      if (r.reason && r.action === 'skipped') summary.errors.push(r.reason);
-    } catch (e: any) {
-      summary.skipped++;
-      summary.errors.push(e?.message || String(e));
-    }
-  }
-  return summary;
-}
+// 🗑️ 2026-07-18 삭제 = upsertPlaces(복수 배치) = 호출처 0 죽은함수 §0/§19. 메인앱은 ag3-save 가 곳별 upsertPlace 직접 호출.

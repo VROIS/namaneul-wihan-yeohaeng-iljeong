@@ -2,7 +2,8 @@
 -- = 라이브 DB 현행 정의 복원(= 소실됐던 원본) + 2026-06-03 PID/URI veto 추가.
 -- = 정규화 = lower(trim(name_en)) = server/services/shared/matcher.ts normName 과 동일 식 (= 앱↔DB 정합).
 -- ⚠️ 수정금지(승인필요) — matcher PID veto 제거 동기화(2026-06-15 SSOT)
--- = 트리거 = shared/matcher.ts 7단계와 동형(§16 matcher≡트리거): PID > URI > 주소+로컬이름 > 좌표10m > 로컬이름 / 영어명·한국어명(의심메모).
+-- = 트리거 = shared/matcher.ts 7단계와 동형(§16 matcher≡트리거): PID > URI > 풀주소 > 좌표10m > 로컬이름 / 영어명·한국어명(의심메모).
+--   ⚠️ 2026-07-18 §19 = 불변3 로컬이름 AND 결합 삭제(주소만 독립 차단) = 불변요소는 각각 독립이어야 무력화 안 됨(초콜릿하우스 중복 근본).
 --   핵심: URI(cid) 둘 다 있고 서로 다르면 = 확정 다른 장소 = 보조(주소·좌표) 차단 (= samePlace veto). PID 차이는 더이상 veto 아님(우리 PID 오류=TS 교정, 2026-06-15).
 -- ⚠️ 수정금지(승인필요) 2026-07-17 사장님 SSOT = 불변1~5(병합) = 도시무관(글로벌) / 6·7·8 = 같은도시 OR 100km(같은장소 물리 상한) §19.
 --   = 같은 장소가 다른 도시 여정에서 재발굴되던 재과금 근본 제거(불변1~5). 전면 도시무관은 일반명 노이즈 9,826 폭발 실측이라 6~8 은 100km 상한 유지. matcher.ts 와 byte 동형(§16).
@@ -88,7 +89,7 @@ BEGIN
   --   = replica 방식(모든 트리거 우회) 폐기 §19 = write_gate(데드락방지)·autorank(랭킹) 는 살려야 = 이 트리거만 정확히 끔.
   IF current_setting('app.skip_dup_check', true) = 'on' THEN RETURN NEW; END IF;
   -- 사용자 SSOT 2026-06-15 = matcher.ts 와 동일 = veto 는 URI(cid)만 (PID 제거 = 우리 PID 오류 가능 = TS 교정).
-  -- 불변(확정=차단) 1)PID 2)URI 3)풀주소+로컬이름 4)좌표10m 5)로컬이름 / 가변(의심=통과+메모) 6)영어명 7)한국어명
+  -- 불변(확정=차단) 1)PID 2)URI 3)풀주소 4)좌표10m 5)로컬이름 / 가변(의심=통과+메모) 6)영어명 7)한국어명 (2026-07-18 §19 = 불변3 로컬이름 결합 삭제)
   -- ⚠️ 수정금지(승인필요) 2026-06-24 사장님 SSOT = BEFORE INSERT OR UPDATE 확장 = 자기행 제외(c.id <> COALESCE(NEW.id,-1)) 전 불변 필수.
   --   = UPDATE 시 NEW.id 가 자기 자신과 충돌(전수 마비) 차단. INSERT 는 NEW.id NULL = COALESCE -1 폴백 = 기존 동작 무변경.
 
@@ -106,19 +107,18 @@ BEGIN
     IF matched_id IS NOT NULL THEN RAISE EXCEPTION '[중복차단] 불변2 URI 일치 id=%', matched_id; END IF;
   END IF;
 
-  -- 3) 풀주소 + 로컬이름 (자기행 제외, URI veto 만 유지)
+  -- 3) 풀주소 (자기행 제외, URI veto 만 유지)
+  -- ⚠️ 수정금지(승인필요) 2026-07-18 사장님 SSOT = 로컬이름 AND 결합 완전삭제 §19 = 불변요소는 각각 독립(OR)이어야 함.
+  --   근본: 불변요소를 AND 로 묶으면 하나만 어긋나도 전체 무력화 = 룩셈부르크 초콜릿하우스 중복 근본(주소 동일한데 이름 "Chocolate House"↔"Chocolathouse" LIKE 실패 → 통과 → 중복 INSERT).
+  --   = 풀주소(20자+) 정규화 일치 = 그것만으로 같은 장소 = 독립 차단. URI veto(확정 다른 장소)만 예외 유지.
   v_addr := TRIM(REGEXP_REPLACE(REGEXP_REPLACE(LOWER(COALESCE(NEW.address,'')), '[.,;:!?''"()\[\]{}]', ' ', 'g'), '\s+', ' ', 'g'));
   IF LENGTH(v_addr) >= 20 THEN
     SELECT c.id INTO matched_id FROM place_seed_raw c
     WHERE c.address IS NOT NULL AND c.id <> COALESCE(NEW.id, -1)
       AND TRIM(REGEXP_REPLACE(REGEXP_REPLACE(LOWER(c.address), '[.,;:!?''"()\[\]{}]', ' ', 'g'), '\s+', ' ', 'g')) = v_addr
       AND NOT (c.google_maps_uri IS NOT NULL AND c.google_maps_uri<>'' AND NEW.google_maps_uri IS NOT NULL AND NEW.google_maps_uri<>'' AND c.google_maps_uri<>NEW.google_maps_uri)
-      AND (v_local = '' OR EXISTS (
-        SELECT 1 FROM (VALUES (LOWER(TRIM(COALESCE(c.name_en,'')))),(LOWER(TRIM(COALESCE(c.name_local,'')))),(LOWER(TRIM(COALESCE(c.name_ko,''))))) AS t(cn)
-        WHERE t.cn <> '' AND ((LEAST(LENGTH(v_local),LENGTH(t.cn))<6 AND v_local=t.cn) OR (LEAST(LENGTH(v_local),LENGTH(t.cn))>=6 AND (v_local LIKE '%'||t.cn||'%' OR t.cn LIKE '%'||v_local||'%')))
-      ))
     LIMIT 1;
-    IF matched_id IS NOT NULL THEN RAISE EXCEPTION '[중복차단] 불변3 풀주소+로컬이름 일치 id=%', matched_id; END IF;
+    IF matched_id IS NOT NULL THEN RAISE EXCEPTION '[중복차단] 불변3 풀주소 일치 id=%', matched_id; END IF;
   END IF;
 
   -- 4) 좌표 10m (자기행 제외)

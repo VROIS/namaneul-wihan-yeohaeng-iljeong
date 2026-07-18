@@ -65,9 +65,10 @@ const isInternal = (r: any) => r.name_en && r.name_en.trim() !== '';
   const report: string[] = [];
   for (const row of internalRows) {
     try {
-      const r = await upsertPlace({ cityId, seedCategory: row.seed_category, googlePlaceId: row.pid, nameEn: row.name_en, nameLocal: row.name_en });
-      if (r.action === 'updated' && r.matchedBy === 'pid') { internalFixed++; report.push(`  ✓[내부] name_local := "${row.name_en}"`); }
-      else { err++; report.push(`  ⚠️[내부] ${row.name_en} = ${r.action}(${r.matchedBy})`); }
+      // ⚠️ 2026-07-18 = 매칭 폐기(트리거 단일) 후 = 고칠 행(row.id) 이미 알므로 targetRowId 직행 UPDATE. 옛 matchedBy==='pid' 판정(매칭 UPDATE 전제) 폐기 §19.
+      const r = await upsertPlace({ cityId, seedCategory: row.seed_category, targetRowId: row.id, googlePlaceId: row.pid, nameEn: row.name_en, nameLocal: row.name_en });
+      if (r.action === 'updated') { internalFixed++; report.push(`  ✓[내부] name_local := "${row.name_en}"`); }
+      else { err++; report.push(`  ⚠️[내부] ${row.name_en} = ${r.action}(${r.reason || ''})`); }
     } catch (e: any) { err++; report.push(`  ✗[내부] ${row.name_en}: ${e.message}`); }
   }
   for (const row of tsRows) {
@@ -82,15 +83,14 @@ const isInternal = (r: any) => r.name_en && r.name_en.trim() !== '';
       // ⚠️ 수정금지(승인필요) — TS displayName→name_en (2026-06-17 사장님 SSOT) = name_local은 Gemini전용
       if (!match || !match.nameEn) { noMatch++; report.push(`  ✗[TS] PID 미매칭: ${row.name_en}`); continue; }
       const r = await upsertPlace({
-        cityId, seedCategory: row.seed_category, googlePlaceId: row.pid,
-        // ⚠️ 수정금지(승인필요) — TS displayName→name_en (2026-06-17 사장님 SSOT) = name_local은 Gemini전용
+        // ⚠️ 2026-07-18 = 고칠 행(row.id) 직행 UPDATE(매칭 폐기, 트리거 단일). TS displayName→name_en (2026-06-17 사장님 SSOT) = name_local은 Gemini전용.
+        cityId, seedCategory: row.seed_category, targetRowId: row.id, googlePlaceId: row.pid,
         nameEn: match.nameEn, nameLocal: null, address: match.address,
         latitude: match.latitude ?? row.lat, longitude: match.longitude ?? row.lng,
         googleMapsUri: match.googleMapsUri, googleReviewCount: match.googleReviewCount, priceEur: match.priceEur,
       });
-      // ⚠️ 수정금지(승인필요) — TS displayName→name_en (2026-06-17 사장님 SSOT) = name_local은 Gemini전용
       if (r.action === 'updated') { tsFixed++; report.push(`  ✓[TS] "${row.name_en}" → "${match.nameEn}"`); }
-      else { err++; report.push(`  ⚠️[TS] ${row.name_en} = ${r.action}(${r.matchedBy})`); }
+      else { err++; report.push(`  ⚠️[TS] ${row.name_en} = ${r.action}(${r.reason || ''})`); }
     } catch (e: any) { err++; report.push(`  ✗[TS] ${row.name_en}: ${e.message}`); }
   }
   await c.end();

@@ -1,6 +1,6 @@
 // ⚠️ 수정금지(승인필요) 2026-06-04 = fillCity 단일 오케스트레이터 (= 헌법 §16 Phase B = 사용자 SSOT)
 // = 한 도시 raw DB 채우기 전 파이프라인을 "한 줄"로. 도시ID만 바꾸면 300번 동일 동작.
-// = 모든 쓰기는 단일 7단계 매처(shared/matcher.ts) + upsertPlace 통과 (= 신규 INSERT / 기존 UPDATE 자동 분기).
+// = 모든 쓰기는 upsertPlace 통과 = 중복 판정은 DB 트리거 단일 관문(place_seed_raw_prevent_dup) 전담(2026-07-18 §19, 옛 코드 매처 matcher.ts 삭제).
 //
 // ⚠️ 수정금지(승인필요) 2026-06-08 = 확정 PRD(docs/FILLCITY_PRD.md §4) 정합 = 6단계 상호보완 체인 + ⓪
 // 단계 (= 전부 기존 컴포넌트 = 재발명 0):

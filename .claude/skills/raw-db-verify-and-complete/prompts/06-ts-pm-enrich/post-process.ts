@@ -35,7 +35,7 @@ if (!cityId) { console.error('Usage: --city-id=<N> --date=<YYYY-MM-DD> --apply-s
   }
 
   // ⚠️ 수정금지(승인필요) — raw 버전순번/06 reader 정합(2026-06-16 SSOT)
-  //   = (1) 옛 하드코딩명 '06-ts-pm-enrich-candidates-{date}.json' 폐기 → writer(run.ts) 신표준 rawName(6,...) 으로 정합 (07-merge 패턴).
+  //   = (1) 옛 하드코딩명 '06-ts-pm-enrich-candidates-{date}.json' 폐기 → writer(run.ts) 신표준 rawName(6,...) 으로 정합 (rawName 파일명 규칙).
   //   = (3) 버전순번 = latestVersioned 로 stem 계열(_N) 중 최신 1개 선택. 없으면 기존 미존재 에러.
   const { rawName, latestVersioned } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/raw-filename.ts')).href);
   const inDir = path.join(ROOT, 'docs', 'raw', String(cityId));                                    // = 산출물 폴더(불변)
