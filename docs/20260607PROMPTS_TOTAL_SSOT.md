@@ -199,6 +199,7 @@ ${categoryMatrix}
 - 식사(lunch/dinner) = c="restaurant".
 
 [동선 원칙]
+- ⚠️ NO DUPLICATE PLACES: Each place must appear AT MOST ONCE across the ENTIRE itinerary (all days). 같은 장소(같은 건물·같은 구글맵 위치)를 여러 슬롯/여러 날에 중복 추천 금지 = 이름·주소를 다르게 써도 실제 같은 곳이면 한 번만. 슬롯이 남으면 다른 장소로 채운다.
 - 매일 ${formData.destination} 도시 중심부에서 출발·귀환, 같은 날 = 같은 구역 묶기
 - Array order within each day = visit order (= sorted by minimum travel distance from start)
 - DAILY MEAL RULE (= AG1 has already assigned these slots — DO NOT modify count or position):

@@ -4,6 +4,11 @@ import { MEAL_BUDGET, SEED_CATEGORIES } from './types';
 import { computeCatSlots } from './ag2-gemini-recommender';
 import { getAI, normalizeTravelStyle, type GeminiPlace, type GeminiDay } from './pipeline-v3-types';
 
+// ⚠️ 수정금지(승인필요) 2026-07-18 사장님 확정 = 메인앱 여정 Step1 모델 = gemini-3.5-flash(정식 GA, preview 대체). 실측: thinking 0인데도 중복 0 + 13초 + 3일 완성.
+//   = 옛 gemini-3-flash-preview 폐기 §19. 3.5 = 입력$1.5/출력$9 per 1M(preview 3배)이나 여정 1건 ~₩37 = 품질·간결 우선. (3.5 Pro 출시 시 재검토)
+//   = 로그·호출 2곳 단일 지점(다른 파일 MODEL_ID 로컬 상수 컨벤션 동일) = 향후 교체 1곳.
+const STEP1_MODEL = "gemini-3.5-flash";
+
 // =====================================================
 // Step 1: Gemini 완전 일정 생성
 // =====================================================
@@ -146,6 +151,7 @@ ${categoryMatrix}
 - 식사(lunch/dinner) = c="restaurant".
 
 [동선 원칙]
+- ⚠️ NO DUPLICATE PLACES: Each place must appear AT MOST ONCE across the ENTIRE itinerary (all days). 같은 장소(같은 건물·같은 구글맵 위치)를 여러 슬롯/여러 날에 중복 추천 금지 = 이름·주소를 다르게 써도 실제 같은 곳이면 한 번만. 슬롯이 남으면 다른 장소로 채운다.
 - 매일 ${startPoint}에서 출발·귀환, 같은 날 = 같은 구역 묶기
 - Array order within each day = visit order (= sorted by minimum travel distance from start)
 - DAILY MEAL RULE (= AG1 has already assigned these slots — DO NOT modify count or position):
@@ -181,18 +187,20 @@ OUTPUT (strict JSON, no markdown fences):
   try {
     // 🗑️ 2026-07-05 삭제 = STEP1_USE_GROUNDING 토글 + grounding else분기 = false고정 데드경로(JSON경로 1벌만) §0/§19
     // responseMimeType JSON = 파싱안정+속도 (신규장소 환각 안전망 = saveNewPlacesToDB TS searchText 재검증)
+    // ⚠️ 수정금지(승인필요) 2026-07-18 사장님 확정 = maxOutputTokens 50000(다른 Gemini 호출 geminiClient·route·발굴01/03/04 와 통일).
+    //   = 옛 8192(gemini-2.5 시절 잔존값) 폐기 §19 = 3.5-flash 응답 잘림(3일→2일) 근본. maxTokens=상한이라 실제 과금(생성토큰)엔 영향 0.
     const step1Config: any = {
       temperature: 0.3,
-      maxOutputTokens: 8192,
+      maxOutputTokens: 50000,
       thinkingConfig: { thinkingBudget: 0 },
       responseMimeType: "application/json",
     };
     console.log(
-      `[V3-Step1] 🤖 gemini-3-flash-preview + JSON (${prompt.length}자)...`,
+      `[V3-Step1] 🤖 ${STEP1_MODEL} + JSON (${prompt.length}자)...`,
     );
 
     const response = await getAI().models.generateContent({
-      model: "gemini-3-flash-preview",
+      model: STEP1_MODEL,
       contents: [{ role: "user", parts: [{ text: prompt }] }],
       config: step1Config,
     });
