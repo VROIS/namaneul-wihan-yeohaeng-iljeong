@@ -186,16 +186,15 @@ OUTPUT (strict JSON, no markdown fences):
 ]}]}`;
 
   try {
-    // 🗑️ 2026-07-05 삭제 = STEP1_USE_GROUNDING 토글 + grounding else분기 = false고정 데드경로(JSON경로 1벌만) §0/§19
-    // responseMimeType JSON = 파싱안정+속도 (신규장소 환각 안전망 = saveNewPlacesToDB TS searchText 재검증)
-    // ⚠️ 수정금지(승인필요) 2026-07-18 사장님 확정 = maxOutputTokens 50000(다른 Gemini 호출 geminiClient·route·발굴01/03/04 와 통일).
-    //   = 옛 8192(gemini-2.5 시절 잔존값) 폐기 §19 = 3일 JSON 상한 부족 방지. maxTokens=상한이라 실제 과금(생성토큰)엔 영향 0. 모델 = preview 복귀(3.5 thinking0 잘림 §19).
+    // ⚠️ 수정금지(승인필요) 2026-07-18 사장님 확정 = 발굴(_call-config.md 검증표준)과 완전 통일 = googleSearch 그라운딩 실제 켬 + responseMimeType 제거.
+    //   근본: preview 모델·temp0.2 로도 환각(렌 실증: 파리 식당을 렌에·거리이름 추천) 발생 = 원인은 모델 아니라 "그라운딩 미실행"(프롬프트엔 GROUNDING REQUIREMENT 글만, 실제 tools 없어 효력0).
+    //   = 발굴은 tools googleSearch 로 실제 Google 검증 = 환각 억제. responseMimeType 은 grounding 과 배타(INVALID_ARGUMENT, 06-run.ts:92 정합) = 제거 → 프롬프트 STRICT JSON + repairTruncatedJSON 이 JSON 보장.
+    // ⚠️ maxOutputTokens 50000(발굴 통일, 8192 폐기 §19) / temperature 0.2(발굴 통일, 0.3 폐기 §19) / 모델 preview(3.5 thinking0 잘림 §19).
     const step1Config: any = {
-      // ⚠️ 수정금지(승인필요) 2026-07-18 사장님 확정 = temperature 0.2 = 발굴(120장소 안정 발굴, _call-config.md 검증표준)과 통일. 옛 0.3 폐기 §19 = 무작위성↑ = 긴 JSON 불안정 요인.
       temperature: 0.2,
       maxOutputTokens: 50000,
       thinkingConfig: { thinkingBudget: 0 },
-      responseMimeType: "application/json",
+      tools: [{ googleSearch: {} }],
     };
     console.log(
       `[V3-Step1] 🤖 ${STEP1_MODEL} + JSON (${prompt.length}자)...`,
