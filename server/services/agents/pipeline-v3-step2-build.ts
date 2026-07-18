@@ -76,6 +76,10 @@ export async function step2_enrichAndBuild(
         geminiAddress: gPlace.address || '',
         nameKo: gPlace.nameKo || null,
         nameLocal: gPlace.nameLocal || null,
+        // ⚠️ 수정금지(승인필요) 2026-07-18 사장님 SSOT = editorialSummary(FE 한줄요약) = Gemini shortform_ko(=desc)를 place 에 직접 매핑.
+        //   근본: 옛 재조회(loadSeedRawMap) 삭제 후 = 신규 곳(흡수 RETURNING 없음)의 editorialSummary 가 place 에 없어 FE 슬롯에서 빔(사장님 실증 3-4곳).
+        //   = place 에 desc 를 editorialSummary 로 실으면 신규·흡수 무관 완비 = 재조회(+1.2초) 불필요. day-builder 는 ep.editorialSummary 우선.
+        editorialSummary: desc || null,
         // 🧠 2026-07-05 사장님 SSOT = Gemini 도심거리·카테고리 살림(§20) = saveNewPlacesToDB job 전필드 저장(지점4) = 결손컬럼 채움.
         distanceKmFromCenter: gPlace.distance_km_from_center ?? null,
         // ⚠️ 수정금지(승인필요) 2026-07-11 사장님 SSOT = 슬롯 카테고리 1회 계산(중복식 드리프트 방지) + SEED_CATEGORIES 화이트리스트 검증
