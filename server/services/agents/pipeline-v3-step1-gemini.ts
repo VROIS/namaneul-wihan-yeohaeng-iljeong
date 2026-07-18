@@ -294,40 +294,21 @@ OUTPUT (strict JSON, no markdown fences):
   }
 }
 
-/** Gemini JSON 잘림 복구 */
+/** Gemini JSON 잘림 복구 = 발굴(01-run.ts parse) 방식 동일(§16 통일).
+ *  = 뒤에서부터 성한 '}' 지점마다 접미사(]}}/]}/}) 붙여 파싱 시도 = 잘린 마지막 날의 완성 place 까지 살림.
+ *  = 옛 "day 경계 통째 버림"(braceDepth) 폐기 2026-07-19 §19 = 3일 요청인데 Day3 통째 소실 근본(렌 2일 잘림). */
 export function repairTruncatedJSON(broken: string): { days: GeminiDay[] } | null {
-  try {
-    const arrStart = broken.indexOf('[');
-    if (arrStart === -1) return null;
-
-    let lastCompleteIdx = -1;
-    let braceDepth = 0;
-    let inString = false;
-    let escapeNext = false;
-
-    for (let i = arrStart + 1; i < broken.length; i++) {
-      const ch = broken[i];
-      if (escapeNext) { escapeNext = false; continue; }
-      if (ch === '\\') { escapeNext = true; continue; }
-      if (ch === '"') { inString = !inString; continue; }
-      if (inString) continue;
-      if (ch === '{') braceDepth++;
-      if (ch === '}') {
-        braceDepth--;
-        if (braceDepth === 0) lastCompleteIdx = i;
-      }
+  const start = broken.indexOf('{');
+  if (start < 0) return null;
+  // 1차 = 통째 시도
+  try { const p = JSON.parse(broken.slice(start, broken.lastIndexOf('}') + 1)); if (p.days) return p; } catch { /* 잘림 = 아래 복구 */ }
+  // 2차 = 뒤에서부터 성한 '}' 마다 접미사 붙여 최대한 살림(발굴 parse 패턴)
+  for (let endIdx = broken.length - 1; endIdx > start; endIdx--) {
+    if (broken[endIdx] !== '}') continue;
+    const trimmed = broken.slice(start, endIdx + 1);
+    for (const suffix of [']}]}', ']}}', ']}', '}', '']) {
+      try { const p = JSON.parse(trimmed + suffix); if (p.days) return p; } catch { /* 다음 접미사 */ }
     }
-
-    if (lastCompleteIdx === -1) return null;
-
-    const repaired = broken.substring(0, lastCompleteIdx + 1) + ']}';
-    try {
-      return JSON.parse(repaired);
-    } catch {
-      const cleaned = repaired.replace(/,\s*\]/, ']');
-      return JSON.parse(cleaned);
-    }
-  } catch {
-    return null;
   }
+  return null;
 }
