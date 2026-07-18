@@ -4,10 +4,11 @@ import { MEAL_BUDGET, SEED_CATEGORIES } from './types';
 import { computeCatSlots } from './ag2-gemini-recommender';
 import { getAI, normalizeTravelStyle, type GeminiPlace, type GeminiDay } from './pipeline-v3-types';
 
-// ⚠️ 수정금지(승인필요) 2026-07-18 사장님 확정 = 메인앱 여정 Step1 모델 = gemini-3.5-flash(정식 GA, preview 대체). 실측: thinking 0인데도 중복 0 + 13초 + 3일 완성.
-//   = 옛 gemini-3-flash-preview 폐기 §19. 3.5 = 입력$1.5/출력$9 per 1M(preview 3배)이나 여정 1건 ~₩37 = 품질·간결 우선. (3.5 Pro 출시 시 재검토)
+// ⚠️ 수정금지(승인필요) 2026-07-18 사장님 확정 = 메인앱 여정 Step1 모델 = gemini-3-flash-preview 로 복귀.
+//   = 옛 gemini-3.5-flash 폐기 §19 = 3.5 는 thinking 기반 추론모델이라 thinkingBudget:0 에서 긴 JSON(24곳) 생성이 불안정 = finishReason STOP 인데 응답 중간 잘림(실증: 9,686자↔5,554자 변동 = 3일↔2일).
+//     리서치 확정(ai.google.dev/gemini-3.5 + 개발자포럼): 3.5 는 thinking 켜야 긴 구조화 출력 안정 = thinking 켜면 비싼 모델 쓸 이유 없음(사장님). preview 는 thinking 0 에서도 안정적 3일 완결(예전 실증).
 //   = 로그·호출 2곳 단일 지점(다른 파일 MODEL_ID 로컬 상수 컨벤션 동일) = 향후 교체 1곳.
-const STEP1_MODEL = "gemini-3.5-flash";
+const STEP1_MODEL = "gemini-3-flash-preview";
 
 // =====================================================
 // Step 1: Gemini 완전 일정 생성
@@ -188,9 +189,10 @@ OUTPUT (strict JSON, no markdown fences):
     // 🗑️ 2026-07-05 삭제 = STEP1_USE_GROUNDING 토글 + grounding else분기 = false고정 데드경로(JSON경로 1벌만) §0/§19
     // responseMimeType JSON = 파싱안정+속도 (신규장소 환각 안전망 = saveNewPlacesToDB TS searchText 재검증)
     // ⚠️ 수정금지(승인필요) 2026-07-18 사장님 확정 = maxOutputTokens 50000(다른 Gemini 호출 geminiClient·route·발굴01/03/04 와 통일).
-    //   = 옛 8192(gemini-2.5 시절 잔존값) 폐기 §19 = 3.5-flash 응답 잘림(3일→2일) 근본. maxTokens=상한이라 실제 과금(생성토큰)엔 영향 0.
+    //   = 옛 8192(gemini-2.5 시절 잔존값) 폐기 §19 = 3일 JSON 상한 부족 방지. maxTokens=상한이라 실제 과금(생성토큰)엔 영향 0. 모델 = preview 복귀(3.5 thinking0 잘림 §19).
     const step1Config: any = {
-      temperature: 0.3,
+      // ⚠️ 수정금지(승인필요) 2026-07-18 사장님 확정 = temperature 0.2 = 발굴(120장소 안정 발굴, _call-config.md 검증표준)과 통일. 옛 0.3 폐기 §19 = 무작위성↑ = 긴 JSON 불안정 요인.
+      temperature: 0.2,
       maxOutputTokens: 50000,
       thinkingConfig: { thinkingBudget: 0 },
       responseMimeType: "application/json",
