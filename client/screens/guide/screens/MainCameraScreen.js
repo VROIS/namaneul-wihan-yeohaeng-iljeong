@@ -9,7 +9,20 @@ import { StatusBar } from 'expo-status-bar';
 import * as ImagePicker from 'expo-image-picker';
 import * as Speech from 'expo-speech';
 import * as Location from 'expo-location';
-import { ExpoSpeechRecognitionModule, useSpeechRecognitionEvent } from 'expo-speech-recognition';
+// expo-speech-recognition = 네이티브 전용 (Expo Go 미지원) → 안전 로드
+let ExpoSpeechRecognitionModule = {
+  stop: () => {},
+  start: () => {},
+  requestPermissionsAsync: async () => ({ granted: false }),
+};
+let useSpeechRecognitionEvent = (_event, _cb) => {};
+try {
+  const sr = require('expo-speech-recognition');
+  if (sr?.ExpoSpeechRecognitionModule) ExpoSpeechRecognitionModule = sr.ExpoSpeechRecognitionModule;
+  if (sr?.useSpeechRecognitionEvent) useSpeechRecognitionEvent = sr.useSpeechRecognitionEvent;
+} catch (_) {
+  // Expo Go: 네이티브 모듈 없음 — 스텁으로 동작
+}
 
 import CameraView from '../components/CameraView';
 import FooterButtons from '../components/FooterButtons';
