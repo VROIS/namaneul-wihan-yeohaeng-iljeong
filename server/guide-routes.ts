@@ -1,23 +1,31 @@
 // ═══════════════════════════════════════════════════════════════════════════════
-// 내손안에 가이드 API 라우트 (P0-4 통합 스텁, Phase 4에서 구현)
+// ⚠️ 수정금지(승인필요) 2026-07-19 사장님 SSOT (§12 4단계) = 가이드 미니앱 서버 배선.
+// = 레거시 카메라 모듈(client/screens/guide, 내부 0수정)이 부르는 엔드포인트 = 여기서 배선.
+// = 모듈 backendApi.js·PromptService.js 가 기대하는 인터페이스에 맞춤(모듈 불가침 = 서버가 맞춤).
+//   ① POST /api/analyze            = 사진 해설 (geminiVision, §16 단일진입점 재사용). JSON 응답.
+//   ② GET  /api/prompts/:lang/:type = 언어별 페르소나 (DB prompts, is_active+version DESC = §12 함정 필터).
+//   ③ GET  /api/voice-configs       = 웹TTS 음성 우선순위 (DB voice_configs).
+//   ④ /api/guides (batch·목록·삭제)  = 보관함 (DB guides). 당분간 사장님만 = auth.ts 재사용.
 // ═══════════════════════════════════════════════════════════════════════════════
-//
-// 원본: 내손안에 가이드/server/routes.ts (~95 엔드포인트)
-// 레거시 참고 파일 = 원본은 레거시 레포(내손안에 가이드)에 보존, 이 레포 사본은 미사용으로 삭제 = 2026-07-15 §19
-// (크레딧 로직 = server/creditService.ts 는 재사용 예정으로 유지)
-//
-// 인증 = 이미 server/auth.ts 1벌로 구현·운영 중(재구현 금지 §16)
-//
-// Phase 4 구현 시 아래 카테고리별로 엔드포인트 추가:
-//   1. 가이드 CRUD (6개)
-//   2. 공유/공유페이지 (9개) (참조 구현 = 레거시 레포에 보존, 이 레포 사본은 삭제됨 §19)
-//   3. 크레딧/결제 (5개) (참조 구현 = 레거시 레포에 보존, 이 레포 사본은 삭제됨 §19)
-//   4. 알림/푸시 (9개)
-//   5. 관리자 (27개)
-//   6. AI/Gemini (1개)
-//   7. 음성/TTS (3개)
 
-import type { Express } from "express";
+import type { Express, Request } from "express";
+import { and, desc, eq } from "drizzle-orm";
+import { db as _db } from "./db";
+import { guides, prompts, voiceConfigs } from "../shared/schema";
+import { geminiVision } from "./services/shared/geminiClient";
+
+// ⚠️ db 는 DB 미연결 시 null 가능(server/db.ts) = 라우트 진입 시 확정(bts-routes 패턴). null 이면 throw → 각 라우트 catch 가 503.
+function getDb() {
+  if (!_db) throw new Error("DB unavailable");
+  return _db;
+}
+
+// ⚠️ 인증 = auth.ts 토큰형식("simple_auth_token_v1_"+id) 파싱(전문가탭 패턴 재사용, §16). Bearer 없으면 null.
+function userIdFromReq(req: Request): string | null {
+  const auth = req.headers.authorization || "";
+  const m = auth.match(/^Bearer\s+simple_auth_token_v1_(.+)$/);
+  return m ? m[1] : null;
+}
 
 export function registerGuideRoutes(app: Express): void {
   // === 헬스 체크 ===
@@ -25,12 +33,149 @@ export function registerGuideRoutes(app: Express): void {
     res.json({ status: "ok", service: "guide", version: "2.0.0" });
   });
 
-  // === Phase 4에서 추가될 라우트 ===
-  // TODO: 가이드 CRUD — GET/POST/DELETE /api/guides
-  // TODO: 공유페이지 — GET /s/:id, POST /api/share
-  // TODO: 크레딧 — POST /api/credits/purchase
-  // TODO: 알림 — GET/POST /api/notifications
-  // TODO: 푸시 — POST /api/push/subscribe
-  // TODO: 음성설정 — GET /api/voice-configs
-  // TODO: AI해설 — POST /api/gemini
+  // ① 사진 해설 = geminiVision (JSON 응답 = 모듈 analyzeImageViaServer 가 response.json() 기대).
+  app.post("/api/analyze", async (req, res) => {
+    try {
+      const { image, prompt, language } = req.body || {};
+      if (!image)
+        return res.status(400).json({ error: "image(base64) required" });
+      // 페르소나 = 요청 prompt 우선, 없으면 언어 기본. (모듈 useAI 가 DB 페르소나를 prompt 로 넘김)
+      const out = await geminiVision(
+        String(image),
+        prompt || "이 이미지를 여행자에게 친근하게 해설해줘.",
+        {
+          systemPrompt: prompt || undefined,
+          contextId: "runtime",
+          rawTag: "guide-analyze",
+        },
+      );
+      // 모듈은 result.description || result.text 를 읽음 → 둘 다 담아 하위호환.
+      res.json({
+        description: out.text,
+        text: out.text,
+        language: language || "ko",
+      });
+    } catch (e: any) {
+      console.error("[guide/analyze]", e?.message || e);
+      res.status(500).json({ error: "해설 생성 실패" });
+    }
+  });
+
+  // ② 언어별 페르소나 = DB prompts. ⚠️ §12 함정 = 중복·구버전 존재 → is_active + version DESC 1건.
+  app.get("/api/prompts/:language/:type", async (req, res) => {
+    try {
+      const { language, type } = req.params;
+      const rows = await getDb()
+        .select()
+        .from(prompts)
+        .where(
+          and(
+            eq(prompts.language, language),
+            eq(prompts.type, type),
+            eq(prompts.isActive, true),
+          ),
+        )
+        .orderBy(desc(prompts.version))
+        .limit(1);
+      if (!rows.length)
+        return res.status(404).json({ error: "prompt not found" });
+      res.json({
+        content: rows[0].content,
+        language,
+        type,
+        version: rows[0].version,
+      });
+    } catch (e: any) {
+      console.error("[guide/prompts]", e?.message || e);
+      res.status(500).json({ error: "프롬프트 조회 실패" });
+    }
+  });
+
+  // ③ 웹TTS 음성 우선순위 = DB voice_configs (모듈 웹앱 로직이 langCode·platform 별로 캐시).
+  app.get("/api/voice-configs", async (_req, res) => {
+    try {
+      const rows = await getDb()
+        .select()
+        .from(voiceConfigs)
+        .where(eq(voiceConfigs.isActive, true));
+      res.json(
+        rows.map((r) => ({
+          langCode: r.langCode,
+          platform: r.platform,
+          voicePriorities: r.voicePriorities,
+          excludeVoices: r.excludeVoices || [],
+        })),
+      );
+    } catch (e: any) {
+      console.error("[guide/voice-configs]", e?.message || e);
+      res.status(500).json({ error: "음성설정 조회 실패" });
+    }
+  });
+
+  // ④ 보관함 저장 = 모듈 ArchiveService.saveToServer 가 { userId, language, guides:[...] } 로 POST.
+  app.post("/api/guides/batch", async (req, res) => {
+    try {
+      const reqUserId = userIdFromReq(req);
+      const { userId, language, guides: items } = req.body || {};
+      const owner = reqUserId || userId; // 인증 우선, 없으면 바디 userId(당분간 사장님만)
+      if (!owner) return res.status(401).json({ error: "userId required" });
+      if (!Array.isArray(items) || !items.length)
+        return res.status(400).json({ error: "guides required" });
+      const inserted = await getDb()
+        .insert(guides)
+        .values(
+          items.map((g: any) => ({
+            userId: owner,
+            localId: g.localId || null,
+            title: g.title || "여행 기록",
+            description: g.description || null,
+            imageUrl: g.imageDataUrl || g.imageUrl || null, // 모듈은 data:image base64 인라인 전달
+            aiGeneratedContent: g.aiGeneratedContent || null,
+            latitude: g.latitude ?? null,
+            longitude: g.longitude ?? null,
+            locationName: g.locationName || null,
+            language: g.language || language || "ko",
+            voiceLang: g.voiceLang || null,
+            voiceName: g.voiceName || null,
+          })),
+        )
+        .returning({ id: guides.id });
+      res.json({ guideIds: inserted.map((r) => r.id) });
+    } catch (e: any) {
+      console.error("[guide/guides/batch]", e?.message || e);
+      res.status(500).json({ error: "보관함 저장 실패" });
+    }
+  });
+
+  // ④ 보관함 목록 = GET /api/guides?userId=
+  app.get("/api/guides", async (req, res) => {
+    try {
+      const owner = userIdFromReq(req) || (req.query.userId as string);
+      if (!owner) return res.status(401).json({ error: "userId required" });
+      const rows = await getDb()
+        .select()
+        .from(guides)
+        .where(eq(guides.userId, owner))
+        .orderBy(desc(guides.createdAt));
+      res.json(rows);
+    } catch (e: any) {
+      console.error("[guide/guides]", e?.message || e);
+      res.status(500).json({ error: "보관함 조회 실패" });
+    }
+  });
+
+  // ④ 보관함 삭제 = DELETE /api/guides/:id (본인 것만).
+  app.delete("/api/guides/:id", async (req, res) => {
+    try {
+      const owner = userIdFromReq(req) || (req.body?.userId as string);
+      if (!owner) return res.status(401).json({ error: "userId required" });
+      await getDb()
+        .delete(guides)
+        .where(and(eq(guides.id, req.params.id), eq(guides.userId, owner)));
+      res.json({ success: true });
+    } catch (e: any) {
+      console.error("[guide/guides delete]", e?.message || e);
+      res.status(500).json({ error: "보관함 삭제 실패" });
+    }
+  });
 }

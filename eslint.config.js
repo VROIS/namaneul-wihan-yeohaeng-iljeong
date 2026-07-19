@@ -53,6 +53,8 @@ module.exports = defineConfig([
       "dev/**", // 개발용 임시
       "web/**", // 빌드 웹 산출물
       "bts-app/**", // 독립 별도 앱(자체 package.json·node_modules) = 메인 Tripis 코드 아님 = 자기 앱에서 lint
+      // ⚠️ 2026-07-19 §12 = 레거시 카메라 모듈 이식본(내손안에가이드 main-input-screen-rn-v1.0) = 기종불문 검증완료 = 내부 0수정 원칙(§12) = lint 규칙 적용 안 함(우리 스타일로 재포맷 = 검증파괴 위험). GuideStackNavigator·GuidePlaceholder(우리 배선 tsx)는 상위 폴더라 정상 lint.
+      "client/screens/guide/**",
       "scripts/db_cleanup.js", // 한글깨짐 파싱에러 죽은 1회용 스크립트
       "scripts/fix-db-issues.js", // 동일
       "scripts/verify-workflow.mjs", // Workflow 전역함수(agent·parallel) = 런타임 주입 = eslint 파싱 대상 아님

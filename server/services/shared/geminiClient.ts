@@ -114,3 +114,89 @@ export async function geminiJson<T = any>(
 
   return { raw, data, finishReason, parseError };
 }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ⚠️ 수정금지(승인필요) 2026-07-19 사장님 SSOT (§12 4단계) = Gemini Vision(이미지 해설) 확장.
+// = geminiJson()(텍스트 전용) 은 불변 = 하위호환. Vision 은 이 형제 함수로 = §16 단일 진입점(새 클라이언트 금지) 정합.
+// = getAI·saveRaw·키조달 = 기존 코드 재사용. 응답 = 일반 텍스트(해설이니 JSON 아님).
+// = 용도: 가이드 미니앱 /api/analyze = 사진 base64 + 페르소나프롬프트 → 여행 해설.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export interface GeminiVisionOptions {
+  model?: string;
+  temperature?: number;
+  maxOutputTokens?: number;
+  /** = 이미지 MIME (기본 image/jpeg). 카메라·갤러리 = jpeg. */
+  mimeType?: string;
+  /** = 시스템 페르소나 프롬프트(DB prompts 에서 조달). systemInstruction 으로 주입. */
+  systemPrompt?: string;
+  /** ⚠️ raw 저장 맥락 = 미지정→'runtime'(메인앱). */
+  contextId?: string | number | null;
+  rawTag?: string | null;
+  apiKey?: string;
+}
+
+export interface GeminiVisionResult {
+  text: string;
+  finishReason: string;
+}
+
+/**
+ * 이미지 + 텍스트 프롬프트 → 해설 텍스트.
+ * = base64 이미지를 inlineData 로 파트 구성(geminiJson 의 텍스트 전용 parts 확장).
+ * = raw 저장(§18) 강제 = 이미지는 용량 커서 raw 엔 프롬프트·응답만(이미지 제외).
+ */
+export async function geminiVision(
+  imageBase64: string,
+  prompt: string,
+  opts?: GeminiVisionOptions,
+): Promise<GeminiVisionResult> {
+  const model = opts?.model || MODEL_ID;
+  const config: any = {
+    temperature: opts?.temperature ?? TEMPERATURE,
+    maxOutputTokens: opts?.maxOutputTokens ?? MAX_OUTPUT_TOKENS,
+    thinkingConfig: { thinkingBudget: 0 },
+  };
+  if (opts?.systemPrompt) {
+    config.systemInstruction = { parts: [{ text: opts.systemPrompt }] };
+  }
+
+  const response = await getAI(opts?.apiKey).models.generateContent({
+    model,
+    contents: [
+      {
+        role: "user",
+        parts: [
+          { text: prompt },
+          {
+            inlineData: {
+              mimeType: opts?.mimeType || "image/jpeg",
+              data: imageBase64,
+            },
+          },
+        ],
+      },
+    ],
+    config,
+  });
+
+  const text = (response as any).text || "";
+  const finishReason =
+    (response as any).candidates?.[0]?.finishReason || "unknown";
+
+  // ⚠️ raw 저장(§18) = 이미지 제외(용량) = 프롬프트·페르소나·응답만.
+  await saveRaw({
+    source: "gemini",
+    contextId: opts?.contextId,
+    tag: opts?.rawTag || "vision-guide",
+    request: {
+      prompt,
+      systemPrompt: opts?.systemPrompt || null,
+      model,
+      hasImage: true,
+    },
+    raw: { parsed: null, text, finishReason },
+  });
+
+  return { text, finishReason };
+}

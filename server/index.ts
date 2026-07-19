@@ -63,13 +63,15 @@ function setupCharset(app: express.Application) {
 function setupBodyParsing(app: express.Application) {
   app.use(
     express.json({
+      // ⚠️ 2026-07-19 §12 = 가이드 미니앱 /api/analyze 가 카메라 사진 base64(수 MB) POST = 기본 100KB 초과 → 10mb 로 상향.
+      limit: "10mb",
       verify: (req, _res, buf) => {
         req.rawBody = buf;
       },
     }),
   );
 
-  app.use(express.urlencoded({ extended: false }));
+  app.use(express.urlencoded({ extended: false, limit: "10mb" }));
 }
 
 // ⚠️ 수정금지(승인필요) — 앱 에러 리포트 엔드포인트 (AI가 에러 확인용)

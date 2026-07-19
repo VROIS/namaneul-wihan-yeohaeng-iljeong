@@ -45,7 +45,28 @@
       "expo-localization",
       "@react-native-community/datetimepicker",
       "./plugins/withKakaoMavenRepo",
-      "./plugins/withAndroidGradleMemory"
+      "./plugins/withAndroidGradleMemory",
+      "expo-speech-recognition",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "가이드가 사진을 보고 여행 정보를 해설하기 위해 카메라를 사용합니다.",
+          "microphonePermission": "라이브 여행비서와 음성으로 대화하기 위해 마이크를 사용합니다.",
+          "recordAudioAndroid": true
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "가이드가 갤러리 사진을 보고 여행 정보를 해설하기 위해 사진 접근을 사용합니다."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "현재 위치 기반 여행 정보·SOS 안내를 위해 위치를 사용합니다."
+        }
+      ]
     ],
     "experiments": {
       "reactCompiler": false
