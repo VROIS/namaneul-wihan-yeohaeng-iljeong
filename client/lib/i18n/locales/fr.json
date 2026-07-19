@@ -254,7 +254,8 @@
     "aiOpinion": "Avis IA",
     "expert": "Vérification",
     "profile": "Profil",
-    "settings": "Paramètres"
+    "settings": "Paramètres",
+    "guide": "Tripis"
   },
   "aiOpinion": {
     "title": "Avis IA",

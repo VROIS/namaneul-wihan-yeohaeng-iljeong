@@ -254,7 +254,8 @@
     "aiOpinion": "AI意見",
     "expert": "専門家検証",
     "profile": "プロフィール",
-    "settings": "設定"
+    "settings": "設定",
+    "guide": "Tripis"
   },
   "aiOpinion": {
     "title": "AI意見",

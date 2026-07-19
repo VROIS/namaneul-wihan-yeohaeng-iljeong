@@ -254,7 +254,8 @@
     "aiOpinion": "AI意见",
     "expert": "专家验证",
     "profile": "我的",
-    "settings": "设置"
+    "settings": "设置",
+    "guide": "Tripis"
   },
   "aiOpinion": {
     "title": "AI意见",

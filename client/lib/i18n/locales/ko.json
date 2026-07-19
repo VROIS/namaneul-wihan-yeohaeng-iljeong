@@ -314,7 +314,8 @@
     "aiOpinion": "AI 의견",
     "expert": "전문가 검증",
     "profile": "프로필",
-    "settings": "설정"
+    "settings": "설정",
+    "guide": "Tripis"
   },
   "aiOpinion": {
     "title": "AI 의견",

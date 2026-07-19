@@ -16,6 +16,7 @@ import SavedTripDetailScreen from "@/screens/saved-trip/SavedTripDetailScreen";
 import AdminScreen from "@/screens/AdminScreen";
 import BTSConcertPlannerScreen from "@/screens/BTSConcertPlannerScreen";
 import BTSStackNavigator from "@/navigation/BTSStackNavigator";
+import GuideStackNavigator from "@/navigation/GuideStackNavigator"; // 가이드 미니앱(§12 1단계) = BTS 패턴 독립 스택
 import { BTSLandingScreen } from "@/screens/BTSLandingScreen";
 import BTSWorldMapScreen from "@/screens/bts/BTSWorldMapScreen";
 // ⚠️ 수정금지(승인필요) — 보관 화면 import 제거 (번들 크기 축소, 14.97MB→Expo Go 30초 타임아웃 초과)
@@ -35,8 +36,15 @@ export type RootStackParamList = {
   AdminModal: undefined;
   BTSConcertPlanner: undefined;
   BTSMiniApp: undefined;
+  GuideMiniApp: undefined; // 가이드 미니앱(§12 1단계) = 설정탭에서 진입, 풀스크린 모달
   BTSLanding: undefined;
-  BTSWorldMap: { city?: string; cityId?: number; date?: string; dDay?: number; venue?: string }; // ⚠️ 수정금지(승인필요) — next-concert API 데이터 전달
+  BTSWorldMap: {
+    city?: string;
+    cityId?: number;
+    date?: string;
+    dDay?: number;
+    venue?: string;
+  }; // ⚠️ 수정금지(승인필요) — next-concert API 데이터 전달
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -73,7 +81,7 @@ export default function RootStackNavigator() {
 
   return (
     <Stack.Navigator
-      initialRouteName="Main"  /* ⚠️ 수정금지(승인필요) — NUBI 메인 먼저, BTS는 배너→랜딩→미니앱 */
+      initialRouteName="Main" /* ⚠️ 수정금지(승인필요) — NUBI 메인 먼저, BTS는 배너→랜딩→미니앱 */
       screenOptions={{
         headerTitleAlign: "center",
         headerTransparent: true,
@@ -186,6 +194,16 @@ export default function RootStackNavigator() {
       <Stack.Screen
         name="BTSMiniApp"
         component={BTSStackNavigator}
+        options={{
+          presentation: "fullScreenModal",
+          headerShown: false,
+          animation: "slide_from_bottom",
+        }}
+      />
+      {/* 가이드 미니앱 (풀스크린 독립 스택) — §12 1단계, 설정탭에서 진입 */}
+      <Stack.Screen
+        name="GuideMiniApp"
+        component={GuideStackNavigator}
         options={{
           presentation: "fullScreenModal",
           headerShown: false,

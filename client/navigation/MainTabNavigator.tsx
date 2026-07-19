@@ -23,7 +23,8 @@ export type MainTabParamList = {
   Map: undefined;
   Verify: undefined; // 검증 센터 (센터 위치)
   Profile: undefined;
-  Admin: undefined;
+  // ⚠️ 사장님 SSOT 2026-07-19 = 5번째 탭 = 설정(관리자모달) 완전교체 → 가이드 미니앱 진입(§12 2단계). 관리자 대시보드 = 프로필>설정메뉴(SettingsMenu.tsx:38)에 이미 있어 중복 = 제거 §19.
+  Guide: undefined;
 };
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -33,8 +34,8 @@ function MapTogglePlaceholder() {
   return <View style={{ flex: 1 }} />;
 }
 
-// ⚙️ 관리자 더미 컴포넌트 (실제로는 모달로 열림)
-function AdminPlaceholder() {
+// 📷 가이드 탭 더미 컴포넌트 (실제로는 tabPress에서 GuideMiniApp 풀스크린으로 열림)
+function GuideTabPlaceholder() {
   return <View style={{ flex: 1 }} />;
 }
 
@@ -44,7 +45,12 @@ export default function MainTabNavigator() {
   const isDark = colorScheme === "dark";
   const theme = Colors[colorScheme ?? "light"];
   // ⚠️ 2026-07-03 사장님 SSOT = 지도는 결과화면 고정섹션이라 하단 지도토글 버튼(showMap)은 죽은 버튼 = "AI 의견" 버튼으로 교체.
-  const { currentItinerary, requestAiOpinion, requestExpert, expertDataChangedAt } = useMapToggle();
+  const {
+    currentItinerary,
+    requestAiOpinion,
+    requestExpert,
+    expertDataChangedAt,
+  } = useMapToggle();
   // ⚠️ 수정금지(승인필요) — 삼성폰 하단 3버튼 겹침 방지 (SafeArea 여백)
   const insets = useSafeAreaInsets();
   const rootNavigation =
@@ -57,9 +63,18 @@ export default function MainTabNavigator() {
   const [isExpertRole, setIsExpertRole] = useState(false);
   useEffect(() => {
     let alive = true;
-    const load = () => tabBadgeCount().then((n) => { if (alive) setExpertBadge(n); }).catch(() => {});
+    const load = () =>
+      tabBadgeCount()
+        .then((n) => {
+          if (alive) setExpertBadge(n);
+        })
+        .catch(() => {});
     load();
-    getMyRole().then((r) => { if (alive) setIsExpertRole(r === "expert" || r === "admin"); }).catch(() => {});
+    getMyRole()
+      .then((r) => {
+        if (alive) setIsExpertRole(r === "expert" || r === "admin");
+      })
+      .catch(() => {});
     const iv = setInterval(load, 30000);
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
     const debouncedLoad = () => {
@@ -67,14 +82,25 @@ export default function MainTabNavigator() {
       debounceTimer = setTimeout(load, 1000);
     };
     const unsub = rootNavigation.addListener("state", debouncedLoad); // 화면 이동마다 배지 갱신 (1초 디바운스 = state 이벤트 스팸 방지)
-    return () => { alive = false; clearInterval(iv); if (debounceTimer) clearTimeout(debounceTimer); unsub(); };
+    return () => {
+      alive = false;
+      clearInterval(iv);
+      if (debounceTimer) clearTimeout(debounceTimer);
+      unsub();
+    };
   }, [rootNavigation]);
   // ⚠️ 사장님 SSOT 2026-07-14 = 오버레이 안 문의접수·답변전송 직후 = 배지 즉시 재조회(오버레이는 navigation state 안 바꿔서 위 리스너로는 안 걸림 = 실시간 피드백 §19).
   useEffect(() => {
     if (!expertDataChangedAt) return;
     let alive = true;
-    tabBadgeCount().then((n) => { if (alive) setExpertBadge(n); }).catch(() => {});
-    return () => { alive = false; };
+    tabBadgeCount()
+      .then((n) => {
+        if (alive) setExpertBadge(n);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
   }, [expertDataChangedAt]);
 
   const getTabBarIcon = (
@@ -97,8 +123,8 @@ export default function MainTabNavigator() {
       case "Profile":
         iconName = "user";
         break;
-      case "Admin":
-        iconName = "settings";
+      case "Guide":
+        iconName = "camera"; // ⚠️ 사장님 SSOT 2026-07-19 = 가이드 미니앱 진입(§12). 옛 settings(관리자) 폐기 §19 = 관리자는 프로필>설정메뉴.
         break;
       default:
         iconName = "circle";
@@ -195,7 +221,11 @@ export default function MainTabNavigator() {
               <Icon
                 name="brain"
                 size={24}
-                color={(currentItinerary || isExpertRole) ? Brand.primary : theme.textTertiary}
+                color={
+                  currentItinerary || isExpertRole
+                    ? Brand.primary
+                    : theme.textTertiary
+                }
               />
             ),
           }}
@@ -215,18 +245,18 @@ export default function MainTabNavigator() {
             headerTitle: t("tab.profile"),
           }}
         />
-        {/* ⚙️ 설정 (관리자) - 클릭 시 모달로 열림 */}
+        {/* 📷 가이드 (§12 2단계) - 클릭 시 GuideMiniApp 풀스크린으로 열림. 옛 설정(관리자모달) 완전교체 §19 = 관리자는 프로필>설정메뉴 중복존재. */}
         <Tab.Screen
-          name="Admin"
-          component={AdminPlaceholder}
+          name="Guide"
+          component={GuideTabPlaceholder}
           options={{
-            tabBarLabel: t("tab.settings"),
+            tabBarLabel: t("tab.guide"),
             headerShown: false,
           }}
           listeners={{
             tabPress: (e) => {
               e.preventDefault();
-              rootNavigation.navigate("AdminModal");
+              rootNavigation.navigate("GuideMiniApp");
             },
           }}
         />

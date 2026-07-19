@@ -254,7 +254,8 @@
     "aiOpinion": "KI-Meinung",
     "expert": "Expertenprüfung",
     "profile": "Profil",
-    "settings": "Einstellungen"
+    "settings": "Einstellungen",
+    "guide": "Tripis"
   },
   "aiOpinion": {
     "title": "KI-Meinung",

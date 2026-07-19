@@ -618,3 +618,37 @@ server/services/
 ### 변경하려면?
 
 = 사장님 명시 승인. = §12 RALPH LOOP 4번(스크린샷 시각검증) 강화·명문화.
+
+---
+
+## 제22조: ⚠️⚠️ 커밋 전 병렬 검증 = 의무 = 서브에이전트 전부 동원 (2026-07-19 사장님 최우선 SSOT)
+
+> 근본: 5단계검증(타입·서버빌드·웹빌드·simplify·review·react-best)을 **1000번 시켜도 AI 가 안 지킴**(사장님 분노, 메모리 [[feedback_5gate_verify_loop_before_commit]]). = 글이 아니라 **기계로 강제 + 서브에이전트 병렬로 전수**.
+
+### ✅ 절대 규칙
+
+1. **커밋 전 = 아래 검증 전부 통과 = 의무.** 선택 아님. 통과 못 하면 커밋 후보에도 못 올림.
+2. **검증 = 서브에이전트 전부 동원 = 병렬 실행**(순차 금지, 사장님 지시). = Workflow(`scripts/verify-workflow.mjs`) = 7개 에이전트 동시:
+   - **기계 4** = tsc(신규에러 0=베이스라인 이하) · 서버빌드 · 웹빌드(expo export web) · lint(expo lint)
+   - **판단 3** = /simplify(재사용·품질·효율) · /code-review(정확성·컨벤션·보안) · vercel:react-best-practices(TSX 변경 시)
+3. **하나라도 실패 = Ralph-loop = 통과까지 자율 반복**(§17 정합). 사장님께 "진행할까요" 묻지 않고 통과시킴.
+4. **기계 2중 방어**: Workflow(AI 병렬) + pre-commit hook(`.git/hooks/pre-commit`) = client/ 변경 시 웹빌드·lint 기계 강제. AI 가 Workflow 건너뛰어도 hook 이 2차 차단.
+
+### 실행
+
+- 병렬 검증 = `Workflow({scriptPath: "scripts/verify-workflow.mjs"})` (토큰=사장님 몫, ultracode급 = 사장님 승인됨 2026-07-19).
+- 기계만 빠르게 = `node scripts/verify-before-commit.mjs`(4종 병렬) / `--fe-only`(client 변경) / `--quick`(웹빌드 제외).
+- 통과 결과 = **한국어 표로 보고**(스크린샷·로그·근거 포함, "될 것 같다" 금지 §11·§21) → 그 다음 커밋 지시 대기(§10).
+
+### ❌ 절대 금지 (= 위반 즉시 작업 중단)
+
+| # | 금지 | 이유 |
+|---|---|---|
+| 1 | 검증 없이 커밋 / 일부만 검증 | 5단계검증 누락 = 사장님 분노 근본 |
+| 2 | 순차 실행(병렬 아님) | 사장님 "서브에이전트 전부 병렬" 지시 위반 |
+| 3 | 웹빌드·lint·react-best 생략(옛 서버빌드만) | FE 붕괴 무방비 = 2026-07-19 발견 누락 |
+| 4 | `--no-verify` 로 hook 우회 | 기계 강제 무력화 |
+
+### 변경하려면?
+
+= 사장님 명시 승인. = 관련 메모리 [[feedback_5gate_verify_loop_before_commit]] · [[feedback_orchestrate_delegate_subagents]] · §17(3게이트).
