@@ -1,9 +1,9 @@
 /**
  * ⚠️ 수정금지(승인필요) — 가이드 미니앱 전용 스택 네비게이터 (2026-07-19 §12 4단계)
  * = BTSStackNavigator 패턴 = 메인앱과 독립된 풀스크린 플로우.
- * = 레거시 카메라 모듈(mobile-app/src, DetailViewer 포함)을 client/screens/guide/ 로 통째 이식(내부 0수정).
- * = 흐름(레거시 index.js processImage→playAudio 의 RN판): MainCameraScreen 촬영 → GuideResult(DetailViewer, 최적음성).
- *   레거시는 이 흐름을 WebView(웹앱 index.js)로 위임 → Tripis 는 WebView 없음 → DetailViewer(RN 구현체)로 연결(§1).
+ * = 카메라 화면 = CameraOverlay(완성본: 카메라 권한처리·이미지 1024px 최적화·하단 4버튼·X닫기 자체완결).
+ *   (MainCameraScreen 은 권한처리·X 없는 구버전이라 미사용 = iOS 블랙·버튼 안보임 원인이었음.)
+ * = 흐름: CameraOverlay 촬영/업로드(base64) → GuideResult(/api/analyze → DetailViewer 최적음성 Yuna).
  */
 
 import React, { useCallback, useEffect, useState } from "react";
@@ -13,9 +13,10 @@ import {
   type NativeStackScreenProps,
 } from "@react-navigation/native-stack";
 import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
 // 레거시 모듈은 JS(무타입) = allowJs 로 import(내부 0수정 원칙 = 그대로 이식).
-import MainCameraScreen from "@/screens/guide/screens/MainCameraScreen";
+import CameraOverlay from "@/screens/guide/components/CameraOverlay";
 import DetailViewer from "@/screens/guide/components/DetailViewer";
 import { apiRequest } from "@/lib/query-client";
 
@@ -27,34 +28,38 @@ export type GuideStackParamList = {
 
 const Stack = createNativeStackNavigator<GuideStackParamList>();
 
-// ⚠️ 모듈 MainCameraScreen 은 onNavigateToWebView('detail', {imageBase64}) 를 부름(레거시 WebView 위임 시그니처).
-//   = Tripis 는 WebView 없음 → 이 콜백을 GuideResult 화면 이동으로 잇는다(내부 0수정, 배선만).
+// ⚠️ CameraOverlay = onCapture/onUpload({base64,uri,location}) · onVoice · onArchive · onClose 콜백.
+//   = 촬영·업로드 = base64 → GuideResult(해설). onClose = 미니앱 닫기(RootStack goBack). 내부 0수정, 배선만.
 function GuideCameraHost() {
   const navigation =
     useNavigation<
       NativeStackScreenProps<GuideStackParamList, "GuideCamera">["navigation"]
     >();
-  const handleNavigate = useCallback(
-    (page: string, data?: { imageBase64?: string; text?: string }) => {
-      // 촬영·업로드 = 'detail' + imageBase64 → 결과화면(DetailViewer). 'voice'·'archive' 는 추후.
-      if (page === "detail" && data?.imageBase64) {
-        navigation.navigate("GuideResult", { imageBase64: data.imageBase64 });
+  // 미니앱 자체를 닫으려면 부모(RootStack)로 나가야 함.
+  const rootNavigation = useNavigation<NativeStackNavigationProp<any>>();
+
+  const toResult = useCallback(
+    (data?: { base64?: string }) => {
+      if (data?.base64) {
+        navigation.navigate("GuideResult", { imageBase64: data.base64 });
       }
     },
     [navigation],
   );
-  // onInjectJS·lang = 모듈 prop(WebView 위임용). Tripis 는 WebView 없어 onInjectJS no-op, lang 기본 ko.
+
   return (
-    <MainCameraScreen
-      onNavigateToWebView={handleNavigate}
-      onInjectJS={() => {}}
+    <CameraOverlay
       lang="ko"
+      onCapture={toResult}
+      onUpload={toResult}
+      onVoice={() => {}} // 음성입력('voice')은 다음 단계 배선.
+      onArchive={() => {}} // 보관함(다시보기)은 다음 단계 배선.
+      onClose={() => rootNavigation.goBack()} // X = 미니앱 닫기 → 메인앱 복귀.
     />
   );
 }
 
-// ⚠️ GuideResult = 이미지 → /api/analyze(내가 배선한 라우트, 레거시 generateDescriptionStream 역할) → 해설 →
-//   DetailViewer(레거시 index.js playAudio 의 RN 구현체 = IOS_VOICE_MAP 최적음성 Yuna) 로 표시.
+// ⚠️ GuideResult = 이미지 → /api/analyze(geminiVision 해설) → DetailViewer(IOS_VOICE_MAP 최적음성 Yuna).
 //   DetailViewer·라우트 내부는 0수정 = 이 래퍼가 둘을 잇기만 함.
 function GuideResultHost({
   route,
@@ -67,7 +72,6 @@ function GuideResultHost({
     let alive = true;
     (async () => {
       try {
-        // 레거시 backendApi.analyzeImageViaServer 와 동일 계약: { image, prompt, language } → { description }.
         const res = await apiRequest("POST", "/api/analyze", {
           image: imageBase64,
           language: lang,
