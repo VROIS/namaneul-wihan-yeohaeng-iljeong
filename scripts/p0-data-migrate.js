@@ -1,27 +1,38 @@
 // P0: Neon DB (내손안에 가이드) → Supabase (통합 DB) 데이터 이전
-const { Client } = require('pg');
+const { Client } = require("pg");
 
-const NEON_URL = 'postgresql://neondb_owner:npg_rA9amitxoeO2@ep-long-flower-afx921eh.c-2.us-west-2.aws.neon.tech/neondb?sslmode=require';
-const SUPA_URL = 'postgresql://postgres:Vrois%4075015@db.wxebceflvuythuodemro.supabase.co:5432/postgres';
+const NEON_URL =
+  "postgresql://neondb_owner:npg_rA9amitxoeO2@ep-long-flower-afx921eh.c-2.us-west-2.aws.neon.tech/neondb?sslmode=require";
+const SUPA_URL =
+  "postgresql://postgres:Vrois%4075015@db.wxebceflvuythuodemro.supabase.co:5432/postgres";
 
 async function migrate(neon, supa, tableName, query, insertFn) {
   try {
     const { rows } = await neon.query(query);
-    if (rows.length === 0) { console.log(`SKIP: ${tableName} (0건)`); return 0; }
+    if (rows.length === 0) {
+      console.log(`SKIP: ${tableName} (0건)`);
+      return 0;
+    }
 
-    let ok = 0, fail = 0;
+    let ok = 0,
+      fail = 0;
     for (const row of rows) {
       try {
         await insertFn(supa, row);
         ok++;
-      } catch(e) {
-        if (e.message.includes('duplicate')) { ok++; } // 이미 존재
-        else { fail++; console.log(`  ERR ${tableName}:`, e.message.substring(0, 80)); }
+      } catch (e) {
+        if (e.message.includes("duplicate")) {
+          ok++;
+        } // 이미 존재
+        else {
+          fail++;
+          console.log(`  ERR ${tableName}:`, e.message.substring(0, 80));
+        }
       }
     }
     console.log(`OK: ${tableName} — ${ok}건 이전 (${fail}건 실패)`);
     return ok;
-  } catch(e) {
+  } catch (e) {
     console.log(`ERR: ${tableName} — ${e.message.substring(0, 80)}`);
     return 0;
   }
@@ -34,11 +45,10 @@ async function run() {
   await supa.connect();
 
   // 1. users (가이드 컬럼 매핑)
-  await migrate(neon, supa, 'users',
-    'SELECT * FROM users',
-    async (db, r) => {
-      // Supabase users는 username/password 필수 → 가이드 user를 nubi 포맷으로 변환
-      await db.query(`
+  await migrate(neon, supa, "users", "SELECT * FROM users", async (db, r) => {
+    // Supabase users는 username/password 필수 → 가이드 user를 nubi 포맷으로 변환
+    await db.query(
+      `
         INSERT INTO users (id, username, password, display_name, preferred_language,
           email, profile_image_url, provider, location_enabled, ai_content_enabled,
           credits, is_admin, referred_by, referral_code, subscription_status,
@@ -49,12 +59,13 @@ async function run() {
           credits = EXCLUDED.credits,
           is_admin = EXCLUDED.is_admin,
           referral_code = EXCLUDED.referral_code
-      `, [
+      `,
+      [
         r.id,
         r.email || r.id, // username = email 또는 id
-        'guide_migrated', // placeholder password
-        [r.first_name, r.last_name].filter(Boolean).join(' ') || null,
-        r.preferred_language || 'ko',
+        "guide_migrated", // placeholder password
+        [r.first_name, r.last_name].filter(Boolean).join(" ") || null,
+        r.preferred_language || "ko",
         r.email,
         r.profile_image_url,
         r.provider,
@@ -64,117 +75,244 @@ async function run() {
         r.is_admin || false,
         r.referred_by,
         r.referral_code,
-        r.subscription_status || 'active',
+        r.subscription_status || "active",
         r.subscription_canceled_at,
-        r.account_status || 'active',
+        r.account_status || "active",
         r.created_at,
-        r.updated_at
-      ]);
-    }
-  );
+        r.updated_at,
+      ],
+    );
+  });
 
   // 2. guides
-  await migrate(neon, supa, 'guides',
-    'SELECT * FROM guides',
-    async (db, r) => {
-      await db.query(`
+  await migrate(neon, supa, "guides", "SELECT * FROM guides", async (db, r) => {
+    await db.query(
+      `
         INSERT INTO guides (id, local_id, user_id, title, description, image_url,
           latitude, longitude, location_name, ai_generated_content, tags,
           view_count, language, voice_lang, voice_name, created_at, updated_at)
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
         ON CONFLICT (id) DO NOTHING
-      `, [r.id, r.local_id, r.user_id, r.title, r.description, r.image_url,
-          r.latitude, r.longitude, r.location_name, r.ai_generated_content, r.tags,
-          r.view_count, r.language, r.voice_lang, r.voice_name, r.created_at, r.updated_at]);
-    }
-  );
+      `,
+      [
+        r.id,
+        r.local_id,
+        r.user_id,
+        r.title,
+        r.description,
+        r.image_url,
+        r.latitude,
+        r.longitude,
+        r.location_name,
+        r.ai_generated_content,
+        r.tags,
+        r.view_count,
+        r.language,
+        r.voice_lang,
+        r.voice_name,
+        r.created_at,
+        r.updated_at,
+      ],
+    );
+  });
 
   // 3. shared_html_pages
-  await migrate(neon, supa, 'shared_html_pages',
-    'SELECT * FROM shared_html_pages',
+  await migrate(
+    neon,
+    supa,
+    "shared_html_pages",
+    "SELECT * FROM shared_html_pages",
     async (db, r) => {
-      await db.query(`
+      await db.query(
+        `
         INSERT INTO shared_html_pages (id, user_id, name, html_content, html_file_path,
           template_version, guide_ids, thumbnail, sender, location, date,
           featured, featured_order, download_count, is_active, created_at, updated_at)
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
         ON CONFLICT (id) DO NOTHING
-      `, [r.id, r.user_id, r.name, r.html_content, r.html_file_path,
-          r.template_version, r.guide_ids, r.thumbnail, r.sender, r.location, r.date,
-          r.featured, r.featured_order, r.download_count, r.is_active, r.created_at, r.updated_at]);
-    }
+      `,
+        [
+          r.id,
+          r.user_id,
+          r.name,
+          r.html_content,
+          r.html_file_path,
+          r.template_version,
+          r.guide_ids,
+          r.thumbnail,
+          r.sender,
+          r.location,
+          r.date,
+          r.featured,
+          r.featured_order,
+          r.download_count,
+          r.is_active,
+          r.created_at,
+          r.updated_at,
+        ],
+      );
+    },
   );
 
   // 4. credit_transactions
-  await migrate(neon, supa, 'credit_transactions',
-    'SELECT * FROM credit_transactions',
+  await migrate(
+    neon,
+    supa,
+    "credit_transactions",
+    "SELECT * FROM credit_transactions",
     async (db, r) => {
-      await db.query(`
+      await db.query(
+        `
         INSERT INTO credit_transactions (id, user_id, type, amount, description, reference_id, created_at)
         VALUES ($1,$2,$3,$4,$5,$6,$7)
         ON CONFLICT (id) DO NOTHING
-      `, [r.id, r.user_id, r.type, r.amount, r.description, r.reference_id, r.created_at]);
-    }
+      `,
+        [
+          r.id,
+          r.user_id,
+          r.type,
+          r.amount,
+          r.description,
+          r.reference_id,
+          r.created_at,
+        ],
+      );
+    },
   );
 
   // 5. voice_configs
-  await migrate(neon, supa, 'voice_configs',
-    'SELECT * FROM voice_configs',
+  await migrate(
+    neon,
+    supa,
+    "voice_configs",
+    "SELECT * FROM voice_configs",
     async (db, r) => {
-      await db.query(`
+      await db.query(
+        `
         INSERT INTO voice_configs (id, lang_code, platform, voice_priorities, exclude_voices, is_active, updated_at)
         VALUES ($1,$2,$3,$4,$5,$6,$7)
         ON CONFLICT (id) DO NOTHING
-      `, [r.id, r.lang_code, r.platform, r.voice_priorities, r.exclude_voices, r.is_active, r.updated_at]);
-    }
+      `,
+        [
+          r.id,
+          r.lang_code,
+          r.platform,
+          r.voice_priorities,
+          r.exclude_voices,
+          r.is_active,
+          r.updated_at,
+        ],
+      );
+    },
   );
 
   // 6. prompts
-  await migrate(neon, supa, 'prompts',
-    'SELECT * FROM prompts',
+  await migrate(
+    neon,
+    supa,
+    "prompts",
+    "SELECT * FROM prompts",
     async (db, r) => {
-      await db.query(`
+      await db.query(
+        `
         INSERT INTO prompts (id, language, type, content, is_active, version, created_by, created_at)
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
         ON CONFLICT (id) DO NOTHING
-      `, [r.id, r.language, r.type, r.content, r.is_active, r.version, r.created_by, r.created_at]);
-    }
+      `,
+        [
+          r.id,
+          r.language,
+          r.type,
+          r.content,
+          r.is_active,
+          r.version,
+          r.created_by,
+          r.created_at,
+        ],
+      );
+    },
   );
 
   // 7. notifications
-  await migrate(neon, supa, 'notifications',
-    'SELECT * FROM notifications',
+  await migrate(
+    neon,
+    supa,
+    "notifications",
+    "SELECT * FROM notifications",
     async (db, r) => {
-      await db.query(`
+      await db.query(
+        `
         INSERT INTO notifications (id, user_id, type, title, message, icon, link, is_read, created_at)
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
         ON CONFLICT (id) DO NOTHING
-      `, [r.id, r.user_id, r.type, r.title, r.message, r.icon, r.link, r.is_read, r.created_at]);
-    }
+      `,
+        [
+          r.id,
+          r.user_id,
+          r.type,
+          r.title,
+          r.message,
+          r.icon,
+          r.link,
+          r.is_read,
+          r.created_at,
+        ],
+      );
+    },
   );
 
   // 8. user_activity_logs
-  await migrate(neon, supa, 'user_activity_logs',
-    'SELECT * FROM user_activity_logs',
+  await migrate(
+    neon,
+    supa,
+    "user_activity_logs",
+    "SELECT * FROM user_activity_logs",
     async (db, r) => {
-      await db.query(`
+      await db.query(
+        `
         INSERT INTO user_activity_logs (id, user_id, session_id, device_type, browser, user_agent, session_duration, page_views, created_at)
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
         ON CONFLICT (id) DO NOTHING
-      `, [r.id, r.user_id, r.session_id, r.device_type, r.browser, r.user_agent, r.session_duration, r.page_views, r.created_at]);
-    }
+      `,
+        [
+          r.id,
+          r.user_id,
+          r.session_id,
+          r.device_type,
+          r.browser,
+          r.user_agent,
+          r.session_duration,
+          r.page_views,
+          r.created_at,
+        ],
+      );
+    },
   );
 
   // 9. push_subscriptions
-  await migrate(neon, supa, 'push_subscriptions',
-    'SELECT * FROM push_subscriptions',
+  await migrate(
+    neon,
+    supa,
+    "push_subscriptions",
+    "SELECT * FROM push_subscriptions",
     async (db, r) => {
-      await db.query(`
+      await db.query(
+        `
         INSERT INTO push_subscriptions (id, user_id, endpoint, p256dh, auth, user_agent, created_at)
         VALUES ($1,$2,$3,$4,$5,$6,$7)
         ON CONFLICT (id) DO NOTHING
-      `, [r.id, r.user_id, r.endpoint, r.p256dh, r.auth, r.user_agent, r.created_at]);
-    }
+      `,
+        [
+          r.id,
+          r.user_id,
+          r.endpoint,
+          r.p256dh,
+          r.auth,
+          r.user_agent,
+          r.created_at,
+        ],
+      );
+    },
   );
 
   // 검증
@@ -188,12 +326,12 @@ async function run() {
     UNION ALL SELECT 'notifications', count(*) FROM notifications
     ORDER BY t
   `);
-  console.log('\n=== Supabase 최종 현황 ===');
-  verify.rows.forEach(r => console.log(`${r.t}: ${r.c}건`));
+  console.log("\n=== Supabase 최종 현황 ===");
+  verify.rows.forEach((r) => console.log(`${r.t}: ${r.c}건`));
 
   await neon.end();
   await supa.end();
-  console.log('\nMigration done!');
+  console.log("\nMigration done!");
 }
 
-run().catch(e => console.error(e));
+run().catch((e) => console.error(e));

@@ -36,7 +36,10 @@ export interface LiquidButtonProps {
   disabled?: boolean;
 }
 
-const SIZE_MAP: Record<LiquidButtonSize, { h: number; px: number; fs: number }> = {
+const SIZE_MAP: Record<
+  LiquidButtonSize,
+  { h: number; px: number; fs: number }
+> = {
   sm: { h: 28, px: 10, fs: 11 },
   md: { h: 32, px: 8, fs: 12 },
   lg: { h: 44, px: 16, fs: 14 },

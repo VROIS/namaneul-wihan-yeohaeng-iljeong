@@ -19,58 +19,121 @@
 // 호출:
 //   npx tsx fillcity/cleanse.ts --city-id=24            # DRY = 오염행 목록만(외부호출 0)
 //   npx tsx fillcity/cleanse.ts --city-id=24 --apply    # Gemini 1콜 정정 → 새덮어쓰기
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath, pathToFileURL } from 'url';
+import fs from "fs";
+import path from "path";
+import { fileURLToPath, pathToFileURL } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(__dirname, '..');
+const ROOT = path.resolve(__dirname, "..");
 process.chdir(ROOT);
-const env = fs.readFileSync('.env', 'utf-8').replace(/^﻿/, '');
+const env = fs.readFileSync(".env", "utf-8").replace(/^﻿/, "");
 for (const line of env.split(/\r?\n/)) {
   const m = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/);
-  if (m && !process.env[m[1]]) { let v = m[2].trim(); if (/^['"]/.test(v)) v = v.slice(1, -1); process.env[m[1]] = v; }
+  if (m && !process.env[m[1]]) {
+    let v = m[2].trim();
+    if (/^['"]/.test(v)) v = v.slice(1, -1);
+    process.env[m[1]] = v;
+  }
 }
-const argv = Object.fromEntries(process.argv.slice(2).map((a) => a.replace(/^--/, '').split('=')).map(([k, v]) => [k, v ?? 'true']));
-const cityId = Number(argv['city-id'] || 0);
-const apply = argv['apply'] === 'true';
+const argv = Object.fromEntries(
+  process.argv
+    .slice(2)
+    .map((a) => a.replace(/^--/, "").split("="))
+    .map(([k, v]) => [k, v ?? "true"]),
+);
+const cityId = Number(argv["city-id"] || 0);
+const apply = argv["apply"] === "true";
 const inputDate = new Date().toISOString().slice(0, 10);
-if (!cityId) { console.error('Usage: --city-id=<N> [--apply]'); process.exit(1); }
+if (!cityId) {
+  console.error("Usage: --city-id=<N> [--apply]");
+  process.exit(1);
+}
 
 (async () => {
-  const pg = await import('pg');
-  const c = new (pg as any).default.Client({ connectionString: process.env.SUPA_URL || process.env.SUPABASE_DATABASE_URL || process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+  const pg = await import("pg");
+  const c = new (pg as any).default.Client({
+    connectionString:
+      process.env.SUPA_URL ||
+      process.env.SUPABASE_DATABASE_URL ||
+      process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false },
+  });
   await c.connect();
-  const city = (await c.query('SELECT name_en FROM cities WHERE id=$1', [cityId])).rows[0];
-  if (!city) { await c.end(); console.error(`X city ${cityId} 미존재`); process.exit(1); }
+  const city = (
+    await c.query("SELECT name_en FROM cities WHERE id=$1", [cityId])
+  ).rows[0];
+  if (!city) {
+    await c.end();
+    console.error(`X city ${cityId} 미존재`);
+    process.exit(1);
+  }
 
   // [1 오염행 추출] = 가격오염(카테고리별 임계) + 칸오입력(형식위반). BTS 제외.
-  const rows = (await c.query(`
+  const rows = (
+    await c.query(
+      `
     SELECT id, name_local, name_en, name_ko, address,
            latitude::float8 AS lat, longitude::float8 AS lng,
            price_eur::float8 AS price_eur, google_review_count AS rc, seed_category
     FROM place_seed_raw
     WHERE city_id=$1 AND seed_category NOT LIKE 'bts%'
-    ORDER BY seed_category, id`, [cityId])).rows;
+    ORDER BY seed_category, id`,
+      [cityId],
+    )
+  ).rows;
   // ⚠️ 수정금지(승인필요) 2026-06-23 사장님 SSOT = 정제 = "전체 행 통째 Gemini 재검증" (= 오염추출 SQL 폐기, §19).
   //   = 근거: 어떤 게 오염인지 SQL 패턴(price>200 등)으로 추리는 건 AI 임의 = Gemini 가 행 전체 보고 판단해야 정확.
   //     Gemini 1콜=120곳 입증 → 한 도시 전체(130~450) = 2~4콜(geminiCurate 자동 배치). 어차피 비용 = 전체 재검증 가치.
   //   = #45 이전 독립 단계(섞지 말 것). 정제 후 #45 = 결손률↓ + 가격오류·이상행 미리잡힘 = 이중체크.
 
-  console.log(`=== #1b 정제(전체 재검증) (city ${cityId} ${city.name_en}) = 전체 ${rows.length}곳 ${apply ? '(APPLY)' : '(DRY)'} ===`);
-  if (!rows.length) { console.log('= 행 0 = 종료'); await c.end(); return; }
-  console.log(`[계획] 전체 ${rows.length}곳 → Gemini 재검증(이름·가격·칸오입력 교정) → 전필드 새덮어쓰기. 배치 = geminiCurate 자동(~120/콜).`);
+  console.log(
+    `=== #1b 정제(전체 재검증) (city ${cityId} ${city.name_en}) = 전체 ${rows.length}곳 ${apply ? "(APPLY)" : "(DRY)"} ===`,
+  );
+  if (!rows.length) {
+    console.log("= 행 0 = 종료");
+    await c.end();
+    return;
+  }
+  console.log(
+    `[계획] 전체 ${rows.length}곳 → Gemini 재검증(이름·가격·칸오입력 교정) → 전필드 새덮어쓰기. 배치 = geminiCurate 자동(~120/콜).`,
+  );
 
-  if (!apply) { console.log(`\n=== DRY = 외부호출 0. --apply 로 Gemini 재검증(전체) ===`); await c.end(); return; }
+  if (!apply) {
+    console.log(`\n=== DRY = 외부호출 0. --apply 로 Gemini 재검증(전체) ===`);
+    await c.end();
+    return;
+  }
 
   // [2 Gemini 1콜 정정] = geminiCurate(#45 와 동일 배치 1콜) = 행 전체 보고 올바른 값. 출입증 발급.
-  const { issueApiKey } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/issue-api-key.ts')).href);
-  const geminiKey = await issueApiKey(c, 'GEMINI_API_KEY', cityId, inputDate, true);
-  const { geminiCurate } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/gemini-curate.ts')).href);
-  const curated = await geminiCurate(city.name_en, cityId, rows.map((r: any) => ({
-    id: r.id, nameEn: r.name_en, nameLocal: r.name_local, nameKo: r.name_ko,
-    address: r.address, latitude: r.lat, longitude: r.lng,
-  })), { apiKey: geminiKey });
+  const { issueApiKey } = await import(
+    pathToFileURL(path.join(ROOT, "server/services/shared/issue-api-key.ts"))
+      .href
+  );
+  const geminiKey = await issueApiKey(
+    c,
+    "GEMINI_API_KEY",
+    cityId,
+    inputDate,
+    true,
+  );
+  const { geminiCurate } = await import(
+    pathToFileURL(path.join(ROOT, "server/services/shared/gemini-curate.ts"))
+      .href
+  );
+  const curated = await geminiCurate(
+    city.name_en,
+    cityId,
+    rows.map((r: any) => ({
+      id: r.id,
+      nameEn: r.name_en,
+      nameLocal: r.name_local,
+      nameKo: r.name_ko,
+      address: r.address,
+      latitude: r.lat,
+      longitude: r.lng,
+    })),
+    { apiKey: geminiKey },
+  );
   const gById = new Map<number, any>(curated.map((g: any) => [g.id, g]));
 
   // [3 전필드 새덮어쓰기] = #45 와 동일 = id 직행 UPDATE = COALESCE 새우선(셀렉 X = 전 필드).
@@ -78,9 +141,13 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--apply]'); process.exit(1);
   let done = 0;
   for (const r of rows) {
     const g = gById.get(r.id);
-    if (!g) { console.log(`  ! Gemini 응답없음 id=${r.id} ${r.name_en}`); continue; }
+    if (!g) {
+      console.log(`  ! Gemini 응답없음 id=${r.id} ${r.name_en}`);
+      continue;
+    }
     // ⚠️ shopping price NULL 강제 = SQL CASE($12) 단일 처리 (TS 삼항 중복 제거 = /simplify 2026-06-23).
-    const u = await c.query(`UPDATE place_seed_raw SET
+    const u = await c.query(
+      `UPDATE place_seed_raw SET
         name_local = COALESCE(NULLIF($2,''), name_local),
         name_en = COALESCE(NULLIF($3,''), name_en),
         name_ko = COALESCE(NULLIF($4,''), name_ko),
@@ -95,12 +162,28 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--apply]'); process.exit(1);
         distance_km_from_center = COALESCE($11::numeric, distance_km_from_center),
         updated_at = NOW()
       WHERE id=$1`,
-      [r.id, g.nameLocal ?? null, g.nameEn ?? null, g.nameKo ?? null, g.address ?? null,
-       g.latitude ?? null, g.longitude ?? null, g.summaryKo ?? null, g.editorialSummary ?? null,
-       g.priceEur ?? null, g.distanceKmFromCenter ?? null, r.seed_category === 'shopping']);
+      [
+        r.id,
+        g.nameLocal ?? null,
+        g.nameEn ?? null,
+        g.nameKo ?? null,
+        g.address ?? null,
+        g.latitude ?? null,
+        g.longitude ?? null,
+        g.summaryKo ?? null,
+        g.editorialSummary ?? null,
+        g.priceEur ?? null,
+        g.distanceKmFromCenter ?? null,
+        r.seed_category === "shopping",
+      ],
+    );
     if (u.rowCount) done++;
-    console.log(`  + 교정 id=${r.id} ${g.nameEn || r.name_en} (price €${r.price_eur}→€${r.seed_category === 'shopping' ? 'NULL' : (g.priceEur ?? '?')})`);
+    console.log(
+      `  + 교정 id=${r.id} ${g.nameEn || r.name_en} (price €${r.price_eur}→€${r.seed_category === "shopping" ? "NULL" : (g.priceEur ?? "?")})`,
+    );
   }
-  console.log(`\n=== #1b 정제 결과 = 전체 ${rows.length}곳 → Gemini 재검증 정정 ${done}곳 (외부호출 = Gemini만, TS·PM 0) ===`);
+  console.log(
+    `\n=== #1b 정제 결과 = 전체 ${rows.length}곳 → Gemini 재검증 정정 ${done}곳 (외부호출 = Gemini만, TS·PM 0) ===`,
+  );
   await c.end();
 })();

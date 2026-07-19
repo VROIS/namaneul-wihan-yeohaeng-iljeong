@@ -33,8 +33,18 @@ export default function ReelCard({ place, index, scrollX }: ReelCardProps) {
   ];
 
   const animStyle = useAnimatedStyle(() => {
-    const scale = interpolate(scrollX.value, inputRange, [0.88, 1, 0.88], Extrapolation.CLAMP);
-    const opacity = interpolate(scrollX.value, inputRange, [0.5, 1, 0.5], Extrapolation.CLAMP);
+    const scale = interpolate(
+      scrollX.value,
+      inputRange,
+      [0.88, 1, 0.88],
+      Extrapolation.CLAMP,
+    );
+    const opacity = interpolate(
+      scrollX.value,
+      inputRange,
+      [0.5, 1, 0.5],
+      Extrapolation.CLAMP,
+    );
     return { transform: [{ scale }], opacity };
   });
 
@@ -49,7 +59,9 @@ export default function ReelCard({ place, index, scrollX }: ReelCardProps) {
         end={{ x: 0.5, y: 1 }}
       >
         {/* 카테고리 아이콘 */}
-        <View style={[styles.reelCatBadge, { backgroundColor: catColor + "30" }]}>
+        <View
+          style={[styles.reelCatBadge, { backgroundColor: catColor + "30" }]}
+        >
           <Text style={[styles.reelCatText, { color: catColor }]}>
             {place.tags?.[0] || "spot"}
           </Text>

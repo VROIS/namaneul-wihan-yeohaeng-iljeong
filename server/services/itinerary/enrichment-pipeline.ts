@@ -1,7 +1,11 @@
 // AG3용 enrichment 파이프라인(_enrichmentPipeline) = itinerary-generator 분리(2026-07-15 §0 슬림화, 순수 이동)
 import type { TravelPace, TripFormData, PlaceResult } from "./types";
 import { RANK_FALLBACK, NON_FOOD_MAX_RANK } from "./types";
-import { generateSelectionReasons, isFoodPlace, getRealityCheckForCity } from "./helpers";
+import {
+  generateSelectionReasons,
+  isFoodPlace,
+  getRealityCheckForCity,
+} from "./helpers";
 import { optimizeDayRoute } from "./route-optimizer";
 import { distributePlacesWithUserTime } from "./slot-distributor";
 

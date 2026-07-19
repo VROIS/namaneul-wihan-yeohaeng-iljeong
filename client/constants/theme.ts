@@ -166,7 +166,9 @@ export function getVibeScoreGradient(score: number): string[] {
 }
 
 // Vibe Score 레벨 (10점 만점 기준)
-export function getVibeScoreLevel(score: number): "excellent" | "good" | "average" {
+export function getVibeScoreLevel(
+  score: number,
+): "excellent" | "good" | "average" {
   if (score >= 8.0) return "excellent";
   if (score >= 5.0) return "good";
   return "average";
@@ -186,7 +188,10 @@ export function getVibeScoreLabelKo(score: number): string {
   return "보통";
 }
 
-export function normalizeScoreForDisplay(rawScore: number, maxScore: number = 30): number {
+export function normalizeScoreForDisplay(
+  rawScore: number,
+  maxScore: number = 30,
+): number {
   return Math.min(10, (rawScore / maxScore) * 10);
 }
 

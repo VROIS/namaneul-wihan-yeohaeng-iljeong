@@ -60,8 +60,12 @@ export async function runStartupMigrations(): Promise<void> {
           CONSTRAINT "user_providers_provider_provider_id_unique" UNIQUE("provider", "provider_id")
         );
       `);
-      await pool.query(`CREATE INDEX IF NOT EXISTS "user_providers_user_id_idx" ON "user_providers"("user_id");`);
-      await pool.query(`CREATE INDEX IF NOT EXISTS "user_providers_provider_provider_id_idx" ON "user_providers"("provider", "provider_id");`);
+      await pool.query(
+        `CREATE INDEX IF NOT EXISTS "user_providers_user_id_idx" ON "user_providers"("user_id");`,
+      );
+      await pool.query(
+        `CREATE INDEX IF NOT EXISTS "user_providers_provider_provider_id_idx" ON "user_providers"("provider", "provider_id");`,
+      );
       await pool.query(`
         INSERT INTO "user_providers" ("user_id", "provider", "provider_id")
         SELECT "id", "provider", "provider_id"
@@ -71,16 +75,23 @@ export async function runStartupMigrations(): Promise<void> {
       `);
       console.log("[Migration] ✅ 0010 user_providers 적용 완료");
     } catch (e010) {
-      console.warn("[Migration] 0010 user_providers 스킵:", (e010 as Error).message);
+      console.warn(
+        "[Migration] 0010 user_providers 스킵:",
+        (e010 as Error).message,
+      );
     }
     // 0011: 다국어 장소명
     // ⚠️ 수정금지(승인필요) 2026-05-24 = Step 4 DB DROP = places 폐기 (= ALTER places 제거)
     // ⚠️ 2026-06-11 = names_i18n 토큰 제거 (= DROP, 좀비 차단). name_local 만 보존.
-    await pool.query("ALTER TABLE place_seed_raw ADD COLUMN IF NOT EXISTS name_local text;");
+    await pool.query(
+      "ALTER TABLE place_seed_raw ADD COLUMN IF NOT EXISTS name_local text;",
+    );
     console.log("[Migration] 0011 name_local 적용 완료");
     // 0012: SSoT 통합 - place_seed_raw에 좌표/평점/리뷰수/사진 컬럼 추가
     // ⚠️ 2026-06-11 = google_rating/photo_urls 토큰 제거 (= DROP, 좀비 차단). 나머지 보존.
-    await pool.query("ALTER TABLE place_seed_raw ADD COLUMN IF NOT EXISTS latitude real, ADD COLUMN IF NOT EXISTS longitude real, ADD COLUMN IF NOT EXISTS google_review_count integer, ADD COLUMN IF NOT EXISTS opening_hours jsonb, ADD COLUMN IF NOT EXISTS editorial_summary text;");
+    await pool.query(
+      "ALTER TABLE place_seed_raw ADD COLUMN IF NOT EXISTS latitude real, ADD COLUMN IF NOT EXISTS longitude real, ADD COLUMN IF NOT EXISTS google_review_count integer, ADD COLUMN IF NOT EXISTS opening_hours jsonb, ADD COLUMN IF NOT EXISTS editorial_summary text;",
+    );
     console.log("[Migration] 0012 SSoT 통합 컬럼 적용 완료");
 
     // 0013: DB 정리 + SSoT 인앱 링크 컬럼
@@ -120,7 +131,9 @@ export async function runStartupMigrations(): Promise<void> {
         ADD COLUMN IF NOT EXISTS google_primary_type text,
         ADD COLUMN IF NOT EXISTS gemini_rank integer;
     `);
-    console.log("[Migration] 0014 multi-tag/image-meta/gemini3 컬럼 10개 추가 완료");
+    console.log(
+      "[Migration] 0014 multi-tag/image-meta/gemini3 컬럼 10개 추가 완료",
+    );
 
     // 0015: google_maps_uri (= 2026-05-15 사용자 13 번째 SSOT 요소 = 최후의 보루)
     await pool.query(`

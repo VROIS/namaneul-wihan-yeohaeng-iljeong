@@ -3,7 +3,7 @@
 // = MIX = Gemini 1차 응답 동선 + Haversine 추정 (= 본 함수)
 // = 외부 호출 0 / 비용 0 / 시간 0ms / 직렬 27 호출 폭탄 해결
 
-export type TravelMode = 'WALK' | 'TRANSIT' | 'DRIVE';
+export type TravelMode = "WALK" | "TRANSIT" | "DRIVE";
 
 /**
  * 평균 속도 (= 도시 + 교통체증 반영 = 사용자 SSOT)
@@ -12,7 +12,7 @@ export type TravelMode = 'WALK' | 'TRANSIT' | 'DRIVE';
  * = DRIVE = 도심반경 10km 이내 30km/h · 밖 70km/h (2026-07-04 사장님 SSOT, TomTom/Sanef 실측 기반 리서치 확정).
  *   도시중심 좌표(cityCenter) 없이 호출 시 = 도심 기준값(DRIVE_URBAN) 사용.
  */
-const AVG_SPEED_KMH: Record<Exclude<TravelMode, 'DRIVE'>, number> = {
+const AVG_SPEED_KMH: Record<Exclude<TravelMode, "DRIVE">, number> = {
   WALK: 5,
   TRANSIT: 25,
 };
@@ -65,35 +65,38 @@ export function estimateTransitCost(mode: string): number {
 export function pickTransitMode(
   km: number,
   isGuide: boolean,
-): { mode: 'walk' | 'metro' | 'private_guide'; calc: TravelMode } {
-  if (isGuide) return { mode: 'private_guide', calc: 'DRIVE' };
-  if (km <= 1.0) return { mode: 'walk', calc: 'WALK' };
-  return { mode: 'metro', calc: 'TRANSIT' };
+): { mode: "walk" | "metro" | "private_guide"; calc: TravelMode } {
+  if (isGuide) return { mode: "private_guide", calc: "DRIVE" };
+  if (km <= 1.0) return { mode: "walk", calc: "WALK" };
+  return { mode: "metro", calc: "TRANSIT" };
 }
 
 export interface TransitResult {
   from: string;
   to: string;
-  mode: 'walk' | 'transit' | 'drive';
+  mode: "walk" | "transit" | "drive";
   modeLabel: string;
-  duration: number;       // = 분
+  duration: number; // = 분
   durationText: string;
-  distance: number;       // = 미터
-  cost: number;           // = EUR / 1 인 단가
-  costTotal: number;      // = EUR / 그룹 총액 (= cost × companionCount)
+  distance: number; // = 미터
+  cost: number; // = EUR / 1 인 단가
+  costTotal: number; // = EUR / 그룹 총액 (= cost × companionCount)
 }
 
 /** Haversine 거리 = km (= 다른 모듈에서 재사용 = 헌법 §16 단일 SSOT) */
 export function haversineKm(
-  lat1: number, lng1: number,
-  lat2: number, lng2: number,
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number,
 ): number {
   const R = 6371;
-  const toRad = (d: number) => d * Math.PI / 180;
+  const toRad = (d: number) => (d * Math.PI) / 180;
   const dLat = toRad(lat2 - lat1);
   const dLng = toRad(lng2 - lng1);
-  const a = Math.sin(dLat / 2) ** 2
-    + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
   return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
 }
 
@@ -105,19 +108,25 @@ export function haversineKm(
 export function calcTransitHaversine(
   from: { lat: number; lng: number; name?: string },
   to: { lat: number; lng: number; name?: string },
-  mode: TravelMode = 'WALK',
+  mode: TravelMode = "WALK",
   companionCount = 1,
   cityCenter?: { lat: number; lng: number },
 ): TransitResult {
   const km = haversineKm(from.lat, from.lng, to.lat, to.lng);
   const meters = Math.round(km * 1000);
   let speedKmh: number;
-  if (mode === 'DRIVE') {
+  if (mode === "DRIVE") {
     if (cityCenter) {
       const midLat = (from.lat + to.lat) / 2;
       const midLng = (from.lng + to.lng) / 2;
-      const distFromCenter = haversineKm(cityCenter.lat, cityCenter.lng, midLat, midLng);
-      speedKmh = distFromCenter <= CITY_RADIUS_KM ? DRIVE_URBAN_KMH : DRIVE_SUBURBAN_KMH;
+      const distFromCenter = haversineKm(
+        cityCenter.lat,
+        cityCenter.lng,
+        midLat,
+        midLng,
+      );
+      speedKmh =
+        distFromCenter <= CITY_RADIUS_KM ? DRIVE_URBAN_KMH : DRIVE_SUBURBAN_KMH;
     } else {
       speedKmh = DRIVE_URBAN_KMH;
     }
@@ -125,14 +134,17 @@ export function calcTransitHaversine(
     speedKmh = AVG_SPEED_KMH[mode];
   }
   const durationMin = Math.round((km / speedKmh) * 60);
-  const costPerPerson = km > 0
-    ? Math.round((BASE_FARE_EUR[mode] + km * COST_PER_KM_EUR[mode]) * 100) / 100
-    : 0;
+  const costPerPerson =
+    km > 0
+      ? Math.round((BASE_FARE_EUR[mode] + km * COST_PER_KM_EUR[mode]) * 100) /
+        100
+      : 0;
   return {
-    from: from.name || '',
-    to: to.name || '',
-    mode: mode.toLowerCase() as TransitResult['mode'],
-    modeLabel: mode === 'WALK' ? '도보' : mode === 'TRANSIT' ? '지하철' : '차량',
+    from: from.name || "",
+    to: to.name || "",
+    mode: mode.toLowerCase() as TransitResult["mode"],
+    modeLabel:
+      mode === "WALK" ? "도보" : mode === "TRANSIT" ? "지하철" : "차량",
     duration: durationMin,
     durationText: `${durationMin}분`,
     distance: meters,

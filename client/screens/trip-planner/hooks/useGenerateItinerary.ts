@@ -23,11 +23,15 @@ export function useGenerateItinerary({
   formData: TripFormData;
   currentUser: UserData | null;
   navigation: { navigate: (screen: any) => void };
-  setScreen: React.Dispatch<React.SetStateAction<"Input" | "Loading" | "Result">>;
+  setScreen: React.Dispatch<
+    React.SetStateAction<"Input" | "Loading" | "Result">
+  >;
   setLoadingStep: React.Dispatch<React.SetStateAction<number>>;
   setItinerary: React.Dispatch<React.SetStateAction<Itinerary | null>>;
   setAiOpinionData: React.Dispatch<React.SetStateAction<any>>;
-  setDayAccommodations: React.Dispatch<React.SetStateAction<DayAccommodation[]>>;
+  setDayAccommodations: React.Dispatch<
+    React.SetStateAction<DayAccommodation[]>
+  >;
   setCurrentItineraryId: React.Dispatch<React.SetStateAction<number | null>>;
   t: (key: string, opts?: any) => string;
   i18n: { language: string };
@@ -186,13 +190,15 @@ export function useGenerateItinerary({
         // 생성된 모든 Day에 입력 숙소를 그 Day 번호로 동일 적용 (= 출발·도착 기점 고정)
         const days = result.days || [];
         setDayAccommodations(
-          days.map((d: any): DayAccommodation => ({
-            day: d.day,
-            name: formData.accommodationName!,
-            address: formData.accommodationAddress || "",
-            coords: formData.accommodationCoords!,
-            placeId: formData.accommodationPlaceId,
-          })),
+          days.map(
+            (d: any): DayAccommodation => ({
+              day: d.day,
+              name: formData.accommodationName!,
+              address: formData.accommodationAddress || "",
+              coords: formData.accommodationCoords!,
+              placeId: formData.accommodationPlaceId,
+            }),
+          ),
         );
       } else {
         setDayAccommodations([]);

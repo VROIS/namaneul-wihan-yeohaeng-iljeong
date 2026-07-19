@@ -5,7 +5,7 @@
  * BTS앱: 아리랑 레드 강조, 한지 화이트 배경
  * 메인앱: 제미나이 블루 강조, 화이트 배경
  */
-import React, { useState } from 'react';
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -14,12 +14,12 @@ import {
   StyleSheet,
   Platform,
   ActivityIndicator,
-} from 'react-native';
-import { ArirangColors } from '@/constants/bts-theme';
-import { Brand } from '@/constants/theme';
+} from "react-native";
+import { ArirangColors } from "@/constants/bts-theme";
+import { Brand } from "@/constants/theme";
 
 // ⚠️ 수정금지(승인필요) — 공유 인증 컴포넌트, BTS+메인앱 공용
-type AuthTheme = 'bts' | 'default';
+type AuthTheme = "bts" | "default";
 
 interface AuthInputZoneProps {
   theme?: AuthTheme;
@@ -30,40 +30,40 @@ interface AuthInputZoneProps {
 // 테마별 색상 매핑
 const themeColors = {
   bts: {
-    accent: ArirangColors.red,        // #C73E2D
+    accent: ArirangColors.red, // #C73E2D
     accentLight: ArirangColors.redWash,
-    background: '#FAF8F5',            // 한지 화이트
-    text: '#1A1A1A',
-    textSecondary: '#6B7280',
-    divider: 'rgba(199, 62, 45, 0.1)',
+    background: "#FAF8F5", // 한지 화이트
+    text: "#1A1A1A",
+    textSecondary: "#6B7280",
+    divider: "rgba(199, 62, 45, 0.1)",
   },
   default: {
-    accent: Brand.primary,            // #4285F4
-    accentLight: 'rgba(66, 133, 244, 0.08)',
-    background: '#FFFFFF',
-    text: '#111827',
-    textSecondary: '#6B7280',
-    divider: 'rgba(0, 0, 0, 0.06)',
+    accent: Brand.primary, // #4285F4
+    accentLight: "rgba(66, 133, 244, 0.08)",
+    background: "#FFFFFF",
+    text: "#111827",
+    textSecondary: "#6B7280",
+    divider: "rgba(0, 0, 0, 0.06)",
   },
 };
 
 export function AuthInputZone({
-  theme = 'bts',
+  theme = "bts",
   onAuthComplete,
   onBirthDateChange,
 }: AuthInputZoneProps) {
   const c = themeColors[theme];
-  const [birthDate, setBirthDate] = useState('');
+  const [birthDate, setBirthDate] = useState("");
   const [loading, setLoading] = useState(false);
 
   // 생년월일 입력 포맷 (DD/MM/YYYY)
   const handleBirthDateInput = (text: string) => {
     // 숫자만 추출
-    const digits = text.replace(/\D/g, '');
-    let formatted = '';
+    const digits = text.replace(/\D/g, "");
+    let formatted = "";
     if (digits.length > 0) formatted = digits.substring(0, 2);
-    if (digits.length > 2) formatted += '/' + digits.substring(2, 4);
-    if (digits.length > 4) formatted += '/' + digits.substring(4, 8);
+    if (digits.length > 2) formatted += "/" + digits.substring(2, 4);
+    if (digits.length > 4) formatted += "/" + digits.substring(4, 8);
     setBirthDate(formatted);
     onBirthDateChange?.(formatted);
   };
@@ -76,7 +76,7 @@ export function AuthInputZone({
       // const response = await fetch(`/api/auth/${provider}`);
       console.log(`OAuth 시작: ${provider}`);
     } catch (e) {
-      console.error('OAuth 오류:', e);
+      console.error("OAuth 오류:", e);
     } finally {
       setLoading(false);
     }
@@ -90,38 +90,38 @@ export function AuthInputZone({
           {/* 구글 */}
           <TouchableOpacity
             style={[styles.oauthButton, styles.googleButton]}
-            onPress={() => handleOAuth('google')}
+            onPress={() => handleOAuth("google")}
             activeOpacity={0.8}
           >
             <Text style={[styles.oauthIcon, { fontSize: 18 }]}>G</Text>
-            <Text style={[styles.oauthText, { color: '#1A1A1A' }]}>
+            <Text style={[styles.oauthText, { color: "#1A1A1A" }]}>
               Google로 시작
             </Text>
           </TouchableOpacity>
 
           {/* 카카오 */}
           <TouchableOpacity
-            style={[styles.oauthButton, { backgroundColor: '#FEE500' }]}
-            onPress={() => handleOAuth('kakao')}
+            style={[styles.oauthButton, { backgroundColor: "#FEE500" }]}
+            onPress={() => handleOAuth("kakao")}
             activeOpacity={0.8}
           >
             <Text style={[styles.oauthIcon, { fontSize: 16 }]}>K</Text>
-            <Text style={[styles.oauthText, { color: '#3C1E1E' }]}>
+            <Text style={[styles.oauthText, { color: "#3C1E1E" }]}>
               Kakao로 시작
             </Text>
           </TouchableOpacity>
 
           {/* Apple (iOS만) */}
-          {Platform.OS === 'ios' && (
+          {Platform.OS === "ios" && (
             <TouchableOpacity
-              style={[styles.oauthButton, { backgroundColor: '#000000' }]}
-              onPress={() => handleOAuth('apple')}
+              style={[styles.oauthButton, { backgroundColor: "#000000" }]}
+              onPress={() => handleOAuth("apple")}
               activeOpacity={0.8}
             >
-              <Text style={[styles.oauthIcon, { color: '#FFFFFF', fontSize: 18 }]}>
-
-              </Text>
-              <Text style={[styles.oauthText, { color: '#FFFFFF' }]}>
+              <Text
+                style={[styles.oauthIcon, { color: "#FFFFFF", fontSize: 18 }]}
+              ></Text>
+              <Text style={[styles.oauthText, { color: "#FFFFFF" }]}>
                 Apple로 시작
               </Text>
             </TouchableOpacity>
@@ -140,10 +140,13 @@ export function AuthInputZone({
         {/* 생년월일 입력 — 캐릭터 매칭용 필수 */}
         <View style={styles.birthDateRow}>
           <TextInput
-            style={[styles.birthDateInput, {
-              borderColor: birthDate.length === 10 ? c.accent : c.divider,
-              color: c.text,
-            }]}
+            style={[
+              styles.birthDateInput,
+              {
+                borderColor: birthDate.length === 10 ? c.accent : c.divider,
+                color: c.text,
+              },
+            ]}
             placeholder="DD / MM / YYYY"
             placeholderTextColor={c.textSecondary}
             value={birthDate}
@@ -161,10 +164,13 @@ export function AuthInputZone({
 
         {/* 시작 버튼 */}
         <TouchableOpacity
-          style={[styles.startButton, {
-            backgroundColor: c.accent,
-            opacity: birthDate.length === 10 ? 1 : 0.4,
-          }]}
+          style={[
+            styles.startButton,
+            {
+              backgroundColor: c.accent,
+              opacity: birthDate.length === 10 ? 1 : 0.4,
+            },
+          ]}
           disabled={birthDate.length !== 10 || loading}
           onPress={() => onAuthComplete?.({ birthDate })}
           activeOpacity={0.8}
@@ -193,35 +199,35 @@ const styles = StyleSheet.create({
   },
   inner: {
     maxWidth: 400,
-    width: '100%',
-    alignSelf: 'center',
+    width: "100%",
+    alignSelf: "center",
   },
   buttonGroup: {
     gap: 12,
   },
   oauthButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     height: 52,
     borderRadius: 14,
     gap: 10,
   },
   googleButton: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderWidth: 1,
-    borderColor: '#E5E7EB',
+    borderColor: "#E5E7EB",
   },
   oauthIcon: {
-    fontWeight: '700',
+    fontWeight: "700",
   },
   oauthText: {
     fontSize: 16,
-    fontFamily: 'Pretendard-Medium',
+    fontFamily: "Pretendard-Medium",
   },
   dividerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginVertical: 20,
     gap: 12,
   },
@@ -231,11 +237,11 @@ const styles = StyleSheet.create({
   },
   dividerText: {
     fontSize: 13,
-    fontFamily: 'Pretendard-Medium',
+    fontFamily: "Pretendard-Medium",
   },
   birthDateRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
   },
   birthDateInput: {
@@ -245,30 +251,30 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingHorizontal: 16,
     fontSize: 18,
-    fontFamily: 'Pretendard-Medium',
-    textAlign: 'center',
+    fontFamily: "Pretendard-Medium",
+    textAlign: "center",
     letterSpacing: 2,
   },
   birthDateCheck: {
     fontSize: 14,
-    fontFamily: 'Pretendard-Bold',
+    fontFamily: "Pretendard-Bold",
   },
   startButton: {
     height: 52,
     borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     marginTop: 16,
   },
   startButtonText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 17,
-    fontFamily: 'Pretendard-SemiBold',
+    fontFamily: "Pretendard-SemiBold",
   },
   disclaimer: {
     fontSize: 11,
-    textAlign: 'center',
+    textAlign: "center",
     marginTop: 12,
-    fontFamily: 'Pretendard-Regular',
+    fontFamily: "Pretendard-Regular",
   },
 });

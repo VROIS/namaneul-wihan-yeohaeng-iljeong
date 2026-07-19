@@ -9,7 +9,10 @@ let ai: GoogleGenAI | null = null;
 
 function getAI(): GoogleGenAI | null {
   if (!ai) {
-    const apiKey = process.env.AI_INTEGRATIONS_GEMINI_API_KEY || process.env.GEMINI_API_KEY || "";
+    const apiKey =
+      process.env.AI_INTEGRATIONS_GEMINI_API_KEY ||
+      process.env.GEMINI_API_KEY ||
+      "";
     if (!apiKey) {
       console.warn("[BTS-Gemini] API 키 없음 - 기본 정렬 사용");
       return null;
@@ -41,7 +44,7 @@ export type OptimizedPlace = PlaceForOptimization & {
 export async function optimizeBTSRoute(
   cityName: string,
   characterName: string,
-  places: PlaceForOptimization[]
+  places: PlaceForOptimization[],
 ): Promise<OptimizedPlace[]> {
   const gemini = getAI();
 
@@ -52,7 +55,9 @@ export async function optimizeBTSRoute(
 
   try {
     const placeList = places
-      .map((p, i) => `${i + 1}. ${p.name} (${p.category}, €${p.priceEur ?? "?"})`)
+      .map(
+        (p, i) => `${i + 1}. ${p.name} (${p.category}, €${p.priceEur ?? "?"})`,
+      )
       .join("\n");
 
     const prompt = `You are a travel route optimizer for ${cityName}.
@@ -84,14 +89,14 @@ Respond in JSON array format only, no explanation:
     const jsonMatch = text.match(/\[[\s\S]*\]/);
     if (!jsonMatch) throw new Error("No JSON in response");
 
-    const optimized: Array<{
+    const optimized: {
       id: number;
       suggestedOrder: number;
       startTime: string;
       endTime: string;
       estimatedDuration: string;
       travelTip: string;
-    }> = JSON.parse(jsonMatch[0]);
+    }[] = JSON.parse(jsonMatch[0]);
 
     // 원본 데이터와 합치기
     return optimized
@@ -114,9 +119,29 @@ Respond in JSON array format only, no explanation:
 }
 
 /** Gemini 없을 때 기본 시간 배치 */
-function fallbackOptimization(places: PlaceForOptimization[]): OptimizedPlace[] {
-  const STARTS = ["09:30", "11:00", "12:30", "14:00", "15:30", "17:00", "18:30", "20:00"];
-  const ENDS = ["11:00", "12:30", "14:00", "15:30", "17:00", "18:30", "20:00", "21:30"];
+function fallbackOptimization(
+  places: PlaceForOptimization[],
+): OptimizedPlace[] {
+  const STARTS = [
+    "09:30",
+    "11:00",
+    "12:30",
+    "14:00",
+    "15:30",
+    "17:00",
+    "18:30",
+    "20:00",
+  ];
+  const ENDS = [
+    "11:00",
+    "12:30",
+    "14:00",
+    "15:30",
+    "17:00",
+    "18:30",
+    "20:00",
+    "21:30",
+  ];
 
   return places.map((p, i) => ({
     ...p,

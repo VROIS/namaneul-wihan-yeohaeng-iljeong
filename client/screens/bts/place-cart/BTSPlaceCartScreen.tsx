@@ -2,7 +2,13 @@
 // REF: Screen C BTSCharacterSelectScreen 패턴 / docs/design-references/button-system-shadcn.tsx
 // 2026-04-17 재설계 — 다크→화이트, 이모지 제거, 헤더 최소화, 도시 5등분, 캐릭터 Rive 폴백
 // 2026-07-16 §0 슬림화 = bts/place-cart/ 폴더 완전분리(순수 이동, JSX·로직 동일)
-import React, { useEffect, useCallback, useMemo, useState, useRef } from "react";
+import React, {
+  useEffect,
+  useCallback,
+  useMemo,
+  useState,
+  useRef,
+} from "react";
 import {
   View,
   Text,
@@ -60,7 +66,8 @@ export default function BTSPlaceCartScreen() {
   }, []);
 
   const insets = useSafeAreaInsets();
-  const navigation = useNavigation<NativeStackNavigationProp<BTSStackParamList>>();
+  const navigation =
+    useNavigation<NativeStackNavigationProp<BTSStackParamList>>();
   const { width: sw, height: sh } = useWindowDimensions();
   const {
     selectedCharacter,
@@ -111,8 +118,12 @@ export default function BTSPlaceCartScreen() {
 
   // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1g: 내용 기반 키로 리셋 (참조 비교 시 fetch마다 새 배열 → 불필요 리셋 + 스피너 재노출 방지).
   const topPlacesKey = useMemo(
-    () => topPlaces.slice(0, MAX_PLACES).map((p) => p.id).join(","),
-    [topPlaces]
+    () =>
+      topPlaces
+        .slice(0, MAX_PLACES)
+        .map((p) => p.id)
+        .join(","),
+    [topPlaces],
   );
   useEffect(() => {
     setReadyIds(new Set());
@@ -123,7 +134,9 @@ export default function BTSPlaceCartScreen() {
   useEffect(() => {
     cardsOpacity.value = withTiming(allReady ? 1 : 0, { duration: 300 });
   }, [allReady, cardsOpacity]);
-  const cardsLayerStyle = useAnimatedStyle(() => ({ opacity: cardsOpacity.value }));
+  const cardsLayerStyle = useAnimatedStyle(() => ({
+    opacity: cardsOpacity.value,
+  }));
 
   // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1g: 로드 성공 통보만 유지. useCallback 으로 PlaceCard React.memo 안정화.
   const handleReady = useCallback((id: number) => {
@@ -140,7 +153,7 @@ export default function BTSPlaceCartScreen() {
     const withDate = cities.filter((c) => c.nextConcertDate);
     if (withDate.length > 0) {
       const sorted = [...withDate].sort((a, b) =>
-        (a.nextConcertDate || "").localeCompare(b.nextConcertDate || "")
+        (a.nextConcertDate || "").localeCompare(b.nextConcertDate || ""),
       );
       return sorted.slice(0, 5);
     }
@@ -154,7 +167,7 @@ export default function BTSPlaceCartScreen() {
     setError(null);
     clearSelectedPlaces(); // 도시 전환 시 선택 초기화
     fetch(
-      `${baseUrl}/api/bts/top-places?cityId=${selectedCity.id}&memberId=${selectedCharacter.id}`
+      `${baseUrl}/api/bts/top-places?cityId=${selectedCity.id}&memberId=${selectedCharacter.id}`,
     )
       .then((r) => r.json())
       .then((data) => {
@@ -191,8 +204,9 @@ export default function BTSPlaceCartScreen() {
     if (!node || !scrollRef.current) return;
     node.measureLayout(
       scrollRef.current as any,
-      (_x, y) => scrollRef.current?.scrollTo({ y: Math.max(0, y - 16), animated: true }),
-      () => {}
+      (_x, y) =>
+        scrollRef.current?.scrollTo({ y: Math.max(0, y - 16), animated: true }),
+      () => {},
     );
   }, []);
 
@@ -201,7 +215,7 @@ export default function BTSPlaceCartScreen() {
       haptic("light");
       togglePlace(place);
     },
-    [togglePlace]
+    [togglePlace],
   );
 
   const handleCityPick = useCallback(
@@ -209,7 +223,7 @@ export default function BTSPlaceCartScreen() {
       haptic("light");
       setSelectedCity(city);
     },
-    [setSelectedCity]
+    [setSelectedCity],
   );
 
   const selectedCount = selectedPlaceIds.length;
@@ -227,14 +241,14 @@ export default function BTSPlaceCartScreen() {
   // ⚠️ 2026-05-07 js-index-maps: id → place Map 으로 O(1) lookup.
   const topPlacesById = useMemo(
     () => new Map(topPlaces.map((p) => [p.id, p])),
-    [topPlaces]
+    [topPlaces],
   );
   const selectedPlaces = useMemo(
     () =>
       selectedPlaceIds
         .map((id) => topPlacesById.get(id))
         .filter((p): p is BTSPlace => !!p),
-    [selectedPlaceIds, topPlacesById]
+    [selectedPlaceIds, topPlacesById],
   );
 
   // ⚠️ 수정금지(승인필요) — 반응형 HERO 영역 계산
@@ -319,7 +333,11 @@ export default function BTSPlaceCartScreen() {
               {/* ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1c: 카드/히어로는 항상 마운트 (이미지 로드 기회 유지) + opacity 로 allReady 전 숨김. 8장 모두 준비되면 일괄 노출. */}
               {/* ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1j: Reanimated withTiming 300ms 로 부드러운 fade-in. */}
               <Animated.View
-                style={[StyleSheet.absoluteFillObject, styles.cardsLayer, cardsLayerStyle]}
+                style={[
+                  StyleSheet.absoluteFillObject,
+                  styles.cardsLayer,
+                  cardsLayerStyle,
+                ]}
                 pointerEvents={allReady ? "auto" : "none"}
               >
                 {selectedCharacter && (
@@ -333,21 +351,24 @@ export default function BTSPlaceCartScreen() {
 
                 {/* ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1h: 순차 마운트. 카드 i 는 i-1 까지 로드 완료 후에만 마운트. Glide 동시성 8개 → Wikimedia Varnish rate-limit (429) 회피. */}
                 {/* ⚠️ 수정금지(승인필요) — 2026-04-24 Track 4a: 카트에 담긴 카드는 궤도에서 완전히 사라짐 (frame + image + label 전체). 빈 액자 금지. 캐릭터 노출 효과. */}
-                {topPlaces.slice(0, MAX_PLACES).map((place, i) =>
-                  i <= readyIds.size && !selectedPlaceIds.includes(place.id) ? (
-                    <PlaceCard
-                      key={place.id}
-                      place={place}
-                      displayName={localizedName(place, isKorean)}
-                      posX={positions[i].x}
-                      posY={positions[i].y}
-                      isSelected={false}
-                      onToggle={handleTogglePlace}
-                      onReady={handleReady}
-                      tint={tint}
-                    />
-                  ) : null
-                )}
+                {topPlaces
+                  .slice(0, MAX_PLACES)
+                  .map((place, i) =>
+                    i <= readyIds.size &&
+                    !selectedPlaceIds.includes(place.id) ? (
+                      <PlaceCard
+                        key={place.id}
+                        place={place}
+                        displayName={localizedName(place, isKorean)}
+                        posX={positions[i].x}
+                        posY={positions[i].y}
+                        isSelected={false}
+                        onToggle={handleTogglePlace}
+                        onReady={handleReady}
+                        tint={tint}
+                      />
+                    ) : null,
+                  )}
               </Animated.View>
             </>
           )}
@@ -361,7 +382,10 @@ export default function BTSPlaceCartScreen() {
         {/* 마커 클릭 → 아래 상세 섹션의 해당 카드로 인앱 scrollTo (= 모달 X) */}
         <View style={styles.mapSection}>
           <Text style={[styles.cartTitle, { color: tint }]}>
-            {t("bts.placeCart.cartTitle", { count: selectedCount, max: MAX_PLACES })}
+            {t("bts.placeCart.cartTitle", {
+              count: selectedCount,
+              max: MAX_PLACES,
+            })}
           </Text>
           <BTSPlaceMap
             places={topPlaces.slice(0, MAX_PLACES)}
@@ -433,7 +457,9 @@ export default function BTSPlaceCartScreen() {
 
           <Pressable onPress={handleNext} disabled={!canProceed}>
             <LinearGradient
-              colors={canProceed ? [gradient[0], gradient[1]] : ["#CCCCCC", "#999999"]}
+              colors={
+                canProceed ? [gradient[0], gradient[1]] : ["#CCCCCC", "#999999"]
+              }
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={[styles.ctaBtn, !canProceed && { opacity: 0.5 }]}

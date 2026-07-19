@@ -1,5 +1,13 @@
 // 공통 헬퍼 함수 모음 = itinerary-generator 분리(2026-07-15 §0 슬림화, 순수 이동)
-import { PACE_CONFIG, PSR_TIER_OFFSET, RANK_FALLBACK, type PlaceResult, type TravelPace, type CurationFocus, type Vibe } from "./types";
+import {
+  PACE_CONFIG,
+  PSR_TIER_OFFSET,
+  RANK_FALLBACK,
+  type PlaceResult,
+  type TravelPace,
+  type CurationFocus,
+  type Vibe,
+} from "./types";
 
 // === 인원수 계산 (companionType 기반) ===
 export function getCompanionCount(companionType: string): number {
@@ -50,7 +58,9 @@ export function getTierOffset(rank: number): number {
 }
 
 // 식당 점수 = tier 안 1 등 = 10 점 / 20 등 = 0 점
-export async function calculateRestaurantScore(place: PlaceResult): Promise<number> {
+export async function calculateRestaurantScore(
+  place: PlaceResult,
+): Promise<number> {
   const rank = place.rank ?? RANK_FALLBACK;
   const tierRank = rank - getTierOffset(rank);
   return Math.max(0, Math.min(10, 11 - tierRank));
@@ -260,7 +270,9 @@ export function calculateDayCount(startDate: string, endDate: string): number {
   return dayCount;
 }
 
-export function groupPlacesByCity(places: PlaceResult[]): Map<string, PlaceResult[]> {
+export function groupPlacesByCity(
+  places: PlaceResult[],
+): Map<string, PlaceResult[]> {
   const cityGroups = new Map<string, PlaceResult[]>();
 
   for (const place of places) {
@@ -293,7 +305,9 @@ export function calculateDistance(
   return R * c;
 }
 
-export function optimizeCityOrder(cityGroups: Map<string, PlaceResult[]>): string[] {
+export function optimizeCityOrder(
+  cityGroups: Map<string, PlaceResult[]>,
+): string[] {
   const cities = Array.from(cityGroups.keys());
   if (cities.length <= 1) return cities;
 

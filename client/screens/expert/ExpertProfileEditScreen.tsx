@@ -3,10 +3,18 @@
 //   디자인 = 메인앱 토큰(Pretendard·Brand.primary·Lucide·이모지0). 모바일 = 고정헤더 + KeyboardAwareScrollViewCompat + SafeArea.
 //   자기 폴더 = 다른 파일 안 섞기(§16). API = expertApi.
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { View, Text, StyleSheet, Pressable, TextInput, ActivityIndicator, Alert } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  TextInput,
+  ActivityIndicator,
+  Alert,
+  useColorScheme,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
-import { useColorScheme } from "react-native";
 import { Colors, Spacing, BorderRadius, Brand, Fonts } from "@/constants/theme";
 import Icon from "@/components/Icon";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
@@ -25,7 +33,12 @@ export default function ExpertProfileEditScreen({ navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const mounted = useRef(true);
-  useEffect(() => () => { mounted.current = false; }, []);
+  useEffect(
+    () => () => {
+      mounted.current = false;
+    },
+    [],
+  );
 
   // 본인 프로필 프리필(리뷰 2026-07-13 = 공용 대표전문가 값이 아니라 로그인한 본인 값 = 전문가 다수 시 정체성 덮어쓰기 방지).
   useEffect(() => {
@@ -38,14 +51,21 @@ export default function ExpertProfileEditScreen({ navigation }: any) {
         setBio(profile.bio || "");
       })
       .catch(() => {})
-      .finally(() => { if (mounted.current) setLoading(false); });
+      .finally(() => {
+        if (mounted.current) setLoading(false);
+      });
   }, []);
 
   const onSave = useCallback(async () => {
     if (saving) return;
     setSaving(true);
     try {
-      const r = await saveExpertProfile({ character: character.trim(), nickname: nickname.trim(), career: career.trim(), bio: bio.trim() });
+      const r = await saveExpertProfile({
+        character: character.trim(),
+        nickname: nickname.trim(),
+        career: career.trim(),
+        bio: bio.trim(),
+      });
       if (r.ok) {
         Alert.alert(t("expert.pfSaved"));
         navigation?.goBack?.();
@@ -62,26 +82,50 @@ export default function ExpertProfileEditScreen({ navigation }: any) {
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
       {/* 고정 헤더 (닫기 + 제목) */}
-      <View style={[styles.header, { paddingTop: insets.top + Spacing.sm, borderBottomColor: theme.border }]}>
-        <Pressable onPress={() => navigation?.goBack?.()} hitSlop={10} style={styles.back}>
+      <View
+        style={[
+          styles.header,
+          {
+            paddingTop: insets.top + Spacing.sm,
+            borderBottomColor: theme.border,
+          },
+        ]}
+      >
+        <Pressable
+          onPress={() => navigation?.goBack?.()}
+          hitSlop={10}
+          style={styles.back}
+        >
           <Icon name="arrow-left" size={24} color={theme.text} />
         </Pressable>
-        <Text style={[styles.title, { color: theme.text }]}>{t("expert.editProfile")}</Text>
+        <Text style={[styles.title, { color: theme.text }]}>
+          {t("expert.editProfile")}
+        </Text>
         <View style={styles.back} />
       </View>
 
       {loading ? (
-        <View style={styles.center}><ActivityIndicator color={Brand.primary} /></View>
+        <View style={styles.center}>
+          <ActivityIndicator color={Brand.primary} />
+        </View>
       ) : (
         <KeyboardAwareScrollViewCompat
           style={styles.scroll}
-          contentContainerStyle={{ padding: Spacing.lg, paddingBottom: insets.bottom + Spacing.xl }}
+          contentContainerStyle={{
+            padding: Spacing.lg,
+            paddingBottom: insets.bottom + Spacing.xl,
+          }}
           showsVerticalScrollIndicator={false}
         >
           {/* 캐릭터(아바타 글자) */}
-          <Text style={[styles.label, { color: theme.text }]}>{t("expert.pfCharacter")}</Text>
+          <Text style={[styles.label, { color: theme.text }]}>
+            {t("expert.pfCharacter")}
+          </Text>
           <TextInput
-            style={[styles.input, { backgroundColor: theme.backgroundDefault, color: theme.text }]}
+            style={[
+              styles.input,
+              { backgroundColor: theme.backgroundDefault, color: theme.text },
+            ]}
             placeholder={t("expert.pfCharacterPh")}
             placeholderTextColor={theme.textTertiary}
             value={character}
@@ -90,9 +134,14 @@ export default function ExpertProfileEditScreen({ navigation }: any) {
           />
 
           {/* 닉네임 */}
-          <Text style={[styles.label, { color: theme.text }]}>{t("expert.pfNickname")}</Text>
+          <Text style={[styles.label, { color: theme.text }]}>
+            {t("expert.pfNickname")}
+          </Text>
           <TextInput
-            style={[styles.input, { backgroundColor: theme.backgroundDefault, color: theme.text }]}
+            style={[
+              styles.input,
+              { backgroundColor: theme.backgroundDefault, color: theme.text },
+            ]}
             placeholder={t("expert.pfNicknamePh")}
             placeholderTextColor={theme.textTertiary}
             value={nickname}
@@ -101,9 +150,14 @@ export default function ExpertProfileEditScreen({ navigation }: any) {
           />
 
           {/* 경력 */}
-          <Text style={[styles.label, { color: theme.text }]}>{t("expert.pfCareer")}</Text>
+          <Text style={[styles.label, { color: theme.text }]}>
+            {t("expert.pfCareer")}
+          </Text>
           <TextInput
-            style={[styles.input, { backgroundColor: theme.backgroundDefault, color: theme.text }]}
+            style={[
+              styles.input,
+              { backgroundColor: theme.backgroundDefault, color: theme.text },
+            ]}
             placeholder={t("expert.pfCareerPh")}
             placeholderTextColor={theme.textTertiary}
             value={career}
@@ -112,9 +166,15 @@ export default function ExpertProfileEditScreen({ navigation }: any) {
           />
 
           {/* 자기소개 */}
-          <Text style={[styles.label, { color: theme.text }]}>{t("expert.pfBio")}</Text>
+          <Text style={[styles.label, { color: theme.text }]}>
+            {t("expert.pfBio")}
+          </Text>
           <TextInput
-            style={[styles.input, styles.inputMultiline, { backgroundColor: theme.backgroundDefault, color: theme.text }]}
+            style={[
+              styles.input,
+              styles.inputMultiline,
+              { backgroundColor: theme.backgroundDefault, color: theme.text },
+            ]}
             placeholder={t("expert.pfBioPh")}
             placeholderTextColor={theme.textTertiary}
             value={bio}
@@ -124,11 +184,18 @@ export default function ExpertProfileEditScreen({ navigation }: any) {
           />
 
           <Pressable
-            style={[styles.saveBtn, { backgroundColor: Brand.primary, opacity: saving ? 0.5 : 1 }]}
+            style={[
+              styles.saveBtn,
+              { backgroundColor: Brand.primary, opacity: saving ? 0.5 : 1 },
+            ]}
             onPress={onSave}
             disabled={saving}
           >
-            {saving ? <ActivityIndicator color="#FFF" /> : <Icon name="check" size={18} color="#FFF" />}
+            {saving ? (
+              <ActivityIndicator color="#FFF" />
+            ) : (
+              <Icon name="check" size={18} color="#FFF" />
+            )}
             <Text style={styles.saveText}>{t("expert.pfSave")}</Text>
           </Pressable>
         </KeyboardAwareScrollViewCompat>
@@ -140,14 +207,49 @@ export default function ExpertProfileEditScreen({ navigation }: any) {
 // 메인앱 토큰 동일: title 28 bold / inputBox = backgroundDefault·BorderRadius.md / Pretendard.
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: Spacing.md, paddingBottom: Spacing.md, borderBottomWidth: StyleSheet.hairlineWidth },
-  back: { width: 40, height: 40, justifyContent: "center", alignItems: "center" },
-  title: { flex: 1, fontSize: 20, fontFamily: Fonts.bold, letterSpacing: -0.5, textAlign: "center" },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: Spacing.md,
+    paddingBottom: Spacing.md,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  back: {
+    width: 40,
+    height: 40,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  title: {
+    flex: 1,
+    fontSize: 20,
+    fontFamily: Fonts.bold,
+    letterSpacing: -0.5,
+    textAlign: "center",
+  },
   scroll: { flex: 1 },
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
-  label: { fontSize: 14, fontFamily: Fonts.semiBold, marginBottom: Spacing.xs, marginTop: Spacing.md },
-  input: { padding: Spacing.md, borderRadius: BorderRadius.md, fontSize: 15, fontFamily: Fonts.medium },
+  label: {
+    fontSize: 14,
+    fontFamily: Fonts.semiBold,
+    marginBottom: Spacing.xs,
+    marginTop: Spacing.md,
+  },
+  input: {
+    padding: Spacing.md,
+    borderRadius: BorderRadius.md,
+    fontSize: 15,
+    fontFamily: Fonts.medium,
+  },
   inputMultiline: { minHeight: 100, textAlignVertical: "top" },
-  saveBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: Spacing.sm, height: Spacing.buttonHeight, borderRadius: BorderRadius.md, marginTop: Spacing.xl },
+  saveBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.sm,
+    height: Spacing.buttonHeight,
+    borderRadius: BorderRadius.md,
+    marginTop: Spacing.xl,
+  },
   saveText: { color: "#FFF", fontSize: 16, fontFamily: Fonts.bold },
 });

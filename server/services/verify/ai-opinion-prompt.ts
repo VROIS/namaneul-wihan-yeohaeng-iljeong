@@ -37,7 +37,7 @@ export interface AiOpinionInput {
   travelPace?: string;
   // ⚠️ 2026-07-09 사장님 SSOT = 교통 카테고리 = shouldApplyGuidePrice(mobility·travel) 매트릭스 매칭 결과 = 'guide'(드라이빙가이드 전용차) | 'transit'(대중교통).
   //   = 이 값 없으면 AI 의견이 무조건 "대중교통 불가능"으로 오판(디종 드라이빙가이드 실증 결함). pipeline-v3 가 계산한 실제 카테고리를 그대로 전달.
-  transportCategory?: 'guide' | 'transit';
+  transportCategory?: "guide" | "transit";
   days: AiOpinionDay[];
   // ⚠️ 2026-07-03 사장님 SSOT = 동적 콘텐츠(AI 의견 본문) 다국어 대응. pipeline-v3.ts:382-392 langMap 패턴 재사용.
   //   = 번역기 X, Gemini가 그 언어로 직접 작문. 미지정 시 한국어.
@@ -80,7 +80,7 @@ function buildAiOpinionInputJson(input: AiOpinionInput) {
       mobility_style: input.mobilityStyle,
       travel_pace: input.travelPace,
       // ⚠️ 2026-07-09 = 확정 교통수단 = 이동바이브+예산 매트릭스 매칭 결과(guide=전용차 드라이빙가이드 / transit=대중교통). Gemini 는 이 수단 전제로 동선·비용 평가.
-      transport_category: input.transportCategory || 'transit',
+      transport_category: input.transportCategory || "transit",
     },
     days: input.days.map((d) => ({
       day: d.day,
@@ -96,7 +96,8 @@ function buildAiOpinionInputJson(input: AiOpinionInput) {
 
 export function generateAiOpinionPrompt(input: AiOpinionInput): string {
   const inputJson = buildAiOpinionInputJson(input);
-  const langInstruction = LANG_INSTRUCTION[input.language || "ko"] || LANG_INSTRUCTION.ko;
+  const langInstruction =
+    LANG_INSTRUCTION[input.language || "ko"] || LANG_INSTRUCTION.ko;
 
   return `# 역할
 당신은 여행 전문가이자 냉정한 비평가입니다.

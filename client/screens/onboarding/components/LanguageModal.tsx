@@ -48,8 +48,7 @@ export default function LanguageModal({
                 key={lang.code}
                 style={[
                   styles.languageItem,
-                  currentLang.code === lang.code &&
-                  styles.languageItemSelected,
+                  currentLang.code === lang.code && styles.languageItemSelected,
                 ]}
                 onPress={async () => {
                   await changeLanguageAndPersist(lang.code);

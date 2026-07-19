@@ -10,7 +10,15 @@ import ResultStep from "./ResultStep";
 
 export default function TripPlannerScreen() {
   const planner = useTripPlanner();
-  const { screen, theme, t, navigation, expertVisible, setExpertVisible, restoreItineraryById } = planner;
+  const {
+    screen,
+    theme,
+    t,
+    navigation,
+    expertVisible,
+    setExpertVisible,
+    restoreItineraryById,
+  } = planner;
 
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
@@ -20,7 +28,11 @@ export default function TripPlannerScreen() {
 
       {/* ⚠️ 사장님 SSOT 2026-07-14 = "전문가" 오버레이 = 배경 여정 보이는 드래그 스냅 시트(SnapSheet). 최상위 렌더(어느 화면이든) = 전문가는 여정 없어도 답변함.
           아래로 드래그→peek(뒤 여정 상세히 봄), 위로 드래그/헤더탭→full(작성), X/맨아래스와이프→닫힘. 시트 본문 = ExpertSheet(자체 상태머신). §16·§19. */}
-      <SnapSheet visible={expertVisible} onClose={() => setExpertVisible(false)} title={t("expert.title")}>
+      <SnapSheet
+        visible={expertVisible}
+        onClose={() => setExpertVisible(false)}
+        title={t("expert.title")}
+      >
         <ExpertSheet
           onClose={() => setExpertVisible(false)}
           onOpenItinerary={(itineraryId) => {

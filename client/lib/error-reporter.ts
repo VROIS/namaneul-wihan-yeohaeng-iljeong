@@ -19,14 +19,20 @@ const errorQueue: AppError[] = [];
 let flushTimer: NodeJS.Timeout | null = null;
 
 // ⚠️ 수정금지(승인필요) — 에러 리포트 (큐에 쌓고 1초마다 전송)
-export function reportError(error: Error | string, context?: { component?: string; screen?: string }) {
+export function reportError(
+  error: Error | string,
+  context?: { component?: string; screen?: string },
+) {
   const entry: AppError = {
     message: typeof error === "string" ? error : error.message,
     stack: typeof error === "string" ? undefined : error.stack,
     component: context?.component,
     screen: context?.screen,
     timestamp: new Date().toISOString(),
-    platform: typeof navigator !== "undefined" ? navigator.userAgent?.slice(0, 50) : "unknown",
+    platform:
+      typeof navigator !== "undefined"
+        ? navigator.userAgent?.slice(0, 50)
+        : "unknown",
   };
 
   errorQueue.push(entry);
@@ -68,10 +74,13 @@ export function installGlobalErrorHandler() {
   });
 
   // Promise rejection
-  const originalRejection = (globalThis as any).__promiseRejectionTrackingOptions?.onUnhandled;
+  const originalRejection = (globalThis as any)
+    .__promiseRejectionTrackingOptions?.onUnhandled;
   if (typeof globalThis !== "undefined") {
     (globalThis as any).onunhandledrejection = (event: any) => {
-      reportError(event?.reason?.message || "Unhandled promise rejection", { component: "promise" });
+      reportError(event?.reason?.message || "Unhandled promise rejection", {
+        component: "promise",
+      });
     };
   }
 }

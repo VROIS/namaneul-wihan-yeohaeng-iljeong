@@ -52,10 +52,7 @@ export default function VideosSection({ profile }: { profile: ProfileApi }) {
               {trip.title}
             </Text>
             <Text
-              style={[
-                styles.videoCardDate,
-                { color: theme.textSecondary },
-              ]}
+              style={[styles.videoCardDate, { color: theme.textSecondary }]}
             >
               {trip.startDate?.split("T")[0]}
             </Text>

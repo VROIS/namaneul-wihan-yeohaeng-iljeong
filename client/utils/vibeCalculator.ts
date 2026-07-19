@@ -1,4 +1,4 @@
-import { Vibe, CurationFocus, VIBE_OPTIONS, VibeWeight } from '@/types/trip';
+import { Vibe, CurationFocus, VIBE_OPTIONS, VibeWeight } from "@/types/trip";
 
 const BASE_WEIGHTS: Record<Vibe, number> = {
   Healing: 35,
@@ -10,7 +10,10 @@ const BASE_WEIGHTS: Record<Vibe, number> = {
   Attraction: 15, // = 즐길거리(테마파크·유람선·아쿠아리움·체험전시)
 };
 
-const PROTAGONIST_ADJUSTMENTS: Record<CurationFocus, Partial<Record<Vibe, number>>> = {
+const PROTAGONIST_ADJUSTMENTS: Record<
+  CurationFocus,
+  Partial<Record<Vibe, number>>
+> = {
   Kids: { Adventure: 10, Healing: -5, Culture: -5 },
   Parents: { Culture: 10, Healing: 5, Adventure: -10 },
   Everyone: {},
@@ -19,13 +22,13 @@ const PROTAGONIST_ADJUSTMENTS: Record<CurationFocus, Partial<Record<Vibe, number
 
 export function calculateVibeWeights(
   selectedVibes: Vibe[],
-  protagonist: CurationFocus
+  protagonist: CurationFocus,
 ): VibeWeight[] {
   if (selectedVibes.length === 0) return [];
 
   const adjustments = PROTAGONIST_ADJUSTMENTS[protagonist];
-  
-  const adjustedWeights = selectedVibes.map(vibe => {
+
+  const adjustedWeights = selectedVibes.map((vibe) => {
     let weight = BASE_WEIGHTS[vibe];
     if (adjustments[vibe]) {
       weight += adjustments[vibe]!;
@@ -43,26 +46,31 @@ export function calculateVibeWeights(
 }
 
 export function getVibeLabel(vibe: Vibe): string {
-  const option = VIBE_OPTIONS.find(v => v.id === vibe);
+  const option = VIBE_OPTIONS.find((v) => v.id === vibe);
   return option?.label || vibe;
 }
 
 export function formatVibeWeightsSummary(weights: VibeWeight[]): string {
   return weights
     .sort((a, b) => b.percentage - a.percentage)
-    .map(w => `${getVibeLabel(w.vibe)} ${w.percentage}%`)
-    .join(' | ');
+    .map((w) => `${getVibeLabel(w.vibe)} ${w.percentage}%`)
+    .join(" | ");
 }
 
-export function getPreferredTimeSlots(vibe: Vibe): ('morning' | 'lunch' | 'afternoon' | 'evening')[] {
-  const slotMapping: Record<Vibe, ('morning' | 'lunch' | 'afternoon' | 'evening')[]> = {
-    Healing: ['morning', 'afternoon'],
-    Foodie: ['lunch', 'evening'],
-    Hotspot: ['afternoon'],
-    Culture: ['morning', 'afternoon'],
-    Adventure: ['morning', 'afternoon'],
-    Shopping: ['afternoon', 'evening'],
-    Attraction: ['morning', 'afternoon'],
+export function getPreferredTimeSlots(
+  vibe: Vibe,
+): ("morning" | "lunch" | "afternoon" | "evening")[] {
+  const slotMapping: Record<
+    Vibe,
+    ("morning" | "lunch" | "afternoon" | "evening")[]
+  > = {
+    Healing: ["morning", "afternoon"],
+    Foodie: ["lunch", "evening"],
+    Hotspot: ["afternoon"],
+    Culture: ["morning", "afternoon"],
+    Adventure: ["morning", "afternoon"],
+    Shopping: ["afternoon", "evening"],
+    Attraction: ["morning", "afternoon"],
   };
   return slotMapping[vibe];
 }

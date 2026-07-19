@@ -3,7 +3,13 @@
  * 캐릭터 선택 → 도시/장소 선택 → 일정 생성까지의 전체 플로우 상태
  */
 
-import React, { createContext, useContext, useState, useCallback, useEffect } from "react";
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useEffect,
+} from "react";
 import type { BTSCharacter } from "@/constants/bts-characters";
 
 // 타입 정의
@@ -44,12 +50,12 @@ export type BTSItineraryPlace = {
 export type BTSItinerary = {
   title: string;
   destination: string;
-  days: Array<{
+  days: {
     day: number;
     places: BTSItineraryPlace[];
     city: string;
     summary: string;
-  }>;
+  }[];
 };
 
 type BTSContextType = {
@@ -89,7 +95,8 @@ type BTSContextType = {
 const BTSContext = createContext<BTSContextType | null>(null);
 
 export function BTSProvider({ children }: { children: React.ReactNode }) {
-  const [selectedCharacter, setSelectedCharacter] = useState<BTSCharacter | null>(null);
+  const [selectedCharacter, setSelectedCharacter] =
+    useState<BTSCharacter | null>(null);
   const [selectedCity, setSelectedCity] = useState<BTSCity | null>(null);
   const [selectedPlaceIds, setSelectedPlaceIds] = useState<number[]>([]);
   const [selectedPlaces, setSelectedPlaces] = useState<BTSPlace[]>([]);
@@ -108,14 +115,21 @@ export function BTSProvider({ children }: { children: React.ReactNode }) {
     const api = getApiUrl();
     setIsLoadingCities(true);
     Promise.all([
-      fetch(`${api}/api/bts/cities`).then(r => r.json()),
-      fetch(`${api}/api/bts/next-concert`).then(r => r.json()),
+      fetch(`${api}/api/bts/cities`).then((r) => r.json()),
+      fetch(`${api}/api/bts/next-concert`).then((r) => r.json()),
     ])
       .then(([cityRows, next]: [BTSCity[], any]) => {
         setCities(cityRows);
         if (next.cityId) {
           const found = cityRows.find((c: BTSCity) => c.id === next.cityId);
-          setSelectedCity(found || { id: next.cityId, nameKo: next.cityKo, nameEn: next.city, btsRank: 1 });
+          setSelectedCity(
+            found || {
+              id: next.cityId,
+              nameKo: next.cityKo,
+              nameEn: next.city,
+              btsRank: 1,
+            },
+          );
         }
       })
       .catch(() => {})

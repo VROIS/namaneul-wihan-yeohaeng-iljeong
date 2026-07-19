@@ -8,7 +8,10 @@ import { issueAccessTokenWithCodeWeb } from "@react-native-kakao/user";
 import { getApiUrl } from "./query-client";
 
 const KAKAO_JS_KEY = process.env.EXPO_PUBLIC_KAKAO_JAVASCRIPT_KEY || "";
-const KAKAO_REST_KEY = process.env.EXPO_PUBLIC_KAKAO_REST_API_KEY || process.env.KAKAO_REST_API_KEY || "";
+const KAKAO_REST_KEY =
+  process.env.EXPO_PUBLIC_KAKAO_REST_API_KEY ||
+  process.env.KAKAO_REST_API_KEY ||
+  "";
 
 const KAKAO_CALLBACK_STORAGE_KEY = "@nubi_kakao_birthDate";
 
@@ -73,7 +76,10 @@ export async function ensureKakaoSDKInitialized(): Promise<boolean> {
  * 카카오 로그인 시작 (웹: 리다이렉트)
  * rnkakao login()은 intent 스킴을 시도해 웹에서 실패함 → Kakao.Auth.authorize 직접 사용
  */
-export async function startKakaoLoginWeb(birthDate: string, language: string): Promise<void> {
+export async function startKakaoLoginWeb(
+  birthDate: string,
+  language: string,
+): Promise<void> {
   if (Platform.OS !== "web") {
     throw new Error("카카오 웹 로그인은 웹 환경에서만 지원됩니다.");
   }
@@ -82,11 +88,26 @@ export async function startKakaoLoginWeb(birthDate: string, language: string): P
 
   const redirectUri = getKakaoRedirectUri();
   if (typeof sessionStorage !== "undefined") {
-    sessionStorage.setItem(KAKAO_CALLBACK_STORAGE_KEY, JSON.stringify({ birthDate, language }));
+    sessionStorage.setItem(
+      KAKAO_CALLBACK_STORAGE_KEY,
+      JSON.stringify({ birthDate, language }),
+    );
   }
 
-  const Kakao = (window as unknown as { Kakao?: { Auth?: { authorize: (opts: { redirectUri: string; throughTalk?: boolean }) => void } } }).Kakao;
-  if (!Kakao?.Auth?.authorize) throw new Error("카카오 웹 SDK를 불러올 수 없습니다.");
+  const Kakao = (
+    window as unknown as {
+      Kakao?: {
+        Auth?: {
+          authorize: (opts: {
+            redirectUri: string;
+            throughTalk?: boolean;
+          }) => void;
+        };
+      };
+    }
+  ).Kakao;
+  if (!Kakao?.Auth?.authorize)
+    throw new Error("카카오 웹 SDK를 불러올 수 없습니다.");
   // throughTalk: false → 카카오톡 앱(intent) 대신 웹 로그인 페이지로 리다이렉트
   Kakao.Auth.authorize({ redirectUri, throughTalk: false });
 }
@@ -108,7 +129,10 @@ export async function exchangeKakaoCodeForToken(code: string): Promise<string> {
 }
 
 /** 리다이렉트 복귀 시 저장해 둔 birthDate/language 조회 */
-export function getKakaoCallbackData(): { birthDate: string; language: string } | null {
+export function getKakaoCallbackData(): {
+  birthDate: string;
+  language: string;
+} | null {
   if (typeof sessionStorage === "undefined") return null;
   try {
     const raw = sessionStorage.getItem(KAKAO_CALLBACK_STORAGE_KEY);

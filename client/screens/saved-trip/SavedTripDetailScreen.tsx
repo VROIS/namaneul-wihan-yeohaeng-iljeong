@@ -137,7 +137,9 @@ export default function SavedTripDetailScreen() {
                 onPress={handleSaveVideo}
               >
                 <Icon name="download" size={20} color="#FFFFFF" />
-                <Text style={styles.saveVideoButtonText}>{t("saved.videoSave")}</Text>
+                <Text style={styles.saveVideoButtonText}>
+                  {t("saved.videoSave")}
+                </Text>
               </Pressable>
               <Pressable
                 style={[styles.regenerateButton, { borderColor: theme.border }]}

@@ -42,7 +42,8 @@ export function useLogin() {
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
-  const currentLang = SUPPORTED_LANGS.find((l) => l.code === i18n.language) ?? SUPPORTED_LANGS[0];
+  const currentLang =
+    SUPPORTED_LANGS.find((l) => l.code === i18n.language) ?? SUPPORTED_LANGS[0];
   const [showLanguageModal, setShowLanguageModal] = useState(false);
 
   const [day, setDay] = useState("");
@@ -102,7 +103,7 @@ export function useLogin() {
     const idToken = getIdTokenFromGoogleResponse(googleResponse);
     if (!idToken) return;
     setOauthLoading(true);
-      socialLoginWithGoogle({
+    socialLoginWithGoogle({
       idToken,
       birthDate: birthDateStr,
       language: i18n.language,
@@ -251,7 +252,10 @@ export function useLogin() {
     if (result.success && result.user) {
       navigation.reset({ index: 0, routes: [{ name: "Main" }] });
     } else {
-      Alert.alert(t("login.loginFailed"), result.error || t("login.loginFailed"));
+      Alert.alert(
+        t("login.loginFailed"),
+        result.error || t("login.loginFailed"),
+      );
     }
   };
 
@@ -291,7 +295,10 @@ export function useLogin() {
 
   const handleWhatsAppVerify = async () => {
     if (!whatsappOtp || whatsappOtp.length < 4) {
-      Alert.alert(t("login.alert"), t("login.otpHint", { phone: whatsappPhone }));
+      Alert.alert(
+        t("login.alert"),
+        t("login.otpHint", { phone: whatsappPhone }),
+      );
       return;
     }
     setOauthLoading(true);
@@ -335,12 +342,16 @@ export function useLogin() {
   const [emailLoading, setEmailLoading] = useState(false);
   // ⚠️ 2026-07-14 = 웹(WebView)에서 Alert.alert 이 안 떠서 로그인 실패·검증 안내가 안 보임 = "눌러도 반응 없음"의 원인. 웹 = window.alert, 앱 = Alert.alert(§19).
   const notify = (msg: string) => {
-    if (Platform.OS === "web") { if (typeof window !== "undefined") window.alert(msg); }
-    else Alert.alert(msg);
+    if (Platform.OS === "web") {
+      if (typeof window !== "undefined") window.alert(msg);
+    } else Alert.alert(msg);
   };
   const handleEmailLogin = async () => {
     const email = emailInput.trim();
-    if (!email || !email.includes("@")) { notify(t("login.emailInvalid")); return; }
+    if (!email || !email.includes("@")) {
+      notify(t("login.emailInvalid"));
+      return;
+    }
     setEmailLoading(true);
     try {
       const r = await emailLogin(email);

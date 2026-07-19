@@ -5,7 +5,10 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, View, Platform } from "react-native";
 import { apiRequest } from "@/lib/query-client";
-import { PLACE_AUTOCOMPLETE_HTML, type PlaceAutoSelection } from "./place-autocomplete-html";
+import {
+  PLACE_AUTOCOMPLETE_HTML,
+  type PlaceAutoSelection,
+} from "./place-autocomplete-html";
 
 export type { PlaceAutoSelection };
 
@@ -24,7 +27,16 @@ type Props = {
 // ============================================================
 // Web 분기 = div + Google Maps SDK 직접 (PlaceAutocompleteElement)
 // ============================================================
-function PlaceAutocompleteWeb({ onSelect, includedPrimaryTypes, cityPrefix, placeholder, language = "ko", height = 56, tint = "#2563eb", apiKey }: Props & { apiKey: string }) {
+function PlaceAutocompleteWeb({
+  onSelect,
+  includedPrimaryTypes,
+  cityPrefix,
+  placeholder,
+  language = "ko",
+  height = 56,
+  tint = "#2563eb",
+  apiKey,
+}: Props & { apiKey: string }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const [ready, setReady] = useState(false);
   // onSelect = 최신 콜백 ref 보관 (= 부모 인라인 콜백이라도 위젯 재생성 안 함 = 입력중 초기화 방지, review MAJOR)
@@ -42,11 +54,19 @@ function PlaceAutocompleteWeb({ onSelect, includedPrimaryTypes, cityPrefix, plac
       if (w.__placeSdkPromise) return w.__placeSdkPromise;
       w.__placeSdkPromise = new Promise((resolve, reject) => {
         const cb = `__placeInit_${Date.now()}`;
-        (w as any)[cb] = () => { try { delete (w as any)[cb]; } catch {} resolve(w.google); };
+        (w as any)[cb] = () => {
+          try {
+            delete (w as any)[cb];
+          } catch {}
+          resolve(w.google);
+        };
         const s = document.createElement("script");
         s.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&v=weekly&language=${language}&libraries=places&callback=${cb}`;
         s.async = true;
-        s.onerror = () => { w.__placeSdkPromise = null; reject(new Error("Places SDK load failed")); };
+        s.onerror = () => {
+          w.__placeSdkPromise = null;
+          reject(new Error("Places SDK load failed"));
+        };
         document.body.appendChild(s);
       });
       return w.__placeSdkPromise;
@@ -55,13 +75,22 @@ function PlaceAutocompleteWeb({ onSelect, includedPrimaryTypes, cityPrefix, plac
     loadSdk()
       .then(async (google) => {
         if (cancelled || !host) return;
-        const { PlaceAutocompleteElement } = await google.maps.importLibrary("places");
+        const { PlaceAutocompleteElement } =
+          await google.maps.importLibrary("places");
         const ac = new PlaceAutocompleteElement(
-          includedPrimaryTypes ? { includedPrimaryTypes: [includedPrimaryTypes] } : {},
+          includedPrimaryTypes
+            ? { includedPrimaryTypes: [includedPrimaryTypes] }
+            : {},
         );
-        try { if (placeholder) (ac as any).placeholder = placeholder; } catch {}
+        try {
+          if (placeholder) (ac as any).placeholder = placeholder;
+        } catch {}
         // 🏨 도시명 prefill = "Paris " → 사용자가 뒤에 숙소명 = "Paris 노보텔" = 그 도시만 (구글맵 방식)
-        if (cityPrefix) { try { (ac as any).value = cityPrefix; } catch {} }
+        if (cityPrefix) {
+          try {
+            (ac as any).value = cityPrefix;
+          } catch {}
+        }
         (ac as any).style.width = "100%";
         host.innerHTML = "";
         host.appendChild(ac);
@@ -69,7 +98,9 @@ function PlaceAutocompleteWeb({ onSelect, includedPrimaryTypes, cityPrefix, plac
           try {
             const pred = ev.placePrediction;
             const place = pred.toPlace();
-            await place.fetchFields({ fields: ["displayName", "formattedAddress", "location"] });
+            await place.fetchFields({
+              fields: ["displayName", "formattedAddress", "location"],
+            });
             const loc = place.location;
             onSelectRef.current({
               placeId: place.id || pred.placeId || "",
@@ -88,7 +119,9 @@ function PlaceAutocompleteWeb({ onSelect, includedPrimaryTypes, cityPrefix, plac
       })
       .catch((e) => console.warn("[PlaceAutocompleteWidget-web] SDK 실패:", e));
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [apiKey, includedPrimaryTypes, cityPrefix, placeholder, language]);
 
   return (
@@ -106,13 +139,30 @@ function PlaceAutocompleteWeb({ onSelect, includedPrimaryTypes, cityPrefix, plac
 // ============================================================
 // Native 분기 = react-native-webview
 // ============================================================
-function PlaceAutocompleteNative({ onSelect, includedPrimaryTypes, cityPrefix, placeholder, language = "ko", height, tint = "#2563eb", apiKey }: Props & { apiKey: string }) {
-  const { WebView } = require("react-native-webview") as typeof import("react-native-webview");
+function PlaceAutocompleteNative({
+  onSelect,
+  includedPrimaryTypes,
+  cityPrefix,
+  placeholder,
+  language = "ko",
+  height,
+  tint = "#2563eb",
+  apiKey,
+}: Props & { apiKey: string }) {
+  const { WebView } =
+    require("react-native-webview") as typeof import("react-native-webview");
   const [ready, setReady] = useState(false);
   // 🏨 2026-06-29 = WebView 동적높이 (= 고정 280px 빈공간 결함 해소): 위젯이 resize로 알려준 높이만큼만 차지.
   const [webHeight, setWebHeight] = useState(56);
   const html = useMemo(
-    () => PLACE_AUTOCOMPLETE_HTML({ apiKey, includedPrimaryTypes, cityPrefix, placeholder, language }),
+    () =>
+      PLACE_AUTOCOMPLETE_HTML({
+        apiKey,
+        includedPrimaryTypes,
+        cityPrefix,
+        placeholder,
+        language,
+      }),
     [apiKey, includedPrimaryTypes, cityPrefix, placeholder, language],
   );
 
@@ -125,8 +175,14 @@ function PlaceAutocompleteNative({ onSelect, includedPrimaryTypes, cityPrefix, p
         setWebHeight(Math.max(48, Math.min(340, Math.ceil(data.height))));
       } else if (data.type === "select") {
         // 선택 → 호출측이 이 위젯을 언마운트(첫화면=섹션숨김 / 여정속=setHotelModalDay null) = 입력창 사라져 키보드 자동 닫힘(iOS·AOS). RN Keyboard.dismiss는 WebView 키보드 못 내려 무용(실기기 실증)이라 제거(§19).
-        onSelect({ placeId: data.placeId, name: data.name, address: data.address, coords: data.coords });
-      } else if (data.type === "error") console.warn("[PlaceAutocompleteWidget] WebView error:", data.message);
+        onSelect({
+          placeId: data.placeId,
+          name: data.name,
+          address: data.address,
+          coords: data.coords,
+        });
+      } else if (data.type === "error")
+        console.warn("[PlaceAutocompleteWidget] WebView error:", data.message);
     } catch {}
   }
 
@@ -173,13 +229,21 @@ export default function PlaceAutocompleteWidget(props: Props) {
           const res = await apiRequest("GET", "/api/bts/map-config");
           const data = await res.json();
           if (cancelled) return;
-          if (data.googleMapsApiKey) { setApiKey(data.googleMapsApiKey); return; }
+          if (data.googleMapsApiKey) {
+            setApiKey(data.googleMapsApiKey);
+            return;
+          }
         } catch (e) {
-          console.warn(`[PlaceAutocompleteWidget] map-config fetch 실패(시도 ${i + 1}/${delays.length}):`, e);
+          console.warn(
+            `[PlaceAutocompleteWidget] map-config fetch 실패(시도 ${i + 1}/${delays.length}):`,
+            e,
+          );
         }
       }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   if (!apiKey) {
@@ -190,12 +254,17 @@ export default function PlaceAutocompleteWidget(props: Props) {
     );
   }
 
-  if (Platform.OS === "web") return <PlaceAutocompleteWeb {...props} apiKey={apiKey} />;
+  if (Platform.OS === "web")
+    return <PlaceAutocompleteWeb {...props} apiKey={apiKey} />;
   return <PlaceAutocompleteNative {...props} apiKey={apiKey} />;
 }
 
 const styles = StyleSheet.create({
   container: { width: "100%", justifyContent: "center" },
   webview: { flex: 1, backgroundColor: "transparent" },
-  loadingOverlay: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" },
+  loadingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+  },
 });

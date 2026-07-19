@@ -1,6 +1,12 @@
 // 프로필 화면 메인 스타일 = ProfileScreen 분리(2026-07-15 §0 슬림화, 순수 이동)
 import { StyleSheet } from "react-native";
-import { Spacing, BorderRadius, Typography, Shadows, Fonts } from "@/constants/theme";
+import {
+  Spacing,
+  BorderRadius,
+  Typography,
+  Shadows,
+  Fonts,
+} from "@/constants/theme";
 
 export const styles = StyleSheet.create({
   profileCard: {

@@ -23,7 +23,11 @@ import * as Haptics from "expo-haptics";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
-import { BTS_CHARACTERS, BTS_CHARACTER_IMAGES, type BTSCharacter } from "@/constants/bts-characters";
+import {
+  BTS_CHARACTERS,
+  BTS_CHARACTER_IMAGES,
+  type BTSCharacter,
+} from "@/constants/bts-characters";
 import { CharacterGradients } from "@/constants/bts-theme";
 import { useBTS } from "@/contexts/BTSContext";
 import type { BTSStackParamList } from "@/navigation/BTSStackNavigator";
@@ -32,7 +36,8 @@ import type { BTSStackParamList } from "@/navigation/BTSStackNavigator";
 const haptic = (t: "light" | "medium" | "success") => {
   try {
     if (t === "light") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    else if (t === "medium") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    else if (t === "medium")
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     else Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   } catch {}
 };
@@ -40,8 +45,8 @@ const haptic = (t: "light" | "medium" | "success") => {
 const ANGLE_OFFSET = -Math.PI / 2;
 
 // ⚠️ 수정금지(승인필요) — 레이아웃 상수 (사용자 지시 반영)
-const TITLE_TOP_OFFSET = 56;   // status bar로부터 타이틀까지 여백
-const TITLE_HEIGHT = 76;       // 30pt × 2줄 × lineHeight 1.27
+const TITLE_TOP_OFFSET = 56; // status bar로부터 타이틀까지 여백
+const TITLE_HEIGHT = 76; // 30pt × 2줄 × lineHeight 1.27
 const TITLE_TO_ELLIPSE_GAP = 100; // 타이틀-원형 간격
 
 // ⚠️ 수정금지(승인필요) — 타원 배치 + 중앙 overlay 사이즈 계산
@@ -84,31 +89,47 @@ const CharacterAvatar = React.memo(function CharacterAvatar({
   posY: number;
   avatarSize: number;
 }) {
-  const gradient = CharacterGradients[character.id] || CharacterGradients.collector;
+  const gradient =
+    CharacterGradients[character.id] || CharacterGradients.collector;
 
   // 선택 상태에 따른 부드러운 스케일 (썸네일용 미세 확대)
-  const scaleStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: withSpring(isSelected ? 1.05 : 1, { damping: 12, stiffness: 180 }) }],
-  }), [isSelected]);
+  const scaleStyle = useAnimatedStyle(
+    () => ({
+      transform: [
+        {
+          scale: withSpring(isSelected ? 1.05 : 1, {
+            damping: 12,
+            stiffness: 180,
+          }),
+        },
+      ],
+    }),
+    [isSelected],
+  );
 
   // 프로포셔널 폰트: 캐릭터 사이즈 기준 자동 스케일
   const nameEnFontSize = Math.round(avatarSize * 0.095);
   const archetypeFontSize = Math.round(avatarSize * 0.075);
 
   return (
-    <Animated.View style={[{
-      position: "absolute",
-      left: posX - avatarSize / 2,
-      top: posY - avatarSize / 2,
-      width: avatarSize,
-      height: avatarSize,
-      shadowColor: isSelected ? gradient[0] : "#000",
-      shadowOffset: { width: 0, height: 4 },
-      shadowOpacity: isSelected ? 0.55 : 0.2,
-      shadowRadius: isSelected ? 20 : 12,
-      elevation: isSelected ? 16 : 8,
-      // ⚠️ 수정금지(승인필요) — 2026-04-21 회복: zIndex:25 제거 (01f53bf 에서 추가 후 hero가 뒤로 밀리는 회귀 발생). overlay(z20)가 시각 최상위 = 직전 정상 버전(207b643) 로직
-    }, scaleStyle]}>
+    <Animated.View
+      style={[
+        {
+          position: "absolute",
+          left: posX - avatarSize / 2,
+          top: posY - avatarSize / 2,
+          width: avatarSize,
+          height: avatarSize,
+          shadowColor: isSelected ? gradient[0] : "#000",
+          shadowOffset: { width: 0, height: 4 },
+          shadowOpacity: isSelected ? 0.55 : 0.2,
+          shadowRadius: isSelected ? 20 : 12,
+          elevation: isSelected ? 16 : 8,
+          // ⚠️ 수정금지(승인필요) — 2026-04-21 회복: zIndex:25 제거 (01f53bf 에서 추가 후 hero가 뒤로 밀리는 회귀 발생). overlay(z20)가 시각 최상위 = 직전 정상 버전(207b643) 로직
+        },
+        scaleStyle,
+      ]}
+    >
       <Pressable
         onPress={() => onTap(character.id)}
         style={{
@@ -139,10 +160,16 @@ const CharacterAvatar = React.memo(function CharacterAvatar({
 
         {/* 레이어 3: 미선택 시 어두운 오버레이 (선택 시 제거로 컬러 복귀) — 기능성 유지 */}
         {!isSelected && (
-          <View style={[
-            StyleSheet.absoluteFillObject,
-            { backgroundColor: isDimmed ? "rgba(30,30,30,0.65)" : "rgba(60,60,60,0.45)" },
-          ]} />
+          <View
+            style={[
+              StyleSheet.absoluteFillObject,
+              {
+                backgroundColor: isDimmed
+                  ? "rgba(30,30,30,0.65)"
+                  : "rgba(60,60,60,0.45)",
+              },
+            ]}
+          />
         )}
 
         {/* 레이어 6: 텍스트 오버레이 (캐릭터 위 하단 15% 영역, 프로포셔널) */}
@@ -177,17 +204,22 @@ const CharacterAvatar = React.memo(function CharacterAvatar({
 
 // ⚠️ 수정금지(승인필요) — 메인 화면
 export default function BTSCharacterSelectScreen() {
-  const navigation = useNavigation<NativeStackNavigationProp<BTSStackParamList>>();
+  const navigation =
+    useNavigation<NativeStackNavigationProp<BTSStackParamList>>();
   const { setSelectedCharacter } = useBTS();
   const insets = useSafeAreaInsets();
-  const { avatarSize, heroSize, areaW, areaH, positions } = useCharacterLayout();
+  const { avatarSize, heroSize, areaW, areaH, positions } =
+    useCharacterLayout();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selectedIdRef = useRef<string | null>(null);
   selectedIdRef.current = selectedId;
 
   const selectedChar = useMemo(
-    () => (selectedId ? BTS_CHARACTERS.find((c) => c.id === selectedId) ?? null : null),
-    [selectedId]
+    () =>
+      selectedId
+        ? (BTS_CHARACTERS.find((c) => c.id === selectedId) ?? null)
+        : null,
+    [selectedId],
   );
 
   // ⚠️ 수정금지(승인필요) — 복귀 시 초기화: Screen D → 뒤로가기 복귀하면 선택 해제
@@ -195,22 +227,25 @@ export default function BTSCharacterSelectScreen() {
   useFocusEffect(
     useCallback(() => {
       setSelectedId(null);
-    }, [])
+    }, []),
   );
 
   // ⚠️ 수정금지(승인필요) — 2단계 탭: 1탭=overlay 등장, 같은 캐릭터 2탭=확정
-  const handleCharacterTap = useCallback((charId: string) => {
-    const char = BTS_CHARACTERS.find((c) => c.id === charId);
-    if (!char) return;
-    if (selectedIdRef.current === charId) {
-      haptic("success");
-      setSelectedCharacter(char);
-      navigation.navigate("BTSPlaceCart");
-    } else {
-      haptic("light");
-      setSelectedId(charId);
-    }
-  }, [setSelectedCharacter, navigation]);
+  const handleCharacterTap = useCallback(
+    (charId: string) => {
+      const char = BTS_CHARACTERS.find((c) => c.id === charId);
+      if (!char) return;
+      if (selectedIdRef.current === charId) {
+        haptic("success");
+        setSelectedCharacter(char);
+        navigation.navigate("BTSPlaceCart");
+      } else {
+        haptic("light");
+        setSelectedId(charId);
+      }
+    },
+    [setSelectedCharacter, navigation],
+  );
 
   return (
     <View style={styles.container}>
@@ -224,7 +259,18 @@ export default function BTSCharacterSelectScreen() {
       </View>
 
       {/* ⚠️ 수정금지(승인필요) — 타원 영역: 타이틀과 100px 간격, 중앙 overlay는 동일 영역 내 absolute */}
-      <View style={[styles.circleWrap, { marginTop: insets.top + TITLE_TOP_OFFSET + TITLE_HEIGHT + TITLE_TO_ELLIPSE_GAP }]}>
+      <View
+        style={[
+          styles.circleWrap,
+          {
+            marginTop:
+              insets.top +
+              TITLE_TOP_OFFSET +
+              TITLE_HEIGHT +
+              TITLE_TO_ELLIPSE_GAP,
+          },
+        ]}
+      >
         <View style={{ width: areaW, height: areaH, position: "relative" }}>
           {/* ⚠️ 수정금지(승인필요) — 배경 탭 취소: 선택 상태에서만 활성, 썸네일보다 낮은 z → 썸네일 탭은 정상 */}
           {selectedId && (

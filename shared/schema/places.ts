@@ -1,5 +1,14 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, integer, serial, timestamp, real, boolean, jsonb } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  text,
+  integer,
+  serial,
+  timestamp,
+  real,
+  boolean,
+  jsonb,
+} from "drizzle-orm/pg-core";
 import { dataSourceEnum } from "./enums";
 import { cities } from "./cities";
 
@@ -21,7 +30,9 @@ export const reviews = pgTable("reviews", {
   sentimentScore: real("sentiment_score"),
   authenticityKeywords: jsonb("authenticity_keywords").$type<string[]>(),
   reviewDate: timestamp("review_date"),
-  fetchedAt: timestamp("fetched_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  fetchedAt: timestamp("fetched_at")
+    .default(sql`CURRENT_TIMESTAMP`)
+    .notNull(),
 });
 
 // [DROPPED 0013] vibe_analysis — 0건, 미사용
@@ -31,7 +42,9 @@ export const reviews = pgTable("reviews", {
 export const placeSeedRaw = pgTable("place_seed_raw", {
   id: serial("id").primaryKey(),
   // ⚠️ 수정금지(승인필요) 2026-06-11 = place_id(옛 places FK) DROP = 헛바퀴(google_place_id 가 진짜 연결)
-  cityId: integer("city_id").notNull().references(() => cities.id, { onDelete: "cascade" }),
+  cityId: integer("city_id")
+    .notNull()
+    .references(() => cities.id, { onDelete: "cascade" }),
   seedCategory: text("seed_category").notNull(), // attraction|restaurant|healing|adventure|hotspot
   // ⚠️ 개정헌법 2026-07-07 사장님 = rank nullable §19(DB↔레포 동기화). 코드는 랭킹 안 넣음 = 신규는 rank NULL 로 INSERT → AFTER autorank 트리거가 RC순 확정.
   rank: integer("rank"),
@@ -43,7 +56,7 @@ export const placeSeedRaw = pgTable("place_seed_raw", {
   // ⚠️ 수정금지(승인필요) 2026-06-11 = nubi_reason → summary_ko 흡수통합 / evidence_url DROP (= 헛바퀴)
   // ⚠️ 2026-05-15 사용자 SSOT = price_eur 단일 컬럼 (= 1인 입장료/식사비 통합)
   // = price_source / price_fetched_at = 영구 폐기 (SSOT §14 + 제15조)
-  priceEur: real("price_eur"),           // 1인 입장료/식사비 (EUR), 0=무료
+  priceEur: real("price_eur"), // 1인 입장료/식사비 (EUR), 0=무료
 
   // 6단계: googlePlaceId 바코드 (places 테이블 100% 정확 연결용)
   googlePlaceId: text("google_place_id"),
@@ -67,22 +80,24 @@ export const placeSeedRaw = pgTable("place_seed_raw", {
   nameLocal: text("name_local"),
   // ⚠️ 수정금지(승인필요) 2026-06-11 = names_i18n(고유명사 번역 무의미) / instagram·tiktok_post_url(인스타 가짜 폐기) DROP = 헛바퀴
   // ⚠️ 수정금지(승인필요) — 2026-04-30: multi-tag SSOT (1 장소 = N 카테고리)
-  phaseTags: text("phase_tags").array(),       // ['bts2026'] 등 수집 phase 태그
+  phaseTags: text("phase_tags").array(), // ['bts2026'] 등 수집 phase 태그
   categoryTags: text("category_tags").array(), // ['heritage','hotspot','attraction'] 등 다중 카테고리 태그
   imageAttribution: text("image_attribution"), // "Photo via Google Places (placeId)"
   imageUpdatedAt: timestamp("image_updated_at"),
-  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  createdAt: timestamp("created_at")
+    .default(sql`CURRENT_TIMESTAMP`)
+    .notNull(),
   // ⚠️ 수정금지(승인필요) 2026-07-16 = updated_at 레포 등재 §19(DB↔레포 동기화) = DB 실측 nullable+default now() 그대로 반영.
   //   = 이 등재와 무관하게 db:push 는 여전히 절대 금지: DB 실측 33컬럼 vs 이 스키마 28컬럼 불일치 + latitude/longitude/distance_km_from_center 가
   //     DB numeric ↔ 이 스키마 real 로 어긋나 있어, push 시 좌표 정밀도가 깎여 좌표10m 매칭의 근거 데이터가 손상된다.
   updatedAt: timestamp("updated_at").default(sql`now()`),
   // ⚠️ 수정금지(승인필요) — 2026-05-04 사용자 SSOT: gemini3-2026-05 표준화 17 필드 추가 (메인앱 통합 진입점)
-  summaryKo: text("summary_ko"),                          // 한국어 감성 요약 (NUBI 카피, 숏폼 KO)
-  dayZone: text("day_zone"),                              // core (≤10km) / outskirt (10-100km)
-  distanceKmFromCenter: real("distance_km_from_center"),  // 도심 거리 (haversine)
-  address: text("address"),                               // 전체 주소 + 우편번호
-  googlePrimaryType: text("google_primary_type"),         // Google primary type (museum, restaurant 등)
-  geminiRank: integer("gemini_rank"),                     // Gemini 응답 순위 (rank 재정렬 우선 키)
+  summaryKo: text("summary_ko"), // 한국어 감성 요약 (NUBI 카피, 숏폼 KO)
+  dayZone: text("day_zone"), // core (≤10km) / outskirt (10-100km)
+  distanceKmFromCenter: real("distance_km_from_center"), // 도심 거리 (haversine)
+  address: text("address"), // 전체 주소 + 우편번호
+  googlePrimaryType: text("google_primary_type"), // Google primary type (museum, restaurant 등)
+  geminiRank: integer("gemini_rank"), // Gemini 응답 순위 (rank 재정렬 우선 키)
 });
 
 export type Review = typeof reviews.$inferSelect;

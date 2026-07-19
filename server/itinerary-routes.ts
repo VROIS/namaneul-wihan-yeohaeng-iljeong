@@ -13,7 +13,12 @@ function computeItineraryFingerprint(itinerary: any): string {
     endDate: itinerary.endDate,
     days: (itinerary.days || []).map((d: any) => ({
       day: d.day,
-      places: (d.places || []).map((p: any) => ({ name: p.name, lat: p.lat, lng: p.lng, startTime: p.startTime })),
+      places: (d.places || []).map((p: any) => ({
+        name: p.name,
+        lat: p.lat,
+        lng: p.lng,
+        startTime: p.startTime,
+      })),
     })),
   };
   return createHash("sha1").update(JSON.stringify(material)).digest("hex");
@@ -101,7 +106,11 @@ export function registerItineraryRoutes(app: Express): void {
     const { verificationResult: vr, ...rawData } = (body.rawData || {}) as any; // 🩹 [2026-01-26] raw_data 저장 (없으면 빈 객체)
     if (vr?.result) {
       const fp = `${computeItineraryFingerprint(rawData)}:${vr.language || "ko"}`;
-      (rawData as any).verification = { fp, result: vr.result, generatedAt: new Date().toISOString() };
+      (rawData as any).verification = {
+        fp,
+        result: vr.result,
+        generatedAt: new Date().toISOString(),
+      };
     }
     return {
       ...body,
@@ -121,7 +130,9 @@ export function registerItineraryRoutes(app: Express): void {
   app.post("/api/itineraries", async (req, res) => {
     try {
       const itineraryData = buildItineraryData(req.body);
-      console.log(`[Itinerary] Creating itinerary for user=${itineraryData.userId}...`);
+      console.log(
+        `[Itinerary] Creating itinerary for user=${itineraryData.userId}...`,
+      );
       const itinerary = await storage.createItinerary(itineraryData);
       console.log(`[Itinerary] Created successfully: id=${itinerary.id}`);
       res.status(201).json(itinerary);
@@ -190,12 +201,16 @@ export function registerItineraryRoutes(app: Express): void {
 
       // 저장된 여정이면 캐시 확인 (여정 안 바뀌었으면 Gemini 재호출 없이 반환 = $0)
       // ⚠️ 2026-07-03 = existingForCache 보관 = 캐시미스 시 저장 단계에서 재사용(DB 재조회 1회 절약)
-      let existingForCache: Awaited<ReturnType<typeof storage.getItinerary>> | undefined;
+      let existingForCache:
+        | Awaited<ReturnType<typeof storage.getItinerary>>
+        | undefined;
       if (itineraryId) {
         existingForCache = await storage.getItinerary(parseInt(itineraryId));
         const cached = (existingForCache?.rawData as any)?.verification;
         if (cached && cached.fp === fp) {
-          console.log(`[AiOpinion] 캐시 반환: itineraryId=${itineraryId} (Gemini 호출 없음)`);
+          console.log(
+            `[AiOpinion] 캐시 반환: itineraryId=${itineraryId} (Gemini 호출 없음)`,
+          );
           return res.json({ ...cached.result, cached: true });
         }
       }
@@ -209,16 +224,21 @@ export function registerItineraryRoutes(app: Express): void {
         // ⚠️ 2026-07-10 = curationFocus 도 metadata 단일 관례(FE 통째 보존)에서 읽음. 옛 top-level 읽기 = 항상 undefined(셀렉 누락) = 폐기 §19.
         curationFocus: itinerary.metadata?.curationFocus,
         // ⚠️ 2026-07-03 = route-prompt.ts buildRouteInputJson()과 동일 = vibeWeights(vibe+weight+percentage) 배열 그대로 전달(이름만 뽑아 가중치 버리지 않음)
-        vibeWeights: (itinerary.vibeWeights || []).map((v: any) => ({ vibe: v.vibe, weight: v.weight, percentage: v.percentage })),
+        vibeWeights: (itinerary.vibeWeights || []).map((v: any) => ({
+          vibe: v.vibe,
+          weight: v.weight,
+          percentage: v.percentage,
+        })),
         travelStyle: itinerary.travelStyle,
         mobilityStyle: itinerary.mobilityStyle,
         // ⚠️ 수정금지(승인필요) 2026-07-10 사장님 SSOT = 교통수단 = 1차 생성 매트릭스 확정값(응답 metadata, FE가 통째 보존)을 그대로 사용.
         //   서버 재계산·기본값 = 폐기 2026-07-10 §19: 값 누락 시 기본값 'Moderate'가 매트릭스를 guide로 뒤집어
         //   대중교통 여정(€527)을 전용차 기준(€1,126)으로 오판(투르 실증). 매트릭스는 1차 생성 때 1회만.
         //   guide/transit 외 값 = 버림(프롬프트 오염 방지) → 프롬프트 보수 기본(transit).
-        transportCategory: (itinerary.metadata?.transportCategory === 'guide' || itinerary.metadata?.transportCategory === 'transit'
+        transportCategory: (itinerary.metadata?.transportCategory === "guide" ||
+        itinerary.metadata?.transportCategory === "transit"
           ? itinerary.metadata.transportCategory
-          : undefined) as 'guide' | 'transit' | undefined,
+          : undefined) as "guide" | "transit" | undefined,
         days: (itinerary.days || []).map((d: any) => ({
           day: d.day,
           // ⚠️ 2026-07-03 = Place 타입(client/types/trip.ts) 실제 필드만 사용. entranceFee=입장료, mealPrice=식사가격.
@@ -247,23 +267,40 @@ export function registerItineraryRoutes(app: Express): void {
       //   상세 설계 = docs/WORKLOG.md 2026-07-04 항목 + 메모리 [[project_credit_deduction_design]].
       const result = await handleAiOpinionRequest(opinionInput);
       if (!result.ok || !result.response) {
-        return res.status(502).json({ error: "AI opinion generation failed", details: result.parseError });
+        return res.status(502).json({
+          error: "AI opinion generation failed",
+          details: result.parseError,
+        });
       }
 
       // 저장된 여정이면 raw_data.verification에 결과 병합(캐시 저장). 미저장 신규 여정은 즉석 반환만.
       //   ⚠️ existingForCache 재사용(캐시확인 시 이미 조회함) = DB 재조회 1회 절약.
       if (itineraryId) {
-        const target = existingForCache || (await storage.getItinerary(parseInt(itineraryId)));
+        const target =
+          existingForCache ||
+          (await storage.getItinerary(parseInt(itineraryId)));
         if (target) {
-          const rawData = { ...(target.rawData as any), verification: { fp, result: result.response, generatedAt: new Date().toISOString() } };
-          await storage.updateItinerary(parseInt(itineraryId), { rawData } as any);
+          const rawData = {
+            ...(target.rawData as any),
+            verification: {
+              fp,
+              result: result.response,
+              generatedAt: new Date().toISOString(),
+            },
+          };
+          await storage.updateItinerary(parseInt(itineraryId), {
+            rawData,
+          } as any);
         }
       }
 
       res.json({ ...result.response, cached: false });
     } catch (error: any) {
       console.error("Error generating AI opinion:", error?.message || error);
-      res.status(500).json({ error: "Failed to generate AI opinion", details: error?.message });
+      res.status(500).json({
+        error: "Failed to generate AI opinion",
+        details: error?.message,
+      });
     }
   });
 }

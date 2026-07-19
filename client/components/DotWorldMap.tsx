@@ -87,19 +87,13 @@ export function viewBoxToScreen(vbX: number, vbY: number) {
 
 // ⚠️ 수정금지(승인필요) — 줌인 좌표 계산 (수학 검증)
 // 목표 도시를 화면 중앙으로 줌인할 때 필요한 translate 값
-export function calcZoomTranslate(
-  vbX: number,
-  vbY: number,
-  zoomScale: number
-) {
+export function calcZoomTranslate(vbX: number, vbY: number, zoomScale: number) {
   const targetX = (vbX / 99) * MAP_W;
   const targetY = (vbY / 50) * MAP_H;
   const mapTop = (SH - MAP_H) / 2;
 
-  const tx =
-    SW / 2 - MAP_W / 2 - (targetX - MAP_W / 2) * zoomScale;
-  const ty =
-    SH / 2 - mapTop - MAP_H / 2 - (targetY - MAP_H / 2) * zoomScale;
+  const tx = SW / 2 - MAP_W / 2 - (targetX - MAP_W / 2) * zoomScale;
+  const ty = SH / 2 - mapTop - MAP_H / 2 - (targetY - MAP_H / 2) * zoomScale;
 
   return { tx, ty };
 }

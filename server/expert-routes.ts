@@ -24,7 +24,10 @@ function getUserIdFromReq(req: Request): string | null {
 
 // 역할 조회 = users.role ('user' | 'expert' | 'admin')
 async function getRole(userId: string): Promise<string> {
-  const [u] = await db().select({ role: users.role }).from(users).where(eq(users.id, userId));
+  const [u] = await db()
+    .select({ role: users.role })
+    .from(users)
+    .where(eq(users.id, userId));
   return u?.role || "user";
 }
 
@@ -35,17 +38,23 @@ export function registerExpertRoutes(app: Express): void {
   app.post("/api/verification/request", async (req, res) => {
     try {
       const authId = getUserIdFromReq(req);
-      const { userId, itineraryData, userMessage, itineraryId } = req.body || {};
+      const { userId, itineraryData, userMessage, itineraryId } =
+        req.body || {};
       const uid = authId || userId; // 3단계(FE 토큰 첨부) 전 과도기 = body userId 허용. FK가 실존 사용자만 통과시킴.
       if (!uid || !userMessage) {
-        return res.status(400).json({ error: "userId and userMessage are required" });
+        return res
+          .status(400)
+          .json({ error: "userId and userMessage are required" });
       }
-      const [row] = await db().insert(expertInquiries).values({
-        userId: uid,
-        itineraryId: itineraryId ?? null,
-        itineraryData: itineraryData ?? null,
-        userMessage,
-      }).returning({ id: expertInquiries.id });
+      const [row] = await db()
+        .insert(expertInquiries)
+        .values({
+          userId: uid,
+          itineraryId: itineraryId ?? null,
+          itineraryData: itineraryData ?? null,
+          userMessage,
+        })
+        .returning({ id: expertInquiries.id });
       res.json({ success: true, requestId: row.id });
     } catch (e: any) {
       console.error("[Expert] 접수 실패:", e?.message);
@@ -79,7 +88,9 @@ export function registerExpertRoutes(app: Express): void {
       if (!isExpert) conds.push(eq(expertInquiries.userId, uid));
       else if (qUserId) conds.push(eq(expertInquiries.userId, qUserId));
       if (status) conds.push(eq(expertInquiries.status, status));
-      const rows = await db().select().from(expertInquiries)
+      const rows = await db()
+        .select()
+        .from(expertInquiries)
         .where(conds.length ? and(...conds) : undefined)
         .orderBy(desc(expertInquiries.createdAt));
       res.json(rows);
@@ -93,14 +104,18 @@ export function registerExpertRoutes(app: Express): void {
   app.get("/api/verification/unread-count", async (req, res) => {
     try {
       const authId = getUserIdFromReq(req);
-      const uid = authId || ((req.query.userId as string) || undefined);
+      const uid = authId || (req.query.userId as string) || undefined;
       if (!uid) return res.json({ count: 0 }); // 미로그인 = 배지 없음(에러 아님)
-      const rows = await db().select({ id: expertInquiries.id }).from(expertInquiries)
-        .where(and(
-          eq(expertInquiries.userId, uid),
-          eq(expertInquiries.status, "answered"),
-          eq(expertInquiries.isReadByUser, false),
-        ));
+      const rows = await db()
+        .select({ id: expertInquiries.id })
+        .from(expertInquiries)
+        .where(
+          and(
+            eq(expertInquiries.userId, uid),
+            eq(expertInquiries.status, "answered"),
+            eq(expertInquiries.isReadByUser, false),
+          ),
+        );
       res.json({ count: rows.length });
     } catch (e: any) {
       res.json({ count: 0 }); // 배지는 실패해도 앱 흐름 안 막음
@@ -111,15 +126,27 @@ export function registerExpertRoutes(app: Express): void {
   app.get("/api/verification/requests/:id", async (req, res) => {
     try {
       const authId = getUserIdFromReq(req);
-      const uid = authId || ((req.query.userId as string) || undefined);
-      const [row] = await db().select().from(expertInquiries).where(eq(expertInquiries.id, req.params.id));
+      const uid = authId || (req.query.userId as string) || undefined;
+      const [row] = await db()
+        .select()
+        .from(expertInquiries)
+        .where(eq(expertInquiries.id, req.params.id));
       if (!row) return res.status(404).json({ error: "Inquiry not found" });
       const role = uid ? await getRole(uid) : "user";
       const isExpert = role === "expert" || role === "admin";
-      if (!isExpert && row.userId !== uid) return res.status(403).json({ error: "forbidden" });
+      if (!isExpert && row.userId !== uid)
+        return res.status(403).json({ error: "forbidden" });
       // ⚠️ 읽음 처리 = 실 토큰(authId) 본인 열람일 때만 = 쿼리스푸핑(?userId=피해자)으로 남의 배지 지우기 차단(리뷰 발견 2026-07-13).
-      if (authId && row.userId === authId && row.status === "answered" && !row.isReadByUser) {
-        await db().update(expertInquiries).set({ isReadByUser: true }).where(eq(expertInquiries.id, row.id));
+      if (
+        authId &&
+        row.userId === authId &&
+        row.status === "answered" &&
+        !row.isReadByUser
+      ) {
+        await db()
+          .update(expertInquiries)
+          .set({ isReadByUser: true })
+          .where(eq(expertInquiries.id, row.id));
       }
       res.json(row);
     } catch (e: any) {
@@ -136,12 +163,16 @@ export function registerExpertRoutes(app: Express): void {
       const authId = getUserIdFromReq(req);
       if (!authId) return res.status(401).json({ error: "login_required" });
       const role = await getRole(authId);
-      if (role !== "expert" && role !== "admin") return res.status(403).json({ error: "expert_only" });
+      if (role !== "expert" && role !== "admin")
+        return res.status(403).json({ error: "expert_only" });
 
       const { status, expertReply, adminComment } = req.body || {};
       // 빈 문자열('')은 "값 없음"으로 취급 = 상태만 바꿀 때 기존 답변을 ''로 지우는 사고 차단(리뷰 발견 2026-07-13).
       const rawReply = expertReply ?? adminComment; // admin-dashboard 호환 매핑
-      const reply = (typeof rawReply === "string" && rawReply.trim() !== "") ? rawReply : undefined;
+      const reply =
+        typeof rawReply === "string" && rawReply.trim() !== ""
+          ? rawReply
+          : undefined;
       // status 화이트리스트 = admin-dashboard VERIFICATION_STATUS_MAP 규약. 오타/임의값 저장 차단.
       const VALID = ["pending", "in_review", "answered", "rejected"];
       if (status !== undefined && !VALID.includes(status)) {
@@ -150,8 +181,12 @@ export function registerExpertRoutes(app: Express): void {
       // 답변완료 = 반드시 답변 본문 필요(배지만 뜨고 빈 답변인 유령상태 차단).
       if (status === "answered" && !reply) {
         // 이미 저장된 답변이 있으면 그걸로 완료 처리 허용, 없으면 거부
-        const [cur] = await db().select({ r: expertInquiries.expertReply }).from(expertInquiries).where(eq(expertInquiries.id, req.params.id));
-        if (!cur?.r) return res.status(400).json({ error: "reply_required_for_answered" });
+        const [cur] = await db()
+          .select({ r: expertInquiries.expertReply })
+          .from(expertInquiries)
+          .where(eq(expertInquiries.id, req.params.id));
+        if (!cur?.r)
+          return res.status(400).json({ error: "reply_required_for_answered" });
       }
       if (status === undefined && reply === undefined) {
         return res.status(400).json({ error: "nothing_to_update" }); // 빈 PATCH = 400(옛 500 방지)
@@ -165,8 +200,11 @@ export function registerExpertRoutes(app: Express): void {
         patch.expertId = authId;
         patch.isReadByUser = false; // 새 답변 = 미읽음(배지 표시)
       }
-      const [updated] = await db().update(expertInquiries).set(patch)
-        .where(eq(expertInquiries.id, req.params.id)).returning();
+      const [updated] = await db()
+        .update(expertInquiries)
+        .set(patch)
+        .where(eq(expertInquiries.id, req.params.id))
+        .returning();
       if (!updated) return res.status(404).json({ error: "Inquiry not found" });
 
       // 답변완료로 전환 = 항상 알림(빈답변은 위에서 이미 400 = 여기 도달 = 답변 존재 보장).
@@ -192,12 +230,19 @@ export function registerExpertRoutes(app: Express): void {
   // ── 6) 전문가 공개 프로필 = GET /api/expert/profile (미인증 공개) = 소개카드 표시용. 단일 전문가(사장님=is_admin 우선). ──
   app.get("/api/expert/profile", async (_req, res) => {
     try {
-      const [u] = await db().select({ profile: users.expertProfile, displayName: users.displayName })
+      const [u] = await db()
+        .select({
+          profile: users.expertProfile,
+          displayName: users.displayName,
+        })
         .from(users)
         .where(or(eq(users.role, "admin"), eq(users.role, "expert")))
         .orderBy(desc(users.isAdmin))
         .limit(1);
-      res.json({ profile: (u?.profile as any) || null, displayName: u?.displayName || null });
+      res.json({
+        profile: (u?.profile as any) || null,
+        displayName: u?.displayName || null,
+      });
     } catch (e: any) {
       res.json({ profile: null, displayName: null });
     }
@@ -210,10 +255,19 @@ export function registerExpertRoutes(app: Express): void {
       const authId = getUserIdFromReq(req);
       if (!authId) return res.status(401).json({ error: "login_required" });
       const role = await getRole(authId);
-      if (role !== "expert" && role !== "admin") return res.status(403).json({ error: "expert_only" });
-      const [u] = await db().select({ profile: users.expertProfile, displayName: users.displayName })
-        .from(users).where(eq(users.id, authId));
-      res.json({ profile: (u?.profile as any) || null, displayName: u?.displayName || null });
+      if (role !== "expert" && role !== "admin")
+        return res.status(403).json({ error: "expert_only" });
+      const [u] = await db()
+        .select({
+          profile: users.expertProfile,
+          displayName: users.displayName,
+        })
+        .from(users)
+        .where(eq(users.id, authId));
+      res.json({
+        profile: (u?.profile as any) || null,
+        displayName: u?.displayName || null,
+      });
     } catch (e: any) {
       res.status(500).json({ error: "Failed to fetch profile" });
     }
@@ -225,12 +279,22 @@ export function registerExpertRoutes(app: Express): void {
       const authId = getUserIdFromReq(req);
       if (!authId) return res.status(401).json({ error: "login_required" });
       const role = await getRole(authId);
-      if (role !== "expert" && role !== "admin") return res.status(403).json({ error: "expert_only" });
+      if (role !== "expert" && role !== "admin")
+        return res.status(403).json({ error: "expert_only" });
       const { nickname, career, bio, character } = req.body || {};
-      const s = (v: unknown, n: number) => (typeof v === "string" && v.trim() !== "" ? v.slice(0, n) : undefined);
-      const profile = { nickname: s(nickname, 40), career: s(career, 60), bio: s(bio, 300), character: s(character, 20) };
-      const [u] = await db().update(users).set({ expertProfile: profile })
-        .where(eq(users.id, authId)).returning({ profile: users.expertProfile });
+      const s = (v: unknown, n: number) =>
+        typeof v === "string" && v.trim() !== "" ? v.slice(0, n) : undefined;
+      const profile = {
+        nickname: s(nickname, 40),
+        career: s(career, 60),
+        bio: s(bio, 300),
+        character: s(character, 20),
+      };
+      const [u] = await db()
+        .update(users)
+        .set({ expertProfile: profile })
+        .where(eq(users.id, authId))
+        .returning({ profile: users.expertProfile });
       res.json({ success: true, profile: (u?.profile as any) || null });
     } catch (e: any) {
       console.error("[Expert] 프로필 저장 실패:", e?.message);

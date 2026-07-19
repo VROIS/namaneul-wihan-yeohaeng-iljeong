@@ -1,7 +1,7 @@
 /**
  * AG1: Skeleton Builder (뼈대 설계자)
  * 소요: 0.2~0.5초 (AI 호출 없음, 순수 계산)
- * 
+ *
  * 역할:
  * - 사용자 입력 파싱
  * - 일별 슬롯 수 계산 + 역할 배정
@@ -21,7 +21,7 @@ import {
   getCompanionCount,
   calculateSlotsForDay,
   calculateDayCount,
-} from './types';
+} from "./types";
 
 /**
  * Vibe 가중치 계산 (사용자 선택 순서 = 우선순위)
@@ -44,17 +44,19 @@ function calculateVibeWeights(selectedVibes: string[], _protagonist: string) {
 /**
  * AG1 메인: 사용자 입력으로 일정표 뼈대 생성
  */
-export async function buildSkeleton(formData: TripFormData): Promise<AG1Output> {
+export async function buildSkeleton(
+  formData: TripFormData,
+): Promise<AG1Output> {
   const _t0 = Date.now();
 
   // ⚠️ 수정금지(승인필요) 2026-06-28 사용자 SSOT = vibes 빈값 폴백 = 옛 Foodie→Shopping 교체(§19, 버튼 폐기). 헤더 "미식" 오염 차단.
-  const vibes = formData.vibes || ['Shopping', 'Culture', 'Healing'];
-  const curationFocus = formData.curationFocus || 'Everyone';
+  const vibes = formData.vibes || ["Shopping", "Culture", "Healing"];
+  const curationFocus = formData.curationFocus || "Everyone";
   const vibeWeights = calculateVibeWeights(vibes, curationFocus);
 
   // 여행 밀도 (프론트엔드 기준 Normal, Moderate도 Normal로)
-  let travelPace: TravelPace = (formData.travelPace as TravelPace) || 'Normal';
-  if (travelPace === 'Moderate' as any) travelPace = 'Normal';
+  let travelPace: TravelPace = (formData.travelPace as TravelPace) || "Normal";
+  if (travelPace === ("Moderate" as any)) travelPace = "Normal";
 
   const paceConfig = PACE_CONFIG[travelPace];
   const dayCount = calculateDayCount(formData.startDate, formData.endDate);
@@ -85,17 +87,26 @@ export async function buildSkeleton(formData: TripFormData): Promise<AG1Output> 
     }
 
     const slots = calculateSlotsForDay(dayStart, dayEnd, travelPace);
-    daySlotsConfig.push({ day: d, startTime: dayStart, endTime: dayEnd, slots });
+    daySlotsConfig.push({
+      day: d,
+      startTime: dayStart,
+      endTime: dayEnd,
+      slots,
+    });
     totalRequiredPlaces += slots;
   }
 
   const requiredPlaceCount = totalRequiredPlaces + 4; // 여유분
-  const companionCount = getCompanionCount(formData.companionType || 'Solo');
+  const companionCount = getCompanionCount(formData.companionType || "Solo");
 
   console.log(`[AG1] ===== 뼈대 생성 완료 (${Date.now() - _t0}ms) =====`);
-  console.log(`[AG1] ${dayCount}일, ${totalRequiredPlaces}슬롯, 밀도: ${travelPace} (${paceConfig.slotDurationMinutes}분)`);
-  daySlotsConfig.forEach(d => {
-    console.log(`[AG1]   Day ${d.day}: ${d.startTime}~${d.endTime} → ${d.slots}곳`);
+  console.log(
+    `[AG1] ${dayCount}일, ${totalRequiredPlaces}슬롯, 밀도: ${travelPace} (${paceConfig.slotDurationMinutes}분)`,
+  );
+  daySlotsConfig.forEach((d) => {
+    console.log(
+      `[AG1]   Day ${d.day}: ${d.startTime}~${d.endTime} → ${d.slots}곳`,
+    );
   });
 
   return {

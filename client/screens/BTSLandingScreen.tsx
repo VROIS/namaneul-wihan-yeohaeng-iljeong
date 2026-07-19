@@ -32,7 +32,11 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
 import * as Haptics from "expo-haptics";
 import { socialLoginWithGoogle, socialLoginWithKakao } from "@/lib/auth";
-import { useGoogleAuthRequest, getIdTokenFromGoogleResponse, isGoogleOAuthConfigured } from "@/lib/auth-oauth";
+import {
+  useGoogleAuthRequest,
+  getIdTokenFromGoogleResponse,
+  isGoogleOAuthConfigured,
+} from "@/lib/auth-oauth";
 import { isKakaoOAuthConfigured, startKakaoLoginWeb } from "@/lib/auth-kakao";
 import { getApiUrl } from "@/lib/query-client";
 
@@ -53,17 +57,26 @@ const BTN_AREA_W = SW * 0.72;
 const haptic = (t: "light" | "medium" | "success") => {
   try {
     if (t === "light") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    else if (t === "medium") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    else if (t === "medium")
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     else Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   } catch {}
 };
 
 // ⚠️ 수정금지(승인필요) — D-Day 실시간 (fallback: 하드코딩) + 공연 상세 데이터
-type ConcertInfo = { city: string; dDay: number; date?: string; venue?: string; cityId?: number };
+type ConcertInfo = {
+  city: string;
+  dDay: number;
+  date?: string;
+  venue?: string;
+  cityId?: number;
+};
 function getDDayFallback(): ConcertInfo {
   const concert = new Date("2026-04-09");
   const today = new Date();
-  const dDay = Math.ceil((concert.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  const dDay = Math.ceil(
+    (concert.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
+  );
   return { city: "GOYANG", dDay };
 }
 
@@ -80,9 +93,16 @@ export function BTSLandingScreen() {
   // ⚠️ 수정금지(승인필요) — /api/bts/next-concert 실시간 연동
   useEffect(() => {
     fetch(`${getApiUrl()}/api/bts/next-concert`)
-      .then(r => r.json())
-      .then(data => {
-        if (data.city) setConcertInfo({ city: data.city.toUpperCase(), dDay: data.dDay, date: data.date, venue: data.venue, cityId: data.cityId }); // ⚠️ 수정금지(승인필요) — next-concert 전체 데이터 저장
+      .then((r) => r.json())
+      .then((data) => {
+        if (data.city)
+          setConcertInfo({
+            city: data.city.toUpperCase(),
+            dDay: data.dDay,
+            date: data.date,
+            venue: data.venue,
+            cityId: data.cityId,
+          }); // ⚠️ 수정금지(승인필요) — next-concert 전체 데이터 저장
       })
       .catch(() => {}); // 실패 시 fallback 유지
   }, []);
@@ -90,7 +110,8 @@ export function BTSLandingScreen() {
   const { city, dDay } = concertInfo;
 
   // ⚠️ 수정금지(승인필요) — Google OAuth hook (기존 LoginScreen 패턴 그대로)
-  const [googleRequest, googleResponse, googlePromptAsync] = useGoogleAuthRequest();
+  const [googleRequest, googleResponse, googlePromptAsync] =
+    useGoogleAuthRequest();
   const processedGoogleRef = useRef<typeof googleResponse>(null);
 
   const entrance = useSharedValue(0);
@@ -107,7 +128,8 @@ export function BTSLandingScreen() {
 
   // ⚠️ 수정금지(승인필요) — Google OAuth 응답 처리 (기존 LoginScreen 패턴)
   useEffect(() => {
-    if (!googleResponse || googleResponse.type !== "success" || !birthDateStr) return;
+    if (!googleResponse || googleResponse.type !== "success" || !birthDateStr)
+      return;
     if (processedGoogleRef.current === googleResponse) return;
     processedGoogleRef.current = googleResponse;
     // @ts-expect-error Type mismatch from AuthSession
@@ -125,7 +147,10 @@ export function BTSLandingScreen() {
           // 인증 성공 → 세계지도 → 캐릭터
           goToWorldMap();
         } else {
-          Alert.alert("로그인 실패", result.error || "Google 로그인에 실패했습니다.");
+          Alert.alert(
+            "로그인 실패",
+            result.error || "Google 로그인에 실패했습니다.",
+          );
         }
       })
       .catch(() => Alert.alert("로그인 실패", "서버 연결에 실패했습니다."))
@@ -137,7 +162,10 @@ export function BTSLandingScreen() {
     // 아미봉 스윽 올라옴 (원본: 2.5s cubic-bezier)
     entrance.value = withDelay(
       800,
-      withTiming(1, { duration: 2500, easing: Easing.bezier(0.22, 1, 0.36, 1) })
+      withTiming(1, {
+        duration: 2500,
+        easing: Easing.bezier(0.22, 1, 0.36, 1),
+      }),
     );
     // stage 1 (Midnight)
     setTimeout(() => {
@@ -152,7 +180,13 @@ export function BTSLandingScreen() {
     const digits = text.replace(/\D/g, "").slice(0, 8);
     let fmt = digits;
     if (digits.length > 2) fmt = digits.slice(0, 2) + " / " + digits.slice(2);
-    if (digits.length > 4) fmt = digits.slice(0, 2) + " / " + digits.slice(2, 4) + " / " + digits.slice(4);
+    if (digits.length > 4)
+      fmt =
+        digits.slice(0, 2) +
+        " / " +
+        digits.slice(2, 4) +
+        " / " +
+        digits.slice(4);
     setDob(fmt);
     if (digits.length === 8) {
       setDobComplete(true);
@@ -170,7 +204,7 @@ export function BTSLandingScreen() {
     globeGlow.value = withSpring(0.8, { damping: 12 });
     flare.value = withSequence(
       withTiming(1, { duration: 150 }),
-      withTiming(0, { duration: 150 })
+      withTiming(0, { duration: 150 }),
     );
     haptic("light");
   }, []);
@@ -179,21 +213,30 @@ export function BTSLandingScreen() {
   const goToWorldMap = useCallback(() => {
     whiteout.value = withTiming(1, { duration: 600 });
     setTimeout(() => {
-      navigation.replace("BTSWorldMap", { city, cityId: concertInfo.cityId || 0, date: concertInfo.date, dDay: concertInfo.dDay, venue: concertInfo.venue }); // ⚠️ 수정금지(승인필요) — 공연 상세 전달
+      navigation.replace("BTSWorldMap", {
+        city,
+        cityId: concertInfo.cityId || 0,
+        date: concertInfo.date,
+        dDay: concertInfo.dDay,
+        venue: concertInfo.venue,
+      }); // ⚠️ 수정금지(승인필요) — 공연 상세 전달
     }, 700);
   }, [city, concertInfo]);
 
   // ⚠️ 수정금지(승인필요) — OAuth 실제 연결 (기존 LoginScreen 패턴 그대로)
-  const handleLogin = useCallback(async (provider: string) => {
-    // ⚠️ 수정금지(승인필요) — dobComplete 체크 바이패스 (BTS 랜딩은 인증 없이 진입)
-    handleInteraction();
-    globeGlow.value = withSpring(1, { damping: 8, stiffness: 200 });
-    haptic("success");
+  const handleLogin = useCallback(
+    async (provider: string) => {
+      // ⚠️ 수정금지(승인필요) — dobComplete 체크 바이패스 (BTS 랜딩은 인증 없이 진입)
+      handleInteraction();
+      globeGlow.value = withSpring(1, { damping: 8, stiffness: 200 });
+      haptic("success");
 
-    // ⚠️ 수정금지(승인필요) — BTS 랜딩은 바이패스 (인증은 메인앱에서 처리)
-    // 생년월일 입력 완료 + OAuth 터치 = 바로 세계지도 전환
-    goToWorldMap();
-  }, [dobComplete, birthDateStr, city]);
+      // ⚠️ 수정금지(승인필요) — BTS 랜딩은 바이패스 (인증은 메인앱에서 처리)
+      // 생년월일 입력 완료 + OAuth 터치 = 바로 세계지도 전환
+      goToWorldMap();
+    },
+    [dobComplete, birthDateStr, city],
+  );
 
   // ── 애니메이션 스타일 ──
 
@@ -203,40 +246,87 @@ export function BTSLandingScreen() {
 
   const entranceStyle = useAnimatedStyle(() => ({
     transform: [
-      { translateY: interpolate(entrance.value, [0, 1], [150, 0], Extrapolation.CLAMP) },
+      {
+        translateY: interpolate(
+          entrance.value,
+          [0, 1],
+          [150, 0],
+          Extrapolation.CLAMP,
+        ),
+      },
     ],
-    opacity: interpolate(entrance.value, [0, 0.3, 1], [0, 0.5, 1], Extrapolation.CLAMP),
+    opacity: interpolate(
+      entrance.value,
+      [0, 0.3, 1],
+      [0, 0.5, 1],
+      Extrapolation.CLAMP,
+    ),
   }));
 
   const globeShadowStyle = useAnimatedStyle(() => ({
     shadowOpacity: globeGlow.value,
-    shadowRadius: interpolate(globeGlow.value, [0, 0.5, 1], [0, 40, 80], Extrapolation.CLAMP),
+    shadowRadius: interpolate(
+      globeGlow.value,
+      [0, 0.5, 1],
+      [0, 40, 80],
+      Extrapolation.CLAMP,
+    ),
   }));
 
   const innerGlowOpacity = useAnimatedStyle(() => ({
-    opacity: interpolate(bgStage.value, [0, 1, 2], [0.1, 0.3, 0.6], Extrapolation.CLAMP),
+    opacity: interpolate(
+      bgStage.value,
+      [0, 1, 2],
+      [0.1, 0.3, 0.6],
+      Extrapolation.CLAMP,
+    ),
   }));
 
   const flareStyle = useAnimatedStyle(() => ({
     opacity: flare.value * 0.4,
-    transform: [{ scale: interpolate(flare.value, [0, 1], [0.5, 2.5], Extrapolation.CLAMP) }],
+    transform: [
+      {
+        scale: interpolate(
+          flare.value,
+          [0, 1],
+          [0.5, 2.5],
+          Extrapolation.CLAMP,
+        ),
+      },
+    ],
   }));
 
   const whiteoutStyle = useAnimatedStyle(() => ({ opacity: whiteout.value }));
 
-  const blurBg = Platform.select({ android: { backgroundColor: "rgba(255,255,255,0.1)" }, default: {} });
+  const blurBg = Platform.select({
+    android: { backgroundColor: "rgba(255,255,255,0.1)" },
+    default: {},
+  });
   const isDisabled = !dobComplete;
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    >
       <View style={styles.root}>
-        <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+        <StatusBar
+          barStyle="light-content"
+          translucent
+          backgroundColor="transparent"
+        />
 
         {/* Layer 0: 배경 3단계 */}
         <Animated.View style={[StyleSheet.absoluteFill, bgStyle]} />
 
         {/* Layer 2: 렌즈 플레어 */}
-        <Animated.View style={[StyleSheet.absoluteFill, flareStyle, { backgroundColor: "rgba(255,255,255,0.4)", pointerEvents: "none" }]} />
+        <Animated.View
+          style={[
+            StyleSheet.absoluteFill,
+            flareStyle,
+            { backgroundColor: "rgba(255,255,255,0.4)", pointerEvents: "none" },
+          ]}
+        />
 
         {/* ── 상단 히어로 텍스트 ── */}
         <View style={styles.hero}>
@@ -254,8 +344,18 @@ export function BTSLandingScreen() {
         {/* ── 아미봉 (구체 + 손잡이) — 하단 배치, 스윽 올라옴 ── */}
         <Animated.View style={[styles.bombWrap, entranceStyle]}>
           {/* 구체 */}
-          <Animated.View style={[styles.globeShadow, globeShadowStyle, { shadowColor: lightingStage === 2 ? "#a855f7" : PRIMARY }]}>
-            <TouchableOpacity activeOpacity={0.97} onPress={handleInteraction} style={[styles.globeClip, blurBg]}>
+          <Animated.View
+            style={[
+              styles.globeShadow,
+              globeShadowStyle,
+              { shadowColor: lightingStage === 2 ? "#a855f7" : PRIMARY },
+            ]}
+          >
+            <TouchableOpacity
+              activeOpacity={0.97}
+              onPress={handleInteraction}
+              style={[styles.globeClip, blurBg]}
+            >
               <BlurView intensity={20} tint="dark" style={styles.globeInner}>
                 <Animated.View style={[styles.innerGlow, innerGlowOpacity]}>
                   <LinearGradient
@@ -287,16 +387,34 @@ export function BTSLandingScreen() {
 
           {/* 손잡이 */}
           <View style={styles.handleWrap}>
-            <LinearGradient colors={["rgba(255,255,255,0.1)", "rgba(5,9,48,1)"]} style={styles.handleGrad} />
+            <LinearGradient
+              colors={["rgba(255,255,255,0.1)", "rgba(5,9,48,1)"]}
+              style={styles.handleGrad}
+            />
             <View style={styles.btnArea}>
-              <TouchableOpacity style={[styles.btn, styles.googleBtn, isDisabled && styles.off]} onPress={() => handleLogin("google")} disabled={isDisabled} activeOpacity={0.96}>
+              <TouchableOpacity
+                style={[styles.btn, styles.googleBtn, isDisabled && styles.off]}
+                onPress={() => handleLogin("google")}
+                disabled={isDisabled}
+                activeOpacity={0.96}
+              >
                 <Text style={styles.googleTxt}>Continue with Google</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={[styles.btn, styles.kakaoBtn, isDisabled && styles.off]} onPress={() => handleLogin("kakao")} disabled={isDisabled} activeOpacity={0.96}>
+              <TouchableOpacity
+                style={[styles.btn, styles.kakaoBtn, isDisabled && styles.off]}
+                onPress={() => handleLogin("kakao")}
+                disabled={isDisabled}
+                activeOpacity={0.96}
+              >
                 <Text style={styles.kakaoTxt}>Continue with Kakao</Text>
               </TouchableOpacity>
               {Platform.OS === "ios" && (
-                <TouchableOpacity style={[styles.appleLink, isDisabled && styles.off]} onPress={() => handleLogin("apple")} disabled={isDisabled} activeOpacity={0.96}>
+                <TouchableOpacity
+                  style={[styles.appleLink, isDisabled && styles.off]}
+                  onPress={() => handleLogin("apple")}
+                  disabled={isDisabled}
+                  activeOpacity={0.96}
+                >
                   <Text style={styles.appleTxt}>Sign in with Apple</Text>
                 </TouchableOpacity>
               )}
@@ -308,7 +426,13 @@ export function BTSLandingScreen() {
         <Text style={styles.buildTag}>build-02</Text>
 
         {/* ⚠️ 수정금지(승인필요) — 화이트아웃 (zIndex 99로 모든 레이어 위) */}
-        <Animated.View style={[StyleSheet.absoluteFill, { backgroundColor: "#FFF", pointerEvents: "none", zIndex: 99 }, whiteoutStyle]} />
+        <Animated.View
+          style={[
+            StyleSheet.absoluteFill,
+            { backgroundColor: "#FFF", pointerEvents: "none", zIndex: 99 },
+            whiteoutStyle,
+          ]}
+        />
       </View>
     </KeyboardAvoidingView>
   );
@@ -472,11 +596,32 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   googleBtn: { backgroundColor: PRIMARY },
-  googleTxt: { fontSize: 11, fontFamily: "Pretendard-Bold", color: "#050930", letterSpacing: 2, textTransform: "uppercase" },
-  kakaoBtn: { backgroundColor: "rgba(255,255,255,0.1)", borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" },
-  kakaoTxt: { fontSize: 11, fontFamily: "Pretendard-Bold", color: "#FFFFFF", letterSpacing: 2, textTransform: "uppercase" },
+  googleTxt: {
+    fontSize: 11,
+    fontFamily: "Pretendard-Bold",
+    color: "#050930",
+    letterSpacing: 2,
+    textTransform: "uppercase",
+  },
+  kakaoBtn: {
+    backgroundColor: "rgba(255,255,255,0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+  },
+  kakaoTxt: {
+    fontSize: 11,
+    fontFamily: "Pretendard-Bold",
+    color: "#FFFFFF",
+    letterSpacing: 2,
+    textTransform: "uppercase",
+  },
   appleLink: { height: 32, justifyContent: "center", alignItems: "center" },
-  appleTxt: { fontSize: 10, fontFamily: "Pretendard-Bold", color: PRIMARY, letterSpacing: 2, textTransform: "uppercase" },
+  appleTxt: {
+    fontSize: 10,
+    fontFamily: "Pretendard-Bold",
+    color: PRIMARY,
+    letterSpacing: 2,
+    textTransform: "uppercase",
+  },
   off: { opacity: 0.35 },
-
 });

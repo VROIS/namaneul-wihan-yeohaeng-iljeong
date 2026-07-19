@@ -3,52 +3,64 @@
 //   PID/URI 는 Gemini 에 **전달 안 함**(환각 + 인식 못함 + 느려짐 = 사용자 SSOT).
 // = 프롬프트 = 잠긴 02-enrich/prompt.txt (1글자 변경 X) 단일 소스. 호출설정 = _call-config (gemini-3-flash + googleSearch + 40 batch + adaptive fallback).
 // = 모든 한국어 큐레이션 호출은 이 함수만 통과. 결과(데이터)는 호출자가 upsertPlace 로 융합 → 덮어쓰기 = self-validating PSR.
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { geminiJson } from './geminiClient';
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+import { geminiJson } from "./geminiClient";
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
-const PROMPT_PATH = path.join(ROOT, '.claude/skills/raw-db-verify-and-complete/prompts/02-enrich-place/prompt.txt');
+const ROOT = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "../../..",
+);
+const PROMPT_PATH = path.join(
+  ROOT,
+  ".claude/skills/raw-db-verify-and-complete/prompts/02-enrich-place/prompt.txt",
+);
 // ⚠️ 수정금지(승인필요) 2026-06-23 사장님 SSOT = 1콜 우선(120) → 실패(missing>5) 시 자동 축소 = 콜 최소화.
 //   = maxOutputTokens 50000 = 120곳 1콜 입증됨. 134곳=120+14=2콜 / 한 도시 대부분 1~2콜 = 콜 최소화(§19).
 const FALLBACK = [120, 60, 40, 20, 10]; // = adaptive fallback (큰 배치 먼저 = 콜 최소)
 
 export interface GeminiCurateInput {
-  id: number;              // place_seed_raw.id (= 응답 매칭 키)
+  id: number; // place_seed_raw.id (= 응답 매칭 키)
   nameEn: string;
   nameLocal?: string | null;
   nameKo?: string | null;
   address?: string | null;
   latitude?: number | null;
   longitude?: number | null;
-  seedCategory?: string;  // ⚠️ 2026-06-16 = Gemini 입력에서 제외(카테고리 안 줌) = optional 로 정합. shopping price=null 은 호출자 저장단계 처리.
+  seedCategory?: string; // ⚠️ 2026-06-16 = Gemini 입력에서 제외(카테고리 안 줌) = optional 로 정합. shopping price=null 은 호출자 저장단계 처리.
 }
 // ⚠️ 수정금지(승인필요) 2026-06-20 사장님 SSOT = 선별 금지 = Gemini 응답 전 필드 포함(02-enrich/prompt.txt 응답 10요소 그대로) (§19).
 //   = Gemini만 주는 요소(name_local·distance·가격) 가 여기 다 실려야 #45 가 새우선 덮어쓰기로 필수컬럼 자동 완비.
 export interface GeminiCurateOutput {
   id: number;
-  nameLocal: string | null;            // ← name_local (현지 원어명 = Gemini 전용)
-  nameEn: string | null;               // ← name_en (영어명, 1차 = TS displayName 이 최종 덮음)
-  nameKo: string | null;               // ← name_ko (한국 친숙 호칭)
-  address: string | null;              // ← address
-  latitude: number | null;             // ← latitude
-  longitude: number | null;            // ← longitude
-  summaryKo: string | null;            // ← summary_ko (한국 트렌드/사회적 검증)
-  editorialSummary: string | null;     // ← editorial_summary (코믹/위트 후킹)
-  priceEur: number | null;             // ← price_eur (1인 입장료/식대, shopping=null)
+  nameLocal: string | null; // ← name_local (현지 원어명 = Gemini 전용)
+  nameEn: string | null; // ← name_en (영어명, 1차 = TS displayName 이 최종 덮음)
+  nameKo: string | null; // ← name_ko (한국 친숙 호칭)
+  address: string | null; // ← address
+  latitude: number | null; // ← latitude
+  longitude: number | null; // ← longitude
+  summaryKo: string | null; // ← summary_ko (한국 트렌드/사회적 검증)
+  editorialSummary: string | null; // ← editorial_summary (코믹/위트 후킹)
+  priceEur: number | null; // ← price_eur (1인 입장료/식대, shopping=null)
   distanceKmFromCenter: number | null; // ← distance_km_from_center (도심거리 = 동선 최적화 재료 = Gemini 전용)
 }
 
 // 잘림 복구 파서 (= _call-config 표준)
 function parsePlaces(t: string): any[] {
-  const start = t.indexOf('{');
+  const start = t.indexOf("{");
   if (start < 0) return [];
-  try { const j = JSON.parse(t.slice(start, t.lastIndexOf('}') + 1)); if (j?.places) return j.places; } catch {}
+  try {
+    const j = JSON.parse(t.slice(start, t.lastIndexOf("}") + 1));
+    if (j?.places) return j.places;
+  } catch {}
   for (let e = t.length - 1; e > start; e--) {
-    if (t[e] !== '}') continue;
-    for (const suf of [']}}', ']}', '}']) {
-      try { const j = JSON.parse(t.slice(start, e + 1) + suf); if (j?.places) return j.places; } catch {}
+    if (t[e] !== "}") continue;
+    for (const suf of ["]}}", "]}", "}"]) {
+      try {
+        const j = JSON.parse(t.slice(start, e + 1) + suf);
+        if (j?.places) return j.places;
+      } catch {}
     }
   }
   return [];
@@ -62,11 +74,11 @@ export async function geminiCurate(
   cityName: string,
   cityId: number,
   rows: GeminiCurateInput[],
-  opts?: { year?: string; apiKey?: string },  // ⚠️ 2026-06-19 = apiKey = 출입증 발급 키 직독(결손보강 WF). 미지정 시 env(라이브앱 무영향).
+  opts?: { year?: string; apiKey?: string }, // ⚠️ 2026-06-19 = apiKey = 출입증 발급 키 직독(결손보강 WF). 미지정 시 env(라이브앱 무영향).
 ): Promise<GeminiCurateOutput[]> {
   const valid = rows.filter((r) => r.id && r.nameEn); // = 매칭 키 필수
   if (!valid.length) return [];
-  const body = fs.readFileSync(PROMPT_PATH, 'utf-8').split(/═{30,}/)[2] || '';
+  const body = fs.readFileSync(PROMPT_PATH, "utf-8").split(/═{30,}/)[2] || "";
   const year = opts?.year || String(new Date().getFullYear());
   // ⚠️ 수정금지(승인필요) 2026-06-16 사장님 승인 = ${MONTH} 동적 치환 = 호출 시점 이번 달 (getMonth 는 0부터 = +1). prompt.txt grounding 줄 "${YEAR}년 ${MONTH}월 현재 시점" = 최신 강제.
   const month = String(new Date().getMonth() + 1);
@@ -79,25 +91,47 @@ export async function geminiCurate(
     // ⚠️ 입력 = PID/URI 제외 (= 환각 방지). id=매칭키.
     // ⚠️ 2026-06-16 사장님 승인 = seed_category 입력 제거 (= id 에 이미 분류 + 카테고리 주면 shopping 에서 식당/바 가격 오염 실증). shopping price=null 은 호출자 저장단계 처리.
     const input = batch.map((r) => ({
-      id: r.id, name_en: r.nameEn, name_local: r.nameLocal ?? null, name_ko: r.nameKo ?? null,
-      address: r.address ?? null, latitude: r.latitude ?? null, longitude: r.longitude ?? null,
+      id: r.id,
+      name_en: r.nameEn,
+      name_local: r.nameLocal ?? null,
+      name_ko: r.nameKo ?? null,
+      address: r.address ?? null,
+      latitude: r.latitude ?? null,
+      longitude: r.longitude ?? null,
     }));
     // ⚠️ 수정금지(승인필요) 2026-06-18 = 출입증(${API_PASS}) 동적 조립·치환 = 02-enrich/run.ts 와 동일 패턴(prompt.txt 헤더에 박힘).
     //   = 큐레이션 = 채움 = 행=있음. 도시=이름(id). 날짜=호출시점. (run.ts/gemini-curate 양쪽 동반 치환 = prompt.txt 주석 정합)
     const apiPass = `[API-PASS] 도시=${cityName}(${cityId}) / 행=있음(채움) / 날짜=${new Date().toISOString().slice(0, 10)}`;
     const prompt = body
-      .replace(/\$\{CITY_NAME\}/g, cityName).replace(/\[CITY_NAME\]/g, cityName)
-      .replace(/\$\{CITY_ID\}/g, String(cityId)).replace(/\$\{YEAR\}/g, year).replace(/\$\{MONTH\}/g, month)
+      .replace(/\$\{CITY_NAME\}/g, cityName)
+      .replace(/\[CITY_NAME\]/g, cityName)
+      .replace(/\$\{CITY_ID\}/g, String(cityId))
+      .replace(/\$\{YEAR\}/g, year)
+      .replace(/\$\{MONTH\}/g, month)
       .replace(/\$\{API_PASS\}/g, apiPass)
-      .replace(/\$\{BATCH_LEN\}/g, String(batch.length)).replace(/\$\{JSON_INPUT\}/g, JSON.stringify(input));
+      .replace(/\$\{BATCH_LEN\}/g, String(batch.length))
+      .replace(/\$\{JSON_INPUT\}/g, JSON.stringify(input));
 
     // ⚠️ 2026-06-16 사장님 SSOT = contextId(cityId)+rawTag = raw 가 docs/raw/{cityId}/ 도시폴더 저장(= TS 동형, runtime 폴더 방지).
-    const r = await geminiJson(prompt, { googleSearch: true, contextId: cityId, rawTag: 'enrich-curate', apiKey: opts?.apiKey });
-    const places = (r.data?.places && Array.isArray(r.data.places)) ? r.data.places : parsePlaces(r.raw);
-    const missing = batch.filter((b) => !places.find((p: any) => p.id === b.id)).length;
+    const r = await geminiJson(prompt, {
+      googleSearch: true,
+      contextId: cityId,
+      rawTag: "enrich-curate",
+      apiKey: opts?.apiKey,
+    });
+    const places =
+      r.data?.places && Array.isArray(r.data.places)
+        ? r.data.places
+        : parsePlaces(r.raw);
+    const missing = batch.filter(
+      (b) => !places.find((p: any) => p.id === b.id),
+    ).length;
 
     // adaptive fallback = 응답 부족 시 batch 축소 재시도
-    if ((places.length === 0 || missing > 5) && FALLBACK.indexOf(size) < FALLBACK.length - 1) {
+    if (
+      (places.length === 0 || missing > 5) &&
+      FALLBACK.indexOf(size) < FALLBACK.length - 1
+    ) {
       size = FALLBACK[FALLBACK.indexOf(size) + 1];
       continue;
     }

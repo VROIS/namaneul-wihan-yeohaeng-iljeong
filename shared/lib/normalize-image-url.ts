@@ -5,7 +5,8 @@
 
 const WIKIMEDIA_BUCKETS = [120, 250, 330, 500, 800, 1280, 1920, 3840];
 const WIKIMEDIA_PX_REGEX = /\/\d+px-/;
-const WIKIMEDIA_ORIG_REGEX = /\/wikipedia\/commons\/([0-9a-f])\/([0-9a-f]{2})\/([^/]+)$/;
+const WIKIMEDIA_ORIG_REGEX =
+  /\/wikipedia\/commons\/([0-9a-f])\/([0-9a-f]{2})\/([^/]+)$/;
 const UNSPLASH_W_REGEX = /([?&])w=\d+/;
 
 function snapBucket(targetPx: number): number {
@@ -17,7 +18,10 @@ function snapBucket(targetPx: number): number {
  * - 모르는 패턴 = 그대로 통과 (= 안전).
  * - 새 source 추가 = 여기 case 1 줄 추가만.
  */
-export function normalizeImageUrl(url: string | null | undefined, targetPx = 1280): string | null {
+export function normalizeImageUrl(
+  url: string | null | undefined,
+  targetPx = 1280,
+): string | null {
   if (!url) return null;
 
   // Wikimedia Commons /thumb/ → bucket 사이즈로 변환

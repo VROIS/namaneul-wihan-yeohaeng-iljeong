@@ -41,18 +41,25 @@ const CITY_COORDS: Record<string, { lat: number; lng: number }> = {
   "LOS ANGELES": { lat: 34.0522, lng: -118.2437 },
   BUSAN: { lat: 35.1796, lng: 129.0756 },
   MADRID: { lat: 40.4168, lng: -3.7038 },
-  MUNICH: { lat: 48.1351, lng: 11.5820 },
+  MUNICH: { lat: 48.1351, lng: 11.582 },
   SINGAPORE: { lat: 1.3521, lng: 103.8198 },
   BANGKOK: { lat: 13.7563, lng: 100.5018 },
   SYDNEY: { lat: -33.8688, lng: 151.2093 },
   MANILA: { lat: 14.5995, lng: 120.9842 },
 };
 
-type RouteParams = { city?: string; cityId?: number; date?: string; dDay?: number; venue?: string };
+type RouteParams = {
+  city?: string;
+  cityId?: number;
+  date?: string;
+  dDay?: number;
+  venue?: string;
+};
 
 export default function BTSWorldMapScreen() {
   const navigation = useNavigation<any>();
-  const route = useRoute<RouteProp<{ BTSWorldMap: RouteParams }, "BTSWorldMap">>();
+  const route =
+    useRoute<RouteProp<{ BTSWorldMap: RouteParams }, "BTSWorldMap">>();
 
   // ⚠️ 수정금지(승인필요) — SVG 에셋 비동기 로딩 (번들 크기 축소)
   const [svgXml, setSvgXml] = useState<string | null>(null);
@@ -72,9 +79,15 @@ export default function BTSWorldMapScreen() {
   useEffect(() => {
     if (!concert.date) {
       fetch(`${getApiUrl()}/api/bts/next-concert`)
-        .then(r => r.json())
-        .then(d => {
-          if (d.city) setConcert({ city: d.city.toUpperCase(), date: d.date, dDay: d.dDay, venue: d.venue || "" });
+        .then((r) => r.json())
+        .then((d) => {
+          if (d.city)
+            setConcert({
+              city: d.city.toUpperCase(),
+              date: d.date,
+              dDay: d.dDay,
+              venue: d.venue || "",
+            });
         })
         .catch(() => {}); // fallback 유지
     }
@@ -96,7 +109,7 @@ export default function BTSWorldMapScreen() {
   const mapTx = useSharedValue(0);
   const mapTy = useSharedValue(0);
   const fadeOut = useSharedValue(0);
-  const cardScale = useSharedValue(0);   // 카드 팽창: 0=점, 1=풀카드
+  const cardScale = useSharedValue(0); // 카드 팽창: 0=점, 1=풀카드
   const textOpacity1 = useSharedValue(0); // 도시명
   const textOpacity2 = useSharedValue(0); // 날짜
   const textOpacity3 = useSharedValue(0); // D-Day
@@ -110,9 +123,18 @@ export default function BTSWorldMapScreen() {
 
     // ⚠️ 수정금지(승인필요) — 1초 후 줌인 시작 (1.5초, 원본 타이밍)
     const zoomTimer = setTimeout(() => {
-      mapScale.value = withTiming(S, { duration: 1500, easing: Easing.inOut(Easing.cubic) });
-      mapTx.value = withTiming(tx, { duration: 1500, easing: Easing.inOut(Easing.cubic) });
-      mapTy.value = withTiming(ty, { duration: 1500, easing: Easing.inOut(Easing.cubic) });
+      mapScale.value = withTiming(S, {
+        duration: 1500,
+        easing: Easing.inOut(Easing.cubic),
+      });
+      mapTx.value = withTiming(tx, {
+        duration: 1500,
+        easing: Easing.inOut(Easing.cubic),
+      });
+      mapTy.value = withTiming(ty, {
+        duration: 1500,
+        easing: Easing.inOut(Easing.cubic),
+      });
     }, 1000);
 
     // ⚠️ 수정금지(승인필요) — 줌인 거의 완료 시 (2초) 카드 팽창
@@ -131,7 +153,12 @@ export default function BTSWorldMapScreen() {
       innerTimer = setTimeout(() => navigation.replace("BTSMiniApp"), 500);
     }, 3500);
 
-    return () => { clearTimeout(zoomTimer); clearTimeout(cardTimer); clearTimeout(navTimer); clearTimeout(innerTimer); };
+    return () => {
+      clearTimeout(zoomTimer);
+      clearTimeout(cardTimer);
+      clearTimeout(navTimer);
+      clearTimeout(innerTimer);
+    };
   }, []);
 
   // ⚠️ 수정금지(승인필요) — 지도 transform
@@ -145,10 +172,20 @@ export default function BTSWorldMapScreen() {
 
   // ⚠️ 수정금지(승인필요) — 카드 스타일 (도시 위치에서 팽창)
   const cardAnimStyle = useAnimatedStyle(() => {
-    const s = interpolate(cardScale.value, [0, 1], [0.1, 1], Extrapolation.CLAMP);
+    const s = interpolate(
+      cardScale.value,
+      [0, 1],
+      [0.1, 1],
+      Extrapolation.CLAMP,
+    );
     return {
       transform: [{ scale: s }],
-      opacity: interpolate(cardScale.value, [0, 0.3, 1], [0, 0.5, 1], Extrapolation.CLAMP),
+      opacity: interpolate(
+        cardScale.value,
+        [0, 0.3, 1],
+        [0, 0.5, 1],
+        Extrapolation.CLAMP,
+      ),
     };
   });
 
@@ -158,9 +195,15 @@ export default function BTSWorldMapScreen() {
   const t3 = useAnimatedStyle(() => ({ opacity: textOpacity3.value }));
   const t4 = useAnimatedStyle(() => ({ opacity: textOpacity4.value }));
 
-  const dDayText = dDay > 0 ? `D-${dDay}` : dDay === 0 ? "D-Day" : `D+${Math.abs(dDay)}`;
+  const dDayText =
+    dDay > 0 ? `D-${dDay}` : dDay === 0 ? "D-Day" : `D+${Math.abs(dDay)}`;
   // ⚠️ 수정금지(승인필요) — 날짜 포맷: 2026.4.17 (전 인류 이해, 년월일 제외)
-  const dateDisplay = concertDate ? (() => { const d = new Date(concertDate); return `${d.getFullYear()}.${d.getMonth()+1}.${d.getDate()}`; })() : "";
+  const dateDisplay = concertDate
+    ? (() => {
+        const d = new Date(concertDate);
+        return `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()}`;
+      })()
+    : "";
 
   return (
     <Animated.View style={[styles.container, fadeStyle]}>
@@ -188,11 +231,21 @@ export default function BTSWorldMapScreen() {
           ]}
         >
           <BlurView intensity={100} tint="light" style={styles.cardBlur}>
-            <Animated.Text style={[styles.cardCity, t1]}>{targetCity}</Animated.Text>
+            <Animated.Text style={[styles.cardCity, t1]}>
+              {targetCity}
+            </Animated.Text>
             <Animated.View style={[styles.divider, t2]} />
-            <Animated.Text style={[styles.cardDate, t2]}>{dateDisplay}</Animated.Text>
-            <Animated.Text style={[styles.cardDDay, t3]}>{dDayText}</Animated.Text>
-            {venue ? <Animated.Text style={[styles.cardVenue, t4]}>{venue}</Animated.Text> : null}
+            <Animated.Text style={[styles.cardDate, t2]}>
+              {dateDisplay}
+            </Animated.Text>
+            <Animated.Text style={[styles.cardDDay, t3]}>
+              {dDayText}
+            </Animated.Text>
+            {venue ? (
+              <Animated.Text style={[styles.cardVenue, t4]}>
+                {venue}
+              </Animated.Text>
+            ) : null}
           </BlurView>
         </Animated.View>
       </Animated.View>
@@ -266,7 +319,8 @@ const styles = StyleSheet.create({
     gap: 3,
     overflow: "hidden",
     // ⚠️ 수정금지(승인필요) — 3D 그림자 (RN 베스트프랙티스: boxShadow CSS 문법)
-    boxShadow: "0 12px 40px rgba(0, 0, 0, 0.35), 0 0 20px rgba(108, 45, 199, 0.3)" as any,
+    boxShadow:
+      "0 12px 40px rgba(0, 0, 0, 0.35), 0 0 20px rgba(108, 45, 199, 0.3)" as any,
   },
   divider: {
     width: 24,

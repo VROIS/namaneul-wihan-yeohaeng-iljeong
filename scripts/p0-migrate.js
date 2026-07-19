@@ -1,14 +1,17 @@
 // P0-2/P0-3: Supabase DB 마이그레이션 — 가이드 통합 + bts_event_info
-const { Client } = require('pg');
+const { Client } = require("pg");
 
 async function run() {
   const client = new Client({
-    connectionString: 'postgresql://postgres:Vrois%4075015@db.wxebceflvuythuodemro.supabase.co:5432/postgres'
+    connectionString:
+      "postgresql://postgres:Vrois%4075015@db.wxebceflvuythuodemro.supabase.co:5432/postgres",
   });
   await client.connect();
 
   const queries = [
-    ['ALTER users (가이드 컬럼 추가)', `
+    [
+      "ALTER users (가이드 컬럼 추가)",
+      `
       ALTER TABLE users
         ADD COLUMN IF NOT EXISTS email VARCHAR UNIQUE,
         ADD COLUMN IF NOT EXISTS profile_image_url TEXT,
@@ -22,8 +25,11 @@ async function run() {
         ADD COLUMN IF NOT EXISTS subscription_canceled_at TIMESTAMP,
         ADD COLUMN IF NOT EXISTS account_status VARCHAR DEFAULT 'active',
         ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
-    `],
-    ['CREATE guides', `
+    `,
+    ],
+    [
+      "CREATE guides",
+      `
       CREATE TABLE IF NOT EXISTS guides (
         id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
         local_id VARCHAR,
@@ -43,8 +49,11 @@ async function run() {
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
-    `],
-    ['CREATE share_links', `
+    `,
+    ],
+    [
+      "CREATE share_links",
+      `
       CREATE TABLE IF NOT EXISTS share_links (
         id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
         user_id VARCHAR REFERENCES users(id) ON DELETE CASCADE,
@@ -60,8 +69,11 @@ async function run() {
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
-    `],
-    ['CREATE credit_transactions', `
+    `,
+    ],
+    [
+      "CREATE credit_transactions",
+      `
       CREATE TABLE IF NOT EXISTS credit_transactions (
         id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
         user_id VARCHAR NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -71,8 +83,11 @@ async function run() {
         reference_id VARCHAR,
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
-    `],
-    ['CREATE cashback_requests', `
+    `,
+    ],
+    [
+      "CREATE cashback_requests",
+      `
       CREATE TABLE IF NOT EXISTS cashback_requests (
         id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
         user_id VARCHAR NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -85,8 +100,11 @@ async function run() {
         processed_at TIMESTAMP,
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
-    `],
-    ['CREATE api_logs', `
+    `,
+    ],
+    [
+      "CREATE api_logs",
+      `
       CREATE TABLE IF NOT EXISTS api_logs (
         id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
         type VARCHAR NOT NULL,
@@ -98,8 +116,11 @@ async function run() {
         error_message TEXT,
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
-    `],
-    ['CREATE user_activity_logs', `
+    `,
+    ],
+    [
+      "CREATE user_activity_logs",
+      `
       CREATE TABLE IF NOT EXISTS user_activity_logs (
         id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
         user_id VARCHAR REFERENCES users(id) ON DELETE SET NULL,
@@ -111,8 +132,11 @@ async function run() {
         page_views INTEGER DEFAULT 1,
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
-    `],
-    ['CREATE shared_html_pages', `
+    `,
+    ],
+    [
+      "CREATE shared_html_pages",
+      `
       CREATE TABLE IF NOT EXISTS shared_html_pages (
         id VARCHAR PRIMARY KEY,
         user_id VARCHAR NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -132,8 +156,11 @@ async function run() {
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
-    `],
-    ['CREATE notifications', `
+    `,
+    ],
+    [
+      "CREATE notifications",
+      `
       CREATE TABLE IF NOT EXISTS notifications (
         id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
         user_id VARCHAR REFERENCES users(id) ON DELETE CASCADE,
@@ -145,8 +172,11 @@ async function run() {
         is_read BOOLEAN DEFAULT FALSE,
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
-    `],
-    ['CREATE push_subscriptions', `
+    `,
+    ],
+    [
+      "CREATE push_subscriptions",
+      `
       CREATE TABLE IF NOT EXISTS push_subscriptions (
         id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
         user_id VARCHAR NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -156,8 +186,11 @@ async function run() {
         user_agent TEXT,
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
-    `],
-    ['CREATE voice_configs', `
+    `,
+    ],
+    [
+      "CREATE voice_configs",
+      `
       CREATE TABLE IF NOT EXISTS voice_configs (
         id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
         lang_code VARCHAR NOT NULL,
@@ -167,8 +200,11 @@ async function run() {
         is_active BOOLEAN DEFAULT TRUE,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
-    `],
-    ['CREATE prompts', `
+    `,
+    ],
+    [
+      "CREATE prompts",
+      `
       CREATE TABLE IF NOT EXISTS prompts (
         id VARCHAR PRIMARY KEY DEFAULT gen_random_uuid(),
         language VARCHAR NOT NULL,
@@ -179,8 +215,11 @@ async function run() {
         created_by VARCHAR REFERENCES users(id) ON DELETE SET NULL,
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
-    `],
-    ['CREATE bts_event_info', `
+    `,
+    ],
+    [
+      "CREATE bts_event_info",
+      `
       CREATE TABLE IF NOT EXISTS bts_event_info (
         id SERIAL PRIMARY KEY,
         city_id INTEGER REFERENCES cities(id) ON DELETE CASCADE,
@@ -200,15 +239,16 @@ async function run() {
         updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
         created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
-    `],
+    `,
+    ],
   ];
 
   for (const [name, query] of queries) {
     try {
       await client.query(query);
-      console.log('OK:', name);
+      console.log("OK:", name);
     } catch (e) {
-      console.log('ERR:', name, '-', e.message);
+      console.log("ERR:", name, "-", e.message);
     }
   }
 
@@ -217,10 +257,10 @@ async function run() {
     SELECT count(*) as cnt FROM information_schema.tables
     WHERE table_schema = 'public' AND table_type = 'BASE TABLE'
   `);
-  console.log('\nTotal tables:', res.rows[0].cnt);
+  console.log("\nTotal tables:", res.rows[0].cnt);
 
   await client.end();
-  console.log('Migration done!');
+  console.log("Migration done!");
 }
 
-run().catch(e => console.error(e));
+run().catch((e) => console.error(e));

@@ -21,15 +21,15 @@
  *     = 즉 "온 값=새것 강제 / 안 온 컬럼=뼈대 유지" (= 새우선과 발굴안전을 동시 충족).
  *   - tags = UNION (= 누적 = 멀티태그 SSOT).
  */
-import { db } from '../db';
-import { placeSeedRaw } from '@shared/schema';
-import { eq, sql } from 'drizzle-orm';
+import { db } from "../db";
+import { placeSeedRaw } from "@shared/schema";
+import { eq, sql } from "drizzle-orm";
 // ⚠️ 2026-06-03 = 동일장소 5단계 매칭 = 공용 matcher.ts 단일 (= 헌법 §16, 흩어진 매처 통합)
-import { type MatchedBy } from './shared/place-enrich';
+import { type MatchedBy } from "./shared/place-enrich";
 
 export interface UpsertPayload {
   cityId: number;
-  seedCategory: string;  // 'restaurant' | 'attraction' | 'heritage' | ...
+  seedCategory: string; // 'restaurant' | 'attraction' | 'heritage' | ...
   // ⚠️ 수정금지(승인필요) 2026-07-06 사장님 SSOT = rowId 직행 UPDATE(#45 repair.ts WHERE id=$1 방식).
   //   = 있으면 7단계 매칭 완전 스킵하고 그 행에 직행 UPDATE. 발굴 후 "방금 INSERT한 신규행을 TS검증값으로 되덮을 때" 재매칭 실패(name_local·좌표 결손 시 중복 INSERT) 원천차단.
   //   = 없으면(기본) 옛 동작 그대로 = 7단계 매칭 후 UPDATE/INSERT.
@@ -48,12 +48,12 @@ export interface UpsertPayload {
   nameKo?: string | null;
   nameLocal?: string | null;
   // 카피 (= Gemini 큐레이션)
-  selectionReasonKo?: string | null;  // → summary_ko
-  shortformKo?: string | null;        // → editorial_summary
+  selectionReasonKo?: string | null; // → summary_ko
+  shortformKo?: string | null; // → editorial_summary
   // 메타 (= TS / Wikipedia)
   googleReviewCount?: number | null;
   googlePrimaryType?: string | null;
-  googleMapsUri?: string | null;  // 2026-05-15 = 13번째 SSOT = 최후의 보루
+  googleMapsUri?: string | null; // 2026-05-15 = 13번째 SSOT = 최후의 보루
   priceEur?: number | null;
   // 🗑️ 2026-07-05 = priceOverwrite 인자 제거 = 무의미(동작 영향 0) 데드 인자 = 가격도 새우선 단일정책 §14갱신/§19
   imageUrl?: string | null;
@@ -74,7 +74,7 @@ export type { MatchedBy };
 // 🗑️ 2026-07-18 삭제 = loadMatchCandidates(전체 PSR SELECT) + syncCandidateList(candidates 동기화) = 매칭 폐기(트리거 단일) 로 후보명단 개념 소멸 §0/§19.
 
 export interface UpsertResult {
-  action: 'inserted' | 'updated' | 'skipped';
+  action: "inserted" | "updated" | "skipped";
   rowId: number | null;
   matchedBy: MatchedBy;
   // ⚠️ 2026-06-08 = 가변(영어·한국어명)만 일치 = 유사의심 = 자동병합 X = 새 행 + '중복의심' 메모 (= 사용자 SSOT)
@@ -83,17 +83,25 @@ export interface UpsertResult {
   // ⚠️ 수정금지(승인필요) 2026-07-18 사장님 SSOT = 매칭 3벌 폐기 재설계 = 트리거 흡수(recoverTriggerDup) 시 원행의 재활용 데이터(RETURNING).
   //   = 옛 ag3-match-core matchCandidate 가 하던 "매칭행 데이터를 place 에 입힘"을 흡수가 대체 = 매칭 판정 없이 재활용 보존. 흡수 아니면 undefined.
   enriched?: {
-    imageUrl: string | null; googleReviewCount: number | null;
-    nameKo: string | null; nameLocal: string | null;
-    summaryKo: string | null; editorialSummary: string | null;
-    googlePlaceId: string | null; latitude: number | null; longitude: number | null;
+    imageUrl: string | null;
+    googleReviewCount: number | null;
+    nameKo: string | null;
+    nameLocal: string | null;
+    summaryKo: string | null;
+    editorialSummary: string | null;
+    googlePlaceId: string | null;
+    latitude: number | null;
+    longitude: number | null;
   };
 }
 
 // ⚠️ 수정금지(승인필요) 2026-07-17 사장님 SSOT = 직행 UPDATE SQL 1벌(§16) = targetRowId 직행·회수 병합 공용.
 //   COALESCE 새우선(§14) + tags UNION + image_updated_at/updated_at. 컬럼셋 = 매칭 UPDATE 와 동일.
 function buildDirectUpdateSql(p: UpsertPayload, targetId: number) {
-  const catTags = p.categoryTags && p.categoryTags.length > 0 ? p.categoryTags : [p.seedCategory];
+  const catTags =
+    p.categoryTags && p.categoryTags.length > 0
+      ? p.categoryTags
+      : [p.seedCategory];
   const phTags = p.phaseTags || [];
   return sql`
       UPDATE place_seed_raw SET
@@ -114,8 +122,8 @@ function buildDirectUpdateSql(p: UpsertPayload, targetId: number) {
         summary_ko        = COALESCE(${p.selectionReasonKo ?? null}, summary_ko),
         day_zone          = COALESCE(${p.dayZone ?? null}, day_zone),
         distance_km_from_center = COALESCE(${p.distanceKmFromCenter ?? null}::real, distance_km_from_center),
-        category_tags     = (SELECT ARRAY(SELECT DISTINCT unnest(COALESCE(category_tags, ARRAY[]::text[]) || ${sql.raw(`ARRAY[${catTags.map((s) => `'${s.replace(/'/g, "''")}'`).join(',')}]::text[]`)}))),
-        phase_tags        = (SELECT ARRAY(SELECT DISTINCT unnest(COALESCE(phase_tags, ARRAY[]::text[]) || ${sql.raw(`ARRAY[${phTags.length === 0 ? "" : phTags.map((s) => `'${s.replace(/'/g, "''")}'`).join(',')}]::text[]`)}))),
+        category_tags     = (SELECT ARRAY(SELECT DISTINCT unnest(COALESCE(category_tags, ARRAY[]::text[]) || ${sql.raw(`ARRAY[${catTags.map((s) => `'${s.replace(/'/g, "''")}'`).join(",")}]::text[]`)}))),
+        phase_tags        = (SELECT ARRAY(SELECT DISTINCT unnest(COALESCE(phase_tags, ARRAY[]::text[]) || ${sql.raw(`ARRAY[${phTags.length === 0 ? "" : phTags.map((s) => `'${s.replace(/'/g, "''")}'`).join(",")}]::text[]`)}))),
         image_updated_at  = CASE WHEN ${p.imageUrl || null}::text IS NOT NULL THEN NOW() ELSE image_updated_at END,
         updated_at        = NOW()
       WHERE id = ${targetId}
@@ -128,15 +136,27 @@ function buildDirectUpdateSql(p: UpsertPayload, targetId: number) {
 //   = 명단 스냅샷이 못 본 같은 장소를 트리거가 'id=N' 으로 알려주면 = 그 원행(N) 직행 UPDATE 로 전환(같은 장소 흡수).
 //   = 승자 = 트리거가 지목한 N(재판정 없음 = 트리거가 이미 목적지 판단, 사장님 2026-07-17). 재시도는 followTriggerDup:false = 또 막히면 skip(무한루프 불가).
 //   = 옛 "skipped 처리 = 그 슬롯 검증·사진 통째 소실" 폐기 2026-07-10 §19. 중복차단 예외 아니면 null(호출측 기존 처리 유지).
-async function recoverTriggerDup(p: UpsertPayload, e: any): Promise<UpsertResult | null> {
-  const dup = /\[중복차단\][^]*?id=(\d+)/.exec(e?.message || '');
+async function recoverTriggerDup(
+  p: UpsertPayload,
+  e: any,
+): Promise<UpsertResult | null> {
+  const dup = /\[중복차단\][^]*?id=(\d+)/.exec(e?.message || "");
   if (!dup) return null;
   const dupId = Number(dup[1]);
   try {
-    const r = await upsertPlace({ ...p, targetRowId: dupId, followTriggerDup: false });
-    return { ...r, reason: 'trigger_dup_recovered' };
+    const r = await upsertPlace({
+      ...p,
+      targetRowId: dupId,
+      followTriggerDup: false,
+    });
+    return { ...r, reason: "trigger_dup_recovered" };
   } catch (e2: any) {
-    return { action: 'skipped', rowId: null, matchedBy: 'none', reason: `trigger_dup_recover_failed: ${e2?.message || String(e2)}` };
+    return {
+      action: "skipped",
+      rowId: null,
+      matchedBy: "none",
+      reason: `trigger_dup_recover_failed: ${e2?.message || String(e2)}`,
+    };
   }
 }
 
@@ -147,10 +167,20 @@ async function recoverTriggerDup(p: UpsertPayload, e: any): Promise<UpsertResult
  */
 export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
   if (!db) {
-    return { action: 'skipped', rowId: null, matchedBy: 'none', reason: 'db_unavailable' };
+    return {
+      action: "skipped",
+      rowId: null,
+      matchedBy: "none",
+      reason: "db_unavailable",
+    };
   }
   if (!p.cityId || !p.seedCategory || !p.nameEn) {
-    return { action: 'skipped', rowId: null, matchedBy: 'none', reason: 'missing_required_fields' };
+    return {
+      action: "skipped",
+      rowId: null,
+      matchedBy: "none",
+      reason: "missing_required_fields",
+    };
   }
 
   // ⚠️ 수정금지(승인필요) 2026-07-06 사장님 SSOT = targetRowId 직행 UPDATE(#45 repair.ts WHERE id=$1 방식).
@@ -158,36 +188,50 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
   //   = COALESCE 새우선 §14갱신 동일(아래 매칭 UPDATE 와 같은 컬럼셋). tags=UNION. image_updated_at=이미지 있을때만.
   if (p.targetRowId != null) {
     try {
-    // ⚠️ 수정금지(승인필요) 2026-07-18 사장님 SSOT = 우리 id 확정행 직행 = prevent_dup 만 외과적 면제하고 그 행에 TS 요소 바로 씀(중복검사 불필요 = 이미 우리 id).
-    //   근거: ② TS 시점 = 우리 id 이미 확정("어디로 갈지 아는 상태") = 그 행 직행인데 트리거가 다른 쌍둥이 URI/PID 로 막아 유료결과 폐기(디종 4/10콜).
-    //   = followTriggerDup=true(ag3 ③ TS 직행)만 SET LOCAL app.skip_dup_check='on' 로 prevent_dup 만 스킵(트리거 가드 1줄). 트랜잭션 한정 = 이 UPDATE 만 = 자동 복원.
-    //   = replica 방식(모든 트리거 우회) 폐기 §19 = write_gate(데드락방지)·autorank(랭킹)는 살아있음. image-backfill 등 미지정 = 우회 안 함. buildDirectUpdateSql 1벌(§16). updated_at 무기록 §19.
-    let res;
-    if (p.followTriggerDup) {
-      res = await db.transaction(async (tx) => {
-        await tx.execute(sql`SELECT set_config('app.skip_dup_check', 'on', true)`); // true=트랜잭션 한정 = prevent_dup 만 스킵(자동 복원)
-        return tx.execute(buildDirectUpdateSql(p, p.targetRowId!));
-      });
-    } else {
-      res = await db.execute(buildDirectUpdateSql(p, p.targetRowId));
-    }
-    // 2026-07-17 = 삭제된 행을 향한 늦은 직행 = 0행인데 'updated' 로 나가던 거짓 성공 차단
-    if ((res.rowCount ?? 0) === 0) {
-      return { action: 'skipped', rowId: null, matchedBy: 'none', reason: 'target_row_deleted' };
-    }
-    // 2026-07-18 = RETURNING 재활용 데이터(매칭 폐기 후 place 재활용, §16). undefined 안전 (RETURNING 없는 경로 대비).
-    const row = (res as any).rows?.[0];
-    return {
-      action: 'updated', rowId: p.targetRowId, matchedBy: 'none',
-      enriched: row ? {
-        imageUrl: row.image_url ?? null, googleReviewCount: row.google_review_count ?? null,
-        nameKo: row.name_ko ?? null, nameLocal: row.name_local ?? null,
-        summaryKo: row.summary_ko ?? null, editorialSummary: row.editorial_summary ?? null,
-        googlePlaceId: row.google_place_id ?? null,
-        latitude: row.latitude != null ? Number(row.latitude) : null,
-        longitude: row.longitude != null ? Number(row.longitude) : null,
-      } : undefined,
-    };
+      // ⚠️ 수정금지(승인필요) 2026-07-18 사장님 SSOT = 우리 id 확정행 직행 = prevent_dup 만 외과적 면제하고 그 행에 TS 요소 바로 씀(중복검사 불필요 = 이미 우리 id).
+      //   근거: ② TS 시점 = 우리 id 이미 확정("어디로 갈지 아는 상태") = 그 행 직행인데 트리거가 다른 쌍둥이 URI/PID 로 막아 유료결과 폐기(디종 4/10콜).
+      //   = followTriggerDup=true(ag3 ③ TS 직행)만 SET LOCAL app.skip_dup_check='on' 로 prevent_dup 만 스킵(트리거 가드 1줄). 트랜잭션 한정 = 이 UPDATE 만 = 자동 복원.
+      //   = replica 방식(모든 트리거 우회) 폐기 §19 = write_gate(데드락방지)·autorank(랭킹)는 살아있음. image-backfill 등 미지정 = 우회 안 함. buildDirectUpdateSql 1벌(§16). updated_at 무기록 §19.
+      let res;
+      if (p.followTriggerDup) {
+        res = await db.transaction(async (tx) => {
+          await tx.execute(
+            sql`SELECT set_config('app.skip_dup_check', 'on', true)`,
+          ); // true=트랜잭션 한정 = prevent_dup 만 스킵(자동 복원)
+          return tx.execute(buildDirectUpdateSql(p, p.targetRowId!));
+        });
+      } else {
+        res = await db.execute(buildDirectUpdateSql(p, p.targetRowId));
+      }
+      // 2026-07-17 = 삭제된 행을 향한 늦은 직행 = 0행인데 'updated' 로 나가던 거짓 성공 차단
+      if ((res.rowCount ?? 0) === 0) {
+        return {
+          action: "skipped",
+          rowId: null,
+          matchedBy: "none",
+          reason: "target_row_deleted",
+        };
+      }
+      // 2026-07-18 = RETURNING 재활용 데이터(매칭 폐기 후 place 재활용, §16). undefined 안전 (RETURNING 없는 경로 대비).
+      const row = (res as any).rows?.[0];
+      return {
+        action: "updated",
+        rowId: p.targetRowId,
+        matchedBy: "none",
+        enriched: row
+          ? {
+              imageUrl: row.image_url ?? null,
+              googleReviewCount: row.google_review_count ?? null,
+              nameKo: row.name_ko ?? null,
+              nameLocal: row.name_local ?? null,
+              summaryKo: row.summary_ko ?? null,
+              editorialSummary: row.editorial_summary ?? null,
+              googlePlaceId: row.google_place_id ?? null,
+              latitude: row.latitude != null ? Number(row.latitude) : null,
+              longitude: row.longitude != null ? Number(row.longitude) : null,
+            }
+          : undefined,
+      };
     } catch (e: any) {
       // 면제(followTriggerDup) 는 직행이 안 막히므로 여기 도달 시 = 다른 예외 = 그대로 전파(image-backfill "정확히 그 행에만 기록" 의미 보존).
       throw e;
@@ -197,7 +241,10 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
   // ⚠️ 수정금지(승인필요) 2026-07-18 사장님 SSOT = 매칭 3벌 폐기 = 코드 매칭(loadMatchCandidates 전체SELECT + matchCandidate) 완전삭제 §19.
   //   = 근본: 매칭이 코드+트리거 2벌 = 기준 드리프트로 "합쳐질 중복이 신규 생성"되는 사고(사장님 실증). = INSERT만 시도, 매칭은 트리거 1벌(100km 단일판정).
   //   = 막히면 recoverTriggerDup(트리거가 준 id=N 흡수, RETURNING 재활용). matchedBy='none'/suspect 개념 폐기(트리거가 판정).
-  const categoryTags = p.categoryTags && p.categoryTags.length > 0 ? p.categoryTags : [p.seedCategory];
+  const categoryTags =
+    p.categoryTags && p.categoryTags.length > 0
+      ? p.categoryTags
+      : [p.seedCategory];
   const phaseTags = p.phaseTags || [];
 
   // INSERT = 신규 행 = 전체 응답값 그대로 새삽입. 트리거가 중복이면 recoverTriggerDup 흡수.
@@ -232,7 +279,7 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
       .returning({ id: placeSeedRaw.id });
 
     const newId = inserted[0]?.id || null;
-    return { action: 'inserted', rowId: newId, matchedBy: 'none' };
+    return { action: "inserted", rowId: newId, matchedBy: "none" };
   } catch (e: any) {
     // ⚠️ 수정금지(승인필요) 2026-07-10 사장님 SSOT = DB 트리거(prevent_dup) = 최종 매처(§14 최종 안전망)를 따라감.
     //   = 명단 스냅샷이 못 본 같은 장소(동시 요청의 방금 INSERT 등)를 트리거가 '[중복차단] ... id=N' 예외로 알려주면
@@ -242,9 +289,9 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
     if (rec) return rec;
     // 최후 안전망 = INSERT 예외 시 skip(응답 안 죽임). rank 는 nullable+트리거 배정이라 rank 충돌 없음(2026-07-07 §19). = 실제 도달 드묾.
     return {
-      action: 'skipped',
+      action: "skipped",
       rowId: null,
-      matchedBy: 'none',
+      matchedBy: "none",
       reason: `insert_error: ${e?.message || String(e)}`,
     };
   }

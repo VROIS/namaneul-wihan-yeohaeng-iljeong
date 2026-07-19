@@ -5,22 +5,30 @@
 //   npx tsx fillcity/prompts/04-outskirt-restaurant/post-process.ts --city-id=19 [--dry]
 //
 // 정책 = §14 upsertPlace 단일 진입점 + 가격 COALESCE 새우선(최신최우선) + day_zone 강제 'outskirt'
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath, pathToFileURL } from 'url';
+import fs from "fs";
+import path from "path";
+import { fileURLToPath, pathToFileURL } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(__dirname, '../../..');  // ⚠️ 2026-06-08 = prompts/04 un-archive 복귀 = 상위 5 (표준 스킬 위치 = 아카이브 ROOT 버그 근본해소)
+const ROOT = path.resolve(__dirname, "../../.."); // ⚠️ 2026-06-08 = prompts/04 un-archive 복귀 = 상위 5 (표준 스킬 위치 = 아카이브 ROOT 버그 근본해소)
 process.chdir(ROOT);
 
-const argv = Object.fromEntries(process.argv.slice(2).map(a => a.replace(/^--/, '').split('=')).map(([k, v]) => [k, v ?? 'true']));
-const cityId = Number(argv['city-id'] || 0);
-const date = String(argv['date'] || new Date().toISOString().slice(0, 10));
-const dryRun = argv['dry'] === 'true';
-if (!cityId) { console.error('Usage: --city-id=<N> [--date=<YYYY-MM-DD>] [--dry]'); process.exit(1); }
+const argv = Object.fromEntries(
+  process.argv
+    .slice(2)
+    .map((a) => a.replace(/^--/, "").split("="))
+    .map(([k, v]) => [k, v ?? "true"]),
+);
+const cityId = Number(argv["city-id"] || 0);
+const date = String(argv["date"] || new Date().toISOString().slice(0, 10));
+const dryRun = argv["dry"] === "true";
+if (!cityId) {
+  console.error("Usage: --city-id=<N> [--date=<YYYY-MM-DD>] [--dry]");
+  process.exit(1);
+}
 
 (async () => {
-  const envRaw = fs.readFileSync('.env', 'utf-8').replace(/^﻿/, '');
+  const envRaw = fs.readFileSync(".env", "utf-8").replace(/^﻿/, "");
   for (const line of envRaw.split(/\r?\n/)) {
     const m = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/);
     if (m && !process.env[m[1]]) {
@@ -30,79 +38,127 @@ if (!cityId) { console.error('Usage: --city-id=<N> [--date=<YYYY-MM-DD>] [--dry]
     }
   }
 
-  const rawDir = path.join(ROOT, 'docs', 'raw', String(cityId));
+  const rawDir = path.join(ROOT, "docs", "raw", String(cityId));
   // ⚠️ 수정금지(승인필요) — raw 파일명 표준화: 날짜앞 rawName 형식
   // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = low/mid 별 latestVersioned 로 _N 계열 최신 1개 읽기
-  const { rawName, latestVersioned } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/raw-filename.ts')).href);
+  const { rawName, latestVersioned } = await import(
+    pathToFileURL(path.join(ROOT, "server/services/shared/raw-filename.ts"))
+      .href
+  );
   // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = zone stem 계열 최신(없으면 무순번명=기존 미존재 에러 유지)
-  const lowLatest = latestVersioned(rawDir, rawName(4, 'outskirt-restaurant', 'low', date));
-  const midLatest = latestVersioned(rawDir, rawName(4, 'outskirt-restaurant', 'mid', date));
-  const lowPath = lowLatest ? path.join(rawDir, lowLatest) : path.join(rawDir, rawName(4, 'outskirt-restaurant', 'low', date));  // ⚠️ 수정금지(승인필요) — raw 파일명 표준화: 날짜앞 rawName 형식
-  const midPath = midLatest ? path.join(rawDir, midLatest) : path.join(rawDir, rawName(4, 'outskirt-restaurant', 'mid', date));  // ⚠️ 수정금지(승인필요) — raw 파일명 표준화: 날짜앞 rawName 형식
+  const lowLatest = latestVersioned(
+    rawDir,
+    rawName(4, "outskirt-restaurant", "low", date),
+  );
+  const midLatest = latestVersioned(
+    rawDir,
+    rawName(4, "outskirt-restaurant", "mid", date),
+  );
+  const lowPath = lowLatest
+    ? path.join(rawDir, lowLatest)
+    : path.join(rawDir, rawName(4, "outskirt-restaurant", "low", date)); // ⚠️ 수정금지(승인필요) — raw 파일명 표준화: 날짜앞 rawName 형식
+  const midPath = midLatest
+    ? path.join(rawDir, midLatest)
+    : path.join(rawDir, rawName(4, "outskirt-restaurant", "mid", date)); // ⚠️ 수정금지(승인필요) — raw 파일명 표준화: 날짜앞 rawName 형식
   if (!fs.existsSync(lowPath) || !fs.existsSync(midPath)) {
-    console.error(`✗ ${lowPath} 또는 ${midPath} 미존재 = run.ts 먼저 실행`); process.exit(1);
+    console.error(`✗ ${lowPath} 또는 ${midPath} 미존재 = run.ts 먼저 실행`);
+    process.exit(1);
   }
 
-  function parseTier(text: string, key: 'low' | 'mid'): any[] {
-    const start = text.indexOf('{');
+  function parseTier(text: string, key: "low" | "mid"): any[] {
+    const start = text.indexOf("{");
     if (start < 0) return [];
-    try { return JSON.parse(text.slice(start, text.lastIndexOf('}') + 1)).results?.[key] || []; } catch (e) { return []; }
+    try {
+      return (
+        JSON.parse(text.slice(start, text.lastIndexOf("}") + 1)).results?.[
+          key
+        ] || []
+      );
+    } catch (e) {
+      return [];
+    }
   }
 
-  const lowJson = JSON.parse(fs.readFileSync(lowPath, 'utf-8'));
-  const midJson = JSON.parse(fs.readFileSync(midPath, 'utf-8'));
-  const low = parseTier(lowJson.raw_text, 'low');
-  const mid = parseTier(midJson.raw_text, 'mid');
+  const lowJson = JSON.parse(fs.readFileSync(lowPath, "utf-8"));
+  const midJson = JSON.parse(fs.readFileSync(midPath, "utf-8"));
+  const low = parseTier(lowJson.raw_text, "low");
+  const mid = parseTier(midJson.raw_text, "mid");
   const all = [...low, ...mid];
 
   console.log(`═══ 04-outskirt-restaurant post-process ═══`);
-  console.log(`city_id = ${cityId}, low = ${low.length}, mid = ${mid.length}, 합계 = ${all.length}`);
+  console.log(
+    `city_id = ${cityId}, low = ${low.length}, mid = ${mid.length}, 합계 = ${all.length}`,
+  );
 
   // 검증 = 외곽 강제 + 중복 방지
-  const failed = all.filter(p => !(p.distance_km_from_center > 10 && p.distance_km_from_center <= 100));
+  const failed = all.filter(
+    (p) =>
+      !(p.distance_km_from_center > 10 && p.distance_km_from_center <= 100),
+  );
   if (failed.length) {
-    console.error(`✗ distance_km_from_center 위반 = ${failed.length} 행 = sample:`, failed.slice(0, 3).map(p => p.name_en));
+    console.error(
+      `✗ distance_km_from_center 위반 = ${failed.length} 행 = sample:`,
+      failed.slice(0, 3).map((p) => p.name_en),
+    );
   }
 
   if (dryRun) {
-    console.log('\n=== DRY-RUN ===');
-    console.log('low sample:', low.slice(0, 2));
-    console.log('mid sample:', mid.slice(0, 2));
+    console.log("\n=== DRY-RUN ===");
+    console.log("low sample:", low.slice(0, 2));
+    console.log("mid sample:", mid.slice(0, 2));
     process.exit(0);
   }
 
   // upsertPlace INSERT
-  const { upsertPlace } = await import(pathToFileURL(path.join(ROOT, 'server/services/place-upsert.ts')).href);  // ⚠️ 2026-06-08 = Windows ESM file:// 변환 (ERR_UNSUPPORTED_ESM_URL_SCHEME 수정, 01-discover/post 와 동일)
+  const { upsertPlace } = await import(
+    pathToFileURL(path.join(ROOT, "server/services/place-upsert.ts")).href
+  ); // ⚠️ 2026-06-08 = Windows ESM file:// 변환 (ERR_UNSUPPORTED_ESM_URL_SCHEME 수정, 01-discover/post 와 동일)
   const today = new Date().toISOString().slice(0, 10);
 
-  let inserted = 0, updated = 0, skipped = 0, errors = 0;
-  const matchedBy: Record<string, number> = { pid: 0, uri: 0, address: 0, coords: 0, name_local: 0, name_en: 0, name_ko: 0, none: 0 };  // ⚠️ 2026-06-08 = 7단계 매처 키 정합
+  let inserted = 0,
+    updated = 0,
+    skipped = 0,
+    errors = 0;
+  const matchedBy: Record<string, number> = {
+    pid: 0,
+    uri: 0,
+    address: 0,
+    coords: 0,
+    name_local: 0,
+    name_en: 0,
+    name_ko: 0,
+    none: 0,
+  }; // ⚠️ 2026-06-08 = 7단계 매처 키 정합
 
   for (const p of all) {
     try {
       const r = await upsertPlace({
         cityId,
-        seedCategory: 'restaurant',
+        seedCategory: "restaurant",
         rank: p.rank,
         nameEn: p.name_en,
         nameLocal: p.name_local || null,
         nameKo: p.name_ko || null,
         address: p.address || null,
-        latitude: null,  // = 본 prompt 응답 X
+        latitude: null, // = 본 prompt 응답 X
         longitude: null,
         // ⚠️ 2026-06-12 카피 필드명 통폐합 = 응답 키 summary_ko/editorial_summary (= DB 컬럼명) 우선, 옛 raw fallback = 손실 0
         selectionReasonKo: p.summary_ko ?? p.selection_reason_ko ?? null,
         shortformKo: p.editorial_summary ?? p.shortform_ko ?? null,
-        priceEur: p.price_eur ?? null,                    // COALESCE 새우선(최신최우선) 정책 (= §14)
-        dayZone: 'outskirt',                                   // = 강제
+        priceEur: p.price_eur ?? null, // COALESCE 새우선(최신최우선) 정책 (= §14)
+        dayZone: "outskirt", // = 강제
         distanceKmFromCenter: p.distance_km_from_center ?? null,
-        collectionPhase: 'gemini3-2026-05',
-        phaseTags: ['gemini3', 'gemini3-2026-05', `outskirt-restaurant-${today}`],
+        collectionPhase: "gemini3-2026-05",
+        phaseTags: [
+          "gemini3",
+          "gemini3-2026-05",
+          `outskirt-restaurant-${today}`,
+        ],
       });
-      if (r.action === 'inserted') inserted++;
-      else if (r.action === 'updated') updated++;
+      if (r.action === "inserted") inserted++;
+      else if (r.action === "updated") updated++;
       else skipped++;
-      matchedBy[r.matchedBy || 'none']++;
+      matchedBy[r.matchedBy || "none"]++;
     } catch (e: any) {
       errors++;
       console.error(`  ✗ ${p.name_en}: ${e.message}`);

@@ -23,13 +23,22 @@ export function registerGuidePricesRoutes(app: Express) {
     try {
       const { guidePrices } = await import("../../shared/schema");
       const id = parseInt(req.params.id);
-      const { pricePerDay, priceLow, priceHigh, description, features } = req.body;
+      const { pricePerDay, priceLow, priceHigh, description, features } =
+        req.body;
       const [updated] = await db
         .update(guidePrices)
-        .set({ pricePerDay, priceLow, priceHigh, description, features, lastUpdated: new Date() })
+        .set({
+          pricePerDay,
+          priceLow,
+          priceHigh,
+          description,
+          features,
+          lastUpdated: new Date(),
+        })
         .where(eq(guidePrices.id, id))
         .returning();
-      if (!updated) return res.status(404).json({ error: "Guide price not found" });
+      if (!updated)
+        return res.status(404).json({ error: "Guide price not found" });
       res.json(updated);
     } catch (error) {
       console.error("Error updating guide price:", error);
@@ -41,9 +50,20 @@ export function registerGuidePricesRoutes(app: Express) {
     if (!db) return res.status(503).json({ error: "DB unavailable" });
     try {
       const { guidePrices } = await import("../../shared/schema");
-      const { serviceType, serviceName, pricePerDay, priceLow, priceHigh, unit, description, features } = req.body;
+      const {
+        serviceType,
+        serviceName,
+        pricePerDay,
+        priceLow,
+        priceHigh,
+        unit,
+        description,
+        features,
+      } = req.body;
       if (!serviceType || !serviceName) {
-        return res.status(400).json({ error: "서비스 유형과 이름은 필수입니다" });
+        return res
+          .status(400)
+          .json({ error: "서비스 유형과 이름은 필수입니다" });
       }
       const [created] = await db
         .insert(guidePrices)
@@ -73,8 +93,12 @@ export function registerGuidePricesRoutes(app: Express) {
     try {
       const { guidePrices } = await import("../../shared/schema");
       const id = parseInt(req.params.id);
-      const [deleted] = await db.delete(guidePrices).where(eq(guidePrices.id, id)).returning();
-      if (!deleted) return res.status(404).json({ error: "Guide price not found" });
+      const [deleted] = await db
+        .delete(guidePrices)
+        .where(eq(guidePrices.id, id))
+        .returning();
+      if (!deleted)
+        return res.status(404).json({ error: "Guide price not found" });
       res.json({ success: true, deleted });
     } catch (error) {
       console.error("Error deleting guide price:", error);
@@ -87,14 +111,67 @@ export function registerGuidePricesRoutes(app: Express) {
     try {
       const { guidePrices } = await import("../../shared/schema");
       const seedData = [
-        { serviceType: "walking", serviceName: "워킹 가이드 (반일)", pricePerDay: 420, priceLow: 420, priceHigh: 420, unit: "day", description: "시내/박물관 워킹 투어", features: ["공인 가이드", "차량 미포함"] },
-        { serviceType: "sedan", serviceName: "세단 가이드 (전일)", pricePerDay: 600, priceLow: 600, priceHigh: 600, unit: "day", description: "비즈니스 세단 + 가이드", features: ["E-Class", "8-10시간", "주행거리 포함"] },
-        { serviceType: "vip", serviceName: "VIP 전담 (전일)", pricePerDay: 1015, priceLow: 880, priceHigh: 1015, unit: "day", description: "최상위 VIP 밴 서비스", features: ["럭셔리 미니밴", "의전 서비스", "전담 가이드"] },
-        { serviceType: "airport_sedan", serviceName: "공항 픽업 (비즈니스 세단)", pricePerDay: null, priceLow: 117, priceHigh: 152, unit: "trip", description: "CDG 공항 픽업", features: ["60분 대기 무료", "피켓 마중"] },
-        { serviceType: "airport_vip", serviceName: "공항 픽업 (럭셔리 세단)", pricePerDay: null, priceLow: 234, priceHigh: 480, unit: "trip", description: "CDG VIP 픽업", features: ["S-Class", "VIP 서비스"] },
+        {
+          serviceType: "walking",
+          serviceName: "워킹 가이드 (반일)",
+          pricePerDay: 420,
+          priceLow: 420,
+          priceHigh: 420,
+          unit: "day",
+          description: "시내/박물관 워킹 투어",
+          features: ["공인 가이드", "차량 미포함"],
+        },
+        {
+          serviceType: "sedan",
+          serviceName: "세단 가이드 (전일)",
+          pricePerDay: 600,
+          priceLow: 600,
+          priceHigh: 600,
+          unit: "day",
+          description: "비즈니스 세단 + 가이드",
+          features: ["E-Class", "8-10시간", "주행거리 포함"],
+        },
+        {
+          serviceType: "vip",
+          serviceName: "VIP 전담 (전일)",
+          pricePerDay: 1015,
+          priceLow: 880,
+          priceHigh: 1015,
+          unit: "day",
+          description: "최상위 VIP 밴 서비스",
+          features: ["럭셔리 미니밴", "의전 서비스", "전담 가이드"],
+        },
+        {
+          serviceType: "airport_sedan",
+          serviceName: "공항 픽업 (비즈니스 세단)",
+          pricePerDay: null,
+          priceLow: 117,
+          priceHigh: 152,
+          unit: "trip",
+          description: "CDG 공항 픽업",
+          features: ["60분 대기 무료", "피켓 마중"],
+        },
+        {
+          serviceType: "airport_vip",
+          serviceName: "공항 픽업 (럭셔리 세단)",
+          pricePerDay: null,
+          priceLow: 234,
+          priceHigh: 480,
+          unit: "trip",
+          description: "CDG VIP 픽업",
+          features: ["S-Class", "VIP 서비스"],
+        },
       ];
       for (const data of seedData) {
-        await db.insert(guidePrices).values({ ...data, currency: "EUR", isActive: true, source: "guide_verified" } as any).onConflictDoNothing();
+        await db
+          .insert(guidePrices)
+          .values({
+            ...data,
+            currency: "EUR",
+            isActive: true,
+            source: "guide_verified",
+          } as any)
+          .onConflictDoNothing();
       }
       const allPrices = await db.select().from(guidePrices);
       res.json({ success: true, count: allPrices.length, prices: allPrices });
@@ -113,7 +190,9 @@ export function registerGuidePricesRoutes(app: Express) {
       const result: Record<string, any> = {};
       const comparison: Record<string, any> = {};
       for (const price of prices) {
-        if (["sedan", "van", "minibus", "guide_only"].includes(price.serviceType)) {
+        if (
+          ["sedan", "van", "minibus", "guide_only"].includes(price.serviceType)
+        ) {
           result[price.serviceType] = {
             basePrice4h: price.basePrice4h,
             pricePerHour: price.pricePerHour,
@@ -123,12 +202,19 @@ export function registerGuidePricesRoutes(app: Express) {
             priceLow: price.priceLow,
             priceHigh: price.priceHigh,
           };
-          if (price.uberBlackEstimate || price.uberXEstimate || price.taxiEstimate) {
+          if (
+            price.uberBlackEstimate ||
+            price.uberXEstimate ||
+            price.taxiEstimate
+          ) {
             if (!comparison.uberBlack) comparison.uberBlack = {};
             if (!comparison.uberX) comparison.uberX = {};
             if (!comparison.taxi) comparison.taxi = {};
             if (price.uberBlackEstimate) {
-              const x = price.uberBlackEstimate as { low: number; high: number };
+              const x = price.uberBlackEstimate as {
+                low: number;
+                high: number;
+              };
               comparison.uberBlack[price.serviceType] = `€${x.low}~${x.high}`;
             }
             if (price.uberXEstimate) {
@@ -140,7 +226,8 @@ export function registerGuidePricesRoutes(app: Express) {
               comparison.taxi[price.serviceType] = `€${x.low}~${x.high}`;
             }
           }
-          if (price.comparisonNote) comparison.marketingNote = price.comparisonNote;
+          if (price.comparisonNote)
+            comparison.marketingNote = price.comparisonNote;
         }
       }
       result.comparison = comparison;
@@ -162,14 +249,19 @@ export function registerGuidePricesRoutes(app: Express) {
       for (const serviceType of serviceTypes) {
         const priceData = hourlyPrices[serviceType];
         if (!priceData) continue;
-        const existing = await db.select().from(guidePrices).where(eq(guidePrices.serviceType, serviceType)).limit(1);
+        const existing = await db
+          .select()
+          .from(guidePrices)
+          .where(eq(guidePrices.serviceType, serviceType))
+          .limit(1);
         const fullDayPrice = priceData.basePrice4h + 4 * priceData.pricePerHour;
         let uberBlackEstimate: any = null;
         let uberXEstimate: any = null;
         let taxiEstimate: any = null;
         if (comparison?.uberBlack?.[serviceType]) {
           const m = comparison.uberBlack[serviceType].match(/€?(\d+)~(\d+)/);
-          if (m) uberBlackEstimate = { low: parseInt(m[1]), high: parseInt(m[2]) };
+          if (m)
+            uberBlackEstimate = { low: parseInt(m[1]), high: parseInt(m[2]) };
         }
         if (comparison?.uberX?.[serviceType]) {
           const m = comparison.uberX[serviceType].match(/€?(\d+)~(\d+)/);
@@ -195,7 +287,10 @@ export function registerGuidePricesRoutes(app: Express) {
           lastUpdated: new Date(),
         };
         if (existing.length > 0) {
-          await db.update(guidePrices).set(updateData).where(eq(guidePrices.serviceType, serviceType));
+          await db
+            .update(guidePrices)
+            .set(updateData)
+            .where(eq(guidePrices.serviceType, serviceType));
           results.push({ serviceType, action: "updated" });
         } else {
           const serviceNames: Record<string, string> = {
@@ -208,7 +303,10 @@ export function registerGuidePricesRoutes(app: Express) {
             serviceType,
             serviceName: serviceNames[serviceType] || serviceType,
             ...updateData,
-            features: serviceType === "guide_only" ? ["차량 없음", "가이드만 동행"] : ["전일 대기", "가이드 포함", "주차비 포함"],
+            features:
+              serviceType === "guide_only"
+                ? ["차량 없음", "가이드만 동행"]
+                : ["전일 대기", "가이드 포함", "주차비 포함"],
             source: "guide_verified",
           } as any);
           results.push({ serviceType, action: "created" });

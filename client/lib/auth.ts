@@ -22,7 +22,6 @@ export interface UserData {
   createdAt?: string;
 }
 
-
 export async function isAuthenticated(): Promise<boolean> {
   // 저장 토큰(@vibetrip_auth) 존재로만 판정 = 실제 로그인/로그아웃이 정확히 반영.
   try {
@@ -66,7 +65,9 @@ export async function clearAuth(): Promise<void> {
 
 // ⚠️ 사장님 SSOT 2026-07-14 = 개발단계 이메일 로그인 = 구글 OAuth(웹 400) 우회. 메일만 넣으면 그 계정으로 로그인(사장님 메일=admin).
 //   ⚠️ 임시(개발용) = 로그인 정식화 때 폐기 §19. 기존 saveAuth·UserData 재사용(§16).
-export async function emailLogin(email: string): Promise<{ success: boolean; user?: UserData; error?: string }> {
+export async function emailLogin(
+  email: string,
+): Promise<{ success: boolean; user?: UserData; error?: string }> {
   try {
     const response = await fetch(`${getApiUrl()}/api/auth/email-login`, {
       method: "POST",
@@ -79,7 +80,8 @@ export async function emailLogin(email: string): Promise<{ success: boolean; use
       await saveAuth(userData);
       return { success: true, user: userData };
     }
-    if (response.status === 404) return { success: false, error: "email_not_found" };
+    if (response.status === 404)
+      return { success: false, error: "email_not_found" };
     return { success: false, error: result.error || "로그인 실패" };
   } catch (error) {
     console.error("Email login error:", error);
@@ -167,7 +169,9 @@ export async function socialLoginWithKakao(data: {
 }
 
 /** WhatsApp OTP 발송 */
-export async function whatsappOtpSend(phoneNumber: string): Promise<{ success: boolean; error?: string }> {
+export async function whatsappOtpSend(
+  phoneNumber: string,
+): Promise<{ success: boolean; error?: string }> {
   try {
     const response = await fetch(`${getApiUrl()}/api/auth/whatsapp/send-otp`, {
       method: "POST",
@@ -214,7 +218,10 @@ export function calculateAge(birthDate: Date): number {
   const today = new Date();
   let age = today.getFullYear() - birthDate.getFullYear();
   const monthDiff = today.getMonth() - birthDate.getMonth();
-  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+  if (
+    monthDiff < 0 ||
+    (monthDiff === 0 && today.getDate() < birthDate.getDate())
+  ) {
     age--;
   }
   return age;

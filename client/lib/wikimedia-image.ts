@@ -14,7 +14,9 @@
 import { Platform } from "react-native";
 
 // 공식 Wikimedia 허용 width 버킷 (= T414805/Common_thumbnail_sizes)
-export const WIKIMEDIA_BUCKETS = [20, 40, 60, 120, 250, 330, 500, 960, 1280, 1920, 3840] as const;
+export const WIKIMEDIA_BUCKETS = [
+  20, 40, 60, 120, 250, 330, 500, 960, 1280, 1920, 3840,
+] as const;
 const WIKIMEDIA_PX_REGEX = /\/\d+px-/;
 const UNSPLASH_W_REGEX = /([?&])w=\d+/g;
 

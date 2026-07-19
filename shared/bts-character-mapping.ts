@@ -11,7 +11,10 @@ export type BTSCharacterId =
   | "chiller"
   | "companion";
 
-export const CHARACTER_PRIMARY_CATEGORY: Record<Exclude<BTSCharacterId, "companion">, string> = {
+export const CHARACTER_PRIMARY_CATEGORY: Record<
+  Exclude<BTSCharacterId, "companion">,
+  string
+> = {
   collector: "heritage",
   romanticist: "hotspot",
   explorer: "attraction",

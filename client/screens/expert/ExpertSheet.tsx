@@ -6,7 +6,16 @@
 //   시트 자체 헤더(제목·X)는 부모 모달이 제공 = 여기선 각 내부뷰의 서브헤더(← 뒤로)만. 상단 SafeArea = 부모 담당 / 하단 insets 만 사용.
 // 2026-07-15 §0 슬림화 = 하위 뷰(DetailView·ProfileEditView)·스타일 = 같은 폴더 안 별도 파일로 순수 이동(리팩토링 금지, JSX·로직·주석 그대로).
 import React, { useState, useCallback, useRef, useEffect } from "react";
-import { View, Text, Pressable, TextInput, ActivityIndicator, ScrollView, Alert, Platform } from "react-native";
+import {
+  View,
+  Text,
+  Pressable,
+  TextInput,
+  ActivityIndicator,
+  ScrollView,
+  Alert,
+  Platform,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 import { useColorScheme } from "react-native";
@@ -34,7 +43,10 @@ import { styles } from "./styles";
 const EXPERT_INQUIRY_CREDIT_COST = 10;
 
 // ⚠️ 사장님 SSOT 2026-07-14 = 시트 내부 화면 = react-navigation 아님 = 상태머신 1개(setView)로 전환.
-type SheetView = { kind: "home" } | { kind: "detail"; id: string } | { kind: "profileEdit" };
+type SheetView =
+  | { kind: "home" }
+  | { kind: "detail"; id: string }
+  | { kind: "profileEdit" };
 
 interface ExpertSheetProps {
   onClose: () => void; // 시트 닫기(부모가 모달 숨김 → 여정으로 복귀)
@@ -48,13 +60,23 @@ interface ExpertSheetProps {
 type Filter = "all" | InquiryStatus;
 const FILTERS: Filter[] = ["all", "pending", "answered"];
 
-export default function ExpertSheet({ onClose, onOpenItinerary, onRestoreBackground, onRequestLogin }: ExpertSheetProps) {
+export default function ExpertSheet({
+  onClose,
+  onOpenItinerary,
+  onRestoreBackground,
+  onRequestLogin,
+}: ExpertSheetProps) {
   const { t } = useTranslation();
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? "light"];
   const insets = useSafeAreaInsets();
   // ⚠️ 실제 저장 여정 id = currentItineraryId(별도) = Itinerary 타입엔 id 없음. 이걸 써야 FK 연결됨.
-  const { currentItinerary, currentItineraryId, setCurrentItinerary, bumpExpertData } = useMapToggle();
+  const {
+    currentItinerary,
+    currentItineraryId,
+    setCurrentItinerary,
+    bumpExpertData,
+  } = useMapToggle();
 
   // 내부 화면 전환(§16 = react-navigation 대신 상태머신).
   const [view, setView] = useState<SheetView>({ kind: "home" });
@@ -73,27 +95,59 @@ export default function ExpertSheet({ onClose, onOpenItinerary, onRestoreBackgro
 
   // 마운트 가드 = 액션 후 reload 가 언마운트 후 setState 방지.
   const mounted = useRef(true);
-  useEffect(() => () => { mounted.current = false; }, []);
+  useEffect(
+    () => () => {
+      mounted.current = false;
+    },
+    [],
+  );
 
   // home 진입 시 1회 = 역할 + 목록 + 프로필 조회(옛 useFocusEffect 폐기 §19 = 시트는 포커스 개념 없음, mount + 액션 후 reload 로 갱신).
   const reload = useCallback(() => {
-    listInquiries().then((r) => { if (mounted.current) setInquiries(r); }).catch(() => { if (mounted.current) setInquiries([]); });
+    listInquiries()
+      .then((r) => {
+        if (mounted.current) setInquiries(r);
+      })
+      .catch(() => {
+        if (mounted.current) setInquiries([]);
+      });
   }, []);
   useEffect(() => {
     let alive = true;
-    getMyRole().then((role) => {
-      if (!alive) return;
-      const expert = role === "expert" || role === "admin";
-      setIsExpert(expert);
-      setViewMode(expert ? "expert" : "user"); // 진입 기본 = 실제 역할(전문가면 답변함 먼저). 이후 상단 토글로 자유 전환.
-    }).catch(() => { if (alive) { setIsExpert(false); setViewMode("user"); } });
-    listInquiries().then((r) => { if (alive) setInquiries(r); }).catch(() => { if (alive) setInquiries([]); });
-    getExpertProfile().then(({ profile }) => { if (alive) setProfile(profile); }).catch(() => {});
-    return () => { alive = false; };
+    getMyRole()
+      .then((role) => {
+        if (!alive) return;
+        const expert = role === "expert" || role === "admin";
+        setIsExpert(expert);
+        setViewMode(expert ? "expert" : "user"); // 진입 기본 = 실제 역할(전문가면 답변함 먼저). 이후 상단 토글로 자유 전환.
+      })
+      .catch(() => {
+        if (alive) {
+          setIsExpert(false);
+          setViewMode("user");
+        }
+      });
+    listInquiries()
+      .then((r) => {
+        if (alive) setInquiries(r);
+      })
+      .catch(() => {
+        if (alive) setInquiries([]);
+      });
+    getExpertProfile()
+      .then(({ profile }) => {
+        if (alive) setProfile(profile);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
   }, []);
 
   const itin: any = currentItinerary;
-  const totalPlaces = itin?.days?.reduce((s: number, d: any) => s + (d.places?.length || 0), 0) || 0;
+  const totalPlaces =
+    itin?.days?.reduce((s: number, d: any) => s + (d.places?.length || 0), 0) ||
+    0;
   const aiOpinion =
     itin?.rawData?.verification?.result?.feasibility?.verdict ||
     itin?.rawData?.verification?.result?.summary ||
@@ -103,17 +157,26 @@ export default function ExpertSheet({ onClose, onOpenItinerary, onRestoreBackgro
   const goLoginPrompt = () => {
     // 시트 = navigation 없음 = 로그인 수락 시 부모 콜백(onRequestLogin) 호출 → 없으면 onClose 폴백(사용자는 프로필서 로그인).
     if (Platform.OS === "web") {
-      if (typeof window !== "undefined" && window.confirm(`${t("expert.loginTitle")}\n\n${t("expert.loginMsg")}`)) (onRequestLogin ?? onClose)();
+      if (
+        typeof window !== "undefined" &&
+        window.confirm(`${t("expert.loginTitle")}\n\n${t("expert.loginMsg")}`)
+      )
+        (onRequestLogin ?? onClose)();
     } else {
       Alert.alert(t("expert.loginTitle"), t("expert.loginMsg"), [
         { text: t("common.cancel"), style: "cancel" },
-        { text: t("expert.goLogin"), onPress: () => (onRequestLogin ?? onClose)() },
+        {
+          text: t("expert.goLogin"),
+          onPress: () => (onRequestLogin ?? onClose)(),
+        },
       ]);
     }
   };
   const notify = (title: string, msg?: string) => {
-    if (Platform.OS === "web") { if (typeof window !== "undefined") window.alert(msg ? `${title}\n\n${msg}` : title); }
-    else Alert.alert(title, msg);
+    if (Platform.OS === "web") {
+      if (typeof window !== "undefined")
+        window.alert(msg ? `${title}\n\n${msg}` : title);
+    } else Alert.alert(title, msg);
   };
 
   // ── 사용자: 문의 접수(로그인가드·여정자동저장·웹세이프 = 이 파일 인라인 §16) ──
@@ -121,7 +184,11 @@ export default function ExpertSheet({ onClose, onOpenItinerary, onRestoreBackgro
     if (!message.trim() || submitting) return;
     // ⚠️ 사장님 SSOT 2026-07-14 = 문의 전 로그인 확인 = 비로그인(또는 게스트)이면 서버 400 대신 즉시 로그인 안내(§19).
     const user = await getUserData();
-    if (!user || !user.token || !user.token.startsWith("simple_auth_token_v1_")) {
+    if (
+      !user ||
+      !user.token ||
+      !user.token.startsWith("simple_auth_token_v1_")
+    ) {
       goLoginPrompt();
       return;
     }
@@ -136,7 +203,14 @@ export default function ExpertSheet({ onClose, onOpenItinerary, onRestoreBackgro
       const r = await submitInquiry({
         userMessage: message.trim(),
         // 목록카드용 요약(전문가는 여정 id로 restore-by-id = DB 원본 열람). 스냅샷 폐기 §19.
-        itineraryData: itin ? { destination: itin.destination, dayCount: itin.days?.length ?? 0, totalPlaces, aiOpinion } : null,
+        itineraryData: itin
+          ? {
+              destination: itin.destination,
+              dayCount: itin.days?.length ?? 0,
+              totalPlaces,
+              aiOpinion,
+            }
+          : null,
         itineraryId: linkedId, // 저장된 여정 id 연결(FK)
       });
       if (r.ok) {
@@ -163,7 +237,8 @@ export default function ExpertSheet({ onClose, onOpenItinerary, onRestoreBackgro
 
   // ⚠️ 사장님 SSOT 2026-07-14 = 문의 카드 누름 = 그 문의의 여정을 배경에 복원(있으면) + 상세 뷰로 전환 = 실제 여정 보며 답변/확인(중간 요약카드 불필요).
   const openInquiry = (q: Inquiry) => {
-    if (q.itineraryId && onRestoreBackground) onRestoreBackground(q.itineraryId);
+    if (q.itineraryId && onRestoreBackground)
+      onRestoreBackground(q.itineraryId);
     setView({ kind: "detail", id: q.id });
   };
 
@@ -176,30 +251,62 @@ export default function ExpertSheet({ onClose, onOpenItinerary, onRestoreBackgro
         colorScheme={colorScheme}
         insets={insets}
         t={t}
-        onBack={() => { setView({ kind: "home" }); reload(); }}
+        onBack={() => {
+          setView({ kind: "home" });
+          reload();
+        }}
         onClose={onClose}
         onOpenItinerary={onOpenItinerary}
       />
     );
   }
   if (view.kind === "profileEdit") {
-    return <ProfileEditView theme={theme} insets={insets} t={t} onBack={() => setView({ kind: "home" })} />;
+    return (
+      <ProfileEditView
+        theme={theme}
+        insets={insets}
+        t={t}
+        onBack={() => setView({ kind: "home" })}
+      />
+    );
   }
 
   // ── home = 상단 토글(전문가/관리자만) + 역할별 본문 ──
   const modeToggle = isExpert ? (
-    <View style={[styles.toggleRow, { backgroundColor: theme.backgroundDefault }]}>
+    <View
+      style={[styles.toggleRow, { backgroundColor: theme.backgroundDefault }]}
+    >
       <Pressable
-        style={[styles.toggleBtn, viewMode === "user" && { backgroundColor: Brand.primary }]}
+        style={[
+          styles.toggleBtn,
+          viewMode === "user" && { backgroundColor: Brand.primary },
+        ]}
         onPress={() => setViewMode("user")}
       >
-        <Text style={[styles.toggleText, { color: viewMode === "user" ? "#FFF" : theme.textSecondary }]}>{t("expert.modeUser")}</Text>
+        <Text
+          style={[
+            styles.toggleText,
+            { color: viewMode === "user" ? "#FFF" : theme.textSecondary },
+          ]}
+        >
+          {t("expert.modeUser")}
+        </Text>
       </Pressable>
       <Pressable
-        style={[styles.toggleBtn, viewMode === "expert" && { backgroundColor: Brand.primary }]}
+        style={[
+          styles.toggleBtn,
+          viewMode === "expert" && { backgroundColor: Brand.primary },
+        ]}
         onPress={() => setViewMode("expert")}
       >
-        <Text style={[styles.toggleText, { color: viewMode === "expert" ? "#FFF" : theme.textSecondary }]}>{t("expert.modeExpert")}</Text>
+        <Text
+          style={[
+            styles.toggleText,
+            { color: viewMode === "expert" ? "#FFF" : theme.textSecondary },
+          ]}
+        >
+          {t("expert.modeExpert")}
+        </Text>
       </Pressable>
     </View>
   ) : null;
@@ -214,16 +321,29 @@ export default function ExpertSheet({ onClose, onOpenItinerary, onRestoreBackgro
       rejected: inquiries.filter((q) => q.status === "rejected").length,
     };
     const filterLabel: Record<Filter, string> = {
-      all: t("expert.fltAll"), pending: t("expert.stPending"), in_review: t("expert.stReview"), answered: t("expert.stAnswered"), rejected: t("expert.stRejected"),
+      all: t("expert.fltAll"),
+      pending: t("expert.stPending"),
+      in_review: t("expert.stReview"),
+      answered: t("expert.stAnswered"),
+      rejected: t("expert.stRejected"),
     };
-    const shown = filter === "all" ? inquiries : inquiries.filter((q) => q.status === filter);
+    const shown =
+      filter === "all"
+        ? inquiries
+        : inquiries.filter((q) => q.status === filter);
     return (
       <View style={styles.container}>
         {/* 서브헤더 = 답변함 제목 + 프로필 편집 진입 + 상단 토글(시트 자체 헤더는 부모 모달) */}
         <View style={[styles.subHeader, { borderBottomColor: theme.border }]}>
           <View style={styles.subHeaderRow}>
-            <Text style={[styles.subTitle, { color: theme.text }]}>{t("expert.answerBox")}</Text>
-            <Pressable onPress={() => setView({ kind: "profileEdit" })} hitSlop={10} style={styles.iconBtn}>
+            <Text style={[styles.subTitle, { color: theme.text }]}>
+              {t("expert.answerBox")}
+            </Text>
+            <Pressable
+              onPress={() => setView({ kind: "profileEdit" })}
+              hitSlop={10}
+              style={styles.iconBtn}
+            >
               <Icon name="user" size={22} color={Brand.primary} />
             </Pressable>
           </View>
@@ -231,27 +351,51 @@ export default function ExpertSheet({ onClose, onOpenItinerary, onRestoreBackgro
         </View>
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={{ padding: Spacing.lg, paddingBottom: insets.bottom + Spacing.lg }}
+          contentContainerStyle={{
+            padding: Spacing.lg,
+            paddingBottom: insets.bottom + Spacing.lg,
+          }}
           showsVerticalScrollIndicator={false}
         >
           {/* 상태 필터 칩 */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.chips}
+          >
             {FILTERS.map((f) => {
               const on = filter === f;
               return (
                 <Pressable
                   key={f}
                   onPress={() => setFilter(f)}
-                  style={[styles.chip, { backgroundColor: on ? Brand.primary : theme.backgroundDefault, borderColor: on ? Brand.primary : theme.border }]}
+                  style={[
+                    styles.chip,
+                    {
+                      backgroundColor: on
+                        ? Brand.primary
+                        : theme.backgroundDefault,
+                      borderColor: on ? Brand.primary : theme.border,
+                    },
+                  ]}
                 >
-                  <Text style={[styles.chipText, { color: on ? "#FFF" : theme.textSecondary }]}>{filterLabel[f]} {counts[f]}</Text>
+                  <Text
+                    style={[
+                      styles.chipText,
+                      { color: on ? "#FFF" : theme.textSecondary },
+                    ]}
+                  >
+                    {filterLabel[f]} {counts[f]}
+                  </Text>
                 </Pressable>
               );
             })}
           </ScrollView>
 
           {shown.length === 0 ? (
-            <Text style={[styles.empty, { color: theme.textTertiary }]}>{t("expert.inboxNoItems")}</Text>
+            <Text style={[styles.empty, { color: theme.textTertiary }]}>
+              {t("expert.inboxNoItems")}
+            </Text>
           ) : (
             shown.map((q) => {
               const st = statusStyle(q.status, theme, t);
@@ -259,15 +403,39 @@ export default function ExpertSheet({ onClose, onOpenItinerary, onRestoreBackgro
               return (
                 <Pressable
                   key={q.id}
-                  style={[styles.inquiryCard, { backgroundColor: theme.backgroundDefault }]}
+                  style={[
+                    styles.inquiryCard,
+                    { backgroundColor: theme.backgroundDefault },
+                  ]}
                   onPress={() => openInquiry(q)}
                 >
                   <View style={styles.flex1}>
-                    <Text style={[styles.inquiryTitle, { color: theme.text }]} numberOfLines={1}>{dest}</Text>
-                    <Text style={[styles.inquiryPreview, { color: theme.textSecondary }]} numberOfLines={1}>{q.userMessage}</Text>
+                    <Text
+                      style={[styles.inquiryTitle, { color: theme.text }]}
+                      numberOfLines={1}
+                    >
+                      {dest}
+                    </Text>
+                    <Text
+                      style={[
+                        styles.inquiryPreview,
+                        { color: theme.textSecondary },
+                      ]}
+                      numberOfLines={1}
+                    >
+                      {q.userMessage}
+                    </Text>
                   </View>
-                  <View style={[styles.badge, { backgroundColor: st.bg }]}><Text style={[styles.badgeText, { color: st.fg }]}>{st.label}</Text></View>
-                  <Icon name="chevron-right" size={18} color={theme.textTertiary} />
+                  <View style={[styles.badge, { backgroundColor: st.bg }]}>
+                    <Text style={[styles.badgeText, { color: st.fg }]}>
+                      {st.label}
+                    </Text>
+                  </View>
+                  <Icon
+                    name="chevron-right"
+                    size={18}
+                    color={theme.textTertiary}
+                  />
                 </Pressable>
               );
             })
@@ -282,29 +450,58 @@ export default function ExpertSheet({ onClose, onOpenItinerary, onRestoreBackgro
     <View style={styles.container}>
       {/* 전문가/관리자면 상단 토글만(제목·X = 부모 모달). 순수 사용자는 서브헤더 없음. */}
       {modeToggle ? (
-        <View style={[styles.subHeader, { borderBottomColor: theme.border }]}>{modeToggle}</View>
+        <View style={[styles.subHeader, { borderBottomColor: theme.border }]}>
+          {modeToggle}
+        </View>
       ) : null}
 
       <KeyboardAwareScrollViewCompat
         style={styles.scroll}
-        contentContainerStyle={{ padding: Spacing.lg, paddingBottom: insets.bottom + Spacing.lg }}
+        contentContainerStyle={{
+          padding: Spacing.lg,
+          paddingBottom: insets.bottom + Spacing.lg,
+        }}
         showsVerticalScrollIndicator={false}
       >
         {/* 소개 카드 = 전문가 본인 프로필(있으면) / 없으면 기본 i18n 문구 */}
         <View style={[styles.card, { backgroundColor: `${Brand.primary}0D` }]}>
-          <View style={styles.avatar}><Text style={styles.avatarText}>{profile?.character || t("expert.introInitial")}</Text></View>
+          <View style={styles.avatar}>
+            <Text style={styles.avatarText}>
+              {profile?.character || t("expert.introInitial")}
+            </Text>
+          </View>
           <View style={styles.flex1}>
-            <Text style={[styles.cardTitle, { color: theme.text }]}>{profile?.nickname || t("expert.introName")}</Text>
-            <Text style={[styles.cardSub, { color: theme.textSecondary }]}>{profile?.career || t("expert.introDesc")}</Text>
-            {profile?.bio ? <Text style={[styles.cardBio, { color: theme.textTertiary }]} numberOfLines={3}>{profile.bio}</Text> : null}
+            <Text style={[styles.cardTitle, { color: theme.text }]}>
+              {profile?.nickname || t("expert.introName")}
+            </Text>
+            <Text style={[styles.cardSub, { color: theme.textSecondary }]}>
+              {profile?.career || t("expert.introDesc")}
+            </Text>
+            {profile?.bio ? (
+              <Text
+                style={[styles.cardBio, { color: theme.textTertiary }]}
+                numberOfLines={3}
+              >
+                {profile.bio}
+              </Text>
+            ) : null}
           </View>
         </View>
 
         {/* ⚠️ 사장님 SSOT 2026-07-15 = 사용자도 진입 즉시 '내 문의함(본인 문의 목록)'이 먼저 = 관리자 답변함(목록 먼저)과 동작 통일. 새 문의 작성은 그 아래. BE는 이미 본인 것만 반환(expert-routes 신원필터). */}
         {/* 내 문의함 = 본인 문의 목록(먼저) */}
-        <Text style={[styles.sectionTitle, { color: theme.text, marginTop: Spacing.md }]}>{t("expert.myInbox")}</Text>
+        <Text
+          style={[
+            styles.sectionTitle,
+            { color: theme.text, marginTop: Spacing.md },
+          ]}
+        >
+          {t("expert.myInbox")}
+        </Text>
         {inquiries.length === 0 ? (
-          <Text style={[styles.emptyText, { color: theme.textTertiary }]}>{t("expert.inboxEmpty")}</Text>
+          <Text style={[styles.emptyText, { color: theme.textTertiary }]}>
+            {t("expert.inboxEmpty")}
+          </Text>
         ) : (
           inquiries.map((q) => {
             const st = statusStyle(q.status, theme, t);
@@ -313,18 +510,40 @@ export default function ExpertSheet({ onClose, onOpenItinerary, onRestoreBackgro
             return (
               <Pressable
                 key={q.id}
-                style={[styles.inquiryCard, { backgroundColor: theme.backgroundDefault }]}
+                style={[
+                  styles.inquiryCard,
+                  { backgroundColor: theme.backgroundDefault },
+                ]}
                 onPress={() => openInquiry(q)}
               >
                 {unread ? <View style={styles.unreadDot} /> : null}
                 <View style={styles.flex1}>
-                  <Text style={[styles.inquiryTitle, { color: theme.text }]} numberOfLines={1}>{dest}</Text>
-                  <Text style={[styles.inquiryPreview, { color: theme.textSecondary }]} numberOfLines={1}>{q.userMessage}</Text>
+                  <Text
+                    style={[styles.inquiryTitle, { color: theme.text }]}
+                    numberOfLines={1}
+                  >
+                    {dest}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.inquiryPreview,
+                      { color: theme.textSecondary },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {q.userMessage}
+                  </Text>
                 </View>
                 <View style={[styles.badge, { backgroundColor: st.bg }]}>
-                  <Text style={[styles.badgeText, { color: st.fg }]}>{st.label}</Text>
+                  <Text style={[styles.badgeText, { color: st.fg }]}>
+                    {st.label}
+                  </Text>
                 </View>
-                <Icon name="chevron-right" size={18} color={theme.textTertiary} />
+                <Icon
+                  name="chevron-right"
+                  size={18}
+                  color={theme.textTertiary}
+                />
               </Pressable>
             );
           })
@@ -335,30 +554,62 @@ export default function ExpertSheet({ onClose, onOpenItinerary, onRestoreBackgro
 
         {/* 여정 첨부 카드 */}
         {itin ? (
-          <View style={[styles.attachCard, { backgroundColor: theme.backgroundDefault }]}>
-            <Text style={[styles.sectionSub, { color: theme.textTertiary }]}>{t("expert.attachLabel")}</Text>
+          <View
+            style={[
+              styles.attachCard,
+              { backgroundColor: theme.backgroundDefault },
+            ]}
+          >
+            <Text style={[styles.sectionSub, { color: theme.textTertiary }]}>
+              {t("expert.attachLabel")}
+            </Text>
             <Text style={[styles.attachTitle, { color: theme.text }]}>
-              {itin.destination} · {itin.days?.length || 0}{t("expert.daysPlaces", { places: totalPlaces })}
+              {itin.destination} · {itin.days?.length || 0}
+              {t("expert.daysPlaces", { places: totalPlaces })}
             </Text>
             {aiOpinion ? (
               <View style={[styles.aiLine, { backgroundColor: "#7A5AF814" }]}>
                 <View style={styles.dot} />
                 {/* AI 보라 = 라이트 진보라/다크 연보라(다크모드 대비 확보). 점은 accent #7A5AF8 유지. */}
-                <Text style={[styles.aiText, { color: colorScheme === "dark" ? "#A78BFA" : "#5B3FD4" }]} numberOfLines={2}>{t("expert.aiAttached")}</Text>
+                <Text
+                  style={[
+                    styles.aiText,
+                    { color: colorScheme === "dark" ? "#A78BFA" : "#5B3FD4" },
+                  ]}
+                  numberOfLines={2}
+                >
+                  {t("expert.aiAttached")}
+                </Text>
               </View>
             ) : null}
           </View>
         ) : (
-          <View style={[styles.card, { backgroundColor: theme.backgroundDefault }]}>
+          <View
+            style={[styles.card, { backgroundColor: theme.backgroundDefault }]}
+          >
             <Icon name="map-pin" size={18} color={theme.textTertiary} />
-            <Text style={[styles.cardSub, { color: theme.textTertiary, flex: 1 }]}>{t("expert.noItinerary")}</Text>
+            <Text
+              style={[styles.cardSub, { color: theme.textTertiary, flex: 1 }]}
+            >
+              {t("expert.noItinerary")}
+            </Text>
           </View>
         )}
 
         {/* 질문 입력 */}
-        <Text style={[styles.sectionTitle, { color: theme.text, marginTop: Spacing.md }]}>{t("expert.questionLabel")}</Text>
+        <Text
+          style={[
+            styles.sectionTitle,
+            { color: theme.text, marginTop: Spacing.md },
+          ]}
+        >
+          {t("expert.questionLabel")}
+        </Text>
         <TextInput
-          style={[styles.input, { backgroundColor: theme.backgroundDefault, color: theme.text }]}
+          style={[
+            styles.input,
+            { backgroundColor: theme.backgroundDefault, color: theme.text },
+          ]}
           placeholder={t("expert.questionPlaceholder")}
           placeholderTextColor={theme.textTertiary}
           value={message}
@@ -366,15 +617,24 @@ export default function ExpertSheet({ onClose, onOpenItinerary, onRestoreBackgro
           multiline
         />
         <Pressable
-          style={[styles.submitBtn, { backgroundColor: Brand.primary, opacity: canSubmit ? 1 : 0.5 }]}
+          style={[
+            styles.submitBtn,
+            { backgroundColor: Brand.primary, opacity: canSubmit ? 1 : 0.5 },
+          ]}
           onPress={onSubmit}
           disabled={!canSubmit}
         >
-          {submitting ? <ActivityIndicator color="#FFF" /> : <Icon name="send" size={18} color="#FFF" />}
+          {submitting ? (
+            <ActivityIndicator color="#FFF" />
+          ) : (
+            <Icon name="send" size={18} color="#FFF" />
+          )}
           <Text style={styles.submitText}>{t("expert.submit")}</Text>
         </Pressable>
         {/* 크레딧 안내 = AI 의견 팝업과 동일 패턴. 실제 차감은 로그인 정식화 후(§9). */}
-        <Text style={[styles.creditNote, { color: theme.textTertiary }]}>{t("expert.creditNote", { count: EXPERT_INQUIRY_CREDIT_COST })}</Text>
+        <Text style={[styles.creditNote, { color: theme.textTertiary }]}>
+          {t("expert.creditNote", { count: EXPERT_INQUIRY_CREDIT_COST })}
+        </Text>
       </KeyboardAwareScrollViewCompat>
     </View>
   );

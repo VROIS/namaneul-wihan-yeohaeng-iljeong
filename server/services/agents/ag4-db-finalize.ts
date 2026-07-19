@@ -25,7 +25,10 @@ import { buildRouteLocal } from "../route/route-local";
 import { backfillFromRoute } from "../route/route-backfill";
 // ⚠️ 2026-07-04 사장님 SSOT = 드라이빙 가이드 가격 = 재발명 금지(§16) = MIX 경로(pipeline-v3.ts)와 동일한 단일 SSOT 재사용.
 // ⚠️ 2026-07-06 사장님 SSOT = 가이드 하루요금 = guideCostForDay 공용 SSOT(옛 로컬 guideCostPerPersonPerDay 승격, 3경로 공유 §16).
-import { shouldApplyGuidePrice, guideCostForDay } from "../transport-pricing-service";
+import {
+  shouldApplyGuidePrice,
+  guideCostForDay,
+} from "../transport-pricing-service";
 // ⚠️ 2026-07-17 사장님 확정 = 식당풀 = (city_id=요청도시) ∪ (중심 100km) 합집합 = shared/pool-radius 단일 SSOT(§16)
 import { getPoolContext } from "../shared/pool-radius";
 
@@ -74,7 +77,7 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
     inputPlaces,
   } = input;
 
-  const eurToKrw = await getEurToKrwRate('[AG4-DB]');
+  const eurToKrw = await getEurToKrwRate("[AG4-DB]");
 
   // ===== 1. 동선 = 로컬 NN+Haversine 단일 SSOT (= DB-only 자체 해결, $0/~3ms) (= Stage C 2026-06-06) =====
   // 🗑️ 2026-07-05 = USE_LOCAL_ROUTE 롤백 토글 + Gemini 우선 삼항 = "새||옛" 폴백 = 삭제 §0/§19 (buildRouteLocal 단일 경로)
@@ -105,7 +108,7 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
         WHERE (${poolWhere}) AND seed_category = 'restaurant' AND price_eur IS NOT NULL
       )
       SELECT * FROM banded WHERE band_rn <= quota ORDER BY "googleReviewCount" DESC NULLS LAST
-    `)) as unknown as { rows: Array<Record<string, any>> };
+    `)) as unknown as { rows: Record<string, any>[] };
     restaurantPool = (rows.rows || [])
       .filter((r) => r.latitude != null && Number(r.latitude) !== 0)
       .map((r) => ({
@@ -129,8 +132,15 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
   }
 
   // 🗑️ 2026-07-05 = 옛 Gemini 삼항·localInsufficient 재호출·legacy fallback = "새||옛" 폴백 = 삭제 §0/§19
-  const routeResult = buildRouteLocal(skeleton, inputPlaces, cityCoords, restaurantPool);
-  console.log(`[AG4-DB] ✅ 동선 = 로컬 NN+Haversine (${routeResult.elapsedMs}ms, Gemini 0)`);
+  const routeResult = buildRouteLocal(
+    skeleton,
+    inputPlaces,
+    cityCoords,
+    restaurantPool,
+  );
+  console.log(
+    `[AG4-DB] ✅ 동선 = 로컬 NN+Haversine (${routeResult.elapsedMs}ms, Gemini 0)`,
+  );
 
   // buildRouteLocal 은 daySlotsConfig 를 순회해 days 를 채우므로 정상 뼈대면 항상 ok.
   // !ok = daySlotsConfig 자체가 비어있는 malformed 뼈대뿐 → 옛 파이프라인 부활 없이 명확한 에러(§0).
@@ -220,7 +230,9 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
 
       // ⚠️ 2026-06-12 = 매트릭스 폴백 = 안전망(유지)이나 정상 경로(식당풀 isNotNull(priceEur))에선 0건이어야 함. 발생 시 = 데이터 결손 신호 = warn.
       if (isMeal && scene.price_eur == null) {
-        console.warn(`[AG4-DB] ⚠️ meal price 매트릭스 폴백 발생 = ${scene.name_local || scene.name_en || scene.place_id} (= PSR price_eur NULL = 식당풀 게이트 누수 점검)`);
+        console.warn(
+          `[AG4-DB] ⚠️ meal price 매트릭스 폴백 발생 = ${scene.name_local || scene.name_en || scene.place_id} (= PSR price_eur NULL = 식당풀 게이트 누수 점검)`,
+        );
       }
       const mealPrice = isMeal
         ? (scene.price_eur ??
@@ -295,7 +307,10 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
     // ===== 교통 = 대중교통 구간별 추정 + 드라이빙 가이드 하루 1회 실가격 =====
     // ⚠️ 2026-07-04 사장님 SSOT = 드라이빙 가이드는 구간별 계산 금지(반일요금 개념 없어 비현실적으로 쌈, §0 옛것 완전삭제).
     //   MIX 경로와 동일한 shouldApplyGuidePrice + calculateTransportPrice 재사용(§16) = 하루 가용시간 기준 1회 계산.
-    const isGuideDay = shouldApplyGuidePrice(formData.mobilityStyle, formData.travelStyle);
+    const isGuideDay = shouldApplyGuidePrice(
+      formData.mobilityStyle,
+      formData.travelStyle,
+    );
     const transits = scenes.slice(1).map((scene, i) => {
       const cost = isGuideDay ? 0 : estimateTransitCost(scene.transit_mode); // 가이드 = 구간 표시 FE 숨김, 일 총합에만 반영
       return {
@@ -309,7 +324,14 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
       };
     });
     const transportCostEur = isGuideDay
-      ? await guideCostForDay({ dayConfig, companionType: formData.companionType as any, companionCount, mobilityStyle: formData.mobilityStyle, travelStyle: formData.travelStyle, dayCount })
+      ? await guideCostForDay({
+          dayConfig,
+          companionType: formData.companionType as any,
+          companionCount,
+          mobilityStyle: formData.mobilityStyle,
+          travelStyle: formData.travelStyle,
+          dayCount,
+        })
       : transits.reduce((s, t) => s + (t.cost || 0), 0);
 
     const dailyPerPersonEur =
@@ -403,7 +425,12 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
       curationFocus: formData.curationFocus,
       // ⚠️ 수정금지(승인필요) 2026-07-10 사장님 SSOT = 확정 교통수단 = MIX(pipeline-v3:1157)와 동형 방출(§20 전수).
       //   = 이 값이 없으면 AI의견이 DB-only 가이드 여정을 대중교통 전제로 오판(서버 재계산 폐기 2026-07-10과 세트).
-      transportCategory: shouldApplyGuidePrice(formData.mobilityStyle, formData.travelStyle) ? "guide" : "transit",
+      transportCategory: shouldApplyGuidePrice(
+        formData.mobilityStyle,
+        formData.travelStyle,
+      )
+        ? "guide"
+        : "transit",
       generatedAt: new Date().toISOString(),
       pipelineVersion: "db-only-v2-scene-direct",
       route: {

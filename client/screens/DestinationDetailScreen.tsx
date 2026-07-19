@@ -145,7 +145,9 @@ export default function DestinationDetailScreen() {
           >
             <View style={styles.cardHeader}>
               <Icon name="zap" size={20} color={Brand.primary} />
-              <ThemedText style={styles.cardTitle}>{t("destination.aiAnalysis")}</ThemedText>
+              <ThemedText style={styles.cardTitle}>
+                {t("destination.aiAnalysis")}
+              </ThemedText>
             </View>
             <Text style={[styles.cardContent, { color: theme.textSecondary }]}>
               {t("destination.aiAnalysisContent")}
@@ -178,7 +180,9 @@ export default function DestinationDetailScreen() {
           >
             <View style={styles.cardHeader}>
               <Icon name="cloud" size={20} color={Brand.primary} />
-              <ThemedText style={styles.cardTitle}>{t("destination.realtime")}</ThemedText>
+              <ThemedText style={styles.cardTitle}>
+                {t("destination.realtime")}
+              </ThemedText>
             </View>
             <Text style={[styles.cardContent, { color: theme.textSecondary }]}>
               {t("destination.realtimeContent")}

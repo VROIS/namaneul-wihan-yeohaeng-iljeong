@@ -39,7 +39,9 @@ export default function WhatsAppModal({ login }: { login: LoginApi }) {
         >
           <View style={styles.modalHeader}>
             <Text style={[styles.modalTitle, { color: theme.text }]}>
-              {whatsappStep === "phone" ? t("login.phoneInput") : t("login.otpInput")}
+              {whatsappStep === "phone"
+                ? t("login.phoneInput")
+                : t("login.otpInput")}
             </Text>
             <Pressable onPress={() => setShowWhatsAppModal(false)}>
               <Icon name="x" size={24} color={theme.text} />
@@ -71,7 +73,9 @@ export default function WhatsAppModal({ login }: { login: LoginApi }) {
                 onPress={handleWhatsAppSendOtp}
                 disabled={oauthLoading}
               >
-                <Text style={styles.whatsappButtonText}>{t("login.otpSend")}</Text>
+                <Text style={styles.whatsappButtonText}>
+                  {t("login.otpSend")}
+                </Text>
               </Pressable>
             </View>
           ) : (
@@ -103,7 +107,9 @@ export default function WhatsAppModal({ login }: { login: LoginApi }) {
                 onPress={handleWhatsAppVerify}
                 disabled={oauthLoading}
               >
-                <Text style={styles.whatsappButtonText}>{t("common.confirm")}</Text>
+                <Text style={styles.whatsappButtonText}>
+                  {t("common.confirm")}
+                </Text>
               </Pressable>
               <Pressable
                 onPress={() => setWhatsappStep("phone")}

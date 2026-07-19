@@ -34,7 +34,8 @@ const LOADING_MESSAGES = [
 ];
 
 export default function BTSLoadingScreen() {
-  const navigation = useNavigation<NativeStackNavigationProp<BTSStackParamList>>();
+  const navigation =
+    useNavigation<NativeStackNavigationProp<BTSStackParamList>>();
   const {
     selectedCharacter,
     selectedCity,
@@ -57,16 +58,16 @@ export default function BTSLoadingScreen() {
     rotation.value = withRepeat(
       withTiming(360, { duration: 1200, easing: Easing.linear }),
       -1,
-      false
+      false,
     );
     // 펄스
     ringScale.value = withRepeat(
       withSequence(
         withTiming(1.1, { duration: 800 }),
-        withTiming(1, { duration: 800 })
+        withTiming(1, { duration: 800 }),
       ),
       -1,
-      true
+      true,
     );
   }, []);
 
@@ -83,7 +84,8 @@ export default function BTSLoadingScreen() {
 
   // API 호출
   useEffect(() => {
-    if (!selectedCity || !selectedCharacter || selectedPlaceIds.length === 0) return;
+    if (!selectedCity || !selectedCharacter || selectedPlaceIds.length === 0)
+      return;
 
     setIsGenerating(true);
 
@@ -104,9 +106,12 @@ export default function BTSLoadingScreen() {
       .then((data) => {
         setItinerary(data);
         // 최소 3초 대기 후 결과 화면으로 (로딩 메시지 다 보여주기)
-        setTimeout(() => {
-          navigation.replace("BTSDashboard");
-        }, Math.max(0, 3000));
+        setTimeout(
+          () => {
+            navigation.replace("BTSDashboard");
+          },
+          Math.max(0, 3000),
+        );
       })
       .catch((e) => {
         setError(e?.message || "일정 생성에 실패했어요");
@@ -116,10 +121,7 @@ export default function BTSLoadingScreen() {
   }, []);
 
   const ringStyle = useAnimatedStyle(() => ({
-    transform: [
-      { rotate: `${rotation.value}deg` },
-      { scale: ringScale.value },
-    ],
+    transform: [{ rotate: `${rotation.value}deg` }, { scale: ringScale.value }],
   }));
 
   const currentMsg = LOADING_MESSAGES[msgIndex];
@@ -147,7 +149,9 @@ export default function BTSLoadingScreen() {
 
       {/* 중앙 이모지 */}
       <Animated.View entering={FadeIn.delay(300)} style={styles.centerIcon}>
-        <Text style={styles.centerEmoji}>{selectedCharacter?.emoji || "🎵"}</Text>
+        <Text style={styles.centerEmoji}>
+          {selectedCharacter?.emoji || "🎵"}
+        </Text>
       </Animated.View>
 
       {/* 메시지 영역 */}
@@ -171,7 +175,8 @@ export default function BTSLoadingScreen() {
       {/* 도시 정보 */}
       <Animated.View entering={FadeIn.delay(600)} style={styles.infoArea}>
         <Text style={styles.infoText}>
-          {selectedCity?.nameKo} · {selectedCharacter?.name} · {selectedPlaceIds.length}곳
+          {selectedCity?.nameKo} · {selectedCharacter?.name} ·{" "}
+          {selectedPlaceIds.length}곳
         </Text>
       </Animated.View>
     </View>

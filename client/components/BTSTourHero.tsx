@@ -30,7 +30,9 @@ interface BTSTourHeroProps {
 function getDDay(): number {
   const concert = new Date("2026-04-09");
   const today = new Date();
-  return Math.ceil((concert.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  return Math.ceil(
+    (concert.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
+  );
 }
 
 export default function BTSTourHero({ bgOpacity }: BTSTourHeroProps) {
@@ -43,7 +45,10 @@ export default function BTSTourHero({ bgOpacity }: BTSTourHeroProps) {
   useEffect(() => {
     // Stage 1: 1초 암전 후 타이틀 점화
     titleOpacity.value = withDelay(1000, withTiming(1, { duration: 400 }));
-    titleScale.value = withDelay(1000, withSpring(1, { damping: 12, stiffness: 100 }));
+    titleScale.value = withDelay(
+      1000,
+      withSpring(1, { damping: 12, stiffness: 100 }),
+    );
 
     // 부제
     subtitleOpacity.value = withDelay(2000, withTiming(1, { duration: 600 }));

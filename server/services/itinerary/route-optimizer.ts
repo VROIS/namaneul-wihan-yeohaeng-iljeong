@@ -54,7 +54,12 @@ export function optimizeDayRoute(
     let nearestIdx = 0;
     let nearestDist = Infinity;
     for (let i = 0; i < remaining.length; i++) {
-      const d = haversineKm(current.lat, current.lng, remaining[i].lat, remaining[i].lng);
+      const d = haversineKm(
+        current.lat,
+        current.lng,
+        remaining[i].lat,
+        remaining[i].lng,
+      );
       if (d < nearestDist) {
         nearestDist = d;
         nearestIdx = i;
@@ -80,10 +85,30 @@ export function optimizeDayRoute(
           j + 1 < optimized.length
             ? { lat: optimized[j + 1].lat, lng: optimized[j + 1].lng }
             : end; // 종점 = 도착지 anchor
-        const d1 = haversineKm(optimized[i].lat, optimized[i].lng, optimized[i + 1].lat, optimized[i + 1].lng);
-        const d2 = haversineKm(optimized[j].lat, optimized[j].lng, jNext.lat, jNext.lng);
-        const newD1 = haversineKm(optimized[i].lat, optimized[i].lng, optimized[j].lat, optimized[j].lng);
-        const newD2 = haversineKm(optimized[i + 1].lat, optimized[i + 1].lng, jNext.lat, jNext.lng);
+        const d1 = haversineKm(
+          optimized[i].lat,
+          optimized[i].lng,
+          optimized[i + 1].lat,
+          optimized[i + 1].lng,
+        );
+        const d2 = haversineKm(
+          optimized[j].lat,
+          optimized[j].lng,
+          jNext.lat,
+          jNext.lng,
+        );
+        const newD1 = haversineKm(
+          optimized[i].lat,
+          optimized[i].lng,
+          optimized[j].lat,
+          optimized[j].lng,
+        );
+        const newD2 = haversineKm(
+          optimized[i + 1].lat,
+          optimized[i + 1].lng,
+          jNext.lat,
+          jNext.lng,
+        );
         if (newD1 + newD2 < d1 + d2) {
           const segment = optimized.slice(i + 1, j + 1).reverse();
           optimized.splice(i + 1, j - i, ...segment);

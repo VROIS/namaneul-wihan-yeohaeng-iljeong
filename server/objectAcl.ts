@@ -29,7 +29,7 @@ export interface ObjectAclRule {
 export interface ObjectAclPolicy {
   owner: string;
   visibility: "public" | "private";
-  aclRules?: Array<ObjectAclRule>;
+  aclRules?: ObjectAclRule[];
 }
 
 // Check if the requested permission is allowed based on the granted permission.

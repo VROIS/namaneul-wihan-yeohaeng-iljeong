@@ -1,4 +1,4 @@
-﻿/**
+/**
  * ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = AG2 = DB-only 단일 진입점
  *
  * AG2: place_seed_raw 직접 SELECT (= Gemini 호출 0)
@@ -111,17 +111,22 @@ export function computeCatSlots(
     catSlots.restaurant = restaurantCap;
     const nr = Object.keys(catSlots).filter((k) => k !== "restaurant");
     const nrTotal = nr.reduce((s, k) => s + (catSlots[k] || 0), 0) || 1;
-    for (const k of nr) catSlots[k] = (catSlots[k] || 0) + overflow * (catSlots[k] / nrTotal);
+    for (const k of nr)
+      catSlots[k] = (catSlots[k] || 0) + overflow * (catSlots[k] / nrTotal);
   }
   // 비식당 비율 재조정 (= 식당 정해진 후, 나머지 = 사용자 vibe 비율)
   const nonRest = Object.keys(catSlots).filter((k) => k !== "restaurant");
   const nonRestSum = nonRest.reduce((s, k) => s + (catSlots[k] || 0), 0);
   const targetNonRest = totalSlots - catSlots.restaurant;
   if (nonRestSum > 0) {
-    for (const k of nonRest) catSlots[k] = Math.round(((catSlots[k] || 0) / nonRestSum) * targetNonRest);
+    for (const k of nonRest)
+      catSlots[k] = Math.round(
+        ((catSlots[k] || 0) / nonRestSum) * targetNonRest,
+      );
   }
   // 정수화 + 합계 보정
-  for (const k of Object.keys(catSlots)) catSlots[k] = Math.max(1, Math.round(catSlots[k]));
+  for (const k of Object.keys(catSlots))
+    catSlots[k] = Math.max(1, Math.round(catSlots[k]));
   const sum = Object.values(catSlots).reduce((s, n) => s + n, 0);
   if (sum !== totalSlots) {
     const top = Object.entries(catSlots).sort((a, b) => b[1] - a[1])[0][0];
@@ -143,7 +148,10 @@ async function fetchFromPlaceSeedRaw(
   let cityName: string = preResolvedCity?.name ?? formData.destination;
   if (!cityId) {
     // ⚠️ 2026-07-08 사장님 SSOT = 좌표(불변키) 전달 = 중복도시·재발굴 차단.
-    const cityResult = await findCityUnified(formData.destination, formData.destinationCoords);
+    const cityResult = await findCityUnified(
+      formData.destination,
+      formData.destinationCoords,
+    );
     cityId = cityResult?.cityId;
     cityName = cityResult?.name ?? formData.destination;
     if (!cityId) {
@@ -156,7 +164,10 @@ async function fetchFromPlaceSeedRaw(
   // ⚠️ 2026-07-17 사장님 확정 = 풀 컨텍스트(중심좌표 + 합집합 WHERE) 1회 확보 = 아래 카테고리별 SELECT 공용
   const cid: number = cityId;
   // 2026-07-17 = 기점 = 동적 출발점(숙소 입력 시 그 좌표 = 이중도시·숙소중간 100km 공유). 미입력 = getPoolContext 가 도시중심 폴백.
-  const { center, where: poolWhere } = await getPoolContext(cid, (formData as any).accommodationCoords ?? null);
+  const { center, where: poolWhere } = await getPoolContext(
+    cid,
+    (formData as any).accommodationCoords ?? null,
+  );
 
   // 🧠 2026-07-05 사장님 SSOT = vibe → 카테고리 슬롯 분배 = computeCatSlots 단일 SSOT(§16). 옛 인라인 계산 폐기(§19) = 로직 그대로 함수로 이동(DB-only 동작 불변).
   const totalSlots = requiredPlaceCount;
@@ -227,11 +238,15 @@ async function fetchFromPlaceSeedRaw(
       isRestaurant
         ? (a, b) => rc(b) - rc(a)
         : (a, b) =>
-            (a.rank ?? Number.MAX_SAFE_INTEGER) - (b.rank ?? Number.MAX_SAFE_INTEGER) ||
-            rc(b) - rc(a),
+            (a.rank ?? Number.MAX_SAFE_INTEGER) -
+              (b.rank ?? Number.MAX_SAFE_INTEGER) || rc(b) - rc(a),
     );
-    const coreRows = rows.filter((r) => r.dayZone === "core").slice(0, coreSlots);
-    const outskirtRows = rows.filter((r) => r.dayZone === "outskirt").slice(0, outskirtSlots);
+    const coreRows = rows
+      .filter((r) => r.dayZone === "core")
+      .slice(0, coreSlots);
+    const outskirtRows = rows
+      .filter((r) => r.dayZone === "outskirt")
+      .slice(0, outskirtSlots);
     const picked = [...coreRows, ...outskirtRows];
     const crossCount = picked.filter((r) => r.cityId !== cid).length;
     const budgetLabel = isRestaurant
@@ -318,7 +333,10 @@ export async function generateRecommendations(
   skeleton: AG1Output,
 ): Promise<PlaceResult[]> {
   // ⚠️ 2026-07-08 사장님 SSOT = 좌표(불변키) 전달 = DB-only↔MIX 예외없이 모두 좌표 우선.
-  const cityCheck = await isCityReady(skeleton.formData.destination, skeleton.formData.destinationCoords);
+  const cityCheck = await isCityReady(
+    skeleton.formData.destination,
+    skeleton.formData.destinationCoords,
+  );
 
   if (!cityCheck.ready) {
     console.error(

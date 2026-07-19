@@ -95,12 +95,12 @@ export interface TripFormData {
   accommodationAddress?: string;
   accommodationCoords?: { lat: number; lng: number };
   // Day별 개별 숙소 (이동형 여행 — 결과화면에서 설정)
-  dayAccommodations?: Array<{
+  dayAccommodations?: {
     day: number;
     name: string;
     address: string;
     coords: { lat: number; lng: number };
-  }>;
+  }[];
 }
 
 // ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = 점수 시스템 + MIX path 완전 폐기

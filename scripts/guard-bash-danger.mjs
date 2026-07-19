@@ -7,23 +7,27 @@
 //   "Bash|PowerShell" 로 양쪽 다 등록해야 함(이 파일 자체가 아니라 등록 설정의 책임). 이 스크립트는 두 도구 페이로드 모두 처리.
 // = 한계(정직히 명시, 완전 우회불가 아님): command 문자열 리터럴 검사이므로 base64/원격스크립트 실행 등은 못 잡음.
 //   이건 "무심결 실수" 재발방지가 목적이지 악의적 우회 방지가 목적이 아님(§1 정직 = 과장 주장 금지).
-import { readFileSync } from 'node:fs';
+import { readFileSync } from "node:fs";
 
-let payload = '';
+let payload = "";
 try {
-  payload = readFileSync(0, 'utf8'); // stdin
+  payload = readFileSync(0, "utf8"); // stdin
 } catch (e) {
-  console.error(`[guard-bash-danger] stdin 읽기 실패(차단 안 함, fail-open) = ${e?.message || e}`);
+  console.error(
+    `[guard-bash-danger] stdin 읽기 실패(차단 안 함, fail-open) = ${e?.message || e}`,
+  );
   process.exit(0); // 페이로드 못 읽으면 차단하지 않음(오탐으로 작업 전체를 막지 않음). 실패 자체는 로그로 남겨 조용한 무력화 방지.
 }
 
-let command = '';
+let command = "";
 try {
   const data = JSON.parse(payload);
   // Bash 도구 = tool_input.command / PowerShell 도구 = tool_input.command 동일 필드명 사용.
-  command = data?.tool_input?.command || '';
+  command = data?.tool_input?.command || "";
 } catch (e) {
-  console.error(`[guard-bash-danger] JSON 파싱 실패(차단 안 함, fail-open) = ${e?.message || e}`);
+  console.error(
+    `[guard-bash-danger] JSON 파싱 실패(차단 안 함, fail-open) = ${e?.message || e}`,
+  );
   process.exit(0);
 }
 
@@ -40,8 +44,8 @@ const hit = DANGEROUS_PATTERNS.find((re) => re.test(command));
 if (hit) {
   console.error(
     `\n⛔⛔ 위험한 git 명령 차단 = "${command}"\n` +
-    `   = 2026-07-04 사고(AI가 rebase 실행 → Replit 저장소 꼬임 → EAS 배포 마비 → $20+ 손실) 재발 방지.\n` +
-    `   = 원격이 앞서면 git pull(merge)만 사용. 정말 필요하면 사장님께 직접 여쭤보고 Replit Git pane에서 처리.\n`
+      `   = 2026-07-04 사고(AI가 rebase 실행 → Replit 저장소 꼬임 → EAS 배포 마비 → $20+ 손실) 재발 방지.\n` +
+      `   = 원격이 앞서면 git pull(merge)만 사용. 정말 필요하면 사장님께 직접 여쭤보고 Replit Git pane에서 처리.\n`,
   );
   process.exit(2); // PreToolUse 차단 신호
 }

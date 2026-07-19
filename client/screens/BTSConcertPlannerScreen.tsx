@@ -32,20 +32,41 @@ const MEMBERS = [
 ];
 
 type BtsCity = { id: number; nameKo: string; nameEn: string; btsRank: number };
-type BtsPlace = { id: number; nameKo: string | null; nameEn: string; imageUrl: string | null; summaryKo: string | null };
-type ItineraryDay = { day: number; places: Array<{ name: string; startTime: string; description: string; image?: string }>; city: string };
+type BtsPlace = {
+  id: number;
+  nameKo: string | null;
+  nameEn: string;
+  imageUrl: string | null;
+  summaryKo: string | null;
+};
+type ItineraryDay = {
+  day: number;
+  places: {
+    name: string;
+    startTime: string;
+    description: string;
+    image?: string;
+  }[];
+  city: string;
+};
 
 export default function BTSConcertPlannerScreen() {
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const [screen, setScreen] = useState<"select" | "places" | "loading" | "result">("select");
+  const navigation =
+    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const [screen, setScreen] = useState<
+    "select" | "places" | "loading" | "result"
+  >("select");
   const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
   const [cities, setCities] = useState<BtsCity[]>([]);
   const [selectedCityId, setSelectedCityId] = useState<number | null>(null);
   const [places, setPlaces] = useState<BtsPlace[]>([]);
   const [selectedPlaceIds, setSelectedPlaceIds] = useState<number[]>([]);
-  const [itinerary, setItinerary] = useState<{ title: string; days: ItineraryDay[] } | null>(null);
+  const [itinerary, setItinerary] = useState<{
+    title: string;
+    days: ItineraryDay[];
+  } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -68,7 +89,9 @@ export default function BTSConcertPlannerScreen() {
   useEffect(() => {
     if (!selectedMemberId || !selectedCityId) return;
     setLoading(true);
-    fetch(`${baseUrl}/api/bts/top-places?cityId=${selectedCityId}&memberId=${selectedMemberId}`)
+    fetch(
+      `${baseUrl}/api/bts/top-places?cityId=${selectedCityId}&memberId=${selectedMemberId}`,
+    )
       .then((r) => r.json())
       .then((data: BtsPlace[]) => setPlaces(Array.isArray(data) ? data : []))
       .catch(() => setPlaces([]))
@@ -82,12 +105,15 @@ export default function BTSConcertPlannerScreen() {
 
   const handlePlaceToggle = (id: number) => {
     setSelectedPlaceIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id].slice(0, 8)
+      prev.includes(id)
+        ? prev.filter((x) => x !== id)
+        : [...prev, id].slice(0, 8),
     );
   };
 
   const handleGenerate = () => {
-    if (!selectedCityId || !selectedMemberId || selectedPlaceIds.length === 0) return;
+    if (!selectedCityId || !selectedMemberId || selectedPlaceIds.length === 0)
+      return;
     setScreen("loading");
     setError(null);
     fetch(`${baseUrl}/api/bts/generate`, {
@@ -137,11 +163,18 @@ export default function BTSConcertPlannerScreen() {
         </View>
         <Text style={styles.subTitle}>{t("bts.selectVibe")}</Text>
 
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.cityRow}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.cityRow}
+        >
           {cities.slice(0, 10).map((c) => (
             <Pressable
               key={c.id}
-              style={[styles.cityChip, selectedCityId === c.id && styles.cityChipSelected]}
+              style={[
+                styles.cityChip,
+                selectedCityId === c.id && styles.cityChipSelected,
+              ]}
               onPress={() => setSelectedCityId(c.id)}
             >
               <Text style={styles.cityChipText}>{c.nameKo}</Text>
@@ -180,7 +213,9 @@ export default function BTSConcertPlannerScreen() {
           {loading ? (
             <ActivityIndicator color="#fff" />
           ) : (
-            <Text style={styles.primaryBtnText}>{t("bts.nextSelectPlaces")}</Text>
+            <Text style={styles.primaryBtnText}>
+              {t("bts.nextSelectPlaces")}
+            </Text>
           )}
         </Pressable>
       </View>
@@ -196,7 +231,9 @@ export default function BTSConcertPlannerScreen() {
           <Pressable onPress={() => setScreen("select")} style={styles.backBtn}>
             <Icon name="arrow-left" size={22} color="#F9FAFB" />
           </Pressable>
-          <Text style={styles.headerTitle}>{t("bts.placeSelectCount", { count: selectedPlaceIds.length })}</Text>
+          <Text style={styles.headerTitle}>
+            {t("bts.placeSelectCount", { count: selectedPlaceIds.length })}
+          </Text>
         </View>
         {error && <Text style={styles.errorText}>{error}</Text>}
         <ScrollView contentContainerStyle={styles.placeGrid}>
@@ -205,7 +242,10 @@ export default function BTSConcertPlannerScreen() {
             return (
               <Pressable
                 key={p.id}
-                style={[styles.placeCard, isSelected && styles.placeCardSelected]}
+                style={[
+                  styles.placeCard,
+                  isSelected && styles.placeCardSelected,
+                ]}
                 onPress={() => handlePlaceToggle(p.id)}
               >
                 <Text style={styles.placeName} numberOfLines={2}>
@@ -232,7 +272,13 @@ export default function BTSConcertPlannerScreen() {
   // ─── Loading ───
   if (screen === "loading") {
     return (
-      <View style={[styles.container, styles.centerContent, { paddingTop: insets.top }]}>
+      <View
+        style={[
+          styles.container,
+          styles.centerContent,
+          { paddingTop: insets.top },
+        ]}
+      >
         <View style={styles.loadingRing} />
         <Text style={styles.loadingTitle}>{t("bts.generating")}</Text>
         <Text style={styles.loadingSub}>{t("bts.generatingHint")}</Text>
@@ -247,12 +293,16 @@ export default function BTSConcertPlannerScreen() {
         <Pressable onPress={handleReset} style={styles.backBtn}>
           <Icon name="arrow-left" size={22} color="#F9FAFB" />
         </Pressable>
-        <Text style={styles.headerTitle}>{itinerary?.title || t("bts.title")}</Text>
+        <Text style={styles.headerTitle}>
+          {itinerary?.title || t("bts.title")}
+        </Text>
       </View>
       <ScrollView contentContainerStyle={styles.resultContent}>
         {itinerary?.days.map((day) => (
           <View key={day.day} style={styles.dayBlock}>
-            <Text style={styles.dayTitle}>Day {day.day} - {day.city}</Text>
+            <Text style={styles.dayTitle}>
+              Day {day.day} - {day.city}
+            </Text>
             {day.places.map((p, i) => (
               <View key={i} style={styles.timelineItem}>
                 <View style={styles.dot} />
@@ -267,7 +317,13 @@ export default function BTSConcertPlannerScreen() {
             ))}
           </View>
         ))}
-        <Pressable style={[styles.primaryBtn, { backgroundColor: "#374151", marginTop: 20 }]} onPress={handleReset}>
+        <Pressable
+          style={[
+            styles.primaryBtn,
+            { backgroundColor: "#374151", marginTop: 20 },
+          ]}
+          onPress={handleReset}
+        >
           <Text style={styles.primaryBtnText}>{t("bts.backToStart")}</Text>
         </Pressable>
       </ScrollView>
@@ -278,37 +334,114 @@ export default function BTSConcertPlannerScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#0F0F14" },
   centerContent: { justifyContent: "center", alignItems: "center" },
-  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 12 },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
   backBtn: { padding: 8, marginRight: 8 },
   headerTitle: { flex: 1, fontSize: 18, fontWeight: "700", color: "#F9FAFB" },
-  subTitle: { fontSize: 14, color: "#9CA3AF", textAlign: "center", marginBottom: 12 },
+  subTitle: {
+    fontSize: 14,
+    color: "#9CA3AF",
+    textAlign: "center",
+    marginBottom: 12,
+  },
   cityRow: { maxHeight: 44, marginBottom: 16, paddingHorizontal: 16 },
-  cityChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: "rgba(255,255,255,0.1)", marginRight: 8 },
+  cityChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: "rgba(255,255,255,0.1)",
+    marginRight: 8,
+  },
   cityChipSelected: { backgroundColor: "#8B5CF6" },
   cityChipText: { color: "#F9FAFB", fontSize: 13 },
-  bubbleRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", gap: 12, paddingHorizontal: 20 },
-  bubble: { width: 80, height: 80, borderRadius: 40, justifyContent: "center", alignItems: "center" },
+  bubbleRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    gap: 12,
+    paddingHorizontal: 20,
+  },
+  bubble: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: "center",
+    alignItems: "center",
+  },
   bubbleSelected: { borderWidth: 3, borderColor: "#8B5CF6" },
   bubbleText: { fontSize: 12, fontWeight: "700", color: "#222" },
-  primaryBtn: { margin: 20, padding: 18, borderRadius: 30, backgroundColor: "#8B5CF6", alignItems: "center" },
+  primaryBtn: {
+    margin: 20,
+    padding: 18,
+    borderRadius: 30,
+    backgroundColor: "#8B5CF6",
+    alignItems: "center",
+  },
   primaryBtnDisabled: { opacity: 0.5 },
   primaryBtnText: { color: "#FFF", fontSize: 16, fontWeight: "700" },
   placeGrid: { flexDirection: "row", flexWrap: "wrap", padding: 16, gap: 12 },
-  placeCard: { width: "47%", padding: 16, borderRadius: 16, backgroundColor: "rgba(255,255,255,0.06)", borderWidth: 2, borderColor: "transparent" },
+  placeCard: {
+    width: "47%",
+    padding: 16,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    borderWidth: 2,
+    borderColor: "transparent",
+  },
   placeCardSelected: { borderColor: "#8B5CF6" },
   placeName: { color: "#F9FAFB", fontSize: 14, fontWeight: "600" },
-  check: { position: "absolute", top: 8, right: 8, color: "#8B5CF6", fontSize: 18 },
+  check: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    color: "#8B5CF6",
+    fontSize: 18,
+  },
   errorText: { color: "#EF4444", padding: 16, textAlign: "center" },
-  loadingRing: { width: 60, height: 60, borderRadius: 30, borderWidth: 4, borderColor: "rgba(255,255,255,0.2)", borderTopColor: "#8B5CF6", marginBottom: 20 },
+  loadingRing: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    borderWidth: 4,
+    borderColor: "rgba(255,255,255,0.2)",
+    borderTopColor: "#8B5CF6",
+    marginBottom: 20,
+  },
   loadingTitle: { fontSize: 20, fontWeight: "700", color: "#F9FAFB" },
   loadingSub: { fontSize: 14, color: "#9CA3AF", marginTop: 8 },
   resultContent: { padding: 20, paddingBottom: 40 },
   dayBlock: { marginBottom: 24 },
-  dayTitle: { fontSize: 18, fontWeight: "800", color: "#8B5CF6", marginBottom: 12 },
+  dayTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#8B5CF6",
+    marginBottom: 12,
+  },
   timelineItem: { flexDirection: "row", marginBottom: 16 },
-  dot: { width: 12, height: 12, borderRadius: 6, backgroundColor: "#8B5CF6", marginTop: 6, marginRight: 12 },
-  timelineContent: { flex: 1, backgroundColor: "rgba(255,255,255,0.06)", padding: 14, borderRadius: 12 },
-  timeText: { fontSize: 12, fontWeight: "700", color: "#8B5CF6", marginBottom: 4 },
+  dot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: "#8B5CF6",
+    marginTop: 6,
+    marginRight: 12,
+  },
+  timelineContent: {
+    flex: 1,
+    backgroundColor: "rgba(255,255,255,0.06)",
+    padding: 14,
+    borderRadius: 12,
+  },
+  timeText: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#8B5CF6",
+    marginBottom: 4,
+  },
   placeTitle: { fontSize: 16, fontWeight: "600", color: "#F9FAFB" },
   placeDesc: { fontSize: 13, color: "#9CA3AF", marginTop: 4 },
 });

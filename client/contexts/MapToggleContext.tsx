@@ -42,20 +42,32 @@ const MapToggleContext = createContext<MapToggleContextType>({
 
 export function MapToggleProvider({ children }: { children: React.ReactNode }) {
   const [showMap, setShowMap] = useState(false);
-  const [currentItinerary, setCurrentItineraryState] = useState<Itinerary | null>(null);
-  const [currentItineraryId, setCurrentItineraryId] = useState<number | null>(null);
-  const [aiOpinionRequestedAt, setAiOpinionRequestedAt] = useState<number | null>(null);
-  const [expertRequestedAt, setExpertRequestedAt] = useState<number | null>(null);
-  const [expertDataChangedAt, setExpertDataChangedAt] = useState<number | null>(null);
+  const [currentItinerary, setCurrentItineraryState] =
+    useState<Itinerary | null>(null);
+  const [currentItineraryId, setCurrentItineraryId] = useState<number | null>(
+    null,
+  );
+  const [aiOpinionRequestedAt, setAiOpinionRequestedAt] = useState<
+    number | null
+  >(null);
+  const [expertRequestedAt, setExpertRequestedAt] = useState<number | null>(
+    null,
+  );
+  const [expertDataChangedAt, setExpertDataChangedAt] = useState<number | null>(
+    null,
+  );
 
   const toggleMap = useCallback(() => {
     setShowMap((prev) => !prev);
   }, []);
 
-  const setCurrentItinerary = useCallback((itinerary: Itinerary | null, id: number | null) => {
-    setCurrentItineraryState(itinerary);
-    setCurrentItineraryId(id);
-  }, []);
+  const setCurrentItinerary = useCallback(
+    (itinerary: Itinerary | null, id: number | null) => {
+      setCurrentItineraryState(itinerary);
+      setCurrentItineraryId(id);
+    },
+    [],
+  );
 
   // 매 요청마다 새 타임스탬프 = 같은 화면에서 다시 눌러도 useEffect가 재실행되도록.
   const requestAiOpinion = useCallback(() => {
@@ -79,11 +91,20 @@ export function MapToggleProvider({ children }: { children: React.ReactNode }) {
   return (
     <MapToggleContext.Provider
       value={{
-        showMap, toggleMap, setShowMap,
-        currentItinerary, currentItineraryId, setCurrentItinerary,
-        aiOpinionRequestedAt, requestAiOpinion, clearAiOpinionRequest,
-        expertRequestedAt, requestExpert, clearExpertRequest,
-        expertDataChangedAt, bumpExpertData,
+        showMap,
+        toggleMap,
+        setShowMap,
+        currentItinerary,
+        currentItineraryId,
+        setCurrentItinerary,
+        aiOpinionRequestedAt,
+        requestAiOpinion,
+        clearAiOpinionRequest,
+        expertRequestedAt,
+        requestExpert,
+        clearExpertRequest,
+        expertDataChangedAt,
+        bumpExpertData,
       }}
     >
       {children}

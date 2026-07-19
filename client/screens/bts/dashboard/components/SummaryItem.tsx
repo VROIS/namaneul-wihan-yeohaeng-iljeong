@@ -4,7 +4,13 @@ import { View, Text } from "react-native";
 import { styles } from "../styles";
 
 // ─── Summary Item ───
-export default function SummaryItem({ label, value }: { label: string; value: string }) {
+export default function SummaryItem({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
   return (
     <View style={styles.summaryItem}>
       <Text style={styles.summaryValue}>{value}</Text>

@@ -4,7 +4,12 @@ import { Platform } from "react-native";
 import { TripFormData } from "@/types/trip";
 import { formatDate, formatTime, parseDate, parseTime } from "../utils";
 
-export type PickerMode = "startDate" | "startTime" | "endDate" | "endTime" | null;
+export type PickerMode =
+  | "startDate"
+  | "startTime"
+  | "endDate"
+  | "endTime"
+  | null;
 
 export function usePickers({
   formData,

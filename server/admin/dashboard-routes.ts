@@ -32,7 +32,12 @@ export function registerDashboardRoutes(app: Express) {
     const possiblePaths = [
       path.join(__dirname, "..", "templates", "admin-dashboard.html"), // server/admin/ 로 이동 = 템플릿은 상위 server/templates (2026-07-16 분리)
       path.join(process.cwd(), "server", "templates", "admin-dashboard.html"),
-      path.join(process.cwd(), "server_dist", "templates", "admin-dashboard.html"),
+      path.join(
+        process.cwd(),
+        "server_dist",
+        "templates",
+        "admin-dashboard.html",
+      ),
     ];
     const templatePath = possiblePaths.find((p) => fs.existsSync(p));
     if (templatePath) {
@@ -54,19 +59,22 @@ export function registerDashboardRoutes(app: Express) {
     try {
       const [cityRow] = await db.select({ count: count() }).from(cities);
       const [psrRow] = await db.select({ count: count() }).from(placeSeedRaw);
-      const [exchangeRow] = await db.select({ count: count() }).from(exchangeRates);
+      const [exchangeRow] = await db
+        .select({ count: count() })
+        .from(exchangeRates);
 
       // PSR 14 SSOT 채움률 (= 사용자 SSOT)
       // ⚠️ 2026-07-16 수정 = db.execute()는 배열이 아니라 pg.QueryResult 객체 반환(.rows 프로퍼티 보유) = 배열 구조분해 시 "not iterable" 500 (실측: node-postgres 드라이버 실제 호출로 shape 확인). 구조분해 제거.
-      const fillRow = await db.execute(
+      const fillRow = (await db.execute(
         sql`SELECT
           COUNT(image_url)::int AS img,
           COUNT(price_eur)::int AS price,
           COUNT(summary_ko)::int AS sum,
           COUNT(google_place_id)::int AS pid
         FROM place_seed_raw`,
-      ) as any;
-      const filled = fillRow?.rows?.[0] || fillRow || { img: 0, price: 0, sum: 0, pid: 0 };
+      )) as any;
+      const filled = fillRow?.rows?.[0] ||
+        fillRow || { img: 0, price: 0, sum: 0, pid: 0 };
 
       const apiServicesList = await db.select().from(apiServiceStatus);
 

@@ -16,9 +16,9 @@ import type {
   CurationFocus,
   MobilityStyle,
   TravelStyle,
+  PlaceResult,
 } from "../agents/types";
 import { MEAL_BUDGET, getCompanionCount } from "../agents/types";
-import type { PlaceResult } from "../agents/types";
 // ⚠️ 수정금지(승인필요) 2026-05-25 = 헌법 §16 = shouldApplyGuidePrice 단일 SSOT (= transport-pricing-service)
 // = 옛 로컬 정의 (= 같은 이름 다른 의미) = silent drift 위험 = 폐기
 import { shouldApplyGuidePrice } from "../transport-pricing-service";
@@ -142,9 +142,9 @@ export function buildRouteInputJson(
     places: places
       .filter((p) => p.seedCategory !== "restaurant")
       .map((p) => ({
-        id: p.id,                                  // = "db-${PSR.id}" = echo 매칭 키
-        name_local: p.nameLocal || null,           // = PSR.name_local (= 없으면 null = Gemini 채워줌)
-        address: p.address || null,                // = PSR.address (= 없으면 null = Gemini 채워줌)
+        id: p.id, // = "db-${PSR.id}" = echo 매칭 키
+        name_local: p.nameLocal || null, // = PSR.name_local (= 없으면 null = Gemini 채워줌)
+        address: p.address || null, // = PSR.address (= 없으면 null = Gemini 채워줌)
         lat: p.lat,
         lng: p.lng,
       })),

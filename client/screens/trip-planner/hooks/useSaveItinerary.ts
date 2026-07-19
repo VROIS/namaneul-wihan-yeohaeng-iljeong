@@ -56,11 +56,20 @@ export function useSaveItinerary({
       const userData = await getUserData();
       if (!userData) {
         if (Platform.OS === "web") {
-          if (typeof window !== "undefined" && window.confirm(`${t("trip.loginRequired")}\n\n${t("trip.saveLoginHint")}`)) navigation.navigate("Login");
+          if (
+            typeof window !== "undefined" &&
+            window.confirm(
+              `${t("trip.loginRequired")}\n\n${t("trip.saveLoginHint")}`,
+            )
+          )
+            navigation.navigate("Login");
         } else {
           Alert.alert(t("trip.loginRequired"), t("trip.saveLoginHint"), [
             { text: t("common.cancel"), style: "cancel" },
-            { text: t("trip.loginBtn"), onPress: () => navigation.navigate("Login") },
+            {
+              text: t("trip.loginBtn"),
+              onPress: () => navigation.navigate("Login"),
+            },
           ]);
         }
         setIsSaving(false);
@@ -77,14 +86,29 @@ export function useSaveItinerary({
         days: (itinerary.days || []).map((d) => {
           const acc = dayAccommodations.find((a) => a.day === d.day);
           return acc
-            ? { ...d, accommodation: { name: acc.name, address: acc.address, coords: acc.coords, placeId: acc.placeId } }
+            ? {
+                ...d,
+                accommodation: {
+                  name: acc.name,
+                  address: acc.address,
+                  coords: acc.coords,
+                  placeId: acc.placeId,
+                },
+              }
             : d;
         }),
         // 🧠 2026-07-04 사장님 SSOT = 화면에 뜬 AI 의견 결과(유료 Gemini)를 여정 저장에 함께 박제(구글이미지 스토리지 박제와 동일 원리).
         //   → 복원 후 첫 클릭도 캐시 히트($0). fp는 BE(buildItineraryData)가 이 rawData로 서버 SSOT 계산(FE는 fp 재발명 금지 §16).
         //   language는 응답 본문에 없으므로 지금 앱 언어를 함께 실음(BE fp의 :language 접미와 일치). AI 의견 안 봤으면(null) 미포함 = POST 종전 동작 동일.
         //   cached 플래그는 벗겨 순수 본문만 저장 = BE 직접캐시 경로(result.response)와 동일 모양 = 저장 형태 1벌 통일(§20).
-        ...(aiOpinionData ? { verificationResult: { result: aiOpinionResult, language: i18n.language } } : {}),
+        ...(aiOpinionData
+          ? {
+              verificationResult: {
+                result: aiOpinionResult,
+                language: i18n.language,
+              },
+            }
+          : {}),
       };
 
       // 일정 데이터 구성
@@ -109,7 +133,11 @@ export function useSaveItinerary({
 
       // ⚠️ 2026-07-03 사장님 SSOT = 복원 여정(currentItineraryId 있음) 재저장 = 같은 행 덮어쓰기(PUT=여정1→여정1.1). 신규 = 새 행(POST).
       const response = currentItineraryId
-        ? await apiRequest("PUT", `/api/itineraries/${currentItineraryId}`, saveData)
+        ? await apiRequest(
+            "PUT",
+            `/api/itineraries/${currentItineraryId}`,
+            saveData,
+          )
         : await apiRequest("POST", "/api/itineraries", saveData);
       const saved = await response.json();
 
@@ -121,7 +149,9 @@ export function useSaveItinerary({
         if (justSavedTimer.current) clearTimeout(justSavedTimer.current);
         setJustSaved(true);
         justSavedTimer.current = setTimeout(() => setJustSaved(false), 500);
-        console.log(`[TripPlanner] 💾 일정 저장 완료: id=${saved.id} (${wasOverwrite ? "덮어쓰기" : "신규"})`);
+        console.log(
+          `[TripPlanner] 💾 일정 저장 완료: id=${saved.id} (${wasOverwrite ? "덮어쓰기" : "신규"})`,
+        );
         // ⚠️ 사장님 SSOT 2026-07-14 = 전문가 문의 footer 가 저장 성공 여부로 이동 판단(비로그인=미저장이면 문의탭으로 안 넘김). 저장 id 반환.
         return saved.id as number;
       }

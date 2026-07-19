@@ -2,37 +2,76 @@
  * place_seed_raw = DROP 예정 43 컬럼 = 데이터 보유 row 만 JSON 백업
  * = 추후 복구 가능 (= 컬럼 ADD + UPDATE SQL 작성)
  */
-import 'dotenv/config';
-import pg from 'pg';
-import fs from 'fs';
-import path from 'path';
+import "dotenv/config";
+import pg from "pg";
+import fs from "fs";
+import path from "path";
 
 function convertToPoolerUrl(u) {
-  const m = u.match(/postgresql:\/\/postgres:([^@]+)@db\.([^.]+)\.supabase\.co:5432\/postgres/);
-  if (m) return `postgresql://postgres.${m[2]}:${m[1]}@aws-1-eu-west-3.pooler.supabase.com:6543/postgres`;
+  const m = u.match(
+    /postgresql:\/\/postgres:([^@]+)@db\.([^.]+)\.supabase\.co:5432\/postgres/,
+  );
+  if (m)
+    return `postgresql://postgres.${m[2]}:${m[1]}@aws-1-eu-west-3.pooler.supabase.com:6543/postgres`;
   return u;
 }
 
 const DROP_COLS = [
-  'delivery', 'dine_in', 'takeout', 'curbside_pickup', 'reservable',
-  'serves_beer', 'serves_wine', 'serves_breakfast', 'serves_brunch', 'serves_lunch',
-  'serves_dinner', 'serves_vegetarian_food', 'serves_coffee', 'serves_dessert',
-  'good_for_children', 'good_for_groups', 'good_for_watching_sports', 'live_music',
-  'outdoor_seating', 'restroom', 'menu_for_children', 'allows_dogs',
-  'accessibility_options', 'parking_options', 'payment_options',
-  'instagram_photo_urls', 'instagram_hashtags', 'instagram_post_count',
-  'celeb_mention', 'names_i18n', 'type', 'cuisine_type', 'cuisine_origin_country',
-  'short_address', 'display_name_ko', 'aliases', 'price_fetched_at', 'last_data_sync',
-  'price_level', 'business_status', 'website_uri', 'phone_number', 'google_maps_uri',
+  "delivery",
+  "dine_in",
+  "takeout",
+  "curbside_pickup",
+  "reservable",
+  "serves_beer",
+  "serves_wine",
+  "serves_breakfast",
+  "serves_brunch",
+  "serves_lunch",
+  "serves_dinner",
+  "serves_vegetarian_food",
+  "serves_coffee",
+  "serves_dessert",
+  "good_for_children",
+  "good_for_groups",
+  "good_for_watching_sports",
+  "live_music",
+  "outdoor_seating",
+  "restroom",
+  "menu_for_children",
+  "allows_dogs",
+  "accessibility_options",
+  "parking_options",
+  "payment_options",
+  "instagram_photo_urls",
+  "instagram_hashtags",
+  "instagram_post_count",
+  "celeb_mention",
+  "names_i18n",
+  "type",
+  "cuisine_type",
+  "cuisine_origin_country",
+  "short_address",
+  "display_name_ko",
+  "aliases",
+  "price_fetched_at",
+  "last_data_sync",
+  "price_level",
+  "business_status",
+  "website_uri",
+  "phone_number",
+  "google_maps_uri",
 ];
 
-const c = new pg.Client({ connectionString: convertToPoolerUrl(process.env.DATABASE_URL), ssl: { rejectUnauthorized: false } });
+const c = new pg.Client({
+  connectionString: convertToPoolerUrl(process.env.DATABASE_URL),
+  ssl: { rejectUnauthorized: false },
+});
 await c.connect();
 
 // 각 컬럼별 = 데이터 보유 row 만 = id + 컬럼값 추출
 const backup = {
   timestamp: new Date().toISOString(),
-  table: 'place_seed_raw',
+  table: "place_seed_raw",
   drop_columns_count: DROP_COLS.length,
   data_by_column: {},
 };

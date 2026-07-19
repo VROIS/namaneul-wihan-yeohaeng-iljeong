@@ -5,15 +5,15 @@
 
 export type BTSCharacter = {
   id: string;
-  name: string;           // 한국어 캐릭터명
-  nameEn: string;         // 영어명
-  archetype: string;      // 아키타입 설명 (한국어)
-  archetypeEn: string;    // 아키타입 설명 (영어)
-  tags: string[];         // 해시태그 (최대 3개)
+  name: string; // 한국어 캐릭터명
+  nameEn: string; // 영어명
+  archetype: string; // 아키타입 설명 (한국어)
+  archetypeEn: string; // 아키타입 설명 (영어)
+  tags: string[]; // 해시태그 (최대 3개)
   weights: Record<string, number>; // seed_category 가중치 (5.3.2)
   pace: "Ultra-Relaxed" | "Relaxed" | "Normal" | "Packed";
-  emoji: string;          // 대표 이모지 (아바타 대신 임시)
-  description: string;    // 캐릭터 소개 문구
+  emoji: string; // 대표 이모지 (아바타 대신 임시)
+  description: string; // 캐릭터 소개 문구
 };
 
 export const BTS_CHARACTERS: BTSCharacter[] = [
@@ -27,7 +27,8 @@ export const BTS_CHARACTERS: BTSCharacter[] = [
     weights: { attraction: 5, healing: 3, restaurant: 2 },
     pace: "Normal",
     emoji: "🎨",
-    description: "미술관, 갤러리, 역사적 명소를 수집하듯 돌아다니는 문화 여행가",
+    description:
+      "미술관, 갤러리, 역사적 명소를 수집하듯 돌아다니는 문화 여행가",
   },
   {
     id: "romanticist",
@@ -87,7 +88,8 @@ export const BTS_CHARACTERS: BTSCharacter[] = [
     weights: { healing: 5, restaurant: 3, attraction: 2 },
     pace: "Relaxed",
     emoji: "✨",
-    description: "스파, 미쉐린 레스토랑, 고급 호텔에서 리차지하는 럭셔리 여행가",
+    description:
+      "스파, 미쉐린 레스토랑, 고급 호텔에서 리차지하는 럭셔리 여행가",
   },
   {
     id: "chiller",
@@ -117,7 +119,8 @@ export {
 // ⚠️ 수정금지(승인필요) — 캐릭터 전신 이미지 URL 매핑 (Screen 3/4 공유 소스)
 // iOS Expo Go의 require() 실패 회피용 GitHub raw URL. 이미지 변경 시 여기 한 곳만 수정
 // 2026-04-23: PNG → WebP 포맷 전환 (해상도 896×1200 유지, q=85). 7장 합계 16.1MB → 1.17MB (13.7× 감소, 92.7% 절약). expo-image 네이티브 WebP 지원.
-const GH_RAW = "https://raw.githubusercontent.com/VROIS/namaneul-wihan-yeohaeng-iljeong/main/assets/images/bts-characters";
+const GH_RAW =
+  "https://raw.githubusercontent.com/VROIS/namaneul-wihan-yeohaeng-iljeong/main/assets/images/bts-characters";
 export const BTS_CHARACTER_IMAGES: Record<string, { uri: string }> = {
   collector: { uri: `${GH_RAW}/bts_collector.webp` },
   romanticist: { uri: `${GH_RAW}/bts_romanticist.webp` },

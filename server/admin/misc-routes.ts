@@ -8,24 +8,39 @@ export function registerMiscAdminRoutes(app: Express) {
   // ========================================
   app.get("/api/trip-alerts", async (req, res) => {
     try {
-      const { crisisAlertService } = await import("../services/crisis-alert-service");
+      const { crisisAlertService } = await import(
+        "../services/crisis-alert-service"
+      );
       const city = req.query.city as string;
       const startDate = req.query.startDate as string;
       const endDate = req.query.endDate as string;
       if (!city || !startDate || !endDate) {
-        return res.status(400).json({ success: false, error: "city, startDate, endDate 파라미터가 필요합니다" });
+        return res.status(400).json({
+          success: false,
+          error: "city, startDate, endDate 파라미터가 필요합니다",
+        });
       }
-      const result = await crisisAlertService.getAlertsForTrip(city, startDate, endDate);
+      const result = await crisisAlertService.getAlertsForTrip(
+        city,
+        startDate,
+        endDate,
+      );
       res.json({
         success: true,
         ...result,
         shouldShowPopup: result.highSeverity,
-        notificationLevel: result.highSeverity ? "warning" : result.hasAlerts ? "info" : "none",
+        notificationLevel: result.highSeverity
+          ? "warning"
+          : result.hasAlerts
+            ? "info"
+            : "none",
         alertCount: result.alerts.length,
       });
     } catch (error) {
       console.error("Error fetching trip alerts:", error);
-      res.status(500).json({ success: false, alerts: [], summary: "위기 정보 조회 실패" });
+      res
+        .status(500)
+        .json({ success: false, alerts: [], summary: "위기 정보 조회 실패" });
     }
   });
 

@@ -2,7 +2,7 @@
 
 /** Enrichment 함수 동적 import (순환 참조 방지) */
 export async function getEnrichmentFunctions() {
-  const mod = await import('../itinerary-generator');
+  const mod = await import("../itinerary-generator");
   return mod.enrichmentFunctions;
 }
 
@@ -14,5 +14,12 @@ export async function getEnrichmentFunctions() {
 
 /** 좌표 유효성 검증 */
 export function isValidCoord(lat: number, lng: number): boolean {
-  return lat !== 0 && lng !== 0 && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180;
+  return (
+    lat !== 0 &&
+    lng !== 0 &&
+    lat >= -90 &&
+    lat <= 90 &&
+    lng >= -180 &&
+    lng <= 180
+  );
 }

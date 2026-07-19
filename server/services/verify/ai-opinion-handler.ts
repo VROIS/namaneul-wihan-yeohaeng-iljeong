@@ -2,7 +2,10 @@
 // = 헌법 §16 = geminiClient 단일 진입점 통과 (재발명 차단)
 
 import { geminiJson } from "../shared/geminiClient";
-import { generateAiOpinionPrompt, type AiOpinionInput } from "./ai-opinion-prompt";
+import {
+  generateAiOpinionPrompt,
+  type AiOpinionInput,
+} from "./ai-opinion-prompt";
 
 const AI_OPINION_MODEL_ID = "gemini-3-flash-preview";
 const AI_OPINION_TEMPERATURE = 0.2;
@@ -54,7 +57,9 @@ export async function handleAiOpinionRequest(
     const elapsedMs = Date.now() - t0;
 
     if (!result.data) {
-      console.warn(`[AiOpinion] ⚠️ Gemini 응답 파싱 실패 (${elapsedMs}ms): ${result.parseError}`);
+      console.warn(
+        `[AiOpinion] ⚠️ Gemini 응답 파싱 실패 (${elapsedMs}ms): ${result.parseError}`,
+      );
       return {
         ok: false,
         response: null,
@@ -64,7 +69,9 @@ export async function handleAiOpinionRequest(
       };
     }
 
-    console.log(`[AiOpinion] ✅ Gemini 응답 (${elapsedMs}ms): verdict=${result.data.feasibility?.verdict}`);
+    console.log(
+      `[AiOpinion] ✅ Gemini 응답 (${elapsedMs}ms): verdict=${result.data.feasibility?.verdict}`,
+    );
 
     return {
       ok: true,
@@ -74,7 +81,10 @@ export async function handleAiOpinionRequest(
     };
   } catch (e: any) {
     const elapsedMs = Date.now() - t0;
-    console.error(`[AiOpinion] ❌ Gemini 호출 실패 (${elapsedMs}ms):`, e?.message || e);
+    console.error(
+      `[AiOpinion] ❌ Gemini 호출 실패 (${elapsedMs}ms):`,
+      e?.message || e,
+    );
     return {
       ok: false,
       response: null,

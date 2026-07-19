@@ -78,7 +78,12 @@ export const inputStyles = StyleSheet.create({
     borderRadius: BorderRadius.md,
     gap: Spacing.xs,
   },
-  toggleText: { fontSize: 13, fontFamily: Fonts.bold, textAlign: "center", flexShrink: 1 },
+  toggleText: {
+    fontSize: 13,
+    fontFamily: Fonts.bold,
+    textAlign: "center",
+    flexShrink: 1,
+  },
   generateButton: {
     borderRadius: BorderRadius.xl,
     overflow: "hidden",

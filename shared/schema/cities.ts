@@ -1,5 +1,14 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, serial, timestamp, real, boolean, jsonb, integer } from "drizzle-orm/pg-core";
+import {
+  pgTable,
+  text,
+  serial,
+  timestamp,
+  real,
+  boolean,
+  jsonb,
+  integer,
+} from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -8,10 +17,10 @@ import { z } from "zod";
 // name=한국어, nameEn=영어(매칭키), nameLocal=현지명, aliases=별칭배열
 export const cities = pgTable("cities", {
   id: serial("id").primaryKey(),
-  name: text("name").notNull(),                    // 한국어 표시명 (예: "파리")
-  nameEn: text("name_en"),                         // 영어 공식명 (매칭 키, 예: "Paris")
-  nameLocal: text("name_local"),                   // 현지 공식명 (예: "Paris", "Roma", "München")
-  aliases: jsonb("aliases").$type<string[]>().default([]),  // 별칭 배열 (예: ["巴黎","パリ"])
+  name: text("name").notNull(), // 한국어 표시명 (예: "파리")
+  nameEn: text("name_en"), // 영어 공식명 (매칭 키, 예: "Paris")
+  nameLocal: text("name_local"), // 현지 공식명 (예: "Paris", "Roma", "München")
+  aliases: jsonb("aliases").$type<string[]>().default([]), // 별칭 배열 (예: ["巴黎","パリ"])
   country: text("country").notNull(),
   countryCode: text("country_code").notNull(),
   latitude: real("latitude").notNull(),
@@ -31,15 +40,21 @@ export const cities = pgTable("cities", {
   //   장소 정보 (venue/army_zone/merch_store) = place_seed_raw 통합
   //   cities 는 도시 자체의 BTS 활동 메타만 보유 (일정/순위/검증)
   btsConcertDates: jsonb("bts_concert_dates").$type<string[]>().default([]), // ["2026-04-09","2026-04-12"]
-  btsShowTimes: jsonb("bts_show_times").$type<{ date: string; time: string }[]>().default([]),
+  btsShowTimes: jsonb("bts_show_times")
+    .$type<{ date: string; time: string }[]>()
+    .default([]),
   btsTimeConfirmed: boolean("bts_time_confirmed").default(false),
   btsArchived: boolean("bts_archived").default(false),
   btsSpecialNotes: text("bts_special_notes"),
   btsSource: text("bts_source"),
   btsVerified: boolean("bts_verified").default(false),
   tier: integer("tier").default(1),
-  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
-  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`).notNull(),
+  createdAt: timestamp("created_at")
+    .default(sql`CURRENT_TIMESTAMP`)
+    .notNull(),
+  updatedAt: timestamp("updated_at")
+    .default(sql`CURRENT_TIMESTAMP`)
+    .notNull(),
 });
 
 export const insertCitySchema = createInsertSchema(cities).omit({

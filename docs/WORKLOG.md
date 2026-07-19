@@ -8,6 +8,42 @@
 
 ---
 
+## 🔴🔴 2026-07-18~19 = **파이프라인 v3 슬림화 정식 도입** (워크트리 격리→검증→main 병합, 사장님 실시간 지휘)
+
+> 워크트리 `claude/pipeline-slim`에서 1벌 만들어 검증 후 main 완전 교체. **main = 9720455 = 정식**. 옛것은 git 히스토리 보존(§19). 다음 작업도 동일 방식(새 워크트리→검증→병합).
+
+### ① 매칭 3벌 → 트리거 1벌 (−1,065줄)
+- **근본**: 매칭 판정이 코드(matcher.ts)+upsertPlace+DB트리거 3벌 = 기준 드리프트 = 중복 신규생성 사고 + 전체 PSR SELECT 2,800ms 병목.
+- **해결**: 코드 매칭 완전삭제 = 트리거 단일 관문. `matcher.ts`(418)·`matcher.golden.ts`(159)·`ag3-data-matcher.ts`(재export 허브 27)·`ag3-db-direct.ts`(죽은코드 51) **삭제**. `place-enrich.ts` 신규(정규화·타입 유틸만, 트리거 SQL과 동형). `ag3-match-core` 319→37줄(Wikipedia/Instagram 실시간 이미지보강=죽은코드 삭제). place-upsert = INSERT-only + recoverTriggerDup 흡수(RETURNING 재활용). 발굴 01·12 dry = matchCandidate 제거(트리거 판정). 07-merge·refeed 삭제(§20상 사후병합 불필요).
+- **속도**: Step2 매칭SELECT·순차upsert·재조회 제거 = 매칭 0ms.
+
+### ② 트리거 불변3 독립 (초콜릿하우스 중복 근본)
+- **근본**: 불변3이 풀주소를 로컬이름과 **AND**로 묶어 무력화 = 이름 흔들리면(Chocolate House↔Chocolathouse) 주소 같아도 통과 → 중복. 사장님 "불변요소는 각각 독립(OR)".
+- **해결**: `place-identity.sql` 불변3 로컬이름 AND 결합 삭제 = 풀주소만 독립 차단. 라이브 DB+레포 동기(§19). **실증**: 룩셈부르크 Gemini raw 재입력 → 신규0, 깨끗한 상태서 주소로 흡수 확인.
+
+### ③ Step1 = 발굴 검증표준(_call-config.md)과 완전 통일 (Day3 잘림 + 환각 근본)
+- **모델**: gemini-3.5-flash → **gemini-3-flash-preview** 복귀. 근본=3.5는 thinking 기반이라 thinkingBudget:0에서 긴 JSON(24곳) 불안정 STOP(9,686자↔5,554자 변동=3일↔2일 잘림). 리서치 확정. thinking 켜면 비싼 모델 무의미(사장님).
+- **grounding 실제 켬**: `tools:[{googleSearch:{}}]` 추가 + `responseMimeType` 제거(배타, geminiClient.ts 정합). 근본=프롬프트엔 GROUNDING 글만 있고 실제 tools 없어 효력0 → 환각(파리 식당을 렌에·거리이름 추천). **실증(렌 재생성)**: 지난 환각 3곳(La Grande Rue·Le Petit Saint-Benoît·Allée) 전부 소멸, 24곳 전부 렌·근교 실재 장소.
+- **temperature** 0.3→0.2(발굴 통일). **잘림복구** `repairTruncatedJSON` = 발굴 parse() 방식(뒤에서 접미사 복구)으로 통일 = 잘려도 마지막 날 완성 place 살림(옛 day경계 통째버림 폐기).
+
+### ④ editorialSummary 신규 슬롯 누락 해소
+- **근본**: 재조회(loadSeedRawMap) 삭제 후 신규 곳 editorialSummary가 place에 없어 FE 슬롯 빔. **해결**: step2 place 생성 시 `editorialSummary: desc`(Gemini shortform_ko) 1줄 = 재조회(+1.2초) 없이 완비. 실증: 렌 신규 20/20 채워짐.
+
+### ⑤ TS 헤더 실증 (사장님 다수 지적)
+- 로컬명 단독+좌표 locationBias vs 풀주소 실증. **핵심 배움**: locationBias=약한 우선(유명세에 밀림), locationRestriction=강제(rectangle만). 환각 장소는 헤더로 못 막음=grounding이 답(③). textQuery 문법=`이름 in 도시`(Google 공식). Fort Thüngen=로컬명+좌표로 정확(RC 2361).
+
+### DB 정리
+- Instagram 605건(전부 깨진 URL 허위) = image_url/attribution/updated_at NULL 삭제(사장님 지시). Wikipedia 6,634건 유지.
+- 룩셈부르크 초콜릿하우스 중복 79089 → 79057로 통합(더 충실한 곳, name_ko 흡수).
+
+### 정리
+- 워크트리 pipeline-slim·eager-bassi + 미사용 브랜치 3개 삭제. **pipeline-slim 빈 폴더만 세션 cwd 잠금으로 잔존**(다음 세션서 `git worktree prune`+rmdir 또는 탐색기 삭제).
+- **8항목 검증**(타입체크·서버빌드·웹빌드·§19·§16·500줄·simplify·review) + hook 파일 통째 실행. 커밋 다수 = pre-commit hook 5게이트 자동. push 전 Replit 동기화 우선(merge, rebase 금지).
+
+관련: [[project_pool_dynamic_startpoint_and_ts_flag]] · [[feedback_5gate_verify_loop_before_commit]] · [[feedback_gemini_ts_pm_order_absolute]]
+
+---
+
 ## 🔴🔴 2026-07-17~18 = 돈샘/속도 정밀수정 + **여정 풀·매칭 동적출발점(100km) 근본개편** (사장님 실시간 지휘, 5단계+3게이트 전수, 미커밋→이 커밋)
 
 > 메인=검수·오케스트레이션·DB, 요원=조사·수정. 모든 DB검증 = **DO+강제RAISE 롤백**(운영 무손상). 외부 유료호출 0(Storage raw 재활용).

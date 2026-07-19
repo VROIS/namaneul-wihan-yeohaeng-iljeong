@@ -6,7 +6,12 @@ import * as MediaLibrary from "expo-media-library";
 import * as Sharing from "expo-sharing";
 import { apiRequest } from "@/lib/query-client";
 
-export type VideoStatus = "idle" | "generating" | "polling" | "succeeded" | "failed";
+export type VideoStatus =
+  | "idle"
+  | "generating"
+  | "polling"
+  | "succeeded"
+  | "failed";
 
 export interface ItineraryDetail {
   id: number;
@@ -126,10 +131,7 @@ export function useVideoGeneration({
       // 권한 요청
       const { status } = await MediaLibrary.requestPermissionsAsync();
       if (status !== "granted") {
-        Alert.alert(
-          t("saved.permissionRequired"),
-          t("saved.permissionMsg"),
-        );
+        Alert.alert(t("saved.permissionRequired"), t("saved.permissionMsg"));
         return;
       }
 
@@ -146,7 +148,10 @@ export function useVideoGeneration({
         const asset = await MediaLibrary.createAssetAsync(downloadResult.uri);
         await MediaLibrary.createAlbumAsync("TRIPIS 여행", asset, false);
 
-        Alert.alert(t("saved.videoSaveComplete"), t("saved.videoSaveCompleteMsg"));
+        Alert.alert(
+          t("saved.videoSaveComplete"),
+          t("saved.videoSaveCompleteMsg"),
+        );
       } else {
         throw new Error("다운로드 실패");
       }
@@ -161,14 +166,13 @@ export function useVideoGeneration({
 
       // 공유 폴백
       if (await Sharing.isAvailableAsync()) {
-        Alert.alert(
-          t("saved.videoSaveFailed"),
-          t("saved.videoSaveFailedMsg"),
-          [
-            { text: t("common.cancel"), style: "cancel" },
-            { text: t("common.share"), onPress: () => Sharing.shareAsync(videoUrl) },
-          ],
-        );
+        Alert.alert(t("saved.videoSaveFailed"), t("saved.videoSaveFailedMsg"), [
+          { text: t("common.cancel"), style: "cancel" },
+          {
+            text: t("common.share"),
+            onPress: () => Sharing.shareAsync(videoUrl),
+          },
+        ]);
       } else {
         Alert.alert(t("common.error"), t("saved.videoSaveErrorMsg"));
       }

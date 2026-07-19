@@ -43,7 +43,8 @@ export function distanceKmFromCoords(
   lngB: number,
 ): number {
   const dLat = (latA - latB) * 111320;
-  const dLng = (lngA - lngB) * 111320 * Math.cos((((latA + latB) / 2) * Math.PI) / 180);
+  const dLng =
+    (lngA - lngB) * 111320 * Math.cos((((latA + latB) / 2) * Math.PI) / 180);
   return Math.sqrt(dLat * dLat + dLng * dLng) / 1000;
 }
 
@@ -66,7 +67,8 @@ export function poolWhereSql(
 ): SQL {
   if (!center) return sql`${placeSeedRaw.cityId} = ${cityId}`;
   // 경도 1도 길이 = 위도에 따라 짧아짐 → 박스폭 = 위도폭 / cos(위도). cos 최소 0.15(위도 81°+) 로 클램프(극지 방어) = 어느 위도든 100km 넉넉히 커버.
-  const lngDeg = POOL_LAT_DEG / Math.max(Math.cos((center.lat * Math.PI) / 180), 0.15);
+  const lngDeg =
+    POOL_LAT_DEG / Math.max(Math.cos((center.lat * Math.PI) / 180), 0.15);
   return sql`(${placeSeedRaw.cityId} = ${cityId} OR (
     ${placeSeedRaw.latitude} IS NOT NULL AND ${placeSeedRaw.longitude} IS NOT NULL
     AND ${placeSeedRaw.latitude} <> 0 AND ${placeSeedRaw.longitude} <> 0
@@ -93,7 +95,13 @@ export async function getPoolContext(
  * = 자기도시 행 = 저장값 그대로(자기 도시 중심 기준 = 요청 도시 중심과 동일) = 미변경.
  */
 export function recalcCrossCityZone(
-  row: { cityId: number; latitude: any; longitude: any; dayZone?: any; distanceKmFromCenter?: any },
+  row: {
+    cityId: number;
+    latitude: any;
+    longitude: any;
+    dayZone?: any;
+    distanceKmFromCenter?: any;
+  },
   requestCityId: number,
   center: { lat: number; lng: number } | null,
 ): void {

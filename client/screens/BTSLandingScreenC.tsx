@@ -1,7 +1,13 @@
 // ⚠️ 수정금지(승인필요) — C안: Ultimate BTS 아미봄 랜딩 (Digital Concert Opening)
 // 모든 디자인 도구와 스킬을 활용한 최고의 작품
 import React, { useEffect, useCallback, useMemo } from "react";
-import { View, StyleSheet, Dimensions, StatusBar, Platform } from "react-native";
+import {
+  View,
+  StyleSheet,
+  Dimensions,
+  StatusBar,
+  Platform,
+} from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -49,7 +55,7 @@ export function BTSLandingScreenC() {
     // 초기 진입 애니메이션
     bombEntrance.value = withDelay(
       500,
-      withSpring(1, { damping: 18, stiffness: 80 })
+      withSpring(1, { damping: 18, stiffness: 80 }),
     );
 
     // 배경 30% 밝아짐
@@ -58,50 +64,52 @@ export function BTSLandingScreenC() {
   }, []);
 
   // ⚠️ 수정금지(승인필요) — 3단계 진행 콜백
-  const onStageChange = useCallback((stage: number) => {
-    "worklet";
+  const onStageChange = useCallback(
+    (stage: number) => {
+      "worklet";
 
-    if (stage === 1) {
-      // Stage 1: 생년월일 입력 (50% 밝기)
-      progress.value = withTiming(0.5, { duration: 800 });
-      bgOpacity.value = withTiming(0.5, { duration: 800 });
-      bombGlow.value = withSpring(0.5, { damping: 20 });
+      if (stage === 1) {
+        // Stage 1: 생년월일 입력 (50% 밝기)
+        progress.value = withTiming(0.5, { duration: 800 });
+        bgOpacity.value = withTiming(0.5, { duration: 800 });
+        bombGlow.value = withSpring(0.5, { damping: 20 });
+      } else if (stage === 2) {
+        // Stage 2: 인증 완료 (100% 밝기 + 화이트아웃)
+        progress.value = withTiming(1, { duration: 1200 });
+        bgOpacity.value = withTiming(1, { duration: 1200 });
+        bombGlow.value = withSequence(
+          withSpring(1, { damping: 8 }),
+          withDelay(300, withTiming(1.5, { duration: 400 })),
+        );
 
-    } else if (stage === 2) {
-      // Stage 2: 인증 완료 (100% 밝기 + 화이트아웃)
-      progress.value = withTiming(1, { duration: 1200 });
-      bgOpacity.value = withTiming(1, { duration: 1200 });
-      bombGlow.value = withSequence(
-        withSpring(1, { damping: 8 }),
-        withDelay(300, withTiming(1.5, { duration: 400 }))
-      );
+        // 파티클 트리거
+        particlesTrigger.value = withTiming(1, { duration: 100 });
 
-      // 파티클 트리거
-      particlesTrigger.value = withTiming(1, { duration: 100 });
+        // 화이트아웃 전환
+        whiteout.value = withDelay(
+          1800,
+          withTiming(1, { duration: 600, easing: Easing.inOut(Easing.ease) }),
+        );
 
-      // 화이트아웃 전환
-      whiteout.value = withDelay(
-        1800,
-        withTiming(1, { duration: 600, easing: Easing.inOut(Easing.ease) })
-      );
+        // 다음 화면으로
+        const navigateNext = () => {
+          navigation.replace("Main");
+        };
 
-      // 다음 화면으로
-      const navigateNext = () => {
-        navigation.replace("Main");
-      };
-
-      runOnJS(setTimeout)(() => {
-        runOnJS(navigateNext)();
-      }, 2800);
-    }
-  }, [navigation]);
+        runOnJS(setTimeout)(() => {
+          runOnJS(navigateNext)();
+        }, 2800);
+      }
+    },
+    [navigation],
+  );
 
   // ⚠️ 수정금지(승인필요) — 배경 그라디언트 애니메이션
   const bgAnimatedStyle = useAnimatedStyle(() => {
     const backgroundColor = interpolateColor(
       progress.value,
       [0, 0.3, 0.5, 1],
-      [COBALT_DEEP, "#1A1A3E", "#2D1B69", BORAHAE_DARK]
+      [COBALT_DEEP, "#1A1A3E", "#2D1B69", BORAHAE_DARK],
     );
 
     return {
@@ -116,7 +124,7 @@ export function BTSLandingScreenC() {
       bombGlow.value,
       [0, 0.5, 1, 1.5],
       [0, 0.2, 0.5, 0.8],
-      Extrapolation.CLAMP
+      Extrapolation.CLAMP,
     ),
   }));
 
@@ -125,7 +133,12 @@ export function BTSLandingScreenC() {
     opacity: whiteout.value,
     transform: [
       {
-        scale: interpolate(whiteout.value, [0, 1], [0.8, 1.2], Extrapolation.CLAMP),
+        scale: interpolate(
+          whiteout.value,
+          [0, 1],
+          [0.8, 1.2],
+          Extrapolation.CLAMP,
+        ),
       },
     ],
   }));
@@ -136,9 +149,9 @@ export function BTSLandingScreenC() {
     pulseAnimation.value = withRepeat(
       withSequence(
         withTiming(1, { duration: 2000 }),
-        withTiming(0, { duration: 2000 })
+        withTiming(0, { duration: 2000 }),
       ),
-      -1
+      -1,
     );
   }, []);
 
@@ -153,7 +166,11 @@ export function BTSLandingScreenC() {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      <StatusBar
+        barStyle="light-content"
+        translucent
+        backgroundColor="transparent"
+      />
 
       {/* Layer 0: 배경 베이스 */}
       <Animated.View style={[StyleSheet.absoluteFill, bgAnimatedStyle]} />
@@ -168,7 +185,10 @@ export function BTSLandingScreenC() {
       />
 
       {/* Layer 2: 보라색 글로우 */}
-      <Animated.View style={[StyleSheet.absoluteFill, glowOverlayStyle]} pointerEvents="none">
+      <Animated.View
+        style={[StyleSheet.absoluteFill, glowOverlayStyle]}
+        pointerEvents="none"
+      >
         <LinearGradient
           colors={[
             "transparent",
@@ -206,7 +226,11 @@ export function BTSLandingScreenC() {
         style={[StyleSheet.absoluteFill, styles.whiteout, whiteoutStyle]}
         pointerEvents="none"
       >
-        <BlurView intensity={100} tint="light" style={StyleSheet.absoluteFill} />
+        <BlurView
+          intensity={100}
+          tint="light"
+          style={StyleSheet.absoluteFill}
+        />
       </Animated.View>
     </View>
   );

@@ -7,7 +7,8 @@ import type { BTSPlace } from "@/contexts/BTSContext";
 export const haptic = (t: "light" | "medium" | "success") => {
   try {
     if (t === "light") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    else if (t === "medium") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    else if (t === "medium")
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     else Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   } catch {}
 };
@@ -18,7 +19,9 @@ export const haptic = (t: "light" | "medium" | "success") => {
 // ⚠️ 수정금지(승인필요) — 2026-05-07: 1 주일 노하우 복원. 클라이언트 변환 로직 = SSOT.
 //   카드 = toCardThumbUrl(330px) / 상세 = toFullUrl(1280px) / Wikimedia 공식 버킷.
 //   백엔드 normalize 는 호환 (= 응답 1280px URL 도 카드 변환 시 → 330px 정상).
-const WIKIMEDIA_BUCKETS = [20, 40, 60, 120, 250, 330, 500, 960, 1280, 1920, 3840];
+const WIKIMEDIA_BUCKETS = [
+  20, 40, 60, 120, 250, 330, 500, 960, 1280, 1920, 3840,
+];
 const WIKIMEDIA_PX_REGEX = /\/\d+px-/;
 const UNSPLASH_W_REGEX = /([?&])w=\d+/g;
 
@@ -74,7 +77,7 @@ const WIKIMEDIA_UA = "TRIPIS/1.0 (contact@vibetrip.app) Expo/54";
 // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1i: Wikimedia 요청에 User-Agent 헤더 부착.
 // ⚠️ 수정금지(승인필요) — 2026-05-07: web 환경에서 User-Agent 는 forbidden header → 브라우저 fetch 거부 → web 만 헤더 X.
 export function resolvePlaceImage(
-  place: BTSPlace
+  place: BTSPlace,
 ): { uri: string; headers?: Record<string, string> } | undefined {
   if (!place.imageUrl) return undefined;
   const uri = toCardThumbUrl(place.imageUrl);
@@ -87,7 +90,7 @@ export function resolvePlaceImage(
 // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 4a: 상세 섹션용 큰 이미지 소스 (1280px + 동일 UA 정책).
 // Track 1i 의 resolvePlaceImage 와 병렬 구조 — Track 1i 로직 건드리지 않음.
 export function resolvePlaceImageFull(
-  place: BTSPlace
+  place: BTSPlace,
 ): { uri: string; headers?: Record<string, string> } | undefined {
   if (!place.imageUrl) return undefined;
   const uri = toFullUrl(place.imageUrl);
@@ -100,7 +103,7 @@ export function resolvePlaceImageFull(
 // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 5b: 도시/장소 이름 언어 연동 헬퍼. 영어 토글 시 nameEn 우선.
 export function localizedName(
   item: { nameKo?: string | null; nameEn?: string | null },
-  isKorean: boolean
+  isKorean: boolean,
 ): string {
   if (isKorean) return item.nameKo || item.nameEn || "";
   return item.nameEn || item.nameKo || "";

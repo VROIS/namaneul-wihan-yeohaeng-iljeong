@@ -118,11 +118,11 @@ const ICON_MAP: Record<string, React.ComponentType<LucideProps>> = {
   Zap,
   ShoppingBag, // = 쇼핑
   Ticket,
-  Camera,      // = 핫스팟 (= 마커와 통일)
+  Camera, // = 핫스팟 (= 마커와 통일)
   FerrisWheel, // = 즐길거리 (= 마커와 통일)
-  Flower2,     // = 힐링 (= 마커와 통일)
-  Landmark,    // = 문화/예술 (= 마커와 통일)
-  Mountain,    // = 모험 (= 마커와 통일)
+  Flower2, // = 힐링 (= 마커와 통일)
+  Landmark, // = 문화/예술 (= 마커와 통일)
+  Mountain, // = 모험 (= 마커와 통일)
 };
 
 // ⚠️ 수정금지(승인필요) — kebab-case → PascalCase 변환
@@ -150,7 +150,9 @@ export function Icon({ name, color, size = 24, ...rest }: IconProps) {
   const LucideIcon = ICON_MAP[iconName];
 
   if (!LucideIcon) {
-    console.warn(`[Icon] Missing icon: ${name} (resolved to ${iconName}). ICON_MAP에 추가 필요.`);
+    console.warn(
+      `[Icon] Missing icon: ${name} (resolved to ${iconName}). ICON_MAP에 추가 필요.`,
+    );
     return null;
   }
 

@@ -1,10 +1,15 @@
 // 가이드 가격 계산(DB조회+1일가격+1인가격) = transport-pricing-service 분리(2026-07-16 §0 슬림화, 순수 이동)
 
-import { db } from '../../db';
-import { guidePrices } from '../../../shared/schema';
-import { eq } from 'drizzle-orm';
-import { DEFAULT_PRICES, COMPANION_TO_TRANSPORT } from './constants';
-import type { TransportType, MobilityStyle, TravelStyle, CompanionType } from './constants';
+import { db } from "../../db";
+import { guidePrices } from "../../../shared/schema";
+import { eq } from "drizzle-orm";
+import { DEFAULT_PRICES, COMPANION_TO_TRANSPORT } from "./constants";
+import type {
+  TransportType,
+  MobilityStyle,
+  TravelStyle,
+  CompanionType,
+} from "./constants";
 
 // ===================================================================
 // 유틸리티
@@ -23,10 +28,11 @@ export function shouldApplyGuidePrice(
   mobilityStyle: MobilityStyle,
   travelStyle: TravelStyle,
 ): boolean {
-  const ms = (mobilityStyle || '').toLowerCase();
-  const ts = (travelStyle || '').toLowerCase();
-  return ms === 'minimal' || ms === 'moderate'
-    || ts === 'premium' || ts === 'luxury';
+  const ms = (mobilityStyle || "").toLowerCase();
+  const ts = (travelStyle || "").toLowerCase();
+  return (
+    ms === "minimal" || ms === "moderate" || ts === "premium" || ts === "luxury"
+  );
 }
 
 // ===================================================================
@@ -38,16 +44,23 @@ async function getGuidePriceFromDB(serviceType: TransportType): Promise<{
   pricePerHour: number;
 } | null> {
   try {
-    const [priceData] = await db.select().from(guidePrices)
+    const [priceData] = await db
+      .select()
+      .from(guidePrices)
       .where(eq(guidePrices.serviceType, serviceType))
       .limit(1);
     if (!priceData) return null;
     return {
-      basePrice4h: priceData.basePrice4h || DEFAULT_PRICES[serviceType].basePrice4h,
-      pricePerHour: priceData.pricePerHour || DEFAULT_PRICES[serviceType].pricePerHour,
+      basePrice4h:
+        priceData.basePrice4h || DEFAULT_PRICES[serviceType].basePrice4h,
+      pricePerHour:
+        priceData.pricePerHour || DEFAULT_PRICES[serviceType].pricePerHour,
     };
   } catch (error) {
-    console.warn(`[Transport] DB 조회 실패, 기본값 사용: ${serviceType}`, error);
+    console.warn(
+      `[Transport] DB 조회 실패, 기본값 사용: ${serviceType}`,
+      error,
+    );
     return null;
   }
 }
@@ -67,7 +80,10 @@ export async function calculateGuideDailyPrice(
   transportType: TransportType,
   availableHours: number = 8,
   isRegionalTravel: boolean = false,
-): Promise<{ dailyVehiclePrice: number; priceConfig: { basePrice4h: number; pricePerHour: number } }> {
+): Promise<{
+  dailyVehiclePrice: number;
+  priceConfig: { basePrice4h: number; pricePerHour: number };
+}> {
   const dbPrice = await getGuidePriceFromDB(transportType);
   const priceConfig = dbPrice || DEFAULT_PRICES[transportType];
 
@@ -76,7 +92,9 @@ export async function calculateGuideDailyPrice(
   const additionalHours = Math.max(0, effectiveHours - 4);
 
   // 1일 차량 가격 = 기본(4h포함) + 추가시간 × 시간당 (내부 계산만, 고객에게는 1일 가격으로 표시)
-  let dailyVehiclePrice = round2(priceConfig.basePrice4h + (additionalHours * priceConfig.pricePerHour));
+  let dailyVehiclePrice = round2(
+    priceConfig.basePrice4h + additionalHours * priceConfig.pricePerHour,
+  );
 
   // 지방/도시간 이동: +50% 할증
   if (isRegionalTravel) {
@@ -94,17 +112,35 @@ export async function getGuidePerPersonPerDay(
   companionCount: number,
   availableHours: number = 8,
   isRegionalTravel: boolean = false,
-): Promise<{ perPersonPerDay: number; dailyVehiclePrice: number; vehicleType: TransportType; vehicleDescription: string }> {
+): Promise<{
+  perPersonPerDay: number;
+  dailyVehiclePrice: number;
+  vehicleType: TransportType;
+  vehicleDescription: string;
+}> {
   const config = COMPANION_TO_TRANSPORT[companionType];
   const transportType = config.transportType;
 
-  const { dailyVehiclePrice } = await calculateGuideDailyPrice(transportType, availableHours, isRegionalTravel);
+  const { dailyVehiclePrice } = await calculateGuideDailyPrice(
+    transportType,
+    availableHours,
+    isRegionalTravel,
+  );
   const perPersonPerDay = round2(dailyVehiclePrice / companionCount);
 
-  const vehicleDescription = transportType === 'sedan' ? '전용 세단 (1-4인)'
-    : transportType === 'van' ? '전용 밴 (5-7인)'
-    : transportType === 'minibus' ? '전용 미니버스 (8인+)'
-    : '가이드 서비스';
+  const vehicleDescription =
+    transportType === "sedan"
+      ? "전용 세단 (1-4인)"
+      : transportType === "van"
+        ? "전용 밴 (5-7인)"
+        : transportType === "minibus"
+          ? "전용 미니버스 (8인+)"
+          : "가이드 서비스";
 
-  return { perPersonPerDay, dailyVehiclePrice, vehicleType: transportType, vehicleDescription };
+  return {
+    perPersonPerDay,
+    dailyVehiclePrice,
+    vehicleType: transportType,
+    vehicleDescription,
+  };
 }

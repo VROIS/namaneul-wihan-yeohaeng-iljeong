@@ -225,9 +225,7 @@ export default function LoginScreen() {
             {dateError ? (
               <Text style={styles.errorText}>{dateError}</Text>
             ) : isDateComplete && !isAdult && age !== null ? (
-              <Text style={styles.errorText}>
-                {t("login.adultOnly")}
-              </Text>
+              <Text style={styles.errorText}>{t("login.adultOnly")}</Text>
             ) : null}
           </View>
 
@@ -272,10 +270,21 @@ export default function LoginScreen() {
 
             {/* ⚠️ 사장님 SSOT 2026-07-14 = 개발단계 이메일 로그인(구글 OAuth 웹 400 우회). 메일 넣으면 그 계정으로 로그인(사장님 메일=admin). 로그인 정식화 때 폐기 §19. */}
             <View style={styles.emailLoginBox}>
-              <Text style={[styles.emailLoginLabel, { color: theme.textTertiary }]}>{t("login.emailDevLabel")}</Text>
+              <Text
+                style={[styles.emailLoginLabel, { color: theme.textTertiary }]}
+              >
+                {t("login.emailDevLabel")}
+              </Text>
               <View style={styles.emailLoginRow}>
                 <TextInput
-                  style={[styles.emailInput, { backgroundColor: theme.backgroundDefault, color: theme.text, borderColor: theme.border }]}
+                  style={[
+                    styles.emailInput,
+                    {
+                      backgroundColor: theme.backgroundDefault,
+                      color: theme.text,
+                      borderColor: theme.border,
+                    },
+                  ]}
                   placeholder={t("login.emailPlaceholder")}
                   placeholderTextColor={theme.textTertiary}
                   value={emailInput}
@@ -285,11 +294,24 @@ export default function LoginScreen() {
                   editable={!emailLoading}
                 />
                 <Pressable
-                  style={({ pressed }) => [styles.emailLoginBtn, { backgroundColor: Brand.primary, opacity: (emailLoading || !emailInput.trim()) ? 0.5 : pressed ? 0.8 : 1 }]}
+                  style={({ pressed }) => [
+                    styles.emailLoginBtn,
+                    {
+                      backgroundColor: Brand.primary,
+                      opacity:
+                        emailLoading || !emailInput.trim()
+                          ? 0.5
+                          : pressed
+                            ? 0.8
+                            : 1,
+                    },
+                  ]}
                   onPress={handleEmailLogin}
                   disabled={emailLoading || !emailInput.trim()}
                 >
-                  <Text style={styles.emailLoginBtnText}>{t("login.emailLoginBtn")}</Text>
+                  <Text style={styles.emailLoginBtnText}>
+                    {t("login.emailLoginBtn")}
+                  </Text>
                 </Pressable>
               </View>
             </View>
@@ -324,7 +346,7 @@ export default function LoginScreen() {
                 styles.whatsappButton,
                 pressed && isWhatsAppOtpConfigured() && styles.buttonPressed,
                 (oauthLoading || !isWhatsAppOtpConfigured()) &&
-                styles.buttonDisabled,
+                  styles.buttonDisabled,
                 !isWhatsAppOtpConfigured() && { opacity: 0.5 },
               ]}
               onPress={handleWhatsAppPress}

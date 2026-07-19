@@ -7,8 +7,6 @@
  * 입력 = {imageUrl} (= place_seed_raw.image_url = 구글 PM 검증 이미지)
  * 출력 = string ('' = image_url NULL)
  */
-export function pickPlaceImage(seed: {
-  imageUrl?: string | null;
-}): string {
-  return seed.imageUrl || '';
+export function pickPlaceImage(seed: { imageUrl?: string | null }): string {
+  return seed.imageUrl || "";
 }

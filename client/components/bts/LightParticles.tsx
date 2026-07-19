@@ -49,7 +49,7 @@ function Particle({
             progress,
             [0, 1],
             [0, targetX],
-            Extrapolation.CLAMP
+            Extrapolation.CLAMP,
           ),
         },
         {
@@ -57,7 +57,7 @@ function Particle({
             progress,
             [0, 1],
             [0, targetY],
-            Extrapolation.CLAMP
+            Extrapolation.CLAMP,
           ),
         },
         {
@@ -65,7 +65,7 @@ function Particle({
             progress,
             [0, 0.3, 0.7, 1],
             [0, 1.5, 1, 0],
-            Extrapolation.CLAMP
+            Extrapolation.CLAMP,
           ),
         },
       ],
@@ -73,7 +73,7 @@ function Particle({
         progress,
         [0, 0.1, 0.6, 1],
         [0, 1, 0.6, 0],
-        Extrapolation.CLAMP
+        Extrapolation.CLAMP,
       ),
     };
   });

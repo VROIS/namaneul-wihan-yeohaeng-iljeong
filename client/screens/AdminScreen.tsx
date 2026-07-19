@@ -141,7 +141,13 @@ export default function AdminScreen() {
             ) : null}
 
             <TouchableOpacity
-              style={[styles.loginButton, { backgroundColor: Brand.primary, opacity: isLoading ? 0.6 : 1 }]}
+              style={[
+                styles.loginButton,
+                {
+                  backgroundColor: Brand.primary,
+                  opacity: isLoading ? 0.6 : 1,
+                },
+              ]}
               onPress={handleLogin}
               activeOpacity={0.8}
               disabled={isLoading}

@@ -1,13 +1,14 @@
-const { Client } = require('pg');
+const { Client } = require("pg");
 
-const connectionString = 'postgresql://postgres:Vrois%4075015@db.wxebceflvuythuodemro.supabase.co:5432/postgres';
+const connectionString =
+  "postgresql://postgres:Vrois%4075015@db.wxebceflvuythuodemro.supabase.co:5432/postgres";
 
 async function main() {
   const client = new Client({ connectionString });
 
   try {
     await client.connect();
-    console.log('Connected!');
+    console.log("Connected!");
 
     // Get all sequences
     const seqResult = await client.query(`
@@ -21,8 +22,8 @@ async function main() {
     for (const row of seqResult.rows) {
       const seqName = row.sequence_name;
       // Extract table name from sequence (e.g., places_id_seq -> places)
-      const tableName = seqName.replace('_id_seq', '');
-      
+      const tableName = seqName.replace("_id_seq", "");
+
       try {
         // Reset sequence to max(id) + 1
         await client.query(`
@@ -34,10 +35,9 @@ async function main() {
       }
     }
 
-    console.log('\n✅ Sequences fixed!');
-
+    console.log("\n✅ Sequences fixed!");
   } catch (error) {
-    console.error('Error:', error.message);
+    console.error("Error:", error.message);
   } finally {
     await client.end();
   }

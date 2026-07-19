@@ -9,11 +9,11 @@
  * Adaptive fallback (= 사용자 SSOT) = 40 실패 → 30 → 20 → 10
  */
 
-import { db } from '../../db';
-import { placeSeedRaw } from '@shared/schema';
-import { eq, asc } from 'drizzle-orm';
-import { geminiJson } from '../shared/geminiClient';
-import { upsertPlace } from '../place-upsert';
+import { db } from "../../db";
+import { placeSeedRaw } from "@shared/schema";
+import { eq, asc } from "drizzle-orm";
+import { geminiJson } from "../shared/geminiClient";
+import { upsertPlace } from "../place-upsert";
 
 interface GeminiInputPlace {
   id: number;
@@ -38,7 +38,7 @@ interface GeminiOutputPlace {
   summary_ko: string | null;
   editorial_summary: string | null;
   price_eur: number | null;
-  distance_km_from_center: number | null;  // ⚠️ 2026-06-12 = 도심거리 = 모든 enrich 필수요소 (= 동선 최적화 기본)
+  distance_km_from_center: number | null; // ⚠️ 2026-06-12 = 도심거리 = 모든 enrich 필수요소 (= 동선 최적화 기본)
 }
 
 interface GeminiResponse {
@@ -75,7 +75,7 @@ export interface EnrichBatchResult {
  * Paris 활성 행 (= archive 제외) = id ASC = batch 만큼 SELECT
  */
 async function selectBatch(cityId: number, batchSize: number, offset: number) {
-  if (!db) throw new Error('db unavailable');
+  if (!db) throw new Error("db unavailable");
   const rows = await db
     .select({
       id: placeSeedRaw.id,
@@ -163,7 +163,7 @@ export async function enrichPlaceByGemini(
   const batch = await selectBatch(cityId, batchSize, offset);
   const input: GeminiInputPlace[] = batch.map((r) => ({
     id: r.id,
-    name_en: r.nameEn || '',
+    name_en: r.nameEn || "",
     name_local: r.nameLocal,
     name_ko: r.nameKo,
     address: r.address,
@@ -210,7 +210,7 @@ export async function enrichPlaceByGemini(
         continue;
       }
       try {
-        const isShopping = orig.seedCategory === 'shopping';
+        const isShopping = orig.seedCategory === "shopping";
         const priceEur = isShopping
           ? null
           : p.price_eur != null
@@ -230,10 +230,13 @@ export async function enrichPlaceByGemini(
           selectionReasonKo: p.summary_ko || undefined,
           shortformKo: p.editorial_summary || undefined,
           // ⚠️ 2026-06-12 = 도심거리 = 모든 enrich 필수요소 전달 (= 동선 최적화 기본, place-upsert COALESCE 새우선)
-          distanceKmFromCenter: p.distance_km_from_center != null ? p.distance_km_from_center : undefined,
+          distanceKmFromCenter:
+            p.distance_km_from_center != null
+              ? p.distance_km_from_center
+              : undefined,
         });
-        if (r.action === 'inserted') inserted++;
-        else if (r.action === 'updated') updated++;
+        if (r.action === "inserted") inserted++;
+        else if (r.action === "updated") updated++;
         else skipped++;
       } catch (e: any) {
         errors.push(`upsert id ${p.id}: ${e.message || String(e)}`);

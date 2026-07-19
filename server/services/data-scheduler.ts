@@ -24,7 +24,9 @@ export class DataScheduler {
     this.scheduleTask("exchange_rate_sync", "0 0,8,16 * * *");
 
     this.isRunning = true;
-    console.log("[Scheduler] ✅ exchange_rate_sync 매일 00:00 / 08:00 / 16:00 활성");
+    console.log(
+      "[Scheduler] ✅ exchange_rate_sync 매일 00:00 / 08:00 / 16:00 활성",
+    );
   }
 
   private scheduleTask(taskName: string, cronExpression: string): void {
@@ -45,23 +47,36 @@ export class DataScheduler {
         return;
       }
 
-      let result: { success: boolean; itemsProcessed: number; errors: string[] } =
-        { success: false, itemsProcessed: 0, errors: ["unknown task"] };
+      let result: {
+        success: boolean;
+        itemsProcessed: number;
+        errors: string[];
+      } = { success: false, itemsProcessed: 0, errors: ["unknown task"] };
 
       if (taskName === "exchange_rate_sync") {
         result = await this.runExchangeRateSync();
       }
 
       const elapsed = Date.now() - startTime.getTime();
-      console.log(`[Scheduler] Task ${taskName} ${result.success ? "✅" : "❌"} = ${result.itemsProcessed} 항목 / ${result.errors.length} 오류 / ${elapsed}ms`);
-      if (result.errors.length > 0) console.warn(`[Scheduler] errors:`, result.errors.join("; "));
+      console.log(
+        `[Scheduler] Task ${taskName} ${result.success ? "✅" : "❌"} = ${result.itemsProcessed} 항목 / ${result.errors.length} 오류 / ${elapsed}ms`,
+      );
+      if (result.errors.length > 0)
+        console.warn(`[Scheduler] errors:`, result.errors.join("; "));
     } catch (error: any) {
       const elapsed = Date.now() - startTime.getTime();
-      console.error(`[Scheduler] Task ${taskName} ❌ FATAL (${elapsed}ms):`, error.message);
+      console.error(
+        `[Scheduler] Task ${taskName} ❌ FATAL (${elapsed}ms):`,
+        error.message,
+      );
     }
   }
 
-  private async runExchangeRateSync(): Promise<{ success: boolean; itemsProcessed: number; errors: string[] }> {
+  private async runExchangeRateSync(): Promise<{
+    success: boolean;
+    itemsProcessed: number;
+    errors: string[];
+  }> {
     try {
       const { exchangeRateFetcher } = await import("./exchange-rate");
       const result = await exchangeRateFetcher.syncExchangeRates();

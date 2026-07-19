@@ -22,8 +22,16 @@ import type { PlannerApi } from "./hooks/useTripPlanner";
 
 export default function InputStep({ planner }: { planner: PlannerApi }) {
   const {
-    navigation, theme, insets, t, i18n,
-    formData, setFormData, toggleVibe, openPicker, handleGenerate,
+    navigation,
+    theme,
+    insets,
+    t,
+    i18n,
+    formData,
+    setFormData,
+    toggleVibe,
+    openPicker,
+    handleGenerate,
   } = planner;
 
   const renderSectionHeader = (title: string, subtitle: string) => (
@@ -82,10 +90,23 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
         {/* ⚠️ 2026-06-24 = 💜 이모지 제거 → Lucide heart (= 디자인 SSOT §1-3 이모지금지 / §8 Lucide만, ICON_MAP 기존 Heart 사용 = 보호파일 미변경). 보라색 = BTS 보라해 유지 */}
         <Icon name="heart" size={24} color="#A78BFA" />
         <View style={{ flex: 1 }}>
-          <Text style={{ color: "#A78BFA", fontFamily: "Pretendard-Bold", fontSize: 14 }}>
+          <Text
+            style={{
+              color: "#A78BFA",
+              fontFamily: "Pretendard-Bold",
+              fontSize: 14,
+            }}
+          >
             {t("trip.btsBanner")}
           </Text>
-          <Text style={{ color: "#6B7280", fontFamily: "Pretendard-Medium", fontSize: 11, marginTop: 2 }}>
+          <Text
+            style={{
+              color: "#6B7280",
+              fontFamily: "Pretendard-Medium",
+              fontSize: 11,
+              marginTop: 2,
+            }}
+          >
             {t("trip.btsBannerSub")}
           </Text>
         </View>
@@ -94,7 +115,12 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
 
       {/* 🗺️ 목적지 (자유 입력 — 한글/영어 OK, DB city-resolver가 매칭) */}
       <View style={[styles.section, { zIndex: 20 }]}>
-        <View style={[styles.inputBox, { backgroundColor: theme.backgroundDefault }]}>
+        <View
+          style={[
+            styles.inputBox,
+            { backgroundColor: theme.backgroundDefault },
+          ]}
+        >
           <Icon name="map-pin" size={20} color={Brand.primary} />
           <TextInput
             style={[styles.textInput, { color: theme.text }]}
@@ -104,19 +130,26 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
                 ...prev,
                 destination: text,
                 destinationCoords: undefined,
-                ...(text ? {} : {
-                  accommodationName: undefined,
-                  accommodationAddress: undefined,
-                  accommodationCoords: undefined,
-                  accommodationPlaceId: undefined,
-                }),
+                ...(text
+                  ? {}
+                  : {
+                      accommodationName: undefined,
+                      accommodationAddress: undefined,
+                      accommodationCoords: undefined,
+                      accommodationPlaceId: undefined,
+                    }),
               }))
             }
             placeholder={t("trip.destinationPlaceholder")}
             placeholderTextColor={theme.textTertiary}
           />
         </View>
-        <Text style={[styles.sectionSubtitle, { color: theme.textTertiary, marginTop: 4, marginLeft: 4 }]}>
+        <Text
+          style={[
+            styles.sectionSubtitle,
+            { color: theme.textTertiary, marginTop: 4, marginLeft: 4 },
+          ]}
+        >
           {t("trip.destinationHint")}
         </Text>
       </View>
@@ -132,7 +165,9 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
             placeholder={t("trip.accommodation")}
             language={i18n.language || "ko"}
             // 🏨 2026-06-29 = 도시명 prefill(구글맵 방식) = 입력 도시 "Paris " → 사용자가 뒤에 숙소명 = 그 도시만.
-            cityPrefix={formData.destination ? `${formData.destination} ` : undefined}
+            cityPrefix={
+              formData.destination ? `${formData.destination} ` : undefined
+            }
             onSelect={(place: PlaceSelection) => {
               // 선택 저장 → accommodationName 채워짐 → 위 조건으로 이 섹션 언마운트 = 키보드 자동 닫힘
               setFormData((prev) => ({
@@ -144,7 +179,12 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
               }));
             }}
           />
-          <Text style={[styles.sectionSubtitle, { color: theme.textTertiary, marginTop: 4, marginLeft: 4 }]}>
+          <Text
+            style={[
+              styles.sectionSubtitle,
+              { color: theme.textTertiary, marginTop: 4, marginLeft: 4 },
+            ]}
+          >
             {t("trip.accommodationHint")}
           </Text>
         </View>
@@ -254,7 +294,10 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
       </View>
 
       <View style={styles.section}>
-        {renderSectionHeader(t("trip.curationFocus"), t("trip.curationFocusHint"))}
+        {renderSectionHeader(
+          t("trip.curationFocus"),
+          t("trip.curationFocusHint"),
+        )}
         <View style={styles.iconGrid}>
           {CURATION_FOCUS_OPTIONS.map((option) => {
             const isSelected = formData.curationFocus === option.id;
@@ -298,7 +341,11 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
           {VIBE_OPTIONS.map((vibe) => {
             const isSelected = formData.vibes.includes(vibe.id);
             const selectionIndex = formData.vibes.indexOf(vibe.id);
-            const priorityLabels = [t("trip.priorityHighest"), t("trip.priorityHigh"), t("trip.priorityNormal")];
+            const priorityLabels = [
+              t("trip.priorityHighest"),
+              t("trip.priorityHigh"),
+              t("trip.priorityNormal"),
+            ];
             const priorityLabel =
               selectionIndex >= 0 ? priorityLabels[selectionIndex] : "";
             return (
@@ -413,7 +460,10 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
       </View>
 
       <View style={styles.section}>
-        {renderSectionHeader(t("trip.mobilityStyle"), t("trip.mobilityStyleHint"))}
+        {renderSectionHeader(
+          t("trip.mobilityStyle"),
+          t("trip.mobilityStyleHint"),
+        )}
         <View style={styles.toggleRow}>
           {MOBILITY_STYLE_OPTIONS.map((option) => {
             const isSelected = formData.mobilityStyle === option.id;

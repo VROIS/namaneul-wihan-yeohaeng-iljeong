@@ -13,7 +13,10 @@ process.on("uncaughtException", (err) => {
   console.error("[FATAL] uncaughtException (서버 유지):", err?.message || err);
 });
 process.on("unhandledRejection", (reason) => {
-  console.error("[FATAL] unhandledRejection (서버 유지):", (reason as Error)?.message || reason);
+  console.error(
+    "[FATAL] unhandledRejection (서버 유지):",
+    (reason as Error)?.message || reason,
+  );
 });
 
 const app = express();
@@ -29,7 +32,10 @@ function setupCors(app: express.Application) {
   app.use((req, res, next) => {
     const origin = req.header("origin");
     res.header("Access-Control-Allow-Origin", origin || "*");
-    res.header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS"); // PATCH = 전문가 답변/admin 상태변경(2026-07-13). 웹 preflight 필수.
+    res.header(
+      "Access-Control-Allow-Methods",
+      "GET, POST, PUT, PATCH, DELETE, OPTIONS",
+    ); // PATCH = 전문가 답변/admin 상태변경(2026-07-13). 웹 preflight 필수.
     res.header("Access-Control-Allow-Headers", "Content-Type, Authorization");
     res.header("Access-Control-Allow-Credentials", "true");
 
@@ -47,7 +53,7 @@ function setupCharset(app: express.Application) {
     // JSON 응답시 charset=utf-8 자동 추가
     const originalJson = res.json.bind(res);
     res.json = (body) => {
-      res.setHeader('Content-Type', 'application/json; charset=utf-8');
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
       return originalJson(body);
     };
     next();
@@ -76,9 +82,12 @@ function setupAppErrorReporter(app: express.Application) {
       return res.status(400).json({ ok: false });
     }
 
-    const lines = errors.map((e: any) =>
-      `[${e.timestamp}] ${e.component || "?"} | ${e.message}${e.stack ? "\n  " + e.stack.split("\n").slice(0, 3).join("\n  ") : ""}`
-    ).join("\n");
+    const lines = errors
+      .map(
+        (e: any) =>
+          `[${e.timestamp}] ${e.component || "?"} | ${e.message}${e.stack ? "\n  " + e.stack.split("\n").slice(0, 3).join("\n  ") : ""}`,
+      )
+      .join("\n");
 
     fs.appendFileSync(errorLogPath, lines + "\n---\n", "utf-8");
     console.error(`[APP-ERROR] ${errors.length}건 수신:\n${lines}`);
@@ -88,7 +97,9 @@ function setupAppErrorReporter(app: express.Application) {
   // 에러 로그 읽기 (AI가 확인용)
   app.get("/api/app-errors", (_req: Request, res: Response) => {
     try {
-      const content = fs.existsSync(errorLogPath) ? fs.readFileSync(errorLogPath, "utf-8") : "(에러 없음)";
+      const content = fs.existsSync(errorLogPath)
+        ? fs.readFileSync(errorLogPath, "utf-8")
+        : "(에러 없음)";
       res.type("text/plain").send(content);
     } catch {
       res.type("text/plain").send("(읽기 실패)");
@@ -160,7 +171,9 @@ const metroProxy = createProxyMiddleware({
     error: (err, req, res) => {
       console.error("[Metro Proxy Error]", err.message);
       if (res && "status" in res) {
-        (res as Response).status(502).json({ error: "Metro bundler not running" });
+        (res as Response)
+          .status(502)
+          .json({ error: "Metro bundler not running" });
       }
     },
   },
@@ -224,7 +237,9 @@ function configureExpoAndLanding(app: express.Application) {
       if (req.path.startsWith("/admin")) return next();
       return (metroProxy as any)(req, res, next);
     });
-    log("⚙️  Dev mode: proxying non-API requests (incl. /assets) to Metro at localhost:8081");
+    log(
+      "⚙️  Dev mode: proxying non-API requests (incl. /assets) to Metro at localhost:8081",
+    );
   }
 
   app.use("/assets", express.static(path.resolve(process.cwd(), "assets")));
@@ -255,8 +270,12 @@ function setupErrorHandler(app: express.Application) {
   setupRequestLogging(app);
 
   app.use((req, res, next) => {
-    if (req.path.endsWith('.html') || req.path === '/' || !req.path.includes('.')) {
-      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    if (
+      req.path.endsWith(".html") ||
+      req.path === "/" ||
+      !req.path.includes(".")
+    ) {
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
     }
     next();
   });
@@ -268,86 +287,95 @@ function setupErrorHandler(app: express.Application) {
 
   const port = parseInt(process.env.PORT || "5000", 10);
 
-  server.on('error', (err: NodeJS.ErrnoException) => {
-    if (err.code === 'EADDRINUSE') {
-      console.error(`❌ Port ${port} is already in use. Please stop the other process or use a different port.`);
-      console.error(`   Try: netstat -ano | findstr :${port} to find the process`);
+  server.on("error", (err: NodeJS.ErrnoException) => {
+    if (err.code === "EADDRINUSE") {
+      console.error(
+        `❌ Port ${port} is already in use. Please stop the other process or use a different port.`,
+      );
+      console.error(
+        `   Try: netstat -ano | findstr :${port} to find the process`,
+      );
       process.exit(1);
     } else {
-      console.error('❌ Server error:', err);
+      console.error("❌ Server error:", err);
       process.exit(1);
     }
   });
 
-  server.listen(
-    port,
-    "0.0.0.0",
-    async () => {
-      log(`express server serving on port ${port}`);
+  server.listen(port, "0.0.0.0", async () => {
+    log(`express server serving on port ${port}`);
 
-      // DB 마이그레이션 (mcp_phases 등 누락 컬럼 자동 추가)
-      try {
-        const { runStartupMigrations } = await import("./run-startup-migrations");
-        await runStartupMigrations();
-      } catch (e) {
-        log("[Server] Startup migration skip:", (e as Error).message);
-      }
+    // DB 마이그레이션 (mcp_phases 등 누락 컬럼 자동 추가)
+    try {
+      const { runStartupMigrations } = await import("./run-startup-migrations");
+      await runStartupMigrations();
+    } catch (e) {
+      log("[Server] Startup migration skip:", (e as Error).message);
+    }
 
-      // DB에서 API 키 로드
-      try {
-        if (isDatabaseConnected() && db) {
-          const keys = await db.select().from(apiKeys);
-          let loadedCount = 0;
-          for (const key of keys) {
-            if (key.keyValue && key.keyValue.trim() !== '' && key.isActive) {
-              process.env[key.keyName] = key.keyValue;
-              // 추가 매핑 (서비스별 env 변수명)
-              if (key.keyName === 'GEMINI_API_KEY') {
-                process.env.AI_INTEGRATIONS_GEMINI_API_KEY = key.keyValue;
-              }
-              if (key.keyName === 'GOOGLE_MAPS_API_KEY') {
-                process.env.Google_maps_api_key = key.keyValue;
-              }
-              if (key.keyName === 'GOOGLE_OAUTH_CLIENT_ID' || key.keyName === 'EXPO_PUBLIC_GOOGLE_CLIENT_ID') {
-                process.env.GOOGLE_CLIENT_ID = key.keyValue;
-                process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID = key.keyValue;
-              }
-              loadedCount++;
+    // DB에서 API 키 로드
+    try {
+      if (isDatabaseConnected() && db) {
+        const keys = await db.select().from(apiKeys);
+        let loadedCount = 0;
+        for (const key of keys) {
+          if (key.keyValue && key.keyValue.trim() !== "" && key.isActive) {
+            process.env[key.keyName] = key.keyValue;
+            // 추가 매핑 (서비스별 env 변수명)
+            if (key.keyName === "GEMINI_API_KEY") {
+              process.env.AI_INTEGRATIONS_GEMINI_API_KEY = key.keyValue;
             }
-          }
-          log(`[Server] ✅ Loaded ${loadedCount} API keys from database`);
-        }
-      } catch (error) {
-        log("[Server] Failed to load API keys from database:", error);
-      }
-
-      // ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT = DB-only 도시 ready 검증 로그 (= 메인앱 분기 확실화)
-      try {
-        const { isCityReady } = await import("./services/agents/ag2-gemini-recommender");
-        const DB_ONLY_CITIES = ['Paris'];  // = 추후 list 확장 = Tokyo / Madrid 등
-        for (const cityName of DB_ONLY_CITIES) {
-          const check = await isCityReady(cityName);
-          if (check.ready) {
-            log(`[Server] ✅ DB-only city '${cityName}' (id=${check.cityId}) ready=true / ${check.count} rows`);
-          } else {
-            log(`[Server] ⚠️  DB-only city '${cityName}' ready=false / ${check.count} rows < threshold = MIX path 진입 시 = 차단됨`);
+            if (key.keyName === "GOOGLE_MAPS_API_KEY") {
+              process.env.Google_maps_api_key = key.keyValue;
+            }
+            if (
+              key.keyName === "GOOGLE_OAUTH_CLIENT_ID" ||
+              key.keyName === "EXPO_PUBLIC_GOOGLE_CLIENT_ID"
+            ) {
+              process.env.GOOGLE_CLIENT_ID = key.keyValue;
+              process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID = key.keyValue;
+            }
+            loadedCount++;
           }
         }
-      } catch (e) {
-        log("[Server] DB-only city ready check skip:", (e as Error).message);
+        log(`[Server] ✅ Loaded ${loadedCount} API keys from database`);
       }
+    } catch (error) {
+      log("[Server] Failed to load API keys from database:", error);
+    }
 
-      try {
-        // ✅ [2026-02-08] 스케줄러 복구 - 비용 보호 적용 완료:
-        // - place_seed_sync만 차단 (Google Places API 폭탄 주범)
-        // - Gemini Google Search 일일 160건 제한 (무료 범위 유지)
-        // - 나머지 13개 크롤러는 안전하게 운영
-        const { dataScheduler } = await import("./services/data-scheduler");
-        await dataScheduler.initialize();
-        log("[Server] ✅ Data scheduler initialized");
-      } catch (error) {
-        log("[Server] Failed to initialize scheduler:", error);
+    // ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT = DB-only 도시 ready 검증 로그 (= 메인앱 분기 확실화)
+    try {
+      const { isCityReady } = await import(
+        "./services/agents/ag2-gemini-recommender"
+      );
+      const DB_ONLY_CITIES = ["Paris"]; // = 추후 list 확장 = Tokyo / Madrid 등
+      for (const cityName of DB_ONLY_CITIES) {
+        const check = await isCityReady(cityName);
+        if (check.ready) {
+          log(
+            `[Server] ✅ DB-only city '${cityName}' (id=${check.cityId}) ready=true / ${check.count} rows`,
+          );
+        } else {
+          log(
+            `[Server] ⚠️  DB-only city '${cityName}' ready=false / ${check.count} rows < threshold = MIX path 진입 시 = 차단됨`,
+          );
+        }
       }
-    },
-  );
+    } catch (e) {
+      log("[Server] DB-only city ready check skip:", (e as Error).message);
+    }
+
+    try {
+      // ✅ [2026-02-08] 스케줄러 복구 - 비용 보호 적용 완료:
+      // - place_seed_sync만 차단 (Google Places API 폭탄 주범)
+      // - Gemini Google Search 일일 160건 제한 (무료 범위 유지)
+      // - 나머지 13개 크롤러는 안전하게 운영
+      const { dataScheduler } = await import("./services/data-scheduler");
+      await dataScheduler.initialize();
+      log("[Server] ✅ Data scheduler initialized");
+    } catch (error) {
+      log("[Server] Failed to initialize scheduler:", error);
+    }
+  });
 })();

@@ -39,17 +39,21 @@ export class ExchangeRateFetcher {
     }
   }
 
-  async fetchRates(baseCurrency: string = "KRW"): Promise<Record<string, number>> {
+  async fetchRates(
+    baseCurrency: string = "KRW",
+  ): Promise<Record<string, number>> {
     try {
-      const response = await fetch(`${FREE_API_BASE}/latest?from=${baseCurrency}`);
-      
+      const response = await fetch(
+        `${FREE_API_BASE}/latest?from=${baseCurrency}`,
+      );
+
       if (!response.ok) {
         throw new Error(`API error: ${response.status}`);
       }
 
       const data: FrankfurterResponse = await response.json();
       await this.updateApiStatus(true);
-      
+
       const rates = { [baseCurrency]: 1, ...data.rates };
       return rates;
     } catch (error) {
@@ -59,9 +63,11 @@ export class ExchangeRateFetcher {
     }
   }
 
-  async syncExchangeRates(baseCurrency: string = "KRW"): Promise<{ synced: number; baseCurrency: string }> {
+  async syncExchangeRates(
+    baseCurrency: string = "KRW",
+  ): Promise<{ synced: number; baseCurrency: string }> {
     const rates = await this.fetchRates(baseCurrency);
-    
+
     let synced = 0;
     const now = new Date();
 
@@ -70,10 +76,12 @@ export class ExchangeRateFetcher {
         const existing = await db
           .select()
           .from(exchangeRates)
-          .where(and(
-            eq(exchangeRates.baseCurrency, baseCurrency),
-            eq(exchangeRates.targetCurrency, targetCurrency)
-          ))
+          .where(
+            and(
+              eq(exchangeRates.baseCurrency, baseCurrency),
+              eq(exchangeRates.targetCurrency, targetCurrency),
+            ),
+          )
           .limit(1);
 
         if (existing.length > 0) {
@@ -101,36 +109,48 @@ export class ExchangeRateFetcher {
     return { synced, baseCurrency };
   }
 
-  async convert(amount: number, fromCurrency: string, toCurrency: string): Promise<number> {
+  async convert(
+    amount: number,
+    fromCurrency: string,
+    toCurrency: string,
+  ): Promise<number> {
     const baseCurrency = "KRW";
-    
+
     const [fromRate] = await db
       .select()
       .from(exchangeRates)
-      .where(and(
-        eq(exchangeRates.baseCurrency, baseCurrency),
-        eq(exchangeRates.targetCurrency, fromCurrency)
-      ))
+      .where(
+        and(
+          eq(exchangeRates.baseCurrency, baseCurrency),
+          eq(exchangeRates.targetCurrency, fromCurrency),
+        ),
+      )
       .limit(1);
 
     const [toRate] = await db
       .select()
       .from(exchangeRates)
-      .where(and(
-        eq(exchangeRates.baseCurrency, baseCurrency),
-        eq(exchangeRates.targetCurrency, toCurrency)
-      ))
+      .where(
+        and(
+          eq(exchangeRates.baseCurrency, baseCurrency),
+          eq(exchangeRates.targetCurrency, toCurrency),
+        ),
+      )
       .limit(1);
 
     if (!fromRate || !toRate) {
-      throw new Error(`Exchange rate not found for ${fromCurrency} or ${toCurrency}`);
+      throw new Error(
+        `Exchange rate not found for ${fromCurrency} or ${toCurrency}`,
+      );
     }
 
     const amountInBase = amount / fromRate.rate;
     return amountInBase * toRate.rate;
   }
 
-  async getRatesForDisplay(): Promise<Array<{ currency: string; name: string; rate: number }>> {
+  async getRatesForDisplay(): Promise<
+    { currency: string; name: string; rate: number }[]
+  > {
     const rates = await db
       .select()
       .from(exchangeRates)
@@ -157,7 +177,7 @@ export class ExchangeRateFetcher {
       INR: "인도 루피",
     };
 
-    return rates.map(r => ({
+    return rates.map((r) => ({
       currency: r.targetCurrency,
       name: currencyNames[r.targetCurrency] || r.targetCurrency,
       rate: r.rate,
@@ -169,17 +189,23 @@ export const exchangeRateFetcher = new ExchangeRateFetcher();
 
 // 🧠 2026-07-05 = EUR→KRW 환율 조회 단일 SSOT(§16 재발명금지). 옛 pipeline-v3·ag4-db·ag4-realtime 3벌 복붙 폐기 → 이 1벌로 통합.
 //   = DB 캐시(exchangeRates KRW→EUR) 읽어 역수. 실패/미조회 = 기본값 1500. 호출자별 로그태그는 인자로.
-export async function getEurToKrwRate(logTag = ''): Promise<number> {
+export async function getEurToKrwRate(logTag = ""): Promise<number> {
   try {
     if (!db) return 1500;
     const [rate] = await db
       .select()
       .from(exchangeRates)
-      .where(and(eq(exchangeRates.baseCurrency, 'KRW'), eq(exchangeRates.targetCurrency, 'EUR')))
+      .where(
+        and(
+          eq(exchangeRates.baseCurrency, "KRW"),
+          eq(exchangeRates.targetCurrency, "EUR"),
+        ),
+      )
       .limit(1);
     if (rate && rate.rate > 0) {
       const eurToKrw = Math.round(1 / rate.rate);
-      if (logTag) console.log(`${logTag} 💱 €1 = ₩${eurToKrw.toLocaleString()}`);
+      if (logTag)
+        console.log(`${logTag} 💱 €1 = ₩${eurToKrw.toLocaleString()}`);
       return eurToKrw;
     }
   } catch (error) {

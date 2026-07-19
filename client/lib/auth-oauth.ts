@@ -10,7 +10,9 @@ WebBrowser.maybeCompleteAuthSession();
 
 const GOOGLE_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID || "";
 // Google provider requires non-empty clientId; use placeholder to avoid crash when not configured
-const GOOGLE_CLIENT_ID_OR_PLACEHOLDER = GOOGLE_CLIENT_ID || "000000000000-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com";
+const GOOGLE_CLIENT_ID_OR_PLACEHOLDER =
+  GOOGLE_CLIENT_ID ||
+  "000000000000-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com";
 
 export function useGoogleAuthRequest() {
   return useIdTokenAuthRequest({
@@ -30,7 +32,13 @@ export function isWhatsAppOtpConfigured(): boolean {
 }
 
 /** Google OAuth 응답에서 id_token 추출 */
-export function getIdTokenFromGoogleResponse(response: { type: string; params?: { id_token?: string }; authentication?: { idToken?: string } } | null): string | null {
+export function getIdTokenFromGoogleResponse(
+  response: {
+    type: string;
+    params?: { id_token?: string };
+    authentication?: { idToken?: string };
+  } | null,
+): string | null {
   if (!response || response.type !== "success") return null;
   return response.params?.id_token ?? response.authentication?.idToken ?? null;
 }

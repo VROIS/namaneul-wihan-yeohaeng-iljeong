@@ -40,14 +40,22 @@ const BOMB_TOTAL_H = HEAD_SIZE + HANDLE_HEIGHT - OVERLAP;
 // ⚠️ 수정금지(승인필요) — 햅틱 (전문가 검증: Success가 Heavy보다 적합)
 const triggerHaptic = (type: "light" | "medium" | "success") => {
   try {
-    if (type === "light") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    else if (type === "medium") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (type === "light")
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    else if (type === "medium")
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     else Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   } catch {}
 };
 
 // ⚠️ 수정금지(승인필요) — Android BlurView fallback (전문가 검증: Android에서 BlurView 비용 높음)
-const AuthBackground = ({ children, style }: { children: React.ReactNode; style?: any }) => {
+const AuthBackground = ({
+  children,
+  style,
+}: {
+  children: React.ReactNode;
+  style?: any;
+}) => {
   if (Platform.OS === "android") {
     return (
       <View style={[style, { backgroundColor: "rgba(108,45,199,0.15)" }]}>
@@ -69,7 +77,12 @@ interface ArmyBombAuthA1Props {
   onGlowChange?: (level: number) => void;
 }
 
-export function ArmyBombAuthA1({ onAuthComplete, glowLevel, entranceProgress, onGlowChange }: ArmyBombAuthA1Props) {
+export function ArmyBombAuthA1({
+  onAuthComplete,
+  glowLevel,
+  entranceProgress,
+  onGlowChange,
+}: ArmyBombAuthA1Props) {
   const [birthDate, setBirthDate] = useState("");
   const [birthComplete, setBirthComplete] = useState(false);
 
@@ -77,67 +90,114 @@ export function ArmyBombAuthA1({ onAuthComplete, glowLevel, entranceProgress, on
   const pressScale = useSharedValue(1);
 
   // ⚠️ 수정금지(승인필요) — 생년월일 자동 포맷 (DD/MM/YYYY)
-  const handleBirthInput = useCallback((text: string) => {
-    const digits = text.replace(/\D/g, "").slice(0, 8);
-    let formatted = digits;
-    if (digits.length > 2) formatted = digits.slice(0, 2) + " / " + digits.slice(2);
-    if (digits.length > 4) formatted = digits.slice(0, 2) + " / " + digits.slice(2, 4) + " / " + digits.slice(4);
-    setBirthDate(formatted);
+  const handleBirthInput = useCallback(
+    (text: string) => {
+      const digits = text.replace(/\D/g, "").slice(0, 8);
+      let formatted = digits;
+      if (digits.length > 2)
+        formatted = digits.slice(0, 2) + " / " + digits.slice(2);
+      if (digits.length > 4)
+        formatted =
+          digits.slice(0, 2) +
+          " / " +
+          digits.slice(2, 4) +
+          " / " +
+          digits.slice(4);
+      setBirthDate(formatted);
 
-    if (digits.length === 8) {
-      setBirthComplete(true);
-      // Stage 2: 생년월일 완료 → 70% 밝기
-      glowLevel.value = withSpring(0.7, { damping: 20, stiffness: 80 });
-      onGlowChange?.(0.7);
-      triggerHaptic("medium");
-    } else {
-      setBirthComplete(false);
-      if (glowLevel.value > 0) {
-        glowLevel.value = withTiming(0, { duration: 300 });
-        onGlowChange?.(0);
+      if (digits.length === 8) {
+        setBirthComplete(true);
+        // Stage 2: 생년월일 완료 → 70% 밝기
+        glowLevel.value = withSpring(0.7, { damping: 20, stiffness: 80 });
+        onGlowChange?.(0.7);
+        triggerHaptic("medium");
+      } else {
+        setBirthComplete(false);
+        if (glowLevel.value > 0) {
+          glowLevel.value = withTiming(0, { duration: 300 });
+          onGlowChange?.(0);
+        }
       }
-    }
-  }, [onGlowChange]);
+    },
+    [onGlowChange],
+  );
 
   // ⚠️ 수정금지(승인필요) — OAuth 탭 = 풀 점등 (100%)
-  const handleOAuth = useCallback((provider: string) => {
-    // Stage 3: 풀 점등
-    glowLevel.value = withSequence(
-      withSpring(1, { damping: 8, stiffness: 200 }),
-      withDelay(500, withTiming(1.2, { duration: 300 }))
-    );
-    onGlowChange?.(1);
-    triggerHaptic("success");
+  const handleOAuth = useCallback(
+    (provider: string) => {
+      // Stage 3: 풀 점등
+      glowLevel.value = withSequence(
+        withSpring(1, { damping: 8, stiffness: 200 }),
+        withDelay(500, withTiming(1.2, { duration: 300 })),
+      );
+      onGlowChange?.(1);
+      triggerHaptic("success");
 
-    // 전문가 검증: setTimeout 대신 withTiming callback 사용은 LandingScreen에서 처리
-    setTimeout(() => {
-      onAuthComplete(provider, birthDate);
-    }, 2000);
-  }, [birthDate, onGlowChange]);
+      // 전문가 검증: setTimeout 대신 withTiming callback 사용은 LandingScreen에서 처리
+      setTimeout(() => {
+        onAuthComplete(provider, birthDate);
+      }, 2000);
+    },
+    [birthDate, onGlowChange],
+  );
 
   // ⚠️ 수정금지(승인필요) — 등장 애니메이션 (GPU: transform + opacity만)
   const entranceStyle = useAnimatedStyle(() => ({
     transform: [
-      { translateY: interpolate(entranceProgress.value, [0, 1], [400, 0], Extrapolation.CLAMP) },
+      {
+        translateY: interpolate(
+          entranceProgress.value,
+          [0, 1],
+          [400, 0],
+          Extrapolation.CLAMP,
+        ),
+      },
     ],
-    opacity: interpolate(entranceProgress.value, [0, 0.3, 1], [0, 0.5, 1], Extrapolation.CLAMP),
+    opacity: interpolate(
+      entranceProgress.value,
+      [0, 0.3, 1],
+      [0, 0.5, 1],
+      Extrapolation.CLAMP,
+    ),
   }));
 
   // ⚠️ 수정금지(승인필요) — 글로우 효과 (아미봉 전체에서 발광)
   const glowStyle = useAnimatedStyle(() => ({
-    shadowOpacity: interpolate(glowLevel.value, [0, 0.7, 1, 1.2], [0.1, 0.5, 0.8, 1], Extrapolation.CLAMP),
-    shadowRadius: interpolate(glowLevel.value, [0, 0.7, 1, 1.2], [15, 40, 70, 90], Extrapolation.CLAMP),
+    shadowOpacity: interpolate(
+      glowLevel.value,
+      [0, 0.7, 1, 1.2],
+      [0.1, 0.5, 0.8, 1],
+      Extrapolation.CLAMP,
+    ),
+    shadowRadius: interpolate(
+      glowLevel.value,
+      [0, 0.7, 1, 1.2],
+      [15, 40, 70, 90],
+      Extrapolation.CLAMP,
+    ),
   }));
 
   // 내부 보라빛 오버레이 (점등 느낌)
   const innerGlowStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(glowLevel.value, [0, 0.7, 1, 1.2], [0, 0.2, 0.5, 0.7], Extrapolation.CLAMP),
+    opacity: interpolate(
+      glowLevel.value,
+      [0, 0.7, 1, 1.2],
+      [0, 0.2, 0.5, 0.7],
+      Extrapolation.CLAMP,
+    ),
   }));
 
   const isDisabled = !birthComplete;
 
   return (
-    <Animated.View style={[styles.bombContainer, entranceStyle, glowStyle, { shadowColor: BORAHAE }]}>
+    <Animated.View
+      style={[
+        styles.bombContainer,
+        entranceStyle,
+        glowStyle,
+        { shadowColor: BORAHAE },
+      ]}
+    >
       {/* ⚠️ 수정금지(승인필요) — 아미봉 머리 (원형 발광부) — B안 형태 참고 */}
       <View style={styles.headWrapper}>
         <AuthBackground style={styles.bombHead}>
@@ -169,10 +229,20 @@ export function ArmyBombAuthA1({ onAuthComplete, glowLevel, entranceProgress, on
             {/* Google */}
             <Animated.View style={[styles.oauthBtnWrap]}>
               <View
-                style={[styles.oauthBtn, styles.googleBtn, isDisabled && styles.disabledBtn]}
+                style={[
+                  styles.oauthBtn,
+                  styles.googleBtn,
+                  isDisabled && styles.disabledBtn,
+                ]}
                 onTouchEnd={() => !isDisabled && handleOAuth("google")}
               >
-                <Text style={[styles.oauthText, styles.googleText, isDisabled && styles.disabledText]}>
+                <Text
+                  style={[
+                    styles.oauthText,
+                    styles.googleText,
+                    isDisabled && styles.disabledText,
+                  ]}
+                >
                   Continue with Google
                 </Text>
               </View>
@@ -181,10 +251,20 @@ export function ArmyBombAuthA1({ onAuthComplete, glowLevel, entranceProgress, on
             {/* Kakao */}
             <Animated.View style={[styles.oauthBtnWrap]}>
               <View
-                style={[styles.oauthBtn, styles.kakaoBtn, isDisabled && styles.disabledBtn]}
+                style={[
+                  styles.oauthBtn,
+                  styles.kakaoBtn,
+                  isDisabled && styles.disabledBtn,
+                ]}
                 onTouchEnd={() => !isDisabled && handleOAuth("kakao")}
               >
-                <Text style={[styles.oauthText, styles.kakaoText, isDisabled && styles.disabledKakao]}>
+                <Text
+                  style={[
+                    styles.oauthText,
+                    styles.kakaoText,
+                    isDisabled && styles.disabledKakao,
+                  ]}
+                >
                   카카오로 시작하기
                 </Text>
               </View>
@@ -194,10 +274,20 @@ export function ArmyBombAuthA1({ onAuthComplete, glowLevel, entranceProgress, on
             {Platform.OS === "ios" && (
               <Animated.View style={[styles.oauthBtnWrap]}>
                 <View
-                  style={[styles.oauthBtn, styles.appleBtn, isDisabled && styles.disabledBtn]}
+                  style={[
+                    styles.oauthBtn,
+                    styles.appleBtn,
+                    isDisabled && styles.disabledBtn,
+                  ]}
                   onTouchEnd={() => !isDisabled && handleOAuth("apple")}
                 >
-                  <Text style={[styles.oauthText, styles.appleText, isDisabled && styles.disabledText]}>
+                  <Text
+                    style={[
+                      styles.oauthText,
+                      styles.appleText,
+                      isDisabled && styles.disabledText,
+                    ]}
+                  >
                     Sign in with Apple
                   </Text>
                 </View>

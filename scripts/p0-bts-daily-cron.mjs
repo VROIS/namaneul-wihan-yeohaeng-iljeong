@@ -33,48 +33,84 @@
 //   node scripts/p0-bts-daily-cron.mjs --city=El_Paso --dry-run    # 검증
 //   node scripts/p0-bts-daily-cron.mjs --city=El_Paso --category=shopping  # 특정 카테고리만
 
-import pg from 'pg';
+import pg from "pg";
 
 // ━━━━━━ Config ━━━━━━
 const SUPA_URL = process.env.SUPA_URL;
 if (!SUPA_URL) {
-  console.error('❌ SUPA_URL 환경변수 미설정.');
+  console.error("❌ SUPA_URL 환경변수 미설정.");
   process.exit(1);
 }
 
-const args = Object.fromEntries(process.argv.slice(2).map(a => {
-  const [k, v] = a.replace(/^--/, '').split('=');
-  return [k, v ?? true];
-}));
-const CITY_ARG = args.city ? args.city.replace(/_/g, ' ') : null;
+const args = Object.fromEntries(
+  process.argv.slice(2).map((a) => {
+    const [k, v] = a.replace(/^--/, "").split("=");
+    return [k, v ?? true];
+  }),
+);
+const CITY_ARG = args.city ? args.city.replace(/_/g, " ") : null;
 const CATEGORY_ARG = args.category || null;
-const DRY_RUN = args['dry-run'] === true;
+const DRY_RUN = args["dry-run"] === true;
 
 if (!CITY_ARG) {
-  console.error('❌ --city=<도시명> 인자 필수 (예: --city=El_Paso)');
+  console.error("❌ --city=<도시명> 인자 필수 (예: --city=El_Paso)");
   process.exit(1);
 }
 
 // ━━━━━━ 안전장치 #1 ━━━━━━
 const ALLOWED_FIELDS = new Set([
-  'places.id', 'places.displayName', 'places.location', 'places.formattedAddress',
-  'places.photos', 'places.rating', 'places.userRatingCount',
+  "places.id",
+  "places.displayName",
+  "places.location",
+  "places.formattedAddress",
+  "places.photos",
+  "places.rating",
+  "places.userRatingCount",
 ]);
 const ATMOSPHERE_FIELDS = new Set([
-  'allowsDogs', 'curbsidePickup', 'delivery', 'dineIn', 'editorialSummary', 'evChargeAmenitySummary',
-  'evChargeOptions', 'fuelOptions', 'generativeSummary', 'goodForChildren', 'goodForGroups',
-  'goodForWatchingSports', 'liveMusic', 'menuForChildren', 'neighborhoodSummary', 'parkingOptions',
-  'paymentOptions', 'outdoorSeating', 'reservable', 'restroom', 'reviews', 'reviewSummary',
-  'routingSummaries', 'servesBeer', 'servesBreakfast', 'servesBrunch', 'servesCocktails',
-  'servesCoffee', 'servesDessert', 'servesDinner', 'servesLunch', 'servesVegetarianFood',
-  'servesWine', 'takeout',
+  "allowsDogs",
+  "curbsidePickup",
+  "delivery",
+  "dineIn",
+  "editorialSummary",
+  "evChargeAmenitySummary",
+  "evChargeOptions",
+  "fuelOptions",
+  "generativeSummary",
+  "goodForChildren",
+  "goodForGroups",
+  "goodForWatchingSports",
+  "liveMusic",
+  "menuForChildren",
+  "neighborhoodSummary",
+  "parkingOptions",
+  "paymentOptions",
+  "outdoorSeating",
+  "reservable",
+  "restroom",
+  "reviews",
+  "reviewSummary",
+  "routingSummaries",
+  "servesBeer",
+  "servesBreakfast",
+  "servesBrunch",
+  "servesCocktails",
+  "servesCoffee",
+  "servesDessert",
+  "servesDinner",
+  "servesLunch",
+  "servesVegetarianFood",
+  "servesWine",
+  "takeout",
 ]);
-const FIELD_MASK = 'places.id,places.displayName,places.location,places.photos,places.userRatingCount,places.googleMapsUri';
+const FIELD_MASK =
+  "places.id,places.displayName,places.location,places.photos,places.userRatingCount,places.googleMapsUri";
 
 function validateFieldMask(mask) {
-  for (const f of mask.split(',').map((x) => x.trim())) {
-    const bare = f.replace(/^places\./, '');
-    if (ATMOSPHERE_FIELDS.has(bare)) throw new Error(`🚨 BLOCKED Atmosphere: ${f}`);
+  for (const f of mask.split(",").map((x) => x.trim())) {
+    const bare = f.replace(/^places\./, "");
+    if (ATMOSPHERE_FIELDS.has(bare))
+      throw new Error(`🚨 BLOCKED Atmosphere: ${f}`);
     if (!ALLOWED_FIELDS.has(f)) throw new Error(`🚨 NOT WHITELISTED: ${f}`);
   }
 }
@@ -86,31 +122,65 @@ validateFieldMask(FIELD_MASK);
 // 효과: 1 도시 = 1 일 자동
 const SEARCH_DAILY_LIMIT = 40;
 const PHOTOS_DAILY_LIMIT = 40;
-let searchCalls = 0, photoCalls = 0;
+let searchCalls = 0,
+  photoCalls = 0;
 
 // ━━━━━━ 사용자 SSOT 카테고리 spec ━━━━━━
 //   vibe 6 = 카테고리당 상위 5
 //   restaurant = 상위 10
 //   bts_venue = skip (Wikipedia)
-const VIBE_CATEGORIES = ['attraction', 'healing', 'adventure', 'hotspot', 'heritage', 'shopping'];
-const RESTAURANT_CATEGORY = 'restaurant';
+const VIBE_CATEGORIES = [
+  "attraction",
+  "healing",
+  "adventure",
+  "hotspot",
+  "heritage",
+  "shopping",
+];
+const RESTAURANT_CATEGORY = "restaurant";
 const VIBE_TOP_N = 5;
 const RESTAURANT_TOP_N = 10;
 
 // ━━━━━━ 도시 location string (메모리 project_bts_data_insights.md) ━━━━━━
 const US_STATES = {
-  'Tampa': 'Florida', 'El Paso': 'Texas', 'Stanford': 'California', 'Las Vegas': 'Nevada',
-  'East Rutherford': 'New Jersey', 'Foxborough': 'Massachusetts', 'Baltimore': 'Maryland',
-  'Arlington': 'Texas', 'Chicago': 'Illinois', 'Los Angeles': 'California',
+  Tampa: "Florida",
+  "El Paso": "Texas",
+  Stanford: "California",
+  "Las Vegas": "Nevada",
+  "East Rutherford": "New Jersey",
+  Foxborough: "Massachusetts",
+  Baltimore: "Maryland",
+  Arlington: "Texas",
+  Chicago: "Illinois",
+  "Los Angeles": "California",
 };
 const COUNTRY_EN = {
-  US: 'United States', MX: 'Mexico', KR: 'South Korea', ES: 'Spain', BE: 'Belgium',
-  GB: 'United Kingdom', DE: 'Germany', FR: 'France', CA: 'Canada', CO: 'Colombia',
-  PE: 'Peru', CL: 'Chile', AR: 'Argentina', BR: 'Brazil', TW: 'Taiwan', TH: 'Thailand',
-  MY: 'Malaysia', SG: 'Singapore', ID: 'Indonesia', AU: 'Australia', HK: 'Hong Kong', PH: 'Philippines',
+  US: "United States",
+  MX: "Mexico",
+  KR: "South Korea",
+  ES: "Spain",
+  BE: "Belgium",
+  GB: "United Kingdom",
+  DE: "Germany",
+  FR: "France",
+  CA: "Canada",
+  CO: "Colombia",
+  PE: "Peru",
+  CL: "Chile",
+  AR: "Argentina",
+  BR: "Brazil",
+  TW: "Taiwan",
+  TH: "Thailand",
+  MY: "Malaysia",
+  SG: "Singapore",
+  ID: "Indonesia",
+  AU: "Australia",
+  HK: "Hong Kong",
+  PH: "Philippines",
 };
 function buildLocationStr(city, cc) {
-  if (cc === 'US' && US_STATES[city]) return `${city}, ${US_STATES[city]}, United States`;
+  if (cc === "US" && US_STATES[city])
+    return `${city}, ${US_STATES[city]}, United States`;
   return COUNTRY_EN[cc] ? `${city}, ${COUNTRY_EN[cc]}` : city;
 }
 
@@ -120,12 +190,12 @@ async function searchTextOnce(textQuery, apiKey, locationBias) {
   // ⚠️ 수정금지(승인필요) — languageCode 제거(2026-06-17 사장님 SSOT) = 한국어 displayName 강제 안 함(키 미삽입 = TS 현지 기본)
   const body = { textQuery, pageSize: 1 };
   if (locationBias) body.locationBias = locationBias;
-  return await fetch('https://places.googleapis.com/v1/places:searchText', {
-    method: 'POST',
+  return await fetch("https://places.googleapis.com/v1/places:searchText", {
+    method: "POST",
     headers: {
-      'Content-Type': 'application/json',
-      'X-Goog-Api-Key': apiKey,
-      'X-Goog-FieldMask': FIELD_MASK,
+      "Content-Type": "application/json",
+      "X-Goog-Api-Key": apiKey,
+      "X-Goog-FieldMask": FIELD_MASK,
     },
     body: JSON.stringify(body),
     signal: AbortSignal.timeout(15000),
@@ -182,11 +252,11 @@ async function downloadPhotoBinary(photoName, apiKey) {
 async function uploadToStorage(supabaseUrl, serviceKey, fileName, buffer) {
   const url = `${supabaseUrl}/storage/v1/object/place-images/${fileName}`;
   const res = await fetch(url, {
-    method: 'POST',
+    method: "POST",
     headers: {
-      'Authorization': `Bearer ${serviceKey}`,
-      'Content-Type': 'image/jpeg',
-      'x-upsert': 'true',
+      Authorization: `Bearer ${serviceKey}`,
+      "Content-Type": "image/jpeg",
+      "x-upsert": "true",
     },
     body: buffer,
     signal: AbortSignal.timeout(15000),
@@ -202,15 +272,17 @@ async function uploadToStorage(supabaseUrl, serviceKey, fileName, buffer) {
 async function getApiKey(db, keyName) {
   const r = await db.query(
     "SELECT key_value FROM api_keys WHERE key_name = $1 AND is_active = true",
-    [keyName]
+    [keyName],
   );
-  if (!r.rows.length) throw new Error(`🚨 ${keyName} 없음 (api_keys 테이블에 추가 필요)`);
+  if (!r.rows.length)
+    throw new Error(`🚨 ${keyName} 없음 (api_keys 테이블에 추가 필요)`);
   return r.rows[0].key_value;
 }
 
 // ━━━━━━ 카테고리 상위 N row SELECT (사용자 SSOT) ━━━━━━
 async function selectTopNByCategory(db, cityId, category, topN) {
-  const r = await db.query(`
+  const r = await db.query(
+    `
     SELECT id, name_en, name_ko, seed_category, google_place_id, rank
     FROM place_seed_raw
     WHERE city_id = $1
@@ -219,20 +291,22 @@ async function selectTopNByCategory(db, cityId, category, topN) {
       AND name_en IS NOT NULL AND TRIM(name_en) <> ''
     ORDER BY rank NULLS LAST, id
     LIMIT $3
-  `, [cityId, category, topN]);
+  `,
+    [cityId, category, topN],
+  );
   return r.rows;
 }
 
 // ━━━━━━ 카테고리 키워드 (사용자 SSOT 2026-04-29) ━━━━━━
 // textQuery = "El Cardenal restaurant 19.4337,-99.1353 Mexico City, Mexico" = 정확 매칭
 const CATEGORY_KEYWORDS = {
-  restaurant: 'restaurant',
-  shopping: 'shopping mall',
-  attraction: 'tourist attraction landmark',
-  healing: 'park spa wellness',
-  adventure: 'adventure activities outdoor',
-  hotspot: 'popular tourist spot, rooftop and terraces',
-  heritage: 'historical site heritage',
+  restaurant: "restaurant",
+  shopping: "shopping mall",
+  attraction: "tourist attraction landmark",
+  healing: "park spa wellness",
+  adventure: "adventure activities outdoor",
+  hotspot: "popular tourist spot, rooftop and terraces",
+  heritage: "historical site heritage",
 };
 
 // ━━━━━━ row 1 개 처리 ━━━━━━
@@ -240,10 +314,14 @@ async function processRow(db, row, city, googleKey, supabaseUrl, supabaseKey) {
   const locStr = buildLocationStr(city.name_en, city.country_code);
   // ⚠️ 수정금지(승인필요) — 2026-04-29 사용자 SSOT: 좌표 + 카테고리 키워드 추가
   // textQuery = name + categoryKw + 좌표 6자리 + city + country = 정확 매칭 보장
-  const categoryKw = CATEGORY_KEYWORDS[row.seed_category] || '';
-  const coordStr = (row.latitude && row.longitude) ? `${row.latitude},${row.longitude}` : '';
+  const categoryKw = CATEGORY_KEYWORDS[row.seed_category] || "";
+  const coordStr =
+    row.latitude && row.longitude ? `${row.latitude},${row.longitude}` : "";
   const textQuery = [row.name_en, categoryKw, coordStr, locStr]
-    .filter(Boolean).join(' ').replace(/\s+/g, ' ').trim();
+    .filter(Boolean)
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
   console.log(`\n  📍 #${row.id} [${row.seed_category}] ${row.name_en}`);
 
   let placeId = row.google_place_id;
@@ -253,15 +331,18 @@ async function processRow(db, row, city, googleKey, supabaseUrl, supabaseKey) {
   // searchText (place_id 캐싱 시에도 photoName 받기 위해 1 회 호출)
   if (DRY_RUN) {
     console.log(`     [DRY] searchText("${textQuery.slice(0, 50)}...")`);
-    placeId = placeId || 'DRY_PLACE_ID';
-    photoName = 'DRY_PHOTO_NAME';
+    placeId = placeId || "DRY_PLACE_ID";
+    photoName = "DRY_PHOTO_NAME";
   } else {
-    const locBias = city.latitude && city.longitude ? {
-      circle: {
-        center: { latitude: city.latitude, longitude: city.longitude },
-        radius: 50000,
-      }
-    } : null;
+    const locBias =
+      city.latitude && city.longitude
+        ? {
+            circle: {
+              center: { latitude: city.latitude, longitude: city.longitude },
+              radius: 50000,
+            },
+          }
+        : null;
     const found = await findPlace(textQuery, googleKey, locBias);
     if (!found) {
       console.log(`     ✗ searchText 결과 없음 → skip`);
@@ -270,7 +351,9 @@ async function processRow(db, row, city, googleKey, supabaseUrl, supabaseKey) {
     placeId = found.placeId;
     photoName = found.photoName;
     photoLocation = found.location;
-    console.log(`     ✓ searchText → placeId=${placeId.slice(0, 20)}... photo=${photoName ? '1' : '0'}`);
+    console.log(
+      `     ✓ searchText → placeId=${placeId.slice(0, 20)}... photo=${photoName ? "1" : "0"}`,
+    );
     await new Promise((r) => setTimeout(r, 10000));
   }
 
@@ -283,7 +366,7 @@ async function processRow(db, row, city, googleKey, supabaseUrl, supabaseKey) {
   let buffer;
   if (DRY_RUN) {
     console.log(`     [DRY] Photo Media`);
-    buffer = Buffer.from('DRY');
+    buffer = Buffer.from("DRY");
   } else {
     buffer = await downloadPhotoBinary(photoName, googleKey);
     console.log(`     ✓ binary ${(buffer.length / 1024).toFixed(0)} KB`);
@@ -296,7 +379,12 @@ async function processRow(db, row, city, googleKey, supabaseUrl, supabaseKey) {
   if (DRY_RUN) {
     storageUrl = `[DRY] ${fileName}`;
   } else {
-    storageUrl = await uploadToStorage(supabaseUrl, supabaseKey, fileName, buffer);
+    storageUrl = await uploadToStorage(
+      supabaseUrl,
+      supabaseKey,
+      fileName,
+      buffer,
+    );
     console.log(`     ✓ Storage → ${storageUrl}`);
   }
 
@@ -308,7 +396,8 @@ async function processRow(db, row, city, googleKey, supabaseUrl, supabaseKey) {
     // ⚠️ 수정금지(승인필요) — 2026-04-27 사용자 원칙 B: Google = 최종 좌표 SSOT
     // COALESCE($google, 기존) = Google 응답 있으면 무조건 덮어쓰기 (서브에이전트 4자리 → Google 6자리 자동 업그레이드)
     // Google 미응답 시만 기존 보존 (T2/T3 fallback)
-    await db.query(`
+    await db.query(
+      `
       UPDATE place_seed_raw
       SET image_url = $1,
           google_place_id = COALESCE(google_place_id, $2),
@@ -317,12 +406,16 @@ async function processRow(db, row, city, googleKey, supabaseUrl, supabaseKey) {
           latitude = COALESCE($4, latitude),
           longitude = COALESCE($5, longitude)
       WHERE id = $6
-    `, [
-      storageUrl, placeId, attribution,
-      photoLocation?.latitude || null,
-      photoLocation?.longitude || null,
-      row.id,
-    ]);
+    `,
+      [
+        storageUrl,
+        placeId,
+        attribution,
+        photoLocation?.latitude || null,
+        photoLocation?.longitude || null,
+        row.id,
+      ],
+    );
     console.log(`     ✓ DB UPDATE`);
   }
 
@@ -331,46 +424,68 @@ async function processRow(db, row, city, googleKey, supabaseUrl, supabaseKey) {
 
 // ━━━━━━ Main ━━━━━━
 (async () => {
-  console.log(`🚀 BTS cron v3 ${DRY_RUN ? '(DRY-RUN)' : ''}`);
-  console.log(`   도시: ${CITY_ARG}${CATEGORY_ARG ? ` / 카테고리: ${CATEGORY_ARG}` : ' / 모든 카테고리'}\n`);
+  console.log(`🚀 BTS cron v3 ${DRY_RUN ? "(DRY-RUN)" : ""}`);
+  console.log(
+    `   도시: ${CITY_ARG}${CATEGORY_ARG ? ` / 카테고리: ${CATEGORY_ARG}` : " / 모든 카테고리"}\n`,
+  );
 
-  const db = new pg.Client({ connectionString: SUPA_URL, ssl: { rejectUnauthorized: false } });
+  const db = new pg.Client({
+    connectionString: SUPA_URL,
+    ssl: { rejectUnauthorized: false },
+  });
   await db.connect();
 
   try {
     // 1) 도시 → API 키 (⚠️ 2026-06-18 = 도시 먼저 = 출입증 도시id 필요)
     const cr = await db.query(
-      'SELECT id, name_en, country_code, latitude, longitude FROM cities WHERE LOWER(name_en) = LOWER($1) LIMIT 1',
-      [CITY_ARG]
+      "SELECT id, name_en, country_code, latitude, longitude FROM cities WHERE LOWER(name_en) = LOWER($1) LIMIT 1",
+      [CITY_ARG],
     );
     if (!cr.rows.length) throw new Error(`도시 없음: ${CITY_ARG}`);
     const city = cr.rows[0];
-    console.log(`   ✓ 도시 = ${city.name_en} (id=${city.id}, ${city.country_code})`);
+    console.log(
+      `   ✓ 도시 = ${city.name_en} (id=${city.id}, ${city.country_code})`,
+    );
 
     // ⚠️ 2026-06-18 사장님 SSOT = GOOGLE_MAPS 키 = 출입증 관문 issue_api_key() 경유 (= 직독 폐기). BTS = 발굴 = 도시 있음 + 행 없음(false).
     // = SUPABASE_ANON_KEY / SUPABASE_URL 은 Storage 인증 = 외부호출 키 아님 = getApiKey 직독 유지(건드리지 않음).
     const today = new Date().toISOString().slice(0, 10);
-    const { issueApiKey } = await import(new URL('../server/services/shared/issue-api-key.ts', import.meta.url).href);
-    const googleKey = await issueApiKey(db, 'GOOGLE_MAPS_API_KEY', city.id, today, false);
-    if (!googleKey) throw new Error('GOOGLE_MAPS_API_KEY 미발급 = 출입증 검문 미달 또는 api_keys DB 확인');
+    const { issueApiKey } = await import(
+      new URL("../server/services/shared/issue-api-key.ts", import.meta.url)
+        .href
+    );
+    const googleKey = await issueApiKey(
+      db,
+      "GOOGLE_MAPS_API_KEY",
+      city.id,
+      today,
+      false,
+    );
+    if (!googleKey)
+      throw new Error(
+        "GOOGLE_MAPS_API_KEY 미발급 = 출입증 검문 미달 또는 api_keys DB 확인",
+      );
     let supabaseKey, supabaseUrl;
     if (!DRY_RUN) {
       // ⚠️ 수정금지(승인필요) — 2026-04-27 사용자 결정: ANON key + RLS 정책 우회
       // service_role key 없으므로 anon key (publishable) 사용. bucket place-images RLS 정책 = anon INSERT 허용.
-      supabaseKey = await getApiKey(db, 'SUPABASE_ANON_KEY');
+      supabaseKey = await getApiKey(db, "SUPABASE_ANON_KEY");
       // ⚠️ 수정금지(승인필요) — 2026-04-27 사용자 승인 SUPABASE_URL 다중 fallback
       // 우선순위: env > api_keys > 직접 (db.X.supabase.co) > pooler (postgres.X@...)
       if (process.env.SUPABASE_URL) {
         supabaseUrl = process.env.SUPABASE_URL;
       } else {
         try {
-          supabaseUrl = await getApiKey(db, 'SUPABASE_URL');
+          supabaseUrl = await getApiKey(db, "SUPABASE_URL");
         } catch {
           // direct: postgresql://postgres:pwd@db.PROJECT.supabase.co:5432/postgres
           let m = SUPA_URL.match(/db\.([^.]+)\.supabase\.co/);
           // pooler: postgresql://postgres.PROJECT:pwd@aws-0-region.pooler.supabase.com:6543/postgres
           if (!m) m = SUPA_URL.match(/postgres\.([a-z0-9]+):/);
-          if (!m) throw new Error('SUPABASE_URL 추정 실패 (env / api_keys / db / pooler 모두 실패)');
+          if (!m)
+            throw new Error(
+              "SUPABASE_URL 추정 실패 (env / api_keys / db / pooler 모두 실패)",
+            );
           supabaseUrl = `https://${m[1]}.supabase.co`;
         }
       }
@@ -392,36 +507,47 @@ async function processRow(db, row, city, googleKey, supabaseUrl, supabaseKey) {
     }
 
     if (tasks.length === 0) {
-      console.log('\n✗ 처리할 row 없음 (카테고리 시드 0)');
+      console.log("\n✗ 처리할 row 없음 (카테고리 시드 0)");
       return;
     }
     console.log(`\n📊 처리 대상: ${tasks.length} row`);
 
     // 3) 각 row 처리 (cap 안)
-    let processed = 0, skipped = 0, errors = 0;
+    let processed = 0,
+      skipped = 0,
+      errors = 0;
     for (const row of tasks) {
       try {
-        const r = await processRow(db, row, city, googleKey, supabaseUrl, supabaseKey);
+        const r = await processRow(
+          db,
+          row,
+          city,
+          googleKey,
+          supabaseUrl,
+          supabaseKey,
+        );
         if (r.skipped) skipped++;
         else if (r.processed) processed++;
       } catch (e) {
         errors++;
         console.error(`     ❌ ${e.message.slice(0, 200)}`);
-        if (e.message.includes('DAILY_LIMIT')) {
-          console.error('🚨 일일 한도 도달 — 종료 (남은 row 는 다음 날)');
+        if (e.message.includes("DAILY_LIMIT")) {
+          console.error("🚨 일일 한도 도달 — 종료 (남은 row 는 다음 날)");
           break;
         }
       }
     }
 
-    console.log(`\n📊 결과: 처리 ${processed} / skip ${skipped} / 오류 ${errors}`);
+    console.log(
+      `\n📊 결과: 처리 ${processed} / skip ${skipped} / 오류 ${errors}`,
+    );
     console.log(`📞 호출: search ${searchCalls} / photo ${photoCalls}`);
   } finally {
     await db.end();
   }
 
-  console.log(`\n✅ cron 완료 ${DRY_RUN ? '(DRY-RUN)' : ''}`);
+  console.log(`\n✅ cron 완료 ${DRY_RUN ? "(DRY-RUN)" : ""}`);
 })().catch((e) => {
-  console.error('❌ FATAL:', e.message);
+  console.error("❌ FATAL:", e.message);
   process.exit(1);
 });

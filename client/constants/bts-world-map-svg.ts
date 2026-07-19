@@ -3,7 +3,6 @@
 // e037144 이전 working 상태로 회귀 — SVG를 TS 상수로 인라인, 번들에 직접 포함
 // 번들 크기 +175KB 증가하지만 확실성 우선 (preview APK도 문제없음)
 
-// eslint-disable-next-line @typescript-eslint/naming-convention
 export const BTS_WORLD_MAP_SVG = `
 <svg viewBox="0 0 99 50" xmlns="http://www.w3.org/2000/svg">
 <rect width="99" height="50" fill="#FFFFFF"/>

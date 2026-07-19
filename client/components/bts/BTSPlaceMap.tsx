@@ -9,13 +9,19 @@ import { ActivityIndicator, StyleSheet, View, Platform } from "react-native";
 import { BTS_MAP_HTML, type BTSMapPlace } from "./bts-map-html";
 import type { BTSPlace } from "@/contexts/BTSContext";
 
+// ============================================================
+// ⚠️ 수정금지(승인필요) 2026-05-19 = COLORS + LUCIDE = 단일 SSOT bts-marker-svg.ts 로 분리
+// = 메인앱 placeholder + BTSPlaceMap 양쪽 import (= bundle-barrel-imports 가드)
+// ============================================================
+import { COLORS, LUCIDE } from "./bts-marker-svg";
+
 type Props = {
-  places: BTSPlace[];        // top-places 응답 8 슬롯 (= venue + vibe5 + 식사2)
-  selectedIds: number[];     // 카트에 담긴 카드 id (= 마커 등장 트리거)
-  venueId: number | null;    // slot 1 = bts_venue id (= 항상 표시)
-  apiKey: string | null;     // /api/bts/map-config 에서 fetch
+  places: BTSPlace[]; // top-places 응답 8 슬롯 (= venue + vibe5 + 식사2)
+  selectedIds: number[]; // 카트에 담긴 카드 id (= 마커 등장 트리거)
+  venueId: number | null; // slot 1 = bts_venue id (= 항상 표시)
+  apiKey: string | null; // /api/bts/map-config 에서 fetch
   onMarkerPress: (id: number) => void;
-  height?: number;           // 단계 3 사용자 시각 검수로 확정 (초기 = 240)
+  height?: number; // 단계 3 사용자 시각 검수로 확정 (초기 = 240)
   tint?: string;
 };
 
@@ -30,13 +36,12 @@ function toMapPlace(p: BTSPlace): BTSMapPlace {
   };
 }
 
-// ============================================================
-// ⚠️ 수정금지(승인필요) 2026-05-19 = COLORS + LUCIDE = 단일 SSOT bts-marker-svg.ts 로 분리
-// = 메인앱 placeholder + BTSPlaceMap 양쪽 import (= bundle-barrel-imports 가드)
-// ============================================================
-import { COLORS, LUCIDE } from "./bts-marker-svg";
-
-function makeIcon(google: any, cat: string, isVenue: boolean, isActive: boolean) {
+function makeIcon(
+  google: any,
+  cat: string,
+  isVenue: boolean,
+  isActive: boolean,
+) {
   const color = COLORS[cat] || "#666";
   const path = LUCIDE[cat] || '<circle cx="12" cy="12" r="6"/>';
   const size = isVenue ? 56 : 40;
@@ -94,12 +99,32 @@ function makeIcon(google: any, cat: string, isVenue: boolean, isActive: boolean)
 const MAP_STYLES = [
   { elementType: "geometry", stylers: [{ color: "#f8f7fb" }] },
   { elementType: "labels.icon", stylers: [{ visibility: "off" }] },
-  { featureType: "poi", elementType: "labels", stylers: [{ visibility: "off" }] },
+  {
+    featureType: "poi",
+    elementType: "labels",
+    stylers: [{ visibility: "off" }],
+  },
   { featureType: "transit", stylers: [{ visibility: "off" }] },
-  { featureType: "road", elementType: "geometry", stylers: [{ color: "#e9e6f0" }] },
-  { featureType: "road", elementType: "labels", stylers: [{ visibility: "off" }] },
-  { featureType: "water", elementType: "geometry", stylers: [{ color: "#e9d5ff" }] },
-  { featureType: "poi.park", elementType: "geometry", stylers: [{ color: "#dcfce7" }] },
+  {
+    featureType: "road",
+    elementType: "geometry",
+    stylers: [{ color: "#e9e6f0" }],
+  },
+  {
+    featureType: "road",
+    elementType: "labels",
+    stylers: [{ visibility: "off" }],
+  },
+  {
+    featureType: "water",
+    elementType: "geometry",
+    stylers: [{ color: "#e9d5ff" }],
+  },
+  {
+    featureType: "poi.park",
+    elementType: "geometry",
+    stylers: [{ color: "#dcfce7" }],
+  },
 ];
 
 // Google Maps SDK 로드 = 페이지당 1 회 (= 모듈 레벨 promise)
@@ -155,45 +180,51 @@ function BTSPlaceMapWeb({
   useEffect(() => {
     if (!apiKey || !mapDivRef.current) return;
     let cancelled = false;
-    loadGoogleMaps(apiKey).then((google) => {
-      if (cancelled || !mapDivRef.current) return;
-      mapRef.current = new google.maps.Map(mapDivRef.current, {
-        center: { lat: 19.4049, lng: -99.0959 },
-        zoom: 11,
-        disableDefaultUI: true,
-        zoomControl: true,
-        gestureHandling: "greedy",
-        clickableIcons: false,
-        styles: MAP_STYLES,
-      });
-      setMapReady(true);
-
-      // viewport 진입 시 1 회 trigger resize → 그 후 disconnect (= 중복 발화 방지)
-      try {
-        const io = new IntersectionObserver((entries) => {
-          for (const e of entries) {
-            if (e.isIntersecting && mapRef.current) {
-              google.maps.event.trigger(mapRef.current, "resize");
-              io.disconnect();
-              obsRef.current.io = undefined;
-              break;
-            }
-          }
-        }, { threshold: 0.1 });
-        io.observe(mapDivRef.current as any);
-        obsRef.current.io = io;
-        // ResizeObserver = container size 변경 (rAF 으로 debounce)
-        let raf = 0;
-        const ro = new ResizeObserver(() => {
-          if (raf) cancelAnimationFrame(raf);
-          raf = requestAnimationFrame(() => {
-            if (mapRef.current) google.maps.event.trigger(mapRef.current, "resize");
-          });
+    loadGoogleMaps(apiKey)
+      .then((google) => {
+        if (cancelled || !mapDivRef.current) return;
+        mapRef.current = new google.maps.Map(mapDivRef.current, {
+          center: { lat: 19.4049, lng: -99.0959 },
+          zoom: 11,
+          disableDefaultUI: true,
+          zoomControl: true,
+          gestureHandling: "greedy",
+          clickableIcons: false,
+          styles: MAP_STYLES,
         });
-        ro.observe(mapDivRef.current as any);
-        obsRef.current.ro = ro;
-      } catch {}
-    }).catch((e) => console.warn("[BTSPlaceMap-web] SDK load failed:", e));
+        setMapReady(true);
+
+        // viewport 진입 시 1 회 trigger resize → 그 후 disconnect (= 중복 발화 방지)
+        try {
+          const io = new IntersectionObserver(
+            (entries) => {
+              for (const e of entries) {
+                if (e.isIntersecting && mapRef.current) {
+                  google.maps.event.trigger(mapRef.current, "resize");
+                  io.disconnect();
+                  obsRef.current.io = undefined;
+                  break;
+                }
+              }
+            },
+            { threshold: 0.1 },
+          );
+          io.observe(mapDivRef.current as any);
+          obsRef.current.io = io;
+          // ResizeObserver = container size 변경 (rAF 으로 debounce)
+          let raf = 0;
+          const ro = new ResizeObserver(() => {
+            if (raf) cancelAnimationFrame(raf);
+            raf = requestAnimationFrame(() => {
+              if (mapRef.current)
+                google.maps.event.trigger(mapRef.current, "resize");
+            });
+          });
+          ro.observe(mapDivRef.current as any);
+          obsRef.current.ro = ro;
+        } catch {}
+      })
+      .catch((e) => console.warn("[BTSPlaceMap-web] SDK load failed:", e));
     return () => {
       cancelled = true;
       obsRef.current.io?.disconnect();
@@ -217,7 +248,12 @@ function BTSPlaceMapWeb({
       const m = new google.maps.Marker({
         position: { lat: Number(venue.latitude), lng: Number(venue.longitude) },
         map: mapRef.current,
-        icon: makeIcon(google, venue.seedCategory || "bts_venue", true, isActive),
+        icon: makeIcon(
+          google,
+          venue.seedCategory || "bts_venue",
+          true,
+          isActive,
+        ),
         title: venue.nameEn || "",
         zIndex: 999,
       });
@@ -300,10 +336,7 @@ function BTSPlaceMapWeb({
 
   return (
     <View style={[styles.container, { height }]}>
-      <View
-        ref={mapDivRef as any}
-        style={{ width: "100%", height: "100%" }}
-      />
+      <View ref={mapDivRef as any} style={{ width: "100%", height: "100%" }} />
       {!mapReady && (
         <View style={styles.loadingOverlay} pointerEvents="none">
           <ActivityIndicator size="small" color={tint} />
@@ -317,7 +350,8 @@ function BTSPlaceMapWeb({
 // Native 분기 = react-native-webview
 // ============================================================
 function BTSPlaceMapNative(props: InternalProps) {
-  const { WebView } = require("react-native-webview") as typeof import("react-native-webview");
+  const { WebView } =
+    require("react-native-webview") as typeof import("react-native-webview");
   const {
     selectedIds,
     apiKey,
@@ -338,7 +372,7 @@ function BTSPlaceMapNative(props: InternalProps) {
     if (!mapReady) return;
     const payload = { places: validPlaces, venue, selectedIds };
     webRef.current?.injectJavaScript(
-      `window.syncPlaces(${JSON.stringify(payload)}); true;`
+      `window.syncPlaces(${JSON.stringify(payload)}); true;`,
     );
   }, [mapReady, validPlaces, venue, selectedIds]);
 
@@ -346,8 +380,10 @@ function BTSPlaceMapNative(props: InternalProps) {
     try {
       const data = JSON.parse(e.nativeEvent.data || "{}");
       if (data.type === "ready") setMapReady(true);
-      else if (data.type === "marker" && typeof data.id === "number") onMarkerPress(data.id);
-      else if (data.type === "error") console.warn("[BTSPlaceMap] WebView error:", data.message);
+      else if (data.type === "marker" && typeof data.id === "number")
+        onMarkerPress(data.id);
+      else if (data.type === "error")
+        console.warn("[BTSPlaceMap] WebView error:", data.message);
     } catch {}
   }
 
@@ -394,13 +430,18 @@ type InternalProps = Props & {
 
 export default function BTSPlaceMap(props: Props) {
   const mapPlaces = useMemo(
-    () => props.places.filter((p) => p.latitude != null && p.longitude != null).map(toMapPlace),
-    [props.places]
+    () =>
+      props.places
+        .filter((p) => p.latitude != null && p.longitude != null)
+        .map(toMapPlace),
+    [props.places],
   );
   const mapVenue = useMemo<BTSMapPlace | null>(() => {
     if (props.venueId == null) return null;
     const v = props.places.find((p) => p.id === props.venueId);
-    return v && v.latitude != null && v.longitude != null ? toMapPlace(v) : null;
+    return v && v.latitude != null && v.longitude != null
+      ? toMapPlace(v)
+      : null;
   }, [props.venueId, props.places]);
 
   const internal: InternalProps = { ...props, mapPlaces, mapVenue };

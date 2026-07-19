@@ -7,12 +7,20 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { StatusBar } from "expo-status-bar";
 import { useFonts } from "expo-font";
-import { NotoSerifKR_400Regular, NotoSerifKR_700Bold } from "@expo-google-fonts/noto-serif-kr"; // ⚠️ 수정금지(승인필요) — BTS 아리랑 한국어 세리프
-import { PlayfairDisplay_400Regular, PlayfairDisplay_700Bold } from "@expo-google-fonts/playfair-display"; // ⚠️ 수정금지(승인필요) — BTS 아리랑 영어 디스플레이
-import { SpaceGrotesk_400Regular, SpaceGrotesk_700Bold } from "@expo-google-fonts/space-grotesk"; // ⚠️ 수정금지(승인필요) — BTS 랜딩 모던 타이포
+import {
+  NotoSerifKR_400Regular,
+  NotoSerifKR_700Bold,
+} from "@expo-google-fonts/noto-serif-kr"; // ⚠️ 수정금지(승인필요) — BTS 아리랑 한국어 세리프
+import {
+  PlayfairDisplay_400Regular,
+  PlayfairDisplay_700Bold,
+} from "@expo-google-fonts/playfair-display"; // ⚠️ 수정금지(승인필요) — BTS 아리랑 영어 디스플레이
+import {
+  SpaceGrotesk_400Regular,
+  SpaceGrotesk_700Bold,
+} from "@expo-google-fonts/space-grotesk"; // ⚠️ 수정금지(승인필요) — BTS 랜딩 모던 타이포
 import * as SplashScreen from "expo-splash-screen";
 
-import "@/lib/i18n";
 import { initI18nLanguage } from "@/lib/i18n";
 import { queryClient } from "@/lib/query-client";
 import RootStackNavigator from "@/navigation/RootStackNavigator";
@@ -40,9 +48,11 @@ export default function App() {
   useEffect(() => {
     initI18nLanguage().catch(() => {});
     // ⚠️ 수정금지(승인필요) — 글로벌 에러 핸들러 설치 (앱 에러 → 서버 전송 → AI 확인)
-    import("@/lib/error-reporter").then(({ installGlobalErrorHandler }) => {
-      installGlobalErrorHandler();
-    }).catch(() => {});
+    import("@/lib/error-reporter")
+      .then(({ installGlobalErrorHandler }) => {
+        installGlobalErrorHandler();
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -55,11 +65,18 @@ export default function App() {
     return null;
   }
   return (
-    <ErrorBoundary onError={(err, stack) => {
-        import("@/lib/error-reporter").then(({ reportError }) => {
-          reportError(err, { component: "ErrorBoundary", screen: stack?.slice(0, 100) });
-        }).catch(() => {});
-      }}>
+    <ErrorBoundary
+      onError={(err, stack) => {
+        import("@/lib/error-reporter")
+          .then(({ reportError }) => {
+            reportError(err, {
+              component: "ErrorBoundary",
+              screen: stack?.slice(0, 100),
+            });
+          })
+          .catch(() => {});
+      }}
+    >
       <QueryClientProvider client={queryClient}>
         <MapToggleProvider>
           <SafeAreaProvider>

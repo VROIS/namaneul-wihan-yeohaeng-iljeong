@@ -1,6 +1,12 @@
 // 🗂️ 나의 여정 섹션 = ProfileScreen 분리(2026-07-15 §0 슬림화, 순수 이동)
 import React from "react";
-import { View, Text, Pressable, ScrollView, ActivityIndicator } from "react-native";
+import {
+  View,
+  Text,
+  Pressable,
+  ScrollView,
+  ActivityIndicator,
+} from "react-native";
 import { Brand } from "@/constants/theme";
 import Icon from "@/components/Icon";
 import ThemedText from "@/components/ThemedText";
@@ -9,7 +15,8 @@ import { shortDateCard, summaryLineCard } from "../utils";
 import type { ProfileApi } from "../hooks/useProfile";
 
 export default function TripsSection({ profile }: { profile: ProfileApi }) {
-  const { theme, t, navigation, savedTrips, isLoadingTrips, handleDeleteTrip } = profile;
+  const { theme, t, navigation, savedTrips, isLoadingTrips, handleDeleteTrip } =
+    profile;
 
   return (
     <View style={styles.section}>
@@ -29,14 +36,10 @@ export default function TripsSection({ profile }: { profile: ProfileApi }) {
           ]}
         >
           <Icon name="map" size={40} color={theme.textTertiary} />
-          <Text
-            style={[styles.emptyTripsText, { color: theme.textSecondary }]}
-          >
+          <Text style={[styles.emptyTripsText, { color: theme.textSecondary }]}>
             저장된 여행이 없어요
           </Text>
-          <Text
-            style={[styles.emptyTripsHint, { color: theme.textTertiary }]}
-          >
+          <Text style={[styles.emptyTripsHint, { color: theme.textTertiary }]}>
             일정을 생성하고 저장해보세요!
           </Text>
         </View>

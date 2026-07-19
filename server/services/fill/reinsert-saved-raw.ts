@@ -6,73 +6,141 @@
 //   = 재입력 시 도심거리·이미지 결손이 실제 UPDATE 되게 = 사장님 입증 ②(결손 채움). photo_name 리소스명은 외부호출 필요라 제외.
 // 호출: npx tsx server/services/fill/reinsert-saved-raw.ts --city-id=37 [--apply]
 //   --apply 없으면 = dry = 파싱·매칭대상만, DB 쓰기 0.  외부호출 0 (로컬→DB).
-import fs from 'fs';
-import path from 'path';
-import { fileURLToPath, pathToFileURL } from 'url';
+import fs from "fs";
+import path from "path";
+import { fileURLToPath, pathToFileURL } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const ROOT = path.resolve(__dirname, '../../..');
+const ROOT = path.resolve(__dirname, "../../..");
 process.chdir(ROOT);
-const envRaw = fs.readFileSync(path.join(ROOT, '.env'), 'utf-8').replace(/^﻿/, '');
+const envRaw = fs
+  .readFileSync(path.join(ROOT, ".env"), "utf-8")
+  .replace(/^﻿/, "");
 for (const line of envRaw.split(/\r?\n/)) {
   const m = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/);
-  if (m && !process.env[m[1]]) { let v = m[2].trim(); if (/^['"]/.test(v)) v = v.slice(1, -1); process.env[m[1]] = v; }
+  if (m && !process.env[m[1]]) {
+    let v = m[2].trim();
+    if (/^['"]/.test(v)) v = v.slice(1, -1);
+    process.env[m[1]] = v;
+  }
 }
-const argv = Object.fromEntries(process.argv.slice(2).map((a) => a.replace(/^--/, '').split('=')).map(([k, v]) => [k, v ?? 'true']));
-const cityId = Number(argv['city-id'] || 0);
-const apply = argv['apply'] === 'true';
-if (!cityId) { console.error('Usage: --city-id=<N> [--apply]'); process.exit(1); }
+const argv = Object.fromEntries(
+  process.argv
+    .slice(2)
+    .map((a) => a.replace(/^--/, "").split("="))
+    .map(([k, v]) => [k, v ?? "true"]),
+);
+const cityId = Number(argv["city-id"] || 0);
+const apply = argv["apply"] === "true";
+if (!cityId) {
+  console.error("Usage: --city-id=<N> [--apply]");
+  process.exit(1);
+}
 
-const num = (v: any): number | undefined => (v == null || v === '' ? undefined : Number(v));
+const num = (v: any): number | undefined =>
+  v == null || v === "" ? undefined : Number(v);
 const price = (p: any): number | null => {
-  const v = p.estimated_price_eur ?? p.price_per_person_eur ?? p.price_eur_max ?? p.price_eur;
+  const v =
+    p.estimated_price_eur ??
+    p.price_per_person_eur ??
+    p.price_eur_max ??
+    p.price_eur;
   return v == null ? null : Number(v); // 0 보존
 };
 const parseRawText = (rt: string): any => {
-  let t = (rt || '').trim();
-  if (t.startsWith('```')) { t = t.replace(/^```(json)?\s*/, ''); const i = t.lastIndexOf('```'); if (i >= 0) t = t.slice(0, i); }
+  let t = (rt || "").trim();
+  if (t.startsWith("```")) {
+    t = t.replace(/^```(json)?\s*/, "");
+    const i = t.lastIndexOf("```");
+    if (i >= 0) t = t.slice(0, i);
+  }
   return JSON.parse(t.trim());
 };
 
 // ⚠️ 2026-06-13 = 결손 배선 추가 = distC(도심거리) + imageUrl(완성형 URL 보존). 도심거리 = raw 값 우선, 없으면 좌표로 haversine(외부호출 0).
-type Job = { src: string; cat?: string; id?: number; nameEn?: string; nameLocal?: string; nameKo?: string; address?: string; lat?: number; lng?: number; pid?: string; mapsUri?: string; rc?: number; priceEur: number | null; summaryKo?: string; shortformKo?: string; photoName?: string; distC?: number; imageUrl?: string };
+type Job = {
+  src: string;
+  cat?: string;
+  id?: number;
+  nameEn?: string;
+  nameLocal?: string;
+  nameKo?: string;
+  address?: string;
+  lat?: number;
+  lng?: number;
+  pid?: string;
+  mapsUri?: string;
+  rc?: number;
+  priceEur: number | null;
+  summaryKo?: string;
+  shortformKo?: string;
+  photoName?: string;
+  distC?: number;
+  imageUrl?: string;
+};
 
 // 🧠 2026-07-05 사장님 SSOT = 입력순서 절대 = Gemini → TS (실제 순서). Gemini("무엇을" name_local·nameKo·seed_category·요약·거리) 먼저 새덮어쓰기 → TS(검증 name_en·좌표·PID·RC) 다음 덮음.
 //   = runtime 폴더의 MIX Gemini raw = contextId 'runtime'(cityId 미확정 저장) → prompt "CITY: <이름>" 로 도시 식별. cityName 인자로 필터.
 const collectGeminiRuntime = (cityNameArg: string): Job[] => {
   const jobs: Job[] = [];
-  const rdir = path.join(ROOT, 'docs', 'raw', 'runtime');
+  const rdir = path.join(ROOT, "docs", "raw", "runtime");
   if (!fs.existsSync(rdir) || !cityNameArg) return jobs;
-  for (const f of fs.readdirSync(rdir).filter((x) => x.includes('gemini-mix-step1') && x.endsWith('.json'))) {
-    let d: any; try { d = JSON.parse(fs.readFileSync(path.join(rdir, f), 'utf-8')); } catch { continue; }
-    const prompt = d?.request?.prompt || '';
-    const m = prompt.match(/CITY:\s*([^\n]+)/);
-    if (!m || m[1].trim().toLowerCase() !== cityNameArg.toLowerCase()) continue;  // 이 도시 아니면 skip
-    let j: any; try { j = parseRawText(d?.raw?.text || ''); } catch { continue; }
-    const tag = f.replace(/-2026.*$/, '').replace('.json', '');
-    for (const day of (j?.days || [])) for (const p of (day?.places || [])) {
-      if (!p || typeof p !== 'object') continue;
-      const isMeal = p.type === 'lunch' || p.type === 'dinner';
-      jobs.push({
-        src: `gemini:${tag}`,
-        cat: isMeal ? 'restaurant' : (p.seed_category || undefined),
-        nameEn: p.name, nameLocal: p.nameLocal, nameKo: p.nameKo,
-        address: p.address, lat: num(p.latitude), lng: num(p.longitude),
-        rc: undefined, priceEur: p.price_eur == null ? null : Number(p.price_eur),  // 0(무료) 보존
-        summaryKo: p.selection_reason_ko, shortformKo: p.shortform_ko,
-        distC: num(p.distance_km_from_center) ?? undefined,
-      });
+  for (const f of fs
+    .readdirSync(rdir)
+    .filter((x) => x.includes("gemini-mix-step1") && x.endsWith(".json"))) {
+    let d: any;
+    try {
+      d = JSON.parse(fs.readFileSync(path.join(rdir, f), "utf-8"));
+    } catch {
+      continue;
     }
+    const prompt = d?.request?.prompt || "";
+    const m = prompt.match(/CITY:\s*([^\n]+)/);
+    if (!m || m[1].trim().toLowerCase() !== cityNameArg.toLowerCase()) continue; // 이 도시 아니면 skip
+    let j: any;
+    try {
+      j = parseRawText(d?.raw?.text || "");
+    } catch {
+      continue;
+    }
+    const tag = f.replace(/-2026.*$/, "").replace(".json", "");
+    for (const day of j?.days || [])
+      for (const p of day?.places || []) {
+        if (!p || typeof p !== "object") continue;
+        const isMeal = p.type === "lunch" || p.type === "dinner";
+        jobs.push({
+          src: `gemini:${tag}`,
+          cat: isMeal ? "restaurant" : p.seed_category || undefined,
+          nameEn: p.name,
+          nameLocal: p.nameLocal,
+          nameKo: p.nameKo,
+          address: p.address,
+          lat: num(p.latitude),
+          lng: num(p.longitude),
+          rc: undefined,
+          priceEur: p.price_eur == null ? null : Number(p.price_eur), // 0(무료) 보존
+          summaryKo: p.selection_reason_ko,
+          shortformKo: p.shortform_ko,
+          distC: num(p.distance_km_from_center) ?? undefined,
+        });
+      }
   }
   return jobs;
 };
 
 const collect = (): Job[] => {
   const jobs: Job[] = [];
-  const dir = path.join(ROOT, 'docs', 'raw', String(cityId));
-  for (const f of fs.readdirSync(dir).filter((x) => x.endsWith('.json') && !x.includes('pretty'))) {
-    let d: any; try { d = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf-8')); } catch { continue; }
-    const tag = f.split('-2026')[0].split('.')[0];
+  const dir = path.join(ROOT, "docs", "raw", String(cityId));
+  for (const f of fs
+    .readdirSync(dir)
+    .filter((x) => x.endsWith(".json") && !x.includes("pretty"))) {
+    let d: any;
+    try {
+      d = JSON.parse(fs.readFileSync(path.join(dir, f), "utf-8"));
+    } catch {
+      continue;
+    }
+    const tag = f.split("-2026")[0].split(".")[0];
     const metaCat = d?.meta?.category; // 12-TS = meta.category (zone 응답엔 cat 없음)
     // 🧠 2026-07-05 사장님 SSOT = §18 saveRaw TS 형식(ts-ag3 = MIX 여정생성 中 TS 응답) 재입력 추가.
     //   = request(우리 로컬명·주소·좌표 힌트) + raw.places[0](TS 검증 PID·displayName·좌표·RC·photos)가 한 파일 = 골격 재구성 가능(외부호출 0).
@@ -80,13 +148,13 @@ const collect = (): Job[] => {
     if (d?.request && Array.isArray(d?.raw?.places) && d.raw.places.length) {
       const req = d.request;
       for (const tp of d.raw.places) {
-        if (!tp || typeof tp !== 'object') continue;
+        if (!tp || typeof tp !== "object") continue;
         const pr = tp.priceRange?.endPrice?.units;
         jobs.push({
           src: tag,
-          cat: undefined,                                     // seed_category = PID 로 DB 조회(아래 noCatPids) 흡수
-          nameEn: tp.displayName?.text,                       // TS 검증명 = name_en
-          nameLocal: req.nameLocal,                           // 우리가 보낸 로컬명(Gemini) = name_local
+          cat: undefined, // seed_category = PID 로 DB 조회(아래 noCatPids) 흡수
+          nameEn: tp.displayName?.text, // TS 검증명 = name_en
+          nameLocal: req.nameLocal, // 우리가 보낸 로컬명(Gemini) = name_local
           address: tp.formattedAddress || req.address,
           lat: num(tp.location?.latitude ?? req.latitude),
           lng: num(tp.location?.longitude ?? req.longitude),
@@ -95,109 +163,194 @@ const collect = (): Job[] => {
           rc: num(tp.userRatingCount),
           priceEur: pr == null ? null : Number(pr),
           photoName: tp.photos?.[0]?.name,
-          distC: undefined,                                   // main 에서 좌표로 haversine
+          distC: undefined, // main 에서 좌표로 haversine
           imageUrl: undefined,
         });
       }
-      continue;                                               // 이 파일 처리 완료 = 아래 발굴형식 분기 skip
+      continue; // 이 파일 처리 완료 = 아래 발굴형식 분기 skip
     }
     // 형식 분기
     let groups: { cat?: string; arr: any[] }[] = [];
     // ⚠️ 2026-07-07 사장님 승인 = saveCollectedRaw 형식({meta,rawResponse,parsedPlaces}) 재입력 추가.
     //   = 02-enrich·MIX Gemini(90-mix)가 이 형식으로 저장 = parsedPlaces = 파싱된 배열(id 또는 name 앵커). 옛 collect 는 d.places 만 봐서 이 형식 누락(파리·본느 재입력 0곳 근본).
     //   = cat 미지정 = 아래 p.seed_category 폴백 or id/pid DB 조회 흡수(기존 로직). MIX Gemini(name 앵커)도 p.name 폴백(line 아래)으로 커버.
-    if (Array.isArray(d?.parsedPlaces)) groups = [{ arr: d.parsedPlaces }];                       // 02-enrich·MIX Gemini (parsedPlaces, id/name 앵커)
-    else if (Array.isArray(d?.places)) groups = [{ arr: d.places }];                             // 02-enrich (구형 places, id, cat=DB조회)
-    else if (Array.isArray(d?.parsed)) groups = [{ cat: 'restaurant', arr: d.parsed }];          // 13-restaurant (id, 식당)
-    else if (Array.isArray(d?.zones)) groups = d.zones.flatMap((z: any) => [{ cat: metaCat, arr: z.places || [] }]); // 12-TS (pid, meta.category)
-    else if (typeof d?.raw_text === 'string') {                                                   // 01/03/04 (raw_text)
-      try { const j = parseRawText(d.raw_text); const res = j.results || j;
-        if (res && typeof res === 'object') for (const [cat, arr] of Object.entries(res)) if (Array.isArray(arr)) groups.push({ cat, arr });
-      } catch { /* skip */ }
+    if (Array.isArray(d?.parsedPlaces))
+      groups = [{ arr: d.parsedPlaces }]; // 02-enrich·MIX Gemini (parsedPlaces, id/name 앵커)
+    else if (Array.isArray(d?.places))
+      groups = [{ arr: d.places }]; // 02-enrich (구형 places, id, cat=DB조회)
+    else if (Array.isArray(d?.parsed))
+      groups = [{ cat: "restaurant", arr: d.parsed }]; // 13-restaurant (id, 식당)
+    else if (Array.isArray(d?.zones))
+      groups = d.zones.flatMap((z: any) => [
+        { cat: metaCat, arr: z.places || [] },
+      ]);
+    // 12-TS (pid, meta.category)
+    else if (typeof d?.raw_text === "string") {
+      // 01/03/04 (raw_text)
+      try {
+        const j = parseRawText(d.raw_text);
+        const res = j.results || j;
+        if (res && typeof res === "object")
+          for (const [cat, arr] of Object.entries(res))
+            if (Array.isArray(arr)) groups.push({ cat, arr });
+      } catch {
+        /* skip */
+      }
     }
-    for (const g of groups) for (const p of g.arr) {
-      if (!p || typeof p !== 'object') continue;
-      jobs.push({
-        // ⚠️ 수정금지(승인필요) 2026-07-07 사장님 = 셀렉 금지(§18) = MIX Gemini raw 는 카멜케이스(nameLocal·nameKo) → 스네이크만 읽던 옛 셀렉이 로컬명 버려 매칭요소 상실 → 중복 INSERT 근본. 카멜 폴백으로 전체값 빠짐없이.
-        src: tag, cat: g.cat || p.seed_category || p.price_tier,
-        id: num(p.id), nameEn: p.name_en || p.name, nameLocal: p.name_local ?? p.nameLocal, nameKo: p.name_ko ?? p.nameKo,
-        address: p.address || p.formattedAddress, lat: num(p.lat ?? p.latitude), lng: num(p.lng ?? p.longitude),
-        pid: p.place_id || p.google_place_id, mapsUri: p.google_maps_uri || p.googleMapsUri,
-        rc: num(p.review_count ?? p.userRatingCount ?? p.google_review_count),
-        priceEur: price(p), summaryKo: p.summary_ko || p.selection_reason_ko, shortformKo: p.editorial_summary || p.shortform_ko,
-        photoName: p.photo_name,
-        // ⚠️ 2026-06-13 = 도심거리 = raw 값 우선(없으면 main 에서 좌표로 haversine), 이미지 = 완성형 URL 만(photo_name 리소스명은 외부호출 필요라 제외)
-        distC: num(p.distance_km_from_center) ?? undefined,
-        imageUrl: (p.image_url && /^https?:/.test(String(p.image_url))) ? String(p.image_url) : undefined,
-      });
-    }
+    for (const g of groups)
+      for (const p of g.arr) {
+        if (!p || typeof p !== "object") continue;
+        jobs.push({
+          // ⚠️ 수정금지(승인필요) 2026-07-07 사장님 = 셀렉 금지(§18) = MIX Gemini raw 는 카멜케이스(nameLocal·nameKo) → 스네이크만 읽던 옛 셀렉이 로컬명 버려 매칭요소 상실 → 중복 INSERT 근본. 카멜 폴백으로 전체값 빠짐없이.
+          src: tag,
+          cat: g.cat || p.seed_category || p.price_tier,
+          id: num(p.id),
+          nameEn: p.name_en || p.name,
+          nameLocal: p.name_local ?? p.nameLocal,
+          nameKo: p.name_ko ?? p.nameKo,
+          address: p.address || p.formattedAddress,
+          lat: num(p.lat ?? p.latitude),
+          lng: num(p.lng ?? p.longitude),
+          pid: p.place_id || p.google_place_id,
+          mapsUri: p.google_maps_uri || p.googleMapsUri,
+          rc: num(p.review_count ?? p.userRatingCount ?? p.google_review_count),
+          priceEur: price(p),
+          summaryKo: p.summary_ko || p.selection_reason_ko,
+          shortformKo: p.editorial_summary || p.shortform_ko,
+          photoName: p.photo_name,
+          // ⚠️ 2026-06-13 = 도심거리 = raw 값 우선(없으면 main 에서 좌표로 haversine), 이미지 = 완성형 URL 만(photo_name 리소스명은 외부호출 필요라 제외)
+          distC: num(p.distance_km_from_center) ?? undefined,
+          imageUrl:
+            p.image_url && /^https?:/.test(String(p.image_url))
+              ? String(p.image_url)
+              : undefined,
+        });
+      }
   }
   return jobs;
 };
 
 (async () => {
-  const { upsertPlace } = await import(pathToFileURL(path.join(ROOT, 'server/services/place-upsert.ts')).href);
+  const { upsertPlace } = await import(
+    pathToFileURL(path.join(ROOT, "server/services/place-upsert.ts")).href
+  );
   // ⚠️ 2026-06-13 = 도심거리 계산 = 단일 SSOT haversineKm 재사용 (= 헌법 §16 재발명 금지)
-  const { haversineKm } = await import(pathToFileURL(path.join(ROOT, 'server/services/agents/transit-haversine.ts')).href);
-  const pg = await import('pg');
-  const c = new (pg as any).default.Client({ connectionString: process.env.SUPA_URL || process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } });
+  const { haversineKm } = await import(
+    pathToFileURL(
+      path.join(ROOT, "server/services/agents/transit-haversine.ts"),
+    ).href
+  );
+  const pg = await import("pg");
+  const c = new (pg as any).default.Client({
+    connectionString: process.env.SUPA_URL || process.env.DATABASE_URL,
+    ssl: { rejectUnauthorized: false },
+  });
   await c.connect();
 
   // ⚠️ 2026-06-13 = 도시 중심좌표 = 도심거리 결손 보강용 (raw 에 distance_km_from_center 없으면 좌표로 계산 = 외부호출 0, 사장님 "도심거리 무조건 저장")
   // 🧠 2026-07-05 = name_en 추가 조회 = runtime Gemini raw(CITY:<이름>) 도시 필터용.
-  const cityRow = (await c.query('SELECT name_en, latitude::float8 AS lat, longitude::float8 AS lng FROM cities WHERE id=$1', [cityId])).rows[0];
+  const cityRow = (
+    await c.query(
+      "SELECT name_en, latitude::float8 AS lat, longitude::float8 AS lng FROM cities WHERE id=$1",
+      [cityId],
+    )
+  ).rows[0];
 
   // 🧠 2026-07-05 사장님 SSOT = 입력순서 절대 Gemini → TS. Gemini(runtime, 도시필터) 먼저 + TS/발굴(collect) 다음 = 같은 장소가 Gemini 새덮어쓰기 후 TS 검증덮음.
-  const jobs = [...collectGeminiRuntime(cityRow?.name_en || ''), ...collect()];
+  const jobs = [...collectGeminiRuntime(cityRow?.name_en || ""), ...collect()];
   // 도심거리 결손 보강 = raw 에 없고 좌표 있으면 = haversine(도시중심, 장소좌표) = 외부호출 0
   if (cityRow?.lat != null) {
     for (const j of jobs) {
       if (j.distC == null && j.lat != null && j.lng != null) {
-        j.distC = Math.round(haversineKm(cityRow.lat, cityRow.lng, j.lat, j.lng) * 10) / 10;
+        j.distC =
+          Math.round(haversineKm(cityRow.lat, cityRow.lng, j.lat, j.lng) * 10) /
+          10;
       }
     }
   }
   // ⚠️ 수정금지(승인필요) 2026-06-11 = id 보유 raw(02-enrich/13-restaurant) = DB 기존 행의 "검증된 식별 앵커"로 upsert
   //   = 옛 버그: raw 의 Gemini 식별자(name/주소 부정확)로 매칭 → 197곳 신규 누수. 이제 PID/주소/cat = DB 것 = 1·3순위 확정 병합.
   //   = 콘텐츠(가격/요약/이름갱신)만 raw 것 = "id가 가리키는 행을 보강한다"의 정확한 구현.
-  const RTIER = new Set(['economic', 'reasonable', 'premium', 'luxury', 'low', 'mid', 'high']);
+  const RTIER = new Set([
+    "economic",
+    "reasonable",
+    "premium",
+    "luxury",
+    "low",
+    "mid",
+    "high",
+  ]);
   const idList = jobs.filter((j) => j.id != null).map((j) => j.id!);
   if (idList.length) {
-    const idRows = (await c.query(
-      `SELECT id, seed_category, name_en, name_local, address, latitude, longitude, google_place_id, google_maps_uri
-       FROM place_seed_raw WHERE id = ANY($1::int[])`, [idList]
-    )).rows;
+    const idRows = (
+      await c.query(
+        `SELECT id, seed_category, name_en, name_local, address, latitude, longitude, google_place_id, google_maps_uri
+       FROM place_seed_raw WHERE id = ANY($1::int[])`,
+        [idList],
+      )
+    ).rows;
     const idMap = new Map<number, any>(idRows.map((r: any) => [r.id, r]));
     for (const j of jobs) {
-      if (j.id != null && !idMap.has(j.id)) { (j as any).deadId = true; continue; } // ⚠️ 2026-06-11 = 죽은 id(과거 정리로 삭제된 행) 보강 raw = 부활 금지 (Tanatorio M30 사고)
+      if (j.id != null && !idMap.has(j.id)) {
+        (j as any).deadId = true;
+        continue;
+      } // ⚠️ 2026-06-11 = 죽은 id(과거 정리로 삭제된 행) 보강 raw = 부활 금지 (Tanatorio M30 사고)
       const b = j.id != null ? idMap.get(j.id) : undefined;
       if (!b) continue;
-      j.cat = b.seed_category;                                   // cat = DB 행 (tier 오염 원천 차단)
-      j.pid = b.google_place_id ?? j.pid;                        // 식별 앵커 = DB (1순위 확정)
-      j.mapsUri = b.google_maps_uri ?? j.mapsUri;                // (2순위)
-      j.address = b.address ?? j.address;                        // (3순위 확정 = DB 주소)
-      j.nameEn = j.nameEn || b.name_en;                          // ⚠️ 2026-06-11 = 13-batch3·4(요약+가격만, 이름 無 80곳) = DB 이름으로 보완
-      j.nameLocal = j.nameLocal || b.name_local;                 // 로컬이름 = raw 우선(갱신), 없으면 DB (4순위)
-      if (j.lat == null && b.latitude != null) { j.lat = Number(b.latitude); j.lng = Number(b.longitude); }
+      j.cat = b.seed_category; // cat = DB 행 (tier 오염 원천 차단)
+      j.pid = b.google_place_id ?? j.pid; // 식별 앵커 = DB (1순위 확정)
+      j.mapsUri = b.google_maps_uri ?? j.mapsUri; // (2순위)
+      j.address = b.address ?? j.address; // (3순위 확정 = DB 주소)
+      j.nameEn = j.nameEn || b.name_en; // ⚠️ 2026-06-11 = 13-batch3·4(요약+가격만, 이름 無 80곳) = DB 이름으로 보완
+      j.nameLocal = j.nameLocal || b.name_local; // 로컬이름 = raw 우선(갱신), 없으면 DB (4순위)
+      if (j.lat == null && b.latitude != null) {
+        j.lat = Number(b.latitude);
+        j.lng = Number(b.longitude);
+      }
     }
   }
-  for (const j of jobs) { if (j.cat && RTIER.has(j.cat)) j.cat = 'restaurant'; }
+  for (const j of jobs) {
+    if (j.cat && RTIER.has(j.cat)) j.cat = "restaurant";
+  }
   // ⚠️ 2026-06-11 = 12-TS 中 meta.category="" 파일(text/premium/nearby 실험 140곳) = cat 부재
   //   = PID 로 DB 행 lookup → 그 행의 cat 사용(= 매칭·갱신 흡수). DB 에 없는 PID = cat 발명 금지 = skip 유지 (로그로 노출).
-  const noCatPids = [...new Set(jobs.filter((j) => !j.cat && j.pid).map((j) => j.pid!))];
+  const noCatPids = [
+    ...new Set(jobs.filter((j) => !j.cat && j.pid).map((j) => j.pid!)),
+  ];
   if (noCatPids.length) {
-    const pidRows = (await c.query(
-      `SELECT google_place_id, seed_category FROM place_seed_raw WHERE google_place_id = ANY($1::text[])`, [noCatPids]
-    )).rows;
-    const pidCat = new Map<string, string>(pidRows.map((r: any) => [r.google_place_id, r.seed_category]));
-    for (const j of jobs) { if (!j.cat && j.pid && pidCat.has(j.pid)) j.cat = pidCat.get(j.pid); }
+    const pidRows = (
+      await c.query(
+        `SELECT google_place_id, seed_category FROM place_seed_raw WHERE google_place_id = ANY($1::text[])`,
+        [noCatPids],
+      )
+    ).rows;
+    const pidCat = new Map<string, string>(
+      pidRows.map((r: any) => [r.google_place_id, r.seed_category]),
+    );
+    for (const j of jobs) {
+      if (!j.cat && j.pid && pidCat.has(j.pid)) j.cat = pidCat.get(j.pid);
+    }
   }
-  const before = (await c.query(`SELECT count(*)::int AS n, count(price_eur)::int AS p, count(*) FILTER (WHERE price_eur=0)::int AS z FROM place_seed_raw WHERE city_id=$1`, [cityId])).rows[0];
-  console.log(`\n═══ reinsert-saved-raw (city=${cityId}, raw job ${jobs.length}곳) ${apply ? '[APPLY]' : '[DRY]'} ═══`);
-  console.log(`  [전] PSR 행=${before.n} / 가격보유=${before.p} / €0무료=${before.z}`);
+  const before = (
+    await c.query(
+      `SELECT count(*)::int AS n, count(price_eur)::int AS p, count(*) FILTER (WHERE price_eur=0)::int AS z FROM place_seed_raw WHERE city_id=$1`,
+      [cityId],
+    )
+  ).rows[0];
+  console.log(
+    `\n═══ reinsert-saved-raw (city=${cityId}, raw job ${jobs.length}곳) ${apply ? "[APPLY]" : "[DRY]"} ═══`,
+  );
+  console.log(
+    `  [전] PSR 행=${before.n} / 가격보유=${before.p} / €0무료=${before.z}`,
+  );
   const bySrc: Record<string, number> = {};
   for (const j of jobs) bySrc[j.src] = (bySrc[j.src] || 0) + 1;
-  console.log('  raw 소스별:', Object.entries(bySrc).map(([k, v]) => `${k}=${v}`).join(' '));
+  console.log(
+    "  raw 소스별:",
+    Object.entries(bySrc)
+      .map(([k, v]) => `${k}=${v}`)
+      .join(" "),
+  );
   const zeroN = jobs.filter((j) => j.priceEur === 0).length;
   console.log(`  raw 가격=0(무료): ${zeroN}곳 (= 0 보존 검증대)`);
 
@@ -207,7 +360,11 @@ const collect = (): Job[] => {
     const insertedLog: string[] = [];
     const skipLog: Record<string, number> = {};
     for (const j of jobs) {
-      if ((j as any).deadId) { action.skip = (action.skip || 0) + 1; skipLog['dead_id'] = (skipLog['dead_id'] || 0) + 1; continue; }
+      if ((j as any).deadId) {
+        action.skip = (action.skip || 0) + 1;
+        skipLog["dead_id"] = (skipLog["dead_id"] || 0) + 1;
+        continue;
+      }
       if (!j.cat || (!j.id && !j.pid && !j.nameEn)) {
         action.skip = (action.skip || 0) + 1;
         const why = !j.cat ? `no_cat:${j.src}` : `no_identity:${j.src}`;
@@ -216,26 +373,68 @@ const collect = (): Job[] => {
       }
       try {
         const r = await upsertPlace({
-          cityId, seedCategory: j.cat,
-          nameEn: j.nameEn, nameLocal: j.nameLocal, nameKo: j.nameKo,
-          address: j.address, latitude: j.lat, longitude: j.lng,
-          googlePlaceId: j.pid, googleMapsUri: j.mapsUri, googleReviewCount: j.rc,
-          priceEur: j.priceEur, selectionReasonKo: j.summaryKo, shortformKo: j.shortformKo,
+          cityId,
+          seedCategory: j.cat,
+          nameEn: j.nameEn,
+          nameLocal: j.nameLocal,
+          nameKo: j.nameKo,
+          address: j.address,
+          latitude: j.lat,
+          longitude: j.lng,
+          googlePlaceId: j.pid,
+          googleMapsUri: j.mapsUri,
+          googleReviewCount: j.rc,
+          priceEur: j.priceEur,
+          selectionReasonKo: j.summaryKo,
+          shortformKo: j.shortformKo,
           // ⚠️ 2026-06-13 = 결손 배선 = 도심거리(raw 또는 haversine 계산) + 이미지(완성형 URL 보존) = place-upsert COALESCE 새우선
-          distanceKmFromCenter: j.distC, imageUrl: j.imageUrl,
+          distanceKmFromCenter: j.distC,
+          imageUrl: j.imageUrl,
         });
-        action[r?.action || 'done'] = (action[r?.action || 'done'] || 0) + 1;
-        if (r?.action === 'inserted') insertedLog.push(`${j.src} | ${j.nameEn}${r?.suspect ? ' [중복의심]' : ' [진짜신규]'}`);
-        if (r?.action === 'skipped') skipLog[`upsert:${r?.reason || 'unknown'}`] = (skipLog[`upsert:${r?.reason || 'unknown'}`] || 0) + 1;
-      } catch (e: any) { action.error = (action.error || 0) + 1; if ((action.error || 0) <= 3) console.warn(`   err ${j.nameEn}: ${e?.message?.slice(0, 80)}`); }
+        action[r?.action || "done"] = (action[r?.action || "done"] || 0) + 1;
+        if (r?.action === "inserted")
+          insertedLog.push(
+            `${j.src} | ${j.nameEn}${r?.suspect ? " [중복의심]" : " [진짜신규]"}`,
+          );
+        if (r?.action === "skipped")
+          skipLog[`upsert:${r?.reason || "unknown"}`] =
+            (skipLog[`upsert:${r?.reason || "unknown"}`] || 0) + 1;
+      } catch (e: any) {
+        action.error = (action.error || 0) + 1;
+        if ((action.error || 0) <= 3)
+          console.warn(`   err ${j.nameEn}: ${e?.message?.slice(0, 80)}`);
+      }
     }
-    if (insertedLog.length) { console.log(`  ─ 신규 INSERT ${insertedLog.length}곳 전수:`); for (const l of insertedLog) console.log(`    + ${l}`); }
-    if (Object.keys(skipLog).length) console.log('  ─ skip 사유:', Object.entries(skipLog).map(([k, v]) => `${k}=${v}`).join(' '));
-    const after = (await c.query(`SELECT count(*)::int AS n, count(price_eur)::int AS p, count(*) FILTER (WHERE price_eur=0)::int AS z FROM place_seed_raw WHERE city_id=$1`, [cityId])).rows[0];
-    console.log('  upsert 결과:', Object.entries(action).map(([k, v]) => `${k}=${v}`).join(' '));
-    console.log(`  [후] PSR 행=${after.n}(${after.n - before.n >= 0 ? '+' : ''}${after.n - before.n}) / 가격보유=${after.p}(+${after.p - before.p}) / €0무료=${after.z}(+${after.z - before.z})`);
+    if (insertedLog.length) {
+      console.log(`  ─ 신규 INSERT ${insertedLog.length}곳 전수:`);
+      for (const l of insertedLog) console.log(`    + ${l}`);
+    }
+    if (Object.keys(skipLog).length)
+      console.log(
+        "  ─ skip 사유:",
+        Object.entries(skipLog)
+          .map(([k, v]) => `${k}=${v}`)
+          .join(" "),
+      );
+    const after = (
+      await c.query(
+        `SELECT count(*)::int AS n, count(price_eur)::int AS p, count(*) FILTER (WHERE price_eur=0)::int AS z FROM place_seed_raw WHERE city_id=$1`,
+        [cityId],
+      )
+    ).rows[0];
+    console.log(
+      "  upsert 결과:",
+      Object.entries(action)
+        .map(([k, v]) => `${k}=${v}`)
+        .join(" "),
+    );
+    console.log(
+      `  [후] PSR 행=${after.n}(${after.n - before.n >= 0 ? "+" : ""}${after.n - before.n}) / 가격보유=${after.p}(+${after.p - before.p}) / €0무료=${after.z}(+${after.z - before.z})`,
+    );
   } else {
-    console.log(`  [DRY] --apply 시 upsertPlace ${jobs.length}곳 (id/pid/name 매칭 후 갱신 or 신규)`);
+    console.log(
+      `  [DRY] --apply 시 upsertPlace ${jobs.length}곳 (id/pid/name 매칭 후 갱신 or 신규)`,
+    );
   }
   await c.end();
 })();

@@ -56,7 +56,7 @@ const PlaceCard = React.memo(function PlaceCard({
         onPress={() => {
           scale.value = withSequence(
             withSpring(0.9, { damping: 12, stiffness: 220 }),
-            withSpring(1, { damping: 14, stiffness: 160 })
+            withSpring(1, { damping: 14, stiffness: 160 }),
           );
           onToggle(place);
         }}

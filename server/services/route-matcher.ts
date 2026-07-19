@@ -14,7 +14,12 @@ function toRad(d: number): number {
 }
 
 export function haversineKm(a: GeoPoint, b: GeoPoint): number {
-  if (a.latitude == null || a.longitude == null || b.latitude == null || b.longitude == null) {
+  if (
+    a.latitude == null ||
+    a.longitude == null ||
+    b.latitude == null ||
+    b.longitude == null
+  ) {
     return Number.POSITIVE_INFINITY;
   }
   const dLat = toRad(b.latitude - a.latitude);
@@ -30,17 +35,22 @@ export function haversineKm(a: GeoPoint, b: GeoPoint): number {
 // 점 P 가 선분 AB 에 가까운 정도 (km). 평면 근사 — 도시 규모면 충분.
 function perpendicularKm(p: GeoPoint, a: GeoPoint, b: GeoPoint): number {
   if (
-    p.latitude == null || p.longitude == null ||
-    a.latitude == null || a.longitude == null ||
-    b.latitude == null || b.longitude == null
-  ) return Number.POSITIVE_INFINITY;
+    p.latitude == null ||
+    p.longitude == null ||
+    a.latitude == null ||
+    a.longitude == null ||
+    b.latitude == null ||
+    b.longitude == null
+  )
+    return Number.POSITIVE_INFINITY;
 
   const dx = b.latitude - a.latitude;
   const dy = b.longitude - a.longitude;
   const lenSq = dx * dx + dy * dy;
   if (lenSq === 0) return haversineKm(p, a);
 
-  const t = ((p.latitude - a.latitude) * dx + (p.longitude - a.longitude) * dy) / lenSq;
+  const t =
+    ((p.latitude - a.latitude) * dx + (p.longitude - a.longitude) * dy) / lenSq;
   if (t < 0) return haversineKm(p, a);
   if (t > 1) return haversineKm(p, b);
 
@@ -66,23 +76,27 @@ function pickMin<T>(items: T[], score: (x: T) => number): T | null {
 
 function eligible<T extends GeoPoint>(pool: T[], excludeIds: number[]): T[] {
   const exclude = new Set(excludeIds);
-  return pool.filter((p) => !exclude.has(p.id) && p.latitude != null && p.longitude != null);
+  return pool.filter(
+    (p) => !exclude.has(p.id) && p.latitude != null && p.longitude != null,
+  );
 }
 
 export function pickRestaurantBySegment<T extends GeoPoint>(
   pool: T[],
   anchorA: T | null | undefined,
   anchorB: T | null | undefined,
-  excludeIds: number[] = []
+  excludeIds: number[] = [],
 ): T | null {
   if (!anchorA || !anchorB) return null;
-  return pickMin(eligible(pool, excludeIds), (p) => perpendicularKm(p, anchorA, anchorB));
+  return pickMin(eligible(pool, excludeIds), (p) =>
+    perpendicularKm(p, anchorA, anchorB),
+  );
 }
 
 export function pickRestaurantNearVenue<T extends GeoPoint>(
   pool: T[],
   venue: T | null | undefined,
-  excludeIds: number[] = []
+  excludeIds: number[] = [],
 ): T | null {
   if (!venue) return null;
   return pickMin(eligible(pool, excludeIds), (p) => haversineKm(p, venue));

@@ -88,7 +88,10 @@ export function useProfile() {
     } catch (e) {
       console.error("[Profile] 여정 삭제 실패:", e);
       // 함수형 롤백 = 그 항목만 복원(연속 삭제 시 다른 삭제분 안 건드림). 이미 있으면 무시.
-      if (removed) setSavedTrips((list) => (list.some((t) => t.id === id) ? list : [...list, removed]));
+      if (removed)
+        setSavedTrips((list) =>
+          list.some((t) => t.id === id) ? list : [...list, removed],
+        );
     }
   };
 
@@ -119,10 +122,15 @@ export function useProfile() {
     });
   };
 
-  const currentLang = SUPPORTED_LANGS.find((l) => l.code === i18n.language) ?? SUPPORTED_LANGS[0];
+  const currentLang =
+    SUPPORTED_LANGS.find((l) => l.code === i18n.language) ?? SUPPORTED_LANGS[0];
 
   const stats = [
-    { label: t("profile.trips"), value: String(savedTrips.length), icon: "map" },
+    {
+      label: t("profile.trips"),
+      value: String(savedTrips.length),
+      icon: "map",
+    },
     {
       label: t("profile.visits"),
       value: String(
@@ -130,7 +138,11 @@ export function useProfile() {
       ),
       icon: "map-pin",
     },
-    { label: t("common.save"), value: String(savedTrips.length), icon: "bookmark" },
+    {
+      label: t("common.save"),
+      value: String(savedTrips.length),
+      icon: "bookmark",
+    },
   ];
 
   return {

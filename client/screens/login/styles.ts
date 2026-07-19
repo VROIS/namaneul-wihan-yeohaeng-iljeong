@@ -112,10 +112,28 @@ export const styles = StyleSheet.create({
   socialSection: { gap: Spacing.md, paddingBottom: Spacing.lg },
   // 개발단계 이메일 로그인(2026-07-14)
   emailLoginBox: { gap: Spacing.xs, marginTop: Spacing.sm },
-  emailLoginLabel: { fontSize: 12, fontFamily: Fonts.medium, textAlign: "center" },
+  emailLoginLabel: {
+    fontSize: 12,
+    fontFamily: Fonts.medium,
+    textAlign: "center",
+  },
   emailLoginRow: { flexDirection: "row", gap: Spacing.sm },
-  emailInput: { flex: 1, height: 48, paddingHorizontal: Spacing.md, borderRadius: BorderRadius.md, borderWidth: 1, fontSize: 14, fontFamily: Fonts.medium },
-  emailLoginBtn: { paddingHorizontal: Spacing.lg, height: 48, borderRadius: BorderRadius.md, alignItems: "center", justifyContent: "center" },
+  emailInput: {
+    flex: 1,
+    height: 48,
+    paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    fontSize: 14,
+    fontFamily: Fonts.medium,
+  },
+  emailLoginBtn: {
+    paddingHorizontal: Spacing.lg,
+    height: 48,
+    borderRadius: BorderRadius.md,
+    alignItems: "center",
+    justifyContent: "center",
+  },
   emailLoginBtnText: { color: "#FFF", fontSize: 14, fontFamily: Fonts.bold },
   socialButton: {
     flexDirection: "row",

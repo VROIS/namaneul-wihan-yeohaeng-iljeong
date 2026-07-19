@@ -22,7 +22,11 @@ export interface Inquiry {
 }
 
 // 공용 fetch = Bearer 토큰 자동 첨부(로그인 사용자) + JSON. 미로그인이면 토큰 없음(백엔드가 401 반환).
-async function req(method: string, path: string, body?: unknown): Promise<Response> {
+async function req(
+  method: string,
+  path: string,
+  body?: unknown,
+): Promise<Response> {
   const user = await getUserData();
   const headers: Record<string, string> = {};
   if (body) headers["Content-Type"] = "application/json; charset=utf-8";
@@ -39,7 +43,9 @@ async function req(method: string, path: string, body?: unknown): Promise<Respon
 
 // ⚠️ 사장님 SSOT 2026-07-14 = 문의 시 여정이 아직 저장 안 됐으면(currentItineraryId null) 여기서 BE에 저장(POST /api/itineraries) → id 확보 → 문의가 그 id에 연결(전문가·사용자 restore-by-id 원본 열람). 옛: 저장 안 하면 itineraryId=null → 여정 안 보임(사장님 지적) 폐기 §19.
 //   저장 페이로드 = 화면 여정(currentItinerary) 그대로. userId=본인. buildItineraryData(서버)가 나머지 정규화. 실패 시 null 반환(문의는 itineraryData 요약으로라도 진행).
-export async function saveItineraryForInquiry(itin: any): Promise<number | null> {
+export async function saveItineraryForInquiry(
+  itin: any,
+): Promise<number | null> {
   if (!itin) return null;
   const user = await getUserData();
   if (!user?.id) return null;
@@ -93,7 +99,9 @@ export async function submitInquiry(input: {
 
 // ── 문의 목록 = Bearer 신원으로 백엔드가 판단(일반=본인 것만 강제 / 전문가·관리자=전체). ──
 //   ⚠️ userId 쿼리 안 보냄 = 전문가가 전체를 보려면 필수(옛 ?userId=me = 전문가도 자기 것만 나오던 버그, 폐기 §19).
-export async function listInquiries(status?: InquiryStatus): Promise<Inquiry[]> {
+export async function listInquiries(
+  status?: InquiryStatus,
+): Promise<Inquiry[]> {
   const q = status ? `?status=${encodeURIComponent(status)}` : "";
   const res = await req("GET", `/api/verification/requests${q}`);
   if (!res.ok) return [];
@@ -120,8 +128,15 @@ export async function getInquiry(id: string): Promise<Inquiry | null> {
 }
 
 // ── 전문가/관리자: 답변 전송(백엔드가 role 검사 + 질문자에게 알림 발송) ──
-export async function replyInquiry(id: string, expertReply: string, status: InquiryStatus = "answered"): Promise<{ ok: boolean; error?: string }> {
-  const res = await req("PATCH", `/api/verification/requests/${id}`, { status, expertReply });
+export async function replyInquiry(
+  id: string,
+  expertReply: string,
+  status: InquiryStatus = "answered",
+): Promise<{ ok: boolean; error?: string }> {
+  const res = await req("PATCH", `/api/verification/requests/${id}`, {
+    status,
+    expertReply,
+  });
   if (res.ok) return { ok: true };
   if (res.status === 403) return { ok: false, error: "expert_only" };
   if (res.status === 400) {
@@ -134,7 +149,7 @@ export async function replyInquiry(id: string, expertReply: string, status: Inqu
 // ── 내 역할 조회 = 로그인 시 이미 폰에 저장된 role 을 그대로 읽음(서버 재조회 삭제 = 2026-07-16 §0 사장님 SSOT). 미로그인/role 없음 = 'user'. ──
 export async function getMyRole(): Promise<"user" | "expert" | "admin"> {
   const user = await getUserData();
-  return (user?.role === "expert" || user?.role === "admin") ? user.role : "user";
+  return user?.role === "expert" || user?.role === "admin" ? user.role : "user";
 }
 
 // ── 탭 배지 수 = 역할별. ⚠️ 사장님 SSOT 2026-07-14 = 실시간 접수/답변 신호.
@@ -147,11 +162,16 @@ export async function tabBadgeCount(): Promise<number> {
   const role = await getMyRole();
   const list = await listInquiries();
   if (role === "expert" || role === "admin") {
-    return list.filter((q) => q.status === "pending" || q.status === "in_review").length;
+    return list.filter(
+      (q) => q.status === "pending" || q.status === "in_review",
+    ).length;
   }
   // 사용자 = 본인 문의만 조회됨(백엔드가 신원으로 강제). 진행중 + 안읽은답변.
-  return list.filter((q) =>
-    q.status === "pending" || q.status === "in_review" || (q.status === "answered" && !q.isReadByUser)
+  return list.filter(
+    (q) =>
+      q.status === "pending" ||
+      q.status === "in_review" ||
+      (q.status === "answered" && !q.isReadByUser),
   ).length;
 }
 
@@ -164,21 +184,39 @@ export interface ExpertProfile {
 }
 
 // 공개 조회(미인증) = 소개카드용(대표 전문가). 없으면 null → 화면이 i18n 기본문구로 폴백.
-export async function getExpertProfile(): Promise<{ profile: ExpertProfile | null; displayName: string | null }> {
+export async function getExpertProfile(): Promise<{
+  profile: ExpertProfile | null;
+  displayName: string | null;
+}> {
   const res = await req("GET", "/api/expert/profile");
   if (!res.ok) return { profile: null, displayName: null };
-  return (await res.json().catch(() => ({ profile: null, displayName: null }))) as { profile: ExpertProfile | null; displayName: string | null };
+  return (await res
+    .json()
+    .catch(() => ({ profile: null, displayName: null }))) as {
+    profile: ExpertProfile | null;
+    displayName: string | null;
+  };
 }
 
 // 본인 조회(expert·admin) = 편집화면 프리필용 = 로그인한 본인 행(대표전문가 아님, 리뷰 2026-07-13).
-export async function getMyExpertProfile(): Promise<{ profile: ExpertProfile | null; displayName: string | null }> {
+export async function getMyExpertProfile(): Promise<{
+  profile: ExpertProfile | null;
+  displayName: string | null;
+}> {
   const res = await req("GET", "/api/expert/profile/me");
   if (!res.ok) return { profile: null, displayName: null };
-  return (await res.json().catch(() => ({ profile: null, displayName: null }))) as { profile: ExpertProfile | null; displayName: string | null };
+  return (await res
+    .json()
+    .catch(() => ({ profile: null, displayName: null }))) as {
+    profile: ExpertProfile | null;
+    displayName: string | null;
+  };
 }
 
 // 본인 저장(expert·admin) = 백엔드가 role 검사.
-export async function saveExpertProfile(p: ExpertProfile): Promise<{ ok: boolean; error?: string }> {
+export async function saveExpertProfile(
+  p: ExpertProfile,
+): Promise<{ ok: boolean; error?: string }> {
   const res = await req("PATCH", "/api/expert/profile", p);
   if (res.ok) return { ok: true };
   if (res.status === 401) return { ok: false, error: "login_required" };

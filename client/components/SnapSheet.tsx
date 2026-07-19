@@ -4,7 +4,15 @@
 //   스냅 2단계: full(~85% = 작성/답변) ↔ peek(하단에 살짝 = 뒤 여정 전체 보임). 아래로 드래그→peek, 위로 드래그/헤더바 탭→full, 맨아래 스와이프/X=완전닫힘.
 //   ⚠️ peek 상태 = 배경(여정) 터치 가능해야 함 = dim 은 full 일 때만 진하게, peek 이면 투명+터치통과(pointerEvents).
 import React, { useEffect } from "react";
-import { View, Text, StyleSheet, Pressable, useWindowDimensions, Platform } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Pressable,
+  useWindowDimensions,
+  Platform,
+  useColorScheme,
+} from "react-native";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -19,7 +27,6 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Colors, Spacing, BorderRadius, Fonts } from "@/constants/theme";
 import Icon from "@/components/Icon";
-import { useColorScheme } from "react-native";
 
 const SPRING = { damping: 20, stiffness: 220, mass: 0.6 };
 
@@ -33,7 +40,14 @@ interface SnapSheetProps {
   peekHeight?: number; // peek 상태에서 화면에 보이는 시트 높이(px). 기본 90.
 }
 
-export default function SnapSheet({ visible, onClose, title, children, fullRatio = 0.9, peekHeight = 90 }: SnapSheetProps) {
+export default function SnapSheet({
+  visible,
+  onClose,
+  title,
+  children,
+  fullRatio = 0.9,
+  peekHeight = 90,
+}: SnapSheetProps) {
   const { height: winH } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
@@ -60,7 +74,9 @@ export default function SnapSheet({ visible, onClose, title, children, fullRatio
     "worklet";
     if (target >= CLOSED_Y - 1) {
       // 완전 닫힘 = 부모 onClose(state false) → useEffect 가 CLOSED_Y 로. 여기선 애니메이션만 주고 JS 콜백.
-      translateY.value = withTiming(CLOSED_Y, { duration: 180 }, () => { runOnJS(onClose)(); });
+      translateY.value = withTiming(CLOSED_Y, { duration: 180 }, () => {
+        runOnJS(onClose)();
+      });
     } else {
       translateY.value = withSpring(target, SPRING);
     }
@@ -79,7 +95,10 @@ export default function SnapSheet({ visible, onClose, title, children, fullRatio
       const y = translateY.value;
       const v = e.velocityY;
       // ⚠️ 사장님 SSOT 2026-07-14 = 스냅 4지점(full/half/peek/닫힘) 중 최근접. 빠른 위=full, 빠른 아래=peek/닫힘. 맨아래 근처 아래로 던지면 닫힘.
-      if (v < -900) { snapTo(y > HALF_Y ? HALF_Y : FULL_Y); return; } // 빠르게 위로 = 한 단계 위(half or full).
+      if (v < -900) {
+        snapTo(y > HALF_Y ? HALF_Y : FULL_Y);
+        return;
+      } // 빠르게 위로 = 한 단계 위(half or full).
       if (v > 900) {
         // 빠르게 아래로: peek 아래면 닫힘, half~peek 면 peek, half 위면 half.
         if (y > PEEK_Y - 10) snapTo(CLOSED_Y);
@@ -90,7 +109,8 @@ export default function SnapSheet({ visible, onClose, title, children, fullRatio
       // 정지 = 최근접 스냅.
       const points = [FULL_Y, HALF_Y, PEEK_Y, CLOSED_Y];
       let best = points[0];
-      for (const p of points) if (Math.abs(y - p) < Math.abs(y - best)) best = p;
+      for (const p of points)
+        if (Math.abs(y - p) < Math.abs(y - best)) best = p;
       snapTo(best);
     });
 
@@ -101,7 +121,12 @@ export default function SnapSheet({ visible, onClose, title, children, fullRatio
 
   // ⚠️ 사장님 SSOT 2026-07-14 = dim = full(0)일 때만 진하게(0.35) → half(HALF_Y)부터는 0(배경 여정 다 보임). half·peek = 배경 터치 통과.
   const dimStyle = useAnimatedStyle(() => {
-    const o = interpolate(translateY.value, [FULL_Y, HALF_Y], [0.35, 0], Extrapolation.CLAMP);
+    const o = interpolate(
+      translateY.value,
+      [FULL_Y, HALF_Y],
+      [0.35, 0],
+      Extrapolation.CLAMP,
+    );
     return { opacity: o };
   });
   // pointerEvents = full 근처(half 위쪽 절반)일 때만 dim 이 배경 터치 막음. half 이하 = 통과(배경 여정 지도·카드 조작).
@@ -112,7 +137,7 @@ export default function SnapSheet({ visible, onClose, title, children, fullRatio
       const touchable = y < HALF_Y * 0.5; // full~half 중간보다 위일 때만 배경 막음.
       runOnJS(setDimTouchable)(touchable);
     },
-    [HALF_Y]
+    [HALF_Y],
   );
 
   if (!visible) return null;
@@ -120,15 +145,26 @@ export default function SnapSheet({ visible, onClose, title, children, fullRatio
   return (
     <View style={StyleSheet.absoluteFill} pointerEvents="box-none">
       {/* dim = full 일 때만 배경 가림. 탭하면 peek 로 내림(완전 닫힘 아님 = 사장님 SSOT). peek/닫힘이면 pointerEvents none 으로 배경 터치 통과. */}
-      <Animated.View style={[StyleSheet.absoluteFill, styles.dim, dimStyle]} pointerEvents={dimTouchable ? "auto" : "none"}>
-        <Pressable style={StyleSheet.absoluteFill} onPress={() => { translateY.value = withSpring(HALF_Y, SPRING); }} />
+      <Animated.View
+        style={[StyleSheet.absoluteFill, styles.dim, dimStyle]}
+        pointerEvents={dimTouchable ? "auto" : "none"}
+      >
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={() => {
+            translateY.value = withSpring(HALF_Y, SPRING);
+          }}
+        />
       </Animated.View>
 
       {/* 시트 = top(애니메이션) ~ 화면 하단(bottom:0). 스냅마다 높이 달라짐 = 본문 ScrollView 가 그 높이에 맞춰 스크롤. */}
       <Animated.View
         style={[
           styles.sheet,
-          { backgroundColor: theme.backgroundRoot, paddingBottom: insets.bottom + Spacing.md },
+          {
+            backgroundColor: theme.backgroundRoot,
+            paddingBottom: insets.bottom + Spacing.md,
+          },
           sheetStyle,
         ]}
       >
@@ -137,8 +173,15 @@ export default function SnapSheet({ visible, onClose, title, children, fullRatio
           <View style={styles.header}>
             <View style={[styles.handle, { backgroundColor: theme.border }]} />
             <View style={styles.headerRow}>
-              <Pressable onPress={() => { translateY.value = withSpring(FULL_Y, SPRING); }} style={styles.headerTapArea}>
-                <Text style={[styles.title, { color: theme.text }]}>{title}</Text>
+              <Pressable
+                onPress={() => {
+                  translateY.value = withSpring(FULL_Y, SPRING);
+                }}
+                style={styles.headerTapArea}
+              >
+                <Text style={[styles.title, { color: theme.text }]}>
+                  {title}
+                </Text>
               </Pressable>
               <Pressable onPress={onClose} style={styles.closeBtn} hitSlop={10}>
                 <Icon name="x" size={24} color={theme.text} />
@@ -166,14 +209,41 @@ const styles = StyleSheet.create({
     borderTopRightRadius: BorderRadius.xl,
     ...Platform.select({
       web: { boxShadow: "0 -4px 24px rgba(0,0,0,0.15)" } as any,
-      default: { shadowColor: "#000", shadowOffset: { width: 0, height: -4 }, shadowOpacity: 0.15, shadowRadius: 12, elevation: 12 },
+      default: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 12,
+        elevation: 12,
+      },
     }),
   },
-  header: { paddingTop: Spacing.sm, paddingHorizontal: Spacing.md, paddingBottom: Spacing.sm },
-  handle: { alignSelf: "center", width: 40, height: 4, borderRadius: 2, marginBottom: Spacing.sm },
-  headerRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  header: {
+    paddingTop: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingBottom: Spacing.sm,
+  },
+  handle: {
+    alignSelf: "center",
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    marginBottom: Spacing.sm,
+  },
+  headerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
   headerTapArea: { flex: 1, alignItems: "center", paddingVertical: 4 },
   title: { fontSize: 16, fontFamily: Fonts.bold, letterSpacing: -0.3 },
-  closeBtn: { width: 40, height: 40, justifyContent: "center", alignItems: "center", position: "absolute", right: 0 },
+  closeBtn: {
+    width: 40,
+    height: 40,
+    justifyContent: "center",
+    alignItems: "center",
+    position: "absolute",
+    right: 0,
+  },
   body: { flex: 1 },
 });

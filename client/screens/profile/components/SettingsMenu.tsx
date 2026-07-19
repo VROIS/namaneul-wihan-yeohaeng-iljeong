@@ -7,16 +7,14 @@ import { styles } from "../styles";
 import type { ProfileApi } from "../hooks/useProfile";
 
 export default function SettingsMenu({ profile }: { profile: ProfileApi }) {
-  const { theme, t, navigation, isAuth, setShowLanguageModal, handleLogout } = profile;
+  const { theme, t, navigation, isAuth, setShowLanguageModal, handleLogout } =
+    profile;
 
   return (
     <View style={styles.section}>
       <ThemedText style={styles.sectionTitle}>설정</ThemedText>
       <View
-        style={[
-          styles.menuCard,
-          { backgroundColor: theme.backgroundDefault },
-        ]}
+        style={[styles.menuCard, { backgroundColor: theme.backgroundDefault }]}
       >
         {[
           // 2026-07-13 = 내 문의함 바로가기(사장님 SSOT) = 전문가 탭(하단 내문의함)으로 이동. 전문가 문의 답변 확인.
@@ -31,7 +29,7 @@ export default function SettingsMenu({ profile }: { profile: ProfileApi }) {
             onPress: () => {
               // TODO: 결제 화면 라우팅 추가 예정
               alert("결제 기능을 준비 중입니다.");
-            }
+            },
           },
           {
             icon: "settings",

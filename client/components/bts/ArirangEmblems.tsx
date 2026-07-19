@@ -30,9 +30,24 @@ export function EmblemIeung({ size = 48, color = ARIRANG_RED }: EmblemProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 48 48">
       {/* 외곽 원 */}
-      <Circle cx={24} cy={24} r={21} stroke={color} strokeWidth={2.5} fill="none" />
+      <Circle
+        cx={24}
+        cy={24}
+        r={21}
+        stroke={color}
+        strokeWidth={2.5}
+        fill="none"
+      />
       {/* 내부 링 (도장 느낌) */}
-      <Circle cx={24} cy={24} r={16} stroke={color} strokeWidth={0.8} fill="none" opacity={0.3} />
+      <Circle
+        cx={24}
+        cy={24}
+        r={16}
+        stroke={color}
+        strokeWidth={0.8}
+        fill="none"
+        opacity={0.3}
+      />
       {/* 중앙 점 */}
       <Circle cx={24} cy={24} r={6} fill={color} />
     </Svg>
@@ -44,9 +59,24 @@ export function EmblemRieul1({ size = 48, color = ARIRANG_RED }: EmblemProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 48 48">
       {/* 외곽 원 */}
-      <Circle cx={24} cy={24} r={21} stroke={color} strokeWidth={2.5} fill="none" />
+      <Circle
+        cx={24}
+        cy={24}
+        r={21}
+        stroke={color}
+        strokeWidth={2.5}
+        fill="none"
+      />
       {/* 내부 링 */}
-      <Circle cx={24} cy={24} r={16} stroke={color} strokeWidth={0.8} fill="none" opacity={0.3} />
+      <Circle
+        cx={24}
+        cy={24}
+        r={16}
+        stroke={color}
+        strokeWidth={0.8}
+        fill="none"
+        opacity={0.3}
+      />
       {/* 수평 2줄 (괘) */}
       <Rect x={12} y={19} width={24} height={3} rx={1.5} fill={color} />
       <Rect x={12} y={26} width={24} height={3} rx={1.5} fill={color} />
@@ -59,9 +89,24 @@ export function EmblemRieul2({ size = 48, color = ARIRANG_RED }: EmblemProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 48 48">
       {/* 외곽 원 */}
-      <Circle cx={24} cy={24} r={21} stroke={color} strokeWidth={2.5} fill="none" />
+      <Circle
+        cx={24}
+        cy={24}
+        r={21}
+        stroke={color}
+        strokeWidth={2.5}
+        fill="none"
+      />
       {/* 내부 링 */}
-      <Circle cx={24} cy={24} r={16} stroke={color} strokeWidth={0.8} fill="none" opacity={0.3} />
+      <Circle
+        cx={24}
+        cy={24}
+        r={16}
+        stroke={color}
+        strokeWidth={0.8}
+        fill="none"
+        opacity={0.3}
+      />
       {/* 수평선 */}
       <Rect x={12} y={22.5} width={24} height={3} rx={1.5} fill={color} />
       {/* 수직선 */}
@@ -92,9 +137,18 @@ export function ArirangEmblemsRow({
 
   useEffect(() => {
     // 순차 등장 (0.3초 간격, spring)
-    scale1.value = withDelay(delay, withSpring(1, { damping: 15, stiffness: 150 }));
-    scale2.value = withDelay(delay + 300, withSpring(1, { damping: 15, stiffness: 150 }));
-    scale3.value = withDelay(delay + 600, withSpring(1, { damping: 15, stiffness: 150 }));
+    scale1.value = withDelay(
+      delay,
+      withSpring(1, { damping: 15, stiffness: 150 }),
+    );
+    scale2.value = withDelay(
+      delay + 300,
+      withSpring(1, { damping: 15, stiffness: 150 }),
+    );
+    scale3.value = withDelay(
+      delay + 600,
+      withSpring(1, { damping: 15, stiffness: 150 }),
+    );
 
     // 글로우 펄스 (등장 후 한번 빛나고 은은하게 유지)
     glow1.value = withDelay(
@@ -102,24 +156,42 @@ export function ArirangEmblemsRow({
       withSequence(
         withTiming(1, { duration: 400 }),
         withTiming(0.3, { duration: 600 }),
-        withRepeat(withSequence(withTiming(0.5, { duration: 2000 }), withTiming(0.3, { duration: 2000 })), -1)
-      )
+        withRepeat(
+          withSequence(
+            withTiming(0.5, { duration: 2000 }),
+            withTiming(0.3, { duration: 2000 }),
+          ),
+          -1,
+        ),
+      ),
     );
     glow2.value = withDelay(
       delay + 500,
       withSequence(
         withTiming(1, { duration: 400 }),
         withTiming(0.3, { duration: 600 }),
-        withRepeat(withSequence(withTiming(0.5, { duration: 2000 }), withTiming(0.3, { duration: 2000 })), -1)
-      )
+        withRepeat(
+          withSequence(
+            withTiming(0.5, { duration: 2000 }),
+            withTiming(0.3, { duration: 2000 }),
+          ),
+          -1,
+        ),
+      ),
     );
     glow3.value = withDelay(
       delay + 800,
       withSequence(
         withTiming(1, { duration: 400 }),
         withTiming(0.3, { duration: 600 }),
-        withRepeat(withSequence(withTiming(0.5, { duration: 2000 }), withTiming(0.3, { duration: 2000 })), -1)
-      )
+        withRepeat(
+          withSequence(
+            withTiming(0.5, { duration: 2000 }),
+            withTiming(0.3, { duration: 2000 }),
+          ),
+          -1,
+        ),
+      ),
     );
   }, []);
 

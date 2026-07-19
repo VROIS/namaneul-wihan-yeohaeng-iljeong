@@ -3,10 +3,10 @@
 // = Google Maps URLs API 공식 = api=1 필수 = 모바일 네이티브 앱 자동 호출
 // = 근거 = https://developers.google.com/maps/documentation/urls/get-started
 
-import { Linking } from 'react-native';
+import { Linking } from "react-native";
 
 /** Google Place ID 표준 prefix = base64 인코딩 헤더 (= 모든 PID = "ChIJ..." 시작) */
-const GOOGLE_PLACE_ID_PREFIX = 'ChIJ';
+const GOOGLE_PLACE_ID_PREFIX = "ChIJ";
 
 export interface PlaceForMaps {
   // ⚠️ 수정금지(승인필요) 2026-05-20 = 0 순위 = google_maps_uri (= cid URL = 100% 정확)
@@ -30,12 +30,12 @@ export interface PlaceForMaps {
  */
 export function openPlaceInMaps(p: PlaceForMaps): void {
   // ⚠️ 수정금지(승인필요) 2026-05-20 = 0 순위 = google_maps_uri 직접 호출 (= 사용자 SSOT = TS 검증 cid URL)
-  if (p.googleMapsUri && p.googleMapsUri.startsWith('http')) {
+  if (p.googleMapsUri && p.googleMapsUri.startsWith("http")) {
     Linking.openURL(p.googleMapsUri);
     return;
   }
 
-  const name = p.nameEn || p.name || p.nameLocal || p.nameKo || '';
+  const name = p.nameEn || p.name || p.nameLocal || p.nameKo || "";
   const address = p.address || p.geminiAddress;
   const query = encodeURIComponent(address ? `${name},${address}` : name);
 
@@ -49,5 +49,8 @@ export function openPlaceInMaps(p: PlaceForMaps): void {
     Linking.openURL(`https://www.google.com/maps/search/?api=1&query=${query}`);
     return;
   }
-  console.warn('[openPlaceInMaps] 빈 input = name + PID + URI 모두 없음 = URL 호출 스킵', p);
+  console.warn(
+    "[openPlaceInMaps] 빈 input = name + PID + URI 모두 없음 = URL 호출 스킵",
+    p,
+  );
 }

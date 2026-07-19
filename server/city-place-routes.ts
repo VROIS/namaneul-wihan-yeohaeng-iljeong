@@ -4,9 +4,8 @@ import type { Express } from "express";
 import { storage } from "./storage";
 import { itineraryGenerator } from "./services/itinerary-generator";
 import { db } from "./db";
-import { cities } from "../shared/schema";
+import { cities, users } from "../shared/schema";
 import { eq, sql } from "drizzle-orm";
-import { users } from "../shared/schema";
 
 export function registerCityPlaceRoutes(app: Express): void {
   // Cities

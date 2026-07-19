@@ -8,7 +8,8 @@ import { styles } from "../styles";
 import type { LoginApi } from "../hooks/useLogin";
 
 export default function LanguageModal({ login }: { login: LoginApi }) {
-  const { t, theme, currentLang, showLanguageModal, setShowLanguageModal } = login;
+  const { t, theme, currentLang, showLanguageModal, setShowLanguageModal } =
+    login;
 
   return (
     <Modal
@@ -38,8 +39,7 @@ export default function LanguageModal({ login }: { login: LoginApi }) {
                 key={lang.code}
                 style={[
                   styles.languageItem,
-                  currentLang.code === lang.code &&
-                  styles.languageItemSelected,
+                  currentLang.code === lang.code && styles.languageItemSelected,
                 ]}
                 onPress={async () => {
                   await changeLanguageAndPersist(lang.code);

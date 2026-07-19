@@ -36,19 +36,25 @@ export function BTSLandingScreen() {
     // Stage 1: 타이틀 점화 → 배경 살짝 밝아짐
     bgBrightness.value = withDelay(1200, withTiming(0.1, { duration: 800 }));
     // Stage 2: 아미봉 등장 — 스윽 느리게 올라옴 (Apple 바텀시트)
-    armyBombEntrance.value = withDelay(2000, withTiming(1, { duration: 1000, easing: Easing.out(Easing.cubic) }));
+    armyBombEntrance.value = withDelay(
+      2000,
+      withTiming(1, { duration: 1000, easing: Easing.out(Easing.cubic) }),
+    );
     glowLevel.value = withDelay(2800, withTiming(0.3, { duration: 600 }));
     bgBrightness.value = withDelay(3000, withTiming(0.15, { duration: 600 }));
   }, []);
 
   // ⚠️ 수정금지(승인필요) — 인증 완료 → 화이트아웃 → 전환
-  const handleAuthComplete = useCallback((provider: string, birthDate: string) => {
-    bgBrightness.value = withTiming(1, { duration: 1200 });
-    whiteout.value = withDelay(1500, withTiming(1, { duration: 600 }));
-    setTimeout(() => {
-      // TODO: navigation.replace("BTSHome", { city: "goyang" })
-    }, 2200);
-  }, []);
+  const handleAuthComplete = useCallback(
+    (provider: string, birthDate: string) => {
+      bgBrightness.value = withTiming(1, { duration: 1200 });
+      whiteout.value = withDelay(1500, withTiming(1, { duration: 600 }));
+      setTimeout(() => {
+        // TODO: navigation.replace("BTSHome", { city: "goyang" })
+      }, 2200);
+    },
+    [],
+  );
 
   // ⚠️ 수정금지(승인필요) — 3단 점등: 터치마다 배경 밝기 연동
   const onGlowChange = useCallback((level: number) => {
@@ -67,13 +73,18 @@ export function BTSLandingScreen() {
     backgroundColor: interpolateColor(
       bgBrightness.value,
       [0, 0.15, 0.2, 0.35, 0.6, 1],
-      ["#0B1026", "#1A2660", "#4285F4", "#7C3AED", "#B794F4", "#F5F0FF"]
+      ["#0B1026", "#1A2660", "#4285F4", "#7C3AED", "#B794F4", "#F5F0FF"],
     ),
   }));
 
   // ⚠️ 수정금지(승인필요) — 보라색 글로우 오버레이 (강화 — 확실히 보이게)
   const glowOverlayStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(bgBrightness.value, [0, 0.15, 0.2, 0.35, 0.6, 1], [0, 0.1, 0.25, 0.45, 0.7, 0.95], Extrapolation.CLAMP),
+    opacity: interpolate(
+      bgBrightness.value,
+      [0, 0.15, 0.2, 0.35, 0.6, 1],
+      [0, 0.1, 0.25, 0.45, 0.7, 0.95],
+      Extrapolation.CLAMP,
+    ),
   }));
 
   const whiteoutStyle = useAnimatedStyle(() => ({
@@ -82,7 +93,11 @@ export function BTSLandingScreen() {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      <StatusBar
+        barStyle="light-content"
+        translucent
+        backgroundColor="transparent"
+      />
 
       {/* Layer 0: 코발트 블루 → 보라색으로 변하는 배경 (점등에 따라) */}
       <Animated.View style={[StyleSheet.absoluteFill, bgColorStyle]} />
@@ -90,7 +105,12 @@ export function BTSLandingScreen() {
       {/* Layer 1: 보라색 글로우 (아미봉 빛 전파 — 조도 단계별) */}
       <Animated.View style={[StyleSheet.absoluteFill, glowOverlayStyle]}>
         <LinearGradient
-          colors={["transparent", "rgba(108,45,199,0.8)", "rgba(155,89,182,0.5)", "rgba(108,45,199,0.3)"]}
+          colors={[
+            "transparent",
+            "rgba(108,45,199,0.8)",
+            "rgba(155,89,182,0.5)",
+            "rgba(108,45,199,0.3)",
+          ]}
           style={StyleSheet.absoluteFill}
           start={{ x: 0.5, y: 0.75 }}
           end={{ x: 0.5, y: 0.1 }}
@@ -114,7 +134,12 @@ export function BTSLandingScreen() {
 
       {/* 화이트아웃 */}
       <Animated.View
-        style={[StyleSheet.absoluteFill, styles.whiteout, whiteoutStyle, { pointerEvents: "none" }]}
+        style={[
+          StyleSheet.absoluteFill,
+          styles.whiteout,
+          whiteoutStyle,
+          { pointerEvents: "none" },
+        ]}
       />
     </View>
   );

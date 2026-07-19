@@ -33,7 +33,10 @@ export default function BTSStackNavigator() {
           gestureEnabled: true,
         }}
       >
-        <Stack.Screen name="BTSCharacterSelect" component={BTSCharacterSelectScreen} />
+        <Stack.Screen
+          name="BTSCharacterSelect"
+          component={BTSCharacterSelectScreen}
+        />
         <Stack.Screen name="BTSPlaceCart" component={BTSPlaceCartScreen} />
         <Stack.Screen
           name="BTSLoading"

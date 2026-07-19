@@ -34,19 +34,28 @@ export function BTSLandingScreenA1() {
 
   useEffect(() => {
     // Stage 1: 아미봉 등장 → 배경 50% 밝아짐
-    armyBombEntrance.value = withDelay(800, withSpring(1, { damping: 14, stiffness: 100 }));
+    armyBombEntrance.value = withDelay(
+      800,
+      withSpring(1, { damping: 14, stiffness: 100 }),
+    );
     bgBrightness.value = withDelay(1200, withTiming(0.5, { duration: 1000 }));
   }, []);
 
   // ⚠️ 수정금지(승인필요) — 인증 완료 → 화이트아웃 → 전환 (전문가 검증: withTiming callback 사용)
-  const handleAuthComplete = useCallback((provider: string, birthDate: string) => {
-    bgBrightness.value = withTiming(1, { duration: 1200 });
-    whiteout.value = withDelay(1500, withTiming(1, { duration: 600 }, (finished) => {
-      if (finished) {
-        runOnJS(navigateNext)();
-      }
-    }));
-  }, []);
+  const handleAuthComplete = useCallback(
+    (provider: string, birthDate: string) => {
+      bgBrightness.value = withTiming(1, { duration: 1200 });
+      whiteout.value = withDelay(
+        1500,
+        withTiming(1, { duration: 600 }, (finished) => {
+          if (finished) {
+            runOnJS(navigateNext)();
+          }
+        }),
+      );
+    },
+    [],
+  );
 
   const navigateNext = useCallback(() => {
     // TODO: navigation.replace("BTSHome", { city: "goyang" })
@@ -65,7 +74,12 @@ export function BTSLandingScreenA1() {
 
   // ⚠️ 수정금지(승인필요) — 보라색 글로우 오버레이 (조도 단계별)
   const glowOverlayStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(bgBrightness.value, [0, 0.5, 0.7, 1], [0, 0.2, 0.4, 0.8], Extrapolation.CLAMP),
+    opacity: interpolate(
+      bgBrightness.value,
+      [0, 0.5, 0.7, 1],
+      [0, 0.2, 0.4, 0.8],
+      Extrapolation.CLAMP,
+    ),
   }));
 
   const whiteoutStyle = useAnimatedStyle(() => ({
@@ -74,15 +88,29 @@ export function BTSLandingScreenA1() {
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      <StatusBar
+        barStyle="light-content"
+        translucent
+        backgroundColor="transparent"
+      />
 
       {/* Layer 0: 코발트 블루 배경 */}
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: COBALT_DEEP }]} />
+      <View
+        style={[StyleSheet.absoluteFill, { backgroundColor: COBALT_DEEP }]}
+      />
 
       {/* Layer 1: 보라색 글로우 (아미봉 빛 전파 — 조도 단계별) */}
-      <Animated.View style={[StyleSheet.absoluteFill, glowOverlayStyle]} pointerEvents="none">
+      <Animated.View
+        style={[StyleSheet.absoluteFill, glowOverlayStyle]}
+        pointerEvents="none"
+      >
         <LinearGradient
-          colors={["transparent", "rgba(108,45,199,0.6)", "rgba(155,89,182,0.3)", "transparent"]}
+          colors={[
+            "transparent",
+            "rgba(108,45,199,0.6)",
+            "rgba(155,89,182,0.3)",
+            "transparent",
+          ]}
           style={StyleSheet.absoluteFill}
           start={{ x: 0.5, y: 0.8 }}
           end={{ x: 0.5, y: 0 }}

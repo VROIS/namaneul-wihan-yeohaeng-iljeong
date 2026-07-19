@@ -85,8 +85,11 @@ export function useAccommodations({
                     returnTransit: result.returnTransit,
                     transit: (result as any).transit || (d as any).transit,
                     // 🧠 2026-07-04 사장님 SSOT = 화면이 읽는 가격·교통표시 갱신 = 숙소 재계산 후 가이드칩·교통비 실제 반영(버그① 해소).
-                    dailyCost: (result as any).dailyCost || (d as any).dailyCost,
-                    transportDisplay: (result as any).transportDisplay || (d as any).transportDisplay,
+                    dailyCost:
+                      (result as any).dailyCost || (d as any).dailyCost,
+                    transportDisplay:
+                      (result as any).transportDisplay ||
+                      (d as any).transportDisplay,
                   }
                 : d,
             );
@@ -95,10 +98,7 @@ export function useAccommodations({
         }
       } catch (error) {
         console.error("[TripPlanner] Day 재최적화 실패:", error);
-        Alert.alert(
-          t("common.notice"),
-          t("trip.reoptimizeFailed"),
-        );
+        Alert.alert(t("common.notice"), t("trip.reoptimizeFailed"));
       } finally {
         setIsReoptimizing(false);
       }

@@ -103,7 +103,11 @@ export async function geminiJson<T = any>(
     source: "gemini",
     contextId: opts?.contextId,
     tag: opts?.rawTag || (opts?.googleSearch ? "grounded" : "json"),
-    request: { prompt, model: opts?.model || MODEL_ID, googleSearch: !!opts?.googleSearch },
+    request: {
+      prompt,
+      model: opts?.model || MODEL_ID,
+      googleSearch: !!opts?.googleSearch,
+    },
     // ⚠️ 2026-06-16 사장님 SSOT = parsed(객체)도 저장 = pretty 들여쓰기 먹어 사장님이 원본 눈으로 검수 가능(= text 통짜문자열 한 줄 = 읽기 불가 해소).
     raw: { parsed: data ?? null, text: raw, finishReason },
   });

@@ -23,7 +23,11 @@ type TimelineCardProps = {
   isLast: boolean;
 };
 
-export default function TimelineCard({ place, index, isLast }: TimelineCardProps) {
+export default function TimelineCard({
+  place,
+  index,
+  isLast,
+}: TimelineCardProps) {
   const catColor = CAT_COLORS[place.tags?.[0] || ""] || BTSColors.neonPurple;
   const catEmoji: Record<string, string> = {
     attraction: "🏛️",

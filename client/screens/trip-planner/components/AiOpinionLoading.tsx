@@ -9,7 +9,11 @@ import { useTranslation } from "react-i18next";
 //   → 퍼센트 막대바(가짜 숫자=역효과) 대신, 부정형(indeterminate) 흐름 바 + 시간 기반 정직한 단계 문구.
 //   단계 문구 = 실제 파이프라인에 매칭(살펴봄→그라운딩→검토→정리). 마지막 단계는 응답 늦어도 계속 유지.
 //   크레딧(5) 언급 = 로딩 중엔 없음(사장님 SSOT), 결과 하단에만 조용히.
-export default function AiOpinionLoading({ theme }: { theme: (typeof Colors)["light"] }) {
+export default function AiOpinionLoading({
+  theme,
+}: {
+  theme: (typeof Colors)["light"];
+}) {
   const { t } = useTranslation();
   // 흐름 바 = 좌→우 반복 이동(멈춤 아님 신호). 기존 CrisisAlertBanner의 Animated.loop 패턴 재사용(§16).
   const flowAnim = React.useRef(new Animated.Value(0)).current;

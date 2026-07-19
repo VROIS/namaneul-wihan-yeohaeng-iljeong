@@ -29,8 +29,10 @@ import * as Haptics from "expo-haptics";
 // ⚠️ 수정금지(승인필요) — 웹/네이티브 Haptics 분기
 const triggerHaptic = (type: "light" | "medium" | "success") => {
   try {
-    if (type === "light") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    else if (type === "medium") Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (type === "light")
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    else if (type === "medium")
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     else Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   } catch {}
 };
@@ -55,7 +57,12 @@ interface ArmyBombAuthProps {
   onGlowChange?: (level: number) => void; // 배경 연동 콜백
 }
 
-export function ArmyBombAuth({ onAuthComplete, glowLevel, entranceProgress, onGlowChange }: ArmyBombAuthProps) {
+export function ArmyBombAuth({
+  onAuthComplete,
+  glowLevel,
+  entranceProgress,
+  onGlowChange,
+}: ArmyBombAuthProps) {
   const [birthDate, setBirthDate] = useState("");
   const [birthComplete, setBirthComplete] = useState(false);
 
@@ -67,89 +74,183 @@ export function ArmyBombAuth({ onAuthComplete, glowLevel, entranceProgress, onGl
   }, [onGlowChange]);
 
   // ⚠️ 수정금지(승인필요) — 생년월일 자동 포맷 (DD/MM/YYYY)
-  const handleBirthInput = useCallback((text: string) => {
-    const digits = text.replace(/\D/g, "").slice(0, 8);
-    let formatted = digits;
-    if (digits.length > 2) formatted = digits.slice(0, 2) + " / " + digits.slice(2);
-    if (digits.length > 4) formatted = digits.slice(0, 2) + " / " + digits.slice(2, 4) + " / " + digits.slice(4);
-    setBirthDate(formatted);
+  const handleBirthInput = useCallback(
+    (text: string) => {
+      const digits = text.replace(/\D/g, "").slice(0, 8);
+      let formatted = digits;
+      if (digits.length > 2)
+        formatted = digits.slice(0, 2) + " / " + digits.slice(2);
+      if (digits.length > 4)
+        formatted =
+          digits.slice(0, 2) +
+          " / " +
+          digits.slice(2, 4) +
+          " / " +
+          digits.slice(4);
+      setBirthDate(formatted);
 
-    if (digits.length === 8) {
-      setBirthComplete(true);
-      // 생년월일 완료 → 70% 점등 + 배경 연동
-      glowLevel.value = withSpring(0.7, { damping: 18, stiffness: 90 });
-      onGlowChange?.(0.7);
-      triggerHaptic("medium");
-    } else {
-      setBirthComplete(false);
-    }
-  }, [onGlowChange]);
+      if (digits.length === 8) {
+        setBirthComplete(true);
+        // 생년월일 완료 → 70% 점등 + 배경 연동
+        glowLevel.value = withSpring(0.7, { damping: 18, stiffness: 90 });
+        onGlowChange?.(0.7);
+        triggerHaptic("medium");
+      } else {
+        setBirthComplete(false);
+      }
+    },
+    [onGlowChange],
+  );
 
   // ⚠️ 수정금지(승인필요) — OAuth 터치 = 100% 풀 점등 + 화이트아웃
-  const handleOAuth = useCallback((provider: string) => {
-    glowLevel.value = withSequence(
-      withSpring(1, { damping: 8, stiffness: 200 }),
-      withDelay(500, withTiming(1.2, { duration: 300 }))
-    );
-    onGlowChange?.(1);
-    triggerHaptic("success");
+  const handleOAuth = useCallback(
+    (provider: string) => {
+      glowLevel.value = withSequence(
+        withSpring(1, { damping: 8, stiffness: 200 }),
+        withDelay(500, withTiming(1.2, { duration: 300 })),
+      );
+      onGlowChange?.(1);
+      triggerHaptic("success");
 
-    setTimeout(() => {
-      onAuthComplete(provider, birthDate);
-    }, 2000);
-  }, [birthDate, onGlowChange]);
+      setTimeout(() => {
+        onAuthComplete(provider, birthDate);
+      }, 2000);
+    },
+    [birthDate, onGlowChange],
+  );
 
   // ⚠️ 수정금지(승인필요) — 등장: Apple Maps 바텀시트처럼 스윽 올라옴
   const entranceStyle = useAnimatedStyle(() => ({
     transform: [
-      { translateY: interpolate(entranceProgress.value, [0, 1], [SCREEN_H * 0.6, 0], Extrapolation.CLAMP) },
-      { scale: interpolate(entranceProgress.value, [0, 0.5, 1], [0.85, 0.95, 1], Extrapolation.CLAMP) },
+      {
+        translateY: interpolate(
+          entranceProgress.value,
+          [0, 1],
+          [SCREEN_H * 0.6, 0],
+          Extrapolation.CLAMP,
+        ),
+      },
+      {
+        scale: interpolate(
+          entranceProgress.value,
+          [0, 0.5, 1],
+          [0.85, 0.95, 1],
+          Extrapolation.CLAMP,
+        ),
+      },
     ],
-    opacity: interpolate(entranceProgress.value, [0, 0.2, 0.6, 1], [0, 0.3, 0.8, 1], Extrapolation.CLAMP),
+    opacity: interpolate(
+      entranceProgress.value,
+      [0, 0.2, 0.6, 1],
+      [0, 0.3, 0.8, 1],
+      Extrapolation.CLAMP,
+    ),
   }));
 
   // ⚠️ 수정금지(승인필요) — 외부 글로우 (보라색 전등 — Android/iOS 공통 시각 효과)
   // Android: shadow 안 먹음 → 뒤에 큰 보라색 원으로 글로우 표현
   const outerGlowStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(glowLevel.value, [0, 0.5, 0.7, 1, 1.2], [0, 0.3, 0.5, 0.8, 1], Extrapolation.CLAMP),
+    opacity: interpolate(
+      glowLevel.value,
+      [0, 0.5, 0.7, 1, 1.2],
+      [0, 0.3, 0.5, 0.8, 1],
+      Extrapolation.CLAMP,
+    ),
     transform: [
-      { scale: interpolate(glowLevel.value, [0, 0.5, 1, 1.2], [0.8, 1, 1.15, 1.25], Extrapolation.CLAMP) },
+      {
+        scale: interpolate(
+          glowLevel.value,
+          [0, 0.5, 1, 1.2],
+          [0.8, 1, 1.15, 1.25],
+          Extrapolation.CLAMP,
+        ),
+      },
     ],
   }));
 
   // iOS 전용 shadow (있으면 더 좋고 없어도 outerGlow가 커버)
   const shadowStyle = useAnimatedStyle(() => ({
-    shadowOpacity: interpolate(glowLevel.value, [0, 0.5, 0.7, 1, 1.2], [0, 0.4, 0.7, 1, 1], Extrapolation.CLAMP),
-    shadowRadius: interpolate(glowLevel.value, [0, 0.5, 0.7, 1, 1.2], [0, 20, 40, 70, 90], Extrapolation.CLAMP),
+    shadowOpacity: interpolate(
+      glowLevel.value,
+      [0, 0.5, 0.7, 1, 1.2],
+      [0, 0.4, 0.7, 1, 1],
+      Extrapolation.CLAMP,
+    ),
+    shadowRadius: interpolate(
+      glowLevel.value,
+      [0, 0.5, 0.7, 1, 1.2],
+      [0, 20, 40, 70, 90],
+      Extrapolation.CLAMP,
+    ),
   }));
 
   // ⚠️ 수정금지(승인필요) — 머리 전등 효과: 색상이 변하면서 밝아짐
   const headGlowStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(glowLevel.value, [0, 0.3, 0.5, 0.7, 1, 1.2], [0, 0.1, 0.2, 0.4, 0.65, 0.85], Extrapolation.CLAMP),
+    opacity: interpolate(
+      glowLevel.value,
+      [0, 0.3, 0.5, 0.7, 1, 1.2],
+      [0, 0.1, 0.2, 0.4, 0.65, 0.85],
+      Extrapolation.CLAMP,
+    ),
     backgroundColor: interpolateColor(
       glowLevel.value,
       [0, 0.5, 0.7, 1, 1.2],
-      ["rgba(108,45,199,0.0)", "rgba(108,45,199,0.3)", "rgba(124,58,237,0.5)", "rgba(183,148,244,0.7)", "rgba(255,255,255,0.9)"]
+      [
+        "rgba(108,45,199,0.0)",
+        "rgba(108,45,199,0.3)",
+        "rgba(124,58,237,0.5)",
+        "rgba(183,148,244,0.7)",
+        "rgba(255,255,255,0.9)",
+      ],
     ),
   }));
 
   // ⚠️ 수정금지(승인필요) — 머리 뒤 글로우 링 (전등 빛 확산 — 2겹)
   const glowRing1Style = useAnimatedStyle(() => ({
-    opacity: interpolate(glowLevel.value, [0, 0.5, 0.7, 1], [0, 0.15, 0.3, 0.5], Extrapolation.CLAMP),
+    opacity: interpolate(
+      glowLevel.value,
+      [0, 0.5, 0.7, 1],
+      [0, 0.15, 0.3, 0.5],
+      Extrapolation.CLAMP,
+    ),
     transform: [
-      { scale: interpolate(glowLevel.value, [0, 0.5, 1], [0.9, 1.05, 1.15], Extrapolation.CLAMP) },
+      {
+        scale: interpolate(
+          glowLevel.value,
+          [0, 0.5, 1],
+          [0.9, 1.05, 1.15],
+          Extrapolation.CLAMP,
+        ),
+      },
     ],
   }));
   const glowRing2Style = useAnimatedStyle(() => ({
-    opacity: interpolate(glowLevel.value, [0, 0.5, 0.7, 1], [0, 0.08, 0.15, 0.3], Extrapolation.CLAMP),
+    opacity: interpolate(
+      glowLevel.value,
+      [0, 0.5, 0.7, 1],
+      [0, 0.08, 0.15, 0.3],
+      Extrapolation.CLAMP,
+    ),
     transform: [
-      { scale: interpolate(glowLevel.value, [0, 0.5, 1], [0.85, 1.1, 1.3], Extrapolation.CLAMP) },
+      {
+        scale: interpolate(
+          glowLevel.value,
+          [0, 0.5, 1],
+          [0.85, 1.1, 1.3],
+          Extrapolation.CLAMP,
+        ),
+      },
     ],
   }));
 
   // ⚠️ 수정금지(승인필요) — 손잡이 내부 보라빛 오버레이
   const handleGlowStyle = useAnimatedStyle(() => ({
-    opacity: interpolate(glowLevel.value, [0, 0.5, 0.7, 1, 1.2], [0, 0.08, 0.2, 0.4, 0.6], Extrapolation.CLAMP),
+    opacity: interpolate(
+      glowLevel.value,
+      [0, 0.5, 0.7, 1, 1.2],
+      [0, 0.08, 0.2, 0.4, 0.6],
+      Extrapolation.CLAMP,
+    ),
   }));
 
   const isDisabled = !birthComplete;
@@ -210,7 +311,11 @@ export function ArmyBombAuth({ onAuthComplete, glowLevel, entranceProgress, onGl
           <View style={styles.oauthSection}>
             {/* Google */}
             <TouchableOpacity
-              style={[styles.oauthBtn, styles.googleBtn, isDisabled && styles.disabledBtn]}
+              style={[
+                styles.oauthBtn,
+                styles.googleBtn,
+                isDisabled && styles.disabledBtn,
+              ]}
               onPress={() => handleOAuth("google")}
               disabled={isDisabled}
               activeOpacity={0.8}
@@ -222,7 +327,11 @@ export function ArmyBombAuth({ onAuthComplete, glowLevel, entranceProgress, onGl
 
             {/* Kakao */}
             <TouchableOpacity
-              style={[styles.oauthBtn, styles.kakaoBtn, isDisabled && styles.disabledBtn]}
+              style={[
+                styles.oauthBtn,
+                styles.kakaoBtn,
+                isDisabled && styles.disabledBtn,
+              ]}
               onPress={() => handleOAuth("kakao")}
               disabled={isDisabled}
               activeOpacity={0.8}
@@ -235,7 +344,11 @@ export function ArmyBombAuth({ onAuthComplete, glowLevel, entranceProgress, onGl
             {/* Apple (iOS only) */}
             {Platform.OS === "ios" && (
               <TouchableOpacity
-                style={[styles.oauthBtn, styles.appleBtn, isDisabled && styles.disabledBtn]}
+                style={[
+                  styles.oauthBtn,
+                  styles.appleBtn,
+                  isDisabled && styles.disabledBtn,
+                ]}
                 onPress={() => handleOAuth("apple")}
                 disabled={isDisabled}
                 activeOpacity={0.8}

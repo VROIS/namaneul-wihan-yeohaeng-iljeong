@@ -1,34 +1,35 @@
-const { Client } = require('pg');
-const { from: copyFrom } = require('pg-copy-streams');
-const fs = require('fs');
-const path = require('path');
+const { Client } = require("pg");
+const { from: copyFrom } = require("pg-copy-streams");
+const fs = require("fs");
+const path = require("path");
 
-const connectionString = 'postgresql://postgres:Vrois%4075015@db.wxebceflvuythuodemro.supabase.co:5432/postgres';
+const connectionString =
+  "postgresql://postgres:Vrois%4075015@db.wxebceflvuythuodemro.supabase.co:5432/postgres";
 
 async function main() {
-  const client = new Client({ 
+  const client = new Client({
     connectionString,
     connectionTimeoutMillis: 30000,
-    query_timeout: 60000
+    query_timeout: 60000,
   });
 
-  const sqlPath = path.join(__dirname, '..', 'backup_clean.sql');
-  let raw = fs.readFileSync(sqlPath, 'utf8');
-  raw = raw.replace(/^\uFEFF/, '');
+  const sqlPath = path.join(__dirname, "..", "backup_clean.sql");
+  let raw = fs.readFileSync(sqlPath, "utf8");
+  raw = raw.replace(/^\uFEFF/, "");
   const lines = raw.split(/\r?\n/);
 
-  console.log('Parsing SQL file...');
-  
+  console.log("Parsing SQL file...");
+
   // Collect all COPY statements
   const tables = [];
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    if (line.startsWith('COPY ')) {
+    if (line.startsWith("COPY ")) {
       const copyCommand = line;
-      const tableName = line.match(/COPY public\.(\w+)/)?.[1] || 'unknown';
+      const tableName = line.match(/COPY public\.(\w+)/)?.[1] || "unknown";
       const dataLines = [];
       i++;
-      while (i < lines.length && lines[i] !== '\\.') {
+      while (i < lines.length && lines[i] !== "\\.") {
         dataLines.push(lines[i]);
         i++;
       }
@@ -37,11 +38,11 @@ async function main() {
   }
 
   console.log(`Found ${tables.length} tables`);
-  console.log('Connecting...');
-  
+  console.log("Connecting...");
+
   try {
     await client.connect();
-    console.log('Connected!\n');
+    console.log("Connected!\n");
 
     let totalRows = 0;
     for (const table of tables) {
@@ -50,13 +51,13 @@ async function main() {
         continue;
       }
 
-      const copyData = table.dataLines.join('\n') + '\n';
-      
+      const copyData = table.dataLines.join("\n") + "\n";
+
       try {
         await new Promise((resolve, reject) => {
           const stream = client.query(copyFrom(table.copyCommand));
-          stream.on('error', reject);
-          stream.on('end', resolve);
+          stream.on("error", reject);
+          stream.on("end", resolve);
           stream.write(copyData);
           stream.end();
         });
@@ -68,9 +69,8 @@ async function main() {
     }
 
     console.log(`\n✅ Done! Total: ${totalRows} rows`);
-
   } catch (error) {
-    console.error('Connection error:', error.message);
+    console.error("Connection error:", error.message);
   } finally {
     await client.end();
   }

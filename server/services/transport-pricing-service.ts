@@ -26,21 +26,34 @@
  *   이 파일 = 진입 경로 유지용 배럴 + 메인 오케스트레이터(calculateTransportPrice) 단독 보유.
  */
 
-import { COMPANION_TO_TRANSPORT, PARIS_TRANSIT_FARES, UBER_PARIS_FARES } from './transport/constants';
+import {
+  COMPANION_TO_TRANSPORT,
+  PARIS_TRANSIT_FARES,
+  UBER_PARIS_FARES,
+} from "./transport/constants";
 import type {
   TransportPriceInput,
   GuidePriceResult,
   TransitPriceResult,
   TransportPricingResult,
-} from './transport/constants';
-import { round2, shouldApplyGuidePrice, calculateGuideDailyPrice, getGuidePerPersonPerDay } from './transport/guide-pricing';
+} from "./transport/constants";
+import {
+  round2,
+  shouldApplyGuidePrice,
+  calculateGuideDailyPrice,
+  getGuidePerPersonPerDay,
+} from "./transport/guide-pricing";
 import {
   calculateTransitPerPersonPerDay,
   calculateUberXDailyPerPerson,
   calculateUberBlackHourly,
   calculateUberBlackForRoutes,
-} from './transport/transit-pricing';
-import { buildDayConfig, guideCostForDay, getAirportTransferPrice } from './transport/day-config';
+} from "./transport/transit-pricing";
+import {
+  buildDayConfig,
+  guideCostForDay,
+  getAirportTransferPrice,
+} from "./transport/day-config";
 
 // === 재수출 (진입 파일 경로·이름 유지 = importer 무수정) ===
 export type {
@@ -49,13 +62,22 @@ export type {
   TransitPriceResult,
   TransportPricingResult,
   UberBlackComparison,
-} from './transport/constants';
-export { round2, shouldApplyGuidePrice, calculateGuideDailyPrice, getGuidePerPersonPerDay } from './transport/guide-pricing';
+} from "./transport/constants";
+export {
+  round2,
+  shouldApplyGuidePrice,
+  calculateGuideDailyPrice,
+  getGuidePerPersonPerDay,
+} from "./transport/guide-pricing";
 export {
   calculateUberBlackHourly,
   calculateUberBlackForRoutes, // @deprecated → calculateUberBlackHourly 사용
-} from './transport/transit-pricing';
-export { buildDayConfig, guideCostForDay, getAirportTransferPrice } from './transport/day-config';
+} from "./transport/transit-pricing";
+export {
+  buildDayConfig,
+  guideCostForDay,
+  getAirportTransferPrice,
+} from "./transport/day-config";
 
 // ===================================================================
 // 🎯 메인: 교통비 산정 (카테고리 자동 분류)
@@ -67,8 +89,18 @@ export { buildDayConfig, guideCostForDay, getAirportTransferPrice } from './tran
  * - 모든 가격은 1인 1일 기준 (OTA 방식)
  * - 차량 전체 가격 표시 안 함
  */
-export async function calculateTransportPrice(input: TransportPriceInput): Promise<TransportPricingResult> {
-  const { companionType, companionCount, mobilityStyle, travelStyle, availableHours, dayCount, isRegionalTravel } = input;
+export async function calculateTransportPrice(
+  input: TransportPriceInput,
+): Promise<TransportPricingResult> {
+  const {
+    companionType,
+    companionCount,
+    mobilityStyle,
+    travelStyle,
+    availableHours,
+    dayCount,
+    isRegionalTravel,
+  } = input;
 
   const isGuide = shouldApplyGuidePrice(mobilityStyle, travelStyle);
   const config = COMPANION_TO_TRANSPORT[companionType];
@@ -79,32 +111,41 @@ export async function calculateTransportPrice(input: TransportPriceInput): Promi
   // ═══════════════════════════════════════════════════════════════════
   if (isGuide) {
     const { dailyVehiclePrice } = await calculateGuideDailyPrice(
-      transportType, availableHours, isRegionalTravel || false,
+      transportType,
+      availableHours,
+      isRegionalTravel || false,
     );
     const perPersonPerDay = round2(dailyVehiclePrice / companionCount);
 
-    const vehicleDescription = transportType === 'sedan' ? '전용 세단 (1-4인)'
-      : transportType === 'van' ? '전용 밴 (5-7인)'
-      : transportType === 'minibus' ? '전용 미니버스 (8인+)'
-      : '가이드 서비스';
+    const vehicleDescription =
+      transportType === "sedan"
+        ? "전용 세단 (1-4인)"
+        : transportType === "van"
+          ? "전용 밴 (5-7인)"
+          : transportType === "minibus"
+            ? "전용 미니버스 (8인+)"
+            : "가이드 서비스";
 
     const notes: string[] = [];
 
-    if (mobilityStyle === 'Minimal' && (travelStyle === 'Premium' || travelStyle === 'Luxury')) {
-      notes.push('이동 최소화 + 프리미엄/럭셔리');
-    } else if (mobilityStyle === 'Minimal') {
-      notes.push('이동 최소화 → 전용 드라이빙 가이드');
+    if (
+      mobilityStyle === "Minimal" &&
+      (travelStyle === "Premium" || travelStyle === "Luxury")
+    ) {
+      notes.push("이동 최소화 + 프리미엄/럭셔리");
+    } else if (mobilityStyle === "Minimal") {
+      notes.push("이동 최소화 → 전용 드라이빙 가이드");
     } else {
       notes.push(`${travelStyle} → 전용 드라이빙 가이드 포함`);
     }
 
     notes.push(`${availableHours}시간 기준, 200km 포함`);
     if (isRegionalTravel) {
-      notes.push('지방/도시 간 이동 포함 (+50%)');
+      notes.push("지방/도시 간 이동 포함 (+50%)");
     }
 
     return {
-      category: 'guide',
+      category: "guide",
       perPersonPerDay,
       vehicleType: transportType,
       vehicleDescription,
@@ -114,7 +155,7 @@ export async function calculateTransportPrice(input: TransportPriceInput): Promi
       dailyVehiclePrice,
       dayCount,
       companionCount,
-      segmentLabel: '전용차량이동',
+      segmentLabel: "전용차량이동",
       notes,
     } as GuidePriceResult;
   }
@@ -125,16 +166,19 @@ export async function calculateTransportPrice(input: TransportPriceInput): Promi
 
   // 가이드 업셀 가격 계산 (비교용)
   const guideUpsell = await getGuidePerPersonPerDay(
-    companionType, companionCount, availableHours, false,
+    companionType,
+    companionCount,
+    availableHours,
+    false,
   );
 
-  if (mobilityStyle === 'WalkMore') {
+  if (mobilityStyle === "WalkMore") {
     // 많이 걷기: 대중교통만
     const tripCount = PARIS_TRANSIT_FARES.daily_trips_walkmore;
     const transit = calculateTransitPerPersonPerDay(dayCount, tripCount);
 
     return {
-      category: 'transit',
+      category: "transit",
       perPersonPerDay: transit.perPersonPerDay,
       method: transit.method,
       details: transit.details,
@@ -147,21 +191,28 @@ export async function calculateTransportPrice(input: TransportPriceInput): Promi
       },
       notes: [
         transit.details,
-        '파리 대중교통 2026년 실제 요금',
-        '메트로/버스/RER Zone 1-5',
+        "파리 대중교통 2026년 실제 요금",
+        "메트로/버스/RER Zone 1-5",
       ],
     } as TransitPriceResult;
   }
 
   // 적당히 (Moderate): 대중교통 + UberX 혼합
-  const transitTrips = PARIS_TRANSIT_FARES.daily_trips_moderate - UBER_PARIS_FARES.daily_uber_trips;
+  const transitTrips =
+    PARIS_TRANSIT_FARES.daily_trips_moderate -
+    UBER_PARIS_FARES.daily_uber_trips;
   const transit = calculateTransitPerPersonPerDay(dayCount, transitTrips);
-  const uber = calculateUberXDailyPerPerson(UBER_PARIS_FARES.daily_uber_trips, companionCount);
+  const uber = calculateUberXDailyPerPerson(
+    UBER_PARIS_FARES.daily_uber_trips,
+    companionCount,
+  );
 
-  const perPersonPerDay = round2(transit.perPersonPerDay + uber.perPersonPerDay);
+  const perPersonPerDay = round2(
+    transit.perPersonPerDay + uber.perPersonPerDay,
+  );
 
   return {
-    category: 'transit',
+    category: "transit",
     perPersonPerDay,
     method: `${transit.method} + UberX`,
     details: `대중교통 €${transit.perPersonPerDay}/인/일 + UberX €${uber.perPersonPerDay}/인/일`,
@@ -175,7 +226,7 @@ export async function calculateTransportPrice(input: TransportPriceInput): Promi
     notes: [
       `대중교통: ${transit.details}`,
       `우버: ${uber.details}`,
-      '파리 2026년 실제 요금',
+      "파리 2026년 실제 요금",
     ],
   } as TransitPriceResult;
 }

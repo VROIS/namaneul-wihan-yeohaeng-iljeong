@@ -8,8 +8,14 @@ import { langModalStyles } from "../langModalStyles";
 import type { ProfileApi } from "../hooks/useProfile";
 
 export default function LanguageModal({ profile }: { profile: ProfileApi }) {
-  const { theme, t, showLanguageModal, setShowLanguageModal, currentLang, handleLanguageChange } =
-    profile;
+  const {
+    theme,
+    t,
+    showLanguageModal,
+    setShowLanguageModal,
+    currentLang,
+    handleLanguageChange,
+  } = profile;
 
   return (
     <Modal
@@ -40,13 +46,15 @@ export default function LanguageModal({ profile }: { profile: ProfileApi }) {
                 style={[
                   langModalStyles.item,
                   currentLang.code === lang.code &&
-                  langModalStyles.itemSelected,
+                    langModalStyles.itemSelected,
                 ]}
                 onPress={() => handleLanguageChange(lang.code)}
               >
                 <Text style={langModalStyles.flag}>{lang.flag}</Text>
                 <View style={langModalStyles.itemText}>
-                  <Text style={[langModalStyles.itemName, { color: theme.text }]}>
+                  <Text
+                    style={[langModalStyles.itemName, { color: theme.text }]}
+                  >
                     {lang.nativeName}
                   </Text>
                   <Text

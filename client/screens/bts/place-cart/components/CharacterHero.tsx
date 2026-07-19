@@ -20,7 +20,8 @@ function CharacterHero({
   w: number;
   h: number;
 }) {
-  const imgSource = BTS_CHARACTER_IMAGES[characterId] || BTS_CHARACTER_IMAGES.collector;
+  const imgSource =
+    BTS_CHARACTER_IMAGES[characterId] || BTS_CHARACTER_IMAGES.collector;
 
   return (
     <View

@@ -23,12 +23,16 @@ export async function matchPlacesWithDB(
   //   = DB Direct(DB-only 경로) 는 이 함수 안 탐(MIX 전용) = 분기 삭제. matchCandidate/buildCandidateIndex import 도 제거.
   const enriched: PlaceResult[] = geminiPlaces.map((place) => {
     // 이미지 = place(Gemini) 우선, 없으면 seedRawMap(100km) 이름키 폴백. 좌표/PID/RC = 흡수(RETURNING) 또는 TS 가 확보.
-    const nameKey = place.name ? place.name.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, "") : "";
+    const nameKey = place.name
+      ? place.name.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, "")
+      : "";
     const seed = seedRawMap?.get(nameKey);
     const finalImg = place.image || (seed ? pickPlaceImage(seed) || "" : "");
     return { ...place, sourceType: "Gemini AI (New)", image: finalImg };
   });
-  console.log(`[AG3] 매칭 폐기(트리거 단일) = ${enriched.length}곳 place 통과 (${Date.now() - _t0}ms)`);
+  console.log(
+    `[AG3] 매칭 폐기(트리거 단일) = ${enriched.length}곳 place 통과 (${Date.now() - _t0}ms)`,
+  );
 
   // 🗑️ 2026-07-18 §0/§19 = Instagram 깨진 URL 필터 + Wikipedia 실시간 이미지 보강 완전삭제.
   //   = Instagram = 완전 쓰레기(사장님 SSOT, DB 605건 옛 레거시) / Wikipedia 보강 = 죽은 코드(호출부 skipImageEnrich=true 고정).

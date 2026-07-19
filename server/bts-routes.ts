@@ -7,8 +7,14 @@ import type { Express } from "express";
 import { db } from "./db";
 import { cities, placeSeedRaw } from "../shared/schema";
 import { isNotNull, asc, desc, eq, and, inArray, sql } from "drizzle-orm";
-import { optimizeBTSRoute, type PlaceForOptimization } from "./services/bts-gemini";
-import { pickRestaurantBySegment, pickRestaurantNearVenue } from "./services/route-matcher";
+import {
+  optimizeBTSRoute,
+  type PlaceForOptimization,
+} from "./services/bts-gemini";
+import {
+  pickRestaurantBySegment,
+  pickRestaurantNearVenue,
+} from "./services/route-matcher";
 import {
   CHARACTER_PRIMARY_CATEGORY,
   COMPANION_VIBE_CATEGORIES,
@@ -44,7 +50,8 @@ const _IMG_CACHE_MAX = 500;
 function _imgCacheSet(url: string, ok: boolean): void {
   if (_imgAliveCache.size >= _IMG_CACHE_MAX) {
     const cutoff = Date.now() - _IMG_CACHE_TTL;
-    for (const [k, v] of _imgAliveCache) if (v.t < cutoff) _imgAliveCache.delete(k);
+    for (const [k, v] of _imgAliveCache)
+      if (v.t < cutoff) _imgAliveCache.delete(k);
     if (_imgAliveCache.size >= _IMG_CACHE_MAX) {
       const oldest = _imgAliveCache.keys().next().value;
       if (oldest) _imgAliveCache.delete(oldest);
@@ -79,9 +86,11 @@ function effectiveImage(p: PlaceRow | null | undefined): string | null {
 // 깨진 이미지 row = 클라이언트 expo-image cover fit + native UA 헤더 = 1 주일 노하우 그대로 처리.
 async function pickAliveFrom<T extends PlaceRow>(
   candidates: T[],
-  used: Set<number>
+  used: Set<number>,
 ): Promise<T | null> {
-  const eligible = candidates.filter((c) => !used.has(c.id) && !!effectiveImage(c));
+  const eligible = candidates.filter(
+    (c) => !used.has(c.id) && !!effectiveImage(c),
+  );
   return eligible[0] || null;
 }
 
@@ -100,7 +109,8 @@ export function registerBtsRoutes(app: Express): void {
   // ─── GET /api/bts/next-concert — 다음 공연 도시/날짜 자동 계산 ───
   app.get("/api/bts/next-concert", async (_req, res) => {
     try {
-      if (!db) return res.status(503).json({ error: "Database not configured" });
+      if (!db)
+        return res.status(503).json({ error: "Database not configured" });
       // ⚠️ 수정금지(승인필요) — 2026-04-26 단일 SSOT: venue = place_seed_raw LEFT JOIN (seed_category='bts_venue')
       const rows = await db
         .select({
@@ -118,21 +128,30 @@ export function registerBtsRoutes(app: Express): void {
             eq(placeSeedRaw.cityId, cities.id),
             eq(placeSeedRaw.seedCategory, "bts_venue"),
             // ⚠️ 2026-05-23 = collection_phase 폐기 = phase_tags 'bts2026' 마커로 대체
-            sql`'bts2026' = ANY(COALESCE(${placeSeedRaw.phaseTags}, ARRAY[]::text[]))`
-          )
+            sql`'bts2026' = ANY(COALESCE(${placeSeedRaw.phaseTags}, ARRAY[]::text[]))`,
+          ),
         )
         .where(isNotNull(cities.btsRank))
         .orderBy(asc(cities.btsRank));
 
       // ⚠️ 수정금지(승인필요) — 오늘 이후 가장 가까운 공연 찾기
       const today = new Date().toISOString().slice(0, 10);
-      let next: { cityId: number; city: string; cityKo: string; date: string; dDay: number; venue: string | null } | null = null;
+      let next: {
+        cityId: number;
+        city: string;
+        cityKo: string;
+        date: string;
+        dDay: number;
+        venue: string | null;
+      } | null = null;
 
       for (const row of rows) {
         const dates = (row.btsConcertDates || []) as string[];
         for (const d of dates) {
           if (d >= today) {
-            const diff = Math.ceil((new Date(d).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+            const diff = Math.ceil(
+              (new Date(d).getTime() - Date.now()) / (1000 * 60 * 60 * 24),
+            );
             if (!next || d < next.date) {
               next = {
                 cityId: row.id,
@@ -151,7 +170,14 @@ export function registerBtsRoutes(app: Express): void {
       if (!next) {
         // 모든 공연 종료 시 마지막 도시 반환
         const last = rows[rows.length - 1];
-        next = { cityId: last?.id || 0, city: last?.nameEn || "Manila", cityKo: last?.nameKo || "마닐라", date: "2027-03-14", dDay: 0, venue: last?.venueName || null };
+        next = {
+          cityId: last?.id || 0,
+          city: last?.nameEn || "Manila",
+          cityKo: last?.nameKo || "마닐라",
+          date: "2027-03-14",
+          dDay: 0,
+          venue: last?.venueName || null,
+        };
       }
 
       res.json(next);
@@ -165,7 +191,8 @@ export function registerBtsRoutes(app: Express): void {
   // ⚠️ 수정금지(승인필요) — 공연 임박 순 5개 필터링용 nextConcertDate 추가 (2026-04-17)
   app.get("/api/bts/cities", async (_req, res) => {
     try {
-      if (!db) return res.status(503).json({ error: "Database not configured" });
+      if (!db)
+        return res.status(503).json({ error: "Database not configured" });
       const rows = await db
         .select({
           id: cities.id,
@@ -210,7 +237,8 @@ export function registerBtsRoutes(app: Express): void {
   // slot 8 = 저녁 (venue 인근), slot 2,3,4,6,7 = 주 카테고리 vibe 1~5 (companion = 5 카테고리)
   app.get("/api/bts/top-places", async (req, res) => {
     try {
-      if (!db) return res.status(503).json({ error: "Database not configured" });
+      if (!db)
+        return res.status(503).json({ error: "Database not configured" });
       const cityId = parseInt(req.query.cityId as string, 10);
       const memberId = (req.query.memberId as string) || "challenger";
       if (!cityId || isNaN(cityId)) {
@@ -227,9 +255,15 @@ export function registerBtsRoutes(app: Express): void {
       // category_tags=["heritage","restaurant"] 같은 다중 tag row는 = lunch/dinner 자리만 사용.
       // 즉 vibe 검색 시 = 같은 row 가 restaurant tag 도 가지면 vibe slot 에서 제외 (= 식당 카드 중복 차단).
       const byCategoryTag = (tag: string, limit: number) => {
-        const conditions = [cityFilter, sql`${placeSeedRaw.categoryTags} && ARRAY[${tag}]::text[]`, imageNotNull];
+        const conditions = [
+          cityFilter,
+          sql`${placeSeedRaw.categoryTags} && ARRAY[${tag}]::text[]`,
+          imageNotNull,
+        ];
         if (tag !== "restaurant") {
-          conditions.push(sql`NOT (${placeSeedRaw.categoryTags} && ARRAY['restaurant']::text[])`);
+          conditions.push(
+            sql`NOT (${placeSeedRaw.categoryTags} && ARRAY['restaurant']::text[])`,
+          );
         }
         return dbi
           .select(PLACE_COLS)
@@ -253,8 +287,17 @@ export function registerBtsRoutes(app: Express): void {
       const isCompanion = memberId === "companion";
       // companion = 5 카테고리 병렬, 그 외 = 1 카테고리 top 15
       const vibeQuery: Promise<PlaceRow[]> = isCompanion
-        ? Promise.all(COMPANION_VIBE_CATEGORIES.map((c) => byCategoryTag(c, 3).then((r) => r))).then((arr) => arr.flat())
-        : byCategoryTag(CHARACTER_PRIMARY_CATEGORY[memberId as keyof typeof CHARACTER_PRIMARY_CATEGORY] ?? "attraction", 15);
+        ? Promise.all(
+            COMPANION_VIBE_CATEGORIES.map((c) =>
+              byCategoryTag(c, 3).then((r) => r),
+            ),
+          ).then((arr) => arr.flat())
+        : byCategoryTag(
+            CHARACTER_PRIMARY_CATEGORY[
+              memberId as keyof typeof CHARACTER_PRIMARY_CATEGORY
+            ] ?? "attraction",
+            15,
+          );
 
       const [venueRows, vibeRowsAll, restaurantPoolAll] = await Promise.all([
         venueQuery,
@@ -280,24 +323,30 @@ export function registerBtsRoutes(app: Express): void {
       }
 
       // 식당 풀 = 이미 사용된 id 제외 (= HEAD 검증 폐기, fail-open).
-      const restaurantPool = restaurantPoolAll.filter((r) => !usedIds.has(r.id) && !!effectiveImage(r));
+      const restaurantPool = restaurantPoolAll.filter(
+        (r) => !usedIds.has(r.id) && !!effectiveImage(r),
+      );
 
-      const lunch = pickRestaurantBySegment(restaurantPool, vibeSlots[2], vibeSlots[3]);
+      const lunch = pickRestaurantBySegment(
+        restaurantPool,
+        vibeSlots[2],
+        vibeSlots[3],
+      );
       if (lunch) usedIds.add(lunch.id);
       const dinner = pickRestaurantNearVenue(
         restaurantPool.filter((r) => !usedIds.has(r.id)),
-        venue
+        venue,
       );
 
       const slotPlaces: (PlaceRow | null)[] = [
-        venue,          // 1 공연장
-        vibeSlots[0],   // 2
-        vibeSlots[1],   // 3
-        vibeSlots[2],   // 4
-        lunch,          // 5 점심 ★
-        vibeSlots[3],   // 6
-        vibeSlots[4],   // 7
-        dinner,         // 8 저녁 (venue 인근)
+        venue, // 1 공연장
+        vibeSlots[0], // 2
+        vibeSlots[1], // 3
+        vibeSlots[2], // 4
+        lunch, // 5 점심 ★
+        vibeSlots[3], // 6
+        vibeSlots[4], // 7
+        dinner, // 8 저녁 (venue 인근)
       ];
 
       // ⚠️ 수정금지(승인필요) — 카드 노출 필드 7 개 + 좌표 2 개 (= 지도 마커용, 2026-05-06 Screen 4 카트→지도)
@@ -332,23 +381,32 @@ export function registerBtsRoutes(app: Express): void {
   // ⚠️ 수정금지(승인필요) — 2026-05-06 Screen 4 카트→지도 = WebView 안 Google Maps API key 노출
   // QA `/api/config` 패턴과 동일. referrer 제한 = 운영 합의 후 Google Cloud Console 설정.
   app.get("/api/bts/map-config", (_req, res) => {
-    const key = process.env.GOOGLE_MAPS_API_KEY || process.env.Google_maps_api_key || "";
-    if (!key) return res.status(503).json({ error: "Google Maps API key missing" });
+    const key =
+      process.env.GOOGLE_MAPS_API_KEY || process.env.Google_maps_api_key || "";
+    if (!key)
+      return res.status(503).json({ error: "Google Maps API key missing" });
     res.json({ googleMapsApiKey: key });
   });
 
   // ─── POST /api/bts/generate (Gemini AI 보강) ───
   app.post("/api/bts/generate", async (req, res) => {
     try {
-      if (!db) return res.status(503).json({ error: "Database not configured" });
+      if (!db)
+        return res.status(503).json({ error: "Database not configured" });
 
       const { cityId, memberId, selectedPlaceIds } = req.body as {
         cityId: number;
         memberId?: string;
         selectedPlaceIds: number[];
       };
-      if (!cityId || !Array.isArray(selectedPlaceIds) || selectedPlaceIds.length === 0) {
-        return res.status(400).json({ error: "cityId and selectedPlaceIds required" });
+      if (
+        !cityId ||
+        !Array.isArray(selectedPlaceIds) ||
+        selectedPlaceIds.length === 0
+      ) {
+        return res
+          .status(400)
+          .json({ error: "cityId and selectedPlaceIds required" });
       }
 
       // 도시 조회
@@ -359,9 +417,13 @@ export function registerBtsRoutes(app: Express): void {
       if (!cityRow) return res.status(404).json({ error: "City not found" });
 
       // 선택된 장소 조회
-      const ids = selectedPlaceIds.slice(0, 8).filter((n: number) => Number.isInteger(n));
+      const ids = selectedPlaceIds
+        .slice(0, 8)
+        .filter((n: number) => Number.isInteger(n));
       if (ids.length === 0) {
-        return res.status(400).json({ error: "selectedPlaceIds must contain valid ids" });
+        return res
+          .status(400)
+          .json({ error: "selectedPlaceIds must contain valid ids" });
       }
 
       const seeds = await db
@@ -383,8 +445,8 @@ export function registerBtsRoutes(app: Express): void {
             eq(placeSeedRaw.cityId, cityId),
             // ⚠️ 2026-05-23 = collection_phase 폐기 = phase_tags 'bts2026' 마커로 대체
             sql`'bts2026' = ANY(COALESCE(${placeSeedRaw.phaseTags}, ARRAY[]::text[]))`,
-            inArray(placeSeedRaw.id, ids)
-          )
+            inArray(placeSeedRaw.id, ids),
+          ),
         );
 
       // Gemini AI 동선 최적화
@@ -400,7 +462,7 @@ export function registerBtsRoutes(app: Express): void {
       const optimized = await optimizeBTSRoute(
         cityRow.nameEn || cityRow.name,
         characterName,
-        placesForOpt
+        placesForOpt,
       );
 
       // 최종 일정 조립
@@ -430,7 +492,7 @@ export function registerBtsRoutes(app: Express): void {
 
       const totalCost = resultPlaces.reduce(
         (sum, p) => sum + (p.estimatedPriceEur || 0),
-        0
+        0,
       );
 
       const itinerary = {
@@ -451,7 +513,9 @@ export function registerBtsRoutes(app: Express): void {
         ],
       };
 
-      console.log(`[BTS] ✅ 일정 생성: ${cityRow.name} / ${characterName} / ${resultPlaces.length}곳`);
+      console.log(
+        `[BTS] ✅ 일정 생성: ${cityRow.name} / ${characterName} / ${resultPlaces.length}곳`,
+      );
       res.json(itinerary);
     } catch (err) {
       console.error("[BTS] POST /api/bts/generate error:", err);

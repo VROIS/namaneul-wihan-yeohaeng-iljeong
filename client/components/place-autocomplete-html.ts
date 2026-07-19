@@ -78,7 +78,9 @@ gmp-place-autocomplete { width: 100%; display: block; }
     try {
       const { PlaceAutocompleteElement } = await google.maps.importLibrary("places");
       const ac = new PlaceAutocompleteElement(${
-        includedPrimaryTypes ? `{ includedPrimaryTypes: ["${includedPrimaryTypes}"] }` : "{}"
+        includedPrimaryTypes
+          ? `{ includedPrimaryTypes: ["${includedPrimaryTypes}"] }`
+          : "{}"
       });
       ${placeholder ? `try { ac.placeholder = ${JSON.stringify(placeholder)}; } catch(e) {}` : ""}
       ${cityPrefix ? `try { ac.value = ${JSON.stringify(cityPrefix)}; } catch(e) {}` : ""}

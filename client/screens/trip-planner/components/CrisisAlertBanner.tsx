@@ -1,6 +1,13 @@
 // 위기 경보 깜박이 배너 = TripPlannerScreen 분리(2026-07-15 §0 슬림화, 순수 이동)
 import React from "react";
-import { View, Text, Pressable, StyleSheet, Animated, Easing } from "react-native";
+import {
+  View,
+  Text,
+  Pressable,
+  StyleSheet,
+  Animated,
+  Easing,
+} from "react-native";
 import { Fonts } from "@/constants/theme";
 import Icon from "@/components/Icon";
 import { CrisisAlert } from "@/types/trip";

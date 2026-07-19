@@ -2,7 +2,11 @@
 import { haversineKm } from "../agents/transit-haversine";
 import { MEAL_BUDGET, type TravelStyle } from "../agents/types";
 import { PACE_CONFIG, type PlaceResult, type TravelPace } from "./types";
-import { isFoodPlace, calculateRestaurantScore, minutesToTime } from "./helpers";
+import {
+  isFoodPlace,
+  calculateRestaurantScore,
+  minutesToTime,
+} from "./helpers";
 
 /**
  * 사용자 시간 기반으로 장소를 슬롯에 분배
@@ -70,7 +74,7 @@ export async function distributePlacesWithUserTime(
   // = dayCount 기반 zone = Day 1 core / Day 2 outskirt / Day 3+ mixed = 자연 클러스터링
 
   const dayCount = daySlotsConfig.length;
-  const dayZoneMap: Array<"core" | "outskirt" | "mixed"> = [];
+  const dayZoneMap: ("core" | "outskirt" | "mixed")[] = [];
   for (let d = 0; d < dayCount; d++) {
     if (dayCount === 1) dayZoneMap.push("core");
     else if (d === 0) dayZoneMap.push("core");

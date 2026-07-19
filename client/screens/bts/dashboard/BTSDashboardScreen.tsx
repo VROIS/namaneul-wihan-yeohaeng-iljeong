@@ -40,7 +40,8 @@ const { width: SCREEN_W } = Dimensions.get("window");
 // ─── Main Screen ───
 export default function BTSDashboardScreen() {
   const insets = useSafeAreaInsets();
-  const navigation = useNavigation<NativeStackNavigationProp<BTSStackParamList>>();
+  const navigation =
+    useNavigation<NativeStackNavigationProp<BTSStackParamList>>();
   const { itinerary, selectedCharacter, reset } = useBTS();
   const scrollX = useSharedValue(0);
 
@@ -49,7 +50,9 @@ export default function BTSDashboardScreen() {
 
   const handleShare = useCallback(async () => {
     if (!itinerary) return;
-    const placeList = places.map((p) => `  ${p.startTime} ${p.name}`).join("\n");
+    const placeList = places
+      .map((p) => `  ${p.startTime} ${p.name}`)
+      .join("\n");
     try {
       await Share.share({
         message: `🎵 ${itinerary.title}\n\n${placeList}\n\n#TRIPIS #BTS투어 #방탄투어`,
@@ -95,7 +98,10 @@ export default function BTSDashboardScreen() {
         contentContainerStyle={{ paddingBottom: insets.bottom + 100 }}
       >
         {/* 릴스 프리뷰 */}
-        <Animated.View entering={FadeInUp.delay(200)} style={styles.reelsSection}>
+        <Animated.View
+          entering={FadeInUp.delay(200)}
+          style={styles.reelsSection}
+        >
           <Text style={styles.sectionTitle}>미리보기</Text>
           <Text style={styles.sectionSub}>스와이프해서 장소를 탐색하세요</Text>
 
@@ -122,7 +128,10 @@ export default function BTSDashboardScreen() {
         </Animated.View>
 
         {/* 스마트 타임라인 */}
-        <Animated.View entering={FadeInUp.delay(400)} style={styles.timelineSection}>
+        <Animated.View
+          entering={FadeInUp.delay(400)}
+          style={styles.timelineSection}
+        >
           <Text style={styles.sectionTitle}>스마트 타임라인</Text>
           <Text style={styles.sectionSub}>
             {day?.city} · {places.length}곳 · {selectedCharacter?.name} 바이브
@@ -139,7 +148,10 @@ export default function BTSDashboardScreen() {
         </Animated.View>
 
         {/* 요약 */}
-        <Animated.View entering={FadeInUp.delay(600)} style={styles.summarySection}>
+        <Animated.View
+          entering={FadeInUp.delay(600)}
+          style={styles.summarySection}
+        >
           <LinearGradient
             colors={[BTSColors.purpleGlowLight, "transparent"]}
             style={styles.summaryCard}
@@ -147,10 +159,13 @@ export default function BTSDashboardScreen() {
             <Text style={styles.summaryTitle}>📊 여행 요약</Text>
             <View style={styles.summaryRow}>
               <SummaryItem label="장소" value={`${places.length}곳`} />
-              <SummaryItem label="예상 시간" value={`${places.length * 1.5}시간`} />
+              <SummaryItem
+                label="예상 시간"
+                value={`${places.length * 1.5}시간`}
+              />
               <SummaryItem
                 label="예상 비용"
-                value={`€${places.reduce((sum, p) => sum + (parseFloat(p.priceEstimate?.replace("€", "") || "0")), 0).toFixed(0)}`}
+                value={`€${places.reduce((sum, p) => sum + parseFloat(p.priceEstimate?.replace("€", "") || "0"), 0).toFixed(0)}`}
               />
             </View>
           </LinearGradient>
@@ -158,7 +173,9 @@ export default function BTSDashboardScreen() {
       </ScrollView>
 
       {/* 하단 액션 버튼 */}
-      <View style={[styles.bottomActions, { paddingBottom: insets.bottom + 16 }]}>
+      <View
+        style={[styles.bottomActions, { paddingBottom: insets.bottom + 16 }]}
+      >
         <Pressable onPress={handleRestart} style={styles.secondaryBtn}>
           <Text style={styles.secondaryBtnText}>처음부터 다시</Text>
         </Pressable>

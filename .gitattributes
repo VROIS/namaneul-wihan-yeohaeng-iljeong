@@ -1,1 +1,15 @@
 .replit merge=keep-ours
+
+# ⚠️ 수정금지(승인필요) 2026-07-19 사장님 SSOT = 줄바꿈 LF 통일 (§22 lint CRLF 지옥 근본해결).
+# = Windows(core.autocrlf=true) 가 CRLF 로 바꿔 prettier/eslint 오류 수천개 발생하던 것 = 여기서 LF 강제.
+# = 코드/문서 소스만 LF (eslint·prettier 대상). .bat(Windows 배치)·.replit(§13 보호)·.sql·.yml 등은 자동판별로 두어 안 건드림.
+* text=auto
+*.ts text eol=lf
+*.tsx text eol=lf
+*.js text eol=lf
+*.jsx text eol=lf
+*.mjs text eol=lf
+*.cjs text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.css text eol=lf

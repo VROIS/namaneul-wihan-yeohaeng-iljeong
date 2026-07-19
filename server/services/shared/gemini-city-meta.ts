@@ -5,7 +5,7 @@
  * = 실패 = null (= 도시 미존재 = caller 가 매칭 null 반환)
  */
 
-import { geminiJson } from './geminiClient';
+import { geminiJson } from "./geminiClient";
 
 export interface CityMeta {
   nameKo: string;
@@ -19,7 +19,9 @@ export interface CityMeta {
   primaryLanguage: string;
 }
 
-export async function fetchCityMetaFromGemini(input: string): Promise<CityMeta | null> {
+export async function fetchCityMetaFromGemini(
+  input: string,
+): Promise<CityMeta | null> {
   const prompt = `역할: 너는 도시 메타데이터 전문가야.
 
 ⚠️ 응답 근거 = **Google Search 그라운딩 기반** = 검증된 사실만 사용 = 추정/환각 금지.
@@ -48,7 +50,8 @@ export async function fetchCityMetaFromGemini(input: string): Promise<CityMeta |
   try {
     const { data } = await geminiJson<any>(prompt, { googleSearch: true });
     if (!data || data.exists === false) return null;
-    if (!data.nameEn || !data.latitude || !data.longitude || !data.countryCode) return null;
+    if (!data.nameEn || !data.latitude || !data.longitude || !data.countryCode)
+      return null;
     return {
       nameKo: data.nameKo || data.nameEn,
       nameEn: data.nameEn,
@@ -57,8 +60,8 @@ export async function fetchCityMetaFromGemini(input: string): Promise<CityMeta |
       country: data.country || data.countryCode,
       latitude: Number(data.latitude),
       longitude: Number(data.longitude),
-      timezone: data.timezone || 'UTC',
-      primaryLanguage: data.primaryLanguage || 'en',
+      timezone: data.timezone || "UTC",
+      primaryLanguage: data.primaryLanguage || "en",
     };
   } catch (e: any) {
     console.error(`[CityMeta] Gemini 호출 실패 "${input}":`, e?.message || e);

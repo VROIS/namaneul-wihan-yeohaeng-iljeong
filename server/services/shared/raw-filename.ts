@@ -1,5 +1,5 @@
-import crypto from 'crypto'; // ⚠️ 수정금지(승인필요) — raw 버전순번 헬퍼(2026-06-16 사장님 SSOT) = md5 해시용
-import fs from 'fs';          // ⚠️ 수정금지(승인필요) — raw 버전순번 헬퍼(2026-06-16 사장님 SSOT) = 디렉토리 동기 스캔용
+import crypto from "crypto"; // ⚠️ 수정금지(승인필요) — raw 버전순번 헬퍼(2026-06-16 사장님 SSOT) = md5 해시용
+import fs from "fs"; // ⚠️ 수정금지(승인필요) — raw 버전순번 헬퍼(2026-06-16 사장님 SSOT) = 디렉토리 동기 스캔용
 
 // ⚠️ 수정금지(승인필요) 2026-06-15 사장님 SSOT = docs/raw 산출물 파일명 단일 표준 (= 장독 형식 정비).
 //   = 표준: {YYYY-MM-DD}_{NN-단계명}_{내용}.json  (날짜 앞 = 시간순 정렬·찾기 / 단계번호 = 그룹 / 내용 = 식별)
@@ -8,7 +8,8 @@ import fs from 'fs';          // ⚠️ 수정금지(승인필요) — raw 버�
 //   = 13 단계 run.ts 가 모두 이 1벌 호출 = 향후 변경 1곳 (= 헌법 §16 영구 컴포넌트, 제각각 하드코딩 폐기).
 
 /** 오늘 날짜 YYYY-MM-DD (= 모든 산출물 공용). 인자로 주면 그 날짜 사용(= post-process --date 호환). */
-export const rawDate = (d?: string): string => d || new Date().toISOString().slice(0, 10);
+export const rawDate = (d?: string): string =>
+  d || new Date().toISOString().slice(0, 10);
 
 /**
  * 표준 산출물 파일명 생성 = {date}_{NN-step}_{content}.json
@@ -19,9 +20,14 @@ export const rawDate = (d?: string): string => d || new Date().toISOString().sli
  * 예) rawName(2,'enrich-place','batch-0') → '2026-06-15_02-enrich-place_batch-0.json'
  *     rawName(6,'ts-pm-enrich','candidates') → '2026-06-15_06-ts-pm-enrich_candidates.json'
  */
-export function rawName(stepNum: number, stepName: string, content?: string, date?: string): string {
-  const nn = String(stepNum).padStart(2, '0');
-  const tail = content && content.trim() ? `_${content.trim()}` : '';
+export function rawName(
+  stepNum: number,
+  stepName: string,
+  content?: string,
+  date?: string,
+): string {
+  const nn = String(stepNum).padStart(2, "0");
+  const tail = content && content.trim() ? `_${content.trim()}` : "";
   return `${rawDate(date)}_${nn}-${stepName}${tail}.json`;
 }
 
@@ -35,7 +41,7 @@ export function rawName(stepNum: number, stepName: string, content?: string, dat
 const RAW_NAME_RE = /^(.*?)(?:_(\d+))?\.json$/;
 function parseRawName(name: string): { base: string; n: number } | null {
   const m = name.match(RAW_NAME_RE);
-  if (!m) return null;                                  // .json 아니면 raw 산출물 아님
+  if (!m) return null; // .json 아니면 raw 산출물 아님
   return { base: m[1], n: m[2] != null ? parseInt(m[2], 10) : 0 }; // 무순번 = 0 취급
 }
 
@@ -45,7 +51,10 @@ function parseRawName(name: string): { base: string; n: number } | null {
  */
 // ⚠️ 수정금지(승인필요) — raw 버전순번 헬퍼(2026-06-16 사장님 SSOT)
 export function rawHash(rawPart: unknown): string {
-  return crypto.createHash('md5').update(JSON.stringify(rawPart ?? {})).digest('hex');
+  return crypto
+    .createHash("md5")
+    .update(JSON.stringify(rawPart ?? {}))
+    .digest("hex");
 }
 
 /**
@@ -63,9 +72,13 @@ export function versionedName(
   newContentHash: string,
   hashOf: (p: string) => string | null,
 ): string {
-  const base = stemFile.replace(/\.json$/, ''); // 무순번 기본명 (확장자 제거)
+  const base = stemFile.replace(/\.json$/, ""); // 무순번 기본명 (확장자 제거)
   let siblings: string[] = [];
-  try { siblings = fs.readdirSync(dir); } catch { siblings = []; } // 폴더 없으면 첫 호출 취급
+  try {
+    siblings = fs.readdirSync(dir);
+  } catch {
+    siblings = [];
+  } // 폴더 없으면 첫 호출 취급
 
   let maxN = -1; // -1 = 계열 파일 없음 (= 무순번도 없음)
   for (const name of siblings) {
@@ -76,8 +89,8 @@ export function versionedName(
     if (h !== null && h === newContentHash) return name;
     if (p.n > maxN) maxN = p.n;
   }
-  if (maxN < 0) return `${base}.json`;       // 계열 첫 호출 = 무순번
-  return `${base}_${maxN + 1}.json`;          // 이후 호출 = 최대순번+1
+  if (maxN < 0) return `${base}.json`; // 계열 첫 호출 = 무순번
+  return `${base}_${maxN + 1}.json`; // 이후 호출 = 최대순번+1
 }
 
 /**
@@ -88,15 +101,23 @@ export function versionedName(
  */
 // ⚠️ 수정금지(승인필요) — raw 버전순번 헬퍼(2026-06-16 사장님 SSOT)
 export function latestVersioned(dir: string, stemFile: string): string | null {
-  const base = stemFile.replace(/\.json$/, '');
+  const base = stemFile.replace(/\.json$/, "");
   let siblings: string[] = [];
-  try { siblings = fs.readdirSync(dir); } catch { return null; }
+  try {
+    siblings = fs.readdirSync(dir);
+  } catch {
+    return null;
+  }
 
-  let best: string | null = null, bestN = -1;
+  let best: string | null = null,
+    bestN = -1;
   for (const name of siblings) {
     const p = parseRawName(name);
     if (!p || p.base !== base) continue; // 같은 stem 계열만 (= 옛 base 정규식 동치)
-    if (p.n > bestN) { bestN = p.n; best = name; }
+    if (p.n > bestN) {
+      bestN = p.n;
+      best = name;
+    }
   }
   return best;
 }

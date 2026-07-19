@@ -30,7 +30,8 @@ export default function OnboardingScreen() {
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
-  const currentLang = SUPPORTED_LANGS.find((l) => l.code === i18n.language) ?? SUPPORTED_LANGS[0];
+  const currentLang =
+    SUPPORTED_LANGS.find((l) => l.code === i18n.language) ?? SUPPORTED_LANGS[0];
   const [showLanguageModal, setShowLanguageModal] = useState(false);
 
   const [day, setDay] = useState("");
@@ -134,8 +135,6 @@ export default function OnboardingScreen() {
       routes: [{ name: "Main" }],
     });
   };
-
-
 
   return (
     <View style={[styles.container, { backgroundColor: theme.backgroundRoot }]}>
@@ -294,9 +293,7 @@ export default function OnboardingScreen() {
             {dateError ? (
               <Text style={styles.errorText}>{dateError}</Text>
             ) : isDateComplete && !isAdult && age !== null ? (
-              <Text style={styles.errorText}>
-                {t("onboarding.adultOnly")}
-              </Text>
+              <Text style={styles.errorText}>{t("onboarding.adultOnly")}</Text>
             ) : null}
           </View>
 
@@ -316,7 +313,9 @@ export default function OnboardingScreen() {
               <View style={styles.kakaoIcon}>
                 <Text style={styles.kakaoIconText}>K</Text>
               </View>
-              <Text style={styles.kakaoButtonText}>{t("onboarding.kakaoStart")}</Text>
+              <Text style={styles.kakaoButtonText}>
+                {t("onboarding.kakaoStart")}
+              </Text>
             </Pressable>
 
             {/* Google Button */}
