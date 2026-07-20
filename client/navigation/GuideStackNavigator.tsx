@@ -21,8 +21,9 @@ import { useCameraPermissions } from "expo-camera";
 import { fetch as expoFetch } from "expo/fetch";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as Location from "expo-location";
-import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+// 아이콘 = 운영 SVG 직접 렌더 = iOS Expo Go 에서 Ionicons 미표시 근본 해결(2026-07-20 실기기 SSOT).
+import GuideIconJs from "@/screens/guide/components/GuideIcons";
 
 // 레거시 모듈은 JS(무타입) = allowJs 로 import.
 //   = JS 기본값 추론(never[]·필수화)과 충돌하므로 ComponentType<any> 로 배선(타입만, 동작 무관).
@@ -41,6 +42,9 @@ const MainCameraScreen = MainCameraScreenJs as unknown as React.ComponentType<
   Record<string, unknown>
 >;
 const DetailViewer = DetailViewerJs as unknown as React.ComponentType<
+  Record<string, unknown>
+>;
+const GuideIcon = GuideIconJs as unknown as React.ComponentType<
   Record<string, unknown>
 >;
 
@@ -114,7 +118,7 @@ function GuideCameraHost() {
         onPress={() => rootNavigation.goBack()}
         accessibilityLabel="닫기"
       >
-        <Ionicons name="close" size={32} color="#4285F4" />
+        <GuideIcon name="close" size={32} />
       </TouchableOpacity>
     </View>
   );

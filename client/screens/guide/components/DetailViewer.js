@@ -14,9 +14,10 @@ import {
 } from 'react-native';
 import * as Speech from 'expo-speech';
 import * as Haptics from 'expo-haptics';
-import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CONFIG } from '../config/constants';
+// 아이콘 = 운영 SVG 경로 직접 렌더(GuideIcons) = iOS Expo Go 에서 Ionicons 미표시 근본 해결(2026-07-20 실기기 SSOT).
+import GuideIcon from './GuideIcons';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
@@ -56,8 +57,9 @@ export default function DetailViewer({
   const [isPaused, setIsPaused] = useState(false);
   const [currentSentence, setCurrentSentence] = useState(-1);
   const [textVisible, setTextVisible] = useState(true);
-  const [saved, setSaved] = useState(false);
-  const [saving, setSaving] = useState(false);
+  // 저장 상태 = 운영 saveBtn 클론: 'idle'(북마크) → 'saving'(스피너) → 'success'(체크마크 1.5초) → 'idle' 복원(재저장 가능).
+  const [saveState, setSaveState] = useState('idle');
+  const saveTimerRef = useRef(null);
   const textOpacity = useRef(new Animated.Value(1)).current;
   const sentencesRef = useRef([]);
   const currentIdxRef = useRef(-1);
@@ -172,20 +174,34 @@ export default function DetailViewer({
     Animated.timing(textOpacity, { toValue: next ? 1 : 0, duration: 200, useNativeDriver: true }).start();
   }, [textVisible, textOpacity]);
 
-  // ⚠️ 저장 = 운영 인라인 스피너 패턴: onSave(비동기) 성공 시에만 저장 표시.
+  // ⚠️ 저장 = 운영 handleSaveClick 클론(index.js:3051~3130): 스피너 → 성공 시 체크마크 1.5초 후 북마크 복원.
+  //   + 성공 시 음성 안내 "저장되었습니다"(진입화면 버튼 안내와 동일 속도·음성 = 2026-07-20 사장님 지시).
   const handleSave = useCallback(async () => {
-    if (saved || saving || !onSave) return;
-    setSaving(true);
+    if (saveState !== 'idle' || !onSave) return;
+    setSaveState('saving');
     try {
       const ok = await onSave();
       if (ok) {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        setSaved(true);
+        setSaveState('success');
+        Speech.speak(t.saved, {
+          language: lang === 'zh-CN' ? 'zh-CN' : lang,
+          voice: Platform.OS === 'ios' ? IOS_VOICE_MAP[lang] : undefined,
+          rate: CONFIG.VOICE.TTS_RATE,
+          pitch: CONFIG.VOICE.TTS_PITCH,
+        });
+        // 1.5초 후 원래 아이콘 복원 = 재저장 가능(운영 index.js:3127).
+        saveTimerRef.current = setTimeout(() => setSaveState('idle'), 1500);
+      } else {
+        setSaveState('idle');
       }
-    } finally {
-      setSaving(false);
+    } catch {
+      setSaveState('idle');
     }
-  }, [saved, saving, onSave]);
+  }, [saveState, onSave, t.saved, lang]);
+
+  // 언마운트 시 저장 복원 타이머 정리.
+  useEffect(() => () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); }, []);
 
   // ⚠️ 리턴 (낭독 정지 + 닫기)
   const handleClose = useCallback(() => {
@@ -203,15 +219,15 @@ export default function DetailViewer({
         <Image source={{ uri: imageUri }} style={styles.bg} resizeMode="cover" />
       )}
 
-      {/* ← 리턴 버튼 = 우측상단(운영 backBtn 위치) + 완전 투명(사장님 지시) */}
+      {/* ← 리턴 버튼 = 우측상단(운영 backBtn 위치) + 완전 투명 + 운영 SVG 화살표 */}
       <TouchableOpacity style={[styles.backBtn, { top: insets.top + 16 }]} onPress={handleClose}>
-        <Ionicons name="arrow-back" size={28} color="#4285F4" />
+        <GuideIcon name="back" size={28} />
       </TouchableOpacity>
 
-      {/* 위치창 / 음성질문 박스 = 운영 locationInfo 클론(흰 반투명 + 파란 아이콘) */}
+      {/* 위치창 / 음성질문 박스 = 운영 locationInfo 클론(흰 반투명 + 파란 마커 SVG) */}
       {(locationName || voiceQuery) && (
         <View style={[styles.infoBox, { top: insets.top + 72 }]}>
-          <Ionicons name={voiceQuery ? 'chatbubble' : 'location'} size={16} color="#4285F4" />
+          <GuideIcon name={voiceQuery ? 'mic' : 'location'} size={18} />
           <Text style={styles.infoText} numberOfLines={2} allowFontScaling={false}>
             {voiceQuery || locationName}
           </Text>
@@ -260,35 +276,49 @@ export default function DetailViewer({
         </Animated.View>
       )}
 
-      {/* 하단 footer = 완전 투명 버튼(사장님 지시) — 로딩 중 숨김(운영 detailFooter hidden 클론) */}
+      {/* 하단 footer = 완전 투명 버튼 + 운영 SVG 아이콘 — 로딩 중 숨김(운영 detailFooter hidden 클론).
+          AOS = 기기 버튼과 겹침 방지 = 바 전체를 인셋만큼 위로(2026-07-20 실기기 SSOT). iOS = 기존 그대로. */}
       {!loading && (
-        <View style={[styles.footer, { paddingBottom: insets.bottom + 8 }]}>
+        <View
+          style={[
+            styles.footer,
+            Platform.OS === 'ios'
+              ? { paddingBottom: insets.bottom + 8 }
+              : { bottom: insets.bottom + 12 },
+          ]}
+        >
           {/* 재질문 (음성모드만) */}
           {isVoiceMode && onAskAgain && (
             <TouchableOpacity
               style={styles.footerBtn}
               onPress={() => { advanceRef.current = false; Speech.stop(); onAskAgain(); }}
             >
-              <Ionicons name="mic" size={30} color="#4285F4" />
+              <GuideIcon name="mic" size={30} />
             </TouchableOpacity>
           )}
 
           {/* 재생⇄일시정지 */}
           <TouchableOpacity style={styles.footerBtn} onPress={handleAudioToggle}>
-            <Ionicons name={isPlaying && !isPaused ? 'pause' : 'play'} size={30} color="#4285F4" />
+            <GuideIcon name={isPlaying && !isPaused ? 'pause' : 'play'} size={30} />
           </TouchableOpacity>
 
-          {/* 텍스트 표시 토글 */}
+          {/* 텍스트 표시 토글 (숨김 상태 = 흐린 파랑) */}
           <TouchableOpacity style={styles.footerBtn} onPress={handleTextToggle}>
-            <Ionicons name={textVisible ? 'document-text' : 'document-text-outline'} size={30} color="#4285F4" />
+            <GuideIcon name="documentText" size={30} color={textVisible ? '#4285F4' : 'rgba(66,133,244,0.4)'} />
           </TouchableOpacity>
 
-          {/* 저장 (운영 인라인 스피너) */}
-          <TouchableOpacity style={styles.footerBtn} onPress={handleSave} disabled={saved || saving}>
-            {saving ? (
+          {/* 저장 = 운영 클론: 스피너 → 체크마크(1.5초) → 북마크 복원 */}
+          <TouchableOpacity
+            style={styles.footerBtn}
+            onPress={handleSave}
+            disabled={saveState !== 'idle'}
+          >
+            {saveState === 'saving' ? (
               <ActivityIndicator size="small" color="#4285F4" />
+            ) : saveState === 'success' ? (
+              <GuideIcon name="check" size={30} color="#00C851" strokeWidth={3} />
             ) : (
-              <Ionicons name={saved ? 'bookmark' : 'bookmark-outline'} size={30} color={saved ? '#00C851' : '#4285F4'} />
+              <GuideIcon name="bookmark" size={30} color="#4285F4" />
             )}
           </TouchableOpacity>
         </View>
