@@ -1,8 +1,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════
 // ⚠️ 수정금지(승인필요) 2026-07-19 사장님 SSOT (§12 4단계) = 가이드 미니앱 서버 배선.
 // = 레거시 카메라 모듈(client/screens/guide, 내부 0수정)이 부르는 엔드포인트 = 여기서 배선.
-// = 모듈 backendApi.js·PromptService.js 가 기대하는 인터페이스에 맞춤(모듈 불가침 = 서버가 맞춤).
-//   ① POST /api/analyze            = 사진 해설 (geminiVision, §16 단일진입점 재사용). JSON 응답.
+//   ① POST /api/gemini             = 사진 해설 스트리밍 (검증된 레거시 원본 그대로 = 2026-07-20 사장님 SSOT).
 //   ② GET  /api/prompts/:lang/:type = 언어별 페르소나 (DB prompts, is_active+version DESC = §12 함정 필터).
 //   ③ GET  /api/voice-configs       = 웹TTS 음성 우선순위 (DB voice_configs).
 //   ④ /api/guides (batch·목록·삭제)  = 보관함 (DB guides). 당분간 사장님만 = auth.ts 재사용.
@@ -12,7 +11,7 @@ import type { Express, Request } from "express";
 import { and, desc, eq } from "drizzle-orm";
 import { db as _db } from "./db";
 import { guides, prompts, voiceConfigs } from "../shared/schema";
-import { geminiVision } from "./services/shared/geminiClient";
+import { geminiVisionStream } from "./services/shared/geminiClient";
 
 // ⚠️ db 는 DB 미연결 시 null 가능(server/db.ts) = 라우트 진입 시 확정(bts-routes 패턴). null 이면 throw → 각 라우트 catch 가 503.
 function getDb() {
@@ -33,31 +32,42 @@ export function registerGuideRoutes(app: Express): void {
     res.json({ status: "ok", service: "guide", version: "2.0.0" });
   });
 
-  // ① 사진 해설 = geminiVision (JSON 응답 = 모듈 analyzeImageViaServer 가 response.json() 기대).
-  app.post("/api/analyze", async (req, res) => {
+  // ① 사진 해설 = 원본 레거시 POST /api/gemini 그대로 (2026-07-20 사장님 SSOT).
+  //   = body { base64Image, prompt, systemInstruction } → text/plain 청크 스트리밍(res.write).
+  //   = 크레딧 차감만 제외 = §9 프로모션 바이패스. (/api/analyze 삭제 = 2026-07-20 §19)
+  app.post("/api/gemini", async (req, res) => {
     try {
-      const { image, prompt, language } = req.body || {};
-      if (!image)
-        return res.status(400).json({ error: "image(base64) required" });
-      // 페르소나 = 요청 prompt 우선, 없으면 언어 기본. (모듈 useAI 가 DB 페르소나를 prompt 로 넘김)
-      const out = await geminiVision(
-        String(image),
-        prompt || "이 이미지를 여행자에게 친근하게 해설해줘.",
+      const { base64Image, prompt, systemInstruction } = req.body || {};
+      const isPromptEmpty = !prompt || String(prompt).trim() === "";
+      if (isPromptEmpty && !base64Image) {
+        return res.status(400).json({
+          error:
+            "요청 본문에 필수 데이터(prompt 또는 base64Image)가 누락되었습니다.",
+        });
+      }
+
+      res.setHeader("Content-Type", "text/plain; charset=utf-8");
+      res.setHeader("Transfer-Encoding", "chunked");
+
+      for await (const text of geminiVisionStream(
+        base64Image || null,
+        prompt || "",
         {
-          systemPrompt: prompt || undefined,
+          systemInstruction: systemInstruction || undefined,
           contextId: "runtime",
-          rawTag: "guide-analyze",
+          rawTag: "guide-gemini",
         },
-      );
-      // 모듈은 result.description || result.text 를 읽음 → 둘 다 담아 하위호환.
-      res.json({
-        description: out.text,
-        text: out.text,
-        language: language || "ko",
-      });
+      )) {
+        res.write(text);
+      }
+      res.end();
     } catch (e: any) {
-      console.error("[guide/analyze]", e?.message || e);
-      res.status(500).json({ error: "해설 생성 실패" });
+      console.error("[guide/gemini]", e?.message || e);
+      if (!res.headersSent) {
+        res.status(500).json({ error: "해설 생성 실패" });
+      } else {
+        res.end();
+      }
     }
   });
 

@@ -63,7 +63,7 @@ function setupCharset(app: express.Application) {
 function setupBodyParsing(app: express.Application) {
   app.use(
     express.json({
-      // ⚠️ 2026-07-19 §12 = 가이드 미니앱 /api/analyze 가 카메라 사진 base64(수 MB) POST = 기본 100KB 초과 → 10mb 로 상향.
+      // ⚠️ 2026-07-20 §12 = 가이드 미니앱 POST /api/gemini 가 카메라 사진 base64(수 MB) POST = 기본 100KB 초과 → 10mb 로 상향.
       limit: "10mb",
       verify: (req, _res, buf) => {
         req.rawBody = buf;

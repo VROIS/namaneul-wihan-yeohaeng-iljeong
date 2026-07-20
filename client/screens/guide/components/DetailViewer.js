@@ -1,10 +1,14 @@
 // ⚠️ 수정금지(승인필요): 2026-04-03 네이티브 DetailViewer — TTS 자동재생 해결
 // WebView autoplay 정책 우회: expo-speech 직접 호출 (네이티브 모듈 → 제한 없음)
 // 웹 버전과 동일한 UI: 전체화면 이미지 + 텍스트 오버레이 + 문장 하이라이트 + TTS
-import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+// ⚠️ 2026-07-20 사장님 SSOT = 웹 원본(index.html 상세페이지) 기준 교정:
+//   리턴버튼 우측상단(웹 backBtn right-4) · 텍스트 상단부터(content-safe-area) ·
+//   로딩 = 이미지 유지 + 스피너 + 문구(웹 loader-container) · 하단버튼 = 반투명 검정 원(bg-black/60) ·
+//   문장 스트리밍 수신(sentences 배열) + 스트림 완료(done) 후 자동 낭독(웹 speakNext 시점).
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   View, Text, Image, StyleSheet, ScrollView, TouchableOpacity,
-  Dimensions, Animated, Platform,
+  ActivityIndicator, Dimensions, Animated, Platform,
 } from 'react-native';
 import * as Speech from 'expo-speech';
 import * as Haptics from 'expo-haptics';
@@ -35,11 +39,11 @@ const IOS_VOICE_MAP = {
   'es': 'com.apple.ttsbundle.Monica-compact',
 };
 
-// ⚠️ 수정금지(승인필요): 문장 분리 정규식
-const SENTENCE_REGEX = /[^.!?。！？]+[.!?。！？]+/g;
+// 문장 분리 = 호출자(GuideResultHost)가 원본 index.js processImage 방식으로 수행 = 2026-07-20 §19.
 
 export default function DetailViewer({
-  imageUri, description, locationName, voiceQuery, mode = 'camera',
+  imageUri, sentences = [], loading = false, loadingText = '', done = false,
+  locationName, voiceQuery, mode = 'camera',
   lang = 'ko', onClose, onSave, onAskAgain,
 }) {
   const t = I18N[lang] || I18N.ko;
@@ -54,19 +58,7 @@ export default function DetailViewer({
   const currentIdxRef = useRef(-1);
 
   const isVoiceMode = mode === 'voice';
-  // ⚠️ 수정금지(승인필요): useMemo로 문장 분리 캐시 (렌더마다 재계산 방지)
-  const sentences = useMemo(() =>
-    (description.match(SENTENCE_REGEX) || [description]).map(s => s.trim()).filter(Boolean),
-    [description]
-  );
   sentencesRef.current = sentences;
-
-  // ⚠️ 수정금지(승인필요): TTS 자동재생 — DetailViewer 표시 후 500ms 딜레이
-  useEffect(() => {
-    if (!description) return;
-    const timer = setTimeout(() => playTTS(), 500);
-    return () => { clearTimeout(timer); Speech.stop(); };
-  }, [description, playTTS]);
 
   // ⚠️ 수정금지(승인필요): 문장별 순차 TTS 재생 + 하이라이트
   const speakSentence = useCallback((index) => {
@@ -108,6 +100,14 @@ export default function DetailViewer({
     setCurrentSentence(-1);
   }, []);
 
+  // ⚠️ 수정금지(승인필요): TTS 자동재생 — 웹 원본 = 스트림 완료 후 speakNext() 시점 그대로 + 500ms 딜레이
+  //   (playTTS 선언 뒤에 위치 필수 = 앞서 두면 웹 프로덕션 번들 TDZ 크래시 = 2026-07-20 DevTools 실증)
+  useEffect(() => {
+    if (!done || !sentencesRef.current.length) return;
+    const timer = setTimeout(() => playTTS(), 500);
+    return () => { clearTimeout(timer); Speech.stop(); };
+  }, [done, playTTS]);
+
   // ⚠️ 수정금지(승인필요): 오디오 토글
   const handleAudioToggle = useCallback(() => {
     if (isPlaying) stopTTS();
@@ -145,60 +145,77 @@ export default function DetailViewer({
         <Image source={{ uri: imageUri }} style={styles.bg} resizeMode="cover" />
       )}
 
-      {/* ← 리턴 버튼 (좌측 상단) */}
-      <TouchableOpacity style={[styles.backBtn, { top: insets.top + 12 }]} onPress={handleClose}>
-        <Ionicons name="arrow-back" size={24} color={isVoiceMode ? '#000' : '#fff'} />
+      {/* ← 리턴 버튼 = 웹 원본 backBtn 그대로 (우측상단, 반투명 검정 원, 제미니블루) */}
+      <TouchableOpacity style={[styles.backBtn, { top: insets.top + 16 }]} onPress={handleClose}>
+        <Ionicons name="arrow-back" size={24} color="#4285F4" />
       </TouchableOpacity>
 
       {/* 위치명 / 음성질문 박스 (상호배타) */}
       {(locationName || voiceQuery) && (
-        <View style={[styles.infoBox, { top: insets.top + 60 }]}>
+        <View style={[styles.infoBox, { top: insets.top + 72 }]}>
           <Ionicons name={voiceQuery ? 'chatbubble' : 'location'} size={16} color="#4285F4" />
           <Text style={styles.infoText} numberOfLines={2}>{voiceQuery || locationName}</Text>
         </View>
       )}
 
-      {/* 텍스트 오버레이 (문장별 하이라이트) */}
-      <Animated.View style={[styles.textArea, { opacity: textOpacity }]}>
-        <ScrollView ref={scrollRef} contentContainerStyle={styles.textContent} showsVerticalScrollIndicator={false}>
-          {sentences.map((sentence, i) => (
-            <Text
-              key={i}
-              style={[
-                isVoiceMode ? styles.sentenceDark : styles.sentence,
-                i === currentSentence && styles.sentenceHighlight,
-              ]}
-            >
-              {sentence}{' '}
-            </Text>
-          ))}
-        </ScrollView>
-      </Animated.View>
+      {/* 로딩 = 웹 원본 loader-container 그대로: 이미지 유지 + 중앙 스피너 + 로테이션 문구 */}
+      {loading && (
+        <View style={styles.loaderWrap}>
+          <ActivityIndicator size="large" color="#fff" />
+          <Text style={styles.loadingText}>{loadingText || t.loading}</Text>
+        </View>
+      )}
 
-      {/* ⚠️ 수정금지(승인필요): 하단 footer — 64px 버튼, transparent 배경 */}
-      <View style={[styles.footer, { paddingBottom: insets.bottom + 8 }]}>
-        {/* 재질문 (음성모드만) */}
-        {isVoiceMode && onAskAgain && (
-          <TouchableOpacity style={styles.footerBtn} onPress={() => { stopTTS(); onAskAgain(); }}>
-            <Ionicons name="mic" size={28} color="#4285F4" />
+      {/* 텍스트 오버레이 = 웹 원본 content-safe-area 그대로: 상단부터 시작 + 문장별 하이라이트 */}
+      {!loading && (
+        <Animated.View
+          style={[
+            styles.textArea,
+            { top: insets.top + ((locationName || voiceQuery) ? 124 : 72), opacity: textOpacity },
+          ]}
+        >
+          <ScrollView ref={scrollRef} contentContainerStyle={styles.textContent} showsVerticalScrollIndicator={false}>
+            {sentences.map((sentence, i) => (
+              <Text
+                key={i}
+                style={[
+                  isVoiceMode ? styles.sentenceDark : styles.sentence,
+                  i === currentSentence && styles.sentenceHighlight,
+                ]}
+              >
+                {sentence}{' '}
+              </Text>
+            ))}
+          </ScrollView>
+        </Animated.View>
+      )}
+
+      {/* ⚠️ 수정금지(승인필요): 하단 footer = 웹 원본 detailFooter 그대로 — 로딩 중 숨김, 64px 반투명 검정 원 버튼 */}
+      {!loading && (
+        <View style={[styles.footer, { paddingBottom: insets.bottom + 8 }]}>
+          {/* 재질문 (음성모드만) */}
+          {isVoiceMode && onAskAgain && (
+            <TouchableOpacity style={styles.footerBtn} onPress={() => { stopTTS(); onAskAgain(); }}>
+              <Ionicons name="mic" size={28} color="#4285F4" />
+            </TouchableOpacity>
+          )}
+
+          {/* 오디오 토글 */}
+          <TouchableOpacity style={styles.footerBtn} onPress={handleAudioToggle}>
+            <Ionicons name={isPlaying ? 'pause' : 'play'} size={28} color="#4285F4" />
           </TouchableOpacity>
-        )}
 
-        {/* 오디오 토글 */}
-        <TouchableOpacity style={styles.footerBtn} onPress={handleAudioToggle}>
-          <Ionicons name={isPlaying ? 'pause' : 'play'} size={28} color="#4285F4" />
-        </TouchableOpacity>
+          {/* 텍스트 토글 */}
+          <TouchableOpacity style={styles.footerBtn} onPress={handleTextToggle}>
+            <Ionicons name={textVisible ? 'document-text' : 'document-text-outline'} size={28} color="#4285F4" />
+          </TouchableOpacity>
 
-        {/* 텍스트 토글 */}
-        <TouchableOpacity style={styles.footerBtn} onPress={handleTextToggle}>
-          <Ionicons name={textVisible ? 'document-text' : 'document-text-outline'} size={28} color="#4285F4" />
-        </TouchableOpacity>
-
-        {/* 저장 */}
-        <TouchableOpacity style={styles.footerBtn} onPress={handleSave} disabled={saved}>
-          <Ionicons name={saved ? 'bookmark' : 'bookmark-outline'} size={28} color={saved ? '#00C851' : '#4285F4'} />
-        </TouchableOpacity>
-      </View>
+          {/* 저장 */}
+          <TouchableOpacity style={styles.footerBtn} onPress={handleSave} disabled={saved}>
+            <Ionicons name={saved ? 'bookmark' : 'bookmark-outline'} size={28} color={saved ? '#00C851' : '#4285F4'} />
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 }
@@ -206,26 +223,41 @@ export default function DetailViewer({
 const styles = StyleSheet.create({
   container: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 200, backgroundColor: '#000' },
   bg: { position: 'absolute', top: 0, left: 0, width: SCREEN_W, height: SCREEN_H },
+  // ⚠️ 2026-07-20 웹 원본(index.html) 기준: backBtn = 우측 48px 원(bg-black/60) / 텍스트 = 상단부터(text-content 2rem·1.5rem, text-xl, 행간 1.8) / footer 버튼 = 64px 반투명 검정 원.
   backBtn: {
-    position: 'absolute', left: 16, width: 40, height: 40, borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.4)', alignItems: 'center', justifyContent: 'center', zIndex: 10,
+    position: 'absolute', right: 16, width: 48, height: 48, borderRadius: 24,
+    backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center', zIndex: 10,
   },
   infoBox: {
     position: 'absolute', left: 16, right: 16, flexDirection: 'row', alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 8, padding: 8, gap: 8, zIndex: 10,
+    backgroundColor: 'rgba(255,255,255,0.9)', borderRadius: 8, padding: 8, gap: 8, zIndex: 10,
   },
-  infoText: { color: '#fff', fontSize: 14, flex: 1 },
-  textArea: { position: 'absolute', bottom: 108, left: 0, right: 0, maxHeight: SCREEN_H * 0.45 },
-  textContent: { paddingHorizontal: 24, paddingVertical: 16 },
+  infoText: { color: '#1f2937', fontSize: 15, fontWeight: '600', flex: 1 },
+  loaderWrap: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    alignItems: 'center', justifyContent: 'center', zIndex: 5,
+  },
+  loadingText: {
+    color: '#fff', fontSize: 18, fontWeight: '600', marginTop: 16, textAlign: 'center',
+    paddingHorizontal: 16,
+    textShadowColor: 'rgba(0,0,0,0.95)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 8,
+  },
+  textArea: { position: 'absolute', bottom: 108, left: 0, right: 0 },
+  textContent: { paddingHorizontal: 24, paddingVertical: 32 },
   sentence: {
-    color: '#fff', fontSize: 18, lineHeight: 28,
-    textShadowColor: 'rgba(0,0,0,0.8)', textShadowOffset: { width: 1, height: 1 }, textShadowRadius: 4,
+    color: '#fff', fontSize: 20, lineHeight: 36,
+    textShadowColor: 'rgba(0,0,0,0.95)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 8,
   },
-  sentenceDark: { color: '#000', fontSize: 18, lineHeight: 28 },
+  sentenceDark: { color: '#000', fontSize: 20, lineHeight: 36 },
   sentenceHighlight: { backgroundColor: 'rgba(66,133,244,0.3)', fontWeight: '600' },
   footer: {
     position: 'absolute', bottom: 0, left: 0, right: 0, height: 100,
     flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', paddingHorizontal: 16,
   },
-  footerBtn: { width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center' },
+  footerBtn: {
+    width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.25, shadowRadius: 24,
+    elevation: 12,
+  },
 });

@@ -73,7 +73,8 @@ function catalog() {
 //   ⚠️ import 중복병합 등 eslint --fix 정리는 포맷으로 안 봄(가드 안 eslint = 커밋마다 수십초). 그런 파일은 커밋 전 prettier 만 재적용해 순수포맷화.
 let _prettier = null;
 async function loadPrettier() {
-  if (!_prettier) _prettier = await import(join(ROOT, "node_modules/prettier/index.mjs"));
+  if (!_prettier)
+    _prettier = await import(join(ROOT, "node_modules/prettier/index.mjs"));
   return _prettier;
 }
 async function isPrettierOnlyChange(f) {
@@ -82,7 +83,10 @@ async function isPrettierOnlyChange(f) {
     const opts = (await prettier.resolveConfig(join(ROOT, f))) || {};
     opts.filepath = f;
     const fmt = async (ref) => {
-      const src = execSync(`git show "${ref}:${f}"`, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+      const src = execSync(`git show "${ref}:${f}"`, {
+        encoding: "utf8",
+        maxBuffer: 64 * 1024 * 1024,
+      });
       return prettier.format(src, opts);
     };
     return (await fmt("HEAD")) === (await fmt(""));

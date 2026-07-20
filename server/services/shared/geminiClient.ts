@@ -116,87 +116,80 @@ export async function geminiJson<T = any>(
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// ⚠️ 수정금지(승인필요) 2026-07-19 사장님 SSOT (§12 4단계) = Gemini Vision(이미지 해설) 확장.
+// ⚠️ 수정금지(승인필요) 2026-07-20 사장님 SSOT (§12) = Gemini Vision(이미지 해설) 스트리밍.
 // = geminiJson()(텍스트 전용) 은 불변 = 하위호환. Vision 은 이 형제 함수로 = §16 단일 진입점(새 클라이언트 금지) 정합.
-// = getAI·saveRaw·키조달 = 기존 코드 재사용. 응답 = 일반 텍스트(해설이니 JSON 아님).
-// = 용도: 가이드 미니앱 /api/analyze = 사진 base64 + 페르소나프롬프트 → 여행 해설.
+// = getAI·saveRaw·키조달 = 기존 코드 재사용. 응답 = 일반 텍스트 청크(해설이니 JSON 아님).
+// = 용도: 가이드 미니앱 POST /api/gemini = 사진 base64 + 페르소나프롬프트 → 여행 해설 스트리밍.
+//   (옛 geminiVision 비스트리밍 삭제 = 2026-07-20 §19)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-export interface GeminiVisionOptions {
-  model?: string;
-  temperature?: number;
-  maxOutputTokens?: number;
-  /** = 이미지 MIME (기본 image/jpeg). 카메라·갤러리 = jpeg. */
-  mimeType?: string;
-  /** = 시스템 페르소나 프롬프트(DB prompts 에서 조달). systemInstruction 으로 주입. */
-  systemPrompt?: string;
+export interface GeminiVisionStreamOptions {
+  /** = 시스템 페르소나(DB prompts 조달) = 원본 systemInstruction 그대로 주입. */
+  systemInstruction?: string;
   /** ⚠️ raw 저장 맥락 = 미지정→'runtime'(메인앱). */
   contextId?: string | number | null;
   rawTag?: string | null;
   apiKey?: string;
 }
 
-export interface GeminiVisionResult {
-  text: string;
-  finishReason: string;
-}
-
 /**
- * 이미지 + 텍스트 프롬프트 → 해설 텍스트.
- * = base64 이미지를 inlineData 로 파트 구성(geminiJson 의 텍스트 전용 parts 확장).
- * = raw 저장(§18) 강제 = 이미지는 용량 커서 raw 엔 프롬프트·응답만(이미지 제외).
+ * ⚠️ 수정금지(승인필요) 2026-07-20 사장님 SSOT = 가이드 미니앱 해설 스트리밍.
+ * = 검증된 레거시 원본(내손안에 가이드 server/routes.ts /api/gemini)의 파라미터 그대로:
+ *   이미지 파트 먼저 → 텍스트 파트, thinkingBudget 0, temperature 0.5,
+ *   maxOutputTokens 800, topP 0.8, topK 20 (= 현장 테스트로 확정된 값 = 변경 금지).
+ * = 청크 텍스트를 그대로 yield = 호출자(guide-routes)가 res.write 로 흘려보냄.
+ * = raw 저장(§18) = 스트림 종료 후 전체 조립 텍스트 저장(이미지는 용량 제외).
  */
-export async function geminiVision(
-  imageBase64: string,
+export async function* geminiVisionStream(
+  base64Image: string | null,
   prompt: string,
-  opts?: GeminiVisionOptions,
-): Promise<GeminiVisionResult> {
-  const model = opts?.model || MODEL_ID;
-  const config: any = {
-    temperature: opts?.temperature ?? TEMPERATURE,
-    maxOutputTokens: opts?.maxOutputTokens ?? MAX_OUTPUT_TOKENS,
-    thinkingConfig: { thinkingBudget: 0 },
-  };
-  if (opts?.systemPrompt) {
-    config.systemInstruction = { parts: [{ text: opts.systemPrompt }] };
+  opts?: GeminiVisionStreamOptions,
+): AsyncGenerator<string> {
+  const parts: any[] = [];
+  if (base64Image) {
+    parts.push({ inlineData: { mimeType: "image/jpeg", data: base64Image } });
+  }
+  if (prompt && prompt.trim() !== "") {
+    parts.push({ text: prompt });
   }
 
-  const response = await getAI(opts?.apiKey).models.generateContent({
-    model,
-    contents: [
-      {
-        role: "user",
-        parts: [
-          { text: prompt },
-          {
-            inlineData: {
-              mimeType: opts?.mimeType || "image/jpeg",
-              data: imageBase64,
-            },
-          },
-        ],
-      },
-    ],
-    config,
-  });
+  // ⚠️ 튜닝값 = 원본 그대로. 단 @google/genai v1.34 는 config 최상위(평면)만 읽음
+  //   (중첩 generationConfig = SDK 가 통째로 폐기 = §22 검증 에이전트 node_modules 실측) = 평면 기재.
+  const config: any = {
+    systemInstruction: opts?.systemInstruction,
+    thinkingConfig: { thinkingBudget: 0 },
+    temperature: 0.5,
+    maxOutputTokens: 800,
+    topP: 0.8,
+    topK: 20,
+  };
 
-  const text = (response as any).text || "";
-  const finishReason =
-    (response as any).candidates?.[0]?.finishReason || "unknown";
+  const responseStream = await getAI(opts?.apiKey).models.generateContentStream(
+    { model: MODEL_ID, contents: { parts }, config },
+  );
 
-  // ⚠️ raw 저장(§18) = 이미지 제외(용량) = 프롬프트·페르소나·응답만.
+  let fullText = "";
+  let finishReason = "stream-end";
+  for await (const chunk of responseStream) {
+    const fr = (chunk as any).candidates?.[0]?.finishReason;
+    if (fr) finishReason = fr;
+    const text = (chunk as any).text;
+    if (text) {
+      fullText += text;
+      yield text;
+    }
+  }
+
   await saveRaw({
     source: "gemini",
     contextId: opts?.contextId,
-    tag: opts?.rawTag || "vision-guide",
+    tag: opts?.rawTag || "guide-gemini",
     request: {
       prompt,
-      systemPrompt: opts?.systemPrompt || null,
-      model,
-      hasImage: true,
+      systemInstruction: opts?.systemInstruction || null,
+      model: MODEL_ID,
+      hasImage: !!base64Image,
     },
-    raw: { parsed: null, text, finishReason },
+    raw: { parsed: null, text: fullText, finishReason },
   });
-
-  return { text, finishReason };
 }
