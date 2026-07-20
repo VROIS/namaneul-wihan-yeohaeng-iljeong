@@ -12,6 +12,7 @@ import { and, desc, eq } from "drizzle-orm";
 import { db as _db } from "./db";
 import { guides, prompts, voiceConfigs } from "../shared/schema";
 import { geminiVisionStream } from "./services/shared/geminiClient";
+import { tsSearch } from "./services/shared/ts-client";
 
 // ⚠️ db 는 DB 미연결 시 null 가능(server/db.ts) = 라우트 진입 시 확정(bts-routes 패턴). null 이면 throw → 각 라우트 catch 가 503.
 function getDb() {
@@ -68,6 +69,45 @@ export function registerGuideRoutes(app: Express): void {
       } else {
         res.end();
       }
+    }
+  });
+
+  // ①-b 위치창 랜드마크 = 운영앱 getNearbyLandmark 클론 (2026-07-20 사장님 SSOT = 위치창 복원).
+  //   = 주변 100m 인기순 장소의 현지어 이름 1건. TS 단일관문 tsSearch 재사용(§16).
+  //   = 비용: TS 1콜/촬영·업로드 (운영앱도 Maps JS nearbySearch 동일 구조 지출).
+  app.get("/api/guide/landmark", async (req, res) => {
+    try {
+      const lat = parseFloat(String(req.query.lat));
+      const lng = parseFloat(String(req.query.lng));
+      if (!isFinite(lat) || !isFinite(lng)) {
+        return res.status(400).json({ error: "lat,lng required" });
+      }
+      const apiKey = process.env.GOOGLE_MAPS_API_KEY || "";
+      if (!apiKey) return res.status(503).json({ error: "maps key missing" });
+      const places = await tsSearch({
+        apiKey,
+        method: "searchNearby",
+        latitude: lat,
+        longitude: lng,
+        circleRadiusM: 100,
+        maxResults: 5,
+        // 운영앱 getNearbyLandmark = 무필터 검색+랜드마크 우선. ts-client 기본값(식당만)이 걸리지 않게
+        // 운영 우선타입+상권 타입을 명시(§22 검증 적발 = 식당명만 반환되던 클론 변질 수정).
+        includedTypes: [
+          "tourist_attraction",
+          "museum",
+          "church",
+          "park",
+          "lodging",
+          "restaurant",
+          "cafe",
+        ],
+        rawTag: "guide-landmark",
+      });
+      res.json({ name: places[0]?.nameEn || null });
+    } catch (e: any) {
+      console.error("[guide/landmark]", e?.message || e);
+      res.status(500).json({ error: "landmark 조회 실패" });
     }
   });
 

@@ -3,8 +3,11 @@
 // 비활성화: opacity 0.5 (기존 .interactive-btn:disabled)
 // 아이콘: Heroicons SVG (기존 앱과 동일 path)
 // i18n: 다국어 라벨 (Google Translate 미적용 → 자체 번역)
+// ⚠️ 2026-07-20 사장님 SSOT = 실기기 피드백 반영: ①버튼 = 완전 투명 + 아이콘·라벨만(검정 원 배경 삭제)
+//   ②AOS = 기기 하단버튼(내비바)과 겹침 → 안전영역 인셋만큼 위로 (iOS = 기존 그대로 = 불변).
 import React, { useRef } from 'react';
 import { View, Pressable, Text, StyleSheet, Platform, Animated } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { CONFIG } from '../config/constants';
 import { useStore } from '../state/store';
@@ -92,9 +95,17 @@ export default function FooterButtons({ onPress, isProcessing }) {
   const liveMode = useStore((s) => s.liveMode);
   const activeFeature = useStore((s) => s.activeFeature);
   const lang = useStore((s) => s.language) || 'ko';
+  // AOS = 기기 내비바 인셋만큼 위로(2026-07-20 사장님 실기기 피드백). iOS = 기존값 불변.
+  const insets = useSafeAreaInsets();
 
   return (
-    <View style={styles.footer}>
+    <View
+      style={[
+        styles.footer,
+        // 바 전체를 인셋만큼 올림(§22 검증: 고정 height 안 padding 은 절반만 반영되던 방식 폐기).
+        Platform.OS !== 'ios' && { bottom: insets.bottom + 12 },
+      ]}
+    >
       {CONFIG.BUTTONS.map(({ id }) => {
         const isActive = (id === 'live' && liveMode !== 'off') || activeFeature === id;
         const isDisabled = isProcessing && (id === 'capture' || id === 'upload');
@@ -141,19 +152,14 @@ const styles = StyleSheet.create({
     gap: 4, // 기존: gap-1 (0.25rem = 4px)
     minWidth: 48, // i18n 라벨 공간 확보
   },
+  // 검정 원 배경·그림자 삭제 = 완전 투명 + 아이콘만 (2026-07-20 사장님 실기기 피드백)
   button: {
-    width: 56, // 기존: w-14 (56px)
-    height: 56, // 기존: h-14 (56px)
-    borderRadius: 28, // 기존: rounded-full
-    backgroundColor: 'rgba(0,0,0,0.6)', // 기존: bg-black/60
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
-    // 기존: shadow-2xl
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 25 },
-    shadowOpacity: 0.25,
-    shadowRadius: 50,
-    elevation: 25,
   },
   buttonActive: {
     backgroundColor: CONFIG.GEMINI_BLUE, // 활성 상태: 파란색
