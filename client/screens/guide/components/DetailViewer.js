@@ -21,15 +21,15 @@ import GuideIcon from './GuideIcons';
 
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
-// ⚠️ 수정금지(승인필요): i18n 7개 언어 사전 주입
+// ⚠️ 수정금지(승인필요): i18n 7개 언어 사전 주입. alreadySaved = 중복 저장 시 안내(2026-07-21 사장님).
 const I18N = {
-  ko: { play: '오디오 재생', pause: '일시정지', save: '보관함에 저장', saved: '저장되었습니다', textToggle: '해설 읽기', askAgain: '다시 질문하기', loading: '로딩 중...', back: '뒤로' },
-  en: { play: 'Play Audio', pause: 'Pause', save: 'Save to Archive', saved: 'Saved!', textToggle: 'Read Text', askAgain: 'Ask Again', loading: 'Loading...', back: 'Back' },
-  ja: { play: '音声再生', pause: '一時停止', save: '保管庫に保存', saved: '保存しました', textToggle: 'テキスト', askAgain: 'もう一度', loading: '読み込み中...', back: '戻る' },
-  'zh-CN': { play: '播放', pause: '暂停', save: '保存', saved: '已保存', textToggle: '文字', askAgain: '重新提问', loading: '加载中...', back: '返回' },
-  fr: { play: 'Lire', pause: 'Pause', save: 'Sauvegarder', saved: 'Sauvegardé!', textToggle: 'Texte', askAgain: 'Reposer', loading: 'Chargement...', back: 'Retour' },
-  de: { play: 'Abspielen', pause: 'Pause', save: 'Speichern', saved: 'Gespeichert!', textToggle: 'Text', askAgain: 'Erneut', loading: 'Laden...', back: 'Zurück' },
-  es: { play: 'Reproducir', pause: 'Pausar', save: 'Guardar', saved: '¡Guardado!', textToggle: 'Texto', askAgain: 'Preguntar', loading: 'Cargando...', back: 'Atrás' },
+  ko: { play: '오디오 재생', pause: '일시정지', save: '보관함에 저장', saved: '저장되었습니다', alreadySaved: '이미 저장되었습니다', textToggle: '해설 읽기', askAgain: '다시 질문하기', loading: '로딩 중...', back: '뒤로' },
+  en: { play: 'Play Audio', pause: 'Pause', save: 'Save to Archive', saved: 'Saved!', alreadySaved: 'Already saved.', textToggle: 'Read Text', askAgain: 'Ask Again', loading: 'Loading...', back: 'Back' },
+  ja: { play: '音声再生', pause: '一時停止', save: '保管庫に保存', saved: '保存しました', alreadySaved: 'すでに保存済みです', textToggle: 'テキスト', askAgain: 'もう一度', loading: '読み込み中...', back: '戻る' },
+  'zh-CN': { play: '播放', pause: '暂停', save: '保存', saved: '已保存', alreadySaved: '已经保存过了', textToggle: '文字', askAgain: '重新提问', loading: '加载中...', back: '返回' },
+  fr: { play: 'Lire', pause: 'Pause', save: 'Sauvegarder', saved: 'Sauvegardé!', alreadySaved: 'Déjà sauvegardé.', textToggle: 'Texte', askAgain: 'Reposer', loading: 'Chargement...', back: 'Retour' },
+  de: { play: 'Abspielen', pause: 'Pause', save: 'Speichern', saved: 'Gespeichert!', alreadySaved: 'Bereits gespeichert.', textToggle: 'Text', askAgain: 'Erneut', loading: 'Laden...', back: 'Zurück' },
+  es: { play: 'Reproducir', pause: 'Pausar', save: 'Guardar', saved: '¡Guardado!', alreadySaved: 'Ya guardado.', textToggle: 'Texto', askAgain: 'Preguntar', loading: 'Cargando...', back: 'Atrás' },
 };
 
 // ⚠️ 수정금지(승인필요): iOS 음성 우선순위
@@ -57,9 +57,11 @@ export default function DetailViewer({
   const [isPaused, setIsPaused] = useState(false);
   const [currentSentence, setCurrentSentence] = useState(-1);
   const [textVisible, setTextVisible] = useState(true);
-  // 저장 상태 = 운영 saveBtn 클론: 'idle'(북마크) → 'saving'(스피너) → 'success'(체크마크 1.5초) → 'idle' 복원(재저장 가능).
+  // 저장 상태 = 운영 saveBtn 클론: 'idle'(북마크) → 'saving'(스피너) → 'success'(체크마크 1.5초) → 'idle' 복원.
   const [saveState, setSaveState] = useState('idle');
   const saveTimerRef = useRef(null);
+  // ⚠️ 이 해설의 DB 저장 완료 여부 = 중복저장 방지(2026-07-21 사장님 지시). 한 번 저장되면 재클릭해도 DB 재기록 안 함(안내음성만).
+  const savedRef = useRef(false);
   const textOpacity = useRef(new Animated.Value(1)).current;
   const sentencesRef = useRef([]);
   const currentIdxRef = useRef(-1);
@@ -134,6 +136,19 @@ export default function DetailViewer({
   // 언마운트 = 낭독 정지.
   useEffect(() => () => { Speech.stop(); }, []);
 
+  // ⚠️ 낭독 완전 정지 = 운영 index.js:3057 resetSpeechState 클론(단일 진입점, §0·§16 재발명 금지).
+  //   저장 안내음성·닫기·재질문 3곳이 각자 인라인으로 정지하던 것을 이 함수 1벌로 통일.
+  const stopTTS = useCallback(() => {
+    advanceRef.current = false;
+    pausedRef.current = false;
+    waitingRef.current = false;
+    currentIdxRef.current = -1;
+    Speech.stop();
+    setIsPlaying(false);
+    setIsPaused(false);
+    setCurrentSentence(-1);
+  }, []);
+
   // ⚠️ 자동 스크롤 = 운영 scrollIntoView(center) 클론 — 문장 글자수 비례 위치로 부드럽게.
   useEffect(() => {
     if (currentSentence < 0 || !scrollRef.current || !contentHRef.current) return;
@@ -144,28 +159,32 @@ export default function DetailViewer({
     scrollRef.current.scrollTo({ y, animated: true });
   }, [currentSentence]);
 
+  // ⚠️ 일시정지 = 읽던 문장 기억(운영 onAudioBtnClick pause 경로). 저장·토글 공용(§16 재발명 금지).
+  const pauseTTS = useCallback(() => {
+    pausedRef.current = true;
+    setIsPaused(true);
+    Speech.stop();
+  }, []);
+
+  // ⚠️ 재개 = 멈춘 문장부터(운영 resume 경로). 저장·토글 공용.
+  const resumeTTS = useCallback(() => {
+    pausedRef.current = false;
+    setIsPaused(false);
+    waitingRef.current = false; // 일시정지 중 도착분과 이중진행 방지
+    speakSentence(Math.max(currentIdxRef.current, 0));
+  }, [speakSentence]);
+
   // ⚠️ 재생⇄일시정지 = 운영 onAudioBtnClick 네이티브 패턴 클론:
   //   재생 중 → 정지 + 읽던 문장 기억 / 일시정지 중 → 그 문장부터 재개 / 종료 후 → 처음부터.
   const handleAudioToggle = useCallback(() => {
-    if (isPlaying && !isPaused) {
-      pausedRef.current = true;
-      setIsPaused(true);
-      Speech.stop();
-      return;
-    }
-    if (isPlaying && isPaused) {
-      pausedRef.current = false;
-      setIsPaused(false);
-      waitingRef.current = false; // 일시정지 중 도착분과 이중진행 방지(§22 검증 반영)
-      speakSentence(Math.max(currentIdxRef.current, 0));
-      return;
-    }
+    if (isPlaying && !isPaused) { pauseTTS(); return; }
+    if (isPlaying && isPaused) { resumeTTS(); return; }
     advanceRef.current = true;
     pausedRef.current = false;
     setIsPaused(false);
     setIsPlaying(true);
     speakSentence(0);
-  }, [isPlaying, isPaused, speakSentence]);
+  }, [isPlaying, isPaused, pauseTTS, resumeTTS, speakSentence]);
 
   // ⚠️ 텍스트 토글 = 운영 1줄 클론(표시만 토글) — 음성·하이라이트 상태는 건드리지 않음.
   const handleTextToggle = useCallback(() => {
@@ -174,23 +193,47 @@ export default function DetailViewer({
     Animated.timing(textOpacity, { toValue: next ? 1 : 0, duration: 200, useNativeDriver: true }).start();
   }, [textVisible, textOpacity]);
 
-  // ⚠️ 저장 = 운영 handleSaveClick 클론(index.js:3051~3130): 스피너 → 성공 시 체크마크 1.5초 후 북마크 복원.
-  //   + 성공 시 음성 안내 "저장되었습니다"(진입화면 버튼 안내와 동일 속도·음성 = 2026-07-20 사장님 지시).
+  // ⚠️ 저장 안내음성 = 사장님 설계(2026-07-21): 일시정지 → 안내음성 → 자동 일시정지 해제(낭독 지속).
+  //   ⚠️ 재개 판단 = React state(isPlaying/isPaused = 비동기)가 아니라 ref(currentIdxRef = 즉시반영)로 =
+  //     연속 저장 시 state 리렌더 지연으로 재개가 꺼지던 버그 근본(2026-07-21). 낭독 미완료(문장 남음)면 항상 재개.
+  const announce = useCallback((message) => {
+    const resumeIdx = currentIdxRef.current;
+    const wasReading = resumeIdx >= 0 && resumeIdx < sentencesRef.current.length;
+    if (wasReading) pauseTTS(); // 일시정지 버튼과 동일(§16 재사용). stop 前 pausedRef 선점 = 끊긴 문장 onDone 이 다음으로 안 넘어감.
+    const resume = () => {
+      if (wasReading) resumeTTS(); // 자동 일시정지 해제 = 멈춘 문장부터 낭독 지속(§16 재사용).
+    };
+    Speech.speak(message, {
+      language: lang === 'zh-CN' ? 'zh-CN' : lang,
+      voice: Platform.OS === 'ios' ? IOS_VOICE_MAP[lang] : undefined,
+      rate: CONFIG.VOICE.TTS_RATE,
+      pitch: CONFIG.VOICE.TTS_PITCH,
+      onDone: resume,
+      onStopped: resume,
+    });
+  }, [pauseTTS, resumeTTS, lang]);
+
+  // ⚠️ 저장 클릭 = ①DB 저장은 최초 1회만(중복 방지, 2026-07-21 사장님) ②안내음성+낭독 이어가기는 매번 동일.
+  //   운영 handleSaveClick(index.js:3051~) = 스피너 → 체크마크 1.5초 → 북마크 복원.
   const handleSave = useCallback(async () => {
     if (saveState !== 'idle' || !onSave) return;
+
+    // 이미 저장된 해설 = DB 재기록 없이 "이미 저장되었습니다" 안내음성만(중복 저장 차단).
+    if (savedRef.current) {
+      setSaveState('success');
+      announce(t.alreadySaved);
+      saveTimerRef.current = setTimeout(() => setSaveState('idle'), 1500);
+      return;
+    }
+
     setSaveState('saving');
     try {
       const ok = await onSave();
       if (ok) {
+        savedRef.current = true; // 이 해설 = 저장 완료 = 이후 중복 저장 차단.
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         setSaveState('success');
-        Speech.speak(t.saved, {
-          language: lang === 'zh-CN' ? 'zh-CN' : lang,
-          voice: Platform.OS === 'ios' ? IOS_VOICE_MAP[lang] : undefined,
-          rate: CONFIG.VOICE.TTS_RATE,
-          pitch: CONFIG.VOICE.TTS_PITCH,
-        });
-        // 1.5초 후 원래 아이콘 복원 = 재저장 가능(운영 index.js:3127).
+        announce(t.saved); // 1차 = "저장되었습니다"
         saveTimerRef.current = setTimeout(() => setSaveState('idle'), 1500);
       } else {
         setSaveState('idle');
@@ -198,17 +241,16 @@ export default function DetailViewer({
     } catch {
       setSaveState('idle');
     }
-  }, [saveState, onSave, t.saved, lang]);
+  }, [saveState, onSave, announce, t.saved, t.alreadySaved]);
 
   // 언마운트 시 저장 복원 타이머 정리.
   useEffect(() => () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); }, []);
 
-  // ⚠️ 리턴 (낭독 정지 + 닫기)
+  // ⚠️ 리턴 (낭독 정지 + 닫기) = stopTTS 단일 진입점 사용(§0·§16 재발명 금지, 인라인 중복 삭제)
   const handleClose = useCallback(() => {
-    advanceRef.current = false;
-    Speech.stop();
+    stopTTS();
     onClose();
-  }, [onClose]);
+  }, [onClose, stopTTS]);
 
   return (
     <View style={styles.container}>
@@ -248,6 +290,8 @@ export default function DetailViewer({
           style={[
             styles.textArea,
             { top: insets.top + ((locationName || voiceQuery) ? 124 : 72), opacity: textOpacity },
+            // ⚠️ AOS = footer(insets+12 올림, 높이 100) 위로 텍스트존 하단을 동적 확보 = 겹침 방지, 2026-07-20 3차 실기기
+            Platform.OS === 'android' && { bottom: insets.bottom + 120 },
           ]}
           pointerEvents={textVisible ? 'auto' : 'none'}
         >
@@ -291,20 +335,20 @@ export default function DetailViewer({
           {isVoiceMode && onAskAgain && (
             <TouchableOpacity
               style={styles.footerBtn}
-              onPress={() => { advanceRef.current = false; Speech.stop(); onAskAgain(); }}
+              onPress={() => { stopTTS(); onAskAgain(); }}
             >
-              <GuideIcon name="mic" size={30} />
+              <GuideIcon name="mic" size={34} />
             </TouchableOpacity>
           )}
 
           {/* 재생⇄일시정지 */}
           <TouchableOpacity style={styles.footerBtn} onPress={handleAudioToggle}>
-            <GuideIcon name={isPlaying && !isPaused ? 'pause' : 'play'} size={30} />
+            <GuideIcon name={isPlaying && !isPaused ? 'pause' : 'play'} size={34} />
           </TouchableOpacity>
 
           {/* 텍스트 표시 토글 (숨김 상태 = 흐린 파랑) */}
           <TouchableOpacity style={styles.footerBtn} onPress={handleTextToggle}>
-            <GuideIcon name="documentText" size={30} color={textVisible ? '#4285F4' : 'rgba(66,133,244,0.4)'} />
+            <GuideIcon name="documentText" size={34} color={textVisible ? '#4285F4' : 'rgba(66,133,244,0.4)'} />
           </TouchableOpacity>
 
           {/* 저장 = 운영 클론: 스피너 → 체크마크(1.5초) → 북마크 복원 */}
@@ -316,9 +360,9 @@ export default function DetailViewer({
             {saveState === 'saving' ? (
               <ActivityIndicator size="small" color="#4285F4" />
             ) : saveState === 'success' ? (
-              <GuideIcon name="check" size={30} color="#00C851" strokeWidth={3} />
+              <GuideIcon name="check" size={34} color="#00C851" strokeWidth={3} />
             ) : (
-              <GuideIcon name="bookmark" size={30} color="#4285F4" />
+              <GuideIcon name="bookmark" size={34} color="#4285F4" />
             )}
           </TouchableOpacity>
         </View>
@@ -362,7 +406,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', paddingHorizontal: 16,
   },
   footerBtn: {
-    width: 64, height: 64, borderRadius: 32, alignItems: 'center', justifyContent: 'center',
+    width: 68, height: 68, borderRadius: 34, alignItems: 'center', justifyContent: 'center',
     backgroundColor: 'transparent',
   },
 });

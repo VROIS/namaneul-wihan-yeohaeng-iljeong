@@ -58,6 +58,7 @@ module.exports = defineConfig([
       "scripts/db_cleanup.js", // 한글깨짐 파싱에러 죽은 1회용 스크립트
       "scripts/fix-db-issues.js", // 동일
       "scripts/verify-workflow.mjs", // Workflow 전역함수(agent·parallel) = 런타임 주입 = eslint 파싱 대상 아님
+      "scripts/dev-pipeline.mjs", // 동일 = Workflow 스크립트(top-level await/return = 특수 실행 컨텍스트)
       // 코드 아님(§18/§20 프롬프트·문서 보호) = 자동재포맷 금지
       ".claude/**",
       ".agents/**",
