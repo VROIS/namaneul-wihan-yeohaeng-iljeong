@@ -3,6 +3,7 @@
 import type { Express } from "express";
 import { createHash } from "node:crypto";
 import { storage } from "./storage";
+import { generateItineraryICS, type ItineraryForICS } from "./itinerary-ics";
 import { handleAiOpinionRequest } from "./services/verify/ai-opinion-handler";
 
 // ⚠️ 2026-07-03 사장님 SSOT = "AI 의견" 캐싱용 여정 지문. 도시+일자+장소명 순서만 반영(이미지 등 무관 필드 제외) = 숙소변경→동선변경 시에만 달라져 재호출.
@@ -83,6 +84,40 @@ export function registerItineraryRoutes(app: Express): void {
     } catch (error) {
       console.error("Error fetching itinerary:", error);
       res.status(500).json({ error: "Failed to fetch itinerary" });
+    }
+  });
+
+  // 📅 여정 .ics 서빙 (2026-07-21 캘린더 재구현 = docs/2026-07-21 여정공유·캘린더저장 명세.md)
+  //   iOS = Linking.openURL(이 https URL) → Safari가 text/calendar 응답을 네이티브 "일정 추가" 미리보기로 엶 = 원탭 등록.
+  //   /api 하위인 이유 = SPA 폴백(server/index.ts app.get("*"))이 /api 만 통과시킴(video 라우트와 동일 패턴).
+  app.get("/api/itineraries/:id/calendar.ics", async (req, res) => {
+    try {
+      const idNum = parseInt(req.params.id);
+      if (Number.isNaN(idNum)) {
+        return res.status(404).json({ error: "Itinerary not found" });
+      }
+      const itinerary = await storage.getItinerary(idNum);
+      const raw = itinerary?.rawData as ItineraryForICS | undefined;
+      if (!raw?.days?.length || !raw.startDate) {
+        return res.status(404).json({ error: "Itinerary not found" });
+      }
+      const ics = generateItineraryICS(raw);
+      // RFC 5987 attr-char = encodeURIComponent 가 남기는 !'()* 도 %인코딩(제목에 ' 포함돼도 헤더 유효)
+      const filename = encodeURIComponent(
+        `${raw.title || raw.destination || "trip"}.ics`,
+      ).replace(
+        /[!'()*]/g,
+        (c) => "%" + c.charCodeAt(0).toString(16).toUpperCase(),
+      );
+      res.setHeader("Content-Type", "text/calendar; charset=utf-8");
+      res.setHeader(
+        "Content-Disposition",
+        `inline; filename="trip.ics"; filename*=UTF-8''${filename}`,
+      );
+      res.send(ics);
+    } catch (error) {
+      console.error("Error generating itinerary ics:", error);
+      res.status(500).json({ error: "Failed to generate calendar" });
     }
   });
 

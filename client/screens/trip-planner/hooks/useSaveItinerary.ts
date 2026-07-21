@@ -1,9 +1,10 @@
 // 여정 저장(신규 POST/복원 PUT + 저장성공 녹색체크) = TripPlannerScreen 분리(2026-07-15 §0 슬림화, 순수 이동)
 import { useState, useEffect, useRef } from "react";
-import { Alert, Platform } from "react-native";
+import { Alert } from "react-native";
 import { Itinerary, TripFormData, DayAccommodation } from "@/types/trip";
 import { apiRequest } from "@/lib/query-client";
 import { getUserData } from "@/lib/auth";
+import { ensureLoggedIn } from "./login-gate";
 
 export function useSaveItinerary({
   itinerary,
@@ -50,31 +51,16 @@ export function useSaveItinerary({
 
     setIsSaving(true);
     try {
-      // ⚠️ 사장님 SSOT 2026-07-15 = 저장 판정 = 실계정(getUserData) 1벌만(§0.3). 게스트(둘러보기)·비로그인 모두 로그인 안내.
-      //   옛 isAuthenticated() 선판정 폐기 §19 = 게스트는 토큰만 있어 통과 → getUserData() null → 조용히 return = 저장도 안내도 없는 먹통이었음.
-      //   웹은 버튼 있는 Alert.alert 이 안 떠서 window.confirm 사용(ExpertSheet 과 동일 패턴 §16).
-      const userData = await getUserData();
-      if (!userData) {
-        if (Platform.OS === "web") {
-          if (
-            typeof window !== "undefined" &&
-            window.confirm(
-              `${t("trip.loginRequired")}\n\n${t("trip.saveLoginHint")}`,
-            )
-          )
-            navigation.navigate("Login");
-        } else {
-          Alert.alert(t("trip.loginRequired"), t("trip.saveLoginHint"), [
-            { text: t("common.cancel"), style: "cancel" },
-            {
-              text: t("trip.loginBtn"),
-              onPress: () => navigation.navigate("Login"),
-            },
-          ]);
-        }
+      // ⚠️ 사장님 SSOT 2026-07-15 = 저장 판정 = 실계정 1벌(§0.3). 게스트·비로그인 모두 로그인 안내(ensureLoggedIn = login-gate 공용, §0.3 1벌화 2026-07-21).
+      if (!(await ensureLoggedIn(t, navigation))) {
         setIsSaving(false);
         return;
       }
+      const userData = await getUserData();
+      if (!userData) {
+        setIsSaving(false);
+        return;
+      } // 게이트 통과 = 항상 존재(이론상 도달 X). TS null 좁힘 + 만일의 세션 만료 방어.
 
       // 🧠 2026-07-04 = 저장할 AI 의견 본문 = 화면 state에서 cached 플래그만 제외한 순수 결과(BE 직접캐시 저장분과 동일 모양 통일 §20).
       const { cached: _c, ...aiOpinionResult } = (aiOpinionData || {}) as any;

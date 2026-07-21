@@ -1,140 +1,72 @@
-// ⚠️ 수정금지(승인필요) — 여정 캘린더 저장(.ics) 신규 컴포넌트 (2026-07-21 사장님 승인 = 명세 docs/2026-07-21 여정공유·캘린더저장 명세.md)
-// 기능: 여정(Itinerary)을 iCalendar(RFC 5545) 표준 .ics 문자열로 변환 + 플랫폼별 전달(웹=다운로드, 네이티브=공유시트→캘린더 앱 등록)
-// 신규 네이티브 패키지 추가 없음 = expo-file-system(^19.0.21 신 File API)·expo-sharing(^14.0.8) 기설치분만 사용 (iOS Expo Go OTA 안전)
-import { Platform } from "react-native";
+// ⚠️ 수정금지(승인필요) — 여정 캘린더 저장 = 플랫폼별 원탭 진입 (2026-07-21 재구현 = docs/2026-07-21 여정공유·캘린더저장 명세.md)
+//   iOS = 서버 .ics(https)를 Safari로 열기 → iOS 네이티브 "일정 추가" 미리보기(웹 표준 방식, 애플캘린더 직행).
+//   Android(삼성 포함)·웹 = Google Calendar render 링크 → 구글캘린더 앱/웹 일정 편집화면 → 저장 = 원탭.
+//   옛 .ics 파일 생성·공유시트(shareAsync) 방식 완전삭제 = 2026-07-21 §19 (캘린더 앱이 공유시트에 안 떠 실사용 불가 실증).
+//   신규 패키지 0 = iOS Expo Go OTA 안전. ICS 생성 = 서버 1벌만(server/itinerary-ics.ts §0).
+import { Linking, Platform } from "react-native";
 import type { Itinerary } from "@/types/trip";
 
-// iCalendar 텍스트 필드 이스케이프 (RFC 5545 §3.3.11) — 순서 중요: 백슬래시 먼저
-function escapeICSText(text: string): string {
-  return text
-    .replace(/\\/g, "\\\\")
-    .replace(/;/g, "\\;")
-    .replace(/,/g, "\\,")
-    .replace(/\n/g, "\\n");
-}
-
-// 75옥텟 초과 줄 폴딩 (RFC 5545 §3.1) — UTF-8 옥텟(바이트) 기준 폴딩
-// ⚠️ 수정금지(승인필요) — 문자 수(line.length) 기준이던 옛 구현은 한글(3바이트)·이모지(서로게이트) 줄에서
-// 75옥텟 요건 미달 + 서로게이트 페어 분할 손상 위험이 있어 코드포인트 단위 누적으로 교체 (2026-07-21)
-function foldICSLine(line: string): string {
-  const enc = new TextEncoder();
-  let out = "";
-  let cur = "";
-  let curOct = 0;
-  let limit = 75;
-  for (const ch of line) {
-    const o = enc.encode(ch).length;
-    if (curOct + o > limit) {
-      out += (out ? "\r\n " : "") + cur;
-      cur = ch;
-      curOct = o;
-      limit = 74; // 이어붙는 줄은 선행 공백 1옥텟 포함해 74옥텟 한도
-    } else {
-      cur += ch;
-      curOct += o;
-    }
-  }
-  return out ? out + "\r\n " + cur : cur;
-}
-
-// startDate("YYYY-MM-DD") 기준 day번째(1-base) 날짜를 "YYYYMMDD"로 반환 (로컬 Date 연산)
-function dayToYYYYMMDD(startDate: string, day: number): string {
+// startDate("YYYY-MM-DD") 기준 day번째(1-base) 날짜 (로컬 Date 연산)
+function dayToDate(startDate: string, day: number): Date {
   const [y, m, d] = startDate.split("-").map(Number);
   const base = new Date(y, (m || 1) - 1, d || 1);
   base.setDate(base.getDate() + (day - 1));
-  const yyyy = base.getFullYear();
-  const mm = String(base.getMonth() + 1).padStart(2, "0");
-  const dd = String(base.getDate()).padStart(2, "0");
-  return `${yyyy}${mm}${dd}`;
+  return base;
 }
 
-// "HH:MM" → "HHMM00" (floating 로컬시간 = 타임존 미부착, 여행지 현지시간 그대로 §0)
-function timeToHHMMSS(time: string): string {
-  const [hh, mm] = time.split(":");
-  return `${(hh || "00").padStart(2, "0")}${(mm || "00").padStart(2, "0")}00`;
+function toYYYYMMDD(d: Date): string {
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}${mm}${dd}`;
 }
 
-// 현재 UTC → "YYYYMMDDTHHMMSSZ" (DTSTAMP 용)
-function nowUTCStamp(): string {
-  const now = new Date();
-  const yyyy = now.getUTCFullYear();
-  const mm = String(now.getUTCMonth() + 1).padStart(2, "0");
-  const dd = String(now.getUTCDate()).padStart(2, "0");
-  const hh = String(now.getUTCHours()).padStart(2, "0");
-  const mi = String(now.getUTCMinutes()).padStart(2, "0");
-  const ss = String(now.getUTCSeconds()).padStart(2, "0");
-  return `${yyyy}${mm}${dd}T${hh}${mi}${ss}Z`;
-}
+// Google Calendar render 링크 = 링크당 이벤트 1개 제한 → 여행 전체 기간 종일 이벤트 1개 + 설명에 일자별 전체 일정
+function buildGoogleCalendarUrl(itinerary: Itinerary): string {
+  const start = dayToDate(itinerary.startDate, 1);
+  const lastDay = itinerary.days.length
+    ? Math.max(...itinerary.days.map((d) => d.day))
+    : 1;
+  // 종일 이벤트 종료일 = 마지막 날 다음날 (구글 규격 = end exclusive)
+  const endExclusive = dayToDate(itinerary.startDate, lastDay + 1);
 
-// 여정(Itinerary) → iCalendar(.ics) 문자열 생성 (RFC 5545, 장소 1개 = VEVENT 1개)
-export function generateICS(itinerary: Itinerary): string {
-  const dtstamp = nowUTCStamp();
-  const lines: string[] = [
-    "BEGIN:VCALENDAR",
-    "VERSION:2.0",
-    "PRODID:-//NUBI//Trip Itinerary//KO",
-    "CALSCALE:GREGORIAN",
-    "METHOD:PUBLISH",
-  ];
-
+  const detailLines: string[] = [];
   for (const dayPlan of itinerary.days) {
-    const dateStr = dayToYYYYMMDD(itinerary.startDate, dayPlan.day);
+    const d = dayToDate(itinerary.startDate, dayPlan.day);
+    detailLines.push(`Day ${dayPlan.day} (${d.getMonth() + 1}/${d.getDate()})`);
     for (const place of dayPlan.places) {
-      const dtstart = `${dateStr}T${timeToHHMMSS(place.startTime)}`;
-      const dtend = `${dateStr}T${timeToHHMMSS(place.endTime)}`;
-      const uid = `${dayPlan.day}-${place.id}-${Date.now()}@my-guide`;
-
-      const descriptionParts: string[] = [];
-      if (place.editorialSummary) descriptionParts.push(place.editorialSummary);
-      if (place.googleMapsUrl) descriptionParts.push(place.googleMapsUrl);
-      // ⚠️ 수정금지(승인필요) — ICS DESCRIPTION 개행 = 실제 개행 문자 1개로 join. escapeICSText 가 \n → \\n 으로 1회만 이스케이프함(RFC 5545 표준). 리터럴 "\\n" 으로 join 하면 이중 이스케이프되어 캘린더에 "\n" 글자가 그대로 보임 = 2026-07-21 검수 수정.
-      const description = descriptionParts.join("\n");
-
-      lines.push("BEGIN:VEVENT");
-      lines.push(foldICSLine(`UID:${uid}`));
-      lines.push(foldICSLine(`DTSTAMP:${dtstamp}`));
-      lines.push(foldICSLine(`DTSTART:${dtstart}`));
-      lines.push(foldICSLine(`DTEND:${dtend}`));
-      lines.push(foldICSLine(`SUMMARY:${escapeICSText(place.name)}`));
-      if (description) {
-        lines.push(foldICSLine(`DESCRIPTION:${escapeICSText(description)}`));
-      }
-      lines.push(foldICSLine(`GEO:${place.lat};${place.lng}`));
-      lines.push("END:VEVENT");
+      detailLines.push(`${place.startTime} ${place.name}`);
     }
+    detailLines.push("");
   }
+  let details = detailLines.join("\n").trim();
+  // URL 길이 안전 한도(브라우저·구글 처리 한계 대비) — 초과분만 말줄임
+  if (details.length > 1800) details = details.slice(0, 1800) + "…";
 
-  lines.push("END:VCALENDAR");
-  return lines.join("\r\n") + "\r\n";
+  const params = new URLSearchParams({
+    action: "TEMPLATE",
+    text: itinerary.title || itinerary.destination || "Trip",
+    dates: `${toYYYYMMDD(start)}/${toYYYYMMDD(endExclusive)}`,
+    details,
+  });
+  if (itinerary.destination) params.set("location", itinerary.destination);
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
 }
 
-// 여정을 .ics 파일로 전달 — 웹: Blob 다운로드 / 네이티브: 캐시 파일 생성 후 공유시트(캘린더 앱 등록)
-export async function deliverICS(itinerary: Itinerary): Promise<void> {
-  const ics = generateICS(itinerary);
-  const filename = `trip-${itinerary.destination || "itinerary"}.ics`;
-
-  if (Platform.OS === "web") {
-    const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
+// 캘린더 열기 — iOS만 서버 .ics URL 필수(icsUrl), Android·웹은 구글 링크(icsUrl 불필요 = null)
+export async function openCalendar(
+  itinerary: Itinerary,
+  icsUrl: string | null,
+): Promise<void> {
+  if (Platform.OS === "ios") {
+    // iOS 인데 icsUrl 없음 = 호출부 버그 = 조용한 폴백 대신 명시 실패(§0 폴백 분기 금지) → 훅 try/catch가 로그.
+    if (!icsUrl) throw new Error("iOS 캘린더 = 서버 .ics URL 필수");
+    await Linking.openURL(icsUrl);
     return;
   }
-
-  // 네이티브(iOS/Android) = expo-file-system v19 신 File API + expo-sharing (기설치, 신규 패키지 0)
-  const { File, Paths } = await import("expo-file-system");
-  const Sharing = await import("expo-sharing");
-
-  const file = new File(Paths.cache, `trip-${Date.now()}.ics`);
-  file.write(ics);
-
-  await Sharing.shareAsync(file.uri, {
-    mimeType: "text/calendar",
-    UTI: "com.apple.ical.ics",
-  });
+  const url = buildGoogleCalendarUrl(itinerary);
+  if (Platform.OS === "web") {
+    if (typeof window !== "undefined") window.open(url, "_blank", "noopener");
+    return;
+  }
+  await Linking.openURL(url);
 }

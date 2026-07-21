@@ -27,9 +27,16 @@
 - 웹 진입 = `useTripPlanner.ts` 에 pathname 파싱 effect(`/shared/itinerary/(\d+)` 정규식, 1회 실행 ref 가드 = OAuth 콜백 replaceState 재진입 루프 방지) 추가 → `restoreItineraryById(id, { shared: true })`.
 - **원본 보호 핵심**: `shared:true` 진입 시 `currentItineraryId` = `null` 유지(기본 동작인 `setCurrentItineraryId(targetId)` 를 shared 옵션일 때만 건너뜀) → 열람자가 저장하면 `useSaveItinerary` 의 PUT/POST 분기가 POST(새 행) 실행 = 원본 타인 여정 덮어쓰기 원천 차단.
 
-### ④ 캘린더 저장 = `.ics` 생성 + 공유
-- `client/lib/itinerary-calendar.ts` 신설(`generateICS`/`deliverICS`).
-- 웹 = Blob 다운로드, 네이티브 = 기존 설치된 `expo-file-system`(^19.0.21, 신 File API)·`expo-sharing`(^14.0.8) 재사용 — 버전 불변·신규 패키지 0(§16 재발명 금지, 기존 `useVideoGeneration.ts` 사용례와 동일 계열).
+### ④ 캘린더 저장 = 플랫폼별 원탭 (2026-07-21 당일 재구현 = 초판 .ics 파일+공유시트 방식 폐기 §19 — 실기기에서 캘린더 앱이 공유시트에 안 떠 실사용 불가)
+- **iOS** = 신규 서버 라우트 `GET /api/itineraries/:id/calendar.ics`(`server/itinerary-routes.ts`, text/calendar 서빙) → `Linking.openURL` → Safari 네이티브 "일정 추가" 미리보기(애플캘린더 직행). ICS 생성 = `server/itinerary-ics.ts` 프로젝트 유일 1벌(§0).
+- **Android(삼성 포함)·웹** = 구글캘린더 render 링크(`client/lib/itinerary-calendar.ts` `buildGoogleCalendarUrl` = 전체기간 종일 이벤트 1개 + details 일자별 일정) → 구글캘린더 앱/웹 편집화면 → 저장.
+- **공유 PC웹 보강** = PC는 navigator.share(빈약한 Windows OS창) 대신 클립보드 복사 + `trip.shareLinkCopied` 안내(7 locale 신설). 모바일웹·네이티브 = 시스템 공유시트 종전대로.
+- 신규 패키지 0(`Linking` = RN 코어) = iOS Expo Go OTA 안전. §22 = 기계4 통과 + simplify·review 게이트 통과(지적 경미건 전부 반영: UID seq 유일화·RFC5987 인코딩·NaN 404·id확보 헬퍼 1벌화). 실측 = 여정91 → 200/12 VEVENT/UID유일/NaN 404.
+
+### ⑥ 로그인 게이트 1벌화 (§0.3 = 같은 기능 코드는 1벌만)
+- 저장(`useSaveItinerary`)·공유/캘린더(`useShareCalendar`)가 각자 갖던 동일 로그인안내 로직(getUserData null → 웹 confirm/네이티브 Alert → Login 이동) = 공용 `client/screens/trip-planner/hooks/login-gate.ts`(`ensureLoggedIn`) 1벌로 통합. 두 훅 모두 같은 화면·navigation·`trip.*` i18n 키라 안전. (파일명 = 훅 아닌 순수함수라 `use*` 미접두 = rules-of-hooks 오탐 방지, simplify 게이트 권고.)
+- ⚠️ `ExpertSheet.goLoginPrompt` = 통합 제외(§2 작동코드 보호) = 인터페이스 다름(navigation 없이 부모콜백 onRequestLogin·`expert.*` 키·토큰형식검사) = 억지 통합 시 오히려 복잡(§0). = 3벌처럼 보였으나 진짜 동일은 2벌 → 1벌.
+- tsc 160(베이스라인 회복 = 신규에러 0)·웹빌드·lint 통과.
 
 ### ⑤ FE 게이트 + UI 교체
 - 비로그인 게이트 = `useSaveItinerary.ts:56-77` 패턴 그대로 복제(`getUserData` null → 웹 `window.confirm`/네이티브 `Alert` → `navigate("Login")`), 기존 i18n 키 `trip.loginRequired`/`saveLoginHint`/`loginBtn` 재사용(오염 없음).

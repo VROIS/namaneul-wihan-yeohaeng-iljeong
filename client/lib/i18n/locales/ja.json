@@ -104,6 +104,7 @@
     "noItinerary": "保存する日程がありません。",
     "loginRequired": "ログインが必要です",
     "saveLoginHint": "日程を保存するにはログインしてください。",
+    "shareLinkCopied": "共有リンクをコピーしました。\nメッセージなどに貼り付けて共有してください。",
     "loginBtn": "ログイン",
     "crisisAlert": "注意！",
     "crisisInfo": "お知らせ",
