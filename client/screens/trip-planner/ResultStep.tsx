@@ -343,31 +343,41 @@ export default function ResultStep({ planner }: { planner: PlannerApi }) {
             {t("trip.footerCta")}
           </Text>
           <View style={styles.shareFooterRow}>
-            {/* isSharing 중 = 연타 방지(disabled + 반투명). 2026-07-21 §22 UX 배선. */}
+            {/* 2026-07-21 iOS 실기기 = 눌러도 색 안 변해 "눌렸나?" 혼동(사장님). 해결 = ①pressed 즉시 눌림 피드백(opacity 0.6) ②처리중 스피너로 아이콘 교체(진행 명확). isSharing = 연타 방지 disabled. */}
             <Pressable
-              style={[
+              style={({ pressed }) => [
                 styles.shareFooterBtn,
                 { borderColor: theme.border },
+                pressed && { opacity: 0.6 },
                 isSharing && { opacity: 0.5 },
               ]}
               onPress={() => handleShareItinerary()}
               disabled={isSharing}
             >
-              <Icon name="share-2" size={18} color={Brand.primary} />
+              {isSharing ? (
+                <ActivityIndicator size="small" color={Brand.primary} />
+              ) : (
+                <Icon name="share-2" size={18} color={Brand.primary} />
+              )}
               <Text style={[styles.shareFooterBtnText, { color: theme.text }]}>
                 {t("trip.footerShare")}
               </Text>
             </Pressable>
             <Pressable
-              style={[
+              style={({ pressed }) => [
                 styles.shareFooterBtn,
                 styles.shareFooterBtnPrimary,
-                isSharing && { opacity: 0.5 },
+                pressed && { opacity: 0.7 },
+                isSharing && { opacity: 0.6 },
               ]}
               onPress={() => handleSaveCalendar()}
               disabled={isSharing}
             >
-              <Icon name="calendar-plus" size={18} color="#FFFFFF" />
+              {isSharing ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Icon name="calendar-plus" size={18} color="#FFFFFF" />
+              )}
               <Text style={[styles.shareFooterBtnText, { color: "#FFFFFF" }]}>
                 {t("trip.footerCalendar")}
               </Text>

@@ -77,21 +77,17 @@ export function useShareCalendar({
     }
   };
 
-  // 📅 캘린더 저장 (2026-07-21 재구현) = 회원게이트 → 플랫폼별 원탭:
-  //   iOS = 서버 .ics URL(저장된 여정 id 필요 = 미저장이면 자동저장, 공유와 동일 패턴 §16) → Safari 네이티브 "일정 추가".
-  //   Android·웹 = 구글캘린더 render 링크(id 불필요, 클라 데이터로 즉시).
+  // 📅 캘린더 저장 (2026-07-21 = iOS·Android·웹 전부 서버 .ics 통일) = 회원게이트 → 저장 id 확보(미저장이면 자동저장, 공유와 동일 §16)
+  //   → 서버 .ics URL 을 openCalendar 가 Linking.openURL(웹=새 탭)로 엶 = 시간대별 개별 일정. 옛 안드로이드 구글링크 분기 삭제(§19).
   const handleSaveCalendar = async () => {
     if (!itinerary) return;
     if (!(await ensureLoggedIn(t, navigation))) return;
     setIsSharing(true);
     try {
-      let icsUrl: string | null = null;
-      if (Platform.OS === "ios") {
-        const id = await ensureItineraryId();
-        if (!id) return; // 저장 실패 = 캘린더 중단.
-        icsUrl = `${getApiUrl()}/api/itineraries/${id}/calendar.ics`;
-      }
-      await openCalendar(itinerary, icsUrl);
+      const id = await ensureItineraryId();
+      if (!id) return; // 저장 실패 = 캘린더 중단.
+      const icsUrl = `${getApiUrl()}/api/itineraries/${id}/calendar.ics`;
+      await openCalendar(icsUrl);
     } catch (error) {
       console.error("[TripPlanner] 캘린더 저장 오류:", error);
     } finally {

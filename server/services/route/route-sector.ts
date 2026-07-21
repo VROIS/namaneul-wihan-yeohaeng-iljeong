@@ -10,11 +10,8 @@ import { haversineKm } from "../agents/transit-haversine";
 
 type LatLng = { lat: number; lng: number };
 
-// 경계가 이보다 가까우면 = 붙은 곳(디즈니 2파크 등) = 절단 회피
-const NEAR_KM = 1.0;
-// 도심 날(평균 중심거리 ≤ CITY_KM)은 활동 +CITY_BONUS 더 담음 (= 가까워 많이 소화. 외곽 날은 baseCap). 사용자 SSOT 2026-06-12.
-const CITY_KM = 10;
-const CITY_BONUS = 1;
+// ⚠️ 2026-07-21 사장님 SSOT = NEAR_KM(붙은곳 회피)·CITY_KM·CITY_BONUS(도심날 +1 편중) 폐기(§19) = 도심 편중·회피 연쇄가
+//   앞 Day에 활동을 몰아 마지막 Day 활동 0(식사슬롯만 남고 활동슬롯 누락) 만들던 근본 결함. 확정 = "각 Day 슬롯수대로 정확히 균등배분".
 
 const hasCoord = (p: { lat?: number | null; lng?: number | null }): boolean =>
   p.lat != null && p.lng != null && p.lat !== 0 && p.lng !== 0;
@@ -77,17 +74,6 @@ export function sectorIntoDays(
   // ① NN 체인
   const chain = nnFromFarthest(pts, center);
   const n = chain.length;
-  // 인접 거리 (절단 경계 판정용)
-  const gaps: number[] = [];
-  for (let i = 0; i < n - 1; i++)
-    gaps.push(
-      haversineKm(
-        chain[i].lat,
-        chain[i].lng,
-        chain[i + 1].lat,
-        chain[i + 1].lng,
-      ),
-    );
 
   // ⚠️ 2026-07-04 사장님 SSOT = 후보 총량이 목표(Σ slotsPerDay)보다 부족할 때, 마지막 날에 부족분이 몰리는 결함 수정(§0).
   //   = 부족분을 전 Day에 균등 비례 축소해 배분(마지막 날만 텅 비는 현상 방지). 후보 충분하면 원래 슬롯 그대로(기존 검증 로직 불변).
@@ -109,20 +95,21 @@ export function sectorIntoDays(
           return arr;
         })();
 
-  // ② 절단 = 도심 날은 활동 +1 더 담고(가까워 많이 소화) 외곽 날은 적게 = 거리별 자연 차등 (사용자 SSOT 2026-06-12).
-  //   = 그룹 시작이 도심 밀집(평균 ≤ CITY_KM)이면 cap+CITY_BONUS(=활동7), 외곽이면 baseCap(=활동6). 붙은 곳(<NEAR_KM) 경계는 ±1 당겨 분리 회피.
-  //   = 도심이 NN 체인상 한 덩어리로 모이므로 도심 날이 더 채워지고 외곽 날이 5~6 으로 줄어듦(= 직전 라이브 9/8/7 의도형).
+  // ② 절단 = 각 Day 에 정확히 effectiveSlots[d] 곳씩 배분 (= 사장님 SSOT 2026-07-21 "슬롯수대로 균등배분").
+  //   = NN 체인 순서(가까운 곳 연속) 유지하되, 앞 Day 부터 자기 슬롯수만큼 잘라 담음 = 특정 Day 편중·마지막 Day 굶음 원천 차단.
+  //   = 잔여(활동 > Σ슬롯) = 한 Day 에 몰지 말고 앞 Day 부터 1개씩 순환 분산(§0 균등).
+  //   ⚠️ 운영 경로(route-local.ts:317-324)는 활동을 maxActivities=Σ(slots-2)=Σ슬롯 로 slice 후 전달 = 항상 n≤Σ슬롯 → surplus≤0(루프 0회).
+  //     이 순환 분산은 sim/외부 호출이 더 많은 활동을 넣을 때만 발동하는 방어 = 그때도 한 Day 몰림 방지(안전).
+  const perDay = effectiveSlots.map((v) => Math.max(1, v)); // 각 Day 목표 활동수
+  let surplus = n - perDay.reduce((s, v) => s + v, 0); // 활동 > Σ슬롯 이면 잔여 발생
+  for (let d = 0; surplus > 0; d = (d + 1) % k) {
+    perDay[d] += 1; // 잔여를 앞 Day 부터 1개씩 순환 분산(한 날 몰림 방지)
+    surplus -= 1;
+  }
   const groups: PlaceResult[][] = [];
   let start = 0;
   for (let d = 0; d < k - 1; d++) {
-    const baseCap = Math.max(1, effectiveSlots[d]);
-    // 이 그룹 시작 구간(baseCap+CITY_BONUS 만큼)의 평균 중심거리로 도심/외곽 판정
-    const peek = chain.slice(start, start + baseCap + CITY_BONUS);
-    const avgKm =
-      peek.reduce((s, p) => s + distFrom(p, center), 0) / (peek.length || 1);
-    const cap = avgKm <= CITY_KM ? baseCap + CITY_BONUS : baseCap;
-    let cut = Math.min(start + cap, n);
-    if (cut > start + 1 && cut < n && gaps[cut - 1] < NEAR_KM) cut -= 1; // 붙은 곳 분리 회피
+    const cut = Math.min(start + perDay[d], n);
     groups.push(chain.slice(start, cut));
     start = cut;
   }
