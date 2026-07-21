@@ -8,6 +8,50 @@
 
 ---
 
+## 🔴 2026-07-21 = **여정 공유 + 캘린더 저장 구현** (정본 = `docs/2026-07-21 여정공유·캘린더저장 명세.md`)
+
+> RALPH LOOP 실측→설계→구현 완료. 신규 네이티브 패키지 0(iOS Expo Go OTA 안전, [[reference_tripis_build_ios_expogo_aos_apk]] 정합) · 서버 신규 라우트 0(기존 SPA 폴백·API 재사용).
+
+### ① 카카오 공유 = A 시스템 공유시트로 확정
+- 사장님 확정 = **A안(RN `Share.share` / 웹 `navigator.share`)**. 카카오 SDK 전용 카드형 템플릿 = 로그인 정식화 시점으로 이연(미결 위험 아님, 의도된 순연).
+- 근거 = `BTSDashboardScreen.tsx:57` 기존 `Share.share` 사용례 재사용 = 신규 패키지 0.
+
+### ② DB = `is_saved_by_user` 컬럼 1개 추가
+- `shared/schema/itineraries.ts` = boolean 컬럼 1개만 추가(§0 가벼움, 이중화 금지).
+- `server/run-startup-migrations.ts` = 0017 블록 신설, 기존 0004~0015 와 동일한 `ADD COLUMN IF NOT EXISTS` 패턴(매 부팅 재실행 안전, throw로 후속 마이그 중단 없음).
+- `insertItinerarySchema`(`shared/schema/itineraries.ts`) omit 목록 불변 = `isSavedByUser` optional 로 통과 → `server/itinerary-routes.ts` buildItineraryData 의 `...body` 스프레드가 그대로 실어 저장(서버 로직 수정 0). 전문가 문의 저장(`saveItineraryForInquiry`, isSavedByUser 미전송)·프로필 목록 필터(`status!='inquiry'` 불변) 영향 없음 실측.
+
+### ③ 공유 링크 = 서버 신규 라우트 0
+- 링크 형식 = `getApiUrl() + /shared/itinerary/{id}` (공유·캘린더 핸들러 = `client/screens/trip-planner/hooks/useShareCalendar.ts` 신설, `handleShareItinerary`. 실제 신설 파일명 교정 = 2026-07-21 §1.1).
+- 서버 = `server/index.ts:223-232` 기존 SPA 폴백(`/api`·`/admin`·`/test-video` 제외 전 경로 index.html) 이 그대로 서빙 = 라우트 추가 0.
+- 웹 진입 = `useTripPlanner.ts` 에 pathname 파싱 effect(`/shared/itinerary/(\d+)` 정규식, 1회 실행 ref 가드 = OAuth 콜백 replaceState 재진입 루프 방지) 추가 → `restoreItineraryById(id, { shared: true })`.
+- **원본 보호 핵심**: `shared:true` 진입 시 `currentItineraryId` = `null` 유지(기본 동작인 `setCurrentItineraryId(targetId)` 를 shared 옵션일 때만 건너뜀) → 열람자가 저장하면 `useSaveItinerary` 의 PUT/POST 분기가 POST(새 행) 실행 = 원본 타인 여정 덮어쓰기 원천 차단.
+
+### ④ 캘린더 저장 = `.ics` 생성 + 공유
+- `client/lib/itinerary-calendar.ts` 신설(`generateICS`/`deliverICS`).
+- 웹 = Blob 다운로드, 네이티브 = 기존 설치된 `expo-file-system`(^19.0.21, 신 File API)·`expo-sharing`(^14.0.8) 재사용 — 버전 불변·신규 패키지 0(§16 재발명 금지, 기존 `useVideoGeneration.ts` 사용례와 동일 계열).
+
+### ⑤ FE 게이트 + UI 교체
+- 비로그인 게이트 = `useSaveItinerary.ts:56-77` 패턴 그대로 복제(`getUserData` null → 웹 `window.confirm`/네이티브 `Alert` → `navigate("Login")`), 기존 i18n 키 `trip.loginRequired`/`saveLoginHint`/`loginBtn` 재사용(오염 없음).
+- 공유·캘린더 전 자동저장 = `handleSaveItinerary` 재사용(반환 `saved.id` 규약 불변) → id 확보 후 링크/ics 생성.
+- `ResultStep.tsx` expertFooter 블록(339-370줄) 문구 + 버튼 2개만 교체(공유/캘린더). **하단 5탭·`requestAiOpinion`·`requestExpert`·`AiOpinionSheet`·`ExpertSheet` 배선 완전 불변**(사장님 '탭 불변' 명시 = MainTabNavigator 트리거만 잔존).
+- `styles/result.ts` expertFooter* 6개 키를 shareFooter* 로 개명(값 변경 0, 실제 개명 사실로 교정 = 2026-07-21 §1.1).
+- `Icon.tsx`(⚠️수정금지) = `Share2`·`CalendarPlus` 2개를 명시 import + `ICON_MAP` 양쪽에 추가만(기존 아이콘 삭제 0, import * 전환 금지 = 번들 15MB 회귀 방지).
+- 7개 locale(`ko.json` 등) `trip.footerAiOpinion`/`footerExpert` 키 삭제 + `footerShare`/`footerCalendar` 키 신설 + `footerCta` 값 교체(키 구조 변경 실제 발생, JSON 문법 오류 없도록 개별 검증. 실제 키 변경 사실로 교정 = 2026-07-21 §1.1).
+
+### ⑥ 검증 (dev-pipeline 회귀방지 파이프라인 첫 대형 실전, 73.6분·21에이전트·190만토큰)
+- **§22 = 판단 3종(simplify·review·react-best) 전부 통과**: "옛코드 완전삭제·재발명 없음", "실버그·회귀 0, 딥링크 원본보호 안전", "훅 패턴 정상". 기계 = tsc 160(베이스라인)·서버빌드·웹빌드 통과, lint 차단 1건(useShareCalendar prettier)→`--fix` 해소.
+- **영향분석 도미노 14건 예측** → 코딩 에이전트에 경고 주입 = 하단탭·전문가 로직·저장규약·AI캐시 등 회귀 0 확인.
+- **§22 UX 지적 반영**: `isSharing` 이 훅에서 반환되나 ResultStep 미소비(연타방지·스피너 없음) → 공유·캘린더 버튼 2개에 `disabled={isSharing}` + `opacity 0.5` 배선(2026-07-21).
+- **비차단 정리 대상(커밋 후)**: sharedEntry 데드 state(set만·소비 0) 정리, 로그인게이트 3곳(useSaveItinerary·useShareCalendar·ExpertSheet) useLoginGate 공용훅 1벌화.
+
+### 남은 일 (P0)
+- ⏳ 운영 배포(koyeb 서버 재시작 = is_saved_by_user 마이그 자동적용) 후 **Chrome DevTools 시각검증(§21)** — 공유 링크 열람(비회원)·캘린더 .ics·비로그인 게이트 실동작.
+- ⏳ **실기기 확인** = iOS(Expo Go 즉시)·AOS(새 APK). 커밋→push→배포→EAS+APK 순. 공유링크 열람은 서버 배포 후 가능.
+- ⏳ 카카오 SDK 카드형 공유 = 로그인 정식화 시점(이번 A안으로 충분).
+
+---
+
 ## 🔴🔴 2026-07-19~20 = **가이드 미니앱(3단계) = 발명 청산 → 운영앱 완전 클론** (커밋 677ddc2·96f2dc1 + 미커밋 1건)
 
 > 정본 상세 = `docs/2026-07-16 3단계 라이브여행비서 조사결과 SSOT.md` §12. 대원칙(사장님) = **운영앱(내손안에 가이드, 6개월 실증본)이 정답 = 그대로 클론, 발명 금지**.

@@ -31,6 +31,7 @@ import { usePickers } from "./usePickers";
 import { useAccommodations } from "./useAccommodations";
 import { useAiOpinionOverlay } from "./useAiOpinionOverlay";
 import { useSaveItinerary } from "./useSaveItinerary";
+import { useShareCalendar } from "./useShareCalendar";
 import { useGenerateItinerary } from "./useGenerateItinerary";
 
 type ScreenState = "Input" | "Loading" | "Result";
@@ -75,6 +76,8 @@ export function useTripPlanner() {
   const [currentItineraryId, setCurrentItineraryId] = useState<number | null>(
     null,
   );
+  // 🔗 2026-07-21 = 공유 링크(/shared/itinerary/:id)로 들어온 열람인지 표시. true면 restoreItineraryById가 currentItineraryId를 null로 유지(원본 보호).
+  const [sharedEntry, setSharedEntry] = useState(false);
   // 🗺️ 2026-06-28 = 지도 마커 클릭 → 해당 슬롯 스크롤 (= ScrollView ref + 슬롯별 y좌표 기록)
   const resultScrollRef = useRef<ScrollView | null>(null);
   const slotLayoutsRef = useRef<Record<string, number>>({});
@@ -147,6 +150,16 @@ export function useTripPlanner() {
     i18n,
   });
 
+  // 🔗📅 2026-07-21 = 여정 공유(시스템 공유시트)·캘린더 저장(.ics) 서브훅 조립(§16 = useSaveItinerary 바로 다음).
+  const { isSharing, handleShareItinerary, handleSaveCalendar } =
+    useShareCalendar({
+      itinerary,
+      currentItineraryId,
+      handleSaveItinerary,
+      navigation,
+      t,
+    });
+
   const { handleGenerate } = useGenerateItinerary({
     formData,
     currentUser,
@@ -195,57 +208,76 @@ export function useTripPlanner() {
     loadUserData();
   }, []);
 
-  // 🗂️ 2026-07-03 사용자 SSOT = 저장여정 복원 = 단일 함수(§16). 프로필 "나의 여정" 카드 탭·전문가 답변함 문의 탭 공용.
+  // 🗂️ 2026-07-03 사용자 SSOT = 저장여정 복원 = 단일 함수(§16). 프로필 "나의 여정" 카드 탭·전문가 답변함 문의 탭·공유링크 열람 공용.
   //   itineraryId → GET raw_data → 여정 결과화면(ResultStep) 재현. setItinerary + 숙소깃발 + 요약헤더 formData 스칼라 + Result 전환.
-  const restoreItineraryById = useCallback(async (targetId: number) => {
-    try {
-      const res = await apiRequest("GET", `/api/itineraries/${targetId}`);
-      const data = await res.json();
-      const raw = data?.rawData;
-      if (!raw || !raw.days) {
-        console.warn(
-          "[TripPlanner] 저장여정 복원 실패: rawData 없음",
-          targetId,
-        );
-        return;
-      }
-      setItinerary(raw as Itinerary);
-      setAiOpinionData((raw as any).verification?.result ?? null);
-      const accoms: DayAccommodation[] = (raw.days || [])
-        .filter((d: any) => d.accommodation?.coords?.lat)
-        .map((d: any) => ({
-          day: d.day,
-          name: d.accommodation.name,
-          address: d.accommodation.address || "",
-          coords: d.accommodation.coords,
-          placeId: d.accommodation.placeId,
+  //   ⚠️ 2026-07-21 = opts.shared=true(공유링크 열람) 시 setCurrentItineraryId를 null로 유지 = 열람자가 저장 눌러도
+  //   PUT(원본 덮어쓰기)이 아니라 POST(내 여정 새 행)로 감 = 타인 원본 보호. 기본(opts 없음=프로필 카드 복원)은 종전과 동일하게 targetId 세팅.
+  const restoreItineraryById = useCallback(
+    async (targetId: number, opts?: { shared?: boolean }) => {
+      try {
+        const res = await apiRequest("GET", `/api/itineraries/${targetId}`);
+        const data = await res.json();
+        const raw = data?.rawData;
+        if (!raw || !raw.days) {
+          console.warn(
+            "[TripPlanner] 저장여정 복원 실패: rawData 없음",
+            targetId,
+          );
+          return;
+        }
+        setItinerary(raw as Itinerary);
+        setAiOpinionData((raw as any).verification?.result ?? null);
+        const accoms: DayAccommodation[] = (raw.days || [])
+          .filter((d: any) => d.accommodation?.coords?.lat)
+          .map((d: any) => ({
+            day: d.day,
+            name: d.accommodation.name,
+            address: d.accommodation.address || "",
+            coords: d.accommodation.coords,
+            placeId: d.accommodation.placeId,
+          }));
+        setDayAccommodations(accoms);
+        setFormData((prev) => ({
+          ...prev,
+          destination: raw.destination || prev.destination,
+          companionType: data.companionType || prev.companionType,
+          companionCount: data.companionCount ?? prev.companionCount,
+          curationFocus: data.curationFocus || prev.curationFocus,
+          vibes:
+            Array.isArray(data.vibes) && data.vibes.length
+              ? data.vibes
+              : prev.vibes,
+          travelStyle: data.travelStyle || prev.travelStyle,
+          travelPace: data.travelPace || prev.travelPace,
+          mobilityStyle: data.mobilityStyle || prev.mobilityStyle,
         }));
-      setDayAccommodations(accoms);
-      setFormData((prev) => ({
-        ...prev,
-        destination: raw.destination || prev.destination,
-        companionType: data.companionType || prev.companionType,
-        companionCount: data.companionCount ?? prev.companionCount,
-        curationFocus: data.curationFocus || prev.curationFocus,
-        vibes:
-          Array.isArray(data.vibes) && data.vibes.length
-            ? data.vibes
-            : prev.vibes,
-        travelStyle: data.travelStyle || prev.travelStyle,
-        travelPace: data.travelPace || prev.travelPace,
-        mobilityStyle: data.mobilityStyle || prev.mobilityStyle,
-      }));
-      setCurrentItineraryId(targetId);
-      setScreen("Result");
-    } catch (e) {
-      console.warn("[TripPlanner] 저장여정 복원 오류:", e);
-    }
-  }, []);
+        setCurrentItineraryId(opts?.shared ? null : targetId);
+        setSharedEntry(!!opts?.shared);
+        setScreen("Result");
+      } catch (e) {
+        console.warn("[TripPlanner] 저장여정 복원 오류:", e);
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     if (!restoreItineraryId) return;
     restoreItineraryById(restoreItineraryId);
   }, [restoreItineraryId, restoreItineraryById]);
+
+  // 🔗 2026-07-21 = 웹 공유링크 진입(/shared/itinerary/:id) = 서버는 이미 SPA 폴백이 이 경로에 index.html 서빙(server/index.ts:223-232, 신규 라우트 0)
+  //   + GET /api/itineraries/:id 인증 0(개발 전체공개 = 게이트 추가 금지). 마운트 시 pathname 1회 파싱(useLogin.ts:130-143 패턴 준용) → shared:true로 복원.
+  //   1회 실행 가드(ref) = 로그인 왕복 후 pathname이 남아있어도(§ useLogin replaceState) 재실행돼 반복 재진입하는 것 방지.
+  const sharedDeepLinkHandled = useRef(false);
+  useEffect(() => {
+    if (Platform.OS !== "web" || typeof window === "undefined") return;
+    if (sharedDeepLinkHandled.current) return;
+    const m = window.location.pathname.match(/^\/shared\/itinerary\/(\d+)$/);
+    if (!m) return;
+    sharedDeepLinkHandled.current = true;
+    restoreItineraryById(Number(m[1]), { shared: true });
+  }, [restoreItineraryById]);
 
   useEffect(() => {
     if (screen === "Loading") {
@@ -298,6 +330,11 @@ export function useTripPlanner() {
     isSaving,
     justSaved,
     handleSaveItinerary,
+    // 🔗📅 공유·캘린더(2026-07-21 신규, ResultStep footer 버튼 2개가 이 이름 그대로 참조 = D와 인터페이스 계약)
+    isSharing,
+    handleShareItinerary,
+    handleSaveCalendar,
+    sharedEntry,
     // 숙소
     dayAccommodations,
     hotelModalDay,

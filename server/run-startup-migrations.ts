@@ -143,6 +143,13 @@ export async function runStartupMigrations(): Promise<void> {
     console.log("[Migration] 0015 google_maps_uri 컬럼 추가 완료");
 
     // ⚠️ 수정금지(승인필요) 2026-06-11 = 0016 celeb_mention 부팅마이그 제거 (= DROP = 헛바퀴, 좀비 차단)
+
+    // 0017: itineraries.is_saved_by_user (= 여정공유·캘린더저장 명세, 사용자 명시 저장 플래그)
+    await pool.query(`
+      ALTER TABLE "itineraries"
+        ADD COLUMN IF NOT EXISTS "is_saved_by_user" boolean DEFAULT false;
+    `);
+    console.log("[Migration] ✅ 0017 itineraries.is_saved_by_user 적용 완료");
   } catch (err) {
     console.warn("[Migration] 스킵 또는 실패:", (err as Error).message);
   }

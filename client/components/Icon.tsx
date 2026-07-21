@@ -60,6 +60,8 @@ import {
   Flower2,
   Landmark,
   Mountain,
+  Share2,
+  CalendarPlus,
 } from "lucide-react-native";
 import { useColorScheme } from "react-native";
 import { Colors } from "@/constants/theme";
@@ -123,6 +125,8 @@ const ICON_MAP: Record<string, React.ComponentType<LucideProps>> = {
   Flower2, // = 힐링 (= 마커와 통일)
   Landmark, // = 문화/예술 (= 마커와 통일)
   Mountain, // = 모험 (= 마커와 통일)
+  Share2, // = 여정 공유 (2026-07-21 결과화면 하단 공유 버튼)
+  CalendarPlus, // = 캘린더 저장 (2026-07-21 결과화면 하단 캘린더 버튼)
 };
 
 // ⚠️ 수정금지(승인필요) — kebab-case → PascalCase 변환

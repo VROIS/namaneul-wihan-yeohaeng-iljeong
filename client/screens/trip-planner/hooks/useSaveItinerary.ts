@@ -127,6 +127,8 @@ export function useSaveItinerary({
         travelPace: formData.travelPace,
         mobilityStyle: formData.mobilityStyle,
         status: "saved",
+        // 사용자가 저장 버튼으로 명시 저장 = true (2026-07-21 여정공유·캘린더저장 명세)
+        isSavedByUser: true,
         // 🩹 [2026-01-26] 영상 생성을 위한 원본 데이터 전체 저장 + 🏨 2026-07-03 숙소 병합본
         rawData: rawWithAccom,
       };

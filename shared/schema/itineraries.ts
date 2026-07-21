@@ -8,6 +8,7 @@ import {
   timestamp,
   real,
   jsonb,
+  boolean,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -60,6 +61,9 @@ export const itineraries = pgTable("itineraries", {
   // 🩹 [2026-01-26] 일정 생성 원본 데이터 저장 (영상 생성 시 재사용)
   // items 테이블 대신 이 JSON을 사용하여 장소 목록을 복원함
   rawData: jsonb("raw_data").$type<object>().default({}),
+
+  // 사용자가 저장 버튼으로 명시 저장한 여정 = true (2026-07-21 여정공유·캘린더저장 명세)
+  isSavedByUser: boolean("is_saved_by_user").default(false),
 
   createdAt: timestamp("created_at")
     .default(sql`CURRENT_TIMESTAMP`)

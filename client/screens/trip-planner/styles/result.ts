@@ -91,19 +91,20 @@ export const resultStyles = StyleSheet.create({
   dayHeaderTheme: { fontSize: 14, fontFamily: Fonts.bold },
   dayHeaderCity: { fontSize: 11, marginTop: 1 },
   resultScrollView: { flex: 1 },
-  expertFooter: {
+  // 2026-07-21 expertFooter*→shareFooter* 개명(이름 거짓말 제거 §19, 사용처=ResultStep 1곳뿐 grep 실측, 값 변경 0)
+  shareFooter: {
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.lg,
     paddingBottom: Spacing.md + 56,
     gap: Spacing.sm,
   },
-  expertFooterCta: {
+  shareFooterCta: {
     fontSize: 13,
     fontFamily: Fonts.medium,
     textAlign: "center",
   },
-  expertFooterRow: { flexDirection: "row", gap: Spacing.sm },
-  expertFooterBtn: {
+  shareFooterRow: { flexDirection: "row", gap: Spacing.sm },
+  shareFooterBtn: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
@@ -114,11 +115,11 @@ export const resultStyles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "transparent",
   },
-  expertFooterBtnPrimary: {
+  shareFooterBtnPrimary: {
     backgroundColor: Brand.primary,
     borderColor: Brand.primary,
   },
-  expertFooterBtnText: { fontSize: 14, fontFamily: Fonts.semiBold },
+  shareFooterBtnText: { fontSize: 14, fontFamily: Fonts.semiBold },
   placesList: { paddingHorizontal: Spacing.sm },
   placeItem: { flexDirection: "row", marginBottom: Spacing.sm }, // 간격 최소화
   timelineLeft: { width: 44, alignItems: "center" },

@@ -47,8 +47,9 @@ export default function ResultStep({ planner }: { planner: PlannerApi }) {
     setHotelModalDay,
     handleSetDayAccommodation,
     isReoptimizing,
-    requestAiOpinion,
-    requestExpert,
+    handleShareItinerary,
+    handleSaveCalendar,
+    isSharing,
     resultScrollRef,
     slotLayoutsRef,
     dayLayoutsRef,
@@ -336,34 +337,39 @@ export default function ResultStep({ planner }: { planner: PlannerApi }) {
             planner={planner}
           />
         ))}
-        {/* ⚠️ 수정금지(승인필요) 2026-07-13 사장님 SSOT = 여정 결과화면(지도섹션=Result) 하단 = 현지전문가 문의 / AI 의견 바로가기.
-              7/3 "링크금지" 해제(사장님 2026-07-13 승인). 판별=screen==="Result"(지도섹션) 재사용 = 라이브·저장 여정 공용. */}
-        <View style={styles.expertFooter}>
-          <Text
-            style={[styles.expertFooterCta, { color: theme.textSecondary }]}
-          >
+        {/* 2026-07-21 사장님 SSOT = 여정 결과화면 하단 = 여정 공유 / 캘린더 저장 바로가기(구 AI의견·전문가 바로가기 교체, §0/§19). 하단 5탭의 AI의견·전문가검증은 불변. */}
+        <View style={styles.shareFooter}>
+          <Text style={[styles.shareFooterCta, { color: theme.textSecondary }]}>
             {t("trip.footerCta")}
           </Text>
-          <View style={styles.expertFooterRow}>
+          <View style={styles.shareFooterRow}>
+            {/* isSharing 중 = 연타 방지(disabled + 반투명). 2026-07-21 §22 UX 배선. */}
             <Pressable
-              style={[styles.expertFooterBtn, { borderColor: theme.border }]}
-              onPress={() => requestAiOpinion()}
+              style={[
+                styles.shareFooterBtn,
+                { borderColor: theme.border },
+                isSharing && { opacity: 0.5 },
+              ]}
+              onPress={() => handleShareItinerary()}
+              disabled={isSharing}
             >
-              {/* ⚠️ 사장님 SSOT 2026-07-15 = AI 의견 = bot(로봇). 하단 탭과 동일 아이콘. */}
-              <Icon name="bot" size={18} color={Brand.primary} />
-              <Text style={[styles.expertFooterBtnText, { color: theme.text }]}>
-                {t("trip.footerAiOpinion")}
+              <Icon name="share-2" size={18} color={Brand.primary} />
+              <Text style={[styles.shareFooterBtnText, { color: theme.text }]}>
+                {t("trip.footerShare")}
               </Text>
             </Pressable>
             <Pressable
-              style={[styles.expertFooterBtn, styles.expertFooterBtnPrimary]}
-              // ⚠️ 사장님 SSOT 2026-07-14 = 전문가 문의 = AI의견과 동일 = 여정화면 위 오버레이 열기(requestExpert). 화면 이동·수동저장 아님. 문의 시 여정 자동저장은 ExpertSheet 안에서(saveItineraryForInquiry). §19.
-              onPress={() => requestExpert()}
+              style={[
+                styles.shareFooterBtn,
+                styles.shareFooterBtnPrimary,
+                isSharing && { opacity: 0.5 },
+              ]}
+              onPress={() => handleSaveCalendar()}
+              disabled={isSharing}
             >
-              {/* ⚠️ 사장님 SSOT 2026-07-15 = 전문가 검증 = brain(사람 전문가의 판단). 하단 탭과 동일 아이콘(옛 award 폐기 §19 = 탭·여정하단 불일치 해소). */}
-              <Icon name="brain" size={18} color="#FFFFFF" />
-              <Text style={[styles.expertFooterBtnText, { color: "#FFFFFF" }]}>
-                {t("trip.footerExpert")}
+              <Icon name="calendar-plus" size={18} color="#FFFFFF" />
+              <Text style={[styles.shareFooterBtnText, { color: "#FFFFFF" }]}>
+                {t("trip.footerCalendar")}
               </Text>
             </Pressable>
           </View>
