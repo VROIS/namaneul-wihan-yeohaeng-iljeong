@@ -62,6 +62,44 @@ export function sceneClipPrompt(scene: GhibliScene): string {
 ${SCENE_SECONDS}-second clip. Audio: a warm, cheerful Korean narrator says in Korean: "${scene.narrationKo}" — plus light Ghibli-style piano background music.`;
 }
 
+// Gemini가 간혹 정상 JSON 뒤에 여분의 `}` 를 붙임(2026-07-22 운영 i103 raw 2회 실증 = "...}\n}") →
+// 중괄호 균형 기준으로 첫 JSON 객체만 정확히 추출하는 파서 1벌(§0). 문자열 내부의 {}·이스케이프 안전.
+function parseFirstJsonObject<T>(raw: string): T | null {
+  const start = raw.indexOf("{");
+  if (start < 0) return null;
+  let depth = 0;
+  let inStr = false;
+  let esc = false;
+  for (let i = start; i < raw.length; i++) {
+    const ch = raw[i];
+    if (esc) {
+      esc = false;
+      continue;
+    }
+    if (ch === "\\") {
+      if (inStr) esc = true;
+      continue;
+    }
+    if (ch === '"') {
+      inStr = !inStr;
+      continue;
+    }
+    if (inStr) continue;
+    if (ch === "{") depth++;
+    else if (ch === "}") {
+      depth--;
+      if (depth === 0) {
+        try {
+          return JSON.parse(raw.slice(start, i + 1)) as T;
+        } catch {
+          return null;
+        }
+      }
+    }
+  }
+  return null;
+}
+
 /** 하루치 지브리 스토리보드 = Gemini 1콜 (비용 ≈ $0.01 미만) */
 export async function buildGhibliStoryboard(
   params: StoryboardParams,
@@ -107,14 +145,18 @@ export async function buildGhibliStoryboard(
       rawTag: `ghibli-storyboard-i${itinerary.id ?? 0}-d${day}`,
     },
   );
-  if (!r.data?.scenes?.length)
+  // 파싱 = 균형 파서 1벌만 사용(관문의 greedy 정규식은 여분 `}` 에 깨짐 = 운영 실증)
+  const data = parseFirstJsonObject<{ title: string; scenes: GhibliScene[] }>(
+    r.raw,
+  );
+  if (!data?.scenes?.length)
     throw new Error(
       `[storyboard] Gemini 응답 파싱 실패: ${r.parseError || r.finishReason}`,
     );
 
   const root = process.cwd();
   return {
-    title: r.data.title || `${itinerary.title || "여행"} Day ${day}`,
+    title: data.title || `${itinerary.title || "여행"} Day ${day}`,
     cast,
     referenceImagePaths: [
       ...cast.travelers.map((c) => path.join(root, c.assetPath)),
@@ -124,6 +166,6 @@ export async function buildGhibliStoryboard(
         `assets/vehicles/vehicle_${cast.vehicle.type === "sprinter_bus" ? "bus" : cast.vehicle.type}.jpg`,
       ),
     ],
-    scenes: r.data.scenes.slice(0, slots.length),
+    scenes: data.scenes.slice(0, slots.length),
   };
 }
