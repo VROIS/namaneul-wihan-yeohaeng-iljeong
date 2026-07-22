@@ -77,8 +77,8 @@ export function useShareCalendar({
     }
   };
 
-  // 📅 캘린더 저장 (2026-07-21 = iOS·Android·웹 전부 서버 .ics 통일) = 회원게이트 → 저장 id 확보(미저장이면 자동저장, 공유와 동일 §16)
-  //   → 서버 .ics URL 을 openCalendar 가 Linking.openURL(웹=새 탭)로 엶 = 시간대별 개별 일정. 옛 안드로이드 구글링크 분기 삭제(§19).
+  // 📅 캘린더 저장 (2026-07-22 = OS 분기) = 회원게이트 → 저장 id 확보(미저장이면 자동저장, 공유와 동일 §16) → openCalendar 위임.
+  //   Android = expo-calendar 직접삽입(itinerary 슬롯 → 이벤트, 모달 없음). iOS·웹 = 서버 .ics URL(id 필요). §16 openCalendar 단일 진입.
   const handleSaveCalendar = async () => {
     if (!itinerary) return;
     if (!(await ensureLoggedIn(t, navigation))) return;
@@ -87,7 +87,7 @@ export function useShareCalendar({
       const id = await ensureItineraryId();
       if (!id) return; // 저장 실패 = 캘린더 중단.
       const icsUrl = `${getApiUrl()}/api/itineraries/${id}/calendar.ics`;
-      await openCalendar(icsUrl);
+      await openCalendar(itinerary, icsUrl);
     } catch (error) {
       console.error("[TripPlanner] 캘린더 저장 오류:", error);
     } finally {

@@ -10,5 +10,5 @@
     "types": ["node"]
   },
   "include": ["**/*.ts", "**/*.tsx"],
-  "exclude": ["node_modules", "build", "dist", "**/*.test.ts", "docs/design-references/**", "_agent/**", "dev/**"],
+  "exclude": ["node_modules", "build", "dist", "**/*.test.ts", "docs/design-references/**", "_agent/**", "dev/**", "deliverables_ghibli_video/**", "scratch_*.ts"],
 }

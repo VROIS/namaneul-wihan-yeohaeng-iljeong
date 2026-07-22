@@ -66,6 +66,12 @@
         {
           "locationAlwaysAndWhenInUsePermission": "현재 위치 기반 여행 정보·SOS 안내를 위해 위치를 사용합니다."
         }
+      ],
+      [
+        "expo-calendar",
+        {
+          "calendarPermission": "여정을 캘린더에 추가하기 위해 캘린더를 사용합니다."
+        }
       ]
     ],
     "experiments": {
