@@ -10,7 +10,6 @@ import {
   haversineKm,
   calcTransitHaversine,
   pickTransitMode,
-  type TravelMode,
 } from "../agents/transit-haversine";
 import type {
   RouteResponse,
@@ -289,7 +288,8 @@ export function buildRouteLocal(
 ): RouteHandlerResult {
   const t0 = Date.now();
   const { formData, daySlotsConfig, paceConfig, companionCount } = skeleton;
-  const slotDuration = paceConfig.slotDurationMinutes;
+  const slotDuration = paceConfig.slotDurationMinutes; // 활동 1곳 시간
+  const mealDuration = paceConfig.mealDurationMinutes; // 식사 1회 시간(밀도별, 활동보다 짧음)
   const mealBudget = MEAL_BUDGET[formData.travelStyle || "Reasonable"];
 
   // ⚠️ 2026-07-04 사장님 SSOT = 출발/종료 앵커 = 숙소 좌표 최우선(§14 A안=여행 전체 공통 숙소) → 없으면 도심 중심.
@@ -422,10 +422,18 @@ export function buildRouteLocal(
     if (lunch && lunchIdx >= dayActs.length) seq.push({ p: lunch, rest: true }); // 활동<2 = 점심 뒤에
     if (dinner) seq.push({ p: dinner, rest: true });
 
-    // 고정 페이스 그리드 시각 (= startTime + i×슬롯간격, 이동시간 미반영 = 깔끔 시각) + 거리/교통(Haversine)
+    // ⚠️ 2026-07-21 사장님 SSOT = 슬롯 시각 = 활동/식사 각 소요시간 누적(균일 그리드 폐기 §19). 활동 우선 = 최대한 활동 보장.
+    //   활동 = slotDuration, 점심 = mealDuration(중간). 저녁 = 마지막 슬롯 = 마지막 활동 끝난 시각부터 시작(시작시각만 = 종료 미지정 = 사용자 현장 결정).
+    //   → 활동을 앞에 꽉 채우고 저녁은 그 직후 = 저녁이 실제 저녁시각(영업시간)에 자연히 옴. 옛 저녁 이른시각(16:30)·종료 인위고정 폐기 §19.
     let prev: LatLng = center;
     let dayKm = 0;
     const startMin = toMin(dc.startTime);
+    const slotStartMins: number[] = [];
+    let acc = startMin;
+    for (const it of seq) {
+      slotStartMins.push(acc);
+      acc += it.rest ? mealDuration : slotDuration;
+    }
     const scenes: RouteScene[] = seq.map((it, i) => {
       const km = round2(haversineKm(prev.lat, prev.lng, it.p.lat, it.p.lng));
       const { mode, calc } = pickTransitMode(
@@ -442,10 +450,10 @@ export function buildRouteLocal(
       );
       prev = { lat: it.p.lat, lng: it.p.lng };
       dayKm += km;
-      grandSec += slotDuration * 60;
+      grandSec += (it.rest ? mealDuration : slotDuration) * 60;
       const scene: RouteScene = {
         slot: i + 1,
-        time: minutesToTime(startMin + i * slotDuration),
+        time: minutesToTime(slotStartMins[i]),
         type: it.rest ? "restaurant" : "activity",
         place_id: it.p.id,
         name_en: it.p.name || "",

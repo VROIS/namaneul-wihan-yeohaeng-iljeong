@@ -47,8 +47,11 @@ export type CurationFocus = "Kids" | "Parents" | "Everyone" | "Self";
 
 // ===== 설정 인터페이스 =====
 export interface PaceConfig {
-  slotDurationMinutes: number;
-  maxSlotsPerDay: number;
+  slotDurationMinutes: number; // 활동 1곳 체류+이동 시간(밀도별)
+  // ⚠️ 2026-07-21 사장님 SSOT = 식사 슬롯 시간을 활동과 분리(밀도별) = 활동3 의무 + 저녁이 실제 저녁시각(영업시간)에 오게 함.
+  //   옛 균일 slotDuration(식사도 활동과 같은 간격) 폐기 §19 = Relaxed 저녁 16:30(문 안 연 시각) 사고 근본.
+  mealDurationMinutes: number; // 식사 1회 시간(밀도별, 활동보다 짧음)
+  maxSlotsPerDay: number; // (레거시 상한, 이제 가용시간이 슬롯수 결정 = 실질 미사용이나 안전 상한 유지)
 }
 
 export interface MealSlotConfig {
@@ -147,10 +150,24 @@ export interface PlaceResult {
 }
 
 // ===== 상수 =====
+// ⚠️ 2026-07-21 사장님 SSOT = 활동간격(밀도별) + 식사간격(밀도별, 활동보다 짧음). maxSlotsPerDay = 안전 상한(가용시간이 실제 슬롯수 결정).
+//   식사가 활동보다 짧아(밥은 빨리 끝남) 저녁이 뒤로 밀려 실제 저녁시각(18-20시)·가용시간 종료 근처에 옴 + 활동 자리 확보(Relaxed 활동3).
 export const PACE_CONFIG: Record<TravelPace, PaceConfig> = {
-  Packed: { slotDurationMinutes: 90, maxSlotsPerDay: 8 },
-  Normal: { slotDurationMinutes: 120, maxSlotsPerDay: 6 },
-  Relaxed: { slotDurationMinutes: 150, maxSlotsPerDay: 4 },
+  Packed: {
+    slotDurationMinutes: 90,
+    mealDurationMinutes: 60,
+    maxSlotsPerDay: 12,
+  },
+  Normal: {
+    slotDurationMinutes: 120,
+    mealDurationMinutes: 90,
+    maxSlotsPerDay: 10,
+  },
+  Relaxed: {
+    slotDurationMinutes: 150,
+    mealDurationMinutes: 120,
+    maxSlotsPerDay: 8,
+  },
 };
 
 export const MEAL_SLOTS: MealSlotConfig[] = [
@@ -276,7 +293,10 @@ export function getCompanionCount(companionType: string): number {
   return mapping[companionType] || 1;
 }
 
-// ===== 슬롯 수 계산 =====
+// ===== 슬롯 수 계산 (2026-07-21 사장님 SSOT = 활동 우선 최대 + 식사2) =====
+//   하루 = 활동 N개 + 점심1 + 저녁1(마지막 활동 직후 = 종료 미지정 = 현장 결정). 활동을 우선 최대한 채움:
+//   활동수 N = floor((가용 - 점심1) / 활동간격). 총슬롯 = N + 2(점심·저녁).
+//   저녁은 마지막 활동 직후라 저녁 몫을 활동시간에서 빼지 않음 = 활동이 가용시간을 꽉 채우고 저녁은 종료 근처(넘어도 현장). 옛 균일 slotDuration 분할·저녁 이른시각 폐기 §19.
 export function calculateSlotsForDay(
   startTime: string,
   endTime: string,
@@ -287,10 +307,13 @@ export function calculateSlotsForDay(
   const [endH, endM] = endTime.split(":").map(Number);
   const availableMinutes = endH * 60 + endM - (startH * 60 + startM);
   if (availableMinutes <= 0) return 0;
-  return Math.min(
-    Math.floor(availableMinutes / config.slotDurationMinutes),
-    config.maxSlotsPerDay,
+  // 활동 = 점심1개 자리만 빼고 최대(저녁은 마지막 활동 뒤라 안 뺌 = 활동 우선). 최소 활동 1.
+  const forActivities = availableMinutes - config.mealDurationMinutes;
+  const nActivities = Math.max(
+    1,
+    Math.floor(forActivities / config.slotDurationMinutes),
   );
+  return Math.min(nActivities + 2, config.maxSlotsPerDay);
 }
 
 // ===== 일수 계산 =====

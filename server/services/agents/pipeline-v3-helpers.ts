@@ -12,6 +12,24 @@ export async function getEnrichmentFunctions() {
 
 // 🗑️ 2026-07-06 = haversineTransit + calcTransit 완전삭제 §19 = MIX 이동계산 = transit-haversine(calcTransitHaversine·pickTransitMode·estimateTransitCost) 단일 SSOT(§16) = DB-only(route-local) 동형. 옛 2km 도보임계·mobilityStyle 편향·cost 0 하드코딩 = 결함③④ 근본 제거.
 
+// ⚠️ 2026-07-21 사장님 SSOT = 슬롯 시작시각 = 활동/식사 각 소요 누적(DB-only route-local·MIX day-builder 공용 1벌 §16).
+//   활동 = slotDur, 식사(isMeal true) = mealDur(짧음) → 저녁이 실제 저녁시각·마지막 활동 직후. 옛 균일그리드 폐기 §19.
+export function computeSlotStartMins(
+  count: number,
+  startMin: number,
+  slotDur: number,
+  mealDur: number,
+  isMeal: (i: number) => boolean,
+): number[] {
+  const out: number[] = [];
+  let acc = startMin;
+  for (let i = 0; i < count; i++) {
+    out.push(acc);
+    acc += isMeal(i) ? mealDur : slotDur;
+  }
+  return out;
+}
+
 /** 좌표 유효성 검증 */
 export function isValidCoord(lat: number, lng: number): boolean {
   return (

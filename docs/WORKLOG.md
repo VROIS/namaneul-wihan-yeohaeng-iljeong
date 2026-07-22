@@ -8,6 +8,32 @@
 
 ---
 
+## 🔴 2026-07-21 = **여정 슬롯 배분 근본수정 = 활동 우선 + 식사시간 분리 + 저녁 마지막**
+
+> 증상: Relaxed 3일 "밥만 2번"(Day3 활동0·식사2) + 저녁 16:30(문 안 연 시각). 근본: ①활동 `slots-2`로 Relaxed 활동2뿐 ②균일 slotDuration 그리드라 식사도 활동간격(150분) = 저녁 이른시각 + 가용시간(21시) 앞부분만 씀.
+
+### 사장님 SSOT 규칙 (실제 Gemini 호출 + 시뮬 입증 완료)
+- **활동 우선 최대** = 활동수 = `floor((가용 - 점심1) / 활동간격)`, 저녁은 마지막 활동 직후(종료 미지정=현장). Relaxed도 활동3+.
+- **식사시간 밀도별 분리** = PACE_CONFIG에 `mealDurationMinutes`(Packed60·Normal90·Relaxed120) 추가. 활동간격(90/120/150)과 별개. 식사가 짧아 저녁이 뒤로 밀려 실제 저녁시각(영업시간)에 옴.
+- **점심=중간, 저녁=마지막 슬롯**(활동 직후). 슬롯 시각 = 활동/식사 각 소요시간 누적(옛 균일그리드 폐기 §19).
+- **동적 가용시간** = 사용자 startTime/endTime 그대로(08~21시/10:30~20시 등) 반영.
+
+### 수정 파일(6, DB-only + MIX 두 경로 동형 §16)
+- `agents/types.ts` = PaceConfig+mealDuration, PACE_CONFIG 3밀도, calculateSlotsForDay 재작성.
+- `route/route-local.ts` = 시각 소요누적(slotStartMins), 저녁 마지막 활동 직후.
+- `agents/pipeline-v3-step1-gemini.ts` = MIX 프롬프트 activityCount=slots-2·식사2·저녁 마지막 단순화(옛 저녁 18:30~20:00 윈도우 폐기 §19).
+- `agents/pipeline-v3-day-builder.ts` = MIX 실제 시각 = route-local 동형(소요누적). = simplify 게이트 지적(MIX 시각 방치) 반영.
+- `agents/pipeline-v3-step2-build.ts` = paceConfig 타입 mealDuration 추가(review 게이트 커밋차단 TS2741 해소).
+- `agents/ag4-db-finalize.ts` = 식사 endTime = mealDuration(활동간격 30분 과다 수정, simplify 지적).
+
+### 입증 (사장님 요구 = 실제 Gemini 유료호출, apipass 경유)
+- **실호출(파리 13h)**: Packed 총10(관광8+식사2)·Normal 총7(관광5+식사2)·Relaxed 총6(관광4+식사2) = 슬롯수·식사2·저녁마지막 전부 정확.
+- **DB-only 시뮬**: Relaxed 09:00~21:00 = 09:00활 11:30활 14:00점심 16:00활 18:30활 21:00저녁 = 활동4.
+- **MIX day-builder 시각 = route-local 동형**(산수). §22 기계4(tsc160·서버빌드·lint) + simplify·review 통과.
+- ⚠️ **서버 로직 = APK 무관 = 사장님 Replit Republish로 운영 반영**(FE 무변경).
+
+---
+
 ## 🔴 2026-07-21 = **여정 공유 + 캘린더 저장 구현** (정본 = `docs/2026-07-21 여정공유·캘린더저장 명세.md`)
 
 > RALPH LOOP 실측→설계→구현 완료. 신규 네이티브 패키지 0(iOS Expo Go OTA 안전, [[reference_tripis_build_ios_expogo_aos_apk]] 정합) · 서버 신규 라우트 0(기존 SPA 폴백·API 재사용).

@@ -1,6 +1,6 @@
 // Step1 Gemini 완전 일정 생성 + JSON 잘림 복구 헬퍼 = pipeline-v3 분리(2026-07-15 §0 슬림화, 순수 이동)
 import type { TripFormData, DaySlotConfig, VibeWeight } from "./types";
-import { MEAL_BUDGET, SEED_CATEGORIES } from "./types";
+import { MEAL_BUDGET } from "./types"; // SEED_CATEGORIES 삭제 §19 = 미사용(호출 0)
 import { computeCatSlots } from "./ag2-gemini-recommender";
 import {
   getAI,
@@ -44,12 +44,7 @@ export async function step1_geminiItinerary(
   const headcount = formData.companionCount || 2;
   const focusDesc = formData.curationFocus || "Everyone"; // 원본값(Kids/Parents/Everyone/Self) 그대로
 
-  // ⑥ 여행지 (destination) - 직접 사용
-
-  // ⑦ 여행 기간
-  const startDate = formData.startDate;
-  const endDate = formData.endDate;
-
+  // 🗑️ 2026-07-21 = startDate·endDate 삭제 §19 = dateRangeText(삭제됨)에서만 쓰이던 죽은 변수.
   // 🗑️ 2026-07-09 사장님 SSOT = vibeKo·styleKo·mobilityKo·paceKo 하드코딩 번역맵 4개 완전삭제 §19 = 옛 AI 과설계.
   //   = Gemini 응답요소에 없는 것(사람 읽는 설명글) = 삭제. 원본값(vibes·travelStyle·travelPace)을 그대로 프롬프트에 실어 Gemini 해석([[feedback_dynamic_function_not_hardcoded_map]]).
   //   = 실제 로직(카테고리 배분 catSlots·페이스 90/120/150분·예산)은 이미 다른 곳서 동적 처리 = 이 설명맵은 장식(죽은코드·도달불가폴백)이었음.
@@ -66,83 +61,18 @@ export async function step1_geminiItinerary(
     nonRestCats.map(([cat, n]) => `${cat} ${n}곳`).join(", ") +
     (catSlots.restaurant ? ` / 식당(restaurant) ${catSlots.restaurant}곳` : "");
 
-  // 일별 요구사항 (식사 시간 제약 자동 계산)
+  // 일별 요구사항 (2026-07-21 사장님 SSOT = DB-only와 동일 규칙 = 식사 항상 2(점심 중간+저녁 마지막), 활동 = slots-2 우선).
+  //   활동을 우선 최대한 채우고(AG1 슬롯수 = 활동 최대), 점심은 12~14시 중간, 저녁은 마지막 활동 직후(종료 미지정 = 유동).
+  //   옛 저녁 18:30~20:00 윈도우 고정·윈도우 밖이면 식사 제외 폐기 §19 = DB-only(slots-2)와 불일치·저녁 누락 원인.
   const dayRequirements = daySlotsConfig
     .map((d) => {
-      const startH = parseInt(d.startTime.split(":")[0]);
-      const endH = parseInt(d.endTime.split(":")[0]);
-      // 점심: 가용시간에 12:00~13:30 포함되면
-      const hasLunchWindow = startH <= 12 && endH >= 13;
-      // 저녁: 가용시간에 18:30~20:00 포함되면
-      const hasDinnerWindow = startH <= 18 && endH >= 20;
-      const mealCount = (hasLunchWindow ? 1 : 0) + (hasDinnerWindow ? 1 : 0);
-      const activityCount = Math.max(0, d.slots - mealCount);
-
-      let mealNote = "";
-      if (hasLunchWindow && hasDinnerWindow) {
-        mealNote = "점심 12:00~13:30 사이 배치, 저녁 18:30~20:00 사이 배치";
-      } else if (hasLunchWindow) {
-        mealNote = "점심 12:00~13:30 사이 배치 (저녁 시간 없음)";
-      } else if (hasDinnerWindow) {
-        mealNote = "저녁 18:30~20:00 사이 배치 (점심 시간 없음)";
-      } else {
-        mealNote = "식사 시간 범위 밖 — 카페/간식만";
-      }
-
-      return `Day ${d.day}: ${d.startTime} 출발 ~ ${d.endTime} 마무리, 총 ${d.slots}곳 (관광 ${activityCount} + 식사 ${mealCount}) → ${mealNote}`;
+      const activityCount = Math.max(0, d.slots - 2); // 식사2(점심·저녁) 제외 = 활동
+      return `Day ${d.day}: ${d.startTime} 출발 ~ ${d.endTime} 마무리, 총 ${d.slots}곳 (관광 ${activityCount} + 식사 2) → 점심 t="lunch" 12:00~14:00 중간 배치, 저녁 t="dinner" 마지막 슬롯(마지막 관광 직후, 시각 유동 = 종료시간 무관)`;
     })
     .join("\n");
 
-  // 출력 언어 (일정 텍스트: nameKo, reason, theme 등)
-  const outputLang = (formData as any).language || "ko";
-  const langMap: Record<string, { name: string; prompt: string }> = {
-    ko: {
-      name: "한국어",
-      prompt:
-        "nameKo=한국어 장소명, reason=한국어 추천이유 (이동수단+시간+핵심이유, 60자 이내), theme=한국어 테마",
-    },
-    en: {
-      name: "English",
-      prompt:
-        "nameKo=English place name (or local name), reason=English recommendation reason (transport+time+key point, 60 chars), theme=English theme",
-    },
-    ja: {
-      name: "日本語",
-      prompt:
-        "nameKo=日本語の場所名, reason=日本語の推薦理由 (移動手段+時間+ポイント, 60字以内), theme=日本語テーマ",
-    },
-    fr: {
-      name: "Français",
-      prompt:
-        "nameKo=Nom du lieu en français, reason=Raison de recommandation en français (transport+temps+point clé, 60 caractères), theme=Thème en français",
-    },
-    zh: {
-      name: "中文",
-      prompt:
-        "nameKo=中文场所名, reason=中文推荐理由 (交通+时间+要点, 60字以内), theme=中文主题",
-    },
-    es: {
-      name: "Español",
-      prompt:
-        "nameKo=Nombre del lugar en español, reason=Razón de recomendación en español (transporte+tiempo+punto clave, 60 caracteres), theme=Tema en español",
-    },
-    de: {
-      name: "Deutsch",
-      prompt:
-        "nameKo=Deutscher Ortsname, reason=Deutsche Empfehlungsbegründung (Verkehr+Zeit+Kernpunkt, 60 Zeichen), theme=Deutsches Thema",
-    },
-  };
-  const langSpec = langMap[outputLang] || langMap.ko;
-
-  // 날짜를 "3월 1일" 형태로 (한국어 자연어용)
-  const formatDateShort = (d: string) => {
-    if (!d || d.length < 10) return d;
-    const [y, m, day] = d.split("-");
-    const month = parseInt(m || "0", 10);
-    const dayNum = parseInt(day || "0", 10);
-    return `${month}월 ${dayNum}일`;
-  };
-  const dateRangeText = `${startDate ? formatDateShort(startDate) : ""}부터 ${endDate ? formatDateShort(endDate) : ""}까지`;
+  // ⚠️ 2026-07-21 사장님 SSOT = 다국어 출력은 여기(Gemini k/r/s)서 안 함 = PSR 공유컬럼(name_ko·summary_ko·editorial_summary)은 한국어 고정(오염 방지).
+  //   표시 다국어(사용자 프로필 언어설정 연동)는 별도 = FE/BE 가 name_en·name_local 중 선택하거나 표시전용 번역 = 별도 설계(PSR 저장과 분리). 옛 langMap(프롬프트 미삽입 죽은코드) 폐기 §19.
 
   // 현재 연도/월 (2026 최신 정보 반영 지시용)
   const nowYear = new Date().getFullYear();
@@ -210,7 +140,7 @@ ${categoryMatrix}
 
 For each place include (= ALL fields verified via Google Search grounding, 키는 아래 축약형 그대로 사용):
 - n (English official name on Google Maps)
-- k (한국어 = 한국 여행자가 부르는 이름)
+- k (한국어 = 한국 여행자가 부르는 이름) [= PSR name_ko 공유컬럼 = 언어 고정(오염 방지). 표시 다국어는 별도 = FE가 name_en/local 선택]
 - l (local language name = 예: 파리=Tour Eiffel) [= REQUIRED for ALL places INCLUDING restaurants (식당도 반드시). If the restaurant's official name is already in the local language (예: "Le Comptoir du Marché"), copy that same name into l — never leave l empty. = Text Search forwarding + matching key, final DB column]
 - a (FULL street address with NUMBER + street + postal code + city) [= REQUIRED for Text Search forwarding + matching key, final DB column — verify via Google Search]
 - t ("activity" | "lunch" | "dinner")
@@ -219,8 +149,8 @@ For each place include (= ALL fields verified via Google Search grounding, 키�
 - x (longitude = decimal 6 digits, e.g. 2.294481) [= 위 y 와 동일 요건]
 - p (1 인 EUR)
 - d (= 출발점(위 동선 원칙 기준)으로부터 직선거리 km = haversine = 소수 1 자리 = 동선 최적화 기본 필수)
-- r (한국어 한 줄 = 최대 18자 = 선정 이유 = 한국 여행객 트렌드 = 인스타 성지/한국 vlog 등 사회적 검증)
-- s (한국어 한 줄 = 최대 18자 = 장소에 대한 코믹/위트 = Claude 톤. 단순 정보 X = "프사각", "본전 뽑음" 같은 한국 슬랭)
+- r (한국어 한 줄 = 최대 18자 = 선정 이유 = 한국 여행객 트렌드 = 인스타 성지/한국 vlog 등 사회적 검증) [= PSR summary_ko 공유컬럼 = 언어 고정]
+- s (한국어 한 줄 = 최대 18자 = 장소에 대한 코믹/위트 = Claude 톤. 단순 정보 X = "프사각", "본전 뽑음" 같은 한국 슬랭) [= PSR editorial_summary 공유컬럼 = 언어 고정]
 
 OUTPUT (strict JSON, no markdown fences):
 {"days":[{"day":1,"theme":"테마","places":[

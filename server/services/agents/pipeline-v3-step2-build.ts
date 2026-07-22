@@ -41,7 +41,11 @@ export async function step2_enrichAndBuild(
   dayCount: number,
   companionCount: number,
   travelPace: TravelPace,
-  paceConfig: { slotDurationMinutes: number; maxSlotsPerDay: number },
+  paceConfig: {
+    slotDurationMinutes: number;
+    mealDurationMinutes: number;
+    maxSlotsPerDay: number;
+  },
   vibeWeights: VibeWeight[],
 ): Promise<any> {
   const _t0 = Date.now();

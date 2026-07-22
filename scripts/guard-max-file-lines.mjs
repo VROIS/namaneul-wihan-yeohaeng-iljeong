@@ -1,14 +1,16 @@
 #!/usr/bin/env node
-// ⚠️ 수정금지(승인필요) 2026-07-15 사장님 SSOT = §0 가벼움 가드 = 1파일 500줄 이하를 "글 아닌 기계"로 강제.
+// ⚠️ 수정금지(승인필요) 2026-07-15 사장님 SSOT = §0 가벼움 가드 = 1파일 700줄 이하를 "글 아닌 기계"로 강제.
+//   ⚠️ 2026-07-21 사장님 승인 = 한도 500→700 상향(§19) = 업계기준 700줄도 정상범위(실행속도 무관·디버깅=책임분리가 핵심)이라
+//     6줄 초과로 §19 주석 쥐어짜기·억지분리(작동코드 §2 위험)가 더 나쁨. 700 = AI 메가파일(1500줄+) 비대화만 막는 현실적 상한.
 // = 근본: AI 과설계로 파일이 비대해짐(TripPlannerScreen 3,415줄 등 14개 실측). 등재만으로는 안 지켜짐 = 기계 차단.
 // = 규칙(커밋 차단 기준):
-//     ① 신규 파일 500줄 초과 = 차단.
-//     ② 기존 파일 수정 = HEAD 보다 줄수가 "늘었고" 500줄 초과면 차단(= 슬림화 이행기: 아직 못 쪼갠 레거시 파일의
+//     ① 신규 파일 700줄 초과 = 차단.
+//     ② 기존 파일 수정 = HEAD 보다 줄수가 "늘었고" 700줄 초과면 차단(= 슬림화 이행기: 아직 못 쪼갠 레거시 파일의
 //        버그수정·감량은 허용, 더 키우는 것만 금지. 전부 쪼개지면 자연히 ①만 남음).
 //        ⚠️ 2026-07-19 = 단, 순수 포맷변경(prettier 줄바꿈 접기 = 공백무시 내용 동일)으로 줄수만 는 것은 비대화 아님 = 통과.
 //     ③ EXCEPTIONS(데이터 전용 상수 = 로직 0)만 예외. 화면·서비스 로직 파일은 예외 없음.
 // = 진입점:
-//     --catalog : 현재 500줄 초과 파일 전체 목록(줄수 내림차순) 출력 = 1단계 슬림화 진행상황 추적.
+//     --catalog : 현재 700줄 초과 파일 전체 목록(줄수 내림차순) 출력 = 1단계 슬림화 진행상황 추적.
 //     --staged  : git pre-commit = 위 규칙 위반 시 exit 1.
 import { execSync } from "node:child_process";
 import { readFileSync, existsSync } from "node:fs";
@@ -16,7 +18,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const MAX_LINES = 500;
+const MAX_LINES = 700;
 
 // ── 예외 = 데이터 전용 상수 파일만(사유 필수). 로직 파일 등재 금지(= 남발 방지, 사장님 승인 필요). ──
 const EXCEPTIONS = [
@@ -36,7 +38,7 @@ const countLines = (content) => {
   return content.endsWith("\n") ? n - 1 : n; // = wc -l 과 동일 기준
 };
 
-// ── --catalog : 500줄 초과 전수 목록(진행상황 추적 = 목표: 예외 제외 0건) ──
+// ── --catalog : 700줄 초과 전수 목록(진행상황 추적 = 목표: 예외 제외 0건) ──
 // = git 추적 파일만(= .gitignore 의 빌드산출물 dist-server/ 등 자동 제외).
 function catalog() {
   const out = [];
@@ -58,7 +60,7 @@ function catalog() {
   out.sort((a, b) => b.lines - a.lines);
   const over = out.filter((f) => !f.ex);
   console.log(
-    `# 500줄 초과 파일 카탈로그 (§0 슬림화 목표 = 예외 제외 0건) — 현재 ${over.length}건 + 예외 ${out.length - over.length}건`,
+    `# 700줄 초과 파일 카탈로그 (§0 슬림화 목표 = 예외 제외 0건) — 현재 ${over.length}건 + 예외 ${out.length - over.length}건`,
   );
   for (const f of out)
     console.log(
@@ -138,7 +140,7 @@ async function scanStaged() {
       violations.push({
         f,
         stagedLines,
-        why: `${headLines}줄 → ${stagedLines}줄로 증가 (500 초과 파일은 늘리기 금지 = 쪼개기)`,
+        why: `${headLines}줄 → ${stagedLines}줄로 증가 (700 초과 파일은 늘리기 금지 = 쪼개기)`,
       });
     }
   }

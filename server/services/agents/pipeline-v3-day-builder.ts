@@ -21,7 +21,7 @@ import {
   type GeminiPlace,
   type GeminiDay,
 } from "./pipeline-v3-types";
-import { isValidCoord } from "./pipeline-v3-helpers";
+import { isValidCoord, computeSlotStartMins } from "./pipeline-v3-helpers";
 
 export interface DayBuilderDeps {
   formData: TripFormData;
@@ -31,7 +31,11 @@ export interface DayBuilderDeps {
   scheduleMap: { day: number; gPlace: GeminiPlace; placeId: string }[];
   finalPlaceMap: Map<string, PlaceResult>;
   daySlotsConfig: DaySlotConfig[];
-  paceConfig: { slotDurationMinutes: number; maxSlotsPerDay: number };
+  paceConfig: {
+    slotDurationMinutes: number;
+    mealDurationMinutes: number;
+    maxSlotsPerDay: number;
+  };
   companionCount: number;
   dayCount: number;
   isGuideCategory: boolean;
@@ -68,22 +72,26 @@ export async function buildDayResult(
 
   // 이 날의 스케줄
   const dayScheduleItems = scheduleMap.filter((s) => s.day === d);
-  // ⚠️ 2026-07-06 사장님 SSOT = 슬롯 시각 = slot 순서 그리드 계산(startTime + i×슬롯간격) = DB-only(ag4:288 scene.time) 동형(§16).
-  //   = 옛 s.gPlace.startTime(Gemini raw엔 startTime 없음 = 항상 undefined = 슬롯시간 미표시 결함) 완전삭제 §19.
-  const dayStartMin = (() => {
-    const [h, m] = (dayConfig.startTime || "09:00").split(":").map(Number);
-    return h * 60 + m;
-  })();
+  // 슬롯 시각 = 활동/식사 소요 누적(computeSlotStartMins 공용 1벌 §16, DB-only route-local 동형). 저녁이 실제 저녁시각·마지막 활동 직후.
+  const [dh, dm] = (dayConfig.startTime || "09:00").split(":").map(Number);
   const slotDur = paceConfig.slotDurationMinutes;
+  const mealDur = paceConfig.mealDurationMinutes;
+  const mealAt = (i: number) =>
+    ["lunch", "dinner"].includes(dayScheduleItems[i]?.gPlace.type as string);
+  const slotStartMins = computeSlotStartMins(
+    dayScheduleItems.length,
+    dh * 60 + dm,
+    slotDur,
+    mealDur,
+    mealAt,
+  );
   const dayPlaces = dayScheduleItems.map((s, slotIdx) => {
     const enrichedPlace = finalPlaceMap.get(s.placeId)!;
-    const isMeal = s.gPlace.type === "lunch" || s.gPlace.type === "dinner";
+    const isMeal = mealAt(slotIdx);
     // 프론트 전달 시 불필요한 0값 필드 제거 (React Native에서 {0}이 "0" 텍스트로 표시되는 문제 방지)
     const { finalScore, buzzScore, ...safePlace } = enrichedPlace as any;
 
-    // ⚠️ 2026-07-18 사장님 SSOT = 슬롯 = enrichedPlace(place) 직접 flat = 재조회(loadSeedRawMap) 폐기 §0/§19.
-    //   근본: 흡수(트리거 dup) 시 원행 재활용데이터(nameKo·nameLocal·summaryKo·editorialSummary·RC·image·좌표)를 RETURNING 으로 place 에 이미 입힘(ag3-save).
-    //   = 신규는 Gemini(place)값 그대로. 둘 다 place 에 완비 = 저장 PSR 재조회(419키 SELECT + PID/이름 재매칭) 불필요. TS mutate 값도 place 에 있음.
+    // ⚠️ 2026-07-18 사장님 SSOT = 슬롯 = enrichedPlace(place) 직접 flat = 재조회(loadSeedRawMap) 폐기 §0/§19. 흡수 시 원행 재활용데이터 RETURNING 으로 place 에 완비(신규는 Gemini값) = PSR 재조회 불필요.
     const ep = enrichedPlace as any;
 
     return {
@@ -91,13 +99,13 @@ export async function buildDayResult(
       // 0이 아닌 경우만 포함
       ...(finalScore ? { finalScore } : {}),
       ...(buzzScore ? { buzzScore } : {}),
-      // ⚠️ 2026-07-06 = 슬롯 시각 = 그리드 계산(DB-only 동형). startTime + slotIdx×슬롯간격.
-      startTime: minutesToTime(dayStartMin + slotIdx * slotDur),
-      endTime: minutesToTime(dayStartMin + (slotIdx + 1) * slotDur),
-      // ⚠️ 2026-07-06 = FE 슬롯 필드 = DB-only 동형(type/nameEn flat). 옛 MIX 누락 보완 §16.
-      type: isMeal ? ("restaurant" as const) : ("activity" as const),
+      // 슬롯 시각 = 소요 누적(DB-only 동형). 종료 = 시작 + (식사 mealDur / 활동 slotDur).
+      startTime: minutesToTime(slotStartMins[slotIdx]),
+      endTime: minutesToTime(
+        slotStartMins[slotIdx] + (isMeal ? mealDur : slotDur),
+      ),
+      type: isMeal ? ("restaurant" as const) : ("activity" as const), // FE 슬롯 = DB-only 동형(§16)
       nameEn: ep.nameEn || enrichedPlace.name,
-      // 식사 정보
       isMealSlot: isMeal,
       mealType:
         s.gPlace.type === "lunch"
@@ -113,7 +121,7 @@ export async function buildDayResult(
           ? mealBudget.lunchLabel
           : mealBudget.dinnerLabel
         : undefined,
-      // ⚠️ 2026-07-18 = 전 표시필드 = place 직접(흡수 RETURNING·Gemini·TS mutate 로 완비). Gemini(s.gPlace) 폴백만.
+      // ⚠️ 2026-07-18 = 표시필드 = place 직접(흡수 RETURNING·Gemini·TS mutate 완비), Gemini 폴백만.
       nameKo: ep.nameKo || s.gPlace.nameKo,
       nameLocal: ep.nameLocal || s.gPlace.nameLocal || null,
       userRatingCount: ep.userRatingCount,
@@ -165,10 +173,8 @@ export async function buildDayResult(
   }
 
   // ── 이동 구간 계산 = DB-only(route-local) 계산법 단일 SSOT(§16) ──
-  // ⚠️ 2026-07-06 사장님 SSOT = 거리(haversineKm) → pickTransitMode(1km 도보/초과 metro, mobilityStyle 무관) → calcTransitHaversine.
-  //   = 옛 haversineTransit(2km 도보임계·mobilityStyle 힌트·cost 0 하드코딩) 완전삭제 §19 = 파리(DB-only)와 동일 표시.
-  //   = 구간 = 숙소→place[0], place[i]→[i+1], place[last]→숙소. transits 배열 = place 간(betweenTransits)만 = n-1(FE transits[index]=place[i] 나가는 이동).
-  // ⚠️ 2026-07-06 = center = 거리계산 앵커. 숙소/도심좌표 있으면 그것(= departure/return 별도필드 표시), 없으면 place[0] 폴백(= 역주입·간격계산용, departure/return 필드는 억제 = 옛 동작 보존).
+  // ⚠️ 2026-07-06 사장님 SSOT = 거리(haversineKm)→pickTransitMode(1km 도보/초과 metro)→calcTransitHaversine. 옛 haversineTransit 완전삭제 §19 = 파리(DB-only) 동일.
+  //   구간 = 숙소→place[0], place[i]→[i+1], place[last]→숙소. transits 배열 = place 간(betweenTransits)만 = n-1. center = 숙소/도심좌표 우선, 없으면 place[0] 폴백(departure/return 억제).
   const hasAccommodation = !!accommodationCoords;
   const center =
     accommodationCoords ||

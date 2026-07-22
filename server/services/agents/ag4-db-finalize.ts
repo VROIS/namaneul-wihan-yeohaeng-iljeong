@@ -162,6 +162,7 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
   // ===== 3. scene 직접 24 슬롯 사용 =====
   const inputById = new Map(inputPlaces.map((p) => [p.id, p]));
   const slotDuration = skeleton.paceConfig.slotDurationMinutes;
+  const mealDuration = skeleton.paceConfig.mealDurationMinutes; // 식사 슬롯 종료시각용(활동보다 짧음, 2026-07-21 §16 route-local 정합)
   const mealBudget = MEAL_BUDGET[formData.travelStyle || "Reasonable"];
 
   // ⚠️ 2026-05-26 = 사용자 SSOT = scene 검증 (= 안전망)
@@ -264,9 +265,9 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
         mealType,
         seedCategory:
           inputPlace?.seedCategory || (isMeal ? "restaurant" : "attraction"),
-        // 시간
+        // 시간 = 식사면 mealDuration(짧음)·활동이면 slotDuration (2026-07-21 §16 route-local 정합 = 식사 종료 30분 과다 수정)
         startTime: scene.time,
-        endTime: addMinutes(scene.time, slotDuration),
+        endTime: addMinutes(scene.time, isMeal ? mealDuration : slotDuration),
         // 가격
         estimatedPriceEur: isMeal
           ? scene.price_eur
