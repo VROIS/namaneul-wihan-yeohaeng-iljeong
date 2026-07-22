@@ -40,6 +40,10 @@
 - **selectGhibliCast() 신설**([character-roster-ghibli.ts](../server/services/character-roster-ghibli.ts), 옛 "주인공 1명" 선택 폐기 §19): 인원·구성 = **'누구랑'(companionType+companionCount)** = 차량·교통비와 동일 소스 / 나이 = **users.birth_date 실계산**(protagonist-generator calculateAge·estimateFamilyAges export 재사용 §16, 없으면 40대 가정) / 동반 나이 = companionAges 입력 우선. 레퍼런스 = 일행(최대4)+가이드+차량 = 최대 6장 첨부, 스토리보드 프롬프트 = "일행 전원 등장, 1명만 등장 금지".
 - 실증($1.24): 가족4(부부 30대+부모 55·59) → **4명 전원+가이드 한 화면 등장** 프레임 확인. 검증 스크립트의 snake_case 전달 버그도 정정(운영 드리즐 경로는 원래 정상).
 
+### 운영 핫픽스 (커밋 9a6c89b): 스토리보드 파싱 실패
+- 운영(브뤼셀 i103, 9씬)에서 영상 생성 실패 2회 = **Gemini가 정상 JSON 뒤 여분 `}` 부착**("...}\n}", Storage raw 2건으로 입증 = §18 덕에 원인 즉시 확정). 관문 greedy 정규식이 여분 괄호까지 물어 파싱 실패.
+- 수정 = 스토리보드에 **중괄호 균형 파서 1벌**(문자열·이스케이프 안전, geminiClient 잠금파일 무수정). 실패 raw 2건 재파싱 성공 + 회귀 통과. **재반영 = Republish 필요.**
+
 ### 크레딧 단가 확정 (사장님 SSOT 2026-07-22)
 - 100크레딧 = €10. 여정생성 5(DB-only 동일)·AI의견 5·Tripis 호출 5·전문가검증 10 / **지브리영상 하루치 = 고정 60크레딧**(원가 실측: 장면당 $0.61 = 6씬 34~10씬 56크레딧어치 → 60이 최대치 커버). 차감 = `creditService.useCredits` 재사용, 구현 = 로그인 정식화·크레딧 병합 시점. 드라이빙가이드 예약손님 = 무료 제공 예정. 정본 = 메모리 `project_credit_deduction_design` + 구현계획서.
 
