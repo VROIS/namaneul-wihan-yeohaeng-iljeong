@@ -67,6 +67,9 @@ module.exports = defineConfig([
       "backups/**",
       "reference/**",
       "legacy-guide/**",
+      // 2026-07-22 지브리영상 = 외부작업(Antigravity) 산출물 보존폴더·1회용 스크립트 = 코드 아님 = lint·커밋 대상 제외
+      "deliverables_ghibli_video/**",
+      "scratch_*.ts",
     ],
   },
   {

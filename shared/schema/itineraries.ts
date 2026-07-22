@@ -16,6 +16,15 @@ import { personaTypeEnum } from "./enums";
 import { users } from "./users";
 import { cities } from "./cities";
 
+// 🎬 일별 지브리 여행영상 상태 (2026-07-22 구현계획) = video_by_day jsonb 값 형
+export interface DayVideo {
+  status: "processing" | "succeeded" | "failed";
+  url: string | null;
+  taskId: string;
+  scenesDone: number;
+  totalScenes: number;
+}
+
 // User itineraries
 export const itineraries = pgTable("itineraries", {
   id: serial("id").primaryKey(),
@@ -53,10 +62,13 @@ export const itineraries = pgTable("itineraries", {
   // 예: "5살 아이를 동반한 한국인 가족의 로맨틱 파리 여행"
   protagonistSentence: text("protagonist_sentence"),
 
-  // Output Video Generation Status (Seedance)
+  // 옛 단일영상 3컬럼(videoTaskId/videoStatus/videoUrl) = 일별 video_by_day 로 대체, Republish 후 드랍 예정 = 2026-07-22 지브리영상 구현계획
   videoTaskId: text("video_task_id"),
-  videoStatus: text("video_status"), // pending, processing, succeeded, failed
-  videoUrl: text("video_url"), // Final MP4 URL
+  videoStatus: text("video_status"),
+  videoUrl: text("video_url"),
+
+  // 🎬 지브리 일별 여행영상 SSOT (2026-07-22) = { "1": {status,url,taskId,scenesDone,totalScenes}, ... }
+  videoByDay: jsonb("video_by_day").$type<Record<string, DayVideo>>(),
 
   // 🩹 [2026-01-26] 일정 생성 원본 데이터 저장 (영상 생성 시 재사용)
   // items 테이블 대신 이 JSON을 사용하여 장소 목록을 복원함

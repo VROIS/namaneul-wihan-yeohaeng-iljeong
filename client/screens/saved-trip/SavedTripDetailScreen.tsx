@@ -13,7 +13,6 @@ import { useRoute, useNavigation } from "@react-navigation/native";
 import type { RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { LinearGradient } from "expo-linear-gradient";
-import { Video, ResizeMode } from "expo-av";
 import { useTranslation } from "react-i18next";
 
 import { Spacing, Brand, Colors } from "@/constants/theme";
@@ -33,16 +32,9 @@ export default function SavedTripDetailScreen() {
   const route = useRoute<RouteProp<RootStackParamList, "SavedTripDetail">>();
   const { itineraryId } = route.params;
 
-  const {
-    itinerary,
-    isLoading,
-    videoStatus,
-    videoUrl,
-    handleGenerateVideo,
-    handleSaveVideo,
-    getVideoButtonText,
-    isVideoButtonDisabled,
-  } = useVideoGeneration({ itineraryId, t });
+  const { itinerary, isLoading, totalDays, doneDays } = useVideoGeneration({
+    itineraryId,
+  });
 
   if (isLoading) {
     return (
@@ -114,95 +106,33 @@ export default function SavedTripDetailScreen() {
           <ThemedText style={styles.title}>{itinerary.title}</ThemedText>
         </View>
 
-        {/* 🎬 영상 카드 */}
-        <View
+        {/* 🎬 지브리 여행 만화영상 진입 카드 = 일별 생성·진행률·재생·저장은 VideoPreviewScreen 1벌 담당 (2026-07-22 §16) */}
+        <Pressable
           style={[
             styles.videoCard,
             { backgroundColor: theme.backgroundDefault },
           ]}
+          onPress={() => navigation.navigate("VideoPreview", { itineraryId })}
         >
-          {videoStatus === "succeeded" && videoUrl ? (
-            // ✅ 영상 완료: 비디오 플레이어 + 저장 버튼
-            <View style={styles.videoPlayerContainer}>
-              <Video
-                source={{ uri: videoUrl }}
-                style={styles.videoPlayer}
-                useNativeControls
-                resizeMode={ResizeMode.CONTAIN}
-                isLooping
-                shouldPlay={false}
-              />
-              <Pressable
-                style={styles.saveVideoButton}
-                onPress={handleSaveVideo}
-              >
-                <Icon name="download" size={20} color="#FFFFFF" />
-                <Text style={styles.saveVideoButtonText}>
-                  {t("saved.videoSave")}
-                </Text>
-              </Pressable>
-              <Pressable
-                style={[styles.regenerateButton, { borderColor: theme.border }]}
-                onPress={handleGenerateVideo}
-              >
-                <Icon name="refresh-cw" size={16} color={theme.textSecondary} />
-                <Text
-                  style={[
-                    styles.regenerateButtonText,
-                    { color: theme.textSecondary },
-                  ]}
-                >
-                  {t("saved.videoRegenerate")}
-                </Text>
-              </Pressable>
-            </View>
-          ) : (
-            // 🎬 영상 미생성 또는 생성 중
-            <LinearGradient
-              colors={[`${Brand.primary}20`, `${Brand.secondary}10`]}
-              style={styles.videoCardGradient}
-            >
-              <View style={styles.videoCardHeader}>
-                <Icon name="film" size={24} color={Brand.primary} />
-                <Text style={[styles.videoCardTitle, { color: theme.text }]}>
-                  {t("saved.videoTitle")}
-                </Text>
-              </View>
-              <Text
-                style={[styles.videoCardDesc, { color: theme.textSecondary }]}
-              >
-                {t("saved.videoDesc")}
+          <LinearGradient
+            colors={[`${Brand.primary}20`, `${Brand.secondary}10`]}
+            style={styles.videoCardGradient}
+          >
+            <View style={styles.videoCardHeader}>
+              <Icon name="film" size={24} color={Brand.primary} />
+              <Text style={[styles.videoCardTitle, { color: theme.text }]}>
+                지브리 여행 만화영상
               </Text>
-
-              <Pressable
-                style={[
-                  styles.videoButton,
-                  isVideoButtonDisabled && styles.videoButtonDisabled,
-                ]}
-                onPress={handleGenerateVideo}
-                disabled={isVideoButtonDisabled}
-              >
-                {isVideoButtonDisabled && (
-                  <ActivityIndicator
-                    color="#fff"
-                    style={styles.videoButtonSpinner}
-                  />
-                )}
-                <Text style={styles.videoButtonText}>
-                  {getVideoButtonText()}
-                </Text>
-              </Pressable>
-
-              {videoStatus === "polling" && (
-                <Text
-                  style={[styles.progressText, { color: theme.textSecondary }]}
-                >
-                  {t("saved.videoPolling")}
-                </Text>
-              )}
-            </LinearGradient>
-          )}
-        </View>
+            </View>
+            <Text
+              style={[styles.videoCardDesc, { color: theme.textSecondary }]}
+            >
+              {doneDays > 0
+                ? `${totalDays}일 중 ${doneDays}일 생성됨 · 눌러서 보기`
+                : "나의 일정이 코믹한 지브리 애니메이션이 됩니다 · 눌러서 만들기"}
+            </Text>
+          </LinearGradient>
+        </Pressable>
 
         {/* 일정 정보 */}
         <View
@@ -266,7 +196,7 @@ export default function SavedTripDetailScreen() {
                 {t("saved.vibes")}
               </Text>
               <View style={styles.vibesTags}>
-                {itinerary.vibes.map((vibe, index) => (
+                {itinerary.vibes.map((vibe: string, index: number) => (
                   <View
                     key={index}
                     style={[

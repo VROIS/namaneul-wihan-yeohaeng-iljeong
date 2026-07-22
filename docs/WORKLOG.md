@@ -8,6 +8,78 @@
 
 ---
 
+## 🔴 2026-07-22(오후) = **지브리 일별 여행영상 실배선 (Gemini Omni Flash) = 목업→진짜 AI 생성**
+
+### 개요 (정본 = `docs/2026-07-22 지브리 여행영상 구현계획.md`)
+- 외부작업(Antigravity) 목업(가짜 성공→샘플 mp4) 전면 교체 = **실제 AI 영상 생성 파이프라인 1벌**. 목적 = 여정을 코믹 지브리 만화로 후킹 → 드라이빙 가이드 유도.
+- **모델 확정 = `gemini-omni-flash-preview`**(2026-06-30 공개 프리뷰, $0.101/초 720p): Veo Lite($0.05/초)는 레퍼런스 이미지 미지원 → 캐릭터 일관성 위해 Omni(이미지 6장+, `reference_to_video`) 사장님 선정. 18인 캐릭터·차량 jpg = 실사용.
+
+### 파이프라인 (사장님 설계 = 'AI의견' 패턴)
+1. **스토리보드 = Gemini 1콜**(`ghibli-travel-storyboard.ts` 재작성): 여정 메타+바이브+해당일 슬롯 전요소(PSR summaryKo·editorialSummary)+캐릭터·차량 매트릭스 = **전부 다 줌**(셀렉 금지) → 최대 10씬(6초/씬) 코믹 스토리보드+한국어 대사 = 기승전결·환각차단.
+2. **씬 병렬 생성** = `shared/video-gen-client.ts` 신설(§16 단일관문, Interactions API REST, apipass 출입증, §18 saveRaw 2곳).
+3. **후처리** = `video-stitcher.ts` 재작성: ffmpeg-static concat(-c copy, 0.8초)→길이검증→Storage `itinerary-videos/{id}/day{N}.mp4`.
+4. **DB** = `itineraries.video_by_day` jsonb 신설(일별 status/url/진행률). ⚠️ 옛 3컬럼(video_task_id/status/url) = **Republish 후 드랍**(P1, 지금 드랍=운영 옛서버 SELECT 파손).
+
+### 실증 (전부 실측)
+- 사전검증 1씬($0.60): 37.8초 생성, 6.02초 720x1280 오디오 포함, 사장님 눈확인 승인.
+- **풀 실증 = 여정 101 Day1 6씬($3.64): 45초 만에 완료**(병렬), 36.12초 최종본, 얼굴·헤어 전씬 일관(의상 미세변동), 대사 = 씬1 시작인사→씬4 가이드차 후킹→씬6 마무리 소감. 산출물 = 바탕화면 `지브리실증_여정101_Day1_6씬.mp4`.
+- 비용: 1일치 6씬=$3.64 / 8씬=$4.85 / 10씬=$6.08(≈8,400원). 무료 제공(드라이빙가이드 예약손님) or 크레딧 차감 = 로그인 정식화 때.
+
+### 클라이언트
+- 진입점(사장님 확정) = **ResultStep 우측상단 버튼 전환**: 미저장=💾저장 → 저장됨(currentItineraryId)=**'여정 미리보기'(film)** → `VideoPreviewScreen`(재작성: Day칩 + 미생성/진행률%폴링/재생·기기저장 3분기, optionB=슬롯 슬라이드쇼+expo-speech 무과금). InputStep 배너·SettingsMenu 항목 = revert. SavedTripDetail 영상카드 = 진입버튼으로 슬림(useVideoGeneration 훅 일별 재작성), VideosSection·TripsSection = videoByDay 필터.
+- 신규 네이티브 모듈 0(expo-av·expo-speech 기설치) = **APK 재빌드 불필요, OTA 가능**.
+
+### §22 병렬검증(7종) + Ralph-loop 수정
+- 기계4 = tsc 159(≤161)·서버빌드·웹빌드·lint(수정 후 0 errors) 통과. 판단3 차단 전부 수정:
+  - **react-best**: expo-file-system@19 = downloadAsync 제거 → `expo-file-system/legacy` import 교체(기기저장 100% 실패 결함 해소) + 폴링 1회 오류 영구정지 수정(pollTick).
+  - **code-review**: 백그라운드 파이프라인 중 서버사망 시 processing 영구고착 → **staleness 판정**(taskId 시각, 15분 초과 = 재생성 허용 + 조회 시 failed 표시) + 진행률 쓰기 레이스 await.
+  - **simplify**: deliverables·scratch = .gitignore+eslint ignore(커밋 오염 차단), MAX_SCENES·SCENE_SECONDS 상수 = 스토리보드 1벌 SSOT 통합, 차량기준 주석 모순 정정.
+- **§21 DevTools 실증**(localhost, dev이메일 로그인): 입력화면 배너·설정메뉴 항목 제거 확인 / 프로필 여정카드→Result 복원→우측상단 '여정 미리보기'(film) 버튼→VideoPreview 진입 / 미생성(Day칩+생성버튼)·완료(Day1 ✓+영상 재생+기기저장) 두 상태 확인 / 프로필 '나의 영상(1)'·SavedTripDetail "3일 중 1일 생성됨" / 콘솔 에러 0. 스샷 = `검증_지브리영상_VideoPreview_Day1재생.png`.
+
+### 출연진 동적 구성 (사장님 실기기 피드백 "아빠+딸만 나옴" 해소)
+- **selectGhibliCast() 신설**([character-roster-ghibli.ts](../server/services/character-roster-ghibli.ts), 옛 "주인공 1명" 선택 폐기 §19): 인원·구성 = **'누구랑'(companionType+companionCount)** = 차량·교통비와 동일 소스 / 나이 = **users.birth_date 실계산**(protagonist-generator calculateAge·estimateFamilyAges export 재사용 §16, 없으면 40대 가정) / 동반 나이 = companionAges 입력 우선. 레퍼런스 = 일행(최대4)+가이드+차량 = 최대 6장 첨부, 스토리보드 프롬프트 = "일행 전원 등장, 1명만 등장 금지".
+- 실증($1.24): 가족4(부부 30대+부모 55·59) → **4명 전원+가이드 한 화면 등장** 프레임 확인. 검증 스크립트의 snake_case 전달 버그도 정정(운영 드리즐 경로는 원래 정상).
+
+### 크레딧 단가 확정 (사장님 SSOT 2026-07-22)
+- 100크레딧 = €10. 여정생성 5(DB-only 동일)·AI의견 5·Tripis 호출 5·전문가검증 10 / **지브리영상 하루치 = 고정 60크레딧**(원가 실측: 장면당 $0.61 = 6씬 34~10씬 56크레딧어치 → 60이 최대치 커버). 차감 = `creditService.useCredits` 재사용, 구현 = 로그인 정식화·크레딧 병합 시점. 드라이빙가이드 예약손님 = 무료 제공 예정. 정본 = 메모리 `project_credit_deduction_design` + 구현계획서.
+
+### 영상 UX 정정 3건 (사장님 확정)
+- **진입점 정정**: 신규 여정 = 💾 저장버튼 원래 기능 유지(저장 후에도 안 바뀜) / **프로필 카드로 복원한 저장 여정에서만** 헤더 저장버튼 자리가 🎬 영상 버튼으로 전환(restoredTrip 상태, 공유열람 제외). DevTools 두 상태 스크린샷 실증.
+- **재생 화면 = Tripis 공통 투명 오버레이**: 좌상단 X + 우상단 저장(다운로드) Lucide 아이콘 = 영상 방해 0. 하단 파란 저장버튼 삭제.
+- **저장 = 해설화면(DetailViewer) 패턴 완전 이식**: 영상 잠시 정지 → 안내음성("저장이 되었습니다"/"이미 저장되었습니다") → 자동 재개 + 스피너→체크 1.5초 + 기기 파일 존재로 중복저장 차단. 저장 위치 = 갤러리 "TRIPIS 여행" 앨범.
+
+### 캘린더 실기기 피드백 반영 (2026-07-22 삼성폰·iOS 테스트)
+- 삼성폰 = 삽입 후 캘린더 앱 **자동 열기**(여행 시작일 화면, content:// 표준 주소) 추가([itinerary-calendar.ts](../client/lib/itinerary-calendar.ts)).
+- 공유·캘린더 버튼 = isSharing 공유 → **sharingAction 분리**: 누른 버튼만 파란 선택색+스피너, 반대쪽 흐림([ResultStep.tsx](../client/screens/trip-planner/ResultStep.tsx)). 캘린더 저장 = 파란 디폴트 유지.
+
+### §19 삭제
+- `video-asset-resolver.ts`(축구사진 폴백)·`video-prompt-builder.ts`(초실사 SSOT충돌)·`assets/characters/index.ts`(레포밖 경로)·`public/sample-ghibli.mp4`·`public/scenes/` 삭제. roster `.png→.jpg`+kids/teen/couple 실파일명 정정.
+- 잔존 주의: git stash@{0} `video-ghibli-외부작업-미완-임시퇴피-2026-07-21` = 옛 외부작업 백업(deliverables_ghibli_video/에 동일본 보존) = 사장님 확인 후 drop 가능.
+
+---
+
+## 🔴 2026-07-22 = **캘린더 안드로이드 네이티브(expo-calendar) + API36 경고 + 세션 인수인계**
+
+### ① 캘린더 = 안드로이드 expo-calendar 직접삽입 (커밋 f0e4729, push·APK빌드 진행)
+- 삼성폰 캘린더 변천 종결: .ics공유시트→구글링크(종일뭉침)→.ics다운로드(파일의심·구글캘린더 안열림) **전부 부실** → 딥리서치 후 **expo-calendar v15.0.8** 확정.
+- **딥리서치 확정**: react-native-add-calendar-event = 제작자 폐기+"expo-calendar 쓰라". **expo-calendar = Expo SDK 내장 = iOS Expo Go 안 깨짐 = OS 분기 성립**(서드파티 커스텀 모듈만 Expo Go 깸).
+- **Android** = `createEventAsync` 반복 = 여정 슬롯마다 이벤트 시간대별 직접삽입(권한1+클릭1, 모달0·파일0·종일뭉침0). 대상=기본캘린더(구글연동 시 구글캘린더 자동, 사장님 확정). **iOS·웹** = 기존 .ics 유지.
+- 배선: `client/lib/itinerary-calendar.ts`(OS분기), `useShareCalendar.ts`, `app.json`(plugin+권한), `tsconfig.json`(deliverables_ghibli_video/·scratch_*.ts exclude=video 임시산출물 tsc오염 방지). §22 기계(tsc160·웹빌드·lint) + simplify·review 게이트 통과(날짜롤오버·권한·폴백·OS분기 실행검증).
+- **다음 = 사장님 삼성폰 실기기 확인**(§21): 캘린더저장 클릭→권한1회→여정 시간대별 삽입. 만족못하면 회귀옵션=`a258a15`(구글링크,종일뭉침). 정본=`docs/2026-07-21 여정공유·캘린더저장 명세.md`.
+
+### ② 구글Play API36 경고 = 2026-10-30까지 연장(사장님)
+- '내손안의가이드'(com.sonanie.guide) Android16(API36) 필요, 기한 8-31→**10-30 연장 확정**. Tripis(SDK54)=API36 자동충족→통합 6단계 신원교체 배포 시 자동해소. 별도 코드조치 0. 메모리 [[project_google_api36_deadline_extension]].
+
+### ③ 다국어 = 당분간 없음(사장님) = 한국어 고정
+- MIX Gemini 프롬프트 다국어(langMap)가 원래 프롬프트 미삽입=죽은코드였음 삭제(§19). k/r/s=PSR 공유컬럼이라 **한국어 고정**(오염방지). 추후 국제화=번역방식 별도(i18n 불가=동적생성). ⚠️ 다국어 주석 정정(step1-gemini.ts)은 **미커밋 상태**(video 커밋 시 딸림).
+
+### ⚠️ 세션 인수인계 = 미커밋 상태 (다음 세션 주의)
+- **video/ghibli = 외부작업 미완 = 절대 건드리지 말 것.** 미커밋 tracked(RootStackNavigator·SettingsMenu·SavedTripDetail·InputStep·video-routes) + untracked(client/screens/video/·deliverables_ghibli_video/·assets/characters·vehicles·scratch_*.ts 다수). 커밋 시 이것들 제외 필수(client/ staged면 pre-commit FE검증이 video lint·tsc 오염 = stash로 치우고 커밋 후 복구).
+- **미커밋 = step1-gemini.ts 다국어주석 정정**(내 것, video와 별개). 다음 서버변경 때 같이 커밋 또는 단독 커밋 가능.
+- **APK 빌드 진행중**(run 29931219801, expo-calendar 포함) = 완료 시 바탕화면 다운로드 예정.
+
+---
+
 ## 🔴 2026-07-21 = **여정 슬롯 배분 근본수정 = 활동 우선 + 식사시간 분리 + 저녁 마지막**
 
 > 증상: Relaxed 3일 "밥만 2번"(Day3 활동0·식사2) + 저녁 16:30(문 안 연 시각). 근본: ①활동 `slots-2`로 Relaxed 활동2뿐 ②균일 slotDuration 그리드라 식사도 활동간격(150분) = 저녁 이른시각 + 가용시간(21시) 앞부분만 씀.

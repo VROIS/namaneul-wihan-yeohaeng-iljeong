@@ -9,8 +9,9 @@ import type { ProfileApi } from "../hooks/useProfile";
 
 export default function VideosSection({ profile }: { profile: ProfileApi }) {
   const { theme, navigation, savedTrips } = profile;
-  const videosReady = savedTrips.filter(
-    (t) => t.videoStatus === "succeeded" && t.videoUrl,
+  // 🎬 2026-07-22 일별 video_by_day 구조 = 하루라도 생성 완료된 여정만 노출
+  const videosReady = savedTrips.filter((t) =>
+    Object.values(t.videoByDay || {}).some((v) => v?.status === "succeeded"),
   );
   if (videosReady.length === 0) return null;
 

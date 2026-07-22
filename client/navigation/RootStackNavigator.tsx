@@ -21,7 +21,7 @@ import { BTSLandingScreen } from "@/screens/BTSLandingScreen";
 import BTSWorldMapScreen from "@/screens/bts/BTSWorldMapScreen";
 // ⚠️ 수정금지(승인필요) — 보관 화면 import 제거 (번들 크기 축소, 14.97MB→Expo Go 30초 타임아웃 초과)
 // import { BTSLandingScreenC } from "@/screens/BTSLandingScreenC"; // C안 보관
-// import { BTSLandingScreenA1 } from "@/screens/BTSLandingScreenA1"; // A1안 보관
+import VideoPreviewScreen from "@/screens/video/VideoPreviewScreen";
 import { Colors } from "@/constants/theme";
 import { isAuthenticated } from "@/lib/auth";
 
@@ -33,6 +33,7 @@ export type RootStackParamList = {
   ExpertInquiryDetail: { id: string }; // 전문가 문의 상세(2026-07-13) = 옛 VerificationRequest 대체 §19
   ExpertProfileEdit: undefined; // 현지전문가 본인 프로필 편집(2026-07-13)
   SavedTripDetail: { itineraryId: number };
+  VideoPreview: { itineraryId: number }; // 🎬 지브리 일별 여행영상 미리보기 (풀스크린, 2026-07-22 실배선)
   AdminModal: undefined;
   BTSConcertPlanner: undefined;
   BTSMiniApp: undefined;
@@ -204,6 +205,16 @@ export default function RootStackNavigator() {
       <Stack.Screen
         name="GuideMiniApp"
         component={GuideStackNavigator}
+        options={{
+          presentation: "fullScreenModal",
+          headerShown: false,
+          animation: "slide_from_bottom",
+        }}
+      />
+      {/* 🎬 60초 숏폼 AI 비디오 프리뷰 (독립 풀스크린 모달, 👑 유료 전용) */}
+      <Stack.Screen
+        name="VideoPreview"
+        component={VideoPreviewScreen}
         options={{
           presentation: "fullScreenModal",
           headerShown: false,

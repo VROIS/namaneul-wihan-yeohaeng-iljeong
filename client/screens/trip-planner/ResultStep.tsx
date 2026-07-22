@@ -41,6 +41,9 @@ export default function ResultStep({ planner }: { planner: PlannerApi }) {
     isSaving,
     justSaved,
     handleSaveItinerary,
+    currentItineraryId,
+    restoredTrip,
+    navigation,
     formData,
     dayAccommodations,
     hotelModalDay,
@@ -49,7 +52,7 @@ export default function ResultStep({ planner }: { planner: PlannerApi }) {
     isReoptimizing,
     handleShareItinerary,
     handleSaveCalendar,
-    isSharing,
+    sharingAction,
     resultScrollRef,
     slotLayoutsRef,
     dayLayoutsRef,
@@ -80,25 +83,39 @@ export default function ResultStep({ planner }: { planner: PlannerApi }) {
         <Text style={[styles.resultTitle, { color: theme.text }]}>
           {itinerary.destination}
         </Text>
-        {/* ⚠️ 2026-07-03 사장님 UX = 저장 성공 시 justSaved 1.8초 = 녹색 체크(✓) → 원래 💾 복귀. 저장중(isSaving)만 비활성 = 재저장 항상 가능. */}
-        <Pressable
-          style={[
-            styles.headerButton,
-            justSaved && { backgroundColor: "#22c55e" },
-          ]}
-          onPress={handleSaveItinerary}
-          disabled={isSaving}
-        >
-          {isSaving ? (
-            <ActivityIndicator size="small" color={theme.text} />
-          ) : (
-            <Icon
-              name={justSaved ? "check" : "save"}
-              size={22}
-              color={justSaved ? "#FFFFFF" : theme.text}
-            />
-          )}
-        </Pressable>
+        {/* 🎬 2026-07-22 사장님 SSOT = 신규 여정 = 💾 저장버튼 원래 기능 그대로(저장 후에도 유지).
+            프로필 카드로 복원한 저장 여정에서만 = 저장버튼 자리가 영상 생성 버튼으로 전환("이 여정을 영상으로 봐야지" 내비게이션). */}
+        {restoredTrip && currentItineraryId ? (
+          <Pressable
+            style={styles.headerButton}
+            onPress={() =>
+              (navigation as any).navigate("VideoPreview", {
+                itineraryId: currentItineraryId,
+              })
+            }
+          >
+            <Icon name="film" size={22} color={Brand.primary} />
+          </Pressable>
+        ) : (
+          <Pressable
+            style={[
+              styles.headerButton,
+              justSaved && { backgroundColor: "#22c55e" },
+            ]}
+            onPress={handleSaveItinerary}
+            disabled={isSaving}
+          >
+            {isSaving ? (
+              <ActivityIndicator size="small" color={theme.text} />
+            ) : (
+              <Icon
+                name={justSaved ? "check" : "save"}
+                size={22}
+                color={justSaved ? "#FFFFFF" : theme.text}
+              />
+            )}
+          </Pressable>
+        )}
       </View>
 
       {/* 🚨 위기 경보 배너 - 깜박이는 표시 */}
@@ -343,23 +360,32 @@ export default function ResultStep({ planner }: { planner: PlannerApi }) {
             {t("trip.footerCta")}
           </Text>
           <View style={styles.shareFooterRow}>
-            {/* 2026-07-21 iOS 실기기 = 눌러도 색 안 변해 "눌렸나?" 혼동(사장님). 해결 = ①pressed 즉시 눌림 피드백(opacity 0.6) ②처리중 스피너로 아이콘 교체(진행 명확). isSharing = 연타 방지 disabled. */}
+            {/* 2026-07-22 사장님 실기기 피드백 = 두 버튼이 스피너를 공유해 뭘 눌렀는지 혼동 → sharingAction 으로 분리:
+                눌린 버튼만 선택색(파란 배경)으로 전환 + 자기 스피너. 캘린더 저장 = 파란 디폴트 유지(사장님 확정). */}
             <Pressable
               style={({ pressed }) => [
                 styles.shareFooterBtn,
                 { borderColor: theme.border },
-                pressed && { opacity: 0.6 },
-                isSharing && { opacity: 0.5 },
+                (pressed || sharingAction === "share") &&
+                  styles.shareFooterBtnPrimary,
+                sharingAction === "calendar" && { opacity: 0.4 },
               ]}
               onPress={() => handleShareItinerary()}
-              disabled={isSharing}
+              disabled={sharingAction !== null}
             >
-              {isSharing ? (
-                <ActivityIndicator size="small" color={Brand.primary} />
+              {sharingAction === "share" ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
                 <Icon name="share-2" size={18} color={Brand.primary} />
               )}
-              <Text style={[styles.shareFooterBtnText, { color: theme.text }]}>
+              <Text
+                style={[
+                  styles.shareFooterBtnText,
+                  {
+                    color: sharingAction === "share" ? "#FFFFFF" : theme.text,
+                  },
+                ]}
+              >
                 {t("trip.footerShare")}
               </Text>
             </Pressable>
@@ -368,12 +394,12 @@ export default function ResultStep({ planner }: { planner: PlannerApi }) {
                 styles.shareFooterBtn,
                 styles.shareFooterBtnPrimary,
                 pressed && { opacity: 0.7 },
-                isSharing && { opacity: 0.6 },
+                sharingAction === "share" && { opacity: 0.4 },
               ]}
               onPress={() => handleSaveCalendar()}
-              disabled={isSharing}
+              disabled={sharingAction !== null}
             >
-              {isSharing ? (
+              {sharingAction === "calendar" ? (
                 <ActivityIndicator size="small" color="#FFFFFF" />
               ) : (
                 <Icon name="calendar-plus" size={18} color="#FFFFFF" />

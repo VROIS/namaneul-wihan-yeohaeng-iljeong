@@ -97,7 +97,9 @@ export default function TripsSection({ profile }: { profile: ProfileApi }) {
               >
                 {summaryLineCard(trip, t)}
               </Text>
-              {trip.videoStatus === "succeeded" && (
+              {Object.values(trip.videoByDay || {}).some(
+                (v) => v?.status === "succeeded",
+              ) && (
                 <View style={styles.videoReadyBadge}>
                   <Icon name="film" size={12} color="#FFFFFF" />
                 </View>

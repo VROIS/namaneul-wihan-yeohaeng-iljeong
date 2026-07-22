@@ -14,8 +14,8 @@ export interface SavedItinerary {
   companionCount: number;
   vibes: string[];
   travelPace: string;
-  videoStatus?: string;
-  videoUrl?: string;
+  // 🎬 2026-07-22 일별 지브리영상 = video_by_day 컬럼 (옛 단일 videoStatus/videoUrl 폐기 = 구현계획 §19)
+  videoByDay?: Record<string, { status?: string; url?: string | null }>;
   // 🗂️ 2026-07-03 = 목록 API가 SELECT * = rawData 포함(storage.getUserItineraries). 카드 4요소(도시·기간·예산·요약)용.
   rawData?: {
     destination?: string;

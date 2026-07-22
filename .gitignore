@@ -182,3 +182,7 @@ attached_assets/
 
 # 2026-07-14 = 루트 최상위 검증용 스크린샷 PNG (= Playwright/DevTools 실증 캡처 = 로컬 전용, 레포 오염 방지). 앱 에셋은 assets/ 안에 있어 무관.
 /*.png
+
+# 2026-07-22 지브리영상 = 외부작업(Antigravity) 산출물 사본·1회용 스크립트 = 레포 커밋 금지(§16·§19, 원본 보존은 로컬 폴더)
+deliverables_ghibli_video/
+scratch_*.ts

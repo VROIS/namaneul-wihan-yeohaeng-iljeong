@@ -76,7 +76,7 @@ const FOCUS_LABELS: Record<CurationFocus, string> = {
 /**
  * 생년월일 → 현재 나이 계산
  */
-function calculateAge(birthDate?: string): number | null {
+export function calculateAge(birthDate?: string): number | null {
   if (!birthDate) return null;
 
   const birth = new Date(birthDate);
@@ -107,7 +107,7 @@ interface FamilyAgeEstimate {
   parentAgeGroup: string; // "60대", "70대", "80대"
 }
 
-function estimateFamilyAges(userAge: number): FamilyAgeEstimate {
+export function estimateFamilyAges(userAge: number): FamilyAgeEstimate {
   // 자녀 나이 = 사용자 - 30 (최소 0세)
   const estimatedChildAge = Math.max(0, userAge - 30);
 

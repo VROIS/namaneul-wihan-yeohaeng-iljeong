@@ -78,6 +78,9 @@ export function useTripPlanner() {
   );
   // 🔗 2026-07-21 = 공유 링크(/shared/itinerary/:id)로 들어온 열람인지 표시. true면 restoreItineraryById가 currentItineraryId를 null로 유지(원본 보호).
   const [sharedEntry, setSharedEntry] = useState(false);
+  // 🎬 2026-07-22 사장님 SSOT = 영상 버튼은 "프로필 카드로 복원한 저장 여정"에서만 저장버튼 자리에 노출.
+  //   신규 생성 여정 = 저장버튼 원래 기능 유지(저장 후에도 안 바뀜). 복원 = "이 여정을 영상으로 봐야지" 내비게이션.
+  const [restoredTrip, setRestoredTrip] = useState(false);
   // 🗺️ 2026-06-28 = 지도 마커 클릭 → 해당 슬롯 스크롤 (= ScrollView ref + 슬롯별 y좌표 기록)
   const resultScrollRef = useRef<ScrollView | null>(null);
   const slotLayoutsRef = useRef<Record<string, number>>({});
@@ -151,7 +154,7 @@ export function useTripPlanner() {
   });
 
   // 🔗📅 2026-07-21 = 여정 공유(시스템 공유시트)·캘린더 저장(.ics) 서브훅 조립(§16 = useSaveItinerary 바로 다음).
-  const { isSharing, handleShareItinerary, handleSaveCalendar } =
+  const { sharingAction, handleShareItinerary, handleSaveCalendar } =
     useShareCalendar({
       itinerary,
       currentItineraryId,
@@ -253,6 +256,7 @@ export function useTripPlanner() {
         }));
         setCurrentItineraryId(opts?.shared ? null : targetId);
         setSharedEntry(!!opts?.shared);
+        setRestoredTrip(!opts?.shared); // 프로필 카드 복원 = 헤더 저장버튼 → 영상 버튼 전환(공유 열람 제외)
         setScreen("Result");
       } catch (e) {
         console.warn("[TripPlanner] 저장여정 복원 오류:", e);
@@ -265,6 +269,11 @@ export function useTripPlanner() {
     if (!restoreItineraryId) return;
     restoreItineraryById(restoreItineraryId);
   }, [restoreItineraryId, restoreItineraryById]);
+
+  // 새 여정 생성 시작(Loading) = 복원 상태 해제 = 신규 여정 화면은 저장버튼 원래 기능으로 복귀
+  useEffect(() => {
+    if (screen === "Loading") setRestoredTrip(false);
+  }, [screen]);
 
   // 🔗 2026-07-21 = 웹 공유링크 진입(/shared/itinerary/:id) = 서버는 이미 SPA 폴백이 이 경로에 index.html 서빙(server/index.ts:223-232, 신규 라우트 0)
   //   + GET /api/itineraries/:id 인증 0(개발 전체공개 = 게이트 추가 금지). 마운트 시 pathname 1회 파싱(useLogin.ts:130-143 패턴 준용) → shared:true로 복원.
@@ -330,8 +339,10 @@ export function useTripPlanner() {
     isSaving,
     justSaved,
     handleSaveItinerary,
+    currentItineraryId, // 🎬 VideoPreview 이동 파라미터용 여정 id
+    restoredTrip, // 🎬 프로필 카드 복원 여정 = 헤더 저장버튼 → 영상 버튼 전환(2026-07-22 사장님 SSOT, 신규 여정은 저장버튼 유지)
     // 🔗📅 공유·캘린더(2026-07-21 신규, ResultStep footer 버튼 2개가 이 이름 그대로 참조 = D와 인터페이스 계약)
-    isSharing,
+    sharingAction, // "share" | "calendar" | null = 눌린 버튼만 선택색+스피너 (2026-07-22 사장님 실기기 피드백)
     handleShareItinerary,
     handleSaveCalendar,
     sharedEntry,

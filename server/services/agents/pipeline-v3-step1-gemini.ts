@@ -71,8 +71,8 @@ export async function step1_geminiItinerary(
     })
     .join("\n");
 
-  // ⚠️ 2026-07-21 사장님 SSOT = 다국어 출력은 여기(Gemini k/r/s)서 안 함 = PSR 공유컬럼(name_ko·summary_ko·editorial_summary)은 한국어 고정(오염 방지).
-  //   표시 다국어(사용자 프로필 언어설정 연동)는 별도 = FE/BE 가 name_en·name_local 중 선택하거나 표시전용 번역 = 별도 설계(PSR 저장과 분리). 옛 langMap(프롬프트 미삽입 죽은코드) 폐기 §19.
+  // ⚠️ 2026-07-21 사장님 SSOT = 여정 출력 = 한국어 고정(디폴트). PSR 공유컬럼(name_ko·summary_ko·editorial_summary)도 한국어 = 오염 방지.
+  //   다국어 = 당분간 계획 없음. 추후 국제화 = i18n 불가(동적생성 요소) = "번역 방식"으로 별도 붙임(미확정). Gemini 언어분기·옛 langMap(프롬프트 미삽입 죽은코드) 폐기 §19.
 
   // 현재 연도/월 (2026 최신 정보 반영 지시용)
   const nowYear = new Date().getFullYear();
@@ -140,7 +140,7 @@ ${categoryMatrix}
 
 For each place include (= ALL fields verified via Google Search grounding, 키는 아래 축약형 그대로 사용):
 - n (English official name on Google Maps)
-- k (한국어 = 한국 여행자가 부르는 이름) [= PSR name_ko 공유컬럼 = 언어 고정(오염 방지). 표시 다국어는 별도 = FE가 name_en/local 선택]
+- k (한국어 = 한국 여행자가 부르는 이름) [= PSR name_ko 공유컬럼 = 한국어 고정(오염 방지). 다국어는 추후 번역방식 별도, 당분간 없음]
 - l (local language name = 예: 파리=Tour Eiffel) [= REQUIRED for ALL places INCLUDING restaurants (식당도 반드시). If the restaurant's official name is already in the local language (예: "Le Comptoir du Marché"), copy that same name into l — never leave l empty. = Text Search forwarding + matching key, final DB column]
 - a (FULL street address with NUMBER + street + postal code + city) [= REQUIRED for Text Search forwarding + matching key, final DB column — verify via Google Search]
 - t ("activity" | "lunch" | "dinner")

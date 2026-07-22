@@ -54,6 +54,21 @@ async function saveToAndroidCalendar(itinerary: Itinerary): Promise<void> {
       });
     }
   }
+
+  // 삽입 완료 후 캘린더 앱을 여행 시작일로 자동 열기 = 삼성폰 "저장됐는지 안 보임" 해소 (2026-07-22 사장님 실기기 피드백).
+  //   content://com.android.calendar/time/{밀리초} = 안드로이드 표준 캘린더 열기 주소(리서치 확인). 실패해도 삽입은 이미 완료 = 조용히 무시.
+  try {
+    const firstStart = slotDate(
+      itinerary.startDate,
+      1,
+      itinerary.days[0]?.places[0]?.startTime || "09:00",
+    );
+    await Linking.openURL(
+      `content://com.android.calendar/time/${firstStart.getTime()}`,
+    );
+  } catch {
+    // 캘린더 앱 열기 실패 = 삽입 자체는 성공이므로 무시.
+  }
 }
 
 // 캘린더 저장 — Android = expo-calendar 직접삽입 / iOS·웹 = 서버 .ics.
