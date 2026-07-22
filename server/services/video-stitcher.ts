@@ -88,7 +88,10 @@ export async function stitchAndUpload(
         signal: AbortSignal.timeout(120000),
       },
     );
-    if (!ur.ok) throw new Error(`[stitcher] 업로드 실패 ${ur.status}`);
+    if (!ur.ok)
+      throw new Error(
+        `[stitcher] 업로드 실패 ${ur.status}: ${(await ur.text()).slice(0, 300)}`,
+      );
     return `${supaPublicUrl}/storage/v1/object/public/itinerary-videos/${filePath}`;
   } finally {
     fs.rmSync(work, { recursive: true, force: true });

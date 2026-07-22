@@ -40,6 +40,11 @@
 - **selectGhibliCast() 신설**([character-roster-ghibli.ts](../server/services/character-roster-ghibli.ts), 옛 "주인공 1명" 선택 폐기 §19): 인원·구성 = **'누구랑'(companionType+companionCount)** = 차량·교통비와 동일 소스 / 나이 = **users.birth_date 실계산**(protagonist-generator calculateAge·estimateFamilyAges export 재사용 §16, 없으면 40대 가정) / 동반 나이 = companionAges 입력 우선. 레퍼런스 = 일행(최대4)+가이드+차량 = 최대 6장 첨부, 스토리보드 프롬프트 = "일행 전원 등장, 1명만 등장 금지".
 - 실증($1.24): 가족4(부부 30대+부모 55·59) → **4명 전원+가이드 한 화면 등장** 프레임 확인. 검증 스크립트의 snake_case 전달 버그도 정정(운영 드리즐 경로는 원래 정상).
 
+### 운영 사고 2 (삼성폰 실기기, i104): 업로드 400 = 새 버킷 정책 부재
+- 증상 = 씬 9/9 생성 성공 후 Storage 업로드 400, 2회 반복($11 지출). 원인 = **운영 서버 = anon 키인데 `itinerary-videos` 버킷만 anon 정책 0개**(raw-responses·place-images는 과거 사고 때 정책 존재 → 그래서 raw 저장은 됐음). 로컬 검증은 서비스롤 키(RLS 무시)라 통과 = 못 잡음.
+- 수정 = **anon INSERT/SELECT/UPDATE 정책 3종 복제 적용**(raw-responses 전례 §16). ⚠️ 교훈 = **새 Storage 버킷 = 생성 시 anon 정책 3종 필수**(서비스롤 로컬 테스트는 이 결함을 못 잡음 = anon 키로 재현할 것).
+- 복구 = §18 raw 메타의 영상 uri로 **씬 9개 재다운로드 → 결합 → 업로드 → DB succeeded** = 재생성 없이 1세트($5.5) 복구, 여정 104 Day1(54초) 앱 재생 가능. stitcher 에러에 응답 본문 포함(진단 개선).
+
 ### 운영 핫픽스 (커밋 9a6c89b): 스토리보드 파싱 실패
 - 운영(브뤼셀 i103, 9씬)에서 영상 생성 실패 2회 = **Gemini가 정상 JSON 뒤 여분 `}` 부착**("...}\n}", Storage raw 2건으로 입증 = §18 덕에 원인 즉시 확정). 관문 greedy 정규식이 여분 괄호까지 물어 파싱 실패.
 - 수정 = 스토리보드에 **중괄호 균형 파서 1벌**(문자열·이스케이프 안전, geminiClient 잠금파일 무수정). 실패 raw 2건 재파싱 성공 + 회귀 통과. **재반영 = Republish 필요.**
