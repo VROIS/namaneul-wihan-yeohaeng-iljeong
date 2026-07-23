@@ -146,8 +146,23 @@ async function withQuotaRetry<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
-/** [B안] 스틸 1장 → Veo Lite 사진→영상 = 움직이는 씬 클립(오디오 포함) mp4 Buffer */
+/** [B안] 스틸 1장 → Veo Lite 사진→영상 = 움직이는 씬 클립(오디오 포함) mp4 Buffer.
+ *  Veo 가 done 인데 uri·bytes 를 안 준 경우(운영 i104 s6 실증) = 정책성 누락 → 1회 재시도(그 씬만 = $0.35). */
 export async function animateStillToClip(
+  prompt: string,
+  opts: PhotoMotionOpts,
+): Promise<Buffer> {
+  try {
+    return await animateStillToClipOnce(prompt, opts);
+  } catch (e: any) {
+    const isEmpty = String(e?.message || "").includes("영상 없음");
+    if (!isEmpty) throw e; // 429 등은 이미 내부 withQuotaRetry 가 처리 = 여기선 재시도 안 함
+    console.warn(`[video-gen] 씬 응답 비었음 → 1회 재시도: ${opts.rawTag}`);
+    return await animateStillToClipOnce(prompt, opts);
+  }
+}
+
+async function animateStillToClipOnce(
   prompt: string,
   opts: PhotoMotionOpts,
 ): Promise<Buffer> {

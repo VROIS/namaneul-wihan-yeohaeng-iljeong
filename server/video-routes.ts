@@ -1,6 +1,7 @@
 // ⚠️ 수정금지(승인필요) 2026-07-22 사장님 SSOT = 지브리 일별 여행영상 백엔드 실배선 1벌 (docs/여정 미리보기 영상 구현.md)
 // = POST {day} → Gemini 스토리보드 1콜(전데이터 제공) → Omni 씬 병렬 생성(캐릭터 3장 첨부) → ffmpeg 결합 → Storage → video_by_day 갱신.
 // = 키 = issueApiKey 출입증(apipass)만. 옛 목업(샘플 mp4·가짜 성공·폴백 여정) = 완전 폐기 2026-07-22 §19.
+// = 2026-07-23 사장님 SSOT: 씬 하나 실패해도 전체 폐기 금지 = 성공한 씬만 모아 완성(사용자 무한대기 방지). 카드 요약 = 슬롯 summaryKo 없으면 PSR.summary_ko 직조회(name_local 과 동일).
 
 import type { Express, Request, Response } from "express";
 import { storage } from "./storage";
@@ -57,6 +58,22 @@ function isStaleProcessing(v: DayVideo | undefined): boolean {
   if (v?.status !== "processing") return false;
   const ts = Number(v.taskId?.split("_").pop());
   return !ts || Date.now() - ts > STALE_PROCESSING_MS;
+}
+
+/** 카드 요약 = 슬롯 summaryKo 우선, 없으면(옛 여정) 슬롯 id 로 PSR.summary_ko 직조회 = name_local 과 동일 로직(1회용 백필 아님) */
+async function resolveSummaries(slots: any[]): Promise<Record<number, string>> {
+  const map: Record<number, string> = {};
+  if (!pool) return map;
+  const ids = slots
+    .map((s) => parseInt(String(s?.id ?? "").replace(/\D/g, ""), 10)) // "db-62219" → 62219
+    .filter((n) => !isNaN(n));
+  if (!ids.length) return map;
+  const r = await pool.query(
+    "SELECT id, summary_ko FROM place_seed_raw WHERE id = ANY($1::int[])",
+    [ids],
+  );
+  for (const row of r.rows) map[row.id] = row.summary_ko || "";
+  return map;
 }
 
 /** video_by_day 의 해당 day 만 원자적 병합 갱신 (다른 day 보존) */
@@ -167,83 +184,114 @@ export function registerVideoRoutes(app: Express): void {
               const es = sceneSlots[i]?.editorialSummary;
               if (es) s.narrationKo = es; // 나레이션 = 우리 DB 문구 그대로(톤앤매너 통일, Gemini 창작 대사 폐기)
             });
-            const scenesMeta = sb.scenes.map((s, i) => ({
-              placeName:
-                sceneSlots[i]?.nameLocal || sceneSlots[i]?.name || s.placeName,
-              summary: sceneSlots[i]?.summaryKo || "",
-            }));
+            // 카드 요약 = 슬롯 summaryKo 우선, 없으면 PSR.summary_ko 직조회(name_local 과 동일 로직)
+            const psrSummary = await resolveSummaries(sceneSlots);
+            const scenesMeta = sb.scenes.map((s, i) => {
+              const numId = parseInt(
+                String(sceneSlots[i]?.id ?? "").replace(/\D/g, ""),
+                10,
+              );
+              return {
+                placeName:
+                  sceneSlots[i]?.nameLocal ||
+                  sceneSlots[i]?.name ||
+                  s.placeName,
+                summary: sceneSlots[i]?.summaryKo || psrSummary[numId] || "",
+              };
+            });
             const narrator = narratorFromCast(sb.cast); // 나레이터 음색 = 출연진 연령대·성별 연동
             let done = 0;
-            const clips = await mapLimit(
+            // 씬 하나 실패해도 전체 폐기 금지 = 성공한 씬만 모아 완성(사장님 SSOT 2026-07-23 = 사용자를 마냥 기다리게 안 함).
+            // 실패 씬 = null 반환 → 아래 filter 로 제외 후 stitch. try/catch 가 mapLimit 예외 전파 차단.
+            const rawClips = await mapLimit(
               sb.scenes,
               SCENE_CONCURRENCY,
               async (scene, i) => {
-                let buf: Buffer;
-                if (useOptionB) {
-                  // B = ①실사진+캐릭터 합성 스틸 → ②Veo Lite 첫프레임 영상 (일관성 = 스틸이 보장)
-                  const slotImage = sceneSlots[i]?.image;
-                  const still = await composeSceneStill(
-                    sceneStillPrompt(
-                      scene,
-                      sb.cast.totalTravelerCount,
-                      !!slotImage,
-                    ),
-                    {
-                      apiKey,
-                      referenceImages: [
-                        ...(slotImage ? [{ url: slotImage }] : []), // 실사진 없는 슬롯(드묾) = 캐릭터 참조만
-                        ...sb.referenceImagePaths.map((p) => ({ path: p })),
-                      ],
-                      contextId: null,
-                      rawTag: `nano-i${id}-d${day}-s${scene.sceneIndex}`,
-                    },
+                try {
+                  let buf: Buffer;
+                  if (useOptionB) {
+                    // B = ①실사진+캐릭터 합성 스틸 → ②Veo Lite 첫프레임 영상 (일관성 = 스틸이 보장)
+                    const slotImage = sceneSlots[i]?.image;
+                    const still = await composeSceneStill(
+                      sceneStillPrompt(
+                        scene,
+                        sb.cast.totalTravelerCount,
+                        !!slotImage,
+                      ),
+                      {
+                        apiKey,
+                        referenceImages: [
+                          ...(slotImage ? [{ url: slotImage }] : []), // 실사진 없는 슬롯(드묾) = 캐릭터 참조만
+                          ...sb.referenceImagePaths.map((p) => ({ path: p })),
+                        ],
+                        contextId: null,
+                        rawTag: `nano-i${id}-d${day}-s${scene.sceneIndex}`,
+                      },
+                    );
+                    buf = await animateStillToClip(
+                      scenePhotoMotionPrompt(scene, narrator),
+                      {
+                        apiKey,
+                        imageBuffer: still,
+                        imageMimeType: "image/png",
+                        durationSeconds: SCENE_SECONDS,
+                        contextId: null,
+                        rawTag: `veo-i${id}-d${day}-s${scene.sceneIndex}`,
+                      },
+                    );
+                  } else {
+                    buf = await generateSceneClip(
+                      sceneClipPrompt(scene, narrator),
+                      {
+                        apiKey,
+                        referenceImages: sb.referenceImagePaths.map((p) => ({
+                          path: p,
+                        })),
+                        aspectRatio: "9:16",
+                        contextId: null,
+                        rawTag: `omni-i${id}-d${day}-s${scene.sceneIndex}`,
+                      },
+                    );
+                  }
+                  // await = 진행률 쓰기가 최종 succeeded 쓰기를 늦게 덮는 레이스 차단 (§22 code-review)
+                  done++;
+                  await setDayVideo(id, day, {
+                    status: "processing",
+                    url: null,
+                    taskId,
+                    scenesDone: done,
+                    totalScenes,
+                    scenes: scenesMeta,
+                  });
+                  return buf;
+                } catch (sceneErr) {
+                  // 이 씬만 실패(uri 누락·타임아웃 등) = 로그 후 제외 = 나머지 씬으로 완성 진행
+                  console.error(
+                    `[video] ${taskId} 씬${scene.sceneIndex} 실패(제외):`,
+                    (sceneErr as Error)?.message,
                   );
-                  buf = await animateStillToClip(
-                    scenePhotoMotionPrompt(scene, narrator),
-                    {
-                      apiKey,
-                      imageBuffer: still,
-                      imageMimeType: "image/png",
-                      durationSeconds: SCENE_SECONDS,
-                      contextId: null,
-                      rawTag: `veo-i${id}-d${day}-s${scene.sceneIndex}`,
-                    },
-                  );
-                } else {
-                  buf = await generateSceneClip(
-                    sceneClipPrompt(scene, narrator),
-                    {
-                      apiKey,
-                      referenceImages: sb.referenceImagePaths.map((p) => ({
-                        path: p,
-                      })),
-                      aspectRatio: "9:16",
-                      contextId: null,
-                      rawTag: `omni-i${id}-d${day}-s${scene.sceneIndex}`,
-                    },
-                  );
+                  return null;
                 }
-                // await = 진행률 쓰기가 최종 succeeded 쓰기를 늦게 덮는 레이스 차단 (§22 code-review)
-                done++;
-                await setDayVideo(id, day, {
-                  status: "processing",
-                  url: null,
-                  taskId,
-                  scenesDone: done,
-                  totalScenes,
-                  scenes: scenesMeta,
-                });
-                return buf;
               },
+            );
+            // 성공 씬만 = 클립·카드메타 동일 필터(같은 인덱스) → 카드 인덱스(재생시간÷씬수)와 영상 싱크 유지
+            const clips = rawClips.filter((b): b is Buffer => b != null);
+            const okScenesMeta = scenesMeta.filter(
+              (_, i) => rawClips[i] != null,
+            );
+            if (!clips.length)
+              throw new Error("모든 씬 생성 실패 = 완성할 클립 없음");
+            console.log(
+              `[video] ${taskId} 성공 씬 ${clips.length}/${totalScenes} = 완성 진행`,
             );
             const url = await stitchAndUpload(clips, id, day);
             await setDayVideo(id, day, {
               status: "succeeded",
               url,
               taskId,
-              scenesDone: totalScenes,
-              totalScenes,
-              scenes: scenesMeta,
+              scenesDone: clips.length,
+              totalScenes: clips.length,
+              scenes: okScenesMeta,
             });
             console.log(
               `[video] ${taskId} 완료(${useOptionB ? "B실사포토무비" : "A지브리"}): ${url}`,
