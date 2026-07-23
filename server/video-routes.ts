@@ -33,8 +33,9 @@ let adminVideoOptionMode: "optionA" | "optionB" = "optionB";
 // 죽은 파이프라인 판정 = 202 후 백그라운드 중 서버 사망(재배포·autoscale 회수) 시 processing 영구 고착 방지 (§22 code-review 2026-07-22).
 // taskId 끝 세그먼트 = 시작 Date.now → 폴링상한(10분)+여유보다 오래된 processing = 죽음 = 재생성 허용 + 조회 시 failed 로 표시.
 const STALE_PROCESSING_MS = 15 * 60 * 1000;
-// 씬 생성 동시 상한 = Veo 프리뷰 한도(10 RPM·동시 10/프로젝트) 안쪽 (2026-07-23 운영 i105 429 실증 = 9씬 동시 발사가 원인)
-const SCENE_CONCURRENCY = 3;
+// 씬 생성 동시 상한 = Veo Tier2 RPM4 안쪽 = 4 (2026-07-23 실측: Veo 1개 ~60초라 동시4=분당4개=한도 딱 맞음, 429 안전).
+//   8씬 이하 여정 = 2배치로 단축(107 실증 176→117초). 9씬 = 3배치 그대로. Tier 상승 시 5~6 으로 재조정.
+const SCENE_CONCURRENCY = 4;
 
 /** 동시 상한 병렬 실행 (결과 순서 = 입력 순서 유지) */
 async function mapLimit<T, R>(
