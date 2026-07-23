@@ -1,13 +1,15 @@
 // ⚠️ 수정금지(승인필요) 2026-07-22 사장님 SSOT = 영상 클립 생성 단일 진입점 (§16)
-// = 모델 = gemini-omni-flash-preview (Interactions API) = 사장님 선정 2026-07-22 (레퍼런스 이미지 첨부 = 캐릭터 일관성).
-// = 모든 영상 생성 호출 = 이 함수만 통과. 모델 교체(Veo 등) = 이 파일 내부만 수정 = 호출부 불변.
-// = 키 = issueApiKey 출입증(apipass)을 호출자가 인자로 전달 (geminiClient #01 무판단 배관과 동일 원칙).
-// = §18 = 응답 메타(영상 바이트 제외) saveRaw 2곳 저장.
+// = A안 = gemini-omni-flash-preview (Interactions API, 캐릭터 레퍼런스 첨부) = generateSceneClip
+// = B안(2026-07-23 실사 포토무비) = veo-3.1-lite 사진→영상 (합성 스틸 = 첫 프레임, 일관성은 스틸이 보장) = animateStillToClip
+// = 모든 영상 생성 호출 = 이 파일만 통과. 모델 교체 = 이 파일 내부만 수정 = 호출부 불변.
+// = 키 = issueApiKey 출입증(apipass)을 호출자가 인자로 전달. §18 = 응답 메타(영상 바이트 제외) saveRaw 2곳 저장.
 
 import fs from "fs";
+import { GoogleGenAI } from "@google/genai";
 import { saveRaw } from "./save-raw";
 
 const OMNI_MODEL = "gemini-omni-flash-preview";
+const VEO_I2V_MODEL = "veo-3.1-lite-generate-preview"; // B안 = 최저가($0.05/초). 첫프레임 입력·대사 오디오 = 공식 지원 확인
 const API_BASE = "https://generativelanguage.googleapis.com/v1beta";
 const POLL_INTERVAL_MS = 5000;
 const POLL_TIMEOUT_MS = 10 * 60 * 1000; // 씬 1개 생성 폴링 상한 10분
@@ -115,6 +117,81 @@ export async function generateSceneClip(
   throw new Error(
     `[video-gen] 응답에 영상 없음: ${JSON.stringify(interaction).slice(0, 300)}`,
   );
+}
+
+export interface PhotoMotionOpts {
+  apiKey: string; // issueApiKey 출입증
+  imageBuffer: Buffer; // 첫 프레임 = 나노바나나 합성 스틸
+  imageMimeType?: string; // 기본 image/png
+  durationSeconds?: number; // 기본 6 (SCENE_SECONDS와 동일값. 호출자가 전달)
+  contextId?: string | number | null;
+  rawTag?: string | null;
+}
+
+/** [B안] 스틸 1장 → Veo Lite 사진→영상 = 움직이는 씬 클립(오디오 포함) mp4 Buffer */
+export async function animateStillToClip(
+  prompt: string,
+  opts: PhotoMotionOpts,
+): Promise<Buffer> {
+  const ai = new GoogleGenAI({ apiKey: opts.apiKey });
+  let op: any = await ai.models.generateVideos({
+    model: VEO_I2V_MODEL,
+    prompt,
+    image: {
+      imageBytes: opts.imageBuffer.toString("base64"),
+      mimeType: opts.imageMimeType || "image/png",
+    },
+    config: {
+      aspectRatio: "9:16",
+      durationSeconds: opts.durationSeconds ?? 6,
+      resolution: "720p",
+      numberOfVideos: 1,
+    } as any,
+  });
+
+  const started = Date.now();
+  while (!op?.done) {
+    if (Date.now() - started > POLL_TIMEOUT_MS)
+      throw new Error(`[video-gen] Veo 폴링 타임아웃(10분): ${op?.name}`);
+    await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+    op = await ai.operations.getVideosOperation({ operation: op });
+  }
+
+  const video = op?.response?.generatedVideos?.[0]?.video;
+  await saveRaw({
+    source: "gemini",
+    contextId: opts.contextId,
+    tag: opts.rawTag || "veo-i2v-clip",
+    request: {
+      model: VEO_I2V_MODEL,
+      prompt,
+      durationSeconds: opts.durationSeconds ?? 6,
+      aspectRatio: "9:16",
+      firstFrame: "still(base64 생략)",
+    },
+    raw: stripVideoBytes({
+      name: op?.name,
+      done: op?.done,
+      error: op?.error,
+      video: { uri: video?.uri, hasBytes: !!video?.videoBytes },
+    }),
+  });
+
+  if (op?.error)
+    throw new Error(
+      `[video-gen] Veo 생성 실패: ${JSON.stringify(op.error).slice(0, 300)}`,
+    );
+  if (video?.videoBytes) return Buffer.from(video.videoBytes, "base64");
+  if (video?.uri) {
+    const joiner = video.uri.includes("?") ? "&" : "?";
+    const vr = await fetch(`${video.uri}${joiner}key=${opts.apiKey}`, {
+      signal: AbortSignal.timeout(120000),
+    });
+    if (!vr.ok)
+      throw new Error(`[video-gen] Veo 영상 다운로드 실패 ${vr.status}`);
+    return Buffer.from(await vr.arrayBuffer());
+  }
+  throw new Error(`[video-gen] Veo 응답에 영상 없음`);
 }
 
 /** raw 저장용 = 응답에서 대용량 base64 필드 제거(메타만 보존) */

@@ -1,4 +1,4 @@
-// ⚠️ 수정금지(승인필요) 2026-07-22 사장님 SSOT = 지브리 일별 여행영상 백엔드 실배선 1벌 (docs/2026-07-22 지브리 여행영상 구현계획.md)
+// ⚠️ 수정금지(승인필요) 2026-07-22 사장님 SSOT = 지브리 일별 여행영상 백엔드 실배선 1벌 (docs/여정 미리보기 영상 구현.md)
 // = POST {day} → Gemini 스토리보드 1콜(전데이터 제공) → Omni 씬 병렬 생성(캐릭터 3장 첨부) → ffmpeg 결합 → Storage → video_by_day 갱신.
 // = 키 = issueApiKey 출입증(apipass)만. 옛 목업(샘플 mp4·가짜 성공·폴백 여정) = 완전 폐기 2026-07-22 §19.
 
@@ -10,16 +10,24 @@ import { issueApiKey } from "./services/shared/issue-api-key";
 import {
   buildGhibliStoryboard,
   sceneClipPrompt,
+  sceneStillPrompt,
+  scenePhotoMotionPrompt,
+  narratorFromCast,
   MAX_SCENES,
   SCENE_SECONDS,
 } from "./services/ghibli-travel-storyboard";
-import { generateSceneClip } from "./services/shared/video-gen-client";
+import {
+  generateSceneClip,
+  animateStillToClip,
+} from "./services/shared/video-gen-client";
+import { composeSceneStill } from "./services/shared/image-gen-client";
 import { stitchAndUpload } from "./services/video-stitcher";
 
-const COST_PER_SECOND_USD = 0.101; // Omni Flash 720p (5,792tok/초 × $17.5/1M)
+const COST_PER_SECOND_USD = 0.101; // A안 = Omni Flash 720p (5,792tok/초 × $17.5/1M)
+const B_COST_PER_SCENE_USD = 0.35; // B안 = 나노바나나 스틸 $0.045 + Veo Lite 6초 $0.30
 
-// 관리자 A/B 토글 = A(Omni 영상) 디폴트 / B(클라 자체 슬라이드쇼) = 사장님 확정 유지
-let adminVideoOptionMode: "optionA" | "optionB" = "optionA";
+// 관리자 A/B 토글 = 사장님 SSOT 2026-07-23: **디폴트 = B(실사 포토무비, 씬당 $0.35 = 원가 절감)**, 필요시 대시보드에서 A(지브리풍) 전환
+let adminVideoOptionMode: "optionA" | "optionB" = "optionB";
 
 // 죽은 파이프라인 판정 = 202 후 백그라운드 중 서버 사망(재배포·autoscale 회수) 시 processing 영구 고착 방지 (§22 code-review 2026-07-22).
 // taskId 끝 세그먼트 = 시작 Date.now → 폴링상한(10분)+여유보다 오래된 processing = 죽음 = 재생성 허용 + 조회 시 failed 로 표시.
@@ -98,14 +106,15 @@ export function registerVideoRoutes(app: Express): void {
           scenesDone: 0,
           totalScenes,
         });
+        // A(optionA) = Omni 지브리 직행 / B(optionB) = 실사 포토무비(나노바나나 스틸 → Veo Lite 사진→영상) = 관리자 토글 분기
+        const useOptionB = adminVideoOptionMode === "optionB";
         res.status(202).json({
           taskId,
           day,
           totalScenes,
-          estimatedCostUsd: (
-            totalScenes *
-            SCENE_SECONDS *
-            COST_PER_SECOND_USD
+          estimatedCostUsd: (useOptionB
+            ? totalScenes * B_COST_PER_SCENE_USD
+            : totalScenes * SCENE_SECONDS * COST_PER_SECOND_USD
           ).toFixed(2),
         });
 
@@ -132,30 +141,77 @@ export function registerVideoRoutes(app: Express): void {
               slots: sceneSlots,
               apiKey,
             });
+            // 데이터 소스 = 사장님 SSOT 2026-07-23: 대사 = editorial_summary / 카드 요약 = summary_ko / 카드 장소명 = name_local
+            sb.scenes.forEach((s, i) => {
+              const es = sceneSlots[i]?.editorialSummary;
+              if (es) s.narrationKo = es; // 나레이션 = 우리 DB 문구 그대로(톤앤매너 통일, Gemini 창작 대사 폐기)
+            });
+            const scenesMeta = sb.scenes.map((s, i) => ({
+              placeName:
+                sceneSlots[i]?.nameLocal || sceneSlots[i]?.name || s.placeName,
+              summary: sceneSlots[i]?.summaryKo || "",
+            }));
+            const narrator = narratorFromCast(sb.cast); // 나레이터 음색 = 출연진 연령대·성별 연동
             let done = 0;
             const clips = await Promise.all(
-              sb.scenes.map((scene) =>
-                generateSceneClip(sceneClipPrompt(scene), {
-                  apiKey,
-                  referenceImages: sb.referenceImagePaths.map((p) => ({
-                    path: p,
-                  })),
-                  aspectRatio: "9:16",
-                  contextId: null,
-                  rawTag: `omni-i${id}-d${day}-s${scene.sceneIndex}`,
-                }).then(async (buf) => {
-                  // await = 진행률 쓰기가 최종 succeeded 쓰기를 늦게 덮는 레이스 차단 (§22 code-review)
-                  done++;
-                  await setDayVideo(id, day, {
-                    status: "processing",
-                    url: null,
-                    taskId,
-                    scenesDone: done,
-                    totalScenes,
-                  });
-                  return buf;
-                }),
-              ),
+              sb.scenes.map(async (scene, i) => {
+                let buf: Buffer;
+                if (useOptionB) {
+                  // B = ①실사진+캐릭터 합성 스틸 → ②Veo Lite 첫프레임 영상 (일관성 = 스틸이 보장)
+                  const slotImage = sceneSlots[i]?.image;
+                  const still = await composeSceneStill(
+                    sceneStillPrompt(
+                      scene,
+                      sb.cast.totalTravelerCount,
+                      !!slotImage,
+                    ),
+                    {
+                      apiKey,
+                      referenceImages: [
+                        ...(slotImage ? [{ url: slotImage }] : []), // 실사진 없는 슬롯(드묾) = 캐릭터 참조만
+                        ...sb.referenceImagePaths.map((p) => ({ path: p })),
+                      ],
+                      contextId: null,
+                      rawTag: `nano-i${id}-d${day}-s${scene.sceneIndex}`,
+                    },
+                  );
+                  buf = await animateStillToClip(
+                    scenePhotoMotionPrompt(scene, narrator),
+                    {
+                      apiKey,
+                      imageBuffer: still,
+                      imageMimeType: "image/png",
+                      durationSeconds: SCENE_SECONDS,
+                      contextId: null,
+                      rawTag: `veo-i${id}-d${day}-s${scene.sceneIndex}`,
+                    },
+                  );
+                } else {
+                  buf = await generateSceneClip(
+                    sceneClipPrompt(scene, narrator),
+                    {
+                      apiKey,
+                      referenceImages: sb.referenceImagePaths.map((p) => ({
+                        path: p,
+                      })),
+                      aspectRatio: "9:16",
+                      contextId: null,
+                      rawTag: `omni-i${id}-d${day}-s${scene.sceneIndex}`,
+                    },
+                  );
+                }
+                // await = 진행률 쓰기가 최종 succeeded 쓰기를 늦게 덮는 레이스 차단 (§22 code-review)
+                done++;
+                await setDayVideo(id, day, {
+                  status: "processing",
+                  url: null,
+                  taskId,
+                  scenesDone: done,
+                  totalScenes,
+                  scenes: scenesMeta,
+                });
+                return buf;
+              }),
             );
             const url = await stitchAndUpload(clips, id, day);
             await setDayVideo(id, day, {
@@ -164,8 +220,11 @@ export function registerVideoRoutes(app: Express): void {
               taskId,
               scenesDone: totalScenes,
               totalScenes,
+              scenes: scenesMeta,
             });
-            console.log(`[video] ${taskId} 완료: ${url}`);
+            console.log(
+              `[video] ${taskId} 완료(${useOptionB ? "B실사포토무비" : "A지브리"}): ${url}`,
+            );
           } catch (e) {
             console.error(`[video] ${taskId} 실패:`, e);
             await setDayVideo(id, day, {

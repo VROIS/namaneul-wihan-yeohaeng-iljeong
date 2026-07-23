@@ -1,6 +1,7 @@
-// 🎬 지브리 일별 여행영상 미리보기 (2026-07-22 실배선 재작성 = docs/2026-07-22 지브리 여행영상 구현계획.md, §19 옛 목업 슬라이드쇼 폐기)
-// = Day 칩 선택 → 일별 3분기: 미생성(생성 버튼) / 생성중(진행률 % 3초 폴링) / 완료(mp4 재생 + 기기 저장).
-// = optionA(디폴트) = 서버 생성 지브리 영상(expo-av) / optionB = 해당일 슬롯 슬라이드쇼 + expo-speech 나레이션(자체 해결 무과금, 관리자 토글).
+// 🎬 일별 여행영상 미리보기 (정본 = docs/여정 미리보기 영상 구현.md)
+// = Day 칩 선택 → 일별 3분기: 미생성(생성 버튼) / 생성중(진행률 % 3초 폴링) / 완료(mp4 재생 + 글라스 카드 + 기기 저장).
+// = A(지브리)·B(실사 포토무비) 모두 서버가 mp4 생성 = 재생 화면 1벌(옛 클라 슬라이드쇼 폐기 2026-07-23 §19).
+// = 글라스 카드(Scene n/N·장소명·요약) = 2026-07-23 사장님 목업 = video_by_day.scenes 메타를 재생 위치에 맞춰 전환.
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
@@ -9,7 +10,6 @@ import {
   ActivityIndicator,
   StyleSheet,
   ScrollView,
-  Image,
   Platform,
   Alert,
 } from "react-native";
@@ -30,6 +30,7 @@ interface DayVideo {
   taskId: string;
   scenesDone: number;
   totalScenes: number;
+  scenes?: { placeName: string; summary?: string }[]; // 글라스 카드(Scene n/N·장소명·요약)용 씬 메타
 }
 
 export default function VideoPreviewScreen({ route, navigation }: any) {
@@ -38,12 +39,9 @@ export default function VideoPreviewScreen({ route, navigation }: any) {
 
   const [itinerary, setItinerary] = useState<any | null>(null);
   const [videoByDay, setVideoByDay] = useState<Record<string, DayVideo>>({});
-  const [optionMode, setOptionMode] = useState<"optionA" | "optionB">(
-    "optionA",
-  );
   const [selectedDay, setSelectedDay] = useState(1);
   const [isRequesting, setIsRequesting] = useState(false);
-  const [slideIdx, setSlideIdx] = useState(0); // optionB 슬라이드쇼
+  const [sceneIdx, setSceneIdx] = useState(0); // 재생 위치 기반 현재 씬(글라스 카드 전환)
   const [pollTick, setPollTick] = useState(0); // 폴링 재가동 신호 = 네트워크 1회 오류에도 다음 폴링 이어감(§22 react-best)
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // 저장 = Tripis 해설화면(DetailViewer) 저장 패턴 이식(2026-07-22 사장님 SSOT = 완전 동일 구현):
@@ -68,7 +66,6 @@ export default function VideoPreviewScreen({ route, navigation }: any) {
       setItinerary(await ir.json());
       const v = await vr.json();
       setVideoByDay(v.videoByDay || {});
-      setOptionMode(v.optionMode || "optionA");
     } catch (e) {
       console.error("[VideoPreview] 로드 오류:", e);
     }
@@ -180,21 +177,29 @@ export default function VideoPreviewScreen({ route, navigation }: any) {
     }
   };
 
-  // optionB = 슬롯 슬라이드쇼(6초/장) + expo-speech 한국어 나레이션 (자체 해결 = 무과금)
-  useEffect(() => {
-    if (optionMode !== "optionB" || !slots.length) return;
-    const slot = slots[slideIdx % slots.length];
-    const line = slot?.summaryKo || slot?.editorialSummary || slot?.name || "";
-    if (line) Speech.speak(line, { language: "ko-KR", rate: 1.0 });
-    const timer = setTimeout(
-      () => setSlideIdx((i) => (i + 1) % slots.length),
-      6000,
+  // 재생 위치 → 현재 씬 인덱스 (씬 길이 = 전체길이/씬수 = 동적, 글라스 카드 전환)
+  const handlePlaybackStatus = (status: any) => {
+    const scenes = dayVideo?.scenes;
+    if (!status?.isLoaded || !scenes?.length || !status.durationMillis) return;
+    const per = status.durationMillis / scenes.length;
+    const idx = Math.min(
+      Math.floor((status.positionMillis || 0) / per),
+      scenes.length - 1,
     );
-    return () => {
-      clearTimeout(timer);
-      Speech.stop();
-    };
-  }, [optionMode, slideIdx, selectedDay, slots.length]);
+    setSceneIdx((prev) => (prev === idx ? prev : idx));
+  };
+  const sceneCard = dayVideo?.scenes?.length
+    ? {
+        index: Math.min(sceneIdx, dayVideo.scenes.length - 1),
+        total: dayVideo.scenes.length,
+        placeName:
+          dayVideo.scenes[Math.min(sceneIdx, dayVideo.scenes.length - 1)]
+            .placeName,
+        summary:
+          dayVideo.scenes[Math.min(sceneIdx, dayVideo.scenes.length - 1)]
+            .summary,
+      }
+    : null;
 
   if (!itinerary) {
     return (
@@ -214,9 +219,7 @@ export default function VideoPreviewScreen({ route, navigation }: any) {
         <Text style={styles.title} numberOfLines={1}>
           🎬 {itinerary.title || "여정 미리보기"}
         </Text>
-        {optionMode === "optionA" &&
-        dayVideo?.status === "succeeded" &&
-        dayVideo.url ? (
+        {dayVideo?.status === "succeeded" && dayVideo.url ? (
           <Pressable style={styles.headerBtn} onPress={handleSaveVideo}>
             {saveState === "saving" ? (
               <ActivityIndicator size="small" color="#FFFFFF" />
@@ -248,7 +251,7 @@ export default function VideoPreviewScreen({ route, navigation }: any) {
               style={[styles.chip, selectedDay === i + 1 && styles.chipActive]}
               onPress={() => {
                 setSelectedDay(i + 1);
-                setSlideIdx(0);
+                setSceneIdx(0);
               }}
             >
               <Text
@@ -269,39 +272,10 @@ export default function VideoPreviewScreen({ route, navigation }: any) {
         })}
       </ScrollView>
 
-      {/* 본문 = 일별 상태 분기 */}
+      {/* 본문 = 일별 상태 분기 (A·B 모두 서버 mp4 = 재생 화면 1벌. 옛 클라 슬라이드쇼 = 폐기 2026-07-23 §19) */}
       <View style={styles.body}>
-        {optionMode === "optionB" ? (
-          // 🅱️ 자체 슬라이드쇼(무과금): 슬롯 이미지 + 나레이션
-          slots.length ? (
-            <View style={styles.playerBox}>
-              {slots[slideIdx % slots.length]?.image ? (
-                <Image
-                  source={{ uri: slots[slideIdx % slots.length].image }}
-                  style={styles.slideImage}
-                  resizeMode="cover"
-                />
-              ) : (
-                <View style={[styles.slideImage, styles.center]}>
-                  <Icon name="image" size={48} color="#475569" />
-                </View>
-              )}
-              <View style={styles.captionBox}>
-                <Text style={styles.captionTitle}>
-                  {slots[slideIdx % slots.length]?.name}
-                </Text>
-                <Text style={styles.captionText} numberOfLines={3}>
-                  {slots[slideIdx % slots.length]?.summaryKo ||
-                    slots[slideIdx % slots.length]?.editorialSummary ||
-                    ""}
-                </Text>
-              </View>
-            </View>
-          ) : (
-            <Text style={styles.emptyText}>이 날짜의 일정이 없습니다.</Text>
-          )
-        ) : dayVideo?.status === "succeeded" && dayVideo.url ? (
-          // ✅ 완료 = 전체 재생 (저장 = 우상단 오버레이 아이콘 = 영상 방해 0)
+        {dayVideo?.status === "succeeded" && dayVideo.url ? (
+          // ✅ 완료 = 전체 재생 + 하단 글라스 카드(Scene n/N·장소명·요약 = 2026-07-23 사장님 목업. 버튼은 기존 그대로)
           <View style={styles.playerBox}>
             <Video
               ref={videoRef}
@@ -311,7 +285,26 @@ export default function VideoPreviewScreen({ route, navigation }: any) {
               resizeMode={ResizeMode.CONTAIN}
               shouldPlay
               isLooping
+              onPlaybackStatusUpdate={handlePlaybackStatus}
             />
+            {sceneCard && (
+              <View style={styles.sceneCard} pointerEvents="none">
+                <View style={styles.sceneCardRow}>
+                  <Icon name="map-pin" size={14} color="#93c5fd" />
+                  <Text style={styles.sceneCardIndex}>
+                    Scene {sceneCard.index + 1}/{sceneCard.total}
+                  </Text>
+                </View>
+                <Text style={styles.sceneCardTitle} numberOfLines={1}>
+                  {sceneCard.placeName}
+                </Text>
+                {!!sceneCard.summary && (
+                  <Text style={styles.sceneCardSummary} numberOfLines={2}>
+                    {sceneCard.summary}
+                  </Text>
+                )}
+              </View>
+            )}
           </View>
         ) : dayVideo?.status === "processing" ? (
           // ⏳ 생성중 = 진행률
@@ -406,19 +399,36 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   player: { width: "100%", flex: 1, borderRadius: 16, overflow: "hidden" },
-  slideImage: {
-    width: "100%",
-    flex: 1,
-    borderRadius: 16,
-    backgroundColor: "#1e293b",
+  // 글라스 카드(2026-07-23 사장님 목업) = 영상 하단 반투명 오버레이: Scene n/N + 장소명 + 요약
+  sceneCard: {
+    position: "absolute",
+    left: 28,
+    right: 28,
+    bottom: 88,
+    backgroundColor: "rgba(15, 23, 42, 0.55)",
+    borderRadius: 20,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    gap: 4,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
   },
-  captionBox: { width: "100%", gap: 4 },
-  captionTitle: {
+  sceneCardRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  sceneCardIndex: {
+    color: "#93c5fd",
+    fontSize: 12,
+    fontFamily: Fonts?.medium || undefined,
+  },
+  sceneCardTitle: {
     color: "#FFFFFF",
-    fontSize: 16,
+    fontSize: 21,
     fontFamily: Fonts?.bold || undefined,
   },
-  captionText: { color: "#94a3b8", fontSize: 13, lineHeight: 19 },
+  sceneCardSummary: {
+    color: "rgba(255,255,255,0.85)",
+    fontSize: 13,
+    lineHeight: 19,
+  },
   progressText: {
     color: "#FFFFFF",
     fontSize: 16,
@@ -454,5 +464,4 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontFamily: Fonts?.bold || undefined,
   },
-  emptyText: { color: "#94a3b8", textAlign: "center", marginTop: 40 },
 });

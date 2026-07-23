@@ -23,6 +23,8 @@ export interface DayVideo {
   taskId: string;
   scenesDone: number;
   totalScenes: number;
+  /** 씬 메타(2026-07-23 사장님 목업) = 재생 화면 글라스 카드(Scene n/N·장소명·요약)용. 재생 타이밍에 맞춰 전환 */
+  scenes?: { placeName: string; summary?: string }[];
 }
 
 // User itineraries
