@@ -32,6 +32,27 @@ let adminVideoOptionMode: "optionA" | "optionB" = "optionB";
 // 죽은 파이프라인 판정 = 202 후 백그라운드 중 서버 사망(재배포·autoscale 회수) 시 processing 영구 고착 방지 (§22 code-review 2026-07-22).
 // taskId 끝 세그먼트 = 시작 Date.now → 폴링상한(10분)+여유보다 오래된 processing = 죽음 = 재생성 허용 + 조회 시 failed 로 표시.
 const STALE_PROCESSING_MS = 15 * 60 * 1000;
+// 씬 생성 동시 상한 = Veo 프리뷰 한도(10 RPM·동시 10/프로젝트) 안쪽 (2026-07-23 운영 i105 429 실증 = 9씬 동시 발사가 원인)
+const SCENE_CONCURRENCY = 3;
+
+/** 동시 상한 병렬 실행 (결과 순서 = 입력 순서 유지) */
+async function mapLimit<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T, i: number) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  await Promise.all(
+    Array.from({ length: Math.min(limit, items.length) }, async () => {
+      while (next < items.length) {
+        const i = next++;
+        results[i] = await fn(items[i], i);
+      }
+    }),
+  );
+  return results;
+}
 function isStaleProcessing(v: DayVideo | undefined): boolean {
   if (v?.status !== "processing") return false;
   const ts = Number(v.taskId?.split("_").pop());
@@ -153,8 +174,10 @@ export function registerVideoRoutes(app: Express): void {
             }));
             const narrator = narratorFromCast(sb.cast); // 나레이터 음색 = 출연진 연령대·성별 연동
             let done = 0;
-            const clips = await Promise.all(
-              sb.scenes.map(async (scene, i) => {
+            const clips = await mapLimit(
+              sb.scenes,
+              SCENE_CONCURRENCY,
+              async (scene, i) => {
                 let buf: Buffer;
                 if (useOptionB) {
                   // B = ①실사진+캐릭터 합성 스틸 → ②Veo Lite 첫프레임 영상 (일관성 = 스틸이 보장)
@@ -211,7 +234,7 @@ export function registerVideoRoutes(app: Express): void {
                   scenes: scenesMeta,
                 });
                 return buf;
-              }),
+              },
             );
             const url = await stitchAndUpload(clips, id, day);
             await setDayVideo(id, day, {

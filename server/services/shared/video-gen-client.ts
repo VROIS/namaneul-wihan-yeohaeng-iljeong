@@ -128,26 +128,46 @@ export interface PhotoMotionOpts {
   rawTag?: string | null;
 }
 
+// Veo 프리뷰 한도 = 10 RPM·동시 10/프로젝트 → 429(RESOURCE_EXHAUSTED) 시 대기 후 재시도 (2026-07-23 운영 i105 실증: 9씬 동시 발사 = 일부 콜 429)
+const RETRY_DELAYS_MS = [20000, 40000, 60000];
+async function withQuotaRetry<T>(fn: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await fn();
+    } catch (e: any) {
+      const is429 =
+        e?.status === 429 || String(e?.message || "").includes('"code":429');
+      if (!is429 || attempt >= RETRY_DELAYS_MS.length) throw e;
+      console.warn(
+        `[video-gen] 429 한도 = ${RETRY_DELAYS_MS[attempt] / 1000}초 대기 후 재시도(${attempt + 1}/${RETRY_DELAYS_MS.length})`,
+      );
+      await new Promise((r) => setTimeout(r, RETRY_DELAYS_MS[attempt]));
+    }
+  }
+}
+
 /** [B안] 스틸 1장 → Veo Lite 사진→영상 = 움직이는 씬 클립(오디오 포함) mp4 Buffer */
 export async function animateStillToClip(
   prompt: string,
   opts: PhotoMotionOpts,
 ): Promise<Buffer> {
   const ai = new GoogleGenAI({ apiKey: opts.apiKey });
-  let op: any = await ai.models.generateVideos({
-    model: VEO_I2V_MODEL,
-    prompt,
-    image: {
-      imageBytes: opts.imageBuffer.toString("base64"),
-      mimeType: opts.imageMimeType || "image/png",
-    },
-    config: {
-      aspectRatio: "9:16",
-      durationSeconds: opts.durationSeconds ?? 6,
-      resolution: "720p",
-      numberOfVideos: 1,
-    } as any,
-  });
+  let op: any = await withQuotaRetry(() =>
+    ai.models.generateVideos({
+      model: VEO_I2V_MODEL,
+      prompt,
+      image: {
+        imageBytes: opts.imageBuffer.toString("base64"),
+        mimeType: opts.imageMimeType || "image/png",
+      },
+      config: {
+        aspectRatio: "9:16",
+        durationSeconds: opts.durationSeconds ?? 6,
+        resolution: "720p",
+        numberOfVideos: 1,
+      } as any,
+    }),
+  );
 
   const started = Date.now();
   while (!op?.done) {

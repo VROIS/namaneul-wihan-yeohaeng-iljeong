@@ -8,13 +8,17 @@
 
 ---
 
-## ⏳ 2026-07-23 세션 인수인계 (컴팩팅 대비 = 진행 중 상태)
+## 🔧 2026-07-23 운영 핫픽스 2 = Veo 429 한도 (iOS 마드리드 i105, 2회 실패)
+- 원인(실측) = **Google Veo 프리뷰 한도(10 RPM·동시 10/프로젝트)**에 9씬 동시 발사가 충돌 = 429 RESOURCE_EXHAUSTED. raw 확인 = 스틸 9장·Veo 5클립은 성공(일부 콜만 429). ⚠️ Gemini 토큰(maxOutputTokens 50000)과 무관 = 토큰 상향은 답 아님.
+- 수정 = ①씬 생성 **동시 상한 3개**(mapLimit, A·B 공통) ②Veo 429 = **20/40/60초 자동 대기·재시도**(withQuotaRetry). 예상 생성 시간 = 9씬 ~2분(동시3 배치).
+- 근본 한도 상향 = Google AI 결제 tier(플랜) 문제 = 필요 시 사장님이 ai.dev 결제 티어 확인.
 
-**사장님 확정**: 영상 디폴트 = **B(실사 포토무비)** 반영 완료 / 대시보드 = 전환버튼만(기타 개편 추후) / **"검증하고 커밋 푸시해" 지시 받음**.
+## ✅ 2026-07-23 세션 마감 = 옵션B 커밋 완료 (624be96 push)
 
-**진행 중**: §22 병렬검증 워크플로우 실행 중(run wf_1efe59a4-db7). **완료 통지 오면** → 통과 확인(차단 시 Ralph 수정) → `node scripts/guard-commit-approval.mjs stamp` → 커밋(스테이징 9파일 완료: image-gen-client 신설·video-gen-client·storyboard·video-routes(디폴트B)·schema·admin-dashboard.html·VideoPreviewScreen·WORKLOG·문서 rename) → `git push origin main`(원격 앞서면 pull --no-rebase). 푸시 후 = OTA 자동, **Replit Publish = 사장님**(서버 변경 = B 파이프라인 반영에 필수).
+**완료**: §22 7/7 통과 → **커밋 624be96 푸시 완료**(옵션B 디폴트·글라스 카드·대시보드 A/B 전환·문서 개명 = 9파일). OTA(EAS Update) 자동 트리거됨.
 
-**주의**: deliverables_ghibli_video/·scratch_*.ts·검증 png = gitignore 제외됨. 로컬 서버 5100(bul0ifdor) = 옛 코드로 떠있음(무해). 크레딧 단가 B = 사장님 책정 대기(원가 씬당 3.5크레딧어치).
+**다음(사장님)**: ① **Replit Publish** = B 파이프라인·대시보드 버튼 운영 반영의 필수 관문 ② 크레딧 단가 B 책정(원가 씬당 3.5크레딧어치, A는 하루 고정 60 확정됨) ③ B 실기기 확인(생성 버튼 = 이제 B로 생성됨).
+**참고**: deliverables_ghibli_video/·scratch_*.ts = gitignore 영구 제외. 대시보드 죽은 지표(유튜브·블로그·최근동기화·관제탑 3칸) 정리 = P2(사장님 "추후 개편").
 
 ## 🔴 2026-07-23(추가) = **영상 데이터소스 정정 + 문서 개명 + 대시보드 A/B 전환버튼**
 
