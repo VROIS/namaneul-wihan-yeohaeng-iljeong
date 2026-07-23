@@ -275,7 +275,7 @@ export default function VideoPreviewScreen({ route, navigation }: any) {
       {/* 본문 = 일별 상태 분기 (A·B 모두 서버 mp4 = 재생 화면 1벌. 옛 클라 슬라이드쇼 = 폐기 2026-07-23 §19) */}
       <View style={styles.body}>
         {dayVideo?.status === "succeeded" && dayVideo.url ? (
-          // ✅ 완료 = 전체 재생 + 하단 글라스 카드(Scene n/N·장소명·요약 = 2026-07-23 사장님 목업. 버튼은 기존 그대로)
+          // ✅ 완료 = 전체 재생 + 상단 글라스 카드(Scene n/N·장소명·요약 = 2026-07-23 사장님 v2: 인물이 하단에 크게 나와 상단 배치)
           <View style={styles.playerBox}>
             <Video
               ref={videoRef}
@@ -399,35 +399,44 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   player: { width: "100%", flex: 1, borderRadius: 16, overflow: "hidden" },
-  // 글라스 카드(2026-07-23 사장님 목업) = 영상 하단 반투명 오버레이: Scene n/N + 장소명 + 요약
+  // 글라스 카드(2026-07-23 사장님 v2) = 완전투명 유리 + 상단 배치(인물·원근 확대가 하단이라 가림 방지). 가독성 = 글자 그림자 담당
   sceneCard: {
     position: "absolute",
     left: 28,
     right: 28,
-    bottom: 88,
-    backgroundColor: "rgba(15, 23, 42, 0.55)",
+    top: 32,
+    backgroundColor: "rgba(255,255,255,0.08)",
     borderRadius: 20,
     paddingHorizontal: 18,
     paddingVertical: 14,
     gap: 4,
     borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
+    borderColor: "rgba(255,255,255,0.45)",
   },
   sceneCardRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   sceneCardIndex: {
-    color: "#93c5fd",
+    color: "#bfdbfe",
     fontSize: 12,
     fontFamily: Fonts?.medium || undefined,
+    textShadowColor: "rgba(0,0,0,0.6)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
   sceneCardTitle: {
     color: "#FFFFFF",
     fontSize: 21,
     fontFamily: Fonts?.bold || undefined,
+    textShadowColor: "rgba(0,0,0,0.65)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 5,
   },
   sceneCardSummary: {
-    color: "rgba(255,255,255,0.85)",
+    color: "rgba(255,255,255,0.95)",
     fontSize: 13,
     lineHeight: 19,
+    textShadowColor: "rgba(0,0,0,0.6)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
   progressText: {
     color: "#FFFFFF",
