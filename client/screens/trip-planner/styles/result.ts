@@ -267,6 +267,31 @@ export const resultStyles = StyleSheet.create({
     fontSize: 20,
     fontFamily: Fonts.bold,
   },
+  // 2026-07-24 사장님 승인 = 일별 2버튼(동선 바로가기·바로 예약하기) = 드라이빙 가이드 전용
+  dailyActionRow: {
+    flexDirection: "row",
+    gap: Spacing.sm,
+    marginTop: Spacing.md,
+  },
+  dailyActionBtn: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: BorderRadius.md,
+  },
+  dailyActionText: {
+    fontSize: 13,
+    fontFamily: Fonts.semiBold,
+  },
+  dailyActionEta: {
+    fontSize: 12,
+    fontFamily: Fonts.medium,
+    textAlign: "center",
+    marginTop: Spacing.sm,
+  },
   accommodationBar: {
     flexDirection: "row",
     alignItems: "center",

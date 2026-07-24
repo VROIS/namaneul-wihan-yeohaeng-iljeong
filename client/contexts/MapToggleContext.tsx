@@ -15,9 +15,12 @@ interface MapToggleContextType {
   requestAiOpinion: () => void;
   clearAiOpinionRequest: () => void;
   // ⚠️ 사장님 SSOT 2026-07-14 = 하단탭 "전문가" 버튼 → 여정화면 위 오버레이(AI의견과 동일 패턴). 별도 화면 아님(§16 재사용·§19 옛 탭화면 폐기).
+  //   2026-07-24 사장님 승인 = payload 옵션 추가: 일별 [바로 예약하기] = {mode:'booking', day:n} 로 열면 예약 작성뷰로 오픈(무인자 호출 = 기존 그대로).
   expertRequestedAt: number | null;
-  requestExpert: () => void;
+  expertOpenPayload: { mode: "booking"; day: number } | null;
+  requestExpert: (payload?: { mode: "booking"; day: number }) => void;
   clearExpertRequest: () => void;
+  clearExpertOpenPayload: () => void;
   // ⚠️ 사장님 SSOT 2026-07-14 = 오버레이 안에서 문의접수·답변전송 직후 = 하단 탭 배지 즉시 갱신 신호(오버레이는 navigation state를 안 바꿔 폴링으로만 반영되던 지연 제거 §19). 실시간 피드백.
   expertDataChangedAt: number | null;
   bumpExpertData: () => void;
@@ -34,8 +37,10 @@ const MapToggleContext = createContext<MapToggleContextType>({
   requestAiOpinion: () => {},
   clearAiOpinionRequest: () => {},
   expertRequestedAt: null,
+  expertOpenPayload: null,
   requestExpert: () => {},
   clearExpertRequest: () => {},
+  clearExpertOpenPayload: () => {},
   expertDataChangedAt: null,
   bumpExpertData: () => {},
 });
@@ -53,6 +58,10 @@ export function MapToggleProvider({ children }: { children: React.ReactNode }) {
   const [expertRequestedAt, setExpertRequestedAt] = useState<number | null>(
     null,
   );
+  const [expertOpenPayload, setExpertOpenPayload] = useState<{
+    mode: "booking";
+    day: number;
+  } | null>(null);
   const [expertDataChangedAt, setExpertDataChangedAt] = useState<number | null>(
     null,
   );
@@ -77,11 +86,19 @@ export function MapToggleProvider({ children }: { children: React.ReactNode }) {
     setAiOpinionRequestedAt(null);
   }, []);
   // ⚠️ 사장님 SSOT 2026-07-14 = 전문가 오버레이 트리거(AI의견과 동일 트릭 = 매 요청 새 타임스탬프 → 같은 화면 재클릭도 useEffect 재실행).
-  const requestExpert = useCallback(() => {
-    setExpertRequestedAt(Date.now());
-  }, []);
+  //   2026-07-24 = payload(예약 모드) 동반 가능. ExpertSheet가 마운트 시 1회 소비 후 clearExpertOpenPayload(미클리어 = 다음 일반 열기 오염).
+  const requestExpert = useCallback(
+    (payload?: { mode: "booking"; day: number }) => {
+      setExpertOpenPayload(payload ?? null);
+      setExpertRequestedAt(Date.now());
+    },
+    [],
+  );
   const clearExpertRequest = useCallback(() => {
     setExpertRequestedAt(null);
+  }, []);
+  const clearExpertOpenPayload = useCallback(() => {
+    setExpertOpenPayload(null);
   }, []);
   // 오버레이 안 문의접수·답변전송 직후 = 배지 즉시 재조회 트리거(타임스탬프 변화 = MainTabNavigator가 감지).
   const bumpExpertData = useCallback(() => {
@@ -101,8 +118,10 @@ export function MapToggleProvider({ children }: { children: React.ReactNode }) {
         requestAiOpinion,
         clearAiOpinionRequest,
         expertRequestedAt,
+        expertOpenPayload,
         requestExpert,
         clearExpertRequest,
+        clearExpertOpenPayload,
         expertDataChangedAt,
         bumpExpertData,
       }}

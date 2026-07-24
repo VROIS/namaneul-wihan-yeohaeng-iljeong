@@ -165,6 +165,18 @@ export default function DetailView({
         >
           {/* ⚠️ 사장님 SSOT 2026-07-14 = 중간 여정 요약카드 폐기 §19 = 문의 카드 누르면 그 여정이 이미 배경에 복원됨(onRestoreBackground = restore-by-id). 실제 여정(지도+상세)을 배경으로 보며 답변/확인 = 요약 불필요. */}
 
+          {/* 예약 요청이면 = Day n 라벨 1줄(2026-07-24 = 전문가가 몇일차 예약인지 즉시 인지) */}
+          {inq.kind === "booking" && inq.dayNumber ? (
+            <Text
+              style={[
+                styles.from,
+                { color: Brand.primary, fontFamily: Fonts.semiBold },
+              ]}
+            >
+              {t("expert.bookingDayLabel", { day: inq.dayNumber })}
+            </Text>
+          ) : null}
+
           {/* 내 질문(파랑 우측) */}
           <Text
             style={[

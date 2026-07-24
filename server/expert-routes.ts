@@ -33,13 +33,20 @@ async function getRole(userId: string): Promise<string> {
 
 export function registerExpertRoutes(app: Express): void {
   // ── 1) 문의 접수 = POST /api/verification/request ──
-  //   body = { userId, itineraryData(여정+AI의견 스냅샷), userMessage, itineraryId? }
+  //   body = { userId, itineraryData(여정+AI의견 스냅샷), userMessage, itineraryId?, kind?, dayNumber? }
+  //   kind = 'booking'(일별 바로 예약하기, 2026-07-24 사장님 승인) 만 인정, 그 외 전부 'expert'(기존 검증 문의).
   //   🪙 크레딧 차감(10) = 8단계에서 이 지점에 useCredits 1줄(로그인 정식화 후 사장님 지시 시) — routes.ts:803 AI의견 앵커와 동일 패턴.
   app.post("/api/verification/request", async (req, res) => {
     try {
       const authId = getUserIdFromReq(req);
-      const { userId, itineraryData, userMessage, itineraryId } =
-        req.body || {};
+      const {
+        userId,
+        itineraryData,
+        userMessage,
+        itineraryId,
+        kind,
+        dayNumber,
+      } = req.body || {};
       const uid = authId || userId; // 3단계(FE 토큰 첨부) 전 과도기 = body userId 허용. FK가 실존 사용자만 통과시킴.
       if (!uid || !userMessage) {
         return res
@@ -53,6 +60,8 @@ export function registerExpertRoutes(app: Express): void {
           itineraryId: itineraryId ?? null,
           itineraryData: itineraryData ?? null,
           userMessage,
+          kind: kind === "booking" ? "booking" : "expert",
+          dayNumber: Number.isInteger(dayNumber) ? dayNumber : null,
         })
         .returning({ id: expertInquiries.id });
       res.json({ success: true, requestId: row.id });

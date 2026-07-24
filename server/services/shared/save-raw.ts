@@ -16,7 +16,8 @@ import { rawHash, versionedName } from "./raw-filename";
 const BUCKET = "raw-responses";
 
 export interface SaveRawOpts {
-  source: "ts" | "gemini";
+  source: "ts" | "gemini" | "routes"; // routes = Google Routes API(일별 바로가기 선처리) = 2026-07-24 사장님 승인 추가
+
   contextId?: string | number | null; // cityId(발굴) 또는 'runtime'(동선·메인앱 등 cityId 없는 호출)
   tag?: string | null; // 호출 맥락 식별(파일명) — 미지정 시 'call'
   request: any; // 호출 입력 (= 비밀 제외, 재현용)

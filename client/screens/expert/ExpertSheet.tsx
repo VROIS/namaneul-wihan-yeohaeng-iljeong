@@ -76,6 +76,8 @@ export default function ExpertSheet({
     currentItineraryId,
     setCurrentItinerary,
     bumpExpertData,
+    expertOpenPayload,
+    clearExpertOpenPayload,
   } = useMapToggle();
 
   // 내부 화면 전환(§16 = react-navigation 대신 상태머신).
@@ -90,6 +92,19 @@ export default function ExpertSheet({
   const [submitting, setSubmitting] = useState(false);
   const [inquiries, setInquiries] = useState<Inquiry[]>([]);
   const [filter, setFilter] = useState<Filter>("all");
+  // ⚠️ 2026-07-24 사장님 승인 = 일별 [바로 예약하기] = 시트를 예약 작성 모드(Day n)로 오픈.
+  //   SnapSheet 는 닫히면 언마운트 = 열릴 때마다 fresh 마운트 → payload 를 마운트 1회 소비 후 clear(다음 일반 열기 오염 방지).
+  const [bookingDay, setBookingDay] = useState<number | null>(null);
+  const bookingRef = useRef(false);
+  useEffect(() => {
+    if (expertOpenPayload?.mode === "booking") {
+      bookingRef.current = true;
+      setBookingDay(expertOpenPayload.day);
+      setViewMode("user"); // admin/expert 진입도 예약이면 작성뷰(답변함 아님)
+      clearExpertOpenPayload();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- 마운트 1회 소비(재실행 = 오염)
+  }, []);
   // 전문가 본인 프로필(닉네임/경력/자기소개/캐릭터) = 소개카드 반영. 없으면 i18n 기본문구 폴백.
   const [profile, setProfile] = useState<ExpertProfile | null>(null);
 
@@ -119,7 +134,8 @@ export default function ExpertSheet({
         if (!alive) return;
         const expert = role === "expert" || role === "admin";
         setIsExpert(expert);
-        setViewMode(expert ? "expert" : "user"); // 진입 기본 = 실제 역할(전문가면 답변함 먼저). 이후 상단 토글로 자유 전환.
+        // 진입 기본 = 실제 역할(전문가면 답변함 먼저). 단 예약 모드 진입이면 user 유지(2026-07-24). 이후 상단 토글로 자유 전환.
+        setViewMode(expert && !bookingRef.current ? "expert" : "user");
       })
       .catch(() => {
         if (alive) {
@@ -200,6 +216,7 @@ export default function ExpertSheet({
         linkedId = await saveItineraryForInquiry(itin);
         if (linkedId) setCurrentItinerary(itin, linkedId); // 재문의 시 중복 저장 방지(같은 여정 + 새 id)
       }
+      const isBooking = bookingDay != null; // 예약 모드(2026-07-24) = kind/dayNumber 동반
       const r = await submitInquiry({
         userMessage: message.trim(),
         // 목록카드용 요약(전문가는 여정 id로 restore-by-id = DB 원본 열람). 스냅샷 폐기 §19.
@@ -209,16 +226,22 @@ export default function ExpertSheet({
               dayCount: itin.days?.length ?? 0,
               totalPlaces,
               aiOpinion,
+              ...(isBooking ? { bookingDay } : {}),
             }
           : null,
         itineraryId: linkedId, // 저장된 여정 id 연결(FK)
+        kind: isBooking ? "booking" : "expert",
+        dayNumber: isBooking ? bookingDay : null,
       });
       if (r.ok) {
         // ⚠️ 사장님 SSOT 2026-07-14 = 문의 전송 완료 = 목적 달성 = 시트 자동 내려감(onClose) → 배경 여정 복귀(AI의견과 동일). X는 사용자가 인위적으로 닫을 때만.
         //   + bumpExpertData() = 하단 탭 배지 즉시 갱신 = 사용자가 "내 문의 접수됨"을 실시간으로 인식.
         setMessage("");
         bumpExpertData();
-        notify(t("expert.sentTitle"), t("expert.sentMsg"));
+        notify(
+          t(isBooking ? "expert.bookingSentTitle" : "expert.sentTitle"),
+          t(isBooking ? "expert.bookingSentMsg" : "expert.sentMsg"),
+        );
         onClose();
       } else if (r.error === "login_required") {
         goLoginPrompt();
@@ -240,6 +263,45 @@ export default function ExpertSheet({
     if (q.itineraryId && onRestoreBackground)
       onRestoreBackground(q.itineraryId);
     setView({ kind: "detail", id: q.id });
+  };
+
+  // 2026-07-24 = 사용자 목록 카드 1벌(나의 예약·내 문의함 공용 §0). 예약 카드 = Day n 병기.
+  const renderUserCard = (q: Inquiry) => {
+    const st = statusStyle(q.status, theme, t);
+    const dest = q.itineraryData?.destination || t("expert.inquiry");
+    const unread = q.status === "answered" && !q.isReadByUser;
+    return (
+      <Pressable
+        key={q.id}
+        style={[
+          styles.inquiryCard,
+          { backgroundColor: theme.backgroundDefault },
+        ]}
+        onPress={() => openInquiry(q)}
+      >
+        {unread ? <View style={styles.unreadDot} /> : null}
+        <View style={styles.flex1}>
+          <Text
+            style={[styles.inquiryTitle, { color: theme.text }]}
+            numberOfLines={1}
+          >
+            {q.kind === "booking" && q.dayNumber
+              ? `${dest} · Day ${q.dayNumber}`
+              : dest}
+          </Text>
+          <Text
+            style={[styles.inquiryPreview, { color: theme.textSecondary }]}
+            numberOfLines={1}
+          >
+            {q.userMessage}
+          </Text>
+        </View>
+        <View style={[styles.badge, { backgroundColor: st.bg }]}>
+          <Text style={[styles.badgeText, { color: st.fg }]}>{st.label}</Text>
+        </View>
+        <Icon name="chevron-right" size={18} color={theme.textTertiary} />
+      </Pressable>
+    );
   };
 
   // ── 내부 라우팅 = 상세/프로필편집이면 해당 뷰만 렌더 ──
@@ -426,6 +488,17 @@ export default function ExpertSheet({
                       {q.userMessage}
                     </Text>
                   </View>
+                  {/* 예약/검증 구분 배지(2026-07-24) = 답변함에서 예약 요청을 즉시 식별 */}
+                  {q.kind === "booking" ? (
+                    <View
+                      style={[styles.badge, { backgroundColor: Brand.primary }]}
+                    >
+                      <Text style={[styles.badgeText, { color: "#FFF" }]}>
+                        {t("expert.kindBooking")}
+                        {q.dayNumber ? ` D${q.dayNumber}` : ""}
+                      </Text>
+                    </View>
+                  ) : null}
                   <View style={[styles.badge, { backgroundColor: st.bg }]}>
                     <Text style={[styles.badgeText, { color: st.fg }]}>
                       {st.label}
@@ -488,8 +561,25 @@ export default function ExpertSheet({
           </View>
         </View>
 
-        {/* ⚠️ 사장님 SSOT 2026-07-15 = 사용자도 진입 즉시 '내 문의함(본인 문의 목록)'이 먼저 = 관리자 답변함(목록 먼저)과 동작 통일. 새 문의 작성은 그 아래. BE는 이미 본인 것만 반환(expert-routes 신원필터). */}
-        {/* 내 문의함 = 본인 문의 목록(먼저) */}
+        {/* ⚠️ 사장님 SSOT 2026-07-15 = 사용자도 진입 즉시 본인 목록이 먼저 = 관리자 답변함(목록 먼저)과 동작 통일. 새 문의 작성은 그 아래. BE는 이미 본인 것만 반환(expert-routes 신원필터). */}
+        {/* 나의 예약 = kind=booking 목록(2026-07-24 사장님 승인 = 일별 바로 예약하기 = 비즈니스 우선 = 먼저) */}
+        <Text
+          style={[
+            styles.sectionTitle,
+            { color: theme.text, marginTop: Spacing.md },
+          ]}
+        >
+          {t("expert.myBookings")}
+        </Text>
+        {inquiries.filter((q) => q.kind === "booking").length === 0 ? (
+          <Text style={[styles.emptyText, { color: theme.textTertiary }]}>
+            {t("expert.bookingEmpty")}
+          </Text>
+        ) : (
+          inquiries.filter((q) => q.kind === "booking").map(renderUserCard)
+        )}
+
+        {/* 내 문의함 = kind=expert(검증 문의)만 — 예약은 위 섹션 */}
         <Text
           style={[
             styles.sectionTitle,
@@ -498,55 +588,12 @@ export default function ExpertSheet({
         >
           {t("expert.myInbox")}
         </Text>
-        {inquiries.length === 0 ? (
+        {inquiries.filter((q) => q.kind !== "booking").length === 0 ? (
           <Text style={[styles.emptyText, { color: theme.textTertiary }]}>
             {t("expert.inboxEmpty")}
           </Text>
         ) : (
-          inquiries.map((q) => {
-            const st = statusStyle(q.status, theme, t);
-            const dest = q.itineraryData?.destination || t("expert.inquiry");
-            const unread = q.status === "answered" && !q.isReadByUser;
-            return (
-              <Pressable
-                key={q.id}
-                style={[
-                  styles.inquiryCard,
-                  { backgroundColor: theme.backgroundDefault },
-                ]}
-                onPress={() => openInquiry(q)}
-              >
-                {unread ? <View style={styles.unreadDot} /> : null}
-                <View style={styles.flex1}>
-                  <Text
-                    style={[styles.inquiryTitle, { color: theme.text }]}
-                    numberOfLines={1}
-                  >
-                    {dest}
-                  </Text>
-                  <Text
-                    style={[
-                      styles.inquiryPreview,
-                      { color: theme.textSecondary },
-                    ]}
-                    numberOfLines={1}
-                  >
-                    {q.userMessage}
-                  </Text>
-                </View>
-                <View style={[styles.badge, { backgroundColor: st.bg }]}>
-                  <Text style={[styles.badgeText, { color: st.fg }]}>
-                    {st.label}
-                  </Text>
-                </View>
-                <Icon
-                  name="chevron-right"
-                  size={18}
-                  color={theme.textTertiary}
-                />
-              </Pressable>
-            );
-          })
+          inquiries.filter((q) => q.kind !== "booking").map(renderUserCard)
         )}
 
         {/* 새 문의 작성 = 목록 아래 */}
@@ -596,21 +643,27 @@ export default function ExpertSheet({
           </View>
         )}
 
-        {/* 질문 입력 */}
+        {/* 질문 입력 — 예약 모드(bookingDay)면 예약 라벨/플레이스홀더(2026-07-24) */}
         <Text
           style={[
             styles.sectionTitle,
             { color: theme.text, marginTop: Spacing.md },
           ]}
         >
-          {t("expert.questionLabel")}
+          {bookingDay != null
+            ? t("expert.bookingDayLabel", { day: bookingDay })
+            : t("expert.questionLabel")}
         </Text>
         <TextInput
           style={[
             styles.input,
             { backgroundColor: theme.backgroundDefault, color: theme.text },
           ]}
-          placeholder={t("expert.questionPlaceholder")}
+          placeholder={
+            bookingDay != null
+              ? t("expert.bookingPlaceholder")
+              : t("expert.questionPlaceholder")
+          }
           placeholderTextColor={theme.textTertiary}
           value={message}
           onChangeText={setMessage}

@@ -6,6 +6,10 @@ import { itineraryGenerator } from "./services/itinerary-generator";
 import { db } from "./db";
 import { cities, users } from "../shared/schema";
 import { eq, sql } from "drizzle-orm";
+import {
+  computeDayRouteLive,
+  enrichStopsWithPsr,
+} from "./services/shared/routes-client";
 
 export function registerCityPlaceRoutes(app: Express): void {
   // Cities
@@ -71,6 +75,39 @@ export function registerCityPlaceRoutes(app: Express): void {
   // ⚠️ 2026-05-23 = /api/cities/:cityId/weather 완전 삭제 (= FE 호출 0 = weather.ts 파일도 삭제)
 
   // [DROPPED 0013] reality-checks 엔드포인트 삭제
+
+  // ⚠️ 2026-07-24 사장님 승인 = 일별 [바로가기] 선처리 = 클릭 시점 화면 순서 그대로의 그 날 좌표
+  //   → Routes API(TRAFFIC_AWARE) 실소요시간·거리 = "그날 정말 갈 수 있나" 실시간 재검증(재정렬 안 함 = 사장님 SSOT).
+  app.post("/api/routes/day-live", async (req, res) => {
+    try {
+      const stops = Array.isArray(req.body?.stops)
+        ? req.body.stops.filter(
+            (s: any) =>
+              typeof s?.lat === "number" && typeof s?.lng === "number",
+          )
+        : [];
+      if (stops.length < 2) {
+        return res.status(400).json({ error: "stops(lat,lng) 2개 이상 필요" });
+      }
+      // ① PSR 좌표조회 = PID+한국어명(필수 = 구글맵 주소 대신 장소명 노출, 사장님 SSOT 2026-07-24)
+      const enriched = await enrichStopsWithPsr(stops);
+      // ② Routes API 실소요시간 (선택 = 실패해도 이름은 반환)
+      let live: { durationSec: number; distanceKm: number } | null = null;
+      try {
+        live = await computeDayRouteLive(stops);
+      } catch (e: any) {
+        console.error("[day-live] ETA 실패(이름은 반환):", e?.message);
+      }
+      res.json({
+        durationSec: live?.durationSec ?? null,
+        distanceKm: live?.distanceKm ?? null,
+        stops: enriched,
+      });
+    } catch (e: any) {
+      console.error("[day-live] 실패:", e?.message);
+      res.status(502).json({ error: "day_live_failed" }); // FE = 딥링크만 오픈(기능 불중단)
+    }
+  });
 
   // Itinerary generation
   app.post("/api/routes/generate", async (req, res) => {

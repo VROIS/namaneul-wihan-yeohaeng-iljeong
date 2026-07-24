@@ -150,6 +150,17 @@ export async function runStartupMigrations(): Promise<void> {
         ADD COLUMN IF NOT EXISTS "is_saved_by_user" boolean DEFAULT false;
     `);
     console.log("[Migration] ✅ 0017 itineraries.is_saved_by_user 적용 완료");
+
+    // 0018: expert_inquiries.kind/day_number (= 일별 [바로 예약하기] = 전문가 문의함 통합, 2026-07-24 사장님 승인)
+    //   kind = 'expert'(검증 문의) | 'booking'(드라이빙 가이드 예약) / day_number = booking 전용 일차. 기존 행 = default 'expert' 자동.
+    await pool.query(`
+      ALTER TABLE "expert_inquiries"
+        ADD COLUMN IF NOT EXISTS "kind" varchar NOT NULL DEFAULT 'expert',
+        ADD COLUMN IF NOT EXISTS "day_number" integer;
+    `);
+    console.log(
+      "[Migration] ✅ 0018 expert_inquiries.kind/day_number 적용 완료",
+    );
   } catch (err) {
     console.warn("[Migration] 스킵 또는 실패:", (err as Error).message);
   }

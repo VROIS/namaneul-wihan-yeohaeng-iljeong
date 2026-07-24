@@ -13,6 +13,8 @@ export interface Inquiry {
   itineraryId: number | null;
   itineraryData: any | null;
   userMessage: string;
+  kind: "expert" | "booking"; // 2026-07-24 사장님 승인 = 'booking' = 일별 [바로 예약하기] 요청
+  dayNumber: number | null; // booking 전용 = 몇일차 예약(expert 문의 = null)
   status: InquiryStatus;
   expertId: string | null;
   expertReply: string | null;
@@ -72,11 +74,13 @@ export async function saveItineraryForInquiry(
   }
 }
 
-// ── 사용자: 문의 접수(여정+AI의견 스냅샷 첨부) ──
+// ── 사용자: 문의 접수(여정+AI의견 스냅샷 첨부). kind='booking' = 일별 예약 요청(2026-07-24) ──
 export async function submitInquiry(input: {
   userMessage: string;
   itineraryData?: any;
   itineraryId?: number | null;
+  kind?: "expert" | "booking";
+  dayNumber?: number | null;
 }): Promise<{ ok: boolean; requestId?: string; error?: string }> {
   const user = await getUserData();
   const res = await req("POST", "/api/verification/request", {
@@ -84,6 +88,8 @@ export async function submitInquiry(input: {
     userMessage: input.userMessage,
     itineraryData: input.itineraryData ?? null,
     itineraryId: input.itineraryId ?? null,
+    kind: input.kind ?? "expert",
+    dayNumber: input.dayNumber ?? null,
   });
   if (res.ok) {
     const j = await res.json();

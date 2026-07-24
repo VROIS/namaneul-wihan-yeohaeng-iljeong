@@ -54,3 +54,67 @@ export function openPlaceInMaps(p: PlaceForMaps): void {
     p,
   );
 }
+
+// ⚠️ 수정금지(승인필요) 2026-07-24 사장님 승인 = 일별 [바로가기] = 그 날 전체 동선을 구글맵 dir 모드로 열기(무료 딥링크).
+//   순서 = 클릭 시점 화면 순서 그대로(재정렬 안 함 = 사장님 SSOT = 식사 배치·앱 리스트와 일치).
+//   ⚠️ 노출명 = 슬롯처럼 한국어명(name = nameKo) = 라벨 = 사장님 SSOT 2026-07-24("경유지에 주소는 안됨").
+//     좌표만 넘기면 구글이 근처 주소를 라벨로 붙임(공식문서 = 좌표는 핀만·장소정보 없음) → 백엔드(day-live)가 PSR 에서 PID+한국어명 보충.
+//   규격 = Maps URLs API 공식: origin/destination(+*_place_id), waypoints=이름텍스트|… (+waypoint_place_ids 전원 보유 시 1:1 = 정확도).
+//   경유지 상한 = 9(공식). 초과 = 순서 보존 앞 9개 절삭. 구글맵 앱 없는 모바일 브라우저 = 3개 제한(공식 명시 = 한계).
+
+export interface DayRouteStop {
+  name?: string | null; // 표시 라벨 = 한국어명(nameKo) 우선 = 주소 대신 장소명 노출
+  lat: number;
+  lng: number;
+  googlePlaceId?: string | null;
+}
+
+const MAX_DIR_WAYPOINTS = 9;
+
+export function buildDayRouteUrl(stops: DayRouteStop[]): string | null {
+  const pts = (stops || []).filter(
+    (s) => typeof s?.lat === "number" && typeof s?.lng === "number",
+  );
+  if (pts.length < 2) {
+    console.warn("[buildDayRouteUrl] 지점 2개 미만 = 스킵");
+    return null;
+  }
+  const origin = pts[0];
+  const dest = pts[pts.length - 1];
+  let mids = pts.slice(1, -1);
+  if (mids.length > MAX_DIR_WAYPOINTS) {
+    console.warn(
+      `[buildDayRouteUrl] 경유지 ${mids.length} > ${MAX_DIR_WAYPOINTS} = 순서 보존 절삭`,
+    );
+    mids = mids.slice(0, MAX_DIR_WAYPOINTS);
+  }
+  const hasPid = (s: DayRouteStop) =>
+    !!s.googlePlaceId?.startsWith(GOOGLE_PLACE_ID_PREFIX);
+  // 라벨 = 이름(한국어명) 우선 = 주소 노출 금지(사장님 SSOT). 이름 없을 때만 좌표 폴백. PID 는 정확도 앵커로 별도 첨부.
+  const label = (s: DayRouteStop) =>
+    s.name?.trim() ? encodeURIComponent(s.name.trim()) : `${s.lat},${s.lng}`;
+
+  const qs = [
+    "api=1",
+    "travelmode=driving", // 드라이빙 가이드 전용 버튼
+    `origin=${label(origin)}`,
+    `destination=${label(dest)}`,
+  ];
+  if (hasPid(origin)) qs.push(`origin_place_id=${origin.googlePlaceId}`);
+  if (hasPid(dest)) qs.push(`destination_place_id=${dest.googlePlaceId}`);
+  if (mids.length) {
+    // 경유지 라벨 = 한국어명(주소 아님). PID 는 전원 보유 시에만 1:1 첨부(API 요구 = 개수 정렬).
+    qs.push(`waypoints=${mids.map(label).join("%7C")}`);
+    if (mids.every(hasPid)) {
+      qs.push(
+        `waypoint_place_ids=${mids.map((s) => s.googlePlaceId).join("%7C")}`,
+      );
+    }
+  }
+  return `https://www.google.com/maps/dir/?${qs.join("&")}`;
+}
+
+// 구글맵 URL 열기 = 단일 진입점 유지(컴포넌트가 Linking 직접 import 안 함)
+export function openMapsUrl(url: string): void {
+  Linking.openURL(url);
+}

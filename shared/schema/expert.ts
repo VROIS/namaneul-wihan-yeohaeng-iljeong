@@ -28,6 +28,9 @@ export const expertInquiries = pgTable("expert_inquiries", {
   }), // 저장 여정이면 연결(미저장 즉석 여정은 null)
   itineraryData: jsonb("itinerary_data"), // 여정+AI의견 스냅샷(문의 시점 박제 = 여정이 나중에 바뀌어도 문의 내용 보존)
   userMessage: text("user_message").notNull(), // 사용자 질문
+  // ⚠️ 수정금지(승인필요) 2026-07-24 사장님 승인 = 일별 [바로 예약하기] = 문의함 통합(별도 테이블 금지 §0)
+  kind: varchar("kind").notNull().default("expert"), // 'expert'(검증 문의) | 'booking'(드라이빙 가이드 예약 요청)
+  dayNumber: integer("day_number"), // booking 전용 = 몇일차 예약인지(expert 문의 = null)
   status: varchar("status").notNull().default("pending"), // pending | in_review | answered | rejected
   expertId: varchar("expert_id").references(() => users.id, {
     onDelete: "set null",
