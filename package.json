@@ -6,6 +6,7 @@
     "node": ">=18.0.0"
   },
   "scripts": {
+    "prepare": "git config core.hooksPath .githooks || true",
     "dev": "tsx server/index.ts",
     "dev:server": "tsx server/index.ts",
     "expo:dev": "npx expo start --localhost --port 8082",

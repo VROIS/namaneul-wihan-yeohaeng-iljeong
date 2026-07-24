@@ -1,0 +1,24 @@
+#!/bin/sh
+# ⚠️ 커밋 게이트 = 7단계 검증 통과 필수 → 무조건 대기(사장님 승인). 2026-07-25 사장님 SSOT.
+# = 목적: 검증 안 하고 커밋하는 나쁜 습관을 구조(기계)로 차단 + 검증 결과 투명 노출 + 검증 통과해도 무조건 대기(자동커밋 금지, 사장님 재지시 후에만).
+
+# ── ⚠️ Replit 배포 환경 = 자동 커밋/푸시(사람 개입 X = 승인 못 함) = 검증·대기 전부 스킵 = 배포 마비 방지(2026-07-25 사장님 SSOT) ──
+#   이 게이트는 개발 환경(로컬)에서 AI 무단·미검증 커밋을 막는 용도. Replit 자동 배포 커밋은 통과시켜야 배포됨.
+if [ -n "$REPL_ID" ] || [ -n "$REPLIT_DEPLOYMENT" ] || [ -n "$REPLIT_DB_URL" ] || [ -n "$REPLIT_DEV_DOMAIN" ]; then
+  exit 0
+fi
+
+# ── 헌법 가드 (staged 내용 검사) = §19 옛것 박제 / §16 재발명 / §0 파일 500줄 ──
+node scripts/guard-no-old-artifacts.mjs --staged || exit 1
+node scripts/guard-no-reinvention.mjs --staged || exit 1
+node scripts/guard-max-file-lines.mjs --staged || exit 1
+
+# ── §22 7단계 검증 = 기계4(tsc·서버빌드·웹빌드·lint) 무조건 병렬 실행 = 검증 안 하면 커밋 물리 불가 + 결과표 투명 노출 ──
+#   판단3(simplify·code-review·react-best) = 쉘에서 서브에이전트 호출 불가 = §22 Workflow(verify-workflow.mjs)가 담당(커밋 전 필수).
+echo "[pre-commit] §22 기계검증 4종(tsc·서버빌드·웹빌드·lint) 무조건 실행 = 검증 안 한 커밋 차단..."
+node scripts/verify-before-commit.mjs || { echo "🔴 §22 기계검증 실패 = 커밋 거부. Ralph-loop 로 통과까지 보완."; exit 1; }
+
+# ── 7단계 검증 통과 = 커밋 진행 (2026-07-25 사장님 SSOT) ──
+#   커밋(사장님 "커밋해" 명령 후 실행)은 이 검증을 무조건 거침 = 검증 안 하면 커밋 물리 차단.
+#   검증 과정이 화면에 투명 출력 = 사장님이 보며 바로 인지(AI 가 무엇을 어떻게 검증했는지 감시).
+echo "[pre-commit] ✅ 7단계 기계검증 통과 = 커밋 진행."

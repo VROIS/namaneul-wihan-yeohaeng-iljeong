@@ -18,6 +18,7 @@ import {
   buildDayRouteUrl,
   openMapsUrl,
   type DayRouteStop,
+  type DayRouteEnd,
 } from "@/lib/openPlaceInMaps";
 
 // 이동 과다 경고 기준 = 당일 운전 6시간 초과(시뮬 실증: 좌표불량 일정 = 13~26시간으로 즉시 적발됨)
@@ -49,43 +50,53 @@ export default function DailyTotal({
     distanceKm: number;
   } | null>(null);
 
-  // [n일차 동선 바로가기] = 선처리(실시간 실소요시간·거리 = day-live) 후 딥링크 최종 노출(사장님 SSOT 2026-07-24).
-  //   순서 = 클릭 시점 화면 상태 그대로(숙소 출발 포함 = 이미 구현된 동적 재배열 결과). 선처리 실패 = 딥링크만 오픈(기능 불중단).
+  // [바로가기] = day-live 선처리 후 딥링크 노출(사장님 SSOT 2026-07-24).
+  //   ⚠️ 출발지+경유지+도착지 = 왕복(사장님 SSOT). 출발/도착(origin=destination):
+  //     - 숙소 변경시 = 숙소명+좌표+placeId.
+  //     - 미설정 = 도시명 텍스트(itinerary.destination) = 구글맵이 알아서 도시중심(좌표조회 불필요·견고).
+  //   경유지(waypoints) = 그날 슬롯(클릭 시점 순서). day-live 로 PID+이름 보충. 재정렬 안 함.
   const onOpenRoute = async () => {
     if (routeLoading) return;
     const accom =
       dayAccommodations?.find((a) => a.day === currentDay.day) ||
       currentDay.accommodation ||
       null;
-    // 클릭 시점 화면 순서(숙소 출발 포함) = 좌표 배열. 슬롯 rawData 엔 PID 미탑재라 좌표만 확실.
-    const stops: DayRouteStop[] = [
-      ...(accom?.coords
-        ? [
-            {
-              name: accom.name, // 숙소 로컬명(폴백 텍스트). 라벨은 placeId 있으면 구글 통제.
-              lat: accom.coords.lat,
-              lng: accom.coords.lng,
-              googlePlaceId: accom.placeId,
-            },
-          ]
-        : []),
-      ...(currentDay.places || [])
-        .filter((p) => typeof p.lat === "number" && typeof p.lng === "number")
-        .map((p) => ({
-          name: p.name, // 폴백 텍스트 = 슬롯 로컬명(구글 실제명) = place_id 실패 시 정확 검색(한국어명은 오매칭 위험 = 콜마르 실증)
-          lat: p.lat,
-          lng: p.lng,
-          googlePlaceId: (p as any).googlePlaceId,
-        })),
-    ];
-    if (stops.length < 2) return;
+    const cityName = (itinerary as any)?.destination ?? "";
+    const placeStops: DayRouteStop[] = (currentDay.places || [])
+      .filter((p) => typeof p.lat === "number" && typeof p.lng === "number")
+      .map((p) => ({
+        name: p.name,
+        lat: p.lat,
+        lng: p.lng,
+        googlePlaceId: (p as any).googlePlaceId,
+      }));
+    if (placeStops.length < 1) return;
+    // 출발/도착 = 숙소(변경시 좌표+placeId) ?? 도시명 텍스트(구글이 도시중심). 왕복 = origin==destination.
+    const end: DayRouteEnd = accom?.coords
+      ? {
+          name: accom.name,
+          lat: accom.coords.lat,
+          lng: accom.coords.lng,
+          googlePlaceId: accom.placeId,
+        }
+      : { name: cityName };
+    if (!end.name?.trim() && typeof end.lat !== "number") return; // 도시명·숙소 둘 다 없음
+    // 숙소 변경시 = day-live 실소요 왕복 기준(좌표). 없으면 백엔드가 cityName 주소로.
+    const accomBody = accom?.coords
+      ? {
+          lat: accom.coords.lat,
+          lng: accom.coords.lng,
+          name: accom.name,
+          placeId: accom.placeId,
+        }
+      : null;
     setRouteLoading(true);
-    // 웹 = 팝업차단 회피: 사용자 제스처 동기 시점에 창 먼저 열고 → 선처리 후 URL 주입
+    // 웹 = 팝업차단 회피: 제스처 동기 시점 창 먼저 → 선처리 후 URL 주입
     const pre =
       Platform.OS === "web" && typeof window !== "undefined"
         ? window.open("", "_blank")
         : null;
-    let url = buildDayRouteUrl(stops); // 폴백 = 좌표/슬롯명(day-live 실패 대비)
+    let url = buildDayRouteUrl(placeStops, end, end); // 폴백 = 슬롯 로컬명(day-live 실패 대비)
     try {
       const res = await fetch(
         new URL("/api/routes/day-live", getApiUrl()).toString(),
@@ -93,23 +104,24 @@ export default function DailyTotal({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            stops: stops.map((s) => ({ lat: s.lat, lng: s.lng })),
+            slots: placeStops.map((s) => ({ lat: s.lat, lng: s.lng })),
+            accommodation: accomBody, // 숙소 변경시 = 실소요 왕복 기준
+            cityName, // 미설정 시 = 도시명 주소로 왕복
           }),
         },
       );
       if (res.ok) {
         const data = await res.json();
         if (data.durationSec != null) setEta(data);
-        // ⚠️ day-live 가 PSR 에서 PID+이름 보충 → 딥링크에 주소 대신 장소명(사장님 SSOT 2026-07-24).
-        //   화면 라벨 = place_id 의 구글 공식명(기기 언어) = 구글 통제(실증). 우리 텍스트는 place_id 실패 시 폴백뿐 → 로컬명(구글 실제명) 우선 = 오매칭(콜마르) 방지.
-        if (Array.isArray(data.stops) && data.stops.length === stops.length) {
-          const enriched: DayRouteStop[] = stops.map((s, i) => ({
-            name: data.stops[i]?.nameLocal || data.stops[i]?.nameKo || s.name,
+        // 백엔드가 슬롯 PID+이름 보충 → 경유지 딥링크(주소 대신 장소명). 라벨은 place_id 있으면 구글 공식명(기기 언어).
+        if (Array.isArray(data.stops) && data.stops.length >= 1) {
+          const wps: DayRouteStop[] = data.stops.map((s: any) => ({
+            name: s.nameLocal || s.nameKo || null,
             lat: s.lat,
             lng: s.lng,
-            googlePlaceId: data.stops[i]?.placeId || s.googlePlaceId,
+            googlePlaceId: s.placeId || null,
           }));
-          url = buildDayRouteUrl(enriched) || url;
+          url = buildDayRouteUrl(wps, end, end) || url;
         }
       }
     } catch {
@@ -244,7 +256,7 @@ export default function DailyTotal({
                 <Icon name="map" size={16} color={Brand.primary} />
               )}
               <Text style={[styles.dailyActionText, { color: Brand.primary }]}>
-                {t("trip.dayOpenRoute", { day: currentDay.day })}
+                {t("trip.dayOpenRoute")}
               </Text>
             </Pressable>
             <Pressable
@@ -258,7 +270,7 @@ export default function DailyTotal({
             >
               <Icon name="calendar" size={16} color="#FFF" />
               <Text style={[styles.dailyActionText, { color: "#FFF" }]}>
-                {t("trip.dayBookNow", { day: currentDay.day })}
+                {t("trip.dayBookNow")}
               </Text>
             </Pressable>
           </View>

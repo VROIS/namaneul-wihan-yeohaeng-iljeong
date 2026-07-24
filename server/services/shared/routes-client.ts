@@ -68,11 +68,16 @@ export async function enrichStopsWithPsr(
   });
 }
 
+// 왕복 실소요시간 = 출발/도착(endpoint) + 경유지(slots). endpoint = 숙소 좌표 또는 도시명 주소(구글 지오코딩).
+//   도시명 주소 방식 = 도심중심 좌표 조회 불필요(구글이 알아서) = 사장님 SSOT 2026-07-24.
+export type RouteEndpoint = { lat: number; lng: number } | { address: string };
+
 export async function computeDayRouteLive(
-  stops: DayLiveStop[],
+  slots: DayLiveStop[],
+  endpoint: RouteEndpoint,
 ): Promise<DayLiveResult> {
-  if (!Array.isArray(stops) || stops.length < 2) {
-    throw new Error("[routes-client] 지점 2개 이상 필요");
+  if (!Array.isArray(slots) || slots.length < 1) {
+    throw new Error("[routes-client] 경유지 1개 이상 필요");
   }
   const apiKey = process.env.GOOGLE_MAPS_API_KEY;
   if (!apiKey) throw new Error("[routes-client] GOOGLE_MAPS_API_KEY 없음");
@@ -80,10 +85,19 @@ export async function computeDayRouteLive(
   const toWp = (s: DayLiveStop) => ({
     location: { latLng: { latitude: s.lat, longitude: s.lng } },
   });
+  // endpoint = 좌표(숙소) 또는 주소(도시명). 왕복이라 origin=destination=endpoint.
+  const ep =
+    "address" in endpoint
+      ? { address: endpoint.address }
+      : {
+          location: {
+            latLng: { latitude: endpoint.lat, longitude: endpoint.lng },
+          },
+        };
   const body = {
-    origin: toWp(stops[0]),
-    destination: toWp(stops[stops.length - 1]),
-    intermediates: stops.slice(1, -1).map(toWp),
+    origin: ep,
+    destination: ep,
+    intermediates: slots.map(toWp),
     travelMode: "DRIVE",
     routingPreference: "TRAFFIC_AWARE",
   };

@@ -55,61 +55,84 @@ export function openPlaceInMaps(p: PlaceForMaps): void {
   );
 }
 
-// ⚠️ 수정금지(승인필요) 2026-07-24 사장님 승인 = 일별 [바로가기] = 그 날 전체 동선을 구글맵 dir 모드로 열기(무료 딥링크).
-//   순서 = 클릭 시점 화면 순서 그대로(재정렬 안 함 = 사장님 SSOT = 식사 배치·앱 리스트와 일치).
-//   ⚠️ 노출명 = 슬롯처럼 한국어명(name = nameKo) = 라벨 = 사장님 SSOT 2026-07-24("경유지에 주소는 안됨").
-//     좌표만 넘기면 구글이 근처 주소를 라벨로 붙임(공식문서 = 좌표는 핀만·장소정보 없음) → 백엔드(day-live)가 PSR 에서 PID+한국어명 보충.
-//   규격 = Maps URLs API 공식: origin/destination(+*_place_id), waypoints=이름텍스트|… (+waypoint_place_ids 전원 보유 시 1:1 = 정확도).
-//   경유지 상한 = 9(공식). 초과 = 순서 보존 앞 9개 절삭. 구글맵 앱 없는 모바일 브라우저 = 3개 제한(공식 명시 = 한계).
+// ⚠️ 수정금지(승인필요) 2026-07-24 사장님 승인 = 일별 [바로가기] = 그 날 동선을 구글맵 dir 모드로 열기(무료 딥링크).
+//   ⚠️ 출발지+경유지+도착지 = 왕복(사장님 SSOT). 출발/도착(origin·destination):
+//     - 숙소 변경시 = 숙소명+placeId(정확).
+//     - 미설정 = **도시명 텍스트**("Paris") = 구글맵이 알아서 도시 중심으로 잡음(사장님 SSOT 2026-07-24 = 좌표 조회 불필요·견고).
+//   경유지(waypoints) = 그날 슬롯(클릭 시점 순서, 재정렬 안 함) = PID+이름 보충됨.
+//   노출명 = place_id 있으면 구글 공식명(기기언어), 없으면 우리 텍스트. 좌표는 주소로 역표기되니 이름 우선.
+//   경유지 상한 = 9(공식). 초과 = 순서 보존 절삭. 구글맵 앱 없는 모바일 브라우저 = 3개 제한(한계).
 
 export interface DayRouteStop {
-  name?: string | null; // 표시 라벨 = 한국어명(nameKo) 우선 = 주소 대신 장소명 노출
+  name?: string | null; // 경유지 표시 라벨(이름 우선). PID 있으면 구글 공식명이 우선.
   lat: number;
   lng: number;
   googlePlaceId?: string | null;
 }
 
+// 출발/도착 = 숙소(좌표+placeId) 또는 도시명 텍스트(좌표 없음 = 구글이 도시중심 지오코딩).
+export interface DayRouteEnd {
+  name?: string | null; // 도시명("Paris") 또는 숙소명. 있으면 라벨.
+  lat?: number | null;
+  lng?: number | null;
+  googlePlaceId?: string | null;
+}
+
 const MAX_DIR_WAYPOINTS = 9;
 
-export function buildDayRouteUrl(stops: DayRouteStop[]): string | null {
-  const pts = (stops || []).filter(
+function endLabel(e: DayRouteEnd): string | null {
+  if (e.name?.trim()) return encodeURIComponent(e.name.trim());
+  if (typeof e.lat === "number" && typeof e.lng === "number")
+    return `${e.lat},${e.lng}`;
+  return null; // 이름·좌표 둘 다 없음 = 무효
+}
+
+export function buildDayRouteUrl(
+  waypoints: DayRouteStop[],
+  origin: DayRouteEnd,
+  destination: DayRouteEnd,
+): string | null {
+  let mids = (waypoints || []).filter(
     (s) => typeof s?.lat === "number" && typeof s?.lng === "number",
   );
-  if (pts.length < 2) {
-    console.warn("[buildDayRouteUrl] 지점 2개 미만 = 스킵");
+  const oL = endLabel(origin);
+  const dL = endLabel(destination);
+  if (!oL || !dL || mids.length < 1) {
+    console.warn("[buildDayRouteUrl] 출발/도착/경유지 부족 = 스킵");
     return null;
   }
-  const origin = pts[0];
-  const dest = pts[pts.length - 1];
-  let mids = pts.slice(1, -1);
   if (mids.length > MAX_DIR_WAYPOINTS) {
     console.warn(
       `[buildDayRouteUrl] 경유지 ${mids.length} > ${MAX_DIR_WAYPOINTS} = 순서 보존 절삭`,
     );
     mids = mids.slice(0, MAX_DIR_WAYPOINTS);
   }
-  const hasPid = (s: DayRouteStop) =>
+  const hasPid = (s: DayRouteEnd | DayRouteStop) =>
     !!s.googlePlaceId?.startsWith(GOOGLE_PLACE_ID_PREFIX);
-  // 라벨 = 이름(한국어명) 우선 = 주소 노출 금지(사장님 SSOT). 이름 없을 때만 좌표 폴백. PID 는 정확도 앵커로 별도 첨부.
-  const label = (s: DayRouteStop) =>
-    s.name?.trim() ? encodeURIComponent(s.name.trim()) : `${s.lat},${s.lng}`;
 
   const qs = [
     "api=1",
     "travelmode=driving", // 드라이빙 가이드 전용 버튼
-    `origin=${label(origin)}`,
-    `destination=${label(dest)}`,
+    `origin=${oL}`,
+    `destination=${dL}`,
   ];
   if (hasPid(origin)) qs.push(`origin_place_id=${origin.googlePlaceId}`);
-  if (hasPid(dest)) qs.push(`destination_place_id=${dest.googlePlaceId}`);
-  if (mids.length) {
-    // 경유지 라벨 = 한국어명(주소 아님). PID 는 전원 보유 시에만 1:1 첨부(API 요구 = 개수 정렬).
-    qs.push(`waypoints=${mids.map(label).join("%7C")}`);
-    if (mids.every(hasPid)) {
-      qs.push(
-        `waypoint_place_ids=${mids.map((s) => s.googlePlaceId).join("%7C")}`,
-      );
-    }
+  if (hasPid(destination))
+    qs.push(`destination_place_id=${destination.googlePlaceId}`);
+  // 경유지 라벨 = 이름(주소 아님) 우선. PID 전원 보유 시에만 1:1 첨부(API 요구 = 개수 정렬).
+  qs.push(
+    `waypoints=${mids
+      .map((s) =>
+        s.name?.trim()
+          ? encodeURIComponent(s.name.trim())
+          : `${s.lat},${s.lng}`,
+      )
+      .join("%7C")}`,
+  );
+  if (mids.every(hasPid)) {
+    qs.push(
+      `waypoint_place_ids=${mids.map((s) => s.googlePlaceId).join("%7C")}`,
+    );
   }
   return `https://www.google.com/maps/dir/?${qs.join("&")}`;
 }

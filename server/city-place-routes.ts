@@ -76,27 +76,45 @@ export function registerCityPlaceRoutes(app: Express): void {
 
   // [DROPPED 0013] reality-checks 엔드포인트 삭제
 
-  // ⚠️ 2026-07-24 사장님 승인 = 일별 [바로가기] 선처리 = 클릭 시점 화면 순서 그대로의 그 날 좌표
-  //   → Routes API(TRAFFIC_AWARE) 실소요시간·거리 = "그날 정말 갈 수 있나" 실시간 재검증(재정렬 안 함 = 사장님 SSOT).
+  // ⚠️ 2026-07-24 사장님 승인 = 일별 [바로가기] = 출발지+경유지+도착지 왕복(사장님 SSOT).
+  //   출발/도착 = 숙소(변경시 좌표) ?? 도시명 주소(미설정 = 구글이 도시중심 지오코딩 = 좌표조회 불필요·견고, 사장님 SSOT).
+  //   경유지 = 그날 슬롯(클릭 시점 순서). PSR 이름보충 + Routes API 왕복 실소요시간. 재정렬 안 함.
   app.post("/api/routes/day-live", async (req, res) => {
     try {
-      const stops = Array.isArray(req.body?.stops)
-        ? req.body.stops.filter(
+      const slots = Array.isArray(req.body?.slots)
+        ? req.body.slots.filter(
             (s: any) =>
               typeof s?.lat === "number" && typeof s?.lng === "number",
           )
         : [];
-      if (stops.length < 2) {
-        return res.status(400).json({ error: "stops(lat,lng) 2개 이상 필요" });
+      const accom = req.body?.accommodation; // {lat,lng,name,placeId} | null (숙소 변경시)
+      const cityName =
+        typeof req.body?.cityName === "string" ? req.body.cityName.trim() : "";
+      if (slots.length < 1) {
+        return res.status(400).json({ error: "slots(lat,lng) 필요" });
       }
-      // ① PSR 좌표조회 = PID+한국어명(필수 = 구글맵 주소 대신 장소명 노출, 사장님 SSOT 2026-07-24)
-      const enriched = await enrichStopsWithPsr(stops);
-      // ② Routes API 실소요시간 (선택 = 실패해도 이름은 반환)
+      // 왕복 실소요 endpoint = 숙소 좌표(변경시) ?? 도시명 주소(구글 지오코딩). 딥링크 출발/도착은 FE 가 동일 기준으로 조립.
+      const hasAccom =
+        accom && typeof accom.lat === "number" && typeof accom.lng === "number";
+      const endpoint = hasAccom
+        ? { lat: accom.lat, lng: accom.lng }
+        : cityName
+          ? { address: cityName }
+          : null;
+      const startSrc = hasAccom ? "숙소" : cityName ? "도시명주소" : "없음";
+      console.log(
+        `[day-live] 슬롯 ${slots.length} | 출발/도착 기준=${startSrc}${cityName ? `(${cityName})` : ""}`,
+      );
+      // ① PSR 좌표조회 = 슬롯 PID+이름(구글맵 주소 대신 장소명, 사장님 SSOT). 출발/도착은 FE 가 숙소/도시명으로.
+      const enriched = await enrichStopsWithPsr(slots);
+      // ② Routes API 왕복 실소요시간 (선택 = 실패해도 이름은 반환). endpoint 없으면 스킵.
       let live: { durationSec: number; distanceKm: number } | null = null;
-      try {
-        live = await computeDayRouteLive(stops);
-      } catch (e: any) {
-        console.error("[day-live] ETA 실패(이름은 반환):", e?.message);
+      if (endpoint) {
+        try {
+          live = await computeDayRouteLive(slots, endpoint);
+        } catch (e: any) {
+          console.error("[day-live] ETA 실패(이름은 반환):", e?.message);
+        }
       }
       res.json({
         durationSec: live?.durationSec ?? null,
