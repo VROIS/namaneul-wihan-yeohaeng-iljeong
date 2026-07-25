@@ -27,6 +27,7 @@ import RootStackNavigator from "@/navigation/RootStackNavigator";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { MapToggleProvider } from "@/contexts/MapToggleContext";
 import LoginSheet from "@/screens/login/LoginSheet";
+import ExpertOverlay from "@/screens/expert/ExpertOverlay";
 
 // Prevent auto hide while fonts are loading
 SplashScreen.preventAutoHideAsync();
@@ -87,6 +88,8 @@ export default function App() {
                   <RootStackNavigator />
                   {/* ⚠️ 사장님 SSOT 2026-07-25 = 로그인 인앱 팝업(전역 1벌). requestLogin() 신호로 어느 화면에서든 뜸(§16 재사용·§0 1벌). NavigationContainer 자식 = useLogin 의 useNavigation 의존. */}
                   <LoginSheet />
+                  {/* ⚠️ 사장님 SSOT 2026-07-25 = 전문가 오버레이(전역 1벌). requestExpert() 신호로 어느 화면(일정·AI의견·프로필·Tripis)에서든 열림 = 전문가는 언제든 답변(§16·§19 옛 TripPlanner 내부 렌더 폐기). NavigationContainer 자식 = 여정 복원 navigation 의존. */}
+                  <ExpertOverlay />
                 </NavigationContainer>
                 <StatusBar style="auto" />
               </KeyboardProvider>

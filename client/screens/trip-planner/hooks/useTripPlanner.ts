@@ -56,8 +56,7 @@ export function useTripPlanner() {
     aiOpinionRequestedAt,
     clearAiOpinionRequest,
     requestAiOpinion,
-    expertRequestedAt,
-    clearExpertRequest,
+    // ⚠️ 2026-07-25 = requestExpert만 사용(일별 바로예약 버튼=DailyTotal). expert 오버레이 열림/신호수신은 전역 ExpertOverlay(App)로 이관(§19).
     requestExpert,
   } = useMapToggle();
   const { t, i18n } = useTranslation();
@@ -119,15 +118,11 @@ export function useTripPlanner() {
     aiOpinionData,
     setAiOpinionData,
     aiOpinionError,
-    expertVisible,
-    setExpertVisible,
   } = useAiOpinionOverlay({
     itinerary,
     currentItineraryId,
     aiOpinionRequestedAt,
     clearAiOpinionRequest,
-    expertRequestedAt,
-    clearExpertRequest,
     t,
     i18n,
   });
@@ -355,8 +350,6 @@ export function useTripPlanner() {
     aiOpinionLoading,
     aiOpinionData,
     aiOpinionError,
-    expertVisible,
-    setExpertVisible,
     requestAiOpinion,
     requestExpert,
     // 지도·스크롤 연동

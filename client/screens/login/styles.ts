@@ -174,10 +174,15 @@ export const styles = StyleSheet.create({
     flex: 1.4,
     width: "auto",
   },
+  // ⚠️ 사장님 SSOT 2026-07-25 = 삼성폰(안드) TextInput 글자 위쪽 쏠림·잘림 버그 수정 = 세로중앙 강제.
+  //   textAlignVertical:center(안드 세로중앙) + paddingVertical:0(안드 기본 상하패딩 제거) + includeFontPadding:false(안드 폰트 위 여백 제거) = 40px 칸에서 "DD/MM/YYYY" 온전 표시. iOS는 원래 중앙이라 무해.
   dateInput: {
     fontSize: 18,
     fontFamily: Fonts.semiBold,
     paddingHorizontal: Spacing.sm,
+    paddingVertical: 0,
+    textAlignVertical: "center",
+    includeFontPadding: false,
   },
   dateSeparator: { fontSize: 20, fontFamily: Fonts.medium },
   ageBadge: {
@@ -210,10 +215,14 @@ export const styles = StyleSheet.create({
     flex: 1,
     height: 40,
     paddingHorizontal: Spacing.md,
+    paddingVertical: 0,
     borderRadius: BorderRadius.md,
     borderWidth: 1,
     fontSize: 14,
     fontFamily: Fonts.medium,
+    // ⚠️ 사장님 SSOT 2026-07-25 = 삼성폰(안드) placeholder/입력 글자 위쪽 쏠림 수정 = 세로중앙 강제(dateInput과 동일). iOS 무해.
+    textAlignVertical: "center",
+    includeFontPadding: false,
   },
   emailLoginBtn: {
     paddingHorizontal: Spacing.lg,
