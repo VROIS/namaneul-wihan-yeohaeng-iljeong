@@ -7,6 +7,12 @@ const GOOGLE_CLIENT_ID =
   process.env.GOOGLE_CLIENT_ID ||
   "";
 
+// ⚠️ 사장님 SSOT 2026-07-26 = 소셜별 닉네임 기본문구(카카오/구글이 이름 안 줄 때 fallback) = 1벌 상수(§0·§16).
+//   재로그인 displayName 갱신 가드가 이 집합과 비교 = 정의부·가드가 같은 소스 참조(따로 하드코딩 시 한쪽만 바뀌면 가드 조용히 깨짐 = simplify 지적).
+const KAKAO_DEFAULT_NAME = "카카오 사용자";
+const GOOGLE_DEFAULT_NAME = "Google User";
+const SOCIAL_DEFAULT_NAMES = new Set([KAKAO_DEFAULT_NAME, GOOGLE_DEFAULT_NAME]);
+
 /**
  * 사용자 조회/생성 = ⚠️ 사장님 SSOT 2026-07-25 = **오직 provider+providerId(소셜 인증 신원)로만** 기존 계정 매칭.
  *   birthDate 는 매칭 키가 아니라 신규 생성 시 저장·성인확인용. "2가지(생년월일+소셜인증) 다 충족" = 소셜 신원이 일치하는 그 사람일 때만 기존 계정.
@@ -26,12 +32,16 @@ async function findOrCreateUser(params: {
   // 1) provider+providerId(소셜 인증 신원)로만 조회 = 그 사람일 때만 기존 계정 매칭.
   let user = await storage.getUserByProvider(provider, providerId);
   if (user) {
+    // ⚠️ 사장님 SSOT 2026-07-26 = 재로그인 시 displayName(닉네임) 갱신 = 옛 계정이 "카카오 사용자"/"Google User" 기본문구로 고정되던 것 해소.
+    //   단 이번 로그인이 진짜 닉네임을 줬을 때만 덮음(기본문구 fallback 으로는 덮지 않음 = 좋은 이름 보존). 동의항목 닉네임 켜진 뒤 재로그인하면 진짜 이름으로 교체됨.
+    const isRealName = !!displayName && !SOCIAL_DEFAULT_NAMES.has(displayName);
     user = (await storage.updateUserLogin(user.id, {
       lastLoginAt: new Date(),
       loginCount: (user.loginCount || 0) + 1,
       deviceType,
       preferredLanguage: language || user.preferredLanguage,
       birthDate: birthDate || user.birthDate,
+      ...(isRealName ? { displayName } : {}),
     }))!;
     return user;
   }
@@ -115,7 +125,8 @@ export function registerAuthRoutes(app: Express) {
           .json({ success: false, error: "Token audience mismatch" });
       }
       const providerId = tokenData.sub;
-      const displayName = tokenData.name || tokenData.email || "Google User";
+      const displayName =
+        tokenData.name || tokenData.email || GOOGLE_DEFAULT_NAME;
       const user = await findOrCreateUser({
         provider: "google",
         providerId,
@@ -163,7 +174,7 @@ export function registerAuthRoutes(app: Express) {
         meData.kakao_account?.profile?.nickname ||
         meData.kakao_account?.profile?.name ||
         meData.properties?.nickname ||
-        "카카오 사용자";
+        KAKAO_DEFAULT_NAME;
       const user = await findOrCreateUser({
         provider: "kakao",
         providerId,
