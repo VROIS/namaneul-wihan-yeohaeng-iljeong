@@ -13,8 +13,11 @@ import {
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 import { LinearGradient } from "expo-linear-gradient";
+import { useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Spacing, Brand } from "@/constants/theme";
 import Icon from "@/components/Icon";
+import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { isWhatsAppOtpConfigured } from "@/lib/auth-oauth";
 import { useLogin } from "./hooks/useLogin";
 import LanguageModal from "./components/LanguageModal";
@@ -22,12 +25,16 @@ import WhatsAppModal from "./components/WhatsAppModal";
 import { styles } from "./styles";
 
 export default function LoginScreen() {
-  const login = useLogin();
+  // ⚠️ 2026-07-25 = 이 화면(과도기 보관) = 로그인 성공 시 기존대로 Main 리셋. useLogin(onDone) 로 위임(§0 단일경로).
+  const navigation =
+    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const login = useLogin({
+    onDone: () => navigation.reset({ index: 0, routes: [{ name: "Main" }] }),
+  });
   const {
     t,
     theme,
     insets,
-    navigation,
     currentLang,
     setShowLanguageModal,
     day,

@@ -26,6 +26,7 @@ import { queryClient } from "@/lib/query-client";
 import RootStackNavigator from "@/navigation/RootStackNavigator";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { MapToggleProvider } from "@/contexts/MapToggleContext";
+import LoginSheet from "@/screens/login/LoginSheet";
 
 // Prevent auto hide while fonts are loading
 SplashScreen.preventAutoHideAsync();
@@ -84,6 +85,8 @@ export default function App() {
               <KeyboardProvider>
                 <NavigationContainer>
                   <RootStackNavigator />
+                  {/* ⚠️ 사장님 SSOT 2026-07-25 = 로그인 인앱 팝업(전역 1벌). requestLogin() 신호로 어느 화면에서든 뜸(§16 재사용·§0 1벌). NavigationContainer 자식 = useLogin 의 useNavigation 의존. */}
+                  <LoginSheet />
                 </NavigationContainer>
                 <StatusBar style="auto" />
               </KeyboardProvider>

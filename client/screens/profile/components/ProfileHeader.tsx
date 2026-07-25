@@ -5,11 +5,14 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Brand } from "@/constants/theme";
 import Icon from "@/components/Icon";
 import ThemedText from "@/components/ThemedText";
+import { useMapToggle } from "@/contexts/MapToggleContext";
 import { styles } from "../styles";
 import type { ProfileApi } from "../hooks/useProfile";
 
 export default function ProfileHeader({ profile }: { profile: ProfileApi }) {
-  const { theme, navigation, persona, isAuth, user, stats } = profile;
+  const { theme, persona, isAuth, user, stats } = profile;
+  // ⚠️ 사장님 SSOT 2026-07-25 = "로그인/가입하기" = 별도 Login 화면 이동 대신 인앱 팝업(§16 전역 LoginSheet). 화면 이동 폐기.
+  const { requestLogin } = useMapToggle();
 
   return (
     <>
@@ -36,7 +39,7 @@ export default function ProfileHeader({ profile }: { profile: ProfileApi }) {
             <ThemedText style={styles.userName}>로그인이 필요합니다</ThemedText>
             <Pressable
               style={[styles.loginButton, { backgroundColor: Brand.primary }]}
-              onPress={() => navigation.navigate("Login")}
+              onPress={() => requestLogin()}
             >
               <Text style={styles.loginButtonText}>로그인 / 가입하기</Text>
             </Pressable>

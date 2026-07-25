@@ -2,11 +2,8 @@
 import { useState, useRef, useMemo, useEffect } from "react";
 import { TextInput, useColorScheme, Platform, Alert } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useNavigation } from "@react-navigation/native";
-import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
 import { Colors } from "@/constants/theme";
-import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import {
   UserData,
   calculateAge,
@@ -34,13 +31,15 @@ import {
 import { useTranslation } from "react-i18next";
 import { SUPPORTED_LANGS, changeLanguageAndPersist } from "@/lib/i18n";
 
-export function useLogin() {
+// ⚠️ 사장님 SSOT 2026-07-25 = 로그인 성공 시 "다음 동작"을 호출자가 결정(§0 단일경로·분기금지). onDone:
+//   - LoginScreen(과도기 보관 화면) = () => navigation.reset(Main)  (기존 동작 100% 유지)
+//   - LoginSheet(인앱 팝업) = () => setVisible(false)  (팝업만 닫고 배경 화면 유지)
+//   훅 내부엔 화면이동/팝업닫기 분기 없음 = 성공하면 onDone() 1개만 부름.
+export function useLogin({ onDone }: { onDone: () => void }) {
   const { t, i18n } = useTranslation();
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? "light"];
   const insets = useSafeAreaInsets();
-  const navigation =
-    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
   const currentLang =
     SUPPORTED_LANGS.find((l) => l.code === i18n.language) ?? SUPPORTED_LANGS[0];
@@ -111,7 +110,7 @@ export function useLogin() {
     })
       .then((result) => {
         if (result.success) {
-          navigation.reset({ index: 0, routes: [{ name: "Main" }] });
+          onDone(); // 성공 = 호출자 결정(화면 리셋 or 팝업 닫기). §0 단일경로.
         } else {
           Alert.alert(
             "로그인 실패",
@@ -124,7 +123,7 @@ export function useLogin() {
         Alert.alert(t("login.loginFailed"), t("login.loginFailed"));
       })
       .finally(() => setOauthLoading(false));
-  }, [googleResponse, birthDateStr, i18n.language, navigation]);
+  }, [googleResponse, birthDateStr, i18n.language, onDone]);
 
   // 카카오 웹 리다이렉트 복귀 시 code 처리
   useEffect(() => {
@@ -160,7 +159,7 @@ export function useLogin() {
           window.history.replaceState({}, "", window.location.pathname);
         }
         if (result.success) {
-          navigation.reset({ index: 0, routes: [{ name: "Main" }] });
+          onDone(); // 성공 = 호출자 결정. §0 단일경로.
         } else {
           Alert.alert(
             t("login.loginFailed"),
@@ -173,7 +172,7 @@ export function useLogin() {
         Alert.alert("로그인 실패", "카카오 로그인 중 오류가 발생했습니다.");
       })
       .finally(() => setOauthLoading(false));
-  }, [i18n.language, navigation]);
+  }, [i18n.language, onDone]);
 
   const validateAndSetDay = (value: string) => {
     const num = value.replace(/[^0-9]/g, "").slice(0, 2);
@@ -250,7 +249,7 @@ export function useLogin() {
     });
 
     if (result.success && result.user) {
-      navigation.reset({ index: 0, routes: [{ name: "Main" }] });
+      onDone(); // 성공 = 호출자 결정. §0 단일경로.
     } else {
       Alert.alert(
         t("login.loginFailed"),
@@ -312,7 +311,7 @@ export function useLogin() {
     setOauthLoading(false);
     if (result.success) {
       setShowWhatsAppModal(false);
-      navigation.reset({ index: 0, routes: [{ name: "Main" }] });
+      onDone(); // 성공 = 호출자 결정. §0 단일경로.
     } else {
       Alert.alert(
         t("login.loginFailed"),
@@ -347,6 +346,8 @@ export function useLogin() {
     } else Alert.alert(msg);
   };
   const handleEmailLogin = async () => {
+    // ⚠️ 사장님 SSOT 2026-07-25 = 로그인 = 2가지 필수(생년월일 + 인증). 생년월일 = 비번 대체 + 진짜 생년월일 재유도. 이메일도 구글·카톡과 동일하게 생년월일 게이트 통과 필수.
+    if (!requireBirthDateAndAdult()) return;
     const email = emailInput.trim();
     if (!email || !email.includes("@")) {
       notify(t("login.emailInvalid"));
@@ -356,7 +357,7 @@ export function useLogin() {
     try {
       const r = await emailLogin(email);
       if (r.success) {
-        navigation.reset({ index: 0, routes: [{ name: "Main" }] });
+        onDone(); // 성공 = 호출자 결정. §0 단일경로.
       } else if (r.error === "email_not_found") {
         notify(t("login.emailNotFound"));
       } else {
@@ -376,7 +377,7 @@ export function useLogin() {
       birthDate: birthDateStr || "1990-01-01",
     };
     await saveAuth(guestUser);
-    navigation.reset({ index: 0, routes: [{ name: "Main" }] });
+    onDone(); // 게스트 진입 = 호출자 결정. §0 단일경로.
   };
 
   return {
@@ -384,7 +385,6 @@ export function useLogin() {
     i18n,
     theme,
     insets,
-    navigation,
     currentLang,
     showLanguageModal,
     setShowLanguageModal,

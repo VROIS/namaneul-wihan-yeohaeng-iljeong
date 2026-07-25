@@ -7,7 +7,11 @@ const GOOGLE_CLIENT_ID =
   process.env.GOOGLE_CLIENT_ID ||
   "";
 
-/** provider 1순위, provider 없을 때만 birth_date로 매칭 */
+/**
+ * 사용자 조회/생성 = ⚠️ 사장님 SSOT 2026-07-25 = **오직 provider+providerId(소셜 인증 신원)로만** 기존 계정 매칭.
+ *   birthDate 는 매칭 키가 아니라 신규 생성 시 저장·성인확인용. "2가지(생년월일+소셜인증) 다 충족" = 소셜 신원이 일치하는 그 사람일 때만 기존 계정.
+ *   ⚠️ 옛 2단계(birthDate 단독 매칭 → provider 연결) 완전삭제 §19 = 근본버그(남이 같은 생년월일 넣으면 남 계정에 붙음)의 원인. birthDate=비번대체지만 "매칭 단독키"로는 절대 안 씀.
+ */
 async function findOrCreateUser(params: {
   provider: string;
   providerId: string;
@@ -19,7 +23,7 @@ async function findOrCreateUser(params: {
   const { provider, providerId, birthDate, displayName, language, deviceType } =
     params;
 
-  // 1) provider로 조회
+  // 1) provider+providerId(소셜 인증 신원)로만 조회 = 그 사람일 때만 기존 계정 매칭.
   let user = await storage.getUserByProvider(provider, providerId);
   if (user) {
     user = (await storage.updateUserLogin(user.id, {
@@ -32,21 +36,7 @@ async function findOrCreateUser(params: {
     return user;
   }
 
-  // 2) birth_date로 조회 → 있으면 provider 연결
-  user = await storage.getUserByBirthDate(birthDate);
-  if (user) {
-    await storage.linkProvider(user.id, provider, providerId);
-    user = (await storage.updateUserLogin(user.id, {
-      lastLoginAt: new Date(),
-      loginCount: (user.loginCount || 0) + 1,
-      deviceType,
-      preferredLanguage: language || user.preferredLanguage,
-      birthDate: birthDate || user.birthDate,
-    }))!;
-    return user;
-  }
-
-  // 3) 신규 사용자 생성
+  // 2) 신규 사용자 생성 (birthDate = 저장·성인확인용으로만 사용, 매칭 키 아님).
   const username = `${provider}_${providerId.substring(0, 12)}_${Math.random().toString(36).substring(2, 6)}`;
   return storage.createUser({
     username,
@@ -280,17 +270,18 @@ export function registerAuthRoutes(app: Express) {
         displayName,
       } = req.body;
 
-      if (!provider || !birthDate) {
-        return res
-          .status(400)
-          .json({ error: "Provider and birthDate are required" });
+      // ⚠️ 사장님 SSOT 2026-07-25 = providerId(소셜 인증 신원) 필수. 옛 `temp_{provider}_{birthDate}` fallback 완전삭제 §19
+      //   = 그 fallback 은 매칭 키를 (provider+생년월일)로 만들어 = 같은 생년월일인 남 계정에 붙는 버그(findOrCreateUser birthDate 매칭 삭제와 동일 클래스)를 이 경로로 되살렸음.
+      //   providerId 없음 = 진짜 소셜 인증이 안 된 것 = 차단(신규도 남 계정 붙이기도 안 함). "2가지 다 충족(생년월일+소셜신원)일 때만" 원칙.
+      if (!provider || !birthDate || !providerId) {
+        return res.status(400).json({
+          error: "provider, providerId, birthDate are all required",
+        });
       }
 
-      const pid =
-        providerId || `temp_${provider}_${birthDate.replace(/-/g, "")}`;
       const user = await findOrCreateUser({
         provider,
-        providerId: pid,
+        providerId,
         birthDate,
         displayName: displayName || `${provider} User`,
         language,

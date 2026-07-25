@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import Animated, {
   useSharedValue,
+  useDerivedValue,
   useAnimatedStyle,
   useAnimatedReaction,
   withSpring,
@@ -22,9 +23,11 @@ import Animated, {
   runOnJS,
   interpolate,
   Extrapolation,
+  type SharedValue,
 } from "react-native-reanimated";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "react-i18next";
 import { Colors, Spacing, BorderRadius, Fonts } from "@/constants/theme";
 import Icon from "@/components/Icon";
 
@@ -38,6 +41,12 @@ interface SnapSheetProps {
   // full 높이 비율(0~1). 기본 0.9. peek 는 하단 고정 높이(px)만 보이게.
   fullRatio?: number;
   peekHeight?: number; // peek 상태에서 화면에 보이는 시트 높이(px). 기본 90.
+  // ⚠️ 사장님 SSOT 2026-07-25 = 옵셔널 render-prop = 시트 노출 진행도(0=peek/닫힘 ~ 1=full)를 SharedValue 로 자식에 전달.
+  //   로그인 팝업(LoginSheet)이 로고+타이틀을 스냅 높이에 따라 실시간 리사이즈(방법B)하는 데 씀. 미지정 사용처(ExpertSheet/AiOpinionSheet)는 무영향(additive §0).
+  renderTitleAccessory?: (progress: SharedValue<number>) => React.ReactNode;
+  // ⚠️ 사장님 SSOT 2026-07-25 = 첫 노출 스냅 = "half"(기본, 전문가/AI의견 = 배경 여정 보이게) | "full"(로그인 팝업 = 로고 크게·입력 편하게).
+  //   미지정 = half(기존 사용처 무영향, additive §0).
+  initialSnap?: "half" | "full";
 }
 
 export default function SnapSheet({
@@ -47,11 +56,14 @@ export default function SnapSheet({
   children,
   fullRatio = 0.9,
   peekHeight = 90,
+  renderTitleAccessory,
+  initialSnap = "half",
 }: SnapSheetProps) {
   const { height: winH } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? "light"];
+  const { t } = useTranslation();
 
   // ⚠️ 사장님 SSOT 2026-07-14 = 시트 상단(top) = translateY 위치. 시트는 그 지점부터 화면 하단까지 = 스냅마다 시트 높이가 달라짐 = 본문 ScrollView(flex:1)가 그 높이에 맞춰 스크롤됨(half 에서 넘치면 스크롤 O).
   //   translateY(=시트 top 의 화면 상단 대비 offset): TOP_MARGIN=full(거의 맨 위) / HALF_Y=half(화면 ~50%) / PEEK_Y=peek(하단에 살짝) / winH=완전 숨김(닫힘).
@@ -65,9 +77,11 @@ export default function SnapSheet({
   const translateY = useSharedValue(CLOSED_Y);
   const startY = useSharedValue(0);
 
-  // visible 토글 = half(중간)로 열기 / 닫기(완전 숨김) 애니메이션. 첫 노출 = half(사장님 SSOT = 너무 안 올라옴).
+  // visible 토글 = 첫 노출 스냅(initialSnap: half 기본 / full=로그인 팝업)으로 열기 / 닫기(완전 숨김) 애니메이션.
+  //   ⚠️ 2026-07-25 = 로그인 팝업은 initialSnap="full" = 처음부터 로고 크게(방법B 온전 표시) + 입력칸 바로 보임. 전문가/AI의견은 half 유지(사장님 SSOT).
+  const OPEN_Y = initialSnap === "full" ? FULL_Y : HALF_Y;
   useEffect(() => {
-    translateY.value = withSpring(visible ? HALF_Y : CLOSED_Y, SPRING);
+    translateY.value = withSpring(visible ? OPEN_Y : CLOSED_Y, SPRING);
   }, [visible]);
 
   const snapTo = (target: number) => {
@@ -129,6 +143,16 @@ export default function SnapSheet({
     );
     return { opacity: o };
   });
+  // ⚠️ 2026-07-25 = 시트 노출 진행도(0=peek/닫힘 ~ 1=full). renderTitleAccessory 자식(LoginSheet 로고+타이틀)이 스냅 높이에 따라 실시간 리사이즈(방법B)하는 데 씀.
+  const progress = useDerivedValue(() =>
+    interpolate(
+      translateY.value,
+      [PEEK_Y, FULL_Y],
+      [0, 1],
+      Extrapolation.CLAMP,
+    ),
+  );
+
   // pointerEvents = full 근처(half 위쪽 절반)일 때만 dim 이 배경 터치 막음. half 이하 = 통과(배경 여정 지도·카드 조작).
   const [dimTouchable, setDimTouchable] = React.useState(false);
   useAnimatedReaction(
@@ -183,10 +207,18 @@ export default function SnapSheet({
                   {title}
                 </Text>
               </Pressable>
-              <Pressable onPress={onClose} style={styles.closeBtn} hitSlop={10}>
+              <Pressable
+                onPress={onClose}
+                style={styles.closeBtn}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel={t("common.close")}
+              >
                 <Icon name="x" size={24} color={theme.text} />
               </Pressable>
             </View>
+            {/* ⚠️ 2026-07-25 = 옵셔널 = 제목 아래 액세서리(로그인 팝업의 로고+슬로건, 스냅 높이 따라 실시간 리사이즈). 미지정이면 아무것도 안 그림. */}
+            {renderTitleAccessory ? renderTitleAccessory(progress) : null}
           </View>
         </GestureDetector>
 

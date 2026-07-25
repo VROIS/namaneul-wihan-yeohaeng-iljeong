@@ -3,6 +3,7 @@ import React from "react";
 import { View, StyleSheet } from "react-native";
 import SnapSheet from "@/components/SnapSheet"; // 배경 여정 보이는 드래그 스냅 시트(peek↔full, 2026-07-14 리서치)
 import ExpertSheet from "@/screens/expert/ExpertSheet"; // 전문가 오버레이 시트(2026-07-14 = AI의견처럼 여정화면 위)
+import { useMapToggle } from "@/contexts/MapToggleContext";
 import { useTripPlanner } from "./hooks/useTripPlanner";
 import InputStep from "./InputStep";
 import LoadingStep from "./LoadingStep";
@@ -10,11 +11,12 @@ import ResultStep from "./ResultStep";
 
 export default function TripPlannerScreen() {
   const planner = useTripPlanner();
+  // ⚠️ 2026-07-25 = 전문가 시트의 로그인 요구 = 별도 화면 아닌 인앱 팝업(requestLogin). 전문가 시트 닫고 로그인 팝업 엶.
+  const { requestLogin } = useMapToggle();
   const {
     screen,
     theme,
     t,
-    navigation,
     expertVisible,
     setExpertVisible,
     restoreItineraryById,
@@ -46,7 +48,7 @@ export default function TripPlannerScreen() {
           }}
           onRequestLogin={() => {
             setExpertVisible(false);
-            navigation.navigate("Login");
+            requestLogin();
           }}
         />
       </SnapSheet>

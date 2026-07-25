@@ -31,7 +31,6 @@ export interface IStorage {
     provider: string,
     providerId: string,
   ): Promise<User | undefined>;
-  getUserByBirthDate(birthDate: string): Promise<User | undefined>;
   linkProvider(
     userId: string,
     provider: string,
@@ -146,17 +145,6 @@ export class DatabaseStorage implements IStorage {
       .where(
         and(eq(users.provider, provider), eq(users.providerId, providerId)),
       );
-    return user || undefined;
-  }
-
-  async getUserByBirthDate(birthDate: string): Promise<User | undefined> {
-    if (!birthDate || typeof birthDate !== "string") return undefined;
-    const normalized = birthDate.trim().replace(/\s/g, "");
-    if (!normalized) return undefined;
-    const [user] = await db
-      .select()
-      .from(users)
-      .where(eq(users.birthDate, normalized));
     return user || undefined;
   }
 

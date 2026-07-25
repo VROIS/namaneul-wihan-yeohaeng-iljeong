@@ -4,6 +4,7 @@ import { Alert } from "react-native";
 import { Itinerary, TripFormData, DayAccommodation } from "@/types/trip";
 import { apiRequest } from "@/lib/query-client";
 import { getUserData } from "@/lib/auth";
+import { useMapToggle } from "@/contexts/MapToggleContext";
 import { ensureLoggedIn } from "./login-gate";
 
 export function useSaveItinerary({
@@ -13,7 +14,6 @@ export function useSaveItinerary({
   formData,
   currentItineraryId,
   setCurrentItineraryId,
-  navigation,
   t,
   i18n,
 }: {
@@ -23,10 +23,11 @@ export function useSaveItinerary({
   formData: TripFormData;
   currentItineraryId: number | null;
   setCurrentItineraryId: React.Dispatch<React.SetStateAction<number | null>>;
-  navigation: { navigate: (screen: any) => void };
   t: (key: string, opts?: any) => string;
   i18n: { language: string };
 }) {
+  // ⚠️ 2026-07-25 = 로그인 게이트 = 별도 화면 아닌 인앱 팝업(requestLogin). navigation prop 제거(§0 결합 제거).
+  const { requestLogin } = useMapToggle();
   // 💾 일정 저장 상태
   const [isSaving, setIsSaving] = useState(false);
   // ⚠️ 2026-07-03 사장님 UX SSOT = 저장버튼 = 누르면 영구 잠김(옛) 아님 = 저장 성공 시 녹색 체크(✓) 0.5초(초최단) 보여준 뒤 원래 💾로 복귀 = 다시 저장 가능.
@@ -52,7 +53,7 @@ export function useSaveItinerary({
     setIsSaving(true);
     try {
       // ⚠️ 사장님 SSOT 2026-07-15 = 저장 판정 = 실계정 1벌(§0.3). 게스트·비로그인 모두 로그인 안내(ensureLoggedIn = login-gate 공용, §0.3 1벌화 2026-07-21).
-      if (!(await ensureLoggedIn(t, navigation))) {
+      if (!(await ensureLoggedIn(t, requestLogin))) {
         setIsSaving(false);
         return;
       }

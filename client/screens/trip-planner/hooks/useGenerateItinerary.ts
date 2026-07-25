@@ -1,16 +1,14 @@
 // 여정 생성(위기경보 체크 → 생성 API → 결과 전환) = TripPlannerScreen 분리(2026-07-15 §0 슬림화, 순수 이동)
-import { useState, useCallback } from "react";
 import { Alert } from "react-native";
-import { useFocusEffect } from "@react-navigation/native";
 import { Itinerary, TripFormData, DayAccommodation } from "@/types/trip";
 import { calculateVibeWeights } from "@/utils/vibeCalculator";
 import { apiRequest } from "@/lib/query-client";
 import { isAuthenticated, UserData } from "@/lib/auth";
+import { useMapToggle } from "@/contexts/MapToggleContext";
 
 export function useGenerateItinerary({
   formData,
   currentUser,
-  navigation,
   setScreen,
   setLoadingStep,
   setItinerary,
@@ -22,7 +20,6 @@ export function useGenerateItinerary({
 }: {
   formData: TripFormData;
   currentUser: UserData | null;
-  navigation: { navigate: (screen: any) => void };
   setScreen: React.Dispatch<
     React.SetStateAction<"Input" | "Loading" | "Result">
   >;
@@ -36,7 +33,8 @@ export function useGenerateItinerary({
   t: (key: string, opts?: any) => string;
   i18n: { language: string };
 }) {
-  const [pendingGenerate, setPendingGenerate] = useState(false);
+  // ⚠️ 2026-07-25 사장님 SSOT = 여정생성 인증분기 = 로그인 인식되면 바로 생성 진행 / 비인증이면 로그인 팝업(requestLogin). 화면 이동·자동재개 폐기(§0·§19).
+  const { requestLogin } = useMapToggle();
 
   // 🚨 위기 정보 체크 및 팝업 표시
   const checkCrisisAlerts = async (): Promise<{
@@ -220,27 +218,16 @@ export function useGenerateItinerary({
     }
   };
 
+  // 여정생성 버튼 = 인증분기(사장님 SSOT): 로그인 인식되면 팝업 없이 바로 생성 / 비인증이면 로그인 팝업만.
+  //   비인증은 팝업만 띄우고, 로그인 후 사용자가 생성 버튼을 다시 누름(단순 = §0. 옛 pendingGenerate 화면복귀 자동재개는 팝업엔 불필요 = 폐기 §19).
   const handleGenerate = async () => {
     const authenticated = await isAuthenticated();
     if (authenticated) {
       executeGenerate();
     } else {
-      setPendingGenerate(true);
-      navigation.navigate("Login");
+      requestLogin();
     }
   };
-  useFocusEffect(
-    useCallback(() => {
-      if (pendingGenerate) {
-        setPendingGenerate(false);
-        isAuthenticated().then((auth) => {
-          if (auth) {
-            executeGenerate();
-          }
-        });
-      }
-    }, [pendingGenerate]),
-  );
 
   return { handleGenerate };
 }
