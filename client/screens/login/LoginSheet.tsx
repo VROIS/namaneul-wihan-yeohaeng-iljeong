@@ -66,7 +66,7 @@ function LoginSheetForm({ onClose }: { onClose: () => void }) {
       {/* ⚠️ 사장님 SSOT 2026-07-25 = 슬로건 제거 = 상단존 최소화 → 하단 인증(카카오/구글/이메일)이 한눈에 보이게. Tripis 글자만 유지. */}
       <View style={styles.loginBrand}>
         <View style={styles.loginBrandTitleRow}>
-          <Text style={styles.tripisTitle}>Tripis</Text>
+          <Text style={styles.loginBrandTitle}>Tripis</Text>
           <Text style={styles.tripisTitleKo}>트리피스</Text>
         </View>
       </View>
@@ -86,6 +86,7 @@ function LoginSheetForm({ onClose }: { onClose: () => void }) {
           <View
             style={[
               styles.dateInputBox,
+              styles.sheetDateBox,
               {
                 backgroundColor: theme.backgroundDefault,
                 borderColor: dateError ? "#EF4444" : theme.border,
@@ -115,6 +116,7 @@ function LoginSheetForm({ onClose }: { onClose: () => void }) {
           <View
             style={[
               styles.dateInputBox,
+              styles.sheetDateBox,
               {
                 backgroundColor: theme.backgroundDefault,
                 borderColor: dateError ? "#EF4444" : theme.border,
@@ -144,7 +146,8 @@ function LoginSheetForm({ onClose }: { onClose: () => void }) {
           <View
             style={[
               styles.dateInputBox,
-              styles.yearBox,
+              styles.sheetDateBox,
+              styles.sheetYearBox,
               {
                 backgroundColor: theme.backgroundDefault,
                 borderColor: dateError ? "#EF4444" : theme.border,
@@ -327,20 +330,16 @@ export default function LoginSheet() {
             },
           ]}
         >
-          <View style={styles.loginCardHeader}>
-            <Text style={[styles.loginCardTitle, { color: theme.text }]}>
-              {t("login.title")}
-            </Text>
-            <Pressable
-              onPress={handleClose}
-              style={styles.loginCloseBtn}
-              hitSlop={10}
-              accessibilityRole="button"
-              accessibilityLabel={t("common.close")}
-            >
-              <Icon name="x" size={24} color={theme.text} />
-            </Pressable>
-          </View>
+          {/* ⚠️ 사장님 SSOT 2026-07-25 = "로그인" 제목 텍스트 삭제 = 우리 요소(Tripis)를 카드 최상단부터 시작 → 상단 여백 회수 → 삼성폰 키보드 위로 이격(§23 = 뭐하는 창인지 요소로 자명). 닫기 X만 절대위치(세로공간 0). */}
+          <Pressable
+            onPress={handleClose}
+            style={styles.loginCloseBtn}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel={t("common.close")}
+          >
+            <Icon name="x" size={24} color={theme.text} />
+          </Pressable>
           <LoginSheetForm onClose={handleClose} />
         </View>
       </View>

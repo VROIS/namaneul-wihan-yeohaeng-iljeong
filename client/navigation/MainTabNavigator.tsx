@@ -15,6 +15,7 @@ import ProfileScreen from "@/screens/profile/ProfileScreen";
 // ⚠️ 사장님 SSOT 2026-07-14 = 전문가 = 여정화면 위 오버레이(AI의견과 동일). 옛 별도탭 화면 폐기 §19 = 탭은 트리거만(requestExpert).
 import { tabBadgeCount, getMyRole } from "@/screens/expert/expertApi"; // 전문가 탭 배지 = 역할별(사용자=안읽은답변/전문가=대기문의) + 역할(탭 활성 분기)
 import { useMapToggle } from "@/contexts/MapToggleContext";
+import { isAuthenticated } from "@/lib/auth"; // Tripis(가이드)탭 인증게이트 = 여정생성과 동일 패턴
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 export type MainTabParamList = {
@@ -50,6 +51,8 @@ export default function MainTabNavigator() {
     requestAiOpinion,
     requestExpert,
     expertDataChangedAt,
+    authChangedAt,
+    requestLogin,
   } = useMapToggle();
   // ⚠️ 수정금지(승인필요) — 삼성폰 하단 3버튼 겹침 방지 (SafeArea 여백)
   const insets = useSafeAreaInsets();
@@ -102,6 +105,24 @@ export default function MainTabNavigator() {
       alive = false;
     };
   }, [expertDataChangedAt]);
+  // ⚠️ 사장님 SSOT 2026-07-25 = 로그인 팝업(모달)은 navigation state를 안 바꿔 위 mount/이동 리스너로는 role 재조회 안 됨 → 관리자(사장님) 메일 로그인 직후에도 isExpertRole=false로 남아 [전문가]탭 프리패스 안 되던 버그. authChangedAt 신호로 role+배지 즉시 재조회(§16 신호 재사용, useProfile과 동일 패턴).
+  useEffect(() => {
+    if (!authChangedAt) return;
+    let alive = true;
+    getMyRole()
+      .then((r) => {
+        if (alive) setIsExpertRole(r === "expert" || r === "admin");
+      })
+      .catch(() => {});
+    tabBadgeCount()
+      .then((n) => {
+        if (alive) setExpertBadge(n);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [authChangedAt]);
 
   const getTabBarIcon = (
     routeName: string,
@@ -254,9 +275,15 @@ export default function MainTabNavigator() {
             headerShown: false,
           }}
           listeners={{
+            // ⚠️ 사장님 SSOT 2026-07-25 = Tripis(가이드)탭 = 여정생성 버튼과 동일 인증게이트 = 비인증이면 로그인 팝업(무방비 진입 차단), 인증됨(관리자 포함)이면 바로 진입(프리패스).
             tabPress: (e) => {
               e.preventDefault();
-              rootNavigation.navigate("GuideMiniApp");
+              isAuthenticated()
+                .then((ok) => {
+                  if (ok) rootNavigation.navigate("GuideMiniApp");
+                  else requestLogin();
+                })
+                .catch(() => requestLogin()); // 조회 실패 시 = 안전하게 로그인 유도(무방비 진입 방지, 형제 useEffect .catch 패턴 일관).
             },
           }}
         />

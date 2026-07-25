@@ -39,14 +39,6 @@ export const styles = StyleSheet.create({
       },
     }),
   },
-  loginCardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    paddingTop: Spacing.md,
-    paddingHorizontal: Spacing.lg,
-  },
-  loginCardTitle: { fontSize: 16, fontFamily: Fonts.bold, letterSpacing: -0.3 },
   loginCloseBtn: {
     position: "absolute",
     right: Spacing.md,
@@ -56,19 +48,31 @@ export const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  loginCardBody: { paddingHorizontal: Spacing.xl, paddingBottom: Spacing.xl },
-  // 브랜드존 = 최소화(로고 이미지 제거, Tripis 글자 + 슬로건 축소). 상단 고정 카드라 여백 최소로 = 소셜 버튼이 스크롤 없이 최대한 보이게(사장님 SSOT).
+  // 헤더 삭제(§23) = 본문이 카드 최상단부터. paddingTop md = X 버튼(우상단 절대위치)과 Tripis 글자 안 겹치는 최소 여백.
+  loginCardBody: {
+    paddingHorizontal: Spacing.xl,
+    paddingTop: Spacing.md,
+    paddingBottom: Spacing.md,
+  },
+  // 브랜드존 = 최소화(로고 이미지 제거, Tripis 글자만). 상단 고정 카드라 여백 최소 = 삼성폰 키보드 위로 이격(사장님 SSOT).
   loginBrand: {
     alignItems: "center",
-    paddingTop: Spacing.xs,
-    paddingBottom: Spacing.sm,
+    paddingBottom: Spacing.xs,
   },
   // LoginSheet 브랜드 = Tripis 글자행. tripisTitleRow(marginBottom 28)는 LoginScreen 전용이라 여기선 작은 간격으로 오버라이드(§0 화면별 분리).
   loginBrandTitleRow: {
     flexDirection: "row",
     alignItems: "baseline",
-    gap: 8,
-    marginBottom: 4,
+    gap: 6,
+    marginBottom: 2,
+  },
+  // ⚠️ 사장님 SSOT 2026-07-25 = LoginSheet 전용 Tripis 글자 = 38→26 축소(삼성폰 키보드 회피 = 상단 콤팩트). LoginScreen 보관은 tripisTitle(38) 그대로.
+  loginBrandTitle: {
+    fontSize: 26,
+    fontWeight: "700",
+    letterSpacing: -0.8,
+    color: Brand.primary,
+    lineHeight: 28,
   },
   /* ── TRIPIS 통합 헤더 = 시안 tripia-onboarding.jsx:35-45 ── */
   tripisHeader: {
@@ -116,7 +120,7 @@ export const styles = StyleSheet.create({
   },
 
   /* ── 폼 ── */
-  formSection: { marginBottom: Spacing.md },
+  formSection: { marginBottom: Spacing.sm },
   label: {
     fontSize: 13,
     fontFamily: Fonts.semiBold,
@@ -160,6 +164,16 @@ export const styles = StyleSheet.create({
     justifyContent: "center",
   },
   yearBox: { width: 80 },
+  // ⚠️ 사장님 SSOT 2026-07-25 = LoginSheet 전용 = 칸을 옆으로 최대한 늘리고(flex:1 = 카드 폭 꽉 채움) 높이 축소(52→40) = 세로 콤팩트(삼성폰 키보드 회피) + 넓어진 폭으로 "MM"/"YYYY" 잘림 해소. LoginScreen(보관)은 원본(width 56/52) 그대로 = §2 미파손. width:"auto"로 원본 고정폭 무효화.
+  sheetDateBox: {
+    flex: 1,
+    width: "auto",
+    height: 40,
+  },
+  sheetYearBox: {
+    flex: 1.4,
+    width: "auto",
+  },
   dateInput: {
     fontSize: 18,
     fontFamily: Fonts.semiBold,
@@ -183,7 +197,7 @@ export const styles = StyleSheet.create({
   },
 
   /* ── 소셜 버튼 ── */
-  socialSection: { gap: Spacing.md, paddingBottom: Spacing.lg },
+  socialSection: { gap: Spacing.sm, paddingBottom: Spacing.sm },
   // 개발단계 이메일 로그인(2026-07-14)
   emailLoginBox: { gap: Spacing.xs, marginTop: Spacing.sm },
   emailLoginLabel: {
@@ -194,7 +208,7 @@ export const styles = StyleSheet.create({
   emailLoginRow: { flexDirection: "row", gap: Spacing.sm },
   emailInput: {
     flex: 1,
-    height: 48,
+    height: 40,
     paddingHorizontal: Spacing.md,
     borderRadius: BorderRadius.md,
     borderWidth: 1,
@@ -203,18 +217,18 @@ export const styles = StyleSheet.create({
   },
   emailLoginBtn: {
     paddingHorizontal: Spacing.lg,
-    height: 48,
+    height: 40,
     borderRadius: BorderRadius.md,
     alignItems: "center",
     justifyContent: "center",
   },
   emailLoginBtnText: { color: "#FFF", fontSize: 14, fontFamily: Fonts.bold },
-  // ⚠️ 사장님 SSOT 2026-07-25 = 상단 모달에 카카오·구글·이메일이 스크롤 없이 다 보이게 = 버튼 세로여백 lg→md 축소(터치영역 48pt+ 유지). 나머지 화면(LoginScreen 보관)은 자체 스타일이라 무영향.
+  // ⚠️ 사장님 SSOT 2026-07-25 = 삼성폰 키보드 회피 = 버튼 높이 최대한 축소(고정 40 = 세로 콤팩트). 나머지 화면(LoginScreen 보관)은 자체 스타일이라 무영향.
   socialButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: Spacing.md,
+    height: 40,
     borderRadius: BorderRadius.xl,
     gap: Spacing.md,
   },
