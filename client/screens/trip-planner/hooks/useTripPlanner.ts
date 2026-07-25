@@ -148,7 +148,6 @@ export function useTripPlanner() {
     formData,
     currentItineraryId,
     setCurrentItineraryId,
-    navigation,
     t,
     i18n,
   });
@@ -159,14 +158,12 @@ export function useTripPlanner() {
       itinerary,
       currentItineraryId,
       handleSaveItinerary,
-      navigation,
       t,
     });
 
   const { handleGenerate } = useGenerateItinerary({
     formData,
     currentUser,
-    navigation,
     setScreen,
     setLoadingStep,
     setItinerary,

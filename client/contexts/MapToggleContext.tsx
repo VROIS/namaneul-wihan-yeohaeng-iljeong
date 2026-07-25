@@ -24,10 +24,13 @@ interface MapToggleContextType {
   // ⚠️ 사장님 SSOT 2026-07-14 = 오버레이 안에서 문의접수·답변전송 직후 = 하단 탭 배지 즉시 갱신 신호(오버레이는 navigation state를 안 바꿔 폴링으로만 반영되던 지연 제거 §19). 실시간 피드백.
   expertDataChangedAt: number | null;
   bumpExpertData: () => void;
-  // ⚠️ 사장님 SSOT 2026-07-25 = 로그인 = 별도 화면 아닌 인앱 팝업(SnapSheet). AI의견·전문가와 동일 신호 패턴(§16 재사용). 저장·공유·전문가·프로필·여정생성(비인증) 게이트가 이걸 불러 전역 LoginSheet를 엶.
+  // ⚠️ 사장님 SSOT 2026-07-25 = 로그인 = 별도 화면 아닌 인앱 팝업(센터/상단 모달). AI의견·전문가와 동일 신호 패턴(§16 재사용). 저장·공유·전문가·프로필·여정생성(비인증) 게이트가 이걸 불러 전역 LoginSheet를 엶.
   loginRequestedAt: number | null;
   requestLogin: () => void;
   clearLoginRequest: () => void;
+  // ⚠️ 사장님 SSOT 2026-07-25(세션2) = 로그인 성공/로그아웃 등 인증상태 변경 신호(expertDataChangedAt 패턴 복제). 로그인 팝업은 navigation focus를 안 바꿔 프로필(useFocusEffect)이 재조회 안 함 → 이 신호로 useProfile 등이 재조회 = 로그인 후 즉시 인증반영.
+  authChangedAt: number | null;
+  bumpAuthChanged: () => void;
 }
 
 const MapToggleContext = createContext<MapToggleContextType>({
@@ -50,6 +53,8 @@ const MapToggleContext = createContext<MapToggleContextType>({
   loginRequestedAt: null,
   requestLogin: () => {},
   clearLoginRequest: () => {},
+  authChangedAt: null,
+  bumpAuthChanged: () => {},
 });
 
 export function MapToggleProvider({ children }: { children: React.ReactNode }) {
@@ -73,6 +78,7 @@ export function MapToggleProvider({ children }: { children: React.ReactNode }) {
     null,
   );
   const [loginRequestedAt, setLoginRequestedAt] = useState<number | null>(null);
+  const [authChangedAt, setAuthChangedAt] = useState<number | null>(null);
 
   const toggleMap = useCallback(() => {
     setShowMap((prev) => !prev);
@@ -119,6 +125,10 @@ export function MapToggleProvider({ children }: { children: React.ReactNode }) {
   const clearLoginRequest = useCallback(() => {
     setLoginRequestedAt(null);
   }, []);
+  // ⚠️ 2026-07-25(세션2) = 로그인 성공/로그아웃 시 호출 → 구독자(useProfile 등)가 인증 재조회(navigation focus 안 바뀌어도 즉시 반영).
+  const bumpAuthChanged = useCallback(() => {
+    setAuthChangedAt(Date.now());
+  }, []);
 
   return (
     <MapToggleContext.Provider
@@ -142,6 +152,8 @@ export function MapToggleProvider({ children }: { children: React.ReactNode }) {
         loginRequestedAt,
         requestLogin,
         clearLoginRequest,
+        authChangedAt,
+        bumpAuthChanged,
       }}
     >
       {children}

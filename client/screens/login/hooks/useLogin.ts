@@ -1,6 +1,12 @@
 // 로그인 화면 상태·핸들러 = LoginScreen 분리(2026-07-15 §0 슬림화, 순수 이동)
 import { useState, useRef, useMemo, useEffect } from "react";
-import { TextInput, useColorScheme, Platform, Alert } from "react-native";
+import {
+  TextInput,
+  useColorScheme,
+  Platform,
+  Alert,
+  Keyboard,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Colors } from "@/constants/theme";
@@ -211,6 +217,9 @@ export function useLogin({ onDone }: { onDone: () => void }) {
       const currentYear = new Date().getFullYear();
       if (y < 1920 || y > currentYear - 10) {
         setDateError(t("login.yearInvalid"));
+      } else {
+        // ⚠️ 2026-07-25(세션2) = 생년월일 마지막 칸(연도) 완료 = 키보드 자동 내림. number-pad엔 return 키가 없어 코드 dismiss가 표준(사장님 실기기: 키보드 갇힘 해소).
+        Keyboard.dismiss();
       }
     }
   };

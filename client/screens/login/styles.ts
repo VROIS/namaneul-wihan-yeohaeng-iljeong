@@ -1,5 +1,5 @@
 // 로그인 화면 스타일 = LoginScreen 분리(2026-07-15 §0 슬림화, 순수 이동)
-import { StyleSheet } from "react-native";
+import { StyleSheet, Platform } from "react-native";
 import { Spacing, BorderRadius, Brand, Fonts } from "@/constants/theme";
 
 export const styles = StyleSheet.create({
@@ -7,6 +7,69 @@ export const styles = StyleSheet.create({
   flex: { flex: 1 },
   content: { paddingHorizontal: Spacing.xl },
 
+  /* ── 2026-07-25(세션2) 로그인 = 상단 센터 모달 ── */
+  // 오버레이 = 화면 전체, 카드를 상단(flex-start)에 = 키보드(하단)와 최대 이격.
+  loginOverlay: {
+    flex: 1,
+    justifyContent: "flex-start",
+    alignItems: "center",
+  },
+  // dim = 뒤 여정 흐리게(맥락 유지) + 탭하면 닫기. 카드 뒤 전체.
+  loginBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(0,0,0,0.4)",
+  },
+  // 카드 = 상단에 뜨는 로그인 박스. marginTop은 컴포넌트에서 safe-area+여백 주입.
+  // ⚠️ 사장님 SSOT 2026-07-25 = 상단 고정 + 슬로건 제거 = 콘텐츠(로고글자+생년월일+소셜3)가 스크롤 없이 이메일까지 다 보이되(maxHeight 60%),
+  //   키보드(하단 ~40%)와는 안 겹침(카드 하단이 키보드 위 = 아이폰12 기준 60%≈506pt ≤ 키보드위 508pt). 넘치는 소형기기만 내부 ScrollView.
+  loginCard: {
+    width: "92%",
+    maxWidth: 480,
+    maxHeight: "60%",
+    borderRadius: BorderRadius.xl,
+    overflow: "hidden",
+    ...Platform.select({
+      web: { boxShadow: "0 8px 32px rgba(0,0,0,0.18)" } as any,
+      default: {
+        shadowColor: "#000",
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.18,
+        shadowRadius: 20,
+        elevation: 16,
+      },
+    }),
+  },
+  loginCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingTop: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+  },
+  loginCardTitle: { fontSize: 16, fontFamily: Fonts.bold, letterSpacing: -0.3 },
+  loginCloseBtn: {
+    position: "absolute",
+    right: Spacing.md,
+    top: Spacing.sm,
+    width: 40,
+    height: 40,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loginCardBody: { paddingHorizontal: Spacing.xl, paddingBottom: Spacing.xl },
+  // 브랜드존 = 최소화(로고 이미지 제거, Tripis 글자 + 슬로건 축소). 상단 고정 카드라 여백 최소로 = 소셜 버튼이 스크롤 없이 최대한 보이게(사장님 SSOT).
+  loginBrand: {
+    alignItems: "center",
+    paddingTop: Spacing.xs,
+    paddingBottom: Spacing.sm,
+  },
+  // LoginSheet 브랜드 = Tripis 글자행. tripisTitleRow(marginBottom 28)는 LoginScreen 전용이라 여기선 작은 간격으로 오버라이드(§0 화면별 분리).
+  loginBrandTitleRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    gap: 8,
+    marginBottom: 4,
+  },
   /* ── TRIPIS 통합 헤더 = 시안 tripia-onboarding.jsx:35-45 ── */
   tripisHeader: {
     alignItems: "center",
@@ -58,6 +121,17 @@ export const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: Fonts.semiBold,
     marginBottom: Spacing.xs,
+    marginLeft: Spacing.xs,
+  },
+  // 라벨 + "(필수 입력)" 한 줄 = baseline 정렬 행(LoginSheet 생년월일 전용, LoginScreen 무영향).
+  labelRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+  },
+  // "(필수 입력)" = 라벨 같은 줄, 작고 흐리게 = 설명 아닌 필수 마커(사장님 SSOT 2026-07-25 §23). 간격 = marginLeft(공백 하드코딩 아님).
+  labelRequired: {
+    fontSize: 11,
+    fontFamily: Fonts.medium,
     marginLeft: Spacing.xs,
   },
   birthDateHint: {
@@ -135,11 +209,12 @@ export const styles = StyleSheet.create({
     justifyContent: "center",
   },
   emailLoginBtnText: { color: "#FFF", fontSize: 14, fontFamily: Fonts.bold },
+  // ⚠️ 사장님 SSOT 2026-07-25 = 상단 모달에 카카오·구글·이메일이 스크롤 없이 다 보이게 = 버튼 세로여백 lg→md 축소(터치영역 48pt+ 유지). 나머지 화면(LoginScreen 보관)은 자체 스타일이라 무영향.
   socialButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingVertical: Spacing.lg,
+    paddingVertical: Spacing.md,
     borderRadius: BorderRadius.xl,
     gap: Spacing.md,
   },

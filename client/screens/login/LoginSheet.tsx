@@ -1,6 +1,7 @@
-// ⚠️ 사장님 SSOT 2026-07-25 = 로그인 = 별도 화면 아닌 인앱 팝업(SnapSheet). '내손앱'처럼.
+// ⚠️ 사장님 SSOT 2026-07-25(세션2) = 로그인 = 화면 상단에 뜨는 센터 모달(RN Modal). '내손앱'처럼 인앱 팝업이되,
+//   바텀시트(밑에서)는 키보드(밑에서)와 구조적 겹침 → 상단 모달로 교체(키보드 겹침 원천 차단, 조사: 범용앱+NN/G+Material).
 //   기존 LoginScreen(보관)의 폼을 그대로 담되(§16 재사용), 화면이동 대신 팝업 닫기(onDone)로 동작.
-//   로고+슬로건 = "앱 정체성" = 팝업 크기(스냅)에 따라 실시간 리사이즈(방법B): 로고+타이틀 = progress interpolate / 슬로건 = adjustsFontSizeToFit.
+//   상단 = 이미지 로고(png=iOS 미표시 버그) 제거 + "Tripis 트리피스" 글자 유지 + 슬로건 축소(넘침 방지).
 //   곁가지 제외(사장님 "메인앱만") = WhatsApp·BTS·언어선택 미포함. 애플 = 별도 세션.
 import React, { useEffect, useState } from "react";
 import {
@@ -10,79 +11,25 @@ import {
   TextInput,
   ScrollView,
   Platform,
+  Modal,
   useColorScheme,
 } from "react-native";
-import Animated, {
-  useAnimatedStyle,
-  interpolate,
-  Extrapolation,
-  type SharedValue,
-} from "react-native-reanimated";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 
-import SnapSheet from "@/components/SnapSheet";
+import Icon from "@/components/Icon";
 import { Colors, Brand } from "@/constants/theme";
 import { useMapToggle } from "@/contexts/MapToggleContext";
 import { useLogin } from "./hooks/useLogin";
 import { styles } from "./styles";
 
-// ⚠️ 방법B = 팝업 노출 진행도(progress: 0=peek ~ 1=full)에 따라 로고 크기·타이틀 폰트 실시간 리사이즈.
-//   로고: 48~120px(정사각 aspectRatio:1) / 타이틀: 22~38pt. 슬로건은 adjustsFontSizeToFit(성능 안전 하이브리드).
-function ResizableBrand({ progress }: { progress: SharedValue<number> }) {
-  const { t } = useTranslation();
-
-  const logoStyle = useAnimatedStyle(() => {
-    const size = interpolate(
-      progress.value,
-      [0, 1],
-      [48, 120],
-      Extrapolation.CLAMP,
-    );
-    return { width: size, height: size };
-  });
-  const titleStyle = useAnimatedStyle(() => {
-    const fs = interpolate(
-      progress.value,
-      [0, 1],
-      [22, 38],
-      Extrapolation.CLAMP,
-    );
-    return { fontSize: fs, lineHeight: fs };
-  });
-
-  return (
-    <View style={styles.tripisHeader}>
-      <Animated.Image
-        source={require("../../../assets/images/tripis-mark.png")}
-        style={[{ aspectRatio: 1, marginBottom: 16 }, logoStyle]}
-        resizeMode="contain"
-      />
-      <View style={styles.tripisTitleRow}>
-        <Animated.Text style={[styles.tripisTitle, titleStyle]}>
-          Tripis
-        </Animated.Text>
-        <Text style={styles.tripisTitleKo}>트리피스</Text>
-      </View>
-      <Text
-        style={styles.tripisSubtitle}
-        adjustsFontSizeToFit
-        numberOfLines={2}
-        minimumFontScale={0.6}
-      >
-        {t("login.slogan")}
-      </Text>
-    </View>
-  );
-}
-
-// ⚠️ 2026-07-25 = 폼 본문(useLogin 포함)을 별도 컴포넌트로 분리 = SnapSheet 자식은 visible=false면 언마운트(SnapSheet.tsx `if(!visible) return null`).
-//   → 팝업 닫으면 useLogin state(생년월일·이메일·에러) 소멸 = 재열림 시 항상 깨끗(개인정보 잔류·상태 잔류 방지, react-best 지적).
-//   → 닫혀있을 땐 useLogin 의 카카오 웹 code useEffect·useGoogleAuthRequest 도 안 돎 = LoginScreen(보관)과의 카카오 code 이중소비 위험 제거.
+// ⚠️ 폼 본문(useLogin 포함) = Modal 자식 = visible=false면 언마운트 → 재열림 시 useLogin state(생년월일·이메일·에러) 소멸 = 항상 깨끗(개인정보·상태 잔류 방지).
+//   닫혀있을 땐 useLogin의 카카오 웹 code useEffect·useGoogleAuthRequest도 안 돎 = LoginScreen(보관)과 카카오 code 이중소비 위험 제거.
 function LoginSheetForm({ onClose }: { onClose: () => void }) {
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? "light"];
 
-  // 로그인 성공/게스트 = 팝업만 닫음(배경 화면 유지, 화면 이동 X). 인증 지속은 saveAuth 가 이미 처리(§16).
+  // 로그인 성공 = 팝업만 닫음(배경 화면 유지, 화면 이동 X). 인증 지속은 saveAuth가 이미 처리(§16). onClose = 닫기 + bumpAuthChanged(부모).
   const login = useLogin({ onDone: onClose });
   const {
     t,
@@ -111,18 +58,30 @@ function LoginSheetForm({ onClose }: { onClose: () => void }) {
 
   return (
     <ScrollView
-      contentContainerStyle={styles.content}
+      contentContainerStyle={styles.loginCardBody}
       showsVerticalScrollIndicator={false}
       keyboardShouldPersistTaps="handled"
     >
-      {/* ── 생년월일 (소셜 로그인 필수) ── 사장님 SSOT 2026-07-25 = 팝업 노출 = 로고+슬로건+생년월일+구글+카톡+이메일만. 언어선택·게스트·약관 제외. */}
+      {/* ── 브랜드(이미지 로고 제거, Tripis 글자 + 슬로건 축소) ── 상단존 최소화(사장님 확정). */}
+      {/* ⚠️ 사장님 SSOT 2026-07-25 = 슬로건 제거 = 상단존 최소화 → 하단 인증(카카오/구글/이메일)이 한눈에 보이게. Tripis 글자만 유지. */}
+      <View style={styles.loginBrand}>
+        <View style={styles.loginBrandTitleRow}>
+          <Text style={styles.tripisTitle}>Tripis</Text>
+          <Text style={styles.tripisTitleKo}>트리피스</Text>
+        </View>
+      </View>
+
+      {/* ── 생년월일 (소셜 로그인 필수) ── 사장님 SSOT = 팝업 노출 = 로고글자+생년월일+구글+카톡+이메일. */}
       <View style={styles.formSection}>
-        <Text style={[styles.label, { color: theme.textSecondary }]}>
-          {t("login.birthDate")}
-        </Text>
-        <Text style={[styles.birthDateHint, { color: theme.textTertiary }]}>
-          {t("login.birthDateHint")}
-        </Text>
+        {/* ⚠️ 사장님 SSOT 2026-07-25 = 힌트("실제 생년월일…") 설명문 제거(§23) + "(필수 입력)"을 라벨 같은 줄에 작게 = 사용자가 필수임을 즉시 인식(설명 아닌 마커). 행(baseline)+간격 style = RN 크로스플랫폼 정석(공백 하드코딩 아님). */}
+        <View style={styles.labelRow}>
+          <Text style={[styles.label, { color: theme.textSecondary }]}>
+            {t("login.birthDate")}
+          </Text>
+          <Text style={[styles.labelRequired, { color: theme.textTertiary }]}>
+            {t("login.required")}
+          </Text>
+        </View>
         <View style={styles.dateInputRow}>
           <View
             style={[
@@ -267,11 +226,8 @@ function LoginSheetForm({ onClose }: { onClose: () => void }) {
           </Text>
         </Pressable>
 
-        {/* ⚠️ 개발단계 이메일 로그인(유지) = 사장님 실제 메일로 admin 인식. 구글 OAuth 웹 400 우회. */}
+        {/* ⚠️ 이메일 로그인 = 구글(지메일)로 로그인 못 하는 사용자가 다른 이메일로 시작하는 정식 경로. 설명 라벨 없이 입력창만 = 사용자가 순서대로 진행(§23 설명형 텍스트 금지, 사장님 SSOT 2026-07-25). */}
         <View style={styles.emailLoginBox}>
-          <Text style={[styles.emailLoginLabel, { color: theme.textTertiary }]}>
-            {t("login.emailDevLabel")}
-          </Text>
           <View style={styles.emailLoginRow}>
             <TextInput
               style={[
@@ -289,6 +245,8 @@ function LoginSheetForm({ onClose }: { onClose: () => void }) {
               autoCapitalize="none"
               keyboardType="email-address"
               editable={!emailLoading}
+              returnKeyType="done"
+              onSubmitEditing={handleEmailLogin}
             />
             <Pressable
               style={({ pressed }) => [
@@ -322,10 +280,15 @@ function LoginSheetForm({ onClose }: { onClose: () => void }) {
   );
 }
 
-// 바깥 껍데기 = 신호 수신 + visible 관리 + SnapSheet. 폼(LoginSheetForm)은 visible 일 때만 마운트(위 주석 참조).
+// 바깥 껍데기 = 신호 수신 + visible 관리 + 상단 고정 센터 모달(RN Modal).
+//   상단 정렬(flex-start) + dim(여정 흐리게=맥락 유지). 카드가 화면 위쪽(키보드 위)에 고정 = 키보드(하단)와 안 겹침 → KAV 불필요.
 export default function LoginSheet() {
-  const { loginRequestedAt, clearLoginRequest } = useMapToggle();
+  const { loginRequestedAt, clearLoginRequest, bumpAuthChanged } =
+    useMapToggle();
   const { t } = useTranslation();
+  const insets = useSafeAreaInsets();
+  const colorScheme = useColorScheme();
+  const theme = Colors[colorScheme ?? "light"];
   const [visible, setVisible] = useState(false);
 
   // loginRequestedAt 신호 수신 → 팝업 열기(AI의견·전문가 오버레이와 동일 패턴). 소비 후 clear(다음 요청 재실행 보장).
@@ -335,18 +298,52 @@ export default function LoginSheet() {
     clearLoginRequest();
   }, [loginRequestedAt, clearLoginRequest]);
 
+  // 닫기(성공/취소 공통) = 팝업 닫고 인증변경 신호(§0 단일경로). 프로필 등이 재조회해 로그인 후 즉시 반영(문제3).
+  const handleClose = () => {
+    setVisible(false);
+    bumpAuthChanged();
+  };
+
   return (
-    <SnapSheet
+    <Modal
       visible={visible}
-      onClose={() => setVisible(false)}
-      title={t("login.title")}
-      fullRatio={0.92}
-      initialSnap="full"
-      renderTitleAccessory={(progress) => (
-        <ResizableBrand progress={progress} />
-      )}
+      transparent
+      animationType="fade"
+      onRequestClose={handleClose}
+      statusBarTranslucent
     >
-      <LoginSheetForm onClose={() => setVisible(false)} />
-    </SnapSheet>
+      {/* ⚠️ 사장님 SSOT 2026-07-25 = 상단 고정 = 카드를 화면 위쪽(maxHeight 60%)에 둠 → 키보드(하단 ~40%)와 물리적으로 안 겹침.
+          슬로건·힌트 제거 + 버튼여백 축소로 콘텐츠 슬림화 = 카카오/구글/이메일까지 스크롤 없이 한눈에(사장님 SSOT). KAV 불필요(카드가 키보드 위). */}
+      <View style={styles.loginOverlay}>
+        {/* dim 배경 탭 = 닫기. 뒤 여정 흐리게 보임 = 맥락 유지. */}
+        <Pressable style={styles.loginBackdrop} onPress={handleClose} />
+        {/* 카드 = 화면 상단(safe-area 아래). 위 절반 고정 = 키보드와 물리적 분리. */}
+        <View
+          style={[
+            styles.loginCard,
+            {
+              backgroundColor: theme.backgroundRoot,
+              marginTop: insets.top + 12,
+            },
+          ]}
+        >
+          <View style={styles.loginCardHeader}>
+            <Text style={[styles.loginCardTitle, { color: theme.text }]}>
+              {t("login.title")}
+            </Text>
+            <Pressable
+              onPress={handleClose}
+              style={styles.loginCloseBtn}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel={t("common.close")}
+            >
+              <Icon name="x" size={24} color={theme.text} />
+            </Pressable>
+          </View>
+          <LoginSheetForm onClose={handleClose} />
+        </View>
+      </View>
+    </Modal>
   );
 }

@@ -1,5 +1,5 @@
 // 프로필 화면 핵심 훅 = 상태·효과·핸들러 = ProfileScreen 분리(2026-07-15 §0 슬림화, 순수 이동)
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useColorScheme } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -8,6 +8,7 @@ import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
 import { Colors } from "@/constants/theme";
+import { useMapToggle } from "@/contexts/MapToggleContext";
 import { apiRequest } from "@/lib/query-client";
 import {
   getUserData,
@@ -40,44 +41,57 @@ export function useProfile() {
   const [user, setUser] = useState<UserData | null>(null);
   const [isAuth, setIsAuth] = useState(false);
   const [showLanguageModal, setShowLanguageModal] = useState(false);
+  // ⚠️ 2026-07-25(세션2) = 로그인 팝업(모달)은 navigation focus를 안 바꿔 useFocusEffect가 재실행 안 됨 → 로그인 성공해도 프로필이 미인증으로 남던 버그. authChangedAt 신호를 구독해 재조회.
+  const { authChangedAt } = useMapToggle();
 
-  // ⚠️ 사장님 SSOT 2026-07-14 = 프로필 진입마다 저장여정 목록 refetch (useFocusEffect). 조회 user_id = 로그인 본인(userData.id) = 저장(POST가 본인ID로 저장)과 한 쌍(§19). 옛 'admin' 고정 폐기(§9 잔재).
+  // 언마운트 후 setState 방지 = 두 트리거(focus·authChangedAt) 겹침·비동기 지연 대비 단일 가드(§16 = cancelled 플래그 2벌 대신 1벌).
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  // ⚠️ 사장님 SSOT 2026-07-14 = 저장여정 목록 refetch. 조회 user_id = 로그인 본인(userData.id) = 저장(POST가 본인ID로 저장)과 한 쌍(§19). 옛 'admin' 고정 폐기(§9 잔재).
+  //   ⚠️ 2026-07-25 = loadData를 useCallback으로 추출(§16 중복 제거) = useFocusEffect(탭 진입)와 authChangedAt(로그인 팝업 성공) 양쪽에서 재사용.
+  const loadData = useCallback(async () => {
+    try {
+      const authenticated = await isAuthenticated();
+      if (!mountedRef.current) return;
+      setIsAuth(authenticated);
+      if (authenticated) {
+        const userData = await getUserData();
+        const response = await apiRequest(
+          "GET",
+          `/api/users/${encodeURIComponent(userData?.id || "admin")}/itineraries`,
+        );
+        const trips = await response.json();
+        if (!mountedRef.current) return;
+        setUser(userData);
+        setSavedTrips(trips || []);
+      } else {
+        setUser(null);
+        setSavedTrips([]);
+      }
+    } catch (error) {
+      console.error("[Profile] 로드 오류:", error);
+    } finally {
+      if (mountedRef.current) setIsLoadingTrips(false);
+    }
+  }, []);
+
+  // 탭 진입마다 재조회(기존).
   useFocusEffect(
     useCallback(() => {
-      let cancelled = false;
-      const loadData = async () => {
-        try {
-          const authenticated = await isAuthenticated();
-          if (cancelled) return;
-          setIsAuth(authenticated);
-
-          if (authenticated) {
-            const userData = await getUserData();
-            if (cancelled) return;
-            setUser(userData);
-
-            const response = await apiRequest(
-              "GET",
-              `/api/users/${encodeURIComponent(userData?.id || "admin")}/itineraries`,
-            );
-            const trips = await response.json();
-            if (cancelled) return;
-            setSavedTrips(trips || []);
-          } else {
-            setSavedTrips([]);
-          }
-        } catch (error) {
-          console.error("[Profile] 로드 오류:", error);
-        } finally {
-          if (!cancelled) setIsLoadingTrips(false);
-        }
-      };
       loadData();
-      return () => {
-        cancelled = true;
-      };
-    }, []),
+    }, [loadData]),
   );
+  // 로그인 팝업(모달) 성공 등 인증상태 변경 시 재조회(세션2 = focus 안 바뀌어도 즉시 반영).
+  useEffect(() => {
+    if (!authChangedAt) return;
+    loadData();
+  }, [authChangedAt, loadData]);
 
   // ⚠️ 2026-07-03 사장님 SSOT = 카드 우측 상단 X = 확인 팝업 없이 즉시 삭제(범용 홈페이지 닫기 버튼처럼). 목록에서 바로 제거(낙관적) + 서버 DELETE. 실패 시 그 항목만 복원.
   const handleDeleteTrip = async (id: number) => {
