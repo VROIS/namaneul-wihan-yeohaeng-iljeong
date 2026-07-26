@@ -9,10 +9,10 @@ on:
   push:
     branches: [main]
     paths-ignore:
-      - '**.md'
-      - 'docs/**'
-      - '.github/**'
-      - 'scripts/**'  # ⚠️ 수정금지(승인필요) — 2026-04-27 사용자 승인. 백엔드 cron/시드 스크립트 = 앱 JS 번들 무관 = 불필요한 EAS Update 트리거 차단
+      - "**.md"
+      - "docs/**"
+      - ".github/**"
+      - "scripts/**" # ⚠️ 수정금지(승인필요) — 2026-04-27 사용자 승인. 백엔드 cron/시드 스크립트 = 앱 JS 번들 무관 = 불필요한 EAS Update 트리거 차단
   # 2026-04-21 추가: 수동 실행 지원 (지난 실패 복구용)
   workflow_dispatch:
 
@@ -30,6 +30,27 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      # ⚠️ 2026-07-26 신설 — 소셜로그인 열쇠 사전 검사(APK 워크플로와 동일 가드).
+      # OTA 는 이미 설치된 폰에 JS 를 내려보내는 경로 = 열쇠가 비면 "조용히" 빈 키가 배포됨.
+      # 그래서 여기서도 크게 실패시킴(§0 = 조용한 실패 금지).
+      - name: 소셜로그인 열쇠 확인 (없으면 중단)
+        env:
+          G: ${{ secrets.EXPO_PUBLIC_GOOGLE_CLIENT_ID }}
+          KNATIVE: ${{ secrets.EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY }}
+        run: |
+          # eas update 는 iOS·Android 번들만 만듦 = 앱이 실제로 쓰는 열쇠 2개만 검사.
+          # 카카오 JS키는 웹 전용 → 여기서 요구하면 그 키가 없을 때 로그인과 무관한 수정까지
+          # OTA 배포가 전부 막힘(§22 검증 지적). APK 워크플로와 검사 목록 동일하게 통일.
+          MISSING=""
+          [ -z "$G" ] && MISSING="$MISSING EXPO_PUBLIC_GOOGLE_CLIENT_ID"
+          [ -z "$KNATIVE" ] && MISSING="$MISSING EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY"
+          if [ -n "$MISSING" ]; then
+            echo "❌ GitHub Secrets 에 없는 열쇠:$MISSING"
+            echo "   등록 위치 = repo Settings > Secrets and variables > Actions"
+            exit 1
+          fi
+          echo "✅ 앱 로그인 열쇠 2종 확인"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -53,6 +74,12 @@ jobs:
         env:
           COMMIT_MSG: ${{ github.event.head_commit.message }}
           EXPO_PUBLIC_DOMAIN: ${{ secrets.EXPO_PUBLIC_DOMAIN }}
+          # ⚠️ 2026-07-26 §22 승인 추가 — 소셜로그인 열쇠. OTA 번들도 빌드타임 인라인이라
+          #   여기서 안 넘기면 폰에 내려가는 JS 에 키가 빈칸으로 박힘(= 로그인 불가).
+          EXPO_PUBLIC_GOOGLE_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_CLIENT_ID }}
+          EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID }}
+          EXPO_PUBLIC_KAKAO_JAVASCRIPT_KEY: ${{ secrets.EXPO_PUBLIC_KAKAO_JAVASCRIPT_KEY }}
+          EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY: ${{ secrets.EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY }}
         run: |
           SAFE_MSG=$(printf '%s' "$COMMIT_MSG" | head -n 1 | tr -d '"')
           if [ -z "$SAFE_MSG" ]; then

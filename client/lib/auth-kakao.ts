@@ -1,10 +1,15 @@
 /**
- * 카카오 OAuth 로그인 (웹 플랫폼)
- * @react-native-kakao/core (SDK 초기화) + @react-native-kakao/user (login) 사용
+ * 카카오 OAuth 로그인
+ * - 웹 = Kakao.Auth.authorize 리다이렉트 → code → accessToken (운영 작동 중, §2 무변경)
+ * - 앱(iOS·Android) = @react-native-kakao/user login() → accessToken (2026-07-26 신설)
+ * 둘 다 최종 산출물이 accessToken 이라 서버(/api/auth/kakao)는 무변경.
  */
 import { Platform } from "react-native";
 import { initializeKakaoSDK } from "@react-native-kakao/core";
-import { issueAccessTokenWithCodeWeb } from "@react-native-kakao/user";
+import {
+  issueAccessTokenWithCodeWeb,
+  login as kakaoNativeLogin,
+} from "@react-native-kakao/user";
 import { getApiUrl } from "./query-client";
 
 const KAKAO_JS_KEY = process.env.EXPO_PUBLIC_KAKAO_JAVASCRIPT_KEY || "";
@@ -12,11 +17,16 @@ const KAKAO_REST_KEY =
   process.env.EXPO_PUBLIC_KAKAO_REST_API_KEY ||
   process.env.KAKAO_REST_API_KEY ||
   "";
+// ⚠️ 앱 전용 = 카카오 콘솔 "네이티브 앱 키". plugins/withKakaoNative.js(빌드설정)와 같은 환경변수를 읽음 = 값 1벌(§0).
+const KAKAO_NATIVE_APP_KEY = process.env.EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY || "";
 
 const KAKAO_CALLBACK_STORAGE_KEY = "@nubi_kakao_birthDate";
 
 export function isKakaoOAuthConfigured(): boolean {
-  return !!(KAKAO_JS_KEY && KAKAO_REST_KEY);
+  // 웹 = JS키(로그인 시작) + REST키(code→accessToken 교환) / 앱 = 네이티브 앱 키 1개
+  return Platform.OS === "web"
+    ? !!(KAKAO_JS_KEY && KAKAO_REST_KEY)
+    : !!KAKAO_NATIVE_APP_KEY;
 }
 
 /** 웹 리다이렉트 URI (카카오 콘솔에 등록된 값과 동일해야 함) */
@@ -70,6 +80,26 @@ export async function ensureKakaoSDKInitialized(): Promise<boolean> {
     console.warn("[Kakao] SDK init failed:", e);
     return false;
   }
+}
+
+/**
+ * 앱(iOS·Android) 카카오 로그인 → accessToken 반환.
+ * 카카오톡이 깔려 있으면 카카오톡으로, 없으면 카카오계정 화면으로 자동 진행(SDK 담당).
+ * 반환한 accessToken 은 웹과 똑같이 서버 /api/auth/kakao 로 보냄 = 서버 무변경.
+ */
+export async function loginKakaoNative(): Promise<string> {
+  if (!KAKAO_NATIVE_APP_KEY) {
+    throw new Error("카카오 네이티브 앱 키가 설정되지 않았습니다.");
+  }
+  if (!sdkInitialized) {
+    await initializeKakaoSDK(KAKAO_NATIVE_APP_KEY);
+    sdkInitialized = true;
+  }
+  const token = await kakaoNativeLogin();
+  if (!token?.accessToken) {
+    throw new Error("카카오에서 인증 정보를 받지 못했습니다.");
+  }
+  return token.accessToken;
 }
 
 /**

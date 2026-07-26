@@ -32,11 +32,12 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
 import * as Haptics from "expo-haptics";
 import { socialLoginWithGoogle, socialLoginWithKakao } from "@/lib/auth";
+import { getIdTokenFromGoogleResponse } from "@/lib/auth-oauth";
+// 구글 = 웹(auth-google.web.ts) / 앱(auth-google.ts) 자동 선택 (2026-07-26 분리)
 import {
   useGoogleAuthRequest,
-  getIdTokenFromGoogleResponse,
   isGoogleOAuthConfigured,
-} from "@/lib/auth-oauth";
+} from "@/lib/auth-google";
 import { isKakaoOAuthConfigured, startKakaoLoginWeb } from "@/lib/auth-kakao";
 import { getApiUrl } from "@/lib/query-client";
 
@@ -132,7 +133,6 @@ export function BTSLandingScreen() {
       return;
     if (processedGoogleRef.current === googleResponse) return;
     processedGoogleRef.current = googleResponse;
-    // @ts-expect-error Type mismatch from AuthSession
     const idToken = getIdTokenFromGoogleResponse(googleResponse);
     if (!idToken) return;
     setOauthLoading(true);

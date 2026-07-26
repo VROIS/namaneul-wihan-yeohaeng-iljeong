@@ -65,14 +65,19 @@ export async function clearAuth(): Promise<void> {
 
 // ⚠️ 사장님 SSOT 2026-07-14 = 개발단계 이메일 로그인 = 구글 OAuth(웹 400) 우회. 메일만 넣으면 그 계정으로 로그인(사장님 메일=admin).
 //   ⚠️ 임시(개발용) = 로그인 정식화 때 폐기 §19. 기존 saveAuth·UserData 재사용(§16).
-export async function emailLogin(
-  email: string,
-): Promise<{ success: boolean; user?: UserData; error?: string }> {
+// ⚠️ 사장님 SSOT 2026-07-26 = 이메일 = 지메일 아닌 메일로 하는 정식 인증.
+//   생년월일은 인증 조건이 아니라 "우리가 저장할 값"으로 함께 보냄(소셜 2종과 동일 구조).
+export async function emailLogin(data: {
+  email: string;
+  birthDate: string;
+  language: string;
+  deviceType: string;
+}): Promise<{ success: boolean; user?: UserData; error?: string }> {
   try {
     const response = await fetch(`${getApiUrl()}/api/auth/email-login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email }),
+      body: JSON.stringify(data),
     });
     const result = await response.json();
     if (response.ok && result.success) {
@@ -89,32 +94,8 @@ export async function emailLogin(
   }
 }
 
-export async function socialLogin(data: {
-  provider: "kakao" | "google" | "whatsapp";
-  providerId?: string;
-  birthDate: string;
-  language: string;
-  deviceType: string;
-  displayName?: string;
-}): Promise<{ success: boolean; user?: UserData; error?: string }> {
-  try {
-    const response = await fetch(`${getApiUrl()}/api/auth/social-login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    const result = await response.json();
-    if (response.ok && result.success) {
-      const userData: UserData = { ...result.user, token: result.token };
-      await saveAuth(userData);
-      return { success: true, user: userData };
-    }
-    return { success: false, error: result.error || "로그인 실패" };
-  } catch (error) {
-    console.error("Social login error:", error);
-    return { success: false, error: "서버 연결 실패" };
-  }
-}
+// ⚠️ 수정금지(승인필요) — 옛 socialLogin(/api/auth/social-login) 완전삭제 = 2026-07-26 §0·§19.
+//   사유: 진짜 외부인증 없이 로그인시키던 우회로. 소셜 로그인 = 아래 2개(구글·카카오)가 유일.
 
 /** Google OAuth 성공 후 id_token으로 로그인 */
 export async function socialLoginWithGoogle(data: {

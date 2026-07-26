@@ -14,6 +14,34 @@ const GOOGLE_DEFAULT_NAME = "Google User";
 const SOCIAL_DEFAULT_NAMES = new Set([KAKAO_DEFAULT_NAME, GOOGLE_DEFAULT_NAME]);
 
 /**
+ * ⚠️ 수정금지(승인필요) — 로그인 성공 시 기존 계정에 반영하는 단 하나의 함수 (2026-07-26 §16 1벌).
+ *   사장님 SSOT: 이메일도 "지메일이 아닌 다른 메일로 하는 정식 인증" = 소셜과 동일 취급 =
+ *   생년월일 저장·로그인 기록 갱신을 우회하면 안 됨. 그래서 소셜(findOrCreateUser)·이메일이 이 함수 1벌을 공유.
+ *   - birthDate = 이번 로그인에서 온 값이 있으면 갱신, 없으면 기존값 유지(파괴 금지).
+ *   - displayName = 진짜 이름일 때만 덮음("카카오 사용자"/"Google User" 기본문구로는 안 덮음 = 좋은 이름 보존).
+ */
+async function applyLogin(
+  user: User,
+  opts: {
+    birthDate?: string;
+    language?: string;
+    deviceType?: string;
+    displayName?: string;
+  },
+): Promise<User> {
+  const isRealName =
+    !!opts.displayName && !SOCIAL_DEFAULT_NAMES.has(opts.displayName);
+  return (await storage.updateUserLogin(user.id, {
+    lastLoginAt: new Date(),
+    loginCount: (user.loginCount || 0) + 1,
+    deviceType: opts.deviceType,
+    preferredLanguage: opts.language || user.preferredLanguage,
+    birthDate: opts.birthDate || user.birthDate,
+    ...(isRealName ? { displayName: opts.displayName } : {}),
+  }))!;
+}
+
+/**
  * 사용자 조회/생성 = ⚠️ 사장님 SSOT 2026-07-25 = **오직 provider+providerId(소셜 인증 신원)로만** 기존 계정 매칭.
  *   birthDate 는 매칭 키가 아니라 신규 생성 시 저장·성인확인용. "2가지(생년월일+소셜인증) 다 충족" = 소셜 신원이 일치하는 그 사람일 때만 기존 계정.
  *   ⚠️ 옛 2단계(birthDate 단독 매칭 → provider 연결) 완전삭제 §19 = 근본버그(남이 같은 생년월일 넣으면 남 계정에 붙음)의 원인. birthDate=비번대체지만 "매칭 단독키"로는 절대 안 씀.
@@ -30,21 +58,9 @@ async function findOrCreateUser(params: {
     params;
 
   // 1) provider+providerId(소셜 인증 신원)로만 조회 = 그 사람일 때만 기존 계정 매칭.
-  let user = await storage.getUserByProvider(provider, providerId);
-  if (user) {
-    // ⚠️ 사장님 SSOT 2026-07-26 = 재로그인 시 displayName(닉네임) 갱신 = 옛 계정이 "카카오 사용자"/"Google User" 기본문구로 고정되던 것 해소.
-    //   단 이번 로그인이 진짜 닉네임을 줬을 때만 덮음(기본문구 fallback 으로는 덮지 않음 = 좋은 이름 보존). 동의항목 닉네임 켜진 뒤 재로그인하면 진짜 이름으로 교체됨.
-    const isRealName = !!displayName && !SOCIAL_DEFAULT_NAMES.has(displayName);
-    user = (await storage.updateUserLogin(user.id, {
-      lastLoginAt: new Date(),
-      loginCount: (user.loginCount || 0) + 1,
-      deviceType,
-      preferredLanguage: language || user.preferredLanguage,
-      birthDate: birthDate || user.birthDate,
-      ...(isRealName ? { displayName } : {}),
-    }))!;
-    return user;
-  }
+  const user = await storage.getUserByProvider(provider, providerId);
+  if (user)
+    return applyLogin(user, { birthDate, language, deviceType, displayName });
 
   // 2) 신규 사용자 생성 (birthDate = 저장·성인확인용으로만 사용, 매칭 키 아님).
   const username = `${provider}_${providerId.substring(0, 12)}_${Math.random().toString(36).substring(2, 6)}`;
@@ -272,47 +288,10 @@ export function registerAuthRoutes(app: Express) {
     }
   });
 
-  // 소셜 로그인 / 회원가입 통합 엔드포인트
-  app.post("/api/auth/social-login", async (req, res) => {
-    try {
-      const {
-        provider,
-        providerId,
-        birthDate,
-        language,
-        deviceType,
-        displayName,
-      } = req.body;
-
-      // ⚠️ 사장님 SSOT 2026-07-25 = providerId(소셜 인증 신원) 필수. 옛 `temp_{provider}_{birthDate}` fallback 완전삭제 §19
-      //   = 그 fallback 은 매칭 키를 (provider+생년월일)로 만들어 = 같은 생년월일인 남 계정에 붙는 버그(findOrCreateUser birthDate 매칭 삭제와 동일 클래스)를 이 경로로 되살렸음.
-      //   providerId 없음 = 진짜 소셜 인증이 안 된 것 = 차단(신규도 남 계정 붙이기도 안 함). "2가지 다 충족(생년월일+소셜신원)일 때만" 원칙.
-      if (!provider || !birthDate || !providerId) {
-        return res.status(400).json({
-          error: "provider, providerId, birthDate are all required",
-        });
-      }
-
-      const user = await findOrCreateUser({
-        provider,
-        providerId,
-        birthDate,
-        displayName: displayName || `${provider} User`,
-        language,
-        deviceType,
-      });
-
-      // 4. 응답 (실제 운영 환경에선 JWT 토큰 생성 후 반환)
-      res.json({
-        success: true,
-        user: toClientUser(user),
-        token: "simple_auth_token_v1_" + user.id, // 임시 토큰
-      });
-    } catch (error: any) {
-      console.error("[Auth] Social Login Error:", error);
-      res.status(500).json({ error: "Failed to process social login" });
-    }
-  });
+  // ⚠️ 수정금지(승인필요) — 옛 `/api/auth/social-login` 우회 경로 완전삭제 = 2026-07-26 §0·§19.
+  //   사유: 진짜 외부인증(구글 idToken·카카오 accessToken) 없이 로그인시키던 우회로.
+  //   앱 번들에 키가 안 박혀 있으면 이 경로로 빠져 400 을 뱉는 것이 "앱에서 인증창도 안 뜬다"의 근본.
+  //   소셜 로그인 = `/api/auth/google` · `/api/auth/kakao` 2개가 유일한 경로.
 
   // 내 정보 조회
   app.get("/api/auth/me", async (req, res) => {
@@ -373,18 +352,21 @@ export function registerAuthRoutes(app: Express) {
   //   ⚠️ 임시(개발용) = 로그인 정식화(프로필 리팩토링) 때 구글 OAuth 정상화하면 폐기 §19. 비번 없음 = 개발단계 한정.
   app.post("/api/auth/email-login", async (req, res) => {
     try {
-      const { email } = req.body;
+      const { email, birthDate, language, deviceType } = req.body;
       if (!email || typeof email !== "string" || !email.includes("@")) {
         return res
           .status(400)
           .json({ success: false, error: "email_required" });
       }
-      const user = await storage.getUserByEmail(email);
-      if (!user) {
+      const found = await storage.getUserByEmail(email);
+      if (!found) {
         return res
           .status(404)
           .json({ success: false, error: "email_not_found" });
       }
+      // ⚠️ 사장님 SSOT 2026-07-26 = 이메일도 정식 인증(지메일 아닌 메일용) = 소셜과 동일하게
+      //   생년월일 저장 + 로그인 기록 갱신. 옛 "조회만 하고 아무것도 안 남김" = 생년월일 우회 = 폐기 §19.
+      const user = await applyLogin(found, { birthDate, language, deviceType });
       res.json({
         success: true,
         user: toClientUser(user),

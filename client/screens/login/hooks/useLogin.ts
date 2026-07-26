@@ -15,7 +15,6 @@ import {
   calculateAge,
   getAgeGroup,
   saveAuth,
-  socialLogin,
   socialLoginWithGoogle,
   socialLoginWithKakao,
   whatsappOtpSend,
@@ -23,14 +22,20 @@ import {
   emailLogin,
 } from "@/lib/auth";
 import {
-  useGoogleAuthRequest,
-  isGoogleOAuthConfigured,
   isWhatsAppOtpConfigured,
   getIdTokenFromGoogleResponse,
+  isUserCancelled,
 } from "@/lib/auth-oauth";
+// 구글 = 웹(auth-google.web.ts, 리다이렉트) / 앱(auth-google.ts, 네이티브 SDK) 자동 선택
+import {
+  useGoogleAuthRequest,
+  signInWithGoogle,
+  isGoogleOAuthConfigured,
+} from "@/lib/auth-google";
 import {
   isKakaoOAuthConfigured,
   startKakaoLoginWeb,
+  loginKakaoNative,
   exchangeKakaoCodeForToken,
   getKakaoCallbackData,
 } from "@/lib/auth-kakao";
@@ -61,8 +66,8 @@ export function useLogin({ onDone }: { onDone: () => void }) {
   const monthRef = useRef<TextInput>(null);
   const yearRef = useRef<TextInput>(null);
 
-  const [googleRequest, googleResponse, googlePromptAsync] =
-    useGoogleAuthRequest();
+  // 첫 칸(요청 객체)은 안 씀 = 생략(§19)
+  const [, googleResponse, googlePromptAsync] = useGoogleAuthRequest();
   const processedGoogleRef = useRef<typeof googleResponse>(null);
   const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
   const [whatsappPhone, setWhatsappPhone] = useState("");
@@ -97,14 +102,24 @@ export function useLogin({ onDone }: { onDone: () => void }) {
   const isAdult = age !== null && age >= 18;
   const isDateComplete =
     day.length === 2 && month.length === 2 && year.length === 4;
-  const birthDateStr = birthDate ? birthDate.toISOString().split("T")[0] : null;
+  // ⚠️ 수정금지(승인필요) — 생년월일 = 사용자가 친 년·월·일 칸을 그대로 조립 = 시간대 변환 0 = 어느 나라에서든 입력값 = 저장값.
+  //   UTC 변환 방식 폐기 = 2026-07-26 §19 (한국·유럽 등 UTC 보다 앞선 곳에서 하루 앞날짜로 저장되던 실측 버그).
+  const birthDateStr = birthDate ? `${year}-${month}-${day}` : null;
+
+  // ⚠️ 2026-07-14 = 웹(WebView)에서 Alert.alert 이 안 떠서 로그인 실패·검증 안내가 안 보임 = "눌러도 반응 없음"의 원인. 웹 = window.alert, 앱 = Alert.alert(§19).
+  //   2026-07-26(§22 리뷰) = "로그인 실패" 안내를 여기 1벌로 통일(§16).
+  //   (생년월일 게이트·WhatsApp 의 Alert.alert 은 그대로 = 생년월일은 인라인 빨간 문구가 웹에서도 보이고, WhatsApp 은 비활성)
+  const notify = (msg: string) => {
+    if (Platform.OS === "web") {
+      if (typeof window !== "undefined") window.alert(msg);
+    } else Alert.alert(msg);
+  };
 
   useEffect(() => {
     if (!googleResponse || googleResponse.type !== "success" || !birthDateStr)
       return;
     if (processedGoogleRef.current === googleResponse) return;
     processedGoogleRef.current = googleResponse;
-    // @ts-expect-error Type mismatch from AuthSession
     const idToken = getIdTokenFromGoogleResponse(googleResponse);
     if (!idToken) return;
     setOauthLoading(true);
@@ -118,15 +133,13 @@ export function useLogin({ onDone }: { onDone: () => void }) {
         if (result.success) {
           onDone(); // 성공 = 호출자 결정(화면 리셋 or 팝업 닫기). §0 단일경로.
         } else {
-          Alert.alert(
-            "로그인 실패",
-            result.error || "Google 로그인에 실패했습니다.",
-          );
+          // ⚠️ 2026-07-26 = 웹에서는 Alert.alert 이 안 뜸(§22 리뷰) → notify 로 통일(§16 1벌)
+          notify(result.error || t("login.loginFailed"));
         }
       })
       .catch((err) => {
-        console.error("Google login error:", err);
-        Alert.alert(t("login.loginFailed"), t("login.loginFailed"));
+        console.error("[Auth] 웹 구글 로그인 실패:", err);
+        notify(t("login.loginFailed"));
       })
       .finally(() => setOauthLoading(false));
   }, [googleResponse, birthDateStr, i18n.language, onDone]);
@@ -143,7 +156,7 @@ export function useLogin({ onDone }: { onDone: () => void }) {
     const birthDate = callbackData?.birthDate;
     const language = callbackData?.language || i18n.language;
     if (!birthDate) {
-      Alert.alert(t("login.loginFailed"), t("login.loginFailed"));
+      notify(t("login.loginFailed"));
       if (typeof window !== "undefined" && window.history) {
         window.history.replaceState({}, "", window.location.pathname);
       }
@@ -167,15 +180,12 @@ export function useLogin({ onDone }: { onDone: () => void }) {
         if (result.success) {
           onDone(); // 성공 = 호출자 결정. §0 단일경로.
         } else {
-          Alert.alert(
-            t("login.loginFailed"),
-            result.error || t("login.loginFailed"),
-          );
+          notify(result.error || t("login.loginFailed"));
         }
       })
       .catch((err) => {
-        console.error("Kakao login error:", err);
-        Alert.alert("로그인 실패", "카카오 로그인 중 오류가 발생했습니다.");
+        console.error("[Auth] 웹 카카오 로그인 실패:", err);
+        notify(t("login.loginFailed"));
       })
       .finally(() => setOauthLoading(false));
   }, [i18n.language, onDone]);
@@ -239,41 +249,54 @@ export function useLogin({ onDone }: { onDone: () => void }) {
     return true;
   };
 
-  const handleSocialLogin = async (
-    provider: "kakao" | "google" | "whatsapp",
+  // ⚠️ 사장님 SSOT 2026-07-26 = 앱(iOS·Android) 소셜 로그인 공통 마무리(§16 1벌).
+  //   외부인증에서 표(구글 id_token / 카카오 accessToken)를 받은 뒤 → 우리 서버 로그인 → 성공하면 onDone().
+  //   생년월일은 인증 요청이 아니라 "우리 저장분"으로만 함께 감(생년월일-인증 분리, 세션2-D).
+  //   run() 이 null 을 주면 = 사용자가 로그인 창을 닫은 것(취소) = 실패 아님 = 조용히 종료.
+  const runNativeSocialLogin = async (
+    run: () => Promise<{ success: boolean; error?: string } | null>,
   ) => {
-    if (!requireBirthDateAndAdult()) return;
-
-    const result = await socialLogin({
-      provider,
-      birthDate: birthDate!.toISOString().split("T")[0],
-      language: i18n.language,
-      deviceType: Platform.OS,
-      displayName:
-        provider === "kakao"
-          ? "카카오 사용자"
-          : provider === "whatsapp"
-            ? "WhatsApp User"
-            : "Google User",
-    });
-
-    if (result.success && result.user) {
-      onDone(); // 성공 = 호출자 결정. §0 단일경로.
-    } else {
-      Alert.alert(
-        t("login.loginFailed"),
-        result.error || t("login.loginFailed"),
-      );
+    setOauthLoading(true);
+    try {
+      const result = await run();
+      if (!result) return; // 취소
+      if (result.success)
+        onDone(); // 성공 = 호출자 결정. §0 단일경로.
+      else notify(result.error || t("login.loginFailed"));
+    } catch (err) {
+      // 카카오 SDK 는 취소를 예외로 던짐 = 안내 없이 종료(흔적은 로그로 남김)
+      if (isUserCancelled(err)) {
+        console.log("[Auth] 사용자가 로그인 창을 닫음:", err);
+        return;
+      }
+      console.error("[Auth] 앱 소셜 로그인 실패:", err);
+      notify(t("login.loginFailed"));
+    } finally {
+      setOauthLoading(false);
     }
   };
 
   const handleGooglePress = async () => {
     if (!requireBirthDateAndAdult()) return;
-    if (isGoogleOAuthConfigured()) {
-      await googlePromptAsync();
-    } else {
-      await handleSocialLogin("google");
+    if (!isGoogleOAuthConfigured()) {
+      console.error("[Auth] 구글 클라이언트 ID 미주입 = 로그인 불가");
+      notify(t("login.loginFailed"));
+      return;
     }
+    if (Platform.OS === "web") {
+      await googlePromptAsync(); // 리다이렉트 → 복귀 시 위 useEffect 가 처리
+      return;
+    }
+    await runNativeSocialLogin(async () => {
+      const idToken = await signInWithGoogle();
+      if (!idToken) return null; // 사용자가 구글 창을 닫음
+      return socialLoginWithGoogle({
+        idToken,
+        birthDate: birthDateStr!,
+        language: i18n.language,
+        deviceType: "mobile",
+      });
+    });
   };
 
   const handleWhatsAppPress = async () => {
@@ -331,29 +354,36 @@ export function useLogin({ onDone }: { onDone: () => void }) {
 
   const handleKakaoPress = async () => {
     if (!requireBirthDateAndAdult()) return;
-    if (isKakaoOAuthConfigured() && Platform.OS === "web") {
+    if (!isKakaoOAuthConfigured()) {
+      console.error("[Auth] 카카오 앱 키 미주입 = 로그인 불가");
+      notify(t("login.loginFailed"));
+      return;
+    }
+    if (Platform.OS === "web") {
       setOauthLoading(true);
       try {
-        await startKakaoLoginWeb(birthDateStr!, i18n.language);
+        await startKakaoLoginWeb(birthDateStr!, i18n.language); // 리다이렉트
       } catch (err) {
-        console.error("Kakao login start error:", err);
-        Alert.alert("로그인 실패", "카카오 로그인을 시작할 수 없습니다.");
+        console.error("[Auth] 카카오 웹 로그인 시작 실패:", err);
+        notify(t("login.loginFailed"));
         setOauthLoading(false);
       }
-    } else {
-      await handleSocialLogin("kakao");
+      return;
     }
+    await runNativeSocialLogin(async () => {
+      const accessToken = await loginKakaoNative();
+      return socialLoginWithKakao({
+        accessToken,
+        birthDate: birthDateStr!,
+        language: i18n.language,
+        deviceType: "mobile",
+      });
+    });
   };
 
   // ⚠️ 사장님 SSOT 2026-07-14 = 개발단계 이메일 로그인 = 구글 OAuth(웹 400) 우회. 메일 넣으면 그 계정으로 로그인(사장님 메일=admin).
   const [emailInput, setEmailInput] = useState("");
   const [emailLoading, setEmailLoading] = useState(false);
-  // ⚠️ 2026-07-14 = 웹(WebView)에서 Alert.alert 이 안 떠서 로그인 실패·검증 안내가 안 보임 = "눌러도 반응 없음"의 원인. 웹 = window.alert, 앱 = Alert.alert(§19).
-  const notify = (msg: string) => {
-    if (Platform.OS === "web") {
-      if (typeof window !== "undefined") window.alert(msg);
-    } else Alert.alert(msg);
-  };
   const handleEmailLogin = async () => {
     // ⚠️ 사장님 SSOT 2026-07-25 = 로그인 = 2가지 필수(생년월일 + 인증). 생년월일 = 비번 대체 + 진짜 생년월일 재유도. 이메일도 구글·카톡과 동일하게 생년월일 게이트 통과 필수.
     if (!requireBirthDateAndAdult()) return;
@@ -364,7 +394,12 @@ export function useLogin({ onDone }: { onDone: () => void }) {
     }
     setEmailLoading(true);
     try {
-      const r = await emailLogin(email);
+      const r = await emailLogin({
+        email,
+        birthDate: birthDateStr!, // 위 게이트를 통과했으므로 항상 있음
+        language: i18n.language,
+        deviceType: Platform.OS === "web" ? "web" : "mobile",
+      });
       if (r.success) {
         onDone(); // 성공 = 호출자 결정. §0 단일경로.
       } else if (r.error === "email_not_found") {

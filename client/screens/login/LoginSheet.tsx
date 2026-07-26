@@ -56,6 +56,11 @@ function LoginSheetForm({ onClose }: { onClose: () => void }) {
     handleEmailLogin,
   } = login;
 
+  // ⚠️ 사장님 SSOT 2026-07-26 = "생년월일 입력 → 연령대 표시된 상태" 여야 이메일 입력 가능.
+  //   연령대 배지(아래 isAdult && ageGroup)와 같은 조건 1벌 = 화면과 입력 제한이 항상 일치.
+  const canUseEmail = isAdult && !!ageGroup;
+  const emailBtnDisabled = emailLoading || !canUseEmail || !emailInput.trim();
+
   return (
     <ScrollView
       contentContainerStyle={styles.loginCardBody}
@@ -247,7 +252,9 @@ function LoginSheetForm({ onClose }: { onClose: () => void }) {
               onChangeText={setEmailInput}
               autoCapitalize="none"
               keyboardType="email-address"
-              editable={!emailLoading}
+              // ⚠️ 사장님 SSOT 2026-07-26 = 생년월일(연령대 표시)이 먼저. 그 전엔 이메일 입력 자체를 막음
+              //   = 생년월일 우회 원천 차단. 조건 = 위 연령대 배지가 뜨는 조건과 동일(isAdult && ageGroup).
+              editable={!emailLoading && canUseEmail}
               returnKeyType="done"
               onSubmitEditing={handleEmailLogin}
             />
@@ -256,21 +263,14 @@ function LoginSheetForm({ onClose }: { onClose: () => void }) {
                 styles.emailLoginBtn,
                 {
                   backgroundColor: Brand.primary,
-                  opacity:
-                    emailLoading || !emailInput.trim()
-                      ? 0.5
-                      : pressed
-                        ? 0.8
-                        : 1,
+                  opacity: emailBtnDisabled ? 0.5 : pressed ? 0.8 : 1,
                 },
               ]}
               onPress={handleEmailLogin}
-              disabled={emailLoading || !emailInput.trim()}
+              disabled={emailBtnDisabled}
               accessibilityRole="button"
               accessibilityLabel={t("login.emailLoginBtn")}
-              accessibilityState={{
-                disabled: emailLoading || !emailInput.trim(),
-              }}
+              accessibilityState={{ disabled: emailBtnDisabled }}
             >
               <Text style={styles.emailLoginBtnText}>
                 {t("login.emailLoginBtn")}
