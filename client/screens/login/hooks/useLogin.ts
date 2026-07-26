@@ -24,7 +24,7 @@ import {
 import {
   isWhatsAppOtpConfigured,
   getIdTokenFromGoogleResponse,
-  isUserCancelled,
+  authErrorDetail,
 } from "@/lib/auth-oauth";
 // 구글 = 웹(auth-google.web.ts, 리다이렉트) / 앱(auth-google.ts, 네이티브 SDK) 자동 선택
 import {
@@ -36,6 +36,7 @@ import {
   isKakaoOAuthConfigured,
   startKakaoLoginWeb,
   loginKakaoNative,
+  isKakaoUserCancelled,
   exchangeKakaoCodeForToken,
   getKakaoCallbackData,
 } from "@/lib/auth-kakao";
@@ -109,10 +110,12 @@ export function useLogin({ onDone }: { onDone: () => void }) {
   // ⚠️ 2026-07-14 = 웹(WebView)에서 Alert.alert 이 안 떠서 로그인 실패·검증 안내가 안 보임 = "눌러도 반응 없음"의 원인. 웹 = window.alert, 앱 = Alert.alert(§19).
   //   2026-07-26(§22 리뷰) = "로그인 실패" 안내를 여기 1벌로 통일(§16).
   //   (생년월일 게이트·WhatsApp 의 Alert.alert 은 그대로 = 생년월일은 인라인 빨간 문구가 웹에서도 보이고, WhatsApp 은 비활성)
-  const notify = (msg: string) => {
+  //   detail = 실패 사유(에러 코드 등). 앱은 제목·본문 2칸으로 넘겨야 잘리지 않음(§22 리뷰).
+  const notify = (msg: string, detail?: string) => {
     if (Platform.OS === "web") {
-      if (typeof window !== "undefined") window.alert(msg);
-    } else Alert.alert(msg);
+      if (typeof window !== "undefined")
+        window.alert(detail ? `${msg}\n${detail}` : msg);
+    } else Alert.alert(msg, detail);
   };
 
   useEffect(() => {
@@ -139,7 +142,7 @@ export function useLogin({ onDone }: { onDone: () => void }) {
       })
       .catch((err) => {
         console.error("[Auth] 웹 구글 로그인 실패:", err);
-        notify(t("login.loginFailed"));
+        notify(t("login.loginFailed"), authErrorDetail(err));
       })
       .finally(() => setOauthLoading(false));
   }, [googleResponse, birthDateStr, i18n.language, onDone]);
@@ -185,7 +188,7 @@ export function useLogin({ onDone }: { onDone: () => void }) {
       })
       .catch((err) => {
         console.error("[Auth] 웹 카카오 로그인 실패:", err);
-        notify(t("login.loginFailed"));
+        notify(t("login.loginFailed"), authErrorDetail(err));
       })
       .finally(() => setOauthLoading(false));
   }, [i18n.language, onDone]);
@@ -265,12 +268,13 @@ export function useLogin({ onDone }: { onDone: () => void }) {
       else notify(result.error || t("login.loginFailed"));
     } catch (err) {
       // 카카오 SDK 는 취소를 예외로 던짐 = 안내 없이 종료(흔적은 로그로 남김)
-      if (isUserCancelled(err)) {
+      if (isKakaoUserCancelled(err)) {
         console.log("[Auth] 사용자가 로그인 창을 닫음:", err);
         return;
       }
+      // ⚠️ 2026-07-26 = 실패 사유를 화면에 그대로 보여줌(§11). 삼키면 사장님·AI 모두 원인을 못 봄.
       console.error("[Auth] 앱 소셜 로그인 실패:", err);
-      notify(t("login.loginFailed"));
+      notify(t("login.loginFailed"), authErrorDetail(err));
     } finally {
       setOauthLoading(false);
     }
@@ -365,7 +369,7 @@ export function useLogin({ onDone }: { onDone: () => void }) {
         await startKakaoLoginWeb(birthDateStr!, i18n.language); // 리다이렉트
       } catch (err) {
         console.error("[Auth] 카카오 웹 로그인 시작 실패:", err);
-        notify(t("login.loginFailed"));
+        notify(t("login.loginFailed"), authErrorDetail(err));
         setOauthLoading(false);
       }
       return;

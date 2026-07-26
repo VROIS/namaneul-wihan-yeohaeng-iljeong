@@ -24,14 +24,16 @@ export function isWhatsAppOtpConfigured(): boolean {
 }
 
 /**
- * 사용자가 로그인 창을 그냥 닫았는지(취소) 판별 — 카카오 SDK 전용.
- * (구글 SDK 는 취소 시 예외를 던지지 않고 type:'cancelled' 로 정상 반환하므로
- *  auth-google.ts 가 그 자리에서 판별한다 = 여기 안 옴)
- * 취소는 실패가 아니므로 "로그인 실패" 안내를 띄우지 않기 위해 씀.
+ * ⚠️ 수정금지(승인필요) — 로그인 실패 사유를 화면에 그대로 보여주기 위한 상세문구 (2026-07-26 신설).
+ *   사유: 실패를 조용히 삼켜 사장님도 AI도 원인을 볼 수 없던 상태를 해소(§11 = 추측 금지, 사실을 보게).
+ *   카카오 SDK 는 code 에 사유 이름(Misconfigured·NotSupported·AccessDenied 등)을 넣어 줌
+ *   = 그 코드를 그대로 노출해야 원인 판별이 됨. 반환값은 알림창의 "본문"으로 씀(제목과 분리 = 앱에서 잘림 방지).
  */
-export function isUserCancelled(err: unknown): boolean {
+export function authErrorDetail(err: unknown): string | undefined {
   const e = err as { code?: string | number; message?: string } | null;
-  return /cancel|취소/i.test(`${e?.code ?? ""} ${e?.message ?? ""}`);
+  const code = e?.code != null && e.code !== "" ? String(e.code) : "";
+  const msg = e?.message ? String(e.message) : "";
+  return [code && `(${code})`, msg].filter(Boolean).join(" ") || undefined;
 }
 
 /** Google OAuth 응답에서 id_token 추출 (웹 리다이렉트 복귀 전용) */

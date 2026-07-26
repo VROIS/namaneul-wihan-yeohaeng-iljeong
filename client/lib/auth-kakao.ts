@@ -9,6 +9,7 @@ import { initializeKakaoSDK } from "@react-native-kakao/core";
 import {
   issueAccessTokenWithCodeWeb,
   login as kakaoNativeLogin,
+  isKakaoTalkLoginAvailable,
 } from "@react-native-kakao/user";
 import { getApiUrl } from "./query-client";
 
@@ -83,9 +84,32 @@ export async function ensureKakaoSDKInitialized(): Promise<boolean> {
 }
 
 /**
+ * ⚠️ 수정금지(승인필요) — 사용자가 카카오 로그인 창을 직접 닫았는지 판별 (2026-07-26).
+ *   rnkakao 안드로이드는 reject(e.reason.name, ...) 로 넘김 = code 가 카카오 SDK 의 사유 이름.
+ *   취소 = ClientErrorCause.Cancelled → code "Cancelled" **정확 비교**(사유 이름 전체 일치).
+ *   글자 포함 검사(정규식) 방식 폐기 = 2026-07-26 §19 — 실패 사유에 그 글자가 있으면
+ *   진짜 실패까지 조용히 삼켜 원인을 볼 수 없게 만들었음(사장님 앱 테스트에서 실증).
+ *   대소문자만 무시 = iOS 카카오 SDK enum 표기를 이 PC 에서 확인할 수 없어(Pods 없음) 양쪽 다 커버.
+ */
+export function isKakaoUserCancelled(err: unknown): boolean {
+  const code = (err as { code?: string } | null)?.code;
+  return typeof code === "string" && code.toLowerCase() === "cancelled";
+}
+
+/**
  * 앱(iOS·Android) 카카오 로그인 → accessToken 반환.
- * 카카오톡이 깔려 있으면 카카오톡으로, 없으면 카카오계정 화면으로 자동 진행(SDK 담당).
  * 반환한 accessToken 은 웹과 똑같이 서버 /api/auth/kakao 로 보냄 = 서버 무변경.
+ *
+ * ⚠️ 카카오는 로그인 경로가 2개(카카오톡 앱 / 카카오계정 화면)이고 **둘 다 정상 경로**다.
+ *   rnkakao 의 login() 은 카카오톡이 깔려 있으면 카카오톡만 시도하고, 거부당해도 계정 화면으로
+ *   넘어가지 않고 그대로 끝낸다(RNCKakaoUserModule.kt 직접 확인). 카카오 공식은 이때 계정 화면으로
+ *   이어가라고 안내한다 → 그 이어가기를 여기서 한다.
+ *   이어가는 조건 = **1차가 카카오톡 경로였을 때만**(SDK 에 직접 물어봄). 카카오톡이 없으면 1차가
+ *   이미 계정 화면이라 이어갈 곳이 없다(그대로 두면 같은 화면이 두 번 뜸).
+ *   ⚠️ 취소(code "Cancelled")로 와도 이어간다 — 카카오톡 인증 화면이 결과 없이 닫힐 때도 SDK 가
+ *   Cancelled 로 보고하는 경우가 있어(사장님 삼성 실기기 = 상태바만 깜박 후 무반응) 여기서 끊으면
+ *   안내도 없고 로그인도 못 하는 상태가 된다. 계정 화면에서 사용자가 닫으면 그 취소는 위(useLogin)에서
+ *   조용히 종료된다 = 진짜 취소도 정상 처리.
  */
 export async function loginKakaoNative(): Promise<string> {
   if (!KAKAO_NATIVE_APP_KEY) {
@@ -95,7 +119,44 @@ export async function loginKakaoNative(): Promise<string> {
     await initializeKakaoSDK(KAKAO_NATIVE_APP_KEY);
     sdkInitialized = true;
   }
-  const token = await kakaoNativeLogin();
+
+  try {
+    return pickAccessToken(await kakaoNativeLogin());
+  } catch (talkErr) {
+    // 카카오톡 경로였는지 = 실패했을 때만 SDK 에 물어봄(성공 경로에 불필요한 왕복 0).
+    //   이 조회가 실패해도 원래 사유(talkErr)를 잃지 않게 false 로 떨어뜨림.
+    const viaKakaoTalk = await isKakaoTalkLoginAvailable().catch(() => false);
+    if (!viaKakaoTalk) throw talkErr;
+    console.warn(
+      "[Kakao] 카카오톡 경로 실패 → 카카오계정 화면으로 이어감:",
+      talkErr,
+    );
+    try {
+      return pickAccessToken(
+        await kakaoNativeLogin({ useKakaoAccountLogin: true }),
+      );
+    } catch (accountErr) {
+      // 둘 다 실패 = 두 단계 사유를 한 번에 보여줘야 1회 테스트로 원인이 확정됨(§11)
+      throw mergeKakaoErrors(accountErr, talkErr);
+    }
+  }
+}
+
+/** 2차(계정 화면) 사유에 1차(카카오톡) 사유를 덧붙임. code 는 2차 것을 유지 */
+function mergeKakaoErrors(second: unknown, first: unknown): Error {
+  const s = second as { code?: string; message?: string } | null;
+  const f = first as { code?: string; message?: string } | null;
+  const firstDesc = [f?.code, f?.message].filter(Boolean).join(" ");
+  const merged = new Error(
+    [s?.message, firstDesc && `(카카오톡 단계: ${firstDesc})`]
+      .filter(Boolean)
+      .join(" "),
+  ) as Error & { code?: string };
+  merged.code = s?.code;
+  return merged;
+}
+
+function pickAccessToken(token: { accessToken?: string } | null): string {
   if (!token?.accessToken) {
     throw new Error("카카오에서 인증 정보를 받지 못했습니다.");
   }
