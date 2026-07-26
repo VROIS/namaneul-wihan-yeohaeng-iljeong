@@ -1,4 +1,4 @@
-// ⚠️ 수정금지(승인필요) — 구글 "앱 로그인" 빌드설정 (2026-07-26 신설, withKakaoNative 와 같은 패턴)
+// ⚠️ 수정금지(승인필요) — 구글 "앱 로그인" 빌드설정 (2026-07-26 신설)
 // 목적: 공식 @react-native-google-signin/google-signin config plugin 은 iosUrlScheme 을 app.json 에
 //       문자열로 요구함. 이 레포는 공개(public) 라 환경변수(GitHub Secrets)에서 읽어 넘김.
 // 하는 일: iOS Info.plist 의 URL 스킴에 "역순 iOS 클라이언트 ID" 등록

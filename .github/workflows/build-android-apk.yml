@@ -58,20 +58,17 @@ jobs:
       - name: 소셜로그인 열쇠 확인 (없으면 빌드 중단)
         env:
           G: ${{ secrets.EXPO_PUBLIC_GOOGLE_CLIENT_ID }}
-          KNATIVE: ${{ secrets.EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY }}
         run: |
-          # 안드로이드 앱이 실제로 쓰는 열쇠 2개만 검사.
-          # 카카오 JS키는 웹 전용이라 APK 빌드를 막을 이유가 없음(§22 리뷰 반영 = 과잉 게이트 제거).
+          # 앱이 실제로 쓰는 열쇠만 검사 = 구글 웹 클라이언트 ID 1개.
+          # 카카오는 서버가 대신 통신해 앱 번들에 키가 필요 없음(2026-07-26 §19 네이티브 SDK 폐기).
           MISSING=""
           [ -z "$G" ] && MISSING="$MISSING EXPO_PUBLIC_GOOGLE_CLIENT_ID"
-          [ -z "$KNATIVE" ] && MISSING="$MISSING EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY"
           if [ -n "$MISSING" ]; then
             echo "❌ GitHub Secrets 에 없는 열쇠:$MISSING"
             echo "   등록 위치 = repo Settings > Secrets and variables > Actions"
-            echo "   카카오 네이티브 앱 키 = 카카오 디벨로퍼스 > 내 애플리케이션 > 앱 키 > 네이티브 앱 키"
             exit 1
           fi
-          echo "✅ 앱 로그인 열쇠 2종 확인"
+          echo "✅ 앱 로그인 열쇠 확인"
 
       # ⚠️ 수정금지(승인필요) — preview 프로필 + --local 로 GitHub 러너에서 직접 빌드
       # eas.json의 build.preview 정의 사용 (internal 배포, apk, Dev Launcher 없음)
@@ -85,8 +82,6 @@ jobs:
           EXPO_PUBLIC_GOOGLE_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_CLIENT_ID }}
           EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID }}
           EXPO_PUBLIC_KAKAO_JAVASCRIPT_KEY: ${{ secrets.EXPO_PUBLIC_KAKAO_JAVASCRIPT_KEY }}
-          # 카카오 네이티브 앱 키 = plugins/withKakaoNative.js(빌드설정) + auth-kakao.ts(런타임) 공용 단일 소스
-          EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY: ${{ secrets.EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY }}
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4

@@ -17,6 +17,7 @@ import {
   saveAuth,
   socialLoginWithGoogle,
   socialLoginWithKakao,
+  socialLoginWithKakaoApp,
   whatsappOtpSend,
   whatsappOtpVerify,
   emailLogin,
@@ -35,8 +36,7 @@ import {
 import {
   isKakaoOAuthConfigured,
   startKakaoLoginWeb,
-  loginKakaoNative,
-  isKakaoUserCancelled,
+  loginKakaoApp,
   exchangeKakaoCodeForToken,
   getKakaoCallbackData,
 } from "@/lib/auth-kakao";
@@ -267,12 +267,8 @@ export function useLogin({ onDone }: { onDone: () => void }) {
         onDone(); // 성공 = 호출자 결정. §0 단일경로.
       else notify(result.error || t("login.loginFailed"));
     } catch (err) {
-      // 카카오 SDK 는 취소를 예외로 던짐 = 안내 없이 종료(흔적은 로그로 남김)
-      if (isKakaoUserCancelled(err)) {
-        console.log("[Auth] 사용자가 로그인 창을 닫음:", err);
-        return;
-      }
       // ⚠️ 2026-07-26 = 실패 사유를 화면에 그대로 보여줌(§11). 삼키면 사장님·AI 모두 원인을 못 봄.
+      //   (취소는 각 로그인 함수가 null 을 반환해 위에서 조용히 끝남 = 여기 안 옴)
       console.error("[Auth] 앱 소셜 로그인 실패:", err);
       notify(t("login.loginFailed"), authErrorDetail(err));
     } finally {
@@ -375,9 +371,10 @@ export function useLogin({ onDone }: { onDone: () => void }) {
       return;
     }
     await runNativeSocialLogin(async () => {
-      const accessToken = await loginKakaoNative();
-      return socialLoginWithKakao({
-        accessToken,
+      const kakao = await loginKakaoApp();
+      if (!kakao) return null; // 사용자가 브라우저 창을 닫음
+      return socialLoginWithKakaoApp({
+        ...kakao, // 봉한 표 + 이 폰만 아는 무작위값
         birthDate: birthDateStr!,
         language: i18n.language,
         deviceType: "mobile",

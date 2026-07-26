@@ -44,7 +44,6 @@
       "expo-web-browser",
       "expo-localization",
       "@react-native-community/datetimepicker",
-      "./plugins/withKakaoNative",
       "./plugins/withGoogleNative",
       "./plugins/withKakaoMavenRepo",
       "./plugins/withAndroidGradleMemory",

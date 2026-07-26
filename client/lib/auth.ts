@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getApiUrl } from "./query-client";
+import { KAKAO_APP_API_ORIGIN } from "./auth-kakao";
 
 const AUTH_KEY = "@vibetrip_auth";
 const USER_KEY = "@vibetrip_user";
@@ -97,15 +98,21 @@ export async function emailLogin(data: {
 // ⚠️ 수정금지(승인필요) — 옛 socialLogin(/api/auth/social-login) 완전삭제 = 2026-07-26 §0·§19.
 //   사유: 진짜 외부인증 없이 로그인시키던 우회로. 소셜 로그인 = 아래 2개(구글·카카오)가 유일.
 
-/** Google OAuth 성공 후 id_token으로 로그인 */
-export async function socialLoginWithGoogle(data: {
-  idToken: string;
-  birthDate: string;
-  language: string;
-  deviceType: string;
-}): Promise<{ success: boolean; user?: UserData; error?: string }> {
+type LoginResult = { success: boolean; user?: UserData; error?: string };
+
+/**
+ * ⚠️ 수정금지(승인필요) — 소셜 인증 결과를 우리 서버로 보내 로그인하는 **단 하나의 함수** (2026-07-26 §16).
+ *   보낼 것(id_token / accessToken / code)만 다르고 나머지(보내기 → 성공이면 저장 → 실패문구)는 전부 같음.
+ *   같은 처리 3벌 공존 폐기 = 2026-07-26 §0·§16 (§22 검증 지적).
+ */
+async function postSocialLogin(
+  path: string,
+  data: Record<string, string>,
+  failMsg: string,
+  origin: string = getApiUrl(),
+): Promise<LoginResult> {
   try {
-    const response = await fetch(`${getApiUrl()}/api/auth/google`, {
+    const response = await fetch(`${origin}${path}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
@@ -116,37 +123,49 @@ export async function socialLoginWithGoogle(data: {
       await saveAuth(userData);
       return { success: true, user: userData };
     }
-    return { success: false, error: result.error || "Google 로그인 실패" };
+    return { success: false, error: result.error || failMsg };
   } catch (error) {
-    console.error("Google login error:", error);
+    console.error(`[Auth] ${path} 실패:`, error);
     return { success: false, error: "서버 연결 실패" };
   }
 }
 
-/** 카카오 OAuth 성공 후 accessToken으로 로그인 */
-export async function socialLoginWithKakao(data: {
+/** Google OAuth 성공 후 id_token으로 로그인 */
+export function socialLoginWithGoogle(data: {
+  idToken: string;
+  birthDate: string;
+  language: string;
+  deviceType: string;
+}): Promise<LoginResult> {
+  return postSocialLogin("/api/auth/google", data, "Google 로그인 실패");
+}
+
+/** 앱 카카오 로그인 = 서버가 봉한 표를 열어 토큰으로 바꿔 로그인.
+ *  nonce = 이 폰이 시작한 로그인임을 증명하는 값(가로챈 표를 못 쓰게 함, 2026-07-26). */
+export function socialLoginWithKakaoApp(data: {
+  ticket: string;
+  nonce: string;
+  birthDate: string;
+  language: string;
+  deviceType: string;
+}): Promise<LoginResult> {
+  // ⚠️ 카카오 앱 경로만 운영 주소 고정 = 표를 봉한 서버와 여는 서버를 같게(auth-kakao.ts 주석 참조)
+  return postSocialLogin(
+    "/api/auth/kakao/code",
+    data,
+    "카카오 로그인 실패",
+    KAKAO_APP_API_ORIGIN,
+  );
+}
+
+/** 카카오 OAuth 성공 후 accessToken으로 로그인 (웹 = 브라우저가 교환한 토큰) */
+export function socialLoginWithKakao(data: {
   accessToken: string;
   birthDate: string;
   language: string;
   deviceType: string;
-}): Promise<{ success: boolean; user?: UserData; error?: string }> {
-  try {
-    const response = await fetch(`${getApiUrl()}/api/auth/kakao`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    const result = await response.json();
-    if (response.ok && result.success) {
-      const userData: UserData = { ...result.user, token: result.token };
-      await saveAuth(userData);
-      return { success: true, user: userData };
-    }
-    return { success: false, error: result.error || "카카오 로그인 실패" };
-  } catch (error) {
-    console.error("Kakao login error:", error);
-    return { success: false, error: "서버 연결 실패" };
-  }
+}): Promise<LoginResult> {
+  return postSocialLogin("/api/auth/kakao", data, "카카오 로그인 실패");
 }
 
 /** WhatsApp OTP 발송 */

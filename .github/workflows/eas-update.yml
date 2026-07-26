@@ -37,20 +37,18 @@ jobs:
       - name: 소셜로그인 열쇠 확인 (없으면 중단)
         env:
           G: ${{ secrets.EXPO_PUBLIC_GOOGLE_CLIENT_ID }}
-          KNATIVE: ${{ secrets.EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY }}
         run: |
-          # eas update 는 iOS·Android 번들만 만듦 = 앱이 실제로 쓰는 열쇠 2개만 검사.
+          # eas update 는 iOS·Android 번들만 만듦 = 앱이 실제로 쓰는 열쇠만 검사.
           # 카카오 JS키는 웹 전용 → 여기서 요구하면 그 키가 없을 때 로그인과 무관한 수정까지
           # OTA 배포가 전부 막힘(§22 검증 지적). APK 워크플로와 검사 목록 동일하게 통일.
           MISSING=""
           [ -z "$G" ] && MISSING="$MISSING EXPO_PUBLIC_GOOGLE_CLIENT_ID"
-          [ -z "$KNATIVE" ] && MISSING="$MISSING EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY"
           if [ -n "$MISSING" ]; then
             echo "❌ GitHub Secrets 에 없는 열쇠:$MISSING"
             echo "   등록 위치 = repo Settings > Secrets and variables > Actions"
             exit 1
           fi
-          echo "✅ 앱 로그인 열쇠 2종 확인"
+          echo "✅ 앱 로그인 열쇠 확인"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -79,7 +77,6 @@ jobs:
           EXPO_PUBLIC_GOOGLE_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_CLIENT_ID }}
           EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID }}
           EXPO_PUBLIC_KAKAO_JAVASCRIPT_KEY: ${{ secrets.EXPO_PUBLIC_KAKAO_JAVASCRIPT_KEY }}
-          EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY: ${{ secrets.EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY }}
         run: |
           SAFE_MSG=$(printf '%s' "$COMMIT_MSG" | head -n 1 | tr -d '"')
           if [ -z "$SAFE_MSG" ]; then
