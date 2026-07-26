@@ -21,7 +21,7 @@ const SOCIAL_DEFAULT_NAMES = new Set([KAKAO_DEFAULT_NAME, GOOGLE_DEFAULT_NAME]);
 async function findOrCreateUser(params: {
   provider: string;
   providerId: string;
-  birthDate: string;
+  birthDate?: string; // ⚠️ 2026-07-26(세션2-D) = 외부인증에서 분리 = 선택적. 있으면 저장/갱신, 없으면 null(신규)·기존값 유지.
   displayName: string;
   language?: string;
   deviceType?: string;
@@ -101,10 +101,12 @@ export function registerAuthRoutes(app: Express) {
   app.post("/api/auth/google", async (req, res) => {
     try {
       const { idToken, birthDate, language, deviceType } = req.body;
-      if (!idToken || !birthDate) {
+      // ⚠️ 사장님 SSOT 2026-07-26(세션2-D) = 외부인증에서 생년월일 분리 = idToken(인증 신원)만 필수.
+      //   생년월일은 클라 게이트(입력해야 인증버튼 작동)로 항상 딸려오되, 서버 필수검사에선 뺌 = 인증은 인증만. birthDate 있으면 findOrCreateUser 가 저장/갱신(신규 생성 / 기존 통과).
+      if (!idToken) {
         return res.status(400).json({
           success: false,
-          error: "idToken and birthDate are required",
+          error: "idToken is required",
         });
       }
       const tokenRes = await fetch(
@@ -152,10 +154,11 @@ export function registerAuthRoutes(app: Express) {
   app.post("/api/auth/kakao", async (req, res) => {
     try {
       const { accessToken, birthDate, language, deviceType } = req.body;
-      if (!accessToken || !birthDate) {
+      // ⚠️ 사장님 SSOT 2026-07-26(세션2-D) = 외부인증에서 생년월일 분리 = accessToken(인증 신원)만 필수. 생년월일은 findOrCreateUser 가 저장/갱신(신규 생성 / 기존 통과).
+      if (!accessToken) {
         return res.status(400).json({
           success: false,
-          error: "accessToken and birthDate are required",
+          error: "accessToken is required",
         });
       }
       const meRes = await fetch("https://kapi.kakao.com/v2/user/me", {
