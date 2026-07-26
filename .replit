@@ -14,7 +14,6 @@ EXPO_PUBLIC_DOMAIN = "https://828b2285-99c5-4cc9-9bcd-a09cdff531bc-00-kzvu1v5xhe
 EXPO_PUBLIC_GOOGLE_CLIENT_ID = "644754272946-7a1cs6h0rrj7i42pcr05vfvjae87fh71.apps.googleusercontent.com"
 EXPO_PUBLIC_KAKAO_JAVASCRIPT_KEY = "38f6c1f38e834e0f8ef8c6ae6728b528"
 EXPO_PUBLIC_KAKAO_REST_API_KEY = "6eb174dfa18249002bdc3bb1a65e920a"
-KAKAO_CLIENT_SECRET = "0l4nRsyd0U7mVU6pYgASw8F2aKZP3hS8"
 
 [workflows]
 runButton = "Start application"
