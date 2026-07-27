@@ -5,8 +5,6 @@ import { KAKAO_APP_API_ORIGIN } from "./auth-kakao";
 const AUTH_KEY = "@vibetrip_auth";
 const USER_KEY = "@vibetrip_user";
 
-// ⚠️ 사장님 SSOT 2026-07-15 = 실제 로그인만 = 저장 토큰 유무로만 판정. DEV 자동로그인 목업 완전삭제 §19(로그아웃 무효·로그인실패 은폐 근본원인).
-
 export interface UserData {
   id: string;
   email?: string;
@@ -23,18 +21,14 @@ export interface UserData {
   createdAt?: string;
 }
 
-export async function isAuthenticated(): Promise<boolean> {
-  // 저장 토큰(@vibetrip_auth) 존재로만 판정 = 실제 로그인/로그아웃이 정확히 반영.
-  try {
-    const token = await AsyncStorage.getItem(AUTH_KEY);
-    return token !== null;
-  } catch {
-    return false;
-  }
-}
+// ⚠️ 옛 isAuthenticated(@vibetrip_auth 토큰 유무) 완전삭제 = 2026-07-27 §19.
+//   사유: 로그인 판정이 두 벌(토큰 유무 / 사용자 정보)로 갈려 화면마다 결과가 달랐음.
+//   현재 판정은 MapToggleContext(getUserData 기반) 1벌뿐.
 
 export async function getUserData(): Promise<UserData | null> {
-  // ⚠️ 사장님 SSOT 2026-07-15 = 저장된 실계정(@vibetrip_user)만 반환. 게스트(둘러보기)·비로그인 = null. DEV 목업 폴백 완전삭제 §19.
+  // ⚠️ 저장된 실계정(@vibetrip_user)만 반환. 비로그인 = null.
+  //   guest_browse 거르기는 게스트 기능 폐지로 불필요해졌으나, 옛 기기에 남은 가짜 계정이
+  //   로그인으로 잡히지 않게 그대로 둔다(2026-07-27 §19 = 기능은 삭제, 옛 저장값 방어만 유지).
   try {
     const data = await AsyncStorage.getItem(USER_KEY);
     if (data) {
@@ -47,6 +41,20 @@ export async function getUserData(): Promise<UserData | null> {
   return null;
 }
 
+// ⚠️ 수정금지(승인필요) — 사장님 SSOT 2026-07-27 = **저장소에 인증을 쓰면 자동으로 알린다**(§19·§22 "글 아닌 기계").
+//   옛 방식 폐기 §19 = 부르는 쪽이 따로 신호를 보내야 했고, 한 곳(관리자 로그인)이 빠뜨려
+//   "로그인했는데 앱은 비로그인"이 재발했음(§22 검증이 잡음). 이제 잊을 수가 없다.
+const authListeners = new Set<() => void>();
+export function subscribeAuthChanged(fn: () => void): () => void {
+  authListeners.add(fn);
+  return () => {
+    authListeners.delete(fn);
+  };
+}
+function notifyAuthChanged() {
+  authListeners.forEach((fn) => fn());
+}
+
 export async function saveAuth(userData: UserData): Promise<void> {
   try {
     await AsyncStorage.setItem(AUTH_KEY, "authenticated");
@@ -54,6 +62,7 @@ export async function saveAuth(userData: UserData): Promise<void> {
   } catch (error) {
     console.error("Failed to save auth:", error);
   }
+  notifyAuthChanged();
 }
 
 export async function clearAuth(): Promise<void> {
@@ -62,6 +71,7 @@ export async function clearAuth(): Promise<void> {
   } catch (error) {
     console.error("Failed to clear auth:", error);
   }
+  notifyAuthChanged();
 }
 
 // ⚠️ 사장님 SSOT 2026-07-14 = 개발단계 이메일 로그인 = 구글 OAuth(웹 400) 우회. 메일만 넣으면 그 계정으로 로그인(사장님 메일=admin).
@@ -86,8 +96,6 @@ export async function emailLogin(data: {
       await saveAuth(userData);
       return { success: true, user: userData };
     }
-    if (response.status === 404)
-      return { success: false, error: "email_not_found" };
     return { success: false, error: result.error || "로그인 실패" };
   } catch (error) {
     console.error("Email login error:", error);

@@ -3,7 +3,6 @@ import { useState, useEffect, useRef } from "react";
 import { Alert } from "react-native";
 import { Itinerary, TripFormData, DayAccommodation } from "@/types/trip";
 import { apiRequest } from "@/lib/query-client";
-import { getUserData } from "@/lib/auth";
 import { useMapToggle } from "@/contexts/MapToggleContext";
 import { ensureLoggedIn } from "./login-gate";
 
@@ -27,7 +26,7 @@ export function useSaveItinerary({
   i18n: { language: string };
 }) {
   // ⚠️ 2026-07-25 = 로그인 게이트 = 별도 화면 아닌 인앱 팝업(requestLogin). navigation prop 제거(§0 결합 제거).
-  const { requestLogin } = useMapToggle();
+  const { requestLogin, isAuthed, authUser } = useMapToggle();
   // 💾 일정 저장 상태
   const [isSaving, setIsSaving] = useState(false);
   // ⚠️ 2026-07-03 사장님 UX SSOT = 저장버튼 = 누르면 영구 잠김(옛) 아님 = 저장 성공 시 녹색 체크(✓) 0.5초(초최단) 보여준 뒤 원래 💾로 복귀 = 다시 저장 가능.
@@ -53,15 +52,17 @@ export function useSaveItinerary({
     setIsSaving(true);
     try {
       // ⚠️ 사장님 SSOT 2026-07-15 = 저장 판정 = 실계정 1벌(§0.3). 게스트·비로그인 모두 로그인 안내(ensureLoggedIn = login-gate 공용, §0.3 1벌화 2026-07-21).
-      if (!(await ensureLoggedIn(t, requestLogin))) {
+      if (!ensureLoggedIn(isAuthed, t, requestLogin)) {
         setIsSaving(false);
         return;
       }
-      const userData = await getUserData();
+      // ⚠️ 2026-07-27 = 저장 주인 = 전역 판정과 **같은 값**(authUser). 저장소를 따로 읽던 옛 방식 폐기 §19
+      //   (게이트는 전역으로 판정하고 저장은 따로 읽으면 두 값이 갈려 남의 계정에 저장될 수 있었음).
+      const userData = authUser;
       if (!userData) {
         setIsSaving(false);
         return;
-      } // 게이트 통과 = 항상 존재(이론상 도달 X). TS null 좁힘 + 만일의 세션 만료 방어.
+      } // 게이트 통과 = 항상 존재. TS null 좁힘.
 
       // 🧠 2026-07-04 = 저장할 AI 의견 본문 = 화면 state에서 cached 플래그만 제외한 순수 결과(BE 직접캐시 저장분과 동일 모양 통일 §20).
       const { cached: _c, ...aiOpinionResult } = (aiOpinionData || {}) as any;

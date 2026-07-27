@@ -129,7 +129,7 @@ export default function OnboardingScreen() {
       createdAt: new Date().toISOString(),
     };
 
-    await saveAuth(userData);
+    await saveAuth(userData); // 전역 판정 갱신은 saveAuth 가 자동 처리
     navigation.reset({
       index: 0,
       routes: [{ name: "Main" }],

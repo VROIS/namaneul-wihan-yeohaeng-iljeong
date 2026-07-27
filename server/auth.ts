@@ -8,103 +8,18 @@ import {
   timingSafeEqual,
 } from "crypto";
 import { storage } from "./storage";
+import {
+  findOrCreateUser,
+  toClientUser,
+  KAKAO_DEFAULT_NAME,
+  GOOGLE_DEFAULT_NAME,
+} from "./auth-user";
 import type { User } from "@shared/schema";
 
 const GOOGLE_CLIENT_ID =
   process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID ||
   process.env.GOOGLE_CLIENT_ID ||
   "";
-
-// ⚠️ 사장님 SSOT 2026-07-26 = 소셜별 닉네임 기본문구(카카오/구글이 이름 안 줄 때 fallback) = 1벌 상수(§0·§16).
-//   재로그인 displayName 갱신 가드가 이 집합과 비교 = 정의부·가드가 같은 소스 참조(따로 하드코딩 시 한쪽만 바뀌면 가드 조용히 깨짐 = simplify 지적).
-const KAKAO_DEFAULT_NAME = "카카오 사용자";
-const GOOGLE_DEFAULT_NAME = "Google User";
-const SOCIAL_DEFAULT_NAMES = new Set([KAKAO_DEFAULT_NAME, GOOGLE_DEFAULT_NAME]);
-
-/**
- * ⚠️ 수정금지(승인필요) — 로그인 성공 시 기존 계정에 반영하는 단 하나의 함수 (2026-07-26 §16 1벌).
- *   사장님 SSOT: 이메일도 "지메일이 아닌 다른 메일로 하는 정식 인증" = 소셜과 동일 취급 =
- *   생년월일 저장·로그인 기록 갱신을 우회하면 안 됨. 그래서 소셜(findOrCreateUser)·이메일이 이 함수 1벌을 공유.
- *   - birthDate = 이번 로그인에서 온 값이 있으면 갱신, 없으면 기존값 유지(파괴 금지).
- *   - displayName = 진짜 이름일 때만 덮음("카카오 사용자"/"Google User" 기본문구로는 안 덮음 = 좋은 이름 보존).
- */
-async function applyLogin(
-  user: User,
-  opts: {
-    birthDate?: string;
-    language?: string;
-    deviceType?: string;
-    displayName?: string;
-  },
-): Promise<User> {
-  const isRealName =
-    !!opts.displayName && !SOCIAL_DEFAULT_NAMES.has(opts.displayName);
-  return (await storage.updateUserLogin(user.id, {
-    lastLoginAt: new Date(),
-    loginCount: (user.loginCount || 0) + 1,
-    deviceType: opts.deviceType,
-    preferredLanguage: opts.language || user.preferredLanguage,
-    birthDate: opts.birthDate || user.birthDate,
-    ...(isRealName ? { displayName: opts.displayName } : {}),
-  }))!;
-}
-
-/**
- * 사용자 조회/생성 = ⚠️ 사장님 SSOT 2026-07-25 = **오직 provider+providerId(소셜 인증 신원)로만** 기존 계정 매칭.
- *   birthDate 는 매칭 키가 아니라 신규 생성 시 저장·성인확인용. "2가지(생년월일+소셜인증) 다 충족" = 소셜 신원이 일치하는 그 사람일 때만 기존 계정.
- *   ⚠️ 옛 2단계(birthDate 단독 매칭 → provider 연결) 완전삭제 §19 = 근본버그(남이 같은 생년월일 넣으면 남 계정에 붙음)의 원인. birthDate=비번대체지만 "매칭 단독키"로는 절대 안 씀.
- */
-async function findOrCreateUser(params: {
-  provider: string;
-  providerId: string;
-  birthDate?: string; // ⚠️ 2026-07-26(세션2-D) = 외부인증에서 분리 = 선택적. 있으면 저장/갱신, 없으면 null(신규)·기존값 유지.
-  displayName: string;
-  language?: string;
-  deviceType?: string;
-}): Promise<User> {
-  const { provider, providerId, birthDate, displayName, language, deviceType } =
-    params;
-
-  // 1) provider+providerId(소셜 인증 신원)로만 조회 = 그 사람일 때만 기존 계정 매칭.
-  const user = await storage.getUserByProvider(provider, providerId);
-  if (user)
-    return applyLogin(user, { birthDate, language, deviceType, displayName });
-
-  // 2) 신규 사용자 생성 (birthDate = 저장·성인확인용으로만 사용, 매칭 키 아님).
-  const username = `${provider}_${providerId.substring(0, 12)}_${Math.random().toString(36).substring(2, 6)}`;
-  return storage.createUser({
-    username,
-    password: "social_login_no_password",
-    displayName,
-    provider,
-    providerId,
-    birthDate,
-    preferredLanguage: language || "ko",
-    deviceType,
-    loginCount: 1,
-    lastLoginAt: new Date(),
-    isPaid: false,
-    planType: "free",
-  });
-}
-
-// ⚠️ 사장님 SSOT 2026-07-15 = 모든 로그인 응답의 user 객체 = 이 함수 1벌만(§0.3·§16). 옛 5곳 제각각(name·email 누락 → 프로필 빈칸 / google·kakao 는 role 까지 누락) 폐기 §19.
-//   클라 UserData(client/lib/auth.ts) 와 필드 일치 = 프로필 이름·이메일 표시 + role 로 전문가/관리자 분기.
-function toClientUser(user: User) {
-  return {
-    id: user.id,
-    name: user.displayName, // 프로필 표시명(ProfileScreen 이 읽는 필드)
-    email: user.email, // 프로필 이메일
-    username: user.username,
-    displayName: user.displayName,
-    provider: user.provider,
-    birthDate: user.birthDate,
-    language: user.preferredLanguage,
-    isPaid: user.isPaid,
-    planType: user.planType,
-    role: user.role, // 사용자/전문가/관리자 분기
-  };
-}
 
 // ⚠️ 수정금지(승인필요) — 카카오 accessToken → 우리 로그인 = 이 함수 1벌만 (2026-07-26 §16).
 //   웹(브라우저가 토큰 교환)·앱(서버가 code 로 교환) 두 경로가 이 함수를 공유 = 처리 두 벌 방지.
@@ -132,6 +47,10 @@ async function loginWithKakaoAccessToken(params: {
   const user = await findOrCreateUser({
     provider: "kakao",
     providerId,
+    // 카카오는 메일을 안 줄 수도 있음(동의 안 함) = 주면 저장, 없으면 provider 로만 매칭.
+    email: meData.kakao_account?.email || undefined,
+    // 카카오가 함께 주는 인증 여부. true 일 때만 기존 계정에 연결(§22 보안 지적).
+    emailVerified: meData.kakao_account?.is_email_verified === true,
     birthDate: params.birthDate,
     displayName,
     language: params.language,
@@ -156,27 +75,12 @@ const KAKAO_KEY_MISSING =
   "카카오 REST API 키가 서버에 없습니다(EXPO_PUBLIC_KAKAO_REST_API_KEY)";
 
 /**
- * ⚠️ 수정금지(승인필요) — 앱 로그인 도중 오가는 값을 **우리 서버만 열 수 있게 봉하는** 함수 1벌 (2026-07-26 §16).
- *
- * 왜 필요한가: 앱이 결과를 돌려받는 주소(`vibetrip://`)는 안드로이드에서 독점이 아니다.
- *   나쁜 앱이 같은 주소를 등록해 두면 오가는 값을 가로챌 수 있고,
- *   카카오가 준 1회용 인가코드가 그대로 노출되면 **남의 계정을 차지**할 수 있다.
- *
- * 어떻게 막나(두 겹):
- *   ① 인가코드를 앱에 **그대로 넘기지 않는다.** 봉한 표(ticket)로 바꿔 넘기므로 가로채도 코드를 읽지 못한다.
- *   ② 앱이 이번 시도에만 쓰는 무작위값(nonce)을 만들어 **앱 안에만 두고**, 그 지문만 봉투 안에 넣는다.
- *      마지막에 서버가 원본 무작위값을 요구하므로, 표를 가로챈 쪽은 그것이 없어 쓰지 못한다.
- *
- * 왜 서명이 아니라 봉함(암호화)인가: 서명만 하면 안을 읽을 수 있어, 가로챈 쪽이 코드를 꺼내
- *   자기 지문으로 표를 새로 받아갈 수 있다(§22 검증이 잡은 실제 우회 경로). 그래서 읽지도 못하게 봉한다.
- *
- * 왜 표준(PKCE)을 안 쓰나: 카카오 공식 REST 문서(2026-07-26 확인)에 `code_challenge` 계열이 없다.
- *
- * 열쇠 = 이 서버만 아는 값에서 파생(사장님이 새로 등록할 것 없음).
- *   카카오 클라이언트 시크릿을 쓰지 않는 이유 = 그 값은 콘솔에서 꺼져 있을 수 있고,
- *   그것에 묶으면 지금 잘 도는 웹 로그인까지 끌려가 깨진다(§2·§22 검증 지적).
- * 왜 저장소를 안 쓰나: 봉투 자체로 검증되므로 서버가 아무것도 기억할 필요가 없다
- *   (Replit 은 개발용·배포용 프로세스가 갈릴 수 있어, 메모리에 담아두면 한쪽에서만 통한다).
+ * ⚠️ 수정금지(승인필요) — 앱 로그인 값을 **우리 서버만 열 수 있게 봉함** = 1벌 (2026-07-26 §16).
+ *   `vibetrip://` 는 안드로이드에서 독점이 아니라 가로채기 가능 → ① 인가코드를 그대로 안 넘기고 봉한 표로 바꿔 넘김
+ *   ② 앱만 아는 무작위값(nonce) 지문을 봉투에 넣어 마지막에 원본을 요구 = 가로채도 못 씀.
+ *   서명이 아니라 암호화인 이유 = 서명만 하면 안을 읽어 코드를 꺼내 재봉인 가능(§22 검증이 잡은 우회로).
+ *   PKCE 미사용 = 카카오 공식 REST 문서에 `code_challenge` 없음(2026-07-26 확인).
+ *   열쇠 = 서버만 아는 값에서 파생(카카오 시크릿은 콘솔에서 꺼질 수 있어 안 씀 §2). 저장소 불필요 = 봉투가 스스로 검증.
  */
 const KAKAO_APP_TTL_MS = 10 * 60 * 1000; // 10분 = 카카오 인가코드 유효시간과 맞춤
 /** ⚠️ 열쇠 재료 = `server/db.ts` 와 **똑같은 소스 1벌**(§16). 이름이 갈리면 한쪽만 비어도 조용히 약해짐.
@@ -294,6 +198,13 @@ export function registerAuthRoutes(app: Express) {
       const user = await findOrCreateUser({
         provider: "google",
         providerId,
+        // ⚠️ 2026-07-27 = 구글이 준 메일을 **반드시 저장**. 메일 1개 = 그 사람의 신원이라
+        //   나중에 같은 메일로 이메일 로그인해도 같은 계정으로 들어옴(중복 계정 차단).
+        email: tokenData.email,
+        // tokeninfo 는 문자열 "true" 로 내려줌. 인증된 메일일 때만 기존 계정에 연결(§22 보안 지적).
+        emailVerified:
+          tokenData.email_verified === true ||
+          tokenData.email_verified === "true",
         birthDate,
         displayName,
         language,
@@ -607,26 +518,36 @@ export function registerAuthRoutes(app: Express) {
     }
   });
 
-  // ⚠️ 사장님 SSOT 2026-07-14 = 개발단계 이메일 로그인 = 구글 OAuth(웹 리다이렉트 설정 문제로 400) 우회.
-  //   메일 입력 → 그 메일의 users 행으로 로그인(사장님 메일=admin 자동 인식). 기존 세션 토큰(§16 = /api/auth/me 와 동일 Bearer) 발급.
-  //   ⚠️ 임시(개발용) = 로그인 정식화(프로필 리팩토링) 때 구글 OAuth 정상화하면 폐기 §19. 비번 없음 = 개발단계 한정.
+  // ⚠️ 수정금지(승인필요) — 사장님 SSOT 2026-07-27 = **이메일 = 인증 3종 중 하나 = 신규 가입도 여기서 된다.**
+  //   지메일이 아닌 메일을 쓰는 사람의 가입·로그인 창구. 구글·카카오와 **완전히 같은 대우**:
+  //   있으면 그 계정으로 로그인, 없으면 **새 계정 생성**(구글·카카오의 findOrCreateUser 와 같은 규칙).
+  //   옛 "모르는 메일 = 404" 완전삭제 §19 = 신규 가입 자체를 막고 있던 것(사장님 지적 2026-07-27).
+  //   비번 없음 = 개발단계 한정(정식화 때 메일 인증코드 추가 예정).
   app.post("/api/auth/email-login", async (req, res) => {
     try {
-      const { email, birthDate, language, deviceType } = req.body;
-      if (!email || typeof email !== "string" || !email.includes("@")) {
+      const raw = req.body?.email;
+      // ⚠️ 조회(getUserByEmail 은 소문자 비교)와 저장을 **같은 모양**으로 = 대소문자·공백 때문에 계정이 갈리지 않게.
+      const email = typeof raw === "string" ? raw.trim().toLowerCase() : "";
+      const { birthDate, language, deviceType } = req.body;
+      if (!email || !email.includes("@")) {
         return res
           .status(400)
           .json({ success: false, error: "email_required" });
       }
-      const found = await storage.getUserByEmail(email);
-      if (!found) {
-        return res
-          .status(404)
-          .json({ success: false, error: "email_not_found" });
-      }
-      // ⚠️ 사장님 SSOT 2026-07-26 = 이메일도 정식 인증(지메일 아닌 메일용) = 소셜과 동일하게
-      //   생년월일 저장 + 로그인 기록 갱신. 옛 "조회만 하고 아무것도 안 남김" = 생년월일 우회 = 폐기 §19.
-      const user = await applyLogin(found, { birthDate, language, deviceType });
+      // ⚠️ 구글·카카오와 **같은 함수 1벌**(§16). 그 안에서 메일로 기존 계정을 찾아 연결하므로
+      //   "구글로 가입 → 같은 메일로 이메일 로그인" 도 **같은 계정**으로 들어온다(중복 계정 없음).
+      const user = await findOrCreateUser({
+        provider: "email",
+        providerId: email,
+        email,
+        // 이 경로는 메일 자체가 신원(그 메일로 로그인하는 중) = 연결 허용.
+        // ⚠️ 개발단계라 메일 인증코드가 없음 = 정식화 때 코드 확인 후 true 로 바꿀 것.
+        emailVerified: true,
+        birthDate,
+        displayName: email.split("@")[0],
+        language,
+        deviceType,
+      });
       res.json({
         success: true,
         user: toClientUser(user),

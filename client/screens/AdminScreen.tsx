@@ -49,6 +49,7 @@ export default function AdminScreen() {
       if (res.ok && data.success && data.token) {
         // ⚠️ 사장님 SSOT 2026-07-15 = 서버 toClientUser 응답을 그대로 저장(§0.3 = 손매핑 2벌 폐기 §19).
         //   옛 손매핑은 role 을 안 넘겨 비번 관리자 세션의 role 이 undefined 였음(= 전문가 답변함 분기 실패 위험).
+        // saveAuth 가 전역 판정에 자동으로 알림(client/lib/auth.ts) = 여기서 따로 부를 것 없음
         await saveAuth({ ...data.user, token: data.token });
         setIsAuthenticated(true);
         setPassword("");

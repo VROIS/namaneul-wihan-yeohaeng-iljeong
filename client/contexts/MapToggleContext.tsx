@@ -1,4 +1,11 @@
-import React, { createContext, useContext, useState, useCallback } from "react";
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useEffect,
+} from "react";
+import { getUserData, subscribeAuthChanged, type UserData } from "@/lib/auth";
 import type { Itinerary } from "@/types/trip";
 
 interface MapToggleContextType {
@@ -30,7 +37,15 @@ interface MapToggleContextType {
   clearLoginRequest: () => void;
   // ⚠️ 사장님 SSOT 2026-07-25(세션2) = 로그인 성공/로그아웃 등 인증상태 변경 신호(expertDataChangedAt 패턴 복제). 로그인 팝업은 navigation focus를 안 바꿔 프로필(useFocusEffect)이 재조회 안 함 → 이 신호로 useProfile 등이 재조회 = 로그인 후 즉시 인증반영.
   authChangedAt: number | null;
-  bumpAuthChanged: () => void;
+  // ⚠️ 수정금지(승인필요) — 사장님 SSOT 2026-07-27 = **로그인 여부 판정은 이 1곳만**(§0·§16).
+  //   (전문가 시트·가이드 등은 판정이 아니라 서버 요청용 토큰을 저장소에서 읽음 = 같은 저장소 = 판정 갈림 없음)
+  //   화면마다 각자 저장소를 읽던 옛 방식 폐기 §19 = 한 곳이라도 네트워크 결과에 로그인 상태를 묶으면
+  //   로그인돼 있는데 "로그인이 필요합니다"가 떠서 매번 다시 로그인하게 됨(실기기 실증).
+  //   규칙: **기기에 저장된 값만으로 판정. 서버 응답은 로그인 상태를 절대 바꾸지 않는다.**
+  //   강제 로그아웃(프로필 로그아웃) 전까지 유지.
+  authUser: UserData | null;
+  isAuthed: boolean;
+  authReady: boolean; // 저장소 첫 조회가 끝났는지(끝나기 전 "비로그인"으로 착각하지 않게)
 }
 
 const MapToggleContext = createContext<MapToggleContextType>({
@@ -54,7 +69,9 @@ const MapToggleContext = createContext<MapToggleContextType>({
   requestLogin: () => {},
   clearLoginRequest: () => {},
   authChangedAt: null,
-  bumpAuthChanged: () => {},
+  authUser: null,
+  isAuthed: false,
+  authReady: false,
 });
 
 export function MapToggleProvider({ children }: { children: React.ReactNode }) {
@@ -79,6 +96,26 @@ export function MapToggleProvider({ children }: { children: React.ReactNode }) {
   );
   const [loginRequestedAt, setLoginRequestedAt] = useState<number | null>(null);
   const [authChangedAt, setAuthChangedAt] = useState<number | null>(null);
+  // 인증 상태 1벌 = 앱 시작 시 1회 + 인증변경 신호마다 저장소에서 다시 읽음(네트워크 없음).
+  const [authUser, setAuthUser] = useState<UserData | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    // 첫 로드는 신호를 안 찍는다(구독자들이 마운트 때 이미 1회 조회 = 중복 호출 방지).
+    const reload = (notify: boolean) =>
+      getUserData().then((u) => {
+        if (!alive) return;
+        setAuthUser(u);
+        setAuthReady(true);
+        if (notify) setAuthChangedAt(Date.now()); // 로그인/로그아웃 시에만 다른 구독자도 갱신
+      });
+    reload(false); // 앱 시작 1회
+    const unsubscribe = subscribeAuthChanged(() => reload(true)); // 저장/로그아웃 시 자동
+    return () => {
+      alive = false;
+      unsubscribe();
+    };
+  }, []);
 
   const toggleMap = useCallback(() => {
     setShowMap((prev) => !prev);
@@ -126,9 +163,6 @@ export function MapToggleProvider({ children }: { children: React.ReactNode }) {
     setLoginRequestedAt(null);
   }, []);
   // ⚠️ 2026-07-25(세션2) = 로그인 성공/로그아웃 시 호출 → 구독자(useProfile 등)가 인증 재조회(navigation focus 안 바뀌어도 즉시 반영).
-  const bumpAuthChanged = useCallback(() => {
-    setAuthChangedAt(Date.now());
-  }, []);
 
   return (
     <MapToggleContext.Provider
@@ -153,7 +187,9 @@ export function MapToggleProvider({ children }: { children: React.ReactNode }) {
         requestLogin,
         clearLoginRequest,
         authChangedAt,
-        bumpAuthChanged,
+        authUser,
+        isAuthed: !!authUser,
+        authReady,
       }}
     >
       {children}

@@ -3,7 +3,7 @@ import { Alert } from "react-native";
 import { Itinerary, TripFormData, DayAccommodation } from "@/types/trip";
 import { calculateVibeWeights } from "@/utils/vibeCalculator";
 import { apiRequest } from "@/lib/query-client";
-import { isAuthenticated, UserData } from "@/lib/auth";
+import { UserData } from "@/lib/auth";
 import { useMapToggle } from "@/contexts/MapToggleContext";
 
 export function useGenerateItinerary({
@@ -34,7 +34,7 @@ export function useGenerateItinerary({
   i18n: { language: string };
 }) {
   // ⚠️ 2026-07-25 사장님 SSOT = 여정생성 인증분기 = 로그인 인식되면 바로 생성 진행 / 비인증이면 로그인 팝업(requestLogin). 화면 이동·자동재개 폐기(§0·§19).
-  const { requestLogin } = useMapToggle();
+  const { requestLogin, isAuthed } = useMapToggle();
 
   // 🚨 위기 정보 체크 및 팝업 표시
   const checkCrisisAlerts = async (): Promise<{
@@ -221,12 +221,9 @@ export function useGenerateItinerary({
   // 여정생성 버튼 = 인증분기(사장님 SSOT): 로그인 인식되면 팝업 없이 바로 생성 / 비인증이면 로그인 팝업만.
   //   비인증은 팝업만 띄우고, 로그인 후 사용자가 생성 버튼을 다시 누름(단순 = §0. 옛 pendingGenerate 화면복귀 자동재개는 팝업엔 불필요 = 폐기 §19).
   const handleGenerate = async () => {
-    const authenticated = await isAuthenticated();
-    if (authenticated) {
-      executeGenerate();
-    } else {
-      requestLogin();
-    }
+    // ⚠️ 2026-07-27 = 전역 1곳(isAuthed)만 읽음(§0). 저장소 직접 조회 폐기 §19.
+    if (isAuthed) executeGenerate();
+    else requestLogin();
   };
 
   return { handleGenerate };

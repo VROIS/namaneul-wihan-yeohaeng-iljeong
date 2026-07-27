@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import {
   Platform,
   useColorScheme,
@@ -23,7 +23,7 @@ import BTSWorldMapScreen from "@/screens/bts/BTSWorldMapScreen";
 // import { BTSLandingScreenC } from "@/screens/BTSLandingScreenC"; // C안 보관
 import VideoPreviewScreen from "@/screens/video/VideoPreviewScreen";
 import { Colors } from "@/constants/theme";
-import { isAuthenticated } from "@/lib/auth";
+import { useMapToggle } from "@/contexts/MapToggleContext";
 
 export type RootStackParamList = {
   Main: undefined;
@@ -55,15 +55,8 @@ export default function RootStackNavigator() {
   const isDark = colorScheme === "dark";
   const theme = Colors[colorScheme ?? "light"];
 
-  const [authChecked, setAuthChecked] = useState(false);
-  const [loggedIn, setLoggedIn] = useState(false);
-
-  useEffect(() => {
-    isAuthenticated().then((result) => {
-      setLoggedIn(result);
-      setAuthChecked(true);
-    });
-  }, []);
+  // ⚠️ 2026-07-27 = 로그인 판정은 전역 1곳(MapToggleContext)만. 직접 저장소를 읽던 옛 방식 폐기 §19.
+  const { authReady: authChecked } = useMapToggle();
 
   if (!authChecked) {
     return (

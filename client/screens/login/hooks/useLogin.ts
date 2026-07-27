@@ -11,10 +11,8 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Colors } from "@/constants/theme";
 import {
-  UserData,
   calculateAge,
   getAgeGroup,
-  saveAuth,
   socialLoginWithGoogle,
   socialLoginWithKakao,
   socialLoginWithKakaoApp,
@@ -403,9 +401,9 @@ export function useLogin({ onDone }: { onDone: () => void }) {
       });
       if (r.success) {
         onDone(); // 성공 = 호출자 결정. §0 단일경로.
-      } else if (r.error === "email_not_found") {
-        notify(t("login.emailNotFound"));
       } else {
+        // ⚠️ 옛 "모르는 메일 = 가입 거부(email_not_found)" 분기 삭제 = 2026-07-27 §19.
+        //   이제 이메일도 신규 가입이 되므로 그 응답 자체가 없어짐.
         notify(t("login.emailLoginFailed"));
       }
     } finally {
@@ -413,17 +411,8 @@ export function useLogin({ onDone }: { onDone: () => void }) {
     }
   };
 
-  const handleGuestBrowse = async () => {
-    const guestUser: UserData = {
-      id: "guest_browse",
-      displayName: "비회원",
-      provider: "kakao",
-      language: i18n.language,
-      birthDate: birthDateStr || "1990-01-01",
-    };
-    await saveAuth(guestUser);
-    onDone(); // 게스트 진입 = 호출자 결정. §0 단일경로.
-  };
+  // ⚠️ 게스트("로그인 없이 둘러보기") 완전삭제 = 2026-07-27 사장님 = 기능 폐지 §19.
+  //   가짜 계정(guest_browse)을 저장소에 넣어 로그인 흉내를 내던 경로 = 판정이 갈리는 원인이기도 했음.
 
   return {
     t,
@@ -465,7 +454,6 @@ export function useLogin({ onDone }: { onDone: () => void }) {
     setEmailInput,
     emailLoading,
     handleEmailLogin,
-    handleGuestBrowse,
   };
 }
 

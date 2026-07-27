@@ -21,7 +21,7 @@ export function useShareCalendar({
   t: (key: string, opts?: any) => string;
 }) {
   // ⚠️ 2026-07-25 = 로그인 게이트 = 인앱 팝업(requestLogin). navigation prop 제거(§0 결합 제거).
-  const { requestLogin } = useMapToggle();
+  const { requestLogin, isAuthed } = useMapToggle();
   // 어떤 동작이 진행 중인지 구분(2026-07-22 사장님 실기기 피드백 = 눌린 버튼만 선택색+스피너). null = 대기.
   const [sharingAction, setSharingAction] = useState<
     "share" | "calendar" | null
@@ -36,7 +36,7 @@ export function useShareCalendar({
   // 🔗 여정 공유 = 저장된 여정 id 확보(미저장이면 자동저장) → /shared/itinerary/{id} 링크 → 시스템 공유시트(카카오톡 포함).
   const handleShareItinerary = async () => {
     if (!itinerary) return;
-    if (!(await ensureLoggedIn(t, requestLogin))) return;
+    if (!ensureLoggedIn(isAuthed, t, requestLogin)) return;
 
     setSharingAction("share");
     try {
@@ -85,7 +85,7 @@ export function useShareCalendar({
   //   Android = expo-calendar 직접삽입(itinerary 슬롯 → 이벤트, 모달 없음). iOS·웹 = 서버 .ics URL(id 필요). §16 openCalendar 단일 진입.
   const handleSaveCalendar = async () => {
     if (!itinerary) return;
-    if (!(await ensureLoggedIn(t, requestLogin))) return;
+    if (!ensureLoggedIn(isAuthed, t, requestLogin)) return;
     setSharingAction("calendar");
     try {
       const id = await ensureItineraryId();

@@ -59,7 +59,6 @@ export default function LoginScreen() {
     setEmailInput,
     emailLoading,
     handleEmailLogin,
-    handleGuestBrowse,
   } = login;
 
   return (
@@ -323,17 +322,7 @@ export default function LoginScreen() {
               </View>
             </View>
 
-            {/* 로그인 없이 둘러보기 (테스트용) */}
-            <Pressable
-              onPress={handleGuestBrowse}
-              style={({ pressed }) => [
-                { opacity: pressed ? 0.7 : 1, paddingVertical: Spacing.sm },
-              ]}
-            >
-              <Text style={[styles.disclaimer, { color: theme.link }]}>
-                {t("login.guestBrowse")}
-              </Text>
-            </Pressable>
+            {/* 게스트 둘러보기 버튼 삭제 = 2026-07-27 사장님 기능 폐지 §19 */}
             {/* BTS 투어 바로가기 (로그인 없이 접근) */}
             <Pressable
               onPress={() => navigation.navigate("BTSConcertPlanner")}

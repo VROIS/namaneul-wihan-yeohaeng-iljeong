@@ -22,7 +22,7 @@ import { Colors } from "@/constants/theme";
 import { TripFormData, Vibe, DayAccommodation, Itinerary } from "@/types/trip";
 import { apiRequest } from "@/lib/query-client";
 import { useMapToggle } from "@/contexts/MapToggleContext";
-import { getUserData, UserData } from "@/lib/auth";
+import { UserData } from "@/lib/auth";
 import { useTranslation } from "react-i18next";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 import type { MainTabParamList } from "@/navigation/MainTabNavigator";
@@ -58,6 +58,7 @@ export function useTripPlanner() {
     requestAiOpinion,
     // ⚠️ 2026-07-25 = requestExpert만 사용(일별 바로예약 버튼=DailyTotal). expert 오버레이 열림/신호수신은 전역 ExpertOverlay(App)로 이관(§19).
     requestExpert,
+    authUser,
   } = useMapToggle();
   const { t, i18n } = useTranslation();
 
@@ -90,7 +91,9 @@ export function useTripPlanner() {
   // 🗺️ 2026-06-28 사용자 SSOT = 슬롯(이미지外) 터치 → 지도 그 마커 포커스 (= 양방향 연동, 썸네일터치=외부구글맵 분리)
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
   // 🎯 로그인된 사용자 정보 (birthDate 포함)
-  const [currentUser, setCurrentUser] = useState<UserData | null>(null);
+  // ⚠️ 2026-07-27 = 로그인 사용자 = 전역 1곳(authUser)만 읽음. 마운트 때 1회만 읽던 자기 사본 폐기 §19
+  //   (인앱 로그인 후에도 옛 값이 남아 여정 요청의 사용자 id 가 갈리던 문제).
+  const currentUser: UserData | null = authUser;
 
   const [formData, setFormData] = useState<TripFormData>({
     birthDate: "", // 🔧 필수 입력값으로 변경
@@ -181,27 +184,15 @@ export function useTripPlanner() {
     );
   }, [screen, itinerary, currentItineraryId, setCurrentItinerary]);
 
-  // 🎯 로그인된 사용자 정보 로드 → formData.birthDate 자동 설정
-  // 🔧 테스트용: 로그인 없이도 기본값 설정
+  // 🎯 로그인 사용자의 생년월일을 입력폼에 반영. 전역 판정(authUser)이 바뀌면 따라감
+  //   (마운트 때 저장소를 1회만 읽던 옛 방식 폐기 §19 = 인앱 로그인 후에도 옛 값이 남던 원인).
   useEffect(() => {
-    const loadUserData = async () => {
-      const userData = await getUserData();
-      if (userData) {
-        setCurrentUser(userData);
-        // birthDate를 사용자 정보에서 가져와 formData에 반영
-        setFormData((prev) => ({
-          ...prev,
-          birthDate: userData.birthDate || prev.birthDate,
-        }));
-        console.log(
-          `[TripPlanner] 🎯 사용자 정보 로드: ${userData.name}, birthDate=${userData.birthDate}`,
-        );
-      } else {
-        console.log(`[TripPlanner] 🎯 로그인 정보 없음`);
-      }
-    };
-    loadUserData();
-  }, []);
+    if (!authUser) return;
+    setFormData((prev) => ({
+      ...prev,
+      birthDate: authUser.birthDate || prev.birthDate,
+    }));
+  }, [authUser]);
 
   // 🗂️ 2026-07-03 사용자 SSOT = 저장여정 복원 = 단일 함수(§16). 프로필 "나의 여정" 카드 탭·전문가 답변함 문의 탭·공유링크 열람 공용.
   //   itineraryId → GET raw_data → 여정 결과화면(ResultStep) 재현. setItinerary + 숙소깃발 + 요약헤더 formData 스칼라 + Result 전환.

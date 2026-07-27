@@ -10,13 +10,7 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Colors } from "@/constants/theme";
 import { useMapToggle } from "@/contexts/MapToggleContext";
 import { apiRequest } from "@/lib/query-client";
-import {
-  getUserData,
-  isAuthenticated,
-  clearAuth,
-  saveAuth,
-  type UserData,
-} from "@/lib/auth";
+import { clearAuth, saveAuth } from "@/lib/auth";
 import { useTranslation } from "react-i18next";
 import { SUPPORTED_LANGS, changeLanguageAndPersist } from "@/lib/i18n";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
@@ -37,12 +31,9 @@ export function useProfile() {
   const [savedTrips, setSavedTrips] = useState<SavedItinerary[]>([]);
   const [isLoadingTrips, setIsLoadingTrips] = useState(true);
 
-  // 👤 사용자 정보
-  const [user, setUser] = useState<UserData | null>(null);
-  const [isAuth, setIsAuth] = useState(false);
   const [showLanguageModal, setShowLanguageModal] = useState(false);
-  // ⚠️ 2026-07-25(세션2) = 로그인 팝업(모달)은 navigation focus를 안 바꿔 useFocusEffect가 재실행 안 됨 → 로그인 성공해도 프로필이 미인증으로 남던 버그. authChangedAt 신호를 구독해 재조회.
-  const { authChangedAt } = useMapToggle();
+  // 👤 사용자 정보 = 전역 1곳만 읽음(§0). 이 화면이 따로 들고 있던 user/isAuth 상태 완전삭제 §19.
+  const { authUser, authReady, isAuthed } = useMapToggle();
 
   // 언마운트 후 setState 방지 = 두 트리거(focus·authChangedAt) 겹침·비동기 지연 대비 단일 가드(§16 = cancelled 플래그 2벌 대신 1벌).
   const mountedRef = useRef(true);
@@ -55,43 +46,41 @@ export function useProfile() {
 
   // ⚠️ 사장님 SSOT 2026-07-14 = 저장여정 목록 refetch. 조회 user_id = 로그인 본인(userData.id) = 저장(POST가 본인ID로 저장)과 한 쌍(§19). 옛 'admin' 고정 폐기(§9 잔재).
   //   ⚠️ 2026-07-25 = loadData를 useCallback으로 추출(§16 중복 제거) = useFocusEffect(탭 진입)와 authChangedAt(로그인 팝업 성공) 양쪽에서 재사용.
-  const loadData = useCallback(async () => {
+  // ⚠️ 수정금지(승인필요) — 사장님 SSOT 2026-07-27 = 로그인 판정은 전역 1곳(MapToggleContext.authUser)만 읽음.
+  //   이 화면이 직접 저장소를 읽던 옛 방식 완전삭제 §19 = 저장여정 조회(네트워크) 성공 뒤에야 로그인으로 표시해서,
+  //   조회 한 번 실패하면 로그인돼 있는데 "로그인이 필요합니다"가 뜨던 원인. 여기선 목록만 받아온다.
+  const loadTrips = useCallback(async () => {
+    if (!authReady) return;
+    if (!authUser?.id) {
+      setSavedTrips([]);
+      setIsLoadingTrips(false);
+      return;
+    }
     try {
-      const authenticated = await isAuthenticated();
+      const response = await apiRequest(
+        "GET",
+        `/api/users/${encodeURIComponent(authUser.id)}/itineraries`,
+      );
+      const trips = await response.json();
       if (!mountedRef.current) return;
-      setIsAuth(authenticated);
-      if (authenticated) {
-        const userData = await getUserData();
-        const response = await apiRequest(
-          "GET",
-          `/api/users/${encodeURIComponent(userData?.id || "admin")}/itineraries`,
-        );
-        const trips = await response.json();
-        if (!mountedRef.current) return;
-        setUser(userData);
-        setSavedTrips(trips || []);
-      } else {
-        setUser(null);
-        setSavedTrips([]);
-      }
+      setSavedTrips(trips || []);
     } catch (error) {
-      console.error("[Profile] 로드 오류:", error);
+      // ⚠️ 실패해도 **직전 목록을 그대로 둔다**(§22 검증 지적). 비우면 사용자가 여정이 지워진 줄 알고 또 저장함.
+      console.error(
+        "[Profile] 저장여정 조회 실패(로그인·목록 모두 유지):",
+        error,
+      );
     } finally {
       if (mountedRef.current) setIsLoadingTrips(false);
     }
-  }, []);
+  }, [authReady, authUser?.id]);
 
   // 탭 진입마다 재조회(기존).
   useFocusEffect(
     useCallback(() => {
-      loadData();
-    }, [loadData]),
+      loadTrips();
+    }, [loadTrips]),
   );
-  // 로그인 팝업(모달) 성공 등 인증상태 변경 시 재조회(세션2 = focus 안 바뀌어도 즉시 반영).
-  useEffect(() => {
-    if (!authChangedAt) return;
-    loadData();
-  }, [authChangedAt, loadData]);
 
   // ⚠️ 2026-07-03 사장님 SSOT = 카드 우측 상단 X = 확인 팝업 없이 즉시 삭제(범용 홈페이지 닫기 버튼처럼). 목록에서 바로 제거(낙관적) + 서버 DELETE. 실패 시 그 항목만 복원.
   const handleDeleteTrip = async (id: number) => {
@@ -112,13 +101,14 @@ export function useProfile() {
   const handleLanguageChange = async (code: string) => {
     await changeLanguageAndPersist(code);
     setShowLanguageModal(false);
-    if (user?.id && user.id !== "guest_browse") {
+    if (authUser?.id) {
       try {
-        await apiRequest("PATCH", `/api/users/${user.id}/preferred-language`, {
-          preferredLanguage: code,
-        });
-        setUser((prev) => (prev ? { ...prev, language: code } : null));
-        await saveAuth({ ...user!, language: code });
+        await apiRequest(
+          "PATCH",
+          `/api/users/${authUser.id}/preferred-language`,
+          { preferredLanguage: code },
+        );
+        await saveAuth({ ...authUser, language: code }); // saveAuth 가 전역 판정에 자동 알림
       } catch (e) {
         console.warn("[Profile] 언어 DB 업데이트 실패:", e);
       }
@@ -126,9 +116,7 @@ export function useProfile() {
   };
 
   const handleLogout = async () => {
-    await clearAuth();
-    setIsAuth(false);
-    setUser(null);
+    await clearAuth(); // clearAuth 가 전역 판정에 자동 알림
     setSavedTrips([]);
     navigation.reset({
       index: 0,
@@ -170,8 +158,8 @@ export function useProfile() {
     setPersona,
     savedTrips,
     isLoadingTrips,
-    user,
-    isAuth,
+    user: authUser,
+    isAuth: isAuthed,
     showLanguageModal,
     setShowLanguageModal,
     handleDeleteTrip,

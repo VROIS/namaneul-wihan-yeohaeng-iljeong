@@ -29,7 +29,7 @@ function LoginSheetForm({ onClose }: { onClose: () => void }) {
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? "light"];
 
-  // 로그인 성공 = 팝업만 닫음(배경 화면 유지, 화면 이동 X). 인증 지속은 saveAuth가 이미 처리(§16). onClose = 닫기 + bumpAuthChanged(부모).
+  // 로그인 성공 = 팝업만 닫음(배경 화면 유지, 화면 이동 X). 인증 반영은 saveAuth 가 자동으로 알림(§16).
   const login = useLogin({ onDone: onClose });
   const {
     t,
@@ -286,8 +286,7 @@ function LoginSheetForm({ onClose }: { onClose: () => void }) {
 // 바깥 껍데기 = 신호 수신 + visible 관리 + 상단 고정 센터 모달(RN Modal).
 //   상단 정렬(flex-start) + dim(여정 흐리게=맥락 유지). 카드가 화면 위쪽(키보드 위)에 고정 = 키보드(하단)와 안 겹침 → KAV 불필요.
 export default function LoginSheet() {
-  const { loginRequestedAt, clearLoginRequest, bumpAuthChanged } =
-    useMapToggle();
+  const { loginRequestedAt, clearLoginRequest } = useMapToggle();
   const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
@@ -301,11 +300,8 @@ export default function LoginSheet() {
     clearLoginRequest();
   }, [loginRequestedAt, clearLoginRequest]);
 
-  // 닫기(성공/취소 공통) = 팝업 닫고 인증변경 신호(§0 단일경로). 프로필 등이 재조회해 로그인 후 즉시 반영(문제3).
-  const handleClose = () => {
-    setVisible(false);
-    bumpAuthChanged();
-  };
+  // 닫기(성공/취소 공통) = 팝업만 닫음. 인증 반영은 saveAuth 가 자동으로 알림(§0 두 벌 금지, 2026-07-27).
+  const handleClose = () => setVisible(false);
 
   return (
     <Modal
