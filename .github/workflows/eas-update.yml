@@ -37,12 +37,15 @@ jobs:
       - name: 소셜로그인 열쇠 확인 (없으면 중단)
         env:
           G: ${{ secrets.EXPO_PUBLIC_GOOGLE_CLIENT_ID }}
+          K: ${{ secrets.EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY }}
         run: |
           # eas update 는 iOS·Android 번들만 만듦 = 앱이 실제로 쓰는 열쇠만 검사.
-          # 카카오 JS키는 웹 전용 → 여기서 요구하면 그 키가 없을 때 로그인과 무관한 수정까지
-          # OTA 배포가 전부 막힘(§22 검증 지적). APK 워크플로와 검사 목록 동일하게 통일.
+          # 카카오 = 앱도 네이티브 앱 키를 번들에서 읽는다(2026-07-27 §19) → 여기서도 검사.
+          # (카카오 JS키·REST키는 웹 전용이라 여기서 요구하지 않음 = OTA 가 통째로 막히는 것 방지.)
+          # APK 워크플로와 검사 목록 동일하게 통일.
           MISSING=""
           [ -z "$G" ] && MISSING="$MISSING EXPO_PUBLIC_GOOGLE_CLIENT_ID"
+          [ -z "$K" ] && MISSING="$MISSING EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY"
           if [ -n "$MISSING" ]; then
             echo "❌ GitHub Secrets 에 없는 열쇠:$MISSING"
             echo "   등록 위치 = repo Settings > Secrets and variables > Actions"
@@ -77,6 +80,8 @@ jobs:
           EXPO_PUBLIC_GOOGLE_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_CLIENT_ID }}
           EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID }}
           EXPO_PUBLIC_KAKAO_JAVASCRIPT_KEY: ${{ secrets.EXPO_PUBLIC_KAKAO_JAVASCRIPT_KEY }}
+          # 앱 카카오 로그인(네이티브 SDK) 전용 = 없으면 앱에서 카카오 로그인 불가
+          EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY: ${{ secrets.EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY }}
         run: |
           SAFE_MSG=$(printf '%s' "$COMMIT_MSG" | head -n 1 | tr -d '"')
           if [ -z "$SAFE_MSG" ]; then

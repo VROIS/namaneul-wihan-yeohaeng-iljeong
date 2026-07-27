@@ -15,10 +15,10 @@ import {
   ScrollView,
   Alert,
   Platform,
+  useColorScheme,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
-import { useColorScheme } from "react-native";
 import { Colors, Spacing, Brand } from "@/constants/theme";
 import Icon from "@/components/Icon";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";

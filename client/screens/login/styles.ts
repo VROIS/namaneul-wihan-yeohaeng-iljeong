@@ -335,18 +335,17 @@ export const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  // ⚠️ 사장님 SSOT 2026-07-27(AOS 실기기) = 로그인 처리 1초 동안 화면이 그대로라 "버그인가?" 하고 재입력하는 오조작 유발.
-  //   진행 중 = 카드 내용을 흐리고 그 위에 스피너 = "지금 처리 중" 이 즉시 보임.
-  // ⚠️ flex:1 금지 = 앱(RN)에서 카드가 항상 화면 60% 높이로 늘어나 키보드 경계까지 내려옴(§22 지적).
-  //   웹은 콘텐츠 크기라 크롬 실증으로 안 잡힘 = 앱 전용 회귀. 높이 auto 여도 오버레이는 카드 전체를 덮음.
-  loginFormWrap: {},
-  loginBusyOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    zIndex: 20,
+  // ⚠️ 사장님 SSOT 2026-07-27(AOS 실기기) = 로그인 처리 1초 동안 화면이 그대로라
+  //   "버그인가? 잘못 눌렀나" 하고 다시 누르는 오조작 유발 → 진행 중임을 **카드 안 한 줄**로 보여줌.
+  //   옛 덮개(오버레이) 방식 완전삭제 §19 = 배경색을 직접 칠하다 **밝은 모드에서 글자가 안 보였고**
+  //   (사장님 실기기, 우리 앱엔 다크모드 설정 자체가 없고 대부분 밝은 모드를 씀), 카드 높이까지 흔들었음.
+  //   여기선 배경을 안 칠하고 카드 위에 그대로 얹으므로 밝은/어두운 모드 양쪽 다 자동으로 읽힘.
+  loginBusyRow: {
+    flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 12,
+    gap: 8,
+    paddingBottom: Spacing.sm,
   },
   loginBusyText: { fontSize: 14, fontFamily: Fonts.semiBold },
-  loginBusyDim: { opacity: 0.25 },
 });

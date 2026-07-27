@@ -322,20 +322,23 @@ function setupErrorHandler(app: express.Application) {
         let loadedCount = 0;
         for (const key of keys) {
           if (key.keyValue && key.keyValue.trim() !== "" && key.isActive) {
-            process.env[key.keyName] = key.keyValue;
+            // ⚠️ 2026-07-27 §16 = 붙여넣기 때 딸려오는 줄바꿈·공백을 **여기서 한 번만** 깎는다.
+            //   아래 모든 대입이 이 값을 쓰므로 열쇠 종류에 상관없이 다 걸린다(카카오 KOE101 사고 근본).
+            const value = key.keyValue.trim();
+            process.env[key.keyName] = value;
             // 추가 매핑 (서비스별 env 변수명)
             if (key.keyName === "GEMINI_API_KEY") {
-              process.env.AI_INTEGRATIONS_GEMINI_API_KEY = key.keyValue;
+              process.env.AI_INTEGRATIONS_GEMINI_API_KEY = value;
             }
             if (key.keyName === "GOOGLE_MAPS_API_KEY") {
-              process.env.Google_maps_api_key = key.keyValue;
+              process.env.Google_maps_api_key = value;
             }
             if (
               key.keyName === "GOOGLE_OAUTH_CLIENT_ID" ||
               key.keyName === "EXPO_PUBLIC_GOOGLE_CLIENT_ID"
             ) {
-              process.env.GOOGLE_CLIENT_ID = key.keyValue;
-              process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID = key.keyValue;
+              process.env.GOOGLE_CLIENT_ID = value;
+              process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID = value;
             }
             loadedCount++;
           }

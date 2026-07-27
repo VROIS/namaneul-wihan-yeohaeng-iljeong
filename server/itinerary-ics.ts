@@ -7,9 +7,9 @@ export type ItineraryForICS = {
   title?: string;
   destination?: string;
   startDate: string;
-  days: Array<{
+  days: {
     day: number;
-    places: Array<{
+    places: {
       id?: string | number;
       name: string;
       startTime: string;
@@ -18,8 +18,8 @@ export type ItineraryForICS = {
       lng?: number;
       editorialSummary?: string;
       googleMapsUrl?: string;
-    }>;
-  }>;
+    }[];
+  }[];
 };
 
 // iCalendar 텍스트 필드 이스케이프 (RFC 5545 §3.3.11) — 순서 중요: 백슬래시 먼저

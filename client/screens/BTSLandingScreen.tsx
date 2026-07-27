@@ -31,14 +31,10 @@ import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
 import * as Haptics from "expo-haptics";
-import { socialLoginWithGoogle, socialLoginWithKakao } from "@/lib/auth";
+import { socialLoginWithGoogle } from "@/lib/auth";
 import { getIdTokenFromGoogleResponse } from "@/lib/auth-oauth";
 // 구글 = 웹(auth-google.web.ts) / 앱(auth-google.ts) 자동 선택 (2026-07-26 분리)
-import {
-  useGoogleAuthRequest,
-  isGoogleOAuthConfigured,
-} from "@/lib/auth-google";
-import { isKakaoOAuthConfigured, startKakaoLoginWeb } from "@/lib/auth-kakao";
+import { useGoogleAuthRequest } from "@/lib/auth-google";
 import { getApiUrl } from "@/lib/query-client";
 
 const { width: SW, height: SH } = Dimensions.get("window");

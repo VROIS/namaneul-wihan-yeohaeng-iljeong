@@ -3,9 +3,8 @@
 // = 한 플랫폼에 경로 1벌만 존재(§0). 네이티브 부품이 웹 번들에 섞이는 것도 원천 차단.
 import { Platform } from "react-native";
 import type { GoogleAuthRequestTuple } from "./auth-oauth";
-
-const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID || "";
-const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || "";
+// ⚠️ 열쇠는 client/lib/app-keys.ts 한 곳에서만 읽는다(§16).
+import { GOOGLE_WEB_CLIENT_ID, GOOGLE_IOS_CLIENT_ID } from "./app-keys";
 
 /** iOS 는 별도 클라이언트 ID 필요(구글 규정) / 안드로이드는 웹 클라이언트 ID 1개로 동작 */
 export function isGoogleOAuthConfigured(): boolean {

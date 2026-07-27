@@ -8,11 +8,13 @@
 
 const withGoogleSignIn =
   require("@react-native-google-signin/google-signin/app.plugin.js").default;
+// ⚠️ 빌드 때 쓰는 열쇠는 plugins/env-keys.js 한 곳에서만 읽는다(§16). 여기서 직접 process.env 를 읽지 말 것.
+const { googleIosClientId } = require("./env-keys");
 
 let warned = false; // Expo 가 설정을 여러 번 평가해도 안내는 1번만
 
 module.exports = function withGoogleNative(config) {
-  const iosClientId = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID;
+  const iosClientId = googleIosClientId();
 
   if (!iosClientId) {
     if (!warned) {

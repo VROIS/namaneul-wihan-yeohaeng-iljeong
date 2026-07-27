@@ -4,10 +4,10 @@
 import * as WebBrowser from "expo-web-browser";
 import { useIdTokenAuthRequest } from "expo-auth-session/providers/google";
 import type { GoogleAuthRequestTuple, GoogleAuthResponse } from "./auth-oauth";
+// ⚠️ 열쇠는 client/lib/app-keys.ts 한 곳에서만 읽는다(§16).
+import { GOOGLE_WEB_CLIENT_ID } from "./app-keys";
 
 WebBrowser.maybeCompleteAuthSession();
-
-const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID || "";
 
 /** 웹은 웹 클라이언트 ID 1개면 됨 */
 export function isGoogleOAuthConfigured(): boolean {
