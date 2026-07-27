@@ -66,237 +66,243 @@ function LoginSheetForm({ onClose }: { onClose: () => void }) {
   //   "버그인가? 내가 잘못 눌렀나?" 하고 다시 누르게 됨. **진행 중임을 반드시 보여준다.**
 
   return (
-    <ScrollView
-      contentContainerStyle={styles.loginCardBody}
-      showsVerticalScrollIndicator={false}
-      keyboardShouldPersistTaps="handled"
-    >
-      {/* ── 브랜드(이미지 로고 제거, Tripis 글자 + 슬로건 축소) ── 상단존 최소화(사장님 확정). */}
-      {/* ⚠️ 사장님 SSOT 2026-07-25 = 슬로건 제거 = 상단존 최소화 → 하단 인증(카카오/구글/이메일)이 한눈에 보이게. Tripis 글자만 유지. */}
-      <View style={styles.loginBrand}>
-        <View style={styles.loginBrandTitleRow}>
-          <Text style={styles.loginBrandTitle}>Tripis</Text>
-          <Text style={styles.tripisTitleKo}>트리피스</Text>
-        </View>
-      </View>
-
-      {/* ── 생년월일 (소셜 로그인 필수) ── 사장님 SSOT = 팝업 노출 = 로고글자+생년월일+구글+카톡+이메일. */}
-      <View style={styles.formSection}>
-        {/* ⚠️ 사장님 SSOT 2026-07-25 = 힌트("실제 생년월일…") 설명문 제거(§23) + "(필수 입력)"을 라벨 같은 줄에 작게 = 사용자가 필수임을 즉시 인식(설명 아닌 마커). 행(baseline)+간격 style = RN 크로스플랫폼 정석(공백 하드코딩 아님). */}
-        <View style={styles.labelRow}>
-          <Text style={[styles.label, { color: theme.textSecondary }]}>
-            {t("login.birthDate")}
-          </Text>
-          <Text style={[styles.labelRequired, { color: theme.textTertiary }]}>
-            {t("login.required")}
-          </Text>
-        </View>
-        <View style={styles.dateInputRow}>
-          <View
-            style={[
-              styles.dateInputBox,
-              styles.sheetDateBox,
-              {
-                backgroundColor: theme.backgroundDefault,
-                borderColor: dateError ? "#EF4444" : theme.border,
-              },
-            ]}
-          >
-            <TextInput
-              ref={dayRef}
-              style={[styles.dateInput, { color: theme.text }]}
-              placeholder="DD"
-              placeholderTextColor={theme.textTertiary}
-              value={day}
-              onChangeText={validateAndSetDay}
-              keyboardType="number-pad"
-              maxLength={2}
-              textAlign="center"
-              {...(Platform.OS === "web" && {
-                // 웹: type="number"는 선행 0 제거·숫자 변형 유발. text+inputMode로 정확한 입력 보장
-                type: "text",
-                inputMode: "numeric",
-              })}
-            />
-          </View>
-          <Text style={[styles.dateSeparator, { color: theme.textTertiary }]}>
-            /
-          </Text>
-          <View
-            style={[
-              styles.dateInputBox,
-              styles.sheetDateBox,
-              {
-                backgroundColor: theme.backgroundDefault,
-                borderColor: dateError ? "#EF4444" : theme.border,
-              },
-            ]}
-          >
-            <TextInput
-              ref={monthRef}
-              style={[styles.dateInput, { color: theme.text }]}
-              placeholder="MM"
-              placeholderTextColor={theme.textTertiary}
-              value={month}
-              onChangeText={validateAndSetMonth}
-              keyboardType="number-pad"
-              maxLength={2}
-              textAlign="center"
-              {...(Platform.OS === "web" && {
-                // 웹: type="number"는 선행 0 제거·숫자 변형 유발
-                type: "text",
-                inputMode: "numeric",
-              })}
-            />
-          </View>
-          <Text style={[styles.dateSeparator, { color: theme.textTertiary }]}>
-            /
-          </Text>
-          <View
-            style={[
-              styles.dateInputBox,
-              styles.sheetDateBox,
-              styles.sheetYearBox,
-              {
-                backgroundColor: theme.backgroundDefault,
-                borderColor: dateError ? "#EF4444" : theme.border,
-              },
-            ]}
-          >
-            <TextInput
-              ref={yearRef}
-              style={[styles.dateInput, { color: theme.text }]}
-              placeholder="YYYY"
-              placeholderTextColor={theme.textTertiary}
-              value={year}
-              onChangeText={validateAndSetYear}
-              keyboardType="number-pad"
-              maxLength={4}
-              textAlign="center"
-              {...(Platform.OS === "web" && {
-                // 웹: type="number"는 선행 0 제거·숫자 변형 유발
-                type: "text",
-                inputMode: "numeric",
-              })}
-            />
-          </View>
-          {isAdult && ageGroup ? (
-            <View style={styles.ageBadge}>
-              <Text style={styles.ageBadgeText}>{ageGroup}</Text>
-            </View>
-          ) : null}
-        </View>
-        {dateError ? (
-          <Text style={styles.errorText}>{dateError}</Text>
-        ) : isDateComplete && !isAdult && age !== null ? (
-          <Text style={styles.errorText}>{t("login.adultOnly")}</Text>
-        ) : null}
-      </View>
-
-      {/* ⚠️ 사장님 SSOT 2026-07-27(AOS 실기기) = 로그인 요청~응답 약 1초 동안 화면이 그대로라
-            "버그인가? 잘못 눌렀나" 하고 다시 누르는 오조작 유발 → **진행 중임을 한 줄로 보여준다.**
-            옛 덮개(오버레이) 방식 완전삭제 §19 = 배경색을 직접 칠하다 보니 밝은 모드에서 글자가 안 보이고,
-            카드 높이까지 흔드는 부작용이 남. 카드 안 보통 한 줄이면 그런 문제가 아예 없다. */}
+    <View style={styles.loginFormWrap}>
+      {/* ⚠️ 진행 중 = **카드 전체를 덮는 한 층**(반투명 배경 + 가운데 스피너). 버튼 위에 겹쳐 보이지 않게 카드 크기로 덮음.
+          아래 내용은 흐려지고(dim) 이 층만 또렷 = "지금 처리 중" 이 한눈에. 터치는 이미 disabled 라 중복 입력 없음. */}
       {busy && (
-        <View style={styles.loginBusyRow}>
-          <ActivityIndicator size="small" color={theme.link} />
+        <View
+          style={[
+            styles.loginBusyOverlay,
+            { backgroundColor: theme.backgroundRoot },
+          ]}
+          pointerEvents="none"
+        >
+          <ActivityIndicator size="large" color={theme.link} />
           <Text style={[styles.loginBusyText, { color: theme.text }]}>
             {t("login.signingIn")}
           </Text>
         </View>
       )}
-
-      {/* ── 소셜 로그인 ── */}
-      <View style={styles.socialSection}>
-        {/* 카카오 */}
-        <Pressable
-          style={({ pressed }) => [
-            styles.socialButton,
-            styles.kakaoButton,
-            pressed && styles.buttonPressed,
-            oauthLoading && styles.buttonDisabled,
-          ]}
-          onPress={handleKakaoPress}
-          disabled={oauthLoading}
-          accessibilityRole="button"
-          accessibilityLabel="카카오로 시작하기"
-          accessibilityState={{ disabled: oauthLoading }}
-        >
-          <View style={styles.kakaoIcon}>
-            <Text style={styles.kakaoIconText}>K</Text>
-          </View>
-          <Text style={styles.kakaoButtonText}>카카오로 시작하기</Text>
-        </Pressable>
-
-        {/* 구글 */}
-        <Pressable
-          style={({ pressed }) => [
-            styles.socialButton,
-            styles.googleButton,
-            { borderColor: theme.border },
-            pressed && styles.buttonPressed,
-            oauthLoading && styles.buttonDisabled,
-          ]}
-          onPress={handleGooglePress}
-          disabled={oauthLoading}
-          accessibilityRole="button"
-          accessibilityLabel={t("login.googleStart")}
-          accessibilityState={{ disabled: oauthLoading }}
-        >
-          <View style={styles.googleIcon}>
-            <Text style={styles.googleIconText}>G</Text>
-          </View>
-          <Text style={[styles.googleButtonText, { color: theme.text }]}>
-            {t("login.googleStart")}
-          </Text>
-        </Pressable>
-
-        {/* ⚠️ 이메일 로그인 = 구글(지메일)로 로그인 못 하는 사용자가 다른 이메일로 시작하는 정식 경로. 설명 라벨 없이 입력창만 = 사용자가 순서대로 진행(§23 설명형 텍스트 금지, 사장님 SSOT 2026-07-25). */}
-        <View style={styles.emailLoginBox}>
-          <View style={styles.emailLoginRow}>
-            <TextInput
-              style={[
-                styles.emailInput,
-                {
-                  backgroundColor: theme.backgroundDefault,
-                  color: theme.text,
-                  borderColor: theme.border,
-                },
-              ]}
-              placeholder={t("login.emailPlaceholder")}
-              placeholderTextColor={theme.textTertiary}
-              value={emailInput}
-              onChangeText={setEmailInput}
-              autoCapitalize="none"
-              keyboardType="email-address"
-              // ⚠️ 사장님 SSOT 2026-07-26 = 생년월일(연령대 표시)이 먼저. 그 전엔 이메일 입력 자체를 막음
-              //   = 생년월일 우회 원천 차단. 조건 = 위 연령대 배지가 뜨는 조건과 동일(isAdult && ageGroup).
-              editable={!busy && canUseEmail}
-              returnKeyType="done"
-              onSubmitEditing={handleEmailLogin}
-            />
-            <Pressable
-              style={({ pressed }) => [
-                styles.emailLoginBtn,
-                {
-                  backgroundColor: Brand.primary,
-                  opacity: emailBtnDisabled ? 0.5 : pressed ? 0.8 : 1,
-                },
-              ]}
-              onPress={handleEmailLogin}
-              disabled={emailBtnDisabled}
-              accessibilityRole="button"
-              accessibilityLabel={t("login.emailLoginBtn")}
-              accessibilityState={{ disabled: emailBtnDisabled }}
-            >
-              <Text style={styles.emailLoginBtnText}>
-                {t("login.emailLoginBtn")}
-              </Text>
-            </Pressable>
+      <ScrollView
+        contentContainerStyle={styles.loginCardBody}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        style={busy ? styles.loginBusyDim : undefined}
+      >
+        {/* ── 브랜드(이미지 로고 제거, Tripis 글자 + 슬로건 축소) ── 상단존 최소화(사장님 확정). */}
+        {/* ⚠️ 사장님 SSOT 2026-07-25 = 슬로건 제거 = 상단존 최소화 → 하단 인증(카카오/구글/이메일)이 한눈에 보이게. Tripis 글자만 유지. */}
+        <View style={styles.loginBrand}>
+          <View style={styles.loginBrandTitleRow}>
+            <Text style={styles.loginBrandTitle}>Tripis</Text>
+            <Text style={styles.tripisTitleKo}>트리피스</Text>
           </View>
         </View>
-      </View>
-    </ScrollView>
+
+        {/* ── 생년월일 (소셜 로그인 필수) ── 사장님 SSOT = 팝업 노출 = 로고글자+생년월일+구글+카톡+이메일. */}
+        <View style={styles.formSection}>
+          {/* ⚠️ 사장님 SSOT 2026-07-25 = 힌트("실제 생년월일…") 설명문 제거(§23) + "(필수 입력)"을 라벨 같은 줄에 작게 = 사용자가 필수임을 즉시 인식(설명 아닌 마커). 행(baseline)+간격 style = RN 크로스플랫폼 정석(공백 하드코딩 아님). */}
+          <View style={styles.labelRow}>
+            <Text style={[styles.label, { color: theme.textSecondary }]}>
+              {t("login.birthDate")}
+            </Text>
+            <Text style={[styles.labelRequired, { color: theme.textTertiary }]}>
+              {t("login.required")}
+            </Text>
+          </View>
+          <View style={styles.dateInputRow}>
+            <View
+              style={[
+                styles.dateInputBox,
+                styles.sheetDateBox,
+                {
+                  backgroundColor: theme.backgroundDefault,
+                  borderColor: dateError ? "#EF4444" : theme.border,
+                },
+              ]}
+            >
+              <TextInput
+                ref={dayRef}
+                style={[styles.dateInput, { color: theme.text }]}
+                placeholder="DD"
+                placeholderTextColor={theme.textTertiary}
+                value={day}
+                onChangeText={validateAndSetDay}
+                keyboardType="number-pad"
+                maxLength={2}
+                textAlign="center"
+                {...(Platform.OS === "web" && {
+                  // 웹: type="number"는 선행 0 제거·숫자 변형 유발. text+inputMode로 정확한 입력 보장
+                  type: "text",
+                  inputMode: "numeric",
+                })}
+              />
+            </View>
+            <Text style={[styles.dateSeparator, { color: theme.textTertiary }]}>
+              /
+            </Text>
+            <View
+              style={[
+                styles.dateInputBox,
+                styles.sheetDateBox,
+                {
+                  backgroundColor: theme.backgroundDefault,
+                  borderColor: dateError ? "#EF4444" : theme.border,
+                },
+              ]}
+            >
+              <TextInput
+                ref={monthRef}
+                style={[styles.dateInput, { color: theme.text }]}
+                placeholder="MM"
+                placeholderTextColor={theme.textTertiary}
+                value={month}
+                onChangeText={validateAndSetMonth}
+                keyboardType="number-pad"
+                maxLength={2}
+                textAlign="center"
+                {...(Platform.OS === "web" && {
+                  // 웹: type="number"는 선행 0 제거·숫자 변형 유발
+                  type: "text",
+                  inputMode: "numeric",
+                })}
+              />
+            </View>
+            <Text style={[styles.dateSeparator, { color: theme.textTertiary }]}>
+              /
+            </Text>
+            <View
+              style={[
+                styles.dateInputBox,
+                styles.sheetDateBox,
+                styles.sheetYearBox,
+                {
+                  backgroundColor: theme.backgroundDefault,
+                  borderColor: dateError ? "#EF4444" : theme.border,
+                },
+              ]}
+            >
+              <TextInput
+                ref={yearRef}
+                style={[styles.dateInput, { color: theme.text }]}
+                placeholder="YYYY"
+                placeholderTextColor={theme.textTertiary}
+                value={year}
+                onChangeText={validateAndSetYear}
+                keyboardType="number-pad"
+                maxLength={4}
+                textAlign="center"
+                {...(Platform.OS === "web" && {
+                  // 웹: type="number"는 선행 0 제거·숫자 변형 유발
+                  type: "text",
+                  inputMode: "numeric",
+                })}
+              />
+            </View>
+            {isAdult && ageGroup ? (
+              <View style={styles.ageBadge}>
+                <Text style={styles.ageBadgeText}>{ageGroup}</Text>
+              </View>
+            ) : null}
+          </View>
+          {dateError ? (
+            <Text style={styles.errorText}>{dateError}</Text>
+          ) : isDateComplete && !isAdult && age !== null ? (
+            <Text style={styles.errorText}>{t("login.adultOnly")}</Text>
+          ) : null}
+        </View>
+
+        {/* ── 소셜 로그인 ── */}
+        <View style={styles.socialSection}>
+          {/* 카카오 */}
+          <Pressable
+            style={({ pressed }) => [
+              styles.socialButton,
+              styles.kakaoButton,
+              pressed && styles.buttonPressed,
+              oauthLoading && styles.buttonDisabled,
+            ]}
+            onPress={handleKakaoPress}
+            disabled={oauthLoading}
+            accessibilityRole="button"
+            accessibilityLabel="카카오로 시작하기"
+            accessibilityState={{ disabled: oauthLoading }}
+          >
+            <View style={styles.kakaoIcon}>
+              <Text style={styles.kakaoIconText}>K</Text>
+            </View>
+            <Text style={styles.kakaoButtonText}>카카오로 시작하기</Text>
+          </Pressable>
+
+          {/* 구글 */}
+          <Pressable
+            style={({ pressed }) => [
+              styles.socialButton,
+              styles.googleButton,
+              { borderColor: theme.border },
+              pressed && styles.buttonPressed,
+              oauthLoading && styles.buttonDisabled,
+            ]}
+            onPress={handleGooglePress}
+            disabled={oauthLoading}
+            accessibilityRole="button"
+            accessibilityLabel={t("login.googleStart")}
+            accessibilityState={{ disabled: oauthLoading }}
+          >
+            <View style={styles.googleIcon}>
+              <Text style={styles.googleIconText}>G</Text>
+            </View>
+            <Text style={[styles.googleButtonText, { color: theme.text }]}>
+              {t("login.googleStart")}
+            </Text>
+          </Pressable>
+
+          {/* ⚠️ 이메일 로그인 = 구글(지메일)로 로그인 못 하는 사용자가 다른 이메일로 시작하는 정식 경로. 설명 라벨 없이 입력창만 = 사용자가 순서대로 진행(§23 설명형 텍스트 금지, 사장님 SSOT 2026-07-25). */}
+          <View style={styles.emailLoginBox}>
+            <View style={styles.emailLoginRow}>
+              <TextInput
+                style={[
+                  styles.emailInput,
+                  {
+                    backgroundColor: theme.backgroundDefault,
+                    color: theme.text,
+                    borderColor: theme.border,
+                  },
+                ]}
+                placeholder={t("login.emailPlaceholder")}
+                placeholderTextColor={theme.textTertiary}
+                value={emailInput}
+                onChangeText={setEmailInput}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                // ⚠️ 사장님 SSOT 2026-07-26 = 생년월일(연령대 표시)이 먼저. 그 전엔 이메일 입력 자체를 막음
+                //   = 생년월일 우회 원천 차단. 조건 = 위 연령대 배지가 뜨는 조건과 동일(isAdult && ageGroup).
+                editable={!busy && canUseEmail}
+                returnKeyType="done"
+                onSubmitEditing={handleEmailLogin}
+              />
+              <Pressable
+                style={({ pressed }) => [
+                  styles.emailLoginBtn,
+                  {
+                    backgroundColor: Brand.primary,
+                    opacity: emailBtnDisabled ? 0.5 : pressed ? 0.8 : 1,
+                  },
+                ]}
+                onPress={handleEmailLogin}
+                disabled={emailBtnDisabled}
+                accessibilityRole="button"
+                accessibilityLabel={t("login.emailLoginBtn")}
+                accessibilityState={{ disabled: emailBtnDisabled }}
+              >
+                <Text style={styles.emailLoginBtnText}>
+                  {t("login.emailLoginBtn")}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 

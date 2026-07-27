@@ -15,6 +15,7 @@ import {
   getAgeGroup,
   socialLoginWithGoogle,
   socialLoginWithKakao,
+  socialLoginWithKakaoApp,
   whatsappOtpSend,
   whatsappOtpVerify,
   emailLogin,
@@ -368,9 +369,10 @@ export function useLogin({ onDone }: { onDone: () => void }) {
       return;
     }
     await runNativeSocialLogin(async () => {
-      const accessToken = await loginKakaoApp();
-      return socialLoginWithKakao({
-        accessToken,
+      const kakao = await loginKakaoApp();
+      if (!kakao) return null; // 사용자가 브라우저 창을 닫음
+      return socialLoginWithKakaoApp({
+        ...kakao, // 봉한 표 + 이 폰만 아는 무작위값
         birthDate: birthDateStr!,
         language: i18n.language,
         deviceType: "mobile",

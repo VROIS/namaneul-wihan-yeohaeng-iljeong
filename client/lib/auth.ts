@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getApiUrl } from "./query-client";
+import { KAKAO_APP_API_ORIGIN } from "./auth-kakao";
 
 const AUTH_KEY = "@vibetrip_auth";
 const USER_KEY = "@vibetrip_user";
@@ -116,9 +117,10 @@ async function postSocialLogin(
   path: string,
   data: Record<string, string>,
   failMsg: string,
+  origin: string = getApiUrl(),
 ): Promise<LoginResult> {
   try {
-    const response = await fetch(`${getApiUrl()}${path}`, {
+    const response = await fetch(`${origin}${path}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
@@ -144,6 +146,24 @@ export function socialLoginWithGoogle(data: {
   deviceType: string;
 }): Promise<LoginResult> {
   return postSocialLogin("/api/auth/google", data, "Google 로그인 실패");
+}
+
+/** 앱 카카오 로그인 = 서버가 봉한 표를 열어 토큰으로 바꿔 로그인.
+ *  nonce = 이 폰이 시작한 로그인임을 증명하는 값(가로챈 표를 못 쓰게 함, 2026-07-26). */
+export function socialLoginWithKakaoApp(data: {
+  ticket: string;
+  nonce: string;
+  birthDate: string;
+  language: string;
+  deviceType: string;
+}): Promise<LoginResult> {
+  // ⚠️ 카카오 앱 경로만 운영 주소 고정 = 표를 봉한 서버와 여는 서버를 같게(auth-kakao.ts 주석 참조)
+  return postSocialLogin(
+    "/api/auth/kakao/code",
+    data,
+    "카카오 로그인 실패",
+    KAKAO_APP_API_ORIGIN,
+  );
 }
 
 /** 카카오 OAuth 성공 후 accessToken으로 로그인 (웹 = 브라우저가 교환한 토큰) */
