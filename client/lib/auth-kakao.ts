@@ -129,9 +129,16 @@ export async function loginKakaoApp(): Promise<KakaoAppLoginResult | null> {
   );
 
   const startUrl = `${KAKAO_APP_API_ORIGIN}/api/auth/kakao/start?nh=${nonceHash}`;
+  // ⚠️ createTask:false = 로그인 창을 **앱과 같은 작업(task)** 으로 엶 (2026-07-27 사장님 지적 = 로그인 후 빈 껍데기 창이 뒤에 남음).
+  //   안드로이드에는 브라우저를 닫는 기능이 없다("We can't dismiss the browser on Android" — WebBrowser.js).
+  //   기본값(true)에도 라이브러리가 정리 플래그(NO_HISTORY·EXCLUDE_FROM_RECENTS)를 붙이지만 **크롬이 무시**해서 남는다.
+  //   같은 작업으로 열면 MainActivity(launchMode=singleTask)가 딥링크 복귀 때 위 스택을 정리한다.
+  //   ⚠️ 맞바꾼 것 = 위 정리 플래그가 함께 빠짐 → 로그인 도중 홈버튼으로 나갔다 오면 앱 대신 로그인 창이 먼저 보일 수 있음(실기기 확인 대상).
+  //   안드로이드 전용(iOS 는 이 옵션 무시). 전달 경로 = 폴리필 _openBrowserAndWaitAndroidAsync → openBrowserAsync.
   const result = await WebBrowser.openAuthSessionAsync(
     startUrl,
     KAKAO_APP_RETURN_SCHEME,
+    { createTask: false },
   );
 
   if (result.type !== "success" || !result.url) {
