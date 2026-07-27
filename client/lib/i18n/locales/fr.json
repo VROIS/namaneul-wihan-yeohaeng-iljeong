@@ -20,6 +20,7 @@
     "download": "Télécharger"
   },
   "login": {
+    "signingIn": "Connexion…",
     "slogan": "Votre assistant IA personnel,\nunique et dédié à vos voyages",
     "language": "Langue",
     "birthDate": "Date de naissance",

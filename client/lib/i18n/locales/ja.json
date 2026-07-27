@@ -20,6 +20,7 @@
     "download": "ダウンロード"
   },
   "login": {
+    "signingIn": "ログイン中…",
     "slogan": "あなたの旅を任せられる、\n世界でたった一つのAIアシスタント",
     "language": "言語",
     "birthDate": "生年月日",
