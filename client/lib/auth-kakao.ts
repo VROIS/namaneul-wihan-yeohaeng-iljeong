@@ -12,6 +12,7 @@ import { initializeKakaoSDK } from "@react-native-kakao/core";
 import {
   issueAccessTokenWithCodeWeb,
   login as kakaoNativeLogin,
+  isKakaoTalkLoginAvailable,
 } from "@react-native-kakao/user";
 import { getApiUrl } from "./query-client";
 // ⚠️ 열쇠는 client/lib/app-keys.ts 한 곳에서만 읽는다(§16). 여기서 직접 process.env 를 읽지 말 것.
@@ -89,23 +90,29 @@ export async function ensureKakaoSDKInitialized(): Promise<boolean> {
  *   ② 탭 수가 많고(3~4탭) 아이폰은 애플 확인창이 1탭 더 붙음
  *   → 네이티브면 카카오톡으로 **2탭**에 끝나고 창이 아예 안 뜬다(구글 로그인과 같은 방식).
  *
- *   ⚠️ 경로는 **1 벌만**(§0 = 폴백·이중 분기 금지). 카카오톡 경로가 실패하면 대체 경로로 몰래
- *   넘어가지 않는다. 사유(2026-07-27 실기기) = 넘어가던 갈래가 실패를 삼키고 카카오 웹 오류
- *   페이지만 띄워, 사장님도 AI 도 원인을 볼 수 없었다.
+ *   ⚠️ 카카오톡 경로가 실패하면 **카카오계정 화면으로 이어간다**(2026-07-28 사장님 지시로 복원).
+ *   AI 가 §0(폴백 금지)를 이유로 이 갈래를 지웠다가 **되던 버튼을 망가뜨렸다** — 카카오톡이 실패하면
+ *   아무 화면도 안 뜨고 버튼이 죽은 것처럼 보였고, 사장님이 오류 화면조차 볼 수 없게 됐다.
+ *   = 이건 폴백이 아니라 **카카오 공식 로그인 흐름**(카카오톡 → 안 되면 카카오계정)이다.
  *
- *   반환 = accessToken. 웹과 똑같이 서버 /api/auth/kakao 로 보냄. 실패는 **그대로 올려보낸다.**
- *
- *   ⚠️ 옛 "취소(Cancelled·AccessDenied)면 조용히 null" 갈래 삭제 = 2026-07-28 §19.
- *   사유(사장님 실기기): 카카오톡이 **즉시 실패**할 때도 같은 이름으로 오는데 그걸 취소로 오인해
- *   삼키는 바람에, 버튼을 눌러도 "로그인 중" 만 잠깐 뜨고 아무 말 없이 되돌아왔다 = 버튼이 죽은 것처럼 보임.
- *   실패를 삼키면 사장님도 AI 도 원인을 볼 수 없다(§11) = 삼키지 않는다.
+ *   반환 = accessToken. 웹과 똑같이 서버 /api/auth/kakao 로 보냄. 실패는 그대로 올려보낸다.
  */
 export async function loginKakaoApp(): Promise<string> {
   if (!sdkInitialized) {
     await initializeKakaoSDK(KAKAO_NATIVE_APP_KEY);
     sdkInitialized = true;
   }
-  return (await kakaoNativeLogin()).accessToken;
+  try {
+    return (await kakaoNativeLogin()).accessToken;
+  } catch (talkErr) {
+    const viaKakaoTalk = await isKakaoTalkLoginAvailable().catch(() => false);
+    if (!viaKakaoTalk) throw talkErr;
+    console.warn(
+      "[Kakao] 카카오톡 경로 실패 → 카카오계정 화면으로 이어감:",
+      talkErr,
+    );
+    return (await kakaoNativeLogin({ useKakaoAccountLogin: true })).accessToken;
+  }
 }
 
 /**
