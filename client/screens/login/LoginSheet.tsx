@@ -17,6 +17,8 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
+// ⚠️ 2026-07-28 = 지금 폰에서 도는 코드가 어느 것인지 화면에 찍기 위함(아래 buildTag).
+import * as Updates from "expo-updates";
 
 import Icon from "@/components/Icon";
 import { Colors, Brand } from "@/constants/theme";
@@ -61,6 +63,12 @@ function LoginSheetForm({ onClose }: { onClose: () => void }) {
   //   연령대 배지(아래 isAdult && ageGroup)와 같은 조건 1벌 = 화면과 입력 제한이 항상 일치.
   const canUseEmail = isAdult && !!ageGroup;
   const busy = oauthLoading || emailLoading;
+  // ⚠️ 2026-07-28 = 지금 폰에서 도는 코드 표시. 앱은 켤 때 옛 코드로 먼저 뜨고 새 코드는
+  //   **다음에 켤 때** 적용되는 구조라, "고쳤는데 그대로다" 가 옛 코드 때문인지 구분이 안 됐다.
+  //   updateId 가 있으면 OTA 로 받은 코드, 없으면 APK 에 들어있던 코드.
+  const buildTag = Updates.updateId
+    ? `ota ${Updates.updateId.slice(0, 8)}`
+    : "apk 내장";
   const emailBtnDisabled = busy || !canUseEmail || !emailInput.trim();
   // ⚠️ 사장님 SSOT 2026-07-27(AOS 실기기) = 로그인 요청~응답 약 1초 동안 화면이 그대로라
   //   "버그인가? 내가 잘못 눌렀나?" 하고 다시 누르게 됨. **진행 중임을 반드시 보여준다.**
@@ -205,6 +213,14 @@ function LoginSheetForm({ onClose }: { onClose: () => void }) {
           </Text>
         </View>
       )}
+
+      {/* ⚠️ 2026-07-28 = **지금 폰에서 도는 코드가 어느 것인지** 눈으로 확인하는 표시.
+          사유: 앱은 켤 때 옛 코드로 먼저 뜨고 새 코드는 다음에 켤 때 적용되는 구조라,
+          "고쳤는데 그대로다"가 옛 코드 때문인지 진짜 안 고쳐진 건지 사장님도 AI 도 구분할 수 없었다.
+          이 한 줄이 있으면 그 실랑이가 끝난다. 회색 작은 글씨 = 화면 방해 없음(§23). */}
+      <Text style={[styles.loginBuildTag, { color: theme.textSecondary }]}>
+        {buildTag}
+      </Text>
 
       {/* ── 소셜 로그인 ── */}
       <View style={styles.socialSection}>

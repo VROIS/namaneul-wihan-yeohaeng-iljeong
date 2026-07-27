@@ -348,4 +348,11 @@ export const styles = StyleSheet.create({
     paddingBottom: Spacing.sm,
   },
   loginBusyText: { fontSize: 14, fontFamily: Fonts.semiBold },
+  // ⚠️ 2026-07-28 = 지금 도는 코드 표시(작게, 가운데). 화면 방해 없이 눈으로만 확인용.
+  loginBuildTag: {
+    fontSize: 10,
+    fontFamily: Fonts.sans,
+    textAlign: "center",
+    marginTop: 6,
+  },
 });
