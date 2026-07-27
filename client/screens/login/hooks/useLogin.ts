@@ -106,8 +106,8 @@ export function useLogin({ onDone }: { onDone: () => void }) {
   // ⚠️ 2026-07-14 = 웹(WebView)에서 Alert.alert 이 안 떠서 로그인 실패·검증 안내가 안 보임 = "눌러도 반응 없음"의 원인. 웹 = window.alert, 앱 = Alert.alert(§19).
   //   2026-07-26(§22 리뷰) = "로그인 실패" 안내를 여기 1벌로 통일(§16).
   //   (생년월일 게이트·WhatsApp 의 Alert.alert 은 그대로 = 생년월일은 인라인 빨간 문구가 웹에서도 보이고, WhatsApp 은 비활성)
-  //   ⚠️ 2026-07-27 사장님 SSOT = 알림은 **한 줄**만. 카카오·구글은 실패 사유를 자기 화면에서 이미
-  //   알려주므로 우리가 오류코드를 덧붙이면 누더기가 된다. 상세문구 기능 완전삭제 §19.
+  //   ⚠️ 2026-07-27 사장님 SSOT = 알림은 **한 줄**만(제목·본문 2칸 쓰던 상세문구 기능 완전삭제 §19).
+  //   긴 영문 원문은 안 붙인다 = 누더기 금지(§23). 실패 사유 **이름 한 낱말**만 호출부에서 제목에 붙인다.
   const notify = (msg: string) => {
     if (Platform.OS === "web") {
       if (typeof window !== "undefined") window.alert(msg);
@@ -263,10 +263,14 @@ export function useLogin({ onDone }: { onDone: () => void }) {
         onDone(); // 성공 = 호출자 결정. §0 단일경로.
       else notify(result.error || t("login.loginFailed"));
     } catch (err) {
-      // ⚠️ 2026-07-26 = 실패 사유를 화면에 그대로 보여줌(§11). 삼키면 사장님·AI 모두 원인을 못 봄.
-      //   (취소는 각 로그인 함수가 null 을 반환해 위에서 조용히 끝남 = 여기 안 옴)
+      // ⚠️ 2026-07-28 = 실패 **사유 이름 한 낱말**만 제목 옆에 붙인다(§11 = 사실을 보게).
+      //   사유: 사유를 아예 안 보여주니 실기기에서 "버튼이 죽었다"로만 보였고 원인을 못 찾았다.
+      //   긴 영문 원문은 안 붙인다(§23 = 누더기 금지). 예: "로그인 실패 (Misconfigured)".
       console.error("[Auth] 앱 소셜 로그인 실패:", err);
-      notify(t("login.loginFailed"));
+      const code = (err as { code?: string | number } | null)?.code;
+      notify(
+        code ? `${t("login.loginFailed")} (${code})` : t("login.loginFailed"),
+      );
     } finally {
       setOauthLoading(false);
     }
@@ -368,7 +372,6 @@ export function useLogin({ onDone }: { onDone: () => void }) {
     }
     await runNativeSocialLogin(async () => {
       const accessToken = await loginKakaoApp();
-      if (!accessToken) return null; // 사용자가 취소 = 조용히 끝냄(구글 경로와 같은 규약)
       return socialLoginWithKakao({
         accessToken,
         birthDate: birthDateStr!,

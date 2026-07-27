@@ -93,24 +93,19 @@ export async function ensureKakaoSDKInitialized(): Promise<boolean> {
  *   넘어가지 않는다. 사유(2026-07-27 실기기) = 넘어가던 갈래가 실패를 삼키고 카카오 웹 오류
  *   페이지만 띄워, 사장님도 AI 도 원인을 볼 수 없었다.
  *
- *   반환 = accessToken. 웹과 똑같이 서버 /api/auth/kakao 로 보냄.
- *   **사용자가 취소하면 null**(= 구글 경로와 같은 규약). 취소는 실패가 아니라서 알림창을 띄우지 않는다.
+ *   반환 = accessToken. 웹과 똑같이 서버 /api/auth/kakao 로 보냄. 실패는 **그대로 올려보낸다.**
+ *
+ *   ⚠️ 옛 "취소(Cancelled·AccessDenied)면 조용히 null" 갈래 삭제 = 2026-07-28 §19.
+ *   사유(사장님 실기기): 카카오톡이 **즉시 실패**할 때도 같은 이름으로 오는데 그걸 취소로 오인해
+ *   삼키는 바람에, 버튼을 눌러도 "로그인 중" 만 잠깐 뜨고 아무 말 없이 되돌아왔다 = 버튼이 죽은 것처럼 보임.
+ *   실패를 삼키면 사장님도 AI 도 원인을 볼 수 없다(§11) = 삼키지 않는다.
  */
-export async function loginKakaoApp(): Promise<string | null> {
+export async function loginKakaoApp(): Promise<string> {
   if (!sdkInitialized) {
     await initializeKakaoSDK(KAKAO_NATIVE_APP_KEY);
     sdkInitialized = true;
   }
-  try {
-    return (await kakaoNativeLogin()).accessToken;
-  } catch (err) {
-    // 카카오 SDK 는 취소를 두 이름으로 올린다 = 창을 닫음("Cancelled", 실기기 확인 2026-07-27
-    // "(Cancelled) user cancelled.") / 동의화면에서 '취소' 누름("AccessDenied").
-    // 둘 다 실패가 아니라 취소 → 조용히 끝냄. 안 그러면 뒤로가기만 해도 "로그인 실패" 알림이 뜬다.
-    const code = (err as { code?: string } | null)?.code;
-    if (code === "Cancelled" || code === "AccessDenied") return null;
-    throw err;
-  }
+  return (await kakaoNativeLogin()).accessToken;
 }
 
 /**
