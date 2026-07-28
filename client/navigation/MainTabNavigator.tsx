@@ -229,31 +229,30 @@ export default function MainTabNavigator() {
             },
           }}
         />
-        {/* ✅ 전문가 (센터) = 현지 전문가 문의 = 여정화면 위 오버레이(AI의견과 동일). 화면 이동 아님 = 탭은 트리거만(2026-07-14 사장님 SSOT). */}
+        {/* ✅ 전문가 (센터) = 현지 전문가 문의 = 로그인시 100% 오버레이 오픈 */}
         <Tab.Screen
           name="Verify"
           component={MapTogglePlaceholder}
           options={{
             tabBarLabel: t("tab.expert"),
             headerShown: false,
-            tabBarBadge: expertBadge > 0 ? expertBadge : undefined, // 답변 안 읽은 수/대기 문의 수(0이면 숨김)
-            // ⚠️ 사장님 SSOT 2026-07-14 = 전문가/관리자면 항상 활성(여정 없어도 답변함). 사용자는 여정 있을 때만(문의는 여정 필요).
-            tabBarIcon: () => (
+            tabBarBadge: expertBadge > 0 ? expertBadge : undefined,
+            tabBarIcon: ({ color }) => (
               <Icon
                 name="brain"
                 size={24}
-                color={
-                  currentItinerary || isExpertRole
-                    ? Brand.primary
-                    : theme.textTertiary
-                }
+                color={isAuthed ? Brand.primary : theme.textTertiary}
               />
             ),
           }}
           listeners={{
             tabPress: (e) => {
-              e.preventDefault(); // 화면 이동 방지(여정 결과화면 위 오버레이로 표시)
-              if (currentItinerary || isExpertRole) requestExpert(); // 전문가는 여정 없어도 답변함. 사용자는 여정 있을 때만.
+              e.preventDefault();
+              if (isAuthed) {
+                requestExpert();
+              } else {
+                requestLogin();
+              }
             },
           }}
         />
