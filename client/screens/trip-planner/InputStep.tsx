@@ -214,11 +214,11 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={{ gap: 7, paddingRight: 6 }}
           >
-            {/* 💜 0. BTS 콘서트 도시 (원래 정식 BTS 미니앱 스택 연동 + 순수 텍스트 전용 초고가독성 배너) */}
+            {/* 💜 0. BTS 콘서트 도시 (정식 BTS 랜딩 및 아미봉 무대 라이트쇼 스택 연결 = BTSLanding) */}
             <Pressable
               onPress={() => {
                 if (navigation) {
-                  (navigation as any).navigate("BTSMiniApp");
+                  (navigation as any).navigate("BTSLanding");
                 }
               }}
               style={({ pressed }) => ({
