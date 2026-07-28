@@ -68,12 +68,12 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.backgroundRoot }}>
-      {/* 📌 1~5 상단 고정 섹션 (스크롤되지 않는 상단 고정 헤더) */}
+      {/* 📌 1~5 상단 고정 섹션 (최상단 여백 최소화, 초슬림 콤팩트 고정 헤더) */}
       <View
         style={{
-          paddingTop: insets.top + Spacing.sm,
-          paddingHorizontal: Spacing.lg,
-          paddingBottom: Spacing.md,
+          paddingTop: Math.max(6, insets.top - 12),
+          paddingHorizontal: Spacing.md,
+          paddingBottom: 8,
           backgroundColor: theme.backgroundDefault,
           borderBottomWidth: 1,
           borderBottomColor: theme.border,
@@ -81,22 +81,12 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
           ...Shadows.card,
         }}
       >
-        {/* 1. DB-Only 완성된 도시의 동적 버튼 (파리 > 브뤼셀 > 마드리드 > 뮌헨 > 런던 순 무한생성 BTS 미니앱 로직) */}
-        <View style={{ marginBottom: 12 }}>
-          <Text
-            style={{
-              fontSize: 13,
-              fontFamily: Fonts.bold,
-              color: Brand.primary,
-              marginBottom: 8,
-            }}
-          >
-            ✨ DB 완성 도시 대표 여정
-          </Text>
+        {/* 1. DB-Only 완성된 도시의 동적 버튼 */}
+        <View style={{ marginBottom: 8 }}>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ gap: 8, paddingRight: 10 }}
+            contentContainerStyle={{ gap: 6, paddingRight: 6 }}
           >
             {DB_COMPLETED_CITIES.map((city) => {
               const isSelected = formData.destination === city.nameEn;
@@ -104,27 +94,27 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
                 <Pressable
                   key={city.id}
                   style={{
-                    paddingHorizontal: 16,
-                    paddingVertical: 9,
+                    paddingHorizontal: 13,
+                    paddingVertical: 7,
                     borderRadius: BorderRadius.full,
                     backgroundColor: isSelected ? Brand.primary : "#F8FAFC",
                     borderWidth: 1.5,
                     borderColor: isSelected ? Brand.primary : "#E2E8F0",
                     flexDirection: "row",
                     alignItems: "center",
-                    gap: 6,
+                    gap: 5,
                     ...Shadows.card,
                   }}
                   onPress={() => handleCityPress(city.nameEn)}
                 >
                   <Icon
                     name="map-pin"
-                    size={14}
+                    size={13}
                     color={isSelected ? "#FFFFFF" : Brand.primary}
                   />
                   <Text
                     style={{
-                      fontSize: 13,
+                      fontSize: 12.5,
                       fontFamily: Fonts.bold,
                       color: isSelected ? "#FFFFFF" : "#0F172A",
                     }}
