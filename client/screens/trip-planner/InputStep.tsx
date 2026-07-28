@@ -214,36 +214,63 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={{ gap: 7, paddingRight: 6 }}
           >
-            {/* 💜 0. BTS 콘서트 도시 (클릭 시 BTS 미니앱 1초 진입) */}
+            {/* 🔮 0. BTS 콘서트 도시 (아미봉 랜드 3D 인증 화면 = BTSLanding 연결 + 원래 아미봉 배너 색상 & 초고가독성) */}
             <Pressable
-              style={{
-                paddingHorizontal: 14,
-                paddingVertical: 7,
-                borderRadius: BorderRadius.full,
-                backgroundColor: "#7C3AED",
-                borderWidth: 1.5,
-                borderColor: "#6D28D9",
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 5,
-                ...Shadows.card,
-              }}
               onPress={() => {
                 if (navigation) {
-                  (navigation as any).navigate("BTSMiniApp");
+                  (navigation as any).navigate("BTSLanding");
                 }
               }}
+              style={({ pressed }) => ({
+                opacity: pressed ? 0.85 : 1,
+                transform: [{ scale: pressed ? 0.97 : 1 }],
+              })}
             >
-              <Text style={{ fontSize: 13 }}>💜</Text>
-              <Text
+              <LinearGradient
+                colors={["#4C1D95", "#6D28D9", "#7C3AED"]}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
                 style={{
-                  fontSize: 12.5,
-                  fontFamily: Fonts.bold,
-                  color: "#FFFFFF",
+                  paddingHorizontal: 15,
+                  paddingVertical: 7.5,
+                  borderRadius: BorderRadius.full,
+                  borderWidth: 1.5,
+                  borderColor: "#C084FC",
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 6,
+                  ...Shadows.card,
                 }}
               >
-                BTS 콘서트 도시
-              </Text>
+                {/* 아미봉 🔮 아이콘 & 빛 발산 도트 */}
+                <View style={{ flexDirection: "row", alignItems: "center" }}>
+                  <Text style={{ fontSize: 13.5 }}>🔮</Text>
+                  <View
+                    style={{
+                      width: 5,
+                      height: 5,
+                      borderRadius: 2.5,
+                      backgroundColor: "#FACC15",
+                      marginLeft: -3,
+                      marginTop: -7,
+                    }}
+                  />
+                </View>
+                <Text
+                  style={{
+                    fontSize: 13,
+                    fontFamily: Fonts.bold,
+                    fontWeight: "800",
+                    color: "#FFFFFF",
+                    letterSpacing: -0.2,
+                    textShadowColor: "rgba(0, 0, 0, 0.4)",
+                    textShadowOffset: { width: 0, height: 1 },
+                    textShadowRadius: 2,
+                  }}
+                >
+                  BTS 콘서트 도시
+                </Text>
+              </LinearGradient>
             </Pressable>
 
             {DB_COMPLETED_CITIES.map((city) => {
