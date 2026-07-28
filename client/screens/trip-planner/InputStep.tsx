@@ -68,12 +68,12 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.backgroundRoot }}>
-      {/* 📌 1~5 상단 고정 섹션 (최상단 여백 최소화, 초슬림 콤팩트 고정 헤더) */}
+      {/* 📌 1~5 상단 고정 섹션 (최상단 여백 쾌적하게 조절, 콤팩트 고정 헤더) */}
       <View
         style={{
-          paddingTop: Math.max(6, insets.top - 12),
+          paddingTop: Math.max(14, insets.top + 6),
           paddingHorizontal: Spacing.md,
-          paddingBottom: 8,
+          paddingBottom: 10,
           backgroundColor: theme.backgroundDefault,
           borderBottomWidth: 1,
           borderBottomColor: theme.border,
@@ -81,13 +81,45 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
           ...Shadows.card,
         }}
       >
-        {/* 1. DB-Only 완성된 도시의 동적 버튼 */}
+        {/* 1. DB-Only 완성된 도시의 동적 버튼 (맨 앞에 BTS 콘서트 도시 버튼 포함) */}
         <View style={{ marginBottom: 8 }}>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ gap: 6, paddingRight: 6 }}
+            contentContainerStyle={{ gap: 7, paddingRight: 6 }}
           >
+            {/* 💜 0. BTS 콘서트 도시 (클릭 시 BTS 미니앱 1초 진입) */}
+            <Pressable
+              style={{
+                paddingHorizontal: 14,
+                paddingVertical: 7,
+                borderRadius: BorderRadius.full,
+                backgroundColor: "#7C3AED",
+                borderWidth: 1.5,
+                borderColor: "#6D28D9",
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 5,
+                ...Shadows.card,
+              }}
+              onPress={() => {
+                if (navigation) {
+                  (navigation as any).navigate("BTSMiniApp");
+                }
+              }}
+            >
+              <Text style={{ fontSize: 13 }}>💜</Text>
+              <Text
+                style={{
+                  fontSize: 12.5,
+                  fontFamily: Fonts.bold,
+                  color: "#FFFFFF",
+                }}
+              >
+                BTS 콘서트 도시
+              </Text>
+            </Pressable>
+
             {DB_COMPLETED_CITIES.map((city) => {
               const isSelected = formData.destination === city.nameEn;
               return (
