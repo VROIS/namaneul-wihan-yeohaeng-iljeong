@@ -214,11 +214,11 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={{ gap: 7, paddingRight: 6 }}
           >
-            {/* 🔮 0. BTS 콘서트 도시 (아미봉 랜드 3D 인증 화면 = BTSLanding 연결 + 원래 아미봉 배너 색상 & 초고가독성) */}
+            {/* 💜 0. BTS 콘서트 도시 (원래 정식 BTS 미니앱 스택 연동 + 순수 텍스트 전용 초고가독성 배너) */}
             <Pressable
               onPress={() => {
                 if (navigation) {
-                  (navigation as any).navigate("BTSLanding");
+                  (navigation as any).navigate("BTSMiniApp");
                 }
               }}
               style={({ pressed }) => ({
@@ -231,31 +231,16 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
                 start={{ x: 0, y: 0 }}
                 end={{ x: 1, y: 1 }}
                 style={{
-                  paddingHorizontal: 15,
-                  paddingVertical: 7.5,
+                  paddingHorizontal: 16,
+                  paddingVertical: 8,
                   borderRadius: BorderRadius.full,
                   borderWidth: 1.5,
                   borderColor: "#C084FC",
-                  flexDirection: "row",
                   alignItems: "center",
-                  gap: 6,
+                  justifyContent: "center",
                   ...Shadows.card,
                 }}
               >
-                {/* 아미봉 🔮 아이콘 & 빛 발산 도트 */}
-                <View style={{ flexDirection: "row", alignItems: "center" }}>
-                  <Text style={{ fontSize: 13.5 }}>🔮</Text>
-                  <View
-                    style={{
-                      width: 5,
-                      height: 5,
-                      borderRadius: 2.5,
-                      backgroundColor: "#FACC15",
-                      marginLeft: -3,
-                      marginTop: -7,
-                    }}
-                  />
-                </View>
                 <Text
                   style={{
                     fontSize: 13,
