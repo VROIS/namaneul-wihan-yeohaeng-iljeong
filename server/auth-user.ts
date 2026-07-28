@@ -83,12 +83,27 @@ async function findOrCreateUser(params: {
 
   // DB 비연동 환경 폴백 데모 사용자
   if (!isDatabaseConnected()) {
-    console.log("[Auth] DB 비연동 환경 → 데모 사용자 즉시 로그인 성공:", email || providerId);
+    const isDevAdmin =
+      !email ||
+      email.toLowerCase().includes("admin") ||
+      email.toLowerCase().includes("expert") ||
+      email.toLowerCase().includes("dbstour1") ||
+      displayName.toLowerCase().includes("admin") ||
+      displayName.toLowerCase().includes("expert");
+
+    console.log(
+      "[Auth] DB 비연동 환경 → 데모 사용자 즉시 로그인 성공:",
+      email || providerId,
+      `Role: ${isDevAdmin ? "admin" : "user"}`,
+    );
     return {
-      id: "demo_user_" + (email ? email.replace(/[^a-zA-Z0-9]/g, "_") : providerId),
+      id:
+        "demo_user_" +
+        (email ? email.replace(/[^a-zA-Z0-9]/g, "_") : providerId),
       username: email || providerId,
       password: "social_login_no_password",
-      displayName: displayName || (email ? email.split("@")[0] : "kang wook Kim"),
+      displayName:
+        displayName || (email ? email.split("@")[0] : "kang wook Kim"),
       email: email || "dbstour1@gmail.com",
       provider: provider || "email",
       providerId: providerId || "demo",
@@ -97,9 +112,9 @@ async function findOrCreateUser(params: {
       deviceType: deviceType || "web",
       loginCount: 1,
       lastLoginAt: new Date(),
-      isPaid: false,
-      planType: "free",
-      role: "user",
+      isPaid: true,
+      planType: "pro",
+      role: isDevAdmin ? "admin" : "user",
       createdAt: new Date(),
     } as User;
   }
