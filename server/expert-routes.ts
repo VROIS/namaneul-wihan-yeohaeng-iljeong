@@ -94,8 +94,13 @@ export function registerExpertRoutes(app: Express): void {
       const conds = [];
       // ⚠️ 보안(리뷰 발견 2026-07-13) = 일반 사용자는 자기 신원(uid)만 조회 = qUserId 무시(타인 문의 열람 스푸핑 차단, 옛 폴백 폐기 §19).
       //   expert·admin 만 qUserId 로 특정 사용자 필터 허용(답변함 검색용).
-      if (!isExpert) conds.push(eq(expertInquiries.userId, uid));
-      else if (qUserId) conds.push(eq(expertInquiries.userId, qUserId));
+      if (!isExpert) {
+        conds.push(eq(expertInquiries.userId, uid));
+        conds.push(eq(expertInquiries.isDeletedByUser, false));
+      } else {
+        if (qUserId) conds.push(eq(expertInquiries.userId, qUserId));
+        conds.push(eq(expertInquiries.isDeletedByExpert, false));
+      }
       if (status) conds.push(eq(expertInquiries.status, status));
       const rows = await db()
         .select()
@@ -236,7 +241,7 @@ export function registerExpertRoutes(app: Express): void {
     }
   });
 
-  // ── 5-2) 문의 삭제 = DELETE /api/verification/requests/:id (본인 또는 expert/admin) ──
+  // ── 5-2) 문의 목록 삭제 (모듈 정리용 소프트 삭제 = DB 데이터 100% 영구 보존) ──
   app.delete("/api/verification/requests/:id", async (req, res) => {
     try {
       const authId = getUserIdFromReq(req);
@@ -251,19 +256,28 @@ export function registerExpertRoutes(app: Express): void {
       const role = await getRole(authId);
       const isExpert = role === "expert" || role === "admin";
 
-      // 본인 작성글이 아니거나 전문가/관리자가 아니면 403
       if (!isExpert && row.userId !== authId) {
         return res.status(403).json({ error: "forbidden" });
       }
 
-      await db()
-        .delete(expertInquiries)
-        .where(eq(expertInquiries.id, req.params.id));
+      // ⚠️ 사장님 SSOT 2026-07-29 = 모듈 안에서의 삭제는 목록 정리용 소프트 삭제이며, DB 레코드는 100% 영구 보존.
+      //   진짜 최종 삭제는 사용자가 프로필 화면에서 저장된 여정을 삭제하거나 탈퇴/관리자 삭제 시에만 수행.
+      if (row.userId === authId) {
+        await db()
+          .update(expertInquiries)
+          .set({ isDeletedByUser: true })
+          .where(eq(expertInquiries.id, req.params.id));
+      } else if (isExpert) {
+        await db()
+          .update(expertInquiries)
+          .set({ isDeletedByExpert: true })
+          .where(eq(expertInquiries.id, req.params.id));
+      }
 
       res.json({ success: true, id: req.params.id });
     } catch (e: any) {
-      console.error("[Expert] 삭제 실패:", e?.message);
-      res.status(500).json({ error: "Failed to delete inquiry" });
+      console.error("[Expert] 소프트 삭제 실패:", e?.message);
+      res.status(500).json({ error: "Failed to remove inquiry from list" });
     }
   });
 
