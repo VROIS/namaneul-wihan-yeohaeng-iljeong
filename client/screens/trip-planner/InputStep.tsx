@@ -1,6 +1,6 @@
 // 입력 화면(InputStep.tsx) = 상단 고정 + DB 도시 동적 버튼 + '누구랑' 및 '누구를 위한' 100% 복원 완료
-import React, { useState } from "react";
-import { View, Text, Pressable, ScrollView } from "react-native";
+import React, { useState, useEffect, useRef } from "react";
+import { View, Text, Pressable, ScrollView, Animated, Image } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Brand, Spacing, Shadows, BorderRadius, Fonts } from "@/constants/theme";
 import Icon from "@/components/Icon";
@@ -48,6 +48,38 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
   const [previewCityName, setPreviewCityName] = useState<string>("Paris");
   const [previewModalVisible, setPreviewModalVisible] = useState<boolean>(false);
 
+  // 🔥 '지금 핫한 TRIPIS 여정' RN 텍스트 애니메이션 (무한 루프 펄스 & 은은한 스케일 바운스)
+  const pulseAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1100,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 0,
+          duration: 1100,
+          useNativeDriver: true,
+        }),
+      ]),
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [pulseAnim]);
+
+  const animatedScale = pulseAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 1.04],
+  });
+
+  const animatedOpacity = pulseAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.85, 1],
+  });
+
   const handleCityPress = (cityId: string) => {
     setFormData((prev) => ({
       ...prev,
@@ -68,12 +100,12 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.backgroundRoot }}>
-      {/* 📌 1~5 상단 고정 섹션 (최상단 여백 쾌적하게 조절, 콤팩트 고정 헤더) */}
+      {/* 📌 1~5 상단 고정 섹션 (최상단 여백 쾌적·여유롭게 확대) */}
       <View
         style={{
-          paddingTop: Math.max(14, insets.top + 6),
+          paddingTop: Math.max(22, insets.top + 14),
           paddingHorizontal: Spacing.md,
-          paddingBottom: 10,
+          paddingBottom: 12,
           backgroundColor: theme.backgroundDefault,
           borderBottomWidth: 1,
           borderBottomColor: theme.border,
@@ -81,6 +113,70 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
           ...Shadows.card,
         }}
       >
+        {/* 🔥 0. '지금 핫한 TRIPIS 여정' RN 텍스트 애니메이션 섹션 타이틀 (인증창 동일 TRIPIS 브랜드 아이콘/폰트) */}
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            marginBottom: 8,
+            paddingLeft: 2,
+          }}
+        >
+          <Animated.View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              transform: [{ scale: animatedScale }],
+              opacity: animatedOpacity,
+            }}
+          >
+            <Text style={{ fontSize: 14, marginRight: 3 }}>🔥</Text>
+            <Text
+              style={{
+                fontSize: 13.5,
+                fontFamily: Fonts.bold,
+                fontWeight: "800",
+                color: theme.text,
+                letterSpacing: -0.3,
+              }}
+            >
+              지금 핫한{" "}
+            </Text>
+
+            {/* ⚠️ 인증창과 100% 동일한 TRIPIS 브랜드 로고 & 텍스트 */}
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+              <Image
+                source={require("../../../assets/images/tripis-mark.png")}
+                style={{ width: 16, height: 16, borderRadius: 4 }}
+                resizeMode="contain"
+              />
+              <Text
+                style={{
+                  fontSize: 14.5,
+                  fontFamily: Fonts.bold,
+                  fontWeight: "800",
+                  color: Brand.primary,
+                  letterSpacing: -0.6,
+                }}
+              >
+                TRIPIS
+              </Text>
+            </View>
+
+            <Text
+              style={{
+                fontSize: 13.5,
+                fontFamily: Fonts.bold,
+                fontWeight: "800",
+                color: theme.text,
+                letterSpacing: -0.3,
+              }}
+            >
+              {" "}여정
+            </Text>
+          </Animated.View>
+        </View>
+
         {/* 1. DB-Only 완성된 도시의 동적 버튼 (맨 앞에 BTS 콘서트 도시 버튼 포함) */}
         <View style={{ marginBottom: 8 }}>
           <ScrollView
