@@ -48,36 +48,41 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
   const [previewCityName, setPreviewCityName] = useState<string>("Paris");
   const [previewModalVisible, setPreviewModalVisible] = useState<boolean>(false);
 
-  // 🔥 '지금 핫한 TRIPIS 여정' RN 텍스트 애니메이션 (무한 루프 펄스 & 은은한 스케일 바운스)
-  const pulseAnim = useRef(new Animated.Value(0)).current;
+  // ✨ '지금 핫한 TRIPIS 여정' 브랜드 슬로건 다이나믹 RN 애니메이션 (이모지 없음, 3D 플로팅 + 스케일 펄스)
+  const sloganPulse = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     const animation = Animated.loop(
       Animated.sequence([
-        Animated.timing(pulseAnim, {
+        Animated.timing(sloganPulse, {
           toValue: 1,
-          duration: 1100,
+          duration: 950,
           useNativeDriver: true,
         }),
-        Animated.timing(pulseAnim, {
+        Animated.timing(sloganPulse, {
           toValue: 0,
-          duration: 1100,
+          duration: 950,
           useNativeDriver: true,
         }),
       ]),
     );
     animation.start();
     return () => animation.stop();
-  }, [pulseAnim]);
+  }, [sloganPulse]);
 
-  const animatedScale = pulseAnim.interpolate({
+  const sloganScale = sloganPulse.interpolate({
     inputRange: [0, 1],
-    outputRange: [1, 1.04],
+    outputRange: [1, 1.06],
   });
 
-  const animatedOpacity = pulseAnim.interpolate({
+  const sloganTranslateY = sloganPulse.interpolate({
     inputRange: [0, 1],
-    outputRange: [0.85, 1],
+    outputRange: [0, -3.5],
+  });
+
+  const sloganOpacity = sloganPulse.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.82, 1],
   });
 
   const handleCityPress = (cityId: string) => {
@@ -113,50 +118,62 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
           ...Shadows.card,
         }}
       >
-        {/* 🔥 0. '지금 핫한 TRIPIS 여정' RN 텍스트 애니메이션 섹션 타이틀 (인증창 동일 TRIPIS 브랜드 아이콘/폰트) */}
+        {/* 🌟 '지금 핫한 TRIPIS 여정' 센터 브랜드 슬로건 다이나믹 애니메이션 (이모지 없음, 대형 글씨, 3D 플로팅/펄스) */}
         <View
           style={{
-            flexDirection: "row",
             alignItems: "center",
-            marginBottom: 8,
-            paddingLeft: 2,
+            justify: "center",
+            marginBottom: 12,
+            marginTop: 2,
           }}
         >
           <Animated.View
             style={{
               flexDirection: "row",
               alignItems: "center",
-              transform: [{ scale: animatedScale }],
-              opacity: animatedOpacity,
+              justifyContent: "center",
+              transform: [{ scale: sloganScale }, { translateY: sloganTranslateY }],
+              opacity: sloganOpacity,
             }}
           >
-            <Text style={{ fontSize: 14, marginRight: 3 }}>🔥</Text>
             <Text
               style={{
-                fontSize: 13.5,
+                fontSize: 18,
                 fontFamily: Fonts.bold,
                 fontWeight: "800",
                 color: theme.text,
-                letterSpacing: -0.3,
+                letterSpacing: -0.5,
               }}
             >
               지금 핫한{" "}
             </Text>
 
-            {/* ⚠️ 인증창과 100% 동일한 TRIPIS 브랜드 로고 & 텍스트 */}
-            <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+            {/* ⚠️ 인증창과 100% 동일한 TRIPIS 브랜드 로고 & 볼드 텍스트 */}
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 5,
+                marginHorizontal: 2,
+              }}
+            >
               <Image
                 source={require("../../../assets/images/tripis-mark.png")}
-                style={{ width: 16, height: 16, borderRadius: 4 }}
+                style={{
+                  width: 22,
+                  height: 22,
+                  borderRadius: 6,
+                }}
                 resizeMode="contain"
               />
               <Text
                 style={{
-                  fontSize: 14.5,
+                  fontSize: 21,
                   fontFamily: Fonts.bold,
-                  fontWeight: "800",
+                  fontWeight: "900",
                   color: Brand.primary,
-                  letterSpacing: -0.6,
+                  letterSpacing: -0.8,
+                  lineHeight: 25,
                 }}
               >
                 TRIPIS
@@ -165,16 +182,29 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
 
             <Text
               style={{
-                fontSize: 13.5,
+                fontSize: 18,
                 fontFamily: Fonts.bold,
                 fontWeight: "800",
                 color: theme.text,
-                letterSpacing: -0.3,
+                letterSpacing: -0.5,
               }}
             >
               {" "}여정
             </Text>
           </Animated.View>
+
+          {/* 슬로건 하단 3D 글로우 액센트 바 */}
+          <Animated.View
+            style={{
+              height: 3,
+              width: 140,
+              backgroundColor: Brand.primary,
+              borderRadius: 2,
+              marginTop: 5,
+              opacity: sloganOpacity,
+              transform: [{ scaleX: sloganScale }],
+            }}
+          />
         </View>
 
         {/* 1. DB-Only 완성된 도시의 동적 버튼 (맨 앞에 BTS 콘서트 도시 버튼 포함) */}
