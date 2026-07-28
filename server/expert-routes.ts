@@ -385,14 +385,15 @@ export function registerExpertRoutes(app: Express): void {
       const role = await getRole(authId);
       if (role !== "expert" && role !== "admin")
         return res.status(403).json({ error: "expert_only" });
-      const { nickname, career, bio, character } = req.body || {};
+      const { nickname, career, bio, character, avatarUrl } = req.body || {};
       const s = (v: unknown, n: number) =>
         typeof v === "string" && v.trim() !== "" ? v.slice(0, n) : undefined;
       const profile = {
         nickname: s(nickname, 40),
         career: s(career, 60),
-        bio: s(bio, 300),
+        bio: s(bio, 150),
         character: s(character, 20),
+        avatarUrl: typeof avatarUrl === "string" ? avatarUrl : undefined,
       };
       const [u] = await db()
         .update(users)

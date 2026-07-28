@@ -197,6 +197,7 @@ export interface ExpertProfile {
   career?: string;
   bio?: string;
   character?: string;
+  avatarUrl?: string;
 }
 
 // 공개 조회(미인증) = 소개카드용(대표 전문가). 없으면 null → 화면이 i18n 기본문구로 폴백.

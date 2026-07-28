@@ -16,6 +16,7 @@ import {
   Alert,
   Platform,
   useColorScheme,
+  Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
@@ -716,10 +717,18 @@ export default function ExpertSheet({
       >
         {/* 소개 카드 = 전문가 본인 프로필(있으면) / 없으면 기본 i18n 문구 */}
         <View style={[styles.card, { backgroundColor: `${Brand.primary}0D` }]}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {profile?.character || t("expert.introInitial")}
-            </Text>
+          <View style={[styles.avatar, { overflow: "hidden" }]}>
+            {profile?.avatarUrl ? (
+              <Image
+                source={{ uri: profile.avatarUrl }}
+                style={{ width: 44, height: 44, borderRadius: 22 }}
+                resizeMode="cover"
+              />
+            ) : (
+              <Text style={styles.avatarText}>
+                {profile?.character || t("expert.introInitial")}
+              </Text>
+            )}
           </View>
           <View style={styles.flex1}>
             <Text style={[styles.cardTitle, { color: theme.text }]}>
