@@ -236,6 +236,37 @@ export function registerExpertRoutes(app: Express): void {
     }
   });
 
+  // ── 5-2) 문의 삭제 = DELETE /api/verification/requests/:id (본인 또는 expert/admin) ──
+  app.delete("/api/verification/requests/:id", async (req, res) => {
+    try {
+      const authId = getUserIdFromReq(req);
+      if (!authId) return res.status(401).json({ error: "login_required" });
+
+      const [row] = await db()
+        .select()
+        .from(expertInquiries)
+        .where(eq(expertInquiries.id, req.params.id));
+      if (!row) return res.status(404).json({ error: "Inquiry not found" });
+
+      const role = await getRole(authId);
+      const isExpert = role === "expert" || role === "admin";
+
+      // 본인 작성글이 아니거나 전문가/관리자가 아니면 403
+      if (!isExpert && row.userId !== authId) {
+        return res.status(403).json({ error: "forbidden" });
+      }
+
+      await db()
+        .delete(expertInquiries)
+        .where(eq(expertInquiries.id, req.params.id));
+
+      res.json({ success: true, id: req.params.id });
+    } catch (e: any) {
+      console.error("[Expert] 삭제 실패:", e?.message);
+      res.status(500).json({ error: "Failed to delete inquiry" });
+    }
+  });
+
   // ── 6) 전문가 공개 프로필 = GET /api/expert/profile (미인증 공개) = 소개카드 표시용. 단일 전문가(사장님=is_admin 우선). ──
   app.get("/api/expert/profile", async (_req, res) => {
     try {
