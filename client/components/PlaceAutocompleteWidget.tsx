@@ -3,7 +3,7 @@
 //   웹 = div+SDK 직접 / 앱 = react-native-webview. ItineraryMap 패턴 동일. API키 = /api/bts/map-config.
 //   선택 → onSelect(name·address·coords) → 호출측이 handleSetDayAccommodation 등으로 전달 → 지도 깃발 자동.
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, StyleSheet, View, Platform } from "react-native";
+import { ActivityIndicator, StyleSheet, View, Platform, TextInput } from "react-native";
 import { apiRequest } from "@/lib/query-client";
 import {
   PLACE_AUTOCOMPLETE_HTML,
@@ -214,14 +214,12 @@ function PlaceAutocompleteNative({
 // ============================================================
 export default function PlaceAutocompleteWidget(props: Props) {
   const [apiKey, setApiKey] = useState<string | null>(null);
+  const [localInput, setLocalInput] = useState<string>("");
 
   useEffect(() => {
     let cancelled = false;
-    // 🏨 2026-06-29 = map-config fetch 재시도(backoff). 아이폰 첫 로드 시 서버 응답 준비 전 fetch 일시 실패(transient)
-    //   → 옛: catch에서 setApiKey 안 함 → apiKey 영구 null → 무한 스피너(위젯 안뜸). 재시도로 해소(새로고침하면 정상이던 증상).
-    //   응답 = { googleMapsApiKey } (= ItineraryMap 정합).
     (async () => {
-      const delays = [0, 800, 1600, 3200, 5000];
+      const delays = [0, 500, 1000];
       for (let i = 0; i < delays.length; i++) {
         if (cancelled) return;
         if (delays[i] > 0) await new Promise((r) => setTimeout(r, delays[i]));
@@ -234,10 +232,7 @@ export default function PlaceAutocompleteWidget(props: Props) {
             return;
           }
         } catch (e) {
-          console.warn(
-            `[PlaceAutocompleteWidget] map-config fetch 실패(시도 ${i + 1}/${delays.length}):`,
-            e,
-          );
+          // ignore
         }
       }
     })();
@@ -248,8 +243,45 @@ export default function PlaceAutocompleteWidget(props: Props) {
 
   if (!apiKey) {
     return (
-      <View style={[styles.container, { minHeight: props.height || 56 }]}>
-        <ActivityIndicator size="small" color={props.tint || "#2563eb"} />
+      <View
+        style={[
+          styles.container,
+          {
+            minHeight: props.height || 48,
+            backgroundColor: "#F8FAFC",
+            borderRadius: 14,
+            borderWidth: 1,
+            borderColor: "#E2E8F0",
+            paddingHorizontal: 12,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 8,
+          },
+        ]}
+      >
+        <TextInput
+          style={{
+            flex: 1,
+            fontSize: 13,
+            fontFamily: "Pretendard-Medium",
+            color: "#0F172A",
+            paddingVertical: 8,
+          }}
+          value={localInput}
+          onChangeText={(text) => {
+            setLocalInput(text);
+            props.onSelect({
+              placeId: "manual_" + Date.now(),
+              name: text,
+              address: text,
+            });
+          }}
+          placeholder={
+            props.placeholder ||
+            "숙소명이나 도시명을 한글이나 원어로 입력해주세요"
+          }
+          placeholderTextColor="#94A3B8"
+        />
       </View>
     );
   }

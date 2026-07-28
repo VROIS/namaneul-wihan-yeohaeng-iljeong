@@ -88,7 +88,7 @@
     "budgetHint": "여행 예산 수준을 선택하세요",
     "mobilityStyle": "이동 스타일",
     "mobilityStyleHint": "이동 방식을 선택하세요",
-    "generate": "일정 생성",
+    "generate": "여정 생성",
     "loading1": "실시간 교통 정보 분석 중",
     "loading2": "현지 운영 현황 확인 중",
     "loading3": "취향 기반 경로 최적화 중",
@@ -323,7 +323,7 @@
     "noSavedTrips": "저장된 일정이 없습니다"
   },
   "tab": {
-    "plan": "일정",
+    "plan": "여정",
     "map": "지도",
     "aiOpinion": "AI 의견",
     "expert": "전문가 검증",
