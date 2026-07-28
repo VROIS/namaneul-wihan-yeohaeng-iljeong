@@ -5,13 +5,15 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
  * @returns {string} The API base URL
  */
 export function getApiUrl(): string {
-  // 웹 환경에서는 같은 도메인 origin 사용
+  // 웹 환경에서는 로컬 백엔드 Express 포트(:5000)로 자동 라우팅
   if (typeof window !== "undefined" && window.location) {
-    // ⚠️ 수정금지(승인필요) 2026-05-06 임시 = 로컬 Metro web dev (:19006 / :8081) → Express (:8082) 로 자동 redirect.
-    // Replit/배포 환경에서는 같은 도메인이라 영향 X. 자동 분기라 원복 불필요.
     const origin = window.location.origin;
-    if (origin.includes(":19006") || origin.includes(":8081")) {
-      return origin.replace(/:(19006|8081)/, ":8082");
+    if (
+      origin.includes(":19006") ||
+      origin.includes(":8081") ||
+      origin.includes(":8082")
+    ) {
+      return origin.replace(/:(19006|8081|8082)/, ":5000");
     }
     return origin;
   }

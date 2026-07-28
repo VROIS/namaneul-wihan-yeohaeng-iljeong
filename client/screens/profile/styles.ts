@@ -1,33 +1,127 @@
-// 프로필 화면 메인 스타일 = ProfileScreen 분리(2026-07-15 §0 슬림화, 순수 이동)
-import { StyleSheet } from "react-native";
+import { StyleSheet, Dimensions } from "react-native";
 import {
   Spacing,
   BorderRadius,
   Typography,
   Shadows,
   Fonts,
+  Brand,
 } from "@/constants/theme";
 
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
+
+// 📱 아이폰 12 (390pt) 화면을 가득 채우는 풍성한 가로 스크롤 카드 폭 계산 (250pt)
+export const getResponsiveFullTripCardWidth = () => {
+  return Math.min(270, Math.max(220, Math.floor(SCREEN_WIDTH * 0.65)));
+};
+
+export const getResponsiveFullVideoCardWidth = () => {
+  return Math.min(135, Math.max(115, Math.floor(SCREEN_WIDTH * 0.32)));
+};
+
 export const styles = StyleSheet.create({
+  // 👤 3D 입체 프로필 헤더 카드 (슬림 초슬림 컴팩트 1섹션)
   profileCard: {
     alignItems: "center",
-    marginBottom: Spacing.xl,
+    marginBottom: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    width: "100%",
+    borderRadius: 22,
+    backgroundColor: "#FFFFFF",
+    ...Shadows.card,
+    borderWidth: 1,
+    borderColor: "rgba(226, 232, 240, 0.8)",
   },
-  avatarGradient: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+  profileTopRow: {
+    width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 8,
+  },
+  profileUserInfoLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    flexShrink: 1,
+  },
+  avatarGradientCompact: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: Spacing.md,
-    ...Shadows.fab,
+    borderWidth: 2,
+    borderColor: "#FFFFFF",
+    ...Shadows.card,
   },
-  userName: {
-    ...Typography.h2,
-    marginBottom: Spacing.xs,
+  userTextContainer: {
+    justifyContent: "center",
+    flexShrink: 1,
   },
-  userEmail: {
-    ...Typography.small,
+  userNameCompact: {
+    fontSize: 16,
+    fontFamily: Fonts.bold,
+    color: "#0F172A",
+    lineHeight: 20,
+  },
+  userEmailCompact: {
+    fontSize: 11.5,
+    fontFamily: Fonts.medium,
+    color: "#64748B",
+    marginTop: 1,
+  },
+  // 💳 초슬림 3D 1줄 크레딧 카드 (높이 34px)
+  creditCardCompact: {
+    width: "100%",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    backgroundColor: "#F8FAFC",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  creditLeftCompact: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flexShrink: 1,
+  },
+  creditIconCircleCompact: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: "rgba(66, 133, 244, 0.12)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  creditLabelCompact: {
+    fontSize: 11.5,
+    fontFamily: Fonts.medium,
+    color: "#64748B",
+  },
+  creditValueCompact: {
+    fontSize: 14,
+    fontFamily: Fonts.bold,
+    color: "#0F172A",
+  },
+  creditRechargeBtnCompact: {
+    backgroundColor: Brand.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: BorderRadius.full,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  creditRechargeTextCompact: {
+    color: "#FFFFFF",
+    fontSize: 11.5,
+    fontFamily: Fonts.bold,
   },
   loginButton: {
     marginTop: Spacing.md,
@@ -40,218 +134,263 @@ export const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: Fonts.bold,
   },
-  statsRow: {
-    flexDirection: "row",
-    gap: Spacing.md,
-    marginBottom: Spacing.xl,
-  },
-  statCard: {
-    flex: 1,
-    alignItems: "center",
-    padding: Spacing.lg,
-    borderRadius: BorderRadius.md,
-  },
-  statIcon: {
-    marginBottom: Spacing.sm,
-  },
-  statValue: {
-    ...Typography.h2,
-    marginBottom: Spacing.xs,
-  },
-  statLabel: {
-    ...Typography.caption,
-  },
+  // 🏷️ 섹션 영역 (아이폰 12 가득 채움)
   section: {
-    marginBottom: Spacing.xl,
+    marginBottom: 24,
+    width: "100%",
   },
-  sectionTitle: {
-    ...Typography.h3,
-    marginBottom: Spacing.md,
-  },
-  personaContainer: {
-    flexDirection: "row",
-    gap: Spacing.md,
-  },
-  personaCard: {
-    flex: 1,
-    padding: Spacing.lg,
-    borderRadius: BorderRadius.md,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "transparent",
-  },
-  personaIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: Spacing.md,
-  },
-  personaTitle: {
-    ...Typography.h3,
-    marginBottom: Spacing.xs,
-  },
-  personaDesc: {
-    ...Typography.caption,
-  },
-  menuCard: {
-    borderRadius: BorderRadius.md,
-    overflow: "hidden",
-  },
-  menuItem: {
+  sectionTitleHeader: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    padding: Spacing.lg,
+    gap: 8,
+    marginBottom: 12,
   },
-  menuItemLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.md,
-  },
-  menuItemLabel: {
-    ...Typography.body,
-  },
-  // 🗂️ 나의 여정 스타일
-  loadingContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: Spacing.xl,
-    gap: Spacing.sm,
-  },
-  loadingText: {
-    fontSize: 14,
-  },
-  emptyTrips: {
-    alignItems: "center",
-    padding: Spacing.xl,
-    borderRadius: BorderRadius.md,
-  },
-  emptyTripsText: {
-    fontSize: 16,
-    fontFamily: Fonts.semiBold,
-    marginTop: Spacing.md,
-  },
-  emptyTripsHint: {
-    fontSize: 13,
-    marginTop: Spacing.xs,
-  },
-  tripsScroll: {
-    marginHorizontal: -Spacing.lg,
-    paddingHorizontal: Spacing.lg,
-  },
-  tripCard: {
-    width: 190,
-    padding: Spacing.md,
-    // ⚠️ 2026-07-03 = X 삭제버튼 절대위치 기준(우측 상단). 도시명이 X와 안 겹치게 우측 여백 확보.
-    position: "relative",
-    paddingRight: Spacing.md + 20,
-    borderRadius: BorderRadius.md,
-    marginRight: Spacing.md,
-  },
-  // ⚠️ 2026-07-03 사장님 SSOT = 카드 우측 상단 X = 항상 표시, 즉시 삭제. 글라스 미니멀(은은한 반투명 원). 이모지 금지 = Lucide x 아이콘.
-  cardDeleteBtn: {
-    position: "absolute",
-    top: 6,
-    right: 6,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: "rgba(120,120,128,0.12)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  tripCardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: Spacing.sm,
-  },
-  tripCardIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  videoReadyBadge: {
-    backgroundColor: "#22c55e",
-    width: 24,
-    height: 24,
+  sectionIconBox: {
+    width: 32,
+    height: 32,
     borderRadius: 12,
     justifyContent: "center",
     alignItems: "center",
   },
-  tripCardTitle: {
+  sectionTitle: {
+    ...Typography.h3,
+    fontFamily: Fonts.bold,
+    fontSize: 18,
+    color: "#0F172A",
+  },
+  sectionBadge: {
+    fontSize: 11,
+    fontFamily: Fonts.bold,
+    color: Brand.primary,
+    backgroundColor: "rgba(66, 133, 244, 0.12)",
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: BorderRadius.full,
+  },
+  // 🗂️ 나의 여정 풍성한 3D 입체 카드 (아이폰 12 가득 채움)
+  loadingContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: Spacing.lg,
+    gap: Spacing.sm,
+  },
+  loadingText: {
+    fontSize: 13,
+  },
+  emptyTrips: {
+    alignItems: "center",
+    padding: Spacing.xl,
+    borderRadius: 22,
+    borderWidth: 1,
+    width: "100%",
+  },
+  emptyTripsText: {
     fontSize: 15,
     fontFamily: Fonts.bold,
-    marginBottom: Spacing.xs,
+    marginTop: Spacing.sm,
   },
-  // 🗂️ 2026-07-03 = 나의여정 카드 4요소 = 메인앱 요약헤더 폰트·색 통일(Fonts=Pretendard, tripSummaryText=semiBold12 / tripDescriptionText=bold14 위계)
-  cardCity: {
-    fontSize: 16,
-    fontFamily: Fonts.bold,
-    marginBottom: 2,
-  },
-  cardMeta: {
+  emptyTripsHint: {
     fontSize: 12,
-    fontFamily: Fonts.semiBold,
-    marginBottom: 2,
+    marginTop: Spacing.xs,
   },
-  cardBudget: {
-    fontSize: 13,
+  tripsScroll: {
+    marginHorizontal: -16,
+    paddingHorizontal: 16,
+  },
+  tripCardRich: {
+    padding: 14,
+    position: "relative",
+    borderRadius: 24,
+    marginRight: 12,
+    backgroundColor: "#FFFFFF",
+    ...Shadows.elevated,
+    borderWidth: 1.5,
+    borderColor: "#E2E8F0",
+  },
+  cardDeleteBtnRich: {
+    position: "absolute",
+    top: 10,
+    right: 10,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: "rgba(100, 116, 139, 0.15)",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 10,
+  },
+  cardHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 4,
+    paddingRight: 24,
+  },
+  cardCityRich: {
+    fontSize: 17,
     fontFamily: Fonts.bold,
-    marginBottom: Spacing.xs,
+    color: "#0F172A",
   },
-  cardSummary: {
+  cardMetaRich: {
+    fontSize: 11,
+    fontFamily: Fonts.medium,
+    color: "#64748B",
+    marginBottom: 6,
+  },
+  cardBudgetPill: {
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(66, 133, 244, 0.12)",
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 8,
+    fontSize: 12,
+    fontFamily: Fonts.bold,
+    color: Brand.primary,
+    marginBottom: 8,
+  },
+  cardSummaryRich: {
     fontSize: 12,
     fontFamily: Fonts.medium,
-    lineHeight: 16,
+    color: "#475569",
+    lineHeight: 17,
   },
-  tripCardDate: {
-    fontSize: 12,
-    marginBottom: Spacing.sm,
-  },
-  tripCardTags: {
-    flexDirection: "row",
-    gap: Spacing.xs,
-  },
-  tripTag: {
-    paddingHorizontal: Spacing.sm,
-    paddingVertical: 2,
-    borderRadius: BorderRadius.sm,
-  },
-  tripTagText: {
-    fontSize: 11,
-    fontFamily: Fonts.semiBold,
-  },
-  // 🎬 나의 영상 스타일
-  videoCard: {
-    width: 140,
-    padding: Spacing.sm,
-    borderRadius: BorderRadius.md,
-    marginRight: Spacing.md,
+  // 🎬 나의 숏폼 영상 입체 3D 카드
+  videoCardRich: {
+    aspectRatio: 9 / 16,
+    borderRadius: 20,
+    marginRight: 10,
+    overflow: "hidden",
+    position: "relative",
+    ...Shadows.elevated,
+    borderWidth: 1.5,
+    borderColor: "rgba(255, 255, 255, 0.4)",
   },
   videoThumbnail: {
     width: "100%",
-    aspectRatio: 9 / 16,
-    borderRadius: BorderRadius.sm,
-    overflow: "hidden",
-    marginBottom: Spacing.sm,
+    height: "100%",
+    position: "relative",
   },
   videoThumbnailGradient: {
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
   },
+  videoPlayOverlayRich: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(0, 0, 0, 0.4)",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1.5,
+    borderColor: "rgba(255, 255, 255, 0.8)",
+    boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+  },
+  videoInfoOverlay: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 8,
+    backgroundColor: "rgba(15, 23, 42, 0.75)",
+  },
   videoCardTitle: {
-    fontSize: 13,
-    fontFamily: Fonts.semiBold,
-    marginBottom: 2,
+    fontSize: 11,
+    fontFamily: Fonts.bold,
+    color: "#FFFFFF",
   },
   videoCardDate: {
-    fontSize: 11,
+    fontSize: 9,
+    fontFamily: Fonts.medium,
+    color: "rgba(255, 255, 255, 0.8)",
+  },
+  // 🔧 설정 아코디언 카드 (아이폰 12 가득 채움)
+  accordionCard: {
+    width: "100%",
+    borderRadius: 26,
+    backgroundColor: "#FFFFFF",
+    overflow: "hidden",
+    ...Shadows.elevated,
+    borderWidth: 1.5,
+    borderColor: "#E2E8F0",
+  },
+  accordionItemHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+  },
+  accordionItemLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+  },
+  menuIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  accordionItemLabel: {
+    ...Typography.body,
+    fontSize: 16,
+    fontFamily: Fonts.bold,
+    color: "#0F172A",
+  },
+  accordionBody: {
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    backgroundColor: "#F8FAFC",
+    borderTopWidth: 1,
+    borderTopColor: "#E2E8F0",
+  },
+  accordionText: {
+    fontSize: 13,
+    fontFamily: Fonts.regular,
+    color: "#475569",
+    lineHeight: 19,
+    marginBottom: 6,
+  },
+  chipContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 8,
+  },
+  chipBtn: {
+    paddingHorizontal: 13,
+    paddingVertical: 7,
+    borderRadius: 18,
+    borderWidth: 1.5,
+    backgroundColor: "#FFFFFF",
+  },
+  chipBtnText: {
+    fontSize: 12,
+    fontFamily: Fonts.bold,
+  },
+  // 🚪 독립 분리형 개별 로그아웃 카드 (가득 채움)
+  logoutSeparateCard: {
+    width: "100%",
+    marginTop: 16,
+    marginBottom: 28,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 22,
+    backgroundColor: "rgba(239, 68, 68, 0.08)",
+    borderWidth: 1.5,
+    borderColor: "rgba(239, 68, 68, 0.25)",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    ...Shadows.card,
+  },
+  logoutSeparateText: {
+    fontSize: 16,
+    fontFamily: Fonts.bold,
+    color: "#EF4444",
   },
 });
