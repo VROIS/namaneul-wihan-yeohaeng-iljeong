@@ -269,14 +269,8 @@ export default function BTSWorldMapScreen() {
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
-  <header>
-    <div class="tour-tag">WORLD TOUR 2026</div>
-    <h1 class="main-title">BTS <span class="brand-purple">'Arirang'</span> 3D GLOBE</h1>
-    <p class="subtitle">OriginKit Cobe 스타일 3D 도트 회전 지구본 & 도시 피켓 핀</p>
-  </header>
   <div id="canvas-container"></div>
   <div class="picket-container" id="picket-container"></div>
-  <div class="hint">🖱️ 마우스/터치 드래그: 3D 지구본 회전 | 도시 3D 피켓 클릭: 공연 정보 확인</div>
 
   <div class="city-modal" id="city-modal">
     <h2 class="modal-city-name" id="m-city">GOYANG</h2>
@@ -294,7 +288,7 @@ export default function BTSWorldMapScreen() {
 
     const isMobile = window.innerWidth < 600;
     const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.z = isMobile ? 360 : 300;
+    camera.position.z = isMobile ? 410 : 340;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -318,8 +312,8 @@ export default function BTSWorldMapScreen() {
     const globeGroup = new THREE.Group();
     scene.add(globeGroup);
 
-    // 모바일 해상도 맞춤 3D 지구본 반경 (모바일 68px, 데스크톱 88px)
-    const GLOBE_RADIUS = isMobile ? 68 : 88;
+    // 모바일 해상도 맞춤 3D 지구본 반경 (모바일 54px, 데스크톱 74px - 극적 비주얼 여백 극대화)
+    const GLOBE_RADIUS = isMobile ? 54 : 74;
 
     // 1. OriginKit / Cobe Style 3D Dotted Sphere (구체 도트 메쉬)
     const dotCount = 1800;
