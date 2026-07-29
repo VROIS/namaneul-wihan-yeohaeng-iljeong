@@ -23,6 +23,8 @@ import RepresentativeTripShortForm, {
 } from "./components/RepresentativeTripShortForm";
 import type { PlannerApi } from "./hooks/useTripPlanner";
 
+import ShinyPillBanner from "@/components/ShinyPillBanner";
+
 const DB_COMPLETED_CITIES = [
   { id: "Paris", nameKo: "파리", nameEn: "Paris" },
   { id: "Brussels", nameKo: "브뤼셀", nameEn: "Brussels" },
@@ -118,93 +120,9 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
           ...Shadows.card,
         }}
       >
-        {/* 🌟 '지금 핫한 TRIPIS 여정' 센터 브랜드 슬로건 다이나믹 애니메이션 (이모지 없음, 대형 글씨, 3D 플로팅/펄스) */}
-        <View
-          style={{
-            alignItems: "center",
-            justify: "center",
-            marginBottom: 12,
-            marginTop: 2,
-          }}
-        >
-          <Animated.View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "center",
-              transform: [{ scale: sloganScale }, { translateY: sloganTranslateY }],
-              opacity: sloganOpacity,
-            }}
-          >
-            <Text
-              style={{
-                fontSize: 18,
-                fontFamily: Fonts.bold,
-                fontWeight: "800",
-                color: theme.text,
-                letterSpacing: -0.5,
-              }}
-            >
-              지금 핫한{" "}
-            </Text>
-
-            {/* ⚠️ 인증창과 100% 동일한 TRIPIS 브랜드 로고 & 볼드 텍스트 */}
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                gap: 5,
-                marginHorizontal: 2,
-              }}
-            >
-              <Image
-                source={require("../../../assets/images/tripis-mark.png")}
-                style={{
-                  width: 22,
-                  height: 22,
-                  borderRadius: 6,
-                }}
-                resizeMode="contain"
-              />
-              <Text
-                style={{
-                  fontSize: 21,
-                  fontFamily: Fonts.bold,
-                  fontWeight: "900",
-                  color: Brand.primary,
-                  letterSpacing: -0.8,
-                  lineHeight: 25,
-                }}
-              >
-                TRIPIS
-              </Text>
-            </View>
-
-            <Text
-              style={{
-                fontSize: 18,
-                fontFamily: Fonts.bold,
-                fontWeight: "800",
-                color: theme.text,
-                letterSpacing: -0.5,
-              }}
-            >
-              {" "}여정
-            </Text>
-          </Animated.View>
-
-          {/* 슬로건 하단 3D 글로우 액센트 바 */}
-          <Animated.View
-            style={{
-              height: 3,
-              width: 140,
-              backgroundColor: Brand.primary,
-              borderRadius: 2,
-              marginTop: 5,
-              opacity: sloganOpacity,
-              transform: [{ scaleX: sloganScale }],
-            }}
-          />
+        {/* 🌟 OriginKit Shiny Pill 스타일 '지금 핫한 [TRIPIS Mark + TRIPIS] 여정' 3D 쉬머 빔 알약 배너 */}
+        <View style={{ marginBottom: 12, marginTop: 2 }}>
+          <ShinyPillBanner />
         </View>
 
         {/* 1. DB-Only 완성된 도시의 동적 버튼 (맨 앞에 BTS 콘서트 도시 버튼 포함) */}
