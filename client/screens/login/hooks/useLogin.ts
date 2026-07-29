@@ -184,6 +184,11 @@ export function useLogin({ onDone }: { onDone: () => void }) {
       })
       .catch((err) => {
         console.error("[Auth] 웹 카카오 로그인 실패:", err);
+        // ⚠️ 2026-07-28 = 성공·조기실패 경로와 동일하게 여기서도 code 를 지운다(§16 형식 통일).
+        //   안 지우면 네트워크 예외 시 다음 시도에서 이미 쓴 code 를 또 시도하게 된다.
+        if (typeof window !== "undefined" && window.history) {
+          window.history.replaceState({}, "", window.location.pathname);
+        }
         notify(t("login.loginFailed"));
       })
       .finally(() => setOauthLoading(false));

@@ -308,7 +308,18 @@ export default function LoginSheet() {
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? "light"];
-  const [visible, setVisible] = useState(false);
+  const [visible, setVisible] = useState(() => {
+    // ⚠️ 수정금지(승인필요) — 카카오 웹 로그인 복귀 버그 수정(2026-07-28 세션7, 실측 확정).
+    //   카카오는 팝업이 아니라 전체 페이지 리다이렉트라, 돌아올 때 앱이 통째로 새로고침되며
+    //   이 시트가 "닫힌 초기상태"로 리셋된다. 시트가 닫혀 있으면 안의 useLogin(카카오 code 처리)이
+    //   아예 마운트되지 않아 처리가 방치되고, 사용자가 다시 열어야만 그제서야 처리가 시작돼
+    //   "로그인 중…"에 갇힌 것처럼 보였다(Chrome DevTools 로 직접 재현·확정).
+    //   → 돌아온 시점(주소에 카카오 code 있음)이면 처음부터 열어서 즉시 처리가 시작되게 한다.
+    if (Platform.OS === "web" && typeof window !== "undefined") {
+      return new URLSearchParams(window.location.search).has("code");
+    }
+    return false;
+  });
 
   // loginRequestedAt 신호 수신 → 팝업 열기(AI의견·전문가 오버레이와 동일 패턴). 소비 후 clear(다음 요청 재실행 보장).
   useEffect(() => {
