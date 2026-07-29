@@ -1,16 +1,28 @@
 import React, { useEffect, useRef } from "react";
-import { View, Text, StyleSheet, Animated, Image, Easing } from "react-native";
+import {
+  View,
+  Text,
+  StyleSheet,
+  Animated,
+  Image,
+  Easing,
+  useColorScheme,
+} from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { Brand } from "@/constants/theme";
 
 export default function ShinyPillBanner() {
+  const colorScheme = useColorScheme();
+  const isDark = colorScheme === "dark";
+  const textColor = isDark ? "#FFFFFF" : "#1A1A1A";
+
   const shimmerAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.loop(
       Animated.timing(shimmerAnim, {
         toValue: 1,
-        duration: 2500,
+        duration: 2400,
         easing: Easing.bezier(0.4, 0.0, 0.2, 1),
         useNativeDriver: true,
       }),
@@ -19,14 +31,14 @@ export default function ShinyPillBanner() {
 
   const translateX = shimmerAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [-160, 280],
+    outputRange: [-140, 240],
   });
 
   return (
-    <View style={styles.pillWrap}>
-      {/* Pill Outer Border Glow & Glass Background */}
-      <View style={styles.pillContainer}>
-        {/* Shimmer Light Beam Sweeping Across the Pill */}
+    <View style={styles.bannerWrap}>
+      {/* 🌟 검은 배경 상자 없이 순수 텍스트 & 로고 위로 지나는 무한 샤이니 빛줄기 */}
+      <View style={styles.textContainer}>
+        {/* Shimmer Light Beam Sweeping Across Text */}
         <Animated.View
           style={[
             styles.shimmerBeam,
@@ -36,9 +48,9 @@ export default function ShinyPillBanner() {
           <LinearGradient
             colors={[
               "transparent",
-              "rgba(192, 132, 252, 0.15)",
-              "rgba(255, 255, 255, 0.85)",
-              "rgba(192, 132, 252, 0.3)",
+              "rgba(147, 51, 234, 0.25)",
+              "rgba(255, 255, 255, 0.95)",
+              "rgba(192, 132, 252, 0.4)",
               "transparent",
             ]}
             start={{ x: 0, y: 0 }}
@@ -47,14 +59,11 @@ export default function ShinyPillBanner() {
           />
         </Animated.View>
 
-        {/* Content Row */}
+        {/* Text & Logo Content Row */}
         <View style={styles.contentRow}>
-          {/* Glowing Pulse Dot */}
-          <View style={styles.pulseDotOuter}>
-            <View style={styles.pulseDotInner} />
-          </View>
-
-          <Text style={styles.pillTextLeading}>지금 핫한</Text>
+          <Text style={[styles.textLeading, { color: textColor }]}>
+            지금 핫한
+          </Text>
 
           <View style={styles.logoRow}>
             <Image
@@ -65,7 +74,7 @@ export default function ShinyPillBanner() {
             <Text style={styles.logoText}>TRIPIS</Text>
           </View>
 
-          <Text style={styles.pillTextTrailing}>여정</Text>
+          <Text style={[styles.textTrailing, { color: textColor }]}>여정</Text>
         </View>
       </View>
     </View>
@@ -73,31 +82,27 @@ export default function ShinyPillBanner() {
 }
 
 const styles = StyleSheet.create({
-  pillWrap: {
+  bannerWrap: {
     alignItems: "center",
     justifyContent: "center",
-    marginVertical: 4,
+    marginVertical: 2,
   },
-  pillContainer: {
+  textContainer: {
     position: "relative",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 18,
-    paddingVertical: 9,
-    borderRadius: 50,
-    backgroundColor: "rgba(18, 12, 38, 0.92)",
-    borderWidth: 1.2,
-    borderColor: "rgba(168, 85, 247, 0.65)",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: "transparent", // ⚠️ 검은 배경 제거 (배경 없이 톤앤매너 100% 동기화)
     overflow: "hidden",
-    boxShadow:
-      "0 4px 20px rgba(147, 51, 234, 0.35), 0 0 12px rgba(168, 85, 247, 0.25)" as any,
+    borderRadius: 20,
   },
   shimmerBeam: {
     position: "absolute",
     top: -10,
     bottom: -10,
-    width: 90,
+    width: 75,
     zIndex: 2,
     pointerEvents: "none",
   },
@@ -105,31 +110,14 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
+    gap: 5,
     zIndex: 5,
   },
-  pulseDotOuter: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#A855F7",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 2,
-    boxShadow: "0 0 8px #A855F7" as any,
-  },
-  pulseDotInner: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: "#FFFFFF",
-  },
-  pillTextLeading: {
-    fontSize: 16,
+  textLeading: {
+    fontSize: 18,
     fontFamily: "Pretendard-Bold",
     fontWeight: "800",
-    color: "#FFFFFF",
-    letterSpacing: -0.3,
+    letterSpacing: -0.4,
   },
   logoRow: {
     flexDirection: "row",
@@ -138,22 +126,22 @@ const styles = StyleSheet.create({
     marginHorizontal: 1,
   },
   logoImage: {
-    width: 19,
-    height: 19,
-    borderRadius: 5,
+    width: 22,
+    height: 22,
+    borderRadius: 6,
   },
   logoText: {
-    fontSize: 18,
+    fontSize: 21,
     fontFamily: "Pretendard-Bold",
     fontWeight: "900",
-    color: "#C084FC",
-    letterSpacing: -0.5,
+    color: Brand.primary,
+    letterSpacing: -0.8,
+    lineHeight: 25,
   },
-  pillTextTrailing: {
-    fontSize: 16,
+  textTrailing: {
+    fontSize: 18,
     fontFamily: "Pretendard-Bold",
     fontWeight: "800",
-    color: "#FFFFFF",
-    letterSpacing: -0.3,
+    letterSpacing: -0.4,
   },
 });
