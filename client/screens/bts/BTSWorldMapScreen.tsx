@@ -292,8 +292,9 @@ export default function BTSWorldMapScreen() {
     const scene = new THREE.Scene();
     scene.fog = new THREE.FogExp2(0x070514, 0.0014);
 
+    const isMobile = window.innerWidth < 600;
     const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.z = 300;
+    camera.position.z = isMobile ? 360 : 300;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
@@ -316,7 +317,9 @@ export default function BTSWorldMapScreen() {
 
     const globeGroup = new THREE.Group();
     scene.add(globeGroup);
-    const GLOBE_RADIUS = 92;
+
+    // 모바일 해상도 맞춤 3D 지구본 반경 (모바일 68px, 데스크톱 88px)
+    const GLOBE_RADIUS = isMobile ? 68 : 88;
 
     // 1. OriginKit / Cobe Style 3D Dotted Sphere (구체 도트 메쉬)
     const dotCount = 1800;
@@ -401,14 +404,17 @@ export default function BTSWorldMapScreen() {
       const el = document.createElement('div');
       el.className = 'picket-pin';
       el.innerHTML = '<div class="picket-card"><span class="picket-flag">' + city.flag + '</span><div class="picket-info"><span class="picket-city">' + city.name + '</span><span class="picket-dday">' + city.dDay + '</span></div></div><div class="picket-stem"></div><div class="picket-dot"></div>';
-      el.onclick = () => selectCity(city);
+      el.onclick = (e) => {
+        e.stopPropagation();
+        animPhase = 99; // 터치 시 인트로 자동시퀀스 일시중단 후 도시 선택
+        selectCity(city);
+      };
       picketContainer.appendChild(el);
       pickets.push({ data: city, meshPos: pos, element: el });
     });
 
     let isDragging = false, prevPos = { x: 0, y: 0 };
     let animPhase = 0; // 0: intro rotate, 1: focus target city, 2: zoom in, 3: modal open & auto next
-    let startTime = performance.now();
 
     // 타겟 도시 3D 각도 계산 (위경도 -> 구체 3D 회전각)
     const targetLngRad = -(TARGET_CITY_INFO.lng * Math.PI / 180) - Math.PI / 2;
@@ -436,26 +442,26 @@ export default function BTSWorldMapScreen() {
       }
     }
 
-    // 🎬 인트로 연출 시퀀스 타임라인 (1.0s 타겟도시 회전정지 -> 2.2s 3D 줌인 -> 3.5s 카드팝업 -> 5.2s 자동전환)
-    setTimeout(() => { if (animPhase === 0) animPhase = 1; }, 1000);
-    setTimeout(() => { if (animPhase === 1) animPhase = 2; }, 2200);
+    // 🎬 인트로 연출 시퀀스 타임라인 (1.2s 타겟도시 회전정지 -> 2.4s 3D 줌인 -> 3.8s 카드팝업 -> 5.5s 자동전환)
+    setTimeout(() => { if (animPhase === 0) animPhase = 1; }, 1200);
+    setTimeout(() => { if (animPhase === 1) animPhase = 2; }, 2400);
     setTimeout(() => {
       if (animPhase === 2) {
         animPhase = 3;
         selectCity(TARGET_CITY_INFO);
       }
-    }, 3400);
+    }, 3800);
     setTimeout(() => {
       if (animPhase === 3) nextStep();
-    }, 5200);
+    }, 5500);
 
     function animate() {
       requestAnimationFrame(animate);
 
-      // 3D 애니메이션 페이즈별 보간 (Smooth Lerp)
+      // 초저속 우아한 자전 회전 (0.0008)으로 피켓 클릭 극대화
       if (!isDragging) {
         if (animPhase === 0) {
-          globeGroup.rotation.y += 0.0035;
+          globeGroup.rotation.y += 0.0008;
         } else if (animPhase === 1 || animPhase === 2 || animPhase === 3) {
           // 타겟 도시로 회전 각도 부드럽게 정지 (Lerp)
           globeGroup.rotation.y += (targetLngRad - globeGroup.rotation.y) * 0.04;
@@ -463,8 +469,9 @@ export default function BTSWorldMapScreen() {
         }
 
         if (animPhase === 2 || animPhase === 3) {
-          // 3D 줌인 (카메라 접근: 300 -> 145)
-          camera.position.z += (145 - camera.position.z) * 0.05;
+          // 3D 줌인 (카메라 접근: 모바일 360/300 -> 160)
+          const destZ = isMobile ? 180 : 145;
+          camera.position.z += (destZ - camera.position.z) * 0.05;
         }
       }
 
