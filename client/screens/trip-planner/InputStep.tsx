@@ -59,6 +59,7 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
   } = planner;
 
   const [previewCityName, setPreviewCityName] = useState<string>("Paris");
+  const [previewModalVisible, setPreviewModalVisible] = useState<boolean>(false);
   // ♾️ 모바일·웹 전천후 도시 버튼 가로 자동 무한 스크롤 & 자유 스와이프
   const cityScrollRef = useRef<ScrollView>(null);
   const scrollPosRef = useRef<number>(0);
