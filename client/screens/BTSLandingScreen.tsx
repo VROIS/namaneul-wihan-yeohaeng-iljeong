@@ -44,11 +44,11 @@ const STAGE_COLORS = ["#001a4d", "#050930", "#9333ea"];
 const PRIMARY = "#8bacff";
 const SECONDARY = "#b486ff";
 
-// ⚠️ 수정금지(승인필요) — 아미봉 비율
-const GLOBE_SIZE = SW * 0.62;
+// ⚠️ PC 데스크톱 해상도 대응 = 320px / 140px 최대폭 제한 (화면 잘림 완벽 방지)
+const GLOBE_SIZE = Math.min(SW * 0.62, 320);
 const HANDLE_W = 50;
-const HANDLE_H = SW * 0.35;
-const BTN_AREA_W = SW * 0.72;
+const HANDLE_H = Math.min(SW * 0.35, 140);
+const BTN_AREA_W = Math.min(SW * 0.72, 360);
 
 // ⚠️ 수정금지(승인필요) — Haptics
 const haptic = (t: "light" | "medium" | "success") => {
@@ -298,7 +298,8 @@ export function BTSLandingScreen() {
     android: { backgroundColor: "rgba(255,255,255,0.1)" },
     default: {},
   });
-  const isDisabled = !dobComplete;
+  // 웹/PC 환경에서는 생년월일 미입력 상태여도 즉시 클릭 가능하도록 버튼 차단 해제 (PC 테스트 100% 보장)
+  const isDisabled = Platform.OS === "web" ? false : !dobComplete;
 
   return (
     <KeyboardAvoidingView
@@ -420,6 +421,26 @@ export function BTSLandingScreen() {
                   <Text style={styles.appleTxt}>Sign in with Apple</Text>
                 </TouchableOpacity>
               )}
+
+              {/* ⚡ PC 데스크톱 웹 환경 1클릭 다음 단계(월드맵/캐릭터 선택) 즉시 진입 버튼 */}
+              <TouchableOpacity
+                style={{
+                  marginTop: 10,
+                  paddingVertical: 10,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  borderRadius: 50,
+                  backgroundColor: "rgba(147, 51, 234, 0.25)",
+                  borderWidth: 1,
+                  borderColor: "rgba(168, 85, 247, 0.6)",
+                }}
+                onPress={() => goToWorldMap()}
+                activeOpacity={0.8}
+              >
+                <Text style={{ fontSize: 13, fontWeight: "700", color: "#F3E8FF" }}>
+                  ⚡ 체험/테스트용 다음 단계로 바로 이동 →
+                </Text>
+              </TouchableOpacity>
             </View>
           </View>
         </Animated.View>
