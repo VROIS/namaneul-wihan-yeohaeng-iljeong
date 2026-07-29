@@ -60,30 +60,6 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
 
   const [previewCityName, setPreviewCityName] = useState<string>("Paris");
   const [previewModalVisible, setPreviewModalVisible] = useState<boolean>(false);
-  // ♾️ 모바일·웹 전천후 도시 버튼 가로 자동 무한 스크롤 & 자유 스와이프
-  const cityScrollRef = useRef<ScrollView>(null);
-  const scrollPosRef = useRef<number>(0);
-  const isInteractingRef = useRef<boolean>(false);
-
-  useEffect(() => {
-    let animId: number;
-    const autoScrollStep = () => {
-      if (!isInteractingRef.current && cityScrollRef.current) {
-        scrollPosRef.current += 0.5;
-        if (scrollPosRef.current > 1400) {
-          scrollPosRef.current = 0;
-        }
-        cityScrollRef.current.scrollTo({
-          x: scrollPosRef.current,
-          animated: false,
-        });
-      }
-      animId = requestAnimationFrame(autoScrollStep);
-    };
-
-    animId = requestAnimationFrame(autoScrollStep);
-    return () => cancelAnimationFrame(animId);
-  }, []);
 
   // ✨ '지금 핫한 TRIPIS 여정' 브랜드 슬로건 다이나믹 RN 애니메이션 (이모지 없음, 3D 플로팅 + 스케일 펄스)
   const sloganPulse = useRef(new Animated.Value(0)).current;
@@ -160,30 +136,14 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
           <ShinyPillBanner />
         </View>
 
-        {/* 1. DB-Only 완성된 도시의 동적 버튼 (맨 앞에 BTS 콘서트 도시 버튼 포함 + 16개 전세계 도시 무한 가로 자동 스크롤) */}
+        {/* 1. DB-Only 완성된 16개 전세계 인기도시 동적 버튼 (100% 사용자 자유 가로 스와이프) */}
         <View style={{ marginBottom: 8 }}>
           <ScrollView
-            ref={cityScrollRef}
             horizontal
             showsHorizontalScrollIndicator={false}
-            onTouchStart={() => {
-              isInteractingRef.current = true;
-            }}
-            onTouchEnd={() => {
-              setTimeout(() => {
-                isInteractingRef.current = false;
-              }, 2500);
-            }}
-            onScrollBeginDrag={() => {
-              isInteractingRef.current = true;
-            }}
-            onScrollEndDrag={(e) => {
-              scrollPosRef.current = e.nativeEvent.contentOffset.x;
-              setTimeout(() => {
-                isInteractingRef.current = false;
-              }, 2500);
-            }}
-            contentContainerStyle={{ gap: 7, paddingRight: 20 }}
+            bounces={true}
+            overScrollMode="always"
+            contentContainerStyle={{ gap: 8, paddingRight: 24 }}
           >
             {/* 💜 0. BTS 콘서트 도시 (정식 BTS 랜딩 및 아미봉 무대 라이트쇼 스택 연결 = BTSLanding) */}
             <Pressable
