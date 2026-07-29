@@ -362,7 +362,13 @@ export function BTSLandingScreen() {
                   />
                 </Animated.View>
                 <Text style={styles.cityLabel}>{city}</Text>
-                <Text style={styles.dDay}>D-{dDay}</Text>
+                <Text style={styles.dDay}>
+                  {typeof dDay === "number"
+                    ? dDay < 0
+                      ? `D+${Math.abs(dDay)}`
+                      : `D-${Math.abs(dDay)}`
+                    : `D-${dDay}`}
+                </Text>
                 <View style={styles.inputArea}>
                   <Text style={styles.inputLabel}>DATE OF BIRTH</Text>
                   <TextInput
