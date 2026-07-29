@@ -6,6 +6,7 @@ import {
   Animated,
   Image,
   Easing,
+  Platform,
   useColorScheme,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -18,15 +19,30 @@ export default function ShinyPillBanner() {
 
   const shimmerAnim = useRef(new Animated.Value(0)).current;
 
+  // ♾️ 1회에 멈추지 않고 멈춤 없이 100% 무한 지속 반복되는 빛줄기 시퀀스
   useEffect(() => {
-    Animated.loop(
+    let active = true;
+
+    const runInfiniteShimmer = () => {
+      if (!active) return;
+      shimmerAnim.setValue(0);
       Animated.timing(shimmerAnim, {
         toValue: 1,
-        duration: 2400,
-        easing: Easing.bezier(0.4, 0.0, 0.2, 1),
-        useNativeDriver: true,
-      }),
-    ).start();
+        duration: 2200,
+        easing: Easing.linear,
+        useNativeDriver: Platform.OS !== "web",
+      }).start(({ finished }) => {
+        if (active && finished) {
+          runInfiniteShimmer();
+        }
+      });
+    };
+
+    runInfiniteShimmer();
+
+    return () => {
+      active = false;
+    };
   }, [shimmerAnim]);
 
   const translateX = shimmerAnim.interpolate({
