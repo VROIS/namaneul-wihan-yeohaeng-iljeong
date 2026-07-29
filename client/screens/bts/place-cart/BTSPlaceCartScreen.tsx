@@ -28,6 +28,7 @@ import Animated, {
   withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import MainAppBottomTabBar from "@/components/MainAppBottomTabBar";
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
@@ -469,6 +470,9 @@ export default function BTSPlaceCartScreen() {
           </Pressable>
         </View>
       </ScrollView>
+
+      {/* 📌 메인앱 5단 하단 탭바 고정 부착 */}
+      <MainAppBottomTabBar activeTab="BTS" />
     </View>
   );
 }
