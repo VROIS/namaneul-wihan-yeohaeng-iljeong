@@ -310,6 +310,10 @@ export default function BTSWorldMapScreen() {
       { id: 'LA', name: 'LOS ANGELES', flag: '🇺🇸', lat: 34.0522, lng: -118.2437, dDay: 'D-160', date: '2026.05.29', venue: 'SoFi Stadium' }
     ];
 
+    // 백엔드 연동 실시간 콘서트 도시
+    const TARGET_CITY_ID = "${targetCity.toUpperCase()}";
+    const TARGET_CITY_INFO = CITIES.find(c => c.id === TARGET_CITY_ID) || CITIES[0];
+
     const globeGroup = new THREE.Group();
     scene.add(globeGroup);
     const GLOBE_RADIUS = 92;
@@ -403,7 +407,14 @@ export default function BTSWorldMapScreen() {
     });
 
     let isDragging = false, prevPos = { x: 0, y: 0 };
-    container.addEventListener('mousedown', () => isDragging = true);
+    let animPhase = 0; // 0: intro rotate, 1: focus target city, 2: zoom in, 3: modal open & auto next
+    let startTime = performance.now();
+
+    // 타겟 도시 3D 각도 계산 (위경도 -> 구체 3D 회전각)
+    const targetLngRad = -(TARGET_CITY_INFO.lng * Math.PI / 180) - Math.PI / 2;
+    const targetLatRad = (TARGET_CITY_INFO.lat * Math.PI / 180) * 0.55;
+
+    container.addEventListener('mousedown', () => { isDragging = true; animPhase = 99; });
     window.addEventListener('mouseup', () => isDragging = false);
     container.addEventListener('mousemove', (e) => {
       if (isDragging) {
@@ -425,9 +436,38 @@ export default function BTSWorldMapScreen() {
       }
     }
 
+    // 🎬 인트로 연출 시퀀스 타임라인 (1.0s 타겟도시 회전정지 -> 2.2s 3D 줌인 -> 3.5s 카드팝업 -> 5.2s 자동전환)
+    setTimeout(() => { if (animPhase === 0) animPhase = 1; }, 1000);
+    setTimeout(() => { if (animPhase === 1) animPhase = 2; }, 2200);
+    setTimeout(() => {
+      if (animPhase === 2) {
+        animPhase = 3;
+        selectCity(TARGET_CITY_INFO);
+      }
+    }, 3400);
+    setTimeout(() => {
+      if (animPhase === 3) nextStep();
+    }, 5200);
+
     function animate() {
       requestAnimationFrame(animate);
-      if (!isDragging) globeGroup.rotation.y += 0.0025;
+
+      // 3D 애니메이션 페이즈별 보간 (Smooth Lerp)
+      if (!isDragging) {
+        if (animPhase === 0) {
+          globeGroup.rotation.y += 0.0035;
+        } else if (animPhase === 1 || animPhase === 2 || animPhase === 3) {
+          // 타겟 도시로 회전 각도 부드럽게 정지 (Lerp)
+          globeGroup.rotation.y += (targetLngRad - globeGroup.rotation.y) * 0.04;
+          globeGroup.rotation.x += (targetLatRad - globeGroup.rotation.x) * 0.04;
+        }
+
+        if (animPhase === 2 || animPhase === 3) {
+          // 3D 줌인 (카메라 접근: 300 -> 145)
+          camera.position.z += (145 - camera.position.z) * 0.05;
+        }
+      }
+
       const tempV = new THREE.Vector3();
       pickets.forEach((p) => {
         tempV.copy(p.meshPos);
