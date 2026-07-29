@@ -205,7 +205,7 @@ export default function BTSWorldMapScreen() {
       })()
     : "";
 
-  // 🌐 웹/브라우저 환경(localhost:8082) 3D 회전 지구본 + 도시 3D 피켓 핀 라이브 렌더링
+  // 🌐 OriginKit (Cobe) 스타일 3D 도트 회전 지구본 + BTS 보라해 톤앤매너 피켓 & 아크 연결선 라이브 렌더링
   if (Platform.OS === "web") {
     const webGlobeHtml = `
 <!DOCTYPE html>
@@ -213,32 +213,58 @@ export default function BTSWorldMapScreen() {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OriginKit Style 3D Dotted Globe - BTS World Tour 2026</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
-    body { background: #030517; color: #FFFFFF; font-family: -apple-system, BlinkMacSystemFont, 'Pretendard', sans-serif; overflow: hidden; width: 100vw; height: 100vh; }
-    header { position: absolute; top: 18px; left: 0; right: 0; text-align: center; z-index: 20; pointer-events: none; }
-    .tour-tag { font-size: 11px; font-weight: 800; letter-spacing: 5px; color: rgba(255, 255, 255, 0.45); margin-bottom: 3px; }
-    .main-title { font-size: 32px; font-weight: 900; color: #FFFFFF; letter-spacing: -1px; }
-    .brand-purple { color: #A855F7; font-style: italic; }
-    .subtitle { font-size: 12px; color: rgba(255, 255, 255, 0.6); margin-top: 4px; }
+    body { background: #070514; color: #FFFFFF; font-family: -apple-system, BlinkMacSystemFont, 'Pretendard', sans-serif; overflow: hidden; width: 100vw; height: 100vh; }
+    
+    /* Header Tone & Manner */
+    header { position: absolute; top: 22px; left: 0; right: 0; text-align: center; z-index: 20; pointer-events: none; }
+    .tour-tag { font-size: 11px; font-weight: 800; letter-spacing: 6px; color: rgba(192, 132, 252, 0.6); margin-bottom: 4px; }
+    .main-title { font-size: 34px; font-weight: 900; color: #FFFFFF; letter-spacing: -1px; }
+    .brand-purple { color: #C084FC; font-style: italic; text-shadow: 0 0 16px rgba(192, 132, 252, 0.6); }
+    .subtitle { font-size: 12.5px; color: rgba(255, 255, 255, 0.65); margin-top: 5px; }
+
     #canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; cursor: grab; }
     #canvas-container:active { cursor: grabbing; }
+
+    /* OriginKit Style 3D Picket Pins */
     .picket-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
-    .picket-pin { position: absolute; transform: translate(-50%, -100%); pointer-events: auto; cursor: pointer; transition: transform 0.2s ease; }
-    .picket-pin:hover { z-index: 100 !important; transform: translate(-50%, -110%) scale(1.12); }
-    .picket-card { background: rgba(15, 13, 35, 0.88); backdrop-filter: blur(12px); border: 1.5px solid rgba(168, 85, 247, 0.65); box-shadow: 0 8px 32px rgba(124, 58, 237, 0.35); border-radius: 14px; padding: 7px 13px; display: flex; align-items: center; gap: 8px; white-space: nowrap; }
-    .picket-flag { font-size: 16px; }
+    .picket-pin { position: absolute; transform: translate(-50%, -100%); pointer-events: auto; cursor: pointer; transition: transform 0.22s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+    .picket-pin:hover { z-index: 100 !important; transform: translate(-50%, -112%) scale(1.14); }
+
+    .picket-card {
+      background: rgba(15, 10, 32, 0.9);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border: 1.5px solid rgba(192, 132, 252, 0.7);
+      box-shadow: 0 8px 30px rgba(124, 58, 237, 0.4), 0 0 15px rgba(192, 132, 252, 0.3);
+      border-radius: 14px;
+      padding: 7px 13px;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      white-space: nowrap;
+    }
+    .picket-flag { font-size: 17px; }
     .picket-info { display: flex; flex-direction: column; }
-    .picket-city { font-size: 12.5px; font-weight: 800; color: #FFFFFF; }
-    .picket-dday { font-size: 10.5px; font-weight: 800; color: #C084FC; }
-    .picket-stem { width: 2px; height: 26px; background: linear-gradient(to bottom, rgba(168, 85, 247, 0.9), rgba(168, 85, 247, 0.1)); margin: 0 auto; box-shadow: 0 0 8px #A855F7; }
-    .picket-dot { width: 7px; height: 7px; background: #FACC15; border-radius: 50%; margin: 0 auto; box-shadow: 0 0 10px #FACC15; }
-    .city-modal { position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(140%); background: rgba(13, 11, 28, 0.94); border: 1.5px solid #A855F7; backdrop-filter: blur(20px); padding: 18px 24px; border-radius: 22px; box-shadow: 0 16px 40px rgba(0,0,0,0.6); z-index: 30; width: 90%; max-width: 400px; text-align: center; transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1); }
+    .picket-city { font-size: 13px; font-weight: 800; color: #FFFFFF; letter-spacing: 0.3px; }
+    .picket-dday { font-size: 11px; font-weight: 800; color: #C084FC; }
+    .picket-stem { width: 2px; height: 28px; background: linear-gradient(to bottom, rgba(192, 132, 252, 0.95), rgba(192, 132, 252, 0.15)); margin: 0 auto; box-shadow: 0 0 10px #C084FC; }
+    .picket-dot { width: 8px; height: 8px; background: #FACC15; border-radius: 50%; margin: 0 auto; box-shadow: 0 0 12px #FACC15; }
+
+    /* City Details Modal */
+    .city-modal {
+      position: absolute; bottom: 26px; left: 50%; transform: translateX(-50%) translateY(140%);
+      background: rgba(12, 8, 28, 0.94); border: 1.5px solid #C084FC; backdrop-filter: blur(24px);
+      padding: 20px 28px; border-radius: 24px; box-shadow: 0 16px 45px rgba(0,0,0,0.65), 0 0 30px rgba(192, 132, 252, 0.4);
+      z-index: 30; width: 90%; max-width: 420px; text-align: center; transition: transform 0.38s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
     .city-modal.active { transform: translateX(-50%) translateY(0); }
-    .modal-city-name { font-size: 22px; font-weight: 900; color: #FFFFFF; }
-    .modal-venue { font-size: 12.5px; color: rgba(255,255,255,0.7); margin-top: 4px; }
-    .modal-btn { margin-top: 14px; background: linear-gradient(135deg, #7C3AED, #9333EA); border: none; color: #FFF; font-weight: 800; padding: 11px 22px; border-radius: 50px; font-size: 13.5px; cursor: pointer; }
-    .hint { position: absolute; bottom: 14px; left: 16px; font-size: 11.5px; color: rgba(255,255,255,0.45); z-index: 20; }
+    .modal-city-name { font-size: 24px; font-weight: 900; color: #FFFFFF; }
+    .modal-venue { font-size: 13px; color: rgba(255,255,255,0.75); margin-top: 4px; }
+    .modal-btn { margin-top: 16px; background: linear-gradient(135deg, #7C3AED, #9333EA); border: none; color: #FFF; font-weight: 800; padding: 12px 24px; border-radius: 50px; font-size: 14px; cursor: pointer; box-shadow: 0 4px 20px rgba(147, 51, 234, 0.5); }
+    .hint { position: absolute; bottom: 16px; left: 20px; font-size: 12px; color: rgba(255,255,255,0.45); z-index: 20; }
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
@@ -246,24 +272,29 @@ export default function BTSWorldMapScreen() {
   <header>
     <div class="tour-tag">WORLD TOUR 2026</div>
     <h1 class="main-title">BTS <span class="brand-purple">'Arirang'</span> 3D GLOBE</h1>
-    <p class="subtitle">지구본을 회전시키고 도시 3D 피켓을 선택해 보세요</p>
+    <p class="subtitle">OriginKit Cobe 스타일 3D 도트 회전 지구본 & 도시 피켓 핀</p>
   </header>
   <div id="canvas-container"></div>
   <div class="picket-container" id="picket-container"></div>
-  <div class="hint">🖱️ 마우스/터치 드래그: 3D 회전 | 도시 3D 피켓 클릭: 공연 정보 선택</div>
+  <div class="hint">🖱️ 마우스/터치 드래그: 3D 지구본 회전 | 도시 3D 피켓 클릭: 공연 정보 확인</div>
+
   <div class="city-modal" id="city-modal">
     <h2 class="modal-city-name" id="m-city">GOYANG</h2>
     <p class="modal-venue" id="m-venue">Goyang Stadium • 2026.04.09</p>
     <button class="modal-btn" onclick="nextStep()">이 도시 투어 선택 및 캐릭터 설정 →</button>
   </div>
+
   <script>
     const container = document.getElementById('canvas-container');
     const picketContainer = document.getElementById('picket-container');
     const cityModal = document.getElementById('city-modal');
+
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x030517, 0.0015);
+    scene.fog = new THREE.FogExp2(0x070514, 0.0014);
+
     const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.z = 310;
+    camera.position.z = 300;
+
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -281,20 +312,50 @@ export default function BTSWorldMapScreen() {
 
     const globeGroup = new THREE.Group();
     scene.add(globeGroup);
-    const GLOBE_RADIUS = 95;
-    const sphereMesh = new THREE.Mesh(
-      new THREE.SphereGeometry(GLOBE_RADIUS, 64, 64),
-      new THREE.MeshPhongMaterial({ color: 0x1A0E40, emissive: 0x100828, specular: 0x7C3AED, shininess: 45, transparent: true, opacity: 0.92 })
-    );
-    globeGroup.add(sphereMesh);
-    globeGroup.add(new THREE.Mesh(
-      new THREE.SphereGeometry(GLOBE_RADIUS + 0.5, 36, 18),
-      new THREE.MeshBasicMaterial({ color: 0x6D28D9, wireframe: true, transparent: true, opacity: 0.18 })
-    ));
+    const GLOBE_RADIUS = 92;
 
-    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-    const dLight = new THREE.DirectionalLight(0xA855F7, 1.2);
-    dLight.position.set(200, 200, 200);
+    // 1. OriginKit / Cobe Style 3D Dotted Sphere (구체 도트 메쉬)
+    const dotCount = 1800;
+    const dotPositions = [];
+    const dotColors = [];
+    const colorBorahae = new THREE.Color(0xC084FC);
+    const colorGlow = new THREE.Color(0x9333EA);
+
+    for (let i = 0; i < dotCount; i++) {
+      const phi = Math.acos(-1 + (2 * i) / dotCount);
+      const theta = Math.sqrt(dotCount * Math.PI) * phi;
+      const x = GLOBE_RADIUS * Math.cos(theta) * Math.sin(phi);
+      const y = GLOBE_RADIUS * Math.sin(theta) * Math.sin(phi);
+      const z = GLOBE_RADIUS * Math.cos(phi);
+      dotPositions.push(x, y, z);
+      const c = (i % 3 === 0) ? colorBorahae : colorGlow;
+      dotColors.push(c.r, c.g, c.b);
+    }
+
+    const dotGeo = new THREE.BufferGeometry();
+    dotGeo.setAttribute('position', new THREE.Float32BufferAttribute(dotPositions, 3));
+    dotGeo.setAttribute('color', new THREE.Float32BufferAttribute(dotColors, 3));
+
+    const dotMat = new THREE.PointsMaterial({
+      size: 2.2,
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.85
+    });
+    const dotsMesh = new THREE.Points(dotGeo, dotMat);
+    globeGroup.add(dotsMesh);
+
+    // Inner Dark Core Sphere
+    const coreMesh = new THREE.Mesh(
+      new THREE.SphereGeometry(GLOBE_RADIUS - 1, 48, 48),
+      new THREE.MeshBasicMaterial({ color: 0x0A0620, transparent: true, opacity: 0.94 })
+    );
+    globeGroup.add(coreMesh);
+
+    // Atmosphere Ring Glow
+    scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+    const dLight = new THREE.DirectionalLight(0xA855F7, 1.4);
+    dLight.position.set(200, 250, 200);
     scene.add(dLight);
 
     function latLngToVector3(lat, lng, radius) {
@@ -303,10 +364,33 @@ export default function BTSWorldMapScreen() {
       return new THREE.Vector3(-(radius * Math.sin(phi) * Math.cos(theta)), radius * Math.cos(phi), radius * Math.sin(phi) * Math.sin(theta));
     }
 
+    // 2. 3D Arc Connections (OriginKit Great Circle Arcs)
+    function createArc(v1, v2) {
+      const distance = v1.distanceTo(v2);
+      const mid = v1.clone().add(v2).multiplyScalar(0.5);
+      const midLength = mid.length();
+      mid.normalize().multiplyScalar(midLength + distance * 0.25);
+
+      const curve = new THREE.QuadraticBezierCurve3(v1, mid, v2);
+      const points = curve.getPoints(40);
+      const arcGeo = new THREE.BufferGeometry().setFromPoints(points);
+      const arcMat = new THREE.LineBasicMaterial({ color: 0xC084FC, transparent: true, opacity: 0.45 });
+      const arcLine = new THREE.Line(arcGeo, arcMat);
+      globeGroup.add(arcLine);
+    }
+
+    // Connect Goyang to other cities with arcs
+    const goyangPos = latLngToVector3(CITIES[0].lat, CITIES[0].lng, GLOBE_RADIUS);
+    for (let i = 1; i < CITIES.length; i++) {
+      const targetPos = latLngToVector3(CITIES[i].lat, CITIES[i].lng, GLOBE_RADIUS);
+      createArc(goyangPos, targetPos);
+    }
+
+    // 3. Create 3D Pickets
     const pickets = [];
     CITIES.forEach((city) => {
       const pos = latLngToVector3(city.lat, city.lng, GLOBE_RADIUS);
-      const dotMesh = new THREE.Mesh(new THREE.SphereGeometry(2.2, 16, 16), new THREE.MeshBasicMaterial({ color: 0xFACC15 }));
+      const dotMesh = new THREE.Mesh(new THREE.SphereGeometry(2.4, 16, 16), new THREE.MeshBasicMaterial({ color: 0xFACC15 }));
       dotMesh.position.copy(pos);
       globeGroup.add(dotMesh);
 
@@ -323,8 +407,8 @@ export default function BTSWorldMapScreen() {
     window.addEventListener('mouseup', () => isDragging = false);
     container.addEventListener('mousemove', (e) => {
       if (isDragging) {
-        globeGroup.rotation.y += (e.clientX - prevPos.x) * 0.005;
-        globeGroup.rotation.x += (e.clientY - prevPos.y) * 0.005;
+        globeGroup.rotation.y += (e.clientX - prevPos.x) * 0.004;
+        globeGroup.rotation.x += (e.clientY - prevPos.y) * 0.004;
       }
       prevPos = { x: e.clientX, y: e.clientY };
     });
@@ -343,7 +427,7 @@ export default function BTSWorldMapScreen() {
 
     function animate() {
       requestAnimationFrame(animate);
-      if (!isDragging) globeGroup.rotation.y += 0.002;
+      if (!isDragging) globeGroup.rotation.y += 0.0025;
       const tempV = new THREE.Vector3();
       pickets.forEach((p) => {
         tempV.copy(p.meshPos);
@@ -353,7 +437,7 @@ export default function BTSWorldMapScreen() {
           p.element.style.display = 'block';
           p.element.style.left = (tempV.x * 0.5 + 0.5) * window.innerWidth + 'px';
           p.element.style.top = (-(tempV.y * 0.5) + 0.5) * window.innerHeight + 'px';
-          p.element.style.opacity = Math.max(0.3, Math.min(1.0, (tempV.z + 50) / 120));
+          p.element.style.opacity = Math.max(0.35, Math.min(1.0, (tempV.z + 50) / 120));
           p.element.style.zIndex = Math.floor(tempV.z + 100);
         } else {
           p.element.style.display = 'none';
@@ -367,14 +451,14 @@ export default function BTSWorldMapScreen() {
 </html>`;
 
     return (
-      <View style={{ flex: 1, backgroundColor: "#030517" }}>
+      <View style={{ flex: 1, backgroundColor: "#070514" }}>
         <iframe
           srcDoc={webGlobeHtml}
           style={{
             width: "100%",
             height: "100%",
             border: "none",
-            backgroundColor: "#030517",
+            backgroundColor: "#070514",
           }}
           onMessage={(e: any) => {
             if (e?.data?.type === "NEXT_STEP") {
