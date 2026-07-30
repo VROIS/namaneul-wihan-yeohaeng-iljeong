@@ -1,13 +1,6 @@
 // 입력 화면(InputStep.tsx) = 상단 고정 + DB 도시 동적 버튼 + '누구랑' 및 '누구를 위한' 100% 복원 완료
-import React, { useState, useEffect, useRef } from "react";
-import {
-  View,
-  Text,
-  Pressable,
-  ScrollView,
-  Animated,
-  Image,
-} from "react-native";
+import React, { useState, useEffect } from "react";
+import { View, Text, Pressable, ScrollView } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import {
   Brand,
@@ -35,19 +28,17 @@ import RepresentativeTripShortForm, {
   CITY_PREVIEW_MAP,
 } from "./components/RepresentativeTripShortForm";
 import type { PlannerApi } from "./hooks/useTripPlanner";
-import { getApiUrl } from "@/lib/query-client";
+import { apiRequest } from "@/lib/query-client";
 
 import ShinyPillBanner from "@/components/ShinyPillBanner";
 
 // ⚠️ 수정금지(승인필요) 2026-07-30 사장님 SSOT = 도시버튼 목록 = **서버가 DB 실측으로 내려주는 것만.**
-//   옛 하드코딩 16개 완전삭제 §19 = 그중 11개가 미완비였고(도쿄·오사카·싱가포르·방콕·LA·뉴욕·시드니·바르셀로나·로마·프라하·다낭)
-//   미리보기가 5개뿐이라 그 11개를 누르면 전부 "파리" 카드가 떴다(가짜 표시).
-//   지금은 GET /api/cities/ready = place_seed_raw 행수 300 이상만·완비순 = 도시를 더 발굴하면 **코드 수정 없이 자동 추가.**
+//   손으로 적어둔 목록은 완전삭제 §19 = 발굴이 안 된 도시까지 버튼에 떠서 가짜 정보를 보여줬다.
+//   정본 = GET /api/cities/ready (완비 도시만·완비순). 도시를 더 발굴하면 **코드 수정 없이 자동 추가.**
 type ReadyCity = {
   id: number;
   nameKo: string;
   nameEn: string;
-  country: string | null;
 };
 
 export default function InputStep({ planner }: { planner: PlannerApi }) {
@@ -70,15 +61,13 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
     useState<boolean>(false);
 
   // 🏙️ 도시버튼 목록 = 서버 DB 실측(완비 도시만·완비순). 실패하면 빈 줄 = 가짜 도시 표시 금지.
+  //   조회는 이 폴더의 다른 훅들과 같은 apiRequest 1벌(§16) = 주소 조립·오류 처리를 다시 만들지 않는다.
   const [readyCities, setReadyCities] = useState<ReadyCity[]>([]);
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
-        const res = await fetch(
-          new URL("/api/cities/ready", getApiUrl()).toString(),
-        );
-        if (!res.ok) return;
+        const res = await apiRequest("GET", "/api/cities/ready");
         const data = await res.json();
         if (alive && Array.isArray(data)) setReadyCities(data);
       } catch (e) {
@@ -90,42 +79,9 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
     };
   }, []);
 
-  // ✨ '지금 핫한 TRIPIS 여정' 브랜드 슬로건 다이나믹 RN 애니메이션 (이모지 없음, 3D 플로팅 + 스케일 펄스)
-  const sloganPulse = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    const animation = Animated.loop(
-      Animated.sequence([
-        Animated.timing(sloganPulse, {
-          toValue: 1,
-          duration: 950,
-          useNativeDriver: true,
-        }),
-        Animated.timing(sloganPulse, {
-          toValue: 0,
-          duration: 950,
-          useNativeDriver: true,
-        }),
-      ]),
-    );
-    animation.start();
-    return () => animation.stop();
-  }, [sloganPulse]);
-
-  const sloganScale = sloganPulse.interpolate({
-    inputRange: [0, 1],
-    outputRange: [1, 1.06],
-  });
-
-  const sloganTranslateY = sloganPulse.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0, -3.5],
-  });
-
-  const sloganOpacity = sloganPulse.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.82, 1],
-  });
+  // ⚠️ 2026-07-30 §19 = 슬로건 펄스 애니메이션 완전삭제.
+  //   사유: 슬로건이 ShinyPillBanner 로 교체돼 계산값을 쓰는 곳이 0인데도 무한 루프가 화면 진입마다 돌고 있었다.
+  //   (이 파일이 500줄 가드 상한에 붙어 다음 수정이 막히던 원인 중 하나)
 
   // 도시 칩 = 그 도시를 목적지로 잡고, **미리보기가 있을 때만** 모달을 띄운다.
   //   ⚠️ 미리보기 없는 도시(= 새로 완비된 6번째 도시 등)는 모달을 열지 않는다 = 빈 모달·엉뚱한 파리 카드 방지(2026-07-30 §19).
@@ -169,7 +125,7 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
           <ShinyPillBanner />
         </View>
 
-        {/* 1. DB-Only 완성된 16개 전세계 인기도시 동적 버튼 (100% 사용자 자유 가로 스와이프) */}
+        {/* 1. 완비 도시 버튼 = 서버가 내려준 목록 그대로(개수 고정 아님). 가로 스와이프 */}
         <View style={{ marginBottom: 8 }}>
           <ScrollView
             horizontal
@@ -240,6 +196,11 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
                     ...Shadows.card,
                   }}
                   onPress={() => handleCityPress(city.nameEn)}
+                  // 칩 높이가 약 30px 이라 손가락 기준(iOS 44 / 안드로이드 48)에 못 미친다 → 픽셀은 그대로 두고 누를 수 있는 범위만 넓힘
+                  hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${city.nameKo} 선택`}
+                  accessibilityState={{ selected: isSelected }}
                 >
                   <Icon
                     name="map-pin"

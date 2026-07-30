@@ -34,20 +34,18 @@ export function registerExpertRoutes(app: Express): void {
   //   🪙 크레딧 차감(10) = 아래 INSERT 직전에 구현됨 = 2026-07-29 §9 (예고 주석 폐기 §19).
   app.post("/api/verification/request", async (req, res) => {
     try {
-      const authId = getUserIdFromReq(req);
-      const {
-        userId,
-        itineraryData,
-        userMessage,
-        itineraryId,
-        kind,
-        dayNumber,
-      } = req.body || {};
-      const uid = authId || userId; // 3단계(FE 토큰 첨부) 전 과도기 = body userId 허용. FK가 실존 사용자만 통과시킴.
-      if (!uid || !userMessage) {
-        return res
-          .status(400)
-          .json({ error: "userId and userMessage are required" });
+      // ⚠️ 수정금지(승인필요) 2026-07-30 §0 = 신원은 **로그인 토큰에서만** 온다.
+      //   요청 본문의 userId 를 받아주던 갈래 삭제: 크레딧이 걸린 라우트에서 신원을 클라이언트가 정하게 두면
+      //   본문 한 칸만 바꿔 남의 이름으로 접수하거나, 칸을 비워 차감을 건너뛸 수 있다(§22 검증 지적).
+      //   클라(apiRequest)가 항상 Bearer 를 붙이므로 본문 경로가 필요 없다.
+      const uid = getUserIdFromReq(req);
+      const { itineraryData, userMessage, itineraryId, kind, dayNumber } =
+        req.body || {};
+      if (!uid) {
+        return res.status(401).json({ error: "login_required" });
+      }
+      if (!userMessage) {
+        return res.status(400).json({ error: "userMessage is required" });
       }
       // 🪙 전문가 검증 10크레딧 차감 (2026-07-29 §9) = 접수가 확정되는 INSERT **직전**.
       //   잔액이 부족하면 접수 자체를 막는다(돈 드는 일을 시작하지 않는 것이 402 의 목적).

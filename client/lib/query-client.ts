@@ -88,8 +88,11 @@ export const getQueryFn: <T>(options: {
     const baseUrl = getApiUrl();
     const url = new URL(queryKey.join("/") as string, baseUrl);
 
+    // ⚠️ 수정금지(승인필요) 2026-07-30 = 여기도 토큰을 붙인다. apiRequest 만 고치면 useQuery 경로가
+    //   토큰 없이 나가 서버가 "비로그인" 으로 보고, 크레딧이 걸린 라우트가 무과금으로 새는 같은 결함이 남는다(§0 = 1벌).
     const res = await fetch(url, {
       credentials: "include",
+      headers: await authHeader(),
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {

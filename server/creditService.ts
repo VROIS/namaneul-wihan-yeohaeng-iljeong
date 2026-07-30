@@ -45,6 +45,9 @@ export class CreditService {
     return user;
   }
 
+  // ⚠️ 수정금지(승인필요) 2026-07-30 = 장부 줄과 잔액을 **한 덩어리로** 처리한다.
+  //   왜: 둘이 따로 돌면 장부만 적힌 채 서버가 끊길 수 있고, 그러면 결제는 됐는데 잔액은 그대로인 상태가 굳는다
+  //   (재시도해도 같은 결제번호가 막혀 복구가 안 됨). 내손앱도 같은 이유로 한 덩어리였다 = 이식 때 빠뜨린 것 복원.
   async addCredits(
     userId: string,
     amount: number,
@@ -52,24 +55,26 @@ export class CreditService {
     description: string,
     referenceId?: string,
   ): Promise<number> {
-    await db.insert(creditTransactions).values({
-      userId,
-      type,
-      amount,
-      description,
-      referenceId,
+    return await db.transaction(async (tx) => {
+      await tx.insert(creditTransactions).values({
+        userId,
+        type,
+        amount,
+        description,
+        referenceId,
+      });
+
+      const [updated] = await tx
+        .update(users)
+        .set({
+          credits: sql`COALESCE(${users.credits}, 0) + ${amount}`,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, userId))
+        .returning({ credits: users.credits });
+
+      return updated?.credits ?? 0;
     });
-
-    const [updated] = await db
-      .update(users)
-      .set({
-        credits: sql`COALESCE(${users.credits}, 0) + ${amount}`,
-        updatedAt: new Date(),
-      })
-      .where(eq(users.id, userId))
-      .returning({ credits: users.credits });
-
-    return updated?.credits ?? 0;
   }
 
   async useCredits(

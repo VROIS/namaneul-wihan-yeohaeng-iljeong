@@ -1,9 +1,9 @@
 // ⚠️ 수정금지(승인필요) 2026-07-29 사장님 SSOT = 크레딧·결제 화면 API 헬퍼 (CLAUDE.md §9).
 //   정본 문서 = docs/2026-07-29 결제·크레딧 구현.md. 백엔드 = server/payment-routes.ts (6라우트).
-//   인증 방식 = client/screens/expert/expertApi.ts:27-44 를 **그대로 복제**(§16 재발명 금지) =
-//   공유 apiRequest(쿠키) 대신 Bearer 토큰(getUserData().token)을 직접 붙인다(앱에서 유일하게 작동하는 인증).
-import { getApiUrl } from "@/lib/query-client";
-import { getUserData } from "@/lib/auth";
+//   ⚠️ 2026-07-30 §16 = 자체 fetch 헬퍼 삭제 → 공용 apiRequest 1벌 사용.
+//     apiRequest 가 주소 조립·로그인 토큰 첨부·오류 던지기를 모두 하므로 여기서 다시 만들 것이 없다.
+//     이 파일은 "응답을 화면이 쓰기 쉬운 값으로 바꾸는 일"만 한다.
+import { apiRequest } from "@/lib/query-client";
 
 // 장부 1줄 = server/creditService.ts getTransactionHistory 응답 규약
 export interface CreditTransaction {
@@ -25,22 +25,12 @@ export interface CreditPricing {
   costs: Record<string, number>;
 }
 
-// 공용 fetch = Bearer 토큰 자동 첨부. 미로그인이면 토큰 없음(백엔드가 401 반환).
-async function req(method: string, path: string): Promise<Response> {
-  const user = await getUserData();
-  const headers: Record<string, string> = {};
-  if (user?.token && user.token.startsWith("simple_auth_token_v1_")) {
-    headers["Authorization"] = `Bearer ${user.token}`;
-  }
-  return fetch(new URL(path, getApiUrl()).toString(), { method, headers });
-}
-
 // 잔액 = GET /api/credits/balance. 실패·미로그인 = null(화면이 "-" 로 표시).
 export async function getBalance(): Promise<number | null> {
   try {
-    const res = await req("GET", "/api/credits/balance");
-    if (!res.ok) return null;
-    const data = (await res.json()) as { balance: number };
+    const data = (await (
+      await apiRequest("GET", "/api/credits/balance")
+    ).json()) as { balance: number };
     return typeof data.balance === "number" ? data.balance : null;
   } catch {
     return null;
@@ -52,9 +42,9 @@ export async function getTransactions(
   limit = 20,
 ): Promise<CreditTransaction[]> {
   try {
-    const res = await req("GET", `/api/credits/transactions?limit=${limit}`);
-    if (!res.ok) return [];
-    const data = (await res.json()) as { transactions: CreditTransaction[] };
+    const data = (await (
+      await apiRequest("GET", `/api/credits/transactions?limit=${limit}`)
+    ).json()) as { transactions: CreditTransaction[] };
     return Array.isArray(data.transactions) ? data.transactions : [];
   } catch {
     return [];
@@ -64,9 +54,9 @@ export async function getTransactions(
 // 요금·단가표 = GET /api/credits/pricing (공개). 실패 = null.
 export async function getPricing(): Promise<CreditPricing | null> {
   try {
-    const res = await req("GET", "/api/credits/pricing");
-    if (!res.ok) return null;
-    return (await res.json()) as CreditPricing;
+    return (await (
+      await apiRequest("GET", "/api/credits/pricing")
+    ).json()) as CreditPricing;
   } catch {
     return null;
   }
@@ -80,9 +70,9 @@ export async function createCheckout(): Promise<{
   sessionId: string;
 } | null> {
   try {
-    const res = await req("POST", "/api/payments/checkout");
-    if (!res.ok) return null;
-    const data = (await res.json()) as { url: string; sessionId: string };
+    const data = (await (
+      await apiRequest("POST", "/api/payments/checkout")
+    ).json()) as { url: string; sessionId: string };
     return data.url ? data : null;
   } catch {
     return null;
@@ -95,12 +85,12 @@ export async function getSessionStatus(
   sessionId: string,
 ): Promise<{ paid: boolean; fulfilled: boolean } | null> {
   try {
-    const res = await req(
-      "GET",
-      `/api/payments/session/${encodeURIComponent(sessionId)}`,
-    );
-    if (!res.ok) return null;
-    const data = (await res.json()) as { paid?: unknown; fulfilled?: unknown };
+    const data = (await (
+      await apiRequest(
+        "GET",
+        `/api/payments/session/${encodeURIComponent(sessionId)}`,
+      )
+    ).json()) as { paid?: unknown; fulfilled?: unknown };
     // ⚠️ 검증 없이 캐스트하면 서버가 다른 형태를 줄 때 undefined 가 "결제 안 됨"으로 읽힌다 = 돈 걸린 판단이라 엄격 비교(§22 지적).
     return { paid: data.paid === true, fulfilled: data.fulfilled === true };
   } catch {

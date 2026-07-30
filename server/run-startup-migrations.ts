@@ -161,6 +161,24 @@ export async function runStartupMigrations(): Promise<void> {
     console.log(
       "[Migration] ✅ 0018 expert_inquiries.kind/day_number 적용 완료",
     );
+
+    // 0019: 결제·크레딧 (2026-07-30 §19 4항 = 라이브 DB 에만 있던 것을 레포에도 등재. 안 하면 db:push 한 번에 사라짐)
+    //   ① 같은 결제번호로 충전 줄이 두 개 생기는 것을 DB 가 막는다 = 통보 재전송 시 이중충전 차단.
+    //      ⚠️ 부분(WHERE) 이어야 한다 = 'usage' 줄은 같은 여정번호를 여러 번 쓰므로 전체 유니크를 걸면 차감이 전면 차단된다.
+    //   ② 문의 숨김 플래그 = 사용자/전문가가 각자 자기 목록에서만 지우는 용도.
+    await pool.query(`
+      CREATE UNIQUE INDEX IF NOT EXISTS "credit_transactions_purchase_ref_uniq"
+        ON "credit_transactions" ("reference_id")
+        WHERE "type" = 'purchase' AND "reference_id" IS NOT NULL;
+    `);
+    await pool.query(`
+      ALTER TABLE "expert_inquiries"
+        ADD COLUMN IF NOT EXISTS "is_deleted_by_user" boolean NOT NULL DEFAULT false,
+        ADD COLUMN IF NOT EXISTS "is_deleted_by_expert" boolean NOT NULL DEFAULT false;
+    `);
+    console.log(
+      "[Migration] ✅ 0019 결제 이중충전 차단 + 문의 숨김 플래그 적용 완료",
+    );
   } catch (err) {
     console.warn("[Migration] 스킵 또는 실패:", (err as Error).message);
   }

@@ -43,6 +43,10 @@ function stripe(): Stripe {
 const PURCHASE_CREDITS = CREDIT_CONFIG.PURCHASE_CREDITS;
 const PRICE_EUR = CREDIT_CONFIG.PRICE_EUR;
 
+// ⚠️ 우리 앱이 만든 결제라는 표식. 내손앱과 같은 Stripe 계정을 쓰기 때문에 필요하다(사장님 결정 2026-07-29).
+//   결제창을 만들 때 붙이고, 통보를 받을 때 이 값이 맞는지 확인한다 = 두 앱의 결제가 섞이지 않는다.
+const APP_TAG = "tripis";
+
 // 이미 충전 처리된 결제인지 = 장부의 결제 줄 1건 조회(읽기 전용).
 async function findPurchaseRow(sessionId: string) {
   const [row] = await db()
@@ -135,8 +139,11 @@ export function registerPaymentRoutes(app: Express): void {
         success_url: `${baseUrl}/?payment=success&session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${baseUrl}/?payment=cancel`,
         customer_email: user?.email || undefined,
-        // 통보가 왔을 때 누구에게 넣을지 = 이 값 1개로만 판단한다(크레딧 수는 CREDIT_CONFIG 가 정본이라 metadata 에 안 넣음).
-        metadata: { userId },
+        // 통보가 왔을 때 누구에게 넣을지 = userId 1개로만 판단(크레딧 수는 CREDIT_CONFIG 가 정본이라 metadata 에 안 넣음).
+        // ⚠️ app 표식 = 내손앱과 **같은 Stripe 계정**을 쓰므로 필요하다(2026-07-30).
+        //   표식이 없으면 내손앱 손님의 결제 통보까지 이 서버가 받아 Tripis 크레딧을 만들어 버린다
+        //   (내손앱 계정 형식이 Tripis DB 에도 실존하므로 실제로 들어간다) = 장부가 틀어짐.
+        metadata: { userId, app: APP_TAG },
       });
 
       res.json({ url: session.url, sessionId: session.id });
@@ -190,6 +197,18 @@ export function registerPaymentRoutes(app: Express): void {
       console.log(
         `[Payments] 결제 미완료 상태(${session.payment_status}) = 충전 안 함:`,
         session.id,
+      );
+      return res.json({ received: true });
+    }
+
+    // ⚠️ 수정금지(승인필요) 2026-07-30 = **우리가 만든 결제인지** 먼저 확인한다.
+    //   내손앱과 같은 Stripe 계정이라 이 끝점은 내손앱 결제 통보도 받는다. 표식을 안 보면
+    //   내손앱 손님의 €10 이 Tripis 크레딧까지 만들어 장부가 틀어진다(우리가 만든 세션에만 이 표식이 붙는다).
+    if (session.metadata?.app !== APP_TAG) {
+      console.log(
+        "[Payments] 우리 앱 결제가 아님 = 충전 안 함:",
+        session.id,
+        session.metadata?.app ?? "(표식 없음)",
       );
       return res.json({ received: true });
     }

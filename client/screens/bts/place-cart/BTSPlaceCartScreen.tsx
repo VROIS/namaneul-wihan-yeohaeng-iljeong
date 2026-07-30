@@ -34,7 +34,12 @@ import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
 import { CharacterGradients } from "@/constants/bts-theme";
-import { useBTS, type BTSPlace, type BTSCity } from "@/contexts/BTSContext";
+import {
+  useBTS,
+  pickImminentCities,
+  type BTSPlace,
+  type BTSCity,
+} from "@/contexts/BTSContext";
 import { getApiUrl } from "@/lib/query-client";
 import type { BTSStackParamList } from "@/navigation/BTSStackNavigator";
 import LiquidButton from "@/components/ui/LiquidButton";
@@ -149,21 +154,19 @@ export default function BTSPlaceCartScreen() {
     });
   }, []);
 
-  // ⚠️ 수정금지(승인필요) — 공연 임박 순 상위 5개 도시 (폴백: btsRank 순)
-  const cityButtons = useMemo(() => {
-    const withDate = cities.filter((c) => c.nextConcertDate);
-    if (withDate.length > 0) {
-      const sorted = [...withDate].sort((a, b) =>
-        (a.nextConcertDate || "").localeCompare(b.nextConcertDate || ""),
-      );
-      return sorted.slice(0, 5);
-    }
-    return cities.slice(0, 5);
-  }, [cities]);
+  // ⚠️ 수정금지(승인필요) — 공연 임박 상위 5개 = BTSContext 의 pickImminentCities 1벌(§16).
+  //   지구본 인트로도 같은 함수를 쓰므로 두 화면의 도시가 어긋나지 않는다.
+  //   (옛 폴백 `cities.slice(0,5)` 삭제 = 서버가 날짜 없는 도시를 아예 안 내려줘 도달 불가였음)
+  const cityButtons = useMemo(() => pickImminentCities(cities), [cities]);
 
   // 장소 로드 (캐릭터 + 도시 선택 시)
   useEffect(() => {
     if (!selectedCharacter || !selectedCity) return;
+    // ⚠️ 수정금지(승인필요) 2026-07-30 = **도시를 빠르게 연달아 누를 때의 뒤바뀜 차단.**
+    //   이게 없으면: 파리 → 런던을 연타할 때 **먼저 부른 파리 답이 늦게 도착해 런던을 덮어써서**
+    //   화면엔 "런던"인데 파리 장소가 뜨고, 심하면 **빙글빙글 로딩이 영영 안 끝나** 앱을 껐다 켜야 했다.
+    //   이제 지난 요청의 답은 버린다(같은 파일 위쪽 map-config 와 같은 방식 = 재발명 아님 §16).
+    let cancelled = false;
     setIsLoadingPlaces(true);
     setError(null);
     clearSelectedPlaces(); // 도시 전환 시 선택 초기화
@@ -172,6 +175,7 @@ export default function BTSPlaceCartScreen() {
     )
       .then((r) => r.json())
       .then((data) => {
+        if (cancelled) return; // 이미 다른 도시를 누름 = 이 답은 버린다
         // ⚠️ 수정금지(승인필요) — 2026-05-07 안전장치: id=null slot 제외 + 중복 id dedup
         // = readyIds 가 같은 id 1 회만 추가 → 중복 카드 마운트 시 readyIds.size < expectedCount → 영구 spinner 차단
         const arr = Array.isArray(data) ? data : [];
@@ -184,10 +188,16 @@ export default function BTSPlaceCartScreen() {
         setTopPlaces(dedup);
       })
       .catch(() => {
+        if (cancelled) return;
         setTopPlaces([]);
         setError(t("bts.placeCart.errorLoad"));
       })
-      .finally(() => setIsLoadingPlaces(false));
+      .finally(() => {
+        if (!cancelled) setIsLoadingPlaces(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [selectedCharacter?.id, selectedCity?.id, baseUrl]);
 
   const handleNext = useCallback(() => {

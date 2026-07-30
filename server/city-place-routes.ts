@@ -13,6 +13,7 @@ import {
   enrichStopsWithPsr,
 } from "./services/shared/routes-client";
 import { chargeFeature } from "./credit-charge"; // 크레딧 차감 단일 관문(2026-07-29 §9)
+import { getUserIdFromReq } from "./auth-user"; // 토큰 → userId 1벌(§16)
 
 export function registerCityPlaceRoutes(app: Express): void {
   // Cities
@@ -34,28 +35,19 @@ export function registerCityPlaceRoutes(app: Express): void {
   app.get("/api/cities/ready", async (_req, res) => {
     try {
       if (!db) return res.status(503).json({ error: "db_unavailable" });
+      // 화면이 쓰는 칸만 뽑는다 = 안 쓰는 칸을 뽑으면 GROUP BY 가 그만큼 길어진다(2026-07-30 §22 지적).
       const rows = await db
         .select({
           id: cities.id,
           nameKo: cities.name,
           nameEn: cities.nameEn,
-          country: cities.country,
-          latitude: cities.latitude,
-          longitude: cities.longitude,
-          rows: sql<number>`COUNT(${placeSeedRaw.id})::int`,
+          rows: sql<number>`COUNT(*)::int`,
         })
         .from(cities)
         .innerJoin(placeSeedRaw, eq(placeSeedRaw.cityId, cities.id))
-        .groupBy(
-          cities.id,
-          cities.name,
-          cities.nameEn,
-          cities.country,
-          cities.latitude,
-          cities.longitude,
-        )
-        .having(sql`COUNT(${placeSeedRaw.id}) >= ${READY_THRESHOLD}`)
-        .orderBy(desc(sql`COUNT(${placeSeedRaw.id})`));
+        .groupBy(cities.id, cities.name, cities.nameEn)
+        .having(sql`COUNT(*) >= ${READY_THRESHOLD}`)
+        .orderBy(desc(sql`COUNT(*)`));
       res.json(rows);
     } catch (error) {
       console.error("[cities/ready] 완비도시 조회 실패:", error);
@@ -219,10 +211,10 @@ export function registerCityPlaceRoutes(app: Express): void {
       }
 
       // 🪙 여정 생성 5크레딧 차감 (2026-07-29 §9) = 유료 파이프라인 진입 **직전**.
-      //   userId 는 이 라우트의 규약대로 body 에서 온다(위 formData.userId) = 여기서 다른 갈래를 만들지 않는다(§0).
-      if (
-        !(await chargeFeature(res, formData.userId ?? null, "route_generate"))
-      )
+      //   ⚠️ 수정금지(승인필요) 2026-07-30 §0 = 차감 기준 신원은 **로그인 토큰에서만** 읽는다.
+      //     요청 본문의 userId 로 차감하면 그 칸을 비우는 것만으로 유료 생성이 공짜가 된다(§22 검증 지적).
+      //     본문의 userId 는 아래 파이프라인이 쓰는 조회용 값이고, **돈 판단에는 쓰지 않는다.**
+      if (!(await chargeFeature(res, getUserIdFromReq(req), "route_generate")))
         return;
 
       const itinerary = await itineraryGenerator.generate(enrichedFormData);

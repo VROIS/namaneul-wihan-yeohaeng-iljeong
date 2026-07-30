@@ -19,8 +19,6 @@ import BTSStackNavigator from "@/navigation/BTSStackNavigator";
 import GuideStackNavigator from "@/navigation/GuideStackNavigator"; // 가이드 미니앱(§12 1단계) = BTS 패턴 독립 스택
 import { BTSLandingScreen } from "@/screens/BTSLandingScreen";
 import BTSWorldMapScreen from "@/screens/bts/BTSWorldMapScreen";
-// ⚠️ 수정금지(승인필요) — 보관 화면 import 제거 (번들 크기 축소, 14.97MB→Expo Go 30초 타임아웃 초과)
-// import { BTSLandingScreenC } from "@/screens/BTSLandingScreenC"; // C안 보관
 import VideoPreviewScreen from "@/screens/video/VideoPreviewScreen";
 import { Colors } from "@/constants/theme";
 import { useMapToggle } from "@/contexts/MapToggleContext";

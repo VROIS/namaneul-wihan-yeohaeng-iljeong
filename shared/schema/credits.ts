@@ -9,6 +9,7 @@ import {
   boolean,
   jsonb,
   decimal,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -69,21 +70,34 @@ export const shareLinks = pgTable("share_links", {
 });
 
 // 크레딧 거래 이력 (결제/사용/보너스/관리자 지급)
-export const creditTransactions = pgTable("credit_transactions", {
-  id: varchar("id")
-    .primaryKey()
-    .default(sql`gen_random_uuid()`),
-  userId: varchar("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  type: varchar("type").notNull(), // 'purchase' | 'usage' | 'referral_bonus' | 'admin_grant'
-  amount: integer("amount").notNull(), // 양수=획득, 음수=사용
-  description: text("description").notNull(),
-  referenceId: varchar("reference_id"), // Stripe payment id 등
-  createdAt: timestamp("created_at")
-    .default(sql`CURRENT_TIMESTAMP`)
-    .notNull(),
-});
+export const creditTransactions = pgTable(
+  "credit_transactions",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    userId: varchar("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    type: varchar("type").notNull(), // 'purchase' | 'usage' | 'referral_bonus' | 'admin_grant'
+    amount: integer("amount").notNull(), // 양수=획득, 음수=사용
+    description: text("description").notNull(),
+    referenceId: varchar("reference_id"), // Stripe payment id 등
+    createdAt: timestamp("created_at")
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+  },
+  (t) => [
+    // ⚠️ 수정금지(승인필요) 2026-07-30 = **이중충전 차단 열쇠**(§9). 실제 DB 에는 마이그 0019 로 이미 있다.
+    //   여기에 **반드시 같이 적어 둬야 한다** = 스키마에 없으면 `drizzle-kit push` 가
+    //   "쓸모없는 인덱스"로 보고 **지워 버려** 같은 결제가 두 번 적립될 수 있다(€10 에 280 크레딧).
+    //   ⚠️ 반드시 **부분(where)** 인덱스여야 한다. 전체 UNIQUE 로 만들면 `usage` 줄이
+    //   여정번호를 다시 쓰는 정상 동작과 부딪혀 **차감이 통째로 막힌다**.
+    uniqueIndex("credit_transactions_purchase_ref_uniq")
+      .on(t.referenceId)
+      .where(sql`${t.type} = 'purchase' AND ${t.referenceId} IS NOT NULL`),
+  ],
+);
 
 // API 호출 로그 (비용 추적)
 export const apiLogs = pgTable("api_logs", {

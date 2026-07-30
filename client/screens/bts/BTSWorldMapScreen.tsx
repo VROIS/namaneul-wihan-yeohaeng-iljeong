@@ -1,9 +1,17 @@
-// ⚠️ 수정금지(승인필요) — BTS 세계지도 줌인 + 3D 글래스 알림판
+// ⚠️ 수정금지(승인필요) — BTS 세계지도 줌인 + 3D 글래스 알림판 = **인트로 연출**(누르는 화면 아님)
 // 마커가 mapArea 안에 배치 → 줌인과 함께 자연스럽게 확대
-// 데이터: /api/bts/next-concert 실시간 (날짜, D-Day, 공연장)
-import React, { useEffect, useState } from "react";
+// 데이터: /api/bts/cities (임박 5개 도시의 이름·좌표·D-Day) + 랜딩에서 넘어온 줌인 대상 도시
+import React, { useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet, Dimensions, Platform } from "react-native";
 import { getApiUrl } from "@/lib/query-client";
+// 임박 5개 규칙·도시 타입 = 8장 화면과 같은 1벌(§16)
+import {
+  pickImminentCities,
+  formatDDay,
+  type BTSCity,
+} from "@/contexts/BTSContext";
+// 웹 지구본 = cobe. 네이티브(아래 SVG 지도)와 분리된 파일 1개로 둔다.
+import BTSGlobeIntroWeb from "./BTSGlobeIntroWeb";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -30,23 +38,12 @@ const MAP_H_ORIGINAL = SW * (50 / 99);
 const MAP_H = MAP_H_ORIGINAL * 1.6;
 const MAP_TOP = (SH - MAP_H) / 2;
 
-// ⚠️ 수정금지(승인필요) — 도시 좌표 DB (위경도 → viewBox 변환)
-// 추후 API에서 가져오도록 확장 가능
-const CITY_COORDS: Record<string, { lat: number; lng: number }> = {
-  GOYANG: { lat: 37.6584, lng: 126.832 },
-  TOKYO: { lat: 35.6762, lng: 139.6503 },
-  TAMPA: { lat: 27.9506, lng: -82.4572 },
-  PARIS: { lat: 48.8566, lng: 2.3522 },
-  LONDON: { lat: 51.5074, lng: -0.1278 },
-  "LOS ANGELES": { lat: 34.0522, lng: -118.2437 },
-  BUSAN: { lat: 35.1796, lng: 129.0756 },
-  MADRID: { lat: 40.4168, lng: -3.7038 },
-  MUNICH: { lat: 48.1351, lng: 11.582 },
-  SINGAPORE: { lat: 1.3521, lng: 103.8198 },
-  BANGKOK: { lat: 13.7563, lng: 100.5018 },
-  SYDNEY: { lat: -33.8688, lng: 151.2093 },
-  MANILA: { lat: 14.5995, lng: 120.9842 },
-};
+// ⚠️ 수정금지(승인필요) 2026-07-30 사장님 SSOT = 이 화면은 **인트로 연출**이다(아미봉 인증창과 같은 성격).
+//   · 사용자가 누르는 화면이 아니다 = 3초 남짓 지나가므로 클릭을 받을 수 없다.
+//   · 하는 일 = 공연할 도시를 **정확히 보여주는 것**뿐. 임박한 5개를 피켓으로 찍고,
+//     아미봉 인증화면(랜딩)에 나온 그 도시로 줌인해 하이라이트한다.
+//   · 도시 목록·좌표는 DB 에서 온다(GET /api/bts/cities). 손으로 적어둔 좌표표 완전삭제 §19.
+//   · 5개를 고르는 규칙은 **BTS 앱 도시 탭(8장 화면)과 같은 함수 1벌**(pickImminentCities, §16).
 
 type RouteParams = {
   city?: string;
@@ -67,30 +64,39 @@ export default function BTSWorldMapScreen() {
     loadBtsWorldMapSvg().then(setSvgXml);
   }, []);
 
-  // ⚠️ 수정금지(승인필요) — API 실시간 데이터 (랜딩 params + API fallback)
+  // ⚠️ 수정금지(승인필요) — 줌인할 도시 = 랜딩(아미봉)에서 넘어온 값. 없으면 아래에서 가장 임박한 공연으로 채운다.
   const [concert, setConcert] = useState({
-    city: route.params?.city || "GOYANG",
+    city: route.params?.city || "",
     date: route.params?.date || "",
     dDay: route.params?.dDay ?? 0,
     venue: route.params?.venue || "",
   });
 
-  // ⚠️ 수정금지(승인필요) — params 없으면 API에서 직접 가져옴
+  // 🌍 피켓에 찍을 도시 = **BTS 앱 도시 탭과 같은 임박 5개**(pickImminentCities 1벌).
+  const [btsCities, setBtsCities] = useState<BTSCity[]>([]);
   useEffect(() => {
-    if (!concert.date) {
-      fetch(`${getApiUrl()}/api/bts/next-concert`)
-        .then((r) => r.json())
-        .then((d) => {
-          if (d.city)
-            setConcert({
-              city: d.city.toUpperCase(),
-              date: d.date,
-              dDay: d.dDay,
-              venue: d.venue || "",
-            });
-        })
-        .catch(() => {}); // fallback 유지
-    }
+    let alive = true;
+    fetch(`${getApiUrl()}/api/bts/cities`)
+      .then((r) => r.json())
+      .then((list: BTSCity[]) => {
+        if (!alive || !Array.isArray(list) || list.length === 0) return;
+        setBtsCities(pickImminentCities(list));
+        // 랜딩(아미봉)에서 도시를 못 받았을 때만 = 가장 임박한 공연 도시로 잡는다.
+        setConcert((prev) =>
+          prev.date
+            ? prev
+            : {
+                city: (list[0].nameEn || "").toUpperCase(),
+                date: list[0].nextConcertDate || "",
+                dDay: list[0].dDay ?? 0,
+                venue: "",
+              },
+        );
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
   }, []);
 
   const targetCity = concert.city;
@@ -98,11 +104,23 @@ export default function BTSWorldMapScreen() {
   const dDay = concert.dDay;
   const venue = concert.venue;
 
-  // ⚠️ 수정금지(승인필요) — 도시 좌표 → viewBox → 화면 좌표
-  const coords = CITY_COORDS[targetCity.toUpperCase()] || CITY_COORDS.GOYANG;
-  const vb = geoToViewBox(coords.lat, coords.lng);
+  // 도시 좌표 → viewBox → 화면 좌표. 목록에서 이름으로 찾고, 아직 목록이 안 왔으면 지도 중앙(0,0).
+  const matched = btsCities.find(
+    (c) => (c.nameEn || "").toUpperCase() === targetCity.toUpperCase(),
+  );
+  const vb = geoToViewBox(matched?.latitude ?? 0, matched?.longitude ?? 0);
   const targetX = (vb.x / 99) * MAP_W;
   const targetY = (vb.y / 50) * MAP_H;
+
+  // ⚠️ 수정금지(승인필요) 2026-07-30 = **줌인 좌표는 "줌이 시작되는 순간"의 값을 읽어야 한다.**
+  //   아래 인트로 타이머는 마운트 시 1회만 도는데(그래야 화면에 갇히지 않음),
+  //   그 시점엔 도시 목록이 아직 안 와서 좌표가 **(0,0) = 대서양 한복판**이었다.
+  //   그래서 어느 도시를 골라도 엉뚱한 곳으로 줌인됐다(앱 화면 결함).
+  //   이제 최신 좌표를 이 통에 담아 두고, 1초 뒤 줌이 시작될 때 그 값을 꺼내 쓴다.
+  const targetRef = useRef({ x: targetX, y: targetY });
+  useEffect(() => {
+    targetRef.current = { x: targetX, y: targetY };
+  }, [targetX, targetY]);
 
   // ⚠️ 수정금지(승인필요) — 애니메이션 값
   const mapScale = useSharedValue(1);
@@ -116,13 +134,18 @@ export default function BTSWorldMapScreen() {
   const textOpacity4 = useSharedValue(0); // 공연장
 
   useEffect(() => {
-    // ⚠️ 수정금지(승인필요) — 줌인 좌표 계산
+    // ⚠️ 수정금지(승인필요) = 인트로는 **도시 목록과 무관하게 항상 끝나고 다음 화면으로 넘어간다.**
+    //   이 화면은 뒤로가기·스와이프가 없으므로(RootStackNavigator), 여기서 멈추면 앱을 강제종료해야 벗어난다.
+    //   목록이 늦게 오거나 못 오더라도 넘어가는 것이 맞다 = 인트로는 연출일 뿐 필수 관문이 아니다.
+    // ⚠️ 수정금지(승인필요) — 줌인 배율
     const S = 6;
-    const tx = SW / 2 - MAP_W / 2 - (targetX - MAP_W / 2) * S;
-    const ty = SH / 2 - MAP_TOP - MAP_H / 2 - (targetY - MAP_H / 2) * S;
 
     // ⚠️ 수정금지(승인필요) — 1초 후 줌인 시작 (1.5초, 원본 타이밍)
     const zoomTimer = setTimeout(() => {
+      // 좌표는 **지금 이 순간**의 값을 읽는다(마운트 때 값은 목록이 없어 대서양이었다)
+      const { x, y } = targetRef.current;
+      const tx = SW / 2 - MAP_W / 2 - (x - MAP_W / 2) * S;
+      const ty = SH / 2 - MAP_TOP - MAP_H / 2 - (y - MAP_H / 2) * S;
       mapScale.value = withTiming(S, {
         duration: 1500,
         easing: Easing.inOut(Easing.cubic),
@@ -147,7 +170,7 @@ export default function BTSWorldMapScreen() {
     }, 2000);
 
     // ⚠️ 수정금지(승인필요) — 알림판 유지 후 전환 (총 3.5초, 원본 타이밍)
-    let innerTimer: NodeJS.Timeout;
+    let innerTimer: ReturnType<typeof setTimeout> | undefined;
     const navTimer = setTimeout(() => {
       fadeOut.value = withTiming(1, { duration: 400 });
       innerTimer = setTimeout(() => navigation.replace("BTSMiniApp"), 500);
@@ -159,6 +182,7 @@ export default function BTSWorldMapScreen() {
       clearTimeout(navTimer);
       clearTimeout(innerTimer);
     };
+    // 마운트 시 1회만 = 인트로 타이머가 도중에 다시 시작되지 않게 한다.
   }, []);
 
   // ⚠️ 수정금지(승인필요) — 지도 transform
@@ -195,8 +219,7 @@ export default function BTSWorldMapScreen() {
   const t3 = useAnimatedStyle(() => ({ opacity: textOpacity3.value }));
   const t4 = useAnimatedStyle(() => ({ opacity: textOpacity4.value }));
 
-  const dDayText =
-    dDay > 0 ? `D-${dDay}` : dDay === 0 ? "D-Day" : `D+${Math.abs(dDay)}`;
+  const dDayText = formatDDay(dDay);
   // ⚠️ 수정금지(승인필요) — 날짜 포맷: 2026.4.17 (전 인류 이해, 년월일 제외)
   const dateDisplay = concertDate
     ? (() => {
@@ -205,308 +228,13 @@ export default function BTSWorldMapScreen() {
       })()
     : "";
 
-  // 🌐 OriginKit (Cobe) 스타일 3D 도트 회전 지구본 + BTS 보라해 톤앤매너 피켓 & 아크 연결선 라이브 렌더링
+  // ⚠️ 수정금지(승인필요) 2026-07-30 사장님 지시 = 웹 지구본 = **cobe**(BTSGlobeIntroWeb).
+  //   옛 three.js iframe(srcDoc 약 300줄) 완전삭제 §19 = 돌지도 줌인도 안 되고 도시가 글자로 박혀 있었다.
+  //   넘어가는 시점은 위 인트로 타이머가 정한다(도시 목록과 무관하게 항상 끝난다).
   if (Platform.OS === "web") {
-    const webGlobeHtml = `
-<!DOCTYPE html>
-<html lang="ko">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>OriginKit Style 3D Dotted Globe - BTS World Tour 2026</title>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
-    body { background: #070514; color: #FFFFFF; font-family: -apple-system, BlinkMacSystemFont, 'Pretendard', sans-serif; overflow: hidden; width: 100vw; height: 100vh; }
-    
-    /* Header Tone & Manner */
-    header { position: absolute; top: 22px; left: 0; right: 0; text-align: center; z-index: 20; pointer-events: none; }
-    .tour-tag { font-size: 11px; font-weight: 800; letter-spacing: 6px; color: rgba(192, 132, 252, 0.6); margin-bottom: 4px; }
-    .main-title { font-size: 34px; font-weight: 900; color: #FFFFFF; letter-spacing: -1px; }
-    .brand-purple { color: #C084FC; font-style: italic; text-shadow: 0 0 16px rgba(192, 132, 252, 0.6); }
-    .subtitle { font-size: 12.5px; color: rgba(255, 255, 255, 0.65); margin-top: 5px; }
-
-    #canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; cursor: grab; }
-    #canvas-container:active { cursor: grabbing; }
-
-    /* OriginKit Style 3D Picket Pins */
-    .picket-container { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
-    .picket-pin { position: absolute; transform: translate(-50%, -100%); pointer-events: auto; cursor: pointer; transition: transform 0.22s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
-    .picket-pin:hover { z-index: 100 !important; transform: translate(-50%, -112%) scale(1.14); }
-
-    .picket-card {
-      background: rgba(15, 10, 32, 0.9);
-      backdrop-filter: blur(14px);
-      -webkit-backdrop-filter: blur(14px);
-      border: 1.5px solid rgba(192, 132, 252, 0.7);
-      box-shadow: 0 8px 30px rgba(124, 58, 237, 0.4), 0 0 15px rgba(192, 132, 252, 0.3);
-      border-radius: 14px;
-      padding: 7px 13px;
-      display: flex;
-      align-items: center;
-      gap: 9px;
-      white-space: nowrap;
-    }
-    .picket-flag { font-size: 17px; }
-    .picket-info { display: flex; flex-direction: column; }
-    .picket-city { font-size: 13px; font-weight: 800; color: #FFFFFF; letter-spacing: 0.3px; }
-    .picket-dday { font-size: 11px; font-weight: 800; color: #C084FC; }
-    .picket-stem { width: 2px; height: 28px; background: linear-gradient(to bottom, rgba(192, 132, 252, 0.95), rgba(192, 132, 252, 0.15)); margin: 0 auto; box-shadow: 0 0 10px #C084FC; }
-    .picket-dot { width: 8px; height: 8px; background: #FACC15; border-radius: 50%; margin: 0 auto; box-shadow: 0 0 12px #FACC15; }
-
-    /* City Details Modal */
-    .city-modal {
-      position: absolute; bottom: 26px; left: 50%; transform: translateX(-50%) translateY(140%);
-      background: rgba(12, 8, 28, 0.94); border: 1.5px solid #C084FC; backdrop-filter: blur(24px);
-      padding: 20px 28px; border-radius: 24px; box-shadow: 0 16px 45px rgba(0,0,0,0.65), 0 0 30px rgba(192, 132, 252, 0.4);
-      z-index: 30; width: 90%; max-width: 420px; text-align: center; transition: transform 0.38s cubic-bezier(0.34, 1.56, 0.64, 1);
-    }
-    .city-modal.active { transform: translateX(-50%) translateY(0); }
-    .modal-city-name { font-size: 24px; font-weight: 900; color: #FFFFFF; }
-    .modal-venue { font-size: 13px; color: rgba(255,255,255,0.75); margin-top: 4px; }
-    .modal-btn { margin-top: 16px; background: linear-gradient(135deg, #7C3AED, #9333EA); border: none; color: #FFF; font-weight: 800; padding: 12px 24px; border-radius: 50px; font-size: 14px; cursor: pointer; box-shadow: 0 4px 20px rgba(147, 51, 234, 0.5); }
-    .hint { position: absolute; bottom: 16px; left: 20px; font-size: 12px; color: rgba(255,255,255,0.45); z-index: 20; }
-  </style>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-</head>
-<body>
-  <div id="canvas-container"></div>
-  <div class="picket-container" id="picket-container"></div>
-
-  <div class="city-modal" id="city-modal">
-    <h2 class="modal-city-name" id="m-city">GOYANG</h2>
-    <p class="modal-venue" id="m-venue">Goyang Stadium • 2026.04.09</p>
-    <button class="modal-btn" onclick="nextStep()">이 도시 투어 선택 및 캐릭터 설정 →</button>
-  </div>
-
-  <script>
-    const container = document.getElementById('canvas-container');
-    const picketContainer = document.getElementById('picket-container');
-    const cityModal = document.getElementById('city-modal');
-
-    const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x070514, 0.0014);
-
-    const isMobile = window.innerWidth < 600;
-    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.z = isMobile ? 410 : 340;
-
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    container.appendChild(renderer.domElement);
-
-    const CITIES = [
-      { id: 'GOYANG', name: '고양 (GOYANG)', flag: '🇰🇷', lat: 37.6584, lng: 126.832, dDay: 'D-110', date: '2026.04.09', venue: 'Goyang Stadium' },
-      { id: 'PARIS', name: '파리 (PARIS)', flag: '🇫🇷', lat: 48.8566, lng: 2.3522, dDay: 'D-125', date: '2026.04.24', venue: 'Stade de France' },
-      { id: 'BRUSSELS', name: '브뤼셀 (BRUSSELS)', flag: '🇧🇪', lat: 50.8503, lng: 4.3517, dDay: 'D-130', date: '2026.04.29', venue: 'King Baudouin Stadium' },
-      { id: 'MADRID', name: '마드리드 (MADRID)', flag: '🇪🇸', lat: 40.4168, lng: -3.7038, dDay: 'D-135', date: '2026.05.04', venue: 'Estadio Santiago Bernabéu' },
-      { id: 'MUNICH', name: '뮌헨 (MUNICH)', flag: '🇩🇪', lat: 48.1351, lng: 11.582, dDay: 'D-140', date: '2026.05.09', venue: 'Allianz Arena' },
-      { id: 'LONDON', name: '런던 (LONDON)', flag: '🇬🇧', lat: 51.5074, lng: -0.1278, dDay: 'D-145', date: '2026.05.14', venue: 'Wembley Stadium' },
-      { id: 'LA', name: 'LOS ANGELES', flag: '🇺🇸', lat: 34.0522, lng: -118.2437, dDay: 'D-160', date: '2026.05.29', venue: 'SoFi Stadium' }
-    ];
-
-    // 백엔드 연동 실시간 콘서트 도시
-    const TARGET_CITY_ID = "${targetCity.toUpperCase()}";
-    const TARGET_CITY_INFO = CITIES.find(c => c.id === TARGET_CITY_ID) || CITIES[0];
-
-    const globeGroup = new THREE.Group();
-    scene.add(globeGroup);
-
-    // 모바일 해상도 맞춤 3D 지구본 반경 (모바일 54px, 데스크톱 74px - 극적 비주얼 여백 극대화)
-    const GLOBE_RADIUS = isMobile ? 54 : 74;
-
-    // 1. OriginKit / Cobe Style 3D Dotted Sphere (구체 도트 메쉬)
-    const dotCount = 1800;
-    const dotPositions = [];
-    const dotColors = [];
-    const colorBorahae = new THREE.Color(0xC084FC);
-    const colorGlow = new THREE.Color(0x9333EA);
-
-    for (let i = 0; i < dotCount; i++) {
-      const phi = Math.acos(-1 + (2 * i) / dotCount);
-      const theta = Math.sqrt(dotCount * Math.PI) * phi;
-      const x = GLOBE_RADIUS * Math.cos(theta) * Math.sin(phi);
-      const y = GLOBE_RADIUS * Math.sin(theta) * Math.sin(phi);
-      const z = GLOBE_RADIUS * Math.cos(phi);
-      dotPositions.push(x, y, z);
-      const c = (i % 3 === 0) ? colorBorahae : colorGlow;
-      dotColors.push(c.r, c.g, c.b);
-    }
-
-    const dotGeo = new THREE.BufferGeometry();
-    dotGeo.setAttribute('position', new THREE.Float32BufferAttribute(dotPositions, 3));
-    dotGeo.setAttribute('color', new THREE.Float32BufferAttribute(dotColors, 3));
-
-    const dotMat = new THREE.PointsMaterial({
-      size: 2.2,
-      vertexColors: true,
-      transparent: true,
-      opacity: 0.85
-    });
-    const dotsMesh = new THREE.Points(dotGeo, dotMat);
-    globeGroup.add(dotsMesh);
-
-    // Inner Dark Core Sphere
-    const coreMesh = new THREE.Mesh(
-      new THREE.SphereGeometry(GLOBE_RADIUS - 1, 48, 48),
-      new THREE.MeshBasicMaterial({ color: 0x0A0620, transparent: true, opacity: 0.94 })
-    );
-    globeGroup.add(coreMesh);
-
-    // Atmosphere Ring Glow
-    scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-    const dLight = new THREE.DirectionalLight(0xA855F7, 1.4);
-    dLight.position.set(200, 250, 200);
-    scene.add(dLight);
-
-    function latLngToVector3(lat, lng, radius) {
-      const phi = (90 - lat) * (Math.PI / 180);
-      const theta = (lng + 180) * (Math.PI / 180);
-      return new THREE.Vector3(-(radius * Math.sin(phi) * Math.cos(theta)), radius * Math.cos(phi), radius * Math.sin(phi) * Math.sin(theta));
-    }
-
-    // 2. 3D Arc Connections (OriginKit Great Circle Arcs)
-    function createArc(v1, v2) {
-      const distance = v1.distanceTo(v2);
-      const mid = v1.clone().add(v2).multiplyScalar(0.5);
-      const midLength = mid.length();
-      mid.normalize().multiplyScalar(midLength + distance * 0.25);
-
-      const curve = new THREE.QuadraticBezierCurve3(v1, mid, v2);
-      const points = curve.getPoints(40);
-      const arcGeo = new THREE.BufferGeometry().setFromPoints(points);
-      const arcMat = new THREE.LineBasicMaterial({ color: 0xC084FC, transparent: true, opacity: 0.45 });
-      const arcLine = new THREE.Line(arcGeo, arcMat);
-      globeGroup.add(arcLine);
-    }
-
-    // Connect Goyang to other cities with arcs
-    const goyangPos = latLngToVector3(CITIES[0].lat, CITIES[0].lng, GLOBE_RADIUS);
-    for (let i = 1; i < CITIES.length; i++) {
-      const targetPos = latLngToVector3(CITIES[i].lat, CITIES[i].lng, GLOBE_RADIUS);
-      createArc(goyangPos, targetPos);
-    }
-
-    // 3. Create 3D Pickets
-    const pickets = [];
-    CITIES.forEach((city) => {
-      const pos = latLngToVector3(city.lat, city.lng, GLOBE_RADIUS);
-      const dotMesh = new THREE.Mesh(new THREE.SphereGeometry(2.4, 16, 16), new THREE.MeshBasicMaterial({ color: 0xFACC15 }));
-      dotMesh.position.copy(pos);
-      globeGroup.add(dotMesh);
-
-      const el = document.createElement('div');
-      el.className = 'picket-pin';
-      el.innerHTML = '<div class="picket-card"><span class="picket-flag">' + city.flag + '</span><div class="picket-info"><span class="picket-city">' + city.name + '</span><span class="picket-dday">' + city.dDay + '</span></div></div><div class="picket-stem"></div><div class="picket-dot"></div>';
-      el.onclick = (e) => {
-        e.stopPropagation();
-        animPhase = 99; // 터치 시 인트로 자동시퀀스 일시중단 후 도시 선택
-        selectCity(city);
-      };
-      picketContainer.appendChild(el);
-      pickets.push({ data: city, meshPos: pos, element: el });
-    });
-
-    let isDragging = false, prevPos = { x: 0, y: 0 };
-    let animPhase = 0; // 0: intro rotate, 1: focus target city, 2: zoom in, 3: modal open & auto next
-
-    // 타겟 도시 3D 각도 계산 (위경도 -> 구체 3D 회전각)
-    const targetLngRad = -(TARGET_CITY_INFO.lng * Math.PI / 180) - Math.PI / 2;
-    const targetLatRad = (TARGET_CITY_INFO.lat * Math.PI / 180) * 0.55;
-
-    container.addEventListener('mousedown', () => { isDragging = true; animPhase = 99; });
-    window.addEventListener('mouseup', () => isDragging = false);
-    container.addEventListener('mousemove', (e) => {
-      if (isDragging) {
-        globeGroup.rotation.y += (e.clientX - prevPos.x) * 0.004;
-        globeGroup.rotation.x += (e.clientY - prevPos.y) * 0.004;
-      }
-      prevPos = { x: e.clientX, y: e.clientY };
-    });
-
-    function selectCity(city) {
-      document.getElementById('m-city').innerText = city.name;
-      document.getElementById('m-venue').innerText = city.venue + ' • ' + city.date + ' (' + city.dDay + ')';
-      cityModal.classList.add('active');
-    }
-
-    function nextStep() {
-      if (window.parent) {
-        window.parent.postMessage({ type: 'NEXT_STEP' }, '*');
-      }
-    }
-
-    // 🎬 인트로 연출 시퀀스 타임라인 (1.2s 타겟도시 회전정지 -> 2.4s 3D 줌인 -> 3.8s 카드팝업 -> 5.5s 자동전환)
-    setTimeout(() => { if (animPhase === 0) animPhase = 1; }, 1200);
-    setTimeout(() => { if (animPhase === 1) animPhase = 2; }, 2400);
-    setTimeout(() => {
-      if (animPhase === 2) {
-        animPhase = 3;
-        selectCity(TARGET_CITY_INFO);
-      }
-    }, 3800);
-    setTimeout(() => {
-      if (animPhase === 3) nextStep();
-    }, 5500);
-
-    function animate() {
-      requestAnimationFrame(animate);
-
-      // 초저속 우아한 자전 회전 (0.0008)으로 피켓 클릭 극대화
-      if (!isDragging) {
-        if (animPhase === 0) {
-          globeGroup.rotation.y += 0.0008;
-        } else if (animPhase === 1 || animPhase === 2 || animPhase === 3) {
-          // 타겟 도시로 회전 각도 부드럽게 정지 (Lerp)
-          globeGroup.rotation.y += (targetLngRad - globeGroup.rotation.y) * 0.04;
-          globeGroup.rotation.x += (targetLatRad - globeGroup.rotation.x) * 0.04;
-        }
-
-        if (animPhase === 2 || animPhase === 3) {
-          // 3D 줌인 (카메라 접근: 모바일 360/300 -> 160)
-          const destZ = isMobile ? 180 : 145;
-          camera.position.z += (destZ - camera.position.z) * 0.05;
-        }
-      }
-
-      const tempV = new THREE.Vector3();
-      pickets.forEach((p) => {
-        tempV.copy(p.meshPos);
-        tempV.applyMatrix4(globeGroup.matrixWorld);
-        if (tempV.z > -20) {
-          tempV.project(camera);
-          p.element.style.display = 'block';
-          p.element.style.left = (tempV.x * 0.5 + 0.5) * window.innerWidth + 'px';
-          p.element.style.top = (-(tempV.y * 0.5) + 0.5) * window.innerHeight + 'px';
-          p.element.style.opacity = Math.max(0.35, Math.min(1.0, (tempV.z + 50) / 120));
-          p.element.style.zIndex = Math.floor(tempV.z + 100);
-        } else {
-          p.element.style.display = 'none';
-        }
-      });
-      renderer.render(scene, camera);
-    }
-    animate();
-  </script>
-</body>
-</html>`;
-
     return (
       <View style={{ flex: 1, backgroundColor: "#070514" }}>
-        <iframe
-          srcDoc={webGlobeHtml}
-          style={{
-            width: "100%",
-            height: "100%",
-            border: "none",
-            backgroundColor: "#070514",
-          }}
-          onMessage={(e: any) => {
-            if (e?.data?.type === "NEXT_STEP") {
-              navigation.replace("BTSMiniApp");
-            }
-          }}
-        />
+        <BTSGlobeIntroWeb cities={btsCities} targetCityEn={targetCity} />
       </View>
     );
   }

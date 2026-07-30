@@ -82,9 +82,9 @@ export async function submitInquiry(input: {
   kind?: "expert" | "booking";
   dayNumber?: number | null;
 }): Promise<{ ok: boolean; requestId?: string; error?: string }> {
-  const user = await getUserData();
+  // ⚠️ 수정금지(승인필요) 2026-07-30 = 신원은 **로그인 표(Bearer 토큰)로만** 판단한다.
+  //   옛 방식(본문에 userId 를 실어 보냄)은 서버가 더 이상 읽지 않으므로 삭제 §19.
   const res = await req("POST", "/api/verification/request", {
-    userId: user?.id, // 과도기 = body userId(백엔드가 Bearer 우선, 없으면 body 사용)
     userMessage: input.userMessage,
     itineraryData: input.itineraryData ?? null,
     itineraryId: input.itineraryId ?? null,

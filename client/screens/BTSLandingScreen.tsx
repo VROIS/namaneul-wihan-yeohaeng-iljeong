@@ -60,7 +60,7 @@ const haptic = (t: "light" | "medium" | "success") => {
   } catch {}
 };
 
-// ⚠️ 수정금지(승인필요) — D-Day 실시간 (fallback: 하드코딩) + 공연 상세 데이터
+// ⚠️ 수정금지(승인필요) — D-Day 실시간(서버 계산) + 공연 상세 데이터. 대체값 없음 = 못 받으면 빈 칸.
 type ConcertInfo = {
   city: string;
   dDay: number;
@@ -68,14 +68,10 @@ type ConcertInfo = {
   venue?: string;
   cityId?: number;
 };
-function getDDayFallback(): ConcertInfo {
-  const concert = new Date("2026-04-09");
-  const today = new Date();
-  const dDay = Math.ceil(
-    (concert.getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
-  );
-  return { city: "GOYANG", dDay };
-}
+// ⚠️ 2026-07-30 §19 = 날짜를 글자로 박아둔 대체값 완전삭제.
+//   사유: 그 공연일이 지나 D-Day 가 음수로 표시되고 이미 끝난 도시가 첫 화면에 떴다.
+//   API 가 답하기 전에는 도시·D-Day 를 **비워둔다**(빈 값 = 화면이 표시하지 않음). 거짓 숫자보다 빈 칸이 낫다.
+const EMPTY_CONCERT: ConcertInfo = { city: "", dDay: 0 };
 
 // 전구/서치라이트 삭제됨 (Expo Go 미지원 + 비율 깨짐)
 
@@ -85,14 +81,15 @@ export function BTSLandingScreen() {
   const [dobComplete, setDobComplete] = useState(false);
   const [lightingStage, setLightingStage] = useState(0);
   const [oauthLoading, setOauthLoading] = useState(false);
-  const [concertInfo, setConcertInfo] = useState(getDDayFallback());
+  const [concertInfo, setConcertInfo] = useState(EMPTY_CONCERT);
 
   // ⚠️ 수정금지(승인필요) — /api/bts/next-concert 실시간 연동
+  //   남은 공연이 없으면 서버가 null 을 준다 = `data?.city` 로 받아야 터지지 않는다(2026-07-30).
   useEffect(() => {
     fetch(`${getApiUrl()}/api/bts/next-concert`)
       .then((r) => r.json())
       .then((data) => {
-        if (data.city)
+        if (data?.city)
           setConcertInfo({
             city: data.city.toUpperCase(),
             dDay: data.dDay,
@@ -101,7 +98,7 @@ export function BTSLandingScreen() {
             cityId: data.cityId,
           }); // ⚠️ 수정금지(승인필요) — next-concert 전체 데이터 저장
       })
-      .catch(() => {}); // 실패 시 fallback 유지
+      .catch(() => {}); // 실패해도 빈 칸 유지 = 거짓 숫자를 만들지 않는다
   }, []);
 
   const { city, dDay } = concertInfo;
@@ -362,14 +359,9 @@ export function BTSLandingScreen() {
                     end={{ x: 1, y: 1 }}
                   />
                 </Animated.View>
+                {/* 서버가 답하기 전에는 도시·D-Day 를 비워둔다 = 거짓 숫자 대신 빈 칸(2026-07-30 §19) */}
                 <Text style={styles.cityLabel}>{city}</Text>
-                <Text style={styles.dDay}>
-                  {typeof dDay === "number"
-                    ? dDay < 0
-                      ? `D+${Math.abs(dDay)}`
-                      : `D-${Math.abs(dDay)}`
-                    : `D-${dDay}`}
-                </Text>
+                <Text style={styles.dDay}>{city ? `D-${dDay}` : ""}</Text>
                 <View style={styles.inputArea}>
                   <Text style={styles.inputLabel}>DATE OF BIRTH</Text>
                   <TextInput

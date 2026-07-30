@@ -105,6 +105,18 @@ const MEMBER_NAMES: Record<string, string> = {
   chiller: "칠러",
 };
 
+// ⚠️ 수정금지(승인필요) 2026-07-30 = **D-Day 계산 = 이 함수 1벌.**
+//   옛것(`Date.now()` 로 빼기)은 **지금 시각(시·분)이 섞여** 계산이 하루 밀렸다 = 삭제 §19.
+//   예: 밤 11시에 열면 아미봉 화면은 "D-2" 인데 지구본은 "D-1" = 같은 흐름에서 숫자가 달랐다.
+//   지금은 양쪽 다 **날짜만(UTC 자정 기준)** 빼므로 몇 시에 열어도 같은 숫자가 나온다.
+function calcDDay(concertDate: string, today: string): number {
+  return Math.ceil(
+    (new Date(concertDate + "T00:00:00Z").getTime() -
+      new Date(today + "T00:00:00Z").getTime()) /
+      86400000,
+  );
+}
+
 export function registerBtsRoutes(app: Express): void {
   // ─── GET /api/bts/next-concert — 다음 공연 도시/날짜 자동 계산 ───
   app.get("/api/bts/next-concert", async (_req, res) => {
@@ -149,9 +161,7 @@ export function registerBtsRoutes(app: Express): void {
         const dates = (row.btsConcertDates || []) as string[];
         for (const d of dates) {
           if (d >= today) {
-            const diff = Math.ceil(
-              (new Date(d).getTime() - Date.now()) / (1000 * 60 * 60 * 24),
-            );
+            const diff = calcDDay(d, today);
             if (!next || d < next.date) {
               next = {
                 cityId: row.id,
@@ -167,19 +177,9 @@ export function registerBtsRoutes(app: Express): void {
         }
       }
 
-      if (!next) {
-        // 모든 공연 종료 시 마지막 도시 반환
-        const last = rows[rows.length - 1];
-        next = {
-          cityId: last?.id || 0,
-          city: last?.nameEn || "Manila",
-          cityKo: last?.nameKo || "마닐라",
-          date: "2027-03-14",
-          dDay: 0,
-          venue: last?.venueName || null,
-        };
-      }
-
+      // ⚠️ 수정금지(승인필요) 2026-07-30 §19 = 도시명·날짜를 글자로 박아둔 대체값 완전삭제.
+      //   사유: 모든 공연이 끝난 뒤 그 도시·날짜가 영구히 표시되어(D-0) 거짓 정보가 됐다.
+      //   남은 공연이 없으면 **아무것도 없다고 답한다**(null) = 화면이 빈 칸으로 처리한다.
       res.json(next);
     } catch (err) {
       console.error("[BTS] GET /api/bts/next-concert error:", err);
@@ -202,6 +202,9 @@ export function registerBtsRoutes(app: Express): void {
           country: cities.country,
           countryCode: cities.countryCode,
           btsConcertDates: cities.btsConcertDates,
+          btsShowTimes: cities.btsShowTimes,
+          latitude: cities.latitude,
+          longitude: cities.longitude,
         })
         .from(cities)
         .where(isNotNull(cities.btsRank))
@@ -213,6 +216,16 @@ export function registerBtsRoutes(app: Express): void {
         const upcoming = ((r.btsConcertDates || []) as string[])
           .filter((d) => d >= today)
           .sort();
+        const nextConcertDate = upcoming[0] || null;
+        // D-Day = 서버가 계산해 내려준다(화면이 글자로 박아두면 날짜가 지나도 그대로 남는다).
+        const dDay = nextConcertDate ? calcDDay(nextConcertDate, today) : null;
+        // 공연 시각 = 그 날짜에 해당하는 것만(여정 종료를 공연 시작에 맞추는 데 쓴다).
+        const showTime =
+          (
+            ((r.btsShowTimes || []) as { date: string; time: string }[]).find(
+              (s) => s.date === nextConcertDate,
+            ) || {}
+          ).time || null;
         return {
           id: r.id,
           nameKo: r.nameKo,
@@ -220,11 +233,19 @@ export function registerBtsRoutes(app: Express): void {
           btsRank: r.btsRank,
           country: r.country,
           countryCode: r.countryCode,
-          nextConcertDate: upcoming[0] || null,
+          nextConcertDate,
+          dDay,
+          showTime,
+          latitude: r.latitude ? Number(r.latitude) : null,
+          longitude: r.longitude ? Number(r.longitude) : null,
         };
       });
 
-      res.json(enriched);
+      // ⚠️ 수정금지(승인필요) 2026-07-30 사장님 SSOT = **남은 공연 도시만** 내려준다.
+      //   기준은 bts_archived 가 아니라 **공연 날짜**다: 그 표시는 갱신이 안 되어 34개 중 2개만 true 인데,
+      //   실제로 지난 공연은 그보다 훨씬 많다. 날짜로 판단하면 항상 정확하고 손이 안 간다.
+      //   지구본과 8장 선택화면이 **이 목록 1벌**을 함께 쓴다(같은 도시 순서 보장).
+      res.json(enriched.filter((c) => c.nextConcertDate !== null));
     } catch (err) {
       console.error("[BTS] GET /api/bts/cities error:", err);
       res.status(500).json({ error: "Failed to fetch BTS cities" });

@@ -150,9 +150,7 @@ export default function RepresentativeTripShortForm({
 
           {/* 하단 세부 하이라이트 */}
           <View style={styles.bodyContent}>
-            <Text style={styles.sectionTitle}>
-              ✨ 대표 추천 코스 하이라이트
-            </Text>
+            <Text style={styles.sectionTitle}>대표 추천 코스 하이라이트</Text>
             {preview.highlights.map((item, idx) => (
               <View key={idx} style={styles.highlightRow}>
                 <View style={styles.bulletDot} />
@@ -173,7 +171,8 @@ export default function RepresentativeTripShortForm({
               >
                 <Icon name="check-circle" size={18} color="#FFFFFF" />
                 <Text style={styles.selectBtnText}>
-                  {preview.nameKo} 도시로 여정 만들기
+                  {/* ⚠️ §23 = 버튼은 짧은 동사만. 어느 도시인지는 이 카드 안이라 위치로 자명하므로 도시명을 넣지 않는다(2026-07-30) */}
+                  여정 만들기
                 </Text>
               </LinearGradient>
             </Pressable>
