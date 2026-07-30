@@ -12,17 +12,10 @@
 name: Build Android APK (local)
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "package.json"
-      - "package-lock.json"
-      - "app.json"
-      - "app.config.*"
-      - "eas.json"
-      - "plugins/**"
-      - "assets/**"
-      - ".github/workflows/build-android-apk.yml"
+  # ⚠️ 수정금지(승인필요) 2026-07-30 사장님 지시 = **APK 는 모아서 굽는다 = 수동 실행만.**
+  #   사유: 수정할 때마다 굽는 것은 낭비(1회 36분). 평소 확인은 EAS Update(OTA) + 아이폰 Expo 로 충분.
+  #   옛 자동 발동(package.json 등이 바뀌면 push 마다 자동 빌드)은 삭제 §19.
+  #   ⇒ 필요할 때 Actions 탭 "Run workflow" 로 실행.
   workflow_dispatch:
 
 jobs:

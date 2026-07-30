@@ -161,11 +161,15 @@ export function BTSLandingScreen() {
       }),
     );
     // stage 1 (Midnight)
-    setTimeout(() => {
+    // ⚠️ 수정금지(승인필요) 2026-07-30 = 화면을 벗어나면 이 시계를 반드시 끈다.
+    //   안 끄면 3.3초 안에 다음 화면으로 넘어갔을 때 **사라진 화면의 조명을 켜려 든다**.
+    const stageTimer = setTimeout(() => {
       bgStage.value = withTiming(1, { duration: 200 });
       setLightingStage(1);
       globeGlow.value = withTiming(0.3, { duration: 600 });
     }, 3300);
+    return () => clearTimeout(stageTimer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ⚠️ 수정금지(승인필요) — 생년월일 포맷
@@ -217,19 +221,19 @@ export function BTSLandingScreen() {
   }, [city, concertInfo]);
 
   // ⚠️ 수정금지(승인필요) — OAuth 실제 연결 (기존 LoginScreen 패턴 그대로)
-  const handleLogin = useCallback(
-    async (provider: string) => {
-      // ⚠️ 수정금지(승인필요) — dobComplete 체크 바이패스 (BTS 랜딩은 인증 없이 진입)
-      handleInteraction();
-      globeGlow.value = withSpring(1, { damping: 8, stiffness: 200 });
-      haptic("success");
+  // ⚠️ 수정금지(승인필요) 2026-07-30 = 이 함수가 **최신 도시 정보**를 쓰게 고쳤다.
+  //   옛것(의존성이 dobComplete·birthDateStr·city)은 실제로 쓰는 값과 하나도 안 맞아서,
+  //   공연 정보가 늦게 도착하면 **옛 함수를 붙잡아 다음 화면에 도시·날짜를 빈 값으로 넘겼다** = 삭제 §19.
+  const handleLogin = useCallback(async () => {
+    handleInteraction();
+    globeGlow.value = withSpring(1, { damping: 8, stiffness: 200 });
+    haptic("success");
 
-      // ⚠️ 수정금지(승인필요) — BTS 랜딩은 바이패스 (인증은 메인앱에서 처리)
-      // 생년월일 입력 완료 + OAuth 터치 = 바로 세계지도 전환
-      goToWorldMap();
-    },
-    [dobComplete, birthDateStr, city],
-  );
+    // ⚠️ 수정금지(승인필요) — BTS 랜딩은 바이패스 (인증은 메인앱에서 처리)
+    // 생년월일 입력 완료 + OAuth 터치 = 바로 세계지도 전환
+    goToWorldMap();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handleInteraction, goToWorldMap]);
 
   // ── 애니메이션 스타일 ──
 
@@ -295,8 +299,10 @@ export function BTSLandingScreen() {
     android: { backgroundColor: "rgba(255,255,255,0.1)" },
     default: {},
   });
-  // 웹/PC 환경에서는 생년월일 미입력 상태여도 즉시 클릭 가능하도록 버튼 차단 해제 (PC 테스트 100% 보장)
-  const isDisabled = Platform.OS === "web" ? false : !dobComplete;
+  // ⚠️ 수정금지(승인필요) 2026-07-30 사장님 지시 = **웹·앱이 똑같이 동작한다.**
+  //   옛것(웹이면 생년월일 없이도 눌리게 열어둠)은 시험용이었고, 웹에서 본 것과 폰에서 본 것이
+  //   달라지는 원인이었다 = 삭제 §19. 이제 어디서나 생년월일을 넣어야 로그인 버튼이 열린다.
+  const isDisabled = !dobComplete;
 
   return (
     <KeyboardAvoidingView
@@ -389,7 +395,7 @@ export function BTSLandingScreen() {
             <View style={styles.btnArea}>
               <TouchableOpacity
                 style={[styles.btn, styles.googleBtn, isDisabled && styles.off]}
-                onPress={() => handleLogin("google")}
+                onPress={() => handleLogin()}
                 disabled={isDisabled}
                 activeOpacity={0.96}
               >
@@ -397,7 +403,7 @@ export function BTSLandingScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.btn, styles.kakaoBtn, isDisabled && styles.off]}
-                onPress={() => handleLogin("kakao")}
+                onPress={() => handleLogin()}
                 disabled={isDisabled}
                 activeOpacity={0.96}
               >
@@ -406,41 +412,16 @@ export function BTSLandingScreen() {
               {Platform.OS === "ios" && (
                 <TouchableOpacity
                   style={[styles.appleLink, isDisabled && styles.off]}
-                  onPress={() => handleLogin("apple")}
+                  onPress={() => handleLogin()}
                   disabled={isDisabled}
                   activeOpacity={0.96}
                 >
                   <Text style={styles.appleTxt}>Sign in with Apple</Text>
                 </TouchableOpacity>
               )}
-
-              {/* ⚡ PC 데스크톱 웹 환경 1클릭 다음 단계(월드맵/캐릭터 선택) 즉시 진입 버튼 */}
-              <TouchableOpacity
-                style={{
-                  marginTop: 10,
-                  paddingVertical: 10,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  borderRadius: 50,
-                  backgroundColor: "rgba(147, 51, 234, 0.25)",
-                  borderWidth: 1,
-                  borderColor: "rgba(168, 85, 247, 0.6)",
-                }}
-                onPress={() => goToWorldMap()}
-                activeOpacity={0.8}
-              >
-                <Text
-                  style={{ fontSize: 13, fontWeight: "700", color: "#F3E8FF" }}
-                >
-                  ⚡ 체험/테스트용 다음 단계로 바로 이동 →
-                </Text>
-              </TouchableOpacity>
             </View>
           </View>
         </Animated.View>
-
-        {/* ⚠️ 수정금지(승인필요) — EAS Update 검증 태그 (커밋마다 숫자 증가) */}
-        <Text style={styles.buildTag}>build-02</Text>
 
         {/* ⚠️ 수정금지(승인필요) — 화이트아웃 (zIndex 99로 모든 레이어 위) */}
         <Animated.View
@@ -457,17 +438,6 @@ export function BTSLandingScreen() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: STAGE_COLORS[0] },
-
-  // ⚠️ 수정금지(승인필요) — EAS Update 검증 태그 스타일 (좌하단 반투명)
-  buildTag: {
-    position: "absolute",
-    bottom: 4,
-    left: 8,
-    fontSize: 9,
-    color: "rgba(255,255,255,0.25)",
-    fontFamily: "Pretendard-Bold",
-    zIndex: 50,
-  },
 
   // ⚠️ 수정금지(승인필요) — 히어로 (상단)
   hero: {

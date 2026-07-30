@@ -182,12 +182,24 @@ export default function RootStackNavigator() {
           headerShown: false,
         }}
       />
-      {/* BTS 미니앱 (풀스크린 독립 스택) */}
+      {/* BTS 미니앱 (독립 스택) */}
+      {/* ⚠️ 수정금지(승인필요) 2026-07-30 사장님 지시 = **안드로이드를 아이폰과 같게 맞춘다.**
+          사장님 실기기 결과 = 아이폰은 BTS 위에 메인앱이 얹히고 **BTS 가 뒤에 살아있으며 손가락으로 내려간다**(정상).
+          안드로이드는 BTS 가 **사라지고** 완전히 갈아치워졌다(잘못).
+
+          원인 = 옛 값 `fullScreenModal` 은 **아이폰 전용**이라 안드로이드에서는 `modal` 로 낮춰진다.
+            근거1 ScreenViewManager.kt:126-131 = "modal·containedModal·fullScreenModal·pageSheet" 가 전부 MODAL 로 묶임.
+            근거2 Screen.kt:279-286 = **TRANSPARENT_MODAL 과 FORM_SHEET 만** 뒤 화면을 살려둔다(isTranslucent).
+            근거3 ScreenStack.kt:240-244 = 위가 불투명(MODAL)이면 아래 화면을 아예 떼어낸다(remove).
+          ⇒ 두 OS 에서 **똑같이** 뒤 화면을 살려두는 값 = `transparentModal` 로 교체 §19.
+          (`contained*` 계열은 한 스택에 다른 모달과 섞으면 크래시 위험이라 쓰지 않는다 = types.d.ts:360-361)
+
+          ⚠️ 배경이 비치면 안 되므로 BTS 스택 자체가 불투명해야 한다(BTSStackNavigator 배경 #05050A). */}
       <Stack.Screen
         name="BTSMiniApp"
         component={BTSStackNavigator}
         options={{
-          presentation: "fullScreenModal",
+          presentation: "transparentModal",
           headerShown: false,
           animation: "slide_from_bottom",
         }}

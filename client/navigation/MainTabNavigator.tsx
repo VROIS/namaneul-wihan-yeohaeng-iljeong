@@ -241,13 +241,20 @@ export default function MainTabNavigator() {
               <Icon
                 name="brain"
                 size={24}
-                color={isAuthed ? Brand.primary : theme.textTertiary}
+                color={
+                  currentItinerary && isAuthed
+                    ? Brand.primary
+                    : theme.textTertiary
+                }
               />
             ),
           }}
           listeners={{
             tabPress: (e) => {
               e.preventDefault();
+              // ⚠️ 수정금지(승인필요) 2026-07-30 = 여정이 있어야 활성(= AI의견과 같은 규칙 1벌).
+              //   옛것(여정 없어도 눌림)은 물어볼 대상 없이 크레딧 10 이 빠지는 경로 = 삭제 §19.
+              if (!currentItinerary) return;
               if (isAuthed) {
                 requestExpert();
               } else {

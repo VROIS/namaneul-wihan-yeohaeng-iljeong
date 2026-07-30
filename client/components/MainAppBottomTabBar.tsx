@@ -55,20 +55,24 @@ export default function MainAppBottomTabBar({
     };
   }, [expertDataChangedAt]);
 
+  // ⚠️ 수정금지(승인필요) 2026-07-30 사장님 SSOT = **AI의견·전문가 = 여정이 있을 때만 활성.**
+  //   이유: 둘 다 "지금 보고 있는 여정"에 대해 묻는 버튼이다. 여정이 없으면 물어볼 대상이 없다.
+  //   옛것(여정 없어도 눌림)은 = 엉뚱한 옛 여정에 대해 답하거나, 대상도 없이 **크레딧 5·10 이
+  //   헛되이 빠지는** 경로였다 = 삭제 §19. 메인앱 탭(MainTabNavigator)과 **같은 규칙 1벌**.
+  const needsItinerary = !currentItinerary;
+
   const handleTabPress = (key: string) => {
     switch (key) {
       case "Home":
         rootNavigation.navigate("Main");
         break;
       case "Map":
-        if (currentItinerary) {
-          rootNavigation.navigate("Main");
-          setTimeout(() => requestAiOpinion(), 150);
-        } else {
-          rootNavigation.navigate("Main");
-        }
+        if (needsItinerary) return; // 여정 없음 = 무동작(비활성)
+        rootNavigation.navigate("Main");
+        setTimeout(() => requestAiOpinion(), 150);
         break;
       case "Verify":
+        if (needsItinerary) return; // 여정 없음 = 무동작(비활성)
         if (isAuthed) {
           rootNavigation.navigate("Main");
           setTimeout(() => requestExpert(), 150);
@@ -99,13 +103,14 @@ export default function MainAppBottomTabBar({
       key: "Map",
       label: t("tab.aiOpinion", "AI 의견"),
       icon: "bot",
-      disabled: !currentItinerary,
+      disabled: needsItinerary,
     },
     {
       key: "Verify",
       label: t("tab.expert", "전문가"),
       icon: "brain",
       badge: expertBadge,
+      disabled: needsItinerary,
     },
     {
       key: "Profile",
@@ -158,7 +163,14 @@ export default function MainAppBottomTabBar({
             <TouchableOpacity
               key={tab.key}
               style={styles.tabBtn}
-              activeOpacity={0.7}
+              // 비활성이면 눌리는 느낌도 주지 않는다(색만 흐린 채 눌리던 옛 동작 삭제 §19)
+              activeOpacity={isIconDisabled ? 1 : 0.7}
+              disabled={isIconDisabled}
+              accessibilityRole="button"
+              accessibilityState={{
+                selected: isActive,
+                disabled: !!isIconDisabled,
+              }}
               onPress={() => handleTabPress(tab.key)}
             >
               <View>

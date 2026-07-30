@@ -171,7 +171,28 @@ export async function getMyRole(): Promise<"user" | "expert" | "admin"> {
 // ── 탭 배지 수 = 역할별. ⚠️ 사장님 SSOT 2026-07-14 = 실시간 접수/답변 신호.
 //   전문가·관리자 = 대기+검토중 받은 문의 수(응답 대기 신호).
 //   사용자 = 진행중 문의(접수됨=pending·검토중=in_review) + 안 읽은 답변(answered 미열람). = 문의 즉시 배지로 "접수됨"을 인식(옛: 안읽은답변만 = 문의 직후 배지0 = 접수 인식불가 폐기 §19).
-export async function tabBadgeCount(): Promise<number> {
+// ⚠️ 수정금지(승인필요) 2026-07-30 = **같은 순간의 배지 조회는 1번만 서버에 간다.**
+//   이유(운영 로그 실측): 이 함수를 부르는 곳이 4군데이고, 하단 탭바가 BTS 화면 3개에도 붙어 있어
+//   화면을 한 번 움직이면 **같은 조회가 초당 5~8번** 몰려 나갔다(호출 1회당 요청 2개 = 역할+목록).
+//   화면에 보이는 문제는 없지만 DB 전송량 = 돈이므로 차단한다.
+//   방식 = 아주 짧은 시간(아래 값) 안의 중복 호출은 **먼저 나간 요청의 답을 함께 쓴다**.
+const BADGE_DEDUP_MS = 3000;
+let badgeInFlight: { at: number; p: Promise<number> } | null = null;
+
+export function tabBadgeCount(): Promise<number> {
+  const now = Date.now();
+  if (badgeInFlight && now - badgeInFlight.at < BADGE_DEDUP_MS) {
+    return badgeInFlight.p;
+  }
+  const p = fetchBadgeCount().finally(() => {
+    // 실패해도 다음 호출이 다시 시도할 수 있게 통을 비운다
+    if (badgeInFlight && badgeInFlight.p === p) badgeInFlight = null;
+  });
+  badgeInFlight = { at: now, p };
+  return p;
+}
+
+async function fetchBadgeCount(): Promise<number> {
   // ⚠️ 사장님 승인 2026-07-14 = 비로그인(실형식 토큰 없음)이면 배지 API(verification/requests) 자체를 안 부름 → 401 로그·불필요 서버호출 제거. 배지는 로그인해야 의미. 옛: 무조건 호출 → 비로그인 401 스팸 폐기 §19.
   const user = await getUserData();
   if (!user?.token || !user.token.startsWith("simple_auth_token_v1_")) return 0;

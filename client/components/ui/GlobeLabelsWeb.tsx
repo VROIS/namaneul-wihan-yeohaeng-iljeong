@@ -2,7 +2,8 @@
 //   출처 = 21st.dev @shuding/cobe-globe-labels. 원본 보존 = docs/design-references/cobe-globe-labels-reference.tsx
 //
 //   왜 부품으로 두는가 = 사장님 지시: 나중에 **메인앱 여정플래너의 도시 선택**에 쓸 것.
-//   그래서 BTS 전용 화면(BTSGlobeIntroWeb)과 달리 **어느 화면에서도 쓰도록 일반화**했다.
+//   ⚠️ **아직 어느 화면에도 안 붙였다**(보관만). 지금 도는 지구본은 이것이 아니라
+//     `client/screens/bts/bts-globe-html.ts` 다(웹·앱 공통 1벌). 헷갈리지 말 것.
 //
 //   원본에서 바꾼 것 (= 우리 앱 규칙에 맞춤):
 //   ① Tailwind(className) 제거 = 우리 앱은 Tailwind 를 쓰지 않는다 → style 로 대체.
@@ -13,7 +14,8 @@
 //
 //   ⚠️ 웹 전용이다. CSS Anchor Positioning(positionAnchor)·WebGL 캔버스를 쓰므로
 //     iOS/안드로이드 앱(React Native)에서는 동작하지 않는다. 앱 화면에서 쓰려면 별도 대응이 필요하다.
-//     그래서 파일명에 **Web** 을 붙였다(앱 안의 BTSGlobeIntroWeb 과 같은 규칙).
+//     그래서 파일명에 **Web** 을 붙였다. 앱에서도 쓰려면 BTS 지구본처럼
+//     WebView 안에서 띄우는 방식으로 옮겨야 한다(bts-globe-html.ts 참고).
 import React, { useEffect, useRef, useCallback, useMemo } from "react";
 import createGlobe from "cobe";
 
