@@ -23,6 +23,8 @@ import {
 } from "./services/shared/video-gen-client";
 import { composeSceneStill } from "./services/shared/image-gen-client";
 import { stitchAndUpload } from "./services/video-stitcher";
+import { getUserIdFromReq } from "./auth-user"; // Bearer → userId 단일 관문(2026-07-29 §16)
+import { chargeFeature } from "./credit-charge"; // 크레딧 차감 단일 관문(2026-07-29 §9)
 
 const COST_PER_SECOND_USD = 0.101; // A안 = Omni Flash 720p (5,792tok/초 × $17.5/1M)
 const B_COST_PER_SCENE_USD = 0.35; // B안 = 나노바나나 스틸 $0.045 + Veo Lite 6초 $0.30
@@ -136,6 +138,21 @@ export function registerVideoRoutes(app: Express): void {
             .json({ error: "이미 생성 중", taskId: existing.taskId });
 
         const taskId = `ghibli_${id}_d${day}_${Date.now()}`;
+
+        // 🪙 일별 영상 60크레딧 차감 (2026-07-29 §9 = A안·B안 동일 단가).
+        //   자리 이유 = 위 409 중복가드를 통과한 뒤 · 아래 "생성 중" 기록 **앞**.
+        //   차감이 실패했는데 status 를 processing 으로 적으면 "영원히 생성 중" 좀비가 남는다.
+        //   referenceId = taskId = 렌더 1건을 유일 식별. 같은 날짜 재생성은 새 taskId = 새 유료 렌더 = 재차감이 정상.
+        if (
+          !(await chargeFeature(
+            res,
+            getUserIdFromReq(req),
+            "day_video",
+            taskId,
+          ))
+        )
+          return;
+
         const sceneSlots = slots.slice(0, MAX_SCENES);
         const totalScenes = sceneSlots.length;
         await setDayVideo(id, day, {

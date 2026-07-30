@@ -24,7 +24,12 @@ export default function TripsSection({ profile }: { profile: ProfileApi }) {
   return (
     <View style={styles.section}>
       <View style={styles.sectionTitleHeader}>
-        <View style={[styles.sectionIconBox, { backgroundColor: "rgba(66, 133, 244, 0.12)" }]}>
+        <View
+          style={[
+            styles.sectionIconBox,
+            { backgroundColor: "rgba(66, 133, 244, 0.12)" },
+          ]}
+        >
           <Icon name="map" size={18} color={Brand.primary} />
         </View>
         <ThemedText style={styles.sectionTitle}>나의 여정</ThemedText>
@@ -129,7 +134,3 @@ export default function TripsSection({ profile }: { profile: ProfileApi }) {
     </View>
   );
 }
-
-
-
-

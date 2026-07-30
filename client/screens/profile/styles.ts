@@ -349,10 +349,40 @@ export const styles = StyleSheet.create({
   },
   accordionText: {
     fontSize: 13,
-    fontFamily: Fonts.regular,
+    // ⚠️ 2026-07-29 = Fonts 에 'regular' 키가 없어 타입 오류였다(있는 키 = sans·medium·semiBold·bold). 본문용 = sans.
+    fontFamily: Fonts.sans,
     color: "#475569",
     lineHeight: 19,
     marginBottom: 6,
+  },
+  // ⚠️ 2026-07-29 복원 = PersonaSection.tsx 가 쓰는 5개 키. 이 파일을 다시 쓸 때 빠져 그 섹션이 스타일 없이 렌더되고
+  //   타입 오류 9건을 내던 것 = main 정의 그대로 복원(§19 = 최신이 아니라 **동작하는 것**이 정본).
+  personaContainer: {
+    flexDirection: "row",
+    gap: Spacing.md,
+  },
+  personaCard: {
+    flex: 1,
+    padding: Spacing.lg,
+    borderRadius: BorderRadius.md,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "transparent",
+  },
+  personaIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: Spacing.md,
+  },
+  personaTitle: {
+    ...Typography.h3,
+    marginBottom: Spacing.xs,
+  },
+  personaDesc: {
+    ...Typography.caption,
   },
   chipContainer: {
     flexDirection: "row",

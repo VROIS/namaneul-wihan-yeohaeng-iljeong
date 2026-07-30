@@ -51,11 +51,21 @@ export default function VideosSection({ profile }: { profile: ProfileApi }) {
   return (
     <View style={styles.section}>
       <View style={styles.sectionTitleHeader}>
-        <View style={[styles.sectionIconBox, { backgroundColor: "rgba(139, 92, 246, 0.12)" }]}>
+        <View
+          style={[
+            styles.sectionIconBox,
+            { backgroundColor: "rgba(139, 92, 246, 0.12)" },
+          ]}
+        >
           <Icon name="film" size={18} color="#8B5CF6" />
         </View>
         <ThemedText style={styles.sectionTitle}>나의 영상</ThemedText>
-        <Text style={[styles.sectionBadge, { color: "#8B5CF6", backgroundColor: "rgba(139, 92, 246, 0.12)" }]}>
+        <Text
+          style={[
+            styles.sectionBadge,
+            { color: "#8B5CF6", backgroundColor: "rgba(139, 92, 246, 0.12)" },
+          ]}
+        >
           {displayVideos.length}
         </Text>
       </View>
@@ -120,8 +130,3 @@ export default function VideosSection({ profile }: { profile: ProfileApi }) {
     </View>
   );
 }
-
-
-
-
-

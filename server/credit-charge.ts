@@ -1,0 +1,74 @@
+// ⚠️ 수정금지(승인필요) 2026-07-29 사장님 SSOT = 크레딧 차감 단일 관문 (CLAUDE.md §9).
+//   정본 문서 = docs/2026-07-29 결제·크레딧 구현.md
+//   유료 외부호출 5지점(여정생성·AI의견·Tripis해설·전문가검증·일별영상)이 **전부 이 함수 1벌만** 부른다.
+//   왜 1벌인가: 관리자 면제 규칙과 잔액부족(402) 응답 형태가 두 벌로 갈라지면 어느 게 진짜인지 알 수 없어진다(§0·§16).
+//   장부 기록·잔액 차감은 재발명하지 않고 server/creditService.ts 의 useCredits() 를 그대로 쓴다.
+import type { Response } from "express";
+import { creditService } from "./creditService";
+
+// ⚠️ 수정금지(승인필요) — 크레딧 단가표 = 사장님 SSOT 2026-07-22 (일별영상 60 = A안·B안 동일, 2026-07-29 확정).
+//   화면은 이 값을 GET /api/credits/pricing 으로 읽어간다 = 단가를 화면에 하드코딩하지 마라(두 벌 금지).
+export const CREDIT_COSTS = {
+  route_generate: 5, // 여정 생성 (DB-only 포함 = 동일)
+  ai_opinion: 5, // AI 의견
+  guide_explain: 5, // Tripis 해설 (가이드 미니앱)
+  expert_verify: 10, // 전문가 검증·문의
+  day_video: 60, // 일별 여행영상 (하루치)
+} as const;
+
+export type CreditFeature = keyof typeof CREDIT_COSTS;
+
+// 장부(credit_transactions.description)에 남는 한국어 이름 = 사장님이 거래내역에서 바로 읽을 수 있어야 함
+const CREDIT_LABELS: Record<CreditFeature, string> = {
+  route_generate: "여정 생성",
+  ai_opinion: "AI 의견",
+  guide_explain: "Tripis 해설",
+  expert_verify: "전문가 검증",
+  day_video: "일별 영상",
+};
+
+/**
+ * ⚠️ 수정금지(승인필요) — 유료 호출 **직전**에 크레딧을 깎는다.
+ *   반환 true  = 통과(차감했거나 면제 대상) → 호출부는 그대로 진행.
+ *   반환 false = **이미 402 응답을 보냈다** → 호출부는 `return` 만 하면 된다(응답 두 번 보내기 방지).
+ *   ⚠️ 스트리밍 라우트는 res.setHeader/res.write **전에** 불러야 한다. 헤더가 나간 뒤엔 402 를 보낼 수 없다.
+ *   userId 는 호출부가 자기 규약대로 넘긴다(Bearer 토큰 또는 그 라우트의 body 규약) = 여기서 갈래를 만들지 않는다(§0).
+ */
+export async function chargeFeature(
+  res: Response,
+  userId: string | null,
+  feature: CreditFeature,
+  referenceId?: string,
+): Promise<boolean> {
+  // 비로그인 = 차감 없음 (개발단계 게스트 개방 방침, CLAUDE.md §9). 로그인 정식화 때 닫힌다.
+  if (!userId) return true;
+
+  const amount = CREDIT_COSTS[feature];
+  const label = CREDIT_LABELS[feature];
+
+  // 관리자 면제 = **users.role 만** 본다 (shared/schema/users.ts:61 사장님 SSOT = "신규 코드는 role만 읽음").
+  //   is_admin 은 배포앱 원서버가 쓰는 옛 칸이라 기준으로 삼지 않는다 = 두 칸이 어긋나면 공짜 사용이 뚫린다(2026-07-29 §22 지적).
+  //   ⚠️ 아이디 문자열에 'admin' 이 들어있는지로 판단하는 방식도 금지 = 아무나 관리자가 되는 권한상승 경로.
+  //   사용자 행이 없으면 차감을 건너뛴다 = 장부 외래키 위반으로 500 나는 것 방지(그 라우트의 기존 401/404 흐름을 그대로 살림).
+  const user = await creditService.getUserProfile(userId);
+  if (!user || user.role === "admin") return true;
+
+  const charge = await creditService.useCredits(
+    userId,
+    amount,
+    label,
+    referenceId,
+  );
+
+  if (!charge.success) {
+    res.status(402).json({
+      error: "insufficient_credits",
+      message: charge.message,
+      balance: charge.balance,
+      required: amount,
+    });
+    return false;
+  }
+
+  return true;
+}

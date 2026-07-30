@@ -4,12 +4,15 @@ import type { Express } from "express";
 import { storage } from "./storage";
 import { itineraryGenerator } from "./services/itinerary-generator";
 import { db } from "./db";
-import { cities, users } from "../shared/schema";
-import { eq, sql } from "drizzle-orm";
+import { cities, users, placeSeedRaw } from "../shared/schema";
+import { eq, sql, desc } from "drizzle-orm";
+// ⚠️ 완비 기준 = ag2 의 상수 1벌을 가져다 쓴다(§16). 여기에 300 을 다시 적으면 기준이 두 벌이 된다.
+import { READY_THRESHOLD } from "./services/agents/ag2-gemini-recommender";
 import {
   computeDayRouteLive,
   enrichStopsWithPsr,
 } from "./services/shared/routes-client";
+import { chargeFeature } from "./credit-charge"; // 크레딧 차감 단일 관문(2026-07-29 §9)
 
 export function registerCityPlaceRoutes(app: Express): void {
   // Cities
@@ -20,6 +23,43 @@ export function registerCityPlaceRoutes(app: Express): void {
     } catch (error) {
       console.error("Error fetching cities:", error);
       res.status(500).json({ error: "Failed to fetch cities" });
+    }
+  });
+
+  // ⚠️ 수정금지(승인필요) 2026-07-30 사장님 SSOT = 여정 플래너 상단 **도시버튼의 유일한 목록 소스.**
+  //   DB-only 가 완비된 도시만 = place_seed_raw 전체 행수 ≥ READY_THRESHOLD(300, ag2 상수 1벌).
+  //   완비도 높은 순(행수 DESC)으로 내려준다 = 사장님 "완비된 도시 순으로 노출".
+  //   ⚠️ 반드시 아래 "/api/cities/:id" **앞**에 있어야 한다 = 뒤에 두면 :id 가 "ready" 를 id 로 먹어 404.
+  //   도시를 더 발굴해 300 을 넘기면 **코드 수정 없이 자동으로 목록에 추가됨**(사장님 "점진적으로 늘려감").
+  app.get("/api/cities/ready", async (_req, res) => {
+    try {
+      if (!db) return res.status(503).json({ error: "db_unavailable" });
+      const rows = await db
+        .select({
+          id: cities.id,
+          nameKo: cities.name,
+          nameEn: cities.nameEn,
+          country: cities.country,
+          latitude: cities.latitude,
+          longitude: cities.longitude,
+          rows: sql<number>`COUNT(${placeSeedRaw.id})::int`,
+        })
+        .from(cities)
+        .innerJoin(placeSeedRaw, eq(placeSeedRaw.cityId, cities.id))
+        .groupBy(
+          cities.id,
+          cities.name,
+          cities.nameEn,
+          cities.country,
+          cities.latitude,
+          cities.longitude,
+        )
+        .having(sql`COUNT(${placeSeedRaw.id}) >= ${READY_THRESHOLD}`)
+        .orderBy(desc(sql`COUNT(${placeSeedRaw.id})`));
+      res.json(rows);
+    } catch (error) {
+      console.error("[cities/ready] 완비도시 조회 실패:", error);
+      res.status(500).json({ error: "failed_to_fetch_ready_cities" });
     }
   });
 
@@ -177,6 +217,13 @@ export function registerCityPlaceRoutes(app: Express): void {
           );
         }
       }
+
+      // 🪙 여정 생성 5크레딧 차감 (2026-07-29 §9) = 유료 파이프라인 진입 **직전**.
+      //   userId 는 이 라우트의 규약대로 body 에서 온다(위 formData.userId) = 여기서 다른 갈래를 만들지 않는다(§0).
+      if (
+        !(await chargeFeature(res, formData.userId ?? null, "route_generate"))
+      )
+        return;
 
       const itinerary = await itineraryGenerator.generate(enrichedFormData);
 

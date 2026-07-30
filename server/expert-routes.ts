@@ -2,11 +2,13 @@
 //   계획서 = docs/2026-07-13 전문가탭 구현계획.md 2단계. 시안 = docs/design/2026-07-13 전문가탭 화면구성안.html
 //   흐름 = 사용자(여정+AI의견 첨부) 문의 접수 → 전문가(role='expert'/'admin') 답변 → notificationService 1줄로 인앱 알림(+VAPID 있으면 푸시).
 //   경로 규약 = FE(VerificationRequestScreen)·admin-dashboard 기존 호출 그대로(/api/verification/*) = 양쪽 수정 최소화(§16).
-import type { Express, Request } from "express";
+import type { Express } from "express";
 import { db as _db } from "./db";
 import { expertInquiries, users } from "@shared/schema";
 import { eq, desc, and, or } from "drizzle-orm";
 import { notificationService } from "./notificationService";
+import { getUserIdFromReq } from "./auth-user"; // Bearer → userId 단일 관문(2026-07-29 §16, 이 파일 사본 삭제 §19)
+import { chargeFeature } from "./credit-charge"; // 크레딧 차감 단일 관문(2026-07-29 §9)
 
 // db 널 가드 = place-upsert 'db_unavailable' 규약과 동일 취지(각 핸들러 try/catch가 500 처리)
 function db() {
@@ -14,37 +16,22 @@ function db() {
   return _db;
 }
 
-// Bearer 토큰 → userId = server/auth.ts:259-263 규약 1벌 그대로(§16 재발명 금지)
-function getUserIdFromReq(req: Request): string | null {
-  const h = req.headers.authorization;
-  if (!h || !h.startsWith("Bearer ")) return null;
-  const id = h.split(" ")[1].replace("simple_auth_token_v1_", "");
-  return id || null;
-}
-
-// 역할 조회 = users.role ('user' | 'expert' | 'admin')
+// ⚠️ 수정금지(승인필요) — 역할 조회 = users.role ('user' | 'expert' | 'admin') = DB 1벌만.
+//   아이디 문자열로 역할을 추측하는 방식 폐기 = 2026-07-29 §0·§22 (아이디에 'admin' 만 넣으면 관리자가 되는 권한상승 경로).
+//   DB 오류를 삼켜 관리자로 승격시키는 것도 폐기 = 같은 날 = 호출부 try/catch 가 500 으로 처리한다.
 async function getRole(userId: string): Promise<string> {
-  const isDevAdmin =
-    userId.toLowerCase().includes("admin") ||
-    userId.toLowerCase().includes("expert") ||
-    userId.toLowerCase().includes("dbstour1");
-
-  try {
-    const [u] = await db()
-      .select({ role: users.role })
-      .from(users)
-      .where(eq(users.id, userId));
-    return u?.role || (isDevAdmin ? "admin" : "user");
-  } catch {
-    return isDevAdmin ? "admin" : "user";
-  }
+  const [u] = await db()
+    .select({ role: users.role })
+    .from(users)
+    .where(eq(users.id, userId));
+  return u?.role || "user";
 }
 
 export function registerExpertRoutes(app: Express): void {
   // ── 1) 문의 접수 = POST /api/verification/request ──
   //   body = { userId, itineraryData(여정+AI의견 스냅샷), userMessage, itineraryId?, kind?, dayNumber? }
   //   kind = 'booking'(일별 바로 예약하기, 2026-07-24 사장님 승인) 만 인정, 그 외 전부 'expert'(기존 검증 문의).
-  //   🪙 크레딧 차감(10) = 8단계에서 이 지점에 useCredits 1줄(로그인 정식화 후 사장님 지시 시) — routes.ts:803 AI의견 앵커와 동일 패턴.
+  //   🪙 크레딧 차감(10) = 아래 INSERT 직전에 구현됨 = 2026-07-29 §9 (예고 주석 폐기 §19).
   app.post("/api/verification/request", async (req, res) => {
     try {
       const authId = getUserIdFromReq(req);
@@ -62,6 +49,18 @@ export function registerExpertRoutes(app: Express): void {
           .status(400)
           .json({ error: "userId and userMessage are required" });
       }
+      // 🪙 전문가 검증 10크레딧 차감 (2026-07-29 §9) = 접수가 확정되는 INSERT **직전**.
+      //   잔액이 부족하면 접수 자체를 막는다(돈 드는 일을 시작하지 않는 것이 402 의 목적).
+      if (
+        !(await chargeFeature(
+          res,
+          uid,
+          "expert_verify",
+          itineraryId ? String(itineraryId) : undefined,
+        ))
+      )
+        return;
+
       const [row] = await db()
         .insert(expertInquiries)
         .values({
@@ -125,8 +124,13 @@ export function registerExpertRoutes(app: Express): void {
             id: "demo_inquiry_1",
             userId: uid,
             itineraryId: 101,
-            itineraryData: { destination: "Paris", dayCount: 3, totalPlaces: 14 },
-            userMessage: "파리 3일차 루브르 박물관 및 센강 유람선 동선과 현지 추천 맛집 문의드립니다.",
+            itineraryData: {
+              destination: "Paris",
+              dayCount: 3,
+              totalPlaces: 14,
+            },
+            userMessage:
+              "파리 3일차 루브르 박물관 및 센강 유람선 동선과 현지 추천 맛집 문의드립니다.",
             kind: "expert",
             dayNumber: null,
             status: "pending",
@@ -142,13 +146,19 @@ export function registerExpertRoutes(app: Express): void {
             id: "demo_inquiry_2",
             userId: uid,
             itineraryId: 102,
-            itineraryData: { destination: "LUXEMBOURG", dayCount: 3, totalPlaces: 24 },
-            userMessage: "룩셈부르크 2일차 맞춤 드라이빙 가이드 및 차량 바로 예약 요청",
+            itineraryData: {
+              destination: "LUXEMBOURG",
+              dayCount: 3,
+              totalPlaces: 24,
+            },
+            userMessage:
+              "룩셈부르크 2일차 맞춤 드라이빙 가이드 및 차량 바로 예약 요청",
             kind: "booking",
             dayNumber: 2,
             status: "answered",
             expertId: "demo_expert_1",
-            expertReply: "안녕하세요! 룩셈부르크 2일차 드라이빙 가이드 예약이 확정되었습니다. 당일 오전에 숙소 로비에서 미팅 진행합니다.",
+            expertReply:
+              "안녕하세요! 룩셈부르크 2일차 드라이빙 가이드 예약이 확정되었습니다. 당일 오전에 숙소 로비에서 미팅 진행합니다.",
             isReadByUser: false,
             isDeletedByUser: false,
             isDeletedByExpert: false,

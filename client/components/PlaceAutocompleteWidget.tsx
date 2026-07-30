@@ -3,7 +3,13 @@
 //   웹 = div+SDK 직접 / 앱 = react-native-webview. ItineraryMap 패턴 동일. API키 = /api/bts/map-config.
 //   선택 → onSelect(name·address·coords) → 호출측이 handleSetDayAccommodation 등으로 전달 → 지도 깃발 자동.
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, StyleSheet, View, Platform, TextInput } from "react-native";
+import {
+  ActivityIndicator,
+  StyleSheet,
+  View,
+  Platform,
+  TextInput,
+} from "react-native";
 import { apiRequest } from "@/lib/query-client";
 import {
   PLACE_AUTOCOMPLETE_HTML,

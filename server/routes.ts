@@ -14,6 +14,7 @@ import { registerCityPlaceRoutes } from "./city-place-routes";
 import { registerItineraryRoutes } from "./itinerary-routes";
 import { registerVideoRoutes } from "./video-routes";
 import { registerMiscRoutes } from "./misc-routes";
+import { registerPaymentRoutes } from "./payment-routes"; // 결제·크레딧 API (2026-07-29, docs/2026-07-29 결제·크레딧 구현.md)
 
 export async function registerRoutes(app: Express): Promise<Server> {
   registerAdminRoutes(app);
@@ -25,6 +26,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerItineraryRoutes(app); // 언어설정 + 여정 CRUD5 + AI 의견 (예산3 = 2026-07-16 §19 완전삭제, 호출자 0 + 500크래시)
   registerVideoRoutes(app); // 영상 상태조회 2종(DB read-only) = klingai/seedance 삭제(2026-07-16 §19), 5단계 Omni Flash 재배선 대상
   registerMiscRoutes(app); // 지도HTML + 헬스체크
+  registerPaymentRoutes(app); // 잔액·내역·단가표 + Stripe 결제창 + 직접통보(충전 유일 경로) (2026-07-29 §9)
 
   const httpServer = createServer(app);
 

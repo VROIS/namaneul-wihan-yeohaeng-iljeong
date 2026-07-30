@@ -10,11 +10,13 @@ import { styles } from "../styles";
 import type { ProfileApi } from "../hooks/useProfile";
 
 export default function ProfileHeader({ profile }: { profile: ProfileApi }) {
-  const { theme, isAuth, user } = profile;
+  const { theme, isAuth, user, credits, recharging, handleRecharge } = profile;
   const { requestLogin } = useMapToggle();
 
-  // 사용자 보유 크레딧 (디폴트 150 C)
-  const userCredits = (user as any)?.credits ?? 150;
+  // ⚠️ 보유 크레딧 = 서버(GET /api/credits/balance)가 정본 = 2026-07-29 §9.
+  //   옛 `(user as any)?.credits ?? 150` 폐기 §19 = 클라 사용자정보엔 credits 가 없어 **항상 가짜 150** 이 보였음.
+  //   아직 못 받았거나 미로그인 = null → "-" 로 표시(가짜 숫자 금지).
+  const creditText = credits === null ? "-" : `${credits} C`;
 
   return (
     <View style={styles.profileCard}>
@@ -35,7 +37,10 @@ export default function ProfileHeader({ profile }: { profile: ProfileApi }) {
                   {user.name || "사용자"}
                 </ThemedText>
                 <Text
-                  style={[styles.userEmailCompact, { color: theme.textSecondary }]}
+                  style={[
+                    styles.userEmailCompact,
+                    { color: theme.textSecondary },
+                  ]}
                   numberOfLines={1}
                 >
                   {user.email}
@@ -77,29 +82,32 @@ export default function ProfileHeader({ profile }: { profile: ProfileApi }) {
           <View style={styles.creditIconCircleCompact}>
             <Icon name="credit-card" size={14} color={Brand.primary} />
           </View>
-          <Text style={[styles.creditLabelCompact, { color: theme.textSecondary }]}>
+          <Text
+            style={[styles.creditLabelCompact, { color: theme.textSecondary }]}
+          >
             보유 크레딧
           </Text>
           <Text style={[styles.creditValueCompact, { color: theme.text }]}>
-            {userCredits} C
+            {creditText}
           </Text>
         </View>
 
+        {/* 충전 = Stripe 결제창을 브라우저로 연다(2026-07-29 §9). 버튼 모양·문구는 그대로. */}
         <Pressable
           style={styles.creditRechargeBtnCompact}
-          onPress={() => {
-            alert("크레딧 충전 기능 준비 중입니다.");
-          }}
+          onPress={handleRecharge}
+          disabled={recharging}
+          hitSlop={{ top: 12, bottom: 12, left: 10, right: 10 }}
+          accessibilityRole="button"
+          accessibilityLabel="크레딧 충전"
+          accessibilityState={{ disabled: recharging, busy: recharging }}
         >
           <Icon name="plus-circle" size={12} color="#FFFFFF" />
-          <Text style={styles.creditRechargeTextCompact}>충전</Text>
+          <Text style={styles.creditRechargeTextCompact}>
+            {recharging ? "진행 중" : "충전"}
+          </Text>
         </Pressable>
       </View>
     </View>
   );
 }
-
-
-
-
-

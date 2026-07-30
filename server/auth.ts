@@ -3,6 +3,7 @@ import { storage } from "./storage";
 import {
   findOrCreateUser,
   toClientUser,
+  getUserIdFromReq,
   KAKAO_DEFAULT_NAME,
   GOOGLE_DEFAULT_NAME,
 } from "./auth-user";
@@ -270,14 +271,12 @@ export function registerAuthRoutes(app: Express) {
   // 내 정보 조회
   app.get("/api/auth/me", async (req, res) => {
     try {
-      const authHeader = req.headers.authorization;
-      if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      // ⚠️ 토큰 해석 = auth-user.getUserIdFromReq 1벌 (2026-07-29 §16). 이 파일 인라인 사본 완전삭제 §19.
+      //   옛 사본은 `.replace()` 라 앞이 고정되지 않아 "Bearer x…" 처럼 접두사가 중간에 있는 값도 통과시켜 엉뚱한 id 를 만들었다.
+      const userId = getUserIdFromReq(req);
+      if (!userId) {
         return res.status(401).json({ error: "Unauthorized" });
       }
-
-      const userId = authHeader
-        .split(" ")[1]
-        .replace("simple_auth_token_v1_", "");
       const user = await storage.getUser(userId);
 
       if (!user) {

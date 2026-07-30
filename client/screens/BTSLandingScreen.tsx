@@ -437,7 +437,9 @@ export function BTSLandingScreen() {
                 onPress={() => goToWorldMap()}
                 activeOpacity={0.8}
               >
-                <Text style={{ fontSize: 13, fontWeight: "700", color: "#F3E8FF" }}>
+                <Text
+                  style={{ fontSize: 13, fontWeight: "700", color: "#F3E8FF" }}
+                >
                   ⚡ 체험/테스트용 다음 단계로 바로 이동 →
                 </Text>
               </TouchableOpacity>

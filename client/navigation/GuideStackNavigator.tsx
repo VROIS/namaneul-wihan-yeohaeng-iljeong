@@ -202,9 +202,17 @@ function GuideResultHost({
 
         const systemInstruction = await fetchPrompt(lang, "image");
 
+        // ⚠️ 2026-07-29 §9 = 로그인 토큰 첨부 필수. 이 호출은 5크레딧 차감 지점(server/guide-routes.ts:47)인데
+        //   토큰이 없으면 서버가 "비로그인=무과금" 으로 보고 **영구 무료**가 된다(§22 실측 지적).
+        const guideUser = await getUserData();
         const resp = await expoFetch(`${CONFIG.API.SERVER_URL}/api/gemini`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...(guideUser?.token?.startsWith("simple_auth_token_v1_")
+              ? { Authorization: `Bearer ${guideUser.token}` }
+              : {}),
+          },
           body: JSON.stringify({
             base64Image: optimized,
             prompt:

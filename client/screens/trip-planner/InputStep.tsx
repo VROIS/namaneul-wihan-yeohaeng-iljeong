@@ -1,8 +1,21 @@
 // 입력 화면(InputStep.tsx) = 상단 고정 + DB 도시 동적 버튼 + '누구랑' 및 '누구를 위한' 100% 복원 완료
 import React, { useState, useEffect, useRef } from "react";
-import { View, Text, Pressable, ScrollView, Animated, Image } from "react-native";
+import {
+  View,
+  Text,
+  Pressable,
+  ScrollView,
+  Animated,
+  Image,
+} from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { Brand, Spacing, Shadows, BorderRadius, Fonts } from "@/constants/theme";
+import {
+  Brand,
+  Spacing,
+  Shadows,
+  BorderRadius,
+  Fonts,
+} from "@/constants/theme";
 import Icon from "@/components/Icon";
 import {
   VIBE_OPTIONS,
@@ -22,27 +35,20 @@ import RepresentativeTripShortForm, {
   CITY_PREVIEW_MAP,
 } from "./components/RepresentativeTripShortForm";
 import type { PlannerApi } from "./hooks/useTripPlanner";
+import { getApiUrl } from "@/lib/query-client";
 
 import ShinyPillBanner from "@/components/ShinyPillBanner";
 
-const DB_COMPLETED_CITIES = [
-  { id: "Paris", nameKo: "파리", nameEn: "Paris" },
-  { id: "Brussels", nameKo: "브뤼셀", nameEn: "Brussels" },
-  { id: "Madrid", nameKo: "마드리드", nameEn: "Madrid" },
-  { id: "Munich", nameKo: "뮌헨", nameEn: "Munich" },
-  { id: "London", nameKo: "런던", nameEn: "London" },
-  { id: "Tokyo", nameKo: "도쿄", nameEn: "Tokyo" },
-  { id: "Osaka", nameKo: "오사카", nameEn: "Osaka" },
-  { id: "Singapore", nameKo: "싱가포르", nameEn: "Singapore" },
-  { id: "Bangkok", nameKo: "방콕", nameEn: "Bangkok" },
-  { id: "LA", nameKo: "LA", nameEn: "Los Angeles" },
-  { id: "NewYork", nameKo: "뉴욕", nameEn: "New York" },
-  { id: "Sydney", nameKo: "시드니", nameEn: "Sydney" },
-  { id: "Barcelona", nameKo: "바르셀로나", nameEn: "Barcelona" },
-  { id: "Rome", nameKo: "로마", nameEn: "Rome" },
-  { id: "Prague", nameKo: "프라하", nameEn: "Prague" },
-  { id: "Danang", nameKo: "다낭", nameEn: "Danang" },
-];
+// ⚠️ 수정금지(승인필요) 2026-07-30 사장님 SSOT = 도시버튼 목록 = **서버가 DB 실측으로 내려주는 것만.**
+//   옛 하드코딩 16개 완전삭제 §19 = 그중 11개가 미완비였고(도쿄·오사카·싱가포르·방콕·LA·뉴욕·시드니·바르셀로나·로마·프라하·다낭)
+//   미리보기가 5개뿐이라 그 11개를 누르면 전부 "파리" 카드가 떴다(가짜 표시).
+//   지금은 GET /api/cities/ready = place_seed_raw 행수 300 이상만·완비순 = 도시를 더 발굴하면 **코드 수정 없이 자동 추가.**
+type ReadyCity = {
+  id: number;
+  nameKo: string;
+  nameEn: string;
+  country: string | null;
+};
 
 export default function InputStep({ planner }: { planner: PlannerApi }) {
   const {
@@ -58,8 +64,31 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
     handleGenerate,
   } = planner;
 
-  const [previewCityName, setPreviewCityName] = useState<string>("Paris");
-  const [previewModalVisible, setPreviewModalVisible] = useState<boolean>(false);
+  // ⚠️ 초기값을 "Paris" 로 두지 않는다(2026-07-30) = 아무 도시도 안 골랐는데 파리가 뜨던 가짜 표시 방지.
+  const [previewCityName, setPreviewCityName] = useState<string>("");
+  const [previewModalVisible, setPreviewModalVisible] =
+    useState<boolean>(false);
+
+  // 🏙️ 도시버튼 목록 = 서버 DB 실측(완비 도시만·완비순). 실패하면 빈 줄 = 가짜 도시 표시 금지.
+  const [readyCities, setReadyCities] = useState<ReadyCity[]>([]);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch(
+          new URL("/api/cities/ready", getApiUrl()).toString(),
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        if (alive && Array.isArray(data)) setReadyCities(data);
+      } catch (e) {
+        console.warn("[InputStep] 완비도시 조회 실패:", e);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   // ✨ '지금 핫한 TRIPIS 여정' 브랜드 슬로건 다이나믹 RN 애니메이션 (이모지 없음, 3D 플로팅 + 스케일 펄스)
   const sloganPulse = useRef(new Animated.Value(0)).current;
@@ -98,12 +127,16 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
     outputRange: [0.82, 1],
   });
 
-  const handleCityPress = (cityId: string) => {
+  // 도시 칩 = 그 도시를 목적지로 잡고, **미리보기가 있을 때만** 모달을 띄운다.
+  //   ⚠️ 미리보기 없는 도시(= 새로 완비된 6번째 도시 등)는 모달을 열지 않는다 = 빈 모달·엉뚱한 파리 카드 방지(2026-07-30 §19).
+  //   그 경우 목적지만 선택된 상태로 남아 사용자가 그대로 여정을 생성할 수 있다.
+  const handleCityPress = (cityNameEn: string) => {
     setFormData((prev) => ({
       ...prev,
-      destination: cityId,
+      destination: cityNameEn,
     }));
-    setPreviewCityName(cityId);
+    if (!CITY_PREVIEW_MAP[cityNameEn]) return;
+    setPreviewCityName(cityNameEn);
     setPreviewModalVisible(true);
   };
 
@@ -189,7 +222,7 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
               </LinearGradient>
             </Pressable>
 
-            {DB_COMPLETED_CITIES.map((city) => {
+            {readyCities.map((city) => {
               const isSelected = formData.destination === city.nameEn;
               return (
                 <Pressable
@@ -266,7 +299,9 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
             onPress={() => openPicker("startDate")}
           >
             <Icon name="calendar" size={16} color={Brand.primary} />
-            <Text style={[styles.dateText, { color: theme.text, fontSize: 13 }]}>
+            <Text
+              style={[styles.dateText, { color: theme.text, fontSize: 13 }]}
+            >
               {formData.startDate}
             </Text>
           </Pressable>
@@ -286,7 +321,9 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
             onPress={() => openPicker("endDate")}
           >
             <Icon name="calendar" size={16} color={Brand.primary} />
-            <Text style={[styles.dateText, { color: theme.text, fontSize: 13 }]}>
+            <Text
+              style={[styles.dateText, { color: theme.text, fontSize: 13 }]}
+            >
               {formData.endDate}
             </Text>
           </Pressable>
@@ -308,7 +345,9 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
             onPress={() => openPicker("startTime")}
           >
             <Icon name="clock" size={16} color={Brand.primary} />
-            <Text style={[styles.dateText, { color: theme.text, fontSize: 13 }]}>
+            <Text
+              style={[styles.dateText, { color: theme.text, fontSize: 13 }]}
+            >
               {formData.startTime || "09:00"}
             </Text>
           </Pressable>
@@ -328,7 +367,9 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
             onPress={() => openPicker("endTime")}
           >
             <Icon name="clock" size={16} color={Brand.primary} />
-            <Text style={[styles.dateText, { color: theme.text, fontSize: 13 }]}>
+            <Text
+              style={[styles.dateText, { color: theme.text, fontSize: 13 }]}
+            >
               {formData.endTime || "21:00"}
             </Text>
           </Pressable>

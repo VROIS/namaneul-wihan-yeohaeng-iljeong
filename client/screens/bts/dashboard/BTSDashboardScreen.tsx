@@ -174,9 +174,7 @@ export default function BTSDashboardScreen() {
       </ScrollView>
 
       {/* 하단 액션 버튼 */}
-      <View
-        style={[styles.bottomActions, { paddingBottom: 68 }]}
-      >
+      <View style={[styles.bottomActions, { paddingBottom: 68 }]}>
         <Pressable onPress={handleRestart} style={styles.secondaryBtn}>
           <Text style={styles.secondaryBtnText}>처음부터 다시</Text>
         </Pressable>
