@@ -1,7 +1,19 @@
 // ⚠️ 수정금지(승인필요) — 로그인 사용자 처리 1벌 (2026-07-27 §16 분리).
 //   server/auth.ts 가 700줄 한도(§0 기계가드)를 넘어 **사용자 조회·생성·연결·응답변환**만 여기로 옮김(순수 이동).
+import type { Request } from "express";
 import { storage } from "./storage";
+import { creditService } from "./creditService";
 import type { User } from "@shared/schema";
+
+// ⚠️ 수정금지(승인필요) — Bearer 토큰 → userId = 프로젝트 전체 1벌 (2026-07-29 §16 1벌화).
+//   토큰 형식은 server/auth.ts 가 발급하는 것과 한 쌍이다(둘을 항상 함께 바꿀 것).
+//   옛 사본 3벌(expert-routes·guide-routes·auth.ts 인라인) 중 라우트 2곳 사본 삭제 = 2026-07-29 §19.
+export function getUserIdFromReq(req: Request): string | null {
+  const m = (req.headers.authorization || "").match(
+    /^Bearer\s+simple_auth_token_v1_(.+)$/,
+  );
+  return m ? m[1] : null;
+}
 
 // ⚠️ 사장님 SSOT 2026-07-26 = 소셜별 닉네임 기본문구(카카오/구글이 이름 안 줄 때 fallback) = 1벌 상수(§0·§16).
 //   재로그인 displayName 갱신 가드가 이 집합과 비교 = 정의부·가드가 같은 소스 참조(따로 하드코딩 시 한쪽만 바뀌면 가드 조용히 깨짐 = simplify 지적).
@@ -134,7 +146,7 @@ async function findOrCreateUser(params: {
   //   안 그러면 미인증 메일이 남의 메일을 선점해, 진짜 주인이 로그인할 때 그 계정으로 들어가게 됨(§22 보안 지적).
   const username = `${provider}_${providerId.substring(0, 12)}_${Math.random().toString(36).substring(2, 6)}`;
   const emailFree = email ? !(await storage.getUserByEmail(email)) : false;
-  return storage.createUser({
+  const created = await storage.createUser({
     username,
     password: "social_login_no_password",
     displayName,
@@ -149,6 +161,18 @@ async function findOrCreateUser(params: {
     isPaid: false,
     planType: "free",
   });
+
+  // ⚠️ 수정금지(승인필요) — 가입 보너스 140 크레딧 (2026-07-29 사장님 SSOT = CLAUDE.md §9 유지).
+  //   여기가 **신규 계정이 만들어지는 유일한 지점**(구글·카카오·왓츠앱·이메일 전부 이 함수로 모임) = 보너스도 여기 1벌(§0·§16).
+  //   grantSignupBonus 는 자체적으로 중복 지급을 막으므로(기존 signup_bonus 줄 확인) 두 번 불려도 안전하다.
+  //   ⚠️ try/catch 필수 = 위 linkProvider(:52-58)와 같은 취지. 보너스 지급이 실패해도 **로그인 자체는 성공해야** 한다.
+  try {
+    await creditService.grantSignupBonus(created.id);
+  } catch (e: any) {
+    console.warn("[Auth] 가입 보너스 지급 실패(로그인은 계속):", e?.message);
+  }
+
+  return created;
 }
 
 // ⚠️ 사장님 SSOT 2026-07-15 = 모든 로그인 응답의 user 객체 = 이 함수 1벌만(§0.3·§16). 옛 5곳 제각각(name·email 누락 → 프로필 빈칸 / google·kakao 는 role 까지 누락) 폐기 §19.

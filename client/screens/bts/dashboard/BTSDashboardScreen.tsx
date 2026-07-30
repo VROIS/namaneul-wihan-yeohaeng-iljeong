@@ -28,6 +28,7 @@ import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
 import { BTSColors } from "@/constants/bts-theme";
 import { useBTS } from "@/contexts/BTSContext";
+import MainAppBottomTabBar from "@/components/MainAppBottomTabBar";
 import type { BTSStackParamList } from "@/navigation/BTSStackNavigator";
 
 import ReelCard from "./components/ReelCard";
@@ -173,9 +174,7 @@ export default function BTSDashboardScreen() {
       </ScrollView>
 
       {/* 하단 액션 버튼 */}
-      <View
-        style={[styles.bottomActions, { paddingBottom: insets.bottom + 16 }]}
-      >
+      <View style={[styles.bottomActions, { paddingBottom: 68 }]}>
         <Pressable onPress={handleRestart} style={styles.secondaryBtn}>
           <Text style={styles.secondaryBtnText}>처음부터 다시</Text>
         </Pressable>
@@ -190,6 +189,9 @@ export default function BTSDashboardScreen() {
           </LinearGradient>
         </Pressable>
       </View>
+
+      {/* 📌 메인앱 5단 하단 탭바 고정 부착 */}
+      <MainAppBottomTabBar activeTab="BTS" />
     </View>
   );
 }

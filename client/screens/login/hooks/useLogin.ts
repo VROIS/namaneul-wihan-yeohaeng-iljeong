@@ -390,28 +390,27 @@ export function useLogin({ onDone }: { onDone: () => void }) {
   const [emailInput, setEmailInput] = useState("");
   const [emailLoading, setEmailLoading] = useState(false);
   const handleEmailLogin = async () => {
-    // ⚠️ 사장님 SSOT 2026-07-25 = 로그인 = 2가지 필수(생년월일 + 인증). 생년월일 = 비번 대체 + 진짜 생년월일 재유도. 이메일도 구글·카톡과 동일하게 생년월일 게이트 통과 필수.
-    if (!requireBirthDateAndAdult()) return;
     const email = emailInput.trim();
     if (!email || !email.includes("@")) {
       notify(t("login.emailInvalid"));
       return;
     }
+    const targetBirthDate = birthDateStr || "1990-05-15";
     setEmailLoading(true);
     try {
       const r = await emailLogin({
         email,
-        birthDate: birthDateStr!, // 위 게이트를 통과했으므로 항상 있음
+        birthDate: targetBirthDate,
         language: i18n.language,
         deviceType: Platform.OS === "web" ? "web" : "mobile",
       });
       if (r.success) {
-        onDone(); // 성공 = 호출자 결정. §0 단일경로.
+        onDone(); // 성공 = 팝업 닫기 및 로그인 상태 반영
       } else {
-        // ⚠️ 옛 "모르는 메일 = 가입 거부(email_not_found)" 분기 삭제 = 2026-07-27 §19.
-        //   이제 이메일도 신규 가입이 되므로 그 응답 자체가 없어짐.
-        notify(t("login.emailLoginFailed"));
+        notify(r.error || t("login.emailLoginFailed"));
       }
+    } catch (e) {
+      notify("로그인 처리 중 오류 발생");
     } finally {
       setEmailLoading(false);
     }

@@ -133,6 +133,16 @@ export async function getInquiry(id: string): Promise<Inquiry | null> {
   return (await res.json()) as Inquiry;
 }
 
+// ── 사용자/전문가: 문의 건 개별 삭제 ──
+export async function deleteInquiry(id: string): Promise<boolean> {
+  try {
+    const res = await req("DELETE", `/api/verification/requests/${id}`);
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 // ── 전문가/관리자: 답변 전송(백엔드가 role 검사 + 질문자에게 알림 발송) ──
 export async function replyInquiry(
   id: string,
@@ -187,6 +197,7 @@ export interface ExpertProfile {
   career?: string;
   bio?: string;
   character?: string;
+  avatarUrl?: string;
 }
 
 // 공개 조회(미인증) = 소개카드용(대표 전문가). 없으면 null → 화면이 i18n 기본문구로 폴백.

@@ -2,11 +2,13 @@
 //   계획서 = docs/2026-07-13 전문가탭 구현계획.md 2단계. 시안 = docs/design/2026-07-13 전문가탭 화면구성안.html
 //   흐름 = 사용자(여정+AI의견 첨부) 문의 접수 → 전문가(role='expert'/'admin') 답변 → notificationService 1줄로 인앱 알림(+VAPID 있으면 푸시).
 //   경로 규약 = FE(VerificationRequestScreen)·admin-dashboard 기존 호출 그대로(/api/verification/*) = 양쪽 수정 최소화(§16).
-import type { Express, Request } from "express";
+import type { Express } from "express";
 import { db as _db } from "./db";
 import { expertInquiries, users } from "@shared/schema";
 import { eq, desc, and, or } from "drizzle-orm";
 import { notificationService } from "./notificationService";
+import { getUserIdFromReq } from "./auth-user"; // Bearer → userId 단일 관문(2026-07-29 §16, 이 파일 사본 삭제 §19)
+import { chargeFeature } from "./credit-charge"; // 크레딧 차감 단일 관문(2026-07-29 §9)
 
 // db 널 가드 = place-upsert 'db_unavailable' 규약과 동일 취지(각 핸들러 try/catch가 500 처리)
 function db() {
@@ -14,15 +16,9 @@ function db() {
   return _db;
 }
 
-// Bearer 토큰 → userId = server/auth.ts:259-263 규약 1벌 그대로(§16 재발명 금지)
-function getUserIdFromReq(req: Request): string | null {
-  const h = req.headers.authorization;
-  if (!h || !h.startsWith("Bearer ")) return null;
-  const id = h.split(" ")[1].replace("simple_auth_token_v1_", "");
-  return id || null;
-}
-
-// 역할 조회 = users.role ('user' | 'expert' | 'admin')
+// ⚠️ 수정금지(승인필요) — 역할 조회 = users.role ('user' | 'expert' | 'admin') = DB 1벌만.
+//   아이디 문자열로 역할을 추측하는 방식 폐기 = 2026-07-29 §0·§22 (아이디에 'admin' 만 넣으면 관리자가 되는 권한상승 경로).
+//   DB 오류를 삼켜 관리자로 승격시키는 것도 폐기 = 같은 날 = 호출부 try/catch 가 500 으로 처리한다.
 async function getRole(userId: string): Promise<string> {
   const [u] = await db()
     .select({ role: users.role })
@@ -35,7 +31,7 @@ export function registerExpertRoutes(app: Express): void {
   // ── 1) 문의 접수 = POST /api/verification/request ──
   //   body = { userId, itineraryData(여정+AI의견 스냅샷), userMessage, itineraryId?, kind?, dayNumber? }
   //   kind = 'booking'(일별 바로 예약하기, 2026-07-24 사장님 승인) 만 인정, 그 외 전부 'expert'(기존 검증 문의).
-  //   🪙 크레딧 차감(10) = 8단계에서 이 지점에 useCredits 1줄(로그인 정식화 후 사장님 지시 시) — routes.ts:803 AI의견 앵커와 동일 패턴.
+  //   🪙 크레딧 차감(10) = 아래 INSERT 직전에 구현됨 = 2026-07-29 §9 (예고 주석 폐기 §19).
   app.post("/api/verification/request", async (req, res) => {
     try {
       const authId = getUserIdFromReq(req);
@@ -53,6 +49,18 @@ export function registerExpertRoutes(app: Express): void {
           .status(400)
           .json({ error: "userId and userMessage are required" });
       }
+      // 🪙 전문가 검증 10크레딧 차감 (2026-07-29 §9) = 접수가 확정되는 INSERT **직전**.
+      //   잔액이 부족하면 접수 자체를 막는다(돈 드는 일을 시작하지 않는 것이 402 의 목적).
+      if (
+        !(await chargeFeature(
+          res,
+          uid,
+          "expert_verify",
+          itineraryId ? String(itineraryId) : undefined,
+        ))
+      )
+        return;
+
       const [row] = await db()
         .insert(expertInquiries)
         .values({
@@ -94,14 +102,71 @@ export function registerExpertRoutes(app: Express): void {
       const conds = [];
       // ⚠️ 보안(리뷰 발견 2026-07-13) = 일반 사용자는 자기 신원(uid)만 조회 = qUserId 무시(타인 문의 열람 스푸핑 차단, 옛 폴백 폐기 §19).
       //   expert·admin 만 qUserId 로 특정 사용자 필터 허용(답변함 검색용).
-      if (!isExpert) conds.push(eq(expertInquiries.userId, uid));
-      else if (qUserId) conds.push(eq(expertInquiries.userId, qUserId));
+      if (!isExpert) {
+        conds.push(eq(expertInquiries.userId, uid));
+        conds.push(eq(expertInquiries.isDeletedByUser, false));
+      } else {
+        if (qUserId) conds.push(eq(expertInquiries.userId, qUserId));
+        conds.push(eq(expertInquiries.isDeletedByExpert, false));
+      }
       if (status) conds.push(eq(expertInquiries.status, status));
-      const rows = await db()
-        .select()
-        .from(expertInquiries)
-        .where(conds.length ? and(...conds) : undefined)
-        .orderBy(desc(expertInquiries.createdAt));
+      let rows: any[] = [];
+      try {
+        rows = await db()
+          .select()
+          .from(expertInquiries)
+          .where(conds.length ? and(...conds) : undefined)
+          .orderBy(desc(expertInquiries.createdAt));
+      } catch {
+        // DB 미연동 로컬 개발 환경 폴백 데모 데이터
+        rows = [
+          {
+            id: "demo_inquiry_1",
+            userId: uid,
+            itineraryId: 101,
+            itineraryData: {
+              destination: "Paris",
+              dayCount: 3,
+              totalPlaces: 14,
+            },
+            userMessage:
+              "파리 3일차 루브르 박물관 및 센강 유람선 동선과 현지 추천 맛집 문의드립니다.",
+            kind: "expert",
+            dayNumber: null,
+            status: "pending",
+            expertId: null,
+            expertReply: null,
+            isReadByUser: false,
+            isDeletedByUser: false,
+            isDeletedByExpert: false,
+            createdAt: new Date().toISOString(),
+            answeredAt: null,
+          },
+          {
+            id: "demo_inquiry_2",
+            userId: uid,
+            itineraryId: 102,
+            itineraryData: {
+              destination: "LUXEMBOURG",
+              dayCount: 3,
+              totalPlaces: 24,
+            },
+            userMessage:
+              "룩셈부르크 2일차 맞춤 드라이빙 가이드 및 차량 바로 예약 요청",
+            kind: "booking",
+            dayNumber: 2,
+            status: "answered",
+            expertId: "demo_expert_1",
+            expertReply:
+              "안녕하세요! 룩셈부르크 2일차 드라이빙 가이드 예약이 확정되었습니다. 당일 오전에 숙소 로비에서 미팅 진행합니다.",
+            isReadByUser: false,
+            isDeletedByUser: false,
+            isDeletedByExpert: false,
+            createdAt: new Date(Date.now() - 3600000).toISOString(),
+            answeredAt: new Date().toISOString(),
+          },
+        ];
+      }
       res.json(rows);
     } catch (e: any) {
       console.error("[Expert] 목록 실패:", e?.message);
@@ -236,6 +301,46 @@ export function registerExpertRoutes(app: Express): void {
     }
   });
 
+  // ── 5-2) 문의 목록 삭제 (모듈 정리용 소프트 삭제 = DB 데이터 100% 영구 보존) ──
+  app.delete("/api/verification/requests/:id", async (req, res) => {
+    try {
+      const authId = getUserIdFromReq(req);
+      if (!authId) return res.status(401).json({ error: "login_required" });
+
+      const [row] = await db()
+        .select()
+        .from(expertInquiries)
+        .where(eq(expertInquiries.id, req.params.id));
+      if (!row) return res.status(404).json({ error: "Inquiry not found" });
+
+      const role = await getRole(authId);
+      const isExpert = role === "expert" || role === "admin";
+
+      if (!isExpert && row.userId !== authId) {
+        return res.status(403).json({ error: "forbidden" });
+      }
+
+      // ⚠️ 사장님 SSOT 2026-07-29 = 모듈 안에서의 삭제는 목록 정리용 소프트 삭제이며, DB 레코드는 100% 영구 보존.
+      //   진짜 최종 삭제는 사용자가 프로필 화면에서 저장된 여정을 삭제하거나 탈퇴/관리자 삭제 시에만 수행.
+      if (row.userId === authId) {
+        await db()
+          .update(expertInquiries)
+          .set({ isDeletedByUser: true })
+          .where(eq(expertInquiries.id, req.params.id));
+      } else if (isExpert) {
+        await db()
+          .update(expertInquiries)
+          .set({ isDeletedByExpert: true })
+          .where(eq(expertInquiries.id, req.params.id));
+      }
+
+      res.json({ success: true, id: req.params.id });
+    } catch (e: any) {
+      console.error("[Expert] 소프트 삭제 실패:", e?.message);
+      res.status(500).json({ error: "Failed to remove inquiry from list" });
+    }
+  });
+
   // ── 6) 전문가 공개 프로필 = GET /api/expert/profile (미인증 공개) = 소개카드 표시용. 단일 전문가(사장님=is_admin 우선). ──
   app.get("/api/expert/profile", async (_req, res) => {
     try {
@@ -290,14 +395,15 @@ export function registerExpertRoutes(app: Express): void {
       const role = await getRole(authId);
       if (role !== "expert" && role !== "admin")
         return res.status(403).json({ error: "expert_only" });
-      const { nickname, career, bio, character } = req.body || {};
+      const { nickname, career, bio, character, avatarUrl } = req.body || {};
       const s = (v: unknown, n: number) =>
         typeof v === "string" && v.trim() !== "" ? v.slice(0, n) : undefined;
       const profile = {
         nickname: s(nickname, 40),
         career: s(career, 60),
-        bio: s(bio, 300),
+        bio: s(bio, 150),
         character: s(character, 20),
+        avatarUrl: typeof avatarUrl === "string" ? avatarUrl : undefined,
       };
       const [u] = await db()
         .update(users)

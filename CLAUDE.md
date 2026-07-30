@@ -111,11 +111,43 @@
 - 모든 수정은 Android 앱(WebView) 환경 기준
 - 웹 브라우저 전용 수정 금지 (앱에서 테스트 불가능한 변경 금지)
 
-## 제9조: 프로모션 모드 유지
+## 제9조: 크레딧 과금 = 켬 (2026-07-29 사장님 SSOT)
 
-- `return true;` 바이패스 — 사용자 해제 선언 시까지 유지
-- 가입 보너스 140 크레딧 — 현재 설정 유지
-- 사용자가 "프로모션 종료"라고 선언하기 전까지 변경 금지
+> 정본 = [`docs/2026-07-29 결제·크레딧 구현.md`](docs/2026-07-29%20결제·크레딧%20구현.md)
+
+- **차감 = 켬.** 유료 외부호출 5지점에서 실제로 깎는다.
+  단가 = 여정생성 5 / AI의견 5 / Tripis 해설 5 / 전문가검증 10 / 일별영상 60.
+- **충전 = 켬.** Stripe €10 = 140 크레딧(100 기본 + 40 보너스).
+  충전 확정 = **스트라이프 직접 통보(웹훅) 1경로만.** 클라이언트가 부르는 충전은 존재하지 않는다.
+  (내손앱 TWA 는 복귀 페이지 JS+쿠키로 확정했으나 RN 은 앱이 브라우저가 아니라 그 페이지를 못 받는다 = 구조가 다름.)
+- **가입 보너스 140 크레딧 = 유지.** 신규 계정 생성 시 1회(`auth-user.ts` 의 `storage.createUser` 직후).
+- **관리자(`users.is_admin`) = 차감 없음. 비로그인 = 차감 없음**(개발단계 게스트 개방).
+- **카드 정보는 우리가 보관하지 않는다**(Stripe 호스티드 결제). 화면에 카드번호를 표시하지 말 것.
+- 단가·금액·면제 대상 변경 = 사장님 명시 승인.
+
+### 단일 진입점
+
+| 대상 | 유일 정본 |
+|---|---|
+| 차감 | `server/credit-charge.ts` → `chargeFeature()` (5지점 전부 이 1벌) |
+| 단가표 | `server/credit-charge.ts` → `CREDIT_COSTS` (화면은 `GET /api/credits/pricing`) |
+| 충전 | `server/payment-routes.ts` → `POST /api/payments/webhook` |
+| 장부 | `server/creditService.ts` |
+| 이중충전 차단 | DB 규칙 `credit_transactions_purchase_ref_uniq` (`WHERE type='purchase'`) |
+| 토큰 → userId | `server/auth-user.ts` → `getUserIdFromReq()` |
+| 화면 잔액·내역·충전 | `client/screens/profile/creditsApi.ts` |
+
+### ❌ 절대 금지 (= 위반 즉시 작업 중단)
+
+| # | 금지 | 이유 |
+|---|---|---|
+| 1 | 클라이언트가 부르는 충전·적립 엔드포인트 추가 | 충전 경로 2벌 = §0 위반 |
+| 2 | 라우트에서 `creditService.useCredits()` 직접 호출 | 관리자 면제·잔액부족 응답이 2벌로 갈라짐 |
+| 3 | 단가·잔액을 화면에 하드코딩 | `CREDIT_COSTS` 1벌 + API 조회만 |
+| 4 | 응답 헤더(`setHeader`/`write`) 내보낸 뒤 차감 배치 | 잔액부족(402)을 보낼 수 없게 됨 |
+| 5 | `credit_transactions.reference_id` 에 전체 UNIQUE | `usage` 줄은 여정번호를 재사용(정상) = 차감 전면 차단됨 |
+| 6 | 결제 복귀에 커스텀 스킴·딥링크 사용 | 2026-07-27 안드로이드 창닫기 함정 재발 |
+| 7 | 아이디 문자열(`admin` 포함 여부)로 역할·면제 판단 | 아무나 관리자·공짜 사용 = 권한상승 경로 |
 
 ## 제10조: 커밋/푸시는 지시 시에만
 

@@ -7,24 +7,19 @@
 //   ④ /api/guides (batch·목록·삭제)  = 보관함 (DB guides). 당분간 사장님만 = auth.ts 재사용.
 // ═══════════════════════════════════════════════════════════════════════════════
 
-import type { Express, Request } from "express";
+import type { Express } from "express";
 import { and, desc, eq } from "drizzle-orm";
 import { db as _db } from "./db";
 import { guides, prompts, voiceConfigs } from "../shared/schema";
 import { geminiVisionStream } from "./services/shared/geminiClient";
 import { tsSearch } from "./services/shared/ts-client";
+import { getUserIdFromReq } from "./auth-user"; // Bearer → userId 단일 관문(2026-07-29 §16, 이 파일 사본 삭제 §19)
+import { chargeFeature } from "./credit-charge"; // 크레딧 차감 단일 관문(2026-07-29 §9)
 
 // ⚠️ db 는 DB 미연결 시 null 가능(server/db.ts) = 라우트 진입 시 확정(bts-routes 패턴). null 이면 throw → 각 라우트 catch 가 503.
 function getDb() {
   if (!_db) throw new Error("DB unavailable");
   return _db;
-}
-
-// ⚠️ 인증 = auth.ts 토큰형식("simple_auth_token_v1_"+id) 파싱(전문가탭 패턴 재사용, §16). Bearer 없으면 null.
-function userIdFromReq(req: Request): string | null {
-  const auth = req.headers.authorization || "";
-  const m = auth.match(/^Bearer\s+simple_auth_token_v1_(.+)$/);
-  return m ? m[1] : null;
 }
 
 export function registerGuideRoutes(app: Express): void {
@@ -35,7 +30,7 @@ export function registerGuideRoutes(app: Express): void {
 
   // ① 사진 해설 = 원본 레거시 POST /api/gemini 그대로 (2026-07-20 사장님 SSOT).
   //   = body { base64Image, prompt, systemInstruction } → text/plain 청크 스트리밍(res.write).
-  //   = 크레딧 차감만 제외 = §9 프로모션 바이패스. (/api/analyze 삭제 = 2026-07-20 §19)
+  //   = 🪙 Tripis 해설 5크레딧 차감 = 2026-07-29 §9 (옛 "차감 제외 바이패스" 폐기 §19).
   app.post("/api/gemini", async (req, res) => {
     try {
       const { base64Image, prompt, systemInstruction } = req.body || {};
@@ -46,6 +41,11 @@ export function registerGuideRoutes(app: Express): void {
             "요청 본문에 필수 데이터(prompt 또는 base64Image)가 누락되었습니다.",
         });
       }
+
+      // 🪙 Tripis 해설 5크레딧 차감 (2026-07-29 §9).
+      //   ⚠️ 반드시 아래 setHeader/write **전에** 있어야 한다 = 헤더가 나가면 잔액부족(402)을 보낼 수 없다.
+      if (!(await chargeFeature(res, getUserIdFromReq(req), "guide_explain")))
+        return;
 
       res.setHeader("Content-Type", "text/plain; charset=utf-8");
       res.setHeader("Transfer-Encoding", "chunked");
@@ -165,7 +165,7 @@ export function registerGuideRoutes(app: Express): void {
   // ④ 보관함 저장 = 모듈 ArchiveService.saveToServer 가 { userId, language, guides:[...] } 로 POST.
   app.post("/api/guides/batch", async (req, res) => {
     try {
-      const reqUserId = userIdFromReq(req);
+      const reqUserId = getUserIdFromReq(req);
       const { userId, language, guides: items } = req.body || {};
       const owner = reqUserId || userId; // 인증 우선, 없으면 바디 userId(당분간 사장님만)
       if (!owner) return res.status(401).json({ error: "userId required" });
@@ -200,7 +200,7 @@ export function registerGuideRoutes(app: Express): void {
   // ④ 보관함 목록 = GET /api/guides?userId=
   app.get("/api/guides", async (req, res) => {
     try {
-      const owner = userIdFromReq(req) || (req.query.userId as string);
+      const owner = getUserIdFromReq(req) || (req.query.userId as string);
       if (!owner) return res.status(401).json({ error: "userId required" });
       const rows = await getDb()
         .select()
@@ -217,7 +217,7 @@ export function registerGuideRoutes(app: Express): void {
   // ④ 보관함 삭제 = DELETE /api/guides/:id (본인 것만).
   app.delete("/api/guides/:id", async (req, res) => {
     try {
-      const owner = userIdFromReq(req) || (req.body?.userId as string);
+      const owner = getUserIdFromReq(req) || (req.body?.userId as string);
       if (!owner) return res.status(401).json({ error: "userId required" });
       await getDb()
         .delete(guides)

@@ -5,6 +5,8 @@ import { createHash } from "node:crypto";
 import { storage } from "./storage";
 import { generateItineraryICS, type ItineraryForICS } from "./itinerary-ics";
 import { handleAiOpinionRequest } from "./services/verify/ai-opinion-handler";
+import { getUserIdFromReq } from "./auth-user"; // Bearer → userId 단일 관문(2026-07-29 §16)
+import { chargeFeature } from "./credit-charge"; // 크레딧 차감 단일 관문(2026-07-29 §9)
 
 // ⚠️ 2026-07-03 사장님 SSOT = "AI 의견" 캐싱용 여정 지문. 도시+일자+장소명 순서만 반영(이미지 등 무관 필드 제외) = 숙소변경→동선변경 시에만 달라져 재호출.
 function computeItineraryFingerprint(itinerary: any): string {
@@ -289,17 +291,19 @@ export function registerItineraryRoutes(app: Express): void {
         language: language || "ko",
       };
 
-      // 🪙 TODO(크레딧 차감) 2026-07-04 설계확정·구현보류(두 앱 병합/로그인 정식화 시점) — AI가 나중에 헤매지 않게 앵커.
-      //   여기가 유료 차감 지점 = 이 줄에 도달 = 캐시 미스(위 763줄에서 히트는 이미 return) = 실제 Gemini 유료 호출.
-      //   ✅ 재발명 금지 = 기존 자산 그대로: server/creditService.ts 의 creditService.useCredits() 1줄.
-      //   구현 시(이 handleAiOpinionRequest 호출 "직전"에 배치 = 잔액 부족이면 호출 자체 차단):
-      //     const charge = await creditService.useCredits(userId, 5, 'AI 의견', String(itineraryId));
-      //     if (!charge.success) return res.status(402).json({ error: 'insufficient_credits', message: charge.message, balance: charge.balance });
-      //   = users.credits -= 5 + credit_transactions INSERT(type:'usage', amount:-5, referenceId=여정id) 자동(공유 원장).
-      //   ⚠️ 캐시 히트(재열람)는 위에서 이미 return되어 여기 안 옴 = 재차감 없음(무료 재열람). 여정 저장(무료)도 이 라우트 안 탐.
-      //   ⚠️ 전제: userId = 실제 로그인 사용자(현재는 §9 프로모션으로 'admin' 고정). 병합/로그인 정식화 후 req 사용자 id로.
-      //   결과 본문 보관·재열람 = raw_data.verification(아래 806줄) 그대로 = 프로필 카드 탭 시 getItinerary(id)에 딸려옴($0).
-      //   상세 설계 = docs/WORKLOG.md 2026-07-04 항목 + 메모리 [[project_credit_deduction_design]].
+      // 🪙 AI 의견 5크레딧 차감 (2026-07-29 §9) = 유료 Gemini 호출 **직전**.
+      //   이 줄에 도달했다는 것 = 캐시 미스 = 실제 유료 호출. 캐시 히트(다시 보기)는 위에서 이미 return 되어 여기 안 온다 = 재차감 없음(무료 재열람).
+      //   여정 저장(무료)도 이 라우트를 타지 않는다.
+      if (
+        !(await chargeFeature(
+          res,
+          getUserIdFromReq(req),
+          "ai_opinion",
+          itineraryId ? String(itineraryId) : undefined,
+        ))
+      )
+        return;
+
       const result = await handleAiOpinionRequest(opinionInput);
       if (!result.ok || !result.response) {
         return res.status(502).json({

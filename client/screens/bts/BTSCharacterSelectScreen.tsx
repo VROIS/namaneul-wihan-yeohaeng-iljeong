@@ -31,6 +31,7 @@ import {
 import { CharacterGradients } from "@/constants/bts-theme";
 import { useBTS } from "@/contexts/BTSContext";
 import type { BTSStackParamList } from "@/navigation/BTSStackNavigator";
+import MainAppBottomTabBar from "@/components/MainAppBottomTabBar";
 
 // ⚠️ 수정금지(승인필요) — Haptics 유틸
 const haptic = (t: "light" | "medium" | "success") => {
@@ -324,6 +325,9 @@ export default function BTSCharacterSelectScreen() {
           )}
         </View>
       </View>
+
+      {/* 📌 메인앱 5단 하단 탭바 고정 부착 */}
+      <MainAppBottomTabBar activeTab="BTS" />
     </View>
   );
 }

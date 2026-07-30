@@ -1,4 +1,4 @@
-// ⚠️ 사장님 SSOT 2026-07-14 = 전문가(현지 전문가 문의) 기능 = 여정화면 위 바텀시트 BODY(모달 껍데기 = 부모 TripPlannerScreen).
+// ⚠️ 사장님 SSOT 2026-07-29 = 전문가(현지 전문가 문의) 기능 = 사용자 & 전문가 3대 미세조정(개별삭제, 선택강조, 여정정보 내장) 완벽 반영
 //   AI의견과 동일 패턴 = 별도 탭 화면(react-navigation) 폐기 §19 → 부모 모달 안에서 내부 상태머신(setView)으로 home↔detail↔profileEdit 전환.
 //   내부 전환 = react-navigation 안 씀(§16 재사용) = setView 만. 외부 = onOpenItinerary(여정 복원)·onClose(시트 닫기)·onRequestLogin(로그인).
 //   home = 역할별(전문가/관리자 = 답변함 / 사용자 = 문의작성 + 내문의함). detail = 문의상세(말풍선 + 전문가 답변입력). profileEdit = 전문가 프로필 편집.
@@ -16,6 +16,7 @@ import {
   Alert,
   Platform,
   useColorScheme,
+  Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
@@ -27,6 +28,7 @@ import {
   submitInquiry,
   saveItineraryForInquiry,
   listInquiries,
+  deleteInquiry,
   getMyRole,
   getExpertProfile,
   type Inquiry,
@@ -258,37 +260,122 @@ export default function ExpertSheet({
 
   const canSubmit = !!message.trim() && !submitting;
 
-  // ⚠️ 사장님 SSOT 2026-07-14 = 문의 카드 누름 = 그 문의의 여정을 배경에 복원(있으면) + 상세 뷰로 전환 = 실제 여정 보며 답변/확인(중간 요약카드 불필요).
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  // ⚠️ 문의 개별 삭제 핸들러
+  const handleDeleteInquiry = useCallback(
+    (id: string) => {
+      const doDelete = async () => {
+        const ok = await deleteInquiry(id);
+        if (ok) {
+          setInquiries((prev) => prev.filter((q) => q.id !== id));
+          if (selectedId === id) setSelectedId(null);
+          bumpExpertData();
+        } else {
+          notify(t("common.error"), t("expert.deleteError"));
+        }
+      };
+
+      if (Platform.OS === "web") {
+        if (
+          typeof window !== "undefined" &&
+          window.confirm("이 문의 내역을 삭제하시겠습니까?")
+        ) {
+          doDelete();
+        }
+      } else {
+        Alert.alert("문의 삭제", "이 문의 내역을 삭제하시겠습니까?", [
+          { text: t("common.cancel"), style: "cancel" },
+          {
+            text: t("common.delete"),
+            style: "destructive",
+            onPress: doDelete,
+          },
+        ]);
+      }
+    },
+    [bumpExpertData, selectedId, t],
+  );
+
+  // ⚠️ 문의 카드 누름 = 그 문의의 여정을 배경에 복원 + 상세 뷰로 전환 + 선택 강조 State
   const openInquiry = (q: Inquiry) => {
+    setSelectedId(q.id);
     if (q.itineraryId && onRestoreBackground)
       onRestoreBackground(q.itineraryId);
     setView({ kind: "detail", id: q.id });
   };
 
-  // 2026-07-24 = 사용자 목록 카드 1벌(나의 예약·내 문의함 공용 §0). 예약 카드 = Day n 병기.
+  // 2026-07-29 = 사용자 목록 카드 (선택 강조 3D 테두리 + 개별 삭제 ✕ 버튼 + 여정 정보 내장)
   const renderUserCard = (q: Inquiry) => {
+    const isSelected = selectedId === q.id;
     const st = statusStyle(q.status, theme, t);
     const dest = q.itineraryData?.destination || t("expert.inquiry");
+    const dayCount = q.itineraryData?.dayCount ?? 0;
+    const totalPlaces = q.itineraryData?.totalPlaces ?? 0;
     const unread = q.status === "answered" && !q.isReadByUser;
+
     return (
       <Pressable
         key={q.id}
         style={[
           styles.inquiryCard,
-          { backgroundColor: theme.backgroundDefault },
+          {
+            backgroundColor: isSelected ? "#EFF6FF" : theme.backgroundDefault,
+            borderWidth: isSelected ? 2 : 1,
+            borderColor: isSelected ? Brand.primary : theme.border,
+            borderRadius: 16,
+            padding: 14,
+            marginBottom: 10,
+          },
         ]}
         onPress={() => openInquiry(q)}
       >
         {unread ? <View style={styles.unreadDot} /> : null}
         <View style={styles.flex1}>
-          <Text
-            style={[styles.inquiryTitle, { color: theme.text }]}
-            numberOfLines={1}
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 8,
+              marginBottom: 4,
+              flexWrap: "wrap",
+            }}
           >
-            {q.kind === "booking" && q.dayNumber
-              ? `${dest} · Day ${q.dayNumber}`
-              : dest}
-          </Text>
+            <Text
+              style={[
+                styles.inquiryTitle,
+                {
+                  color: isSelected ? Brand.primary : theme.text,
+                  fontWeight: isSelected ? "700" : "600",
+                },
+              ]}
+              numberOfLines={1}
+            >
+              {q.kind === "booking" && q.dayNumber
+                ? `${dest} · Day ${q.dayNumber}`
+                : dest}
+            </Text>
+            {dayCount > 0 && (
+              <View
+                style={{
+                  backgroundColor: `${Brand.primary}18`,
+                  paddingHorizontal: 8,
+                  paddingVertical: 2,
+                  borderRadius: 6,
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 11,
+                    fontFamily: "Pretendard-Bold",
+                    color: Brand.primary,
+                  }}
+                >
+                  {dayCount}일 · {totalPlaces}개 장소
+                </Text>
+              </View>
+            )}
+          </View>
           <Text
             style={[styles.inquiryPreview, { color: theme.textSecondary }]}
             numberOfLines={1}
@@ -296,10 +383,32 @@ export default function ExpertSheet({
             {q.userMessage}
           </Text>
         </View>
-        <View style={[styles.badge, { backgroundColor: st.bg }]}>
-          <Text style={[styles.badgeText, { color: st.fg }]}>{st.label}</Text>
+        <View
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 6,
+            marginLeft: 8,
+          }}
+        >
+          <View style={[styles.badge, { backgroundColor: st.bg }]}>
+            <Text style={[styles.badgeText, { color: st.fg }]}>{st.label}</Text>
+          </View>
+          <Pressable
+            hitSlop={10}
+            style={{
+              padding: 4,
+              borderRadius: 12,
+              backgroundColor: isSelected ? "#DBEAFE" : "#F1F5F9",
+            }}
+            onPress={(e) => {
+              e.stopPropagation();
+              handleDeleteInquiry(q.id);
+            }}
+          >
+            <Icon name="x" size={15} color={theme.textTertiary} />
+          </Pressable>
         </View>
-        <Icon name="chevron-right" size={18} color={theme.textTertiary} />
       </Pressable>
     );
   };
@@ -460,24 +569,73 @@ export default function ExpertSheet({
             </Text>
           ) : (
             shown.map((q) => {
+              const isSelected = selectedId === q.id;
               const st = statusStyle(q.status, theme, t);
               const dest = q.itineraryData?.destination || t("expert.inquiry");
+              const dayCount = q.itineraryData?.dayCount ?? 0;
+              const totalPlaces = q.itineraryData?.totalPlaces ?? 0;
+
               return (
                 <Pressable
                   key={q.id}
                   style={[
                     styles.inquiryCard,
-                    { backgroundColor: theme.backgroundDefault },
+                    {
+                      backgroundColor: isSelected
+                        ? "#EFF6FF"
+                        : theme.backgroundDefault,
+                      borderWidth: isSelected ? 2 : 1,
+                      borderColor: isSelected ? Brand.primary : theme.border,
+                      borderRadius: 16,
+                      padding: 14,
+                      marginBottom: 10,
+                    },
                   ]}
                   onPress={() => openInquiry(q)}
                 >
                   <View style={styles.flex1}>
-                    <Text
-                      style={[styles.inquiryTitle, { color: theme.text }]}
-                      numberOfLines={1}
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 8,
+                        marginBottom: 4,
+                        flexWrap: "wrap",
+                      }}
                     >
-                      {dest}
-                    </Text>
+                      <Text
+                        style={[
+                          styles.inquiryTitle,
+                          {
+                            color: isSelected ? Brand.primary : theme.text,
+                            fontWeight: isSelected ? "700" : "600",
+                          },
+                        ]}
+                        numberOfLines={1}
+                      >
+                        {dest}
+                      </Text>
+                      {dayCount > 0 && (
+                        <View
+                          style={{
+                            backgroundColor: `${Brand.primary}18`,
+                            paddingHorizontal: 8,
+                            paddingVertical: 2,
+                            borderRadius: 6,
+                          }}
+                        >
+                          <Text
+                            style={{
+                              fontSize: 11,
+                              fontFamily: "Pretendard-Bold",
+                              color: Brand.primary,
+                            }}
+                          >
+                            {dayCount}일 · {totalPlaces}개 장소
+                          </Text>
+                        </View>
+                      )}
+                    </View>
                     <Text
                       style={[
                         styles.inquiryPreview,
@@ -488,27 +646,48 @@ export default function ExpertSheet({
                       {q.userMessage}
                     </Text>
                   </View>
-                  {/* 예약/검증 구분 배지(2026-07-24) = 답변함에서 예약 요청을 즉시 식별 */}
-                  {q.kind === "booking" ? (
-                    <View
-                      style={[styles.badge, { backgroundColor: Brand.primary }]}
-                    >
-                      <Text style={[styles.badgeText, { color: "#FFF" }]}>
-                        {t("expert.kindBooking")}
-                        {q.dayNumber ? ` D${q.dayNumber}` : ""}
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 6,
+                      marginLeft: 8,
+                    }}
+                  >
+                    {/* 예약/검증 구분 배지 */}
+                    {q.kind === "booking" ? (
+                      <View
+                        style={[
+                          styles.badge,
+                          { backgroundColor: Brand.primary },
+                        ]}
+                      >
+                        <Text style={[styles.badgeText, { color: "#FFF" }]}>
+                          {t("expert.kindBooking")}
+                          {q.dayNumber ? ` D${q.dayNumber}` : ""}
+                        </Text>
+                      </View>
+                    ) : null}
+                    <View style={[styles.badge, { backgroundColor: st.bg }]}>
+                      <Text style={[styles.badgeText, { color: st.fg }]}>
+                        {st.label}
                       </Text>
                     </View>
-                  ) : null}
-                  <View style={[styles.badge, { backgroundColor: st.bg }]}>
-                    <Text style={[styles.badgeText, { color: st.fg }]}>
-                      {st.label}
-                    </Text>
+                    <Pressable
+                      hitSlop={10}
+                      style={{
+                        padding: 4,
+                        borderRadius: 12,
+                        backgroundColor: isSelected ? "#DBEAFE" : "#F1F5F9",
+                      }}
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        handleDeleteInquiry(q.id);
+                      }}
+                    >
+                      <Icon name="x" size={15} color={theme.textTertiary} />
+                    </Pressable>
                   </View>
-                  <Icon
-                    name="chevron-right"
-                    size={18}
-                    color={theme.textTertiary}
-                  />
                 </Pressable>
               );
             })
@@ -538,10 +717,18 @@ export default function ExpertSheet({
       >
         {/* 소개 카드 = 전문가 본인 프로필(있으면) / 없으면 기본 i18n 문구 */}
         <View style={[styles.card, { backgroundColor: `${Brand.primary}0D` }]}>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {profile?.character || t("expert.introInitial")}
-            </Text>
+          <View style={[styles.avatar, { overflow: "hidden" }]}>
+            {profile?.avatarUrl ? (
+              <Image
+                source={{ uri: profile.avatarUrl }}
+                style={{ width: 44, height: 44, borderRadius: 22 }}
+                resizeMode="cover"
+              />
+            ) : (
+              <Text style={styles.avatarText}>
+                {profile?.character || t("expert.introInitial")}
+              </Text>
+            )}
           </View>
           <View style={styles.flex1}>
             <Text style={[styles.cardTitle, { color: theme.text }]}>
@@ -598,50 +785,6 @@ export default function ExpertSheet({
 
         {/* 새 문의 작성 = 목록 아래 */}
         <View style={[styles.divider, { borderTopColor: theme.border }]} />
-
-        {/* 여정 첨부 카드 */}
-        {itin ? (
-          <View
-            style={[
-              styles.attachCard,
-              { backgroundColor: theme.backgroundDefault },
-            ]}
-          >
-            <Text style={[styles.sectionSub, { color: theme.textTertiary }]}>
-              {t("expert.attachLabel")}
-            </Text>
-            <Text style={[styles.attachTitle, { color: theme.text }]}>
-              {itin.destination} · {itin.days?.length || 0}
-              {t("expert.daysPlaces", { places: totalPlaces })}
-            </Text>
-            {aiOpinion ? (
-              <View style={[styles.aiLine, { backgroundColor: "#7A5AF814" }]}>
-                <View style={styles.dot} />
-                {/* AI 보라 = 라이트 진보라/다크 연보라(다크모드 대비 확보). 점은 accent #7A5AF8 유지. */}
-                <Text
-                  style={[
-                    styles.aiText,
-                    { color: colorScheme === "dark" ? "#A78BFA" : "#5B3FD4" },
-                  ]}
-                  numberOfLines={2}
-                >
-                  {t("expert.aiAttached")}
-                </Text>
-              </View>
-            ) : null}
-          </View>
-        ) : (
-          <View
-            style={[styles.card, { backgroundColor: theme.backgroundDefault }]}
-          >
-            <Icon name="map-pin" size={18} color={theme.textTertiary} />
-            <Text
-              style={[styles.cardSub, { color: theme.textTertiary, flex: 1 }]}
-            >
-              {t("expert.noItinerary")}
-            </Text>
-          </View>
-        )}
 
         {/* 질문 입력 — 예약 모드(bookingDay)면 예약 라벨/플레이스홀더(2026-07-24) */}
         <Text

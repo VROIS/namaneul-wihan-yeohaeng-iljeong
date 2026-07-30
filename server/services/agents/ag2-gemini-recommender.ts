@@ -29,7 +29,9 @@ import { getPoolContext, recalcCrossCityZone } from "../shared/pool-radius";
  *   = rank 조건 제거 = place_seed_raw 의 city_id 별 전체 행수로 판정 (= 복잡할 이유 없음, 사장님 명시).
  * 프론트 UI 노출 X (= 사용자 명시 = 별도 안내 페이지 존재)
  */
-const READY_THRESHOLD = 300;
+// ⚠️ export 이유(2026-07-30) = 여정 플래너 상단 도시버튼(GET /api/cities/ready)이 **같은 기준 1벌**을 써야 함(§16).
+//   숫자를 그쪽에 다시 적으면 두 벌이 되어 기준이 갈린다.
+export const READY_THRESHOLD = 300;
 
 export async function isCityReady(
   destination: string,

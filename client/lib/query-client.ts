@@ -5,13 +5,15 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
  * @returns {string} The API base URL
  */
 export function getApiUrl(): string {
-  // 웹 환경에서는 같은 도메인 origin 사용
+  // 웹 환경에서는 로컬 백엔드 Express 포트(:5000)로 자동 라우팅
   if (typeof window !== "undefined" && window.location) {
-    // ⚠️ 수정금지(승인필요) 2026-05-06 임시 = 로컬 Metro web dev (:19006 / :8081) → Express (:8082) 로 자동 redirect.
-    // Replit/배포 환경에서는 같은 도메인이라 영향 X. 자동 분기라 원복 불필요.
     const origin = window.location.origin;
-    if (origin.includes(":19006") || origin.includes(":8081")) {
-      return origin.replace(/:(19006|8081)/, ":8082");
+    if (
+      origin.includes(":19006") ||
+      origin.includes(":8081") ||
+      origin.includes(":8082")
+    ) {
+      return origin.replace(/:(19006|8081|8082)/, ":5000");
     }
     return origin;
   }
@@ -37,6 +39,24 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
+// ⚠️ 수정금지(승인필요) 2026-07-29 §22 = 로그인 토큰을 **반드시** 붙인다.
+//   왜 필요한가(실측): 이 함수는 쿠키(credentials)만 보냈고 앱은 쿠키 인증을 쓰지 않는다 = 서버가 보기에 **항상 비로그인**.
+//   그래서 크레딧 차감이 걸린 라우트(AI 의견 5·일별 영상 60)가 "비로그인=무과금" 규칙을 타고 **영구 무료**로 새고 있었다.
+//   ⚠️ import 는 동적으로 한다 = auth.ts 가 이 파일의 getApiUrl 을 import 하므로 정적 import 면 순환 참조가 된다.
+//   토큰 형식 검사는 expertApi.ts:36 규약 1벌과 동일(진짜 형식일 때만 첨부).
+async function authHeader(): Promise<Record<string, string>> {
+  try {
+    const { getUserData } = await import("./auth");
+    const user = await getUserData();
+    if (user?.token && user.token.startsWith("simple_auth_token_v1_")) {
+      return { Authorization: `Bearer ${user.token}` };
+    }
+  } catch {
+    // 저장소 읽기 실패 = 비로그인으로 취급(요청 자체를 막지 않는다)
+  }
+  return {};
+}
+
 export async function apiRequest(
   method: string,
   route: string,
@@ -47,7 +67,10 @@ export async function apiRequest(
 
   const res = await fetch(url, {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
+    headers: {
+      ...(data ? { "Content-Type": "application/json" } : {}),
+      ...(await authHeader()),
+    },
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
   });

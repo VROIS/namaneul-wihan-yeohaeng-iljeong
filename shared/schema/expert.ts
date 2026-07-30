@@ -37,6 +37,8 @@ export const expertInquiries = pgTable("expert_inquiries", {
   }), // 답변한 전문가(다수 대비). SET NULL = 전문가 탈퇴해도 답변 보존(시뮬 발견 2026-07-13)
   expertReply: text("expert_reply"), // 전문가 답변 본문
   isReadByUser: boolean("is_read_by_user").default(false), // 답변을 사용자가 읽었는지(전문가 탭 배지 카운트)
+  isDeletedByUser: boolean("is_deleted_by_user").default(false), // 사용자가 전문가검증 탭 리스트에서 숨김 (DB 보존)
+  isDeletedByExpert: boolean("is_deleted_by_expert").default(false), // 전문가가 답변함 리스트에서 숨김 (DB 보존)
   createdAt: timestamp("created_at")
     .default(sql`CURRENT_TIMESTAMP`)
     .notNull(),

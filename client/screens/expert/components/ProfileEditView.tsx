@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
   Platform,
+  Image,
 } from "react-native";
 import { Colors, Brand, Spacing } from "@/constants/theme";
 import Icon from "@/components/Icon";
@@ -27,6 +28,7 @@ export default function ProfileEditView({
   t: (k: string, o?: any) => string;
   onBack: () => void;
 }) {
+  const [avatarUrl, setAvatarUrl] = useState("");
   const [character, setCharacter] = useState("");
   const [nickname, setNickname] = useState("");
   const [career, setCareer] = useState("");
@@ -34,6 +36,8 @@ export default function ProfileEditView({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const mounted = useRef(true);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
   useEffect(
     () => () => {
       mounted.current = false;
@@ -46,6 +50,7 @@ export default function ProfileEditView({
     getMyExpertProfile()
       .then(({ profile }) => {
         if (!mounted.current || !profile) return;
+        setAvatarUrl(profile.avatarUrl || "");
         setCharacter(profile.character || "");
         setNickname(profile.nickname || "");
         setCareer(profile.career || "");
@@ -64,18 +69,75 @@ export default function ProfileEditView({
     } else Alert.alert(title, msg);
   };
 
+  // 📷 웹/모바일 이미지 파일 선택 (5MB 용량 제한 + 1클릭 교체/삭제 연동)
+  const handlePickImage = () => {
+    if (Platform.OS === "web") {
+      if (typeof document !== "undefined") {
+        const input = document.createElement("input");
+        input.type = "file";
+        input.accept = "image/*";
+        input.onchange = (e: any) => {
+          const file = e.target?.files?.[0];
+          if (file) {
+            // 5MB 용량 제한 체크
+            if (file.size > 5 * 1024 * 1024) {
+              notify(
+                "이미지 용량 초과",
+                "최대 5MB 이하의 이미지 파일만 업로드할 수 있습니다.",
+              );
+              return;
+            }
+            const reader = new FileReader();
+            reader.onload = (event) => {
+              const res = event.target?.result as string;
+              if (res) setAvatarUrl(res);
+            };
+            reader.readAsDataURL(file);
+          }
+        };
+        input.click();
+      }
+    } else {
+      notify(
+        "이미지 업로드 안내",
+        "웹 환경에서 원하는 사진 파일을 바로 선택해 업로드할 수 있습니다.",
+      );
+    }
+  };
+
+  const handleDeleteImage = () => {
+    if (Platform.OS === "web") {
+      if (
+        typeof window !== "undefined" &&
+        window.confirm("등록된 프로필 사진을 삭제하시겠습니까?")
+      ) {
+        setAvatarUrl("");
+      }
+    } else {
+      Alert.alert("사진 삭제", "등록된 프로필 사진을 삭제하시겠습니까?", [
+        { text: t("common.cancel"), style: "cancel" },
+        {
+          text: t("common.delete"),
+          style: "destructive",
+          onPress: () => setAvatarUrl(""),
+        },
+      ]);
+    }
+  };
+
   const onSave = useCallback(async () => {
     if (saving) return;
     setSaving(true);
     try {
       const r = await saveExpertProfile({
+        avatarUrl: avatarUrl.trim(),
         character: character.trim(),
         nickname: nickname.trim(),
         career: career.trim(),
-        bio: bio.trim(),
+        bio: bio.trim().slice(0, 100),
       });
       if (r.ok) {
-        notify(t("expert.pfSaved"));
+        notify("프로필이 저장되었습니다.");
         onBack();
       } else if (r.error === "expert_only" || r.error === "login_required") {
         notify(t("expert.loginTitle"), t("expert.loginMsg"));
@@ -85,7 +147,7 @@ export default function ProfileEditView({
     } finally {
       if (mounted.current) setSaving(false);
     }
-  }, [saving, character, nickname, career, bio, onBack, t]);
+  }, [saving, avatarUrl, character, nickname, career, bio, onBack, t]);
 
   return (
     <View style={styles.container}>
@@ -95,7 +157,7 @@ export default function ProfileEditView({
           <Icon name="arrow-left" size={24} color={theme.text} />
         </Pressable>
         <Text style={[styles.pfTitle, { color: theme.text }]}>
-          {t("expert.editProfile")}
+          전문가 프로필 편집
         </Text>
         <View style={styles.pfBack} />
       </View>
@@ -113,69 +175,231 @@ export default function ProfileEditView({
           }}
           showsVerticalScrollIndicator={false}
         >
-          {/* 캐릭터(아바타 글자) */}
-          <Text style={[styles.pfLabel, { color: theme.text }]}>
-            {t("expert.pfCharacter")}
-          </Text>
-          <TextInput
+          {/* 🖼️ 1. 전문가 아바타 이미지 업로드 & 56x56 px 가이드 */}
+          <Text
             style={[
-              styles.pfInput,
-              { backgroundColor: theme.backgroundDefault, color: theme.text },
+              styles.pfLabel,
+              { color: theme.text, fontSize: 14, fontWeight: "700" },
             ]}
-            placeholder={t("expert.pfCharacterPh")}
-            placeholderTextColor={theme.textTertiary}
-            value={character}
-            onChangeText={setCharacter}
-            maxLength={2}
-          />
+          >
+            📷 전문가 프로필 이미지 (소개 카드 아바타)
+          </Text>
+          <Text
+            style={{
+              fontSize: 12,
+              color: theme.textTertiary,
+              marginBottom: 10,
+              lineHeight: 16,
+            }}
+          >
+            업로드하신 이미지는 시스템이 자동으로{" "}
+            <Text style={{ color: Brand.primary, fontWeight: "700" }}>
+              56 × 56 px 원형 규격
+            </Text>
+            으로 크롭/조정합니다. (최대 파일 용량:{" "}
+            <Text style={{ fontWeight: "700" }}>5MB</Text>)
+          </Text>
 
-          {/* 닉네임 */}
-          <Text style={[styles.pfLabel, { color: theme.text }]}>
-            {t("expert.pfNickname")}
+          <View
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 14,
+              marginBottom: 18,
+              backgroundColor: theme.backgroundDefault,
+              padding: 14,
+              borderRadius: 16,
+              borderWidth: 1,
+              borderColor: theme.border,
+            }}
+          >
+            {/* 56x56 px 원형 미리보기 */}
+            <View
+              style={{
+                width: 56,
+                height: 56,
+                borderRadius: 28,
+                backgroundColor: `${Brand.primary}1A`,
+                alignItems: "center",
+                justifyContent: "center",
+                overflow: "hidden",
+                borderWidth: 2,
+                borderColor: Brand.primary,
+              }}
+            >
+              {avatarUrl ? (
+                <Image
+                  source={{ uri: avatarUrl }}
+                  style={{ width: 56, height: 56 }}
+                  resizeMode="cover"
+                />
+              ) : (
+                <Text
+                  style={{
+                    fontSize: 18,
+                    fontWeight: "700",
+                    color: Brand.primary,
+                  }}
+                >
+                  {character || "가이드"}
+                </Text>
+              )}
+            </View>
+
+            {/* 교체 및 삭제 버튼 세트 */}
+            <View
+              style={{
+                flex: 1,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 8,
+              }}
+            >
+              <Pressable
+                style={{
+                  backgroundColor: Brand.primary,
+                  paddingHorizontal: 12,
+                  paddingVertical: 9,
+                  borderRadius: 10,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+                onPress={handlePickImage}
+              >
+                <Icon name="camera" size={14} color="#FFFFFF" />
+                <Text
+                  style={{ fontSize: 12, fontWeight: "700", color: "#FFFFFF" }}
+                >
+                  {avatarUrl ? "사진 교체하기" : "사진 선택/업로드"}
+                </Text>
+              </Pressable>
+
+              {avatarUrl ? (
+                <Pressable
+                  style={{
+                    backgroundColor: "#FEE2E2",
+                    paddingHorizontal: 12,
+                    paddingVertical: 9,
+                    borderRadius: 10,
+                    flexDirection: "row",
+                    alignItems: "center",
+                    gap: 6,
+                  }}
+                  onPress={handleDeleteImage}
+                >
+                  <Icon name="trash-2" size={14} color="#EF4444" />
+                  <Text
+                    style={{
+                      fontSize: 12,
+                      fontWeight: "700",
+                      color: "#EF4444",
+                    }}
+                  >
+                    사진 삭제
+                  </Text>
+                </Pressable>
+              ) : null}
+            </View>
+          </View>
+
+          {/* 2. 닉네임 */}
+          <Text
+            style={[
+              styles.pfLabel,
+              { color: theme.text, fontSize: 14, fontWeight: "700" },
+            ]}
+          >
+            닉네임 (소개 타이틀)
           </Text>
           <TextInput
             style={[
               styles.pfInput,
               { backgroundColor: theme.backgroundDefault, color: theme.text },
             ]}
-            placeholder={t("expert.pfNicknamePh")}
+            placeholder="예: 파리 빵돌이"
             placeholderTextColor={theme.textTertiary}
             value={nickname}
             onChangeText={setNickname}
             maxLength={40}
           />
 
-          {/* 경력 */}
-          <Text style={[styles.pfLabel, { color: theme.text }]}>
-            {t("expert.pfCareer")}
+          {/* 3. 경력 및 대표 칭호 */}
+          <Text
+            style={[
+              styles.pfLabel,
+              { color: theme.text, fontSize: 14, fontWeight: "700" },
+            ]}
+          >
+            경력 및 칭호
           </Text>
           <TextInput
             style={[
               styles.pfInput,
               { backgroundColor: theme.backgroundDefault, color: theme.text },
             ]}
-            placeholder={t("expert.pfCareerPh")}
+            placeholder="예: 파리 현지 35년 베테랑 가이드"
             placeholderTextColor={theme.textTertiary}
             value={career}
             onChangeText={setCareer}
             maxLength={60}
           />
 
-          {/* 자기소개 */}
-          <Text style={[styles.pfLabel, { color: theme.text }]}>
-            {t("expert.pfBio")}
+          {/* ✍️ 4. 자기소개 (카드 노출 글자 수 100자 이내 제한 및 실시간 카운터) */}
+          <View
+            style={{
+              flexDirection: "row",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginTop: 6,
+              marginBottom: 4,
+            }}
+          >
+            <Text
+              style={[
+                styles.pfLabel,
+                {
+                  color: theme.text,
+                  fontSize: 14,
+                  fontWeight: "700",
+                  marginTop: 0,
+                },
+              ]}
+            >
+              자기소개 (카드 노출 100자 제한)
+            </Text>
+            <Text
+              style={{
+                fontSize: 12,
+                fontWeight: "600",
+                color: bio.length > 90 ? "#EF4444" : Brand.primary,
+              }}
+            >
+              [{bio.length} / 100자]
+            </Text>
+          </View>
+          <Text
+            style={{ fontSize: 12, color: theme.textTertiary, marginBottom: 8 }}
+          >
+            여행자 소개 카드에 최대 3줄(100자 이내)로 노출되는 핵심
+            소개글입니다.
           </Text>
           <TextInput
             style={[
               styles.pfInput,
               styles.pfInputMultiline,
-              { backgroundColor: theme.backgroundDefault, color: theme.text },
+              {
+                backgroundColor: theme.backgroundDefault,
+                color: theme.text,
+                minHeight: 80,
+                textAlignVertical: "top",
+              },
             ]}
-            placeholder={t("expert.pfBioPh")}
+            placeholder="여행자에게 보여줄 소개글을 100자 이내로 입력하세요."
             placeholderTextColor={theme.textTertiary}
             value={bio}
-            onChangeText={setBio}
-            maxLength={300}
+            onChangeText={(text) => setBio(text.slice(0, 100))}
+            maxLength={100}
             multiline
           />
 
