@@ -50,6 +50,20 @@ const HANDLE_W = 50;
 const HANDLE_H = Math.min(SW * 0.35, 140);
 const BTN_AREA_W = Math.min(SW * 0.72, 360);
 
+// ⚠️ 수정금지(승인필요) 2026-07-30 = 아미봉 구체 안 글자에 **똑같이** 적용하는 값 1벌(§0).
+//   여러 곳에 흩어 적으면 나중에 한 곳만 고치고 나머지를 빠뜨린다(드리프트).
+//   한 줄 유지 + 넘치면 스스로 축소 + 폰 글자확대 상한.
+//   ⚠️ **작아지는 하한은 `minimumFontSize`(실제 크기)로 준다.**
+//     `minimumFontScale`(배율)은 안드로이드에 **전달조차 되지 않아 무시된다**
+//     (RN 소스 conversions.h 가 안드로이드로 보내는 값 목록에 없음 = 하한이 4dp 로 떨어져
+//      글자가 개미만 해진다). 두 OS 가 같게 동작하도록 실제 크기로 지정한다.
+const FIT_ONE_LINE = {
+  numberOfLines: 1,
+  adjustsFontSizeToFit: true,
+  minimumFontSize: 8, // 이보다 작아지지 않는다(가장 작은 글자가 9pt 라 8 이 하한)
+  maxFontSizeMultiplier: 1.2,
+} as const;
+
 // ⚠️ 수정금지(승인필요) — Haptics
 const haptic = (t: "light" | "medium" | "success") => {
   try {
@@ -365,11 +379,20 @@ export function BTSLandingScreen() {
                     end={{ x: 1, y: 1 }}
                   />
                 </Animated.View>
-                {/* 서버가 답하기 전에는 도시·D-Day 를 비워둔다 = 거짓 숫자 대신 빈 칸(2026-07-30 §19) */}
-                <Text style={styles.cityLabel}>{city}</Text>
-                <Text style={styles.dDay}>{city ? `D-${dDay}` : ""}</Text>
+                {/* ⚠️ 수정금지(승인필요) 2026-07-30 사장님 지시 = **아미봉 그릇(칸 크기·위치)은 한 픽셀도 안 바꾼다**
+                    = 3일 연구로 맞춘 최적 크기. 대신 **글자가 그릇에 맞춰 들어가게** 만들었다(FIT_ONE_LINE).
+                    사고: 폰 설정에서 글자를 키우면 안드로이드는 **글자와 자간을 함께** 키우는데
+                    구체는 화면 폭에만 묶여 안 커진다 → 글자가 넘쳐 잘리고 두 줄로 쪼개졌다. */}
+                <Text style={styles.cityLabel} {...FIT_ONE_LINE}>
+                  {city}
+                </Text>
+                <Text style={styles.dDay} {...FIT_ONE_LINE}>
+                  {city ? `D-${dDay}` : ""}
+                </Text>
                 <View style={styles.inputArea}>
-                  <Text style={styles.inputLabel}>DATE OF BIRTH</Text>
+                  <Text style={styles.inputLabel} {...FIT_ONE_LINE}>
+                    DATE OF BIRTH
+                  </Text>
                   <TextInput
                     style={styles.input}
                     placeholder="DD / MM / YYYY"
@@ -380,6 +403,7 @@ export function BTSLandingScreen() {
                     keyboardType="number-pad"
                     returnKeyType="done"
                     maxLength={14}
+                    maxFontSizeMultiplier={1.2}
                   />
                 </View>
               </BlurView>
@@ -520,12 +544,18 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     borderRadius: GLOBE_SIZE / 2,
   },
+  // ⚠️ 수정금지(승인필요) 2026-07-30 = `textAlign:"center"` 는 **빠져 있던 것을 채운 것**이다.
+  //   부모의 alignItems:center 만으로는 **자식이 부모보다 넓어지는 순간 왼쪽 기준 넘침**이 되어
+  //   글자가 한쪽으로 쏠려 앞글자가 잘렸다(사장님 실기기 관찰). 크기·위치는 그대로다.
+  //   ⚠️ 자간(letterSpacing)은 안드로이드에서 **마지막 글자 뒤에도 붙어** 폭이 넓게 잡힌다 = 쏠림을 키운다.
   cityLabel: {
     fontSize: 10,
     fontFamily: "Pretendard-Bold",
     letterSpacing: 4,
     color: "rgba(255,255,255,0.4)",
     marginBottom: 2,
+    textAlign: "center",
+    alignSelf: "stretch",
   },
   dDay: {
     fontSize: 44,
@@ -533,6 +563,8 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     letterSpacing: -2,
     marginBottom: 16,
+    textAlign: "center",
+    alignSelf: "stretch",
   },
   inputArea: { width: "75%", alignItems: "center" },
   inputLabel: {
@@ -541,6 +573,8 @@ const styles = StyleSheet.create({
     letterSpacing: 3,
     color: "rgba(255,255,255,0.4)",
     marginBottom: 6,
+    textAlign: "center",
+    alignSelf: "stretch",
   },
   input: {
     width: "100%",
@@ -549,9 +583,13 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.15)",
     borderRadius: 50,
     paddingVertical: 10,
-    paddingHorizontal: 20,
+    // ⚠️ 수정금지(승인필요) 2026-07-30 = 좌우 여백 20→10, 글자 13→12.
+    //   사유: 칸 안쪽 폭이 95px 인데 "DD / MM / YYYY" 가 99px = **4px 모자라 마지막 Y 가 잘렸다**(실측).
+    //   입력칸은 글자가 스스로 작아지는 기능(adjustsFontSizeToFit)이 안 먹으므로 이렇게 맞춘다.
+    //   ⚠️ **칸 자체의 폭·높이·둥근 정도는 그대로**(아미봉 그릇은 안 건드림).
+    paddingHorizontal: 10,
     textAlign: "center",
-    fontSize: 13,
+    fontSize: 12,
     color: "#FFFFFF",
     fontFamily: "Pretendard-Bold",
   },
