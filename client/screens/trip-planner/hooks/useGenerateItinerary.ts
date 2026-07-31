@@ -206,14 +206,31 @@ export function useGenerateItinerary({
       clearInterval(interval);
       console.error("Failed to generate itinerary:", error);
 
+      // ⚠️ 수정금지(승인필요) 2026-07-31 사장님 지시 = **왜 안 됐는지 화면에 그대로 보여준다.**
+      //   사고: 옛것은 어떤 이유든 전부 "다시 시도해 주세요" 한 줄로 뭉갰다.
+      //   그래서 **크레딧이 없어서 막힌 것**을 아무도 알 수 없었고,
+      //   사장님이 폰에서 실패를 겪고도 원인을 못 찾아 "배선을 건드렸나" 하고 한참 헤맸다(실측).
+      //   서버는 이미 사실을 정확히 보내준다(credit-charge.ts = 남은 크레딧·필요 크레딧까지).
+      //   화면이 그걸 버리고 있었을 뿐이다 = 이제 그대로 옮겨 보여준다(§11 = 사실을 보게).
       const message = error?.message || "";
-      Alert.alert(
-        t("trip.generateFailed"),
-        message.includes("일정 검증")
-          ? t("trip.validationFailed")
-          : t("trip.retryHint"),
-        [{ text: t("common.confirm") }],
-      );
+      let detail: string;
+      if (message.includes("일정 검증")) {
+        detail = t("trip.validationFailed");
+      } else if (message.includes("insufficient_credits")) {
+        // 서버가 함께 보낸 숫자를 꺼내 그대로 보여준다(못 꺼내면 물음표)
+        const m = message.match(
+          /"balance":\s*(-?\d+)[\s\S]*?"required":\s*(\d+)/,
+        );
+        detail = t("trip.creditShort", {
+          balance: m?.[1] ?? "?",
+          required: m?.[2] ?? "?",
+        });
+      } else {
+        detail = t("trip.retryHint");
+      }
+      Alert.alert(t("trip.generateFailed"), detail, [
+        { text: t("common.confirm") },
+      ]);
       setScreen("Input");
     }
   };

@@ -161,7 +161,8 @@
     "transitPublic": "Public transit",
     "drivingGuide": "Driving guide",
     "btsBanner": "BTS Concert Tour Planner",
-    "btsBannerSub": "Create a concert city journey with member vibes"
+    "btsBannerSub": "Create a concert city journey with member vibes",
+    "creditShort": "Not enough credits ({{balance}} left / {{required}} needed)"
   },
   "bts": {
     "title": "My BTS Tour",

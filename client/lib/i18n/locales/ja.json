@@ -161,7 +161,8 @@
     "transitPublic": "公共交通機関",
     "drivingGuide": "ドライビングガイド",
     "btsBanner": "BTSコンサートツアープランナー",
-    "btsBannerSub": "メンバーのバイブでコンサート都市の旅を作ろう"
+    "btsBannerSub": "メンバーのバイブでコンサート都市の旅を作ろう",
+    "creditShort": "クレジットが足りません（残り {{balance}} / 必要 {{required}}）"
   },
   "bts": {
     "title": "マイBTSツアー",

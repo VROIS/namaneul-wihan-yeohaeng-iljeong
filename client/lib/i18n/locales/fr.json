@@ -161,7 +161,8 @@
     "transitPublic": "Transports en commun",
     "drivingGuide": "Guide chauffeur",
     "btsBanner": "Planificateur BTS Concert Tour",
-    "btsBannerSub": "Créez un voyage concert avec l'ambiance de votre membre préféré"
+    "btsBannerSub": "Créez un voyage concert avec l'ambiance de votre membre préféré",
+    "creditShort": "Crédits insuffisants ({{balance}} restants / {{required}} requis)"
   },
   "bts": {
     "title": "Mon BTS Tour",

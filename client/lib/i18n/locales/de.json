@@ -161,7 +161,8 @@
     "transitPublic": "Öffentliche Verkehrsmittel",
     "drivingGuide": "Fahrer-Guide",
     "btsBanner": "BTS Konzerttour-Planer",
-    "btsBannerSub": "Erstelle eine Konzertstadt-Reise im Stil deines Lieblings-Members"
+    "btsBannerSub": "Erstelle eine Konzertstadt-Reise im Stil deines Lieblings-Members",
+    "creditShort": "Nicht genug Guthaben ({{balance}} übrig / {{required}} nötig)"
   },
   "bts": {
     "title": "Meine BTS Tour",
