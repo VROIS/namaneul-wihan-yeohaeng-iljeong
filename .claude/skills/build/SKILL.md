@@ -63,6 +63,11 @@ node scripts/verify-before-commit.mjs
 | 기능이 크게 바뀜 | `version` 을 올림(예 1.0.2 → 1.0.3), `ios.buildNumber` = "1" |
 | 같은 기능 재빌드 | `version` 그대로, `ios.buildNumber` 만 +1 |
 
+🔴 **`version` 을 올렸으면 `runtimeVersion` 도 같은 값으로 올려라**(2026-07-31 추가).
+`runtimeVersion` 은 `{"policy":"appVersion"}` 이 아니라 **숫자를 직접 적는 방식**이다
+(이 프로젝트는 bare 로 인식돼 policy 를 못 씀). = **자동으로 안 따라간다.**
+안 올리면 새로 구운 앱이 옛 번호표를 달고 나와 무선 업데이트가 어긋난다.
+
 ⚠️ **내손앱이 이미 올린 버전보다 높아야 한다**(같은 앱 번호를 쓰므로).
 2026-07-31 실측 = 내손앱 최종 `1.0.1`.
 
