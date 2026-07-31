@@ -31,8 +31,25 @@ export function useProfile() {
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? "light"];
   const insets = useSafeAreaInsets();
-  const headerHeight = useHeaderHeight();
-  const tabBarHeight = useBottomTabBarHeight();
+  // ⚠️ 수정금지(승인필요) 2026-07-31 = **화면 밖에서 열려도 안 터지게** 한 것.
+  //   사고: 이 화면을 BTS 위에 창(모달)으로 띄우면 위쪽 제목줄·아래쪽 탭이 아예 없어서
+  //   "그 높이가 얼마냐"고 물어보는 순간 앱이 죽었다
+  //   ("Couldn't find the header height", 사장님 실증 2026-07-31).
+  //   이 값들은 **여백을 얼마나 줄지 계산하는 데만** 쓰인다. 없으면 0 = 여백 없음 = 화면은 정상.
+  let headerHeight = 0;
+  try {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    headerHeight = useHeaderHeight();
+  } catch {
+    headerHeight = 0; // 창으로 열린 경우 = 제목줄이 없음
+  }
+  let tabBarHeight = 0;
+  try {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    tabBarHeight = useBottomTabBarHeight();
+  } catch {
+    tabBarHeight = 0; // 창으로 열린 경우 = 아래 탭이 없음
+  }
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { t, i18n } = useTranslation();
@@ -213,10 +230,19 @@ export function useProfile() {
   const handleLogout = async () => {
     await clearAuth(); // clearAuth 가 전역 판정에 자동 알림
     setSavedTrips([]);
-    navigation.reset({
-      index: 0,
-      routes: [{ name: "Main" }],
-    });
+    // ⚠️ 수정금지(승인필요) 2026-07-31 = **창으로 열렸을 때는 화면을 갈아엎지 않는다**(§22 검증 지적).
+    //   사고: 이 화면이 BTS 위에 창으로 떠 있을 때 로그아웃을 누르면
+    //   `reset` 이 **뒤의 BTS 까지 통째로 날려** 메인앱만 남겼다
+    //   = "BTS 를 떠나지 않는다"는 이번 작업의 대전제가 깨진다.
+    //   창으로 열린 경우 = 화면 소속이 없다(위 headerHeight 가 0) → 그때는 그냥 로그아웃만 한다.
+    //   (탭에서 평소처럼 열었을 때는 옛날 그대로 메인으로 리셋 = 기능 손상 0)
+    const openedAsSheet = headerHeight === 0 && tabBarHeight === 0;
+    if (!openedAsSheet) {
+      navigation.reset({
+        index: 0,
+        routes: [{ name: "Main" }],
+      });
+    }
   };
 
   const currentLang =

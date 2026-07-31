@@ -43,8 +43,20 @@ export function useTripPlanner() {
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   // 🗂️ 2026-07-03 = 저장여정 복원용 route param(itineraryId). 프로필 나의여정 카드 탭 시 전달됨.
-  const route = useRoute<RouteProp<MainTabParamList, "Home">>();
-  const restoreItineraryId = route.params?.itineraryId;
+  // ⚠️ 수정금지(승인필요) 2026-07-31 = **화면 밖에서 열려도 안 터지게** 한 것.
+  //   사고: 이 화면을 BTS 위에 창(모달)으로 띄우면 "지금 어느 화면이냐"를 물어볼 곳이 없어
+  //   `useRoute()` 가 그 자리에서 앱을 죽였다("Couldn't find a route object", 2026-07-30 실측).
+  //   여기서 쓰는 값은 **저장여정 복원 번호 하나뿐**이고, 창으로 열 때는 그 번호가 애초에 없다.
+  //   그래서 물어볼 곳이 없으면 조용히 **없음**으로 두고 화면은 정상 동작하게 한다.
+  //   (탭에서 평소처럼 열 때는 옛날 그대로 번호를 받는다 = 저장여정 복원 기능 손상 0)
+  let restoreItineraryId: number | undefined;
+  try {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const route = useRoute<RouteProp<MainTabParamList, "Home">>();
+    restoreItineraryId = route.params?.itineraryId;
+  } catch {
+    restoreItineraryId = undefined; // 창으로 열린 경우 = 복원할 여정이 없음
+  }
   const [screen, setScreen] = useState<ScreenState>("Input");
   const [loadingStep, setLoadingStep] = useState(0);
   const [itinerary, setItinerary] = useState<Itinerary | null>(null);

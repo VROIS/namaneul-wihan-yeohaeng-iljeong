@@ -35,6 +35,15 @@ interface MapToggleContextType {
   loginRequestedAt: number | null;
   requestLogin: () => void;
   clearLoginRequest: () => void;
+  // ⚠️ 사장님 SSOT 2026-07-31 = BTS 미니앱에서 하단 5버튼을 누르면 **메인앱이 위로 스르륵 올라온다**(화면 절반).
+  //   왜 이 방식인가: 옛것(화면 자체를 모달로 바꿔 띄우기)은 **안드로이드에서 BTS 가 완전히 사라졌다**
+  //   (아이폰만 정상이라 두 OS 가 달랐다) = 삭제 §19.
+  //   지금은 전문가·AI의견 오버레이와 **똑같은 방식**(SnapSheet) = 화면을 바꾸지 않고 그 위에 얹기만 한다
+  //   → 뒤의 BTS 가 그대로 살아 있고, 손가락(마우스)으로 내리거나 닫을 수 있다. 두 OS 가 같게 동작(§16 재사용).
+  mainAppRequestedAt: number | null;
+  mainAppOpenTab: "Home" | "Profile" | null;
+  requestMainApp: (tab?: "Home" | "Profile") => void;
+  clearMainAppRequest: () => void;
   // ⚠️ 사장님 SSOT 2026-07-25(세션2) = 로그인 성공/로그아웃 등 인증상태 변경 신호(expertDataChangedAt 패턴 복제). 로그인 팝업은 navigation focus를 안 바꿔 프로필(useFocusEffect)이 재조회 안 함 → 이 신호로 useProfile 등이 재조회 = 로그인 후 즉시 인증반영.
   authChangedAt: number | null;
   // ⚠️ 수정금지(승인필요) — 사장님 SSOT 2026-07-27 = **로그인 여부 판정은 이 1곳만**(§0·§16).
@@ -68,6 +77,10 @@ const MapToggleContext = createContext<MapToggleContextType>({
   loginRequestedAt: null,
   requestLogin: () => {},
   clearLoginRequest: () => {},
+  mainAppRequestedAt: null,
+  mainAppOpenTab: null,
+  requestMainApp: () => {},
+  clearMainAppRequest: () => {},
   authChangedAt: null,
   authUser: null,
   isAuthed: false,
@@ -95,6 +108,12 @@ export function MapToggleProvider({ children }: { children: React.ReactNode }) {
     null,
   );
   const [loginRequestedAt, setLoginRequestedAt] = useState<number | null>(null);
+  const [mainAppRequestedAt, setMainAppRequestedAt] = useState<number | null>(
+    null,
+  );
+  const [mainAppOpenTab, setMainAppOpenTab] = useState<
+    "Home" | "Profile" | null
+  >(null);
   const [authChangedAt, setAuthChangedAt] = useState<number | null>(null);
   // 인증 상태 1벌 = 앱 시작 시 1회 + 인증변경 신호마다 저장소에서 다시 읽음(네트워크 없음).
   const [authUser, setAuthUser] = useState<UserData | null>(null);
@@ -162,6 +181,14 @@ export function MapToggleProvider({ children }: { children: React.ReactNode }) {
   const clearLoginRequest = useCallback(() => {
     setLoginRequestedAt(null);
   }, []);
+  // ⚠️ 2026-07-31 = BTS 미니앱에서 메인앱을 **위로 스르륵 올리는** 신호(로그인 팝업과 같은 형식 §16).
+  const requestMainApp = useCallback((tab?: "Home" | "Profile") => {
+    setMainAppOpenTab(tab ?? "Home");
+    setMainAppRequestedAt(Date.now());
+  }, []);
+  const clearMainAppRequest = useCallback(() => {
+    setMainAppRequestedAt(null);
+  }, []);
   // ⚠️ 2026-07-25(세션2) = 로그인 성공/로그아웃 시 호출 → 구독자(useProfile 등)가 인증 재조회(navigation focus 안 바뀌어도 즉시 반영).
 
   return (
@@ -186,6 +213,10 @@ export function MapToggleProvider({ children }: { children: React.ReactNode }) {
         loginRequestedAt,
         requestLogin,
         clearLoginRequest,
+        mainAppRequestedAt,
+        mainAppOpenTab,
+        requestMainApp,
+        clearMainAppRequest,
         authChangedAt,
         authUser,
         isAuthed: !!authUser,

@@ -21,6 +21,10 @@ expo-env.d.ts
 *.p12
 *.key
 *.mobileprovision
+# ⚠️ 2026-07-31 = 애플 서명 파일·비밀번호는 **절대 올리지 않는다.**
+#   유출되면 남이 우리 이름으로 앱을 만들 수 있다. 파일은 이 PC 에만 둔다.
+ios-credentials/
+credentials.json
 
 # Metro
 .metro-health-check*

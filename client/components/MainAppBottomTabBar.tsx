@@ -39,6 +39,7 @@ export default function MainAppBottomTabBar({
     expertDataChangedAt,
     requestLogin,
     isAuthed,
+    requestMainApp,
   } = useMapToggle();
 
   const [expertBadge, setExpertBadge] = useState(0);
@@ -61,27 +62,32 @@ export default function MainAppBottomTabBar({
   //   헛되이 빠지는** 경로였다 = 삭제 §19. 메인앱 탭(MainTabNavigator)과 **같은 규칙 1벌**.
   const needsItinerary = !currentItinerary;
 
+  // ⚠️ 수정금지(승인필요) 2026-07-31 사장님 SSOT = **BTS 를 떠나지 않는다.**
+  //   옛것(`navigate("Main")` = 화면을 메인앱으로 갈아끼움) 완전삭제 §19.
+  //   사고: 그 방식은 **안드로이드에서 BTS 가 통째로 사라졌다**(아이폰만 정상 = 두 OS 가 달랐다).
+  //   지금은 화면을 바꾸지 않고 **메인앱을 위로 스르륵 올린다**(전문가·AI의견 모달과 같은 방식 §16).
+  //   → 뒤의 BTS 가 살아 있고 손가락으로 내릴 수 있다 = **두 앱이 공존**.
   const handleTabPress = (key: string) => {
     switch (key) {
       case "Home":
-        rootNavigation.navigate("Main");
+        requestMainApp("Home");
         break;
       case "Map":
         if (needsItinerary) return; // 여정 없음 = 무동작(비활성)
-        rootNavigation.navigate("Main");
+        requestMainApp("Home");
         setTimeout(() => requestAiOpinion(), 150);
         break;
       case "Verify":
         if (needsItinerary) return; // 여정 없음 = 무동작(비활성)
         if (isAuthed) {
-          rootNavigation.navigate("Main");
+          requestMainApp("Home");
           setTimeout(() => requestExpert(), 150);
         } else {
           requestLogin();
         }
         break;
       case "Profile":
-        (rootNavigation as any).navigate("Main", { screen: "Profile" });
+        requestMainApp("Profile");
         break;
       case "Guide":
         if (isAuthed) {

@@ -1,0 +1,36 @@
+# ⚠️ 수정금지(승인필요) 2026-07-31 = EAS 빌드에 **올릴 것/말 것**을 정하는 파일.
+#
+# 왜 필요한가
+#   이 파일이 없으면 EAS 는 `.gitignore` 를 그대로 따른다. 그런데 우리 `.gitignore` 는
+#   `*.json` 을 통째로 막고 있어서 **애플 서명 설정(credentials.json)이 빌드 서버로 안 갔다.**
+#   그래서 서명을 찾지 못해 빌드가 시작 48초 만에 죽었다(2026-07-31 실측).
+#
+# ⚠️ 여기 적은 것은 **EAS 빌드 서버에만** 올라간다. git(공개 저장소)에는 여전히 안 올라간다.
+#   두 곳이 별개라는 점이 헷갈리기 쉬우니 주의.
+
+# ── 빌드에 필요 없는 것 = 올리지 않는다(용량·시간 절약) ──
+# ⚠️ `.expo/` 를 반드시 뺀다 = 2026-07-31 실측 원인.
+#   이 폴더는 **내 PC 에서 만든 임시 캐시**다. 그대로 올리면 빌드 서버가 그 안에
+#   아이콘 이미지를 새로 만들려다 "권한 없음(EACCES)"으로 죽는다(빌드 50초 만에 실패).
+.expo
+.expo/
+.expo/**
+node_modules/
+dist/
+server_dist/
+.git/
+docs/
+scripts/
+server/
+migrations/
+attached_assets/
+*.log
+*.apk
+*.aab
+
+# ── 애플 서명 = 빌드에 **반드시** 필요하다 = 올린다 ──
+# (git 에는 .gitignore 가 계속 막고 있으므로 공개되지 않는다)
+!credentials.json
+!ios-credentials/
+!ios-credentials/dist.p12
+!ios-credentials/dist.mobileprovision

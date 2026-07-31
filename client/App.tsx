@@ -28,6 +28,7 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { MapToggleProvider } from "@/contexts/MapToggleContext";
 import LoginSheet from "@/screens/login/LoginSheet";
 import ExpertOverlay from "@/screens/expert/ExpertOverlay";
+import MainAppOverlay from "@/screens/bts/MainAppOverlay";
 
 // Prevent auto hide while fonts are loading
 SplashScreen.preventAutoHideAsync();
@@ -90,6 +91,10 @@ export default function App() {
                   <LoginSheet />
                   {/* ⚠️ 사장님 SSOT 2026-07-25 = 전문가 오버레이(전역 1벌). requestExpert() 신호로 어느 화면(일정·AI의견·프로필·Tripis)에서든 열림 = 전문가는 언제든 답변(§16·§19 옛 TripPlanner 내부 렌더 폐기). NavigationContainer 자식 = 여정 복원 navigation 의존. */}
                   <ExpertOverlay />
+                  {/* ⚠️ 사장님 SSOT 2026-07-31 = BTS 미니앱 위로 **메인앱을 스르륵 올리는 창**(전역 1벌).
+                      전문가·AI의견 오버레이와 **같은 자리·같은 방식** = 화면이 무엇이든 그 위에 뜬다.
+                      BTS 하단 5버튼이 requestMainApp() 신호를 보내면 열린다 = 두 앱이 공존. */}
+                  <MainAppOverlay />
                 </NavigationContainer>
                 <StatusBar style="auto" />
               </KeyboardProvider>

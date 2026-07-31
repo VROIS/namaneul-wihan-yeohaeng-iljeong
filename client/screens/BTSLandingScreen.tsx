@@ -44,6 +44,8 @@ import {
   type SocialProvider,
 } from "@/lib/auth-social";
 import { getApiUrl } from "@/lib/query-client";
+// 로그인 여부 = 메인앱과 **같은 판정 1벌**(§16). 두 곳이 갈리면 이중 인증이 재발한다.
+import { useMapToggle } from "@/contexts/MapToggleContext";
 // ⚠️ 크기·색·모양 값은 같은 폴더 bts/bts-landing-styles.ts 1곳에 모아 둔다(§0 700줄 한도로 분리, 2026-07-31).
 import {
   styles,
@@ -124,6 +126,13 @@ export function BTSLandingScreen() {
   }, []);
 
   const { city, dDay } = concertInfo;
+
+  // ⚠️ 수정금지(승인필요) 2026-07-31 사장님 지시 = **이미 로그인했으면 이 창을 건너뛴다.**
+  //   사고: 메인앱에서 로그인하고 BTS 로 들어와도 **또 로그인하라고 했다**(이중 인증).
+  //   반대 방향(BTS 에서 로그인 → 메인앱이 알아봄)은 이미 잘 되고 있었다 = 한쪽만 빠져 있던 것.
+  //   판정은 메인앱과 **같은 것 1벌**(MapToggleContext 의 isAuthed) = 두 곳이 갈릴 수 없다(§16).
+  //   ⚠️ 화면이 한 번 그려진 뒤 넘긴다(replace) = 뒤로 눌러도 이 창으로 안 돌아온다.
+  const { isAuthed } = useMapToggle();
 
   // ⚠️ 수정금지(승인필요) — Google OAuth hook (기존 LoginScreen 패턴 그대로)
   const [googleRequest, googleResponse, googlePromptAsync] =
@@ -261,6 +270,17 @@ export function BTSLandingScreen() {
       }); // ⚠️ 수정금지(승인필요) — 공연 상세 전달
     }, 700);
   }, [city, concertInfo]);
+
+  // ⚠️ 수정금지(승인필요) 2026-07-31 사장님 지시 = **이미 로그인했으면 인증창을 건너뛰고 지구본으로.**
+  //   ⚠️ **공연 정보가 도착한 뒤에** 넘긴다(`city` 가 채워질 때까지 기다림).
+  //     안 그러면 다음 화면에 도시명·D-Day 가 빈 값으로 넘어간다(2026-07-30 같은 사고 재발).
+  //   한 번만 넘긴다(jumpedRef) = 화면이 다시 그려져도 두 번 넘기지 않는다.
+  const jumpedRef = useRef(false);
+  useEffect(() => {
+    if (!isAuthed || jumpedRef.current || !city) return;
+    jumpedRef.current = true;
+    goToWorldMap();
+  }, [isAuthed, city, goToWorldMap]);
 
   // ⚠️ 수정금지(승인필요) 2026-07-31 사장님 지시 = **아미봉 인증창도 진짜 로그인을 한다.**
   //   옛것(눌러도 그냥 다음 화면으로 넘어가던 바이패스) 완전삭제 §19.
