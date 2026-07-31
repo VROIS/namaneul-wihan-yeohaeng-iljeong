@@ -1,0 +1,103 @@
+# ⚠️ 수정금지(승인필요) 2026-07-31 사장님 지시 = **아이폰 앱 만들기(EAS 클라우드 빌드).**
+#   왜 GitHub 에서 하나: 아이폰 앱은 **맥에서만** 만들 수 있는데 사장님 PC 는 윈도우다.
+#   EAS 가 애플 서명(인증서·프로비저닝)을 알아서 만들고 보관해 준다 = 사장님이 관리할 것이 없다.
+#
+#   ⚠️ 안드로이드(build-android-apk.yml)와 다른 점:
+#     안드로이드는 GitHub 러너에서 **직접** 굽지만(--local), 아이폰은 맥이 필요해
+#     **EAS 서버에 맡긴다**(--local 없음). 그래서 여기서는 "주문만 넣고" 결과는 EAS 에서 받는다.
+#
+#   ⚠️ **자동 실행 안 함**(workflow_dispatch 만) = 사장님 지시 없이 빌드 굽지 않는다(2026-07-24 SSOT).
+#
+#   ⚠️⚠️ **preview 로 굽기 전에 아이폰이 EAS 에 등록돼 있어야 한다.**
+#     애플 규칙 = 앱스토어를 거치지 않고 폰에 직접 넣으려면, 그 폰의 고유번호(UDID)를
+#     **빌드를 굽는 시점에** 미리 등록해 둬야 한다. 나중에 등록해도 이미 구운 빌드에는 안 먹는다.
+#     등록 방법(사장님 폰에서 1회) = 아래 "기기 등록" 단계가 만들어 주는 링크를 아이폰 사파리로 열면 끝.
+name: 아이폰 앱 만들기 (iOS 빌드)
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: "빌드 종류"
+        required: true
+        default: "preview"
+        type: choice
+        options:
+          - preview # 사장님 폰에 바로 설치해 확인용(권장)
+          - production # 앱스토어 제출용
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: 부품 설치
+        run: npm ci --no-audit --prefer-offline
+
+      - name: EAS 준비
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      # ⚠️ 열쇠 = 이 순간 앱 안에 박힌다(빌드타임). 여기서 안 넘기면 폰에서 로그인 버튼이 죽는다.
+      #   같은 열쇠를 안드로이드 빌드·OTA 도 넘긴다(§16 = 세 곳이 같은 이름을 쓴다).
+      - name: 열쇠 확인 (없으면 크게 실패 = 조용한 실패 금지 §0)
+        env:
+          G_WEB: ${{ secrets.EXPO_PUBLIC_GOOGLE_CLIENT_ID }}
+          G_IOS: ${{ secrets.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID }}
+          K_NATIVE: ${{ secrets.EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY }}
+        run: |
+          missing=""
+          [ -z "$G_WEB" ] && missing="$missing EXPO_PUBLIC_GOOGLE_CLIENT_ID"
+          [ -z "$G_IOS" ] && missing="$missing EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID"
+          [ -z "$K_NATIVE" ] && missing="$missing EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY"
+          if [ -n "$missing" ]; then
+            echo "❌ 열쇠 없음:$missing"
+            echo "   → GitHub 저장소 Settings > Secrets 에 넣어야 한다."
+            exit 1
+          fi
+          echo "✅ 로그인 열쇠 3종 확인"
+
+      # ⚠️ 애플 규칙 = 앱스토어를 안 거치고 폰에 넣으려면 그 폰이 **미리 등록**돼 있어야 한다.
+      #   등록된 폰이 하나도 없으면 빌드가 되어도 **설치가 안 된다** → 미리 알려준다.
+      - name: 등록된 아이폰 확인
+        if: inputs.profile == 'preview'
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        continue-on-error: true
+        run: |
+          echo "════════ 등록된 아이폰 ════════"
+          eas device:list --non-interactive || echo "(목록을 못 가져옴 = 애플 계정 연결이 아직일 수 있음)"
+          echo "═══════════════════════════════"
+          echo "등록된 폰이 없으면 아래를 사장님 아이폰에서 1회 하시면 됩니다:"
+          echo "  1) https://expo.dev/accounts/[계정]/projects/vibetrip/devices 접속"
+          echo "  2) '+ Register a device' → QR 또는 링크를 **아이폰 사파리**로 열기"
+          echo "  3) 안내대로 프로필 설치 → 등록 완료"
+          echo "※ 등록은 빌드를 굽기 **전에** 해야 한다(나중에 하면 이미 구운 빌드엔 안 먹음)."
+
+      - name: 아이폰 앱 만들기 (EAS 클라우드)
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EXPO_PUBLIC_DOMAIN: ${{ secrets.EXPO_PUBLIC_DOMAIN }}
+          EXPO_PUBLIC_GOOGLE_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_CLIENT_ID }}
+          EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID }}
+          EXPO_PUBLIC_KAKAO_JAVASCRIPT_KEY: ${{ secrets.EXPO_PUBLIC_KAKAO_JAVASCRIPT_KEY }}
+          EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY: ${{ secrets.EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY }}
+        run: |
+          eas build \
+            --platform ios \
+            --profile ${{ inputs.profile }} \
+            --non-interactive \
+            --no-wait
+          echo ""
+          echo "════════════════════════════════════════════"
+          echo " 주문 완료. 만드는 데 20~30분 걸립니다."
+          echo " 진행상황·설치링크: https://expo.dev/accounts/[계정]/projects/vibetrip/builds"
+          echo "════════════════════════════════════════════"
