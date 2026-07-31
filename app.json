@@ -17,7 +17,7 @@
         "NSMicrophoneUsageDescription": "Allow $(PRODUCT_NAME) to use the microphone.",
         "ITSAppUsesNonExemptEncryption": false
       },
-      "buildNumber": "1"
+      "buildNumber": "2"
     },
     "android": {
       "adaptiveIcon": {
