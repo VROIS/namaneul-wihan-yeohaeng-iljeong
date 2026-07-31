@@ -6,11 +6,9 @@
 import type { Express } from "express";
 import { db } from "./db";
 import { cities, placeSeedRaw } from "../shared/schema";
-import { isNotNull, asc, desc, eq, and, inArray, sql } from "drizzle-orm";
-import {
-  optimizeBTSRoute,
-  type PlaceForOptimization,
-} from "./services/bts-gemini";
+import { isNotNull, asc, desc, eq, and, sql } from "drizzle-orm";
+// ⚠️ 2026-07-31 사장님 승인(BTS D단계) = 옛 자체 생성기(/api/bts/generate + bts-gemini) 완전삭제 §19·§16.
+//   여정 생성 = 메인 파이프라인 v3 1벌(/api/routes/generate + pinnedPlaceIds).
 import {
   pickRestaurantBySegment,
   pickRestaurantNearVenue,
@@ -93,17 +91,6 @@ async function pickAliveFrom<T extends PlaceRow>(
   );
   return eligible[0] || null;
 }
-
-// 캐릭터명 매핑
-const MEMBER_NAMES: Record<string, string> = {
-  collector: "컬렉터",
-  romanticist: "로맨티스트",
-  explorer: "익스플로러",
-  challenger: "챌린저",
-  companion: "컴패니언",
-  recharger: "리차저",
-  chiller: "칠러",
-};
 
 // ⚠️ 수정금지(승인필요) 2026-07-30 = **D-Day 계산 = 이 함수 1벌.**
 //   옛것(`Date.now()` 로 빼기)은 **지금 시각(시·분)이 섞여** 계산이 하루 밀렸다 = 삭제 §19.
@@ -286,12 +273,23 @@ export function registerBtsRoutes(app: Express): void {
             sql`NOT (${placeSeedRaw.categoryTags} && ARRAY['restaurant']::text[])`,
           );
         }
-        return dbi
-          .select(PLACE_COLS)
-          .from(placeSeedRaw)
-          .where(and(...conditions))
-          .orderBy(asc(placeSeedRaw.rank), desc(placeSeedRaw.googleReviewCount))
-          .limit(limit);
+        return (
+          dbi
+            .select(PLACE_COLS)
+            .from(placeSeedRaw)
+            .where(and(...conditions))
+            // ⚠️ 2026-07-31 사장님 지시(BTS 문제점2) = **주 카테고리 일치 우선** → rank ASC.
+            //   옛것(rank 만) = 소도시 상위 rank 행이 멀티태그(예: American Dream = hotspot·attraction·
+            //   adventure·shopping 전부)라 **어느 캐릭터를 골라도 같은 카드**가 나왔다(DB 실측).
+            //   주 카테고리(seed_category)가 그 캐릭터 카테고리인 행을 앞세우면 캐릭터마다 카드가 갈린다.
+            //   부족하면 멀티태그 행이 자연히 뒤를 채움(= 시드 발굴로 채워질수록 자동 개선).
+            .orderBy(
+              sql`(${placeSeedRaw.seedCategory} = ${tag}) DESC`,
+              asc(placeSeedRaw.rank),
+              desc(placeSeedRaw.googleReviewCount),
+            )
+            .limit(limit)
+        );
       };
 
       const venueQuery = dbi
@@ -407,140 +405,5 @@ export function registerBtsRoutes(app: Express): void {
     if (!key)
       return res.status(503).json({ error: "Google Maps API key missing" });
     res.json({ googleMapsApiKey: key });
-  });
-
-  // ─── POST /api/bts/generate (Gemini AI 보강) ───
-  app.post("/api/bts/generate", async (req, res) => {
-    try {
-      if (!db)
-        return res.status(503).json({ error: "Database not configured" });
-
-      const { cityId, memberId, selectedPlaceIds } = req.body as {
-        cityId: number;
-        memberId?: string;
-        selectedPlaceIds: number[];
-      };
-      if (
-        !cityId ||
-        !Array.isArray(selectedPlaceIds) ||
-        selectedPlaceIds.length === 0
-      ) {
-        return res
-          .status(400)
-          .json({ error: "cityId and selectedPlaceIds required" });
-      }
-
-      // 도시 조회
-      const [cityRow] = await db
-        .select({ name: cities.name, nameEn: cities.nameEn })
-        .from(cities)
-        .where(eq(cities.id, cityId));
-      if (!cityRow) return res.status(404).json({ error: "City not found" });
-
-      // 선택된 장소 조회
-      const ids = selectedPlaceIds
-        .slice(0, 8)
-        .filter((n: number) => Number.isInteger(n));
-      if (ids.length === 0) {
-        return res
-          .status(400)
-          .json({ error: "selectedPlaceIds must contain valid ids" });
-      }
-
-      const seeds = await db
-        .select({
-          id: placeSeedRaw.id,
-          nameKo: placeSeedRaw.nameKo,
-          nameEn: placeSeedRaw.nameEn,
-          seedCategory: placeSeedRaw.seedCategory,
-          imageUrl: placeSeedRaw.imageUrl,
-          priceEur: placeSeedRaw.priceEur,
-          summaryKo: placeSeedRaw.summaryKo,
-          // ⚠️ 수정금지(승인필요) — 좌표 추가 (지도 표시 + 동선 계산용)
-          latitude: placeSeedRaw.latitude,
-          longitude: placeSeedRaw.longitude,
-        })
-        .from(placeSeedRaw)
-        .where(
-          and(
-            eq(placeSeedRaw.cityId, cityId),
-            // ⚠️ 2026-05-23 = collection_phase 폐기 = phase_tags 'bts2026' 마커로 대체
-            sql`'bts2026' = ANY(COALESCE(${placeSeedRaw.phaseTags}, ARRAY[]::text[]))`,
-            inArray(placeSeedRaw.id, ids),
-          ),
-        );
-
-      // Gemini AI 동선 최적화
-      const characterName = MEMBER_NAMES[memberId || "challenger"] || "챌린저";
-      const placesForOpt: PlaceForOptimization[] = seeds.map((s) => ({
-        id: s.id,
-        name: s.nameKo || s.nameEn,
-        category: s.seedCategory || "attraction",
-        priceEur: s.priceEur,
-        summaryKo: s.summaryKo,
-      }));
-
-      const optimized = await optimizeBTSRoute(
-        cityRow.nameEn || cityRow.name,
-        characterName,
-        placesForOpt,
-      );
-
-      // 최종 일정 조립
-      const resultPlaces = optimized.map((opt) => {
-        const seed = seeds.find((s) => s.id === opt.id);
-        return {
-          id: `bts-${opt.id}`,
-          name: opt.name,
-          description: opt.travelTip || seed?.summaryKo || "",
-          startTime: opt.startTime,
-          endTime: opt.endTime,
-          lat: 0,
-          lng: 0,
-          vibeScore: 8,
-          confidenceScore: 0.9,
-          sourceType: "bts",
-          personaFitReason: seed?.summaryKo || "",
-          tags: [seed?.seedCategory || ""],
-          vibeTags: [],
-          image: seed?.imageUrl || "",
-          priceEstimate: seed?.priceEur != null ? `€${seed.priceEur}` : "",
-          estimatedPriceEur: seed?.priceEur ?? 0,
-          summaryKo: seed?.summaryKo ?? null,
-          estimatedDuration: opt.estimatedDuration,
-        };
-      });
-
-      const totalCost = resultPlaces.reduce(
-        (sum, p) => sum + (p.estimatedPriceEur || 0),
-        0,
-      );
-
-      const itinerary = {
-        title: `나만의 방탄 투어 - ${cityRow.name}`,
-        destination: cityRow.nameEn || cityRow.name,
-        character: characterName,
-        memberId: memberId || "challenger",
-        startDate: new Date().toISOString().split("T")[0],
-        endDate: new Date().toISOString().split("T")[0],
-        totalEstimatedCost: `€${totalCost.toFixed(0)}`,
-        days: [
-          {
-            day: 1,
-            places: resultPlaces,
-            city: cityRow.name,
-            summary: `${resultPlaces.length}곳 방문 · 예상 €${totalCost.toFixed(0)}`,
-          },
-        ],
-      };
-
-      console.log(
-        `[BTS] ✅ 일정 생성: ${cityRow.name} / ${characterName} / ${resultPlaces.length}곳`,
-      );
-      res.json(itinerary);
-    } catch (err) {
-      console.error("[BTS] POST /api/bts/generate error:", err);
-      res.status(500).json({ error: "Failed to generate BTS itinerary" });
-    }
   });
 }

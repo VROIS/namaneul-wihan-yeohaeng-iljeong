@@ -291,6 +291,11 @@ export function buildRouteLocal(
   const slotDuration = paceConfig.slotDurationMinutes; // 활동 1곳 시간
   const mealDuration = paceConfig.mealDurationMinutes; // 식사 1회 시간(밀도별, 활동보다 짧음)
   const mealBudget = MEAL_BUDGET[formData.travelStyle || "Reasonable"];
+  // ⚠️ 수정금지(승인필요) 2026-07-31 사장님 승인(BTS D단계 BE-3) = 핀 식당 id 집합(풀 id 형식 = "db-<번호>").
+  //   사용자가 직접 고른 식당 = 고정 식사자리(점심=3번째·저녁=마지막)에 가격대 필터보다 우선 착석.
+  const pinnedRestIds = new Set(
+    (formData.pinnedPlaceIds ?? []).map((n) => `db-${n}`),
+  );
 
   // ⚠️ 2026-07-04 사장님 SSOT = 출발/종료 앵커 = 숙소 좌표 최우선(§14 A안=여행 전체 공통 숙소) → 없으면 도심 중심.
   //   지도 숙소깃발·슬롯순서 변경은 이미 실시간 연동인데 동선 최적화(center)만 도심 고정이던 결함 수정(§0).
@@ -351,6 +356,13 @@ export function buildRouteLocal(
       }))
       .sort((a, b) => a.d - b.d);
     if (!ranked.length) return null;
+    // ⚠️ 2026-07-31 사장님 승인(BTS D단계) = 핀 식당 우선 = 사용자가 직접 고른 것 = 가격대 필터보다 우선.
+    //   그 자리(앵커) 최근접 핀이 앉음 → 핀 2개면 점심(중간 앵커)·저녁(공연장 인근 앵커)이 거리로 자동 배정.
+    const pinnedPick = ranked.find((x) => pinnedRestIds.has(x.r.id));
+    if (pinnedPick) {
+      usedRest.add(pinnedPick.r.id);
+      return pinnedPick.r;
+    }
     // ⚠️ 2026-06-12 = 하한 클램프 = Luxury 점심(min181 > 점심상한120) 역전 방어 = min 을 상한 이하로 (= 등급 필터 무력화 버그 수정)
     const lo = Math.min(priceMin, priceCap);
     const inBand = ranked.find(

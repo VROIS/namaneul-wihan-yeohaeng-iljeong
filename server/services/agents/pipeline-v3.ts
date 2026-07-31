@@ -41,6 +41,18 @@ export async function runPipelineV3(formData: TripFormData): Promise<any> {
     formData.destination,
     formData.destinationCoords,
   );
+  // ⚠️ 수정금지(승인필요) 2026-07-31 사장님 승인(BTS D단계 결정5) = 고른 장소(pinnedPlaceIds) 있으면 db-only 직행.
+  //   = 장소를 이미 골랐으면 발굴(Gemini)이 애초에 불필요 = 외부호출 0원. BTS 29개 소도시(행수<300) = "작은 자체 db-only".
+  //   = 핀 요청 = **무료**(라우트가 차감 안 함) → 도시를 못 찾아도 유료 MIX 로는 절대 안 흘림(§22 검증 = 돈 새는 틈 차단).
+  if (formData.pinnedPlaceIds?.length) {
+    if (!cityCheck.cityId) {
+      throw new Error(
+        `핀 요청인데 도시 미발견: '${formData.destination}' = 무료(db-only) 전제 = 유료 경로로 흘리지 않는다`,
+      );
+    }
+    const { runPipelineDbOnly } = await import("./pipeline-db-only");
+    return runPipelineDbOnly(formData, cityCheck);
+  }
   if (cityCheck.ready) {
     const { runPipelineDbOnly } = await import("./pipeline-db-only");
     return runPipelineDbOnly(formData, cityCheck);

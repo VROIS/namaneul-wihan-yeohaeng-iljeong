@@ -21,8 +21,13 @@ import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 export default function MainAppBottomTabBar({
   activeTab,
+  aiOpensInPlace,
 }: {
   activeTab?: "Home" | "Map" | "Verify" | "Profile" | "Guide" | "BTS";
+  // ⚠️ 2026-07-31 사장님 승인(BTS D단계 FE-5) = BTS 여정화면 전용.
+  //   여정이 이미 눈앞에 있으므로 AI의견·전문가를 **창을 새로 열지 않고 그 자리에서** 띄운다.
+  //   (없으면 = 기존 그대로 = 메인앱 창을 올린 뒤 신호)
+  aiOpensInPlace?: boolean;
 }) {
   const { t } = useTranslation();
   const colorScheme = useColorScheme();
@@ -74,12 +79,22 @@ export default function MainAppBottomTabBar({
         break;
       case "Map":
         if (needsItinerary) return; // 여정 없음 = 무동작(비활성)
+        // ⚠️ 2026-07-31 = BTS 여정화면(aiOpensInPlace) = 여정이 이미 눈앞 = 창 안 열고 그 자리에서(FE-5).
+        if (aiOpensInPlace) {
+          requestAiOpinion();
+          break;
+        }
         requestMainApp("Home");
         setTimeout(() => requestAiOpinion(), 150);
         break;
       case "Verify":
         if (needsItinerary) return; // 여정 없음 = 무동작(비활성)
         if (isAuthed) {
+          // 전문가 창은 전역(App 마운트) = 같은 규칙(여정이 눈앞이면 바로 신호만).
+          if (aiOpensInPlace) {
+            requestExpert();
+            break;
+          }
           requestMainApp("Home");
           setTimeout(() => requestExpert(), 150);
         } else {

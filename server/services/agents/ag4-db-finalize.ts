@@ -18,7 +18,11 @@ import type {
 } from "./types";
 import { MEAL_BUDGET } from "./types";
 // ⚠️ 2026-07-06 사장님 SSOT = 대중교통 구간당 균일 예상가 = 단일 SSOT(§16) = transit-haversine 로 이동(옛 ag4 로컬정의 삭제) = MIX·DB-only 공통.
-import { estimateTransitCost } from "./transit-haversine";
+import {
+  estimateTransitCost,
+  haversineKm,
+  pickTransitMode,
+} from "./transit-haversine";
 // ⚠️ 수정금지(승인필요) 2026-06-06 = DB-only 동선 = 로컬 NN+Haversine (= Stage C) 단일 SSOT
 // 🗑️ 2026-07-05 = handleRouteRequest(Gemini) import·RouteResponse(미사용) import = 옛 폴백 잔재 = 삭제 §0/§19
 import { buildRouteLocal } from "../route/route-local";
@@ -93,21 +97,32 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
     // ⚠️ 2026-07-17 사장님 확정 = 풀 = (city_id=요청도시) ∪ (좌표 유효 100km 이내) 합집합(§16 pool-radius)
     //   = 크로스도시 시내 식당 포함(실증: 본(134) 소속 디종 시내 Loiseau des Ducs 가 디종 풀에서 안 보이던 결함 해소)
     const { where: poolWhere } = await getPoolContext(cityId, cityCoords); // 2026-07-17 = 기점 = 동적 출발점(cityCoords = 숙소>도심, day-builder 우선순위 반영값)
+    // ⚠️ 2026-07-31 사장님 승인(BTS D단계 BE-3) = 핀 식당 = **같은 쿼리 1벌 안에서** 무조건 포함(§16).
+    //   사용자가 직접 고른 식당이 리뷰수 쿼터·price NULL 제외에 걸려 풀에서 빠지면 자리에 못 앉음 → OR 1줄로 보장.
+    //   (simplify 게이트가 잡음: 처음엔 쿼리를 통째로 한 벌 더 복붙했었다 → 완전삭제 §19)
+    const pinIdsForMeals = (formData.pinnedPlaceIds ?? []).filter((n: number) =>
+      Number.isFinite(n),
+    );
+    const pinCond = pinIdsForMeals.length
+      ? sql.raw(`id IN (${pinIdsForMeals.join(",")})`) // 숫자만 통과한 값 = 안전
+      : sql.raw("FALSE");
     const rows = (await db!.execute(sql`
       WITH banded AS (
         SELECT id, name_en AS "nameEn", name_ko AS "nameKo", name_local AS "nameLocal", address,
                latitude, longitude, price_eur AS "priceEur", summary_ko AS "summaryKo",
                editorial_summary AS "editorialSummary", image_url AS "imageUrl",
                google_review_count AS "googleReviewCount",
+               (${pinCond}) AS pinned,
                CASE WHEN price_eur <= 24 THEN 20 WHEN price_eur <= 60 THEN 40 WHEN price_eur <= 180 THEN 20 ELSE 20 END AS quota,
                ROW_NUMBER() OVER (
                  PARTITION BY CASE WHEN price_eur <= 24 THEN 'eco' WHEN price_eur <= 60 THEN 'reason' WHEN price_eur <= 180 THEN 'premium' ELSE 'luxury' END
                  ORDER BY google_review_count DESC NULLS LAST
                ) AS band_rn
         FROM place_seed_raw
-        WHERE (${poolWhere}) AND seed_category = 'restaurant' AND price_eur IS NOT NULL
+        WHERE (${poolWhere}) AND seed_category = 'restaurant'
+          AND (price_eur IS NOT NULL OR (${pinCond}))
       )
-      SELECT * FROM banded WHERE band_rn <= quota ORDER BY "googleReviewCount" DESC NULLS LAST
+      SELECT * FROM banded WHERE band_rn <= quota OR pinned ORDER BY "googleReviewCount" DESC NULLS LAST
     `)) as unknown as { rows: Record<string, any>[] };
     restaurantPool = (rows.rows || [])
       .filter((r) => r.latitude != null && Number(r.latitude) !== 0)
@@ -127,7 +142,7 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
         userRatingCount: r.googleReviewCount || 0,
       })) as unknown as PlaceResult[];
     console.log(
-      `[AG4-DB] 🍽️ 식당풀 DB 조회 = ${restaurantPool.length}곳 (= 가격대구간별 RC TOP eco20/reason40/premium20/luxury20, 부실 바닥식당 제외)`,
+      `[AG4-DB] 🍽️ 식당풀 DB 조회 = ${restaurantPool.length}곳 (= 가격대구간별 RC TOP eco20/reason40/premium20/luxury20, 부실 바닥식당 제외, 핀은 쿼터 무관 보장)`,
     );
   }
 
@@ -377,6 +392,65 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
         groupKrw: dailyGroupKrw,
       },
     });
+  }
+
+  // ⚠️ 2026-07-31 사장님 지시(BTS 문제점4) = **마지막 슬롯 = 공연장 카드**(공연 시작 시각).
+  //   BTS 폼(finalPlaceId·finalPlaceTime)이 실렸을 때만 = 마지막 날 끝에 그 장소 카드 1장을 고정 부착.
+  //   여정이 "저녁 → 공연장(공연 시작)"으로 끝나 목적(공연)이 일정표·지도 마커(마지막 번호)에 박힌다.
+  //   비용 = 0 유지(BTS 결정⑥ = 비용 별 의미 없음 = 티켓·구간비 합산 안 함), 거리·이동시간은 실계산.
+  if (formData.finalPlaceId && db && days.length) {
+    const fRes = (await db.execute(sql`
+      SELECT id, name_en AS "nameEn", name_ko AS "nameKo", name_local AS "nameLocal", address,
+             latitude, longitude, seed_category AS "seedCategory", image_url AS "imageUrl",
+             google_review_count AS "googleReviewCount", summary_ko AS "summaryKo",
+             editorial_summary AS "editorialSummary"
+      FROM place_seed_raw WHERE id = ${formData.finalPlaceId}
+    `)) as unknown as { rows: Record<string, any>[] };
+    const f = fRes.rows?.[0];
+    if (f && f.latitude != null && Number(f.latitude) !== 0) {
+      const lastDay = days[days.length - 1];
+      const prev = lastDay.places[lastDay.places.length - 1];
+      const lat = Number(f.latitude);
+      const lng = Number(f.longitude);
+      const km = prev ? haversineKm(prev.lat, prev.lng, lat, lng) : 0;
+      const picked = pickTransitMode(km, false);
+      const finalTime = formData.finalPlaceTime || "19:00";
+      const displayName = f.nameEn || f.nameLocal;
+      lastDay.places.push({
+        id: `db-${f.id}`,
+        name: displayName,
+        nameEn: displayName,
+        nameKo: f.nameKo,
+        nameLocal: f.nameLocal,
+        address: f.address,
+        lat,
+        lng,
+        type: "activity",
+        isMealSlot: false,
+        mealType: undefined,
+        seedCategory: f.seedCategory,
+        startTime: finalTime,
+        endTime: addMinutes(finalTime, 180), // 공연 관람 표준 ~3시간
+        estimatedPriceEur: null,
+        mealPrice: undefined,
+        mealPriceLabel: undefined,
+        image: f.imageUrl || null,
+        userRatingCount: f.googleReviewCount || 0,
+        summaryKo: f.summaryKo,
+        editorialSummary: f.editorialSummary,
+        distance_from_prev_km: Math.round(km * 10) / 10,
+        transit_mode: picked.mode,
+        transit_min: prev
+          ? Math.max(
+              1,
+              Math.round((km / (picked.calc === "WALK" ? 4 : 25)) * 60),
+            )
+          : 0,
+      });
+      console.log(
+        `[AG4-DB] 🎤 마지막 슬롯 = 공연장 카드 부착: ${displayName} @ ${finalTime}`,
+      );
+    }
   }
 
   const totalGroupEur =

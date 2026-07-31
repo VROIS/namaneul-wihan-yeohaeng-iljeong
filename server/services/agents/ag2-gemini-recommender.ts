@@ -13,10 +13,11 @@ import { pickPlaceImage } from "../shared/place-image";
 // ⚠️ 수정금지(승인필요) 2026-05-06 = 사용자 의도 = AG2 데이터 출처 = place_seed_raw 우선
 import { db } from "../../db";
 import { placeSeedRaw } from "@shared/schema";
-import { eq, and, between, sql } from "drizzle-orm";
+import { eq, and, between, sql, inArray } from "drizzle-orm";
 import { findCityUnified } from "../city-resolver";
 // ⚠️ 2026-07-17 사장님 확정 = 슬롯 풀 = (city_id=요청도시) ∪ (중심 100km) 합집합 = shared/pool-radius 단일 SSOT(§16)
 import { getPoolContext, recalcCrossCityZone } from "../shared/pool-radius";
+import { VIBE_PRIMARY_CATEGORY } from "@shared/vibe-category";
 
 /**
  * ⚠️ 수정금지(승인필요) 2026-05-07 = 사용자 명시 = 도시 입력 시점 분기 (백엔드만)
@@ -76,17 +77,9 @@ export async function isCityReady(
  * = 발굴 도시 (= top 20 phase=gemini3-2026-05) 만 = 0.1초 + 0 비용
  * = 미발굴 도시 = null 반환 = Gemini fallback
  */
-// ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = Romantic 모든 흔적 삭제 + Shopping 1:1 매핑
-// = PSR seedCategory 7 종과 1:1 직접 대응 (= 가짜 매핑 X)
-export const VIBE_PRIMARY_CATEGORY: Record<string, string> = {
-  Foodie: "restaurant", // = 내부 식당태그 유지(버튼 X)
-  Healing: "healing",
-  Hotspot: "hotspot",
-  Adventure: "adventure",
-  Shopping: "shopping",
-  Culture: "heritage",
-  Attraction: "attraction", // = 즐길거리(신규 버튼) → 테마파크·유람선·아쿠아리움·체험전시
-};
+// ⚠️ 2026-07-31 사장님 승인(BTS D단계 FE-2) = VIBE_PRIMARY_CATEGORY 정의 = shared/vibe-category.ts 로 이동(1벌 유지 §16).
+//   클라(BTS 캐릭터→vibe 동적변환)와 서버가 같은 매핑 1벌을 쓴다. 여기서는 재수출 = 기존 소비처 무변경.
+export { VIBE_PRIMARY_CATEGORY } from "@shared/vibe-category";
 
 // 🧠 2026-07-05 사장님 SSOT = vibe → 6카테고리 슬롯 분배 = 단일 SSOT(§16 재발명금지). DB-only(fetchFromPlaceSeedRaw)와 MIX(pipeline-v3 프롬프트) 공용.
 //   = 옛날엔 이 로직이 ag2 안에 인라인이라 MIX 가 못 씀 → 순수함수 추출 = DB-only 동작 불변(내부이동) + MIX 가 카테고리별 개수를 Gemini 에 전달 가능.
@@ -272,6 +265,34 @@ async function fetchFromPlaceSeedRaw(
     return null;
   }
 
+  // ⚠️ 수정금지(승인필요) 2026-07-31 사장님 승인(BTS D단계 BE-3) = 핀 주입 = 고른 장소는 반드시 포함.
+  //   rank = -1 로 맨 앞 = route-local 의 rank ASC 활동 컷을 무조건 통과(선택 순서 유지).
+  //   카테고리 SELECT 로 이미 온 행은 핀 1벌로 대체(1곳 1벌). 식당 핀은 여기선 그대로 두고
+  //   식사 자리 배치는 ag4 식당풀 + route-local 핀 우선이 담당(활동 필터가 식당을 안 쓰므로 무해).
+  const pinIds = (formData.pinnedPlaceIds ?? []).filter((n) =>
+    Number.isFinite(n),
+  );
+  if (pinIds.length) {
+    const pinRows: any[] = await db!
+      .select(SELECT_COLS)
+      .from(placeSeedRaw)
+      .where(inArray(placeSeedRaw.id, pinIds));
+    for (const r of pinRows) recalcCrossCityZone(r, cid, center);
+    const byId = new Map(pinRows.map((r) => [r.id, r]));
+    const ordered = pinIds.map((id) => byId.get(id)).filter(Boolean) as any[];
+    const pinSet = new Set(pinIds);
+    const rest = allRows.filter((r) => !pinSet.has(r.id));
+    allRows.length = 0;
+    for (const r of ordered) {
+      r.rank = -1;
+      allRows.push(r);
+    }
+    allRows.push(...rest);
+    console.log(
+      `[AG2-DB] 📌 핀 ${ordered.length}/${pinIds.length}곳 주입 (rank -1 = 활동 컷 무조건 통과)`,
+    );
+  }
+
   // ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = 부족해도 그대로 반환 (= Gemini fallback X)
   // = 빈 슬롯 가능 = 사용자 표시 = 솔직 (= 환각 채움 X)
   console.log(
@@ -340,7 +361,11 @@ export async function generateRecommendations(
     skeleton.formData.destinationCoords,
   );
 
-  if (!cityCheck.ready) {
+  // ⚠️ 2026-07-31 사장님 승인(BTS D단계 결정5) = 핀 있으면 행수 미달이어도 db-only 진행(pipeline-v3 직행과 같은 규칙 1벌).
+  const hasPins = !!(
+    cityCheck.cityId && skeleton.formData.pinnedPlaceIds?.length
+  );
+  if (!cityCheck.ready && !hasPins) {
     console.error(
       `[AG2] ❌ city='${cityCheck.cityName}' MIX 모드 = ag2 처리 X (= ${cityCheck.count} rows < ${READY_THRESHOLD}) = MIX path = pipeline-v3.ts step1_geminiItinerary 표준 prompt 사용`,
     );

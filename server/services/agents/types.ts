@@ -101,6 +101,12 @@ export interface TripFormData {
   }[];
   /** 일정 출력 언어 (ko, en, ja, fr 등). 기본 ko */
   language?: string;
+  /** ⚠️ 수정금지(승인필요) 2026-07-31 사장님 승인(BTS D단계) = 반드시 포함할 장소 id(선택 순서 유지).
+   *  BTS "같이 떠나요" = 사용자가 이미 고른 3~8곳. 있으면 = 발굴 불필요 = db-only 직행 + 생성 무료(외부호출 0). */
+  pinnedPlaceIds?: number[];
+  /** ⚠️ 2026-07-31 사장님 지시(BTS 문제점4) = 마지막 슬롯에 고정 부착할 장소(= 공연장) + 그 시각(= 공연 시작). */
+  finalPlaceId?: number;
+  finalPlaceTime?: string;
 }
 
 // ===== 장소 결과 =====

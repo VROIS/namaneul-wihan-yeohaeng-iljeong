@@ -34,7 +34,6 @@
     "emailLoginBtn": "登录",
     "emailInvalid": "请输入有效的邮箱",
     "emailLoginFailed": "登录失败",
-    "btsTour": "🎵 前往BTS之旅",
     "termsAgree": "登录即表示您同意服务条款和隐私政策",
     "languageSelect": "选择语言",
     "dateInvalid": "日期无效",
@@ -165,16 +164,6 @@
     "creditShort": "积分不足（剩余 {{balance}} / 需要 {{required}}）"
   },
   "bts": {
-    "title": "我的BTS之旅",
-    "selectVibe": "你想跟谁的风格旅行？",
-    "nextSelectPlaces": "下一步：从8个地点中选择",
-    "placeSelect": "选择地点",
-    "placeSelectCount": "选择地点（{{count}}/8）",
-    "generateWithPlaces": "✨ 使用{{count}}个地点生成",
-    "generating": "正在生成行程",
-    "generatingHint": "正在用您选择的地点创建定制旅程...",
-    "generateFailed": "生成失败",
-    "backToStart": "重新开始",
     "placeCart": {
       "cartTitle": "一起去的地方 {{count}}/{{max}}",
       "remove": "移除",

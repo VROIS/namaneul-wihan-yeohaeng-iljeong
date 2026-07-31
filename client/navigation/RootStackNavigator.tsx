@@ -14,7 +14,7 @@ import ExpertInquiryDetailScreen from "@/screens/expert/ExpertInquiryDetailScree
 import ExpertProfileEditScreen from "@/screens/expert/ExpertProfileEditScreen"; // 현지전문가 본인 프로필 편집(2026-07-13)
 import SavedTripDetailScreen from "@/screens/saved-trip/SavedTripDetailScreen";
 import AdminScreen from "@/screens/AdminScreen";
-import BTSConcertPlannerScreen from "@/screens/BTSConcertPlannerScreen";
+// ⚠️ 2026-07-31 = 옛 BTS 이벤트 화면(BTSConcertPlanner) 완전삭제 §19 = 삭제된 /api/bts/generate 의 마지막 호출자였음.
 import BTSStackNavigator from "@/navigation/BTSStackNavigator";
 import GuideStackNavigator from "@/navigation/GuideStackNavigator"; // 가이드 미니앱(§12 1단계) = BTS 패턴 독립 스택
 import { BTSLandingScreen } from "@/screens/BTSLandingScreen";
@@ -33,7 +33,6 @@ export type RootStackParamList = {
   SavedTripDetail: { itineraryId: number };
   VideoPreview: { itineraryId: number }; // 🎬 지브리 일별 여행영상 미리보기 (풀스크린, 2026-07-22 실배선)
   AdminModal: undefined;
-  BTSConcertPlanner: undefined;
   BTSMiniApp: undefined;
   GuideMiniApp: undefined; // 가이드 미니앱(§12 1단계) = 설정탭에서 진입, 풀스크린 모달
   BTSLanding: undefined;
@@ -173,13 +172,6 @@ export default function RootStackNavigator() {
           presentation: "fullScreenModal",
           headerShown: false,
           animation: "slide_from_bottom",
-        }}
-      />
-      <Stack.Screen
-        name="BTSConcertPlanner"
-        component={BTSConcertPlannerScreen}
-        options={{
-          headerShown: false,
         }}
       />
       {/* BTS 미니앱 (독립 스택) */}

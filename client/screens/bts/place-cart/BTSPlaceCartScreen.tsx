@@ -202,9 +202,11 @@ export default function BTSPlaceCartScreen() {
 
   const handleNext = useCallback(() => {
     // ⚠️ 수정금지(승인필요) — 2026-05-06 v3 SSOT: 카드 ≥ 3 부터 일정 생성 (사용자 명시 "3 부터 생성")
+    // ⚠️ 2026-07-31 사장님 승인(BTS D단계) = 착지 = BTSTrip(메인앱 여정화면 그대로).
+    //   폼 조립·생성·로딩·결과 전부 그 화면이 담당 = 옛 BTSLoading 완전삭제 §19.
     if (selectedPlaceIds.length >= 3) {
       haptic("success");
-      navigation.navigate("BTSLoading");
+      navigation.navigate("BTSTrip");
     }
   }, [selectedPlaceIds.length, navigation]);
 
@@ -319,13 +321,15 @@ export default function BTSPlaceCartScreen() {
       />
 
       {/* ⚠️ 수정금지(승인필요) — 2026-04-22 Part B: 전체 스크롤존. 궤도 + 카트 + 상세 섹션 + CTA 모두 포함. */}
-      {/* ⚠️ 수정금지(승인필요) — 2026-04-24 Track 4a v2 (사용자 피드백): CTA 가 스크롤과 함께 움직이도록 ScrollView 안으로 복귀. paddingBottom 은 insets + 24 로 원복. */}
+      {/* ⚠️ 수정금지(승인필요) — 2026-04-24 Track 4a v2 (사용자 피드백): CTA 가 스크롤과 함께 움직이도록 ScrollView 안으로 복귀. */}
+      {/* ⚠️ 2026-07-31 = 여백 + 하단바 높이. 그 뒤(7-30) 하단 5단바가 고정 부착됐는데 여백이 그대로라
+          스크롤 끝에서 [같이 떠나요]가 바에 덮여 안 눌렸다(DevTools 좌표 실측). 최신 결정 우선 = 바 높이만큼 보정. */}
       <ScrollView
         ref={scrollRef}
         style={{ flex: 1 }}
         contentContainerStyle={[
           styles.scrollContent,
-          { paddingBottom: insets.bottom + 24 },
+          { paddingBottom: insets.bottom + 88 },
         ]}
         showsVerticalScrollIndicator={false}
       >

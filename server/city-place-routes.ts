@@ -214,7 +214,15 @@ export function registerCityPlaceRoutes(app: Express): void {
       //   ⚠️ 수정금지(승인필요) 2026-07-30 §0 = 차감 기준 신원은 **로그인 토큰에서만** 읽는다.
       //     요청 본문의 userId 로 차감하면 그 칸을 비우는 것만으로 유료 생성이 공짜가 된다(§22 검증 지적).
       //     본문의 userId 는 아래 파이프라인이 쓰는 조회용 값이고, **돈 판단에는 쓰지 않는다.**
-      if (!(await chargeFeature(res, getUserIdFromReq(req), "route_generate")))
+      //   ⚠️ 2026-07-31 사장님 승인(BTS D단계 결정7) = 크레딧 = **외부호출 발생 시만**.
+      //     고른 장소(pinnedPlaceIds) 있음 = BTS "같이 떠나요" = db-only 직행 = 외부호출 0 = 무료(차감 안 함).
+      const isPinnedDbOnly = !!(
+        Array.isArray(formData.pinnedPlaceIds) && formData.pinnedPlaceIds.length
+      );
+      if (
+        !isPinnedDbOnly &&
+        !(await chargeFeature(res, getUserIdFromReq(req), "route_generate"))
+      )
         return;
 
       const itinerary = await itineraryGenerator.generate(enrichedFormData);

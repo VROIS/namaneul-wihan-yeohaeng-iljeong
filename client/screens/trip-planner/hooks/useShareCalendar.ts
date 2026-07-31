@@ -67,7 +67,7 @@ export function useShareCalendar({
           }
         }
       } else {
-        // 📱 네이티브 = 기존 사용례(BTSDashboardScreen.tsx:57) 동일 Share.share = 카카오톡·문자·클립보드 등 시스템 공유시트(사장님 확정 A안).
+        // 📱 네이티브 = Share.share = 카카오톡·문자·클립보드 등 시스템 공유시트(사장님 확정 A안).
         await Share.share(
           Platform.OS === "ios"
             ? { url, message: itinerary.title }

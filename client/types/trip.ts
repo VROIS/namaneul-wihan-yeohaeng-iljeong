@@ -63,6 +63,12 @@ export interface TripFormData {
   accommodationAddress?: string; // 숙소 주소
   accommodationCoords?: { lat: number; lng: number }; // 숙소 GPS 좌표
   accommodationPlaceId?: string; // Google Place ID (재검색용)
+  // ⚠️ 2026-07-31 사장님 승인(BTS D단계) = 반드시 포함할 장소 id(선택 순서 유지).
+  //   BTS "같이 떠나요" = 이미 고른 3~8곳. 있으면 서버가 db-only 직행 + 생성 무료(외부호출 0).
+  pinnedPlaceIds?: number[];
+  // ⚠️ 2026-07-31 사장님 지시(BTS 문제점4) = 마지막 슬롯 = 공연장 카드(공연 시작 시각).
+  finalPlaceId?: number;
+  finalPlaceTime?: string;
 }
 
 export interface Place {

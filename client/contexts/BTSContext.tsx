@@ -24,6 +24,9 @@ export type BTSCity = {
   dDay?: number | null;
   latitude?: number | null;
   longitude?: number | null;
+  // ⚠️ 2026-07-31 사장님 승인(BTS D단계) = 공연 시각("19:00" 등, 서버가 이미 내려줌).
+  //   여정 종료시각 = 공연 3시간 전 계산에 사용. 옛날엔 서버만 보내고 클라가 안 읽었다.
+  showTime?: string | null;
 };
 
 // ⚠️ 수정금지(승인필요) 2026-07-30 사장님 SSOT = **공연 임박 5개 도시를 고르는 규칙 = 이 함수 1벌.**
@@ -62,29 +65,8 @@ export type BTSPlace = {
   longitude?: number | null;
 };
 
-export type BTSItineraryPlace = {
-  id: string;
-  name: string;
-  description: string;
-  startTime: string;
-  endTime: string;
-  image: string;
-  priceEstimate: string;
-  tags: string[];
-  // 후킹 숏폼 차별점 = 한줄요약
-  summaryKo: string | null;
-};
-
-export type BTSItinerary = {
-  title: string;
-  destination: string;
-  days: {
-    day: number;
-    places: BTSItineraryPlace[];
-    city: string;
-    summary: string;
-  }[];
-};
+// ⚠️ 2026-07-31 사장님 승인(BTS D단계) = BTSItinerary·itinerary 상태 완전삭제(§19).
+//   옛 로딩·대시보드 화면 전용이었음(둘 다 완전삭제 §19) — 여정 생성·결과는 메인 여정화면(BTSTripScreen) 1벌.
 
 type BTSContextType = {
   // 선택 상태
@@ -92,7 +74,6 @@ type BTSContextType = {
   selectedCity: BTSCity | null;
   selectedPlaces: BTSPlace[];
   selectedPlaceIds: number[];
-  itinerary: BTSItinerary | null;
 
   // 데이터
   cities: BTSCity[];
@@ -101,7 +82,6 @@ type BTSContextType = {
   // 로딩 상태
   isLoadingCities: boolean;
   isLoadingPlaces: boolean;
-  isGenerating: boolean;
   error: string | null;
 
   // 액션
@@ -112,10 +92,8 @@ type BTSContextType = {
   clearSelectedPlaces: () => void;
   setCities: (cities: BTSCity[]) => void;
   setTopPlaces: (places: BTSPlace[]) => void;
-  setItinerary: (itinerary: BTSItinerary | null) => void;
   setIsLoadingCities: (v: boolean) => void;
   setIsLoadingPlaces: (v: boolean) => void;
-  setIsGenerating: (v: boolean) => void;
   setError: (err: string | null) => void;
   reset: () => void;
 };
@@ -130,10 +108,8 @@ export function BTSProvider({ children }: { children: React.ReactNode }) {
   const [selectedPlaces, setSelectedPlaces] = useState<BTSPlace[]>([]);
   const [cities, setCities] = useState<BTSCity[]>([]);
   const [topPlaces, setTopPlaces] = useState<BTSPlace[]>([]);
-  const [itinerary, setItinerary] = useState<BTSItinerary | null>(null);
   const [isLoadingCities, setIsLoadingCities] = useState(false);
   const [isLoadingPlaces, setIsLoadingPlaces] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // ⚠️ 수정금지(승인필요) 2026-07-30 사장님 SSOT = 도시 목록 = /api/bts/cities 1벌(남은 공연만).
@@ -178,9 +154,7 @@ export function BTSProvider({ children }: { children: React.ReactNode }) {
     setSelectedPlaceIds([]);
     setSelectedPlaces([]);
     setTopPlaces([]);
-    setItinerary(null);
     setError(null);
-    setIsGenerating(false);
     setIsLoadingPlaces(false);
   }, []);
 
@@ -191,12 +165,10 @@ export function BTSProvider({ children }: { children: React.ReactNode }) {
         selectedCity,
         selectedPlaces,
         selectedPlaceIds,
-        itinerary,
         cities,
         topPlaces,
         isLoadingCities,
         isLoadingPlaces,
-        isGenerating,
         error,
         setSelectedCharacter,
         setSelectedCity,
@@ -204,10 +176,8 @@ export function BTSProvider({ children }: { children: React.ReactNode }) {
         clearSelectedPlaces,
         setCities,
         setTopPlaces,
-        setItinerary,
         setIsLoadingCities,
         setIsLoadingPlaces,
-        setIsGenerating,
         setError,
         reset,
       }}

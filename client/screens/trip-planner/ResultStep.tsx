@@ -75,7 +75,8 @@ export default function ResultStep({ planner }: { planner: PlannerApi }) {
         style={[styles.resultHeader, { paddingTop: insets.top + Spacing.sm }]}
       >
         <Pressable
-          onPress={() => setScreen("Input")}
+          // ⚠️ 2026-07-31 사장님 지시(BTS 문제점1) = BTS 로 열렸으면 카드 화면 복귀, 메인은 입력화면(단일 출구 1벌)
+          onPress={planner.handleExitResult}
           style={styles.headerButton}
         >
           <Icon name="arrow-left" size={24} color={theme.text} />

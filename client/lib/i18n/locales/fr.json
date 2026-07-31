@@ -34,7 +34,6 @@
     "emailLoginBtn": "Se connecter",
     "emailInvalid": "Veuillez saisir un e-mail valide",
     "emailLoginFailed": "Échec de la connexion",
-    "btsTour": "🎵 Aller au BTS Tour",
     "termsAgree": "En vous connectant, vous acceptez les Conditions d'utilisation et la Politique de confidentialité",
     "languageSelect": "Sélectionner la langue",
     "dateInvalid": "Date invalide",
@@ -165,16 +164,6 @@
     "creditShort": "Crédits insuffisants ({{balance}} restants / {{required}} requis)"
   },
   "bts": {
-    "title": "Mon BTS Tour",
-    "selectVibe": "Avec quelle ambiance de membre voyagerez-vous ?",
-    "nextSelectPlaces": "Suivant : Sélectionner parmi 8 lieux",
-    "placeSelect": "Sélectionner des lieux",
-    "placeSelectCount": "Sélectionner des lieux ({{count}}/8)",
-    "generateWithPlaces": "✨ Générer avec {{count}} lieux",
-    "generating": "Génération de l'itinéraire",
-    "generatingHint": "Création d'un tour personnalisé avec vos lieux sélectionnés...",
-    "generateFailed": "Échec de la génération",
-    "backToStart": "Recommencer",
     "placeCart": {
       "cartTitle": "Ensemble à visiter {{count}}/{{max}}",
       "remove": "Retirer",

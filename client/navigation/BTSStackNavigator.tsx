@@ -10,14 +10,14 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { BTSProvider } from "@/contexts/BTSContext";
 import BTSCharacterSelectScreen from "@/screens/bts/BTSCharacterSelectScreen";
 import BTSPlaceCartScreen from "@/screens/bts/place-cart/BTSPlaceCartScreen";
-import BTSLoadingScreen from "@/screens/bts/BTSLoadingScreen";
-import BTSDashboardScreen from "@/screens/bts/dashboard/BTSDashboardScreen";
+// ⚠️ 2026-07-31 사장님 승인(BTS D단계) = 옛 BTSLoading·BTSDashboard 완전삭제(§19)
+//   → 자리 대체 = BTSTripScreen(메인앱 여정화면 그대로 = 생성기 1벌).
+import BTSTripScreen from "@/screens/bts/BTSTripScreen";
 
 export type BTSStackParamList = {
   BTSCharacterSelect: undefined;
   BTSPlaceCart: undefined;
-  BTSLoading: undefined;
-  BTSDashboard: undefined;
+  BTSTrip: undefined;
 };
 
 const Stack = createNativeStackNavigator<BTSStackParamList>();
@@ -44,18 +44,9 @@ export default function BTSStackNavigator() {
           />
           <Stack.Screen name="BTSPlaceCart" component={BTSPlaceCartScreen} />
           <Stack.Screen
-            name="BTSLoading"
-            component={BTSLoadingScreen}
+            name="BTSTrip"
+            component={BTSTripScreen}
             options={{
-              gestureEnabled: false,
-              animation: "fade",
-            }}
-          />
-          <Stack.Screen
-            name="BTSDashboard"
-            component={BTSDashboardScreen}
-            options={{
-              gestureEnabled: false,
               animation: "fade",
             }}
           />

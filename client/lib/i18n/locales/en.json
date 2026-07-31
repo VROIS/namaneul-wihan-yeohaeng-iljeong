@@ -34,7 +34,6 @@
     "emailLoginBtn": "Log in",
     "emailInvalid": "Please enter a valid email",
     "emailLoginFailed": "Login failed",
-    "btsTour": "🎵 Go to BTS Tour",
     "termsAgree": "By logging in, you agree to the Terms of Service and Privacy Policy",
     "languageSelect": "Select Language",
     "dateInvalid": "Invalid date",
@@ -165,16 +164,6 @@
     "creditShort": "Not enough credits ({{balance}} left / {{required}} needed)"
   },
   "bts": {
-    "title": "My BTS Tour",
-    "selectVibe": "Whose journey vibe will you travel with?",
-    "nextSelectPlaces": "Next: Select from 8 places",
-    "placeSelect": "Select Places",
-    "placeSelectCount": "Select Places ({{count}}/8)",
-    "generateWithPlaces": "✨ Generate with {{count}} places",
-    "generating": "Generating itinerary",
-    "generatingHint": "Creating a custom tour with your selected places...",
-    "generateFailed": "Generation failed",
-    "backToStart": "Start Over",
     "placeCart": {
       "cartTitle": "Going together {{count}}/{{max}}",
       "remove": "Remove",
