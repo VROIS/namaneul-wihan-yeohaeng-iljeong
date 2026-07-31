@@ -30,5 +30,12 @@ jobs:
           EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY: ${{ secrets.EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY }}
         run: npx expo prebuild --platform ios --no-install
 
+      # ⚠️ 2026-07-31 = 검사 단계에도 **열쇠를 넘겨야 한다.**
+      #   앞 단계(prebuild)에만 주고 여기 안 주면, 검사기가 "심어진 값"과 비교할 **기대값**을 못 만든다
+      #   → 실제로는 정상인데 "열쇠가 없음"으로 **거짓 실패**가 난다(2026-07-31 첫 실행에서 실측).
       - name: 3종 검사 (하나라도 틀리면 실패)
+        env:
+          EXPO_PUBLIC_GOOGLE_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_CLIENT_ID }}
+          EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID }}
+          EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY: ${{ secrets.EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY }}
         run: node scripts/verify-ios-auth.mjs
