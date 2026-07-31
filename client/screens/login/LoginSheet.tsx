@@ -2,7 +2,9 @@
 //   바텀시트(밑에서)는 키보드(밑에서)와 구조적 겹침 → 상단 모달로 교체(키보드 겹침 원천 차단, 조사: 범용앱+NN/G+Material).
 //   기존 LoginScreen(보관)의 폼을 그대로 담되(§16 재사용), 화면이동 대신 팝업 닫기(onDone)로 동작.
 //   상단 = 이미지 로고(png=iOS 미표시 버그) 제거 + "Tripis 트리피스" 글자 유지 + 슬로건 축소(넘침 방지).
-//   곁가지 제외(사장님 "메인앱만") = WhatsApp·BTS·언어선택 미포함. 애플 = 별도 세션.
+//   곁가지 제외(사장님 "메인앱만") = WhatsApp·BTS·언어선택 미포함.
+// ⚠️ 사장님 SSOT 2026-07-31 = **순서 = 생년월일 → 구글 → 카톡 → 애플(아이폰만) → 메일.**
+//   아미봉 인증창(BTSLandingScreen)과 **같은 순서·같은 기기분기 1벌**. 껍데기(색·배경)만 다르다.
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -51,6 +53,8 @@ function LoginSheetForm({ onClose }: { onClose: () => void }) {
     validateAndSetYear,
     handleGooglePress,
     handleKakaoPress,
+    handleApplePress,
+    isAppleAvailable,
     emailInput,
     setEmailInput,
     emailLoading,
@@ -206,28 +210,11 @@ function LoginSheetForm({ onClose }: { onClose: () => void }) {
         </View>
       )}
 
-      {/* ── 소셜 로그인 ── */}
+      {/* ── 소셜 로그인 ──
+          ⚠️ 수정금지(승인필요) 2026-07-31 사장님 SSOT = **순서 = 생년월일 → 구글 → 카톡 → 애플 → 메일.**
+            옛 순서(카카오가 구글보다 위)는 이 파일 맨 위 설명과도 **반대**여서 어느 쪽이 맞는지
+            알 수 없는 상태였다 = 삭제 §19. 아미봉 인증창과 **같은 순서 1벌**로 맞춘다. */}
       <View style={styles.socialSection}>
-        {/* 카카오 */}
-        <Pressable
-          style={({ pressed }) => [
-            styles.socialButton,
-            styles.kakaoButton,
-            pressed && styles.buttonPressed,
-            oauthLoading && styles.buttonDisabled,
-          ]}
-          onPress={handleKakaoPress}
-          disabled={oauthLoading}
-          accessibilityRole="button"
-          accessibilityLabel="카카오로 시작하기"
-          accessibilityState={{ disabled: oauthLoading }}
-        >
-          <View style={styles.kakaoIcon}>
-            <Text style={styles.kakaoIconText}>K</Text>
-          </View>
-          <Text style={styles.kakaoButtonText}>카카오로 시작하기</Text>
-        </Pressable>
-
         {/* 구글 */}
         <Pressable
           style={({ pressed }) => [
@@ -250,6 +237,50 @@ function LoginSheetForm({ onClose }: { onClose: () => void }) {
             {t("login.googleStart")}
           </Text>
         </Pressable>
+
+        {/* 카카오 */}
+        <Pressable
+          style={({ pressed }) => [
+            styles.socialButton,
+            styles.kakaoButton,
+            pressed && styles.buttonPressed,
+            oauthLoading && styles.buttonDisabled,
+          ]}
+          onPress={handleKakaoPress}
+          disabled={oauthLoading}
+          accessibilityRole="button"
+          accessibilityLabel="카카오로 시작하기"
+          accessibilityState={{ disabled: oauthLoading }}
+        >
+          <View style={styles.kakaoIcon}>
+            <Text style={styles.kakaoIconText}>K</Text>
+          </View>
+          <Text style={styles.kakaoButtonText}>카카오로 시작하기</Text>
+        </Pressable>
+
+        {/* ⚠️ 수정금지(승인필요) 2026-07-31 사장님 SSOT = **애플 = 아이폰에서만 보인다.**
+            안드로이드에는 애플 로그인이 아예 없으므로(애플이 iOS 에서만 제공) 버튼을 감춘다.
+            아미봉 인증창(BTSLandingScreen)이 쓰는 것과 **똑같은 판단 1벌** = 두 창이 항상 같이 움직인다. */}
+        {isAppleAvailable && (
+          <Pressable
+            style={({ pressed }) => [
+              styles.socialButton,
+              styles.appleButton,
+              pressed && styles.buttonPressed,
+              oauthLoading && styles.buttonDisabled,
+            ]}
+            onPress={handleApplePress}
+            disabled={oauthLoading}
+            accessibilityRole="button"
+            accessibilityLabel="Apple로 시작하기"
+            accessibilityState={{ disabled: oauthLoading }}
+          >
+            <View style={styles.appleIcon}>
+              <Text style={styles.appleIconText}></Text>
+            </View>
+            <Text style={styles.appleButtonText}>Apple로 시작하기</Text>
+          </Pressable>
+        )}
 
         {/* ⚠️ 이메일 로그인 = 구글(지메일)로 로그인 못 하는 사용자가 다른 이메일로 시작하는 정식 경로. 설명 라벨 없이 입력창만 = 사용자가 순서대로 진행(§23 설명형 텍스트 금지, 사장님 SSOT 2026-07-25). */}
         <View style={styles.emailLoginBox}>

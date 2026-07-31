@@ -271,6 +271,18 @@ export const styles = StyleSheet.create({
   },
   googleIconText: { color: "#FFFFFF", fontSize: 14, fontFamily: Fonts.bold },
   googleButtonText: { fontSize: 16, fontFamily: Fonts.bold },
+  // ⚠️ 수정금지(승인필요) 2026-07-31 사장님 지시 = 애플 로그인 버튼(아이폰 전용).
+  //   색·글자 = 애플이 정한 규격 그대로(검정 바탕 + 흰 글자). 애플은 자기 버튼 모양을 바꾸면
+  //   앱 심사에서 되돌려보낸다 = 임의로 색을 바꾸지 말 것.
+  appleButton: { backgroundColor: "#000000" },
+  appleIcon: {
+    width: 24,
+    height: 24,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  appleIconText: { color: "#FFFFFF", fontSize: 18, fontFamily: Fonts.bold },
+  appleButtonText: { color: "#FFFFFF", fontSize: 16, fontFamily: Fonts.bold },
   disclaimer: {
     fontSize: 12,
     fontFamily: Fonts.sans,

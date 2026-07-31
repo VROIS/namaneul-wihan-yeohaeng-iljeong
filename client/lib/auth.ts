@@ -9,7 +9,7 @@ export interface UserData {
   email?: string;
   name?: string;
   displayName?: string;
-  provider: "kakao" | "google" | "whatsapp";
+  provider: "kakao" | "google" | "apple" | "whatsapp";
   language: string;
   birthDate: string;
   ageGroup?: string;
@@ -154,6 +154,20 @@ export function socialLoginWithKakao(data: {
   deviceType: string;
 }): Promise<LoginResult> {
   return postSocialLogin("/api/auth/kakao", data, "카카오 로그인 실패");
+}
+
+// ⚠️ 수정금지(승인필요) 2026-07-31 사장님 지시 = 애플 로그인(아이폰 전용).
+//   애플이 주는 신분증(identityToken)을 우리 서버로 보낸다 = 구글과 **완전히 같은 형식**.
+//   이름은 애플이 **맨 처음 로그인할 때 딱 한 번만** 준다(두 번째부터는 안 줌).
+//   그래서 받은 그 순간 함께 보내 저장한다 = 나중에는 두 번 다시 받을 수 없다.
+export function socialLoginWithApple(data: {
+  identityToken: string;
+  birthDate: string;
+  language: string;
+  deviceType: string;
+  fullName?: string;
+}): Promise<LoginResult> {
+  return postSocialLogin("/api/auth/apple", data, "Apple 로그인 실패");
 }
 
 /** WhatsApp OTP 발송 */

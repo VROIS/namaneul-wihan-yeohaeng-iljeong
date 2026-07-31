@@ -19,7 +19,14 @@ export function getUserIdFromReq(req: Request): string | null {
 //   재로그인 displayName 갱신 가드가 이 집합과 비교 = 정의부·가드가 같은 소스 참조(따로 하드코딩 시 한쪽만 바뀌면 가드 조용히 깨짐 = simplify 지적).
 const KAKAO_DEFAULT_NAME = "카카오 사용자";
 const GOOGLE_DEFAULT_NAME = "Google User";
-const SOCIAL_DEFAULT_NAMES = new Set([KAKAO_DEFAULT_NAME, GOOGLE_DEFAULT_NAME]);
+// ⚠️ 2026-07-31 = 애플도 같은 집합에 넣는다. 애플은 이름을 첫 로그인 때 한 번만 주므로
+//   두 번째부터는 이 기본문구가 오는데, 집합에 없으면 나중에 받은 진짜 이름을 이걸로 덮어버린다.
+const APPLE_DEFAULT_NAME = "Apple User";
+const SOCIAL_DEFAULT_NAMES = new Set([
+  KAKAO_DEFAULT_NAME,
+  GOOGLE_DEFAULT_NAME,
+  APPLE_DEFAULT_NAME,
+]);
 
 /**
  * ⚠️ 수정금지(승인필요) — 로그인 성공 시 기존 계정에 반영하는 단 하나의 함수 (2026-07-26 §16 1벌).
@@ -199,4 +206,5 @@ export {
   toClientUser,
   KAKAO_DEFAULT_NAME,
   GOOGLE_DEFAULT_NAME,
+  APPLE_DEFAULT_NAME,
 };

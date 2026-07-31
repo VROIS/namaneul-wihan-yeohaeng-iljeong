@@ -6,7 +6,9 @@ import {
   getUserIdFromReq,
   KAKAO_DEFAULT_NAME,
   GOOGLE_DEFAULT_NAME,
+  APPLE_DEFAULT_NAME,
 } from "./auth-user";
+import { verifyAppleIdentityToken } from "./auth-apple";
 import type { User } from "@shared/schema";
 
 // ⚠️ 2026-07-27 §16 = 값 끝의 줄바꿈·공백을 깎는다(카카오 KOE101 사고 근본 = 눈에 안 보이는 글자).
@@ -188,6 +190,56 @@ export function registerAuthRoutes(app: Express) {
       res
         .status(500)
         .json({ success: false, error: "Failed to process Kakao login" });
+    }
+  });
+
+  // ⚠️ 수정금지(승인필요) 2026-07-31 사장님 지시 — 애플 로그인(아이폰 전용).
+  //   구글·카카오와 **완전히 같은 형식**: 신분증 확인 → findOrCreateUser → 같은 모양의 응답(§16).
+  //   확인 방식만 다르다(애플엔 문의 창구가 없어 서명을 직접 대조) = server/auth-apple.ts 1벌.
+  app.post("/api/auth/apple", async (req, res) => {
+    try {
+      const { identityToken, birthDate, language, deviceType, fullName } =
+        req.body;
+      // 사장님 SSOT 2026-07-26(세션2-D) = 외부인증에서 생년월일 분리 = 신분증만 필수.
+      if (!identityToken) {
+        return res
+          .status(400)
+          .json({ success: false, error: "identityToken is required" });
+      }
+      const identity = await verifyAppleIdentityToken(identityToken);
+      if (!identity) {
+        return res
+          .status(401)
+          .json({ success: false, error: "Invalid Apple token" });
+      }
+      // ⚠️ 애플은 이름을 **맨 처음 로그인할 때 딱 한 번만** 준다(그 뒤로는 안 줌).
+      //   그래서 클라이언트가 그때 받은 이름을 함께 보내온다. 없으면 기본 이름을 쓴다.
+      //   ⚠️ 애플의 "메일 가리기"를 쓰면 개인 메일 대신 애플이 만든 전달용 주소가 온다 = 정상.
+      const displayName =
+        (typeof fullName === "string" && fullName.trim()) ||
+        identity.email ||
+        APPLE_DEFAULT_NAME;
+      const user = await findOrCreateUser({
+        provider: "apple",
+        providerId: identity.providerId,
+        email: identity.email,
+        // 인증된 메일일 때만 기존 계정에 연결(구글·카카오와 같은 보안 규칙).
+        emailVerified: identity.emailVerified,
+        birthDate,
+        displayName,
+        language,
+        deviceType,
+      });
+      res.json({
+        success: true,
+        user: toClientUser(user),
+        token: "simple_auth_token_v1_" + user.id,
+      });
+    } catch (e: any) {
+      console.error("[Auth] Apple Error:", e);
+      res
+        .status(500)
+        .json({ success: false, error: "Failed to process Apple login" });
     }
   });
 

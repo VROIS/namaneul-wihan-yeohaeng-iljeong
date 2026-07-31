@@ -1,0 +1,34 @@
+# ⚠️ 수정금지(승인필요) 2026-07-31 사장님 지시 = **아이폰 소셜 3종(구글·애플·카톡) 실증 도구.**
+#   목적: 아이폰 빌드에 실제로 들어갈 설정이 3종 모두 올바른지 **빌드 없이** 확인한다.
+#   왜 필요한가: iOS 설정 생성(prebuild)은 **맥·리눅스에서만** 된다(윈도우 불가).
+#     이 PC 에서는 확인 자체가 불가능하므로, 리눅스에서 도는 이 자리에서 확인한다.
+#   1회용이 아니라 **상시 도구**다(§16) — 열쇠가 바뀌거나 빌드가 실패하면 여기서 먼저 원인을 본다.
+name: iOS 인증 3종 확인 (구글·애플·카톡)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: 부품 설치
+        run: npm ci --legacy-peer-deps
+
+      - name: iOS 설정 생성 (prebuild)
+        env:
+          EXPO_PUBLIC_DOMAIN: ${{ secrets.EXPO_PUBLIC_DOMAIN }}
+          EXPO_PUBLIC_GOOGLE_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_CLIENT_ID }}
+          EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID }}
+          EXPO_PUBLIC_KAKAO_JAVASCRIPT_KEY: ${{ secrets.EXPO_PUBLIC_KAKAO_JAVASCRIPT_KEY }}
+          EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY: ${{ secrets.EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY }}
+        run: npx expo prebuild --platform ios --no-install
+
+      - name: 3종 검사 (하나라도 틀리면 실패)
+        run: node scripts/verify-ios-auth.mjs

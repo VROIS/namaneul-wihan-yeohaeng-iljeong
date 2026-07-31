@@ -10,7 +10,8 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.vibetrip.app"
+      "bundleIdentifier": "com.sonanie.guide",
+      "usesAppleSignIn": true
     },
     "android": {
       "adaptiveIcon": {

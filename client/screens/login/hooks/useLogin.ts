@@ -24,18 +24,21 @@ import {
   getIdTokenFromGoogleResponse,
 } from "@/lib/auth-oauth";
 // 구글 = 웹(auth-google.web.ts, 리다이렉트) / 앱(auth-google.ts, 네이티브 SDK) 자동 선택
+import { useGoogleAuthRequest } from "@/lib/auth-google";
 import {
-  useGoogleAuthRequest,
-  signInWithGoogle,
-  isGoogleOAuthConfigured,
-} from "@/lib/auth-google";
-import {
-  isKakaoOAuthConfigured,
   startKakaoLoginWeb,
-  loginKakaoApp,
   exchangeKakaoCodeForToken,
   getKakaoCallbackData,
+  isKakaoOAuthConfigured,
 } from "@/lib/auth-kakao";
+// 애플 = 웹(auth-apple.web.ts, 없음) / 앱(auth-apple.ts, iOS 네이티브) 자동 선택
+import { isAppleAuthAvailable } from "@/lib/auth-apple";
+// ⚠️ 앱 소셜 3종 조립 = 공용 1벌(§16). 아미봉 인증창도 같은 것을 쓴다.
+import {
+  runNativeSocial,
+  isSocialConfigured,
+  type SocialProvider,
+} from "@/lib/auth-social";
 import { useTranslation } from "react-i18next";
 import { SUPPORTED_LANGS, changeLanguageAndPersist } from "@/lib/i18n";
 
@@ -281,9 +284,19 @@ export function useLogin({ onDone }: { onDone: () => void }) {
     }
   };
 
+  // ⚠️ 수정금지(승인필요) 2026-07-31 = 앱 소셜 3종 = **공용 1벌**(auth-social.ts)로 통일 §16.
+  //   옛것(구글·카카오·애플 각각 여기서 따로 조립) 완전삭제 §19 = 아미봉 인증창과 두 벌로 갈리던 근본.
+  const startNativeSocial = (provider: SocialProvider) =>
+    runNativeSocialLogin(() =>
+      runNativeSocial(provider, {
+        birthDate: birthDateStr!,
+        language: i18n.language,
+      }),
+    );
+
   const handleGooglePress = async () => {
     if (!requireBirthDateAndAdult()) return;
-    if (!isGoogleOAuthConfigured()) {
+    if (!isSocialConfigured("google")) {
       console.error("[Auth] 구글 클라이언트 ID 미주입 = 로그인 불가");
       notify(t("login.loginFailed"));
       return;
@@ -292,16 +305,7 @@ export function useLogin({ onDone }: { onDone: () => void }) {
       await googlePromptAsync(); // 리다이렉트 → 복귀 시 위 useEffect 가 처리
       return;
     }
-    await runNativeSocialLogin(async () => {
-      const idToken = await signInWithGoogle();
-      if (!idToken) return null; // 사용자가 구글 창을 닫음
-      return socialLoginWithGoogle({
-        idToken,
-        birthDate: birthDateStr!,
-        language: i18n.language,
-        deviceType: "mobile",
-      });
-    });
+    await startNativeSocial("google");
   };
 
   const handleWhatsAppPress = async () => {
@@ -359,7 +363,7 @@ export function useLogin({ onDone }: { onDone: () => void }) {
 
   const handleKakaoPress = async () => {
     if (!requireBirthDateAndAdult()) return;
-    if (!isKakaoOAuthConfigured()) {
+    if (!isSocialConfigured("kakao")) {
       console.error("[Auth] 카카오 앱 키 미주입 = 로그인 불가");
       notify(t("login.loginFailed"));
       return;
@@ -375,15 +379,15 @@ export function useLogin({ onDone }: { onDone: () => void }) {
       }
       return;
     }
-    await runNativeSocialLogin(async () => {
-      const accessToken = await loginKakaoApp();
-      return socialLoginWithKakao({
-        accessToken,
-        birthDate: birthDateStr!,
-        language: i18n.language,
-        deviceType: "mobile",
-      });
-    });
+    await startNativeSocial("kakao");
+  };
+
+  // ⚠️ 수정금지(승인필요) 2026-07-31 사장님 지시 = 애플 로그인(아이폰 전용).
+  //   생년월일 확인 → 애플 창 → 우리 서버 로그인 = **구글·카카오와 완전히 같은 순서**.
+  //   웹 분기가 없는 이유 = 웹에는 버튼 자체가 안 그려진다(isAppleAvailable=false).
+  const handleApplePress = async () => {
+    if (!requireBirthDateAndAdult()) return;
+    await startNativeSocial("apple");
   };
 
   // ⚠️ 사장님 SSOT 2026-07-14 = 개발단계 이메일 로그인 = 구글 OAuth(웹 400) 우회. 메일 넣으면 그 계정으로 로그인(사장님 메일=admin).
@@ -455,6 +459,9 @@ export function useLogin({ onDone }: { onDone: () => void }) {
     handleWhatsAppSendOtp,
     handleWhatsAppVerify,
     handleKakaoPress,
+    handleApplePress,
+    // 애플 버튼을 보여줄지 = 아이폰만 true. 화면은 이 값 1벌만 보고 판단(§16).
+    isAppleAvailable: isAppleAuthAvailable(),
     emailInput,
     setEmailInput,
     emailLoading,

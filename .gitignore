@@ -116,6 +116,10 @@ scripts/test-*.mjs
 scripts/check_*.mjs
 scripts/check-*.mjs
 scripts/verify-*.mjs
+# ⚠️ 2026-07-31 예외 = **아이폰 인증 3종 검사기는 올린다**(§16 상시 도구).
+#   이유: 이 검사는 리눅스(GitHub)에서만 돌 수 있다(윈도우는 iOS 설정 생성 자체가 불가).
+#   레포에 없으면 GitHub 작업이 부를 수가 없다 = 1회용이 아니라 빌드 전 상시 관문.
+!scripts/verify-ios-auth.mjs
 scripts/final-verify.mjs
 scripts/bulk-trigger-*.mjs
 scripts/insert-cron-schedules.mjs

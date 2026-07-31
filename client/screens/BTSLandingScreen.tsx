@@ -30,25 +30,28 @@ import Animated, {
 import { BlurView } from "expo-blur";
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
+import { useTranslation } from "react-i18next";
 import * as Haptics from "expo-haptics";
-import { socialLoginWithGoogle } from "@/lib/auth";
+import { socialLoginWithGoogle, calculateAge } from "@/lib/auth";
 import { getIdTokenFromGoogleResponse } from "@/lib/auth-oauth";
 // 구글 = 웹(auth-google.web.ts) / 앱(auth-google.ts) 자동 선택 (2026-07-26 분리)
 import { useGoogleAuthRequest } from "@/lib/auth-google";
+import { isAppleAuthAvailable } from "@/lib/auth-apple";
+// ⚠️ 앱 소셜 3종 조립 = 공용 1벌(§16). 메인 인증창(useLogin)도 같은 것을 쓴다.
+import {
+  runNativeSocial,
+  isSocialConfigured,
+  type SocialProvider,
+} from "@/lib/auth-social";
 import { getApiUrl } from "@/lib/query-client";
-
-const { width: SW, height: SH } = Dimensions.get("window");
-
-// ⚠️ 수정금지(승인필요) — 원본 색상 (VROIS/vrois)
-const STAGE_COLORS = ["#001a4d", "#050930", "#9333ea"];
-const PRIMARY = "#8bacff";
-const SECONDARY = "#b486ff";
-
-// ⚠️ PC 데스크톱 해상도 대응 = 320px / 140px 최대폭 제한 (화면 잘림 완벽 방지)
-const GLOBE_SIZE = Math.min(SW * 0.62, 320);
-const HANDLE_W = 50;
-const HANDLE_H = Math.min(SW * 0.35, 140);
-const BTN_AREA_W = Math.min(SW * 0.72, 360);
+// ⚠️ 크기·색·모양 값은 같은 폴더 bts/bts-landing-styles.ts 1곳에 모아 둔다(§0 700줄 한도로 분리, 2026-07-31).
+import {
+  styles,
+  STAGE_COLORS,
+  PRIMARY,
+  SECONDARY,
+  GLOBE_SIZE,
+} from "./bts/bts-landing-styles";
 
 // ⚠️ 수정금지(승인필요) 2026-07-30 = 아미봉 구체 안 글자에 **똑같이** 적용하는 값 1벌(§0).
 //   여러 곳에 흩어 적으면 나중에 한 곳만 고치고 나머지를 빠뜨린다(드리프트).
@@ -89,8 +92,13 @@ const EMPTY_CONCERT: ConcertInfo = { city: "", dDay: 0 };
 
 // 전구/서치라이트 삭제됨 (Expo Go 미지원 + 비율 깨짐)
 
+// ⚠️ 2026-07-31 §19 = 이 화면이 소셜 3종을 **따로 조립하던 코드 완전삭제**.
+//   사유(§22 검증이 잡음): 메인 인증창과 두 벌로 갈려 이미 서로 달라져 있었다(열쇠 검사 유무).
+//   지금은 두 창 모두 `client/lib/auth-social.ts` 의 `runNativeSocial` 1벌만 부른다(§16).
+
 export function BTSLandingScreen() {
   const navigation = useNavigation<any>();
+  const { i18n } = useTranslation(); // 저장할 언어 = 메인 인증창과 같은 값(§16)
   const [dob, setDob] = useState("");
   const [dobComplete, setDobComplete] = useState(false);
   const [lightingStage, setLightingStage] = useState(0);
@@ -127,17 +135,35 @@ export function BTSLandingScreen() {
   const globeGlow = useSharedValue(0);
   const bgStage = useSharedValue(0);
   const whiteout = useSharedValue(0);
-  // ⚠️ 수정금지(승인필요) — 생년월일 → birthDate 문자열
-  const birthDateStr = (() => {
+  // ⚠️ 수정금지(승인필요) 2026-07-31 = 생년월일 → 저장할 문자열 + **성인 여부**.
+  //   옛것(8자리이기만 하면 통과) 완전삭제 §19. 사유(§22 검증이 잡음):
+  //   이 화면이 진짜 로그인을 하게 되면서, 메인 인증창은 막는 것들이 여기로는 그냥 통과했다
+  //   — ① 없는 날짜(99/99/9999) ② **미성년자**. 같은 서버에 같은 계정이 만들어지므로
+  //   두 창의 기준이 달라선 안 된다. 나이 계산은 메인과 **같은 함수**를 쓴다(§16).
+  const { birthDateStr, isAdult } = (() => {
     const digits = dob.replace(/\D/g, "");
-    if (digits.length !== 8) return "";
-    return `${digits.slice(4)}-${digits.slice(2, 4)}-${digits.slice(0, 2)}`;
+    if (digits.length !== 8) return { birthDateStr: "", isAdult: false };
+    const d = Number(digits.slice(0, 2));
+    const m = Number(digits.slice(2, 4));
+    const y = Number(digits.slice(4));
+    const date = new Date(y, m - 1, d);
+    // 실제로 있는 날짜인지 확인(2월 30일 같은 값을 걸러낸다)
+    const real =
+      date.getDate() === d &&
+      date.getMonth() === m - 1 &&
+      date.getFullYear() === y;
+    if (!real) return { birthDateStr: "", isAdult: false };
+    // 사용자가 친 숫자 그대로 조립 = 시간대 변환 0(메인 인증창과 같은 방식)
+    const str = `${digits.slice(4)}-${digits.slice(2, 4)}-${digits.slice(0, 2)}`;
+    return { birthDateStr: str, isAdult: calculateAge(date) >= 18 };
   })();
 
   // ⚠️ 수정금지(승인필요) — Google OAuth 응답 처리 (기존 LoginScreen 패턴)
   useEffect(() => {
-    if (!googleResponse || googleResponse.type !== "success" || !birthDateStr)
-      return;
+    // ⚠️ 2026-07-31 = 성인 확인을 여기에도 건다(§19 = 8자리면 통과하던 옛 조건 삭제).
+    //   이 갈래는 웹에서 구글 창을 다녀온 뒤 실행되므로, 버튼 앞의 검사를 안 거친다.
+    if (!googleResponse || googleResponse.type !== "success") return;
+    if (!birthDateStr || !isAdult) return;
     if (processedGoogleRef.current === googleResponse) return;
     processedGoogleRef.current = googleResponse;
     const idToken = getIdTokenFromGoogleResponse(googleResponse);
@@ -146,7 +172,7 @@ export function BTSLandingScreen() {
     socialLoginWithGoogle({
       idToken,
       birthDate: birthDateStr,
-      language: "ko",
+      language: i18n.language, // 옛 "ko" 고정 삭제 §19
       deviceType: Platform.OS === "web" ? "web" : "mobile",
     })
       .then((result) => {
@@ -162,7 +188,9 @@ export function BTSLandingScreen() {
       })
       .catch(() => Alert.alert("로그인 실패", "서버 연결에 실패했습니다."))
       .finally(() => setOauthLoading(false));
-  }, [googleResponse, birthDateStr]);
+    // goToWorldMap 은 아래에서 선언되므로 의존성에 넣지 않는다(넣으면 선언 전 참조 = 실행 오류).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [googleResponse, birthDateStr, isAdult, i18n.language]);
 
   // ⚠️ 수정금지(승인필요) — 등장 시퀀스
   useEffect(() => {
@@ -234,20 +262,63 @@ export function BTSLandingScreen() {
     }, 700);
   }, [city, concertInfo]);
 
-  // ⚠️ 수정금지(승인필요) — OAuth 실제 연결 (기존 LoginScreen 패턴 그대로)
-  // ⚠️ 수정금지(승인필요) 2026-07-30 = 이 함수가 **최신 도시 정보**를 쓰게 고쳤다.
-  //   옛것(의존성이 dobComplete·birthDateStr·city)은 실제로 쓰는 값과 하나도 안 맞아서,
-  //   공연 정보가 늦게 도착하면 **옛 함수를 붙잡아 다음 화면에 도시·날짜를 빈 값으로 넘겼다** = 삭제 §19.
-  const handleLogin = useCallback(async () => {
-    handleInteraction();
-    globeGlow.value = withSpring(1, { damping: 8, stiffness: 200 });
-    haptic("success");
+  // ⚠️ 수정금지(승인필요) 2026-07-31 사장님 지시 = **아미봉 인증창도 진짜 로그인을 한다.**
+  //   옛것(눌러도 그냥 다음 화면으로 넘어가던 바이패스) 완전삭제 §19.
+  //   사유: 껍데기만 인증창이고 실제로는 로그인이 **하나도 안 됐다**. 그래서 이 화면을 거쳐 들어온
+  //   사람은 비로그인 상태라, 뒤에서 크레딧·전문가 문의 같은 기능이 전부 막혔다.
+  //   구조 = 메인 인증창(useLogin)과 **같은 함수를 부른다**(§16). 껍데기(아미봉 모양)만 다르다.
+  //   순서 = 생년월일 → 구글 → 카톡 → 애플(아이폰만). 메일칸은 아미봉엔 자리가 없어 뺀다(사장님 확정).
+  const handleSocialLogin = useCallback(
+    async (provider: SocialProvider) => {
+      // 생년월일 = 실제 있는 날짜 + 성인. 메인 인증창과 **같은 기준**(§16).
+      if (!birthDateStr || !isAdult) {
+        Alert.alert("만 18세 이상만 이용할 수 있습니다.");
+        return;
+      }
+      // 열쇠가 없으면 눌러도 알 수 없는 오류만 난다 = 메인 인증창처럼 먼저 막는다.
+      if (!isSocialConfigured(provider)) {
+        console.error(`[Auth] ${provider} 열쇠 미주입 = 로그인 불가`);
+        Alert.alert("로그인에 실패했습니다.");
+        return;
+      }
+      handleInteraction();
+      globeGlow.value = withSpring(1, { damping: 8, stiffness: 200 });
+      haptic("success");
 
-    // ⚠️ 수정금지(승인필요) — BTS 랜딩은 바이패스 (인증은 메인앱에서 처리)
-    // 생년월일 입력 완료 + OAuth 터치 = 바로 세계지도 전환
-    goToWorldMap();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [handleInteraction, goToWorldMap]);
+      // ⚠️ 웹 구글만 예외 = 페이지를 통째로 옮겼다가 돌아오는 방식이라 여기서 결과를 못 받는다.
+      //   돌아온 뒤 아래 googleResponse useEffect 가 이어받아 로그인을 끝낸다(메인 인증창과 같은 구조).
+      if (provider === "google" && Platform.OS === "web") {
+        await googlePromptAsync();
+        return;
+      }
+
+      setOauthLoading(true);
+      try {
+        const result = await runNativeSocial(provider, {
+          birthDate: birthDateStr,
+          language: i18n.language, // 옛 "ko" 고정 삭제 §19 = 메인 인증창과 같은 값
+        });
+        if (!result) return; // 사용자가 로그인 창을 닫음 = 취소 = 조용히 끝
+        if (result.success) goToWorldMap();
+        else Alert.alert(result.error || "로그인에 실패했습니다.");
+      } catch (err) {
+        // 실패 사유 이름 한 낱말만 붙인다(§23 누더기 금지, 메인 인증창과 같은 형식)
+        console.error("[Auth] BTS 소셜 로그인 실패:", err);
+        const code = (err as { code?: string | number } | null)?.code;
+        Alert.alert(code ? `로그인 실패 (${code})` : "로그인에 실패했습니다.");
+      } finally {
+        setOauthLoading(false);
+      }
+    },
+    [
+      birthDateStr,
+      isAdult,
+      i18n.language,
+      handleInteraction,
+      goToWorldMap,
+      googlePromptAsync,
+    ],
+  );
 
   // ── 애니메이션 스타일 ──
 
@@ -316,7 +387,11 @@ export function BTSLandingScreen() {
   // ⚠️ 수정금지(승인필요) 2026-07-30 사장님 지시 = **웹·앱이 똑같이 동작한다.**
   //   옛것(웹이면 생년월일 없이도 눌리게 열어둠)은 시험용이었고, 웹에서 본 것과 폰에서 본 것이
   //   달라지는 원인이었다 = 삭제 §19. 이제 어디서나 생년월일을 넣어야 로그인 버튼이 열린다.
-  const isDisabled = !dobComplete;
+  // ⚠️ 수정금지(승인필요) 2026-07-31 = **로그인이 도는 중에는 버튼을 잠근다.**
+  //   사유(§22 검증이 잡음): 옛것은 생년월일만 봐서, 로그인 창이 뜨는 1~2초 사이에 다시 누르면
+  //   로그인이 **두 번 겹쳐 시작**됐다(외부 호출 2번 + 화면 넘김 타이머 2개). 메인 인증창은 이미
+  //   이렇게 잠그고 있었는데 이 화면만 빠져 있었다 = 두 창을 같은 규칙 1벌로 맞춘다.
+  const isDisabled = !dobComplete || oauthLoading;
 
   return (
     <KeyboardAvoidingView
@@ -416,33 +491,45 @@ export function BTSLandingScreen() {
               colors={["rgba(255,255,255,0.1)", "rgba(5,9,48,1)"]}
               style={styles.handleGrad}
             />
+            {/* ⚠️ 수정금지(승인필요) 2026-07-31 사장님 SSOT = **아미봉 순서 = 생년월일 → 구글 → 애플 → 카톡.**
+                (생년월일은 위 구체 안. 메일칸은 자리가 없어 없음 = 사장님 확정)
+                ⚠️ 메인 인증창은 **카톡 → 애플** 순이다. **두 창의 순서가 다른 것이 사장님 SSOT 다.**
+                  옛것(두 창을 같은 순서로 맞춤) 삭제 §19 = AI 가 "통일"을 명분으로 사장님 지시를 임의로 바꾼 것.
+                ⚠️ **버튼의 모양·크기·자리는 3일 연구로 맞춘 것 = 한 픽셀도 안 바꾼다**(사장님 지시).
+                  자리는 그대로 두고 **안의 글자와 연결만** 바꿨다. */}
             <View style={styles.btnArea}>
               <TouchableOpacity
                 style={[styles.btn, styles.googleBtn, isDisabled && styles.off]}
-                onPress={() => handleLogin()}
+                onPress={() => handleSocialLogin("google")}
                 disabled={isDisabled}
                 activeOpacity={0.96}
               >
                 <Text style={styles.googleTxt}>Continue with Google</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.btn, styles.kakaoBtn, isDisabled && styles.off]}
-                onPress={() => handleLogin()}
-                disabled={isDisabled}
-                activeOpacity={0.96}
-              >
-                <Text style={styles.kakaoTxt}>Continue with Kakao</Text>
-              </TouchableOpacity>
-              {Platform.OS === "ios" && (
+              {/* 2번째 자리 = 애플(아이폰만). 아이폰이 아니면 이 자리는 비고 카톡이 위로 올라온다. */}
+              {isAppleAuthAvailable() && (
                 <TouchableOpacity
-                  style={[styles.appleLink, isDisabled && styles.off]}
-                  onPress={() => handleLogin()}
+                  style={[
+                    styles.btn,
+                    styles.slot2Btn,
+                    isDisabled && styles.off,
+                  ]}
+                  onPress={() => handleSocialLogin("apple")}
                   disabled={isDisabled}
                   activeOpacity={0.96}
                 >
-                  <Text style={styles.appleTxt}>Sign in with Apple</Text>
+                  <Text style={styles.slot2Txt}>Sign in with Apple</Text>
                 </TouchableOpacity>
               )}
+              {/* 3번째 자리 = 카톡 */}
+              <TouchableOpacity
+                style={[styles.slot3Link, isDisabled && styles.off]}
+                onPress={() => handleSocialLogin("kakao")}
+                disabled={isDisabled}
+                activeOpacity={0.96}
+              >
+                <Text style={styles.slot3Txt}>Continue with Kakao</Text>
+              </TouchableOpacity>
             </View>
           </View>
         </Animated.View>
@@ -459,194 +546,3 @@ export function BTSLandingScreen() {
     </KeyboardAvoidingView>
   );
 }
-
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: STAGE_COLORS[0] },
-
-  // ⚠️ 수정금지(승인필요) — 히어로 (상단)
-  hero: {
-    paddingTop: Platform.OS === "ios" ? 80 : 55,
-    paddingLeft: 28,
-    paddingRight: 28,
-    zIndex: 20,
-  },
-  tourLabel: {
-    fontSize: 10,
-    fontFamily: "Pretendard-Bold",
-    letterSpacing: 6,
-    color: "rgba(255,255,255,0.5)",
-    marginBottom: 8,
-  },
-  titleRow: {
-    flexDirection: "row",
-    alignItems: "baseline",
-    marginBottom: 20,
-  },
-  titleBTS: {
-    fontSize: 42,
-    fontFamily: "Pretendard-Bold",
-    color: PRIMARY,
-    textShadowColor: "rgba(139,172,255,0.3)",
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 20,
-  },
-  // ⚠️ 수정금지(승인필요) — Arirang 이탤릭 (고유명사)
-  titleArirang: {
-    fontSize: 42,
-    fontFamily: "Pretendard-Bold",
-    fontStyle: "italic",
-    color: PRIMARY,
-    textShadowColor: "rgba(139,172,255,0.3)",
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 20,
-  },
-  // ⚠️ 수정금지(승인필요) — 앱 정체성 문구 (가장 크게)
-  sloganWrap: {
-    marginBottom: 0,
-  },
-  slogan: {
-    fontSize: 30,
-    fontFamily: "Pretendard-Bold",
-    color: "#FFFFFF",
-    letterSpacing: 2,
-    lineHeight: 38,
-    textShadowColor: "rgba(139,172,255,0.4)",
-    textShadowOffset: { width: 0, height: 0 },
-    textShadowRadius: 12,
-  },
-
-  // ⚠️ 수정금지(승인필요) — 아미봉 (하단 배치)
-  bombWrap: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingBottom: Platform.OS === "ios" ? 30 : 16,
-  },
-  globeShadow: {
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 20,
-  },
-  globeClip: {
-    width: GLOBE_SIZE,
-    height: GLOBE_SIZE,
-    borderRadius: GLOBE_SIZE / 2,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.1)",
-  },
-  globeInner: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingHorizontal: 20,
-  },
-  innerGlow: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: GLOBE_SIZE / 2,
-  },
-  // ⚠️ 수정금지(승인필요) 2026-07-30 = `textAlign:"center"` 는 **빠져 있던 것을 채운 것**이다.
-  //   부모의 alignItems:center 만으로는 **자식이 부모보다 넓어지는 순간 왼쪽 기준 넘침**이 되어
-  //   글자가 한쪽으로 쏠려 앞글자가 잘렸다(사장님 실기기 관찰). 크기·위치는 그대로다.
-  //   ⚠️ 자간(letterSpacing)은 안드로이드에서 **마지막 글자 뒤에도 붙어** 폭이 넓게 잡힌다 = 쏠림을 키운다.
-  cityLabel: {
-    fontSize: 10,
-    fontFamily: "Pretendard-Bold",
-    letterSpacing: 4,
-    color: "rgba(255,255,255,0.4)",
-    marginBottom: 2,
-    textAlign: "center",
-    alignSelf: "stretch",
-  },
-  dDay: {
-    fontSize: 44,
-    fontFamily: "Pretendard-Bold",
-    color: "#FFFFFF",
-    letterSpacing: -2,
-    marginBottom: 16,
-    textAlign: "center",
-    alignSelf: "stretch",
-  },
-  inputArea: { width: "75%", alignItems: "center" },
-  inputLabel: {
-    fontSize: 9,
-    fontFamily: "Pretendard-Bold",
-    letterSpacing: 3,
-    color: "rgba(255,255,255,0.4)",
-    marginBottom: 6,
-    textAlign: "center",
-    alignSelf: "stretch",
-  },
-  input: {
-    width: "100%",
-    backgroundColor: "rgba(255,255,255,0.08)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.15)",
-    borderRadius: 50,
-    paddingVertical: 10,
-    // ⚠️ 수정금지(승인필요) 2026-07-30 = 좌우 여백 20→10, 글자 13→12.
-    //   사유: 칸 안쪽 폭이 95px 인데 "DD / MM / YYYY" 가 99px = **4px 모자라 마지막 Y 가 잘렸다**(실측).
-    //   입력칸은 글자가 스스로 작아지는 기능(adjustsFontSizeToFit)이 안 먹으므로 이렇게 맞춘다.
-    //   ⚠️ **칸 자체의 폭·높이·둥근 정도는 그대로**(아미봉 그릇은 안 건드림).
-    paddingHorizontal: 10,
-    textAlign: "center",
-    fontSize: 12,
-    color: "#FFFFFF",
-    fontFamily: "Pretendard-Bold",
-  },
-
-  // ⚠️ 수정금지(승인필요) — 손잡이
-  handleWrap: {
-    width: HANDLE_W,
-    height: HANDLE_H,
-    alignItems: "center",
-    marginTop: -16,
-    zIndex: -1,
-  },
-  handleGrad: {
-    ...StyleSheet.absoluteFillObject,
-    borderBottomLeftRadius: 24,
-    borderBottomRightRadius: 24,
-  },
-  btnArea: {
-    position: "absolute",
-    top: 20,
-    width: BTN_AREA_W,
-    alignSelf: "center",
-    gap: 10,
-  },
-  btn: {
-    height: 44,
-    borderRadius: 50,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  googleBtn: { backgroundColor: PRIMARY },
-  googleTxt: {
-    fontSize: 11,
-    fontFamily: "Pretendard-Bold",
-    color: "#050930",
-    letterSpacing: 2,
-    textTransform: "uppercase",
-  },
-  kakaoBtn: {
-    backgroundColor: "rgba(255,255,255,0.1)",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.2)",
-  },
-  kakaoTxt: {
-    fontSize: 11,
-    fontFamily: "Pretendard-Bold",
-    color: "#FFFFFF",
-    letterSpacing: 2,
-    textTransform: "uppercase",
-  },
-  appleLink: { height: 32, justifyContent: "center", alignItems: "center" },
-  appleTxt: {
-    fontSize: 10,
-    fontFamily: "Pretendard-Bold",
-    color: PRIMARY,
-    letterSpacing: 2,
-    textTransform: "uppercase",
-  },
-  off: { opacity: 0.35 },
-});
