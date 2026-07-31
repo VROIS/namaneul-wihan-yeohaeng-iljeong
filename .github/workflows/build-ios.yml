@@ -74,7 +74,9 @@ jobs:
         continue-on-error: true
         run: |
           echo "════════ 등록된 아이폰 ════════"
-          eas device:list --non-interactive || echo "(목록을 못 가져옴 = 애플 계정 연결이 아직일 수 있음)"
+          # ⚠️ 2026-07-31 = 팀 번호를 **반드시 준다.** 자동 실행에서는 "어느 팀이냐" 고르는 창을
+          #   띄울 수 없어 그냥 실패한다(첫 실행에서 실측). 사장님 애플 팀 = Tripis Dev Team.
+          eas device:list --apple-team-id AA86VKNZLZ --non-interactive || echo "(목록을 못 가져옴)"
           echo "═══════════════════════════════"
           echo "등록된 폰이 없으면 아래를 사장님 아이폰에서 1회 하시면 됩니다:"
           echo "  1) https://expo.dev/accounts/[계정]/projects/vibetrip/devices 접속"
