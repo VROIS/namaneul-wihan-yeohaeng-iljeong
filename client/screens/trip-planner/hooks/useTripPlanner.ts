@@ -380,11 +380,14 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
     i18n,
     // BTS 문제점1 = 결과화면 ← 의 단일 출구(카드 복귀 vs 입력화면)
     handleExitResult,
-    // ⚠️ 2026-08-01 사장님 지시 = BTS 여정이면 [숙소 변경]을 숨긴다.
+    // ⚠️ 2026-08-01 사장님 지시 = **마지막 슬롯이 고정된 여정**이면 [숙소 변경]을 숨긴다.
     //   사유(실측): 숙소를 바꾸면 그 날을 통째로 다시 짜는데(regenerate-day) 그 경로는
-    //   **공연장 슬롯을 모른다** → 마지막에 있어야 할 공연장이 1번 자리에 20:00 으로 박혔다.
+    //   **고정 슬롯(공연장)을 모른다** → 마지막에 있어야 할 공연장이 1번 자리에 20:00 으로 박혔다.
     //   BTS 는 출발지가 공연장으로 고정(사장님 결정3)이라 애초에 바꿀 이유도 없다.
-    isBtsTrip: !!initialRequest,
+    //   ⚠️ 판단 기준 = `finalPlaceId` **1벌**(§16). 옛 `!!initialRequest`(= 폼이 밖에서 왔나) 폐기 §19 —
+    //     그건 "누가 만들었나"라 데이터 성질과 갈라졌다: 공연장 행이 없는 도시면 initialRequest 는 있는데
+    //     finalPlaceId 는 없어 **버튼만 사라지고 차단은 안 걸리는** 상태가 됐다(§22 검증 2종이 잡음).
+    hasFixedFinalPlace: !!formData.finalPlaceId,
     // 화면 상태
     screen,
     setScreen,

@@ -33,7 +33,7 @@ export default function DaySection({
     handleSetDayAccommodation,
     dayLayoutsRef,
     placesListOffsetRef,
-    isBtsTrip,
+    hasFixedFinalPlace,
   } = planner;
   const places = currentDay?.places || [];
   return (
@@ -73,11 +73,11 @@ export default function DaySection({
             </Text>
           )}
         </View>
-        {/* ⚠️ 2026-08-01 사장님 지시 = BTS 여정에는 [숙소 변경]을 안 보여준다.
-            사유(실측): 숙소를 바꾸면 그 날을 통째로 다시 짜는데 그 경로는 공연장 슬롯을 몰라서
+        {/* ⚠️ 2026-08-01 사장님 지시 = 마지막 슬롯이 고정된 여정(BTS 공연장)에는 [숙소 변경]을 안 보여준다.
+            사유(실측): 숙소를 바꾸면 그 날을 통째로 다시 짜는데 그 경로는 고정 슬롯을 몰라서
             마지막에 있어야 할 공연장이 1번 자리에 20:00 으로 박혔다(스크린샷).
-            BTS 는 출발지가 공연장으로 고정이라 바꿀 이유도 없다. */}
-        {!isBtsTrip && (
+            판단 기준 = 아래 useAccommodations 차단과 **같은 값 1벌**(§16). */}
+        {!hasFixedFinalPlace && (
           <Pressable
             style={[
               styles.accommodationButton,
