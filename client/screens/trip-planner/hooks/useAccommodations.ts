@@ -28,6 +28,11 @@ export function useAccommodations({
     day: number,
     place: PlaceSelection,
   ) => {
+    // ⚠️ 2026-08-01 사장님 지시 = BTS 여정(마지막 슬롯 = 공연장)은 숙소 변경 금지.
+    //   사유(실측): 아래 재최적화(regenerate-day)는 **공연장 슬롯을 모른다** → 그 날을 통째로 다시 짜면서
+    //   마지막에 있어야 할 공연장이 1번 자리에 20:00 으로 박혔다(스크린샷). 버튼은 화면에서 숨기지만,
+    //   다른 진입로(ResultStep 의 같은 모달)로도 못 들어오게 **여기서 1벌로 막는다**(§16).
+    if (formData.finalPlaceId) return;
     // 🏨 2026-07-03 사용자 SSOT = 숙소는 여행 전체 공통(A안). 변경한 Day + 그 이후 Day 전부에 적용, 이전 Day는 유지.
     //   예: Day2에서 B호텔 변경 → Day2·Day3=B, Day1=옛숙소 유지(2일차에 숙소 옮기는 실제 동선). 첫입력 숙소는 전 Day 기본값(A단계).
     const targetDays = (itinerary?.days || [])

@@ -380,6 +380,11 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
     i18n,
     // BTS 문제점1 = 결과화면 ← 의 단일 출구(카드 복귀 vs 입력화면)
     handleExitResult,
+    // ⚠️ 2026-08-01 사장님 지시 = BTS 여정이면 [숙소 변경]을 숨긴다.
+    //   사유(실측): 숙소를 바꾸면 그 날을 통째로 다시 짜는데(regenerate-day) 그 경로는
+    //   **공연장 슬롯을 모른다** → 마지막에 있어야 할 공연장이 1번 자리에 20:00 으로 박혔다.
+    //   BTS 는 출발지가 공연장으로 고정(사장님 결정3)이라 애초에 바꿀 이유도 없다.
+    isBtsTrip: !!initialRequest,
     // 화면 상태
     screen,
     setScreen,

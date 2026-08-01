@@ -33,6 +33,7 @@ export default function DaySection({
     handleSetDayAccommodation,
     dayLayoutsRef,
     placesListOffsetRef,
+    isBtsTrip,
   } = planner;
   const places = currentDay?.places || [];
   return (
@@ -72,21 +73,27 @@ export default function DaySection({
             </Text>
           )}
         </View>
-        <Pressable
-          style={[
-            styles.accommodationButton,
-            { backgroundColor: Brand.primary },
-          ]}
-          onPress={() => setHotelModalDay(currentDay?.day || 1)}
-        >
-          <Icon name="home" size={12} color="#FFFFFF" />
-          <Text style={styles.accommodationButtonText}>
-            {dayAccommodations.find((a) => a.day === currentDay?.day) ||
-            currentDay?.accommodation
-              ? t("trip.accommodationSet")
-              : t("trip.accommodationSetup")}
-          </Text>
-        </Pressable>
+        {/* ⚠️ 2026-08-01 사장님 지시 = BTS 여정에는 [숙소 변경]을 안 보여준다.
+            사유(실측): 숙소를 바꾸면 그 날을 통째로 다시 짜는데 그 경로는 공연장 슬롯을 몰라서
+            마지막에 있어야 할 공연장이 1번 자리에 20:00 으로 박혔다(스크린샷).
+            BTS 는 출발지가 공연장으로 고정이라 바꿀 이유도 없다. */}
+        {!isBtsTrip && (
+          <Pressable
+            style={[
+              styles.accommodationButton,
+              { backgroundColor: Brand.primary },
+            ]}
+            onPress={() => setHotelModalDay(currentDay?.day || 1)}
+          >
+            <Icon name="home" size={12} color="#FFFFFF" />
+            <Text style={styles.accommodationButtonText}>
+              {dayAccommodations.find((a) => a.day === currentDay?.day) ||
+              currentDay?.accommodation
+                ? t("trip.accommodationSet")
+                : t("trip.accommodationSetup")}
+            </Text>
+          </Pressable>
+        )}
       </View>
 
       {/* 출발 정보 */}
