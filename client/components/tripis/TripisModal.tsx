@@ -32,6 +32,9 @@ import VideoPlaySlot, { type DayVideo } from "./VideoPlaySlot";
 import GuideViewSlot from "./GuideViewSlot";
 import CityCardScreen from "./CityCardScreen";
 import { openGuideForPlace } from "./openGuide";
+// 📥 저장(프로필 담기)·열람해제 = savedVideosApi 1벌(2026-08-03 사장님 확정 = 영상은 회사 자산, 저장 = 담기)
+import { listSavedVideos, saveVideo, markVideoSeen } from "./savedVideosApi";
+import { useMapToggle } from "@/contexts/MapToggleContext";
 
 // GET /api/cities/:id/representative 응답 1벌 (B2). 이 칸들 = 도시 카드가 그리는 전부.
 // = 대표여정이 없는 도시도 서버가 도시 DB 로 채워 내려준다 → itineraryId=null·dayCount=0·hasVideo=false (2026-08-02).
@@ -66,9 +69,18 @@ export interface GuideRow {
 }
 
 // 열기 인자 = 3모드: 도시 카드(대표여정 미리보기) / 숏폼 영상(여정) / TRIPIS 콘텐츠(장소별 여러 건 중 index 번째)
+// ⚠️ 2026-08-03 사장님 확정 = `canGenerate` = **영상을 만들 수 있는 자리인가**(생성기 / 감상).
+//   여는 쪽이 선언한다 = 모달이 추측하지 않는다. 지금 만들 수 있는 곳은 **여정 결과화면 하나뿐**이고,
+//   도시 대표카드·프로필 '나의 TRIPIS' 는 **감상(뷰)** 이다(사장님: "이 뷰는 프로필에도 해당함").
+//   칩줄이 이 값으로 갈린다 = 생성기: 전체 일차 / 뷰: 영상이 있는 날만.
 export type TripisOpenParams =
   | { mode: "city"; rep: RepCard }
-  | { mode: "itinerary"; itineraryId: number; day?: number }
+  | {
+      mode: "itinerary";
+      itineraryId: number;
+      day?: number;
+      canGenerate?: boolean;
+    }
   | { mode: "guide"; guides: GuideRow[]; index: number };
 
 interface Props {
@@ -113,11 +125,11 @@ function TripisModalInner({
     params.mode === "itinerary" ? (params.day ?? null) : null,
   );
   const [isRequesting, setIsRequesting] = useState(false);
-
-  // ── guide 모드 상태 = 칩 터치로 장소별 콘텐츠 전환 ────────────────
-  const [guideIdx, setGuideIdx] = useState(
-    params.mode === "guide" ? params.index : 0,
-  );
+  // 📥 생성기 [저장] 상태 = 이 여정에서 내가 이미 담은 날짜들(담긴 날 = "저장됨" 비활성)
+  const [savedDays, setSavedDays] = useState<Set<number>>(new Set());
+  const [isSaving, setIsSaving] = useState(false);
+  // 완성 영상 열람 = ★·탭 뱃지 즉시 갱신 신호(전문가 신호와 동일 패턴 §16)
+  const { bumpVideoData } = useMapToggle();
 
   // 이 모달이 다루는 여정 번호 = 여정 모드는 인자 그대로, 도시 모드는 그 도시 대표여정 번호(▶ 전환용).
   const itineraryId =
@@ -149,19 +161,53 @@ function TripisModalInner({
   }, [loadAll]);
 
   const days: any[] = itinerary?.rawData?.days || [];
-  // 칩 = 영상이 실제 만들어진(succeeded) 날짜만 (B-0: "숏폼 = 만들어진 날짜만 노출"). 미생성 날짜 = 칩 없음.
+  // ⚠️ 2026-08-03 사장님 확정 = 칩은 **여는 곳에 따라 다르다**(한 줄로 두 경우를 다 덮지 않는다).
+  //   · **감상(도시 대표카드로 열림)** = 남의(관리자) 여정을 보는 것 = **영상이 있는 날만**.
+  //     사장님 실기기 확인: 브뤼셀만 1·2·3일차, 다른 도시는 만들어진 그 날짜만. 없는 날 칩을 보여줘도
+  //     그 사람은 만들 수 없으니 헛것이다.
+  //   · **내 여정(프로필 영상 카드·여정 결과화면)** = 만들 수 있는 자리 = **전체 일차**.
+  //     옛 영상 생성기(client/screens/video, 2026-08-03 삭제)가 `days.map()` 으로 전부 그리던 그대로 = 원본 복원(§16).
+  //     이게 없으면 아직 안 만든 2·3일차를 **고를 수가 없어 영영 못 만든다**(생성 진입점 = 이 화면 하나뿐).
+  //   완성 여부 표시(✓ / …)는 두 경우 공통 = 원본과 동일.
+  const canGenerate =
+    params.mode === "itinerary" && params.canGenerate === true;
   const succeededDays = Object.keys(videoByDay)
     .filter((k) => videoByDay[k]?.status === "succeeded")
     .map(Number)
     .sort((a, b) => a - b);
-  const effectiveDay = selectedDay ?? succeededDays[0] ?? 1;
+  const dayNumbers = canGenerate ? days.map((_, i) => i + 1) : succeededDays;
+  const effectiveDay = selectedDay ?? dayNumbers[0] ?? 1;
   const dayVideo = videoByDay[String(effectiveDay)];
   const slots: any[] = days[effectiveDay - 1]?.places || [];
-  // "보는 중" 판정 = 그 날짜 영상 완성 + url 존재 → 우측 버튼이 [여정 보기]로 바뀜
+  // "보는 중" 판정 = 그 날짜 영상 완성 + url 존재 → 우측 버튼이 [저장](생성기)/[여정 보기](뷰)로 바뀜
   const viewing =
     viewMode === "itinerary" &&
     dayVideo?.status === "succeeded" &&
     !!dayVideo.url;
+
+  // 📥 생성기 = 내가 이미 담은 날짜 목록 1회 로드 ([저장]/[저장됨] 갈림용. 뷰에서는 안 부름 = 뷰는 지금 그대로)
+  useEffect(() => {
+    if (!canGenerate || itineraryId == null) return;
+    let alive = true;
+    listSavedVideos().then((rows) => {
+      if (!alive) return;
+      setSavedDays(
+        new Set(
+          rows.filter((r) => r.itineraryId === itineraryId).map((r) => r.day),
+        ),
+      );
+    });
+    return () => {
+      alive = false;
+    };
+  }, [canGenerate, itineraryId]);
+
+  // 📥 완성 영상을 실제로 보는 순간 = ★·탭 뱃지 해제(사장님 SSOT = "이 영상 뷰를 1회 열 때부터 해제").
+  //   프로필 카드·생성기 어느 길로 열어도 이 1곳이 처리(§0). 담긴 행이 없으면 서버가 0행 갱신 = 무해.
+  useEffect(() => {
+    if (!viewing || itineraryId == null) return;
+    markVideoSeen(itineraryId, effectiveDay).then(bumpVideoData);
+  }, [viewing, itineraryId, effectiveDay, bumpVideoData]);
 
   // 일별 생성 요청 = 함수 소유는 껍데기(상단 버튼 + 본문 버튼이 같은 함수 1벌 §0)
   const handleGenerate = async () => {
@@ -185,6 +231,17 @@ function TripisModalInner({
     }
   };
 
+  // 📥 [저장] = 나의 프로필에 담기 (생성기 전용, 2026-08-03 사장님 확정 = 기기 다운로드 아님)
+  const handleSave = async () => {
+    if (itineraryId == null) return;
+    setIsSaving(true);
+    const r = await saveVideo(itineraryId, effectiveDay);
+    setIsSaving(false);
+    if (r.ok)
+      setSavedDays((prev) => new Set(prev).add(effectiveDay)); // → "저장됨" 비활성
+    else Alert.alert("저장", r.error || "저장 실패"); // 서버 사유 그대로(뭉개기 금지)
+  };
+
   // [여정 보기] = 모달 닫고 그 여정 화면으로 (저장여정 카드와 같은 경로 1벌 = TripsSection §16)
   const handleViewItinerary = () => {
     if (itineraryId == null) return;
@@ -203,8 +260,9 @@ function TripisModalInner({
     openGuideForPlace(navigation, placeId);
   };
 
+  // 보여줄 해설 = 프로필에서 누른 그 카드 1건(칩줄 폐기 = 2026-08-03 §19, 아래 상단줄 주석 참조)
   const currentGuide =
-    params.mode === "guide" ? params.guides[guideIdx] : undefined;
+    params.mode === "guide" ? params.guides[params.index] : undefined;
 
   // 도시 카드 = 콘텐츠 풀 채움이 아니라 어두운 배경 위 카드 1장 = 칩줄·상단 버튼을 그리지 않는다(B-0 "A. 도시 카드").
   //   [여정 만들기] = 도시 칩을 누른 순간 뒤 플래너 도시입력칸이 이미 채워졌으므로 카드만 닫으면 바로 생성 가능.
@@ -244,6 +302,7 @@ function TripisModalInner({
                 day={effectiveDay}
                 dayVideo={dayVideo}
                 hasSlots={slots.length > 0}
+                canGenerate={canGenerate}
                 isRequesting={isRequesting}
                 onGenerate={handleGenerate}
                 onVideoByDay={setVideoByDay}
@@ -263,16 +322,27 @@ function TripisModalInner({
           ) : null}
         </View>
 
-        {/* 상단 줄 = 콘텐츠 위 오버레이: 왼쪽 칩줄 + 오른쪽 버튼 1개 + [X] (§23 = 아이콘 + 짧은 동사만) */}
-        <View style={[styles.topRow, { paddingTop: insets.top + Spacing.sm }]}>
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            style={styles.chips}
-            contentContainerStyle={styles.chipsContent}
+        {/* 상단 줄 = **영상(itinerary) 모드 전용** = 날짜 칩 + [영상 만들기]/[여정 보기] + [X].
+            ⚠️ 2026-08-03 사장님 지시 = 해설(guide) 모드에서는 이 줄을 **완전삭제**(§19).
+              사유 = ① 장소명은 뷰어가 자체 입력창 형태로 이미 보여준다 = 칩줄은 같은 정보 두 벌
+                     ② 이 줄이 뷰어의 ←(우측상단)를 zIndex 10 으로 덮어 **닫기가 먹통**이 됐다
+                        (DevTools elementsFromPoint 실측 = 맨 위 DIV 502x52 z=10).
+              → 줄 자체를 안 그리니 미니앱으로 여는 다른 화면과 완전히 같은 모양·같은 동작이 된다. */}
+        {viewMode === "itinerary" && (
+          <View
+            pointerEvents="box-none"
+            style={[styles.topRow, { paddingTop: insets.top + Spacing.sm }]}
           >
-            {viewMode === "itinerary"
-              ? succeededDays.map((d) => (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.chips}
+              contentContainerStyle={styles.chipsContent}
+            >
+              {dayNumbers.map((d) => {
+                // 완성 ✓ / 만드는 중 … / 아직 없음 = 표시 없음 (옛 영상 생성기와 같은 규칙)
+                const st = videoByDay[String(d)]?.status;
+                return (
                   <Pressable
                     key={d}
                     style={[
@@ -280,6 +350,8 @@ function TripisModalInner({
                       effectiveDay === d && styles.chipActive,
                     ]}
                     onPress={() => setSelectedDay(d)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: effectiveDay === d }}
                   >
                     <Text
                       style={[
@@ -287,40 +359,45 @@ function TripisModalInner({
                         effectiveDay === d && styles.chipTextActive,
                       ]}
                     >
-                      {d}일차 ✓
+                      {d}일차
+                      {st === "succeeded"
+                        ? " ✓"
+                        : st === "processing"
+                          ? " …"
+                          : ""}
                     </Text>
                   </Pressable>
-                ))
-              : params.mode !== "guide"
-                ? null
-                : params.guides.map((g, i) => (
-                    <Pressable
-                      key={g.id}
-                      style={[styles.chip, guideIdx === i && styles.chipActive]}
-                      onPress={() => setGuideIdx(i)}
-                    >
-                      <Text
-                        style={[
-                          styles.chipText,
-                          guideIdx === i && styles.chipTextActive,
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {g.locationName || g.title}
-                      </Text>
-                    </Pressable>
-                  ))}
-          </ScrollView>
+                );
+              })}
+            </ScrollView>
 
-          {/* 우측 버튼 = 상황표(B-0): 보는 중 → [여정 보기] / 만드는 자리 → [영상 만들기].
-              guide 모드 = 버튼 없음(guides 표에 여정 연결 열쇠가 없음 = 지어내지 않음). */}
-          {viewMode === "itinerary" &&
-            (viewing ? (
+            {/* 우측 버튼 = 상황표(2026-08-03 사장님 확정):
+                · 생성기 + 완성 영상 보는 중 → **[저장]**(나의 프로필에 담기 / 담긴 날 = [저장됨] 비활성).
+                  옛 [여정 보기]는 생성기에서 삭제 §19 = 모달 뒤가 이미 그 여정(닫기만 하면 됨).
+                · 뷰(도시 대표카드·프로필) + 보는 중 → [여정 보기] = 지금 그대로.
+                · 생성기 + 미완성 날 → [영상 만들기]. 감상 자리에서는 만들기 버튼 자체가 없다. */}
+            {viewing && canGenerate ? (
+              savedDays.has(effectiveDay) ? (
+                <View style={[styles.topBtn, styles.topBtnDisabled]}>
+                  <Icon name="check" size={14} color="#FFFFFF" />
+                  <Text style={styles.topBtnText}>저장됨</Text>
+                </View>
+              ) : (
+                <Pressable
+                  style={[styles.topBtn, isSaving && styles.topBtnDisabled]}
+                  disabled={isSaving}
+                  onPress={handleSave}
+                >
+                  <Icon name="bookmark" size={14} color="#FFFFFF" />
+                  <Text style={styles.topBtnText}>저장</Text>
+                </Pressable>
+              )
+            ) : viewing ? (
               <Pressable style={styles.topBtn} onPress={handleViewItinerary}>
                 <Icon name="map" size={14} color="#FFFFFF" />
                 <Text style={styles.topBtnText}>여정 보기</Text>
               </Pressable>
-            ) : (
+            ) : canGenerate ? (
               <Pressable
                 style={[
                   styles.topBtn,
@@ -333,11 +410,8 @@ function TripisModalInner({
                 <Icon name="film" size={14} color="#FFFFFF" />
                 <Text style={styles.topBtnText}>영상 만들기</Text>
               </Pressable>
-            ))}
+            ) : null}
 
-          {/* guide 모드 = 뷰어 자체 닫기(←)가 오른쪽 위에 있음 → X 대신 그 폭만큼 빈 자리를 확보
-              (칩이 ← 밑으로 파고들어 오터치 나던 것 수정 = 2026-08-01 사장님 지적) */}
-          {viewMode === "itinerary" ? (
             <Pressable
               style={styles.closeBtn}
               onPress={onClose}
@@ -348,10 +422,8 @@ function TripisModalInner({
             >
               <Icon name="x" size={22} color="#FFFFFF" />
             </Pressable>
-          ) : (
-            <View style={styles.closeBtn} pointerEvents="none" />
-          )}
-        </View>
+          </View>
+        )}
       </View>
     </View>
   );

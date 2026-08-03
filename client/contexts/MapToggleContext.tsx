@@ -31,6 +31,9 @@ interface MapToggleContextType {
   // ⚠️ 사장님 SSOT 2026-07-14 = 오버레이 안에서 문의접수·답변전송 직후 = 하단 탭 배지 즉시 갱신 신호(오버레이는 navigation state를 안 바꿔 폴링으로만 반영되던 지연 제거 §19). 실시간 피드백.
   expertDataChangedAt: number | null;
   bumpExpertData: () => void;
+  // 📥 2026-08-03 사장님 확정 = 완성 영상 뷰 1회 열람(★·뱃지 해제) 직후 = TRIPIS 탭 뱃지 즉시 갱신 신호(위 전문가 신호와 동일 패턴 §16).
+  videoDataChangedAt: number | null;
+  bumpVideoData: () => void;
   // ⚠️ 사장님 SSOT 2026-07-25 = 로그인 = 별도 화면 아닌 인앱 팝업(센터/상단 모달). AI의견·전문가와 동일 신호 패턴(§16 재사용). 저장·공유·전문가·프로필·여정생성(비인증) 게이트가 이걸 불러 전역 LoginSheet를 엶.
   loginRequestedAt: number | null;
   requestLogin: () => void;
@@ -74,6 +77,8 @@ const MapToggleContext = createContext<MapToggleContextType>({
   clearExpertOpenPayload: () => {},
   expertDataChangedAt: null,
   bumpExpertData: () => {},
+  videoDataChangedAt: null,
+  bumpVideoData: () => {},
   loginRequestedAt: null,
   requestLogin: () => {},
   clearLoginRequest: () => {},
@@ -105,6 +110,10 @@ export function MapToggleProvider({ children }: { children: React.ReactNode }) {
     day: number;
   } | null>(null);
   const [expertDataChangedAt, setExpertDataChangedAt] = useState<number | null>(
+    null,
+  );
+  // 📥 완성 영상 열람 신호(2026-08-03) = 전문가 신호 복제(§16)
+  const [videoDataChangedAt, setVideoDataChangedAt] = useState<number | null>(
     null,
   );
   const [loginRequestedAt, setLoginRequestedAt] = useState<number | null>(null);
@@ -174,6 +183,9 @@ export function MapToggleProvider({ children }: { children: React.ReactNode }) {
   const bumpExpertData = useCallback(() => {
     setExpertDataChangedAt(Date.now());
   }, []);
+  const bumpVideoData = useCallback(() => {
+    setVideoDataChangedAt(Date.now());
+  }, []);
   // ⚠️ 사장님 SSOT 2026-07-25 = 로그인 팝업 트리거(AI의견·전문가와 동일 = 매 요청 새 타임스탬프 → 같은 화면 재요청도 LoginSheet useEffect 재실행). 전역 LoginSheet가 소비 후 clearLoginRequest.
   const requestLogin = useCallback(() => {
     setLoginRequestedAt(Date.now());
@@ -210,6 +222,8 @@ export function MapToggleProvider({ children }: { children: React.ReactNode }) {
         clearExpertOpenPayload,
         expertDataChangedAt,
         bumpExpertData,
+        videoDataChangedAt,
+        bumpVideoData,
         loginRequestedAt,
         requestLogin,
         clearLoginRequest,

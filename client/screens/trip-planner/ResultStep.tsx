@@ -476,7 +476,12 @@ export default function ResultStep({ planner }: { planner: PlannerApi }) {
         visible={tripisOpen}
         params={
           currentItineraryId
-            ? { mode: "itinerary", itineraryId: currentItineraryId }
+            ? // 🎬 여정 결과화면 = **영상 생성기** = 내 여정이므로 전체 일차를 고르고 만들 수 있다(2026-08-03 사장님)
+              {
+                mode: "itinerary",
+                itineraryId: currentItineraryId,
+                canGenerate: true,
+              }
             : null
         }
         onClose={() => setTripisOpen(false)}

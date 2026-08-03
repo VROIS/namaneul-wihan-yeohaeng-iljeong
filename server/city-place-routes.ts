@@ -93,18 +93,25 @@ export function registerCityPlaceRoutes(app: Express): void {
           .from(cities)
           // ⚠️ 수정금지(승인필요) 2026-08-02 사장님 = 대표여정 고르는 순서 1벌.
           //   ① 손으로 올린 대표(status='representative') 가 있으면 그것
-          //   ② 없으면 **영상이 완성된 여정 중 최신** 이 자동으로 그 도시 대표
+          //   ② 없으면 **영상이 완성된 관리자 여정 중 최신** 이 자동으로 그 도시 대표
           //      (사장님 SSOT: "최신 영상이 있는 것이 우선 = 이게 우리 앱의 특화")
           //   ③ 둘 다 없으면 null = 카드는 도시 DB 만으로 뜬다(B-0 자동 채움).
           //   정렬로 1벌 표현 = 분기 코드를 만들지 않는다(§0).
+          //   ⚠️ 2026-08-03 사장님 지적·승인 = ②에 **관리자 소유** 조건 추가. 없던 탓에 손으로 올린 대표가
+          //     아직 없는 도시는 **아무 사용자가 영상을 만드는 순간 그 여정이 도시 카드에 걸렸다**(권한 구멍).
+          //     판정 기준 = users.role='admin' 1벌(§9 표7 = is_admin·아이디 문자열 금지).
           .leftJoin(
             itineraries,
             and(
               eq(itineraries.cityId, cities.id),
               or(
                 eq(itineraries.status, "representative"),
-                sql`EXISTS (SELECT 1 FROM jsonb_each(${itineraries.videoByDay}) e
-                            WHERE e.value->>'status' = 'succeeded')`,
+                and(
+                  sql`EXISTS (SELECT 1 FROM jsonb_each(${itineraries.videoByDay}) e
+                              WHERE e.value->>'status' = 'succeeded')`,
+                  sql`EXISTS (SELECT 1 FROM ${users} u
+                              WHERE u.id = ${itineraries.userId} AND u.role = 'admin')`,
+                ),
               ),
             ),
           )

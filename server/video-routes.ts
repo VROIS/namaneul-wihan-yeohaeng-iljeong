@@ -139,18 +139,15 @@ export function registerVideoRoutes(app: Express): void {
 
         const taskId = `ghibli_${id}_d${day}_${Date.now()}`;
 
+        // 📥 신청자 = 완료 자동게시 대상 (2026-08-03 사장님 확정 = 완성되면 신청자 프로필에 자동 게시 + 탭 뱃지).
+        //   응답 후 백그라운드에서는 req 를 다시 읽을 수 없으므로 여기서 잡아 둔다. 비로그인(게스트) = null = 게시 없음.
+        const requesterUserId = getUserIdFromReq(req);
+
         // 🪙 일별 영상 60크레딧 차감 (2026-07-29 §9 = A안·B안 동일 단가).
         //   자리 이유 = 위 409 중복가드를 통과한 뒤 · 아래 "생성 중" 기록 **앞**.
         //   차감이 실패했는데 status 를 processing 으로 적으면 "영원히 생성 중" 좀비가 남는다.
         //   referenceId = taskId = 렌더 1건을 유일 식별. 같은 날짜 재생성은 새 taskId = 새 유료 렌더 = 재차감이 정상.
-        if (
-          !(await chargeFeature(
-            res,
-            getUserIdFromReq(req),
-            "day_video",
-            taskId,
-          ))
-        )
+        if (!(await chargeFeature(res, requesterUserId, "day_video", taskId)))
           return;
 
         const sceneSlots = slots.slice(0, MAX_SCENES);
@@ -311,6 +308,25 @@ export function registerVideoRoutes(app: Express): void {
               totalScenes: clips.length,
               scenes: okScenesMeta,
             });
+            // 📥 완료 = 신청자 프로필 자동 게시 (2026-08-03 사장님 확정 = 벨 알림 안 씀 §19).
+            //   is_new=true = ★ 표식 + 하단 TRIPIS 탭 뱃지의 원천. 재생성(이미 담긴 행)도 다시 true = 새 완성 알림.
+            //   게시 실패해도 영상 자체(succeeded)는 이미 기록됨 = 유료 자산 손실 없음 → 로그만.
+            if (requesterUserId && pool) {
+              await pool
+                .query(
+                  `INSERT INTO saved_videos (user_id, itinerary_id, day, is_new)
+                   VALUES ($1, $2, $3, true)
+                   ON CONFLICT ON CONSTRAINT saved_videos_user_itin_day_uniq
+                   DO UPDATE SET is_new = true`,
+                  [requesterUserId, id, day],
+                )
+                .catch((pubErr) =>
+                  console.error(
+                    `[video] ${taskId} 자동게시 실패:`,
+                    (pubErr as Error)?.message,
+                  ),
+                );
+            }
             console.log(
               `[video] ${taskId} 완료(${useOptionB ? "B실사포토무비" : "A지브리"}): ${url}`,
             );
@@ -350,6 +366,112 @@ export function registerVideoRoutes(app: Express): void {
     } catch (error) {
       console.error("[video] 상태조회 오류:", error);
       res.status(500).json({ error: "상태 조회 실패" });
+    }
+  });
+
+  // ── 4. 저장한 영상 = 프로필 담기 (2026-08-03 사장님 확정) ──────────────────────
+  //   영상 = 회사 자산(여정 video_by_day) → 저장 = 사용자↔(여정,일차) 연결 행 = saved_videos (해설 guides 와 같은 DB 방식).
+  //   프로필 '나의 TRIPIS' 영상 카드 = 이 목록만 보여준다. 기기 다운로드 없음(속도·유출 = 앱에 와서 보게 하는 구조).
+
+  // 4-1. 내가 담은 영상 목록 (여정 제목·시작일·영상 상태 동봉. 여정이 지워졌거나 영상이 더는 완성 상태가 아니면 제외)
+  app.get("/api/videos/saved", async (req: Request, res: Response) => {
+    try {
+      const userId = getUserIdFromReq(req);
+      if (!userId) return res.status(401).json({ error: "로그인 필요" });
+      if (!pool) return res.status(500).json({ error: "DB 미연결" });
+      const r = await pool.query(
+        `SELECT sv.itinerary_id, sv.day, sv.is_new, sv.created_at,
+                i.title, i.start_date
+           FROM saved_videos sv
+           JOIN itineraries i ON i.id = sv.itinerary_id
+          WHERE sv.user_id = $1
+            AND i.video_by_day -> (sv.day::text) ->> 'status' = 'succeeded'
+          ORDER BY sv.is_new DESC, sv.created_at DESC, sv.day`,
+        [userId],
+      );
+      res.json(
+        r.rows.map((row) => ({
+          itineraryId: row.itinerary_id,
+          day: row.day,
+          isNew: row.is_new,
+          title: row.title,
+          startDate: row.start_date,
+          savedAt: row.created_at,
+        })),
+      );
+    } catch (error) {
+      console.error("[video] 저장목록 오류:", error);
+      res.status(500).json({ error: "저장 목록 조회 실패" });
+    }
+  });
+
+  // 4-2. [저장] = 담기 (생성기 우측 상단 버튼. 완성된 영상만 담을 수 있다. 이미 담김 = 그대로 성공)
+  app.post("/api/videos/save", async (req: Request, res: Response) => {
+    try {
+      const userId = getUserIdFromReq(req);
+      if (!userId) return res.status(401).json({ error: "로그인 필요" });
+      if (!pool) return res.status(500).json({ error: "DB 미연결" });
+      const itineraryId = parseInt(req.body?.itineraryId);
+      const day = parseInt(req.body?.day);
+      if (isNaN(itineraryId) || isNaN(day) || day < 1)
+        return res.status(400).json({ error: "itineraryId + day 필요" });
+      // 담을 대상 검증 = 그 여정 그 날짜에 완성(succeeded) 영상이 실제로 있는가
+      const chk = await pool.query(
+        `SELECT 1 FROM itineraries
+          WHERE id = $1 AND video_by_day -> ($2::text) ->> 'status' = 'succeeded'`,
+        [itineraryId, String(day)],
+      );
+      if (!chk.rowCount)
+        return res.status(404).json({ error: "완성된 영상이 없는 날짜" });
+      // 본인이 직접 담음 = 이미 아는 영상 = is_new false (뱃지는 완료 자동게시 전용)
+      await pool.query(
+        `INSERT INTO saved_videos (user_id, itinerary_id, day, is_new)
+         VALUES ($1, $2, $3, false)
+         ON CONFLICT ON CONSTRAINT saved_videos_user_itin_day_uniq DO NOTHING`,
+        [userId, itineraryId, day],
+      );
+      res.json({ success: true });
+    } catch (error) {
+      console.error("[video] 담기 오류:", error);
+      res.status(500).json({ error: "저장 실패" });
+    }
+  });
+
+  // 4-3. 탭 뱃지 수 = 아직 안 열어 본 완성 영상 수 (게스트 = 0. 전문가 뱃지와 같은 폴링 대상)
+  app.get("/api/videos/badge", async (req: Request, res: Response) => {
+    try {
+      const userId = getUserIdFromReq(req);
+      if (!userId || !pool) return res.json({ count: 0 });
+      const r = await pool.query(
+        `SELECT COUNT(*)::int AS n FROM saved_videos WHERE user_id = $1 AND is_new`,
+        [userId],
+      );
+      res.json({ count: r.rows[0]?.n || 0 });
+    } catch (error) {
+      console.error("[video] 뱃지 오류:", error);
+      res.json({ count: 0 }); // 뱃지는 장식 = 실패가 앱을 막으면 안 됨
+    }
+  });
+
+  // 4-4. 열람 = ★·뱃지 해제 (사장님 SSOT = "이 영상 뷰를 1회 열 때부터 뱃지 해제")
+  app.post("/api/videos/seen", async (req: Request, res: Response) => {
+    try {
+      const userId = getUserIdFromReq(req);
+      if (!userId) return res.status(401).json({ error: "로그인 필요" });
+      if (!pool) return res.status(500).json({ error: "DB 미연결" });
+      const itineraryId = parseInt(req.body?.itineraryId);
+      const day = parseInt(req.body?.day);
+      if (isNaN(itineraryId) || isNaN(day))
+        return res.status(400).json({ error: "itineraryId + day 필요" });
+      await pool.query(
+        `UPDATE saved_videos SET is_new = false
+          WHERE user_id = $1 AND itinerary_id = $2 AND day = $3`,
+        [userId, itineraryId, day],
+      );
+      res.json({ success: true });
+    } catch (error) {
+      console.error("[video] 열람해제 오류:", error);
+      res.status(500).json({ error: "열람 처리 실패" });
     }
   });
 }

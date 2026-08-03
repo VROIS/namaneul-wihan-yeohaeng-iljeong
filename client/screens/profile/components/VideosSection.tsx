@@ -21,6 +21,11 @@ import TripisModal, {
   type GuideRow,
   type TripisOpenParams,
 } from "@/components/tripis/TripisModal";
+// 📥 영상 카드 데이터 = saved_videos(내가 담은 것만) 1벌 (2026-08-03 사장님 확정 = 해설과 같은 DB 방식)
+import {
+  listSavedVideos,
+  type SavedVideoRow,
+} from "@/components/tripis/savedVideosApi";
 import { styles, getResponsiveFullVideoCardWidth } from "../styles";
 import type { ProfileApi } from "../hooks/useProfile";
 
@@ -34,7 +39,6 @@ const HIDDEN_CARDS_KEY_PREFIX = "@vibetrip_hidden_cards:";
 const cardKey = (kind: "video" | "guide", id: string) => `${kind}:${id}`;
 
 export default function VideosSection({ profile }: { profile: ProfileApi }) {
-  const { savedTrips } = profile;
   // 섹션 제목 = 7언어 사전(profile.myTripis). 하드코딩 금지 = 2026-08-01 사장님 §B-0.
   const { t } = useTranslation();
 
@@ -94,6 +98,9 @@ export default function VideosSection({ profile }: { profile: ProfileApi }) {
   //   mount 1회 방식 폐기 = 2026-08-03 §22 판단검증 지적 — 하단 탭은 계속 마운트 상태라
   //   해설을 저장하고 [보관함]으로 와도 새 카드가 안 보였고, 계정 전환 후 이전 계정 목록이 남았다.
   const [guides, setGuides] = useState<GuideRow[]>([]);
+  // 📥 저장한 영상 목록 = saved_videos(내가 담은 것만). 옛 "내 여정 자동 노출"(savedTrips 파생) 폐기 §19
+  //   = 2026-08-03 사장님 확정: 사용자가 저장한 것만 프로필에서 본다. 완성 자동게시(is_new)도 이 표로 들어온다.
+  const [savedVideos, setSavedVideos] = useState<SavedVideoRow[]>([]);
   // 통합 모달 = null 이면 닫힘(모달이 아예 렌더되지 않아 폴링·낭독 완전 중단)
   const [modalParams, setModalParams] = useState<TripisOpenParams | null>(null);
 
@@ -101,6 +108,7 @@ export default function VideosSection({ profile }: { profile: ProfileApi }) {
     if (!profile.authReady) return;
     if (!profile.user?.id) {
       setGuides([]); // 미로그인·계정 전환 = 이전 계정 목록을 남기지 않는다
+      setSavedVideos([]);
       return;
     }
     try {
@@ -110,6 +118,9 @@ export default function VideosSection({ profile }: { profile: ProfileApi }) {
     } catch (e) {
       console.error("[VideosSection] TRIPIS 목록 조회 실패:", e); // 실패 = 직전 목록 유지(loadTrips 와 같은 정책)
     }
+    // 영상 목록 = 같은 초점 시점에 함께 (실패 = listSavedVideos 가 빈 배열 아닌 직전 유지가 아니라 [] 반환 —
+    //   401(로그아웃)일 때 이전 계정 카드가 남지 않게 하는 쪽이 우선)
+    setSavedVideos(await listSavedVideos());
   }, [profile.authReady, profile.user?.id]);
 
   useFocusEffect(
@@ -124,17 +135,19 @@ export default function VideosSection({ profile }: { profile: ProfileApi }) {
   // ⚠️ 수정금지(승인필요) 2026-08-01 사장님 = 가짜 샘플 카드 완전삭제 §19.
   //   사유 = 영상이 0건이어도 가짜 카드가 떠서 "저장 실패"를 화면에서 알 수 없었고,
   //   눌러도 안내창만 떠 통합 모달 확인 자체가 막혔다. 이제 실제 영상만 보여준다.
-  const displayVideos = savedTrips
-    .filter((trip) => !hiddenKeys.includes(cardKey("video", String(trip.id))))
-    .filter((trip) =>
-      Object.values(trip.videoByDay || {}).some(
-        (v) => v?.status === "succeeded",
-      ),
+  // 카드 1장 = 담은 영상 1건(여정×일차). id = "여정번호:일차" = 숨김 열쇠도 이 단위.
+  const displayVideos = savedVideos
+    .filter(
+      (v) =>
+        !hiddenKeys.includes(cardKey("video", `${v.itineraryId}:${v.day}`)),
     )
-    .map((trip) => ({
-      id: String(trip.id),
-      title: trip.title,
-      date: trip.startDate?.split("T")[0] || "",
+    .map((v) => ({
+      id: `${v.itineraryId}:${v.day}`,
+      itineraryId: v.itineraryId,
+      day: v.day,
+      isNew: v.isNew,
+      title: v.title,
+      date: v.startDate?.split("T")[0] || "",
     }));
 
   // TRIPIS 카드 = 기기에서 숨긴 것 제외(숏폼과 같은 목록 1벌 = DB 보존)
@@ -192,14 +205,30 @@ export default function VideosSection({ profile }: { profile: ProfileApi }) {
                 width: fullVideoWidth,
               },
             ]}
-            // ⚠️ 수정금지(승인필요) 2026-08-01 사장님 B-0 = 카드 터치 = 통합 모달로 곧바로 영상.
-            onPress={() =>
+            // ⚠️ 수정금지(승인필요) 2026-08-01 사장님 B-0 = 카드 터치 = 통합 모달로 곧바로 영상(그 일차).
+            //   ★ 해제(서버 is_new) = 모달이 영상 뷰를 여는 순간 1벌로 처리 = 여기서는 화면 표식만 지운다.
+            onPress={() => {
+              if (video.isNew)
+                setSavedVideos((prev) =>
+                  prev.map((v) =>
+                    v.itineraryId === video.itineraryId && v.day === video.day
+                      ? { ...v, isNew: false }
+                      : v,
+                  ),
+                );
               setModalParams({
                 mode: "itinerary",
-                itineraryId: Number(video.id),
-              })
-            }
+                itineraryId: video.itineraryId,
+                day: video.day,
+              });
+            }}
           >
+            {/* 좌측 상단 ★ = 막 완성돼 자동 게시된 영상 표식(2026-08-03 사장님) = 1회 열면 사라짐 */}
+            {video.isNew && (
+              <View style={localStyles.newStar}>
+                <Icon name="star" size={13} color="#FFFFFF" />
+              </View>
+            )}
             {/* 우측 상단 X = 이 기기에서만 숨김(기억됨). DB 는 건드리지 않는다 */}
             <Pressable
               style={styles.cardDeleteBtnRich}
@@ -225,12 +254,14 @@ export default function VideosSection({ profile }: { profile: ProfileApi }) {
                 </View>
               </LinearGradient>
 
-              {/* 하단 텍스트 오버레이 */}
+              {/* 하단 텍스트 오버레이 = 제목 + n일차·시작일 */}
               <View style={styles.videoInfoOverlay}>
                 <Text style={styles.videoCardTitle} numberOfLines={1}>
                   {video.title}
                 </Text>
-                <Text style={styles.videoCardDate}>{video.date}</Text>
+                <Text style={styles.videoCardDate}>
+                  {video.day}일차 · {video.date}
+                </Text>
               </View>
             </View>
           </Pressable>
@@ -305,4 +336,17 @@ export default function VideosSection({ profile }: { profile: ProfileApi }) {
 // 썸네일 중앙 아이콘 자리 = 이미지 위에 겹치는 정중앙 배치(이 파일 전용 최소 스타일)
 const localStyles = StyleSheet.create({
   thumbCenter: { flex: 1, alignItems: "center", justifyContent: "center" },
+  // ★ 막 완성된 영상 표식(좌측 상단, X 와 대칭 크기)
+  newStar: {
+    position: "absolute",
+    top: 10,
+    left: 10,
+    zIndex: 2,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(250, 204, 21, 0.92)",
+  },
 });

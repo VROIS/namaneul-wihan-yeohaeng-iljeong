@@ -31,6 +31,7 @@ interface Props {
   day: number; // 현재 보고 있는 일차 (기기 저장 파일명에도 사용)
   dayVideo: DayVideo | undefined;
   hasSlots: boolean; // 그 날 일정 슬롯 존재 여부 = 없으면 생성 버튼 비활성
+  canGenerate: boolean; // 만들 수 있는 자리인가(생성기=true / 감상=false, 2026-08-03 사장님)
   isRequesting: boolean; // 껍데기의 생성 요청 진행 중 여부
   onGenerate(): void; // 생성 요청 = 껍데기 소유 함수 1벌(§0)
   onVideoByDay(v: Record<string, DayVideo>): void; // 폴링 결과를 껍데기로 올림
@@ -41,6 +42,7 @@ export default function VideoPlaySlot({
   day,
   dayVideo,
   hasSlots,
+  canGenerate,
   isRequesting,
   onGenerate,
   onVideoByDay,
@@ -143,28 +145,41 @@ export default function VideoPlaySlot({
           )}
         </View>
       ) : dayVideo?.status === "processing" ? (
-        // ⏳ 생성중 = 진행률
+        // ⏳ 생성중 = 진행률. 문구 = 2026-08-03 사장님 교체('지브리' 폐기 §19) + 나가도 됨 안내(백그라운드 진행).
         <View style={styles.center}>
           <ActivityIndicator size="large" color={Brand.primary} />
           <Text style={styles.progressText}>
-            지브리 영상 생성 중{" "}
+            여행 애니메이션 생성 중{" "}
             {dayVideo.totalScenes
               ? `${Math.round((dayVideo.scenesDone / dayVideo.totalScenes) * 100)}%`
               : ""}
           </Text>
           <Text style={styles.progressSub}>
-            장면 {dayVideo.scenesDone}/{dayVideo.totalScenes} · 약 1~2분 소요
+            장면 {dayVideo.scenesDone}/{dayVideo.totalScenes} · 약 4~5분 소요
+          </Text>
+          <Text style={styles.noticeBig}>
+            만드는 동안 나가셔도 됩니다.{"\n"}완성되면 하단 TRIPIS 버튼에
+            표시됩니다.
           </Text>
         </View>
-      ) : (
+      ) : canGenerate ? (
         // 🎬 미생성(또는 실패) = 생성 버튼. 버튼 문구 = "영상 만들기"(§23) / 소요 시간은 안내문에.
+        //   문구 = 2026-08-03 사장님 교체('지브리' 폐기 §19) + 60크레딧·4~5분·나가도 됨 = **크게** 표시.
+        //   ⚠️ 만들 수 있는 자리에서만 그린다(2026-08-03 사장님) = 감상(도시 대표카드·프로필)에서는
+        //     남의 여정이라 만들 수 없다. 일별 영상 = 60크레딧이므로 헛 버튼을 보여주면 안 된다.
         <View style={styles.center}>
           <Icon name="film" size={56} color={Brand.primary} />
-          <Text style={styles.introTitle}>Day {day} 지브리 여행 만화영상</Text>
+          <Text style={styles.introTitle}>Day {day} 여행 애니메이션</Text>
           <Text style={styles.introDesc}>
-            나의 실제 일정이 코믹한 지브리 애니메이션 브이로그가 됩니다.
+            나의 실제 일정이 한 편의 애니메이션 브이로그가 됩니다.
           </Text>
-          <Text style={styles.progressSub}>약 1~2분 소요</Text>
+          <Text style={styles.creditNotice}>
+            영상 생성 시 60크레딧이 차감됩니다
+          </Text>
+          <Text style={styles.noticeBig}>
+            약 4~5분 소요 — 만드는 동안 나가셔도 됩니다.{"\n"}완성되면 하단
+            TRIPIS 버튼에 표시됩니다.
+          </Text>
           {dayVideo?.status === "failed" && (
             <Text style={styles.failText}>
               이전 생성에 실패했어요. 다시 시도해 주세요.
@@ -182,6 +197,12 @@ export default function VideoPlaySlot({
             )}
             <Text style={styles.genBtnText}>영상 만들기</Text>
           </Pressable>
+        </View>
+      ) : (
+        // 감상 자리인데 그 날짜 영상이 아직 없음 = 만들 수 없으니 안내만(버튼 없음).
+        <View style={styles.center}>
+          <Icon name="film" size={56} color={Brand.primary} />
+          <Text style={styles.introTitle}>{day}일차 영상은 아직 없습니다</Text>
         </View>
       )}
     </View>
@@ -239,6 +260,20 @@ const styles = StyleSheet.create({
     fontFamily: Fonts?.bold || undefined,
   },
   progressSub: { color: "#94a3b8", fontSize: 13 },
+  // 크게 표시(2026-08-03 사장님) = 크레딧 차감 고지 + 나가도 됨 안내
+  creditNotice: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontFamily: Fonts?.bold || undefined,
+    marginTop: 10,
+  },
+  noticeBig: {
+    color: "#cbd5e1",
+    fontSize: 14,
+    lineHeight: 21,
+    textAlign: "center",
+    paddingHorizontal: 32,
+  },
   introTitle: {
     color: "#FFFFFF",
     fontSize: 18,

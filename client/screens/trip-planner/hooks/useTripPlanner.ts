@@ -321,10 +321,21 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
     [],
   );
 
+  // ⚠️ 2026-08-03 사장님 지적 실증 = **같은 여정을 다시 열면 먹통**(도시카드 [코스] 1회는 뜨고 2회째 무반응,
+  //   파리·마드리드·뮌헨 동일). 레이턴시가 아니라 구조 문제였다: 이 복원은 **번호가 바뀔 때만** 돈다.
+  //   같은 도시를 다시 누르면 번호가 그대로라 바뀐 것이 없어 아무 일도 안 일어났다
+  //   (실증: 같은 도시 = 무반응 / 다른 도시로 바꾸면 = 정상 동작).
+  //   → 복원한 뒤 번호를 **비운다**. 그러면 다음에 같은 번호가 와도 "없음 → 번호" 로 바뀌어 확실히 돈다.
+  //   보내는 쪽 4곳(도시카드·프로필 여정카드·전문가 답변함·전문가 오버레이)은 손대지 않는다 = 받는 쪽 1벌만(§0).
   useEffect(() => {
     if (!restoreItineraryId) return;
     restoreItineraryById(restoreItineraryId);
-  }, [restoreItineraryId, restoreItineraryById]);
+    try {
+      navigation.setParams({ itineraryId: undefined } as never);
+    } catch {
+      // 창(모달)으로 열린 경우 = 비울 route 자체가 없음 = 위 useRoute 와 같은 방어
+    }
+  }, [restoreItineraryId, restoreItineraryById, navigation]);
 
   // 새 여정 생성 시작(Loading) = 복원 상태 해제 = 신규 여정 화면은 저장버튼 원래 기능으로 복귀
   useEffect(() => {

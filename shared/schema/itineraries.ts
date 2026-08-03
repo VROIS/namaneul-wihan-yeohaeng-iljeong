@@ -9,6 +9,7 @@ import {
   real,
   jsonb,
   boolean,
+  unique,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -86,6 +87,33 @@ export const itineraries = pgTable("itineraries", {
     .default(sql`CURRENT_TIMESTAMP`)
     .notNull(),
 });
+
+// 📥 저장한 영상 (2026-08-03 사장님 확정) = 영상은 회사 자산(여정 video_by_day)이고,
+//   저장 = "이 사용자가 이 여정 n일차 영상을 프로필에 담았다"는 연결 행 1개 = 해설(guides.user_id)과 같은 DB 방식.
+//   프로필 '나의 TRIPIS' 영상 카드 = 이 표에 담긴 것만 보여준다(옛 "내 여정 자동 노출" 폐기 §19).
+//   is_new = 생성 완료 자동 게시 표식(★ + 하단 TRIPIS 탭 뱃지) — 그 영상 뷰를 1회 열 때 해제.
+//   FK 없음 = 위 itineraries 와 같은 사유(§19-4) = push 발 연쇄삭제 지뢰를 안 심는다. 여정이 지워진 행은 조회 JOIN 이 자연 제외.
+export const savedVideos = pgTable(
+  "saved_videos",
+  {
+    id: serial("id").primaryKey(),
+    userId: varchar("user_id").notNull(),
+    itineraryId: integer("itinerary_id").notNull(),
+    day: integer("day").notNull(),
+    isNew: boolean("is_new").default(false).notNull(),
+    createdAt: timestamp("created_at")
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+  },
+  (t) => [
+    // 같은 사용자·같은 여정·같은 날짜 = 1행 = 중복 담기 차단 + 완료 자동게시 upsert 의 ON CONFLICT 대상
+    unique("saved_videos_user_itin_day_uniq").on(
+      t.userId,
+      t.itineraryId,
+      t.day,
+    ),
+  ],
+);
 
 // [DROPPED 0013] itinerary_items — 0건, rawData JSON으로 대체됨
 

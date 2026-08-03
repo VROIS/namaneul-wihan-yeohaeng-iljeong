@@ -14,6 +14,9 @@ import TripPlannerScreen from "@/screens/trip-planner/TripPlannerScreen";
 import ProfileScreen from "@/screens/profile/ProfileScreen";
 // ⚠️ 사장님 SSOT 2026-07-14 = 전문가 = 여정화면 위 오버레이(AI의견과 동일). 옛 별도탭 화면 폐기 §19 = 탭은 트리거만(requestExpert).
 import { tabBadgeCount, getMyRole } from "@/screens/expert/expertApi"; // 전문가 탭 배지 = 역할별(사용자=안읽은답변/전문가=대기문의) + 역할(탭 활성 분기)
+// 📥 2026-08-03 사장님 확정 = 영상 완성 알림 = 벨 알림 안 씀 → **하단 TRIPIS 탭 뱃지**(전문가 뱃지와 같은 구현).
+//   뱃지 원천 = saved_videos.is_new(서버) = 앱을 껐다 와도 폴링이 다시 인식. 해제 = 그 영상 뷰 1회 열람.
+import { videoBadgeCount } from "@/components/tripis/savedVideosApi";
 import { useMapToggle } from "@/contexts/MapToggleContext";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
@@ -50,6 +53,7 @@ export default function MainTabNavigator() {
     requestAiOpinion,
     requestExpert,
     expertDataChangedAt,
+    videoDataChangedAt,
     authChangedAt,
     requestLogin,
     isAuthed,
@@ -62,16 +66,24 @@ export default function MainTabNavigator() {
   // ⚠️ 2026-07-13 = 전문가 탭 배지(시안 D) = 답변 안 읽은 수. 초기 1회 + 30초 폴링(경량).
   //   ⚠️ 사장님 SSOT 2026-07-14 = 답변 전송·문의 열람 직후 배지 즉시 갱신 = 화면 이동(navigation state 변화)마다 재조회 추가(30초 지연 stale 제거 §19).
   const [expertBadge, setExpertBadge] = useState(0);
+  // 📥 완성 영상 뱃지(TRIPIS 탭) = 전문가 뱃지와 같은 폴링·신호 1벌(2026-08-03 사장님)
+  const [videoBadge, setVideoBadge] = useState(0);
   // ⚠️ 사장님 SSOT 2026-07-14 = 역할=전문가/관리자면 [전문가]탭 항상 활성(자기 여정 없어도 답변함 진입 가능). 사용자는 여정 있을 때만.
   const [isExpertRole, setIsExpertRole] = useState(false);
   useEffect(() => {
     let alive = true;
-    const load = () =>
+    const load = () => {
       tabBadgeCount()
         .then((n) => {
           if (alive) setExpertBadge(n);
         })
         .catch(() => {});
+      videoBadgeCount()
+        .then((n) => {
+          if (alive) setVideoBadge(n);
+        })
+        .catch(() => {});
+    };
     load();
     getMyRole()
       .then((r) => {
@@ -105,6 +117,19 @@ export default function MainTabNavigator() {
       alive = false;
     };
   }, [expertDataChangedAt]);
+  // 📥 2026-08-03 = 완성 영상 뷰 1회 열람(모달, navigation state 안 바뀜) 직후 = TRIPIS 탭 뱃지 즉시 재조회(전문가 신호와 동일 패턴 §16).
+  useEffect(() => {
+    if (!videoDataChangedAt) return;
+    let alive = true;
+    videoBadgeCount()
+      .then((n) => {
+        if (alive) setVideoBadge(n);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [videoDataChangedAt]);
   // ⚠️ 사장님 SSOT 2026-07-25 = 로그인 팝업(모달)은 navigation state를 안 바꿔 위 mount/이동 리스너로는 role 재조회 안 됨 → 관리자(사장님) 메일 로그인 직후에도 isExpertRole=false로 남아 [전문가]탭 프리패스 안 되던 버그. authChangedAt 신호로 role+배지 즉시 재조회(§16 신호 재사용, useProfile과 동일 패턴).
   useEffect(() => {
     if (!authChangedAt) return;
@@ -117,6 +142,11 @@ export default function MainTabNavigator() {
     tabBadgeCount()
       .then((n) => {
         if (alive) setExpertBadge(n);
+      })
+      .catch(() => {});
+    videoBadgeCount()
+      .then((n) => {
+        if (alive) setVideoBadge(n);
       })
       .catch(() => {});
     return () => {
@@ -279,16 +309,25 @@ export default function MainTabNavigator() {
           options={{
             tabBarLabel: t("tab.guide"),
             headerShown: false,
+            // 📥 완성 영상 뱃지(2026-08-03 사장님) = 전문가 탭과 같은 표기 1벌
+            tabBarBadge: videoBadge > 0 ? videoBadge : undefined,
           }}
-          listeners={{
+          listeners={({ navigation: tabNavigation }) => ({
             // ⚠️ 사장님 SSOT 2026-07-25 = Tripis(가이드)탭 = 여정생성 버튼과 동일 인증게이트 = 비인증이면 로그인 팝업(무방비 진입 차단), 인증됨(관리자 포함)이면 바로 진입(프리패스).
             // ⚠️ 2026-07-27 = 로그인 판정은 전역 1곳(isAuthed)만 읽음(§0). 저장소를 직접 읽던 옛 방식 폐기 §19.
+            // 📥 2026-08-03 사장님 확정 = 뱃지가 켜져 있으면 이 탭 = **프로필**(완성 영상이 자동 게시된 화면)로 분기.
+            //   뱃지 해제는 여기가 아니라 그 영상 뷰를 1회 열 때(서버 is_new) = 앱을 껐다 와도 서버가 기억.
+            //   뱃지 없으면 = 원래 기능(카메라 미니앱) 그대로.
             tabPress: (e) => {
               e.preventDefault();
+              if (videoBadge > 0) {
+                tabNavigation.navigate("Profile");
+                return;
+              }
               if (isAuthed) rootNavigation.navigate("GuideMiniApp");
               else requestLogin();
             },
-          }}
+          })}
         />
       </Tab.Navigator>
     </>

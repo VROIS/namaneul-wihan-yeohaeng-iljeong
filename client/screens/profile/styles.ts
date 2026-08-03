@@ -369,6 +369,12 @@ export const styles = StyleSheet.create({
     lineHeight: 19,
     marginBottom: 6,
   },
+  // ❔ 도움말 FAQ 질문 줄 = 작은 아이콘 + 질문(2026-08-03). accordionItemLeft(gap14·36px원용)보다 좁은 줄 전용.
+  faqQRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
   // ⚠️ 2026-07-29 복원 = PersonaSection.tsx 가 쓰는 5개 키. 이 파일을 다시 쓸 때 빠져 그 섹션이 스타일 없이 렌더되고
   //   타입 오류 9건을 내던 것 = main 정의 그대로 복원(§19 = 최신이 아니라 **동작하는 것**이 정본).
   personaContainer: {

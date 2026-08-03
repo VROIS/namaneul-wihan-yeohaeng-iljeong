@@ -8,6 +8,61 @@ import { styles } from "../styles";
 import { shortDateCard } from "../utils"; // 날짜 서식 = 여정 카드와 같은 1벌(§16)
 import type { ProfileApi } from "../hooks/useProfile";
 
+// ❔ 도움말 FAQ = 실제 TRIPIS 기능 기준 재구성(2026-08-03 사장님 승인, 옛 '손안에 가이드' 문서 폐기 §19).
+//   icon = client/components/Icon.tsx ICON_MAP 에 이미 있는 이름만 사용(이모지 금지 = 사장님 지시).
+const HELP_FAQ: { icon: string; q: string; a: string }[] = [
+  {
+    icon: "compass",
+    q: "앱 하단 5개 버튼(여정 / AI 의견 / 전문가 검증 / 프로필 / Tripis)은 각각 뭔가요?",
+    a: "[여정]에서 도시·날짜·스타일을 고르면 나만의 일정이 만들어져요. [AI 의견]과 [전문가 검증]은 만든 여정이 있어야 눌립니다(여정이 없으면 회색으로 비활성화되는 게 정상이에요). [프로필]에서 내가 만든 여정·해설·영상을 다시 볼 수 있고, [Tripis]는 카메라로 여행지를 찍어 바로 해설을 받는 기능이에요.",
+  },
+  {
+    icon: "dollar-sign",
+    q: "크레딧은 어디에, 얼마나 쓰이나요?",
+    a: "기능별로 정해진 만큼만 차감돼요 — 여정 생성 5 · AI 의견 5 · Tripis 해설 5 · 전문가 검증 10 · 여행 영상 제작 60. 가입하면 140 크레딧을 무료로 드리고, 부족하면 프로필 > 결제 관리에서 충전(€10 = 140 크레딧)할 수 있어요.",
+  },
+  {
+    icon: "bot",
+    q: '"AI 의견"과 "전문가 검증"의 차이가 뭔가요?',
+    a: "[AI 의견]은 AI가 내 여정을 보고 즉시 조언을 주는 기능이고, [전문가 검증]은 실제 현지 전문가에게 문의해 답변을 받는 기능이에요. 그래서 전문가 검증이 크레딧을 더 씁니다(10크레딧). 두 기능 모두 로그인과 여정 생성이 먼저 필요해요.",
+  },
+  {
+    icon: "book-open",
+    q: '각 장소의 "해설 듣기" 버튼을 누르면 뭐가 나오나요?',
+    a: "그 장소에 대한 AI 음성 해설이 재생돼요. 처음 듣는 장소라면 해설을 새로 만드는 데 약간의 시간이 걸릴 수 있고, 이미 만들어진 해설이 있으면 바로 재생됩니다. 프로필 > 설정 > 언어 설정에서 고른 언어(7개 언어 지원)로 나와요.",
+  },
+  {
+    icon: "film",
+    q: '하루 일정을 "여행 애니메이션"으로 만드는 기능은 뭔가요?',
+    a: "여정 화면 우측 상단의 영상 버튼을 누르면, 그 날 일정을 애니메이션 영상으로 만들 수 있어요(60크레딧, 약 4~5분 소요). 만드는 동안 앱을 나가거나 다른 화면을 봐도 괜찮아요 — 완성되면 하단 [Tripis] 탭에 빨간 알림이 뜨고, 눌러보면 완성된 영상이 프로필에 자동으로 올라와 있어요. 이미 만들어진 영상이 있는 날짜는 다시 만들 필요 없이 바로 감상하거나 [저장]으로 내 프로필에 담을 수 있어요.",
+  },
+  {
+    icon: "camera",
+    q: "Tripis(카메라 아이콘) 탭은 정확히 뭘 하는 기능인가요?",
+    a: "여행 중 궁금한 장소나 작품을 카메라로 찍으면 AI가 그 자리에서 해설을 만들어줘요(5크레딧). 사진과 함께 있는 이름표·간판 글자가 잘 보이게 찍으면 더 정확한 해설을 받을 수 있어요. 궁금한 점은 음성으로 바로 물어볼 수도 있습니다.",
+  },
+  {
+    icon: "star",
+    q: "도시 대표 카드에는 왜 내가 만든 여정이 안 뜨나요?",
+    a: "첫 화면의 도시 카드는 운영팀이 별 표시로 선정한 대표 여정만 보여줘요. 내가 만든 여정은 자동으로 대표가 되지 않지만, 프로필 > 나의 여정에서 언제든 다시 열어볼 수 있어요.",
+  },
+  {
+    icon: "map",
+    q: "일정에 있는 [바로가기] · [바로 예약하기] 버튼은 뭔가요?",
+    a: "[바로가기]를 누르면 그 날 전체 일정이 장소마다 구간별로 이어진 구글맵 경로가 바로 열려요. [바로 예약하기]는 그 날 일정을 함께할 드라이빙 가이드와 연결해 드립니다.",
+  },
+  {
+    icon: "share-2",
+    q: "일정에 있는 [여정 공유] · [캘린더 저장] 버튼은 뭔가요?",
+    a: "[여정 공유]는 완성된 여정을 링크로 만들어 카카오톡·문자 등으로 다른 사람에게 바로 보낼 수 있게 해줘요. [캘린더 저장]은 그 여정의 일정을 내 휴대폰 캘린더 앱에 등록해서 날짜별로 확인할 수 있게 해줘요. 두 기능 모두 로그인이 필요하고, 아직 저장 안 한 여정이면 자동으로 먼저 저장돼요.",
+  },
+  {
+    icon: "user",
+    q: "로그인은 어떤 방법으로 할 수 있나요?",
+    a: "Google, Kakao, Apple 3가지 소셜 로그인을 지원해요. 별도의 회원가입·비밀번호 없이 간편하게 시작할 수 있습니다.",
+  },
+];
+
 export default function SettingsMenu({ profile }: { profile: ProfileApi }) {
   const {
     theme,
@@ -248,6 +303,9 @@ export default function SettingsMenu({ profile }: { profile: ProfileApi }) {
         </Pressable>
         {expandedKey === "privacy" && (
           <View style={styles.accordionBody}>
+            {/* ⚠️ 수정금지(승인필요) 2026-08-03 사장님 승인 = 옛 '손안에 가이드'(카메라 전용 앱) 문서 전면 교체.
+                지금 TRIPIS(여정생성·AI의견·전문가검증·Tripis해설/영상·크레딧) 실제 데이터 흐름 기준으로 다시 씀 = §19.
+                정본 = docs/2026-07-29 결제·크레딧 구현.md (이 컴포넌트를 이미 다루는 문서). */}
             <Text
               style={[
                 styles.accordionText,
@@ -259,11 +317,11 @@ export default function SettingsMenu({ profile }: { profile: ProfileApi }) {
                 },
               ]}
             >
-              개인 정보 처리 방침 (Privacy Policy)
+              개인 정보 처리 방침
             </Text>
             <Text style={[styles.accordionText, { marginBottom: 10 }]}>
-              손안에 가이드는 사용자의 여행 경험을 돕기 위해 최소한의 정보만을
-              수집하며, AI 분석을 위한 데이터 처리에 투명성을 보장합니다.
+              TRIPIS는 여정 생성과 AI 해설 제공에 필요한 최소한의 정보만
+              수집하며, AI 데이터 처리 과정을 투명하게 안내합니다.
             </Text>
 
             <Text
@@ -275,19 +333,16 @@ export default function SettingsMenu({ profile }: { profile: ProfileApi }) {
               1. 수집하는 개인 정보의 항목
             </Text>
             <Text style={styles.accordionText}>
-              • 필수 항목: 소셜 로그인(Google, Kakao)을 통해 제공받은 이메일
-              주소, 이름, 프로필 사진.
-            </Text>
-            <Text style={styles.accordionText}>
-              • 서비스 이용 과정에서 생성/수집되는 정보:
+              • 필수: 소셜 로그인(Google·Kakao·Apple)으로 받는 이메일, 이름,
+              프로필 사진.
             </Text>
             <Text style={[styles.accordionText, { paddingLeft: 10 }]}>
-              - 이미지 및 음성: AI 분석을 위해 사용자가 업로드하거나 촬영한
-              사진, 녹음된 음성 데이터.
+              - 여정 생성 시: 목적지, 여행 날짜, 동행자 유형·인원, 여행 스타일
+              선택값.
             </Text>
             <Text style={[styles.accordionText, { paddingLeft: 10 }]}>
-              - 위치 정보: 가이드 생성 및 지도 표시를 위한 GPS 위도/경도 데이터
-              (촬영 시 메타데이터 포함).
+              - Tripis(해설) 이용 시: 촬영·업로드한 사진, GPS 위치정보, AI와
+              음성으로 대화할 때의 음성 데이터.
             </Text>
             <Text
               style={[
@@ -295,8 +350,8 @@ export default function SettingsMenu({ profile }: { profile: ProfileApi }) {
                 { paddingLeft: 10, marginBottom: 10 },
               ]}
             >
-              - 결제 정보: 크레딧 충전 시 Stripe를 통해 처리되는 결제 내역 (카드
-              정보는 서버에 저장되지 않음).
+              - 결제 시: Stripe를 통해 처리되는 결제 내역(카드 정보 자체는
+              저장하지 않음).
             </Text>
 
             <Text
@@ -308,15 +363,11 @@ export default function SettingsMenu({ profile }: { profile: ProfileApi }) {
               2. 개인 정보의 수집 및 이용 목적
             </Text>
             <Text style={styles.accordionText}>
-              • 서비스 제공: Gemini AI를 활용한 이미지/음성 분석 및 여행
-              가이드(상세페이지) 콘텐츠 생성.
+              • AI 여정 생성·해설 생성(Google Gemini API 활용).
             </Text>
-            <Text style={styles.accordionText}>
-              • 회원 관리: 개인 식별, 보관함 데이터 동기화, 불량 회원의 부정
-              이용 방지.
-            </Text>
+            <Text style={styles.accordionText}>• 크레딧 차감·잔액 관리.</Text>
             <Text style={[styles.accordionText, { marginBottom: 10 }]}>
-              • 리워드 지급: 친구 추천 크레딧 지급 및 캐시백 처리를 위한 식별.
+              • 회원 식별, '나의 여정'·'나의 TRIPIS' 보관함 동기화.
             </Text>
 
             <Text
@@ -328,13 +379,15 @@ export default function SettingsMenu({ profile }: { profile: ProfileApi }) {
               3. 개인 정보의 보유 및 이용 기간
             </Text>
             <Text style={styles.accordionText}>
-              • 회원 정보: 회원 탈퇴 시까지 보유하며, 탈퇴 요청 시 즉시
-              파기합니다.
+              • 회원 정보: 탈퇴 시까지 보유하며, 탈퇴 요청 시 즉시 파기합니다.
+            </Text>
+            <Text style={styles.accordionText}>
+              • 생성한 여정·해설: 사용자가 직접 삭제(카드의 X)하기 전까지
+              보관됩니다.
             </Text>
             <Text style={[styles.accordionText, { marginBottom: 10 }]}>
-              • 이미지 데이터: AI 분석 완료 후 즉시 삭제되거나, 사용자의
-              '보관함' 기능 제공을 위해 암호화된 데이터베이스 또는 보안
-              스토리지에 보관됩니다.
+              • 일별 여행 영상: 서비스 콘텐츠로 제작되므로, 프로필에서 숨겨도
+              서버에는 보관될 수 있습니다.
             </Text>
 
             <Text
@@ -346,17 +399,13 @@ export default function SettingsMenu({ profile }: { profile: ProfileApi }) {
               4. 제3자 제공 및 위탁
             </Text>
             <Text style={styles.accordionText}>
-              서비스 향상을 위해 다음과 같이 외부 전문 업체에 일부 업무를
-              위탁합니다.
+              • AI 분석: Google(Gemini API) — 사진·텍스트 분석, 지도 표시.
             </Text>
             <Text style={styles.accordionText}>
-              • AI 분석: Google (Gemini API) - 이미지 및 텍스트 분석.
-            </Text>
-            <Text style={styles.accordionText}>
-              • 결제 처리: Stripe - 크레딧 충전 결제 대행.
+              • 결제 대행: Stripe — 크레딧 충전 결제 처리.
             </Text>
             <Text style={[styles.accordionText, { marginBottom: 10 }]}>
-              • 데이터 호스팅: Replit/Neon - 서비스 서버 및 데이터베이스 운영.
+              • 서버·데이터 보관: Supabase — 서버 운영, 이미지·영상 저장.
             </Text>
 
             <Text
@@ -365,12 +414,11 @@ export default function SettingsMenu({ profile }: { profile: ProfileApi }) {
                 { fontWeight: "bold", color: "#0F172A", marginTop: 4 },
               ]}
             >
-              5. 정보 주체의 권리
+              5. 이용자의 권리
             </Text>
             <Text style={[styles.accordionText, { marginBottom: 14 }]}>
-              사용자는 언제든지 자신의 개인 정보를 열람, 수정하거나 회원
-              탈퇴(데이터 삭제)를 요청할 수 있습니다. 설정 &gt; 데이터 관리
-              메뉴에서 '내 데이터 다운로드'를 요청할 수 있습니다.
+              언제든 개인정보 열람·수정·삭제(회원 탈퇴)를 요청할 수 있습니다.
+              프로필 &gt; 도움말 및 고객센터로 문의해 주세요.
             </Text>
 
             <View
@@ -387,66 +435,23 @@ export default function SettingsMenu({ profile }: { profile: ProfileApi }) {
                 { fontWeight: "bold", color: "#0F172A", marginBottom: 6 },
               ]}
             >
-              외부 서비스 연결 및 권리 해제
+              외부 서비스 연결 해제
             </Text>
             <Text style={[styles.accordionText, { marginBottom: 8 }]}>
-              사용자는 소셜 로그인을 통해 연결된 외부 서비스의 접근 권한을
-              언제든지 관리할 수 있습니다.
-            </Text>
-
-            <Text
-              style={[
-                styles.accordionText,
-                { fontWeight: "bold", color: "#0F172A", marginTop: 4 },
-              ]}
-            >
-              1. 연결된 계정 목록
+              앱 안에서 로그아웃·탈퇴해도 소셜 서비스 쪽 연결은 남아있을 수
+              있습니다. 아래 방법으로 직접 해제할 수 있습니다.
             </Text>
             <Text style={styles.accordionText}>
-              현재 손안에 가이드는 간편 로그인을 위해 다음 서비스와 연결될 수
-              있습니다.
+              • Google: [Google 계정 &gt; 데이터 및 개인정보 보호 &gt; 내 계정에
+              액세스할 수 있는 앱]에서 해제.
             </Text>
             <Text style={styles.accordionText}>
-              • Google 계정: 이메일, 프로필 사진 접근.
-            </Text>
-            <Text style={[styles.accordionText, { marginBottom: 10 }]}>
-              • Kakao 계정: 프로필 정보 접근.
-            </Text>
-
-            <Text
-              style={[
-                styles.accordionText,
-                { fontWeight: "bold", color: "#0F172A", marginTop: 4 },
-              ]}
-            >
-              2. 접근 권한 해제 방법
-            </Text>
-            <Text style={styles.accordionText}>
-              앱 내에서 '로그아웃' 또는 '탈퇴'를 하더라도 소셜 서비스 상의 연결
-              고리는 남아있을 수 있습니다. 아래 방법을 통해 직접 연결을 해제할
-              수 있습니다.
-            </Text>
-            <Text style={styles.accordionText}>
-              • Google: [Google 계정 &gt; 데이터 및 개인 정보 보호 &gt; 내
-              계정에 액세스할 수 있는 앱]에서 'My Hand Guide' 연결 해제.
-            </Text>
-            <Text style={[styles.accordionText, { marginBottom: 10 }]}>
               • Kakao: [카카오톡 설정 &gt; 카카오계정 &gt; 연결된 서비스
-              관리]에서 연결 해제.
-            </Text>
-
-            <Text
-              style={[
-                styles.accordionText,
-                { fontWeight: "bold", color: "#0F172A", marginTop: 4 },
-              ]}
-            >
-              3. 데이터 삭제 요청
+              관리]에서 해제.
             </Text>
             <Text style={styles.accordionText}>
-              타사 앱 연결을 해제한 후, 손안에 가이드 서버에 저장된 모든
-              데이터의 영구 삭제를 원하실 경우, 설정 페이지의 [회원 탈퇴] 기능을
-              이용해 주시기 바랍니다.
+              • Apple: [설정 &gt; Apple ID &gt; 암호 및 보안 &gt; Apple로
+              로그인을 사용하는 앱]에서 해제.
             </Text>
           </View>
         )}
@@ -478,6 +483,9 @@ export default function SettingsMenu({ profile }: { profile: ProfileApi }) {
         </Pressable>
         {expandedKey === "help" && (
           <View style={styles.accordionBody}>
+            {/* ⚠️ 수정금지(승인필요) 2026-08-03 사장님 승인 = 옛 '손안에 가이드'(카메라 전용 앱) FAQ 전면 교체.
+                지금 TRIPIS 실제 기능 기준 = 사용자가 헷갈릴 수 있는 화면·버튼 위주로 재구성 = §19.
+                이모지 금지(사장님 지시) → lucide 아이콘 1벌(Icon.tsx ICON_MAP 기존 목록에서만 사용). */}
             <Text
               style={[
                 styles.accordionText,
@@ -489,102 +497,25 @@ export default function SettingsMenu({ profile }: { profile: ProfileApi }) {
                 },
               ]}
             >
-              자주 묻는 질문 (FAQ)
+              자주 묻는 질문
             </Text>
 
-            <Text
-              style={[
-                styles.accordionText,
-                { fontWeight: "bold", color: "#0F172A", marginTop: 4 },
-              ]}
-            >
-              Q1. 앱이 처음에 바로 안 열리거나 멈춘 것 같아요!
-            </Text>
-            <Text style={[styles.accordionText, { marginBottom: 12 }]}>
-              🚀 조금만 기다려주세요! 앱을 처음 실행할 때 최신 기능을 준비하느라
-              약 3초 정도의 로딩 시간이 필요할 수 있습니다. 만약 계속 반응이
-              없다면 브라우저를 새로고침해 주세요. 또한, 이 앱은 크롬(Chrome)
-              브라우저에 최적화되어 있습니다. AI가 최고의 설명을 들려드리기
-              위해서는 카메라, 마이크, 위치 정보 권한 승인이 반드시 필요하니 꼭
-              허용해 주세요!
-            </Text>
-
-            <Text
-              style={[
-                styles.accordionText,
-                { fontWeight: "bold", color: "#0F172A", marginTop: 4 },
-              ]}
-            >
-              Q2. AI 설명이 더 정확하게 나오게 하려면 어떻게 찍어야 하나요?
-            </Text>
-            <Text style={[styles.accordionText, { marginBottom: 12 }]}>
-              📸 AI에게 힌트를 주세요! 사진을 찍으실 때, 단순히 대상만 찍기보다
-              작품의 이름표(캡션)나 가게의 간판/현판 글자가 함께 나오도록 촬영해
-              보세요. 글자 정보를 포함하면 AI가 훨씬 더 정확하고 깊이 있는
-              해설을 들려드릴 수 있답니다.
-            </Text>
-
-            <Text
-              style={[
-                styles.accordionText,
-                { fontWeight: "bold", color: "#0F172A", marginTop: 4 },
-              ]}
-            >
-              Q3. 한국어 말고 다른 언어로도 들을 수 있나요?
-            </Text>
-            <Text style={[styles.accordionText, { marginBottom: 12 }]}>
-              🌍 설정이 필요할 수 있어요. 기본적으로 한국어에 최적화되어
-              있습니다. 만약 다른 언어를 선택하실 경우, 앱 내의 일부 음성 설명이
-              지원되지 않거나 매끄럽지 않을 수 있습니다. 원활한 청취를 위해
-              사용자님 모바일 기기의 '텍스트 읽어주기(TTS) 설정'을 해당 언어에
-              맞게 최적화해 주시는 것을 권장합니다.
-            </Text>
-
-            <Text
-              style={[
-                styles.accordionText,
-                { fontWeight: "bold", color: "#0F172A", marginTop: 4 },
-              ]}
-            >
-              Q4. 인터넷이 안 터지는 박물관이나 붐비는 여행지에서도 쓸 수
-              있나요?
-            </Text>
-            <Text style={[styles.accordionText, { marginBottom: 12 }]}>
-              ✈️ 물론입니다! 한 번 열어본 공유 페이지(링크)는 인터넷 연결이
-              끊겨도 완벽하게 재생됩니다. 여행 떠나기 전이나 숙소에서 미리
-              링크를 열어두기만 하면, 데이터 걱정 없이 어디서든 나만의 가이드를
-              즐길 수 있어요.
-            </Text>
-
-            <Text
-              style={[
-                styles.accordionText,
-                { fontWeight: "bold", color: "#0F172A", marginTop: 4 },
-              ]}
-            >
-              Q5. 크레딧은 어떻게 사용되고, 충전은 어떻게 하나요?
-            </Text>
-            <Text style={[styles.accordionText, { marginBottom: 12 }]}>
-              💰 사진을 분석하고 해설을 만들 때마다 크레딧이 사용돼요. 처음
-              가입하시면 무료 크레딧을 드리고, 친구에게 이 앱을 추천해서 친구가
-              가입하면 두 분 모두에게 보너스 크레딧을 드립니다! 물론, 부족하면
-              언제든 프로필 페이지에서 충전할 수도 있어요.
-            </Text>
-
-            <Text
-              style={[
-                styles.accordionText,
-                { fontWeight: "bold", color: "#0F172A", marginTop: 4 },
-              ]}
-            >
-              Q6. 저장한 가이드 내용을 수정할 수 있나요?
-            </Text>
-            <Text style={[styles.accordionText, { marginBottom: 8 }]}>
-              😅 수정은 어려워요. 아쉽게도 한 번 만들어진 가이드는 내용 수정이
-              어렵습니다. 만약 설명이 마음에 들지 않는다면, 삭제 후 Q2번의 팁을
-              활용해 새로운 사진으로 다시 가이드를 생성해 보세요. 더 멋진 해설이
-              기다리고 있을지도 몰라요!
-            </Text>
+            {HELP_FAQ.map((item, i) => (
+              <View key={item.icon} style={i > 0 ? { marginTop: 12 } : null}>
+                <View style={styles.faqQRow}>
+                  <Icon name={item.icon} size={15} color="#64748B" />
+                  <Text
+                    style={[
+                      styles.accordionText,
+                      { fontWeight: "bold", color: "#0F172A", flex: 1 },
+                    ]}
+                  >
+                    {item.q}
+                  </Text>
+                </View>
+                <Text style={styles.accordionText}>▸ {item.a}</Text>
+              </View>
+            ))}
           </View>
         )}
 
