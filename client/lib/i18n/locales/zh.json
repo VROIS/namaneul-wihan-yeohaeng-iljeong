@@ -243,7 +243,8 @@
     "language": "语言设置",
     "logout": "退出登录",
     "savedTrips": "已保存行程",
-    "noSavedTrips": "暂无已保存行程"
+    "noSavedTrips": "暂无已保存行程",
+    "myTripis": "我的 TRIPIS"
   },
   "tab": {
     "plan": "计划",

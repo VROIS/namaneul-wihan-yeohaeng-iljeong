@@ -33,3 +33,14 @@ export const LUCIDE: Record<string, string> = {
   restaurant:
     '<path d="M3 2v7c0 1.1.9 2 2 2h4a2 2 0 0 0 2-2V2"/><path d="M7 2v20"/><path d="M21 15V2a5 5 0 0 0-5 5v6c0 1.1.9 2 2 2h3Zm0 0v7"/>',
 };
+
+// ⚠️ 수정금지(승인필요) 2026-08-02 사장님 SSOT = **사진이 없을 때 대신 띄우는 원형 마커** 조립 1벌(§16 재발명 금지).
+//   = 위 COLORS·LUCIDE 그대로 "분류 색 원 + 흰 아이콘" 한 장. 분류를 모르거나 없는 분류면 null(호출부가 기본 아이콘으로 처리).
+//   = 이 파일 머리말대로 placeholder 는 여기 1벌에서 나온다. 화면마다 다시 만들지 말 것.
+export function placeholderMarkerSvg(
+  category: string | null | undefined,
+): string | null {
+  const path = category ? LUCIDE[category] : null;
+  if (!path) return null;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="18" fill="${COLORS[category!] || "#666"}" stroke="white" stroke-width="3"/><g transform="translate(10,10) scale(0.8333)" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${path}</g></svg>`;
+}

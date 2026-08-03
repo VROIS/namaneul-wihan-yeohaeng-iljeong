@@ -405,7 +405,7 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
     isSaving,
     justSaved,
     handleSaveItinerary,
-    currentItineraryId, // 🎬 VideoPreview 이동 파라미터용 여정 id
+    currentItineraryId, // 🎬 영상 슬롯이 쓰는 여정 id
     restoredTrip, // 🎬 프로필 카드 복원 여정 = 헤더 저장버튼 → 영상 버튼 전환(2026-07-22 사장님 SSOT, 신규 여정은 저장버튼 유지)
     // 🔗📅 공유·캘린더(2026-07-21 신규, ResultStep footer 버튼 2개가 이 이름 그대로 참조 = D와 인터페이스 계약)
     sharingAction, // "share" | "calendar" | null = 눌린 버튼만 선택색+스피너 (2026-07-22 사장님 실기기 피드백)

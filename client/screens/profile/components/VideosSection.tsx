@@ -1,46 +1,152 @@
-// 나의 숏폼 영상 섹션 (아이폰 12 가득 채우는 입체 3D 숏폼 카드)
-import React, { useState } from "react";
-import { View, Text, Pressable, ScrollView } from "react-native";
+// '나의 TRIPIS' 섹션 = 숏폼 영상 + TRIPIS 콘텐츠 (아이폰 12 가득 채우는 입체 3D 카드)
+// = 2026-08-01 사장님 B-0 배선: 카드 터치 = 통합 모달(TripisModal) 1벌로 열기.
+//   영상 카드 → {mode:"itinerary"} / TRIPIS 카드 → {mode:"guide"}. 화면 이동 없음 = 라우트 경유 폐기 = 2026-08-01 §B-0.
+import React, { useState, useEffect, useCallback, useRef } from "react";
+import {
+  View,
+  Text,
+  Pressable,
+  ScrollView,
+  Image,
+  StyleSheet,
+} from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
-import { Brand } from "@/constants/theme";
+import { useFocusEffect } from "@react-navigation/native";
+import { useTranslation } from "react-i18next";
 import Icon from "@/components/Icon";
 import ThemedText from "@/components/ThemedText";
+import { apiRequest } from "@/lib/query-client";
+import TripisModal, {
+  type GuideRow,
+  type TripisOpenParams,
+} from "@/components/tripis/TripisModal";
 import { styles, getResponsiveFullVideoCardWidth } from "../styles";
 import type { ProfileApi } from "../hooks/useProfile";
 
-export default function VideosSection({ profile }: { profile: ProfileApi }) {
-  const { theme, navigation, savedTrips } = profile;
+// ⚠️ 수정금지(승인필요) 2026-08-02 사장님 지시 = X(숨김)를 이 기기에 기억시킨다.
+//   저장 수단 = 앱이 이미 쓰는 기기 저장소(AsyncStorage, client/lib/auth.ts 와 같은 것) = 새 저장 계층 만들지 않음(§16).
+//   열쇠 = 접두사 + 계정 id. 로그인 안 한 상태는 손님용 1벌("guest").
+//   → 한 기기를 여러 사람이 써도 계정마다 목록이 따로 남아 남의 숨김이 딸려오지 않는다.
+const HIDDEN_CARDS_KEY_PREFIX = "@vibetrip_hidden_cards:";
 
-  // 영상 개별 삭제 상태
-  const [deletedVideoIds, setDeletedVideoIds] = useState<string[]>([]);
+// 영상·해설 두 종류를 한 목록에 담기 위한 이름표(종류:id) = 같은 동작을 1벌로 처리(§0).
+const cardKey = (kind: "video" | "guide", id: string) => `${kind}:${id}`;
+
+export default function VideosSection({ profile }: { profile: ProfileApi }) {
+  const { savedTrips } = profile;
+  // 섹션 제목 = 7언어 사전(profile.myTripis). 하드코딩 금지 = 2026-08-01 사장님 §B-0.
+  const { t } = useTranslation();
+
+  // ⚠️ 수정금지(승인필요) 영상·TRIPIS 숨김 목록 = 같은 동작 1벌(2026-08-01 사장님, 2026-08-02 기억 추가).
+  //   본인 기기 화면에서만 숨기고 DB 행은 보존한다 = 서버에 삭제를 요청하지 않는다.
+  //   창고(guides) 행을 지우면 다음 사람이 유료 외부호출을 다시 하게 되므로 이 설계는 바뀌지 않는다.
+  const [hiddenKeys, setHiddenKeys] = useState<string[]>([]);
+  // 기기에 적어둔 목록을 다 읽기 전에는 카드를 그리지 않는다 = 숨긴 카드가 잠깐 보였다 사라지는 깜빡임 방지.
+  const [hiddenReady, setHiddenReady] = useState(false);
+  // 최신 목록 원본 = 연달아 X 를 눌러도 직전 것이 누락되지 않게 하는 기준값(상태값은 다음 그리기 때 반영되므로 못 씀).
+  const hiddenKeysRef = useRef<string[]>([]);
+  // 계정별 열쇠 1벌. 로그인 안 한 상태 = 손님용.
+  const storageKey = HIDDEN_CARDS_KEY_PREFIX + (profile.user?.id || "guest");
+
+  // 화면이 뜰 때(그리고 계정이 바뀔 때) 기기에 적어둔 목록을 읽어 처음부터 안 보이게 한다.
+  //   계정이 확정되기 전(authReady=false)에는 읽지 않는다 = 손님 목록과 계정 목록이 섞이지 않는다.
+  useEffect(() => {
+    if (!profile.authReady) return;
+    let alive = true;
+    setHiddenReady(false); // 계정이 바뀌면 새 목록을 다 읽을 때까지 카드를 내보내지 않는다
+    (async () => {
+      let saved: string[] = [];
+      try {
+        const raw = await AsyncStorage.getItem(storageKey);
+        const parsed = raw ? JSON.parse(raw) : null;
+        if (Array.isArray(parsed))
+          saved = parsed.filter((v): v is string => typeof v === "string");
+      } catch (e) {
+        console.error("[VideosSection] 숨김 목록 읽기 실패:", e);
+      }
+      if (!alive) return;
+      hiddenKeysRef.current = saved;
+      setHiddenKeys(saved);
+      setHiddenReady(true);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [profile.authReady, storageKey]);
+
+  // X 터치 = 화면에서 빼고 그 자리에서 기기에 적어둔다. 영상·해설이 이 함수 하나를 같이 쓴다(§0).
+  const hideCard = useCallback(
+    (key: string) => {
+      if (hiddenKeysRef.current.includes(key)) return;
+      const next = [...hiddenKeysRef.current, key];
+      hiddenKeysRef.current = next;
+      setHiddenKeys(next);
+      AsyncStorage.setItem(storageKey, JSON.stringify(next)).catch((e) =>
+        console.error("[VideosSection] 숨김 목록 저장 실패:", e),
+      );
+    },
+    [storageKey],
+  );
+
+  // TRIPIS 보관함(guides) = **프로필 탭이 보일 때마다 + 계정이 바뀔 때** 다시 읽는다
+  //   = 같은 훅(useProfile)의 loadTrips·refetchCredits 와 같은 useFocusEffect 1벌 패턴(§16).
+  //   mount 1회 방식 폐기 = 2026-08-03 §22 판단검증 지적 — 하단 탭은 계속 마운트 상태라
+  //   해설을 저장하고 [보관함]으로 와도 새 카드가 안 보였고, 계정 전환 후 이전 계정 목록이 남았다.
+  const [guides, setGuides] = useState<GuideRow[]>([]);
+  // 통합 모달 = null 이면 닫힘(모달이 아예 렌더되지 않아 폴링·낭독 완전 중단)
+  const [modalParams, setModalParams] = useState<TripisOpenParams | null>(null);
+
+  const loadGuides = useCallback(async () => {
+    if (!profile.authReady) return;
+    if (!profile.user?.id) {
+      setGuides([]); // 미로그인·계정 전환 = 이전 계정 목록을 남기지 않는다
+      return;
+    }
+    try {
+      const r = await apiRequest("GET", "/api/guides");
+      const rows = await r.json();
+      setGuides(Array.isArray(rows) ? rows : []);
+    } catch (e) {
+      console.error("[VideosSection] TRIPIS 목록 조회 실패:", e); // 실패 = 직전 목록 유지(loadTrips 와 같은 정책)
+    }
+  }, [profile.authReady, profile.user?.id]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadGuides();
+    }, [loadGuides]),
+  );
 
   // 아이폰 12 (390pt) 가득 채우는 3D 숏폼 카드 폭
   const fullVideoWidth = getResponsiveFullVideoCardWidth();
 
-  // 샘플 숏폼 영상 목록 (로그아웃 또는 생성된 영상이 없는 경우에도 프리뷰 제공)
-  const sampleVideos = [
-    { id: "sample-1", title: "파리 Vlog#1", date: "2026.07.23" },
-    { id: "sample-2", title: "마드리드 투어", date: "2026.07.23" },
-    { id: "sample-3", title: "브뤼셀 힐링", date: "2026.07.22" },
-  ];
+  // ⚠️ 수정금지(승인필요) 2026-08-01 사장님 = 가짜 샘플 카드 완전삭제 §19.
+  //   사유 = 영상이 0건이어도 가짜 카드가 떠서 "저장 실패"를 화면에서 알 수 없었고,
+  //   눌러도 안내창만 떠 통합 모달 확인 자체가 막혔다. 이제 실제 영상만 보여준다.
+  const displayVideos = savedTrips
+    .filter((trip) => !hiddenKeys.includes(cardKey("video", String(trip.id))))
+    .filter((trip) =>
+      Object.values(trip.videoByDay || {}).some(
+        (v) => v?.status === "succeeded",
+      ),
+    )
+    .map((trip) => ({
+      id: String(trip.id),
+      title: trip.title,
+      date: trip.startDate?.split("T")[0] || "",
+    }));
 
-  const videosReady = savedTrips
-    .filter((t) => !deletedVideoIds.includes(String(t.id)))
-    .filter((t) =>
-      Object.values(t.videoByDay || {}).some((v) => v?.status === "succeeded"),
-    );
+  // TRIPIS 카드 = 기기에서 숨긴 것 제외(숏폼과 같은 목록 1벌 = DB 보존)
+  const displayGuides = guides.filter(
+    (g) => !hiddenKeys.includes(cardKey("guide", g.id)),
+  );
 
-  // 실제 데이터가 없을 경우 샘플 비디오 카드로 무조건 노출
-  const displayVideos =
-    videosReady.length > 0
-      ? videosReady.map((t) => ({
-          id: String(t.id),
-          title: t.title,
-          date: t.startDate?.split("T")[0] || "2026.07.23",
-        }))
-      : sampleVideos.filter((v) => !deletedVideoIds.includes(v.id));
+  // 기기에 적어둔 숨김 목록을 아직 못 읽었으면 아무것도 그리지 않는다(깜빡임 방지).
+  if (!hiddenReady) return null;
 
-  if (displayVideos.length === 0) return null;
+  // 영상도 TRIPIS 도 0건일 때만 섹션 숨김(TRIPIS 만 있어도 보여야 함)
+  if (displayVideos.length === 0 && displayGuides.length === 0) return null;
 
   const gradientPalettes = [
     ["#4F46E5", "#7C3AED"],
@@ -59,14 +165,16 @@ export default function VideosSection({ profile }: { profile: ProfileApi }) {
         >
           <Icon name="film" size={18} color="#8B5CF6" />
         </View>
-        <ThemedText style={styles.sectionTitle}>나의 영상</ThemedText>
+        <ThemedText style={styles.sectionTitle}>
+          {t("profile.myTripis")}
+        </ThemedText>
         <Text
           style={[
             styles.sectionBadge,
             { color: "#8B5CF6", backgroundColor: "rgba(139, 92, 246, 0.12)" },
           ]}
         >
-          {displayVideos.length}
+          {displayVideos.length + displayGuides.length}
         </Text>
       </View>
 
@@ -84,23 +192,24 @@ export default function VideosSection({ profile }: { profile: ProfileApi }) {
                 width: fullVideoWidth,
               },
             ]}
-            onPress={() => {
-              if (video.id.startsWith("sample")) {
-                alert("샘플 숏폼 비디오 미리보기입니다.");
-              } else {
-                navigation.navigate("SavedTripDetail", {
-                  itineraryId: Number(video.id),
-                });
-              }
-            }}
+            // ⚠️ 수정금지(승인필요) 2026-08-01 사장님 B-0 = 카드 터치 = 통합 모달로 곧바로 영상.
+            onPress={() =>
+              setModalParams({
+                mode: "itinerary",
+                itineraryId: Number(video.id),
+              })
+            }
           >
-            {/* 우측 상단 X 삭제 버튼 */}
+            {/* 우측 상단 X = 이 기기에서만 숨김(기억됨). DB 는 건드리지 않는다 */}
             <Pressable
               style={styles.cardDeleteBtnRich}
               hitSlop={8}
+              // 아이콘뿐인 버튼 = 스크린리더용 이름 필수(2026-08-03 §22 판단검증)
+              accessibilityRole="button"
+              accessibilityLabel="숨기기"
               onPress={(e) => {
                 e.stopPropagation();
-                setDeletedVideoIds((prev) => [...prev, video.id]);
+                hideCard(cardKey("video", video.id));
               }}
             >
               <Icon name="x" size={13} color="#FFFFFF" />
@@ -126,7 +235,74 @@ export default function VideosSection({ profile }: { profile: ProfileApi }) {
             </View>
           </Pressable>
         ))}
+
+        {/* TRIPIS 콘텐츠 카드 = 영상 카드 다음(같은 가로 스크롤, B-0). 썸네일 = 저장 사진(base64) */}
+        {displayGuides.map((g, i) => (
+          <Pressable
+            key={g.id}
+            style={[styles.videoCardRich, { width: fullVideoWidth }]}
+            onPress={() =>
+              setModalParams({ mode: "guide", guides: displayGuides, index: i })
+            }
+          >
+            {/* 우측 상단 X = 숏폼과 같은 함수 1벌: 이 기기에서만 숨김(기억됨, DB 보존) */}
+            <Pressable
+              style={styles.cardDeleteBtnRich}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="숨기기"
+              onPress={(e) => {
+                e.stopPropagation();
+                hideCard(cardKey("guide", g.id));
+              }}
+            >
+              <Icon name="x" size={13} color="#FFFFFF" />
+            </Pressable>
+
+            <View style={styles.videoThumbnail}>
+              {g.imageUrl ? (
+                <Image
+                  source={{ uri: g.imageUrl }}
+                  style={StyleSheet.absoluteFill}
+                  resizeMode="cover"
+                />
+              ) : (
+                <LinearGradient
+                  colors={gradientPalettes[i % gradientPalettes.length] as any}
+                  style={StyleSheet.absoluteFill}
+                />
+              )}
+              <View style={localStyles.thumbCenter}>
+                <View style={styles.videoPlayOverlayRich}>
+                  <Icon name="book-open" size={18} color="#FFFFFF" />
+                </View>
+              </View>
+
+              {/* 하단 텍스트 오버레이 = 제목(장소명 우선) + 저장일 앞 10자 */}
+              <View style={styles.videoInfoOverlay}>
+                <Text style={styles.videoCardTitle} numberOfLines={1}>
+                  {g.locationName || g.title}
+                </Text>
+                <Text style={styles.videoCardDate}>
+                  {(g.createdAt || "").slice(0, 10)}
+                </Text>
+              </View>
+            </View>
+          </Pressable>
+        ))}
       </ScrollView>
+
+      {/* 통합 모달 = 껍데기 1벌(B-0). 닫기 = params null = 렌더 자체 종료 */}
+      <TripisModal
+        visible={modalParams !== null}
+        params={modalParams}
+        onClose={() => setModalParams(null)}
+      />
     </View>
   );
 }
+
+// 썸네일 중앙 아이콘 자리 = 이미지 위에 겹치는 정중앙 배치(이 파일 전용 최소 스타일)
+const localStyles = StyleSheet.create({
+  thumbCenter: { flex: 1, alignItems: "center", justifyContent: "center" },
+});

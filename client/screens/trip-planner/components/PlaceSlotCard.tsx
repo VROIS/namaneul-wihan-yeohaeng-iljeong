@@ -1,6 +1,6 @@
 // 슬롯(장소) 카드 + 이동구간 = TripPlannerScreen 분리(2026-07-15 §0 슬림화, 순수 이동)
 import React from "react";
-import { View, Text, Pressable } from "react-native";
+import { View, Text, Pressable, StyleSheet } from "react-native";
 // ⚠️ 수정금지(승인필요) 2026-05-12 = BTS 1주일 디버깅 SSOT 완전 적용 (= 단순 expo-image 부족)
 // = client/lib/wikimedia-image.ts = Wikimedia 버킷 변환 + User-Agent 헤더 + Platform 분기
 // = AOS Samsung A36 5G Wikimedia 5/8 실패 → 8/8 3초 (= BTS 검증)
@@ -13,10 +13,14 @@ import {
   COLORS as BTS_MARKER_COLORS,
   LUCIDE as BTS_MARKER_LUCIDE,
 } from "@/components/bts/bts-marker-svg";
-import { Brand } from "@/constants/theme";
+import { Brand, Spacing } from "@/constants/theme";
 import Icon from "@/components/Icon";
+// 🎙️ 2026-08-02 사장님 지시 = 슬롯마다 [해설 듣기]. 부품·색 모두 **도시 카드 해설 배지와 같은 1벌**(§16 재발명 금지).
+import CityBadge from "@/components/tripis/CityBadge";
+import { BADGE_COLORS } from "@/components/tripis/CityCardScreen";
 import { Itinerary, DayPlan } from "@/types/trip";
 import { openPlaceInMaps } from "@/lib/openPlaceInMaps";
+import { openGuideForPlace } from "@/components/tripis/openGuide";
 import { resultStyles as styles } from "../styles/result";
 import type { PlannerApi } from "../hooks/useTripPlanner";
 
@@ -28,6 +32,23 @@ const BTS_PLACEHOLDER_SVG_BY_CAT: Record<string, string> = Object.fromEntries(
     `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="18" fill="${BTS_MARKER_COLORS[cat] || "#666"}" stroke="white" stroke-width="3"/><g transform="translate(10,10) scale(0.8333)" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${BTS_MARKER_LUCIDE[cat]}</g></svg>`,
   ]),
 );
+
+// 🎙️ 2026-08-03 사장님 지시 = 썸네일(위) + [해설 듣기](칸 맨 아래) 를 담는 세로칸.
+//   · alignSelf "stretch" = 이 칸이 슬롯 줄 높이만큼 늘어난다 → justifyContent "space-between" 이
+//     배지를 **칸 맨 아래**로 민다 = 썸네일과 최대한 벌어져 오터치가 나지 않는다.
+//   · 폭 고정 없음 = 배지가 도시 카드와 **같은 원래 크기** 1벌이라, 칸이 그 배지 폭에 맞춰 자연스럽게 넓어진다.
+//     썸네일(56)은 그대로 왼쪽 정렬이고, 오른쪽 본문(placeInfo, flex:1)이 그만큼 줄어든다
+//     = 타임라인 세로선·이동구간 줄은 이 칸 바깥이라 흐트러지지 않는다.
+const slotStyles = StyleSheet.create({
+  thumbColumn: {
+    alignSelf: "stretch",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: Spacing.sm,
+  },
+  // 배지 오른쪽 여백 = 썸네일이 가진 여백(Spacing.sm)과 같은 값 = 본문 글자와 붙지 않는다.
+  badgeSlot: { paddingRight: Spacing.sm },
+});
 
 export default function PlaceSlotCard({
   place,
@@ -51,7 +72,21 @@ export default function PlaceSlotCard({
     placesListOffsetRef,
     slotLayoutsRef,
     setSelectedSlotId,
+    navigation,
   } = planner;
+
+  // 🎙️ 2026-08-02 사장님 지시 = 이 슬롯의 우리 장소번호.
+  //   슬롯 id 는 여정 생성기가 `db-${place_seed_raw.id}` 로 넣는다(ag2-gemini-recommender / ag4-db-finalize 1벌).
+  //   번호가 안 읽히는 옛 여정 슬롯은 배지를 그리지 않는다(헛클릭 방지).
+  const guidePlaceIdMatch = /^db-(\d+)$/.exec(String(place.id ?? ""));
+  const guidePlaceId = guidePlaceIdMatch ? Number(guidePlaceIdMatch[1]) : null;
+
+  // [해설 듣기] = 해설 화면 열기 1벌(openGuideForPlace §16 = 도시 카드와 같은 통로).
+  //   2026-08-03 §22 수정 = 300ms 이중탭 잠금 + 앱 언어 전달이 그 1벌 안에 있다.
+  //   그 화면이 창고에 있으면 그대로 보여주고(유료호출 0), 없으면 만들어 담는다. 사진은 서버가 넣는다.
+  const openGuide = () => {
+    if (guidePlaceId !== null) openGuideForPlace(navigation, guidePlaceId);
+  };
 
   // ⚠️ 수정금지(승인필요) 2026-05-09 = 별점(vibeScore) 폐기 = userRatingCount(rc) 만 사용 (= 사용자 SSOT)
 
@@ -129,64 +164,83 @@ export default function PlaceSlotCard({
           ]}
         >
           <View style={styles.placeCardContent}>
-            {/* 썸네일 이미지 = 터치 시 외부 Google Maps 앱 호출 (= openPlaceInMaps) */}
-            {/* ⚠️ 수정금지(승인필요) 2026-05-12 = BTS 1주일 SSOT = resolveImageSource (= UA + bucket + Platform 분기) */}
-            <Pressable
-              style={styles.placeThumbnail}
-              onPress={() => openPlaceInMaps(place)}
-            >
-              {place.image ? (
-                <Image
-                  source={resolveImageSource(place.image, "card")}
-                  style={styles.placeThumbnailImage}
-                  contentFit="cover"
-                  priority="normal"
-                  cachePolicy="memory-disk"
-                  transition={150}
-                />
-              ) : (
-                <View
-                  style={[
-                    styles.placeThumbnailPlaceholder,
-                    {
-                      backgroundColor: isMealSlot
-                        ? "#FFF5F0"
-                        : theme.backgroundSecondary,
-                    },
-                  ]}
-                >
-                  {/* ⚠️ 수정금지(승인필요) 2026-05-19 = BTS 맵 마커 SVG 동일 사용 (= 사전 빌드 lookup) */}
-                  {/* ⚠️ 수정금지(승인필요) 2026-07-11 사장님 SSOT = 카드 아이콘도 취향 슬롯 카테고리(slotCategory) 우선 = 지도 마커와 동일 소스(§16). */}
-                  {/* ⚠️ 수정금지(승인필요) 2026-07-11 사장님 SSOT = 이미지 없이 아이콘 뜨는 모든 슬롯 = 아이콘 밑 '구글맵 정보' 문구(분기 없음 = MIX 신규는 당연, DB-only 도 누락·오류 대비. 썸네일 터치 = openPlaceInMaps 기존 연동). */}
-                  {(() => {
-                    const cat =
-                      (place as any).slotCategory ||
-                      (place as any).seedCategory ||
-                      (isMealSlot || isMeal ? "restaurant" : null);
-                    const svg = cat ? BTS_PLACEHOLDER_SVG_BY_CAT[cat] : null;
-                    return svg ? (
-                      <SvgXml xml={svg} width={30} height={30} />
-                    ) : (
-                      <Icon
-                        name={isMealSlot || isMeal ? "coffee" : "map-pin"}
-                        size={20}
-                        color={isMealSlot ? "#FF6B35" : theme.textTertiary}
-                      />
-                    );
-                  })()}
-                  <Text
-                    style={{
-                      fontSize: 8,
-                      lineHeight: 10,
-                      marginTop: 1,
-                      color: theme.textTertiary,
-                    }}
+            {/* 🎙️ 2026-08-03 사장님 지시 = 썸네일(위) + 칸 맨 아래 [해설 듣기] 세로칸(치수 = slotStyles). */}
+            <View style={slotStyles.thumbColumn}>
+              {/* 썸네일 이미지 = 터치 시 외부 Google Maps 앱 호출 (= openPlaceInMaps) */}
+              {/* ⚠️ 수정금지(승인필요) 2026-05-12 = BTS 1주일 SSOT = resolveImageSource (= UA + bucket + Platform 분기) */}
+              <Pressable
+                style={styles.placeThumbnail}
+                onPress={() => openPlaceInMaps(place)}
+              >
+                {place.image ? (
+                  <Image
+                    source={resolveImageSource(place.image, "card")}
+                    style={styles.placeThumbnailImage}
+                    contentFit="cover"
+                    priority="normal"
+                    cachePolicy="memory-disk"
+                    transition={150}
+                  />
+                ) : (
+                  <View
+                    style={[
+                      styles.placeThumbnailPlaceholder,
+                      {
+                        backgroundColor: isMealSlot
+                          ? "#FFF5F0"
+                          : theme.backgroundSecondary,
+                      },
+                    ]}
                   >
-                    구글맵 정보
-                  </Text>
+                    {/* ⚠️ 수정금지(승인필요) 2026-05-19 = BTS 맵 마커 SVG 동일 사용 (= 사전 빌드 lookup) */}
+                    {/* ⚠️ 수정금지(승인필요) 2026-07-11 사장님 SSOT = 카드 아이콘도 취향 슬롯 카테고리(slotCategory) 우선 = 지도 마커와 동일 소스(§16). */}
+                    {/* ⚠️ 수정금지(승인필요) 2026-07-11 사장님 SSOT = 이미지 없이 아이콘 뜨는 모든 슬롯 = 아이콘 밑 '구글맵 정보' 문구(분기 없음 = MIX 신규는 당연, DB-only 도 누락·오류 대비. 썸네일 터치 = openPlaceInMaps 기존 연동). */}
+                    {(() => {
+                      const cat =
+                        (place as any).slotCategory ||
+                        (place as any).seedCategory ||
+                        (isMealSlot || isMeal ? "restaurant" : null);
+                      const svg = cat ? BTS_PLACEHOLDER_SVG_BY_CAT[cat] : null;
+                      return svg ? (
+                        <SvgXml xml={svg} width={30} height={30} />
+                      ) : (
+                        <Icon
+                          name={isMealSlot || isMeal ? "coffee" : "map-pin"}
+                          size={20}
+                          color={isMealSlot ? "#FF6B35" : theme.textTertiary}
+                        />
+                      );
+                    })()}
+                    <Text
+                      style={{
+                        fontSize: 8,
+                        lineHeight: 10,
+                        marginTop: 1,
+                        color: theme.textTertiary,
+                      }}
+                    >
+                      구글맵 정보
+                    </Text>
+                  </View>
+                )}
+              </Pressable>
+
+              {/* 🎙️ [해설 듣기] = 이미지가 떠도 아이콘이 떠도 같은 자리(칸 맨 아래)에 뜬다(식사 슬롯도 동일).
+                  부품·크기·빛줄기 = 도시 카드 해설 배지와 **같은 CityBadge 1벌 그대로**(§16 재발명 금지),
+                  색 = 그 표의 guide 색, 아이콘 = 같은 book-open.
+                  빛줄기(샤이니)를 켜 둔다 = 다른 앱에 없는 기능이라 눈에 띄어야 한다(2026-08-03 사장님 지시). */}
+              {guidePlaceId !== null && (
+                <View style={slotStyles.badgeSlot}>
+                  <CityBadge
+                    icon="book-open"
+                    label="해설 듣기"
+                    colors={BADGE_COLORS.guide}
+                    visible
+                    onPress={openGuide}
+                  />
                 </View>
               )}
-            </Pressable>
+            </View>
 
             {/* ⚠️ 수정금지(승인필요) 2026-06-24 사용자 SSOT = 슬롯 6요소 + 순서 고정 = ①로컬네임(메인) ②한국이름(보조) ③시간 ④구글리뷰 ⑤한줄요약(editorial_summary, 차별화) ⑥가격(필수). 그외 노출·구글맵힌트줄 완전삭제(§19). */}
             {/* 🗺️ 2026-06-28 = 슬롯 본문 터치 = 지도 그 마커 포커스(선택) = 양방향 연동. (썸네일 터치만 외부 구글맵) */}

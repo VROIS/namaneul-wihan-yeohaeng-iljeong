@@ -657,25 +657,27 @@ server/services/
 
 > 근본: 5단계검증(타입·서버빌드·웹빌드·simplify·review·react-best)을 **1000번 시켜도 AI 가 안 지킴**(사장님 분노, 메모리 [[feedback_5gate_verify_loop_before_commit]]). = 글이 아니라 **기계로 강제 + 서브에이전트 병렬로 전수**.
 
-### ✅ 절대 규칙
+### ✅ 절대 규칙 (2026-08-03 사장님 갱신 = 기계·판단 분리, 옛 "7개 = 에이전트 4개" 구조 폐기 §19)
 
 1. **커밋 전 = 아래 검증 전부 통과 = 의무.** 선택 아님. 통과 못 하면 커밋 후보에도 못 올림.
-2. **검증 = 서브에이전트 병렬 실행**(순차 금지, 사장님 지시). = Workflow(`scripts/verify-workflow.mjs`).
-   **검증 항목은 7개**:
-   - **기계 4** = tsc(신규에러 0=베이스라인 이하) · 서버빌드 · 웹빌드(expo export web) · lint(expo lint)
-   - **판단 3** = /simplify(재사용·품질·효율) · /code-review(정확성·컨벤션·보안) · vercel:react-best-practices(TSX 변경 시)
+2. **확정 순서** (기계검증을 여러 겹 중복으로 돌리지 않는다 = 2026-08-03 사장님 지적):
 
-   ⚠️ **에이전트 수 = 4개 고정**(2026-07-27 사장님 지시 "시간 최대한 줄여라"). 항목 7개는 그대로이고
-   기계 4종을 **한 에이전트가 순서대로** 돌린다. 이유(실측) = 동시 실행 한도는 `min(16, CPU코어-2)` 이고
-   이 PC 는 6코어 = **한도 4**. 7개를 띄우면 3개가 줄 서서 **두 번에 나눠 돌아 시간이 2배**가 된다.
-   = 항목을 늘려도 **에이전트는 4개를 넘기지 마라.**
+   ```
+   수정 → 기계검증(로컬 스크립트) → 크롬 dev 실증(§21) → 미비 시 재수정 무한루프
+        → 전부 통과 후 = 커밋 직전 판단 3종 에이전트만
+   ```
+
+   - **기계 4** = tsc(신규에러 0=베이스라인 이하) · 서버빌드 · 웹빌드(expo export web) · lint(변경 파일만)
+     = `node scripts/verify-before-commit.mjs` (AI 아님 = 로컬 병렬, 수 분). 수정 반복 중 이걸로 돌린다.
+   - **판단 3** = /simplify(재사용·품질·효율) · /code-review(정확성·컨벤션·보안) · vercel:react-best-practices(TSX 변경 시)
+     = `Workflow({scriptPath: "scripts/verify-workflow.mjs"})` = **에이전트 3개 병렬**(이 PC 동시 한도 4 안).
 3. **하나라도 실패 = Ralph-loop = 통과까지 자율 반복**(§17 정합). 사장님께 "진행할까요" 묻지 않고 통과시킴.
-4. **기계 2중 방어**: Workflow(AI 병렬) + pre-commit hook(`.git/hooks/pre-commit`) = client/ 변경 시 웹빌드·lint 기계 강제. AI 가 Workflow 건너뛰어도 hook 이 2차 차단.
+4. **기계 2중 방어**: 로컬 스크립트 + pre-commit hook(`.git/hooks/pre-commit`) = client/ 변경 시 웹빌드·lint 기계 강제. AI 가 스크립트를 건너뛰어도 hook 이 2차 차단. (판단 워크플로 안에서 기계를 또 돌리는 3중 중복 = 금지.)
 
 ### 실행
 
-- 병렬 검증 = `Workflow({scriptPath: "scripts/verify-workflow.mjs"})` (토큰=사장님 몫, ultracode급 = 사장님 승인됨 2026-07-19).
-- 기계만 빠르게 = `node scripts/verify-before-commit.mjs`(4종 병렬) / `--fe-only`(client 변경) / `--quick`(웹빌드 제외).
+- 기계 = `node scripts/verify-before-commit.mjs`(4종 병렬) / `--fe-only`(client 변경) / `--quick`(웹빌드 제외).
+- 판단 = `Workflow({scriptPath: "scripts/verify-workflow.mjs"})` (토큰=사장님 몫, 사장님 승인됨 2026-07-19).
 - 통과 결과 = **한국어 표로 보고**(스크린샷·로그·근거 포함, "될 것 같다" 금지 §11·§21) → 그 다음 커밋 지시 대기(§10).
 
 ### ❌ 절대 금지 (= 위반 즉시 작업 중단)

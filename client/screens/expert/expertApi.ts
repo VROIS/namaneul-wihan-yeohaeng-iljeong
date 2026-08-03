@@ -114,16 +114,6 @@ export async function listInquiries(
   return (await res.json()) as Inquiry[];
 }
 
-// ── 사용자: 안 읽은 답변 수(탭 배지) ──
-export async function unreadCount(): Promise<number> {
-  const user = await getUserData();
-  const q = user?.id ? `?userId=${encodeURIComponent(user.id)}` : "";
-  const res = await req("GET", `/api/verification/unread-count${q}`);
-  if (!res.ok) return 0;
-  const j = await res.json().catch(() => ({ count: 0 }));
-  return j.count || 0;
-}
-
 // ── 상세(열람 시 백엔드가 본인 답변이면 읽음 처리) ──
 export async function getInquiry(id: string): Promise<Inquiry | null> {
   const user = await getUserData();
@@ -193,23 +183,15 @@ export function tabBadgeCount(): Promise<number> {
 }
 
 async function fetchBadgeCount(): Promise<number> {
-  // ⚠️ 사장님 승인 2026-07-14 = 비로그인(실형식 토큰 없음)이면 배지 API(verification/requests) 자체를 안 부름 → 401 로그·불필요 서버호출 제거. 배지는 로그인해야 의미. 옛: 무조건 호출 → 비로그인 401 스팸 폐기 §19.
+  // ⚠️ 사장님 승인 2026-07-14 = 비로그인(실형식 토큰 없음)이면 배지 API 자체를 안 부름 → 401 로그·불필요 서버호출 제거.
   const user = await getUserData();
   if (!user?.token || !user.token.startsWith("simple_auth_token_v1_")) return 0;
-  const role = await getMyRole();
-  const list = await listInquiries();
-  if (role === "expert" || role === "admin") {
-    return list.filter(
-      (q) => q.status === "pending" || q.status === "in_review",
-    ).length;
-  }
-  // 사용자 = 본인 문의만 조회됨(백엔드가 신원으로 강제). 진행중 + 안읽은답변.
-  return list.filter(
-    (q) =>
-      q.status === "pending" ||
-      q.status === "in_review" ||
-      (q.status === "answered" && !q.isReadByUser),
-  ).length;
+  // ⚠️ 2026-08-03 사장님 지시 = 숫자 하나 얻으려고 문의 **목록 전체**를 내려받아 세던 방식 폐기 §19.
+  //   세는 일 = 서버 unread-count 1벌(역할별 기준 동일)이 DB COUNT 로 함 → 여기는 숫자만 받는다.
+  const res = await req("GET", "/api/verification/unread-count");
+  if (!res.ok) return 0;
+  const j = await res.json().catch(() => ({ count: 0 }));
+  return j.count || 0;
 }
 
 // ── 현지 전문가 프로필(닉네임/경력/자기소개/캐릭터) = 소개카드 표시·편집(2026-07-13). ──

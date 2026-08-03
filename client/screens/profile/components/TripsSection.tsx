@@ -15,8 +15,18 @@ import { shortDateCard, summaryLineCard } from "../utils";
 import type { ProfileApi } from "../hooks/useProfile";
 
 export default function TripsSection({ profile }: { profile: ProfileApi }) {
-  const { theme, t, navigation, savedTrips, isLoadingTrips, handleDeleteTrip } =
-    profile;
+  const {
+    theme,
+    t,
+    navigation,
+    savedTrips,
+    isLoadingTrips,
+    handleDeleteTrip,
+    // 🏆 2026-08-02 = 대표 올리기(관리자 전용). 판정·호출은 useProfile 1벌, 여기는 그리기만.
+    isAdmin,
+    promotingTripId,
+    handleSetRepresentative,
+  } = profile;
 
   // 아이폰 12 (390pt) 화면을 가득 채우는 넉넉하고 읽기 쉬운 카드 폭 (약 250pt)
   const fullCardWidth = getResponsiveFullTripCardWidth();
@@ -85,6 +95,45 @@ export default function TripsSection({ profile }: { profile: ProfileApi }) {
                 } as any)
               }
             >
+              {/* 🏆 대표 올리기 = **관리자에게만** 그린다 = 일반 사용자 카드는 이 자리 자체가 없다(화면 100% 그대로).
+                  §23 = 아이콘 하나 = 별. 채운 별 = 지금 그 도시 카드에 걸린 대표 / 빈 별 = 아님.
+                  누르면 서버가 같은 도시의 옛 대표를 내리고 이 여정을 올린다 = 화면은 목록만 다시 읽는다(§0 = 로직 1벌). */}
+              {isAdmin && (
+                <Pressable
+                  style={styles.cardRepBtnRich}
+                  hitSlop={8}
+                  disabled={promotingTripId === trip.id}
+                  // 아이콘뿐인 버튼 = 스크린리더용 이름 필수(2026-08-03 §22 판단검증)
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    trip.status === "representative" ? "대표" : "대표 올리기"
+                  }
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    handleSetRepresentative(trip.id);
+                  }}
+                >
+                  {promotingTripId === trip.id ? (
+                    <ActivityIndicator size="small" color={Brand.primary} />
+                  ) : (
+                    <Icon
+                      name="star"
+                      size={13}
+                      color={
+                        trip.status === "representative"
+                          ? Brand.primary
+                          : "#64748B"
+                      }
+                      fill={
+                        trip.status === "representative"
+                          ? Brand.primary
+                          : "none"
+                      }
+                    />
+                  )}
+                </Pressable>
+              )}
+
               {/* 우측 상단 X 삭제 버튼 */}
               <Pressable
                 style={styles.cardDeleteBtnRich}
@@ -97,8 +146,10 @@ export default function TripsSection({ profile }: { profile: ProfileApi }) {
                 <Icon name="x" size={13} color="#64748B" />
               </Pressable>
 
-              {/* 1. 도시명 */}
-              <View style={styles.cardHeaderRow}>
+              {/* 1. 도시명 = 관리자일 때만 별 자리만큼 오른쪽 여백을 더 준다(일반 사용자 = 옛 값 24 그대로) */}
+              <View
+                style={[styles.cardHeaderRow, isAdmin && { paddingRight: 54 }]}
+              >
                 <Text style={styles.cardCityRich} numberOfLines={1}>
                   {trip.rawData?.destination || trip.title}
                 </Text>

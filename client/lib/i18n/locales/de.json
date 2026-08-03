@@ -243,7 +243,8 @@
     "language": "Spracheinstellungen",
     "logout": "Abmelden",
     "savedTrips": "Gespeicherte Reisepläne",
-    "noSavedTrips": "Keine gespeicherten Reisepläne"
+    "noSavedTrips": "Keine gespeicherten Reisepläne",
+    "myTripis": "Meine TRIPIS"
   },
   "tab": {
     "plan": "Plan",

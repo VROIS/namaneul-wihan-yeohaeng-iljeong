@@ -7,6 +7,12 @@ import { generateItineraryICS, type ItineraryForICS } from "./itinerary-ics";
 import { handleAiOpinionRequest } from "./services/verify/ai-opinion-handler";
 import { getUserIdFromReq } from "./auth-user"; // Bearer → userId 단일 관문(2026-07-29 §16)
 import { chargeFeature } from "./credit-charge"; // 크레딧 차감 단일 관문(2026-07-29 §9)
+// 🏆 대표 지정(B1) 전용 = 트랜잭션(옛 대표 강등+승격 원자성)에 db 직접 필요(2026-08-01 베스트갤러리)
+import { db } from "./db";
+import { itineraries } from "../shared/schema";
+import { and, eq } from "drizzle-orm";
+// 🏙️ 목적지 문자열 → 도시 id 단일 관문(2026-08-02 §16) = 저장(POST/PUT)·대표 지정(B1)이 같은 1벌을 쓴다.
+import { matchCityIdByName } from "./city-match";
 
 // ⚠️ 2026-07-03 사장님 SSOT = "AI 의견" 캐싱용 여정 지문. 도시+일자+장소명 순서만 반영(이미지 등 무관 필드 제외) = 숙소변경→동선변경 시에만 달라져 재호출.
 function computeItineraryFingerprint(itinerary: any): string {
@@ -125,7 +131,7 @@ export function registerItineraryRoutes(app: Express): void {
 
   // ⚠️ 2026-07-03 = 여정 저장(POST)·재저장(PUT) 공통 데이터 변환 = 재발명 금지(§16). userId admin 강제 + 날짜변환 + travelStyle→persona_type enum + rawData.
   //   ⚠️ 수정금지(승인필요) 2026-06-24 = travel_style 컬럼도 persona_type enum(luxury/comfort/economic) 강제 = FE "reasonable" 전송 시 enum 위반 500 방지.
-  const buildItineraryData = (body: any) => {
+  const buildItineraryData = async (body: any) => {
     const styleToPersonaType: Record<string, string> = {
       Luxury: "luxury",
       Premium: "comfort",
@@ -149,8 +155,15 @@ export function registerItineraryRoutes(app: Express): void {
         generatedAt: new Date().toISOString(),
       };
     }
+    // 🏙️ 2026-08-02 사장님 지시 = 도시 id 는 **서버가** 목적지 문자열로 매칭해 채운다(§16 city-match.ts 1벌).
+    //   화면이 보내오던 도시 id 는 완전삭제(§19) = 화면은 도시 번호를 모르고, 서버가 유일한 근거다.
+    //   → 옛 화면 번들이 아직 보내오더라도 여기서 떼어내(bodyRest) 무시한다.
+    //   매칭 실패하면 키 자체를 안 넣는다 = 새 여정은 비워두고(모르면 비움), 재저장은 이미 맞게 들어간 값을 지우지 않음.
+    const { cityId: _fromClient, ...bodyRest } = body || {};
+    const matchedCityId = await matchCityIdByName(rawData?.destination);
     return {
-      ...body,
+      ...bodyRest,
+      ...(matchedCityId != null ? { cityId: matchedCityId } : {}),
       // ⚠️ 사장님 SSOT 2026-07-14 = 여정은 로그인 본인 ID(users.id)로 저장 = 전문가가 연락할 상대·푸시 대상 특정. 옛 'admin' 강제 폐기 §19(§9 로그인제거 잔재).
       //   FE(handleSaveItinerary)가 userData.id 를 실어 보냄. 없으면(비로그인 경로) 'admin' 폴백 = 둘러보기 안전. 다른 컬럼 = body 그대로.
       userId: body.userId || "admin",
@@ -166,7 +179,7 @@ export function registerItineraryRoutes(app: Express): void {
 
   app.post("/api/itineraries", async (req, res) => {
     try {
-      const itineraryData = buildItineraryData(req.body);
+      const itineraryData = await buildItineraryData(req.body);
       console.log(
         `[Itinerary] Creating itinerary for user=${itineraryData.userId}...`,
       );
@@ -189,7 +202,7 @@ export function registerItineraryRoutes(app: Express): void {
       // 🧠 2026-07-04 = AI 의견 캐시 봉인은 buildItineraryData 단일 지점(§16). 재저장 시 FE가 verificationResult를 실으면
       //   현재 내용 fp로 재봉인(내용 안 바뀌면 같은 fp = 캐시 유지, 바뀌면 새 fp = 다음 클릭에 정상 재호출). 옛 fp 보존 분기 폐기 §19(그 분기는
       //   newFp에 :language 미부착이라 저장 fp와 절대 불일치 = 죽은 코드였음). DB 재조회 1회도 제거 = 더 가벼움 §0.
-      const itineraryData = buildItineraryData(req.body);
+      const itineraryData = await buildItineraryData(req.body);
 
       console.log(`[Itinerary] Updating id=${id} (재저장 덮어쓰기)...`);
       const updated = await storage.updateItinerary(id, itineraryData);
@@ -221,6 +234,72 @@ export function registerItineraryRoutes(app: Express): void {
       res
         .status(500)
         .json({ error: "Failed to delete itinerary", details: error?.message });
+    }
+  });
+
+  // 🏆 B1 대표로 올리기 (2026-08-01 베스트갤러리 = docs/2026-07-30 도시버튼·베스트갤러리·BTS 통합.md B절)
+  //   관리자(users.role='admin')만 = credit-charge.ts 와 같은 기준(§9 표7 = is_admin·아이디 문자열 판단 금지).
+  //   도시 id 는 지정 시점에도 목적지 이름으로 다시 확인해 채운다(2026-08-02 = 저장 시점 자동 채움과 같은 1벌).
+  //   크레딧 경로 일절 없음 = 차감 없는 순수 상태 변경. status='representative' = 기존 미사용 값(스키마 변경 0).
+  app.post("/api/itineraries/:id/representative", async (req, res) => {
+    try {
+      if (!db) return res.status(503).json({ error: "db_unavailable" });
+
+      // 관리자 판정 = users.role 만 본다(§9 표7 단일 기준)
+      const userId = getUserIdFromReq(req);
+      const user = userId ? await storage.getUser(userId) : undefined;
+      if (user?.role !== "admin") {
+        return res.status(403).json({ error: "관리자만 대표 지정 가능" });
+      }
+
+      const id = parseInt(req.params.id);
+      if (Number.isNaN(id)) {
+        return res.status(404).json({ error: "Itinerary not found" });
+      }
+      const itinerary = await storage.getItinerary(id);
+      if (!itinerary) {
+        return res.status(404).json({ error: "Itinerary not found" });
+      }
+
+      // cityId 교정 = rawData.destination(문자열) → 도시 매칭 단일 관문(2026-08-02 §16 = server/city-match.ts 1벌)
+      const cityId = await matchCityIdByName(
+        (itinerary.rawData as any)?.destination,
+      );
+      if (cityId == null) {
+        return res.status(400).json({ error: "도시 매칭 실패" });
+      }
+
+      // 트랜잭션 1개 = 도시당 대표 1개 보장(①옛 대표 강등 ②이 여정 승격이 함께 성공/함께 실패)
+      await db.transaction(async (tx) => {
+        // ① 그 도시의 옛 대표 → saved 강등
+        await tx
+          .update(itineraries)
+          .set({ status: "saved", updatedAt: new Date() })
+          .where(
+            and(
+              eq(itineraries.cityId, cityId),
+              eq(itineraries.status, "representative"),
+            ),
+          );
+        // ② 이 여정 → representative 승격 + 교정된 cityId 반영
+        await tx
+          .update(itineraries)
+          .set({
+            status: "representative",
+            cityId,
+            updatedAt: new Date(),
+          })
+          .where(eq(itineraries.id, id));
+      });
+
+      console.log(`[Representative] 대표 지정: itinerary=${id} city=${cityId}`);
+      res.json({ itineraryId: id, cityId });
+    } catch (error: any) {
+      console.error(
+        "[Representative] 대표 지정 실패:",
+        error?.message || error,
+      );
+      res.status(500).json({ error: "Failed to set representative" });
     }
   });
 

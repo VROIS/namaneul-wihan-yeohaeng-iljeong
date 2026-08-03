@@ -243,7 +243,8 @@
     "language": "Paramètres de langue",
     "logout": "Déconnexion",
     "savedTrips": "Itinéraires sauvegardés",
-    "noSavedTrips": "Aucun itinéraire sauvegardé"
+    "noSavedTrips": "Aucun itinéraire sauvegardé",
+    "myTripis": "Mes TRIPIS"
   },
   "tab": {
     "plan": "Plan",

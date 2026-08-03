@@ -10,41 +10,64 @@ import {
   jsonb,
   decimal,
   uniqueIndex,
+  index,
 } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { users } from "./users";
+import { cities } from "./cities"; // guides.city_id 참조(2026-08-02 = TRIPIS ↔ 도시 잇기)
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // 내손안에 가이드 통합 테이블 (P0-2 병합, 2026-03-27)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // AI 가이드 콘텐츠 (사진→Gemini→TTS 해설)
-export const guides = pgTable("guides", {
-  id: varchar("id")
-    .primaryKey()
-    .default(sql`gen_random_uuid()`),
-  localId: varchar("local_id"), // IndexedDB ID 매핑용
-  userId: varchar("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  title: text("title").notNull(),
-  description: text("description"),
-  imageUrl: text("image_url"),
-  latitude: decimal("latitude", { precision: 10, scale: 8 }),
-  longitude: decimal("longitude", { precision: 11, scale: 8 }),
-  locationName: text("location_name"),
-  aiGeneratedContent: text("ai_generated_content"),
-  tags: text("tags").array(), // 태그 (예: ['궁전', '역사', '바로크'])
-  viewCount: integer("view_count").default(0),
-  language: varchar("language").default("ko"),
-  voiceLang: varchar("voice_lang").default("ko-KR"), // TTS 언어 코드
-  voiceName: varchar("voice_name"), // TTS 음성 이름
-  createdAt: timestamp("created_at")
-    .default(sql`CURRENT_TIMESTAMP`)
-    .notNull(),
-  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`),
-});
+export const guides = pgTable(
+  "guides",
+  {
+    id: varchar("id")
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    localId: varchar("local_id"), // IndexedDB ID 매핑용
+    userId: varchar("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    description: text("description"),
+    imageUrl: text("image_url"),
+    latitude: decimal("latitude", { precision: 10, scale: 8 }),
+    longitude: decimal("longitude", { precision: 11, scale: 8 }),
+    locationName: text("location_name"),
+    // 🏙️ 2026-08-02 사장님 승인 = TRIPIS 도 도시와 잇는다(저장 시 좌표 → 최근접 도시 = server/city-match.ts).
+    //   nullable 인 이유 = 좌표 없이 저장된 지난 행들은 채울 근거가 없다(추측 금지 = §1).
+    cityId: integer("city_id").references(() => cities.id),
+    // 🏷️ 2026-08-02 사장님 승인 = **해설 창고 열쇠** = 그 해설이 어느 장소(place_seed_raw.id)의 것인지.
+    //   같은 장소라도 언어권마다 프롬프트의 관심사가 달라 해설 자체가 다르다(독일어=사실·논리 / 프랑스어=미적 감동 …)
+    //   → 창고를 찾을 때는 **(place_id, language) 두 칸을 함께** 본다. 한 칸만 보면 다른 언어 해설이 나온다.
+    //   nullable 인 이유 = 사용자가 직접 찍은 사진에는 장소번호가 없다.
+    //   외래키를 걸지 않는 이유 = 장소 행은 발굴·병합으로 정리될 수 있는데(§14) 이미 만들어 둔 해설은 남아야 한다.
+    placeId: integer("place_id"),
+    aiGeneratedContent: text("ai_generated_content"),
+    tags: text("tags").array(), // 태그 (예: ['궁전', '역사', '바로크'])
+    viewCount: integer("view_count").default(0),
+    language: varchar("language").default("ko"),
+    voiceLang: varchar("voice_lang").default("ko-KR"), // TTS 언어 코드
+    voiceName: varchar("voice_name"), // TTS 음성 이름
+    createdAt: timestamp("created_at")
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+    updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => [
+    // ⚠️ 수정금지(승인필요) 2026-08-03 = **창고 찾기 색인**(§22 검수 4번 수정 = 사장님 승인).
+    //   실제 DB 에는 city-link-repair --apply 로 이미 있다. 여기에 같이 적어 두는 이유 =
+    //   위 credit_transactions 색인과 같은 함정: 스키마에 없으면 `drizzle-kit push` 가 지워 버려
+    //   창고 조회(place-guide·hasGuide)가 풀스캔이 된다. 부분(where) 조건까지 라이브와 동일해야 한다.
+    index("guides_place_lang_idx")
+      .on(t.placeId, t.language)
+      .where(sql`${t.placeId} IS NOT NULL`),
+  ],
+);
 
 // 공유 링크 (보관함 → 외부 공유)
 export const shareLinks = pgTable("share_links", {

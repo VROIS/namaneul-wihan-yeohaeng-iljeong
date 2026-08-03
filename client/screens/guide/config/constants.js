@@ -1,5 +1,6 @@
 // ⚠️ 수정금지(승인필요): Gemma 4 E2B + API + UX 설정 상수
 // 다른 앱에 이식 시 이 파일만 수정하면 됨
+import { getApiUrl } from '@/lib/query-client';
 
 export const CONFIG = {
   // === 색상 (기존 앱과 동일) ===
@@ -20,6 +21,9 @@ export const CONFIG = {
     LOCAL_DIR: 'models/',                                // expo-file-system 로컬 경로
   },
 
+  // === 저장 이미지 다이얼 (2026-08-01 사장님 선택 = 800px/0.7 = 실측 장당 ~113KB. 촬영·업로드 공용 1벌 §0) ===
+  IMAGE: { MAX_PX: 800, QUALITY: 0.7 },
+
   // === 카메라 (라이브 모드) ===
   CAMERA: {
     FPS: 2,                // 초당 AI에 전송할 프레임 수 (1-3fps)
@@ -38,14 +42,10 @@ export const CONFIG = {
 
   // === API (서버 경유 — 키는 Replit Secrets에만 보관) ===
   API: {
-    // ⚠️ 2026-07-19 §12 = 이식 시 서버주소만 Tripis 로 교체(설정값 1줄=내부로직 아님, SSOT §12 허용).
-    //   = Tripis 표준 EXPO_PUBLIC_DOMAIN(Metro 빌드 시 인라인 주입, §13). 옛 레거시 my-handyguide1 폐기 §19.
-    SERVER_URL:
-      (process.env.EXPO_PUBLIC_DOMAIN
-        ? (process.env.EXPO_PUBLIC_DOMAIN.startsWith('http')
-            ? process.env.EXPO_PUBLIC_DOMAIN
-            : 'https://' + process.env.EXPO_PUBLIC_DOMAIN)
-        : 'https://my-guide.replit.app'),
+    // ⚠️ 2026-08-01 사장님 승인(§12 서버주소 1줄) = 메인앱 유일 주소함수 getApiUrl() 1벌로 통일(§0·§16).
+    //   왜: 옛 자체 조립은 로컬 테스트에서도 운영서버로 저장을 보내 "저장했는데 안 보임" 오진의 근본이었다.
+    //   웹 = 현재 주소의 :5000 로컬 서버 / 앱 = EXPO_PUBLIC_DOMAIN = 종전 운영 동작 그대로.
+    SERVER_URL: getApiUrl(),
     GEMINI_MODEL: 'gemini-3-flash-preview',
     EXCHANGE_RATE_URL: 'https://api.exchangerate-api.com/v4/latest',
     EXCHANGE_RATE_CACHE_HOURS: 24, // 1일 1회 캐시

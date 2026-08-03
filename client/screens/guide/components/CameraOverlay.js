@@ -12,6 +12,7 @@ import * as Location from 'expo-location';
 import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { CONFIG } from '../config/constants';
 
 // ⚠️ 수정금지(승인필요): i18n 7개 언어 사전 주입
 const I18N = {
@@ -41,12 +42,12 @@ export default function CameraOverlay({ lang = 'ko', onCapture, onVoice, onUploa
     fn();
   }, []);
 
-  // ⚠️ 수정금지(승인필요): 이미지 최적화 — 1024px JPEG 0.85
+  // ⚠️ 수정금지(승인필요): 이미지 최적화 — 다이얼 = CONFIG.IMAGE 1벌(2026-08-01 사장님 선택 800px/0.7, 촬영·업로드 공용 §0)
   const optimizeImage = async (uri) => {
     const result = await ImageManipulator.manipulateAsync(
       uri,
-      [{ resize: { width: 1024 } }],
-      { compress: 0.85, format: ImageManipulator.SaveFormat.JPEG, base64: true }
+      [{ resize: { width: CONFIG.IMAGE.MAX_PX } }],
+      { compress: CONFIG.IMAGE.QUALITY, format: ImageManipulator.SaveFormat.JPEG, base64: true }
     );
     return result;
   };

@@ -4,8 +4,15 @@ import type { Express } from "express";
 import { storage } from "./storage";
 import { itineraryGenerator } from "./services/itinerary-generator";
 import { db } from "./db";
-import { cities, users, placeSeedRaw } from "../shared/schema";
-import { eq, sql, desc } from "drizzle-orm";
+// guides = 해설 창고 1벌(2026-08-02). 도시 카드 [해설] 배지를 켤지 여기서 있는지만 본다.
+import {
+  cities,
+  users,
+  placeSeedRaw,
+  itineraries,
+  guides,
+} from "../shared/schema";
+import { eq, sql, desc, and, or, ne, isNull, isNotNull } from "drizzle-orm";
 // ⚠️ 완비 기준 = ag2 의 상수 1벌을 가져다 쓴다(§16). 여기에 300 을 다시 적으면 기준이 두 벌이 된다.
 import { READY_THRESHOLD } from "./services/agents/ag2-gemini-recommender";
 import {
@@ -52,6 +59,151 @@ export function registerCityPlaceRoutes(app: Express): void {
     } catch (error) {
       console.error("[cities/ready] 완비도시 조회 실패:", error);
       res.status(500).json({ error: "failed_to_fetch_ready_cities" });
+    }
+  });
+
+  // ⚠️ 수정금지(승인필요) 🏙️ B2 도시 카드 데이터 = 카드는 **항상** 뜬다(2026-08-02 사장님 지시로 갱신 §19).
+  //   조립은 1벌 = ① 도시 DB 로 기본 카드를 채우고 ② 대표여정이 있으면 그 칸만 여정 값으로 덮는다(§0 = 폴백 분기 안 만듦).
+  //   아래 "/api/cities/:id" 와 경로 충돌 없음(:id 는 슬래시를 넘지 않음) = /api/cities/ready 뒤 배치.
+  app.get("/api/cities/:id/representative", async (req, res) => {
+    try {
+      if (!db) return res.status(503).json({ error: "db_unavailable" });
+      const cityId = parseInt(req.params.id);
+      if (Number.isNaN(cityId)) {
+        return res.status(404).json({ error: "City not found" });
+      }
+      // 🎙️ 지금 화면 언어 = 화면이 넘겨준다(앱 언어 1벌). 안 넘어오면 한국어.
+      //   같은 장소라도 언어가 다르면 해설 자체가 다르므로 창고를 찾는 열쇠에 반드시 들어간다.
+      const lang = String(req.query.lang || "ko");
+
+      // 조회 2번뿐 = ① 도시 1행(+있으면 대표여정 LEFT JOIN) ② 도심 리뷰 상위 3곳(2026-08-01 "대표 사진" SQL 그대로).
+      //   상위 3곳 = 사진(1위)·한 줄 카피(1위 summary_ko)·하이라이트(3곳)를 **한 번의 조회로** 다 쓴다(§16 = 같은 조건 두 번 묻지 않음).
+      const [[row], top3] = await Promise.all([
+        db
+          .select({
+            nameKo: cities.name,
+            nameEn: cities.nameEn,
+            country: cities.country,
+            itineraryId: itineraries.id, // 대표여정 없으면 null = 그대로 "없음" 신호
+            title: itineraries.title,
+            protagonistSentence: itineraries.protagonistSentence,
+            rawData: itineraries.rawData,
+            videoByDay: itineraries.videoByDay,
+          })
+          .from(cities)
+          // ⚠️ 수정금지(승인필요) 2026-08-02 사장님 = 대표여정 고르는 순서 1벌.
+          //   ① 손으로 올린 대표(status='representative') 가 있으면 그것
+          //   ② 없으면 **영상이 완성된 여정 중 최신** 이 자동으로 그 도시 대표
+          //      (사장님 SSOT: "최신 영상이 있는 것이 우선 = 이게 우리 앱의 특화")
+          //   ③ 둘 다 없으면 null = 카드는 도시 DB 만으로 뜬다(B-0 자동 채움).
+          //   정렬로 1벌 표현 = 분기 코드를 만들지 않는다(§0).
+          .leftJoin(
+            itineraries,
+            and(
+              eq(itineraries.cityId, cities.id),
+              or(
+                eq(itineraries.status, "representative"),
+                sql`EXISTS (SELECT 1 FROM jsonb_each(${itineraries.videoByDay}) e
+                            WHERE e.value->>'status' = 'succeeded')`,
+              ),
+            ),
+          )
+          .where(eq(cities.id, cityId))
+          .orderBy(
+            sql`CASE WHEN ${itineraries.status} = 'representative' THEN 0 ELSE 1 END`,
+            desc(itineraries.id),
+          )
+          .limit(1),
+        db
+          .select({
+            // 🎙️ 2026-08-02 = 1위 행의 우리 장소번호. 관리자 [해설 만들기] 가 이 번호로 해설 화면을 연다.
+            //   이미 뽑는 조회에 칸 하나만 더한다 = 같은 조건을 두 번 묻는 새 조회를 만들지 않는다(§16).
+            id: placeSeedRaw.id,
+            imageUrl: placeSeedRaw.imageUrl,
+            summaryKo: placeSeedRaw.summaryKo,
+            nameKo: placeSeedRaw.nameKo,
+            nameEn: placeSeedRaw.nameEn,
+          })
+          .from(placeSeedRaw)
+          .where(
+            and(
+              eq(placeSeedRaw.cityId, cityId),
+              isNotNull(placeSeedRaw.imageUrl),
+              isNotNull(placeSeedRaw.googleReviewCount),
+              ne(placeSeedRaw.seedCategory, "restaurant"),
+              or(
+                eq(placeSeedRaw.dayZone, "core"),
+                isNull(placeSeedRaw.dayZone),
+              ),
+            ),
+          )
+          .orderBy(desc(placeSeedRaw.googleReviewCount))
+          .limit(3),
+      ]);
+      if (!row) return res.status(404).json({ error: "City not found" });
+
+      // 🎙️ 2026-08-02 사장님 확정 = [해설] 배지는 **그 카드 장소의 해설이 창고에 있으면 자동으로 켠다.**
+      //   대표 해설을 따로 담는 칸도, 손으로 고르는 절차도 두지 않는다 =
+      //   카드가 보여주는 장소(리뷰 1위)와 [해설 만들기]가 여는 장소가 같은 1곳이라 고를 것이 없다.
+      //   찾는 열쇠 = (장소번호, 언어) 두 칸 = 색인 guides_place_lang_idx 그대로.
+      //   ⚠️ 있는지만 본다 = 내용 칸은 뽑지 않고 1행에서 끊는다(이 라우트는 도시 칩마다 불린다).
+      const repPlaceId = top3[0]?.id ?? null;
+      const guideHit =
+        repPlaceId === null
+          ? []
+          : await db
+              .select({ id: guides.id })
+              .from(guides)
+              .where(
+                and(eq(guides.placeId, repPlaceId), eq(guides.language, lang)),
+              )
+              .limit(1);
+
+      // ① 기본 카드 = 도시 DB 만으로 채움. 장소가 0개면 사진 null·하이라이트 [] 로 그대로 나간다(화면이 알아서 비움).
+      const card = {
+        itineraryId: row.itineraryId,
+        cityId,
+        nameKo: row.nameKo,
+        nameEn: row.nameEn,
+        country: row.country,
+        tagline: top3[0]?.summaryKo ?? "",
+        highlights: top3.map((p) => p.nameKo || p.nameEn),
+        dayCount: 0, // 0 = 화면이 "N일 코스" 배지를 안 그림
+        imageUrl: top3[0]?.imageUrl ?? null,
+        // 🎙️ 2026-08-02 사장님 순서 ㉠ = 관리자가 [해설 만들기] 로 여는 장소 = 위 사진과 **같은 1위 행**.
+        //   그 도시에 쓸 장소가 하나도 없으면 null = 화면이 [해설 만들기] 를 아예 안 그린다.
+        placeId: repPlaceId,
+        // 🎙️ 해설 배지 스위치 = 그 장소 + 그 언어의 해설이 창고에 1건이라도 있으면 켜짐(위 존재 확인 1벌).
+        hasGuide: guideHit.length > 0,
+        hasVideo: false,
+      };
+
+      // ② 대표여정이 있으면 그 여정 값이 이긴다(사진은 위 1위 장소 그대로 = 두 경우 동일).
+      if (row.itineraryId !== null) {
+        const raw = row.rawData as any;
+        const days: any[] = Array.isArray(raw?.days) ? raw.days : [];
+        // 하이라이트 = rawData.days 앞에서부터 장소명 정확히 3개(1일차가 3곳 미만이면 다음 날 이어붙임 = B-0)
+        const picked: string[] = [];
+        for (const d of days) {
+          for (const p of d?.places || []) {
+            if (picked.length >= 3) break;
+            if (typeof p?.name === "string" && p.name) picked.push(p.name);
+          }
+          if (picked.length >= 3) break;
+        }
+        card.tagline = row.protagonistSentence || row.title || ""; // 주인공 문장 우선, 없으면 제목(B-0)
+        card.highlights = picked;
+        card.dayCount = days.length;
+        // hasVideo = 하루라도 영상 성공(succeeded)이면 true = ▶배지는 영상이 실제로 있을 때만(B5)
+        card.hasVideo = Object.values(row.videoByDay || {}).some(
+          (v) => v?.status === "succeeded",
+        );
+      }
+
+      res.json(card);
+    } catch (error) {
+      console.error("[cities/:id/representative] 도시 카드 조회 실패:", error);
+      res.status(500).json({ error: "failed_to_fetch_representative" });
     }
   });
 

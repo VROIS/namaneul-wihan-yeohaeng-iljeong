@@ -10,16 +10,18 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   View, Text, Image, StyleSheet, ScrollView, TouchableOpacity,
-  ActivityIndicator, Dimensions, Animated, Platform,
+  ActivityIndicator, Animated, Platform,
 } from 'react-native';
 import * as Speech from 'expo-speech';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SvgXml } from 'react-native-svg';
 import { CONFIG } from '../config/constants';
 // 아이콘 = 운영 SVG 경로 직접 렌더(GuideIcons) = iOS Expo Go 에서 Ionicons 미표시 근본 해결(2026-07-20 실기기 SSOT).
 import GuideIcon from './GuideIcons';
+// 사진 없을 때 대신 띄우는 원형 마커 = 여정 슬롯 카드가 쓰는 그 1벌 그대로(§16 재발명 금지).
+import { placeholderMarkerSvg } from '@/components/bts/bts-marker-svg';
 
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
 // ⚠️ 수정금지(승인필요): i18n 7개 언어 사전 주입. alreadySaved = 중복 저장 시 안내(2026-07-21 사장님).
 const I18N = {
@@ -45,8 +47,8 @@ const IOS_VOICE_MAP = {
 
 export default function DetailViewer({
   imageUri, sentences = [], loading = false, loadingText = '', done = false,
-  locationName, voiceQuery, mode = 'camera',
-  lang = 'ko', onClose, onSave, onAskAgain,
+  locationName, voiceQuery, mode = 'camera', placeholderCategory = null,
+  lang = 'ko', onClose, onSave, onAskAgain, alreadySaved = false,
 }) {
   const t = I18N[lang] || I18N.ko;
   const insets = useSafeAreaInsets();
@@ -61,7 +63,10 @@ export default function DetailViewer({
   const [saveState, setSaveState] = useState('idle');
   const saveTimerRef = useRef(null);
   // ⚠️ 이 해설의 DB 저장 완료 여부 = 중복저장 방지(2026-07-21 사장님 지시). 한 번 저장되면 재클릭해도 DB 재기록 안 함(안내음성만).
-  const savedRef = useRef(false);
+  //   ⚠️ 2026-08-03 사장님 지시 = **한 사용자 = 한 장소 = 해설 1행**. 이미 담아둔 장소면(창고 응답 mine)
+  //     화면을 다시 열어도 처음부터 켠 상태로 시작한다(= 첫 클릭도 "이미 저장되었습니다"). 저장 흐름 자체는 그대로.
+  const savedRef = useRef(alreadySaved);
+  useEffect(() => { savedRef.current = alreadySaved; }, [alreadySaved]);
   const textOpacity = useRef(new Animated.Value(1)).current;
   const sentencesRef = useRef([]);
   const currentIdxRef = useRef(-1);
@@ -72,6 +77,11 @@ export default function DetailViewer({
   const doneRef = useRef(false);
 
   const isVoiceMode = mode === 'voice';
+  // ⚠️ 수정금지(승인필요) 2026-08-03 사장님 지시 = 검정은 여행앱 금기색.
+  //   밝은 바탕 여부 = 음성 모드 + **사진이 없는 장소**. 이 판단 1벌이 배경·글씨색·로딩색을 함께 정한다(§0 = 분기 1벌).
+  const onLightBg = isVoiceMode || !imageUri;
+  // 사진이 없을 때 배경에 띄울 분류 아이콘(없는 분류면 null → 기본 위치 아이콘).
+  const noImageSvg = placeholderMarkerSvg(placeholderCategory);
   sentencesRef.current = sentences;
   doneRef.current = done;
 
@@ -104,6 +114,11 @@ export default function DetailViewer({
         if (currentIdxRef.current === index) speakSentence(index + 1);
       },
       onError: () => {
+        // ⚠️ 2026-08-03 사장님 지적("저장 후 1단락만 읽고 끝남") 실측 원인:
+        //   [저장]·[일시정지] 가 부르는 Speech.stop() 이 읽던 문장을 error:interrupted 로 끝낸다.
+        //   이건 진짜 오류가 아니라 **우리가 일부러 멈춘 것**인데, 여기서 사슬(advanceRef)을 끊어
+        //   재개 후 한 문장만 읽고 멈췄다. onDone 이 쓰는 것과 **같은 가드 1벌**로 걸러낸다(§16).
+        if (pausedRef.current) return;
         advanceRef.current = false;
         setIsPlaying(false);
         setCurrentSentence(-1);
@@ -253,10 +268,23 @@ export default function DetailViewer({
   }, [onClose, stopTTS]);
 
   return (
-    <View style={styles.container}>
-      {/* 배경: 이미지모드 또는 음성모드 */}
-      {isVoiceMode ? (
-        <View style={[styles.bg, { backgroundColor: '#FFFEFA' }]} />
+    <View style={[styles.container, !onLightBg && styles.containerPhoto]}>
+      {/* 배경 = 사진 / 밝은 바탕(음성 모드·사진 없는 장소 공용 1벌) */}
+      {onLightBg ? (
+        <View style={[styles.bg, styles.lightBg]}>
+          {/* ⚠️ 2026-08-03 사장님 지시 = 사진 없는 장소는 분류 아이콘이 화면을 거의 다 채운다.
+              부모(화면) 폭 비율로만 커진다 = 화면크기를 한 번 재서 굳히지 않는다(어느 기기·회전에도 같은 비율).
+              글이 먼저 읽혀야 하므로 옅게 깔리는 장식. 음성 모드는 아이콘 없이 바탕만. */}
+          {!isVoiceMode && (
+            <View style={styles.noImageIcon} pointerEvents="none">
+              {noImageSvg ? (
+                <SvgXml xml={noImageSvg} width="100%" height="100%" />
+              ) : (
+                <GuideIcon name="location" size="100%" />
+              )}
+            </View>
+          )}
+        </View>
       ) : (
         <Image source={{ uri: imageUri }} style={styles.bg} resizeMode="cover" />
       )}
@@ -279,8 +307,14 @@ export default function DetailViewer({
       {/* 로딩 = 운영 loader-container 클론: 이미지 유지 + 중앙 스피너 + 로테이션 문구 */}
       {loading && (
         <View style={styles.loaderWrap}>
-          <ActivityIndicator size="large" color="#fff" />
-          <Text style={styles.loadingText} allowFontScaling={false}>{loadingText || t.loading}</Text>
+          {/* 밝은 바탕에서는 흰 스피너·흰 글씨가 안 보인다 → 화면이 이미 쓰는 파랑·어두운 글씨로(2026-08-03 §23 결) */}
+          <ActivityIndicator size="large" color={onLightBg ? '#4285F4' : '#fff'} />
+          <Text
+            style={[styles.loadingText, onLightBg && styles.loadingTextDark]}
+            allowFontScaling={false}
+          >
+            {loadingText || t.loading}
+          </Text>
         </View>
       )}
 
@@ -308,7 +342,8 @@ export default function DetailViewer({
                   key={i}
                   allowFontScaling={false}
                   style={[
-                    isVoiceMode ? styles.sentenceDark : styles.sentence,
+                    // 밝은 바탕(음성 모드·사진 없는 장소) = 어두운 글씨 1벌 재사용(§16)
+                    onLightBg ? styles.sentenceDark : styles.sentence,
                     i === currentSentence && styles.sentenceHighlight,
                   ]}
                 >
@@ -351,11 +386,12 @@ export default function DetailViewer({
             <GuideIcon name="documentText" size={34} color={textVisible ? '#4285F4' : 'rgba(66,133,244,0.4)'} />
           </TouchableOpacity>
 
-          {/* 저장 = 운영 클론: 스피너 → 체크마크(1.5초) → 북마크 복원 */}
+          {/* 저장 = 운영 클론: 스피너 → 체크마크(1.5초) → 북마크 복원.
+              ⚠️ 2026-08-01 사장님 = 보기 전용(onSave 미전달 = 이미 저장된 콘텐츠)이면 흐리게 비활성만, 3단 버튼 레이아웃 유지 */}
           <TouchableOpacity
-            style={styles.footerBtn}
+            style={[styles.footerBtn, !onSave && { opacity: 0.35 }]}
             onPress={handleSave}
-            disabled={saveState !== 'idle'}
+            disabled={saveState !== 'idle' || !onSave}
           >
             {saveState === 'saving' ? (
               <ActivityIndicator size="small" color="#4285F4" />
@@ -373,8 +409,16 @@ export default function DetailViewer({
 
 // ⚠️ 2026-07-20 운영앱 DevTools 실측 클론: 글자 20px/행간 32.5 + 여백 32·24 + 모든 버튼 완전 투명(사장님 지시).
 const styles = StyleSheet.create({
-  container: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 200, backgroundColor: '#000' },
-  bg: { position: 'absolute', top: 0, left: 0, width: SCREEN_W, height: SCREEN_H },
+  container: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 200 },
+  // ⚠️ 수정금지(승인필요) 2026-08-03 사장님 = 어두운 바탕은 **사진이 깔릴 때만**(사진 로딩 중 여백용).
+  //   사진 없는 장소에는 깔지 않는다 = 검정 = 여행앱 금기색.
+  containerPhoto: { backgroundColor: '#000' },
+  // ⚠️ 2026-08-01 사장님 "풀로 차게" = 앱 시작 때 화면크기 1회 고정(Dimensions) 버릇 제거 → 어느 크기에서든 부모 꽉 채움
+  bg: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
+  // 밝은 바탕 1벌 = 음성 모드 + 사진 없는 장소 공용(§16 재사용). 아이콘은 이 안에서 가운데.
+  lightBg: { backgroundColor: '#FFFEFA', alignItems: 'center', justifyContent: 'center' },
+  // 사진 없는 장소의 분류 아이콘 = 부모(화면) 폭의 80% 정사각 + 옅게 = 글이 먼저 읽히는 장식.
+  noImageIcon: { width: '80%', aspectRatio: 1, opacity: 0.15 },
   backBtn: {
     position: 'absolute', right: 16, width: 48, height: 48, borderRadius: 24,
     backgroundColor: 'transparent', alignItems: 'center', justifyContent: 'center', zIndex: 10,
@@ -393,6 +437,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     textShadowColor: 'rgba(0,0,0,0.95)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 8,
   },
+  // 밝은 바탕용 로딩 문구 = 해설 문장(sentenceDark)과 같은 글씨색 + 그림자 끔(§16 값 재사용 = 새 색 없음)
+  loadingTextDark: { color: '#000', textShadowColor: 'transparent' },
   textArea: { position: 'absolute', bottom: 108, left: 0, right: 0 },
   textContent: { paddingHorizontal: 24, paddingVertical: 32 },
   sentence: {

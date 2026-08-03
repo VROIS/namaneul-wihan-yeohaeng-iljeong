@@ -6,6 +6,8 @@
  *   · 위치창 = 운영 requestBrowserLocation 클론: 위치 1회 허용 → 주변 랜드마크(/api/guide/landmark) → 위치창
  *   · 해설 = DB 페르소나(/api/prompts) → /api/gemini 스트리밍 → 문장 즉시 표시+즉시 낭독(DetailViewer)
  *   · 저장 = 운영 handleSaveClick 페이로드 그대로 /api/guides/batch. 로그인한 경우만(사장님 확정).
+ *   · 창고 = 우리 DB 장소(placeId)로 열면 (장소,언어)로 만들어 둔 해설을 먼저 찾고(/api/guide/place-guide),
+ *     없을 때만 새로 만든 뒤 그 결과를 공용 창고에 자동으로 담는다(2026-08-02 사장님 확정).
  *   · 음성질문·보관함 화면 배선 = 추후 (사장님 지시)
  */
 
@@ -50,8 +52,10 @@ const GuideIcon = GuideIconJs as unknown as React.ComponentType<
 
 export type GuideStackParamList = {
   GuideCamera: undefined;
-  // 촬영/업로드 결과 = 이미지 base64 + 언어(지금은 ko 디폴트, 언어설정 연결은 추후).
-  GuideResult: { imageBase64: string; lang?: string };
+  // 해설 화면 입구 = 둘 중 하나만 준다(둘 다 이후 흐름은 완전히 같다):
+  //   · imageBase64 = 기기 카메라·갤러리 사진 (원래 입구)
+  //   · placeId     = 우리 DB 장소(place_seed_raw.id) = 서버가 그 장소 사진을 재료로 내어준다 (2026-08-02 사장님 지시)
+  GuideResult: { imageBase64?: string; placeId?: number; lang?: string };
 };
 
 const Stack = createNativeStackNavigator<GuideStackParamList>();
@@ -80,6 +84,76 @@ async function optimizeImageBase64(base64: string): Promise<string> {
   }
 }
 
+// ⚠️ 문장 분리 1벌(§16) = 운영 index.js 규칙 그대로 [.?!] 종결부호 단위.
+//   스트리밍은 끝이 잘린 조각을 다음 덩어리와 이어 붙여야 하므로 남은 꼬리(rest)를 함께 돌려준다.
+//   창고에서 통째로 받은 글도 같은 규칙으로 나눈다 = 낭독 단위가 두 벌이 되지 않는다.
+function splitSentences(text: string): { sentences: string[]; rest: string } {
+  const sentences: string[] = [];
+  let buf = text;
+  let idx = buf.search(/[.?!]/);
+  while (idx !== -1) {
+    const s = buf.substring(0, idx + 1).trim();
+    buf = buf.substring(idx + 1);
+    if (s) sentences.push(s);
+    idx = buf.search(/[.?!]/);
+  }
+  return { sentences, rest: buf };
+}
+
+// ⚠️ 보관함 저장 페이로드 1벌(§16) = [저장] 버튼과 **창고 자동저장**이 같은 모양을 쓴다.
+//   warehouse:true = 새로 만든 해설을 공용 창고에 담는 것 = 서버가 관리자 소유로 넣는다(토큰 불필요).
+//   warehouse 없음 = 사용자가 [저장]을 눌러 **본인 '나의 TRIPIS'** 에 담는 것(토큰 필수).
+async function postGuideBatch(args: {
+  token?: string | null;
+  warehouse?: boolean;
+  lang: string;
+  placeId?: number | null;
+  text: string;
+  imageUrl?: string | null;
+  imageBase64?: string | null;
+  lat?: unknown;
+  lng?: unknown;
+  locationName?: string | null;
+  cityId?: number | null;
+}): Promise<boolean> {
+  const resp = await fetch(`${CONFIG.API.SERVER_URL}/api/guides/batch`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(args.token ? { Authorization: `Bearer ${args.token}` } : {}),
+    },
+    body: JSON.stringify({
+      language: args.lang,
+      ...(args.warehouse ? { warehouse: true } : {}),
+      guides: [
+        {
+          localId: `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
+          title: "제목 없음",
+          description: args.text,
+          // 사진 = 우리 DB 장소면 Storage 원본 URL 을 그대로(이미 있는 사진을 base64 로 다시 넣으면 장당 110KB 낭비).
+          //   기기 사진은 우리 저장소에 없으므로 인라인 data URL. 사진이 아예 없는 장소는 이미지 칸 없이 저장.
+          ...(args.imageUrl
+            ? { imageUrl: args.imageUrl }
+            : args.imageBase64
+              ? { imageDataUrl: `data:image/jpeg;base64,${args.imageBase64}` }
+              : {}),
+          // 창고 열쇠 = 어느 장소의 해설인지. 기기 사진이면 없음(null) = 창고에는 안 뜬다.
+          placeId: args.placeId ?? null,
+          // 도시 = 우리 DB 장소면 그 장소의 city_id(좌표 최근접 계산보다 정확). 없으면 서버가 좌표로 계산.
+          cityId: args.cityId ?? null,
+          latitude: args.lat != null ? String(args.lat) : undefined,
+          longitude: args.lng != null ? String(args.lng) : undefined,
+          locationName: args.locationName ?? null,
+          aiGeneratedContent: args.text,
+          voiceLang: getTTSLanguage(args.lang),
+          voiceName: null,
+        },
+      ],
+    }),
+  });
+  return resp.ok;
+}
+
 // ⚠️ 카메라 화면 = 원본 MainCameraScreen(5단 버튼) 그대로 + 바깥(출입구)만 배선.
 //   = X 닫기 = 우측상단 완전 투명(2026-07-20 사장님 지시 = 컴포넌트 모든 버튼 통일).
 function GuideCameraHost() {
@@ -98,13 +172,29 @@ function GuideCameraHost() {
   }, []);
 
   const handleNavigateToWebView = useCallback(
-    (page: string, data?: { imageBase64?: string }) => {
+    (page: string, data?: { imageBase64?: string; placeId?: number }) => {
       if (page === "detail" && data?.imageBase64) {
         navigation.navigate("GuideResult", { imageBase64: data.imageBase64 });
+        return;
       }
-      // 'archive'(보관함)·'voice'(음성질문) = 추후 배선 (사장님 지시).
+      // ⚠️ 2026-08-02 사장님 지시 = 관리자 전용 [장소번호] 입구. 번호만 넘긴다.
+      //   그 뒤(창고 조회 → 없으면 생성 → 자동 저장)는 해설 화면의 완성된 1벌이 그대로 한다(§16).
+      if (page === "detail" && data?.placeId) {
+        navigation.navigate("GuideResult", { placeId: data.placeId });
+        return;
+      }
+      // ⚠️ 수정금지(승인필요) 2026-08-01 사장님 §B-0 = [보관함] = 프로필 탭의 '나의 TRIPIS' 섹션 1벌로 간다.
+      //   보관함 화면을 따로 만들지 않는다(§16 재발명 금지) = 저장된 TRIPIS 카드가 이미 그 섹션에 뜬다.
+      //   미니앱은 루트 스택 모달이라 navigate 만으로는 안 닫힌다(DevTools 실측: 뒤만 프로필로 바뀌고 미니앱이 위에 남음)
+      //   → 이 화면 [X]와 같은 goBack 으로 **먼저 닫고**(검증된 1벌) 그 다음 프로필 탭을 켠다.
+      if (page === "archive") {
+        rootNavigation.goBack();
+        rootNavigation.navigate("Main", { screen: "Profile" });
+        return;
+      }
+      // 'voice'(음성질문) = 추후 배선 (사장님 지시).
     },
-    [navigation],
+    [navigation, rootNavigation],
   );
 
   return (
@@ -127,11 +217,13 @@ function GuideCameraHost() {
 // ⚠️ 해설 화면 = 운영 processImage 흐름 그대로 (RN 배선판):
 //   ①이미지 최적화(1024/0.85) ②위치 1회 허용→랜드마크→위치창 ③DB 페르소나 ④/api/gemini 스트리밍
 //   ⑤문장 단위 즉시 표시(낭독은 DetailViewer가 첫 문장 즉시 시작) ⑥저장 = 로그인 시 guides.
+//   ⚠️ 2026-08-02 사장님 지시 = 재료가 우리 DB 장소 사진(placeId)일 때도 ③~⑥은 **완전히 같은 1벌**을 탄다.
+//     다른 점은 재료를 어디서 얻는지 뿐이고, 장소가 이미 확정이라 ②(GPS·랜드마크)는 아예 실행하지 않는다.
 function GuideResultHost({
   route,
   navigation,
 }: NativeStackScreenProps<GuideStackParamList, "GuideResult">) {
-  const { imageBase64, lang = "ko" } = route.params;
+  const { imageBase64, placeId, lang = "ko" } = route.params;
   const [sentences, setSentences] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingText, setLoadingText] = useState(
@@ -139,17 +231,35 @@ function GuideResultHost({
   );
   const [done, setDone] = useState(false);
   // 위치창 = 운영 클론: '위치 확인 중...' → 랜드마크명/'위치 정보 없음'/'위치 권한 필요'.
-  const [locationName, setLocationName] = useState("위치 확인 중...");
+  //   우리 DB 장소로 연 경우 = 장소명이 곧 위치이므로 서버가 준 이름으로 바로 채운다.
+  const [locationName, setLocationName] = useState(
+    placeId ? "" : "위치 확인 중...",
+  );
+  // 화면에 띄울 사진 = 기기 사진이면 인라인 data URL, 우리 DB 장소면 Storage 원본 URL.
+  const [imageUri, setImageUri] = useState(
+    imageBase64 ? `data:image/jpeg;base64,${imageBase64}` : "",
+  );
+  // 사진이 없는 장소일 때 화면에 띄울 아이콘 종류(= 그 장소의 분류). 여정 슬롯 카드와 같은 결(§16).
+  const [placeCategory, setPlaceCategory] = useState<string | null>(null);
+  // ⚠️ 2026-08-03 사장님 지시 = 한 사용자 = 한 장소 = 해설 1행.
+  //   창고 응답의 mine(= 내가 이미 담아둔 장소·언어)을 뷰어에 넘겨 [저장]을 처음부터 잠근다.
+  //   기기 사진(장소번호 없음)은 창고를 부르지 않으므로 항상 거짓 = 지금 그대로 매번 저장된다.
+  const [alreadySaved, setAlreadySaved] = useState(false);
   const gpsRef = useRef<{ lat: number; lng: number } | null>(null);
   const locationNameRef = useRef<string | null>(null);
   const fullTextRef = useRef("");
-  const optimizedRef = useRef(imageBase64);
+  const optimizedRef = useRef("");
+  // 우리 DB 장소로 연 경우에만 채워진다 = 보관함에 사진 URL·도시를 그대로 넣기 위한 값.
+  const placeImageUrlRef = useRef<string | null>(null);
+  const cityIdRef = useRef<number | null>(null);
   const readerRef = useRef<ReadableStreamDefaultReader<Uint8Array> | null>(
     null,
   );
 
   // ① 위치 = 운영 requestBrowserLocation 클론 (권한 1회 → 좌표 → 랜드마크 → 위치창).
+  //   ⚠️ 우리 DB 장소(placeId)로 연 경우 = 장소·좌표가 이미 확정 = GPS 도 유료 랜드마크 호출도 하지 않는다(§15 비용).
   useEffect(() => {
+    if (placeId) return;
     let alive = true;
     (async () => {
       try {
@@ -169,8 +279,14 @@ function GuideResultHost({
           `${CONFIG.API.SERVER_URL}/api/guide/landmark?lat=${loc.coords.latitude}&lng=${loc.coords.longitude}`,
         );
         const d = r.ok ? await r.json() : null;
+        // ⚠️ 2026-08-02 사장님 지시 = 저장할 좌표는 **랜드마크(구글이 준 인근 대표장소) 좌표**를 우선한다.
+        //   기기 GPS 는 오차(실내·건물 사이에서 수십~수백 m)가 있고, 우리가 화면에 보여주고 기록하는 대상은
+        //   그 대표장소이기 때문. 랜드마크가 안 잡혔을 때만 위에서 받아둔 기기 GPS 를 그대로 쓴다.
+        if (Number.isFinite(d?.lat) && Number.isFinite(d?.lng)) {
+          gpsRef.current = { lat: d.lat, lng: d.lng };
+        }
         const name = d?.name || "위치 정보 없음";
-        locationNameRef.current = d?.name || null;
+        locationNameRef.current = d?.name || null; // 화면·저장 표시는 이름 그대로(좌표는 안 보임)
         if (alive) setLocationName(name);
       } catch {
         if (alive) setLocationName("위치 정보 없음");
@@ -179,9 +295,9 @@ function GuideResultHost({
     return () => {
       alive = false;
     };
-  }, []);
+  }, [placeId]);
 
-  // ② 해설 = 최적화 → 페르소나 → 스트리밍 → 문장 분리 즉시 표시 (운영 processImage 클론).
+  // ② 해설 = 재료 확보 → 페르소나 → 스트리밍 → 문장 분리 즉시 표시 (운영 processImage 클론).
   useEffect(() => {
     let alive = true;
     const loadingMessages = [
@@ -195,33 +311,126 @@ function GuideResultHost({
     }, 2000);
 
     (async () => {
+      // 🪙 서버가 준 실패 사유(잔액부족 등) = 화면에서 뭉개지 않고 그대로 보여준다(2026-07-31 사장님 SSOT).
+      let failMsg: string | null = null;
       try {
-        // 운영 = optimizeImage 후 전송 (응답속도 근본 = 2026-07-20 사장님 지적 #10).
-        const optimized = await optimizeImageBase64(imageBase64);
+        // 로그인 토큰 = 아래 **창고 조회·해설 생성 둘 다 차감 지점**이라 먼저 확보한다.
+        //   토큰이 없으면 서버가 "비로그인=무과금"으로 보고 영구 무료가 된다(§22 실측 지적).
+        const guideUser = await getUserData();
+        const authHeader: Record<string, string> = guideUser?.token?.startsWith(
+          "simple_auth_token_v1_",
+        )
+          ? { Authorization: `Bearer ${guideUser.token}` }
+          : {};
+
+        // ⓪ ⚠️ 2026-08-02 사장님 확정 = 우리 DB 장소는 **창고를 먼저 본다**.
+        //   (장소, 언어)로 이미 만들어 둔 해설이 있으면 그대로 보여준다 = 유료 외부호출 0.
+        //   204 = 창고에 없음 → 아래에서 새로 만들고, 다 만들면 창고에 자동으로 담는다.
+        if (placeId) {
+          const wr = await fetch(
+            `${CONFIG.API.SERVER_URL}/api/guide/place-guide?placeId=${placeId}&lang=${lang}`,
+            { headers: authHeader },
+          );
+          if (wr.status === 402) {
+            const wd = await wr.json().catch(() => null);
+            failMsg = String(wd?.message || "크레딧이 부족합니다.");
+            throw new Error(failMsg);
+          }
+          if (wr.status === 200) {
+            const wd = await wr.json();
+            const stored = String(wd.content || "");
+            fullTextRef.current = stored;
+            placeImageUrlRef.current = wd.imageUrl || null;
+            cityIdRef.current = wd.cityId ?? null;
+            gpsRef.current = { lat: wd.latitude, lng: wd.longitude };
+            locationNameRef.current = wd.locationName;
+            clearInterval(loadingInterval);
+            if (alive) {
+              setLocationName(wd.locationName || "");
+              setImageUri(wd.imageUrl || "");
+              setPlaceCategory(wd.seedCategory || null);
+              setAlreadySaved(!!wd.mine); // 내가 이미 담아둔 해설 = [저장] 잠금(중복 저장 차단)
+              const { sentences: whole, rest } = splitSentences(stored);
+              const tail = rest.trim();
+              setSentences(tail ? [...whole, tail] : whole);
+              setLoading(false);
+              setDone(true);
+            }
+            return; // 창고에서 나왔다 = 새로 만들지도, 다시 담지도 않는다
+          }
+        }
+
+        // 재료 확보 = 두 입구가 여기서 하나로 합쳐진다(아래 해설·저장 흐름은 완전히 같은 1벌).
+        //   · 우리 DB 장소(placeId) = 서버가 **확정 정보 머리글**만 조립해 준다(사진은 Gemini 에 안 보낸다 = 아래 참조).
+        //   · 기기 사진 = 운영 optimizeImage 후 전송 (응답속도 근본 = 2026-07-20 사장님 지적 #10).
+        let hintHeader = "";
+        if (placeId) {
+          const pr = await fetch(
+            `${CONFIG.API.SERVER_URL}/api/guide/place-image?placeId=${placeId}&lang=${lang}`,
+          );
+          const pd = await pr.json().catch(() => null);
+          // 🔴 서버가 준 사유를 **그대로** 화면에 보여준다(2026-07-31 사장님 SSOT = 뭉갠 문구로 덮지 않는다).
+          //   없는 번호 = 404 "그런 장소가 없습니다" / 구글 식별정보 없음 = 409 "검증되지 않은 장소(구글 식별정보 없음)".
+          //   표시 경로는 아래 catch 의 failMsg 1벌을 그대로 탄다(§16 = 새 표시 장치를 만들지 않는다).
+          if (!pr.ok) {
+            failMsg = String(pd?.error || `장소 오류: ${pr.status}`);
+            throw new Error(failMsg);
+          }
+          hintHeader = pd.hintHeader || "";
+          placeImageUrlRef.current = pd.imageUrl; // 보관함에는 이 URL 그대로 저장(사진을 base64 로 다시 담지 않는다)
+          cityIdRef.current = pd.cityId;
+          gpsRef.current = { lat: pd.latitude, lng: pd.longitude };
+          locationNameRef.current = pd.placeName;
+          if (alive) {
+            setLocationName(pd.placeName);
+            setImageUri(pd.imageUrl || ""); // 사진 없으면 빈 값 = 뷰어가 아이콘을 띄운다
+            setPlaceCategory(pd.seedCategory || null);
+          }
+        }
+
+        // ⚠️ 2026-08-03 사장님 지시 = **우리 DB 장소는 사진을 Gemini 에 보내지 않는다**(빈 문자열 = 사진 없음).
+        //   해설의 정확도를 만드는 것은 사진이 아니라 위 머리글이고(2026-08-02 4종 실측),
+        //   사진을 같이 보내면 요청이 799KB·6.0초 / 머리글만 보내면 1KB·3.9초 = 속도·비용 둘 다 손해다.
+        //   화면에 뜨는 사진은 위 setImageUri(pd.imageUrl) = 우리 이미지 그대로다(사진과 해설은 별개).
+        //   기기 카메라·갤러리 사진은 그 사진이 곧 재료이므로 지금 그대로 최적화 후 보낸다.
+        const optimized = placeId
+          ? ""
+          : await optimizeImageBase64(imageBase64 || "");
         optimizedRef.current = optimized;
 
-        const systemInstruction = await fetchPrompt(lang, "image");
+        // ⚠️ 2026-08-02 사장님 SSOT = 우리 DB 장소는 **확정 정보 머리글을 페르소나 앞에** 붙여 보낸다.
+        //   실측: 사진이 엉뚱해도 머리글이 이기고, 사진이 없어도 머리글만으로 해설이 나온다.
+        //   기기 사진 경로는 장소가 확정이 아니므로 머리글 없이 지금 그대로 간다(hintHeader = 빈 문자열).
+        const systemInstruction =
+          hintHeader + (await fetchPrompt(lang, "image"));
 
-        // ⚠️ 2026-07-29 §9 = 로그인 토큰 첨부 필수. 이 호출은 5크레딧 차감 지점(server/guide-routes.ts:47)인데
+        // ⚠️ 2026-07-29 §9 = 로그인 토큰 첨부 필수(위에서 만든 authHeader 1벌). 이 호출은 5크레딧 차감 지점인데
         //   토큰이 없으면 서버가 "비로그인=무과금" 으로 보고 **영구 무료**가 된다(§22 실측 지적).
-        const guideUser = await getUserData();
         const resp = await expoFetch(`${CONFIG.API.SERVER_URL}/api/gemini`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            ...(guideUser?.token?.startsWith("simple_auth_token_v1_")
-              ? { Authorization: `Bearer ${guideUser.token}` }
-              : {}),
+            ...authHeader,
           },
           body: JSON.stringify({
-            base64Image: optimized,
-            prompt:
-              lang === "ko"
+            // 사진이 없으면 base64Image 를 아예 보내지 않는다(서버는 prompt 만 있어도 받는다 = guide-routes.ts ①).
+            ...(optimized ? { base64Image: optimized } : {}),
+            prompt: optimized
+              ? lang === "ko"
                 ? "이 이미지를 분석하고 생생하게 설명해주세요."
-                : "Analyze this image and describe it vividly.",
+                : "Analyze this image and describe it vividly."
+              : lang === "ko"
+                ? "이 장소를 생생하게 설명해주세요."
+                : "Describe this place vividly.",
             systemInstruction,
           }),
         });
+        // 🪙 잔액부족(402) = 서버가 준 사유 그대로. "다시 시도해 주세요"로 뭉개면 원인을 알 수 없다.
+        if (resp.status === 402) {
+          const d = await resp.json().catch(() => null);
+          failMsg = String(d?.message || "크레딧이 부족합니다.");
+          throw new Error(failMsg);
+        }
         if (!resp.ok || !resp.body)
           throw new Error(`서버 오류: ${resp.status}`);
 
@@ -244,26 +453,39 @@ function GuideResultHost({
           }
 
           fullTextRef.current += chunkText;
-          // 운영 index.js 문장 분리 그대로 = [.?!] 종결부호 단위.
+          // 문장 분리 = splitSentences 1벌(§16). 끝이 잘린 꼬리(rest)는 다음 덩어리와 이어 붙인다.
           sentenceBuffer += chunkText;
-          const completed: string[] = [];
-          let idx = sentenceBuffer.search(/[.?!]/);
-          while (idx !== -1) {
-            const sentence = sentenceBuffer.substring(0, idx + 1).trim();
-            sentenceBuffer = sentenceBuffer.substring(idx + 1);
-            if (sentence) completed.push(sentence);
-            idx = sentenceBuffer.search(/[.?!]/);
-          }
+          const { sentences: completed, rest } = splitSentences(sentenceBuffer);
+          sentenceBuffer = rest;
           if (completed.length && alive) {
             setSentences((prev) => [...prev, ...completed]);
           }
         }
 
-        const rest = sentenceBuffer.trim();
-        if (rest && alive) setSentences((prev) => [...prev, rest]);
+        const tail = sentenceBuffer.trim();
+        if (tail && alive) setSentences((prev) => [...prev, tail]);
         if (alive) {
           setLoading(false);
           setDone(true);
+        }
+
+        // 🏷️ 2026-08-02 사장님 확정 = **새로 만든 해설은 창고에 자동으로 담는다**(공용 = 관리자 소유).
+        //   다음 사람이 같은 장소·같은 언어로 열면 위 ⓪에서 그대로 나온다 = 유료 외부호출 0.
+        //   본인 '나의 TRIPIS' 는 [저장]을 눌렀을 때만 따로 1건 생긴다(아래 handleSave) = 사장님 "필요시 저장".
+        //   ⚠️ 서버가 본문을 모아 저장하지 않는 이유 = 스트림이 중간에 끊기면 반쪽 해설이 창고에 박힌다.
+        //   화면을 떠났어도(alive=false) 담는다 = 이미 돈이 나간 결과물이라 버리지 않는다.
+        if (placeId && fullTextRef.current) {
+          postGuideBatch({
+            warehouse: true,
+            lang,
+            placeId,
+            text: fullTextRef.current,
+            imageUrl: placeImageUrlRef.current,
+            lat: gpsRef.current?.lat,
+            lng: gpsRef.current?.lng,
+            locationName: locationNameRef.current,
+            cityId: cityIdRef.current,
+          }).catch((err) => console.warn("[guide] 창고 자동저장 실패:", err));
         }
       } catch (e) {
         console.error("[guide] 해설 스트리밍 오류:", e);
@@ -274,7 +496,10 @@ function GuideResultHost({
           setSentences((prev) =>
             prev.length
               ? prev
-              : ["해설을 불러오지 못했습니다. 잠시 후 다시 시도해주세요."],
+              : [
+                  failMsg ||
+                    "해설을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.",
+                ],
           );
         }
       }
@@ -287,7 +512,7 @@ function GuideResultHost({
       readerRef.current?.cancel().catch(() => {});
       readerRef.current = null;
     };
-  }, [imageBase64, lang]);
+  }, [imageBase64, placeId, lang]);
 
   // ③ 저장 = 운영 handleSaveClick 페이로드 그대로. 로그인한 경우만(사장님 확정 2026-07-20).
   const handleSave = useCallback(async (): Promise<boolean> => {
@@ -301,32 +526,20 @@ function GuideResultHost({
     }
     if (!fullTextRef.current) return false;
     try {
-      const tempLocalId = `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
-      const resp = await fetch(`${CONFIG.API.SERVER_URL}/api/guides/batch`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${user.token}`,
-        },
-        body: JSON.stringify({
-          language: lang,
-          guides: [
-            {
-              localId: tempLocalId,
-              title: "제목 없음",
-              description: fullTextRef.current,
-              imageDataUrl: `data:image/jpeg;base64,${optimizedRef.current}`,
-              latitude: gpsRef.current?.lat?.toString(),
-              longitude: gpsRef.current?.lng?.toString(),
-              locationName: locationNameRef.current,
-              aiGeneratedContent: fullTextRef.current,
-              voiceLang: getTTSLanguage(lang),
-              voiceName: null,
-            },
-          ],
-        }),
+      // 페이로드 = postGuideBatch 1벌(§16). 창고 자동저장과 같은 모양이고, 주인만 본인으로 달라진다.
+      const ok = await postGuideBatch({
+        token: user.token,
+        lang,
+        placeId: placeId ?? null,
+        text: fullTextRef.current,
+        imageUrl: placeImageUrlRef.current,
+        imageBase64: optimizedRef.current,
+        lat: gpsRef.current?.lat,
+        lng: gpsRef.current?.lng,
+        locationName: locationNameRef.current,
+        cityId: cityIdRef.current,
       });
-      if (!resp.ok) {
+      if (!ok) {
         Alert.alert("저장 실패", "잠시 후 다시 시도해주세요.");
         return false;
       }
@@ -335,15 +548,19 @@ function GuideResultHost({
       Alert.alert("저장 실패", "네트워크를 확인해주세요.");
       return false;
     }
-  }, [lang]);
+  }, [lang, placeId]);
 
   return (
     <DetailViewer
-      imageUri={`data:image/jpeg;base64,${imageBase64}`}
+      imageUri={imageUri}
+      // 사진이 없는 장소 = 뷰어가 이 분류의 아이콘을 대신 띄운다(여정 슬롯 카드와 같은 결).
+      placeholderCategory={placeCategory}
       sentences={sentences}
       loading={loading}
       loadingText={loadingText}
       done={done}
+      // 이미 내 것으로 담아둔 해설 = 뷰어가 [저장] 첫 클릭부터 "이미 저장되었습니다"만 안내(2026-08-03 사장님).
+      alreadySaved={alreadySaved}
       locationName={locationName}
       voiceQuery={null}
       mode="camera"

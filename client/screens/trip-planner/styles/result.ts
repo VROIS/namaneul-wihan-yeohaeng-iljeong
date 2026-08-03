@@ -28,6 +28,7 @@ export const resultStyles = StyleSheet.create({
     alignItems: "center",
   },
   resultTitle: { fontSize: 20, fontFamily: Fonts.bold },
+  // 🏆 대표 올리기 3키(headerActions·repBtn·repBtnText) = 프로필 이관으로 완전삭제 = 2026-08-02 §19.
   tripSummaryRow: {
     flexDirection: "row",
     alignItems: "center",

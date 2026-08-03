@@ -5,7 +5,7 @@
 import type { Express } from "express";
 import { db as _db } from "./db";
 import { expertInquiries, users } from "@shared/schema";
-import { eq, desc, and, or } from "drizzle-orm";
+import { eq, desc, and, or, sql } from "drizzle-orm";
 import { notificationService } from "./notificationService";
 import { getUserIdFromReq } from "./auth-user"; // Bearer → userId 단일 관문(2026-07-29 §16, 이 파일 사본 삭제 §19)
 import { chargeFeature } from "./credit-charge"; // 크레딧 차감 단일 관문(2026-07-29 §9)
@@ -172,24 +172,46 @@ export function registerExpertRoutes(app: Express): void {
     }
   });
 
-  // ── 3) 배지 카운트 = GET /api/verification/unread-count = 답변완료인데 사용자가 안 읽은 수(전문가 탭 아이콘 배지) ──
+  // ── 3) 배지 카운트 = GET /api/verification/unread-count = 하단 [전문가] 탭 배지 = **숫자 1개만** 반환 ──
+  //   ⚠️ 2026-08-03 사장님 지시 = 배지 숫자 하나 얻으려고 화면 이동마다 문의 **목록 전체**를 내려받던 낭비
+  //   (화면당 10~14회 × 전체 행 = Egress 소모) 제거. 세는 일은 여기서 DB COUNT 1개로 한다.
+  //   기준 = tabBadgeCount(2026-07-14 사장님 SSOT)와 동일 1벌:
+  //   · expert·admin = 받은 문의 중 대기+검토중(답변 대기 신호)
+  //   · user = 본인 진행중(pending·in_review) + 안 읽은 답변(answered 미열람)
+  //   옛 "안 읽은 답변만" 기준 폐기 = 2026-08-03 §19 (클라 호출자 0 이던 낡은 기준).
   app.get("/api/verification/unread-count", async (req, res) => {
     try {
       const authId = getUserIdFromReq(req);
       const uid = authId || (req.query.userId as string) || undefined;
       if (!uid) return res.json({ count: 0 }); // 미로그인 = 배지 없음(에러 아님)
-      const rows = await db()
-        .select({ id: expertInquiries.id })
-        .from(expertInquiries)
-        .where(
-          and(
+      const role = await getRole(uid);
+      const isExpert = role === "expert" || role === "admin";
+      const where = isExpert
+        ? and(
+            eq(expertInquiries.isDeletedByExpert, false),
+            or(
+              eq(expertInquiries.status, "pending"),
+              eq(expertInquiries.status, "in_review"),
+            ),
+          )
+        : and(
             eq(expertInquiries.userId, uid),
-            eq(expertInquiries.status, "answered"),
-            eq(expertInquiries.isReadByUser, false),
-          ),
-        );
-      res.json({ count: rows.length });
-    } catch (e: any) {
+            eq(expertInquiries.isDeletedByUser, false),
+            or(
+              eq(expertInquiries.status, "pending"),
+              eq(expertInquiries.status, "in_review"),
+              and(
+                eq(expertInquiries.status, "answered"),
+                eq(expertInquiries.isReadByUser, false),
+              ),
+            ),
+          );
+      const [row] = await db()
+        .select({ n: sql<number>`count(*)::int` })
+        .from(expertInquiries)
+        .where(where);
+      res.json({ count: row?.n ?? 0 });
+    } catch {
       res.json({ count: 0 }); // 배지는 실패해도 앱 흐름 안 막음
     }
   });

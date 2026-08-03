@@ -13,8 +13,6 @@ import {
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { personaTypeEnum } from "./enums";
-import { users } from "./users";
-import { cities } from "./cities";
 
 // 🎬 일별 지브리 여행영상 상태 (2026-07-22 구현계획) = video_by_day jsonb 값 형
 export interface DayVideo {
@@ -28,14 +26,16 @@ export interface DayVideo {
 }
 
 // User itineraries
+// ⚠️ 수정금지(승인필요) 2026-08-03 §22 검수(사장님 승인) = **외래키를 걸지 않는다** = 라이브 DB 와 동일(§19-4).
+//   라이브 itineraries 에는 FK 가 없다(pkey 뿐). 스키마에만 CASCADE FK 를 적어 두면 훗날 push 한 번에
+//   FK 가 신설되어 도시·사용자 행 삭제가 **여정(영상 자산이 여정번호에 묶임)을 연쇄삭제**하는 시한폭탄이 된다.
 export const itineraries = pgTable("itineraries", {
   id: serial("id").primaryKey(),
-  userId: varchar("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  cityId: integer("city_id")
-    .notNull()
-    .references(() => cities.id, { onDelete: "cascade" }),
+  userId: varchar("user_id").notNull(),
+  // 🏙️ 2026-08-02 사장님 승인 = 저장 시점에 **서버가** 목적지 문자열로 매칭해 채운다(server/city-match.ts).
+  //   nullable 로 바꾼 이유 = NOT NULL 이면 매칭 실패한 여정에도 아무 도시나 억지로 넣어야 한다
+  //   (그렇게 전 여정에 1(파리)이 박혀 있던 것이 이번에 고치는 문제 그 자체). 모르면 비워 둔다 = §1 추측 금지.
+  cityId: integer("city_id"),
   title: text("title").notNull(),
   startDate: timestamp("start_date").notNull(),
   endDate: timestamp("end_date").notNull(),

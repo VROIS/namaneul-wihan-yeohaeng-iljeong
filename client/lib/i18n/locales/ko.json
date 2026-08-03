@@ -310,7 +310,8 @@
     "language": "언어 설정",
     "logout": "로그아웃",
     "savedTrips": "저장된 일정",
-    "noSavedTrips": "저장된 일정이 없습니다"
+    "noSavedTrips": "저장된 일정이 없습니다",
+    "myTripis": "나의 TRIPIS"
   },
   "tab": {
     "plan": "여정",

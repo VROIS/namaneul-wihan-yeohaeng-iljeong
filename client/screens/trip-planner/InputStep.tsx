@@ -1,5 +1,5 @@
 // 입력 화면(InputStep.tsx) = 상단 고정 + DB 도시 동적 버튼 + '누구랑' 및 '누구를 위한' 100% 복원 완료
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { View, Text, Pressable, ScrollView } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import {
@@ -24,9 +24,7 @@ import PlaceAutocompleteWidget, {
 } from "@/components/PlaceAutocompleteWidget";
 import { inputStyles as styles } from "./styles/input";
 import { WebInputModal, NativePicker } from "./components/DateTimePickers";
-import RepresentativeTripShortForm, {
-  CITY_PREVIEW_MAP,
-} from "./components/RepresentativeTripShortForm";
+import TripisModal, { type RepCard } from "@/components/tripis/TripisModal";
 import type { PlannerApi } from "./hooks/useTripPlanner";
 import { apiRequest } from "@/lib/query-client";
 
@@ -55,10 +53,9 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
     handleGenerate,
   } = planner;
 
-  // ⚠️ 초기값을 "Paris" 로 두지 않는다(2026-07-30) = 아무 도시도 안 골랐는데 파리가 뜨던 가짜 표시 방지.
-  const [previewCityName, setPreviewCityName] = useState<string>("");
-  const [previewModalVisible, setPreviewModalVisible] =
-    useState<boolean>(false);
+  // 도시 카드 = 서버가 조립해 준 값 그대로(null = 아직 안 열림). ref = 늦게 온 응답이 새로 고른 도시를 덮지 않게.
+  const [repCard, setRepCard] = useState<RepCard | null>(null);
+  const lastCityRef = useRef<number>(0);
 
   // 🏙️ 도시버튼 목록 = 서버 DB 실측(완비 도시만·완비순). 실패하면 빈 줄 = 가짜 도시 표시 금지.
   //   조회는 이 폴더의 다른 훅들과 같은 apiRequest 1벌(§16) = 주소 조립·오류 처리를 다시 만들지 않는다.
@@ -83,17 +80,28 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
   //   사유: 슬로건이 ShinyPillBanner 로 교체돼 계산값을 쓰는 곳이 0인데도 무한 루프가 화면 진입마다 돌고 있었다.
   //   (이 파일이 500줄 가드 상한에 붙어 다음 수정이 막히던 원인 중 하나)
 
-  // 도시 칩 = 그 도시를 목적지로 잡고, **미리보기가 있을 때만** 모달을 띄운다.
-  //   ⚠️ 미리보기 없는 도시(= 새로 완비된 6번째 도시 등)는 모달을 열지 않는다 = 빈 모달·엉뚱한 파리 카드 방지(2026-07-30 §19).
-  //   그 경우 목적지만 선택된 상태로 남아 사용자가 그대로 여정을 생성할 수 있다.
-  const handleCityPress = (cityNameEn: string) => {
+  // 도시 칩 = 그 도시를 목적지로 잡고 **항상** 카드를 띄운다(2026-08-02 사장님 지시 = 옛 "대표여정 없으면 안 띄움" 폐기 §19).
+  //   대표여정이 없어도 서버가 도시 DB(사진·한 줄 요약·리뷰 상위 3곳)로 채워 내려주므로 카드는 늘 채워져 온다.
+  //   조회 자체가 실패했을 때(네트워크·서버 오류 = apiRequest 가 던짐)만 카드를 열지 않는다 = 폴백이 아니라 오류 처리.
+  const handleCityPress = async (city: ReadyCity) => {
+    lastCityRef.current = city.id;
     setFormData((prev) => ({
       ...prev,
-      destination: cityNameEn,
+      destination: city.nameEn,
     }));
-    if (!CITY_PREVIEW_MAP[cityNameEn]) return;
-    setPreviewCityName(cityNameEn);
-    setPreviewModalVisible(true);
+    try {
+      // 🎙️ 지금 화면 언어를 함께 넘긴다 = 서버가 그 언어의 해설이 창고에 있는지 보고 [해설] 배지를 켠다(2026-08-02).
+      //   언어값은 앱 언어 1벌(i18n.language = 7종 두 글자 코드)에서만 읽는다 = 새 상태를 만들지 않는다(§16).
+      const res = await apiRequest(
+        "GET",
+        `/api/cities/${city.id}/representative?lang=${encodeURIComponent(i18n.language || "ko")}`,
+      );
+      // 그 사이 다른 도시를 눌렀으면 이 응답은 버린다(늦게 온 응답이 새 선택을 덮지 않게)
+      if (lastCityRef.current !== city.id) return;
+      setRepCard(await res.json());
+    } catch (e) {
+      console.error("[InputStep] 도시 카드 조회 실패:", e);
+    }
   };
 
   const renderSectionHeader = (title: string, subtitle: string) => (
@@ -195,7 +203,7 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
                     gap: 5,
                     ...Shadows.card,
                   }}
-                  onPress={() => handleCityPress(city.nameEn)}
+                  onPress={() => handleCityPress(city)}
                   // 칩 높이가 약 30px 이라 손가락 기준(iOS 44 / 안드로이드 48)에 못 미친다 → 픽셀은 그대로 두고 누를 수 있는 범위만 넓힘
                   hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
                   accessibilityRole="button"
@@ -641,17 +649,11 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
         </Pressable>
       </ScrollView>
 
-      {/* 🏙️ 도시별 대표여정 숏폼 모달 */}
-      <RepresentativeTripShortForm
-        visible={previewModalVisible}
-        cityName={previewCityName}
-        onClose={() => setPreviewModalVisible(false)}
-        onSelectCity={(cityNameEn) => {
-          setFormData((prev) => ({
-            ...prev,
-            destination: cityNameEn,
-          }));
-        }}
+      {/* 🏙️ 도시 카드 = TRIPIS 통합 모달 1벌(§16). ▶ 배지를 누르면 같은 모달이 대표 숏폼 재생으로 바뀐다 */}
+      <TripisModal
+        visible={repCard !== null}
+        params={repCard ? { mode: "city", rep: repCard } : null}
+        onClose={() => setRepCard(null)}
       />
 
       <WebInputModal planner={planner} />

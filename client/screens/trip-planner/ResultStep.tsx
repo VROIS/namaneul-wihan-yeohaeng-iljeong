@@ -1,5 +1,5 @@
 // 결과 화면(Result step = 헤더·요약·지도·Day목록·전문가푸터·iOS숙소모달·AI의견시트) = TripPlannerScreen 분리(2026-07-15 §0 슬림화, 순수 이동)
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -19,6 +19,8 @@ import ItineraryMap from "@/components/ItineraryMap";
 import PlaceAutocompleteWidget, {
   type PlaceAutoSelection as PlaceSelection,
 } from "@/components/PlaceAutocompleteWidget";
+// 🎬 2026-08-01 사장님 §B-0 = 영상 진입점은 통합 모달 1벌(TripisModal). 옛 전용 화면 이동 폐기 §19.
+import TripisModal from "@/components/tripis/TripisModal";
 import { shortDate } from "./utils";
 import CrisisAlertBanner from "./components/CrisisAlertBanner";
 import DaySection from "./components/DaySection";
@@ -43,7 +45,6 @@ export default function ResultStep({ planner }: { planner: PlannerApi }) {
     handleSaveItinerary,
     currentItineraryId,
     restoredTrip,
-    navigation,
     formData,
     dayAccommodations,
     hotelModalDay,
@@ -61,6 +62,9 @@ export default function ResultStep({ planner }: { planner: PlannerApi }) {
     selectedSlotId,
     setSelectedSlotId,
   } = planner;
+
+  // 🎬 통합 모달 열림 상태 = 이 화면 위에 그대로 뜬다(화면 이동 없음, §B-0).
+  const [tripisOpen, setTripisOpen] = useState(false);
 
   if (!itinerary) return null;
 
@@ -85,15 +89,16 @@ export default function ResultStep({ planner }: { planner: PlannerApi }) {
           {itinerary.destination}
         </Text>
         {/* 🎬 2026-07-22 사장님 SSOT = 신규 여정 = 💾 저장버튼 원래 기능 그대로(저장 후에도 유지).
-            프로필 카드로 복원한 저장 여정에서만 = 저장버튼 자리가 영상 생성 버튼으로 전환("이 여정을 영상으로 봐야지" 내비게이션). */}
+            프로필 카드로 복원한 저장 여정에서만 = 저장버튼 자리가 영상 버튼으로 전환.
+            2026-08-01 §B-0 = 영상 버튼 = 통합 모달을 이 화면 위에 연다(화면 이동 없음).
+            ⚠️ [대표 올리기] = 프로필 '나의 여정' 카드로 이관 = 2026-08-02 사장님 지시 §19(여기서는 완전삭제). */}
         {restoredTrip && currentItineraryId ? (
           <Pressable
             style={styles.headerButton}
-            onPress={() =>
-              (navigation as any).navigate("VideoPreview", {
-                itineraryId: currentItineraryId,
-              })
-            }
+            onPress={() => setTripisOpen(true)}
+            // 아이콘뿐인 버튼 = 스크린리더용 이름 필수(2026-08-03 §22 판단검증)
+            accessibilityRole="button"
+            accessibilityLabel="영상"
           >
             <Icon name="film" size={22} color={Brand.primary} />
           </Pressable>
@@ -465,6 +470,17 @@ export default function ResultStep({ planner }: { planner: PlannerApi }) {
           </View>
         </Modal>
       )}
+
+      {/* 🎬 통합 모달 = 껍데기 1벌(§B-0). 닫으면 params=null 이라 렌더 자체가 끝난다(폴링·재생 중단). */}
+      <TripisModal
+        visible={tripisOpen}
+        params={
+          currentItineraryId
+            ? { mode: "itinerary", itineraryId: currentItineraryId }
+            : null
+        }
+        onClose={() => setTripisOpen(false)}
+      />
 
       <AiOpinionSheet planner={planner} />
     </View>

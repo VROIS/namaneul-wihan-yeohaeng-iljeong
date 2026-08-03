@@ -243,7 +243,8 @@
     "language": "Language Settings",
     "logout": "Logout",
     "savedTrips": "Saved Itineraries",
-    "noSavedTrips": "No saved itineraries"
+    "noSavedTrips": "No saved itineraries",
+    "myTripis": "My TRIPIS"
   },
   "tab": {
     "plan": "Plan",

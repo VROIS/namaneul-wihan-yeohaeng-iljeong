@@ -243,7 +243,8 @@
     "language": "言語設定",
     "logout": "ログアウト",
     "savedTrips": "保存した日程",
-    "noSavedTrips": "保存した日程はありません"
+    "noSavedTrips": "保存した日程はありません",
+    "myTripis": "マイ TRIPIS"
   },
   "tab": {
     "plan": "プラン",

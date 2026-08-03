@@ -1,6 +1,6 @@
 // 프로필 화면 핵심 훅 = 상태·효과·핸들러 = ProfileScreen 분리(2026-07-15 §0 슬림화, 순수 이동)
 import { useState, useCallback, useEffect, useRef } from "react";
-import { useColorScheme, Platform } from "react-native";
+import { useColorScheme, Platform, Alert } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -210,6 +210,31 @@ export function useProfile() {
     }
   };
 
+  // 🏆 대표 올리기(관리자 전용) = 2026-08-02 사장님 지시로 여정 결과화면에서 **이 화면으로 이관**(§19 = 저쪽은 완전삭제).
+  //   관리자 판정 = 전역 계정 1벌의 role 만 본다(§9 표7 = 아이디 문자열·is_admin 으로 판단 금지).
+  const isAdmin = authUser?.role === "admin";
+  // 지금 대표로 올리는 중인 여정 번호 = 그 카드의 별만 스피너가 된다. null = 없음.
+  const [promotingTripId, setPromotingTripId] = useState<number | null>(null);
+
+  // 🏆 POST /api/itineraries/:id/representative 1벌 호출(2026-08-01 만든 라우트 그대로 = §16 재발명 0).
+  //   같은 도시의 옛 대표를 내리는 일은 **서버 트랜잭션이 이미 한다** = 화면에서 따로 내리지 않는다(§0 = 로직 1벌).
+  //   성공하면 목록만 다시 읽는다 = 어느 카드가 대표인지는 서버가 준 status 가 정한다(화면이 지어내지 않음).
+  //   ⚠️ 실패하면 **서버가 준 사유를 그대로** 보여준다(뭉개서 "다시 시도" 금지 = 2026-07-31 사장님 지시).
+  //     apiRequest 는 실패를 `"<상태코드>: <응답본문>"` 문자열로 던지므로 본문의 error 값을 꺼낸다.
+  const handleSetRepresentative = async (id: number) => {
+    setPromotingTripId(id);
+    try {
+      await apiRequest("POST", `/api/itineraries/${id}/representative`);
+      await loadTrips();
+    } catch (e: any) {
+      const message = String(e?.message || "");
+      const reason = message.match(/"error"\s*:\s*"([^"]*)"/)?.[1] || message;
+      Alert.alert("대표 올리기 실패", reason);
+    } finally {
+      if (mountedRef.current) setPromotingTripId(null);
+    }
+  };
+
   const handleLanguageChange = async (code: string) => {
     await changeLanguageAndPersist(code);
     setShowLanguageModal(false);
@@ -281,9 +306,16 @@ export function useProfile() {
     isLoadingTrips,
     user: authUser,
     isAuth: isAuthed,
+    // 계정 확정 여부 = 저장소 첫 조회가 끝났는지. 계정별로 기기에 기억해 둔 값을 읽는 화면이
+    // 확정 전에 '비로그인'으로 착각해 엉뚱한 목록을 읽지 않도록 그대로 넘겨준다(2026-08-02).
+    authReady,
     showLanguageModal,
     setShowLanguageModal,
     handleDeleteTrip,
+    // 🏆 대표 올리기(관리자 전용) = '나의 여정' 카드가 쓴다
+    isAdmin,
+    promotingTripId,
+    handleSetRepresentative,
     handleLanguageChange,
     handleLogout,
     currentLang,

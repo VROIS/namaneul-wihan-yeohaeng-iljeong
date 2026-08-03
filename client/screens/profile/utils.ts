@@ -14,6 +14,9 @@ export interface SavedItinerary {
   companionCount: number;
   vibes: string[];
   travelPace: string;
+  // 🏆 2026-08-02 = 대표 여정 표시용. 'representative' 면 그 도시 카드에 걸린 것(서버가 정하는 값 = 화면은 읽기만).
+  //   목록 API(GET /api/users/:id/itineraries)가 행 전체를 내려주므로 이미 오고 있던 값이다(새 조회 0).
+  status?: string;
   // 🎬 2026-07-22 일별 지브리영상 = video_by_day 컬럼 (옛 단일 videoStatus/videoUrl 폐기 = 구현계획 §19)
   videoByDay?: Record<string, { status?: string; url?: string | null }>;
   // 🗂️ 2026-07-03 = 목록 API가 SELECT * = rawData 포함(storage.getUserItineraries). 카드 4요소(도시·기간·예산·요약)용.

@@ -100,9 +100,10 @@ export function useSaveItinerary({
       };
 
       // 일정 데이터 구성
+      // ⚠️ 2026-08-02 사장님 지시 = 도시 id 는 화면이 보내지 않는다(하드코딩 1 완전삭제 §19).
+      //   서버가 저장 시점에 목적지 이름으로 도시를 찾아 채운다(server/city-match.ts 1벌 = §16).
       const saveData = {
         userId: userData.id,
-        cityId: 1, // TODO: 도시 ID 동적 매핑
         title: `${itinerary.destination} ${t("profile.trips")}`,
         startDate: itinerary.startDate,
         endDate: itinerary.endDate,

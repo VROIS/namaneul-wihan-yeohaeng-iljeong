@@ -4,9 +4,20 @@
 // 보관함 → WebView showArchivePage 전달
 // 라이브/여행비서 → 준비 중 음성 안내
 import React, { useState, useCallback } from 'react';
-import { View, ActivityIndicator } from 'react-native';
+import {
+  View,
+  Text,
+  ActivityIndicator,
+  Modal,
+  Pressable,
+  TextInput,
+  StyleSheet,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import * as Speech from 'expo-speech';
 import * as Location from 'expo-location';
 // expo-speech-recognition = 네이티브 전용 (Expo Go 미지원) → 안전 로드
@@ -32,6 +43,17 @@ import { useStore } from '../state/store';
 import { theme } from '../styles/theme';
 import { CONFIG } from '../config/constants';
 import { getTTSLanguage } from '../services/PromptService';
+// 관리자 판정 = 저장된 계정 1벌. 도시 카드 [해설 만들기](CityCardScreen.tsx) 와 완전히 같은 방식(§16 재발명 금지).
+import { getUserData } from '@/lib/auth';
+import { Icon } from '@/components/Icon';
+import {
+  Brand,
+  Colors,
+  Fonts,
+  BorderRadius,
+  Spacing,
+  Shadows,
+} from '@/constants/theme';
 
 // ⚠️ 수정금지(승인필요): debounce — 기존 index.js:537-550 debounceClick 클론
 const debounceMap = new Map();
@@ -58,6 +80,27 @@ export default function MainCameraScreen({ onNavigateToWebView, onInjectJS, lang
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [isListening, setIsListening] = useState(false);
+
+  // ⚠️ 2026-08-02 사장님 지시 = [업로드] 는 **관리자에게만** 갈림길을 띄운다.
+  //   일반 사용자는 종전 그대로 곧장 갤러리가 열린다 = 이 화면의 다른 동작은 하나도 바뀌지 않는다.
+  const [isAdmin, setIsAdmin] = useState(false);
+  // 창 단계 = null(안 뜸) | 'pick'(무엇으로) | 'number'(장소번호 입력).
+  //   창은 **하나**만 쓴다 = iOS 는 창을 겹쳐 띄우면 뒤 창이 안 뜬다(§8·§11 공식 동작).
+  const [sourceStep, setSourceStep] = useState(null);
+  const [placeIdText, setPlaceIdText] = useState('');
+
+  // 관리자 여부 = 저장된 계정의 role 1벌. 아이디 문자열·is_admin 으로 판단하지 않는다(§9 표7).
+  React.useEffect(() => {
+    let alive = true;
+    getUserData()
+      .then((u) => {
+        if (alive) setIsAdmin(u?.role === 'admin');
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   // ⚠️ 수정금지(승인필요): 오디오 정리 헬퍼 — TTS/STT/상태 일괄 중지
   const stopAllAudio = useCallback(() => {
@@ -161,10 +204,18 @@ export default function MainCameraScreen({ onNavigateToWebView, onInjectJS, lang
       // #15 기기 갤러리 열기
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
-        base64: true,
-        quality: 0.8,
+        quality: 1,
       });
-      if (result.canceled || !result.assets?.[0]?.base64) return;
+      if (result.canceled || !result.assets?.[0]?.uri) return;
+
+      // #15-1 다이얼 = CONFIG.IMAGE 1벌(2026-08-01 사장님 선택 800px/0.7).
+      //   옛날엔 리사이즈 없이 갤러리 원본을 통째로 저장 = 장당 수백 KB 들어가던 근본 원인.
+      const optimized = await ImageManipulator.manipulateAsync(
+        result.assets[0].uri,
+        [{ resize: { width: CONFIG.IMAGE.MAX_PX } }],
+        { compress: CONFIG.IMAGE.QUALITY, format: ImageManipulator.SaveFormat.JPEG, base64: true },
+      );
+      if (!optimized.base64) return;
 
       // #16 크레딧 체크
       const canProceed = await checkUsageLimit();
@@ -181,7 +232,7 @@ export default function MainCameraScreen({ onNavigateToWebView, onInjectJS, lang
 
       // #18 WebView 전달 → processImageFromNative → 이후 촬영과 동일
       if (onNavigateToWebView) {
-        onNavigateToWebView('detail', { imageBase64: result.assets[0].base64 });
+        onNavigateToWebView('detail', { imageBase64: optimized.base64 });
       }
     } catch (e) {
       console.error('[업로드 오류]', e.message);
@@ -191,6 +242,34 @@ export default function MainCameraScreen({ onNavigateToWebView, onInjectJS, lang
       setActiveFeature(null);
     }
   }, [isProcessing, checkUsageLimit, sendGPSToWebView, onNavigateToWebView, speak, setActiveFeature]);
+
+  // ═══════════════════════════════════════════════
+  // 장소번호로 만들기 — 관리자 전용 (2026-08-02 사장님 지시)
+  // 우리 DB 장소번호(place_seed_raw.id)만 넘긴다 = 그 뒤 흐름(창고 조회 → 없으면 생성 → 자동 저장)은
+  // 해설 화면의 완성된 1벌이 그대로 한다(§16). 사진·GPS·랜드마크는 이 경로에 아예 없다.
+  // 크레딧은 이 화면에서 재지 않는다 = 차감은 서버 chargeFeature 1벌(§9). 화면이 또 재면 두 벌이 된다.
+  // ═══════════════════════════════════════════════
+  const placeIdValue = /^[0-9]+$/.test(placeIdText) ? Number(placeIdText) : 0;
+
+  const handlePlaceIdConfirm = useCallback(() => {
+    if (placeIdValue <= 0) return;
+    setSourceStep(null);
+    setPlaceIdText('');
+    if (onNavigateToWebView) {
+      onNavigateToWebView('detail', { placeId: placeIdValue });
+    }
+  }, [placeIdValue, onNavigateToWebView]);
+
+  // [업로드] 입구 = 관리자면 갈림길, 아니면 종전 handleUpload 를 **그대로** 부른다(코드 이동 없음 = 회귀 0).
+  const handleUploadPress = useCallback(() => {
+    if (isProcessing) return;
+    if (isAdmin) {
+      setPlaceIdText('');
+      setSourceStep('pick');
+      return;
+    }
+    handleUpload();
+  }, [isProcessing, isAdmin, handleUpload]);
 
   // ⚠️ 수정금지(승인필요): 언마운트 시 마이크 타임아웃 정리 (메모리 누수 방지)
   React.useEffect(() => {
@@ -317,7 +396,7 @@ export default function MainCameraScreen({ onNavigateToWebView, onInjectJS, lang
         debounceClick('capture', () => handleCapture(), 300);
         break;
       case 'upload':
-        handleUpload();
+        handleUploadPress();
         break;
       case 'assistant':
         handleAssistant();
@@ -326,7 +405,7 @@ export default function MainCameraScreen({ onNavigateToWebView, onInjectJS, lang
         debounceClick('archive', () => handleArchive(), 300);
         break;
     }
-  }, [handleLive, handleCapture, handleUpload, handleAssistant, handleArchive]);
+  }, [handleLive, handleCapture, handleUploadPress, handleAssistant, handleArchive]);
 
   return (
     <View style={theme.container}>
@@ -347,6 +426,157 @@ export default function MainCameraScreen({ onNavigateToWebView, onInjectJS, lang
 
       {/* 5개 버튼 Footer */}
       <FooterButtons onPress={handleButtonPress} isProcessing={isProcessing} />
+
+      {/* ⚠️ 2026-08-02 사장님 지시 = 관리자 전용 갈림길. [업로드] 를 누른 관리자에게만 뜬다.
+          일반 사용자는 sourceStep 이 영영 null = 이 창이 존재하지 않는 것과 같다. */}
+      <Modal
+        visible={sourceStep !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setSourceStep(null)}
+      >
+        <View style={pickerStyles.backdrop}>
+          {/* 바깥을 누르면 닫힘 = 카드 뒤에 깔린 판. 카드 위 터치는 카드가 먹는다. */}
+          <Pressable
+            style={StyleSheet.absoluteFill}
+            onPress={() => setSourceStep(null)}
+            accessibilityLabel="닫기"
+          />
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={pickerStyles.cardWrap}
+          >
+            <View style={pickerStyles.card}>
+              {sourceStep === 'pick' ? (
+                <>
+                  <Text style={pickerStyles.title}>무엇으로 만들까요</Text>
+                  <View style={pickerStyles.row}>
+                    <Pressable
+                      style={[pickerStyles.btn, pickerStyles.btnPrimary]}
+                      onPress={() => {
+                        setSourceStep(null);
+                        handleUpload();
+                      }}
+                    >
+                      <Icon name="camera" size={18} color="#FFFFFF" />
+                      <Text style={[pickerStyles.btnText, pickerStyles.btnTextPrimary]}>
+                        내 기기
+                      </Text>
+                    </Pressable>
+                    <Pressable
+                      style={[pickerStyles.btn, pickerStyles.btnGhost]}
+                      onPress={() => setSourceStep('number')}
+                    >
+                      <Icon name="tag" size={18} color={Colors.light.text} />
+                      <Text style={pickerStyles.btnText}>장소번호</Text>
+                    </Pressable>
+                  </View>
+                </>
+              ) : (
+                <>
+                  <Text style={pickerStyles.title}>장소번호</Text>
+                  <TextInput
+                    style={pickerStyles.input}
+                    value={placeIdText}
+                    onChangeText={(v) => setPlaceIdText(v.replace(/[^0-9]/g, '').slice(0, 8))}
+                    keyboardType="number-pad"
+                    placeholder="0000"
+                    placeholderTextColor={Colors.light.textTertiary}
+                    autoFocus
+                    maxLength={8}
+                    onSubmitEditing={handlePlaceIdConfirm}
+                  />
+                  <View style={pickerStyles.row}>
+                    <Pressable
+                      style={[pickerStyles.btn, pickerStyles.btnGhost]}
+                      onPress={() => setSourceStep(null)}
+                    >
+                      <Icon name="x" size={18} color={Colors.light.text} />
+                      <Text style={pickerStyles.btnText}>닫기</Text>
+                    </Pressable>
+                    {/* 빈 값·0·숫자 아님 = 만들기 꺼짐 (placeIdValue 0) */}
+                    <Pressable
+                      style={[
+                        pickerStyles.btn,
+                        placeIdValue > 0 ? pickerStyles.btnPrimary : pickerStyles.btnDisabled,
+                      ]}
+                      onPress={handlePlaceIdConfirm}
+                      disabled={placeIdValue <= 0}
+                    >
+                      <Icon name="check" size={18} color="#FFFFFF" />
+                      <Text style={[pickerStyles.btnText, pickerStyles.btnTextPrimary]}>
+                        만들기
+                      </Text>
+                    </Pressable>
+                  </View>
+                </>
+              )}
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
     </View>
   );
 }
+
+// ⚠️ 2026-08-02 = 관리자 전용 갈림길 창 스타일. 앱 톤(글라스 미니멀리즘 = 둥근 모서리 + 낮은 대비 그림자) 그대로.
+//   색·둥글기·간격 = 전부 @/constants/theme 토큰 = 새 색을 만들지 않는다(사장님 톤앤매너 유지).
+//   카메라(어두움) 위에 뜨므로 배경은 반투명 어둡게 + 카드만 밝게 = 미니앱 다른 창과 충돌 없음.
+const pickerStyles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: Spacing.xl,
+  },
+  cardWrap: {
+    width: '100%',
+    maxWidth: 340,
+  },
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: BorderRadius.xl,
+    paddingVertical: Spacing.xl,
+    paddingHorizontal: Spacing.lg,
+    ...Shadows.elevated,
+  },
+  title: {
+    fontFamily: Fonts.semiBold,
+    fontSize: 17,
+    color: Colors.light.text,
+    textAlign: 'center',
+    marginBottom: Spacing.lg,
+  },
+  input: {
+    height: Spacing.inputHeight,
+    borderWidth: 1,
+    borderColor: Colors.light.border,
+    borderRadius: BorderRadius.sm,
+    backgroundColor: Colors.light.backgroundDefault,
+    paddingHorizontal: Spacing.lg,
+    fontFamily: Fonts.medium,
+    fontSize: 18,
+    color: Colors.light.text,
+    textAlign: 'center',
+    marginBottom: Spacing.lg,
+  },
+  row: {
+    flexDirection: 'row',
+    gap: Spacing.md,
+  },
+  btn: {
+    flex: 1,
+    height: Spacing.buttonHeight,
+    borderRadius: BorderRadius.sm,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+  btnPrimary: { backgroundColor: Brand.primary },
+  btnGhost: { backgroundColor: Colors.light.backgroundSecondary },
+  btnDisabled: { backgroundColor: Colors.light.textTertiary },
+  btnText: { fontFamily: Fonts.medium, fontSize: 15, color: Colors.light.text },
+  btnTextPrimary: { color: '#FFFFFF' },
+});
