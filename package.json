@@ -38,6 +38,7 @@
     "ios": "expo run:ios"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1102.0",
     "@expo-google-fonts/noto-serif-kr": "^0.4.3",
     "@expo-google-fonts/playfair-display": "^0.4.2",
     "@expo-google-fonts/space-grotesk": "^0.4.1",
