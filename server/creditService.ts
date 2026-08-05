@@ -16,8 +16,12 @@ import { eq, desc, sql, and, like } from "drizzle-orm";
 import { notificationService } from "./notificationService";
 
 export const CREDIT_CONFIG = {
-  // 🎁 2026-08-05 사장님 SSOT = 신규 가입 100 크레딧(140에서 조정, §9 갱신)
-  SIGNUP_BONUS: 100,
+  // 🎁 2026-08-05 사장님 SSOT = 신규 가입 **50** 크레딧.
+  //   사유(사장님): 영상 생성 원가를 감당 못 한다. 보너스가 60 이상이면 신규 가입자가
+  //   **일별 영상(60크레딧 = 최대 10씬 × $0.35 ≈ $3.5)을 공짜로** 만들 수 있다.
+  //   50 = 영상은 충전해야만 가능 / 여정생성·AI의견·해설(각 5)·전문가검증(10)은 맛볼 수 있는 선.
+  //   옛 140 → 100 → 50 (앞의 두 값 폐기 §19).
+  SIGNUP_BONUS: 50,
   PURCHASE_CREDITS: 140,
   PURCHASE_BONUS: 40,
   DETAIL_PAGE_COST: 2,
