@@ -65,6 +65,10 @@
     "yearInvalid": "年份无效",
     "adultOnly": "仅限18岁及以上用户使用"
   },
+  "credit": {
+    "shortTitle": "积分不足",
+    "goCharge": "去充值"
+  },
   "trip": {
     "destination": "目的地",
     "destinationPlaceholder": "例如：巴黎、佛罗伦萨、法国南部",

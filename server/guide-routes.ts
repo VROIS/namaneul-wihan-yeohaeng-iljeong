@@ -26,6 +26,7 @@ import { buildPlaceHintHeader } from "./services/shared/place-hint-header"; // �
 import { getUserIdFromReq } from "./auth-user"; // Bearer → userId 단일 관문(2026-07-29 §16, 이 파일 사본 삭제 §19)
 import { nearestCityIdByCoords } from "./city-match"; // 좌표 → 최근접 도시 단일 관문(2026-08-02 §16)
 import { chargeFeature } from "./credit-charge"; // 크레딧 차감 단일 관문(2026-07-29 §9)
+import { isCityRepresentativePlace } from "./services/shared/city-representative-place"; // 도시 대표장소=맛보기 무료 판정 1벌(2026-08-05 §16)
 
 // ⚠️ db 는 DB 미연결 시 null 가능(server/db.ts) = 라우트 진입 시 확정(bts-routes 패턴). null 이면 throw → 각 라우트 catch 가 503.
 function getDb() {
@@ -67,10 +68,17 @@ export function registerGuideRoutes(app: Express): void {
         });
       }
 
+      // 🔒 수정금지(승인필요) 2026-08-05 사장님 SSOT = **해설 새로 만들기 = 로그인 필수**.
+      //   사유(실측): chargeFeature 는 비로그인을 차감 없이 통과시키므로(credit-charge.ts = §9 게스트 개방),
+      //   이 줄이 없으면 토큰 없는 요청이 유료 Gemini 를 그대로 태운다(무과금 = 회사 지출).
+      //   ⚠️ 창고 조회(GET /api/guide/place-guide)는 **열어 둔다** = 이미 만들어 둔 해설을 그대로 내주는
+      //   외부호출 0 경로이고, 도시 대표카드의 미가입 맛보기(사장님 2026-08-05)가 그 경로를 쓴다.
+      const requesterId = getUserIdFromReq(req);
+      if (!requesterId) return res.status(401).json({ error: "로그인 필요" });
+
       // 🪙 Tripis 해설 5크레딧 차감 (2026-07-29 §9).
       //   ⚠️ 반드시 아래 setHeader/write **전에** 있어야 한다 = 헤더가 나가면 잔액부족(402)을 보낼 수 없다.
-      if (!(await chargeFeature(res, getUserIdFromReq(req), "guide_explain")))
-        return;
+      if (!(await chargeFeature(res, requesterId, "guide_explain"))) return;
 
       res.setHeader("Content-Type", "text/plain; charset=utf-8");
       res.setHeader("Transfer-Encoding", "chunked");
@@ -311,7 +319,13 @@ export function registerGuideRoutes(app: Express): void {
         }
       }
       // 🪙 차감 = 내 것이 아닐 때만(볼 때마다 5, 사장님 확정). res.json 보다 먼저(§9 표4).
-      if (!mine) {
+      //   ⚠️ 수정금지(승인필요) 2026-08-05 사장님 SSOT = **도시 대표장소 해설 = 맛보기 = 조건 없이 무료.**
+      //     사유(사장님 실측): 도시 카드의 [해설]은 대표 이미지 1장짜리 **샘플**인데, 옛 코드는 비로그인만
+      //     우연히 공짜였고(§9 게스트 통과) **로그인하면 5가 깎였다** = 로그인할수록 손해인 앞뒤 안 맞는 상태.
+      //     판정은 서버가 단독으로 한다(city-representative-place 1벌) = 화면이 무엇을 보내도 흉내낼 수 없다.
+      //     ⚠️ requester 를 먼저 본다 = 비로그인은 어차피 무과금(chargeFeature)이라 대표장소 판정(조회 2회)이
+      //       순수 낭비다. 도시카드 맛보기가 가장 잦은 경로라 그 길에서 0회가 된다.
+      if (!mine && requester && !(await isCityRepresentativePlace(placeId))) {
         if (!(await chargeFeature(res, requester, "guide_explain"))) return;
       }
 

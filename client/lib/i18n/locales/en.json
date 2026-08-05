@@ -65,6 +65,10 @@
     "yearInvalid": "Invalid year",
     "adultOnly": "Only available for ages 18 and above"
   },
+  "credit": {
+    "shortTitle": "Low Credits",
+    "goCharge": "Recharge"
+  },
   "trip": {
     "destination": "Destination",
     "destinationPlaceholder": "e.g. Paris, Florence, South of France",

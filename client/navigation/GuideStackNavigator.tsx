@@ -24,8 +24,15 @@ import { fetch as expoFetch } from "expo/fetch";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as Location from "expo-location";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "react-i18next";
 // 아이콘 = 운영 SVG 직접 렌더 = iOS Expo Go 에서 Ionicons 미표시 근본 해결(2026-07-20 실기기 SSOT).
 import GuideIconJs from "@/screens/guide/components/GuideIcons";
+// ⚠️ 수정금지(승인필요) 2026-08-05 사장님 SSOT = 크레딧부족 공용 헬퍼(§16 5곳 공용).
+import {
+  parseCreditShortfall,
+  showCreditShortfallAlert,
+  type CreditShortfall,
+} from "@/lib/creditError";
 
 // 레거시 모듈은 JS(무타입) = allowJs 로 import.
 //   = JS 기본값 추론(never[]·필수화)과 충돌하므로 ComponentType<any> 로 배선(타입만, 동작 무관).
@@ -224,6 +231,15 @@ function GuideResultHost({
   navigation,
 }: NativeStackScreenProps<GuideStackParamList, "GuideResult">) {
   const { imageBase64, placeId, lang = "ko" } = route.params;
+  const { t } = useTranslation();
+  // ⚠️ 수정금지(승인필요) 2026-08-05 = 이 화면은 **루트 스택 fullScreenModal**(가이드 미니앱) 안이다
+  //   (RootStackNavigator.tsx:198). 충전 화면으로 보내려면 **미니앱을 먼저 닫아야** 한다:
+  //   · 안 닫고 navigate 하면 = StackRouter 의 NAVIGATE 는 pop 표시가 없으면 기존 Main 을 찾지 않고
+  //     **새로 push** 한다(routers/src/StackRouter.tsx:371-382 소스 확인) → [Main, 미니앱, Main] = 메인 두 벌
+  //     = RootStackNavigator.tsx:185-187 이 기록한 사고(여정 화면 두 벌이 전역 슬롯을 서로 지움).
+  //   · 닫을 때 이 화면의 goBack 을 쓰면 안 된다 = navigation prop 은 **가이드 스택**의 것이라,
+  //     카메라로 들어온 경우 스택이 [GuideCamera, GuideResult](initialRouteName="GuideCamera", :606)라서
+  //     카메라로 돌아갈 뿐 미니앱은 그대로 남는다. → **루트를 직접 지목**(getParent)해서 닫는다.
   const [sentences, setSentences] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingText, setLoadingText] = useState(
@@ -313,6 +329,8 @@ function GuideResultHost({
     (async () => {
       // 🪙 서버가 준 실패 사유(잔액부족 등) = 화면에서 뭉개지 않고 그대로 보여준다(2026-07-31 사장님 SSOT).
       let failMsg: string | null = null;
+      // ⚠️ 수정금지(승인필요) 2026-08-05 사장님 SSOT = 크레딧부족이면 해설칸 텍스트 대신 공용 Alert+충전이동(§16).
+      let creditShortfall: CreditShortfall | null = null;
       try {
         // 로그인 토큰 = 아래 **창고 조회·해설 생성 둘 다 차감 지점**이라 먼저 확보한다.
         //   토큰이 없으면 서버가 "비로그인=무과금"으로 보고 영구 무료가 된다(§22 실측 지적).
@@ -334,6 +352,7 @@ function GuideResultHost({
           if (wr.status === 402) {
             const wd = await wr.json().catch(() => null);
             failMsg = String(wd?.message || "크레딧이 부족합니다.");
+            creditShortfall = parseCreditShortfall(wd);
             throw new Error(failMsg);
           }
           if (wr.status === 200) {
@@ -429,6 +448,7 @@ function GuideResultHost({
         if (resp.status === 402) {
           const d = await resp.json().catch(() => null);
           failMsg = String(d?.message || "크레딧이 부족합니다.");
+          creditShortfall = parseCreditShortfall(d);
           throw new Error(failMsg);
         }
         if (!resp.ok || !resp.body)
@@ -493,6 +513,10 @@ function GuideResultHost({
         if (alive) {
           setLoading(false);
           setDone(true);
+          // ⚠️ 수정금지(승인필요) 2026-08-05 = 실패 사유는 **언제나** 화면에 남긴다(2026-07-31 SSOT = 서버가 준 사유를 뭉개지 마라).
+          //   크레딧부족이면 그 위에 공용 Alert+충전이동을 얹는다(§16 5곳 공용).
+          //   ⚠️ 크레딧부족을 else 로 가르면 안 된다 = 안드로이드는 Alert 을 뒤로가기로 닫을 수 있어
+          //     (cancelable 기본 true) 본문이 비어 있으면 **빈 해설칸만 남는다**(§22 판단검증이 잡음).
           setSentences((prev) =>
             prev.length
               ? prev
@@ -501,6 +525,12 @@ function GuideResultHost({
                     "해설을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.",
                 ],
           );
+          if (creditShortfall) {
+            // 미니앱을 **루트에서** 먼저 닫고(어느 진입경로든 확실) → 그 다음 프로필.
+            showCreditShortfallAlert(navigation, creditShortfall, t, () =>
+              navigation.getParent()?.goBack(),
+            );
+          }
         }
       }
     })();

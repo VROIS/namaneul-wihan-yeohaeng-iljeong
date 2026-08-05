@@ -169,7 +169,7 @@ async function findOrCreateUser(params: {
     planType: "free",
   });
 
-  // ⚠️ 수정금지(승인필요) — 가입 보너스 140 크레딧 (2026-07-29 사장님 SSOT = CLAUDE.md §9 유지).
+  // ⚠️ 수정금지(승인필요) — 가입 보너스 100 크레딧(2026-08-05 조정 = CLAUDE.md §9, 금액은 CREDIT_CONFIG.SIGNUP_BONUS 1벌).
   //   여기가 **신규 계정이 만들어지는 유일한 지점**(구글·카카오·왓츠앱·이메일 전부 이 함수로 모임) = 보너스도 여기 1벌(§0·§16).
   //   grantSignupBonus 는 자체적으로 중복 지급을 막으므로(기존 signup_bonus 줄 확인) 두 번 불려도 안전하다.
   //   ⚠️ try/catch 필수 = 위 linkProvider(:52-58)와 같은 취지. 보너스 지급이 실패해도 **로그인 자체는 성공해야** 한다.

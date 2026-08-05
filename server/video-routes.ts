@@ -143,6 +143,14 @@ export function registerVideoRoutes(app: Express): void {
         //   응답 후 백그라운드에서는 req 를 다시 읽을 수 없으므로 여기서 잡아 둔다. 비로그인(게스트) = null = 게시 없음.
         const requesterUserId = getUserIdFromReq(req);
 
+        // 🔒 수정금지(승인필요) 2026-08-05 사장님 SSOT = 영상 만들기 = **로그인 필수**.
+        //   사유(실측): chargeFeature 는 비로그인을 차감 없이 통과시키므로(credit-charge.ts = §9 게스트 개방),
+        //   이 줄이 없으면 토큰 없는 요청도 렌더가 돌아 1건당 최대 10씬 × $0.35 ≈ $3.5 를 회사가 부담한다.
+        //   게다가 신청자가 null 이라 자동게시도 안 되어 **아무도 못 보는 영상에 돈만 나간다.**
+        //   같은 파일의 저장·목록·열람(:379 등)이 이미 쓰는 문장 1벌.
+        if (!requesterUserId)
+          return res.status(401).json({ error: "로그인 필요" });
+
         // 🪙 일별 영상 60크레딧 차감 (2026-07-29 §9 = A안·B안 동일 단가).
         //   자리 이유 = 위 409 중복가드를 통과한 뒤 · 아래 "생성 중" 기록 **앞**.
         //   차감이 실패했는데 status 를 processing 으로 적으면 "영원히 생성 중" 좀비가 남는다.

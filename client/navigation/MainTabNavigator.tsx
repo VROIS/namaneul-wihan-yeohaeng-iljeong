@@ -154,6 +154,15 @@ export default function MainTabNavigator() {
     };
   }, [authChangedAt]);
 
+  // ⚠️ 수정금지(승인필요) 2026-08-05 사장님 SSOT = [전문가 검증] 탭 **열림 조건 1벌**.
+  //   이 값을 아이콘 색과 아래 tabPress 가 **같이** 본다 = 조건을 두 벌로 적으면 한쪽만 고쳤을 때
+  //   "회색인데 눌리거나 파란데 안 눌리는" 오신호가 난다(§0 = 같은 판단 2벌 금지).
+  //   ⚠️ 다만 **색에는 isAuthed 가 하나 더 붙는다**(로그인까지 돼야 파랑) = 관문은 로그인을 안 본다.
+  //     그래서 "비로그인 + 여정 있음" 은 회색이지만 눌리고, 눌리면 로그인 팝업으로 간다(의도된 동작).
+  //   · 전문가·관리자 = 자기 여정이 없어도 답변하러 들어가야 하므로 **항상** 열림
+  //   · 사용자 = 여정이 있거나(문의 작성) 배지가 떠 있으면(도착한 답변 열람 = 무료) 열림
+  const expertTabOpen = isExpertRole || !!currentItinerary || expertBadge > 0;
+
   const getTabBarIcon = (
     routeName: string,
     color: string,
@@ -271,10 +280,9 @@ export default function MainTabNavigator() {
               <Icon
                 name="brain"
                 size={24}
+                // 활성색 = 열림 조건(expertTabOpen 1벌) + **로그인까지** 됐을 때만 파랑.
                 color={
-                  currentItinerary && isAuthed
-                    ? Brand.primary
-                    : theme.textTertiary
+                  isAuthed && expertTabOpen ? Brand.primary : theme.textTertiary
                 }
               />
             ),
@@ -282,9 +290,12 @@ export default function MainTabNavigator() {
           listeners={{
             tabPress: (e) => {
               e.preventDefault();
-              // ⚠️ 수정금지(승인필요) 2026-07-30 = 여정이 있어야 활성(= AI의견과 같은 규칙 1벌).
-              //   옛것(여정 없어도 눌림)은 물어볼 대상 없이 크레딧 10 이 빠지는 경로 = 삭제 §19.
-              if (!currentItinerary) return;
+              // ⚠️ 수정금지(승인필요) 2026-08-05 사장님 SSOT = 순서는 **①열림 조건 → ②로그인** 이다.
+              //   ① expertTabOpen(위 1벌)이 아니면 = 아무 일도 안 일어난다(무동작).
+              //   ② 통과했는데 비로그인이면 = 막지 않고 로그인 팝업으로 유도(여정생성 버튼과 같은 방식).
+              //   문의 "작성" 크레딧 10 보호는 시트 안 canSubmit(ExpertSheet)이 담당 = 관문과 분리.
+              //   옛 관문(전원 여정 필수 = 배지 떠도 안 열림 = "전문가 항상 활성" 2026-07-14 SSOT를 덮은 회귀) 삭제 §19.
+              if (!expertTabOpen) return;
               if (isAuthed) {
                 requestExpert();
               } else {

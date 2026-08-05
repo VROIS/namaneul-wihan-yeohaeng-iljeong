@@ -73,6 +73,9 @@ export default function PlaceSlotCard({
     slotLayoutsRef,
     setSelectedSlotId,
     navigation,
+    // 🔒 2026-08-05 사장님 SSOT = 여정 슬롯 해설 = 심화 = 로그인 필수(도시카드 샘플과 다름).
+    isAuthed,
+    requestLogin,
   } = planner;
 
   // 🎙️ 2026-08-02 사장님 지시 = 이 슬롯의 우리 장소번호.
@@ -85,7 +88,8 @@ export default function PlaceSlotCard({
   //   2026-08-03 §22 수정 = 300ms 이중탭 잠금 + 앱 언어 전달이 그 1벌 안에 있다.
   //   그 화면이 창고에 있으면 그대로 보여주고(유료호출 0), 없으면 만들어 담는다. 사진은 서버가 넣는다.
   const openGuide = () => {
-    if (guidePlaceId !== null) openGuideForPlace(navigation, guidePlaceId);
+    if (guidePlaceId !== null)
+      openGuideForPlace(navigation, guidePlaceId, { isAuthed, requestLogin });
   };
 
   // ⚠️ 수정금지(승인필요) 2026-05-09 = 별점(vibeScore) 폐기 = userRatingCount(rc) 만 사용 (= 사용자 SSOT)

@@ -3,6 +3,7 @@
 //   공유 apiRequest(쿠키)를 안 쓰고, 여기서 Bearer 토큰(getUserData().token)을 직접 붙여 인증 = /api/auth/me 와 동일 패턴(앱 유일 작동 인증).
 import { getApiUrl } from "@/lib/query-client";
 import { getUserData } from "@/lib/auth";
+import { parseCreditShortfall, type CreditShortfall } from "@/lib/creditError";
 
 // 상태 값 = server/expert-routes + admin-dashboard 규약 통일
 export type InquiryStatus = "pending" | "in_review" | "answered" | "rejected";
@@ -81,7 +82,13 @@ export async function submitInquiry(input: {
   itineraryId?: number | null;
   kind?: "expert" | "booking";
   dayNumber?: number | null;
-}): Promise<{ ok: boolean; requestId?: string; error?: string }> {
+}): Promise<{
+  ok: boolean;
+  requestId?: string;
+  error?: string;
+  // 크레딧부족일 때만 채워진다(잔액·필요액 한 벌). 판독은 creditError.ts 1벌이 한다.
+  shortfall?: CreditShortfall | null;
+}> {
   // ⚠️ 수정금지(승인필요) 2026-07-30 = 신원은 **로그인 표(Bearer 토큰)로만** 판단한다.
   //   옛 방식(본문에 userId 를 실어 보냄)은 서버가 더 이상 읽지 않으므로 삭제 §19.
   const res = await req("POST", "/api/verification/request", {
@@ -99,6 +106,16 @@ export async function submitInquiry(input: {
   if (res.status === 400) {
     const j = await res.json().catch(() => ({}));
     return { ok: false, error: j.error || "bad_request" };
+  }
+  // ⚠️ 수정금지(승인필요) 2026-08-05 사장님 SSOT = 크레딧부족(402) 뭉개지 않고 숫자까지 그대로 올려보냄(§16 5곳 공용).
+  //   판독 = creditError.ts 의 parseCreditShortfall 1벌(앱 전체가 이것만 쓴다). 여기서 칸을 직접 꺼내지 않는다.
+  if (res.status === 402) {
+    const j = await res.json().catch(() => null);
+    return {
+      ok: false,
+      error: "insufficient_credits",
+      shortfall: parseCreditShortfall(j),
+    };
   }
   return { ok: false, error: "server_error" };
 }

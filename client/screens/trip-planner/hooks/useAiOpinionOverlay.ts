@@ -3,6 +3,10 @@
 import { useState, useEffect, useRef } from "react";
 import { Itinerary } from "@/types/trip";
 import { apiRequest } from "@/lib/query-client";
+import {
+  parseCreditShortfall,
+  showCreditShortfallAlert,
+} from "@/lib/creditError";
 
 export function useAiOpinionOverlay({
   itinerary,
@@ -12,6 +16,7 @@ export function useAiOpinionOverlay({
   globalCurrentItinerary,
   t,
   i18n,
+  navigation,
 }: {
   itinerary: Itinerary | null;
   currentItineraryId: number | null;
@@ -21,6 +26,7 @@ export function useAiOpinionOverlay({
   globalCurrentItinerary: Itinerary | null;
   t: (key: string, opts?: any) => string;
   i18n: { language: string };
+  navigation: { navigate: (name: string, params?: unknown) => void };
 }) {
   // 🧠 2026-07-03 사장님 SSOT = "AI 의견" 결과 오버레이 상태(하단탭 버튼→여정 화면 위 오버레이, 새 화면 아님).
   const [aiOpinionVisible, setAiOpinionVisible] = useState(false);
@@ -57,7 +63,23 @@ export function useAiOpinionOverlay({
       } catch (e: any) {
         if (cancelled) return;
         console.error("[TripPlanner] AI 의견 조회 실패:", e);
-        setAiOpinionError(t("aiOpinion.error"));
+        // ⚠️ 수정금지(승인필요) 2026-08-05 사장님 SSOT = 실패 사유는 **언제나 화면에 남기고**,
+        //   크레딧부족이면 그 위에 공용 안내(충전화면 이동)를 얹는다(§16 5곳 공용 / GuideStackNavigator 와 같은 규칙 1벌).
+        //   ⚠️ 옛것(크레딧부족이면 오버레이를 닫고 Alert 만) 폐기 = 안드로이드는 Alert 을 뒤로가기로 닫을 수 있어
+        //     그 경우 **사유도 안 남고 이동도 안 되는 조용한 실패**가 됐다(§22 판단검증이 잡음).
+        const shortfall = parseCreditShortfall(e?.message);
+        if (shortfall) {
+          // 서버가 준 사유를 그대로(숫자 포함) = "다시 시도" 로 뭉개지 않는다(2026-07-31 SSOT).
+          setAiOpinionError(
+            t("trip.creditShort", {
+              balance: shortfall.balance,
+              required: shortfall.required,
+            }),
+          );
+          showCreditShortfallAlert(navigation, shortfall, t);
+        } else {
+          setAiOpinionError(t("aiOpinion.error"));
+        }
       } finally {
         if (!cancelled) setAiOpinionLoading(false);
         clearAiOpinionRequest();

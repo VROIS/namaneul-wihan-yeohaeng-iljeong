@@ -65,6 +65,10 @@
     "yearInvalid": "無効な年",
     "adultOnly": "18歳以上のみご利用いただけます"
   },
+  "credit": {
+    "shortTitle": "クレジット不足",
+    "goCharge": "チャージする"
+  },
   "trip": {
     "destination": "目的地",
     "destinationPlaceholder": "例：パリ、フィレンツェ、南フランス",

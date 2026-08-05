@@ -76,6 +76,8 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
     authUser,
     // ⚠️ 2026-07-31 = BTS 자동생성(FE-4)의 로그인 대기용(§22 검증 = 비로그인 잠금 소진 방지).
     isAuthed,
+    // 🔒 2026-08-05 사장님 SSOT = 여정 슬롯 [해설 듣기] 관문용(PlaceSlotCard 로 내려보냄).
+    requestLogin,
   } = useMapToggle();
   const { t, i18n } = useTranslation();
 
@@ -148,6 +150,7 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
     globalCurrentItinerary,
     t,
     i18n,
+    navigation,
   });
 
   const {
@@ -190,6 +193,7 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
     setCurrentItineraryId,
     t,
     i18n,
+    navigation,
   });
 
   const pickers = usePickers({ formData, setFormData });
@@ -389,6 +393,9 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
     navigation,
     t,
     i18n,
+    // 🔒 2026-08-05 사장님 SSOT = 슬롯 [해설 듣기] 관문에 필요(판정은 전역 1곳 MapToggleContext, 여기선 전달만).
+    isAuthed,
+    requestLogin,
     // BTS 문제점1 = 결과화면 ← 의 단일 출구(카드 복귀 vs 입력화면)
     handleExitResult,
     // ⚠️ 2026-08-01 사장님 지시 = **마지막 슬롯이 고정된 여정**이면 [숙소 변경]을 숨긴다.

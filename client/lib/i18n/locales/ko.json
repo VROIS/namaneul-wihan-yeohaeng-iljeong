@@ -65,6 +65,10 @@
     "yearInvalid": "유효하지 않은 연도입니다",
     "adultOnly": "만 18세 이상만 이용 가능합니다"
   },
+  "credit": {
+    "shortTitle": "크레딧 부족",
+    "goCharge": "충전하기"
+  },
   "trip": {
     "destination": "목적지",
     "destinationPlaceholder": "예: 파리, 피렌체, 남프랑스",

@@ -20,10 +20,17 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
+import { useNavigation } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { Colors, Spacing, Brand } from "@/constants/theme";
 import Icon from "@/components/Icon";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useMapToggle } from "@/contexts/MapToggleContext";
+// ⚠️ 수정금지(승인필요) 2026-08-05 사장님 SSOT = 크레딧부족 공용 헬퍼(§16 5곳 공용).
+//   이 파일은 원래 내부 화면전환(home/detail/profileEdit)에 react-navigation을 안 쓰지만(주석 §2 참조),
+//   "충전 화면으로 나가는" 외부 이동은 TripisModal.tsx 와 같은 패턴(useNavigation)을 그대로 재사용한다.
+import { showCreditShortfallAlert } from "@/lib/creditError";
 import {
   submitInquiry,
   saveItineraryForInquiry,
@@ -39,6 +46,8 @@ import { statusStyle } from "./statusStyle";
 import { getUserData } from "@/lib/auth"; // 문의 전 로그인 확인(비로그인=로그인 안내)
 import DetailView from "./components/DetailView";
 import ProfileEditView from "./components/ProfileEditView";
+// 답변함 화면 = 2026-08-05 사장님 지시로 분리(§0 700줄 = 예외 없이 쪼갠다). DetailView·ProfileEditView 와 같은 패턴.
+import ExpertInboxView from "./components/ExpertInboxView";
 import { styles } from "./styles";
 
 // 전문가 문의 크레딧 = AI 의견과 동일 방식으로 사전 안내(2026-07-13). 실제 차감은 로그인 정식화 후(§9 프로모션).
@@ -72,6 +81,8 @@ export default function ExpertSheet({
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? "light"];
   const insets = useSafeAreaInsets();
+  const navigation =
+    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   // ⚠️ 실제 저장 여정 id = currentItineraryId(별도) = Itinerary 타입엔 id 없음. 이걸 써야 FK 연결됨.
   const {
     currentItinerary,
@@ -247,6 +258,10 @@ export default function ExpertSheet({
         onClose();
       } else if (r.error === "login_required") {
         goLoginPrompt();
+      } else if (r.error === "insufficient_credits" && r.shortfall) {
+        // ⚠️ 수정금지(승인필요) 2026-08-05 사장님 SSOT = 공용 헬퍼(§16 5곳 공용).
+        //   시트를 먼저 닫는다 = 안 닫으면 프로필로 가도 이 시트가 계속 덮는다(성공:256·로그인 경로와 같은 순서).
+        showCreditShortfallAlert(navigation, r.shortfall, t, onClose);
       } else {
         notify(t("common.error"), t("expert.sendError"));
       }
@@ -258,7 +273,11 @@ export default function ExpertSheet({
     }
   };
 
-  const canSubmit = !!message.trim() && !submitting;
+  // ⚠️ 수정금지(승인필요) 2026-08-05 사장님 SSOT = 사용자 새 문의 = 여정 생성 후에만(크레딧 10 보호 §9).
+  //   배지(도착한 답변) 열람으로 여정 없이 들어온 사용자 = 목록·상세는 그대로, "작성"만 잠금 + 사유 안내.
+  //   전문가/관리자(차감 면제)·예약 모드(여정 화면에서만 진입)는 잠금 없음.
+  const composeLocked = !itin && isExpert !== true && bookingDay == null;
+  const canSubmit = !!message.trim() && !submitting && !composeLocked;
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
@@ -483,217 +502,23 @@ export default function ExpertSheet({
   ) : null;
 
   // 전문가/관리자 + expert 모드 = 답변함(받은 문의 목록·상태필터 = 이 파일 인라인).
+  // 전문가/관리자 + expert 모드 = 답변함. 화면은 components/ExpertInboxView 1벌(§0 700줄 = 2026-08-05 분리).
   if (isExpert && viewMode === "expert") {
-    const counts: Record<Filter, number> = {
-      all: inquiries.length,
-      pending: inquiries.filter((q) => q.status === "pending").length,
-      in_review: inquiries.filter((q) => q.status === "in_review").length,
-      answered: inquiries.filter((q) => q.status === "answered").length,
-      rejected: inquiries.filter((q) => q.status === "rejected").length,
-    };
-    const filterLabel: Record<Filter, string> = {
-      all: t("expert.fltAll"),
-      pending: t("expert.stPending"),
-      in_review: t("expert.stReview"),
-      answered: t("expert.stAnswered"),
-      rejected: t("expert.stRejected"),
-    };
-    const shown =
-      filter === "all"
-        ? inquiries
-        : inquiries.filter((q) => q.status === filter);
     return (
-      <View style={styles.container}>
-        {/* 서브헤더 = 답변함 제목 + 프로필 편집 진입 + 상단 토글(시트 자체 헤더는 부모 모달) */}
-        <View style={[styles.subHeader, { borderBottomColor: theme.border }]}>
-          <View style={styles.subHeaderRow}>
-            <Text style={[styles.subTitle, { color: theme.text }]}>
-              {t("expert.answerBox")}
-            </Text>
-            <Pressable
-              onPress={() => setView({ kind: "profileEdit" })}
-              hitSlop={10}
-              style={styles.iconBtn}
-            >
-              <Icon name="user" size={22} color={Brand.primary} />
-            </Pressable>
-          </View>
-          {modeToggle}
-        </View>
-        <ScrollView
-          style={styles.scroll}
-          contentContainerStyle={{
-            padding: Spacing.lg,
-            paddingBottom: insets.bottom + Spacing.lg,
-          }}
-          showsVerticalScrollIndicator={false}
-        >
-          {/* 상태 필터 칩 */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.chips}
-          >
-            {FILTERS.map((f) => {
-              const on = filter === f;
-              return (
-                <Pressable
-                  key={f}
-                  onPress={() => setFilter(f)}
-                  style={[
-                    styles.chip,
-                    {
-                      backgroundColor: on
-                        ? Brand.primary
-                        : theme.backgroundDefault,
-                      borderColor: on ? Brand.primary : theme.border,
-                    },
-                  ]}
-                >
-                  <Text
-                    style={[
-                      styles.chipText,
-                      { color: on ? "#FFF" : theme.textSecondary },
-                    ]}
-                  >
-                    {filterLabel[f]} {counts[f]}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-
-          {shown.length === 0 ? (
-            <Text style={[styles.empty, { color: theme.textTertiary }]}>
-              {t("expert.inboxNoItems")}
-            </Text>
-          ) : (
-            shown.map((q) => {
-              const isSelected = selectedId === q.id;
-              const st = statusStyle(q.status, theme, t);
-              const dest = q.itineraryData?.destination || t("expert.inquiry");
-              const dayCount = q.itineraryData?.dayCount ?? 0;
-              const totalPlaces = q.itineraryData?.totalPlaces ?? 0;
-
-              return (
-                <Pressable
-                  key={q.id}
-                  style={[
-                    styles.inquiryCard,
-                    {
-                      backgroundColor: isSelected
-                        ? "#EFF6FF"
-                        : theme.backgroundDefault,
-                      borderWidth: isSelected ? 2 : 1,
-                      borderColor: isSelected ? Brand.primary : theme.border,
-                      borderRadius: 16,
-                      padding: 14,
-                      marginBottom: 10,
-                    },
-                  ]}
-                  onPress={() => openInquiry(q)}
-                >
-                  <View style={styles.flex1}>
-                    <View
-                      style={{
-                        flexDirection: "row",
-                        alignItems: "center",
-                        gap: 8,
-                        marginBottom: 4,
-                        flexWrap: "wrap",
-                      }}
-                    >
-                      <Text
-                        style={[
-                          styles.inquiryTitle,
-                          {
-                            color: isSelected ? Brand.primary : theme.text,
-                            fontWeight: isSelected ? "700" : "600",
-                          },
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {dest}
-                      </Text>
-                      {dayCount > 0 && (
-                        <View
-                          style={{
-                            backgroundColor: `${Brand.primary}18`,
-                            paddingHorizontal: 8,
-                            paddingVertical: 2,
-                            borderRadius: 6,
-                          }}
-                        >
-                          <Text
-                            style={{
-                              fontSize: 11,
-                              fontFamily: "Pretendard-Bold",
-                              color: Brand.primary,
-                            }}
-                          >
-                            {dayCount}일 · {totalPlaces}개 장소
-                          </Text>
-                        </View>
-                      )}
-                    </View>
-                    <Text
-                      style={[
-                        styles.inquiryPreview,
-                        { color: theme.textSecondary },
-                      ]}
-                      numberOfLines={1}
-                    >
-                      {q.userMessage}
-                    </Text>
-                  </View>
-                  <View
-                    style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      gap: 6,
-                      marginLeft: 8,
-                    }}
-                  >
-                    {/* 예약/검증 구분 배지 */}
-                    {q.kind === "booking" ? (
-                      <View
-                        style={[
-                          styles.badge,
-                          { backgroundColor: Brand.primary },
-                        ]}
-                      >
-                        <Text style={[styles.badgeText, { color: "#FFF" }]}>
-                          {t("expert.kindBooking")}
-                          {q.dayNumber ? ` D${q.dayNumber}` : ""}
-                        </Text>
-                      </View>
-                    ) : null}
-                    <View style={[styles.badge, { backgroundColor: st.bg }]}>
-                      <Text style={[styles.badgeText, { color: st.fg }]}>
-                        {st.label}
-                      </Text>
-                    </View>
-                    <Pressable
-                      hitSlop={10}
-                      style={{
-                        padding: 4,
-                        borderRadius: 12,
-                        backgroundColor: isSelected ? "#DBEAFE" : "#F1F5F9",
-                      }}
-                      onPress={(e) => {
-                        e.stopPropagation();
-                        handleDeleteInquiry(q.id);
-                      }}
-                    >
-                      <Icon name="x" size={15} color={theme.textTertiary} />
-                    </Pressable>
-                  </View>
-                </Pressable>
-              );
-            })
-          )}
-        </ScrollView>
-      </View>
+      <ExpertInboxView
+        inquiries={inquiries}
+        filter={filter}
+        setFilter={setFilter}
+        filters={FILTERS}
+        selectedId={selectedId}
+        theme={theme}
+        insets={insets}
+        t={t}
+        modeToggle={modeToggle}
+        onOpenProfileEdit={() => setView({ kind: "profileEdit" })}
+        onOpenInquiry={openInquiry}
+        onDeleteInquiry={handleDeleteInquiry}
+      />
     );
   }
 
@@ -812,6 +637,11 @@ export default function ExpertSheet({
           onChangeText={setMessage}
           multiline
         />
+        {composeLocked ? (
+          <Text style={[styles.emptyText, { color: theme.textTertiary }]}>
+            {t("expert.noItinerary")}
+          </Text>
+        ) : null}
         <Pressable
           style={[
             styles.submitBtn,

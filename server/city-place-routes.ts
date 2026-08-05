@@ -12,9 +12,15 @@ import {
   itineraries,
   guides,
 } from "../shared/schema";
-import { eq, sql, desc, and, or, ne, isNull, isNotNull } from "drizzle-orm";
+// ne·isNull·isNotNull = 대표장소 조건을 city-representative-place 1벌로 옮기며 이 파일에서 안 쓰게 됨(삭제 2026-08-05 §19)
+import { eq, sql, desc, and, or } from "drizzle-orm";
 // ⚠️ 완비 기준 = ag2 의 상수 1벌을 가져다 쓴다(§16). 여기에 300 을 다시 적으면 기준이 두 벌이 된다.
 import { READY_THRESHOLD } from "./services/agents/ag2-gemini-recommender";
+// 도시 대표장소 = 조건·정렬 1벌(해설 무료 판정과 같은 기준을 봐야 함, 2026-08-05 §16)
+import {
+  cityRepresentativeWhere,
+  cityRepresentativeOrder,
+} from "./services/shared/city-representative-place";
 import {
   computeDayRouteLive,
   enrichStopsWithPsr,
@@ -132,19 +138,10 @@ export function registerCityPlaceRoutes(app: Express): void {
             nameEn: placeSeedRaw.nameEn,
           })
           .from(placeSeedRaw)
-          .where(
-            and(
-              eq(placeSeedRaw.cityId, cityId),
-              isNotNull(placeSeedRaw.imageUrl),
-              isNotNull(placeSeedRaw.googleReviewCount),
-              ne(placeSeedRaw.seedCategory, "restaurant"),
-              or(
-                eq(placeSeedRaw.dayZone, "core"),
-                isNull(placeSeedRaw.dayZone),
-              ),
-            ),
-          )
-          .orderBy(desc(placeSeedRaw.googleReviewCount))
+          // ⚠️ 수정금지(승인필요) 2026-08-05 = 조건·정렬은 **city-representative-place 1벌**을 가져다 쓴다.
+          //   여기서 다시 적으면 = 해설 무료 판정(guide-routes)과 갈라져 카드에 뜬 장소인데 5크레딧이 깎인다(§16).
+          .where(cityRepresentativeWhere(cityId))
+          .orderBy(...cityRepresentativeOrder)
           .limit(3),
       ]);
       if (!row) return res.status(404).json({ error: "City not found" });
@@ -434,7 +431,14 @@ export function registerCityPlaceRoutes(app: Express): void {
   });
 
   // 🔧 진단용: 일정 생성 단계별 타임아웃 확인
+  // ⚠️ 수정금지(승인필요) 2026-08-05 사장님 SSOT = 관리자 전용 잠금(§9 표7 판단기준 = users.role 1벌).
+  //   옛것 = 인증·차감 전혀 없이 실제 유료 파이프라인(Gemini+TS)이 그대로 도는 구멍이었다(운영배포 시 무제한 무료호출 위험).
   app.get("/api/debug/generate-test", async (req, res) => {
+    const userId = getUserIdFromReq(req);
+    const user = userId ? await storage.getUser(userId) : undefined;
+    if (user?.role !== "admin") {
+      return res.status(403).json({ error: "관리자 전용 진단 엔드포인트" });
+    }
     const steps: string[] = [];
     const start = Date.now();
     try {

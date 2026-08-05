@@ -19,7 +19,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
+import { useTranslation } from "react-i18next";
 import { apiRequest } from "@/lib/query-client";
+// ⚠️ 수정금지(승인필요) 2026-08-05 사장님 SSOT = 크레딧부족 공용 헬퍼(§16 5곳 공용).
+import {
+  parseCreditShortfall,
+  showCreditShortfallAlert,
+} from "@/lib/creditError";
 import { Icon } from "@/components/Icon";
 import {
   Brand,
@@ -110,6 +116,7 @@ function TripisModalInner({
   const insets = useSafeAreaInsets();
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const { t } = useTranslation();
 
   // 지금 이 모달이 보여주는 것 = 처음엔 열기 인자 그대로.
   //   도시 카드에서 ▶ 대표 숏폼 배지를 누르면 여기만 "itinerary" 로 바뀌어 카드가 사라지고 영상 화면이 된다(B-0 도면).
@@ -129,7 +136,8 @@ function TripisModalInner({
   const [savedDays, setSavedDays] = useState<Set<number>>(new Set());
   const [isSaving, setIsSaving] = useState(false);
   // 완성 영상 열람 = ★·탭 뱃지 즉시 갱신 신호(전문가 신호와 동일 패턴 §16)
-  const { bumpVideoData } = useMapToggle();
+  // 🔒 2026-08-05 = isAuthed/requestLogin = [영상 만들기] 로그인 관문용(판정은 전역 1곳).
+  const { bumpVideoData, isAuthed, requestLogin } = useMapToggle();
 
   // 이 모달이 다루는 여정 번호 = 여정 모드는 인자 그대로, 도시 모드는 그 도시 대표여정 번호(▶ 전환용).
   const itineraryId =
@@ -212,20 +220,34 @@ function TripisModalInner({
   // 일별 생성 요청 = 함수 소유는 껍데기(상단 버튼 + 본문 버튼이 같은 함수 1벌 §0)
   const handleGenerate = async () => {
     if (itineraryId == null) return;
+    // 🔒 수정금지(승인필요) 2026-08-05 사장님 SSOT = 영상 만들기 = 로그인 필수(+60크레딧은 서버 1벌).
+    //   상단(:421)·본문(:320) 두 버튼이 이 함수 1벌만 타므로 여기 1곳이면 앱 전체가 덮인다.
+    //   이 화면은 최상위 Modal 이라 로그인 팝업(또 다른 Modal)을 덮는다 = 먼저 닫는다(크레딧부족과 같은 순서).
+    if (!isAuthed) {
+      onClose();
+      requestLogin();
+      return;
+    }
     setIsRequesting(true);
     try {
-      const r = await apiRequest(
+      // ⚠️ 수정금지(승인필요) 2026-08-05 = apiRequest 가 !ok 응답을 이미 throw 하므로(query-client.ts
+      //   throwIfResNotOk) 여기서 r.ok 를 다시 검사하는 옛 코드는 죽은 코드였다(§19 삭제).
+      await apiRequest(
         "POST",
         `/api/itineraries/${itineraryId}/video/generate`,
         { day: effectiveDay },
       );
-      if (!r.ok) {
-        const err = await r.json().catch(() => ({}));
-        throw new Error(err.error || `요청 실패(${r.status})`);
-      }
       await loadAll();
     } catch (e: any) {
-      Alert.alert("영상 생성", e.message || "요청에 실패했습니다.");
+      // ⚠️ 수정금지(승인필요) 2026-08-05 사장님 SSOT = 크레딧부족 공용 헬퍼(§16 5곳 공용).
+      //   옛 버그 = err.error(기계코드 "insufficient_credits")를 그대로 노출하던 것 §19 폐기.
+      const shortfall = parseCreditShortfall(e?.message);
+      if (shortfall) {
+        // 이 화면은 최상위 Modal = 안 닫으면 프로필로 가도 계속 덮는다([여정 보기]:258 과 같은 순서).
+        showCreditShortfallAlert(navigation, shortfall, t, onClose);
+      } else {
+        Alert.alert("영상 생성", e.message || "요청에 실패했습니다.");
+      }
     } finally {
       setIsRequesting(false);
     }
@@ -257,7 +279,10 @@ function TripisModalInner({
   //   여는 방식 = openGuideForPlace 1벌(2026-08-03 §22 수정 = 300ms 이중탭 잠금 + 앱 언어 전달).
   const handleOpenGuide = (placeId: number) => {
     onClose();
-    openGuideForPlace(navigation, placeId);
+    // 🔓 2026-08-05 사장님 SSOT = 도시 대표카드 해설 = **대표 이미지 1장의 맛보기 샘플** = 미가입자도 개방.
+    //   안전한 이유 = 이 배지는 서버 hasGuide(그 장소·그 언어 해설이 창고에 이미 있음)일 때만 켜진다
+    //   (city-place-routes.ts:184 / CityCardScreen.tsx:101) = 열어도 유료 외부호출 0.
+    openGuideForPlace(navigation, placeId, "sample");
   };
 
   // 보여줄 해설 = 프로필에서 누른 그 카드 1건(칩줄 폐기 = 2026-08-03 §19, 아래 상단줄 주석 참조)

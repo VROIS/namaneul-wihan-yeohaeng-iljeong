@@ -65,6 +65,10 @@
     "yearInvalid": "Année invalide",
     "adultOnly": "Réservé aux personnes de 18 ans et plus"
   },
+  "credit": {
+    "shortTitle": "Crédits insuffisants",
+    "goCharge": "Recharger"
+  },
   "trip": {
     "destination": "Destination",
     "destinationPlaceholder": "ex. Paris, Florence, Sud de la France",

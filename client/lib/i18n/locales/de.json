@@ -65,6 +65,10 @@
     "yearInvalid": "Ungültiges Jahr",
     "adultOnly": "Nur für Personen ab 18 Jahren verfügbar"
   },
+  "credit": {
+    "shortTitle": "Guthaben knapp",
+    "goCharge": "Aufladen"
+  },
   "trip": {
     "destination": "Reiseziel",
     "destinationPlaceholder": "z.B. Paris, Florenz, Südfrankreich",

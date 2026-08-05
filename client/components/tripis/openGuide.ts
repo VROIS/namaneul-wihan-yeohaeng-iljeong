@@ -4,11 +4,29 @@
 //      (레거시 5단버튼 debounceClick 과 같은 값 = MainCameraScreen.js).
 //   ② 앱 언어를 함께 넘긴다 = 창고 열쇠는 (장소, 언어) 두 칸. 안 넘기면 항상 ko 로 열람·차감되어
 //      비한국어 사용자가 돈 내고 한국어 해설을 받고, 그 언어 창고는 영영 안 찬다(§22 검수 지적).
+//   ③ 🔒 2026-08-05 사장님 SSOT = **로그인 관문도 이 1벌 안에** = 앱 어느 경로로 해설을 열든 여기만 통과하면 된다.
+//      판정은 하지 않는다 — 전역 1곳(MapToggleContext.isAuthed)이 판정한 값을 호출자가 넘긴다(login-gate.ts 와 같은 규칙).
+//      `"sample"` = 도시 대표카드 = **창고에 이미 있는 해설 1장**만 여는 자리(서버 hasGuide 가 그때만 배지를 켬
+//      = city-place-routes.ts:184) = 외부호출 0 = 회사 지출 0 → 미가입자도 맛보게 개방(사장님 지시).
+//      여정 슬롯 [해설 듣기] 는 심화라 관문을 통과해야 한다.
 import i18n from "@/lib/i18n";
 
 let lastOpenAt = 0;
 
-export function openGuideForPlace(navigation: any, placeId: number): void {
+export type GuideGate =
+  | { isAuthed: boolean; requestLogin: () => void }
+  | "sample";
+
+export function openGuideForPlace(
+  navigation: any,
+  placeId: number,
+  gate: GuideGate,
+): void {
+  // 관문 = 여정생성 버튼과 같은 2줄(useGenerateItinerary.ts) = 팝업만 띄우고 자동 재개는 안 한다.
+  if (gate !== "sample" && !gate.isAuthed) {
+    gate.requestLogin();
+    return;
+  }
   const now = Date.now();
   if (now - lastOpenAt < 300) return; // 이중탭 = 두 번째는 버린다
   lastOpenAt = now;

@@ -5,6 +5,10 @@ import { calculateVibeWeights } from "@/utils/vibeCalculator";
 import { apiRequest } from "@/lib/query-client";
 import { UserData } from "@/lib/auth";
 import { useMapToggle } from "@/contexts/MapToggleContext";
+import {
+  parseCreditShortfall,
+  showCreditShortfallAlert,
+} from "@/lib/creditError";
 
 export function useGenerateItinerary({
   formData,
@@ -17,6 +21,7 @@ export function useGenerateItinerary({
   setCurrentItineraryId,
   t,
   i18n,
+  navigation,
 }: {
   formData: TripFormData;
   currentUser: UserData | null;
@@ -32,6 +37,7 @@ export function useGenerateItinerary({
   setCurrentItineraryId: React.Dispatch<React.SetStateAction<number | null>>;
   t: (key: string, opts?: any) => string;
   i18n: { language: string };
+  navigation: { navigate: (name: string, params?: unknown) => void };
 }) {
   // ⚠️ 2026-07-25 사장님 SSOT = 여정생성 인증분기 = 로그인 인식되면 바로 생성 진행 / 비인증이면 로그인 팝업(requestLogin). 화면 이동·자동재개 폐기(§0·§19).
   const { requestLogin, isAuthed } = useMapToggle();
@@ -212,22 +218,17 @@ export function useGenerateItinerary({
       //   사장님이 폰에서 실패를 겪고도 원인을 못 찾아 "배선을 건드렸나" 하고 한참 헤맸다(실측).
       //   서버는 이미 사실을 정확히 보내준다(credit-charge.ts = 남은 크레딧·필요 크레딧까지).
       //   화면이 그걸 버리고 있었을 뿐이다 = 이제 그대로 옮겨 보여준다(§11 = 사실을 보게).
+      // ⚠️ 수정금지(승인필요) 2026-08-05 사장님 SSOT = 크레딧부족 = 공용 헬퍼(충전화면 자동이동, §16 5곳 공용).
       const message = error?.message || "";
-      let detail: string;
-      if (message.includes("일정 검증")) {
-        detail = t("trip.validationFailed");
-      } else if (message.includes("insufficient_credits")) {
-        // 서버가 함께 보낸 숫자를 꺼내 그대로 보여준다(못 꺼내면 물음표)
-        const m = message.match(
-          /"balance":\s*(-?\d+)[\s\S]*?"required":\s*(\d+)/,
-        );
-        detail = t("trip.creditShort", {
-          balance: m?.[1] ?? "?",
-          required: m?.[2] ?? "?",
-        });
-      } else {
-        detail = t("trip.retryHint");
+      const shortfall = parseCreditShortfall(message);
+      if (shortfall) {
+        showCreditShortfallAlert(navigation, shortfall, t);
+        setScreen("Input");
+        return;
       }
+      const detail = message.includes("일정 검증")
+        ? t("trip.validationFailed")
+        : t("trip.retryHint");
       Alert.alert(t("trip.generateFailed"), detail, [
         { text: t("common.confirm") },
       ]);

@@ -65,6 +65,10 @@
     "yearInvalid": "Año inválido",
     "adultOnly": "Solo disponible para mayores de 18 años"
   },
+  "credit": {
+    "shortTitle": "Créditos bajos",
+    "goCharge": "Recargar"
+  },
   "trip": {
     "destination": "Destino",
     "destinationPlaceholder": "ej. París, Florencia, Sur de Francia",
