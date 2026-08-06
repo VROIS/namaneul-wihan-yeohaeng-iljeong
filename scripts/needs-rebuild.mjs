@@ -70,47 +70,100 @@ const uncommitted = sh(`git status --porcelain`)
   .map((l) => unescapePath(l.slice(3)));
 const all = [...new Set([...changed, ...uncommitted])];
 
-// ── 판단 = "무선으로 절대 못 가는 것"이 바뀌었나 ──
-const reasons = [];
+// ── 판단 = "무선으로 절대 못 가는 것"이 바뀌었나 = IPA(아이폰)·APK(삼성) **각각** 판정 ──
+//   ⚠️ 2026-08-06 사장님 지적 = 옛 "의존성 줄 변경 = 무조건 굽기" 오판 폐기 §19(실측: @aws-sdk·dotenv = 서버 전용인데 굽기로 오판).
+//   새 기준 = 그 라이브러리가 **실제로 네이티브 부품인가**: ①node_modules/<이름>/ios|android 네이티브 코드 실존 ②app.json plugins 등재 ③이름이 expo-*/react-native-* 계열인데 미설치(실물 확인 불가) = 보수적으로 굽기.
+import { existsSync, readFileSync } from "node:fs";
+
+const iosReasons = []; // IPA(아이폰 TF)를 구워야 하는 사유
+const andReasons = []; // APK(삼성)를 구워야 하는 사유
+const both = (msg) => {
+  iosReasons.push(msg);
+  andReasons.push(msg);
+};
+const infoNotes = []; // 굽기 불필요지만 알아둘 것(서버 전용 부품 등)
+
+let pkgJson = {};
+let appJson = {};
+try {
+  pkgJson = JSON.parse(readFileSync("package.json", "utf8"));
+} catch {}
+try {
+  appJson = JSON.parse(readFileSync("app.json", "utf8"));
+} catch {}
+const devDeps = new Set(Object.keys(pkgJson.devDependencies || {}));
+const pluginNames = (appJson?.expo?.plugins || []).map((p) =>
+  Array.isArray(p) ? String(p[0]) : String(p),
+);
+
+function isNativeLib(name) {
+  // ① 이름에 react-native/expo 계열이 포함 = **설치 여부 무관** 네이티브 취급.
+  //    (§22 판단검증 적발 2026-08-06: RN 코어는 node_modules/react-native 에 ios/·android/ 폴더 없이 배포 = 폴더 검사만으론 "무선 OK" 오판 = OTA 크래시 경로.
+  //     @stripe/stripe-react-native 같은 스코프 이름도 이 포함 검사로 잡힘.)
+  if (/react-native|^expo$|^expo-|^@expo\//.test(name)) return true;
+  const dir = `node_modules/${name}`;
+  // ② 미설치 = 실물 확인 불가 = **보수적으로 굽기**(안전한 쪽으로만 틀리게)
+  if (!existsSync(dir)) return true;
+  // ③ 네이티브 코드 실존 or config plugin 등재
+  if (existsSync(`${dir}/ios`) || existsSync(`${dir}/android`)) return true;
+  if (pluginNames.some((p) => p === name || p.startsWith(name + "/")))
+    return true;
+  return false;
+}
 
 if (all.includes("package.json")) {
   const d =
     sh(`git diff ${range} -- package.json`) + sh(`git diff -- package.json`);
-  // 의존성 줄(이름: "^1.2.3")이 바뀐 것만 = 스크립트만 바뀐 건 제외
-  if (/^[+-]\s*"[^"]+":\s*"[~^]?\d/m.test(d)) {
-    reasons.push("package.json 에 새 부품(라이브러리)이 추가·변경됨");
+  // 바뀐 의존성 이름 추출(스크립트 줄 제외 = 값이 버전 형태인 줄만)
+  const names = [
+    ...new Set(
+      [...d.matchAll(/^[+-]\s*"([^"]+)":\s*"[~^]?\d[^"]*"/gm)].map((m) => m[1]),
+    ),
+  ];
+  for (const n of names) {
+    if (devDeps.has(n)) {
+      infoNotes.push(`부품 '${n}' = 개발 도구(devDependencies) = 앱과 무관`);
+    } else if (isNativeLib(n)) {
+      both(`네이티브 부품 '${n}' 추가·변경 = 무선으로 못 감`);
+    } else {
+      infoNotes.push(`부품 '${n}' = 서버/JS 전용(네이티브 코드 없음) = 무선 OK`);
+    }
   }
 }
 
 if (all.includes("app.json")) {
   const d = sh(`git diff ${range} -- app.json`) + sh(`git diff -- app.json`);
-  if (
-    /^[+-].*(plugins|bundleIdentifier|package|permissions|extraPods|scheme|usesAppleSignIn)/m.test(
-      d,
-    )
-  ) {
-    reasons.push("app.json 의 네이티브 설정(플러그인·권한·번들ID)이 바뀜");
-  }
-  // 번호표가 바뀌면 이미 깔린 앱은 무선 업데이트를 못 받는다 = 다시 구워야 함
-  if (/^[+-]\s*"(runtimeVersion|policy)"/m.test(d)) {
-    reasons.push(
-      "app.json 의 번호표(runtimeVersion)가 바뀜 = 이미 깔린 앱은 무선으로 못 받음",
-    );
-  }
+  if (/^[+-].*(bundleIdentifier|usesAppleSignIn|extraPods|infoPlist)/m.test(d))
+    iosReasons.push("app.json 아이폰 설정(번들ID·애플로그인·Info) 변경");
+  if (/^[+-].*("package"|permissions|intentFilters)/m.test(d))
+    andReasons.push("app.json 안드로이드 설정(패키지·권한) 변경");
+  if (/^[+-].*(plugins|scheme)/m.test(d))
+    both("app.json 공통 네이티브 설정(플러그인·scheme) 변경");
+  if (/^[+-]\s*"(runtimeVersion|policy)"/m.test(d))
+    both("번호표(runtimeVersion) 변경 = 이미 깔린 앱은 무선으로 못 받음");
 }
 
-if (all.some((f) => f.startsWith("ios/") || f.startsWith("android/"))) {
-  reasons.push("ios/ 또는 android/ 폴더를 직접 고침");
-}
+if (all.some((f) => f.startsWith("ios/")))
+  iosReasons.push("ios/ 폴더 직접 수정");
+if (all.some((f) => f.startsWith("android/")))
+  andReasons.push("android/ 폴더 직접 수정");
+if (all.some((f) => f.startsWith("plugins/")))
+  both("plugins/(네이티브 설정 플러그인) 수정");
 
-const needsRebuild = reasons.length > 0;
+const needsIos = iosReasons.length > 0;
+const needsAndroid = andReasons.length > 0;
+const needsRebuild = needsIos || needsAndroid;
 const serverChanged = all.some(
   (f) => f.startsWith("server/") || f.startsWith("shared/"),
 );
 
 const result = {
   needsRebuild,
-  reasons,
+  needsIos, // IPA(아이폰 TF)
+  needsAndroid, // APK(삼성)
+  iosReasons,
+  androidReasons: andReasons,
+  infoNotes,
   serverChanged, // = Replit 에서 서버 빌드가 필요한 변경이 있었나(사장님 흐름 쪽 참고용)
   base: baseInfo,
   changedCount: all.length,
@@ -123,14 +176,20 @@ if (process.argv.includes("--json")) {
 }
 
 console.log("");
-console.log("┌─ 이번에 구워야 하나? ─────────────────────────────");
-if (needsRebuild) {
-  console.log("│ 🔥 예 — IPA(TF)·APK 를 다시 구워야 합니다");
-  for (const r of reasons) console.log(`│   · ${r}`);
-} else {
-  console.log("│ 🟢 아니오 — 무선 업데이트로 들어갑니다");
-  console.log("│   (TF·APK 모두. 앱 껐다 켜기 / APK 는 2번)");
-}
+console.log("┌─ 이번에 구워야 하나? (IPA·APK 각각) ──────────────");
+console.log(
+  needsIos
+    ? "│ 🔥 IPA(아이폰 TF) = 다시 구워야 함"
+    : "│ 🟢 IPA(아이폰 TF) = 불필요(무선 업데이트로 들어감)",
+);
+for (const r of iosReasons) console.log(`│     · ${r}`);
+console.log(
+  needsAndroid
+    ? "│ 🔥 APK(삼성)      = 다시 구워야 함"
+    : "│ 🟢 APK(삼성)      = 불필요(무선 업데이트로 들어감)",
+);
+for (const r of andReasons) console.log(`│     · ${r}`);
+for (const n of infoNotes) console.log(`│ ℹ ${n}`);
 console.log("├───────────────────────────────────────────────────");
 console.log(`│ 마지막 구운 시점: ${baseInfo}`);
 console.log(`│ 그 뒤 바뀐 파일: ${all.length}개`);

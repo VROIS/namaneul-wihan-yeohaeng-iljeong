@@ -54,9 +54,10 @@ description: 앱을 굽는다(아이폰 TestFlight + 안드로이드 APK). 사�
 node scripts/needs-rebuild.mjs
 ```
 
-- **🟢 아니오** = 굽지 마라. `npx eas update --branch main --message "<한 줄>"` 로 끝
+- 출력 = **IPA(아이폰 TF)·APK(삼성) 각각** 판정(2026-08-06 개선 = 옛 뭉뚱그린 "예/아니오" 폐기 §19).
+- **둘 다 🟢 불필요** = 굽지 마라. `npx eas update --branch main --message "<한 줄>"` 로 끝
   (TF·APK 둘 다 받음. 사장님은 앱 껐다 켜기 / APK 는 2번).
-- **🔥 예** = 아래 절차 진행.
+- **🔥 표시된 쪽만** 아래 절차로 굽는다(IPA만·APK만·둘 다 = 출력이 명시).
 - 사장님이 **"그래도 구워라"** 하시면 = 구운다(사장님 결정이 우선 §1).
 
 ⚠️ `eas update` 가 `bare workflow ... runtime version policies` 오류를 내면
