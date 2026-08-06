@@ -7,8 +7,9 @@
 // = 이유: TS 는 유료(€0.0299/콜) → 한 번에 9요소 전부 받아 옛값 덮어씀(최신검증 유지).
 import { STANDARD_TS_FIELD_MASK, validateFieldMask } from "./google-places-sku";
 import { saveRaw } from "./save-raw";
+import { uploadToR2, isR2Configured } from "./r2-client";
 
-// ⚠️ 수정금지(승인필요) 2026-07-09 사장님 SSOT = 사진 저장 해상도 단일 상수 = 구글 PhotoMedia 다운 시점부터 작게(내부 축소, Supabase 변환 유료 안 씀).
+// ⚠️ 수정금지(승인필요) 2026-07-09 사장님 SSOT = 사진 저장 해상도 단일 상수 = 구글 PhotoMedia 다운 시점부터 작게(내부 축소 = 저장소 유료 변환 안 씀).
 //   = FE 표시 실측: 메인앱 썸네일 56px, BTS 궤도카드 80×140px, BTS 하단 화면폭(~800px). 사장님 "BTS 하단 흐려져도 됨" → 400px 균형(800 대비 데이터 1/4 = 다운·저장·FE로딩 4배 빠름).
 //   = 모든 사진 호출(ag3·repair·발굴스킬)이 이 관문(tsPhoto) 통과 = 이 상수 1곳으로 전체 통일(§16, 800 하드코딩 5곳 드리프트 폐기 §19).
 export const PHOTO_MAX_WIDTH_PX = 400;
@@ -108,7 +109,7 @@ const mapPlace = (p: any): TsPlace => ({
 });
 
 // ⚠️ 수정금지(승인필요) 2026-06-09 사용자 SSOT = 외부호출 raw 저장 강제 (= 코드로). 단일 관문에 박아 모든 tsSearch 가 응답 원본을 저장 후 반환.
-//   저장소 = Supabase Storage 'raw-responses' 버킷(shared/save-raw) = 발굴·런타임 둘 다 동작(FS 비의존). apiKey 는 raw 에 저장 안 함(비밀).
+//   저장소 = R2 raw-responses/ 프리픽스(shared/save-raw, 2026-08-06 R2 전환) = 발굴·런타임 둘 다 동작(FS 비의존). apiKey 는 raw 에 저장 안 함(비밀).
 async function saveTsRaw(
   method: string,
   req: TsSearchReq,
@@ -241,46 +242,35 @@ export async function tsSearch(req: TsSearchReq): Promise<TsPlace[]> {
 export interface TsPhotoReq {
   apiKey: string;
   photoName: string; // TsPlace.photoName
-  storageKey: string; // Supabase service role key (= SUPABASE_SERVICE_ROLE_KEY)
-  supaPublicUrl: string; // 전체 공개 URL (= SUPABASE_PUBLIC_URL, 예 https://xxxx.supabase.co) = image-pool 검증 패턴
   pathKey: string; // 저장 경로 (예 `${cityId}/${cat}/${pid}`) — .jpg 자동 부착
-  bucket?: string; // 기본 'place-images'
   maxWidthPx?: number;
   // ⚠️ 수정금지(승인필요) 2026-06-16 사장님 SSOT = 관문(issueApiKey) 통과 증표 (= tsSearch 와 동일 원리).
   //   = 기본 undefined = 하위호환. env TS_GATE_ENFORCE='1' 일 때만 검사. PM 키('pm')도 동일 issueApiKey 경유.
   gated?: boolean;
 }
 
-/** 단일 사진 관문 = PhotoMedia 다운 + Supabase Storage 업로드(PUT+x-upsert) → 공개 URL. 모든 사진 호출은 이 함수만. */
+// ⚠️ 수정금지(승인필요) 2026-08-06 사장님 SSOT = 사진 저장 = R2 place-images/ 프리픽스 1곳(옛 Supabase 버킷·storageKey/supaPublicUrl 인자 폐기 = 2026-08-06 Cloudflare 이전계획 1단계 §19).
+const PHOTO_PREFIX = "place-images";
+
+/** 단일 사진 관문 = PhotoMedia 다운 + R2 업로드 → 공개 URL. 모든 사진 호출은 이 함수만. 계약 = 에러/미설정 = null. */
 export async function tsPhoto(req: TsPhotoReq): Promise<string | null> {
-  if (!req.apiKey || !req.photoName || !req.storageKey || !req.supaPublicUrl)
-    return null;
+  if (!req.apiKey || !req.photoName || !isR2Configured()) return null;
   // ⚠️ 수정금지(승인필요) 2026-06-16 사장님 SSOT = 관문 수동 강제(soft-assert).
   //   = env TS_GATE_ENFORCE='1' 일 때만 검사 → gated≠true 면 return null(=tsPhoto 기존 '에러=null' 계약 유지).
   //     (throw 로 바꾸면 06 post-process / restaurant-image-targets 의 if(!imageUrl) 분기 의미가 변질됨)
   //   = env 미설정 = no-op = 하위호환 100%.
   if (process.env.TS_GATE_ENFORCE === "1" && req.gated !== true) return null;
-  const bucket = req.bucket || "place-images";
   try {
     const photoUrl = `https://places.googleapis.com/v1/${req.photoName}/media?maxWidthPx=${req.maxWidthPx ?? PHOTO_MAX_WIDTH_PX}&key=${req.apiKey}`;
     const pr = await fetch(photoUrl, { signal: AbortSignal.timeout(30000) });
     if (!pr.ok) return null;
     const buf = Buffer.from(await pr.arrayBuffer());
-    const filePath = `${req.pathKey}.jpg`;
-    const ur = await fetch(
-      `${req.supaPublicUrl}/storage/v1/object/${bucket}/${filePath}`,
-      {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${req.storageKey}`,
-          "Content-Type": "image/jpeg",
-          "x-upsert": "true",
-        },
-        body: buf,
-      },
+    const up = await uploadToR2(
+      `${PHOTO_PREFIX}/${req.pathKey}.jpg`,
+      buf,
+      "image/jpeg",
     );
-    if (!ur.ok) return null;
-    return `${req.supaPublicUrl}/storage/v1/object/public/${bucket}/${filePath}`;
+    return up.publicUrl;
   } catch {
     return null;
   }

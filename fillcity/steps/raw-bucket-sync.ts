@@ -1,10 +1,10 @@
-// ⚠️ 영구 컴포넌트 2026-06-10 = docs/raw/{city} raw 파일 → Supabase Storage 'raw-responses' 버킷 동기화(영구 백업).
-//   = 발굴 raw 가 로컬 PC 에만 있는 누수 차단 = "필수 raw 버킷 저장"(사용자 완성 기준). 외부호출 0 = Storage PUT 만.
-//   = 발굴 후 오케스트레이터가 호출 → 버킷에 항상 최신 raw. 버킷이 진짜 토대(PC/DB 날아가도 재입력 가능).
+// ⚠️ 영구 컴포넌트 2026-08-06 = docs/raw/{city} raw 파일 → R2 raw-responses/ 동기화(영구 백업. 원격지 = 옛 Supabase → R2 대체 = Cloudflare 이전계획 1단계 §19).
+//   = 발굴 raw 가 로컬 PC 에만 있는 누수 차단 = "필수 raw 원격 저장"(사용자 완성 기준). 외부호출 0 = R2 업로드만.
+//   = 발굴 후 오케스트레이터가 호출 → 원격에 항상 최신 raw. 원격이 진짜 토대(PC/DB 날아가도 재입력 가능).
 //   호출: npx tsx fillcity/steps/raw-bucket-sync.ts --city-id=37 [--apply]
 import fs from "fs";
 import path from "path";
-import { fileURLToPath } from "url";
+import { fileURLToPath, pathToFileURL } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "../..");
@@ -31,18 +31,15 @@ if (!cityId) {
   process.exit(1);
 }
 
-const BUCKET = "raw-responses";
+const PREFIX = "raw-responses"; // R2 프리픽스 (옛 Supabase 버킷명과 동일 = 키 대조 불변)
 
 (async () => {
-  const storageKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.SUPABASE_ANON_KEY ||
-    process.env.SUPABASE_KEY;
-  const supaPublicUrl =
-    process.env.SUPABASE_PUBLIC_URL ||
-    "https://wxebceflvuythuodemro.supabase.co";
-  if (!storageKey) {
-    console.error("✗ SUPABASE_SERVICE_ROLE_KEY 미존재 = 업로드 불가");
+  // ⚠️ 2026-08-06 = 업로드 = r2-client 단일 진입점(§16). 옛 Supabase storageKey/PUT 폐기 = §19.
+  const { uploadToR2, isR2Configured } = await import(
+    pathToFileURL(path.join(ROOT, "server/services/shared/r2-client.ts")).href
+  );
+  if (!isR2Configured()) {
+    console.error("✗ R2 환경변수 미비 = 업로드 불가");
     process.exit(1);
   }
 
@@ -54,7 +51,7 @@ const BUCKET = "raw-responses";
   const files = fs.readdirSync(dir).filter((f) => f.endsWith(".json"));
 
   console.log(
-    `═══ raw-bucket-sync (city ${cityId}) = docs/raw/${cityId} .json ${files.length}개 → ${BUCKET}/docs-raw/${cityId}/ ═══`,
+    `═══ raw-bucket-sync (city ${cityId}) = docs/raw/${cityId} .json ${files.length}개 → R2 ${PREFIX}/docs-raw/${cityId}/ ═══`,
   );
   if (!apply) {
     console.log(
@@ -70,32 +67,19 @@ const BUCKET = "raw-responses";
   for (const f of files) {
     try {
       const buf = fs.readFileSync(path.join(dir, f));
-      const r = await fetch(
-        `${supaPublicUrl}/storage/v1/object/${BUCKET}/docs-raw/${cityId}/${encodeURIComponent(f)}`,
-        {
-          method: "PUT",
-          headers: {
-            Authorization: `Bearer ${storageKey}`,
-            "Content-Type": "application/json",
-            "x-upsert": "true",
-          },
-          body: buf,
-          signal: AbortSignal.timeout(30000),
-        },
+      await uploadToR2(
+        `${PREFIX}/docs-raw/${cityId}/${f}`,
+        buf,
+        "application/json",
       );
-      if (r.ok) {
-        ok++;
-        bytes += buf.length;
-      } else {
-        err++;
-        console.log(`  ✗ ${f}: ${r.status} ${(await r.text()).slice(0, 80)}`);
-      }
+      ok++;
+      bytes += buf.length;
     } catch (e: any) {
       err++;
       console.log(`  ✗ ${f}: ${e.message}`);
     }
   }
   console.log(
-    `\n═══ 결과 = 업로드 ${ok} / 실패 ${err} / ${(bytes / 1024 / 1024).toFixed(1)}MB → ${BUCKET}/docs-raw/${cityId}/ ═══`,
+    `\n═══ 결과 = 업로드 ${ok} / 실패 ${err} / ${(bytes / 1024 / 1024).toFixed(1)}MB → R2 ${PREFIX}/docs-raw/${cityId}/ ═══`,
   );
 })();

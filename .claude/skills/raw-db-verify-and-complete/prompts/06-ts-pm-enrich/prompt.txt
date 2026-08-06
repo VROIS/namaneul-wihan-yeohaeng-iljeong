@@ -35,15 +35,13 @@ import { tsPhoto } from 'server/services/shared/ts-client';
 const imageUrl = await tsPhoto({
   apiKey: ${GOOGLE_PLACES_API_KEY},
   photoName,                        // = TsPlace.photoName (= "places/{id}/photos/{photo_id}")
-  storageKey: ${SUPABASE_SERVICE_ROLE_KEY},
-  supaPublicUrl: 'https://{project}.supabase.co',
-  pathKey: `${cityId}/${rowId}-${Date.now()}`,  // = .jpg 자동 부착
-  bucket: 'place-photos',
-  maxWidthPx: 800,
+  pathKey: `${cityId}/${category}/${pid}`,  // = .jpg 자동 부착 (PID 결정적 경로 = 2026-06-14 SSOT)
+  // maxWidthPx 미지정 = 관문 기본 PHOTO_MAX_WIDTH_PX(400) = 해상도 단일 SSOT(2026-07-09)
 });
 
-= 내부 = PhotoMedia binary 다운(JPEG) → Supabase Storage 업로드(PUT+x-upsert) → public URL 반환
-= public URL = https://{project}.supabase.co/storage/v1/object/public/place-photos/{cityId}/{rowId}-{timestamp}.jpg
+= 내부 = PhotoMedia binary 다운(JPEG) → R2 업로드(place-images/ 프리픽스, r2-client 단일 진입점) → public URL 반환
+= public URL = {R2_PUBLIC_URL}/place-images/{cityId}/{category}/{pid}.jpg
+= 옛 Supabase storageKey/supaPublicUrl/bucket 인자 폐기 = 2026-08-06 Cloudflare 이전계획 1단계 §19
 
 ══════════════════════════════════════════════════════════════════════════════
 응답 매핑 (= TsPlace 9요소 → upsertPlace 호환):

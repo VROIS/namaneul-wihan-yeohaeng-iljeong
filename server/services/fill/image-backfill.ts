@@ -149,21 +149,16 @@ export async function backfillImages(opts: {
   );
   const GOOGLE_KEY =
     process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_PLACES_API_KEY || "";
-  // ⚠️ 수정금지(승인필요) 2026-07-11 = Storage 업로드 키 = SERVICE_ROLE(ts-client tsPhoto:169 요구) = ANON 아님(리뷰 적발 = ANON 없어 무성실패).
-  const SUPA_SR =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.SUPABASE_ANON_KEY ||
-    "";
-  const SUPA_PUB =
-    process.env.SUPABASE_PUBLIC_URL ||
-    process.env.SUPABASE_URL ||
-    "https://wxebceflvuythuodemro.supabase.co";
-  // 키 결손 = 사진 전건 무성실패 방지 = 시작 전 차단(과거 raw 증발 패턴 차단).
+  // ⚠️ 2026-08-06 = 사진 저장 = R2(tsPhoto 내부 r2-client). 옛 Supabase SUPA_SR/SUPA_PUB 폐기 = Cloudflare 이전계획 1단계 §19.
+  const { isR2Configured } = await import(
+    pathToFileURL(path.join(ROOT, "server/services/shared/r2-client.ts")).href
+  );
+  // 설정 결손 = 사진 전건 무성실패 방지 = 시작 전 차단(과거 raw 증발 패턴 차단).
   if (!GOOGLE_KEY)
     throw new Error("image-backfill: GOOGLE_MAPS_API_KEY 없음 = PM 불가");
-  if (!SUPA_SR)
+  if (!isR2Configured())
     throw new Error(
-      "image-backfill: SUPABASE_SERVICE_ROLE_KEY 없음 = Storage 업로드 불가(무성실패 차단)",
+      "image-backfill: R2 환경변수 미비 = 이미지 업로드 불가(무성실패 차단)",
     );
 
   let pmDone = 0,
@@ -173,10 +168,8 @@ export async function backfillImages(opts: {
     const url = await tsPhoto({
       apiKey: GOOGLE_KEY,
       photoName,
-      storageKey: SUPA_SR,
-      supaPublicUrl: SUPA_PUB,
       pathKey: `${cityId}/${r.cat}/${r.pid}`,
-    });
+    }); // 저장 = R2 place-images/ (2026-08-06)
     if (!url) {
       pmFail++;
       console.warn(

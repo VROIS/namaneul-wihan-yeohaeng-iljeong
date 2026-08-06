@@ -75,27 +75,20 @@ if (!cityId) { console.error('Usage: --city-id=<N> --date=<YYYY-MM-DD> --apply-s
   // ⚠️ 수정금지(승인필요) 2026-06-05 = 사진 단일 관문 = tsPhoto (= PhotoMedia 다운 + Storage 업로드 일원화 = 앱 전체 동일 라인)
   const { tsPhoto } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/ts-client.ts')).href);
 
-  // Supabase Storage 업로드용 (= REST API 직접 호출 = supabase-js 의존 회피)
-  // ⚠️ 수정금지(승인필요) 2026-06-14 사용자 SSOT = SUPA_PUBLIC 도출 = save-raw.ts·tsPhoto 와 동일화 (= 불일치 버그 해소)
-  //   = 옛 SUPA_URL 정규식 추출 = .env SUPA_URL 이 postgresql:// 접속문자열이라 매칭 실패 → SUPA_PUBLIC='' → Storage 업로드 Invalid URL → 이미지 0 버그.
-  //   = 시스템 SSOT = SUPABASE_PUBLIC_URL 환경변수 단일 + 하드코딩 fallback (= save-raw line21 동일).
-  const STORAGE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || process.env.SUPABASE_KEY;
+  // ⚠️ 2026-08-06 = 사진 저장 = R2(tsPhoto 내부 r2-client 단일 진입점). 옛 Supabase STORAGE_KEY/SUPA_PUBLIC 인자 폐기 = Cloudflare 이전계획 1단계 §19.
+  const { isR2Configured } = await import(pathToFileURL(path.join(ROOT, 'server/services/shared/r2-client.ts')).href);
 
   // ⚠️ 수정금지(승인필요) 2026-06-14 사장님 SSOT = PM 저장경로 = {cityId}/{category}/{PID} (PID 결정적).
-  //   = 원칙: PID 있어야만 구글이미지 인정 → PID 없으면 PM 자체 불성립(Storage 입력 X = WK 폴백 유지).
-  //   = 경로 = PID 결정적 → row 가 바뀌어도(merge/rename) storage-image-relink 가 항상 찾음 = 고아 영구 방지 = Storage↔DB image_url 일치.
+  //   = 원칙: PID 있어야만 구글이미지 인정 → PID 없으면 PM 자체 불성립(저장 입력 X = WK 폴백 유지).
+  //   = 경로 = PID 결정적 → row 가 바뀌어도(merge/rename) 재링크가 항상 찾음 = 고아 영구 방지 = 저장소↔DB image_url 일치.
   //   = 옛 {cityId}/{rowId}-{ts} 폐기(= rowId·타임스탬프 비결정적 = row 바뀌면 고아 = relink 불가 = 밑빠진독 원인, [[feedback_internal_first_recover]]).
-  //   = 업로드 = tsPhoto 단일 관문(PUT+x-upsert) = bucket place-images, 해상도 = 관문 기본 PHOTO_MAX_WIDTH_PX(400) 단일 SSOT(2026-07-09).
-  const SUPA_PUBLIC = process.env.SUPABASE_PUBLIC_URL || 'https://wxebceflvuythuodemro.supabase.co';
+  //   = 업로드 = tsPhoto 단일 관문, 해상도 = 관문 기본 PHOTO_MAX_WIDTH_PX(400) 단일 SSOT(2026-07-09).
   async function downloadAndUpload(photoName: string, category: string, pid: string): Promise<string | null> {
-    if (!PLACES_KEY || !SUPA_PUBLIC || !STORAGE_KEY) return null;
+    if (!PLACES_KEY || !isR2Configured()) return null;
     return await tsPhoto({
       apiKey: PLACES_KEY,
       photoName,
-      storageKey: STORAGE_KEY,
-      supaPublicUrl: SUPA_PUBLIC,
       pathKey: `${cityId}/${category}/${pid}`,
-      bucket: 'place-images',
       // maxWidthPx 미지정 = 관문 기본 PHOTO_MAX_WIDTH_PX(400) = 사진 해상도 단일 SSOT(§16, 2026-07-09 사장님).
     });
   }

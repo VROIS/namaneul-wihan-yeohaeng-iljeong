@@ -1,10 +1,10 @@
 // ⚠️ 수정금지(승인필요) 2026-06-09 사용자 SSOT = 외부호출 raw 저장 단일 관문 (ts-client·geminiClient 가 응답 직후 호출).
 //   = 모든 외부 클라이언트가 이 함수로 raw 저장 → 이후 사용/DB 입력 = 소 안 잃음, 맥락 무관.
 //   = 강제는 각 관문(클라이언트)에 박음. best-effort(저장 실패가 유료 호출 결과를 깨지 않음).
-// ⚠️ 수정금지(승인필요) 2026-06-15 사장님 SSOT = 외부호출 raw = 로컬 + Storage **2곳** 저장 (= 추후 재활용 + 비용 보호).
-//   = 같은 파일규칙으로 양쪽 저장: 로컬 docs/raw/{cityId}/{YYYY-MM-DD}_{source}-{tag}.json + Storage raw-responses 동일 경로.
-//   = 로컬 = 발굴 환경(쓰기 가능 FS)에서만 됨(배포 읽기전용 FS = 조용히 skip). Storage = 어디서든 HTTP PUT.
-//   = 이미지(PM)는 별도 = Storage place-images {cityId}/{category}/{PID} 1곳만 (= 본 함수 아님).
+// ⚠️ 수정금지(승인필요) 2026-08-06 사장님 SSOT = 외부호출 raw = 로컬 + R2 **2곳** 저장 (= §18 2곳 동형 유지. 원격지 = 옛 Supabase Storage → R2 raw-responses/ 프리픽스 대체 = Cloudflare 이전계획 1단계 §19).
+//   = 같은 파일규칙으로 양쪽 저장: 로컬 docs/raw/{cityId}/{YYYY-MM-DD}_{source}-{tag}.json + R2 raw-responses/{동일 경로}.
+//   = 로컬 = 발굴 환경(쓰기 가능 FS)에서만 됨(배포 읽기전용 FS = 조용히 skip). R2 = 어디서든 됨(r2-client 단일 진입점).
+//   = 이미지(PM)는 별도 = R2 place-images/{cityId}/{category}/{PID} 1곳만 (= 본 함수 아님).
 
 import fs from "fs";
 import path from "path";
@@ -12,8 +12,9 @@ import path from "path";
 //   = sibling raw-filename.ts 는 save-raw 를 import 안 함(순환참조 없음) → 정적 import 안전 = esbuild 가 server_dist 번들에 포함 = 배포(CJS)에서도 동작.
 //   = 옛 동적 import('raw-filename.ts') 폐기 = dist 에 .ts 없어 throw + import.meta.url 기준 = CJS 번들 깨짐.
 import { rawHash, versionedName } from "./raw-filename";
+import { uploadToR2, isR2Configured } from "./r2-client";
 
-const BUCKET = "raw-responses";
+const PREFIX = "raw-responses"; // R2 프리픽스 (옛 Supabase 버킷명과 동일 = 로컬·원격 키 대조 불변)
 
 export interface SaveRawOpts {
   source: "ts" | "gemini" | "routes"; // routes = Google Routes API(일별 바로가기 선처리) = 2026-07-24 사장님 승인 추가
@@ -29,14 +30,7 @@ export interface SaveRawOpts {
 
 export async function saveRaw(opts: SaveRawOpts): Promise<void> {
   try {
-    const storageKey =
-      process.env.SUPABASE_SERVICE_ROLE_KEY ||
-      process.env.SUPABASE_ANON_KEY ||
-      process.env.SUPABASE_KEY;
-    const supaPublicUrl =
-      process.env.SUPABASE_PUBLIC_URL ||
-      "https://wxebceflvuythuodemro.supabase.co";
-    if (!storageKey || !supaPublicUrl) return; // 키 없으면 조용히 skip (best-effort)
+    if (!isR2Configured()) return; // R2 설정 없으면 조용히 skip (best-effort, 옛 Supabase 키 검사 대체 2026-08-06)
 
     const ctx =
       opts.contextId != null && String(opts.contextId).trim() !== ""
@@ -97,24 +91,16 @@ export async function saveRaw(opts: SaveRawOpts): Promise<void> {
       2,
     );
 
-    // ⚠️ 2026-07-07 무성실패 제거(사장님 승인) = fetch 는 HTTP 4xx/5xx 예외 안 던짐 → response.ok 확인 강제(raw 증발 로그0 재발방지).
-    const resp = await fetch(
-      `${supaPublicUrl}/storage/v1/object/${BUCKET}/${filePath}`,
-      {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${storageKey}`,
-          "Content-Type": "application/json",
-          "x-upsert": "true",
-        },
-        body,
-        signal: AbortSignal.timeout(15000),
-      },
-    );
-    if (!resp.ok) {
-      const eb = await resp.text().catch(() => "");
+    // ⚠️ 2026-07-07 무성실패 제거(사장님 승인) 원칙 유지 = R2 업로드 실패도 반드시 로그(raw 증발 로그0 재발방지). S3 SDK 는 실패 시 throw.
+    try {
+      await uploadToR2(
+        `${PREFIX}/${filePath}`,
+        Buffer.from(body, "utf8"),
+        "application/json",
+      );
+    } catch (e: any) {
       console.error(
-        `[saveRaw] ❌ Storage PUT 실패 ${resp.status} = ${BUCKET}/${filePath} = ${eb.slice(0, 200)}`,
+        `[saveRaw] ❌ R2 PUT 실패 = ${PREFIX}/${filePath} = ${String(e?.message || e).slice(0, 200)}`,
       );
     }
 

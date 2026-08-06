@@ -27,6 +27,7 @@ import { getUserIdFromReq } from "./auth-user"; // Bearer → userId 단일 관�
 import { nearestCityIdByCoords } from "./city-match"; // 좌표 → 최근접 도시 단일 관문(2026-08-02 §16)
 import { chargeFeature } from "./credit-charge"; // 크레딧 차감 단일 관문(2026-07-29 §9)
 import { isCityRepresentativePlace } from "./services/shared/city-representative-place"; // 도시 대표장소=맛보기 무료 판정 1벌(2026-08-05 §16)
+import { uploadDataUriToR2 } from "./services/shared/r2-client"; // 기기 사진(base64) → R2 guides/ 파일화 1벌(2026-08-06 §16, Cloudflare 이전 1단계)
 
 // ⚠️ db 는 DB 미연결 시 null 가능(server/db.ts) = 라우트 진입 시 확정(bts-routes 패턴). null 이면 throw → 각 라우트 catch 가 503.
 function getDb() {
@@ -446,26 +447,35 @@ export function registerGuideRoutes(app: Express): void {
       //   ② 기기 사진 = 도시를 모르니 좌표로 최근접 1곳 계산(city-match.ts 1벌 §16, 외부호출 0).
       //   좌표도 도시도 없으면 null 로 그대로 저장 = 사장님이 나중에 지정.
       const values = await Promise.all(
-        targets.map(async (g: any) => ({
-          userId: owner,
-          localId: g.localId || null,
-          title: g.title || "여행 기록",
-          description: g.description || null,
-          // 사진 = 기기 사진이면 모듈이 data:image base64 인라인(imageDataUrl)으로,
-          //   우리 DB 장소 사진이면 Storage 원본 URL(imageUrl)로 온다. 둘 다 이 한 칸에 들어간다.
-          imageUrl: g.imageDataUrl || g.imageUrl || null,
-          aiGeneratedContent: g.aiGeneratedContent || null,
-          latitude: g.latitude ?? null,
-          longitude: g.longitude ?? null,
-          locationName: g.locationName || null,
-          cityId:
-            g.cityId ?? (await nearestCityIdByCoords(g.latitude, g.longitude)),
-          // 🏷️ 창고 열쇠 = 어느 장소의 해설인지. 기기 사진이면 장소번호가 없어 null 그대로(= 창고에는 안 뜬다).
-          placeId: Number(g.placeId) > 0 ? Number(g.placeId) : null,
-          language: g.language || language || "ko",
-          voiceLang: g.voiceLang || null,
-          voiceName: g.voiceName || null,
-        })),
+        targets.map(async (g: any) => {
+          // ⚠️ 수정금지(승인필요) 2026-08-06 사장님 SSOT(Cloudflare 이전 1단계) = 기기 사진(base64)은 DB 에 안 넣는다.
+          //   = id 를 먼저 만들어 R2 guides/{id}.{확장자} 로 올리고 DB 에는 주소만(옛 base64 직저장 = 행당 수백 KB = DB 비대 근본 = 폐기 §19).
+          //   = 우리 DB 장소 사진(imageUrl = 이미 r2.dev 주소)은 그대로. R2 업로드 실패 = catch 로 500 = 무성실패 없음(폴백 분기 없음 §0).
+          const id = crypto.randomUUID();
+          const deviceUrl = g.imageDataUrl
+            ? await uploadDataUriToR2(`guides/${id}`, g.imageDataUrl)
+            : null;
+          return {
+            id,
+            userId: owner,
+            localId: g.localId || null,
+            title: g.title || "여행 기록",
+            description: g.description || null,
+            imageUrl: deviceUrl || g.imageUrl || null,
+            aiGeneratedContent: g.aiGeneratedContent || null,
+            latitude: g.latitude ?? null,
+            longitude: g.longitude ?? null,
+            locationName: g.locationName || null,
+            cityId:
+              g.cityId ??
+              (await nearestCityIdByCoords(g.latitude, g.longitude)),
+            // 🏷️ 창고 열쇠 = 어느 장소의 해설인지. 기기 사진이면 장소번호가 없어 null 그대로(= 창고에는 안 뜬다).
+            placeId: Number(g.placeId) > 0 ? Number(g.placeId) : null,
+            language: g.language || language || "ko",
+            voiceLang: g.voiceLang || null,
+            voiceName: g.voiceName || null,
+          };
+        }),
       );
       const inserted = await getDb()
         .insert(guides)

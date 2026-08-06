@@ -1156,10 +1156,10 @@ OUTPUT (strict JSON, no markdown fences):
 - **응답 매핑**: 9요소 → TsPlace (PID/nameLocal/address/lat/lng/RC/priceEur(=priceRange.endPrice.units)/photoName/mapsUri/businessStatus). **rating 제외**.
 - **조건**: 앱 전체 모든 Places 검색 유일 진입점. 호출자 = ts-backfill, ts-photo-fill, 06, gemini-curate(아님 — gemini), ag3(아님 — 우회). timeout 30000.
 
-### #27 · `tsPhoto()` — PhotoMedia → Supabase Storage 단일 진입점
+### #27 · `tsPhoto()` — PhotoMedia → R2(place-images/) 단일 진입점 (2026-08-06 R2 전환)
 - **파일**: `server/services/shared/ts-client.ts:129` · **상태**: live
 - **호출1 (verbatim)**: `GET https://places.googleapis.com/v1/${photoName}/media?maxWidthPx=${maxWidthPx ?? 800}&key=${apiKey}`. timeout 30000. FieldMask 없음(미디어).
-- **호출2 (verbatim)**: `PUT ${supaPublicUrl}/storage/v1/object/${bucket}/${pathKey}.jpg` (bucket 기본 'place-images'), headers `{ Authorization: Bearer ${storageKey}, 'Content-Type':'image/jpeg', 'x-upsert':'true' }`. 반환 = public URL.
+- **호출2 (verbatim)**: `uploadToR2('place-images/${pathKey}.jpg', buf, 'image/jpeg')` (r2-client 단일 진입점, 옛 Supabase PUT 폐기 = 2026-08-06 §19). 반환 = R2 public URL.
 - **조건**: 모든 사진 다운+저장 유일 진입점. 호출자 = ts-photo-fill, 06 post-process.
 
 ### #28 · `ts-backfill.ts` — PID 없는 행 TS 재검증·보강
@@ -1256,7 +1256,7 @@ const CATEGORY_QUERIES: Record<string, string> = {
 
 ### #38 · 06 ts-pm-enrich post-process (tsPhoto 관문)
 - **파일**: `.claude/skills/.../06-ts-pm-enrich/post-process.ts:75` · **상태**: tool
-- **호출 (verbatim)**: `tsPhoto({ photoName, pathKey:`${cityId}/${rowId}-${Date.now()}`, bucket:'place-photos', maxWidthPx:800 })` → upsertPlace(imageUrl 새우선). €0.007/행.
+- **호출 (verbatim, 2026-08-06 R2 전환)**: `tsPhoto({ apiKey, photoName, pathKey:`${cityId}/${category}/${pid}` })` (해상도 = 관문 기본 400, 저장 = R2 place-images/) → upsertPlace(imageUrl 새우선). €0.007/행.
 - **조건**: CLI `--apply-status=ok [--photo] [--apply-ids]`.
 
 ## TS 라이브 매처 ag3 (#39~#40, 메인앱 핫패스)
@@ -1518,11 +1518,11 @@ const t1 = tsByOurId.get(r.id);
 if (!t1 || !t1.photoName) { imgNoPhoto++; continue; } // 사진 없음 = skip
 const pid = t1.googlePlaceId || cur?.google_place_id;
 const pmKey = await issueApiKey(c, 'GOOGLE_MAPS_API_KEY', cityId, inputDate, true); // 출입증 직독
-const imageUrl = await tsPhoto({ apiKey: pmKey, photoName: t1.photoName, storageKey, supaPublicUrl,
-  pathKey: `${cityId}/${cur?.seed_category||r.seed_category}/${pid}`, maxWidthPx: 800 });
+const imageUrl = await tsPhoto({ apiKey: pmKey, photoName: t1.photoName,
+  pathKey: `${cityId}/${cur?.seed_category||r.seed_category}/${pid}` }); // 저장 = R2 place-images/ (2026-08-06 전환), 해상도 = 관문 기본 400
 // → 우리 id 직행 UPDATE: image_url=$2, image_updated_at=NOW() WHERE id=$1
 ```
-- **호출 = #27 그대로**: PhotoMedia GET → Storage PUT place-images. photo = `t1.photoName`(photos[0] = 대표 1장). maxWidthPx=800. 무료재링크(`storage-image-relink.ts`) 우선이라 실제 PM = 최종 소수만(결손분 필터 4중: 무료재링크∉ + place-images없음 + photoName있음).
+- **호출 = #27 그대로**: PhotoMedia GET → R2 업로드 place-images/(2026-08-06 전환). photo = `t1.photoName`(photos[0] = 대표 1장). 무료재링크(`storage-image-relink.ts`) 우선이라 실제 PM = 최종 소수만(결손분 필터 4중: 무료재링크∉ + place-images없음 + photoName있음).
 
 ### 저장 = §18 (TS 모음 1파일 = 06형태)
 - TS raw = 건건 로컬 skip(`localSkipRaw:true`) + 끝에 06형태 모음 1파일 `{date}_45-ts-defect-repair_candidates.json`(results 배열, photo_name 1개). Gemini raw = 로컬+스토리지 2곳. 이미지 = Storage place-images 1곳.

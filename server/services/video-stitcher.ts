@@ -1,6 +1,6 @@
-// ⚠️ 수정금지(승인필요) 2026-07-22 사장님 SSOT = 씬 클립 결합 + Storage 업로드 (지브리 일별 영상 후처리 1벌)
-// = ffmpeg concat -c copy(무재인코딩 = 수 초) → 길이 검증 → Supabase Storage itinerary-videos/{itineraryId}/day{N}.mp4 → 공개 URL.
-// = 업로드 = ts-client tsPhoto 와 동형 PUT(x-upsert) 패턴. 옛 목업(샘플 URL 반환) = 폐기 2026-07-22 구현계획.
+// ⚠️ 수정금지(승인필요) 2026-08-06 사장님 SSOT = 씬 클립 결합 + R2 업로드 (지브리 일별 영상 후처리 1벌)
+// = ffmpeg concat -c copy(무재인코딩 = 수 초) → 길이 검증 → R2 itinerary-videos/{itineraryId}/day{N}.mp4 → 공개 URL.
+// = 업로드 = r2-client 단일 진입점(uploadToR2). 옛 Supabase Storage PUT = 폐기 2026-08-06 Cloudflare 이전계획 1단계 §19(창고 0.9/1GB 위기 = 신규 영상은 R2 로만).
 
 import fs from "fs";
 import os from "os";
@@ -9,6 +9,7 @@ import { execFile } from "child_process";
 import { promisify } from "util";
 import ffmpegPath from "ffmpeg-static";
 import { SCENE_SECONDS } from "./ghibli-travel-storyboard";
+import { uploadToR2 } from "./shared/r2-client";
 
 const execFileAsync = promisify(execFile);
 
@@ -64,35 +65,14 @@ export async function stitchAndUpload(
         `[stitcher] 결합 길이 이상: ${durationSec}s (기대 ${expected}s)`,
       );
 
-    // Storage 업로드 (save-raw 와 동일 env 체계)
-    const storageKey =
-      process.env.SUPABASE_SERVICE_ROLE_KEY ||
-      process.env.SUPABASE_ANON_KEY ||
-      process.env.SUPABASE_KEY;
-    const supaPublicUrl =
-      process.env.SUPABASE_PUBLIC_URL ||
-      "https://wxebceflvuythuodemro.supabase.co";
-    if (!storageKey) throw new Error("[stitcher] Storage 키 없음");
-    const filePath = `${itineraryId}/day${day}.mp4`;
+    // R2 업로드 (r2-client 단일 진입점, S3 SDK 가 업로드 실패 시 throw = 무성실패 없음)
     const finalBuf = fs.readFileSync(outPath);
-    const ur = await fetch(
-      `${supaPublicUrl}/storage/v1/object/itinerary-videos/${filePath}`,
-      {
-        method: "PUT",
-        headers: {
-          Authorization: `Bearer ${storageKey}`,
-          "Content-Type": "video/mp4",
-          "x-upsert": "true",
-        },
-        body: finalBuf,
-        signal: AbortSignal.timeout(120000),
-      },
+    const up = await uploadToR2(
+      `itinerary-videos/${itineraryId}/day${day}.mp4`,
+      finalBuf,
+      "video/mp4",
     );
-    if (!ur.ok)
-      throw new Error(
-        `[stitcher] 업로드 실패 ${ur.status}: ${(await ur.text()).slice(0, 300)}`,
-      );
-    return `${supaPublicUrl}/storage/v1/object/public/itinerary-videos/${filePath}`;
+    return up.publicUrl;
   } finally {
     fs.rmSync(work, { recursive: true, force: true });
   }

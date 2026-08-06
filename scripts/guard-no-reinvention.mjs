@@ -70,6 +70,21 @@ const CAPABILITIES = [
     triggers: [/seed_category\s*=[\s\S]{0,40}(UPDATE|move)/i],
     hint: "오분류 이동 = category-move.ts (DELETE 금지 = TS 자산 보존). 새로 만들지 말 것(§16).",
   },
+  {
+    id: "r2-storage-migrate",
+    ko: "Supabase Storage → R2 복사·DB 주소 치환·guides base64 추출(Cloudflare 이전 1단계, 2026-08-06)",
+    owners: [
+      "server/services/fill/storage-r2-migrate.ts",
+      "server/services/fill/storage-r2-relink.ts",
+      "server/services/fill/guides-photo-extract.ts",
+      "server/services/shared/r2-client.ts",
+    ],
+    triggers: [
+      /storage\.objects[\s\S]{0,200}uploadToR2/i,
+      /supabase\.co[\s\S]{0,160}r2\.dev/i,
+    ],
+    hint: "Supabase→R2 복사 = storage-r2-migrate.ts / DB 주소 치환 = storage-r2-relink.ts / guides base64 추출 = guides-photo-extract.ts. 새 복사·치환 루프 만들지 말 것(§16).",
+  },
 ];
 
 // ── --catalog : fill/ 실제 파일 헤더 1줄 + 능력표를 출력 (항상 최신 = 카탈로그가 코드에서 자동 생성) ──

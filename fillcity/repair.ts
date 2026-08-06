@@ -76,14 +76,10 @@ const ANCHOR_M = 10; // ⚠️ 수정금지(승인필요) 2026-06-23 사장님 S
     console.error(`X city ${cityId} 미존재`);
     process.exit(1);
   }
-  // Storage 업로드용(외부호출 아님 = Supabase 자체 인증) = env 그대로.
-  const supaPublicUrl =
-    process.env.SUPABASE_PUBLIC_URL ||
-    "https://wxebceflvuythuodemro.supabase.co";
-  const storageKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.SUPABASE_ANON_KEY ||
-    process.env.SUPABASE_KEY;
+  // ⚠️ 2026-08-06 = 사진 저장 = R2(r2-client 단일 진입점). 옛 Supabase storageKey/supaPublicUrl 폐기 = Cloudflare 이전계획 1단계 §19.
+  const { isR2Configured } = await import(
+    pathToFileURL(path.join(ROOT, "server/services/shared/r2-client.ts")).href
+  );
 
   // [1 추출] = 그 시점 PSR SQL = 우리 id 목록 (= 12요소 결손 행). 풀 = 6cat TOP20 + 식당 30/90/30. BTS 제외.
   //   사장님 SSOT 2026-06-16 = 저장된 rank 그대로 추출(라이브 ROW_NUMBER 재계산 X = #45 가 RC 덮어써 풀 흔드는 옛 결함 차단).
@@ -175,9 +171,9 @@ const ANCHOR_M = 10; // ⚠️ 수정금지(승인필요) 2026-06-23 사장님 S
     await c.end();
     return;
   }
-  // ⚠️ 수정금지(승인필요) 2026-06-18 = 외부호출 키는 각 단계 issueApiKey 가 발급(미달=throw). 여기선 Storage 업로드용 storageKey 만 사전 점검.
-  if (!storageKey) {
-    console.error("X Storage 키 미설정 = 이미지 업로드 불가");
+  // ⚠️ 수정금지(승인필요) 2026-06-18 = 외부호출 키는 각 단계 issueApiKey 가 발급(미달=throw). 여기선 이미지 저장용 R2 설정만 사전 점검(2026-08-06 R2 전환).
+  if (!isR2Configured()) {
+    console.error("X R2 설정 미비 = 이미지 업로드 불가");
     await c.end();
     return;
   }
@@ -475,10 +471,8 @@ const ANCHOR_M = 10; // ⚠️ 수정금지(승인필요) 2026-06-23 사장님 S
       const imageUrl = await tsPhoto({
         apiKey: pmKey,
         photoName: t1.photoName,
-        storageKey,
-        supaPublicUrl,
         pathKey: `${cityId}/${cur?.seed_category || r.seed_category}/${pid}`,
-      }); // maxWidthPx 미지정 = 관문 기본 400(§16 단일 SSOT)
+      }); // maxWidthPx 미지정 = 관문 기본 400(§16 단일 SSOT). 저장 = R2(2026-08-06)
       if (!imageUrl) {
         console.log(`  X 업로드실패 id=${r.id} ${r.name_local}`);
         continue;

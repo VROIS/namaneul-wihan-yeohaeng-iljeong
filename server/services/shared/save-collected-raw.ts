@@ -1,13 +1,14 @@
-// ⚠️ 수정금지(승인필요) 2026-07-06 사장님 SSOT = 발굴형 raw(모음/parsedPlaces) 저장 단일 헬퍼 (= §18 로컬+Storage 2곳).
+// ⚠️ 수정금지(승인필요) 2026-08-06 사장님 SSOT = 발굴형 raw(모음/parsedPlaces) 저장 단일 헬퍼 (= §18 로컬+R2 2곳. 원격지 = 옛 Supabase Storage → R2 대체 = Cloudflare 이전계획 1단계 §19).
 //   = #45(repair.ts:259-271)·02-enrich(enrich-paris.ts) 가 만드는 "사람 검수용 형식"({meta, rawResponse, parsedPlaces} / {meta, results[]})을
-//     런타임(MIX 여정생성)에서도 도시id 폴더에 동일 저장하기 위한 관문. save-raw.ts(봉투형식 건건 Storage)와 별개 = 형식이 다름.
-//   = save-raw.ts:74-90 의 Storage PUT + 로컬 write 로직 복붙(§16 재발명0). 파일명 = raw-filename.ts(rawName/versionedName/rawHash) 재사용.
-//   = 배포서버(읽기전용 FS)에서도 raw 안 증발 = Storage PUT 필수(로컬 write 는 best-effort). = 사장님 "300 도시 자동" 정합.
+//     런타임(MIX 여정생성)에서도 도시id 폴더에 동일 저장하기 위한 관문. save-raw.ts(봉투형식 건건)와 별개 = 형식이 다름.
+//   = save-raw.ts 의 R2 업로드 + 로컬 write 로직과 동형(§16 재발명0). 파일명 = raw-filename.ts(rawName/versionedName/rawHash) 재사용.
+//   = 배포서버(읽기전용 FS)에서도 raw 안 증발 = R2 업로드 필수(로컬 write 는 best-effort). = 사장님 "300 도시 자동" 정합.
 import fs from "fs";
 import path from "path";
 import { rawName, versionedName, rawHash } from "./raw-filename";
+import { uploadToR2, isR2Configured } from "./r2-client";
 
-const BUCKET = "raw-responses";
+const PREFIX = "raw-responses"; // R2 프리픽스 (옛 Supabase 버킷명과 동일 = 로컬·원격 키 대조 불변)
 
 export interface SaveCollectedRawOpts {
   cityId: number; // = 도시 폴더(raw-responses/{cityId}/ + docs/raw/{cityId}/)
@@ -24,13 +25,6 @@ export async function saveCollectedRaw(
   opts: SaveCollectedRawOpts,
 ): Promise<void> {
   try {
-    const storageKey =
-      process.env.SUPABASE_SERVICE_ROLE_KEY ||
-      process.env.SUPABASE_ANON_KEY ||
-      process.env.SUPABASE_KEY;
-    const supaPublicUrl =
-      process.env.SUPABASE_PUBLIC_URL ||
-      "https://wxebceflvuythuodemro.supabase.co";
     if (!opts.cityId) return; // 도시 미확정 = 저장 skip(runtime 재발 방지 = 사장님 SSOT)
 
     const stem = rawName(opts.stepNum, opts.stepName, opts.content, opts.date); // {date}_{NN-step}_{content}.json
@@ -59,27 +53,18 @@ export async function saveCollectedRaw(
     const filePath = `${ctx}/${fileName}`;
     const text = JSON.stringify(opts.body, null, 2); // pretty(사장님 눈 검수)
 
-    // ① Storage PUT (= 배포서버에서도 안 증발 = 필수). save-raw.ts:74-79 복붙.
-    // ⚠️ 2026-07-07 무성실패 제거 = fetch 는 HTTP 4xx/5xx 를 예외로 안 던짐 → response.ok 확인 강제.
-    //   (근본사고: raw-responses 버킷 ANON 정책 없어 403 → 결과 미확인 → catch 로 삼켜 raw 증발 로그0. 정책 복제 + 이 가드로 재발방지.)
-    if (storageKey && supaPublicUrl) {
-      const resp = await fetch(
-        `${supaPublicUrl}/storage/v1/object/${BUCKET}/${filePath}`,
-        {
-          method: "PUT",
-          headers: {
-            Authorization: `Bearer ${storageKey}`,
-            "Content-Type": "application/json",
-            "x-upsert": "true",
-          },
-          body: text,
-          signal: AbortSignal.timeout(15000),
-        },
-      );
-      if (!resp.ok) {
-        const body = await resp.text().catch(() => "");
+    // ① R2 업로드 (= 배포서버에서도 안 증발 = 필수). save-raw.ts 와 동형(r2-client 단일 진입점).
+    // ⚠️ 2026-07-07 무성실패 제거 원칙 유지 = 실패 시 반드시 로그(raw 증발 로그0 재발방지). S3 SDK 는 실패 시 throw.
+    if (isR2Configured()) {
+      try {
+        await uploadToR2(
+          `${PREFIX}/${filePath}`,
+          Buffer.from(text, "utf8"),
+          "application/json",
+        );
+      } catch (e: any) {
         console.error(
-          `[saveCollectedRaw] ❌ Storage PUT 실패 ${resp.status} = ${BUCKET}/${filePath} = ${body.slice(0, 200)}`,
+          `[saveCollectedRaw] ❌ R2 PUT 실패 = ${PREFIX}/${filePath} = ${String(e?.message || e).slice(0, 200)}`,
         );
       }
     }
