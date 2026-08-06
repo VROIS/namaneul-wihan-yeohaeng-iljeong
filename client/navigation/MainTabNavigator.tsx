@@ -19,6 +19,8 @@ import { tabBadgeCount, getMyRole } from "@/screens/expert/expertApi"; // 전문
 import { videoBadgeCount } from "@/components/tripis/savedVideosApi";
 import { useMapToggle } from "@/contexts/MapToggleContext";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
+// ⚠️ 수정금지(승인필요) 2026-08-05 사장님 지적 = 결제하고 돌아왔으면 **처음부터 프로필(충전소)** 로 뜬다.
+import { readPaymentReturn } from "@/lib/paymentReturn";
 
 export type MainTabParamList = {
   // 🗂️ 2026-07-03 = itineraryId 있으면 저장여정 복원(프로필 나의여정 카드 탭 → 여정화면 그대로). 없으면 신규 생성(기존).
@@ -196,6 +198,18 @@ export default function MainTabNavigator() {
   return (
     <>
       <Tab.Navigator
+        // ⚠️ 수정금지(승인필요) 2026-08-06 사장님 SSOT = **첫 화면(부모)** 을 여기서 정한다.
+        //   사장님 지적: "결제의 출발이 프로필인데 돌아오는 곳을 프로필로 설정하지 않고
+        //   여정플래너(앱 시작 화면)를 부모로 잡으니 리디렉션이 실패한다."
+        //   → 결제 복귀(?payment=)로 들어온 부팅이면 홈을 거치지 않고 **바로 프로필**을 연다.
+        //
+        //   ⚠️ **로그인일 때만** 프로필로 연다(§22 판단검증이 잡은 돈 걸린 함정).
+        //   폰에서는 결제창이 **앱 안 브라우저**로 뜨는데(useProfile 의 WebBrowser), 그 브라우저는
+        //   앱과 저장소를 공유하지 않아 복귀한 웹판이 **비로그인**으로 켜진다.
+        //   그 상태로 프로필을 열면 잔액칸이 "-" 로 보여(ProfileHeader) 방금 €10 을 낸 사람이
+        //   "충전이 안 됐다"고 오해하고 **또 결제**할 수 있다. 비로그인 복귀는 홈(중립)에 둔다.
+        //   (이 값은 로그인 확인이 끝난 뒤에 계산된다 = RootStackNavigator 가 authReady 까지 기다림)
+        initialRouteName={readPaymentReturn() && isAuthed ? "Profile" : "Home"}
         screenOptions={({ route }) => ({
           tabBarIcon: ({ color, focused }) =>
             getTabBarIcon(route.name, color, focused),

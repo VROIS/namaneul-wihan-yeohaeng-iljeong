@@ -62,6 +62,23 @@ async function findPurchaseRow(sessionId: string) {
   return row ?? null;
 }
 
+// ⚠️ 수정금지(승인필요) 2026-08-05 = 결제 끝나고 **돌아올 주소**를 고르는 곳 1벌.
+//   브라우저가 알려 준 화면 주소(Origin)가 **우리 것이면** 그리로, 아니면 요청받은 주소로.
+//   (아무 주소나 받으면 결제 후 낯선 사이트로 보내는 통로가 된다.)
+function pickReturnBase(origin: string, selfBase: string): string {
+  try {
+    const o = new URL(origin);
+    if (o.protocol !== "http:" && o.protocol !== "https:") return selfBase;
+    const ours =
+      o.host === new URL(selfBase).host ||
+      o.hostname === "localhost" ||
+      o.hostname === "127.0.0.1";
+    return ours ? o.origin : selfBase;
+  } catch {
+    return selfBase; // Origin 이 없거나(앱에서 직접 호출) 이상하면 요청받은 주소
+  }
+}
+
 export function registerPaymentRoutes(app: Express): void {
   // ── 1) 잔액 = GET /api/credits/balance ──
   app.get("/api/credits/balance", async (req: Request, res: Response) => {
@@ -113,9 +130,26 @@ export function registerPaymentRoutes(app: Express): void {
 
       const user = await creditService.getUserProfile(userId);
 
-      // ⚠️ https 고정 = 프록시(Replit) 뒤에서는 req.protocol 이 항상 'http' 로 나온다(trust proxy 미설정).
-      //   내손앱은 req.protocol 을 써서 이 함정이 있었다 = 같은 실수 반복 금지.
-      const baseUrl = `https://${req.headers.host}`;
+      // ⚠️ 수정금지(승인필요) 2026-08-05 사장님 실조작 SSOT = **결제 끝나고 돌아올 주소**.
+      //   사장님이 로컬에서 직접 결제해 보시고 잡아낸 것: 돌아온 주소가 `https://localhost:5000` 이라
+      //   화면이 안 뜨고 `ERR_SSL_PROTOCOL_ERROR` 가 났다. 이유 두 가지였다.
+      //     ① 프로토콜을 https 로 **고정**했는데 로컬은 http 다 → 접속 자체가 실패.
+      //     ② 화면이 사는 곳(로컬 8082)과 서버(5000)가 **다른 주소**인데 서버 주소로 돌아오게 했다.
+      //   그래서 이렇게 정한다:
+      //     · 브라우저가 알려 준 **화면 주소(Origin)** 가 있으면 그리로 돌아온다 = 화면이 있는 곳이 정답.
+      //     · 없으면(폰 앱에서 직접 호출) 요청받은 호스트로 돌아오되 **https 로 붙인다.**
+      //       ⚠️ 여기서 `req.protocol` 을 쓰면 안 된다 — 프록시(Replit) 뒤에서는 그 값이 항상 'http' 라
+      //       폰 결제 복귀 주소가 http 로 떨어진다(옛 코드가 https 를 고정해 둔 이유가 이것이다).
+      //       프록시가 진짜 값을 알려주면(`x-forwarded-proto`) 그걸 우선 쓴다.
+      //   ⚠️ 아무 주소나 받으면 결제 후 낯선 사이트로 보내는 통로가 된다 → **우리 것일 때만** 쓴다.
+      const fwdProto = String(req.headers["x-forwarded-proto"] || "").split(
+        ",",
+      )[0];
+      const selfBase = `${fwdProto || "https"}://${req.headers.host}`;
+      const baseUrl = pickReturnBase(
+        String(req.headers.origin || ""),
+        selfBase,
+      );
 
       const session = await stripe().checkout.sessions.create({
         mode: "payment",
@@ -136,6 +170,11 @@ export function registerPaymentRoutes(app: Express): void {
             quantity: 1,
           },
         ],
+        // ⚠️ 수정금지(승인필요) 2026-08-06 = 이 `?payment=` 를 화면이 읽어 **첫 화면을 프로필(충전소)로** 연다.
+        //   읽는 곳 = client/lib/paymentReturn.ts(판별 1벌) → client/navigation/MainTabNavigator.tsx(첫 화면 결정).
+        //   그 처리가 없으면 복귀 화면이 홈(여정플래너)이라 사용자가 충전됐는지 알 수 없다
+        //   (사장님 TestFlight·로컬 실증으로 발견 2026-08-05~06).
+        //   ⚠️ 이 파라미터 이름을 바꾸면 그 두 파일도 같이 바꿔야 한다(한 쌍).
         success_url: `${baseUrl}/?payment=success&session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${baseUrl}/?payment=cancel`,
         customer_email: user?.email || undefined,

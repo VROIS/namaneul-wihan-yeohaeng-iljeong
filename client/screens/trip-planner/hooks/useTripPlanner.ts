@@ -150,7 +150,6 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
     globalCurrentItinerary,
     t,
     i18n,
-    navigation,
   });
 
   const {
@@ -193,7 +192,6 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
     setCurrentItineraryId,
     t,
     i18n,
-    navigation,
   });
 
   const pickers = usePickers({ formData, setFormData });

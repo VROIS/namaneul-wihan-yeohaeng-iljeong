@@ -47,6 +47,13 @@ interface MapToggleContextType {
   mainAppOpenTab: "Home" | "Profile" | null;
   requestMainApp: (tab?: "Home" | "Profile") => void;
   clearMainAppRequest: () => void;
+  // ⚠️ 수정금지(승인필요) 2026-08-05 사장님 SSOT = **지금 그 창(메인앱 오버레이)이 열려 있는가.**
+  //   왜 필요한가(사장님 실기기 실증): BTS 안에서 [충전하기] 를 누르면 메인앱이 **한 벌 더** 떠서
+  //   화면이 3개(BTS·오버레이·새 메인앱)가 됐다. BTS 를 옆으로 밀면 뒤에서 또 다른 메인앱이 나왔다.
+  //   원인 = 그 상황에서 화면 이동을 시키면 새 화면이 **쌓인다**(현재 뿌리 화면 이름이 BTS 라서).
+  //   해법 = 창이 열려 있으면 이동시키지 않고 **그 창의 탭만 프로필로 바꾼다** = BTS 를 떠나지 않는다.
+  mainAppOverlayOpen: boolean;
+  setMainAppOverlayOpen: (open: boolean) => void;
   // ⚠️ 사장님 SSOT 2026-07-25(세션2) = 로그인 성공/로그아웃 등 인증상태 변경 신호(expertDataChangedAt 패턴 복제). 로그인 팝업은 navigation focus를 안 바꿔 프로필(useFocusEffect)이 재조회 안 함 → 이 신호로 useProfile 등이 재조회 = 로그인 후 즉시 인증반영.
   authChangedAt: number | null;
   // ⚠️ 수정금지(승인필요) — 사장님 SSOT 2026-07-27 = **로그인 여부 판정은 이 1곳만**(§0·§16).
@@ -86,6 +93,8 @@ const MapToggleContext = createContext<MapToggleContextType>({
   mainAppOpenTab: null,
   requestMainApp: () => {},
   clearMainAppRequest: () => {},
+  mainAppOverlayOpen: false,
+  setMainAppOverlayOpen: () => {},
   authChangedAt: null,
   authUser: null,
   isAuthed: false,
@@ -123,6 +132,7 @@ export function MapToggleProvider({ children }: { children: React.ReactNode }) {
   const [mainAppOpenTab, setMainAppOpenTab] = useState<
     "Home" | "Profile" | null
   >(null);
+  const [mainAppOverlayOpen, setMainAppOverlayOpen] = useState(false);
   const [authChangedAt, setAuthChangedAt] = useState<number | null>(null);
   // 인증 상태 1벌 = 앱 시작 시 1회 + 인증변경 신호마다 저장소에서 다시 읽음(네트워크 없음).
   const [authUser, setAuthUser] = useState<UserData | null>(null);
@@ -231,6 +241,8 @@ export function MapToggleProvider({ children }: { children: React.ReactNode }) {
         mainAppOpenTab,
         requestMainApp,
         clearMainAppRequest,
+        mainAppOverlayOpen,
+        setMainAppOverlayOpen,
         authChangedAt,
         authUser,
         isAuthed: !!authUser,

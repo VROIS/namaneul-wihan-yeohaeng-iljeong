@@ -5,10 +5,7 @@ import { calculateVibeWeights } from "@/utils/vibeCalculator";
 import { apiRequest } from "@/lib/query-client";
 import { UserData } from "@/lib/auth";
 import { useMapToggle } from "@/contexts/MapToggleContext";
-import {
-  parseCreditShortfall,
-  showCreditShortfallAlert,
-} from "@/lib/creditError";
+import { parseCreditShortfall, useCreditShortfall } from "@/lib/creditError";
 
 export function useGenerateItinerary({
   formData,
@@ -21,7 +18,6 @@ export function useGenerateItinerary({
   setCurrentItineraryId,
   t,
   i18n,
-  navigation,
 }: {
   formData: TripFormData;
   currentUser: UserData | null;
@@ -37,10 +33,11 @@ export function useGenerateItinerary({
   setCurrentItineraryId: React.Dispatch<React.SetStateAction<number | null>>;
   t: (key: string, opts?: any) => string;
   i18n: { language: string };
-  navigation: { navigate: (name: string, params?: unknown) => void };
 }) {
   // ⚠️ 2026-07-25 사장님 SSOT = 여정생성 인증분기 = 로그인 인식되면 바로 생성 진행 / 비인증이면 로그인 팝업(requestLogin). 화면 이동·자동재개 폐기(§0·§19).
   const { requestLogin, isAuthed } = useMapToggle();
+  // 크레딧부족(402) 안내 + 충전화면 이동 = 앱 전체 공용 1벌(§16). 이동 방식(창 안/밖) 판단도 그 훅이 한다.
+  const showCreditShortfall = useCreditShortfall();
 
   // 🚨 위기 정보 체크 및 팝업 표시
   const checkCrisisAlerts = async (): Promise<{
@@ -222,7 +219,7 @@ export function useGenerateItinerary({
       const message = error?.message || "";
       const shortfall = parseCreditShortfall(message);
       if (shortfall) {
-        showCreditShortfallAlert(navigation, shortfall, t);
+        showCreditShortfall(shortfall);
         setScreen("Input");
         return;
       }

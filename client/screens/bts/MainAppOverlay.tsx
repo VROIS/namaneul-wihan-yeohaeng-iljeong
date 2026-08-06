@@ -34,11 +34,17 @@ import { Colors } from "@/constants/theme";
 
 export default function MainAppOverlay() {
   const { t } = useTranslation();
-  const { mainAppRequestedAt, mainAppOpenTab, clearMainAppRequest } =
-    useMapToggle();
+  const {
+    mainAppRequestedAt,
+    mainAppOpenTab,
+    clearMainAppRequest,
+    // ⚠️ 수정금지(승인필요) 2026-08-05 = 열림 여부를 **여기 혼자 알지 않고 공용으로 둔다**(§0 1벌).
+    //   충전 이동이 이 값을 보고 "창 안이면 탭만 바꾸기"로 갈라져야 하기 때문(메인앱 2벌 방지).
+    mainAppOverlayOpen: visible,
+    setMainAppOverlayOpen: setVisible,
+  } = useMapToggle();
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? "light"];
-  const [visible, setVisible] = useState(false);
   // ⚠️ 수정금지(승인필요) 2026-07-31 사장님 지시 = **어느 버튼으로 열었는지 기억한다.**
   //   사고: [프로필] 을 눌러도 여정 화면이 떠서, 창 안에서 프로필로 갈 방법이 없었다(사장님 실증).
   //   신호에 실려 온 값(mainAppOpenTab)을 여기 담아 **그 화면을 바로 보여준다.**
@@ -56,7 +62,7 @@ export default function MainAppOverlay() {
     setVisible(true);
     setOpenKey(mainAppRequestedAt); // 누를 때마다 달라지는 값(시각)
     clearMainAppRequest();
-  }, [mainAppRequestedAt, mainAppOpenTab, clearMainAppRequest]);
+  }, [mainAppRequestedAt, mainAppOpenTab, clearMainAppRequest, setVisible]);
 
   // ⚠️ 닫혀 있을 때는 **아예 만들지 않는다.**
   //   메인앱 화면을 항상 켜 두면 배터리·메모리를 계속 쓴다. 필요할 때만 만든다.

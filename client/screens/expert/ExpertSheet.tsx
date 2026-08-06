@@ -20,17 +20,14 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
-import { useNavigation } from "@react-navigation/native";
-import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { Colors, Spacing, Brand } from "@/constants/theme";
 import Icon from "@/components/Icon";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useMapToggle } from "@/contexts/MapToggleContext";
 // ⚠️ 수정금지(승인필요) 2026-08-05 사장님 SSOT = 크레딧부족 공용 헬퍼(§16 5곳 공용).
-//   이 파일은 원래 내부 화면전환(home/detail/profileEdit)에 react-navigation을 안 쓰지만(주석 §2 참조),
-//   "충전 화면으로 나가는" 외부 이동은 TripisModal.tsx 와 같은 패턴(useNavigation)을 그대로 재사용한다.
-import { showCreditShortfallAlert } from "@/lib/creditError";
+//   이 파일은 내부 화면전환(home/detail/profileEdit)에 react-navigation을 안 쓴다(주석 §2 참조).
+//   "충전 화면으로 나가는" 외부 이동도 이 훅이 통째로 맡으므로 여기서는 navigation 을 직접 만지지 않는다.
+import { useCreditShortfall } from "@/lib/creditError";
 import {
   submitInquiry,
   saveItineraryForInquiry,
@@ -81,8 +78,7 @@ export default function ExpertSheet({
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? "light"];
   const insets = useSafeAreaInsets();
-  const navigation =
-    useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const showCreditShortfall = useCreditShortfall();
   // ⚠️ 실제 저장 여정 id = currentItineraryId(별도) = Itinerary 타입엔 id 없음. 이걸 써야 FK 연결됨.
   const {
     currentItinerary,
@@ -261,7 +257,7 @@ export default function ExpertSheet({
       } else if (r.error === "insufficient_credits" && r.shortfall) {
         // ⚠️ 수정금지(승인필요) 2026-08-05 사장님 SSOT = 공용 헬퍼(§16 5곳 공용).
         //   시트를 먼저 닫는다 = 안 닫으면 프로필로 가도 이 시트가 계속 덮는다(성공:256·로그인 경로와 같은 순서).
-        showCreditShortfallAlert(navigation, r.shortfall, t, onClose);
+        showCreditShortfall(r.shortfall, onClose);
       } else {
         notify(t("common.error"), t("expert.sendError"));
       }

@@ -24,13 +24,12 @@ import { fetch as expoFetch } from "expo/fetch";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as Location from "expo-location";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useTranslation } from "react-i18next";
 // 아이콘 = 운영 SVG 직접 렌더 = iOS Expo Go 에서 Ionicons 미표시 근본 해결(2026-07-20 실기기 SSOT).
 import GuideIconJs from "@/screens/guide/components/GuideIcons";
 // ⚠️ 수정금지(승인필요) 2026-08-05 사장님 SSOT = 크레딧부족 공용 헬퍼(§16 5곳 공용).
 import {
   parseCreditShortfall,
-  showCreditShortfallAlert,
+  useCreditShortfall,
   type CreditShortfall,
 } from "@/lib/creditError";
 
@@ -231,7 +230,7 @@ function GuideResultHost({
   navigation,
 }: NativeStackScreenProps<GuideStackParamList, "GuideResult">) {
   const { imageBase64, placeId, lang = "ko" } = route.params;
-  const { t } = useTranslation();
+  const showCreditShortfall = useCreditShortfall();
   // ⚠️ 수정금지(승인필요) 2026-08-05 = 이 화면은 **루트 스택 fullScreenModal**(가이드 미니앱) 안이다
   //   (RootStackNavigator.tsx:198). 충전 화면으로 보내려면 **미니앱을 먼저 닫아야** 한다:
   //   · 안 닫고 navigate 하면 = StackRouter 의 NAVIGATE 는 pop 표시가 없으면 기존 Main 을 찾지 않고
@@ -527,7 +526,7 @@ function GuideResultHost({
           );
           if (creditShortfall) {
             // 미니앱을 **루트에서** 먼저 닫고(어느 진입경로든 확실) → 그 다음 프로필.
-            showCreditShortfallAlert(navigation, creditShortfall, t, () =>
+            showCreditShortfall(creditShortfall, () =>
               navigation.getParent()?.goBack(),
             );
           }

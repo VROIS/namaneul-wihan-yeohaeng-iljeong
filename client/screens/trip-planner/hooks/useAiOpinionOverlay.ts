@@ -3,10 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Itinerary } from "@/types/trip";
 import { apiRequest } from "@/lib/query-client";
-import {
-  parseCreditShortfall,
-  showCreditShortfallAlert,
-} from "@/lib/creditError";
+import { parseCreditShortfall, useCreditShortfall } from "@/lib/creditError";
 
 export function useAiOpinionOverlay({
   itinerary,
@@ -16,7 +13,6 @@ export function useAiOpinionOverlay({
   globalCurrentItinerary,
   t,
   i18n,
-  navigation,
 }: {
   itinerary: Itinerary | null;
   currentItineraryId: number | null;
@@ -26,8 +22,9 @@ export function useAiOpinionOverlay({
   globalCurrentItinerary: Itinerary | null;
   t: (key: string, opts?: any) => string;
   i18n: { language: string };
-  navigation: { navigate: (name: string, params?: unknown) => void };
 }) {
+  // 크레딧부족(402) 안내 + 충전화면 이동 = 앱 전체 공용 1벌(§16). 이동 방식(창 안/밖) 판단도 그 훅이 한다.
+  const showCreditShortfall = useCreditShortfall();
   // 🧠 2026-07-03 사장님 SSOT = "AI 의견" 결과 오버레이 상태(하단탭 버튼→여정 화면 위 오버레이, 새 화면 아님).
   const [aiOpinionVisible, setAiOpinionVisible] = useState(false);
   const [aiOpinionLoading, setAiOpinionLoading] = useState(false);
@@ -76,7 +73,7 @@ export function useAiOpinionOverlay({
               required: shortfall.required,
             }),
           );
-          showCreditShortfallAlert(navigation, shortfall, t);
+          showCreditShortfall(shortfall);
         } else {
           setAiOpinionError(t("aiOpinion.error"));
         }

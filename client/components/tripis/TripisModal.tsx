@@ -19,13 +19,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
-import { useTranslation } from "react-i18next";
 import { apiRequest } from "@/lib/query-client";
 // ⚠️ 수정금지(승인필요) 2026-08-05 사장님 SSOT = 크레딧부족 공용 헬퍼(§16 5곳 공용).
-import {
-  parseCreditShortfall,
-  showCreditShortfallAlert,
-} from "@/lib/creditError";
+import { parseCreditShortfall, useCreditShortfall } from "@/lib/creditError";
 import { Icon } from "@/components/Icon";
 import {
   Brand,
@@ -116,7 +112,7 @@ function TripisModalInner({
   const insets = useSafeAreaInsets();
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  const { t } = useTranslation();
+  const showCreditShortfall = useCreditShortfall();
 
   // 지금 이 모달이 보여주는 것 = 처음엔 열기 인자 그대로.
   //   도시 카드에서 ▶ 대표 숏폼 배지를 누르면 여기만 "itinerary" 로 바뀌어 카드가 사라지고 영상 화면이 된다(B-0 도면).
@@ -244,7 +240,7 @@ function TripisModalInner({
       const shortfall = parseCreditShortfall(e?.message);
       if (shortfall) {
         // 이 화면은 최상위 Modal = 안 닫으면 프로필로 가도 계속 덮는다([여정 보기]:258 과 같은 순서).
-        showCreditShortfallAlert(navigation, shortfall, t, onClose);
+        showCreditShortfall(shortfall, onClose);
       } else {
         Alert.alert("영상 생성", e.message || "요청에 실패했습니다.");
       }

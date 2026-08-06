@@ -29,6 +29,8 @@ import { MapToggleProvider } from "@/contexts/MapToggleContext";
 import LoginSheet from "@/screens/login/LoginSheet";
 import ExpertOverlay from "@/screens/expert/ExpertOverlay";
 import MainAppOverlay from "@/screens/bts/MainAppOverlay";
+// 결제 후 복귀 = 프로필(충전소)로 보내는 1벌(2026-08-05 사장님 TestFlight 실증)
+import PaymentReturnHandler from "@/components/PaymentReturnHandler";
 
 // Prevent auto hide while fonts are loading
 SplashScreen.preventAutoHideAsync();
@@ -95,6 +97,10 @@ export default function App() {
                       전문가·AI의견 오버레이와 **같은 자리·같은 방식** = 화면이 무엇이든 그 위에 뜬다.
                       BTS 하단 5버튼이 requestMainApp() 신호를 보내면 열린다 = 두 앱이 공존. */}
                   <MainAppOverlay />
+                  {/* ⚠️ 수정금지(승인필요) 2026-08-06 사장님 SSOT = 결제 후 복귀 뒷정리(전역 1벌) = **주소창 청소만**.
+                      복귀 화면을 프로필로 여는 일은 탭의 첫 화면(MainTabNavigator 의 initialRouteName)이 한다
+                      = 이동을 두 곳에서 하지 않는다(§0). */}
+                  <PaymentReturnHandler />
                 </NavigationContainer>
                 <StatusBar style="auto" />
               </KeyboardProvider>

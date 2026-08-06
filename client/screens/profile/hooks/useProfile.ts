@@ -15,6 +15,8 @@ import { clearAuth, saveAuth } from "@/lib/auth";
 import { useTranslation } from "react-i18next";
 import { SUPPORTED_LANGS, changeLanguageAndPersist } from "@/lib/i18n";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
+// ⚠️ 결제하고 막 돌아온 부팅인지 = 판별 1벌(§16). 잔액 재확인 시점을 정하는 데 쓴다.
+import { readPaymentReturn } from "@/lib/paymentReturn";
 import type { SavedItinerary } from "../utils";
 // 크레딧·결제 = 자기 폴더 API 헬퍼(2026-07-29 §9, docs/2026-07-29 결제·크레딧 구현.md)
 import {
@@ -193,6 +195,22 @@ export function useProfile() {
       refetchCredits();
     }, [loadTrips, refetchCredits]),
   );
+
+  // ⚠️ 수정금지(승인필요) 2026-08-06 = **결제하고 막 돌아왔으면 잔액을 잠깐 더 지켜본다.**
+  //   왜: 충전을 확정하는 것은 스트라이프의 **통보**인데(§9), 그 통보가 화면 복귀보다 늦게 올 수 있다.
+  //   그러면 프로필이 **충전 전 잔액**을 그대로 보여주고, 탭을 나갔다 들어오기 전까지 안 바뀐다
+  //   → 방금 €10 을 낸 사람이 "충전이 안 됐다"고 여겨 **또 결제**할 수 있다(§22 판단검증 지적).
+  //   그래서 복귀 직후 몇 초만 다시 확인한다(2초 간격 5회 = 10초). 잔액이 오르면 화면이 스스로 바뀐다.
+  //   폰은 이 자리가 필요 없다 = 앱 안 브라우저를 닫는 순간 위 handleRecharge 가 이미 확인한다.
+  useEffect(() => {
+    if (readPaymentReturn() !== "success") return;
+    let left = 5;
+    const id = setInterval(() => {
+      refetchCredits();
+      if (--left <= 0) clearInterval(id);
+    }, 2000);
+    return () => clearInterval(id);
+  }, [refetchCredits]);
 
   // ⚠️ 2026-07-03 사장님 SSOT = 카드 우측 상단 X = 확인 팝업 없이 즉시 삭제(범용 홈페이지 닫기 버튼처럼). 목록에서 바로 제거(낙관적) + 서버 DELETE. 실패 시 그 항목만 복원.
   const handleDeleteTrip = async (id: number) => {
