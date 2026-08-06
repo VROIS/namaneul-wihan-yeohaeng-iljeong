@@ -2,3 +2,5 @@
 # 커밋 성공 후 = 허가 토큰 1회용 소멸 (= 다음 커밋은 다시 사장님 허가 필요). 2026-06-29 사장님 SSOT.
 # ⚠️ 2026-08-06 = .githooks 로 복원(7-25 훅 이사 때 유실). Replit 자동 배포는 토큰 없이도 무해(pre-commit 이 스킵).
 node scripts/guard-commit-approval.mjs consume
+# 검증 마커도 커밋과 함께 소멸 = 다음 수정은 파이프라인 처음부터(1회용 정합, 2026-08-06 사장님 자동화 지시)
+rm -f .verify-state.json

@@ -124,6 +124,9 @@ scripts/verify-*.mjs
 #   이유: 이 검사는 리눅스(GitHub)에서만 돌 수 있다(윈도우는 iOS 설정 생성 자체가 불가).
 #   레포에 없으면 GitHub 작업이 부를 수가 없다 = 1회용이 아니라 빌드 전 상시 관문.
 !scripts/verify-ios-auth.mjs
+# ⚠️ 2026-08-06 예외 = §22 파이프라인 오케스트레이터·기계4 검증기 = 커밋 훅의 필수 의존(§22 판단검증 적발: 제외되면 7-25 훅 유실 사고 재생산 = 다른 클론에서 커밋 파손)
+!scripts/verify-pipeline.mjs
+!scripts/verify-before-commit.mjs
 scripts/final-verify.mjs
 scripts/bulk-trigger-*.mjs
 scripts/insert-cron-schedules.mjs
@@ -200,3 +203,4 @@ scratch_*.ts
 #   계정·생년월일·개인 메일·DB 조작값을 문서에 적으면 그대로 인터넷에 공개된다(2026-08-05 푸시 차단으로 발각).
 #   → 그런 값은 아래 폴더에만 둔다. 이 PC 에서는 평소처럼 열어볼 수 있고, git 에는 안 올라간다.
 docs/_비공개/
+.verify-state.json

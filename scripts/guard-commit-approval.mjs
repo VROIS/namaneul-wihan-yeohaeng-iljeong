@@ -3,7 +3,7 @@
 // = AI 의 무심결/실수 커밋(= 사장님 지시 없는 커밋)을 헌법 글이 아니라 기계로 차단.
 // = pre-commit 훅이 호출 = 허가 토큰(.commit-approved)이 있고 + 내용이 오늘 날짜일 때만 통과.
 //   토큰 없음/날짜 불일치 = exit 1 = 커밋 거부.
-// = 토큰 = 사장님이 "커밋해" 지시 시에만 AI 가 생성 = 1회용 = 커밋 성공 후 pre-commit 이 자동 삭제.
+// = 토큰 = 사장님이 "커밋해" 지시 시에만 AI 가 생성 = 1회용 = 커밋 성공 후 post-commit 이 자동 삭제.
 // = 토큰 내용 = 발급 시각(YYYY-MM-DD HH:mm:ss) = 시/분/초까지 = 발급 후 유효시간(5분) 이내만 통과 (= 옛 토큰/재사용/하루내 다회 우회 차단).
 // = 솔직: AI 가 --no-verify / 직접 토큰생성으로 회피하면 완벽차단 불가. 목표 = 무심결/실수 커밋 + 옛 토큰 재사용 차단.
 import { readFileSync, writeFileSync, existsSync, unlinkSync } from "node:fs";
@@ -22,8 +22,9 @@ const mode = process.argv[2]; // 'check' | 'consume' | 'stamp'
 
 if (mode === "stamp") {
   // 사장님 "커밋해" 지시 시 = AI 가 이 명령으로 현재 시각 토큰 생성 (= 형식/시각 자동 = 수기 실수 방지)
-  writeFileSync(TOKEN, nowStamp() + "\n", "utf8");
-  console.log(`✅ 허가 토큰 발급: ${nowStamp()} (유효 5분, 1회용)`);
+  const issuedAt = nowStamp(); // 기록·로그 동일 시각 1회 계산(§22 판단검증 지적 2026-08-06)
+  writeFileSync(TOKEN, issuedAt + "\n", "utf8");
+  console.log(`✅ 허가 토큰 발급: ${issuedAt} (유효 5분, 1회용)`);
   process.exit(0);
 }
 
