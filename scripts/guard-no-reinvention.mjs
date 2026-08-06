@@ -77,6 +77,7 @@ const CAPABILITIES = [
       "server/services/fill/storage-r2-migrate.ts",
       "server/services/fill/storage-r2-relink.ts",
       "server/services/fill/guides-photo-extract.ts",
+      "server/services/fill/storage-observe.ts",
       "server/services/shared/r2-client.ts",
     ],
     triggers: [

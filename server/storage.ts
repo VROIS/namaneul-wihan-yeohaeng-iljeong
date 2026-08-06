@@ -248,6 +248,15 @@ export class DatabaseStorage implements IStorage {
       .orderBy(desc(itineraries.createdAt));
   }
 
+  // ⚠️ 2026-08-06 사장님 승인 = 관리자 전체 상황판 = 전 사용자 저장 여정(inquiry 제외 규칙·정렬 = 위와 동일 1벌 기준).
+  async getAllItineraries(): Promise<Itinerary[]> {
+    return db
+      .select()
+      .from(itineraries)
+      .where(ne(itineraries.status, "inquiry"))
+      .orderBy(desc(itineraries.createdAt));
+  }
+
   async getItinerary(id: number): Promise<Itinerary | undefined> {
     const [itinerary] = await db
       .select()

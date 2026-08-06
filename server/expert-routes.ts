@@ -7,7 +7,7 @@ import { db as _db } from "./db";
 import { expertInquiries, users } from "@shared/schema";
 import { eq, desc, and, or, sql } from "drizzle-orm";
 import { notificationService } from "./notificationService";
-import { getUserIdFromReq } from "./auth-user"; // Bearer → userId 단일 관문(2026-07-29 §16, 이 파일 사본 삭제 §19)
+import { getUserIdFromReq, getRoleFromDb } from "./auth-user"; // Bearer → userId·역할 단일 관문(2026-07-29 §16 / 역할 1벌화 2026-08-06)
 import { chargeFeature } from "./credit-charge"; // 크레딧 차감 단일 관문(2026-07-29 §9)
 
 // db 널 가드 = place-upsert 'db_unavailable' 규약과 동일 취지(각 핸들러 try/catch가 500 처리)
@@ -16,16 +16,8 @@ function db() {
   return _db;
 }
 
-// ⚠️ 수정금지(승인필요) — 역할 조회 = users.role ('user' | 'expert' | 'admin') = DB 1벌만.
-//   아이디 문자열로 역할을 추측하는 방식 폐기 = 2026-07-29 §0·§22 (아이디에 'admin' 만 넣으면 관리자가 되는 권한상승 경로).
-//   DB 오류를 삼켜 관리자로 승격시키는 것도 폐기 = 같은 날 = 호출부 try/catch 가 500 으로 처리한다.
-async function getRole(userId: string): Promise<string> {
-  const [u] = await db()
-    .select({ role: users.role })
-    .from(users)
-    .where(eq(users.id, userId));
-  return u?.role || "user";
-}
+// 역할 조회 = auth-user.getRoleFromDb 1벌로 이관 = 2026-08-06 §16(옛 로컬 getRole 삭제 §19. 원칙 동일 = users.role DB 1벌만).
+const getRole = getRoleFromDb;
 
 export function registerExpertRoutes(app: Express): void {
   // ── 1) 문의 접수 = POST /api/verification/request ──

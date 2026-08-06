@@ -23,8 +23,8 @@ import {
 } from "./services/shared/video-gen-client";
 import { composeSceneStill } from "./services/shared/image-gen-client";
 import { stitchAndUpload } from "./services/video-stitcher";
-import { getUserIdFromReq } from "./auth-user"; // Bearer → userId 단일 관문(2026-07-29 §16)
-import { chargeFeature } from "./credit-charge"; // 크레딧 차감 단일 관문(2026-07-29 §9)
+import { getUserIdFromReq, getRoleFromDb } from "./auth-user"; // Bearer → userId·역할 단일 관문(2026-07-29 §16 / 상황판 2026-08-06)
+import { chargeFeature, precheckFeature } from "./credit-charge"; // 크레딧 차감·사전확인 단일 관문(2026-07-29 §9, 성공시점 차감 2026-08-06)
 
 const COST_PER_SECOND_USD = 0.101; // A안 = Omni Flash 720p (5,792tok/초 × $17.5/1M)
 const B_COST_PER_SCENE_USD = 0.35; // B안 = 나노바나나 스틸 $0.045 + Veo Lite 6초 $0.30
@@ -151,12 +151,11 @@ export function registerVideoRoutes(app: Express): void {
         if (!requesterUserId)
           return res.status(401).json({ error: "로그인 필요" });
 
-        // 🪙 일별 영상 60크레딧 차감 (2026-07-29 §9 = A안·B안 동일 단가).
-        //   자리 이유 = 위 409 중복가드를 통과한 뒤 · 아래 "생성 중" 기록 **앞**.
-        //   차감이 실패했는데 status 를 processing 으로 적으면 "영원히 생성 중" 좀비가 남는다.
-        //   referenceId = taskId = 렌더 1건을 유일 식별. 같은 날짜 재생성은 새 taskId = 새 유료 렌더 = 재차감이 정상.
-        if (!(await chargeFeature(res, requesterUserId, "day_video", taskId)))
-          return;
+        // 🪙 2026-08-06 사장님 승인 = **성공 시점 차감**으로 이동(런던 121 사고 = 실패했는데 60 증발 근본해결).
+        //   여기(시작)는 잔액 **사전확인만**(차감 0) = 부족하면 402 = §9 "헤더 후 402 불가" 취지를 시작 시점에 충족.
+        //   실제 차감 = 아래 백그라운드에서 완성·프로필 게시 순간(사장님: "게시되고 뱃지 생성되는 시점 차감").
+        //   옛 "시작 시 차감" 폐기 = 2026-08-06 §19.
+        if (!(await precheckFeature(res, requesterUserId, "day_video"))) return;
 
         const sceneSlots = slots.slice(0, MAX_SCENES);
         const totalScenes = sceneSlots.length;
@@ -316,6 +315,35 @@ export function registerVideoRoutes(app: Express): void {
               totalScenes: clips.length,
               scenes: okScenesMeta,
             });
+            // 🪙 2026-08-06 사장님 승인 = 차감 = **완성·게시 시점**(성공 씬 ≥ min(6, 요청 씬수)만 유료 = "최소 6씬" SSOT.
+            //   씬이 6개 못 되는 짧은 날짜는 전 씬 성공 = 유료). 미달 완성 = 무료 서비스(게시는 유지).
+            //   res=null = 백그라운드(402 불가) = 시작 시 precheckFeature 가 이미 걸렀고, 그 사이 잔액 소진이면
+            //   차감 실패 = 로그만(완성 자산은 이미 존재 = 사용자 경험 우선 = 사장님 관점).
+            //   ⚠️ 자체 try/catch = §22 판단검증 지적(2026-08-06): 차감 중 DB 예외가 바깥 catch 로 가면
+            //   이미 기록된 succeeded(완성 영상 포인터)를 failed 로 덮어씀 = 유료 자산 소실. 게시 쿼리와 동일 보호.
+            if (clips.length >= Math.min(6, totalScenes)) {
+              try {
+                const paid = await chargeFeature(
+                  null,
+                  requesterUserId,
+                  "day_video",
+                  taskId,
+                );
+                if (!paid)
+                  console.error(
+                    `[video] ${taskId} 성공했으나 차감 실패(잔액 소진) = 무료 처리 기록`,
+                  );
+              } catch (chargeErr) {
+                console.error(
+                  `[video] ${taskId} 차감 예외(영상 succeeded 는 보존):`,
+                  (chargeErr as Error)?.message,
+                );
+              }
+            } else {
+              console.log(
+                `[video] ${taskId} 성공 씬 ${clips.length} < ${Math.min(6, totalScenes)} = 무료 게시(차감 없음)`,
+              );
+            }
             // 📥 완료 = 신청자 프로필 자동 게시 (2026-08-03 사장님 확정 = 벨 알림 안 씀 §19).
             //   is_new=true = ★ 표식 + 하단 TRIPIS 탭 뱃지의 원천. 재생성(이미 담긴 행)도 다시 true = 새 완성 알림.
             //   게시 실패해도 영상 자체(succeeded)는 이미 기록됨 = 유료 자산 손실 없음 → 로그만.
@@ -340,12 +368,15 @@ export function registerVideoRoutes(app: Express): void {
             );
           } catch (e) {
             console.error(`[video] ${taskId} 실패:`, e);
+            // ⚠️ 2026-08-06 사장님 승인 = 실패 **사유를 DB 에 기록**(화면이 그대로 표시 = 뭉개기 금지 SSOT).
+            //   차감은 성공 시점으로 이동했으므로 실패 = 차감 0 = 환불 불필요(런던 121 사고 근본해결).
             await setDayVideo(id, day, {
               status: "failed",
               url: null,
               taskId,
               scenesDone: 0,
               totalScenes,
+              error: String((e as Error)?.message || e).slice(0, 300),
             });
           }
         })();
@@ -382,20 +413,23 @@ export function registerVideoRoutes(app: Express): void {
   //   프로필 '나의 TRIPIS' 영상 카드 = 이 목록만 보여준다. 기기 다운로드 없음(속도·유출 = 앱에 와서 보게 하는 구조).
 
   // 4-1. 내가 담은 영상 목록 (여정 제목·시작일·영상 상태 동봉. 여정이 지워졌거나 영상이 더는 완성 상태가 아니면 제외)
+  //   ⚠️ 2026-08-06 사장님 승인 = **관리자 = 전체 상황판** = 모든 사용자의 담긴 영상(콘텐츠 소유권 = 회사).
+  //     패턴 = 전문가 문의함(expert-routes)과 동형 = role 이 admin 이면 본인 필터를 안 붙임. 역할 = getRoleFromDb 1벌.
   app.get("/api/videos/saved", async (req: Request, res: Response) => {
     try {
       const userId = getUserIdFromReq(req);
       if (!userId) return res.status(401).json({ error: "로그인 필요" });
       if (!pool) return res.status(500).json({ error: "DB 미연결" });
+      const isAdmin = (await getRoleFromDb(userId)) === "admin";
       const r = await pool.query(
         `SELECT sv.itinerary_id, sv.day, sv.is_new, sv.created_at,
                 i.title, i.start_date
            FROM saved_videos sv
            JOIN itineraries i ON i.id = sv.itinerary_id
-          WHERE sv.user_id = $1
+          WHERE ($2 OR sv.user_id = $1)
             AND i.video_by_day -> (sv.day::text) ->> 'status' = 'succeeded'
           ORDER BY sv.is_new DESC, sv.created_at DESC, sv.day`,
-        [userId],
+        [userId, isAdmin],
       );
       res.json(
         r.rows.map((row) => ({

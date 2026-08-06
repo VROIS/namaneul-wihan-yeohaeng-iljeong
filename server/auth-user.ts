@@ -15,6 +15,14 @@ export function getUserIdFromReq(req: Request): string | null {
   return m ? m[1] : null;
 }
 
+// ⚠️ 수정금지(승인필요) 2026-08-06 사장님 승인 = 역할 조회 1벌(관리자 전체 상황판 = 영상·해설·여정 3곳 + 전문가 문의함 공용).
+//   users.role('user'|'expert'|'admin') DB 1벌만 본다(아이디 문자열 추측·오류 시 승격 = 폐기 원칙 유지, expert-routes 2026-07-29 동일).
+//   조회 = creditService.getUserProfile 재사용(§16 재발명 금지). 옛 expert-routes 로컬 getRole = 이 함수로 대체 §19.
+export async function getRoleFromDb(userId: string): Promise<string> {
+  const u = await creditService.getUserProfile(userId);
+  return u?.role || "user";
+}
+
 // ⚠️ 사장님 SSOT 2026-07-26 = 소셜별 닉네임 기본문구(카카오/구글이 이름 안 줄 때 fallback) = 1벌 상수(§0·§16).
 //   재로그인 displayName 갱신 가드가 이 집합과 비교 = 정의부·가드가 같은 소스 참조(따로 하드코딩 시 한쪽만 바뀌면 가드 조용히 깨짐 = simplify 지적).
 const KAKAO_DEFAULT_NAME = "카카오 사용자";

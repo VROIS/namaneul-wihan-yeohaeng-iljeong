@@ -24,6 +24,7 @@ export interface DayVideo {
   scenesDone: number;
   totalScenes: number;
   scenes?: { placeName: string; summary?: string }[]; // 글라스 카드(Scene n/N·장소명·요약)용 씬 메타
+  error?: string; // 실패 사유(서버 예외 문구 그대로 = 뭉개기 금지 SSOT, 2026-08-06)
 }
 
 interface Props {
@@ -182,7 +183,10 @@ export default function VideoPlaySlot({
           </Text>
           {dayVideo?.status === "failed" && (
             <Text style={styles.failText}>
-              이전 생성에 실패했어요. 다시 시도해 주세요.
+              {/* 서버 실패 사유 그대로 표시(뭉개기 금지 SSOT 2026-08-06). 사유 미기록(옛 실패 건) = 기본 문구 */}
+              {dayVideo.error
+                ? `생성 실패: ${dayVideo.error}`
+                : "이전 생성에 실패했어요. 다시 시도해 주세요."}
             </Text>
           )}
           <Pressable

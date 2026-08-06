@@ -5,7 +5,7 @@ import { createHash } from "node:crypto";
 import { storage } from "./storage";
 import { generateItineraryICS, type ItineraryForICS } from "./itinerary-ics";
 import { handleAiOpinionRequest } from "./services/verify/ai-opinion-handler";
-import { getUserIdFromReq } from "./auth-user"; // Bearer → userId 단일 관문(2026-07-29 §16)
+import { getUserIdFromReq, getRoleFromDb } from "./auth-user"; // Bearer → userId·역할 단일 관문(2026-07-29 §16 / 상황판 2026-08-06)
 import { chargeFeature } from "./credit-charge"; // 크레딧 차감 단일 관문(2026-07-29 §9)
 // 🏆 대표 지정(B1) 전용 = 트랜잭션(옛 대표 강등+승격 원자성)에 db 직접 필요(2026-08-01 베스트갤러리)
 import { db } from "./db";
@@ -71,9 +71,17 @@ export function registerItineraryRoutes(app: Express): void {
   });
 
   // Itineraries
+  //   ⚠️ 2026-08-06 사장님 승인 = **관리자(Bearer 토큰 role) = 전체 상황판** = 전 사용자 저장 여정(소유권 = 회사).
+  //     전문가 문의함 패턴 동형. 판정 = 토큰 신원만(경로 :userId 로는 승격 불가 = 스푸핑 차단).
   app.get("/api/users/:userId/itineraries", async (req, res) => {
     try {
-      const itineraries = await storage.getUserItineraries(req.params.userId);
+      const authId = getUserIdFromReq(req);
+      const isAdmin = authId
+        ? (await getRoleFromDb(authId)) === "admin"
+        : false;
+      const itineraries = isAdmin
+        ? await storage.getAllItineraries()
+        : await storage.getUserItineraries(req.params.userId);
       res.json(itineraries);
     } catch (error) {
       console.error("Error fetching itineraries:", error);

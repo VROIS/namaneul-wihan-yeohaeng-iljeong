@@ -8,6 +8,7 @@
 
 import { GoogleGenAI } from "@google/genai";
 import { saveRaw } from "./save-raw";
+import { withQuotaRetry } from "./retry-429"; // 429 재시도 1벌(2026-08-06 사장님 승인 = 런던 121 사고 대응)
 
 const MODEL_ID = "gemini-3-flash-preview";
 const TEMPERATURE = 0.2;
@@ -78,11 +79,16 @@ export async function geminiJson<T = any>(
     delete config.responseMimeType;
   }
 
-  const response = await getAI(opts?.apiKey).models.generateContent({
-    model: opts?.model || MODEL_ID,
-    contents: [{ role: "user", parts: [{ text: prompt }] }],
-    config,
-  });
+  // ⚠️ 2026-08-06 = 429 재시도(1→2→4→8초) = 여정생성 직후 스토리보드 연속 호출 같은 스파이크 흡수(사장님 승인).
+  const response = await withQuotaRetry(
+    () =>
+      getAI(opts?.apiKey).models.generateContent({
+        model: opts?.model || MODEL_ID,
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        config,
+      }),
+    { label: `gemini-json:${opts?.rawTag || "call"}` },
+  );
 
   const raw = (response as any).text || "";
   const finishReason =
@@ -164,8 +170,15 @@ export async function* geminiVisionStream(
     topK: 20,
   };
 
-  const responseStream = await getAI(opts?.apiKey).models.generateContentStream(
-    { model: MODEL_ID, contents: { parts }, config },
+  // ⚠️ 2026-08-06 = 스트림 "생성" 호출만 재시도(첫 바이트 전 = 안전). 스트림 도중 오류는 재시도 불가(이미 흘려보냄).
+  const responseStream = await withQuotaRetry(
+    () =>
+      getAI(opts?.apiKey).models.generateContentStream({
+        model: MODEL_ID,
+        contents: { parts },
+        config,
+      }),
+    { label: `gemini-vision:${opts?.rawTag || "guide"}` },
   );
 
   let fullText = "";

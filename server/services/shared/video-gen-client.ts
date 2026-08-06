@@ -7,6 +7,7 @@
 import fs from "fs";
 import { GoogleGenAI } from "@google/genai";
 import { saveRaw } from "./save-raw";
+import { withQuotaRetry } from "./retry-429"; // 429 재시도 1벌(2026-08-06 §16 승격)
 
 const OMNI_MODEL = "gemini-omni-flash-preview";
 const VEO_I2V_MODEL = "veo-3.1-lite-generate-preview"; // B안 = 최저가($0.05/초). 첫프레임 입력·대사 오디오 = 공식 지원 확인
@@ -128,23 +129,11 @@ export interface PhotoMotionOpts {
   rawTag?: string | null;
 }
 
-// Veo 프리뷰 한도 = 10 RPM·동시 10/프로젝트 → 429(RESOURCE_EXHAUSTED) 시 대기 후 재시도 (2026-07-23 운영 i105 실증: 9씬 동시 발사 = 일부 콜 429)
+// Veo 프리뷰 한도 = 10 RPM·동시 10/프로젝트 → 429 시 대기 후 재시도 (2026-07-23 운영 i105 실증 딜레이 유지).
+// 재시도 본체 = shared/retry-429.ts 1벌로 승격 = 2026-08-06 §16(옛 로컬 사본 삭제 §19).
 const RETRY_DELAYS_MS = [20000, 40000, 60000];
-async function withQuotaRetry<T>(fn: () => Promise<T>): Promise<T> {
-  for (let attempt = 0; ; attempt++) {
-    try {
-      return await fn();
-    } catch (e: any) {
-      const is429 =
-        e?.status === 429 || String(e?.message || "").includes('"code":429');
-      if (!is429 || attempt >= RETRY_DELAYS_MS.length) throw e;
-      console.warn(
-        `[video-gen] 429 한도 = ${RETRY_DELAYS_MS[attempt] / 1000}초 대기 후 재시도(${attempt + 1}/${RETRY_DELAYS_MS.length})`,
-      );
-      await new Promise((r) => setTimeout(r, RETRY_DELAYS_MS[attempt]));
-    }
-  }
-}
+const veoRetry = <T>(fn: () => Promise<T>): Promise<T> =>
+  withQuotaRetry(fn, { delaysMs: RETRY_DELAYS_MS, label: "video-gen" });
 
 /** [B안] 스틸 1장 → Veo Lite 사진→영상 = 움직이는 씬 클립(오디오 포함) mp4 Buffer.
  *  Veo 가 done 인데 uri·bytes 를 안 준 경우(운영 i104 s6 실증) = 정책성 누락 → 1회 재시도(그 씬만 = $0.35). */
@@ -167,7 +156,7 @@ async function animateStillToClipOnce(
   opts: PhotoMotionOpts,
 ): Promise<Buffer> {
   const ai = new GoogleGenAI({ apiKey: opts.apiKey });
-  let op: any = await withQuotaRetry(() =>
+  let op: any = await veoRetry(() =>
     ai.models.generateVideos({
       model: VEO_I2V_MODEL,
       prompt,

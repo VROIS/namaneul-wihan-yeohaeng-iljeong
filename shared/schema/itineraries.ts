@@ -24,6 +24,8 @@ export interface DayVideo {
   totalScenes: number;
   /** 씬 메타(2026-07-23 사장님 목업) = 재생 화면 글라스 카드(Scene n/N·장소명·요약)용. 재생 타이밍에 맞춰 전환 */
   scenes?: { placeName: string; summary?: string }[];
+  /** 실패 사유(2026-08-06 사장님 승인 = 서버 예외 문구 그대로 기록 = 화면 표시·포렌식용, 뭉개기 금지 SSOT) */
+  error?: string;
 }
 
 // User itineraries

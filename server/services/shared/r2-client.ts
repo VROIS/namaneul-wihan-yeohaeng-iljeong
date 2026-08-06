@@ -120,13 +120,13 @@ export async function deleteFromR2(key: string): Promise<void> {
   await client.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
 }
 
-/** prefix 하위 파일 전체 목록(키·크기) — S3 는 1회 1,000개 한도라 페이지 순회(사진 ~1만개 대응, 2026-08-06) */
+/** prefix 하위 파일 전체 목록(키·크기·수정시각) — S3 는 1회 1,000개 한도라 페이지 순회(사진 ~1만개 대응, 2026-08-06). lastModified = 포렌식·소크 관찰용(storage-observe) */
 export async function listR2(
   prefix = "",
-): Promise<{ key: string; size: number }[]> {
+): Promise<{ key: string; size: number; lastModified: Date | null }[]> {
   const client = getClient();
   const bucket = getBucketName();
-  const out: { key: string; size: number }[] = [];
+  const out: { key: string; size: number; lastModified: Date | null }[] = [];
   let token: string | undefined;
   do {
     const res = await client.send(
@@ -137,7 +137,11 @@ export async function listR2(
       }),
     );
     for (const o of res.Contents || [])
-      out.push({ key: o.Key || "", size: o.Size || 0 });
+      out.push({
+        key: o.Key || "",
+        size: o.Size || 0,
+        lastModified: o.LastModified || null,
+      });
     token = res.IsTruncated ? res.NextContinuationToken : undefined;
   } while (token);
   return out;

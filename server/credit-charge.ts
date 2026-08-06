@@ -33,9 +33,11 @@ const CREDIT_LABELS: Record<CreditFeature, string> = {
  *   반환 false = **이미 402 응답을 보냈다** → 호출부는 `return` 만 하면 된다(응답 두 번 보내기 방지).
  *   ⚠️ 스트리밍 라우트는 res.setHeader/res.write **전에** 불러야 한다. 헤더가 나간 뒤엔 402 를 보낼 수 없다.
  *   userId 는 호출부가 자기 규약대로 넘긴다(Bearer 토큰 또는 그 라우트의 body 규약) = 여기서 갈래를 만들지 않는다(§0).
+ *   ⚠️ 2026-08-06 사장님 승인 = res=null 허용 = **성공 시점 차감**(일별영상 = 완성·게시 순간 백그라운드에서 차감 = 응답 객체 없음).
+ *     이때 402 는 못 보내므로 반환 false = "차감 실패(잔액 소진)" 판단만 호출부가 한다(시작 시 precheckFeature 로 이미 걸렀음).
  */
 export async function chargeFeature(
-  res: Response,
+  res: Response | null,
   userId: string | null,
   feature: CreditFeature,
   referenceId?: string,
@@ -61,14 +63,44 @@ export async function chargeFeature(
   );
 
   if (!charge.success) {
+    if (res)
+      res.status(402).json({
+        error: "insufficient_credits",
+        message: charge.message,
+        balance: charge.balance,
+        required: amount,
+      });
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * ⚠️ 수정금지(승인필요) 2026-08-06 사장님 SSOT = **잔액 사전확인**(차감 0) — 성공 시점 차감 기능(일별영상)의 짝.
+ *   왜: 차감을 "완성·게시 순간"으로 옮기면(사장님 승인 = 실패 시 돈 안 날림) 402 를 보낼 기회가 백그라운드엔 없다.
+ *   → 시작 시점에 이 함수로 잔액을 확인해 부족하면 402 = §9 "헤더 나간 뒤 402 불가" 금지 취지를 시작 시점에서 충족.
+ *   면제 규칙(비로그인·관리자)은 chargeFeature 와 동일 = 여기서 갈라지면 두 벌(§0) = 같은 판정 순서 유지.
+ *   반환 true = 진행 가능 / false = 이미 402 보냄.
+ */
+export async function precheckFeature(
+  res: Response,
+  userId: string | null,
+  feature: CreditFeature,
+): Promise<boolean> {
+  if (!userId) return true;
+  const amount = CREDIT_COSTS[feature];
+  const user = await creditService.getUserProfile(userId);
+  if (!user || user.role === "admin") return true;
+  const balance = await creditService.getBalance(userId);
+  if (balance < amount) {
     res.status(402).json({
       error: "insufficient_credits",
-      message: charge.message,
-      balance: charge.balance,
+      message: `크레딧이 부족합니다. (필요: ${amount}, 잔액: ${balance})`,
+      balance,
       required: amount,
     });
     return false;
   }
-
   return true;
 }

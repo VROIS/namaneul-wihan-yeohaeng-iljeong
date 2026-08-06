@@ -23,7 +23,7 @@ import {
 import { geminiVisionStream } from "./services/shared/geminiClient";
 import { tsSearch } from "./services/shared/ts-client";
 import { buildPlaceHintHeader } from "./services/shared/place-hint-header"; // 확정 정보 머리글 단일 관문(2026-08-02 §16)
-import { getUserIdFromReq } from "./auth-user"; // Bearer → userId 단일 관문(2026-07-29 §16, 이 파일 사본 삭제 §19)
+import { getUserIdFromReq, getRoleFromDb } from "./auth-user"; // Bearer → userId·역할 단일 관문(2026-07-29 §16 / 상황판 2026-08-06)
 import { nearestCityIdByCoords } from "./city-match"; // 좌표 → 최근접 도시 단일 관문(2026-08-02 §16)
 import { chargeFeature } from "./credit-charge"; // 크레딧 차감 단일 관문(2026-07-29 §9)
 import { isCityRepresentativePlace } from "./services/shared/city-representative-place"; // 도시 대표장소=맛보기 무료 판정 1벌(2026-08-05 §16)
@@ -489,15 +489,23 @@ export function registerGuideRoutes(app: Express): void {
   });
 
   // ④ 보관함 목록 = GET /api/guides?userId=
+  //   ⚠️ 2026-08-06 사장님 승인 = **관리자(Bearer 토큰 role) = 전체 상황판** = 모든 사용자의 해설(소유권 = 회사).
+  //     전문가 문의함 패턴 동형. 쿼리 userId 폴백(비토큰 레거시 경로)은 admin 판정에 안 씀 = 스푸핑 차단.
   app.get("/api/guides", async (req, res) => {
     try {
-      const owner = getUserIdFromReq(req) || (req.query.userId as string);
+      const authId = getUserIdFromReq(req);
+      const owner = authId || (req.query.userId as string);
       if (!owner) return res.status(401).json({ error: "userId required" });
-      const rows = await getDb()
-        .select()
-        .from(guides)
-        .where(eq(guides.userId, owner))
-        .orderBy(desc(guides.createdAt));
+      const isAdmin = authId
+        ? (await getRoleFromDb(authId)) === "admin"
+        : false;
+      const rows = await (isAdmin
+        ? getDb().select().from(guides).orderBy(desc(guides.createdAt))
+        : getDb()
+            .select()
+            .from(guides)
+            .where(eq(guides.userId, owner))
+            .orderBy(desc(guides.createdAt)));
       res.json(rows);
     } catch (e: any) {
       console.error("[guide/guides]", e?.message || e);
