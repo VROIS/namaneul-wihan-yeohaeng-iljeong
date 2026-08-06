@@ -29,6 +29,7 @@ export interface StoryboardParams {
   day: number; // 1-base 일차
   slots: any[]; // rawData.days[day-1].places 통째(전요소)
   apiKey?: string; // issueApiKey 출입증(백그라운드) / 미전달 = env(메인앱)
+  model?: string; // 2026-08-06 사장님 지시(모델 A/B 시뮬·전환용) = geminiJson 에 그대로 전달. 미지정 = 기존 기본 모델(동작 무변경)
 }
 
 // 사장님 SSOT 2026-07-22 = 6초×최대 10씬 ≈ 60초. 씬 수·길이 상수 = 이 파일 1벌만(routes·stitcher 가 import = §0 드리프트 차단)
@@ -175,6 +176,7 @@ export async function buildGhibliStoryboard(
     buildStoryboardPrompt(geminiInput, slots.length),
     {
       apiKey: params.apiKey,
+      model: params.model, // 미지정 = geminiClient 기본(현행 무변경)
       contextId: null, // 메인앱 런타임 호출 = raw 'runtime' 폴더 (§18 = 발굴 cityId 체계와 분리)
       rawTag: `ghibli-storyboard-i${itinerary.id ?? 0}-d${day}`,
     },

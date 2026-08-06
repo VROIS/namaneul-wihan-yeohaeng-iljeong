@@ -18,7 +18,12 @@ node scripts/guard-max-file-lines.mjs --staged || exit 1
 echo "[pre-commit] §22 기계검증 4종(tsc·서버빌드·웹빌드·lint) 무조건 실행 = 검증 안 한 커밋 차단..."
 node scripts/verify-before-commit.mjs || { echo "🔴 §22 기계검증 실패 = 커밋 거부. Ralph-loop 로 통과까지 보완."; exit 1; }
 
+# ── 무조건 대기 = 검증 통과해도 사장님 허가 토큰(.commit-approved, 5분 1회용) 없으면 커밋 차단 (§10) ──
+#   ⚠️ 2026-08-06 복원 = 7-25 훅 이사(.git/hooks→.githooks) 때 이 줄과 가드 스크립트가 유실됐던 것(사장님 적발).
+#   토큰 = 사장님 "커밋해" 지시 시에만 stamp 발급 = 커밋 성공 시 post-commit 이 자동 소멸(1회용).
+node scripts/guard-commit-approval.mjs check || exit 1
+
 # ── 7단계 검증 통과 = 커밋 진행 (2026-07-25 사장님 SSOT) ──
 #   커밋(사장님 "커밋해" 명령 후 실행)은 이 검증을 무조건 거침 = 검증 안 하면 커밋 물리 차단.
 #   검증 과정이 화면에 투명 출력 = 사장님이 보며 바로 인지(AI 가 무엇을 어떻게 검증했는지 감시).
-echo "[pre-commit] ✅ 7단계 기계검증 통과 = 커밋 진행."
+echo "[pre-commit] ✅ 7단계 기계검증 + 허가 토큰 통과 = 커밋 진행."
