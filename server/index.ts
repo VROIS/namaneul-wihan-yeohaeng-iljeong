@@ -7,6 +7,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { db, isDatabaseConnected } from "./db";
 import { apiKeys } from "../shared/schema";
+import { isR2Configured } from "./services/shared/r2-client"; // 2026-08-07 사장님 승인 = 부팅 시 창고 열쇠 검사
 
 // 서버 크래시 방지: MCP/백그라운드 작업의 unhandled 에러가 프로세스를 죽이지 않도록
 process.on("uncaughtException", (err) => {
@@ -306,6 +307,18 @@ function setupErrorHandler(app: express.Application) {
 
   server.listen(port, "0.0.0.0", async () => {
     log(`express server serving on port ${port}`);
+
+    // ⚠️ 2026-08-07 사장님 승인 = R2 창고 열쇠 부팅 검사 = 미등록 배포가 조용히 지나가는 것 원천 차단
+    //   (런던 121 사고 = Replit Secrets 누락 배포 → 유료 6씬 생성 후 저장 단계 사망. 이 배너가 그 침묵을 깬다.)
+    if (isR2Configured()) {
+      log("✅ R2 창고 연결 확인 (열쇠 5종 등록됨)");
+    } else {
+      console.error(
+        "\n" +
+          "🔴🔴🔴 R2 창고 열쇠 미등록 = 영상·사진·raw 저장이 전부 실패합니다! 🔴🔴🔴\n" +
+          "🔴 Replit Secrets(또는 .env)에 R2_ACCOUNT_ID / R2_ACCESS_KEY_ID / R2_SECRET_ACCESS_KEY / R2_BUCKET_NAME / R2_PUBLIC_URL 5종을 등록 후 재배포하세요.\n",
+      );
+    }
 
     // DB 마이그레이션 (mcp_phases 등 누락 컬럼 자동 추가)
     try {

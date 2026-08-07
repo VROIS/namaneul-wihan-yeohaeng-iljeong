@@ -32,7 +32,8 @@ export function rawName(
 }
 
 // ⚠️ 수정금지(승인필요) — raw 버전순번 헬퍼(2026-06-16 사장님 SSOT)
-//   = storage-raw-restructure.ts:103-125 잠금본 재사용 (= 재발명 금지). tag 로 구별 안 되는 다른 호출 = _N 순번 보존(손실 0),
+//   = 이 파일이 규칙의 유일 정본(원출처 storage-raw-restructure 는 SP 창고 철거로 삭제 = 2026-08-07 §19/1-5b).
+//   = tag 로 구별 안 되는 다른 호출 = _N 순번 보존(손실 0),
 //   = 내용 완전동일(rawHash 같음) = 진짜 중복 = 1개만. 무순번=첫 호출 / _N=이후 호출.
 
 // ⚠️ 수정금지(승인필요) — raw 버전순번 헬퍼(2026-06-16 사장님 SSOT)
@@ -46,7 +47,7 @@ function parseRawName(name: string): { base: string; n: number } | null {
 }
 
 /**
- * (1) 외부응답 부분만 md5 = storage-raw-restructure.ts:113 동일 규칙(파일전체 X, meta 제외).
+ * (1) 외부응답 부분만 md5 (파일전체 X, meta 제외) — 이 함수가 유일 정본(2026-08-07 §19).
  *   = saveRaw 산출물의 `raw` 부분만 해시 (= 같은 외부응답 = 같은 해시 = 진짜 중복 판별).
  */
 // ⚠️ 수정금지(승인필요) — raw 버전순번 헬퍼(2026-06-16 사장님 SSOT)

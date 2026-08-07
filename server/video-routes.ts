@@ -23,6 +23,12 @@ import {
 } from "./services/shared/video-gen-client";
 import { composeSceneStill } from "./services/shared/image-gen-client";
 import { stitchAndUpload } from "./services/video-stitcher";
+// ⚠️ 2026-08-07 사장님 승인 = 씬 낱개 즉시 R2 보존 + 재시도 재활용 + 열쇠 사전검사(런던 121 €1.58 유출 재발 방지)
+import {
+  uploadToR2,
+  getFromR2,
+  isR2Configured,
+} from "./services/shared/r2-client";
 import { getUserIdFromReq, getRoleFromDb } from "./auth-user"; // Bearer → userId·역할 단일 관문(2026-07-29 §16 / 상황판 2026-08-06)
 import { chargeFeature, precheckFeature } from "./credit-charge"; // 크레딧 차감·사전확인 단일 관문(2026-07-29 §9, 성공시점 차감 2026-08-06)
 
@@ -181,6 +187,12 @@ export function registerVideoRoutes(app: Express): void {
         // 백그라운드 파이프라인 (응답 후 진행, 진행률 = video_by_day.scenesDone 폴링)
         void (async () => {
           try {
+            // ⚠️ 2026-08-07 사장님 승인 = 저장 열쇠 없으면 씬 생성(유료) 전에 즉시 실패 = 비용 유출 0
+            //   (런던 121 = 열쇠 미등록인데 6씬 €1.58 과금 후 합치기에서 사망 → 이 검사가 그 순서를 뒤집음)
+            if (!isR2Configured())
+              throw new Error(
+                "저장 창고(R2) 열쇠 미등록 = 영상을 만들어도 저장할 수 없어 시작 전 중단(관리자: Replit Secrets 확인)",
+              );
             const today = new Date().toISOString().slice(0, 10);
             // 메인앱 city_id(cities)는 발굴 도시 테이블과 별개 체계 = 출입증은 null(런타임) 발급 (2026-07-22 실측: id 직전달 = 가짜도시 차단)
             const apiKey = await issueApiKey(
@@ -230,8 +242,20 @@ export function registerVideoRoutes(app: Express): void {
               SCENE_CONCURRENCY,
               async (scene, i) => {
                 try {
-                  let buf: Buffer;
-                  if (useOptionB) {
+                  // ⚠️ 2026-08-07 사장님 승인 = 씬 낱개 즉시 R2 보존 + 재시도 재활용(외부 재과금 0).
+                  //   키 = 여정·일차·씬순번·슬롯·스타일 전부 일치할 때만 재활용(슬롯 교체·A/B 토글 변경 = 새 생성).
+                  const slotKeyId = String(sceneSlots[i]?.id ?? i).replace(
+                    /[^A-Za-z0-9_-]/g,
+                    "",
+                  );
+                  const sceneKey = `itinerary-videos/${id}/scenes/d${day}-s${scene.sceneIndex}-p${slotKeyId}-${useOptionB ? "b" : "a"}.mp4`;
+                  let buf: Buffer | null = await getFromR2(sceneKey);
+                  const reused = !!buf;
+                  if (buf) {
+                    console.log(
+                      `[video] ${taskId} 씬${scene.sceneIndex} = 보존본 재활용(재과금 0): ${sceneKey}`,
+                    );
+                  } else if (useOptionB) {
                     // B = ①실사진+캐릭터 합성 스틸 → ②Veo Lite 첫프레임 영상 (일관성 = 스틸이 보장)
                     const slotImage = sceneSlots[i]?.image;
                     const still = await composeSceneStill(
@@ -275,6 +299,15 @@ export function registerVideoRoutes(app: Express): void {
                       },
                     );
                   }
+                  // 신규 생성 씬 = 즉시 낱개 보존(합치기 전에 죽어도 씬 자산 유지 = 재시도가 위 getFromR2 로 집음).
+                  //   보존 실패 = 로그만(클립은 메모리에 있어 이번 완성은 계속).
+                  if (!reused && buf)
+                    await uploadToR2(sceneKey, buf, "video/mp4").catch((e) =>
+                      console.error(
+                        `[video] ${taskId} 씬${scene.sceneIndex} 낱개보존 실패(완성은 계속):`,
+                        (e as Error)?.message,
+                      ),
+                    );
                   // await = 진행률 쓰기가 최종 succeeded 쓰기를 늦게 덮는 레이스 차단 (§22 code-review)
                   done++;
                   await setDayVideo(id, day, {

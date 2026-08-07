@@ -33,6 +33,10 @@ const CAPABILITIES = [
       "fillcity/prompts/12-ts-discover-pool/post-process.ts",
       "fillcity/prompts/06-ts-pm-enrich/post-process.ts",
       ".claude/skills/", // 스킬 내 post-process 도 정당
+      // ⚠️ 2026-08-07 사장님 승인 = fillcity-bts/ = fillcity/ 의 BTS 전용 사본(원본 보존 원칙).
+      //   = 새 능력이 아니라 같은 도구의 설정만 다른 사본(TOP5·공연장반경·보강범위) = 재발명 아님.
+      //   = BTS 15개 도시 작업 종료 후 사본 폐기 시 이 줄도 함께 삭제할 것.
+      "fillcity-bts/", // BTS 전용 사본 폴더 전체
     ],
     triggers: [/tsPhoto\s*\(/, /PhotoMedia\/media/i, /place-images.*x-upsert/i],
     hint: "이미지 채우기 = image-backfill.ts(무료재링크→raw재활용→PM) / relink = storage-image-relink.ts / 사진관문 = ts-client tsPhoto. 새 다운로더·업로더 만들지 말 것(§16).",
@@ -59,7 +63,13 @@ const CAPABILITIES = [
   {
     id: "raw-reinsert",
     ko: "저장 raw → PSR 재입력(외부호출 0)",
-    owners: ["server/services/fill/reinsert-saved-raw.ts"],
+    // ⚠️ 2026-08-07 = fillcity/ 발굴 post-process 는 "자기 발굴 raw 를 자기가 병합"하는 정상 경로(재입력 도구 아님).
+    //   원본은 기존 커밋분이라 검사 대상이 아니었고, BTS 사본(fillcity-bts/)은 신규 추가라 걸림 → 사본도 동일 정당 사용처로 등재(사장님 승인).
+    owners: [
+      "server/services/fill/reinsert-saved-raw.ts",
+      "fillcity/",
+      "fillcity-bts/",
+    ],
     triggers: [/docs[\/\\]raw[\/\\][\s\S]{0,80}(INSERT|upsertPlace)/i],
     hint: "raw → PSR 재입력 = reinsert-saved-raw.ts + raw-storage-recall 스킬. 새로 만들지 말 것(§16).",
   },
@@ -71,20 +81,17 @@ const CAPABILITIES = [
     hint: "오분류 이동 = category-move.ts (DELETE 금지 = TS 자산 보존). 새로 만들지 말 것(§16).",
   },
   {
-    id: "r2-storage-migrate",
-    ko: "Supabase Storage → R2 복사·DB 주소 치환·guides base64 추출(Cloudflare 이전 1단계, 2026-08-06)",
+    id: "r2-storage",
+    ko: "R2 창고 접근·guides base64 추출 (SP 창고 철거 완료 2026-08-07 = 1-5b, 이전 도구 3종은 임무 완수로 삭제 §19)",
     owners: [
-      "server/services/fill/storage-r2-migrate.ts",
-      "server/services/fill/storage-r2-relink.ts",
       "server/services/fill/guides-photo-extract.ts",
-      "server/services/fill/storage-observe.ts",
       "server/services/shared/r2-client.ts",
     ],
     triggers: [
       /storage\.objects[\s\S]{0,200}uploadToR2/i,
-      /supabase\.co[\s\S]{0,160}r2\.dev/i,
+      /supabase\.co\/storage\/v1/i,
     ],
-    hint: "Supabase→R2 복사 = storage-r2-migrate.ts / DB 주소 치환 = storage-r2-relink.ts / guides base64 추출 = guides-photo-extract.ts. 새 복사·치환 루프 만들지 말 것(§16).",
+    hint: "창고 = R2 단독(r2-client.ts 단일 진입점). 옛 Supabase Storage(storage/v1) 경로를 새로 쓰는 것 = SP 부활 = 금지(1-5b 철거 완료). guides base64 추출 = guides-photo-extract.ts.",
   },
 ];
 

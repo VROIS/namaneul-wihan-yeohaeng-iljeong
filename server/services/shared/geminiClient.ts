@@ -46,6 +46,8 @@ export interface GeminiJsonOptions {
   rawTag?: string | null;
   /** ⚠️ 2026-06-20 사장님 SSOT = 출입증 발급 키(관리자 백그라운드 #07·#45). 미전달 시 process.env(사용자 메인앱). = #01 무판단 배관, 카드 판단은 호출자가. */
   apiKey?: string;
+  /** 2026-08-07 사장님 승인(런던 4씬 복구 식별) = fileData 등 추가 파트(텍스트 앞 배치). 관문 1벌 유지용(§16 = 우회 fetch 금지) */
+  extraParts?: any[];
 }
 
 export interface GeminiJsonResult<T = any> {
@@ -84,7 +86,12 @@ export async function geminiJson<T = any>(
     () =>
       getAI(opts?.apiKey).models.generateContent({
         model: opts?.model || MODEL_ID,
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        contents: [
+          {
+            role: "user",
+            parts: [...(opts?.extraParts || []), { text: prompt }],
+          },
+        ],
         config,
       }),
     { label: `gemini-json:${opts?.rawTag || "call"}` },
