@@ -17,7 +17,8 @@
     "days": "{{count}}日間",
     "places": "{{count}}か所",
     "share": "共有",
-    "download": "ダウンロード"
+    "download": "ダウンロード",
+    "delete": "削除"
   },
   "login": {
     "signingIn": "ログイン中…",
@@ -338,9 +339,6 @@
   },
   "expert": {
     "title": "現地エキスパート",
-    "introInitial": "P",
-    "modeUser": "問い合わせ",
-    "modeExpert": "回答箱",
     "introName": "パリジャン",
     "introDesc": "パリ現地35年 · AIプランを現地の目で検証",
     "attachLabel": "問い合わせる旅程（自動添付）",
@@ -350,12 +348,9 @@
     "questionLabel": "エキスパートに質問",
     "questionPlaceholder": "質問やご要望をご記入ください",
     "submit": "問い合わせる",
-    "myInbox": "マイ問い合わせ",
     "inquiry": "問い合わせ",
     "sentTitle": "送信しました",
     "sentMsg": "現地エキスパートが確認後、できるだけ早く返信します。",
-    "myBookings": "マイ予約",
-    "bookingEmpty": "まだ予約リクエストはありません",
     "kindBooking": "予約",
     "bookingDayLabel": "Day {{day}} 予約リクエスト",
     "bookingPlaceholder": "予約のご要望をご記入ください（人数・日付・時間など）",
@@ -383,7 +378,6 @@
     "expertReplyFrom": "現地エキスパート",
     "me": "自分",
     "askMore": "追加で質問",
-    "answerBox": "回答箱",
     "sendReply": "返信する",
     "inboxEmpty": "まだ問い合わせがありません",
     "stPending": "返信待ち",

@@ -17,7 +17,8 @@
     "days": "{{count}}일",
     "places": "{{count}}개 장소",
     "share": "공유",
-    "download": "다운로드"
+    "download": "다운로드",
+    "delete": "삭제"
   },
   "login": {
     "signingIn": "로그인 중…",
@@ -231,9 +232,6 @@
   },
   "expert": {
     "title": "현지 전문가",
-    "introInitial": "P",
-    "modeUser": "문의하기",
-    "modeExpert": "답변함",
     "introName": "파리지앵",
     "introDesc": "파리 현지 35년 경력 · AI 일정을 현지 눈으로 검증",
     "attachLabel": "문의할 여정 (자동 첨부)",
@@ -243,12 +241,9 @@
     "questionLabel": "전문가에게 질문",
     "questionPlaceholder": "궁금한 점이나 요청사항을 적어주세요",
     "submit": "문의 보내기",
-    "myInbox": "내 문의함",
     "inquiry": "문의",
     "sentTitle": "문의를 보냈습니다",
     "sentMsg": "현지 전문가가 확인 후 최대한 빨리 답변 드리겠습니다.",
-    "myBookings": "나의 예약",
-    "bookingEmpty": "아직 예약 요청이 없어요",
     "kindBooking": "예약",
     "bookingDayLabel": "Day {{day}} 예약 요청",
     "bookingPlaceholder": "예약 요청사항을 적어주세요 (인원·날짜·시간 등)",
@@ -276,7 +271,6 @@
     "expertReplyFrom": "현지 전문가",
     "me": "나",
     "askMore": "추가 문의하기",
-    "answerBox": "답변함",
     "sendReply": "답변 보내기",
     "inboxEmpty": "아직 보낸 문의가 없어요",
     "stPending": "답변대기",

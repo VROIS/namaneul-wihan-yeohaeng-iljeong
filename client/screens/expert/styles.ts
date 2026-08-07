@@ -8,64 +8,13 @@ export const styles = StyleSheet.create({
   container: { flex: 1 },
   scroll: { flex: 1 },
   flex1: { flex: 1 },
-  // 상단 세그먼트 토글(사용자↔전문가) = 개발단계 양쪽 화면 열람(2026-07-14)
-  toggleRow: {
-    flexDirection: "row",
-    gap: 4,
-    padding: 4,
-    borderRadius: BorderRadius.md,
-  },
-  toggleBtn: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: Spacing.sm,
-    borderRadius: BorderRadius.sm,
-  },
-  toggleText: { fontSize: 13, fontFamily: Fonts.bold },
-  // 답변함/사용자 서브헤더(부모 모달 헤더 아래) = 상단 SafeArea 없음(부모 담당)
-  subHeader: {
-    paddingHorizontal: Spacing.lg,
-    paddingTop: Spacing.sm,
-    paddingBottom: Spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  subHeaderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-  subTitle: { fontSize: 20, fontFamily: Fonts.bold, letterSpacing: -0.5 },
-  iconBtn: {
-    width: 36,
-    height: 36,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  // 소개/여정 카드
-  card: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.md,
-    padding: Spacing.md,
-    borderRadius: BorderRadius.md,
-    marginBottom: Spacing.md,
-  },
+  // (옛 토글·서브헤더·소개카드 스타일 = 2026-08-07 시트 레이아웃 개편으로 화면과 함께 삭제 §19)
   attachCard: {
     padding: Spacing.md,
     borderRadius: BorderRadius.md,
     marginBottom: Spacing.md,
     gap: Spacing.xs,
   },
-  avatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: Brand.primary,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  avatarText: { color: "#FFF", fontFamily: Fonts.bold, fontSize: 18 },
   cardTitle: { fontSize: 16, fontFamily: Fonts.bold, marginBottom: 2 },
   cardSub: { fontSize: 13, fontFamily: Fonts.medium },
   cardBio: { fontSize: 12, fontFamily: Fonts.medium, marginTop: 4 },
@@ -74,7 +23,6 @@ export const styles = StyleSheet.create({
     fontFamily: Fonts.bold,
     marginBottom: Spacing.sm,
   },
-  sectionSub: { fontSize: 12, fontFamily: Fonts.medium },
   attachTitle: { fontSize: 18, fontFamily: Fonts.bold },
   aiLine: {
     flexDirection: "row",

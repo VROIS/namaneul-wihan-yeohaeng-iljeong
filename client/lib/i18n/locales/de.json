@@ -17,7 +17,8 @@
     "days": "{{count}} Tage",
     "places": "{{count}} Orte",
     "share": "Teilen",
-    "download": "Herunterladen"
+    "download": "Herunterladen",
+    "delete": "Löschen"
   },
   "login": {
     "signingIn": "Anmeldung…",
@@ -338,9 +339,6 @@
   },
   "expert": {
     "title": "Lokaler Experte",
-    "introInitial": "P",
-    "modeUser": "Anfragen",
-    "modeExpert": "Postfach",
     "introName": "Der Pariser",
     "introDesc": "35 Jahre in Paris · Prüft KI-Pläne mit lokalem Blick",
     "attachLabel": "Reise zur Anfrage (automatisch angehängt)",
@@ -350,12 +348,9 @@
     "questionLabel": "Den Experten fragen",
     "questionPlaceholder": "Schreibe deine Frage oder Anfrage",
     "submit": "Anfrage senden",
-    "myInbox": "Meine Anfragen",
     "inquiry": "Anfrage",
     "sentTitle": "Anfrage gesendet",
     "sentMsg": "Der lokale Experte prüft und antwortet so schnell wie möglich.",
-    "myBookings": "Meine Buchungen",
-    "bookingEmpty": "Noch keine Buchungsanfragen",
     "kindBooking": "Buchung",
     "bookingDayLabel": "Buchungsanfrage – Tag {{day}}",
     "bookingPlaceholder": "Beschreiben Sie Ihre Anfrage (Personen, Datum, Uhrzeit ...)",
@@ -383,7 +378,6 @@
     "expertReplyFrom": "Lokaler Experte",
     "me": "Ich",
     "askMore": "Weiter fragen",
-    "answerBox": "Antworten",
     "sendReply": "Antworten",
     "inboxEmpty": "Noch keine Anfragen",
     "stPending": "Wartet",

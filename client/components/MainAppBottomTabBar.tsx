@@ -61,10 +61,9 @@ export default function MainAppBottomTabBar({
     };
   }, [expertDataChangedAt]);
 
-  // ⚠️ 수정금지(승인필요) 2026-07-30 사장님 SSOT = **AI의견·전문가 = 여정이 있을 때만 활성.**
-  //   이유: 둘 다 "지금 보고 있는 여정"에 대해 묻는 버튼이다. 여정이 없으면 물어볼 대상이 없다.
-  //   옛것(여정 없어도 눌림)은 = 엉뚱한 옛 여정에 대해 답하거나, 대상도 없이 **크레딧 5·10 이
-  //   헛되이 빠지는** 경로였다 = 삭제 §19. 메인앱 탭(MainTabNavigator)과 **같은 규칙 1벌**.
+  // ⚠️ 수정금지(승인필요) 2026-07-30 사장님 SSOT = **AI의견 = 여정이 있을 때만 활성.**
+  //   이유: "지금 보고 있는 여정"에 대해 묻는 버튼이다. 여정이 없으면 물어볼 대상이 없고 크레딧 5 가 헛나간다.
+  //   (전문가 탭은 2026-08-07 SSOT 로 이 조건에서 분리됨 = 아래 Verify 주석 참조 = 독립 탭)
   const needsItinerary = !currentItinerary;
 
   // ⚠️ 수정금지(승인필요) 2026-07-31 사장님 SSOT = **BTS 를 떠나지 않는다.**
@@ -88,15 +87,16 @@ export default function MainAppBottomTabBar({
         setTimeout(() => requestAiOpinion(), 150);
         break;
       case "Verify":
-        if (needsItinerary) return; // 여정 없음 = 무동작(비활성)
+        // ⚠️ 수정금지(승인필요) 2026-08-07 사장님 SSOT = [전문가 검증] = **독립 탭** = 터치하면 그 자리에서 열림.
+        //   분기는 **비로그인 하나뿐**(여정 유무·역할·배지·현재 화면 안 봄) = MainTabNavigator 와 **같은 규칙 1벌**.
+        //   전문가 창 = App 최상위 전역 마운트 = 어느 화면 위에든 그대로 뜬다 → **화면을 바꿀 필요가 없다.**
+        //   옛것 2가지 완전삭제 §19:
+        //     ① 여정 없으면 무동작 = 메인앱에만 풀려 있어 **BTS 에서 관리자도 잠기던** 원인.
+        //     ② requestMainApp("Home") 후 150ms 뒤 신호 = 메인앱 창이 전문가 창을 **덮어 안 보이던** 원인
+        //        (App 렌더 순서상 MainAppOverlay 가 ExpertOverlay 보다 위. 2026-08-07 크롬 실증으로 확인).
+        //   ※ AI의견(Map)은 다르다 = 그 창은 여정화면 안에 살아서 메인앱을 올려야 한다 = 그쪽 분기 유지.
         if (isAuthed) {
-          // 전문가 창은 전역(App 마운트) = 같은 규칙(여정이 눈앞이면 바로 신호만).
-          if (aiOpensInPlace) {
-            requestExpert();
-            break;
-          }
-          requestMainApp("Home");
-          setTimeout(() => requestExpert(), 150);
+          requestExpert();
         } else {
           requestLogin();
         }
@@ -127,11 +127,11 @@ export default function MainAppBottomTabBar({
       disabled: needsItinerary,
     },
     {
+      // 전문가 = 독립 탭 = 화면·여정과 무관하게 항상 활성(비로그인만 눌렀을 때 로그인 유도) = 2026-08-07 §19
       key: "Verify",
       label: t("tab.expert", "전문가"),
       icon: "brain",
       badge: expertBadge,
-      disabled: needsItinerary,
     },
     {
       key: "Profile",

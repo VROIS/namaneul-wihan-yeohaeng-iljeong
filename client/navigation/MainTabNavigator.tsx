@@ -13,7 +13,7 @@ import { Brand, Colors } from "@/constants/theme";
 import TripPlannerScreen from "@/screens/trip-planner/TripPlannerScreen";
 import ProfileScreen from "@/screens/profile/ProfileScreen";
 // ⚠️ 사장님 SSOT 2026-07-14 = 전문가 = 여정화면 위 오버레이(AI의견과 동일). 옛 별도탭 화면 폐기 §19 = 탭은 트리거만(requestExpert).
-import { tabBadgeCount, getMyRole } from "@/screens/expert/expertApi"; // 전문가 탭 배지 = 역할별(사용자=안읽은답변/전문가=대기문의) + 역할(탭 활성 분기)
+import { tabBadgeCount } from "@/screens/expert/expertApi"; // 전문가 탭 배지 = 역할별(사용자=안읽은답변/전문가=대기문의). 역할 조회는 탭 활성과 무관해져 삭제 = 2026-08-07 §19
 // 📥 2026-08-03 사장님 확정 = 영상 완성 알림 = 벨 알림 안 씀 → **하단 TRIPIS 탭 뱃지**(전문가 뱃지와 같은 구현).
 //   뱃지 원천 = saved_videos.is_new(서버) = 앱을 껐다 와도 폴링이 다시 인식. 해제 = 그 영상 뷰 1회 열람.
 import { videoBadgeCount } from "@/components/tripis/savedVideosApi";
@@ -70,8 +70,6 @@ export default function MainTabNavigator() {
   const [expertBadge, setExpertBadge] = useState(0);
   // 📥 완성 영상 뱃지(TRIPIS 탭) = 전문가 뱃지와 같은 폴링·신호 1벌(2026-08-03 사장님)
   const [videoBadge, setVideoBadge] = useState(0);
-  // ⚠️ 사장님 SSOT 2026-07-14 = 역할=전문가/관리자면 [전문가]탭 항상 활성(자기 여정 없어도 답변함 진입 가능). 사용자는 여정 있을 때만.
-  const [isExpertRole, setIsExpertRole] = useState(false);
   useEffect(() => {
     let alive = true;
     const load = () => {
@@ -87,11 +85,6 @@ export default function MainTabNavigator() {
         .catch(() => {});
     };
     load();
-    getMyRole()
-      .then((r) => {
-        if (alive) setIsExpertRole(r === "expert" || r === "admin");
-      })
-      .catch(() => {});
     const iv = setInterval(load, 30000);
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
     const debouncedLoad = () => {
@@ -132,15 +125,10 @@ export default function MainTabNavigator() {
       alive = false;
     };
   }, [videoDataChangedAt]);
-  // ⚠️ 사장님 SSOT 2026-07-25 = 로그인 팝업(모달)은 navigation state를 안 바꿔 위 mount/이동 리스너로는 role 재조회 안 됨 → 관리자(사장님) 메일 로그인 직후에도 isExpertRole=false로 남아 [전문가]탭 프리패스 안 되던 버그. authChangedAt 신호로 role+배지 즉시 재조회(§16 신호 재사용, useProfile과 동일 패턴).
+  // ⚠️ 사장님 SSOT 2026-07-25 = 로그인 팝업(모달)은 navigation state를 안 바꿔 위 mount/이동 리스너로는 배지 재조회가 안 됨 → 로그인 직후 뱃지가 옛 값으로 남던 버그. authChangedAt 신호로 즉시 재조회(§16 신호 재사용, useProfile과 동일 패턴).
   useEffect(() => {
     if (!authChangedAt) return;
     let alive = true;
-    getMyRole()
-      .then((r) => {
-        if (alive) setIsExpertRole(r === "expert" || r === "admin");
-      })
-      .catch(() => {});
     tabBadgeCount()
       .then((n) => {
         if (alive) setExpertBadge(n);
@@ -155,15 +143,6 @@ export default function MainTabNavigator() {
       alive = false;
     };
   }, [authChangedAt]);
-
-  // ⚠️ 수정금지(승인필요) 2026-08-05 사장님 SSOT = [전문가 검증] 탭 **열림 조건 1벌**.
-  //   이 값을 아이콘 색과 아래 tabPress 가 **같이** 본다 = 조건을 두 벌로 적으면 한쪽만 고쳤을 때
-  //   "회색인데 눌리거나 파란데 안 눌리는" 오신호가 난다(§0 = 같은 판단 2벌 금지).
-  //   ⚠️ 다만 **색에는 isAuthed 가 하나 더 붙는다**(로그인까지 돼야 파랑) = 관문은 로그인을 안 본다.
-  //     그래서 "비로그인 + 여정 있음" 은 회색이지만 눌리고, 눌리면 로그인 팝업으로 간다(의도된 동작).
-  //   · 전문가·관리자 = 자기 여정이 없어도 답변하러 들어가야 하므로 **항상** 열림
-  //   · 사용자 = 여정이 있거나(문의 작성) 배지가 떠 있으면(도착한 답변 열람 = 무료) 열림
-  const expertTabOpen = isExpertRole || !!currentItinerary || expertBadge > 0;
 
   const getTabBarIcon = (
     routeName: string,
@@ -282,7 +261,13 @@ export default function MainTabNavigator() {
             },
           }}
         />
-        {/* ✅ 전문가 (센터) = 현지 전문가 문의 = 로그인시 100% 오버레이 오픈 */}
+        {/* ⚠️ 수정금지(승인필요) 2026-08-07 사장님 SSOT = [전문가 검증] = **독립 탭** (조건 1벌 = 여기).
+            조건은 **로그인 여부 하나뿐**(isAuthed). 여정 유무·역할·배지 등 화면 상태를 일절 안 본다.
+            이유(사장님): 이 탭은 문의·예약을 즉시 보고 응답하는 **현황판**이다. 관리자·전문가는 어느 화면에서든
+              들어와 답해야 하고, 사용자도 로그인만 했으면 언제든 자기 문의 상태를 봐야 한다.
+            효과: 화면이 더 늘거나 바뀌어도 **탭 동작이 화면과 무관** = BTS 잠김 같은 회귀가 구조적으로 불가.
+            문의 "작성"의 크레딧 10 보호는 시트 안 canSubmit(ExpertSheet)이 담당 = 여는 것과 쓰는 것을 분리.
+            옛 조건(역할·여정·배지 조합 = MainAppBottomTabBar 와 두 벌로 갈려 BTS 에서 관리자도 잠기던 것) 완전삭제 §19. */}
         <Tab.Screen
           name="Verify"
           component={MapTogglePlaceholder}
@@ -294,22 +279,16 @@ export default function MainTabNavigator() {
               <Icon
                 name="brain"
                 size={24}
-                // 활성색 = 열림 조건(expertTabOpen 1벌) + **로그인까지** 됐을 때만 파랑.
-                color={
-                  isAuthed && expertTabOpen ? Brand.primary : theme.textTertiary
-                }
+                // 활성색 = 로그인했으면 파랑(위 SSOT = 조건 1개). 비로그인 = 회색이지만 눌리면 로그인 팝업.
+                color={isAuthed ? Brand.primary : theme.textTertiary}
               />
             ),
           }}
           listeners={{
             tabPress: (e) => {
               e.preventDefault();
-              // ⚠️ 수정금지(승인필요) 2026-08-05 사장님 SSOT = 순서는 **①열림 조건 → ②로그인** 이다.
-              //   ① expertTabOpen(위 1벌)이 아니면 = 아무 일도 안 일어난다(무동작).
-              //   ② 통과했는데 비로그인이면 = 막지 않고 로그인 팝업으로 유도(여정생성 버튼과 같은 방식).
-              //   문의 "작성" 크레딧 10 보호는 시트 안 canSubmit(ExpertSheet)이 담당 = 관문과 분리.
-              //   옛 관문(전원 여정 필수 = 배지 떠도 안 열림 = "전문가 항상 활성" 2026-07-14 SSOT를 덮은 회귀) 삭제 §19.
-              if (!expertTabOpen) return;
+              // ⚠️ 수정금지(승인필요) 2026-08-07 사장님 SSOT = 터치 = 무조건 열림. 분기는 **비로그인 하나뿐**.
+              //   비로그인 = 막지 않고 로그인 팝업으로 유도(여정생성 버튼과 같은 방식).
               if (isAuthed) {
                 requestExpert();
               } else {

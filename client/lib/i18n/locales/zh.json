@@ -17,7 +17,8 @@
     "days": "{{count}}天",
     "places": "{{count}}个地点",
     "share": "分享",
-    "download": "下载"
+    "download": "下载",
+    "delete": "删除"
   },
   "login": {
     "signingIn": "登录中…",
@@ -338,9 +339,6 @@
   },
   "expert": {
     "title": "当地专家",
-    "introInitial": "P",
-    "modeUser": "咨询",
-    "modeExpert": "回复箱",
     "introName": "巴黎人",
     "introDesc": "巴黎当地35年经验 · 以当地视角审核AI行程",
     "attachLabel": "要咨询的行程（自动附加）",
@@ -350,12 +348,9 @@
     "questionLabel": "向专家提问",
     "questionPlaceholder": "请写下您的问题或需求",
     "submit": "发送咨询",
-    "myInbox": "我的咨询",
     "inquiry": "咨询",
     "sentTitle": "已发送咨询",
     "sentMsg": "当地专家核实后会尽快回复您。",
-    "myBookings": "我的预订",
-    "bookingEmpty": "暂无预订请求",
     "kindBooking": "预订",
     "bookingDayLabel": "第{{day}}天预订请求",
     "bookingPlaceholder": "请填写预订需求（人数、日期、时间等）",
@@ -383,7 +378,6 @@
     "expertReplyFrom": "当地专家",
     "me": "我",
     "askMore": "继续咨询",
-    "answerBox": "回复箱",
     "sendReply": "发送回复",
     "inboxEmpty": "还没有咨询",
     "stPending": "等待回复",

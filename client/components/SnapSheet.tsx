@@ -36,6 +36,9 @@ interface SnapSheetProps {
   onClose: () => void;
   title: string;
   children: React.ReactNode;
+  // ⚠️ 2026-08-07 사장님 SSOT = 제목 자리를 대신 채우는 요소(전문가 답변함 = 본인 프로필 사진).
+  //   "이 탭을 여는 사람은 뭐하는 탭인지 이미 안다" = 글자 제목 불필요 → 넘기면 title 대신 이것만 그린다.
+  headerLeft?: React.ReactNode;
   // full 높이 비율(0~1). 기본 0.9. peek 는 하단 고정 높이(px)만 보이게.
   fullRatio?: number;
   peekHeight?: number; // peek 상태에서 화면에 보이는 시트 높이(px). 기본 90.
@@ -46,6 +49,7 @@ export default function SnapSheet({
   onClose,
   title,
   children,
+  headerLeft,
   fullRatio = 0.9,
   peekHeight = 90,
 }: SnapSheetProps) {
@@ -176,15 +180,21 @@ export default function SnapSheet({
           <View style={styles.header}>
             <View style={[styles.handle, { backgroundColor: theme.border }]} />
             <View style={styles.headerRow}>
+              {/* 헤더 빈 영역 탭 = 시트 전체 펼치기(옛 동작 보존). headerLeft(사진)를 넘겨도
+                  펼치기 수단이 사라지지 않게 **바깥은 항상 Pressable** = §22 판단검증 지적 2026-08-07.
+                  사진 자체의 터치(프로필 편집)는 안쪽 요소가 먼저 받는다. */}
               <Pressable
                 onPress={() => {
                   translateY.value = withSpring(FULL_Y, SPRING);
                 }}
                 style={styles.headerTapArea}
+                accessibilityLabel={title}
               >
-                <Text style={[styles.title, { color: theme.text }]}>
-                  {title}
-                </Text>
+                {headerLeft ?? (
+                  <Text style={[styles.title, { color: theme.text }]}>
+                    {title}
+                  </Text>
+                )}
               </Pressable>
               <Pressable
                 onPress={onClose}

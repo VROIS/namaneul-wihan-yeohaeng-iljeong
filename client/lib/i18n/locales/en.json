@@ -17,7 +17,8 @@
     "days": "{{count}} days",
     "places": "{{count}} places",
     "share": "Share",
-    "download": "Download"
+    "download": "Download",
+    "delete": "Delete"
   },
   "login": {
     "signingIn": "Signing in…",
@@ -338,9 +339,6 @@
   },
   "expert": {
     "title": "Local Expert",
-    "introInitial": "P",
-    "modeUser": "Ask",
-    "modeExpert": "Inbox",
     "introName": "Parisian",
     "introDesc": "35 years in Paris · Verifying AI plans with local eyes",
     "attachLabel": "Trip to ask about (auto-attached)",
@@ -350,12 +348,9 @@
     "questionLabel": "Ask the expert",
     "questionPlaceholder": "Write your question or request",
     "submit": "Send inquiry",
-    "myInbox": "My inquiries",
     "inquiry": "Inquiry",
     "sentTitle": "Inquiry sent",
     "sentMsg": "The local expert will review and reply as soon as possible.",
-    "myBookings": "My bookings",
-    "bookingEmpty": "No booking requests yet",
     "kindBooking": "Booking",
     "bookingDayLabel": "Day {{day}} booking request",
     "bookingPlaceholder": "Tell us your booking details (party size, date, time, etc.)",
@@ -383,7 +378,6 @@
     "expertReplyFrom": "Local Expert",
     "me": "Me",
     "askMore": "Ask more",
-    "answerBox": "Answer box",
     "sendReply": "Send reply",
     "inboxEmpty": "No inquiries yet",
     "stPending": "Waiting",

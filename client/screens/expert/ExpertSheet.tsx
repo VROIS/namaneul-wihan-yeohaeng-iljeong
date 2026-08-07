@@ -16,7 +16,6 @@ import {
   Alert,
   Platform,
   useColorScheme,
-  Image,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
@@ -39,12 +38,11 @@ import {
   type InquiryStatus,
   type ExpertProfile,
 } from "./expertApi";
-import { statusStyle } from "./statusStyle";
 import { getUserData } from "@/lib/auth"; // 문의 전 로그인 확인(비로그인=로그인 안내)
 import DetailView from "./components/DetailView";
 import ProfileEditView from "./components/ProfileEditView";
-// 답변함 화면 = 2026-08-05 사장님 지시로 분리(§0 700줄 = 예외 없이 쪼갠다). DetailView·ProfileEditView 와 같은 패턴.
-import ExpertInboxView from "./components/ExpertInboxView";
+// 목록 화면 = 전문가·사용자 공용 1벌(2026-08-07 §0). DetailView·ProfileEditView 와 같은 분리 패턴.
+import InquiryListView from "./components/InquiryListView"; // 목록(칩+카드) 1벌 = 전문가·사용자 공용(2026-08-07 §0)
 import { styles } from "./styles";
 
 // 전문가 문의 크레딧 = AI 의견과 동일 방식으로 사전 안내(2026-07-13). 실제 차감은 로그인 정식화 후(§9 프로모션).
@@ -62,6 +60,16 @@ interface ExpertSheetProps {
   // ⚠️ 사장님 SSOT 2026-07-14 = 문의 카드 누름 = 그 여정을 배경에 복원(시트는 열린 채) = 실제 여정 보며 답변(사용자 프로필카드 클릭과 동일). 중간 요약카드 불필요.
   onRestoreBackground?: (itineraryId: number) => void;
   onRequestLogin?: () => void; // 로그인 필요 시 부모가 로그인 화면으로(없으면 onClose 폴백 = 프로필서 로그인)
+  // ⚠️ 2026-08-07 사장님 SSOT = 시트 헤더(제목 자리) = 전문가 본인 사진. 역할·프로필은 이 파일이 이미 조회하므로
+  //   부모가 또 조회하지 않도록(§0 = 같은 조회 2벌 금지) 결과만 위로 올린다. 전문가 아니면 null.
+  onHeaderChange?: (
+    h: {
+      avatarUrl?: string;
+      nickname?: string;
+      /** 전문가·관리자만 = 프로필 편집. 사용자는 없음(터치 동작 X) */
+      onPress?: () => void;
+    } | null,
+  ) => void;
 }
 
 // ⚠️ 사장님 SSOT 2026-07-14 = 답변함 필터 = 전체/답변대기/답변완료 (검토중·반려 완전 삭제 §19 = 그 상태로 갈 방법이 없어짐).
@@ -73,6 +81,7 @@ export default function ExpertSheet({
   onOpenItinerary,
   onRestoreBackground,
   onRequestLogin,
+  onHeaderChange,
 }: ExpertSheetProps) {
   const { t } = useTranslation();
   const colorScheme = useColorScheme();
@@ -168,6 +177,22 @@ export default function ExpertSheet({
       alive = false;
     };
   }, []);
+
+  // ⚠️ 2026-08-07 사장님 SSOT = 시트 헤더 = (글자 제목 삭제) 전문가 사진 1개.
+  //   · 전문가·관리자 = 본인 사진, 터치 = 프로필 편집
+  //   · 사용자 = 같은 전문가 사진(누구에게 묻는지 = 이 시트의 얼굴), 터치 동작 없음(편집 권한 없음)
+  //   여기 조회 결과를 그대로 재사용 = 부모 재조회 0(§0).
+  useEffect(() => {
+    if (!onHeaderChange || isExpert === null) return;
+    onHeaderChange({
+      avatarUrl: profile?.avatarUrl,
+      nickname: profile?.nickname || t("expert.introName"),
+      onPress: isExpert ? () => setView({ kind: "profileEdit" }) : undefined,
+    });
+    // 시트가 닫히면 이 컴포넌트는 언마운트되지만 부모(오버레이)는 전역 상주 = 헤더를 비워야
+    // 계정을 바꿔 다시 열었을 때 **옛 사람 얼굴**이 남지 않는다(§22 판단검증 2026-08-07).
+    return () => onHeaderChange(null);
+  }, [isExpert, profile, onHeaderChange, t]);
 
   const itin: any = currentItinerary;
   const totalPlaces =
@@ -320,114 +345,6 @@ export default function ExpertSheet({
     setView({ kind: "detail", id: q.id });
   };
 
-  // 2026-07-29 = 사용자 목록 카드 (선택 강조 3D 테두리 + 개별 삭제 ✕ 버튼 + 여정 정보 내장)
-  const renderUserCard = (q: Inquiry) => {
-    const isSelected = selectedId === q.id;
-    const st = statusStyle(q.status, theme, t);
-    const dest = q.itineraryData?.destination || t("expert.inquiry");
-    const dayCount = q.itineraryData?.dayCount ?? 0;
-    const totalPlaces = q.itineraryData?.totalPlaces ?? 0;
-    const unread = q.status === "answered" && !q.isReadByUser;
-
-    return (
-      <Pressable
-        key={q.id}
-        style={[
-          styles.inquiryCard,
-          {
-            backgroundColor: isSelected ? "#EFF6FF" : theme.backgroundDefault,
-            borderWidth: isSelected ? 2 : 1,
-            borderColor: isSelected ? Brand.primary : theme.border,
-            borderRadius: 16,
-            padding: 14,
-            marginBottom: 10,
-          },
-        ]}
-        onPress={() => openInquiry(q)}
-      >
-        {unread ? <View style={styles.unreadDot} /> : null}
-        <View style={styles.flex1}>
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 8,
-              marginBottom: 4,
-              flexWrap: "wrap",
-            }}
-          >
-            <Text
-              style={[
-                styles.inquiryTitle,
-                {
-                  color: isSelected ? Brand.primary : theme.text,
-                  fontWeight: isSelected ? "700" : "600",
-                },
-              ]}
-              numberOfLines={1}
-            >
-              {q.kind === "booking" && q.dayNumber
-                ? `${dest} · Day ${q.dayNumber}`
-                : dest}
-            </Text>
-            {dayCount > 0 && (
-              <View
-                style={{
-                  backgroundColor: `${Brand.primary}18`,
-                  paddingHorizontal: 8,
-                  paddingVertical: 2,
-                  borderRadius: 6,
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: 11,
-                    fontFamily: "Pretendard-Bold",
-                    color: Brand.primary,
-                  }}
-                >
-                  {dayCount}일 · {totalPlaces}개 장소
-                </Text>
-              </View>
-            )}
-          </View>
-          <Text
-            style={[styles.inquiryPreview, { color: theme.textSecondary }]}
-            numberOfLines={1}
-          >
-            {q.userMessage}
-          </Text>
-        </View>
-        <View
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 6,
-            marginLeft: 8,
-          }}
-        >
-          <View style={[styles.badge, { backgroundColor: st.bg }]}>
-            <Text style={[styles.badgeText, { color: st.fg }]}>{st.label}</Text>
-          </View>
-          <Pressable
-            hitSlop={10}
-            style={{
-              padding: 4,
-              borderRadius: 12,
-              backgroundColor: isSelected ? "#DBEAFE" : "#F1F5F9",
-            }}
-            onPress={(e) => {
-              e.stopPropagation();
-              handleDeleteInquiry(q.id);
-            }}
-          >
-            <Icon name="x" size={15} color={theme.textTertiary} />
-          </Pressable>
-        </View>
-      </Pressable>
-    );
-  };
-
   // ── 내부 라우팅 = 상세/프로필편집이면 해당 뷰만 렌더 ──
   if (view.kind === "detail") {
     return (
@@ -457,77 +374,42 @@ export default function ExpertSheet({
     );
   }
 
-  // ── home = 상단 토글(전문가/관리자만) + 역할별 본문 ──
-  const modeToggle = isExpert ? (
-    <View
-      style={[styles.toggleRow, { backgroundColor: theme.backgroundDefault }]}
-    >
-      <Pressable
-        style={[
-          styles.toggleBtn,
-          viewMode === "user" && { backgroundColor: Brand.primary },
-        ]}
-        onPress={() => setViewMode("user")}
-      >
-        <Text
-          style={[
-            styles.toggleText,
-            { color: viewMode === "user" ? "#FFF" : theme.textSecondary },
-          ]}
-        >
-          {t("expert.modeUser")}
-        </Text>
-      </Pressable>
-      <Pressable
-        style={[
-          styles.toggleBtn,
-          viewMode === "expert" && { backgroundColor: Brand.primary },
-        ]}
-        onPress={() => setViewMode("expert")}
-      >
-        <Text
-          style={[
-            styles.toggleText,
-            { color: viewMode === "expert" ? "#FFF" : theme.textSecondary },
-          ]}
-        >
-          {t("expert.modeExpert")}
-        </Text>
-      </Pressable>
-    </View>
-  ) : null;
-
-  // 전문가/관리자 + expert 모드 = 답변함(받은 문의 목록·상태필터 = 이 파일 인라인).
-  // 전문가/관리자 + expert 모드 = 답변함. 화면은 components/ExpertInboxView 1벌(§0 700줄 = 2026-08-05 분리).
+  // ⚠️ 수정금지(승인필요) 2026-08-07 사장님 SSOT = 전문가/관리자 + expert 모드 = 답변함. 목록은 InquiryListView 1벌(사용자와 공용).
+  //   옛 상단 토글(문의하기↔답변함) 완전삭제 §19 = **테스트용이었음**(사장님 확인). 제목줄("답변함"+프로필아이콘)도 함께 삭제
+  //   = 시트 헤더의 사진 1개로 대체(위 onHeaderChange) = 머리 3층 → 1층 = 목록이 그만큼 더 보임.
+  //   viewMode 는 유지 = [바로 예약하기]로 들어오면 전문가·관리자도 작성뷰로 열려야 함(2026-07-24 예약 경로).
   if (isExpert && viewMode === "expert") {
     return (
-      <ExpertInboxView
-        inquiries={inquiries}
-        filter={filter}
-        setFilter={setFilter}
-        filters={FILTERS}
-        selectedId={selectedId}
-        theme={theme}
-        insets={insets}
-        t={t}
-        modeToggle={modeToggle}
-        onOpenProfileEdit={() => setView({ kind: "profileEdit" })}
-        onOpenInquiry={openInquiry}
-        onDeleteInquiry={handleDeleteInquiry}
-      />
+      <View style={styles.container}>
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={{
+            padding: Spacing.lg,
+            paddingBottom: insets.bottom + Spacing.lg,
+          }}
+          showsVerticalScrollIndicator={false}
+        >
+          <InquiryListView
+            inquiries={inquiries}
+            filter={filter}
+            setFilter={setFilter}
+            filters={FILTERS}
+            selectedId={selectedId}
+            theme={theme}
+            t={t}
+            emptyText={t("expert.inboxNoItems")}
+            onOpenInquiry={openInquiry}
+            onDeleteInquiry={handleDeleteInquiry}
+          />
+        </ScrollView>
+      </View>
     );
   }
 
   // 사용자(또는 admin 이 user 모드로 전환) = 문의작성 + 내문의함(사용자 모드 = 이 파일 인라인).
   return (
     <View style={styles.container}>
-      {/* 전문가/관리자면 상단 토글만(제목·X = 부모 모달). 순수 사용자는 서브헤더 없음. */}
-      {modeToggle ? (
-        <View style={[styles.subHeader, { borderBottomColor: theme.border }]}>
-          {modeToggle}
-        </View>
-      ) : null}
-
+      {/* 옛 상단 토글(문의하기↔답변함) 삭제 = 2026-08-07 §19. 제목·X = 부모 시트 헤더. */}
       <KeyboardAwareScrollViewCompat
         style={styles.scroll}
         contentContainerStyle={{
@@ -536,78 +418,29 @@ export default function ExpertSheet({
         }}
         showsVerticalScrollIndicator={false}
       >
-        {/* 소개 카드 = 전문가 본인 프로필(있으면) / 없으면 기본 i18n 문구 */}
-        <View style={[styles.card, { backgroundColor: `${Brand.primary}0D` }]}>
-          <View style={[styles.avatar, { overflow: "hidden" }]}>
-            {profile?.avatarUrl ? (
-              <Image
-                source={{ uri: profile.avatarUrl }}
-                style={{ width: 44, height: 44, borderRadius: 22 }}
-                resizeMode="cover"
-              />
-            ) : (
-              <Text style={styles.avatarText}>
-                {profile?.character || t("expert.introInitial")}
-              </Text>
-            )}
-          </View>
-          <View style={styles.flex1}>
-            <Text style={[styles.cardTitle, { color: theme.text }]}>
-              {profile?.nickname || t("expert.introName")}
+        {/* ⚠️ 수정금지(승인필요) 2026-08-07 사장님 SSOT = **전문가 소개 문구는 사용자에게 중요**(누구에게 묻는지).
+            헤더 사진 바로 아래 이름·경력·자기소개만 남긴다(옛 소개카드의 아바타·박스는 헤더 사진과 중복이라 삭제 §19).
+            전문가·관리자 화면에는 안 보인다(= 본인 소개를 본인이 볼 이유 없음, 사장님 확정). */}
+        <View style={{ marginBottom: Spacing.md }}>
+          <Text style={[styles.cardTitle, { color: theme.text }]}>
+            {profile?.nickname || t("expert.introName")}
+          </Text>
+          <Text style={[styles.cardSub, { color: theme.textSecondary }]}>
+            {profile?.career || t("expert.introDesc")}
+          </Text>
+          {profile?.bio ? (
+            <Text
+              style={[styles.cardBio, { color: theme.textTertiary }]}
+              numberOfLines={3}
+            >
+              {profile.bio}
             </Text>
-            <Text style={[styles.cardSub, { color: theme.textSecondary }]}>
-              {profile?.career || t("expert.introDesc")}
-            </Text>
-            {profile?.bio ? (
-              <Text
-                style={[styles.cardBio, { color: theme.textTertiary }]}
-                numberOfLines={3}
-              >
-                {profile.bio}
-              </Text>
-            ) : null}
-          </View>
+          ) : null}
         </View>
 
-        {/* ⚠️ 사장님 SSOT 2026-07-15 = 사용자도 진입 즉시 본인 목록이 먼저 = 관리자 답변함(목록 먼저)과 동작 통일. 새 문의 작성은 그 아래. BE는 이미 본인 것만 반환(expert-routes 신원필터). */}
-        {/* 나의 예약 = kind=booking 목록(2026-07-24 사장님 승인 = 일별 바로 예약하기 = 비즈니스 우선 = 먼저) */}
-        <Text
-          style={[
-            styles.sectionTitle,
-            { color: theme.text, marginTop: Spacing.md },
-          ]}
-        >
-          {t("expert.myBookings")}
-        </Text>
-        {inquiries.filter((q) => q.kind === "booking").length === 0 ? (
-          <Text style={[styles.emptyText, { color: theme.textTertiary }]}>
-            {t("expert.bookingEmpty")}
-          </Text>
-        ) : (
-          inquiries.filter((q) => q.kind === "booking").map(renderUserCard)
-        )}
-
-        {/* 내 문의함 = kind=expert(검증 문의)만 — 예약은 위 섹션 */}
-        <Text
-          style={[
-            styles.sectionTitle,
-            { color: theme.text, marginTop: Spacing.md },
-          ]}
-        >
-          {t("expert.myInbox")}
-        </Text>
-        {inquiries.filter((q) => q.kind !== "booking").length === 0 ? (
-          <Text style={[styles.emptyText, { color: theme.textTertiary }]}>
-            {t("expert.inboxEmpty")}
-          </Text>
-        ) : (
-          inquiries.filter((q) => q.kind !== "booking").map(renderUserCard)
-        )}
-
-        {/* 새 문의 작성 = 목록 아래 */}
-        <View style={[styles.divider, { borderTopColor: theme.border }]} />
-
-        {/* 질문 입력 — 예약 모드(bookingDay)면 예약 라벨/플레이스홀더(2026-07-24) */}
+        {/* ⚠️ 수정금지(승인필요) 2026-08-07 사장님 SSOT = **문의 입력창·보내기 = 이 화면의 핵심** = 열자마자 보이는 자리(목록 위).
+            옛 순서(목록 먼저·작성은 맨 아래 = 2026-07-15) 폐기 §19 = 문의가 쌓일수록 핵심 버튼이 스크롤 밑으로 묻혔다(사장님 지적).
+            질문 입력 — 예약 모드(bookingDay)면 예약 라벨/플레이스홀더(2026-07-24) */}
         <Text
           style={[
             styles.sectionTitle,
@@ -657,6 +490,25 @@ export default function ExpertSheet({
         <Text style={[styles.creditNote, { color: theme.textTertiary }]}>
           {t("expert.creditNote", { count: EXPERT_INQUIRY_CREDIT_COST })}
         </Text>
+
+        <View style={[styles.divider, { borderTopColor: theme.border }]} />
+
+        {/* 지난 문의 목록 = 작성창 아래. 전문가 답변함과 **같은 구성**(칩 + 공용 카드).
+            옛것 완전삭제 §19: 나의예약/내문의함 2섹션(= 상태칩 1벌로 통일, 예약 우선 노출은
+            InquiryListView 정렬이 이어받음) · renderUserCard(= InquiryCard 1벌로 통합). */}
+        <InquiryListView
+          inquiries={inquiries}
+          filter={filter}
+          setFilter={setFilter}
+          filters={FILTERS}
+          selectedId={selectedId}
+          theme={theme}
+          t={t}
+          emptyText={t("expert.inboxEmpty")}
+          showUnread /* 사용자 목록만 = 도착한 답변 안읽음 점(전문가 답변함은 뜻이 반대) */
+          onOpenInquiry={openInquiry}
+          onDeleteInquiry={handleDeleteInquiry}
+        />
       </KeyboardAwareScrollViewCompat>
     </View>
   );

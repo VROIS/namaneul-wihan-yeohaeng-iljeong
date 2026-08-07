@@ -17,7 +17,8 @@
     "days": "{{count}} días",
     "places": "{{count}} lugares",
     "share": "Compartir",
-    "download": "Descargar"
+    "download": "Descargar",
+    "delete": "Eliminar"
   },
   "login": {
     "signingIn": "Iniciando sesión…",
@@ -338,9 +339,6 @@
   },
   "expert": {
     "title": "Experto local",
-    "introInitial": "P",
-    "modeUser": "Preguntar",
-    "modeExpert": "Bandeja",
     "introName": "El Parisino",
     "introDesc": "35 años en París · Verifica los planes de IA con ojos locales",
     "attachLabel": "Viaje a consultar (adjuntado automáticamente)",
@@ -350,12 +348,9 @@
     "questionLabel": "Pregunta al experto",
     "questionPlaceholder": "Escribe tu pregunta o solicitud",
     "submit": "Enviar consulta",
-    "myInbox": "Mis consultas",
     "inquiry": "Consulta",
     "sentTitle": "Consulta enviada",
     "sentMsg": "El experto local revisará y responderá lo antes posible.",
-    "myBookings": "Mis reservas",
-    "bookingEmpty": "Aún no hay solicitudes de reserva",
     "kindBooking": "Reserva",
     "bookingDayLabel": "Solicitud de reserva - Día {{day}}",
     "bookingPlaceholder": "Escribe tu solicitud (personas, fecha, hora...)",
@@ -383,7 +378,6 @@
     "expertReplyFrom": "Experto local",
     "me": "Yo",
     "askMore": "Preguntar más",
-    "answerBox": "Respuestas",
     "sendReply": "Responder",
     "inboxEmpty": "Aún no hay consultas",
     "stPending": "En espera",
