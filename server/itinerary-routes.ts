@@ -227,23 +227,9 @@ export function registerItineraryRoutes(app: Express): void {
     }
   });
 
-  // ⚠️ 2026-07-03 사장님 SSOT = 프로필 카드 X버튼 = 여정 삭제(불필요/중복 카드 정리). 없는 id면 404.
-  app.delete("/api/itineraries/:id", async (req, res) => {
-    try {
-      const id = parseInt(req.params.id);
-      const count = await storage.deleteItinerary(id);
-      if (count === 0) {
-        return res.status(404).json({ error: "Itinerary not found" });
-      }
-      console.log(`[Itinerary] Deleted: id=${id}`);
-      res.json({ deleted: true, id });
-    } catch (error: any) {
-      console.error("Error deleting itinerary:", error?.message || error);
-      res
-        .status(500)
-        .json({ error: "Failed to delete itinerary", details: error?.message });
-    }
-  });
+  // ⚠️ 2026-08-08 사장님 SSOT = 여정 삭제 라우트 **완전삭제** §19 (옛 2026-07-03 "X버튼 = 여정 삭제" 폐기).
+  //   사유 = 모든 생성물은 회사 소유 = DB 는 무조건 남긴다. X 는 화면에서만 감춘다(useHiddenCards 1벌).
+  //   호출자 0 확인 후 제거. 남겨 두면 인증·소유자 확인 없이 id 만으로 남의 여정을 지우는 통로가 열려 있게 된다.
 
   // 🏆 B1 대표로 올리기 (2026-08-01 베스트갤러리 = docs/2026-07-30 도시버튼·베스트갤러리·BTS 통합.md B절)
   //   관리자(users.role='admin')만 = credit-charge.ts 와 같은 기준(§9 표7 = is_admin·아이디 문자열 판단 금지).

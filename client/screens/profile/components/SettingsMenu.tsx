@@ -1,6 +1,6 @@
 // 설정 및 계정 섹션 (입체감 3D 칼라 아이콘 서클 & 가득 채움 레이아웃)
 import React, { useState } from "react";
-import { View, Text, Pressable } from "react-native";
+import { View, Text, Pressable, Linking } from "react-native";
 import { Brand } from "@/constants/theme";
 import Icon from "@/components/Icon";
 import ThemedText from "@/components/ThemedText";
@@ -8,13 +8,19 @@ import { styles } from "../styles";
 import { shortDateCard } from "../utils"; // 날짜 서식 = 여정 카드와 같은 1벌(§16)
 import type { ProfileApi } from "../hooks/useProfile";
 
+// ⚠️ 수정금지(승인필요) 2026-08-08 사장님 지시 = 고객센터 대표 메일 = 이 상수 1벌.
+//   쓰는 곳 = 도움말 아코디언 '문의하기' + 개인정보 방침 §5. 두 곳에 손으로 적으면 갈라진다(§0).
+const SUPPORT_EMAIL = "vrois75015@gmail.com";
+
 // ❔ 도움말 FAQ = 실제 TRIPIS 기능 기준 재구성(2026-08-03 사장님 승인, 옛 '손안에 가이드' 문서 폐기 §19).
 //   icon = client/components/Icon.tsx ICON_MAP 에 이미 있는 이름만 사용(이모지 금지 = 사장님 지시).
 const HELP_FAQ: { icon: string; q: string; a: string }[] = [
   {
     icon: "compass",
     q: "앱 하단 5개 버튼(여정 / AI 의견 / 전문가 검증 / 프로필 / Tripis)은 각각 뭔가요?",
-    a: "[여정]에서 도시·날짜·스타일을 고르면 나만의 일정이 만들어져요. [AI 의견]과 [전문가 검증]은 만든 여정이 있어야 눌립니다(여정이 없으면 회색으로 비활성화되는 게 정상이에요). [프로필]에서 내가 만든 여정·해설·영상을 다시 볼 수 있고, [Tripis]는 카메라로 여행지를 찍어 바로 해설을 받는 기능이에요.",
+    // ⚠️ 2026-08-08 사장님 지시 = "회색으로" 삭제 §19. 실제 탭 라벨 색은 다른 탭과 같아(rgb(156,163,175)) 회색 처리가 없다.
+    //   회색 스타일을 새로 입히는 대신 사실과 다른 문구를 지운다(= 더 가벼운 해결).
+    a: "[여정]에서 도시·날짜·스타일을 고르면 나만의 일정이 만들어져요. [AI 의견]과 [전문가 검증]은 만든 여정이 있어야 눌립니다(여정이 없으면 비활성화되는 게 정상이에요). [프로필]에서 내가 만든 여정·해설·영상을 다시 볼 수 있고, [Tripis]는 카메라로 여행지를 찍어 바로 해설을 받는 기능이에요.",
   },
   {
     icon: "dollar-sign",
@@ -74,9 +80,10 @@ export default function SettingsMenu({ profile }: { profile: ProfileApi }) {
     currentLang,
     handleLanguageChange,
     transactions,
-    recharging,
-    handleRecharge,
     pricing,
+    // 회원 탈퇴 (2026-08-08) = 개인정보 보호 아코디언 안 [탈퇴]
+    handleDeleteAccount,
+    deletingAccount,
   } = profile;
 
   // 아코디언 및 언어 풀다운 드롭다운 상태
@@ -157,36 +164,20 @@ export default function SettingsMenu({ profile }: { profile: ProfileApi }) {
               · 안전 결제: Stripe(카드 정보 미저장){priceNote}
             </Text>
             <Text style={styles.accordionText}>· 최근 충전: {lastTopUp}</Text>
+            {/* ⚠️ 수정금지(승인필요) 2026-08-08 사장님 지시 = 여기 [충전] 칩 완전삭제 §19.
+                사유 = 프로필 헤더에 이미 같은 버튼이 있어 한 화면에 두 벌(§0). 충전 진입 = 헤더 1벌만.
+                이름도 교체 = [영수증 내역] → [크레딧 내역] (실제로 나오는 것이 영수증이 아니라 크레딧 증감 기록). */}
             <View style={styles.chipContainer}>
-              <Pressable
-                style={[
-                  styles.chipBtn,
-                  {
-                    borderColor: Brand.primary,
-                    backgroundColor: "rgba(66, 133, 244, 0.1)",
-                  },
-                ]}
-                onPress={handleRecharge}
-                disabled={recharging}
-                hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
-                accessibilityRole="button"
-                accessibilityLabel="크레딧 충전"
-                accessibilityState={{ disabled: recharging, busy: recharging }}
-              >
-                <Text style={[styles.chipBtnText, { color: Brand.primary }]}>
-                  {recharging ? "진행 중" : "충전"}
-                </Text>
-              </Pressable>
               <Pressable
                 style={[styles.chipBtn, { borderColor: "#CBD5E1" }]}
                 onPress={() => setShowReceipts((prev) => !prev)}
                 hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
                 accessibilityRole="button"
-                accessibilityLabel="영수증 내역"
+                accessibilityLabel="크레딧 내역"
                 accessibilityState={{ expanded: showReceipts }}
               >
                 <Text style={[styles.chipBtnText, { color: "#0F172A" }]}>
-                  영수증 내역
+                  크레딧 내역
                 </Text>
               </Pressable>
             </View>
@@ -416,10 +407,41 @@ export default function SettingsMenu({ profile }: { profile: ProfileApi }) {
             >
               5. 이용자의 권리
             </Text>
-            <Text style={[styles.accordionText, { marginBottom: 14 }]}>
+            {/* ⚠️ 수정금지(승인필요) 2026-08-08 사장님 확정 = 옛 "고객센터로 문의해 주세요" 완전삭제 §19.
+                사유 = 방침이 "탈퇴 요청 시 즉시 파기"를 약속해 놓고 정작 앱에 탈퇴 수단이 없어 문의로 떠넘기고 있었다.
+                자리 = 권리 문단 바로 아래(읽고 그 자리에서 누름). 로그아웃과 떨어져 있어 오조작도 없다.
+                표시 = 아이콘 + "탈퇴" 두 글자(§23 = 설명은 버튼 밖 안내줄로). */}
+            <Text style={[styles.accordionText, { marginBottom: 8 }]}>
               언제든 개인정보 열람·수정·삭제(회원 탈퇴)를 요청할 수 있습니다.
-              프로필 &gt; 도움말 및 고객센터로 문의해 주세요.
+              열람·수정 문의는 {SUPPORT_EMAIL} 로 보내주세요.
             </Text>
+            <Text style={[styles.accordionText, { marginBottom: 8 }]}>
+              · 탈퇴하시면 로그아웃되고 목록에서 사라집니다. 6개월 안에 다시
+              로그인하시면 그대로 복구됩니다. 6개월이 지나면 회원 정보와 직접
+              찍으신 사진이 완전히 삭제됩니다.
+            </Text>
+            {isAuth && (
+              <Pressable
+                style={[
+                  styles.chipBtn,
+                  { borderColor: "#FCA5A5", alignSelf: "flex-start" },
+                ]}
+                onPress={handleDeleteAccount}
+                disabled={deletingAccount}
+                hitSlop={{ top: 10, bottom: 10, left: 8, right: 8 }}
+                accessibilityRole="button"
+                accessibilityLabel="회원 탈퇴"
+                accessibilityState={{ disabled: deletingAccount }}
+              >
+                <View style={styles.faqQRow}>
+                  <Icon name="x-circle" size={15} color="#DC2626" />
+                  <Text style={[styles.chipBtnText, { color: "#DC2626" }]}>
+                    {deletingAccount ? "처리 중" : "탈퇴"}
+                  </Text>
+                </View>
+              </Pressable>
+            )}
+            <View style={{ height: 6 }} />
 
             <View
               style={{
@@ -516,6 +538,41 @@ export default function SettingsMenu({ profile }: { profile: ProfileApi }) {
                 <Text style={styles.accordionText}>▸ {item.a}</Text>
               </View>
             ))}
+
+            {/* ⚠️ 수정금지(승인필요) 2026-08-08 사장님 지시 = 고객센터 대표 메일 + 바로 보내기 링크.
+                주소 상수 1벌(SUPPORT_EMAIL) = 개인정보 방침 §5 도 같은 값을 쓴다(두 곳에 손으로 적으면 갈라짐 §0). */}
+            <View
+              style={{
+                height: 1,
+                backgroundColor: "#CBD5E1",
+                marginVertical: 12,
+              }}
+            />
+            <Text
+              style={[
+                styles.accordionText,
+                { fontWeight: "bold", color: "#0F172A", marginBottom: 6 },
+              ]}
+            >
+              문의하기
+            </Text>
+            <Pressable
+              style={styles.faqQRow}
+              onPress={() => Linking.openURL(`mailto:${SUPPORT_EMAIL}`)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityRole="link"
+              accessibilityLabel={`고객센터 메일 ${SUPPORT_EMAIL}`}
+            >
+              <Icon name="send" size={15} color={Brand.primary} />
+              <Text
+                style={[
+                  styles.accordionText,
+                  { color: Brand.primary, textDecorationLine: "underline" },
+                ]}
+              >
+                {SUPPORT_EMAIL}
+              </Text>
+            </Pressable>
           </View>
         )}
 

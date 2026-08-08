@@ -27,6 +27,10 @@ export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
   getUserByUsername(username: string): Promise<User | undefined>;
   getUserByEmail(email: string): Promise<User | undefined>;
+  // 관리자 계정 = users.role='admin' 1벌 조회 (2026-08-08, 옛 ADMIN_USER_ID 하드코딩 폐기 §19)
+  getAdminUser(): Promise<User | undefined>;
+  // 회원 탈퇴 = 문패만 내림(6개월 유예). 실제 정리는 account-cleanup.ts (2026-08-08)
+  markAccountDeleted(userId: string): Promise<void>;
   getUserByProvider(
     provider: string,
     providerId: string,
@@ -62,8 +66,6 @@ export interface IStorage {
     id: number,
     data: Partial<InsertItinerary>,
   ): Promise<Itinerary | undefined>;
-  // ⚠️ 2026-07-03 사장님 SSOT = 프로필 카드 X버튼 = 불필요/중복 여정 사용자 직접 삭제(쌓임 정리). 삭제 행수 반환(0=없는 id).
-  deleteItinerary(id: number): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -87,6 +89,28 @@ export class DatabaseStorage implements IStorage {
       .select()
       .from(users)
       .where(sql`lower(${users.email}) = ${email.trim().toLowerCase()}`);
+    return user || undefined;
+  }
+
+  // ⚠️ 수정금지(승인필요) 2026-08-08 사장님 확정 = 탈퇴 = **문패만 내린다. 아무것도 지우지 않는다.**
+  //   6개월 뒤 실제 정리(개인 사진만)는 server/services/account-cleanup.ts 가 한다.
+  async markAccountDeleted(userId: string): Promise<void> {
+    await db!
+      .update(users)
+      .set({ accountStatus: "deleted", deletedAt: new Date() })
+      .where(eq(users.id, userId));
+  }
+
+  // ⚠️ 수정금지(승인필요) 2026-08-08 사장님 확정 = 관리자 계정 조회 = **users.role='admin' DB 1벌만**.
+  //   옛 ADMIN_USER_ID 하드코딩(auth.ts) 완전삭제 §19 = 관리자를 바꿀 때 코드를 고칠 필요가 없어진다.
+  //   여럿이면 가장 먼저 만든 1명(정렬 고정 = 매번 다른 계정이 나오는 것 방지).
+  async getAdminUser(): Promise<User | undefined> {
+    const [user] = await db!
+      .select()
+      .from(users)
+      .where(eq(users.role, "admin"))
+      .orderBy(users.createdAt)
+      .limit(1);
     return user || undefined;
   }
 
@@ -285,15 +309,6 @@ export class DatabaseStorage implements IStorage {
       .where(eq(itineraries.id, id))
       .returning();
     return updated || undefined;
-  }
-
-  // ⚠️ 2026-07-03 사장님 SSOT = 프로필 카드 X버튼 = 여정 삭제. 삭제된 행 반환 → 길이로 삭제수 판정(0=없는 id).
-  async deleteItinerary(id: number): Promise<number> {
-    const deleted = await db
-      .delete(itineraries)
-      .where(eq(itineraries.id, id))
-      .returning({ id: itineraries.id });
-    return deleted.length;
   }
 
   // ========================================

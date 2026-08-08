@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { storage } from "./storage";
 import {
   findOrCreateUser,
+  applyLogin,
   toClientUser,
   getUserIdFromReq,
   KAKAO_DEFAULT_NAME,
@@ -342,8 +343,10 @@ export function registerAuthRoutes(app: Express) {
   });
 
   // ⚠️ 수정금지(승인필요) 2026-07-13 = 관리자 로그인 = 비번 서버검증 → 관리자 세션 토큰 발급(§16 = 기존 Bearer 인증 재사용).
-  //   관리자 = 현지전문가(사장님) 계정 = role='admin'. 비번을 서버로 옮겨 앱 번들서 제거 = 보안↑. ADMIN_PASSWORD/ADMIN_USER_ID = Replit Secrets 우선.
-  //   관리자 인식(2026-07-14 사장님 모델 = 다른 배포앱과 동일) = 이 비번 OR 구글 로그인(사장님 계정 role='admin') 둘 다 가능. 관리자 대시보드만 비번으로 막는 방식. ADMIN_PASSWORD 시크릿 설정 시 기본값 대체(선택).
+  //   관리자 = 현지전문가(사장님) 계정 = role='admin'. 비번을 서버로 옮겨 앱 번들서 제거 = 보안↑. ADMIN_PASSWORD = Replit Secrets 우선.
+  //   관리자 인식 = 이 비번 OR 구글 로그인(그 계정 role='admin') 둘 다 가능. 관리자 대시보드만 비번으로 막는 방식.
+  //   ⚠️ 누가 관리자인지는 **DB(users.role='admin') 1벌**로만 정한다 = 계정을 바꿔도 코드를 안 고친다.
+  //     아이디를 코드에 적어 두던 방식 폐기 = 2026-08-08 §19.
   app.post("/api/admin/login", async (req, res) => {
     try {
       const { password } = req.body;
@@ -353,9 +356,11 @@ export function registerAuthRoutes(app: Express) {
           .status(401)
           .json({ success: false, error: "invalid_password" });
       }
-      const adminId =
-        process.env.ADMIN_USER_ID || "google_103229431780116955364"; // 사장님 구글 계정 = 관리자
-      const admin = await storage.getUser(adminId);
+      // ⚠️ 수정금지(승인필요) 2026-08-08 사장님 확정 = 관리자 계정을 **아이디로 박지 않는다** §19.
+      //   옛 하드코딩(google_103229431780116955364 = dbstour1) 완전삭제 = 그 계정은 일반 사용자로 내려갔다.
+      //   판정 = users.role='admin' **DB 1벌만**(credit-charge.ts:56 등 전 지점과 같은 기준 §9 표7).
+      //   → 관리자 계정을 바꿀 때 코드를 고칠 필요가 없다. DB 의 role 만 바꾸면 전 기능이 따라온다.
+      const admin = await storage.getAdminUser();
       if (!admin) {
         return res
           .status(500)
@@ -372,15 +377,39 @@ export function registerAuthRoutes(app: Express) {
     }
   });
 
-  // ⚠️ 수정금지(승인필요) — 사장님 SSOT 2026-07-27 = **이메일 = 인증 3종 중 하나 = 신규 가입도 여기서 된다.**
-  //   지메일이 아닌 메일을 쓰는 사람의 가입·로그인 창구. 구글·카카오와 **완전히 같은 대우**:
-  //   있으면 그 계정으로 로그인, 없으면 **새 계정 생성**(구글·카카오의 findOrCreateUser 와 같은 규칙).
-  //   옛 "모르는 메일 = 404" 완전삭제 §19 = 신규 가입 자체를 막고 있던 것(사장님 지적 2026-07-27).
-  //   비번 없음 = 개발단계 한정(정식화 때 메일 인증코드 추가 예정).
+  // ⚠️ 수정금지(승인필요) 2026-08-08 사장님 확정 = **회원 탈퇴 = 6개월 유예.**
+  //   여기서 하는 일 = 문패만 내린다(account_status='deleted' + 탈퇴시각). **아무것도 지우지 않는다.**
+  //   왜: 여정·영상·창고 해설은 우리 재료로 만든 회사 자산이고, 개인 사진만 6개월 뒤 정리 대상이다.
+  //   6개월 뒤 실제 정리 = server/services/account-cleanup.ts 1벌(자동 + 관리자 버튼이 같은 함수를 부름).
+  //   되돌리기 = 6개월 안에 다시 로그인하면 auth-user.applyLogin 이 'active' 로 살린다.
+  app.delete("/api/auth/account", async (req, res) => {
+    try {
+      const userId = getUserIdFromReq(req);
+      if (!userId) return res.status(401).json({ error: "login_required" });
+      const user = await storage.getUser(userId);
+      if (!user) return res.status(404).json({ error: "user_not_found" });
+      await storage.markAccountDeleted(userId);
+      res.json({ success: true, graceMonths: 6 });
+    } catch (error) {
+      console.error("[Auth] 탈퇴 처리 실패:", error);
+      res.status(500).json({ error: "server_error" });
+    }
+  });
+
+  // ⚠️ 수정금지(승인필요) 2026-08-08 사장님 확정 = **이메일창은 "가입"이 아니라 "이미 있는 내 계정 찾기"다.**
+  //
+  //   왜 바꿨나 (실측 근거): 옛 방식(없으면 새 계정 생성)이 **오타 계정 3개를 실제로 만들었다** —
+  //     user_test@ / user-teat@ / user~test@ (전부 한 글자 오타 + 가입보너스 중복 지급).
+  //     메일 인증코드로 막으려면 발송 수단·비용·시간이 들지만, **생성 경로 자체를 없애면 0원에 원천 차단**된다.
+  //   그래서: **신규 가입 = 소셜 3종(구글·카카오·애플)만.** 그쪽은 제공자가 메일을 인증해 준다(email_verified).
+  //           이메일창 = 소셜 창이 안 열릴 때를 위한 **재진입 통로**.
+  //
+  //   관문 2개(사장님 SSOT "생년월일은 비번처럼") = **메일 + 생년월일이 둘 다 그 계정과 맞아야** 들어간다.
+  //   옛 findOrCreateUser 호출·emailVerified:true 하드코딩 완전삭제 §19 (= 남의 메일로 그 계정이 열리던 통로).
   app.post("/api/auth/email-login", async (req, res) => {
     try {
       const raw = req.body?.email;
-      // ⚠️ 조회(getUserByEmail 은 소문자 비교)와 저장을 **같은 모양**으로 = 대소문자·공백 때문에 계정이 갈리지 않게.
+      // ⚠️ 조회(getUserByEmail 은 소문자 비교)와 같은 모양으로 = 대소문자·공백 때문에 못 찾는 일이 없게.
       const email = typeof raw === "string" ? raw.trim().toLowerCase() : "";
       const { birthDate, language, deviceType } = req.body;
       if (!email || !email.includes("@")) {
@@ -388,19 +417,32 @@ export function registerAuthRoutes(app: Express) {
           .status(400)
           .json({ success: false, error: "email_required" });
       }
-      // ⚠️ 구글·카카오와 **같은 함수 1벌**(§16). 그 안에서 메일로 기존 계정을 찾아 연결하므로
-      //   "구글로 가입 → 같은 메일로 이메일 로그인" 도 **같은 계정**으로 들어온다(중복 계정 없음).
-      const user = await findOrCreateUser({
-        provider: "email",
-        providerId: email,
-        email,
-        // 이 경로는 메일 자체가 신원(그 메일로 로그인하는 중) = 연결 허용.
-        // ⚠️ 개발단계라 메일 인증코드가 없음 = 정식화 때 코드 확인 후 true 로 바꿀 것.
-        emailVerified: true,
-        birthDate,
-        displayName: email.split("@")[0],
+      if (!birthDate) {
+        return res
+          .status(400)
+          .json({ success: false, error: "birthdate_required" });
+      }
+
+      const found = await storage.getUserByEmail(email);
+      // 없는 메일 = 새로 만들지 않는다. 소셜로 가입하라고 알려 준다(오타가 계정이 되지 않는 이유).
+      if (!found) {
+        return res
+          .status(404)
+          .json({ success: false, error: "account_not_found" });
+      }
+      // 생년월일 = 그 계정의 것과 같아야 한다. 메일만 알아서는 못 들어간다.
+      if (!found.birthDate || found.birthDate !== birthDate) {
+        return res
+          .status(401)
+          .json({ success: false, error: "birthdate_mismatch" });
+      }
+
+      // 로그인 기록 갱신 = 소셜과 같은 함수 1벌(§16). 신원 연결(user_providers)도 그 안에서 한다.
+      const user = await applyLogin(found, {
         language,
         deviceType,
+        provider: "email",
+        providerId: email,
       });
       res.json({
         success: true,

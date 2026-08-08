@@ -179,6 +179,15 @@ export async function runStartupMigrations(): Promise<void> {
     console.log(
       "[Migration] ✅ 0019 결제 이중충전 차단 + 문의 숨김 플래그 적용 완료",
     );
+
+    // 0020: 회원 탈퇴 6개월 유예 (2026-08-08 사장님 확정)
+    //   탈퇴 누른 시각을 적어 둔다 = 6개월이 지났는지 판단하는 유일한 근거.
+    //   account_status 는 이미 있는 칸('active' | 'deleted') 을 그대로 쓴다 = 새 칸을 늘리지 않는다(§0).
+    await pool.query(`
+      ALTER TABLE "users"
+        ADD COLUMN IF NOT EXISTS "deleted_at" timestamp;
+    `);
+    console.log("[Migration] ✅ 0020 users.deleted_at(탈퇴 유예) 적용 완료");
   } catch (err) {
     console.warn("[Migration] 스킵 또는 실패:", (err as Error).message);
   }

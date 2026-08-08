@@ -1,7 +1,7 @@
 // '나의 TRIPIS' 섹션 = 숏폼 영상 + TRIPIS 콘텐츠 (아이폰 12 가득 채우는 입체 3D 카드)
 // = 2026-08-01 사장님 B-0 배선: 카드 터치 = 통합 모달(TripisModal) 1벌로 열기.
 //   영상 카드 → {mode:"itinerary"} / TRIPIS 카드 → {mode:"guide"}. 화면 이동 없음 = 라우트 경유 폐기 = 2026-08-01 §B-0.
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -10,7 +10,6 @@ import {
   Image,
   StyleSheet,
 } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
@@ -28,70 +27,17 @@ import {
 } from "@/components/tripis/savedVideosApi";
 import { styles, getResponsiveFullVideoCardWidth } from "../styles";
 import type { ProfileApi } from "../hooks/useProfile";
-
-// ⚠️ 수정금지(승인필요) 2026-08-02 사장님 지시 = X(숨김)를 이 기기에 기억시킨다.
-//   저장 수단 = 앱이 이미 쓰는 기기 저장소(AsyncStorage, client/lib/auth.ts 와 같은 것) = 새 저장 계층 만들지 않음(§16).
-//   열쇠 = 접두사 + 계정 id. 로그인 안 한 상태는 손님용 1벌("guest").
-//   → 한 기기를 여러 사람이 써도 계정마다 목록이 따로 남아 남의 숨김이 딸려오지 않는다.
-const HIDDEN_CARDS_KEY_PREFIX = "@vibetrip_hidden_cards:";
-
-// 영상·해설 두 종류를 한 목록에 담기 위한 이름표(종류:id) = 같은 동작을 1벌로 처리(§0).
-const cardKey = (kind: "video" | "guide", id: string) => `${kind}:${id}`;
+// 숨김 이름표(종류:id) = 공용 1벌(§16). 목록·저장은 useProfile 이 1번만 부른다.
+import { cardKey } from "../hooks/useHiddenCards";
 
 export default function VideosSection({ profile }: { profile: ProfileApi }) {
   // 섹션 제목 = 7언어 사전(profile.myTripis). 하드코딩 금지 = 2026-08-01 사장님 §B-0.
   const { t } = useTranslation();
 
-  // ⚠️ 수정금지(승인필요) 영상·TRIPIS 숨김 목록 = 같은 동작 1벌(2026-08-01 사장님, 2026-08-02 기억 추가).
+  // ⚠️ 수정금지(승인필요) 숨김 목록 = 공용 1벌(2026-08-08 §16) = 여정 카드도 같은 것을 쓴다.
   //   본인 기기 화면에서만 숨기고 DB 행은 보존한다 = 서버에 삭제를 요청하지 않는다.
-  //   창고(guides) 행을 지우면 다음 사람이 유료 외부호출을 다시 하게 되므로 이 설계는 바뀌지 않는다.
-  const [hiddenKeys, setHiddenKeys] = useState<string[]>([]);
-  // 기기에 적어둔 목록을 다 읽기 전에는 카드를 그리지 않는다 = 숨긴 카드가 잠깐 보였다 사라지는 깜빡임 방지.
-  const [hiddenReady, setHiddenReady] = useState(false);
-  // 최신 목록 원본 = 연달아 X 를 눌러도 직전 것이 누락되지 않게 하는 기준값(상태값은 다음 그리기 때 반영되므로 못 씀).
-  const hiddenKeysRef = useRef<string[]>([]);
-  // 계정별 열쇠 1벌. 로그인 안 한 상태 = 손님용.
-  const storageKey = HIDDEN_CARDS_KEY_PREFIX + (profile.user?.id || "guest");
-
-  // 화면이 뜰 때(그리고 계정이 바뀔 때) 기기에 적어둔 목록을 읽어 처음부터 안 보이게 한다.
-  //   계정이 확정되기 전(authReady=false)에는 읽지 않는다 = 손님 목록과 계정 목록이 섞이지 않는다.
-  useEffect(() => {
-    if (!profile.authReady) return;
-    let alive = true;
-    setHiddenReady(false); // 계정이 바뀌면 새 목록을 다 읽을 때까지 카드를 내보내지 않는다
-    (async () => {
-      let saved: string[] = [];
-      try {
-        const raw = await AsyncStorage.getItem(storageKey);
-        const parsed = raw ? JSON.parse(raw) : null;
-        if (Array.isArray(parsed))
-          saved = parsed.filter((v): v is string => typeof v === "string");
-      } catch (e) {
-        console.error("[VideosSection] 숨김 목록 읽기 실패:", e);
-      }
-      if (!alive) return;
-      hiddenKeysRef.current = saved;
-      setHiddenKeys(saved);
-      setHiddenReady(true);
-    })();
-    return () => {
-      alive = false;
-    };
-  }, [profile.authReady, storageKey]);
-
-  // X 터치 = 화면에서 빼고 그 자리에서 기기에 적어둔다. 영상·해설이 이 함수 하나를 같이 쓴다(§0).
-  const hideCard = useCallback(
-    (key: string) => {
-      if (hiddenKeysRef.current.includes(key)) return;
-      const next = [...hiddenKeysRef.current, key];
-      hiddenKeysRef.current = next;
-      setHiddenKeys(next);
-      AsyncStorage.setItem(storageKey, JSON.stringify(next)).catch((e) =>
-        console.error("[VideosSection] 숨김 목록 저장 실패:", e),
-      );
-    },
-    [storageKey],
-  );
+  //   ⚠️ 훅을 여기서 직접 부르지 않는다(§22 판단검증) = useProfile 이 1번만 부른 것을 받아 쓴다.
+  const { hiddenKeys, hiddenReady, hideCard } = profile;
 
   // TRIPIS 보관함(guides) = **프로필 탭이 보일 때마다 + 계정이 바뀔 때** 다시 읽는다
   //   = 같은 훅(useProfile)의 loadTrips·refetchCredits 와 같은 useFocusEffect 1벌 패턴(§16).

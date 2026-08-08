@@ -13,6 +13,8 @@ import ThemedText from "@/components/ThemedText";
 import { styles, getResponsiveFullTripCardWidth } from "../styles";
 import { shortDateCard, summaryLineCard } from "../utils";
 import type { ProfileApi } from "../hooks/useProfile";
+// 숨김 이름표(종류:id) = 공용 1벌(§16). 목록·저장은 useProfile 이 1번만 부른다.
+import { cardKey } from "../hooks/useHiddenCards";
 
 export default function TripsSection({ profile }: { profile: ProfileApi }) {
   const {
@@ -21,12 +23,20 @@ export default function TripsSection({ profile }: { profile: ProfileApi }) {
     navigation,
     savedTrips,
     isLoadingTrips,
-    handleDeleteTrip,
     // 🏆 2026-08-02 = 대표 올리기(관리자 전용). 판정·호출은 useProfile 1벌, 여기는 그리기만.
     isAdmin,
     promotingTripId,
     handleSetRepresentative,
   } = profile;
+
+  // ⚠️ 수정금지(승인필요) 2026-08-08 사장님 SSOT = X 는 **화면에서만 감춘다. DB 는 무조건 남는다.**
+  //   옛 handleDeleteTrip(DELETE /api/itineraries/:id = DB 영구삭제) 완전삭제 §19.
+  //   ⚠️ 훅을 여기서 직접 부르지 않는다(§22 판단검증) = useProfile 이 1번만 부른 것을 받아 쓴다.
+  //     각자 부르면 같은 저장소 열쇠를 서로 덮어써 여정 X → 영상 X 순서에서 앞의 숨김이 사라진다.
+  const { hiddenKeys, hiddenReady, hideCard } = profile;
+  const visibleTrips = savedTrips.filter(
+    (tr) => !hiddenKeys.includes(cardKey("trip", String(tr.id))),
+  );
 
   // 아이폰 12 (390pt) 화면을 가득 채우는 넉넉하고 읽기 쉬운 카드 폭 (약 250pt)
   const fullCardWidth = getResponsiveFullTripCardWidth();
@@ -43,19 +53,19 @@ export default function TripsSection({ profile }: { profile: ProfileApi }) {
           <Icon name="map" size={18} color={Brand.primary} />
         </View>
         <ThemedText style={styles.sectionTitle}>나의 여정</ThemedText>
-        {savedTrips.length > 0 && (
-          <Text style={styles.sectionBadge}>{savedTrips.length}</Text>
+        {visibleTrips.length > 0 && (
+          <Text style={styles.sectionBadge}>{visibleTrips.length}</Text>
         )}
       </View>
 
-      {isLoadingTrips ? (
+      {isLoadingTrips || !hiddenReady ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="small" color={Brand.primary} />
           <Text style={[styles.loadingText, { color: theme.textSecondary }]}>
             불러오는 중...
           </Text>
         </View>
-      ) : savedTrips.length === 0 ? (
+      ) : visibleTrips.length === 0 ? (
         <View
           style={[
             styles.emptyTrips,
@@ -79,7 +89,7 @@ export default function TripsSection({ profile }: { profile: ProfileApi }) {
           showsHorizontalScrollIndicator={false}
           style={styles.tripsScroll}
         >
-          {savedTrips.map((trip) => (
+          {visibleTrips.map((trip) => (
             <Pressable
               key={trip.id}
               style={[
@@ -134,13 +144,16 @@ export default function TripsSection({ profile }: { profile: ProfileApi }) {
                 </Pressable>
               )}
 
-              {/* 우측 상단 X 삭제 버튼 */}
+              {/* 우측 상단 X = 이 기기에서만 숨김(기억됨). DB 는 건드리지 않는다.
+                  아이콘뿐인 버튼 = 스크린리더용 이름 필수(2026-08-03 §22 판단검증) — TRIPIS 카드와 같은 문구 1벌 */}
               <Pressable
                 style={styles.cardDeleteBtnRich}
                 hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel="숨기기"
                 onPress={(e) => {
                   e.stopPropagation();
-                  handleDeleteTrip(trip.id);
+                  hideCard(cardKey("trip", String(trip.id)));
                 }}
               >
                 <Icon name="x" size={13} color="#64748B" />

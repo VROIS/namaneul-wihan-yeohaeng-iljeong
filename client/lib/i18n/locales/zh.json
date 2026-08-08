@@ -50,7 +50,9 @@
     "otpSend": "发送验证码",
     "changePhone": "更换手机号",
     "alert": "提醒",
-    "birthRequiredAlert": "使用服务需要填写出生日期。"
+    "birthRequiredAlert": "使用服务需要填写出生日期。",
+    "emailAccountNotFound": "该邮箱没有已创建的账号。请使用 Google、Kakao 或 Apple 开始。",
+    "emailBirthMismatch": "出生日期与该账号不一致。"
   },
   "onboarding": {
     "signUp": "注册",

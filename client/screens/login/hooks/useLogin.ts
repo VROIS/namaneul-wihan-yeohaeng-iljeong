@@ -390,7 +390,10 @@ export function useLogin({ onDone }: { onDone: () => void }) {
     await startNativeSocial("apple");
   };
 
-  // ⚠️ 사장님 SSOT 2026-07-14 = 개발단계 이메일 로그인 = 구글 OAuth(웹 400) 우회. 메일 넣으면 그 계정으로 로그인(사장님 메일=admin).
+  // ⚠️ 수정금지(승인필요) 2026-08-08 사장님 확정 = **이메일창은 가입이 아니라 "이미 있는 내 계정 찾기"**.
+  //   가입은 소셜 3종(구글·카카오·애플)만 = 오타가 새 계정이 되던 통로를 원천 차단(실제 오타 계정 3개 발생 이력).
+  //   관문 2개 = 메일 + 생년월일이 둘 다 그 계정과 맞아야 한다("생년월일은 비번처럼" 사장님 SSOT).
+  //   ⚠️ 옛 `birthDateStr || "1990-05-15"`(생년월일 없으면 가짜값을 서버에 저장) 완전삭제 §19.
   const [emailInput, setEmailInput] = useState("");
   const [emailLoading, setEmailLoading] = useState(false);
   const handleEmailLogin = async () => {
@@ -399,20 +402,28 @@ export function useLogin({ onDone }: { onDone: () => void }) {
       notify(t("login.emailInvalid"));
       return;
     }
-    const targetBirthDate = birthDateStr || "1990-05-15";
+    // 생년월일 관문 = 소셜 3종과 같은 함수 1벌(§16). 통과하면 birthDateStr 이 반드시 있다.
+    if (!requireBirthDateAndAdult() || !birthDateStr) return;
     setEmailLoading(true);
     try {
       const r = await emailLogin({
         email,
-        birthDate: targetBirthDate,
+        birthDate: birthDateStr,
         language: i18n.language,
         deviceType: Platform.OS === "web" ? "web" : "mobile",
       });
       if (r.success) {
         onDone(); // 성공 = 팝업 닫기 및 로그인 상태 반영
-      } else {
-        notify(r.error || t("login.emailLoginFailed"));
+        return;
       }
+      // 서버가 준 사유를 뭉개지 않는다(2026-07-31 사장님 지시). 사용자가 다음에 뭘 할지 알 수 있게.
+      if (r.error === "account_not_found")
+        notify(t("login.emailAccountNotFound"));
+      else if (r.error === "birthdate_mismatch")
+        notify(t("login.emailBirthMismatch"));
+      // ⚠️ 2026-08-08 §22 판단검증 = 알려진 사유만 우리 말로. 나머지는 서버 코드(server_error 등)를
+      //   그대로 띄우지 않는다 = 사용자가 못 읽는 영문 코드가 화면에 뜨던 것 폐기 §19.
+      else notify(t("login.emailLoginFailed"));
     } catch (e) {
       notify("로그인 처리 중 오류 발생");
     } finally {

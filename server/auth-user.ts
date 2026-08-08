@@ -84,8 +84,14 @@ async function applyLogin(
     }
   }
 
+  // ⚠️ 수정금지(승인필요) 2026-08-08 = **탈퇴 유예 중 다시 로그인하면 되살린다.**
+  //   화면이 "6개월 안에 다시 로그인하시면 그대로 복구됩니다" 라고 약속하므로 여기서 실제로 되돌려야 한다.
+  //   이 줄이 없으면 = 복귀해서 정상 사용 중인 사람의 사진·개인정보를 6개월 뒤 정리가 지워버린다(§22 판단검증 지적).
+  const wasDeleted = user.accountStatus === "deleted";
+
   return (await storage.updateUserLogin(user.id, {
     ...(emailToFill ? { email: emailToFill } : {}),
+    ...(wasDeleted ? { accountStatus: "active", deletedAt: null } : {}),
     lastLoginAt: new Date(),
     loginCount: (user.loginCount || 0) + 1,
     deviceType: opts.deviceType,

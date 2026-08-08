@@ -71,7 +71,11 @@ export const users = pgTable("users", {
   referralCode: varchar("referral_code").unique(),
   subscriptionStatus: varchar("subscription_status").default("active"),
   subscriptionCanceledAt: timestamp("subscription_canceled_at"),
+  // ⚠️ 2026-08-08 사장님 확정 = 회원 탈퇴 6개월 유예.
+  //   'active' | 'deleted'(유예중) | 'purged'(6개월 뒤 정리 끝). 탈퇴 = 'deleted' + deleted_at 기록,
+  //   6개월 안에 다시 로그인하면 applyLogin 이 'active' 로 복구. 정리가 끝나면 'purged' = 다시 대상이 되지 않음.
   accountStatus: varchar("account_status").default("active"),
+  deletedAt: timestamp("deleted_at"),
 
   createdAt: timestamp("created_at")
     .default(sql`CURRENT_TIMESTAMP`)

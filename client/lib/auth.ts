@@ -73,10 +73,10 @@ export async function clearAuth(): Promise<void> {
   notifyAuthChanged();
 }
 
-// ⚠️ 사장님 SSOT 2026-07-14 = 개발단계 이메일 로그인 = 구글 OAuth(웹 400) 우회. 메일만 넣으면 그 계정으로 로그인(사장님 메일=admin).
-//   ⚠️ 임시(개발용) = 로그인 정식화 때 폐기 §19. 기존 saveAuth·UserData 재사용(§16).
-// ⚠️ 사장님 SSOT 2026-07-26 = 이메일 = 지메일 아닌 메일로 하는 정식 인증.
-//   생년월일은 인증 조건이 아니라 "우리가 저장할 값"으로 함께 보냄(소셜 2종과 동일 구조).
+// ⚠️ 수정금지(승인필요) 사장님 SSOT 2026-08-08 = **이메일창 = 가입이 아니라 "이미 있는 내 계정 찾기"**.
+//   신규 가입은 소셜 3종(구글·카카오·애플)만 = 오타가 새 계정이 되던 통로를 원천 차단.
+//   관문 2개 = 메일 + 생년월일이 **둘 다** 그 계정과 맞아야 한다("생년월일은 비번처럼").
+//   서버가 주는 사유 = account_not_found / birthdate_mismatch / birthdate_required (화면이 그대로 보여준다).
 export async function emailLogin(data: {
   email: string;
   birthDate: string;

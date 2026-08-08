@@ -50,7 +50,9 @@
     "otpSend": "OTP 발송",
     "changePhone": "전화번호 변경",
     "alert": "알림",
-    "birthRequiredAlert": "서비스 이용을 위해 생년월일 입력이 필요합니다."
+    "birthRequiredAlert": "서비스 이용을 위해 생년월일 입력이 필요합니다.",
+    "emailAccountNotFound": "그 메일로 만든 계정이 없습니다. 구글·카카오·애플로 시작해 주세요.",
+    "emailBirthMismatch": "생년월일이 그 계정과 다릅니다."
   },
   "onboarding": {
     "signUp": "가입하기",

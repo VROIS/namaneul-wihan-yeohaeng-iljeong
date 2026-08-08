@@ -130,6 +130,13 @@ export function registerPaymentRoutes(app: Express): void {
 
       const user = await creditService.getUserProfile(userId);
 
+      // ⚠️ 수정금지(승인필요) 2026-08-08 사장님 확정 = **크레딧 0 고정 계정은 충전을 막는다.**
+      //   왜: 이 계정은 잔액부족(402) 화면을 언제든 재현하려고 두는 것이라, 충전되면 그 용도가 사라진다.
+      //   규칙 = 주소가 `c0@` 로 시작하고 테스트 도메인(@t.test) 이면 크레딧 0 고정 계정(= c5@ 처럼 늘릴 수 있는 규칙).
+      if (user?.email && /^c0@.+\.test$/i.test(user.email)) {
+        return res.status(403).json({ error: "test_account_no_topup" });
+      }
+
       // ⚠️ 수정금지(승인필요) 2026-08-05 사장님 실조작 SSOT = **결제 끝나고 돌아올 주소**.
       //   사장님이 로컬에서 직접 결제해 보시고 잡아낸 것: 돌아온 주소가 `https://localhost:5000` 이라
       //   화면이 안 뜨고 `ERR_SSL_PROTOCOL_ERROR` 가 났다. 이유 두 가지였다.
@@ -176,7 +183,12 @@ export function registerPaymentRoutes(app: Express): void {
         //   (사장님 TestFlight·로컬 실증으로 발견 2026-08-05~06).
         //   ⚠️ 이 파라미터 이름을 바꾸면 그 두 파일도 같이 바꿔야 한다(한 쌍).
         success_url: `${baseUrl}/?payment=success&session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${baseUrl}/?payment=cancel`,
+        // ⚠️ 수정금지(승인필요) 2026-08-08 사장님 APK 실증 = 옛 cancel_url 완전삭제 §19.
+        //   증상: 결제창 안의 `←` 를 누르면 **다른 사람 프로필**(안드로이드) 또는 **비로그인 홈**(아이폰)이 떴다.
+        //   원인: 결제창은 앱과 별개 브라우저(Chrome Custom Tab / SFSafariViewController) 라,
+        //        cancel_url(= 우리 웹앱 전체 주소) 로 가면 **그 브라우저에 로그인돼 있던 계정**으로 앱이 통째로 다시 뜬다.
+        //   근거: Stripe 공식 문서 = "**If set**, Checkout displays a back button" = 이 값을 주면 back 버튼이 생긴다.
+        //   → 값을 주지 않으면 버튼 자체가 안 그려진다. 그냥 돌아오려면 창을 닫으면 된다(X·∨ = 이미 정상 동작).
         customer_email: user?.email || undefined,
         // 통보가 왔을 때 누구에게 넣을지 = userId 1개로만 판단(크레딧 수는 CREDIT_CONFIG 가 정본이라 metadata 에 안 넣음).
         // ⚠️ app 표식 = 내손앱과 **같은 Stripe 계정**을 쓰므로 필요하다(2026-07-30).

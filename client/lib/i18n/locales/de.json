@@ -50,7 +50,9 @@
     "otpSend": "OTP senden",
     "changePhone": "Nummer ändern",
     "alert": "Hinweis",
-    "birthRequiredAlert": "Das Geburtsdatum ist für die Nutzung des Dienstes erforderlich."
+    "birthRequiredAlert": "Das Geburtsdatum ist für die Nutzung des Dienstes erforderlich.",
+    "emailAccountNotFound": "Für diese E-Mail gibt es kein Konto. Bitte mit Google, Kakao oder Apple starten.",
+    "emailBirthMismatch": "Das Geburtsdatum stimmt mit diesem Konto nicht überein."
   },
   "onboarding": {
     "signUp": "Registrieren",

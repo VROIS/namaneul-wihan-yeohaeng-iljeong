@@ -18,6 +18,8 @@ import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 // ⚠️ 결제하고 막 돌아온 부팅인지 = 판별 1벌(§16). 잔액 재확인 시점을 정하는 데 쓴다.
 import { readPaymentReturn } from "@/lib/paymentReturn";
 import type { SavedItinerary } from "../utils";
+// 숨김(X) = 여정·영상·해설 공용 1벌. 이 훅에서 **딱 1번** 부른다(2026-08-08 §22).
+import { useHiddenCards } from "./useHiddenCards";
 // 크레딧·결제 = 자기 폴더 API 헬퍼(2026-07-29 §9, docs/2026-07-29 결제·크레딧 구현.md)
 import {
   getBalance,
@@ -213,20 +215,14 @@ export function useProfile() {
   }, [refetchCredits]);
 
   // ⚠️ 2026-07-03 사장님 SSOT = 카드 우측 상단 X = 확인 팝업 없이 즉시 삭제(범용 홈페이지 닫기 버튼처럼). 목록에서 바로 제거(낙관적) + 서버 DELETE. 실패 시 그 항목만 복원.
-  const handleDeleteTrip = async (id: number) => {
-    const removed = savedTrips.find((t) => t.id === id); // 실패 시 되살릴 항목만 보관
-    setSavedTrips((list) => list.filter((t) => t.id !== id)); // 즉시 화면에서 제거
-    try {
-      await apiRequest("DELETE", `/api/itineraries/${id}`);
-    } catch (e) {
-      console.error("[Profile] 여정 삭제 실패:", e);
-      // 함수형 롤백 = 그 항목만 복원(연속 삭제 시 다른 삭제분 안 건드림). 이미 있으면 무시.
-      if (removed)
-        setSavedTrips((list) =>
-          list.some((t) => t.id === id) ? list : [...list, removed],
-        );
-    }
-  };
+  // ⚠️ 2026-08-08 사장님 SSOT = 옛 handleDeleteTrip(DELETE /api/itineraries/:id) 완전삭제 §19.
+  //   X 는 화면에서만 감춘다 = DB 는 무조건 남긴다.
+  //   ⚠️ 훅은 **여기서 딱 1번만** 부른다(§22 판단검증 지적). 섹션마다 부르면 같은 저장소 열쇠를
+  //     서로 다른 목록으로 덮어써, 여정 X → 영상 X 순서로 누르면 앞의 숨김이 사라진다.
+  const { hiddenKeys, hiddenReady, hideCard } = useHiddenCards(
+    authUser?.id,
+    authReady,
+  );
 
   // 🏆 대표 올리기(관리자 전용) = 2026-08-02 사장님 지시로 여정 결과화면에서 **이 화면으로 이관**(§19 = 저쪽은 완전삭제).
   //   관리자 판정 = 전역 계정 1벌의 role 만 본다(§9 표7 = 아이디 문자열·is_admin 으로 판단 금지).
@@ -288,6 +284,64 @@ export function useProfile() {
     }
   };
 
+  // ⚠️ 수정금지(승인필요) 2026-08-08 사장님 확정 = 회원 탈퇴.
+  //   설계 = 우리 재료(장소 id)로 만든 것(여정·영상·창고 해설)은 회사 자산이라 남기고,
+  //          개인이 찍은 사진만 6개월 뒤 자동 삭제. 서버가 그 판단을 한다(여기는 부르기만).
+  //   확인 2단계 = 되돌릴 수 없는 조작이라 한 번 더 묻는다(여정 카드 X 와 성격이 다름 = 그건 화면 정리, 이건 계정).
+  //   ⚠️ 웹(react-native-web)은 Alert.alert 이 안 뜬다 = window.confirm 으로 갈라야 한다
+  //      (ExpertSheet.tsx:206 에서 2026-07-14 사장님이 겪은 그 함정 = 같은 규칙 1벌).
+  const [deletingAccount, setDeletingAccount] = useState(false);
+
+  const runDeleteAccount = async () => {
+    setDeletingAccount(true);
+    try {
+      await apiRequest("DELETE", "/api/auth/account");
+      await clearAuth(); // clearAuth 가 전역 판정에 자동 알림
+      setSavedTrips([]);
+    } catch (e: any) {
+      // 서버가 준 사유를 뭉개지 않는다(2026-07-31 사장님 지시)
+      const msg = e?.message || "탈퇴 처리에 실패했습니다.";
+      if (Platform.OS === "web") window.alert(msg);
+      else Alert.alert("탈퇴 실패", msg);
+    } finally {
+      setDeletingAccount(false);
+    }
+  };
+
+  const handleDeleteAccount = () => {
+    const t1 = "정말 탈퇴하시겠습니까?";
+    // ⚠️ 2026-08-08 §22 판단검증 = 실제 동작과 문구를 맞춘다. 옛 "바로 로그인할 수 없게 됩니다" 폐기 §19
+    //   (재로그인하면 applyLogin 이 되살리므로 그 문장은 사실이 아니었다).
+    const m1 =
+      "탈퇴하면 로그아웃되고 목록에서 사라집니다.\n6개월 안에 다시 로그인하시면 그대로 복구됩니다.";
+    const t2 = "마지막 확인";
+    const m2 =
+      "6개월이 지나면 회원 정보와 직접 찍으신 사진이 완전히 삭제됩니다.\n계속하시겠습니까?";
+
+    if (Platform.OS === "web") {
+      if (!window.confirm(`${t1}\n\n${m1}`)) return;
+      if (!window.confirm(`${t2}\n\n${m2}`)) return;
+      void runDeleteAccount();
+      return;
+    }
+    Alert.alert(t1, m1, [
+      { text: "취소", style: "cancel" },
+      {
+        text: "계속",
+        style: "destructive",
+        onPress: () =>
+          Alert.alert(t2, m2, [
+            { text: "취소", style: "cancel" },
+            {
+              text: "탈퇴",
+              style: "destructive",
+              onPress: () => void runDeleteAccount(),
+            },
+          ]),
+      },
+    ]);
+  };
+
   const currentLang =
     SUPPORTED_LANGS.find((l) => l.code === i18n.language) ?? SUPPORTED_LANGS[0];
 
@@ -329,13 +383,19 @@ export function useProfile() {
     authReady,
     showLanguageModal,
     setShowLanguageModal,
-    handleDeleteTrip,
     // 🏆 대표 올리기(관리자 전용) = '나의 여정' 카드가 쓴다
     isAdmin,
     promotingTripId,
     handleSetRepresentative,
     handleLanguageChange,
     handleLogout,
+    // 숨김(X) 공용 1벌 = TripsSection·VideosSection 이 이것을 받아 쓴다(각자 호출 금지)
+    hiddenKeys,
+    hiddenReady,
+    hideCard,
+    // 회원 탈퇴 (2026-08-08) = 개인정보 보호 아코디언 안 [탈퇴] 한 줄이 쓴다
+    handleDeleteAccount,
+    deletingAccount,
     currentLang,
     stats,
     // 🪙 크레딧·결제 (2026-07-29 §9). refetchCredits 는 이 훅 안에서만 쓰므로 내보내지 않는다(쓰는 데 없는 표면 금지 §0).

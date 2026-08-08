@@ -50,7 +50,9 @@
     "otpSend": "OTPを送信",
     "changePhone": "電話番号を変更",
     "alert": "お知らせ",
-    "birthRequiredAlert": "サービスをご利用いただくには生年月日が必要です。"
+    "birthRequiredAlert": "サービスをご利用いただくには生年月日が必要です。",
+    "emailAccountNotFound": "そのメールで作成されたアカウントがありません。Google・Kakao・Appleで始めてください。",
+    "emailBirthMismatch": "生年月日がそのアカウントと一致しません。"
   },
   "onboarding": {
     "signUp": "会員登録",

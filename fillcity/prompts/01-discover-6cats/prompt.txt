@@ -2,6 +2,7 @@
 ⚠️ 2026-06-07 사용자 승인 변경 = hotspot 에 'rooftop and terraces' 추가 (= 한국인 진정한 사진명소 = 05-text-recategorize 와 동기)
 ⚠️ 2026-06-12 사용자 승인 변경 = 카피 필드명 통폐합 = selection_reason_ko→summary_ko / shortform_ko→editorial_summary (= 실제 DB 컬럼명 통일 = 별칭 폐기 = 후처리 변환 제거)
 ⚠️ 2026-06-18 사장님 승인 변경 = 본문 최상단 ${API_PASS} 출입증 헤더 추가 (= 표준 프롬프트 통과 증표 = AI 임의호출 차단 = 발굴(행=없음) 동적 치환, run.ts 치환 동반)
+⚠️ 2026-08-07 사장님 승인 변경 = TOP 20 고정 → ${TOP_N} 치환자(기본 20 = 기존과 100% 동일, run.ts --top 미지정 시 20). BTS 15개 도시 = --top=5
 
 ══════════════════════════════════════════════════════════════════════════════
 PROMPT 본문:
@@ -18,7 +19,7 @@ CITY_CENTER: { lat: ${CITY_LAT}, lng: ${CITY_LNG} }
 RADIUS_KM: 100
 TARGET_AUDIENCE: Korean travelers (= 한국 인스타/블로그/유튜브 트렌드 기준)
 
-For each of the 6 categories below, return TOP 20 most famous places
+For each of the 6 categories below, return TOP ${TOP_N} most famous places
 ordered by KOREAN TRAVELERS' popularity (= 인스타 성지, 한국 블로그 빈도,
 유튜브 vlog 등장 빈도 우선 = NOT Western tourist ranking).
 (Note: restaurant category is intentionally excluded — separate prompt with price-tier classification.)
@@ -32,7 +33,7 @@ Categories:
 6. shopping    — shopping places and markets
 
 For each place include:
-- rank (1-20, Korean traveler popularity order)
+- rank (1-${TOP_N}, Korean traveler popularity order)
 - name_en (English official name)
 - name_local (local language name, if different — for TS matching)
 - name_ko (Korean name commonly used by Korean travelers)
