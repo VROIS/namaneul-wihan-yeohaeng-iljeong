@@ -142,25 +142,6 @@ export const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 13,
   },
-  checkBadge: {
-    position: "absolute",
-    top: 4,
-    right: 4,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    justifyContent: "center",
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
-  },
-  checkText: {
-    fontSize: 11,
-    color: "#FFFFFF",
-    fontWeight: "900",
-  },
 
   // ⚠️ 수정금지(승인필요) — 에러 텍스트
   errorText: {
@@ -269,9 +250,14 @@ export const styles = StyleSheet.create({
     backgroundColor: "#F0F0F0",
     overflow: "hidden",
   },
+  // ⚠️ 수정금지(승인필요) 2026-08-08 판단3종 지적 — 채움은 **폭을 늘리지 않고 눌러 늘린다**(scaleX).
+  //   폭(%)을 움직이면 매 프레임 자리계산이 다시 돈다. 눌러 늘리기는 그림만 바꾼다.
+  //   왼쪽에 붙여 늘어나야 하므로 기준점을 왼쪽으로 둔다.
   gaugeFill: {
+    width: "100%",
     height: "100%",
     borderRadius: 3,
+    transformOrigin: "left",
   },
   gaugeText: {
     fontSize: 12,

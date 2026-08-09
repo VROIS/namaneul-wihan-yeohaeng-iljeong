@@ -25,6 +25,7 @@ import { Image } from "expo-image";
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
+  withSequence,
   withTiming,
 } from "react-native-reanimated";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -118,11 +119,7 @@ export default function BTSPlaceCartScreen() {
   // ⚠️ 수정금지(승인필요) — 2026-04-23 Track 1b-①: 캐스케이드 마운트 게이트 제거.
   // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1g: failedIds/타임아웃/폴백 모두 제거. 실제 이미지 완성까지 무조건 대기 (안전장치 0).
   // 사용자 원칙: "선택지 없이 무조건 완성 될때까지 기다림" → 8/8 실사진 readyIds 도달 전엔 스피너 영구.
-  const [readyIds, setReadyIds] = useState<Set<number>>(() => new Set());
-  const expectedCount = Math.min(topPlaces.length, MAX_PLACES);
-  const allReady = expectedCount > 0 && readyIds.size >= expectedCount;
-
-  // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1g: 내용 기반 키로 리셋 (참조 비교 시 fetch마다 새 배열 → 불필요 리셋 + 스피너 재노출 방지).
+  // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1g: 내용 기반 키 (참조 비교 시 fetch마다 새 배열 → 불필요 리셋 + 스피너 재노출 방지).
   const topPlacesKey = useMemo(
     () =>
       topPlaces
@@ -131,9 +128,21 @@ export default function BTSPlaceCartScreen() {
         .join(","),
     [topPlaces],
   );
-  useEffect(() => {
-    setReadyIds(new Set());
-  }, [topPlacesKey]);
+
+  // ⚠️ 수정금지(승인필요) 2026-08-08 판단3종 지적 = **다 떴는지 여부는 "어느 도시 것인지"와 한 덩어리**로 둔다.
+  //   옛 방식(사진 도착 목록만 따로 들고, 도시가 바뀌면 뒤이은 이펙트로 비움) 폐기 = 2026-08-08 §19.
+  //   사유: 비우는 이펙트는 **렌더가 끝난 뒤** 돈다. 새 도시 목록이 들어온 그 렌더에서는
+  //   목록만 새것이고 도착 목록은 아직 **옛 도시의 8장**이라, 한 프레임 동안 "다 떴다"가 참이 된다.
+  //   그 틈으로 자동 시범이 새어 나가 **스피너 뒤에서 몰래 담기고**, 담긴 카드는 화면에서 빠져
+  //   사진 도착 신호를 영영 못 보내 **빙글빙글 로딩이 안 끝난다**(같은 파일 :181 이 경고한 실패 모드).
+  //   키를 함께 들면 그 한 프레임이 사라진다 = 비우는 이펙트도 필요 없다.
+  const [ready, setReady] = useState<{ key: string; ids: Set<number> }>(() => ({
+    key: "",
+    ids: new Set(),
+  }));
+  const expectedCount = Math.min(topPlaces.length, MAX_PLACES);
+  const readyCount = ready.key === topPlacesKey ? ready.ids.size : 0;
+  const allReady = expectedCount > 0 && readyCount >= expectedCount;
 
   // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1j: cardsLayer opacity Reanimated fade-in (allReady 전환 시 부드러움, 깝빡 현상 완화).
   const cardsOpacity = useSharedValue(0);
@@ -145,12 +154,17 @@ export default function BTSPlaceCartScreen() {
   }));
 
   // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1g: 로드 성공 통보만 유지. useCallback 으로 PlaceCard React.memo 안정화.
+  //   ⚠️ 2026-08-08 = 도착 신호는 **그때의 도시 것으로** 기록한다. 도시가 바뀌었으면 새 도시 것으로 새로 센다.
+  const topPlacesKeyRef = useRef(topPlacesKey);
+  topPlacesKeyRef.current = topPlacesKey;
   const handleReady = useCallback((id: number) => {
-    setReadyIds((prev) => {
-      if (prev.has(id)) return prev;
-      const next = new Set(prev);
-      next.add(id);
-      return next;
+    const key = topPlacesKeyRef.current;
+    setReady((prev) => {
+      if (prev.key !== key) return { key, ids: new Set([id]) };
+      if (prev.ids.has(id)) return prev;
+      const ids = new Set(prev.ids);
+      ids.add(id);
+      return { key, ids };
     });
   }, []);
 
@@ -223,31 +237,100 @@ export default function BTSPlaceCartScreen() {
     );
   }, []);
 
+  // ⚠️ 수정금지(승인필요) 2026-08-08 판단3종 지적 = **날아가는 도중에 도시가 바뀌면 담지 않는다.**
+  //   카드는 눌린 뒤 0.36초(자동 시범은 최대 1.06초) 날아간 **뒤에** 담긴다. 그 사이 도시를 바꾸면
+  //   옛 도시 장소가 새 도시 카트에 들어가 **유령 1장**이 된다 = 숫자는 늘었는데 아래 목록에 안 보여
+  //   [제거]로 뺄 수도 없고, 그대로 여정 만들기까지 넘어간다.
+  //   막는 방식 = 같은 파일 위쪽 도시 요청의 cancelled 와 같은 생각(§16) = **세대 번호**로 지난 것을 버린다.
+  const cartGen = useRef(0);
   const handleTogglePlace = useCallback(
-    (place: BTSPlace) => {
+    (place: BTSPlace, gen?: number) => {
+      if (gen !== undefined && gen !== cartGen.current) return; // 지난 도시의 카드 = 버린다
       haptic("light");
       togglePlace(place);
     },
     [togglePlace],
   );
 
+  // ⚠️ 수정금지(승인필요) 2026-08-08 판단3종 지적 = **지금 보고 있는 도시를 다시 누르면 아무 일도 안 한다.**
+  //   옛 방식(같은 도시여도 세대를 올림) 폐기 = 2026-08-08 §19 — 같은 도시는 장소를 다시 안 불러와
+  //   카드가 화면에 그대로 남는데, 세대만 올라가 **날아가던 카드가 담기지도 못하고 투명한 채 영영 사라졌다**.
   const handleCityPick = useCallback(
     (city: BTSCity) => {
+      if (city.id === selectedCity?.id) return;
+      cartGen.current += 1; // 도시가 실제로 바뀌는 그 순간에만 세대를 올린다
       haptic("light");
       setSelectedCity(city);
     },
-    [setSelectedCity],
+    [setSelectedCity, selectedCity?.id],
   );
 
   const selectedCount = selectedPlaceIds.length;
   // ⚠️ 수정금지(승인필요) — 2026-05-06 v3 SSOT: 카드 ≥ 3 부터 CTA 활성 (= "3 부터 생성")
   const canProceed = selectedCount >= 3;
 
+  // ⚠️ 수정금지(승인필요) 2026-08-08 사장님 지시 — 담길 때마다 게이지가 **차오르고** 숫자칸이 톡 튄다.
+  //   숫자만 바뀌면 담긴 게 눈에 안 들어온다(= 카드가 날아온 것이 어디에 꽂혔는지 알 수 없음).
+  const gaugePct = useSharedValue(0);
+  const cartPop = useSharedValue(1);
+  useEffect(() => {
+    gaugePct.value = withTiming((selectedCount / MAX_PLACES) * 100, {
+      duration: 420,
+    });
+    if (selectedCount > 0) {
+      cartPop.value = withSequence(
+        withTiming(1.18, { duration: 140 }),
+        withTiming(1, { duration: 220 }),
+      );
+    }
+  }, [selectedCount, gaugePct, cartPop]);
+  const gaugeStyle = useAnimatedStyle(() => ({
+    transform: [{ scaleX: gaugePct.value / 100 }],
+  }));
+  const cartTitleStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: cartPop.value }],
+  }));
+
   // ⚠️ 수정금지(승인필요) — 2026-05-06 venue (slot 1 = bts_venue) id 추출 = 지도 마커 항상 표시 + 2 중 상태
   const venueId = useMemo(() => {
     const v = topPlaces.find((p) => p.seedCategory === "bts_venue");
     return v?.id ?? null;
   }, [topPlaces]);
+
+  // ⚠️ 수정금지(승인필요) 2026-08-08 사장님 확정 — 들어오면 **공연장 카드가 스스로 한 번 담긴다.**
+  //   사람이 누른 것과 같은 길(PlaceCard.fly)을 타므로 "이렇게 하는 거구나"가 그대로 학습된다.
+  //   조건 3개를 다 만족할 때만 = ① 8장 사진이 다 떠 있고(안 그러면 날아가는 게 안 보임)
+  //   ② 아직 아무것도 안 담겼고 ③ **이 도시에서 아직 시범을 안 보였을 때**.
+  //   ③ 이 없으면 = 사장님이 공연장을 [제거] 했을 때 다시 담겨 되돌릴 수 없게 된다.
+  // ⚠️ 수정금지(승인필요) 2026-08-08 사장님 지시 — 기준은 **도시 번호가 아니라 실제 장소 8장의 목록**(topPlacesKey).
+  //   도시 번호로 잠그면: 도시 버튼을 누른 직후에는 아직 **옛 도시 목록**이 남아 있어 표적이 옛 공연장 id 로
+  //   잡히고 그대로 잠긴다 → 새 도시에는 그 카드가 없어 시범이 영영 안 나간다(실측 2026-08-08 볼티모어→알링턴).
+  //   allReady 가 목록 키와 한 덩어리라(위 ready 참고) 새 사진 8장이 다 뜬 뒤에 정확히 한 번 나간다.
+  //   = 공연 도시가 몇 개로 늘어나도 도시마다 똑같이 동작한다.
+  const autoDemoedKey = useRef<string | null>(null);
+  const [autoPickId, setAutoPickId] = useState<number | null>(null);
+  useEffect(() => {
+    if (autoDemoedKey.current !== topPlacesKey) {
+      autoDemoedKey.current = null; // 장소 목록이 바뀌면 다시 무장
+      setAutoPickId(null);
+    }
+    if (selectedPlaceIds.length > 0) {
+      // ⚠️ **표적을 반드시 푼다.** 안 풀면 [제거] 했을 때 그 카드가 다시 그려지며 시범이 또 돌아
+      //   뺄 수가 없다(실측 2026-08-08 발견).
+      if (autoPickId !== null) setAutoPickId(null);
+      return;
+    }
+    if (!allReady || autoDemoedKey.current === topPlacesKey) return;
+    autoDemoedKey.current = topPlacesKey;
+    setAutoPickId(venueId ?? topPlaces[0]?.id ?? null);
+  }, [
+    allReady,
+    topPlacesKey,
+    selectedPlaceIds.length,
+    venueId,
+    topPlaces,
+    autoPickId,
+  ]);
 
   // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 4a: 카트 배열 = selectedPlaceIds 순서대로 topPlaces 에서 조회.
   // 선택 순서 = 여정 순서 (사용자 결정: 드래그 순서 변경 불필요).
@@ -366,24 +449,24 @@ export default function BTSPlaceCartScreen() {
 
                 {/* ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1h: 순차 마운트. 카드 i 는 i-1 까지 로드 완료 후에만 마운트. Glide 동시성 8개 → Wikimedia Varnish rate-limit (429) 회피. */}
                 {/* ⚠️ 수정금지(승인필요) — 2026-04-24 Track 4a: 카트에 담긴 카드는 궤도에서 완전히 사라짐 (frame + image + label 전체). 빈 액자 금지. 캐릭터 노출 효과. */}
-                {topPlaces
-                  .slice(0, MAX_PLACES)
-                  .map((place, i) =>
-                    i <= readyIds.size &&
-                    !selectedPlaceIds.includes(place.id) ? (
-                      <PlaceCard
-                        key={place.id}
-                        place={place}
-                        displayName={localizedName(place, isKorean)}
-                        posX={positions[i].x}
-                        posY={positions[i].y}
-                        isSelected={false}
-                        onToggle={handleTogglePlace}
-                        onReady={handleReady}
-                        tint={tint}
-                      />
-                    ) : null,
-                  )}
+                {topPlaces.slice(0, MAX_PLACES).map((place, i) =>
+                  i <= readyCount && !selectedPlaceIds.includes(place.id) ? (
+                    <PlaceCard
+                      key={place.id}
+                      place={place}
+                      displayName={localizedName(place, isKorean)}
+                      posX={positions[i].x}
+                      posY={positions[i].y}
+                      onToggle={handleTogglePlace}
+                      onReady={handleReady}
+                      flyY={hero.radiusY + 90}
+                      gen={cartGen.current}
+                      /* ⚠️ 수정금지(승인필요) 2026-08-08 사장님 지시 — 공연장 카드 **한 장만**
+                           스스로 담기는 시범을 보인다. 여러 장이 움직이면 신호가 아니라 소란이 된다. */
+                      autoPick={place.id === autoPickId}
+                    />
+                  ) : null,
+                )}
               </Animated.View>
             </>
           )}
@@ -396,12 +479,16 @@ export default function BTSPlaceCartScreen() {
         {/* venue (= 별 마커) 항상 표시. 첫 카드 떼면 → 별 + "BTS" 라벨 활성화 (= 사용자 직관 = 공연장) */}
         {/* 마커 클릭 → 아래 상세 섹션의 해당 카드로 인앱 scrollTo (= 모달 X) */}
         <View style={styles.mapSection}>
-          <Text style={[styles.cartTitle, { color: tint }]}>
+          {/* ⚠️ 수정금지(승인필요) 2026-08-08 사장님 확정 — 카드가 날아와 **꽂히는 자리**.
+              한 장 담길 때마다 숫자가 톡 튄다 = 착지 신호(설명문을 넣으려던 자리를 목적지로 씀). */}
+          <Animated.Text
+            style={[styles.cartTitle, { color: tint }, cartTitleStyle]}
+          >
             {t("bts.placeCart.cartTitle", {
               count: selectedCount,
               max: MAX_PLACES,
             })}
-          </Text>
+          </Animated.Text>
           <BTSPlaceMap
             places={topPlaces.slice(0, MAX_PLACES)}
             selectedIds={selectedPlaceIds}
@@ -455,13 +542,13 @@ export default function BTSPlaceCartScreen() {
         <View style={styles.bottomArea}>
           <View style={styles.gaugeRow}>
             <View style={styles.gaugeTrack}>
-              <View
+              {/* ⚠️ 수정금지(승인필요) 2026-08-08 사장님 지시 — 게이지는 **차오른다**.
+                  옛 즉시 폭 변경 폐기 = 2026-08-08 §19(툭 바뀌어 차오르는 느낌이 없었음). */}
+              <Animated.View
                 style={[
                   styles.gaugeFill,
-                  {
-                    width: `${(selectedCount / MAX_PLACES) * 100}%`,
-                    backgroundColor: tint,
-                  },
+                  { backgroundColor: tint },
+                  gaugeStyle,
                 ]}
               />
             </View>

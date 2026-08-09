@@ -16,6 +16,9 @@ import {
   Platform,
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+// ⚠️ 수정금지(승인필요) 2026-08-08 = 이 화면이 **지금 보이는 화면인지** 판단용.
+//   해설 화면으로 넘어가도 이 화면은 스택에 살아 있다(GuideStackNavigator = native-stack, :615-616).
+import { useIsFocused } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import * as Speech from 'expo-speech';
@@ -38,9 +41,11 @@ try {
 import CameraView from '../components/CameraView';
 import FooterButtons from '../components/FooterButtons';
 import LiveChat from '../components/LiveChat';
+import HintWave from '../components/HintWave';
 import { useCamera } from '../hooks/useCamera';
 import { useStore } from '../state/store';
 import { theme } from '../styles/theme';
+import { t } from '../i18n/translations';
 import { CONFIG } from '../config/constants';
 import { getTTSLanguage } from '../services/PromptService';
 // 관리자 판정 = 저장된 계정 1벌. 도시 카드 [해설 만들기](CityCardScreen.tsx) 와 완전히 같은 방식(§16 재발명 금지).
@@ -72,6 +77,11 @@ export default function MainCameraScreen({ onNavigateToWebView, onInjectJS, lang
   } = useStore();
 
   const language = useStore((s) => s.language) || 'ko';
+
+  // ⚠️ 수정금지(승인필요) 2026-08-08 판단3종 지적 = 힌트 물결은 **이 화면이 보일 때만** 산다.
+  //   해설 화면으로 넘어가도 이 화면은 언마운트되지 않아(native-stack), 이 조건이 없으면
+  //   보이지도 않는 글자 애니메이션이 해설을 읽는 내내 매 프레임 돈다(= 카메라 프리뷰 위에서 낭비).
+  const isFocused = useIsFocused();
 
   // ⚠️ 수정금지(승인필요): App.js에서 전달받은 언어를 store에 동기화
   React.useEffect(() => {
@@ -416,6 +426,17 @@ export default function MainCameraScreen({ onNavigateToWebView, onInjectJS, lang
 
       {/* 라이브 대화 오버레이 */}
       <LiveChat />
+
+      {/* ⚠️ 수정금지(승인필요) 2026-08-08 사장님 확정 — 뷰(첫 화면)에만 사는 사용법 1줄.
+          촬영·업로드를 누르면 isProcessing 이 켜지며 사라지고 곧바로 해설 생성 화면으로 넘어간다
+          = 뷰와 생성기는 동작이 다르다. pointerEvents none = 카메라·버튼 터치를 가로채지 않는다. */}
+      {!isProcessing && isFocused && (
+        <View style={theme.hintWrap} pointerEvents="none">
+          <View style={theme.hintCard}>
+            <HintWave text={t('hint', language)} />
+          </View>
+        </View>
+      )}
 
       {/* 처리 중 스피너 */}
       {isProcessing && (
