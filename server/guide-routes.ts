@@ -25,7 +25,13 @@ import { tsSearch } from "./services/shared/ts-client";
 import { buildPlaceHintHeader } from "./services/shared/place-hint-header"; // 확정 정보 머리글 단일 관문(2026-08-02 §16)
 import { getUserIdFromReq, getRoleFromDb } from "./auth-user"; // Bearer → userId·역할 단일 관문(2026-07-29 §16 / 상황판 2026-08-06)
 import { nearestCityIdByCoords } from "./city-match"; // 좌표 → 최근접 도시 단일 관문(2026-08-02 §16)
-import { chargeFeature } from "./credit-charge"; // 크레딧 차감 단일 관문(2026-07-29 §9)
+// 크레딧 단일 관문(2026-07-29 §9). 이 파일은 셋 다 쓴다 —
+//   precheck(시작 잔액확인) · chargeOnSuccess(완성 뒤 차감) · chargeFeature(창고 조회 = 402 를 직접 보내야 함).
+import {
+  chargeFeature,
+  chargeOnSuccess,
+  precheckFeature,
+} from "./credit-charge";
 import { isCityRepresentativePlace } from "./services/shared/city-representative-place"; // 도시 대표장소=맛보기 무료 판정 1벌(2026-08-05 §16)
 import { uploadDataUriToR2 } from "./services/shared/r2-client"; // 기기 사진(base64) → R2 guides/ 파일화 1벌(2026-08-06 §16, Cloudflare 이전 1단계)
 
@@ -77,13 +83,18 @@ export function registerGuideRoutes(app: Express): void {
       const requesterId = getUserIdFromReq(req);
       if (!requesterId) return res.status(401).json({ error: "로그인 필요" });
 
-      // 🪙 Tripis 해설 5크레딧 차감 (2026-07-29 §9).
-      //   ⚠️ 반드시 아래 setHeader/write **전에** 있어야 한다 = 헤더가 나가면 잔액부족(402)을 보낼 수 없다.
-      if (!(await chargeFeature(res, requesterId, "guide_explain"))) return;
+      // 🪙 Tripis 해설 5크레딧 (2026-07-29 §9)
+      //   ⚠️ 수정금지(승인필요) 2026-08-09 사장님 최우선 SSOT = **차감은 완성 시점에만.**
+      //     여기는 잔액 **사전확인만**(차감 0). 반드시 아래 setHeader/write **전에** 있어야 한다
+      //     = 헤더가 나가면 잔액부족(402)을 보낼 수 없다(§9 금지 4번).
+      //     실제 차감 = 해설 글이 **다 흘러나온 뒤**. 옛 "시작 시 차감" 폐기 = 2026-08-09 §19
+      //     (= 중간에 끊기면 글은 못 받고 5크레딧만 사라져 환불 분쟁이 된다).
+      if (!(await precheckFeature(res, requesterId, "guide_explain"))) return;
 
       res.setHeader("Content-Type", "text/plain; charset=utf-8");
       res.setHeader("Transfer-Encoding", "chunked");
 
+      let produced = 0; // 실제로 내보낸 글자 수 = 완성 판정 근거
       for await (const text of geminiVisionStream(
         base64Image || null,
         prompt || "",
@@ -94,8 +105,15 @@ export function registerGuideRoutes(app: Express): void {
         },
       )) {
         res.write(text);
+        produced += text.length;
       }
       res.end();
+
+      // 🪙 차감 = 여기(글이 실제로 나온 뒤). 중간에 터지면 아래 catch 로 가므로 **차감하지 않는다**.
+      if (produced)
+        await chargeOnSuccess(requesterId, "guide_explain", {
+          tag: "Tripis 해설",
+        });
     } catch (e: any) {
       console.error("[guide/gemini]", e?.message || e);
       if (!res.headersSent) {
@@ -326,7 +344,17 @@ export function registerGuideRoutes(app: Express): void {
       //     판정은 서버가 단독으로 한다(city-representative-place 1벌) = 화면이 무엇을 보내도 흉내낼 수 없다.
       //     ⚠️ requester 를 먼저 본다 = 비로그인은 어차피 무과금(chargeFeature)이라 대표장소 판정(조회 2회)이
       //       순수 낭비다. 도시카드 맛보기가 가장 잦은 경로라 그 길에서 0회가 된다.
-      if (!mine && requester && !(await isCityRepresentativePlace(placeId))) {
+      //   ⚠️ 수정금지(승인필요) 2026-08-09 사장님 최우선 SSOT = **차감은 완성 시점에만.**
+      //     이 길은 **이미 만들어진 해설을 창고에서 꺼내 주는 것**이라 만들다 실패할 것이 없다
+      //     = 지금 자리가 곧 완성 시점이다(생성 경로처럼 뒤로 옮길 것이 없음).
+      //     다만 **줄 내용이 없으면 받은 게 없는 것** = 그때는 깎지 않는다(빈 해설에 5크레딧 = 환불 분쟁 소지).
+      const deliverable = (row.content || row.description || "").trim();
+      if (
+        deliverable &&
+        !mine &&
+        requester &&
+        !(await isCityRepresentativePlace(placeId))
+      ) {
         if (!(await chargeFeature(res, requester, "guide_explain"))) return;
       }
 

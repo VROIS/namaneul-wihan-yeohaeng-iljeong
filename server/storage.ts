@@ -17,7 +17,7 @@ import {
   guidePrices,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, sql, ne } from "drizzle-orm";
+import { eq, desc, and, sql, notInArray } from "drizzle-orm";
 
 // 참고: sql import는 필요 시 추가
 // requireDb() 함수 - 향후 DB 연결 검증 필요 시 사용
@@ -261,23 +261,33 @@ export class DatabaseStorage implements IStorage {
   // ========================================
   // Itineraries (= itineraries.rawData JSON 사용 = 외래키 없음)
   // ========================================
+  // ⚠️ 수정금지(승인필요) 2026-08-09 = 화면 목록에서 **빼는 상태 1벌**(아래 두 목록이 같은 기준을 쓴다 §0).
+  //   · inquiry    = 전문가 문의용 자동저장(사장님 SSOT 2026-07-14). 전문가는 여정 id 로 직접 연다.
+  //   · generating = **아직 만드는 중** = 내용이 없다. 다 되면 draft 로 내려가 그때 목록에 뜬다.
+  //   · failed     = 만들다 실패 = 보여줄 내용이 없다.
+  //   ⚠️ 두 상태 모두 **DB 에서 지우지 않는다**(사장님 SSOT = 모든 생성물은 회사 소유 = 무조건 남긴다).
+  //     화면에서만 감추는 것이고, 실패 원인은 그 행의 raw_data 에 남아 있어 나중에 들여다볼 수 있다.
+  private static readonly HIDDEN_STATUSES = ["inquiry", "generating", "failed"];
+
   async getUserItineraries(userId: string): Promise<Itinerary[]> {
-    // ⚠️ 사장님 SSOT 2026-07-14 = 프로필 '나의 여정'은 사용자가 실제 저장(💾)한 것만 = status='inquiry'(전문가 문의용 자동저장)는 제외(사용자가 저장 안 했으니 프로필 카드에 안 뜸). 전문가는 여정 id로 restore-by-id 로 봄.
     return db
       .select()
       .from(itineraries)
       .where(
-        and(eq(itineraries.userId, userId), ne(itineraries.status, "inquiry")),
+        and(
+          eq(itineraries.userId, userId),
+          notInArray(itineraries.status, DatabaseStorage.HIDDEN_STATUSES),
+        ),
       )
       .orderBy(desc(itineraries.createdAt));
   }
 
-  // ⚠️ 2026-08-06 사장님 승인 = 관리자 전체 상황판 = 전 사용자 저장 여정(inquiry 제외 규칙·정렬 = 위와 동일 1벌 기준).
+  // ⚠️ 2026-08-06 사장님 승인 = 관리자 전체 상황판 = 전 사용자 여정(감출 상태 규칙·정렬 = 위와 동일 1벌 기준).
   async getAllItineraries(): Promise<Itinerary[]> {
     return db
       .select()
       .from(itineraries)
-      .where(ne(itineraries.status, "inquiry"))
+      .where(notInArray(itineraries.status, DatabaseStorage.HIDDEN_STATUSES))
       .orderBy(desc(itineraries.createdAt));
   }
 

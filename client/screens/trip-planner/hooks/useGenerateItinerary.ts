@@ -157,6 +157,12 @@ export function useGenerateItinerary({
 
       clearInterval(interval);
 
+      // ⚠️ 수정금지(승인필요) 2026-08-09 사장님 지시 = 서버가 **만드는 순간 DB 에 여정 행을 만든다**.
+      //   그 행 번호를 여기서 받아 둬야 [저장]이 **같은 행을 덮어쓴다**(PUT).
+      //   안 받아 두면 저장할 때 새 행이 또 생겨 **같은 여정이 두 벌**이 된다(useSaveItinerary 의 POST/PUT 분기).
+      //   비로그인은 서버가 행을 만들지 않으므로 번호가 안 온다 = null 그대로(종전과 같음).
+      if (result.itineraryId) setCurrentItineraryId(result.itineraryId);
+
       const vibeWeights = calculateVibeWeights(
         formData.vibes,
         formData.curationFocus,

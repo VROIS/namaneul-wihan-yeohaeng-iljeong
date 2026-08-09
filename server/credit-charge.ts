@@ -77,12 +77,46 @@ export async function chargeFeature(
 }
 
 /**
+ * ⚠️ 수정금지(승인필요) 2026-08-09 사장님 최우선 SSOT = **완성 시점 차감 1벌.**
+ *   차감을 "다 만든 뒤"로 옮기면 호출부마다 똑같은 뒷정리가 필요하다 —
+ *   ① 응답이 이미 나갔으니 402 를 못 보낸다(res=null) ② 그 사이 잔액이 비었으면 로그만 남기고 결과는 준다
+ *   ③ 차감 중 DB 예외가 바깥 catch 로 가면 **다 만든 유료 결과물이 500 으로 버려진다** = 자체 try/catch 필수.
+ *   이 셋을 호출부 4곳에 각각 적어 두면 한 곳만 고쳐지는 날 갈라진다(§0·§16) = 여기 1벌로 둔다.
+ *   옛 방식(호출부마다 try/catch 복붙) 폐기 = 2026-08-09 §19(판단3종 지적).
+ *   @param tag 로그에 남길 이름(어느 기능인지 사장님이 로그에서 바로 읽게)
+ */
+export async function chargeOnSuccess(
+  userId: string | null,
+  feature: CreditFeature,
+  opts?: { referenceId?: string; tag?: string },
+): Promise<void> {
+  const tag = opts?.tag || feature;
+  try {
+    const paid = await chargeFeature(null, userId, feature, opts?.referenceId);
+    if (!paid)
+      console.error(
+        `[credits] ${tag} 완성했으나 차감 실패(잔액 소진) = 무료 처리 기록`,
+      );
+  } catch (e) {
+    console.error(
+      `[credits] ${tag} 차감 예외(완성물은 그대로 보존):`,
+      (e as Error)?.message,
+    );
+  }
+}
+
+/**
  * ⚠️ 수정금지(승인필요) 2026-08-06 사장님 SSOT = **잔액 사전확인**(차감 0) — 성공 시점 차감 기능(일별영상)의 짝.
  *   왜: 차감을 "완성·게시 순간"으로 옮기면(사장님 승인 = 실패 시 돈 안 날림) 402 를 보낼 기회가 백그라운드엔 없다.
  *   → 시작 시점에 이 함수로 잔액을 확인해 부족하면 402 = §9 "헤더 나간 뒤 402 불가" 금지 취지를 시작 시점에서 충족.
  *   면제 규칙(비로그인·관리자)은 chargeFeature 와 동일 = 여기서 갈라지면 두 벌(§0) = 같은 판정 순서 유지.
  *   반환 true = 진행 가능 / false = 이미 402 보냄.
  */
+//   ⚠️ 여기서 "지금 만드는 중인 것"까지 세는 방어는 만들지 않는다(2026-08-09 사장님 판단으로 삭제 §0·§19).
+//     사유 = ① 화면은 누르는 즉시 로딩으로 바뀌어 **사람 손으로는 두 번 못 누른다**(실측: setScreen 이 요청보다 먼저).
+//            ② 프로그램으로 동시에 부르는 경우만 해당 = 지금 막을 위협이 아니다(사장님: "뚫으려 들면 다 뚫린다").
+//            ③ 그 방어가 유료 요청마다 DB 조회를 한 번씩 더 얹고, 죽은 영상 판정을 두 벌로 만들었다(판단3종 지적).
+//     = §0 "안전장치 남발 금지" 그대로. 필요해지는 날 만든다.
 export async function precheckFeature(
   res: Response,
   userId: string | null,

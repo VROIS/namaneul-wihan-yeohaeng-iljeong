@@ -11,6 +11,8 @@ import { registerGuideRoutes } from "./guide-routes";
 import { registerExpertRoutes } from "./expert-routes"; // 전문가 문의 API (2026-07-13, docs/2026-07-13 전문가탭 구현계획.md)
 // ⚠️ 2026-07-15 = routes.ts(1,049줄) 500줄 가드 초과 슬림화 = 순수 이동(로직 변경 없음, §19) = server/*-routes.ts 4개 신설
 import { registerCityPlaceRoutes } from "./city-place-routes";
+// 여정 생성(유료 파이프라인) = 700줄 가드로 city-place-routes 에서 분리(2026-08-09 순수 이동)
+import { registerItineraryGenerateRoute } from "./itinerary-generate-route";
 import { registerItineraryRoutes } from "./itinerary-routes";
 import { registerVideoRoutes } from "./video-routes";
 import { registerMiscRoutes } from "./misc-routes";
@@ -22,7 +24,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   registerBtsRoutes(app);
   registerGuideRoutes(app); // 내손안에 가이드 API (Phase 4 구현)
   registerExpertRoutes(app); // 전문가 문의 API (2026-07-13)
-  registerCityPlaceRoutes(app); // 도시3 + 장소3 + 일정생성(+디버그) + Day 재최적화
+  registerCityPlaceRoutes(app); // 도시3 + 장소3 + 진단 + Day 재최적화
+  registerItineraryGenerateRoute(app); // POST /api/routes/generate (유료 = 크레딧·DB 저장)
   registerItineraryRoutes(app); // 언어설정 + 여정 CRUD5 + AI 의견 (예산3 = 2026-07-16 §19 완전삭제, 호출자 0 + 500크래시)
   registerVideoRoutes(app); // 영상 상태조회 2종(DB read-only) = klingai/seedance 삭제(2026-07-16 §19), 5단계 Omni Flash 재배선 대상
   registerMiscRoutes(app); // 지도HTML + 헬스체크

@@ -30,7 +30,7 @@ import {
   isR2Configured,
 } from "./services/shared/r2-client";
 import { getUserIdFromReq, getRoleFromDb } from "./auth-user"; // Bearer → userId·역할 단일 관문(2026-07-29 §16 / 상황판 2026-08-06)
-import { chargeFeature, precheckFeature } from "./credit-charge"; // 크레딧 차감·사전확인 단일 관문(2026-07-29 §9, 성공시점 차감 2026-08-06)
+import { chargeOnSuccess, precheckFeature } from "./credit-charge"; // 크레딧 사전확인·완성시점차감 단일 관문(2026-07-29 §9 / 1벌화 2026-08-09)
 
 const COST_PER_SECOND_USD = 0.101; // A안 = Omni Flash 720p (5,792tok/초 × $17.5/1M)
 const B_COST_PER_SCENE_USD = 0.35; // B안 = 나노바나나 스틸 $0.045 + Veo Lite 6초 $0.30
@@ -355,23 +355,10 @@ export function registerVideoRoutes(app: Express): void {
             //   ⚠️ 자체 try/catch = §22 판단검증 지적(2026-08-06): 차감 중 DB 예외가 바깥 catch 로 가면
             //   이미 기록된 succeeded(완성 영상 포인터)를 failed 로 덮어씀 = 유료 자산 소실. 게시 쿼리와 동일 보호.
             if (clips.length >= Math.min(6, totalScenes)) {
-              try {
-                const paid = await chargeFeature(
-                  null,
-                  requesterUserId,
-                  "day_video",
-                  taskId,
-                );
-                if (!paid)
-                  console.error(
-                    `[video] ${taskId} 성공했으나 차감 실패(잔액 소진) = 무료 처리 기록`,
-                  );
-              } catch (chargeErr) {
-                console.error(
-                  `[video] ${taskId} 차감 예외(영상 succeeded 는 보존):`,
-                  (chargeErr as Error)?.message,
-                );
-              }
+              await chargeOnSuccess(requesterUserId, "day_video", {
+                referenceId: taskId,
+                tag: `일별 영상 ${taskId}`,
+              });
             } else {
               console.log(
                 `[video] ${taskId} 성공 씬 ${clips.length} < ${Math.min(6, totalScenes)} = 무료 게시(차감 없음)`,

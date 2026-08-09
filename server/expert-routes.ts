@@ -8,7 +8,7 @@ import { expertInquiries, users } from "@shared/schema";
 import { eq, desc, and, or, sql } from "drizzle-orm";
 import { notificationService } from "./notificationService";
 import { getUserIdFromReq, getRoleFromDb } from "./auth-user"; // Bearer → userId·역할 단일 관문(2026-07-29 §16 / 역할 1벌화 2026-08-06)
-import { chargeFeature } from "./credit-charge"; // 크레딧 차감 단일 관문(2026-07-29 §9)
+import { chargeOnSuccess, precheckFeature } from "./credit-charge"; // 크레딧 사전확인·완성시점차감 단일 관문(2026-07-29 §9 / 1벌화 2026-08-09)
 
 // db 널 가드 = place-upsert 'db_unavailable' 규약과 동일 취지(각 핸들러 try/catch가 500 처리)
 function db() {
@@ -39,17 +39,14 @@ export function registerExpertRoutes(app: Express): void {
       if (!userMessage) {
         return res.status(400).json({ error: "userMessage is required" });
       }
-      // 🪙 전문가 검증 10크레딧 차감 (2026-07-29 §9) = 접수가 확정되는 INSERT **직전**.
-      //   잔액이 부족하면 접수 자체를 막는다(돈 드는 일을 시작하지 않는 것이 402 의 목적).
-      if (
-        !(await chargeFeature(
-          res,
-          uid,
-          "expert_verify",
-          itineraryId ? String(itineraryId) : undefined,
-        ))
-      )
-        return;
+      // 🪙 전문가 검증 10크레딧 (2026-07-29 §9)
+      //   ⚠️ 수정금지(승인필요) 2026-08-09 사장님 최우선 SSOT = **차감은 완성 시점에만**(유료 5지점 공통 1벌).
+      //     여기(시작)는 잔액 **사전확인만**(차감 0) = 부족하면 402 = 돈 드는 일을 시작하지 않는다.
+      //     실제 차감 = 아래 **문의가 실제로 접수된 뒤**. 옛 "INSERT 직전 선차감" 폐기 = 2026-08-09 §19.
+      //     사유(사장님 판단) = 지금까지 접수가 실패한 적은 없지만 **트래픽이 늘면 생길 자리**다.
+      //     실제로 아래 catch 는 400(지워진 여정)·401·500 으로 되돌아가는 길을 갖고 있고,
+      //     그 경우 옛 방식은 **접수는 안 됐는데 10크레딧만 사라진** 상태가 됐다(= 환불 분쟁 소지).
+      if (!(await precheckFeature(res, uid, "expert_verify"))) return;
 
       const [row] = await db()
         .insert(expertInquiries)
@@ -62,6 +59,13 @@ export function registerExpertRoutes(app: Express): void {
           dayNumber: Number.isInteger(dayNumber) ? dayNumber : null,
         })
         .returning({ id: expertInquiries.id });
+
+      // 🪙 차감 = 여기(문의가 실제로 들어간 뒤). 위 INSERT 가 터지면 아래 catch 로 가므로 **차감하지 않는다**.
+      await chargeOnSuccess(uid, "expert_verify", {
+        referenceId: itineraryId ? String(itineraryId) : undefined,
+        tag: "전문가 검증",
+      });
+
       res.json({ success: true, requestId: row.id });
     } catch (e: any) {
       console.error("[Expert] 접수 실패:", e?.message);

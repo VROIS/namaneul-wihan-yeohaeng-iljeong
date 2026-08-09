@@ -25,7 +25,6 @@ import {
   computeDayRouteLive,
   enrichStopsWithPsr,
 } from "./services/shared/routes-client";
-import { chargeFeature } from "./credit-charge"; // 크레딧 차감 단일 관문(2026-07-29 §9)
 import { getUserIdFromReq } from "./auth-user"; // 토큰 → userId 1벌(§16)
 
 export function registerCityPlaceRoutes(app: Express): void {
@@ -312,121 +311,6 @@ export function registerCityPlaceRoutes(app: Express): void {
     } catch (e: any) {
       console.error("[day-live] 실패:", e?.message);
       res.status(502).json({ error: "day_live_failed" }); // FE = 딥링크만 오픈(기능 불중단)
-    }
-  });
-
-  // Itinerary generation
-  app.post("/api/routes/generate", async (req, res) => {
-    try {
-      const formData = req.body;
-
-      if (!formData.destination || !formData.startDate || !formData.endDate) {
-        return res.status(400).json({
-          error: "destination, startDate, endDate are required",
-        });
-      }
-
-      // 🎯 사용자 정보 DB에서 조회 (birthDate 필수 - 로그인시 입력됨)
-      let enrichedFormData: Record<string, any> = {
-        ...formData,
-        language: formData.language || "ko", // 일정 생성 출력 언어 (기본 한국어)
-      };
-
-      if (formData.userId) {
-        try {
-          const [user] = await db
-            .select({
-              birthDate: users.birthDate,
-              displayName: users.displayName,
-              preferredVibes: users.preferredVibes,
-              preferredLanguage: users.preferredLanguage,
-            })
-            .from(users)
-            .where(eq(users.id, formData.userId));
-
-          if (user) {
-            // DB에서 가져온 사용자 정보 병합 (language: 일정 생성 출력 언어)
-            enrichedFormData = {
-              ...formData,
-              birthDate: user.birthDate, // 🎯 핵심: 가족 연령 추정용
-              userDisplayName: user.displayName,
-              language: formData.language || user.preferredLanguage || "ko",
-              // preferredVibes는 프론트에서 선택한 vibes 우선
-            };
-
-            console.log(
-              `[Routes] 🎯 사용자 정보 조회 완료: userId=${formData.userId}, birthDate=${user.birthDate}`,
-            );
-          }
-        } catch (userError) {
-          console.warn(
-            "[Routes] 사용자 정보 조회 실패 (계속 진행):",
-            userError,
-          );
-        }
-      }
-
-      // 🪙 여정 생성 5크레딧 차감 (2026-07-29 §9) = 유료 파이프라인 진입 **직전**.
-      //   ⚠️ 수정금지(승인필요) 2026-07-30 §0 = 차감 기준 신원은 **로그인 토큰에서만** 읽는다.
-      //     요청 본문의 userId 로 차감하면 그 칸을 비우는 것만으로 유료 생성이 공짜가 된다(§22 검증 지적).
-      //     본문의 userId 는 아래 파이프라인이 쓰는 조회용 값이고, **돈 판단에는 쓰지 않는다.**
-      //   ⚠️ 2026-07-31 사장님 승인(BTS D단계 결정7) = 크레딧 = **외부호출 발생 시만**.
-      //     고른 장소(pinnedPlaceIds) 있음 = BTS "같이 떠나요" = db-only 직행 = 외부호출 0 = 무료(차감 안 함).
-      const isPinnedDbOnly = !!(
-        Array.isArray(formData.pinnedPlaceIds) && formData.pinnedPlaceIds.length
-      );
-      if (
-        !isPinnedDbOnly &&
-        !(await chargeFeature(res, getUserIdFromReq(req), "route_generate"))
-      )
-        return;
-
-      const itinerary = await itineraryGenerator.generate(enrichedFormData);
-
-      // 🔍 디버그: places 비어있는 문제 추적
-      const debugInfo = {
-        daysCount: itinerary?.days?.length || 0,
-        placesPerDay:
-          itinerary?.days?.map((d: any) => ({
-            day: d.day,
-            placesCount: d.places?.length || 0,
-            placeNames: d.places?.slice(0, 3).map((p: any) => p.name) || [],
-          })) || [],
-        totalPlaces: itinerary?.metadata?.totalPlaces || 0,
-        pipelineVersion: itinerary?.metadata?._pipelineVersion || "unknown",
-        totalMs: itinerary?.metadata?._totalMs || 0,
-      };
-      console.log(`[Routes] 📊 일정 생성 완료:`, JSON.stringify(debugInfo));
-
-      // places가 전부 비어있으면 경고
-      const totalPlacesInDays = debugInfo.placesPerDay.reduce(
-        (sum: number, d: any) => sum + d.placesCount,
-        0,
-      );
-      if (totalPlacesInDays === 0) {
-        console.error(
-          `[Routes] ❌ 경고: 모든 day의 places가 비어있습니다! schedule이 비었을 수 있음`,
-        );
-      }
-
-      res.json(itinerary);
-    } catch (error: any) {
-      console.error("Error generating itinerary:", error?.message || error);
-
-      // API 키 누락 에러 구분
-      if (error?.message?.includes("API") || error?.message?.includes("키")) {
-        res.status(503).json({
-          error: "AI 서비스 연결 오류",
-          detail: error.message,
-          suggestion: "관리자 대시보드에서 API 키를 확인해주세요.",
-        });
-      } else {
-        res.status(500).json({
-          error: "일정 생성 실패",
-          detail: error?.message || "Unknown error",
-          stack: (error?.stack || "").substring(0, 300),
-        });
-      }
     }
   });
 

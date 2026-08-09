@@ -1,37 +1,22 @@
 // ⚠️ 2026-07-15 = routes.ts(1,049줄) 500줄 가드 초과 슬림화 = 순수 이동(로직 변경 없음) §0
 //   담긴 라우트 = 언어설정 + 여정 CRUD 5(목록·단건·생성·재저장·삭제) + AI 의견 (예산3 = 2026-07-16 §19 완전삭제, 호출자 0 + 500크래시)
 import type { Express } from "express";
-import { createHash } from "node:crypto";
 import { storage } from "./storage";
 import { generateItineraryICS, type ItineraryForICS } from "./itinerary-ics";
 import { handleAiOpinionRequest } from "./services/verify/ai-opinion-handler";
 import { getUserIdFromReq, getRoleFromDb } from "./auth-user"; // Bearer → userId·역할 단일 관문(2026-07-29 §16 / 상황판 2026-08-06)
-import { chargeFeature } from "./credit-charge"; // 크레딧 차감 단일 관문(2026-07-29 §9)
+import { chargeOnSuccess, precheckFeature } from "./credit-charge"; // 크레딧 사전확인·완성시점차감 단일 관문(2026-07-29 §9 / 1벌화 2026-08-09)
 // 🏆 대표 지정(B1) 전용 = 트랜잭션(옛 대표 강등+승격 원자성)에 db 직접 필요(2026-08-01 베스트갤러리)
 import { db } from "./db";
 import { itineraries } from "../shared/schema";
 import { and, eq } from "drizzle-orm";
 // 🏙️ 목적지 문자열 → 도시 id 단일 관문(2026-08-02 §16) = 저장(POST/PUT)·대표 지정(B1)이 같은 1벌을 쓴다.
-import { matchCityIdByName } from "./city-match";
-
-// ⚠️ 2026-07-03 사장님 SSOT = "AI 의견" 캐싱용 여정 지문. 도시+일자+장소명 순서만 반영(이미지 등 무관 필드 제외) = 숙소변경→동선변경 시에만 달라져 재호출.
-function computeItineraryFingerprint(itinerary: any): string {
-  const material = {
-    destination: itinerary.destination,
-    startDate: itinerary.startDate,
-    endDate: itinerary.endDate,
-    days: (itinerary.days || []).map((d: any) => ({
-      day: d.day,
-      places: (d.places || []).map((p: any) => ({
-        name: p.name,
-        lat: p.lat,
-        lng: p.lng,
-        startTime: p.startTime,
-      })),
-    })),
-  };
-  return createHash("sha1").update(JSON.stringify(material)).digest("hex");
-}
+// 여정 → DB 행 변환 1벌(2026-08-09 순수 이동). 저장·재저장·생성이 같은 것을 쓴다(§16).
+import {
+  buildItineraryData,
+  computeItineraryFingerprint,
+} from "./itinerary-save";
+import { matchCityIdByName } from "./city-match"; // 목적지 → 도시 id 1벌(대표 지정 B1 이 씀)
 
 export function registerItineraryRoutes(app: Express): void {
   // ⚠️ 2026-07-16 = /api/budget/preview·calculate·compare 3개 완전삭제(§19) = client/bts-app/public 전수 grep 호출자 0
@@ -136,52 +121,6 @@ export function registerItineraryRoutes(app: Express): void {
       res.status(500).json({ error: "Failed to generate calendar" });
     }
   });
-
-  // ⚠️ 2026-07-03 = 여정 저장(POST)·재저장(PUT) 공통 데이터 변환 = 재발명 금지(§16). userId admin 강제 + 날짜변환 + travelStyle→persona_type enum + rawData.
-  //   ⚠️ 수정금지(승인필요) 2026-06-24 = travel_style 컬럼도 persona_type enum(luxury/comfort/economic) 강제 = FE "reasonable" 전송 시 enum 위반 500 방지.
-  const buildItineraryData = async (body: any) => {
-    const styleToPersonaType: Record<string, string> = {
-      Luxury: "luxury",
-      Premium: "comfort",
-      Reasonable: "comfort",
-      Economic: "comfort", // 🩹 [2026-01-26] DB Enum 불일치 방지 (economic -> comfort)
-      luxury: "luxury",
-      comfort: "comfort",
-      reasonable: "comfort",
-      economic: "comfort", // 🩹 [2026-01-26] DB Enum 불일치 방지
-    };
-    // 🧠 2026-07-04 사장님 SSOT = AI 의견 결과 박제(구글이미지 스토리지 박제와 동일 원리). FE가 rawData.verificationResult(본문+언어)를 실으면
-    //   여기서 fp를 서버 단일 SSOT로 계산해 rawData.verification으로 봉인. POST·PUT 공통 1벌(§16 재발명금지·§20 통일).
-    //   → 저장 후 복원 → 첫 AI 의견 클릭도 fp 일치 = Gemini 재호출 $0(cached:true). fp는 저장될 rawData 그대로 계산 = 복원 시 fp와 정의상 동일.
-    //   verificationResult(임시 전달키)는 구조분해로 애초에 rawData에서 분리 = DB에 절대 안 새어나감(delete 방어 불필요 = §0 가벼움).
-    const { verificationResult: vr, ...rawData } = (body.rawData || {}) as any; // 🩹 [2026-01-26] raw_data 저장 (없으면 빈 객체)
-    if (vr?.result) {
-      const fp = `${computeItineraryFingerprint(rawData)}:${vr.language || "ko"}`;
-      (rawData as any).verification = {
-        fp,
-        result: vr.result,
-        generatedAt: new Date().toISOString(),
-      };
-    }
-    // 🏙️ 2026-08-02 사장님 지시 = 도시 id 는 **서버가** 목적지 문자열로 매칭해 채운다(§16 city-match.ts 1벌).
-    //   화면이 보내오던 도시 id 는 완전삭제(§19) = 화면은 도시 번호를 모르고, 서버가 유일한 근거다.
-    //   → 옛 화면 번들이 아직 보내오더라도 여기서 떼어내(bodyRest) 무시한다.
-    //   매칭 실패하면 키 자체를 안 넣는다 = 새 여정은 비워두고(모르면 비움), 재저장은 이미 맞게 들어간 값을 지우지 않음.
-    const { cityId: _fromClient, ...bodyRest } = body || {};
-    const matchedCityId = await matchCityIdByName(rawData?.destination);
-    return {
-      ...bodyRest,
-      ...(matchedCityId != null ? { cityId: matchedCityId } : {}),
-      // ⚠️ 사장님 SSOT 2026-07-14 = 여정은 로그인 본인 ID(users.id)로 저장 = 전문가가 연락할 상대·푸시 대상 특정. 옛 'admin' 강제 폐기 §19(§9 로그인제거 잔재).
-      //   FE(handleSaveItinerary)가 userData.id 를 실어 보냄. 없으면(비로그인 경로) 'admin' 폴백 = 둘러보기 안전. 다른 컬럼 = body 그대로.
-      userId: body.userId || "admin",
-      startDate: body.startDate ? new Date(body.startDate) : new Date(),
-      endDate: body.endDate ? new Date(body.endDate) : new Date(),
-      personaType: styleToPersonaType[body.travelStyle] || "comfort",
-      travelStyle: styleToPersonaType[body.travelStyle] || "comfort",
-      rawData,
-    };
-  };
 
   // ⚠️ 사장님 SSOT 2026-07-14 = 옛 ensureAdminUser 폐기 §19. id='admin'을 못 찾아 매번 새 유저를 찍어 유령유저 69개 양산하던 버그의 근원. 여정은 본인ID로 저장 = admin 행 불필요(itineraries.user_id FK 없음).
 
@@ -364,18 +303,15 @@ export function registerItineraryRoutes(app: Express): void {
         language: language || "ko",
       };
 
-      // 🪙 AI 의견 5크레딧 차감 (2026-07-29 §9) = 유료 Gemini 호출 **직전**.
+      // 🪙 AI 의견 5크레딧 (2026-07-29 §9)
+      //   ⚠️ 수정금지(승인필요) 2026-08-09 사장님 최우선 SSOT = **차감은 완성 시점에만.**
+      //     여기는 잔액 **사전확인만**(차감 0) = 부족하면 402(§9 금지 4번 = 헤더 전에 판정).
+      //     실제 차감 = 의견이 **실제로 만들어진 뒤**. 옛 "호출 직전 차감" 폐기 = 2026-08-09 §19 —
+      //     Gemini 가 실패하면 502 를 받으면서 5크레딧은 이미 사라져 있었다(= 환불 분쟁 소지).
       //   이 줄에 도달했다는 것 = 캐시 미스 = 실제 유료 호출. 캐시 히트(다시 보기)는 위에서 이미 return 되어 여기 안 온다 = 재차감 없음(무료 재열람).
       //   여정 저장(무료)도 이 라우트를 타지 않는다.
-      if (
-        !(await chargeFeature(
-          res,
-          getUserIdFromReq(req),
-          "ai_opinion",
-          itineraryId ? String(itineraryId) : undefined,
-        ))
-      )
-        return;
+      const opinionPayerId = getUserIdFromReq(req);
+      if (!(await precheckFeature(res, opinionPayerId, "ai_opinion"))) return;
 
       const result = await handleAiOpinionRequest(opinionInput);
       if (!result.ok || !result.response) {
@@ -384,6 +320,12 @@ export function registerItineraryRoutes(app: Express): void {
           details: result.parseError,
         });
       }
+
+      // 🪙 차감 = 여기(의견이 실제로 나온 뒤). 위 사전확인이 잔액을 이미 봤으므로 402 는 안 난다.
+      await chargeOnSuccess(opinionPayerId, "ai_opinion", {
+        referenceId: itineraryId ? String(itineraryId) : undefined,
+        tag: "AI 의견",
+      });
 
       // 저장된 여정이면 raw_data.verification에 결과 병합(캐시 저장). 미저장 신규 여정은 즉석 반환만.
       //   ⚠️ existingForCache 재사용(캐시확인 시 이미 조회함) = DB 재조회 1회 절약.
