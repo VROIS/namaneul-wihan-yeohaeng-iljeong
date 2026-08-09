@@ -41,7 +41,6 @@ try {
 import CameraView from '../components/CameraView';
 import FooterButtons from '../components/FooterButtons';
 import LiveChat from '../components/LiveChat';
-import HintWave from '../components/HintWave';
 import { useCamera } from '../hooks/useCamera';
 import { useStore } from '../state/store';
 import { theme } from '../styles/theme';
@@ -430,11 +429,12 @@ export default function MainCameraScreen({ onNavigateToWebView, onInjectJS, lang
       {/* ⚠️ 수정금지(승인필요) 2026-08-08 사장님 확정 — 뷰(첫 화면)에만 사는 사용법 1줄.
           촬영·업로드를 누르면 isProcessing 이 켜지며 사라지고 곧바로 해설 생성 화면으로 넘어간다
           = 뷰와 생성기는 동작이 다르다. pointerEvents none = 카메라·버튼 터치를 가로채지 않는다. */}
+      {/* ⚠️ 수정금지(승인필요) 2026-08-09 사장님 지시 = **바탕 없이 글자만, 움직임 없이 정지.**
+          옛 방식(어두운 막 + 글자별 흘러내림 = HintWave) 완전삭제 §19 — 실기기에서 막이
+          선글라스처럼 드러나 라이브뷰를 가렸다. 읽히게 하는 것은 글자 그림자 하나로 충분하다. */}
       {!isProcessing && isFocused && (
         <View style={theme.hintWrap} pointerEvents="none">
-          <View style={theme.hintCard}>
-            <HintWave text={t('hint', language)} />
-          </View>
+          <Text style={theme.hintText}>{t('hint', language)}</Text>
         </View>
       )}
 

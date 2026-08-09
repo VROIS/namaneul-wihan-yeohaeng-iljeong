@@ -67,10 +67,9 @@ const haptic = (t: "light" | "medium" | "success") => {
 const TITLE_TOP_OFFSET = 56; // status bar로부터 타이틀까지 여백
 const TITLE_HEIGHT = 76; // 30pt × 2줄 × lineHeight 1.27
 const TAB_BAR_HEIGHT = 52; // MainAppBottomTabBar.tsx:226 = 화면 아래에 겹쳐 붙는 높이
-// ⚠️ 수정금지(승인필요) 2026-08-08 사장님 지시 — 원통은 타이틀 **바로 밑**에 붙는다.
-//   남는 칸을 위:아래 = 15:85 로 나눈다(고정 px 아님 = 화면이 커지면 같이 커진다).
-//   옛 고정 간격 100 + 가운데 정렬 폐기 = 2026-08-08 §19(원통이 화면 한가운데로 내려가 위가 텅 빔).
-const RING_TOP_RATIO = 0.15;
+// ⚠️ 수정금지(승인필요) 2026-08-09 사장님 지시 — 남는 칸을 위:아래 = **50:50**(고정 px 아님).
+//   옛 15:85 폐기 = 2026-08-09 §19 — 실기기(아이폰12)에서 원통이 위 타이틀 쪽으로 치우쳐 붙었다.
+const RING_TOP_RATIO = 0.5;
 
 const COUNT = BTS_CHARACTERS.length;
 const SLICE = (Math.PI * 2) / COUNT; // 카드 한 칸이 차지하는 각도
