@@ -1,4 +1,5 @@
-// 여정 생성(위기경보 체크 → 생성 API → 결과 전환) = TripPlannerScreen 분리(2026-07-15 §0 슬림화, 순수 이동)
+// 여정 생성(생성 API → 결과 전환) = TripPlannerScreen 분리(2026-07-15 §0 슬림화, 순수 이동)
+// ⚠️ 2026-08-10 사장님 지시 = 위기경보(crisis alert) 완전삭제(§19) = 이 파일이 부르던 GET /api/trip-alerts 체크 삭제.
 import { Alert } from "react-native";
 import { Itinerary, TripFormData, DayAccommodation } from "@/types/trip";
 import { calculateVibeWeights } from "@/utils/vibeCalculator";
@@ -39,81 +40,7 @@ export function useGenerateItinerary({
   // 크레딧부족(402) 안내 + 충전화면 이동 = 앱 전체 공용 1벌(§16). 이동 방식(창 안/밖) 판단도 그 훅이 한다.
   const showCreditShortfall = useCreditShortfall();
 
-  // 🚨 위기 정보 체크 및 팝업 표시
-  const checkCrisisAlerts = async (): Promise<{
-    hasAlerts: boolean;
-    shouldProceed: boolean;
-  }> => {
-    try {
-      const response = await apiRequest(
-        "GET",
-        `/api/trip-alerts?city=${encodeURIComponent(formData.destination)}&startDate=${formData.startDate}&endDate=${formData.endDate}`,
-      );
-      const data = await response.json();
-
-      if (data.hasAlerts && data.alerts?.length > 0) {
-        const highSeverityAlerts = data.alerts.filter(
-          (a: any) => a.severity >= 7,
-        );
-        const alertMessages = data.alerts
-          .slice(0, 3)
-          .map((a: any) => `• ${a.titleKo || a.title} (${a.date})`)
-          .join("\n");
-
-        return new Promise((resolve) => {
-          if (data.highSeverity) {
-            // 심각한 위기 정보 - 경고 팝업
-            Alert.alert(
-              t("trip.crisisTitle"),
-              `${formData.destination}에 ${data.alertCount}개의 주의사항이 있습니다:\n\n${alertMessages}\n\n${data.summary}\n\n일정을 계속 생성하시겠습니까?`,
-              [
-                {
-                  text: t("common.cancel"),
-                  style: "cancel",
-                  onPress: () =>
-                    resolve({ hasAlerts: true, shouldProceed: false }),
-                },
-                {
-                  text: t("trip.crisisContinue"),
-                  onPress: () =>
-                    resolve({ hasAlerts: true, shouldProceed: true }),
-                },
-              ],
-            );
-          } else {
-            // 일반 알림 정보 - 알림 팝업
-            Alert.alert(
-              t("trip.crisisReferenceTitle"),
-              `${formData.destination}에 참고할 정보가 있습니다:\n\n${alertMessages}`,
-              [
-                {
-                  text: t("trip.crisisConfirm"),
-                  onPress: () =>
-                    resolve({ hasAlerts: true, shouldProceed: true }),
-                },
-              ],
-            );
-          }
-        });
-      }
-
-      return { hasAlerts: false, shouldProceed: true };
-    } catch (error) {
-      console.log(
-        "[TripPlanner] Crisis check failed, proceeding anyway:",
-        error,
-      );
-      return { hasAlerts: false, shouldProceed: true };
-    }
-  };
-
   const executeGenerate = async () => {
-    // 🚨 1. 위기 정보 체크 (일정 생성 전)
-    const crisisCheck = await checkCrisisAlerts();
-    if (!crisisCheck.shouldProceed) {
-      return; // 사용자가 취소함
-    }
-
     // ⚠️ 2026-07-03 사장님 SSOT = 새로 생성하는 여정은 새 카드(POST). 복원 id 리셋 = 이전 복원 여정 덮어쓰기 방지.
     setCurrentItineraryId(null);
     setScreen("Loading");
@@ -185,8 +112,6 @@ export function useGenerateItinerary({
         travelStyle: result.travelStyle,
         mobilityStyle: result.mobilityStyle,
         metadata: result.metadata,
-        // 🚨 위기 정보 포함
-        crisisAlerts: crisisCheck.hasAlerts ? result.crisisAlerts : undefined,
       });
 
       // 🏨 2026-06-29 사용자 SSOT = A단계: 입력화면에서 정한 숙소 = 전체 Day의 출발·도착 기점으로 고정.

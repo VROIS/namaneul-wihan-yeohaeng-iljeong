@@ -3,49 +3,10 @@
 import type { Express } from "express";
 
 export function registerMiscAdminRoutes(app: Express) {
-  // ========================================
-  // /api/trip-alerts* = TripPlannerScreen 호출 (= DB SELECT 만)
-  // ========================================
-  app.get("/api/trip-alerts", async (req, res) => {
-    try {
-      const { crisisAlertService } = await import(
-        "../services/crisis-alert-service"
-      );
-      const city = req.query.city as string;
-      const startDate = req.query.startDate as string;
-      const endDate = req.query.endDate as string;
-      if (!city || !startDate || !endDate) {
-        return res.status(400).json({
-          success: false,
-          error: "city, startDate, endDate 파라미터가 필요합니다",
-        });
-      }
-      const result = await crisisAlertService.getAlertsForTrip(
-        city,
-        startDate,
-        endDate,
-      );
-      res.json({
-        success: true,
-        ...result,
-        shouldShowPopup: result.highSeverity,
-        notificationLevel: result.highSeverity
-          ? "warning"
-          : result.hasAlerts
-            ? "info"
-            : "none",
-        alertCount: result.alerts.length,
-      });
-    } catch (error) {
-      console.error("Error fetching trip alerts:", error);
-      res
-        .status(500)
-        .json({ success: false, alerts: [], summary: "위기 정보 조회 실패" });
-    }
-  });
-
-  // ⚠️ 2026-07-16 = POST /api/trip-alerts/check 완전삭제(§19) = client/bts-app/public/admin-dashboard.html 전수 grep 호출자 0.
-  //   GET /api/trip-alerts(위)는 useGenerateItinerary.ts 실사용 = 무손 보존.
+  // ⚠️ 2026-08-10 사장님 지시 = 위기경보 전부 완전삭제(§19). 서비스·라우트·화면 배너·팝업 모두 제거.
+  //   사유 = 데이터가 2026-05-23 에 한 번 들어온 뒤 갱신 0(대부분 나폴리 뉴스)이고,
+  //   여정 응답에 crisisAlerts 를 싣는 코드가 아예 없어 배너는 **뜬 적이 없다** = 죽은 기능이었다.
+  //   (DB 표 crisis_alerts 279행 = 사장님 자산이라 그대로 둔다 = 코드만 삭제.)
 
   // ⚠️ 수정금지(승인필요) 2026-08-08 사장님 확정 = **탈퇴 유예 만료 계정 즉시 정리**(관리자 버튼).
   //   자동(하루 1회 data-scheduler)과 **같은 함수 1벌**을 부른다 = 동작이 두 벌로 갈리지 않는다(§0).

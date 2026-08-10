@@ -45,6 +45,10 @@ export const itineraries = pgTable("itineraries", {
   travelStyle: personaTypeEnum("travel_style").default("comfort"),
   budget: integer("budget"),
   optimizationMode: text("optimization_mode").default("balanced"),
+  // ⚠️ 수정금지(승인필요) 2026-08-09 사장님 확정 = **1인 유로(€)**. 화면의 "1인 €232" 와 같은 값.
+  //   ⚠️ 이름이 total_cost 라 "전체 비용"으로 읽기 쉬우나 **1인 값**이다(이름은 라이브 DB 구조라 안 바꿈).
+  //   단체 총액·원화·환율 = raw_data.totalCost 안에 그대로 있다(groupEur/perPersonKrw/groupKrw/eurToKrwRate).
+  //   채우는 곳 = server/itinerary-save.ts 1벌(생성·저장·재저장 공용). 옛 여정은 null 로 남아 있다.
   totalCost: real("total_cost"),
   totalDuration: integer("total_duration"),
   status: text("status").default("draft"),

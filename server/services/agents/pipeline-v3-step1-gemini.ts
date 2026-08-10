@@ -136,7 +136,9 @@ ${categoryMatrix}
 [가격 원칙]
 - p = ${nowYear}년 실제 입장료 (1인, EUR). 무료=0
 - 점심 1인 ~€${mealBudget.lunch}, 저녁 1인 ~€${mealBudget.dinner}
-- 활동(activity) = 1인 입장료 / 식당(lunch/dinner) = 1인당 평균. 확실하지 않으면 0
+- 활동(activity) = 1인 입장료 EUR / 식당(lunch/dinner) = 1인당 평균 EUR. 확실하지 않으면 0
+- ⚠️ CURRENCY = **ALWAYS EUR**, never local currency. 비유로권 도시(도쿄·방콕·서울 등)도 **반드시 EUR 로 환산**해서 답하라.
+  (예: 서울 식당 1인 20,000원 → p:13 / 도쿄 1인 3,000엔 → p:18 / 방콕 1인 400바트 → p:11)
 
 For each place include (= ALL fields verified via Google Search grounding, 키는 아래 축약형 그대로 사용):
 - n (English official name on Google Maps)

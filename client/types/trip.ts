@@ -149,22 +149,6 @@ export interface VibeWeight {
   percentage: number;
 }
 
-// 🚨 위기 정보 타입
-export interface CrisisAlert {
-  id: number;
-  type: "strike" | "protest" | "traffic" | "weather" | "security";
-  title: string;
-  titleKo: string;
-  description: string;
-  date: string;
-  endDate?: string;
-  city: string;
-  affected: string[];
-  severity: number; // 1-10
-  recommendation: string;
-  recommendationKo: string;
-}
-
 // 💰 일별 예산 상세
 export interface DailyBudgetBreakdown {
   day: number;
@@ -192,8 +176,6 @@ export interface Itinerary {
   endDate: string;
   days: DayPlan[];
   vibeWeights?: VibeWeight[];
-  // 🚨 위기 정보 (여행 기간 중 해당 도시의 알림)
-  crisisAlerts?: CrisisAlert[];
   // 💰 예산 정보
   budget?: {
     travelStyle: TravelStyle;

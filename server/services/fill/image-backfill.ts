@@ -228,7 +228,11 @@ export async function backfillImages(opts: {
           longitude: ts.longitude && ts.longitude !== 0 ? ts.longitude : null,
           googleMapsUri: ts.googleMapsUri ?? null,
           googleReviewCount: ts.googleReviewCount ?? null,
-          priceEur: (ts.priceEur || 0) > 0 ? ts.priceEur : undefined,
+          // ⚠️ 수정금지(승인필요) 2026-08-10 사장님 확정 = **가격 칸의 주인은 제미니 하나**(SSOT:583).
+          //   구글 priceRange 는 그 나라 통화(케냐 KES 5,000 ≈ €35)라 price_eur 로 쓰면 €5,000 이 박힌다.
+          //   ag3(생성)·reinsert 와 **같은 규칙** = 여기서도 안 쓴다(§20 = 같은 PSR 로 모이는 경로는 규칙 하나).
+          //   버리는 게 아니다 = TS 가격은 §18 raw 에 그대로 남는다.
+          priceEur: undefined,
           phaseTags: closed ? ["영구폐업"] : undefined,
         });
         if (ts.photoName && !closed) await runPm(r, ts.photoName);

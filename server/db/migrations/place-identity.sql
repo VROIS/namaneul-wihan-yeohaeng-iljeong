@@ -112,7 +112,12 @@ BEGIN
   --   근본: 불변요소를 AND 로 묶으면 하나만 어긋나도 전체 무력화 = 룩셈부르크 초콜릿하우스 중복 근본(주소 동일한데 이름 "Chocolate House"↔"Chocolathouse" LIKE 실패 → 통과 → 중복 INSERT).
   --   = 풀주소(20자+) 정규화 일치 = 그것만으로 같은 장소 = 독립 차단. URI veto(확정 다른 장소)만 예외 유지.
   v_addr := TRIM(REGEXP_REPLACE(REGEXP_REPLACE(LOWER(COALESCE(NEW.address,'')), '[.,;:!?''"()\[\]{}]', ' ', 'g'), '\s+', ' ', 'g'));
-  IF LENGTH(v_addr) >= 20 THEN
+  -- ⚠️ 수정금지(승인필요) 2026-08-10 사장님 승인 = 주소 판정은 **번지+우편번호가 있을 때만**(§14 원문 전제 그대로 집행).
+  --   사유 = 번지·우편번호가 없는 나라(케냐 등)는 주소가 '길 이름'뿐이라 같은 길의 다른 곳까지 한 곳으로 합쳐졌다.
+  --   실증 2026-08-10 나이로비 = 27곳 중 2곳 소실(스네이크파크·카렌블릭센박물관). 숫자 덩어리 2개 이상 = 번지+우편번호.
+  --   유럽·일본 주소는 숫자 2개 이상이라 판정이 종전과 완전히 같다(실측: 우리 DB 4,336행 그대로 / 1,043행만 건너뜀).
+  IF LENGTH(v_addr) >= 20
+     AND (SELECT count(*) FROM regexp_matches(v_addr, '[0-9]+', 'g')) >= 2 THEN
     SELECT c.id INTO matched_id FROM place_seed_raw c
     WHERE c.address IS NOT NULL AND c.id <> COALESCE(NEW.id, -1)
       AND TRIM(REGEXP_REPLACE(REGEXP_REPLACE(LOWER(c.address), '[.,;:!?''"()\[\]{}]', ' ', 'g'), '\s+', ' ', 'g')) = v_addr

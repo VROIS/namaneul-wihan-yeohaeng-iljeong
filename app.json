@@ -47,13 +47,10 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/tripis-logo-mark.png",
+          "image": "./assets/images/tripis-mark.png",
           "imageWidth": 200,
           "resizeMode": "contain",
-          "backgroundColor": "#FAF6EF",
-          "dark": {
-            "backgroundColor": "#0B0B0D"
-          }
+          "backgroundColor": "#FAF6EF"
         }
       ],
       "expo-web-browser",

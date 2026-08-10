@@ -7,7 +7,6 @@ import {
   ScrollView,
   Modal,
   Platform,
-  Alert,
   ActivityIndicator,
   Dimensions,
 } from "react-native";
@@ -22,7 +21,6 @@ import PlaceAutocompleteWidget, {
 // 🎬 2026-08-01 사장님 §B-0 = 영상 진입점은 통합 모달 1벌(TripisModal). 옛 전용 화면 이동 폐기 §19.
 import TripisModal from "@/components/tripis/TripisModal";
 import { shortDate } from "./utils";
-import CrisisAlertBanner from "./components/CrisisAlertBanner";
 import DaySection from "./components/DaySection";
 import AiOpinionSheet from "./components/AiOpinionSheet";
 import { resultStyles } from "./styles/result";
@@ -123,27 +121,6 @@ export default function ResultStep({ planner }: { planner: PlannerApi }) {
           </Pressable>
         )}
       </View>
-
-      {/* 🚨 위기 경보 배너 - 깜박이는 표시 */}
-      {itinerary.crisisAlerts && itinerary.crisisAlerts.length > 0 && (
-        <CrisisAlertBanner
-          alerts={itinerary.crisisAlerts}
-          onPress={() => {
-            const alertMessages = itinerary
-              .crisisAlerts!.slice(0, 5)
-              .map(
-                (a) =>
-                  `• ${a.titleKo || a.title}\n  ${a.date}${a.endDate ? ` ~ ${a.endDate}` : ""}\n  ${a.recommendationKo || a.recommendation}`,
-              )
-              .join("\n\n");
-            Alert.alert(
-              `${itinerary.destination} ${t("trip.crisisTitle")}`,
-              `${itinerary.crisisAlerts!.length}개의 주의사항:\n\n${alertMessages}`,
-              [{ text: t("common.confirm"), style: "default" }],
-            );
-          }}
-        />
-      )}
 
       {/* 📊 요약 섹션 1: 날짜 + 장소수 + 총예산 */}
       <View

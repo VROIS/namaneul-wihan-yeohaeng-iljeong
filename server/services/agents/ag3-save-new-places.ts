@@ -335,10 +335,14 @@ export async function saveNewPlacesToDB(
         );
 
         // ③-b 저장 = TS 검증값 전체(Gemini+TS = §20 깔대기) = 신규·흡수 공통 자기 rowId 직행 UPDATE(targetRowId, §14 재매칭 실패 불가). COALESCE 새우선.
-        const newPriceEur =
-          (result.priceEur || 0) > 0
-            ? result.priceEur
-            : (place as any).estimatedPriceEur || 0;
+        // ⚠️ 수정금지(승인필요) 2026-08-10 사장님 확정 = **가격 컬럼의 주인은 제미니 하나뿐이다.**
+        //   정본 = docs/20260607PROMPTS_TOTAL_SSOT.md:583 "Gemini만 주는 요소 = name_local · distance · price".
+        //   같은 문서 1459줄은 name_en 에만 "뒤 TS displayName 이 최종 덮음"이라 적었고, 가격에는 그 말이 없다
+        //   = TS 가격이 제미니를 덮는 규칙은 SSOT 어디에도 없었다(코드만 그렇게 하고 있었음) = 2026-08-10 폐기.
+        //   사고 = 구글 priceRange 는 그 나라 통화라 케냐 5,000실링(≈€35)이 €5,000 으로 박혔고(실측 11곳),
+        //     유로권에서도 €·€€·€€€ 급 대략치가 제미니의 "1인 €35"를 덮고 있었다.
+        //   TS 가격은 버리지 않는다 = raw(§18)에 그대로 남아 언제든 다시 볼 수 있다. DB 칸만 제미니 것으로 한다.
+        const newPriceEur = (place as any).estimatedPriceEur || 0;
         const jobBase = {
           cityId,
           seedCategory,

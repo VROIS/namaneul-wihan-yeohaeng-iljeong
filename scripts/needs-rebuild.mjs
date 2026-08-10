@@ -113,7 +113,9 @@ function isNativeLib(name) {
 
 if (all.includes("package.json")) {
   const d =
-    sh(`git diff ${range} -- package.json`) + sh(`git diff -- package.json`);
+    sh(`git diff ${range} -- package.json`) +
+    sh(`git diff -- package.json`) +
+    sh(`git diff --cached -- package.json`); // 스테이징도 봄(2026-08-10 빈틈 메움)
   // 바뀐 의존성 이름 추출(스크립트 줄 제외 = 값이 버전 형태인 줄만)
   const names = [
     ...new Set(
@@ -132,13 +134,25 @@ if (all.includes("package.json")) {
 }
 
 if (all.includes("app.json")) {
-  const d = sh(`git diff ${range} -- app.json`) + sh(`git diff -- app.json`);
+  // ⚠️ 수정금지(승인필요) 2026-08-10 사장님 지시 = **--cached(스테이징) 도 봐야 한다.**
+  //   빈틈 실증 = 2026-08-10 시작 그림 변경을 git add 로 담아 둔 상태에서 이 도구가 "굽기 불필요"로 오판했다.
+  //   파일 목록(git status)은 스테이징을 보는데 정작 내용(git diff)은 안 봐서, 바뀐 줄이 하나도 안 잡혔다.
+  const d =
+    sh(`git diff ${range} -- app.json`) +
+    sh(`git diff -- app.json`) +
+    sh(`git diff --cached -- app.json`);
   if (/^[+-].*(bundleIdentifier|usesAppleSignIn|extraPods|infoPlist)/m.test(d))
     iosReasons.push("app.json 아이폰 설정(번들ID·애플로그인·Info) 변경");
   if (/^[+-].*("package"|permissions|intentFilters)/m.test(d))
     andReasons.push("app.json 안드로이드 설정(패키지·권한) 변경");
   if (/^[+-].*(plugins|scheme)/m.test(d))
     both("app.json 공통 네이티브 설정(플러그인·scheme) 변경");
+  // ⚠️ 수정금지(승인필요) 2026-08-10 사장님 지시 = **플러그인 "안쪽" 값이 바뀐 것도 잡는다.**
+  //   빈틈 실증 = 2026-08-10 시작 그림(expo-splash-screen 의 image·backgroundColor·dark)을 바꿨는데
+  //   위 규칙은 'plugins' 라는 **글자가 그 줄에 있어야** 잡으므로 통째로 놓쳤다("불필요"로 오판).
+  //   시작 그림·아이콘은 굽는 순간 앱에 박히는 값 = 무선으로 절대 안 바뀐다 = 놓치면 실기기에서 옛 그림이 남는다.
+  if (/^[+-]\s*"(image|imageWidth|resizeMode|backgroundColor|dark|icon|adaptiveIcon|splash|foregroundImage|monochromeImage|backgroundImage)"/m.test(d))
+    both("app.json 시작그림·아이콘 설정 변경 = 굽는 순간 박히는 값(무선 불가)");
   if (/^[+-]\s*"(runtimeVersion|policy)"/m.test(d))
     both("번호표(runtimeVersion) 변경 = 이미 깔린 앱은 무선으로 못 받음");
 }

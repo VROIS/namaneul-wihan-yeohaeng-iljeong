@@ -59,9 +59,23 @@ export async function buildItineraryData(body: any) {
   //   매칭 실패하면 키 자체를 안 넣는다 = 새 여정은 비워두고(모르면 비움), 재저장은 이미 맞게 들어간 값을 지우지 않음.
   const { cityId: _fromClient, ...bodyRest } = body || {};
   const matchedCityId = await matchCityIdByName(rawData?.destination);
+  // ⚠️ 수정금지(승인필요) 2026-08-09 사장님 지시 = **total_cost 칸 = 1인 유로(€).**
+  //   화면의 "1인 €232" 와 **같은 값**이다. 단체 총액·원화·환율은 raw_data.totalCost 에 그대로 있다
+  //   (groupEur / perPersonKrw / groupKrw / eurToKrwRate) = 여기 칸은 **찾기 위한 대표 숫자 1개**다.
+  //   ⚠️ 칸 이름이 total_cost 라 "전체 비용"으로 읽기 쉽다 = **1인 값이다.** 이름을 바꾸지 않은 이유 =
+  //     라이브 DB 구조 변경(€1000 창고)을 이름 하나 때문에 하지 않는다(2026-08-09 사장님 확정).
+  //   왜 채우는가 = 값은 이미 raw_data 안에 있는데 칸이 비어 있어, 여정이 수만 건이 되면
+  //     "€500 넘는 여정"·"이번 달 평균 얼마" 같은 것을 **JSON 을 전부 열어보지 않고는** 알 수 없다.
+  //   값이 없으면(옛 여정·계산 실패) 키를 넣지 않는다 = 이미 들어간 값을 null 로 지우지 않는다(도시 id 와 같은 규칙).
+  const perPersonEur = (rawData as any)?.totalCost?.perPersonEur;
+  const totalCostEur =
+    typeof perPersonEur === "number" && isFinite(perPersonEur)
+      ? perPersonEur
+      : undefined;
   return {
     ...bodyRest,
     ...(matchedCityId != null ? { cityId: matchedCityId } : {}),
+    ...(totalCostEur != null ? { totalCost: totalCostEur } : {}),
     // ⚠️ 사장님 SSOT 2026-07-14 = 여정은 로그인 본인 ID(users.id)로 저장 = 전문가가 연락할 상대·푸시 대상 특정. 옛 'admin' 강제 폐기 §19(§9 로그인제거 잔재).
     //   FE(handleSaveItinerary)가 userData.id 를 실어 보냄. 없으면(비로그인 경로) 'admin' 폴백 = 둘러보기 안전. 다른 컬럼 = body 그대로.
     userId: body.userId || "admin",

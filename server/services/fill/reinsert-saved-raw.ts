@@ -147,9 +147,11 @@ const collect = (): Job[] => {
     //   = 니스처럼 발굴(01/12) 안 거친 MIX 도시의 결손 골격을 저장raw 만으로 채움. TS 응답 필드명(displayName.text/location/id)은 발굴형식과 달라 별도 매핑.
     if (d?.request && Array.isArray(d?.raw?.places) && d.raw.places.length) {
       const req = d.request;
-      for (const tp of d.raw.places) {
-        if (!tp || typeof tp !== "object") continue;
-        const pr = tp.priceRange?.endPrice?.units;
+      // ⚠️ 2026-08-10 사장님 확정 = 딸려 온 후보(2번째부터)는 넣지 않는다.
+      //   우리 7종 분류를 알 수 없고, 나중에 확정하려 해도 UNIQUE(city_id, seed_category, rank) 때문에
+      //   분류 변경 UPDATE 가 막힌다(실증: duplicate key). 대표 1곳만 = 옛 동작 그대로.
+      {
+        const tp = d.raw.places[0]; // 우리가 고른 그 한 곳(§18 raw 의 top1) = 대표만 재입력
         jobs.push({
           src: tag,
           cat: undefined, // seed_category = PID 로 DB 조회(아래 noCatPids) 흡수
@@ -161,7 +163,11 @@ const collect = (): Job[] => {
           pid: tp.id,
           mapsUri: tp.googleMapsUri,
           rc: num(tp.userRatingCount),
-          priceEur: pr == null ? null : Number(pr),
+          // ⚠️ 수정금지(승인필요) 2026-08-10 사장님 확정 = **가격 칸의 주인은 제미니 하나**(SSOT:583).
+          //   TS raw 의 priceRange 는 그 나라 통화라(케냐 5,000실링) price_eur 로 쓰면 €5,000 이 된다.
+          //   ag3(생성 중)와 **같은 규칙** = 여기서도 안 쓴다(§20 = 같은 PSR 로 모이는 경로는 규칙이 하나여야 함).
+          //   버리는 게 아니다 = TS 가격은 §18 raw 에 그대로 남아 언제든 다시 볼 수 있다.
+          priceEur: null,
           photoName: tp.photos?.[0]?.name,
           distC: undefined, // main 에서 좌표로 haversine
           imageUrl: undefined,
@@ -231,6 +237,10 @@ const collect = (): Job[] => {
 };
 
 (async () => {
+  // ⚠️ 수정금지(승인필요) 2026-08-10 §22 판단3종 지적 = **place-upsert·ts-client 는 위에 정적으로 올리면 안 된다.**
+  //   ESM 은 import 를 모듈 본문보다 먼저 평가한다 → server/db.ts 가 .env 로더(위 19~29줄)보다 먼저 돌아
+  //   DATABASE_URL 이 빈 상태로 db=null 로 굳는다 → upsertPlace 가 전부 skipped(db_unavailable) = 도구가 통째로 무동작.
+  //   fill/ 8개 도구가 전부 이 방식(늦은 import)인 이유가 그것이다(§16 = 같은 방식 유지).
   const { upsertPlace } = await import(
     pathToFileURL(path.join(ROOT, "server/services/place-upsert.ts")).href
   );
@@ -315,7 +325,12 @@ const collect = (): Job[] => {
   // ⚠️ 2026-06-11 = 12-TS 中 meta.category="" 파일(text/premium/nearby 실험 140곳) = cat 부재
   //   = PID 로 DB 행 lookup → 그 행의 cat 사용(= 매칭·갱신 흡수). DB 에 없는 PID = cat 발명 금지 = skip 유지 (로그로 노출).
   const noCatPids = [
-    ...new Set(jobs.filter((j) => !j.cat && j.pid).map((j) => j.pid!)),
+    ...new Set(
+      jobs
+        .filter((j) => !j.cat)
+        .map((j) => j.pid)
+        .filter((v): v is string => !!v),
+    ),
   ];
   if (noCatPids.length) {
     const pidRows = (
@@ -328,7 +343,41 @@ const collect = (): Job[] => {
       pidRows.map((r: any) => [r.google_place_id, r.seed_category]),
     );
     for (const j of jobs) {
-      if (!j.cat && j.pid && pidCat.has(j.pid)) j.cat = pidCat.get(j.pid);
+      if (j.cat) continue;
+      if (j.pid && pidCat.has(j.pid)) j.cat = pidCat.get(j.pid);
+    }
+  }
+  // ⚠️ 수정금지(승인필요) 2026-08-10 사장님 승인 = PID 로 못 찾으면 **이름으로도** 그 도시 행을 찾아 cat 을 가져온다.
+  //   왜 필요한가 = 위 PID 조회는 "이미 PID 가 있는 행"만 찾는다. 그런데 TS raw 재입력의 목적이 바로
+  //   **PID 없는 행에 PID 를 채우는 것**이라, 정작 대상 행은 영영 못 찾고 skip 된다(닭과 달걀).
+  //   실증 2026-08-10 나이로비 = 스네이크파크·카렌블릭센박물관 2행이 no_cat 으로 건너뛰어짐.
+  //   ⚠️ cat 을 발명하는 것이 아니다 = DB 에 이미 있는 그 행의 값을 이름으로 찾아오는 것뿐(없으면 종전대로 skip).
+  const noCatNames = [
+    ...new Set(
+      jobs
+        .filter((j) => !j.cat)
+        .flatMap((j) => [j.nameEn, j.nameLocal])
+        .filter((n): n is string => !!n && n.trim() !== ""),
+    ),
+  ];
+  if (noCatNames.length) {
+    const nameRows = (
+      await c.query(
+        `SELECT name_en, name_local, seed_category FROM place_seed_raw
+         WHERE city_id = $1 AND (LOWER(TRIM(name_en)) = ANY($2::text[]) OR LOWER(TRIM(name_local)) = ANY($2::text[]))`,
+        [cityId, noCatNames.map((n) => n.toLowerCase().trim())],
+      )
+    ).rows;
+    const nameCat = new Map<string, string>();
+    for (const r of nameRows) {
+      for (const n of [r.name_en, r.name_local]) {
+        if (n) nameCat.set(String(n).toLowerCase().trim(), r.seed_category);
+      }
+    }
+    const pick = (n?: string) =>
+      n ? nameCat.get(n.toLowerCase().trim()) : undefined;
+    for (const j of jobs) {
+      if (!j.cat) j.cat = pick(j.nameEn) ?? pick(j.nameLocal);
     }
   }
   const before = (

@@ -100,6 +100,11 @@ const mapPlace = (p: any): TsPlace => ({
   latitude: p.location?.latitude ?? null,
   longitude: p.location?.longitude ?? null,
   googleReviewCount: p.userRatingCount ?? null,
+  // ⚠️ 수정금지(승인필요) 2026-08-10 사장님 확정 = TS 가격은 **DB 칸에 안 쓴다**(가격 주인 = 제미니 하나, SSOT:583).
+  //   여기서는 응답 그대로 실어만 둔다(§18 = 받은 요소를 버리지 않는다).
+  //   ⚠️ DB 에 쓰는 경로 5곳(ag3·reinsert·ts-backfill·ts-name-recover·image-backfill) 전부 이 값을 안 쓴다
+  //     = price_eur 는 제미니 값만 들어간다(2026-08-10 §22 지적으로 5곳 전수 통일).
+  //   ⚠️ 구글은 그 나라 통화로 준다(케냐 = currencyCode:"KES") = 이 값을 price_eur 로 쓰면 안 된다.
   priceEur: p.priceRange?.endPrice?.units
     ? parseFloat(p.priceRange.endPrice.units)
     : null,

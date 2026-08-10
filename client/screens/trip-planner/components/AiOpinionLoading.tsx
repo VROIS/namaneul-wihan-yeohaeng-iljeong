@@ -15,7 +15,7 @@ export default function AiOpinionLoading({
   theme: (typeof Colors)["light"];
 }) {
   const { t } = useTranslation();
-  // 흐름 바 = 좌→우 반복 이동(멈춤 아님 신호). 기존 CrisisAlertBanner의 Animated.loop 패턴 재사용(§16).
+  // 흐름 바 = 좌→우 반복 이동(멈춤 아님 신호). Animated.loop 반복 이동.
   const flowAnim = React.useRef(new Animated.Value(0)).current;
   // 트랙 폭 실측(onLayout) = translateX를 퍼센트 아닌 숫자 px로 이동(useNativeDriver 안정, RN 부정형 바 표준).
   const [trackW, setTrackW] = React.useState(0);
