@@ -20,6 +20,7 @@ import {
   SpaceGrotesk_700Bold,
 } from "@expo-google-fonts/space-grotesk"; // ⚠️ 수정금지(승인필요) — BTS 랜딩 모던 타이포
 import * as SplashScreen from "expo-splash-screen";
+import { Asset } from "expo-asset";
 
 import { initI18nLanguage } from "@/lib/i18n";
 import { queryClient } from "@/lib/query-client";
@@ -41,6 +42,12 @@ SplashScreen.preventAutoHideAsync();
 //   ⚠️ JS 옵션이라 **다시 굽지 않아도** 적용된다(app.json 스플래시 설정을 건드리면 다시 구워야 함).
 //   fade 는 아이폰 전용 = 안드로이드는 duration 만 적용(부품 타입 주석 명시).
 SplashScreen.setOptions({ fade: true, duration: 300 });
+
+// ⚠️ 수정금지(승인필요) 2026-08-10 사장님 지적 = 인트로(IntroSplash) 로고 이미지(114KB)가 늦게 떠서
+//   "로고 먼저 → 글자" 연출이 느려 보였다. 폰트를 읽는 이 시간(= 스플래시가 아직 떠 있는 시간)에
+//   같은 로고를 **같이 미리 받아둔다**(§0 = 새 로딩창 안 만들고 이미 있는 창 재사용).
+//   IntroSplash 가 뜰 때는 이미 캐시돼 있어 그 화면의 onLoad 가 거의 즉시 불린다.
+Asset.loadAsync(require("../assets/images/tripis-mark.png")).catch(() => {});
 
 export default function App() {
   // ⚠️ 수정금지(승인필요) — 폰트 로드 (Pretendard 4종 + NotoSerifKR 2종 + PlayfairDisplay 2종)

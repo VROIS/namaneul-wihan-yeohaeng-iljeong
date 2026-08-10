@@ -5,11 +5,23 @@
 //   바탕색을 시작 그림과 **같은 베이지**로 두어 두 화면이 이어붙은 것처럼 넘어간다.
 //   ⚠️ 이 화면은 우리 코드 = **무선 업데이트로 들어간다**(시작 그림 자체를 바꾸면 앱을 다시 구워야 함).
 //
+// ⚠️ 수정금지(승인필요) 2026-08-10 사장님 지적 = **로고가 이 화면 진입 순간 커지고 위로 이동해 "다른 화면"으로 보였다.**
+//   원인 = 시작그림 로고(고정 200pt, 화면 정중앙)와 이 화면의 로고(반응형 최대 300pt, 글자와 한 묶음으로 중앙정렬)가
+//   크기·위치 둘 다 달랐다. 사장님 지시 = "이동작이 불필요함" = 로고는 절대 안 움직여야 한다.
+//   해법 = 로고를 **글자와 분리된 레이어**로 화면 정중앙에 고정(= 시작그림과 완전히 같은 자리·같은 계산식)하고,
+//   글자는 그 아래에 별도로 얹는다. 시작그림의 imageWidth(app.json)도 이 화면의 계산값과 맞춰야 함(273 = 아이폰12 기준).
+//
+// ⚠️ 수정금지(승인필요) 2026-08-10 사장님 지적 2차 = "왜 이 화면이 로드 방식이 되어야 하나?"
+//   옛 시도(폐기) = 로고 onLoad 이벤트를 기다렸다가 그 뒤에만 글자를 태움 + 최대 700ms 상한.
+//   문제 = 이 로고는 `require()` 로 **번들에 박혀 들어가는 로컬 파일**이다. 네트워크로 매번 받아오는 이미지가
+//     아니라서 "로딩을 기다린다"는 전제 자체가 틀렸다(글자가 폰트를 기다리지 않는 것과 같은 이치).
+//   해법 = 로고도 **글자와 똑같이 고정 지연(delay) 애니메이션**으로 다룬다(TEXT_START_DELAY_MS).
+//     onLoad·imageLoaded·타임아웃 상한 전부 제거 = 상태분기 0, "로드 중" 개념 자체가 없다.
+//
 // 글자 효과 = 낱말이 **차례로 아래에서 올라오며 진해진다**(사장님 확정 (가)안).
 //   요란한 것보다 조용히 살아나는 쪽이 글라스 미니멀리즘에 맞다.
 import React, { useCallback, useEffect } from "react";
 import {
-  Image,
   Pressable,
   StyleSheet,
   Text,
@@ -29,9 +41,10 @@ import { Brand, Fonts } from "@/constants/theme";
 // ⚠️ 수정금지(승인필요) 2026-08-09 사장님 확정 = **어두운 화면(다크) 지원 안 함 = 밝음 고정.**
 //   사유(사장님) = 한국 사용자는 다크를 거의 쓰지 않는다. 어둡게 쓰고 싶은 사람은 자기 폰에서 바꾼다.
 //   그래서 기기 설정을 따라가는 분기를 두지 않는다(§0 = 분기 안 만듦). 시작 그림 바탕과 같은 색 1개뿐.
-//   ⚠️ 남은 일 = app.json 의 시작 그림에 `dark: { backgroundColor: "#0B0B0D" }` 가 아직 있다.
-//     그 칸은 **다시 구워야** 바뀌므로 다음 빌드 때 #FAF6EF 로 통일한다(그때까지 다크 폰만 첫 순간 검정).
+//   2026-08-10 = app.json 시작그림의 `dark` 분기 완전삭제(§19) = 다크 폰도 첫 순간부터 #FAF6EF 로 통일.
 const BG = "#FAF6EF";
+const IMAGE_FADE_MS = 260; // 로고가 옅게 나타나는 시간(0→진하게). 곧바로 시작(지연 0).
+const TEXT_START_DELAY_MS = 150; // 로고가 먼저 보이도록 글자 시작을 그만큼 늦춘다(로드 대기 아님 = 고정값)
 const WORD_STEP_MS = 90; // 낱말 하나가 다음 낱말보다 먼저 올라오는 간격
 const WORD_RISE_MS = 420; // 낱말 하나가 다 올라오는 데 걸리는 시간
 const HOLD_MS = 1000; // 다 나온 뒤 머무는 시간 = 전체 약 1.8초
@@ -79,7 +92,7 @@ const Word = React.memo(function Word({
   const p = useSharedValue(0);
   useEffect(() => {
     p.value = withDelay(
-      order * WORD_STEP_MS,
+      TEXT_START_DELAY_MS + order * WORD_STEP_MS,
       withTiming(1, {
         duration: WORD_RISE_MS,
         easing: Easing.out(Easing.quad),
@@ -114,10 +127,24 @@ export default function IntroSplash({ onDone }: { onDone: () => void }) {
     });
   }, [fade, onDone]);
 
+  // 로고 = 글자와 같은 방식(고정 지연 애니메이션)으로 옅게 나타난다. "로딩을 기다린다"는 상태가 아예 없다(위 주석).
+  const imgOpacity = useSharedValue(0);
+  useEffect(() => {
+    imgOpacity.value = withTiming(1, {
+      duration: IMAGE_FADE_MS,
+      easing: Easing.out(Easing.quad),
+    });
+  }, [imgOpacity]);
+  const imgStyle = useAnimatedStyle(() => ({ opacity: imgOpacity.value }));
+
   // 다 나온 뒤 잠시 머물다 스스로 넘어간다. 누르면 그 자리에서 바로 넘어간다.
   //   조건은 finish 하나뿐 = 화면이 다시 그려져도 시간이 처음부터 되감기지 않는다(위 TAGLINE_LINES 주석).
   useEffect(() => {
-    const total = TAGLINE_WORDS * WORD_STEP_MS + WORD_RISE_MS + HOLD_MS;
+    const total =
+      TEXT_START_DELAY_MS +
+      TAGLINE_WORDS * WORD_STEP_MS +
+      WORD_RISE_MS +
+      HOLD_MS;
     const timer = setTimeout(finish, total);
     return () => clearTimeout(timer);
   }, [finish]);
@@ -142,13 +169,22 @@ export default function IntroSplash({ onDone }: { onDone: () => void }) {
         accessibilityLabel={`Tripis. ${TAGLINE}`}
         accessibilityHint="두 번 두드리면 건너뜁니다"
       >
-        <View style={styles.center}>
-          <Image
+        {/* 로고 = 화면 정중앙에 단독 고정(시작그림과 완전히 같은 계산식·같은 자리).
+            글자가 있든 없든 로고 위치가 절대 안 바뀐다 = 시작그림→이 화면 전환이 "같은 한 장면"으로 이어진다. */}
+        <View style={styles.imageLayer} pointerEvents="none">
+          <Animated.Image
             source={require("../../assets/images/tripis-mark.png")}
-            style={[styles.mark, { width: size.mark, height: size.mark }]}
+            style={[{ width: size.mark, height: size.mark }, imgStyle]}
             resizeMode="contain"
             accessible={false}
           />
+        </View>
+        {/* 글자 = 로고 아래에서 시작해 아래로만 자란다(로고 레이어와 분리 = 로고 위치에 영향 0).
+            항상 그려져 있고, 안에서 도는 낱말 애니메이션(TEXT_START_DELAY_MS)만 늦게 시작한다. */}
+        <View
+          style={[styles.textLayer, { paddingTop: size.mark / 2 + 10 }]}
+          pointerEvents="none"
+        >
           <Text
             style={[
               styles.brand,
@@ -188,14 +224,21 @@ export default function IntroSplash({ onDone }: { onDone: () => void }) {
 
 const styles = StyleSheet.create({
   fill: { ...StyleSheet.absoluteFillObject, backgroundColor: BG },
-  center: {
-    flex: 1,
+  // 로고 전용 레이어 = 화면 전체를 정중앙 정렬(= 시작그림의 중앙정렬과 같은 계산). 다른 요소와 자리를 안 나눈다.
+  imageLayer: {
+    ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
+  },
+  // 글자 전용 레이어 = 화면 정중앙(50%)에서 시작해 아래로만 그린다(로고 레이어와 겹치되 서로 영향 없음).
+  textLayer: {
+    position: "absolute",
+    top: "50%",
+    left: 0,
+    right: 0,
+    alignItems: "center",
     paddingHorizontal: 28,
   },
-  // 크기는 화면에서 계산해 넣는다(useIntroSize) = 여기엔 자리만 잡는다.
-  mark: { marginBottom: 10 },
   // ⚠️ 수정금지(승인필요) 2026-08-09 사장님 지시 = **글자 로고는 앱 전체와 한 벌.**
   //   여정 플래너 배너(ShinyPillBanner.logoText)·로그인 팝업(styles.loginBrandTitle)이 쓰는 값 그대로 —
   //   색 Brand.primary(#4285F4 = 제미니 블루) / 굵기 900 / 자간 -0.8.

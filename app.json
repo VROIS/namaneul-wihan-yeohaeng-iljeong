@@ -17,7 +17,7 @@
         "NSMicrophoneUsageDescription": "Allow $(PRODUCT_NAME) to use the microphone.",
         "ITSAppUsesNonExemptEncryption": false
       },
-      "buildNumber": "2"
+      "buildNumber": "3"
     },
     "android": {
       "adaptiveIcon": {
@@ -48,7 +48,7 @@
         "expo-splash-screen",
         {
           "image": "./assets/images/tripis-mark.png",
-          "imageWidth": 200,
+          "imageWidth": 273,
           "resizeMode": "contain",
           "backgroundColor": "#FAF6EF"
         }
@@ -103,7 +103,8 @@
             ]
           }
         }
-      ]
+      ],
+      "expo-asset"
     ],
     "experiments": {
       "reactCompiler": false
