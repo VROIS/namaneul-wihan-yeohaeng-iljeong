@@ -1,0 +1,124 @@
+# ⚠️ 수정금지(승인필요) 2026-08-11 = 안드로이드 스토어용(AAB) 빌드 = Play 콘솔 "내 손안의 가이드"(com.sonanie.guide) 앱과 동일 신원.
+#   목적: 공식 버전업 전 안드로이드 내부테스트 트랙 최종 검증(iOS TestFlight 와 같은 성격).
+#   서명키 = 레거시 라이브 앱의 실제 업로드 키(keystore.jks, GitHub Secret 로 base64 보관) 그대로 재사용
+#          → 구글·카카오 콘솔에 등록된 SHA-1 이 그대로 유효(신규 재등록 불필요).
+#   ⚠️ 자동 실행 안 함(workflow_dispatch 만) = 사장님 지시 없이 굽지 않는다(2026-07-24 SSOT 정합).
+#   Secret 필수: EXPO_TOKEN, EXPO_PUBLIC_DOMAIN, EXPO_PUBLIC_GOOGLE_CLIENT_ID, EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+#                EXPO_PUBLIC_KAKAO_JAVASCRIPT_KEY, EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY,
+#                ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_PASSWORD
+
+name: Build Android AAB (production)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      # ⚠️ 신원 가드(2026-08-11 판단3종 지적으로 신설) = docs/2026-07-15 통합계획·2026-08-10 체크사항이 명시한
+      #   "패키지 com.sonanie.guide 아니면 중단" 그대로 기계화. app.json 이 나중에(다른 브랜치 병합·되돌리기 등으로)
+      #   옛 상태로 돌아간 채 이 워크플로가 실행돼도, 라이브 앱과 다른 신원·버전으로 서명 AAB 가 조용히 나가는 것을 막는다.
+      - name: 신원 가드 (패키지명·versionCode 확인)
+        run: |
+          node -e '
+            const a = require("./app.json").expo;
+            const pkg = a.android && a.android.package;
+            const vc = a.android && a.android.versionCode;
+            if (pkg !== "com.sonanie.guide") {
+              console.error("❌ 패키지명 불일치 = " + pkg + " (기대값: com.sonanie.guide) = 빌드 중단");
+              process.exit(1);
+            }
+            if (typeof vc !== "number" || vc < 19) {
+              console.error("❌ versionCode 이상 = " + vc + " (라이브 Play 콘솔 실측 최고치 18보다 커야 함, 최소 19) = 빌드 중단");
+              process.exit(1);
+            }
+            console.log("✅ 신원 확인: " + pkg + " / versionCode " + vc);
+          '
+
+      - name: Setup Java (Android 빌드 필수)
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - name: Install EAS CLI
+        run: npm install -g eas-cli
+
+      - name: Install dependencies
+        run: npm ci --no-audit --prefer-offline
+
+      # ⚠️ 열쇠가 빠진 채로 AAB 가 나가면 = 폰에서 로그인이 "조용히" 실패(2026-07-26 사고 재발 방지, build-android-apk.yml 과 동일 검사)
+      - name: 소셜로그인 열쇠 확인 (없으면 빌드 중단)
+        env:
+          G: ${{ secrets.EXPO_PUBLIC_GOOGLE_CLIENT_ID }}
+          K: ${{ secrets.EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY }}
+        run: |
+          MISSING=""
+          [ -z "$G" ] && MISSING="$MISSING EXPO_PUBLIC_GOOGLE_CLIENT_ID"
+          [ -z "$K" ] && MISSING="$MISSING EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY"
+          if [ -n "$MISSING" ]; then
+            echo "❌ GitHub Secrets 에 없는 열쇠:$MISSING"
+            exit 1
+          fi
+          echo "✅ 앱 로그인 열쇠 확인"
+
+      # ⚠️ 라이브 앱(com.sonanie.guide)의 실제 업로드 키 복원. credentials.json 은 .gitignore 대상이라
+      #   저장소 체크아웃엔 없다 → 이 스텝에서 Secret 으로부터 매번 새로 만든다.
+      # ⚠️ 2026-08-11 판단3종 지적 = 비밀번호를 YAML에 평문 박지 말 것(이 파일은 커밋됨, keystore.jks 와 달리
+      #   .gitignore 예외 대상이 아니다) → keystorePassword·keyPassword 도 Secret 으로 분리, 따옴표 없는
+      #   heredoc(<<EOF, 'EOF' 아님)으로 env 변수를 실제 값으로 치환.
+      - name: 안드로이드 서명키 복원 (라이브 앱 keystore)
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_PW: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_PW: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_B64" ] || [ -z "$KS_PW" ] || [ -z "$KEY_PW" ]; then
+            echo "❌ ANDROID_KEYSTORE_BASE64 / ANDROID_KEYSTORE_PASSWORD / ANDROID_KEY_PASSWORD Secret 중 없는 값 있음"
+            exit 1
+          fi
+          mkdir -p android-credentials
+          echo "$KEYSTORE_B64" | base64 -d > android-credentials/keystore.jks
+          cat > credentials.json << EOF
+          {
+            "android": {
+              "keystore": {
+                "keystorePath": "android-credentials/keystore.jks",
+                "keystorePassword": "$KS_PW",
+                "keyAlias": "key0",
+                "keyPassword": "$KEY_PW"
+              }
+            }
+          }
+          EOF
+          echo "✅ keystore.jks + credentials.json 복원 완료"
+
+      # ⚠️ 수정금지(승인필요) — production 프로필 + --local 로 GitHub 러너에서 직접 빌드(Expo 무료 빌드 한도 회피, build-android-apk.yml 과 동일 방식)
+      - name: Build Android AAB (production profile, local runner)
+        run: eas build --local --platform android --profile production --non-interactive
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+          EXPO_PUBLIC_DOMAIN: ${{ secrets.EXPO_PUBLIC_DOMAIN }}
+          EXPO_PUBLIC_GOOGLE_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_CLIENT_ID }}
+          EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID }}
+          EXPO_PUBLIC_KAKAO_JAVASCRIPT_KEY: ${{ secrets.EXPO_PUBLIC_KAKAO_JAVASCRIPT_KEY }}
+          EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY: ${{ secrets.EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY }}
+
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-production-aab-${{ github.sha }}
+          path: "*.aab"
+          retention-days: 30

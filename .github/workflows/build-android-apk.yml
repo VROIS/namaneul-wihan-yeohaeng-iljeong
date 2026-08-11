@@ -67,6 +67,21 @@ jobs:
           fi
           echo "✅ 앱 로그인 열쇠 확인"
 
+      # ⚠️ 2026-08-11 신설(판단3종 지적) = app.json 은 이 preview(APK) 빌드와 production(AAB) 빌드가
+      #   **1벌을 공유**한다(managed 프로젝트라 프로필별 app.json 이 따로 없음). 그래서 AAB 작업 중
+      #   android.package 가 라이브 앱과 같은 com.sonanie.guide 로 바뀌어 있는 동안 이 워크플로를 돌리면,
+      #   나오는 APK 도 com.sonanie.guide 라 **사장님 폰의 라이브 '내 손안의 가이드'를 덮을 수 있다**(되돌리기 어려움).
+      #   차단은 안 함(패키지가 그 값인 게 항상 위험한 건 아님, AAB 작업 기간엔 오히려 의도된 상태) — 대신 크게 경고만.
+      - name: 패키지명 경고 (라이브 앱과 같은 신원이면 사이드로드 주의)
+        run: |
+          PKG=$(node -e 'console.log(require("./app.json").expo.android.package)')
+          echo "현재 app.json 패키지명 = $PKG"
+          if [ "$PKG" = "com.sonanie.guide" ]; then
+            echo "⚠️⚠️ 경고: 지금 패키지명이 라이브 '내 손안의 가이드'와 동일합니다."
+            echo "   이 APK 를 라이브 앱이 이미 깔린 폰에 설치하면 그 앱이 Tripis 로 덮일 수 있습니다(되돌리기 어려움)."
+            echo "   사이드로드 전 반드시 확인할 것."
+          fi
+
       # ⚠️ 수정금지(승인필요) — preview 프로필 + --local 로 GitHub 러너에서 직접 빌드
       # eas.json의 build.preview 정의 사용 (internal 배포, apk, Dev Launcher 없음)
       # 앱 켜자마자 vibetrip 본체 실행 + EAS Update channel=main 자동 fetch
@@ -106,8 +121,10 @@ jobs:
           fi
           SHA1_CLEAN=$(printf '%s' "$SHA1" | tr -d ': ' | tr 'A-F' 'a-f')
           KEYHASH=$(printf '%s' "$SHA1_CLEAN" | xxd -r -p | openssl base64)
+          # ⚠️ 2026-08-11 = 하드코딩 삭제(§19) — app.json 이 production(AAB) 빌드와 공유라 패키지명이 바뀔 수 있다(판단3종 지적).
+          PKG=$(node -e 'console.log(require("./app.json").expo.android.package)')
           echo "=================================================="
           echo "구글 콘솔용 SHA-1  = $(printf '%s' "$SHA1_CLEAN" | sed 's/../&:/g; s/:$//' | tr 'a-f' 'A-F')"
           echo "카카오 콘솔용 키 해시 = $KEYHASH"
-          echo "패키지명 / 번들ID  = com.vibetrip.app"
+          echo "패키지명 / 번들ID  = $PKG"
           echo "=================================================="

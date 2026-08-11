@@ -28,6 +28,14 @@
       },
       "ios": {
         "credentialsSource": "local"
+      },
+      "android": {
+        "buildType": "app-bundle",
+        "credentialsSource": "local",
+        "image": "ubuntu-22.04-jdk-17-ndk-r26b",
+        "env": {
+          "EXPO_ANDROID_GRADLE_FLAGS": "--no-daemon"
+        }
       }
     }
   },
