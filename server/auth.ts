@@ -18,6 +18,19 @@ const GOOGLE_CLIENT_ID = (
   process.env.GOOGLE_CLIENT_ID ||
   ""
 ).trim();
+// ⚠️ 2026-08-11 신설 = 안드로이드 전용 구글 클라이언트(다른 프로젝트, client/lib/app-keys.ts 의
+//   GOOGLE_ANDROID_CLIENT_ID 주석 참고). 없으면 빈 문자열 = 아래 검사에서 그냥 안 매칭됨(안전).
+const GOOGLE_CLIENT_ID_ANDROID = (
+  process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || ""
+).trim();
+/** 두 프로젝트 중 하나로 발급된 토큰이면 통과(§16 = 이 판정 1벌만 씀). */
+function isValidGoogleAudience(v: string | undefined): boolean {
+  if (!v) return false;
+  return (
+    v === GOOGLE_CLIENT_ID ||
+    (!!GOOGLE_CLIENT_ID_ANDROID && v === GOOGLE_CLIENT_ID_ANDROID)
+  );
+}
 
 // ⚠️ 수정금지(승인필요) — 카카오 accessToken → 우리 로그인 = 이 함수 1벌만 (2026-07-26 §16).
 //   웹(브라우저 SDK)·앱(네이티브 SDK) 두 경로가 accessToken 을 들고 여기로 모인다 = 처리 두 벌 방지.
@@ -125,8 +138,8 @@ export function registerAuthRoutes(app: Express) {
       }
       const tokenData = await tokenRes.json();
       if (
-        tokenData.aud !== GOOGLE_CLIENT_ID &&
-        tokenData.azp !== GOOGLE_CLIENT_ID
+        !isValidGoogleAudience(tokenData.aud) &&
+        !isValidGoogleAudience(tokenData.azp)
       ) {
         return res
           .status(401)

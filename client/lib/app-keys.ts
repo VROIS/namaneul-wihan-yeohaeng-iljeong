@@ -22,7 +22,7 @@ function clean(v: string | undefined): string {
   return (v || "").trim();
 }
 
-/** 구글 = 웹 클라이언트 ID (안드로이드도 이것 1개로 동작) */
+/** 구글 = 웹 클라이언트 ID (Naubi 프로젝트, iOS·웹 담당) */
 export const GOOGLE_WEB_CLIENT_ID = clean(
   process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID,
 );
@@ -30,6 +30,17 @@ export const GOOGLE_WEB_CLIENT_ID = clean(
 export const GOOGLE_IOS_CLIENT_ID = clean(
   process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
 );
+/**
+ * 구글 = 안드로이드 전용 웹 클라이언트 ID (2026-08-11 신설).
+ * ⚠️ Naubi 것과 다른 프로젝트("My-handyguide", 333291226529)의 Web 클라이언트다.
+ *   패키지 com.sonanie.guide + 그 앱 서명 키(Play 앱 서명) 조합이 이미 그 프로젝트에
+ *   등록돼 있어(원래 라이브 "내 손안의 가이드" 것) Naubi 로는 절대 새로 등록할 수 없다
+ *   (구글이 "이미 사용 중"으로 거부 = 패키지+SHA-1 조합은 프로젝트 전역에서 유일해야 함, 2026-08-11 실측).
+ *   그래서 안드로이드만 이 값을 쓴다. 없으면 기존 GOOGLE_WEB_CLIENT_ID 로 대체(구버전 호환).
+ */
+export const GOOGLE_ANDROID_CLIENT_ID =
+  clean(process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID) ||
+  GOOGLE_WEB_CLIENT_ID;
 /** 카카오 = 웹 로그인 시작용 JavaScript 키 */
 export const KAKAO_JS_KEY = clean(process.env.EXPO_PUBLIC_KAKAO_JAVASCRIPT_KEY);
 /** 카카오 = 웹에서 코드를 토큰으로 바꿀 때 쓰는 REST API 키 */

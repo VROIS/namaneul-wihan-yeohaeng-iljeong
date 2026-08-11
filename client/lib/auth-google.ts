@@ -4,13 +4,21 @@
 import { Platform } from "react-native";
 import type { GoogleAuthRequestTuple } from "./auth-oauth";
 // ⚠️ 열쇠는 client/lib/app-keys.ts 한 곳에서만 읽는다(§16).
-import { GOOGLE_WEB_CLIENT_ID, GOOGLE_IOS_CLIENT_ID } from "./app-keys";
+import {
+  GOOGLE_WEB_CLIENT_ID,
+  GOOGLE_IOS_CLIENT_ID,
+  GOOGLE_ANDROID_CLIENT_ID,
+} from "./app-keys";
+
+/** 이 플랫폼에서 실제로 쓸 webClientId. 안드로이드만 별도 프로젝트 값(2026-08-11, app-keys.ts 주석 참고) */
+const webClientIdForPlatform =
+  Platform.OS === "android" ? GOOGLE_ANDROID_CLIENT_ID : GOOGLE_WEB_CLIENT_ID;
 
 /** iOS 는 별도 클라이언트 ID 필요(구글 규정) / 안드로이드는 웹 클라이언트 ID 1개로 동작 */
 export function isGoogleOAuthConfigured(): boolean {
   return Platform.OS === "ios"
     ? !!(GOOGLE_WEB_CLIENT_ID && GOOGLE_IOS_CLIENT_ID)
-    : !!GOOGLE_WEB_CLIENT_ID;
+    : !!webClientIdForPlatform;
 }
 
 // 앱에는 웹 리다이렉트 요청이 없음 = 훅을 호출하지 않는 자리표시(훅 규칙 위반 0)
@@ -23,8 +31,9 @@ let configured = false;
 
 /**
  * 앱 구글 로그인 → id_token 반환. **사용자가 취소하면 null**(실패 아님).
- * - webClientId 를 넣는 이유 = 발급되는 id_token 의 수신자(aud)가 "웹 클라이언트 ID" 가 되어
- *   서버(server/auth.ts 의 aud/azp 검사)를 그대로 통과 = 서버 무변경.
+ * - webClientId 를 넣는 이유 = 발급되는 id_token 의 수신자(aud)가 그 webClientId 가 되어
+ *   서버(server/auth.ts 의 aud/azp 검사)를 통과. 안드로이드는 이 값이 iOS·웹과 다르므로(위 주석)
+ *   서버가 **두 값 중 하나**를 허용하도록 함께 바뀌어야 한다(2026-08-11).
  *   ('내손앱' server/nativeGoogleAuth.ts + mobile-app GoogleAuthHandler.js 와 동일 구조 = 검증된 방식 이식)
  * - 부품은 버튼을 누른 순간에만 불러옴 = 부품이 없는 Expo Go 에서도 앱 자체는 안 깨짐.
  * - ⚠️ v16 signIn() 은 취소 시 예외를 던지지 않고 { type:'cancelled' } 로 정상 반환한다
@@ -36,7 +45,7 @@ export async function signInWithGoogle(): Promise<string | null> {
 
   if (!configured) {
     GoogleSignin.configure({
-      webClientId: GOOGLE_WEB_CLIENT_ID,
+      webClientId: webClientIdForPlatform,
       iosClientId: GOOGLE_IOS_CLIENT_ID,
       offlineAccess: false,
     });
