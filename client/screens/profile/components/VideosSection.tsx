@@ -82,11 +82,17 @@ export default function VideosSection({ profile }: { profile: ProfileApi }) {
   //   사유 = 영상이 0건이어도 가짜 카드가 떠서 "저장 실패"를 화면에서 알 수 없었고,
   //   눌러도 안내창만 떠 통합 모달 확인 자체가 막혔다. 이제 실제 영상만 보여준다.
   // 카드 1장 = 담은 영상 1건(여정×일차). id = "여정번호:일차" = 숨김 열쇠도 이 단위.
+  // ⚠️ 2026-08-12 = 같은 여정×일차가 여러 줄이면 **최신 1건만**(목록 = 최신순 = 첫 줄이 최신, §14 새것우선).
+  //   왜: 관리자(전 사용자 현황판)는 다른 계정이 같은 영상을 담으면 같은 조합이 두 줄로 와서
+  //   카드 이름표(key) 충돌 + 같은 카드 2장 + X 한 번에 둘 다 사라짐(아이폰 dev 경고 실측 2026-08-12, §22).
+  const seenVideoIds = new Set<string>();
   const displayVideos = savedVideos
-    .filter(
-      (v) =>
-        !hiddenKeys.includes(cardKey("video", `${v.itineraryId}:${v.day}`)),
-    )
+    .filter((v) => {
+      const id = `${v.itineraryId}:${v.day}`;
+      if (seenVideoIds.has(id)) return false;
+      seenVideoIds.add(id);
+      return !hiddenKeys.includes(cardKey("video", id));
+    })
     .map((v) => ({
       id: `${v.itineraryId}:${v.day}`,
       itineraryId: v.itineraryId,
