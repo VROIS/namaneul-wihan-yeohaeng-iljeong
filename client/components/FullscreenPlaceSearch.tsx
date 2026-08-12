@@ -65,12 +65,15 @@ export default function FullscreenPlaceSearch({
           <Text style={[styles.title, { color: theme.text }]}>{title}</Text>
           <View style={styles.headerButton} />
         </View>
-        {/* 입력창 = 화면 최상단 = 후보 목록이 키보드 위 공간에 그대로 펼쳐진다(iOS에서 검증된 배치). */}
+        {/* 입력창 = 화면 최상단 = 후보 목록이 키보드 위 공간에 그대로 펼쳐진다(iOS에서 검증된 배치).
+            ⚠️ height 고정(2026-08-13 §22 판단검증 처방·A36 실기기 재현) = 안드로이드는 키보드가 떠 있는 동안
+            웹뷰 크기가 변하면 화면을 지운다(글자 입력 → 후보 목록 크기 변동 = 위젯 소실). 고정하면 크기 변동 0. */}
         <View style={styles.widgetBox}>
           <PlaceAutocompleteWidget
             placeholder={placeholder}
             language={language}
             cityPrefix={cityPrefix}
+            height={300}
             onSelect={onSelect}
           />
         </View>
