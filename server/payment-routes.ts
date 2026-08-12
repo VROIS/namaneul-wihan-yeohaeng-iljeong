@@ -5,21 +5,13 @@
 //   ⚠️⚠️ 충전 확정 경로는 **스트라이프 직접 통보(웹훅) 1개뿐**이다. 클라이언트가 부르는 충전 엔드포인트를 만들지 마라(§0).
 //     내손앱(TWA)은 결제 후 복귀한 페이지의 JS+쿠키로 확정했지만, Tripis(RN)는 앱이 브라우저가 아니라
 //     그 복귀 페이지를 받지 못한다 = 부를 주체가 아예 없다. 그래서 서버↔서버 통보 1벌로 간다.
-//   /api/payments/session/:id 는 **읽기 전용**(결제됐나·크레딧 들어갔나 조회) = 화면의 "처리 중" 안내용. 쓰기 금지.
+//   결제 진입 2갈래(2026-08-12 사장님 승인) = 웹: Stripe 결제창(checkout) / 폰: 네이티브 결제 시트(sheet-intent).
+//     둘 다 충전 확정은 웹훅 1곳(이벤트만 각각 checkout.session.completed / payment_intent.succeeded).
 import type { Express, Request, Response } from "express";
 import Stripe from "stripe";
-import { db as _db } from "./db";
-import { creditTransactions } from "@shared/schema";
-import { and, eq } from "drizzle-orm";
 import { creditService, CREDIT_CONFIG } from "./creditService";
 import { CREDIT_COSTS } from "./credit-charge";
 import { getUserIdFromReq } from "./auth-user";
-
-// db 널 가드 = expert-routes.ts 와 같은 규약 1벌(각 핸들러 try/catch 가 500 처리)
-function db() {
-  if (!_db) throw new Error("db_unavailable");
-  return _db;
-}
 
 // ⚠️ stripe 22.3.2 가 고정한 API 버전과 **같은 문자열**(node_modules/stripe/cjs/apiVersion.js 실측 2026-07-29).
 //   `as any` 캐스트 금지 = 캐스트는 버전이 어긋난 것을 조용히 숨긴다. 타입이 거부하면 SDK 가 올라간 것이니 이 문자열을 고쳐라.
@@ -46,21 +38,6 @@ const PRICE_EUR = CREDIT_CONFIG.PRICE_EUR;
 // ⚠️ 우리 앱이 만든 결제라는 표식. 내손앱과 같은 Stripe 계정을 쓰기 때문에 필요하다(사장님 결정 2026-07-29).
 //   결제창을 만들 때 붙이고, 통보를 받을 때 이 값이 맞는지 확인한다 = 두 앱의 결제가 섞이지 않는다.
 const APP_TAG = "tripis";
-
-// 이미 충전 처리된 결제인지 = 장부의 결제 줄 1건 조회(읽기 전용).
-async function findPurchaseRow(sessionId: string) {
-  const [row] = await db()
-    .select()
-    .from(creditTransactions)
-    .where(
-      and(
-        eq(creditTransactions.type, "purchase"),
-        eq(creditTransactions.referenceId, sessionId),
-      ),
-    )
-    .limit(1);
-  return row ?? null;
-}
 
 // ⚠️ 수정금지(승인필요) 2026-08-05 = 결제 끝나고 **돌아올 주소**를 고르는 곳 1벌.
 //   브라우저가 알려 준 화면 주소(Origin)가 **우리 것이면** 그리로, 아니면 요청받은 주소로.
@@ -118,10 +95,12 @@ export function registerPaymentRoutes(app: Express): void {
       purchaseCredits: PURCHASE_CREDITS,
       signupBonus: CREDIT_CONFIG.SIGNUP_BONUS,
       costs: CREDIT_COSTS,
+      // 폰 결제 시트용 공개 키(pk_ = 비밀 아님) = 관리자 화면 api_keys 등록 1벌 → 재빌드 없이 교체 가능(2026-08-12 사장님 승인).
+      stripePublishableKey: process.env.STRIPE_PUBLISHABLE_KEY || null,
     });
   });
 
-  // ── 4) 결제창 만들기 = POST /api/payments/checkout ──
+  // ── 4) 결제창 만들기 = POST /api/payments/checkout = ⚠️ 웹 전용 (2026-08-12 사장님 승인 = 폰은 아래 결제 시트로 전환)
   //   내손앱과 같은 방식 = 스트라이프에 상품을 미리 만들지 않고 그때그때 금액 지정(price_data).
   app.post("/api/payments/checkout", async (req: Request, res: Response) => {
     try {
@@ -210,6 +189,42 @@ export function registerPaymentRoutes(app: Express): void {
     }
   });
 
+  // ── 4.5) 폰 결제 시트용 결제 생성 = POST /api/payments/sheet-intent (2026-08-12 사장님 승인) ──
+  //   ⚠️ 사장님 SSOT = 사용자 화면·클릭 최소: 시트는 앱 위 오버레이라 브라우저·복귀 주소·안내 화면이 아예 없다.
+  //   금액·크레딧·차단·표식 = 위 checkout 과 같은 정본 1벌(CREDIT_CONFIG·APP_TAG·c0@ 규칙).
+  //   충전 확정은 여기가 아니라 웹훅(payment_intent.succeeded) 1경로(§9).
+  app.post(
+    "/api/payments/sheet-intent",
+    async (req: Request, res: Response) => {
+      try {
+        const userId = getUserIdFromReq(req);
+        if (!userId) return res.status(401).json({ error: "login_required" });
+
+        const user = await creditService.getUserProfile(userId);
+        // 크레딧 0 고정 테스트 계정 = 충전 차단(checkout 과 같은 규칙 = 402 재현용 계정 보호)
+        if (user?.email && /^c0@.+\.test$/i.test(user.email)) {
+          return res.status(403).json({ error: "test_account_no_topup" });
+        }
+
+        const intent = await stripe().paymentIntents.create({
+          amount: PRICE_EUR * 100,
+          currency: "eur",
+          // ⚠️ card 고정 = checkout 과 같은 이유 = 지연결제 수단이 켜지면 두 번째 충전 경로가 필요해진다(§0).
+          payment_method_types: ["card"],
+          description: `Tripis 크레딧 충전 (${PURCHASE_CREDITS})`,
+          metadata: { userId, app: APP_TAG },
+        });
+        res.json({ clientSecret: intent.client_secret, intentId: intent.id });
+      } catch (e: any) {
+        if (e?.message === "stripe_key_missing") {
+          return res.status(503).json({ error: "stripe_key_missing" });
+        }
+        console.error("[Payments] 시트 결제 생성 실패:", e?.message);
+        res.status(502).json({ error: "sheet_intent_failed" });
+      }
+    },
+  );
+
   // ── 5) 스트라이프 직접 통보 = POST /api/payments/webhook = ⚠️ 충전이 확정되는 유일한 곳 ──
   //   서명 원본 바이트는 server/index.ts:63-75 의 express.json({verify}) 가 이미 req.rawBody 에 담아둔다 = 별도 raw 마운트 불필요.
   app.post("/api/payments/webhook", async (req: Request, res: Response) => {
@@ -237,53 +252,59 @@ export function registerPaymentRoutes(app: Express): void {
       return res.status(400).json({ error: "invalid_signature" });
     }
 
-    // 처리하는 통보는 이 1종뿐. 나머지는 받았다고만 답한다.
-    if (event.type !== "checkout.session.completed") {
-      return res.json({ received: true });
-    }
-
-    const session = event.data.object as Stripe.Checkout.Session;
-
-    if (session.payment_status !== "paid") {
-      console.log(
-        `[Payments] 결제 미완료 상태(${session.payment_status}) = 충전 안 함:`,
-        session.id,
-      );
+    // 처리하는 통보 2종 = 웹 결제창(checkout.session.completed) + 폰 결제 시트(payment_intent.succeeded).
+    //   경로가 2종이어도 충전 확정은 이 웹훅 1곳 + processPurchase 1벌(§9) = 이중충전 차단 DB규칙도 공유.
+    let refId: string;
+    let meta: Stripe.Metadata | null;
+    if (event.type === "checkout.session.completed") {
+      const session = event.data.object as Stripe.Checkout.Session;
+      if (session.payment_status !== "paid") {
+        console.log(
+          `[Payments] 결제 미완료 상태(${session.payment_status}) = 충전 안 함:`,
+          session.id,
+        );
+        return res.json({ received: true });
+      }
+      refId = session.id;
+      meta = session.metadata;
+    } else if (event.type === "payment_intent.succeeded") {
+      // succeeded 이벤트 = 결제 완료일 때만 발생 = 별도 상태 검사 불필요.
+      const intent = event.data.object as Stripe.PaymentIntent;
+      refId = intent.id;
+      meta = intent.metadata;
+    } else {
       return res.json({ received: true });
     }
 
     // ⚠️ 수정금지(승인필요) 2026-07-30 = **우리가 만든 결제인지** 먼저 확인한다.
     //   내손앱과 같은 Stripe 계정이라 이 끝점은 내손앱 결제 통보도 받는다. 표식을 안 보면
-    //   내손앱 손님의 €10 이 Tripis 크레딧까지 만들어 장부가 틀어진다(우리가 만든 세션에만 이 표식이 붙는다).
-    if (session.metadata?.app !== APP_TAG) {
+    //   내손앱 손님의 €10 이 Tripis 크레딧까지 만들어 장부가 틀어진다(우리가 만든 결제에만 이 표식이 붙는다).
+    if (meta?.app !== APP_TAG) {
       console.log(
         "[Payments] 우리 앱 결제가 아님 = 충전 안 함:",
-        session.id,
-        session.metadata?.app ?? "(표식 없음)",
+        refId,
+        meta?.app ?? "(표식 없음)",
       );
       return res.json({ received: true });
     }
 
-    const userId = session.metadata?.userId;
+    const userId = meta?.userId;
     if (!userId) {
       // stripe trigger 로 만든 가짜 통보 등 = 넣을 대상이 없음. 재전송은 무의미하므로 200.
-      console.warn(
-        "[Payments] 통보에 userId 없음 = 충전 대상 불명:",
-        session.id,
-      );
+      console.warn("[Payments] 통보에 userId 없음 = 충전 대상 불명:", refId);
       return res.json({ received: true });
     }
 
     try {
-      const balance = await creditService.processPurchase(userId, session.id);
+      const balance = await creditService.processPurchase(userId, refId);
       console.log(
-        `[Payments] 충전 완료 user=${userId} session=${session.id} 잔액=${balance}`,
+        `[Payments] 충전 완료 user=${userId} ref=${refId} 잔액=${balance}`,
       );
     } catch (e: any) {
       // 23505 = DB 규칙(credit_transactions_purchase_ref_uniq) 위반 = 같은 결제를 이미 충전함(통보 재전송).
       //   장부 줄 INSERT 가 거부되면 잔액 UPDATE 는 실행조차 안 되므로 이중지급이 물리적으로 불가능하다.
       if (e?.code === "23505") {
-        console.log("[Payments] 중복 통보 무시(이미 충전됨):", session.id);
+        console.log("[Payments] 중복 통보 무시(이미 충전됨):", refId);
         return res.json({ received: true });
       }
       // 그 외 오류 = 500 으로 답해 스트라이프의 자동 재전송을 복구 수단으로 쓴다.
@@ -294,35 +315,5 @@ export function registerPaymentRoutes(app: Express): void {
     res.json({ received: true });
   });
 
-  // ── 6) 결제 상태 조회 = GET /api/payments/session/:sessionId = ⚠️ 읽기 전용(쓰기 금지) ──
-  //   화면이 결제창에서 돌아온 뒤 "처리 중"인지 "완료"인지 판단하는 용도. 크레딧을 넣지 않는다(그건 웹훅 1벌).
-  app.get(
-    "/api/payments/session/:sessionId",
-    async (req: Request, res: Response) => {
-      try {
-        const userId = getUserIdFromReq(req);
-        if (!userId) return res.status(401).json({ error: "login_required" });
-
-        const session = await stripe().checkout.sessions.retrieve(
-          req.params.sessionId,
-        );
-        // 남의 결제 상태를 훔쳐보지 못하게 = 그 결제를 시작한 사람만 조회 가능.
-        if (session.metadata?.userId !== userId) {
-          return res.status(403).json({ error: "not_owner" });
-        }
-
-        // 이 두 가지만 답한다. 잔액은 화면이 /api/credits/balance 로 따로 읽으므로 여기 넣으면 조회 1건이 헛돈다.
-        res.json({
-          paid: session.payment_status === "paid",
-          fulfilled: !!(await findPurchaseRow(session.id)),
-        });
-      } catch (e: any) {
-        if (e?.message === "stripe_key_missing") {
-          return res.status(503).json({ error: "stripe_key_missing" });
-        }
-        console.error("[Payments] 결제 상태 조회 실패:", e?.message);
-        res.status(404).json({ error: "session_not_found" });
-      }
-    },
-  );
+  // (옛 6번 결제 상태 조회 라우트 = 폰이 결제 시트로 전환되며 호출자 0 = 완전삭제 2026-08-12 §19)
 }

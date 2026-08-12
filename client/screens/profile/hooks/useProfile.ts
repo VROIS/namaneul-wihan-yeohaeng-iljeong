@@ -1,7 +1,6 @@
 // 프로필 화면 핵심 훅 = 상태·효과·핸들러 = ProfileScreen 분리(2026-07-15 §0 슬림화, 순수 이동)
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useColorScheme, Platform, Alert } from "react-native";
-import * as WebBrowser from "expo-web-browser";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
@@ -26,10 +25,12 @@ import {
   getTransactions,
   getPricing,
   createCheckout,
-  getSessionStatus,
+  createSheetIntent,
   type CreditTransaction,
   type CreditPricing,
 } from "../creditsApi";
+// 폰 결제 시트 1벌(웹은 스텁) = 2026-08-12 사장님 승인. 열고 → 결제 → 자동 닫힘.
+import { paySheet } from "../paymentSheet";
 
 export function useProfile() {
   const colorScheme = useColorScheme();
@@ -140,15 +141,12 @@ export function useProfile() {
     });
   }, []);
 
-  // ⚠️ 충전 = 스트라이프 결제창을 브라우저로 열기만 한다. 크레딧을 넣는 것은 **서버가 받는 직접 통보(웹훅) 1벌**이라
-  //   사용자가 창을 닫아도·폰이 꺼져도 충전은 진행된다 → 딥링크·커스텀 스킴 불필요(2026-07-27 안드로이드 창닫기 함정 회피).
-  //
-  //   ⚠️⚠️ 결제 완료를 promise 로 기다리지 않는다 = 2026-07-29 §22 발견.
-  //     expo-web-browser 타입(WebBrowser.types.d.ts) 실측: `OPENED`=@platform android / `CANCEL`·`DISMISS`=@platform ios.
-  //     즉 **안드로이드는 창이 열리는 순간 resolve** 한다 → 그 뒤에 결제 상태를 물으면 당연히 미결제 =
-  //     사용자가 카드번호 입력 중인데 "결제가 완료되지 않았습니다" 가 뜨는 오탐이 났다(사장님 삼성폰 = 주 타깃).
-  //     그래서 상태는 **한 번만** 보고, 확정(fulfilled)일 때만 알린다. 확정 아니면 아무 단정도 하지 않는다
-  //     (웹훅이 정본 = 잠시 뒤 탭 진입 시 useFocusEffect 의 refetchCredits 가 반영).
+  // ⚠️ 수정금지(승인필요) 2026-08-12 사장님 승인 = 충전 2갈래(화면·클릭 최소 SSOT).
+  //   웹 = Stripe 결제창(같은 창 이동, 기존 그대로).
+  //   폰 = 네이티브 결제 시트 = 프로필 위 오버레이 → 결제 → **자동 닫힘**. 브라우저·복귀 주소·안내 화면 0.
+  //       옛 브라우저 방식 완전삭제 §19(보존 = backup/payment-browser-interim-2026-08-12 가지).
+  //   충전 확정 = 서버 웹훅 1경로(§9) → 시트 성공 뒤 잔액을 2초×5 재조회로 따라잡는다(통보 지연 대비).
+  //   성공 알림 없음 = 시트가 닫히고 잔액이 오르는 것이 곧 피드백(사장님 SSOT = 설명·안내 추가 금지).
   const handleRecharge = useCallback(async () => {
     if (!isAuthed) {
       requestLogin();
@@ -160,27 +158,45 @@ export function useProfile() {
     rechargingRef.current = true;
     setRecharging(true);
     try {
-      const session = await createCheckout();
-      if (!session) {
-        alert("결제창을 열지 못했습니다. 잠시 후 다시 시도해 주세요.");
-        return;
-      }
-
       if (Platform.OS === "web") {
-        // 웹 = 같은 창에서 이동. 결제 후 success_url 로 앱 오리진에 복귀 → 화면이 다시 마운트되며 잔액 조회.
+        const session = await createCheckout();
+        if (!session) {
+          alert("결제창을 열지 못했습니다. 잠시 후 다시 시도해 주세요.");
+          return;
+        }
+        // 웹 = 같은 창에서 이동. 결제 후 success_url(?payment=) 복귀 → 첫 화면 프로필 + 잔액 조회(기존 1벌).
         window.location.href = session.url;
         return;
       }
 
-      await WebBrowser.openBrowserAsync(session.url);
-      if (!mountedRef.current) return;
+      // 폰 = 결제 시트. 공개 키 = 서버 정본(pricing 응답 1벌)에서만(하드코딩 금지).
+      const key = pricing?.stripePublishableKey;
+      if (!key) {
+        alert("결제 준비가 안 되었습니다. 잠시 후 다시 시도해 주세요.");
+        return;
+      }
+      const intent = await createSheetIntent();
+      if (!intent) {
+        alert("결제를 시작하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+        return;
+      }
 
-      const status = await getSessionStatus(session.sessionId);
+      const result = await paySheet(key, intent.clientSecret);
       if (!mountedRef.current) return;
-      await refetchCredits();
-
-      // 확정된 사실만 말한다. 아직이면 침묵(잔액이 곧 올라간다) = 확인 안 한 것을 확인했다고 말하지 않기.
-      if (status?.fulfilled === true) alert("충전이 완료되었습니다.");
+      if (result.status === "failed") {
+        // Stripe 가 준 실패 사유 그대로(뭉개기 금지 = 2026-07-31 사장님 지시).
+        alert(result.message);
+        return;
+      }
+      if (result.status === "done") {
+        refetchCredits();
+        let left = 5;
+        const id = setInterval(() => {
+          if (!mountedRef.current) return clearInterval(id);
+          refetchCredits();
+          if (--left <= 0) clearInterval(id);
+        }, 2000);
+      }
     } catch (e) {
       console.error("[Profile] 충전 실패:", e);
       alert("충전 중 오류가 발생했습니다.");
@@ -188,7 +204,7 @@ export function useProfile() {
       rechargingRef.current = false;
       if (mountedRef.current) setRecharging(false);
     }
-  }, [isAuthed, requestLogin, refetchCredits]);
+  }, [isAuthed, requestLogin, refetchCredits, pricing]);
 
   // 탭 진입마다 재조회(기존). 크레딧도 같은 트리거로 함께 갱신(§16 = 트리거 1벌 재사용).
   useFocusEffect(

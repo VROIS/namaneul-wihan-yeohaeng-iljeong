@@ -23,6 +23,8 @@ export interface CreditPricing {
   purchaseCredits: number;
   signupBonus: number;
   costs: Record<string, number>;
+  // 폰 결제 시트용 공개 키(pk_ = 비밀 아님). 서버 api_keys 미등록이면 null = 시트 열기 전 안내.
+  stripePublishableKey: string | null;
 }
 
 // 잔액 = GET /api/credits/balance. 실패·미로그인 = null(화면이 "-" 로 표시).
@@ -79,20 +81,19 @@ export async function createCheckout(): Promise<{
   }
 }
 
-// 결제 상태 조회 = GET /api/payments/session/:id (읽기 전용).
-//   paid = 스트라이프가 결제 완료로 보는가 / fulfilled = 우리 장부에 충전 줄이 들어왔는가.
-export async function getSessionStatus(
-  sessionId: string,
-): Promise<{ paid: boolean; fulfilled: boolean } | null> {
+// 폰 결제 시트용 결제 생성 = POST /api/payments/sheet-intent → { clientSecret }.
+//   시트를 열기 위한 열쇠만 받는다. 충전 확정은 서버 웹훅 1경로(§9).
+//   (옛 getSessionStatus/세션 상태 조회 = 폰이 결제 시트로 전환되며 호출자 0 = 완전삭제 2026-08-12 §19)
+export async function createSheetIntent(): Promise<{
+  clientSecret: string;
+} | null> {
   try {
     const data = (await (
-      await apiRequest(
-        "GET",
-        `/api/payments/session/${encodeURIComponent(sessionId)}`,
-      )
-    ).json()) as { paid?: unknown; fulfilled?: unknown };
-    // ⚠️ 검증 없이 캐스트하면 서버가 다른 형태를 줄 때 undefined 가 "결제 안 됨"으로 읽힌다 = 돈 걸린 판단이라 엄격 비교(§22 지적).
-    return { paid: data.paid === true, fulfilled: data.fulfilled === true };
+      await apiRequest("POST", "/api/payments/sheet-intent")
+    ).json()) as { clientSecret?: unknown };
+    return typeof data.clientSecret === "string"
+      ? { clientSecret: data.clientSecret }
+      : null;
   } catch {
     return null;
   }
