@@ -5,6 +5,7 @@ import {
   Text,
   Pressable,
   ScrollView,
+  Modal,
   Platform,
   ActivityIndicator,
   Dimensions,
@@ -14,9 +15,9 @@ import Icon from "@/components/Icon";
 import { getVibeLabel } from "@/utils/vibeCalculator";
 // ⚠️ 2026-06-28 사용자 SSOT = 토글 InteractiveMap → 고정 ItineraryMap(BTSPlaceMap 패턴: 웹/앱 동일·마커클릭·동선라인폐기·출발깃발) 교체(§19)
 import ItineraryMap from "@/components/ItineraryMap";
-import { type PlaceAutoSelection as PlaceSelection } from "@/components/PlaceAutocompleteWidget";
-// 🎹 2026-08-12 = 숙소 변경 = 폰 공용 전체화면 그릇 1벌(옛 iOS 전용 Modal 승격, §0)
-import FullscreenPlaceSearch from "@/components/FullscreenPlaceSearch";
+import PlaceAutocompleteWidget, {
+  type PlaceAutoSelection as PlaceSelection,
+} from "@/components/PlaceAutocompleteWidget";
 // 🎬 2026-08-01 사장님 §B-0 = 영상 진입점은 통합 모달 1벌(TripisModal). 옛 전용 화면 이동 폐기 §19.
 import TripisModal from "@/components/tripis/TripisModal";
 import { shortDate } from "./utils";
@@ -395,24 +396,57 @@ export default function ResultStep({ planner }: { planner: PlannerApi }) {
       </ScrollView>
       {/* 🏨 2026-06-29 = 인앱 숙소 모달 완전삭제(§19) → Day헤더 "숙소 설정" 버튼이 출발바 아래 구글 위젯 인라인 토글로 대체 (AOS/웹) */}
 
-      {/* 🎹 2026-08-12 사장님 승인 = 숙소 변경 = **폰(iOS+AOS) 공용 전체화면 그릇 1벌**(FullscreenPlaceSearch).
-            옛 iOS 전용 Modal(2026-07-02)의 AOS 인라인 전제 폐기 = 2026-08-12 §19(Android 15+ edge-to-edge, A36 실측).
-            웹만 DaySection 인라인 유지. */}
-      <FullscreenPlaceSearch
-        visible={Platform.OS !== "web" && hotelModalDay != null}
-        title={t("trip.accommodation")}
-        placeholder={t("trip.hotelSearchPlaceholder")}
-        language={i18n.language || "ko"}
-        cityPrefix={
-          itinerary?.destination ? `${itinerary.destination} ` : undefined
-        }
-        onSelect={(place: PlaceSelection) => {
-          if (hotelModalDay != null)
-            handleSetDayAccommodation(hotelModalDay, place);
-          setHotelModalDay(null);
-        }}
-        onClose={() => setHotelModalDay(null)}
-      />
+      {/* 🎹 2026-07-02 사용자 SSOT = iOS 전용 전체화면 위젯 Modal.
+            iOS는 키보드 떠도 화면 안줄어(WKWebView 설계) → 인라인 위젯(지도 아래 중간)이 키보드에 가림.
+            AOS는 화면축소(adjustResize)로 위젯이 위로밀려 정상 → iOS만 이 Modal로 위젯을 화면 최상단 전체화면에 띄워 동일효과(입력창 맨위+후보 키보드위 공간).
+            §19: 구글 위젯(PlaceAutocompleteWidget) 그대로, "담는 그릇"만 iOS 전체화면 Modal (NativePicker(DateTimePickers.tsx) iOS 패턴 재사용). 자체 입력창 재발명 아님. */}
+      {Platform.OS === "ios" && hotelModalDay != null && (
+        <Modal
+          visible
+          transparent
+          animationType="slide"
+          onRequestClose={() => setHotelModalDay(null)}
+        >
+          <View
+            style={[
+              styles.hotelIosModal,
+              {
+                backgroundColor: theme.backgroundRoot,
+                paddingTop: insets.top + Spacing.sm,
+              },
+            ]}
+          >
+            <View style={styles.hotelIosModalHeader}>
+              <Pressable
+                onPress={() => setHotelModalDay(null)}
+                style={styles.headerButton}
+              >
+                <Icon name="x" size={24} color={theme.text} />
+              </Pressable>
+              <Text style={[styles.pickerTitle, { color: theme.text }]}>
+                {t("trip.accommodation")}
+              </Text>
+              <View style={styles.headerButton} />
+            </View>
+            <View style={{ marginHorizontal: 12, marginTop: 8, zIndex: 50 }}>
+              <PlaceAutocompleteWidget
+                placeholder={t("trip.hotelSearchPlaceholder")}
+                language={i18n.language || "ko"}
+                cityPrefix={
+                  itinerary?.destination
+                    ? `${itinerary.destination} `
+                    : undefined
+                }
+                onSelect={(place: PlaceSelection) => {
+                  if (hotelModalDay != null)
+                    handleSetDayAccommodation(hotelModalDay, place);
+                  setHotelModalDay(null);
+                }}
+              />
+            </View>
+          </View>
+        </Modal>
+      )}
 
       {/* 🎬 통합 모달 = 껍데기 1벌(§B-0). 닫으면 params=null 이라 렌더 자체가 끝난다(폴링·재생 중단). */}
       <TripisModal

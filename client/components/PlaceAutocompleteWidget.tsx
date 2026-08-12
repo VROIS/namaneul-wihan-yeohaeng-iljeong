@@ -11,8 +11,6 @@ import {
   TextInput,
 } from "react-native";
 import { apiRequest } from "@/lib/query-client";
-// 앱 오류 보고 정본 1벌(§16) = App.tsx 전역 핸들러와 같은 통로(배칭·플랫폼 정보 포함)
-import { reportError } from "@/lib/error-reporter";
 import {
   PLACE_AUTOCOMPLETE_HTML,
   type PlaceAutoSelection,
@@ -162,8 +160,6 @@ function PlaceAutocompleteNative({
   const [ready, setReady] = useState(false);
   // 🏨 2026-06-29 = WebView 동적높이 (= 고정 280px 빈공간 결함 해소): 위젯이 resize로 알려준 높이만큼만 차지.
   const [webHeight, setWebHeight] = useState(56);
-  // (옛 preExpand 터치 선확장 = A36 임시대응 = 전체화면 그릇(FullscreenPlaceSearch) 승격으로 완전삭제 2026-08-12 §19
-  //   — 첫 터치가 확장에 먹혀 두 번 터치해야 하는 부작용이 실기기에서 확인됨)
   const html = useMemo(
     () =>
       PLACE_AUTOCOMPLETE_HTML({
@@ -191,14 +187,8 @@ function PlaceAutocompleteNative({
           address: data.address,
           coords: data.coords,
         });
-      } else if (data.type === "error") {
+      } else if (data.type === "error")
         console.warn("[PlaceAutocompleteWidget] WebView error:", data.message);
-        // 🔎 2026-08-12 사장님 승인 = 웹뷰 내부 오류를 앱 오류 보고 **정본 1벌**(lib/error-reporter, App.tsx 와 동일 통로 §16)로 전달.
-        //   A36 재현 시 사장님은 폰만 만지고, 원인은 서버 오류함(/api/app-errors)에서 원격 확인(USB 인프라 불필요).
-        reportError(String(data.message || "").slice(0, 500), {
-          component: `PlaceAutocompleteWidget(${Platform.OS})`,
-        });
-      }
     } catch {}
   }
 

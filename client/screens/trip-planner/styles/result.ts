@@ -4,7 +4,14 @@ import { StyleSheet } from "react-native";
 import { Brand, Spacing, BorderRadius, Fonts } from "@/constants/theme";
 
 export const resultStyles = StyleSheet.create({
-  // (옛 hotelIosModal 2키 = 숙소 모달이 공용 부품 FullscreenPlaceSearch 로 승격되며 완전삭제 2026-08-12 §19)
+  hotelIosModal: { flex: 1 },
+  hotelIosModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: Spacing.md,
+    paddingBottom: Spacing.sm,
+  },
   resultContainer: { flex: 1 },
   resultHeader: {
     flexDirection: "row",
