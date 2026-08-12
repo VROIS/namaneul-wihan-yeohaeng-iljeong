@@ -392,6 +392,11 @@ function setupErrorHandler(app: express.Application) {
       const { dataScheduler } = await import("./services/data-scheduler");
       await dataScheduler.initialize();
       log("[Server] ✅ Data scheduler initialized");
+
+      // 💳 2026-08-12 사장님 승인 = 결제 자가치유(웹훅 구독 보증 + 원장 대조 회수) = 부팅마다 1회.
+      //   api_keys 로드 뒤(STRIPE 키 준비 후)라야 함 = 이 자리. 실패해도 서버는 뜬다(함수 안에서 삼킴).
+      const { initPaymentSelfHeal } = await import("./payment-routes");
+      void initPaymentSelfHeal();
     } catch (error) {
       log("[Server] Failed to initialize scheduler:", error);
     }

@@ -26,6 +26,7 @@ import {
   getPricing,
   createCheckout,
   createSheetIntent,
+  confirmTopup,
   type CreditTransaction,
   type CreditPricing,
 } from "../creditsApi";
@@ -189,13 +190,22 @@ export function useProfile() {
         return;
       }
       if (result.status === "done") {
+        // ⚠️ 2026-08-12 사장님 승인 = **즉시 반영**(내손앱과 같은 즉시성) — 시트가 닫히는 순간
+        //   서버가 Stripe 원장을 직접 확인해 충전(§9 개정). 성공 = 그 자리에서 잔액·완료 알림.
+        const confirmed = await confirmTopup(intent.intentId);
+        if (!mountedRef.current) return;
         refetchCredits();
-        let left = 5;
-        const id = setInterval(() => {
-          if (!mountedRef.current) return clearInterval(id);
-          refetchCredits();
-          if (--left <= 0) clearInterval(id);
-        }, 2000);
+        if (confirmed.ok) {
+          alert("충전이 완료되었습니다.");
+        } else {
+          // 즉시 확인이 안 되면 침묵 + 잠깐 재조회 = 웹훅·일일 원장대조가 뒤에서 채운다(자가치유).
+          let left = 5;
+          const id = setInterval(() => {
+            if (!mountedRef.current) return clearInterval(id);
+            refetchCredits();
+            if (--left <= 0) clearInterval(id);
+          }, 2000);
+        }
       }
     } catch (e) {
       console.error("[Profile] 충전 실패:", e);

@@ -39,6 +39,118 @@ const PRICE_EUR = CREDIT_CONFIG.PRICE_EUR;
 //   결제창을 만들 때 붙이고, 통보를 받을 때 이 값이 맞는지 확인한다 = 두 앱의 결제가 섞이지 않는다.
 const APP_TAG = "tripis";
 
+// ⚠️ 수정금지(승인필요) 2026-08-12 사장님 승인 = **충전 집행 1벌** = 어느 진입 신호(웹훅·앱 즉시확인·일일 원장대조)로 오든
+//   판정 재료는 Stripe 원장 기록(refId·metadata)이고 집행은 이 함수 하나다(§0). 이중충전 = DB 규칙(23505)이 차단.
+//   §9 개정(2026-08-12): "진실 = Stripe 원장 / 진입 신호 3종 / 집행 = 이 1벌". 클라이언트의 주장으로 충전하는 경로는 여전히 0개.
+async function fulfillFromStripeRecord(
+  refId: string,
+  meta: Stripe.Metadata | null | undefined,
+): Promise<
+  | { outcome: "credited"; balance: number }
+  | { outcome: "duplicate" }
+  | { outcome: "not_ours" }
+  | { outcome: "no_user" }
+> {
+  if (meta?.app !== APP_TAG) return { outcome: "not_ours" };
+  const userId = meta?.userId;
+  if (!userId) return { outcome: "no_user" };
+  try {
+    const balance = await creditService.processPurchase(userId, refId);
+    console.log(
+      `[Payments] 충전 완료 user=${userId} ref=${refId} 잔액=${balance}`,
+    );
+    return { outcome: "credited", balance };
+  } catch (e: any) {
+    if (e?.code === "23505") return { outcome: "duplicate" };
+    throw e;
+  }
+}
+
+// ⚠️ 수정금지(승인필요) 2026-08-12 사장님 승인 = **원장 대조 회수** = 최근 N일의 성공 결제(tripis 표식)를
+//   Stripe 에서 읽어 장부에 없는 건을 충전 집행 1벌로 채운다. 웹훅 유실·구독 누락·서버 잠듦 = 전부 자동 회수.
+//   호출처 = 서버 부팅 1회 + 스케줄러 매일 + 관리자 수동 라우트(3곳 모두 이 1벌).
+export async function reconcilePayments(days = 3): Promise<{
+  scanned: number;
+  credited: number;
+}> {
+  const since = Math.floor(Date.now() / 1000) - days * 86400;
+  let scanned = 0;
+  let credited = 0;
+  // 시트 결제(PaymentIntent) + 웹 결제창(Checkout Session) 양쪽 원장을 같은 규칙으로 훑는다.
+  const intents = await stripe().paymentIntents.list({
+    created: { gte: since },
+    limit: 100,
+  });
+  for (const pi of intents.data) {
+    if (pi.status !== "succeeded" || pi.metadata?.app !== APP_TAG) continue;
+    scanned++;
+    // 사전 조회 없이 집행 1벌에 바로 = 이미 충전된 건은 DB 규칙(23505)이 duplicate 로 돌려줌(같은 물리 차단).
+    const r = await fulfillFromStripeRecord(pi.id, pi.metadata);
+    if (r.outcome === "credited") credited++;
+  }
+  const sessions = await stripe().checkout.sessions.list({
+    created: { gte: since },
+    limit: 100,
+  });
+  for (const s of sessions.data) {
+    if (s.payment_status !== "paid" || s.metadata?.app !== APP_TAG) continue;
+    scanned++;
+    const r = await fulfillFromStripeRecord(s.id, s.metadata);
+    if (r.outcome === "credited") credited++;
+  }
+  if (credited > 0)
+    console.log(
+      `[Payments] 원장 대조 회수: ${credited}건 충전(검사 ${scanned}건)`,
+    );
+  return { scanned, credited };
+}
+
+// ⚠️ 수정금지(승인필요) 2026-08-12 사장님 승인 = **웹훅 구독 자가 보증** = 대시보드 클릭 의존 제거.
+//   서버가 켜질 때 우리 엔드포인트의 구독 이벤트 2종을 검사하고, 빠져 있으면 직접 등록한다(설정을 코드가 보증).
+//   (2026-08-12 사고 실측 = 대시보드에서 payment_intent.succeeded 추가가 저장되지 않아 시트 충전이 전면 유실됐었다)
+const REQUIRED_WEBHOOK_EVENTS = [
+  "checkout.session.completed",
+  "payment_intent.succeeded",
+] as const;
+export async function ensureWebhookSubscription(): Promise<void> {
+  const eps = await stripe().webhookEndpoints.list({ limit: 16 });
+  const ours = eps.data.find((e) => e.url.endsWith("/api/payments/webhook"));
+  if (!ours) {
+    console.warn("[Payments] 웹훅 엔드포인트를 찾지 못함 = 구독 보증 건너뜀");
+    return;
+  }
+  const missing = REQUIRED_WEBHOOK_EVENTS.filter(
+    (ev) => !ours.enabled_events.includes(ev),
+  );
+  if (missing.length === 0) return;
+  await stripe().webhookEndpoints.update(ours.id, {
+    enabled_events: [
+      ...new Set([...ours.enabled_events, ...REQUIRED_WEBHOOK_EVENTS]),
+    ] as any,
+  });
+  console.log(`[Payments] 웹훅 구독 자가 교정: ${missing.join(", ")} 추가`);
+}
+
+// 부팅 자가치유 1벌 = 구독 보증 + 원장 대조(놓친 충전 회수). 실패해도 서버는 뜬다(로그만).
+export async function initPaymentSelfHeal(): Promise<void> {
+  try {
+    await ensureWebhookSubscription();
+  } catch (e: any) {
+    console.warn(
+      "[Payments] 구독 자가 보증 실패(무해, 다음 부팅 재시도):",
+      e?.message,
+    );
+  }
+  try {
+    await reconcilePayments(3);
+  } catch (e: any) {
+    console.warn(
+      "[Payments] 부팅 원장 대조 실패(스케줄러가 재시도):",
+      e?.message,
+    );
+  }
+}
+
 // ⚠️ 수정금지(승인필요) 2026-08-05 = 결제 끝나고 **돌아올 주소**를 고르는 곳 1벌.
 //   브라우저가 알려 준 화면 주소(Origin)가 **우리 것이면** 그리로, 아니면 요청받은 주소로.
 //   (아무 주소나 받으면 결제 후 낯선 사이트로 보내는 통로가 된다.)
@@ -276,44 +388,79 @@ export function registerPaymentRoutes(app: Express): void {
       return res.json({ received: true });
     }
 
-    // ⚠️ 수정금지(승인필요) 2026-07-30 = **우리가 만든 결제인지** 먼저 확인한다.
-    //   내손앱과 같은 Stripe 계정이라 이 끝점은 내손앱 결제 통보도 받는다. 표식을 안 보면
-    //   내손앱 손님의 €10 이 Tripis 크레딧까지 만들어 장부가 틀어진다(우리가 만든 결제에만 이 표식이 붙는다).
-    if (meta?.app !== APP_TAG) {
-      console.log(
-        "[Payments] 우리 앱 결제가 아님 = 충전 안 함:",
-        refId,
-        meta?.app ?? "(표식 없음)",
-      );
-      return res.json({ received: true });
-    }
-
-    const userId = meta?.userId;
-    if (!userId) {
-      // stripe trigger 로 만든 가짜 통보 등 = 넣을 대상이 없음. 재전송은 무의미하므로 200.
-      console.warn("[Payments] 통보에 userId 없음 = 충전 대상 불명:", refId);
-      return res.json({ received: true });
-    }
-
+    // 판정·집행 = 충전 집행 1벌(fulfillFromStripeRecord §0). 표식(app=tripis) 검사도 그 안 =
+    //   내손앱과 같은 Stripe 계정이라 남의 결제 통보가 섞여 와도 장부가 안 틀어진다(2026-07-30 원칙 유지).
     try {
-      const balance = await creditService.processPurchase(userId, refId);
-      console.log(
-        `[Payments] 충전 완료 user=${userId} ref=${refId} 잔액=${balance}`,
-      );
-    } catch (e: any) {
-      // 23505 = DB 규칙(credit_transactions_purchase_ref_uniq) 위반 = 같은 결제를 이미 충전함(통보 재전송).
-      //   장부 줄 INSERT 가 거부되면 잔액 UPDATE 는 실행조차 안 되므로 이중지급이 물리적으로 불가능하다.
-      if (e?.code === "23505") {
+      const r = await fulfillFromStripeRecord(refId, meta);
+      if (r.outcome === "not_ours")
+        console.log("[Payments] 우리 앱 결제가 아님 = 충전 안 함:", refId);
+      else if (r.outcome === "no_user")
+        console.warn("[Payments] 통보에 userId 없음 = 충전 대상 불명:", refId);
+      else if (r.outcome === "duplicate")
         console.log("[Payments] 중복 통보 무시(이미 충전됨):", refId);
-        return res.json({ received: true });
-      }
-      // 그 외 오류 = 500 으로 답해 스트라이프의 자동 재전송을 복구 수단으로 쓴다.
+    } catch (e: any) {
+      // 집행 오류 = 500 으로 답해 스트라이프의 자동 재전송을 복구 수단으로 쓴다(+일일 원장 대조가 최후망).
       console.error("[Payments] 충전 실패:", e?.message);
       return res.status(500).json({ error: "fulfillment_failed" });
     }
 
     res.json({ received: true });
   });
+
+  // ── 6) 앱 즉시 확인 = POST /api/payments/confirm = 시트가 닫히는 순간 충전 반영(내손앱과 같은 즉시성) ──
+  //   ⚠️ 클라이언트의 "주장"으로 충전하지 않는다(§9) = 앱은 결제 번호(신호)만 주고,
+  //     서버가 Stripe 원장에서 그 결제를 **직접 조회**해 성공·표식·소유자를 확인한 뒤 집행 1벌로 충전한다.
+  //     가짜 번호 = Stripe 조회에서 실패 / 남의 결제 번호 = 소유자 불일치 403 / 재호출 = DB 규칙이 이중충전 차단.
+  app.post("/api/payments/confirm", async (req: Request, res: Response) => {
+    try {
+      const userId = getUserIdFromReq(req);
+      if (!userId) return res.status(401).json({ error: "login_required" });
+      const intentId = String(req.body?.intentId || "");
+      if (!/^pi_[A-Za-z0-9]+$/.test(intentId))
+        return res.status(400).json({ error: "bad_intent_id" });
+
+      const pi = await stripe().paymentIntents.retrieve(intentId);
+      if (pi.metadata?.userId !== userId)
+        return res.status(403).json({ error: "not_your_payment" });
+      if (pi.status !== "succeeded")
+        return res
+          .status(409)
+          .json({ error: "not_succeeded", status: pi.status });
+
+      const r = await fulfillFromStripeRecord(pi.id, pi.metadata);
+      if (r.outcome === "credited")
+        return res.json({ ok: true, balance: r.balance });
+      if (r.outcome === "duplicate")
+        return res.json({
+          ok: true,
+          balance: await creditService.getBalance(userId),
+        });
+      return res.status(409).json({ error: r.outcome });
+    } catch (e: any) {
+      console.error("[Payments] 즉시 확인 실패:", e?.message);
+      res.status(502).json({ error: "confirm_failed" });
+    }
+  });
+
+  // ── 7) 관리자 수동 원장 대조 = POST /api/admin/payments/reconcile (스케줄러·부팅과 같은 함수 1벌) ──
+  app.post(
+    "/api/admin/payments/reconcile",
+    async (req: Request, res: Response) => {
+      try {
+        const { getUserIdFromReq: getUid, getRoleFromDb } = await import(
+          "./auth-user"
+        );
+        const uid = getUid(req);
+        if (!uid) return res.status(401).json({ error: "login_required" });
+        if ((await getRoleFromDb(uid)) !== "admin")
+          return res.status(403).json({ error: "admin_only" });
+        res.json({ success: true, ...(await reconcilePayments(3)) });
+      } catch (e: any) {
+        console.error("[Payments] 수동 원장 대조 실패:", e?.message);
+        res.status(500).json({ error: "reconcile_failed" });
+      }
+    },
+  );
 
   // (옛 6번 결제 상태 조회 라우트 = 폰이 결제 시트로 전환되며 호출자 0 = 완전삭제 2026-08-12 §19)
 }

@@ -27,9 +27,13 @@ export class DataScheduler {
     //   관리자 화면 버튼(POST /api/admin/account-cleanup)과 **같은 함수 1벌**을 부른다(§0).
     this.scheduleTask("account_cleanup", "30 4 * * *");
 
+    // 💳 결제 원장 대조: 하루 1번 새벽 (2026-08-12 사장님 승인 = 자가치유 최후망)
+    //   부팅 자가치유·관리자 수동 라우트와 **같은 함수 1벌**(payment-routes reconcilePayments §0).
+    this.scheduleTask("payment_reconcile", "50 4 * * *");
+
     this.isRunning = true;
     console.log(
-      "[Scheduler] ✅ exchange_rate_sync 매일 00:00 / 08:00 / 16:00 + account_cleanup 매일 04:30 활성",
+      "[Scheduler] ✅ exchange_rate_sync 매일 00:00 / 08:00 / 16:00 + account_cleanup 매일 04:30 + payment_reconcile 매일 04:50 활성",
     );
   }
 
@@ -68,6 +72,11 @@ export class DataScheduler {
           itemsProcessed: r.대상계정,
           errors: r.실패한사진 > 0 ? [`사진 삭제 실패 ${r.실패한사진}장`] : [],
         };
+      } else if (taskName === "payment_reconcile") {
+        // 결제 원장 대조 = 부팅·관리자 라우트와 같은 함수 1벌(§0). 놓친 충전을 자동 회수.
+        const { reconcilePayments } = await import("../payment-routes");
+        const r = await reconcilePayments(3);
+        result = { success: true, itemsProcessed: r.credited, errors: [] };
       }
 
       const elapsed = Date.now() - startTime.getTime();

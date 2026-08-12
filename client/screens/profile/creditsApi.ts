@@ -81,20 +81,41 @@ export async function createCheckout(): Promise<{
   }
 }
 
-// 폰 결제 시트용 결제 생성 = POST /api/payments/sheet-intent → { clientSecret }.
-//   시트를 열기 위한 열쇠만 받는다. 충전 확정은 서버 웹훅 1경로(§9).
+// 폰 결제 시트용 결제 생성 = POST /api/payments/sheet-intent → { clientSecret, intentId }.
+//   시트를 열기 위한 열쇠만 받는다. 충전 확정 = 서버(§9 개정 2026-08-12 = 진실은 Stripe 원장).
 //   (옛 getSessionStatus/세션 상태 조회 = 폰이 결제 시트로 전환되며 호출자 0 = 완전삭제 2026-08-12 §19)
 export async function createSheetIntent(): Promise<{
   clientSecret: string;
+  intentId: string;
 } | null> {
   try {
     const data = (await (
       await apiRequest("POST", "/api/payments/sheet-intent")
-    ).json()) as { clientSecret?: unknown };
-    return typeof data.clientSecret === "string"
-      ? { clientSecret: data.clientSecret }
+    ).json()) as { clientSecret?: unknown; intentId?: unknown };
+    return typeof data.clientSecret === "string" &&
+      typeof data.intentId === "string"
+      ? { clientSecret: data.clientSecret, intentId: data.intentId }
       : null;
   } catch {
     return null;
+  }
+}
+
+// 시트가 닫히는 순간 즉시 충전 반영 = POST /api/payments/confirm (2026-08-12 사장님 승인).
+//   앱은 결제 번호(신호)만 보낸다 — 판정은 서버가 Stripe 원장에서 직접(클라이언트 주장 신뢰 0 = §9 정신 유지).
+//   실패해도 무해 = 웹훅·일일 원장 대조가 뒤에서 채운다(자가치유 3겹).
+export async function confirmTopup(
+  intentId: string,
+): Promise<{ ok: boolean; balance?: number }> {
+  try {
+    const data = (await (
+      await apiRequest("POST", "/api/payments/confirm", { intentId })
+    ).json()) as { ok?: unknown; balance?: unknown };
+    return {
+      ok: data.ok === true,
+      balance: typeof data.balance === "number" ? data.balance : undefined,
+    };
+  } catch {
+    return { ok: false };
   }
 }
