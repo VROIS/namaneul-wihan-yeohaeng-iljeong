@@ -57,6 +57,16 @@ gmp-place-autocomplete { width: 100%; display: block; }
     }
   }
 
+  // 🔎 2026-08-12 사장님 승인 = 웹뷰 안 오류를 밖(RN)으로 전부 올린다 → RN이 서버(/api/app-errors)로 전달.
+  //   왜: A36(One UI 8) 키보드·빈화면 증상을 USB 없이 원격으로 확정하기 위해(사장님 = 폰 재현만, 원인 확인 = 서버 로그).
+  window.onerror = function(msg, src, line) {
+    postRN({ type: "error", message: "js오류: " + msg + " @" + (src || "") + ":" + (line || "") });
+  };
+  window.addEventListener("unhandledrejection", function(ev) {
+    var r = ev && ev.reason;
+    postRN({ type: "error", message: "promise오류: " + ((r && (r.message || r)) || "알수없음") });
+  });
+
   // 🏨 2026-06-29 = WebView 동적높이 (= 빈공간 결함 해소): 입력칸일 땐 작게, 드롭다운 펼치면 크게.
   //   입력 포커스 중 = 드롭다운 공간 확보(300px), 비포커스 = 입력칸 높이만큼. RN이 resize 받아 WebView 높이 조절.
   var DROPDOWN_SPACE = 300;

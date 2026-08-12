@@ -96,6 +96,10 @@ export async function buildDayResult(
 
     return {
       ...safePlace,
+      // 🎙️ 2026-08-12 사장님 승인 = 슬롯 id = 창고 행 번호(`db-<번호>`, DB-only 동형) = [해설 듣기] 버튼 조건 충족.
+      //   MIX 는 창고 저장(ag3-save-new-places)이 돌려준 행 번호(psrRowId)가 이 시점에 이미 place 에 실려 있다.
+      //   번호가 없으면(저장 실패 등) 임시 id(v3-…) 유지 = 화면 규칙대로 배지를 안 그린다(헛클릭 방지).
+      ...(ep.psrRowId != null ? { id: `db-${ep.psrRowId}` } : {}),
       // 0이 아닌 경우만 포함
       ...(finalScore ? { finalScore } : {}),
       ...(buzzScore ? { buzzScore } : {}),

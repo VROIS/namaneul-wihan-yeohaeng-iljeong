@@ -159,6 +159,9 @@ export async function saveNewPlacesToDB(
             place.lng = en.longitude;
           }
         }
+        // 🎙️ 2026-08-12 사장님 승인 = 창고 행 번호를 장소 객체에 실음 → MIX 슬롯 id 가 DB-only 와 같은
+        //   `db-<번호>` 가 되어 [해설 듣기] 조건(화면 1벌)이 MIX 여정에서도 성립한다(pipeline-v3-day-builder 참조).
+        if (r.rowId != null) (place as any).psrRowId = r.rowId;
         return { place, seedCategory, action: r.action, rowId: r.rowId };
       } catch (e) {
         console.error(

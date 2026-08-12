@@ -20,7 +20,6 @@ import {
   SpaceGrotesk_700Bold,
 } from "@expo-google-fonts/space-grotesk"; // ⚠️ 수정금지(승인필요) — BTS 랜딩 모던 타이포
 import * as SplashScreen from "expo-splash-screen";
-import { Asset } from "expo-asset";
 
 import { initI18nLanguage } from "@/lib/i18n";
 import { queryClient } from "@/lib/query-client";
@@ -32,22 +31,18 @@ import ExpertOverlay from "@/screens/expert/ExpertOverlay";
 import MainAppOverlay from "@/screens/bts/MainAppOverlay";
 // 결제 후 복귀 = 프로필(충전소)로 보내는 1벌(2026-08-05 사장님 TestFlight 실증)
 import PaymentReturnHandler from "@/components/PaymentReturnHandler";
-// 앱을 열면 뜨는 소개 화면(로고 + 슬로건). 폰 시작 그림이 걷힌 직후를 이어받는다.
-import IntroSplash from "@/components/IntroSplash";
 
 // ⚠️ 수정금지(승인필요) 2026-08-09 사장님 지시 = **첫 실행에 빈 화면이 스치는 것** 제거.
 //   전역(컴포넌트 밖)에서 부른다 = 컴포넌트 안이면 이미 걷힌 뒤라 늦는다(expo 공식 주의사항).
 SplashScreen.preventAutoHideAsync();
-// 걷을 때 툭 끊지 않고 300ms 로 사라지게 한다 = 스플래시(베이지)와 첫 화면(흰색)의 색 차이를 눈이 못 잡는다.
+// 걷을 때 툭 끊지 않고 300ms 로 사라지게 한다 = 시작 그림과 첫 화면(둘 다 흰 바탕)이 한 장면처럼 이어진다.
 //   ⚠️ JS 옵션이라 **다시 굽지 않아도** 적용된다(app.json 스플래시 설정을 건드리면 다시 구워야 함).
 //   fade 는 아이폰 전용 = 안드로이드는 duration 만 적용(부품 타입 주석 명시).
 SplashScreen.setOptions({ fade: true, duration: 300 });
 
-// ⚠️ 수정금지(승인필요) 2026-08-10 사장님 지적 = 인트로(IntroSplash) 로고 이미지(114KB)가 늦게 떠서
-//   "로고 먼저 → 글자" 연출이 느려 보였다. 폰트를 읽는 이 시간(= 스플래시가 아직 떠 있는 시간)에
-//   같은 로고를 **같이 미리 받아둔다**(§0 = 새 로딩창 안 만들고 이미 있는 창 재사용).
-//   IntroSplash 가 뜰 때는 이미 캐시돼 있어 그 화면의 onLoad 가 거의 즉시 불린다.
-Asset.loadAsync(require("../assets/images/tripis-mark.png")).catch(() => {});
+// ⚠️ 수정금지(승인필요) 2026-08-12 사장님 확정 = **소개 화면(IntroSplash) 완전삭제 §19.**
+//   앱을 열면 시작 그림(로고+Tripis+슬로건 1장, app.json) → 곧장 첫 화면. 화면 2장·1.8초 애니 제거 = 체감 속도.
+//   글자 애니메이션 = 시작 그림이 정지 이미지라 불가 = 속도 우선으로 포기(사장님 확정).
 
 export default function App() {
   // ⚠️ 수정금지(승인필요) — 폰트 로드 (Pretendard 4종 + NotoSerifKR 2종 + PlayfairDisplay 2종)
@@ -81,10 +76,6 @@ export default function App() {
   const onFirstLayout = useCallback(() => {
     if (loaded || error) SplashScreen.hideAsync();
   }, [loaded, error]);
-
-  // 소개 화면이 끝나면 내려간다(2초 뒤 자동 / 누르면 즉시). 앱을 열 때마다 한 번.
-  const [introDone, setIntroDone] = React.useState(false);
-  const onIntroDone = useCallback(() => setIntroDone(true), []);
 
   if (!loaded && !error) {
     return null;
@@ -126,8 +117,6 @@ export default function App() {
                       = 이동을 두 곳에서 하지 않는다(§0). */}
                   <PaymentReturnHandler />
                 </NavigationContainer>
-                {/* 소개 화면 = 모든 것 위에 덮는다. 끝나면 사라지고 다시 안 뜬다. */}
-                {!introDone && <IntroSplash onDone={onIntroDone} />}
                 <StatusBar style="auto" />
               </KeyboardProvider>
             </GestureHandlerRootView>
@@ -142,8 +131,9 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     // ⚠️ 수정금지(승인필요) 2026-08-09 사장님 확정 = **다크 지원 안 함 = 밝음 고정.**
-    //   시작 그림(app.json)의 밝은 바탕과 같은 색 = 그림이 걷히는 순간 색이 안 튄다.
+    //   시작 그림(app.json)의 바탕과 같은 색 = 그림이 걷히는 순간 색이 안 튄다.
+    //   2026-08-12 = 흰색 통일(사장님 확정, 옛 베이지 폐기 §19) = app.json backgroundColor 와 동일값.
     //   기기 설정을 따라가는 분기는 두지 않는다(사장님: 한국 사용자는 다크를 거의 안 쓴다).
-    backgroundColor: "#FAF6EF",
+    backgroundColor: "#FFFFFF",
   },
 });

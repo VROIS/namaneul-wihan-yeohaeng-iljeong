@@ -159,9 +159,10 @@ export default function TripsSection({ profile }: { profile: ProfileApi }) {
                 <Icon name="x" size={13} color="#64748B" />
               </Pressable>
 
-              {/* 1. 도시명 = 관리자일 때만 별 자리만큼 오른쪽 여백을 더 준다(일반 사용자 = 옛 값 24 그대로) */}
+              {/* 1. 도시명 = 관리자일 때만 **왼쪽** 별 자리만큼 여백(2026-08-12 별 좌상단 이동 §22 지적 반영).
+                  옛 오른쪽 54 보정 폐기 §19(별이 왼쪽으로 갔으므로 오른쪽은 X 버튼 몫 = cardHeaderRow 기본 24 그대로). */}
               <View
-                style={[styles.cardHeaderRow, isAdmin && { paddingRight: 54 }]}
+                style={[styles.cardHeaderRow, isAdmin && { paddingLeft: 32 }]}
               >
                 <Text style={styles.cardCityRich} numberOfLines={1}>
                   {trip.rawData?.destination || trip.title}

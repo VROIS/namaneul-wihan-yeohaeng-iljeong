@@ -11,6 +11,8 @@ import {
   TextInput,
 } from "react-native";
 import { apiRequest } from "@/lib/query-client";
+// 앱 오류 보고 정본 1벌(§16) = App.tsx 전역 핸들러와 같은 통로(배칭·플랫폼 정보 포함)
+import { reportError } from "@/lib/error-reporter";
 import {
   PLACE_AUTOCOMPLETE_HTML,
   type PlaceAutoSelection,
@@ -160,6 +162,12 @@ function PlaceAutocompleteNative({
   const [ready, setReady] = useState(false);
   // 🏨 2026-06-29 = WebView 동적높이 (= 고정 280px 빈공간 결함 해소): 위젯이 resize로 알려준 높이만큼만 차지.
   const [webHeight, setWebHeight] = useState(56);
+  // ⌨️ 2026-08-12 사장님 승인 = A36(One UI 8·시스템웹뷰 150) 키보드 충돌 대응.
+  //   기전: Android 15+ 는 키보드가 떠도 창을 안 줄이는데(edge-to-edge 강제), 그 키보드 애니메이션 **도중에**
+  //   웹뷰 크기를 바꾸면(포커스 → resize 300 메시지) 새 시스템웹뷰가 화면을 비우는 알려진 계열(webview#3816 등).
+  //   대응: 손가락이 닿는 **즉시**(포커스·키보드보다 먼저) 드롭다운 높이로 미리 키워 둔다 = 크기 변경과
+  //   키보드 애니가 절대 안 겹침. 값 300 = HTML 쪽 DROPDOWN_SPACE 와 동일(같아야 뒤따르는 resize 메시지가 무변경 no-op).
+  const preExpand = () => setWebHeight((h) => (h < 300 ? 300 : h));
   const html = useMemo(
     () =>
       PLACE_AUTOCOMPLETE_HTML({
@@ -187,13 +195,22 @@ function PlaceAutocompleteNative({
           address: data.address,
           coords: data.coords,
         });
-      } else if (data.type === "error")
+      } else if (data.type === "error") {
         console.warn("[PlaceAutocompleteWidget] WebView error:", data.message);
+        // 🔎 2026-08-12 사장님 승인 = 웹뷰 내부 오류를 앱 오류 보고 **정본 1벌**(lib/error-reporter, App.tsx 와 동일 통로 §16)로 전달.
+        //   A36 재현 시 사장님은 폰만 만지고, 원인은 서버 오류함(/api/app-errors)에서 원격 확인(USB 인프라 불필요).
+        reportError(String(data.message || "").slice(0, 500), {
+          component: `PlaceAutocompleteWidget(${Platform.OS})`,
+        });
+      }
     } catch {}
   }
 
   return (
-    <View style={[styles.container, { height: height ?? webHeight }]}>
+    <View
+      style={[styles.container, { height: height ?? webHeight }]}
+      onTouchStart={preExpand}
+    >
       <WebView
         key={apiKey}
         originWhitelist={["*"]}

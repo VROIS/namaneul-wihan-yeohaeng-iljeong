@@ -220,12 +220,12 @@ export const styles = StyleSheet.create({
     alignItems: "center",
     zIndex: 10,
   },
-  // 🏆 2026-08-02 = 대표 올리기 별(관리자에게만 렌더). X 삭제 버튼 바로 왼쪽에 같은 크기·같은 알약으로 붙는다
-  //   = 새 색·새 모양을 만들지 않고 바로 위 cardDeleteBtnRich 값 그대로(자리만 오른쪽 10 + 버튼24 + 간격6 = 40).
+  // 🏆 2026-08-02 = 대표 올리기 별(관리자에게만 렌더). 크기·알약은 cardDeleteBtnRich 값 그대로(새 모양 안 만듦).
+  //   ⚠️ 2026-08-12 사장님 확정 = 별을 **왼쪽 상단**으로 = X(오른쪽 상단)와 붙어 있어 오터치가 났다(옛 right:40 폐기 §19).
   cardRepBtnRich: {
     position: "absolute",
     top: 10,
-    right: 40,
+    left: 10,
     width: 24,
     height: 24,
     borderRadius: 12,
