@@ -19,6 +19,8 @@ import type {
   PlaceResult,
 } from "../agents/types";
 import { MEAL_BUDGET, getCompanionCount } from "../agents/types";
+// ⚠️ 2026-08-12 운영 500 수정 = 예산값 정규화 1벌(route-local·MIX 와 동일 §0)
+import { normalizeTravelStyle } from "../agents/pipeline-v3-types";
 // ⚠️ 수정금지(승인필요) 2026-05-25 = 헌법 §16 = shouldApplyGuidePrice 단일 SSOT (= transport-pricing-service)
 // = 옛 로컬 정의 (= 같은 이름 다른 의미) = silent drift 위험 = 폐기
 import { shouldApplyGuidePrice } from "../transport-pricing-service";
@@ -106,7 +108,8 @@ export function buildRouteInputJson(
     formData.mobilityStyle,
     formData.travelStyle,
   );
-  const mealBudget = MEAL_BUDGET[formData.travelStyle || "Reasonable"];
+  // ⚠️ 2026-08-12 운영 500 수정 = 정규화 필수(route-local·MIX 와 동일 1벌 §0)
+  const mealBudget = MEAL_BUDGET[normalizeTravelStyle(formData.travelStyle)];
 
   return {
     city_center: resolveCityCenter(formData, cityCoords, places),
@@ -163,7 +166,8 @@ export function generateRoutePrompt(
 ): { prompt: string; inputJson: RouteInputJson } {
   const inputJson = buildRouteInputJson(skeleton, places, cityCoords);
   const { formData, paceConfig } = skeleton;
-  const mealBudget = MEAL_BUDGET[formData.travelStyle || "Reasonable"];
+  // ⚠️ 2026-08-12 운영 500 수정 = 정규화 필수(route-local·MIX 와 동일 1벌 §0)
+  const mealBudget = MEAL_BUDGET[normalizeTravelStyle(formData.travelStyle)];
   const transportMode = inputJson.protagonist.transport_mode;
   const nonRestaurantCount = inputJson.places.length;
   const tc = inputJson.trip_config;

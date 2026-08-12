@@ -8,6 +8,7 @@ import {
   real,
   boolean,
   jsonb,
+  unique,
 } from "drizzle-orm/pg-core";
 import { dataSourceEnum } from "./enums";
 import { cities } from "./cities";
@@ -99,6 +100,32 @@ export const placeSeedRaw = pgTable("place_seed_raw", {
   googlePrimaryType: text("google_primary_type"), // Google primary type (museum, restaurant 등)
   geminiRank: integer("gemini_rank"), // Gemini 응답 순위 (rank 재정렬 우선 키)
 });
+
+// ⚠️ 수정금지(승인필요) 2026-08-12 = 다국어 노출용 번역 캐시(§2.3 Phase A2). place_seed_raw.summary_ko/editorial_summary
+//   (여전히 한국어 원본, 컬럼명 안 바꿈 = 2026-08-12 판단) 를 노출 언어별로 번역해 캐시. place_id+language 조합당 1행.
+//   실제 DB에 직접 CREATE TABLE 로 먼저 만들고(db:push 금지, 위 90-92행 사유와 동일) 이 정의를 맞춰 등재함.
+export const placeTranslations = pgTable(
+  "place_translations",
+  {
+    id: serial("id").primaryKey(),
+    placeId: integer("place_id")
+      .notNull()
+      .references(() => placeSeedRaw.id, { onDelete: "cascade" }),
+    language: text("language").notNull(), // 'en'|'ja'|'zh'|'fr'|'de'|'es' 등 (ko = 원본이라 캐시 대상 아님)
+    summary: text("summary"), // summary_ko 번역본
+    editorialSummary: text("editorial_summary"), // editorial_summary 번역본
+    createdAt: timestamp("created_at")
+      .default(sql`CURRENT_TIMESTAMP`)
+      .notNull(),
+  },
+  (t) => [
+    // 실제 DB에 이미 있는 제약(위 CREATE TABLE 그대로 등재, §19 DB↔레포 동기화)
+    unique("place_translations_place_id_language_uniq").on(
+      t.placeId,
+      t.language,
+    ),
+  ],
+);
 
 export type Review = typeof reviews.$inferSelect;
 export type PlaceSeedRaw = typeof placeSeedRaw.$inferSelect;

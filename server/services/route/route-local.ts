@@ -6,6 +6,8 @@
 // = 활동 = AG2 풀 top-rank 채택(슬롯 상한) / 식사 = 슬롯3 점심(활동2·4 최근접) + 마지막 저녁(최종활동·중심 최근접)
 import type { AG1Output, PlaceResult } from "../agents/types";
 import { minutesToTime, MEAL_BUDGET } from "../agents/types";
+// ⚠️ 2026-08-12 운영 500 수정 = 예산값 정규화 1벌(MIX day-builder 와 동일 §0). 소문자 값이 오면 표 조회가 undefined.min 으로 즉사했다.
+import { normalizeTravelStyle } from "../agents/pipeline-v3-types";
 import {
   haversineKm,
   calcTransitHaversine,
@@ -290,7 +292,8 @@ export function buildRouteLocal(
   const { formData, daySlotsConfig, paceConfig, companionCount } = skeleton;
   const slotDuration = paceConfig.slotDurationMinutes; // 활동 1곳 시간
   const mealDuration = paceConfig.mealDurationMinutes; // 식사 1회 시간(밀도별, 활동보다 짧음)
-  const mealBudget = MEAL_BUDGET[formData.travelStyle || "Reasonable"];
+  // ⚠️ 2026-08-12 운영 실장애 수정 = 정규화 필수(소문자 "economic" 등 = 표 miss = undefined.min 500, Replit 로그 실측)
+  const mealBudget = MEAL_BUDGET[normalizeTravelStyle(formData.travelStyle)];
   // ⚠️ 수정금지(승인필요) 2026-07-31 사장님 승인(BTS D단계 BE-3) = 핀 식당 id 집합(풀 id 형식 = "db-<번호>").
   //   사용자가 직접 고른 식당 = 고정 식사자리(점심=3번째·저녁=마지막)에 가격대 필터보다 우선 착석.
   const pinnedRestIds = new Set(

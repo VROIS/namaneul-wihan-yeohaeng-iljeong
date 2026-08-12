@@ -18,10 +18,9 @@ import {
   TRAVEL_PACE_OPTIONS,
   MOBILITY_STYLE_OPTIONS,
 } from "@/types/trip";
-// ⚠️ 구글 공식 위젯(PlaceAutocompleteElement) 100% 활용
-import PlaceAutocompleteWidget, {
-  type PlaceAutoSelection as PlaceSelection,
-} from "@/components/PlaceAutocompleteWidget";
+// ⚠️ 구글 공식 위젯(PlaceAutocompleteElement) 100% 활용 = 검색 필드 부품 1벌(iOS·웹 인라인 / AOS 전체화면)
+import { type PlaceAutoSelection as PlaceSelection } from "@/components/PlaceAutocompleteWidget";
+import PlaceSearchField from "./components/PlaceSearchField";
 import { inputStyles as styles } from "./styles/input";
 import { WebInputModal, NativePicker } from "./components/DateTimePickers";
 import TripisModal, { type RepCard } from "@/components/tripis/TripisModal";
@@ -230,14 +229,13 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
           </ScrollView>
         </View>
 
-        {/* 3-4번 통합: 구글맵 위젯 통합 1개 필드 ('숙소명이나 도시명을 한글이나 원어로 입력해주세요') */}
+        {/* 3-4번 통합: 도시·숙소 검색 필드 1벌(PlaceSearchField) = iOS·웹 인라인 / AOS 전체화면 그릇(2026-08-12 §0 분리) */}
         <View style={{ marginBottom: 10, zIndex: 30 }}>
-          <PlaceAutocompleteWidget
+          <PlaceSearchField
             placeholder="숙소명이나 도시명을 한글이나 원어로 입력해주세요"
             language={i18n.language || "ko"}
-            cityPrefix={
-              formData.destination ? `${formData.destination} ` : undefined
-            }
+            destination={formData.destination}
+            accommodationName={formData.accommodationName}
             onSelect={(place: PlaceSelection) => {
               setFormData((prev) => ({
                 ...prev,

@@ -5,6 +5,8 @@
 //   = 사용자가 어떤 vibe 조합을 선택하든(6종 중 몇 개든, 향후 종류가 늘어도) 이 함수는 한 글자도 안 고쳐도 된다.
 // = 헌법 §16 = geminiClient 단일 진입점 통과. 톤 = 가장 비평적·적대적(사용자 신뢰 → 전문가검증 퍼널, 사장님 SSOT).
 
+import { getLanguageInstruction } from "../shared/language-instruction";
+
 export interface AiOpinionPlace {
   name: string;
   startTime?: string;
@@ -43,17 +45,6 @@ export interface AiOpinionInput {
   //   = 번역기 X, Gemini가 그 언어로 직접 작문. 미지정 시 한국어.
   language?: string;
 }
-
-// ⚠️ pipeline-v3.ts:383-391 langMap 패턴 그대로 재사용(복제, 원본 미수정) = 7개 언어 = i18n SUPPORTED_LANGS와 동일 세트.
-const LANG_INSTRUCTION: Record<string, string> = {
-  ko: "반드시 한국어로만 답하세요.",
-  en: "Answer entirely in English.",
-  ja: "必ず日本語で答えてください。",
-  fr: "Répondez entièrement en français.",
-  zh: "请完全用中文回答。",
-  es: "Responda completamente en español.",
-  de: "Antworten Sie vollständig auf Deutsch.",
-};
 
 /**
  * ⚠️ route-prompt.ts:94 buildRouteInputJson()과 동일 패턴 = 사용자 입력을 JSON 매트릭스로 그대로 변환.
@@ -96,8 +87,7 @@ function buildAiOpinionInputJson(input: AiOpinionInput) {
 
 export function generateAiOpinionPrompt(input: AiOpinionInput): string {
   const inputJson = buildAiOpinionInputJson(input);
-  const langInstruction =
-    LANG_INSTRUCTION[input.language || "ko"] || LANG_INSTRUCTION.ko;
+  const langInstruction = getLanguageInstruction(input.language);
 
   return `# 역할
 당신은 여행 전문가이자 냉정한 비평가입니다.
