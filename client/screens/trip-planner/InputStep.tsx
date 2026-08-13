@@ -252,7 +252,8 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
             <CitySearchAndroid
               theme={theme}
               topInset={insets.top}
-              selectedName={formData.accommodationName}
+              // 🏙️ iOS 인라인과 동일 UX(사장님 지적 2026-08-13) = 숙소 선택 전엔 도시명(디폴트 파리·칩/도시카드 선택 즉시 반영)이 필드에 보인다
+              selectedName={formData.accommodationName || formData.destination}
               placeholder={searchPlaceholder}
               language={i18n.language || "ko"}
               cityPrefix={
