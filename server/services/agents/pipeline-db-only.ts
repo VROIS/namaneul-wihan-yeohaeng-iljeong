@@ -46,6 +46,12 @@ export async function runPipelineDbOnly(
   // ===== AG4-DB = scenario.scenes 직접 사용 (= 사용자 SSOT 단계 4) =====
   // = ag4 안 scenario 호출 = 자유 동선
   // = 백필 = background fire-and-forget = FE 우선 노출
+  // ⚠️ 수정금지(승인필요) 2026-08-13 = isCityReady() 가 이미 조회한 도시중심좌표 그대로 전달(새 조회 0).
+  const cityCoords =
+    cityCheck.latitude != null && cityCheck.longitude != null
+      ? { lat: cityCheck.latitude, lng: cityCheck.longitude }
+      : undefined;
+
   const result = await finalizeDbOnlyItinerary({
     daySlotsConfig: skeleton.daySlotsConfig,
     travelPace: skeleton.travelPace,
@@ -53,6 +59,7 @@ export async function runPipelineDbOnly(
     companionCount: skeleton.companionCount,
     dayCount: skeleton.dayCount,
     cityId: cityCheck.cityId,
+    cityCoords,
     skeleton,
     inputPlaces: placesArr,
   });

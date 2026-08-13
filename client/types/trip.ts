@@ -125,8 +125,10 @@ export interface TransitInfo {
 // 🏨 Day별 숙소 설정 (이동형 여행: 결과화면에서 Day별 개별 설정)
 export interface DayAccommodation {
   day: number;
-  name: string;
-  address: string;
+  // ⚠️ 수정금지(승인필요) 2026-08-14 = name/address 는 **실제 사용자가 고른 숙소일 때만** 있다.
+  //   서버가 깃발용으로 넣는 도심좌표는 coords 만 있다 → 이름을 쓰려면 반드시 유무를 확인해야 한다(컴파일러가 강제).
+  name?: string;
+  address?: string;
   coords: { lat: number; lng: number };
   placeId?: string; // Google Place ID
 }
@@ -136,6 +138,9 @@ export interface DayPlan {
   places: Place[];
   city?: string;
   summary: string;
+  // 그 날의 시작·종료 시각(서버가 항상 실어 보냄, 예 "09:00"/"21:00")
+  startTime?: string;
+  endTime?: string;
   // 🏨 해당 Day의 숙소 정보 (출발/복귀 기준점)
   accommodation?: DayAccommodation;
   // 🚶 숙소→첫장소, 마지막장소→숙소 이동정보

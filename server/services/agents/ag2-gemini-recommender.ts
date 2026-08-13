@@ -44,14 +44,30 @@ export async function isCityReady(
   cityId: number | null;
   cityName: string;
   count: number;
+  latitude: number | null;
+  longitude: number | null;
 }> {
   if (!db)
-    return { ready: false, cityId: null, cityName: destination, count: 0 };
+    return {
+      ready: false,
+      cityId: null,
+      cityName: destination,
+      count: 0,
+      latitude: null,
+      longitude: null,
+    };
 
   const cityResult = await findCityUnified(destination, destinationCoords);
   const cityId = cityResult?.cityId;
   if (!cityId) {
-    return { ready: false, cityId: null, cityName: destination, count: 0 };
+    return {
+      ready: false,
+      cityId: null,
+      cityName: destination,
+      count: 0,
+      latitude: null,
+      longitude: null,
+    };
   }
 
   // ⚠️ 수정금지(승인필요) 2026-05-21 = 사용자 SSOT = collection_phase 완전 폐기 (= 같은 장소 = 다른 phase = 같은 데이터)
@@ -63,11 +79,14 @@ export async function isCityReady(
     .from(placeSeedRaw)
     .where(eq(placeSeedRaw.cityId, cityId));
   const count = Number(countRows[0]?.count || 0);
+  // ⚠️ 수정금지(승인필요) 2026-08-13 = 좌표는 findCityUnified 가 이미 조회한 값(새 조회 0).
   return {
     ready: count >= READY_THRESHOLD,
     cityId,
     cityName: cityResult.name,
     count,
+    latitude: cityResult.latitude ?? null,
+    longitude: cityResult.longitude ?? null,
   };
 }
 

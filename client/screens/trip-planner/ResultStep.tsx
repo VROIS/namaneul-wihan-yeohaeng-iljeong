@@ -266,14 +266,10 @@ export default function ResultStep({ planner }: { planner: PlannerApi }) {
               .filter((p) => p.lat != null && p.lng != null);
           })()}
           start={(() => {
-            // 출발 깃발 = 현재 Day(currentMapDay) 숙소 ?? 도시중심(destinationCoords)
-            const dayAccom =
-              dayAccommodations.find((a) => a.day === currentMapDay) ||
-              (
-                (itinerary.days || []).find(
-                  (d) => d.day === currentMapDay,
-                ) as any
-              )?.accommodation;
+            // ⚠️ 수정금지(승인필요) 2026-08-13 = 이름은 실제 고른 숙소만. 그 외는 좌표만 쓰고 라벨은 번역 문구.
+            const dayAccom = dayAccommodations.find(
+              (a) => a.day === currentMapDay,
+            );
             if (dayAccom?.coords?.lat) {
               return {
                 lat: dayAccom.coords.lat,
@@ -281,11 +277,13 @@ export default function ResultStep({ planner }: { planner: PlannerApi }) {
                 label: `${t("trip.departure")}: ${dayAccom.name}`,
               };
             }
-            const c = formData.destinationCoords;
-            if (c?.lat)
+            const autoCoords =
+              (itinerary.days || []).find((d) => d.day === currentMapDay)
+                ?.accommodation?.coords || formData.destinationCoords;
+            if (autoCoords?.lat)
               return {
-                lat: c.lat,
-                lng: c.lng,
+                lat: autoCoords.lat,
+                lng: autoCoords.lng,
                 label: `${t("trip.departure")}: ${t("trip.departureCityCenter", { destination: itinerary.destination })}`,
               };
             return null;

@@ -71,7 +71,17 @@ export function useAccommodations({
               day: dNum,
               accommodationCoords: place.coords,
               places: targetDay.places,
-              formData,
+              // ⚠️ 수정금지(승인필요) 2026-08-14 사장님 SSOT = 이미 만든 여정의 값은 그 여정이 갖고 있다.
+              //   홈 폼(formData)은 신규 생성 전용 = 여기 보내지 않는다(복원하면 값이 어긋남).
+              formData: {
+                travelStyle: itinerary.travelStyle,
+                mobilityStyle: itinerary.mobilityStyle,
+                companionType: itinerary.companionType,
+                startDate: itinerary.startDate,
+                endDate: itinerary.endDate,
+                startTime: targetDay.startTime,
+                endTime: targetDay.endTime,
+              },
             },
           );
           const result = await response.json();

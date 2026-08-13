@@ -288,8 +288,11 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
         }
         setItinerary(raw as Itinerary);
         setAiOpinionData((raw as any).verification?.result ?? null);
+        // ⚠️ 수정금지(승인필요) 2026-08-13 = 이름 없는 것(서버 깃발용 좌표)은 실제 숙소가 아니므로 제외.
         const accoms: DayAccommodation[] = (raw.days || [])
-          .filter((d: any) => d.accommodation?.coords?.lat)
+          .filter(
+            (d: any) => d.accommodation?.coords?.lat && d.accommodation?.name,
+          )
           .map((d: any) => ({
             day: d.day,
             name: d.accommodation.name,
@@ -298,6 +301,8 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
             placeId: d.accommodation.placeId,
           }));
         setDayAccommodations(accoms);
+        // ⚠️ 수정금지(승인필요) 2026-08-13 사장님 SSOT = 입력화면 = 앱의 홈 = 항상 디폴트 상태.
+        //   travelStyle/travelPace/mobilityStyle 은 넣지 마라(DB값이 선택지 id 와 달라 버튼이 전부 풀림 → 생성 500).
         setFormData((prev) => ({
           ...prev,
           destination: raw.destination || prev.destination,
@@ -308,9 +313,6 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
             Array.isArray(data.vibes) && data.vibes.length
               ? data.vibes
               : prev.vibes,
-          travelStyle: data.travelStyle || prev.travelStyle,
-          travelPace: data.travelPace || prev.travelPace,
-          mobilityStyle: data.mobilityStyle || prev.mobilityStyle,
         }));
         setCurrentItineraryId(opts?.shared ? null : targetId);
         setSharedEntry(!!opts?.shared);

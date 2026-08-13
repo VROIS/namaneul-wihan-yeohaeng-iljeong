@@ -368,6 +368,8 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
       summary: `${formData.destination} 하루`,
       startTime: dayConfig.startTime,
       endTime: dayConfig.endTime,
+      // ⚠️ 수정금지(승인필요) 2026-08-13 = 출발 깃발용 좌표만. name 금지(한국어 고정문자열이 다국어 화면·딥링크로 샘).
+      accommodation: cityCoords ? { day: d, coords: cityCoords } : undefined,
       transit: {
         transits,
         totalDuration: transits.reduce((s, t) => s + t.duration, 0),
