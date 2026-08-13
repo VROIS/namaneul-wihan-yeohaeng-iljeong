@@ -396,11 +396,13 @@ export default function ResultStep({ planner }: { planner: PlannerApi }) {
       </ScrollView>
       {/* 🏨 2026-06-29 = 인앱 숙소 모달 완전삭제(§19) → Day헤더 "숙소 설정" 버튼이 출발바 아래 구글 위젯 인라인 토글로 대체 (AOS/웹) */}
 
-      {/* 🎹 2026-07-02 사용자 SSOT = iOS 전용 전체화면 위젯 Modal.
-            iOS는 키보드 떠도 화면 안줄어(WKWebView 설계) → 인라인 위젯(지도 아래 중간)이 키보드에 가림.
-            AOS는 화면축소(adjustResize)로 위젯이 위로밀려 정상 → iOS만 이 Modal로 위젯을 화면 최상단 전체화면에 띄워 동일효과(입력창 맨위+후보 키보드위 공간).
-            §19: 구글 위젯(PlaceAutocompleteWidget) 그대로, "담는 그릇"만 iOS 전체화면 Modal (NativePicker(DateTimePickers.tsx) iOS 패턴 재사용). 자체 입력창 재발명 아님. */}
-      {Platform.OS === "ios" && hotelModalDay != null && (
+      {/* 🎹 2026-07-02 사용자 SSOT = 전체화면 위젯 Modal (iOS 검증본).
+            iOS는 키보드 떠도 화면 안줄어(WKWebView 설계) → 인라인 위젯(지도 아래 중간)이 키보드에 가림 → 이 Modal 이 정답이었음.
+            🎹 2026-08-13 사장님 확정 = AOS 도 이 검증본 1벌 사용. Android 15+ 가 화면축소를 OS 차원에서 제거 + 시스템웹뷰 150 은
+            키보드 떠 있는 동안 웹뷰 크기가 바뀌면 내용을 지움(A36 실기기 실증) → AOS 인라인 폐기(DaySection = 웹 전용화 §19).
+            안드로이드 = 위젯 높이 고정(크기변경 0 = 지워질 계기 제거). iOS = 동적 높이 그대로 무변경.
+            §19: 구글 위젯(PlaceAutocompleteWidget) 그대로, "담는 그릇"만 전체화면 Modal. 자체 입력창 재발명 아님. */}
+      {Platform.OS !== "web" && hotelModalDay != null && (
         <Modal
           visible
           transparent
@@ -432,6 +434,8 @@ export default function ResultStep({ planner }: { planner: PlannerApi }) {
               <PlaceAutocompleteWidget
                 placeholder={t("trip.hotelSearchPlaceholder")}
                 language={i18n.language || "ko"}
+                // ⌨️ 안드로이드만 높이 고정 = 시스템웹뷰의 "키보드 중 크기변경 = 내용 지움" 결함 회피 (2026-08-13)
+                height={Platform.OS === "android" ? 360 : undefined}
                 cityPrefix={
                   itinerary?.destination
                     ? `${itinerary.destination} `

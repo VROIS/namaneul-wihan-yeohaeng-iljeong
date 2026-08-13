@@ -38,15 +38,15 @@ export function useAccommodations({
     //     근본 해결 = regenerate-day 가 고정 슬롯을 알게 하는 것(이 커밋 범위 밖).
     //     현재는 BTS 여정 저장(D10) 자체가 미배선이라 실제로 발생하지 않는다.
     if (formData.finalPlaceId) return;
-    // 🏨 2026-07-03 사용자 SSOT = 숙소는 여행 전체 공통(A안). 변경한 Day + 그 이후 Day 전부에 적용, 이전 Day는 유지.
-    //   예: Day2에서 B호텔 변경 → Day2·Day3=B, Day1=옛숙소 유지(2일차에 숙소 옮기는 실제 동선). 첫입력 숙소는 전 Day 기본값(A단계).
+    // 🏨 2026-08-13 사장님 확정 = 숙소변경은 **변경한 그날만** 적용(깃발·슬롯 동선 재정렬도 그날만, 다른 날 = 기존/도시중심 그대로).
+    //   옛 이후-Day 전파(A안) 폐기 = 2026-08-13 §19 (로컬호스트 실증: Day2 변경 시 Day3까지 재편성되던 결함).
     const targetDays = (itinerary?.days || [])
       .map((d) => d.day)
-      .filter((dNum) => dNum >= day);
+      .filter((dNum) => dNum === day);
 
-    // Day별 숙소 배열 = 변경Day 이상(>=)은 전부 새 숙소로 교체, 이전Day는 그대로
+    // Day별 숙소 배열 = 변경한 그날만 새 숙소로 교체, 나머지 날은 그대로
     setDayAccommodations((prev) => {
-      const kept = prev.filter((a) => a.day < day);
+      const kept = prev.filter((a) => a.day !== day);
       const applied: DayAccommodation[] = targetDays.map((dNum) => ({
         day: dNum,
         name: place.name,
@@ -57,7 +57,7 @@ export function useAccommodations({
       return [...kept, ...applied];
     });
 
-    // 서버에 동선 재최적화 요청 = 변경Day~마지막Day 각각(출발점 새숙소로 = 실시간 여정 갱신)
+    // 서버에 동선 재최적화 요청 = 변경한 그날 1회(출발점 새숙소로 = 실시간 여정 갱신)
     if (itinerary && place.coords.lat && place.coords.lng) {
       setIsReoptimizing(true);
       try {

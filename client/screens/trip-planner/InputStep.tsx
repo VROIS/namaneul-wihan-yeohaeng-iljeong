@@ -1,6 +1,6 @@
 // 입력 화면(InputStep.tsx) = 상단 고정 + DB 도시 동적 버튼 + '누구랑' 및 '누구를 위한' 100% 복원 완료
 import React, { useState, useEffect, useRef } from "react";
-import { View, Text, Pressable, ScrollView } from "react-native";
+import { View, Text, Pressable, ScrollView, Platform } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import {
   Brand,
@@ -23,6 +23,7 @@ import PlaceAutocompleteWidget, {
   type PlaceAutoSelection as PlaceSelection,
 } from "@/components/PlaceAutocompleteWidget";
 import { inputStyles as styles } from "./styles/input";
+import CitySearchAndroid from "./components/CitySearchAndroid";
 import { WebInputModal, NativePicker } from "./components/DateTimePickers";
 import TripisModal, { type RepCard } from "@/components/tripis/TripisModal";
 import type { PlannerApi } from "./hooks/useTripPlanner";
@@ -56,6 +57,20 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
   // 도시 카드 = 서버가 조립해 준 값 그대로(null = 아직 안 열림). ref = 늦게 온 응답이 새로 고른 도시를 덮지 않게.
   const [repCard, setRepCard] = useState<RepCard | null>(null);
   const lastCityRef = useRef<number>(0);
+
+  // ⌨️ 2026-08-13 사장님 확정 = AOS 숙소·도시 검색 = 독립 전체화면 모달(CitySearchAndroid, ResultStep 숙소 Modal 과 같은 검증 구조).
+  const searchPlaceholder = "숙소명이나 도시명을 한글이나 원어로 입력해주세요";
+  // 선택 배선 1벌 = 인라인(iOS·웹)과 AOS 모달이 같은 함수를 쓴다(§0). 내용은 기존 로직 그대로.
+  const handlePlaceSelect = (place: PlaceSelection) => {
+    setFormData((prev) => ({
+      ...prev,
+      destination: place.name || prev.destination,
+      accommodationName: place.name,
+      accommodationAddress: place.address,
+      accommodationCoords: place.coords,
+      accommodationPlaceId: place.placeId,
+    }));
+  };
 
   // 🏙️ 도시버튼 목록 = 서버 DB 실측(완비 도시만·완비순). 실패하면 빈 줄 = 가짜 도시 표시 금지.
   //   조회는 이 폴더의 다른 훅들과 같은 apiRequest 1벌(§16) = 주소 조립·오류 처리를 다시 만들지 않는다.
@@ -230,25 +245,31 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
           </ScrollView>
         </View>
 
-        {/* 3-4번 통합: 구글맵 위젯 통합 1개 필드 ('숙소명이나 도시명을 한글이나 원어로 입력해주세요') */}
+        {/* 3-4번 통합: 구글맵 위젯 통합 1개 필드 ('숙소명이나 도시명을 한글이나 원어로 입력해주세요')
+            ⌨️ 2026-08-13 사장님 확정 = AOS 만 돋보기 필드 → 독립 전체화면 모달(CitySearchAndroid). iOS·웹 = 인라인 그대로 무변경. */}
         <View style={{ marginBottom: 10, zIndex: 30 }}>
-          <PlaceAutocompleteWidget
-            placeholder="숙소명이나 도시명을 한글이나 원어로 입력해주세요"
-            language={i18n.language || "ko"}
-            cityPrefix={
-              formData.destination ? `${formData.destination} ` : undefined
-            }
-            onSelect={(place: PlaceSelection) => {
-              setFormData((prev) => ({
-                ...prev,
-                destination: place.name || prev.destination,
-                accommodationName: place.name,
-                accommodationAddress: place.address,
-                accommodationCoords: place.coords,
-                accommodationPlaceId: place.placeId,
-              }));
-            }}
-          />
+          {Platform.OS === "android" ? (
+            <CitySearchAndroid
+              theme={theme}
+              topInset={insets.top}
+              selectedName={formData.accommodationName}
+              placeholder={searchPlaceholder}
+              language={i18n.language || "ko"}
+              cityPrefix={
+                formData.destination ? `${formData.destination} ` : undefined
+              }
+              onSelect={handlePlaceSelect}
+            />
+          ) : (
+            <PlaceAutocompleteWidget
+              placeholder={searchPlaceholder}
+              language={i18n.language || "ko"}
+              cityPrefix={
+                formData.destination ? `${formData.destination} ` : undefined
+              }
+              onSelect={handlePlaceSelect}
+            />
+          )}
         </View>
 
         {/* 5. 일정 및 시간 선택 (디폴트 시작 09:00, 종료 21:00) */}

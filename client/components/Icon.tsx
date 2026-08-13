@@ -47,6 +47,7 @@ import {
   PlusCircle,
   RefreshCw,
   Save,
+  Search,
   Send,
   Settings,
   Shield,
@@ -121,6 +122,7 @@ const ICON_MAP: Record<string, React.ComponentType<LucideProps>> = {
   PlusCircle,
   RefreshCw,
   Save,
+  Search, // = 돋보기 (2026-08-13 AOS 숙소·도시 검색 필드)
   Send,
   Settings,
   Shield,

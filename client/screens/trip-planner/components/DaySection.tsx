@@ -142,10 +142,11 @@ export default function DaySection({
         </View>
       </View>
 
-      {/* 🏨 2026-06-29 사용자 SSOT = 인앱 모달 폐기(§19) → "숙소 설정" 버튼 누르면 그 자리에 구글 공식 위젯 인라인 표시.
+      {/* 🏨 2026-06-29 사용자 SSOT = "숙소 설정" 버튼 누르면 그 자리에 구글 공식 위젯 인라인 표시.
                     선택 → handleSetDayAccommodation(동선 재최적화 + dayAccommodations) → 출발바에 숙소명 + 지도 깃발 자동.
-                    🎹 2026-07-02 = AOS/웹만 인라인(키보드시 화면축소=adjustResize로 위젯 위로밀림=정상). iOS는 화면 안줄어 인라인이 키보드에 가림 → ResultStep의 iOS 전체화면 숙소 Modal로 분기(§19: 구글위젯 그대로, 담는 그릇만 iOS 전체화면). */}
-      {Platform.OS !== "ios" && hotelModalDay === currentDay?.day && (
+                    🎹 2026-08-13 사장님 확정 = 인라인은 **웹 전용**(웹 = 지금도 정상 = 무변경).
+                    iOS(2026-07-02)에 이어 AOS 도 ResultStep 전체화면 Modal 로 이관 = Android 15+ 화면축소 제거 + 웹뷰 소거 결함(A36 실증) §19. */}
+      {Platform.OS === "web" && hotelModalDay === currentDay?.day && (
         <View style={{ marginHorizontal: 12, marginBottom: 8, zIndex: 50 }}>
           {/* 🏨 2026-06-29 = includedPrimaryTypes 미지정 = 호텔+주소 전부 검색 (옛 lodging단독=호텔만 버그 폐기). */}
           <PlaceAutocompleteWidget
