@@ -212,20 +212,29 @@ export default function ResultStep({ planner }: { planner: PlannerApi }) {
                 itinerary.vibeWeights
                   ?.slice(0, 3)
                   .map((v) => getVibeLabel(v.vibe))
-                  .join(" & ") || "힐링";
+                  .join(" & ") || t("options.healing");
 
               // 예: "가족(4명)의 부모님을 위한 힐링 & 미식 여행" (이모지 금지 = 디자인 SSOT §1-3)
               const count =
                 itinerary.companionCount || formData.companionCount || 2;
-              // ⚠️ 수정금지(승인필요) 2026-06-24 = 한국어 조사(을/를) 받침 판정 = focusLabel 마지막 글자 받침 유무
-              //   = "나을"(X) 버그 수정 → 받침 없으면 "를", 있으면 "을" (= 한국어 언어에서만 적용, 타 언어는 조사 없음)
+              // ⚠️ 수정금지(승인필요) 2026-08-13 사장님 승인 = 한국어 조사(을/를)는 한국어 문장에서만 필요
+              //   (받침 유무 판정, "나을"(X) 버그 수정 로직은 그대로). 문장 전체는 기존에 있던 다국어 키
+              //   `trip.tripFor`로 조립(§16 재사용 = 신규 키 안 만듦, 언어별 어순은 그 키의 각 언어 값이 담당).
+              //   다른 언어 템플릿은 {{particle}}을 안 써서 이 값이 있어도 출력에 안 나옴.
               const lastChar = focusLabel.charCodeAt(focusLabel.length - 1);
               const hasFinalConsonant =
                 lastChar >= 0xac00 &&
                 lastChar <= 0xd7a3 &&
                 (lastChar - 0xac00) % 28 !== 0;
-              const objParticle = hasFinalConsonant ? "을" : "를";
-              return `${companionLabel}(${count}명)의 ${focusLabel}${objParticle} 위한 ${vibes} 여행`;
+              const objParticle =
+                i18n.language === "ko" ? (hasFinalConsonant ? "을" : "를") : "";
+              return t("trip.tripFor", {
+                companion: companionLabel,
+                count,
+                focus: focusLabel,
+                particle: objParticle,
+                vibes,
+              });
             })()}
           </Text>
           {/* ⚠️ 2026-06-24 사용자 SSOT = 1인 가격 배지 삭제 (요약섹션1 "1인 €N"과 중복, §19 완전삭제) */}
@@ -293,6 +302,7 @@ export default function ResultStep({ planner }: { planner: PlannerApi }) {
           }}
           selectedSlotId={selectedSlotId}
           height={Math.min(260, Dimensions.get("window").height * 0.3)}
+          language={i18n.language || "ko"}
         />
       </View>
 

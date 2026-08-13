@@ -143,6 +143,8 @@
     "hotelSetupHint": "Setting a hotel will automatically optimize the day's route",
     "hotelSearchPlaceholder": "Search hotels, Airbnb, etc.",
     "googleReviews": "Google Reviews",
+    "listenGuide": "Listen to Guide",
+    "googleMapsInfo": "Google Maps Info",
     "priorityHighest": "(Top priority)",
     "priorityHigh": "(Priority)",
     "priorityNormal": "(Included)",

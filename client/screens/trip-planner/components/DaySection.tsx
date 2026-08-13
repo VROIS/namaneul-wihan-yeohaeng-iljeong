@@ -136,7 +136,10 @@ export default function DaySection({
                 { color: theme.textSecondary },
               ]}
             >
-              → {currentDay.departureTransit.durationText}
+              {/* ⚠️ 수정금지(승인필요) 2026-08-13 사장님 승인 = durationText(서버, 한국어 고정) 대신
+                  언어중립 숫자(duration)를 t()로 노출시점 번역(§16 = trip.durationM 재사용). */}
+              →{" "}
+              {t("trip.durationM", { m: currentDay.departureTransit.duration })}
             </Text>
           )}
         </View>
@@ -206,7 +209,7 @@ export default function DaySection({
               ]}
             >
               {currentDay.returnTransit.from} → {t("trip.returnToHotel")} (
-              {currentDay.returnTransit.durationText})
+              {t("trip.durationM", { m: currentDay.returnTransit.duration })})
             </Text>
           </View>
         </View>

@@ -6,11 +6,13 @@ export function formatDate(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
-// 🗓️ 2026-07-03 = 요약헤더 날짜 축약 "2026-07-03"→"26년 07-03" (연도 2자리+년, 390px 가격잘림 방지). 형식 다르면 원본 그대로.
+// ⚠️ 수정금지(승인필요) 2026-08-13 사장님 승인 = 요약헤더 날짜 축약 "2026-07-03"→"26.07-03"
+//   (연도 2자리+"." , 390px 가격잘림 방지). "년"(한국어 전용) 삭제 = 숫자+기호만 써서 다국어 공통 표기.
+//   형식 다르면 원본 그대로.
 export function shortDate(isoDate: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate || "");
   if (!m) return isoDate || "";
-  return `${m[1].slice(2)}년 ${m[2]}-${m[3]}`;
+  return `${m[1].slice(2)}.${m[2]}-${m[3]}`;
 }
 
 export function formatTime(date: Date): string {

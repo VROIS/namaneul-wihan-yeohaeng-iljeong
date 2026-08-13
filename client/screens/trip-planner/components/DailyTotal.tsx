@@ -177,17 +177,19 @@ export default function DailyTotal({
             {td.category === "guide"
               ? t("trip.guideTransport")
               : t("trip.publicTransport")}{" "}
-            · 1인 €{td.perPersonPerDay}/일
+            · {t("trip.perPersonPerDay", { cost: td.perPersonPerDay })}
           </Text>
+          {/* ⚠️ 수정금지(승인필요) 2026-08-13 사장님 승인 = 기존에 있던 다국어 키(vsUberBlack/guideUpsell) 재사용(§16) */}
           {td.category === "guide" && td.uberBlackComparison && (
             <Text style={{ fontSize: 11, color: "#666" }}>
-              vs 우버블랙 시간제 1인 €{td.uberBlackComparison.perPersonPerDay}
-              /일
+              {t("trip.vsUberBlack", {
+                cost: td.uberBlackComparison.perPersonPerDay,
+              })}
             </Text>
           )}
           {td.category === "transit" && td.guideUpsell && (
             <Text style={{ fontSize: 11, color: "#666" }}>
-              드라이빙 가이드 이용시 1인 €{td.guideUpsell.perPersonPerDay}/일
+              {t("trip.guideUpsell", { cost: td.guideUpsell.perPersonPerDay })}
             </Text>
           )}
         </View>

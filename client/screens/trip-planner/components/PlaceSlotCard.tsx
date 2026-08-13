@@ -223,7 +223,7 @@ export default function PlaceSlotCard({
                         color: theme.textTertiary,
                       }}
                     >
-                      구글맵 정보
+                      {t("trip.googleMapsInfo")}
                     </Text>
                   </View>
                 )}
@@ -237,7 +237,7 @@ export default function PlaceSlotCard({
                 <View style={slotStyles.badgeSlot}>
                   <CityBadge
                     icon="book-open"
-                    label="해설 듣기"
+                    label={t("trip.listenGuide")}
                     colors={BADGE_COLORS.guide}
                     visible
                     onPress={openGuide}
@@ -323,7 +323,7 @@ export default function PlaceSlotCard({
                 />
                 <Text style={[styles.placePriceText, { color: Brand.primary }]}>
                   {isMeal
-                    ? `식사: €${place.mealPrice || "??"}`
+                    ? t("trip.mealPrice", { price: place.mealPrice || "??" })
                     : (place as any).estimatedPriceEur > 0 &&
                         (place as any).estimatedPriceEur < 500
                       ? `€${(place as any).estimatedPriceEur}`
@@ -362,8 +362,11 @@ export default function PlaceSlotCard({
                 } else if (rawMode === "walk") {
                   label = t("trip.walking");
                 }
-                const dur =
-                  transitInfo.durationText || `${transitInfo.duration || 0}분`;
+                // ⚠️ 수정금지(승인필요) 2026-08-13 사장님 승인 = 서버 durationText("15분")는 한국어 고정이라
+                //   화면 표시엔 안 씀. 언어중립 숫자(duration)만 받아 t()로 노출시점 번역(§16 = trip.durationM 재사용).
+                const dur = t("trip.durationM", {
+                  m: transitInfo.duration || 0,
+                });
                 const dist = transitInfo.distance
                   ? `${(transitInfo.distance / 1000).toFixed(1)}km`
                   : "";

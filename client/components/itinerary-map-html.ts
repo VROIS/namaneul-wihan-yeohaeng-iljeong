@@ -18,8 +18,13 @@ export type ItinMapStart = {
   label: string; // "출발: 숙소명" 또는 "출발: 도심"
 };
 
-export const ITINERARY_MAP_HTML = (apiKey: string): string => `<!DOCTYPE html>
-<html lang="ko"><head><meta charset="UTF-8">
+// ⚠️ 수정금지(승인필요) 2026-08-13 사장님 승인 = 지도 배경(구글 SDK 자체 도로명·지명) 다국어 대응.
+//   language 미지정 시 "ko" = 기존 동작(하위호환) 유지. PlaceAutocompleteWidget과 같은 패턴(§16 재사용).
+export const ITINERARY_MAP_HTML = (
+  apiKey: string,
+  language: string = "ko",
+): string => `<!DOCTYPE html>
+<html lang="${language}"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Itinerary Map</title>
 <style>
@@ -182,7 +187,7 @@ body { background: #f8f7fb; font-family: -apple-system, "Segoe UI", "Malgun Goth
 
   // Google Maps SDK 동적 로드
   var s = document.createElement('script');
-  s.src = 'https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initItinMap&v=quarterly';
+  s.src = 'https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initItinMap&v=quarterly&language=${language}';
   s.async = true;
   s.onerror = function() { postRN({ type: 'error', message: 'SDK load failed' }); };
   document.body.appendChild(s);

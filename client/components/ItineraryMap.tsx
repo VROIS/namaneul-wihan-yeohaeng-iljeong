@@ -23,11 +23,16 @@ type Props = {
   selectedSlotId?: string | null;
   height?: number;
   tint?: string;
+  // ⚠️ 수정금지(승인필요) 2026-08-13 사장님 승인 = 지도 배경(구글 SDK 자체 도로명·지명) 다국어 대응.
+  //   PlaceAutocompleteWidget(같은 화면 숙소검색)과 같은 패턴 재사용(§16). 미지정 = "ko"(하위호환).
+  language?: string;
 };
 
-// SDK 로드 = 페이지당 1 회 (= 모듈 레벨 promise, 웹)
+// SDK 로드 = 페이지당 1 회 (= 모듈 레벨 promise, 웹).
+//   ⚠️ 구글 SDK 특성상 language 는 최초 로드 시 1 회만 고정(SDK 자체가 세션 중 재로드 미지원) = 기존 싱글턴 그대로,
+//   language 인자만 최초 로드 URL에 반영(앱 진입 시 이미 결정된 언어라 실사용에서 충분 = Phase E 기기귀속 설계와 정합).
 let sdkPromise: Promise<any> | null = null;
-function loadGoogleMaps(apiKey: string): Promise<any> {
+function loadGoogleMaps(apiKey: string, language: string): Promise<any> {
   if (typeof window === "undefined") return Promise.reject("ssr");
   const w = window as any;
   if (w.google?.maps) return Promise.resolve(w.google);
@@ -41,7 +46,7 @@ function loadGoogleMaps(apiKey: string): Promise<any> {
       resolve(w.google);
     };
     const s = document.createElement("script");
-    s.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=${cb}&v=quarterly`;
+    s.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=${cb}&v=quarterly&language=${language}`;
     s.async = true;
     s.onerror = () => {
       sdkPromise = null;
@@ -172,6 +177,7 @@ function ItineraryMapWeb({
   height = 240,
   tint = "#2563eb",
   apiKey,
+  language = "ko",
 }: Props & { apiKey: string }) {
   const mapDivRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
@@ -188,7 +194,7 @@ function ItineraryMapWeb({
   useEffect(() => {
     if (!apiKey || !mapDivRef.current) return;
     let cancelled = false;
-    loadGoogleMaps(apiKey)
+    loadGoogleMaps(apiKey, language)
       .then((google) => {
         if (cancelled || !mapDivRef.current) return;
         mapRef.current = new google.maps.Map(mapDivRef.current, {
@@ -206,6 +212,11 @@ function ItineraryMapWeb({
     return () => {
       cancelled = true;
     };
+    // ⚠️ 수정금지(승인필요) 2026-08-13 사장님 승인 = language 는 deps 에서 의도적으로 제외.
+    //   구글 SDK 는 이미 로드된 뒤 언어만 바꿔 재로드하는 것을 지원 안 해서, language 를 deps 에 넣으면
+    //   이 effect 가 재실행돼 마커 없는 새 지도 인스턴스만 덮어씌우는 회귀가 생긴다(§22 판단검증이 잡음).
+    //   지도 언어 = "그 페이지가 처음 로드되는 순간의 언어"로 고정(재접속 시 새 언어로 재고정) = 사장님 확정 기준.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiKey]);
 
   // 출발 깃발 + 전 슬롯 마커 동기화
@@ -317,14 +328,15 @@ function ItineraryMapNative({
   height = 240,
   tint = "#2563eb",
   apiKey,
+  language = "ko",
 }: Props & { apiKey: string }) {
   const { WebView } =
     require("react-native-webview") as typeof import("react-native-webview");
   const webRef = useRef<any>(null);
   const [mapReady, setMapReady] = useState(false);
   const html = useMemo(
-    () => (apiKey ? ITINERARY_MAP_HTML(apiKey) : ""),
-    [apiKey],
+    () => (apiKey ? ITINERARY_MAP_HTML(apiKey, language) : ""),
+    [apiKey, language],
   );
 
   useEffect(() => {
@@ -358,7 +370,7 @@ function ItineraryMapNative({
     <View style={[styles.container, { height }]}>
       <WebView
         ref={webRef}
-        key={apiKey}
+        key={`${apiKey}-${language}`}
         originWhitelist={["*"]}
         source={{ html, baseUrl: "https://maps.googleapis.com/" }}
         javaScriptEnabled

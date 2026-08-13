@@ -143,6 +143,8 @@
     "hotelSetupHint": "ホテルを設定すると、その日のルートが自動最適化されます",
     "hotelSearchPlaceholder": "ホテル、Airbnbなどを検索",
     "googleReviews": "Googleレビュー",
+    "listenGuide": "解説を聞く",
+    "googleMapsInfo": "Googleマップ情報",
     "priorityHighest": "（最優先）",
     "priorityHigh": "（優先）",
     "priorityNormal": "（含む）",
