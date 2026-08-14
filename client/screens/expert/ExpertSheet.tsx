@@ -319,19 +319,23 @@ export default function ExpertSheet({
       if (Platform.OS === "web") {
         if (
           typeof window !== "undefined" &&
-          window.confirm("이 문의 내역을 삭제하시겠습니까?")
+          window.confirm(t("expert.deleteConfirmMsg"))
         ) {
           doDelete();
         }
       } else {
-        Alert.alert("문의 삭제", "이 문의 내역을 삭제하시겠습니까?", [
-          { text: t("common.cancel"), style: "cancel" },
-          {
-            text: t("common.delete"),
-            style: "destructive",
-            onPress: doDelete,
-          },
-        ]);
+        Alert.alert(
+          t("expert.deleteConfirmTitle"),
+          t("expert.deleteConfirmMsg"),
+          [
+            { text: t("common.cancel"), style: "cancel" },
+            {
+              text: t("common.delete"),
+              style: "destructive",
+              onPress: doDelete,
+            },
+          ],
+        );
       }
     },
     [bumpExpertData, selectedId, t],

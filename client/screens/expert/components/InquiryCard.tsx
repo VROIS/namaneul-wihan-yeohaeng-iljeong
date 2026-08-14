@@ -92,8 +92,11 @@ export default function InquiryCard({
           {dest}
         </Text>
         {dayCount > 0 ? (
+          // ⚠️ 수정금지(승인필요) 2026-08-14 사장님 승인 = i18n(§22 판단검증 적발) = ExpertInquiryDetailScreen.tsx
+          //   와 동일 패턴(§16 재사용) = 숫자는 그대로 두고 "일 · N개 장소" 부분만 t()로 번역.
           <Text style={{ fontSize: 12, color: theme.textTertiary }}>
-            {dayCount}일 · {totalPlaces}개 장소
+            {dayCount}
+            {t("expert.daysPlaces", { places: totalPlaces })}
           </Text>
         ) : null}
         {q.kind === "booking" ? (

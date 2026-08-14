@@ -82,8 +82,8 @@ export default function ProfileEditView({
             // 5MB 용량 제한 체크
             if (file.size > 5 * 1024 * 1024) {
               notify(
-                "이미지 용량 초과",
-                "최대 5MB 이하의 이미지 파일만 업로드할 수 있습니다.",
+                t("expert.pfImageSizeExceedTitle"),
+                t("expert.pfImageSizeExceedMsg"),
               );
               return;
             }
@@ -99,8 +99,8 @@ export default function ProfileEditView({
       }
     } else {
       notify(
-        "이미지 업로드 안내",
-        "웹 환경에서 원하는 사진 파일을 바로 선택해 업로드할 수 있습니다.",
+        t("expert.pfImageUploadMobileTitle"),
+        t("expert.pfImageUploadMobileMsg"),
       );
     }
   };
@@ -109,19 +109,23 @@ export default function ProfileEditView({
     if (Platform.OS === "web") {
       if (
         typeof window !== "undefined" &&
-        window.confirm("등록된 프로필 사진을 삭제하시겠습니까?")
+        window.confirm(t("expert.pfPhotoDeleteConfirmMsg"))
       ) {
         setAvatarUrl("");
       }
     } else {
-      Alert.alert("사진 삭제", "등록된 프로필 사진을 삭제하시겠습니까?", [
-        { text: t("common.cancel"), style: "cancel" },
-        {
-          text: t("common.delete"),
-          style: "destructive",
-          onPress: () => setAvatarUrl(""),
-        },
-      ]);
+      Alert.alert(
+        t("expert.pfPhotoDelete"),
+        t("expert.pfPhotoDeleteConfirmMsg"),
+        [
+          { text: t("common.cancel"), style: "cancel" },
+          {
+            text: t("common.delete"),
+            style: "destructive",
+            onPress: () => setAvatarUrl(""),
+          },
+        ],
+      );
     }
   };
 
@@ -137,7 +141,7 @@ export default function ProfileEditView({
         bio: bio.trim().slice(0, 100),
       });
       if (r.ok) {
-        notify("프로필이 저장되었습니다.");
+        notify(t("expert.pfSaveSuccessMsg"));
         onBack();
       } else if (r.error === "expert_only" || r.error === "login_required") {
         notify(t("expert.loginTitle"), t("expert.loginMsg"));
@@ -157,7 +161,7 @@ export default function ProfileEditView({
           <Icon name="arrow-left" size={24} color={theme.text} />
         </Pressable>
         <Text style={[styles.pfTitle, { color: theme.text }]}>
-          전문가 프로필 편집
+          {t("expert.editProfile")}
         </Text>
         <View style={styles.pfBack} />
       </View>
@@ -182,8 +186,11 @@ export default function ProfileEditView({
               { color: theme.text, fontSize: 14, fontWeight: "700" },
             ]}
           >
-            📷 전문가 프로필 이미지 (소개 카드 아바타)
+            📷 {t("expert.pfImageLabel")}
           </Text>
+          {/* ⚠️ 수정금지(승인필요) 2026-08-14 사장님 승인 = i18n(§22 판단검증 적발) = 문장 중간에 볼드 구간을
+              끼워 넣던 3조각 구조는 언어마다 어순이 달라 번역이 깨진다(§0 = 정확성 우선, 볼드 강조는 포기) =
+              1개 문장 키(pfImageHint)로 통합. */}
           <Text
             style={{
               fontSize: 12,
@@ -192,12 +199,7 @@ export default function ProfileEditView({
               lineHeight: 16,
             }}
           >
-            업로드하신 이미지는 시스템이 자동으로{" "}
-            <Text style={{ color: Brand.primary, fontWeight: "700" }}>
-              56 × 56 px 원형 규격
-            </Text>
-            으로 크롭/조정합니다. (최대 파일 용량:{" "}
-            <Text style={{ fontWeight: "700" }}>5MB</Text>)
+            {t("expert.pfImageHint")}
           </Text>
 
           <View
@@ -241,7 +243,7 @@ export default function ProfileEditView({
                     color: Brand.primary,
                   }}
                 >
-                  {character || "가이드"}
+                  {character || t("expert.pfCharacterFallback")}
                 </Text>
               )}
             </View>
@@ -271,7 +273,9 @@ export default function ProfileEditView({
                 <Text
                   style={{ fontSize: 12, fontWeight: "700", color: "#FFFFFF" }}
                 >
-                  {avatarUrl ? "사진 교체하기" : "사진 선택/업로드"}
+                  {avatarUrl
+                    ? t("expert.pfPhotoReplace")
+                    : t("expert.pfPhotoSelect")}
                 </Text>
               </Pressable>
 
@@ -296,7 +300,7 @@ export default function ProfileEditView({
                       color: "#EF4444",
                     }}
                   >
-                    사진 삭제
+                    {t("expert.pfPhotoDelete")}
                   </Text>
                 </Pressable>
               ) : null}
@@ -310,14 +314,14 @@ export default function ProfileEditView({
               { color: theme.text, fontSize: 14, fontWeight: "700" },
             ]}
           >
-            닉네임 (소개 타이틀)
+            {t("expert.pfNicknameFieldLabel")}
           </Text>
           <TextInput
             style={[
               styles.pfInput,
               { backgroundColor: theme.backgroundDefault, color: theme.text },
             ]}
-            placeholder="예: 파리 빵돌이"
+            placeholder={t("expert.pfNicknameFieldPh")}
             placeholderTextColor={theme.textTertiary}
             value={nickname}
             onChangeText={setNickname}
@@ -331,14 +335,14 @@ export default function ProfileEditView({
               { color: theme.text, fontSize: 14, fontWeight: "700" },
             ]}
           >
-            경력 및 칭호
+            {t("expert.pfCareerFieldLabel")}
           </Text>
           <TextInput
             style={[
               styles.pfInput,
               { backgroundColor: theme.backgroundDefault, color: theme.text },
             ]}
-            placeholder="예: 파리 현지 35년 베테랑 가이드"
+            placeholder={t("expert.pfCareerFieldPh")}
             placeholderTextColor={theme.textTertiary}
             value={career}
             onChangeText={setCareer}
@@ -366,7 +370,7 @@ export default function ProfileEditView({
                 },
               ]}
             >
-              자기소개 (카드 노출 100자 제한)
+              {t("expert.pfBioFieldLabel")}
             </Text>
             <Text
               style={{
@@ -375,14 +379,13 @@ export default function ProfileEditView({
                 color: bio.length > 90 ? "#EF4444" : Brand.primary,
               }}
             >
-              [{bio.length} / 100자]
+              {t("expert.pfBioCounter", { count: bio.length })}
             </Text>
           </View>
           <Text
             style={{ fontSize: 12, color: theme.textTertiary, marginBottom: 8 }}
           >
-            여행자 소개 카드에 최대 3줄(100자 이내)로 노출되는 핵심
-            소개글입니다.
+            {t("expert.pfBioFieldHint")}
           </Text>
           <TextInput
             style={[
@@ -395,7 +398,7 @@ export default function ProfileEditView({
                 textAlignVertical: "top",
               },
             ]}
-            placeholder="여행자에게 보여줄 소개글을 100자 이내로 입력하세요."
+            placeholder={t("expert.pfBioFieldPh")}
             placeholderTextColor={theme.textTertiary}
             value={bio}
             onChangeText={(text) => setBio(text.slice(0, 100))}
