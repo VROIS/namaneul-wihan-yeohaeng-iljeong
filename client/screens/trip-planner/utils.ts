@@ -1,4 +1,18 @@
 // 날짜·시간 포맷 유틸 = TripPlannerScreen 분리(2026-07-15 §0 슬림화, 순수 이동)
+
+// ⚠️ 수정금지(승인필요) 2026-08-14 사장님 승인 = 텍스트 줄바꿈 방지 공용 1벌(독일어 실기기 실증).
+//   §22 판단검증 적발 = ResultStep.tsx·DailyTotal.tsx 가 같은 3종 prop 을 리터럴로 재복사했던 것을
+//   이 1벌 재사용으로 교체(§0). 칩(2줄 허용)과 버튼(1줄 고정)이 numberOfLines 만 달라 2벌로 분리.
+export const fitTextProps = {
+  numberOfLines: 2 as const,
+  adjustsFontSizeToFit: true,
+  minimumFontScale: 0.75,
+};
+export const fitTextPropsSingleLine = {
+  numberOfLines: 1 as const,
+  adjustsFontSizeToFit: true,
+  minimumFontScale: 0.75,
+};
 export function formatDate(date: Date): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");

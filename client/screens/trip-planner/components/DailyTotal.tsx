@@ -14,6 +14,7 @@ import { DayPlan } from "@/types/trip";
 import type { PlannerApi } from "../hooks/useTripPlanner";
 import Icon from "@/components/Icon";
 import { getApiUrl } from "@/lib/query-client";
+import { fitTextPropsSingleLine } from "../utils";
 import {
   buildDayRouteUrl,
   openMapsUrl,
@@ -257,7 +258,10 @@ export default function DailyTotal({
               ) : (
                 <Icon name="map" size={16} color={Brand.primary} />
               )}
-              <Text style={[styles.dailyActionText, { color: Brand.primary }]}>
+              <Text
+                style={[styles.dailyActionText, { color: Brand.primary }]}
+                {...fitTextPropsSingleLine}
+              >
                 {t("trip.dayOpenRoute")}
               </Text>
             </Pressable>
@@ -271,7 +275,10 @@ export default function DailyTotal({
               }
             >
               <Icon name="calendar" size={16} color="#FFF" />
-              <Text style={[styles.dailyActionText, { color: "#FFF" }]}>
+              <Text
+                style={[styles.dailyActionText, { color: "#FFF" }]}
+                {...fitTextPropsSingleLine}
+              >
                 {t("trip.dayBookNow")}
               </Text>
             </Pressable>

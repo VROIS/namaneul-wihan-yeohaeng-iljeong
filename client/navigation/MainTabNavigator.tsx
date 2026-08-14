@@ -8,6 +8,7 @@ import { useTranslation } from "react-i18next";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
 import Icon from "@/components/Icon";
+import TabBarLabel from "@/components/TabBarLabel";
 
 import { Brand, Colors } from "@/constants/theme";
 import TripPlannerScreen from "@/screens/trip-planner/TripPlannerScreen";
@@ -234,7 +235,9 @@ export default function MainTabNavigator() {
           name="Home"
           component={TripPlannerScreen}
           options={{
-            tabBarLabel: t("tab.plan"),
+            tabBarLabel: ({ color }) => (
+              <TabBarLabel label={t("tab.plan")} color={color} />
+            ),
             headerShown: false,
           }}
         />
@@ -243,7 +246,9 @@ export default function MainTabNavigator() {
           name="Map"
           component={MapTogglePlaceholder}
           options={{
-            tabBarLabel: t("tab.aiOpinion"),
+            tabBarLabel: ({ color }) => (
+              <TabBarLabel label={t("tab.aiOpinion")} color={color} />
+            ),
             headerShown: false,
             // 여정 없으면 비활성(회색), 있으면 활성(브랜드색)
             tabBarIcon: () => (
@@ -272,7 +277,9 @@ export default function MainTabNavigator() {
           name="Verify"
           component={MapTogglePlaceholder}
           options={{
-            tabBarLabel: t("tab.expert"),
+            tabBarLabel: ({ color }) => (
+              <TabBarLabel label={t("tab.expert")} color={color} />
+            ),
             headerShown: false,
             tabBarBadge: expertBadge > 0 ? expertBadge : undefined,
             tabBarIcon: ({ color }) => (
@@ -302,7 +309,9 @@ export default function MainTabNavigator() {
           name="Profile"
           component={ProfileScreen}
           options={{
-            tabBarLabel: t("tab.profile"),
+            tabBarLabel: ({ color }) => (
+              <TabBarLabel label={t("tab.profile")} color={color} />
+            ),
             headerTitle: t("tab.profile"),
           }}
         />
@@ -311,7 +320,9 @@ export default function MainTabNavigator() {
           name="Guide"
           component={GuideTabPlaceholder}
           options={{
-            tabBarLabel: t("tab.guide"),
+            tabBarLabel: ({ color }) => (
+              <TabBarLabel label={t("tab.guide")} color={color} />
+            ),
             headerShown: false,
             // 📥 완성 영상 뱃지(2026-08-03 사장님) = 전문가 탭과 같은 표기 1벌
             tabBarBadge: videoBadge > 0 ? videoBadge : undefined,

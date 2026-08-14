@@ -20,7 +20,7 @@ import PlaceAutocompleteWidget, {
 } from "@/components/PlaceAutocompleteWidget";
 // 🎬 2026-08-01 사장님 §B-0 = 영상 진입점은 통합 모달 1벌(TripisModal). 옛 전용 화면 이동 폐기 §19.
 import TripisModal from "@/components/tripis/TripisModal";
-import { shortDate } from "./utils";
+import { shortDate, fitTextPropsSingleLine } from "./utils";
 import DaySection from "./components/DaySection";
 import AiOpinionSheet from "./components/AiOpinionSheet";
 import { resultStyles } from "./styles/result";
@@ -376,6 +376,7 @@ export default function ResultStep({ planner }: { planner: PlannerApi }) {
                     color: sharingAction === "share" ? "#FFFFFF" : theme.text,
                   },
                 ]}
+                {...fitTextPropsSingleLine}
               >
                 {t("trip.footerShare")}
               </Text>
@@ -395,7 +396,10 @@ export default function ResultStep({ planner }: { planner: PlannerApi }) {
               ) : (
                 <Icon name="calendar-plus" size={18} color="#FFFFFF" />
               )}
-              <Text style={[styles.shareFooterBtnText, { color: "#FFFFFF" }]}>
+              <Text
+                style={[styles.shareFooterBtnText, { color: "#FFFFFF" }]}
+                {...fitTextPropsSingleLine}
+              >
                 {t("trip.footerCalendar")}
               </Text>
             </Pressable>

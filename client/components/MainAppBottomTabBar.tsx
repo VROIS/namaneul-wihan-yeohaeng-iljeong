@@ -14,6 +14,7 @@ import { useTranslation } from "react-i18next";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
 import Icon from "@/components/Icon";
+import TabBarLabel from "@/components/TabBarLabel";
 import { Brand, Colors } from "@/constants/theme";
 import { tabBadgeCount } from "@/screens/expert/expertApi";
 import { useMapToggle } from "@/contexts/MapToggleContext";
@@ -202,7 +203,7 @@ export default function MainAppBottomTabBar({
                   </View>
                 )}
               </View>
-              <Text style={[styles.tabLabel, { color }]}>{tab.label}</Text>
+              <TabBarLabel label={tab.label} color={color} />
             </TouchableOpacity>
           );
         })}
@@ -232,10 +233,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     gap: 3,
-  },
-  tabLabel: {
-    fontSize: 11,
-    fontFamily: "Pretendard-Bold",
   },
   badge: {
     position: "absolute",

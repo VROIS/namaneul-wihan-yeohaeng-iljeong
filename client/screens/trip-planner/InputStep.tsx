@@ -28,6 +28,7 @@ import { WebInputModal, NativePicker } from "./components/DateTimePickers";
 import TripisModal, { type RepCard } from "@/components/tripis/TripisModal";
 import type { PlannerApi } from "./hooks/useTripPlanner";
 import { apiRequest } from "@/lib/query-client";
+import { fitTextProps } from "./utils";
 
 import ShinyPillBanner from "@/components/ShinyPillBanner";
 
@@ -422,6 +423,7 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
                       styles.iconLabel,
                       { color: selected ? "#FFFFFF" : theme.text },
                     ]}
+                    {...fitTextProps}
                   >
                     {t(opt.labelKey)}
                   </Text>
@@ -470,6 +472,7 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
                       styles.iconLabel,
                       { color: selected ? "#FFFFFF" : theme.text },
                     ]}
+                    {...fitTextProps}
                   >
                     {t(opt.labelKey)}
                   </Text>
@@ -518,6 +521,7 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
                       styles.vibeText,
                       { color: selected ? "#FFFFFF" : theme.text },
                     ]}
+                    {...fitTextProps}
                   >
                     {t(vibe.labelKey)}
                     {priorityLabel}
@@ -561,6 +565,7 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
                       styles.toggleText,
                       { color: selected ? "#FFFFFF" : theme.text },
                     ]}
+                    {...fitTextProps}
                   >
                     {t(opt.labelKey)}
                   </Text>
@@ -606,6 +611,7 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
                       styles.iconLabel,
                       { color: selected ? "#FFFFFF" : theme.text },
                     ]}
+                    {...fitTextProps}
                   >
                     {t(opt.labelKey)}
                   </Text>
@@ -654,6 +660,7 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
                       styles.toggleText,
                       { color: selected ? "#FFFFFF" : theme.text },
                     ]}
+                    {...fitTextProps}
                   >
                     {t(opt.labelKey)}
                   </Text>
