@@ -10,7 +10,8 @@ import { styles } from "../styles";
 import type { ProfileApi } from "../hooks/useProfile";
 
 export default function ProfileHeader({ profile }: { profile: ProfileApi }) {
-  const { theme, isAuth, user, credits, recharging, handleRecharge } = profile;
+  const { theme, t, isAuth, user, credits, recharging, handleRecharge } =
+    profile;
   const { requestLogin } = useMapToggle();
 
   // ⚠️ 보유 크레딧 = 서버(GET /api/credits/balance)가 정본 = 2026-07-29 §9.
@@ -34,7 +35,7 @@ export default function ProfileHeader({ profile }: { profile: ProfileApi }) {
             {isAuth && user ? (
               <>
                 <ThemedText style={styles.userNameCompact} numberOfLines={1}>
-                  {user.name || "사용자"}
+                  {user.name || t("profile.defaultUserName")}
                 </ThemedText>
                 <Text
                   style={[
@@ -49,7 +50,7 @@ export default function ProfileHeader({ profile }: { profile: ProfileApi }) {
             ) : (
               <>
                 <ThemedText style={styles.userNameCompact}>
-                  로그인이 필요합니다
+                  {t("profile.loginRequired")}
                 </ThemedText>
                 <Pressable onPress={() => requestLogin()}>
                   <Text
@@ -59,7 +60,7 @@ export default function ProfileHeader({ profile }: { profile: ProfileApi }) {
                       fontFamily: "Bold",
                     }}
                   >
-                    로그인 / 가입하기
+                    {t("profile.loginSignup")}
                   </Text>
                 </Pressable>
               </>
@@ -85,7 +86,7 @@ export default function ProfileHeader({ profile }: { profile: ProfileApi }) {
           <Text
             style={[styles.creditLabelCompact, { color: theme.textSecondary }]}
           >
-            보유 크레딧
+            {t("profile.creditsLabel")}
           </Text>
           <Text style={[styles.creditValueCompact, { color: theme.text }]}>
             {creditText}
@@ -99,12 +100,12 @@ export default function ProfileHeader({ profile }: { profile: ProfileApi }) {
           disabled={recharging}
           hitSlop={{ top: 12, bottom: 12, left: 10, right: 10 }}
           accessibilityRole="button"
-          accessibilityLabel="크레딧 충전"
+          accessibilityLabel={t("credit.goCharge")}
           accessibilityState={{ disabled: recharging, busy: recharging }}
         >
           <Icon name="plus-circle" size={12} color="#FFFFFF" />
           <Text style={styles.creditRechargeTextCompact}>
-            {recharging ? "진행 중" : "충전"}
+            {recharging ? t("common.processing") : t("credit.txPurchase")}
           </Text>
         </Pressable>
       </View>

@@ -30,6 +30,37 @@ import type { ProfileApi } from "../hooks/useProfile";
 // 숨김 이름표(종류:id) = 공용 1벌(§16). 목록·저장은 useProfile 이 1번만 부른다.
 import { cardKey } from "../hooks/useHiddenCards";
 
+// ⚠️ 수정금지(승인필요) 2026-08-14 = 영상 카드 제목 = itineraries.title = "{도시} {여행/Trips/Voyages/...}"
+//   (server/itinerary-save.ts, 저장 시점 언어로 접미사가 고정됨). 도시명은 고유명사라 안 건드리고,
+//   접미사만 이미 있는 profile.trips 키 값들과 대조해 지금 화면 언어로 다시 붙인다(서버 무변경, 새 키 0).
+const TRIP_TITLE_SUFFIXES = [
+  "여행",
+  "Trips",
+  "Voyages",
+  "Viajes",
+  "Reisen",
+  "旅行",
+];
+// ⚠️ 수정금지(승인필요) 2026-08-14 판단검증 지적 반영 = 여정을 명시로 "저장" 안 해도 영상 완료 시 자동게시된다
+//   (video-routes.ts:367-378, 저장 여부 무관 항상 실행). 그런 여정의 제목은 생성 시점 고정 포맷
+//   "{도시} {N}일 여행"(ag4-db-finalize.ts·pipeline-v3-step2-build.ts, 언어 무관 항상 한국어)이 그대로 남아있어
+//   숫자를 먼저 떼지 않으면 "Paris 3일 Trips" 처럼 한국어 숫자와 번역 접미사가 섞인다.
+const DAY_COUNT_TITLE_RE = /^(.+?)\s*\d+일\s*여행$/;
+function localizeVideoTitle(title: string, t: (k: string) => string): string {
+  const dayCountMatch = DAY_COUNT_TITLE_RE.exec(title);
+  if (dayCountMatch) {
+    const destination = dayCountMatch[1].trim();
+    if (destination) return `${destination} ${t("profile.trips")}`;
+  }
+  for (const suf of TRIP_TITLE_SUFFIXES) {
+    if (title.endsWith(suf)) {
+      const destination = title.slice(0, title.length - suf.length).trim();
+      if (destination) return `${destination} ${t("profile.trips")}`;
+    }
+  }
+  return title; // 패턴이 안 맞으면 원본 그대로(안전한 폴백, 데이터 손실 없음)
+}
+
 export default function VideosSection({ profile }: { profile: ProfileApi }) {
   // 섹션 제목 = 7언어 사전(profile.myTripis). 하드코딩 금지 = 2026-08-01 사장님 §B-0.
   const { t } = useTranslation();
@@ -187,7 +218,7 @@ export default function VideosSection({ profile }: { profile: ProfileApi }) {
               hitSlop={8}
               // 아이콘뿐인 버튼 = 스크린리더용 이름 필수(2026-08-03 §22 판단검증)
               accessibilityRole="button"
-              accessibilityLabel="숨기기"
+              accessibilityLabel={t("common.hide")}
               onPress={(e) => {
                 e.stopPropagation();
                 hideCard(cardKey("video", video.id));
@@ -209,10 +240,10 @@ export default function VideosSection({ profile }: { profile: ProfileApi }) {
               {/* 하단 텍스트 오버레이 = 제목 + n일차·시작일 */}
               <View style={styles.videoInfoOverlay}>
                 <Text style={styles.videoCardTitle} numberOfLines={1}>
-                  {video.title}
+                  {localizeVideoTitle(video.title, t)}
                 </Text>
                 <Text style={styles.videoCardDate}>
-                  {video.day}일차 · {video.date}
+                  {t("common.dayCount", { count: video.day })} · {video.date}
                 </Text>
               </View>
             </View>
@@ -233,7 +264,7 @@ export default function VideosSection({ profile }: { profile: ProfileApi }) {
               style={styles.cardDeleteBtnRich}
               hitSlop={8}
               accessibilityRole="button"
-              accessibilityLabel="숨기기"
+              accessibilityLabel={t("common.hide")}
               onPress={(e) => {
                 e.stopPropagation();
                 hideCard(cardKey("guide", g.id));

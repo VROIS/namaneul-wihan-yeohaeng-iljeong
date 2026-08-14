@@ -5,6 +5,7 @@
 // = 이 파일은 껍데기(TripisModal) 안에서만 쓰인다 = 자체 Modal 을 갖지 않고 어두운 배경 + 가운데 카드만 그린다.
 import React, { useEffect, useState } from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
+import { useTranslation } from "react-i18next";
 // ⚠️ 수정금지(승인필요) 2026-05-12 = BTS 1주일 디버깅 SSOT = expo-image + resolveImageSource 1벌(§16)
 //   = Wikimedia 버킷 변환 + User-Agent 헤더 + Platform 분기를 이 파일이 다시 만들지 않는다.
 import { Image } from "expo-image";
@@ -45,6 +46,7 @@ export default function CityCardScreen({
   onCourse,
   onClose,
 }: Props) {
+  const { t, i18n } = useTranslation();
   // 관리자 여부 = 저장된 계정의 role 1벌. 아이디 문자열·is_admin 으로 판단하지 않는다(§9 표7).
   const [isAdmin, setIsAdmin] = useState(false);
   useEffect(() => {
@@ -87,7 +89,7 @@ export default function CityCardScreen({
           <View style={styles.badgeRow}>
             <CityBadge
               icon="play"
-              label="영상"
+              label={t("trip.cityCardVideo")}
               colors={BADGE_COLORS.video}
               visible={rep.hasVideo === true}
               delay={0}
@@ -96,7 +98,11 @@ export default function CityCardScreen({
             <CityBadge
               icon="book-open"
               /* §23 = 아이콘 + 짧은 동사만. 설명(도시명·날짜)은 넣지 않는다 = 카드 안이라 위치로 자명 */
-              label={canCreateGuide ? "해설 만들기" : "해설"}
+              label={
+                canCreateGuide
+                  ? t("trip.cityCardGuideCreate")
+                  : t("trip.cityCardGuideListen")
+              }
               colors={BADGE_COLORS.guide}
               visible={rep.hasGuide || canCreateGuide}
               delay={1200}
@@ -104,7 +110,7 @@ export default function CityCardScreen({
             />
             <CityBadge
               icon="map"
-              label="코스"
+              label={t("trip.cityCardCourse")}
               colors={BADGE_COLORS.course}
               visible={rep.itineraryId !== null}
               delay={2400}
@@ -117,14 +123,19 @@ export default function CityCardScreen({
             onPress={onClose}
             // 아이콘뿐인 버튼 = 스크린리더용 이름 필수(2026-08-03 §22 판단검증)
             accessibilityRole="button"
-            accessibilityLabel="닫기"
+            accessibilityLabel={t("common.close")}
           >
             <Icon name="x" size={20} color="#FFFFFF" />
           </Pressable>
 
           <View style={styles.imageContent}>
+            {/* ⚠️ 수정금지(승인필요) 2026-08-14 = 도시명은 고유명사라 t() 대상이 아니다. 한국어면 nameKo,
+                그 외는 nameEn(이미 서버 응답에 있음, 새 조회 없음) — 도시 칩과 같은 규칙(§16). */}
             <Text style={styles.cityName}>
-              {rep.country ? `${rep.nameKo} (${rep.country})` : rep.nameKo}
+              {(() => {
+                const name = i18n.language === "ko" ? rep.nameKo : rep.nameEn;
+                return rep.country ? `${name} (${rep.country})` : name;
+              })()}
             </Text>
             {/* 한 줄 카피 = 비어 있으면(그 도시에 요약이 없음) 줄 자체를 안 그린다 = 빈 줄 방지(2026-08-02) */}
             {!!rep.tagline && <Text style={styles.tagline}>{rep.tagline}</Text>}
@@ -133,7 +144,9 @@ export default function CityCardScreen({
 
         {/* 하단 세부 하이라이트 = 서버가 골라 내려준 장소명 3줄 그대로(대표여정 있으면 그 여정 것, 없으면 도심 상위 3곳) */}
         <View style={styles.bodyContent}>
-          <Text style={styles.sectionTitle}>대표 추천 코스 하이라이트</Text>
+          <Text style={styles.sectionTitle}>
+            {t("trip.cityCardHighlights")}
+          </Text>
           {rep.highlights.map((item, idx) => (
             <View key={idx} style={styles.highlightRow}>
               <View style={styles.bulletDot} />
@@ -149,7 +162,7 @@ export default function CityCardScreen({
               <Icon name="check-circle" size={18} color="#FFFFFF" />
               <Text style={styles.selectBtnText}>
                 {/* ⚠️ §23 = 버튼은 짧은 동사만. 어느 도시인지는 이 카드 안이라 위치로 자명하므로 도시명을 넣지 않는다(2026-07-30) */}
-                여정 만들기
+                {t("trip.generate")}
               </Text>
             </LinearGradient>
           </Pressable>

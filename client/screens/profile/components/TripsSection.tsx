@@ -52,7 +52,9 @@ export default function TripsSection({ profile }: { profile: ProfileApi }) {
         >
           <Icon name="map" size={18} color={Brand.primary} />
         </View>
-        <ThemedText style={styles.sectionTitle}>나의 여정</ThemedText>
+        <ThemedText style={styles.sectionTitle}>
+          {t("profile.myTrips")}
+        </ThemedText>
         {visibleTrips.length > 0 && (
           <Text style={styles.sectionBadge}>{visibleTrips.length}</Text>
         )}
@@ -62,7 +64,7 @@ export default function TripsSection({ profile }: { profile: ProfileApi }) {
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="small" color={Brand.primary} />
           <Text style={[styles.loadingText, { color: theme.textSecondary }]}>
-            불러오는 중...
+            {t("saved.loading")}
           </Text>
         </View>
       ) : visibleTrips.length === 0 ? (
@@ -77,10 +79,10 @@ export default function TripsSection({ profile }: { profile: ProfileApi }) {
         >
           <Icon name="map" size={36} color={theme.textTertiary} />
           <Text style={[styles.emptyTripsText, { color: theme.textSecondary }]}>
-            저장된 여행이 없어요
+            {t("profile.noSavedTripsHeading")}
           </Text>
           <Text style={[styles.emptyTripsHint, { color: theme.textTertiary }]}>
-            일정을 생성하고 저장해보세요!
+            {t("profile.noSavedTripsHint")}
           </Text>
         </View>
       ) : (
@@ -116,7 +118,9 @@ export default function TripsSection({ profile }: { profile: ProfileApi }) {
                   // 아이콘뿐인 버튼 = 스크린리더용 이름 필수(2026-08-03 §22 판단검증)
                   accessibilityRole="button"
                   accessibilityLabel={
-                    trip.status === "representative" ? "대표" : "대표 올리기"
+                    trip.status === "representative"
+                      ? t("profile.representative")
+                      : t("profile.setRepresentative")
                   }
                   onPress={(e) => {
                     e.stopPropagation();
@@ -150,7 +154,7 @@ export default function TripsSection({ profile }: { profile: ProfileApi }) {
                 style={styles.cardDeleteBtnRich}
                 hitSlop={8}
                 accessibilityRole="button"
-                accessibilityLabel="숨기기"
+                accessibilityLabel={t("common.hide")}
                 onPress={(e) => {
                   e.stopPropagation();
                   hideCard(cardKey("trip", String(trip.id)));
@@ -183,7 +187,7 @@ export default function TripsSection({ profile }: { profile: ProfileApi }) {
                 if (per <= 0) return null;
                 return (
                   <Text style={styles.cardBudgetPill}>
-                    1인 €{per.toFixed(0)}
+                    {t("common.perPerson")} €{per.toFixed(0)}
                   </Text>
                 );
               })()}

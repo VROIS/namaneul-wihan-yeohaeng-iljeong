@@ -59,7 +59,7 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
   const lastCityRef = useRef<number>(0);
 
   // ⌨️ 2026-08-13 사장님 확정 = AOS 숙소·도시 검색 = 독립 전체화면 모달(CitySearchAndroid, ResultStep 숙소 Modal 과 같은 검증 구조).
-  const searchPlaceholder = "숙소명이나 도시명을 한글이나 원어로 입력해주세요";
+  const searchPlaceholder = t("trip.searchPlaceholder");
   // 선택 배선 1벌 = 인라인(iOS·웹)과 AOS 모달이 같은 함수를 쓴다(§0). 내용은 기존 로직 그대로.
   const handlePlaceSelect = (place: PlaceSelection) => {
     setFormData((prev) => ({
@@ -196,13 +196,17 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
                     textShadowRadius: 2,
                   }}
                 >
-                  BTS 콘서트 도시
+                  {t("trip.btsConcertCity")}
                 </Text>
               </LinearGradient>
             </Pressable>
 
             {readyCities.map((city) => {
               const isSelected = formData.destination === city.nameEn;
+              // ⚠️ 수정금지(승인필요) 2026-08-14 = 도시명 = 고유명사라 t() 번역 대상이 아니다.
+              //   서버가 이미 주는 nameKo/nameEn 중 언어에 맞는 것만 고른다(새 서버 필드·번역 불필요).
+              const cityLabel =
+                i18n.language === "ko" ? city.nameKo : city.nameEn;
               return (
                 <Pressable
                   key={city.id}
@@ -222,7 +226,7 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
                   // 칩 높이가 약 30px 이라 손가락 기준(iOS 44 / 안드로이드 48)에 못 미친다 → 픽셀은 그대로 두고 누를 수 있는 범위만 넓힘
                   hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
                   accessibilityRole="button"
-                  accessibilityLabel={`${city.nameKo} 선택`}
+                  accessibilityLabel={cityLabel}
                   accessibilityState={{ selected: isSelected }}
                 >
                   <Icon
@@ -237,7 +241,7 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
                       color: isSelected ? "#FFFFFF" : "#0F172A",
                     }}
                   >
-                    {city.nameKo}
+                    {cityLabel}
                   </Text>
                 </Pressable>
               );

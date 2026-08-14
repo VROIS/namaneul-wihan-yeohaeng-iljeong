@@ -10,9 +10,11 @@ import {
   useColorScheme,
 } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
+import { useTranslation } from "react-i18next";
 import { Brand } from "@/constants/theme";
 
 export default function ShinyPillBanner() {
+  const { t } = useTranslation();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
   const textColor = isDark ? "#FFFFFF" : "#1A1A1A";
@@ -78,7 +80,7 @@ export default function ShinyPillBanner() {
         {/* Text & Logo Content Row */}
         <View style={styles.contentRow}>
           <Text style={[styles.textLeading, { color: textColor }]}>
-            지금 핫한
+            {t("trip.hotBannerLeading")}
           </Text>
 
           <View style={styles.logoRow}>
@@ -90,7 +92,9 @@ export default function ShinyPillBanner() {
             <Text style={styles.logoText}>TRIPIS</Text>
           </View>
 
-          <Text style={[styles.textTrailing, { color: textColor }]}>여정</Text>
+          <Text style={[styles.textTrailing, { color: textColor }]}>
+            {t("trip.hotBannerTrailing")}
+          </Text>
         </View>
       </View>
     </View>

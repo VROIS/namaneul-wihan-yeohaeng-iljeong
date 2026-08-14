@@ -35,6 +35,46 @@ function stripe(): Stripe {
 const PURCHASE_CREDITS = CREDIT_CONFIG.PURCHASE_CREDITS;
 const PRICE_EUR = CREDIT_CONFIG.PRICE_EUR;
 
+// ⚠️ 수정금지(승인필요) 2026-08-14 사장님 승인 = Stripe 결제창 다국어.
+//   locale = Stripe 자체 UI(카드/이메일/결제방식 등)를 Stripe가 이미 7개 언어로 번역해서 자동 표시
+//   (공식문서 확인, 우리 언어코드 ko/en/fr/es/de/ja/zh 와 1:1 일치 = 매핑표 불필요).
+//   우리가 직접 쓰는 건 상품명·설명 2줄뿐. user.preferredLanguage = 이미 조회된 값 재사용(§16, 새 쿼리 없음).
+function checkoutText(lang: string) {
+  const base = PURCHASE_CREDITS - CREDIT_CONFIG.PURCHASE_BONUS;
+  const bonus = CREDIT_CONFIG.PURCHASE_BONUS;
+  const texts: Record<string, { name: string; desc: string }> = {
+    ko: {
+      name: "Tripis 크레딧 충전",
+      desc: `${PURCHASE_CREDITS} 크레딧 (기본 ${base} + 보너스 ${bonus})`,
+    },
+    en: {
+      name: "Tripis Credit Top-up",
+      desc: `${PURCHASE_CREDITS} credits (${base} base + ${bonus} bonus)`,
+    },
+    fr: {
+      name: "Recharge de crédits Tripis",
+      desc: `${PURCHASE_CREDITS} crédits (${base} de base + ${bonus} bonus)`,
+    },
+    es: {
+      name: "Recarga de créditos Tripis",
+      desc: `${PURCHASE_CREDITS} créditos (${base} base + ${bonus} de bono)`,
+    },
+    de: {
+      name: "Tripis-Guthaben aufladen",
+      desc: `${PURCHASE_CREDITS} Credits (${base} Basis + ${bonus} Bonus)`,
+    },
+    ja: {
+      name: "Tripisクレジットチャージ",
+      desc: `${PURCHASE_CREDITS}クレジット(基本${base}+ボーナス${bonus})`,
+    },
+    zh: {
+      name: "Tripis 积分充值",
+      desc: `${PURCHASE_CREDITS} 积分（基础 ${base} + 赠送 ${bonus}）`,
+    },
+  };
+  return texts[lang] || texts.ko;
+}
+
 // ⚠️ 우리 앱이 만든 결제라는 표식. 내손앱과 같은 Stripe 계정을 쓰기 때문에 필요하다(사장님 결정 2026-07-29).
 //   결제창을 만들 때 붙이고, 통보를 받을 때 이 값이 맞는지 확인한다 = 두 앱의 결제가 섞이지 않는다.
 const APP_TAG = "tripis";
@@ -249,19 +289,24 @@ export function registerPaymentRoutes(app: Express): void {
         selfBase,
       );
 
+      const lang = checkoutText(user?.preferredLanguage || "ko");
+
       const session = await stripe().checkout.sessions.create({
         mode: "payment",
         // ⚠️ card 고정 = 의도적. 빼면 대시보드 설정에 따라 지연결제 수단(SEPA 등)이 켜지고
         //   async_payment_succeeded 라는 **두 번째 충전 경로**가 필요해진다(§0 위반). 애플·구글페이는 card 에 포함된다.
         payment_method_types: ["card"],
+        // ⚠️ 수정금지(승인필요) 2026-08-14 = Stripe 자체 UI(카드/이메일/결제방식 등) 다국어 전환 1벌.
+        locale: (user?.preferredLanguage ||
+          "ko") as Stripe.Checkout.SessionCreateParams.Locale,
         line_items: [
           {
             price_data: {
               currency: "eur",
               product_data: {
-                name: "Tripis 크레딧 충전",
+                name: lang.name,
                 // 기본/보너스 숫자를 글로 박지 않고 CREDIT_CONFIG 에서 계산 = 상수가 바뀌면 문구도 따라감(2026-07-29 §0).
-                description: `${PURCHASE_CREDITS} 크레딧 (기본 ${PURCHASE_CREDITS - CREDIT_CONFIG.PURCHASE_BONUS} + 보너스 ${CREDIT_CONFIG.PURCHASE_BONUS})`,
+                description: lang.desc,
               },
               unit_amount: PRICE_EUR * 100,
             },
