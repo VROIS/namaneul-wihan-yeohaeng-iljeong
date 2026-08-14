@@ -458,5 +458,24 @@
     "pfBioFieldPh": "Escribe una presentación para viajeros, en un máximo de 100 caracteres.",
     "pfSaveSuccessMsg": "Perfil guardado.",
     "pfCharacterFallback": "Guía"
+  },
+  "tripisVideo": {
+    "savedLabel": "Guardado",
+    "viewItineraryBtn": "Ver itinerario",
+    "generateBtn": "Crear vídeo",
+    "generateAlertTitle": "Generar vídeo",
+    "generateAlertGeneric": "La solicitud falló.",
+    "saveAlertFailGeneric": "Error al guardar",
+    "dayChip": "Día {{d}}",
+    "generatingTitle": "Creando animación de viaje",
+    "generatingScenes": "Escena {{done}}/{{total}} · Aprox. 4-5 min",
+    "generatingNotice": "Puedes salir mientras se está creando.\nCuando esté lista, aparecerá en el botón TRIPIS de abajo.",
+    "introTitle": "Day {{day}} Animación de viaje",
+    "introDesc": "Tu itinerario real se convierte en un vlog animado.",
+    "creditNotice": "Crear un vídeo cuesta 60 créditos",
+    "genNotice": "Tarda unos 4-5 min — puedes salir mientras se está creando.\nCuando esté lista, aparecerá en el botón TRIPIS de abajo.",
+    "failWithReason": "Error al generar: {{reason}}",
+    "failGeneric": "La generación anterior falló. Inténtalo de nuevo.",
+    "notYet": "Aún no hay vídeo del día {{d}}"
   }
 }

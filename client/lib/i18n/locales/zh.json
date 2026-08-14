@@ -458,5 +458,24 @@
     "pfBioFieldPh": "请在100字以内输入给旅行者看的介绍。",
     "pfSaveSuccessMsg": "资料已保存。",
     "pfCharacterFallback": "导游"
+  },
+  "tripisVideo": {
+    "savedLabel": "已保存",
+    "viewItineraryBtn": "查看行程",
+    "generateBtn": "制作视频",
+    "generateAlertTitle": "生成视频",
+    "generateAlertGeneric": "请求失败。",
+    "saveAlertFailGeneric": "保存失败",
+    "dayChip": "第{{d}}天",
+    "generatingTitle": "正在生成旅行动画",
+    "generatingScenes": "场景 {{done}}/{{total}} · 约需4-5分钟",
+    "generatingNotice": "制作过程中可以离开此页面。\n完成后将显示在下方的TRIPIS按钮上。",
+    "introTitle": "Day {{day}} 旅行动画",
+    "introDesc": "您的实际行程将变成一段动画Vlog。",
+    "creditNotice": "生成视频将消耗60积分",
+    "genNotice": "约需4-5分钟 — 制作过程中可以离开此页面。\n完成后将显示在下方的TRIPIS按钮上。",
+    "failWithReason": "生成失败：{{reason}}",
+    "failGeneric": "上次生成失败了，请重试。",
+    "notYet": "第{{d}}天暂无视频"
   }
 }

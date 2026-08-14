@@ -458,5 +458,24 @@
     "pfBioFieldPh": "旅行者に見せる紹介文を100文字以内で入力してください。",
     "pfSaveSuccessMsg": "プロフィールを保存しました。",
     "pfCharacterFallback": "ガイド"
+  },
+  "tripisVideo": {
+    "savedLabel": "保存済み",
+    "viewItineraryBtn": "旅程を見る",
+    "generateBtn": "動画を作成",
+    "generateAlertTitle": "動画生成",
+    "generateAlertGeneric": "リクエストに失敗しました。",
+    "saveAlertFailGeneric": "保存に失敗しました",
+    "dayChip": "{{d}}日目",
+    "generatingTitle": "旅アニメーション生成中",
+    "generatingScenes": "シーン {{done}}/{{total}} · 約4〜5分",
+    "generatingNotice": "作成中は画面を離れても大丈夫です。\n完成すると下部のTRIPISボタンに表示されます。",
+    "introTitle": "Day {{day}} 旅アニメーション",
+    "introDesc": "あなたの実際の旅程が1本のアニメーションVlogになります。",
+    "creditNotice": "動画作成時に60クレジットが消費されます",
+    "genNotice": "約4〜5分かかります — 作成中は画面を離れても大丈夫です。\n完成すると下部のTRIPISボタンに表示されます。",
+    "failWithReason": "生成に失敗しました: {{reason}}",
+    "failGeneric": "前回の生成に失敗しました。もう一度お試しください。",
+    "notYet": "{{d}}日目の動画はまだありません"
   }
 }

@@ -12,6 +12,7 @@ import {
   StyleSheet,
 } from "react-native";
 import { Video, ResizeMode } from "expo-av";
+import { useTranslation } from "react-i18next";
 import { apiRequest } from "@/lib/query-client";
 import { Icon } from "@/components/Icon";
 import { Brand, Fonts } from "@/constants/theme";
@@ -48,6 +49,7 @@ export default function VideoPlaySlot({
   onGenerate,
   onVideoByDay,
 }: Props) {
+  const { t } = useTranslation();
   const [sceneIdx, setSceneIdx] = useState(0); // 재생 위치 기반 현재 씬(글라스 카드 전환)
   const [pollTick, setPollTick] = useState(0); // 폴링 재가동 신호 = 네트워크 1회 오류에도 다음 폴링 이어감(§22 react-best)
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -150,17 +152,19 @@ export default function VideoPlaySlot({
         <View style={styles.center}>
           <ActivityIndicator size="large" color={Brand.primary} />
           <Text style={styles.progressText}>
-            여행 애니메이션 생성 중{" "}
+            {t("tripisVideo.generatingTitle")}{" "}
             {dayVideo.totalScenes
               ? `${Math.round((dayVideo.scenesDone / dayVideo.totalScenes) * 100)}%`
               : ""}
           </Text>
           <Text style={styles.progressSub}>
-            장면 {dayVideo.scenesDone}/{dayVideo.totalScenes} · 약 4~5분 소요
+            {t("tripisVideo.generatingScenes", {
+              done: dayVideo.scenesDone,
+              total: dayVideo.totalScenes,
+            })}
           </Text>
           <Text style={styles.noticeBig}>
-            만드는 동안 나가셔도 됩니다.{"\n"}완성되면 하단 TRIPIS 버튼에
-            표시됩니다.
+            {t("tripisVideo.generatingNotice")}
           </Text>
         </View>
       ) : canGenerate ? (
@@ -170,23 +174,20 @@ export default function VideoPlaySlot({
         //     남의 여정이라 만들 수 없다. 일별 영상 = 60크레딧이므로 헛 버튼을 보여주면 안 된다.
         <View style={styles.center}>
           <Icon name="film" size={56} color={Brand.primary} />
-          <Text style={styles.introTitle}>Day {day} 여행 애니메이션</Text>
-          <Text style={styles.introDesc}>
-            나의 실제 일정이 한 편의 애니메이션 브이로그가 됩니다.
+          <Text style={styles.introTitle}>
+            {t("tripisVideo.introTitle", { day })}
           </Text>
+          <Text style={styles.introDesc}>{t("tripisVideo.introDesc")}</Text>
           <Text style={styles.creditNotice}>
-            영상 생성 시 60크레딧이 차감됩니다
+            {t("tripisVideo.creditNotice")}
           </Text>
-          <Text style={styles.noticeBig}>
-            약 4~5분 소요 — 만드는 동안 나가셔도 됩니다.{"\n"}완성되면 하단
-            TRIPIS 버튼에 표시됩니다.
-          </Text>
+          <Text style={styles.noticeBig}>{t("tripisVideo.genNotice")}</Text>
           {dayVideo?.status === "failed" && (
             <Text style={styles.failText}>
               {/* 서버 실패 사유 그대로 표시(뭉개기 금지 SSOT 2026-08-06). 사유 미기록(옛 실패 건) = 기본 문구 */}
               {dayVideo.error
-                ? `생성 실패: ${dayVideo.error}`
-                : "이전 생성에 실패했어요. 다시 시도해 주세요."}
+                ? t("tripisVideo.failWithReason", { reason: dayVideo.error })
+                : t("tripisVideo.failGeneric")}
             </Text>
           )}
           <Pressable
@@ -199,14 +200,18 @@ export default function VideoPlaySlot({
             ) : (
               <Icon name="play" size={18} color="#FFFFFF" />
             )}
-            <Text style={styles.genBtnText}>영상 만들기</Text>
+            <Text style={styles.genBtnText}>
+              {t("tripisVideo.generateBtn")}
+            </Text>
           </Pressable>
         </View>
       ) : (
         // 감상 자리인데 그 날짜 영상이 아직 없음 = 만들 수 없으니 안내만(버튼 없음).
         <View style={styles.center}>
           <Icon name="film" size={56} color={Brand.primary} />
-          <Text style={styles.introTitle}>{day}일차 영상은 아직 없습니다</Text>
+          <Text style={styles.introTitle}>
+            {t("tripisVideo.notYet", { d: day })}
+          </Text>
         </View>
       )}
     </View>

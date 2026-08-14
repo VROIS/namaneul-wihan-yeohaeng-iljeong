@@ -16,6 +16,7 @@ import {
   Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useTranslation } from "react-i18next";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
@@ -109,6 +110,7 @@ function TripisModalInner({
   params: TripisOpenParams;
   onClose(): void;
 }) {
+  const { t } = useTranslation();
   const insets = useSafeAreaInsets();
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -242,7 +244,10 @@ function TripisModalInner({
         // 이 화면은 최상위 Modal = 안 닫으면 프로필로 가도 계속 덮는다([여정 보기]:258 과 같은 순서).
         showCreditShortfall(shortfall, onClose);
       } else {
-        Alert.alert("영상 생성", e.message || "요청에 실패했습니다.");
+        Alert.alert(
+          t("tripisVideo.generateAlertTitle"),
+          e.message || t("tripisVideo.generateAlertGeneric"),
+        );
       }
     } finally {
       setIsRequesting(false);
@@ -257,7 +262,11 @@ function TripisModalInner({
     setIsSaving(false);
     if (r.ok)
       setSavedDays((prev) => new Set(prev).add(effectiveDay)); // → "저장됨" 비활성
-    else Alert.alert("저장", r.error || "저장 실패"); // 서버 사유 그대로(뭉개기 금지)
+    else
+      Alert.alert(
+        t("common.save"),
+        r.error || t("tripisVideo.saveAlertFailGeneric"),
+      ); // 서버 사유 그대로(뭉개기 금지)
   };
 
   // [여정 보기] = 모달 닫고 그 여정 화면으로 (저장여정 카드와 같은 경로 1벌 = TripsSection §16)
@@ -380,7 +389,7 @@ function TripisModalInner({
                         effectiveDay === d && styles.chipTextActive,
                       ]}
                     >
-                      {d}일차
+                      {t("tripisVideo.dayChip", { d })}
                       {st === "succeeded"
                         ? " ✓"
                         : st === "processing"
@@ -401,7 +410,9 @@ function TripisModalInner({
               savedDays.has(effectiveDay) ? (
                 <View style={[styles.topBtn, styles.topBtnDisabled]}>
                   <Icon name="check" size={14} color="#FFFFFF" />
-                  <Text style={styles.topBtnText}>저장됨</Text>
+                  <Text style={styles.topBtnText}>
+                    {t("tripisVideo.savedLabel")}
+                  </Text>
                 </View>
               ) : (
                 <Pressable
@@ -410,13 +421,15 @@ function TripisModalInner({
                   onPress={handleSave}
                 >
                   <Icon name="bookmark" size={14} color="#FFFFFF" />
-                  <Text style={styles.topBtnText}>저장</Text>
+                  <Text style={styles.topBtnText}>{t("common.save")}</Text>
                 </Pressable>
               )
             ) : viewing ? (
               <Pressable style={styles.topBtn} onPress={handleViewItinerary}>
                 <Icon name="map" size={14} color="#FFFFFF" />
-                <Text style={styles.topBtnText}>여정 보기</Text>
+                <Text style={styles.topBtnText}>
+                  {t("tripisVideo.viewItineraryBtn")}
+                </Text>
               </Pressable>
             ) : canGenerate ? (
               <Pressable
@@ -429,7 +442,9 @@ function TripisModalInner({
                 onPress={handleGenerate}
               >
                 <Icon name="film" size={14} color="#FFFFFF" />
-                <Text style={styles.topBtnText}>영상 만들기</Text>
+                <Text style={styles.topBtnText}>
+                  {t("tripisVideo.generateBtn")}
+                </Text>
               </Pressable>
             ) : null}
 
@@ -439,7 +454,7 @@ function TripisModalInner({
               hitSlop={8}
               // 아이콘뿐인 버튼 = 스크린리더용 이름 필수(CityBadge 와 같은 수준 = 2026-08-03 §22 판단검증)
               accessibilityRole="button"
-              accessibilityLabel="닫기"
+              accessibilityLabel={t("common.close")}
             >
               <Icon name="x" size={22} color="#FFFFFF" />
             </Pressable>

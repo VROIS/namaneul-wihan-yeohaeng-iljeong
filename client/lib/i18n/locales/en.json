@@ -458,5 +458,24 @@
     "pfBioFieldPh": "Write an introduction for travelers, within 100 characters.",
     "pfSaveSuccessMsg": "Profile saved.",
     "pfCharacterFallback": "Guide"
+  },
+  "tripisVideo": {
+    "savedLabel": "Saved",
+    "viewItineraryBtn": "View Itinerary",
+    "generateBtn": "Create Video",
+    "generateAlertTitle": "Create Video",
+    "generateAlertGeneric": "Request failed.",
+    "saveAlertFailGeneric": "Save failed",
+    "dayChip": "Day {{d}}",
+    "generatingTitle": "Creating travel animation",
+    "generatingScenes": "Scene {{done}}/{{total}} · About 4–5 min",
+    "generatingNotice": "You can leave while it's being created.\nWhen it's done, it will appear on the TRIPIS button below.",
+    "introTitle": "Day {{day}} Travel Animation",
+    "introDesc": "Your actual itinerary becomes a single animated vlog.",
+    "creditNotice": "Creating a video costs 60 credits",
+    "genNotice": "Takes about 4–5 min — you can leave while it's being created.\nWhen it's done, it will appear on the TRIPIS button below.",
+    "failWithReason": "Generation failed: {{reason}}",
+    "failGeneric": "The previous generation failed. Please try again.",
+    "notYet": "No video yet for Day {{d}}"
   }
 }

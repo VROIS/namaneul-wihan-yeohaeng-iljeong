@@ -458,5 +458,24 @@
     "pfBioFieldPh": "Rédigez une présentation pour les voyageurs, en 100 caractères maximum.",
     "pfSaveSuccessMsg": "Profil enregistré.",
     "pfCharacterFallback": "Guide"
+  },
+  "tripisVideo": {
+    "savedLabel": "Enregistré",
+    "viewItineraryBtn": "Voir l'itinéraire",
+    "generateBtn": "Créer la vidéo",
+    "generateAlertTitle": "Création de vidéo",
+    "generateAlertGeneric": "La demande a échoué.",
+    "saveAlertFailGeneric": "Échec de l'enregistrement",
+    "dayChip": "Jour {{d}}",
+    "generatingTitle": "Création de l'animation de voyage",
+    "generatingScenes": "Scène {{done}}/{{total}} · Environ 4 à 5 min",
+    "generatingNotice": "Vous pouvez quitter pendant la création.\nUne fois terminée, elle apparaîtra sur le bouton TRIPIS ci-dessous.",
+    "introTitle": "Day {{day}} Animation de voyage",
+    "introDesc": "Votre itinéraire réel devient un vlog animé.",
+    "creditNotice": "La création d'une vidéo coûte 60 crédits",
+    "genNotice": "Environ 4 à 5 min — vous pouvez quitter pendant la création.\nUne fois terminée, elle apparaîtra sur le bouton TRIPIS ci-dessous.",
+    "failWithReason": "Échec de la génération : {{reason}}",
+    "failGeneric": "La génération précédente a échoué. Veuillez réessayer.",
+    "notYet": "Pas encore de vidéo pour le jour {{d}}"
   }
 }

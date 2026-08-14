@@ -458,5 +458,24 @@
     "pfBioFieldPh": "Schreibe eine Vorstellung für Reisende in maximal 100 Zeichen.",
     "pfSaveSuccessMsg": "Profil gespeichert.",
     "pfCharacterFallback": "Guide"
+  },
+  "tripisVideo": {
+    "savedLabel": "Gespeichert",
+    "viewItineraryBtn": "Reiseplan ansehen",
+    "generateBtn": "Video erstellen",
+    "generateAlertTitle": "Video erstellen",
+    "generateAlertGeneric": "Anfrage fehlgeschlagen.",
+    "saveAlertFailGeneric": "Speichern fehlgeschlagen",
+    "dayChip": "Tag {{d}}",
+    "generatingTitle": "Reise-Animation wird erstellt",
+    "generatingScenes": "Szene {{done}}/{{total}} · Ca. 4–5 Min.",
+    "generatingNotice": "Sie können die Seite während der Erstellung verlassen.\nSobald fertig, erscheint es auf der TRIPIS-Schaltfläche unten.",
+    "introTitle": "Day {{day}} Reise-Animation",
+    "introDesc": "Ihr tatsächlicher Reiseplan wird zu einem animierten Vlog.",
+    "creditNotice": "Die Videoerstellung kostet 60 Credits",
+    "genNotice": "Dauert ca. 4–5 Minuten — Sie können die Seite während der Erstellung verlassen.\nSobald fertig, erscheint es auf der TRIPIS-Schaltfläche unten.",
+    "failWithReason": "Erstellung fehlgeschlagen: {{reason}}",
+    "failGeneric": "Die letzte Erstellung ist fehlgeschlagen. Bitte versuchen Sie es erneut.",
+    "notYet": "Noch kein Video für Tag {{d}}"
   }
 }

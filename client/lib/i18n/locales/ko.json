@@ -458,5 +458,24 @@
     "guideWalking": "워킹 가이드",
     "guideSedan": "세단 가이드",
     "guideVip": "VIP 전담"
+  },
+  "tripisVideo": {
+    "savedLabel": "저장됨",
+    "viewItineraryBtn": "여정 보기",
+    "generateBtn": "영상 만들기",
+    "generateAlertTitle": "영상 생성",
+    "generateAlertGeneric": "요청에 실패했습니다.",
+    "saveAlertFailGeneric": "저장 실패",
+    "dayChip": "{{d}}일차",
+    "generatingTitle": "여행 애니메이션 생성 중",
+    "generatingScenes": "장면 {{done}}/{{total}} · 약 4~5분 소요",
+    "generatingNotice": "만드는 동안 나가셔도 됩니다.\n완성되면 하단 TRIPIS 버튼에 표시됩니다.",
+    "introTitle": "Day {{day}} 여행 애니메이션",
+    "introDesc": "나의 실제 일정이 한 편의 애니메이션 브이로그가 됩니다.",
+    "creditNotice": "영상 생성 시 60크레딧이 차감됩니다",
+    "genNotice": "약 4~5분 소요 — 만드는 동안 나가셔도 됩니다.\n완성되면 하단 TRIPIS 버튼에 표시됩니다.",
+    "failWithReason": "생성 실패: {{reason}}",
+    "failGeneric": "이전 생성에 실패했어요. 다시 시도해 주세요.",
+    "notYet": "{{d}}일차 영상은 아직 없습니다"
   }
 }
