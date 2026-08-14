@@ -45,6 +45,11 @@ import {
 } from "@/screens/guide/services/PromptService";
 // 인증 = 앱 유일 작동 패턴(전문가탭과 동일) = getUserData().token Bearer 직접 첨부.
 import { getUserData } from "@/lib/auth";
+// ⚠️ 수정금지(승인필요) 2026-08-14 사장님 승인 = 카메라 경로 앱 언어 배선 = openGuide.ts 와 같은 패턴(§16).
+import i18n from "@/lib/i18n";
+// ⚠️ 수정금지(승인필요) 2026-08-14 사장님 지시 = 이 화면(가이드 미니앱)의 안내문구·에러문구 다국어 = 이 화면
+//   전용 i18n(guide/i18n/translations.js) 재사용(§16, MainCameraScreen.js 와 같은 시스템 1벌).
+import { t as guideT, normalizeLang } from "@/screens/guide/i18n/translations";
 
 const MainCameraScreen = MainCameraScreenJs as unknown as React.ComponentType<
   Record<string, unknown>
@@ -134,7 +139,7 @@ async function postGuideBatch(args: {
       guides: [
         {
           localId: `${Date.now()}-${Math.random().toString(36).slice(2, 11)}`,
-          title: "제목 없음",
+          title: guideT("untitled", args.lang),
           description: args.text,
           // 사진 = 우리 DB 장소면 Storage 원본 URL 을 그대로(이미 있는 사진을 base64 로 다시 넣으면 장당 110KB 낭비).
           //   기기 사진은 우리 저장소에 없으므로 인라인 data URL. 사진이 아예 없는 장소는 이미지 칸 없이 저장.
@@ -180,13 +185,21 @@ function GuideCameraHost() {
   const handleNavigateToWebView = useCallback(
     (page: string, data?: { imageBase64?: string; placeId?: number }) => {
       if (page === "detail" && data?.imageBase64) {
-        navigation.navigate("GuideResult", { imageBase64: data.imageBase64 });
+        // ⚠️ 수정금지(승인필요) 2026-08-14 = openGuide.ts 와 같은 패턴(§16) = 앱 언어를 함께 넘긴다.
+        //   안 넘기면 GuideResultHost 의 기본값 "ko" 로 열려 AI 해설이 항상 한국어로만 생성됐다.
+        navigation.navigate("GuideResult", {
+          imageBase64: data.imageBase64,
+          lang: i18n.language || "ko",
+        });
         return;
       }
       // ⚠️ 2026-08-02 사장님 지시 = 관리자 전용 [장소번호] 입구. 번호만 넘긴다.
       //   그 뒤(창고 조회 → 없으면 생성 → 자동 저장)는 해설 화면의 완성된 1벌이 그대로 한다(§16).
       if (page === "detail" && data?.placeId) {
-        navigation.navigate("GuideResult", { placeId: data.placeId });
+        navigation.navigate("GuideResult", {
+          placeId: data.placeId,
+          lang: i18n.language || "ko",
+        });
         return;
       }
       // ⚠️ 수정금지(승인필요) 2026-08-01 사장님 §B-0 = [보관함] = 프로필 탭의 '나의 TRIPIS' 섹션 1벌로 간다.
@@ -207,12 +220,12 @@ function GuideCameraHost() {
     <View style={styles.flex1}>
       <MainCameraScreen
         onNavigateToWebView={handleNavigateToWebView}
-        lang="ko"
+        lang={i18n.language || "ko"}
       />
       <TouchableOpacity
         style={[styles.closeBtn, { top: insets.top + 16 }]}
         onPress={() => rootNavigation.goBack()}
-        accessibilityLabel="닫기"
+        accessibilityLabel={guideT("closeA11y", i18n.language)}
       >
         <GuideIcon name="close" size={32} />
       </TouchableOpacity>
@@ -229,7 +242,11 @@ function GuideResultHost({
   route,
   navigation,
 }: NativeStackScreenProps<GuideStackParamList, "GuideResult">) {
-  const { imageBase64, placeId, lang = "ko" } = route.params;
+  // ⚠️ 수정금지(승인필요) 2026-08-14 사장님 승인 = 판단3종 적발(§22) = route.params.lang('zh' 등)을 정규화 없이
+  //   그대로 쓰면 DetailViewer.js/IOS_VOICE_MAP 가 'zh-CN' 키만 있어 한국어로 폴백됨. 여기 1곳에서 정규화하면
+  //   이 화면의 guideT() 전부(§0 = 같은 값 여러 곳에서 각자 정규화 금지)와 DetailViewer 전달까지 한 번에 해결.
+  const { imageBase64, placeId, lang: rawLang = "ko" } = route.params;
+  const lang = normalizeLang(rawLang);
   const showCreditShortfall = useCreditShortfall();
   // ⚠️ 수정금지(승인필요) 2026-08-05 = 이 화면은 **루트 스택 fullScreenModal**(가이드 미니앱) 안이다
   //   (RootStackNavigator.tsx:198). 충전 화면으로 보내려면 **미니앱을 먼저 닫아야** 한다:
@@ -241,14 +258,12 @@ function GuideResultHost({
   //     카메라로 돌아갈 뿐 미니앱은 그대로 남는다. → **루트를 직접 지목**(getParent)해서 닫는다.
   const [sentences, setSentences] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadingText, setLoadingText] = useState(
-    "사진 속 이야기를 찾아내고 있어요...",
-  );
+  const [loadingText, setLoadingText] = useState(guideT("loadingText1", lang));
   const [done, setDone] = useState(false);
   // 위치창 = 운영 클론: '위치 확인 중...' → 랜드마크명/'위치 정보 없음'/'위치 권한 필요'.
   //   우리 DB 장소로 연 경우 = 장소명이 곧 위치이므로 서버가 준 이름으로 바로 채운다.
   const [locationName, setLocationName] = useState(
-    placeId ? "" : "위치 확인 중...",
+    placeId ? "" : guideT("locationChecking", lang),
   );
   // 화면에 띄울 사진 = 기기 사진이면 인라인 data URL, 우리 DB 장소면 Storage 원본 URL.
   const [imageUri, setImageUri] = useState(
@@ -280,7 +295,7 @@ function GuideResultHost({
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== "granted") {
-          if (alive) setLocationName("위치 권한 필요");
+          if (alive) setLocationName(guideT("locationPermissionNeeded", lang));
           return;
         }
         const loc = await Location.getCurrentPositionAsync({
@@ -300,11 +315,11 @@ function GuideResultHost({
         if (Number.isFinite(d?.lat) && Number.isFinite(d?.lng)) {
           gpsRef.current = { lat: d.lat, lng: d.lng };
         }
-        const name = d?.name || "위치 정보 없음";
+        const name = d?.name || guideT("locationNotFound", lang);
         locationNameRef.current = d?.name || null; // 화면·저장 표시는 이름 그대로(좌표는 안 보임)
         if (alive) setLocationName(name);
       } catch {
-        if (alive) setLocationName("위치 정보 없음");
+        if (alive) setLocationName(guideT("locationNotFound", lang));
       }
     })();
     return () => {
@@ -316,8 +331,8 @@ function GuideResultHost({
   useEffect(() => {
     let alive = true;
     const loadingMessages = [
-      "사진 속 이야기를 찾아내고 있어요...",
-      "곧 재미있는 이야기를 들려드릴게요!",
+      guideT("loadingText1", lang),
+      guideT("loadingText2", lang),
     ];
     let msgIndex = 0;
     const loadingInterval = setInterval(() => {
@@ -350,7 +365,7 @@ function GuideResultHost({
           );
           if (wr.status === 402) {
             const wd = await wr.json().catch(() => null);
-            failMsg = String(wd?.message || "크레딧이 부족합니다.");
+            failMsg = String(wd?.message || guideT("creditShort", lang));
             creditShortfall = parseCreditShortfall(wd);
             throw new Error(failMsg);
           }
@@ -391,7 +406,9 @@ function GuideResultHost({
           //   없는 번호 = 404 "그런 장소가 없습니다" / 구글 식별정보 없음 = 409 "검증되지 않은 장소(구글 식별정보 없음)".
           //   표시 경로는 아래 catch 의 failMsg 1벌을 그대로 탄다(§16 = 새 표시 장치를 만들지 않는다).
           if (!pr.ok) {
-            failMsg = String(pd?.error || `장소 오류: ${pr.status}`);
+            failMsg = String(
+              pd?.error || `${guideT("placeError", lang)}: ${pr.status}`,
+            );
             throw new Error(failMsg);
           }
           hintHeader = pd.hintHeader || "";
@@ -446,12 +463,12 @@ function GuideResultHost({
         // 🪙 잔액부족(402) = 서버가 준 사유 그대로. "다시 시도해 주세요"로 뭉개면 원인을 알 수 없다.
         if (resp.status === 402) {
           const d = await resp.json().catch(() => null);
-          failMsg = String(d?.message || "크레딧이 부족합니다.");
+          failMsg = String(d?.message || guideT("creditShort", lang));
           creditShortfall = parseCreditShortfall(d);
           throw new Error(failMsg);
         }
         if (!resp.ok || !resp.body)
-          throw new Error(`서버 오류: ${resp.status}`);
+          throw new Error(`${guideT("serverError", lang)}: ${resp.status}`);
 
         const reader = resp.body.getReader();
         readerRef.current = reader; // 언마운트 시 스트림 취소용(§22 검증 반영)
@@ -517,12 +534,7 @@ function GuideResultHost({
           //   ⚠️ 크레딧부족을 else 로 가르면 안 된다 = 안드로이드는 Alert 을 뒤로가기로 닫을 수 있어
           //     (cancelable 기본 true) 본문이 비어 있으면 **빈 해설칸만 남는다**(§22 판단검증이 잡음).
           setSentences((prev) =>
-            prev.length
-              ? prev
-              : [
-                  failMsg ||
-                    "해설을 불러오지 못했습니다. 잠시 후 다시 시도해주세요.",
-                ],
+            prev.length ? prev : [failMsg || guideT("guideLoadFailed", lang)],
           );
           if (creditShortfall) {
             // 미니앱을 **루트에서** 먼저 닫고(어느 진입경로든 확실) → 그 다음 프로필.
@@ -548,8 +560,8 @@ function GuideResultHost({
     const user = await getUserData();
     if (!user?.token || !user.token.startsWith("simple_auth_token_v1_")) {
       Alert.alert(
-        "로그인이 필요합니다",
-        "저장은 로그인 후 이용할 수 있습니다.",
+        guideT("loginRequiredTitle", lang),
+        guideT("loginRequiredBody", lang),
       );
       return false;
     }
@@ -569,12 +581,18 @@ function GuideResultHost({
         cityId: cityIdRef.current,
       });
       if (!ok) {
-        Alert.alert("저장 실패", "잠시 후 다시 시도해주세요.");
+        Alert.alert(
+          guideT("saveFailedTitle", lang),
+          guideT("saveFailedRetryBody", lang),
+        );
         return false;
       }
       return true;
     } catch {
-      Alert.alert("저장 실패", "네트워크를 확인해주세요.");
+      Alert.alert(
+        guideT("saveFailedTitle", lang),
+        guideT("saveFailedNetworkBody", lang),
+      );
       return false;
     }
   }, [lang, placeId]);

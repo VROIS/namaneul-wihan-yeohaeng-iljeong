@@ -222,7 +222,9 @@ export function registerGuideRoutes(app: Express): void {
           .json({ error: "검증되지 않은 장소(구글 식별정보 없음)" });
       }
 
-      const placeName = row.nameKo || row.nameEn;
+      // ⚠️ 수정금지(승인필요) 2026-08-14 사장님 승인 = 위치정보창 장소명 = 영어 우선 통일(landmark 경로와 동일).
+      //   한국어 우선(nameKo)이면 다른 언어 사용자에게도 한국어가 뜨는 불일치 = 언어무관 단일 표기로 통일.
+      const placeName = row.nameEn || row.nameKo;
       // 머리글 조립 = place-hint-header.ts 1벌(§16). 여기서 문구를 새로 만들지 않는다.
       const hintHeader = buildPlaceHintHeader(
         {
@@ -363,7 +365,8 @@ export function registerGuideRoutes(app: Express): void {
         guideId: row.id,
         content: row.content || row.description || "",
         imageUrl: row.imageUrl,
-        locationName: row.locationName || row.nameKo || row.nameEn,
+        // ⚠️ 수정금지(승인필요) 2026-08-14 사장님 승인 = place-image 와 동일하게 영어 우선 통일(§16).
+        locationName: row.locationName || row.nameEn || row.nameKo,
         latitude: row.latitude,
         longitude: row.longitude,
         cityId: row.cityId,

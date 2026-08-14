@@ -3,7 +3,7 @@
 // 촬영/업로드/음성 → 크레딧 체크 + 캡처 + GPS + WebView 전달
 // 보관함 → WebView showArchivePage 전달
 // 라이브/여행비서 → 준비 중 음성 안내
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -14,15 +14,15 @@ import {
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
-} from 'react-native';
-import { StatusBar } from 'expo-status-bar';
+} from "react-native";
+import { StatusBar } from "expo-status-bar";
 // ⚠️ 수정금지(승인필요) 2026-08-08 = 이 화면이 **지금 보이는 화면인지** 판단용.
 //   해설 화면으로 넘어가도 이 화면은 스택에 살아 있다(GuideStackNavigator = native-stack, :615-616).
-import { useIsFocused } from '@react-navigation/native';
-import * as ImagePicker from 'expo-image-picker';
-import * as ImageManipulator from 'expo-image-manipulator';
-import * as Speech from 'expo-speech';
-import * as Location from 'expo-location';
+import { useIsFocused } from "@react-navigation/native";
+import * as ImagePicker from "expo-image-picker";
+import * as ImageManipulator from "expo-image-manipulator";
+import * as Speech from "expo-speech";
+import * as Location from "expo-location";
 // expo-speech-recognition = 네이티브 전용 (Expo Go 미지원) → 안전 로드
 let ExpoSpeechRecognitionModule = {
   stop: () => {},
@@ -31,25 +31,27 @@ let ExpoSpeechRecognitionModule = {
 };
 let useSpeechRecognitionEvent = (_event, _cb) => {};
 try {
-  const sr = require('expo-speech-recognition');
-  if (sr?.ExpoSpeechRecognitionModule) ExpoSpeechRecognitionModule = sr.ExpoSpeechRecognitionModule;
-  if (sr?.useSpeechRecognitionEvent) useSpeechRecognitionEvent = sr.useSpeechRecognitionEvent;
+  const sr = require("expo-speech-recognition");
+  if (sr?.ExpoSpeechRecognitionModule)
+    ExpoSpeechRecognitionModule = sr.ExpoSpeechRecognitionModule;
+  if (sr?.useSpeechRecognitionEvent)
+    useSpeechRecognitionEvent = sr.useSpeechRecognitionEvent;
 } catch (_) {
   // Expo Go: 네이티브 모듈 없음 — 스텁으로 동작
 }
 
-import CameraView from '../components/CameraView';
-import FooterButtons from '../components/FooterButtons';
-import LiveChat from '../components/LiveChat';
-import { useCamera } from '../hooks/useCamera';
-import { useStore } from '../state/store';
-import { theme } from '../styles/theme';
-import { t } from '../i18n/translations';
-import { CONFIG } from '../config/constants';
-import { getTTSLanguage } from '../services/PromptService';
+import CameraView from "../components/CameraView";
+import FooterButtons from "../components/FooterButtons";
+import LiveChat from "../components/LiveChat";
+import { useCamera } from "../hooks/useCamera";
+import { useStore } from "../state/store";
+import { theme } from "../styles/theme";
+import { t } from "../i18n/translations";
+import { CONFIG } from "../config/constants";
+import { getTTSLanguage } from "../services/PromptService";
 // 관리자 판정 = 저장된 계정 1벌. 도시 카드 [해설 만들기](CityCardScreen.tsx) 와 완전히 같은 방식(§16 재발명 금지).
-import { getUserData } from '@/lib/auth';
-import { Icon } from '@/components/Icon';
+import { getUserData } from "@/lib/auth";
+import { Icon } from "@/components/Icon";
 import {
   Brand,
   Colors,
@@ -57,7 +59,7 @@ import {
   BorderRadius,
   Spacing,
   Shadows,
-} from '@/constants/theme';
+} from "@/constants/theme";
 
 // ⚠️ 수정금지(승인필요): debounce — 기존 index.js:537-550 debounceClick 클론
 const debounceMap = new Map();
@@ -68,14 +70,15 @@ function debounceClick(key, callback, delay = 300) {
   callback();
 }
 
-export default function MainCameraScreen({ onNavigateToWebView, onInjectJS, lang }) {
+export default function MainCameraScreen({
+  onNavigateToWebView,
+  onInjectJS,
+  lang,
+}) {
   const { cameraRef, takePicture } = useCamera();
-  const {
-    setActiveFeature,
-    setLanguage,
-  } = useStore();
+  const { setActiveFeature, setLanguage } = useStore();
 
-  const language = useStore((s) => s.language) || 'ko';
+  const language = useStore((s) => s.language) || "ko";
 
   // ⚠️ 수정금지(승인필요) 2026-08-08 판단3종 지적 = 힌트 물결은 **이 화면이 보일 때만** 산다.
   //   해설 화면으로 넘어가도 이 화면은 언마운트되지 않아(native-stack), 이 조건이 없으면
@@ -96,14 +99,14 @@ export default function MainCameraScreen({ onNavigateToWebView, onInjectJS, lang
   // 창 단계 = null(안 뜸) | 'pick'(무엇으로) | 'number'(장소번호 입력).
   //   창은 **하나**만 쓴다 = iOS 는 창을 겹쳐 띄우면 뒤 창이 안 뜬다(§8·§11 공식 동작).
   const [sourceStep, setSourceStep] = useState(null);
-  const [placeIdText, setPlaceIdText] = useState('');
+  const [placeIdText, setPlaceIdText] = useState("");
 
   // 관리자 여부 = 저장된 계정의 role 1벌. 아이디 문자열·is_admin 으로 판단하지 않는다(§9 표7).
   React.useEffect(() => {
     let alive = true;
     getUserData()
       .then((u) => {
-        if (alive) setIsAdmin(u?.role === 'admin');
+        if (alive) setIsAdmin(u?.role === "admin");
       })
       .catch(() => {});
     return () => {
@@ -122,14 +125,17 @@ export default function MainCameraScreen({ onNavigateToWebView, onInjectJS, lang
   }, [isListening, setActiveFeature]);
 
   // ⚠️ 수정금지(승인필요): 음성 안내 — 사용자 언어로 TTS (Voice-First UX)
-  const speak = useCallback((text) => {
-    if (!text) return;
-    Speech.speak(text, {
-      language: getTTSLanguage(language),
-      rate: CONFIG.VOICE.TTS_RATE,
-      pitch: CONFIG.VOICE.TTS_PITCH,
-    });
-  }, [language]);
+  const speak = useCallback(
+    (text) => {
+      if (!text) return;
+      Speech.speak(text, {
+        language: getTTSLanguage(language),
+        rate: CONFIG.VOICE.TTS_RATE,
+        pitch: CONFIG.VOICE.TTS_PITCH,
+      });
+    },
+    [language],
+  );
 
   // ⚠️ 수정금지(승인필요): 크레딧 체크 — 프로모션 기간 return true (CLAUDE.md 제9조)
   // 프로모션 종료 후: backendApi.checkCredits(userId) 전환
@@ -144,8 +150,10 @@ export default function MainCameraScreen({ onNavigateToWebView, onInjectJS, lang
       (async () => {
         try {
           const { status } = await Location.requestForegroundPermissionsAsync();
-          if (status !== 'granted') return;
-          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+          if (status !== "granted") return;
+          const loc = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          });
           onInjectJS(`
             window.currentGPS = {
               latitude: ${loc.coords.latitude},
@@ -155,7 +163,7 @@ export default function MainCameraScreen({ onNavigateToWebView, onInjectJS, lang
             true;
           `);
         } catch (e) {
-          console.warn('[GPS] 위치 요청 실패:', e.message);
+          console.warn("[GPS] 위치 요청 실패:", e.message);
         }
       })();
     }
@@ -171,18 +179,18 @@ export default function MainCameraScreen({ onNavigateToWebView, onInjectJS, lang
     // #1 크레딧 체크
     const canProceed = await checkUsageLimit();
     if (!canProceed) {
-      speak('크레딧이 부족합니다.');
+      speak(t("creditShort", language));
       return;
     }
 
     setIsProcessing(true);
-    setActiveFeature('capture');
+    setActiveFeature("capture");
 
     try {
       // #2 카메라 프레임 캡처 → base64
       const photo = await takePicture();
       if (!photo?.base64) {
-        speak('촬영에 실패했습니다.');
+        speak(t("captureFailed", language));
         return;
       }
 
@@ -191,16 +199,24 @@ export default function MainCameraScreen({ onNavigateToWebView, onInjectJS, lang
 
       // #4 WebView 전환 + processImageFromNative 호출
       if (onNavigateToWebView) {
-        onNavigateToWebView('detail', { imageBase64: photo.base64 });
+        onNavigateToWebView("detail", { imageBase64: photo.base64 });
       }
     } catch (e) {
-      console.error('[촬영 오류]', e.message);
-      speak('촬영 중 오류가 발생했습니다.');
+      console.error("[촬영 오류]", e.message);
+      speak(t("captureError", language));
     } finally {
       setIsProcessing(false);
       setActiveFeature(null);
     }
-  }, [isProcessing, checkUsageLimit, takePicture, sendGPSToWebView, onNavigateToWebView, speak, setActiveFeature]);
+  }, [
+    isProcessing,
+    checkUsageLimit,
+    takePicture,
+    sendGPSToWebView,
+    onNavigateToWebView,
+    speak,
+    setActiveFeature,
+  ]);
 
   // ═══════════════════════════════════════════════
   // 업로드 버튼 (#15~18)
@@ -212,7 +228,7 @@ export default function MainCameraScreen({ onNavigateToWebView, onInjectJS, lang
     try {
       // #15 기기 갤러리 열기
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
+        mediaTypes: ["images"],
         quality: 1,
       });
       if (result.canceled || !result.assets?.[0]?.uri) return;
@@ -222,35 +238,46 @@ export default function MainCameraScreen({ onNavigateToWebView, onInjectJS, lang
       const optimized = await ImageManipulator.manipulateAsync(
         result.assets[0].uri,
         [{ resize: { width: CONFIG.IMAGE.MAX_PX } }],
-        { compress: CONFIG.IMAGE.QUALITY, format: ImageManipulator.SaveFormat.JPEG, base64: true },
+        {
+          compress: CONFIG.IMAGE.QUALITY,
+          format: ImageManipulator.SaveFormat.JPEG,
+          base64: true,
+        },
       );
       if (!optimized.base64) return;
 
       // #16 크레딧 체크
       const canProceed = await checkUsageLimit();
       if (!canProceed) {
-        speak('크레딧이 부족합니다.');
+        speak(t("creditShort", language));
         return;
       }
 
       setIsProcessing(true);
-      setActiveFeature('upload');
+      setActiveFeature("upload");
 
       // #17 GPS — 현재 위치 직접 사용 (RN에서 EXIF 추출 불필요)
       sendGPSToWebView();
 
       // #18 WebView 전달 → processImageFromNative → 이후 촬영과 동일
       if (onNavigateToWebView) {
-        onNavigateToWebView('detail', { imageBase64: optimized.base64 });
+        onNavigateToWebView("detail", { imageBase64: optimized.base64 });
       }
     } catch (e) {
-      console.error('[업로드 오류]', e.message);
-      speak('업로드 중 오류가 발생했습니다.');
+      console.error("[업로드 오류]", e.message);
+      speak(t("uploadError", language));
     } finally {
       setIsProcessing(false);
       setActiveFeature(null);
     }
-  }, [isProcessing, checkUsageLimit, sendGPSToWebView, onNavigateToWebView, speak, setActiveFeature]);
+  }, [
+    isProcessing,
+    checkUsageLimit,
+    sendGPSToWebView,
+    onNavigateToWebView,
+    speak,
+    setActiveFeature,
+  ]);
 
   // ═══════════════════════════════════════════════
   // 장소번호로 만들기 — 관리자 전용 (2026-08-02 사장님 지시)
@@ -263,9 +290,9 @@ export default function MainCameraScreen({ onNavigateToWebView, onInjectJS, lang
   const handlePlaceIdConfirm = useCallback(() => {
     if (placeIdValue <= 0) return;
     setSourceStep(null);
-    setPlaceIdText('');
+    setPlaceIdText("");
     if (onNavigateToWebView) {
-      onNavigateToWebView('detail', { placeId: placeIdValue });
+      onNavigateToWebView("detail", { placeId: placeIdValue });
     }
   }, [placeIdValue, onNavigateToWebView]);
 
@@ -273,8 +300,8 @@ export default function MainCameraScreen({ onNavigateToWebView, onInjectJS, lang
   const handleUploadPress = useCallback(() => {
     if (isProcessing) return;
     if (isAdmin) {
-      setPlaceIdText('');
-      setSourceStep('pick');
+      setPlaceIdText("");
+      setSourceStep("pick");
       return;
     }
     handleUpload();
@@ -294,8 +321,8 @@ export default function MainCameraScreen({ onNavigateToWebView, onInjectJS, lang
   const micTimeoutRef = React.useRef(null);
 
   // #22~23 STT 결과 수신 + 타임아웃
-  useSpeechRecognitionEvent('result', (event) => {
-    const text = event.results?.[0]?.transcript || '';
+  useSpeechRecognitionEvent("result", (event) => {
+    const text = event.results?.[0]?.transcript || "";
     if (text) {
       // 타임아웃 해제
       if (micTimeoutRef.current) {
@@ -307,19 +334,19 @@ export default function MainCameraScreen({ onNavigateToWebView, onInjectJS, lang
 
       // #24 WebView 전달 → processTextQuery
       if (onNavigateToWebView) {
-        onNavigateToWebView('voice', { text });
+        onNavigateToWebView("voice", { text });
       }
     }
   });
 
-  useSpeechRecognitionEvent('error', (event) => {
+  useSpeechRecognitionEvent("error", (event) => {
     if (micTimeoutRef.current) {
       clearTimeout(micTimeoutRef.current);
       micTimeoutRef.current = null;
     }
     setIsListening(false);
     setActiveFeature(null);
-    speak('음성 인식 중 오류가 발생했습니다.');
+    speak(t("voiceError", language));
   });
 
   const handleVoice = useCallback(async () => {
@@ -331,19 +358,20 @@ export default function MainCameraScreen({ onNavigateToWebView, onInjectJS, lang
     // #20 크레딧 체크
     const canProceed = await checkUsageLimit();
     if (!canProceed) {
-      speak('크레딧이 부족합니다.');
+      speak(t("creditShort", language));
       return;
     }
 
     // #21 마이크 리스닝 상태 (프론트엔드 — store로 전달)
     setIsListening(true);
-    setActiveFeature('live');
+    setActiveFeature("live");
 
     try {
       // #22 네이티브 STT 시작
-      const { granted } = await ExpoSpeechRecognitionModule.requestPermissionsAsync();
+      const { granted } =
+        await ExpoSpeechRecognitionModule.requestPermissionsAsync();
       if (!granted) {
-        speak('마이크 권한이 필요합니다.');
+        speak(t("micPermission", language));
         setIsListening(false);
         setActiveFeature(null);
         return;
@@ -360,16 +388,22 @@ export default function MainCameraScreen({ onNavigateToWebView, onInjectJS, lang
       // #23 10초 타임아웃
       micTimeoutRef.current = setTimeout(() => {
         stopAllAudio();
-        speak('음성을 듣지 못했어요. 다시 시도해볼까요?');
+        speak(t("voiceNotHeard", language));
       }, 10000);
-
     } catch (e) {
-      console.error('[음성 오류]', e.message);
+      console.error("[음성 오류]", e.message);
       setIsListening(false);
       setActiveFeature(null);
-      speak('음성 인식을 시작할 수 없습니다.');
+      speak(t("voiceStartFailed", language));
     }
-  }, [isProcessing, isListening, checkUsageLimit, language, speak, setActiveFeature]);
+  }, [
+    isProcessing,
+    isListening,
+    checkUsageLimit,
+    language,
+    speak,
+    setActiveFeature,
+  ]);
 
   // ═══════════════════════════════════════════════
   // 보관함 버튼 (#27~31)
@@ -380,7 +414,7 @@ export default function MainCameraScreen({ onNavigateToWebView, onInjectJS, lang
     stopAllAudio();
     // #30~34 WebView showArchivePage → 내부에서 전부 처리
     if (onNavigateToWebView) {
-      onNavigateToWebView('archive');
+      onNavigateToWebView("archive");
     }
   }, [stopAllAudio, onNavigateToWebView]);
 
@@ -388,33 +422,42 @@ export default function MainCameraScreen({ onNavigateToWebView, onInjectJS, lang
   // 라이브 / 여행비서 — 준비 중 (이후 단계)
   // ═══════════════════════════════════════════════
   const handleLive = useCallback(() => {
-    speak('라이브 기능을 준비하고 있습니다.');
-  }, [speak]);
+    speak(t("liveComingSoon", language));
+  }, [speak, language]);
 
   const handleAssistant = useCallback(() => {
-    speak('여행비서 기능을 준비하고 있습니다.');
-  }, [speak]);
+    speak(t("assistantComingSoon", language));
+  }, [speak, language]);
 
   // ⚠️ 수정금지(승인필요): 5개 버튼 핸들러 분기
-  const handleButtonPress = useCallback((buttonId) => {
-    switch (buttonId) {
-      case 'live':
-        handleLive();
-        break;
-      case 'capture':
-        debounceClick('capture', () => handleCapture(), 300);
-        break;
-      case 'upload':
-        handleUploadPress();
-        break;
-      case 'assistant':
-        handleAssistant();
-        break;
-      case 'archive':
-        debounceClick('archive', () => handleArchive(), 300);
-        break;
-    }
-  }, [handleLive, handleCapture, handleUploadPress, handleAssistant, handleArchive]);
+  const handleButtonPress = useCallback(
+    (buttonId) => {
+      switch (buttonId) {
+        case "live":
+          handleLive();
+          break;
+        case "capture":
+          debounceClick("capture", () => handleCapture(), 300);
+          break;
+        case "upload":
+          handleUploadPress();
+          break;
+        case "assistant":
+          handleAssistant();
+          break;
+        case "archive":
+          debounceClick("archive", () => handleArchive(), 300);
+          break;
+      }
+    },
+    [
+      handleLive,
+      handleCapture,
+      handleUploadPress,
+      handleAssistant,
+      handleArchive,
+    ],
+  );
 
   return (
     <View style={theme.container}>
@@ -434,7 +477,7 @@ export default function MainCameraScreen({ onNavigateToWebView, onInjectJS, lang
           선글라스처럼 드러나 라이브뷰를 가렸다. 읽히게 하는 것은 글자 그림자 하나로 충분하다. */}
       {!isProcessing && isFocused && (
         <View style={theme.hintWrap} pointerEvents="none">
-          <Text style={theme.hintText}>{t('hint', language)}</Text>
+          <Text style={theme.hintText}>{t("hint", language)}</Text>
         </View>
       )}
 
@@ -464,11 +507,11 @@ export default function MainCameraScreen({ onNavigateToWebView, onInjectJS, lang
             accessibilityLabel="닫기"
           />
           <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
             style={pickerStyles.cardWrap}
           >
             <View style={pickerStyles.card}>
-              {sourceStep === 'pick' ? (
+              {sourceStep === "pick" ? (
                 <>
                   <Text style={pickerStyles.title}>무엇으로 만들까요</Text>
                   <View style={pickerStyles.row}>
@@ -480,13 +523,18 @@ export default function MainCameraScreen({ onNavigateToWebView, onInjectJS, lang
                       }}
                     >
                       <Icon name="camera" size={18} color="#FFFFFF" />
-                      <Text style={[pickerStyles.btnText, pickerStyles.btnTextPrimary]}>
+                      <Text
+                        style={[
+                          pickerStyles.btnText,
+                          pickerStyles.btnTextPrimary,
+                        ]}
+                      >
                         내 기기
                       </Text>
                     </Pressable>
                     <Pressable
                       style={[pickerStyles.btn, pickerStyles.btnGhost]}
-                      onPress={() => setSourceStep('number')}
+                      onPress={() => setSourceStep("number")}
                     >
                       <Icon name="tag" size={18} color={Colors.light.text} />
                       <Text style={pickerStyles.btnText}>장소번호</Text>
@@ -499,7 +547,9 @@ export default function MainCameraScreen({ onNavigateToWebView, onInjectJS, lang
                   <TextInput
                     style={pickerStyles.input}
                     value={placeIdText}
-                    onChangeText={(v) => setPlaceIdText(v.replace(/[^0-9]/g, '').slice(0, 8))}
+                    onChangeText={(v) =>
+                      setPlaceIdText(v.replace(/[^0-9]/g, "").slice(0, 8))
+                    }
                     keyboardType="number-pad"
                     placeholder="0000"
                     placeholderTextColor={Colors.light.textTertiary}
@@ -519,13 +569,20 @@ export default function MainCameraScreen({ onNavigateToWebView, onInjectJS, lang
                     <Pressable
                       style={[
                         pickerStyles.btn,
-                        placeIdValue > 0 ? pickerStyles.btnPrimary : pickerStyles.btnDisabled,
+                        placeIdValue > 0
+                          ? pickerStyles.btnPrimary
+                          : pickerStyles.btnDisabled,
                       ]}
                       onPress={handlePlaceIdConfirm}
                       disabled={placeIdValue <= 0}
                     >
                       <Icon name="check" size={18} color="#FFFFFF" />
-                      <Text style={[pickerStyles.btnText, pickerStyles.btnTextPrimary]}>
+                      <Text
+                        style={[
+                          pickerStyles.btnText,
+                          pickerStyles.btnTextPrimary,
+                        ]}
+                      >
                         만들기
                       </Text>
                     </Pressable>
@@ -546,17 +603,17 @@ export default function MainCameraScreen({ onNavigateToWebView, onInjectJS, lang
 const pickerStyles = StyleSheet.create({
   backdrop: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "rgba(0,0,0,0.55)",
+    alignItems: "center",
+    justifyContent: "center",
     padding: Spacing.xl,
   },
   cardWrap: {
-    width: '100%',
+    width: "100%",
     maxWidth: 340,
   },
   card: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: BorderRadius.xl,
     paddingVertical: Spacing.xl,
     paddingHorizontal: Spacing.lg,
@@ -566,7 +623,7 @@ const pickerStyles = StyleSheet.create({
     fontFamily: Fonts.semiBold,
     fontSize: 17,
     color: Colors.light.text,
-    textAlign: 'center',
+    textAlign: "center",
     marginBottom: Spacing.lg,
   },
   input: {
@@ -579,25 +636,25 @@ const pickerStyles = StyleSheet.create({
     fontFamily: Fonts.medium,
     fontSize: 18,
     color: Colors.light.text,
-    textAlign: 'center',
+    textAlign: "center",
     marginBottom: Spacing.lg,
   },
   row: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: Spacing.md,
   },
   btn: {
     flex: 1,
     height: Spacing.buttonHeight,
     borderRadius: BorderRadius.sm,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 6,
   },
   btnPrimary: { backgroundColor: Brand.primary },
   btnGhost: { backgroundColor: Colors.light.backgroundSecondary },
   btnDisabled: { backgroundColor: Colors.light.textTertiary },
   btnText: { fontFamily: Fonts.medium, fontSize: 15, color: Colors.light.text },
-  btnTextPrimary: { color: '#FFFFFF' },
+  btnTextPrimary: { color: "#FFFFFF" },
 });
