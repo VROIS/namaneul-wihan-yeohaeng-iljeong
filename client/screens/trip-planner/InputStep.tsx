@@ -524,7 +524,11 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
                     {...fitTextProps}
                   >
                     {t(vibe.labelKey)}
-                    {priorityLabel}
+                    {/* ⚠️ 수정금지(승인필요) 2026-08-14 사장님 승인 = 우선순위 괄호를 항상 별도 줄로 강제.
+                        같은 줄에 붙이면 언어·조합에 따라 축약해도 여전히 괄호 중간에서 깨질 수 있음
+                        (사장님 운영 스샷 실증 = 영문 vibe 라벨+우선순위 괄호가 한 줄에서 단어 중간에 끊김).
+                        줄바꿈을 코드로 못박아 원천 차단. */}
+                    {priorityLabel ? `\n${priorityLabel}` : ""}
                   </Text>
                 </Pressable>
               );
