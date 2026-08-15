@@ -93,11 +93,4 @@ export function pickRestaurantBySegment<T extends GeoPoint>(
   );
 }
 
-export function pickRestaurantNearVenue<T extends GeoPoint>(
-  pool: T[],
-  venue: T | null | undefined,
-  excludeIds: number[] = [],
-): T | null {
-  if (!venue) return null;
-  return pickMin(eligible(pool, excludeIds), (p) => haversineKm(p, venue));
-}
+// pickRestaurantNearVenue(8번=저녁 식당 선정) 폐기 = 2026-08-15 §19(bts-routes.ts 참고, 호출부 소멸).

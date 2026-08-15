@@ -272,25 +272,37 @@ async function fetchFromPlaceSeedRaw(
     return picked;
   };
 
-  const allRows: any[] = [];
-  try {
-    const queries = Object.entries(catSlots)
-      .filter(([_, slots]) => slots > 0)
-      .map(([cat, slots]) => selectByDayZone(cat, slots));
-    const results = await Promise.all(queries);
-    for (const rows of results) allRows.push(...rows);
-  } catch (e: any) {
-    console.error(`[AG2-DB] ❌ SELECT 실패:`, e.message);
-    return null;
-  }
-
   // ⚠️ 수정금지(승인필요) 2026-07-31 사장님 승인(BTS D단계 BE-3) = 핀 주입 = 고른 장소는 반드시 포함.
   //   rank = -1 로 맨 앞 = route-local 의 rank ASC 활동 컷을 무조건 통과(선택 순서 유지).
-  //   카테고리 SELECT 로 이미 온 행은 핀 1벌로 대체(1곳 1벌). 식당 핀은 여기선 그대로 두고
-  //   식사 자리 배치는 ag4 식당풀 + route-local 핀 우선이 담당(활동 필터가 식당을 안 쓰므로 무해).
   const pinIds = (formData.pinnedPlaceIds ?? []).filter((n) =>
     Number.isFinite(n),
   );
+  // ⚠️ 수정금지(승인필요) 2026-08-15 사장님 승인 = 핀이 있으면(=BTS "같이 떠나요" 전용, pinnedPlaceIds 는
+  //   client/screens/bts/BTSTripScreen.tsx 1곳만 채움 = 메인앱은 항상 빈 배열이라 이 분기 자체가 안 탐)
+  //   카테고리 기반 추가채우기(selectByDayZone)를 **아예 건너뛴다.**
+  //   옛 방식(핀 + 카테고리 후보를 항상 합침) 폐기 §19 = 사용자가 정확히 4장을 골라도 밀도가 요구하는
+  //   슬롯 수만큼 시스템이 healing/restaurant 등에서 몰래 더 채워 "4장 골랐는데 9장소" 사고(실측 로그 확인).
+  //   메인앱(핀 없음)은 이 분기를 안 타므로 카테고리 채우기 그대로 = 주기능 무변경.
+  const allRows: any[] = [];
+  if (!pinIds.length) {
+    try {
+      const queries = Object.entries(catSlots)
+        .filter(([_, slots]) => slots > 0)
+        .map(([cat, slots]) => selectByDayZone(cat, slots));
+      const results = await Promise.all(queries);
+      for (const rows of results) allRows.push(...rows);
+    } catch (e: any) {
+      console.error(`[AG2-DB] ❌ SELECT 실패:`, e.message);
+      return null;
+    }
+  } else {
+    console.log(
+      `[AG2-DB] 📌 핀 전용 모드(BTS) = 카테고리 추가채우기 건너뜀(${pinIds.length}곳만 사용)`,
+    );
+  }
+
+  // ⚠️ 2026-08-15 = 판단3종 지적 반영(§0 군더더기 정리) = 핀 있으면 위에서 카테고리 조회 자체를 건너뛰어
+  //   allRows 가 이 시점에 항상 빈 배열이다 → 옛 pinSet/rest(카테고리 후보와 병합) 로직은 죽은 코드였다 = 완전삭제.
   if (pinIds.length) {
     const pinRows: any[] = await db!
       .select(SELECT_COLS)
@@ -299,14 +311,10 @@ async function fetchFromPlaceSeedRaw(
     for (const r of pinRows) recalcCrossCityZone(r, cid, center);
     const byId = new Map(pinRows.map((r) => [r.id, r]));
     const ordered = pinIds.map((id) => byId.get(id)).filter(Boolean) as any[];
-    const pinSet = new Set(pinIds);
-    const rest = allRows.filter((r) => !pinSet.has(r.id));
-    allRows.length = 0;
     for (const r of ordered) {
       r.rank = -1;
       allRows.push(r);
     }
-    allRows.push(...rest);
     console.log(
       `[AG2-DB] 📌 핀 ${ordered.length}/${pinIds.length}곳 주입 (rank -1 = 활동 컷 무조건 통과)`,
     );

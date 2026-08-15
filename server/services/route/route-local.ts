@@ -407,16 +407,14 @@ export function buildRouteLocal(
       ? orderHoming(dayGroups[di] || [], center)
       : orderByNN(dayGroups[di] || [], center);
 
-    // 점심 = 슬롯3 (= 활동 2개 후) = 활동2·활동4 중 최근접 식당 (= detour 0)
+    // 점심 = 슬롯3 (= 활동 2개 후) = 오전활동(aBefore) 근처 최근접 식당 (= detour 0)
+    // ⚠️ 수정금지(승인필요) 2026-08-15 사장님 승인 = 앵커를 오전활동 1개로 좁힘(옛 [오전,오후] 둘중 최근접 폐기 §19).
+    //   사유: 오전·오후 둘 다 후보면 min(거리)가 오후활동 쪽으로 튀어, 점심이 "오전 일정 직후 그 근처"가
+    //   아니라 오후 동선 근처로 뽑히는 동선 역행이 발생했다(사장님 실기기 시뮬 지적). 저녁(마지막활동 앵커)은 그대로.
     const lunchIdx = Math.min(2, dayActs.length);
     const aBefore = dayActs[lunchIdx - 1];
-    const aAfter = dayActs[lunchIdx];
     const lunch = pickMealPriority(
-      dayActs.length >= 1
-        ? [aBefore, aAfter]
-            .filter(Boolean)
-            .map((p) => ({ lat: p.lat, lng: p.lng }))
-        : [center], // ⚠️ 활동 0개(빈 날) = 중심 앵커 = 2식 보장
+      aBefore ? [{ lat: aBefore.lat, lng: aBefore.lng }] : [center], // ⚠️ 활동 0개(빈 날) = 중심 앵커 = 2식 보장
       mealBudget.min, // 가격대 하한 (= 등급 구간)
       mealBudget.lunch,
     );

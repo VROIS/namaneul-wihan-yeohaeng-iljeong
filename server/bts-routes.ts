@@ -9,10 +9,8 @@ import { cities, placeSeedRaw } from "../shared/schema";
 import { isNotNull, asc, desc, eq, and, sql } from "drizzle-orm";
 // ⚠️ 2026-07-31 사장님 승인(BTS D단계) = 옛 자체 생성기(/api/bts/generate + bts-gemini) 완전삭제 §19·§16.
 //   여정 생성 = 메인 파이프라인 v3 1벌(/api/routes/generate + pinnedPlaceIds).
-import {
-  pickRestaurantBySegment,
-  pickRestaurantNearVenue,
-} from "./services/route-matcher";
+// pickRestaurantNearVenue(저녁) 폐기 = 2026-08-15 §19(위 슬롯순서 주석 참고). 점심만 유지.
+import { pickRestaurantBySegment } from "./services/route-matcher";
 import {
   CHARACTER_PRIMARY_CATEGORY,
   COMPANION_VIBE_CATEGORIES,
@@ -240,9 +238,11 @@ export function registerBtsRoutes(app: Express): void {
   });
 
   // ─── GET /api/bts/top-places ───
-  // ⚠️ 수정금지(승인필요) — 2026-04-30 사용자 SSOT: 8 슬롯 고정 순서
+  // ⚠️ 수정금지(승인필요) — 2026-08-15 사장님 승인: 8 슬롯 고정 순서 v2
   // slot 1 = bts_venue (출발), slot 5 = 점심 (segment 매칭, 정중앙 하단)
-  // slot 8 = 저녁 (venue 인근), slot 2,3,4,6,7 = 주 카테고리 vibe 1~5 (companion = 5 카테고리)
+  // slot 2,3,4,6,7,8 = 주 카테고리 vibe 1~6 (companion = 5 카테고리)
+  // 옛 "slot 8 = 저녁(venue 인근)" 폐기 §19 = 공연 3시간 전 종료라 저녁시간·식당 오픈시간과 안 맞음
+  //   (BTSTripScreen.tsx 밀도 역산과 정합 = 활동시간 최대 확보).
   app.get("/api/bts/top-places", async (req, res) => {
     try {
       if (!db)
@@ -332,9 +332,17 @@ export function registerBtsRoutes(app: Express): void {
       const usedIds = new Set<number>();
       if (venue) usedIds.add(venue.id);
 
-      // vibe top 5 = 누적 exclude + 이미지 alive 검증 → 깨진 row skip → 다음 rank
-      const vibeSlots: (PlaceRow | null)[] = [null, null, null, null, null];
-      for (let vIdx = 0; vIdx < 5; vIdx++) {
+      // vibe top 6 = 누적 exclude + 이미지 alive 검증 → 깨진 row skip → 다음 rank
+      // ⚠️ 2026-08-15 = 5→6 (옛 8번=저녁 자리가 활동으로 전환됨, 위 슬롯순서 주석 참고).
+      const vibeSlots: (PlaceRow | null)[] = [
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+      ];
+      for (let vIdx = 0; vIdx < 6; vIdx++) {
         const next = await pickAliveFrom(vibeRowsAll, usedIds);
         if (!next) break;
         usedIds.add(next.id);
@@ -352,10 +360,6 @@ export function registerBtsRoutes(app: Express): void {
         vibeSlots[3],
       );
       if (lunch) usedIds.add(lunch.id);
-      const dinner = pickRestaurantNearVenue(
-        restaurantPool.filter((r) => !usedIds.has(r.id)),
-        venue,
-      );
 
       const slotPlaces: (PlaceRow | null)[] = [
         venue, // 1 공연장
@@ -365,7 +369,7 @@ export function registerBtsRoutes(app: Express): void {
         lunch, // 5 점심 ★
         vibeSlots[3], // 6
         vibeSlots[4], // 7
-        dinner, // 8 저녁 (venue 인근)
+        vibeSlots[5], // 8
       ];
 
       // ⚠️ 수정금지(승인필요) — 카드 노출 필드 7 개 + 좌표 2 개 (= 지도 마커용, 2026-05-06 Screen 4 카트→지도)

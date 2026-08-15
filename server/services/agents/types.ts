@@ -4,6 +4,8 @@
  * AG1(뼈대) → AG2(Gemini)||AG3pre(DB) → AG3(매칭) → AG4(실시간)
  */
 
+import { PACE_SLOT_MINUTES } from "../../../shared/pace-duration";
+
 // ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT = KoreanSentiment 완전 폐기 (= 인프라/로우데이터 90% 오류)
 
 // ===== 기본 타입 =====
@@ -158,19 +160,20 @@ export interface PlaceResult {
 // ===== 상수 =====
 // ⚠️ 2026-07-21 사장님 SSOT = 활동간격(밀도별) + 식사간격(밀도별, 활동보다 짧음). maxSlotsPerDay = 안전 상한(가용시간이 실제 슬롯수 결정).
 //   식사가 활동보다 짧아(밥은 빨리 끝남) 저녁이 뒤로 밀려 실제 저녁시각(18-20시)·가용시간 종료 근처에 옴 + 활동 자리 확보(Relaxed 활동3).
+// ⚠️ 2026-08-15 = slotDurationMinutes = shared/pace-duration.ts PACE_SLOT_MINUTES 1벌 재사용(§16, BTS FE 드리프트 방지).
 export const PACE_CONFIG: Record<TravelPace, PaceConfig> = {
   Packed: {
-    slotDurationMinutes: 90,
+    slotDurationMinutes: PACE_SLOT_MINUTES.Packed,
     mealDurationMinutes: 60,
     maxSlotsPerDay: 12,
   },
   Normal: {
-    slotDurationMinutes: 120,
+    slotDurationMinutes: PACE_SLOT_MINUTES.Normal,
     mealDurationMinutes: 90,
     maxSlotsPerDay: 10,
   },
   Relaxed: {
-    slotDurationMinutes: 150,
+    slotDurationMinutes: PACE_SLOT_MINUTES.Relaxed,
     mealDurationMinutes: 120,
     maxSlotsPerDay: 8,
   },

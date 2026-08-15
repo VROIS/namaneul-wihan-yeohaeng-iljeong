@@ -86,7 +86,14 @@ export async function buildSkeleton(
       dayEnd = DEFAULT_END_TIME;
     }
 
-    const slots = calculateSlotsForDay(dayStart, dayEnd, travelPace);
+    let slots = calculateSlotsForDay(dayStart, dayEnd, travelPace);
+    // ⚠️ 수정금지(승인필요) 2026-08-15 사장님 승인 = 핀(pinnedPlaceIds) = "고른 장소는 반드시 포함"(ag2-gemini-recommender.ts
+    //   287행 원칙)인데, 밀도(pace)가 독자적으로 계산한 slots 상한이 핀 개수보다 작으면 route-local 의 활동컷(slots-2)에서
+    //   일부가 잘렸다(BTS 실측 = 핀3개 중 1개 소실). dayCount=1(BTS "같이 떠나요")일 때만 핀 개수만큼 상한을 끌어올린다.
+    //   옛 "pace 상한만 신뢰" 폐기 §19 = 사용자가 명시적으로 고른 것을 밀도 계산이 몰래 버리면 안 됨.
+    if (dayCount === 1 && Array.isArray(formData.pinnedPlaceIds)) {
+      slots = Math.max(slots, formData.pinnedPlaceIds.length + 2);
+    }
     daySlotsConfig.push({
       day: d,
       startTime: dayStart,

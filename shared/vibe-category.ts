@@ -43,9 +43,6 @@ export function characterIdToVibes(memberId: string): string[] {
   return cats.map((c) => catToVibe.get(c)).filter((v): v is string => !!v);
 }
 
-/** 캐릭터 pace → 엔진 TravelPace. 엔진에 없는 Ultra-Relaxed 만 Relaxed 로. */
-export function clampTravelPace(
-  pace: "Ultra-Relaxed" | "Relaxed" | "Normal" | "Packed",
-): "Packed" | "Normal" | "Relaxed" {
-  return pace === "Ultra-Relaxed" ? "Relaxed" : pace;
-}
+// clampTravelPace(캐릭터 고정 pace → 엔진값) 폐기 = 2026-08-15 §19.
+// 사유: 밀도를 캐릭터로 고정하면 사용자가 고른 카드 수와 무관해져 일부 카드가 잘렸다.
+// BTSTripScreen.tsx 의 밀도 역산(가용시간÷활동카드수→근사 pace)으로 대체 = 호출부 소멸.

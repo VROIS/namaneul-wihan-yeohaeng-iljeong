@@ -215,10 +215,12 @@ export default function BTSPlaceCartScreen() {
   }, [selectedCharacter?.id, selectedCity?.id, baseUrl]);
 
   const handleNext = useCallback(() => {
-    // ⚠️ 수정금지(승인필요) — 2026-05-06 v3 SSOT: 카드 ≥ 3 부터 일정 생성 (사용자 명시 "3 부터 생성")
+    // ⚠️ 수정금지(승인필요) — 2026-08-15 v4 SSOT: 카드 ≥ 4 부터 일정 생성.
+    //   옛 "3부터"(2026-05-06) 폐기 §19 = 3장이면 활동 1개뿐이라 밀도 역산 시 슬롯 1개에 최대 8.5시간이
+    //   몰리는 비현실적 결과(사장님 실측 시뮬). 4장 = 공연장+점심(항상 포함)+활동2 = 최소 형태.
     // ⚠️ 2026-07-31 사장님 승인(BTS D단계) = 착지 = BTSTrip(메인앱 여정화면 그대로).
     //   폼 조립·생성·로딩·결과 전부 그 화면이 담당 = 옛 BTSLoading 완전삭제 §19.
-    if (selectedPlaceIds.length >= 3) {
+    if (selectedPlaceIds.length >= 4) {
       haptic("success");
       navigation.navigate("BTSTrip");
     }
@@ -266,8 +268,8 @@ export default function BTSPlaceCartScreen() {
   );
 
   const selectedCount = selectedPlaceIds.length;
-  // ⚠️ 수정금지(승인필요) — 2026-05-06 v3 SSOT: 카드 ≥ 3 부터 CTA 활성 (= "3 부터 생성")
-  const canProceed = selectedCount >= 3;
+  // ⚠️ 수정금지(승인필요) — 2026-08-15 v4 SSOT: 카드 ≥ 4 부터 CTA 활성. 옛 "3부터" 폐기 사유 = handleNext 주석 참고.
+  const canProceed = selectedCount >= 4;
 
   // ⚠️ 수정금지(승인필요) 2026-08-08 사장님 지시 — 담길 때마다 게이지가 **차오르고** 숫자칸이 톡 튄다.
   //   숫자만 바뀌면 담긴 게 눈에 안 들어온다(= 카드가 날아온 것이 어디에 꽂혔는지 알 수 없음).
