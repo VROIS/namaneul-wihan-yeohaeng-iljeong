@@ -162,7 +162,7 @@ export function useProfile() {
       if (Platform.OS === "web") {
         const session = await createCheckout();
         if (!session) {
-          alert("결제창을 열지 못했습니다. 잠시 후 다시 시도해 주세요.");
+          alert(t("credit.checkoutOpenFailed"));
           return;
         }
         // 웹 = 같은 창에서 이동. 결제 후 success_url(?payment=) 복귀 → 첫 화면 프로필 + 잔액 조회(기존 1벌).
@@ -173,12 +173,12 @@ export function useProfile() {
       // 폰 = 결제 시트. 공개 키 = 서버 정본(pricing 응답 1벌)에서만(하드코딩 금지).
       const key = pricing?.stripePublishableKey;
       if (!key) {
-        alert("결제 준비가 안 되었습니다. 잠시 후 다시 시도해 주세요.");
+        alert(t("credit.sheetPrepareFailed"));
         return;
       }
       const intent = await createSheetIntent();
       if (!intent) {
-        alert("결제를 시작하지 못했습니다. 잠시 후 다시 시도해 주세요.");
+        alert(t("credit.sheetStartFailed"));
         return;
       }
 
@@ -196,7 +196,7 @@ export function useProfile() {
         if (!mountedRef.current) return;
         refetchCredits();
         if (confirmed.ok) {
-          alert("충전이 완료되었습니다.");
+          alert(t("credit.topupDone"));
         } else {
           // 즉시 확인이 안 되면 침묵 + 잠깐 재조회 = 웹훅·일일 원장대조가 뒤에서 채운다(자가치유).
           let left = 5;
@@ -209,7 +209,7 @@ export function useProfile() {
       }
     } catch (e) {
       console.error("[Profile] 충전 실패:", e);
-      alert("충전 중 오류가 발생했습니다.");
+      alert(t("credit.topupError"));
     } finally {
       rechargingRef.current = false;
       if (mountedRef.current) setRecharging(false);
@@ -326,40 +326,38 @@ export function useProfile() {
       setSavedTrips([]);
     } catch (e: any) {
       // 서버가 준 사유를 뭉개지 않는다(2026-07-31 사장님 지시)
-      const msg = e?.message || "탈퇴 처리에 실패했습니다.";
+      const msg = e?.message || t("profile.deleteFailedGeneric");
       if (Platform.OS === "web") window.alert(msg);
-      else Alert.alert("탈퇴 실패", msg);
+      else Alert.alert(t("profile.deleteFailedTitle"), msg);
     } finally {
       setDeletingAccount(false);
     }
   };
 
   const handleDeleteAccount = () => {
-    const t1 = "정말 탈퇴하시겠습니까?";
+    const dt1 = t("profile.deleteConfirmTitle1");
     // ⚠️ 2026-08-08 §22 판단검증 = 실제 동작과 문구를 맞춘다. 옛 "바로 로그인할 수 없게 됩니다" 폐기 §19
     //   (재로그인하면 applyLogin 이 되살리므로 그 문장은 사실이 아니었다).
-    const m1 =
-      "탈퇴하면 로그아웃되고 목록에서 사라집니다.\n6개월 안에 다시 로그인하시면 그대로 복구됩니다.";
-    const t2 = "마지막 확인";
-    const m2 =
-      "6개월이 지나면 회원 정보와 직접 찍으신 사진이 완전히 삭제됩니다.\n계속하시겠습니까?";
+    const dm1 = t("profile.deleteConfirmMsg1");
+    const dt2 = t("profile.deleteConfirmTitle2");
+    const dm2 = t("profile.deleteConfirmMsg2");
 
     if (Platform.OS === "web") {
-      if (!window.confirm(`${t1}\n\n${m1}`)) return;
-      if (!window.confirm(`${t2}\n\n${m2}`)) return;
+      if (!window.confirm(`${dt1}\n\n${dm1}`)) return;
+      if (!window.confirm(`${dt2}\n\n${dm2}`)) return;
       void runDeleteAccount();
       return;
     }
-    Alert.alert(t1, m1, [
-      { text: "취소", style: "cancel" },
+    Alert.alert(dt1, dm1, [
+      { text: t("common.cancel"), style: "cancel" },
       {
-        text: "계속",
+        text: t("common.continue"),
         style: "destructive",
         onPress: () =>
-          Alert.alert(t2, m2, [
-            { text: "취소", style: "cancel" },
+          Alert.alert(dt2, dm2, [
+            { text: t("common.cancel"), style: "cancel" },
             {
-              text: "탈퇴",
+              text: t("profile.withdraw"),
               style: "destructive",
               onPress: () => void runDeleteAccount(),
             },

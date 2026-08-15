@@ -1,5 +1,8 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getApiUrl } from "./query-client";
+// ⚠️ 수정금지(승인필요) 2026-08-15 사장님 승인 = 이 파일은 React 컴포넌트가 아니라(useTranslation 훅 불가)
+//   전역 i18n 싱글턴을 직접 불러 t() 대신 i18n.t() 로 결과 문자열을 번역한다(§16 = 기존 i18n 1벌 재사용).
+import i18n from "./i18n";
 
 const AUTH_KEY = "@vibetrip_auth";
 const USER_KEY = "@vibetrip_user";
@@ -95,10 +98,13 @@ export async function emailLogin(data: {
       await saveAuth(userData);
       return { success: true, user: userData };
     }
-    return { success: false, error: result.error || "로그인 실패" };
+    return {
+      success: false,
+      error: result.error || i18n.t("login.loginFailed"),
+    };
   } catch (error) {
     console.error("Email login error:", error);
-    return { success: false, error: "서버 연결 실패" };
+    return { success: false, error: i18n.t("login.serverConnectFailed") };
   }
 }
 
@@ -132,7 +138,7 @@ async function postSocialLogin(
     return { success: false, error: result.error || failMsg };
   } catch (error) {
     console.error(`[Auth] ${path} 실패:`, error);
-    return { success: false, error: "서버 연결 실패" };
+    return { success: false, error: i18n.t("login.serverConnectFailed") };
   }
 }
 
@@ -143,7 +149,7 @@ export function socialLoginWithGoogle(data: {
   language: string;
   deviceType: string;
 }): Promise<LoginResult> {
-  return postSocialLogin("/api/auth/google", data, "Google 로그인 실패");
+  return postSocialLogin("/api/auth/google", data, i18n.t("login.loginFailed"));
 }
 
 /** 카카오 OAuth 성공 후 accessToken으로 로그인 (웹 = 브라우저가 교환한 토큰) */
@@ -153,7 +159,7 @@ export function socialLoginWithKakao(data: {
   language: string;
   deviceType: string;
 }): Promise<LoginResult> {
-  return postSocialLogin("/api/auth/kakao", data, "카카오 로그인 실패");
+  return postSocialLogin("/api/auth/kakao", data, i18n.t("login.loginFailed"));
 }
 
 // ⚠️ 수정금지(승인필요) 2026-07-31 사장님 지시 = 애플 로그인(아이폰 전용).
@@ -167,7 +173,7 @@ export function socialLoginWithApple(data: {
   deviceType: string;
   fullName?: string;
 }): Promise<LoginResult> {
-  return postSocialLogin("/api/auth/apple", data, "Apple 로그인 실패");
+  return postSocialLogin("/api/auth/apple", data, i18n.t("login.loginFailed"));
 }
 
 /** WhatsApp OTP 발송 */
@@ -182,10 +188,13 @@ export async function whatsappOtpSend(
     });
     const result = await response.json();
     if (response.ok && result.success) return { success: true };
-    return { success: false, error: result.error || "OTP 발송 실패" };
+    return {
+      success: false,
+      error: result.error || i18n.t("login.otpSendFailed"),
+    };
   } catch (error) {
     console.error("WhatsApp OTP send error:", error);
-    return { success: false, error: "서버 연결 실패" };
+    return { success: false, error: i18n.t("login.serverConnectFailed") };
   }
 }
 
@@ -209,10 +218,13 @@ export async function whatsappOtpVerify(data: {
       await saveAuth(userData);
       return { success: true, user: userData };
     }
-    return { success: false, error: result.error || "WhatsApp 로그인 실패" };
+    return {
+      success: false,
+      error: result.error || i18n.t("login.whatsappLoginFailed"),
+    };
   } catch (error) {
     console.error("WhatsApp OTP verify error:", error);
-    return { success: false, error: "서버 연결 실패" };
+    return { success: false, error: i18n.t("login.serverConnectFailed") };
   }
 }
 
@@ -230,10 +242,10 @@ export function calculateAge(birthDate: Date): number {
 }
 
 export function getAgeGroup(age: number): string {
-  if (age < 20) return "10대";
-  if (age < 30) return "20대";
-  if (age < 40) return "30대";
-  if (age < 50) return "40대";
-  if (age < 60) return "50대";
-  return "60대+";
+  if (age < 20) return i18n.t("login.ageGroup10s");
+  if (age < 30) return i18n.t("login.ageGroup20s");
+  if (age < 40) return i18n.t("login.ageGroup30s");
+  if (age < 50) return i18n.t("login.ageGroup40s");
+  if (age < 60) return i18n.t("login.ageGroup50s");
+  return i18n.t("login.ageGroup60sPlus");
 }

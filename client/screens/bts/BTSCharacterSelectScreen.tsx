@@ -261,6 +261,8 @@ const RingCard = React.memo(function RingCard({
       />
 
       {/* ⚠️ 수정금지(승인필요) — 텍스트 오버레이 (캐릭터 위 하단, 프로포셔널) */}
+      {/* ⚠️ 수정금지(승인필요) 2026-08-15 사장님 승인 = archetype(한국어) → archetypeEn 전환.
+          nameEn 처럼 언어 무관 고정 영문 표기(브랜드성 아키타입명) = 7개국어 신규번역 대신 기존 필드 재사용(§16). */}
       <View
         pointerEvents="none"
         style={{
@@ -282,7 +284,7 @@ const RingCard = React.memo(function RingCard({
           numberOfLines={1}
           style={[styles.floatingArchetype, { fontSize: archetypeFontSize }]}
         >
-          {character.archetype}
+          {character.archetypeEn}
         </Text>
       </View>
     </Animated.View>

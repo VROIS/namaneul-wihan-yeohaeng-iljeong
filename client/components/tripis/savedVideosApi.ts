@@ -3,6 +3,8 @@
 // = 부르는 곳 3: 프로필 '나의 TRIPIS' 영상 카드(목록) · 통합 모달 [저장]·열람해제 · 하단 TRIPIS 탭 뱃지.
 //   전부 이 파일만 통과(§0·§16). 기기 다운로드 없음 = 앱에 접속해서 보는 구조(사장님 SSOT).
 import { apiRequest } from "@/lib/query-client";
+// ⚠️ 수정금지(승인필요) 2026-08-15 사장님 승인 = 네트워크 오류 폴백 다국어(§16 = i18n 싱글턴 재사용).
+import i18n from "@/lib/i18n";
 
 export interface SavedVideoRow {
   itineraryId: number;
@@ -25,7 +27,7 @@ function serverReason(e: unknown): string {
     } catch {}
     return m[1];
   }
-  return msg || "네트워크 오류";
+  return msg || i18n.t("common.networkError");
 }
 
 // 내가 담은 영상 목록 (미로그인·오류 = 빈 목록)

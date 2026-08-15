@@ -20,7 +20,9 @@
     "download": "다운로드",
     "delete": "삭제",
     "hide": "숨기기",
-    "dayCount": "{{count}}일차"
+    "dayCount": "{{count}}일차",
+    "continue": "계속",
+    "networkError": "네트워크 오류"
   },
   "login": {
     "signingIn": "로그인 중…",
@@ -54,7 +56,17 @@
     "alert": "알림",
     "birthRequiredAlert": "서비스 이용을 위해 생년월일 입력이 필요합니다.",
     "emailAccountNotFound": "그 메일로 만든 계정이 없습니다. 구글·카카오·애플로 시작해 주세요.",
-    "emailBirthMismatch": "생년월일이 그 계정과 다릅니다."
+    "emailBirthMismatch": "생년월일이 그 계정과 다릅니다.",
+    "appleStart": "Apple로 시작하기",
+    "serverConnectFailed": "서버 연결에 실패했습니다.",
+    "otpSendFailed": "OTP 발송 실패",
+    "whatsappLoginFailed": "WhatsApp 로그인 실패",
+    "ageGroup10s": "10대",
+    "ageGroup20s": "20대",
+    "ageGroup30s": "30대",
+    "ageGroup40s": "40대",
+    "ageGroup50s": "50대",
+    "ageGroup60sPlus": "60대+"
   },
   "onboarding": {
     "signUp": "가입하기",
@@ -87,7 +99,13 @@
     "topUpDetail": "{{date}} {{amount}} 크레딧",
     "none": "없음",
     "noHistory": "거래 내역이 없습니다",
-    "history": "크레딧 내역"
+    "history": "크레딧 내역",
+    "checkoutOpenFailed": "결제창을 열지 못했습니다. 잠시 후 다시 시도해 주세요.",
+    "sheetPrepareFailed": "결제 준비가 안 되었습니다. 잠시 후 다시 시도해 주세요.",
+    "sheetStartFailed": "결제를 시작하지 못했습니다. 잠시 후 다시 시도해 주세요.",
+    "topupDone": "충전이 완료되었습니다.",
+    "topupError": "충전 중 오류가 발생했습니다.",
+    "returnSuccessMsg": "결제가 접수되었습니다.\n\n앱으로 돌아가 주세요."
   },
   "trip": {
     "destination": "목적지",
@@ -187,7 +205,9 @@
     "drivingGuide": "드라이빙 가이드",
     "btsBanner": "BTS 콘서트 투어 플래너",
     "btsBannerSub": "멤버 취향으로 콘서트 도시 여정 만들기",
-    "creditShort": "크레딧이 부족합니다 (남은 {{balance}} / 필요 {{required}})"
+    "creditShort": "크레딧이 부족합니다 (남은 {{balance}} / 필요 {{required}})",
+    "searchOpenA11y": "숙소·도시 검색 열기",
+    "searchCloseA11y": "검색 닫기"
   },
   "bts": {
     "placeCart": {
@@ -234,7 +254,9 @@
     "verified": "맛집 인증",
     "verifiedContent": "현지인 리뷰 분석 결과, 이 레스토랑은 오리지널 맛을 유지하고 있는 것으로 확인되었습니다.",
     "realtime": "실시간 정보",
-    "realtimeContent": "현재 날씨: 맑음 22°C\n혼잡도: 보통"
+    "realtimeContent": "현재 날씨: 맑음 22°C\n혼잡도: 보통",
+    "vibeFallbackHip": "힙한",
+    "vibeFallbackInstagrammable": "인스타그래머블"
   },
   "verify": {
     "title": "전문가 검증",
@@ -344,7 +366,9 @@
     "tripAdvisorRating": "TripAdvisor {{rating}} ({{count}}개 리뷰)",
     "showMap": "이 장소 지도 보기",
     "hideMap": "지도 닫기",
-    "mapLoading": "지도 로딩 중..."
+    "mapLoading": "지도 로딩 중...",
+    "searchLoadFailed": "장소 검색 로드 실패",
+    "hotelCitySearchPlaceholderFallback": "숙소명이나 도시명을 한글이나 원어로 입력해주세요"
   },
   "profile": {
     "defaultUserName": "사용자",
@@ -371,7 +395,13 @@
     "noSavedTripsHeading": "저장된 여행이 없어요",
     "noSavedTripsHint": "일정을 생성하고 저장해보세요!",
     "representative": "대표",
-    "setRepresentative": "대표 올리기"
+    "setRepresentative": "대표 올리기",
+    "deleteConfirmTitle1": "정말 탈퇴하시겠습니까?",
+    "deleteConfirmMsg1": "탈퇴하면 로그아웃되고 목록에서 사라집니다.\n6개월 안에 다시 로그인하시면 그대로 복구됩니다.",
+    "deleteConfirmTitle2": "마지막 확인",
+    "deleteConfirmMsg2": "6개월이 지나면 회원 정보와 직접 찍으신 사진이 완전히 삭제됩니다.\n계속하시겠습니까?",
+    "deleteFailedTitle": "탈퇴 실패",
+    "deleteFailedGeneric": "탈퇴 처리에 실패했습니다."
   },
   "tab": {
     "plan": "여정",
@@ -477,5 +507,10 @@
     "failWithReason": "생성 실패: {{reason}}",
     "failGeneric": "이전 생성에 실패했어요. 다시 시도해 주세요.",
     "notYet": "{{d}}일차 영상은 아직 없습니다"
+  },
+  "errorFallback": {
+    "title": "TRIPIS에서 문제가 발생했어요",
+    "message": "앱을 다시 시작해 주세요.",
+    "restartBtn": "다시 시작"
   }
 }

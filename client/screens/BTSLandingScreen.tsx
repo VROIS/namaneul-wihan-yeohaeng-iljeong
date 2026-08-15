@@ -100,7 +100,7 @@ const EMPTY_CONCERT: ConcertInfo = { city: "", dDay: 0 };
 
 export function BTSLandingScreen() {
   const navigation = useNavigation<any>();
-  const { i18n } = useTranslation(); // 저장할 언어 = 메인 인증창과 같은 값(§16)
+  const { t, i18n } = useTranslation(); // 저장할 언어 = 메인 인증창과 같은 값(§16)
   const [dob, setDob] = useState("");
   const [dobComplete, setDobComplete] = useState(false);
   const [lightingStage, setLightingStage] = useState(0);
@@ -190,12 +190,14 @@ export function BTSLandingScreen() {
           goToWorldMap();
         } else {
           Alert.alert(
-            "로그인 실패",
-            result.error || "Google 로그인에 실패했습니다.",
+            t("login.loginFailed"),
+            result.error || t("login.loginFailed"),
           );
         }
       })
-      .catch(() => Alert.alert("로그인 실패", "서버 연결에 실패했습니다."))
+      .catch(() =>
+        Alert.alert(t("login.loginFailed"), t("login.serverConnectFailed")),
+      )
       .finally(() => setOauthLoading(false));
     // goToWorldMap 은 아래에서 선언되므로 의존성에 넣지 않는다(넣으면 선언 전 참조 = 실행 오류).
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -292,13 +294,13 @@ export function BTSLandingScreen() {
     async (provider: SocialProvider) => {
       // 생년월일 = 실제 있는 날짜 + 성인. 메인 인증창과 **같은 기준**(§16).
       if (!birthDateStr || !isAdult) {
-        Alert.alert("만 18세 이상만 이용할 수 있습니다.");
+        Alert.alert(t("login.adultOnly"));
         return;
       }
       // 열쇠가 없으면 눌러도 알 수 없는 오류만 난다 = 메인 인증창처럼 먼저 막는다.
       if (!isSocialConfigured(provider)) {
         console.error(`[Auth] ${provider} 열쇠 미주입 = 로그인 불가`);
-        Alert.alert("로그인에 실패했습니다.");
+        Alert.alert(t("login.loginFailed"));
         return;
       }
       handleInteraction();
@@ -320,12 +322,14 @@ export function BTSLandingScreen() {
         });
         if (!result) return; // 사용자가 로그인 창을 닫음 = 취소 = 조용히 끝
         if (result.success) goToWorldMap();
-        else Alert.alert(result.error || "로그인에 실패했습니다.");
+        else Alert.alert(result.error || t("login.loginFailed"));
       } catch (err) {
         // 실패 사유 이름 한 낱말만 붙인다(§23 누더기 금지, 메인 인증창과 같은 형식)
         console.error("[Auth] BTS 소셜 로그인 실패:", err);
         const code = (err as { code?: string | number } | null)?.code;
-        Alert.alert(code ? `로그인 실패 (${code})` : "로그인에 실패했습니다.");
+        Alert.alert(
+          code ? `${t("login.loginFailed")} (${code})` : t("login.loginFailed"),
+        );
       } finally {
         setOauthLoading(false);
       }
@@ -337,6 +341,7 @@ export function BTSLandingScreen() {
       handleInteraction,
       goToWorldMap,
       googlePromptAsync,
+      t,
     ],
   );
 

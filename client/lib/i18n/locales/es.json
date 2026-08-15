@@ -20,7 +20,9 @@
     "download": "Descargar",
     "delete": "Eliminar",
     "hide": "Ocultar",
-    "dayCount": "Día {{count}}"
+    "dayCount": "Día {{count}}",
+    "continue": "Continuar",
+    "networkError": "Error de red"
   },
   "login": {
     "signingIn": "Iniciando sesión…",
@@ -54,7 +56,17 @@
     "alert": "Alerta",
     "birthRequiredAlert": "Se requiere la fecha de nacimiento para usar el servicio.",
     "emailAccountNotFound": "No existe una cuenta con ese correo. Empieza con Google, Kakao o Apple.",
-    "emailBirthMismatch": "La fecha de nacimiento no coincide con esa cuenta."
+    "emailBirthMismatch": "La fecha de nacimiento no coincide con esa cuenta.",
+    "appleStart": "Empezar con Apple",
+    "serverConnectFailed": "Error de conexión con el servidor.",
+    "otpSendFailed": "Error al enviar el código OTP",
+    "whatsappLoginFailed": "Error al iniciar sesión con WhatsApp",
+    "ageGroup10s": "10 años",
+    "ageGroup20s": "20 años",
+    "ageGroup30s": "30 años",
+    "ageGroup40s": "40 años",
+    "ageGroup50s": "50 años",
+    "ageGroup60sPlus": "60 años+"
   },
   "onboarding": {
     "signUp": "Registrarse",
@@ -87,7 +99,13 @@
     "topUpDetail": "{{date}} {{amount}} créditos",
     "none": "Ninguna",
     "noHistory": "No hay historial de transacciones",
-    "history": "Historial de créditos"
+    "history": "Historial de créditos",
+    "checkoutOpenFailed": "No se pudo abrir el pago. Inténtalo de nuevo en un momento.",
+    "sheetPrepareFailed": "El pago aún no está listo. Inténtalo de nuevo en un momento.",
+    "sheetStartFailed": "No se pudo iniciar el pago. Inténtalo de nuevo en un momento.",
+    "topupDone": "¡Recarga completada!",
+    "topupError": "Ocurrió un error durante la recarga.",
+    "returnSuccessMsg": "Se recibió tu pago.\n\nVuelve a la aplicación."
   },
   "trip": {
     "destination": "Destino",
@@ -187,7 +205,9 @@
     "drivingGuide": "Guía con vehículo",
     "btsBanner": "Planificador BTS Concert Tour",
     "btsBannerSub": "Crea un viaje por la ciudad del concierto con el estilo de tu miembro favorito",
-    "creditShort": "Créditos insuficientes ({{balance}} restantes / {{required}} necesarios)"
+    "creditShort": "Créditos insuficientes ({{balance}} restantes / {{required}} necesarios)",
+    "searchOpenA11y": "Abrir búsqueda de hotel o ciudad",
+    "searchCloseA11y": "Cerrar búsqueda"
   },
   "bts": {
     "placeCart": {
@@ -234,7 +254,9 @@
     "verified": "Restaurante verificado",
     "verifiedContent": "El análisis de reseñas locales confirma que este restaurante mantiene sus sabores originales.",
     "realtime": "Información en tiempo real",
-    "realtimeContent": "Clima: Despejado 22°C\nAfluencia: Moderada"
+    "realtimeContent": "Clima: Despejado 22°C\nAfluencia: Moderada",
+    "vibeFallbackHip": "De moda",
+    "vibeFallbackInstagrammable": "Instagrameable"
   },
   "verify": {
     "title": "Verificación de experto",
@@ -261,7 +283,9 @@
     "tripAdvisorRating": "TripAdvisor {{rating}} ({{count}} reseñas)",
     "showMap": "Mostrar mapa de este lugar",
     "hideMap": "Ocultar mapa",
-    "mapLoading": "Cargando mapa..."
+    "mapLoading": "Cargando mapa...",
+    "searchLoadFailed": "Error al cargar la búsqueda de lugares",
+    "hotelCitySearchPlaceholderFallback": "Introduce el nombre de un hotel o ciudad"
   },
   "profile": {
     "defaultUserName": "Usuario",
@@ -288,7 +312,13 @@
     "noSavedTripsHeading": "No hay viajes guardados",
     "noSavedTripsHint": "¡Crea y guarda un itinerario!",
     "representative": "Destacado",
-    "setRepresentative": "Marcar como destacado"
+    "setRepresentative": "Marcar como destacado",
+    "deleteConfirmTitle1": "¿Seguro que quieres eliminar tu cuenta?",
+    "deleteConfirmMsg1": "Se cerrará tu sesión y desaparecerás de la lista.\nVuelve a iniciar sesión en 6 meses para recuperarlo todo.",
+    "deleteConfirmTitle2": "Última confirmación",
+    "deleteConfirmMsg2": "Después de 6 meses, tu información de cuenta y tus fotos personales se eliminarán permanentemente.\n¿Deseas continuar?",
+    "deleteFailedTitle": "Error al eliminar",
+    "deleteFailedGeneric": "No se pudo eliminar tu cuenta."
   },
   "tab": {
     "plan": "Plan",
@@ -477,5 +507,10 @@
     "failWithReason": "Error al generar: {{reason}}",
     "failGeneric": "La generación anterior falló. Inténtalo de nuevo.",
     "notYet": "Aún no hay vídeo del día {{d}}"
+  },
+  "errorFallback": {
+    "title": "Ocurrió un problema en TRIPIS",
+    "message": "Reinicia la aplicación.",
+    "restartBtn": "Reiniciar"
   }
 }

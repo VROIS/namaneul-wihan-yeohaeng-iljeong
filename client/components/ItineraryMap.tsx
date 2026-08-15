@@ -4,6 +4,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, View, Platform } from "react-native";
 import { apiRequest } from "@/lib/query-client";
+// ⚠️ 수정금지(승인필요) 2026-08-15 사장님 승인 = 마커 title(호버용) 다국어 = HTML 템플릿과 같은 싱글턴 재사용(§16).
+import i18n from "@/lib/i18n";
 import {
   ITINERARY_MAP_HTML,
   type ItinMapPlace,
@@ -235,7 +237,7 @@ function ItineraryMapWeb({
         position: { lat: Number(start.lat), lng: Number(start.lng) },
         map: mapRef.current,
         icon: makeWebIcon(google, "start", true, null),
-        title: start.label || "출발",
+        title: start.label || i18n.t("trip.departure"),
         zIndex: 999,
       });
     }

@@ -5,6 +5,7 @@
 //   위젯 높이 고정(360) = 크기변경 0 = 지워질 계기 제거. iOS·웹 = InputStep 인라인 그대로(이 컴포넌트 미사용).
 import React, { useState } from "react";
 import { View, Text, Pressable, Modal } from "react-native";
+import { useTranslation } from "react-i18next";
 import Icon from "@/components/Icon";
 import { Brand, Fonts } from "@/constants/theme";
 import PlaceAutocompleteWidget, {
@@ -31,6 +32,7 @@ export default function CitySearchAndroid({
   onSelect,
 }: Props) {
   const [open, setOpen] = useState(false);
+  const { t } = useTranslation();
 
   return (
     <>
@@ -49,7 +51,7 @@ export default function CitySearchAndroid({
           gap: 8,
         }}
         accessibilityRole="button"
-        accessibilityLabel="숙소·도시 검색 열기"
+        accessibilityLabel={t("trip.searchOpenA11y")}
       >
         <Icon name="search" size={16} color={Brand.primary} />
         <Text
@@ -91,7 +93,7 @@ export default function CitySearchAndroid({
                 onPress={() => setOpen(false)}
                 style={{ padding: 10 }}
                 accessibilityRole="button"
-                accessibilityLabel="검색 닫기"
+                accessibilityLabel={t("trip.searchCloseA11y")}
               >
                 <Icon name="x" size={24} color={theme.text} />
               </Pressable>

@@ -96,7 +96,7 @@ export default function ResultStep({ planner }: { planner: PlannerApi }) {
             onPress={() => setTripisOpen(true)}
             // 아이콘뿐인 버튼 = 스크린리더용 이름 필수(2026-08-03 §22 판단검증)
             accessibilityRole="button"
-            accessibilityLabel="영상"
+            accessibilityLabel={t("trip.cityCardVideo")}
           >
             <Icon name="film" size={22} color={Brand.primary} />
           </Pressable>

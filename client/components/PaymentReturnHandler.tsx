@@ -18,6 +18,7 @@
 //
 // ⚠️ 딥링크로 앱에 되돌리는 방식은 2026-07-27 안드로이드 창닫기 함정이라 쓰지 않는다(§9 금지 6).
 import { useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 
 import { useMapToggle } from "@/contexts/MapToggleContext";
 import { readPaymentReturn } from "@/lib/paymentReturn";
@@ -25,6 +26,7 @@ import { readPaymentReturn } from "@/lib/paymentReturn";
 export default function PaymentReturnHandler() {
   // 로그인 여부 판정 = 앱 전체 1곳(§0). authReady 전에는 판정하지 않는다.
   const { isAuthed, authReady } = useMapToggle();
+  const { t } = useTranslation();
   const handledRef = useRef(false);
 
   useEffect(() => {
@@ -38,9 +40,9 @@ export default function PaymentReturnHandler() {
     window.history.replaceState({}, "", window.location.pathname);
 
     if (payment === "success" && !isAuthed) {
-      window.alert("결제가 접수되었습니다.\n\n앱으로 돌아가 주세요.");
+      window.alert(t("credit.returnSuccessMsg"));
     }
-  }, [isAuthed, authReady]);
+  }, [isAuthed, authReady, t]);
 
   return null;
 }

@@ -10,6 +10,7 @@ import {
   Platform,
   TextInput,
 } from "react-native";
+import { useTranslation } from "react-i18next";
 import { apiRequest } from "@/lib/query-client";
 import {
   PLACE_AUTOCOMPLETE_HTML,
@@ -240,6 +241,7 @@ function PlaceAutocompleteNative({
 export default function PlaceAutocompleteWidget(props: Props) {
   const [apiKey, setApiKey] = useState<string | null>(null);
   const [localInput, setLocalInput] = useState<string>("");
+  const { t } = useTranslation();
 
   useEffect(() => {
     let cancelled = false;
@@ -302,8 +304,7 @@ export default function PlaceAutocompleteWidget(props: Props) {
             });
           }}
           placeholder={
-            props.placeholder ||
-            "숙소명이나 도시명을 한글이나 원어로 입력해주세요"
+            props.placeholder || t("place.hotelCitySearchPlaceholderFallback")
           }
           placeholderTextColor="#94A3B8"
         />

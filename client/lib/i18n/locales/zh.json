@@ -20,7 +20,9 @@
     "download": "下载",
     "delete": "删除",
     "hide": "隐藏",
-    "dayCount": "第{{count}}天"
+    "dayCount": "第{{count}}天",
+    "continue": "继续",
+    "networkError": "网络错误"
   },
   "login": {
     "signingIn": "登录中…",
@@ -54,7 +56,17 @@
     "alert": "提醒",
     "birthRequiredAlert": "使用服务需要填写出生日期。",
     "emailAccountNotFound": "该邮箱没有已创建的账号。请使用 Google、Kakao 或 Apple 开始。",
-    "emailBirthMismatch": "出生日期与该账号不一致。"
+    "emailBirthMismatch": "出生日期与该账号不一致。",
+    "appleStart": "使用Apple登录",
+    "serverConnectFailed": "服务器连接失败。",
+    "otpSendFailed": "OTP发送失败",
+    "whatsappLoginFailed": "WhatsApp登录失败",
+    "ageGroup10s": "10多岁",
+    "ageGroup20s": "20多岁",
+    "ageGroup30s": "30多岁",
+    "ageGroup40s": "40多岁",
+    "ageGroup50s": "50多岁",
+    "ageGroup60sPlus": "60多岁+"
   },
   "onboarding": {
     "signUp": "注册",
@@ -87,7 +99,13 @@
     "topUpDetail": "{{date}} {{amount}}积分",
     "none": "无",
     "noHistory": "暂无交易记录",
-    "history": "积分记录"
+    "history": "积分记录",
+    "checkoutOpenFailed": "无法打开结算页面。请稍后重试。",
+    "sheetPrepareFailed": "支付尚未准备好。请稍后重试。",
+    "sheetStartFailed": "无法开始支付。请稍后重试。",
+    "topupDone": "充值已完成。",
+    "topupError": "充值过程中出现错误。",
+    "returnSuccessMsg": "已收到您的付款。\n\n请返回应用。"
   },
   "trip": {
     "destination": "目的地",
@@ -187,7 +205,9 @@
     "drivingGuide": "专车向导",
     "btsBanner": "BTS演唱会旅行规划",
     "btsBannerSub": "跟随成员风格打造演唱会城市之旅",
-    "creditShort": "积分不足（剩余 {{balance}} / 需要 {{required}}）"
+    "creditShort": "积分不足（剩余 {{balance}} / 需要 {{required}}）",
+    "searchOpenA11y": "打开住宿·城市搜索",
+    "searchCloseA11y": "关闭搜索"
   },
   "bts": {
     "placeCart": {
@@ -234,7 +254,9 @@
     "verified": "已验证餐厅",
     "verifiedContent": "当地评价分析证实该餐厅保持了原汁原味。",
     "realtime": "实时信息",
-    "realtimeContent": "天气：晴 22°C\n拥挤度：适中"
+    "realtimeContent": "天气：晴 22°C\n拥挤度：适中",
+    "vibeFallbackHip": "潮流",
+    "vibeFallbackInstagrammable": "适合拍照"
   },
   "verify": {
     "title": "专家验证",
@@ -261,7 +283,9 @@
     "tripAdvisorRating": "TripAdvisor {{rating}}（{{count}}条评价）",
     "showMap": "显示此地点地图",
     "hideMap": "隐藏地图",
-    "mapLoading": "地图加载中..."
+    "mapLoading": "地图加载中...",
+    "searchLoadFailed": "地点搜索加载失败",
+    "hotelCitySearchPlaceholderFallback": "请输入酒店名或城市名"
   },
   "profile": {
     "defaultUserName": "用户",
@@ -288,7 +312,13 @@
     "noSavedTripsHeading": "还没有保存的行程",
     "noSavedTripsHint": "创建并保存一个行程吧！",
     "representative": "代表",
-    "setRepresentative": "设为代表"
+    "setRepresentative": "设为代表",
+    "deleteConfirmTitle1": "确定要注销账户吗？",
+    "deleteConfirmMsg1": "注销后将登出账户并从列表中移除。\n6个月内重新登录即可恢复。",
+    "deleteConfirmTitle2": "最后确认",
+    "deleteConfirmMsg2": "6个月后，您的账户信息和您拍摄的照片将被永久删除。\n是否继续？",
+    "deleteFailedTitle": "注销失败",
+    "deleteFailedGeneric": "账户注销处理失败。"
   },
   "tab": {
     "plan": "计划",
@@ -477,5 +507,10 @@
     "failWithReason": "生成失败：{{reason}}",
     "failGeneric": "上次生成失败了，请重试。",
     "notYet": "第{{d}}天暂无视频"
+  },
+  "errorFallback": {
+    "title": "TRIPIS出现了问题",
+    "message": "请重新启动应用。",
+    "restartBtn": "重新启动"
   }
 }

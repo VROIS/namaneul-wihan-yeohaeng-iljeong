@@ -204,7 +204,7 @@ export function useLogin({ onDone }: { onDone: () => void }) {
     if (num.length === 2) {
       const d = parseInt(num, 10);
       if (d < 1 || d > 31) {
-        setDateError("유효하지 않은 날짜입니다");
+        setDateError(t("login.dateInvalid"));
       } else {
         monthRef.current?.focus();
       }
@@ -425,7 +425,7 @@ export function useLogin({ onDone }: { onDone: () => void }) {
       //   그대로 띄우지 않는다 = 사용자가 못 읽는 영문 코드가 화면에 뜨던 것 폐기 §19.
       else notify(t("login.emailLoginFailed"));
     } catch (e) {
-      notify("로그인 처리 중 오류 발생");
+      notify(t("login.emailLoginFailed"));
     } finally {
       setEmailLoading(false);
     }

@@ -127,7 +127,10 @@ export default function DestinationDetailScreen() {
 
           <View style={styles.tagsContainer}>
             {(
-              (place?.vibeKeywords as string[]) || ["힙한", "인스타그래머블"]
+              (place?.vibeKeywords as string[]) || [
+                t("destination.vibeFallbackHip"),
+                t("destination.vibeFallbackInstagrammable"),
+              ]
             ).map((tag, index) => (
               <View
                 key={index}

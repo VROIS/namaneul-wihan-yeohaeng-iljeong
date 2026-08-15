@@ -116,7 +116,7 @@ export default function WhatsAppModal({ login }: { login: LoginApi }) {
                 style={{ marginTop: Spacing.sm }}
               >
                 <Text style={{ color: theme.textTertiary, fontSize: 13 }}>
-                  전화번호 변경
+                  {t("login.changePhone")}
                 </Text>
               </Pressable>
             </View>

@@ -2,6 +2,8 @@
 // QA `docs/qa/index.html` Google Maps 섹션 클론 (lucide 마커 SVG 그대로 = 사용자 명시)
 // 마커 클릭 → window.ReactNativeWebView.postMessage 로 RN 측에 통보 (= 인앱 ScrollView 스크롤)
 // venue (= bts_venue) = 2 중 상태: idle (별 아이콘만) / active (별 + "BTS" 라벨, selectedIds.length >= 1 시)
+// ⚠️ 수정금지(승인필요) 2026-08-15 사장님 승인 = 로딩 문구 다국어(ITINERARY_MAP_HTML과 같은 패턴 §16).
+import i18n from "@/lib/i18n";
 
 export type BTSMapPlace = {
   id: number;
@@ -12,8 +14,11 @@ export type BTSMapPlace = {
   longitude: number | null;
 };
 
-export const BTS_MAP_HTML = (apiKey: string): string => `<!DOCTYPE html>
-<html lang="ko"><head><meta charset="UTF-8">
+export const BTS_MAP_HTML = (
+  apiKey: string,
+  language: string = "ko",
+): string => `<!DOCTYPE html>
+<html lang="${language}"><head><meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>BTS Place Map</title>
 <style>
@@ -24,7 +29,7 @@ body { background: #f8f7fb; font-family: -apple-system, "Segoe UI", "Malgun Goth
 #loading.hide { display: none; }
 </style>
 </head><body>
-<div id="loading">지도 로딩 중...</div>
+<div id="loading">${i18n.t("place.mapLoading", { lng: language })}</div>
 <div id="map"></div>
 <script>
 (function() {

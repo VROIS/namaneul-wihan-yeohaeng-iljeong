@@ -6,6 +6,7 @@
 // native 환경 = react-native-webview
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, View, Platform } from "react-native";
+import { useTranslation } from "react-i18next";
 import { BTS_MAP_HTML, type BTSMapPlace } from "./bts-map-html";
 import type { BTSPlace } from "@/contexts/BTSContext";
 
@@ -364,8 +365,12 @@ function BTSPlaceMapNative(props: InternalProps) {
 
   const webRef = useRef<any>(null);
   const [mapReady, setMapReady] = useState(false);
+  const { i18n } = useTranslation();
 
-  const html = useMemo(() => (apiKey ? BTS_MAP_HTML(apiKey) : ""), [apiKey]);
+  const html = useMemo(
+    () => (apiKey ? BTS_MAP_HTML(apiKey, i18n.language) : ""),
+    [apiKey, i18n.language],
+  );
 
   // ⚠️ syncPlaces 가 syncMarkers 내장 호출 = 중복 inject 방지 위해 단일 effect.
   useEffect(() => {

@@ -20,7 +20,9 @@
     "download": "Herunterladen",
     "delete": "Löschen",
     "hide": "Ausblenden",
-    "dayCount": "Tag {{count}}"
+    "dayCount": "Tag {{count}}",
+    "continue": "Weiter",
+    "networkError": "Netzwerkfehler"
   },
   "login": {
     "signingIn": "Anmeldung…",
@@ -54,7 +56,17 @@
     "alert": "Hinweis",
     "birthRequiredAlert": "Das Geburtsdatum ist für die Nutzung des Dienstes erforderlich.",
     "emailAccountNotFound": "Für diese E-Mail gibt es kein Konto. Bitte mit Google, Kakao oder Apple starten.",
-    "emailBirthMismatch": "Das Geburtsdatum stimmt mit diesem Konto nicht überein."
+    "emailBirthMismatch": "Das Geburtsdatum stimmt mit diesem Konto nicht überein.",
+    "appleStart": "Mit Apple starten",
+    "serverConnectFailed": "Serververbindung fehlgeschlagen.",
+    "otpSendFailed": "OTP-Versand fehlgeschlagen",
+    "whatsappLoginFailed": "WhatsApp-Anmeldung fehlgeschlagen",
+    "ageGroup10s": "10er",
+    "ageGroup20s": "20er",
+    "ageGroup30s": "30er",
+    "ageGroup40s": "40er",
+    "ageGroup50s": "50er",
+    "ageGroup60sPlus": "60er+"
   },
   "onboarding": {
     "signUp": "Registrieren",
@@ -87,7 +99,13 @@
     "topUpDetail": "{{date}} {{amount}} Guthaben",
     "none": "Keine",
     "noHistory": "Kein Transaktionsverlauf",
-    "history": "Guthabenverlauf"
+    "history": "Guthabenverlauf",
+    "checkoutOpenFailed": "Kasse konnte nicht geöffnet werden. Bitte versuchen Sie es in Kürze erneut.",
+    "sheetPrepareFailed": "Zahlung ist noch nicht bereit. Bitte versuchen Sie es in Kürze erneut.",
+    "sheetStartFailed": "Zahlung konnte nicht gestartet werden. Bitte versuchen Sie es in Kürze erneut.",
+    "topupDone": "Aufladung abgeschlossen!",
+    "topupError": "Beim Aufladen ist ein Fehler aufgetreten.",
+    "returnSuccessMsg": "Ihre Zahlung ist eingegangen.\n\nBitte kehren Sie zur App zurück."
   },
   "trip": {
     "destination": "Reiseziel",
@@ -187,7 +205,9 @@
     "drivingGuide": "Fahrer-Guide",
     "btsBanner": "BTS Konzerttour-Planer",
     "btsBannerSub": "Erstelle eine Konzertstadt-Reise im Stil deines Lieblings-Members",
-    "creditShort": "Nicht genug Guthaben ({{balance}} übrig / {{required}} nötig)"
+    "creditShort": "Nicht genug Guthaben ({{balance}} übrig / {{required}} nötig)",
+    "searchOpenA11y": "Hotel- oder Stadtsuche öffnen",
+    "searchCloseA11y": "Suche schließen"
   },
   "bts": {
     "placeCart": {
@@ -234,7 +254,9 @@
     "verified": "Verifiziertes Restaurant",
     "verifiedContent": "Die Analyse lokaler Bewertungen bestätigt, dass dieses Restaurant seine ursprünglichen Aromen bewahrt hat.",
     "realtime": "Echtzeit-Infos",
-    "realtimeContent": "Wetter: Klar 22°C\nAuslastung: Mäßig"
+    "realtimeContent": "Wetter: Klar 22°C\nAuslastung: Mäßig",
+    "vibeFallbackHip": "Angesagt",
+    "vibeFallbackInstagrammable": "Instagram-tauglich"
   },
   "verify": {
     "title": "Experten-Verifizierung",
@@ -261,7 +283,9 @@
     "tripAdvisorRating": "TripAdvisor {{rating}} ({{count}} Bewertungen)",
     "showMap": "Karte für diesen Ort anzeigen",
     "hideMap": "Karte ausblenden",
-    "mapLoading": "Karte wird geladen..."
+    "mapLoading": "Karte wird geladen...",
+    "searchLoadFailed": "Ortssuche konnte nicht geladen werden",
+    "hotelCitySearchPlaceholderFallback": "Hotel- oder Stadtnamen eingeben"
   },
   "profile": {
     "defaultUserName": "Nutzer",
@@ -288,7 +312,13 @@
     "noSavedTripsHeading": "Noch keine gespeicherten Reisen",
     "noSavedTripsHint": "Erstelle und speichere eine Reise!",
     "representative": "Empfohlen",
-    "setRepresentative": "Als empfohlen markieren"
+    "setRepresentative": "Als empfohlen markieren",
+    "deleteConfirmTitle1": "Möchten Sie Ihr Konto wirklich löschen?",
+    "deleteConfirmMsg1": "Sie werden abgemeldet und aus der Liste entfernt.\nMelden Sie sich innerhalb von 6 Monaten wieder an, um alles wiederherzustellen.",
+    "deleteConfirmTitle2": "Letzte Bestätigung",
+    "deleteConfirmMsg2": "Nach 6 Monaten werden Ihre Kontoinformationen und persönlichen Fotos endgültig gelöscht.\nMöchten Sie fortfahren?",
+    "deleteFailedTitle": "Löschen fehlgeschlagen",
+    "deleteFailedGeneric": "Ihr Konto konnte nicht gelöscht werden."
   },
   "tab": {
     "plan": "Plan",
@@ -477,5 +507,10 @@
     "failWithReason": "Erstellung fehlgeschlagen: {{reason}}",
     "failGeneric": "Die letzte Erstellung ist fehlgeschlagen. Bitte versuchen Sie es erneut.",
     "notYet": "Noch kein Video für Tag {{d}}"
+  },
+  "errorFallback": {
+    "title": "In TRIPIS ist ein Problem aufgetreten",
+    "message": "Bitte starten Sie die App neu.",
+    "restartBtn": "Neu starten"
   }
 }

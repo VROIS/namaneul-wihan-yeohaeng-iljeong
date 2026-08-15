@@ -20,7 +20,9 @@
     "download": "Télécharger",
     "delete": "Supprimer",
     "hide": "Masquer",
-    "dayCount": "Jour {{count}}"
+    "dayCount": "Jour {{count}}",
+    "continue": "Continuer",
+    "networkError": "Erreur réseau"
   },
   "login": {
     "signingIn": "Connexion…",
@@ -54,7 +56,17 @@
     "alert": "Alerte",
     "birthRequiredAlert": "La date de naissance est requise pour utiliser le service.",
     "emailAccountNotFound": "Aucun compte n'existe pour cet e-mail. Commencez avec Google, Kakao ou Apple.",
-    "emailBirthMismatch": "La date de naissance ne correspond pas à ce compte."
+    "emailBirthMismatch": "La date de naissance ne correspond pas à ce compte.",
+    "appleStart": "Commencer avec Apple",
+    "serverConnectFailed": "Échec de la connexion au serveur.",
+    "otpSendFailed": "Échec de l'envoi du code OTP",
+    "whatsappLoginFailed": "Échec de la connexion WhatsApp",
+    "ageGroup10s": "10 ans",
+    "ageGroup20s": "20 ans",
+    "ageGroup30s": "30 ans",
+    "ageGroup40s": "40 ans",
+    "ageGroup50s": "50 ans",
+    "ageGroup60sPlus": "60 ans+"
   },
   "onboarding": {
     "signUp": "Inscription",
@@ -87,7 +99,13 @@
     "topUpDetail": "{{date}} {{amount}} crédits",
     "none": "Aucune",
     "noHistory": "Aucun historique de transaction",
-    "history": "Historique des crédits"
+    "history": "Historique des crédits",
+    "checkoutOpenFailed": "Impossible d'ouvrir le paiement. Veuillez réessayer sous peu.",
+    "sheetPrepareFailed": "Le paiement n'est pas encore prêt. Veuillez réessayer sous peu.",
+    "sheetStartFailed": "Impossible de démarrer le paiement. Veuillez réessayer sous peu.",
+    "topupDone": "Recharge terminée !",
+    "topupError": "Une erreur est survenue lors de la recharge.",
+    "returnSuccessMsg": "Votre paiement a été reçu.\n\nVeuillez retourner à l'application."
   },
   "trip": {
     "destination": "Destination",
@@ -187,7 +205,9 @@
     "drivingGuide": "Guide chauffeur",
     "btsBanner": "Planificateur BTS Concert Tour",
     "btsBannerSub": "Créez un voyage concert avec l'ambiance de votre membre préféré",
-    "creditShort": "Crédits insuffisants ({{balance}} restants / {{required}} requis)"
+    "creditShort": "Crédits insuffisants ({{balance}} restants / {{required}} requis)",
+    "searchOpenA11y": "Ouvrir la recherche d'hôtel ou de ville",
+    "searchCloseA11y": "Fermer la recherche"
   },
   "bts": {
     "placeCart": {
@@ -234,7 +254,9 @@
     "verified": "Restaurant vérifié",
     "verifiedContent": "L'analyse des avis locaux confirme que ce restaurant maintient ses saveurs d'origine.",
     "realtime": "Infos en temps réel",
-    "realtimeContent": "Météo : Dégagé 22°C\nAffluence : Modérée"
+    "realtimeContent": "Météo : Dégagé 22°C\nAffluence : Modérée",
+    "vibeFallbackHip": "Branché",
+    "vibeFallbackInstagrammable": "Instagrammable"
   },
   "verify": {
     "title": "Vérification par un expert",
@@ -261,7 +283,9 @@
     "tripAdvisorRating": "TripAdvisor {{rating}} ({{count}} avis)",
     "showMap": "Afficher la carte de ce lieu",
     "hideMap": "Masquer la carte",
-    "mapLoading": "Chargement de la carte..."
+    "mapLoading": "Chargement de la carte...",
+    "searchLoadFailed": "Échec du chargement de la recherche de lieux",
+    "hotelCitySearchPlaceholderFallback": "Saisissez un nom d'hôtel ou de ville"
   },
   "profile": {
     "defaultUserName": "Utilisateur",
@@ -288,7 +312,13 @@
     "noSavedTripsHeading": "Aucun voyage enregistré",
     "noSavedTripsHint": "Créez et enregistrez un itinéraire !",
     "representative": "En vedette",
-    "setRepresentative": "Mettre en vedette"
+    "setRepresentative": "Mettre en vedette",
+    "deleteConfirmTitle1": "Voulez-vous vraiment supprimer votre compte ?",
+    "deleteConfirmMsg1": "Vous serez déconnecté et retiré de la liste.\nReconnectez-vous dans les 6 mois pour tout restaurer.",
+    "deleteConfirmTitle2": "Dernière vérification",
+    "deleteConfirmMsg2": "Après 6 mois, vos informations de compte et vos photos personnelles seront définitivement supprimées.\nVoulez-vous continuer ?",
+    "deleteFailedTitle": "Échec de la suppression",
+    "deleteFailedGeneric": "Échec de la suppression de votre compte."
   },
   "tab": {
     "plan": "Plan",
@@ -477,5 +507,10 @@
     "failWithReason": "Échec de la génération : {{reason}}",
     "failGeneric": "La génération précédente a échoué. Veuillez réessayer.",
     "notYet": "Pas encore de vidéo pour le jour {{d}}"
+  },
+  "errorFallback": {
+    "title": "Un problème est survenu dans TRIPIS",
+    "message": "Veuillez redémarrer l'application.",
+    "restartBtn": "Redémarrer"
   }
 }

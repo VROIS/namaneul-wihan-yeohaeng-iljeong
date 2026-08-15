@@ -2,6 +2,9 @@
 // = 슬롯 = 항상 마커 표시 / 마커 클릭 → RN 측 슬롯 스크롤 / 동선 polyline 폐기(사용자 SSOT)
 // = 출발 마커 = 깃발(flag) = 숙소 미설정 시 도시중심 / 숙소 설정 시 그 위치
 // = 웹 = parent.postMessage / 네이티브 = ReactNativeWebView.postMessage (= 인앱, 모달 X)
+// ⚠️ 수정금지(승인필요) 2026-08-15 사장님 승인 = WebView HTML 은 React 트리 밖이라 i18n 싱글턴을
+//   직접 불러 language 인자로 고정 번역한다(§16 = 기존 i18n 1벌 재사용, 훅 불가).
+import i18n from "@/lib/i18n";
 
 export type ItinMapPlace = {
   id: string;
@@ -35,7 +38,7 @@ body { background: #f8f7fb; font-family: -apple-system, "Segoe UI", "Malgun Goth
 #loading.hide { display: none; }
 </style>
 </head><body>
-<div id="loading">지도 로딩 중...</div>
+<div id="loading">${i18n.t("place.mapLoading", { lng: language })}</div>
 <div id="map"></div>
 <script>
 (function() {
@@ -108,7 +111,7 @@ body { background: #f8f7fb; font-family: -apple-system, "Segoe UI", "Malgun Goth
       position: { lat: Number(startData.lat), lng: Number(startData.lng) },
       map,
       icon: makeIcon('start', true, null, false),
-      title: startData.label || '출발',
+      title: startData.label || '${i18n.t("trip.departure", { lng: language })}',
       zIndex: 999,
     });
   }

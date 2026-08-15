@@ -9,6 +9,7 @@ import {
   Modal,
   useColorScheme,
 } from "react-native";
+import { useTranslation } from "react-i18next";
 import Icon from "@/components/Icon";
 import { Spacing, BorderRadius, Fonts, Colors } from "@/constants/theme";
 
@@ -18,6 +19,7 @@ export type ErrorFallbackProps = {
 };
 
 export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
+  const { t } = useTranslation();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
   const theme = isDark ? Colors.dark : Colors.light;
@@ -59,11 +61,11 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
 
       <View style={styles.content}>
         <Text style={[styles.title, { color: theme.text }]}>
-          TRIPIS에서 문제가 발생했어요
+          {t("errorFallback.title")}
         </Text>
 
         <Text style={[styles.message, { color: theme.textSecondary }]}>
-          앱을 다시 시작해 주세요.
+          {t("errorFallback.message")}
         </Text>
 
         <Pressable
@@ -78,7 +80,7 @@ export function ErrorFallback({ error, resetError }: ErrorFallbackProps) {
           ]}
         >
           <Text style={[styles.buttonText, { color: theme.buttonText }]}>
-            다시 시작
+            {t("errorFallback.restartBtn")}
           </Text>
         </Pressable>
       </View>

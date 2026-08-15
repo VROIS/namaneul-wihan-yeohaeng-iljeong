@@ -77,10 +77,10 @@ function LoginSheetForm({ onClose }: { onClose: () => void }) {
     >
       {/* ── 브랜드(이미지 로고 제거, Tripis 글자 + 슬로건 축소) ── 상단존 최소화(사장님 확정). */}
       {/* ⚠️ 사장님 SSOT 2026-07-25 = 슬로건 제거 = 상단존 최소화 → 하단 인증(카카오/구글/이메일)이 한눈에 보이게. Tripis 글자만 유지. */}
+      {/* ⚠️ 수정금지(승인필요) 2026-08-15 사장님 승인 = 한글 발음표기("트리피스") 삭제 = 언어 무관 고정 워드마크(Tripis)만 유지, 번역 대상 아님. */}
       <View style={styles.loginBrand}>
         <View style={styles.loginBrandTitleRow}>
           <Text style={styles.loginBrandTitle}>Tripis</Text>
-          <Text style={styles.tripisTitleKo}>트리피스</Text>
         </View>
       </View>
 
@@ -249,13 +249,13 @@ function LoginSheetForm({ onClose }: { onClose: () => void }) {
           onPress={handleKakaoPress}
           disabled={oauthLoading}
           accessibilityRole="button"
-          accessibilityLabel="카카오로 시작하기"
+          accessibilityLabel={t("login.kakaoStart")}
           accessibilityState={{ disabled: oauthLoading }}
         >
           <View style={styles.kakaoIcon}>
             <Text style={styles.kakaoIconText}>K</Text>
           </View>
-          <Text style={styles.kakaoButtonText}>카카오로 시작하기</Text>
+          <Text style={styles.kakaoButtonText}>{t("login.kakaoStart")}</Text>
         </Pressable>
 
         {/* ⚠️ 수정금지(승인필요) 2026-07-31 사장님 SSOT = **애플 = 아이폰에서만 보인다.**
@@ -272,13 +272,13 @@ function LoginSheetForm({ onClose }: { onClose: () => void }) {
             onPress={handleApplePress}
             disabled={oauthLoading}
             accessibilityRole="button"
-            accessibilityLabel="Apple로 시작하기"
+            accessibilityLabel={t("login.appleStart")}
             accessibilityState={{ disabled: oauthLoading }}
           >
             <View style={styles.appleIcon}>
               <Text style={styles.appleIconText}></Text>
             </View>
-            <Text style={styles.appleButtonText}>Apple로 시작하기</Text>
+            <Text style={styles.appleButtonText}>{t("login.appleStart")}</Text>
           </Pressable>
         )}
 

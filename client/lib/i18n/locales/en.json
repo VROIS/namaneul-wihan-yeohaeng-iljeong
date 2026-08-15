@@ -20,7 +20,9 @@
     "download": "Download",
     "delete": "Delete",
     "hide": "Hide",
-    "dayCount": "Day {{count}}"
+    "dayCount": "Day {{count}}",
+    "continue": "Continue",
+    "networkError": "Network error"
   },
   "login": {
     "signingIn": "Signing in…",
@@ -54,7 +56,17 @@
     "alert": "Alert",
     "birthRequiredAlert": "Date of birth is required to use the service.",
     "emailAccountNotFound": "No account exists for that email. Please start with Google, Kakao, or Apple.",
-    "emailBirthMismatch": "The date of birth does not match that account."
+    "emailBirthMismatch": "The date of birth does not match that account.",
+    "appleStart": "Start with Apple",
+    "serverConnectFailed": "Server connection failed.",
+    "otpSendFailed": "Failed to send OTP",
+    "whatsappLoginFailed": "WhatsApp login failed",
+    "ageGroup10s": "10s",
+    "ageGroup20s": "20s",
+    "ageGroup30s": "30s",
+    "ageGroup40s": "40s",
+    "ageGroup50s": "50s",
+    "ageGroup60sPlus": "60s+"
   },
   "onboarding": {
     "signUp": "Sign Up",
@@ -87,7 +99,13 @@
     "topUpDetail": "{{date}} {{amount}} credits",
     "none": "None",
     "noHistory": "No transaction history",
-    "history": "Credit history"
+    "history": "Credit history",
+    "checkoutOpenFailed": "Couldn't open checkout. Please try again shortly.",
+    "sheetPrepareFailed": "Payment isn't ready yet. Please try again shortly.",
+    "sheetStartFailed": "Couldn't start payment. Please try again shortly.",
+    "topupDone": "Top-up complete!",
+    "topupError": "Something went wrong during top-up.",
+    "returnSuccessMsg": "Your payment was received.\n\nPlease return to the app."
   },
   "trip": {
     "destination": "Destination",
@@ -187,7 +205,9 @@
     "drivingGuide": "Driving guide",
     "btsBanner": "BTS Concert Tour Planner",
     "btsBannerSub": "Create a concert city journey with member vibes",
-    "creditShort": "Not enough credits ({{balance}} left / {{required}} needed)"
+    "creditShort": "Not enough credits ({{balance}} left / {{required}} needed)",
+    "searchOpenA11y": "Open hotel or city search",
+    "searchCloseA11y": "Close search"
   },
   "bts": {
     "placeCart": {
@@ -234,7 +254,9 @@
     "verified": "Verified Restaurant",
     "verifiedContent": "Local review analysis confirms this restaurant maintains its original flavors.",
     "realtime": "Real-time Info",
-    "realtimeContent": "Weather: Clear 22°C\nCrowdedness: Moderate"
+    "realtimeContent": "Weather: Clear 22°C\nCrowdedness: Moderate",
+    "vibeFallbackHip": "Hip",
+    "vibeFallbackInstagrammable": "Instagrammable"
   },
   "verify": {
     "title": "Expert Verification",
@@ -261,7 +283,9 @@
     "tripAdvisorRating": "TripAdvisor {{rating}} ({{count}} reviews)",
     "showMap": "Show map for this place",
     "hideMap": "Hide map",
-    "mapLoading": "Loading map..."
+    "mapLoading": "Loading map...",
+    "searchLoadFailed": "Failed to load place search",
+    "hotelCitySearchPlaceholderFallback": "Enter a hotel or city name"
   },
   "profile": {
     "defaultUserName": "User",
@@ -288,7 +312,13 @@
     "noSavedTripsHeading": "No saved trips yet",
     "noSavedTripsHint": "Create and save an itinerary!",
     "representative": "Featured",
-    "setRepresentative": "Set as featured"
+    "setRepresentative": "Set as featured",
+    "deleteConfirmTitle1": "Are you sure you want to delete your account?",
+    "deleteConfirmMsg1": "You'll be logged out and removed from the list.\nLog back in within 6 months to restore everything.",
+    "deleteConfirmTitle2": "One last check",
+    "deleteConfirmMsg2": "After 6 months, your account info and personal photos will be permanently deleted.\nDo you want to continue?",
+    "deleteFailedTitle": "Deletion failed",
+    "deleteFailedGeneric": "Failed to delete your account."
   },
   "tab": {
     "plan": "Plan",
@@ -477,5 +507,10 @@
     "failWithReason": "Generation failed: {{reason}}",
     "failGeneric": "The previous generation failed. Please try again.",
     "notYet": "No video yet for Day {{d}}"
+  },
+  "errorFallback": {
+    "title": "Something went wrong in TRIPIS",
+    "message": "Please restart the app.",
+    "restartBtn": "Restart"
   }
 }

@@ -88,9 +88,9 @@ export default function LoginScreen() {
               style={styles.tripisMark}
               resizeMode="contain"
             />
+            {/* ⚠️ 수정금지(승인필요) 2026-08-15 사장님 승인 = 한글 발음표기("트리피스") 삭제 = 언어 무관 고정 워드마크(Tripis)만 유지, 번역 대상 아님. */}
             <View style={styles.tripisTitleRow}>
               <Text style={styles.tripisTitle}>Tripis</Text>
-              <Text style={styles.tripisTitleKo}>트리피스</Text>
             </View>
             <Text style={styles.tripisSubtitle}>{t("login.slogan")}</Text>
           </View>
@@ -251,7 +251,9 @@ export default function LoginScreen() {
               <View style={styles.kakaoIcon}>
                 <Text style={styles.kakaoIconText}>K</Text>
               </View>
-              <Text style={styles.kakaoButtonText}>카카오로 시작하기</Text>
+              <Text style={styles.kakaoButtonText}>
+                {t("login.kakaoStart")}
+              </Text>
             </Pressable>
 
             {/* 구글 */}

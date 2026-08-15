@@ -2,6 +2,8 @@
 // = 자체 입력창+드롭다운 재발명 폐기(§16·§19) → 구글 공식 위젯 100% 활용 (사장님 SSOT)
 // = 입력창+드롭다운+검색+선택+세션토큰 = 구글이 통째 제공. 선택 시 fetchFields → postMessage(name·address·coords)
 // = 웹 = parent.postMessage / 네이티브 = ReactNativeWebView.postMessage (ItineraryMap 패턴 동일)
+// ⚠️ 수정금지(승인필요) 2026-08-15 사장님 승인 = init 실패 에러문구 다국어(같은 i18n 싱글턴 패턴 §16).
+import i18n from "@/lib/i18n";
 
 export type PlaceAutoSelection = {
   placeId: string;
@@ -117,7 +119,7 @@ gmp-place-autocomplete { width: 100%; display: block; }
       postRN({ type: "ready" });
     } catch (e) {
       var err = document.getElementById("err");
-      if (err) { err.style.display = "block"; err.textContent = "장소 검색 로드 실패"; }
+      if (err) { err.style.display = "block"; err.textContent = "${i18n.t("place.searchLoadFailed", { lng: language })}"; }
       postRN({ type: "error", message: "init 실패: " + (e && e.message) });
     }
   }

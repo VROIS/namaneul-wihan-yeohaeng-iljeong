@@ -20,7 +20,9 @@
     "download": "ダウンロード",
     "delete": "削除",
     "hide": "非表示",
-    "dayCount": "{{count}}日目"
+    "dayCount": "{{count}}日目",
+    "continue": "続ける",
+    "networkError": "ネットワークエラー"
   },
   "login": {
     "signingIn": "ログイン中…",
@@ -54,7 +56,17 @@
     "alert": "お知らせ",
     "birthRequiredAlert": "サービスをご利用いただくには生年月日が必要です。",
     "emailAccountNotFound": "そのメールで作成されたアカウントがありません。Google・Kakao・Appleで始めてください。",
-    "emailBirthMismatch": "生年月日がそのアカウントと一致しません。"
+    "emailBirthMismatch": "生年月日がそのアカウントと一致しません。",
+    "appleStart": "Appleで始める",
+    "serverConnectFailed": "サーバー接続に失敗しました。",
+    "otpSendFailed": "OTP送信に失敗しました",
+    "whatsappLoginFailed": "WhatsAppログインに失敗しました",
+    "ageGroup10s": "10代",
+    "ageGroup20s": "20代",
+    "ageGroup30s": "30代",
+    "ageGroup40s": "40代",
+    "ageGroup50s": "50代",
+    "ageGroup60sPlus": "60代+"
   },
   "onboarding": {
     "signUp": "会員登録",
@@ -87,7 +99,13 @@
     "topUpDetail": "{{date}} {{amount}}クレジット",
     "none": "なし",
     "noHistory": "取引履歴がありません",
-    "history": "クレジット履歴"
+    "history": "クレジット履歴",
+    "checkoutOpenFailed": "決済画面を開けませんでした。しばらくしてからもう一度お試しください。",
+    "sheetPrepareFailed": "決済の準備ができていません。しばらくしてからもう一度お試しください。",
+    "sheetStartFailed": "決済を開始できませんでした。しばらくしてからもう一度お試しください。",
+    "topupDone": "チャージが完了しました。",
+    "topupError": "チャージ中にエラーが発生しました。",
+    "returnSuccessMsg": "お支払いを受け付けました。\n\nアプリにお戻りください。"
   },
   "trip": {
     "destination": "目的地",
@@ -187,7 +205,9 @@
     "drivingGuide": "ドライビングガイド",
     "btsBanner": "BTSコンサートツアープランナー",
     "btsBannerSub": "メンバーのバイブでコンサート都市の旅を作ろう",
-    "creditShort": "クレジットが足りません（残り {{balance}} / 必要 {{required}}）"
+    "creditShort": "クレジットが足りません（残り {{balance}} / 必要 {{required}}）",
+    "searchOpenA11y": "宿泊施設・都市検索を開く",
+    "searchCloseA11y": "検索を閉じる"
   },
   "bts": {
     "placeCart": {
@@ -234,7 +254,9 @@
     "verified": "検証済みレストラン",
     "verifiedContent": "地元のレビュー分析により、このレストランが本来の味を維持していることが確認されています。",
     "realtime": "リアルタイム情報",
-    "realtimeContent": "天気：晴れ 22°C\n混雑度：普通"
+    "realtimeContent": "天気：晴れ 22°C\n混雑度：普通",
+    "vibeFallbackHip": "ヒップ",
+    "vibeFallbackInstagrammable": "インスタ映え"
   },
   "verify": {
     "title": "専門家検証",
@@ -261,7 +283,9 @@
     "tripAdvisorRating": "TripAdvisor {{rating}}（{{count}}件のレビュー）",
     "showMap": "この場所の地図を表示",
     "hideMap": "地図を非表示",
-    "mapLoading": "地図を読み込み中..."
+    "mapLoading": "地図を読み込み中...",
+    "searchLoadFailed": "場所検索の読み込みに失敗しました",
+    "hotelCitySearchPlaceholderFallback": "宿泊施設名または都市名を入力してください"
   },
   "profile": {
     "defaultUserName": "ユーザー",
@@ -288,7 +312,13 @@
     "noSavedTripsHeading": "保存された旅程がありません",
     "noSavedTripsHint": "旅程を作成して保存してみましょう！",
     "representative": "代表",
-    "setRepresentative": "代表に設定"
+    "setRepresentative": "代表に設定",
+    "deleteConfirmTitle1": "本当に退会しますか？",
+    "deleteConfirmMsg1": "退会するとログアウトされ、リストから消えます。\n6ヶ月以内に再ログインすればそのまま復元されます。",
+    "deleteConfirmTitle2": "最終確認",
+    "deleteConfirmMsg2": "6ヶ月後、会員情報とご自身で撮影した写真は完全に削除されます。\n続けますか？",
+    "deleteFailedTitle": "退会に失敗しました",
+    "deleteFailedGeneric": "退会処理に失敗しました。"
   },
   "tab": {
     "plan": "プラン",
@@ -477,5 +507,10 @@
     "failWithReason": "生成に失敗しました: {{reason}}",
     "failGeneric": "前回の生成に失敗しました。もう一度お試しください。",
     "notYet": "{{d}}日目の動画はまだありません"
+  },
+  "errorFallback": {
+    "title": "TRIPISで問題が発生しました",
+    "message": "アプリを再起動してください。",
+    "restartBtn": "再起動"
   }
 }

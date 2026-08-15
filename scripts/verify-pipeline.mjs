@@ -50,7 +50,8 @@ const readState = () => {
     return {};
   }
 };
-const writeState = (s) => writeFileSync(STATE, JSON.stringify(s, null, 2) + "\n", "utf8");
+const writeState = (s) =>
+  writeFileSync(STATE, JSON.stringify(s, null, 2) + "\n", "utf8");
 const now = () => new Date().toISOString().replace("T", " ").slice(0, 19);
 const stagedCodeChanged = () =>
   sh("git -c core.quotepath=false diff --cached --name-only")
@@ -76,14 +77,18 @@ if (mode === "machine") {
   runMachine(); // 실패 = throw = exit 1
   state.machine = { fp, at: now() };
   writeState(state);
-  console.log(`✅ [machine] 가드3+기계4 통과 = 마커 기록 (지문 ${fp.slice(0, 8)})`);
+  console.log(
+    `✅ [machine] 가드3+기계4 통과 = 마커 기록 (지문 ${fp.slice(0, 8)})`,
+  );
   process.exit(0);
 }
 
 if (mode === "evidence") {
   const note = process.argv[3] || "";
   if (!note) {
-    console.error("⛔ 실증 메모 필수: verify-pipeline.mjs evidence \"무엇을 어떻게 입증했는지 1줄\"");
+    console.error(
+      '⛔ 실증 메모 필수: verify-pipeline.mjs evidence "무엇을 어떻게 입증했는지 1줄"',
+    );
     process.exit(1);
   }
   state.evidence = { fp: fingerprint(), at: now(), note };
@@ -95,7 +100,9 @@ if (mode === "evidence") {
 if (mode === "judge-pass") {
   state.judge = { fp: fingerprint(), at: now() };
   writeState(state);
-  console.log("✅ [judge] 판단3종 통과 마커 기록 (verify-workflow allPassed 후에만 호출할 것)");
+  console.log(
+    "✅ [judge] 판단3종 통과 마커 기록 (verify-workflow allPassed 후에만 호출할 것)",
+  );
   process.exit(0);
 }
 
@@ -104,13 +111,20 @@ if (mode === "status") {
   const row = (k, need = true) => {
     const m = state[k];
     if (!m) return need ? "🔴 미실행" : "⚪ 없음";
-    return m.fp === fp ? `✅ ${m.at}${m.note ? " | " + m.note : ""}` : `🟡 낡음(코드 변경됨, ${m.at})`;
+    return m.fp === fp
+      ? `✅ ${m.at}${m.note ? " | " + m.note : ""}`
+      : `🟡 낡음(코드 변경됨, ${m.at})`;
   };
   console.log("┌─ §22 파이프라인 상태 (지문 " + fp.slice(0, 8) + ") ─");
   console.log("│ 기계검증(가드3+기계4): " + row("machine"));
   console.log("│ 크롬DEV/실호출 실증:   " + row("evidence"));
   console.log("│ 판단 3종:              " + row("judge"));
-  console.log("│ 커밋 토큰:             " + (existsSync(".commit-approved") ? "✅ 발급됨" : "⚪ 없음(사장님 승인 대기)"));
+  console.log(
+    "│ 커밋 토큰:             " +
+      (existsSync(".commit-approved")
+        ? "✅ 발급됨"
+        : "⚪ 없음(사장님 승인 대기)"),
+  );
   console.log("└─");
   process.exit(0);
 }
@@ -126,21 +140,31 @@ if (mode === "hook-check") {
     state.machine = { fp, at: now() };
     writeState(state);
   } else {
-    console.log(`[hook] ✅ 기계검증 = 마커 일치(${state.machine.at}) = 재실행 생략(중복 제거)`);
+    console.log(
+      `[hook] ✅ 기계검증 = 마커 일치(${state.machine.at}) = 재실행 생략(중복 제거)`,
+    );
   }
   // ② 코드 변경 커밋 = 실증·판단 마커 필수(문서만 바꾼 커밋은 면제 = 실증 대상이 없음)
   if (stagedCodeChanged()) {
     if (state.evidence?.fp !== fp) {
-      console.error("\n⛔ 커밋 차단 = 크롬DEV/실호출 **실증 마커 없음·낡음**(§21·§22 사장님 확정 순서).");
-      console.error("   = 실증 후 `node scripts/verify-pipeline.mjs evidence \"근거 1줄\"` 기록.\n");
+      console.error(
+        "\n⛔ 커밋 차단 = 크롬DEV/실호출 **실증 마커 없음·낡음**(§21·§22 사장님 확정 순서).",
+      );
+      console.error(
+        '   = 실증 후 `node scripts/verify-pipeline.mjs evidence "근거 1줄"` 기록.\n',
+      );
       process.exit(1);
     }
     if (state.judge?.fp !== fp) {
       console.error("\n⛔ 커밋 차단 = **판단3종 마커 없음·낡음**(§22).");
-      console.error("   = verify-workflow(판단3종) allPassed 후 `node scripts/verify-pipeline.mjs judge-pass` 기록.\n");
+      console.error(
+        "   = verify-workflow(판단3종) allPassed 후 `node scripts/verify-pipeline.mjs judge-pass` 기록.\n",
+      );
       process.exit(1);
     }
-    console.log(`[hook] ✅ 실증(${state.evidence.at}: ${state.evidence.note}) + 판단3종(${state.judge.at}) = 마커 일치`);
+    console.log(
+      `[hook] ✅ 실증(${state.evidence.at}: ${state.evidence.note}) + 판단3종(${state.judge.at}) = 마커 일치`,
+    );
   } else {
     console.log("[hook] 문서 전용 커밋 = 실증·판단 마커 면제");
   }
@@ -153,5 +177,7 @@ if (mode === "hook-check") {
   process.exit(0);
 }
 
-console.error(`알 수 없는 모드: ${mode} (machine|evidence|judge-pass|status|hook-check)`);
+console.error(
+  `알 수 없는 모드: ${mode} (machine|evidence|judge-pass|status|hook-check)`,
+);
 process.exit(1);
