@@ -226,9 +226,15 @@ export default function DailyTotal({
           >
             {t("trip.transportCost")}
           </Text>
+          {/* ⚠️ 2026-07-04 사장님 SSOT = 대중교통 구간당 €3 균일 예상가 기반 합산 = "(예상)" 명시로 정직 표기.
+              ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 = 값과 라벨을 별도 줄로 분리(위 주석 근거). */}
           <Text style={[styles.dailyTotalValue, { color: theme.text }]}>
-            {/* ⚠️ 2026-07-04 사장님 SSOT = 대중교통 구간당 €3 균일 예상가 기반 합산 = "(예상)" 명시로 정직 표기 */}
-            €{transportEur.toFixed(1)} ({t("trip.estimated")})
+            €{transportEur.toFixed(1)}
+          </Text>
+          <Text
+            style={[styles.dailyTotalValueNote, { color: theme.textSecondary }]}
+          >
+            ({t("trip.estimated")})
           </Text>
         </View>
       </View>

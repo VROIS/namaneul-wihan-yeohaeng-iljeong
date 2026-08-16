@@ -5,6 +5,7 @@ import { View, Text, Pressable, StyleSheet } from "react-native";
 // = client/lib/wikimedia-image.ts = Wikimedia 버킷 변환 + User-Agent 헤더 + Platform 분기
 // = AOS Samsung A36 5G Wikimedia 5/8 실패 → 8/8 3초 (= BTS 검증)
 import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
 import { resolveImageSource } from "@/lib/wikimedia-image";
 // ⚠️ 수정금지(승인필요) 2026-05-19 = 이미지 NULL placeholder = BTS 맵 마커 동일 SVG (= 사용자 SSOT)
 // = bts-marker-svg.ts 직접 import (= BTSPlaceMap 우회 = webview/Google Maps SDK 코드 번들 제외)
@@ -16,7 +17,7 @@ import {
 import { Brand, Spacing } from "@/constants/theme";
 import Icon from "@/components/Icon";
 // 🎙️ 2026-08-02 사장님 지시 = 슬롯마다 [해설 듣기]. 부품·색 모두 **도시 카드 해설 배지와 같은 1벌**(§16 재발명 금지).
-import CityBadge from "@/components/tripis/CityBadge";
+import CityBadge, { GLOSS_COLORS } from "@/components/tripis/CityBadge";
 import { BADGE_COLORS } from "@/components/tripis/CityCardScreen";
 import { Itinerary, DayPlan } from "@/types/trip";
 import { openPlaceInMaps } from "@/lib/openPlaceInMaps";
@@ -33,6 +34,11 @@ const BTS_PLACEHOLDER_SVG_BY_CAT: Record<string, string> = Object.fromEntries(
   ]),
 );
 
+// ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 = [점심]/[저녁] 텍스트 프리픽스 폐기(식당명 노출공간
+//   확보) 대신 = 식사 슬롯 번호원 안에 옅게 깔리는 워터마크. 아이콘 = 지도 마커와 같은 소스(§16
+//   재발명 금지, BTS_MARKER_LUCIDE.restaurant = 위 BTS_PLACEHOLDER_SVG_BY_CAT과 동일 원본).
+const MEAL_WATERMARK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${BTS_MARKER_LUCIDE.restaurant}</svg>`;
+
 // 🎙️ 2026-08-03 사장님 지시 = 썸네일(위) + [해설 듣기](칸 맨 아래) 를 담는 세로칸.
 //   · alignSelf "stretch" = 이 칸이 슬롯 줄 높이만큼 늘어난다 → justifyContent "space-between" 이
 //     배지를 **칸 맨 아래**로 민다 = 썸네일과 최대한 벌어져 오터치가 나지 않는다.
@@ -46,8 +52,6 @@ const slotStyles = StyleSheet.create({
     justifyContent: "space-between",
     gap: Spacing.sm,
   },
-  // 배지 오른쪽 여백 = 썸네일이 가진 여백(Spacing.sm)과 같은 값 = 본문 글자와 붙지 않는다.
-  badgeSlot: { paddingRight: Spacing.sm },
 });
 
 export default function PlaceSlotCard({
@@ -96,7 +100,6 @@ export default function PlaceSlotCard({
 
   // 🍽️ 식사 슬롯 여부 (백엔드에서 isMealSlot 제공 - 1순위)
   const isMealSlot = place.isMealSlot === true;
-  const mealType = place.mealType; // 'lunch' | 'dinner'
 
   // 식사 여부 (isMealSlot 또는 이름으로 판단)
   const isMeal =
@@ -135,19 +138,38 @@ export default function PlaceSlotCard({
       <View style={styles.placeItem}>
         {/* 타임라인 좌측 - 🍽️ 식사 슬롯은 주황색 강조 */}
         <View style={styles.timelineLeft}>
-          <View
-            style={[
-              styles.placeNumber,
-              {
-                backgroundColor: isMealSlot
-                  ? "#FF6B35"
-                  : isMeal
-                    ? "#FFA500"
-                    : Brand.primary,
-              },
-            ]}
-          >
-            <Text style={styles.placeNumberText}>{index + 1}</Text>
+          {/* ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 = 번호원도 단추 느낌(그림자+유리광택) =
+              CityBadge 세로형과 같은 기법(§16). 바깥(그림자 전용) + 안(overflow:hidden, 광택 클립). */}
+          <View style={styles.placeNumberShadow}>
+            <View
+              style={[
+                styles.placeNumber,
+                {
+                  backgroundColor: isMealSlot
+                    ? "#FF6B35"
+                    : isMeal
+                      ? "#FFA500"
+                      : Brand.primary,
+                },
+              ]}
+            >
+              <LinearGradient
+                colors={GLOSS_COLORS}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 0, y: 0.7 }}
+                style={StyleSheet.absoluteFill}
+                pointerEvents="none"
+              />
+              {(isMealSlot || isMeal) && (
+                <SvgXml
+                  xml={MEAL_WATERMARK_SVG}
+                  width={20}
+                  height={20}
+                  style={styles.placeNumberWatermark}
+                />
+              )}
+              <Text style={styles.placeNumberText}>{index + 1}</Text>
+            </View>
           </View>
           {hasTransit && (
             <View
@@ -230,19 +252,21 @@ export default function PlaceSlotCard({
               </Pressable>
 
               {/* 🎙️ [해설 듣기] = 이미지가 떠도 아이콘이 떠도 같은 자리(칸 맨 아래)에 뜬다(식사 슬롯도 동일).
-                  부품·크기·빛줄기 = 도시 카드 해설 배지와 **같은 CityBadge 1벌 그대로**(§16 재발명 금지),
+                  부품·빛줄기·그라데이션 = 도시 카드 해설 배지와 **같은 CityBadge 1벌 그대로**(§16 재발명 금지),
                   색 = 그 표의 guide 색, 아이콘 = 같은 book-open.
-                  빛줄기(샤이니)를 켜 둔다 = 다른 앱에 없는 기능이라 눈에 띄어야 한다(2026-08-03 사장님 지시). */}
+                  빛줄기(샤이니)를 켜 둔다 = 다른 앱에 없는 기능이라 눈에 띄어야 한다(2026-08-03 사장님 지시).
+                  ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 = layout="column" + width=48(썸네일과 동일 폭)
+                  = 슬롯 텍스트칸 폭 최대 확보(가로 알약 → 세로 3단: 아이콘/글자 자동 2줄). */}
               {guidePlaceId !== null && (
-                <View style={slotStyles.badgeSlot}>
-                  <CityBadge
-                    icon="book-open"
-                    label={t("trip.listenGuide")}
-                    colors={BADGE_COLORS.guide}
-                    visible
-                    onPress={openGuide}
-                  />
-                </View>
+                <CityBadge
+                  icon="book-open"
+                  label={t("trip.listenGuide")}
+                  colors={BADGE_COLORS.guide}
+                  visible
+                  onPress={openGuide}
+                  layout="column"
+                  width={48}
+                />
               )}
             </View>
 
@@ -252,17 +276,12 @@ export default function PlaceSlotCard({
               style={styles.placeInfo}
               onPress={() => setSelectedSlotId(String(place.id))}
             >
-              {/* ① 로컬네임 (메인 = 크게) + 식사 프리픽스 */}
+              {/* ① 로컬네임 (메인 = 크게). ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 =
+                  [점심]/[저녁] 텍스트 프리픽스 폐기(식당명 노출공간 확보, 위 번호원 워터마크로 구분
+                  대체) + numberOfLines 제한 폐기(비한국어 번역시 더 필요한 공간 확보, 슬롯카드는
+                  페이지 스크롤 안이라 길어져도 문제없음). */}
               <View style={styles.placeHeader}>
-                <Text
-                  style={[styles.placeName, { color: theme.text }]}
-                  numberOfLines={1}
-                >
-                  {isMealSlot
-                    ? mealType === "lunch"
-                      ? `[${t("trip.lunch")}] `
-                      : `[${t("trip.dinner")}] `
-                    : ""}
+                <Text style={[styles.placeName, { color: theme.text }]}>
                   {(place as any).nameLocal || place.name}
                 </Text>
               </View>
@@ -304,11 +323,12 @@ export default function PlaceSlotCard({
                 </View>
               ) : null}
 
-              {/* ⑤ 한줄요약 = editorial_summary 단일 (차별화 포인트). 옛 description·geminiReason·personaFitReason·summaryKo 노출 완전삭제(§19). summary_ko = 숏폼 재료 = 별도 보전. */}
+              {/* ⑤ 한줄요약 = editorial_summary 단일 (차별화 포인트). 옛 description·geminiReason·personaFitReason·summaryKo 노출 완전삭제(§19). summary_ko = 숏폼 재료 = 별도 보전.
+                  ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 = numberOfLines 제한 폐기(비한국어
+                  번역시 더 필요한 공간 확보, 페이지 스크롤 안이라 길어져도 문제없음). */}
               {!!(place as any).editorialSummary && (
                 <Text
                   style={[styles.placeReason, { color: theme.textSecondary }]}
-                  numberOfLines={2}
                 >
                   {(place as any).editorialSummary}
                 </Text>

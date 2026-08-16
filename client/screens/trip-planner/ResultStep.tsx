@@ -83,9 +83,9 @@ export default function ResultStep({ planner }: { planner: PlannerApi }) {
         >
           <Icon name="arrow-left" size={24} color={theme.text} />
         </Pressable>
-        <Text style={[styles.resultTitle, { color: theme.text }]}>
-          {itinerary.destination}
-        </Text>
+        {/* ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 = 도시명 단독 큰 제목 완전삭제(§19) = 헤더는
+            뒤로가기·저장 버튼만(순수 기능행, 최소 높이). 도시명은 날짜와 결합해 아래 요약섹션 첫 줄로 이동
+            (프랑스어 등 긴 언어에서 "여행요약" 설명줄이 잘리던 문제 = 이 줄 하나 없앤 여백으로 해결). */}
         {/* 🎬 2026-07-22 사장님 SSOT = 신규 여정 = 💾 저장버튼 원래 기능 그대로(저장 후에도 유지).
             프로필 카드로 복원한 저장 여정에서만 = 저장버튼 자리가 영상 버튼으로 전환.
             2026-08-01 §B-0 = 영상 버튼 = 통합 모달을 이 화면 위에 연다(화면 이동 없음).
@@ -122,53 +122,61 @@ export default function ResultStep({ planner }: { planner: PlannerApi }) {
         )}
       </View>
 
-      {/* 📊 요약 섹션 1: 날짜 + 장소수 + 총예산 */}
+      {/* 📊 요약 섹션: 날짜+도시명(굵게, 1줄) + 장소수·1인예산(2줄) = 한 섹션(사장님 승인 2026-08-16).
+          도시명 단독 큰 제목(헤더)을 없앤 자리를 여기로 흡수 = 그만큼 위 여백 확보(§ 아래 description 2줄 허용과 연동). */}
       <View
         style={[
-          styles.tripSummaryRow,
+          styles.tripSummarySection,
           { backgroundColor: theme.backgroundSecondary },
         ]}
       >
-        <View style={styles.tripSummaryItem}>
-          {/* 🗓️ 2026-07-03 사용자 SSOT = 날짜 아이콘 제거(숫자가 곧 날짜=중복) + 연도 축약 "2026-07-03"→"26년 07-03"(390px 가격잘림 방지=반응형 공간확보) */}
-          <Text style={[styles.tripSummaryText, { color: theme.text }]}>
-            {shortDate(itinerary.startDate)} ~ {shortDate(itinerary.endDate)}
+        {/* ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 = 도시명만 굵게(날짜는 보통 굵기) = 도시명이
+            부각돼야 함(둘 다 굵으면 효과 반감). 같은 Text 안에서 중첩 Text로 부분만 굵게 처리.
+            = 왼쪽끝부터 시작(가운데정렬 X, tripDate textAlign:left) = 날짜가 왼쪽을 채워 굵은
+            도시명이 자연히 줄 중간에 위치. "·" 대신 스페이스 2칸(불필요한 점 제거). */}
+        <Text style={[styles.tripDate, { color: theme.text }]}>
+          {shortDate(itinerary.startDate)} ~ {shortDate(itinerary.endDate)}
+          {"  "}
+          <Text style={[styles.tripCityName, { color: theme.text }]}>
+            {itinerary.destination}
           </Text>
-        </View>
-        <View style={styles.tripSummaryItem}>
-          <Icon name="map-pin" size={14} color={theme.textSecondary} />
-          <Text style={[styles.tripSummaryText, { color: theme.text }]}>
-            {t("common.places", {
-              count: (itinerary.days || []).reduce(
-                (sum, d) => sum + (d.places?.length || 0),
-                0,
-              ),
-            })}
-          </Text>
-        </View>
-        {(() => {
-          // 일별 dailyCost 합산으로 총 비용 계산
-          const totalPerPerson = (itinerary.days || []).reduce(
-            (sum: number, d: any) => sum + (d.dailyCost?.perPersonEur || 0),
-            0,
-          );
-          if (totalPerPerson > 0) {
-            return (
-              <View style={styles.tripSummaryItem}>
-                <Icon name="credit-card" size={14} color={Brand.primary} />
-                <Text
-                  style={[
-                    styles.tripSummaryText,
-                    { color: Brand.primary, fontFamily: Fonts.bold },
-                  ]}
-                >
-                  {t("common.perPerson")} €{totalPerPerson.toFixed(0)}
-                </Text>
-              </View>
+        </Text>
+        <View style={styles.tripSummaryRow}>
+          <View style={styles.tripSummaryItem}>
+            <Icon name="map-pin" size={14} color={theme.textSecondary} />
+            <Text style={[styles.tripSummaryText, { color: theme.text }]}>
+              {t("common.places", {
+                count: (itinerary.days || []).reduce(
+                  (sum, d) => sum + (d.places?.length || 0),
+                  0,
+                ),
+              })}
+            </Text>
+          </View>
+          {(() => {
+            // 일별 dailyCost 합산으로 총 비용 계산
+            const totalPerPerson = (itinerary.days || []).reduce(
+              (sum: number, d: any) => sum + (d.dailyCost?.perPersonEur || 0),
+              0,
             );
-          }
-          return null;
-        })()}
+            if (totalPerPerson > 0) {
+              return (
+                <View style={styles.tripSummaryItem}>
+                  <Icon name="credit-card" size={14} color={Brand.primary} />
+                  <Text
+                    style={[
+                      styles.tripSummaryText,
+                      { color: Brand.primary, fontFamily: Fonts.bold },
+                    ]}
+                  >
+                    {t("common.perPerson")} €{totalPerPerson.toFixed(0)}
+                  </Text>
+                </View>
+              );
+            }
+            return null;
+          })()}
+        </View>
       </View>
 
       {/* 📊 요약 섹션 2: "누구를 위한 X 여행" + 예상 비용 */}
@@ -179,7 +187,12 @@ export default function ResultStep({ planner }: { planner: PlannerApi }) {
         ]}
       >
         <View style={styles.tripDescriptionContainer}>
-          <Text style={[styles.tripDescriptionText, { color: theme.text }]}>
+          {/* ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 = 2줄까지 허용(프랑스어 등 긴 언어에서 잘리던
+              문제, 한국어는 원래 문제없었음). flexShrink=스타일에서 부여(§ styles/result.ts 주석 참고). */}
+          <Text
+            style={[styles.tripDescriptionText, { color: theme.text }]}
+            numberOfLines={2}
+          >
             {(() => {
               // 🎯 누구를 위한 (curationFocus 기반)
               const focusLabels: Record<string, string> = {
