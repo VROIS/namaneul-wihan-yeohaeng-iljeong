@@ -13,6 +13,7 @@ export function useGenerateItinerary({
   currentUser,
   setScreen,
   setLoadingStep,
+  setCarouselOpen,
   setItinerary,
   setAiOpinionData,
   setDayAccommodations,
@@ -26,6 +27,8 @@ export function useGenerateItinerary({
     React.SetStateAction<"Input" | "Loading" | "Result">
   >;
   setLoadingStep: React.Dispatch<React.SetStateAction<number>>;
+  // ⚠️ 수정금지(승인필요) 2026-08-15 사장님 승인 = 로딩화면 기능소개 캐러셀 오픈 게이트(§구현방식-2 참고).
+  setCarouselOpen: React.Dispatch<React.SetStateAction<boolean>>;
   setItinerary: React.Dispatch<React.SetStateAction<Itinerary | null>>;
   setAiOpinionData: React.Dispatch<React.SetStateAction<any>>;
   setDayAccommodations: React.Dispatch<
@@ -45,10 +48,18 @@ export function useGenerateItinerary({
     setCurrentItineraryId(null);
     setScreen("Loading");
     setLoadingStep(0);
+    setCarouselOpen(false); // 이전 실행 잔여 상태 리셋(연속 재시도 대비)
 
-    const interval = setInterval(() => {
+    const messageInterval = setInterval(() => {
       setLoadingStep((s) => (s < 3 ? s + 1 : s));
     }, 2000);
+    // ⚠️ 수정금지(승인필요) 2026-08-15 사장님 승인 = MIX 게이트(3초). DB-only(2초 내)는 응답이 먼저 와서
+    //   이 타이머가 발화 전에 취소된다(§구현방식-2 "경주" 메커니즘) = 캐러셀이 아예 안 열림.
+    const carouselGateTimer = setTimeout(() => setCarouselOpen(true), 3000);
+    const clearTimers = () => {
+      clearInterval(messageInterval);
+      clearTimeout(carouselGateTimer);
+    };
 
     try {
       // 🎯 사용자 ID + 언어 포함 → 백엔드에서 birthDate 조회, 일정 출력 언어 반영
@@ -82,7 +93,8 @@ export function useGenerateItinerary({
         })),
       );
 
-      clearInterval(interval);
+      clearTimers();
+      setCarouselOpen(false); // 이미 열려 있었어도 응답 도착 즉시 강제로 닫는다(중간 프레임 없이 결과화면 전환)
 
       // ⚠️ 수정금지(승인필요) 2026-08-09 사장님 지시 = 서버가 **만드는 순간 DB 에 여정 행을 만든다**.
       //   그 행 번호를 여기서 받아 둬야 [저장]이 **같은 행을 덮어쓴다**(PUT).
@@ -137,7 +149,8 @@ export function useGenerateItinerary({
       }
       setScreen("Result");
     } catch (error: any) {
-      clearInterval(interval);
+      clearTimers();
+      setCarouselOpen(false);
       console.error("Failed to generate itinerary:", error);
 
       // ⚠️ 수정금지(승인필요) 2026-07-31 사장님 지시 = **왜 안 됐는지 화면에 그대로 보여준다.**

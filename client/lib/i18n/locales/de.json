@@ -134,10 +134,10 @@
     "mobilityStyle": "Fortbewegungsart",
     "mobilityStyleHint": "Wählen Sie Ihre bevorzugte Fortbewegungsart",
     "generate": "Reiseplan erstellen",
-    "loading1": "Echtzeit-Verkehr wird analysiert",
-    "loading2": "Lokale Öffnungszeiten werden geprüft",
-    "loading3": "Routen werden nach Vorlieben optimiert",
-    "loading4": "Datenzuverlässigkeit wird überprüft",
+    "loading1": "Wir lernen die Stadt kennen...",
+    "loading2": "Wir entdecken neue Orte...",
+    "loading3": "Wir planen Ihre Route...",
+    "loading4": "Wir prüfen alles noch einmal...",
     "generateFailed": "Erstellung fehlgeschlagen",
     "retryHint": "Bitte versuchen Sie es erneut.",
     "validationFailed": "Reiseplan-Validierung fehlgeschlagen. Bitte versuchen Sie es erneut.",
@@ -512,5 +512,21 @@
     "title": "In TRIPIS ist ein Problem aufgetreten",
     "message": "Bitte starten Sie die App neu.",
     "restartBtn": "Neu starten"
+  },
+  "loadingCarousel": {
+    "slide1Title": "TRIPIS",
+    "slide1Body": "Egal wo Sie sind — richten Sie die Kamera darauf oder zeigen Sie ein gespeichertes Foto, und die KI erklärt es sofort wie ein Local Guide",
+    "slide2Title": "Audioguide",
+    "slide2Body": "Für jeden Ort in Ihrer Reise gibt es eine ausführliche KI-Audioführung. Einfach antippen und sofort anhören",
+    "slide3Title": "KI-Meinung",
+    "slide3Body": "Der Plan gefällt Ihnen nicht? Fragen Sie die KI einfach noch einmal",
+    "slide4Title": "Expertenprüfung",
+    "slide4Body": "Lassen Sie Ihren KI-Reiseplan von einem Ortskundigen prüfen, buchen Sie und erhalten Sie echte Tipps",
+    "slide5Title": "Tages-Video",
+    "slide5Body": "Wir verwandeln Ihre fertige Reise in ein gefühlvolles Video",
+    "slide6Title": "Gleich geschafft",
+    "slide6Body": "Teilen- und Kalender-Buttons sind direkt auf Ihrem Ergebnis, und „Route öffnen“ öffnet automatisch die Route in Google Maps",
+    "navGuide": "Guide",
+    "navVideo": "Video"
   }
 }

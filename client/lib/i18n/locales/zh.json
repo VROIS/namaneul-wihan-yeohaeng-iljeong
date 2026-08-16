@@ -134,10 +134,10 @@
     "mobilityStyle": "出行方式",
     "mobilityStyleHint": "选择您偏好的出行方式",
     "generate": "生成行程",
-    "loading1": "正在分析实时交通",
-    "loading2": "正在检查当地营业信息",
-    "loading3": "正在根据偏好优化路线",
-    "loading4": "正在验证数据可靠性",
+    "loading1": "正在了解这座城市...",
+    "loading2": "正在发现新的地方...",
+    "loading3": "正在为您规划路线...",
+    "loading4": "正在仔细核实信息...",
     "generateFailed": "生成失败",
     "retryHint": "请重试。",
     "validationFailed": "行程验证失败，请重试。",
@@ -512,5 +512,21 @@
     "title": "TRIPIS出现了问题",
     "message": "请重新启动应用。",
     "restartBtn": "重新启动"
+  },
+  "loadingCarousel": {
+    "slide1Title": "TRIPIS",
+    "slide1Body": "无论何时何地，用相机拍摄或展示已保存的照片，AI都会像当地向导一样当场为您讲解",
+    "slide2Title": "语音导览",
+    "slide2Body": "行程中每个地点都准备了详细的AI语音讲解。点一下就能立刻收听",
+    "slide3Title": "AI意见咨询",
+    "slide3Body": "对行程不满意？可以随时再次向AI提问",
+    "slide4Title": "专家验证",
+    "slide4Body": "让当地专家验证您的AI行程，还能预约并获得实用小贴士",
+    "slide5Title": "每日视频生成",
+    "slide5Body": "为您把完成的旅程制作成充满感动的视频",
+    "slide6Title": "马上就好",
+    "slide6Body": "分享和日历保存按钮就在结果页面，点击“打开路线”还会自动在谷歌地图生成路线",
+    "navGuide": "导览",
+    "navVideo": "视频"
   }
 }

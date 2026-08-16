@@ -23,7 +23,7 @@ const CAPABILITIES = [
     id: "image-fill",
     ko: "이미지 결손 채우기(PID 있고 사진만 없는 행 → PM 일괄)",
     // owners = 정당한 tsPhoto 사용처 전부(= 재발명 아님): 사후보강 image-backfill, 무료재링크 relink, 사진관문 ts-client,
-    //   결손보강 WF repair, 발굴 12/06 post-process, ag3(주석에 tsPhoto 언급만 = 생성 중 호출은 제거됨).
+    //   결손보강 WF repair, 발굴 12/06 post-process, ag3-save-new-places(라이브 생성 중 PM, 아래 참고).
     owners: [
       "server/services/fill/image-backfill.ts",
       "server/services/fill/storage-image-relink.ts",
@@ -32,6 +32,10 @@ const CAPABILITIES = [
       "server/services/agents/ag3-data-matcher.ts",
       "fillcity/prompts/12-ts-discover-pool/post-process.ts",
       "fillcity/prompts/06-ts-pm-enrich/post-process.ts",
+      // ⚠️ 2026-08-16 사장님 SSOT = 사진 분리 수술(2026-07-11) 재통합 폐기 §19 = 라이브 MIX 생성 중에도
+      //   즉시 PM 실행하도록 복귀(공식업뎁 전 요구). image-backfill.ts(사후일괄, 관리자 수동)과는 별개
+      //   능력(라이브/사용자호출 vs 사후일괄/관리자임의) = 같은 tsPhoto 관문 재사용이라 재발명 아님(§16).
+      "server/services/agents/ag3-save-new-places.ts",
       ".claude/skills/", // 스킬 내 post-process 도 정당
       // ⚠️ 2026-08-07 사장님 승인 = fillcity-bts/ = fillcity/ 의 BTS 전용 사본(원본 보존 원칙).
       //   = 새 능력이 아니라 같은 도구의 설정만 다른 사본(TOP5·공연장반경·보강범위) = 재발명 아님.

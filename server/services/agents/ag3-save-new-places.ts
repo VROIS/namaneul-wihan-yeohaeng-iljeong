@@ -5,8 +5,11 @@ import { placeSeedRaw } from "@shared/schema";
 import { sql, inArray } from "drizzle-orm"; // sql = raw 좌표·rank 쿼리 / inArray = ②-b 매칭행 PID 배치판정
 import type { PlaceResult } from "./types";
 // ⚠️ 수정금지(승인필요) §18·§20 = TS 호출 단일 관문(tsSearch) = raw 2곳 자동저장 + 9요소·SKU 자체강제
-//   (tsPhoto import 삭제 = 2026-07-11 사진 분리 수술 §19 = 생성 중 PM 0, 이미지 = fill/image-backfill 전담)
-import { tsSearch } from "../shared/ts-client";
+// ⚠️ 수정금지(승인필요) 2026-08-16 사장님 SSOT = 사진 분리 수술(2026-07-11) 재통합 폐기 = 2026-08-16 §19.
+//   공식업뎁 전 실사용자 화면에 사진이 즉시 나와야 함 → PM(tsPhoto)을 생성 흐름으로 복귀. 새 함수
+//   재발명 없이 기존 단일 관문 그대로 재사용(§16, image-backfill.ts의 runPm과 동일 호출 패턴).
+//   이미 ③ TS 단계 전체가 Promise.all 병렬이라 PM도 같은 병렬 안에서 돈다(장소별 순차 처리 아님).
+import { tsSearch, tsPhoto } from "../shared/ts-client";
 // ⚠️ 수정금지(승인필요) 2026-07-06 사장님 SSOT = TS raw 모음 1파일(#45 방식) 저장 = 도시id 폴더 로컬+Storage 2곳(§18).
 import { saveCollectedRaw } from "../shared/save-collected-raw";
 
@@ -17,8 +20,8 @@ import { saveCollectedRaw } from "../shared/save-collected-raw";
 export async function saveNewPlacesToDB(
   newPlaces: PlaceResult[],
   cityId: number | null,
-  // ⚠️ 수정금지(승인필요) 2026-06-01 = 사용자 SSOT = deferPersist=true 시 = fetch(TS) await 완료 후 = DB write(upsertPlace)만 곳별 즉시 X, 함수 끝에서 한꺼번에 await. (PM 제거 = 2026-07-11 사진 분리 수술 §19)
-  // = 첫 trip 이미지 FE 노출 최우선 / DB write 는 뒤로 미루되 함수 반환 전 await Promise.allSettled 로 완료(증발 0, 대안2 2026-07-09). false(기본)=fetch+write 모두 곳별 즉시 await.
+  // ⚠️ 수정금지(승인필요) 2026-06-01 = 사용자 SSOT = deferPersist=true 시 = fetch(TS) await 완료 후 = DB write(upsertPlace)만 곳별 즉시 X, 함수 끝에서 한꺼번에 await. (PM = 2026-08-16 생성 흐름에 재통합)
+  // = 첫 trip 이미지 FE 노출 최우선 / DB write 는 뒤로 미루되 함수 반환 전 await Promise.allSettled 로 완료(증발 0). false(기본)=fetch+write 모두 곳별 즉시 await.
   opts?: { deferPersist?: boolean },
 ): Promise<void> {
   if (!db || !cityId) {
@@ -50,7 +53,7 @@ export async function saveNewPlacesToDB(
   }
 
   console.log(
-    `[AG3-SAVE] toSave=${toSave.length} 행 = 즉시 await searchText + INSERT 시작 (사진 = 사후 일괄 2026-07-11)`,
+    `[AG3-SAVE] toSave=${toSave.length} 행 = 즉시 await searchText + INSERT 시작 (사진 PM = ③ TS 단계와 같은 병렬에서 즉시 시도, 2026-08-16)`,
   );
 
   // ⚠️ 수정금지(승인필요) 2026-05-09 = 도시 좌표 사전 조회 (= tsSearch 좌표앵커 latitude/longitude 용)
@@ -84,7 +87,7 @@ export async function saveNewPlacesToDB(
   // 🗑️ 2026-07-07 개정헌법(사장님) = rank(랭킹) 사전계산 블록 완전삭제 §19. 코드는 랭킹 한 자도 안 넣음 = 받은 응답만 저장 = 랭킹은 이후 DB autorank 트리거(RC순)가 알아서.
   const today = new Date().toISOString().slice(0, 10);
 
-  // ⚠️ 수정금지(승인필요) 2026-07-08 사장님 SSOT = 순서 = ① Gemini 전체 upsert → ② TS 대상 = 신규(inserted) + PID 없는 매칭행(updated) → ③ TS → 저장. (PM = 사후 일괄 2026-07-11)
+  // ⚠️ 수정금지(승인필요) 2026-07-08 사장님 SSOT = 순서 = ① Gemini 전체 upsert → ② TS 대상 = 신규(inserted) + PID 없는 매칭행(updated) → ③ TS(+PM) → 저장. (PM = ③과 같은 병렬로 재통합 2026-08-16)
   //   = Gemini가 채운 슬롯 전부 검증 보장(옛 "신규만" = 흡수건 검증누락 = 폐기 2026-07-08 §19). PID 보유 매칭행만 skip = 재과금 원천차단(니스 €17 사고 코드원인 해소) 유지.
   const { upsertPlace } = await import("../place-upsert");
   // 🗑️ 2026-07-18 삭제 = loadMatchCandidates(전체 PSR SELECT) + batchCands = 매칭 폐기(트리거 단일) 로 후보명단 불필요 §0/§19.
@@ -219,7 +222,7 @@ export async function saveNewPlacesToDB(
     ...absorbedRows.map((r: any) => ({ ...r, mode: "absorbed" as const })),
   ];
   console.log(
-    `[AG3-SAVE] ② TS 대상 = 신규 ${newRows.length} + 흡수(PID 결손) ${absorbedRows.length} = ${tsTargets.length}곳 (PID 완비 매칭행 ${updatedRows.length - absorbedRows.length}곳 = 유료호출 0, 이미지 = 사후 일괄)`,
+    `[AG3-SAVE] ② TS 대상 = 신규 ${newRows.length} + 흡수(PID 결손) ${absorbedRows.length} = ${tsTargets.length}곳 (PID 완비 매칭행 ${updatedRows.length - absorbedRows.length}곳 = 유료호출 0, 이미지 결손행은 fill/image-backfill 사후 대상)`,
   );
 
   // ── ③ 대상(신규+흡수) 전부 TS = 자기 rowId 직행 UPDATE(신규·흡수 통일). ──
@@ -319,11 +322,19 @@ export async function saveNewPlacesToDB(
         const placeId: string | null =
           result.googlePlaceId || (place as any).googlePlaceId || null;
 
-        // ⚠️ 수정금지(승인필요) 2026-07-11 사장님 SSOT = 사진 분리 수술 = 생성 중 PM(사진 다운로드)+Storage 업로드 = 완전 제거.
-        //   옛 "곳당 TS→PM await(대안2 2026-07-09)" 폐기 = 2026-07-11 §19. 이미지 = fill/image-backfill(사후 일괄 = 무료 재링크→raw photoName 재활용→PM) 전담.
-        //   photoName 은 아래 tsResults raw 모음(§18 2곳 저장)에 남음 = 사후 PM 시 TS 재호출 0. FE = 아이콘+'구글맵 정보' 폴백(TripPlannerScreen).
+        // ⚠️ 수정금지(승인필요) 2026-08-16 사장님 SSOT = PM(사진 다운로드+R2 업로드) = 생성 흐름에 재통합.
+        //   폐업 행은 스킵(2026-07-08 SSOT 유지). photoName 없으면(만료·미제공) 스킵 = 무성실패(null 계약, tsPhoto 내부).
+        //   ③ 전체가 Promise.all 병렬이라 PM도 같은 병렬 파도 안에서 돈다(장소별 순차 await 아님).
+        let photoUrl: string | null = null;
+        if (!isClosedPermanently && result.photoName) {
+          photoUrl = await tsPhoto({
+            apiKey: GOOGLE_KEY,
+            photoName: result.photoName,
+            pathKey: `${cityId}/${seedCategory}/${placeId || rowId}`,
+          });
+        }
 
-        // ④ FE 배선 = place 객체 직접 갱신(신규·흡수건 공통) = TS 검증 좌표·PID·주소·RC 즉시 반영(이미지 제외 = 사후 일괄).
+        // ④ FE 배선 = place 객체 직접 갱신(신규·흡수건 공통) = TS 검증 좌표·PID·주소·RC·이미지 즉시 반영.
         if (lat && lng) {
           place.lat = lat;
           place.lng = lng;
@@ -333,8 +344,9 @@ export async function saveNewPlacesToDB(
           result.address || (place as any).geminiAddress;
         if (result.googleReviewCount != null)
           place.userRatingCount = result.googleReviewCount;
+        if (photoUrl) place.image = photoUrl;
         console.log(
-          `[AG3-SAVE] 📡 ${mode === "absorbed" ? "흡수" : "신규"} "${place.name}" → (${lat}, ${lng}) pid=${placeId ? "TS" : "NONE"} img=사후일괄`,
+          `[AG3-SAVE] 📡 ${mode === "absorbed" ? "흡수" : "신규"} "${place.name}" → (${lat}, ${lng}) pid=${placeId ? "TS" : "NONE"} img=${photoUrl ? "OK" : isClosedPermanently ? "스킵(폐업)" : result.photoName ? "실패" : "없음"}`,
         );
 
         // ③-b 저장 = TS 검증값 전체(Gemini+TS = §20 깔대기) = 신규·흡수 공통 자기 rowId 직행 UPDATE(targetRowId, §14 재매칭 실패 불가). COALESCE 새우선.
@@ -361,7 +373,10 @@ export async function saveNewPlacesToDB(
             result.longitude && result.longitude !== 0
               ? result.longitude
               : null,
-          // imageUrl 미포함 = §14 부분갱신(안 온 컬럼 = 뼈대 유지) = 매칭행 기존 이미지 보존 + 신규행 null(아이콘) = 사후 일괄이 채움 (2026-07-11 사진 분리 수술)
+          // ⚠️ 수정금지(승인필요) 2026-08-16 사장님 SSOT = imageUrl = PM 성공 시에만 포함(§14 부분갱신 = 실패/스킵이면
+          //   안 보내 컬럼 그대로 = 매칭행 기존 이미지 보존, 새로 뭘로도 못 덮지 않음). PM 실패분은 여전히
+          //   fill/image-backfill CLI로 사후 복구 가능(§16, 도구 유지).
+          ...(photoUrl ? { imageUrl: photoUrl } : {}),
           googlePlaceId: placeId,
           googleMapsUri: result.googleMapsUri ?? null,
           shortformKo: place.description ?? null,

@@ -134,10 +134,10 @@
     "mobilityStyle": "Mobility Style",
     "mobilityStyleHint": "Select your mobility preference",
     "generate": "Generate Itinerary",
-    "loading1": "Analyzing real-time traffic",
-    "loading2": "Checking local operations",
-    "loading3": "Optimizing routes by preference",
-    "loading4": "Verifying data reliability",
+    "loading1": "Getting to know this city...",
+    "loading2": "Finding new places for you...",
+    "loading3": "Mapping out your route...",
+    "loading4": "Double-checking everything...",
     "generateFailed": "Generation Failed",
     "retryHint": "Please try again.",
     "validationFailed": "Itinerary validation failed. Please try again.",
@@ -512,5 +512,21 @@
     "title": "Something went wrong in TRIPIS",
     "message": "Please restart the app.",
     "restartBtn": "Restart"
+  },
+  "loadingCarousel": {
+    "slide1Title": "TRIPIS",
+    "slide1Body": "Point your camera anywhere, or just show a saved photo — AI explains it like a local guide, right on the spot",
+    "slide2Title": "Audio Guide",
+    "slide2Body": "Every place in your itinerary has a detailed AI voice guide ready. Tap to listen right away",
+    "slide3Title": "AI Opinion",
+    "slide3Body": "Not happy with the plan? Ask the AI again, right away",
+    "slide4Title": "Expert Review",
+    "slide4Body": "Get your AI itinerary verified by a local expert, book it, and get real tips too",
+    "slide5Title": "Daily Video",
+    "slide5Body": "We turn your finished trip into a video full of feeling",
+    "slide6Title": "Almost there",
+    "slide6Body": "Share and save-to-calendar buttons are right there on your results screen, and Open Route auto-generates your route in Google Maps",
+    "navGuide": "Guide",
+    "navVideo": "Video"
   }
 }

@@ -134,10 +134,10 @@
     "mobilityStyle": "Estilo de movilidad",
     "mobilityStyleHint": "Selecciona tu preferencia de movilidad",
     "generate": "Generar itinerario",
-    "loading1": "Analizando el tráfico en tiempo real",
-    "loading2": "Verificando horarios locales",
-    "loading3": "Optimizando rutas según tus preferencias",
-    "loading4": "Verificando la fiabilidad de los datos",
+    "loading1": "Conociendo la ciudad...",
+    "loading2": "Buscando nuevos lugares...",
+    "loading3": "Trazando tu ruta...",
+    "loading4": "Verificando todo una vez más...",
     "generateFailed": "Error en la generación",
     "retryHint": "Por favor, inténtalo de nuevo.",
     "validationFailed": "La validación del itinerario falló. Por favor, inténtalo de nuevo.",
@@ -512,5 +512,21 @@
     "title": "Ocurrió un problema en TRIPIS",
     "message": "Reinicia la aplicación.",
     "restartBtn": "Reiniciar"
+  },
+  "loadingCarousel": {
+    "slide1Title": "TRIPIS",
+    "slide1Body": "Estés donde estés, apunta la cámara o muestra una foto guardada — la IA te lo explica al instante como un guía local",
+    "slide2Title": "Audioguía",
+    "slide2Body": "Cada lugar de tu viaje tiene una guía de audio con IA detallada lista para escuchar. Solo toca para oírla",
+    "slide3Title": "Opinión IA",
+    "slide3Body": "¿No te convence el plan? Vuelve a preguntarle a la IA al instante",
+    "slide4Title": "Revisión experta",
+    "slide4Body": "Haz que un experto local revise tu itinerario con IA, resérvalo y recibe consejos reales",
+    "slide5Title": "Video diario",
+    "slide5Body": "Convertimos tu viaje terminado en un video lleno de emoción",
+    "slide6Title": "Ya casi",
+    "slide6Body": "Los botones de compartir y calendario están justo en tus resultados, y Abrir ruta genera automáticamente tu recorrido en Google Maps",
+    "navGuide": "Guía",
+    "navVideo": "Video"
   }
 }

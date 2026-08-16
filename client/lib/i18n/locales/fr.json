@@ -134,10 +134,10 @@
     "mobilityStyle": "Mode de déplacement",
     "mobilityStyleHint": "Sélectionnez votre préférence de mobilité",
     "generate": "Générer l'itinéraire",
-    "loading1": "Analyse du trafic en temps réel",
-    "loading2": "Vérification des horaires locaux",
-    "loading3": "Optimisation des itinéraires selon vos préférences",
-    "loading4": "Vérification de la fiabilité des données",
+    "loading1": "Découverte de la ville en cours...",
+    "loading2": "Recherche de nouveaux lieux...",
+    "loading3": "Élaboration de votre itinéraire...",
+    "loading4": "Vérification finale en cours...",
     "generateFailed": "Échec de la génération",
     "retryHint": "Veuillez réessayer.",
     "validationFailed": "La validation de l'itinéraire a échoué. Veuillez réessayer.",
@@ -512,5 +512,21 @@
     "title": "Un problème est survenu dans TRIPIS",
     "message": "Veuillez redémarrer l'application.",
     "restartBtn": "Redémarrer"
+  },
+  "loadingCarousel": {
+    "slide1Title": "TRIPIS",
+    "slide1Body": "Où que vous soyez, pointez votre caméra ou montrez une photo enregistrée — l'IA l'explique sur place, comme un guide local",
+    "slide2Title": "Guide audio",
+    "slide2Body": "Chaque lieu de votre voyage a un guide audio IA détaillé prêt à l'écoute. Appuyez pour écouter tout de suite",
+    "slide3Title": "Avis IA",
+    "slide3Body": "Le plan ne vous convient pas ? Redemandez à l'IA, tout de suite",
+    "slide4Title": "Avis expert",
+    "slide4Body": "Faites vérifier votre itinéraire IA par un expert local, réservez et recevez de vrais conseils",
+    "slide5Title": "Vidéo du jour",
+    "slide5Body": "Nous transformons votre voyage terminé en une vidéo pleine d'émotion",
+    "slide6Title": "Presque prêt",
+    "slide6Body": "Les boutons partager et calendrier sont juste là sur vos résultats, et Ouvrir l'itinéraire ouvre automatiquement votre trajet dans Google Maps",
+    "navGuide": "Guide",
+    "navVideo": "Vidéo"
   }
 }

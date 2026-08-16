@@ -7,13 +7,7 @@ import React, {
   useCallback,
   useRef,
 } from "react";
-import {
-  ScrollView,
-  useColorScheme,
-  Animated,
-  Easing,
-  Platform,
-} from "react-native";
+import { ScrollView, useColorScheme, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import type { RouteProp } from "@react-navigation/native";
@@ -60,9 +54,10 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
   }
   const [screen, setScreen] = useState<ScreenState>("Input");
   const [loadingStep, setLoadingStep] = useState(0);
+  // ⚠️ 수정금지(승인필요) 2026-08-15 사장님 승인 = 로딩화면 기능소개 캐러셀 오픈 게이트.
+  //   3초 지연 후에만 열림(useGenerateItinerary가 제어) = DB-only(2초)는 안 열리고 MIX(느림)만 열림.
+  const [carouselOpen, setCarouselOpen] = useState(false);
   const [itinerary, setItinerary] = useState<Itinerary | null>(null);
-  // ✅ 수정: spinValue를 useRef로 관리 (렌더링마다 재생성 방지)
-  const spinValue = React.useRef(new Animated.Value(0)).current;
   // ⚠️ 2026-07-03 = 지도는 항상 고정 표시(showMap 미사용). setCurrentItinerary만 사용 = 하단탭 "AI 의견" 버튼 활성화·검증대상 전달.
   const {
     setCurrentItinerary,
@@ -186,6 +181,7 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
     currentUser,
     setScreen,
     setLoadingStep,
+    setCarouselOpen,
     setItinerary,
     setAiOpinionData,
     setDayAccommodations,
@@ -359,24 +355,6 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
     restoreItineraryById(Number(m[1]), { shared: true });
   }, [restoreItineraryById]);
 
-  useEffect(() => {
-    if (screen === "Loading") {
-      Animated.loop(
-        Animated.timing(spinValue, {
-          toValue: 1,
-          duration: 1500,
-          easing: Easing.linear,
-          useNativeDriver: Platform.OS !== "web",
-        }),
-      ).start();
-    }
-  }, [screen]);
-
-  const spin = spinValue.interpolate({
-    inputRange: [0, 1],
-    outputRange: ["0deg", "360deg"],
-  });
-
   const toggleVibe = (vibe: Vibe) => {
     setFormData((prev) => ({
       ...prev,
@@ -411,7 +389,7 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
     setScreen,
     loadingStep,
     LOADING_MESSAGES,
-    spin,
+    carouselOpen,
     // 여정·폼
     itinerary,
     formData,

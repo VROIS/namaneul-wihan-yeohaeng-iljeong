@@ -134,10 +134,10 @@
     "mobilityStyle": "移動スタイル",
     "mobilityStyleHint": "移動手段の好みを選択",
     "generate": "日程を作成",
-    "loading1": "リアルタイム交通を分析中",
-    "loading2": "現地の営業情報を確認中",
-    "loading3": "好みに合わせてルートを最適化中",
-    "loading4": "データの信頼性を検証中",
+    "loading1": "この街を調べています...",
+    "loading2": "新しいスポットを探しています...",
+    "loading3": "好みに合わせてルートを組んでいます...",
+    "loading4": "最後にしっかり確認しています...",
     "generateFailed": "作成失敗",
     "retryHint": "もう一度お試しください。",
     "validationFailed": "日程の検証に失敗しました。もう一度お試しください。",
@@ -512,5 +512,21 @@
     "title": "TRIPISで問題が発生しました",
     "message": "アプリを再起動してください。",
     "restartBtn": "再起動"
+  },
+  "loadingCarousel": {
+    "slide1Title": "TRIPIS",
+    "slide1Body": "いつでもどこでも、カメラで撮るか保存した写真を見せるだけで、AIが現地ガイドのようにその場で説明してくれます",
+    "slide2Title": "オーディオガイド",
+    "slide2Body": "旅程の各スポットにAI音声の詳しい解説が用意されています。タップしてすぐ聞けます",
+    "slide3Title": "AIオピニオン",
+    "slide3Body": "プランが気に入らない?AIにもう一度すぐ相談できます",
+    "slide4Title": "専門家検証",
+    "slide4Body": "AIプランを現地の専門家に検証してもらい、予約や実践的なコツまで受け取れます",
+    "slide5Title": "デイリー動画",
+    "slide5Body": "完成した旅を感動いっぱいの動画に仕上げます",
+    "slide6Title": "もうすぐです",
+    "slide6Body": "共有・カレンダー保存ボタンも結果画面にすぐあり、ルートを開くとGoogleマップに自動でルートが表示されます",
+    "navGuide": "ガイド",
+    "navVideo": "動画"
   }
 }

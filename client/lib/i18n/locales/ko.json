@@ -134,10 +134,10 @@
     "mobilityStyle": "이동 스타일",
     "mobilityStyleHint": "이동 방식을 선택하세요",
     "generate": "여정 생성",
-    "loading1": "실시간 교통 정보 분석 중",
-    "loading2": "현지 운영 현황 확인 중",
-    "loading3": "취향 기반 경로 최적화 중",
-    "loading4": "데이터 신뢰도 검증 중",
+    "loading1": "그 도시를 살펴보고 있어요...",
+    "loading2": "새로운 장소를 찾아내고 있어요...",
+    "loading3": "취향에 맞게 동선을 짜고 있어요...",
+    "loading4": "마지막으로 꼼꼼히 확인하고 있어요...",
     "generateFailed": "일정 생성 실패",
     "retryHint": "다시 시도해 주세요",
     "validationFailed": "일정 검증 기준 미달. 다시 시도해 주세요.",
@@ -512,5 +512,21 @@
     "title": "TRIPIS에서 문제가 발생했어요",
     "message": "앱을 다시 시작해 주세요.",
     "restartBtn": "다시 시작"
+  },
+  "loadingCarousel": {
+    "slide1Title": "TRIPIS",
+    "slide1Body": "언제 어디서든 촬영이나 저장된 사진을 AI가 그 자리에서 현지 가이드처럼 설명해 드려요",
+    "slide2Title": "오디오가이드",
+    "slide2Body": "여정속 장소마다 AI 음성 상세 해설이 준비돼 있어요. 눌러서 바로 들어보세요",
+    "slide3Title": "AI 의견 상담",
+    "slide3Body": "여정이 마음에 안 들면? AI에게 다시 바로 물어볼 수 있어요",
+    "slide4Title": "전문가 검증",
+    "slide4Body": "AI 일정을 현지 전문가에게 검증받고 예약하고 실전 팁까지 받아보세요",
+    "slide5Title": "일별 영상 생성",
+    "slide5Body": "완성된 여정을 감성 가득한 영상으로 만들어 드려요",
+    "slide6Title": "곧 만나요",
+    "slide6Body": "여정공유·캘린더저장 버튼도 결과 화면에서 바로 보시고 바로가기로 구글맵에 자동 여정이 생성화면이 나와요",
+    "navGuide": "가이드",
+    "navVideo": "영상"
   }
 }
