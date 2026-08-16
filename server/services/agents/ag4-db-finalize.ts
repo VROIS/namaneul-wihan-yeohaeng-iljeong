@@ -483,6 +483,10 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
     startTime: formData.startTime || "09:00",
     endTime: formData.endTime || "21:00",
     days,
+    // ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 = AG1(skeleton)이 이미 계산해 여기까지 파라미터로 들어와 있던
+    //   값을 응답에 담기만 함(§16 재사용, 새 계산 없음) = MIX 경로(pipeline-v3-step2-build.ts:396)와 동일 필드.
+    //   누락 시 프로필 카드·결과화면 vibe 요약이 DB-ONLY 여정에서만 폴백("힐링")으로 고정되던 배선 결손 수정.
+    vibeWeights: skeleton.vibeWeights,
     companionType: formData.companionType,
     companionCount,
     travelStyle: formData.travelStyle,

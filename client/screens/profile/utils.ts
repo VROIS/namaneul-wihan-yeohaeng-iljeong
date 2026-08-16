@@ -5,6 +5,7 @@
 //   지금은 ResultStep 과 똑같이 t("trip.tripFor", {...}) 로 조립(§16 = 같은 문장 = 같은 함수).
 import { getVibeLabel } from "@/utils/vibeCalculator";
 import i18n from "@/lib/i18n";
+import type { VibeWeight } from "@/types/trip";
 
 export interface SavedItinerary {
   id: number;
@@ -25,6 +26,10 @@ export interface SavedItinerary {
   rawData?: {
     destination?: string;
     days?: { dailyCost?: { perPersonEur?: number } }[];
+    // ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 = 생성 시 항상 채워지는 값(ResultStep.tsx 와 같은 소스).
+    //   top-level vibes 컬럼("저장" 버튼 눌러야만 채워짐, useSaveItinerary.ts)과 달리
+    //   MIX 생성 즉시 만들어지는 draft 행에도 이미 들어있어 summaryLineCard 의 실제 소스로 삼는다.
+    vibeWeights?: VibeWeight[];
   };
 }
 
@@ -64,11 +69,14 @@ export function summaryLineCard(
   const comp =
     companionLabels[trip.companionType] || t("labels.companionFamily");
   const focus = focusLabels[trip.curationFocus] || t("labels.curationEveryone");
+  // ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 = ResultStep.tsx:210-215 와 같은 소스(itinerary.vibeWeights)로 통일.
+  //   옛 trip.vibes(top-level DB컬럼, "저장" 버튼 눌러야만 채워짐)는 미저장 여정(대부분)에서 항상 비어
+  //   실제 vibe와 무관하게 폴백 문구("힐링" 등)만 보이던 원인이었다(§ 프로필카드 폴백조사) — rawData.vibeWeights 우선, 없으면 옛 컬럼 그대로 대비.
   const vibes =
-    (trip.vibes || [])
-      .slice(0, 3)
-      .map((v) => getVibeLabel(v as any))
-      .join(" & ") || t("options.healing");
+    (trip.rawData?.vibeWeights?.length
+      ? trip.rawData.vibeWeights.slice(0, 3).map((v) => getVibeLabel(v.vibe))
+      : (trip.vibes || []).slice(0, 3).map((v) => getVibeLabel(v as any))
+    ).join(" & ") || t("options.healing");
   const lastChar = focus.charCodeAt(focus.length - 1);
   const hasFinalConsonant =
     lastChar >= 0xac00 && lastChar <= 0xd7a3 && (lastChar - 0xac00) % 28 !== 0;

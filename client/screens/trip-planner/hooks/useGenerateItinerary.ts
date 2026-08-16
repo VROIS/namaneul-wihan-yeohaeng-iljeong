@@ -18,6 +18,7 @@ export function useGenerateItinerary({
   setAiOpinionData,
   setDayAccommodations,
   setCurrentItineraryId,
+  setFormData,
   t,
   i18n,
 }: {
@@ -35,6 +36,8 @@ export function useGenerateItinerary({
     React.SetStateAction<DayAccommodation[]>
   >;
   setCurrentItineraryId: React.Dispatch<React.SetStateAction<number | null>>;
+  // ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 = 생성 성공 직후 숙소필드 리셋용(아래 executeGenerate 참고).
+  setFormData: React.Dispatch<React.SetStateAction<TripFormData>>;
   t: (key: string, opts?: any) => string;
   i18n: { language: string };
 }) {
@@ -147,6 +150,20 @@ export function useGenerateItinerary({
       } else {
         setDayAccommodations([]);
       }
+
+      // ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 = "1회 생성 = 미션 종료" 안전장치 ①(생성 성공 직후).
+      //   MIX(구글위젯)로 세팅된 숙소좌표/이름/주소/placeId 는 위에서 dayAccommodations 로 이미 스냅샷됐으니
+      //   formData 쪽은 여기서 지운다 — 다음에 DB-ONLY 도시칩(handleCityPress)으로 다른 도시를 고르면
+      //   destination 텍스트만 바뀌고 이 좌표들은 안 바뀌어서, 서버 풀검색 중심이 옛 도시에 남아
+      //   결과화면 헤더는 새 도시인데 장소내용은 옛 도시로 나오던 사고(2026-08-16 실기기 실증) 차단.
+      //   ⚠️ restoreItineraryById(저장여정 다시보기)는 이 함수(executeGenerate)를 타지 않으므로 안 건드림(§ 다시보기 구분).
+      setFormData((prev) => ({
+        ...prev,
+        accommodationCoords: undefined,
+        accommodationName: undefined,
+        accommodationAddress: undefined,
+        accommodationPlaceId: undefined,
+      }));
       setScreen("Result");
     } catch (error: any) {
       clearTimers();

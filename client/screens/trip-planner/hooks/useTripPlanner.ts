@@ -186,6 +186,7 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
     setAiOpinionData,
     setDayAccommodations,
     setCurrentItineraryId,
+    setFormData,
     t,
     i18n,
   });
@@ -200,6 +201,16 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
       navigation.goBack();
       return;
     }
+    // ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 = "1회 생성 = 미션 종료" 안전장치 ②(Input 재진입 시).
+    //   ①(useGenerateItinerary 생성 성공 직후)과 별개 시점 = 충돌 아니라 이중 안전장치.
+    //   restoreItineraryById 는 setScreen("Result")로 끝나 이 분기를 타지 않으므로 "다시보기"는 안 건드림.
+    setFormData((prev) => ({
+      ...prev,
+      accommodationCoords: undefined,
+      accommodationName: undefined,
+      accommodationAddress: undefined,
+      accommodationPlaceId: undefined,
+    }));
     setScreen("Input");
   }, [initialRequest, navigation]);
 
