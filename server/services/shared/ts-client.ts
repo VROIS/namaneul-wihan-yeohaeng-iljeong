@@ -46,7 +46,10 @@ export interface TsPlace {
   latitude: number | null; // location.latitude
   longitude: number | null; // location.longitude
   googleReviewCount: number | null; // userRatingCount
-  priceEur: number | null; // priceRange.endPrice.units
+  // ⚠️ 수정금지(승인필요) 2026-08-19 사장님 승인 = price_eur 필드 완전삭제(§19, 좌표=절대권위 원칙의 가격 적용).
+  //   = 구글 priceRange 는 그 나라 현지통화 그대로(변환 없음) = "EUR"라는 이름만 붙었을 뿐 실제로는 오염값.
+  //   = 가격의 유일한 정답 = 제미니(§20 SSOT, image-backfill.ts 기존 규칙과 동일) = TS 응답에 이 필드
+  //     자체가 없어야 어떤 호출자도(현재·미래) 실수로 못 씀 = repair.ts 청계천 €80,400 실사고 근본 차단.
   photoName: string | null; // photos[0].name
   googleMapsUri: string | null;
   businessStatus: string | null;
@@ -100,14 +103,8 @@ const mapPlace = (p: any): TsPlace => ({
   latitude: p.location?.latitude ?? null,
   longitude: p.location?.longitude ?? null,
   googleReviewCount: p.userRatingCount ?? null,
-  // ⚠️ 수정금지(승인필요) 2026-08-10 사장님 확정 = TS 가격은 **DB 칸에 안 쓴다**(가격 주인 = 제미니 하나, SSOT:583).
-  //   여기서는 응답 그대로 실어만 둔다(§18 = 받은 요소를 버리지 않는다).
-  //   ⚠️ DB 에 쓰는 경로 5곳(ag3·reinsert·ts-backfill·ts-name-recover·image-backfill) 전부 이 값을 안 쓴다
-  //     = price_eur 는 제미니 값만 들어간다(2026-08-10 §22 지적으로 5곳 전수 통일).
-  //   ⚠️ 구글은 그 나라 통화로 준다(케냐 = currencyCode:"KES") = 이 값을 price_eur 로 쓰면 안 된다.
-  priceEur: p.priceRange?.endPrice?.units
-    ? parseFloat(p.priceRange.endPrice.units)
-    : null,
+  // ⚠️ 2026-08-19 = priceEur 필드 삭제(§19, 위 interface 주석 참조) = 응답원본(priceRange)은 §18 raw 저장에
+  //   그대로 남음(saveRaw 가 p 전체를 실어 저장) = 파싱된 사용값만 제거해 재발명 경로 원천봉쇄.
   photoName: p.photos?.[0]?.name ?? null,
   googleMapsUri: p.googleMapsUri ?? null,
   businessStatus: p.businessStatus ?? null,

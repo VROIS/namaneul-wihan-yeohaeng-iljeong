@@ -191,7 +191,9 @@ function townOf(address: string | null): string | null {
           googlePlaceId: p.googlePlaceId,
           googleMapsUri: p.googleMapsUri,
           googleReviewCount: p.googleReviewCount,
-          priceEur: p.priceEur,
+          // ⚠️ 수정금지(승인필요) 2026-08-19 사장님 승인(§19) = priceEur 삭제 = TsPlace.priceEur 필드 자체가
+          //   ts-client.ts 에서 삭제됨(현지통화→EUR 오독 원천차단, §20 가격=Gemini 유일 정답). 신규발굴 식당의
+          //   가격은 이후 Gemini 보강(repair.ts/02-enrich-place)이 채움 = 이 TS전용 발굴단계는 좌표·PID만 담당.
           dayZone: "outskirt",
           phaseTags: ["ts-searchnearby", `outskirt-ts-${today}`],
         });

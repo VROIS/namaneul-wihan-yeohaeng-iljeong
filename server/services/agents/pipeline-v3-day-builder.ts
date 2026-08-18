@@ -18,6 +18,7 @@ import {
 } from "../transport-pricing-service";
 import {
   normalizeTravelStyle,
+  sanitizePriceEur,
   type GeminiPlace,
   type GeminiDay,
 } from "./pipeline-v3-types";
@@ -413,23 +414,19 @@ export async function buildDayResult(
   }
 
   // ── 일일 비용 계산 (1인 기준) ──
+  // ⚠️ 수정금지(승인필요) 2026-08-19 사장님 승인 = mealCostEur 에도 entranceFeesEur 와 동일한 500유로
+  //   오염값 가드 적용(= ag4-db-finalize.ts 와 같은 비대칭 버그: entrance만 가드있고 meal은 없었음).
+  //   sanitizePriceEur() 재사용(§0/§16, 인라인 재발명 금지).
   const mealCostEur = dayPlaces.reduce(
     (sum: number, p: any) =>
-      p.isMealSlot && p.mealPrice ? sum + p.mealPrice : sum,
+      p.isMealSlot ? sum + sanitizePriceEur(p.mealPrice) : sum,
     0,
   );
-  const entranceFeesEur = dayPlaces.reduce((sum: number, p: any) => {
-    // 식사 슬롯 제외, 비정상 가격(€500 초과) 필터
-    if (
-      !p.isMealSlot &&
-      p.estimatedPriceEur &&
-      p.estimatedPriceEur > 0 &&
-      p.estimatedPriceEur < 500
-    ) {
-      return sum + p.estimatedPriceEur;
-    }
-    return sum;
-  }, 0);
+  const entranceFeesEur = dayPlaces.reduce(
+    (sum: number, p: any) =>
+      !p.isMealSlot ? sum + sanitizePriceEur(p.estimatedPriceEur) : sum,
+    0,
+  );
 
   // 1인 1일 비용 합산 (식사 + 입장료는 이미 1인 기준)
   const mealPerPerson = mealCostEur; // Gemini가 1인 기준 추천

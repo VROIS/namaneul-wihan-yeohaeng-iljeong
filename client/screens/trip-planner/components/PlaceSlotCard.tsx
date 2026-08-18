@@ -342,8 +342,14 @@ export default function PlaceSlotCard({
                   color={Brand.primary}
                 />
                 <Text style={[styles.placePriceText, { color: Brand.primary }]}>
+                  {/* ⚠️ 수정금지(승인필요) 2026-08-19 사장님 승인 = 식사슬롯도 비식사슬롯과 동일한 500유로 가드 적용
+                      (= 광장시장 "??" 표시버그 수정 = 0(무료) 오표시 + 가격상한 가드 부재 = 2026-08-19 §19 폐기) */}
                   {isMeal
-                    ? t("trip.mealPrice", { price: place.mealPrice || "??" })
+                    ? typeof place.mealPrice === "number" &&
+                      place.mealPrice > 0 &&
+                      place.mealPrice < 500
+                      ? t("trip.mealPrice", { price: place.mealPrice })
+                      : t("common.free")
                     : (place as any).estimatedPriceEur > 0 &&
                         (place as any).estimatedPriceEur < 500
                       ? `€${(place as any).estimatedPriceEur}`

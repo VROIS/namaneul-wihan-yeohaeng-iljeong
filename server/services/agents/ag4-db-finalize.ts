@@ -20,7 +20,7 @@ import { MEAL_BUDGET } from "./types";
 // ⚠️ 수정금지(승인필요) 2026-08-18 사장님 승인(비판검증 확정결함 수정) = ag2 와 동일한 정규화 필수(§16 1벌).
 //   실사용자 클라이언트는 소문자(luxury/comfort)로 보내는데 MEAL_BUDGET 키는 PascalCase 4종뿐 =
 //   미정규화 인덱싱 = undefined → mealBudget.lunch 접근 크래시(ag2 에서 토론토·나이로비 500 실측과 동일 폭탄).
-import { normalizeTravelStyle } from "./pipeline-v3-types";
+import { normalizeTravelStyle, sanitizePriceEur } from "./pipeline-v3-types";
 // ⚠️ 2026-07-06 사장님 SSOT = 대중교통 구간당 균일 예상가 = 단일 SSOT(§16) = transit-haversine 로 이동(옛 ag4 로컬정의 삭제) = MIX·DB-only 공통.
 import {
   estimateTransitCost,
@@ -327,16 +327,18 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
     });
 
     // ===== 비용 합산 =====
+    // ⚠️ 수정금지(승인필요) 2026-08-19 사장님 승인 = FE 카드(PlaceSlotCard.tsx) 와 동일한 500유로 오염값
+    //   가드를 합산에도 적용(= 카드는 안전한데 일자합계만 폭발하던 버그 수정. 고양체육관 사례 = 카드는
+    //   "무료"로 안전하게 표시됐지만 이 합산은 가드 없이 원본값을 그대로 더해 Day 총액이 €7536 로 폭발함).
+    //   = 인라인 재작성 대신 기존 검증된 sanitizePriceEur()(pipeline-v3-types.ts, 팡테옹 19500 오염 방지용
+    //     동일 500유로 클램프) 재사용 = §0/§16 재발명 금지.
     const mealCostEur = dayPlaces.reduce(
-      (sum, p) => sum + (p.isMealSlot && p.mealPrice ? p.mealPrice : 0),
+      (sum, p) => sum + (p.isMealSlot ? sanitizePriceEur(p.mealPrice) : 0),
       0,
     );
     const entranceFeesEur = dayPlaces.reduce(
       (sum, p) =>
-        sum +
-        (!p.isMealSlot && typeof p.estimatedPriceEur === "number"
-          ? p.estimatedPriceEur
-          : 0),
+        sum + (!p.isMealSlot ? sanitizePriceEur(p.estimatedPriceEur) : 0),
       0,
     );
 

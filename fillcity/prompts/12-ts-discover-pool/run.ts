@@ -95,16 +95,7 @@ if (category && !CATEGORY_QUERIES[category]) {
   process.exit(1);
 }
 
-const priceTier = (p: number | null) =>
-  p == null
-    ? "unknown"
-    : p <= 24
-      ? "eco"
-      : p <= 60
-        ? "reason"
-        : p <= 180
-          ? "premium"
-          : "luxury";
+// 🗑️ 2026-08-19 = priceTier()·price_eur 진단 삭제(§19) = 아래와 동일 사유(가격=Gemini 유일 정답).
 
 // ⚠️ 수정금지(승인필요) 2026-06-03 = 중심+반경(km) → 강제 사각형(rectangle viewport) = searchText locationRestriction 용 (= 범위 밖 전세계 누수 차단). 사각형은 크기제한 없음(공식문서).
 const rectFromCenter = (lat: number, lng: number, km: number) => {
@@ -292,12 +283,9 @@ const rectFromCenter = (lat: number, lng: number, km: number) => {
         lat: p.location?.latitude,
         lng: p.location?.longitude,
         review_count: p.userRatingCount ?? null,
-        price_eur: p.priceRange?.endPrice?.units
-          ? parseFloat(p.priceRange.endPrice.units)
-          : null,
-        price_start: p.priceRange?.startPrice?.units
-          ? parseFloat(p.priceRange.startPrice.units)
-          : null,
+        // ⚠️ 수정금지(승인필요) 2026-08-19 사장님 승인(§19) = price_eur/price_start 필드 완전삭제.
+        //   Google priceRange 는 현지통화인데 환산 없이 그대로 읽어 EUR로 오인하던 근본버그
+        //   (서울 청계천 €80,400 실사고, ts-client.ts 와 동일 원인) = 가격은 Gemini만(§20).
         photo_name: p.photos?.[0]?.name || null,
         photo_count: p.photos?.length || 0,
         google_maps_uri: p.googleMapsUri,
@@ -306,10 +294,6 @@ const rectFromCenter = (lat: number, lng: number, km: number) => {
       }))
       .sort((a: any, b: any) => (b.review_count || 0) - (a.review_count || 0));
     const dt = Date.now() - t0;
-    const spread: Record<string, number> = {};
-    for (const p of places)
-      spread[priceTier(p.price_eur)] =
-        (spread[priceTier(p.price_eur)] || 0) + 1;
     const closed = places.filter(
       (p: any) => p.business_status && p.business_status !== "OPERATIONAL",
     ).length;
@@ -321,7 +305,7 @@ const rectFromCenter = (lat: number, lng: number, km: number) => {
       places,
     });
     console.log(
-      `✓ ${d.name} (${dt}ms, ${page}p) ${places.length}곳 | 가격대 ${JSON.stringify(spread)} | 비영업 ${closed}`,
+      `✓ ${d.name} (${dt}ms, ${page}p) ${places.length}곳 | 비영업 ${closed}`,
     );
     console.log(
       `   top3: ${places

@@ -3,6 +3,7 @@
 ⚠️ 2026-06-12 사용자 승인 변경 = 카피 필드명 통폐합 = selection_reason_ko→summary_ko / shortform_ko→editorial_summary (= 실제 DB 컬럼명 통일 = 별칭 폐기 = 후처리 변환 제거)
 ⚠️ 2026-06-18 사장님 승인 변경 = 본문 최상단 ${API_PASS} 출입증 헤더 추가 (= 표준 프롬프트 통과 증표 = AI 임의호출 차단 = 발굴(행=없음) 동적 치환, run.ts 치환 동반)
 ⚠️ 2026-08-07 사장님 승인 = BTS 전용 사본(fillcity-bts) = 카테고리당 TOP 20 → TOP 5 (원본 fillcity/ 는 20 그대로 = 유럽 무영향)
+⚠️ 2026-08-19 사장님 승인 변경 = price_eur 항목에 CURRENCY 강제줄 추가(= 원본 fillcity/01-discover-6cats 와 동일 문구, 서울 청계천 €80,400 실사고 = 원본만 고치고 이 쌍둥이 사본은 빠뜨렸던 구멍 수정)
 
 ══════════════════════════════════════════════════════════════════════════════
 PROMPT 본문:
@@ -45,6 +46,7 @@ For each place include:
 - day_zone: "core" if distance_km_from_center <= 10 (day 1 walkable from city center)
          OR "outskirt" if 10 < distance_km_from_center <= 100 (day 2+ day-trip required)
 - price_eur (입장료 1인 EUR. 식당이면 1인당 평균. 무료=0. 확실하지 않으면 null. ⚠️ shopping 카테고리는 항상 null = 쇼핑은 1인당 가격 개념 없음)
+  ⚠️ CURRENCY = **ALWAYS EUR**, never local currency. 비유로권 도시(도쿄·방콕·서울 등)도 **반드시 EUR 로 환산**해서 답하라.
 
 OUTPUT (strict JSON, no markdown fences):
 {

@@ -363,7 +363,6 @@ const ANCHOR_M = 10; // ⚠️ 수정금지(승인필요) 2026-06-23 사장님 S
           lat: t1.latitude,
           lng: t1.longitude,
           review_count: t1.googleReviewCount,
-          price_eur: t1.priceEur,
           photo_name: t1.photoName,
           google_maps_uri: t1.googleMapsUri,
           business_status: t1.businessStatus,
@@ -372,10 +371,10 @@ const ANCHOR_M = 10; // ⚠️ 수정금지(승인필요) 2026-06-23 사장님 S
       // ⚠️ 사장님 SSOT 2026-06-16·2026-07-09 = 우리 id 직행 UPDATE = TS 전 응답값(PID 포함) 그대로 이 행에 덮음. PID 바뀌어도 id 불변 = 무조건 여기다. 매칭·중복재판별 X = 빗나감 X.
       //   = dupOwner 선조회 폐기 2026-07-09 §19(사장님 SSOT "어디로 갈지 아는 id 에서 결손만 찾아 그 행으로 직행", ag3 와 통일): 추출[1]에서 이미 결손 행의 id 확정 → 여기선 그 id 에 결손만 직행으로 채움.
       //     TS 가 준 PID 가 타도시 기존 행과 충돌하면(같은 장소가 이미 다른 도시에 있음) = 트리거(도시무관 불변1/2/4)가 EXCEPTION → 아래 바깥 try/catch(그 행만 스킵). 그 원행이 정답 = 이 결손행은 07-merge 병합 대상(§20).
-      // ⚠️ 수정금지(승인필요) 2026-06-20 사장님 SSOT = 선별 금지 = TS 응답 전 필드 → 대응 컬럼 새 우선 덮어쓰기(중복요소 = Gemini 1차 → TS 가 뒤=최신=덮음, price 포함 동일 취급).
-      //   가격 = 새 우선 덮어쓰기(=최신최우선, project_price_eur_ssot). shopping=price 안 줌 정합. TS price 거의 null = COALESCE 가 기존 Gemini price 보존.
-      const priceEur =
-        r.seed_category === "shopping" ? null : (t1.priceEur ?? null);
+      // ⚠️ 수정금지(승인필요) 2026-08-19 사장님 승인(엔진결함 근원수정) = 가격은 이 단계에서 절대 안 건드림.
+      //   = 가격의 유일한 정답 = 제미니 하나(§20 SSOT, 2026-08-10 5곳 통일에 이 파일이 빠져있던 구멍을
+      //     TsPlace.priceEur 필드 완전삭제로 원천봉쇄 = ts-client.ts 참조). TS 응답 전 필드 새우선 원칙(§14)은
+      //     price_eur 를 제외한 나머지 필드에 그대로 적용.
       const u = await c.query(
         `UPDATE place_seed_raw SET
         -- ⚠️ 수정금지(승인필요) — TS displayName→name_en (2026-06-17 사장님 SSOT) = name_local은 Gemini전용 (= TS displayName(영어)을 name_en 칸으로 직행 UPDATE)
@@ -386,7 +385,6 @@ const ANCHOR_M = 10; // ⚠️ 수정금지(승인필요) 2026-06-23 사장님 S
         google_place_id = COALESCE($6, google_place_id),
         google_maps_uri = COALESCE($7, google_maps_uri),
         google_review_count = COALESCE($8::integer, google_review_count),
-        price_eur = COALESCE($9::real, price_eur),
         updated_at = NOW()
       WHERE id=$1`,
         // ⚠️ 수정금지(승인필요) — TS displayName→name_en (2026-06-17 사장님 SSOT) = name_local은 Gemini전용 (= TS결과 .nameLocal→.nameEn = TS는 nameLocal=null이므로 nameEn 읽어야 깨짐 방지)
@@ -399,7 +397,6 @@ const ANCHOR_M = 10; // ⚠️ 수정금지(승인필요) 2026-06-23 사장님 S
           t1.googlePlaceId ?? null,
           t1.googleMapsUri ?? null,
           t1.googleReviewCount ?? null,
-          priceEur,
         ],
       );
       if (u.rowCount) tsDone++;

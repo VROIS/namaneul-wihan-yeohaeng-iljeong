@@ -45,6 +45,7 @@ For each place include:
 - day_zone: "core" if distance_km_from_center <= 10 (day 1 walkable from city center)
          OR "outskirt" if 10 < distance_km_from_center <= 100 (day 2+ day-trip required)
 - price_eur (입장료 1인 EUR. 식당이면 1인당 평균. 무료=0. 확실하지 않으면 null. ⚠️ shopping 카테고리는 항상 null = 쇼핑은 1인당 가격 개념 없음)
+  ⚠️ CURRENCY = **ALWAYS EUR**, never local currency. 비유로권 도시(도쿄·방콕·서울 등)도 **반드시 EUR 로 환산**해서 답하라.
 
 OUTPUT (strict JSON, no markdown fences):
 {

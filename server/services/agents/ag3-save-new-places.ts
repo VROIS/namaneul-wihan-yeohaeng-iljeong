@@ -302,7 +302,6 @@ export async function saveNewPlacesToDB(
                 lat: result.latitude,
                 lng: result.longitude,
                 review_count: result.googleReviewCount,
-                price_eur: result.priceEur,
                 photo_name: result.photoName,
                 google_maps_uri: result.googleMapsUri,
                 business_status: result.businessStatus,

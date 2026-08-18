@@ -9,6 +9,7 @@
 = 호출 설정 = 시드 발굴(03) 동일 = gemini-3-flash-preview + googleSearch + responseMimeType:json + temp0.2 + maxOutputTokens 50000 + timeout 420s
 = 이미지(PM) = 의도적 제외 (= GUIDE 아이콘 + 클릭→구글맵 모달이 커버) / PID·URI = 의도적 스킵 (= TS 건건히 회피)
 ⚠️ 2026-06-18 사장님 승인 변경 = 본문 최상단 ${API_PASS} 출입증 헤더 추가 (= 표준 프롬프트 통과 증표 = AI 임의호출 차단 = ${YEAR} 방식 동적 치환, run.ts 치환 동반)
+⚠️ 2026-08-19 사장님 승인 변경 = price_eur 항목에 CURRENCY 강제줄 추가(= 02-enrich-place 와 동일 문구, 서울 청계천 €80,400 실사고 = 형제 파일 전수 미적용 구멍 수정)
 
 ══════════════════════════════════════════════════════════════════════════════
 PROMPT 본문:
@@ -31,5 +32,6 @@ Return STRICT JSON array only (no markdown wrappers). Per restaurant, ONLY these
 - address (FULL Google Maps address: number + street + postal code + city)
 - lat, lng (Google Maps 좌표, decimal 6 자리; 못 찾으면 null)
 - price_eur (1인당 평균 식사가 EUR, grounded; operating/renamed = 현(새) 식당 기준; 모르면 null)
+  ⚠️ CURRENCY = **ALWAYS EUR**, never local currency. 비유로권 도시(도쿄·방콕·서울 등)도 **반드시 EUR 로 환산**해서 답하라.
 INPUT (${COUNT} restaurants): ${INPUT_JSON}
 OUTPUT (JSON array): [{"id":<n>,"closure_status":"operating|temporarily_closed|permanently_gone|renamed","renamed_to":<str|null>,"name_local":"..","address":"..","lat":<n|null>,"lng":<n|null>,"price_eur":<n|null>}]

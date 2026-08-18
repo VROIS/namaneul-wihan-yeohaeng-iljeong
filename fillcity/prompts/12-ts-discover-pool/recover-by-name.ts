@@ -135,9 +135,9 @@ const hkm = (a: any, b: any) => {
       console.log(`  🚫 "${name}" = ${p.businessStatus} = skip`);
       continue;
     }
-    const price = p.priceRange?.endPrice?.units
-      ? parseFloat(p.priceRange.endPrice.units)
-      : null;
+    // ⚠️ 수정금지(승인필요) 2026-08-19 사장님 승인(§19) = price(현지통화→EUR 오독) 완전삭제.
+    //   Google priceRange 는 현지통화인데 환산 없이 그대로 읽어 EUR로 오인하던 근본버그
+    //   (서울 청계천 €80,400 실사고, ts-client.ts 와 동일 원인) = 가격은 Gemini만(§20).
     const dist = p.location
       ? Math.round(
           hkm(cityCenter, {
@@ -147,7 +147,7 @@ const hkm = (a: any, b: any) => {
         ) / 10
       : null;
     console.log(
-      `  ✓ "${name}" → ${p.displayName?.text} | 리뷰 ${p.userRatingCount} | €${price ?? "?"} | ${dist}km | ${p.businessStatus}`,
+      `  ✓ "${name}" → ${p.displayName?.text} | 리뷰 ${p.userRatingCount} | ${dist}km | ${p.businessStatus}`,
     );
     jobs.push({
       cityId,
@@ -161,7 +161,6 @@ const hkm = (a: any, b: any) => {
       googlePlaceId: p.id,
       googleMapsUri: p.googleMapsUri || null,
       googleReviewCount: p.userRatingCount ?? null,
-      priceEur: price,
       dayZone: dist != null && dist <= 10 ? "core" : "outskirt",
       distanceKmFromCenter: dist,
       categoryTags: [category],

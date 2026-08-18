@@ -2,6 +2,7 @@
 ⚠️ 2026-06-12 사용자 승인 변경 = distance_km_from_center 응답 추가 (= 도심거리 = 모든 enrich 필수요소 = 동선 최적화 기본 = 발굴 01-discover 와 동기)
 ⚠️ 2026-06-16 사장님 승인 변경 (6곳) = ① grounding 줄에 ${YEAR}년 ${MONTH}월 동적 현재시점 명시(= 최신 강제, #04·#08 패턴) ② 입력에서 seed_category 제거(= id 에 이미 분류 + 카테고리 주면 shopping 에서 식당/바 가격 오염 실증) ③ 매칭키 = name_local(불변), name_en·name_ko = 가변(= matcher 7단계 정합) ④ "불변/가변" 단어 프롬프트에 미사용(= Gemini "맘대로" 오해 방지) ⑤ price = 식당 식대 / 그 외 입장료 / 무료=0 (= shopping null 은 우리 저장단계 처리) ⑥ name_local 응답 최상단. (= geminiCurate ${MONTH} 치환 1줄 동반 추가)
 ⚠️ 2026-06-18 사장님 승인 변경 = 본문 최상단 ${API_PASS} 출입증 헤더 추가 (= 표준 프롬프트 통과 증표 = AI 임의호출 차단 = ${YEAR} 방식 동적 치환, run.ts/gemini-curate.ts 양쪽 치환 동반)
+⚠️ 2026-08-19 사장님 승인 변경 = price_eur 항목에 CURRENCY 강제줄 추가(= MIX 프롬프트와 동일 문구, 서울 청계천 €80,400 실사고 = 이 파일에만 강제문구 누락됐던 구멍 수정)
 
 ══════════════════════════════════════════════════════════════════════════════
 PROMPT 본문:
@@ -51,6 +52,7 @@ ${API_PASS}
 4. address = 번지부터 국가까지 완전 (= 부분 주소 X)
 5. summary_ko / editorial_summary = 한국어만 (= 영어 단어 혼용 X)
 6. price_eur = 식당이면 1인 식대, 그 외 장소는 실제 입장료 = EUR 정수 (= 추정 생성 X). 무료·입장료 없는 장소(광장·거리·핫스팟 등) = 0.
+   ⚠️ CURRENCY = **ALWAYS EUR**, never local currency. 비유로권 도시(도쿄·방콕·서울 등)도 **반드시 EUR 로 환산**해서 답하라.
 7. distance_km_from_center = 도심 중심으로부터 직선거리 km (= haversine, 소수 1 자리, 필수)
 8. 응답 = 위 JSON 만 (= 설명/주석/마크다운 X)
 

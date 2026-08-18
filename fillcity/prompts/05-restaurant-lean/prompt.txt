@@ -37,6 +37,7 @@ For each place include only:
 - name_ko (한국 여행자가 부르는 이름)
 - address (FULL: 번지 + 거리 + 우편번호 + 도시 + 국가)
 - price_eur (1인당 평균 EUR 상한가. 확실하지 않으면 null)
+  ⚠️ CURRENCY = **ALWAYS EUR**, never local currency. 비유로권 도시(도쿄·방콕·서울 등)도 **반드시 EUR 로 환산**해서 답하라.
 - distance_km_from_center (haversine from CITY_CENTER, 1 decimal, <= 50)
 - day_zone: distance_km_from_center <= 10 이면 "core", 아니면 "outskirt"
 - summary_ko (한국어 한 줄 = 인스타 성지/네이버 블로그/유튜브 vlog 사회적 검증. = DB summary_ko)

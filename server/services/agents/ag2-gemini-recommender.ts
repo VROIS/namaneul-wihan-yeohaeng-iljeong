@@ -242,7 +242,8 @@ async function fetchFromPlaceSeedRaw(
   //   = 시뮬 검증(8개 도시 48케이스, 2026-08-18): 기존 방식 대비 0건 악화, 다수 개선(LA 등)·다수 동일(파리 등).
   // = 풀 = (city_id=요청도시) ∪ (좌표 유효 100km 이내) = 순수 확장(자기도시 행 손실 0) = 장소는 글로벌(도시번호 소유 아님)
   // = 크로스도시 행 day_zone = 요청 도시 중심 기준 메모리 재계산(core ≤10km / outskirt 10~100km, recalcCrossCityZone) = DB 쓰기 절대 없음
-  // = zone NULL 행(day_zone 미기록) = 풀 제외(기존 동작 보존, 클러스터링에 dayZone 표기가 필요한 하위 소비처 있어 안전 유지)
+  // = zone NULL 행(day_zone 미기록) = 아래 275행 필터삭제(2026-08-19)로 더 이상 풀에서 제외되지 않음(옛 "풀 제외" 설명 폐기).
+  //   PID게이트(249행)가 좌표 안전을 이미 보장하므로 NULL-zone 행도 rank/RC 순위대로 정상 픽업 대상.
   // = 정렬 = 식당 RC DESC NULLS LAST(2026-06-02 SSOT 유지) / 비식당 rank ASC NULLS LAST + 동순위 RC DESC(크로스도시 rank 혼합 대비)
   const selectByDayZone = async (cat: string, slots: number) => {
     const isRestaurant = cat === "restaurant";
@@ -272,9 +273,15 @@ async function fetchFromPlaceSeedRaw(
             (a.rank ?? Number.MAX_SAFE_INTEGER) -
               (b.rank ?? Number.MAX_SAFE_INTEGER) || rc(b) - rc(a),
     );
-    const picked = rows
-      .filter((r) => r.dayZone === "core" || r.dayZone === "outskirt")
-      .slice(0, slots);
+    // ⚠️ 수정금지(승인필요) 2026-08-19 사장님 승인(엔진결함 근원수정) = day_zone 필터 삭제(옛 2026-05-21 §19).
+    //   = 근본: day_zone은 좌표(원천데이터)에서 계산한 파생값을 미리 저장해둔 캐시일 뿐인데, 이 캐시를
+    //     채우는 통로가 5~6곳으로 늘면서 일부가 빠뜨림(서울 쇼핑 TOP20 중 18곳 등 958행 실측) → 카테고리는
+    //     맞는데 이 무관한 지리캐시가 비었다는 이유만으로 후보에서 통째 탈락하던 사고.
+    //   = 안전 근거(실측): PID 있는 행은 좌표 유효율 100%(3,249/3,249, DB-only 10도시) = 위 검증(PID)게이트가
+    //     이미 좌표 안전을 보장 = 별도 좌표검사도 불필요. day_zone 값 자체는 실제 동선조립(route-local.ts
+    //     Lloyd's, 좌표 직접 사용)에 쓰이지 않음(전수 확인) = 제거해도 동선 품질 영향 없음(오히려 성수동류
+    //     진짜 지역클러스터가 이 필터에 막혀 엉뚱한 카테고리로 대체되던 부작용 해소).
+    const picked = rows.slice(0, slots);
     const coreRows = picked.filter((r) => r.dayZone === "core");
     const outskirtRows = picked.filter((r) => r.dayZone === "outskirt");
     const crossCount = picked.filter((r) => r.cityId !== cid).length;
@@ -362,12 +369,9 @@ async function fetchFromPlaceSeedRaw(
       );
     for (const r of extra) recalcCrossCityZone(r, cid, center);
     const rcOf = (r: any) => r.googleReviewCount ?? -1;
+    // ⚠️ 2026-08-19 = day_zone 필터 삭제(위 selectByDayZone 동일 사유·동일 승인 §19).
     const topUp = extra
-      .filter(
-        (r) =>
-          !pickedIds.has(r.id) &&
-          (r.dayZone === "core" || r.dayZone === "outskirt"),
-      )
+      .filter((r) => !pickedIds.has(r.id))
       .sort(
         (a, b) =>
           (a.rank ?? Number.MAX_SAFE_INTEGER) -
