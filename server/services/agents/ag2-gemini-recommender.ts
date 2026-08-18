@@ -8,12 +8,16 @@
 
 import type { AG1Output, PlaceResult, SeedCategory } from "./types";
 import { MEAL_BUDGET } from "./types";
+// ⚠️ 수정금지(승인필요) 2026-08-17 사장님 승인(실측 버그수정) = MIX(pipeline-v3) 3개 파일과 동일하게 정규화 필수.
+//   = 실사용자 클라이언트가 소문자(luxury/comfort 등)로 보내는데, MEAL_BUDGET 키는 PascalCase 4종만 있어서
+//     정규화 없이 그대로 인덱싱하면 undefined→".min 읽기 실패" 크래시(토론토·나이로비 실측, DB-only 경로만 누락돼있었음).
+import { normalizeTravelStyle } from "./pipeline-v3-types";
 // ⚠️ 수정금지(승인필요) 2026-05-20 = 이미지 폴백 단일 SSOT (= Google 1 > WK 2)
-import { pickPlaceImage } from "../shared/place-image";
+import { pickPlaceImage, loadImagePidMap } from "../shared/place-image";
 // ⚠️ 수정금지(승인필요) 2026-05-06 = 사용자 의도 = AG2 데이터 출처 = place_seed_raw 우선
 import { db } from "../../db";
 import { placeSeedRaw } from "@shared/schema";
-import { eq, and, between, sql, inArray } from "drizzle-orm";
+import { eq, and, between, sql, inArray, isNotNull } from "drizzle-orm";
 import { findCityUnified } from "../city-resolver";
 // ⚠️ 2026-07-17 사장님 확정 = 슬롯 풀 = (city_id=요청도시) ∪ (중심 100km) 합집합 = shared/pool-radius 단일 SSOT(§16)
 import { getPoolContext, recalcCrossCityZone } from "../shared/pool-radius";
@@ -32,7 +36,9 @@ import { VIBE_PRIMARY_CATEGORY } from "@shared/vibe-category";
  */
 // ⚠️ export 이유(2026-07-30) = 여정 플래너 상단 도시버튼(GET /api/cities/ready)이 **같은 기준 1벌**을 써야 함(§16).
 //   숫자를 그쪽에 다시 적으면 두 벌이 되어 기준이 갈린다.
-export const READY_THRESHOLD = 300;
+// ⚠️ 수정금지(승인필요) 2026-08-17 사장님 승인 = 300→200 하향. 나이로비(214행) 등 카테고리별 실측(§ 나이로비
+//   이미지완비 rank 깊이 조사) 결과 200행 수준이면 극단적 단일카테고리 편중이 아닌 한 3일 여정 커버 가능 확인.
+export const READY_THRESHOLD = 200;
 
 export async function isCityReady(
   destination: string,
@@ -196,13 +202,13 @@ async function fetchFromPlaceSeedRaw(
   // ⚠️ 수정금지(승인필요) 2026-05-19 = budget 매트릭스 (= 4:6 split)
   // 식당 = travelStyle MEAL_BUDGET tier 별 price_eur 범위로 필터 = rank 제한 X
   // 비식당 = rank 1-20 유지 (= FE 우선 노출 순위)
-  const budgetTier = MEAL_BUDGET[formData.travelStyle];
+  const budgetTier = MEAL_BUDGET[normalizeTravelStyle(formData.travelStyle)];
   console.log(
     `[AG2-DB] travelStyle=${formData.travelStyle} = price €${budgetTier.min}-${budgetTier.max} (lunch ≤€${budgetTier.lunch} / dinner ≤€${budgetTier.dinner})`,
   );
 
-  // ⚠️ 수정금지(승인필요) 2026-05-21 = Phase E-1 = dayZone 균등 (= 사용자 SSOT)
-  // 식당 = budget WHERE + dayZone 균등 (= core 4 + outskirt 2 = 일자별 zone 매칭 자동)
+  // (옛 "dayZone 균등 core4+outskirt2" 주석 = 고정비율 로직 삭제와 함께 폐기 = 2026-08-18 §19.
+  //  PID공유 폴백 목록 로드 = 행 확정 후 1회로 이동 = 2026-08-18 §19)
   const SELECT_COLS = {
     id: placeSeedRaw.id,
     // ⚠️ 2026-07-17 = cityId 프로젝션 추가 = 크로스도시 행 판별(zone 재계산·로그) 용
@@ -227,17 +233,28 @@ async function fetchFromPlaceSeedRaw(
     // = distanceKmFromCenter 2026-05-28 제거 = PlaceResult 매핑 X = 데드 컬럼 (= ag3/place-upsert 별도 SELECT)
   };
 
-  // ⚠️ 수정금지(승인필요) 2026-07-17 사장님 확정 = 식당 + 비식당 = 합집합 풀 + 유효 zone 분리 통합 헬퍼(§16 pool-radius)
+  // ⚠️ 수정금지(승인필요) 2026-08-18 사장님 승인(실측 버그수정, §systemic) = core:outskirt 고정 2:3 비율 삭제.
+  //   = 사유: 이 비율은 "도심 후보가 항상 외곽의 2배"라는 암묵적 가정 = 밀집형 도시(파리 등)엔 맞지만
+  //     LA 같은 스프롤형 도시(비식당 카테고리 core 0~4곳 vs outskirt 20+곳)는 이 가정이 깨져서
+  //     outskirt 여유가 있어도 슬롯이 빈 채로 버려짐(2026-08-18 실측). 날짜별 지리 묶기는 이미 후속 단계
+  //     (route-local.ts buildRouteLocal, farthest-first+Lloyd)가 도시 형태 무관하게 처리하므로,
+  //     여기서는 zone 구분 없이 랭크/RC 상위 slots개를 통합 선정 = 도시 형태 무관 견고화.
+  //   = 시뮬 검증(8개 도시 48케이스, 2026-08-18): 기존 방식 대비 0건 악화, 다수 개선(LA 등)·다수 동일(파리 등).
   // = 풀 = (city_id=요청도시) ∪ (좌표 유효 100km 이내) = 순수 확장(자기도시 행 손실 0) = 장소는 글로벌(도시번호 소유 아님)
-  // = 크로스도시 행 day_zone = 요청 도시 중심 기준 메모리 재계산(core ≤10km / outskirt 10~100km) = DB 쓰기 절대 없음
-  // = 자기도시 행 = 저장 day_zone 그대로 + zone NULL 행 풀 제외(기존 동작 보존)
-  // = core 2/3 + outskirt 1/3 (= 사용자 SSOT = AG3 Day 2 outskirt pool 확보)
+  // = 크로스도시 행 day_zone = 요청 도시 중심 기준 메모리 재계산(core ≤10km / outskirt 10~100km, recalcCrossCityZone) = DB 쓰기 절대 없음
+  // = zone NULL 행(day_zone 미기록) = 풀 제외(기존 동작 보존, 클러스터링에 dayZone 표기가 필요한 하위 소비처 있어 안전 유지)
   // = 정렬 = 식당 RC DESC NULLS LAST(2026-06-02 SSOT 유지) / 비식당 rank ASC NULLS LAST + 동순위 RC DESC(크로스도시 rank 혼합 대비)
   const selectByDayZone = async (cat: string, slots: number) => {
     const isRestaurant = cat === "restaurant";
-    const coreSlots = Math.ceil(slots * (2 / 3));
-    const outskirtSlots = slots - coreSlots;
-    const baseWhere = [poolWhere, eq(placeSeedRaw.seedCategory, cat)];
+    // ⚠️ 수정금지(승인필요) 2026-08-18 사장님 승인 = 검증(PID) 게이트 = 미검증(TS 한 번도 안 거친) 행은 손님상 서빙 금지.
+    //   = 근본: 좌표위조형 오염(키이우 수도원이 토론토 시내 좌표로 rank5 서빙된 실사고)은 거리검사로 못 잡음 —
+    //     공통분모는 "PID 없음 = 검증 이력 0". 실측 부수피해 = 유럽5 상위20위권 1건뿐(식당은 RC정렬로 이미 실질 배제).
+    //   = 미검증 정상행은 TS 검증(PID 획득)되는 순간 자동 복귀 = 도시별 예외 없음 = 전 도시 보편 규칙.
+    const baseWhere = [
+      poolWhere,
+      eq(placeSeedRaw.seedCategory, cat),
+      isNotNull(placeSeedRaw.googlePlaceId),
+    ];
     if (isRestaurant)
       baseWhere.push(
         between(placeSeedRaw.priceEur, budgetTier.min, budgetTier.max),
@@ -255,19 +272,17 @@ async function fetchFromPlaceSeedRaw(
             (a.rank ?? Number.MAX_SAFE_INTEGER) -
               (b.rank ?? Number.MAX_SAFE_INTEGER) || rc(b) - rc(a),
     );
-    const coreRows = rows
-      .filter((r) => r.dayZone === "core")
-      .slice(0, coreSlots);
-    const outskirtRows = rows
-      .filter((r) => r.dayZone === "outskirt")
-      .slice(0, outskirtSlots);
-    const picked = [...coreRows, ...outskirtRows];
+    const picked = rows
+      .filter((r) => r.dayZone === "core" || r.dayZone === "outskirt")
+      .slice(0, slots);
+    const coreRows = picked.filter((r) => r.dayZone === "core");
+    const outskirtRows = picked.filter((r) => r.dayZone === "outskirt");
     const crossCount = picked.filter((r) => r.cityId !== cid).length;
     const budgetLabel = isRestaurant
       ? ` (budget €${budgetTier.min}-${budgetTier.max})`
       : " (rank ASC)";
     console.log(
-      `[AG2-DB] ${cat}: core ${coreRows.length}/${coreSlots} + outskirt ${outskirtRows.length}/${outskirtSlots}${budgetLabel}${crossCount ? ` [크로스도시 ${crossCount}곳 포함]` : ""}`,
+      `[AG2-DB] ${cat}: 통합 ${picked.length}/${slots}(core ${coreRows.length}+outskirt ${outskirtRows.length})${budgetLabel}${crossCount ? ` [크로스도시 ${crossCount}곳 포함]` : ""}`,
     );
     return picked;
   };
@@ -320,11 +335,58 @@ async function fetchFromPlaceSeedRaw(
     );
   }
 
-  // ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = 부족해도 그대로 반환 (= Gemini fallback X)
-  // = 빈 슬롯 가능 = 사용자 표시 = 솔직 (= 환각 채움 X)
-  console.log(
-    `[AG2-DB] 행 수 = ${allRows.length}/${totalSlots} (= 부족해도 그대로 반환)`,
-  );
+  // ⚠️ 수정금지(승인필요) 2026-08-18 사장님 승인 = 카테고리 공급부족 시 다른 카테고리에서 보충(도시 무관 보편 규칙).
+  //   = 실사고: 토론토 Attraction 100% + 빡빡 밀도 = 31슬롯 요청에 attraction 공급 8행뿐 → 14곳 여정(슬롯 2/3 증발).
+  //     취향 카테고리 우선 선정은 그대로, **모자란 만큼만** 나머지 카테고리 상위(rank ASC)로 채움 = 환각 채움 아님(전부 검증행).
+  //   = 옛 무보충 단독 정책 폐기 = 2026-08-18 §19(공급부족 도시에서 여정 반토막).
+  if (!pinIds.length && allRows.length < totalSlots) {
+    const deficit = totalSlots - allRows.length;
+    const pickedIds = new Set(allRows.map((r: any) => r.id));
+    const FILL_CATS = [
+      "heritage",
+      "hotspot",
+      "attraction",
+      "adventure",
+      "healing",
+      "shopping",
+    ];
+    const extra: any[] = await db!
+      .select(SELECT_COLS)
+      .from(placeSeedRaw)
+      .where(
+        and(
+          poolWhere,
+          inArray(placeSeedRaw.seedCategory, FILL_CATS),
+          isNotNull(placeSeedRaw.googlePlaceId),
+        ),
+      );
+    for (const r of extra) recalcCrossCityZone(r, cid, center);
+    const rcOf = (r: any) => r.googleReviewCount ?? -1;
+    const topUp = extra
+      .filter(
+        (r) =>
+          !pickedIds.has(r.id) &&
+          (r.dayZone === "core" || r.dayZone === "outskirt"),
+      )
+      .sort(
+        (a, b) =>
+          (a.rank ?? Number.MAX_SAFE_INTEGER) -
+            (b.rank ?? Number.MAX_SAFE_INTEGER) || rcOf(b) - rcOf(a),
+      )
+      .slice(0, deficit);
+    allRows.push(...topUp);
+    console.log(
+      `[AG2-DB] 🧩 공급부족 보충 = 취향카테고리 ${totalSlots - deficit} + 타카테고리 상위 ${topUp.length}`,
+    );
+  }
+  console.log(`[AG2-DB] 행 수 = ${allRows.length}/${totalSlots}`);
+
+  // ⚠️ 수정금지(승인필요) 2026-08-18 사장님 승인 = PID공유 폴백용 R2 실존목록 = 행 확정 **후** 등장한 도시 전부 로드
+  //   (요청도시만 로드하던 옛 방식 = 크로스도시 행 폴백 무력화 = 폐기 2026-08-18 §19. 도시당 60초 캐시 = listR2 최소).
+  const imagePidMap = await loadImagePidMap([
+    cid,
+    ...allRows.map((r: any) => r.cityId),
+  ]);
 
   // PlaceResult 형식 변환 (= AG3 호환)
   const places: PlaceResult[] = allRows.map((r: any, i: number) => {
@@ -343,8 +405,8 @@ async function fetchFromPlaceSeedRaw(
       personaFitReason: r.summaryKo || "",
       tags: isFood ? ["restaurant", "food"] : [],
       vibeTags: isFood ? ["Foodie" as const] : [],
-      // ⚠️ 수정금지(승인필요) 2026-05-20 = pickPlaceImage 단일 SSOT (= Google 1 > WK 2)
-      image: pickPlaceImage(r),
+      // ⚠️ 수정금지(승인필요) 2026-05-20 = pickPlaceImage 단일 SSOT (= Google 1 > 2026-08-18 PID공유 폴백)
+      image: pickPlaceImage(r, imagePidMap),
       priceEstimate: r.priceEur ? `€${r.priceEur}` : "",
       estimatedPriceEur: r.priceEur ?? undefined,
       seedCategory: r.seedCategory as SeedCategory,

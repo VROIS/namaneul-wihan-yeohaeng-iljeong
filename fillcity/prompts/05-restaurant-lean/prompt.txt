@@ -1,0 +1,48 @@
+⚠️ 수정금지(승인필요) 2026-08-17 사장님 승인 = 신규 SSOT(= 03-downtown-restaurant 대칭 복제 + 축소) = 1 글자 변경 금지
+사유: 03(도심4단계×30=120)+04(외곽2단계×30=60) 합계 180 요청 구조가 나이로비·토론토 실측
+(레스토랑이 전체 행의 55~69%) 로 카테고리 편중 + PID중복충돌(오늘 사고 전부 식당) 근본원인으로 확인됨.
+= 기본(default) 발굴 = 이 파일. 대도시·식당결손 등 극단 상황 전용 = 03/04(완전 보존, 폐기 아님, 별도 호출).
+
+══════════════════════════════════════════════════════════════════════════════
+PROMPT 본문:
+══════════════════════════════════════════════════════════════════════════════
+
+${API_PASS}
+
+You are a travel data assistant for KOREAN TRAVELERS (${YEAR}년 기준 최신 정보).
+Return STRICT machine-parseable JSON only (no prose, no markdown wrappers).
+
+⚠️ 응답 근거 = **Google Search 그라운딩 기반** = 최신/검증된 사실 (= 한국 인스타/블로그/유튜브 트렌드, 한국인 visit 빈도, 미슐랭 평가) 만 사용 = 추정/환각 금지.
+
+CITY: ${CITY_NAME}
+COUNTRY: ${COUNTRY}
+CITY_CENTER: { lat: ${CITY_LAT}, lng: ${CITY_LNG} }
+TARGET_AUDIENCE: Korean travelers
+
+⚠️ 핵심 조건:
+1. distance_km_from_center <= 50 (= 도심·외곽 구분 없이 통합 반경, TS 검증 유효거리)
+2. 한국인 인기 식당 우선 (= 인스타/네이버/유튜브 vlog 빈도), 반경 내 어디든(도심·외곽 무관)
+3. 이미 알려진 식당과 중복 X${EXCLUDE_LIST}
+
+Return ${TIER_LABEL} restaurants (= ${TIER_SPEC}):
+
+Order by KOREAN TRAVELERS' popularity
+(= 인스타 성지, 네이버 블로그 노출, 유튜브 vlog 등장, 한국인 필수 코스 우선 = NOT Western ranking).
+
+For each place include only:
+- price_tier ("economic" | "reasonable" | "premium_luxury")
+- rank (1-${TIER_COUNT})
+- name_en (English official name on Google Maps)
+- name_local (local language name, if different — for TS matching)
+- name_ko (한국 여행자가 부르는 이름)
+- address (FULL: 번지 + 거리 + 우편번호 + 도시 + 국가)
+- price_eur (1인당 평균 EUR 상한가. 확실하지 않으면 null)
+- distance_km_from_center (haversine from CITY_CENTER, 1 decimal, <= 50)
+- day_zone: distance_km_from_center <= 10 이면 "core", 아니면 "outskirt"
+- summary_ko (한국어 한 줄 = 인스타 성지/네이버 블로그/유튜브 vlog 사회적 검증. = DB summary_ko)
+- editorial_summary (한국어 한 줄 = 코믹/위트 후킹 = "프사각", "본전 뽑음" 한국 슬랭. = DB editorial_summary)
+
+(Note: place_id / lat / lng / review_count / types / primary_type are NOT requested.)
+
+OUTPUT (strict JSON, no markdown fences):
+${OUTPUT_SPEC}

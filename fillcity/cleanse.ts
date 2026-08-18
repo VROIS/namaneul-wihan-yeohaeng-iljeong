@@ -146,41 +146,47 @@ if (!cityId) {
       continue;
     }
     // ⚠️ shopping price NULL 강제 = SQL CASE($12) 단일 처리 (TS 삼항 중복 제거 = /simplify 2026-06-23).
-    const u = await c.query(
-      `UPDATE place_seed_raw SET
-        name_local = COALESCE(NULLIF($2,''), name_local),
-        name_en = COALESCE(NULLIF($3,''), name_en),
-        name_ko = COALESCE(NULLIF($4,''), name_ko),
-        address = COALESCE(NULLIF($5,''), address),
-        latitude = COALESCE($6::real, latitude),
-        longitude = COALESCE($7::real, longitude),
-        summary_ko = COALESCE(NULLIF($8,''), summary_ko),
-        editorial_summary = COALESCE(NULLIF($9,''), editorial_summary),
-        -- ⚠️ 수정금지(승인필요) 2026-06-23 사장님 SSOT = shopping = price 강제 NULL (§15 = 쇼핑 1인가격 개념없음).
-        --   = $12(isShopping) true 면 무조건 NULL SET / false 면 Gemini값 새우선 COALESCE.
-        price_eur = CASE WHEN $12::boolean THEN NULL ELSE COALESCE($10::real, price_eur) END,
-        distance_km_from_center = COALESCE($11::numeric, distance_km_from_center),
-        updated_at = NOW()
-      WHERE id=$1`,
-      [
-        r.id,
-        g.nameLocal ?? null,
-        g.nameEn ?? null,
-        g.nameKo ?? null,
-        g.address ?? null,
-        g.latitude ?? null,
-        g.longitude ?? null,
-        g.summaryKo ?? null,
-        g.editorialSummary ?? null,
-        g.priceEur ?? null,
-        g.distanceKmFromCenter ?? null,
-        r.seed_category === "shopping",
-      ],
-    );
-    if (u.rowCount) done++;
-    console.log(
-      `  + 교정 id=${r.id} ${g.nameEn || r.name_en} (price €${r.price_eur}→€${r.seed_category === "shopping" ? "NULL" : (g.priceEur ?? "?")})`,
-    );
+    // ⚠️ 수정금지(승인필요) 2026-08-17 사장님 승인 = try/catch 추가(§45 TS단계·247줄 아래와 동일 패턴 재사용, §16) = 이 직행 UPDATE도
+    //   트리거([중복차단], 예: 다른 도시의 동명 장소와 불변5 충돌) 예외를 못 잡아 1행 문제로 전체 배치(184곳)가 죽던 결함 수정(2026-08-17 토론토 실행 실측).
+    try {
+      const u = await c.query(
+        `UPDATE place_seed_raw SET
+          name_local = COALESCE(NULLIF($2,''), name_local),
+          name_en = COALESCE(NULLIF($3,''), name_en),
+          name_ko = COALESCE(NULLIF($4,''), name_ko),
+          address = COALESCE(NULLIF($5,''), address),
+          latitude = COALESCE($6::real, latitude),
+          longitude = COALESCE($7::real, longitude),
+          summary_ko = COALESCE(NULLIF($8,''), summary_ko),
+          editorial_summary = COALESCE(NULLIF($9,''), editorial_summary),
+          -- ⚠️ 수정금지(승인필요) 2026-06-23 사장님 SSOT = shopping = price 강제 NULL (§15 = 쇼핑 1인가격 개념없음).
+          --   = $12(isShopping) true 면 무조건 NULL SET / false 면 Gemini값 새우선 COALESCE.
+          price_eur = CASE WHEN $12::boolean THEN NULL ELSE COALESCE($10::real, price_eur) END,
+          distance_km_from_center = COALESCE($11::numeric, distance_km_from_center),
+          updated_at = NOW()
+        WHERE id=$1`,
+        [
+          r.id,
+          g.nameLocal ?? null,
+          g.nameEn ?? null,
+          g.nameKo ?? null,
+          g.address ?? null,
+          g.latitude ?? null,
+          g.longitude ?? null,
+          g.summaryKo ?? null,
+          g.editorialSummary ?? null,
+          g.priceEur ?? null,
+          g.distanceKmFromCenter ?? null,
+          r.seed_category === "shopping",
+        ],
+      );
+      if (u.rowCount) done++;
+      console.log(
+        `  + 교정 id=${r.id} ${g.nameEn || r.name_en} (price €${r.price_eur}→€${r.seed_category === "shopping" ? "NULL" : (g.priceEur ?? "?")})`,
+      );
+    } catch (e: any) {
+      console.log(`  X 정제 UPDATE 실패 id=${r.id} ${r.name_en}: ${e.message}`);
+    }
   }
   console.log(
     `\n=== #1b 정제 결과 = 전체 ${rows.length}곳 → Gemini 재검증 정정 ${done}곳 (외부호출 = Gemini만, TS·PM 0) ===`,

@@ -37,11 +37,21 @@ const argv = Object.fromEntries(
 const cityId = Number(argv["city-id"] || 19);
 const apply = argv["apply"] === "true";
 // ⚠️ 수정금지(승인필요) = --only-id=N = 단일 행 격리 실증용 (사장님 승인 2026-06-16). 미지정 시 전체 풀(기존 동작 불변).
-const onlyId = argv["only-id"] ? Number(argv["only-id"]) : null;
+// ⚠️ 수정금지(승인필요) 2026-08-18 사장님 승인(정규화) = --ids=a,b,c 정밀 타격 모드 = 노출 상위 구멍만 지정 수리
+//   (표준풀 안에서 id 목록으로 한정 = 외부호출 최소단위 단계실행). --only-id 는 --ids 1개짜리와 동일 처리로 흡수.
+const onlyIds: number[] | null = argv["ids"]
+  ? String(argv["ids"])
+      .split(",")
+      .map((s) => Number(s.trim()))
+      .filter(Number.isFinite)
+  : argv["only-id"]
+    ? [Number(argv["only-id"])]
+    : null;
+const onlyId = onlyIds && onlyIds.length === 1 ? onlyIds[0] : null; // 로그 표기 호환
 // #45 식당 범위 = 항상 band 30/90/30(=150) 단일(추출 SQL rest CTE) = 항상 순수 Gemini·TS·PM 외부호출. (사장님 SSOT "원복" 2026-06-21 §19·§16)
 // ⚠️ 수정금지(승인필요) = 출입증 키발급 날짜 inputDate (= YYYY-MM-DD = issue-api-key.ts 검문 형식). 함수 상단 1회 선언 = 모든 issueApiKey 호출 공유.
 const inputDate = new Date().toISOString().slice(0, 10);
-const SIXCAT = [
+const SIXCAT_ALL = [
   "heritage",
   "hotspot",
   "attraction",
@@ -49,6 +59,16 @@ const SIXCAT = [
   "healing",
   "shopping",
 ];
+// ⚠️ 수정금지(승인필요) 2026-08-18 사장님 승인(스킬 조정 = 180규격·단계실행) = --cats=a,b 카테고리 선택 +
+//   --skip-restaurant 식당 제외. 미지정 = 기존 전체(불변). 사유 = 외부호출을 단계별 최소단위로 나눠
+//   전<>후 비교하며 실행(일괄 금지, 사장님 지시) + "식당 제외" 처방 도시(LA·토론토) 지원.
+const SIXCAT = argv["cats"]
+  ? String(argv["cats"])
+      .split(",")
+      .map((s) => s.trim())
+      .filter((s) => SIXCAT_ALL.includes(s))
+  : SIXCAT_ALL;
+const skipRestaurant = argv["skip-restaurant"] === "true";
 const ANCHOR_M = 10; // ⚠️ 수정금지(승인필요) 2026-06-23 사장님 SSOT = 좌표 앵커 무조건 10m(매칭기준 동일=도심밀집 환각차단).
 
 (async () => {
@@ -95,17 +115,25 @@ const ANCHOR_M = 10; // ⚠️ 수정금지(승인필요) 2026-06-23 사장님 S
              CASE WHEN price_eur <= 24 THEN 'eco' WHEN price_eur <= 60 THEN 'reason' ELSE 'premium' END AS band
       FROM place_seed_raw WHERE city_id=$1
         AND seed_category NOT IN ('bts_army_zone','bts_merch_store','bts_venue')
-        -- ⚠️ 수정금지(승인필요) = --only-id 지정 시 단일 행만 (격리 실증). 미지정($3=NULL) 시 전체(기존 불변).
-        AND ($3::bigint IS NULL OR id=$3::bigint)
+        -- ⚠️ 2026-08-18 사장님 승인 = 격리행(wrong-city-suspect) 제외 = 쓰레기 행에 유료호출 낭비 차단
+        AND NOT (COALESCE(phase_tags,'{}') && ARRAY['wrong-city-suspect'])
+        -- ⚠️ 수정금지(승인필요) = --ids/--only-id 지정 시 그 행들만 (정밀 타격/격리 실증). 미지정($3=NULL) 시 전체(기존 불변).
+        AND ($3::bigint[] IS NULL OR id = ANY($3::bigint[]))
     ),
     sixcat AS (
+      -- ⚠️ 2026-08-18 사장님 승인 = 저장 rank "순서"는 유지하되 격리행이 점유한 번호 갭을 건너뛰는 유효순위 상위 20
+      --   (격리행이 rank 1~30을 점유해 신규 발굴행(rank 31+)이 통째로 추출 누락되던 결함 = 시카고 실측).
       SELECT id, name_local, name_en, address, lat, lng, price_eur, rc, google_place_id, google_maps_uri, seed_category,
              image_url, distance_km_from_center, summary_ko, editorial_summary
-      FROM base WHERE seed_category = ANY($2::text[]) AND rank BETWEEN 1 AND 20
+      FROM (
+        SELECT *, ROW_NUMBER() OVER (PARTITION BY seed_category ORDER BY rank ASC NULLS LAST) AS eff_rank
+        FROM base WHERE seed_category = ANY($2::text[])
+      ) x WHERE eff_rank <= 20
     ),
     rest_ranked AS (
+      -- ⚠️ 2026-08-18 사장님 승인 = $4(skip-restaurant)=true 면 식당 풀 자체를 비움(LA·토론토 "식당 제외" 처방).
       SELECT *, ROW_NUMBER() OVER (PARTITION BY band ORDER BY rank ASC) AS band_rn
-      FROM base WHERE seed_category='restaurant' AND price_eur IS NOT NULL
+      FROM base WHERE seed_category='restaurant' AND price_eur IS NOT NULL AND NOT $4::boolean
     ),
     -- 식당 = band 30/90/30 단일. (사장님 SSOT "원복" 2026-06-21 §19)
     rest AS (
@@ -141,7 +169,7 @@ const ANCHOR_M = 10; // ⚠️ 수정금지(승인필요) 2026-06-23 사장님 S
       OR summary_ko IS NULL OR summary_ko='' OR editorial_summary IS NULL OR editorial_summary=''
     )
     ORDER BY seed_category, rc DESC NULLS LAST`,
-      [cityId, SIXCAT, onlyId],
+      [cityId, SIXCAT, onlyIds, skipRestaurant],
     )
   ).rows;
 
@@ -220,38 +248,46 @@ const ANCHOR_M = 10; // ⚠️ 수정금지(승인필요) 2026-06-23 사장님 S
     // ⚠️ 사장님 SSOT 2026-06-16 = 우리 id 직행 UPDATE (= 매칭 X). id=탄생 고유이름=불변 목적지 = 매칭(upsertPlace)이 다른 행으로 빗나감 방지. 신규 INSERT 없음.
     // ⚠️ 수정금지(승인필요) 2026-06-20 사장님 SSOT = 선별 금지 = Gemini 응답 전 필드 → 대응 컬럼 새 우선(COALESCE 새값,기존) 순서대로 덮어쓰기.
     //   = Gemini만 주는 요소(name_local·distance·price)가 여기서 채워짐 / name_en 은 1차(뒤 TS displayName 이 최종 덮음). §14 새우선.
-    const u = await c.query(
-      `UPDATE place_seed_raw SET
-        name_local = COALESCE(NULLIF($2,''), name_local),
-        name_en = COALESCE(NULLIF($3,''), name_en),
-        name_ko = COALESCE(NULLIF($4,''), name_ko),
-        address = COALESCE(NULLIF($5,''), address),
-        latitude = COALESCE($6::real, latitude),
-        longitude = COALESCE($7::real, longitude),
-        summary_ko = COALESCE(NULLIF($8,''), summary_ko),
-        editorial_summary = COALESCE(NULLIF($9,''), editorial_summary),
-        price_eur = COALESCE($10::real, price_eur),
-        distance_km_from_center = COALESCE($11::numeric, distance_km_from_center),
-        updated_at = NOW()
-      WHERE id=$1`,
-      [
-        r.id,
-        g.nameLocal ?? null,
-        g.nameEn ?? null,
-        g.nameKo ?? null,
-        g.address ?? null,
-        g.latitude ?? null,
-        g.longitude ?? null,
-        g.summaryKo ?? null,
-        g.editorialSummary ?? null,
-        priceEur,
-        g.distanceKmFromCenter ?? null,
-      ],
-    );
-    if (u.rowCount) copyDone++;
-    console.log(
-      `  + Gemini id=${r.id} ${r.name_local} (직행 ${u.rowCount ? "OK" : "NO"})`,
-    );
+    // ⚠️ 수정금지(승인필요) 2026-08-17 사장님 승인 = try/catch 추가(아래 TS단계·374줄과 동일 패턴 재사용, §16) = 이 직행 UPDATE도
+    //   트리거([중복차단], 예: 다른 도시의 동명 장소와 불변5 충돌) 예외를 못 잡아 1행 문제로 전체 배치(218곳)가 죽던 결함 수정(2026-08-17 토론토 실행 실측).
+    try {
+      const u = await c.query(
+        `UPDATE place_seed_raw SET
+          name_local = COALESCE(NULLIF($2,''), name_local),
+          name_en = COALESCE(NULLIF($3,''), name_en),
+          name_ko = COALESCE(NULLIF($4,''), name_ko),
+          address = COALESCE(NULLIF($5,''), address),
+          latitude = COALESCE($6::real, latitude),
+          longitude = COALESCE($7::real, longitude),
+          summary_ko = COALESCE(NULLIF($8,''), summary_ko),
+          editorial_summary = COALESCE(NULLIF($9,''), editorial_summary),
+          price_eur = COALESCE($10::real, price_eur),
+          distance_km_from_center = COALESCE($11::numeric, distance_km_from_center),
+          updated_at = NOW()
+        WHERE id=$1`,
+        [
+          r.id,
+          g.nameLocal ?? null,
+          g.nameEn ?? null,
+          g.nameKo ?? null,
+          g.address ?? null,
+          g.latitude ?? null,
+          g.longitude ?? null,
+          g.summaryKo ?? null,
+          g.editorialSummary ?? null,
+          priceEur,
+          g.distanceKmFromCenter ?? null,
+        ],
+      );
+      if (u.rowCount) copyDone++;
+      console.log(
+        `  + Gemini id=${r.id} ${r.name_local} (직행 ${u.rowCount ? "OK" : "NO"})`,
+      );
+    } catch (e: any) {
+      console.log(
+        `  X Gemini UPDATE 실패 id=${r.id} ${r.name_local}: ${e.message}`,
+      );
+    }
   }
 
   // [3 TS] = 결손 전부 = tsSearch -> 9요소 검증·갱신(pid·uri·rc·좌표·주소·name_local·photoName).

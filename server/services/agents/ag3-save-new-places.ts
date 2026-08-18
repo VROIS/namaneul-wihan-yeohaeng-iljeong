@@ -10,6 +10,8 @@ import type { PlaceResult } from "./types";
 //   재발명 없이 기존 단일 관문 그대로 재사용(§16, image-backfill.ts의 runPm과 동일 호출 패턴).
 //   이미 ③ TS 단계 전체가 Promise.all 병렬이라 PM도 같은 병렬 안에서 돈다(장소별 순차 처리 아님).
 import { tsSearch, tsPhoto } from "../shared/ts-client";
+// ⚠️ 2026-08-18 = core/outskirt 판정 = shared/pool-radius 단일 SSOT 재사용(§16, 비판검증 확정결함 수정 = 인라인 삼항식 재발명 폐기 §19)
+import { zoneForDistanceKm } from "../shared/pool-radius";
 // ⚠️ 수정금지(승인필요) 2026-07-06 사장님 SSOT = TS raw 모음 1파일(#45 방식) 저장 = 도시id 폴더 로컬+Storage 2곳(§18).
 import { saveCollectedRaw } from "../shared/save-collected-raw";
 
@@ -136,6 +138,13 @@ export async function saveNewPlacesToDB(
             : [seedCategory],
         phaseTags: [`auto-learn-${today}`],
         distanceKmFromCenter: (place as any).distanceKmFromCenter ?? null,
+        // ⚠️ 수정금지(승인필요) 2026-08-17 사장님 승인(실측 버그수정) = day_zone = zoneForDistanceKm 단일 SSOT(§16).
+        //   이 함수(라이브 auto-learn 저장)가 day_zone을 아예 안 써서 실사용자 트래픽으로만 자란 도시
+        //   (토론토·나이로비)가 DB-only 카테고리 조회(day_zone 필터)에서 거의 다 걸러지는 사고 근본(2026-08-17 실측).
+        dayZone:
+          (place as any).distanceKmFromCenter != null
+            ? zoneForDistanceKm((place as any).distanceKmFromCenter)
+            : null,
         // ⚠️ 수정금지(승인필요) 2026-07-11 사장님 SSOT = ① Gemini 쓰기 = 좌표 보호 플래그 = 행에 검증좌표 있으면 유지(빈칸·0만 채움).
         preserveExistingCoords: true,
       };
@@ -301,13 +310,14 @@ export async function saveNewPlacesToDB(
             : null,
         });
 
-        // 🧠 2026-07-08 사장님 SSOT = 폐업 = 슬롯·행 유지 + TS 요소 전체 입력(§20) + PM(이미지)만 스킵 + phase_tags '영구폐업' 기록.
-        //   (옛 "__closedPermanently 마커 + return 반쪽방치 + FE 슬롯 제거" = 슬롯 삭제 무권한 = 완전삭제 §19)
+        // 🧠 2026-08-17 사장님 승인 = 폐업 = 슬롯·행 유지 + TS 요소 전체 입력(§20) + PM도 시도 + phase_tags '영구폐업' 기록.
+        //   사유: 폐업행도 제미니·DB-only 양쪽 다 필터 없이 FE에 그대로 노출됨(2026-08-17 실측) = 이미지 없는 채로
+        //   보여주는 것보다 폐업 전 사진이라도 채우는 게 낫다(image-backfill.ts 동일정책 적용 §19, 옛 PM스킵 폐기).
         const isClosedPermanently =
           result?.businessStatus === "CLOSED_PERMANENTLY";
         if (isClosedPermanently)
           console.log(
-            `[AG3-SAVE] 🚫 "${place.name}" = 영구 폐업(TS) = 행·슬롯 유지, PM만 스킵`,
+            `[AG3-SAVE] 🚫 "${place.name}" = 영구 폐업(TS) = 행·슬롯 유지, PM도 시도(폐업 전 사진)`,
           );
         if (!result) return { enrichedByApi: 0 }; // TS 미검색 = ① Gemini 저장분 유지
 
@@ -322,11 +332,11 @@ export async function saveNewPlacesToDB(
         const placeId: string | null =
           result.googlePlaceId || (place as any).googlePlaceId || null;
 
-        // ⚠️ 수정금지(승인필요) 2026-08-16 사장님 SSOT = PM(사진 다운로드+R2 업로드) = 생성 흐름에 재통합.
-        //   폐업 행은 스킵(2026-07-08 SSOT 유지). photoName 없으면(만료·미제공) 스킵 = 무성실패(null 계약, tsPhoto 내부).
+        // ⚠️ 수정금지(승인필요) 2026-08-17 사장님 승인 = PM(사진 다운로드+R2 업로드) = 생성 흐름에 재통합.
+        //   폐업 행도 photoName 있으면 PM 시도(위 사유). photoName 없으면(만료·미제공) 스킵 = 무성실패(null 계약, tsPhoto 내부).
         //   ③ 전체가 Promise.all 병렬이라 PM도 같은 병렬 파도 안에서 돈다(장소별 순차 await 아님).
         let photoUrl: string | null = null;
-        if (!isClosedPermanently && result.photoName) {
+        if (result.photoName) {
           photoUrl = await tsPhoto({
             apiKey: GOOGLE_KEY,
             photoName: result.photoName,
@@ -390,6 +400,11 @@ export async function saveNewPlacesToDB(
             ? [`auto-learn-${today}`, "영구폐업"]
             : [`auto-learn-${today}`],
           distanceKmFromCenter: (place as any).distanceKmFromCenter ?? null,
+          // ⚠️ 수정금지(승인필요) 2026-08-17 사장님 승인(실측 버그수정) = day_zone = zoneForDistanceKm 단일 SSOT(위 job 동일, §16).
+          dayZone:
+            (place as any).distanceKmFromCenter != null
+              ? zoneForDistanceKm((place as any).distanceKmFromCenter)
+              : null,
         };
         // ⚠️ 수정금지(승인필요) 2026-07-09 사장님 SSOT = 신규·흡수 통일 = 전부 자기 rowId 직행(targetRowId=rowId) = 재매칭·중복재판별 절대 안 함.
         //   사장님 SSOT(line 453·459): "신규든 병합이든 모든행 우리 id 상태에서 결손을 보강하여 해당 id 칸을 채움. 모든 TS+PM 요소는 어디로 갈지 아는 상태." (PM = 사후 일괄로 이동 2026-07-11)

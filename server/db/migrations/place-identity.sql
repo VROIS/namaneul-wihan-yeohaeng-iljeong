@@ -5,8 +5,10 @@
 -- = 트리거 = shared/matcher.ts 7단계와 동형(§16 matcher≡트리거): PID > URI > 풀주소 > 좌표10m > 로컬이름 / 영어명·한국어명(의심메모).
 --   ⚠️ 2026-07-18 §19 = 불변3 로컬이름 AND 결합 삭제(주소만 독립 차단) = 불변요소는 각각 독립이어야 무력화 안 됨(초콜릿하우스 중복 근본).
 --   핵심: URI(cid) 둘 다 있고 서로 다르면 = 확정 다른 장소 = 보조(주소·좌표) 차단 (= samePlace veto). PID 차이는 더이상 veto 아님(우리 PID 오류=TS 교정, 2026-06-15).
--- ⚠️ 수정금지(승인필요) 2026-07-17 사장님 SSOT = 불변1~5(병합) = 도시무관(글로벌) / 6·7·8 = 같은도시 OR 100km(같은장소 물리 상한) §19.
---   = 같은 장소가 다른 도시 여정에서 재발굴되던 재과금 근본 제거(불변1~5). 전면 도시무관은 일반명 노이즈 9,826 폭발 실측이라 6~8 은 100km 상한 유지. matcher.ts 와 byte 동형(§16).
+-- ⚠️ 수정금지(승인필요) 2026-07-17 사장님 SSOT = 불변1~4(병합) = 도시무관(글로벌) / 5·6·7·8 = 같은도시 OR 100km(같은장소 물리 상한) §19.
+--   = 같은 장소가 다른 도시 여정에서 재발굴되던 재과금 근본 제거(불변1~4). 전면 도시무관은 일반명 노이즈 9,826 폭발 실측이라 5~8 은 100km 상한 유지. matcher.ts 와 byte 동형(§16).
+--   ⚠️ 수정금지(승인필요) 2026-08-17 사장님 승인 = 불변5(로컬이름) 도 100km 상한 추가(옛 도시무관 폐기) = "City Market" 류
+--     흔한 이름이 대륙 넘어 오매칭되던 실사고(나이로비↔멕시코시티 id=61563) 근본 차단.
 -- 적용: Supabase apply_migration 또는 psql $SUPA_URL -f server/db/migrations/place-identity.sql
 -- = 라이브 DB 정본과 byte 동기화(§19 DB↔레포).
 
@@ -138,10 +140,19 @@ BEGIN
     IF matched_id IS NOT NULL THEN RAISE EXCEPTION '[중복차단] 불변4 좌표10m 일치 id=%', matched_id; END IF;
   END IF;
 
-  -- 5) 로컬이름 (자기행 제외, 도시무관)
+  -- 5) 로컬이름 (자기행 제외)
+  -- ⚠️ 수정금지(승인필요) 2026-08-17 사장님 승인 = 같은도시 OR 100km 상한 추가(불변6·7·8 과 동형 §16/§19).
+  --   사유: "City Market" 같은 흔한 이름이 대륙이 달라도 문자열만 같으면 무제한(도시무관) 매칭돼
+  --   나이로비 여정이 멕시코시티 행(city_id=102)에 잘못 병합되는 실사고 발생(2026-08-17 실측, id=61563:
+  --   주소="Muindi Mbingu St, Nairobi"인데 좌표·PID는 멕시코시티). 옛 완전 도시무관(2026-07-09) 폐기.
   IF v_local <> '' THEN
     SELECT c.id INTO matched_id FROM place_seed_raw c
     WHERE c.id <> COALESCE(NEW.id, -1)
+      AND ( c.city_id = NEW.city_id
+            OR ( NEW.latitude IS NOT NULL AND NEW.latitude <> 0 AND NEW.longitude IS NOT NULL AND NEW.longitude <> 0
+                 AND c.latitude IS NOT NULL AND c.latitude <> 0 AND c.longitude IS NOT NULL AND c.longitude <> 0
+                 AND sqrt( power((c.latitude::float - NEW.latitude::float)*111320, 2)
+                         + power((c.longitude::float - NEW.longitude::float)*111320*cos(radians((c.latitude::float + NEW.latitude::float)/2)), 2) ) <= 100000 ) )
       AND NOT (c.google_maps_uri IS NOT NULL AND c.google_maps_uri<>'' AND NEW.google_maps_uri IS NOT NULL AND NEW.google_maps_uri<>'' AND c.google_maps_uri<>NEW.google_maps_uri)
       AND v_local IN (LOWER(TRIM(COALESCE(c.name_en,''))), LOWER(TRIM(COALESCE(c.name_local,''))), LOWER(TRIM(COALESCE(c.name_ko,''))))
     LIMIT 1;

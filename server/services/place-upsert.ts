@@ -25,7 +25,7 @@ import { db } from "../db";
 import { placeSeedRaw } from "@shared/schema";
 import { eq, sql } from "drizzle-orm";
 // ⚠️ 2026-06-03 = 동일장소 5단계 매칭 = 공용 matcher.ts 단일 (= 헌법 §16, 흩어진 매처 통합)
-import { type MatchedBy } from "./shared/place-enrich";
+import { type MatchedBy, properKeys } from "./shared/place-enrich";
 
 export interface UpsertPayload {
   cityId: number;
@@ -144,6 +144,84 @@ async function recoverTriggerDup(
   if (!dup) return null;
   const dupId = Number(dup[1]);
   try {
+    // ⚠️ 수정금지(승인필요) 2026-08-17 사장님 승인 = 흡수 안전장치(창고문틀 교정) = 매칭 판정·흡수 동작은 그대로,
+    //   흡수 대상 기존 이름과 새 job 이름이 겹치는 고유명사 키가 0개면 '경고 태그'만 남긴다(§12-3 카사로마/BlueBlood 사고 재발 감지용).
+    //   = 주소 환각(Gemini)이 실재 다른 장소를 흡수시키는 사고를 막지는 못하지만, phase_tags 로 사후 조회·검수 가능하게 함.
+    if (db) {
+      try {
+        const cur = (
+          await db.execute(
+            sql`SELECT name_en, name_local, name_ko, google_place_id, image_url, google_review_count, latitude, longitude, summary_ko, editorial_summary FROM place_seed_raw WHERE id = ${dupId}`,
+          )
+        ).rows?.[0] as any;
+        if (cur) {
+          // 이름불일치 감지(§12-3 카사로마/BlueBlood 재발 감지) = 스킵/쓰기 양 경로 공통으로 먼저 판정
+          //   (조기 return 앞으로 이동 = 2026-08-18 비판검증 확정결함 수정 §19).
+          const oldKeys = properKeys({
+            nameEn: cur.name_en,
+            nameLocal: cur.name_local,
+            nameKo: cur.name_ko,
+          });
+          const newKeys = properKeys({
+            nameEn: p.nameEn,
+            nameLocal: p.nameLocal,
+            nameKo: p.nameKo,
+          });
+          const overlap = [...newKeys].some((k) => oldKeys.has(k));
+          if (oldKeys.size > 0 && newKeys.size > 0 && !overlap) {
+            console.warn(
+              `[UPSERT] ⚠️ 이름 불일치 흡수 = id=${dupId} 기존="${cur.name_en}" ← 새job="${p.nameEn}" (고유명사 키 안 겹침) = name-mismatch-absorbed 태그 부착`,
+            );
+            p = {
+              ...p,
+              phaseTags: [...(p.phaseTags || []), "name-mismatch-absorbed"],
+            };
+          }
+          // ⚠️ 수정금지(승인필요) 2026-08-18 사장님 승인(비판검증 확정결함 수정 = 옛 2026-08-17 "PID만 있으면 무조건 스킵" 폐기 §19).
+          //   = 스킵은 **형제 중복행이 실제로 존재해서 어떤 UPDATE 도 불변1(PID 유일)에 물리적으로 막히는 경우만**.
+          //     (나이로비 Carnivore 실측: 같은 PID 를 가진 행이 2개면 그 행에 뭘 쓰든 문지기가 형제행을 걸고 차단 →
+          //      복구 실패 → rowId 미확보 → FE v3- 빈슬롯. 이 경우만 쓰기 포기하고 링크+기존데이터 재활용이 정답.)
+          //   = 형제가 없으면(성숙 도시의 일반 케이스) 정상 직행 UPDATE 진행 = §14 새것우선(요약·태그·구역값 등
+          //     새 정보 기록 + name-mismatch 태그 영속화 + ag3 day_zone 수정도 그대로 작동) 복원.
+          if (cur.google_place_id) {
+            const sib = (
+              await db.execute(
+                sql`SELECT id FROM place_seed_raw WHERE google_place_id = ${cur.google_place_id} AND id <> ${dupId} LIMIT 1`,
+              )
+            ).rows?.[0] as any;
+            if (sib) {
+              console.log(
+                `[UPSERT] ✅ PID 형제중복(id=${sib.id}) 존재 = id=${dupId} 쓰기 불가(불변1) = 링크만`,
+              );
+              return {
+                action: "updated",
+                rowId: dupId,
+                matchedBy: "pid",
+                reason: "trigger_dup_recovered_skip_write_pid_sibling",
+                enriched: {
+                  imageUrl: cur.image_url ?? null,
+                  googleReviewCount: cur.google_review_count ?? null,
+                  nameKo: cur.name_ko ?? null,
+                  nameLocal: cur.name_local ?? null,
+                  summaryKo: cur.summary_ko ?? null,
+                  editorialSummary: cur.editorial_summary ?? null,
+                  googlePlaceId: cur.google_place_id ?? null,
+                  latitude: cur.latitude != null ? Number(cur.latitude) : null,
+                  longitude:
+                    cur.longitude != null ? Number(cur.longitude) : null,
+                },
+              };
+            }
+          }
+        }
+      } catch (checkErr) {
+        // 확인 실패해도 흡수 자체는 막지 않는다(관측성 전용, 판정로직 무변경).
+        console.warn(
+          "[UPSERT] 이름불일치 확인 중 오류(흡수는 계속 진행):",
+          (checkErr as Error)?.message,
+        );
+      }
+    }
     const r = await upsertPlace({
       ...p,
       targetRowId: dupId,

@@ -92,7 +92,12 @@ export async function backfillImages(opts: {
   // ② 무료 재링크 먼저 = 결제된 고아 이미지 회수 + matchedIds(=Storage 보유 = PM 불필요) 확보
   const relink = await relinkStorageImages({ cityId, apply, client: c });
 
-  // ① 대상 = PID 보유 + 이미지 결손(repair.ts:99 정본) − Storage 보유행 − 영구폐업(2026-07-08 폐업 = PM 스킵 SSOT)
+  // ① 대상 = PID 보유 + 이미지 결손(repair.ts:99 정본) − Storage 보유행
+  // ⚠️ 수정금지(승인필요) 2026-08-17 사장님 승인 = 영구폐업 제외 조건 삭제(옛 2026-07-08 "폐업=PM 스킵" 폐기 §19).
+  //   = 근거: 폐업행도 슬롯·행 유지(§20, ag3-save-new-places.ts:304-305) = FE 에 그대로 노출되는데 제미니·DB-only
+  //     서빙 양쪽 다 영구폐업 필터가 없어(2026-08-17 실측) 사용자가 폐업행을 그대로 봄. 사진이 있으면(폐업 전 저장분)
+  //     채워주는 게 맞음(빈 이미지보다 폐업 전 사진이 낫다). photoName 자체가 없는 곳(Seven Degrees North 등)은
+  //     어차피 withRaw/needTs 분류에서 자연히 걸러짐(수정 불필요).
   const rows = (
     await c.query(
       `
@@ -100,24 +105,20 @@ export async function backfillImages(opts: {
     FROM place_seed_raw
     WHERE city_id = $1 AND google_place_id IS NOT NULL
       AND (image_url IS NULL OR image_url = '' OR image_url NOT LIKE '%place-images%')
-      AND NOT (COALESCE(phase_tags, '{}') @> ARRAY['영구폐업'])
     ORDER BY rank NULLS LAST, id LIMIT $2
   `,
       [cityId, limit],
     )
   ).rows.filter((r: any) => !relink.matchedIds.has(r.id));
 
-  // ③ raw photoName 재활용 분류 (raw businessStatus 가 폐업이면 PM 대상 제외 = 응답요소 존중 §18)
+  // ③ raw photoName 재활용 분류 (폐업이어도 photoName 있으면 PM 대상 포함 = 2026-08-17 위 사유)
   const rawMap = collectPhotoNamesFromRaw(cityId);
-  const isClosed = (r: any) =>
-    rawMap.get(r.pid)?.status === "CLOSED_PERMANENTLY";
-  const live = rows.filter((r: any) => !isClosed(r));
+  const live = rows;
   const withRaw = live.filter((r: any) => rawMap.get(r.pid)?.photoName);
   const needTs = live.filter((r: any) => !rawMap.get(r.pid)?.photoName);
-  const closedCnt = rows.length - live.length;
   console.log(`═══ image-backfill (city ${cityId}) ═══`);
   console.log(
-    `대상(PID보유·이미지결손) ${rows.length}${closedCnt ? ` (폐업 ${closedCnt} 제외 → live ${live.length})` : ""} | 무료재링크 ${apply ? relink.relinked : relink.relinkable}(${apply ? "완료" : "가능"}) | raw재활용 PM ${withRaw.length}건(€${(withRaw.length * 0.5).toFixed(1)}) | TS필요 ${needTs.length}건(€${(needTs.length * 0.8).toFixed(1)}=TS+PM)`,
+    `대상(PID보유·이미지결손) ${rows.length} | 무료재링크 ${apply ? relink.relinked : relink.relinkable}(${apply ? "완료" : "가능"}) | raw재활용 PM ${withRaw.length}건(€${(withRaw.length * 0.5).toFixed(1)}) | TS필요 ${needTs.length}건(€${(needTs.length * 0.8).toFixed(1)}=TS+PM)`,
   );
   if (!apply) {
     for (const r of live.slice(0, 30))
@@ -147,15 +148,28 @@ export async function backfillImages(opts: {
   const { upsertPlace } = await import(
     pathToFileURL(path.join(ROOT, "server/services/place-upsert.ts")).href
   );
-  const GOOGLE_KEY =
-    process.env.GOOGLE_MAPS_API_KEY || process.env.GOOGLE_PLACES_API_KEY || "";
+  // ⚠️ 수정금지(승인필요) 2026-08-17 사장님 승인 = 키 발급 = 다른 전 컴포넌트(repair.ts 등)와 동일하게
+  //   issueApiKey(DB api_keys 테이블 경유, §채움 hasRow=true 검문) 사용. 옛 process.env 직독은 이 파일만
+  //   따로 쓰던 결함 = 로컬·배포 어디든 DB에 키가 있어도 env가 비어있으면 무조건 크래시(2026-08-17 나이로비 실측).
+  const { issueApiKey } = await import(
+    pathToFileURL(path.join(ROOT, "server/services/shared/issue-api-key.ts"))
+      .href
+  );
+  const inputDate = new Date().toISOString().slice(0, 10);
+  const GOOGLE_KEY = await issueApiKey(
+    c,
+    "GOOGLE_MAPS_API_KEY",
+    cityId,
+    inputDate,
+    true,
+  );
   // ⚠️ 2026-08-06 = 사진 저장 = R2(tsPhoto 내부 r2-client). 옛 Supabase SUPA_SR/SUPA_PUB 폐기 = Cloudflare 이전계획 1단계 §19.
   const { isR2Configured } = await import(
     pathToFileURL(path.join(ROOT, "server/services/shared/r2-client.ts")).href
   );
   // 설정 결손 = 사진 전건 무성실패 방지 = 시작 전 차단(과거 raw 증발 패턴 차단).
   if (!GOOGLE_KEY)
-    throw new Error("image-backfill: GOOGLE_MAPS_API_KEY 없음 = PM 불가");
+    throw new Error("image-backfill: GOOGLE_MAPS_API_KEY 발급 실패 = PM 불가");
   if (!isR2Configured())
     throw new Error(
       "image-backfill: R2 환경변수 미비 = 이미지 업로드 불가(무성실패 차단)",
@@ -216,7 +230,8 @@ export async function backfillImages(opts: {
         if (!ts) continue;
         const closed = ts.businessStatus === "CLOSED_PERMANENTLY";
         // ⚠️ §20 = 유료 TS 응답 = 전요소를 그 행에 기록(사진이름만 뽑아쓰기 = 셀렉 금지). imageUrl 은 아래 runPm 이 별도 갱신.
-        //   RC = ?? null(§14 뼈대 유지, TS 무응답 시 기존 RC 보존 = autorank 강등 방지). 폐업 = phase_tags 기록 + PM 스킵.
+        //   RC = ?? null(§14 뼈대 유지, TS 무응답 시 기존 RC 보존 = autorank 강등 방지).
+        //   폐업 = phase_tags 기록 + PM 도 시도(2026-08-18 = raw재활용 경로·ag3 라이브와 동일 정책 통일, 옛 "폐업=PM 스킵" 폐기 §19).
         await upsertPlace({
           targetRowId: r.id,
           cityId,
@@ -235,7 +250,7 @@ export async function backfillImages(opts: {
           priceEur: undefined,
           phaseTags: closed ? ["영구폐업"] : undefined,
         });
-        if (ts.photoName && !closed) await runPm(r, ts.photoName);
+        if (ts.photoName) await runPm(r, ts.photoName);
       } catch (e) {
         console.warn(`  ⚠️ TS 실패 #${r.id}:`, (e as Error).message);
       }

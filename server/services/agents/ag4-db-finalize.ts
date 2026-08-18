@@ -17,6 +17,10 @@ import type {
   AG1Output,
 } from "./types";
 import { MEAL_BUDGET } from "./types";
+// ⚠️ 수정금지(승인필요) 2026-08-18 사장님 승인(비판검증 확정결함 수정) = ag2 와 동일한 정규화 필수(§16 1벌).
+//   실사용자 클라이언트는 소문자(luxury/comfort)로 보내는데 MEAL_BUDGET 키는 PascalCase 4종뿐 =
+//   미정규화 인덱싱 = undefined → mealBudget.lunch 접근 크래시(ag2 에서 토론토·나이로비 500 실측과 동일 폭탄).
+import { normalizeTravelStyle } from "./pipeline-v3-types";
 // ⚠️ 2026-07-06 사장님 SSOT = 대중교통 구간당 균일 예상가 = 단일 SSOT(§16) = transit-haversine 로 이동(옛 ag4 로컬정의 삭제) = MIX·DB-only 공통.
 import {
   estimateTransitCost,
@@ -35,6 +39,10 @@ import {
 } from "../transport-pricing-service";
 // ⚠️ 2026-07-17 사장님 확정 = 식당풀 = (city_id=요청도시) ∪ (중심 100km) 합집합 = shared/pool-radius 단일 SSOT(§16)
 import { getPoolContext } from "../shared/pool-radius";
+// ⚠️ 수정금지(승인필요) 2026-08-18 사장님 승인(비판검증 확정결함 수정) = 식당풀·BTS공연장 카드도 사진 단일 진입점
+//   pickPlaceImage(§16) 경유 = PID공유 폴백 적용. 옛 raw SQL image_url 직독(`r.imageUrl || ""`) = 폐기 §19
+//   (= PID중복행은 창고(R2)에 사진이 있어도 매 여정의 점심·저녁 카드가 빈 이미지로 나가던 실측 결함).
+import { pickPlaceImage, loadImagePidMap } from "../shared/place-image";
 
 // 🗑️ 2026-07-05 = getEurToKrwRate 로컬정의 삭제 = shared/exchange-rate.ts 단일 SSOT 통합(§16 재발명금지, 3벌→1벌)
 
@@ -93,6 +101,8 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
   //     RC DESC ROW_NUMBER ≤ 구간정원(20/40/20/20)만 풀에 포함. rank 는 rc-rerank 가 이미 RC 반영 → TOP = 완비 식당.
   //   → route-local 2차 = 이 TOP 풀에서 슬롯 앵커 거리순 인접픽 (= 부실 바닥식당 원천 제외).
   let restaurantPool: PlaceResult[] = [];
+  // 2026-08-18 = PID공유 폴백 목록(식당풀 로드 시 채움, 아래 BTS 공연장 카드도 재사용 §16)
+  let imagePidMap: Map<string, string> = new Map();
   if (cityId && db) {
     // ⚠️ 2026-07-17 사장님 확정 = 풀 = (city_id=요청도시) ∪ (좌표 유효 100km 이내) 합집합(§16 pool-radius)
     //   = 크로스도시 시내 식당 포함(실증: 본(134) 소속 디종 시내 Loiseau des Ducs 가 디종 풀에서 안 보이던 결함 해소)
@@ -108,9 +118,10 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
       : sql.raw("FALSE");
     const rows = (await db!.execute(sql`
       WITH banded AS (
-        SELECT id, name_en AS "nameEn", name_ko AS "nameKo", name_local AS "nameLocal", address,
+        SELECT id, city_id AS "cityId", name_en AS "nameEn", name_ko AS "nameKo", name_local AS "nameLocal", address,
                latitude, longitude, price_eur AS "priceEur", summary_ko AS "summaryKo",
                editorial_summary AS "editorialSummary", image_url AS "imageUrl",
+               google_place_id AS "googlePlaceId",
                google_review_count AS "googleReviewCount",
                (${pinCond}) AS pinned,
                CASE WHEN price_eur <= 24 THEN 20 WHEN price_eur <= 60 THEN 40 WHEN price_eur <= 180 THEN 20 ELSE 20 END AS quota,
@@ -119,11 +130,18 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
                  ORDER BY google_review_count DESC NULLS LAST
                ) AS band_rn
         FROM place_seed_raw
+        -- ⚠️ 2026-08-18 사장님 승인 = 검증(PID) 게이트(ag2 와 동일 보편규칙 §16) = 미검증 행 서빙 금지. 핀(사용자 직접 선택)만 면제.
         WHERE (${poolWhere}) AND seed_category = 'restaurant'
+          AND (google_place_id IS NOT NULL OR (${pinCond}))
           AND (price_eur IS NOT NULL OR (${pinCond}))
       )
       SELECT * FROM banded WHERE band_rn <= quota OR pinned ORDER BY "googleReviewCount" DESC NULLS LAST
     `)) as unknown as { rows: Record<string, any>[] };
+    // 2026-08-18 = PID공유 폴백 목록 = 요청도시 + 풀에 섞인 크로스도시(60초 캐시 = ag2 로드분 재사용 = listR2 추가 0)
+    imagePidMap = await loadImagePidMap([
+      cityId,
+      ...(rows.rows || []).map((r) => r.cityId),
+    ]);
     restaurantPool = (rows.rows || [])
       .filter((r) => r.latitude != null && Number(r.latitude) !== 0)
       .map((r) => ({
@@ -137,7 +155,7 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
         estimatedPriceEur: r.priceEur != null ? Number(r.priceEur) : undefined,
         summaryKo: r.summaryKo,
         editorialSummary: r.editorialSummary,
-        image: r.imageUrl || "",
+        image: pickPlaceImage(r, imagePidMap),
         seedCategory: "restaurant",
         userRatingCount: r.googleReviewCount || 0,
       })) as unknown as PlaceResult[];
@@ -178,7 +196,7 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
   const inputById = new Map(inputPlaces.map((p) => [p.id, p]));
   const slotDuration = skeleton.paceConfig.slotDurationMinutes;
   const mealDuration = skeleton.paceConfig.mealDurationMinutes; // 식사 슬롯 종료시각용(활동보다 짧음, 2026-07-21 §16 route-local 정합)
-  const mealBudget = MEAL_BUDGET[formData.travelStyle || "Reasonable"];
+  const mealBudget = MEAL_BUDGET[normalizeTravelStyle(formData.travelStyle)];
 
   // ⚠️ 2026-05-26 = 사용자 SSOT = scene 검증 (= 안전망)
   // = prompt 강제 + 코드 검증 양면 = 환각 차단
@@ -404,6 +422,7 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
     const fRes = (await db.execute(sql`
       SELECT id, name_en AS "nameEn", name_ko AS "nameKo", name_local AS "nameLocal", address,
              latitude, longitude, seed_category AS "seedCategory", image_url AS "imageUrl",
+             google_place_id AS "googlePlaceId",
              google_review_count AS "googleReviewCount", summary_ko AS "summaryKo",
              editorial_summary AS "editorialSummary"
       FROM place_seed_raw WHERE id = ${formData.finalPlaceId}
@@ -436,7 +455,8 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
         estimatedPriceEur: null,
         mealPrice: undefined,
         mealPriceLabel: undefined,
-        image: f.imageUrl || null,
+        // 2026-08-18 = 사진 단일 진입점 경유(PID공유 폴백 §16, 옛 image_url 직독 폐기 §19)
+        image: pickPlaceImage(f, imagePidMap) || null,
         userRatingCount: f.googleReviewCount || 0,
         summaryKo: f.summaryKo,
         editorialSummary: f.editorialSummary,
