@@ -17,7 +17,7 @@
         "NSMicrophoneUsageDescription": "Allow $(PRODUCT_NAME) to use the microphone.",
         "ITSAppUsesNonExemptEncryption": false
       },
-      "buildNumber": "6"
+      "buildNumber": "7"
     },
     "android": {
       "adaptiveIcon": {
@@ -27,7 +27,7 @@
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "package": "com.sonanie.guide",
-      "versionCode": 22,
+      "versionCode": 23,
       "permissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.CAMERA",
