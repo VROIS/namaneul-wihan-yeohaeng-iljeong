@@ -229,14 +229,14 @@ export const resultStyles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-start",
   },
-  // ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 = 56→48 축소 + marginRight 4→2(최대축소, 터치는
-  //   썸네일/본문 Pressable이 분리라 지장없음) = 텍스트칸 폭 최대 확보(위 placeCard 근거 동일).
+  // ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 = 56→48 축소(텍스트칸 폭 확보, 위 placeCard 근거 동일).
+  //   ⚠️ 수정금지(승인필요) 2026-08-19 사장님 승인 = marginRight 2→4(너무 붙어보임 실기기 지적, 확정치).
   placeThumbnail: {
     width: 48,
     height: 48,
     borderRadius: BorderRadius.sm,
     overflow: "hidden",
-    marginRight: 2,
+    marginRight: 4,
   },
   placeThumbnailImage: {
     width: 48,

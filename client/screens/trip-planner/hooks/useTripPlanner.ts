@@ -201,6 +201,17 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
       navigation.goBack();
       return;
     }
+    // ⚠️ 수정금지(승인필요) 2026-08-19 사장님 승인 = "출발지로 귀환" = 프로필 카드로 열람한 여정은
+    //   뒤로가기 시 프로필 화면으로 복귀(기존엔 무조건 홈으로 가던 것 = 정합 위반).
+    //   restoredTrip(326줄에서 이미 세팅되는 기존 state)만 재사용 = 새 장치 발명 없음(§16).
+    if (restoredTrip) {
+      (
+        navigation as unknown as {
+          navigate: (name: string, params?: unknown) => void;
+        }
+      ).navigate("Main", { screen: "Profile" });
+      return;
+    }
     // ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 = "1회 생성 = 미션 종료" 안전장치 ②(Input 재진입 시).
     //   ①(useGenerateItinerary 생성 성공 직후)과 별개 시점 = 충돌 아니라 이중 안전장치.
     //   restoreItineraryById 는 setScreen("Result")로 끝나 이 분기를 타지 않으므로 "다시보기"는 안 건드림.
@@ -212,7 +223,7 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
       accommodationPlaceId: undefined,
     }));
     setScreen("Input");
-  }, [initialRequest, navigation]);
+  }, [initialRequest, navigation, restoredTrip]);
 
   // ⚠️ 2026-07-31 사장님 승인(BTS D단계 FE-4) = 폼을 실어 열렸으면(같이 떠나요) 입력화면 건너뛰고 즉시 생성 1회.
   //   ref 잠금 = 1회만. **로그인 확인 후에만 잠금**(§22 검증) — 비로그인 상태에서 잠가버리면

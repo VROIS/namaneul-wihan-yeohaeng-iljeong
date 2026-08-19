@@ -39,6 +39,8 @@ export const styles = StyleSheet.create({
       },
     }),
   },
+  // ⚠️ 수정금지(승인필요) 2026-08-19 사장님 승인 = zIndex 없어서 뒤에 그려지는 로그인폼 ScrollView가
+  //   이 버튼 영역의 터치를 가로채던 문제(형제요소 그리기순서, 로직버그 아님) 수정.
   loginCloseBtn: {
     position: "absolute",
     right: Spacing.md,
@@ -47,6 +49,7 @@ export const styles = StyleSheet.create({
     height: 40,
     justifyContent: "center",
     alignItems: "center",
+    zIndex: 10,
   },
   // 헤더 삭제(§23) = 본문이 카드 최상단부터. paddingTop md = X 버튼(우상단 절대위치)과 Tripis 글자 안 겹치는 최소 여백.
   loginCardBody: {
