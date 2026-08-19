@@ -50,16 +50,19 @@ const resources = {
 
 const validCodes = Object.keys(resources);
 
+// ⚠️ 수정금지(승인필요) 2026-08-19 사장님 승인 = 기본 빌드 로캘 = 영어(전세계 공식출시 대비).
+//   기기 언어가 지원 7개국어 중 하나면 아래 initI18nLanguage()가 그 언어로 즉시 바꿔치기하므로
+//   (한국 사용자는 그대로 한국어로 보임) 실사용 영향은 "지원 밖 언어 기기"·"초기 렌더 찰나"뿐.
 function normalizeLang(code: string): string {
   const lower = code.toLowerCase().slice(0, 2);
   if (lower === "zh") return "zh";
-  return validCodes.includes(lower) ? lower : "ko";
+  return validCodes.includes(lower) ? lower : "en";
 }
 
 i18n.use(initReactI18next).init({
   resources,
-  lng: "ko",
-  fallbackLng: "ko",
+  lng: "en",
+  fallbackLng: "en",
   supportedLngs: validCodes,
   interpolation: { escapeValue: false },
   react: { useSuspense: false },
@@ -72,8 +75,11 @@ export async function initI18nLanguage(): Promise<void> {
     await i18n.changeLanguage(stored);
     return;
   }
+  // ⚠️ 수정금지(승인필요) 2026-08-19 사장님 승인 = 기기 로캘 감지 실패(device=null) 시에도
+  //   ko가 아닌 en으로 떨어져야 "기본 빌드 로캘=영어" 정책과 일치(판단3종 review가 지적한
+  //   ko 우회경로 수정 = device||"ko"였으면 normalizeLang의 en 기본값이 무의미해짐).
   const device = Localization.getLocales()[0]?.languageCode;
-  const normalized = normalizeLang(device || "ko");
+  const normalized = normalizeLang(device || "en");
   if (validCodes.includes(normalized)) {
     await i18n.changeLanguage(normalized);
     await setStoredLanguage(normalized);
