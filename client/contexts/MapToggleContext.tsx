@@ -21,6 +21,12 @@ interface MapToggleContextType {
   aiOpinionRequestedAt: number | null;
   requestAiOpinion: () => void;
   clearAiOpinionRequest: () => void;
+  // ⚠️ 수정금지(승인필요) 2026-08-19 사장님 승인 = 하단탭 "Plan" = 앱의 홈버튼 개념(어디서든 눌러도 여정플래너 홈으로).
+  //   AI의견 신호와 동일 패턴(§16 재사용) = MainTabNavigator가 물리 탭터치 시에만 발신, useTripPlanner가 수신해 Input으로 초기화.
+  //   프로필 카드클릭(navigation.navigate 프로그램호출, itineraryId 동반)은 tabPress 이벤트가 아니라 이 신호와 무관(복원 유지).
+  homeRequestedAt: number | null;
+  requestHome: () => void;
+  clearHomeRequest: () => void;
   // ⚠️ 사장님 SSOT 2026-07-14 = 하단탭 "전문가" 버튼 → 여정화면 위 오버레이(AI의견과 동일 패턴). 별도 화면 아님(§16 재사용·§19 옛 탭화면 폐기).
   //   2026-07-24 사장님 승인 = payload 옵션 추가: 일별 [바로 예약하기] = {mode:'booking', day:n} 로 열면 예약 작성뷰로 오픈(무인자 호출 = 기존 그대로).
   expertRequestedAt: number | null;
@@ -77,6 +83,9 @@ const MapToggleContext = createContext<MapToggleContextType>({
   aiOpinionRequestedAt: null,
   requestAiOpinion: () => {},
   clearAiOpinionRequest: () => {},
+  homeRequestedAt: null,
+  requestHome: () => {},
+  clearHomeRequest: () => {},
   expertRequestedAt: null,
   expertOpenPayload: null,
   requestExpert: () => {},
@@ -111,6 +120,7 @@ export function MapToggleProvider({ children }: { children: React.ReactNode }) {
   const [aiOpinionRequestedAt, setAiOpinionRequestedAt] = useState<
     number | null
   >(null);
+  const [homeRequestedAt, setHomeRequestedAt] = useState<number | null>(null);
   const [expertRequestedAt, setExpertRequestedAt] = useState<number | null>(
     null,
   );
@@ -174,6 +184,12 @@ export function MapToggleProvider({ children }: { children: React.ReactNode }) {
   const clearAiOpinionRequest = useCallback(() => {
     setAiOpinionRequestedAt(null);
   }, []);
+  const requestHome = useCallback(() => {
+    setHomeRequestedAt(Date.now());
+  }, []);
+  const clearHomeRequest = useCallback(() => {
+    setHomeRequestedAt(null);
+  }, []);
   // ⚠️ 사장님 SSOT 2026-07-14 = 전문가 오버레이 트리거(AI의견과 동일 트릭 = 매 요청 새 타임스탬프 → 같은 화면 재클릭도 useEffect 재실행).
   //   2026-07-24 = payload(예약 모드) 동반 가능. ExpertSheet가 마운트 시 1회 소비 후 clearExpertOpenPayload(미클리어 = 다음 일반 열기 오염).
   const requestExpert = useCallback(
@@ -225,6 +241,9 @@ export function MapToggleProvider({ children }: { children: React.ReactNode }) {
         aiOpinionRequestedAt,
         requestAiOpinion,
         clearAiOpinionRequest,
+        homeRequestedAt,
+        requestHome,
+        clearHomeRequest,
         expertRequestedAt,
         expertOpenPayload,
         requestExpert,

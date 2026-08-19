@@ -164,9 +164,76 @@ if (all.some((f) => f.startsWith("android/")))
 if (all.some((f) => f.startsWith("plugins/")))
   both("plugins/(네이티브 설정 플러그인) 수정");
 
+// ⚠️ 수정금지(승인필요) 2026-08-19 사장님 지시 = **이미지 파일 내용 변경(경로는 그대로)도 잡는다.**
+//   빈틈 실증 = 아이콘 3종(tripis-app-icon.png 등)을 같은 파일명으로 픽셀만 110% 재작업 →
+//   app.json 텍스트는 한 글자도 안 바뀌어 위 app.json 검사가 전부 통과(무선 가능으로 오판).
+//   그런데 아이콘·스플래시는 파일명이 같아도 **굽는 순간 그 픽셀 그대로 박히는 값** = 반드시 다시 구워야 함.
+//   해법 = app.json 을 하드코딩 안 하고 **직접 읽어서** 아이콘·스플래시 관련 필드가 가리키는
+//   이미지 경로를 전부 모아, 그 경로들이 `all`(바뀐 파일 목록) 안에 있는지 검사(§16 = 하드코딩 금지).
+function collectIconSplashImagePaths(cfg) {
+  const paths = new Set();
+  const add = (p) => {
+    if (typeof p === "string" && p) paths.add(p.replace(/^\.\//, ""));
+  };
+  const expo = cfg?.expo || {};
+  add(expo.icon);
+  add(expo.web?.favicon);
+  add(expo.android?.adaptiveIcon?.foregroundImage);
+  add(expo.android?.adaptiveIcon?.backgroundImage);
+  add(expo.android?.adaptiveIcon?.monochromeImage);
+  add(expo.ios?.icon);
+  for (const p of expo.plugins || []) {
+    if (!Array.isArray(p) || p[0] !== "expo-splash-screen") continue;
+    const conf = p[1] || {};
+    const collectSplash = (s) => {
+      if (!s) return;
+      add(s.image);
+      add(s.dark?.image);
+    };
+    collectSplash(conf); // 옛(레거시) 최상위 형태
+    collectSplash(conf.ios);
+    collectSplash(conf.android);
+  }
+  return paths;
+}
+const iconSplashPaths = collectIconSplashImagePaths(appJson);
+const changedIconSplashFiles = all.filter((f) => iconSplashPaths.has(f));
+if (changedIconSplashFiles.length > 0) {
+  both(
+    `아이콘·스플래시 이미지 파일 내용 변경(경로 그대로라 app.json 검사로는 안 잡힘) = ${changedIconSplashFiles.join(", ")}`,
+  );
+}
+
 const needsIos = iosReasons.length > 0;
 const needsAndroid = andReasons.length > 0;
 const needsRebuild = needsIos || needsAndroid;
+
+// ⚠️ 수정금지(승인필요) 2026-08-19 사장님 지시 = **굽어야 하는데 버전번호를 안 올렸으면 반드시 경고한다.**
+//   배경 = 2026-08-19 실제 사고: iOS buildNumber 만 올리고 Android versionCode 를 안 올려
+//   Play 콘솔이 "버전 코드는 이미 사용됨"으로 업로드를 거부(일을 2번 시킴). "누락시키는 부분" = 사장님 지적.
+//   해법 = 굽기 필요 판정 시, 마지막 빌드 시점(base) 대비 buildNumber/versionCode 가 실제로 바뀌었는지
+//   직접 대조해서, 안 바뀌었으면 그 자리에서 크게 경고(진행은 막지 않음 = 최종 판단은 사람 몫, §11).
+const versionWarnings = [];
+if (needsRebuild && base) {
+  let baseAppJson = {};
+  try {
+    baseAppJson = JSON.parse(sh(`git show ${base}:app.json`));
+  } catch {}
+  const baseBuildNumber = String(baseAppJson?.expo?.ios?.buildNumber ?? "");
+  const curBuildNumber = String(appJson?.expo?.ios?.buildNumber ?? "");
+  const baseVersionCode = baseAppJson?.expo?.android?.versionCode ?? null;
+  const curVersionCode = appJson?.expo?.android?.versionCode ?? null;
+  if (needsIos && baseBuildNumber === curBuildNumber) {
+    versionWarnings.push(
+      `⚠️⚠️ iOS buildNumber 가 마지막 빌드(${baseBuildNumber})와 그대로(${curBuildNumber}) — 굽기 전 반드시 올릴 것(TestFlight 재업로드 거부됨)`,
+    );
+  }
+  if (needsAndroid && baseVersionCode === curVersionCode) {
+    versionWarnings.push(
+      `⚠️⚠️ Android versionCode 가 마지막 빌드(${baseVersionCode})와 그대로(${curVersionCode}) — 굽기 전 반드시 올릴 것(Play 콘솔 "버전 코드는 이미 사용됨" 거부됨, 2026-08-19 실제 사고 재발 방지)`,
+    );
+  }
+}
 const serverChanged = all.some(
   (f) => f.startsWith("server/") || f.startsWith("shared/"),
 );
@@ -178,6 +245,7 @@ const result = {
   iosReasons,
   androidReasons: andReasons,
   infoNotes,
+  versionWarnings, // 굽기 필요인데 버전번호(buildNumber/versionCode) 안 올린 경우 경고
   serverChanged, // = Replit 에서 서버 빌드가 필요한 변경이 있었나(사장님 흐름 쪽 참고용)
   base: baseInfo,
   changedCount: all.length,
@@ -204,6 +272,10 @@ console.log(
 );
 for (const r of andReasons) console.log(`│     · ${r}`);
 for (const n of infoNotes) console.log(`│ ℹ ${n}`);
+if (versionWarnings.length > 0) {
+  console.log("├───────────────────────────────────────────────────");
+  for (const w of versionWarnings) console.log(`│ ${w}`);
+}
 console.log("├───────────────────────────────────────────────────");
 console.log(`│ 마지막 구운 시점: ${baseInfo}`);
 console.log(`│ 그 뒤 바뀐 파일: ${all.length}개`);

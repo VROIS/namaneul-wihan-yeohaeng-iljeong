@@ -60,6 +60,7 @@ export default function MainTabNavigator() {
     authChangedAt,
     requestLogin,
     isAuthed,
+    requestHome,
   } = useMapToggle();
   // ⚠️ 수정금지(승인필요) — 삼성폰 하단 3버튼 겹침 방지 (SafeArea 여백)
   const insets = useSafeAreaInsets();
@@ -239,6 +240,15 @@ export default function MainTabNavigator() {
               <TabBarLabel label={t("tab.plan")} color={color} />
             ),
             headerShown: false,
+          }}
+          listeners={{
+            // ⚠️ 수정금지(승인필요) 2026-08-19 사장님 승인 = Plan 탭 = 홈페이지의 홈버튼과 같은 개념 =
+            //   어디서 눌러도 여정플래너 홈(Input)으로 고정. 기존엔 탭 전환만 되고 화면은 직전 내부상태
+            //   (예: Result)를 그대로 유지해 갇히는 문제. 프로필 카드클릭(navigation.navigate 프로그램호출)은
+            //   tabPress 이벤트가 아니라서 이 신호와 무관 = 여정 복원과 충돌 없음. BTS는 별개 스택이라 무관.
+            tabPress: () => {
+              requestHome();
+            },
           }}
         />
         {/* 🧠 AI 의견 (여정 생성 후에만 활성. 지도는 결과화면 고정섹션이라 이 탭 자리를 대체함) */}

@@ -73,6 +73,9 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
     isAuthed,
     // 🔒 2026-08-05 사장님 SSOT = 여정 슬롯 [해설 듣기] 관문용(PlaceSlotCard 로 내려보냄).
     requestLogin,
+    // ⚠️ 2026-08-19 = 하단탭 "Plan" = 홈버튼 신호(MainTabNavigator tabPress → 여기서 Input으로 초기화).
+    homeRequestedAt,
+    clearHomeRequest,
   } = useMapToggle();
   const { t, i18n } = useTranslation();
 
@@ -225,6 +228,34 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
     setScreen("Input");
   }, [initialRequest, navigation, restoredTrip]);
 
+  // ⚠️ 수정금지(승인필요) 2026-08-19 사장님 승인 = 하단탭 "Plan" = 홈버튼 신호 수신.
+  //   MainTabNavigator가 물리 탭터치 시에만 발신(requestHome) → 여기서 handleExitResult의 기본 초기화(숙소 플래그 정리+Input 전환)와 동일 로직 실행(§16 재사용).
+  //   ⚠️ 수정금지(승인필요) 2026-08-19 사장님 승인(판단3종 회귀 지적 반영) = Loading 중엔 무시.
+  //   여정생성(executeGenerate)·저장여정복원(restoreItineraryById) 모두 Loading 동안 비동기 응답을 기다리는데,
+  //   그 사이 홈으로 나가 Input을 다시 건드리면 늦게 온 응답이 그 내용을 덮어씀(경합) — 원래(이 기능 추가 전)도
+  //   Home 탭에 리스너가 없어 Loading 중엔 나갈 방법 자체가 없었다 = 그 원래 동작을 그대로 복원.
+  //   전문가·Tripis 탭은 TripPlannerScreen 상태를 안 건드리는 독립 오버레이라 이 가드와 무관(그대로 계속 작동).
+  useEffect(() => {
+    if (!homeRequestedAt) return;
+    if (screen === "Loading") {
+      // 로딩 중 눌림 = 무시하고 신호도 즉시 비움(그대로 두면 로딩 끝난 순간 뒤늦게 재발동해 Result를 다시 Input으로 덮어씀).
+      clearHomeRequest();
+      return;
+    }
+    // ⚠️ 수정금지(승인필요) 2026-08-19 사장님 승인 = 홈(Input)은 항상 새 여정을 만들 수 있는 빈 상태가 기본.
+    //   프로필에서 열어본 여정 꼬리표(restoredTrip)가 남아있으면 안 됨 — 여기서 같이 청소.
+    setRestoredTrip(false);
+    setFormData((prev) => ({
+      ...prev,
+      accommodationCoords: undefined,
+      accommodationName: undefined,
+      accommodationAddress: undefined,
+      accommodationPlaceId: undefined,
+    }));
+    setScreen("Input");
+    clearHomeRequest();
+  }, [homeRequestedAt, clearHomeRequest, screen]);
+
   // ⚠️ 2026-07-31 사장님 승인(BTS D단계 FE-4) = 폼을 실어 열렸으면(같이 떠나요) 입력화면 건너뛰고 즉시 생성 1회.
   //   ref 잠금 = 1회만. **로그인 확인 후에만 잠금**(§22 검증) — 비로그인 상태에서 잠가버리면
   //   로그인해도 재발사가 없어 사용자가 입력화면에 방치됐다. 로그인되면(isAuthed) 그때 1회 발사.
@@ -293,6 +324,14 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
   //   PUT(원본 덮어쓰기)이 아니라 POST(내 여정 새 행)로 감 = 타인 원본 보호. 기본(opts 없음=프로필 카드 복원)은 종전과 동일하게 targetId 세팅.
   const restoreItineraryById = useCallback(
     async (targetId: number, opts?: { shared?: boolean }) => {
+      // ⚠️ 수정금지(승인필요) 2026-08-19 사장님 승인 = GET 응답 오기 전 잠깐 Input 화면이 그대로 보이던 문제
+      //   (탭 전환은 즉시인데 setScreen("Result")는 요청 완료 후라 그 사이 Input이 스침) 수정.
+      //   기존 3states(Input/Loading/Result) 중 Loading 재사용 = 새 상태 발명 없음(§16).
+      //   ⚠️ 수정금지(승인필요) 2026-08-19 사장님 승인(판단3종 지적) = loadingStep도 0으로 리셋.
+      //   안 하면 직전 생성에서 남은 단계값이 그대로 남아 "마지막으로 꼼꼼히 확인 중" 같은
+      //   엉뚱한 문구가 단순 조회(복원)인데도 보임(useGenerateItinerary와 동일 관례 맞춤).
+      setLoadingStep(0);
+      setScreen("Loading");
       try {
         const res = await apiRequest("GET", `/api/itineraries/${targetId}`);
         const data = await res.json();
@@ -302,6 +341,7 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
             "[TripPlanner] 저장여정 복원 실패: rawData 없음",
             targetId,
           );
+          setScreen("Input"); // Loading에 갇히지 않도록 복귀
           return;
         }
         setItinerary(raw as Itinerary);
@@ -338,6 +378,7 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
         setScreen("Result");
       } catch (e) {
         console.warn("[TripPlanner] 저장여정 복원 오류:", e);
+        setScreen("Input"); // Loading에 갇히지 않도록 복귀
       }
     },
     [],
