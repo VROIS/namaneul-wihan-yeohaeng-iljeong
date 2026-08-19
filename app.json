@@ -48,10 +48,18 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/tripis-splash.png",
-          "imageWidth": 280,
-          "resizeMode": "contain",
-          "backgroundColor": "#FFFFFF"
+          "ios": {
+            "image": "./assets/images/tripis-splash.png",
+            "imageWidth": 280,
+            "resizeMode": "contain",
+            "backgroundColor": "#FFFFFF"
+          },
+          "android": {
+            "image": "./assets/images/tripis-splash-android-icon.png",
+            "imageWidth": 150,
+            "resizeMode": "contain",
+            "backgroundColor": "#FFFFFF"
+          }
         }
       ],
       "expo-web-browser",
