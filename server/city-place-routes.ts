@@ -5,13 +5,7 @@ import { storage } from "./storage";
 import { itineraryGenerator } from "./services/itinerary-generator";
 import { db } from "./db";
 // guides = 해설 창고 1벌(2026-08-02). 도시 카드 [해설] 배지를 켤지 여기서 있는지만 본다.
-import {
-  cities,
-  users,
-  placeSeedRaw,
-  itineraries,
-  guides,
-} from "../shared/schema";
+import { cities, placeSeedRaw, itineraries, guides } from "../shared/schema";
 // ne·isNull·isNotNull = 대표장소 조건을 city-representative-place 1벌로 옮기며 이 파일에서 안 쓰게 됨(삭제 2026-08-05 §19)
 import { eq, sql, desc, and, or } from "drizzle-orm";
 // ⚠️ 완비 기준 = ag2 의 상수 1벌을 가져다 쓴다(§16). 여기에 300 을 다시 적으면 기준이 두 벌이 된다.
@@ -89,6 +83,9 @@ export function registerCityPlaceRoutes(app: Express): void {
             nameKo: cities.name,
             nameEn: cities.nameEn,
             country: cities.country,
+            // ⚠️ 수정금지(승인필요) 2026-08-20 사장님 승인 = 도시대표카드 국가명 영어통일용.
+            //   country 컬럼엔 영어값이 없어(전량 한국어) FE가 이 ISO코드로 영어 국가명을 변환한다(§16 = DB 새 컬럼·쓰기 없음).
+            countryCode: cities.countryCode,
             itineraryId: itineraries.id, // 대표여정 없으면 null = 그대로 "없음" 신호
             title: itineraries.title,
             protagonistSentence: itineraries.protagonistSentence,
@@ -96,33 +93,37 @@ export function registerCityPlaceRoutes(app: Express): void {
             videoByDay: itineraries.videoByDay,
           })
           .from(cities)
-          // ⚠️ 수정금지(승인필요) 2026-08-02 사장님 = 대표여정 고르는 순서 1벌.
-          //   ① 손으로 올린 대표(status='representative') 가 있으면 그것
-          //   ② 없으면 **영상이 완성된 관리자 여정 중 최신** 이 자동으로 그 도시 대표
-          //      (사장님 SSOT: "최신 영상이 있는 것이 우선 = 이게 우리 앱의 특화")
-          //   ③ 둘 다 없으면 null = 카드는 도시 DB 만으로 뜬다(B-0 자동 채움).
-          //   정렬로 1벌 표현 = 분기 코드를 만들지 않는다(§0).
-          //   ⚠️ 2026-08-03 사장님 지적·승인 = ②에 **관리자 소유** 조건 추가. 없던 탓에 손으로 올린 대표가
-          //     아직 없는 도시는 **아무 사용자가 영상을 만드는 순간 그 여정이 도시 카드에 걸렸다**(권한 구멍).
-          //     판정 기준 = users.role='admin' 1벌(§9 표7 = is_admin·아이디 문자열 금지).
+          // ⚠️ 수정금지(승인필요) 2026-08-20 사장님 SSOT = 대표여정 고르는 순서 1벌(재정정).
+          //   옛 규칙(관리자 소유 + 여정id 최신) 폐기 = 2026-08-20 §19 — 영상 없는 옛 ★대표(파리#9, 2026-05-09
+          //   생성, video_by_day=null)가 그 뒤에 만든 진짜 영상 5개를 영구히 가려버린 실사고 재발 방지.
+          //   새 규칙(4단계, 정렬 1벌로 표현 = 분기 코드 없음 §0):
+          //     ① ★대표(status='representative') 이면서 그 여정 자체에 영상도 있으면 최우선
+          //     ② ①이 아니어도 영상이 있으면(소유자 무관, 관리자 제한 폐기) **saved_videos 실제 생성시각 기준 최신** 우선
+          //     ③ 영상은 없어도 ★대표면(카피·하이라이트 큐레이션 값만이라도) 그다음
+          //     ④ 아무것도 없으면 null = 카드는 도시 DB 만으로 뜬다(B-0 자동 채움)
           .leftJoin(
             itineraries,
             and(
               eq(itineraries.cityId, cities.id),
               or(
                 eq(itineraries.status, "representative"),
-                and(
-                  sql`EXISTS (SELECT 1 FROM jsonb_each(${itineraries.videoByDay}) e
-                              WHERE e.value->>'status' = 'succeeded')`,
-                  sql`EXISTS (SELECT 1 FROM ${users} u
-                              WHERE u.id = ${itineraries.userId} AND u.role = 'admin')`,
-                ),
+                sql`EXISTS (SELECT 1 FROM jsonb_each(${itineraries.videoByDay}) e
+                            WHERE e.value->>'status' = 'succeeded')`,
               ),
             ),
           )
           .where(eq(cities.id, cityId))
           .orderBy(
-            sql`CASE WHEN ${itineraries.status} = 'representative' THEN 0 ELSE 1 END`,
+            sql`CASE
+                  WHEN ${itineraries.status} = 'representative'
+                       AND EXISTS (SELECT 1 FROM jsonb_each(${itineraries.videoByDay}) e WHERE e.value->>'status'='succeeded')
+                       THEN 0
+                  WHEN EXISTS (SELECT 1 FROM jsonb_each(${itineraries.videoByDay}) e WHERE e.value->>'status'='succeeded')
+                       THEN 1
+                  WHEN ${itineraries.status} = 'representative' THEN 2
+                  ELSE 3
+                END`,
+            sql`(SELECT MAX(sv.created_at) FROM saved_videos sv WHERE sv.itinerary_id = ${itineraries.id}) DESC NULLS LAST`,
             desc(itineraries.id),
           )
           .limit(1),
@@ -169,6 +170,7 @@ export function registerCityPlaceRoutes(app: Express): void {
         nameKo: row.nameKo,
         nameEn: row.nameEn,
         country: row.country,
+        countryCode: row.countryCode,
         tagline: top3[0]?.summaryKo ?? "",
         highlights: top3.map((p) => p.nameKo || p.nameEn),
         dayCount: 0, // 0 = 화면이 "N일 코스" 배지를 안 그림

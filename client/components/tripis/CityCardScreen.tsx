@@ -3,7 +3,7 @@
 //   (GET /api/cities/:id/representative) = 대표여정이 있으면 그 여정 것, 없으면 도시 DB 의 사진·요약·상위 3곳.
 //   손으로 적어둔 도시 소개·유니스플래시 사진은 완전삭제(§19) = 이제 이 파일 어디에도 고정 문구가 없다.
 // = 이 파일은 껍데기(TripisModal) 안에서만 쓰인다 = 자체 Modal 을 갖지 않고 어두운 배경 + 가운데 카드만 그린다.
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
 import { useTranslation } from "react-i18next";
 // ⚠️ 수정금지(승인필요) 2026-05-12 = BTS 1주일 디버깅 SSOT = expo-image + resolveImageSource 1벌(§16)
@@ -15,8 +15,6 @@ import { Icon } from "@/components/Icon";
 import { resolveImageSource } from "@/lib/wikimedia-image";
 import CityBadge from "./CityBadge";
 import type { RepCard } from "./TripisModal";
-// 관리자 판정 = 저장된 계정 1벌에서 읽는다(프로필 '나의 여정' 별과 완전히 같은 방식 §16).
-import { getUserData } from "@/lib/auth";
 
 // 배지 3색 = 프로필 '나의 TRIPIS' 영상 카드의 gradientPalettes 값 그대로
 //   (출처 = client/screens/profile/components/VideosSection.tsx — 그 파일은 이번 작업 범위 밖이라 값만 가져옴).
@@ -27,6 +25,59 @@ export const BADGE_COLORS = {
   guide: ["#06B6D4", "#3B82F6"],
   course: ["#EC4899", "#8B5CF6"],
 } as const;
+
+// ⚠️ 수정금지(승인필요) 2026-08-20 사장님 승인 = 도시대표카드 국가명 영어 통일용.
+//   cities.country 컬럼은 한글/영어가 뒤섞여 있어(DB 직접 확인 = CH·ES·FR·IT 등 중복 불일치) 그대로 못 씀 —
+//   ISO country_code 를 표준 영어 국가명으로 변환하는 유일한 진입점 — 라이브 cities(121곳, 44코드) +
+//   시드 카탈로그(server/config/default-cities-seed-1·2.ts, 새 DB에 자동 채워질 수 있는 전체 도시목록) 합집합 전수 확인.
+//   DB 스키마 변경·쓰기 없음(§16), 새 도시 추가 시 여기 1줄만 추가.
+const COUNTRY_NAMES_EN: Record<string, string> = {
+  AD: "Andorra",
+  AR: "Argentina",
+  AT: "Austria",
+  AU: "Australia",
+  BE: "Belgium",
+  BR: "Brazil",
+  CA: "Canada",
+  CH: "Switzerland",
+  CL: "Chile",
+  CO: "Colombia",
+  CZ: "Czechia",
+  DE: "Germany",
+  DK: "Denmark",
+  ES: "Spain",
+  FI: "Finland",
+  FR: "France",
+  GB: "United Kingdom",
+  GR: "Greece",
+  HK: "Hong Kong",
+  HR: "Croatia",
+  HU: "Hungary",
+  ID: "Indonesia",
+  IE: "Ireland",
+  IS: "Iceland",
+  IT: "Italy",
+  JP: "Japan",
+  KE: "Kenya",
+  KR: "South Korea",
+  LU: "Luxembourg",
+  MC: "Monaco",
+  MX: "Mexico",
+  MY: "Malaysia",
+  NL: "Netherlands",
+  NO: "Norway",
+  PE: "Peru",
+  PH: "Philippines",
+  PL: "Poland",
+  PT: "Portugal",
+  SE: "Sweden",
+  SG: "Singapore",
+  TH: "Thailand",
+  TR: "Turkey",
+  TW: "Taiwan",
+  US: "United States",
+  VN: "Vietnam",
+};
 
 interface Props {
   rep: RepCard;
@@ -46,26 +97,13 @@ export default function CityCardScreen({
   onCourse,
   onClose,
 }: Props) {
-  const { t, i18n } = useTranslation();
-  // 관리자 여부 = 저장된 계정의 role 1벌. 아이디 문자열·is_admin 으로 판단하지 않는다(§9 표7).
-  const [isAdmin, setIsAdmin] = useState(false);
-  useEffect(() => {
-    let alive = true;
-    getUserData()
-      .then((u) => {
-        if (alive) setIsAdmin(u?.role === "admin");
-      })
-      .catch(() => {});
-    return () => {
-      alive = false;
-    };
-  }, []);
+  const { t } = useTranslation();
 
   // 해설 배지 자리는 **하나**다 = 상황에 따라 글자만 갈리고 가는 곳은 같다(부품·자리 1벌 = §0·§16).
-  //   · 해설이 이미 있으면(서버가 창고에서 확인해 준 rep.hasGuide) = [해설] = 누구에게나 보인다.
-  //   · 아직 없고 + 관리자 + 그 도시에 쓸 장소가 있으면 = [해설 만들기] = 관리자만 보이는 만들기 입구(사장님 순서 ㉠).
-  //   · 그 밖(일반 사용자) = 안 보이고 자리만 지킨다 = 줄 높이·다음 배지 위치 불변.
-  const canCreateGuide = !rep.hasGuide && isAdmin && rep.placeId !== null;
+  //   · 해설이 이미 있으면(서버가 창고에서 확인해 준 rep.hasGuide, 그 화면 언어 기준) = [해설] = 누구에게나 보인다.
+  //   · 없고 + 그 도시에 쓸 장소가 있으면 = [해설 만들기] = 누구나 보이는 만들기 입구(2026-08-20 사장님 승인 =
+  //     관리자 전용 폐기 §19 — 실제 생성 시 로그인 관문 + 5크레딧 차감은 TripisModal.handleOpenGuide 가 담당).
+  const canCreateGuide = !rep.hasGuide && rep.placeId !== null;
 
   return (
     <View style={styles.overlay}>
@@ -129,12 +167,16 @@ export default function CityCardScreen({
           </Pressable>
 
           <View style={styles.imageContent}>
-            {/* ⚠️ 수정금지(승인필요) 2026-08-14 = 도시명은 고유명사라 t() 대상이 아니다. 한국어면 nameKo,
-                그 외는 nameEn(이미 서버 응답에 있음, 새 조회 없음) — 도시 칩과 같은 규칙(§16). */}
+            {/* ⚠️ 수정금지(승인필요) 2026-08-20 사장님 승인 = 도시명·국가명 영어 일괄통일(§ COUNTRY_NAMES_EN).
+                한국어 분기 폐기 = 2026-08-20 §19 — 도시명은 고유명사, 뷰어 언어와 무관하게 항상 nameEn.
+                nameEn 이 비어있는 도시 대비 = nameKo 폴백(city-resolver.ts 의 nameEn||name 관례와 동일 §16). */}
             <Text style={styles.cityName}>
               {(() => {
-                const name = i18n.language === "ko" ? rep.nameKo : rep.nameEn;
-                return rep.country ? `${name} (${rep.country})` : name;
+                const name = rep.nameEn || rep.nameKo;
+                const countryName = rep.countryCode
+                  ? COUNTRY_NAMES_EN[rep.countryCode]
+                  : null;
+                return countryName ? `${name} (${countryName})` : name;
               })()}
             </Text>
             {/* 한 줄 카피 = 비어 있으면(그 도시에 요약이 없음) 줄 자체를 안 그린다 = 빈 줄 방지(2026-08-02) */}

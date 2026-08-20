@@ -47,6 +47,7 @@ export interface RepCard {
   nameKo: string;
   nameEn: string;
   country: string | null;
+  countryCode: string | null; // ⚠️ 수정금지(승인필요) 2026-08-20 = 국가명 영어변환용 ISO코드
   tagline: string;
   highlights: string[];
   dayCount: number;
@@ -282,12 +283,23 @@ function TripisModalInner({
   // 🎙️ 해설 배지 = 이 모달을 닫고 **가이드 미니앱의 해설 화면**을 그 장소로 연다 (2026-08-02 사장님 확정).
   //   보기와 만들기가 같은 곳인 이유 = 그 화면이 이미 "창고에 있으면 그대로 보여주고(호출 0), 없으면 만들어 담는다"를 한다 = 1벌(§16).
   //   여는 방식 = openGuideForPlace 1벌(2026-08-03 §22 수정 = 300ms 이중탭 잠금 + 앱 언어 전달).
-  const handleOpenGuide = (placeId: number) => {
+  // ⚠️ 수정금지(승인필요) 2026-08-20 사장님 승인 = [해설 만들기]를 관리자 전용에서 누구나(로그인만)로 확장.
+  //   hasGuide=true(듣기, 창고에 이미 있음=외부호출 0) = 계속 미가입자도 개방("sample").
+  //   hasGuide=false(만들기, 새 Gemini 호출 발생) = 이제부터 진짜 로그인 관문(isAuthed/requestLogin)을 태운다
+  //   = 서버(guide-routes.ts:78-84)가 어차피 비로그인 401 이라, 관문 없이 열면 눌러도 조용히 실패해 보임.
+  const handleOpenGuide = (placeId: number, hasGuide: boolean) => {
+    // 🔒 [영상 만들기](:224-228)와 같은 순서 = 이 화면이 최상위 Modal 이라 로그인 팝업을 덮는다 = 먼저 닫는다.
+    if (!hasGuide && !isAuthed) {
+      onClose();
+      requestLogin();
+      return;
+    }
     onClose();
-    // 🔓 2026-08-05 사장님 SSOT = 도시 대표카드 해설 = **대표 이미지 1장의 맛보기 샘플** = 미가입자도 개방.
-    //   안전한 이유 = 이 배지는 서버 hasGuide(그 장소·그 언어 해설이 창고에 이미 있음)일 때만 켜진다
-    //   (city-place-routes.ts:184 / CityCardScreen.tsx:101) = 열어도 유료 외부호출 0.
-    openGuideForPlace(navigation, placeId, "sample");
+    openGuideForPlace(
+      navigation,
+      placeId,
+      hasGuide ? "sample" : { isAuthed, requestLogin },
+    );
   };
 
   // 보여줄 해설 = 프로필에서 누른 그 카드 1건(칩줄 폐기 = 2026-08-03 §19, 아래 상단줄 주석 참조)
@@ -307,7 +319,8 @@ function TripisModalInner({
         // [해설]·[해설 만들기] = **같은 곳** = 가이드 미니앱 해설 화면을 그 장소번호로 연다(2026-08-02 사장님 확정).
         //   배지가 보일 때만 눌리므로 여기 오면 장소번호가 반드시 있다.
         onGuide={() => {
-          if (params.rep.placeId !== null) handleOpenGuide(params.rep.placeId);
+          if (params.rep.placeId !== null)
+            handleOpenGuide(params.rep.placeId, params.rep.hasGuide);
         }}
         // [코스] = 그 여정 화면 = 프로필 '나의 여정' 카드와 같은 경로 1벌(handleViewItinerary §16)
         onCourse={handleViewItinerary}

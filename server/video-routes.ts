@@ -367,13 +367,16 @@ export function registerVideoRoutes(app: Express): void {
             // 📥 완료 = 신청자 프로필 자동 게시 (2026-08-03 사장님 확정 = 벨 알림 안 씀 §19).
             //   is_new=true = ★ 표식 + 하단 TRIPIS 탭 뱃지의 원천. 재생성(이미 담긴 행)도 다시 true = 새 완성 알림.
             //   게시 실패해도 영상 자체(succeeded)는 이미 기록됨 = 유료 자산 손실 없음 → 로그만.
+            //   ⚠️ 수정금지(승인필요) 2026-08-20 §22 판단검증 지적 = created_at 도 재생성 시 함께 갱신.
+            //     안 하면 도시대표카드 최신영상 정렬(city-place-routes.ts)이 옛 완성시각을 계속 봐서
+            //     방금 재생성한 게 더 최신인데도 순위에서 밀림 = is_new 갱신과 같은 "새 완성" 의미인데 반쪽만 갱신되던 것.
             if (requesterUserId && pool) {
               await pool
                 .query(
                   `INSERT INTO saved_videos (user_id, itinerary_id, day, is_new)
                    VALUES ($1, $2, $3, true)
                    ON CONFLICT ON CONSTRAINT saved_videos_user_itin_day_uniq
-                   DO UPDATE SET is_new = true`,
+                   DO UPDATE SET is_new = true, created_at = now()`,
                   [requesterUserId, id, day],
                 )
                 .catch((pubErr) =>
