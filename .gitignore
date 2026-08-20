@@ -204,3 +204,6 @@ scratch_*.ts
 #   → 그런 값은 아래 폴더에만 둔다. 이 PC 에서는 평소처럼 열어볼 수 있고, git 에는 안 올라간다.
 docs/_비공개/
 .verify-state.json
+
+# 2026-08-20 = 옵시디언(Obsidian) vault 개인설정 폴더. 사장님 PC 로컬 전용, 공개저장소에 올릴 이유 없음.
+.obsidian/
