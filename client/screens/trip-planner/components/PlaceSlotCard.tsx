@@ -270,26 +270,33 @@ export default function PlaceSlotCard({
               )}
             </View>
 
-            {/* ⚠️ 수정금지(승인필요) 2026-06-24 사용자 SSOT = 슬롯 6요소 + 순서 고정 = ①로컬네임(메인) ②한국이름(보조) ③시간 ④구글리뷰 ⑤한줄요약(editorial_summary, 차별화) ⑥가격(필수). 그외 노출·구글맵힌트줄 완전삭제(§19). */}
+            {/* ⚠️ 수정금지(승인필요) 2026-08-21 사장님 승인 = 슬롯 6요소 + 순서 고정 = ①영어명(메인) ②로컬명(보조) ③시간 ④구글리뷰 ⑤한줄요약(editorial_summary, 차별화) ⑥가격(필수). 그외 노출·구글맵힌트줄 완전삭제(§19).
+                한국어 우선 표시(옛 ①로컬 ②한국이름) 폐기 = 2026-08-21 §19 — 도시대표카드 영어통일과 같은 원칙(뷰어 언어 무관 항상 영어 우선).
+                PSR 실측(10도시 상위20위 1,327행) = nameEn 결측 0건, nameLocal 결측 3.7%뿐이라 안전. 초기(PSR연동전) 여정은 nameEn 자체가 없어 최종 폴백 = place.name. */}
             {/* 🗺️ 2026-06-28 = 슬롯 본문 터치 = 지도 그 마커 포커스(선택) = 양방향 연동. (썸네일 터치만 외부 구글맵) */}
             <Pressable
               style={styles.placeInfo}
               onPress={() => setSelectedSlotId(String(place.id))}
             >
-              {/* ① 로컬네임 (메인 = 크게). ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 =
+              {/* ① 영어명 (메인 = 크게). ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 =
                   [점심]/[저녁] 텍스트 프리픽스 폐기(식당명 노출공간 확보, 위 번호원 워터마크로 구분
                   대체) + numberOfLines 제한 폐기(비한국어 번역시 더 필요한 공간 확보, 슬롯카드는
                   페이지 스크롤 안이라 길어져도 문제없음). */}
               <View style={styles.placeHeader}>
                 <Text style={[styles.placeName, { color: theme.text }]}>
-                  {(place as any).nameLocal || place.name}
+                  {(place as any).nameEn ||
+                    (place as any).nameLocal ||
+                    place.name}
                 </Text>
               </View>
-              {/* ② 한국이름 (보조 = 작게) */}
+              {/* ② 로컬명 (보조 = 작게, 있고 메인과 다를 때만) */}
               {(() => {
-                const localName = (place as any).nameLocal || place.name;
-                const koName = (place as any).nameKo;
-                return koName && koName !== localName ? (
+                const mainName =
+                  (place as any).nameEn ||
+                  (place as any).nameLocal ||
+                  place.name;
+                const localName = (place as any).nameLocal;
+                return localName && localName !== mainName ? (
                   <Text
                     style={{
                       fontSize: 11,
@@ -297,7 +304,7 @@ export default function PlaceSlotCard({
                       marginBottom: 2,
                     }}
                   >
-                    {koName}
+                    {localName}
                   </Text>
                 ) : null;
               })()}

@@ -163,6 +163,16 @@ export function registerCityPlaceRoutes(app: Express): void {
               )
               .limit(1);
 
+      // ⚠️ 수정금지(승인필요) 2026-08-21 사장님 승인 = 태그라인 = 대표여정 유무와 무관하게 공식 1벌(§0·§19).
+      //   대표장소(top3[0], 사진과 같은 1위 행) 요약이 항상 중간 폴백으로 보장 = 앞으로 대표여정이 몇 개가
+      //   생기든(무한대로 늘 도시카드) 주인공문장 빈 여정 5곳이 PSR 요약을 가리던 버그가 구조적으로 재발 못 함.
+      //   이중 경로(기본값 설정 후 조건부 재계산) 폐기 = 2026-08-21 §19.
+      const tagline =
+        (row.itineraryId !== null && row.protagonistSentence) ||
+        top3[0]?.summaryKo ||
+        (row.itineraryId !== null && row.title) ||
+        "";
+
       // ① 기본 카드 = 도시 DB 만으로 채움. 장소가 0개면 사진 null·하이라이트 [] 로 그대로 나간다(화면이 알아서 비움).
       const card = {
         itineraryId: row.itineraryId,
@@ -171,7 +181,7 @@ export function registerCityPlaceRoutes(app: Express): void {
         nameEn: row.nameEn,
         country: row.country,
         countryCode: row.countryCode,
-        tagline: top3[0]?.summaryKo ?? "",
+        tagline,
         highlights: top3.map((p) => p.nameKo || p.nameEn),
         dayCount: 0, // 0 = 화면이 "N일 코스" 배지를 안 그림
         imageUrl: top3[0]?.imageUrl ?? null,
@@ -196,7 +206,6 @@ export function registerCityPlaceRoutes(app: Express): void {
           }
           if (picked.length >= 3) break;
         }
-        card.tagline = row.protagonistSentence || row.title || ""; // 주인공 문장 우선, 없으면 제목(B-0)
         card.highlights = picked;
         card.dayCount = days.length;
         // hasVideo = 하루라도 영상 성공(succeeded)이면 true = ▶배지는 영상이 실제로 있을 때만(B5)
