@@ -25,6 +25,8 @@ import DaySection from "./components/DaySection";
 import AiOpinionSheet from "./components/AiOpinionSheet";
 import { resultStyles } from "./styles/result";
 import { inputStyles } from "./styles/input";
+// 도시명 표시 규칙 1벌(§16) = destinationEn(cities.name_en) 우선 → destination 폴백
+import { displayCityName } from "@/lib/display-city-name";
 import type { PlannerApi } from "./hooks/useTripPlanner";
 
 // 픽커 계열 공용 키(pickerTitle)는 입력측 스타일 1벌에서 가져와 병합(중복정의 0 = §16)
@@ -138,7 +140,7 @@ export default function ResultStep({ planner }: { planner: PlannerApi }) {
           {shortDate(itinerary.startDate)} ~ {shortDate(itinerary.endDate)}
           {"  "}
           <Text style={[styles.tripCityName, { color: theme.text }]}>
-            {itinerary.destination}
+            {displayCityName(itinerary)}
           </Text>
         </Text>
         <View style={styles.tripSummaryRow}>
@@ -297,7 +299,7 @@ export default function ResultStep({ planner }: { planner: PlannerApi }) {
               return {
                 lat: autoCoords.lat,
                 lng: autoCoords.lng,
-                label: `${t("trip.departure")}: ${t("trip.departureCityCenter", { destination: itinerary.destination })}`,
+                label: `${t("trip.departure")}: ${t("trip.departureCityCenter", { destination: displayCityName(itinerary) })}`,
               };
             return null;
           })()}

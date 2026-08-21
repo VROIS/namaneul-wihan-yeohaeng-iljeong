@@ -31,8 +31,14 @@ export function openGuideForPlace(
   if (now - lastOpenAt < 300) return; // 이중탭 = 두 번째는 버린다
   lastOpenAt = now;
   // 루트 스택에 GuideMiniApp 은 인자 없는 화면으로 적혀 있어(RootStackNavigator.tsx:35) 중첩 인자는 as any.
+  // ⚠️ 수정금지(승인필요) 2026-08-21 사장님 승인 = from = **출발화면**을 서버로 넘긴다(§9 무료/차감 1벌).
+  //   "card"(gate==="sample") = 도시 대표카드 맛보기 = 무료 / 없음 = 여정 슬롯 = 로그인+차감.
   navigation.navigate("GuideMiniApp", {
     screen: "GuideResult",
-    params: { placeId, lang: i18n.language || "ko" },
+    params: {
+      placeId,
+      lang: i18n.language || "ko",
+      ...(gate === "sample" ? { from: "card" } : {}),
+    },
   } as any);
 }

@@ -46,15 +46,25 @@ const TRIP_TITLE_SUFFIXES = [
 //   "{도시} {N}일 여행"(ag4-db-finalize.ts·pipeline-v3-step2-build.ts, 언어 무관 항상 한국어)이 그대로 남아있어
 //   숫자를 먼저 떼지 않으면 "Paris 3일 Trips" 처럼 한국어 숫자와 번역 접미사가 섞인다.
 const DAY_COUNT_TITLE_RE = /^(.+?)\s*\d+일\s*여행$/;
-function localizeVideoTitle(title: string, t: (k: string) => string): string {
+// ⚠️ 수정금지(승인필요) 2026-08-21 사장님 승인 = cityNameEn(서버가 읽을 때 이어붙인 cities.name_en)이 있으면
+//   제목에서 떼어낸 도시명 대신 그것을 쓴다(§16 = 여정카드·결과화면과 같은 "읽을 때 조립" 원칙).
+//   사유 = title 은 생성 시점 언어로 굳어("리마 3일 여행") 앱 언어를 바꿔도 도시명만 한국어로 남았다.
+function localizeVideoTitle(
+  title: string,
+  t: (k: string) => string,
+  cityNameEn?: string | null,
+): string {
+  const pick = (fromTitle: string) => (cityNameEn || "").trim() || fromTitle;
   const dayCountMatch = DAY_COUNT_TITLE_RE.exec(title);
   if (dayCountMatch) {
-    const destination = dayCountMatch[1].trim();
+    const destination = pick(dayCountMatch[1].trim());
     if (destination) return `${destination} ${t("profile.trips")}`;
   }
   for (const suf of TRIP_TITLE_SUFFIXES) {
     if (title.endsWith(suf)) {
-      const destination = title.slice(0, title.length - suf.length).trim();
+      const destination = pick(
+        title.slice(0, title.length - suf.length).trim(),
+      );
       if (destination) return `${destination} ${t("profile.trips")}`;
     }
   }
@@ -130,6 +140,10 @@ export default function VideosSection({ profile }: { profile: ProfileApi }) {
       day: v.day,
       isNew: v.isNew,
       title: v.title,
+      // 도시 영문명 = 서버가 읽을 때 이어붙인 값(§16). 제목의 한국어 도시명을 이것으로 갈아끼운다.
+      //   ⚠️ as any 금지(§22 판단검증) = SavedVideoRow 에 타입이 있는데 캐스팅하면 서버 필드명이 바뀌어도
+      //     컴파일 에러 없이 조용히 undefined 가 되어 제목이 도로 한국어로 폴백한다(= 고치려던 그 증상).
+      cityNameEn: v.cityNameEn,
       date: v.startDate?.split("T")[0] || "",
     }));
 
@@ -240,7 +254,7 @@ export default function VideosSection({ profile }: { profile: ProfileApi }) {
               {/* 하단 텍스트 오버레이 = 제목 + n일차·시작일 */}
               <View style={styles.videoInfoOverlay}>
                 <Text style={styles.videoCardTitle} numberOfLines={1}>
-                  {localizeVideoTitle(video.title, t)}
+                  {localizeVideoTitle(video.title, t, video.cityNameEn)}
                 </Text>
                 <Text style={styles.videoCardDate}>
                   {t("common.dayCount", { count: video.day })} · {video.date}

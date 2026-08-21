@@ -445,10 +445,14 @@ export function registerVideoRoutes(app: Express): void {
       if (!pool) return res.status(500).json({ error: "DB 미연결" });
       const isAdmin = (await getRoleFromDb(userId)) === "admin";
       const r = await pool.query(
+        // ⚠️ 수정금지(승인필요) 2026-08-21 사장님 승인 = city_name_en = 읽을 때 이어붙이는 도시 영문명(§16).
+        //   title 은 생성 시점 언어로 굳어("리마 3일 여행") 앱 언어를 바꿔도 도시명이 한국어로 남는다.
+        //   cities.name_en 은 121개 도시 전부 보유(결측 0) = 옛 영상 카드도 즉시 영어 표기.
         `SELECT sv.itinerary_id, sv.day, sv.is_new, sv.created_at,
-                i.title, i.start_date
+                i.title, i.start_date, c.name_en AS city_name_en
            FROM saved_videos sv
            JOIN itineraries i ON i.id = sv.itinerary_id
+           LEFT JOIN cities c ON c.id = i.city_id
           WHERE ($2 OR sv.user_id = $1)
             AND i.video_by_day -> (sv.day::text) ->> 'status' = 'succeeded'
           ORDER BY sv.is_new DESC, sv.created_at DESC, sv.day`,
@@ -460,6 +464,7 @@ export function registerVideoRoutes(app: Express): void {
           day: row.day,
           isNew: row.is_new,
           title: row.title,
+          cityNameEn: row.city_name_en, // 화면이 제목의 도시명을 이 값으로 갈아끼운다(§16)
           startDate: row.start_date,
           savedAt: row.created_at,
         })),

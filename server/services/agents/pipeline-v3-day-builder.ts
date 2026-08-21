@@ -162,19 +162,21 @@ export async function buildDayResult(
     accommodationCoords = formData.accommodationCoords;
     accommodationName = formData.accommodationName || "숙소";
     accommodationAddress = formData.accommodationAddress || "";
+    // ⚠️ 수정금지(승인필요) 2026-08-21 사장님 승인 = 아래 3분기(숙소 미입력 = 도심 기준)는 **이름을 비운다**(§19).
+    //   사유 = 옛 코드는 "{도시} 도심" 을 한국어로 서버에서 만들어 저장했고, 그 값이 화면의 3단계 선택에서
+    //   1순위로 이겨 i18n 폴백(trip.departureCityCenter = 7개 언어 전부 존재)까지 내려가지 못했다
+    //   → 앱 언어가 프랑스어여도 "Lima 도심" 이 그대로 보였다(2026-08-21 실기기 스샷).
+    //   이름을 비우면 화면이 그 자리에서 뷰어 언어로 조립한다(= 좌표는 그대로라 동선·거리 계산 무영향).
   } else if (
     formData.destinationCoords?.lat &&
     formData.destinationCoords?.lng
   ) {
     accommodationCoords = formData.destinationCoords;
-    accommodationName = `${formData.destination} 도심`;
   } else if (preloaded.cityCoords?.lat && preloaded.cityCoords?.lng) {
     // ⭐ DB cities 테이블의 도시 중심 좌표 자동 사용 (사용자가 숙소 미입력 시)
     accommodationCoords = preloaded.cityCoords;
-    accommodationName = `${preloaded.cityName || formData.destination} 도심`;
   } else if (dayPlaces.length > 0 && dayPlaces[0].lat && dayPlaces[0].lng) {
     accommodationCoords = { lat: dayPlaces[0].lat, lng: dayPlaces[0].lng };
-    accommodationName = "도심 기준";
   }
 
   // ── 이동 구간 계산 = DB-only(route-local) 계산법 단일 SSOT(§16) ──

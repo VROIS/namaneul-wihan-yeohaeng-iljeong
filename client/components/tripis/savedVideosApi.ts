@@ -11,6 +11,9 @@ export interface SavedVideoRow {
   day: number;
   isNew: boolean; // 완료 자동게시 표식(★ + 탭 뱃지) = 그 영상 뷰를 1회 열면 해제
   title: string;
+  // 🏙️ 2026-08-21 = 도시 영문명(cities.name_en) = 서버가 **읽을 때** 이어붙인다(video-routes.ts 조인).
+  //   title 은 생성 시점 언어로 굳어 있어("리마 3일 여행") 화면이 도시명만 이 값으로 갈아끼운다(§16).
+  cityNameEn?: string | null;
   startDate: string | null;
   savedAt: string;
 }

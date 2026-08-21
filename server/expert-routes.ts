@@ -9,6 +9,8 @@ import { eq, desc, and, or, sql } from "drizzle-orm";
 import { notificationService } from "./notificationService";
 import { getUserIdFromReq, getRoleFromDb } from "./auth-user"; // Bearer → userId·역할 단일 관문(2026-07-29 §16 / 역할 1벌화 2026-08-06)
 import { chargeOnSuccess, precheckFeature } from "./credit-charge"; // 크레딧 사전확인·완성시점차감 단일 관문(2026-07-29 §9 / 1벌화 2026-08-09)
+// 🏙️ 2026-08-21 = 문의카드 도시명 = 읽을 때 영문으로 조립 1벌(§16, 여정·프로필과 같은 원칙)
+import { attachInquiryCityNameEn } from "./services/shared/itinerary-city-name";
 
 // db 널 가드 = place-upsert 'db_unavailable' 규약과 동일 취지(각 핸들러 try/catch가 500 처리)
 function db() {
@@ -161,7 +163,8 @@ export function registerExpertRoutes(app: Express): void {
           },
         ];
       }
-      res.json(rows);
+      // 도시명 = 읽을 때 영문으로 조립(§16) = 저장된 스냅샷("리마")은 그대로 두고 화면 표기만 통일.
+      res.json(await attachInquiryCityNameEn(rows));
     } catch (e: any) {
       console.error("[Expert] 목록 실패:", e?.message);
       res.status(500).json({ error: "Failed to fetch inquiries" });

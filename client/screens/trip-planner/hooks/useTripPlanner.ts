@@ -27,6 +27,8 @@ import { useAiOpinionOverlay } from "./useAiOpinionOverlay";
 import { useSaveItinerary } from "./useSaveItinerary";
 import { useShareCalendar } from "./useShareCalendar";
 import { useGenerateItinerary } from "./useGenerateItinerary";
+// "도심 기준" 표식 판별 1벌(§16) = 실제 숙소가 아니므로 복원 시 숙소 목록에서 제외
+import { isCityCenterName } from "@/lib/display-city-name";
 
 type ScreenState = "Input" | "Loading" | "Result";
 
@@ -347,9 +349,15 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
         setItinerary(raw as Itinerary);
         setAiOpinionData((raw as any).verification?.result ?? null);
         // ⚠️ 수정금지(승인필요) 2026-08-13 = 이름 없는 것(서버 깃발용 좌표)은 실제 숙소가 아니므로 제외.
+        // ⚠️ 수정금지(승인필요) 2026-08-21 사장님 승인 = 서버가 저장해 둔 "{도시} 도심"·"도심 기준" 은
+        //   실제 숙소가 아니라 도심기준 표식이므로 여기서 제외한다(§19). 안 그러면 복원 시 실제 숙소로
+        //   오인돼 출발바가 그 한국어를 그대로 쓰고, 앱 언어를 바꿔도 "Lima 도심" 이 남는다(실기기 실측).
         const accoms: DayAccommodation[] = (raw.days || [])
           .filter(
-            (d: any) => d.accommodation?.coords?.lat && d.accommodation?.name,
+            (d: any) =>
+              d.accommodation?.coords?.lat &&
+              d.accommodation?.name &&
+              !isCityCenterName(d.accommodation.name),
           )
           .map((d: any) => ({
             day: d.day,

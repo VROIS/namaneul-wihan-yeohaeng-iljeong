@@ -17,6 +17,11 @@ import {
   computeItineraryFingerprint,
 } from "./itinerary-save";
 import { matchCityIdByName } from "./city-match"; // 목적지 → 도시 id 1벌(대표 지정 B1 이 씀)
+// 🏙️ 2026-08-21 = 읽을 때 도시 영문명(cities.name_en) 이어붙이기 1벌(§16) = 옛 여정도 영어 표기.
+import {
+  attachCityNameEn,
+  attachCityNameEnMany,
+} from "./services/shared/itinerary-city-name";
 
 export function registerItineraryRoutes(app: Express): void {
   // ⚠️ 2026-07-16 = /api/budget/preview·calculate·compare 3개 완전삭제(§19) = client/bts-app/public 전수 grep 호출자 0
@@ -64,10 +69,11 @@ export function registerItineraryRoutes(app: Express): void {
       const isAdmin = authId
         ? (await getRoleFromDb(authId)) === "admin"
         : false;
-      const itineraries = isAdmin
+      const rows = isAdmin
         ? await storage.getAllItineraries()
         : await storage.getUserItineraries(req.params.userId);
-      res.json(itineraries);
+      // 도시 영문명 이어붙이기 1벌(§16) = 저장 안 하고 읽을 때 조립 → 옛 여정도 즉시 영어 표기.
+      res.json(await attachCityNameEnMany(rows as any[]));
     } catch (error) {
       console.error("Error fetching itineraries:", error);
       res.status(500).json({ error: "Failed to fetch itineraries" });
@@ -81,7 +87,8 @@ export function registerItineraryRoutes(app: Express): void {
       if (!itinerary) {
         return res.status(404).json({ error: "Itinerary not found" });
       }
-      res.json(itinerary);
+      // 도시 영문명 이어붙이기 1벌(§16) = 저장 안 하고 읽을 때 조립 → 옛 여정도 즉시 영어 표기.
+      res.json(await attachCityNameEn(itinerary as any));
     } catch (error) {
       console.error("Error fetching itinerary:", error);
       res.status(500).json({ error: "Failed to fetch itinerary" });

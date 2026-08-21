@@ -7,13 +7,15 @@ import { db } from "./db";
 // guides = 해설 창고 1벌(2026-08-02). 도시 카드 [해설] 배지를 켤지 여기서 있는지만 본다.
 import { cities, placeSeedRaw, itineraries, guides } from "../shared/schema";
 // ne·isNull·isNotNull = 대표장소 조건을 city-representative-place 1벌로 옮기며 이 파일에서 안 쓰게 됨(삭제 2026-08-05 §19)
-import { eq, sql, desc, and, or } from "drizzle-orm";
+import { eq, sql, desc, and, or, inArray } from "drizzle-orm";
 // ⚠️ 완비 기준 = ag2 의 상수 1벌을 가져다 쓴다(§16). 여기에 300 을 다시 적으면 기준이 두 벌이 된다.
 import { READY_THRESHOLD } from "./services/agents/ag2-gemini-recommender";
-// 도시 대표장소 = 조건·정렬 1벌(해설 무료 판정과 같은 기준을 봐야 함, 2026-08-05 §16)
+// 도시 대표장소 = 조건·정렬 1벌(§16). 하이라이트 카테고리 순서도 같은 파일이 정본.
 import {
   cityRepresentativeWhere,
   cityRepresentativeOrder,
+  HIGHLIGHT_CATEGORIES,
+  pickDisplayName,
 } from "./services/shared/city-representative-place";
 import {
   computeDayRouteLive,
@@ -75,9 +77,46 @@ export function registerCityPlaceRoutes(app: Express): void {
       //   같은 장소라도 언어가 다르면 해설 자체가 다르므로 창고를 찾는 열쇠에 반드시 들어간다.
       const lang = String(req.query.lang || "ko");
 
-      // 조회 2번뿐 = ① 도시 1행(+있으면 대표여정 LEFT JOIN) ② 도심 리뷰 상위 3곳(2026-08-01 "대표 사진" SQL 그대로).
-      //   상위 3곳 = 사진(1위)·한 줄 카피(1위 summary_ko)·하이라이트(3곳)를 **한 번의 조회로** 다 쓴다(§16 = 같은 조건 두 번 묻지 않음).
-      const [[row], top3] = await Promise.all([
+      // ③ 하이라이트 = 4 CAT 각 1위를 **조회 1번**으로(§16 = CAT마다 따로 묻지 않는다).
+      //   같은 후보조건(cityRepresentativeWhere) 위에서 CAT 별로 리뷰수 1위 = 창(window) 한 번.
+      //   순서 = HIGHLIGHT_CATEGORIES 배열 순서 그대로(hotspot→attraction→healing→adventure).
+      //   ⚠️ 수정금지(승인필요) 2026-08-21 사장님 승인 = 이 조회는 ①②와 서로 의존하지 않으므로 **아래
+      //     Promise.all 안에서 같이** 나간다(§22 판단검증 지적). 순차 await 로 두면 도시 칩마다 불리는
+      //     라우트에서 DB 왕복이 1회 더 늘어난다.
+      const catOrder = sql.raw(
+        HIGHLIGHT_CATEGORIES.map((cat, i) => `WHEN '${cat}' THEN ${i}`).join(
+          " ",
+        ),
+      );
+      const ranked = db
+        .select({
+          nameEn: placeSeedRaw.nameEn,
+          nameLocal: placeSeedRaw.nameLocal,
+          nameKo: placeSeedRaw.nameKo,
+          rn: sql<number>`ROW_NUMBER() OVER (PARTITION BY ${placeSeedRaw.seedCategory} ORDER BY ${placeSeedRaw.googleReviewCount} DESC, ${placeSeedRaw.id} DESC)`.as(
+            "rn",
+          ),
+          catRank:
+            sql<number>`CASE ${placeSeedRaw.seedCategory} ${catOrder} ELSE 99 END`.as(
+              "cat_rank",
+            ),
+        })
+        .from(placeSeedRaw)
+        .where(
+          and(
+            cityRepresentativeWhere(cityId),
+            inArray(placeSeedRaw.seedCategory, [...HIGHLIGHT_CATEGORIES]),
+          ),
+        )
+        .as("ranked");
+
+      // 조회 3번 = ① 도시 1행(+있으면 대표여정 LEFT JOIN) ② 대표장소 1곳(사진·태그라인) ③ 하이라이트(CAT별 1위).
+      //   ②·③ 을 나눈 이유(2026-08-21 사장님 승인) = 얼굴(사진)과 하이라이트의 **기준이 서로 다르다**.
+      //     · 사진 = 그 도시 리뷰수 1위(랜드마크 노출순위 유지)
+      //     · 하이라이트 = 4 CAT(hotspot→attraction→healing→adventure) 각 1위 = 성격이 겹치지 않게
+      //       (옛 "리뷰수 top3" 폐기 = 2026-08-21 §19 — 같은 성격만 3개 뽑히고 식당·쇼핑몰이 도시 얼굴 옆에
+      //       나란히 서던 문제. 나이로비 = 쇼핑몰 3개, 파리·런던 등 5도시 = 식당이 하이라이트에 노출).
+      const [[row], repRows, highlightRows] = await Promise.all([
         db
           .select({
             nameKo: cities.name,
@@ -138,10 +177,19 @@ export function registerCityPlaceRoutes(app: Express): void {
             nameEn: placeSeedRaw.nameEn,
           })
           .from(placeSeedRaw)
-          // ⚠️ 수정금지(승인필요) 2026-08-05 = 조건·정렬은 **city-representative-place 1벌**을 가져다 쓴다.
-          //   여기서 다시 적으면 = 해설 무료 판정(guide-routes)과 갈라져 카드에 뜬 장소인데 5크레딧이 깎인다(§16).
+          // ⚠️ 수정금지(승인필요) 2026-08-05 = 조건·정렬은 **city-representative-place 1벌**을 가져다 쓴다(§16).
           .where(cityRepresentativeWhere(cityId))
           .orderBy(...cityRepresentativeOrder)
+          .limit(1),
+        db
+          .select({
+            nameEn: ranked.nameEn,
+            nameLocal: ranked.nameLocal,
+            nameKo: ranked.nameKo,
+          })
+          .from(ranked)
+          .where(eq(ranked.rn, 1))
+          .orderBy(ranked.catRank)
           .limit(3),
       ]);
       if (!row) return res.status(404).json({ error: "City not found" });
@@ -151,7 +199,7 @@ export function registerCityPlaceRoutes(app: Express): void {
       //   카드가 보여주는 장소(리뷰 1위)와 [해설 만들기]가 여는 장소가 같은 1곳이라 고를 것이 없다.
       //   찾는 열쇠 = (장소번호, 언어) 두 칸 = 색인 guides_place_lang_idx 그대로.
       //   ⚠️ 있는지만 본다 = 내용 칸은 뽑지 않고 1행에서 끊는다(이 라우트는 도시 칩마다 불린다).
-      const repPlaceId = top3[0]?.id ?? null;
+      const repPlaceId = repRows[0]?.id ?? null;
       const guideHit =
         repPlaceId === null
           ? []
@@ -164,12 +212,12 @@ export function registerCityPlaceRoutes(app: Express): void {
               .limit(1);
 
       // ⚠️ 수정금지(승인필요) 2026-08-21 사장님 승인 = 태그라인 = 대표여정 유무와 무관하게 공식 1벌(§0·§19).
-      //   대표장소(top3[0], 사진과 같은 1위 행) 요약이 항상 중간 폴백으로 보장 = 앞으로 대표여정이 몇 개가
+      //   대표장소(사진과 같은 1위 행) 요약이 항상 중간 폴백으로 보장 = 앞으로 대표여정이 몇 개가
       //   생기든(무한대로 늘 도시카드) 주인공문장 빈 여정 5곳이 PSR 요약을 가리던 버그가 구조적으로 재발 못 함.
       //   이중 경로(기본값 설정 후 조건부 재계산) 폐기 = 2026-08-21 §19.
       const tagline =
         (row.itineraryId !== null && row.protagonistSentence) ||
-        top3[0]?.summaryKo ||
+        repRows[0]?.summaryKo ||
         (row.itineraryId !== null && row.title) ||
         "";
 
@@ -182,9 +230,11 @@ export function registerCityPlaceRoutes(app: Express): void {
         country: row.country,
         countryCode: row.countryCode,
         tagline,
-        highlights: top3.map((p) => p.nameKo || p.nameEn),
+        // ⚠️ 수정금지(승인필요) 2026-08-21 사장님 승인 = 표시명 = pickDisplayName 1벌(§16, 규칙·사유는
+        //   city-representative-place.ts 에). 옛 name_ko 우선 폐기 = 2026-08-21 §19.
+        highlights: highlightRows.map(pickDisplayName),
         dayCount: 0, // 0 = 화면이 "N일 코스" 배지를 안 그림
-        imageUrl: top3[0]?.imageUrl ?? null,
+        imageUrl: repRows[0]?.imageUrl ?? null,
         // 🎙️ 2026-08-02 사장님 순서 ㉠ = 관리자가 [해설 만들기] 로 여는 장소 = 위 사진과 **같은 1위 행**.
         //   그 도시에 쓸 장소가 하나도 없으면 null = 화면이 [해설 만들기] 를 아예 안 그린다.
         placeId: repPlaceId,
@@ -193,20 +243,15 @@ export function registerCityPlaceRoutes(app: Express): void {
         hasVideo: false,
       };
 
-      // ② 대표여정이 있으면 그 여정 값이 이긴다(사진은 위 1위 장소 그대로 = 두 경우 동일).
+      // ② 대표여정이 있으면 **일수·영상 배지만** 그 여정에서 가져온다.
+      //   ⚠️ 수정금지(승인필요) 2026-08-21 사장님 승인 = 하이라이트를 여정 rawData 로 덮어쓰던 경로
+      //     완전삭제 = 2026-08-21 §19. 사유 = ㉠ 하이라이트는 **그 도시 전체의 대표성**이어야 하는데 여정
+      //     1일차 방문순서를 그대로 쓰면 식당·카페가 올라왔다(파리 안젤리나·런던 Bancone 등 5도시 실측).
+      //     ㉡ 대표여정 유무로 로직이 두 벌 갈려 도시마다 기준이 달랐다(유럽5 = 여정 / 나머지5 = PSR).
+      //     이제 하이라이트는 여정과 무관하게 PSR 1벌 = 카드가 무한대로 늘어도 전 도시 같은 기준.
       if (row.itineraryId !== null) {
         const raw = row.rawData as any;
         const days: any[] = Array.isArray(raw?.days) ? raw.days : [];
-        // 하이라이트 = rawData.days 앞에서부터 장소명 정확히 3개(1일차가 3곳 미만이면 다음 날 이어붙임 = B-0)
-        const picked: string[] = [];
-        for (const d of days) {
-          for (const p of d?.places || []) {
-            if (picked.length >= 3) break;
-            if (typeof p?.name === "string" && p.name) picked.push(p.name);
-          }
-          if (picked.length >= 3) break;
-        }
-        card.highlights = picked;
         card.dayCount = days.length;
         // hasVideo = 하루라도 영상 성공(succeeded)이면 true = ▶배지는 영상이 실제로 있을 때만(B5)
         card.hasVideo = Object.values(row.videoByDay || {}).some(

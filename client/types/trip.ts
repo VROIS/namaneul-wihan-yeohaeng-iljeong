@@ -177,6 +177,10 @@ export interface BudgetTotals {
 export interface Itinerary {
   title: string;
   destination: string;
+  // ⚠️ 수정금지(승인필요) 2026-08-21 사장님 승인 = 화면 표시용 도시 영문명(서버 cities.name_en).
+  //   destination 은 생성 시점 입력값이 굳어 언어를 못 바꾸므로, 표시할 때 이 값을 먼저 쓴다(§16).
+  //   옛 여정에는 없을 수 있어 optional = 없으면 destination 폴백.
+  destinationEn?: string | null;
   startDate: string;
   endDate: string;
   days: DayPlan[];

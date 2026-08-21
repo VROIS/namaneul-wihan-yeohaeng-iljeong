@@ -66,7 +66,14 @@ export type GuideStackParamList = {
   // 해설 화면 입구 = 둘 중 하나만 준다(둘 다 이후 흐름은 완전히 같다):
   //   · imageBase64 = 기기 카메라·갤러리 사진 (원래 입구)
   //   · placeId     = 우리 DB 장소(place_seed_raw.id) = 서버가 그 장소 사진을 재료로 내어준다 (2026-08-02 사장님 지시)
-  GuideResult: { imageBase64?: string; placeId?: number; lang?: string };
+  // ⚠️ 수정금지(승인필요) 2026-08-21 사장님 승인 = from = **출발화면**(무료/차감 판정 기준, §9).
+  //   "card" = 도시 대표카드 맛보기(무료) / 없음 = 여정 슬롯 등 심화(로그인+차감). openGuide.ts 가 넣는다.
+  GuideResult: {
+    imageBase64?: string;
+    placeId?: number;
+    lang?: string;
+    from?: string;
+  };
 };
 
 const Stack = createNativeStackNavigator<GuideStackParamList>();
@@ -245,7 +252,12 @@ function GuideResultHost({
   // ⚠️ 수정금지(승인필요) 2026-08-14 사장님 승인 = 판단3종 적발(§22) = route.params.lang('zh' 등)을 정규화 없이
   //   그대로 쓰면 DetailViewer.js/IOS_VOICE_MAP 가 'zh-CN' 키만 있어 한국어로 폴백됨. 여기 1곳에서 정규화하면
   //   이 화면의 guideT() 전부(§0 = 같은 값 여러 곳에서 각자 정규화 금지)와 DetailViewer 전달까지 한 번에 해결.
-  const { imageBase64, placeId, lang: rawLang = "ko" } = route.params;
+  const {
+    imageBase64,
+    placeId,
+    lang: rawLang = "ko",
+    from: openedFrom,
+  } = route.params;
   const lang = normalizeLang(rawLang);
   const showCreditShortfall = useCreditShortfall();
   // ⚠️ 수정금지(승인필요) 2026-08-05 = 이 화면은 **루트 스택 fullScreenModal**(가이드 미니앱) 안이다
@@ -359,8 +371,9 @@ function GuideResultHost({
         //   (장소, 언어)로 이미 만들어 둔 해설이 있으면 그대로 보여준다 = 유료 외부호출 0.
         //   204 = 창고에 없음 → 아래에서 새로 만들고, 다 만들면 창고에 자동으로 담는다.
         if (placeId) {
+          // ⚠️ 수정금지(승인필요) 2026-08-21 사장님 승인 = from = 출발화면(§9 무료/차감 판정, 서버 1벌).
           const wr = await fetch(
-            `${CONFIG.API.SERVER_URL}/api/guide/place-guide?placeId=${placeId}&lang=${lang}`,
+            `${CONFIG.API.SERVER_URL}/api/guide/place-guide?placeId=${placeId}&lang=${lang}${openedFrom ? `&from=${encodeURIComponent(openedFrom)}` : ""}`,
             { headers: authHeader },
           );
           if (wr.status === 402) {

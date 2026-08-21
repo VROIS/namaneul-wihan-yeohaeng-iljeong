@@ -12,6 +12,8 @@ import Icon from "@/components/Icon";
 import ThemedText from "@/components/ThemedText";
 import { styles, getResponsiveFullTripCardWidth } from "../styles";
 import { shortDateCard, summaryLineCard } from "../utils";
+// 도시명 표시 규칙 1벌(§16) = destinationEn(cities.name_en) 우선 → destination 폴백
+import { displayCityName } from "@/lib/display-city-name";
 import type { ProfileApi } from "../hooks/useProfile";
 // 숨김 이름표(종류:id) = 공용 1벌(§16). 목록·저장은 useProfile 이 1번만 부른다.
 import { cardKey } from "../hooks/useHiddenCards";
@@ -168,8 +170,11 @@ export default function TripsSection({ profile }: { profile: ProfileApi }) {
               <View
                 style={[styles.cardHeaderRow, isAdmin && { paddingLeft: 32 }]}
               >
+                {/* ⚠️ 수정금지(승인필요) 2026-08-21 사장님 승인 = 도시명 = displayCityName 1벌(§16) =
+                    결과화면 헤더·출발바와 같은 규칙(destinationEn → destination). 서버 목록 라우트가
+                    읽을 때 cities.name_en 을 이어붙이므로 옛 여정도 영어로 나온다. */}
                 <Text style={styles.cardCityRich} numberOfLines={1}>
-                  {trip.rawData?.destination || trip.title}
+                  {displayCityName(trip.rawData || {}) || trip.title}
                 </Text>
               </View>
 

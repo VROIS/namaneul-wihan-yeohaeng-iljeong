@@ -32,7 +32,7 @@ import {
   chargeOnSuccess,
   precheckFeature,
 } from "./credit-charge";
-import { isCityRepresentativePlace } from "./services/shared/city-representative-place"; // 도시 대표장소=맛보기 무료 판정 1벌(2026-08-05 §16)
+// 🗑️ isCityRepresentativePlace import 삭제 = 2026-08-21 §19(무료 판정 = 출발화면 from=card 로 이관)
 import { uploadDataUriToR2 } from "./services/shared/r2-client"; // 기기 사진(base64) → R2 guides/ 파일화 1벌(2026-08-06 §16, Cloudflare 이전 1단계)
 
 // ⚠️ db 는 DB 미연결 시 null 가능(server/db.ts) = 라우트 진입 시 확정(bts-routes 패턴). null 이면 throw → 각 라우트 catch 가 503.
@@ -340,23 +340,21 @@ export function registerGuideRoutes(app: Express): void {
         }
       }
       // 🪙 차감 = 내 것이 아닐 때만(볼 때마다 5, 사장님 확정). res.json 보다 먼저(§9 표4).
-      //   ⚠️ 수정금지(승인필요) 2026-08-05 사장님 SSOT = **도시 대표장소 해설 = 맛보기 = 조건 없이 무료.**
-      //     사유(사장님 실측): 도시 카드의 [해설]은 대표 이미지 1장짜리 **샘플**인데, 옛 코드는 비로그인만
-      //     우연히 공짜였고(§9 게스트 통과) **로그인하면 5가 깎였다** = 로그인할수록 손해인 앞뒤 안 맞는 상태.
-      //     판정은 서버가 단독으로 한다(city-representative-place 1벌) = 화면이 무엇을 보내도 흉내낼 수 없다.
-      //     ⚠️ requester 를 먼저 본다 = 비로그인은 어차피 무과금(chargeFeature)이라 대표장소 판정(조회 2회)이
-      //       순수 낭비다. 도시카드 맛보기가 가장 잦은 경로라 그 길에서 0회가 된다.
+      //   ⚠️ 수정금지(승인필요) 2026-08-21 사장님 SSOT = **무료/차감은 "출발화면"이 정한다.**
+      //     · 도시카드에서 열면(from=card) = 맛보기 = 조건 없이 무료(비로그인 포함).
+      //     · 여정 슬롯에서 열면 = 심화 = 로그인 + 5차감.
+      //     · 프로필/나의 TRIPIS 재열람(mine) = 이미 지불한 본인 것 = 무료.
+      //     화면이 흉내낼 수 있는 것은 맛보기 1장뿐이고, 그 1장은 창고에 이미 있는 해설이라 외부호출 0·
+      //     회사 지출 0 이다(= 흉내내도 손해가 없다). 옛 장소기준 무료판정 폐기 = 2026-08-21 §19 —
+      //     같은 장소라도 경로가 다르면 값이 달라야 하는데 장소로는 구분 불가였고, 여정 슬롯에 그 도시
+      //     대표장소가 들어오면 차감이 안 되던 구멍이 있었다.
       //   ⚠️ 수정금지(승인필요) 2026-08-09 사장님 최우선 SSOT = **차감은 완성 시점에만.**
       //     이 길은 **이미 만들어진 해설을 창고에서 꺼내 주는 것**이라 만들다 실패할 것이 없다
       //     = 지금 자리가 곧 완성 시점이다(생성 경로처럼 뒤로 옮길 것이 없음).
       //     다만 **줄 내용이 없으면 받은 게 없는 것** = 그때는 깎지 않는다(빈 해설에 5크레딧 = 환불 분쟁 소지).
+      const fromCityCard = String(req.query.from || "") === "card";
       const deliverable = (row.content || row.description || "").trim();
-      if (
-        deliverable &&
-        !mine &&
-        requester &&
-        !(await isCityRepresentativePlace(placeId))
-      ) {
+      if (deliverable && !mine && requester && !fromCityCard) {
         if (!(await chargeFeature(res, requester, "guide_explain"))) return;
       }
 
