@@ -8,10 +8,6 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { StatusBar } from "expo-status-bar";
 import { useFonts } from "expo-font";
 import {
-  NotoSerifKR_400Regular,
-  NotoSerifKR_700Bold,
-} from "@expo-google-fonts/noto-serif-kr"; // ⚠️ 수정금지(승인필요) — BTS 아리랑 한국어 세리프
-import {
   PlayfairDisplay_400Regular,
   PlayfairDisplay_700Bold,
 } from "@expo-google-fonts/playfair-display"; // ⚠️ 수정금지(승인필요) — BTS 아리랑 영어 디스플레이
@@ -45,14 +41,17 @@ SplashScreen.setOptions({ fade: true, duration: 300 });
 //   글자 애니메이션 = 시작 그림이 정지 이미지라 불가 = 속도 우선으로 포기(사장님 확정).
 
 export default function App() {
-  // ⚠️ 수정금지(승인필요) — 폰트 로드 (Pretendard 4종 + NotoSerifKR 2종 + PlayfairDisplay 2종)
+  // ⚠️ 수정금지(승인필요) 2026-08-21 사장님 승인 = AAB 용량 다이어트(§ docs/2026-08-14 "다음 빌드 묶음" 2번).
+  //   NotoSerifKR = npm 패키지(9굵기×14MB=127MB, AAB 170MB 중 75%) 의존 제거 = 실사용 2굵기(Regular·Bold, BTS
+  //   아리랑용)만 Pretendard와 동일 방식(assets/fonts/ 직접 파일 + require())으로 교체. 나머지 7굵기 미사용 삭제.
+  // 폰트 로드 (Pretendard 4종 + NotoSerifKR 2종 + PlayfairDisplay 2종)
   const [loaded, error] = useFonts({
     "Pretendard-Regular": require("../assets/fonts/Pretendard-Regular.otf"),
     "Pretendard-Medium": require("../assets/fonts/Pretendard-Medium.otf"),
     "Pretendard-SemiBold": require("../assets/fonts/Pretendard-SemiBold.otf"),
     "Pretendard-Bold": require("../assets/fonts/Pretendard-Bold.otf"),
-    "NotoSerifKR-Regular": NotoSerifKR_400Regular,
-    "NotoSerifKR-Bold": NotoSerifKR_700Bold,
+    "NotoSerifKR-Regular": require("../assets/fonts/NotoSerifKR-Regular.ttf"),
+    "NotoSerifKR-Bold": require("../assets/fonts/NotoSerifKR-Bold.ttf"),
     "PlayfairDisplay-Regular": PlayfairDisplay_400Regular,
     "PlayfairDisplay-Bold": PlayfairDisplay_700Bold,
     "SpaceGrotesk-Regular": SpaceGrotesk_400Regular,
