@@ -72,8 +72,24 @@ export async function buildItineraryData(body: any) {
     typeof perPersonEur === "number" && isFinite(perPersonEur)
       ? perPersonEur
       : undefined;
+  // ⚠️ 2026-08-22 사장님 승인(A+B+C) = 인원·바이브·밀도·초점 컬럼 = body 직접값 ?? rawData(생성 산출물=진실).
+  //   8/9 '만드는 중 행' 개편 이후 이 필드들이 조립에서 빠져 컬럼이 DB 디폴트(Couple/2)로 굳던 근본 원인.
+  //   값 없으면 키를 넣지 않는다(도시 id 와 같은 규칙 = 이미 든 값을 지우지 않음).
+  const truthCols = Object.fromEntries(
+    [
+      "companionType",
+      "companionCount",
+      "companionAges",
+      "curationFocus",
+      "vibes",
+      "travelPace",
+    ]
+      .map((k) => [k, (body as any)[k] ?? (rawData as any)[k]])
+      .filter(([, v]) => v != null),
+  );
   return {
     ...bodyRest,
+    ...truthCols,
     ...(matchedCityId != null ? { cityId: matchedCityId } : {}),
     ...(totalCostEur != null ? { totalCost: totalCostEur } : {}),
     // ⚠️ 사장님 SSOT 2026-07-14 = 여정은 로그인 본인 ID(users.id)로 저장 = 전문가가 연락할 상대·푸시 대상 특정. 옛 'admin' 강제 폐기 §19(§9 로그인제거 잔재).

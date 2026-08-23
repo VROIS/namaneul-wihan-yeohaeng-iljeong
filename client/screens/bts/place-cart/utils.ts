@@ -100,12 +100,11 @@ export function resolvePlaceImageFull(
   return { uri };
 }
 
-// ⚠️ 수정금지(승인필요) — 2026-04-24 Track 5b: 도시/장소 이름 언어 연동 헬퍼. 영어 토글 시 nameEn 우선.
+// ⚠️ 수정금지(승인필요) — 2026-08-22 사장님 원칙 = 장소명 노출 = nameEn 1순위(로케일 무관, 한국어 분기 폐기 = 2026-08-22 §19).
 export function localizedName(
   item: { nameKo?: string | null; nameEn?: string | null },
-  isKorean: boolean,
+  _isKorean: boolean,
 ): string {
-  if (isKorean) return item.nameKo || item.nameEn || "";
   return item.nameEn || item.nameKo || "";
 }
 

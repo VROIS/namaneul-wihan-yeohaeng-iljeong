@@ -1,0 +1,69 @@
+{
+ "_meta": "클로드(Fable5) 수동 스토리보드 영어판 = 2026-08-22 사장님 지시(뮌헨 대표영상 = 영어 = 다국어 배선 동시 검증). 나레이션 = editorialSummary 내용 근거 영어 작성(창작 금지, 비ko 규칙) + cardSummary(카드 요약, 영어). 8번 다하우 = 경건 톤.",
+ "title": "Four of Us, One Munich — Where's the Little One?",
+ "scenes": [
+  {
+   "sceneIndex": 1,
+   "placeName": "Neues Schloss Herrenchiemsee",
+   "narrationKo": "The peak of palace splendor, built on an island in the middle of a lake!",
+   "visualPrompt": "Studio Ghibli hand-drawn watercolor anime style. A family of four <IMAGE_REF_0> <IMAGE_REF_1> <IMAGE_REF_2> <IMAGE_REF_3> steps off a small ferry toward a grand lakeside palace, morning mist over the water; guide <IMAGE_REF_4> counts heads with fingers — one, two, three... the youngest is already running ahead toward the golden gate. Sparkling lake reflections, comic energy. Vertical 9:16 short-form.",
+   "cardSummary": "A lavish island palace inspired by Versailles, reached by ferry."
+  },
+  {
+   "sceneIndex": 2,
+   "placeName": "Deutsches Museum",
+   "narrationKo": "German engineering at its finest — one day is nowhere near enough!",
+   "visualPrompt": "Studio Ghibli watercolor. Inside a vast science museum hall full of engines and airplanes hanging from the ceiling; the youngest child <IMAGE_REF_3> presses every button on an interactive exhibit at superhuman speed while the parents <IMAGE_REF_0> <IMAGE_REF_1> try to drag the older kid <IMAGE_REF_2> away from a giant propeller; guide <IMAGE_REF_4> checks his watch nervously. Slapstick. Vertical 9:16.",
+   "cardSummary": "The world's largest science and technology museum."
+  },
+  {
+   "sceneIndex": 3,
+   "placeName": "Königsquelle",
+   "narrationKo": "A classic Munich bistro, loved for generations!",
+   "visualPrompt": "Studio Ghibli watercolor. Cozy traditional Munich bistro, warm wood interior. Extreme food close-up filling the frame with steam curling upward; all four family members lean in from the edges of the frame with sparkling eyes and forks raised like knights' swords; guide <IMAGE_REF_4> ties a napkin like a general. Comic feast energy. Vertical 9:16.",
+   "cardSummary": "A traditional bistro serving old-school Munich flavors."
+  },
+  {
+   "sceneIndex": 4,
+   "placeName": "Haus der Kunst",
+   "narrationKo": "The hippest art in town, blooming inside a building with a dark past!",
+   "visualPrompt": "Studio Ghibli watercolor. Bold contemporary art hall with a huge colorful installation; the family strikes exaggerated 'modern art' poses imitating the sculpture — dad <IMAGE_REF_0> becomes a human pretzel; the youngest <IMAGE_REF_3> claps wildly; guide <IMAGE_REF_4> photographs them laughing. Vertical 9:16.",
+   "cardSummary": "Munich's center of experimental contemporary art."
+  },
+  {
+   "sceneIndex": 5,
+   "placeName": "Museum Brandhorst",
+   "narrationKo": "A pop-art holy land where Andy Warhol himself awaits!",
+   "visualPrompt": "Studio Ghibli watercolor with pop-art color explosion. In front of vivid Warhol-style panels, the four family members line up and the wall behind each of them turns a different pop color like a living silkscreen print; the youngest <IMAGE_REF_3> tries to high-five a painting and gets gently caught mid-air by guide <IMAGE_REF_4>. Vertical 9:16.",
+   "cardSummary": "A colorful modern art museum famous for its Warhol collection."
+  },
+  {
+   "sceneIndex": 6,
+   "placeName": "Alte Pinakothek",
+   "narrationKo": "Time travel through masterpieces by Rubens and Dürer!",
+   "visualPrompt": "Studio Ghibli watercolor. Grand old-master gallery with golden frames; as the family walks past, the paintings subtly come alive in Ghibli style — a Rubens cherub winks at the youngest <IMAGE_REF_3> who winks back; parents <IMAGE_REF_0> <IMAGE_REF_1> stand in awed silhouette; warm museum light. Gentle humor, wonder. Vertical 9:16.",
+   "cardSummary": "Classic European painting from the Middle Ages to Rococo."
+  },
+  {
+   "sceneIndex": 7,
+   "placeName": "Schleissheim Palace",
+   "narrationKo": "A grand baroque palace stroll, far from the crowds!",
+   "visualPrompt": "Studio Ghibli watercolor, late-afternoon golden light. Long baroque garden canal stretching to the horizon, almost empty; the family of four walks in a relaxed line kicking up autumn leaves, the two kids <IMAGE_REF_2> <IMAGE_REF_3> race ahead; guide <IMAGE_REF_4> strolls behind carrying everyone's bags like a peaceful pack mule. Calm, breathing scene. Vertical 9:16.",
+   "cardSummary": "A majestic baroque palace in Munich's quiet outskirts."
+  },
+  {
+   "sceneIndex": 8,
+   "placeName": "Dachau Concentration Camp Memorial Site",
+   "narrationKo": "At the Nazis' first camp, we learn the true weight of peace.",
+   "visualPrompt": "Studio Ghibli watercolor, muted grey-blue palette, NO comedy in this scene. The family stands quietly at the memorial gate in soft evening light; the mother <IMAGE_REF_1> gently holds the youngest's <IMAGE_REF_3> hand; guide <IMAGE_REF_4> removes his cap respectfully; a single white bird crosses the sky. Solemn, respectful, still. Vertical 9:16.",
+   "cardSummary": "A memorial site preserving the memory of history's pain."
+  },
+  {
+   "sceneIndex": 9,
+   "placeName": "GIGI TRATTORIA",
+   "narrationKo": "Truffle pasta this good deserves its own celebration!",
+   "visualPrompt": "Studio Ghibli watercolor, warm night lights returning color to the day. Cozy Italian trattoria; a huge truffle pasta close-up, steam forming a little heart; the family clinks glasses of juice and wine, the youngest <IMAGE_REF_3> already asleep face-first near the breadbasket while everyone laughs softly; guide <IMAGE_REF_4> raises a toast to the camera. Happy tired ending. Vertical 9:16.",
+   "cardSummary": "A stylish Italian restaurant known for its truffle pasta."
+  }
+ ]
+}

@@ -71,7 +71,10 @@ export default function DaySection({
               numberOfLines={1}
               ellipsizeMode="tail"
             >
-              {currentDay.city}
+              {/* ⚠️ 2026-08-22 사장님 원칙 = 도시·장소명 노출 nameEn>local>한국어 배제. day.city = 생성기가 destination 복사본(pipeline-v3-day-builder:456·ag4:387) = 일치 시 헤더와 같은 1벌(displayCityName)로 치환 */}
+              {currentDay.city === itinerary.destination
+                ? displayCityName(itinerary)
+                : currentDay.city}
             </Text>
           )}
         </View>

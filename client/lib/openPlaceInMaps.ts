@@ -35,7 +35,8 @@ export function openPlaceInMaps(p: PlaceForMaps): void {
     return;
   }
 
-  const name = p.nameEn || p.name || p.nameLocal || p.nameKo || "";
+  // ⚠️ 2026-08-22 사장님 원칙 = nameEn>nameLocal 체인 정렬(공식명 우선 = 지도검색 정확도)
+  const name = p.nameEn || p.nameLocal || p.name || p.nameKo || "";
   const address = p.address || p.geminiAddress;
   const query = encodeURIComponent(address ? `${name},${address}` : name);
 

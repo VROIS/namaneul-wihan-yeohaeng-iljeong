@@ -1,0 +1,69 @@
+{
+ "_meta": "클로드(Fable5) 감독판 2탄 = 나이로비 베스트영상 파일럿(사장님 지정: 랜드마크7+식당2, 영어, 라이온킹급 서사). 나레이션 = editorial/summary 내용 근거 영어(창작규칙 준수) + cardSummary. 캐스트 = 부모2(<0><1>)+아이 8·11세(<2><3>)+가이드(<4>). 서사 아크 = 사바나 일출 → 경이 → 잔치 → 교감 → 석양 축제 → 감사의 만찬.",
+ "title": "One Day, One Wild Heart — Nairobi",
+ "scenes": [
+  {
+   "sceneIndex": 1,
+   "placeName": "Nairobi National Park",
+   "narrationKo": "Where else do lions greet the sunrise with a city skyline behind them? Only here.",
+   "cardSummary": "A dawn safari where wild lions roam minutes from downtown skyscrapers.",
+   "visualPrompt": "Dawn golden light. The family of four stands in an open safari jeep, blankets over shoulders, breath visible in cool morning air — the two children <IMAGE_REF_2> <IMAGE_REF_3> point in awed silence at giraffes silhouetted against the sunrise and distant skyline. Guide <IMAGE_REF_4> holds binoculars, whispering. No one speaks loudly; pure wonder. Characters small in frame — let the savanna breathe. Vertical 9:16."
+  },
+  {
+   "sceneIndex": 2,
+   "placeName": "Nairobi Safari Walk",
+   "narrationKo": "No jeep needed here — just your own two feet, eye to eye with the wild.",
+   "cardSummary": "A raised boardwalk trail for meeting Kenya's animals on foot.",
+   "visualPrompt": "Morning light on a wooden boardwalk. The youngest child <IMAGE_REF_3> locks eyes with a leopard resting below — both perfectly still, a silent duel of curiosity. The older child <IMAGE_REF_2> holds the rail wide-eyed; parents <IMAGE_REF_0> <IMAGE_REF_1> exchange a smile behind them. Guide <IMAGE_REF_4> crouches to the kids' eye level, pointing gently. Vertical 9:16."
+  },
+  {
+   "sceneIndex": 3,
+   "placeName": "Nairobi National Museum",
+   "narrationKo": "Three million years of family history — come high-five your oldest ancestors.",
+   "cardSummary": "Kenya's story of humankind, from first footsteps to today.",
+   "visualPrompt": "Museum hall, warm light. The children <IMAGE_REF_2> <IMAGE_REF_3> raise their palms in a playful high-five toward an early-human exhibit display; dad <IMAGE_REF_0> mimics a hominid walking pose, mom <IMAGE_REF_1> laughs into her hand. Guide <IMAGE_REF_4> gestures like a proud professor. Respectful fun, no touching exhibits. Vertical 9:16."
+  },
+  {
+   "sceneIndex": 4,
+   "placeName": "Fogo Gaucho",
+   "narrationKo": "Fair warning: loosen your belt. Here the meat comes to you, and it never stops.",
+   "cardSummary": "An endless parade of fire-grilled skewers, served tableside.",
+   "visualPrompt": "Lively churrascaria. Three servers circle the family's table with towering meat skewers like an honor guard; the kids <IMAGE_REF_2> <IMAGE_REF_3> hold up their plates with sparkling eyes, dad <IMAGE_REF_0> surrenders his belt buckle comically, mom <IMAGE_REF_1> flips her card to 'more'. Guide <IMAGE_REF_4> nods approval like a general. Steam and sizzle. Vertical 9:16."
+  },
+  {
+   "sceneIndex": 5,
+   "placeName": "David Sheldrick Wildlife Trust",
+   "narrationKo": "Giant babies, giant bottles — watch out, this much cuteness can break a heart.",
+   "cardSummary": "An orphanage where baby elephants drink milk and steal hearts.",
+   "visualPrompt": "Midday. A baby elephant drinks from a huge milk bottle; the youngest child <IMAGE_REF_3> mirrors it with a water bottle, cheeks puffed. A playful trunk splashes red mud toward dad <IMAGE_REF_0> who takes it heroically; mom <IMAGE_REF_1> and the older child <IMAGE_REF_2> collapse laughing. Guide <IMAGE_REF_4> shields his suit with a tiny leaf, in vain. Vertical 9:16."
+  },
+  {
+   "sceneIndex": 6,
+   "placeName": "Giraffe Centre",
+   "narrationKo": "That tongue is half your arm long — and yes, it is coming straight for your hand.",
+   "cardSummary": "Feed endangered Rothschild giraffes straight from your palm.",
+   "visualPrompt": "Afternoon sun. A giraffe lowers its great head over the feeding platform; its long tongue reaches for a pellet on the older child's <IMAGE_REF_2> open palm — the child frozen between terror and delight. The youngest <IMAGE_REF_3> queues next holding a pellet like a medal. Parents <IMAGE_REF_0> <IMAGE_REF_1> film everything, missing their own pellets being stolen by a second giraffe. Guide <IMAGE_REF_4> mediates the heist diplomatically. Vertical 9:16."
+  },
+  {
+   "sceneIndex": 7,
+   "placeName": "Karen Blixen Museum",
+   "narrationKo": "A European garden under an African sky — the golden hour everyone came for.",
+   "cardSummary": "The storied farmhouse garden glowing at golden hour.",
+   "visualPrompt": "Late-afternoon golden hour in a lush colonial garden. The family walks slowly in a loose line along a flower path, long shadows trailing; mom <IMAGE_REF_1> touches a blossom, the kids <IMAGE_REF_2> <IMAGE_REF_3> carry fallen jacaranda petals like treasure. Quiet, painterly, almost still. Guide <IMAGE_REF_4> waits by the path, hat over chest. Vertical 9:16."
+  },
+  {
+   "sceneIndex": 8,
+   "placeName": "Bomas of Kenya",
+   "narrationKo": "When the drums start, sitting still is simply not an option.",
+   "cardSummary": "Kenya's traditional dance and drums at full blast.",
+   "visualPrompt": "Sunset amphitheater energy. Drummers and dancers mid-performance; the performers wave the family in — the kids <IMAGE_REF_2> <IMAGE_REF_3> leap up copying the dance steps, dad <IMAGE_REF_0> attempts the jump woefully low, mom <IMAGE_REF_1> claps the rhythm. Guide <IMAGE_REF_4> drums on his knees. Firelight warmth, motion everywhere. Vertical 9:16."
+  },
+  {
+   "sceneIndex": 9,
+   "placeName": "Tamarind Nairobi",
+   "narrationKo": "No ocean in this city — yet here comes a lobster the size of a club. What a day.",
+   "cardSummary": "Nairobi's grand seafood table, famous for colossal lobster.",
+   "visualPrompt": "Warm candlelit dining room. A server presents a comically huge lobster platter; the kids' <IMAGE_REF_2> <IMAGE_REF_3> jaws drop in perfect sync. The family raises glasses in a slow toast; through the window, the city lights glow. The youngest <IMAGE_REF_3> is already asleep against mom's <IMAGE_REF_1> arm by dessert, clutching a jacaranda petal from the garden. Guide <IMAGE_REF_4> toasts the camera — a grateful end. Vertical 9:16."
+  }
+ ]
+}

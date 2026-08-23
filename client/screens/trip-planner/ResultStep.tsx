@@ -269,7 +269,7 @@ export default function ResultStep({ planner }: { planner: PlannerApi }) {
             return (day?.places || [])
               .map((p, i) => ({
                 id: String(p.id),
-                name: (p as any).nameLocal || p.name,
+                name: (p as any).nameEn || (p as any).nameLocal || p.name, // ⚠️ 2026-08-22 사장님 원칙 = 장소명 노출 nameEn 1순위
                 // ⚠️ 수정금지(승인필요) 2026-07-11 사장님 SSOT = 마커 = 취향 슬롯 카테고리(slotCategory) 우선 = "이 여정에서의 역할" 표시.
                 //   = 없으면(옛 저장본·DB-only) 검증 seedCategory 폴백.
                 seedCategory:

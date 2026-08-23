@@ -30,6 +30,11 @@ export interface SavedItinerary {
     //   top-level vibes 컬럼("저장" 버튼 눌러야만 채워짐, useSaveItinerary.ts)과 달리
     //   MIX 생성 즉시 만들어지는 draft 행에도 이미 들어있어 summaryLineCard 의 실제 소스로 삼는다.
     vibeWeights?: VibeWeight[];
+    // ⚠️ 2026-08-22 사장님 승인 = 인원·초점도 바이브와 같은 수술 = 생성 즉시 rawData에 있는 진실값.
+    //   컬럼은 8/9 '만드는 중 행' 개편 이후 디폴트(Couple/2)로 남아 전 카드가 2명으로 굳던 원인.
+    companionType?: string;
+    companionCount?: number;
+    curationFocus?: string;
   };
 }
 
@@ -66,9 +71,13 @@ export function summaryLineCard(
     Everyone: t("labels.curationEveryone"),
     Self: t("labels.curationSelf"),
   };
-  const comp =
-    companionLabels[trip.companionType] || t("labels.companionFamily");
-  const focus = focusLabels[trip.curationFocus] || t("labels.curationEveryone");
+  // ⚠️ 2026-08-22 사장님 승인 = rawData(생성 즉시 채워짐) 우선 → 컬럼 폴백 = vibeWeights와 동일 패턴(§16)
+  const compType = trip.rawData?.companionType || trip.companionType;
+  const compCount = trip.rawData?.companionCount ?? trip.companionCount;
+  const comp = companionLabels[compType] || t("labels.companionFamily");
+  const focus =
+    focusLabels[trip.rawData?.curationFocus || trip.curationFocus] ||
+    t("labels.curationEveryone");
   // ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 = ResultStep.tsx:210-215 와 같은 소스(itinerary.vibeWeights)로 통일.
   //   옛 trip.vibes(top-level DB컬럼, "저장" 버튼 눌러야만 채워짐)는 미저장 여정(대부분)에서 항상 비어
   //   실제 vibe와 무관하게 폴백 문구("힐링" 등)만 보이던 원인이었다(§ 프로필카드 폴백조사) — rawData.vibeWeights 우선, 없으면 옛 컬럼 그대로 대비.
@@ -84,7 +93,7 @@ export function summaryLineCard(
     i18n.language === "ko" ? (hasFinalConsonant ? "을" : "를") : "";
   return t("trip.tripFor", {
     companion: comp,
-    count: trip.companionCount,
+    count: compCount,
     focus,
     particle: objParticle,
     vibes,

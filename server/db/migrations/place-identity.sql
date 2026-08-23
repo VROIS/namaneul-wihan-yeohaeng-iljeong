@@ -69,6 +69,39 @@ CREATE OR REPLACE FUNCTION public.psr_proper_key(nm text)
   );
 $$;
 
+-- ⚠️ 2026-08-22 사장님 승인(오병합 사고 79478 = National Park↔Museum, 시뮬 검증) = 불변6 보조 함수.
+--   이름에서 스톱리스트로 제거되는 일반명사들만 뽑아 정렬·쉼표 결합 = 꼬리 비교용.
+--   ⚠️ 스톱리스트·토큰 규칙 = psr_proper_key 와 반드시 동일 유지(수정 시 두 함수 동시).
+CREATE OR REPLACE FUNCTION public.psr_removed_generics(nm text)
+ RETURNS text LANGUAGE sql IMMUTABLE AS $$
+  -- "첫 글자 대문자 = 고유명사"(라틴문자권 공통, matcher.ts properNameKey 동형). 대문자 시작 토큰만 남겨 소문자화·악센트제거·정렬조인.
+  -- 전부대/소문자 이름(대소문자 정보 없음)은 전 토큰 사용. 구두점→공백(원본 대소문자 보존 위해 lower 는 필터 뒤에).
+  WITH toks AS (
+    SELECT tok, (nm = upper(nm) OR nm = lower(nm)) AS all_same
+    FROM unnest(string_to_array(regexp_replace(coalesce(nm,''), '[^\wÀ-ÿ ]', ' ', 'g'), ' ')) AS tok
+    WHERE tok <> ''
+  )
+  SELECT COALESCE(string_agg(DISTINCT k, ',' ORDER BY k), '') FROM (
+    SELECT lower(translate(tok,'ÀÁÂÃÄÅÇÈÉÊËÌÍÎÏÑÒÓÔÕÖÙÚÛÜÝàáâãäåçèéêëìíîïñòóôõöùúûüýœ',
+                               'aaaaaaceeeeiiiinooooouuuuyaaaaaaceeeeiiiinooooouuuuyo')) AS k
+    FROM toks
+    WHERE all_same OR tok ~ '^[A-ZÀ-Þ]'   -- 대문자 시작(고유명사)만. 전부대/소문자면 전 토큰.
+  ) x
+  -- 업종/시설어(대문자여도 걷어냄) = matcher.ts GENERIC_FACILITY 와 동형. Champagne Taittinger→taittinger 흡수. 오병합은 PID veto 차단.
+  WHERE k IN (
+    'restaurant','brasserie','bistro','cafe','bar','hotel','auberge','taverne','pub','pizzeria','trattoria',
+    'museum','musee','gallery','galerie','galeries','theatre','theater','opera','cinema',
+    'palais','chateau','castle','manor','villa','domaine','maison','house','abbaye','abbey','couvent','monastere','monastery',
+    'basilique','basilica','cathedrale','cathedral','eglise','church','chapelle','chapel','temple','mosquee','synagogue',
+    'parc','park','jardin','garden','square','place','plaza','forest','foret','bois',
+    'tour','tower','pont','bridge','porte','gate','phare','lighthouse','fontaine','fountain','statue','monument',
+    'avenue','rue','street','boulevard','allee','chemin','route','promenade','quai',
+    'magasin','store','boutique','marche','market','halles','centre','center','mall',
+    'champagne','cave','caves','vignoble','winery','distillerie'
+  );
+$$;
+
+
 CREATE OR REPLACE FUNCTION public.place_seed_raw_prevent_dup()
  RETURNS trigger
  LANGUAGE plpgsql
@@ -179,6 +212,12 @@ BEGIN
         AND NOT (c.google_place_id IS NOT NULL AND c.google_place_id<>'' AND NEW.google_place_id IS NOT NULL AND NEW.google_place_id<>''
                  AND (c.google_place_id<>NEW.google_place_id
                       OR (c.google_maps_uri IS NOT NULL AND c.google_maps_uri<>'' AND NEW.google_maps_uri IS NOT NULL AND NEW.google_maps_uri<>'' AND c.google_maps_uri<>NEW.google_maps_uri)))
+        -- ⚠️ 2026-08-22 사장님 승인(시뮬 검증) = 일반명사 꼬리 상이 veto = "같은 머리+다른 꼬리"(National Park↔National Museum, Central Park↔Central Market) = 다른 장소(통과).
+        --   양쪽 다 제거 일반명사가 있고 서로 다를 때만 발동 = 꼬리 동일(Palais de↔du Tau)·한쪽 결여(Musée du Louvre↔Louvre)는 기존 병합 유지.
+        AND NOT ( public.psr_removed_generics(COALESCE(NULLIF(NEW.name_local,''), NEW.name_en)) <> ''
+                  AND public.psr_removed_generics(COALESCE(NULLIF(c.name_local,''), c.name_en)) <> ''
+                  AND public.psr_removed_generics(COALESCE(NULLIF(NEW.name_local,''), NEW.name_en))
+                      <> public.psr_removed_generics(COALESCE(NULLIF(c.name_local,''), c.name_en)) )
         AND ARRAY(SELECT k FROM unnest(ARRAY[k_en,k_local]) k WHERE length(k)>=3)
             && ARRAY(SELECT k FROM unnest(ARRAY[public.psr_proper_key(c.name_en),public.psr_proper_key(c.name_local)]) k WHERE length(k)>=3)
       LIMIT 1;

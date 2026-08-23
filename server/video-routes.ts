@@ -5,6 +5,7 @@
 
 import type { Express, Request, Response } from "express";
 import { storage } from "./storage";
+import crypto from "crypto";
 import { pool } from "./db";
 import type { DayVideo } from "../shared/schema";
 import { issueApiKey } from "./services/shared/issue-api-key";
@@ -14,6 +15,7 @@ import {
   sceneStillPrompt,
   scenePhotoMotionPrompt,
   narratorFromCast,
+  normalizeVideoLang,
   MAX_SCENES,
   SCENE_SECONDS,
 } from "./services/ghibli-travel-storyboard";
@@ -121,6 +123,8 @@ export function registerVideoRoutes(app: Express): void {
       try {
         const id = parseInt(req.params.id);
         const day = parseInt(req.body?.day);
+        // 2026-08-22 사장님 승인 = 영상 다국어 = FE가 보낸 앱 언어(미전달·미지원 = ko = 동작 무변경)
+        const lang = normalizeVideoLang(req.body?.language);
         if (isNaN(id) || isNaN(day) || day < 1)
           return res
             .status(400)
@@ -206,17 +210,27 @@ export function registerVideoRoutes(app: Express): void {
               ? await storage.getUser(itin.userId)
               : null;
             const { rawData: _omit, ...meta } = itin as any;
+            // ⚠️ 2026-08-22 사장님 승인(A+B+C) = 캐스팅 재료(누구랑·인원·나이) = rawData(생성 산출물=진실) 우선(읽을 때 조립).
+            //   컬럼은 8/9 개편 이후 디폴트(Couple/2)로 남아 4인 가족 영상이 커플로 캐스팅되던 원인 = 옛 여정도 이 줄로 전부 정확.
+            for (const k of [
+              "companionType",
+              "companionCount",
+              "companionAges",
+            ])
+              if (_omit?.[k] != null) meta[k] = _omit[k];
             const sb = await buildGhibliStoryboard({
               itinerary: meta,
               user,
               day,
               slots: sceneSlots,
               apiKey,
+              language: lang,
             });
             // 데이터 소스 = 사장님 SSOT 2026-07-23: 대사 = editorial_summary / 카드 요약 = summary_ko / 카드 장소명 = name_local
             sb.scenes.forEach((s, i) => {
               const es = sceneSlots[i]?.editorialSummary;
-              if (es) s.narrationKo = es; // 나레이션 = 우리 DB 문구 그대로(톤앤매너 통일, Gemini 창작 대사 폐기)
+              // ko = 우리 DB 문구 그대로(톤앤매너 통일) / 비ko = 제미니가 쓴 사용자 언어 나레이션 유지(2026-08-22 사장님 승인)
+              if (es && lang === "ko") s.narrationKo = es;
             });
             // 카드 요약 = 슬롯 summaryKo 우선, 없으면 PSR.summary_ko 직조회(name_local 과 동일 로직)
             const psrSummary = await resolveSummaries(sceneSlots);
@@ -226,11 +240,17 @@ export function registerVideoRoutes(app: Express): void {
                 10,
               );
               return {
+                // 2026-08-22 사장님 원칙 = 장소명 노출 nameEn 1순위(전 언어 공통)
                 placeName:
+                  sceneSlots[i]?.nameEn ||
                   sceneSlots[i]?.nameLocal ||
                   sceneSlots[i]?.name ||
                   s.placeName,
-                summary: sceneSlots[i]?.summaryKo || psrSummary[numId] || "",
+                // ko = 창고 summary_ko / 비ko = 같은 1콜 응답의 cardSummary(추가호출 0, 2026-08-22 사장님 승인)
+                summary:
+                  lang === "ko"
+                    ? sceneSlots[i]?.summaryKo || psrSummary[numId] || ""
+                    : (s as any).cardSummary || "",
               };
             });
             const narrator = narratorFromCast(sb.cast); // 나레이터 음색 = 출연진 연령대·성별 연동
@@ -243,12 +263,24 @@ export function registerVideoRoutes(app: Express): void {
               async (scene, i) => {
                 try {
                   // ⚠️ 2026-08-07 사장님 승인 = 씬 낱개 즉시 R2 보존 + 재시도 재활용(외부 재과금 0).
-                  //   키 = 여정·일차·씬순번·슬롯·스타일 전부 일치할 때만 재활용(슬롯 교체·A/B 토글 변경 = 새 생성).
+                  //   키 = 여정·일차·씬순번·슬롯·스타일 + 지문. 지문 재료는 출처별로 다름(2026-08-22 판단3종 회귀 지적 반영):
+                  //   - 수동 스토리보드 = 연출(visualPrompt·대사)+사진 → 연출 바꾸면 새 생성, 같으면 재활용.
+                  //   - 제미니 스토리보드 = 매 호출 새 문장이라 연출을 지문에 넣으면 재시도 재활용이 영원히 불일치 → **안정 재료(사진+창고 문구)만** = 옛 재활용 동작 유지.
                   const slotKeyId = String(sceneSlots[i]?.id ?? i).replace(
                     /[^A-Za-z0-9_-]/g,
                     "",
                   );
-                  const sceneKey = `itinerary-videos/${id}/scenes/d${day}-s${scene.sceneIndex}-p${slotKeyId}-${useOptionB ? "b" : "a"}.mp4`;
+                  const slotImage = sceneSlots[i]?.image;
+                  const fpSource =
+                    sb.source === "manual"
+                      ? `${scene.visualPrompt}|${scene.narrationKo}|${slotImage || ""}`
+                      : `${slotImage || ""}|${sceneSlots[i]?.editorialSummary || ""}|${sceneSlots[i]?.summaryKo || ""}`;
+                  const sceneFp = crypto
+                    .createHash("md5")
+                    .update(fpSource)
+                    .digest("hex")
+                    .slice(0, 8);
+                  const sceneKey = `itinerary-videos/${id}/scenes/d${day}-s${scene.sceneIndex}-p${slotKeyId}-${useOptionB ? "b" : "a"}-${sceneFp}.mp4`;
                   let buf: Buffer | null = await getFromR2(sceneKey);
                   const reused = !!buf;
                   if (buf) {
@@ -257,7 +289,6 @@ export function registerVideoRoutes(app: Express): void {
                     );
                   } else if (useOptionB) {
                     // B = ①실사진+캐릭터 합성 스틸 → ②Veo Lite 첫프레임 영상 (일관성 = 스틸이 보장)
-                    const slotImage = sceneSlots[i]?.image;
                     const still = await composeSceneStill(
                       sceneStillPrompt(
                         scene,
@@ -275,7 +306,7 @@ export function registerVideoRoutes(app: Express): void {
                       },
                     );
                     buf = await animateStillToClip(
-                      scenePhotoMotionPrompt(scene, narrator),
+                      scenePhotoMotionPrompt(scene, narrator, lang),
                       {
                         apiKey,
                         imageBuffer: still,
@@ -287,7 +318,7 @@ export function registerVideoRoutes(app: Express): void {
                     );
                   } else {
                     buf = await generateSceneClip(
-                      sceneClipPrompt(scene, narrator),
+                      sceneClipPrompt(scene, narrator, lang),
                       {
                         apiKey,
                         referenceImages: sb.referenceImagePaths.map((p) => ({

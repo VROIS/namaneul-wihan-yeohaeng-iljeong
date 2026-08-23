@@ -207,3 +207,6 @@ docs/_비공개/
 
 # 2026-08-20 = 옵시디언(Obsidian) vault 개인설정 폴더. 사장님 PC 로컬 전용, 공개저장소에 올릴 이유 없음.
 .obsidian/
+
+# 2026-08-22 사장님 지시 = 수동 스토리보드(베스트영상 제작물)는 추적한다(*.json 전역 무시의 예외)
+!docs/storyboards-manual/*.json

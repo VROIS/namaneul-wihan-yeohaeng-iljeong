@@ -111,7 +111,7 @@ function TripisModalInner({
   params: TripisOpenParams;
   onClose(): void;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const insets = useSafeAreaInsets();
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -234,7 +234,8 @@ function TripisModalInner({
       await apiRequest(
         "POST",
         `/api/itineraries/${itineraryId}/video/generate`,
-        { day: effectiveDay },
+        // 2026-08-22 사장님 승인 = 영상 다국어 = 앱 언어 동봉(서버 미지원값 = ko 처리)
+        { day: effectiveDay, language: i18n.language },
       );
       await loadAll();
     } catch (e: any) {

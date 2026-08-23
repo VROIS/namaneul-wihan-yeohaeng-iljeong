@@ -117,7 +117,7 @@ export default function DailyTotal({
         // 백엔드가 슬롯 PID+이름 보충 → 경유지 딥링크(주소 대신 장소명). 라벨은 place_id 있으면 구글 공식명(기기 언어).
         if (Array.isArray(data.stops) && data.stops.length >= 1) {
           const wps: DayRouteStop[] = data.stops.map((s: any) => ({
-            name: s.nameLocal || s.nameKo || null,
+            name: s.nameEn || s.nameLocal || s.nameKo || null, // ⚠️ 2026-08-22 사장님 원칙 = nameEn 1순위
             lat: s.lat,
             lng: s.lng,
             googlePlaceId: s.placeId || null,

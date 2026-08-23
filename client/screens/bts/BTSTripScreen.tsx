@@ -82,7 +82,8 @@ export default function BTSTripScreen() {
       activityCount,
     );
     return {
-      destination: selectedCity.nameKo,
+      // ⚠️ 2026-08-22 사장님 원칙 = 도시명 노출 nameEn 1순위(한국어 배제) — 도시해석은 아래 좌표가 우선이라 안전
+      destination: selectedCity.nameEn || selectedCity.nameKo,
       // 좌표 = 불변키 = 이름 오매칭(니스→베니스) 방지. 서버 도시해석이 좌표 우선.
       ...(selectedCity.latitude != null && selectedCity.longitude != null
         ? {
@@ -105,7 +106,7 @@ export default function BTSTripScreen() {
       // 공연장 = 숙소 칸 = 출발·도착 기점(결정3). 이름은 결과화면 깃발·숙소바에 그대로 표시.
       ...(venue && venue.latitude != null && venue.longitude != null
         ? {
-            accommodationName: venue.nameKo || venue.nameEn,
+            accommodationName: venue.nameEn || venue.nameKo || undefined, // ⚠️ 2026-08-22 사장님 원칙 = nameEn 1순위(null→undefined = 타입 정합)
             accommodationCoords: {
               lat: Number(venue.latitude),
               lng: Number(venue.longitude),
