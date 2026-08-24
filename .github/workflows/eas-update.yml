@@ -53,10 +53,12 @@ jobs:
           fi
           echo "✅ 앱 로그인 열쇠 확인"
 
+      # ⚠️ 2026-08-24 = eas-cli(latest)가 Node 22+ 요구로 바뀌어 Node 20 설치 실패(무관한 이 워크플로만 영향,
+      #   Replit 백엔드 Node 20 런타임과는 별개 환경 = server/ 무관, EAS Update CI 전용).
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
 
       - name: Install dependencies

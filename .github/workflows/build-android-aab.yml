@@ -22,10 +22,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # ⚠️ 2026-08-24 = eas-cli(latest, 58행)가 Node 22+ 요구로 바뀌어 Node 20 설치 실패(eas-update.yml 과 동일 원인).
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
 
       # ⚠️ 신원 가드(2026-08-11 판단3종 지적으로 신설) = docs/2026-07-15 통합계획·2026-08-10 체크사항이 명시한

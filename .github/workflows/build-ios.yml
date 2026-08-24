@@ -21,9 +21,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      # ⚠️ 2026-08-24 = eas-cli(latest)가 Node 22+ 요구로 바뀌어 Node 20 설치 실패(eas-update.yml 과 동일 원인).
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
       - run: npm ci --no-audit --prefer-offline
       - uses: expo/expo-github-action@v8
