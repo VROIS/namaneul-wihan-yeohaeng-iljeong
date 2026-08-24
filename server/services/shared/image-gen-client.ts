@@ -5,6 +5,7 @@
 // = 모델 교체 = 이 파일 내부만.
 
 import fs from "fs";
+import { recordExternalCall, precheck } from "./external-call-log";
 import { GoogleGenAI } from "@google/genai";
 import { saveRaw } from "./save-raw";
 
@@ -49,6 +50,7 @@ export async function composeSceneStill(
   parts.push({ text: prompt });
 
   const ai = new GoogleGenAI({ apiKey: opts.apiKey });
+  await precheck("nano"); // 2026-08-23 출입증형 사전판정
   const response: any = await ai.models.generateContent({
     model: IMAGE_MODEL,
     contents: [{ role: "user", parts }],
@@ -83,5 +85,10 @@ export async function composeSceneStill(
     throw new Error(
       `[image-gen] 응답에 이미지 없음: ${JSON.stringify(response?.candidates?.[0]?.finishReason)}`,
     );
+  void recordExternalCall({
+    provider: "nano",
+    sku: "gemini_2_5_flash_image",
+    tag: opts.rawTag ?? null,
+  }); // 2026-08-23 사장님 승인 = 유료호출 카운터
   return Buffer.from(imagePart.inlineData.data, "base64");
 }

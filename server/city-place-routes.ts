@@ -294,8 +294,7 @@ export function registerCityPlaceRoutes(app: Express): void {
   // ⚠️ 2026-05-23 = /api/places/:id = PSR 직접 (= storage.getPlace 본문 PSR 사용)
   // = dataSources (= placeDataSources 의존) = 삭제
   app.get("/api/places/:id", async (req, res, next) => {
-    // ⚠️ 2026-06-28 = :id 가 정수 아니면(예 "autocomplete"/"details") 다음 라우트로 위임 (= NaN→getPlace(NaN)→DB 22P02 500 버그 차단).
-    //   원인 = 이 라우트가 /api/places/autocomplete·details 보다 먼저 정의 = Express 가 "autocomplete"를 :id 로 선매칭.
+    // ⚠️ 2026-06-28 = :id 가 정수 아니면 다음 라우트로 위임 (= NaN→getPlace(NaN)→DB 22P02 500 차단). 2026-08-23 옛 프록시 2라우트 삭제 후에도 비정수 :id 방어로 유지 §19.
     const id = parseInt(req.params.id);
     if (Number.isNaN(id)) return next();
     try {
@@ -480,107 +479,7 @@ export function registerCityPlaceRoutes(app: Express): void {
     }
   });
 
-  // ========================================
-  // 🏨 장소 검색 프록시 API (Google Places Autocomplete)
-  // API 키를 서버에서만 사용 — 클라이언트 노출 방지
-  // ========================================
-
-  // 장소 자동완성 (목적지 도시 / 숙소 검색)
-  app.get("/api/places/autocomplete", async (req, res) => {
-    try {
-      const apiKey =
-        process.env.Google_maps_api_key || process.env.GOOGLE_MAPS_API_KEY;
-      if (!apiKey) {
-        return res
-          .status(503)
-          .json({ error: "Google Maps API key not configured" });
-      }
-
-      const { input, types, location, radius, language } = req.query;
-      if (!input || typeof input !== "string") {
-        return res.status(400).json({ error: "input parameter required" });
-      }
-
-      // Google Places Autocomplete API 호출
-      const params = new URLSearchParams({
-        input,
-        key: apiKey,
-        language: (language as string) || "ko",
-      });
-
-      if (types) params.append("types", types as string);
-      if (location) params.append("location", location as string);
-      if (radius) params.append("radius", radius as string);
-
-      const response = await fetch(
-        `https://maps.googleapis.com/maps/api/place/autocomplete/json?${params}`,
-      );
-      const data = await response.json();
-
-      // 필요한 필드만 반환 (API 키 노출 방지)
-      const predictions = (data.predictions || []).map((p: any) => ({
-        placeId: p.place_id,
-        description: p.description,
-        mainText: p.structured_formatting?.main_text || p.description,
-        secondaryText: p.structured_formatting?.secondary_text || "",
-        types: p.types || [],
-      }));
-
-      res.json({ predictions });
-    } catch (error: any) {
-      console.error("[Places Autocomplete] Error:", error?.message);
-      res.status(500).json({ error: "장소 검색 실패" });
-    }
-  });
-
-  // 장소 상세 정보 (좌표 + 주소 확보)
-  app.get("/api/places/details", async (req, res) => {
-    try {
-      const apiKey =
-        process.env.Google_maps_api_key || process.env.GOOGLE_MAPS_API_KEY;
-      if (!apiKey) {
-        return res
-          .status(503)
-          .json({ error: "Google Maps API key not configured" });
-      }
-
-      const { placeId } = req.query;
-      if (!placeId || typeof placeId !== "string") {
-        return res.status(400).json({ error: "placeId parameter required" });
-      }
-
-      const params = new URLSearchParams({
-        place_id: placeId,
-        key: apiKey,
-        language: "ko",
-        fields: "geometry,formatted_address,name,place_id,types",
-      });
-
-      const response = await fetch(
-        `https://maps.googleapis.com/maps/api/place/details/json?${params}`,
-      );
-      const data = await response.json();
-
-      if (!data.result) {
-        return res.status(404).json({ error: "장소를 찾을 수 없습니다" });
-      }
-
-      const result = data.result;
-      res.json({
-        placeId: result.place_id,
-        name: result.name,
-        address: result.formatted_address,
-        coords: {
-          lat: result.geometry?.location?.lat,
-          lng: result.geometry?.location?.lng,
-        },
-        types: result.types || [],
-      });
-    } catch (error: any) {
-      console.error("[Places Details] Error:", error?.message);
-      res.status(500).json({ error: "장소 상세 조회 실패" });
-    }
-  });
+  // 2026-08-23 사장님 승인 = 구(legacy) Places Autocomplete/Details 프록시 2라우트 삭제 §19 = 소스 호출자 0(숙소·도시 검색은 구글 공식 위젯 직통), 옛 번들만 두드리던 유료 표면 제거.
 
   // Day별 동선 재최적화 API (숙소 변경 시)
   app.post("/api/routes/regenerate-day", async (req, res) => {

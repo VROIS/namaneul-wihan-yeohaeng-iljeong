@@ -4,9 +4,10 @@
 // = 9요소 FieldMask 가 함수 안에 박혀있어 미만 호출 불가 (= 문서가 아니라 코드가 강제).
 //   9요소 = PID / 로컬이름 / 풀주소 / 좌표 / 리뷰수(RC) / 가격 / 사진 / mapsUri / 영업상태.
 //   ⚠️ rating(평점) 제외 = 우리는 안 씀.
-// = 이유: TS 는 유료(€0.0299/콜) → 한 번에 9요소 전부 받아 옛값 덮어씀(최신검증 유지).
+// = 이유: TS 는 유료(단가 1벌 = external-call-log.UNIT_COST_EUR.ts) → 한 번에 9요소 전부 받아 옛값 덮어씀(최신검증 유지).
 import { STANDARD_TS_FIELD_MASK, validateFieldMask } from "./google-places-sku";
 import { saveRaw } from "./save-raw";
+import { recordExternalCall, precheck } from "./external-call-log"; // 2026-08-23 사장님 승인 = 유료호출 카운터
 import { uploadToR2, isR2Configured } from "./r2-client";
 
 // ⚠️ 수정금지(승인필요) 2026-07-09 사장님 SSOT = 사진 저장 해상도 단일 상수 = 구글 PhotoMedia 다운 시점부터 작게(내부 축소 = 저장소 유료 변환 안 씀).
@@ -222,6 +223,7 @@ export async function tsSearch(req: TsSearchReq): Promise<TsPlace[]> {
       };
 
   const endpoint = isNearby ? "places:searchNearby" : "places:searchText";
+  await precheck("ts"); // 2026-08-23 사장님 = 출입증형 사전판정(잔량·추가과금) = 호출 직전 1줄
   const resp = await fetch(`https://places.googleapis.com/v1/${endpoint}`, {
     method: "POST",
     headers: {
@@ -238,6 +240,12 @@ export async function tsSearch(req: TsSearchReq): Promise<TsPlace[]> {
       `[tsSearch] ${resp.status} ${j?.error?.message || JSON.stringify(j?.error || {})}`,
     );
   await saveTsRaw(req.method, req, j); // ⚠️ 외부호출 = raw 저장 강제 (DB 입력 전 선행 보존 = 소 안 잃음)
+  // 2026-08-23 사장님 승인 = 유료호출 기록(Text Search Enterprise = 월 1,000 무료 후 과금) = 호출 성공 직후 1줄
+  void recordExternalCall({
+    provider: "ts",
+    sku: "text_search_enterprise",
+    cityId: req.cityId ?? null,
+  });
   return (j.places || []).map(mapPlace);
 }
 
@@ -264,8 +272,17 @@ export async function tsPhoto(req: TsPhotoReq): Promise<string | null> {
   if (process.env.TS_GATE_ENFORCE === "1" && req.gated !== true) return null;
   try {
     const photoUrl = `https://places.googleapis.com/v1/${req.photoName}/media?maxWidthPx=${req.maxWidthPx ?? PHOTO_MAX_WIDTH_PX}&key=${req.apiKey}`;
+    await precheck("pm"); // 2026-08-23 출입증형 사전판정
     const pr = await fetch(photoUrl, { signal: AbortSignal.timeout(30000) });
     if (!pr.ok) return null;
+    // 2026-08-23 사장님 승인 = 유료호출 기록(Place Details Photos = 월 1,000 무료 후 과금).
+    //   위치 = 구글 과금 시점(media 응답 성공) 직후 = R2 업로드가 실패해도 카운터가 청구서와 일치.
+    void recordExternalCall({
+      provider: "pm",
+      sku: "place_details_photos",
+      cityId: parseInt(req.pathKey, 10) || null,
+      tag: req.pathKey,
+    });
     const buf = Buffer.from(await pr.arrayBuffer());
     const up = await uploadToR2(
       `${PHOTO_PREFIX}/${req.pathKey}.jpg`,

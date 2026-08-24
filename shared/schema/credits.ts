@@ -122,24 +122,7 @@ export const creditTransactions = pgTable(
   ],
 );
 
-// API 호출 로그 (비용 추적)
-export const apiLogs = pgTable("api_logs", {
-  id: varchar("id")
-    .primaryKey()
-    .default(sql`gen_random_uuid()`),
-  type: varchar("type").notNull(), // 'gemini' | 'maps'
-  userId: varchar("user_id").references(() => users.id, {
-    onDelete: "set null",
-  }),
-  responseTime: integer("response_time"), // ms
-  tokensUsed: integer("tokens_used"),
-  estimatedCost: decimal("estimated_cost", { precision: 10, scale: 6 }), // USD
-  statusCode: integer("status_code"),
-  errorMessage: text("error_message"),
-  createdAt: timestamp("created_at")
-    .default(sql`CURRENT_TIMESTAMP`)
-    .notNull(),
-});
+// 2026-08-23 api_logs 스키마 삭제 §19 = 2026-03-24 이후 쓰는 코드 0(죽은 표). 외부호출 집계 = external_calls(external-call-log.ts) 1벌.
 
 // 사용자 활동 로그 (분석용)
 export const userActivityLogs = pgTable("user_activity_logs", {
@@ -279,10 +262,6 @@ export const insertCreditTransactionSchema = createInsertSchema(
   id: true,
   createdAt: true,
 });
-export const insertApiLogSchema = createInsertSchema(apiLogs).omit({
-  id: true,
-  createdAt: true,
-});
 export const insertUserActivityLogSchema = createInsertSchema(
   userActivityLogs,
 ).omit({
@@ -327,8 +306,6 @@ export type CreditTransaction = typeof creditTransactions.$inferSelect;
 export type InsertCreditTransaction = z.infer<
   typeof insertCreditTransactionSchema
 >;
-export type ApiLog = typeof apiLogs.$inferSelect;
-export type InsertApiLog = z.infer<typeof insertApiLogSchema>;
 export type UserActivityLog = typeof userActivityLogs.$inferSelect;
 export type InsertUserActivityLog = z.infer<typeof insertUserActivityLogSchema>;
 export type SharedHtmlPage = typeof sharedHtmlPages.$inferSelect;

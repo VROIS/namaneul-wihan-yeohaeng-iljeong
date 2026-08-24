@@ -8,7 +8,7 @@
 //   - 모든 TS 호출 = validateFieldMask() 통과 강제
 //
 // 실측 단가 (= GCP 청구서, 2026-05-01 ~ 05-14):
-//   - TS Enterprise = €0.0299/호출 (= 무료 1K 초과 후)
+//   - TS Enterprise = 무료 1K/월 초과 후 과금(단가 1벌 = external-call-log.UNIT_COST_EUR.ts)
 
 /** Text Search (New) Essentials ID Only SKU 트리거 필드 */
 export const TS_ESSENTIALS_FIELDS = new Set<string>([

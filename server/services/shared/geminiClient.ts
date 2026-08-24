@@ -7,6 +7,7 @@
  */
 
 import { GoogleGenAI } from "@google/genai";
+import { recordExternalCall } from "./external-call-log";
 import { saveRaw } from "./save-raw";
 import { withQuotaRetry } from "./retry-429"; // 429 재시도 1벌(2026-08-06 사장님 승인 = 런던 121 사고 대응)
 
@@ -125,6 +126,11 @@ export async function geminiJson<T = any>(
     raw: { parsed: data ?? null, text: raw, finishReason },
   });
 
+  void recordExternalCall({
+    provider: "gemini",
+    sku: opts?.model ?? "default",
+    tag: opts?.rawTag ?? null,
+  }); // 2026-08-23 사장님 승인 = 유료호출 카운터
   return { raw, data, finishReason, parseError };
 }
 

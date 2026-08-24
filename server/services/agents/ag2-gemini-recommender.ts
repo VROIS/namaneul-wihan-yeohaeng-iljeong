@@ -20,7 +20,11 @@ import { placeSeedRaw } from "@shared/schema";
 import { eq, and, between, sql, inArray, isNotNull } from "drizzle-orm";
 import { findCityUnified } from "../city-resolver";
 // ⚠️ 2026-07-17 사장님 확정 = 슬롯 풀 = (city_id=요청도시) ∪ (중심 100km) 합집합 = shared/pool-radius 단일 SSOT(§16)
-import { getPoolContext, recalcCrossCityZone } from "../shared/pool-radius";
+import {
+  getPoolContext,
+  recalcCrossCityZone,
+  servingGateSql,
+} from "../shared/pool-radius";
 import { VIBE_PRIMARY_CATEGORY } from "@shared/vibe-category";
 
 /**
@@ -255,6 +259,9 @@ async function fetchFromPlaceSeedRaw(
       poolWhere,
       eq(placeSeedRaw.seedCategory, cat),
       isNotNull(placeSeedRaw.googlePlaceId),
+      // ⚠️ 2026-08-24 사장님 육안검수 반영 = 손님상 게이트 1벌(status='active' + RC 증거).
+      //   ag3 매칭맵에는 미적용(MIX 신규행 = RC 도착 전 = 슬롯 연결용) = 서빙 경로에만 = servingGateSql 주석 참조.
+      servingGateSql(),
     ];
     if (isRestaurant)
       baseWhere.push(
@@ -365,6 +372,9 @@ async function fetchFromPlaceSeedRaw(
           poolWhere,
           inArray(placeSeedRaw.seedCategory, FILL_CATS),
           isNotNull(placeSeedRaw.googlePlaceId),
+          // ⚠️ 2026-08-24 사장님 육안검수 2라운드 = 보충 경로에도 같은 손님상 게이트(본 선정과 1벌).
+          //   빠져 있던 탓에 무증거 행(고양체육관 RC0 등)이 공급부족 보충으로 재입장(여정 384 실증).
+          servingGateSql(),
         ),
       );
     for (const r of extra) recalcCrossCityZone(r, cid, center);

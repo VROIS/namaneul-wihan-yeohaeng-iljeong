@@ -90,6 +90,17 @@ export function poolWhereSql(
   )))`;
 }
 
+/**
+ * ⚠️ 수정금지(승인필요) 2026-08-24 사장님 승인 = **손님상(서빙) 전용** 게이트 1벌.
+ *   = status='active'(후보·보류·격리·폐업·병합 = 손님상 밖) + RC 증거(리뷰수 1 이상).
+ *   ⚠️ 공용 poolWhereSql 에 넣으면 안 된다 = 그 헬퍼는 ag3 매칭맵(loadSeedRawMap)도 쓰는데,
+ *     매칭맵까지 걸리면 창고에 사진·가격이 있는 행을 MIX 가 못 찾아 신규로 취급한다(§20 = 2026-08-24 판단3종 지적).
+ *   = 사용처 = 서빙 경로 3곳(ag2 본선정·ag2 보충·ag4 식당풀) + 도시카드. 매칭맵(ag3)에는 절대 적용 금지.
+ */
+export function servingGateSql(): SQL {
+  return sql`(${placeSeedRaw.status} = 'active' AND COALESCE(${placeSeedRaw.googleReviewCount}, 0) > 0)`;
+}
+
 /** 중심좌표 + WHERE 조각 한 번에 (3 사용처 공통 보일러플레이트 제거)
  * ⚠️ 2026-07-17 사장님 SSOT = 기점 = 동적 출발점(숙소>도심). startCoords 주면 그 기점 100km(숙소가 중간인 이중도시 = 그 기점 공유),
  *   미지정 시에만 도시중심 폴백(getCityCenter). = day-builder accommodationCoords 우선순위(§16 재사용) 를 풀 반경에도 연장. */

@@ -3,7 +3,8 @@
 // = 순서(비용 최소, [[feedback_internal_first_recover]]):
 //   ① PID보유+이미지결손 추출(repair.ts:99 정본 조건) → ② 무료 재링크(relinkStorageImages §16, 외부호출 0)
 //   → ③ 저장 raw(docs/raw/{cityId})의 photoName 재활용 = PM만(TS 재호출 0) → ④ raw에도 없으면 보고만(기본) / --allow-ts 시 TS 1콜 후 PM.
-// = 비용: PM €0.5/건 · TS €0.3/콜 (GCP 실측 단가). 기본 DRY(외부호출 0·쓰기 0) = --apply 시 실행.
+// = 비용(2025-03 SKU 개편, 2026-08-23 현행화): PM·TS 각 월 1,000 무료(독립) → 초과 PM €0.006/장 · TS €0.035/콜. 기본 DRY(외부호출 0·쓰기 0) = --apply 시 실행.
+// = ⚠️ 2026-08-23 사장님 승인 = 실행 전 무료잔량 게이트(external-call-log.gateBatch) = 초과면 중단, --force-quota 는 사장님 승인 시만.
 // = 쓰기 = upsertPlace 단일 진입점(§14, relink 동일 패턴 = PID 매칭 = imageUrl 부분갱신 = 뼈대 보존).
 // CLI: npx tsx server/services/fill/image-backfill.ts --city-id=19 [--apply] [--allow-ts] [--limit=50]
 import fs from "fs";
@@ -75,6 +76,7 @@ export function collectPhotoNamesFromRaw(
 export async function backfillImages(opts: {
   cityId: number;
   apply: boolean;
+  forceQuota?: boolean; // 2026-08-23 = 무료잔량 초과 시에도 진행(사장님 승인 플래그 --force-quota)
   allowTs?: boolean;
   limit?: number;
   client: any;
@@ -117,8 +119,20 @@ export async function backfillImages(opts: {
   const withRaw = live.filter((r: any) => rawMap.get(r.pid)?.photoName);
   const needTs = live.filter((r: any) => !rawMap.get(r.pid)?.photoName);
   console.log(`═══ image-backfill (city ${cityId}) ═══`);
+  // 2026-08-23 사장님 = 실행 전 시뮬 = 이달 잔량 + 진행 시 추가과금(€). 외부호출 0.
+  const { simulateCost, gateBatch } = await import(
+    "../shared/external-call-log"
+  );
+  const simPm = await simulateCost(
+    "pm",
+    withRaw.length + (opts.allowTs ? needTs.length : 0),
+  );
+  const simTs = await simulateCost("ts", opts.allowTs ? needTs.length : 0);
   console.log(
-    `대상(PID보유·이미지결손) ${rows.length} | 무료재링크 ${apply ? relink.relinked : relink.relinkable}(${apply ? "완료" : "가능"}) | raw재활용 PM ${withRaw.length}건(€${(withRaw.length * 0.5).toFixed(1)}) | TS필요 ${needTs.length}건(€${(needTs.length * 0.8).toFixed(1)}=TS+PM)`,
+    `[시뮬] PM 이달 ${simPm.used}/${simPm.cap} 잔량 ${simPm.remaining} · 계획 ${simPm.planned} → 추가과금 €${simPm.extraEur} | TS 이달 ${simTs.used}/${simTs.cap} 잔량 ${simTs.remaining} · 계획 ${simTs.planned} → 추가과금 €${simTs.extraEur}`,
+  );
+  console.log(
+    `대상(PID보유·이미지결손) ${rows.length} | 무료재링크 ${apply ? relink.relinked : relink.relinkable}(${apply ? "완료" : "가능"}) | raw재활용 PM ${withRaw.length}건 | TS필요 ${needTs.length}건(TS+PM)`,
   );
   if (!apply) {
     for (const r of live.slice(0, 30))
@@ -141,6 +155,14 @@ export async function backfillImages(opts: {
       tsDone: 0,
     };
   }
+
+  // ⚠️ 2026-08-23 사장님 승인 = 관리자 배치 무료잔량 게이트 = 이달 PM·TS 무료(각 1,000) 잔량 안에서만 실행
+  //   계획건수 = 실제 실행 경로와 동일: needTs 행은 --allow-ts 일 때만 돈다(아래 opts.allowTs 분기)
+  const tsPlanned = opts.allowTs ? needTs.length : 0;
+  await gateBatch("pm", withRaw.length + tsPlanned, {
+    force: !!opts.forceQuota,
+  });
+  if (tsPlanned) await gateBatch("ts", tsPlanned, { force: !!opts.forceQuota });
 
   const { tsPhoto, tsSearch } = await import(
     pathToFileURL(path.join(ROOT, "server/services/shared/ts-client.ts")).href
@@ -257,7 +279,7 @@ export async function backfillImages(opts: {
     }
   }
   console.log(
-    `✅ 완료: PM ${pmDone}건 저장(€${(pmDone * 0.5).toFixed(1)})${pmFail ? ` · PM 실패 ${pmFail}건` : ""} · TS ${tsDone}콜(€${(tsDone * 0.3).toFixed(1)})${!opts.allowTs && needTs.length ? ` · TS필요 ${needTs.length}건 보류(--allow-ts)` : ""}`,
+    `✅ 완료: PM ${pmDone}건 저장${pmFail ? ` · PM 실패 ${pmFail}건` : ""} · TS ${tsDone}콜${!opts.allowTs && needTs.length ? ` · TS필요 ${needTs.length}건 보류(--allow-ts)` : ""}`,
   );
   return {
     targets: rows.length,
@@ -292,7 +314,9 @@ if (
     );
     const cityId = Number(argv["city-id"] || 0);
     if (!cityId) {
-      console.error("Usage: --city-id=<N> [--apply] [--allow-ts] [--limit=50]");
+      console.error(
+        "Usage: --city-id=<N> [--apply] [--allow-ts] [--limit=50] [--force-quota]",
+      );
       process.exit(1);
     }
     // @ts-ignore = pg 타입선언 없음(런타임 전용, storage-image-relink CLI 동일 패턴)
@@ -305,6 +329,7 @@ if (
     await backfillImages({
       cityId,
       apply: argv["apply"] === "true",
+      forceQuota: argv["force-quota"] === "true",
       allowTs: argv["allow-ts"] === "true",
       limit: argv["limit"] ? Number(argv["limit"]) : undefined,
       client: c,

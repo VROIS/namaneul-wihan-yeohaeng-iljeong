@@ -11,6 +11,7 @@
 //     LIMIT 1 조회와 LIMIT 3 조회가 서로 다른 행을 1위로 돌려줄 수 있다.
 import { and, desc, eq, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import { placeSeedRaw } from "@shared/schema";
+import { servingGateSql } from "./pool-radius";
 
 // ⚠️ 수정금지(승인필요) 2026-08-21 사장님 승인 = 하이라이트 카테고리 순서 1벌(§16).
 //   대표사진 아래 하이라이트는 이 4 CAT 에서 각 1위를 이 순서대로 뽑는다(식당·쇼핑 = 랜드마크가 거의
@@ -39,7 +40,11 @@ export function cityRepresentativeWhere(cityId: number) {
     // ⚠️ 수정금지(승인필요) 2026-08-21 사장님 승인 = 격리(wrong-city-suspect) 행 제외.
     //   사유 = 격리 표식이 붙은 행이 그대로 카드에 노출됐다(시카고 "게이트웨이 아치" = 세인트루이스
     //   랜드마크, 토론토 "Warsaw" = 7,547km. 옛 day_zone 만 보던 구멍 = 2026-08-21 §19).
+    //   ⚠️ 2026-08-24 = 격리 도구(fill/wrongcity-quarantine.ts)가 찍는 표식이 이 태그이므로 이 검사가 정본이다.
+    //   status 로 갈아타려면 그 도구가 status 도 함께 쓰도록 바꾼 뒤라야 한다(태그·status 두 벌 = §0·§19 위반).
     sql`NOT (COALESCE(${placeSeedRaw.phaseTags}, '{}') && ARRAY['wrong-city-suspect'])`,
+    // 2026-08-24 사장님 육안검수 = 손님상 게이트 1벌(status='active' + RC 증거) = 여정과 동일 기준
+    servingGateSql(),
     or(eq(placeSeedRaw.dayZone, "core"), isNull(placeSeedRaw.dayZone)),
   );
 }

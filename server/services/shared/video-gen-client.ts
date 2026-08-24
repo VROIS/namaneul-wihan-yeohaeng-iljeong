@@ -5,11 +5,13 @@
 // = 키 = issueApiKey 출입증(apipass)을 호출자가 인자로 전달. §18 = 응답 메타(영상 바이트 제외) saveRaw 2곳 저장.
 
 import fs from "fs";
+import { recordExternalCall, precheck } from "./external-call-log";
 import { GoogleGenAI } from "@google/genai";
 import { saveRaw } from "./save-raw";
 import { withQuotaRetry } from "./retry-429"; // 429 재시도 1벌(2026-08-06 §16 승격)
 
 const OMNI_MODEL = "gemini-omni-flash-preview";
+const SCENE_SECONDS_FOR_LOG = 6; // 2026-08-23 = 카운터 기본 단위(초) = ghibli-travel-storyboard SCENE_SECONDS 와 동일값(순환 import 회피)
 const VEO_I2V_MODEL = "veo-3.1-lite-generate-preview"; // B안 = 최저가($0.05/초). 첫프레임 입력·대사 오디오 = 공식 지원 확인
 const API_BASE = "https://generativelanguage.googleapis.com/v1beta";
 const POLL_INTERVAL_MS = 5000;
@@ -37,6 +39,7 @@ export async function generateSceneClip(
   }));
   input.push({ type: "text", text: prompt });
 
+  await precheck("omni", SCENE_SECONDS_FOR_LOG); // 2026-08-23 출입증형 사전판정(초 단위)
   const body = {
     model: OMNI_MODEL,
     input,
@@ -107,6 +110,13 @@ export async function generateSceneClip(
   const video =
     contents.find((c: any) => c?.type === "video") || interaction?.output_video;
   if (video?.uri) {
+    // 2026-08-23 유료호출 카운터 = 영상 생성 완료(= 과금 확정) 시점에 기록 = 다운로드가 실패해도 청구서와 일치
+    void recordExternalCall({
+      provider: "omni",
+      sku: OMNI_MODEL,
+      units: SCENE_SECONDS_FOR_LOG,
+      tag: opts.rawTag ?? null,
+    });
     const vr = await fetch(video.uri, {
       headers: { "x-goog-api-key": opts.apiKey },
       signal: AbortSignal.timeout(120000),
@@ -114,7 +124,15 @@ export async function generateSceneClip(
     if (!vr.ok) throw new Error(`[video-gen] 영상 다운로드 실패 ${vr.status}`);
     return Buffer.from(await vr.arrayBuffer());
   }
-  if (video?.data) return Buffer.from(video.data, "base64");
+  if (video?.data) {
+    void recordExternalCall({
+      provider: "omni",
+      sku: OMNI_MODEL,
+      units: SCENE_SECONDS_FOR_LOG,
+      tag: opts.rawTag ?? null,
+    }); // 2026-08-23 유료호출 카운터
+    return Buffer.from(video.data, "base64");
+  }
   throw new Error(
     `[video-gen] 응답에 영상 없음: ${JSON.stringify(interaction).slice(0, 300)}`,
   );
@@ -129,7 +147,7 @@ export interface PhotoMotionOpts {
   rawTag?: string | null;
 }
 
-// Veo 프리뷰 한도 = 10 RPM·동시 10/프로젝트 → 429 시 대기 후 재시도 (2026-07-23 운영 i105 실증 딜레이 유지).
+// Veo 한도(2026-08-23 사장님 콘솔 실측 = Gemini API Tier 2) = RPM 4·RPD 50 → 429 시 대기 후 재시도 (2026-07-23 운영 i105 실증 딜레이 유지).
 // 재시도 본체 = shared/retry-429.ts 1벌로 승격 = 2026-08-06 §16(옛 로컬 사본 삭제 §19).
 const RETRY_DELAYS_MS = [20000, 40000, 60000];
 const veoRetry = <T>(fn: () => Promise<T>): Promise<T> =>
@@ -156,6 +174,7 @@ async function animateStillToClipOnce(
   opts: PhotoMotionOpts,
 ): Promise<Buffer> {
   const ai = new GoogleGenAI({ apiKey: opts.apiKey });
+  await precheck("veo", opts.durationSeconds ?? SCENE_SECONDS_FOR_LOG); // 2026-08-23 출입증형 사전판정(초 단위)
   let op: any = await veoRetry(() =>
     ai.models.generateVideos({
       model: VEO_I2V_MODEL,
@@ -205,8 +224,23 @@ async function animateStillToClipOnce(
     throw new Error(
       `[video-gen] Veo 생성 실패: ${JSON.stringify(op.error).slice(0, 300)}`,
     );
-  if (video?.videoBytes) return Buffer.from(video.videoBytes, "base64");
+  if (video?.videoBytes) {
+    void recordExternalCall({
+      provider: "veo",
+      sku: VEO_I2V_MODEL,
+      units: opts.durationSeconds ?? SCENE_SECONDS_FOR_LOG,
+      tag: opts.rawTag ?? null,
+    }); // 2026-08-23 유료호출 카운터(초 단위)
+    return Buffer.from(video.videoBytes, "base64");
+  }
   if (video?.uri) {
+    // 2026-08-23 유료호출 카운터(초 단위) = 영상 생성 완료(= 과금 확정) 시점 기록 = 다운로드 실패해도 청구서와 일치
+    void recordExternalCall({
+      provider: "veo",
+      sku: VEO_I2V_MODEL,
+      units: opts.durationSeconds ?? SCENE_SECONDS_FOR_LOG,
+      tag: opts.rawTag ?? null,
+    });
     const joiner = video.uri.includes("?") ? "&" : "?";
     const vr = await fetch(`${video.uri}${joiner}key=${opts.apiKey}`, {
       signal: AbortSignal.timeout(120000),

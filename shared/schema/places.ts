@@ -42,6 +42,14 @@ export const reviews = pgTable("reviews", {
 // MCP 1·2단계 통합 로우데이터 (도시×카테고리 장소 + 한국인 인지도)
 export const placeSeedRaw = pgTable("place_seed_raw", {
   id: serial("id").primaryKey(),
+  // ⚠️ 수정금지(승인필요) 2026-08-24 사장님 승인 = 창고 자체 필터(신원 사다리) 상태 5컬럼(시뮬 정본 = worktrees/psr-filter-sim).
+  //   status: active(명부·서빙) / candidate(무PID 목격담 = 서빙 밖) / hold(오매칭 의심 = 사람 확인) /
+  //           quarantined(오염 격리) / closed(폐업) / merged(중복 = merged_into 포인터, 행 보존 = 삭제 0)
+  status: text("status").notNull().default("active"),
+  mergedInto: integer("merged_into"),
+  businessStatus: text("business_status"), // TS businessStatus 보존(OPERATIONAL/CLOSED_*) = 재검증 근거
+  verifiedAt: timestamp("verified_at"), // 마지막 TS 검증 시각(재검증 주기 근거)
+  verifySource: text("verify_source"),
   // ⚠️ 수정금지(승인필요) 2026-06-11 = place_id(옛 places FK) DROP = 헛바퀴(google_place_id 가 진짜 연결)
   cityId: integer("city_id")
     .notNull()

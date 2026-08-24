@@ -38,7 +38,7 @@ import {
   guideCostForDay,
 } from "../transport-pricing-service";
 // ⚠️ 2026-07-17 사장님 확정 = 식당풀 = (city_id=요청도시) ∪ (중심 100km) 합집합 = shared/pool-radius 단일 SSOT(§16)
-import { getPoolContext } from "../shared/pool-radius";
+import { getPoolContext, servingGateSql } from "../shared/pool-radius";
 // ⚠️ 수정금지(승인필요) 2026-08-18 사장님 승인(비판검증 확정결함 수정) = 식당풀·BTS공연장 카드도 사진 단일 진입점
 //   pickPlaceImage(§16) 경유 = PID공유 폴백 적용. 옛 raw SQL image_url 직독(`r.imageUrl || ""`) = 폐기 §19
 //   (= PID중복행은 창고(R2)에 사진이 있어도 매 여정의 점심·저녁 카드가 빈 이미지로 나가던 실측 결함).
@@ -124,14 +124,19 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
                google_place_id AS "googlePlaceId",
                google_review_count AS "googleReviewCount",
                (${pinCond}) AS pinned,
-               CASE WHEN price_eur <= 24 THEN 20 WHEN price_eur <= 60 THEN 40 WHEN price_eur <= 180 THEN 20 ELSE 20 END AS quota,
+               -- ⚠️ 수정금지(승인필요) 2026-08-24 사장님 승인 = 식당 정원 = 발굴 기준과 동일 3단(경제10·합리30·프리미엄+럭셔리20 = 60).
+               --   근거 = 발굴 정본 fillcity/prompts/05-restaurant-lean(2026-08-17 사장님 승인) = 10/30/20 = 60,
+               --   €180 초과를 따로 캐지 않고 프리미엄에 통합. 옛 4단 20/40/20/20(=100, 03+04 시대 180 전제) 폐기 §19
+               --   (= 발굴 60 < 서빙 요구 100 = 영원히 못 채우는 칸, 특히 luxury 칸은 공급 자체가 없어 전 도시 0~7/20 실측).
+               --   손님상 정원 = 비식당 6카테고리×20(120) + 식당 60 = 180.
+               CASE WHEN price_eur <= 24 THEN 10 WHEN price_eur <= 60 THEN 30 ELSE 20 END AS quota,
                ROW_NUMBER() OVER (
-                 PARTITION BY CASE WHEN price_eur <= 24 THEN 'eco' WHEN price_eur <= 60 THEN 'reason' WHEN price_eur <= 180 THEN 'premium' ELSE 'luxury' END
+                 PARTITION BY CASE WHEN price_eur <= 24 THEN 'eco' WHEN price_eur <= 60 THEN 'reason' ELSE 'premium_luxury' END
                  ORDER BY google_review_count DESC NULLS LAST
                ) AS band_rn
         FROM place_seed_raw
         -- ⚠️ 2026-08-18 사장님 승인 = 검증(PID) 게이트(ag2 와 동일 보편규칙 §16) = 미검증 행 서빙 금지. 핀(사용자 직접 선택)만 면제.
-        WHERE (${poolWhere}) AND seed_category = 'restaurant'
+        WHERE (${poolWhere}) AND seed_category = 'restaurant' AND (${servingGateSql()})
           AND (google_place_id IS NOT NULL OR (${pinCond}))
           AND (price_eur IS NOT NULL OR (${pinCond}))
       )

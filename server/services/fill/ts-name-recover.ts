@@ -1,7 +1,7 @@
 // ⚠️ 영구 컴포넌트 2026-06-09 = 사용자 SSOT = name_local 결손 행 복구 (FILLCITY_PRD ⓪-pre 정제)
 // = PID 있는데 name_local NULL = 옛 경로 잔재. 복구 = 2 경로(내부 우선 → 외부 폴백):
 //   ① 내부(무료): source≠wikipedia_api 면 name_en 에 실명이 있음(옛 경로가 displayName 을 name_en 에 오기록) → name_local := name_en.
-//   ② TS 폴백(유료 €0.0299/곳): wikipedia_api(name_en=위키쓰레기) = 내부 이름원 없음 = 좌표 searchNearby → PID 매칭 → TS displayName.
+//   ② TS 폴백(유료, 단가 = external-call-log.UNIT_COST_EUR.ts, 월 1,000 무료 후): wikipedia_api(name_en=위키쓰레기) = 내부 이름원 없음 = 좌표 searchNearby → PID 매칭 → TS displayName.
 // = 쓰기 = upsertPlace(§14, 직접 SQL 금지). 외부 폴백은 내부 소진 후만(사용자 SSOT 2026-06-09: 외부 게으른 기본 금지).
 // 호출: npx tsx server/services/fill/ts-name-recover.ts --city-id=37 [--apply] [--lang=es] [--category=restaurant,...]
 import fs from "fs";
@@ -45,7 +45,7 @@ const cats = argv["category"]
     ];
 if (!cityId) {
   console.error(
-    "Usage: --city-id=<N> [--apply] [--lang=es] [--category=restaurant,...]",
+    "Usage: --city-id=<N> [--apply] [--lang=es] [--category=restaurant,...] [--force-quota]",
   );
   process.exit(1);
 }
@@ -103,7 +103,15 @@ const isInternal = (r: any) => r.name_en && r.name_en.trim() !== "";
   const tsRows = rows.filter((r: any) => !isInternal(r));
 
   console.log(
-    `═══ ts-name-recover (city ${cityId} ${city.name_en}) = 내부 ${internalRows.length} / TS폴백 ${tsRows.length}(€${(tsRows.length * 0.0299).toFixed(2)}) ═══`,
+    `═══ ts-name-recover (city ${cityId} ${city.name_en}) = 내부 ${internalRows.length} / TS폴백 ${tsRows.length} ═══`,
+  );
+  // 2026-08-23 사장님 승인 = 실행 전 시뮬 = 이달 TS 잔량 + 진행 시 추가과금(€) (ts-backfill 과 동일 1벌)
+  const { simulateCost, gateBatch } = await import(
+    "../shared/external-call-log"
+  );
+  const sim = await simulateCost("ts", tsRows.length);
+  console.log(
+    `[시뮬] TS 이달 ${sim.used}/${sim.cap} 잔량 ${sim.remaining} · 계획 ${sim.planned} → 추가과금 €${sim.extraEur}`,
   );
   if (!apply) {
     console.log(
@@ -147,6 +155,11 @@ const isInternal = (r: any) => r.name_en && r.name_en.trim() !== "";
       report.push(`  ✗[내부] ${row.name_en}: ${e.message}`);
     }
   }
+  // ⚠️ 2026-08-23 사장님 승인 = 관리자 배치 무료잔량 게이트(초과면 외부호출 0건 상태에서 중단, --force-quota = 승인 시)
+  if (tsRows.length)
+    await gateBatch("ts", tsRows.length, {
+      force: argv["force-quota"] === "true",
+    });
   for (const row of tsRows) {
     try {
       const ts = await tsSearch({

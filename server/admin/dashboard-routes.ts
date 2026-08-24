@@ -112,6 +112,40 @@ export function registerDashboardRoutes(app: Express) {
   // /api/admin/control-tower/summary = 시스템 상태 요약 (= PSR + cities + apiServices 만)
   // = 옛 dataSyncLog + geminiWebSearchCache + routeCache 의존 제거
   // ========================================
+  // ⚠️ 2026-08-23 사장님 승인 = 관제탑 계기판 씨앗 = 외부 유료호출 이달 사용량·무료잔량(공급자별) = external_calls 1벌
+  app.get("/api/admin/external-calls/summary", async (_req, res) => {
+    try {
+      const { usageSummary } = await import(
+        "../services/shared/external-call-log"
+      );
+      res.json({
+        month: new Date().toISOString().slice(0, 7),
+        providers: await usageSummary(),
+      });
+    } catch (e) {
+      res.status(500).json({ error: (e as Error).message });
+    }
+  });
+
+  const GATED_PROVIDERS = ["ts", "pm", "veo", "omni", "nano"]; // 사전판정 대상(제미니 텍스트 제외 = 사장님)
+  // 2026-08-23 사장님 = 실행 전 시뮬 API = "이 공급자로 N건 진행하면 무료잔량 안인가, 얼마 더 과금인가"(외부호출 0)
+  app.get("/api/admin/external-calls/simulate", async (req, res) => {
+    try {
+      const { simulateCost } = await import(
+        "../services/shared/external-call-log"
+      );
+      const provider = String(req.query.provider || "") as any;
+      const planned = Number(req.query.planned || 0);
+      if (!GATED_PROVIDERS.includes(provider) || !(planned >= 0))
+        return res
+          .status(400)
+          .json({ error: "provider=ts|pm|veo|omni|nano & planned>=0" });
+      res.json(await simulateCost(provider, planned));
+    } catch (e) {
+      res.status(500).json({ error: (e as Error).message });
+    }
+  });
+
   app.get("/api/admin/control-tower/summary", async (_req, res) => {
     if (!db) return res.json({ dbConnected: false });
     try {

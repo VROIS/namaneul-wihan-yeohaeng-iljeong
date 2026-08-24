@@ -112,16 +112,26 @@ const hkm = (a: any, b: any) => {
   ).rows;
 
   console.log(
-    `═══ ts-backfill (city ${cityId} ${city?.name_en}) = PID 없는 ${rows.length}곳 = €${(rows.length * 0.0299).toFixed(2)} ═══`,
+    `═══ ts-backfill (city ${cityId} ${city?.name_en}) = PID 없는 ${rows.length}곳 ═══`,
   );
   if (!apply) {
     console.log(
       `[대상]\n  ${rows.map((r: any) => `${r.name_local || r.name_en} (${r.seed_category}, RC ${r.rc ?? "?"}, ${r.lat != null ? "좌표O" : "좌표X"})`).join("\n  ")}`,
     );
+    // 2026-08-23 사장님 = 실행 전 시뮬 = 이달 TS 잔량 + 진행 시 추가과금(€)
+    const { simulateCost } = await import("../shared/external-call-log");
+    const sim = await simulateCost("ts", rows.length);
+    console.log(
+      `[시뮬] TS 이달 ${sim.used}/${sim.cap} 잔량 ${sim.remaining} · 계획 ${sim.planned} → 추가과금 €${sim.extraEur}`,
+    );
     console.log(`\n=== DRY (--apply 로 실행) ===`);
     await c.end();
     return;
   }
+
+  // ⚠️ 2026-08-23 사장님 승인 = 관리자 배치 무료잔량 게이트 = 이달 TS 무료(1,000) 잔량 안에서만 실행(--force-quota = 승인 시)
+  const { gateBatch } = await import("../shared/external-call-log");
+  await gateBatch("ts", rows.length, { force: argv["force-quota"] === "true" });
 
   let upd = 0,
     noMatch = 0,

@@ -188,6 +188,39 @@ export async function runStartupMigrations(): Promise<void> {
         ADD COLUMN IF NOT EXISTS "deleted_at" timestamp;
     `);
     console.log("[Migration] ✅ 0020 users.deleted_at(탈퇴 유예) 적용 완료");
+
+    // 0021: 외부 유료호출 카운터 (2026-08-23 사장님 승인 = €860 폭탄 재발 방지 = 배치 무료잔량 게이트 + 관제탑 계기판 1벌)
+    //   기록 주체 = shared 단일 진입점(ts-client·video-gen·image-gen·geminiClient) → external-call-log.ts. 월 무료한도 대비 잔량 계산 근거.
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS "external_calls" (
+        "id" serial PRIMARY KEY,
+        "provider" text NOT NULL,
+        "sku" text,
+        "city_id" integer,
+        "units" numeric NOT NULL DEFAULT 1,
+        "tag" text,
+        "created_at" timestamptz NOT NULL DEFAULT now()
+      );
+      CREATE INDEX IF NOT EXISTS "external_calls_provider_created_idx"
+        ON "external_calls" ("provider", "created_at");
+    `);
+    console.log(
+      "[Migration] ✅ 0021 external_calls(외부호출 카운터) 적용 완료",
+    );
+
+    // 0022: 창고 상태 5컬럼 (2026-08-24 사장님 승인 = 새 창고 필터 1차 반영. 시뮬 정본 = worktrees/psr-filter-sim)
+    await pool.query(`
+      ALTER TABLE "place_seed_raw"
+        ADD COLUMN IF NOT EXISTS "status" text NOT NULL DEFAULT 'active',
+        ADD COLUMN IF NOT EXISTS "merged_into" integer,
+        ADD COLUMN IF NOT EXISTS "business_status" text,
+        ADD COLUMN IF NOT EXISTS "verified_at" timestamptz,
+        ADD COLUMN IF NOT EXISTS "verify_source" text;
+      CREATE INDEX IF NOT EXISTS "psr_status_idx" ON "place_seed_raw" ("status");
+    `);
+    console.log(
+      "[Migration] ✅ 0022 place_seed_raw 상태 5컬럼(창고 필터) 적용 완료",
+    );
   } catch (err) {
     console.warn("[Migration] 스킵 또는 실패:", (err as Error).message);
   }
