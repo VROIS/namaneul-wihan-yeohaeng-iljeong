@@ -66,7 +66,8 @@
     "ageGroup30s": "30대",
     "ageGroup40s": "40대",
     "ageGroup50s": "50대",
-    "ageGroup60sPlus": "60대+"
+    "ageGroup60sPlus": "60대+",
+    "optional": "(선택)"
   },
   "onboarding": {
     "signUp": "가입하기",

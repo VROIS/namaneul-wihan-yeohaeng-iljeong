@@ -24,6 +24,7 @@ import Icon from "@/components/Icon";
 import { Colors, Brand } from "@/constants/theme";
 import { useMapToggle } from "@/contexts/MapToggleContext";
 import { useLogin } from "./hooks/useLogin";
+import { BIRTHDATE_REQUIRED } from "@shared/birthdate-policy";
 import { styles } from "./styles";
 
 // ⚠️ 폼 본문(useLogin 포함) = Modal 자식 = visible=false면 언마운트 → 재열림 시 useLogin state(생년월일·이메일·에러) 소멸 = 항상 깨끗(개인정보·상태 잔류 방지).
@@ -63,7 +64,10 @@ function LoginSheetForm({ onClose }: { onClose: () => void }) {
 
   // ⚠️ 사장님 SSOT 2026-07-26 = "생년월일 입력 → 연령대 표시된 상태" 여야 이메일 입력 가능.
   //   연령대 배지(아래 isAdult && ageGroup)와 같은 조건 1벌 = 화면과 입력 제한이 항상 일치.
-  const canUseEmail = isAdult && !!ageGroup;
+  // ⚠️ 수정금지(승인필요) 2026-08-24 사장님 승인 = 이메일 입력칸 사용 가능 조건 = 생년월일 정책 토글 1벌.
+  //   'optional'(현재) = **메일 하나로 로그인** = 생년월일과 무관하게 칸이 열린다(칸만 열고 눌러서 막는 눈가림 금지).
+  //   'required' = 옛 동작 = 생년월일(성인·연령대)이 있어야 칸이 열린다.
+  const canUseEmail = !BIRTHDATE_REQUIRED || (isAdult && !!ageGroup);
   const busy = oauthLoading || emailLoading;
   const emailBtnDisabled = busy || !canUseEmail || !emailInput.trim();
   // ⚠️ 사장님 SSOT 2026-07-27(AOS 실기기) = 로그인 요청~응답 약 1초 동안 화면이 그대로라
@@ -84,15 +88,18 @@ function LoginSheetForm({ onClose }: { onClose: () => void }) {
         </View>
       </View>
 
-      {/* ── 생년월일 (소셜 로그인 필수) ── 사장님 SSOT = 팝업 노출 = 로고글자+생년월일+구글+카톡+이메일. */}
+      {/* ── 생년월일 ── 사장님 SSOT = 팝업 노출 = 로고글자+생년월일+구글+카톡+이메일.
+          필수 여부 = shared/birthdate-policy 토글(2026-08-24 = 'optional'). */}
       <View style={styles.formSection}>
         {/* ⚠️ 사장님 SSOT 2026-07-25 = 힌트("실제 생년월일…") 설명문 제거(§23) + "(필수 입력)"을 라벨 같은 줄에 작게 = 사용자가 필수임을 즉시 인식(설명 아닌 마커). 행(baseline)+간격 style = RN 크로스플랫폼 정석(공백 하드코딩 아님). */}
         <View style={styles.labelRow}>
           <Text style={[styles.label, { color: theme.textSecondary }]}>
             {t("login.birthDate")}
           </Text>
+          {/* ⚠️ 2026-08-24 사장님 승인 = 필수/선택 마커 1벌 = 정책 토글(shared/birthdate-policy) 표기.
+              선택 정책 = "(선택)" 마커만. 설명문 금지(§23) = 선택이면 조용히 선택. */}
           <Text style={[styles.labelRequired, { color: theme.textTertiary }]}>
-            {t("login.required")}
+            {t(BIRTHDATE_REQUIRED ? "login.required" : "login.optional")}
           </Text>
         </View>
         <View style={styles.dateInputRow}>

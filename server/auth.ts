@@ -11,6 +11,7 @@ import {
 } from "./auth-user";
 import { verifyAppleIdentityToken } from "./auth-apple";
 import type { User } from "@shared/schema";
+import { BIRTHDATE_REQUIRED } from "@shared/birthdate-policy";
 
 // ⚠️ 2026-07-27 §16 = 값 끝의 줄바꿈·공백을 깎는다(카카오 KOE101 사고 근본 = 눈에 안 보이는 글자).
 const GOOGLE_CLIENT_ID = (
@@ -417,7 +418,11 @@ export function registerAuthRoutes(app: Express) {
   //   그래서: **신규 가입 = 소셜 3종(구글·카카오·애플)만.** 그쪽은 제공자가 메일을 인증해 준다(email_verified).
   //           이메일창 = 소셜 창이 안 열릴 때를 위한 **재진입 통로**.
   //
-  //   관문 2개(사장님 SSOT "생년월일은 비번처럼") = **메일 + 생년월일이 둘 다 그 계정과 맞아야** 들어간다.
+  //   ⚠️ 관문 = 생년월일 정책 토글(shared/birthdate-policy) 1벌.
+  //     'required' = 메일 + 생년월일 2관문(사장님 SSOT "생년월일은 비번처럼").
+  //     'optional'(현재, 2026-08-24 사장님 승인 = 애플 5.1.1(v) 대응) = **메일 하나로 들어간다.**
+  //       근거 = 애플 심사관이 실제로 눌러 보므로 "생일 없으면 막힘"이 화면에 남으면 안 된다(눈가림 금지).
+  //       안전은 그대로 = **없는 메일은 계정을 만들지 않는다**(아래 account_not_found) = 오타 계정 생성 0.
   //   옛 findOrCreateUser 호출·emailVerified:true 하드코딩 완전삭제 §19 (= 남의 메일로 그 계정이 열리던 통로).
   app.post("/api/auth/email-login", async (req, res) => {
     try {
@@ -430,7 +435,8 @@ export function registerAuthRoutes(app: Express) {
           .status(400)
           .json({ success: false, error: "email_required" });
       }
-      if (!birthDate) {
+      // 2026-08-24 = 생년월일 선택 정책 = 안 보내도 됨(옛 무조건 400 폐기 §19).
+      if (BIRTHDATE_REQUIRED && !birthDate) {
         return res
           .status(400)
           .json({ success: false, error: "birthdate_required" });
@@ -443,8 +449,9 @@ export function registerAuthRoutes(app: Express) {
           .status(404)
           .json({ success: false, error: "account_not_found" });
       }
-      // 생년월일 = 그 계정의 것과 같아야 한다. 메일만 알아서는 못 들어간다.
-      if (!found.birthDate || found.birthDate !== birthDate) {
+      // 생년월일 = **보냈으면 그 계정 것과 같아야 한다**(정책 무관 = 틀린 값으로는 못 들어감).
+      //   'optional'(현재) = 안 보내면 메일 하나로 진입. 'required' = 반드시 보내야 함(위 400).
+      if (birthDate && (!found.birthDate || found.birthDate !== birthDate)) {
         return res
           .status(401)
           .json({ success: false, error: "birthdate_mismatch" });

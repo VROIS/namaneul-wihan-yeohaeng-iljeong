@@ -82,7 +82,7 @@ export async function clearAuth(): Promise<void> {
 //   서버가 주는 사유 = account_not_found / birthdate_mismatch / birthdate_required (화면이 그대로 보여준다).
 export async function emailLogin(data: {
   email: string;
-  birthDate: string;
+  birthDate?: string; // 2026-08-24 = 생년월일 선택 정책(shared/birthdate-policy)
   language: string;
   deviceType: string;
 }): Promise<{ success: boolean; user?: UserData; error?: string }> {

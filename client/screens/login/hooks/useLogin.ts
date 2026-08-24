@@ -41,6 +41,7 @@ import {
 } from "@/lib/auth-social";
 import { useTranslation } from "react-i18next";
 import { SUPPORTED_LANGS, changeLanguageAndPersist } from "@/lib/i18n";
+import { BIRTHDATE_REQUIRED } from "@shared/birthdate-policy";
 
 // ⚠️ 사장님 SSOT 2026-07-25 = 로그인 성공 시 "다음 동작"을 호출자가 결정(§0 단일경로·분기금지). onDone:
 //   - LoginScreen(과도기 보관 화면) = () => navigation.reset(Main)  (기존 동작 100% 유지)
@@ -242,6 +243,10 @@ export function useLogin({ onDone }: { onDone: () => void }) {
   };
 
   const requireBirthDateAndAdult = (): boolean => {
+    // ⚠️ 수정금지(승인필요) 2026-08-24 사장님 승인 = 생년월일 입력부 필수↔선택 전환 1줄
+    //   (shared/birthdate-policy). 'optional'(현재, 애플 5.1.1(v) 대응) = 이 게이트를 거치지 않는다.
+    //   아래 검사는 'required' 로 되돌리면 그대로 살아난다 = 옛 로직 무변경.
+    if (!BIRTHDATE_REQUIRED) return true;
     if (!isDateComplete) {
       setDateError(t("login.birthRequired"));
       Alert.alert(t("login.alert"), t("login.birthRequiredAlert"));
@@ -402,13 +407,14 @@ export function useLogin({ onDone }: { onDone: () => void }) {
       notify(t("login.emailInvalid"));
       return;
     }
-    // 생년월일 관문 = 소셜 3종과 같은 함수 1벌(§16). 통과하면 birthDateStr 이 반드시 있다.
-    if (!requireBirthDateAndAdult() || !birthDateStr) return;
+    // 생년월일 관문 = 소셜 3종과 같은 함수 1벌(§16).
+    //   2026-08-24 = 선택 정책이면 생년월일 없이도 진행(서버가 있으면 대조 / 없으면 통과).
+    if (!requireBirthDateAndAdult()) return;
     setEmailLoading(true);
     try {
       const r = await emailLogin({
         email,
-        birthDate: birthDateStr,
+        birthDate: birthDateStr ?? undefined,
         language: i18n.language,
         deviceType: Platform.OS === "web" ? "web" : "mobile",
       });

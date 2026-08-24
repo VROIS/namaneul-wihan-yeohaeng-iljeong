@@ -66,7 +66,8 @@
     "ageGroup30s": "30代",
     "ageGroup40s": "40代",
     "ageGroup50s": "50代",
-    "ageGroup60sPlus": "60代+"
+    "ageGroup60sPlus": "60代+",
+    "optional": "(任意)"
   },
   "onboarding": {
     "signUp": "会員登録",
