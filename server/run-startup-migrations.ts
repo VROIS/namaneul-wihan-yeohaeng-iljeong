@@ -221,6 +221,35 @@ export async function runStartupMigrations(): Promise<void> {
     console.log(
       "[Migration] ✅ 0022 place_seed_raw 상태 5컬럼(창고 필터) 적용 완료",
     );
+
+    // 0023: 도시카드 선별입력(override) 3컬럼 (2026-08-25 확정 스펙 v2)
+    //   도시카드 프레임(대표사진·하이라이트3·영상)을 관리자가 자기 콘텐츠id로 수동교체하는 자리.
+    //   대표사진·하이라이트 = place_seed_raw.id(PSR 축), 영상 = saved_videos.id(영상 자신의 id, 여정과 무관 = 사장님 정정).
+    //   null = 자동랭킹 그대로(city-place-routes.ts:69-267), 값 있으면 그 슬롯만 override.
+    //   ⚠️ 관제탑 "+신규" 배지 기준시각은 DB 컬럼 아님 = admin-dashboard.html 이 인증 헤더 없이 부르는 공개 통계
+    //   엔드포인트라 "어느 관리자인지" 알 방법이 없다(video-config 의 in-memory 변수와 동일 패턴, dashboard-routes.ts).
+    await pool.query(`
+      ALTER TABLE "cities"
+        ADD COLUMN IF NOT EXISTS "override_hero_place_id" integer,
+        ADD COLUMN IF NOT EXISTS "override_highlight_place_ids" integer[],
+        ADD COLUMN IF NOT EXISTS "override_video_id" integer;
+    `);
+    console.log("[Migration] ✅ 0023 cities 선별입력 override 3컬럼 적용 완료");
+
+    // 0024: AI 성능 계측 3컬럼 (2026-08-25 사장님 승인 = 관제탑 "AI 성능" 카드 활성화)
+    //   레거시 '내손앱' api_logs(response_time·status_code·error_message)와 같은 발상이나,
+    //   §16 "카운터 2벌 금지"(external-call-log.ts 헤더) 유지 위해 새 표 대신 기존 유일 카운터
+    //   external_calls 에 컬럼만 추가 = 같은 표가 "몇 번 불렀나"+"얼마나 걸렸나·성공했나"를 함께 기록.
+    //   옛 rows(계측 이전)는 이 3컬럼이 NULL = 집계 쿼리에서 자동 제외(§1 추정 금지, 실제 계측된 것만 평균).
+    await pool.query(`
+      ALTER TABLE "external_calls"
+        ADD COLUMN IF NOT EXISTS "response_time_ms" integer,
+        ADD COLUMN IF NOT EXISTS "success" boolean,
+        ADD COLUMN IF NOT EXISTS "error_message" text;
+    `);
+    console.log(
+      "[Migration] ✅ 0024 external_calls AI 성능 계측 3컬럼 적용 완료",
+    );
   } catch (err) {
     console.warn("[Migration] 스킵 또는 실패:", (err as Error).message);
   }

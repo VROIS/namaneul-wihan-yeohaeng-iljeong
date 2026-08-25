@@ -82,21 +82,36 @@ export async function geminiJson<T = any>(
     delete config.responseMimeType;
   }
 
-  // ⚠️ 2026-08-06 = 429 재시도(1→2→4→8초) = 여정생성 직후 스토리보드 연속 호출 같은 스파이크 흡수(사장님 승인).
-  const response = await withQuotaRetry(
-    () =>
-      getAI(opts?.apiKey).models.generateContent({
-        model: opts?.model || MODEL_ID,
-        contents: [
-          {
-            role: "user",
-            parts: [...(opts?.extraParts || []), { text: prompt }],
-          },
-        ],
-        config,
-      }),
-    { label: `gemini-json:${opts?.rawTag || "call"}` },
-  );
+  // ⚠️ 2026-08-25 사장님 승인 = AI 성능(관제탑) 계측 = 시작시각 찍고, 실패해도 기록 후 그대로 throw(기존 에러 처리 불변).
+  const startedAt = Date.now();
+  let response: any;
+  try {
+    // ⚠️ 2026-08-06 = 429 재시도(1→2→4→8초) = 여정생성 직후 스토리보드 연속 호출 같은 스파이크 흡수(사장님 승인).
+    response = await withQuotaRetry(
+      () =>
+        getAI(opts?.apiKey).models.generateContent({
+          model: opts?.model || MODEL_ID,
+          contents: [
+            {
+              role: "user",
+              parts: [...(opts?.extraParts || []), { text: prompt }],
+            },
+          ],
+          config,
+        }),
+      { label: `gemini-json:${opts?.rawTag || "call"}` },
+    );
+  } catch (err: any) {
+    void recordExternalCall({
+      provider: "gemini",
+      sku: opts?.model ?? "default",
+      tag: opts?.rawTag ?? null,
+      responseTimeMs: Date.now() - startedAt,
+      success: false,
+      errorMessage: err?.message || String(err),
+    });
+    throw err;
+  }
 
   const raw = (response as any).text || "";
   const finishReason =
@@ -130,7 +145,9 @@ export async function geminiJson<T = any>(
     provider: "gemini",
     sku: opts?.model ?? "default",
     tag: opts?.rawTag ?? null,
-  }); // 2026-08-23 사장님 승인 = 유료호출 카운터
+    responseTimeMs: Date.now() - startedAt,
+    success: true,
+  }); // 2026-08-23 사장님 승인 = 유료호출 카운터, 2026-08-25 = AI 성능 계측 추가
   return { raw, data, finishReason, parseError };
 }
 
@@ -183,28 +200,50 @@ export async function* geminiVisionStream(
     topK: 20,
   };
 
-  // ⚠️ 2026-08-06 = 스트림 "생성" 호출만 재시도(첫 바이트 전 = 안전). 스트림 도중 오류는 재시도 불가(이미 흘려보냄).
-  const responseStream = await withQuotaRetry(
-    () =>
-      getAI(opts?.apiKey).models.generateContentStream({
-        model: MODEL_ID,
-        contents: { parts },
-        config,
-      }),
-    { label: `gemini-vision:${opts?.rawTag || "guide"}` },
-  );
-
+  // ⚠️ 2026-08-25 사장님 승인 = AI 성능(관제탑) 계측 = 시작시각 찍고, 스트림 시작/도중 실패해도 기록 후 그대로 throw(기존 에러 처리 불변).
+  const startedAt = Date.now();
   let fullText = "";
   let finishReason = "stream-end";
-  for await (const chunk of responseStream) {
-    const fr = (chunk as any).candidates?.[0]?.finishReason;
-    if (fr) finishReason = fr;
-    const text = (chunk as any).text;
-    if (text) {
-      fullText += text;
-      yield text;
+  try {
+    // ⚠️ 2026-08-06 = 스트림 "생성" 호출만 재시도(첫 바이트 전 = 안전). 스트림 도중 오류는 재시도 불가(이미 흘려보냄).
+    const responseStream = await withQuotaRetry(
+      () =>
+        getAI(opts?.apiKey).models.generateContentStream({
+          model: MODEL_ID,
+          contents: { parts },
+          config,
+        }),
+      { label: `gemini-vision:${opts?.rawTag || "guide"}` },
+    );
+
+    for await (const chunk of responseStream) {
+      const fr = (chunk as any).candidates?.[0]?.finishReason;
+      if (fr) finishReason = fr;
+      const text = (chunk as any).text;
+      if (text) {
+        fullText += text;
+        yield text;
+      }
     }
+  } catch (err: any) {
+    void recordExternalCall({
+      provider: "gemini",
+      sku: MODEL_ID,
+      tag: opts?.rawTag ?? "guide-gemini",
+      responseTimeMs: Date.now() - startedAt,
+      success: false,
+      errorMessage: err?.message || String(err),
+    });
+    throw err;
   }
+
+  void recordExternalCall({
+    provider: "gemini",
+    sku: MODEL_ID,
+    tag: opts?.rawTag ?? "guide-gemini",
+    responseTimeMs: Date.now() - startedAt,
+    success: true,
+  });
 
   await saveRaw({
     source: "gemini",

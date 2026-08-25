@@ -2,16 +2,23 @@
 import type { Express } from "express";
 import { db } from "../db";
 import { apiKeys } from "../../shared/schema";
-import { eq } from "drizzle-orm";
+import { eq, ne } from "drizzle-orm";
 
 export function registerApiKeysRoutes(app: Express) {
   // ========================================
   // /api/admin/api-keys/* = API 키 CRUD
   // ========================================
+  // ⚠️ 2026-08-25 사장님 지시로 수정 = 삭제(DELETE, 아래)는 소프트삭제(isActive=false)라 이 목록이 필터
+  //   없이 전부 보여주면 삭제해도 화면에서 안 사라짐. isActive=false 행만 숨긴다(§0 = X는 화면에서만
+  //   감추고 DB는 보존, DB 행 자체는 지우지 않음 — 삭제 라우트가 이미 그렇게 짜여 있음, 조회만 정정).
   app.get("/api/admin/api-keys", async (_req, res) => {
     if (!db) return res.json([]);
     try {
-      const keys = await db.select().from(apiKeys).orderBy(apiKeys.id);
+      const keys = await db
+        .select()
+        .from(apiKeys)
+        .where(ne(apiKeys.isActive, false))
+        .orderBy(apiKeys.id);
       const maskedKeys = keys.map((key) => ({
         ...key,
         keyValue: key.keyValue

@@ -5,7 +5,14 @@ import { storage } from "./storage";
 import { itineraryGenerator } from "./services/itinerary-generator";
 import { db } from "./db";
 // guides = 해설 창고 1벌(2026-08-02). 도시 카드 [해설] 배지를 켤지 여기서 있는지만 본다.
-import { cities, placeSeedRaw, itineraries, guides } from "../shared/schema";
+// savedVideos = 도시카드 선별입력(영상 override, 2026-08-25) = "영상 자신의 id"(itinerary.id 아님, 사장님 정정) 조회용.
+import {
+  cities,
+  placeSeedRaw,
+  itineraries,
+  guides,
+  savedVideos,
+} from "../shared/schema";
 // ne·isNull·isNotNull = 대표장소 조건을 city-representative-place 1벌로 옮기며 이 파일에서 안 쓰게 됨(삭제 2026-08-05 §19)
 import { eq, sql, desc, and, or, inArray } from "drizzle-orm";
 // ⚠️ 완비 기준 = ag2 의 상수 1벌을 가져다 쓴다(§16). 여기에 300 을 다시 적으면 기준이 두 벌이 된다.
@@ -130,6 +137,10 @@ export function registerCityPlaceRoutes(app: Express): void {
             protagonistSentence: itineraries.protagonistSentence,
             rawData: itineraries.rawData,
             videoByDay: itineraries.videoByDay,
+            // 🖼️ 2026-08-25 확정 스펙 v2 = 도시카드 선별입력(override). null = 아래 자동랭킹 그대로 사용.
+            overrideHeroPlaceId: cities.overrideHeroPlaceId,
+            overrideHighlightPlaceIds: cities.overrideHighlightPlaceIds,
+            overrideVideoId: cities.overrideVideoId,
           })
           .from(cities)
           // ⚠️ 수정금지(승인필요) 2026-08-20 사장님 SSOT = 대표여정 고르는 순서 1벌(재정정).
@@ -194,12 +205,54 @@ export function registerCityPlaceRoutes(app: Express): void {
       ]);
       if (!row) return res.status(404).json({ error: "City not found" });
 
+      // 🖼️ 2026-08-25 확정 스펙 v2 = 도시카드 선별입력(override) 적용 — 값이 있으면 위 자동랭킹(repRows/highlightRows)을
+      //   덮어쓴다. null 이면 자동랭킹 그대로(원래 로직 무변경). 저장 관문 = POST /api/admin/cities/:id/content-override(관리자 전용).
+      let heroPlace = repRows[0] ?? null;
+      if (row.overrideHeroPlaceId != null) {
+        const [overrideHero] = await db
+          .select({
+            id: placeSeedRaw.id,
+            imageUrl: placeSeedRaw.imageUrl,
+            summaryKo: placeSeedRaw.summaryKo,
+            nameKo: placeSeedRaw.nameKo,
+            nameEn: placeSeedRaw.nameEn,
+          })
+          .from(placeSeedRaw)
+          .where(eq(placeSeedRaw.id, row.overrideHeroPlaceId))
+          .limit(1);
+        if (overrideHero) heroPlace = overrideHero;
+      }
+
+      let highlightPlaces: {
+        nameEn: string | null;
+        nameLocal: string | null;
+        nameKo: string | null;
+      }[] = highlightRows;
+      const overrideHighlightIds = (row.overrideHighlightPlaceIds || []).filter(
+        (id): id is number => id != null,
+      );
+      if (overrideHighlightIds.length > 0) {
+        const overrideRows = await db
+          .select({
+            id: placeSeedRaw.id,
+            nameEn: placeSeedRaw.nameEn,
+            nameLocal: placeSeedRaw.nameLocal,
+            nameKo: placeSeedRaw.nameKo,
+          })
+          .from(placeSeedRaw)
+          .where(inArray(placeSeedRaw.id, overrideHighlightIds));
+        const byId = new Map(overrideRows.map((r) => [r.id, r]));
+        highlightPlaces = overrideHighlightIds
+          .map((id) => byId.get(id))
+          .filter((r): r is (typeof overrideRows)[number] => r != null);
+      }
+
       // 🎙️ 2026-08-02 사장님 확정 = [해설] 배지는 **그 카드 장소의 해설이 창고에 있으면 자동으로 켠다.**
       //   대표 해설을 따로 담는 칸도, 손으로 고르는 절차도 두지 않는다 =
-      //   카드가 보여주는 장소(리뷰 1위)와 [해설 만들기]가 여는 장소가 같은 1곳이라 고를 것이 없다.
+      //   카드가 보여주는 장소(리뷰 1위 또는 override)와 [해설 만들기]가 여는 장소가 같은 1곳이라 고를 것이 없다.
       //   찾는 열쇠 = (장소번호, 언어) 두 칸 = 색인 guides_place_lang_idx 그대로.
       //   ⚠️ 있는지만 본다 = 내용 칸은 뽑지 않고 1행에서 끊는다(이 라우트는 도시 칩마다 불린다).
-      const repPlaceId = repRows[0]?.id ?? null;
+      const repPlaceId = heroPlace?.id ?? null;
       const guideHit =
         repPlaceId === null
           ? []
@@ -217,7 +270,7 @@ export function registerCityPlaceRoutes(app: Express): void {
       //   이중 경로(기본값 설정 후 조건부 재계산) 폐기 = 2026-08-21 §19.
       const tagline =
         (row.itineraryId !== null && row.protagonistSentence) ||
-        repRows[0]?.summaryKo ||
+        heroPlace?.summaryKo ||
         (row.itineraryId !== null && row.title) ||
         "";
 
@@ -232,15 +285,28 @@ export function registerCityPlaceRoutes(app: Express): void {
         tagline,
         // ⚠️ 수정금지(승인필요) 2026-08-21 사장님 승인 = 표시명 = pickDisplayName 1벌(§16, 규칙·사유는
         //   city-representative-place.ts 에). 옛 name_ko 우선 폐기 = 2026-08-21 §19.
-        highlights: highlightRows.map(pickDisplayName),
+        highlights: highlightPlaces.map(pickDisplayName),
         dayCount: 0, // 0 = 화면이 "N일 코스" 배지를 안 그림
-        imageUrl: repRows[0]?.imageUrl ?? null,
+        imageUrl: heroPlace?.imageUrl ?? null,
         // 🎙️ 2026-08-02 사장님 순서 ㉠ = 관리자가 [해설 만들기] 로 여는 장소 = 위 사진과 **같은 1위 행**.
         //   그 도시에 쓸 장소가 하나도 없으면 null = 화면이 [해설 만들기] 를 아예 안 그린다.
         placeId: repPlaceId,
         // 🎙️ 해설 배지 스위치 = 그 장소 + 그 언어의 해설이 창고에 1건이라도 있으면 켜짐(위 존재 확인 1벌).
         hasGuide: guideHit.length > 0,
         hasVideo: false,
+        // 🎬 영상 override(선별입력)로만 채워짐 = 평소엔 null(TripisModal.tsx 가 이때는 itineraryId 그대로 재생).
+        //   ⚠️ itineraryId 와 분리된 이유 = itineraryId 는 [코스] 배지가 그대로 쓰는 여정번호라 영상 override 로
+        //   건드리면 코스 이동이 엉뚱한 여정으로 튐(2026-08-25 판단3종 지적, 아래 override 블록 참조).
+        videoItineraryId: null as number | null,
+        videoDay: null as number | null,
+        // 🖼️ 2026-08-25 판단3종 지적으로 추가 = 선별입력 폼이 "지금 이 도시에 뭐가 저장돼 있는지" 다시 불러올
+        //   방법이 없어서, 관리자가 슬롯 하나만 고치려 해도 나머지 저장값이 빈칸으로 보여 함께 지워지던 문제.
+        //   raw override 원본값(=DB 컬럼 그대로) 을 그대로 내려준다 = admin-dashboard.html 이 폼을 채우는 데 씀.
+        overrides: {
+          heroPlaceId: row.overrideHeroPlaceId,
+          highlightPlaceIds: row.overrideHighlightPlaceIds,
+          videoId: row.overrideVideoId,
+        },
       };
 
       // ② 대표여정이 있으면 **일수·영상 배지만** 그 여정에서 가져온다.
@@ -259,10 +325,80 @@ export function registerCityPlaceRoutes(app: Express): void {
         );
       }
 
+      // 🎬 영상 override = saved_videos.id(영상 자신의 id) 직접 지정 — itinerary 선택과 무관(사장님 정정, 2026-08-25).
+      //   ⚠️ 2026-08-25 판단3종 지적으로 2차 수정 = card.itineraryId 를 직접 덮으면 [코스] 배지(handleViewItinerary)
+      //     까지 override 여정으로 끌려가 카드의 사진·하이라이트(도시 X)와 실제 이동하는 여정(override의 여정 Y)이
+      //     어긋남 — itineraryId 는 **여정/코스 전용**으로 그대로 두고, 영상 재생만 쓰는 별도 칸
+      //     videoItineraryId 를 새로 둔다(TripisModal.tsx 가 [Video] 눌렀을 때만 이 값으로 갈아탐, [코스]는 그대로 itineraryId).
+      if (row.overrideVideoId != null) {
+        const [overrideVideo] = await db
+          .select({
+            itineraryId: savedVideos.itineraryId,
+            day: savedVideos.day,
+            videoByDay: itineraries.videoByDay,
+          })
+          .from(savedVideos)
+          .innerJoin(itineraries, eq(itineraries.id, savedVideos.itineraryId))
+          .where(eq(savedVideos.id, row.overrideVideoId))
+          .limit(1);
+        if (overrideVideo) {
+          const dayEntry = (overrideVideo.videoByDay as any)?.[
+            overrideVideo.day
+          ];
+          card.hasVideo = dayEntry?.status === "succeeded";
+          card.videoItineraryId = overrideVideo.itineraryId;
+          card.videoDay = overrideVideo.day;
+        }
+      }
+
       res.json(card);
     } catch (error) {
       console.error("[cities/:id/representative] 도시 카드 조회 실패:", error);
       res.status(500).json({ error: "failed_to_fetch_representative" });
+    }
+  });
+
+  // 🖼️ 2026-08-25 확정 스펙 v2 = 도시카드 선별입력(override) 저장 — /admin 페이지(admin-dashboard.html) 전용 API.
+  //   ⚠️ users.role 검사 안 함 = 이 페이지의 다른 관리 기능(guide-prices PUT/POST, api-keys POST/PUT)도 전부
+  //   인증 헤더 없이 열려 있음(§0 = 이 페이지 도달 자체가 "관리자" 경계, 개발단계 전체개방 §16 재사용 = 같은 컨벤션).
+  //   ★대표올리기(itinerary-routes.ts)는 role 검사가 맞다 — 그건 일반 사용자도 쓰는 Profile 화면에서 불리기 때문.
+  //   값을 넣으면 그 슬롯이 자동랭킹 대신 그 id로 고정, null(빈칸)로 저장하면 자동랭킹 복귀.
+  app.post("/api/admin/cities/:id/content-override", async (req, res) => {
+    try {
+      if (!db) return res.status(503).json({ error: "db_unavailable" });
+      const cityId = parseInt(req.params.id);
+      if (Number.isNaN(cityId)) {
+        return res.status(404).json({ error: "City not found" });
+      }
+      const toIdOrNull = (v: unknown) => {
+        const n = Number(v);
+        return Number.isFinite(n) && n > 0 ? n : null;
+      };
+      const heroPlaceId = toIdOrNull(req.body?.heroPlaceId);
+      const highlightPlaceIds = Array.isArray(req.body?.highlightPlaceIds)
+        ? req.body.highlightPlaceIds
+            .map(toIdOrNull)
+            .filter((v: number | null) => v != null)
+        : null;
+      const videoId = toIdOrNull(req.body?.videoId);
+
+      await db
+        .update(cities)
+        .set({
+          overrideHeroPlaceId: heroPlaceId,
+          overrideHighlightPlaceIds:
+            highlightPlaceIds && highlightPlaceIds.length > 0
+              ? highlightPlaceIds
+              : null,
+          overrideVideoId: videoId,
+        })
+        .where(eq(cities.id, cityId));
+
+      console.log(`[ContentOverride] 도시 ${cityId} 선별입력 저장 완료`);
+      res.json({ cityId, heroPlaceId, highlightPlaceIds, videoId });
+    } catch (error) {
+      console.error("[ContentOverride] 저장 실패:", error);
+      res.status(500).json({ error: "failed_to_save_content_override" });
     }
   });
 

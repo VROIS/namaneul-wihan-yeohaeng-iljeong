@@ -57,6 +57,12 @@ export interface RepCard {
   // 🎙️ 그 장소 + 지금 화면 언어의 해설이 창고에 있으면 서버가 true 로 내려준다 = [해설] 배지 스위치(2026-08-02).
   hasGuide: boolean;
   hasVideo: boolean;
+  // 🎬 2026-08-25 도시카드 선별입력(영상 override) = saved_videos.id 로 특정 영상을 지정했을 때만 값이 온다.
+  //   ⚠️ itineraryId 와 분리 = itineraryId 는 [코스] 배지가 그대로 쓰는 그 도시의 진짜 대표여정번호라
+  //   영상 override 가 건드리면 코스 이동이 엉뚱한 여정으로 튄다(2026-08-25 판단3종 지적). null = 평소대로
+  //   자동선택(이 모달이 itineraryId 여정의 첫 성공 날짜를 스스로 고름, 아래 onVideo 참조).
+  videoItineraryId: number | null;
+  videoDay: number | null;
 }
 
 // GET /api/guides 응답 행 (서버 guide-routes.ts ④ 보관함 목록 = 본인 것만)
@@ -139,12 +145,16 @@ function TripisModalInner({
   const { bumpVideoData, isAuthed, requestLogin } = useMapToggle();
 
   // 이 모달이 다루는 여정 번호 = 여정 모드는 인자 그대로, 도시 모드는 그 도시 대표여정 번호(▶ 전환용).
-  const itineraryId =
+  // ⚠️ 2026-08-25 = state 로 전환(옛 const 폐기 §19) = [Video] 배지를 영상 override 로 눌렀을 때만
+  //   rep.videoItineraryId 로 갈아탐(아래 onVideo). [코스]/handleViewItinerary 는 이 값을 그대로 쓰지만
+  //   그 시점엔 아직 안 바뀐 기본값(그 도시의 진짜 대표여정)이라 코스 이동은 영향 없음(2026-08-25 판단3종 지적 수정).
+  const [itineraryId, setItineraryId] = useState<number | null>(
     params.mode === "itinerary"
       ? params.itineraryId
       : params.mode === "city"
         ? params.rep.itineraryId
-        : null;
+        : null,
+  );
 
   // 여정 + 영상 상태 로드 = 열릴 때 1회
   //   도시 카드 상태에서는 부르지 않는다 = ▶ 를 누른 뒤에야 영상 정보를 가져온다(불필요한 호출 0).
@@ -315,8 +325,17 @@ function TripisModalInner({
       <CityCardScreen
         rep={params.rep}
         onCreateTrip={onClose}
-        // [영상] = 이 모달 안에서 숏폼 영상 화면으로
-        onVideo={() => setViewMode("itinerary")}
+        // [영상] = 이 모달 안에서 숏폼 영상 화면으로.
+        //   🎬 2026-08-25 = 선별입력으로 특정 영상(videoItineraryId·videoDay)이 지정돼 있으면 그 여정·날짜로 갈아탐
+        //   (itineraryId 를 여기서만 바꾼다 = [코스] 는 이 시점 이전엔 여전히 기본값을 씀, 판단3종 지적 수정).
+        //   안 지정돼 있으면 기존 그대로(itineraryId 는 기본값 유지, effectiveDay 가 첫 성공 날짜 자동 선택).
+        onVideo={() => {
+          if (params.rep.videoItineraryId != null) {
+            setItineraryId(params.rep.videoItineraryId);
+            setSelectedDay(params.rep.videoDay);
+          }
+          setViewMode("itinerary");
+        }}
         // [해설]·[해설 만들기] = **같은 곳** = 가이드 미니앱 해설 화면을 그 장소번호로 연다(2026-08-02 사장님 확정).
         //   배지가 보일 때만 눌리므로 여기 오면 장소번호가 반드시 있다.
         onGuide={() => {

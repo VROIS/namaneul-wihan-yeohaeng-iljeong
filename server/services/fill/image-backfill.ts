@@ -4,7 +4,7 @@
 //   ① PID보유+이미지결손 추출(repair.ts:99 정본 조건) → ② 무료 재링크(relinkStorageImages §16, 외부호출 0)
 //   → ③ 저장 raw(docs/raw/{cityId})의 photoName 재활용 = PM만(TS 재호출 0) → ④ raw에도 없으면 보고만(기본) / --allow-ts 시 TS 1콜 후 PM.
 // = 비용(2025-03 SKU 개편, 2026-08-23 현행화): PM·TS 각 월 1,000 무료(독립) → 초과 PM €0.006/장 · TS €0.035/콜. 기본 DRY(외부호출 0·쓰기 0) = --apply 시 실행.
-// = ⚠️ 2026-08-23 사장님 승인 = 실행 전 무료잔량 게이트(external-call-log.gateBatch) = 초과면 중단, --force-quota 는 사장님 승인 시만.
+// = ⚠️ 2026-08-24 사장님 승인 = 무료잔량 게이트(gateBatch) = TS만 적용(초과면 중단, --force-quota 는 사장님 승인 시만). PM = 막지 않음(곧 사용자 기능 = 제한 금지, 기록·판정만).
 // = 쓰기 = upsertPlace 단일 진입점(§14, relink 동일 패턴 = PID 매칭 = imageUrl 부분갱신 = 뼈대 보존).
 // CLI: npx tsx server/services/fill/image-backfill.ts --city-id=19 [--apply] [--allow-ts] [--limit=50]
 import fs from "fs";
@@ -156,12 +156,10 @@ export async function backfillImages(opts: {
     };
   }
 
-  // ⚠️ 2026-08-23 사장님 승인 = 관리자 배치 무료잔량 게이트 = 이달 PM·TS 무료(각 1,000) 잔량 안에서만 실행
+  // ⚠️ 2026-08-24 사장님 승인 = PM = 막지 않음(곧 사용자 기능 생김 = 제한 금지). BE가 잔량을 알 수 있게
+  //   기록·판정만(simulateCost, 위 로그) 하고 gateBatch(중단)는 TS 에만 적용.
   //   계획건수 = 실제 실행 경로와 동일: needTs 행은 --allow-ts 일 때만 돈다(아래 opts.allowTs 분기)
   const tsPlanned = opts.allowTs ? needTs.length : 0;
-  await gateBatch("pm", withRaw.length + tsPlanned, {
-    force: !!opts.forceQuota,
-  });
   if (tsPlanned) await gateBatch("ts", tsPlanned, { force: !!opts.forceQuota });
 
   const { tsPhoto, tsSearch } = await import(

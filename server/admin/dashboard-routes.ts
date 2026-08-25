@@ -8,8 +8,14 @@ import {
   exchangeRates,
   cities,
   placeSeedRaw,
+  itineraries,
+  guides,
+  savedVideos,
+  users,
+  creditTransactions,
 } from "../../shared/schema";
-import { sql, count } from "drizzle-orm";
+import { sql, count, eq, and, gte, isNotNull } from "drizzle-orm";
+import { CREDIT_CONFIG } from "../creditService";
 
 const DEFAULT_DASHBOARD_DATA = {
   overview: {
@@ -108,10 +114,8 @@ export function registerDashboardRoutes(app: Express) {
   // ⚠️ 2026-07-16 = GET /api/admin/exchange-rates 완전삭제(§19) = client/bts-app/public/admin-dashboard.html 전수 grep 호출자 0.
   //   admin-dashboard.html 은 다른 경로(/api/admin/sync/exchange-rates POST, 서버에 없음)를 부르는 옛 UI 잔존이었음(D 항목에서 별도 정리).
 
-  // ========================================
-  // /api/admin/control-tower/summary = 시스템 상태 요약 (= PSR + cities + apiServices 만)
-  // = 옛 dataSyncLog + geminiWebSearchCache + routeCache 의존 제거
-  // ========================================
+  // ⚠️ 2026-08-25 = 옛 /api/admin/control-tower/summary(PSR+cities+apiServices 요약) 완전삭제 §19 = 호출자 0(admin-dashboard.html
+  //   죽은 4필드 카드 삭제로 유일한 호출자가 없어짐). psr/cities 총계는 /api/admin/dashboard 가 이미 준다(중복 엔드포인트 아님).
   // ⚠️ 2026-08-23 사장님 승인 = 관제탑 계기판 씨앗 = 외부 유료호출 이달 사용량·무료잔량(공급자별) = external_calls 1벌
   app.get("/api/admin/external-calls/summary", async (_req, res) => {
     try {
@@ -146,29 +150,223 @@ export function registerDashboardRoutes(app: Express) {
     }
   });
 
-  app.get("/api/admin/control-tower/summary", async (_req, res) => {
+  // 🎯 2026-08-25 확정 스펙 v2 = 활동지표(가입자·여정건수·AI의견·전문가검증) + 데이터현황(Audioguide·영상) + 로그인방식별 + 수익.
+  //   "+신규" 배지 기준시각 = in-memory 변수(adminVideoOptionMode 와 같은 패턴, video-routes.ts:41) — 이 엔드포인트가
+  //   인증 헤더 없이 불리는 공개 통계 API라 "어느 관리자"인지 알 방법이 없어 DB 컬럼이 아니라 서버 프로세스 전역 1개.
+  //   재배포 시 리셋(= 다음 열람에서 "이번 것 전부 신규"로 한 번 보임) = video-config 와 같은 허용된 트레이드오프.
+  let activitySummaryLastViewedAt: Date | null = null;
+
+  app.get("/api/admin/activity-summary", async (req, res) => {
     if (!db) return res.json({ dbConnected: false });
     try {
-      const [cityRow] = await db.select({ count: count() }).from(cities);
-      const [psrRow] = await db.select({ count: count() }).from(placeSeedRaw);
-      const apiServices = await db.select().from(apiServiceStatus);
-      const connectedApis = apiServices.filter((s) => s.isConfigured).length;
+      const since = activitySummaryLastViewedAt;
+      // ⚠️ 2026-08-25 판단3종 지적으로 수정 = 예전엔 매 GET(30초 자동새로고침 포함)마다 기준시각을 now() 로
+      //   밀어버려서 "+신규" 창이 항상 직전 30초로만 좁아져 사실상 0/1 만 보였다. 이제 페이지가 처음 열릴 때
+      //   1회만(?markViewed=1) 기준시각을 전진시키고, 자동새로고침 폴링은 기준시각을 안 건드리고 델타만 다시 계산한다
+      //   (admin-dashboard.html 의 loadActivitySummary 가 세션당 최초 1회만 markViewed 를 붙임).
+      const markViewed = req.query.markViewed === "1";
+
+      // 여정건수 "+신규" = 외부호출분만(사장님 확정) = MIX 경로만 metadata._pipelineVersion='v3-2step' 로 찍힘
+      //   (DB-only 경로는 'db-only-v2-scene-direct'). credit_transactions 는 두 경로가 같은 금액·설명이라 구분 불가(§0 확인).
+      const isMixItinerary = sql`${itineraries.rawData}->'metadata'->>'_pipelineVersion' = 'v3-2step'`;
+
+      const [
+        [userTotal],
+        [routeTotal],
+        [aiOpinionTotal],
+        [expertVerifyTotal],
+        [guideTotal],
+        [videoTotal],
+      ] = await Promise.all([
+        db.select({ count: count() }).from(users),
+        db.select({ count: count() }).from(itineraries),
+        db
+          .select({ count: count() })
+          .from(creditTransactions)
+          .where(
+            and(
+              eq(creditTransactions.type, "usage"),
+              eq(creditTransactions.description, "AI 의견"),
+            ),
+          ),
+        db
+          .select({ count: count() })
+          .from(creditTransactions)
+          .where(
+            and(
+              eq(creditTransactions.type, "usage"),
+              eq(creditTransactions.description, "전문가 검증"),
+            ),
+          ),
+        db
+          .select({ count: count() })
+          .from(guides)
+          .where(isNotNull(guides.placeId)),
+        db.select({ count: count() }).from(savedVideos),
+      ]);
+
+      let userNew = 0,
+        userWithdrawn = 0,
+        routeNew = 0,
+        aiOpinionNew = 0,
+        expertVerifyNew = 0,
+        guideNew = 0,
+        videoNew = 0;
+      if (since) {
+        const [[uN], [uW], [rN], [aN], [eN], [gN], [vN]] = await Promise.all([
+          db
+            .select({ count: count() })
+            .from(users)
+            .where(gte(users.createdAt, since)),
+          db
+            .select({ count: count() })
+            .from(users)
+            .where(gte(users.deletedAt, since)),
+          db
+            .select({ count: count() })
+            .from(itineraries)
+            .where(and(gte(itineraries.createdAt, since), isMixItinerary)),
+          db
+            .select({ count: count() })
+            .from(creditTransactions)
+            .where(
+              and(
+                eq(creditTransactions.type, "usage"),
+                eq(creditTransactions.description, "AI 의견"),
+                gte(creditTransactions.createdAt, since),
+              ),
+            ),
+          db
+            .select({ count: count() })
+            .from(creditTransactions)
+            .where(
+              and(
+                eq(creditTransactions.type, "usage"),
+                eq(creditTransactions.description, "전문가 검증"),
+                gte(creditTransactions.createdAt, since),
+              ),
+            ),
+          db
+            .select({ count: count() })
+            .from(guides)
+            .where(
+              and(isNotNull(guides.placeId), gte(guides.createdAt, since)),
+            ),
+          db
+            .select({ count: count() })
+            .from(savedVideos)
+            .where(gte(savedVideos.createdAt, since)),
+        ]);
+        userNew = uN?.count || 0;
+        userWithdrawn = uW?.count || 0;
+        routeNew = rN?.count || 0;
+        aiOpinionNew = aN?.count || 0;
+        expertVerifyNew = eN?.count || 0;
+        guideNew = gN?.count || 0;
+        videoNew = vN?.count || 0;
+      }
+      if (markViewed) activitySummaryLastViewedAt = new Date();
+
+      const loginBreakdown = await db
+        .select({ provider: users.provider, count: count() })
+        .from(users)
+        .groupBy(users.provider);
+
+      const [purchaseCount] = await db
+        .select({ count: count() })
+        .from(creditTransactions)
+        .where(eq(creditTransactions.type, "purchase"));
+
+      // ⚠️ 2026-08-25 사장님 지시로 수정 = "최근 결제내역"이 충전(+)만 반쪽으로 보여주고 있었다.
+      //   전체사용자 카드내역서(엑셀표)처럼 = 누구(email/닉네임)의 어떤 항목(+충전/-사용)인지 전부 원장 그대로.
+      const [creditSum] = await db
+        .select({ total: sql<number>`COALESCE(SUM(${users.credits}), 0)::int` })
+        .from(users);
+
+      const recentTransactions = await db
+        .select({
+          id: creditTransactions.id,
+          type: creditTransactions.type,
+          description: creditTransactions.description,
+          amount: creditTransactions.amount,
+          createdAt: creditTransactions.createdAt,
+          userEmail: users.email,
+          userDisplayName: users.displayName,
+        })
+        .from(creditTransactions)
+        .leftJoin(users, eq(users.id, creditTransactions.userId))
+        .orderBy(sql`${creditTransactions.createdAt} DESC`)
+        .limit(30);
+
+      // AI 비용(추정) = 무료한도 있는 공급자(ts·pm)는 초과분만, 없는 공급자(veo·omni·nano)는 전량 × 단가(§15 실측 단가).
+      //   simulateCost(planned=0) 은 "추가 계획분" 시뮬이라 여기 목적(이달 누적비용)엔 안 맞음 = usageSummary+UNIT_COST_EUR 직접 계산.
+      const { usageSummary, UNIT_COST_EUR, geminiPerformance } = await import(
+        "../services/shared/external-call-log"
+      );
+      const usage = await usageSummary();
+      // ⚠️ 2026-08-25 사장님 승인 = AI 성능 카드 = 계측된 최근 gemini 호출 100건 기준 실시간 집계(geminiClient.ts 배선).
+      const aiPerformance = await geminiPerformance();
+      // ⚠️ 2026-08-25 판단3종 지적으로 정정 = UNIT_COST_EUR 는 이름·주석 그대로 유로(€) 단가다(external-call-log.ts:20
+      //   "초과분 단가(€, 2026-08 GCP 실청구 환산·세전)"). 옛 aiCostUsd 변수명·"$" 표시는 잘못된 통화 라벨이었음.
+      const aiCostEur = usage.reduce((sum, u) => {
+        const billable = u.cap == null ? u.units : Math.max(0, u.units - u.cap);
+        return (
+          sum +
+          billable *
+            (UNIT_COST_EUR[u.provider as keyof typeof UNIT_COST_EUR] || 0)
+        );
+      }, 0);
+
+      const totalRevenueEur =
+        (purchaseCount?.count || 0) * CREDIT_CONFIG.PRICE_EUR;
+      const arpuEur =
+        (userTotal?.count || 0) > 0
+          ? totalRevenueEur / (userTotal?.count || 1)
+          : 0;
+
       res.json({
-        psr: {
-          total: psrRow?.count || 0,
+        updatedAt: new Date().toISOString(),
+        activity: {
+          users: {
+            total: userTotal?.count || 0,
+            new: userNew,
+            withdrawn: userWithdrawn,
+          },
+          routes: { total: routeTotal?.count || 0, new: routeNew },
+          aiOpinion: { total: aiOpinionTotal?.count || 0, new: aiOpinionNew },
+          expertVerify: {
+            total: expertVerifyTotal?.count || 0,
+            new: expertVerifyNew,
+          },
+          guides: { total: guideTotal?.count || 0, new: guideNew },
+          videos: { total: videoTotal?.count || 0, new: videoNew },
         },
-        cities: {
-          total: cityRow?.count || 0,
+        loginBreakdown: loginBreakdown.map((r) => ({
+          provider: r.provider || "unknown",
+          count: r.count,
+        })),
+        revenue: {
+          totalEur: totalRevenueEur,
+          aiCostEur: Math.round(aiCostEur * 100) / 100,
+          arpuEur: Math.round(arpuEur * 100) / 100,
+          // 총수입·AI비용 둘 다 €라 바로 차감 가능(위 통화 정정으로 해결). 고정비는 DB에 없어 미포함(임의 추정 안 함).
+          netEur: Math.round((totalRevenueEur - aiCostEur) * 100) / 100,
         },
-        apiConnections: {
-          connected: connectedApis,
-          total: apiServices.length,
-        },
-        lastUpdated: new Date().toISOString(),
+        aiPerformance,
+        // ⚠️ 2026-08-25 사장님 지시로 수정 = 충전(+)만 반쪽으로 보여주던 것 → 전체사용자 카드내역서(엑셀표)로.
+        totalCreditsHeld: creditSum?.total || 0,
+        recentTransactions: recentTransactions.map((t) => ({
+          id: t.id,
+          type: t.type,
+          description: t.description,
+          amount: t.amount,
+          createdAt: t.createdAt,
+          user: t.userEmail || t.userDisplayName || "(탈퇴/미확인)",
+        })),
       });
     } catch (error) {
-      console.error("Error fetching control tower summary:", error);
-      res.status(500).json({ error: "관제탑 요약 조회 실패" });
+      console.error("[activity-summary] 조회 실패:", error);
+      res.status(500).json({ error: "activity_summary_failed" });
     }
   });
 }

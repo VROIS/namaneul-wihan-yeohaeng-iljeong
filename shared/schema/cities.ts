@@ -49,6 +49,11 @@ export const cities = pgTable("cities", {
   btsSource: text("bts_source"),
   btsVerified: boolean("bts_verified").default(false),
   tier: integer("tier").default(1),
+  // 🖼️ 2026-08-25 확정 스펙 v2 = 도시카드 선별입력(override). null = 자동랭킹 그대로(city-place-routes.ts:69-267).
+  //   대표사진·하이라이트 = place_seed_raw.id(PSR축), 영상 = saved_videos.id(영상 자신의 id, 여정과 무관).
+  overrideHeroPlaceId: integer("override_hero_place_id"),
+  overrideHighlightPlaceIds: integer("override_highlight_place_ids").array(),
+  overrideVideoId: integer("override_video_id"),
   createdAt: timestamp("created_at")
     .default(sql`CURRENT_TIMESTAMP`)
     .notNull(),
