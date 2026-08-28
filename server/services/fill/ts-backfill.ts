@@ -100,12 +100,15 @@ const hkm = (a: any, b: any) => {
     process.exit(1);
   }
 
+  // ⚠️ 수정금지(승인필요) 2026-08-26 사장님 승인 = --ids 지목 행은 PID 유무 무관 재검증(사장님이 행을 지목 = 의심 PID 포함).
+  //   근거: 싱가포르 공연장 #40251 = PID 보유인데 구글맵 열어보니 "싱가포르 국립박물관"(옛 배치 오염 PID) = PID 있음 ≠ 검증됨.
+  //   --ids 없는 기본 경로 = 옛 그대로 PID 없는 행만.
   const rows = (
     await c.query(
       `SELECT id, seed_category, name_en, name_local, address, latitude::float8 AS lat, longitude::float8 AS lng, google_review_count AS rc
      FROM place_seed_raw
-     WHERE city_id=$1 AND seed_category = ANY($2::text[]) AND google_place_id IS NULL
-     ${ids ? "AND id = ANY($3::int[])" : ""}
+     WHERE city_id=$1 AND seed_category = ANY($2::text[])
+     ${ids ? "AND id = ANY($3::int[])" : "AND google_place_id IS NULL"}
      ORDER BY seed_category, google_review_count DESC NULLS LAST`,
       ids ? [cityId, cats, ids] : [cityId, cats],
     )
@@ -136,7 +139,8 @@ const hkm = (a: any, b: any) => {
   let upd = 0,
     noMatch = 0,
     closed = 0,
-    far = 0;
+    far = 0,
+    twinSkip = 0; // 2026-08-26 = --ids 직행 시 PID 가 타행에 이미 있어 기록 안 한 수
   const report: string[] = [];
   for (const row of rows) {
     try {
@@ -175,7 +179,27 @@ const hkm = (a: any, b: any) => {
             ) / 1000
           : null;
       const suspicious = dist != null && dist > 2;
+      // ⚠️ 수정금지(승인필요) 2026-08-26 사장님 승인 = --ids 지정 = 대상 행이 이미 확정 → targetRowId 직행 + 정식 면제(ag3 TS 직행 동형).
+      //   근거: BTS 공연장·아미존·굿즈샵 3행이 전 도시 0m 동일좌표(2026-08-26 실측) → 재매칭 쓰기는 문지기(불변4 좌표10m)가
+      //   3행 중 아무거나 잡아 경기장 PID 가 굿즈샵 행에 박힘. 직행 전 "TS 가 준 PID 가 이미 다른 행에 있으면" 기록하지 않고
+      //   보고만 = 쌍둥이 생성 방지(사후중복 자동병합 시스템 B5 의 사전판). --ids 없는 기존 경로 = 동작 불변.
+      if (ids && top.googlePlaceId) {
+        const twin = (
+          await c.query(
+            `SELECT id, name_en FROM place_seed_raw WHERE google_place_id = $1 AND id <> $2 LIMIT 1`,
+            [top.googlePlaceId, row.id],
+          )
+        ).rows[0];
+        if (twin) {
+          twinSkip++;
+          report.push(
+            `  ⚠️ PID중복 ${row.name_en}: TS PID 가 이미 #${twin.id} ${twin.name_en} 에 있음 = 기록 안 함(병합 판단 = 사장님)`,
+          );
+          continue;
+        }
+      }
       const r = await upsertPlace({
+        ...(ids ? { targetRowId: row.id, followTriggerDup: true } : {}),
         cityId,
         seedCategory: row.seed_category,
         // ⚠️ 수정금지(승인필요) — TS displayName→name_en (2026-06-17 사장님 SSOT) = name_local은 Gemini전용
@@ -206,6 +230,6 @@ const hkm = (a: any, b: any) => {
   await c.end();
   console.log(report.join("\n"));
   console.log(
-    `\n═══ 결과 = 보강 ${upd} / no_match ${noMatch} / 폐업 ${closed} / ⚠️원거리>2km ${far}(검토대상) ═══`,
+    `\n═══ 결과 = 보강 ${upd} / no_match ${noMatch} / 폐업 ${closed} / ⚠️원거리>2km ${far}(검토대상)${ids ? ` / PID중복 보류 ${twinSkip}` : ""} ═══`,
   );
 })();

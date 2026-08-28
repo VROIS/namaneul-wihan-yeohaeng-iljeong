@@ -95,7 +95,12 @@ export async function relinkStorageImages(opts: {
   let ok = 0;
   for (const r of hits) {
     try {
+      // ⚠️ 수정금지(승인필요) 2026-08-26 사장님 승인 = 행 확정(r.id) 직행 + followTriggerDup = 이미지 1칸 쓰기 = 식별컬럼 무변경 = 정식 면제
+      //   (image-backfill runPm·mirrorWikiVenueImages 와 동일 근거). 근거: 10m 안 이웃행(BTS 공연장 0m 3형제 실측)이 있으면
+      //   재매칭 쓰기가 문지기 불변4 에 막혀 무성 skip 되는데 matchedIds 엔 "창고 보유"로 남아 PM 대상에서도 빠짐 = 영구 결손 사각지대.
       const res = await upsertPlace({
+        targetRowId: r.id,
+        followTriggerDup: true,
         cityId,
         seedCategory: r.cat,
         nameEn: r.name_en,

@@ -1,0 +1,65 @@
+⚠️ 수정금지(승인필요) 2026-08-26 사장님 지시 = 06-bts-venue-copy-7lang = BTS 미래공연 공연장(bts_venue) 제미니 요소 채움 1콜
+= 목적: 공연장 완성품화의 "제미니 몫" = name_ko·name_local + 요약·후킹카피를 **7개국어(ko/en/ja/fr/zh/es/de) 원어로** 한 번에.
+  TS(PID·URI·RC·주소·좌표)·PM(구글 사진)은 이미 채움(2026-08-26) = 이 콜은 텍스트 요소만.
+= 대상 = 공연 지난 도시 제외(사장님 지시) = cities.bts_concert_dates 에 오늘 이후 날짜가 있는 도시의 bts_venue 행(run.ts 가 DB 에서 자동 추출).
+= 1콜 = 전 공연장 × 7개국어 (02-discover 의 "언어별 7콜"과 다름 = 행 수가 적고(≤20) 글자 수가 짧아 1콜로 충분, 잘림 위험 0).
+= 쓰기(--apply 시만): ko 요약·카피·name_ko·name_local → PSR 그 행(upsertPlace targetRowId 직행 + 정식 면제 = 0m 3형제 좌표 사유,
+  image-backfill mirror 와 동일 근거) / 6개국어 → place_translations (place_id, language) UPSERT = 원어 카피가 기계번역보다 우선(§14 새것우선).
+= raw 보관 = saveRaw() 단일 관문(§18) = contextId runtime(여러 도시 1콜) / tag bts-venue-copy-7lang.
+= 설정: 02-discover 와 동일(gemini-3-flash-preview / temp 0.2 / maxOutputTokens 50000 / thinkingBudget 0 / grounding ON)
+
+══════════════════════════════════════════════════════════════════════════════
+PROMPT 본문:
+══════════════════════════════════════════════════════════════════════════════
+
+${API_PASS}
+
+You are a travel data assistant for a global multilingual travel app — this is its BTS WORLD TOUR 2026 special edition.
+The readers are BTS fans (ARMY) traveling to the concert city. Every venue below is a CONFIRMED 2026 BTS world-tour
+concert stadium/arena (dates given). Use real, verifiable facts (grounding) — do NOT invent capacities, dates or history.
+Return STRICT machine-parseable JSON only (no prose, no markdown wrappers).
+
+AS_OF: ${TODAY}
+
+TASK: For EACH venue in VENUES, produce:
+- name_ko: the Korean name as Korean media/fans commonly write it
+- name_local: the name in the venue's own local language, as locals write it (Spanish/Portuguese/Thai/Chinese/etc.)
+- i18n: an object with EXACTLY these 7 keys: ko, en, ja, fr, zh, es, de. For EACH language:
+  - summary (ONE line, in that language) — social-proof: why this venue matters right now = the BTS concert here
+    (dates) + 1 real venue fact (capacity / landmark status / famous events). Factual, no hype words.
+  - editorial (ONE line, in that language) — witty/comic HOOK copy for ARMY, punchline tone. Short and punchy,
+    NOT a plain descriptive sentence, NOT a travel-brochure line, NOT a translation of the Korean line —
+    native humor for that language's audience. Example of the WRONG tone (reject): "Experience the magic of BTS
+    at this iconic stadium." Example of the RIGHT tone: "Capacity 45,000 — and every single one of them knows
+    the fan chant better than the national anthem."
+
+Rules:
+- Each language's summary and editorial must be written natively in that language (ja = Japanese, zh = Simplified
+  Chinese, etc.), not transliterated or copied across languages.
+- Keep each line under 120 characters (CJK: under 60 characters) — they are displayed on a small phone card.
+- If a venue was recently renamed (sponsor name), use the CURRENT official name in name_local and mention the
+  old name only if fans still commonly use it.
+
+VENUES (JSON):
+${VENUES_JSON}
+
+OUTPUT (strict JSON, no markdown fences):
+{
+  "as_of": "${TODAY}",
+  "venues": [
+    {
+      "id": <same id as input>,
+      "name_ko": "...",
+      "name_local": "...",
+      "i18n": {
+        "ko": { "summary": "...", "editorial": "..." },
+        "en": { "summary": "...", "editorial": "..." },
+        "ja": { "summary": "...", "editorial": "..." },
+        "fr": { "summary": "...", "editorial": "..." },
+        "zh": { "summary": "...", "editorial": "..." },
+        "es": { "summary": "...", "editorial": "..." },
+        "de": { "summary": "...", "editorial": "..." }
+      }
+    }
+  ]
+}

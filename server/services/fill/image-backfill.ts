@@ -100,13 +100,16 @@ export async function backfillImages(opts: {
   //     서빙 양쪽 다 영구폐업 필터가 없어(2026-08-17 실측) 사용자가 폐업행을 그대로 봄. 사진이 있으면(폐업 전 저장분)
   //     채워주는 게 맞음(빈 이미지보다 폐업 전 사진이 낫다). photoName 자체가 없는 곳(Seven Degrees North 등)은
   //     어차피 withRaw/needTs 분류에서 자연히 걸러짐(수정 불필요).
+  //   2026-08-26 사장님 승인 = 위키 미러 파일(`-wiki.` = mirrorWikiVenueImages 가 만든 임시 자리)은 구글 사진이 아니므로
+  //   결손으로 취급 = PID 가 생기면 PM 이 진짜 사진으로 교체한다(위키 미러는 429 응급용이지 완성품이 아님).
   const rows = (
     await c.query(
       `
     SELECT id, seed_category AS cat, name_en, name_local, address, latitude, longitude, google_place_id AS pid
     FROM place_seed_raw
     WHERE city_id = $1 AND google_place_id IS NOT NULL
-      AND (image_url IS NULL OR image_url = '' OR image_url NOT LIKE '%place-images%')
+      AND (image_url IS NULL OR image_url = '' OR image_url NOT LIKE '%place-images%'
+           OR image_url LIKE '%-wiki.%')
     ORDER BY rank NULLS LAST, id LIMIT $2
   `,
       [cityId, limit],
@@ -212,8 +215,12 @@ export async function backfillImages(opts: {
       return;
     }
     // targetRowId 직행 = PID 중복행이 있어도 정확히 그 행에 기록(§14 재매칭 불가 패턴, ag3 job2 동형)
+    // ⚠️ 수정금지(승인필요) 2026-08-26 사장님 승인 = followTriggerDup = 이미지 1칸 쓰기 = 식별컬럼 무변경 = 정식 면제
+    //   (mirrorWikiVenueImages 와 동일 근거). 근거: 10m 안 이웃행(BTS 공연장·아미존·굿즈샵 0m 3형제 실측)이 있으면
+    //   문지기 불변4 가 이 UPDATE 를 막아 유료 PM 결과가 R2 에만 남고 DB 엔 못 들어감(2026-08-26 6개 공연장 실측).
     await upsertPlace({
       targetRowId: r.id,
+      followTriggerDup: true,
       cityId,
       seedCategory: r.cat,
       nameEn: r.name_en,
@@ -289,6 +296,136 @@ export async function backfillImages(opts: {
   };
 }
 
+// ── 🚨 공연장 위키 직링크 → R2 미러 (2026-08-26 사장님 승인 = 공식업뎃 응급) ──
+// ⚠️ 수정금지(승인필요) 2026-08-26 사장님 승인 = 미래공연 도시의 bts_venue 위키 이미지를 R2 로 1회 복사 후
+//   image_url 을 R2 공개주소로 교체(유료 API 0). 근거: 출시 트래픽에서 위키미디어 직링크가 429(요청 거부)로
+//   해설·카드 이미지 먹통(2026-08-26 실측 4중2 429, 파리 공연장=R2 주소라 유일 정상). 공연 지난 도시 제외(사장님 지시).
+//   쓰기 = upsertPlace targetRowId 직행 + followTriggerDup(정식 면제) — venue·army·merch 3행이 전 도시 0m
+//   동일좌표(2026-08-26 실측)라 일반 UPDATE 는 문지기 불변4(좌표10m)에 필연 차단됨. 이미지 1칸 교체 =
+//   식별컬럼 무변경 = status-backfill 의 면제 논리와 동일 = 안전. image_attribution = 위키 원저작자 표기 유지(무변경).
+export async function mirrorWikiVenueImages(opts: {
+  apply: boolean;
+  client: any;
+  cityId?: number;
+}): Promise<{ targets: number; mirrored: number; failed: number }> {
+  const { apply, client: c } = opts;
+  const today = new Date().toISOString().slice(0, 10);
+  const rows = (
+    await c.query(
+      `SELECT p.id, p.city_id, p.name_en, p.image_url, ct.name_en AS city_name, ct.bts_concert_dates AS dates
+         FROM place_seed_raw p JOIN cities ct ON ct.id = p.city_id
+        WHERE p.seed_category = 'bts_venue'
+          AND (p.image_url ILIKE '%wikipedia%' OR p.image_url ILIKE '%wikimedia%')
+          ${opts.cityId ? "AND p.city_id = $1" : ""}
+        ORDER BY p.city_id`,
+      opts.cityId ? [opts.cityId] : [],
+    )
+  ).rows.filter((r: any) => {
+    let dates: string[] = [];
+    try {
+      dates = Array.isArray(r.dates) ? r.dates : JSON.parse(r.dates || "[]");
+    } catch {
+      dates = [];
+    }
+    return dates.some((d) => String(d).slice(0, 10) >= today); // 공연 지난 도시 제외(사장님 지시 2026-08-26)
+  });
+  console.log(
+    `═══ mirror-wiki (bts_venue, 미래공연 도시만) = 대상 ${rows.length}건 ═══`,
+  );
+  for (const r of rows)
+    console.log(
+      `  #${r.id} [${r.city_name}] ${r.name_en}\n     ${r.image_url}`,
+    );
+  if (!apply) {
+    console.log("=== DRY (외부호출 0·쓰기 0) = --apply 로 실행 ===");
+    return { targets: rows.length, mirrored: 0, failed: 0 };
+  }
+  const { uploadToR2, isR2Configured } = await import(
+    pathToFileURL(path.join(ROOT, "server/services/shared/r2-client.ts")).href
+  );
+  if (!isR2Configured())
+    throw new Error(
+      "mirror-wiki: R2 환경변수 미비 = 업로드 불가(무성실패 차단)",
+    );
+  const { upsertPlace } = await import(
+    pathToFileURL(path.join(ROOT, "server/services/place-upsert.ts")).href
+  );
+  // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 승인 = 429 백오프를 표준헬퍼(withQuotaRetry, §16)로 통일
+  //   (손수 3회 루프 폐기 = §0 "같은 기능 1벌만"). 1280px 축소판 우선(폰 화면 충분·전송량 절약, 원본 URL 폴백은
+  //   분기 2벌이 아니라 같은 다운로드의 후보 순서 §0 정합) — 429 아닌 실패(404·네트워크 예외)는 다음 후보로.
+  const { withQuotaRetry } = await import(
+    pathToFileURL(path.join(ROOT, "server/services/shared/retry-429.ts")).href
+  );
+  const fetchWiki = async (
+    url: string,
+    tag: string,
+  ): Promise<Buffer | null> => {
+    const candidates = [
+      ...new Set([url.replace(/\/\d{3,4}px-/, "/1280px-"), url]),
+    ];
+    for (const u of candidates) {
+      try {
+        const buf: Buffer | null = await withQuotaRetry(
+          async () => {
+            const resp = await fetch(u, {
+              headers: {
+                "User-Agent":
+                  "TripisImageMirror/1.0 (https://my-guide.replit.app)",
+              },
+              signal: AbortSignal.timeout(30000),
+            });
+            if (resp.ok) return Buffer.from(await resp.arrayBuffer());
+            if (resp.status === 429) {
+              const err: any = new Error(`위키 429: ${u}`);
+              err.status = 429;
+              throw err;
+            }
+            return null; // 404 등 = 다음 후보 URL 로(재시도 대상 아님)
+          },
+          { delaysMs: [4000, 8000, 12000], label: `mirror-wiki ${tag}` },
+        );
+        if (buf) return buf;
+      } catch {
+        // 네트워크 예외 = 다음 후보 URL 로(후보 순서 자체가 재시도 역할)
+      }
+    }
+    return null;
+  };
+  let mirrored = 0,
+    failed = 0;
+  for (const r of rows) {
+    const buf = await fetchWiki(r.image_url, `#${r.id} ${r.name_en}`);
+    if (!buf) {
+      failed++;
+      console.warn(`  ⚠️ 다운로드 실패 #${r.id} ${r.name_en}`);
+      continue;
+    }
+    const isPng = r.image_url.toLowerCase().endsWith(".png");
+    const up = await uploadToR2(
+      `place-images/${r.city_id}/bts_venue/psr-${r.id}-wiki.${isPng ? "png" : "jpg"}`,
+      buf,
+      isPng ? "image/png" : "image/jpeg",
+    );
+    await upsertPlace({
+      targetRowId: r.id,
+      followTriggerDup: true, // 0m 동일좌표 3형제 = 불변4 필연 차단 → 정식 면제(위 헤더 근거)
+      cityId: r.city_id,
+      seedCategory: "bts_venue",
+      nameEn: r.name_en,
+      imageUrl: up.publicUrl,
+    });
+    mirrored++;
+    console.log(
+      `  ✅ #${r.id} [${r.city_name}] → ${up.publicUrl} (${Math.round(buf.length / 1024)}KB)`,
+    );
+    await new Promise((s) => setTimeout(s, 800)); // 위키 429 예방 간격
+  }
+  console.log(
+    `✅ 미러 완료 ${mirrored}건${failed ? ` · 실패 ${failed}건` : ""}`,
+  );
+  return { targets: rows.length, mirrored, failed };
+}
+
 // ── CLI = 직접 실행 시만(import 시 미발화) ──
 if (
   (process.argv[1] || "").replace(/\\/g, "/").endsWith("fill/image-backfill.ts")
@@ -311,9 +448,10 @@ if (
         .map(([k, v]) => [k, v ?? "true"]),
     );
     const cityId = Number(argv["city-id"] || 0);
-    if (!cityId) {
+    const mirrorWiki = argv["mirror-wiki"] === "true"; // 2026-08-26 = 공연장 위키→R2 미러 모드(도시 지정 없이 미래공연 전체)
+    if (!cityId && !mirrorWiki) {
       console.error(
-        "Usage: --city-id=<N> [--apply] [--allow-ts] [--limit=50] [--force-quota]",
+        "Usage: --city-id=<N> [--apply] [--allow-ts] [--limit=50] [--force-quota] | --mirror-wiki [--city-id=<N>] [--apply]",
       );
       process.exit(1);
     }
@@ -324,14 +462,22 @@ if (
       ssl: { rejectUnauthorized: false },
     });
     await c.connect();
-    await backfillImages({
-      cityId,
-      apply: argv["apply"] === "true",
-      forceQuota: argv["force-quota"] === "true",
-      allowTs: argv["allow-ts"] === "true",
-      limit: argv["limit"] ? Number(argv["limit"]) : undefined,
-      client: c,
-    });
+    if (mirrorWiki) {
+      await mirrorWikiVenueImages({
+        apply: argv["apply"] === "true",
+        client: c,
+        cityId: cityId || undefined,
+      });
+    } else {
+      await backfillImages({
+        cityId,
+        apply: argv["apply"] === "true",
+        forceQuota: argv["force-quota"] === "true",
+        allowTs: argv["allow-ts"] === "true",
+        limit: argv["limit"] ? Number(argv["limit"]) : undefined,
+        client: c,
+      });
+    }
     await c.end();
   })();
 }

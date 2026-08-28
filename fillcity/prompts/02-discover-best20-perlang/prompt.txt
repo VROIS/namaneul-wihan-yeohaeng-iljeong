@@ -1,0 +1,99 @@
+⚠️ 수정금지(승인필요) 2026-08-25 사장님 승인 = 02-discover-best20-perlang = 시드 발굴 1단계(원재료), 언어별 개별 콜
+= 목적: 신규도시(1호=보고타) PSR 원재료 확보. 90-benchmark-best20(사후 검수 성적표)과는 다른 단계 — 이건 최초 발굴용.
+  90번과 응답요소·설정 동일(§16 재사용), 차이는 언어처리·식당선정 방식뿐. 90번 파일은 그대로 두고 새 파일로 분리.
+= 언어당 1콜 × 7콜(ko/en/ja/fr/zh/es/de) — 90번처럼 1콜에 7개국어 다 담지 않음(잘림 방지, 사장님 확정).
+= 랜드마크 20 + 그 각 랜드마크 "인근" 식당 3곳×20 = 60 = 총 80곳/콜. 식당은 도시 전체 독립랭킹이
+  아니라 랜드마크마다 딸린 것 — near_landmark_rank 로 관계 명시(사장님 정정 2026-08-25).
+= evidence_ko 필드 삭제(사장님 정정 2026-08-25, 불필요).
+= ⚠️ 저/중/고 tier 필드 완전삭제(사장님 정정 2026-08-25, 3차): 보고타 실측에서 "저가" 태그가 진짜 현지
+  최저가(€2-4)가 아니라 "관광객이 접근 가능한 저렴한 축"(평균€9.7)으로 나옴 = 가성비(로컬성)와 가격대(저중고)는
+  서로 다른 축인데 하나로 섞은 게 원인. 해결 = 제미니한테는 "현지인이 진짜 가는 가성비 좋은 곳 3곳"만
+  요구(라벨 없이, 가격 자연변동 허용) → 가격대 판정은 응답의 price_eur 숫자로 우리가 직접 함(§ 앞서 확정한
+  "제미니 라벨 안 믿고 숫자로 판단" 원칙과 동일).
+= ⚠️ "인근" = 도보 이동 가능 거리 명시(사장님 정정 2026-08-25, 4차) = 약 1km/도보15분 이내로 구체 수치화,
+  대중교통·택시 필요한 곳 배제 명시(동선 최적화용 원재료라 진짜 걸어갈 수 있어야 함).
+= ⚠️ 1차 실호출(파리 ko/fr) 실증 후 사장님 발견·수정 2건(2026-08-25):
+  ① c(카테고리)에 우리 PSR enum(heritage|hotspot|attraction|adventure|healing|shopping/restaurant)을
+     안 줘서 제미니가 "Landmark"/"Museum"/"Cathedral" 같은 자기 임의 분류로 응답 = PSR 삽입 불가 → 90번
+     원본의 고정 enum 문구를 그대로 복원.
+  ② editorial이 우아한 여행기 문장이지 "후킹하는 짧은 카피"가 아니었음(예: "숨막히는 파노라마를 감상하라"
+     류) → 90번 원본의 상세 톤 지시(witty/comic, punchline, 브로슈어체 금지) 복원 + 나쁜예/좋은예 명시.
+= ⚠️ 이 콜 결과 = PSR 자동입력 안 함. saveRaw()로 raw만 보관(로컬+R2 2곳 동형, §18) → 사장님 직접 검증 →
+  선처리(중복판단→TS검증, §14 upsertPlace 경유)로 넘어감(2단계, 별도 작업 — 이 프롬프트 범위 아님).
+= 설정: 90-benchmark-best20과 동일(gemini-3-flash-preview / temp 0.2 / maxOutputTokens 50000 /
+  thinkingBudget 0 / grounding ON)
+
+══════════════════════════════════════════════════════════════════════════════
+PROMPT 본문:
+══════════════════════════════════════════════════════════════════════════════
+
+${API_PASS}
+
+You are a travel data assistant for a global multilingual travel app.
+Reflect each language region's own taste and preference as much as possible, with evidence-backed material.
+Return STRICT machine-parseable JSON only (no prose, no markdown wrappers).
+
+AS_OF: ${TODAY}
+CITY: ${CITY_NAME}
+COUNTRY: ${COUNTRY}
+CITY_CENTER: { lat: ${CITY_LAT}, lng: ${CITY_LNG} }
+RADIUS_KM: 100
+LANGUAGE: ${LANGUAGE}  (respond in exactly this one language only)
+
+TASK: Within RADIUS_KM of CITY_CENTER:
+1) Select "landmarks" — TOP 20 globally representative landmarks.
+2) For EACH of those 20 landmarks, additionally select exactly 3 NEARBY restaurants
+   that a visitor could realistically WALK to from that landmark — roughly within
+   1km / 15 minutes on foot. Do NOT pick a restaurant that requires taking transit,
+   a taxi, or a long walk from the landmark, even if it's a great restaurant
+   elsewhere in the city. Among those walkable options, pick ones that RESIDENTS
+   genuinely eat at regularly and consider good value for the price — real local
+   spots, not restaurants primarily known through English-language travel guides,
+   TripAdvisor "best of" lists, or influencer content. Natural price variation
+   among the 3 is expected and fine (that's real local dining, not a designed
+   spread) — do NOT force them into artificial low/mid/high price categories;
+   just pick the 3 best genuinely-local, walkable, good-value options near that
+   landmark. This yields 20 x 3 = 60 restaurants total, each tied to its landmark
+   via near_landmark_rank. Do NOT select restaurants independently city-wide —
+   every restaurant must be genuinely walkable from the landmark it's attached to.
+
+SELECTION CRITERIA (representativeness — NOT any single platform's review count):
+- Official tourism statistics and measured visitor numbers
+- TripAdvisor popularity standing (quality x quantity x recency x consistency)
+- Recognized certifications: UNESCO, Michelin, national heritage
+- Real demand on major tour/activity booking platforms
+- Common-knowledge recognition shared by BOTH locals AND foreign travelers
+- EXCLUDE: permanently/temporarily closed places; non-physical tour products
+- EXCLUDE: any restaurant above 500 EUR per person
+
+For each place include:
+- rank
+- c (landmarks = heritage|hotspot|attraction|adventure|healing|shopping / restaurants = restaurant.
+  This is a FIXED enum for our database column — pick the closest match, do NOT invent your own
+  category word like "Museum"/"Cathedral"/"Monument".)
+- name_en, name_local, name_ko
+- lat, lng
+- address (FULL street address with NUMBER + street + postal code + city)
+- summary (ONE line, in ${LANGUAGE} — social-proof trend, why travelers flock here now)
+- editorial (ONE line, in ${LANGUAGE} — witty/comic HOOK copy about the place, punchline tone.
+  Short and punchy, NOT a plain descriptive/poetic sentence, NOT a travel-brochure line.
+  Native humor for that language's audience — NOT a literal translation of a Korean line.
+  Example of the WRONG tone (too descriptive/poetic, reject this style): "Take in the breathtaking
+  panorama from the Iron Lady." Example of the RIGHT tone (punchy, has a hook/twist): "Waited 2 hours
+  in line? Worth it — until you see the selfie queue at the top too.")
+- distance_km_from_center, day_zone(core/outskirt), price_eur(EUR fixed)
+- (restaurants only) near_landmark_rank (1-20, the rank of the landmark this restaurant belongs to)
+
+OUTPUT (strict JSON, no markdown fences):
+{
+  "as_of": "${TODAY}",
+  "city": "${CITY_NAME}",
+  "country": "${COUNTRY}",
+  "center": { "lat": ${CITY_LAT}, "lng": ${CITY_LNG} },
+  "radius_km": 100,
+  "language": "${LANGUAGE}",
+  "results": {
+    "landmarks": [ ...20 items ],
+    "restaurants": [ ...60 items ]
+  }
+}
