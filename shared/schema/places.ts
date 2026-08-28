@@ -106,7 +106,17 @@ export const placeSeedRaw = pgTable("place_seed_raw", {
   distanceKmFromCenter: real("distance_km_from_center"), // 도심 거리 (haversine)
   address: text("address"), // 전체 주소 + 우편번호
   googlePrimaryType: text("google_primary_type"), // Google primary type (museum, restaurant 등)
-  geminiRank: integer("gemini_rank"), // Gemini 응답 순위 (rank 재정렬 우선 키)
+  // ⚠️ 수정금지(승인필요) 2026-08-27 사장님 확정 = 베스트&베스트 7자리 언어코드(분류 표식. 순위도 계산식도 아님).
+  //   = 자릿수 번호(고정) 1=ko 2=en 3=ja 4=fr 5=zh 6=es 7=de. k번째 자리 = 그 언어의 베스트20 발굴(02-discover-best20-perlang)이
+  //     이 장소를 뽑았으면 k, 아니면 0. 예) 1234567 = 7개 언어 전부 / 1204567 = ja 만 빠짐 / 1034060 = ko+ja+fr+es / 7 = de 만.
+  //     정수라 앞자리 0은 사라지지만 자리값 == 언어번호라 해독은 유일. 같은 코드를 여러 행이 공유함(분류지 id 아님).
+  //   = 뜻 = (a) 베스트 장소 (b) 0 아닌 자리(1=ko 제외, ko 는 이 행의 summary_ko/editorial_summary 자체)마다
+  //     place_translations(place_id, language) 에 그 언어의 summary+editorial_summary 행이 반드시 있다(B2 계약).
+  //   = 노출 순서(트리거+조회, 정의·생성·정렬 1벌 = server/services/shared/best-rank.ts) = 0 아닌 자릿수 개수 DESC NULLS LAST
+  //     → RC DESC NULLS LAST → id. 언어를 알면 그 언어 자리가 든 행만 베스트. ⚠️ 숫자 크기로 정렬 금지(1234500 > 1204567 이나 언어 수는 적음).
+  //     번호 없는 행(NULL, 대다수)은 기존 RC순 그대로(순수 추가, 회귀 0). 랭킹 컬럼은 이것과 rank 둘뿐(추가 금지).
+  //   = 유일한 쓰기 주체 = fillcity/steps/discovery-verify-and-insert.ts(B2). 옛 제미니 순위 컬럼은 원천·컬럼 모두 완전삭제(2026-08-27 §19).
+  bestRank: integer("best_rank"),
 });
 
 // ⚠️ 수정금지(승인필요) 2026-08-12 = 다국어 노출용 번역 캐시(§2.3 Phase A2). place_seed_raw.summary_ko/editorial_summary

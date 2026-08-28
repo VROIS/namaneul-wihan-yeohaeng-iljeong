@@ -12,6 +12,7 @@
 import { and, desc, eq, isNotNull, isNull, ne, or, sql } from "drizzle-orm";
 import { placeSeedRaw } from "@shared/schema";
 import { servingGateSql } from "./pool-radius";
+import { bestRankOrder } from "./best-rank";
 
 // ⚠️ 수정금지(승인필요) 2026-08-21 사장님 승인 = 하이라이트 카테고리 순서 1벌(§16).
 //   대표사진 아래 하이라이트는 이 4 CAT 에서 각 1위를 이 순서대로 뽑는다(식당·쇼핑 = 랜드마크가 거의
@@ -49,8 +50,12 @@ export function cityRepresentativeWhere(cityId: number) {
   );
 }
 
-// 순위 매기는 정렬 1벌 (리뷰수 내림 → 동점이면 최신 id)
+// ⚠️ 수정금지(승인필요) 2026-08-27 사장님 승인 = 정렬 1벌에 베스트 선두 추가(§16 단일 정렬 유지).
+//   best_rank = 7자리 언어코드(정의·정렬 1벌 = best-rank.ts). 뽑은 언어 수(0 아닌 자릿수) 큰 순 → 번호 없는 행(NULL, 대다수)은
+//   리뷰수 내림 → 동점 시 최신 id. 여기는 화면 언어를 모르는 자리 = 언어 무관 정렬(bestRankOrder()).
+//   NULLS LAST 라 best_rank 없는 행끼리는 옛 순서(리뷰수만) 완전 그대로 = 순수 추가, 회귀 0.
 export const cityRepresentativeOrder = [
+  bestRankOrder(),
   desc(placeSeedRaw.googleReviewCount),
   desc(placeSeedRaw.id),
 ];

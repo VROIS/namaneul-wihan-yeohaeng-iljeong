@@ -2,7 +2,7 @@
  * ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = AG2 = DB-only 단일 진입점
  *
  * AG2: place_seed_raw 직접 SELECT (= Gemini 호출 0)
- * = ready=true (= 전체 행수 ≥ 300) → fetchFromPlaceSeedRaw 반환
+ * = ready=true (= 전체 행수 ≥ READY_THRESHOLD=200) → fetchFromPlaceSeedRaw 반환
  * = ready=false → throw MIX_MODE_DISABLED (= MIX path = pipeline-v3.ts step1_geminiItinerary 표준 prompt 사용)
  */
 
@@ -30,11 +30,11 @@ import { VIBE_PRIMARY_CATEGORY } from "@shared/vibe-category";
 /**
  * ⚠️ 수정금지(승인필요) 2026-05-07 = 사용자 명시 = 도시 입력 시점 분기 (백엔드만)
  * 도시 ready 판정 = 발굴 도시인지 미발굴 도시인지
- * = 발굴 (= place_seed_raw 전체 행수 ≥ 300) → DB-only 경로
+ * = 발굴 (= place_seed_raw 전체 행수 ≥ READY_THRESHOLD=200) → DB-only 경로
  * = 미발굴 → Gemini + Google fallback + auto-learn 저장 (= Geneva 패턴)
  *
- * 🧠 2026-07-05 사장님 SSOT = 임계값 = 전체 행수 300 (= 도시특성 반영: 뮌헨 vs 보르도 식당 부족 차이가
- *   후보군 포함 발굴 결과에 나타남 = 보통 완성도시는 300 이상). 옛 "rank 1-20 ≥ 70"(2026-05-07) 폐기(§19)
+ * 🧠 임계값 = 전체 행수 200 (2026-08-17 사장님 확정 = 도시카드 게시 기준과 동일; 도시특성 반영: 뮌헨 vs 보르도 식당 부족 차이가
+ *   후보군 포함 발굴 결과에 나타남 = 보통 완성도시는 200 이상). 옛 "rank 1-20 ≥ 70"(2026-05-07) 폐기(§19)
  *   = rank 조건 제거 = place_seed_raw 의 city_id 별 전체 행수로 판정 (= 복잡할 이유 없음, 사장님 명시).
  * 프론트 UI 노출 X (= 사용자 명시 = 별도 안내 페이지 존재)
  */
@@ -204,8 +204,8 @@ async function fetchFromPlaceSeedRaw(
   );
 
   // ⚠️ 수정금지(승인필요) 2026-05-19 = budget 매트릭스 (= 4:6 split)
-  // 식당 = travelStyle MEAL_BUDGET tier 별 price_eur 범위로 필터 = rank 제한 X
-  // 비식당 = rank 1-20 유지 (= FE 우선 노출 순위)
+  // 식당 = travelStyle MEAL_BUDGET tier 별 price_eur 범위로 WHERE 필터(가격 필터는 식당만)
+  // 정렬은 전 카테고리 공통 rank ASC NULLS LAST → RC DESC 1벌(selectByDayZone 주석 참조)
   const budgetTier = MEAL_BUDGET[normalizeTravelStyle(formData.travelStyle)];
   console.log(
     `[AG2-DB] travelStyle=${formData.travelStyle} = price €${budgetTier.min}-${budgetTier.max} (lunch ≤€${budgetTier.lunch} / dinner ≤€${budgetTier.dinner})`,
@@ -248,7 +248,9 @@ async function fetchFromPlaceSeedRaw(
   // = 크로스도시 행 day_zone = 요청 도시 중심 기준 메모리 재계산(core ≤10km / outskirt 10~100km, recalcCrossCityZone) = DB 쓰기 절대 없음
   // = zone NULL 행(day_zone 미기록) = 아래 275행 필터삭제(2026-08-19)로 더 이상 풀에서 제외되지 않음(옛 "풀 제외" 설명 폐기).
   //   PID게이트(249행)가 좌표 안전을 이미 보장하므로 NULL-zone 행도 rank/RC 순위대로 정상 픽업 대상.
-  // = 정렬 = 식당 RC DESC NULLS LAST(2026-06-02 SSOT 유지) / 비식당 rank ASC NULLS LAST + 동순위 RC DESC(크로스도시 rank 혼합 대비)
+  // ⚠️ 수정금지(승인필요) 2026-08-27 사장님 승인 = 정렬 = 전 카테고리(식당 포함) 공통 rank ASC NULLS LAST → 동순위 google_review_count DESC 1벌.
+  //   = 사유: rank = DB autorank 트리거의 단일 SSOT = (도시, 카테고리)별 "베스트(best_rank 언어코드 언어수 많은 순) → RC순"이 이미 반영된 값.
+  //     식당만 RC 직접 정렬하면 베스트 우선 규칙을 우회함(2026-08-27 실측 누락 지점). 식당 가격대 WHERE 필터는 그대로.
   const selectByDayZone = async (cat: string, slots: number) => {
     const isRestaurant = cat === "restaurant";
     // ⚠️ 수정금지(승인필요) 2026-08-18 사장님 승인 = 검증(PID) 게이트 = 미검증(TS 한 번도 안 거친) 행은 손님상 서빙 금지.
@@ -273,12 +275,11 @@ async function fetchFromPlaceSeedRaw(
       .where(and(...baseWhere));
     for (const r of rows) recalcCrossCityZone(r, cid, center);
     const rc = (r: any) => r.googleReviewCount ?? -1;
+    // ⚠️ 수정금지(승인필요) 2026-08-27 사장님 승인 = 전 카테고리 공통 rank ASC NULLS LAST → RC DESC(rank = autorank 트리거 SSOT).
     rows.sort(
-      isRestaurant
-        ? (a, b) => rc(b) - rc(a)
-        : (a, b) =>
-            (a.rank ?? Number.MAX_SAFE_INTEGER) -
-              (b.rank ?? Number.MAX_SAFE_INTEGER) || rc(b) - rc(a),
+      (a, b) =>
+        (a.rank ?? Number.MAX_SAFE_INTEGER) -
+          (b.rank ?? Number.MAX_SAFE_INTEGER) || rc(b) - rc(a),
     );
     // ⚠️ 수정금지(승인필요) 2026-08-19 사장님 승인(엔진결함 근원수정) = day_zone 필터 삭제(옛 2026-05-21 §19).
     //   = 근본: day_zone은 좌표(원천데이터)에서 계산한 파생값을 미리 저장해둔 캐시일 뿐인데, 이 캐시를
@@ -452,7 +453,7 @@ async function fetchFromPlaceSeedRaw(
  * ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = AG2 메인 = DB-only 단일 분기
  *
  * 분기:
- * - ready=true (= 전체 행수 ≥ 300) → fetchFromPlaceSeedRaw 결과 그대로 반환 (= Gemini 0)
+ * - ready=true (= 전체 행수 ≥ READY_THRESHOLD=200) → fetchFromPlaceSeedRaw 결과 그대로 반환 (= Gemini 0)
  * - ready=false → throw MIX_MODE_DISABLED (= MIX path = pipeline-v3.ts step1_geminiItinerary 처리)
  */
 export async function generateRecommendations(

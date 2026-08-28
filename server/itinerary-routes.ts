@@ -22,6 +22,9 @@ import {
   attachCityNameEn,
   attachCityNameEnMany,
 } from "./services/shared/itinerary-city-name";
+// ⚠️ 수정금지(승인필요) 2026-08-27 사장님 승인 = 7개 언어 목록 1벌(§16) + 읽을 때 (place_id, language) 번역 이어붙이기(제미니 호출 0).
+import { LANGS } from "./services/shared/language-instruction";
+import { applyItineraryTranslations } from "./services/shared/place-translation";
 
 export function registerItineraryRoutes(app: Express): void {
   // ⚠️ 2026-07-16 = /api/budget/preview·calculate·compare 3개 완전삭제(§19) = client/bts-app/public 전수 grep 호출자 0
@@ -45,8 +48,7 @@ export function registerItineraryRoutes(app: Express): void {
           .status(400)
           .json({ error: "userId and preferredLanguage required" });
       }
-      const valid = ["ko", "en", "ja", "fr", "zh", "es", "de"];
-      if (!valid.includes(preferredLanguage)) {
+      if (!(LANGS as readonly string[]).includes(preferredLanguage)) {
         return res.status(400).json({ error: "Invalid preferredLanguage" });
       }
       const updated = await storage.updateUserLogin(userId, {
@@ -88,7 +90,15 @@ export function registerItineraryRoutes(app: Express): void {
         return res.status(404).json({ error: "Itinerary not found" });
       }
       // 도시 영문명 이어붙이기 1벌(§16) = 저장 안 하고 읽을 때 조립 → 옛 여정도 즉시 영어 표기.
-      res.json(await attachCityNameEn(itinerary as any));
+      const out = await attachCityNameEn(itinerary as any);
+      // ⚠️ 수정금지(승인필요) 2026-08-27 사장님 승인 = 화면 언어(?lang=)로 슬롯 해설을 place_translations 캐시에서 이어붙임.
+      //   저장 안 함(읽을 때만 조립) + 제미니 호출 0. 캐시 없는 슬롯 = 한국어 원문 그대로.
+      const lang = String(req.query.lang || "ko");
+      const rawData = (out as any)?.rawData;
+      if (rawData?.days) {
+        (out as any).rawData = await applyItineraryTranslations(rawData, lang);
+      }
+      res.json(out);
     } catch (error) {
       console.error("Error fetching itinerary:", error);
       res.status(500).json({ error: "Failed to fetch itinerary" });

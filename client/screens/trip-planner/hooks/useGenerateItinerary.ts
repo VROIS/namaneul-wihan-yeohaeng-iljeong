@@ -69,7 +69,9 @@ export function useGenerateItinerary({
       const requestData = {
         ...formData,
         userId: currentUser?.id, // DB에서 사용자 정보 조회용
-        language: currentUser?.language || i18n.language || "ko", // 일정 생성 출력 언어
+        // ⚠️ 수정금지(승인필요) 2026-08-27 사장님 지시 = 여정 출력 언어 = 화면 언어(i18n) 1벌 = AI의견·Tripis·저장과 동일 기준(§16).
+        //   계정에 저장된 언어를 먼저 쓰면 화면은 독어인데 계정 캐시가 한국어인 순간 여정이 전부 한국어로 나감(2026-08-27 파리 #400 실증).
+        language: i18n.language || "ko",
       };
 
       console.log(

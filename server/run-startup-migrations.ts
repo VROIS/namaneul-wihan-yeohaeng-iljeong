@@ -128,12 +128,12 @@ export async function runStartupMigrations(): Promise<void> {
         ADD COLUMN IF NOT EXISTS day_zone text,
         ADD COLUMN IF NOT EXISTS distance_km_from_center real,
         ADD COLUMN IF NOT EXISTS address text,
-        ADD COLUMN IF NOT EXISTS google_primary_type text,
-        ADD COLUMN IF NOT EXISTS gemini_rank integer;
+        ADD COLUMN IF NOT EXISTS google_primary_type text;
     `);
-    console.log(
-      "[Migration] 0014 multi-tag/image-meta/gemini3 컬럼 10개 추가 완료",
-    );
+    // ⚠️ 수정금지(승인필요) 2026-08-27 §19 = 이 목록에 있던 옛 제미니 순위 컬럼은 원천(이 줄)·라이브 컬럼 모두 완전삭제.
+    //   교훈(사장님 지적): 마이그레이션은 재부팅마다 다시 도니, 컬럼을 없애려면 "만드는 줄"부터 지워야 한다 —
+    //   이름만 바꾸는 줄을 뒤에 덧붙이면 옛 줄이 매번 빈 컬럼을 되살려 새 컬럼과 충돌한다(2026-08-27 실사고).
+    console.log("[Migration] 0014 multi-tag/image-meta 컬럼 9개 추가 완료");
 
     // 0015: google_maps_uri (= 2026-05-15 사용자 13 번째 SSOT 요소 = 최후의 보루)
     await pool.query(`
@@ -250,6 +250,15 @@ export async function runStartupMigrations(): Promise<void> {
     console.log(
       "[Migration] ✅ 0024 external_calls AI 성능 계측 3컬럼 적용 완료",
     );
+
+    // 0025: place_seed_raw.best_rank (2026-08-27 사장님 승인 = 베스트&베스트 분류번호, 정의는 shared/schema/places.ts)
+    //   = 라이브 DB 에는 2026-08-27 직접 SQL 로 이미 존재(옛 제미니 순위 컬럼은 원천·컬럼 모두 완전삭제 §19).
+    //   = 새 환경 부팅 시에만 이 줄이 컬럼을 만든다(IF NOT EXISTS). 값은 fillcity/steps/discovery-verify-and-insert.ts 만 씀.
+    await pool.query(`
+      ALTER TABLE "place_seed_raw"
+        ADD COLUMN IF NOT EXISTS "best_rank" integer;
+    `);
+    console.log("[Migration] ✅ 0025 place_seed_raw.best_rank 적용 완료");
   } catch (err) {
     console.warn("[Migration] 스킵 또는 실패:", (err as Error).message);
   }

@@ -5,12 +5,14 @@
 //   여정 단위 배치 1호출(장소 N개를 JSON 배열로 한 번에) = 장소당 호출 아님.
 // = 크레딧 차감 대상 아님(운영 원가, 사장님 승인 2026-08-13) — 호출자가 별도로 chargeFeature 부르지 않는다.
 // = 실패(파싱 오류·API 오류) = 한국어 원문 그대로 반환(화면 공백 방지, 폴백 분기 아니라 열화지 처리).
+// ⚠️ 수정금지(승인필요) 2026-08-27 사장님 승인 = 이 보호파일에 (1) 캐시 읽기 1벌 readCachedPlaceTranslations() 분리
+//   (2) 여정 응답에 캐시만 이어붙이는 applyItineraryTranslations() 추가. 제미니 번역 호출은 (2) 에서 절대 없음(사장님 = 끔).
 
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "../../db";
 import { placeTranslations } from "@shared/schema";
 import { geminiJson } from "./geminiClient";
-import { getLanguageInstruction } from "./language-instruction";
+import { getLanguageInstruction, LANGS } from "./language-instruction";
 
 export interface PlaceForTranslation {
   id: number;
@@ -56,6 +58,111 @@ ${JSON.stringify(
 }
 
 /**
+ * ⚠️ 수정금지(승인필요) 2026-08-27 사장님 승인 = place_translations (place_id, language) 캐시 읽기 1벌(§16).
+ * 순수 DB 읽기(외부호출 0). 없는 id 는 Map 에 안 실림. db 없음 = 빈 Map.
+ */
+export async function readCachedPlaceTranslations(
+  ids: number[],
+  language: string,
+): Promise<Map<number, PlaceTranslationResult>> {
+  const result = new Map<number, PlaceTranslationResult>();
+  if (!db || ids.length === 0) return result;
+  const cached = await db
+    .select()
+    .from(placeTranslations)
+    .where(
+      and(
+        inArray(placeTranslations.placeId, ids),
+        eq(placeTranslations.language, language),
+      ),
+    );
+  for (const c of cached) {
+    result.set(c.placeId, {
+      summary: c.summary,
+      editorialSummary: c.editorialSummary,
+    });
+  }
+  return result;
+}
+
+/**
+ * ⚠️ 수정금지(승인필요) 2026-08-27 사장님 확정 = 여정 응답(days[].places[]) 슬롯 해설 언어 = 완전 다국어화 전 중간 단계 = 3단 사슬.
+ * 슬롯의 필드값(editorialSummary·summaryKo)마다 값이 비어있지 않은 첫 단계를 쓴다:
+ *   ① 요청 언어(language) 캐시(place_translations) 값
+ *   ② 영어(en) 캐시 값 (language==="en" 이면 이 단계 없음)
+ *   ③ 슬롯에 이미 있는 한국어 원문 그대로 유지(editorialSummary/summaryKo 안 건드림)
+ * language==="ko" = 한국어가 기본·원문이라 여정 그대로 반환.
+ * DB 읽기 = 최대 2회 = 요청 언어 1회 + (language!=="en" 일 때만) ①에서 두 필드가 다 안 채워진 id 만 en 1회. readCachedPlaceTranslations 재사용.
+ * 여기서 제미니 번역 호출 없음(사장님 2026-08-27 = 끔).
+ * 슬롯의 PSR id = slot.id 가 "db-<psrId>" 꼴일 때만(DB-only/ag4 슬롯). 그 외 슬롯은 건너뜀.
+ * 입력 객체는 안 바꾸고(저장 오염 방지) days/places 새 배열 + 슬롯 얕은 복사로 돌려준다.
+ */
+export async function applyItineraryTranslations<T extends Record<string, any>>(
+  itinerary: T,
+  language: string,
+): Promise<T> {
+  if (
+    !itinerary ||
+    language === "ko" ||
+    !(LANGS as readonly string[]).includes(language) ||
+    !db
+  )
+    return itinerary;
+  const days: any[] = Array.isArray(itinerary.days) ? itinerary.days : [];
+  const psrIdOf = (slot: any): number | null => {
+    const m = /^db-(\d+)$/.exec(String(slot?.id ?? ""));
+    return m ? Number(m[1]) : null;
+  };
+  const ids = new Set<number>();
+  for (const d of days)
+    for (const s of Array.isArray(d?.places) ? d.places : []) {
+      const id = psrIdOf(s);
+      if (id != null) ids.add(id);
+    }
+  if (ids.size === 0) return itinerary;
+
+  // ⚠️ 수정금지(승인필요) 2026-08-27 사장님 확정 = ① 요청 언어 1회 읽기.
+  const primary = await readCachedPlaceTranslations([...ids], language);
+  // ⚠️ 수정금지(승인필요) 2026-08-27 사장님 확정 = ② 영어(en) 1회 읽기 = language!=="en" 이고 ①에서 두 필드가 다 안 채워진 id 만.
+  const enIds =
+    language === "en"
+      ? []
+      : [...ids].filter((id) => {
+          const t = primary.get(id);
+          return !t || !t.editorialSummary || !t.summary;
+        });
+  const fallbackEn =
+    enIds.length > 0
+      ? await readCachedPlaceTranslations(enIds, "en")
+      : new Map<number, PlaceTranslationResult>();
+  if (primary.size === 0 && fallbackEn.size === 0) return itinerary;
+
+  return {
+    ...itinerary,
+    days: days.map((d) => {
+      if (!Array.isArray(d?.places)) return d;
+      return {
+        ...d,
+        places: d.places.map((s: any) => {
+          const id = psrIdOf(s);
+          const t = id != null ? primary.get(id) : undefined;
+          const e = id != null ? fallbackEn.get(id) : undefined;
+          if (!t && !e) return s;
+          // ⚠️ 수정금지(승인필요) 2026-08-27 사장님 확정 = 필드마다 ① 요청 언어 → ② en → ③ 슬롯 원문 유지(빈 값은 다음 단계로).
+          const editorialSummary = t?.editorialSummary || e?.editorialSummary;
+          const summary = t?.summary || e?.summary;
+          return {
+            ...s,
+            ...(editorialSummary ? { editorialSummary } : {}),
+            ...(summary ? { summaryKo: summary } : {}),
+          };
+        }),
+      };
+    }),
+  };
+}
+
+/**
  * 여정 단위 배치 조회(§16 = 이 함수 1벌만, D 에서 N+1 호출 금지 용도).
  * language='ko' = 캐시 조회 없이 원문 그대로(스키마 주석 정합 = ko 는 캐시 대상 아님).
  */
@@ -86,23 +193,11 @@ export async function getPlaceTranslationsForPlaces(
     return result;
   }
 
-  const ids = places.map((p) => p.id);
-  const cached = await db
-    .select()
-    .from(placeTranslations)
-    .where(
-      and(
-        inArray(placeTranslations.placeId, ids),
-        eq(placeTranslations.language, language),
-      ),
-    );
-
-  for (const c of cached) {
-    result.set(c.placeId, {
-      summary: c.summary,
-      editorialSummary: c.editorialSummary,
-    });
-  }
+  const cached = await readCachedPlaceTranslations(
+    places.map((p) => p.id),
+    language,
+  );
+  for (const [id, t] of cached) result.set(id, t);
 
   const missing = places.filter((p) => !result.has(p.id));
   if (missing.length > 0) {

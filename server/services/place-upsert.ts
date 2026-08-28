@@ -52,6 +52,8 @@ export interface UpsertPayload {
   shortformKo?: string | null; // → editorial_summary
   // 메타 (= TS / Wikipedia)
   googleReviewCount?: number | null;
+  // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 확정 = 영업상태(OPERATIONAL | CLOSED_PERMANENTLY | CLOSED_TEMPORARILY) → business_status. gmaps-pid-identity(--verify) 가 구글맵 페이지에서 읽어 채움 = 서빙 관문이 폐업행을 제외할 근거.
+  businessStatus?: string | null;
   googlePrimaryType?: string | null;
   googleMapsUri?: string | null; // 2026-05-15 = 13번째 SSOT = 최후의 보루
   priceEur?: number | null;
@@ -113,6 +115,7 @@ function buildDirectUpdateSql(p: UpsertPayload, targetId: number) {
         address       = COALESCE(${p.address ?? null}, address),
         google_place_id = COALESCE(${p.googlePlaceId ?? null}, google_place_id),
         google_review_count = COALESCE(${p.googleReviewCount ?? null}::integer, google_review_count),
+        business_status = COALESCE(${p.businessStatus ?? null}, business_status),
         google_primary_type = COALESCE(${p.googlePrimaryType ?? null}, google_primary_type),
         google_maps_uri = COALESCE(${p.googleMapsUri ?? null}, google_maps_uri),
         image_url     = COALESCE(${p.imageUrl ?? null}, image_url),
@@ -343,6 +346,7 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
         googlePlaceId: p.googlePlaceId ?? null,
         googleMapsUri: p.googleMapsUri ?? null,
         googleReviewCount: p.googleReviewCount ?? null,
+        businessStatus: p.businessStatus ?? null,
         googlePrimaryType: p.googlePrimaryType ?? null,
         imageUrl: p.imageUrl ?? null,
         imageAttribution: p.imageAttribution ?? null,

@@ -20,7 +20,7 @@ import { useTranslation } from "react-i18next";
 import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
-import { apiRequest } from "@/lib/query-client";
+import { apiRequest, itineraryUrl } from "@/lib/query-client";
 // ⚠️ 수정금지(승인필요) 2026-08-05 사장님 SSOT = 크레딧부족 공용 헬퍼(§16 5곳 공용).
 import { parseCreditShortfall, useCreditShortfall } from "@/lib/creditError";
 import { Icon } from "@/components/Icon";
@@ -161,8 +161,10 @@ function TripisModalInner({
   const loadAll = useCallback(async () => {
     if (itineraryId == null || viewMode !== "itinerary") return;
     try {
+      // ⚠️ 수정금지(승인필요) 2026-08-27 사장님 승인 = 화면 언어를 넘겨 서버가 슬롯 해설을 (place_id, 언어) 캐시로 이어붙임(제미니 호출 0).
+      // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 승인 = URL 생성 = itineraryUrl() 공용(§16, useTripPlanner.ts 와 중복 제거).
       const [ir, vr] = await Promise.all([
-        apiRequest("GET", `/api/itineraries/${itineraryId}`),
+        apiRequest("GET", itineraryUrl(itineraryId, i18n.language)),
         apiRequest("GET", `/api/itineraries/${itineraryId}/video`),
       ]);
       setItinerary(await ir.json());

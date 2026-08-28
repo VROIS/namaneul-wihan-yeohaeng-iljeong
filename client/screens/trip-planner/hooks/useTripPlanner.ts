@@ -14,7 +14,7 @@ import type { RouteProp } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Colors } from "@/constants/theme";
 import { TripFormData, Vibe, DayAccommodation, Itinerary } from "@/types/trip";
-import { apiRequest } from "@/lib/query-client";
+import { apiRequest, itineraryUrl } from "@/lib/query-client";
 import { useMapToggle } from "@/contexts/MapToggleContext";
 import { UserData } from "@/lib/auth";
 import { useTranslation } from "react-i18next";
@@ -335,7 +335,12 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
       setLoadingStep(0);
       setScreen("Loading");
       try {
-        const res = await apiRequest("GET", `/api/itineraries/${targetId}`);
+        // ⚠️ 수정금지(승인필요) 2026-08-27 사장님 승인 = 화면 언어를 넘겨 서버가 슬롯 해설을 (place_id, 언어) 캐시로 이어붙임(제미니 호출 0).
+        // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 승인 = URL 생성 = itineraryUrl() 공용(§16, TripisModal.tsx 와 중복 제거).
+        const res = await apiRequest(
+          "GET",
+          itineraryUrl(targetId, i18n.language),
+        );
         const data = await res.json();
         const raw = data?.rawData;
         if (!raw || !raw.days) {

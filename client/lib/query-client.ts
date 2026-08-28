@@ -79,6 +79,12 @@ export async function apiRequest(
   return res;
 }
 
+// ⚠️ 수정금지(승인필요) 2026-08-28 사장님 승인 = 여정 상세 조회 URL 생성 1벌(§16) = TripisModal.tsx·
+//   useTripPlanner.ts 가 각자 손으로 같은 문자열을 만들던 것 통합(2026-08-27 언어별 슬롯 해설 캐시 배선 시 추가된 패턴).
+export function itineraryUrl(id: number | string, language: string): string {
+  return `/api/itineraries/${id}?lang=${encodeURIComponent(language)}`;
+}
+
 type UnauthorizedBehavior = "returnNull" | "throw";
 export const getQueryFn: <T>(options: {
   on401: UnauthorizedBehavior;

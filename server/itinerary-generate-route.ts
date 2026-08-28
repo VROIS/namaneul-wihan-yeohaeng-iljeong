@@ -10,6 +10,8 @@ import { chargeOnSuccess, precheckFeature } from "./credit-charge"; // 크레딧
 import { getUserIdFromReq } from "./auth-user"; // 토큰 → userId 1벌(§16)
 // 여정 → DB 행 변환 1벌(§16) = 저장 버튼(POST·PUT)과 **같은 것**을 쓴다.
 import { buildItineraryData } from "./itinerary-save";
+// ⚠️ 수정금지(승인필요) 2026-08-27 사장님 승인 = 응답 직전 슬롯 해설을 (place_id, 요청언어) 번역 캐시에서 이어붙임(제미니 호출 0, 저장 안 함).
+import { applyItineraryTranslations } from "./services/shared/place-translation";
 
 export function registerItineraryGenerateRoute(app: Express): void {
   // Itinerary generation
@@ -183,7 +185,12 @@ export function registerItineraryGenerateRoute(app: Express): void {
           tag: "여정 생성",
         });
 
-      res.json(draftId ? { ...itinerary, itineraryId: draftId } : itinerary);
+      res.json(
+        await applyItineraryTranslations(
+          draftId ? { ...itinerary, itineraryId: draftId } : itinerary,
+          enrichedFormData.language,
+        ),
+      );
     } catch (error: any) {
       console.error("Error generating itinerary:", error?.message || error);
 

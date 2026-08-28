@@ -1,5 +1,6 @@
 import crypto from "crypto"; // ⚠️ 수정금지(승인필요) — raw 버전순번 헬퍼(2026-06-16 사장님 SSOT) = md5 해시용
 import fs from "fs"; // ⚠️ 수정금지(승인필요) — raw 버전순번 헬퍼(2026-06-16 사장님 SSOT) = 디렉토리 동기 스캔용
+import path from "path"; // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 승인 = saveVersionedReport() 경로 조합용
 
 // ⚠️ 수정금지(승인필요) 2026-06-15 사장님 SSOT = docs/raw 산출물 파일명 단일 표준 (= 장독 형식 정비).
 //   = 표준: {YYYY-MM-DD}_{NN-단계명}_{내용}.json  (날짜 앞 = 시간순 정렬·찾기 / 단계번호 = 그룹 / 내용 = 식별)
@@ -123,8 +124,37 @@ export function latestVersioned(dir: string, stemFile: string): string | null {
   return best;
 }
 
+// ⚠️ 수정금지(승인필요) 2026-08-28 사장님 승인 = 산출표 저장 절차(mkdir + versionedName + 파일쓰기) 1벌(§16 SSOT) =
+//   fillcity/steps/discovery-merge-diff.ts 와 server/services/fill/gmaps-pid-identity/report.ts 가 각자 손으로
+//   중복 구현하던 동일 10줄(rawHash 기반 versionedName 저장 + null-safe 기존파일 해시 콜백)을 통합.
 /**
- * (4) reader 용(batch/zone) = 이미 prefix 로 거른 files 목록을 base(=_N 뗀 것)별 최신 1개로 축약. 정렬 보존.
+ * (5) writer 헬퍼 = "산출표 저장"(mkdir + versionedName 판정 + 파일쓰기) 공용. 내용 동일(rawHash 같음) = 덮어쓰기
+ *  (중복 0) / 상이 = _N 버전 순번 분리 보존(= versionedName 규칙 그대로, §18).
+ * @param dir      절대경로 디렉토리(= 산출물 폴더, 없으면 이 함수가 recursive 생성)
+ * @param stemFile 무순번 기본 파일명(확장자 포함, 이미 날짜 포함 = 예 '2026-08-28_b1-discovery-diff.json')
+ * @param payload  저장할 JSON 내용(pretty 2칸 들여쓰기)
+ * @returns        실제 쓰여진 절대경로(디렉토리 포함).
+ */
+export function saveVersionedReport(
+  dir: string,
+  stemFile: string,
+  payload: unknown,
+): string {
+  fs.mkdirSync(dir, { recursive: true });
+  const finalName = versionedName(dir, stemFile, rawHash(payload), (p) => {
+    try {
+      return rawHash(JSON.parse(fs.readFileSync(p, "utf-8")));
+    } catch {
+      return null;
+    }
+  });
+  const outPath = path.join(dir, finalName);
+  fs.writeFileSync(outPath, JSON.stringify(payload, null, 2), "utf-8");
+  return outPath;
+}
+
+/**
+ * (6) reader 용(batch/zone) = 이미 prefix 로 거른 files 목록을 base(=_N 뗀 것)별 최신 1개로 축약. 정렬 보존.
  *   = 같은 base 의 _N 여러 개 중 최대 n 의 name 만 남김 (= zone/batch 묶음 reader).
  * @param files  이미 prefix 필터된 파일명 목록(확장자 포함)
  * @returns      base 별 최신 1개 파일명 목록. 입력 .sort() 정렬 순서 보존.

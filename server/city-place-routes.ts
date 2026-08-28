@@ -15,7 +15,7 @@ import {
 } from "../shared/schema";
 // ne·isNull·isNotNull = 대표장소 조건을 city-representative-place 1벌로 옮기며 이 파일에서 안 쓰게 됨(삭제 2026-08-05 §19)
 import { eq, sql, desc, and, or, inArray } from "drizzle-orm";
-// ⚠️ 완비 기준 = ag2 의 상수 1벌을 가져다 쓴다(§16). 여기에 300 을 다시 적으면 기준이 두 벌이 된다.
+// ⚠️ 완비 기준 = ag2 의 상수 1벌을 가져다 쓴다(§16). 여기에 숫자를 다시 적으면 기준이 두 벌이 된다.
 import { READY_THRESHOLD } from "./services/agents/ag2-gemini-recommender";
 // 도시 대표장소 = 조건·정렬 1벌(§16). 하이라이트 카테고리 순서도 같은 파일이 정본.
 import {
@@ -24,6 +24,8 @@ import {
   HIGHLIGHT_CATEGORIES,
   pickDisplayName,
 } from "./services/shared/city-representative-place";
+// best_rank 언어코드 정렬 1벌(§16, 2026-08-27 사장님 확정) = 화면 언어를 아는 자리라 언어 인지 정렬.
+import { bestRankOrder } from "./services/shared/best-rank";
 import {
   computeDayRouteLive,
   enrichStopsWithPsr,
@@ -43,10 +45,10 @@ export function registerCityPlaceRoutes(app: Express): void {
   });
 
   // ⚠️ 수정금지(승인필요) 2026-07-30 사장님 SSOT = 여정 플래너 상단 **도시버튼의 유일한 목록 소스.**
-  //   DB-only 가 완비된 도시만 = place_seed_raw 전체 행수 ≥ READY_THRESHOLD(300, ag2 상수 1벌).
+  //   DB-only 가 완비된 도시만 = place_seed_raw 전체 행수 ≥ READY_THRESHOLD(200, 2026-08-17 확정, ag2 상수 1벌).
   //   완비도 높은 순(행수 DESC)으로 내려준다 = 사장님 "완비된 도시 순으로 노출".
   //   ⚠️ 반드시 아래 "/api/cities/:id" **앞**에 있어야 한다 = 뒤에 두면 :id 가 "ready" 를 id 로 먹어 404.
-  //   도시를 더 발굴해 300 을 넘기면 **코드 수정 없이 자동으로 목록에 추가됨**(사장님 "점진적으로 늘려감").
+  //   도시를 더 발굴해 READY_THRESHOLD(200)를 넘기면 **코드 수정 없이 자동으로 목록에 추가됨**(사장님 "점진적으로 늘려감").
   app.get("/api/cities/ready", async (_req, res) => {
     try {
       if (!db) return res.status(503).json({ error: "db_unavailable" });
@@ -100,7 +102,9 @@ export function registerCityPlaceRoutes(app: Express): void {
           nameEn: placeSeedRaw.nameEn,
           nameLocal: placeSeedRaw.nameLocal,
           nameKo: placeSeedRaw.nameKo,
-          rn: sql<number>`ROW_NUMBER() OVER (PARTITION BY ${placeSeedRaw.seedCategory} ORDER BY ${placeSeedRaw.googleReviewCount} DESC, ${placeSeedRaw.id} DESC)`.as(
+          // ⚠️ 수정금지(승인필요) 2026-08-27 사장님 승인 = best_rank = 7자리 언어코드(정의·정렬 1벌 = shared/best-rank.ts).
+          //   화면 언어(lang) 자리가 든 행만 베스트(뽑은 언어 수 큰 순) → 번호 없는 행(NULL, 대다수)은 리뷰수·id 옛 순서 그대로(순수 추가, 회귀 0).
+          rn: sql<number>`ROW_NUMBER() OVER (PARTITION BY ${placeSeedRaw.seedCategory} ORDER BY ${bestRankOrder(lang)}, ${placeSeedRaw.googleReviewCount} DESC, ${placeSeedRaw.id} DESC)`.as(
             "rn",
           ),
           catRank:

@@ -36,6 +36,10 @@ const CAPABILITIES = [
       //   즉시 PM 실행하도록 복귀(공식업뎁 전 요구). image-backfill.ts(사후일괄, 관리자 수동)과는 별개
       //   능력(라이브/사용자호출 vs 사후일괄/관리자임의) = 같은 tsPhoto 관문 재사용이라 재발명 아님(§16).
       "server/services/agents/ag3-save-new-places.ts",
+      // ⚠️ 2026-08-27 사장님 확정 = B2(7개국어 베스트 발굴 입력 연결부) = "정말 신규행"으로 판정된 행에만 TS+PM 1회.
+      //   병합(기존 행) 경로는 외부호출 0 = 일괄 도구(image-backfill)에 넘기면 이미지 있는 병합행까지 2중 호출되므로
+      //   일괄 위임 금지 = 신규행 전용 즉시 PM = 같은 tsPhoto 관문 재사용 = 재발명 아님(§16).
+      "fillcity/steps/discovery-verify-and-insert.ts",
       ".claude/skills/", // 스킬 내 post-process 도 정당
       // ⚠️ 2026-08-07 사장님 승인 = fillcity-bts/ = fillcity/ 의 BTS 전용 사본(원본 보존 원칙).
       //   = 새 능력이 아니라 같은 도구의 설정만 다른 사본(TOP5·공연장반경·보강범위) = 재발명 아님.
@@ -96,6 +100,33 @@ const CAPABILITIES = [
       /supabase\.co\/storage\/v1/i,
     ],
     hint: "창고 = R2 단독(r2-client.ts 단일 진입점). 옛 Supabase Storage(storage/v1) 경로를 새로 쓰는 것 = SP 부활 = 금지(1-5b 철거 완료). guides base64 추출 = guides-photo-extract.ts.",
+  },
+  {
+    // ⚠️ 2026-08-27 사장님 확정 = "PID 가 있으니 구글맵을 열어 내용을 입력하면 될 일 — TS 다시 하지 마라" = 유료 API 0 = Playwright 로 구글맵 공개 페이지(place_id 링크) 열어 h1·주소 추출.
+    id: "identity-fill",
+    ko: "PID 는 있는데 현지어이름·주소·한국어이름이 빈 행 → 구글맵 페이지로 채움(유료 API 0) + PID 오매칭 감지(이름·좌표 대조) + --verify = 전 PID 행 오염 재확인·리뷰수·영업상태·좌표 최신화",
+    owners: [
+      "server/services/fill/gmaps-pid-identity.ts",
+      "server/services/fill/gmaps-pid-identity/", // 2026-08-28 사장님 승인 = §0 700줄 가드 = 폴더 분리(page-reader·gates·apply·report)
+    ],
+    triggers: [
+      /maps\/place\/\?q=place_id:/,
+      /data-item-id="address"/,
+      /div\.F7nice/,
+    ],
+    hint: "PID 보유 행의 name_local·address·name_ko 채움 + PID 오매칭 감지(name-mismatch·coord-mismatch 관문, 2026-08-27 사장님 지시) + --verify(2026-08-28 사장님 확정) = 도시의 전 PID 행 오염 재확인 + 리뷰수(google_review_count)·영업상태(business_status)·좌표·영어명(빈 칸만) 최신화 = gmaps-pid-identity.ts(Playwright 구글맵 공개 페이지, 유료 호출 0, upsertPlace targetRowId 직행). 새 스크래퍼·TS 재호출 루프·별도 PID 검증기·리뷰수 긁개 만들지 말 것(§16).",
+  },
+  {
+    // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 확정 = A안 = "같은 PID = 같은 장소" 는 소프트 병합(status='merged'+merged_into 포인터, 행 보존)으로만 = PSR 행 DELETE 없음.
+    //   = 1벌 = status-backfill.ts 규칙 ①(keep = RC 최대 → id 큰 쪽) 이 keep 흡수·태그/언어코드 합집합·번역행 복사·포인터 이동까지 담당.
+    id: "pid-twin-merge",
+    ko: "같은 PID 쌍둥이 = 소프트 병합(status='merged'+포인터, 행 보존) + keep 흡수·태그/언어코드 합집합·번역행 복사",
+    owners: ["server/services/fill/status-backfill.ts"],
+    triggers: [
+      /DELETE\s+FROM\s+place_seed_raw/i,
+      /HAVING\s+count\(\*\)\s*>\s*1[\s\S]{0,120}google_place_id/i,
+    ],
+    hint: "같은 PID 쌍둥이 = status-backfill.ts 규칙 ①(keep 흡수 = upsertPlace targetRowId, best_rank = bestRankUnion, place_translations 사본 복사·guides·cities 선별입력·merged_into 포인터 → keep, 그룹당 1 트랜잭션, loser = status='merged'). PSR 행 DELETE 금지 = 소프트 병합만(2026-08-28 A안). 새 PID 중복 청소 스크립트 만들지 말 것(§16).",
   },
 ];
 

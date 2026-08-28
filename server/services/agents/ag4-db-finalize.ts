@@ -21,6 +21,8 @@ import { MEAL_BUDGET } from "./types";
 //   실사용자 클라이언트는 소문자(luxury/comfort)로 보내는데 MEAL_BUDGET 키는 PascalCase 4종뿐 =
 //   미정규화 인덱싱 = undefined → mealBudget.lunch 접근 크래시(ag2 에서 토론토·나이로비 500 실측과 동일 폭탄).
 import { normalizeTravelStyle, sanitizePriceEur } from "./pipeline-v3-types";
+// best_rank 언어코드 정렬 1벌(§16, 2026-08-27 사장님 확정). ag4 는 요청 언어를 모름 = 언어 무관 정렬.
+import { bestRankOrderSql } from "../shared/best-rank";
 // ⚠️ 2026-07-06 사장님 SSOT = 대중교통 구간당 균일 예상가 = 단일 SSOT(§16) = transit-haversine 로 이동(옛 ag4 로컬정의 삭제) = MIX·DB-only 공통.
 import {
   estimateTransitCost,
@@ -130,9 +132,13 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
                --   (= 발굴 60 < 서빙 요구 100 = 영원히 못 채우는 칸, 특히 luxury 칸은 공급 자체가 없어 전 도시 0~7/20 실측).
                --   손님상 정원 = 비식당 6카테고리×20(120) + 식당 60 = 180.
                CASE WHEN price_eur <= 24 THEN 10 WHEN price_eur <= 60 THEN 30 ELSE 20 END AS quota,
+               best_rank,
+               -- ⚠️ 수정금지(승인필요) 2026-08-27 사장님 승인 = best_rank = 7자리 언어코드(정의·정렬 1벌 = shared/best-rank.ts).
+               --   뽑은 언어 수(0 아닌 자릿수) 큰 순 → 번호 없는 행(NULL, 대다수)은 리뷰수 옛 순서 그대로(순수 추가, 회귀 0).
+               --   이 쿼리는 autorank 트리거의 rank 컬럼과 무관한 독립 정렬이라 별도로 고쳐야 함(2026-08-27 실측 확인).
                ROW_NUMBER() OVER (
                  PARTITION BY CASE WHEN price_eur <= 24 THEN 'eco' WHEN price_eur <= 60 THEN 'reason' ELSE 'premium_luxury' END
-                 ORDER BY google_review_count DESC NULLS LAST
+                 ORDER BY ${sql.raw(bestRankOrderSql())}, google_review_count DESC NULLS LAST
                ) AS band_rn
         FROM place_seed_raw
         -- ⚠️ 2026-08-18 사장님 승인 = 검증(PID) 게이트(ag2 와 동일 보편규칙 §16) = 미검증 행 서빙 금지. 핀(사용자 직접 선택)만 면제.
@@ -140,7 +146,8 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
           AND (google_place_id IS NOT NULL OR (${pinCond}))
           AND (price_eur IS NOT NULL OR (${pinCond}))
       )
-      SELECT * FROM banded WHERE band_rn <= quota OR pinned ORDER BY "googleReviewCount" DESC NULLS LAST
+      SELECT * FROM banded WHERE band_rn <= quota OR pinned
+      ORDER BY ${sql.raw(bestRankOrderSql())}, "googleReviewCount" DESC NULLS LAST
     `)) as unknown as { rows: Record<string, any>[] };
     // 2026-08-18 = PID공유 폴백 목록 = 요청도시 + 풀에 섞인 크로스도시(60초 캐시 = ag2 로드분 재사용 = listR2 추가 0)
     imagePidMap = await loadImagePidMap([

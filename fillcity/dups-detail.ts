@@ -5,6 +5,9 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+// ⚠️ 수정금지(승인필요) 2026-08-28 사장님 승인 = 흡수 후보 컬럼 목록 1벌(§16 SSOT) = server/services/fill/status-backfill.ts
+//   와 공용(옛 이 파일 손입력 배열 완전삭제, 내용은 동일).
+import { FILL_COLS } from "../server/services/shared/place-fill-columns";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 process.chdir(ROOT);
@@ -28,33 +31,6 @@ if (!cityId) {
   console.error("Usage: --city-id=<N>");
   process.exit(1);
 }
-
-// 흡수 후보 컬럼 = 결손이면 loser 값으로 채울 수 있는 데이터 컬럼 (식별/시스템 컬럼 제외)
-const FILL_COLS = [
-  "name_ko",
-  "name_en",
-  "name_local",
-  "image_url",
-  "image_attribution",
-  "price_eur",
-  "editorial_summary",
-  "summary_ko",
-  "address",
-  "latitude",
-  "longitude",
-  "google_review_count",
-  "google_rating",
-  "google_maps_uri",
-  "google_primary_type",
-  "opening_hours",
-  "vibe_keywords",
-  "phase_tags",
-  "category_tags",
-  "names_i18n",
-  "photo_urls",
-  "distance_km_from_center",
-  "day_zone",
-];
 
 function isEmpty(v: any): boolean {
   if (v === null || v === undefined) return true;
