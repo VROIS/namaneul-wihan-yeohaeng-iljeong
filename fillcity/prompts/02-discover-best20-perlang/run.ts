@@ -1,14 +1,4 @@
 // ⚠️ 수정금지(승인필요) 2026-08-25 사장님 승인 = 02-discover-best20-perlang 실행 진입점
-// = 시드 발굴 1단계(원재료) — 언어별 개별 콜. 90-benchmark-best20(사후 검수)과 다른 새 파일(90번은 그대로 둠, §16).
-// = 랜드마크20 + 각 랜드마크 인근 식당3(저/중/고)x20=60 = 80곳/콜. 언어당 1콜 x 7언어.
-// = raw 저장 = saveRaw() 단일 관문(§18) 재사용 = 로컬 docs/raw/{cityId} + R2 raw-responses/{cityId} 2곳 동형.
-// = PSR 자동입력 없음(DB 쓰기 0) — raw만 남기고 사장님이 직접 검증.
-//
-// 호출:
-//   npx tsx fillcity/prompts/02-discover-best20-perlang/run.ts --city-id=19 --lang=ko [--dry]
-//   --dry = 치환된 프롬프트 전문만 출력(외부호출 0)
-//
-// 산출물 = docs/raw/{city_id}/{YYYY-MM-DD}_gemini-best20perlang-{lang}.json (+ R2 동일 경로)
 import fs from "fs";
 import path from "path";
 import { fileURLToPath, pathToFileURL } from "url";
@@ -17,7 +7,6 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "../../..");
 process.chdir(ROOT);
 
-// .env 로드 (= 90-benchmark-best20 동일 패턴)
 const envRaw = fs.readFileSync(".env", "utf-8").replace(/^﻿/, "");
 for (const line of envRaw.split(/\r?\n/)) {
   const m = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/);
@@ -46,7 +35,6 @@ if (!cityId || !VALID_LANGS.includes(lang)) {
 const dryRun = argv["dry"] === "true";
 
 (async () => {
-  // 1. 도시 정보 조회
   const pg = await import("pg");
   const mkClient = () =>
     new pg.default.Client({
@@ -67,7 +55,6 @@ const dryRun = argv["dry"] === "true";
     process.exit(1);
   }
 
-  // 2. prompt 치환
   const today = new Date().toISOString().slice(0, 10);
   const apiPass = `[API-PASS] 도시=${city.name_en}(${cityId}) / 언어=${lang} / 행=없음(발굴) / 날짜=${today}`;
   const promptTpl = fs.readFileSync(
@@ -98,7 +85,6 @@ const dryRun = argv["dry"] === "true";
     process.exit(0);
   }
 
-  // 3. Gemini key (= 출입증 관문, 90-benchmark-best20 동일)
   const { issueApiKey } = await import(
     pathToFileURL(path.join(ROOT, "server/services/shared/issue-api-key.ts"))
       .href
@@ -116,7 +102,6 @@ const dryRun = argv["dry"] === "true";
     process.exit(1);
   }
 
-  // 4. Gemini 호출 (= 90-benchmark-best20 표준: grounding ON / mime 없음 / thinking 0 / 420초)
   const t0 = Date.now();
   const resp = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_KEY}`,
@@ -143,7 +128,6 @@ const dryRun = argv["dry"] === "true";
     `\n호출 = ${Date.now() - t0} ms / finishReason = ${finishReason} / 토큰 = ${usage.totalTokenCount || "?"}`,
   );
 
-  // 5. 잘림 복구 파싱 (= 90-benchmark-best20 동일 패턴)
   function parse(t: string): any | null {
     const start = t.indexOf("{");
     if (start < 0) return null;
@@ -172,7 +156,6 @@ const dryRun = argv["dry"] === "true";
     `landmarks=${parsed.results?.landmarks?.length ?? 0} restaurants=${parsed.results?.restaurants?.length ?? 0}`,
   );
 
-  // 6. raw 저장 = saveRaw() 단일 관문(§18) — 로컬 docs/raw/{cityId} + R2 raw-responses/{cityId} 2곳 동형
   const { saveRaw } = await import(
     pathToFileURL(path.join(ROOT, "server/services/shared/save-raw.ts")).href
   );

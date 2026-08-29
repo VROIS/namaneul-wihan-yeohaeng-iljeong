@@ -1,44 +1,21 @@
-// ⚠️ 수정금지(승인필요) 2026-08-27 사장님 확정 = B1 선처리 컴포넌트(§16 영구 컴포넌트, 1회용 아님) = 오염 사전차단 5단 중 ①②③.
-// = 목적: 02-discover-best20-perlang 이 만든 언어별(최대 7개) raw를 PSR 입력 전에 선병합(①)·기존창고 대조(②)하여
-//   "정말 신규행"(③)만 추려낸다. TS·PM·upsertPlace(④⑤)는 이 파일 범위 밖 — 별도 승인 후 B2 에서 실행(외부호출 0).
-// = ⚠️ 수정금지(승인필요) 2026-08-27 사장님 확정 = 이 프로젝트의 중복 판정기는 DB 문지기 트리거
-//   place_seed_raw_prevent_dup(server/db/migrations/place-identity.sql) 단 1벌. 코드 쪽 이름키·좌표·주소 매칭 = 없음(§16 재발명 금지).
-//   ①②는 한 번의 패스로 = 한 트랜잭션 안에서 raw 항목을 언어순(LANGS)·항목순으로 place_seed_raw 에 실제 INSERT 해 보고
-//   문지기의 판정(불변N 차단 예외 / 의심대상-n 태그 / 통과)을 그대로 받아 적는다. 통과한 항목은 임시행으로 남겨 두어
-//   뒤 언어의 항목이 "기존 PSR 행 + 앞선 임시행" 양쪽과 문지기로 대조되게 한다(= raw↔raw 와 raw↔PSR 이 같은 판정기 1벌).
-//   raw 좌표는 제미니 추정치·PID/URI 없음 → INSERT 에 latitude/longitude/google_place_id/google_maps_uri 를 넣지 않는다(NULL)
-//   = 문지기 불변1·2·4 는 발동하지 않고 불변3(풀주소)·5(로컬이름)·6(고유명사)·의심7/8(영어명·한국어명)만 판정한다.
-// = ⚠️ 수정금지(승인필요) 2026-08-27 사장님 확정 = DB 쓰기 0 보장 = 트랜잭션 끝은 항상 ROLLBACK. 종료 후 이 도시 행수를
-//   시작 전과 대조해 같지 않으면 즉시 예외. (시퀀스 값 소모는 트랜잭션 무관 = 행 데이터 아님.)
-// = 판정 결과 → 그룹: 차단·의심 대상 id 가 시작 전 존재하던 PSR 행이면 그 행의 "PSR 그룹", 이 패스의 임시행이면 그 임시행이
-//   앵커인 "신규" 그룹. 의심(7/8)은 PSR 행 대상이면 PSR 그룹, 임시행 대상이면 같은 seed_category 일 때만 합류(아니면 별도 신규 앵커).
-// = ⚠️ 수정금지(승인필요) 2026-08-27 사장님 확정 = PID = 호적(법적 이름표). PSR 그룹은 문지기 판정 등급으로 두 갈래:
-//   · A등급 = 멤버 중 하나라도 불변5(로컬이름 완전일치)·불변6(고유명사 키)로 그 PSR 행을 맞힘 → merge(그 행 직행 병합, B2 외부호출 0).
-//   · B등급 = 불변3(주소만)·의심(영어명/한국어명 완전일치)뿐 → confirm(후보일 뿐). B2 가 TS 1콜로 PID 를 받아 targetRowId 없이
-//     upsertPlace 정상 INSERT 경로로 넣어 문지기 1단(PID)이 진짜 행을 정한다(그 PID 행 흡수 / 없으면 신규행).
-//     실증: raw "Tour d'Argent" 가 주소로 루프탑 #76425 를 맞혔지만 식당 #69247 이 따로 있음 / "Les Invalides" 가 나폴레옹 묘
-//     #76447 을 맞혔지만 #61958 앵발리드가 따로 있음 = 주소·영어명만으로 병합하면 엉뚱한 행에 붙는다.
-//   confirm 항목 모양 = new 와 동일 + psrHint{psrId, psrName, psrCat, by} (문지기 후보 = B2 결과 대조용).
-// = 선정 기준(2026-08-26 사장님 확정): 랜드마크 = 확보된 전 언어의 "합집합" / 식당 = "4개 국어 이상"(7개 중 과반) = merge/confirm/new 3목록 공통.
-// = 산출 파일명 = ⚠️ 수정금지(승인필요) 2026-08-27 사장님 승인 = 임의 명명 금지, 기존 정본 헬퍼(raw-filename.ts) 재사용(§16).
-//   docs/raw/{cityId}/ 는 §18 = 실제 외부호출 원본 전용 폴더 → 이 파생 리포트는 별도 폴더 docs/b1-reports/{cityId}/ 에,
-//   같은 날짜 선두 규칙(rawDate)·같은 버전순번 규칙(rawHash/versionedName)으로 저장.
-//   파일명 = {date}_b1-discovery-diff.json (내용 동일 재실행=덮어쓰기 / 내용 다르면=_N).
-// = ⚠️ 이 파일은 전용 워크트리(.claude/worktrees/b1-discovery-merge-diff)에서 개발·검증 중(사장님 지시 2026-08-27) —
-//   main 에는 검증 통과 후에만 반영.
-//
-// 호출: npx tsx fillcity/steps/discovery-merge-diff.ts --city-id=125   (DRY 전용 = 트랜잭션 ROLLBACK, DB 쓰기 0)
+//   예외 1벌 = 문지기 판정 뒤·산출표 앞의 등급조정(regrade) v3 후처리(2026-08-29 사장님 결정, discovery-regrade.ts).
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 승인 = 산출표 저장(mkdir+versionedName+쓰기) 1벌 = saveVersionedReport()
-//   = gmaps-pid-identity/report.ts 와 공용(§16, 옛 이 파일 자체 인라인 중복 완전삭제).
 import {
   rawDate,
   saveVersionedReport,
 } from "../../server/services/shared/raw-filename";
-// ⚠️ 수정금지(승인필요) 2026-08-27 사장님 승인 = 7개 언어 목록·순서 1벌(§16) = best_rank 언어코드 자릿수와 같은 순서.
+// ⚠️ 수정금지(승인필요) 2026-08-29 사장님 승인 = 7개 언어 목록·순서 1벌(§16)
 import { LANGS } from "../../server/services/shared/language-instruction";
+import {
+  PSR_COLS,
+  regradeStaged,
+  type Bucket,
+  type PsrRow,
+  type Staged,
+} from "./discovery-regrade";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "../..");
@@ -69,9 +46,8 @@ if (!cityId) {
 }
 
 const RESTAURANT_MIN_LANGS = 4; // 사장님 확정 2026-08-26 = 7개국어 중 과반(4+)
-// ⚠️ 수정금지(승인필요) 2026-08-27 사장님 확정 = 한 도시 패스 상한 3분. 넘으면 그 자리에서 중단·ROLLBACK·보고(재시도 없음).
-//   임시 INSERT 마다 autorank 가 (city,category) 버킷 rank 를 재작성하고 write-gate 잠금이 ROLLBACK 까지 유지되기 때문.
-const MAX_TX_SECONDS = 180;
+// ⚠️ 수정금지(승인필요) 2026-08-27 사장님 확정, 2026-08-28 사장님 승인으로 180→240 상향(브뤼셀 560항목이 180초에 3회 연속 553~556/560에서 컷오프 실측).
+const MAX_TX_SECONDS = 240;
 
 interface RawPlace {
   type: "landmarks" | "restaurants";
@@ -102,7 +78,7 @@ interface GroupMember {
   tier: string; // 불변3 | 불변5 | 불변6 | 의심(영어명/한국어명) | 의심(영어명·유니크색인) | new
 }
 
-interface Group {
+export interface Group {
   anchor: { kind: "psr" | "tmp"; id: number };
   type: "landmarks" | "restaurants";
   anchorCat: string;
@@ -121,7 +97,6 @@ interface Group {
   members: GroupMember[];
 }
 
-/** mixed 감사 플래그 전용 정규화(병합 판정에는 쓰지 않음 = 판정기는 DB 문지기 1벌). */
 function norm(s?: string | null): string {
   if (!s) return "";
   return (
@@ -138,9 +113,6 @@ function norm(s?: string | null): string {
   );
 }
 // ⚠️ 수정금지(승인필요) 2026-08-27 사장님 지시 = 과병합 의심 판정(감사 플래그, 병합 판정에 영향 0).
-//   규칙: 멤버 name_en 을 norm() 으로 정규화한 뒤 서로 다른 값이 2개 이상이고, 그 값들이 전부
-//   "토큰 부분집합 변형"이 아니면 mixed=true. 토큰 부분집합 변형 = 각 이름의 토큰 집합이 토큰 수가 가장 많은
-//   이름의 토큰 집합에 모두 포함됨(예: "louvre" ⊂ "musee louvre" = 같은 곳의 표기 차이 → mixed 아님).
 function isMixedGroup(members: GroupMember[]): boolean {
   const distinct = [
     ...new Set(members.map((m) => norm(m.name_en)).filter(Boolean)),
@@ -168,7 +140,6 @@ function avg(xs: number[]): number | null {
     process.exit(1);
   }
   const files = fs.readdirSync(dir).filter((f) => f.includes("best20perlang"));
-  // 언어별 최신(파일명 날짜·버전 역순) 1개만 채택(§14 새것우선)
   const byLang = new Map<string, string>();
   for (const f of files.sort().reverse()) {
     const m = f.match(/best20perlang-([a-z]{2})/);
@@ -185,7 +156,6 @@ function avg(xs: number[]): number | null {
       `⚠️ ${LANGS.filter((l) => !byLang.has(l)).join(",")} 언어 raw 없음 = 부분 실행`,
     );
 
-  // 항목 순서 = LANGS 고정 순서 → 언어 안에서는 landmarks → restaurants → raw 순서 그대로
   const all: RawPlace[] = [];
   for (const lang of LANGS) {
     const f = byLang.get(lang);
@@ -223,7 +193,6 @@ function avg(xs: number[]): number | null {
 
   const countQ = `SELECT count(*)::int AS n FROM place_seed_raw WHERE city_id = $1`;
   const countBefore: number = (await c.query(countQ, [cityId])).rows[0].n;
-  // 시작 전 전역 max(id) = 이보다 작거나 같은 id 는 기존 PSR 행(불변3 풀주소는 도시무관이라 타도시 행도 가능).
   const maxIdBefore: number = (
     await c.query(`SELECT max(id)::int AS m FROM place_seed_raw`)
   ).rows[0].m;
@@ -298,7 +267,6 @@ function avg(xs: number[]): number | null {
       });
     bump(tier);
   }
-  /** 문지기가 가리킨 대상 id 로 합류. 임시행이면 그 앵커 그룹, 아니면 기존 PSR 행 그룹(id 당 1개). */
   function joinTarget(targetId: number, p: RawPlace, tier: string) {
     const tmpKey = tempGroupOf.get(targetId);
     const key = tmpKey ?? `psr:${targetId}`;
@@ -360,7 +328,6 @@ function avg(xs: number[]): number | null {
           await c.query("ROLLBACK TO SAVEPOINT s");
           joinTarget(n, p, "의심(영어명/한국어명)");
         } else {
-          // 임시행 대상인데 seed_category 가 다름 = 별도 신규 앵커(임시행은 뒤 언어 대조용으로 유지)
           await c.query("RELEASE SAVEPOINT s");
           const key = `tmp:${id}`;
           tempGroupOf.set(id, key);
@@ -375,7 +342,6 @@ function avg(xs: number[]): number | null {
           e.code === "23505" &&
           e.constraint === "uniq_psr_global_city_name"
         ) {
-          // 문지기 의심7(영어명 완전일치) 통과 뒤 같은 도시 name_en 유니크 색인에 막힌 경우 = 색인식 그대로로 대상 id 확인
           const hit = (
             await c.query(
               `SELECT id FROM place_seed_raw WHERE city_id = $1 AND lower(trim(name_en)) = lower(trim($2)) LIMIT 1`,
@@ -422,33 +388,80 @@ function avg(xs: number[]): number | null {
     process.exit(2);
   }
 
-  // 기존 PSR 행 정보(병합 그룹용) = 시작 전 존재하던 id 만(임시행 id 는 ROLLBACK 으로 소멸)
   const psrIds = [...groups.values()]
     .filter((g) => g.anchor.kind === "psr")
     .map((g) => g.anchor.id);
-  const psrInfo = new Map<number, any>();
+  const psrInfo = new Map<number, PsrRow>();
   if (psrIds.length) {
-    const rows = (
+    const rows: PsrRow[] = (
       await c.query(
-        `SELECT id, name_en, seed_category, status, google_place_id, city_id FROM place_seed_raw WHERE id = ANY($1::int[])`,
+        `SELECT ${PSR_COLS} FROM place_seed_raw WHERE id = ANY($1::int[])`,
         [psrIds],
       )
     ).rows;
     for (const r of rows) psrInfo.set(r.id, r);
   }
-  await c.end();
+  const cityRows: PsrRow[] = (
+    await c.query(
+      `SELECT ${PSR_COLS} FROM place_seed_raw WHERE city_id = $1 AND latitude IS NOT NULL AND longitude IS NOT NULL`,
+      [cityId],
+    )
+  ).rows;
 
-  // ⚠️ 수정금지(승인필요) 2026-08-27 사장님 확정 = A등급 판정 tier = 불변5(로컬이름)·불변6(고유명사) 1벌. 그 외(불변3·의심)는 B등급.
+  // ⚠️ 수정금지(승인필요) 2026-08-29 사장님 확정 = A등급 tier = 불변5·6, 그 외는 B등급
   const GRADE_A_TIERS = new Set(["불변5", "불변6"]);
+  const staged: Staged[] = [];
+  for (const g of groups.values()) {
+    if (g.type === "restaurants" && g.langs.size < RESTAURANT_MIN_LANGS)
+      continue;
+    const side = {
+      g,
+      name: [...g.names][0],
+      nameLocal: [...g.locals][0] || null,
+      nameKo: [...g.kos][0] || null,
+      lat: avg(g.lats),
+      lng: avg(g.lngs),
+      regrade: null,
+      absorbed: false,
+    };
+    if (g.anchor.kind === "psr") {
+      const r = psrInfo.get(g.anchor.id);
+      if (!r) {
+        errors.push({
+          lang: "-",
+          type: g.type,
+          name_en: side.name,
+          error: `대상 PSR id=${g.anchor.id} 조회 실패(시작 전 max(id)=${maxIdBefore})`,
+        });
+        continue;
+      }
+      const tiers = [...new Set(g.members.map((m) => m.tier))];
+      const bucket: Bucket = tiers.some((t) => GRADE_A_TIERS.has(t))
+        ? "merge"
+        : "confirm";
+      staged.push({
+        ...side,
+        orig: bucket,
+        bucket,
+        psr: r,
+        by: tiers.join("+"),
+      });
+    } else {
+      staged.push({ ...side, orig: "new", bucket: "new", psr: null, by: g.by });
+    }
+  }
+
+  const regradeCounts = await regradeStaged(c, staged, cityRows);
+
   const emptySection = () => ({
     merge: [] as any[],
     confirm: [] as any[],
     new: [] as any[],
   });
   const report = { landmarks: emptySection(), restaurants: emptySection() };
-  for (const g of groups.values()) {
-    if (g.type === "restaurants" && g.langs.size < RESTAURANT_MIN_LANGS)
-      continue;
+  for (const s of staged) {
+    if (s.absorbed) continue;
+    const g = s.g;
     const base = {
       name: [...g.names][0],
       langs: g.langs.size,
@@ -459,8 +472,8 @@ function avg(xs: number[]): number | null {
       copies: g.copies, // 원어 카피(B2 = place_translations 선충전 원천, 외부호출 0)
       mixed: isMixedGroup(g.members),
       members: g.members,
+      regrade: s.regrade,
     };
-    // new·confirm 공통 모양 = B2 TS 텍스트검색 입력(이름·주소·제미니 좌표 평균 앵커)
     const newShape = {
       ...base,
       nameLocal: [...g.locals][0] || null,
@@ -468,48 +481,36 @@ function avg(xs: number[]): number | null {
       lat: avg(g.lats),
       lng: avg(g.lngs),
       address: [...g.addresses][0] || null,
-      by: g.by,
+      by: s.by,
     };
-    if (g.anchor.kind === "psr") {
-      const r = psrInfo.get(g.anchor.id);
-      if (!r) {
-        errors.push({
-          lang: "-",
-          type: g.type,
-          name_en: base.name,
-          error: `대상 PSR id=${g.anchor.id} 조회 실패(시작 전 max(id)=${maxIdBefore})`,
-        });
-        continue;
-      }
-      // 그룹 등급 = 멤버(전원 이 PSR 행을 맞힌 항목) 중 하나라도 A등급 tier 면 A, 아니면 B
-      const tiers = [...new Set(g.members.map((m) => m.tier))];
-      const gradeA = tiers.some((t) => GRADE_A_TIERS.has(t));
-      if (gradeA) {
-        report[g.type].merge.push({
-          ...base,
+    if (s.bucket === "merge") {
+      const r = s.psr!;
+      report[g.type].merge.push({
+        ...base,
+        psrId: r.id,
+        psrName: r.name_en,
+        psrCat: r.seed_category,
+        psrStatus: r.status,
+        psrHasPid: r.pid,
+        psrCityId: r.city_id,
+        by: s.by,
+      });
+    } else if (s.bucket === "confirm") {
+      const r = s.psr!;
+      report[g.type].confirm.push({
+        ...newShape,
+        psrHint: {
           psrId: r.id,
           psrName: r.name_en,
           psrCat: r.seed_category,
-          psrStatus: r.status,
-          psrHasPid: !!r.google_place_id,
-          psrCityId: r.city_id,
-          by: tiers.join("+"),
-        });
-      } else {
-        report[g.type].confirm.push({
-          ...newShape,
-          psrHint: {
-            psrId: r.id,
-            psrName: r.name_en,
-            psrCat: r.seed_category,
-            by: tiers.join("+"),
-          },
-        });
-      }
+          by: s.by,
+        },
+      });
     } else {
       report[g.type].new.push(newShape);
     }
   }
+  await c.end();
 
   const restaurantGroups = [...groups.values()].filter(
     (g) => g.type === "restaurants",
@@ -569,7 +570,7 @@ function avg(xs: number[]): number | null {
   ]);
   const mixedCount = allItems.filter((x) => x.mixed).length;
   console.log(
-    `\n═══ 요약: ${elapsed.toFixed(1)}s · 총 ${totalMerge + totalConfirm + totalNew}곳 = merge ${totalMerge}(외부호출 0) / confirm ${totalConfirm}(🔴 TS ${totalConfirm}콜) / new ${totalNew}(🔴 TS ${totalNew}콜) · mixed ${mixedCount} · 오류 ${errors.length} ═══`,
+    `\n═══ 요약: ${elapsed.toFixed(1)}s · 총 ${totalMerge + totalConfirm + totalNew}곳 = merge ${totalMerge}(외부호출 0) / confirm ${totalConfirm}(🔴 TS ${totalConfirm}콜) / new ${totalNew}(🔴 TS ${totalNew}콜) · mixed ${mixedCount} · 오류 ${errors.length} · 등급조정 R1 ${regradeCounts.R1} / R2 ${regradeCounts.R2} / R3 ${regradeCounts.R3}(PID無 hint ${regradeCounts.hintOnly}) / R4 ${regradeCounts.R4} / R5 ${regradeCounts.R5} / R6 ${regradeCounts.R6} ═══`,
   );
 
   const today = rawDate();
@@ -582,6 +583,7 @@ function avg(xs: number[]): number | null {
     psrCountBefore: countBefore,
     psrCountAfter: countAfter,
     tierHistogram,
+    regradeCounts,
     errors,
     report,
   };

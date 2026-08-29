@@ -124,6 +124,11 @@ places.id,places.displayName,places.formattedAddress,places.location,places.user
 | **#44** | 08 Wikidata 이미지 (SPARQL) | 비-LLM | SPARQL (Gemini 미사용) | live | [08/run.ts:68](../fillcity/prompts/08-wk-image-fill/run.ts) |
 | **#45** | 결손보강·보정 WF (1행 1결손→행 전체 Gemini→TS→PM 보강) | 복합(Gemini+TS+PM) | 추출(6cat TOP20+식당 band 30/90/30 또는 `--all-restaurants`=식당전부)→Gemini 전11필드 새우선→TS 전필드 새우선→PM이미지→2곳저장 | live(실증완료) | [fill45-defect-repair.ts](../fillcity/repair.ts) |
 | **#46** | #1b 정제(cleanse) = 전체 행 재검증 (#07 프롬프트 재사용 = 새 프롬프트 아님) | Gemini | 전체행(BTS제외)→geminiCurate(=02-enrich/prompt.txt)→가격오염·이름환각·칸오입력 교정→id직행 전필드 새덮어쓰기(shopping price=NULL) = TS·PM 0 | live(실증완료) | [fillcity-step1b-fix-pollution.ts](../fillcity/cleanse.ts) · 본문 = **#07** (같은 prompt.txt) |
+| **#47** | 02 7개국어 베스트20 발굴 (신규 시드발굴 정규 WF ③, 언어당 1콜×7) | Gemini | gemini-3-flash-preview / grounding ON / temp 0.2 / thinking 0 | live(1순위 10도시+보고타 실행완료 2026-08-28) · 승인해시 `92d59965d33a2127`(본문 sha256 앞16, 줄바꿈 정규화) | [02-discover-best20-perlang/prompt.txt](../fillcity/prompts/02-discover-best20-perlang/prompt.txt) · [run.ts](../fillcity/prompts/02-discover-best20-perlang/run.ts) |
+| **#48** | 06 BTS 공연장 텍스트 요소 7개국어 (미래공연 도시 bts_venue, 1콜) | Gemini | gemini-3-flash-preview / grounding ON | live · 승인해시 `b2e294b09b2fdedf` | [06-bts-venue-copy-7lang/prompt.txt](../fillcity/prompts/06-bts-venue-copy-7lang/prompt.txt) |
+| **#49** | 90 도시 완성 검수 벤치마크 베스트20 (사후 성적표, DB 쓰기 0) | Gemini | gemini-3-flash-preview / grounding ON | tool · 승인해시 `88585fe9276f293e` | [90-benchmark-best20/prompt.txt](../fillcity/prompts/90-benchmark-best20/prompt.txt) |
+
+> **2026-08-29 사장님 결정(E)** = 외부호출 프롬프트는 이 카탈로그에 **등재 → 골라 조립**. 진본은 링크된 `prompt.txt`(코드 `run.ts` 가 파일을 그대로 읽어 변수만 치환, 사람·AI 재작성 0). **승인해시** = 그 시점 사장님 승인본의 지문 — raw 파일에도 같은 해시를 저장하고 B1 이 현재 prompt.txt 해시와 다른 raw 를 거부하는 관문(정규 WF 구현 시 배선). 해시가 바뀌면 = 프롬프트가 바뀐 것 = 재승인 후 이 칸 갱신.
 
 > **단일관문 우회(정리 후보)**: Gemini = #11~#18(드림스튜디오)·#19·#21·#06·#08·#09 / TS = #33·#34·#39·#41·#42.  <!-- #10 삭제(2026-06-23) -->
 > **명백한 폐기 후보**: #19·#21·#41·#42(legacy) / #22(헬스체크) / #23·#24·#25(reference).
