@@ -1,7 +1,4 @@
 // ⚠️ 수정금지(승인필요) — 전역 글라스 버튼 (shadcn LiquidButton RN 어댑트)
-// REF: docs/design-references/button-system-shadcn.tsx (원본 웹 버전)
-// SVG 필터/Tailwind/backdropFilter(url) 사용 불가 → BlurView + shadow + 반투명 오버레이로 시각 동등 재현
-// 전역 사용처: Screen D 도시 버튼, Screen F CTA 등 (2026-04-17 도입)
 
 import React, { useMemo } from "react";
 import {
@@ -160,7 +157,6 @@ const styles = StyleSheet.create({
   wrap: {
     borderRadius: 16,
     overflow: "hidden",
-    // 은은한 그림자
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06,
@@ -168,7 +164,6 @@ const styles = StyleSheet.create({
     elevation: 2,
     backgroundColor: "transparent",
   },
-  // 상단 하이라이트 0.5px
   topHighlight: {
     position: "absolute",
     top: 0,

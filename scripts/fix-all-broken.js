@@ -1,9 +1,3 @@
-/**
- * 모든 깨진 데이터 수정
- * 1. places 중복 제거
- * 2. instagram_hashtags 깨진 데이터 삭제 및 정상 데이터 추가
- */
-
 const { Client } = require("pg");
 require("dotenv").config();
 
@@ -14,10 +8,8 @@ async function fixAllBroken() {
     await client.connect();
     console.log("DB connected\n");
 
-    // 1. places 중복 제거
     console.log("=== Step 1: Fix places duplicates ===\n");
 
-    // places 중복 확인
     const placeDupes = await client.query(`
       SELECT name, COUNT(*) as cnt, array_agg(id ORDER BY id) as ids
       FROM places
@@ -40,10 +32,8 @@ async function fixAllBroken() {
     );
     console.log("Places after cleanup: " + placesCount.rows[0].cnt);
 
-    // 2. instagram_hashtags 깨진 데이터 삭제
     console.log("\n=== Step 2: Fix instagram_hashtags ===\n");
 
-    // 깨진 데이터 삭제
     const deleteBroken = await client.query(`
       DELETE FROM instagram_hashtags
       WHERE hashtag LIKE '%Ã%' 
@@ -54,7 +44,6 @@ async function fixAllBroken() {
     `);
     console.log("Deleted " + deleteBroken.rowCount + " broken hashtags");
 
-    // 중복 제거
     const deleteIGDupes = await client.query(`
       DELETE FROM instagram_hashtags
       WHERE id NOT IN (
@@ -63,7 +52,6 @@ async function fixAllBroken() {
     `);
     console.log("Deleted " + deleteIGDupes.rowCount + " duplicate hashtags");
 
-    // 정상 한글 해시태그 추가
     const koreanHashtags = [
       { hashtag: "#에펠탑", city: "Paris", category: "landmark" },
       { hashtag: "#파리여행", city: "Paris", category: "travel" },
@@ -121,7 +109,6 @@ async function fixAllBroken() {
     }
     console.log("Added " + addedCount + " new Korean hashtags");
 
-    // 최종 확인
     console.log("\n=== Final Status ===\n");
 
     const finalPlaces = await client.query(
@@ -134,7 +121,6 @@ async function fixAllBroken() {
     console.log("places: " + finalPlaces.rows[0].cnt + " rows");
     console.log("instagram_hashtags: " + finalIG.rows[0].cnt + " rows");
 
-    // 샘플 출력
     console.log("\ninstagram_hashtags sample:");
     const igSample = await client.query(
       "SELECT id, hashtag, city FROM instagram_hashtags ORDER BY id LIMIT 20",

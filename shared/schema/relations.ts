@@ -4,7 +4,6 @@ import { cities } from "./cities";
 import { itineraries } from "./itineraries";
 import { reviews } from "./places";
 
-// Relations (= 유지된 테이블만)
 export const citiesRelations = relations(cities, ({ many }) => ({
   itineraries: many(itineraries),
 }));

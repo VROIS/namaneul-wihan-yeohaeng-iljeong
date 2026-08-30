@@ -1,5 +1,4 @@
 // ⚠️ 2026-07-03 사장님 SSOT = "AI 의견" 기능 = Gemini 호출 단일 진입점(route-handler.ts 구조 복제, 원본 미수정).
-// = 헌법 §16 = geminiClient 단일 진입점 통과 (재발명 차단)
 
 import { geminiJson } from "../shared/geminiClient";
 import {
@@ -36,9 +35,6 @@ export interface AiOpinionHandlerResult {
   parseError?: string;
 }
 
-/**
- * 메인 = AI 의견 프롬프트 조립 + geminiJson 호출 + 파싱
- */
 export async function handleAiOpinionRequest(
   input: AiOpinionInput,
 ): Promise<AiOpinionHandlerResult> {

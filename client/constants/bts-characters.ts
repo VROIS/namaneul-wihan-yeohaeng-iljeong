@@ -1,8 +1,3 @@
-/**
- * BTS 미니앱 7명 캐릭터 데이터
- * 저작권 회피용 아키타입 기반 여행 페르소나
- */
-
 export type BTSCharacter = {
   id: string;
   name: string; // 한국어 캐릭터명
@@ -10,7 +5,6 @@ export type BTSCharacter = {
   archetype: string; // 아키타입 설명 (한국어)
   archetypeEn: string; // 아키타입 설명 (영어)
   tags: string[]; // 해시태그 (최대 3개)
-  // weights(5/3/2) = 완전삭제 2026-07-31 §19 = 폐기 매핑(정본 = shared/bts-character-mapping 1:1)
   pace: "Ultra-Relaxed" | "Relaxed" | "Normal" | "Packed";
   emoji: string; // 대표 이모지 (아바타 대신 임시)
   description: string; // 캐릭터 소개 문구
@@ -110,8 +104,6 @@ export {
 } from "../../shared/bts-character-mapping";
 
 // ⚠️ 수정금지(승인필요) — 캐릭터 전신 이미지 URL 매핑 (Screen 3/4 공유 소스)
-// iOS Expo Go의 require() 실패 회피용 GitHub raw URL. 이미지 변경 시 여기 한 곳만 수정
-// 2026-04-23: PNG → WebP 포맷 전환 (해상도 896×1200 유지, q=85). 7장 합계 16.1MB → 1.17MB (13.7× 감소, 92.7% 절약). expo-image 네이티브 WebP 지원.
 const GH_RAW =
   "https://raw.githubusercontent.com/VROIS/namaneul-wihan-yeohaeng-iljeong/main/assets/images/bts-characters";
 export const BTS_CHARACTER_IMAGES: Record<string, { uri: string }> = {

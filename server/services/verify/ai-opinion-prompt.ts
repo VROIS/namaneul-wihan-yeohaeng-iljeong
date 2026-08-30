@@ -1,9 +1,5 @@
 // ⚠️ 2026-07-03 사장님 SSOT = "AI 의견" 기능 프롬프트 조립.
 // = route-prompt.ts(#03 동선 최적화, 수정금지 원본)의 buildRouteInputJson() 패턴을 그대로 재현(원본 미수정).
-//   핵심 = vibe/동행/curationFocus를 한국어로 미리 번역한 하드코딩 맵을 쓰지 않는다.
-//   여정의 실제 데이터(vibeWeights 등)를 JSON 그대로 프롬프트에 넣어 Gemini가 스스로 해석하게 한다.
-//   = 사용자가 어떤 vibe 조합을 선택하든(6종 중 몇 개든, 향후 종류가 늘어도) 이 함수는 한 글자도 안 고쳐도 된다.
-// = 헌법 §16 = geminiClient 단일 진입점 통과. 톤 = 가장 비평적·적대적(사용자 신뢰 → 전문가검증 퍼널, 사장님 SSOT).
 
 import { getLanguageInstruction } from "../shared/language-instruction";
 
@@ -32,24 +28,17 @@ export interface AiOpinionInput {
   companionType?: string;
   companionCount?: number;
   curationFocus?: string;
-  // ⚠️ route-prompt.ts:126 buildRouteInputJson()과 동일 = vibeWeights 배열을 그대로 JSON에 실음(번역 X).
   vibeWeights?: AiOpinionVibeWeight[];
   travelStyle?: string;
   mobilityStyle?: string;
   travelPace?: string;
   // ⚠️ 2026-07-09 사장님 SSOT = 교통 카테고리 = shouldApplyGuidePrice(mobility·travel) 매트릭스 매칭 결과 = 'guide'(드라이빙가이드 전용차) | 'transit'(대중교통).
-  //   = 이 값 없으면 AI 의견이 무조건 "대중교통 불가능"으로 오판(디종 드라이빙가이드 실증 결함). pipeline-v3 가 계산한 실제 카테고리를 그대로 전달.
   transportCategory?: "guide" | "transit";
   days: AiOpinionDay[];
   // ⚠️ 2026-07-03 사장님 SSOT = 동적 콘텐츠(AI 의견 본문) 다국어 대응. pipeline-v3.ts:382-392 langMap 패턴 재사용.
-  //   = 번역기 X, Gemini가 그 언어로 직접 작문. 미지정 시 한국어.
   language?: string;
 }
 
-/**
- * ⚠️ route-prompt.ts:94 buildRouteInputJson()과 동일 패턴 = 사용자 입력을 JSON 매트릭스로 그대로 변환.
- * 한국어 번역 맵 없음 = 사용자 SSOT(모든 vibe/조건 값은 Gemini가 문맥으로 해석).
- */
 function buildAiOpinionInputJson(input: AiOpinionInput) {
   return {
     trip: {
@@ -61,7 +50,6 @@ function buildAiOpinionInputJson(input: AiOpinionInput) {
       companion_type: input.companionType,
       headcount: input.companionCount,
       focus: input.curationFocus,
-      // = route-prompt.ts:126-130 동일 구조(vibe/weight/priority)
       vibes: (input.vibeWeights || []).map((v, i) => ({
         vibe: v.vibe,
         weight: v.weight,
@@ -70,7 +58,6 @@ function buildAiOpinionInputJson(input: AiOpinionInput) {
       travel_style: input.travelStyle,
       mobility_style: input.mobilityStyle,
       travel_pace: input.travelPace,
-      // ⚠️ 2026-07-09 = 확정 교통수단 = 이동바이브+예산 매트릭스 매칭 결과(guide=전용차 드라이빙가이드 / transit=대중교통). Gemini 는 이 수단 전제로 동선·비용 평가.
       transport_category: input.transportCategory || "transit",
     },
     days: input.days.map((d) => ({

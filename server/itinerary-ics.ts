@@ -1,8 +1,5 @@
 // ⚠️ 수정금지(승인필요) — 여정 → iCalendar(.ics) 생성기 (RFC 5545) = 프로젝트 유일 1벌 (2026-07-21 §0)
-//   iOS 캘린더 등록 = Safari가 https 로 서빙되는 text/calendar 응답을 네이티브 "일정 추가" 미리보기로 열어줌(웹 표준 방식).
-//   클라이언트 .ics 생성·공유시트 방식 폐기 = 2026-07-21 §19 (캘린더 앱이 공유시트에 안 떠 실사용 불가 실증).
 
-// 여정 rawData(itineraries.raw_data) 중 ICS 생성에 쓰는 최소 형태 (클라 Itinerary 구조와 동일 필드)
 export type ItineraryForICS = {
   title?: string;
   destination?: string;
@@ -53,7 +50,6 @@ function foldICSLine(line: string): string {
   return out ? out + "\r\n " + cur : cur;
 }
 
-// startDate("YYYY-MM-DD") 기준 day번째(1-base) 날짜를 "YYYYMMDD"로 반환 (로컬 Date 연산)
 function dayToYYYYMMDD(startDate: string, day: number): string {
   const [y, m, d] = startDate.split("-").map(Number);
   const base = new Date(y, (m || 1) - 1, d || 1);
@@ -64,13 +60,11 @@ function dayToYYYYMMDD(startDate: string, day: number): string {
   return `${yyyy}${mm}${dd}`;
 }
 
-// "HH:MM" → "HHMM00" (floating 로컬시간 = 타임존 미부착, 여행지 현지시간 그대로 §0)
 function timeToHHMMSS(time: string): string {
   const [hh, mm] = time.split(":");
   return `${(hh || "00").padStart(2, "0")}${(mm || "00").padStart(2, "0")}00`;
 }
 
-// 현재 UTC → "YYYYMMDDTHHMMSSZ" (DTSTAMP 용)
 function nowUTCStamp(): string {
   const now = new Date();
   const yyyy = now.getUTCFullYear();
@@ -82,7 +76,6 @@ function nowUTCStamp(): string {
   return `${yyyy}${mm}${dd}T${hh}${mi}${ss}Z`;
 }
 
-// 여정 → iCalendar(.ics) 문자열 (장소 1개 = VEVENT 1개, iOS 미리보기에서 "모두 추가" 가능)
 export function generateItineraryICS(itinerary: ItineraryForICS): string {
   const dtstamp = nowUTCStamp();
   const stamp = Date.now();

@@ -1,7 +1,6 @@
 import * as dotenv from "dotenv";
 import pg from "pg";
 
-// .env 로드 (프로젝트 루트 기준)
 dotenv.config();
 
 const { Pool } = pg;

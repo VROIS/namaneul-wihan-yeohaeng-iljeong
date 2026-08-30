@@ -6,7 +6,6 @@ async function fixCities() {
   await client.connect();
   console.log("DB connected\n");
 
-  // 실제 ID 확인
   const cities = await client.query(
     "SELECT id, name, country FROM cities ORDER BY name, id",
   );
@@ -15,7 +14,6 @@ async function fixCities() {
     console.log("  ID=" + r.id + " | " + r.name + ", " + r.country);
   });
 
-  // 중복 찾기 (같은 이름, 같은 국가)
   const dupes = await client.query(`
     SELECT name, country, COUNT(*) as cnt, array_agg(id ORDER BY id) as ids
     FROM cities 
@@ -31,7 +29,6 @@ async function fixCities() {
     );
   });
 
-  // 중복 삭제 (가장 작은 ID 유지)
   if (dupes.rows.length > 0) {
     console.log("\n\nDeleting duplicates (keeping lowest ID)...");
 
@@ -44,7 +41,6 @@ async function fixCities() {
     }
   }
 
-  // 최종 결과
   const finalCities = await client.query(
     "SELECT id, name, country FROM cities ORDER BY id",
   );

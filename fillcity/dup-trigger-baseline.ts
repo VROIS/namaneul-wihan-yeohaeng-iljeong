@@ -1,6 +1,4 @@
 // ⚠️ 수정금지(승인필요) 2026-06-24 = PSR 중복 트리거 수정용 (1)before 기준선 (2)A+B 시뮬 (3)백업 (직접접속 §16).
-//   = DDL/UPDATE/INSERT/DELETE 절대 없음 = SELECT + 파일저장만 (= 사장님 승인 전 비파괴).
-//   호출: npx tsx fillcity/dup-trigger-baseline.ts --city-id=39
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -29,7 +27,6 @@ if (!cityId) {
 }
 const today = new Date().toISOString().slice(0, 10);
 
-// 두 곳(콘솔 + 파일) 동시 기록 = 사장님 눈 검수
 const outLines: string[] = [];
 const log = (s = "") => {
   console.log(s);
@@ -54,12 +51,8 @@ const log = (s = "") => {
   );
   log(`================================================================\n`);
 
-  // ─────────────────────────────────────────────────────────────
-  // 1. BEFORE 기준선 = 현재 중복의심 전수 기록
-  // ─────────────────────────────────────────────────────────────
   log(`########## 1. BEFORE 기준선 (= 트리거 수정 후 비교 기준) ##########\n`);
 
-  // 총행수 (비BTS / BTS 포함 둘 다)
   const totNonBts = (
     await c.query(
       "SELECT COUNT(*)::int AS n FROM place_seed_raw WHERE city_id=$1 AND seed_category NOT LIKE 'bts%'",
@@ -74,7 +67,6 @@ const log = (s = "") => {
   ).rows[0].n;
   log(`[총행수] 비BTS=${totNonBts} / 전체(BTS포함)=${totAll}\n`);
 
-  // (1) PID 중복 그룹 전체 (id쌍 + 이름 + 각 행 phase_tags 중복의심 여부)
   const pidDup = (
     await c.query(
       `
@@ -100,7 +92,6 @@ const log = (s = "") => {
   }
   log("");
 
-  // (2) 중복의심 phase_tags 가진 행 전수 (id, name_en, 의심대상-N)
   const suspectRows = (
     await c.query(
       `
@@ -121,7 +112,6 @@ const log = (s = "") => {
   }
   log("");
 
-  // (3) 좌표10m 중복쌍 (자기제외 + a.id < b.id 로 쌍 1회만)
   const coordDup = (
     await c.query(
       `
@@ -151,17 +141,11 @@ const log = (s = "") => {
     `[BEFORE 요약] 총행수 비BTS=${totNonBts} 전체=${totAll} / PID중복 ${pidDup.length}그룹 / 중복의심태그 ${suspectRows.length}행 / 좌표10m중복 ${coordDup.length}쌍\n`,
   );
 
-  // BEFORE 기준선 파일 저장
   const beforePath = path.join(outDir, `_dup-before-${today}.txt`);
   fs.writeFileSync(beforePath, outLines.join("\n"), "utf-8");
 
-  // ─────────────────────────────────────────────────────────────
-  // 2. 트리거 A+B 시뮬 (읽기전용 SELECT = DB 안 바꿈)
-  // ─────────────────────────────────────────────────────────────
   log(`########## 2. 트리거 A+B 시뮬 (SELECT만 = DB 무변경) ##########\n`);
 
-  // (a) A 적용 시 UPDATE 가 막혔을 행 수 = 같은 city 다른 행에 같은 PID 있는 행 수 (= B 대응 필요량)
-  // = 자기행 제외(a.id<>b.id) + PID 동일 = "다른 행에 그 PID 가 이미 존재" = A 트리거(UPDATE 확장)면 PID-set 시도가 막힘.
   const blockedByA = (
     await c.query(
       `
@@ -188,7 +172,6 @@ const log = (s = "") => {
     `   => 이미 PID중복이 존재하므로 A 단독이면 이 행들의 정상 PID 갱신도 막힘 = B 가 반드시 동반돼야 함.\n`,
   );
 
-  // (b) 자기행 제외 없으면 마비될 행 = PID 또는 좌표 있는 모든 행 = 자기 자신과 충돌 = 전수. 위험 수치화.
   const selfPid = (
     await c.query(
       "SELECT COUNT(*)::int AS n FROM place_seed_raw WHERE city_id=$1 AND google_place_id IS NOT NULL AND google_place_id <> ''",
@@ -243,7 +226,6 @@ const log = (s = "") => {
     `   => 그래서 A 의 불변1~5 각 SELECT WHERE 에 'AND c.id <> COALESCE(NEW.id, -1)' 필수.\n`,
   );
 
-  // (c) 자기행 제외 로직 논리 검증 = #45 정상 자기행 PID 갱신은 통과하는지
   log(
     `[2-(c)] 자기행 제외 로직 논리 검증 (= #45 정상 자기행 PID 갱신 통과 여부):`,
   );
@@ -262,12 +244,8 @@ const log = (s = "") => {
     `   결론: 자기행 제외(c.id <> COALESCE(NEW.id,-1)) => 정상 자기 갱신 통과 / 진짜 중복(다른행)만 차단 = 의도대로. (단 NEW.id 가 항상 존재(UPDATE)하므로 COALESCE 의 -1 폴백은 INSERT 시에만 발동 = INSERT 동작 무변경.)\n`,
   );
 
-  // ─────────────────────────────────────────────────────────────
-  // 3. 백업 (안전망)
-  // ─────────────────────────────────────────────────────────────
   log(`########## 3. 백업 (비가역 작업 전 복구 안전망) ##########\n`);
 
-  // (3-1) PSR city 전체 행 JSON 백업
   const allRows = (
     await c.query("SELECT * FROM place_seed_raw WHERE city_id=$1 ORDER BY id", [
       cityId,
@@ -294,7 +272,6 @@ const log = (s = "") => {
     `[3-1] PSR city_id=${cityId} 전체 ${allRows.length}행 백업 => ${backupPath}`,
   );
 
-  // (3-2) prevent_dup 트리거 함수 정의 전체 (pg_get_functiondef) + 트리거 바인딩 = 롤백용 SQL
   const fnDef = (
     await c.query(
       "SELECT pg_get_functiondef('public.place_seed_raw_prevent_dup'::regproc) AS def",
@@ -312,7 +289,6 @@ const log = (s = "") => {
   log(`[3-2] prevent_dup 함수+바인딩 백업 => ${trigBackupPath}`);
   log(`   현행 트리거 바인딩 = ${trigBind}\n`);
 
-  // BEFORE 파일 재기록 (시뮬·백업 로그까지 전부 포함)
   fs.writeFileSync(beforePath, outLines.join("\n"), "utf-8");
   log(`================================================================`);
   log(`완료. 저장 파일:`);

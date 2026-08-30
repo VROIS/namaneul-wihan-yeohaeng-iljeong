@@ -1,6 +1,4 @@
 // ⚠️ 수정금지(승인필요): Gemini API 온라인 폴백
-// Gemma 4 온디바이스 실패 시 → Gemini API로 동일 기능 제공
-// + 실시간 환율/날씨 등 최신 정보는 항상 온라인 필요
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { CONFIG } from '../config/constants';
 
@@ -9,7 +7,6 @@ let model = null;
 let chat = null;
 
 // ⚠️ 수정금지(승인필요): Gemini API 초기화
-// apiKey는 앱 설정에서 가져옴 (constants.js에 하드코딩 안 함)
 export function initGemini(apiKey) {
   if (!apiKey) {
     console.warn('[GeminiLiveApi] API key 없음');
@@ -70,11 +67,9 @@ export async function analyzeImage(imageBase64, prompt) {
 }
 
 // ⚠️ 수정금지(승인필요): 이미지 분석 (스트리밍) — 서버 페르소나 프롬프트 적용
-// systemPrompt = 서버에서 가져온 언어별 페르소나 (PromptService.fetchPrompt)
 export async function* analyzeImageStream(imageBase64, systemPrompt) {
   if (!genAI) throw new Error('Gemini 초기화 실패');
 
-  // systemInstruction 포함 모델 생성 (언어별 페르소나 적용)
   const modelWithPrompt = genAI.getGenerativeModel({
     model: CONFIG.API.GEMINI_MODEL,
     systemInstruction: systemPrompt || undefined,

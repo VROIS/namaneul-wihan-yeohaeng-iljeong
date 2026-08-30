@@ -17,11 +17,6 @@ import { z } from "zod";
 import { users } from "./users";
 import { cities } from "./cities"; // guides.city_id 참조(2026-08-02 = TRIPIS ↔ 도시 잇기)
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// 내손안에 가이드 통합 테이블 (P0-2 병합, 2026-03-27)
-// ═══════════════════════════════════════════════════════════════════════════════
-
-// AI 가이드 콘텐츠 (사진→Gemini→TTS 해설)
 export const guides = pgTable(
   "guides",
   {
@@ -39,13 +34,8 @@ export const guides = pgTable(
     longitude: decimal("longitude", { precision: 11, scale: 8 }),
     locationName: text("location_name"),
     // 🏙️ 2026-08-02 사장님 승인 = TRIPIS 도 도시와 잇는다(저장 시 좌표 → 최근접 도시 = server/city-match.ts).
-    //   nullable 인 이유 = 좌표 없이 저장된 지난 행들은 채울 근거가 없다(추측 금지 = §1).
     cityId: integer("city_id").references(() => cities.id),
     // 🏷️ 2026-08-02 사장님 승인 = **해설 창고 열쇠** = 그 해설이 어느 장소(place_seed_raw.id)의 것인지.
-    //   같은 장소라도 언어권마다 프롬프트의 관심사가 달라 해설 자체가 다르다(독일어=사실·논리 / 프랑스어=미적 감동 …)
-    //   → 창고를 찾을 때는 **(place_id, language) 두 칸을 함께** 본다. 한 칸만 보면 다른 언어 해설이 나온다.
-    //   nullable 인 이유 = 사용자가 직접 찍은 사진에는 장소번호가 없다.
-    //   외래키를 걸지 않는 이유 = 장소 행은 발굴·병합으로 정리될 수 있는데(§14) 이미 만들어 둔 해설은 남아야 한다.
     placeId: integer("place_id"),
     aiGeneratedContent: text("ai_generated_content"),
     tags: text("tags").array(), // 태그 (예: ['궁전', '역사', '바로크'])
@@ -60,16 +50,12 @@ export const guides = pgTable(
   },
   (t) => [
     // ⚠️ 수정금지(승인필요) 2026-08-03 = **창고 찾기 색인**(§22 검수 4번 수정 = 사장님 승인).
-    //   실제 DB 에는 city-link-repair --apply 로 이미 있다. 여기에 같이 적어 두는 이유 =
-    //   위 credit_transactions 색인과 같은 함정: 스키마에 없으면 `drizzle-kit push` 가 지워 버려
-    //   창고 조회(place-guide·hasGuide)가 풀스캔이 된다. 부분(where) 조건까지 라이브와 동일해야 한다.
     index("guides_place_lang_idx")
       .on(t.placeId, t.language)
       .where(sql`${t.placeId} IS NOT NULL`),
   ],
 );
 
-// 공유 링크 (보관함 → 외부 공유)
 export const shareLinks = pgTable("share_links", {
   id: varchar("id")
     .primaryKey()
@@ -92,7 +78,6 @@ export const shareLinks = pgTable("share_links", {
   updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`),
 });
 
-// 크레딧 거래 이력 (결제/사용/보너스/관리자 지급)
 export const creditTransactions = pgTable(
   "credit_transactions",
   {
@@ -112,19 +97,12 @@ export const creditTransactions = pgTable(
   },
   (t) => [
     // ⚠️ 수정금지(승인필요) 2026-07-30 = **이중충전 차단 열쇠**(§9). 실제 DB 에는 마이그 0019 로 이미 있다.
-    //   여기에 **반드시 같이 적어 둬야 한다** = 스키마에 없으면 `drizzle-kit push` 가
-    //   "쓸모없는 인덱스"로 보고 **지워 버려** 같은 결제가 두 번 적립될 수 있다(€10 에 280 크레딧).
-    //   ⚠️ 반드시 **부분(where)** 인덱스여야 한다. 전체 UNIQUE 로 만들면 `usage` 줄이
-    //   여정번호를 다시 쓰는 정상 동작과 부딪혀 **차감이 통째로 막힌다**.
     uniqueIndex("credit_transactions_purchase_ref_uniq")
       .on(t.referenceId)
       .where(sql`${t.type} = 'purchase' AND ${t.referenceId} IS NOT NULL`),
   ],
 );
 
-// 2026-08-23 api_logs 스키마 삭제 §19 = 2026-03-24 이후 쓰는 코드 0(죽은 표). 외부호출 집계 = external_calls(external-call-log.ts) 1벌.
-
-// 사용자 활동 로그 (분석용)
 export const userActivityLogs = pgTable("user_activity_logs", {
   id: varchar("id")
     .primaryKey()
@@ -143,7 +121,6 @@ export const userActivityLogs = pgTable("user_activity_logs", {
     .notNull(),
 });
 
-// 공유 HTML 페이지 (짧은 URL /s/:id)
 export const sharedHtmlPages = pgTable("shared_html_pages", {
   id: varchar("id").primaryKey(), // 8자 nanoid
   userId: varchar("user_id")
@@ -168,7 +145,6 @@ export const sharedHtmlPages = pgTable("shared_html_pages", {
   updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`),
 });
 
-// 인앱 알림 (YouTube 스타일 벨)
 export const notifications = pgTable("notifications", {
   id: varchar("id")
     .primaryKey()
@@ -187,7 +163,6 @@ export const notifications = pgTable("notifications", {
     .notNull(),
 });
 
-// 웹 푸시 구독
 export const pushSubscriptions = pgTable("push_subscriptions", {
   id: varchar("id")
     .primaryKey()
@@ -204,7 +179,6 @@ export const pushSubscriptions = pgTable("push_subscriptions", {
     .notNull(),
 });
 
-// TTS 음성 설정 (7언어×4플랫폼)
 export const voiceConfigs = pgTable("voice_configs", {
   id: varchar("id")
     .primaryKey()
@@ -217,7 +191,6 @@ export const voiceConfigs = pgTable("voice_configs", {
   updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP`),
 });
 
-// AI 프롬프트 (7개 언어, 관리자 수정 가능)
 export const prompts = pgTable("prompts", {
   id: varchar("id")
     .primaryKey()
@@ -234,13 +207,6 @@ export const prompts = pgTable("prompts", {
     .default(sql`CURRENT_TIMESTAMP`)
     .notNull(),
 });
-
-// bts_event_info 테이블 삭제됨 — BTS 공연 정보는 cities 테이블 컬럼으로 통합 (SSoT)
-// cities.bts_concert_dates, bts_venue, bts_venue_capacity, bts_fan_zone, bts_merch_info 참조
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// 통합 Insert Schemas + Types
-// ═══════════════════════════════════════════════════════════════════════════════
 
 export const insertGuideSchema = createInsertSchema(guides).omit({
   id: true,
@@ -297,7 +263,6 @@ export const insertPromptSchema = createInsertSchema(prompts).omit({
   createdAt: true,
 });
 
-// 가이드 통합 Types
 export type Guide = typeof guides.$inferSelect;
 export type InsertGuide = z.infer<typeof insertGuideSchema>;
 export type ShareLink = typeof shareLinks.$inferSelect;
@@ -320,4 +285,3 @@ export type VoiceConfig = typeof voiceConfigs.$inferSelect;
 export type InsertVoiceConfig = z.infer<typeof insertVoiceConfigSchema>;
 export type Prompt = typeof prompts.$inferSelect;
 export type InsertPrompt = z.infer<typeof insertPromptSchema>;
-// BtsEventInfo 타입 삭제 — cities 테이블로 통합됨

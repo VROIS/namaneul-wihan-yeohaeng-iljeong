@@ -1,13 +1,4 @@
-/**
- * ⚠️ 수정금지(승인필요) 2026-05-17 = 파리 DB-only 전환 3 단계 표준화 plan §1
- *
- * Step 1 = enrichPlaceByGemini = id ASC batch (= 사용자 SSOT = 카테고리 무시, 40 장소/호출)
- * = Gemini 만 줄 수 있는 정보 (summary_ko / editorial_summary / price_eur) + 부수 (name_ko/name_local/address/lat/lng)
- * = dryRun = true = DB 변경 0 = raw 응답만 (= 사용자 검증 후 DB UPDATE 명시)
- * = dryRun = false = upsertPlace() 통과 = 1차 덮어쓰기 (= 헌법 §14 단일 진입점)
- *
- * Adaptive fallback (= 사용자 SSOT) = 40 실패 → 30 → 20 → 10
- */
+/** ⚠️ 수정금지(승인필요) 2026-05-17 = 파리 DB-only 전환 3 단계 표준화 plan §1 */
 
 import { db } from "../../db";
 import { placeSeedRaw } from "@shared/schema";
@@ -71,9 +62,6 @@ export interface EnrichBatchResult {
   };
 }
 
-/**
- * Paris 활성 행 (= archive 제외) = id ASC = batch 만큼 SELECT
- */
 async function selectBatch(cityId: number, batchSize: number, offset: number) {
   if (!db) throw new Error("db unavailable");
   const rows = await db
@@ -149,9 +137,6 @@ ${JSON.stringify(input, null, 2)}
 `;
 }
 
-/**
- * cityId Paris (= 19) 활성 행 = id ASC = batch 만큼 = Gemini 호출 → (dryRun X) upsertPlace
- */
 export async function enrichPlaceByGemini(
   cityId: number,
   opts?: EnrichOpts,
@@ -229,7 +214,6 @@ export async function enrichPlaceByGemini(
           priceEur: priceEur != null ? priceEur : undefined,
           selectionReasonKo: p.summary_ko || undefined,
           shortformKo: p.editorial_summary || undefined,
-          // ⚠️ 2026-06-12 = 도심거리 = 모든 enrich 필수요소 전달 (= 동선 최적화 기본, place-upsert COALESCE 새우선)
           distanceKmFromCenter:
             p.distance_km_from_center != null
               ? p.distance_km_from_center

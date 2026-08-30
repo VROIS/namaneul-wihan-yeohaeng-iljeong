@@ -3,7 +3,6 @@ const { from: copyFrom } = require("pg-copy-streams");
 const fs = require("fs");
 const path = require("path");
 
-// Supabase connection string (set via env)
 const connectionString =
   process.env.SUPABASE_DATABASE_URL ||
   "postgresql://postgres:[YOUR-PASSWORD]@db.wxebceflvuythuodemro.supabase.co:5432/postgres";
@@ -26,7 +25,6 @@ async function importSQL() {
     await client.connect();
     console.log("Connected successfully!");
 
-    // Ensure clean slate inside the same session to avoid leftover objects
     console.log("Dropping known enum types if they exist...");
     await client.query(`
       DROP TYPE IF EXISTS public.data_source CASCADE;
@@ -50,7 +48,6 @@ async function importSQL() {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
 
-      // Handle COPY ... FROM stdin
       if (line.startsWith("COPY ")) {
         await flushBuffer(buffer);
         buffer = [];
@@ -62,7 +59,6 @@ async function importSQL() {
           dataLines.push(lines[i]);
           i++;
         }
-        // i is at "\." terminator
         const copyData = dataLines.join("\n") + "\n";
 
         await new Promise((resolve, reject) => {
@@ -82,7 +78,6 @@ async function importSQL() {
 
     console.log("SQL executed successfully!");
 
-    // Verify by counting tables
     const result = await client.query(`
       SELECT table_name
       FROM information_schema.tables

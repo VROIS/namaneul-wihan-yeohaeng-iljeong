@@ -1,7 +1,6 @@
 import * as dotenv from "dotenv";
 import pg from "pg";
 
-// .env 로드 (프로젝트 루트 기준)
 dotenv.config();
 
 const { Pool } = pg;
@@ -16,7 +15,6 @@ async function addRawDataColumn() {
     process.exit(1);
   }
 
-  // 실제 값 출력은 보안상 생략하거나 일부만 출력
   console.log(
     "Using DATABASE_URL:",
     process.env.DATABASE_URL.substring(0, 20) + "...",
@@ -28,7 +26,6 @@ async function addRawDataColumn() {
   });
 
   try {
-    // 1. 컬럼 존재 여부 확인
     const checkResult = await pool.query(`
       SELECT column_name 
       FROM information_schema.columns 
@@ -40,7 +37,6 @@ async function addRawDataColumn() {
         "✅ [Migration] raw_data 컬럼이 이미 존재합니다. 스킵합니다.",
       );
     } else {
-      // 2. 컬럼 추가 실행
       console.log("➕ [Migration] raw_data 컬럼 추가 실행...");
       await pool.query(`
             ALTER TABLE itineraries 
@@ -49,7 +45,6 @@ async function addRawDataColumn() {
       console.log("✅ [Migration] raw_data 컬럼 추가 완료!");
     }
 
-    // 3. 검증
     const verifyResult = await pool.query(`
       SELECT column_name, data_type 
       FROM information_schema.columns 

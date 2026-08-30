@@ -1,4 +1,3 @@
-// 로그인 화면 = 조립 전용 = 2026-07-15 §0 슬림화 분리(옛 1,056줄 단일파일 → login/ 폴더 완전분리, 순수 이동)
 import React from "react";
 import {
   View,
@@ -25,7 +24,6 @@ import WhatsAppModal from "./components/WhatsAppModal";
 import { styles } from "./styles";
 
 export default function LoginScreen() {
-  // ⚠️ 2026-07-25 = 이 화면(과도기 보관) = 로그인 성공 시 기존대로 Main 리셋. useLogin(onDone) 로 위임(§0 단일경로).
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const login = useLogin({

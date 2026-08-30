@@ -1,4 +1,3 @@
-// 프로필 화면 메인 = 상단 1섹션 고정(Sticky Profile & Credit) + 하단 무한 스크롤
 import React from "react";
 import { View, ScrollView } from "react-native";
 import { Spacing } from "@/constants/theme";

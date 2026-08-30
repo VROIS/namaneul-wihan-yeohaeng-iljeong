@@ -1,5 +1,3 @@
-// 여정 공유(시스템 공유시트) + 캘린더 저장(.ics) = ResultStep footer 신규 버튼 2개 (2026-07-21 신규, §16 서브훅 패턴)
-// useSaveItinerary.ts 회원게이트 패턴 복제(§16 재발명 금지 = 동일 로직 1벌 재사용).
 import { useState } from "react";
 import { Platform, Share } from "react-native";
 import { Itinerary } from "@/types/trip";
@@ -16,24 +14,20 @@ export function useShareCalendar({
 }: {
   itinerary: Itinerary | null;
   currentItineraryId: number | null;
-  // ⚠️ useSaveItinerary.ts 실제 시그니처 = itinerary 없을 때 undefined도 반환(49줄) = 3종 유니언 그대로 수신(§16 재발명 금지 = 남 소유 함수 타입 임의 축소 금지).
   handleSaveItinerary: () => Promise<number | null | undefined>;
   t: (key: string, opts?: any) => string;
 }) {
-  // ⚠️ 2026-07-25 = 로그인 게이트 = 인앱 팝업(requestLogin). navigation prop 제거(§0 결합 제거).
   const { requestLogin, isAuthed } = useMapToggle();
   // 어떤 동작이 진행 중인지 구분(2026-07-22 사장님 실기기 피드백 = 눌린 버튼만 선택색+스피너). null = 대기.
   const [sharingAction, setSharingAction] = useState<
     "share" | "calendar" | null
   >(null);
 
-  // 🆔 저장된 여정 id 확보 = 미저장이면 이 자리에서 자동저장(§16 handleSaveItinerary 재사용). 실패(비로그인·오류) = null.
   const ensureItineraryId = async (): Promise<number | null> => {
     if (currentItineraryId) return currentItineraryId;
     return (await handleSaveItinerary()) ?? null;
   };
 
-  // 🔗 여정 공유 = 저장된 여정 id 확보(미저장이면 자동저장) → /shared/itinerary/{id} 링크 → 시스템 공유시트(카카오톡 포함).
   const handleShareItinerary = async () => {
     if (!itinerary) return;
     if (!ensureLoggedIn(isAuthed, t, requestLogin)) return;
@@ -46,17 +40,13 @@ export function useShareCalendar({
       const url = `${getApiUrl()}/shared/itinerary/${id}`;
 
       if (Platform.OS === "web") {
-        // 🖥️ 2026-07-21 실증 = PC(Windows) navigator.share 는 OS 공유창(메일·근처기기뿐)이라 빈약 →
-        //   모바일웹만 시스템 공유시트, PC 는 클립보드 복사 + 안내가 사용자에게 실제로 유용.
         const isMobileWeb =
           typeof navigator !== "undefined" &&
           /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || "");
         if (isMobileWeb && (navigator as any).share) {
           try {
             await (navigator as any).share({ title: itinerary.title, url });
-          } catch {
-            // 사용자가 공유 취소 = 정상 흐름(에러 아님).
-          }
+          } catch {}
         } else if (
           typeof navigator !== "undefined" &&
           navigator.clipboard?.writeText
@@ -67,7 +57,6 @@ export function useShareCalendar({
           }
         }
       } else {
-        // 📱 네이티브 = Share.share = 카카오톡·문자·클립보드 등 시스템 공유시트(사장님 확정 A안).
         await Share.share(
           Platform.OS === "ios"
             ? { url, message: itinerary.title }
@@ -81,8 +70,6 @@ export function useShareCalendar({
     }
   };
 
-  // 📅 캘린더 저장 (2026-07-22 = OS 분기) = 회원게이트 → 저장 id 확보(미저장이면 자동저장, 공유와 동일 §16) → openCalendar 위임.
-  //   Android = expo-calendar 직접삽입(itinerary 슬롯 → 이벤트, 모달 없음). iOS·웹 = 서버 .ics URL(id 필요). §16 openCalendar 단일 진입.
   const handleSaveCalendar = async () => {
     if (!itinerary) return;
     if (!ensureLoggedIn(isAuthed, t, requestLogin)) return;

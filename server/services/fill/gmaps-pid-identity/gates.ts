@@ -1,5 +1,4 @@
 // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 승인 = §0 700줄 가드 = 폴더 분리(로직 무변경)
-// = gmaps-pid-identity 의 관문 1벌 = 이름 토큰·일치 강도(strong/weak/none), 좌표 관문(2km/150km), 리뷰수 거부·의심 규칙, 쓰기 가능 판정, 행 1건 판정(evaluateRow).
 import type { Page } from "playwright";
 import { readPlacePage, type BusinessStatus } from "./page-reader";
 
@@ -58,8 +57,6 @@ function tokensMatch(a: string, b: string): boolean {
   return i >= TOKEN_PREFIX_MIN;
 }
 // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 지시 = 이름 일치 강도. 실측 시카고 #60631 우리 "Washington Park" ↔ 페이지 "Washington Square Mall"(16.7km) = 공통 토큰 "washington" 1개만으로 이름 관문을 통과해 coord-corrected 로 좌표가 덮인 사고(수동 원복).
-// = strong = 공통 토큰 2개+ / 공통 토큰 ≥ 작은 쪽 토큰 집합의 60%(작은 쪽이 2개+ 일 때만 = 1개짜리는 공통 1개 = 100% 가 되어 사고 재현) / 정규화(소문자·악센트 제거·기호→공백) 이름 한쪽이 다른 쪽을 포함(Louvre ↔ Musée du Louvre).
-// = weak = 그 미만(공통 토큰 1개뿐) / none = 공통 0. 2km 이내 = weak 도 같은 장소(번역 변형) / 2km 초과 = strong 만 coord-corrected.
 export type NameMatch = "strong" | "weak" | "none";
 const STRONG_SHARE_RATIO = 0.6;
 function normName(s: string | null): string {
@@ -167,7 +164,6 @@ export function initResult(row: Row): Result {
   };
 }
 
-// 행 1건 판정 = 현지어 페이지 읽기 → 리뷰수 거부 규칙 → 좌표 관문(150km/2km) → 이름 관문(필요 시 hl=en 재대조) → gate 확정 → 기본 모드는 hl=ko name_ko. 예외는 호출부(entry)가 error:<msg> 로 기록.
 export type GateContext = {
   page: Page;
   lang: string;
@@ -206,7 +202,6 @@ export async function evaluateRow(
   r.rc_source = local.rcSource;
   r.status = local.consentBlocked ? null : local.status;
   // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 지시 = 리뷰수 거부 규칙(서울 169행 4.6→46 오독 재발 방지) = 페이지 RC 가 round(별점×10)/round(별점×100) 과 같음 · 우리 RC≥100 인데 5 미만 · 본문 "(N)" 대체 출처인데 100 미만 = rc_unparsed(rc_page=null, 안 씀).
-  // = 통과했어도 우리 RC≥200 이고 페이지 RC < 우리 RC×0.2 = rc_suspicious(기록만, 안 씀). 단 우리 RC 가 1000 의 배수(가짜 시드 패턴) 면 페이지값 채택.
   {
     const rc = local.reviewCount;
     const rt = local.ratingNum;
@@ -268,7 +263,6 @@ export async function evaluateRow(
   if (comparable)
     r.name_match = nameMatch(row.name_en, ours, local.h1, cityStop);
   let nameOk = !comparable || r.name_match !== "none";
-  // 페이지 좌표 무효(도시 중심 150km 초과) = 거리 판정 자체를 안 함(coordFar=false) = 이름 실패면 name-mismatch, 통과면 page-coord-invalid.
   const coordFar =
     !pageCoordInvalid && r.dist_km != null && r.dist_km > COORD_GATE_KM;
   // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 확정 = hl=en 페이지 = name_en 빈 행(채움값) 또는 현지어 h1 과 안 겹친 행(영어 정식명 재대조 = 번역명 오탐 방지) 또는 약일치 + 2km 초과 행(영어 정식명으로 강일치 재시도)에서만 1장 더.
@@ -312,7 +306,6 @@ export async function evaluateRow(
   }
   r.gate = gate;
   if (!verify && isWritable(r.gate)) {
-    // ko 페이지 = 한글 표기만 채택(외국 장소는 h1 이 현지어 그대로인 경우 다수 = null). --verify 는 생략.
     const ko = await readPlacePage(page, row.pid, "ko", false);
     r.name_ko = ko.h1 && HANGUL_RE.test(ko.h1) ? ko.h1 : null;
   }

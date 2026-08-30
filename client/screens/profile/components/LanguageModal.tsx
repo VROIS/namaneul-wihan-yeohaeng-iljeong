@@ -1,4 +1,3 @@
-// 언어 선택 모달 = ProfileScreen 분리(2026-07-15 §0 슬림화, 순수 이동)
 import React from "react";
 import { View, Text, Pressable, Modal, ScrollView } from "react-native";
 import { Brand } from "@/constants/theme";

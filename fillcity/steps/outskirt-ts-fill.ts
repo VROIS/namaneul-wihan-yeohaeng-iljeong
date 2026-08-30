@@ -1,9 +1,3 @@
-// ⚠️ 영구 컴포넌트 2026-06-08 = 사용자 SSOT = 외곽 식당 town 자동 시스템화 (FILLCITY_PRD §8.1, §19)
-// = Gemini 04 발굴 외곽식당(day_zone='outskirt') 주소에서 town 추출 → top-N town → TS geocode → searchNearby POP → upsertPlace
-// = 입력 = DB(Gemini 발굴) / 좌표 = TS geocode(searchText) / 풀 = searchNearby POPULARITY(카탈로그 #26/#32 표준) / 쓰기 = upsertPlace(§14)
-// = 도시별 수동 config(destinations.ts) 불필요 = 도시명만으로 자동 = 범용.
-// 호출: npx tsx fillcity/steps/outskirt-ts-fill.ts --city-id=37 [--apply] [--top=5] [--radius=8000] [--per=20] [--lang=es]
-//   (--apply 없으면 = DRY = town 추출 + top-N + 비용추정, TS 호출 0)
 import fs from "fs";
 import path from "path";
 import { fileURLToPath, pathToFileURL } from "url";
@@ -40,7 +34,6 @@ if (!cityId) {
   process.exit(1);
 }
 
-// 주소 → town 추출 = 표준 "..., 우편번호 town, 국가" = 국가 직전 세그먼트 - 우편번호 (= 범용, 지명 하드코딩 0)
 function townOf(address: string | null): string | null {
   if (!address) return null;
   const parts = address
@@ -48,12 +41,10 @@ function townOf(address: string | null): string | null {
     .map((s) => s.trim())
     .filter(Boolean);
   if (parts.length < 2) return null;
-  // ⚠️ 우편번호+town 세그먼트 우선 (= "28232 Las Rozas" → "Las Rozas", 위치 무관 = 4세그먼트 주(Madrid) 오인 방지)
   for (const seg of parts) {
     const m = seg.match(/^\d{4,6}\s+(.+)$/);
     if (m && m[1].trim().length >= 2) return m[1].trim();
   }
-  // 폴백 = 국가 직전 세그먼트 - 우편번호
   const town = (parts[parts.length - 2] || "")
     .replace(/^\d[\d\s-]{2,8}\s*/, "")
     .trim();
@@ -85,7 +76,6 @@ function townOf(address: string | null): string | null {
     process.exit(1);
   }
   // ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유 (§19). 외곽식당 보충 = 채움 = 도시 있음 + 행 있음(true).
-  // = 출입증(키이름·도시id·날짜·행있음) 검문 통과해야만 키 발급. 미달 = throw = 외부호출 불가.
   const today = new Date().toISOString().slice(0, 10);
   const { issueApiKey } = await import(
     pathToFileURL(path.join(ROOT, "server/services/shared/issue-api-key.ts"))
@@ -100,7 +90,6 @@ function townOf(address: string | null): string | null {
   const REGION = city.country_code || "ES";
   const countrySuffix = city.country ? `, ${city.country}` : "";
 
-  // 1. 외곽 식당(Gemini 발굴) 주소 → town 추출 + 식당수 집계 (= 한국선호 강도)
   const rows = (
     await c.query(
       `SELECT address FROM place_seed_raw WHERE city_id=$1 AND seed_category='restaurant' AND day_zone='outskirt'`,
@@ -135,7 +124,6 @@ function townOf(address: string | null): string | null {
     return;
   }
 
-  // 2. top town 별 = geocode(중심좌표) → searchNearby POP(20) → upsertPlace
   let inserted = 0,
     updated = 0,
     skipped = 0,
@@ -143,7 +131,6 @@ function townOf(address: string | null): string | null {
     errors = 0;
   for (const [town, n] of topTowns) {
     try {
-      // 2a. geocode = town 중심좌표 (= TS searchText, 카탈로그 표준)
       const geo = await tsSearch({
         apiKey: KEY,
         method: "searchText",
@@ -160,7 +147,6 @@ function townOf(address: string | null): string | null {
         console.log(`  ✗ geocode 실패: ${town}`);
         continue;
       }
-      // 2b. searchNearby POPULARITY (= 검색어 없음 = 순수 인기순 = 카탈로그 #26/#32 표준)
       const pool = await tsSearch({
         apiKey: KEY,
         method: "searchNearby",
@@ -174,7 +160,6 @@ function townOf(address: string | null): string | null {
         circleRadiusM: radiusM,
         maxResults: per,
       });
-      // 2c. upsertPlace (= 7단계 매칭 → Gemini행 백필 or 신규)
       let ins = 0,
         upd = 0,
         skp = 0;
@@ -192,8 +177,6 @@ function townOf(address: string | null): string | null {
           googleMapsUri: p.googleMapsUri,
           googleReviewCount: p.googleReviewCount,
           // ⚠️ 수정금지(승인필요) 2026-08-19 사장님 승인(§19) = priceEur 삭제 = TsPlace.priceEur 필드 자체가
-          //   ts-client.ts 에서 삭제됨(현지통화→EUR 오독 원천차단, §20 가격=Gemini 유일 정답). 신규발굴 식당의
-          //   가격은 이후 Gemini 보강(repair.ts/02-enrich-place)이 채움 = 이 TS전용 발굴단계는 좌표·PID만 담당.
           dayZone: "outskirt",
           phaseTags: ["ts-searchnearby", `outskirt-ts-${today}`],
         });

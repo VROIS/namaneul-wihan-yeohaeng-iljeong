@@ -1,10 +1,4 @@
 // ⚠️ 수정금지(승인필요) 2026-06-02 = ts-discover-pool 발굴 진입점 (= 명소별 TS discovery → 리뷰순 raw)
-// = STANDARD_TS_FIELD_MASK (9필드 Enterprise, validateFieldMask 강제) + includedType=restaurant + circle + languageCode=ko
-// = 과금 = 요청당 (per-request) = 명소당 1콜 = ~20곳 (= reference_ts_batch_discovery 메모리)
-// = 산출물: docs/raw/{cityId}/{YYYY-MM-DD}_12-ts-discover_{zone}{-label}.json (= 날짜앞 표준, raw-filename.ts / DB 안 건드림 = dry)
-// 호출:
-//   npx tsx fillcity/prompts/12-ts-discover-pool/run.ts --city-id=19 [--zone=outskirt] [--per=20]
-// 다음 = post-process.ts (= OPERATIONAL 필터 + PhotoMedia + upsertPlace 5단계 + 07-merge-dups)
 import fs from "fs";
 import path from "path";
 import { fileURLToPath, pathToFileURL } from "url";
@@ -95,8 +89,6 @@ if (category && !CATEGORY_QUERIES[category]) {
   process.exit(1);
 }
 
-// 🗑️ 2026-08-19 = priceTier()·price_eur 진단 삭제(§19) = 아래와 동일 사유(가격=Gemini 유일 정답).
-
 // ⚠️ 수정금지(승인필요) 2026-06-03 = 중심+반경(km) → 강제 사각형(rectangle viewport) = searchText locationRestriction 용 (= 범위 밖 전세계 누수 차단). 사각형은 크기제한 없음(공식문서).
 const rectFromCenter = (lat: number, lng: number, km: number) => {
   const latD = km / 111;
@@ -128,7 +120,6 @@ const rectFromCenter = (lat: number, lng: number, km: number) => {
     )
   ).rows[0];
   // ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유. 발굴(ts-discover-pool) = 도시 있음 + 행 없음(false = 신규 발견).
-  // = 출입증(키이름·도시id·날짜·행없음) 검문 통과해야만 키 발급. 미달 = throw = 외부호출 불가.
   const today = new Date().toISOString().slice(0, 10);
   const { issueApiKey } = await import(
     pathToFileURL(path.join(ROOT, "server/services/shared/issue-api-key.ts"))
@@ -142,8 +133,6 @@ const rectFromCenter = (lat: number, lng: number, km: number) => {
   }
 
   // ⚠️ 수정금지(승인필요) 2026-06-07 = 신규도시 자동화(사용자 SSOT "도시명만 입력") = destinations config 없으면 cities 좌표 폴백
-  //   downtown(6cat 100km 사각형 + 도심식당 10km) = 중심좌표만 필요 = cities 에 있음 (완전신규는 #04 gemini-city-meta 가 먼저 cities 생성)
-  //   outskirt(명소별 원)만 curated 필요 → config 없으면 Gemini 04 로 발굴
   let dests = DISCOVERY_ZONES[cityId]?.[zone];
   if (!dests?.length) {
     if (
@@ -182,7 +171,6 @@ const rectFromCenter = (lat: number, lng: number, km: number) => {
   );
 
   // ⚠️ 수정금지(승인필요) 2026-06-02 = 검색 2종 = text(searchText 관련성·페이지네이션 최대60) | nearby(searchNearby POPULARITY 인기순·최대20·페이지네이션 없음)
-  //   = searchText 페이지네이션은 FieldMask 에 'nextPageToken' 명시 필요 (= SKU 무관 = 무료) / nearby 는 nextPageToken 없음
   const isNearby = method === "nearby";
   const endpoint = isNearby ? "places:searchNearby" : "places:searchText";
   // ⚠️ 수정금지(승인필요) 2026-06-02 = primaryType(Pro=무료, SKU 안 올림) 추가 = 백화점/영화관 등 비식당 잡음 필터용 (= post-process)
@@ -199,7 +187,6 @@ const rectFromCenter = (lat: number, lng: number, km: number) => {
       if (pageToken) await new Promise((rs) => setTimeout(rs, 2000)); // = nextPageToken 활성 대기 (= 재호출 낭비 방지)
       const body: any = isNearby
         ? {
-            // ⚠️ searchNearby = 구글 인기순(POPULARITY) = 검색어 없음 + locationRestriction + 최대 20 (= 사용자 SSOT 2026-06-02)
             includedTypes, // = --included-types (기본 restaurant / 카테고리 모드 = 매핑 타입)
             maxResultCount: Math.min(per, 20),
             rankPreference: "POPULARITY",
@@ -214,11 +201,8 @@ const rectFromCenter = (lat: number, lng: number, km: number) => {
             regionCode: city?.country_code || "FR",
           }
         : {
-            // ⚠️ searchText = 객관적 발굴 = 중립 "restaurant" (= 관련성 정렬 / 한국인 큐레이션은 13 Gemini)
-            //   = price-levels 주면 가격필터 (= Premium = searchNearby엔 없는 기능 = searchText 전용)
             textQuery: catMode ? effQuery : `${d.name} restaurant`,
             ...(catMode ? {} : { includedType: "restaurant" }), // = 카테고리/쿼리 모드 = 타입 강제 X = Google 자율 해석
-            // ⚠️ 2026-06-03 = 카테고리/쿼리 = locationRestriction(강제 사각형, 범위 밖 안 줌) / 식당 = locationBias(원, 선호)
             ...(catMode
               ? {
                   locationRestriction: {
@@ -266,7 +250,6 @@ const rectFromCenter = (lat: number, lng: number, km: number) => {
       page++;
     } while (!isNearby && pageToken && page < maxPages);
 
-    // = place_id 중복 제거 (= 페이지 경계 안전) → RC 내림차순 (= 우리 내부 랭킹)
     const seen = new Set<string>();
     const places = rawPlaces
       .filter((p: any) => {
@@ -284,8 +267,6 @@ const rectFromCenter = (lat: number, lng: number, km: number) => {
         lng: p.location?.longitude,
         review_count: p.userRatingCount ?? null,
         // ⚠️ 수정금지(승인필요) 2026-08-19 사장님 승인(§19) = price_eur/price_start 필드 완전삭제.
-        //   Google priceRange 는 현지통화인데 환산 없이 그대로 읽어 EUR로 오인하던 근본버그
-        //   (서울 청계천 €80,400 실사고, ts-client.ts 와 동일 원인) = 가격은 Gemini만(§20).
         photo_name: p.photos?.[0]?.name || null,
         photo_count: p.photos?.length || 0,
         google_maps_uri: p.googleMapsUri,
@@ -315,7 +296,6 @@ const rectFromCenter = (lat: number, lng: number, km: number) => {
     );
   }
 
-  // ⚠️ 2026-06-15 = 파일명 단일 표준(raw-filename.ts) = {date}_12-ts-discover_{zone}{-label}.json (날짜앞)
   // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = versionedName/rawHash 로 같은 zone 재호출 = _N 순번 보존(손실0)·내용동일=덮어쓰기
   const { rawName, rawHash, versionedName } = await import(
     pathToFileURL(path.join(ROOT, "server/services/shared/raw-filename.ts"))

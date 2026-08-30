@@ -1,6 +1,3 @@
-/**
- * 테스트용 일정 데이터 생성
- */
 require("dotenv").config();
 const { Pool } = require("pg");
 
@@ -14,7 +11,6 @@ async function createTestItinerary() {
   try {
     console.log("🔗 Supabase 연결 성공");
 
-    // 기존 테스트 일정 확인
     const existing = await client.query("SELECT id FROM itineraries LIMIT 1");
 
     if (existing.rows.length > 0) {
@@ -23,13 +19,11 @@ async function createTestItinerary() {
       return;
     }
 
-    // cities 테이블에서 파리 ID 가져오기
     const cityResult = await client.query(
       "SELECT id FROM cities WHERE name = 'Paris' OR name = '파리' LIMIT 1",
     );
     const cityId = cityResult.rows[0]?.id || 1;
 
-    // 테스트 일정 생성
     const insertResult = await client.query(
       `
       INSERT INTO itineraries (

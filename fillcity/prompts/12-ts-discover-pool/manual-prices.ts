@@ -1,23 +1,15 @@
 // ⚠️ 수정금지(승인필요) 2026-06-02 = 사용자 직접 조사 가격 (= Google 가격 없는 식당의 1인당 EUR = endPrice 상한 = 현지 실망 방지)
-// = post-process 가 norm(name) 으로 매칭 = price_eur 가 null(unknown) 인 행만 채움 (= Google 가격은 안 건드림)
-// = key = TS displayName(ko) 기준 (= dry-run 목록 그대로). 값 = 코스 최고가(상한) 기준.
 export const MANUAL_PRICE_EUR: Record<string, number> = {
-  // 베르사유
   "Blé Noir": 25, // 리뷰 1위(4,616) = €25 (Reasonable)
   "Le Pincemin": 65, // 탑셰프 우승 = 점심28/35, 저녁 테이스팅 65 → 상한 65 (Premium)
   "Le Bar à Crêpes": 25, // 미슐랭 출신 크레페 = 세트 1인 18~25 → 25 (Reasonable)
-  // 디즈니랜드
   "Auberge de Cendrillon": 100, // 신데렐라 캐릭터 다이닝 고정 €100 (Premium)
-  // 오베르(고흐)
   "Auberge Ravoux": 39, // 고흐 마지막 거처 = 시그니처 3코스 €39 (Reasonable)
   "Le Passage Auvers - Le Van Gogh": 35, // 고흐 생가 인근 로컬 = 1인 25~35 → 35 (Reasonable)
-  // 지베르니(모네)
   "Le Jardin des Plumes": 180, // 미슐랭 1스타 = 3코스 98 / 7코스 180 → 상한 180 (Premium)
   "호텔 레스토랑 라 무사르디에르": 42, // La Musardiere = 시그니처 코스 €42 (Reasonable)
-  // 퐁텐블로
   "L'Axel Restaurant": 185, // 미슐랭 1스타 일식퓨전 = 풀 테이스팅 185 (Luxury)
   "Crêperie Hirondelle-Fontainebleau": 26, // 성 앞 대중 크레페 평점4.6 = 1인 18~26 → 26 (Reasonable)
-  // 샹티이
   "Auberge du Jeu de Paume": 195, // 5성 릴레에샤토 La Table du Connétable = 시그니처 195 (Luxury)
   "Le Jardin d'Hiver": 75, // 위 5성 호텔 캐주얼 비스트로 = 올데이 3코스 €75 (Premium)
 };

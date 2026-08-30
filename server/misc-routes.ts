@@ -1,5 +1,3 @@
-// ⚠️ 2026-07-15 = routes.ts(1,049줄) 500줄 가드 초과 슬림화 = 순수 이동(로직 변경 없음) §0
-//   담긴 라우트 = 지도 HTML 생성기 + 헬스체크
 import type { Express } from "express";
 
 const BRAND_PRIMARY = "#6366F1";
@@ -63,7 +61,6 @@ init();
 }
 
 export function registerMiscRoutes(app: Express): void {
-  // Map HTML generator
   app.post("/api/map/html", (req, res) => {
     const { places } = req.body;
     const apiKey =
@@ -88,7 +85,6 @@ export function registerMiscRoutes(app: Express): void {
     res.json({ html });
   });
 
-  // Health check
   app.get("/api/health", (req, res) => {
     res.json({
       status: "ok",

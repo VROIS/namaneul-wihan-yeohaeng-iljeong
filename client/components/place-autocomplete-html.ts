@@ -1,7 +1,3 @@
-// 2026-06-29 = 구글 공식 장소 자동완성 위젯(PlaceAutocompleteElement) WebView HTML 템플릿
-// = 자체 입력창+드롭다운 재발명 폐기(§16·§19) → 구글 공식 위젯 100% 활용 (사장님 SSOT)
-// = 입력창+드롭다운+검색+선택+세션토큰 = 구글이 통째 제공. 선택 시 fetchFields → postMessage(name·address·coords)
-// = 웹 = parent.postMessage / 네이티브 = ReactNativeWebView.postMessage (ItineraryMap 패턴 동일)
 // ⚠️ 수정금지(승인필요) 2026-08-15 사장님 승인 = init 실패 에러문구 다국어(같은 i18n 싱글턴 패턴 §16).
 import i18n from "@/lib/i18n";
 
@@ -14,9 +10,7 @@ export type PlaceAutoSelection = {
 
 type Opts = {
   apiKey: string;
-  // 🏨 2026-06-29 = 미지정 기본 = 호텔+주소 전부 검색(숙소검색 정답). 특정 타입만 원할 때만 지정.
   includedPrimaryTypes?: string;
-  // 🏨 2026-06-29 사용자 SSOT(구글맵 실증 정답) = 위젯 입력칸에 도시명 prefill(예 "Paris ") → 사용자가 뒤에 숙소명 입력 = "Paris 노보텔" = 구글맵에 도시명 치는 것과 동일 = 그 도시만. (좌표·locationRestriction 불필요)
   cityPrefix?: string;
   placeholder?: string;
   language?: string;
@@ -39,7 +33,6 @@ export const PLACE_AUTOCOMPLETE_HTML = (opts: Opts): string => {
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { width: 100%; background: transparent; font-family: -apple-system, "Segoe UI", "Malgun Gothic", sans-serif; }
 #wrap { width: 100%; padding: 0; }
-/* 구글 위젯(gmp-place-autocomplete) = 자체 입력창+드롭다운 제공. 폭 100% 강제 + 우리 카드 톤 맞춤. */
 gmp-place-autocomplete { width: 100%; display: block; }
 #err { color: #c00; font-size: 12px; padding: 6px 2px; display: none; }
 </style>
@@ -59,8 +52,6 @@ gmp-place-autocomplete { width: 100%; display: block; }
     }
   }
 
-  // 🏨 2026-06-29 = WebView 동적높이 (= 빈공간 결함 해소): 입력칸일 땐 작게, 드롭다운 펼치면 크게.
-  //   입력 포커스 중 = 드롭다운 공간 확보(300px), 비포커스 = 입력칸 높이만큼. RN이 resize 받아 WebView 높이 조절.
   var DROPDOWN_SPACE = 300;
   var focused = false;
   function reportHeight() {
@@ -69,11 +60,9 @@ gmp-place-autocomplete { width: 100%; display: block; }
     var h = focused ? Math.max(base, DROPDOWN_SPACE) : base;
     postRN({ type: "resize", height: h });
   }
-  // 포커스 = 드롭다운 뜰 수 있으니 공간 확보 / blur = 입력칸만 (지연 = 항목 탭 먼저 처리)
   document.addEventListener("focusin", function() { focused = true; reportHeight(); });
   document.addEventListener("focusout", function() { setTimeout(function() { focused = false; reportHeight(); }, 200); });
 
-  // 구글 Maps JS SDK 동적 로드 (= places 라이브러리)
   (g=>{var h,a,k,p="The Google Maps JavaScript API",c="google",l="importLibrary",q="__ib__",m=document,b=window;b=b[c]||(b[c]={});var d=b.maps||(b.maps={}),r=new Set,e=new URLSearchParams,u=()=>h||(h=new Promise(async(f,n)=>{await (a=m.createElement("script"));e.set("libraries",[...r]+"");for(k in g)e.set(k.replace(/[A-Z]/g,t=>"_"+t[0].toLowerCase()),g[k]);e.set("callback",c+".maps."+q);a.src="https://maps.googleapis.com/maps/api/js?"+e;d[q]=f;a.onerror=()=>h=n(Error(p+" could not load."));a.nonce=m.querySelector("script[nonce]")?.nonce||"";m.head.append(a)}));d[l]?console.warn(p+" only loads once. Ignoring:",g):d[l]=(f,...n)=>r.add(f)&&u().then(()=>d[l](f,...n))})({key:"${apiKey}",v:"weekly",language:"${language}"});
 
   async function init() {
@@ -88,9 +77,7 @@ gmp-place-autocomplete { width: 100%; display: block; }
       ${cityPrefix ? `try { ac.value = ${JSON.stringify(cityPrefix)}; } catch(e) {}` : ""}
       document.getElementById("wrap").insertBefore(ac, document.getElementById("err"));
 
-      // 선택 이벤트 = gmp-select (신규 위젯 표준)
       ac.addEventListener("gmp-select", async function(ev) {
-        // 선택 → RN 호출측이 이 WebView(위젯)를 언마운트 = 입력창 사라져 키보드 자동 닫힘. (옛 blur 강제닫기 폐기 = 언마운트가 처리 = §19)
         try {
           const pred = ev.placePrediction;
           const place = pred.toPlace();
@@ -108,7 +95,6 @@ gmp-place-autocomplete { width: 100%; display: block; }
         }
       });
 
-      // 위젯 추가 후 초기 높이 보고 + 내부 변화 감시(ResizeObserver = 위젯/드롭다운 레이아웃 변동)
       reportHeight();
       try {
         var ro = new ResizeObserver(function() { reportHeight(); });
@@ -124,7 +110,6 @@ gmp-place-autocomplete { width: 100%; display: block; }
     }
   }
 
-  // init() = 내부에서 importLibrary('places') 직접 await (= 중복 호출 제거, simplify). init try/catch가 로드실패도 처리.
   init();
 })();
 </script>

@@ -1,4 +1,3 @@
-// 프로필 헤더 섹션 (슬림 초슬림 1섹션 컴팩트 디자인)
 import React from "react";
 import { View, Text, Pressable } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -14,9 +13,6 @@ export default function ProfileHeader({ profile }: { profile: ProfileApi }) {
     profile;
   const { requestLogin } = useMapToggle();
 
-  // ⚠️ 보유 크레딧 = 서버(GET /api/credits/balance)가 정본 = 2026-07-29 §9.
-  //   옛 `(user as any)?.credits ?? 150` 폐기 §19 = 클라 사용자정보엔 credits 가 없어 **항상 가짜 150** 이 보였음.
-  //   아직 못 받았거나 미로그인 = null → "-" 로 표시(가짜 숫자 금지).
   const creditText = credits === null ? "-" : `${credits} C`;
 
   return (

@@ -1,7 +1,4 @@
 // ⚠️ 수정금지(승인필요) 2026-08-07 사장님 SSOT = 문의 목록(상태 필터칩 + 카드) **1벌** = 전문가 답변함·사용자 문의함 공용.
-//   사장님 지시 = "사용자에서 열리는 부분도 톤앤매너와 구성이 거의 같아야 함" → 두 화면이 이 컴포넌트를 그대로 쓴다.
-//   옛것 완전삭제 §19: ExpertInboxView(전문가 전용 목록) + ExpertSheet 의 나의예약/내문의함 2섹션 + renderUserCard.
-//   정렬 = 예약(booking) 먼저, 그다음 검증 문의 (2026-07-24 "예약 = 비즈니스 우선" SSOT 를 섹션 대신 정렬로 유지).
 import React from "react";
 import { View, Text, Pressable, ScrollView } from "react-native";
 
@@ -33,7 +30,6 @@ export default function InquiryListView({
   theme: any;
   t: (key: string, opts?: any) => string;
   emptyText: string;
-  /** 사용자 문의함만 true = 안읽은 답변 점 표시(전문가 답변함은 뜻이 반대라 끔, §22 2026-08-07) */
   showUnread?: boolean;
   onOpenInquiry: (q: Inquiry) => void;
   onDeleteInquiry: (id: string) => void;

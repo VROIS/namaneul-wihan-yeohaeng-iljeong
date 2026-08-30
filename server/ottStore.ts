@@ -1,11 +1,7 @@
 // ⚠️ 수정금지(승인필요): 2026-03-22 One-Time Token (OTT) Store
-// 앱 OAuth 세션 교환용 — Auth0/Keycloak 표준 패턴
-// 외부 브라우저(Safari/Chrome)와 WebView 간 쿠키 미공유 문제 해결
-// 토큰은 1회용 + 60초 만료
 
 import crypto from "crypto";
 
-// 메모리 저장소: { token → { userId, expiresAt } }
 const tokens = new Map<string, { userId: number; expiresAt: number }>();
 
 export const ottStore = {
@@ -29,4 +25,3 @@ export const ottStore = {
     return entry.userId;
   },
 };
-// 토큰은 consume() 시 즉시 삭제 + 60초 만료 체크 → 별도 cleanup 불필요

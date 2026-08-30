@@ -1,9 +1,3 @@
-/**
- * DB 정리 완료 검증
- * - 모든 테이블에서 깨진 한글 없음 확인
- * - 중복 없음 확인
- */
-
 const { Client } = require("pg");
 require("dotenv").config();
 
@@ -24,7 +18,6 @@ async function verifyDB() {
     console.log("DB 정리 완료 검증");
     console.log("=".repeat(70));
 
-    // 주요 테이블 검증
     const checks = [
       { table: "cities", textFields: ["name", "country"] },
       { table: "places", textFields: ["name", "description"] },
@@ -59,9 +52,7 @@ async function verifyDB() {
               hasBrokenEncoding(r[field]),
             );
             brokenCount += broken.length;
-          } catch (e) {
-            // field doesn't exist
-          }
+          } catch (e) {}
         }
 
         const status =
@@ -74,19 +65,16 @@ async function verifyDB() {
       }
     }
 
-    // 샘플 데이터 출력
     console.log("\n" + "=".repeat(70));
     console.log("샘플 데이터 확인");
     console.log("=".repeat(70));
 
-    // cities 샘플
     const cities = await client.query(
       "SELECT name, country FROM cities LIMIT 10",
     );
     console.log("\n[cities 샘플]");
     cities.rows.forEach((r) => console.log("  " + r.name + ", " + r.country));
 
-    // data_collection_schedule 샘플
     const schedule = await client.query(
       "SELECT task_name, description FROM data_collection_schedule LIMIT 6",
     );
@@ -95,7 +83,6 @@ async function verifyDB() {
       console.log("  " + r.task_name + ": " + r.description),
     );
 
-    // instagram_hashtags 샘플
     const hashtags = await client.query(
       "SELECT hashtag FROM instagram_hashtags LIMIT 10",
     );

@@ -1,55 +1,24 @@
-/**
- * DB 인코딩 및 데이터 무결성 유틸리티
- *
- * 🎯 목적:
- * - 모든 DB 저장 데이터의 한글 무결성 보장
- * - 깨진 인코딩 감지 및 방지
- * - 데이터 저장 전 검증
- *
- * 📌 사용법:
- * import { validateKorean, sanitizeForDB } from './utils/db-encoding';
- *
- * // 저장 전 검증
- * const cleanData = sanitizeForDB(rawData);
- */
-
-/**
- * 깨진 UTF-8 인코딩 패턴 감지
- */
 export function hasBrokenEncoding(str: string | null | undefined): boolean {
   if (!str) return false;
-  // UTF-8 깨짐 패턴: Ã, Â, ì, í, ë, â, ê, î 등
   return /[ÃÂìíëâêîÐ]/.test(str) || /Ã/.test(str) || /Â/.test(str);
 }
 
-/**
- * 유효한 한글 문자열인지 확인
- */
 export function isValidKorean(str: string | null | undefined): boolean {
   if (!str) return true; // null/undefined는 유효
 
-  // 깨진 인코딩이 있으면 무효
   if (hasBrokenEncoding(str)) return false;
 
-  // 한글이 포함되어 있다면 정상 한글인지 확인
   const hasKorean = /[가-힣ㄱ-ㅎㅏ-ㅣ]/.test(str);
   if (hasKorean) {
-    // 정상 한글 유니코드 범위 내에 있는지 확인
     return true;
   }
 
   return true; // 한글이 없는 문자열도 유효
 }
 
-/**
- * DB 저장을 위한 문자열 정화
- * - 깨진 인코딩 제거
- * - trim 처리
- */
 export function sanitizeForDB(str: string | null | undefined): string | null {
   if (str === null || str === undefined) return null;
 
-  // 깨진 인코딩이 있으면 null 반환 (저장하지 않음)
   if (hasBrokenEncoding(str)) {
     console.warn(
       "[DB-Encoding] 깨진 인코딩 감지, 데이터 제외:",
@@ -61,9 +30,6 @@ export function sanitizeForDB(str: string | null | undefined): string | null {
   return str.trim();
 }
 
-/**
- * 객체 내 모든 문자열 필드 정화
- */
 export function sanitizeObjectForDB<T extends Record<string, any>>(obj: T): T {
   const sanitized = { ...obj };
 
@@ -82,10 +48,6 @@ export function sanitizeObjectForDB<T extends Record<string, any>>(obj: T): T {
   return sanitized;
 }
 
-/**
- * 데이터 저장 전 검증
- * @throws Error if data contains broken encoding
- */
 export function validateBeforeSave(
   data: Record<string, any>,
   tableName: string,
@@ -99,23 +61,15 @@ export function validateBeforeSave(
   }
 }
 
-/**
- * DB 클라이언트 UTF-8 설정
- */
 export async function setClientEncoding(client: any): Promise<void> {
   try {
     await client.query("SET client_encoding TO 'UTF8'");
     await client.query("SET NAMES 'UTF8'");
   } catch (e) {
-    // NAMES는 일부 클라이언트에서 지원 안할 수 있음
     console.warn("[DB-Encoding] SET NAMES 실패, client_encoding만 설정됨");
   }
 }
 
-/**
- * 안전한 한글 데이터 변환
- * - 영문 → 한글 매핑 (필요시)
- */
 export const CITY_NAME_MAP: Record<string, string> = {
   Seoul: "서울",
   Tokyo: "도쿄",
@@ -186,16 +140,10 @@ export const COUNTRY_NAME_MAP: Record<string, string> = {
   USA: "미국",
 };
 
-/**
- * 영문 도시명 → 한글 도시명 변환
- */
 export function toKoreanCityName(englishName: string): string {
   return CITY_NAME_MAP[englishName] || englishName;
 }
 
-/**
- * 영문 국가명 → 한글 국가명 변환
- */
 export function toKoreanCountryName(englishName: string): string {
   return COUNTRY_NAME_MAP[englishName] || englishName;
 }

@@ -1,12 +1,8 @@
 // ⚠️ 수정금지(승인필요): 가이드 미니앱 공용 SVG 아이콘 = 운영앱(index.html·index.js) SVG 경로 그대로
 // = 2026-07-20 사장님 실기기 SSOT: iOS Expo Go 에서 Ionicons(글꼴 계열)가 렌더 안 됨(터치만 됨).
-//   5단 버튼(FooterButtons)만 보였던 이유 = react-native-svg 직접 렌더. → 모든 버튼 아이콘을 이 방식으로 통일.
-// = stroke 형(outline)과 fill 형(solid)을 운영 원본과 동일하게 구분.
 import React from 'react';
 import Svg, { Path } from 'react-native-svg';
 
-// 운영 원본 SVG path (1글자 불변): index.html backBtn·textToggleBtn·saveBtn·locationInfo·detailMicBtn,
-// index.js closeWindowBtn·play-icon·pause-icon.
 const STROKE_ICONS = {
   close: ['M6 18L18 6M6 6l12 12'],
   back: ['M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18'],
@@ -17,7 +13,6 @@ const STROKE_ICONS = {
   mic: [
     'M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z',
   ],
-  // 저장 성공 체크마크 = 운영 index.js:3120 그대로(stroke-width 3). 1.5초 후 bookmark 복원.
   check: ['M5 13l4 4L19 7'],
 };
 

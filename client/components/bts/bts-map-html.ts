@@ -1,7 +1,4 @@
 // ⚠️ 수정금지(승인필요) — 2026-05-06 BTS Screen 4 카트→지도 WebView HTML 템플릿
-// QA `docs/qa/index.html` Google Maps 섹션 클론 (lucide 마커 SVG 그대로 = 사용자 명시)
-// 마커 클릭 → window.ReactNativeWebView.postMessage 로 RN 측에 통보 (= 인앱 ScrollView 스크롤)
-// venue (= bts_venue) = 2 중 상태: idle (별 아이콘만) / active (별 + "BTS" 라벨, selectedIds.length >= 1 시)
 // ⚠️ 수정금지(승인필요) 2026-08-15 사장님 승인 = 로딩 문구 다국어(ITINERARY_MAP_HTML과 같은 패턴 §16).
 import i18n from "@/lib/i18n";
 
@@ -33,7 +30,6 @@ body { background: #f8f7fb; font-family: -apple-system, "Segoe UI", "Malgun Goth
 <div id="map"></div>
 <script>
 (function() {
-  // QA HTML 클론 — 색상 + lucide SVG 패스
   const COLORS = { bts_venue:'#9333ea', heritage:'#92400e', hotspot:'#eab308', attraction:'#f97316', adventure:'#dc2626', healing:'#16a34a', shopping:'#ec4899', restaurant:'#0891b2' };
   const LUCIDE = {
     bts_venue: '<path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/>',
@@ -53,7 +49,6 @@ body { background: #f8f7fb; font-family: -apple-system, "Segoe UI", "Malgun Goth
   const markers = {};   // id -> google.maps.Marker (일반 마커만)
   let placesById = {};  // id -> place object
 
-  // venue idle/active 마커 SVG. active = "BTS" 라벨 inside (= 사용자 명시: 첫 카드 떼면 활성)
   function makeIcon(cat, isVenue, isActive) {
     const color = COLORS[cat] || '#666';
     const path = LUCIDE[cat] || '<circle cx="12" cy="12" r="6"/>';
@@ -63,7 +58,6 @@ body { background: #f8f7fb; font-family: -apple-system, "Segoe UI", "Malgun Goth
     const sc = iconSize / 24;
     let label = '';
     if (isVenue && isActive) {
-      // "BTS" 라벨 = 별 아이콘 아래 작은 흰 박스
       label = '<g transform="translate(' + (size / 2) + ',' + (size - 8) + ')"><rect x="-13" y="-7" width="26" height="13" rx="3" fill="white" stroke="' + color + '" stroke-width="1.5"/><text x="0" y="3" text-anchor="middle" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="' + color + '">BTS</text></g>';
     }
     const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="' + size + '" height="' + size + '" viewBox="0 0 ' + size + ' ' + size + '">' +
@@ -79,18 +73,15 @@ body { background: #f8f7fb; font-family: -apple-system, "Segoe UI", "Malgun Goth
   }
 
   function postRN(payload) {
-    // RN WebView (native) → ReactNativeWebView.postMessage
     if (window.ReactNativeWebView && window.ReactNativeWebView.postMessage) {
       window.ReactNativeWebView.postMessage(JSON.stringify(payload));
       return;
     }
-    // 웹 iframe → parent.postMessage (= 사용자 명시: web 도 인앱, 모달 X)
     if (window.parent && window.parent !== window) {
       try { window.parent.postMessage(JSON.stringify(payload), '*'); } catch (e) {}
     }
   }
 
-  // venue 마커 (= 항상 표시) — idle: 별만 / active: 별 + BTS 라벨
   function renderVenue() {
     if (!map || !venueData || venueData.latitude == null || venueData.longitude == null) return;
     if (venueMarker) venueMarker.setMap(null);
@@ -119,7 +110,6 @@ body { background: #f8f7fb; font-family: -apple-system, "Segoe UI", "Malgun Goth
     map.fitBounds(b, { top: 60, right: 60, bottom: 60, left: 60 });
   }
 
-  // RN → WebView: places + venue + selectedIds 동기화
   window.syncPlaces = function(payload) {
     placesById = {};
     for (const p of payload.places || []) placesById[p.id] = p;
@@ -128,22 +118,18 @@ body { background: #f8f7fb; font-family: -apple-system, "Segoe UI", "Malgun Goth
     syncMarkers(payload.selectedIds || []);
   };
 
-  // RN → WebView: selectedIds 변경 = 마커 추가/제거 + venue active 토글
   window.syncMarkers = function(selectedIds) {
     const want = new Set(selectedIds || []);
-    // 제거
     for (const id of Object.keys(markers)) {
       if (!want.has(Number(id))) {
         markers[id].setMap(null);
         delete markers[id];
       }
     }
-    // 추가
     for (const id of selectedIds || []) {
       if (markers[id]) continue;
       const p = placesById[id];
       if (!p || p.latitude == null || p.longitude == null) continue;
-      // venue 는 이미 venueMarker 로 처리 = 일반 마커 X
       if (venueData && p.id === venueData.id) continue;
       const m = new google.maps.Marker({
         position: { lat: Number(p.latitude), lng: Number(p.longitude) },
@@ -154,7 +140,6 @@ body { background: #f8f7fb; font-family: -apple-system, "Segoe UI", "Malgun Goth
       m.addListener('click', () => postRN({ type: 'marker', id: p.id }));
       markers[id] = m;
     }
-    // venue 2 중 상태 = 첫 카드 떼면 active (= "BTS" 라벨 활성)
     const nextActive = (selectedIds || []).length >= 1;
     if (nextActive !== venueActive) {
       venueActive = nextActive;
@@ -186,7 +171,6 @@ body { background: #f8f7fb; font-family: -apple-system, "Segoe UI", "Malgun Goth
     postRN({ type: 'ready' });
   };
 
-  // Google Maps script 로드
   const s = document.createElement('script');
   s.src = 'https://maps.googleapis.com/maps/api/js?key=${apiKey}&callback=initBTSMap&v=quarterly';
   s.async = true;

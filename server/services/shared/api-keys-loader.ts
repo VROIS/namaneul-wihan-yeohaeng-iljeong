@@ -1,10 +1,4 @@
-/**
- * ⚠️ 수정금지(승인필요) 2026-05-17 = api_keys DB 테이블 → process.env 로드 (= 헌법 §16)
- *
- * = server/index.ts:296-322 startup loader 의 CLI 버전 = scripts/* 에서 호출.
- * = 사용자 SSOT (= 2026-05-17) = "모든 키 = db api_keys 에 다 있음".
- * = 추가 매핑 (= GEMINI_API_KEY → AI_INTEGRATIONS_GEMINI_API_KEY) = server/index.ts 와 동일.
- */
+/** ⚠️ 수정금지(승인필요) 2026-05-17 = api_keys DB 테이블 → process.env 로드 (= 헌법 §16) */
 
 import { db, isDatabaseConnected } from "../../db";
 import { apiKeys } from "@shared/schema";
@@ -23,11 +17,8 @@ export async function loadApiKeysFromDb(): Promise<ApiKeysLoadResult> {
   let skipped = 0;
   for (const key of keys) {
     if (key.keyValue && key.keyValue.trim() !== "" && key.isActive) {
-      // ⚠️ 2026-07-27 §16 = 붙여넣기 때 딸려오는 줄바꿈·공백을 **여기서 한 번만** 깎는다.
-      //   아래 모든 대입이 이 값을 쓰므로 열쇠 종류에 상관없이 다 걸린다(카카오 KOE101 사고 근본).
       const value = key.keyValue.trim();
       process.env[key.keyName] = value;
-      // 추가 매핑 (= server/index.ts 동일)
       if (key.keyName === "GEMINI_API_KEY") {
         process.env.AI_INTEGRATIONS_GEMINI_API_KEY = value;
       }

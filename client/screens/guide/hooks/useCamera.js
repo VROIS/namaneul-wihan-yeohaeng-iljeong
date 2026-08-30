@@ -1,6 +1,4 @@
 // ⚠️ 수정금지(승인필요): 카메라 훅 — 프레임 캡처 + AI 전송
-// reference-LiveCameraView.kt의 ImageAnalysis 패턴을 RN으로 구현
-// preferredSize=500, STRATEGY_KEEP_ONLY_LATEST (최신 프레임만 유지)
 import { useRef, useCallback } from 'react';
 import { useStore } from '../state/store';
 import { CONFIG } from '../config/constants';
@@ -27,7 +25,6 @@ export function useCamera() {
   }, [setPhotoUri]);
 
   // ⚠️ 수정금지(승인필요): 라이브 모드 — 주기적 프레임 캡처 (1-3fps)
-  // reference-LiveCameraView.kt: ImageAnalysis + STRATEGY_KEEP_ONLY_LATEST
   const startFrameCapture = useCallback((onFrame) => {
     if (frameIntervalRef.current) return; // 이미 실행 중
 
@@ -42,7 +39,6 @@ export function useCamera() {
         });
         onFrame?.(photo);
       } catch {
-        // 프레임 드롭 무시 (STRATEGY_KEEP_ONLY_LATEST와 동일)
       }
     }, intervalMs);
   }, []);

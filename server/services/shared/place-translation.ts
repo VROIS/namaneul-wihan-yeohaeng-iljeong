@@ -1,12 +1,6 @@
 // ⚠️ 수정금지(승인필요) 2026-08-13 = 다국어 노출용 번역 캐시 조회/생성 단일 진입점(§16, §2.3 Phase B).
-// = place_seed_raw.summary_ko/editorial_summary(한국어 원문, 컬럼명 불변 — A1 보류 §19 정합)를
-//   요청 언어로 번역해 place_translations 에 캐시. 이후 같은 (place_id, language) 조합은 DB만 읽는다.
 // = 번역 엔진 = geminiClient.ts 재사용(신규 연동 0, raw 자동저장 §18 동승, 사장님 승인 2026-08-13).
-//   여정 단위 배치 1호출(장소 N개를 JSON 배열로 한 번에) = 장소당 호출 아님.
-// = 크레딧 차감 대상 아님(운영 원가, 사장님 승인 2026-08-13) — 호출자가 별도로 chargeFeature 부르지 않는다.
-// = 실패(파싱 오류·API 오류) = 한국어 원문 그대로 반환(화면 공백 방지, 폴백 분기 아니라 열화지 처리).
 // ⚠️ 수정금지(승인필요) 2026-08-27 사장님 승인 = 이 보호파일에 (1) 캐시 읽기 1벌 readCachedPlaceTranslations() 분리
-//   (2) 여정 응답에 캐시만 이어붙이는 applyItineraryTranslations() 추가. 제미니 번역 호출은 (2) 에서 절대 없음(사장님 = 끔).
 
 import { and, eq, inArray } from "drizzle-orm";
 import { db } from "../../db";
@@ -31,7 +25,6 @@ interface TranslatedItem {
   editorial: string;
 }
 
-/** Gemini 배치 번역 1회 호출. 응답 실패·파싱 오류 = 빈 배열(호출자가 한국어 원문으로 채움). */
 async function translateBatch(
   places: PlaceForTranslation[],
   language: string,
@@ -57,10 +50,7 @@ ${JSON.stringify(
   return result.data?.translations || [];
 }
 
-/**
- * ⚠️ 수정금지(승인필요) 2026-08-27 사장님 승인 = place_translations (place_id, language) 캐시 읽기 1벌(§16).
- * 순수 DB 읽기(외부호출 0). 없는 id 는 Map 에 안 실림. db 없음 = 빈 Map.
- */
+/** ⚠️ 수정금지(승인필요) 2026-08-27 사장님 승인 = place_translations (place_id, language) 캐시 읽기 1벌(§16). */
 export async function readCachedPlaceTranslations(
   ids: number[],
   language: string,
@@ -85,18 +75,8 @@ export async function readCachedPlaceTranslations(
   return result;
 }
 
-/**
- * ⚠️ 수정금지(승인필요) 2026-08-27 사장님 확정 = 여정 응답(days[].places[]) 슬롯 해설 언어 = 완전 다국어화 전 중간 단계 = 3단 사슬.
- * 슬롯의 필드값(editorialSummary·summaryKo)마다 값이 비어있지 않은 첫 단계를 쓴다:
- *   ① 요청 언어(language) 캐시(place_translations) 값
- *   ② 영어(en) 캐시 값 (language==="en" 이면 이 단계 없음)
- *   ③ 슬롯에 이미 있는 한국어 원문 그대로 유지(editorialSummary/summaryKo 안 건드림)
- * language==="ko" = 한국어가 기본·원문이라 여정 그대로 반환.
- * DB 읽기 = 최대 2회 = 요청 언어 1회 + (language!=="en" 일 때만) ①에서 두 필드가 다 안 채워진 id 만 en 1회. readCachedPlaceTranslations 재사용.
- * 여기서 제미니 번역 호출 없음(사장님 2026-08-27 = 끔).
- * 슬롯의 PSR id = slot.id 가 "db-<psrId>" 꼴일 때만(DB-only/ag4 슬롯). 그 외 슬롯은 건너뜀.
- * 입력 객체는 안 바꾸고(저장 오염 방지) days/places 새 배열 + 슬롯 얕은 복사로 돌려준다.
- */
+/** ⚠️ 수정금지(승인필요) 2026-08-27 사장님 확정 = 여정 응답(days[].places[]) 슬롯 해설 언어 = 완전 다국어화 전 중간 단계 = 3단 사슬. */
+/** 여기서 제미니 번역 호출 없음(사장님 2026-08-27 = 끔). */
 export async function applyItineraryTranslations<T extends Record<string, any>>(
   itinerary: T,
   language: string,
@@ -162,10 +142,6 @@ export async function applyItineraryTranslations<T extends Record<string, any>>(
   };
 }
 
-/**
- * 여정 단위 배치 조회(§16 = 이 함수 1벌만, D 에서 N+1 호출 금지 용도).
- * language='ko' = 캐시 조회 없이 원문 그대로(스키마 주석 정합 = ko 는 캐시 대상 아님).
- */
 export async function getPlaceTranslationsForPlaces(
   places: PlaceForTranslation[],
   language: string,
@@ -213,8 +189,6 @@ export async function getPlaceTranslationsForPlaces(
 
     for (const t of translated) {
       result.set(t.id, { summary: t.summary, editorialSummary: t.editorial });
-      // 캐시 저장 = best-effort(건별 격리). 여기서 예외가 나도 이미 번역된 값은 이번 응답엔 그대로 쓰고
-      // (result 는 위에서 이미 채움), 캐시만 이번엔 안 남을 뿐 = 다음 요청이 다시 번역해 채운다.
       try {
         await db
           .insert(placeTranslations)
@@ -233,7 +207,6 @@ export async function getPlaceTranslationsForPlaces(
       }
     }
 
-    // 응답에 안 실렸거나 호출 자체가 실패한 항목 = 한국어 원문으로 열화(화면 공백 방지)
     for (const p of missing) {
       if (!result.has(p.id)) {
         result.set(p.id, {
@@ -247,7 +220,6 @@ export async function getPlaceTranslationsForPlaces(
   return result;
 }
 
-/** 단일 장소 조회. 배치 함수에 위임(§16 = 로직 1벌). */
 export async function getPlaceTranslation(
   place: PlaceForTranslation,
   language: string,

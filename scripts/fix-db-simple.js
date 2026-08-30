@@ -1,9 +1,3 @@
-/**
- * DB 정리 스크립트 (단순 버전)
- * 1. 중복 제거
- * 2. 영문으로 통일 (깨진 한글 제거)
- */
-
 const { Client } = require("pg");
 require("dotenv").config();
 
@@ -14,7 +8,6 @@ async function fixDB() {
     await client.connect();
     console.log("DB connected\n");
 
-    // 1. 중복 제거
     console.log("=== Step 1: Remove Duplicates ===\n");
 
     const dupQueries = [
@@ -45,17 +38,12 @@ async function fixDB() {
       console.log(table + ": " + result.rowCount + " duplicates removed");
     }
 
-    // 2. 깨진 한글 데이터 영문으로 수정
     console.log("\n=== Step 2: Fix Broken Korean (to English) ===\n");
 
-    // 깨진 데이터 찾아서 영문으로 교체
     const fixQueries = [
-      // 특수문자가 포함된 도시명 감지 및 수정 (ASCII가 아닌 문자 포함)
       "UPDATE cities SET name = 'Seoul', country = 'South Korea' WHERE id = (SELECT MIN(id) FROM cities WHERE name ~ '[^a-zA-Z0-9 ,.-]' AND name NOT SIMILAR TO '%[가-힣]%' LIMIT 1)",
     ];
 
-    // 더 간단한 방법: 깨진 데이터 삭제 후 정상 데이터만 유지
-    // 깨진 한글은 특정 패턴을 가짐: Ã, ì, í, ë 등
     const brokenPattern = await client.query(`
       SELECT id, name, country FROM cities 
       WHERE name LIKE '%Ã%' OR name LIKE '%ì%' OR name LIKE '%í%' OR name LIKE '%ë%'
@@ -67,7 +55,6 @@ async function fixDB() {
     );
 
     if (brokenPattern.rows.length > 0) {
-      // 깨진 데이터를 영문으로 업데이트
       const cityMapping = {
         1: { name: "Seoul", country: "South Korea" },
         2: { name: "Tokyo", country: "Japan" },
@@ -115,7 +102,6 @@ async function fixDB() {
       }
     }
 
-    // 3. 결과 확인
     console.log("\n=== Step 3: Verify Results ===\n");
 
     const citySample = await client.query(

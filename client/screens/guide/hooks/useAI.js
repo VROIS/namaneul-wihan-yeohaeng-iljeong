@@ -1,6 +1,4 @@
 // ⚠️ 수정금지(승인필요): AI 통합 훅 — Gemma 4 온디바이스 ↔ 서버 API 자동 전환
-// Gemma 4 (디폴트) → 실패 시 → 기존 서버 API 폴백 (Replit 경유, 키 노출 없음)
-// 사용자 언어(store.language) → 해당 페르소나 자동 적용 → 음성도 해당 언어
 import { useCallback, useEffect, useRef } from 'react';
 import * as Speech from 'expo-speech';
 import { useStore } from '../state/store';
@@ -47,7 +45,6 @@ export function useAI() {
   }, [language]);
 
   // ⚠️ 수정금지(승인필요): AI에 텍스트 전송 + 응답 + TTS
-  // Gemma 4 → 실패 시 서버 API 폴백 (키는 Replit에만)
   const sendText = useCallback(async (text, { speakResult = true, type = 'text' } = {}) => {
     addMessage({ role: 'user', text });
     let fullResponse = '';
@@ -62,7 +59,6 @@ export function useAI() {
         throw new Error('FALLBACK_TO_SERVER');
       }
     } catch {
-      // 서버 API 폴백 (기존 앱과 동일 — Replit 서버 경유)
       try {
         setOnlineFallback(true);
         const result = await analyzeImageViaServer(null, text, language);
@@ -79,7 +75,6 @@ export function useAI() {
   }, [addMessage, setOnlineFallback, speak, language]);
 
   // ⚠️ 수정금지(승인필요): 이미지 분석 + 음성 응답
-  // Gemma 4 → 실패 시 서버 API (/api/analyze) 폴백
   const analyzeImage = useCallback(async (imageBase64, { speakResult = true, prompt } = {}) => {
     addMessage({ role: 'user', text: '[이미지 분석 중...]' });
     let fullResponse = '';
@@ -94,7 +89,6 @@ export function useAI() {
         throw new Error('FALLBACK_TO_SERVER');
       }
     } catch {
-      // 서버 API 폴백 — 기존 앱 processImage 동일 경로
       try {
         setOnlineFallback(true);
         const result = await analyzeImageViaServer(imageBase64, systemPrompt, language);

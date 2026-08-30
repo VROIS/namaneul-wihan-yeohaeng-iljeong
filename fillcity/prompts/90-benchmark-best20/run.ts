@@ -1,12 +1,4 @@
 // ⚠️ 수정금지(승인필요) 2026-08-24 사장님 승인 = 90-benchmark-best20 실행 진입점
-// = 도시 완성 검수 벤치마크: 베스트20(랜드마크10+식당10) 1콜 → raw 저장 → 창고(PSR) 대조 성적표 (DB 쓰기 0)
-// = 설정·구조 = 01-discover-6cats 와 동일(시드발굴 표준 = 사장님 지정: 안 잘리고 JSON 응답이 입증된 표준)
-//
-// 호출:
-//   npx tsx fillcity/prompts/90-benchmark-best20/run.ts --city-id=1 [--dry]
-//   --dry = 치환된 프롬프트 전문만 출력(외부호출 0)
-//
-// 산출물 = docs/raw/{city_id}/{YYYY-MM-DD}_90-benchmark-best20.json (+ 콘솔 성적표)
 import fs from "fs";
 import path from "path";
 import { fileURLToPath, pathToFileURL } from "url";
@@ -15,7 +7,6 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "../../..");
 process.chdir(ROOT);
 
-// .env 로드 (= 01-discover-6cats 동일 패턴)
 const envRaw = fs.readFileSync(".env", "utf-8").replace(/^﻿/, "");
 for (const line of envRaw.split(/\r?\n/)) {
   const m = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/);
@@ -40,7 +31,6 @@ if (!cityId) {
 const dryRun = argv["dry"] === "true";
 
 (async () => {
-  // 1. 도시 정보 조회
   const pg = await import("pg");
   const mkClient = () =>
     new pg.default.Client({
@@ -60,7 +50,6 @@ const dryRun = argv["dry"] === "true";
     process.exit(1);
   }
 
-  // 2. prompt 치환 (= 벤치마크 = 검수 = 행 확인 아님 = 발굴과 같은 행=없음 모드)
   const today = new Date().toISOString().slice(0, 10);
   const apiPass = `[API-PASS] 도시=${city.name_en}(${cityId}) / 행=없음(발굴) / 날짜=${today}`;
   const promptTpl = fs.readFileSync(
@@ -89,7 +78,6 @@ const dryRun = argv["dry"] === "true";
     process.exit(0);
   }
 
-  // 3. Gemini key (= 출입증 관문, 01-discover 동일)
   const { issueApiKey } = await import(
     pathToFileURL(path.join(ROOT, "server/services/shared/issue-api-key.ts"))
       .href
@@ -106,7 +94,6 @@ const dryRun = argv["dry"] === "true";
     process.exit(1);
   }
 
-  // 4. Gemini 호출 (= 01-discover 표준: grounding ON / mime 없음 / thinking 0 / 420초)
   const t0 = Date.now();
   const resp = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${GEMINI_KEY}`,
@@ -158,7 +145,6 @@ const dryRun = argv["dry"] === "true";
     process.exit(1);
   }
 
-  // 6. raw 저장 (= 01-discover 동일: raw-filename 버전순번, 내용동일=덮어쓰기/다르면 _N)
   //    = parsed(펼쳐 쓴 응답 = 사람 눈 검수) + raw_text(원본 그대로 = 대조용) 2형 동시 저장 (§18 pretty 원칙)
   const outDir = path.join(ROOT, "docs", "raw", String(cityId));
   fs.mkdirSync(outDir, { recursive: true });
@@ -203,8 +189,6 @@ const dryRun = argv["dry"] === "true";
   );
   console.log(`✓ 산출물 raw 저장 = ${outPath}`);
 
-  // 7. 창고(PSR) 대조 성적표 (= 읽기 전용 = DB 쓰기 0)
-  //   서빙 자격 = status='active' + PID 있음 + RC>0 + 반경 100km (2026-08-24 서빙 게이트와 동일 기준)
   const items: any[] = [
     ...(parsed.results?.landmarks || []),
     ...(parsed.results?.restaurants || []),

@@ -1,4 +1,3 @@
-// P0: 배포본 Neon DB → Supabase 데이터 이전
 const { Client } = require("pg");
 
 const PROD_URL =
@@ -37,7 +36,6 @@ async function run() {
   await src.connect();
   await dst.connect();
 
-  // 1. users (65명 → nubi 27명과 병합)
   await migrate(
     src,
     dst,
@@ -85,7 +83,6 @@ async function run() {
     },
   );
 
-  // 2. guides (207건)
   await migrate(
     src,
     dst,
@@ -123,7 +120,6 @@ async function run() {
     },
   );
 
-  // 3. shared_html_pages (15건)
   await migrate(
     src,
     dst,
@@ -161,7 +157,6 @@ async function run() {
     },
   );
 
-  // 4. credit_transactions (121건)
   await migrate(
     src,
     dst,
@@ -186,7 +181,6 @@ async function run() {
     },
   );
 
-  // 5. api_logs (271건)
   await migrate(
     src,
     dst,
@@ -213,7 +207,6 @@ async function run() {
     },
   );
 
-  // 6. notifications (33건)
   await migrate(
     src,
     dst,
@@ -240,7 +233,6 @@ async function run() {
     },
   );
 
-  // 7. prompts (18건)
   await migrate(
     src,
     dst,
@@ -266,7 +258,6 @@ async function run() {
     },
   );
 
-  // 8. user_activity_logs (1544건)
   await migrate(
     src,
     dst,
@@ -293,7 +284,6 @@ async function run() {
     },
   );
 
-  // 9. push_subscriptions (2건)
   await migrate(
     src,
     dst,
@@ -318,7 +308,6 @@ async function run() {
     },
   );
 
-  // 검증
   const verify = await dst.query(`
     SELECT 'users' as t, count(*) as c FROM users
     UNION ALL SELECT 'guides', count(*) FROM guides

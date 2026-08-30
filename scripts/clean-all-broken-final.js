@@ -1,8 +1,3 @@
-/**
- * 모든 깨진 데이터 최종 정리
- * - description 필드 포함 전체 정리
- */
-
 const { Client } = require("pg");
 require("dotenv").config();
 
@@ -17,13 +12,11 @@ async function cleanAll() {
     console.log("모든 깨진 데이터 최종 정리");
     console.log("=".repeat(70));
 
-    // 깨진 인코딩 패턴
     const brokenPattern = `
       LIKE '%Ã%' OR LIKE '%ì%' OR LIKE '%í%' OR LIKE '%ë%' 
       OR LIKE '%â%' OR LIKE '%ê%' OR LIKE '%î%' OR LIKE '%Â%'
     `;
 
-    // 1. naver_blog_posts - 깨진 description 삭제
     console.log("\n[1] naver_blog_posts");
     const naver1 = await client.query(`
       DELETE FROM naver_blog_posts 
@@ -31,13 +24,11 @@ async function cleanAll() {
     `);
     console.log("  깨진 description: " + naver1.rowCount + "개 삭제");
 
-    // 중복 삭제
     await client.query(`
       DELETE FROM naver_blog_posts 
       WHERE id NOT IN (SELECT MIN(id) FROM naver_blog_posts GROUP BY post_url)
     `);
 
-    // 2. youtube_videos - 깨진 데이터 삭제
     console.log("\n[2] youtube_videos");
     const yt1 = await client.query(`
       DELETE FROM youtube_videos 
@@ -46,7 +37,6 @@ async function cleanAll() {
     `);
     console.log("  깨진 행: " + yt1.rowCount + "개 삭제");
 
-    // 3. tripadvisor_data - 깨진 데이터 삭제
     console.log("\n[3] tripadvisor_data");
     const trip1 = await client.query(`
       DELETE FROM tripadvisor_data 
@@ -55,7 +45,6 @@ async function cleanAll() {
     `);
     console.log("  깨진 행: " + trip1.rowCount + "개 삭제");
 
-    // 4. youtube_place_mentions - 깨진 데이터 삭제
     console.log("\n[4] youtube_place_mentions");
     const ytm1 = await client.query(`
       DELETE FROM youtube_place_mentions 
@@ -65,7 +54,6 @@ async function cleanAll() {
     `);
     console.log("  깨진 행: " + ytm1.rowCount + "개 삭제");
 
-    // 5. place_prices - 깨진 데이터 삭제
     console.log("\n[5] place_prices");
     const pp1 = await client.query(`
       DELETE FROM place_prices 
@@ -73,7 +61,6 @@ async function cleanAll() {
     `);
     console.log("  깨진 행: " + pp1.rowCount + "개 삭제");
 
-    // 6. gemini_web_search_cache - 깨진 데이터 삭제
     console.log("\n[6] gemini_web_search_cache");
     const gw1 = await client.query(`
       DELETE FROM gemini_web_search_cache 
@@ -81,7 +68,6 @@ async function cleanAll() {
     `);
     console.log("  깨진 행: " + gw1.rowCount + "개 삭제");
 
-    // 7. data_collection_schedule - 정상 한글로 업데이트
     console.log("\n[7] data_collection_schedule - 한글 복원");
     const schedules = [
       ["youtube_sync", "YouTube 채널 및 비디오 동기화"],
@@ -100,7 +86,6 @@ async function cleanAll() {
     }
     console.log("  6개 스케줄 한글 복원 완료");
 
-    // 최종 현황
     console.log("\n" + "=".repeat(70));
     console.log("최종 테이블 현황");
     console.log("=".repeat(70));
@@ -131,9 +116,7 @@ async function cleanAll() {
       try {
         const cnt = await client.query(`SELECT COUNT(*) as c FROM "${table}"`);
         console.log(`${table}: ${cnt.rows[0].c}행`);
-      } catch (e) {
-        // table doesn't exist
-      }
+      } catch (e) {}
     }
 
     console.log("\n" + "=".repeat(70));

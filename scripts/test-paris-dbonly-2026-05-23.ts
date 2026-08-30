@@ -1,7 +1,3 @@
-// ⚠️ 2026-05-23 = Paris DB-only 검증 (= 비용 €0 = ready 도시)
-// ⚠️ 2026-06-13 입증확장 = 식당 노출 버그 입증 = 예산 3종(Eco/Reason/Premium) × 3일 생성 →
-//   나온 식당이 PSR 내 RC 순위 몇 위인지(전체 + 가격대구간 내) 출력 + 여정 식당 scene 제시.
-//   = 사장님 입증: "현재는 전체 식당풀 인접픽 → 랭킹밖 부실식당 노출" 사실 측정. DB 쓰기 0.
 import fs from "fs";
 import pg from "pg";
 
@@ -28,7 +24,6 @@ async function main() {
     if (!process.env[r.key_name]) process.env[r.key_name] = r.key_value;
   }
 
-  // PSR 파리 식당 = RC DESC 순위 사전 적재 (= 나온 식당이 몇 위인지 대조용)
   const rest = (
     await c.query(`
     SELECT id, name_en, name_local, price_eur::float8 AS price, google_review_count AS rc,

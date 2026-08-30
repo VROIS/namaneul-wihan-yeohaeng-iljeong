@@ -1,4 +1,3 @@
-// 날짜·시간 픽커 UI(웹 모달 + 네이티브 픽커) = TripPlannerScreen 분리(2026-07-15 §0 슬림화, 순수 이동)
 import React from "react";
 import {
   View,

@@ -1,4 +1,3 @@
-// AG3용 enrichment 파이프라인(_enrichmentPipeline) = itinerary-generator 분리(2026-07-15 §0 슬림화, 순수 이동)
 import type { TravelPace, TripFormData, PlaceResult } from "./types";
 import { RANK_FALLBACK, NON_FOOD_MAX_RANK } from "./types";
 import {
@@ -9,10 +8,6 @@ import {
 import { optimizeDayRoute } from "./route-optimizer";
 import { distributePlacesWithUserTime } from "./slot-distributor";
 
-/**
- * ===== AG3용 enrichment 파이프라인 내보내기 =====
- * 오케스트레이터에서 기존 enrichment 함수들을 호출하기 위한 래퍼
- */
 export const _enrichmentPipeline = {
   async runFullEnrichment(
     placesArr: PlaceResult[],
@@ -45,8 +40,6 @@ export const _enrichmentPipeline = {
     const { daySlotsConfig, travelPace, requiredPlaceCount } = skeleton;
 
     // ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = 점수 시스템 완전 폐기
-    // = PSR.rank 단일 (= ag2-DB 가 카테고리/tier 별 RC 정렬 = 이미 SSOT)
-    // = 옛 calculateFinalScore + calculateDynamicWeights + VIBE_WEIGHT_MATRIX + detectDataGrade = 모두 폐기
     console.log(
       `[AG3] PSR.rank 단일 SSOT (= 옛 점수 시스템 폐기) | 바이브: ${vibes.join(",")}`,
     );
@@ -71,7 +64,6 @@ export const _enrichmentPipeline = {
       );
     });
 
-    // 슬롯 분배
     console.log(
       `[AG3] 슬롯 분배 시작: ${placesArr.length}곳 → ${daySlotsConfig.length}일 (pace: ${travelPace})`,
     );
@@ -91,7 +83,6 @@ export const _enrichmentPipeline = {
       console.error(
         `[AG3] ❌ 슬롯 분배 결과 0개! placesArr: ${placesArr.length}곳, daySlotsConfig: ${JSON.stringify(daySlotsConfig)}`,
       );
-      // 비상 조치: 식당 태그 관계없이 모든 장소를 균등 분배
       console.log(`[AG3] 🚨 비상 분배 실행...`);
       let emergencySlotIdx = 0;
       for (const dayConfig of daySlotsConfig) {
@@ -123,7 +114,6 @@ export const _enrichmentPipeline = {
       console.log(`[AG3] 🚨 비상 분배 결과: ${schedule.length}개`);
     }
 
-    // 동선 최적화
     const dayCount = daySlotsConfig.length;
     for (let d = 1; d <= dayCount; d++) {
       const daySlots = schedule.filter((s) => s.day === d);
@@ -149,7 +139,6 @@ export const _enrichmentPipeline = {
       }
     }
 
-    // 날씨/위기 데이터
     const realityCheck = await getRealityCheckForCity(formData.destination);
 
     return { scoredPlaces: placesArr, schedule, realityCheck };

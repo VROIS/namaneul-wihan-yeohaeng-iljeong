@@ -1,8 +1,4 @@
 // ⚠️ 사장님 SSOT 2026-07-14 = 배경(여정)을 보면서 쓰는 드래그 스냅 바텀시트 = 오버레이가 배경 가리는 결함 해결.
-//   리서치 결론(reference_snap_sheet_reanimated4_not_gorhom): @gorhom/bottom-sheet 는 reanimated4 충돌 = 금지 →
-//   이미 있는 react-native-reanimated@4 + react-native-gesture-handler@2 로 직접 구현(웹 지원 확인됨. worklet 은 웹에서 일반 JS 로 실행).
-//   스냅 2단계: full(~85% = 작성/답변) ↔ peek(하단에 살짝 = 뒤 여정 전체 보임). 아래로 드래그→peek, 위로 드래그/헤더바 탭→full, 맨아래 스와이프/X=완전닫힘.
-//   ⚠️ peek 상태 = 배경(여정) 터치 가능해야 함 = dim 은 full 일 때만 진하게, peek 이면 투명+터치통과(pointerEvents).
 import React, { useEffect } from "react";
 import {
   View,
@@ -37,9 +33,7 @@ interface SnapSheetProps {
   title: string;
   children: React.ReactNode;
   // ⚠️ 2026-08-07 사장님 SSOT = 제목 자리를 대신 채우는 요소(전문가 답변함 = 본인 프로필 사진).
-  //   "이 탭을 여는 사람은 뭐하는 탭인지 이미 안다" = 글자 제목 불필요 → 넘기면 title 대신 이것만 그린다.
   headerLeft?: React.ReactNode;
-  // full 높이 비율(0~1). 기본 0.9. peek 는 하단 고정 높이(px)만 보이게.
   fullRatio?: number;
   peekHeight?: number; // peek 상태에서 화면에 보이는 시트 높이(px). 기본 90.
 }
@@ -60,7 +54,6 @@ export default function SnapSheet({
   const { t } = useTranslation();
 
   // ⚠️ 사장님 SSOT 2026-07-14 = 시트 상단(top) = translateY 위치. 시트는 그 지점부터 화면 하단까지 = 스냅마다 시트 높이가 달라짐 = 본문 ScrollView(flex:1)가 그 높이에 맞춰 스크롤됨(half 에서 넘치면 스크롤 O).
-  //   translateY(=시트 top 의 화면 상단 대비 offset): TOP_MARGIN=full(거의 맨 위) / HALF_Y=half(화면 ~50%) / PEEK_Y=peek(하단에 살짝) / winH=완전 숨김(닫힘).
   const TOP_MARGIN = Math.round(winH * (1 - fullRatio)); // full 일 때 시트 top(상단 여백). fullRatio 0.9 → 상단 10% 는 배경.
   const FULL_Y = TOP_MARGIN;
   const HALF_Y = Math.round(winH * 0.5); // 화면 절반부터 시트 = 상단 절반은 배경 여정(지도 등).
@@ -71,7 +64,6 @@ export default function SnapSheet({
   const translateY = useSharedValue(CLOSED_Y);
   const startY = useSharedValue(0);
 
-  // visible 토글 = half(중간)로 열기 / 닫기(완전 숨김) 애니메이션. 첫 노출 = half(사장님 SSOT = 너무 안 올라옴).
   useEffect(() => {
     translateY.value = withSpring(visible ? HALF_Y : CLOSED_Y, SPRING);
   }, [visible]);
@@ -79,7 +71,6 @@ export default function SnapSheet({
   const snapTo = (target: number) => {
     "worklet";
     if (target >= CLOSED_Y - 1) {
-      // 완전 닫힘 = 부모 onClose(state false) → useEffect 가 CLOSED_Y 로. 여기선 애니메이션만 주고 JS 콜백.
       translateY.value = withTiming(CLOSED_Y, { duration: 180 }, () => {
         runOnJS(onClose)();
       });
@@ -93,7 +84,6 @@ export default function SnapSheet({
       startY.value = translateY.value;
     })
     .onUpdate((e) => {
-      // 위(음수)로 끌면 full(0)까지, 아래로 끌면 CLOSED_Y 까지. 범위 clamp.
       const next = startY.value + e.translationY;
       translateY.value = Math.max(FULL_Y, Math.min(CLOSED_Y, next));
     })
@@ -106,13 +96,11 @@ export default function SnapSheet({
         return;
       } // 빠르게 위로 = 한 단계 위(half or full).
       if (v > 900) {
-        // 빠르게 아래로: peek 아래면 닫힘, half~peek 면 peek, half 위면 half.
         if (y > PEEK_Y - 10) snapTo(CLOSED_Y);
         else if (y > HALF_Y) snapTo(PEEK_Y);
         else snapTo(HALF_Y);
         return;
       }
-      // 정지 = 최근접 스냅.
       const points = [FULL_Y, HALF_Y, PEEK_Y, CLOSED_Y];
       let best = points[0];
       for (const p of points)
@@ -120,7 +108,6 @@ export default function SnapSheet({
       snapTo(best);
     });
 
-  // ⚠️ 시트 = top(애니메이션) ~ 화면 하단(bottom:0) = 높이가 스냅마다 달라짐 = 본문 ScrollView 가 그 높이에 맞춰 스크롤. translateY = 시트 top 위치.
   const sheetStyle = useAnimatedStyle(() => ({
     top: translateY.value,
   }));
@@ -136,7 +123,6 @@ export default function SnapSheet({
     return { opacity: o };
   });
 
-  // pointerEvents = full 근처(half 위쪽 절반)일 때만 dim 이 배경 터치 막음. half 이하 = 통과(배경 여정 지도·카드 조작).
   const [dimTouchable, setDimTouchable] = React.useState(false);
   useAnimatedReaction(
     () => translateY.value,

@@ -1,34 +1,22 @@
-/**
- * BTS WORLD TOUR 'ARIRANG' 전용 테마
- * DESIGN.md 기준: 아리랑 레드 + 보라해 퍼플 + 한국 유산
- * 공식 포스터: 레드 온 화이트, 3 원형 엠블럼 (ㅇㄹㄹ)
- */
-
-// === 아리랑 주색상 (공식 포스터 기반) ===
 export const ArirangColors = {
-  // 주색상 — 아리랑 레드
   red: "#C73E2D",
   redDeep: "#9B2B1F",
   redLight: "#E85D4A",
   redWash: "rgba(199, 62, 45, 0.08)",
 
-  // 보조색 — 보라해 퍼플 (아미 상징)
   purple: "#6C2DC7",
   purpleSoft: "#9B59B6",
   lavender: "#D8B4FE",
 
-  // 강조색
   taegeukBlue: "#0047A0", // 한국 유산 포인트
   armyGold: "#D4AF37", // 인증 뱃지, 프리미엄
   heritageBlack: "#1A1A1A", // 로고, 제목
 
-  // 기능색
   success: "#22C55E",
   warning: "#F59E0B",
   error: "#EF4444",
 } as const;
 
-// === 밝은모드 / 어두운모드 ===
 export const BTSThemeColors = {
   light: {
     background: "#FAF8F5",
@@ -63,7 +51,6 @@ export const BTSThemeColors = {
 // ⚠️ 수정금지(승인필요) — BTS 미니앱 직접 참조 색상 (BTSColors.neonPurple 형태)
 export const BTSColors = {
   ...BTSThemeColors,
-  // 미니앱 공통 색상
   neonPurple: "#A855F7",
   deepViolet: "#1E1040",
   spaceBlack: "#05050A",
@@ -94,23 +81,19 @@ export const BTSDirectColors = {
   danger: "#EF4444",
 };
 
-// === 타이포그래피 ===
 export const BTSTypography = {
-  // 투어 제목 (Noto Serif KR — 한국 전통)
   tourTitle: {
     fontFamily: "NotoSerifKR-Bold",
     fontSize: 28,
     lineHeight: 36,
     letterSpacing: -0.3,
   },
-  // 디스플레이 숫자 (Playfair Display — 격조)
   display: {
     fontFamily: "PlayfairDisplay-Bold",
     fontSize: 32,
     lineHeight: 40,
     letterSpacing: -0.5,
   },
-  // UI 텍스트 (Pretendard — 깔끔한 산세리프)
   h1: {
     fontFamily: "Pretendard-Bold",
     fontSize: 24,
@@ -144,7 +127,6 @@ export const BTSTypography = {
   },
 } as const;
 
-// === 여백 (8px 기본 단위) ===
 export const BTSSpacing = {
   xs: 4,
   sm: 8,
@@ -154,7 +136,6 @@ export const BTSSpacing = {
   "2xl": 48,
 } as const;
 
-// === 모서리 둥글기 ===
 export const BTSBorderRadius = {
   sm: 8,
   md: 12,
@@ -163,7 +144,6 @@ export const BTSBorderRadius = {
   pill: 9999,
 } as const;
 
-// === 그림자 ===
 export const BTSShadows = {
   card: {
     shadowColor: "#000",
@@ -195,7 +175,6 @@ export const BTSShadows = {
   },
 } as const;
 
-// === 컴포넌트 크기 ===
 export const BTSSizes = {
   buttonHeight: 52,
   buttonRadius: 14,
@@ -207,7 +186,6 @@ export const BTSSizes = {
   touchMin: 44, // 애플 HIG 최소 터치 영역
 } as const;
 
-// === 멤버별 바이브 색상 ===
 export const MemberVibeColors: Record<string, string> = {
   rm: "#0D7377", // 딥 틸 — 문화/예술
   v: "#C74B7A", // 로즈 — 로맨틱
@@ -229,14 +207,12 @@ export const CharacterGradients: Record<string, readonly [string, string]> = {
   chiller: ["#64748B", "#475569"] as const,
 };
 
-// === 공연 정보 카드 그래디언트 ===
 export const ConcertGradient = {
   colors: [ArirangColors.redDeep, ArirangColors.red] as const,
   start: { x: 0, y: 0 },
   end: { x: 1, y: 1 },
 } as const;
 
-// === 랜딩 화면 비율 ===
 export const LandingLayout = {
   heroRatio: 0.45, // 상단 45%
   inputRatio: 0.55, // 하단 55%

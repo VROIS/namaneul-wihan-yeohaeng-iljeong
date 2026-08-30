@@ -1,8 +1,4 @@
 // ⚠️ 수정금지(승인필요) 2026-08-07 사장님 SSOT = 문의 카드 **1벌**(전문가 답변함 · 사용자 문의함 공용).
-//   근본: 같은 카드가 ExpertSheet(renderUserCard) 와 ExpertInboxView 에 2벌로 갈려 있었다(§0 위반) →
-//   사장님 지시 "사용자에서 열리는 부분도 톤앤매너와 구성이 거의 같아야 함" = 두 벌 완전삭제 후 이 파일 1벌 §19.
-//   레이아웃(사장님 확정 3줄) = ①여정명 + 규모 + 예약배지 ②문의 내용(가장 크게) ③상태·날짜 + 삭제(⋯).
-//   상태 배지는 **필터가 '전체'일 때만** 표시 = 위 필터칩과 같은 말을 반복하지 않음(중복 제거).
 import React from "react";
 import { View, Text, Pressable } from "react-native";
 
@@ -24,10 +20,7 @@ export default function InquiryCard({
 }: {
   q: Inquiry;
   isSelected: boolean;
-  /** 필터가 '전체'일 때만 true = 상태 배지 표시(특정 상태로 거른 목록엔 중복이라 숨김) */
   showStatus: boolean;
-  /** ⚠️ 사용자 목록에서만 true. 안읽음 점 = "내가 받은 답변을 아직 안 읽음" = 사용자 기준 신호라
-   *  전문가 답변함에 그리면 **이미 답변을 끝낸 건**에 점이 붙는 정반대 표시가 된다(§22 판단검증 2026-08-07). */
   showUnread: boolean;
   theme: any;
   t: (key: string, opts?: any) => string;
@@ -38,7 +31,6 @@ export default function InquiryCard({
   const dest = q.itineraryData?.destination || t("expert.inquiry");
   const dayCount = q.itineraryData?.dayCount ?? 0;
   const totalPlaces = q.itineraryData?.totalPlaces ?? 0;
-  // 도착한 답변을 아직 안 읽음 = 왼쪽 위 점(사용자 목록에서만 = showUnread)
   const unread = showUnread && q.status === "answered" && !q.isReadByUser;
   const when = (q.answeredAt || q.createdAt || "").slice(5, 10); // MM-DD
 
@@ -93,7 +85,6 @@ export default function InquiryCard({
         </Text>
         {dayCount > 0 ? (
           // ⚠️ 수정금지(승인필요) 2026-08-14 사장님 승인 = i18n(§22 판단검증 적발) = ExpertInquiryDetailScreen.tsx
-          //   와 동일 패턴(§16 재사용) = 숫자는 그대로 두고 "일 · N개 장소" 부분만 t()로 번역.
           <Text style={{ fontSize: 12, color: theme.textTertiary }}>
             {dayCount}
             {t("expert.daysPlaces", { places: totalPlaces })}

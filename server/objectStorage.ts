@@ -1,7 +1,3 @@
-// FILEPATH: server/objectStorage.ts
-// App Storage (Object Storage) integration for Replit
-// Referenced from blueprint:javascript_object_storage
-
 import { Storage, File } from "@google-cloud/storage";
 import { Response } from "express";
 import { randomUUID } from "crypto";
@@ -15,7 +11,6 @@ import {
 
 const REPLIT_SIDECAR_ENDPOINT = "http://127.0.0.1:1106";
 
-// The object storage client is used to interact with the object storage service.
 export const objectStorageClient = new Storage({
   credentials: {
     audience: "replit",
@@ -42,11 +37,9 @@ export class ObjectNotFoundError extends Error {
   }
 }
 
-// The object storage service is used to interact with the object storage service.
 export class ObjectStorageService {
   constructor() {}
 
-  // Gets the public object search paths.
   getPublicObjectSearchPaths(): string[] {
     const pathsStr = process.env.PUBLIC_OBJECT_SEARCH_PATHS || "";
     const paths = Array.from(
@@ -66,7 +59,6 @@ export class ObjectStorageService {
     return paths;
   }
 
-  // Gets the private object directory.
   getPrivateObjectDir(): string {
     const dir = process.env.PRIVATE_OBJECT_DIR || "";
     if (!dir) {
@@ -78,17 +70,14 @@ export class ObjectStorageService {
     return dir;
   }
 
-  // Search for a public object from the search paths.
   async searchPublicObject(filePath: string): Promise<File | null> {
     for (const searchPath of this.getPublicObjectSearchPaths()) {
       const fullPath = `${searchPath}/${filePath}`;
 
-      // Full path format: /<bucket_name>/<object_name>
       const { bucketName, objectName } = parseObjectPath(fullPath);
       const bucket = objectStorageClient.bucket(bucketName);
       const file = bucket.file(objectName);
 
-      // Check if file exists
       const [exists] = await file.exists();
       if (exists) {
         return file;
@@ -98,15 +87,11 @@ export class ObjectStorageService {
     return null;
   }
 
-  // Downloads an object to the response.
   async downloadObject(file: File, res: Response, cacheTtlSec: number = 3600) {
     try {
-      // Get file metadata
       const [metadata] = await file.getMetadata();
-      // Get the ACL policy for the object.
       const aclPolicy = await getObjectAclPolicy(file);
       const isPublic = aclPolicy?.visibility === "public";
-      // Set appropriate headers
       res.set({
         "Content-Type": metadata.contentType || "application/octet-stream",
         "Content-Length": metadata.size,
@@ -115,7 +100,6 @@ export class ObjectStorageService {
         }, max-age=${cacheTtlSec}`,
       });
 
-      // Stream the file to the response
       const stream = file.createReadStream();
 
       stream.on("error", (err: Error) => {
@@ -134,7 +118,6 @@ export class ObjectStorageService {
     }
   }
 
-  // Gets the upload URL for an object entity.
   async getObjectEntityUploadURL(): Promise<string> {
     const privateObjectDir = this.getPrivateObjectDir();
     if (!privateObjectDir) {
@@ -149,7 +132,6 @@ export class ObjectStorageService {
 
     const { bucketName, objectName } = parseObjectPath(fullPath);
 
-    // Sign URL for PUT method with TTL
     return signObjectURL({
       bucketName,
       objectName,
@@ -158,7 +140,6 @@ export class ObjectStorageService {
     });
   }
 
-  // Gets the object entity file from the object path.
   async getObjectEntityFile(objectPath: string): Promise<File> {
     if (!objectPath.startsWith("/objects/")) {
       throw new ObjectNotFoundError();
@@ -190,7 +171,6 @@ export class ObjectStorageService {
       return rawPath;
     }
 
-    // Extract the path from the URL by removing query parameters and domain
     const url = new URL(rawPath);
     const rawObjectPath = url.pathname;
 
@@ -203,12 +183,10 @@ export class ObjectStorageService {
       return rawObjectPath;
     }
 
-    // Extract the entity ID from the path
     const entityId = rawObjectPath.slice(objectEntityDir.length);
     return `/objects/${entityId}`;
   }
 
-  // Tries to set the ACL policy for the object entity and return the normalized path.
   async trySetObjectEntityAclPolicy(
     rawPath: string,
     aclPolicy: ObjectAclPolicy,
@@ -223,7 +201,6 @@ export class ObjectStorageService {
     return normalizedPath;
   }
 
-  // Checks if the user can access the object entity.
   async canAccessObjectEntity({
     userId,
     objectFile,
@@ -240,7 +217,6 @@ export class ObjectStorageService {
     });
   }
 
-  // Upload buffer to object storage and return signed URL (temporary public access)
   async uploadBuffer(
     buffer: Buffer,
     fileName: string,
@@ -263,7 +239,6 @@ export class ObjectStorageService {
       resumable: false,
     });
 
-    // Return signed URL (valid for 1 hour) instead of making public
     return signObjectURL({
       bucketName,
       objectName,

@@ -1,6 +1,4 @@
 // ⚠️ 수정금지(승인필요) — BTS 랜딩 (VROIS/vrois 변환 + 무대 구도)
-// 상단 전구 8개(서치라이트) → 히어로 텍스트 → "MAKE YOUR TRIP" (앱 정체성) → 구체+손잡이(하단)
-// Skia 서치라이트 + 3단계 조명 + 렌즈플레어
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import {
   View,
@@ -34,19 +32,15 @@ import { useTranslation } from "react-i18next";
 import * as Haptics from "expo-haptics";
 import { socialLoginWithGoogle, calculateAge } from "@/lib/auth";
 import { getIdTokenFromGoogleResponse } from "@/lib/auth-oauth";
-// 구글 = 웹(auth-google.web.ts) / 앱(auth-google.ts) 자동 선택 (2026-07-26 분리)
 import { useGoogleAuthRequest } from "@/lib/auth-google";
 import { isAppleAuthAvailable } from "@/lib/auth-apple";
-// ⚠️ 앱 소셜 3종 조립 = 공용 1벌(§16). 메인 인증창(useLogin)도 같은 것을 쓴다.
 import {
   runNativeSocial,
   isSocialConfigured,
   type SocialProvider,
 } from "@/lib/auth-social";
 import { getApiUrl } from "@/lib/query-client";
-// 로그인 여부 = 메인앱과 **같은 판정 1벌**(§16). 두 곳이 갈리면 이중 인증이 재발한다.
 import { useMapToggle } from "@/contexts/MapToggleContext";
-// ⚠️ 크기·색·모양 값은 같은 폴더 bts/bts-landing-styles.ts 1곳에 모아 둔다(§0 700줄 한도로 분리, 2026-07-31).
 import {
   styles,
   STAGE_COLORS,
@@ -56,12 +50,6 @@ import {
 } from "./bts/bts-landing-styles";
 
 // ⚠️ 수정금지(승인필요) 2026-07-30 = 아미봉 구체 안 글자에 **똑같이** 적용하는 값 1벌(§0).
-//   여러 곳에 흩어 적으면 나중에 한 곳만 고치고 나머지를 빠뜨린다(드리프트).
-//   한 줄 유지 + 넘치면 스스로 축소 + 폰 글자확대 상한.
-//   ⚠️ **작아지는 하한은 `minimumFontSize`(실제 크기)로 준다.**
-//     `minimumFontScale`(배율)은 안드로이드에 **전달조차 되지 않아 무시된다**
-//     (RN 소스 conversions.h 가 안드로이드로 보내는 값 목록에 없음 = 하한이 4dp 로 떨어져
-//      글자가 개미만 해진다). 두 OS 가 같게 동작하도록 실제 크기로 지정한다.
 const FIT_ONE_LINE = {
   numberOfLines: 1,
   adjustsFontSizeToFit: true,
@@ -87,16 +75,7 @@ type ConcertInfo = {
   venue?: string;
   cityId?: number;
 };
-// ⚠️ 2026-07-30 §19 = 날짜를 글자로 박아둔 대체값 완전삭제.
-//   사유: 그 공연일이 지나 D-Day 가 음수로 표시되고 이미 끝난 도시가 첫 화면에 떴다.
-//   API 가 답하기 전에는 도시·D-Day 를 **비워둔다**(빈 값 = 화면이 표시하지 않음). 거짓 숫자보다 빈 칸이 낫다.
 const EMPTY_CONCERT: ConcertInfo = { city: "", dDay: 0 };
-
-// 전구/서치라이트 삭제됨 (Expo Go 미지원 + 비율 깨짐)
-
-// ⚠️ 2026-07-31 §19 = 이 화면이 소셜 3종을 **따로 조립하던 코드 완전삭제**.
-//   사유(§22 검증이 잡음): 메인 인증창과 두 벌로 갈려 이미 서로 달라져 있었다(열쇠 검사 유무).
-//   지금은 두 창 모두 `client/lib/auth-social.ts` 의 `runNativeSocial` 1벌만 부른다(§16).
 
 export function BTSLandingScreen() {
   const navigation = useNavigation<any>();
@@ -108,7 +87,6 @@ export function BTSLandingScreen() {
   const [concertInfo, setConcertInfo] = useState(EMPTY_CONCERT);
 
   // ⚠️ 수정금지(승인필요) — /api/bts/next-concert 실시간 연동
-  //   남은 공연이 없으면 서버가 null 을 준다 = `data?.city` 로 받아야 터지지 않는다(2026-07-30).
   useEffect(() => {
     fetch(`${getApiUrl()}/api/bts/next-concert`)
       .then((r) => r.json())
@@ -128,10 +106,6 @@ export function BTSLandingScreen() {
   const { city, dDay } = concertInfo;
 
   // ⚠️ 수정금지(승인필요) 2026-07-31 사장님 지시 = **이미 로그인했으면 이 창을 건너뛴다.**
-  //   사고: 메인앱에서 로그인하고 BTS 로 들어와도 **또 로그인하라고 했다**(이중 인증).
-  //   반대 방향(BTS 에서 로그인 → 메인앱이 알아봄)은 이미 잘 되고 있었다 = 한쪽만 빠져 있던 것.
-  //   판정은 메인앱과 **같은 것 1벌**(MapToggleContext 의 isAuthed) = 두 곳이 갈릴 수 없다(§16).
-  //   ⚠️ 화면이 한 번 그려진 뒤 넘긴다(replace) = 뒤로 눌러도 이 창으로 안 돌아온다.
   const { isAuthed } = useMapToggle();
 
   // ⚠️ 수정금지(승인필요) — Google OAuth hook (기존 LoginScreen 패턴 그대로)
@@ -145,10 +119,6 @@ export function BTSLandingScreen() {
   const bgStage = useSharedValue(0);
   const whiteout = useSharedValue(0);
   // ⚠️ 수정금지(승인필요) 2026-07-31 = 생년월일 → 저장할 문자열 + **성인 여부**.
-  //   옛것(8자리이기만 하면 통과) 완전삭제 §19. 사유(§22 검증이 잡음):
-  //   이 화면이 진짜 로그인을 하게 되면서, 메인 인증창은 막는 것들이 여기로는 그냥 통과했다
-  //   — ① 없는 날짜(99/99/9999) ② **미성년자**. 같은 서버에 같은 계정이 만들어지므로
-  //   두 창의 기준이 달라선 안 된다. 나이 계산은 메인과 **같은 함수**를 쓴다(§16).
   const { birthDateStr, isAdult } = (() => {
     const digits = dob.replace(/\D/g, "");
     if (digits.length !== 8) return { birthDateStr: "", isAdult: false };
@@ -156,21 +126,17 @@ export function BTSLandingScreen() {
     const m = Number(digits.slice(2, 4));
     const y = Number(digits.slice(4));
     const date = new Date(y, m - 1, d);
-    // 실제로 있는 날짜인지 확인(2월 30일 같은 값을 걸러낸다)
     const real =
       date.getDate() === d &&
       date.getMonth() === m - 1 &&
       date.getFullYear() === y;
     if (!real) return { birthDateStr: "", isAdult: false };
-    // 사용자가 친 숫자 그대로 조립 = 시간대 변환 0(메인 인증창과 같은 방식)
     const str = `${digits.slice(4)}-${digits.slice(2, 4)}-${digits.slice(0, 2)}`;
     return { birthDateStr: str, isAdult: calculateAge(date) >= 18 };
   })();
 
   // ⚠️ 수정금지(승인필요) — Google OAuth 응답 처리 (기존 LoginScreen 패턴)
   useEffect(() => {
-    // ⚠️ 2026-07-31 = 성인 확인을 여기에도 건다(§19 = 8자리면 통과하던 옛 조건 삭제).
-    //   이 갈래는 웹에서 구글 창을 다녀온 뒤 실행되므로, 버튼 앞의 검사를 안 거친다.
     if (!googleResponse || googleResponse.type !== "success") return;
     if (!birthDateStr || !isAdult) return;
     if (processedGoogleRef.current === googleResponse) return;
@@ -186,7 +152,6 @@ export function BTSLandingScreen() {
     })
       .then((result) => {
         if (result.success) {
-          // 인증 성공 → 세계지도 → 캐릭터
           goToWorldMap();
         } else {
           Alert.alert(
@@ -199,13 +164,11 @@ export function BTSLandingScreen() {
         Alert.alert(t("login.loginFailed"), t("login.serverConnectFailed")),
       )
       .finally(() => setOauthLoading(false));
-    // goToWorldMap 은 아래에서 선언되므로 의존성에 넣지 않는다(넣으면 선언 전 참조 = 실행 오류).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [googleResponse, birthDateStr, isAdult, i18n.language]);
 
   // ⚠️ 수정금지(승인필요) — 등장 시퀀스
   useEffect(() => {
-    // 아미봉 스윽 올라옴 (원본: 2.5s cubic-bezier)
     entrance.value = withDelay(
       800,
       withTiming(1, {
@@ -213,9 +176,7 @@ export function BTSLandingScreen() {
         easing: Easing.bezier(0.22, 1, 0.36, 1),
       }),
     );
-    // stage 1 (Midnight)
     // ⚠️ 수정금지(승인필요) 2026-07-30 = 화면을 벗어나면 이 시계를 반드시 끈다.
-    //   안 끄면 3.3초 안에 다음 화면으로 넘어갔을 때 **사라진 화면의 조명을 켜려 든다**.
     const stageTimer = setTimeout(() => {
       bgStage.value = withTiming(1, { duration: 200 });
       setLightingStage(1);
@@ -274,9 +235,6 @@ export function BTSLandingScreen() {
   }, [city, concertInfo]);
 
   // ⚠️ 수정금지(승인필요) 2026-07-31 사장님 지시 = **이미 로그인했으면 인증창을 건너뛰고 지구본으로.**
-  //   ⚠️ **공연 정보가 도착한 뒤에** 넘긴다(`city` 가 채워질 때까지 기다림).
-  //     안 그러면 다음 화면에 도시명·D-Day 가 빈 값으로 넘어간다(2026-07-30 같은 사고 재발).
-  //   한 번만 넘긴다(jumpedRef) = 화면이 다시 그려져도 두 번 넘기지 않는다.
   const jumpedRef = useRef(false);
   useEffect(() => {
     if (!isAuthed || jumpedRef.current || !city) return;
@@ -285,19 +243,12 @@ export function BTSLandingScreen() {
   }, [isAuthed, city, goToWorldMap]);
 
   // ⚠️ 수정금지(승인필요) 2026-07-31 사장님 지시 = **아미봉 인증창도 진짜 로그인을 한다.**
-  //   옛것(눌러도 그냥 다음 화면으로 넘어가던 바이패스) 완전삭제 §19.
-  //   사유: 껍데기만 인증창이고 실제로는 로그인이 **하나도 안 됐다**. 그래서 이 화면을 거쳐 들어온
-  //   사람은 비로그인 상태라, 뒤에서 크레딧·전문가 문의 같은 기능이 전부 막혔다.
-  //   구조 = 메인 인증창(useLogin)과 **같은 함수를 부른다**(§16). 껍데기(아미봉 모양)만 다르다.
-  //   순서 = 생년월일 → 구글 → 카톡 → 애플(아이폰만). 메일칸은 아미봉엔 자리가 없어 뺀다(사장님 확정).
   const handleSocialLogin = useCallback(
     async (provider: SocialProvider) => {
-      // 생년월일 = 실제 있는 날짜 + 성인. 메인 인증창과 **같은 기준**(§16).
       if (!birthDateStr || !isAdult) {
         Alert.alert(t("login.adultOnly"));
         return;
       }
-      // 열쇠가 없으면 눌러도 알 수 없는 오류만 난다 = 메인 인증창처럼 먼저 막는다.
       if (!isSocialConfigured(provider)) {
         console.error(`[Auth] ${provider} 열쇠 미주입 = 로그인 불가`);
         Alert.alert(t("login.loginFailed"));
@@ -307,8 +258,6 @@ export function BTSLandingScreen() {
       globeGlow.value = withSpring(1, { damping: 8, stiffness: 200 });
       haptic("success");
 
-      // ⚠️ 웹 구글만 예외 = 페이지를 통째로 옮겼다가 돌아오는 방식이라 여기서 결과를 못 받는다.
-      //   돌아온 뒤 아래 googleResponse useEffect 가 이어받아 로그인을 끝낸다(메인 인증창과 같은 구조).
       if (provider === "google" && Platform.OS === "web") {
         await googlePromptAsync();
         return;
@@ -324,7 +273,6 @@ export function BTSLandingScreen() {
         if (result.success) goToWorldMap();
         else Alert.alert(result.error || t("login.loginFailed"));
       } catch (err) {
-        // 실패 사유 이름 한 낱말만 붙인다(§23 누더기 금지, 메인 인증창과 같은 형식)
         console.error("[Auth] BTS 소셜 로그인 실패:", err);
         const code = (err as { code?: string | number } | null)?.code;
         Alert.alert(
@@ -344,8 +292,6 @@ export function BTSLandingScreen() {
       t,
     ],
   );
-
-  // ── 애니메이션 스타일 ──
 
   const bgStyle = useAnimatedStyle(() => ({
     backgroundColor: interpolateColor(bgStage.value, [0, 1, 2], STAGE_COLORS),
@@ -410,12 +356,7 @@ export function BTSLandingScreen() {
     default: {},
   });
   // ⚠️ 수정금지(승인필요) 2026-07-30 사장님 지시 = **웹·앱이 똑같이 동작한다.**
-  //   옛것(웹이면 생년월일 없이도 눌리게 열어둠)은 시험용이었고, 웹에서 본 것과 폰에서 본 것이
-  //   달라지는 원인이었다 = 삭제 §19. 이제 어디서나 생년월일을 넣어야 로그인 버튼이 열린다.
   // ⚠️ 수정금지(승인필요) 2026-07-31 = **로그인이 도는 중에는 버튼을 잠근다.**
-  //   사유(§22 검증이 잡음): 옛것은 생년월일만 봐서, 로그인 창이 뜨는 1~2초 사이에 다시 누르면
-  //   로그인이 **두 번 겹쳐 시작**됐다(외부 호출 2번 + 화면 넘김 타이머 2개). 메인 인증창은 이미
-  //   이렇게 잠그고 있었는데 이 화면만 빠져 있었다 = 두 창을 같은 규칙 1벌로 맞춘다.
   const isDisabled = !dobComplete || oauthLoading;
 
   return (

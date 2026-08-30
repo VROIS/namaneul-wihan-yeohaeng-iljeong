@@ -1,11 +1,4 @@
 // ⚠️ 수정금지(승인필요) 2026-05-20 = 03-downtown-restaurant 실행 진입점 (= 4 호출 분할 = MEAL_BUDGET 4 tier)
-// = 호출 1 ECONOMIC (≤€24) / 2 REASONABLE (€25-60) / 3 PREMIUM (€61-180) / 4 LUXURY (€181+)
-//
-// 호출:
-//   npx tsx fillcity/prompts/03-downtown-restaurant/run.ts --city-id=19 [--year=2026]
-//
-// 산출물:
-//   docs/raw/{city_id}/{YYYY-MM-DD}_03-downtown-restaurant_{tier}.json (= 날짜앞 표준, raw-filename.ts)
 import fs from "fs";
 import path from "path";
 import { fileURLToPath, pathToFileURL } from "url";
@@ -76,7 +69,6 @@ const TIER_SPECS = {
     process.exit(1);
   }
   // ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유. 식당 발굴(03-downtown) = 도시 있음 + 행 없음(false = 신규 발견).
-  // = 출입증(키이름·도시id·날짜·행없음) 검문 통과해야만 키 발급. 미달 = throw = 외부호출 불가.
   const today = new Date().toISOString().slice(0, 10);
   const { issueApiKey } = await import(
     pathToFileURL(path.join(ROOT, "server/services/shared/issue-api-key.ts"))
@@ -99,7 +91,6 @@ const TIER_SPECS = {
   const apiPass = `[API-PASS] 도시=${city.name_en}(${cityId}) / 행=없음(발굴) / 날짜=${today}`;
   const outDir = path.join(ROOT, "docs", "raw", String(cityId));
   fs.mkdirSync(outDir, { recursive: true });
-  // ⚠️ 2026-06-15 = 파일명 단일 표준(raw-filename.ts) = {date}_03-downtown-restaurant_{tier}.json (날짜앞)
   // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = tier 파일별 versionedName(외부응답 raw_text만 해싱)
   const { rawName, rawHash, versionedName } = await import(
     pathToFileURL(path.join(ROOT, "server/services/shared/raw-filename.ts"))

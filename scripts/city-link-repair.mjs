@@ -1,22 +1,5 @@
 #!/usr/bin/env node
-// ═══════════════════════════════════════════════════════════════════════════════
 // ⚠️ 영구 컴포넌트 2026-08-02 사장님 승인 = **도시 연결 정리**(여정·TRIPIS ↔ cities).
-// = 언제든 다시 돌려도 같은 결과가 나오는 정비 도구(1회용 아님 = §16).
-//   ① guides.city_id / guides.place_id 칸 만들기(없을 때만) + itineraries.city_id 를 비워둘 수 있게 풀기
-//   ② TRIPIS(guides) = 좌표가 있는 행 → 가장 가까운 도시로 city_id 채움
-//   ③ 여정(itineraries) = raw_data.destination(목적지 이름) → 진짜 도시로 city_id 교정
-//   ④ 무엇이 몇 건 바뀌는지 표로 출력
-//
-// 실행:
-//   node scripts/city-link-repair.mjs            = 드라이런(읽기 전용, DB 안 건드림)
-//   node scripts/city-link-repair.mjs --apply    = 실제 반영
-//
-// ⚠️ 여정 번호(itineraries.id)는 절대 건드리지 않는다(영상 파일 경로가 여정 번호에 묶여 있음).
-// ⚠️ 이름 매칭이 안 되는 여정은 **그대로 둔다**(억지로 아무 도시나 넣지 않음 = §1 추측 금지).
-//    그 목록을 표로 뽑아 주니 사장님이 직접 지정하시면 된다.
-// ⚠️ 도시 매칭 기준(이름 3칸 + 별칭 / 좌표 최근접) = server/city-match.ts 와 같은 1벌(§16).
-//    서버는 TypeScript, 이 도구는 SQL 로 같은 판정을 한다(도구는 DB 에 직접 붙는 순수 SQL 실행기).
-// ═══════════════════════════════════════════════════════════════════════════════
 
 import "dotenv/config";
 import pg from "pg";
@@ -28,7 +11,6 @@ if (!CONN) {
   process.exit(1);
 }
 
-// 목적지 이름 → cities.id (server/city-match.ts 의 matchCityIdByName 과 동일 판정)
 const SQL_MATCH_BY_NAME = `
   SELECT c.id FROM cities c
   WHERE LOWER(TRIM(c.name_en)) = $1
@@ -38,7 +20,6 @@ const SQL_MATCH_BY_NAME = `
                 WHERE LOWER(TRIM(alias)) = $1)
   LIMIT 1`;
 
-// 좌표 → 가장 가까운 cities.id (server/city-match.ts 의 nearestCityIdByCoords 와 동일 판정)
 const SQL_NEAREST_BY_COORDS = `
   SELECT c.id, c.name,
          6371*acos(LEAST(1, cos(radians($1))*cos(radians(c.latitude))
@@ -61,7 +42,6 @@ const cityName = new Map(
     r.name,
   ]),
 );
-// 도시 번호 표시. cities 에 없는 번호면 그대로 알려준다(= 실측: id 1 은 cities 에 아예 없다).
 const label = (id) =>
   id == null
     ? "(없음)"
@@ -70,7 +50,6 @@ const label = (id) =>
       : `${id} (없는 도시)`;
 
 try {
-  // ── ① 칸 만들기 / 제약 풀기 ────────────────────────────────────────────────
   const guidesHasCity = (
     await db.query(
       `SELECT 1 FROM information_schema.columns
@@ -78,8 +57,6 @@ try {
     )
   ).rowCount;
   // 🏷️ 2026-08-02 사장님 승인 = **해설 창고 열쇠**(guides.place_id) + 찾기용 색인.
-  //   창고 조회는 "이 장소, 이 언어" 한 쌍으로 매번 들어오므로 (place_id, language) 색인을 같이 만든다.
-  //   외래키는 걸지 않는다 = 장소 행은 발굴·병합으로 정리되지만 이미 만든 해설은 남아야 한다(shared/schema/credits.ts 와 같은 판단).
   const guidesHasPlace = (
     await db.query(
       `SELECT 1 FROM information_schema.columns
@@ -133,7 +110,6 @@ try {
       console.log("  ✅ 창고 찾기 색인 생성 (place_id, language)");
     }
     if (itinNotNull) {
-      // 이름 매칭이 안 되는 여정에 아무 도시나 억지로 넣지 않기 위해 비울 수 있어야 한다.
       await db.query(
         `ALTER TABLE public.itineraries ALTER COLUMN city_id DROP NOT NULL`,
       );
@@ -141,7 +117,6 @@ try {
     }
   }
 
-  // ── ② TRIPIS(guides) = 좌표 → 최근접 도시 ────────────────────────────────
   const gRows = (
     await db.query(
       `SELECT id, location_name, latitude, longitude${guidesHasCity ? ", city_id" : ", NULL::int AS city_id"}
@@ -180,7 +155,6 @@ try {
   console.log(`  채우거나 고칠 것  : ${gPlan.length}건`);
   if (gPlan.length) console.table(gPlan);
 
-  // ── ③ 여정(itineraries) = 목적지 이름 → 도시 교정 ────────────────────────
   const iRows = (
     await db.query(
       `SELECT id, city_id, raw_data->>'destination' AS dest FROM itineraries ORDER BY id`,
@@ -192,7 +166,6 @@ try {
   const iStuck = [];
   for (const it of iRows) {
     // ⚠️ 2026-08-02 사장님 승인 = "파리, 프랑스" 처럼 나라를 붙여 입력한 것도 도시로 잡는다.
-    //   server/city-match.ts 의 matchCityIdByName 과 **같은 규칙 1벌**(첫 쉼표 앞만 도시명).
     const dest = String(it.dest || "")
       .split(",")[0]
       .trim()
@@ -211,9 +184,6 @@ try {
       }
       continue;
     }
-    // 이름을 못 찾은 경우:
-    //   · 지금 값이 cities 에 실제로 있는 도시면 = 손대지 않는다(사람이 맞게 넣어둔 값일 수 있음).
-    //   · 지금 값이 cities 에 **없는 번호**면 = 가리키는 도시가 없는 껍데기 숫자 = 비운다(추측 아님, 사실).
     if (it.city_id != null && !cityName.has(it.city_id)) {
       iClear.push({
         여정번호: it.id,
@@ -240,7 +210,6 @@ try {
   if (iClear.length) console.table(iClear);
   if (iStuck.length) console.table(iStuck);
 
-  // ── ④ 반영 ────────────────────────────────────────────────────────────────
   if (APPLY) {
     for (const g of gPlan) {
       await db.query("UPDATE guides SET city_id=$1 WHERE id=$2", [

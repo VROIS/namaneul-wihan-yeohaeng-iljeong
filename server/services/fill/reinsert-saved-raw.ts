@@ -1,11 +1,4 @@
 // ⚠️ 수정금지(승인필요) 2026-06-11 사용자 SSOT = 저장된 raw(docs/raw/{cityId}) 전체를 PSR에 빠짐없이 재입력 (영구 = 1회용 X)
-//   = 6형식 전부 처리: 01-discover(results[cat]) / 02-enrich(places, id) / 03·04-restaurant(results[tier]) / 13-restaurant(parsed, id) / 12-TS(zones[].places, PID).
-//   = 모두 upsertPlace 경유(§14, 5단계 매칭) = 정리된 29컬럼에 정확히 꽂히는지 + 고아/신규 매칭 검증.
-//   = 가격 4종 옛이름(estimated_price_eur/price_per_person_eur/price_eur_max) + price_eur 전부 fallback. 0 보존(?? null).
-// ⚠️ 2026-06-13 사용자 승인 = 결손 배선 추가 = distance_km_from_center(raw 값 또는 도시중심 좌표 haversine, 외부호출 0) + image_url(완성형 URL 보존).
-//   = 재입력 시 도심거리·이미지 결손이 실제 UPDATE 되게 = 사장님 입증 ②(결손 채움). photo_name 리소스명은 외부호출 필요라 제외.
-// 호출: npx tsx server/services/fill/reinsert-saved-raw.ts --city-id=37 [--apply]
-//   --apply 없으면 = dry = 파싱·매칭대상만, DB 쓰기 0.  외부호출 0 (로컬→DB).
 import fs from "fs";
 import path from "path";
 import { fileURLToPath, pathToFileURL } from "url";
@@ -57,7 +50,6 @@ const parseRawText = (rt: string): any => {
   return JSON.parse(t.trim());
 };
 
-// ⚠️ 2026-06-13 = 결손 배선 추가 = distC(도심거리) + imageUrl(완성형 URL 보존). 도심거리 = raw 값 우선, 없으면 좌표로 haversine(외부호출 0).
 type Job = {
   src: string;
   cat?: string;
@@ -80,7 +72,6 @@ type Job = {
 };
 
 // 🧠 2026-07-05 사장님 SSOT = 입력순서 절대 = Gemini → TS (실제 순서). Gemini("무엇을" name_local·nameKo·seed_category·요약·거리) 먼저 새덮어쓰기 → TS(검증 name_en·좌표·PID·RC) 다음 덮음.
-//   = runtime 폴더의 MIX Gemini raw = contextId 'runtime'(cityId 미확정 저장) → prompt "CITY: <이름>" 로 도시 식별. cityName 인자로 필터.
 const collectGeminiRuntime = (cityNameArg: string): Job[] => {
   const jobs: Job[] = [];
   const rdir = path.join(ROOT, "docs", "raw", "runtime");
@@ -143,13 +134,9 @@ const collect = (): Job[] => {
     const tag = f.split("-2026")[0].split(".")[0];
     const metaCat = d?.meta?.category; // 12-TS = meta.category (zone 응답엔 cat 없음)
     // 🧠 2026-07-05 사장님 SSOT = §18 saveRaw TS 형식(ts-ag3 = MIX 여정생성 中 TS 응답) 재입력 추가.
-    //   = request(우리 로컬명·주소·좌표 힌트) + raw.places[0](TS 검증 PID·displayName·좌표·RC·photos)가 한 파일 = 골격 재구성 가능(외부호출 0).
-    //   = 니스처럼 발굴(01/12) 안 거친 MIX 도시의 결손 골격을 저장raw 만으로 채움. TS 응답 필드명(displayName.text/location/id)은 발굴형식과 달라 별도 매핑.
     if (d?.request && Array.isArray(d?.raw?.places) && d.raw.places.length) {
       const req = d.request;
       // ⚠️ 2026-08-10 사장님 확정 = 딸려 온 후보(2번째부터)는 넣지 않는다.
-      //   우리 7종 분류를 알 수 없고, 나중에 확정하려 해도 UNIQUE(city_id, seed_category, rank) 때문에
-      //   분류 변경 UPDATE 가 막힌다(실증: duplicate key). 대표 1곳만 = 옛 동작 그대로.
       {
         const tp = d.raw.places[0]; // 우리가 고른 그 한 곳(§18 raw 의 top1) = 대표만 재입력
         jobs.push({
@@ -164,8 +151,6 @@ const collect = (): Job[] => {
           mapsUri: tp.googleMapsUri,
           rc: num(tp.userRatingCount),
           // ⚠️ 수정금지(승인필요) 2026-08-10 사장님 확정 = **가격 칸의 주인은 제미니 하나**(SSOT:583).
-          //   TS raw 의 priceRange 는 그 나라 통화라(케냐 5,000실링) price_eur 로 쓰면 €5,000 이 된다.
-          //   ag3(생성 중)와 **같은 규칙** = 여기서도 안 쓴다(§20 = 같은 PSR 로 모이는 경로는 규칙이 하나여야 함).
           //   버리는 게 아니다 = TS 가격은 §18 raw 에 그대로 남아 언제든 다시 볼 수 있다.
           priceEur: null,
           photoName: tp.photos?.[0]?.name,
@@ -175,11 +160,8 @@ const collect = (): Job[] => {
       }
       continue; // 이 파일 처리 완료 = 아래 발굴형식 분기 skip
     }
-    // 형식 분기
     let groups: { cat?: string; arr: any[] }[] = [];
     // ⚠️ 2026-07-07 사장님 승인 = saveCollectedRaw 형식({meta,rawResponse,parsedPlaces}) 재입력 추가.
-    //   = 02-enrich·MIX Gemini(90-mix)가 이 형식으로 저장 = parsedPlaces = 파싱된 배열(id 또는 name 앵커). 옛 collect 는 d.places 만 봐서 이 형식 누락(파리·본느 재입력 0곳 근본).
-    //   = cat 미지정 = 아래 p.seed_category 폴백 or id/pid DB 조회 흡수(기존 로직). MIX Gemini(name 앵커)도 p.name 폴백(line 아래)으로 커버.
     if (Array.isArray(d?.parsedPlaces))
       groups = [{ arr: d.parsedPlaces }]; // 02-enrich·MIX Gemini (parsedPlaces, id/name 앵커)
     else if (Array.isArray(d?.places))
@@ -190,18 +172,14 @@ const collect = (): Job[] => {
       groups = d.zones.flatMap((z: any) => [
         { cat: metaCat, arr: z.places || [] },
       ]);
-    // 12-TS (pid, meta.category)
     else if (typeof d?.raw_text === "string") {
-      // 01/03/04 (raw_text)
       try {
         const j = parseRawText(d.raw_text);
         const res = j.results || j;
         if (res && typeof res === "object")
           for (const [cat, arr] of Object.entries(res))
             if (Array.isArray(arr)) groups.push({ cat, arr });
-      } catch {
-        /* skip */
-      }
+      } catch {}
     }
     for (const g of groups)
       for (const p of g.arr) {
@@ -224,7 +202,6 @@ const collect = (): Job[] => {
           summaryKo: p.summary_ko || p.selection_reason_ko,
           shortformKo: p.editorial_summary || p.shortform_ko,
           photoName: p.photo_name,
-          // ⚠️ 2026-06-13 = 도심거리 = raw 값 우선(없으면 main 에서 좌표로 haversine), 이미지 = 완성형 URL 만(photo_name 리소스명은 외부호출 필요라 제외)
           distC: num(p.distance_km_from_center) ?? undefined,
           imageUrl:
             p.image_url && /^https?:/.test(String(p.image_url))
@@ -238,13 +215,9 @@ const collect = (): Job[] => {
 
 (async () => {
   // ⚠️ 수정금지(승인필요) 2026-08-10 §22 판단3종 지적 = **place-upsert·ts-client 는 위에 정적으로 올리면 안 된다.**
-  //   ESM 은 import 를 모듈 본문보다 먼저 평가한다 → server/db.ts 가 .env 로더(위 19~29줄)보다 먼저 돌아
-  //   DATABASE_URL 이 빈 상태로 db=null 로 굳는다 → upsertPlace 가 전부 skipped(db_unavailable) = 도구가 통째로 무동작.
-  //   fill/ 8개 도구가 전부 이 방식(늦은 import)인 이유가 그것이다(§16 = 같은 방식 유지).
   const { upsertPlace } = await import(
     pathToFileURL(path.join(ROOT, "server/services/place-upsert.ts")).href
   );
-  // ⚠️ 2026-06-13 = 도심거리 계산 = 단일 SSOT haversineKm 재사용 (= 헌법 §16 재발명 금지)
   const { haversineKm } = await import(
     pathToFileURL(
       path.join(ROOT, "server/services/agents/transit-haversine.ts"),
@@ -258,7 +231,6 @@ const collect = (): Job[] => {
   await c.connect();
 
   // ⚠️ 2026-06-13 = 도시 중심좌표 = 도심거리 결손 보강용 (raw 에 distance_km_from_center 없으면 좌표로 계산 = 외부호출 0, 사장님 "도심거리 무조건 저장")
-  // 🧠 2026-07-05 = name_en 추가 조회 = runtime Gemini raw(CITY:<이름>) 도시 필터용.
   const cityRow = (
     await c.query(
       "SELECT name_en, latitude::float8 AS lat, longitude::float8 AS lng FROM cities WHERE id=$1",
@@ -268,7 +240,6 @@ const collect = (): Job[] => {
 
   // 🧠 2026-07-05 사장님 SSOT = 입력순서 절대 Gemini → TS. Gemini(runtime, 도시필터) 먼저 + TS/발굴(collect) 다음 = 같은 장소가 Gemini 새덮어쓰기 후 TS 검증덮음.
   const jobs = [...collectGeminiRuntime(cityRow?.name_en || ""), ...collect()];
-  // 도심거리 결손 보강 = raw 에 없고 좌표 있으면 = haversine(도시중심, 장소좌표) = 외부호출 0
   if (cityRow?.lat != null) {
     for (const j of jobs) {
       if (j.distC == null && j.lat != null && j.lng != null) {
@@ -279,8 +250,6 @@ const collect = (): Job[] => {
     }
   }
   // ⚠️ 수정금지(승인필요) 2026-06-11 = id 보유 raw(02-enrich/13-restaurant) = DB 기존 행의 "검증된 식별 앵커"로 upsert
-  //   = 옛 버그: raw 의 Gemini 식별자(name/주소 부정확)로 매칭 → 197곳 신규 누수. 이제 PID/주소/cat = DB 것 = 1·3순위 확정 병합.
-  //   = 콘텐츠(가격/요약/이름갱신)만 raw 것 = "id가 가리키는 행을 보강한다"의 정확한 구현.
   const RTIER = new Set([
     "economic",
     "reasonable",
@@ -322,8 +291,6 @@ const collect = (): Job[] => {
   for (const j of jobs) {
     if (j.cat && RTIER.has(j.cat)) j.cat = "restaurant";
   }
-  // ⚠️ 2026-06-11 = 12-TS 中 meta.category="" 파일(text/premium/nearby 실험 140곳) = cat 부재
-  //   = PID 로 DB 행 lookup → 그 행의 cat 사용(= 매칭·갱신 흡수). DB 에 없는 PID = cat 발명 금지 = skip 유지 (로그로 노출).
   const noCatPids = [
     ...new Set(
       jobs
@@ -348,10 +315,6 @@ const collect = (): Job[] => {
     }
   }
   // ⚠️ 수정금지(승인필요) 2026-08-10 사장님 승인 = PID 로 못 찾으면 **이름으로도** 그 도시 행을 찾아 cat 을 가져온다.
-  //   왜 필요한가 = 위 PID 조회는 "이미 PID 가 있는 행"만 찾는다. 그런데 TS raw 재입력의 목적이 바로
-  //   **PID 없는 행에 PID 를 채우는 것**이라, 정작 대상 행은 영영 못 찾고 skip 된다(닭과 달걀).
-  //   실증 2026-08-10 나이로비 = 스네이크파크·카렌블릭센박물관 2행이 no_cat 으로 건너뛰어짐.
-  //   ⚠️ cat 을 발명하는 것이 아니다 = DB 에 이미 있는 그 행의 값을 이름으로 찾아오는 것뿐(없으면 종전대로 skip).
   const noCatNames = [
     ...new Set(
       jobs
@@ -405,7 +368,6 @@ const collect = (): Job[] => {
 
   const action: Record<string, number> = {};
   if (apply) {
-    // ⚠️ 2026-06-11 = 신규/skip 사유 전수 로그 (= "빠짐없이" 검증 = 신규0 목표 추적용)
     const insertedLog: string[] = [];
     const skipLog: Record<string, number> = {};
     for (const j of jobs) {
@@ -436,7 +398,6 @@ const collect = (): Job[] => {
           priceEur: j.priceEur,
           selectionReasonKo: j.summaryKo,
           shortformKo: j.shortformKo,
-          // ⚠️ 2026-06-13 = 결손 배선 = 도심거리(raw 또는 haversine 계산) + 이미지(완성형 URL 보존) = place-upsert COALESCE 새우선
           distanceKmFromCenter: j.distC,
           imageUrl: j.imageUrl,
         });

@@ -14,8 +14,6 @@ import { users } from "./users";
 import { itineraries } from "./itineraries";
 
 // ⚠️ 수정금지(승인필요) 2026-07-13 사장님 SSOT = 전문가 문의(하단 전문가 탭) = 질문+답변 1행(정규화 과잉 금지).
-//   사용자가 여정+AI의견을 첨부해 현지 전문가에게 문의 → 전문가(role='expert'/'admin')가 답변 → 알림(notifications) 발송.
-//   status 값 = admin-dashboard 검증요청 탭과 동일 규약(pending/in_review/answered/rejected). users 컬럼 방식은 1인 N문의라 불가 판정(2026-07-13 연구).
 export const expertInquiries = pgTable("expert_inquiries", {
   id: varchar("id")
     .primaryKey()
@@ -45,7 +43,6 @@ export const expertInquiries = pgTable("expert_inquiries", {
   answeredAt: timestamp("answered_at"),
 });
 
-// 전문가 문의(2026-07-13) = 접수 시 사용자 입력만 받음(답변·상태는 전문가 라우트가 갱신)
 export const insertExpertInquirySchema = createInsertSchema(
   expertInquiries,
 ).omit({

@@ -10,7 +10,6 @@ async function main() {
     await client.connect();
     console.log("Connected!");
 
-    // Get all sequences
     const seqResult = await client.query(`
       SELECT sequence_name 
       FROM information_schema.sequences 
@@ -21,11 +20,9 @@ async function main() {
 
     for (const row of seqResult.rows) {
       const seqName = row.sequence_name;
-      // Extract table name from sequence (e.g., places_id_seq -> places)
       const tableName = seqName.replace("_id_seq", "");
 
       try {
-        // Reset sequence to max(id) + 1
         await client.query(`
           SELECT setval('${seqName}', COALESCE((SELECT MAX(id) FROM ${tableName}), 0) + 1, false)
         `);

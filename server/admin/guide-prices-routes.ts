@@ -1,12 +1,8 @@
-// 가이드 가격 CRUD 라우트 = admin-routes 분리(2026-07-16 §0 슬림화, 순수 이동)
 import type { Express } from "express";
 import { db } from "../db";
 import { eq } from "drizzle-orm";
 
 export function registerGuidePricesRoutes(app: Express) {
-  // ========================================
-  // /api/admin/guide-prices/* = 가이드 가격 CRUD (= 앱 핵심 비즈니스)
-  // ========================================
   app.get("/api/admin/guide-prices", async (_req, res) => {
     if (!db) return res.json([]);
     try {
@@ -181,7 +177,6 @@ export function registerGuidePricesRoutes(app: Express) {
     }
   });
 
-  // 시간당 가격 조회
   app.get("/api/admin/guide-prices/hourly", async (_req, res) => {
     if (!db) return res.json({});
     try {
@@ -238,7 +233,6 @@ export function registerGuidePricesRoutes(app: Express) {
     }
   });
 
-  // 시간당 가격 저장/업데이트
   app.post("/api/admin/guide-prices/hourly", async (req, res) => {
     if (!db) return res.status(503).json({ error: "DB unavailable" });
     try {
@@ -318,7 +312,4 @@ export function registerGuidePricesRoutes(app: Express) {
       res.status(500).json({ error: "Failed to save hourly prices" });
     }
   });
-
-  // ⚠️ 2026-07-16 = GET /api/admin/guide-prices/test, POST /api/admin/guide-prices/calculate 완전삭제(§19)
-  //   = client/bts-app/public/admin-dashboard.html 전수 grep 호출자 0 확인.
 }

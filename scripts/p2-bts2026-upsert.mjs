@@ -1,7 +1,3 @@
-// BTS 2026 시드 UPSERT (city × consolidated SQL 파일들 트랜잭션 실행)
-// 사용자 v5: MCP 금지 = 직접 pg 연결만
-// 환경: GitHub Actions runner (SUPA_URL secret 사용)
-// 로컬: .env 의 DATABASE_URL (단, IPv4 add-on 또는 IPv6 라우팅 필요)
 import "dotenv/config";
 import pg from "pg";
 import fs from "fs";
@@ -52,7 +48,6 @@ try {
   await db.query("COMMIT");
   console.log("\n✅ COMMIT 완료\n");
 
-  // 검증 SELECT
   const verify = await db.query(
     `
     SELECT seed_category, COUNT(*) AS rows,

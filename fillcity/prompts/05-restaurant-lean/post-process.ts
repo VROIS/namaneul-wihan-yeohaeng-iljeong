@@ -1,8 +1,4 @@
 // ⚠️ 수정금지(승인필요) 2026-08-18 사장님 승인 = 05-restaurant-lean 후처리 + DB INSERT (03 post-process 표준 계승 §16)
-// = docs/raw/{city_id}/{date}_05-restaurant-lean_{tier}.json 3 tier 읽음 → upsertPlace() INSERT
-//
-// 호출:
-//   npx tsx fillcity/prompts/05-restaurant-lean/post-process.ts --city-id=111 --date=2026-08-18 [--dry]
 import fs from "fs";
 import path from "path";
 import { fileURLToPath, pathToFileURL } from "url";
@@ -78,7 +74,6 @@ if (!cityId) {
   console.log(`═══ 05-restaurant-lean post-process ═══`);
   console.log(`city_id = ${cityId}, date = ${date}, 합계 = ${all.length}/60`);
 
-  // 검증 = 통합 50km 반경(프롬프트 계약)
   const bad = all.filter((x) => !(x.place.distance_km_from_center <= 50));
   if (bad.length)
     console.error(`✗ distance>50 위반 = ${bad.length}행 (입고는 진행, 참고)`);
@@ -91,7 +86,6 @@ if (!cityId) {
   const { upsertPlace } = await import(
     pathToFileURL(path.join(ROOT, "server/services/place-upsert.ts")).href
   );
-  // ⚠️ 2026-08-18 = core/outskirt 판정 = shared/pool-radius 단일 SSOT(§16, 판단3종 지적 반영 = 인라인 삼항식 폐기 §19)
   const { zoneForDistanceKm } = await import(
     pathToFileURL(path.join(ROOT, "server/services/shared/pool-radius.ts")).href
   );
@@ -115,7 +109,6 @@ if (!cityId) {
         selectionReasonKo: p.summary_ko ?? null,
         shortformKo: p.editorial_summary ?? null,
         priceEur: p.price_eur ?? null,
-        // day_zone = 프롬프트 계약값 우선, 없으면 zoneForDistanceKm 1벌(100km 상한 포함 = 오염 재도입 차단).
         dayZone:
           p.day_zone === "core" || p.day_zone === "outskirt"
             ? p.day_zone

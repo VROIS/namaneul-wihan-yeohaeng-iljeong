@@ -1,6 +1,5 @@
 // ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = Romantic 모든 흔적 삭제 + Shopping 1:1 (= PSR shopping 카테고리)
 // ⚠️ 수정금지(승인필요) 2026-06-06 = 미식(Foodie) 버튼 제거 → 즐길거리(Attraction) 추가 (= 식사는 예산으로 반영 = 자동)
-// = 'Foodie' 는 타입에 유지(내부 식당 vibeTag 전용, 버튼 X) / 'Attraction'(즐길거리) = 신규 버튼 + seed_category 'attraction'
 export type Vibe =
   | "Healing"
   | "Adventure"
@@ -16,8 +15,6 @@ export type TravelPace = "Packed" | "Normal" | "Relaxed";
 
 export type MobilityStyle = "WalkMore" | "Moderate" | "Minimal";
 
-// 누구랑 = 비용 계산의 핵심 로우데이터
-// 혼자(1명), 커플(2명), 가족(3-4명), 대가족(5-7명), 친구들(8명+)
 export type CompanionType =
   | "Single"
   | "Couple"
@@ -54,17 +51,13 @@ export interface TripFormData {
   mobilityStyle: MobilityStyle;
   mealLevel?: MealLevel;
   guideOption?: GuideOption;
-  // 교통편 자동 확정 (CompanionType에 따라 자동 설정)
   transportType?: "sedan" | "van" | "minibus";
-  // 🎯 API 요청 시 사용자 정보 (백엔드에서 DB 조회용)
   userId?: string;
-  // 🏨 숙소 정보 (선택적 — 입력화면에서 설정, 초행자는 결과화면에서 설정 가능)
   accommodationName?: string; // 숙소 이름 (ex: "Hotel Le Marais")
   accommodationAddress?: string; // 숙소 주소
   accommodationCoords?: { lat: number; lng: number }; // 숙소 GPS 좌표
   accommodationPlaceId?: string; // Google Place ID (재검색용)
   // ⚠️ 2026-07-31 사장님 승인(BTS D단계) = 반드시 포함할 장소 id(선택 순서 유지).
-  //   BTS "같이 떠나요" = 이미 고른 3~8곳. 있으면 서버가 db-only 직행 + 생성 무료(외부호출 0).
   pinnedPlaceIds?: number[];
   // ⚠️ 2026-07-31 사장님 지시(BTS 문제점4) = 마지막 슬롯 = 공연장 카드(공연 시작 시각).
   finalPlaceId?: number;
@@ -74,7 +67,6 @@ export interface TripFormData {
 export interface Place {
   id: string;
   name: string;
-  // ⚠️ 2026-06-24 사용자 SSOT = 슬롯 한줄요약 = editorial_summary 단일 (모든 경로 통일). 옛 description·personaFitReason·geminiReason 한줄요약 경로 완전 삭제(§19). summary_ko = 숏폼 재료 = 별도 보전(이 타입엔 없음).
   editorialSummary?: string;
   startTime: string;
   endTime: string;
@@ -95,22 +87,17 @@ export interface Place {
   };
   image: string;
   priceEstimate: string;
-  // 💰 실시간 가격 정보 (백엔드에서 계산)
   entranceFee?: number; // 1인당 입장료 (EUR)
   entranceFeeTotal?: number; // 인원수 × 입장료
   isMeal?: boolean; // 식사 장소 여부
   mealPrice?: number; // 식사 예상 가격
-  // 🍽️ 식사 슬롯 정보 (점심/저녁 강제 배치)
   isMealSlot?: boolean; // 점심/저녁 슬롯 여부
   mealType?: "lunch" | "dinner"; // 식사 종류
   mealPriceLabel?: string; // "€30 내외" 등
-  // Phase 1: 한국인 인기도 점수
   koreanPopularityScore?: number;
-  // Phase 4: 구글맵 직접 링크 (클릭 시 구글맵 열기)
   googleMapsUrl?: string;
 }
 
-// 🚇 이동 구간 정보
 export interface TransitInfo {
   from: string;
   to: string;
@@ -122,11 +109,9 @@ export interface TransitInfo {
   costTotal: number; // 인원수 × 비용
 }
 
-// 🏨 Day별 숙소 설정 (이동형 여행: 결과화면에서 Day별 개별 설정)
 export interface DayAccommodation {
   day: number;
   // ⚠️ 수정금지(승인필요) 2026-08-14 = name/address 는 **실제 사용자가 고른 숙소일 때만** 있다.
-  //   서버가 깃발용으로 넣는 도심좌표는 coords 만 있다 → 이름을 쓰려면 반드시 유무를 확인해야 한다(컴파일러가 강제).
   name?: string;
   address?: string;
   coords: { lat: number; lng: number };
@@ -138,12 +123,9 @@ export interface DayPlan {
   places: Place[];
   city?: string;
   summary: string;
-  // 그 날의 시작·종료 시각(서버가 항상 실어 보냄, 예 "09:00"/"21:00")
   startTime?: string;
   endTime?: string;
-  // 🏨 해당 Day의 숙소 정보 (출발/복귀 기준점)
   accommodation?: DayAccommodation;
-  // 🚶 숙소→첫장소, 마지막장소→숙소 이동정보
   departureTransit?: TransitInfo; // 숙소 → 첫 관광지
   returnTransit?: TransitInfo; // 마지막 관광지 → 숙소
 }
@@ -154,7 +136,6 @@ export interface VibeWeight {
   percentage: number;
 }
 
-// 💰 일별 예산 상세
 export interface DailyBudgetBreakdown {
   day: number;
   transport: number;
@@ -164,7 +145,6 @@ export interface DailyBudgetBreakdown {
   perPerson: number;
 }
 
-// 💰 전체 예산 정보
 export interface BudgetTotals {
   transport: number;
   meals: number;
@@ -178,33 +158,27 @@ export interface Itinerary {
   title: string;
   destination: string;
   // ⚠️ 수정금지(승인필요) 2026-08-21 사장님 승인 = 화면 표시용 도시 영문명(서버 cities.name_en).
-  //   destination 은 생성 시점 입력값이 굳어 언어를 못 바꾸므로, 표시할 때 이 값을 먼저 쓴다(§16).
-  //   옛 여정에는 없을 수 있어 optional = 없으면 destination 폴백.
   destinationEn?: string | null;
   startDate: string;
   endDate: string;
   days: DayPlan[];
   vibeWeights?: VibeWeight[];
-  // 💰 예산 정보
   budget?: {
     travelStyle: TravelStyle;
     dailyBreakdowns: DailyBudgetBreakdown[];
     totals: BudgetTotals;
   };
-  // 📋 여행 설정 요약
   companionType?: string;
   companionCount?: number;
   travelStyle?: TravelStyle;
   mobilityStyle?: MobilityStyle;
   // ⚠️ 수정금지(승인필요) 2026-07-10 사장님 SSOT = 생성 응답 metadata 통째 보존(§20 셀렉 금지) = 후속 호출(AI의견 등)이 그대로 사용.
-  //   = transportCategory = 1차 생성 매트릭스가 확정한 교통수단(guide=드라이빙가이드/transit=대중교통) = 재계산 금지(누락·변질 차단).
   metadata?: {
     transportCategory?: "guide" | "transit";
     curationFocus?: string;
     travelPace?: string;
     [key: string]: any;
   };
-  // 🏨 숙소 정보 (공통 숙소 or Day별 개별 숙소)
   accommodation?: {
     name: string;
     address: string;
@@ -264,8 +238,6 @@ export const VIBE_OPTIONS: {
   },
 ];
 
-// 여행 스타일 = Premium/Luxury 선택시 가이드 가격 포함 (마케팅 접점)
-// ⚠️ mobilityStyle=Minimal과 중복 적용 안 됨 (동일 가격 1회만 스며듦)
 export const TRAVEL_STYLE_OPTIONS: {
   id: TravelStyle;
   label: string;
@@ -362,9 +334,6 @@ export const TRAVEL_PACE_OPTIONS: {
   },
 ];
 
-// 8️⃣ 이동 스타일 = 교통비 원칙 결정
-// WalkMore/Moderate → Google Maps API 실시간 가격
-// Minimal → 드라이빙 가이드 가격표 적용 (마케팅 접점)
 export const MOBILITY_STYLE_OPTIONS: {
   id: MobilityStyle;
   label: string;
@@ -407,11 +376,6 @@ export const MOBILITY_STYLE_OPTIONS: {
   },
 ];
 
-// 누구랑 → 인원 수 + 교통편 자동 확정의 핵심
-// 프리미엄/럭셔리 선택시:
-//   혼자~가족(1-4명) → 가이드 승용차
-//   대가족(5-7명) → 밴 가이드
-//   친구들(8명+) → 미니버스
 export const COMPANION_OPTIONS: {
   id: CompanionType;
   label: string;

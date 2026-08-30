@@ -1,12 +1,8 @@
 // ⚠️ 수정금지(승인필요) 2026-06-24 = PID 중복그룹 keep/loser 필드 비교 (직접접속 §16). 조사 전용 = DELETE/UPDATE 없음.
-// 목적: 트리거 우회 없이 청소 가능한지 = loser 가 keep 에 없는 값(흡수필요분)을 가졌는지 그룹별 판정.
-// keep 선정 = 사장님 SSOT 우선순위(PID보유 동일전제 → RC 큰쪽 → 최신TS=updated_at 늦은쪽 → id 작은쪽).
-// 호출: npx tsx fillcity/dups-detail.ts --city-id=39
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 승인 = 흡수 후보 컬럼 목록 1벌(§16 SSOT) = server/services/fill/status-backfill.ts
-//   와 공용(옛 이 파일 손입력 배열 완전삭제, 내용은 동일).
 import { FILL_COLS } from "../server/services/shared/place-fill-columns";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -75,7 +71,6 @@ function isEmpty(v: any): boolean {
     const byId: Record<number, any> = {};
     for (const r of rows) byId[r.id] = r;
 
-    // keep 선정 = RC DESC NULLS LAST → updated_at DESC NULLS LAST → id ASC
     const sorted = [...rows].sort((a, b) => {
       const rcA = a.google_review_count ?? -1,
         rcB = b.google_review_count ?? -1;
@@ -88,7 +83,6 @@ function isEmpty(v: any): boolean {
     const keep = sorted[0];
     const losers = sorted.slice(1);
 
-    // 각 loser 가 keep 의 빈칸을 채울 수 있는 필드 = 흡수필요분
     const absorbFields: string[] = [];
     for (const loser of losers) {
       for (const col of FILL_COLS) {

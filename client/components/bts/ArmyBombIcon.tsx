@@ -1,6 +1,4 @@
 // ⚠️ 수정금지(승인필요) — 아미봉 SVG 아이콘 (지도 핀 / 버튼 아이콘 겸용)
-// 구체(Circle) + 손잡이(Rect) + 글로우(RadialGradient)
-// Props: size(12/24/48), color, glowing
 import React from "react";
 import Svg, {
   Circle,

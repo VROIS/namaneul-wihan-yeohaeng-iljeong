@@ -1,17 +1,4 @@
 // ⚠️ 수정금지(승인필요) 2026-06-02 = ts-discover-pool 후처리 = 거리필터 + 가격대별 선정 + 중복先 + 비용先 + PM(필요분만) + upsertPlace
-// 흐름 (= 사용자 SSOT 2026-06-02):
-//   ① 거리 필터 (= Haversine ≤ radius×1.5 = locationBias 소프트 누수 제거: 생제르맹앙레 ← Les Deux Magots 도심)
-//   ② OPERATIONAL 만 (= 폐업 배제 안전망)
-//   ③ 수동가격 override (= manual-prices.ts = Google 가격 없는 행 = 사용자 직접조사)
-//   ④ ★가격대별 quota 선정★ = MEAL_BUDGET tier 별 리뷰순 = Economic4 : Reasonable4 : Premium2 : unknown2 (= 동선 최적화 풀 정합)
-//   ⑤ ★PM 전 중복 테스트★ = upsertPlace 5단계 근사(PID>좌표10m>이름9조합) = UPDATE vs INSERT
-//   ⑥ ★비용 先보고★ = PM 필요 = 신규 + (기존인데 Google 이미지 無) / 절감 = 기존+Google이미지 = 스킵
-//   ⑦ --apply 시에만 = PM(필요분만) → upsertPlace priceOverwrite=true(= endPrice 상한 덮어쓰기 오염청소) + phase_tags 'ts-pool-{date}'
-//   ⑧ 삭제후보 = 그 태그 없는 외곽 식당 (= TS 미발견 = 보고만, 삭제 별도 승인 [[feedback_db_860eur_cost_no_proposals]])
-// 가격 = endPrice(상한) 만 (= 현지 실망 방지) + tier = MEAL_BUDGET 직접 분류
-// 호출:
-//   npx tsx .../12-ts-discover-pool/post-process.ts --city-id=19 --zone=outskirt --date=2026-06-02 [--photo] [--apply]
-//   (--apply 없으면 = dry-run = 쓰기 0 = 가격대 분포·중복·비용·unknown가격필요·삭제후보 미리보기만)
 import fs from "fs";
 import path from "path";
 import { fileURLToPath, pathToFileURL } from "url";
@@ -58,8 +45,6 @@ if (!cityId) {
   process.exit(1);
 }
 
-// ⚠️ 가격대별 quota (= 동선 최적화 풀 = 사용자 SSOT 2026-06-02 = eco4:reason4:premium2 + unknown2)
-// = Premium + Luxury 통합 (= MEAL_BUDGET 둘 다 €300/일 동일 등급 = 사용자 SSOT 2026-06-02)
 const QUOTA: Record<string, number> = {
   Economic: 4,
   Reasonable: 4,
@@ -78,7 +63,6 @@ const hkm = (a: any, b: any) => {
       Math.sin(dLng / 2) ** 2;
   return 2 * R * Math.asin(Math.sqrt(x));
 };
-// ⚠️ 2026-06-02 = NFD 후 NFC 재결합 필수 (= 한글 자모분해 → 빈문자열 충돌 버그 방지). Latin 악센트만 제거.
 const norm = (s: string | null) =>
   (s || "")
     .normalize("NFD")
@@ -86,12 +70,9 @@ const norm = (s: string | null) =>
     .normalize("NFC")
     .toLowerCase()
     .replace(/[^a-z0-9가-힣]/g, "");
-// 구글(PM 결제) 이미지 판정 = R2 place-images (옛 SP place-photos 경로는 창고 철거로 소멸 = 2026-08-07 §19/1-5b.
-//   DB 잔존 옛 URL도 인정 유지 = 있던 이미지를 PM 재호출로 이중 지불하지 않기 위함)
 const isGoogleImg = (url: string | null) =>
   !!url && (url.includes("/place-images/") || url.includes("/place-photos/"));
 // ⚠️ 수정금지(승인필요) 2026-06-02 = 비식당 primaryType 블랙리스트 (= 사용자 SSOT = 백화점/영화관/호텔/박물관 = 원 카테고리 유지 = 식당풀 제외)
-//   = 블랙리스트 방식 = includedType=restaurant 라도 leak 되는 명백한 비식당만 제외 / 나머지(pastry_shop·gastropub·brewery·bar 등 음식)는 모두 유지 (= 진짜 음식점 안 놓침)
 const NON_FOOD_TYPES = new Set<string>([
   "department_store",
   "shopping_mall",
@@ -172,8 +153,6 @@ const PM_CALL_EUR = 0.007;
   );
 
   // ⚠️ 수정금지(승인필요) 2026-06-03 사용자 SSOT = 비식당 카테고리 모드 (early return)
-  //   = --labels 파일 병합 → 명백오류(렌탈listing/좌표無) 제외 → place_id+name_norm dedup → upsertPlace(seedCategory=category)
-  //   = 매칭=기존 검증·정정 / 미매칭=신규 발굴. 식당 전용(NON_FOOD/가격tier/QUOTA/PM/orphan)은 일절 미적용.
   if (category) {
     const labelRe = labels.map(
       (l) =>
@@ -194,7 +173,6 @@ const PM_CALL_EUR = 0.007;
       for (const z of j.zones || [])
         for (const p of z.places || []) merged.push(p);
     }
-    // 명백오류 = 숙박 렌탈 listing(장소 아님) + 좌표 없음 (= 사용자 SSOT "명백오류만 제외")
     const isLodging = (n: string) =>
       /personnes|chambres?|salles? de bain|canap[eé]-lit|\bBdR\b|appartement|studio meubl/i.test(
         n || "",
@@ -226,7 +204,6 @@ const PM_CALL_EUR = 0.007;
       lat: parseFloat(cityRow?.latitude) || 0,
       lng: parseFloat(cityRow?.longitude) || 0,
     };
-    // ⚠️ 2026-06-03 = 거리 필터 제거 = 범위는 run.ts 의 locationRestriction(강제 사각형)이 발굴 단계에서 보장
     const exist = (
       await cc2.query(
         `SELECT id, name_en, name_local, name_ko, google_place_id AS pid, google_maps_uri AS uri, address, latitude AS lat, longitude AS lng FROM place_seed_raw WHERE city_id=$1 AND seed_category=$2`,
@@ -334,7 +311,6 @@ const PM_CALL_EUR = 0.007;
   );
   const tierOf = (p: number | null): string => {
     if (p == null) return "unknown";
-    // ⚠️ 사용자 SSOT 2026-06-02 = Luxury(끼당 €181+) → Premium 통합 (= 같은 고가 등급 = 일한도 €300)
     for (const [style, b] of Object.entries(MEAL_BUDGET) as any)
       if (p >= b.min && p <= b.max)
         return style === "Luxury" ? "Premium" : style;
@@ -365,11 +341,9 @@ const PM_CALL_EUR = 0.007;
     )
   ).rows;
   // ⚠️ 2026-07-18 사장님 SSOT = 미리보기 매칭(matchCandidate) 삭제 §19 = 중복 판정은 DB 트리거 단일 관문 전담.
-  //   = 여기 남는 조회 = PM 비용 최적화 전용(PID 로 기존 행 이미지 유무만 조회 = "이미 이미지 있으면 PM 스킵"). 매칭(어느 행과 같은가) 아님 = PID 직조회로 충분.
   const existByPid = new Map<string, any>();
   for (const e of existing) if (e.pid) existByPid.set(e.pid, e);
 
-  // ── ① 거리 + ② OPERATIONAL + ③ 수동가격 + ④ 가격대별 quota ──
   const kept: any[] = [];
   const drop = { noCoord: 0, closed: 0, nonfood: 0 }; // ⚠️ (B) 2026-06-10 = noCoord/nonfood=제외+로그 / closed=입력+플래그 카운트 (거리=입력)
   const nonfoodList: string[] = [];
@@ -393,7 +367,6 @@ const PM_CALL_EUR = 0.007;
       p._closed = !!(p.business_status && p.business_status !== "OPERATIONAL");
       if (p._closed) drop.closed++;
     } // (B) 폐업 = 입력하되 마커(PM·FE 제외용)
-    // 수동가격 override (= unknown 만)
     for (const p of pass)
       if (p.price_eur == null) {
         const o = manualMap.get(norm(p.name));
@@ -403,8 +376,6 @@ const PM_CALL_EUR = 0.007;
         }
       }
     // ⚠️ 수정금지(승인필요) 2026-06-02 = 입력 = broad (= 거리/영업 필터된 전부, quota 컷 없음 = 사용자 SSOT)
-    //   = 가격대별 quota(QUOTA)는 입력 단계가 아니라 이후 Gemini 요약 추출 단계에 적용
-    //   = 중복은 upsertPlace 5단계가 자동 제거 (= dup PID 0 입증)
     for (const p of pass)
       kept.push({
         ...p,
@@ -425,7 +396,6 @@ const PM_CALL_EUR = 0.007;
     kept.push(...d);
   }
 
-  // ── ⑤ PM 비용 최적화 = PID 로 기존 행 조회(이미지 있으면 PM 스킵). 중복 판정 아님(트리거 전담) = PID 직조회 §19 2026-07-18 ──
   for (const p of kept) {
     p._match = p.place_id ? existByPid.get(p.place_id) || null : null;
     p._pmNeed = !p._closed && (!p._match || !isGoogleImg(p._match.image_url));
@@ -435,12 +405,10 @@ const PM_CALL_EUR = 0.007;
   const pmNeed = kept.filter((p) => p._pmNeed),
     pmSave = kept.length - pmNeed.length;
 
-  // 가격대 분포 + unknown 가격필요 목록
   const spread: Record<string, number> = {};
   for (const p of kept) spread[p.tier] = (spread[p.tier] || 0) + 1;
   const needPrice = kept.filter((p) => p.tier === "unknown");
 
-  // ── ⑧ 삭제후보 ──
   const keptPids = new Set(kept.map((p) => p.place_id));
   const keptNames = new Set(kept.map((p) => norm(p.name)));
   // ⚠️ 수정금지(승인필요) 2026-06-02 = zone 스코프 = downtown(시내 ≤10km/core/null) vs outskirt(>10km)
@@ -465,7 +433,6 @@ const PM_CALL_EUR = 0.007;
       !kept.find((p) => e.lat && e.lng && hkm(e, p) <= 0.01),
   );
 
-  // ── 보고 ──
   console.log(
     `═══ ts-discover post-process (city=${cityId} ${city?.name_en}, ${zone}, ${date}) ═══`,
   );
@@ -501,7 +468,6 @@ const PM_CALL_EUR = 0.007;
     .slice(0, 15)
     .forEach((e: any) => console.log(`  - ${e.id} ${e.name_en}`));
 
-  // === 사전 조사 (= 사용자 SSOT 2026-06-02 = 중복/통합/가격/입지 완비 확인) ===
   const pidGroup: Record<string, any[]> = {};
   for (const p of kept) (pidGroup[p.place_id] ||= []).push(p);
   const internalDups = Object.entries(pidGroup).filter(
@@ -533,7 +499,6 @@ const PM_CALL_EUR = 0.007;
     ),
   );
 
-  // 전체 선정 리스트 (= --list = 검수용 = 명소 × tier / 리뷰·€·U=기존UPDATE/I=신규INSERT)
   if (argv["list"] === "true") {
     console.log(
       `\n=== 선정 ${kept.length}곳 상세 (명소 × tier / 리뷰·€·U=UPDATE/I=INSERT) ===`,
@@ -560,9 +525,7 @@ const PM_CALL_EUR = 0.007;
     return;
   }
 
-  // ── ⑦ APPLY ──
   // ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유. PM 이미지 = 채움 = 도시 있음 + 행 있음(true).
-  // = 출입증(키이름·도시id·날짜·행있음) 검문 통과해야만 키 발급. 미달 = throw = 외부호출 불가.
   const { issueApiKey } = await import(
     pathToFileURL(path.join(ROOT, "server/services/shared/issue-api-key.ts"))
       .href
@@ -574,8 +537,6 @@ const PM_CALL_EUR = 0.007;
   const { upsertPlace } = await import(
     pathToFileURL(path.join(ROOT, "server/services/place-upsert.ts")).href
   );
-  // ⚠️ 2026-08-07 §16·§19/1-5b = 옛 자체 pmUpload(관문 우회 fetch + SP place-photos 업로드) 완전 삭제
-  //   → 사진관문 tsPhoto 1벌(PM 다운 + R2 place-images/{cityId}/{cat}/{pid}.jpg = relink 색인과 동일 표준 키).
   const { tsPhoto } = await import(
     pathToFileURL(path.join(ROOT, "server/services/shared/ts-client.ts")).href
   );
@@ -627,7 +588,6 @@ const PM_CALL_EUR = 0.007;
       else if (r.action === "updated") upd++;
       else skip++;
     } catch (e: any) {
-      // ⚠️ 2026-06-02 = 글로벌 UNIQUE(city_id, name_norm) 충돌 = 크래시 대신 skip + 기록 (= 기존 동명 행 보존)
       conflicts.push(
         `${p.name} [${e.constraint || e.code || (e.message || "").slice(0, 50)}]`,
       );

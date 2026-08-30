@@ -1,14 +1,3 @@
-/**
- * users 테이블 마이그레이션 - 취향 저장 필드 추가
- *
- * 추가 필드:
- * - preferred_vibes: 선호 취향 (최대 3개, 순서 중요)
- * - preferred_companion_type: 자주 선택하는 동행 타입
- * - preferred_travel_style: 선호 여행 스타일
- * - marketing_consent: 마케팅 동의
- * - vibes_updated_at: 마지막 취향 업데이트 시간
- */
-
 require("dotenv").config();
 const { Pool } = require("pg");
 
@@ -23,7 +12,6 @@ async function migrate() {
   try {
     console.log("🔄 users 테이블 마이그레이션 시작...");
 
-    // 새 컬럼 추가 (이미 존재하면 무시)
     const alterStatements = [
       `ALTER TABLE users ADD COLUMN IF NOT EXISTS preferred_vibes JSONB DEFAULT '[]'`,
       `ALTER TABLE users ADD COLUMN IF NOT EXISTS preferred_companion_type TEXT`,
@@ -43,7 +31,6 @@ async function migrate() {
       }
     }
 
-    // 테이블 구조 확인
     const result = await client.query(`
       SELECT column_name, data_type, column_default 
       FROM information_schema.columns 

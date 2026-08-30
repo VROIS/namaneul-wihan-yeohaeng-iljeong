@@ -1,6 +1,3 @@
-// ExpertSheet 스타일 = ExpertSheet.tsx 분리(2026-07-15 §0 슬림화, 순수 이동, 리팩토링 금지).
-// 메인앱(TripPlannerScreen) 토큰과 동일: Pretendard·inputBox=backgroundDefault·BorderRadius.md·Brand.primary.
-// 시트 자체 헤더(제목·X)는 부모 모달 = 여기 title 크기는 서브헤더용(28→20 축소 = 시트 내부 위계).
 import { StyleSheet } from "react-native";
 import { Spacing, BorderRadius, Brand, Fonts } from "@/constants/theme";
 
@@ -8,7 +5,6 @@ export const styles = StyleSheet.create({
   container: { flex: 1 },
   scroll: { flex: 1 },
   flex1: { flex: 1 },
-  // (옛 토글·서브헤더·소개카드 스타일 = 2026-08-07 시트 레이아웃 개편으로 화면과 함께 삭제 §19)
   attachCard: {
     padding: Spacing.md,
     borderRadius: BorderRadius.md,
@@ -68,7 +64,6 @@ export const styles = StyleSheet.create({
     textAlign: "center",
     paddingVertical: Spacing.lg,
   },
-  // 문의 카드(사용자 내문의함 / 전문가 답변함 공용)
   inquiryCard: {
     flexDirection: "row",
     alignItems: "center",
@@ -91,7 +86,6 @@ export const styles = StyleSheet.create({
     borderRadius: BorderRadius.full,
   },
   badgeText: { fontSize: 11, fontFamily: Fonts.bold },
-  // 답변함 필터 칩
   chips: { gap: Spacing.sm, paddingBottom: Spacing.md },
   chip: {
     paddingHorizontal: Spacing.md,
@@ -106,7 +100,6 @@ export const styles = StyleSheet.create({
     textAlign: "center",
     paddingVertical: Spacing.xl,
   },
-  // 상세 서브헤더(← 뒤로 + 제목 + 상태배지)
   detailHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -125,7 +118,6 @@ export const styles = StyleSheet.create({
   detailTitle: { flex: 1, fontSize: 18, fontFamily: Fonts.bold },
   badgePlaceholder: { width: 44 },
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
-  // 첨부 여정(요약/원본열람)
   attach: {
     flexDirection: "row",
     alignItems: "center",
@@ -150,7 +142,6 @@ export const styles = StyleSheet.create({
     fontFamily: Fonts.semiBold,
     marginTop: Spacing.sm,
   },
-  // 말풍선
   from: { fontSize: 11, fontFamily: Fonts.medium, marginBottom: 4 },
   bubble: {
     maxWidth: "88%",
@@ -176,7 +167,6 @@ export const styles = StyleSheet.create({
     borderRadius: BorderRadius.md,
   },
   waitingText: { fontSize: 13, fontFamily: Fonts.semiBold },
-  // 답변 입력/답변완료
   replyBox: {
     borderTopWidth: StyleSheet.hairlineWidth,
     paddingTop: Spacing.lg,
@@ -227,7 +217,6 @@ export const styles = StyleSheet.create({
   },
   actPrimary: { flex: 1 },
   actText: { fontSize: 13, fontFamily: Fonts.bold },
-  // 프로필 편집
   pfHeader: {
     flexDirection: "row",
     alignItems: "center",

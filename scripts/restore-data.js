@@ -1,9 +1,3 @@
-/**
- * 데이터 복구 스크립트
- * 1. places 재생성
- * 2. instagram_hashtags 정상 데이터 추가
- */
-
 const { Client } = require("pg");
 require("dotenv").config();
 
@@ -14,10 +8,8 @@ async function restoreData() {
     await client.connect();
     console.log("DB connected\n");
 
-    // 1. Places 재생성 (서울 장소)
     console.log("=== Step 1: Restore places ===\n");
 
-    // 서울 city_id 찾기
     const seoulCity = await client.query(
       "SELECT id FROM cities WHERE name = '서울' LIMIT 1",
     );
@@ -149,10 +141,8 @@ async function restoreData() {
     }
     console.log("Total places added: " + placesAdded);
 
-    // 2. Instagram hashtags 복구
     console.log("\n=== Step 2: Restore instagram_hashtags ===\n");
 
-    // 현재 컬럼 확인
     const columns = await client.query(`
       SELECT column_name FROM information_schema.columns
       WHERE table_name = 'instagram_hashtags'
@@ -161,7 +151,6 @@ async function restoreData() {
       "Columns: " + columns.rows.map((r) => r.column_name).join(", "),
     );
 
-    // 간단한 해시태그 추가 (기본 컬럼만 사용)
     const hashtags = [
       "#에펠탑",
       "#파리여행",
@@ -211,7 +200,6 @@ async function restoreData() {
     }
     console.log("Hashtags added: " + hashtagsAdded);
 
-    // 3. 최종 확인
     console.log("\n=== Final Status ===\n");
 
     const tables = [
@@ -228,7 +216,6 @@ async function restoreData() {
       console.log(table + ": " + result.rows[0].cnt + " rows");
     }
 
-    // 샘플
     console.log("\nplaces sample:");
     const placesSample = await client.query(
       "SELECT id, name FROM places LIMIT 10",

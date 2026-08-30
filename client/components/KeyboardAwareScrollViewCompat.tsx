@@ -6,10 +6,6 @@ import {
 
 type Props = KeyboardAwareScrollViewProps & ScrollViewProps;
 
-/**
- * KeyboardAwareScrollView that falls back to ScrollView on web.
- * Use this for any screen containing text inputs.
- */
 export function KeyboardAwareScrollViewCompat({
   children,
   keyboardShouldPersistTaps = "handled",

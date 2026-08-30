@@ -1,6 +1,4 @@
 // ⚠️ 수정금지(승인필요) 2026-08-06 사장님 SSOT = 씬 클립 결합 + R2 업로드 (지브리 일별 영상 후처리 1벌)
-// = ffmpeg concat -c copy(무재인코딩 = 수 초) → 길이 검증 → R2 itinerary-videos/{itineraryId}/day{N}.mp4 → 공개 URL.
-// = 업로드 = r2-client 단일 진입점(uploadToR2). 옛 Supabase Storage PUT = 폐기 2026-08-06 Cloudflare 이전계획 1단계 §19(창고 0.9/1GB 위기 = 신규 영상은 R2 로만).
 
 import fs from "fs";
 import os from "os";
@@ -13,7 +11,6 @@ import { uploadToR2 } from "./shared/r2-client";
 
 const execFileAsync = promisify(execFile);
 
-/** 씬 클립들(mp4 Buffer, 씬 순서) → 단일 mp4 결합 → Storage 업로드 → 공개 URL */
 export async function stitchAndUpload(
   clips: Buffer[],
   itineraryId: number,
@@ -48,7 +45,6 @@ export async function stitchAndUpload(
       outPath,
     ]);
 
-    // 길이 검증 = 씬수×6초 ±15% (concat 손실 감지. 미달 시 = 재인코딩 방식으로 코드 교체 판단)
     const info = await execFileAsync(ffmpegPath as unknown as string, [
       "-i",
       outPath,
@@ -65,7 +61,6 @@ export async function stitchAndUpload(
         `[stitcher] 결합 길이 이상: ${durationSec}s (기대 ${expected}s)`,
       );
 
-    // R2 업로드 (r2-client 단일 진입점, S3 SDK 가 업로드 실패 시 throw = 무성실패 없음)
     const finalBuf = fs.readFileSync(outPath);
     const up = await uploadToR2(
       `itinerary-videos/${itineraryId}/day${day}.mp4`,

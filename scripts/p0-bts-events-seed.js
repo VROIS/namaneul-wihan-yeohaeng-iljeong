@@ -1,11 +1,8 @@
-// BTS WORLD TOUR 'ARIRANG' — 전체 공연 일정 Supabase 시딩
 const { Client } = require("pg");
 const SUPA_URL =
   "postgresql://postgres:Vrois%4075015@db.wxebceflvuythuodemro.supabase.co:5432/postgres";
 
-// 전체 확정 일정 (Wikipedia + Trip.com + Weverse 종합)
 const events = [
-  // === 아시아 ===
   {
     cityEn: "Goyang",
     dates: ["2026-04-09", "2026-04-11", "2026-04-12"],
@@ -63,7 +60,6 @@ const events = [
     notes: "",
   },
 
-  // === 북미 ===
   {
     cityEn: "Tampa",
     dates: ["2026-04-25", "2026-04-26"],
@@ -149,7 +145,6 @@ const events = [
     notes: "LA, 4회 공연",
   },
 
-  // === 유럽 ===
   {
     cityEn: "Madrid",
     dates: ["2026-06-26", "2026-06-27"],
@@ -186,7 +181,6 @@ const events = [
     notes: "",
   },
 
-  // === 남미 ===
   {
     cityEn: "Bogota",
     dates: ["2026-10-02", "2026-10-03"],
@@ -223,7 +217,6 @@ const events = [
     notes: "3회 공연",
   },
 
-  // === 2027 ===
   {
     cityEn: "Melbourne",
     dates: ["2027-02-12", "2027-02-13"],
@@ -258,7 +251,6 @@ async function run() {
   const db = new Client({ connectionString: SUPA_URL });
   await db.connect();
 
-  // cities 테이블에서 nameEn → id 매핑
   const citiesRes = await db.query("SELECT id, name_en FROM cities");
   const cityMap = {};
   citiesRes.rows.forEach((c) => {
@@ -276,7 +268,6 @@ async function run() {
       ev.dates.length > 1 ? ev.dates[ev.dates.length - 1] : null;
 
     try {
-      // 중복 체크
       const exists = await db.query(
         "SELECT id FROM bts_event_info WHERE concert_date = $1 AND concert_venue = $2",
         [concertDate, ev.venue],
@@ -327,7 +318,6 @@ async function run() {
       "건 실패 ===",
   );
 
-  // 검증
   const total = await db.query("SELECT count(*) as n FROM bts_event_info");
   const withCity = await db.query(
     "SELECT count(*) as n FROM bts_event_info WHERE city_id IS NOT NULL",
@@ -340,7 +330,6 @@ async function run() {
       "건)",
   );
 
-  // 도시 미매핑 목록
   const noCity = await db.query(
     "SELECT concert_venue FROM bts_event_info WHERE city_id IS NULL",
   );

@@ -1,7 +1,3 @@
-// ⚠️ 영구 컴포넌트 2026-08-06 = docs/raw/{city} raw 파일 → R2 raw-responses/ 동기화(영구 백업. 원격지 = 옛 Supabase → R2 대체 = Cloudflare 이전계획 1단계 §19).
-//   = 발굴 raw 가 로컬 PC 에만 있는 누수 차단 = "필수 raw 원격 저장"(사용자 완성 기준). 외부호출 0 = R2 업로드만.
-//   = 발굴 후 오케스트레이터가 호출 → 원격에 항상 최신 raw. 원격이 진짜 토대(PC/DB 날아가도 재입력 가능).
-//   호출: npx tsx fillcity/steps/raw-bucket-sync.ts --city-id=37 [--apply]
 import fs from "fs";
 import path from "path";
 import { fileURLToPath, pathToFileURL } from "url";
@@ -34,7 +30,6 @@ if (!cityId) {
 const PREFIX = "raw-responses"; // R2 프리픽스 (옛 Supabase 버킷명과 동일 = 키 대조 불변)
 
 (async () => {
-  // ⚠️ 2026-08-06 = 업로드 = r2-client 단일 진입점(§16). 옛 Supabase storageKey/PUT 폐기 = §19.
   const { uploadToR2, isR2Configured } = await import(
     pathToFileURL(path.join(ROOT, "server/services/shared/r2-client.ts")).href
   );

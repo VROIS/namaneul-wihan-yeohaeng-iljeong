@@ -1,6 +1,4 @@
 // ⚠️ 수정금지(승인필요) 2026-07-13 사장님 SSOT = 문의 상세 = 역할별. 배포 수준.
-//   사용자(role user) = 답변 보기(말풍선, 시안 B). 전문가/관리자(role expert/admin) = 말풍선 + 하단 답변 입력/상태버튼(시안 C 상세).
-//   열람 시 백엔드가 사용자 본인이면 읽음 처리(배지 감소). 디자인 = 메인앱 토큰(Pretendard·Brand.primary). 모바일 = 고정헤더 + 키보드 대응.
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import {
   View,
@@ -43,7 +41,6 @@ export default function ExpertInquiryDetailScreen({ route, navigation }: any) {
   const [sending, setSending] = useState(false);
   // ⚠️ 사장님 SSOT 2026-07-14 = 답변완료 문의는 입력창 대신 "답변완료" 표시. [답변 수정]을 눌러야 입력창 열림(옛: 답변완료여도 입력창 항상 표시 = "또 답변함" 혼란 폐기 §19).
   const [editing, setEditing] = useState(false);
-  // 마운트 가드(리뷰 2026-07-13) = onReply 후 reload 가 언마운트 후 setState 하는 것 방지.
   const mounted = useRef(true);
   useEffect(
     () => () => {
@@ -87,8 +84,6 @@ export default function ExpertInquiryDetailScreen({ route, navigation }: any) {
       const r = await replyInquiry(id, reply.trim(), status);
       if (r.ok) {
         // ⚠️ 사장님 SSOT 2026-07-14 = 답변완료/거절 = 즉시 답변함 목록으로 자동 복귀(goBack). 옛(그 자리 멈춤·리턴 없음) 폐기 §19.
-        //   ⚠️ 웹(WebView)에서는 버튼 있는 Alert.alert 이 안 뜸(RN-web 한계) = 복귀를 Alert 콜백에 걸면 안 됨 → goBack 직접 호출.
-        //   목록(답변함)은 useFocusEffect 로 자동 재조회 = 방금 답변건이 '답변완료'로 갱신·배지 반영. 검토중만 = 계속 작업하니 화면 유지.
         if (status === "in_review") {
           load();
           Alert.alert(t("expert.replySentTitle"), t("expert.replySentMsg"));
@@ -407,7 +402,6 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.lg,
   },
   attachText: { flex: 1, fontSize: 12, fontFamily: Fonts.medium },
-  // 시안 C = 전문가 첨부 여정 = 누르면 결과화면 원본(지도+상세카드) 이동(2026-07-14)
   attachFull: {
     flexDirection: "row",
     alignItems: "center",
@@ -458,7 +452,6 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.bold,
     marginBottom: Spacing.sm,
   },
-  // 답변완료 상태 표시 + 수정 버튼(2026-07-14)
   doneRow: {
     flexDirection: "row",
     alignItems: "center",

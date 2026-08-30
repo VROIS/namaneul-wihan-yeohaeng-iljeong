@@ -1,5 +1,3 @@
-// AI 의견 오버레이 상태/신호수신 = TripPlannerScreen 분리(2026-07-15 §0 슬림화, 순수 이동)
-//   ⚠️ 2026-07-25 = 전문가 오버레이는 전역 ExpertOverlay(App)로 이관(§19) = 여기선 AI 의견만.
 import { useState, useEffect, useRef } from "react";
 import { Itinerary } from "@/types/trip";
 import { apiRequest } from "@/lib/query-client";
@@ -23,7 +21,6 @@ export function useAiOpinionOverlay({
   t: (key: string, opts?: any) => string;
   i18n: { language: string };
 }) {
-  // 크레딧부족(402) 안내 + 충전화면 이동 = 앱 전체 공용 1벌(§16). 이동 방식(창 안/밖) 판단도 그 훅이 한다.
   const showCreditShortfall = useCreditShortfall();
   // 🧠 2026-07-03 사장님 SSOT = "AI 의견" 결과 오버레이 상태(하단탭 버튼→여정 화면 위 오버레이, 새 화면 아님).
   const [aiOpinionVisible, setAiOpinionVisible] = useState(false);
@@ -32,15 +29,11 @@ export function useAiOpinionOverlay({
   const [aiOpinionError, setAiOpinionError] = useState<string | null>(null);
 
   // 🧠 2026-07-03 사장님 SSOT = 하단탭 "AI 의견" 버튼 신호 수신 → 오버레이 열고 Gemini 재평가 호출(캐시는 서버가 판정).
-  // ⚠️ 2026-07-31 = 내가 태어나기 전 신호는 무시(§22 검증) — 응답자 없이 남은 옛 타임스탬프가
-  //   나중에 마운트되는 화면에서 **누르지도 않은 AI의견을 자동 발사**(= Gemini 돈)하는 것 차단.
   const mountedAtRef = useRef(Date.now());
   useEffect(() => {
     if (!aiOpinionRequestedAt || !itinerary) return;
     if (aiOpinionRequestedAt < mountedAtRef.current) return;
     // ⚠️ 2026-07-31 사장님 승인(BTS D단계 FE-5) = 내 여정이 "현재 여정"일 때만 응답.
-    //   BTS 여정화면이 생기며 이 화면이 2벌 돌 수 있게 됨 — 잠금 없으면 안 보이는 옛 벌도
-    //   같은 신호를 받아 **같은 Gemini 외부호출을 한 번 더** 내보냄(외부호출 = 돈, D10 메모리 경고).
     if (globalCurrentItinerary !== itinerary) return;
     let cancelled = false;
     setAiOpinionVisible(true);
@@ -61,12 +54,8 @@ export function useAiOpinionOverlay({
         if (cancelled) return;
         console.error("[TripPlanner] AI 의견 조회 실패:", e);
         // ⚠️ 수정금지(승인필요) 2026-08-05 사장님 SSOT = 실패 사유는 **언제나 화면에 남기고**,
-        //   크레딧부족이면 그 위에 공용 안내(충전화면 이동)를 얹는다(§16 5곳 공용 / GuideStackNavigator 와 같은 규칙 1벌).
-        //   ⚠️ 옛것(크레딧부족이면 오버레이를 닫고 Alert 만) 폐기 = 안드로이드는 Alert 을 뒤로가기로 닫을 수 있어
-        //     그 경우 **사유도 안 남고 이동도 안 되는 조용한 실패**가 됐다(§22 판단검증이 잡음).
         const shortfall = parseCreditShortfall(e?.message);
         if (shortfall) {
-          // 서버가 준 사유를 그대로(숫자 포함) = "다시 시도" 로 뭉개지 않는다(2026-07-31 SSOT).
           setAiOpinionError(
             t("trip.creditShort", {
               balance: shortfall.balance,

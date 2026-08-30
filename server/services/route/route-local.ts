@@ -1,12 +1,6 @@
 // ⚠️ 수정금지(승인필요) 2026-06-06 = DB-only 결정적 동선 빌더 v2 = handleRouteRequest(Gemini) 동형 대체 (= 사용자 SSOT)
-// = 2단계: ① 활동만 동선최적화(점심/저녁 슬롯 빈칸) → ② 식당 우선순위 삽입(인접성 → 가격, 순차)
-// = 부품 재사용(헌법 §16): haversineKm / calcTransitHaversine ← transit-haversine.ts (단일 Haversine SSOT)
-// = Gemini 0 / 외부호출 0 (= 식당풀은 ag4 가 DB 조회해 전달) / 결정적 → 시뮬 = 라이브 동일
-// = 동선 = Held-Karp 폐루프(중심 출발·귀환, 노드 ≤11) + NN/2-opt 폴백 = 출발<>종료 = 파리중심 앵커 (= 추후 숙소주소 입력 시 그 좌표로 전체 재최적화)
-// = 활동 = AG2 풀 top-rank 채택(슬롯 상한) / 식사 = 슬롯3 점심(활동2·4 최근접) + 마지막 저녁(최종활동·중심 최근접)
 import type { AG1Output, PlaceResult } from "../agents/types";
 import { minutesToTime, MEAL_BUDGET } from "../agents/types";
-// ⚠️ 2026-08-12 운영 500 수정 = 예산값 정규화 1벌(MIX day-builder 와 동일 §0). 소문자 값이 오면 표 조회가 undefined.min 으로 즉사했다.
 import { normalizeTravelStyle } from "../agents/pipeline-v3-types";
 import {
   haversineKm,
@@ -18,14 +12,12 @@ import type {
   RouteScene,
   RouteHandlerResult,
 } from "./route-types";
-// ⚠️ 2026-06-12 = 정본 동선(NN체인+간격절단+Day1도심 / 일내 귀소동선) = k-means 지그재그 해소 (USE_SECTOR_ROUTE 토글, 1초 롤백)
 import { sectorIntoDays, orderHoming } from "./route-sector";
 // ⚠️ 2026-07-04 사장님 SSOT = 드라이빙 가이드 판별 단일 SSOT(Gemini·MIX 경로와 동일 함수 = 3경로 정합, §16 재발명 금지).
 import { shouldApplyGuidePrice } from "../transport-pricing-service";
 
 type LatLng = { lat: number; lng: number };
 
-// 유효 좌표 = NULL/0 아님
 const hasCoord = (p: { lat?: number | null; lng?: number | null }): boolean =>
   p.lat != null && p.lng != null && p.lat !== 0 && p.lng !== 0;
 
@@ -36,11 +28,6 @@ const toMin = (t: string): number => {
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
-/**
- * 일자 1개 동선 정렬 = 폐루프 최단경로 (= 중심 출발·귀환)
- * = 노드 ≤11 = Held-Karp 정확해 / >11 = NN+2-opt 폴백
- * = 종착이 중심 근처가 되도록 귀환비용 포함 (= 출발<>종료 중심 = 저녁/숙소 앵커 정합)
- */
 function orderByNN(items: PlaceResult[], center: LatLng): PlaceResult[] {
   const valid = items.filter(hasCoord);
   const invalid = items.filter((p) => !hasCoord(p));
@@ -49,10 +36,6 @@ function orderByNN(items: PlaceResult[], center: LatLng): PlaceResult[] {
   return [...nn2opt(valid, center), ...invalid];
 }
 
-/**
- * Held-Karp DP = 고정 시작(center)에서 전체 1회 방문 후 center 귀환 = 폐루프 최단.
- * = dp[S][j] = center→…→j (S 방문완료) 최소비용. 답 = min_j (dp[full][j] + j→center). O(2^n·n²).
- */
 function heldKarpPath(nodes: PlaceResult[], center: LatLng): PlaceResult[] {
   const n = nodes.length;
   if (n <= 1) return [...nodes];
@@ -84,7 +67,6 @@ function heldKarpPath(nodes: PlaceResult[], center: LatLng): PlaceResult[] {
       }
     }
   }
-  // 폐루프 = 마지막 노드 → center 귀환 비용 포함 (= 종착이 중심 근처)
   let best = Infinity,
     endJ = 0;
   for (let j = 0; j < n; j++) {
@@ -108,9 +90,6 @@ function heldKarpPath(nodes: PlaceResult[], center: LatLng): PlaceResult[] {
   return path.reverse();
 }
 
-/**
- * NN + 2-opt 폴백 (= 노드 >11) = 폐루프(중심 출발·귀환) + 시작 엣지(center→첫노드) 목적함수 포함.
- */
 function nn2opt(valid: PlaceResult[], center: LatLng): PlaceResult[] {
   const remaining = [...valid];
   const ordered: PlaceResult[] = [];
@@ -140,7 +119,6 @@ function nn2opt(valid: PlaceResult[], center: LatLng): PlaceResult[] {
     improved = false;
     iter++;
     for (let i = -1; i < ordered.length - 2; i++) {
-      // i = -1 = 시작 엣지(center→ordered[0]) 포함
       const a: LatLng =
         i < 0 ? center : { lat: ordered[i].lat, lng: ordered[i].lng };
       for (let j = i + 2; j < ordered.length; j++) {
@@ -165,9 +143,6 @@ function nn2opt(valid: PlaceResult[], center: LatLng): PlaceResult[] {
   return ordered;
 }
 
-// 🗑️ 2026-07-06 = pickMode 로컬정의 삭제 = transit-haversine.pickTransitMode 단일 SSOT 이동(§16, MIX·DB-only 공통) §19
-
-// 군집 평균 좌표(centroid)
 function centroidOf(items: PlaceResult[]): LatLng {
   const v = items.filter(hasCoord);
   if (!v.length) return { lat: 0, lng: 0 };
@@ -177,18 +152,12 @@ function centroidOf(items: PlaceResult[]): LatLng {
   };
 }
 
-// 군집 centroid ~ 도심 거리 (= 빈 군집은 맨 뒤로)
 function distFromCenter(items: PlaceResult[], center: LatLng): number {
   const c = centroidOf(items);
   if (c.lat === 0 && c.lng === 0) return Infinity;
   return haversineKm(center.lat, center.lng, c.lat, c.lng);
 }
 
-/**
- * 활동을 dayCount 개 지리 군집으로 = 용량균형 k-means (cap = ceil(n/k))
- * = farthest-first 초기화 → Lloyd 10회 → 용량균형 재배정 (= 한 날 몰림 방지 + 먼 곳 인근끼리 묶음)
- * = 입력 활동이 슬롯 상한(= n)으로 이미 잘려 옴 → cap = ceil(n/k) = 일자당 활동 슬롯 수
- */
 function clusterIntoDays(
   items: PlaceResult[],
   k: number,
@@ -199,7 +168,6 @@ function clusterIntoDays(
   if (pts.length <= k)
     return Array.from({ length: k }, (_, i) => (pts[i] ? [pts[i]] : []));
 
-  // 1) farthest-first 초기 centroid (= 서로 먼 씨앗 = 방향 분리)
   const centroids: LatLng[] = [];
   let fi = 0,
     fd = -1;
@@ -226,7 +194,6 @@ function clusterIntoDays(
     centroids.push({ lat: pts[bi].lat, lng: pts[bi].lng });
   }
 
-  // 2) Lloyd 반복 (10회)
   for (let iter = 0; iter < 10; iter++) {
     const assign = pts.map((p) => {
       let bi = 0,
@@ -246,7 +213,6 @@ function clusterIntoDays(
     }
   }
 
-  // 3) 용량균형 재배정 (cap=ceil(n/k)) = 확신(regret) 높은 점 먼저 = 한 날 몰림 방지
   const cap = Math.ceil(pts.length / k);
   const groups: PlaceResult[][] = Array.from({ length: k }, () => []);
   const order = pts
@@ -275,13 +241,6 @@ function clusterIntoDays(
   return groups;
 }
 
-/**
- * 로컬 동선 빌드 v2 = handleRouteRequest(Gemini) 동형 대체 (= 2단계: 활동 1차 / 식당 2차)
- * @param skeleton AG1 뼈대 (= 일자/슬롯/페이스/인원/travelStyle)
- * @param places AG2-DB 풀 (= 활동 후보, 좌표 보유)
- * @param cityCoords 도심 중심 = 출발/종료 앵커 (숙소좌표 있으면 formData.accommodationCoords 우선, 2026-07-04)
- * @param restaurantPool ag4 가 DB 조회한 예산 매칭 식당 전체풀 (= 2차 우선순위 삽입용). 없으면 places 내 식당 폴백.
- */
 export function buildRouteLocal(
   skeleton: AG1Output,
   places: PlaceResult[],
@@ -292,16 +251,13 @@ export function buildRouteLocal(
   const { formData, daySlotsConfig, paceConfig, companionCount } = skeleton;
   const slotDuration = paceConfig.slotDurationMinutes; // 활동 1곳 시간
   const mealDuration = paceConfig.mealDurationMinutes; // 식사 1회 시간(밀도별, 활동보다 짧음)
-  // ⚠️ 2026-08-12 운영 실장애 수정 = 정규화 필수(소문자 "economic" 등 = 표 miss = undefined.min 500, Replit 로그 실측)
   const mealBudget = MEAL_BUDGET[normalizeTravelStyle(formData.travelStyle)];
   // ⚠️ 수정금지(승인필요) 2026-07-31 사장님 승인(BTS D단계 BE-3) = 핀 식당 id 집합(풀 id 형식 = "db-<번호>").
-  //   사용자가 직접 고른 식당 = 고정 식사자리(점심=3번째·저녁=마지막)에 가격대 필터보다 우선 착석.
   const pinnedRestIds = new Set(
     (formData.pinnedPlaceIds ?? []).map((n) => `db-${n}`),
   );
 
   // ⚠️ 2026-07-04 사장님 SSOT = 출발/종료 앵커 = 숙소 좌표 최우선(§14 A안=여행 전체 공통 숙소) → 없으면 도심 중심.
-  //   지도 숙소깃발·슬롯순서 변경은 이미 실시간 연동인데 동선 최적화(center)만 도심 고정이던 결함 수정(§0).
   const firstValid = places.find(hasCoord);
   const center: LatLng =
     formData.accommodationCoords && hasCoord(formData.accommodationCoords)
@@ -315,13 +271,11 @@ export function buildRouteLocal(
             : { lat: 0, lng: 0 };
 
   // ⚠️ 2026-07-04 사장님 SSOT = 드라이빙 가이드 = 이동(Minimal·Moderate) OR 예산(Premium·Luxury) 중 하나라도 = 무조건 가이드(본업 퍼널).
-  //   = Gemini·MIX 경로와 동일한 shouldApplyGuidePrice 단일 SSOT 적용(옛 "Minimal만" 판정 완전 삭제 §19). travelStyle=예산도 반영.
   const transport: "public_transit" | "private_driver_guide" =
     shouldApplyGuidePrice(formData.mobilityStyle, formData.travelStyle)
       ? "private_driver_guide"
       : "public_transit";
 
-  // 활동 = 비식당, rank 높은 순, 슬롯 상한(= Σ(slots-2))까지 (= 유명 보존 = 베르사유, 버퍼 초과분 drop)
   const maxActivities = daySlotsConfig.reduce(
     (s, dc) => s + Math.max(1, dc.slots - 2),
     0,
@@ -331,16 +285,12 @@ export function buildRouteLocal(
     .sort((a, b) => (a.rank ?? 9999) - (b.rank ?? 9999))
     .slice(0, maxActivities);
 
-  // 식당풀 = ag4 가 DB 조회해 전달(우선) / 없으면 places 내 식당(= sim 폴백)
   const restaurants = (
     restaurantPool && restaurantPool.length
       ? restaurantPool
       : places.filter((p) => p.seedCategory === "restaurant")
   ).filter(hasCoord);
 
-  // 2차 식당 우선순위 픽 = [1순위] 인접성(앵커 최근접) 정렬 → [2순위] 가격대 "구간"(min~max) 내 최근접 + 전역 중복 제외
-  // ⚠️ 2026-06-12 = 가격대 구간 필터 = 사용자 예산등급 풀 (= 상한만 쓰면 Premium 도 싼 식당 뽑힘 = 등급 무의미 버그 수정).
-  //   = priceMin~priceCap 구간 내 최근접 우선 → 없으면 상한이하 최근접 폴백 → 그것도 없으면 최근접(빈슬롯 방지).
   const usedRest = new Set<string>();
   const pickMealPriority = (
     anchors: LatLng[],
@@ -360,13 +310,11 @@ export function buildRouteLocal(
       .sort((a, b) => a.d - b.d);
     if (!ranked.length) return null;
     // ⚠️ 2026-07-31 사장님 승인(BTS D단계) = 핀 식당 우선 = 사용자가 직접 고른 것 = 가격대 필터보다 우선.
-    //   그 자리(앵커) 최근접 핀이 앉음 → 핀 2개면 점심(중간 앵커)·저녁(공연장 인근 앵커)이 거리로 자동 배정.
     const pinnedPick = ranked.find((x) => pinnedRestIds.has(x.r.id));
     if (pinnedPick) {
       usedRest.add(pinnedPick.r.id);
       return pinnedPick.r;
     }
-    // ⚠️ 2026-06-12 = 하한 클램프 = Luxury 점심(min181 > 점심상한120) 역전 방어 = min 을 상한 이하로 (= 등급 필터 무력화 버그 수정)
     const lo = Math.min(priceMin, priceCap);
     const inBand = ranked.find(
       (x) =>
@@ -385,9 +333,6 @@ export function buildRouteLocal(
     return pick;
   };
 
-  // 1차 = 활동 일자 배정 (= NN체인+간격절단+Day1도심, route-sector 정본)
-  // ⚠️ 2026-06-12 = 기본 = 정본(좌표 최인접 묶음 = 붙은곳 보존 + Day1 도심 = 귀소 본능) / USE_SECTOR_ROUTE='false' = 옛 k-means 롤백
-  //   = slotsPerDay = 일자별 활동 한도(= slots-2). sectorIntoDays 가 내부에서 Day1 도심 정렬까지 수행(= 추가 sort 불필요).
   const USE_SECTOR_ROUTE = process.env.USE_SECTOR_ROUTE !== "false";
   const slotsPerDay = daySlotsConfig.map((dc) => Math.max(1, dc.slots - 2));
   const dayGroups = USE_SECTOR_ROUTE
@@ -402,15 +347,11 @@ export function buildRouteLocal(
 
   for (let di = 0; di < daySlotsConfig.length; di++) {
     const dc = daySlotsConfig[di];
-    // ⚠️ 2026-06-12 = 정본 = orderHoming(최외곽 1코스 → 도심/숙소 귀환 = 귀소 본능) / 롤백 = orderByNN(폐루프)
     const dayActs = USE_SECTOR_ROUTE
       ? orderHoming(dayGroups[di] || [], center)
       : orderByNN(dayGroups[di] || [], center);
 
-    // 점심 = 슬롯3 (= 활동 2개 후) = 오전활동(aBefore) 근처 최근접 식당 (= detour 0)
     // ⚠️ 수정금지(승인필요) 2026-08-15 사장님 승인 = 앵커를 오전활동 1개로 좁힘(옛 [오전,오후] 둘중 최근접 폐기 §19).
-    //   사유: 오전·오후 둘 다 후보면 min(거리)가 오후활동 쪽으로 튀어, 점심이 "오전 일정 직후 그 근처"가
-    //   아니라 오후 동선 근처로 뽑히는 동선 역행이 발생했다(사장님 실기기 시뮬 지적). 저녁(마지막활동 앵커)은 그대로.
     const lunchIdx = Math.min(2, dayActs.length);
     const aBefore = dayActs[lunchIdx - 1];
     const lunch = pickMealPriority(
@@ -418,7 +359,6 @@ export function buildRouteLocal(
       mealBudget.min, // 가격대 하한 (= 등급 구간)
       mealBudget.lunch,
     );
-    // 저녁 = 마지막 슬롯 = 최종활동·파리중심 중 최근접 (= 조회 폭 넓힘 = 중심 귀환 모델). 빈 날 = 중심 앵커
     const lastAct = dayActs[dayActs.length - 1];
     const dinner = pickMealPriority(
       lastAct ? [{ lat: lastAct.lat, lng: lastAct.lng }, center] : [center],
@@ -426,7 +366,6 @@ export function buildRouteLocal(
       mealBudget.dinner,
     );
 
-    // 시퀀스 조립 = 활동 + 점심(슬롯3) + 저녁(마지막)
     const seq: { p: PlaceResult; rest: boolean }[] = [];
     dayActs.forEach((act, idx) => {
       if (idx === lunchIdx && lunch) seq.push({ p: lunch, rest: true });
@@ -436,8 +375,6 @@ export function buildRouteLocal(
     if (dinner) seq.push({ p: dinner, rest: true });
 
     // ⚠️ 2026-07-21 사장님 SSOT = 슬롯 시각 = 활동/식사 각 소요시간 누적(균일 그리드 폐기 §19). 활동 우선 = 최대한 활동 보장.
-    //   활동 = slotDuration, 점심 = mealDuration(중간). 저녁 = 마지막 슬롯 = 마지막 활동 끝난 시각부터 시작(시작시각만 = 종료 미지정 = 사용자 현장 결정).
-    //   → 활동을 앞에 꽉 채우고 저녁은 그 직후 = 저녁이 실제 저녁시각(영업시간)에 자연히 옴. 옛 저녁 이른시각(16:30)·종료 인위고정 폐기 §19.
     let prev: LatLng = center;
     let dayKm = 0;
     const startMin = toMin(dc.startTime);

@@ -1,8 +1,3 @@
-// 39 orphan JPG row_id 추적 (읽기 전용)
-// 사용자 2026-04-28: 04-27 첫 cron이 받은 row_id 56741~56927 = DB에 없음
-//                    04-28 두 번째 cron 결과만 살아있음 (56978~57051)
-//                    → DELETE/INSERT 사고로 ID 재발급 의심
-
 import "dotenv/config";
 import pg from "pg";
 
@@ -13,20 +8,10 @@ if (!SUPA_URL) {
 }
 
 const ORPHAN_IDS = [
-  // restaurant 10
-  56771, 56772, 56773, 56774, 56775, 56776, 56777, 56778, 56779, 56780,
-  // adventure 5
-  56834, 56835, 56836, 56837, 56838,
-  // attraction 5
-  56741, 56742, 56743, 56744, 56745,
-  // healing 5
-  56803, 56804, 56805, 56806, 56807,
-  // heritage 5
-  56898, 56901, 56903, 56907, 56909,
-  // hotspot 4
-  56871, 56873, 56877, 56878,
-  // shopping 5
-  56921, 56923, 56925, 56926, 56927,
+  56771, 56772, 56773, 56774, 56775, 56776, 56777, 56778, 56779, 56780, 56834,
+  56835, 56836, 56837, 56838, 56741, 56742, 56743, 56744, 56745, 56803, 56804,
+  56805, 56806, 56807, 56898, 56901, 56903, 56907, 56909, 56871, 56873, 56877,
+  56878, 56921, 56923, 56925, 56926, 56927,
 ];
 
 const db = new pg.Client({
@@ -37,7 +22,6 @@ await db.connect();
 console.log("✅ DB 연결 OK\n");
 
 try {
-  // 1) 현재 city_id=101 bts2026 살아있는 row 전체 (created_at + updated_at + image_url 상태)
   console.log("━".repeat(80));
   console.log(
     "1. 현재 place_seed_raw city_id=101 bts2026 (살아있는 row, ID 순)",
@@ -65,7 +49,6 @@ try {
     })),
   );
 
-  // 2) 카테고리별 ID 범위
   console.log("\n━".repeat(80));
   console.log("2. 카테고리별 ID 범위 (현재 살아있는 row)");
   console.log("━".repeat(80));
@@ -87,7 +70,6 @@ try {
     })),
   );
 
-  // 3) 39 orphan ID 가 DB에 존재하는지 확인 (전체 collection_phase 무시)
   console.log("\n━".repeat(80));
   console.log(
     "3. 39 orphan ID 가 어떤 형태로든 DB에 존재하는지 (전체 phase 검색)",
@@ -114,7 +96,6 @@ try {
     console.table(orphanCheck.rows);
   }
 
-  // 4) 04-27 시간대 row 검색 (created_at 또는 updated_at 기준)
   console.log("\n━".repeat(80));
   console.log("4. 04-27 15시대에 생성/수정된 row (city_id=101 한정 안 함)");
   console.log("━".repeat(80));
@@ -139,7 +120,6 @@ try {
     })),
   );
 
-  // 5) 39 orphan ID 와 살아있는 row 의 카테고리/이름 매칭 가능성
   console.log("\n━".repeat(80));
   console.log("5. 살아있는 row 와 04-27 cron 의 카테고리별 정렬 매칭 가능성");
   console.log("━".repeat(80));
@@ -150,7 +130,6 @@ try {
     "대안: 04-27 cron run log (run #25004751231 ?) 에서 어떤 장소를 받았는지 확인 필요.",
   );
 
-  // 6) 최종 진단
   console.log("\n" + "═".repeat(80));
   console.log("🎯 진단");
   console.log("═".repeat(80));

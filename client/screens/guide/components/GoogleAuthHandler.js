@@ -1,6 +1,4 @@
 // ⚠️ 수정금지(승인필요): 2026-04-05 구글 OAuth 네이티브 SDK — 외부 브라우저 안 열림 (카카오/애플과 동일 UX)
-// 이전: WebBrowser.openAuthSessionAsync → 외부 Safari/Chrome 열림 → 앱 미복귀 (3주간 실패)
-// 현재: @react-native-google-signin/google-signin → 네이티브 모달 → idToken 직접 반환
 import { useEffect, useRef } from 'react';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import Constants from 'expo-constants';

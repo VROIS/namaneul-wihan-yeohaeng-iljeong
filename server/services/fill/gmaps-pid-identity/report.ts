@@ -1,8 +1,6 @@
 // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 승인 = §0 700줄 가드 = 폴더 분리(로직 무변경)
-// = gmaps-pid-identity 의 보고 1벌 = 실행 끝 콘솔 표·요약·검수 목록(오매칭·좌표 교정·좌표 오염·페이지 좌표 무효·리뷰수·폐업·address-empty-ambiguous) + 산출표 JSON 저장(docs/b1-reports, versionedName·rawHash).
 import path from "path";
 // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 승인 = 산출표 저장(mkdir+versionedName+쓰기) 1벌 = saveVersionedReport()
-//   = fillcity/steps/discovery-merge-diff.ts 와 공용(§16, 옛 이 파일 자체 인라인 중복 완전삭제).
 import { rawDate, saveVersionedReport } from "../../shared/raw-filename";
 import { PHASE_TAG } from "./apply";
 import {
@@ -23,7 +21,6 @@ export function printAndSaveReport(opts: {
   ROOT: string;
 }): void {
   const { results, elapsed, apply, cityId, verify, lang, ROOT } = opts;
-  // ── 표 + 요약 ──
   console.table(
     results.map((r) => ({
       id: r.id,
@@ -49,7 +46,6 @@ export function printAndSaveReport(opts: {
   const upsertErr = results.filter(
     (r) => r.upsert && r.upsert !== "updated",
   ).length;
-  // 쓰기 대상 행(ok 계열 + coord-corrected) 기준으로 폐업·RC 갱신 집계.
   const writableRows = results.filter((r) => isWritable(r.gate));
   const nOk = results.filter((r) => r.gate.startsWith("ok")).length;
   const nName = byGate["name-mismatch"] || 0;
@@ -61,7 +57,6 @@ export function printAndSaveReport(opts: {
     (r) => r.status && r.status !== "OPERATIONAL",
   );
   const nOther = results.length - nOk - nName - nCorr - nCoord - nPci - nErr;
-  // RC 갱신 = 쓰기 대상 행 중 rc_flag 없고 페이지 리뷰수가 우리 값과 다른 행(--apply 면 실제 쓰인 값, DRY 면 쓰일 값).
   const rcChanged = writableRows.filter(
     (r) => rcWritable(r) && r.rc_page !== r.rc_ours,
   );
@@ -163,7 +158,6 @@ export function printAndSaveReport(opts: {
     );
   }
 
-  // ── 산출표 = docs/b1-reports/{cityId}/{date}_gmaps-pid-identity.json (B1 동일 패턴, 내용 동일 = 덮어쓰기 / 상이 = _N) ──
   const today = rawDate();
   const payload = {
     cityId,

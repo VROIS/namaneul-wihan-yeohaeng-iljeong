@@ -17,7 +17,6 @@ async function checkApiKeys() {
     );
   });
 
-  // GEMINI_API_KEY가 있는지 확인
   const gemini = await client.query(
     "SELECT key_name, key_value FROM api_keys WHERE key_name = 'GEMINI_API_KEY'",
   );

@@ -1,8 +1,3 @@
-// 1 회용 = 603 BAD_NAME 행 일괄 archive (= 사용자 SSOT 2026-05-14)
-// = phase_tags 에 'archived-bad-name-2026-05-14' 추가
-// = DELETE 절대 X (= CLAUDE.md §5)
-// = 운영 SELECT 시 = WHERE NOT (archived-bad-name) 으로 자연스럽게 제외
-
 import pg from "pg";
 import fs from "fs";
 
@@ -19,7 +14,6 @@ for (const line of raw.split(/\r?\n/)) {
   }
 }
 
-// BAD_NAME 패턴 (= merge 스크립트와 동일)
 const BAD_NAME_EXACT = new Set([
   "paris",
   "london",
@@ -131,7 +125,6 @@ if (!COMMIT) {
   console.log(`\n... --commit 으로 실행 시 = ${badRows.length} 행 archive`);
 } else {
   console.log(`\n진행 중...`);
-  // 트랜잭션 = 한 번에 처리
   await c.query("BEGIN");
   try {
     let count = 0;
@@ -157,7 +150,6 @@ if (!COMMIT) {
   }
 }
 
-// 검증 = 도시별 archived 분포
 const after = (
   await c.query(`
   SELECT ci.name_en AS city, COUNT(*) AS archived

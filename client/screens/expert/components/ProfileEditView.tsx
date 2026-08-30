@@ -1,5 +1,3 @@
-// 전문가 프로필 편집(ExpertProfileEditScreen 로직 인라인 §16) = 뒤로 = setView(home)
-// ExpertSheet.tsx 분리(2026-07-15 §0 슬림화, 순수 이동, 리팩토링 금지).
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import {
   View,
@@ -45,7 +43,6 @@ export default function ProfileEditView({
     [],
   );
 
-  // 본인 프로필 프리필(공용 대표전문가 값 아님 = 로그인한 본인 값 = 다수 전문가 정체성 덮어쓰기 방지).
   useEffect(() => {
     getMyExpertProfile()
       .then(({ profile }) => {
@@ -69,7 +66,6 @@ export default function ProfileEditView({
     } else Alert.alert(title, msg);
   };
 
-  // 📷 웹/모바일 이미지 파일 선택 (5MB 용량 제한 + 1클릭 교체/삭제 연동)
   const handlePickImage = () => {
     if (Platform.OS === "web") {
       if (typeof document !== "undefined") {

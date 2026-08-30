@@ -1,4 +1,3 @@
-// Step2 데이터 채우기 + 최종 빌드 = pipeline-v3 분리(2026-07-15 §0 슬림화, 순수 이동)
 import type {
   TripFormData,
   PlaceResult,
@@ -7,7 +6,6 @@ import type {
   VibeWeight,
 } from "./types";
 import { SEED_CATEGORIES, DEFAULT_START_TIME, DEFAULT_END_TIME } from "./types";
-// ⚠️ 2026-07-18 §0/§19 = ag3-data-matcher(재export 허브) 삭제 = 실제 파일 직접 import(껍데기 도려내기).
 import { matchPlacesWithDB } from "./ag3-match-core";
 import { saveNewPlacesToDB } from "./ag3-save-new-places";
 import { preloadCityData } from "./ag3-seed-loader";
@@ -29,10 +27,6 @@ import {
 import { getEnrichmentFunctions } from "./pipeline-v3-helpers";
 import { buildDayResult } from "./pipeline-v3-day-builder";
 
-// =====================================================
-// Step 2: 데이터 채우기 + 최종 빌드
-// =====================================================
-
 export async function step2_enrichAndBuild(
   geminiDays: GeminiDay[],
   formData: TripFormData,
@@ -50,7 +44,6 @@ export async function step2_enrichAndBuild(
 ): Promise<any> {
   const _t0 = Date.now();
 
-  // ── 2a. Gemini 장소 → PlaceResult 변환 ──
   const allPlaces: PlaceResult[] = [];
   const scheduleMap: { day: number; gPlace: GeminiPlace; placeId: string }[] =
     [];
@@ -60,14 +53,11 @@ export async function step2_enrichAndBuild(
     for (const gPlace of gDay.places) {
       const isMeal = gPlace.type === "lunch" || gPlace.type === "dinner";
       const placeId = `v3-d${gDay.day}-${allPlaces.length}`;
-      // 슬롯 카테고리 = 식사=restaurant 고정 / 그 외 = Gemini seed_category 화이트리스트 통과분만(환각값 null).
       const slotCat = isMeal
         ? "restaurant"
         : SEED_CATEGORIES.has(gPlace.seed_category || "")
           ? gPlace.seed_category
           : null;
-      // description=shortform_ko(후킹카피)→DB editorial_summary / personaFitReason=selection_reason_ko(인스타/FOMO)→DB summary_ko
-      // 🗑️ 2026-07-05 삭제 = gPlace.reason 폴백 = 프롬프트 미요청 필드(항상 undefined = 死데이터) §0/§19
       const desc = gPlace.shortform_ko || "";
       const persona = gPlace.selection_reason_ko || "AI 추천 장소";
       const place: PlaceResult = {
@@ -79,8 +69,6 @@ export async function step2_enrichAndBuild(
         lng: gPlace.longitude ?? 0,
         vibeScore: 7,
         confidenceScore: 5,
-        // ⚠️ 2026-05-14 = saveNewPlacesToDB 필터 호환 = 'Gemini AI (New)' 유지
-        // = 'Gemini V3' 로 변경 시 = 필터 통과 X = toSave=0 = DB 자동 캐싱 X (= 운영 검증 시 발견)
         sourceType: "Gemini AI (New)",
         personaFitReason: persona,
         // 🧠 2026-07-05 사장님 SSOT = Gemini seed_category(6종) 보존 = ag3 저장 시 restaurant/attraction 2종 뭉갬 대신 이 값 사용(지점4). 식사는 restaurant.
@@ -102,21 +90,14 @@ export async function step2_enrichAndBuild(
         koreanPopularityScore: 0,
         googleMapsUrl: "",
         estimatedPriceEur: sanitizePriceEur(gPlace.price_eur),
-        // ⚠️ 2026-05-14 = AG3 매칭용 + DB INSERT 매핑
-        // = geminiAddress = 행정주소 (= 1순위 매칭 키)
-        // = nameKo/nameLocal = saveNewPlacesToDB INSERT 매핑 (= 한국어/원어명 누락 방지)
         geminiAddress: gPlace.address || "",
         nameKo: gPlace.nameKo || null,
         nameLocal: gPlace.nameLocal || null,
         // ⚠️ 수정금지(승인필요) 2026-07-18 사장님 SSOT = editorialSummary(FE 한줄요약) = Gemini shortform_ko(=desc)를 place 에 직접 매핑.
-        //   근본: 옛 재조회(loadSeedRawMap) 삭제 후 = 신규 곳(흡수 RETURNING 없음)의 editorialSummary 가 place 에 없어 FE 슬롯에서 빔(사장님 실증 3-4곳).
-        //   = place 에 desc 를 editorialSummary 로 실으면 신규·흡수 무관 완비 = 재조회(+1.2초) 불필요. day-builder 는 ep.editorialSummary 우선.
         editorialSummary: desc || null,
         // 🧠 2026-07-05 사장님 SSOT = Gemini 도심거리·카테고리 살림(§20) = saveNewPlacesToDB job 전필드 저장(지점4) = 결손컬럼 채움.
         distanceKmFromCenter: gPlace.distance_km_from_center ?? null,
         // ⚠️ 수정금지(승인필요) 2026-07-11 사장님 SSOT = 슬롯 카테고리 1회 계산(중복식 드리프트 방지) + SEED_CATEGORIES 화이트리스트 검증
-        //   (등재 외 Gemini 환각값 = null = 마커 회색퇴화·category_tags 오염 차단).
-        //   = slotCategory(취향, AG1 매트릭스→Gemini 이행값) = 매칭행 검증값으로 안 바뀌는 표시 전용 = FE 마커·카드 아이콘 소스.
         seedCategory: slotCat,
         slotCategory: slotCat,
       } as any;
@@ -127,15 +108,9 @@ export async function step2_enrichAndBuild(
 
   console.log(`[V3-Step2] ${allPlaces.length}곳 PlaceResult 변환 완료`);
 
-  // ── 2b. place 통과 + seed 이미지 폴백 (매칭은 트리거 단일 관문 §19) ──
-  // 🗑️ 2026-07-18 §0/§19 = skipImageEnrich 옵션 삭제 = 생성 중 Wikipedia 실시간 보강(죽은코드·옛레거시) 완전제거. 이미지 = fill/image-backfill 사후 일괄(2026-07-11 사진 분리 수술).
   const matchedPlaces = await matchPlacesWithDB(allPlaces, preloaded);
-  // 🗑️ 2026-07-05 삭제 = matchedMap = finalPlaceMap 폴백용 데드맵(finalPlaces 가 동일 id 전부 보유) §0/§19
   console.log(`[V3-Step2] DB 매칭 완료 (${Date.now() - _t0}ms)`);
 
-  // 🗑️ 2026-07-05 삭제 = enrichFns 3종 폐기서술 = getRealityCheckForCity(날씨/위기)만 사용 §0/§19
-
-  // 💡 가용시간 자동 계산 (startTime~endTime, 기본 8시간)
   const startH = parseInt((formData.startTime || "09:00").split(":")[0]);
   const startM = parseInt((formData.startTime || "09:00").split(":")[1] || "0");
   const endH = parseInt((formData.endTime || "18:00").split(":")[0]);
@@ -148,7 +123,6 @@ export async function step2_enrichAndBuild(
     `[V3-Step2] 가용시간: ${availableHours}h (${formData.startTime || "09:00"}~${formData.endTime || "18:00"})`,
   );
 
-  // 카테고리 판별 (사용자의 첫 입력 기반)
   const isGuideCategory = shouldApplyGuidePrice(
     (formData.mobilityStyle || "Moderate") as any,
     (formData.travelStyle || "Reasonable") as any,
@@ -161,7 +135,6 @@ export async function step2_enrichAndBuild(
   const [eurToKrw, realityCheck, transportPrice] = await Promise.all([
     getEurToKrwRate("[V3]"),
     enrichFns.getRealityCheckForCity(formData.destination),
-    // 💰 교통비 산정 (카테고리 자동 분류: 가이드 vs 대중교통)
     calculateTransportPrice({
       companionType: (formData.companionType || "Couple") as any,
       companionCount,
@@ -185,11 +158,8 @@ export async function step2_enrichAndBuild(
     );
   }
 
-  // ── 2d. 병합 + summaryKo 생성 ──
-  // 🗑️ 2026-07-05 삭제 = celebrityVisits 빈맵 = celebrity 폐기잔재(읽는 곳 없음) §0/§19
   const finalPlaces = await Promise.all(
     matchedPlaces.map(async (p) => {
-      // seedRawMap 조회 (가격 + 인앱 링크용)
       const seedNameEn = p.name
         ? p.name.toLowerCase().replace(/[\s\p{P}\p{S}]+/gu, "")
         : "";
@@ -216,14 +186,12 @@ export async function step2_enrichAndBuild(
 
       const merged = {
         ...p,
-        // 🗑️ 2026-07-05 삭제 = priceEstimate 옛 p.priceEstimate raw 폴백 = 이중소스 → resolvePrice 단일결과만 §0/§19
         estimatedPriceEur: resolvedPrice,
         priceEstimate:
           resolvedPrice > 0 ? `€${Math.round(resolvedPrice)}` : "무료",
       };
 
       // ⚠️ 수정금지(승인필요) 2026-06-11 = summary_ko = 후킹 숏폼 한줄요약(앱 차별점) 단일 소스 = seedData.summaryKo 우선 → 구글 리뷰수 폴백.
-      // 🗑️ 2026-07-05 삭제 = generateNubiReasonV2 40줄 async껍데기 = 실질 1줄 로직 인라인화(호출부·정의 통삭) §0/§19
       const reviewCount = (merged as any).userRatingCount || 0;
       merged.summaryKo =
         seedData?.summaryKo ||
@@ -235,8 +203,6 @@ export async function step2_enrichAndBuild(
     }),
   );
 
-  // 🗑️ 2026-07-05 삭제 = AWAIT_NEW_PLACES_IMAGES 토글 + else background분기 = true고정 데드경로(await 1벌만) §0/§19
-  // fetch(TS) await = PID·검증요소 응답 전 확보(증발 0). 이미지 = 사후 일괄(2026-07-11 사진 분리 수술) = FE 아이콘 폴백
   await saveNewPlacesToDB(finalPlaces, preloaded.cityId, {
     deferPersist: true,
   }).catch((e) =>
@@ -246,19 +212,12 @@ export async function step2_enrichAndBuild(
     ),
   );
 
-  // 🗑️ 2026-07-18 삭제 = 1차저장 후 loadSeedRawMap 재조회 = 슬롯이 place 직접(흡수 RETURNING·Gemini·TS 로 완비)이라 불필요 §0/§19. day-builder 가 저장 PSR 재매칭하던 419키 SELECT 제거.
-
   // 🗑️ 2026-07-08 사장님 = 폐업 슬롯 splice 완전삭제 = 슬롯은 그 무엇도 줄일 권한 없음(무단 감소 로직) §19. 슬롯 = scheduleMap = Gemini 곳수 항상 보존.
 
-  // 최종 장소 맵 (= saveNewPlacesToDB 후 = 보강 결과 반영)
   const finalPlaceMap = new Map<string, PlaceResult>();
   for (const fp of finalPlaces) {
     finalPlaceMap.set(fp.id, fp);
   }
-
-  // ── 2e. 일별 스케줄 구성 + 이동시간 계산 ──
-  // 🗑️ 2026-07-06 = travelMode(mobilityStyle 힌트) 완전삭제 §19 = pickTransitMode 가 거리(1km)로 mode 결정(DB-only 동형) = mobilityStyle 편향(전부 도보) 결함 근본제거.
-  // ⚠️ 2026-07-15 = 루프 본문 = pipeline-v3-day-builder.ts buildDayResult (§0 슬림화, 순수 이동. 로직 변경 0).
 
   const days: any[] = [];
   let totalTripCostEur = 0;
@@ -284,8 +243,6 @@ export async function step2_enrichAndBuild(
     days.push(dayResult);
   }
 
-  // ── 총 여행 비용 (1인 기준 - OTA 방식) ──
-  // totalTripCostEur는 이미 1인 기준으로 합산됨
   const totalPerPersonEur = round2(totalTripCostEur);
   const totalPerPersonKrw = Math.round(totalPerPersonEur * eurToKrw);
   const perPersonPerDay =
@@ -298,7 +255,6 @@ export async function step2_enrichAndBuild(
   console.log(`[V3-Step2] 💰 1인 1일 평균: €${perPersonPerDay}`);
 
   // ⚠️ 2026-07-08 사장님 SSOT = 개수보존 3자대조(발각 전용, 보정·삭제 없음) = Gemini 원본 곳수 = scheduleMap = FE days 총합.
-  //   슬롯은 그 무엇도 줄일 권한 없음(§19). 불일치는 조립 단계 어딘가의 무언 손실 = 즉시 발각.
   const geminiPlaceCount = geminiDays.reduce(
     (s, gd) => s + (gd.places?.length || 0),
     0,
@@ -325,7 +281,6 @@ export async function step2_enrichAndBuild(
 
   // ⚠️ 수정금지(승인필요) 2026-05-09 = saveNewPlacesToDB = 위로 이동 (= days 빌드 전) = 중복 호출 X
 
-  // ── 최종 응답 빌드 (프론트엔드 호환 형식) ──
   const paceLabel =
     travelPace === "Packed"
       ? "빡빡하게"
@@ -333,7 +288,6 @@ export async function step2_enrichAndBuild(
         ? "보통"
         : "여유롭게";
 
-  // ⚠️ 2026-07-06 = 요약 총액 = 일별 합(Σ dailyCost.transportEur) = 가이드 날짜별 요금(첫날/막날 버퍼로 다름)과 days 정합. 옛 perPersonPerDay×dayCount(flat) 폐기 §19.
   const transportTotalEur = round2(
     days.reduce(
       (s: number, d: any) => s + (d.dailyCost?.breakdown?.transportEur || 0),
@@ -342,7 +296,6 @@ export async function step2_enrichAndBuild(
   );
   const transportAvgPerDay =
     dayCount > 0 ? round2(transportTotalEur / dayCount) : 0;
-  // 교통비 요약 (카테고리별)
   const transportSummary = transportPrice
     ? (() => {
         if (transportPrice.category === "guide") {
@@ -363,7 +316,6 @@ export async function step2_enrichAndBuild(
           const tp = transportPrice as TransitPriceResult;
           return {
             category: "transit" as const,
-            // ⚠️ 2026-07-06 = 대중교통도 일별 합(구간합산) 기준 = days 정합. perPersonPerDay=평균 대표값.
             perPersonPerDay: transportAvgPerDay,
             perPersonPerDayKrw: Math.round(transportAvgPerDay * eurToKrw),
             perPersonTotal: transportTotalEur,
@@ -384,7 +336,6 @@ export async function step2_enrichAndBuild(
       })()
     : null;
 
-  // ── 최종 일정 검증 (90% 이상만 프론트 전송) ──
   const result = {
     title: `${formData.destination} ${dayCount}일 여행`,
     destination: formData.destination,
@@ -398,7 +349,6 @@ export async function step2_enrichAndBuild(
     companionCount,
     travelStyle: formData.travelStyle,
     mobilityStyle: formData.mobilityStyle,
-    // 💰 비용 (모두 1인 기준 - OTA 방식)
     totalCost: {
       perPersonEur: totalPerPersonEur,
       perPersonKrw: totalPerPersonKrw,
@@ -434,7 +384,6 @@ export async function step2_enrichAndBuild(
         ),
       },
     },
-    // 💰 교통비 요약 (마케팅 핵심)
     transportSummary,
     realityCheck,
     metadata: {
@@ -451,8 +400,6 @@ export async function step2_enrichAndBuild(
       curationFocus: formData.curationFocus,
       generatedAt: new Date().toISOString(),
       pipelineVersion: "v3-2step",
-      // ⚠️ 2026-07-06 = 매칭 집계 = finalPlaces 기준(step2 내부 = 실제 여정 장소). 옛 외부 result.places(항상 빈값 → total:0 오집계) 폐기 §19.
-      //   = googlePlaceId 있음 = DB 매칭 완료 / 없음 = 신규(TS 대상 = 응답 전 저장).
       _matched: finalPlaces.filter((p: any) => p.googlePlaceId).length,
       _unmatched: finalPlaces.filter((p: any) => !p.googlePlaceId).length,
       // ⚠️ 2026-07-08 사장님 SSOT = 개수보존 3자대조 결과. null = 정상(보존). 있으면 조립단계 무언손실 = 즉시발각(은폐0).

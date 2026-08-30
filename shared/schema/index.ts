@@ -8,5 +8,4 @@ export * from "./expert";
 export * from "./credits";
 export * from "./relations";
 
-// Re-export chat models
 export * from "../models/chat";

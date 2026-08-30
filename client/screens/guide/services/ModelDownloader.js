@@ -1,5 +1,4 @@
 // ⚠️ 수정금지(승인필요): Gemma 4 E2B 모델 다운로드 매니저
-// HuggingFace → 로컬 스토리지, 백그라운드 다운로드 + 진행률
 import * as FileSystem from 'expo-file-system';
 import { CONFIG } from '../config/constants';
 
@@ -22,28 +21,22 @@ export function getModelPath() {
 }
 
 // ⚠️ 수정금지(승인필요): 모델 다운로드 (진행률 콜백)
-// onProgress: (progress: 0~1) => void
-// 반환: { success: boolean, path?: string, error?: string }
 export async function downloadModel(onProgress) {
   try {
-    // 디렉토리 생성
     const dirInfo = await FileSystem.getInfoAsync(MODEL_DIR);
     if (!dirInfo.exists) {
       await FileSystem.makeDirectoryAsync(MODEL_DIR, { intermediates: true });
     }
 
-    // 이미 다운로드 완료된 경우
     if (await isModelDownloaded()) {
       onProgress?.(1);
       return { success: true, path: MODEL_PATH };
     }
 
-    // 백그라운드 다운로드 시작
     const downloadResumable = FileSystem.createDownloadResumable(
       CONFIG.MODEL.DOWNLOAD_URL,
       MODEL_PATH,
       {},
-      // 진행률 콜백
       (downloadProgress) => {
         const progress = downloadProgress.totalBytesWritten / downloadProgress.totalBytesExpectedToWrite;
         onProgress?.(progress);

@@ -1,7 +1,4 @@
 // ⚠️ 수정금지(승인필요) 2026-06-24 사장님 SSOT = 레포 place-identity.sql 을 라이브 DB 에 트랜잭션 적용 (직접접속 §16·§19).
-//   = 레포 SQL = 단일 진본(§19). 이 도구가 그 진본을 BEGIN/COMMIT 으로 라이브에 동기화 = 함수+트리거 1벌.
-//   = 적용 후 트리거 events(BEFORE INSERT OR UPDATE) 즉시 확인. 실패 시 ROLLBACK = 라이브 무변경.
-//   호출: npx tsx fillcity/apply-dup-trigger.ts
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -22,7 +19,6 @@ for (const l of env.split(/\r?\n/)) {
   const sqlPath = path.join(ROOT, "server/db/migrations/place-identity.sql");
   const fullSql = fs.readFileSync(sqlPath, "utf-8");
   // ⚠️ 수정금지(승인필요) 2026-06-24 = A 범위 = 함수 + 트리거 바인딩만. UNIQUE INDEX(CREATE UNIQUE INDEX) 는
-  //   라이브 미존재 + 기존 name_en 중복 때문에 생성 불가 = A 범위 밖 = 별도 청소 후 승인 작업. 그래서 함수 정의부터 적용.
   const fnStart = fullSql.indexOf("CREATE OR REPLACE FUNCTION");
   if (fnStart < 0) {
     console.error("X 함수 정의 시작점 미발견");

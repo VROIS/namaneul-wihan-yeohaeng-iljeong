@@ -1,14 +1,5 @@
 // ⚠️ 수정금지(승인필요) 2026-05-26 = 사용자 SSOT = 메인앱 동선 최적화 전용 표준 prompt
 // = 헌법 §3 + §11 + §16 = 변경 시 양쪽 동기 + 사용자 명시 승인
-// = SSOT 원본: .claude/skills/raw-db-verify-and-complete/prompts/10-main-app-route/STANDARD_PROMPT_2026-05-26_route-only.md
-// = 1 글자라도 달라지면 안 됨 (= 양쪽 1:1 비교 검증)
-//
-// 본 파일 = 동선 + 식당 자동 발견 전용 (= 시나리오 카피 6 필드 완전 제거)
-//   - 옛 = 시나리오 통합 = 11-main-app-scenario/ 폴더 = 추후 별도 작업
-//
-// 자동화 = 2 종 분리:
-//   A. 결정적 매트릭스 = 본 파일 (= 함수 호출 = 하드코드 0)
-//   B. 동선 + 식당 자동 발견 = Gemini
 
 import type {
   AG1Output,
@@ -19,17 +10,11 @@ import type {
   PlaceResult,
 } from "../agents/types";
 import { MEAL_BUDGET, getCompanionCount } from "../agents/types";
-// ⚠️ 2026-08-12 운영 500 수정 = 예산값 정규화 1벌(route-local·MIX 와 동일 §0)
 import { normalizeTravelStyle } from "../agents/pipeline-v3-types";
 // ⚠️ 수정금지(승인필요) 2026-05-25 = 헌법 §16 = shouldApplyGuidePrice 단일 SSOT (= transport-pricing-service)
-// = 옛 로컬 정의 (= 같은 이름 다른 의미) = silent drift 위험 = 폐기
 import { shouldApplyGuidePrice } from "../transport-pricing-service";
 import type { RouteInputJson } from "./route-types";
 
-/**
- * COMPANION_LABEL_KO = companionType → 한국어 label 1:1 (= 본 prompt 전용 카피)
- * = headcount = getCompanionCount() (= types.ts SSOT) 직접 호출 = 중복 차단
- */
 const COMPANION_LABEL_KO: Record<string, string> = {
   Single: "1 인 (= 솔로)",
   Solo: "1 인 (= 솔로)",
@@ -39,11 +24,6 @@ const COMPANION_LABEL_KO: Record<string, string> = {
   Group: "친구 10 인 그룹",
 };
 
-/**
- * ⚠️ 2026-05-26 = 사용자 SSOT = 동선 전용 = 시나리오 카피 매트릭스 폐기
- * = focus_key 만 = inputJson.protagonist.focus 채움 (= 동선 영향 = 아이/부모/솔로 시설 선호)
- * = camera_subject / sample_narration / tone_ko = 시나리오 카피 = 폐기
- */
 const FOCUS_KEY: Record<CurationFocus, "child" | "parent" | "all" | "me"> = {
   Kids: "child",
   Parents: "parent",
@@ -51,10 +31,6 @@ const FOCUS_KEY: Record<CurationFocus, "child" | "parent" | "all" | "me"> = {
   Self: "me",
 };
 
-/**
- * resolveTransportMode = transport-pricing-service.shouldApplyGuidePrice() → string 매핑
- * = boolean SSOT (= 단일 함수) + 본 prompt 양식 ("public_transit" | "private_driver_guide")
- */
 function resolveTransportMode(
   mobilityStyle: MobilityStyle | undefined,
   travelStyle: TravelStyle | undefined,
@@ -67,12 +43,6 @@ function resolveTransportMode(
     : "public_transit";
 }
 
-/**
- * city_center 우선순위 = 표준 prompt 의 출발/귀환 anchor
- * 1. formData.accommodationCoords (= 사용자 입력 숙소)
- * 2. cityCoords (= DB cities 테이블 도시 중심)
- * 3. places[0] (= fallback)
- */
 function resolveCityCenter(
   formData: TripFormData,
   cityCoords: { lat: number; lng: number } | undefined,
@@ -89,10 +59,6 @@ function resolveCityCenter(
   return { lat: 0, lng: 0 };
 }
 
-/**
- * AG1Output + places + cityCoords → RouteInputJson (= 결정적 매트릭스 변환)
- * = 표준 prompt 의 inputJson 자동 채움 = 하드코드 0
- */
 export function buildRouteInputJson(
   skeleton: AG1Output,
   places: PlaceResult[],
@@ -108,13 +74,10 @@ export function buildRouteInputJson(
     formData.mobilityStyle,
     formData.travelStyle,
   );
-  // ⚠️ 2026-08-12 운영 500 수정 = 정규화 필수(route-local·MIX 와 동일 1벌 §0)
   const mealBudget = MEAL_BUDGET[normalizeTravelStyle(formData.travelStyle)];
 
   return {
     city_center: resolveCityCenter(formData, cityCoords, places),
-    // ⚠️ 2026-05-26 = 사용자 SSOT = 사용자 동적 입력만 = 시키지 않은 조건 X
-    // = pace = inject 폐기 (= AG2 풀 수 결정 내부 코드만)
     trip_config: {
       day_count: skeleton.dayCount,
       start_time: formData.startTime || "09:00",
@@ -133,15 +96,11 @@ export function buildRouteInputJson(
       })),
       transport_mode,
     },
-    // ⚠️ 2026-05-26 = 사용자 SSOT = 일한도만 = 점심:저녁 비율 강제 X
     meal_budget_eur_per_person: {
       daily_total: mealBudget.dailyTotal, // = 동적 = MEAL_BUDGET[travelStyle].dailyTotal
       label: mealBudget.label,
     },
     // ⚠️ 수정금지(승인필요) 2026-05-28 = 사용자 SSOT 3 번 명시 = 4 필수만 (= PLACE_INPUT_KEYS)
-    // = name_en / name_ko / type / seed_category / day_zone / rank 제거 (= AI 임의 추가 폐기 = 토큰 절약)
-    // = PSR 3 필수 (name_local / address / lat+lng) 다 있으면 다 / 없으면 null = Gemini 가 빈 필드 채워서 반환
-    // @see route-types.ts:PLACE_INPUT_KEYS (= silent drift 방지)
     places: places
       .filter((p) => p.seedCategory !== "restaurant")
       .map((p) => ({
@@ -154,11 +113,6 @@ export function buildRouteInputJson(
   };
 }
 
-/**
- * ⚠️ 2026-05-26 = 사용자 SSOT = 동선 전용 prompt (= 시나리오 카피 5 + 식당 풀 = 모두 제외)
- * = B = protagonist_summary_ko / theme_ko / transit_summary_ko / # Tone Sample / focus_tone_ko/camera_subject 모두 제외
- * = C = places.filter(seedCategory !== 'restaurant') (= 식당 풀 제외 = 제미니 자동 발견 + NULL 좌표 필터 제거)
- */
 export function generateRoutePrompt(
   skeleton: AG1Output,
   places: PlaceResult[],
@@ -166,7 +120,6 @@ export function generateRoutePrompt(
 ): { prompt: string; inputJson: RouteInputJson } {
   const inputJson = buildRouteInputJson(skeleton, places, cityCoords);
   const { formData, paceConfig } = skeleton;
-  // ⚠️ 2026-08-12 운영 500 수정 = 정규화 필수(route-local·MIX 와 동일 1벌 §0)
   const mealBudget = MEAL_BUDGET[normalizeTravelStyle(formData.travelStyle)];
   const transportMode = inputJson.protagonist.transport_mode;
   const nonRestaurantCount = inputJson.places.length;

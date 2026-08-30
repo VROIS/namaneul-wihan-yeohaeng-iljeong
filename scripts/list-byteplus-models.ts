@@ -1,7 +1,6 @@
 import * as dotenv from "dotenv";
 import pg from "pg";
 
-// .env 로드 (프로젝트 루트 기준)
 dotenv.config();
 
 const { Pool } = pg;
@@ -36,9 +35,6 @@ async function listModels() {
 
     console.log(`🔑 Using API Key: ${apiKey.substring(0, 5)}...`);
 
-    // 모델 목록 조회 API 호출 (엔드포인트가 다를 수 있음, 문서 참조 필요)
-    // 일단 /models 시도. 안되면 /contents/generations/models 등 시도 필요.
-    // 하지만 ModelArk API 문서를 볼 수 없으므로 표준적인 /models 시도.
     const response = await fetch(`${BYTEPLUS_BASE_URL}/models`, {
       headers: {
         Authorization: `Bearer ${apiKey}`,

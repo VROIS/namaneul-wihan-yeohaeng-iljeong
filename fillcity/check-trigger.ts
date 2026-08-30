@@ -1,5 +1,3 @@
-// ⚠️ 2026-06-24 = 라이브 DB 트리거 점검 (직접접속). place_seed_raw 의 트리거 실제 정의 확인.
-// 호출: npx tsx fillcity/check-trigger.ts
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";

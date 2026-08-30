@@ -1,4 +1,3 @@
-// 공통 헬퍼 함수 모음 = itinerary-generator 분리(2026-07-15 §0 슬림화, 순수 이동)
 import {
   PACE_CONFIG,
   PSR_TIER_OFFSET,
@@ -9,7 +8,6 @@ import {
   type Vibe,
 } from "./types";
 
-// === 인원수 계산 (companionType 기반) ===
 export function getCompanionCount(companionType: string): number {
   const mapping: Record<string, number> = {
     Single: 1,
@@ -21,9 +19,6 @@ export function getCompanionCount(companionType: string): number {
   return mapping[companionType] || 1;
 }
 
-/**
- * 장소가 식당/카페인지 확인
- */
 export function isFoodPlace(place: PlaceResult): boolean {
   const foodTags = [
     "restaurant",
@@ -34,9 +29,6 @@ export function isFoodPlace(place: PlaceResult): boolean {
     "bistro",
     "brasserie",
   ];
-  // ⚠️ vibeTags에 'Foodie'만 있는 것으로 식당 판단 금지!
-  // AG2가 vibes에 Foodie 포함 시 관광지에도 Foodie 태그 부여 가능 → 모든 장소가 식당으로 분류되는 버그
-  // 대신 tags, placeTypes, 이름으로만 판단 (더 정확)
   const hasFoodTag = place.tags?.some((t) =>
     foodTags.includes(t.toLowerCase()),
   );
@@ -57,7 +49,6 @@ export function getTierOffset(rank: number): number {
   return 0;
 }
 
-// 식당 점수 = tier 안 1 등 = 10 점 / 20 등 = 0 점
 export async function calculateRestaurantScore(
   place: PlaceResult,
 ): Promise<number> {
@@ -66,9 +57,6 @@ export async function calculateRestaurantScore(
   return Math.max(0, Math.min(10, 11 - tierRank));
 }
 
-// ===== PlaceResult → Route Optimizer 호환 변환 =====
-// route-optimizer.ts는 Place 타입 (latitude/longitude)을 기대하지만
-// itinerary-generator에서는 PlaceResult (lat/lng)를 사용함
 export function toRoutablePlace(p: PlaceResult): {
   id: number;
   latitude: number;
@@ -86,7 +74,6 @@ export function toRoutablePlace(p: PlaceResult): {
   };
 }
 
-// 문자열 → 숫자 해시 (PlaceResult.id가 문자열일 때)
 export function hashCode(str: string): number {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
@@ -97,13 +84,6 @@ export function hashCode(str: string): number {
   return hash;
 }
 
-/**
- * 가용 시간으로 슬롯 수 계산
- * @param startTime 시작시간 (HH:MM)
- * @param endTime 종료시간 (HH:MM)
- * @param pace 여행 밀도
- * @returns 슬롯 수
- */
 export function calculateSlotsForDay(
   startTime: string,
   endTime: string,
@@ -124,9 +104,6 @@ export function calculateSlotsForDay(
   return Math.min(slots, config.maxSlotsPerDay);
 }
 
-/**
- * 분(minutes)을 HH:MM 형식으로 변환
- */
 export function minutesToTime(minutes: number): string {
   const hours = Math.floor(minutes / 60);
   const mins = minutes % 60;
@@ -155,14 +132,8 @@ export function calculateVibeWeights(
 }
 
 // ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = MIX path + 옛 점수 코드 완전 삭제
-// = 옛 searchGooglePlaces / isFreePlace / isPackageTourPriceSource / enrichPlacesWith* = 모두 폐기
-// = ag2-DB 가 place_seed_raw 직접 SELECT = Google Places / TripAdvisor / Gemini 호출 0
-// = DB-only path = pipeline-db-only.ts 단일 분기 (= MIX = ag2:throw MIX_MODE_DISABLED)
 
 // ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = 점수 시스템 완전 폐기
-// = VIBE_WEIGHT_MATRIX + DATA_GRADE_ADJUSTMENT + detectDataGrade + calculateDynamicWeights + calculateFinalScore = 모두 삭제
-// = PSR.rank 단일 SSOT = ag2-DB 가 카테고리/tier 별 RC DESC 정렬 = 이미 정렬됨
-// = AG3 = `finalScore = Math.max(0, 21 - place.rank)` 단순 부여
 
 export async function getRealityCheckForCity(
   _destination: string,
@@ -170,10 +141,6 @@ export async function getRealityCheckForCity(
   return { weather: "Sunny", crowd: "Medium", status: "Open" };
 }
 
-/**
- * Phase 1-6: 선정 이유 생성 (최소 2개) + 신뢰도 레벨 판단
- * 데이터 기반 이유 → AI 기반 이유 → 실용적 이유 순으로 채움
- */
 export function generateSelectionReasons(place: PlaceResult): {
   reasons: string[];
   confidence: "high" | "medium" | "low" | "minimal";
@@ -195,18 +162,15 @@ export function generateSelectionReasons(place: PlaceResult): {
     dataPoints += 2;
   }
 
-  // 가격 정보 (= PSR.price_eur 단일 SSOT)
   if (place.estimatedPriceEur !== undefined && place.estimatedPriceEur > 0) {
     reasons.push(`약 EUR${Math.round(place.estimatedPriceEur)}`);
     dataPoints += 1;
   }
 
-  // 페르소나 매칭 이유
   if (place.personaFitReason && reasons.length < 4) {
     reasons.push(place.personaFitReason);
   }
 
-  // 바이브 태그 기반
   if (place.vibeTags && place.vibeTags.length > 0 && reasons.length < 4) {
     const vibeLabels: Record<string, string> = {
       Healing: "힐링",
@@ -220,7 +184,6 @@ export function generateSelectionReasons(place: PlaceResult): {
     reasons.push(`${tags} 분위기 매칭`);
   }
 
-  // 최소 2개 보장
   if (reasons.length < 2 && place.description) {
     reasons.push(
       place.description.length > 60
@@ -232,11 +195,6 @@ export function generateSelectionReasons(place: PlaceResult): {
     reasons.push("여행 동선 최적화 기반 선정");
   }
 
-  // ===== 신뢰도 레벨 =====
-  // high: 3개 이상 데이터 소스 + 한국 인기도 있음
-  // medium: 2개 데이터 소스 또는 TripAdvisor 데이터 있음
-  // low: 1개 데이터 소스
-  // minimal: 데이터 없음, AI 추천만
   let confidence: "high" | "medium" | "low" | "minimal";
   if (dataPoints >= 4) {
     confidence = "high";
@@ -252,8 +210,6 @@ export function generateSelectionReasons(place: PlaceResult): {
 }
 
 // ⚠️ 수정금지(승인필요) 2026-05-24 = MIX path helper 모두 폐기
-// = 옛 getPlaceTypesForVibes / calculatePlaceVibeScore / getPersonaFitReason /
-//   mapPlaceTypesToVibes / getPriceEstimate = 모두 삭제
 
 export function calculateDayCount(startDate: string, endDate: string): number {
   console.log(

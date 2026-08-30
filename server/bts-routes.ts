@@ -1,15 +1,8 @@
-/**
- * BTS 이벤트 페이지 전용 API (v2 - Gemini AI 보강)
- * docs/BTS/BTS_구체화_계획.md 참조
- */
-
 import type { Express } from "express";
 import { db } from "./db";
 import { cities, placeSeedRaw } from "../shared/schema";
 import { isNotNull, asc, desc, eq, and, sql } from "drizzle-orm";
 // ⚠️ 2026-07-31 사장님 승인(BTS D단계) = 옛 자체 생성기(/api/bts/generate + bts-gemini) 완전삭제 §19·§16.
-//   여정 생성 = 메인 파이프라인 v3 1벌(/api/routes/generate + pinnedPlaceIds).
-// pickRestaurantNearVenue(저녁) 폐기 = 2026-08-15 §19(위 슬롯순서 주석 참고). 점심만 유지.
 import { pickRestaurantBySegment } from "./services/route-matcher";
 import {
   CHARACTER_PRIMARY_CATEGORY,
@@ -25,9 +18,7 @@ const PLACE_COLS = {
   seedCategory: placeSeedRaw.seedCategory,
   categoryTags: placeSeedRaw.categoryTags,
   imageUrl: placeSeedRaw.imageUrl,
-  // ⚠️ 2026-06-11 = best_image_url DROP = 이미지 image_url(구글 PM) 1종 통일
   priceEur: placeSeedRaw.priceEur,
-  // ⚠️ 2026-06-11 = nubiReason/googleRating 헛바퀴 폐기 → summary_ko(후킹 숏폼 차별점) 흡수통합
   summaryKo: placeSeedRaw.summaryKo,
   latitude: placeSeedRaw.latitude,
   longitude: placeSeedRaw.longitude,
@@ -39,7 +30,6 @@ const PLACE_COLS = {
 type PlaceRow = Pick<typeof placeSeedRaw.$inferSelect, keyof typeof PLACE_COLS>;
 
 // ⚠️ 수정금지(승인필요) — 2026-05-07 사용자 명시 결정성: 이미지 URL 살아있는지 검증 = HEAD 호출 + 5분 메모리 cache.
-// 깨진 storage URL → 다음 rank 로 자동 swap = "같은 입력 → 같은 결과 + 항상 정상 카드".
 const _imgAliveCache = new Map<string, { ok: boolean; t: number }>();
 const _IMG_CACHE_TTL = 5 * 60 * 1000;
 const _IMG_CACHE_MAX = 500;
@@ -74,12 +64,9 @@ async function isImageAlive(url: string | null | undefined): Promise<boolean> {
 }
 function effectiveImage(p: PlaceRow | null | undefined): string | null {
   if (!p) return null;
-  // ⚠️ 정규화된 URL 으로 alive 검증 = 응답 URL 과 동일 보장
   return normalizeImageUrl(p.imageUrl || null, 1280);
 }
 // ⚠️ 수정금지(승인필요) — 2026-05-07: HEAD 검증 = Replit 서버 외부 fetch 차단/timeout 환경에서 = 모든 row false 사고.
-// → DB 정규화 후 = 깨진 URL 거의 0 → HEAD 검증 폐기 + 첫 eligible 반환 (fail-open).
-// 깨진 이미지 row = 클라이언트 expo-image cover fit + native UA 헤더 = 1 주일 노하우 그대로 처리.
 async function pickAliveFrom<T extends PlaceRow>(
   candidates: T[],
   used: Set<number>,
@@ -91,9 +78,6 @@ async function pickAliveFrom<T extends PlaceRow>(
 }
 
 // ⚠️ 수정금지(승인필요) 2026-07-30 = **D-Day 계산 = 이 함수 1벌.**
-//   옛것(`Date.now()` 로 빼기)은 **지금 시각(시·분)이 섞여** 계산이 하루 밀렸다 = 삭제 §19.
-//   예: 밤 11시에 열면 아미봉 화면은 "D-2" 인데 지구본은 "D-1" = 같은 흐름에서 숫자가 달랐다.
-//   지금은 양쪽 다 **날짜만(UTC 자정 기준)** 빼므로 몇 시에 열어도 같은 숫자가 나온다.
 function calcDDay(concertDate: string, today: string): number {
   return Math.ceil(
     (new Date(concertDate + "T00:00:00Z").getTime() -
@@ -103,7 +87,6 @@ function calcDDay(concertDate: string, today: string): number {
 }
 
 export function registerBtsRoutes(app: Express): void {
-  // ─── GET /api/bts/next-concert — 다음 공연 도시/날짜 자동 계산 ───
   app.get("/api/bts/next-concert", async (_req, res) => {
     try {
       if (!db)
@@ -124,7 +107,6 @@ export function registerBtsRoutes(app: Express): void {
           and(
             eq(placeSeedRaw.cityId, cities.id),
             eq(placeSeedRaw.seedCategory, "bts_venue"),
-            // ⚠️ 2026-05-23 = collection_phase 폐기 = phase_tags 'bts2026' 마커로 대체
             sql`'bts2026' = ANY(COALESCE(${placeSeedRaw.phaseTags}, ARRAY[]::text[]))`,
           ),
         )
@@ -163,8 +145,6 @@ export function registerBtsRoutes(app: Express): void {
       }
 
       // ⚠️ 수정금지(승인필요) 2026-07-30 §19 = 도시명·날짜를 글자로 박아둔 대체값 완전삭제.
-      //   사유: 모든 공연이 끝난 뒤 그 도시·날짜가 영구히 표시되어(D-0) 거짓 정보가 됐다.
-      //   남은 공연이 없으면 **아무것도 없다고 답한다**(null) = 화면이 빈 칸으로 처리한다.
       res.json(next);
     } catch (err) {
       console.error("[BTS] GET /api/bts/next-concert error:", err);
@@ -172,7 +152,6 @@ export function registerBtsRoutes(app: Express): void {
     }
   });
 
-  // ─── GET /api/bts/cities ───
   // ⚠️ 수정금지(승인필요) — 공연 임박 순 5개 필터링용 nextConcertDate 추가 (2026-04-17)
   app.get("/api/bts/cities", async (_req, res) => {
     try {
@@ -202,9 +181,7 @@ export function registerBtsRoutes(app: Express): void {
           .filter((d) => d >= today)
           .sort();
         const nextConcertDate = upcoming[0] || null;
-        // D-Day = 서버가 계산해 내려준다(화면이 글자로 박아두면 날짜가 지나도 그대로 남는다).
         const dDay = nextConcertDate ? calcDDay(nextConcertDate, today) : null;
-        // 공연 시각 = 그 날짜에 해당하는 것만(여정 종료를 공연 시작에 맞추는 데 쓴다).
         const showTime =
           (
             ((r.btsShowTimes || []) as { date: string; time: string }[]).find(
@@ -227,9 +204,6 @@ export function registerBtsRoutes(app: Express): void {
       });
 
       // ⚠️ 수정금지(승인필요) 2026-07-30 사장님 SSOT = **남은 공연 도시만** 내려준다.
-      //   기준은 bts_archived 가 아니라 **공연 날짜**다: 그 표시는 갱신이 안 되어 34개 중 2개만 true 인데,
-      //   실제로 지난 공연은 그보다 훨씬 많다. 날짜로 판단하면 항상 정확하고 손이 안 간다.
-      //   지구본과 8장 선택화면이 **이 목록 1벌**을 함께 쓴다(같은 도시 순서 보장).
       res.json(enriched.filter((c) => c.nextConcertDate !== null));
     } catch (err) {
       console.error("[BTS] GET /api/bts/cities error:", err);
@@ -237,12 +211,7 @@ export function registerBtsRoutes(app: Express): void {
     }
   });
 
-  // ─── GET /api/bts/top-places ───
   // ⚠️ 수정금지(승인필요) — 2026-08-15 사장님 승인: 8 슬롯 고정 순서 v2
-  // slot 1 = bts_venue (출발), slot 5 = 점심 (segment 매칭, 정중앙 하단)
-  // slot 2,3,4,6,7,8 = 주 카테고리 vibe 1~6 (companion = 5 카테고리)
-  // 옛 "slot 8 = 저녁(venue 인근)" 폐기 §19 = 공연 3시간 전 종료라 저녁시간·식당 오픈시간과 안 맞음
-  //   (BTSTripScreen.tsx 밀도 역산과 정합 = 활동시간 최대 확보).
   app.get("/api/bts/top-places", async (req, res) => {
     try {
       if (!db)
@@ -254,14 +223,10 @@ export function registerBtsRoutes(app: Express): void {
       }
 
       // ⚠️ 수정금지(승인필요) — 2026-05-07 사용자 SSOT: place_seed_raw 단일 테이블. collection_phase = 폐기 (= AI 과도 분류).
-      // = 도시 = 통합 최종 top 시드. 카테고리 태그만 사용. 정렬 = rank ASC (= 최종 랭킹순) + reviewCount DESC.
       const cityFilter = eq(placeSeedRaw.cityId, cityId);
-      // 안전장치: imageUrl NULL row 자동 skip
       const imageNotNull = sql`${placeSeedRaw.imageUrl} IS NOT NULL`;
       const dbi = db;
       // ⚠️ 수정금지(승인필요) — 2026-05-07 사용자 SSOT: vibe 슬롯 = "순수 vibe" row만.
-      // category_tags=["heritage","restaurant"] 같은 다중 tag row는 = lunch/dinner 자리만 사용.
-      // 즉 vibe 검색 시 = 같은 row 가 restaurant tag 도 가지면 vibe slot 에서 제외 (= 식당 카드 중복 차단).
       const byCategoryTag = (tag: string, limit: number) => {
         const conditions = [
           cityFilter,
@@ -279,10 +244,6 @@ export function registerBtsRoutes(app: Express): void {
             .from(placeSeedRaw)
             .where(and(...conditions))
             // ⚠️ 2026-07-31 사장님 지시(BTS 문제점2) = **주 카테고리 일치 우선** → rank ASC.
-            //   옛것(rank 만) = 소도시 상위 rank 행이 멀티태그(예: American Dream = hotspot·attraction·
-            //   adventure·shopping 전부)라 **어느 캐릭터를 골라도 같은 카드**가 나왔다(DB 실측).
-            //   주 카테고리(seed_category)가 그 캐릭터 카테고리인 행을 앞세우면 캐릭터마다 카드가 갈린다.
-            //   부족하면 멀티태그 행이 자연히 뒤를 채움(= 시드 발굴로 채워질수록 자동 개선).
             .orderBy(
               sql`(${placeSeedRaw.seedCategory} = ${tag}) DESC`,
               asc(placeSeedRaw.rank),
@@ -299,12 +260,9 @@ export function registerBtsRoutes(app: Express): void {
         .orderBy(desc(placeSeedRaw.googleReviewCount))
         .limit(1);
       // ⚠️ 수정금지(승인필요) — 2026-05-07 사용자 명시 결정성: limit 확장 (= 5/10 → 15/20)
-      // 같은 row 가 여러 category_tags (예: ["heritage","restaurant"]) 가질 수 있어
-      // vibe 슬롯과 lunch/dinner 가 동일 id 매칭되는 사고 방지용 후보 풀 충분 확보.
       const restaurantQuery = byCategoryTag("restaurant", 20);
 
       const isCompanion = memberId === "companion";
-      // companion = 5 카테고리 병렬, 그 외 = 1 카테고리 top 15
       const vibeQuery: Promise<PlaceRow[]> = isCompanion
         ? Promise.all(
             COMPANION_VIBE_CATEGORIES.map((c) =>
@@ -327,13 +285,9 @@ export function registerBtsRoutes(app: Express): void {
       const venue: PlaceRow | null = venueRows[0] ?? null;
 
       // ⚠️ 수정금지(승인필요) — 2026-05-07 사용자 SSOT 결정성:
-      // 1 장소 = 1 카드 = 누적 exclude. venue → vibe5 → lunch → dinner 모두 unique id 보장.
-      // + 깨진 storage URL = 다음 rank 자동 swap (= isImageAlive HEAD 검증).
       const usedIds = new Set<number>();
       if (venue) usedIds.add(venue.id);
 
-      // vibe top 6 = 누적 exclude + 이미지 alive 검증 → 깨진 row skip → 다음 rank
-      // ⚠️ 2026-08-15 = 5→6 (옛 8번=저녁 자리가 활동으로 전환됨, 위 슬롯순서 주석 참고).
       const vibeSlots: (PlaceRow | null)[] = [
         null,
         null,
@@ -349,7 +303,6 @@ export function registerBtsRoutes(app: Express): void {
         vibeSlots[vIdx] = next;
       }
 
-      // 식당 풀 = 이미 사용된 id 제외 (= HEAD 검증 폐기, fail-open).
       const restaurantPool = restaurantPoolAll.filter(
         (r) => !usedIds.has(r.id) && !!effectiveImage(r),
       );
@@ -373,9 +326,7 @@ export function registerBtsRoutes(app: Express): void {
       ];
 
       // ⚠️ 수정금지(승인필요) — 카드 노출 필드 7 개 + 좌표 2 개 (= 지도 마커용, 2026-05-06 Screen 4 카트→지도)
-      // 평점·리뷰수·영업시간·태그 등은 카드 공간 부족으로 미노출 (사용자 SSOT 2026-04-30)
       // ⚠️ 수정금지(승인필요) — 2026-05-07 사용자 SSOT: 이미지 URL 단일 정규화.
-      // 클라이언트 변환 로직 폐기 → server normalize 1 회 → 모든 도시/카테고리/신규 row 동일 적용.
       const slots = slotPlaces.map((p, i) => {
         if (!p) return { slot: i + 1, id: null };
         const rawUrl = p.imageUrl || null;
@@ -400,9 +351,7 @@ export function registerBtsRoutes(app: Express): void {
     }
   });
 
-  // ─── GET /api/bts/map-config ───
   // ⚠️ 수정금지(승인필요) — 2026-05-06 Screen 4 카트→지도 = WebView 안 Google Maps API key 노출
-  // QA `/api/config` 패턴과 동일. referrer 제한 = 운영 합의 후 Google Cloud Console 설정.
   app.get("/api/bts/map-config", (_req, res) => {
     const key =
       process.env.GOOGLE_MAPS_API_KEY || process.env.Google_maps_api_key || "";

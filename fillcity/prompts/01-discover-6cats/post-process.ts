@@ -1,12 +1,4 @@
 // ⚠️ 수정금지(승인필요) 2026-05-20 = 01-discover-6cats 후처리 + DB INSERT
-// = README.md 7 요소 중 ⑥ 후처리 + DB INSERT
-// = docs/raw/{city_id}/01-discover-6cats.json 읽음 → upsertPlace() v2 단일 진입점 INSERT
-//
-// 호출:
-//   npx tsx fillcity/prompts/01-discover-6cats/post-process.ts --city-id=19 [--dry]
-//
-// 정책 = 헌법 §14 = upsertPlace() 단일 진입점 (= 5 단계 매칭 자동)
-//      = §15 = shopping = price_eur null 강제
 import fs from "fs";
 import path from "path";
 import { fileURLToPath, pathToFileURL } from "url";
@@ -30,7 +22,6 @@ if (!cityId) {
 const dryRun = argv["dry"] === "true";
 
 (async () => {
-  // .env 로드
   const envRaw = fs.readFileSync(".env", "utf-8").replace(/^﻿/, "");
   for (const line of envRaw.split(/\r?\n/)) {
     const m = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/);
@@ -41,7 +32,6 @@ const dryRun = argv["dry"] === "true";
     }
   }
 
-  // 1. 산출물 raw 읽기 (= --date 명시 또는 오늘 날짜)
   // ⚠️ 수정금지(승인필요) — raw 파일명 표준화: 날짜앞 rawName 형식
   // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = latestVersioned 로 _N 계열 중 최신 1개 읽기
   const { rawName, latestVersioned } = await import(
@@ -66,7 +56,6 @@ const dryRun = argv["dry"] === "true";
   console.log(`city_id = ${cityId}`);
   console.log(`산출물 = ${inPath} (= ${raw.meta?.called_at})`);
 
-  // 2. raw_text 파싱
   function parse(t: string): any | null {
     const start = t.indexOf("{");
     if (start < 0) return null;
@@ -91,7 +80,6 @@ const dryRun = argv["dry"] === "true";
     process.exit(1);
   }
 
-  // 3. upsertPlace 단일 진입점 호출
   // ⚠️ 수정금지(승인필요) 2026-06-07 사용자 승인 = Windows ESM 호환 = pathToFileURL 로 file:// URL 변환 (= 형제 12/post-process 와 동일, c:\ 경로 import ERR_UNSUPPORTED_ESM_URL_SCHEME 수정). 로직·프롬프트 무관.
   const { upsertPlace } = await import(
     pathToFileURL(path.join(ROOT, "server/services/place-upsert.ts")).href
@@ -99,7 +87,6 @@ const dryRun = argv["dry"] === "true";
   const today = new Date().toISOString().slice(0, 10);
 
   // ⚠️ 수정금지(승인필요) 2026-07-18 사장님 SSOT = --dry = upsert 시도 후보 목록만 표시(쓰기 0). 옛 matchCandidate(코드매칭) 시뮬 삭제 §19.
-  //   = 중복 판정은 DB 트리거 단일 관문(place_seed_raw_prevent_dup) 전담 = "매처미스" 개념 소멸(관문이 모든 입력 판정). 실제 어디로 갈지 = --apply 때 트리거가 판정 + matchedBy 로그.
   let dryPlan = 0;
 
   const cats = [
@@ -127,10 +114,8 @@ const dryRun = argv["dry"] === "true";
     console.log(`\n[${cat}] = ${places.length} 행`);
     for (const p of places) {
       try {
-        // shopping = price_eur null 강제 (= §15)
         const priceEur = cat === "shopping" ? null : (p.price_eur ?? null);
 
-        // ⚠️ 2026-07-18 = --dry = 쓰기 0 = upsert 시도 후보만 카운트(판정은 --apply 때 트리거). 옛 코드매칭 시뮬 삭제 §19.
         if (dryRun) {
           dryPlan++;
           continue;
@@ -146,7 +131,6 @@ const dryRun = argv["dry"] === "true";
           address: p.address || null,
           latitude: p.lat ?? null,
           longitude: p.lng ?? null,
-          // ⚠️ 2026-06-12 카피 필드명 통폐합 = 응답 키 summary_ko/editorial_summary (= DB 컬럼명) 우선, 옛 raw(selection_reason_ko/shortform_ko) fallback = 손실 0
           selectionReasonKo: p.summary_ko ?? p.selection_reason_ko ?? null, // → summary_ko
           shortformKo: p.editorial_summary ?? p.shortform_ko ?? null, // → editorial_summary
           priceEur,

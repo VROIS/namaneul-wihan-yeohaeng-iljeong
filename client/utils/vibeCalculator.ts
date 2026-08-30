@@ -47,7 +47,6 @@ export function calculateVibeWeights(
 }
 
 // ⚠️ 수정금지(승인필요) 2026-08-13 사장님 승인 = 이미 있던 번역키(VIBE_OPTIONS[].labelKey, options.* 7개국어
-//   완비 확인됨)를 안 쓰고 하드코딩 label을 반환하던 버그 수정. i18next는 훅 밖에서도 전역 인스턴스로 호출 가능.
 export function getVibeLabel(vibe: Vibe): string {
   const option = VIBE_OPTIONS.find((v) => v.id === vibe);
   return option ? i18n.t(option.labelKey) : vibe;

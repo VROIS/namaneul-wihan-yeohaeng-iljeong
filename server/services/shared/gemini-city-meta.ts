@@ -1,9 +1,4 @@
-/**
- * ⚠️ 수정금지(승인필요) 2026-05-23 = 사용자 SSOT
- * = 신규 도시 자동 백필 헬퍼 (= city-resolver.ts 5 단계 = cities INSERT 직전 호출)
- * = Gemini 한 번 호출 = 도시 메타 (= 좌표/국가/타임존/한국어/현지어) JSON 반환
- * = 실패 = null (= 도시 미존재 = caller 가 매칭 null 반환)
- */
+/** ⚠️ 수정금지(승인필요) 2026-05-23 = 사용자 SSOT */
 
 import { geminiJson } from "./geminiClient";
 

@@ -151,21 +151,18 @@ export const Fonts = {
   bold: "Pretendard-Bold",
 };
 
-// Vibe Score 색상 (10점 만점 기준)
 export function getVibeScoreColor(score: number): string {
   if (score >= 8.0) return "#8B5CF6"; // 보라색 - Excellent
   if (score >= 5.0) return "#F97316"; // 주황색 - Good
   return "#6B7280"; // 회색 - Average
 }
 
-// Vibe Score 그라데이션 (10점 만점 기준)
 export function getVibeScoreGradient(score: number): string[] {
   if (score >= 8.0) return ["#8B5CF6", "#A78BFA"]; // 보라색 그라데이션 - Excellent
   if (score >= 5.0) return ["#F97316", "#FB923C"]; // 주황색 그라데이션 - Good
   return ["#6B7280", "#9CA3AF"]; // 회색 그라데이션 - Average
 }
 
-// Vibe Score 레벨 (10점 만점 기준)
 export function getVibeScoreLevel(
   score: number,
 ): "excellent" | "good" | "average" {
@@ -174,14 +171,12 @@ export function getVibeScoreLevel(
   return "average";
 }
 
-// Vibe Score 레벨 라벨
 export function getVibeScoreLabel(score: number): string {
   if (score >= 8.0) return "Excellent";
   if (score >= 5.0) return "Good";
   return "Average";
 }
 
-// Vibe Score 레벨 라벨 (한국어)
 export function getVibeScoreLabelKo(score: number): string {
   if (score >= 8.0) return "우수";
   if (score >= 5.0) return "양호";

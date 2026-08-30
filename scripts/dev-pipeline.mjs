@@ -14,17 +14,11 @@ export const meta = {
   ],
 };
 
-// ⚠️ 2026-07-20~21 사장님 SSOT = 회귀방지 모델 파이프라인.
-//   메인 대화창(지휘자) 모델은 불변 = 이 스크립트가 단계마다 하위 에이전트 모델을 자동 배정(사장님 개입 0).
-//   흐름: 조사(fable) → 영향분석/도미노(fable) → 그룹병렬코딩(sonnet) → 검수(fable) → 적대적회귀+실증(fable) → §22.
 //   범용 = 특정 앱 회귀 체크리스트 불필요 = 영향분석이 매번 코드에서 "이번 변경의 회귀 반경"을 자동 생성(2026-07-21 사장님 SSOT).
-//   §22(커밋전 병렬검증)·§17(3게이트)·§10(커밋은 명시지시 후)·§16(재발명 금지=verify-workflow 재사용) 정합.
 
-// ── 작업 지시 = args (문자열 또는 {task} 객체) ──
 const TASK =
   typeof args === "string" ? args : args?.task || "(작업 지시 미지정)";
 
-// ── 1단계 산출물 스키마 = todo list(병렬 코딩 입력) ──
 const PLAN_SCHEMA = {
   type: "object",
   properties: {
@@ -51,7 +45,6 @@ const PLAN_SCHEMA = {
   required: ["summary", "todos"],
 };
 
-// ── 3단계 각 코딩 결과 스키마 ──
 const IMPL_SCHEMA = {
   type: "object",
   properties: {
@@ -64,7 +57,6 @@ const IMPL_SCHEMA = {
   required: ["id", "done", "note"],
 };
 
-// ── 영향분석 스키마 = 이번 변경의 "도미노 반경"(범용: 코드에서 역추적 = 특정 앱 무관) ──
 const IMPACT_SCHEMA = {
   type: "object",
   properties: {
@@ -95,7 +87,6 @@ const IMPACT_SCHEMA = {
   required: ["touchedSymbols", "dominoes", "guardedBehaviors"],
 };
 
-// ── 적대적 회귀검증 스키마 = "안 건드린 기능이 깨졌나"를 refute ──
 const REGRESSION_SCHEMA = {
   type: "object",
   properties: {
@@ -118,7 +109,6 @@ const REGRESSION_SCHEMA = {
   required: ["verdict", "summary"],
 };
 
-// ── 4단계 검수 결과 스키마 ──
 const AUDIT_SCHEMA = {
   type: "object",
   properties: {
@@ -141,9 +131,6 @@ const AUDIT_SCHEMA = {
   required: ["reached", "summary"],
 };
 
-// ═══════════════════════════════════════════════
-// 1단계 = Fable5 사전조사·연구 + 상세 계획·todo
-// ═══════════════════════════════════════════════
 phase("조사·계획");
 log(`[1/5] Fable5 조사·계획 시작 = ${TASK.slice(0, 60)}`);
 
@@ -170,11 +157,7 @@ if (plan.risks && plan.risks.length) {
 }
 log(`[1/5] 계획 완료 = todo ${plan.todos.length}건`);
 
-// ═══════════════════════════════════════════════
-// 1.5단계 = 영향분석(도미노 예측) = Fable5.
-//   ⚠️ 이 앱의 본질(6개월 사용자행동 로직 = 조금 건드리면 도미노) 대응 = 코딩 前에 회귀 반경을 코드에서 역추적.
 //   범용 = 특정 앱 체크리스트 불필요, 코드 자체에서 매번 자동 생성(2026-07-21 사장님 SSOT).
-// ═══════════════════════════════════════════════
 phase("영향분석");
 log(`[1.5/5] Fable5 영향분석 = 도미노 반경 역추적`);
 
@@ -203,20 +186,8 @@ const dominoText = impact
 const guardedText = impact ? impact.guardedBehaviors.map((b) => `  · ${b}`).join("\n") : "";
 log(`[1.5/5] 도미노 ${impact ? impact.dominoes.length : 0}건 · 보장동작 ${impact ? impact.guardedBehaviors.length : 0}건`);
 
-// ═══════════════════════════════════════════════
-// 2단계 = 오케스트레이션 (이 스크립트 = 메인 지휘자가 조율)
-//   = todo 를 파일별 그룹으로 병렬 fan-out(같은 파일 순차 = 충돌0).
-// ═══════════════════════════════════════════════
-// (별도 phase 없음 = 조율은 코드가 수행. 3단계 병렬 코딩으로 바로 진입.)
-
-// ═══════════════════════════════════════════════
-// 3단계 = Sonnet 코딩 (파일 충돌 방지 = 파일별 그룹핑)
-//   ⚠️ 2026-07-21 첫 실전 버그 수정: 같은 파일을 여러 todo 가 병렬 편집 → 충돌·검수 혼선(4단계 오판)의 근본.
-//   해결 = 파일 겹치는 todo 를 한 그룹으로 묶어 1 에이전트가 순차 처리. 독립 파일 그룹끼리만 병렬 = 충돌 0.
-// ═══════════════════════════════════════════════
 phase("병렬코딩");
 
-// 파일 기준 그룹핑: 파일을 공유하는 todo 들은 같은 그룹(순차). files 미지정 todo 는 각자 독립 그룹.
 const groups = [];
 const fileToGroup = {};
 for (const td of plan.todos) {
@@ -263,9 +234,6 @@ ${dominoText}
 const doneImpls = groupResults.filter(Boolean).flat();
 log(`[3/5] 코딩 완료 = ${doneImpls.filter((i) => i.done).length}/${plan.todos.length} 성공`);
 
-// ═══════════════════════════════════════════════
-// 4단계 = Fable5 검수·실증 후 수정 (미달 시 1회 재코딩 루프)
-// ═══════════════════════════════════════════════
 phase("검수·실증");
 log(`[4/5] Fable5 검수·실증`);
 
@@ -296,7 +264,6 @@ let audit = await agent(auditPrompt(), {
   schema: AUDIT_SCHEMA,
 });
 
-// 미달 = Sonnet 재코딩 1라운드 → Fable 재검수 (무한루프 방지 = 1회만).
 if (audit && !audit.reached && audit.fixes && audit.fixes.length) {
   log(`[4/5] 미달 = 수정 ${audit.fixes.length}건 재코딩(1라운드)`);
   const fixImpls = await parallel(
@@ -322,16 +289,10 @@ if (audit && !audit.reached && audit.fixes && audit.fixes.length) {
   );
 }
 
-// ═══════════════════════════════════════════════
-// 4.5단계 = 적대적 회귀검증 + 실증 시나리오 (병렬) = 이 앱 도미노 대응 핵심.
-//   ②적대적 회귀검증(Fable5) = 영향분석의 guardedBehaviors 각각을 "깨졌나?"로 refute.
-//   ③실증 시나리오(Fable5) = 변경 함수의 실제 동작을 DevTools·DB 등으로 실측(사장님 검증방식 자동화).
-// ═══════════════════════════════════════════════
 phase("회귀·실증");
 log(`[4.5/5] 적대적 회귀검증 + 실증 시나리오 병렬`);
 
 const [regression, evidence] = await parallel([
-  // ② 적대적 회귀검증
   () =>
     agent(
       `당신은 적대적 회귀검증 전문가입니다. 이번 변경이 "안 건드린 기존 기능"을 깨뜨렸는지 적대적으로 파고드세요(기본 태도 = 의심).
@@ -351,7 +312,6 @@ ${dominoText}
 - 스타일·개선점 아님 = 실제 기존기능 회귀만.`,
       { label: "4.5-regression-fable", phase: "회귀·실증", model: "fable", effort: "high", schema: REGRESSION_SCHEMA },
     ),
-  // ③ 실증 시나리오
   () =>
     agent(
       `당신은 실증 검증 전문가입니다. 이번 변경의 핵심 동작이 실제로 되는지 "실행"으로 입증하세요(사장님 검증방식 = 직접조작+로그+DB).
@@ -375,14 +335,9 @@ if (hasRegression) {
   log(`[4.5/5] ✅ 회귀 없음(safe)`);
 }
 
-// ═══════════════════════════════════════════════
-// 5단계 = §22 커밋 전 병렬 검증 (verify-workflow 재사용 = §16 재발명 금지)
-//   = 검증 통과 표를 내고 여기서 멈춤. 실제 커밋·push 는 사장님 명시 지시 후(§10).
-// ═══════════════════════════════════════════════
 phase("커밋전검증");
 log(`[5/5] §22 커밋 전 병렬검증 = verify-workflow 재사용`);
 
-// verify-workflow 를 scriptPath 로 재사용(우리 표준 호출 방식). 이름 미등록 대비.
 let verify = null;
 try {
   verify = await workflow({ scriptPath: "scripts/verify-workflow.mjs" });

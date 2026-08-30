@@ -1,7 +1,4 @@
 // ⚠️ 수정금지(승인필요) 2026-05-19 = BTS 맵 마커 SVG = 단일 SSOT
-// = 사용자 명시: lucide 마커 그대로 + 메인앱 placeholder 동일 사용
-// = BTSPlaceMap.tsx (= Google Maps 마커) + TripPlannerScreen.tsx (= 카드 placeholder) 양쪽 import
-// = 메인앱 번들에 BTSPlaceMap 의 webview/Google Maps SDK 코드 따라오지 않도록 분리 (= bundle-barrel-imports 가드)
 
 export const COLORS: Record<string, string> = {
   bts_venue: "#9333ea",
@@ -21,11 +18,9 @@ export const LUCIDE: Record<string, string> = {
     '<path d="M10 18v-7"/><path d="M11.12 2.198a2 2 0 0 1 1.76.006l7.866 3.847c.476.233.31.949-.22.949H3.474c-.53 0-.695-.716-.22-.949z"/><path d="M14 18v-7"/><path d="M18 18v-7"/><path d="M3 22h18"/><path d="M6 18v-7"/>',
   hotspot:
     '<path d="M13.997 4a2 2 0 0 1 1.76 1.05l.486.9A2 2 0 0 0 18.003 7H20a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h1.997a2 2 0 0 0 1.759-1.048l.489-.904A2 2 0 0 1 10.004 4z"/><circle cx="12" cy="13" r="3"/>',
-  // = 즐길거리 = FerrisWheel (= 버튼과 통일 2026-06-06)
   attraction:
     '<circle cx="12" cy="12" r="2"/><path d="M12 2v4"/><path d="m6.8 15-3.5 2"/><path d="m20.7 7-3.5 2"/><path d="M6.8 9 3.3 7"/><path d="m20.7 17-3.5-2"/><path d="m9 22 3-8 3 8"/><path d="M8 22h8"/><path d="M18 18.7a9 9 0 1 0-12 0"/>',
   adventure: '<path d="m8 3 4 8 5-5 5 15H2L8 3z"/>',
-  // = 힐링 = Flower2 (= 버튼과 통일 2026-06-06)
   healing:
     '<path d="M12 5a3 3 0 1 1 3 3m-3-3a3 3 0 1 0-3 3m3-3v1M9 8a3 3 0 1 0 3 3M9 8h1m5 0a3 3 0 1 1-3 3m3-3h-1m-2 3v-1"/><circle cx="12" cy="8" r="2"/><path d="M12 10v12"/><path d="M12 22c4.2 0 7-1.667 7-5-4.2 0-7 1.667-7 5Z"/><path d="M12 22c-4.2 0-7-1.667-7-5 4.2 0 7 1.667 7 5Z"/>',
   shopping:
@@ -35,8 +30,6 @@ export const LUCIDE: Record<string, string> = {
 };
 
 // ⚠️ 수정금지(승인필요) 2026-08-02 사장님 SSOT = **사진이 없을 때 대신 띄우는 원형 마커** 조립 1벌(§16 재발명 금지).
-//   = 위 COLORS·LUCIDE 그대로 "분류 색 원 + 흰 아이콘" 한 장. 분류를 모르거나 없는 분류면 null(호출부가 기본 아이콘으로 처리).
-//   = 이 파일 머리말대로 placeholder 는 여기 1벌에서 나온다. 화면마다 다시 만들지 말 것.
 export function placeholderMarkerSvg(
   category: string | null | undefined,
 ): string | null {

@@ -1,7 +1,3 @@
-// 2026-06-29 = 구글 공식 장소 자동완성 위젯(PlaceAutocompleteElement) = WebView 래퍼
-// = 자체 입력창+드롭다운+프록시 재발명 폐기(§16·§19) → 구글 위젯 100% 활용 (사장님 SSOT)
-//   웹 = div+SDK 직접 / 앱 = react-native-webview. ItineraryMap 패턴 동일. API키 = /api/bts/map-config.
-//   선택 → onSelect(name·address·coords) → 호출측이 handleSetDayAccommodation 등으로 전달 → 지도 깃발 자동.
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -21,9 +17,7 @@ export type { PlaceAutoSelection };
 
 type Props = {
   onSelect: (place: PlaceAutoSelection) => void;
-  // 🏨 2026-06-29 = 미지정 기본 = 호텔+주소 전부 검색. (특정 타입만 원하면 지정, 숙소검색은 미지정이 정답=호텔+에어비앤비주소)
   includedPrimaryTypes?: string;
-  // 🏨 2026-06-29 사용자 SSOT(구글맵 실증) = 입력칸에 도시명 prefill(예 "Paris ") → 사용자가 뒤에 숙소명 = "Paris 노보텔" = 그 도시만. (좌표 불필요)
   cityPrefix?: string;
   placeholder?: string;
   language?: string;
@@ -31,9 +25,6 @@ type Props = {
   tint?: string;
 };
 
-// ============================================================
-// Web 분기 = div + Google Maps SDK 직접 (PlaceAutocompleteElement)
-// ============================================================
 function PlaceAutocompleteWeb({
   onSelect,
   includedPrimaryTypes,
@@ -46,7 +37,6 @@ function PlaceAutocompleteWeb({
 }: Props & { apiKey: string }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const [ready, setReady] = useState(false);
-  // onSelect = 최신 콜백 ref 보관 (= 부모 인라인 콜백이라도 위젯 재생성 안 함 = 입력중 초기화 방지, review MAJOR)
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
 
@@ -92,7 +82,6 @@ function PlaceAutocompleteWeb({
         try {
           if (placeholder) (ac as any).placeholder = placeholder;
         } catch {}
-        // 🏨 도시명 prefill = "Paris " → 사용자가 뒤에 숙소명 = "Paris 노보텔" = 그 도시만 (구글맵 방식)
         if (cityPrefix) {
           try {
             (ac as any).value = cityPrefix;
@@ -143,9 +132,6 @@ function PlaceAutocompleteWeb({
   );
 }
 
-// ============================================================
-// Native 분기 = react-native-webview
-// ============================================================
 function PlaceAutocompleteNative({
   onSelect,
   includedPrimaryTypes,
@@ -159,12 +145,8 @@ function PlaceAutocompleteNative({
   const { WebView } =
     require("react-native-webview") as typeof import("react-native-webview");
   const [ready, setReady] = useState(false);
-  // 🏨 2026-06-29 = WebView 동적높이 (= 고정 280px 빈공간 결함 해소): 위젯이 resize로 알려준 높이만큼만 차지.
   const [webHeight, setWebHeight] = useState(56);
   // ⌨️ 2026-08-13 사장님 지시("딱 위젯 핸들러만") = 안드로이드 크기반영 지연 핸들러.
-  //   A36(Android 16·One UI 8·시스템웹뷰 150) 실기기: 키보드가 올라오는 동작과 웹뷰 크기 변경이 **겹치면**
-  //   웹뷰가 화면을 지워 후보 목록이 안 보였다. 크기 반영을 키보드가 자리 잡은 뒤(0.35초)로 늦추면 겹침이 없다.
-  //   범위 = 이 핸들러뿐(화면·모달·iOS·웹 무변경). iOS·웹 = 기존 즉시 반영 그대로.
   const resizeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const applyHeight = (h: number) => {
     if (Platform.OS === "android") {
@@ -196,11 +178,8 @@ function PlaceAutocompleteNative({
       const data = JSON.parse(e.nativeEvent.data || "{}");
       if (data.type === "ready") setReady(true);
       else if (data.type === "resize" && typeof data.height === "number") {
-        // 입력칸(작게) ↔ 드롭다운 펼침(크게) = 컨텐츠만큼만 (빈공간 제거)
-        // 반영 시점 = applyHeight 핸들러(안드로이드만 키보드 안정 후 = 2026-08-13, 값 계산은 원본 그대로)
         applyHeight(Math.max(48, Math.min(340, Math.ceil(data.height))));
       } else if (data.type === "select") {
-        // 선택 → 호출측이 이 위젯을 언마운트(첫화면=섹션숨김 / 여정속=setHotelModalDay null) = 입력창 사라져 키보드 자동 닫힘(iOS·AOS). RN Keyboard.dismiss는 WebView 키보드 못 내려 무용(실기기 실증)이라 제거(§19).
         onSelect({
           placeId: data.placeId,
           name: data.name,
@@ -235,9 +214,6 @@ function PlaceAutocompleteNative({
   );
 }
 
-// ============================================================
-// 메인 = API키 fetch(/api/bts/map-config 재사용) + 플랫폼 분기
-// ============================================================
 export default function PlaceAutocompleteWidget(props: Props) {
   const [apiKey, setApiKey] = useState<string | null>(null);
   const [localInput, setLocalInput] = useState<string>("");
@@ -258,9 +234,7 @@ export default function PlaceAutocompleteWidget(props: Props) {
             setApiKey(data.googleMapsApiKey);
             return;
           }
-        } catch (e) {
-          // ignore
-        }
+        } catch (e) {}
       }
     })();
     return () => {

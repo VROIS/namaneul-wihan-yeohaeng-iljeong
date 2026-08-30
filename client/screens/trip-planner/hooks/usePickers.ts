@@ -1,4 +1,3 @@
-// 날짜·시간 픽커 상태/핸들러 = TripPlannerScreen 분리(2026-07-15 §0 슬림화, 순수 이동)
 import { useState } from "react";
 import { Platform } from "react-native";
 import { TripFormData } from "@/types/trip";

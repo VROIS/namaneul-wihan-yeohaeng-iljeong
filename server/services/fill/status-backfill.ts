@@ -1,29 +1,13 @@
 // ⚠️ 영구 컴포넌트 2026-08-24 사장님 승인 · 2026-08-28 A안 확정 = 창고 상태 백필 + 같은 PID 쌍둥이 소프트 병합(keep 흡수·태그/언어코드 합집합·번역행 복사·포인터 이동, 행 삭제 0).
-// = 상태 규칙(우선순위 순): ① 같은 PID 다중행 = RC 최대(동률 = id 큰 쪽) 1행 = keep, 나머지 status='merged' + merged_into(포인터, 행 보존).
 //   ⚠️ 수정금지(승인필요) 2026-08-28 사장님 확정 = A안 = keep 이 그룹 내용을 흡수한다(absorbTwinGroup, 행 DELETE 없음) =
-//   ⓐ keep 빈칸(흡수 컬럼표 + 좌표쌍)만 loser 값으로 = upsertPlace(targetRowId=keep, followTriggerDup=true) 1콜(COALESCE §14 뼈대 보존)
-//      + UpsertPayload 에 칸이 없는 컬럼(DIRECT_COLS) = 직접 COALESCE 1문장. category_tags = 그룹 전 행 tags ∪ seed_category / phase_tags = loser tags ∪ 'pid-twin-absorbed'.
-//   ⓑ best_rank = 현재값 ∪ 그룹 합집합(bestRankUnion, FOR UPDATE) ⓒ place_translations = keep 사본 INSERT ON CONFLICT DO NOTHING(loser 번역행 보존)
-//   ⓓ guides.place_id · cities.override_hero_place_id / override_highlight_place_ids · merged_into 포인터 → keep. 그룹당 1 트랜잭션(skip_dup_check 면제).
-//   = 이미 merged 인 그룹도 매번 다시 돈다(멱등). keep 규칙 = 08-24 승인분 유지 = fillcity/dups-detail.ts 의 keep 순서는 이 규칙으로 대체됨.
-//   ② wrong-city-suspect 태그 또는 --quarantine 지목 = 'quarantined'
-//   ③ 영구폐업 태그 **또는** business_status 현재값 CLOSED_PERMANENTLY / CLOSED_TEMPORARILY(gmaps-pid-identity.ts --verify 가 씀) = 'closed'
 //      (2026-08-28 사장님 확정 = 컬럼이 이미 CLOSED_* 면 그 값 유지, 태그만 있으면 business_status=CLOSED_PERMANENTLY 기록. 뮌헨 #67813 Olympiaturm CLOSED_TEMPORARILY 가 rank 6 으로 서빙되던 구멍 봉합)
-//   ④ --holds 지목(시뮬 오매칭 의심) = 'hold' ⑤ PID 없음 = 'candidate'(목격담 보존·서빙 밖) ⑥ 나머지 = 'active'
-//   (keep 의 ②③ 판정 = 흡수 후 태그(keep ∪ loser) 기준 = 같은 PID = 같은 장소.)
-// = 삭제 0 · 외부호출 0 · **재실행 멱등**(2026-08-24) = 현재 status 를 읽어 "달라진 행만" 갱신 =
-//   태그를 떼거나 TS 검증으로 PID·RC 가 채워지거나 --verify 가 business_status 를 OPERATIONAL 로 되돌리면 다음 실행에서 자동으로 active 복귀(가두지 않음).
-//   원복(상태) = UPDATE place_seed_raw SET status='active', merged_into=NULL WHERE city_id=N. 시뮬 정본 = .claude/worktrees/psr-filter-sim/sim/(2026-08-23 검증).
-// = 사용: npx tsx server/services/fill/status-backfill.ts --city-id=141 [--holds=1,2] [--quarantine=3,4] [--apply]
 import * as fs from "node:fs";
 import * as path from "node:path";
 // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 승인 = best_rank 쓰기 트랜잭션(SELECT FOR UPDATE→합집합→조건부 UPDATE) 1벌
-//   = writeBestRankUnion() = discovery-verify-and-insert.ts(B2) 와 공용(§16, 옛 이 파일 자체 인라인 구현 완전삭제).
 import { bestRankUnion, writeBestRankUnion } from "../shared/best-rank";
 // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 승인 = 흡수 후보 컬럼 목록 1벌(§16 SSOT) = fillcity/dups-detail.ts 와 공용.
 import { FILL_COLS } from "../shared/place-fill-columns";
 
-// .env 선로드(다른 fill/ 도구와 동일 패턴 = db.ts import 전에)
 const envRaw = fs.existsSync(path.join(process.cwd(), ".env"))
   ? fs.readFileSync(path.join(process.cwd(), ".env"), "utf-8")
   : "";
@@ -53,11 +37,6 @@ if (!cityId) {
 }
 
 // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 승인 = ① 흡수 컬럼 목록 = 손입력 재복사 금지, 공용 FILL_COLS(§16 SSOT,
-//   server/services/shared/place-fill-columns.ts, fillcity/dups-detail.ts 와 공용)에서 유도 + 이 파일 전용
-//   business_status 만 추가(둘이 손으로 각자 베끼다 드리프트 나던 것 차단). 좌표(latitude/longitude)·태그
-//   (phase_tags/category_tags)는 이 파일이 좌표쌍·UNION 으로 따로 처리하므로 제외. UpsertPayload 에 칸이 있는
-//   컬럼 = UPSERT_COLS(필드명, 카멜케이스 자동변환 예외만 FIELD_NAME_OVERRIDES) / 칸이 없는 컬럼 = DIRECT_COLS
-//   (직접 COALESCE, place-upsert.ts 보호파일 무변경). 값 매핑 결과는 기존과 100% 동일(교체 전 20개 전수 대조 확인).
 const HANDLED_ELSEWHERE = new Set([
   "latitude",
   "longitude",
@@ -242,7 +221,6 @@ function printTwinPlan(p: TwinPlan) {
   );
 }
 
-// ── ① keep 흡수 = ⓐ upsertPlace(드리즐 연결, 트랜잭션 전 = B2 와 같은 순서) → ⓑ~ⓓ pg 트랜잭션 1개(skip_dup_check 면제 = 형제 PID 행이 살아있어 문지기 불변1이 keep UPDATE 를 막음) ──
 async function absorbTwinGroup(
   pool: any,
   upsertPlace: (x: any) => Promise<any>,
@@ -293,9 +271,7 @@ async function absorbTwinGroup(
       );
     }
     // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 승인 = ⓑ best_rank = writeBestRankUnion() SSOT 호출(B2 discovery-verify-and-insert.ts
-    //   와 공용, §16) = 현재값 ∪ 그룹 합집합, 값이 같으면 UPDATE 생략(멱등 = updated_at 무변동).
     const { cur, result } = await writeBestRankUnion(c, keepId, p.bestRank);
-    // ⓒ 번역행 = keep 사본 INSERT(언어당 1행 = 흡수 우선순위 loser 먼저). loser 번역행은 보존(행 삭제 0).
     await c.query(
       `INSERT INTO place_translations (place_id, language, summary, editorial_summary)
        SELECT DISTINCT ON (language) $1, language, summary, editorial_summary
@@ -304,7 +280,6 @@ async function absorbTwinGroup(
        ON CONFLICT (place_id, language) DO NOTHING`,
       [keepId, loserIds],
     );
-    // ⓓ 포인터 이동
     await c.query(
       `UPDATE guides SET place_id = $1 WHERE place_id = ANY($2::int[])`,
       [keepId, loserIds],
@@ -343,7 +318,6 @@ async function main() {
     )
   ).rows;
 
-  // ① 같은 PID 다중행 = keep(RC 최대 → id 큰 쪽) 외 merged + keep 흡수 계획
   const byPid = new Map<string, any[]>();
   for (const r of rows) {
     if (!r.google_place_id) continue;
@@ -398,20 +372,14 @@ async function main() {
       status = "quarantined";
     else if (tags.includes("영구폐업") || CLOSED_BIZ.has(r.business_status)) {
       // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 확정 = ③ closed = 영구폐업 태그 ∪ business_status 현재값 CLOSED_*(gmaps-pid-identity --verify 기록).
-      //   컬럼이 이미 CLOSED_* 면 biz 미지정 = COALESCE 로 컬럼값 유지 / 태그만 있으면 CLOSED_PERMANENTLY 기록.
-      //   --verify 가 OPERATIONAL 로 되돌리면 태그 없는 한 status 가 active 로 계산되어 아래 "달라진 행만" 비교에서 자동 복귀.
       status = "closed";
       if (!CLOSED_BIZ.has(r.business_status)) biz = "CLOSED_PERMANENTLY";
     } else if (holdSet.has(r.id)) status = "hold";
     else if (!r.google_place_id) status = "candidate";
-    // ⚠️ 2026-08-24 판단3종 지적 반영 = 현재값과 다르면 전부 plan 에(= active 복귀 포함).
-    //   옛 "active 아닌 것만 담기" 폐기 §19 = 태그를 떼거나 검증이 채워져도 되돌아오지 못해
-    //   행이 손님상 밖에 영구히 갇히던 결함(원재료를 가두는 구조 = 근원 치유 원칙에 반함).
     if (status !== r.status || (into ?? null) !== (r.merged_into ?? null))
       plan.push({ id: r.id, cat: r.seed_category, status, into, biz });
   }
 
-  // 카테고리별 전<>후 표
   const cats = new Map<
     string,
     { pool: number; after: number; ch: Record<string, number> }
@@ -423,8 +391,6 @@ async function main() {
     const s = cats.get(c)!;
     if (r.google_place_id) s.pool++;
     const p = planById.get(r.id);
-    // ⚠️ 2026-08-24 = 표는 **적용 후 최종 상태** 기준(= 현재 status 를 반영). 옛 "새 계산만" 폐기 §19
-    //   (= 이미 non-active 인 행을 서빙 수에 넣어 실제보다 많게 보고 = 승인 근거가 틀어짐).
     const finalStatus = p ? p.status : r.status || "active";
     if (finalStatus === "active") {
       if (r.google_place_id) s.after++;
@@ -454,7 +420,6 @@ async function main() {
     await pool.end();
     return;
   }
-  // 반영 ① = 그룹당 흡수(그룹당 1 트랜잭션, 실패 = ROLLBACK 후 중단 = 재실행 멱등)
   if (twinPlans.length) {
     const { upsertPlace } = await import("../place-upsert");
     for (const p of twinPlans) {
@@ -464,8 +429,6 @@ async function main() {
       );
     }
   }
-  // 반영 ②~⑥ + 소프트 병합 표식 = 상태 컬럼만 UPDATE. ⚠️ 병합 진 행은 승자와 같은 PID = BEFORE 트리거 불변1에 걸리므로
-  //   wrongcity-quarantine 과 동일한 정식 면제(트랜잭션 한정 skip_dup_check, 식별·내용 컬럼 무변경 = 안전) 사용.
   let n = 0;
   const client = await pool.connect();
   try {

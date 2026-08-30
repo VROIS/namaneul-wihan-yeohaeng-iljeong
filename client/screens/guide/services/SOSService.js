@@ -1,5 +1,4 @@
 // ⚠️ 수정금지(승인필요): SOS 긴급 서비스 — 전화 + 위치 공유 + 인근 시설
-// "위험해요" → 자동 SOS → GPS → 긴급전화 → 가족에게 위치 전송
 import { Linking, Share, Platform } from 'react-native';
 import { CONFIG } from '../config/constants';
 
@@ -21,7 +20,6 @@ export async function callEmergency(countryCode) {
 }
 
 // ⚠️ 수정금지(승인필요): 가족에게 위치 공유 (SMS/카카오/라인 등)
-// 기존 앱 위치 패턴: GPS → 역지오코딩 → 공유 메시지
 export async function shareLocation({ latitude, longitude, address }) {
   const mapUrl = `https://maps.google.com/?q=${latitude},${longitude}`;
   const message = CONFIG.SOS.SHARE_MESSAGE_TEMPLATE
@@ -40,7 +38,6 @@ export async function shareLocation({ latitude, longitude, address }) {
 }
 
 // ⚠️ 수정금지(승인필요): 전체 SOS 프로세스 (한 번에 실행)
-// getSOSLocation은 useLocation.js에서 가져옴
 export async function triggerSOS({ location, address, mapUrl, countryCode }) {
   const results = {
     location: false,
@@ -48,12 +45,10 @@ export async function triggerSOS({ location, address, mapUrl, countryCode }) {
     call: false,
   };
 
-  // 1. 위치 확보 확인
   if (location) {
     results.location = true;
   }
 
-  // 2. 가족에게 위치 공유
   if (location) {
     const shareResult = await shareLocation({
       latitude: location.latitude,
@@ -63,7 +58,6 @@ export async function triggerSOS({ location, address, mapUrl, countryCode }) {
     results.share = shareResult.success;
   }
 
-  // 3. 긴급 전화
   const callResult = await callEmergency(countryCode);
   results.call = callResult.success;
 
@@ -80,7 +74,6 @@ export function detectSOSKeyword(text) {
 }
 
 // ⚠️ 수정금지(승인필요): 인근 시설 안내 텍스트 생성 (Gemma Tool Calling용)
-// Gemma 사전학습으로 주요 도시 경찰/병원/대사관 위치 알고 있음
 export function getSOSPrompt(address) {
   return `긴급 상황입니다. 현재 위치: ${address}
 가장 가까운 경찰서, 병원, 한국 대사관의 위치와 연락처를 알려주세요.

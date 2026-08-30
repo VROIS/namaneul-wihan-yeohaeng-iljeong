@@ -1,13 +1,5 @@
-// ═══════════════════════════════════════════════════════════════════════════════
 // ⚠️ 수정금지(승인필요) 2026-07-19 사장님 SSOT (§12 4단계) = 가이드 미니앱 서버 배선.
-// = 레거시 카메라 모듈(client/screens/guide, 내부 0수정)이 부르는 엔드포인트 = 여기서 배선.
-//   ① POST /api/gemini             = 사진 해설 스트리밍 (검증된 레거시 원본 그대로 = 2026-07-20 사장님 SSOT).
-//   ② GET  /api/prompts/:lang/:type = 언어별 페르소나 (DB prompts, is_active+version DESC = §12 함정 필터).
-//   ③ GET  /api/voice-configs       = 웹TTS 음성 우선순위 (DB voice_configs).
-//   ④ /api/guides (batch·목록·삭제)  = 보관함 (DB guides). 당분간 사장님만 = auth.ts 재사용.
 //   ⑤ GET  /api/guide/place-image   = 우리 DB 장소→ 해설 재료(확정 정보 머리글 + 화면에 띄울 우리 사진 URL). 2026-08-03 사장님 지시.
-//   ⑥ GET  /api/guide/place-guide   = **해설 창고**(장소+언어)에 이미 만들어 둔 해설 찾기. 2026-08-02 사장님 지시.
-// ═══════════════════════════════════════════════════════════════════════════════
 
 import type { Express } from "express";
 import { and, desc, eq, sql } from "drizzle-orm";
@@ -25,26 +17,19 @@ import { tsSearch } from "./services/shared/ts-client";
 import { buildPlaceHintHeader } from "./services/shared/place-hint-header"; // 확정 정보 머리글 단일 관문(2026-08-02 §16)
 import { getUserIdFromReq, getRoleFromDb } from "./auth-user"; // Bearer → userId·역할 단일 관문(2026-07-29 §16 / 상황판 2026-08-06)
 import { nearestCityIdByCoords } from "./city-match"; // 좌표 → 최근접 도시 단일 관문(2026-08-02 §16)
-// 크레딧 단일 관문(2026-07-29 §9). 이 파일은 셋 다 쓴다 —
-//   precheck(시작 잔액확인) · chargeOnSuccess(완성 뒤 차감) · chargeFeature(창고 조회 = 402 를 직접 보내야 함).
 import {
   chargeFeature,
   chargeOnSuccess,
   precheckFeature,
 } from "./credit-charge";
-// 🗑️ isCityRepresentativePlace import 삭제 = 2026-08-21 §19(무료 판정 = 출발화면 from=card 로 이관)
 import { uploadDataUriToR2 } from "./services/shared/r2-client"; // 기기 사진(base64) → R2 guides/ 파일화 1벌(2026-08-06 §16, Cloudflare 이전 1단계)
 
-// ⚠️ db 는 DB 미연결 시 null 가능(server/db.ts) = 라우트 진입 시 확정(bts-routes 패턴). null 이면 throw → 각 라우트 catch 가 503.
 function getDb() {
   if (!_db) throw new Error("DB unavailable");
   return _db;
 }
 
 // 🏷️ 2026-08-02 사장님 확정 = **창고 주인 = 관리자 계정**.
-//   새로 만든 해설을 자동으로 담을 때 그 행의 주인이다(= 공용 창고). 사용자 '나의 TRIPIS' 는
-//   사용자가 [저장]을 눌렀을 때만 따로 1건 생긴다.
-//   판단 기준 = users.role='admin' 1벌 (§9 표7 = is_admin 칸·아이디 문자열로 관리자를 판단하지 않는다).
 async function warehouseOwnerId(): Promise<string | null> {
   const [u] = await getDb()
     .select({ id: users.id })
@@ -56,14 +41,11 @@ async function warehouseOwnerId(): Promise<string | null> {
 }
 
 export function registerGuideRoutes(app: Express): void {
-  // === 헬스 체크 ===
   app.get("/api/guide/health", (_req, res) => {
     res.json({ status: "ok", service: "guide", version: "2.0.0" });
   });
 
   // ① 사진 해설 = 원본 레거시 POST /api/gemini 그대로 (2026-07-20 사장님 SSOT).
-  //   = body { base64Image, prompt, systemInstruction } → text/plain 청크 스트리밍(res.write).
-  //   = 🪙 Tripis 해설 5크레딧 차감 = 2026-07-29 §9 (옛 "차감 제외 바이패스" 폐기 §19).
   app.post("/api/gemini", async (req, res) => {
     try {
       const { base64Image, prompt, systemInstruction } = req.body || {};
@@ -76,19 +58,11 @@ export function registerGuideRoutes(app: Express): void {
       }
 
       // 🔒 수정금지(승인필요) 2026-08-05 사장님 SSOT = **해설 새로 만들기 = 로그인 필수**.
-      //   사유(실측): chargeFeature 는 비로그인을 차감 없이 통과시키므로(credit-charge.ts = §9 게스트 개방),
-      //   이 줄이 없으면 토큰 없는 요청이 유료 Gemini 를 그대로 태운다(무과금 = 회사 지출).
-      //   ⚠️ 창고 조회(GET /api/guide/place-guide)는 **열어 둔다** = 이미 만들어 둔 해설을 그대로 내주는
       //   외부호출 0 경로이고, 도시 대표카드의 미가입 맛보기(사장님 2026-08-05)가 그 경로를 쓴다.
       const requesterId = getUserIdFromReq(req);
       if (!requesterId) return res.status(401).json({ error: "로그인 필요" });
 
-      // 🪙 Tripis 해설 5크레딧 (2026-07-29 §9)
       //   ⚠️ 수정금지(승인필요) 2026-08-09 사장님 최우선 SSOT = **차감은 완성 시점에만.**
-      //     여기는 잔액 **사전확인만**(차감 0). 반드시 아래 setHeader/write **전에** 있어야 한다
-      //     = 헤더가 나가면 잔액부족(402)을 보낼 수 없다(§9 금지 4번).
-      //     실제 차감 = 해설 글이 **다 흘러나온 뒤**. 옛 "시작 시 차감" 폐기 = 2026-08-09 §19
-      //     (= 중간에 끊기면 글은 못 받고 5크레딧만 사라져 환불 분쟁이 된다).
       if (!(await precheckFeature(res, requesterId, "guide_explain"))) return;
 
       res.setHeader("Content-Type", "text/plain; charset=utf-8");
@@ -109,7 +83,6 @@ export function registerGuideRoutes(app: Express): void {
       }
       res.end();
 
-      // 🪙 차감 = 여기(글이 실제로 나온 뒤). 중간에 터지면 아래 catch 로 가므로 **차감하지 않는다**.
       if (produced)
         await chargeOnSuccess(requesterId, "guide_explain", {
           tag: "Tripis 해설",
@@ -124,11 +97,7 @@ export function registerGuideRoutes(app: Express): void {
     }
   });
 
-  // ①-b 위치창 랜드마크 = 운영앱 getNearbyLandmark 클론 (2026-07-20 사장님 SSOT = 위치창 복원).
-  //   = 주변 100m 인기순 장소의 현지어 이름 1건. TS 단일관문 tsSearch 재사용(§16).
-  //   = 비용: TS 1콜/촬영·업로드 (운영앱도 Maps JS nearbySearch 동일 구조 지출).
   //   ⚠️ 2026-08-02 사장님 지시 = **이 호출이 준 좌표도 같이 돌려준다**(name 만 돌려주고 버리던 것 폐기 = §19).
-  //     이미 값을 받아 놓고도 안 쓰던 것이라 추가 비용 0(같은 TS 응답의 9요소 중 좌표). FieldMask 변경 0(§15).
   app.get("/api/guide/landmark", async (req, res) => {
     try {
       const lat = parseFloat(String(req.query.lat));
@@ -145,8 +114,6 @@ export function registerGuideRoutes(app: Express): void {
         longitude: lng,
         circleRadiusM: 100,
         maxResults: 5,
-        // 운영앱 getNearbyLandmark = 무필터 검색+랜드마크 우선. ts-client 기본값(식당만)이 걸리지 않게
-        // 운영 우선타입+상권 타입을 명시(§22 검증 적발 = 식당명만 반환되던 클론 변질 수정).
         includedTypes: [
           "tourist_attraction",
           "museum",
@@ -158,7 +125,6 @@ export function registerGuideRoutes(app: Express): void {
         ],
         rawTag: "guide-landmark",
       });
-      // 화면 표시는 이름(name) 그대로. lat/lng = 저장용(사용자 화면에는 안 보임).
       const nearest = places[0];
       res.json({
         name: nearest?.nameEn || null,
@@ -172,13 +138,7 @@ export function registerGuideRoutes(app: Express): void {
   });
 
   // ①-c ⚠️ 수정금지(승인필요) 2026-08-02 사장님 지시 = **우리 DB 장소를 TRIPIS 해설 재료로 넘기는 입구**.
-  //   = 해설의 정확도를 만드는 것은 사진이 아니라 **확정 정보 머리글**이다(사장님 4종 실측):
-  //       사진이 엉뚱해도(부산 경기장) 머리글이 루브르면 → 루브르 해설 / 사진이 아예 없어도 머리글만으로 → 정상 해설.
   //   ⚠️ 2026-08-03 사장님 지시 = 그래서 이 입구는 **머리글만** 내려준다. 사진은 Gemini 에 보내지 않으므로
-  //     여기서 사진을 내려받지도 않는다(안 쓰는 800KB 를 Storage 에서 받아 폰으로 또 내려보내면
-  //     응답 6.0초 → 3.9초 손해 + 저장소 전송량만 나간다). 화면에 뜨는 우리 사진은 아래 imageUrl 그대로다.
-  //   = 여기는 **재료 전달만** = 크레딧 차감 없음. 과금은 /api/gemini 1지점 그대로(§9 단일 진입점).
-  //   = 새 구글 호출 0 (§15) · 사진 내려받기 0.
   app.get("/api/guide/place-image", async (req, res) => {
     try {
       const placeId = Number(req.query.placeId);
@@ -213,9 +173,6 @@ export function registerGuideRoutes(app: Express): void {
       const row = rows[0];
       if (!row) return res.status(404).json({ error: "그런 장소가 없습니다" });
 
-      // 🔒 검증 관문 = 구글 식별정보(PID 또는 구글맵 URI)가 하나라도 있는 행만 해설 재료로 쓴다.
-      //   이유: 아래 머리글은 "이것은 확인된 사실"이라고 모델에게 못 박는 글이다. 검증 안 된 행(이름만 있는 행)에
-      //   머리글을 붙이면 **틀린 사실을 확신시키는 해설**이 나온다. PID·URI 가 있으면 구글로 실재가 확인된 행이다.
       if (!row.googlePlaceId && !row.googleMapsUri) {
         return res
           .status(409)
@@ -223,9 +180,7 @@ export function registerGuideRoutes(app: Express): void {
       }
 
       // ⚠️ 수정금지(승인필요) 2026-08-14 사장님 승인 = 위치정보창 장소명 = 영어 우선 통일(landmark 경로와 동일).
-      //   한국어 우선(nameKo)이면 다른 언어 사용자에게도 한국어가 뜨는 불일치 = 언어무관 단일 표기로 통일.
       const placeName = row.nameEn || row.nameKo;
-      // 머리글 조립 = place-hint-header.ts 1벌(§16). 여기서 문구를 새로 만들지 않는다.
       const hintHeader = buildPlaceHintHeader(
         {
           placeName,
@@ -243,9 +198,7 @@ export function registerGuideRoutes(app: Express): void {
       );
 
       res.json({
-        // 사진 = 화면이 이 URL 을 그대로 띄운다(우리 이미지). 아이콘밖에 없는 장소도, 사진이 오염된 장소도
         //   있는 그대로 뜬다 = 나중에 진짜 사진으로 갈아끼우면 화면도 같이 좋아지는 구조(2026-08-03 사장님 지시).
-        //   보관함 저장도 이 URL 그대로(사진을 base64 로 다시 담으면 장당 110KB 낭비). 없으면 null = 화면이 아이콘.
         imageUrl: row.imageUrl,
         hintHeader, // 페르소나 앞에 붙일 확정 정보 머리글
         placeName,
@@ -262,13 +215,6 @@ export function registerGuideRoutes(app: Express): void {
   });
 
   // ①-d ⚠️ 수정금지(승인필요) 2026-08-02 사장님 확정 = **해설 창고 찾기**(장소 + 언어).
-  //   있는 해설을 그대로 내주면 유료 외부호출이 0 이 된다. 없으면 204(본문 없음) = 화면이 새로 만든다.
-  //   ⚠️ 찾는 열쇠는 반드시 **(장소, 언어) 두 칸**이다. 언어권마다 프롬프트의 관심사가 달라
-  //     같은 장소라도 언어가 다르면 아예 다른 해설이다(독일어=사실·논리 / 프랑스어=미적 감동 / 일본어=역사 …).
-  //   🪙 차감 = 있다. 창고에 있어 호출이 없어도 **볼 때마다 5크레딧**(사장님 확정):
-  //     우리 원가는 호출비용만이 아니다(저장소·DB·서버·개발 유지비). 첫 사람만 내면 먼저 쓴 사람이 손해다.
-  //     무료 예외 = **그 해설의 주인 본인**(= 자기 '나의 TRIPIS' 에 담아둔 것을 다시 보는 것). 관리자 면제는 chargeFeature 가 이미 한다.
-  //   ⚠️ 차감은 반드시 res.json 보다 **먼저** = 응답이 나간 뒤에는 잔액부족(402)을 보낼 수 없다(§9 표4).
   app.get("/api/guide/place-guide", async (req, res) => {
     try {
       const placeId = Number(req.query.placeId);
@@ -278,9 +224,6 @@ export function registerGuideRoutes(app: Express): void {
       const lang = String(req.query.lang || "ko");
 
       // 🔒 정본 우선 (2026-08-03 §22 검수 실증 = 사장님 승인 1번 수정의 같은 뿌리. 최신행 1기준 폐기 = 2026-08-03 §19):
-      //   사용자 [저장] 본문은 클라이언트가 보내는 값이라 정본이 될 수 없는데, 최신 행이면 전원에게 그대로
-      //   서빙되는 오염 경로가 검수 중 실증됐다(시험 행이 손님에게 나감 → 즉시 삭제·복구).
-      //   → **창고 주인(관리자) 행이 있으면 항상 그것**, 없을 때만 최신 행.
       const warehouseOwner = await warehouseOwnerId();
       const rows = await getDb()
         .select({
@@ -294,7 +237,6 @@ export function registerGuideRoutes(app: Express): void {
           longitude: guides.longitude,
           cityId: guides.cityId,
           voiceLang: guides.voiceLang,
-          // 사진이 없는 장소일 때 화면이 띄울 아이콘 종류 + 이름 보정용(place-image 와 같은 재료).
           seedCategory: placeSeedRaw.seedCategory,
           nameKo: placeSeedRaw.nameKo,
           nameEn: placeSeedRaw.nameEn,
@@ -313,13 +255,6 @@ export function registerGuideRoutes(app: Express): void {
       if (!row) return res.status(204).end(); // 창고에 없음 = 화면이 새로 만든다
 
       // 🔖 ⚠️ 수정금지(승인필요) 2026-08-03 사장님 지시 = **한 사용자 = 한 장소 = 해설 1행** + 면제 기준 1벌.
-      //   mine = 요청자 본인이 이 (장소, 언어) 해설을 이미 자기 것으로 담아 두었는지.
-      //   이 값 하나가 두 가지를 다 정한다(§0 = 같은 사실에 판정 두 벌 금지):
-      //   ① 차감 면제 = "내가 담아둔 것 재열람 = 무료"(사장님 SSOT). ② 화면의 [저장] 잠금("이미 저장되었습니다").
-      //   ⚠️ 그래서 mine 을 차감보다 **먼저** 센다 — 옛 판정(최신 1행 주인만 비교)은 타인이 나중에
-      //   같은 (장소,언어)를 [저장]하면 내 것인데도 차감되던 결함 = 폐기 2026-08-03 §22 검수.
-      //   · 비로그인 = 거짓. · 최신 행 주인이 곧 요청자면 조회 없이 참(같은 사실을 두 번 묻지 않는다).
-      //   · 가볍게 = id 1칸 + limit 1 (색인 guides_place_lang_idx).
       const requester = getUserIdFromReq(req);
       let mine = false;
       if (requester) {
@@ -339,19 +274,8 @@ export function registerGuideRoutes(app: Express): void {
           mine = !!own;
         }
       }
-      // 🪙 차감 = 내 것이 아닐 때만(볼 때마다 5, 사장님 확정). res.json 보다 먼저(§9 표4).
       //   ⚠️ 수정금지(승인필요) 2026-08-21 사장님 SSOT = **무료/차감은 "출발화면"이 정한다.**
-      //     · 도시카드에서 열면(from=card) = 맛보기 = 조건 없이 무료(비로그인 포함).
-      //     · 여정 슬롯에서 열면 = 심화 = 로그인 + 5차감.
-      //     · 프로필/나의 TRIPIS 재열람(mine) = 이미 지불한 본인 것 = 무료.
-      //     화면이 흉내낼 수 있는 것은 맛보기 1장뿐이고, 그 1장은 창고에 이미 있는 해설이라 외부호출 0·
-      //     회사 지출 0 이다(= 흉내내도 손해가 없다). 옛 장소기준 무료판정 폐기 = 2026-08-21 §19 —
-      //     같은 장소라도 경로가 다르면 값이 달라야 하는데 장소로는 구분 불가였고, 여정 슬롯에 그 도시
-      //     대표장소가 들어오면 차감이 안 되던 구멍이 있었다.
       //   ⚠️ 수정금지(승인필요) 2026-08-09 사장님 최우선 SSOT = **차감은 완성 시점에만.**
-      //     이 길은 **이미 만들어진 해설을 창고에서 꺼내 주는 것**이라 만들다 실패할 것이 없다
-      //     = 지금 자리가 곧 완성 시점이다(생성 경로처럼 뒤로 옮길 것이 없음).
-      //     다만 **줄 내용이 없으면 받은 게 없는 것** = 그때는 깎지 않는다(빈 해설에 5크레딧 = 환불 분쟁 소지).
       const fromCityCard = String(req.query.from || "") === "card";
       const deliverable = (row.content || row.description || "").trim();
       if (deliverable && !mine && requester && !fromCityCard) {
@@ -377,7 +301,6 @@ export function registerGuideRoutes(app: Express): void {
     }
   });
 
-  // ② 언어별 페르소나 = DB prompts. ⚠️ §12 함정 = 중복·구버전 존재 → is_active + version DESC 1건.
   app.get("/api/prompts/:language/:type", async (req, res) => {
     try {
       const { language, type } = req.params;
@@ -407,7 +330,6 @@ export function registerGuideRoutes(app: Express): void {
     }
   });
 
-  // ③ 웹TTS 음성 우선순위 = DB voice_configs (모듈 웹앱 로직이 langCode·platform 별로 캐시).
   app.get("/api/voice-configs", async (_req, res) => {
     try {
       const rows = await getDb()
@@ -428,10 +350,7 @@ export function registerGuideRoutes(app: Express): void {
     }
   });
 
-  // ④ 보관함 저장 = 모듈 ArchiveService.saveToServer 가 { userId, language, guides:[...] } 로 POST.
   //   🏷️ 2026-08-02 사장님 확정 = 같은 입구가 **창고 자동 저장**도 받는다(warehouse:true) = 저장 경로 1벌(§0).
-  //     · warehouse 없음 = 지금 그대로 = 사용자가 [저장]을 눌러 **본인 '나의 TRIPIS'** 에 담는 것.
-  //     · warehouse:true = 새로 만든 해설을 **공용 창고**에 담는 것 = 주인은 관리자, 장소번호 필수.
   app.post("/api/guides/batch", async (req, res) => {
     try {
       const reqUserId = getUserIdFromReq(req);
@@ -452,8 +371,6 @@ export function registerGuideRoutes(app: Express): void {
         if (!owner) return res.status(401).json({ error: "userId required" });
       }
 
-      // 창고에 담을 것 고르기 = ① 장소번호가 있는 것만(창고 열쇠가 없으면 아무도 못 찾는다)
-      //   ② (장소, 언어)에 이미 있으면 담지 않는다 = 같은 칸 두 벌 금지(§0). 두 사람이 동시에 열었을 때의 겹침도 여기서 막힌다.
       let targets = items;
       if (isWarehouse) {
         const kept: any[] = [];
@@ -472,14 +389,9 @@ export function registerGuideRoutes(app: Express): void {
         if (!targets.length) return res.json({ guideIds: [] }); // 이미 창고에 있음 = 정상(할 일 없음)
       }
       // 🏙️ 2026-08-02 사장님 지시 = TRIPIS 도 도시와 잇는다. 도시를 아는 두 갈래:
-      //   ① 우리 DB 장소 사진으로 만든 해설 = 그 장소의 city_id 를 body 로 받아 그대로 넣는다(가장 정확).
-      //   ② 기기 사진 = 도시를 모르니 좌표로 최근접 1곳 계산(city-match.ts 1벌 §16, 외부호출 0).
-      //   좌표도 도시도 없으면 null 로 그대로 저장 = 사장님이 나중에 지정.
       const values = await Promise.all(
         targets.map(async (g: any) => {
           // ⚠️ 수정금지(승인필요) 2026-08-06 사장님 SSOT(Cloudflare 이전 1단계) = 기기 사진(base64)은 DB 에 안 넣는다.
-          //   = id 를 먼저 만들어 R2 guides/{id}.{확장자} 로 올리고 DB 에는 주소만(옛 base64 직저장 = 행당 수백 KB = DB 비대 근본 = 폐기 §19).
-          //   = 우리 DB 장소 사진(imageUrl = 이미 r2.dev 주소)은 그대로. R2 업로드 실패 = catch 로 500 = 무성실패 없음(폴백 분기 없음 §0).
           const id = crypto.randomUUID();
           const deviceUrl = g.imageDataUrl
             ? await uploadDataUriToR2(`guides/${id}`, g.imageDataUrl)
@@ -498,7 +410,6 @@ export function registerGuideRoutes(app: Express): void {
             cityId:
               g.cityId ??
               (await nearestCityIdByCoords(g.latitude, g.longitude)),
-            // 🏷️ 창고 열쇠 = 어느 장소의 해설인지. 기기 사진이면 장소번호가 없어 null 그대로(= 창고에는 안 뜬다).
             placeId: Number(g.placeId) > 0 ? Number(g.placeId) : null,
             language: g.language || language || "ko",
             voiceLang: g.voiceLang || null,
@@ -517,9 +428,7 @@ export function registerGuideRoutes(app: Express): void {
     }
   });
 
-  // ④ 보관함 목록 = GET /api/guides?userId=
   //   ⚠️ 2026-08-06 사장님 승인 = **관리자(Bearer 토큰 role) = 전체 상황판** = 모든 사용자의 해설(소유권 = 회사).
-  //     전문가 문의함 패턴 동형. 쿼리 userId 폴백(비토큰 레거시 경로)은 admin 판정에 안 씀 = 스푸핑 차단.
   app.get("/api/guides", async (req, res) => {
     try {
       const authId = getUserIdFromReq(req);
@@ -542,7 +451,6 @@ export function registerGuideRoutes(app: Express): void {
     }
   });
 
-  // ④ 보관함 삭제 = DELETE /api/guides/:id (본인 것만).
   app.delete("/api/guides/:id", async (req, res) => {
     try {
       const owner = getUserIdFromReq(req) || (req.body?.userId as string);

@@ -1,7 +1,3 @@
-/**
- * 모든 테이블 한글 상태 점검
- */
-
 const { Client } = require("pg");
 require("dotenv").config();
 
@@ -15,7 +11,6 @@ async function checkAllTables() {
     console.log("ALL TABLES KOREAN STATUS CHECK");
     console.log("=".repeat(70));
 
-    // 1. cities
     console.log("\n[1] CITIES TABLE");
     console.log("-".repeat(50));
     const cities = await client.query(
@@ -29,7 +24,6 @@ async function checkAllTables() {
     });
     console.log("Total: " + cities.rows.length);
 
-    // 2. places
     console.log("\n[2] PLACES TABLE");
     console.log("-".repeat(50));
     const places = await client.query(
@@ -41,7 +35,6 @@ async function checkAllTables() {
     });
     console.log("Total: " + places.rows.length);
 
-    // 3. youtube_channels
     console.log("\n[3] YOUTUBE_CHANNELS TABLE");
     console.log("-".repeat(50));
     const ytChannels = await client.query(
@@ -62,7 +55,6 @@ async function checkAllTables() {
     });
     console.log("Total: " + ytChannels.rows.length);
 
-    // 4. instagram_hashtags
     console.log("\n[4] INSTAGRAM_HASHTAGS TABLE");
     console.log("-".repeat(50));
     const igHashtags = await client.query(
@@ -74,7 +66,6 @@ async function checkAllTables() {
     });
     console.log("Total: " + igHashtags.rows.length);
 
-    // 5. blog_sources
     console.log("\n[5] BLOG_SOURCES TABLE");
     console.log("-".repeat(50));
     const blogs = await client.query(
@@ -95,7 +86,6 @@ async function checkAllTables() {
     });
     console.log("Total: " + blogs.rows.length);
 
-    // 6. naver_blog_posts
     console.log("\n[6] NAVER_BLOG_POSTS TABLE (sample)");
     console.log("-".repeat(50));
     const naverPosts = await client.query(
@@ -117,7 +107,6 @@ async function checkAllTables() {
     );
     console.log("Total: " + naverCount.rows[0].cnt);
 
-    // 7. youtube_videos
     console.log("\n[7] YOUTUBE_VIDEOS TABLE (sample)");
     console.log("-".repeat(50));
     const ytVideos = await client.query(
@@ -139,7 +128,6 @@ async function checkAllTables() {
     );
     console.log("Total: " + ytCount.rows[0].cnt);
 
-    // Summary
     console.log("\n" + "=".repeat(70));
     console.log("SUMMARY - Broken Korean Check");
     console.log("=".repeat(70));
@@ -216,7 +204,6 @@ async function checkAllTables() {
 
 function hasBrokenKorean(str) {
   if (!str) return false;
-  // Check for common broken UTF-8 patterns
   return /[ÃìíëÂ]/.test(str) || /Ã/.test(str);
 }
 

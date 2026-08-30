@@ -1,4 +1,3 @@
-// Step1 Gemini 완전 일정 생성 + JSON 잘림 복구 헬퍼 = pipeline-v3 분리(2026-07-15 §0 슬림화, 순수 이동)
 import type { TripFormData, DaySlotConfig, VibeWeight } from "./types";
 import { MEAL_BUDGET } from "./types"; // SEED_CATEGORIES 삭제 §19 = 미사용(호출 0)
 import { computeCatSlots } from "./ag2-gemini-recommender";
@@ -10,14 +9,7 @@ import {
 } from "./pipeline-v3-types";
 
 // ⚠️ 수정금지(승인필요) 2026-07-18 사장님 확정 = 메인앱 여정 Step1 모델 = gemini-3-flash-preview 로 복귀.
-//   = 옛 gemini-3.5-flash 폐기 §19 = 3.5 는 thinking 기반 추론모델이라 thinkingBudget:0 에서 긴 JSON(24곳) 생성이 불안정 = finishReason STOP 인데 응답 중간 잘림(실증: 9,686자↔5,554자 변동 = 3일↔2일).
-//     리서치 확정(ai.google.dev/gemini-3.5 + 개발자포럼): 3.5 는 thinking 켜야 긴 구조화 출력 안정 = thinking 켜면 비싼 모델 쓸 이유 없음(사장님). preview 는 thinking 0 에서도 안정적 3일 완결(예전 실증).
-//   = 로그·호출 2곳 단일 지점(다른 파일 MODEL_ID 로컬 상수 컨벤션 동일) = 향후 교체 1곳.
 const STEP1_MODEL = "gemini-3-flash-preview";
-
-// =====================================================
-// Step 1: Gemini 완전 일정 생성
-// =====================================================
 
 export async function step1_geminiItinerary(
   formData: TripFormData,
@@ -28,9 +20,6 @@ export async function step1_geminiItinerary(
   const _t0 = Date.now();
   const mealBudget = MEAL_BUDGET[normalizeTravelStyle(formData.travelStyle)];
 
-  // ===== 사용자 입력 9가지를 자연어로 상세 평문화 =====
-
-  // ① 생년월일 → 나이 계산
   let ageDesc = "";
   if (formData.birthDate) {
     const birth = new Date(formData.birthDate);
@@ -39,19 +28,13 @@ export async function step1_geminiItinerary(
   }
 
   // 🗑️ 2026-07-09 사장님 SSOT = companionTypeKo·focusKo 하드코딩 번역맵 삭제 §19 = 옛 AI 과설계(Gemini 응답요소에 없는 설명글).
-  //   = 동행유형·큐레이션초점도 원본값(companionType·curationFocus) 그대로 Gemini 전달 = 자유해석([[feedback_dynamic_function_not_hardcoded_map]]). agesDesc(죽은코드) 삭제.
   const companionDesc = formData.companionType || "Couple"; // 원본값(Solo/Couple/Family/Group...) 그대로
   const headcount = formData.companionCount || 2;
   const focusDesc = formData.curationFocus || "Everyone"; // 원본값(Kids/Parents/Everyone/Self) 그대로
 
-  // 🗑️ 2026-07-21 = startDate·endDate 삭제 §19 = dateRangeText(삭제됨)에서만 쓰이던 죽은 변수.
   // 🗑️ 2026-07-09 사장님 SSOT = vibeKo·styleKo·mobilityKo·paceKo 하드코딩 번역맵 4개 완전삭제 §19 = 옛 AI 과설계.
-  //   = Gemini 응답요소에 없는 것(사람 읽는 설명글) = 삭제. 원본값(vibes·travelStyle·travelPace)을 그대로 프롬프트에 실어 Gemini 해석([[feedback_dynamic_function_not_hardcoded_map]]).
-  //   = 실제 로직(카테고리 배분 catSlots·페이스 90/120/150분·예산)은 이미 다른 곳서 동적 처리 = 이 설명맵은 장식(죽은코드·도달불가폴백)이었음.
 
   // 🧠 2026-07-05 사장님 SSOT = vibe → 6카테고리 슬롯 배분을 프롬프트에 전달(§20 = catSlots 단일 SSOT ag2 재사용).
-  //   = 옛날엔 "관광 X + 식사 Y" 2종으로만 전달 → Gemini 가 카테고리 모름 → attraction/restaurant 로 뭉개짐(리모주 사고).
-  //   = 이제 "heritage 2곳·shopping 1곳·healing 1곳..." 명시 → 각 place 가 seed_category(6종) 답함 → DB 저장 시 카테고리 보존.
   const totalSlots = daySlotsConfig.reduce((s, d) => s + d.slots, 0);
   const catSlots = computeCatSlots(vibeWeights, totalSlots, dayCount);
   const nonRestCats = Object.entries(catSlots).filter(
@@ -62,8 +45,6 @@ export async function step1_geminiItinerary(
     (catSlots.restaurant ? ` / 식당(restaurant) ${catSlots.restaurant}곳` : "");
 
   // 일별 요구사항 (2026-07-21 사장님 SSOT = DB-only와 동일 규칙 = 식사 항상 2(점심 중간+저녁 마지막), 활동 = slots-2 우선).
-  //   활동을 우선 최대한 채우고(AG1 슬롯수 = 활동 최대), 점심은 12~14시 중간, 저녁은 마지막 활동 직후(종료 미지정 = 유동).
-  //   옛 저녁 18:30~20:00 윈도우 고정·윈도우 밖이면 식사 제외 폐기 §19 = DB-only(slots-2)와 불일치·저녁 누락 원인.
   const dayRequirements = daySlotsConfig
     .map((d) => {
       const activityCount = Math.max(0, d.slots - 2); // 식사2(점심·저녁) 제외 = 활동
@@ -72,9 +53,7 @@ export async function step1_geminiItinerary(
     .join("\n");
 
   // ⚠️ 2026-07-21 사장님 SSOT = 여정 출력 = 한국어 고정(디폴트). PSR 공유컬럼(name_ko·summary_ko·editorial_summary)도 한국어 = 오염 방지.
-  //   다국어 = 당분간 계획 없음. 추후 국제화 = i18n 불가(동적생성 요소) = "번역 방식"으로 별도 붙임(미확정). Gemini 언어분기·옛 langMap(프롬프트 미삽입 죽은코드) 폐기 §19.
 
-  // 현재 연도/월 (2026 최신 정보 반영 지시용)
   const nowYear = new Date().getFullYear();
   const nowMonth = new Date().getMonth() + 1;
   const seasonNote =
@@ -87,13 +66,8 @@ export async function step1_geminiItinerary(
           : "겨울 시즌 (비수기, 일부 시설 단축운영)";
 
   // ⚠️ 수정금지(승인필요) 2026-07-11 = 메인앱 표준 prompt 사장님 SSOT = 슬림본(축약키 12필드 + 꾸밈글 18자 상한, A/B 실호출 실증 = 26% 단축·결손 0)
-  // = SSOT 원본 = .claude/skills/raw-db-verify-and-complete/prompts/09-main-app-itinerary/STANDARD_PROMPT_2026-05-24.md + 카탈로그 docs/20260607PROMPTS_TOTAL_SSOT.md #02
-  // = 1 글자 변경 = Gemini 응답 변경 = 세 파일 동기 강제. 축약키 = 아래 수신부 SLIM_KEYS 가 원명 복원(하류·DB 컬럼 불변)
-  // 🗑️ 2026-07-09 사장님 SSOT = vibe/페이스/스타일 = 하드코딩 번역맵 폐기 §19 → 원본값 그대로(Gemini 해석). vibes·travelPace·travelStyle 원본 = route-prompt 동적 패턴.
   const koreanTravelerStyle = `${companionDesc} ${headcount}명 / vibe=${(formData.vibes || []).join("+")} / 페이스=${formData.travelPace || "Normal"} / 스타일=${formData.travelStyle || "Reasonable"}${ageDesc ? ` / 나이=${ageDesc}` : ""}`;
   // ⚠️ 2026-07-17 사장님 SSOT = 출발점 = 동적(숙소 입력 시 그 좌표, 미입력 시 도시 중심부). 도심 고정 폐기 §19.
-  //   = 좌표가 정본(BE 가 구글위젯 해석값을 이미 보유) = Gemini 재지오코딩 오차 0 + d(haversine)·y/x 좌표기계와 동종. 이름은 사람용 라벨만(거리계산 X).
-  //   = pool-radius 동적 출발점(accommodationCoords)과 동일 원칙 = 여정 동선·외곽거리 기준을 숙소로 통일.
   const startPoint =
     formData.accommodationCoords?.lat && formData.accommodationCoords?.lng
       ? `출발점 좌표 (${formData.accommodationCoords.lat.toFixed(6)}, ${formData.accommodationCoords.lng.toFixed(6)})${formData.accommodationName ? ` = 숙소 "${formData.accommodationName}"` : ""}`
@@ -162,9 +136,6 @@ OUTPUT (strict JSON, no markdown fences):
 
   try {
     // ⚠️ 수정금지(승인필요) 2026-07-18 사장님 확정 = 발굴(_call-config.md 검증표준)과 완전 통일 = googleSearch 그라운딩 실제 켬 + responseMimeType 제거.
-    //   근본: preview 모델·temp0.2 로도 환각(렌 실증: 파리 식당을 렌에·거리이름 추천) 발생 = 원인은 모델 아니라 "그라운딩 미실행"(프롬프트엔 GROUNDING REQUIREMENT 글만, 실제 tools 없어 효력0).
-    //   = 발굴은 tools googleSearch 로 실제 Google 검증 = 환각 억제. responseMimeType 은 grounding 과 배타(INVALID_ARGUMENT, 06-run.ts:92 정합) = 제거 → 프롬프트 STRICT JSON + repairTruncatedJSON 이 JSON 보장.
-    // ⚠️ maxOutputTokens 50000(발굴 통일, 8192 폐기 §19) / temperature 0.2(발굴 통일, 0.3 폐기 §19) / 모델 preview(3.5 thinking0 잘림 §19).
     const step1Config: any = {
       temperature: 0.2,
       maxOutputTokens: 50000,
@@ -179,10 +150,8 @@ OUTPUT (strict JSON, no markdown fences):
       config: step1Config,
     });
 
-    // gemini-2.5-flash: thinking 모드 시 응답이 parts 배열로 올 수 있음
     const candidate = (response as any).candidates?.[0];
     const parts = candidate?.content?.parts || [];
-    // parts 중 text 타입만 추출 (thought 타입 제외)
     let text =
       parts
         .filter((p: any) => p.text && !p.thought)
@@ -195,15 +164,10 @@ OUTPUT (strict JSON, no markdown fences):
       `[V3-Step1] 🤖 응답 수신 (${text.length}자, finish=${finishReason}, parts=${parts.length}, ${Date.now() - _t0}ms)`,
     );
 
-    // 🗑️ 2026-07-06 삭제 = 여기 saveRaw(contextId:null=runtime·봉투형식) 폐기 = cityId 미확정 시점이라 runtime 개판저장 §19.
-    //   = raw 저장은 호출부(runPipelineMix)에서 Promise.all 후 preloaded.cityId 확정 시점에 saveCollectedRaw 로(도시폴더+parsedPlaces). rawText 는 아래 days 에 부착해 전달.
-
     if (text.length < 100) {
       console.warn(`[V3-Step1] ⚠️ 짧은 응답: ${text}`);
     }
 
-    // ── Markdown code fence 제거 ──
-    // Gemini가 ```json ... ``` 으로 감싸서 응답하는 경우 처리
     text = text
       .replace(/```json\s*/gi, "")
       .replace(/```\s*/g, "")
@@ -223,7 +187,6 @@ OUTPUT (strict JSON, no markdown fences):
       console.warn(
         `[V3-Step1] ⚠️ JSON 파싱 오류 (${parseErr.message}), 복구 시도...`,
       );
-      // 디버그: 파싱 실패 위치 근처 출력
       const pos = parseInt(
         String(parseErr.message).match(/position (\d+)/)?.[1] || "0",
       );
@@ -275,7 +238,6 @@ OUTPUT (strict JSON, no markdown fences):
 
     // 🗑️ 2026-07-05 삭제 = DEBUG_PIPELINE_SNAPSHOT 로컬 dump = saveRaw(§18) 이중저장 관문우회 §0/§19
 
-    // 검증: 각 일의 장소 수/식사 체크
     for (const day of days) {
       const hasLunch = day.places?.some((p) => p.type === "lunch");
       const hasDinner = day.places?.some((p) => p.type === "dinner");
@@ -307,22 +269,15 @@ OUTPUT (strict JSON, no markdown fences):
   }
 }
 
-/** Gemini JSON 잘림 복구 = 발굴(01-run.ts parse) 방식 동일(§16 통일).
- *  = 뒤에서부터 성한 '}' 지점마다 접미사(]}}/]}/}) 붙여 파싱 시도 = 잘린 마지막 날의 완성 place 까지 살림.
- *  = 옛 "day 경계 통째 버림"(braceDepth) 폐기 2026-07-19 §19 = 3일 요청인데 Day3 통째 소실 근본(렌 2일 잘림). */
 export function repairTruncatedJSON(
   broken: string,
 ): { days: GeminiDay[] } | null {
   const start = broken.indexOf("{");
   if (start < 0) return null;
-  // 1차 = 통째 시도
   try {
     const p = JSON.parse(broken.slice(start, broken.lastIndexOf("}") + 1));
     if (p.days) return p;
-  } catch {
-    /* 잘림 = 아래 복구 */
-  }
-  // 2차 = 뒤에서부터 성한 '}' 마다 접미사 붙여 최대한 살림(발굴 parse 패턴)
+  } catch {}
   for (let endIdx = broken.length - 1; endIdx > start; endIdx--) {
     if (broken[endIdx] !== "}") continue;
     const trimmed = broken.slice(start, endIdx + 1);
@@ -330,9 +285,7 @@ export function repairTruncatedJSON(
       try {
         const p = JSON.parse(trimmed + suffix);
         if (p.days) return p;
-      } catch {
-        /* 다음 접미사 */
-      }
+      } catch {}
     }
   }
   return null;

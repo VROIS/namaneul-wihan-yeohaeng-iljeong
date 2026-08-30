@@ -1,18 +1,3 @@
-/**
- * itineraries 테이블 마이그레이션 - 주인공 필드 추가
- *
- * 추가 필드:
- * - curation_focus: 누구를 위한 (Kids, Parents, Everyone, Self)
- * - companion_type: 누구랑
- * - companion_count: 인원 수
- * - companion_ages: 동반자 나이
- * - vibes: 바이브 선택
- * - travel_pace: 여행 밀도
- * - mobility_style: 이동 스타일
- * - meal_level: 식사 레벨
- * - protagonist_sentence: 주인공 문장 (Gemini 프롬프트용)
- */
-
 require("dotenv").config();
 const { Pool } = require("pg");
 
@@ -27,7 +12,6 @@ async function migrate() {
   try {
     console.log("🔄 itineraries 테이블 마이그레이션 시작...");
 
-    // 새 컬럼 추가 (이미 존재하면 무시)
     const alterStatements = [
       `ALTER TABLE itineraries ADD COLUMN IF NOT EXISTS curation_focus TEXT DEFAULT 'Everyone'`,
       `ALTER TABLE itineraries ADD COLUMN IF NOT EXISTS companion_type TEXT DEFAULT 'Couple'`,
@@ -51,7 +35,6 @@ async function migrate() {
       }
     }
 
-    // 테이블 구조 확인
     const result = await client.query(`
       SELECT column_name, data_type, column_default 
       FROM information_schema.columns 

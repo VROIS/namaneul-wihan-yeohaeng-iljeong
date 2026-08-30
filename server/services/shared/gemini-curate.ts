@@ -1,8 +1,4 @@
 // ⚠️ 수정금지(승인필요) 2026-06-05 = Gemini 한국어 큐레이션 단일 관문 (= tsSearch 대칭, 사용자 SSOT)
-// = 입력(헤더=어느 장소)만 바뀌고 **출력 요소는 고정**: name_ko + summary_ko(요약) + editorial_summary(숏폼) + price(1인당).
-//   PID/URI 는 Gemini 에 **전달 안 함**(환각 + 인식 못함 + 느려짐 = 사용자 SSOT).
-// = 프롬프트 = 잠긴 02-enrich/prompt.txt (1글자 변경 X) 단일 소스. 호출설정 = _call-config (gemini-3-flash + googleSearch + 40 batch + adaptive fallback).
-// = 모든 한국어 큐레이션 호출은 이 함수만 통과. 결과(데이터)는 호출자가 upsertPlace 로 융합 → 덮어쓰기 = self-validating PSR.
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -17,7 +13,6 @@ const PROMPT_PATH = path.join(
   ".claude/skills/raw-db-verify-and-complete/prompts/02-enrich-place/prompt.txt",
 );
 // ⚠️ 수정금지(승인필요) 2026-06-23 사장님 SSOT = 1콜 우선(120) → 실패(missing>5) 시 자동 축소 = 콜 최소화.
-//   = maxOutputTokens 50000 = 120곳 1콜 입증됨. 134곳=120+14=2콜 / 한 도시 대부분 1~2콜 = 콜 최소화(§19).
 const FALLBACK = [120, 60, 40, 20, 10]; // = adaptive fallback (큰 배치 먼저 = 콜 최소)
 
 export interface GeminiCurateInput {
@@ -31,7 +26,6 @@ export interface GeminiCurateInput {
   seedCategory?: string; // ⚠️ 2026-06-16 = Gemini 입력에서 제외(카테고리 안 줌) = optional 로 정합. shopping price=null 은 호출자 저장단계 처리.
 }
 // ⚠️ 수정금지(승인필요) 2026-06-20 사장님 SSOT = 선별 금지 = Gemini 응답 전 필드 포함(02-enrich/prompt.txt 응답 10요소 그대로) (§19).
-//   = Gemini만 주는 요소(name_local·distance·가격) 가 여기 다 실려야 #45 가 새우선 덮어쓰기로 필수컬럼 자동 완비.
 export interface GeminiCurateOutput {
   id: number;
   nameLocal: string | null; // ← name_local (현지 원어명 = Gemini 전용)
@@ -46,7 +40,6 @@ export interface GeminiCurateOutput {
   distanceKmFromCenter: number | null; // ← distance_km_from_center (도심거리 = 동선 최적화 재료 = Gemini 전용)
 }
 
-// 잘림 복구 파서 (= _call-config 표준)
 function parsePlaces(t: string): any[] {
   const start = t.indexOf("{");
   if (start < 0) return [];
@@ -66,10 +59,6 @@ function parsePlaces(t: string): any[] {
   return [];
 }
 
-/**
- * 한국어 큐레이션 관문 = 배치 단위(40, adaptive). 입력 = 이름/주소/좌표(PID·URI 제외). 출력 = 고정 4요소.
- * @returns id 로 키된 큐레이션 배열 (= 호출자가 upsertPlace 로 덮어씀)
- */
 export async function geminiCurate(
   cityName: string,
   cityId: number,
@@ -88,7 +77,6 @@ export async function geminiCurate(
   let size = FALLBACK[0];
   while (i < valid.length) {
     const batch = valid.slice(i, i + size);
-    // ⚠️ 입력 = PID/URI 제외 (= 환각 방지). id=매칭키.
     // ⚠️ 2026-06-16 사장님 승인 = seed_category 입력 제거 (= id 에 이미 분류 + 카테고리 주면 shopping 에서 식당/바 가격 오염 실증). shopping price=null 은 호출자 저장단계 처리.
     const input = batch.map((r) => ({
       id: r.id,
@@ -100,7 +88,6 @@ export async function geminiCurate(
       longitude: r.longitude ?? null,
     }));
     // ⚠️ 수정금지(승인필요) 2026-06-18 = 출입증(${API_PASS}) 동적 조립·치환 = 02-enrich/run.ts 와 동일 패턴(prompt.txt 헤더에 박힘).
-    //   = 큐레이션 = 채움 = 행=있음. 도시=이름(id). 날짜=호출시점. (run.ts/gemini-curate 양쪽 동반 치환 = prompt.txt 주석 정합)
     const apiPass = `[API-PASS] 도시=${cityName}(${cityId}) / 행=있음(채움) / 날짜=${new Date().toISOString().slice(0, 10)}`;
     const prompt = body
       .replace(/\$\{CITY_NAME\}/g, cityName)
@@ -127,7 +114,6 @@ export async function geminiCurate(
       (b) => !places.find((p: any) => p.id === b.id),
     ).length;
 
-    // adaptive fallback = 응답 부족 시 batch 축소 재시도
     if (
       (places.length === 0 || missing > 5) &&
       FALLBACK.indexOf(size) < FALLBACK.length - 1

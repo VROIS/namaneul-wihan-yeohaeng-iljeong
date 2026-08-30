@@ -1,8 +1,5 @@
 // ⚠️ 수정금지(승인필요) 2026-07-22 사장님 SSOT = 지브리 스토리보드 = Gemini 1콜 ('AI의견' 패턴)
-// = "우리가 가진 것 전부 다 줌": 여정 메타+바이브+해당일 슬롯 전요소(PSR summaryKo·editorialSummary 포함)+캐릭터·차량 매트릭스를
-//   JSON 그대로 Gemini 에 제공(셀렉 금지) → 하루 전체 씬(최대 8)의 장면+한국어 대사를 한 번에 작성
 //   = 대사·서사 일관성 + 환각 차단(실데이터만 근거). 옛 코드 템플릿 조립 = 폐기 2026-07-22 사장님 지시.
-// = visualPrompt 의 <IMAGE_REF_0/1/2> = video-gen-client 레퍼런스 배열 순서(주인공/가이드/차량)와 1:1.
 
 import fs from "fs";
 import path from "path";
@@ -41,7 +38,6 @@ export const MAX_SCENES = 10;
 export const SCENE_SECONDS = 6;
 
 // ⚠️ 2026-08-22 사장님 승인 = 영상 다국어(동적함수) = 앱 7언어 두 글자 코드 → 프롬프트용 언어명 1벌.
-//   원재료(창고 한국어)는 무변경 = 제미니 출력 언어만 지정(7벌 금지 = 사장님 SSOT).
 const VIDEO_LANGS: Record<string, string> = {
   ko: "Korean",
   en: "English",
@@ -59,7 +55,6 @@ export function normalizeVideoLang(code?: string | null): string {
   return VIDEO_LANGS[c] ? c : "ko";
 }
 
-// 스토리보드 지시 프롬프트 (= 코드 = 변경 시 사장님 원본 제시 후 반영)
 function buildStoryboardPrompt(
   input: object,
   sceneCount: number,
@@ -102,7 +97,6 @@ export function narratorFromCast(cast: GhibliCast): string {
   return `a cheerful Korean ${isMale ? "man" : "woman"} in ${isMale ? "his" : "her"} ${age}s`;
 }
 
-/** [A안] 씬 1개의 영상 생성 프롬프트 = visualPrompt + 한국어 나레이션(화자 음색 = 출연진 연동) */
 export function sceneClipPrompt(
   scene: GhibliScene,
   narrator?: string,
@@ -112,8 +106,6 @@ export function sceneClipPrompt(
 ${SCENE_SECONDS}-second clip. Audio: ${narrator || "a warm, cheerful Korean narrator"} says in ${videoLangName(language)}: "${scene.narrationKo}" — plus light Ghibli-style piano background music.`;
 }
 
-/** [B안 ①] 씬 스틸 합성 프롬프트 = 실사 배경 유지 + 우리 캐릭터 삽입 (나노바나나).
- *  hasPlacePhoto = 장소 실사진 첨부 여부(§22 review: 사진 결손 슬롯에서 첫 첨부=캐릭터인데 "첫 장=배경" 지시 = 깨진 스틸 방지) */
 export function sceneStillPrompt(
   scene: GhibliScene,
   totalTravelerCount: number,
@@ -131,7 +123,6 @@ Do NOT render any text, captions, subtitles, letters, numbers, ratios, watermark
 Tall vertical portrait composition, high detail.`;
 }
 
-/** [B안 ②] 스틸→영상 프롬프트 = 사진 배경 유지 + 자연 모션 + 한국어 나레이션 (Veo Lite 첫 프레임 입력용) */
 export function scenePhotoMotionPrompt(
   scene: GhibliScene,
   narrator?: string,
@@ -141,8 +132,6 @@ export function scenePhotoMotionPrompt(
 Audio: ${narrator || "a warm, cheerful Korean narrator"} says in ${videoLangName(language)}: "${scene.narrationKo}" — plus light piano background music.`;
 }
 
-// Gemini가 간혹 정상 JSON 뒤에 여분의 `}` 를 붙임(2026-07-22 운영 i103 raw 2회 실증 = "...}\n}") →
-// 중괄호 균형 기준으로 첫 JSON 객체만 정확히 추출하는 파서 1벌(§0). 문자열 내부의 {}·이스케이프 안전.
 function parseFirstJsonObject<T>(raw: string): T | null {
   const start = raw.indexOf("{");
   if (start < 0) return null;
@@ -179,7 +168,6 @@ function parseFirstJsonObject<T>(raw: string): T | null {
   return null;
 }
 
-/** 하루치 지브리 스토리보드 = Gemini 1콜 (비용 ≈ $0.01 미만) */
 export async function buildGhibliStoryboard(
   params: StoryboardParams,
 ): Promise<GhibliStoryboard> {
@@ -188,7 +176,6 @@ export async function buildGhibliStoryboard(
   if (!slots.length) throw new Error(`[storyboard] day ${day} 슬롯 없음`);
 
   // 출연진 = '누구랑'(companionType·companionCount) + users.birth_date 실계산 = 사장님 SSOT 2026-07-22
-  //   (protagonist-generator 의 calculateAge 재사용 §16. 생년월일 없는 계정 = 40대 가정)
   const userAge = calculateAge(user?.birthDate || itinerary.userBirthDate);
   const cast = selectGhibliCast({
     companionType: itinerary.companionType,
@@ -198,7 +185,6 @@ export async function buildGhibliStoryboard(
     companionAges: itinerary.companionAges,
   });
 
-  // 전부 다 줌 = 여정 메타(무거운 rawData 원본 컬럼만 제외 = slots 로 이미 포함) + 출연진·차량
   const { rawData: _omit, ...itineraryMeta } = itinerary;
   const guideRef = cast.travelers.length; // 가이드 = 일행 다음 번호
   const geminiInput = {
@@ -229,8 +215,6 @@ export async function buildGhibliStoryboard(
   ];
 
   // ⚠️ 2026-08-22 사장님 지시 = 관리자 수동 스토리보드 주입 = 베스트영상·쇼윈도우 제작 정식 채널(1회용 우회 아님).
-  //   docs/storyboards-manual/i{여정id}-d{일차}.json 존재 시 = Gemini 호출 0, 그 파일(title·scenes)로 영상 생성.
-  //   용도 = 클로드(세션) 스토리보드를 API 배선 없이 파이프라인에 태움 → 품질 입증 후 확대 적용 여부 별도 결정.
   const manualPath = path.join(
     root0,
     "docs/storyboards-manual",
@@ -261,7 +245,6 @@ export async function buildGhibliStoryboard(
       rawTag: `ghibli-storyboard-i${itinerary.id ?? 0}-d${day}${lang === "ko" ? "" : `-${lang}`}`,
     },
   );
-  // 파싱 = 균형 파서 1벌만 사용(관문의 greedy 정규식은 여분 `}` 에 깨짐 = 운영 실증)
   const data = parseFirstJsonObject<{ title: string; scenes: GhibliScene[] }>(
     r.raw,
   );

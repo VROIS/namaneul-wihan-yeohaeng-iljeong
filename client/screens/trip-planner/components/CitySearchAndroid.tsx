@@ -1,8 +1,4 @@
 // ⌨️ 2026-08-13 사장님 확정 = AOS 숙소·도시 검색 = 돋보기 필드 → 독립 전체화면 모달.
-//   근본 = Android 15+ 가 "키보드만큼 화면축소"를 OS 차원에서 제거(구글 강제 edge-to-edge) + 시스템웹뷰 150 은
-//   키보드 떠 있는 동안 웹뷰 크기가 바뀌면 내용을 지움(A36 실기기 실증) → 인라인 위젯은 키보드·앱화면에 깔려 사용 불가.
-//   구조 = ResultStep 의 전체화면 숙소 Modal(2026-07-02 iOS 근본해결 검증본)과 같은 그릇. 구글 위젯 그대로 = 재발명 0(§16).
-//   위젯 높이 고정(360) = 크기변경 0 = 지워질 계기 제거. iOS·웹 = InputStep 인라인 그대로(이 컴포넌트 미사용).
 import React, { useState } from "react";
 import { View, Text, Pressable, Modal } from "react-native";
 import { useTranslation } from "react-i18next";
@@ -102,7 +98,6 @@ export default function CitySearchAndroid({
               <PlaceAutocompleteWidget
                 placeholder={placeholder}
                 language={language}
-                // ⌨️ 높이 고정 = 웹뷰 크기변경 0 = "키보드 중 크기변경 = 내용 지움" 결함 회피 (2026-08-13)
                 height={360}
                 cityPrefix={cityPrefix}
                 onSelect={(place) => {

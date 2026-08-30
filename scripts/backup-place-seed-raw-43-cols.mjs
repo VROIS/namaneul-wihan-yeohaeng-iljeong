@@ -1,7 +1,3 @@
-/**
- * place_seed_raw = DROP 예정 43 컬럼 = 데이터 보유 row 만 JSON 백업
- * = 추후 복구 가능 (= 컬럼 ADD + UPDATE SQL 작성)
- */
 import "dotenv/config";
 import pg from "pg";
 import fs from "fs";
@@ -68,7 +64,6 @@ const c = new pg.Client({
 });
 await c.connect();
 
-// 각 컬럼별 = 데이터 보유 row 만 = id + 컬럼값 추출
 const backup = {
   timestamp: new Date().toISOString(),
   table: "place_seed_raw",
@@ -102,7 +97,6 @@ console.log(`\n총 ${totalRows} row 데이터 백업`);
 console.log(`저장: ${outPath}`);
 console.log(`파일 크기: ${(fs.statSync(outPath).size / 1024).toFixed(1)} KB`);
 
-// 복구 SQL 템플릿도 함께 생성
 const restorePath = `backups/RESTORE_INSTRUCTIONS.md`;
 const restoreContent = `# 복구 방법 (= 만약 필요 시)
 

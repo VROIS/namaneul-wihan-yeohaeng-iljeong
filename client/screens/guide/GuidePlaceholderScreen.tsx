@@ -1,6 +1,4 @@
 // ⚠️ 수정금지(승인필요) — 가이드 미니앱 임시 화면 (2026-07-19 §12 1단계)
-//   = 1단계는 "빈 자리"만 = 설정버튼→미니앱 열림 배선 검증용 placeholder.
-//   = 3단계에서 레거시 모듈(MainCameraScreen) 통째 이식으로 교체 예정(내부 0수정).
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";

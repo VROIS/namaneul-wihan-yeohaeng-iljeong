@@ -1,8 +1,5 @@
 // ⚠️ 수정금지(승인필요) 2026-07-23 사장님 SSOT = 씬 스틸 합성 단일 진입점 (§16) = 옵션B "실사 포토무비" 1단
-// = 나노바나나(Gemini Flash Image): 실제 장소 사진 + 우리 18인 캐릭터 jpg를 참조로 첨부 →
-//   실사 배경을 유지한 채 캐릭터가 자연스럽게 삽입된 1K 스틸 1장 생성 (일관성 = 참조 방식 = A안과 동일 체계).
 // = 키 = issueApiKey 출입증을 호출자가 인자로 전달. §18 = 응답 메타(이미지 바이트 제외) saveRaw 2곳 저장.
-// = 모델 교체 = 이 파일 내부만.
 
 import fs from "fs";
 import { recordExternalCall, precheck } from "./external-call-log";
@@ -13,13 +10,11 @@ const IMAGE_MODEL = "gemini-2.5-flash-image"; // 정식판 $0.039/장. 품질 �
 
 export interface SceneStillOpts {
   apiKey: string; // issueApiKey 출입증 (직접 env 조회 금지)
-  /** 참조 이미지 = 로컬 파일(path) 또는 URL(url) 혼용. 순서 = 프롬프트 서술 순서(장소사진 먼저, 캐릭터들 다음) */
   referenceImages: { path?: string; url?: string; mimeType?: string }[];
   contextId?: string | number | null; // §18 raw 맥락
   rawTag?: string | null;
 }
 
-/** 참조 이미지 1개 → base64 (로컬 파일 or URL 다운로드) */
 async function toBase64(img: { path?: string; url?: string }): Promise<string> {
   if (img.path) return fs.readFileSync(img.path).toString("base64");
   if (img.url) {
@@ -33,7 +28,6 @@ async function toBase64(img: { path?: string; url?: string }): Promise<string> {
   throw new Error("[image-gen] 참조 이미지 = path 또는 url 필수");
 }
 
-/** 씬 스틸 1장 = 참조 이미지들 + 프롬프트 → 합성 이미지 Buffer(png/jpg) */
 export async function composeSceneStill(
   prompt: string,
   opts: SceneStillOpts,

@@ -1,31 +1,3 @@
-/**
- * 교통비 계산 서비스 V2 (OTA 방식 - 1인 1일 기준)
- *
- * 💰 카테고리별 교통비 표시:
- *
- * ┌──────────────────────────────────────────────────────────────────────┐
- * │ 카테고리 A (가이드): Premium/Luxury OR Minimal                     │
- * │  → 구간: "전용차량이동"                                            │
- * │  → 표시: 가이드 1인/일 €120 vs 우버블랙 1인/일 €185               │
- * │  → 대중교통 상세 ❌ 안 보여줌                                      │
- * ├──────────────────────────────────────────────────────────────────────┤
- * │ 카테고리 B (대중교통): WalkMore/Moderate + Economic/Reasonable      │
- * │  → 구간: 도보/메트로/버스 상세 (노선,시간,거리,실제요금)           │
- * │  → 표시: 대중교통 1인/일 €14.60                                   │
- * │  → 업셀: "(드라이빙 가이드 이용 시 1인 €120/일)" 클릭 가능        │
- * └──────────────────────────────────────────────────────────────────────┘
- *
- * 💡 가이드 가격 산정:
- *   - 가용시간 자동 계산 (startTime~endTime), 기본 8시간
- *   - 200km 포함
- *   - 지방/도시 간 이동: +50% 할증
- *   - 최종: 차량 1일 가격 ÷ 인원 = 1인 1일 가격 (OTA 방식)
- *   - 차량 전체 가격은 표시 안 함 (고객이 물어보면 그때 답변)
- *
- * = 내부 헬퍼·상수는 server/services/transport/ 로 분리(2026-07-16 §0 슬림화, 순수 이동).
- *   이 파일 = 진입 경로 유지용 배럴 + 메인 오케스트레이터(calculateTransportPrice) 단독 보유.
- */
-
 import {
   COMPANION_TO_TRANSPORT,
   PARIS_TRANSIT_FARES,
@@ -55,7 +27,6 @@ import {
   getAirportTransferPrice,
 } from "./transport/day-config";
 
-// === 재수출 (진입 파일 경로·이름 유지 = importer 무수정) ===
 export type {
   TransportPriceInput,
   GuidePriceResult,
@@ -79,16 +50,6 @@ export {
   getAirportTransferPrice,
 } from "./transport/day-config";
 
-// ===================================================================
-// 🎯 메인: 교통비 산정 (카테고리 자동 분류)
-// ===================================================================
-
-/**
- * 사용자 입력 기반 교통비 산정
- * - 카테고리 A(가이드) / B(대중교통) 자동 분류
- * - 모든 가격은 1인 1일 기준 (OTA 방식)
- * - 차량 전체 가격 표시 안 함
- */
 export async function calculateTransportPrice(
   input: TransportPriceInput,
 ): Promise<TransportPricingResult> {
@@ -106,9 +67,6 @@ export async function calculateTransportPrice(
   const config = COMPANION_TO_TRANSPORT[companionType];
   const transportType = config.transportType;
 
-  // ═══════════════════════════════════════════════════════════════════
-  // 카테고리 A: 드라이빙 가이드 (1인 1일 가격)
-  // ═══════════════════════════════════════════════════════════════════
   if (isGuide) {
     const { dailyVehiclePrice } = await calculateGuideDailyPrice(
       transportType,
@@ -160,11 +118,6 @@ export async function calculateTransportPrice(
     } as GuidePriceResult;
   }
 
-  // ═══════════════════════════════════════════════════════════════════
-  // 카테고리 B: 대중교통 (1인 1일 가격 + 가이드 업셀)
-  // ═══════════════════════════════════════════════════════════════════
-
-  // 가이드 업셀 가격 계산 (비교용)
   const guideUpsell = await getGuidePerPersonPerDay(
     companionType,
     companionCount,
@@ -173,7 +126,6 @@ export async function calculateTransportPrice(
   );
 
   if (mobilityStyle === "WalkMore") {
-    // 많이 걷기: 대중교통만
     const tripCount = PARIS_TRANSIT_FARES.daily_trips_walkmore;
     const transit = calculateTransitPerPersonPerDay(dayCount, tripCount);
 
@@ -197,7 +149,6 @@ export async function calculateTransportPrice(
     } as TransitPriceResult;
   }
 
-  // 적당히 (Moderate): 대중교통 + UberX 혼합
   const transitTrips =
     PARIS_TRANSIT_FARES.daily_trips_moderate -
     UBER_PARIS_FARES.daily_uber_trips;
@@ -230,10 +181,6 @@ export async function calculateTransportPrice(
     ],
   } as TransitPriceResult;
 }
-
-// ===================================================================
-// Export
-// ===================================================================
 
 export const transportPricingService = {
   shouldApplyGuidePrice,

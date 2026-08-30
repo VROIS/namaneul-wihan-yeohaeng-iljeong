@@ -29,22 +29,13 @@ import MainAppOverlay from "@/screens/bts/MainAppOverlay";
 import PaymentReturnHandler from "@/components/PaymentReturnHandler";
 
 // ⚠️ 수정금지(승인필요) 2026-08-09 사장님 지시 = **첫 실행에 빈 화면이 스치는 것** 제거.
-//   전역(컴포넌트 밖)에서 부른다 = 컴포넌트 안이면 이미 걷힌 뒤라 늦는다(expo 공식 주의사항).
 SplashScreen.preventAutoHideAsync();
-// 걷을 때 툭 끊지 않고 300ms 로 사라지게 한다 = 시작 그림과 첫 화면(둘 다 흰 바탕)이 한 장면처럼 이어진다.
-//   ⚠️ JS 옵션이라 **다시 굽지 않아도** 적용된다(app.json 스플래시 설정을 건드리면 다시 구워야 함).
-//   fade 는 아이폰 전용 = 안드로이드는 duration 만 적용(부품 타입 주석 명시).
 SplashScreen.setOptions({ fade: true, duration: 300 });
 
 // ⚠️ 수정금지(승인필요) 2026-08-12 사장님 확정 = **소개 화면(IntroSplash) 완전삭제 §19.**
-//   앱을 열면 시작 그림(로고+Tripis+슬로건 1장, app.json) → 곧장 첫 화면. 화면 2장·1.8초 애니 제거 = 체감 속도.
-//   글자 애니메이션 = 시작 그림이 정지 이미지라 불가 = 속도 우선으로 포기(사장님 확정).
 
 export default function App() {
   // ⚠️ 수정금지(승인필요) 2026-08-21 사장님 승인 = AAB 용량 다이어트(§ docs/2026-08-14 "다음 빌드 묶음" 2번).
-  //   NotoSerifKR = npm 패키지(9굵기×14MB=127MB, AAB 170MB 중 75%) 의존 제거 = 실사용 2굵기(Regular·Bold, BTS
-  //   아리랑용)만 Pretendard와 동일 방식(assets/fonts/ 직접 파일 + require())으로 교체. 나머지 7굵기 미사용 삭제.
-  // 폰트 로드 (Pretendard 4종 + NotoSerifKR 2종 + PlayfairDisplay 2종)
   const [loaded, error] = useFonts({
     "Pretendard-Regular": require("../assets/fonts/Pretendard-Regular.otf"),
     "Pretendard-Medium": require("../assets/fonts/Pretendard-Medium.otf"),
@@ -69,9 +60,6 @@ export default function App() {
   }, []);
 
   // ⚠️ 수정금지(승인필요) 2026-08-09 사장님 지시 = 스플래시를 걷는 기준 = **첫 화면이 실제로 자리를 잡은 순간**.
-  //   옛 방식(폰트 다 읽자마자 useEffect 에서 걷음) 폐기 = 2026-08-09 §19 —
-  //   폰트가 준비된 것과 화면이 그려진 것은 다른 일이라, 그 사이가 **빈 화면으로 스쳤다**(사장님 실기기 관찰).
-  //   ⚠️ 폰트 읽기가 **실패해도**(error) 반드시 걷는다 = 안 그러면 스플래시에 영영 갇힌다.
   const onFirstLayout = useCallback(() => {
     if (loaded || error) SplashScreen.hideAsync();
   }, [loaded, error]);
@@ -130,9 +118,7 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     // ⚠️ 수정금지(승인필요) 2026-08-09 사장님 확정 = **다크 지원 안 함 = 밝음 고정.**
-    //   시작 그림(app.json)의 바탕과 같은 색 = 그림이 걷히는 순간 색이 안 튄다.
     //   2026-08-12 = 흰색 통일(사장님 확정, 옛 베이지 폐기 §19) = app.json backgroundColor 와 동일값.
-    //   기기 설정을 따라가는 분기는 두지 않는다(사장님: 한국 사용자는 다크를 거의 안 쓴다).
     backgroundColor: "#FFFFFF",
   },
 });

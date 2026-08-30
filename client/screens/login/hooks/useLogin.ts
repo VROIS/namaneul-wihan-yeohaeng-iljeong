@@ -1,4 +1,3 @@
-// 로그인 화면 상태·핸들러 = LoginScreen 분리(2026-07-15 §0 슬림화, 순수 이동)
 import { useState, useRef, useMemo, useEffect } from "react";
 import {
   TextInput,
@@ -23,7 +22,6 @@ import {
   isWhatsAppOtpConfigured,
   getIdTokenFromGoogleResponse,
 } from "@/lib/auth-oauth";
-// 구글 = 웹(auth-google.web.ts, 리다이렉트) / 앱(auth-google.ts, 네이티브 SDK) 자동 선택
 import { useGoogleAuthRequest } from "@/lib/auth-google";
 import {
   startKakaoLoginWeb,
@@ -31,9 +29,7 @@ import {
   getKakaoCallbackData,
   isKakaoOAuthConfigured,
 } from "@/lib/auth-kakao";
-// 애플 = 웹(auth-apple.web.ts, 없음) / 앱(auth-apple.ts, iOS 네이티브) 자동 선택
 import { isAppleAuthAvailable } from "@/lib/auth-apple";
-// ⚠️ 앱 소셜 3종 조립 = 공용 1벌(§16). 아미봉 인증창도 같은 것을 쓴다.
 import {
   runNativeSocial,
   isSocialConfigured,
@@ -44,9 +40,6 @@ import { SUPPORTED_LANGS, changeLanguageAndPersist } from "@/lib/i18n";
 import { BIRTHDATE_REQUIRED } from "@shared/birthdate-policy";
 
 // ⚠️ 사장님 SSOT 2026-07-25 = 로그인 성공 시 "다음 동작"을 호출자가 결정(§0 단일경로·분기금지). onDone:
-//   - LoginScreen(과도기 보관 화면) = () => navigation.reset(Main)  (기존 동작 100% 유지)
-//   - LoginSheet(인앱 팝업) = () => setVisible(false)  (팝업만 닫고 배경 화면 유지)
-//   훅 내부엔 화면이동/팝업닫기 분기 없음 = 성공하면 onDone() 1개만 부름.
 export function useLogin({ onDone }: { onDone: () => void }) {
   const { t, i18n } = useTranslation();
   const colorScheme = useColorScheme();
@@ -67,7 +60,6 @@ export function useLogin({ onDone }: { onDone: () => void }) {
   const monthRef = useRef<TextInput>(null);
   const yearRef = useRef<TextInput>(null);
 
-  // 첫 칸(요청 객체)은 안 씀 = 생략(§19)
   const [, googleResponse, googlePromptAsync] = useGoogleAuthRequest();
   const processedGoogleRef = useRef<typeof googleResponse>(null);
   const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
@@ -104,14 +96,9 @@ export function useLogin({ onDone }: { onDone: () => void }) {
   const isDateComplete =
     day.length === 2 && month.length === 2 && year.length === 4;
   // ⚠️ 수정금지(승인필요) — 생년월일 = 사용자가 친 년·월·일 칸을 그대로 조립 = 시간대 변환 0 = 어느 나라에서든 입력값 = 저장값.
-  //   UTC 변환 방식 폐기 = 2026-07-26 §19 (한국·유럽 등 UTC 보다 앞선 곳에서 하루 앞날짜로 저장되던 실측 버그).
   const birthDateStr = birthDate ? `${year}-${month}-${day}` : null;
 
-  // ⚠️ 2026-07-14 = 웹(WebView)에서 Alert.alert 이 안 떠서 로그인 실패·검증 안내가 안 보임 = "눌러도 반응 없음"의 원인. 웹 = window.alert, 앱 = Alert.alert(§19).
-  //   2026-07-26(§22 리뷰) = "로그인 실패" 안내를 여기 1벌로 통일(§16).
-  //   (생년월일 게이트·WhatsApp 의 Alert.alert 은 그대로 = 생년월일은 인라인 빨간 문구가 웹에서도 보이고, WhatsApp 은 비활성)
   //   ⚠️ 2026-07-27 사장님 SSOT = 알림은 **한 줄**만(제목·본문 2칸 쓰던 상세문구 기능 완전삭제 §19).
-  //   긴 영문 원문은 안 붙인다 = 누더기 금지(§23). 실패 사유 **이름 한 낱말**만 호출부에서 제목에 붙인다.
   const notify = (msg: string) => {
     if (Platform.OS === "web") {
       if (typeof window !== "undefined") window.alert(msg);
@@ -136,7 +123,6 @@ export function useLogin({ onDone }: { onDone: () => void }) {
         if (result.success) {
           onDone(); // 성공 = 호출자 결정(화면 리셋 or 팝업 닫기). §0 단일경로.
         } else {
-          // ⚠️ 2026-07-26 = 웹에서는 Alert.alert 이 안 뜸(§22 리뷰) → notify 로 통일(§16 1벌)
           notify(result.error || t("login.loginFailed"));
         }
       })
@@ -147,7 +133,6 @@ export function useLogin({ onDone }: { onDone: () => void }) {
       .finally(() => setOauthLoading(false));
   }, [googleResponse, birthDateStr, i18n.language, onDone]);
 
-  // 카카오 웹 리다이렉트 복귀 시 code 처리
   useEffect(() => {
     if (Platform.OS !== "web" || !isKakaoOAuthConfigured()) return;
     const url = typeof window !== "undefined" ? window.location.search : "";
@@ -188,8 +173,6 @@ export function useLogin({ onDone }: { onDone: () => void }) {
       })
       .catch((err) => {
         console.error("[Auth] 웹 카카오 로그인 실패:", err);
-        // ⚠️ 2026-07-28 = 성공·조기실패 경로와 동일하게 여기서도 code 를 지운다(§16 형식 통일).
-        //   안 지우면 네트워크 예외 시 다음 시도에서 이미 쓴 code 를 또 시도하게 된다.
         if (typeof window !== "undefined" && window.history) {
           window.history.replaceState({}, "", window.location.pathname);
         }
@@ -244,8 +227,6 @@ export function useLogin({ onDone }: { onDone: () => void }) {
 
   const requireBirthDateAndAdult = (): boolean => {
     // ⚠️ 수정금지(승인필요) 2026-08-24 사장님 승인 = 생년월일 입력부 필수↔선택 전환 1줄
-    //   (shared/birthdate-policy). 'optional'(현재, 애플 5.1.1(v) 대응) = 이 게이트를 거치지 않는다.
-    //   아래 검사는 'required' 로 되돌리면 그대로 살아난다 = 옛 로직 무변경.
     if (!BIRTHDATE_REQUIRED) return true;
     if (!isDateComplete) {
       setDateError(t("login.birthRequired"));
@@ -262,9 +243,6 @@ export function useLogin({ onDone }: { onDone: () => void }) {
   };
 
   // ⚠️ 사장님 SSOT 2026-07-26 = 앱(iOS·Android) 소셜 로그인 공통 마무리(§16 1벌).
-  //   외부인증에서 표(구글 id_token / 카카오 accessToken)를 받은 뒤 → 우리 서버 로그인 → 성공하면 onDone().
-  //   생년월일은 인증 요청이 아니라 "우리 저장분"으로만 함께 감(생년월일-인증 분리, 세션2-D).
-  //   run() 이 null 을 주면 = 사용자가 로그인 창을 닫은 것(취소) = 실패 아님 = 조용히 종료.
   const runNativeSocialLogin = async (
     run: () => Promise<{ success: boolean; error?: string } | null>,
   ) => {
@@ -276,9 +254,6 @@ export function useLogin({ onDone }: { onDone: () => void }) {
         onDone(); // 성공 = 호출자 결정. §0 단일경로.
       else notify(result.error || t("login.loginFailed"));
     } catch (err) {
-      // ⚠️ 2026-07-28 = 실패 **사유 이름 한 낱말**만 제목 옆에 붙인다(§11 = 사실을 보게).
-      //   사유: 사유를 아예 안 보여주니 실기기에서 "버튼이 죽었다"로만 보였고 원인을 못 찾았다.
-      //   긴 영문 원문은 안 붙인다(§23 = 누더기 금지). 예: "로그인 실패 (Misconfigured)".
       console.error("[Auth] 앱 소셜 로그인 실패:", err);
       const code = (err as { code?: string | number } | null)?.code;
       notify(
@@ -290,7 +265,6 @@ export function useLogin({ onDone }: { onDone: () => void }) {
   };
 
   // ⚠️ 수정금지(승인필요) 2026-07-31 = 앱 소셜 3종 = **공용 1벌**(auth-social.ts)로 통일 §16.
-  //   옛것(구글·카카오·애플 각각 여기서 따로 조립) 완전삭제 §19 = 아미봉 인증창과 두 벌로 갈리던 근본.
   const startNativeSocial = (provider: SocialProvider) =>
     runNativeSocialLogin(() =>
       runNativeSocial(provider, {
@@ -388,17 +362,12 @@ export function useLogin({ onDone }: { onDone: () => void }) {
   };
 
   // ⚠️ 수정금지(승인필요) 2026-07-31 사장님 지시 = 애플 로그인(아이폰 전용).
-  //   생년월일 확인 → 애플 창 → 우리 서버 로그인 = **구글·카카오와 완전히 같은 순서**.
-  //   웹 분기가 없는 이유 = 웹에는 버튼 자체가 안 그려진다(isAppleAvailable=false).
   const handleApplePress = async () => {
     if (!requireBirthDateAndAdult()) return;
     await startNativeSocial("apple");
   };
 
   // ⚠️ 수정금지(승인필요) 2026-08-08 사장님 확정 = **이메일창은 가입이 아니라 "이미 있는 내 계정 찾기"**.
-  //   가입은 소셜 3종(구글·카카오·애플)만 = 오타가 새 계정이 되던 통로를 원천 차단(실제 오타 계정 3개 발생 이력).
-  //   관문 2개 = 메일 + 생년월일이 둘 다 그 계정과 맞아야 한다("생년월일은 비번처럼" 사장님 SSOT).
-  //   ⚠️ 옛 `birthDateStr || "1990-05-15"`(생년월일 없으면 가짜값을 서버에 저장) 완전삭제 §19.
   const [emailInput, setEmailInput] = useState("");
   const [emailLoading, setEmailLoading] = useState(false);
   const handleEmailLogin = async () => {
@@ -407,8 +376,6 @@ export function useLogin({ onDone }: { onDone: () => void }) {
       notify(t("login.emailInvalid"));
       return;
     }
-    // 생년월일 관문 = 소셜 3종과 같은 함수 1벌(§16).
-    //   2026-08-24 = 선택 정책이면 생년월일 없이도 진행(서버가 있으면 대조 / 없으면 통과).
     if (!requireBirthDateAndAdult()) return;
     setEmailLoading(true);
     try {
@@ -427,8 +394,6 @@ export function useLogin({ onDone }: { onDone: () => void }) {
         notify(t("login.emailAccountNotFound"));
       else if (r.error === "birthdate_mismatch")
         notify(t("login.emailBirthMismatch"));
-      // ⚠️ 2026-08-08 §22 판단검증 = 알려진 사유만 우리 말로. 나머지는 서버 코드(server_error 등)를
-      //   그대로 띄우지 않는다 = 사용자가 못 읽는 영문 코드가 화면에 뜨던 것 폐기 §19.
       else notify(t("login.emailLoginFailed"));
     } catch (e) {
       notify(t("login.emailLoginFailed"));
@@ -438,7 +403,6 @@ export function useLogin({ onDone }: { onDone: () => void }) {
   };
 
   // ⚠️ 게스트("로그인 없이 둘러보기") 완전삭제 = 2026-07-27 사장님 = 기능 폐지 §19.
-  //   가짜 계정(guest_browse)을 저장소에 넣어 로그인 흉내를 내던 경로 = 판정이 갈리는 원인이기도 했음.
 
   return {
     t,
@@ -477,7 +441,6 @@ export function useLogin({ onDone }: { onDone: () => void }) {
     handleWhatsAppVerify,
     handleKakaoPress,
     handleApplePress,
-    // 애플 버튼을 보여줄지 = 아이폰만 true. 화면은 이 값 1벌만 보고 판단(§16).
     isAppleAvailable: isAppleAuthAvailable(),
     emailInput,
     setEmailInput,

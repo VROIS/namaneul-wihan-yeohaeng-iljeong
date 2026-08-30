@@ -16,7 +16,6 @@ import ProfileScreen from "@/screens/profile/ProfileScreen";
 // ⚠️ 사장님 SSOT 2026-07-14 = 전문가 = 여정화면 위 오버레이(AI의견과 동일). 옛 별도탭 화면 폐기 §19 = 탭은 트리거만(requestExpert).
 import { tabBadgeCount } from "@/screens/expert/expertApi"; // 전문가 탭 배지 = 역할별(사용자=안읽은답변/전문가=대기문의). 역할 조회는 탭 활성과 무관해져 삭제 = 2026-08-07 §19
 // 📥 2026-08-03 사장님 확정 = 영상 완성 알림 = 벨 알림 안 씀 → **하단 TRIPIS 탭 뱃지**(전문가 뱃지와 같은 구현).
-//   뱃지 원천 = saved_videos.is_new(서버) = 앱을 껐다 와도 폴링이 다시 인식. 해제 = 그 영상 뷰 1회 열람.
 import { videoBadgeCount } from "@/components/tripis/savedVideosApi";
 import { useMapToggle } from "@/contexts/MapToggleContext";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
@@ -24,7 +23,6 @@ import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { readPaymentReturn } from "@/lib/paymentReturn";
 
 export type MainTabParamList = {
-  // 🗂️ 2026-07-03 = itineraryId 있으면 저장여정 복원(프로필 나의여정 카드 탭 → 여정화면 그대로). 없으면 신규 생성(기존).
   Home: { itineraryId?: number } | undefined;
   Map: undefined;
   Verify: undefined; // 검증 센터 (센터 위치)
@@ -35,12 +33,10 @@ export type MainTabParamList = {
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
-// 🗺️ 지도 토글용 더미 컴포넌트 (실제로 화면 이동 안함)
 function MapTogglePlaceholder() {
   return <View style={{ flex: 1 }} />;
 }
 
-// 📷 가이드 탭 더미 컴포넌트 (실제로는 tabPress에서 GuideMiniApp 풀스크린으로 열림)
 function GuideTabPlaceholder() {
   return <View style={{ flex: 1 }} />;
 }
@@ -67,7 +63,6 @@ export default function MainTabNavigator() {
   const rootNavigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
 
-  // ⚠️ 2026-07-13 = 전문가 탭 배지(시안 D) = 답변 안 읽은 수. 초기 1회 + 30초 폴링(경량).
   //   ⚠️ 사장님 SSOT 2026-07-14 = 답변 전송·문의 열람 직후 배지 즉시 갱신 = 화면 이동(navigation state 변화)마다 재조회 추가(30초 지연 stale 제거 §19).
   const [expertBadge, setExpertBadge] = useState(0);
   // 📥 완성 영상 뱃지(TRIPIS 탭) = 전문가 뱃지와 같은 폴링·신호 1벌(2026-08-03 사장님)
@@ -114,7 +109,6 @@ export default function MainTabNavigator() {
       alive = false;
     };
   }, [expertDataChangedAt]);
-  // 📥 2026-08-03 = 완성 영상 뷰 1회 열람(모달, navigation state 안 바뀜) 직후 = TRIPIS 탭 뱃지 즉시 재조회(전문가 신호와 동일 패턴 §16).
   useEffect(() => {
     if (!videoDataChangedAt) return;
     let alive = true;
@@ -180,16 +174,6 @@ export default function MainTabNavigator() {
     <>
       <Tab.Navigator
         // ⚠️ 수정금지(승인필요) 2026-08-06 사장님 SSOT = **첫 화면(부모)** 을 여기서 정한다.
-        //   사장님 지적: "결제의 출발이 프로필인데 돌아오는 곳을 프로필로 설정하지 않고
-        //   여정플래너(앱 시작 화면)를 부모로 잡으니 리디렉션이 실패한다."
-        //   → 결제 복귀(?payment=)로 들어온 부팅이면 홈을 거치지 않고 **바로 프로필**을 연다.
-        //
-        //   ⚠️ **로그인일 때만** 프로필로 연다(§22 판단검증이 잡은 돈 걸린 함정).
-        //   폰에서는 결제창이 **앱 안 브라우저**로 뜨는데(useProfile 의 WebBrowser), 그 브라우저는
-        //   앱과 저장소를 공유하지 않아 복귀한 웹판이 **비로그인**으로 켜진다.
-        //   그 상태로 프로필을 열면 잔액칸이 "-" 로 보여(ProfileHeader) 방금 €10 을 낸 사람이
-        //   "충전이 안 됐다"고 오해하고 **또 결제**할 수 있다. 비로그인 복귀는 홈(중립)에 둔다.
-        //   (이 값은 로그인 확인이 끝난 뒤에 계산된다 = RootStackNavigator 가 authReady 까지 기다림)
         initialRouteName={readPaymentReturn() && isAuthed ? "Profile" : "Home"}
         screenOptions={({ route }) => ({
           tabBarIcon: ({ color, focused }) =>
@@ -243,9 +227,6 @@ export default function MainTabNavigator() {
           }}
           listeners={{
             // ⚠️ 수정금지(승인필요) 2026-08-19 사장님 승인 = Plan 탭 = 홈페이지의 홈버튼과 같은 개념 =
-            //   어디서 눌러도 여정플래너 홈(Input)으로 고정. 기존엔 탭 전환만 되고 화면은 직전 내부상태
-            //   (예: Result)를 그대로 유지해 갇히는 문제. 프로필 카드클릭(navigation.navigate 프로그램호출)은
-            //   tabPress 이벤트가 아니라서 이 신호와 무관 = 여정 복원과 충돌 없음. BTS는 별개 스택이라 무관.
             tabPress: () => {
               requestHome();
             },
@@ -260,7 +241,6 @@ export default function MainTabNavigator() {
               <TabBarLabel label={t("tab.aiOpinion")} color={color} />
             ),
             headerShown: false,
-            // 여정 없으면 비활성(회색), 있으면 활성(브랜드색)
             tabBarIcon: () => (
               <Icon
                 name="bot"
@@ -296,7 +276,6 @@ export default function MainTabNavigator() {
               <Icon
                 name="brain"
                 size={24}
-                // 활성색 = 로그인했으면 파랑(위 SSOT = 조건 1개). 비로그인 = 회색이지만 눌리면 로그인 팝업.
                 color={isAuthed ? Brand.primary : theme.textTertiary}
               />
             ),
@@ -305,7 +284,6 @@ export default function MainTabNavigator() {
             tabPress: (e) => {
               e.preventDefault();
               // ⚠️ 수정금지(승인필요) 2026-08-07 사장님 SSOT = 터치 = 무조건 열림. 분기는 **비로그인 하나뿐**.
-              //   비로그인 = 막지 않고 로그인 팝업으로 유도(여정생성 버튼과 같은 방식).
               if (isAuthed) {
                 requestExpert();
               } else {
@@ -338,11 +316,7 @@ export default function MainTabNavigator() {
             tabBarBadge: videoBadge > 0 ? videoBadge : undefined,
           }}
           listeners={({ navigation: tabNavigation }) => ({
-            // ⚠️ 사장님 SSOT 2026-07-25 = Tripis(가이드)탭 = 여정생성 버튼과 동일 인증게이트 = 비인증이면 로그인 팝업(무방비 진입 차단), 인증됨(관리자 포함)이면 바로 진입(프리패스).
-            // ⚠️ 2026-07-27 = 로그인 판정은 전역 1곳(isAuthed)만 읽음(§0). 저장소를 직접 읽던 옛 방식 폐기 §19.
             // 📥 2026-08-03 사장님 확정 = 뱃지가 켜져 있으면 이 탭 = **프로필**(완성 영상이 자동 게시된 화면)로 분기.
-            //   뱃지 해제는 여기가 아니라 그 영상 뷰를 1회 열 때(서버 is_new) = 앱을 껐다 와도 서버가 기억.
-            //   뱃지 없으면 = 원래 기능(카메라 미니앱) 그대로.
             tabPress: (e) => {
               e.preventDefault();
               if (videoBadge > 0) {

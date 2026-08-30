@@ -1,15 +1,3 @@
-/**
- * guide_prices 테이블 마이그레이션 스크립트
- *
- * 새로 추가된 필드:
- * - base_price_4h: 기본요금 (4시간 최소)
- * - price_per_hour: 시간당 추가 요금
- * - min_hours, max_hours: 최소/최대 시간
- * - min_passengers, max_passengers: 인원 범위
- * - uber_black_estimate, uber_x_estimate, taxi_estimate: 비교 가격
- * - comparison_note: 마케팅 메시지
- */
-
 require("dotenv").config();
 const { Pool } = require("pg");
 
@@ -24,7 +12,6 @@ async function migrate() {
   try {
     console.log("🔄 guide_prices 테이블 마이그레이션 시작...");
 
-    // 새 컬럼 추가 (이미 존재하면 무시)
     const alterStatements = [
       `ALTER TABLE guide_prices ADD COLUMN IF NOT EXISTS base_price_4h REAL`,
       `ALTER TABLE guide_prices ADD COLUMN IF NOT EXISTS price_per_hour REAL`,
@@ -43,14 +30,12 @@ async function migrate() {
         await client.query(stmt);
         console.log(`✅ ${stmt.substring(0, 60)}...`);
       } catch (err) {
-        // 컬럼이 이미 존재하면 무시
         if (!err.message.includes("already exists")) {
           console.error(`⚠️ ${err.message}`);
         }
       }
     }
 
-    // 기본 시간당 가격 데이터 삽입 (없으면)
     const defaultPrices = [
       {
         serviceType: "sedan",
@@ -96,14 +81,12 @@ async function migrate() {
     ];
 
     for (const price of defaultPrices) {
-      // 이미 존재하는지 확인
       const existing = await client.query(
         "SELECT id FROM guide_prices WHERE service_type = $1",
         [price.serviceType],
       );
 
       if (existing.rows.length === 0) {
-        // 새로 삽입
         await client.query(
           `
           INSERT INTO guide_prices (
@@ -135,7 +118,6 @@ async function migrate() {
         );
         console.log(`✅ ${price.serviceName} 데이터 삽입 완료`);
       } else {
-        // 기존 데이터 업데이트 (시간당 가격 필드만)
         await client.query(
           `
           UPDATE guide_prices SET
@@ -166,7 +148,6 @@ async function migrate() {
       }
     }
 
-    // 최종 확인
     const result = await client.query("SELECT * FROM guide_prices ORDER BY id");
     console.log("\n📊 현재 guide_prices 테이블:");
     console.table(

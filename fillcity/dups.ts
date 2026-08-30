@@ -1,5 +1,4 @@
 // ⚠️ 수정금지(승인필요) 2026-06-24 = fillCity 중복행 탐지 (직접접속 §16). PSR 중복 진단.
-// 호출: npx tsx fillcity/dups.ts --city-id=39
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";

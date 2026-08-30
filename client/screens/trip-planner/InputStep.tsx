@@ -1,4 +1,3 @@
-// 입력 화면(InputStep.tsx) = 상단 고정 + DB 도시 동적 버튼 + '누구랑' 및 '누구를 위한' 100% 복원 완료
 import React, { useState, useEffect, useRef } from "react";
 import { View, Text, Pressable, ScrollView, Platform } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -18,7 +17,6 @@ import {
   TRAVEL_PACE_OPTIONS,
   MOBILITY_STYLE_OPTIONS,
 } from "@/types/trip";
-// ⚠️ 구글 공식 위젯(PlaceAutocompleteElement) 100% 활용
 import PlaceAutocompleteWidget, {
   type PlaceAutoSelection as PlaceSelection,
 } from "@/components/PlaceAutocompleteWidget";
@@ -33,8 +31,6 @@ import { fitTextProps } from "./utils";
 import ShinyPillBanner from "@/components/ShinyPillBanner";
 
 // ⚠️ 수정금지(승인필요) 2026-07-30 사장님 SSOT = 도시버튼 목록 = **서버가 DB 실측으로 내려주는 것만.**
-//   손으로 적어둔 목록은 완전삭제 §19 = 발굴이 안 된 도시까지 버튼에 떠서 가짜 정보를 보여줬다.
-//   정본 = GET /api/cities/ready (완비 도시만·완비순). 도시를 더 발굴하면 **코드 수정 없이 자동 추가.**
 type ReadyCity = {
   id: number;
   nameKo: string;
@@ -55,13 +51,11 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
     handleGenerate,
   } = planner;
 
-  // 도시 카드 = 서버가 조립해 준 값 그대로(null = 아직 안 열림). ref = 늦게 온 응답이 새로 고른 도시를 덮지 않게.
   const [repCard, setRepCard] = useState<RepCard | null>(null);
   const lastCityRef = useRef<number>(0);
 
   // ⌨️ 2026-08-13 사장님 확정 = AOS 숙소·도시 검색 = 독립 전체화면 모달(CitySearchAndroid, ResultStep 숙소 Modal 과 같은 검증 구조).
   const searchPlaceholder = t("trip.searchPlaceholder");
-  // 선택 배선 1벌 = 인라인(iOS·웹)과 AOS 모달이 같은 함수를 쓴다(§0). 내용은 기존 로직 그대로.
   const handlePlaceSelect = (place: PlaceSelection) => {
     setFormData((prev) => ({
       ...prev,
@@ -73,8 +67,6 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
     }));
   };
 
-  // 🏙️ 도시버튼 목록 = 서버 DB 실측(완비 도시만·완비순). 실패하면 빈 줄 = 가짜 도시 표시 금지.
-  //   조회는 이 폴더의 다른 훅들과 같은 apiRequest 1벌(§16) = 주소 조립·오류 처리를 다시 만들지 않는다.
   const [readyCities, setReadyCities] = useState<ReadyCity[]>([]);
   useEffect(() => {
     let alive = true;
@@ -92,13 +84,7 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
     };
   }, []);
 
-  // ⚠️ 2026-07-30 §19 = 슬로건 펄스 애니메이션 완전삭제.
-  //   사유: 슬로건이 ShinyPillBanner 로 교체돼 계산값을 쓰는 곳이 0인데도 무한 루프가 화면 진입마다 돌고 있었다.
-  //   (이 파일이 500줄 가드 상한에 붙어 다음 수정이 막히던 원인 중 하나)
-
   // 도시 칩 = 그 도시를 목적지로 잡고 **항상** 카드를 띄운다(2026-08-02 사장님 지시 = 옛 "대표여정 없으면 안 띄움" 폐기 §19).
-  //   대표여정이 없어도 서버가 도시 DB(사진·한 줄 요약·리뷰 상위 3곳)로 채워 내려주므로 카드는 늘 채워져 온다.
-  //   조회 자체가 실패했을 때(네트워크·서버 오류 = apiRequest 가 던짐)만 카드를 열지 않는다 = 폴백이 아니라 오류 처리.
   const handleCityPress = async (city: ReadyCity) => {
     lastCityRef.current = city.id;
     setFormData((prev) => ({
@@ -106,13 +92,10 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
       destination: city.nameEn,
     }));
     try {
-      // 🎙️ 지금 화면 언어를 함께 넘긴다 = 서버가 그 언어의 해설이 창고에 있는지 보고 [해설] 배지를 켠다(2026-08-02).
-      //   언어값은 앱 언어 1벌(i18n.language = 7종 두 글자 코드)에서만 읽는다 = 새 상태를 만들지 않는다(§16).
       const res = await apiRequest(
         "GET",
         `/api/cities/${city.id}/representative?lang=${encodeURIComponent(i18n.language || "ko")}`,
       );
-      // 그 사이 다른 도시를 눌렀으면 이 응답은 버린다(늦게 온 응답이 새 선택을 덮지 않게)
       if (lastCityRef.current !== city.id) return;
       setRepCard(await res.json());
     } catch (e) {
@@ -205,7 +188,6 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
             {readyCities.map((city) => {
               const isSelected = formData.destination === city.nameEn;
               // ⚠️ 수정금지(승인필요) 2026-08-14 = 도시명 = 고유명사라 t() 번역 대상이 아니다.
-              //   서버가 이미 주는 nameKo/nameEn 중 언어에 맞는 것만 고른다(새 서버 필드·번역 불필요).
               const cityLabel =
                 i18n.language === "ko" ? city.nameKo : city.nameEn;
               return (
@@ -224,7 +206,6 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
                     ...Shadows.card,
                   }}
                   onPress={() => handleCityPress(city)}
-                  // 칩 높이가 약 30px 이라 손가락 기준(iOS 44 / 안드로이드 48)에 못 미친다 → 픽셀은 그대로 두고 누를 수 있는 범위만 넓힘
                   hitSlop={{ top: 10, bottom: 10, left: 6, right: 6 }}
                   accessibilityRole="button"
                   accessibilityLabel={cityLabel}

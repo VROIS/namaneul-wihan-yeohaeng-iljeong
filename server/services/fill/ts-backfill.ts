@@ -1,7 +1,4 @@
 // ⚠️ 수정금지(승인필요) 2026-06-04 = fill/ts-backfill = PID 없는 행 TS 재검증·보강 (= 06 method 의 관문판, 융합)
-// = 관문 tsSearch(이름+좌표앵커) → top1 → upsertPlace(원본 name_en=매칭키 + 새 9요소) = AI 손 0 (fetch→매처→upsert 융합)
-// = 가짜 RC → 진짜 RC 교체 / PID·좌표·주소·mapsUri 채움 / 가격 COALESCE 새우선(최신최우선, 옛 GREATEST 폐기 2026-06-10) / 이미지는 #4(tsPhoto) 별도 / CLOSED skip
-// 호출: npx tsx server/services/fill/ts-backfill.ts --city-id=19 [--apply] [--lang=fr] [--category=heritage,...]
 import fs from "fs";
 import path from "path";
 import { fileURLToPath, pathToFileURL } from "url";
@@ -33,7 +30,6 @@ const cats = argv["category"]
       .split(",")
       .map((s) => s.trim())
   : ["heritage", "hotspot", "attraction", "adventure", "healing", "shopping"];
-// ⚠️ 2026-06-09 사용자 승인 = --ids 추가형 필터 = 특정 행 id 만 타깃(= 풀 전체 backfill 금지 시 = 노출 대상 no-PID 만 검증). 없으면 기존 동작 불변.
 const ids = argv["ids"]
   ? String(argv["ids"])
       .split(",")
@@ -87,7 +83,6 @@ const hkm = (a: any, b: any) => {
     process.exit(1);
   }
   // ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유 (§19). TS 재검증·보강 = 채움 = 도시 있음 + 행 있음(true).
-  // = 출입증(키이름·도시id·날짜·행있음) 검문 통과해야만 키 발급. 미달 = throw = 외부호출 불가.
   const today = new Date().toISOString().slice(0, 10);
   const { issueApiKey } = await import(
     pathToFileURL(path.join(ROOT, "server/services/shared/issue-api-key.ts"))
@@ -101,8 +96,6 @@ const hkm = (a: any, b: any) => {
   }
 
   // ⚠️ 수정금지(승인필요) 2026-08-26 사장님 승인 = --ids 지목 행은 PID 유무 무관 재검증(사장님이 행을 지목 = 의심 PID 포함).
-  //   근거: 싱가포르 공연장 #40251 = PID 보유인데 구글맵 열어보니 "싱가포르 국립박물관"(옛 배치 오염 PID) = PID 있음 ≠ 검증됨.
-  //   --ids 없는 기본 경로 = 옛 그대로 PID 없는 행만.
   const rows = (
     await c.query(
       `SELECT id, seed_category, name_en, name_local, address, latitude::float8 AS lat, longitude::float8 AS lng, google_review_count AS rc
@@ -180,9 +173,6 @@ const hkm = (a: any, b: any) => {
           : null;
       const suspicious = dist != null && dist > 2;
       // ⚠️ 수정금지(승인필요) 2026-08-26 사장님 승인 = --ids 지정 = 대상 행이 이미 확정 → targetRowId 직행 + 정식 면제(ag3 TS 직행 동형).
-      //   근거: BTS 공연장·아미존·굿즈샵 3행이 전 도시 0m 동일좌표(2026-08-26 실측) → 재매칭 쓰기는 문지기(불변4 좌표10m)가
-      //   3행 중 아무거나 잡아 경기장 PID 가 굿즈샵 행에 박힘. 직행 전 "TS 가 준 PID 가 이미 다른 행에 있으면" 기록하지 않고
-      //   보고만 = 쌍둥이 생성 방지(사후중복 자동병합 시스템 B5 의 사전판). --ids 없는 기존 경로 = 동작 불변.
       if (ids && top.googlePlaceId) {
         const twin = (
           await c.query(
@@ -212,8 +202,6 @@ const hkm = (a: any, b: any) => {
         googleMapsUri: top.googleMapsUri,
         googleReviewCount: top.googleReviewCount,
         // ⚠️ 수정금지(승인필요) 2026-08-10 사장님 확정 = **가격 칸의 주인은 제미니 하나**(SSOT:583).
-        //   구글 priceRange 는 그 나라 통화(케냐 KES 5,000 ≈ €35)라 price_eur 로 쓰면 €5,000 이 박힌다.
-        //   ag3(생성)·reinsert 와 **같은 규칙** = 여기서도 안 쓴다(§20 = 같은 PSR 로 모이는 경로는 규칙 하나).
         //   버리는 게 아니다 = TS 가격은 §18 raw 에 그대로 남는다.
         priceEur: null,
       });

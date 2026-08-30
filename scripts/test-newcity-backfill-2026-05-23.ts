@@ -1,23 +1,7 @@
-// ⚠️ 2026-05-23 = 사용자 SSOT = 신규 도시 자동 백필 시뮬 (= Pisa)
-// = city-resolver 5단계 (cities INSERT) + saveNewPlacesToDB 작동 입증
-// = 메인앱 동일 경로 (runPipelineV3) 호출 = silent fail 차단 (= await 강제)
-//
-// 호출:
-//   npx tsx scripts/test-newcity-backfill-2026-05-23.ts
-//
-// 사용자 시나리오:
-//   destination: Pisa (= cities 미등록 신규)
-//   companionType: Couple / 2 인
-//   dayCount: 2 (= 2026-06-01~02)
-//   vibes: ['Hotspot'] (= 핫스팟)
-//   travelStyle: Reasonable (= 합리적 가격)
-//   travelPace: Packed (= 빡빡)
-
 import fs from "fs";
 import pg from "pg";
 
 async function main() {
-  // .env 로드
   const env = fs.readFileSync(".env", "utf-8").replace(/^﻿/, "");
   for (const line of env.split(/\r?\n/)) {
     const m = line.match(/^([A-Z_][A-Z0-9_]*)=(.*)$/);
@@ -28,7 +12,6 @@ async function main() {
     }
   }
 
-  // DB 에서 API key 로드
   const c = new pg.Client({
     connectionString: process.env.SUPA_URL || process.env.SUPABASE_DATABASE_URL,
     ssl: { rejectUnauthorized: false },
@@ -44,7 +27,6 @@ async function main() {
     `✅ API keys 주입: ${keys.rows.map((r: any) => r.key_name).join(", ")}`,
   );
 
-  // BEFORE 스냅샷
   const before = await c.query(
     `SELECT COUNT(*)::int n FROM cities WHERE LOWER(name_en) = 'pisa'`,
   );
@@ -56,7 +38,6 @@ async function main() {
   `);
   console.log(`[BEFORE] PSR Pisa 매칭 행 = ${psrBefore.rows[0].n}`);
 
-  // ⚠️ 메인앱 동일 경로 = runPipelineV3 (= itinerary-generator → pipeline-v3)
   const { runPipelineV3 } = await import(
     "../server/services/agents/pipeline-v3.js"
   );
@@ -110,12 +91,10 @@ async function main() {
     console.error(`❌ 파이프라인 실패:`, e?.message || e);
   }
 
-  // ⚠️ 2026-05-23 = silent fail 차단 = 백그라운드 saveNewPlacesToDB 완료까지 충분 대기 (= TS 20s + PM 30s)
   console.log(`\n⏳ 백그라운드 saveNewPlacesToDB 완료 대기 (60초)...`);
   await new Promise((r) => setTimeout(r, 60000));
   console.log(`✅ 대기 완료`);
 
-  // AFTER 스냅샷
   const after = await c.query(
     `SELECT id, name, name_en, name_local, latitude, longitude FROM cities WHERE LOWER(name_en) = 'pisa'`,
   );

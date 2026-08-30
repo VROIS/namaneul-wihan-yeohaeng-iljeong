@@ -1,6 +1,5 @@
 import { pgEnum } from "drizzle-orm/pg-core";
 
-// Enums
 export const placeTypeEnum = pgEnum("place_type", [
   "restaurant",
   "attraction",

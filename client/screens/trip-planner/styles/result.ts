@@ -1,5 +1,3 @@
-// Result(결과)·AI의견 스타일 = TripPlannerScreen styles 분리(2026-07-15 §0 슬림화, 순수 이동).
-// 미사용 23키(saveButton·dayTab·vibeTag 등 102줄)는 §19 완전삭제(사용처 0 grep 실측 + 키수 대조 147-23=124 무손실 검증).
 import { StyleSheet } from "react-native";
 import {
   Brand,
@@ -20,8 +18,6 @@ export const resultStyles = StyleSheet.create({
   },
   resultContainer: { flex: 1 },
   // ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 = paddingBottom 12(md)→4(xs) = 저장⇄영상 아이콘
-  //   둘 다 22px·headerButton 박스 48×48 고정이라 크기차 버퍼가 아님(코드 실측) = 순수 여백이라 축소
-  //   대상. 완전히 0으로 붙이면 답답해 보여 최소 여백만 유지.
   resultHeader: {
     flexDirection: "row",
     alignItems: "center",
@@ -36,10 +32,7 @@ export const resultStyles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  // 🏆 대표 올리기 3키(headerActions·repBtn·repBtnText) = 프로필 이관으로 완전삭제 = 2026-08-02 §19.
-  // 🗑️ resultTitle(도시명 단독 큰 제목) 완전삭제 = 2026-08-16 §19 = tripDateCity로 흡수(아래).
   // ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 = 날짜+도시명(1줄, 굵게) + 장소수·1인예산(2줄) 묶음 섹션.
-  //   헤더의 도시명 단독 큰 제목을 없앤 자리를 여기로 흡수 = 그만큼 위 여백 확보(§ description 2줄 허용과 연동).
   tripSummarySection: {
     marginHorizontal: Spacing.sm,
     paddingVertical: Spacing.xs,
@@ -48,8 +41,6 @@ export const resultStyles = StyleSheet.create({
     marginBottom: 4,
   },
   // ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 = 도시명만 굵게 부각(날짜는 보통 굵기) = tripDate(보통)
-  //   + tripCityName(굵게) 2벌로 분리(위 ResultStep.tsx 중첩 Text 근거).
-  //   textAlign left(가운데정렬 폐기) = 날짜가 왼쪽부터 채워 굵은 도시명이 줄 중간에 자연히 위치.
   tripDate: {
     fontSize: 15,
     fontFamily: Fonts.semiBold,
@@ -60,8 +51,6 @@ export const resultStyles = StyleSheet.create({
     fontFamily: Fonts.bold,
   },
   // ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 = space-between(양끝 밀착) 폐기 → center + gap.
-  //   장소수·비용 두 항목이 전체폭에 안 늘어나고 가운데로 뭉침(문서 들여쓰기 느낌) = 번역이 길어져도
-  //   비용이 오른쪽 끝으로 안 밀리고 같이 중앙으로 수렴(아이폰12 프랑스어 실기기 스샷 실증 요청).
   tripSummaryRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -88,8 +77,6 @@ export const resultStyles = StyleSheet.create({
     marginBottom: 4,
   },
   // ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 = flexShrink:1 = row 컨테이너(tripDescriptionContainer)
-  //   안에서 RN 기본값(flexShrink:0)이라 안 줄어들고 옆으로 넘치던 문제(프랑스어 실증) 해결. numberOfLines
-  //   는 ResultStep.tsx에서 지정(2줄 상한).
   tripDescriptionText: {
     fontSize: 14,
     fontFamily: Fonts.bold,
@@ -97,8 +84,6 @@ export const resultStyles = StyleSheet.create({
     flexShrink: 1,
   },
   // ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 = flexShrink:1 추가(2차 수정) = 진짜 원인은 이 컨테이너
-  //   였음. tripDescriptionText에만 flexShrink 줘도, 그 부모인 이 View(tripOptionsRow 안의 row-item)가
-  //   RN 기본값(flexShrink:0)이라 안 줄어들어 자식의 flexShrink가 무력화되던 문제(프랑스어 재실증).
   tripDescriptionContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -107,7 +92,6 @@ export const resultStyles = StyleSheet.create({
     flexWrap: "wrap",
     flexShrink: 1,
   },
-  // 🗺️ 지도 섹션
   mapSection: {
     marginHorizontal: Spacing.sm,
     marginBottom: Spacing.xs,
@@ -131,7 +115,6 @@ export const resultStyles = StyleSheet.create({
   dayHeaderTheme: { fontSize: 14, fontFamily: Fonts.bold },
   dayHeaderCity: { fontSize: 11, marginTop: 1 },
   resultScrollView: { flex: 1 },
-  // 2026-07-21 expertFooter*→shareFooter* 개명(이름 거짓말 제거 §19, 사용처=ResultStep 1곳뿐 grep 실측, 값 변경 0)
   shareFooter: {
     paddingHorizontal: Spacing.lg,
     paddingTop: Spacing.lg,
@@ -165,8 +148,6 @@ export const resultStyles = StyleSheet.create({
   // ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 = 44→38(원 36+여유2) = 슬롯 텍스트칸 폭 추가 확보(§ placeCard 근거 동일).
   timelineLeft: { width: 38, alignItems: "center" },
   // ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 = 번호원도 단추 느낌(그림자 = theme.ts Shadows.card
-  //   재사용 §16, 새 그림자값 발명 금지). placeNumber는 overflow:hidden이라 그림자를 못 얹어 이
-  //   바깥 View가 그림자 전담(위 CityBadge badge3dShadow와 같은 패턴).
   placeNumberShadow: {
     borderRadius: 18,
     ...Shadows.card,
@@ -181,11 +162,9 @@ export const resultStyles = StyleSheet.create({
   },
   placeNumberText: { color: "#FFFFFF", fontSize: 15, fontFamily: Fonts.bold },
   // ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 = 식사 슬롯 구분 워터마크(숫자는 유지, 아이콘은
-  //   옅게 뒤에 깔림) = 36 원 중앙(=(36-20)/2=8).
   placeNumberWatermark: { position: "absolute", top: 8, left: 8, opacity: 0.4 },
   timelineLine: { flex: 1, width: 2, marginVertical: Spacing.xs },
   // ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 = 슬롯 텍스트칸 폭 확보(아이폰12 영어 실기기 스샷 실증 =
-  //   지도·비용섹션보다 훨씬 좁게 오른쪽으로 몰려 번역시 여유 없음). paddingHorizontal 축소로 좌우 4px씩 확보.
   placeCard: {
     flex: 1,
     paddingVertical: Spacing.sm,
@@ -308,8 +287,6 @@ export const resultStyles = StyleSheet.create({
     fontFamily: Fonts.bold,
   },
   // ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 = "(estimated)" 라벨을 값과 한 줄에 합치면 좁은 3등분
-  //   칸(flex:1) 안에서 단어 중간에 줄바꿈되던 문제(아이폰12 영어 실기기 스샷 실증) = 값과 분리해 작은
-  //   글씨로 아래 줄에 표시.
   dailyTotalValueNote: {
     fontSize: 10,
     marginTop: 1,
@@ -395,7 +372,6 @@ export const resultStyles = StyleSheet.create({
     fontSize: 11,
     fontFamily: Fonts.bold,
   },
-  // 재최적화 로딩
   reoptimizeBar: {
     flexDirection: "row",
     alignItems: "center",

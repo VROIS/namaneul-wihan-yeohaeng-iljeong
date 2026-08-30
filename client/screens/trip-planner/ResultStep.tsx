@@ -1,4 +1,3 @@
-// 결과 화면(Result step = 헤더·요약·지도·Day목록·전문가푸터·iOS숙소모달·AI의견시트) = TripPlannerScreen 분리(2026-07-15 §0 슬림화, 순수 이동)
 import React, { useState } from "react";
 import {
   View,
@@ -13,7 +12,6 @@ import {
 import { Brand, Spacing, Fonts } from "@/constants/theme";
 import Icon from "@/components/Icon";
 import { getVibeLabel } from "@/utils/vibeCalculator";
-// ⚠️ 2026-06-28 사용자 SSOT = 토글 InteractiveMap → 고정 ItineraryMap(BTSPlaceMap 패턴: 웹/앱 동일·마커클릭·동선라인폐기·출발깃발) 교체(§19)
 import ItineraryMap from "@/components/ItineraryMap";
 import PlaceAutocompleteWidget, {
   type PlaceAutoSelection as PlaceSelection,
@@ -25,11 +23,9 @@ import DaySection from "./components/DaySection";
 import AiOpinionSheet from "./components/AiOpinionSheet";
 import { resultStyles } from "./styles/result";
 import { inputStyles } from "./styles/input";
-// 도시명 표시 규칙 1벌(§16) = destinationEn(cities.name_en) 우선 → destination 폴백
 import { displayCityName } from "@/lib/display-city-name";
 import type { PlannerApi } from "./hooks/useTripPlanner";
 
-// 픽커 계열 공용 키(pickerTitle)는 입력측 스타일 1벌에서 가져와 병합(중복정의 0 = §16)
 const styles = { ...resultStyles, pickerTitle: inputStyles.pickerTitle };
 
 export default function ResultStep({ planner }: { planner: PlannerApi }) {
@@ -63,7 +59,6 @@ export default function ResultStep({ planner }: { planner: PlannerApi }) {
     setSelectedSlotId,
   } = planner;
 
-  // 🎬 통합 모달 열림 상태 = 이 화면 위에 그대로 뜬다(화면 이동 없음, §B-0).
   const [tripisOpen, setTripisOpen] = useState(false);
 
   if (!itinerary) return null;
@@ -96,7 +91,6 @@ export default function ResultStep({ planner }: { planner: PlannerApi }) {
           <Pressable
             style={styles.headerButton}
             onPress={() => setTripisOpen(true)}
-            // 아이콘뿐인 버튼 = 스크린리더용 이름 필수(2026-08-03 §22 판단검증)
             accessibilityRole="button"
             accessibilityLabel={t("trip.cityCardVideo")}
           >
@@ -156,7 +150,6 @@ export default function ResultStep({ planner }: { planner: PlannerApi }) {
             </Text>
           </View>
           {(() => {
-            // 일별 dailyCost 합산으로 총 비용 계산
             const totalPerPerson = (itinerary.days || []).reduce(
               (sum: number, d: any) => sum + (d.dailyCost?.perPersonEur || 0),
               0,
@@ -196,7 +189,6 @@ export default function ResultStep({ planner }: { planner: PlannerApi }) {
             numberOfLines={2}
           >
             {(() => {
-              // 🎯 누구를 위한 (curationFocus 기반)
               const focusLabels: Record<string, string> = {
                 Kids: t("labels.curationKids"),
                 Parents: t("labels.curationParents"),
@@ -229,13 +221,9 @@ export default function ResultStep({ planner }: { planner: PlannerApi }) {
                   .map((v) => getVibeLabel(v.vibe))
                   .join(" & ") || t("options.healing");
 
-              // 예: "가족(4명)의 부모님을 위한 힐링 & 미식 여행" (이모지 금지 = 디자인 SSOT §1-3)
               const count =
                 itinerary.companionCount || formData.companionCount || 2;
               // ⚠️ 수정금지(승인필요) 2026-08-13 사장님 승인 = 한국어 조사(을/를)는 한국어 문장에서만 필요
-              //   (받침 유무 판정, "나을"(X) 버그 수정 로직은 그대로). 문장 전체는 기존에 있던 다국어 키
-              //   `trip.tripFor`로 조립(§16 재사용 = 신규 키 안 만듦, 언어별 어순은 그 키의 각 언어 값이 담당).
-              //   다른 언어 템플릿은 {{particle}}을 안 써서 이 값이 있어도 출력에 안 나옴.
               const lastChar = focusLabel.charCodeAt(focusLabel.length - 1);
               const hasFinalConsonant =
                 lastChar >= 0xac00 &&
@@ -261,17 +249,14 @@ export default function ResultStep({ planner }: { planner: PlannerApi }) {
       <View style={styles.mapSection}>
         <ItineraryMap
           places={(() => {
-            // 🗺️ 지도 = 스크롤로 보이는 현재 Day(currentMapDay)의 슬롯만 표시
             const day =
               (itinerary.days || []).find((d) => d.day === currentMapDay) ||
               itinerary.days?.[0];
-            // ⚠️ slot 번호 = 카드 번호(index+1)와 일치 = 좌표결손 거르기 전에 index 매김 (마커배지≠카드번호 버그 방지)
             return (day?.places || [])
               .map((p, i) => ({
                 id: String(p.id),
                 name: (p as any).nameEn || (p as any).nameLocal || p.name, // ⚠️ 2026-08-22 사장님 원칙 = 장소명 노출 nameEn 1순위
                 // ⚠️ 수정금지(승인필요) 2026-07-11 사장님 SSOT = 마커 = 취향 슬롯 카테고리(slotCategory) 우선 = "이 여정에서의 역할" 표시.
-                //   = 없으면(옛 저장본·DB-only) 검증 seedCategory 폴백.
                 seedCategory:
                   (p as any).slotCategory || (p as any).seedCategory || null,
                 lat: p.lat,
@@ -304,7 +289,6 @@ export default function ResultStep({ planner }: { planner: PlannerApi }) {
             return null;
           })()}
           onMarkerPress={(id) => {
-            // 마커 클릭 → 그 슬롯으로 스크롤 + 선택 강조(양방향)
             setSelectedSlotId(id);
             const y = slotLayoutsRef.current[id];
             if (y != null)
@@ -326,7 +310,6 @@ export default function ResultStep({ planner }: { planner: PlannerApi }) {
         showsVerticalScrollIndicator={false}
         scrollEventThrottle={100}
         onScroll={(e) => {
-          // 🗺️ 스크롤 위치 기준 = 화면 상단에 보이는 Day 감지 → 지도 그 Day로 자동 전환
           const y = e.nativeEvent.contentOffset.y + 100; // 지도 높이만큼 보정
           let day = 1;
           for (const [d, top] of Object.entries(dayLayoutsRef.current)) {
@@ -461,7 +444,6 @@ export default function ResultStep({ planner }: { planner: PlannerApi }) {
               <PlaceAutocompleteWidget
                 placeholder={t("trip.hotelSearchPlaceholder")}
                 language={i18n.language || "ko"}
-                // ⌨️ 안드로이드만 높이 고정 = 시스템웹뷰의 "키보드 중 크기변경 = 내용 지움" 결함 회피 (2026-08-13)
                 height={Platform.OS === "android" ? 360 : undefined}
                 cityPrefix={
                   itinerary?.destination

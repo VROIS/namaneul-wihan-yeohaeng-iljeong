@@ -1,4 +1,3 @@
-// AI 의견 결과 시트(SnapSheet) = TripPlannerScreen 분리(2026-07-15 §0 슬림화, 순수 이동)
 import React from "react";
 import { View, Text, ScrollView } from "react-native";
 import { Brand, Spacing } from "@/constants/theme";
@@ -8,7 +7,6 @@ import { resultStyles as styles } from "../styles/result";
 import type { PlannerApi } from "../hooks/useTripPlanner";
 
 // 🧠 2026-07-04 사장님 SSOT = AI 의견 1회 호출 = 5크레딧 차감(10유로 충전=20회). 결과 하단에만 조용히 표시.
-//   차감 로직 자체는 추후 크레딧 시스템 도입 시 서버가 확정 = 여기선 표시용 상수(한 곳 관리).
 const AI_OPINION_CREDIT_COST = 5;
 
 export default function AiOpinionSheet({ planner }: { planner: PlannerApi }) {
@@ -21,7 +19,6 @@ export default function AiOpinionSheet({ planner }: { planner: PlannerApi }) {
     aiOpinionError,
     aiOpinionData,
   } = planner;
-  // 🧠 2026-07-03 사장님 SSOT = "AI 의견" 결과 오버레이. 새 화면 아님 = 여정 화면 위 반투명 dim + 닫기(X) 버튼(기존 hotel Modal 패턴 재활용).
   // ⚠️ 사장님 SSOT 2026-07-14 = AI 의견 오버레이 = 전문가와 완전 동일한 SnapSheet(첫노출 half + 드래그 + 스크롤). 옛 고정 Modal(fade, 88%) 폐기 §19.
   return (
     <SnapSheet
@@ -43,7 +40,6 @@ export default function AiOpinionSheet({ planner }: { planner: PlannerApi }) {
         </Text>
       ) : aiOpinionData ? (
         // ⚠️ 2026-07-03 사장님 SSOT = 상세페이지형 리포트(카드 나열 아님). 이모지 금지. 버튼/링크 추가 금지(하단탭 5개로 충분).
-        //   전문가 유도 = 클릭 버튼 아닌 마지막 문단의 자연스러운 한 문장("현지 전문가에게 다시 물어보세요" 톤). ScrollView flex:1 = 시트 높이에 맞춰 스크롤(§19).
         <ScrollView
           style={{ flex: 1 }}
           contentContainerStyle={{ padding: Spacing.lg }}

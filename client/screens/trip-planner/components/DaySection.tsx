@@ -1,4 +1,3 @@
-// Day 섹션(헤더배너·출발바·인라인 숙소위젯·슬롯목록·복귀·일별합계) = TripPlannerScreen 분리(2026-07-15 §0 슬림화, 순수 이동)
 import React from "react";
 import { View, Text, Pressable, Platform } from "react-native";
 import { Brand } from "@/constants/theme";
@@ -10,7 +9,6 @@ import PlaceAutocompleteWidget, {
 import { resultStyles as styles } from "../styles/result";
 import PlaceSlotCard from "./PlaceSlotCard";
 import DailyTotal from "./DailyTotal";
-// 도시명 표시 규칙 1벌(§16) = destinationEn(cities.name_en) 우선 → destination 폴백
 import { displayCityName, isCityCenterName } from "@/lib/display-city-name";
 import type { PlannerApi } from "../hooks/useTripPlanner";
 
@@ -40,7 +38,6 @@ export default function DaySection({
   const places = currentDay?.places || [];
   return (
     <View
-      // 🗺️ 2026-06-28 = Day별 시작 y 기록 (= 스크롤 감지로 지도 Day 자동 전환)
       onLayout={(e) => {
         dayLayoutsRef.current[currentDay.day] = e.nativeEvent.layout.y;
       }}
@@ -134,8 +131,6 @@ export default function DaySection({
               if (dayAccom && !isCityCenterName(dayAccom.name))
                 return `${t("trip.departure")}: ${dayAccom.name}`;
               // ⚠️ 수정금지(승인필요) 2026-08-21 사장님 승인 = 서버가 만들어 저장해 둔 "도심" 이름은 무시하고
-              //   뷰어 언어로 조립한다(§19). 옛 여정에는 그 한국어 문자열이 이미 저장돼 있어(생성 시점 고정)
-              //   그대로 쓰면 앱 언어를 바꿔도 영원히 한국어다 = 슬롯 지명·도시명과 같은 "읽을 때 조립" 원칙.
               if (generalAccom?.name && !isCityCenterName(generalAccom.name))
                 return `${t("trip.departure")}: ${generalAccom.name}`;
               return `${t("trip.departure")}: ${cityCenterLabel}`;
@@ -167,7 +162,6 @@ export default function DaySection({
           <PlaceAutocompleteWidget
             placeholder={t("trip.hotelSearchPlaceholder")}
             language={i18n.language || "ko"}
-            // 🏨 2026-06-29 = 도시명 prefill(구글맵 방식) = 그 도시 "Paris " → 사용자가 뒤에 숙소명 = 그 도시만.
             cityPrefix={
               itinerary?.destination ? `${itinerary.destination} ` : undefined
             }

@@ -38,18 +38,14 @@ if (!connectionString) {
   try {
     pool = new Pool({
       connectionString,
-      // 🇰🇷 한글 인코딩 보장을 위한 UTF-8 설정
       options: "-c client_encoding=UTF8",
-      // ⚠️ 2026-07-16 §0 = 폴링주기(30초)보다 짧은 기본 idleTimeoutMillis(10초) 때문에 매 요청이 콜드 재연결(TCP+TLS+SCRAM) 되던 지연 제거. 시뮬 실측(SELECT 1 재사용 5ms vs 재연결 42ms) 확인.
       idleTimeoutMillis: 35000,
     });
 
-    // 연결 시 UTF-8 인코딩 강제 설정
     pool.on("connect", (client) => {
       client.query("SET client_encoding TO 'UTF8'");
     });
 
-    // ⚠️ 2026-07-16 §0 = 유휴 커넥션이 원격에서 끊기면 pg-pool 이 'error' 를 emit 하는데 리스너가 없으면 Node 가 uncaughtException 으로 프로세스 전체가 죽음(시뮬 재현 확인). 로그만 남기고 삼켜서 다음 요청에서 자동 재연결되게 함.
     pool.on("error", (err: Error) => {
       console.error("❌ [DB Pool] 유휴 커넥션 오류(자동 복구됨):", err.message);
     });
@@ -61,10 +57,8 @@ if (!connectionString) {
   }
 }
 
-// DB가 없어도 사용 가능하도록 export
 export { pool, db };
 
-// DB 연결 상태 확인 함수
 export function isDatabaseConnected(): boolean {
   return db !== null && pool !== null;
 }

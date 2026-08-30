@@ -1,7 +1,3 @@
-/**
- * 위기 정보 수집 테스트
- */
-
 require("dotenv").config();
 
 async function testGdelt() {
@@ -9,7 +5,6 @@ async function testGdelt() {
 
   const city = "Paris";
   const keywords = ["Paris strike", "Paris protest", "Paris grève"];
-  // GDELT API: OR 쿼리는 반드시 괄호()로 감싸야 함
   const query = `(${keywords.join(" OR ")})`;
 
   const url = `https://api.gdeltproject.org/api/v2/doc/doc?query=${encodeURIComponent(query)}&mode=artlist&maxrecords=10&format=json&timespan=7d`;

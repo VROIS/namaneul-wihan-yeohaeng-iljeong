@@ -1,9 +1,3 @@
-// ⚠️ 영구 컴포넌트 2026-06-09 = 사용자 SSOT = name_local 결손 행 복구 (FILLCITY_PRD ⓪-pre 정제)
-// = PID 있는데 name_local NULL = 옛 경로 잔재. 복구 = 2 경로(내부 우선 → 외부 폴백):
-//   ① 내부(무료): source≠wikipedia_api 면 name_en 에 실명이 있음(옛 경로가 displayName 을 name_en 에 오기록) → name_local := name_en.
-//   ② TS 폴백(유료, 단가 = external-call-log.UNIT_COST_EUR.ts, 월 1,000 무료 후): wikipedia_api(name_en=위키쓰레기) = 내부 이름원 없음 = 좌표 searchNearby → PID 매칭 → TS displayName.
-// = 쓰기 = upsertPlace(§14, 직접 SQL 금지). 외부 폴백은 내부 소진 후만(사용자 SSOT 2026-06-09: 외부 게으른 기본 금지).
-// 호출: npx tsx server/services/fill/ts-name-recover.ts --city-id=37 [--apply] [--lang=es] [--category=restaurant,...]
 import fs from "fs";
 import path from "path";
 import { fileURLToPath, pathToFileURL } from "url";
@@ -52,7 +46,6 @@ if (!cityId) {
 
 const RADIUS_M = 60; // 행 좌표 = 그 장소 좌표 → 60m searchNearby = PID 매칭 확실
 const TYPE_OF: Record<string, string> = { restaurant: "restaurant" };
-// ⚠️ 2026-06-11 = name_en 존재만 판정 (§19)
 const isInternal = (r: any) => r.name_en && r.name_en.trim() !== "";
 
 (async () => {
@@ -79,7 +72,6 @@ const isInternal = (r: any) => r.name_en && r.name_en.trim() !== "";
     process.exit(1);
   }
   // ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유 (§19). name_local 채움 = 채움 = 도시 있음 + 행 있음(true).
-  // = 출입증(키이름·도시id·날짜·행있음) 검문 통과해야만 키 발급. 미달 = throw = 외부호출 불가.
   const today = new Date().toISOString().slice(0, 10);
   const { issueApiKey } = await import(
     pathToFileURL(path.join(ROOT, "server/services/shared/issue-api-key.ts"))
@@ -132,7 +124,6 @@ const isInternal = (r: any) => r.name_en && r.name_en.trim() !== "";
   const report: string[] = [];
   for (const row of internalRows) {
     try {
-      // ⚠️ 2026-07-18 = 매칭 폐기(트리거 단일) 후 = 고칠 행(row.id) 이미 알므로 targetRowId 직행 UPDATE. 옛 matchedBy==='pid' 판정(매칭 UPDATE 전제) 폐기 §19.
       const r = await upsertPlace({
         cityId,
         seedCategory: row.seed_category,
@@ -198,8 +189,6 @@ const isInternal = (r: any) => r.name_en && r.name_en.trim() !== "";
         googleMapsUri: match.googleMapsUri,
         googleReviewCount: match.googleReviewCount,
         // ⚠️ 수정금지(승인필요) 2026-08-10 사장님 확정 = **가격 칸의 주인은 제미니 하나**(SSOT:583).
-        //   구글 priceRange 는 그 나라 통화(케냐 KES 5,000 ≈ €35)라 price_eur 로 쓰면 €5,000 이 박힌다.
-        //   ag3(생성)·reinsert 와 **같은 규칙** = 여기서도 안 쓴다(§20 = 같은 PSR 로 모이는 경로는 규칙 하나).
         //   버리는 게 아니다 = TS 가격은 §18 raw 에 그대로 남는다.
         priceEur: null,
       });

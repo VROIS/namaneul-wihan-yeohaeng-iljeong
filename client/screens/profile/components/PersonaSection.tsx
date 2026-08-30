@@ -1,4 +1,3 @@
-// 여행 스타일 섹션 = ProfileScreen 분리(2026-07-15 §0 슬림화, 순수 이동)
 import React from "react";
 import { View, Text, Pressable } from "react-native";
 import { Brand } from "@/constants/theme";

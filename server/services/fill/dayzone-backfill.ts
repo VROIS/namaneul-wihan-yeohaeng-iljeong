@@ -1,13 +1,4 @@
 // ⚠️ 수정금지(승인필요) 2026-08-17 사장님 승인 = day_zone 결손 백필 = 신규 영구 컴포넌트(§16 fill/ 표준).
-// = 사유: DB-only 카테고리 조회(selectByDayZone, ag2-gemini-recommender.ts)가 day_zone='core'|'outskirt' 로만
-//   필터해서, day_zone NULL 행은 결과에서 통째로 빠짐 = 토론토(비식당 카테고리 90~100% NULL) 실사고 근본원인.
-//   나이로비도 동일 결손 확인(65~95% NULL) = 도시 1곳만의 문제 아님 = 재사용 도구로 만듦(§16 재발명 금지).
-// = 이미 있는 distance_km_from_center 로만 계산(외부호출 0, 무료) = core(≤10km) / outskirt(>10km).
-//   distance_km_from_center 자체가 NULL인 행(좌표 없음 등)은 계산 불가 = 스킵(별도 결손, 이 도구 대상 아님).
-//
-// 호출:
-//   npx tsx server/services/fill/dayzone-backfill.ts --city-id=110            # DRY = 대상만 표시(쓰기 0)
-//   npx tsx server/services/fill/dayzone-backfill.ts --city-id=110 --apply    # 실제 반영
 import fs from "fs";
 import path from "path";
 import { fileURLToPath, pathToFileURL } from "url";
@@ -75,7 +66,6 @@ if (!cityId) {
   const { upsertPlace } = await import(
     pathToFileURL(path.join(ROOT, "server/services/place-upsert.ts")).href
   );
-  // ⚠️ 2026-08-18 = core/outskirt 판정 = shared/pool-radius 단일 SSOT 재사용(§16, 인라인 삼항식 폐기 §19)
   const { zoneForDistanceKm } = await import(
     pathToFileURL(path.join(ROOT, "server/services/shared/pool-radius.ts")).href
   );

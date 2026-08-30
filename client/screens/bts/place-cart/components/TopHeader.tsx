@@ -1,4 +1,3 @@
-// 상단 고정존(뒤로가기 + 언어 스위치 + 도시 버튼행) = BTSPlaceCartScreen 분리(2026-07-16 §0 슬림화, 순수 이동)
 import React from "react";
 import { View, Text, Pressable, StyleSheet, Switch } from "react-native";
 import { BlurView } from "expo-blur";

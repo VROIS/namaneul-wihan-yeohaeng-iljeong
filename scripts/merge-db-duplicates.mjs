@@ -1,24 +1,3 @@
-// DB 중복 행 병합 = 사용자 SSOT 2026-05-14 = AND 조건 (주소 ✓ AND 이름 ✓)
-// = 목표: 같은 장소 2-3 행 중복 방지 + pid 있는 행 살리기 + 옛 시드 오류 (= 분류명) 정정
-//
-// 사용법:
-//   node scripts/merge-db-duplicates.mjs                    # 전 도시 dry-run
-//   node scripts/merge-db-duplicates.mjs --city-id 19       # 1 도시 dry-run
-//   node scripts/merge-db-duplicates.mjs --commit           # 전 도시 실제 적용
-//
-// 로직:
-//   1. 도시별 같은 장소 그룹 빌드 (= AND 조건)
-//   2. 그룹 내 대표 행 선정 = 점수 기반:
-//      +10 = google_place_id 있음
-//      +5  = image_url 있음 + 'storage' 또는 'wikimedia'
-//      +3  = name_ko 있음 + '?' 아님
-//      +2  = collection_phase = 'gemini3-2026-05' (= 최신 표준)
-//      -10 = name_en 이 BAD_NAME (= 도시명/분류명/잘못)
-//   3. COALESCE 보강 = 대표 행 NULL 필드 = 그룹 내 보충
-//      - image_url = 기존 우선 (= WK 보존) BUT 대표가 NULL = 그룹 채움
-//      - summary_ko, editorial_summary, name_ko, name_local = 보충
-//   4. archived 태그 추가 = phase_tags += 'archived-merge-2026-05-14'
-
 import pg from "pg";
 import fs from "fs";
 
@@ -46,7 +25,6 @@ const c = new pg.Client({
 });
 await c.connect();
 
-// === 매칭 알고리즘 (= AND STRICT) ===
 const STOP_STREET = new Set([
   "rue",
   "av",
@@ -137,11 +115,7 @@ const STOP_CITY = new Set([
   "cdmx",
 ]);
 
-// === BAD NAME 감지 (= 옛 시드 오류 = 분류명/도시명/지역명/일반명) ===
-// = 사용자 명시 2026-05-14 = "이건 분류이지 식당명이 아님"
-// = 강화 = Paris 재측정 발견 패턴 추가
 const BAD_NAME_EXACT = new Set([
-  // 도시명만 = 옛 시드 오류
   "paris",
   "london",
   "madrid",
@@ -154,7 +128,6 @@ const BAD_NAME_EXACT = new Set([
   "brooklyn",
   "queens",
   "polanco",
-  // 분류명 (= 음식 종류 = 옛 시드 = name 대신 분류 들어감)
   "halal",
   "soul food",
   "malagasy cuisine",
@@ -171,25 +144,21 @@ const BAD_NAME_EXACT = new Set([
   "turkish food",
   "spanish cuisine",
   "german cuisine",
-  // 건축/지역 분류
   "architecture of paris",
   "architecture of london",
   "architecture of madrid",
   "old sacramento state historic park",
-  // 동네/지역 (= 도시 + 동네 형식)
   "pigalle, paris",
   "crocker-amazon, san francisco",
   "nob hill, san francisco",
   "pigalle",
   "financial district, los angeles",
   "financial district, new york",
-  // 잘못 매핑 = 다른 나라 명소
   "brandenburg gate",
   "hearst tower (manhattan)",
   "parc merveilleux",
   "a' famosa resort",
   "six flags over georgia",
-  // 일반 카테고리
   "museum",
   "restaurant",
   "cafe",
@@ -206,7 +175,6 @@ const isBadName = (name) => {
   if (!name) return false;
   const lower = name.toLowerCase().trim();
   if (BAD_NAME_EXACT.has(lower)) return true;
-  // 단일 단어 + 8자 이하 + 분류 가능
   if (lower.split(/\s+/).length === 1 && lower.length <= 8) {
     if (
       /^(halal|kosher|asian|french|italian|japanese|chinese|mexican|german|spanish|thai)$/.test(
@@ -215,18 +183,14 @@ const isBadName = (name) => {
     )
       return true;
   }
-  // 괄호 안 도시명 (= "Hearst Tower (Manhattan)" 패턴)
   const inParen = name.match(/\(([^)]+)\)/)?.[1]?.toLowerCase();
   if (
     inParen &&
     /^(manhattan|brooklyn|berlin|frankfurt|tokyo|seoul|nyc|sf)$/.test(inParen)
   )
     return true;
-  // "X cuisine" 또는 "X food" 패턴 (= 분류명)
   if (/^[a-zàâäçèéêëîïôûùüÿñ\s-]+\s+(cuisine|food)$/i.test(lower)) return true;
-  // "Architecture of X" 패턴
   if (/^architecture of\s+/i.test(lower)) return true;
-  // "동네, 도시" 패턴 (= 광범위 지역 = 구체 장소 아님)
   if (
     /^[a-z\s-]+,\s+(paris|london|madrid|munich|new york|los angeles|san francisco|berlin|rome|tokyo|seoul|chicago)$/i.test(
       lower,
@@ -300,7 +264,6 @@ const isSamePlace = (a, b) => {
   return sameAddr && sameName;
 };
 
-// === 점수 = 대표 행 선정 ===
 const scoreRow = (r) => {
   let score = 0;
   if (r.google_place_id) score += 10;
@@ -315,8 +278,6 @@ const scoreRow = (r) => {
   return score;
 };
 
-// === 도시 선택 ===
-// 기본 = 9 핵심 도시 / --all = 전체 99 도시 / --city-id N = 단일
 let cityFilter = "";
 let cityParams = [];
 if (CITY_ID_ARG) {
@@ -367,7 +328,6 @@ for (const city of cities) {
     )
   ).rows;
 
-  // 그룹 빌드
   const groups = [];
   const seen = new Set();
   for (let i = 0; i < rows.length; i++) {
@@ -392,13 +352,11 @@ for (const city of cities) {
 
   for (const g of groups) {
     totalGroups++;
-    // 대표 = 최고 점수 (= 동점 시 = 가장 낮은 id = 먼저 등록)
     const scored = g.map((r) => ({ ...r, score: scoreRow(r) }));
     scored.sort((a, b) => b.score - a.score || a.id - b.id);
     const rep = scored[0];
     const others = scored.slice(1);
 
-    // COALESCE 보강 (= 대표 row NULL 필드를 그룹에서 채움)
     const supplements = {};
     if (!rep.image_url) {
       const wk = others.find((r) => r.image_url?.includes("wikimedia"));
@@ -455,7 +413,6 @@ for (const city of cities) {
     });
 
     if (COMMIT) {
-      // 1) 대표 행 UPDATE (보강 필드만)
       if (Object.keys(supplements).length > 0) {
         const sets = [];
         const vals = [];
@@ -472,7 +429,6 @@ for (const city of cities) {
         );
         totalRepUpdated++;
       }
-      // 2) 나머지 행 = archived 태그 (= DELETE 절대 X = CLAUDE.md §5)
       for (const o of others) {
         await c.query(
           `
@@ -495,7 +451,6 @@ console.log(`대표 행 보강 = ${COMMIT ? totalRepUpdated : "(dry-run)"}`);
 console.log(`archived 행 = ${COMMIT ? totalArchived : "(dry-run)"}`);
 console.log(`BAD_NAME 대표 행 = ${totalBadNames} (= 사용자 검토 권장)`);
 
-// audit 로그 저장
 fs.mkdirSync("backups", { recursive: true });
 const auditPath = `backups/merge-audit-${COMMIT ? "commit" : "dryrun"}-${new Date().toISOString().slice(0, 10)}.json`;
 fs.writeFileSync(auditPath, JSON.stringify(auditLog, null, 2));

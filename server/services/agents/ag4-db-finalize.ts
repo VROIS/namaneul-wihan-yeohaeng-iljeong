@@ -1,13 +1,7 @@
 // ⚠️ 수정금지(승인필요) 2026-05-26 = 사용자 SSOT = DB-only 전용 AG4 = scene 직접 사용
-// = 옛 itinerary-generator 슬롯 강제 분배 + calcTransitHaversine 자체 계산 = 완전 폐기 (= 단계 4)
-// = 동선 = buildRouteLocal(로컬 NN+Haversine) 단일 SSOT = scene 직접 24 슬롯 + scene 의 distance / transit_mode / transit_min 직접 사용
-// 🗑️ 2026-07-05 = 옛 Gemini/legacy fallback 서술 = "새||옛" 폴백 박제 = 삭제 §0/§19
-// = backfill = fire-and-forget (= FE 우선 노출 + background)
-// = dailyPerPersonEur = 1 인 단가 그대로 + group = × companionCount 별도
 
 import { db } from "../../db";
 import { eq, sql } from "drizzle-orm";
-// 🧠 2026-07-05 = 환율 EUR→KRW 단일 SSOT import(§16, 로컬 3벌 복붙 폐기)
 import { getEurToKrwRate } from "../exchange-rate";
 import type {
   PlaceResult,
@@ -18,8 +12,6 @@ import type {
 } from "./types";
 import { MEAL_BUDGET } from "./types";
 // ⚠️ 수정금지(승인필요) 2026-08-18 사장님 승인(비판검증 확정결함 수정) = ag2 와 동일한 정규화 필수(§16 1벌).
-//   실사용자 클라이언트는 소문자(luxury/comfort)로 보내는데 MEAL_BUDGET 키는 PascalCase 4종뿐 =
-//   미정규화 인덱싱 = undefined → mealBudget.lunch 접근 크래시(ag2 에서 토론토·나이로비 500 실측과 동일 폭탄).
 import { normalizeTravelStyle, sanitizePriceEur } from "./pipeline-v3-types";
 // best_rank 언어코드 정렬 1벌(§16, 2026-08-27 사장님 확정). ag4 는 요청 언어를 모름 = 언어 무관 정렬.
 import { bestRankOrderSql } from "../shared/best-rank";
@@ -30,10 +22,8 @@ import {
   pickTransitMode,
 } from "./transit-haversine";
 // ⚠️ 수정금지(승인필요) 2026-06-06 = DB-only 동선 = 로컬 NN+Haversine (= Stage C) 단일 SSOT
-// 🗑️ 2026-07-05 = handleRouteRequest(Gemini) import·RouteResponse(미사용) import = 옛 폴백 잔재 = 삭제 §0/§19
 import { buildRouteLocal } from "../route/route-local";
 import { backfillFromRoute } from "../route/route-backfill";
-// ⚠️ 2026-07-04 사장님 SSOT = 드라이빙 가이드 가격 = 재발명 금지(§16) = MIX 경로(pipeline-v3.ts)와 동일한 단일 SSOT 재사용.
 // ⚠️ 2026-07-06 사장님 SSOT = 가이드 하루요금 = guideCostForDay 공용 SSOT(옛 로컬 guideCostPerPersonPerDay 승격, 3경로 공유 §16).
 import {
   shouldApplyGuidePrice,
@@ -42,11 +32,7 @@ import {
 // ⚠️ 2026-07-17 사장님 확정 = 식당풀 = (city_id=요청도시) ∪ (중심 100km) 합집합 = shared/pool-radius 단일 SSOT(§16)
 import { getPoolContext, servingGateSql } from "../shared/pool-radius";
 // ⚠️ 수정금지(승인필요) 2026-08-18 사장님 승인(비판검증 확정결함 수정) = 식당풀·BTS공연장 카드도 사진 단일 진입점
-//   pickPlaceImage(§16) 경유 = PID공유 폴백 적용. 옛 raw SQL image_url 직독(`r.imageUrl || ""`) = 폐기 §19
-//   (= PID중복행은 창고(R2)에 사진이 있어도 매 여정의 점심·저녁 카드가 빈 이미지로 나가던 실측 결함).
 import { pickPlaceImage, loadImagePidMap } from "../shared/place-image";
-
-// 🗑️ 2026-07-05 = getEurToKrwRate 로컬정의 삭제 = shared/exchange-rate.ts 단일 SSOT 통합(§16 재발명금지, 3벌→1벌)
 
 function addMinutes(time: string, minutes: number): string {
   const [h, m] = time.split(":").map(Number);
@@ -55,10 +41,6 @@ function addMinutes(time: string, minutes: number): string {
   const mm = total % 60;
   return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
 }
-
-// 🗑️ 2026-07-06 = estimateTransitCost 로컬정의 삭제 = transit-haversine.ts 단일 SSOT 이동(§16 재발명금지, MIX·DB-only 공통) §19
-
-// 🗑️ 2026-07-06 = guideCostPerPersonPerDay 로컬정의 삭제 §19 = transport-pricing-service.guideCostForDay 단일 SSOT 승격(3경로 공유, MIX/숙소재계산이 못써서 flat 재발명하던 결함 근본해결).
 
 export interface AG4DbInput {
   daySlotsConfig: DaySlotConfig[];
@@ -72,11 +54,6 @@ export interface AG4DbInput {
   inputPlaces: PlaceResult[];
 }
 
-/**
- * AG4-DB 메인 = buildRouteLocal 동선 → scene 직접 사용 (= 사용자 SSOT 2026-05-26 단계 4)
- * = 로컬 동선 24 씬 = 그대로 일자별 슬롯 = FE 노출
- * 🗑️ 2026-07-05 = 옛 "실패 = itinerary fallback(안전망)" 서술 = 삭제 §0/§19
- */
 export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
   const _t0 = Date.now();
   const {
@@ -93,25 +70,13 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
 
   const eurToKrw = await getEurToKrwRate("[AG4-DB]");
 
-  // ===== 1. 동선 = 로컬 NN+Haversine 단일 SSOT (= DB-only 자체 해결, $0/~3ms) (= Stage C 2026-06-06) =====
-  // 🗑️ 2026-07-05 = USE_LOCAL_ROUTE 롤백 토글 + Gemini 우선 삼항 = "새||옛" 폴백 = 삭제 §0/§19 (buildRouteLocal 단일 경로)
-
   // ⚠️ 수정금지(승인필요) 2026-06-13 사용자 SSOT = DB-only 식당풀 = 가격대 구간별 RC TOP 만 (= eco20/reason40/premium20, zone 구분 없이 도시 전체)
-  //   = 옛 버그(2026-06-06): 가격보유 식당 전체(410곳)를 풀로 넘김 → route-local 이 인접픽 → RC 랭킹 밖(300위권~바닥)
-  //     이미지/PID 없는 부실 식당이 동선에 노출됨(2026-06-13 시뮬 입증: Mokus 402위, Le Chateaubriand 316위 노출).
-  //   = 수정: 가격대 구간(MEAL_BUDGET 경계 = eco≤24 / reason 25~60 / premium 61~180 / luxury 181+)별로
-  //     RC DESC ROW_NUMBER ≤ 구간정원(20/40/20/20)만 풀에 포함. rank 는 rc-rerank 가 이미 RC 반영 → TOP = 완비 식당.
-  //   → route-local 2차 = 이 TOP 풀에서 슬롯 앵커 거리순 인접픽 (= 부실 바닥식당 원천 제외).
   let restaurantPool: PlaceResult[] = [];
-  // 2026-08-18 = PID공유 폴백 목록(식당풀 로드 시 채움, 아래 BTS 공연장 카드도 재사용 §16)
   let imagePidMap: Map<string, string> = new Map();
   if (cityId && db) {
     // ⚠️ 2026-07-17 사장님 확정 = 풀 = (city_id=요청도시) ∪ (좌표 유효 100km 이내) 합집합(§16 pool-radius)
-    //   = 크로스도시 시내 식당 포함(실증: 본(134) 소속 디종 시내 Loiseau des Ducs 가 디종 풀에서 안 보이던 결함 해소)
     const { where: poolWhere } = await getPoolContext(cityId, cityCoords); // 2026-07-17 = 기점 = 동적 출발점(cityCoords = 숙소>도심, day-builder 우선순위 반영값)
     // ⚠️ 2026-07-31 사장님 승인(BTS D단계 BE-3) = 핀 식당 = **같은 쿼리 1벌 안에서** 무조건 포함(§16).
-    //   사용자가 직접 고른 식당이 리뷰수 쿼터·price NULL 제외에 걸려 풀에서 빠지면 자리에 못 앉음 → OR 1줄로 보장.
-    //   (simplify 게이트가 잡음: 처음엔 쿼리를 통째로 한 벌 더 복붙했었다 → 완전삭제 §19)
     const pinIdsForMeals = (formData.pinnedPlaceIds ?? []).filter((n: number) =>
       Number.isFinite(n),
     );
@@ -149,7 +114,6 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
       SELECT * FROM banded WHERE band_rn <= quota OR pinned
       ORDER BY ${sql.raw(bestRankOrderSql())}, "googleReviewCount" DESC NULLS LAST
     `)) as unknown as { rows: Record<string, any>[] };
-    // 2026-08-18 = PID공유 폴백 목록 = 요청도시 + 풀에 섞인 크로스도시(60초 캐시 = ag2 로드분 재사용 = listR2 추가 0)
     imagePidMap = await loadImagePidMap([
       cityId,
       ...(rows.rows || []).map((r) => r.cityId),
@@ -176,7 +140,6 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
     );
   }
 
-  // 🗑️ 2026-07-05 = 옛 Gemini 삼항·localInsufficient 재호출·legacy fallback = "새||옛" 폴백 = 삭제 §0/§19
   const routeResult = buildRouteLocal(
     skeleton,
     inputPlaces,
@@ -187,8 +150,6 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
     `[AG4-DB] ✅ 동선 = 로컬 NN+Haversine (${routeResult.elapsedMs}ms, Gemini 0)`,
   );
 
-  // buildRouteLocal 은 daySlotsConfig 를 순회해 days 를 채우므로 정상 뼈대면 항상 ok.
-  // !ok = daySlotsConfig 자체가 비어있는 malformed 뼈대뿐 → 옛 파이프라인 부활 없이 명확한 에러(§0).
   if (!routeResult.ok || !routeResult.response) {
     throw new Error(
       `[AG4-DB] 로컬 동선 생성 실패 (days=0) = daySlotsConfig 비정상 = 뼈대 점검 필요 (elapsedMs=${routeResult.elapsedMs})`,
@@ -197,21 +158,17 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
 
   const routeResponse = routeResult.response;
 
-  // ===== 2. 백필 = background fire-and-forget (= FE 우선 노출) =====
   if (cityId) {
     backfillFromRoute(routeResponse, cityId, inputPlaces).catch((e: any) =>
       console.warn(`[Route-Backfill] ❌ background error:`, e?.message || e),
     );
   }
 
-  // ===== 3. scene 직접 24 슬롯 사용 =====
   const inputById = new Map(inputPlaces.map((p) => [p.id, p]));
   const slotDuration = skeleton.paceConfig.slotDurationMinutes;
   const mealDuration = skeleton.paceConfig.mealDurationMinutes; // 식사 슬롯 종료시각용(활동보다 짧음, 2026-07-21 §16 route-local 정합)
   const mealBudget = MEAL_BUDGET[normalizeTravelStyle(formData.travelStyle)];
 
-  // ⚠️ 2026-05-26 = 사용자 SSOT = scene 검증 (= 안전망)
-  // = prompt 강제 + 코드 검증 양면 = 환각 차단
   const globalPlaceIdCounts = new Map<string, number>();
   for (const rd of routeResponse.days || []) {
     for (const sc of rd.scenes || []) {
@@ -238,15 +195,12 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
     const routeDay = routeResponse.days?.find((rd) => rd.day === d);
     const scenes = routeDay?.scenes || [];
 
-    // ⚠️ 2026-05-26 = 일자별 검증 = 사용자 SSOT 위반 검출
     const lastScene = scenes[scenes.length - 1];
     if (lastScene && lastScene.type !== "restaurant") {
       console.warn(
         `[AG4-DB] ⚠️ Day ${d} 마지막 슬롯 = activity (= 저녁 식당 강제 위반): ${lastScene.name_local || lastScene.name_en || "(name null)"}`,
       );
     }
-    // ⚠️ 2026-05-31 = 사용자 SSOT = prompt 가 name_en 미요청 (= name_local 단일) = 워닝 조건 시정
-    // = 진짜 결함 = 표시 이름(name_local) + 매칭(inputPlace) 둘 다 없을 때만
     const nameless = scenes.filter(
       (s) => !s.name_local && !s.name_en && !inputById.get(s.place_id),
     );
@@ -258,8 +212,6 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
       );
     }
 
-    // ⚠️ 2026-06-06 = mealType = 위치 기반 (= 일자 마지막 식당 scene = 저녁 / 그 외 = 점심)
-    //   = 짧은 날(활동 적음) 저녁이 13:00 등에 떨어져 classifyMealType(시각<15시)이 "점심"으로 오분류되는 버그 수정
     const lastMealIdx = scenes.reduce(
       (acc, s, i) => (s.type === "restaurant" ? i : acc),
       -1,
@@ -274,7 +226,6 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
           : "lunch"
         : undefined;
 
-      // ⚠️ 2026-06-12 = 매트릭스 폴백 = 안전망(유지)이나 정상 경로(식당풀 isNotNull(priceEur))에선 0건이어야 함. 발생 시 = 데이터 결손 신호 = warn.
       if (isMeal && scene.price_eur == null) {
         console.warn(
           `[AG4-DB] ⚠️ meal price 매트릭스 폴백 발생 = ${scene.name_local || scene.name_en || scene.place_id} (= PSR price_eur NULL = 식당풀 게이트 누수 점검)`,
@@ -292,10 +243,8 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
             : mealBudget.dinnerLabel
         : undefined;
 
-      // ⚠️ 2026-05-26 = 사용자 SSOT = name_en = 보조 = name_local fallback (= FE 표시)
       const displayName = scene.name_en || scene.name_local;
       return {
-        // 식별 (= FE 호환 = PlaceResult 양식)
         id: scene.place_id,
         name: displayName,
         nameEn: displayName,
@@ -304,46 +253,34 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
         address: scene.address,
         lat: scene.lat,
         lng: scene.lng,
-        // 분류
         type: scene.type,
         isMealSlot: isMeal,
         mealType,
         seedCategory:
           inputPlace?.seedCategory || (isMeal ? "restaurant" : "attraction"),
-        // 시간 = 식사면 mealDuration(짧음)·활동이면 slotDuration (2026-07-21 §16 route-local 정합 = 식사 종료 30분 과다 수정)
         startTime: scene.time,
         endTime: addMinutes(scene.time, isMeal ? mealDuration : slotDuration),
-        // 가격
         estimatedPriceEur: isMeal
           ? scene.price_eur
           : (inputPlace?.estimatedPriceEur ?? 0),
         mealPrice,
         mealPriceLabel,
-        // FE 표시 보강 (= inputPlace = PSR 데이터 = 이미지/리뷰수 등)
-        // ⚠️ 2026-06-12 = 식당풀 픽(inputPlace 밖) = scene.image(route-local 이 PSR image_url 탑재) fallback = 식당 이미지 노출
         image: inputPlace?.image || (scene as any).image || null,
         userRatingCount: inputPlace?.userRatingCount,
         selectionReasons: inputPlace?.selectionReasons || [],
         confidenceLevel: inputPlace?.confidenceLevel || "minimal",
         // ⚠️ 수정금지(승인필요) 2026-06-24 사용자 SSOT = 슬롯 한줄요약 = editorial_summary 단일 (모든 경로 통일).
-        //   route-local 이 scene.shortform_ko 에 PSR.editorial_summary 를 탑재 → FE 노출용 editorialSummary 단일 매핑.
         editorialSummary: scene.shortform_ko || null,
         // 🎬 2026-07-23 사장님 SSOT = 여정 미리보기 영상 글라스 카드 요약 = summary_ko → DB-only 슬롯에도 탑재(MIX 경로와 정합, 폐기된 제외정책 갱신 = 2026-07-23 §19)
         summaryKo:
           (scene as any).selection_reason_ko || inputPlace?.summaryKo || null,
-        // 동선 = scene 직접
         distance_from_prev_km: scene.distance_from_prev_km,
         transit_mode: scene.transit_mode,
         transit_min: scene.transit_min,
       };
     });
 
-    // ===== 비용 합산 =====
     // ⚠️ 수정금지(승인필요) 2026-08-19 사장님 승인 = FE 카드(PlaceSlotCard.tsx) 와 동일한 500유로 오염값
-    //   가드를 합산에도 적용(= 카드는 안전한데 일자합계만 폭발하던 버그 수정. 고양체육관 사례 = 카드는
-    //   "무료"로 안전하게 표시됐지만 이 합산은 가드 없이 원본값을 그대로 더해 Day 총액이 €7536 로 폭발함).
-    //   = 인라인 재작성 대신 기존 검증된 sanitizePriceEur()(pipeline-v3-types.ts, 팡테옹 19500 오염 방지용
-    //     동일 500유로 클램프) 재사용 = §0/§16 재발명 금지.
     const mealCostEur = dayPlaces.reduce(
       (sum, p) => sum + (p.isMealSlot ? sanitizePriceEur(p.mealPrice) : 0),
       0,
@@ -354,9 +291,7 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
       0,
     );
 
-    // ===== 교통 = 대중교통 구간별 추정 + 드라이빙 가이드 하루 1회 실가격 =====
     // ⚠️ 2026-07-04 사장님 SSOT = 드라이빙 가이드는 구간별 계산 금지(반일요금 개념 없어 비현실적으로 쌈, §0 옛것 완전삭제).
-    //   MIX 경로와 동일한 shouldApplyGuidePrice + calculateTransportPrice 재사용(§16) = 하루 가용시간 기준 1회 계산.
     const isGuideDay = shouldApplyGuidePrice(
       formData.mobilityStyle,
       formData.travelStyle,
@@ -409,7 +344,6 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
         totalDistanceKm: routeDay?.total_distance_km || 0,
       },
       dailyCost: {
-        // ⚠️ 2026-06-06 = FE 는 dc.breakdown.{...} 중첩을 읽음 (= MIX pipeline-v3 구조 일치) = 카테고리별 비용(교통/식사/입장료) 표시
         breakdown: {
           mealEur: mealCostEur,
           entranceEur: entranceFeesEur,
@@ -429,9 +363,6 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
   }
 
   // ⚠️ 2026-07-31 사장님 지시(BTS 문제점4) = **마지막 슬롯 = 공연장 카드**(공연 시작 시각).
-  //   BTS 폼(finalPlaceId·finalPlaceTime)이 실렸을 때만 = 마지막 날 끝에 그 장소 카드 1장을 고정 부착.
-  //   여정이 "저녁 → 공연장(공연 시작)"으로 끝나 목적(공연)이 일정표·지도 마커(마지막 번호)에 박힌다.
-  //   비용 = 0 유지(BTS 결정⑥ = 비용 별 의미 없음 = 티켓·구간비 합산 안 함), 거리·이동시간은 실계산.
   if (formData.finalPlaceId && db && days.length) {
     const fRes = (await db.execute(sql`
       SELECT id, name_en AS "nameEn", name_ko AS "nameKo", name_local AS "nameLocal", address,
@@ -469,7 +400,6 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
         estimatedPriceEur: null,
         mealPrice: undefined,
         mealPriceLabel: undefined,
-        // 2026-08-18 = 사진 단일 진입점 경유(PID공유 폴백 §16, 옛 image_url 직독 폐기 §19)
         image: pickPlaceImage(f, imagePidMap) || null,
         userRatingCount: f.googleReviewCount || 0,
         summaryKo: f.summaryKo,
@@ -518,8 +448,6 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
     endTime: formData.endTime || "21:00",
     days,
     // ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 = AG1(skeleton)이 이미 계산해 여기까지 파라미터로 들어와 있던
-    //   값을 응답에 담기만 함(§16 재사용, 새 계산 없음) = MIX 경로(pipeline-v3-step2-build.ts:396)와 동일 필드.
-    //   누락 시 프로필 카드·결과화면 vibe 요약이 DB-ONLY 여정에서만 폴백("힐링")으로 고정되던 배선 결손 수정.
     vibeWeights: skeleton.vibeWeights,
     companionType: formData.companionType,
     companionCount,
@@ -541,7 +469,6 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
       companionCount,
       curationFocus: formData.curationFocus,
       // ⚠️ 수정금지(승인필요) 2026-07-10 사장님 SSOT = 확정 교통수단 = MIX(pipeline-v3:1157)와 동형 방출(§20 전수).
-      //   = 이 값이 없으면 AI의견이 DB-only 가이드 여정을 대중교통 전제로 오판(서버 재계산 폐기 2026-07-10과 세트).
       transportCategory: shouldApplyGuidePrice(
         formData.mobilityStyle,
         formData.travelStyle,
@@ -559,5 +486,3 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
     },
   };
 }
-
-// 🗑️ 2026-07-05 = finalizeWithLegacyItinerary(201줄) 전체 삭제 = 옛 _enrichmentPipeline 슬롯강제분배 dynamic import 부활 = 헤더가 "완전폐기" 선언한 걸 fallback으로 되살림 = 똥덮기 §0/§19. 동선 실패 = buildRouteLocal 단일 SSOT 에서 명확한 에러(위 참조).

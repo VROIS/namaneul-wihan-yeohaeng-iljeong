@@ -1,6 +1,4 @@
 // ⚠️ 수정금지(승인필요) 2026-06-23 사장님 SSOT = fillCity 도시 상태 조회 (= MCP 금지 직접접속 §16 영구도구).
-// = WF 실행 전/후 비교용 = 카테고리별 행수·완비율(pid/coord/rc/price/img/sumko) + 식당 band + 결손.
-// 호출: npx tsx fillcity/status.ts --city-id=39
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";

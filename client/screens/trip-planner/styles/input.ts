@@ -1,4 +1,3 @@
-// Input(입력)·픽커 스타일 = TripPlannerScreen styles 분리(2026-07-15 §0 슬림화, 순수 이동)
 import { StyleSheet, Dimensions } from "react-native";
 import { Brand, Spacing, BorderRadius, Fonts } from "@/constants/theme";
 

@@ -1,7 +1,4 @@
 // ⚠️ 수정금지(승인필요) 2026-07-22 사장님 SSOT = 영상 클립 생성 단일 진입점 (§16)
-// = A안 = gemini-omni-flash-preview (Interactions API, 캐릭터 레퍼런스 첨부) = generateSceneClip
-// = B안(2026-07-23 실사 포토무비) = veo-3.1-lite 사진→영상 (합성 스틸 = 첫 프레임, 일관성은 스틸이 보장) = animateStillToClip
-// = 모든 영상 생성 호출 = 이 파일만 통과. 모델 교체 = 이 파일 내부만 수정 = 호출부 불변.
 // = 키 = issueApiKey 출입증(apipass)을 호출자가 인자로 전달. §18 = 응답 메타(영상 바이트 제외) saveRaw 2곳 저장.
 
 import fs from "fs";
@@ -19,14 +16,12 @@ const POLL_TIMEOUT_MS = 10 * 60 * 1000; // 씬 1개 생성 폴링 상한 10분
 
 export interface SceneClipOpts {
   apiKey: string; // issueApiKey 출입증 (직접 env 조회 금지)
-  /** 레퍼런스 이미지(레포 내 jpg 절대경로). 배열 순서 = 프롬프트의 <IMAGE_REF_0>, <IMAGE_REF_1>... 순서 */
   referenceImages: { path: string; mimeType?: string }[];
   aspectRatio?: "9:16" | "16:9"; // 디폴트 9:16 세로 숏폼
   contextId?: string | number | null; // §18 raw 저장 맥락 (cityId)
   rawTag?: string | null; // §18 파일명 태그
 }
 
-/** 씬 1개 = 프롬프트+레퍼런스 이미지 → Omni Flash 영상 생성 → mp4 Buffer */
 export async function generateSceneClip(
   prompt: string,
   opts: SceneClipOpts,
@@ -67,7 +62,6 @@ export async function generateSceneClip(
     );
   }
 
-  // 비동기 생성 = completed/failed 까지 폴링
   const started = Date.now();
   while (
     interaction?.status &&
@@ -103,14 +97,12 @@ export async function generateSceneClip(
       `[video-gen] 생성 실패: ${JSON.stringify(interaction?.error || interaction).slice(0, 500)}`,
     );
 
-  // 영상 추출 = steps[].content[] (type=video) 의 uri 또는 inline data
   const contents = (interaction?.steps || []).flatMap(
     (s: any) => s?.content || [],
   );
   const video =
     contents.find((c: any) => c?.type === "video") || interaction?.output_video;
   if (video?.uri) {
-    // 2026-08-23 유료호출 카운터 = 영상 생성 완료(= 과금 확정) 시점에 기록 = 다운로드가 실패해도 청구서와 일치
     void recordExternalCall({
       provider: "omni",
       sku: OMNI_MODEL,
@@ -148,13 +140,10 @@ export interface PhotoMotionOpts {
 }
 
 // Veo 한도(2026-08-23 사장님 콘솔 실측 = Gemini API Tier 2) = RPM 4·RPD 50 → 429 시 대기 후 재시도 (2026-07-23 운영 i105 실증 딜레이 유지).
-// 재시도 본체 = shared/retry-429.ts 1벌로 승격 = 2026-08-06 §16(옛 로컬 사본 삭제 §19).
 const RETRY_DELAYS_MS = [20000, 40000, 60000];
 const veoRetry = <T>(fn: () => Promise<T>): Promise<T> =>
   withQuotaRetry(fn, { delaysMs: RETRY_DELAYS_MS, label: "video-gen" });
 
-/** [B안] 스틸 1장 → Veo Lite 사진→영상 = 움직이는 씬 클립(오디오 포함) mp4 Buffer.
- *  Veo 가 done 인데 uri·bytes 를 안 준 경우(운영 i104 s6 실증) = 정책성 누락 → 1회 재시도(그 씬만 = $0.35). */
 export async function animateStillToClip(
   prompt: string,
   opts: PhotoMotionOpts,
@@ -234,7 +223,6 @@ async function animateStillToClipOnce(
     return Buffer.from(video.videoBytes, "base64");
   }
   if (video?.uri) {
-    // 2026-08-23 유료호출 카운터(초 단위) = 영상 생성 완료(= 과금 확정) 시점 기록 = 다운로드 실패해도 청구서와 일치
     void recordExternalCall({
       provider: "veo",
       sku: VEO_I2V_MODEL,
@@ -252,7 +240,6 @@ async function animateStillToClipOnce(
   throw new Error(`[video-gen] Veo 응답에 영상 없음`);
 }
 
-/** raw 저장용 = 응답에서 대용량 base64 필드 제거(메타만 보존) */
 function stripVideoBytes(interaction: any): any {
   try {
     return JSON.parse(

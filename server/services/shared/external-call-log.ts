@@ -1,26 +1,15 @@
 // ⚠️ 수정금지(승인필요) 2026-08-23 사장님 승인 = 외부 유료호출 카운터 + 관리자 배치 무료잔량 게이트 = 단일 진입점 1벌(§16).
-//   배경: €860 폭탄 재발 방지. 구글 Places는 2025-03 개편으로 SKU마다 **독립** 월 무료한도(Enterprise = 1,000) → 넘으면 즉시 과금.
 //   원칙(사장님 확정 2026-08-23):
-//     - BE 의 모든 유료 외부호출(제미니 텍스트 제외) = 호출 직전 출입증처럼 `precheck` = "무료잔량 안인가 / 진행하면 얼마 더 과금인가" 판정·기록.
-//     - 사용자 호출(MIX·해설·영상) = 판정만 하고 막지 않음(= 의도된 투자). 관리자 배치(발굴·보충) = `gateBatch` = 초과면 중단, --force-quota = 사장님 승인 시만.
-//     - 시뮬(`simulateCost`) = DRY·관리자 API 에서 실행 전 "추가 과금 €" 를 미리 봄.
-//   기록은 절대 본 호출을 깨지 않는다(try/catch, 실패 = 경고 1줄). 월 = UTC 달력월(구글 무료한도 리셋 단위).
-//   같은 테이블이 5번 계획(관제탑)의 "외부호출 수 항목별" 계기판 소스 = 카운터 2벌 금지.
 import { pool } from "../../db";
 
 export type CallProvider = "ts" | "pm" | "veo" | "omni" | "nano" | "gemini";
 
-/** 월 무료 한도(이벤트 수). Places Enterprise SKU = 1,000 (Text Search Enterprise / Place Details Photos). Veo·나노·제미니 = 무료 없음. */
 export const FREE_CAPS: Partial<Record<CallProvider, number>> = {
   ts: 1000,
   pm: 1000,
 };
 
 // ⚠️ 수정금지(승인필요) 2026-08-25 사장님 승인·리서치 확정 = 단가 가계부(공개단가·출처·확인일·서지 전부 기록,
-//   §16 = 새 공급자 추가 시 이 표에 1줄만 늘리면 됨, UNIT_COST_EUR 재발명 금지).
-//   ⚠️ 공개단가는 항상 그대로 청구되지 않는다 = 사장님 실청구 확인 = **공개단가 대비 +21% 로 실제 청구됨**.
-//   eur = 실제 계산에 쓰는 값 = publicPriceUsd × (1 + surchargePct/100)(환율 변환 없음 = 기존 관행대로 USD 숫자를
-//   그대로 EUR 로 사용, ts 항목의 옛값 0.035 도 공식 $0.035 를 환전 없이 그대로 썼던 것과 동일 관행 유지).
 export interface UnitCostLedgerEntry {
   eur: number; // 실제 과금 계산에 쓰는 단가(€) = publicPriceUsd × (1+surchargePct/100)
   publicPriceUsd: number; // 공식 공개단가(원문 통화 그대로, USD)
@@ -84,7 +73,6 @@ export const UNIT_COST_LEDGER: Record<CallProvider, UnitCostLedgerEntry> = {
   },
 };
 
-/** 실제 과금계산이 읽는 평평한 단가표(€) = 위 가계부에서 자동 파생, 손으로 따로 유지 안 함(§0). */
 export const UNIT_COST_EUR: Record<CallProvider, number> = Object.fromEntries(
   (
     Object.entries(UNIT_COST_LEDGER) as [CallProvider, UnitCostLedgerEntry][]
@@ -101,7 +89,6 @@ export interface QuotaSim {
   extraEur: number; // 진행 시 추가 과금 예상(€)
 }
 
-/** 시뮬 = 실행 전 "가능한가 + 얼마 더 과금인가". 외부호출 0·DB 읽기만. */
 export async function simulateCost(
   provider: CallProvider,
   planned: number,
@@ -122,7 +109,6 @@ export async function simulateCost(
   };
 }
 
-/** 출입증형 사전판정 = 모든 유료 호출 직전 1줄. 막지 않음(사용자 경로) = 판정·로그만. DB 없음/실패 = 호출 방해 0. */
 export async function precheck(
   provider: CallProvider,
   units = 1,
@@ -154,7 +140,6 @@ export interface ExternalCall {
   errorMessage?: string | null;
 }
 
-/** 기록 = fire-and-forget. 유료 호출 성공/실패 직후 1줄 호출. 실패해도 호출 결과에 영향 0. */
 export async function recordExternalCall(e: ExternalCall): Promise<void> {
   if (!pool) return;
   try {
@@ -186,7 +171,6 @@ export interface GeminiPerformance {
   errorRate: number | null; // %
 }
 
-/** 관제탑 "AI 성능" 카드 소스 = 계측된(response_time_ms 있는) 최근 gemini 호출 100건 기준 실시간 집계. */
 export async function geminiPerformance(): Promise<GeminiPerformance> {
   if (!pool)
     return {
@@ -221,7 +205,6 @@ export async function geminiPerformance(): Promise<GeminiPerformance> {
   };
 }
 
-/** 이달(UTC) 사용량 = 건수 + 단위합 */
 export async function monthlyUsage(
   provider: CallProvider,
 ): Promise<{ count: number; units: number }> {
@@ -235,7 +218,6 @@ export async function monthlyUsage(
   return { count: r.rows[0]?.count ?? 0, units: r.rows[0]?.units ?? 0 };
 }
 
-/** 배치 실행 전 무료잔량 판정. cap 없는 공급자(veo 등) = 항상 ok(과금 공급자는 기록만). DB 없음 = fail-closed. */
 export async function checkBatchQuota(
   provider: CallProvider,
   planned: number,
@@ -248,7 +230,6 @@ export async function checkBatchQuota(
   return { ...s, ok: s.cap == null || s.overflow === 0 };
 }
 
-/** 배치 게이트 = 잔량 초과면 throw(중단). force = --force-quota(사장님 승인) 일 때만 통과. */
 export async function gateBatch(
   provider: CallProvider,
   planned: number,
@@ -271,7 +252,6 @@ export async function gateBatch(
   );
 }
 
-/** 관제탑 계기판용 = 공급자별 이달 사용량·무료한도 */
 export async function usageSummary(): Promise<
   {
     provider: string;

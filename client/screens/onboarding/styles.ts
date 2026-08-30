@@ -1,4 +1,3 @@
-// 온보딩 화면 스타일 = OnboardingScreen 분리(2026-07-16 §0 슬림화, 순수 이동)
 import { StyleSheet } from "react-native";
 import { Spacing, BorderRadius, Brand } from "@/constants/theme";
 

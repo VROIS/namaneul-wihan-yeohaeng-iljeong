@@ -1,13 +1,7 @@
-// Gemini 응답 타입 + 가격 정제/해석 헬퍼 + Gemini 클라이언트 초기화 = pipeline-v3 분리(2026-07-15 §0 슬림화, 순수 이동)
 import { GoogleGenAI } from "@google/genai";
 import type { TravelStyle } from "./types";
 import { MEAL_BUDGET } from "./types";
 
-/**
- * Gemini 반환 가격 정제
- * - "19,500" → 19.5 (천 단위 구분자 오파싱 방지)
- * - 500 EUR 초과 → 0 (명백한 오류값 제거, 유럽 일반 입장료 최대 €200)
- */
 export function sanitizePriceEur(raw: any): number {
   if (raw == null) return 0;
   const n =
@@ -27,14 +21,12 @@ export function resolvePrice(
 ): number {
   const resolved = geminiPrice > 0 ? geminiPrice : seedPriceEur;
   if (resolved > 0) return resolved;
-  // 모두 0 = 매트릭스 폴백 (= 식당만)
   if (isMeal && mealType) {
     return MEAL_BUDGET[travelStyle]?.[mealType] ?? 0;
   }
   return 0;
 }
 
-// ===== TravelStyle 정규화 (소문자→표준형) =====
 export function normalizeTravelStyle(style?: string): TravelStyle {
   if (!style) return "Reasonable";
   const map: Record<string, TravelStyle> = {
@@ -50,7 +42,6 @@ export function normalizeTravelStyle(style?: string): TravelStyle {
   return map[style] || "Reasonable";
 }
 
-// ===== Gemini 초기화 =====
 let ai: GoogleGenAI | null = null;
 
 export function getAI(): GoogleGenAI {
@@ -65,7 +56,6 @@ export function getAI(): GoogleGenAI {
   return ai;
 }
 
-// ===== Gemini 응답 타입 =====
 export interface GeminiPlace {
   name: string; // Google Maps 영어 공식명
   nameKo: string; // 사용자 선택 언어명
@@ -73,14 +63,12 @@ export interface GeminiPlace {
   address?: string; // ⚠️ 2026-05-14 v3 = AG3 통합 매칭 1 순위 (= 행정주소)
   type: "activity" | "lunch" | "dinner" | "cafe";
   // 🧠 2026-07-05 사장님 SSOT = Gemini 응답 전체 새덮어쓰기(§20 셀렉금지). 프롬프트가 이미 요구하는 값을 버리지 말고 살림(실호출 4/4 확인).
-  //   = seed_category(6종 = 카테고리 보존), latitude/longitude(정확좌표 = TS 힌트 = 동명오매칭 방지), distance_km_from_center(도심거리 = 동선재료).
   seed_category?: string; // heritage/healing/hotspot/adventure/shopping/attraction/restaurant
   latitude?: number;
   longitude?: number;
   distance_km_from_center?: number;
   startTime: string;
   endTime: string;
-  // 🗑️ 2026-07-05 삭제 = reason 필드 = 프롬프트 미요청(항상 undefined = 死데이터) §0/§19
   selection_reason_ko?: string; // ⚠️ 2026-05-14 v3 신규 = 인스타/FOMO = → summary_ko
   shortform_ko?: string; // ⚠️ 2026-05-14 v3 신규 = 코믹/위트 = → editorial_summary
   transitNote?: string; // 이전 장소에서 이 장소까지 이동 방법 (Gemini 생성)

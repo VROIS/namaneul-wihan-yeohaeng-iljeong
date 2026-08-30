@@ -1,4 +1,3 @@
-// 설정 및 계정 섹션 (입체감 3D 칼라 아이콘 서클 & 가득 채움 레이아웃)
 import React, { useState } from "react";
 import { View, Text, Pressable, Linking } from "react-native";
 import { Brand, Fonts } from "@/constants/theme";
@@ -11,13 +10,9 @@ import { PRIVACY } from "../privacyContent";
 import type { ProfileApi } from "../hooks/useProfile";
 
 // ⚠️ 수정금지(승인필요) 2026-08-08 사장님 지시 = 고객센터 대표 메일 = 이 상수 1벌.
-//   쓰는 곳 = 도움말 아코디언 '문의하기' + 개인정보 방침 §5. 두 곳에 손으로 적으면 갈라진다(§0).
 const SUPPORT_EMAIL = "vrois75015@gmail.com";
 
 // ⚠️ 수정금지(승인필요) 2026-08-14 사장님 SSOT = 크레딧 내역 DB description 은 장부용 한국어 그대로 둔다
-//   (server/credit-charge.ts CREDIT_LABELS = 사장님이 장부에서 바로 읽음, 서버 무변경).
-//   화면 표시만 = type(purchase/signup_bonus/usage) 먼저 보고, usage 안에서만 description 5개 고정값을 매칭한다
-//   (서버가 5개 차감 전부 type="usage" 로만 기록해 type 하나로는 못 가른다, server/creditService.ts useCredits 확인).
 const CREDIT_LABEL_TO_KEY: Record<string, string> = {
   "여정 생성": "credit.txRouteGenerate",
   "AI 의견": "credit.txAiOpinion",
@@ -34,8 +29,6 @@ function txLabel(
   return t(CREDIT_LABEL_TO_KEY[tx.description] || "credit.txPurchase");
 }
 
-// ❔ 도움말 FAQ 데이터 = helpFaq.ts 로 분리(2026-08-14, §0 700줄 초과 방지).
-
 export default function SettingsMenu({ profile }: { profile: ProfileApi }) {
   const {
     theme,
@@ -49,7 +42,6 @@ export default function SettingsMenu({ profile }: { profile: ProfileApi }) {
     credits,
     transactions,
     pricing,
-    // 회원 탈퇴 (2026-08-08) = 개인정보 보호 아코디언 안 [탈퇴]
     handleDeleteAccount,
     deletingAccount,
   } = profile;
@@ -57,15 +49,10 @@ export default function SettingsMenu({ profile }: { profile: ProfileApi }) {
   // 🌐 2026-08-14 사장님 승인 = 개인정보방침·FAQ 한/영 2벌 선택 기준(privacyContent.ts·helpFaq.ts 참조)
   const isKo = currentLang.code === "ko";
 
-  // 아코디언 및 언어 풀다운 드롭다운 상태
   const [expandedKey, setExpandedKey] = useState<string | null>(null);
   const [isLangDropdownOpen, setIsLangDropdownOpen] = useState<boolean>(false);
-  // 영수증 내역 펼침 = 결제 관리 아코디언 안에서만 쓰는 상태(2026-07-29 §9)
   const [showReceipts, setShowReceipts] = useState<boolean>(false);
 
-  // 최근 충전 1건 = 장부의 결제 줄(type='purchase') 중 최신. 서버가 최신순으로 주므로 첫 건.
-  //   날짜 서식 = 같은 폴더 utils.shortDateCard 재사용(§16). 여정 카드와 같은 서식이라 화면 안에서 갈리지 않는다.
-  //   (옛 toLocaleDateString 재발명 폐기 = 2026-07-29 §16 = 플랫폼마다 서식이 달라짐)
   const lastPurchase = transactions.find((tx) => tx.type === "purchase");
   const lastTopUp = lastPurchase
     ? t("credit.topUpDetail", {
@@ -73,7 +60,6 @@ export default function SettingsMenu({ profile }: { profile: ProfileApi }) {
         amount: lastPurchase.amount,
       })
     : t("credit.none");
-  // 충전 1회 금액·크레딧 = 서버 정본(GET /api/credits/pricing). 못 받았으면 그 문구만 생략(하드코딩 금지).
   const priceNote = pricing
     ? ` · ${t("credit.priceNote", { price: pricing.priceEur, credits: pricing.purchaseCredits })}`
     : "";

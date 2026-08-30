@@ -1,7 +1,4 @@
 // ⚠️ 수정금지(승인필요) 2026-07-13 사장님 SSOT = 현지 전문가 본인 프로필 편집(닉네임/경력/자기소개/캐릭터).
-//   전문가 탭 소개카드에 표시되는 값을 전문가(role=expert/admin)가 직접 수정. 저장 = PATCH /api/expert/profile.
-//   디자인 = 메인앱 토큰(Pretendard·Brand.primary·Lucide·이모지0). 모바일 = 고정헤더 + KeyboardAwareScrollViewCompat + SafeArea.
-//   자기 폴더 = 다른 파일 안 섞기(§16). API = expertApi.
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
@@ -40,7 +37,6 @@ export default function ExpertProfileEditScreen({ navigation }: any) {
     [],
   );
 
-  // 본인 프로필 프리필(리뷰 2026-07-13 = 공용 대표전문가 값이 아니라 로그인한 본인 값 = 전문가 다수 시 정체성 덮어쓰기 방지).
   useEffect(() => {
     getMyExpertProfile()
       .then(({ profile }) => {
@@ -204,7 +200,6 @@ export default function ExpertProfileEditScreen({ navigation }: any) {
   );
 }
 
-// 메인앱 토큰 동일: title 28 bold / inputBox = backgroundDefault·BorderRadius.md / Pretendard.
 const styles = StyleSheet.create({
   container: { flex: 1 },
   header: {

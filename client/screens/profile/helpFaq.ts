@@ -1,9 +1,4 @@
-// ❔ 도움말 FAQ 데이터 = SettingsMenu.tsx 분리(2026-08-14, §0 700줄 초과 방지 = 로직 0·순수 데이터만).
-//   실제 TRIPIS 기능 기준 재구성(2026-08-03 사장님 승인, 옛 '손안에 가이드' 문서 폐기 §19).
-//   icon = client/components/Icon.tsx ICON_MAP 에 이미 있는 이름만 사용(이모지 금지 = 사장님 지시).
 // 🌐 2026-08-14 사장님 승인 = 한/영 2벌 구조(비한국어권 전체 영어 공유) = privacyContent.ts 와 같은 패턴,
-//   사유는 utils.ts Bi 타입 주석 참조. 영문 버튼명([Plan]/[AI Opinion]/[Expert]/[Audio guide]/[Open route]/
-//   [Book now]/[Share Trip]/[Save to Calendar]/[Save])은 실제 로케일 en.json 값과 교차검증 완료.
 import type { Bi } from "./utils";
 
 export const FAQ_HEADING: Bi = {
@@ -19,7 +14,6 @@ export const HELP_FAQ: { icon: string; q: Bi; a: Bi }[] = [
       en: "What do the 5 buttons at the bottom of the app (Plan / AI Opinion / Expert / Profile / Tripis) do?",
     },
     // ⚠️ 2026-08-08 사장님 지시 = "회색으로" 삭제 §19. 실제 탭 라벨 색은 다른 탭과 같아(rgb(156,163,175)) 회색 처리가 없다.
-    //   회색 스타일을 새로 입히는 대신 사실과 다른 문구를 지운다(= 더 가벼운 해결).
     a: {
       ko: "[여정]에서 도시·날짜·스타일을 고르면 나만의 일정이 만들어져요. [AI 의견]과 [전문가 검증]은 만든 여정이 있어야 눌립니다(여정이 없으면 비활성화되는 게 정상이에요). [프로필]에서 내가 만든 여정·해설·영상을 다시 볼 수 있고, [Tripis]는 카메라로 여행지를 찍어 바로 해설을 받는 기능이에요.",
       en: "In [Plan], choose a city, dates, and style to build your own itinerary. [AI Opinion] and [Expert] only become active once you have a trip (it's normal for them to be disabled if you don't have one yet). In [Profile], you can revisit the trips, narrations, and videos you've created, and [Tripis] lets you snap a photo of a spot to get instant narration.",

@@ -1,10 +1,4 @@
-// ⚠️ 사장님 SSOT 2026-07-25(세션2) = 로그인 = 화면 상단에 뜨는 센터 모달(RN Modal). '내손앱'처럼 인앱 팝업이되,
-//   바텀시트(밑에서)는 키보드(밑에서)와 구조적 겹침 → 상단 모달로 교체(키보드 겹침 원천 차단, 조사: 범용앱+NN/G+Material).
-//   기존 LoginScreen(보관)의 폼을 그대로 담되(§16 재사용), 화면이동 대신 팝업 닫기(onDone)로 동작.
-//   상단 = 이미지 로고(png=iOS 미표시 버그) 제거 + "Tripis 트리피스" 글자 유지 + 슬로건 축소(넘침 방지).
-//   곁가지 제외(사장님 "메인앱만") = WhatsApp·BTS·언어선택 미포함.
 // ⚠️ 사장님 SSOT 2026-07-31 = **순서 = 생년월일 → 구글 → 카톡 → 애플(아이폰만) → 메일.**
-//   아미봉 인증창(BTSLandingScreen)과 **같은 순서·같은 기기분기 1벌**. 껍데기(색·배경)만 다르다.
 import React, { useEffect, useState } from "react";
 import {
   View,
@@ -27,13 +21,10 @@ import { useLogin } from "./hooks/useLogin";
 import { BIRTHDATE_REQUIRED } from "@shared/birthdate-policy";
 import { styles } from "./styles";
 
-// ⚠️ 폼 본문(useLogin 포함) = Modal 자식 = visible=false면 언마운트 → 재열림 시 useLogin state(생년월일·이메일·에러) 소멸 = 항상 깨끗(개인정보·상태 잔류 방지).
-//   닫혀있을 땐 useLogin의 카카오 웹 code useEffect·useGoogleAuthRequest도 안 돎 = LoginScreen(보관)과 카카오 code 이중소비 위험 제거.
 function LoginSheetForm({ onClose }: { onClose: () => void }) {
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? "light"];
 
-  // 로그인 성공 = 팝업만 닫음(배경 화면 유지, 화면 이동 X). 인증 반영은 saveAuth 가 자동으로 알림(§16).
   const login = useLogin({ onDone: onClose });
   const {
     t,
@@ -62,16 +53,11 @@ function LoginSheetForm({ onClose }: { onClose: () => void }) {
     handleEmailLogin,
   } = login;
 
-  // ⚠️ 사장님 SSOT 2026-07-26 = "생년월일 입력 → 연령대 표시된 상태" 여야 이메일 입력 가능.
-  //   연령대 배지(아래 isAdult && ageGroup)와 같은 조건 1벌 = 화면과 입력 제한이 항상 일치.
   // ⚠️ 수정금지(승인필요) 2026-08-24 사장님 승인 = 이메일 입력칸 사용 가능 조건 = 생년월일 정책 토글 1벌.
-  //   'optional'(현재) = **메일 하나로 로그인** = 생년월일과 무관하게 칸이 열린다(칸만 열고 눌러서 막는 눈가림 금지).
-  //   'required' = 옛 동작 = 생년월일(성인·연령대)이 있어야 칸이 열린다.
   const canUseEmail = !BIRTHDATE_REQUIRED || (isAdult && !!ageGroup);
   const busy = oauthLoading || emailLoading;
   const emailBtnDisabled = busy || !canUseEmail || !emailInput.trim();
   // ⚠️ 사장님 SSOT 2026-07-27(AOS 실기기) = 로그인 요청~응답 약 1초 동안 화면이 그대로라
-  //   "버그인가? 내가 잘못 눌렀나?" 하고 다시 누르게 됨. **진행 중임을 반드시 보여준다.**
 
   return (
     <ScrollView
@@ -124,7 +110,6 @@ function LoginSheetForm({ onClose }: { onClose: () => void }) {
               maxLength={2}
               textAlign="center"
               {...(Platform.OS === "web" && {
-                // 웹: type="number"는 선행 0 제거·숫자 변형 유발. text+inputMode로 정확한 입력 보장
                 type: "text",
                 inputMode: "numeric",
               })}
@@ -154,7 +139,6 @@ function LoginSheetForm({ onClose }: { onClose: () => void }) {
               maxLength={2}
               textAlign="center"
               {...(Platform.OS === "web" && {
-                // 웹: type="number"는 선행 0 제거·숫자 변형 유발
                 type: "text",
                 inputMode: "numeric",
               })}
@@ -185,7 +169,6 @@ function LoginSheetForm({ onClose }: { onClose: () => void }) {
               maxLength={4}
               textAlign="center"
               {...(Platform.OS === "web" && {
-                // 웹: type="number"는 선행 0 제거·숫자 변형 유발
                 type: "text",
                 inputMode: "numeric",
               })}
@@ -308,7 +291,6 @@ function LoginSheetForm({ onClose }: { onClose: () => void }) {
               autoCapitalize="none"
               keyboardType="email-address"
               // ⚠️ 사장님 SSOT 2026-07-26 = 생년월일(연령대 표시)이 먼저. 그 전엔 이메일 입력 자체를 막음
-              //   = 생년월일 우회 원천 차단. 조건 = 위 연령대 배지가 뜨는 조건과 동일(isAdult && ageGroup).
               editable={!busy && canUseEmail}
               returnKeyType="done"
               onSubmitEditing={handleEmailLogin}
@@ -338,8 +320,6 @@ function LoginSheetForm({ onClose }: { onClose: () => void }) {
   );
 }
 
-// 바깥 껍데기 = 신호 수신 + visible 관리 + 상단 고정 센터 모달(RN Modal).
-//   상단 정렬(flex-start) + dim(여정 흐리게=맥락 유지). 카드가 화면 위쪽(키보드 위)에 고정 = 키보드(하단)와 안 겹침 → KAV 불필요.
 export default function LoginSheet() {
   const { loginRequestedAt, clearLoginRequest } = useMapToggle();
   const { t } = useTranslation();
@@ -348,25 +328,18 @@ export default function LoginSheet() {
   const theme = Colors[colorScheme ?? "light"];
   const [visible, setVisible] = useState(() => {
     // ⚠️ 수정금지(승인필요) — 카카오 웹 로그인 복귀 버그 수정(2026-07-28 세션7, 실측 확정).
-    //   카카오는 팝업이 아니라 전체 페이지 리다이렉트라, 돌아올 때 앱이 통째로 새로고침되며
-    //   이 시트가 "닫힌 초기상태"로 리셋된다. 시트가 닫혀 있으면 안의 useLogin(카카오 code 처리)이
-    //   아예 마운트되지 않아 처리가 방치되고, 사용자가 다시 열어야만 그제서야 처리가 시작돼
-    //   "로그인 중…"에 갇힌 것처럼 보였다(Chrome DevTools 로 직접 재현·확정).
-    //   → 돌아온 시점(주소에 카카오 code 있음)이면 처음부터 열어서 즉시 처리가 시작되게 한다.
     if (Platform.OS === "web" && typeof window !== "undefined") {
       return new URLSearchParams(window.location.search).has("code");
     }
     return false;
   });
 
-  // loginRequestedAt 신호 수신 → 팝업 열기(AI의견·전문가 오버레이와 동일 패턴). 소비 후 clear(다음 요청 재실행 보장).
   useEffect(() => {
     if (!loginRequestedAt) return;
     setVisible(true);
     clearLoginRequest();
   }, [loginRequestedAt, clearLoginRequest]);
 
-  // 닫기(성공/취소 공통) = 팝업만 닫음. 인증 반영은 saveAuth 가 자동으로 알림(§0 두 벌 금지, 2026-07-27).
   const handleClose = () => setVisible(false);
 
   return (

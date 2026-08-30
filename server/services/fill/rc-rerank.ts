@@ -1,10 +1,3 @@
-// ⚠️ 영구 컴포넌트 2026-06-08 = 사용자 SSOT = 최종 랭킹 단일 권위체 = 순수 RC DESC NULLS LAST (Gemini 가랭킹 무시)
-// = "RC 가 순위 판단 기준 / RC 없으면 바닥 / RC 오면 회복" = 입력단(upsertPlace/문지기)은 rank 무시, 최종 확정은 여기서.
-// = 카테고리별 google_review_count 내림차순으로 rank 재확정. NULL/0 RC = NULLS LAST = 바닥 (추후 RC 확보 시 다음 rerank 에서 회복).
-// = (city_id, seed_category, rank) UNIQUE 충돌 회피 = rank=-id 임시 → 재계산. 트랜잭션 원자성([[feedback_transaction_atomicity]]).
-// = bts_army_zone / bts_merch_store = BTS 전용 특수(rank=1 고정) = 제외(보존).
-// 호출: npx tsx server/services/fill/rc-rerank.ts --city-id=19 [--apply]
-//   (--apply 없으면 = DRY = 변경예정 수 + hotspot/heritage TOP8 미리보기, 쓰기 0)
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -34,7 +27,6 @@ if (!cityId) {
   process.exit(1);
 }
 
-// ⚠️ 랭킹 정렬식 = 순수 RC DESC NULLS LAST + id (동률 안정). BTS 특수 카테고리 제외.
 const EXCLUDE = `seed_category NOT IN ('bts_army_zone','bts_merch_store')`;
 const ORDER = `google_review_count DESC NULLS LAST, id`;
 

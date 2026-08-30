@@ -9,9 +9,7 @@ import { registerAuthRoutes } from "./auth";
 import { registerBtsRoutes } from "./bts-routes";
 import { registerGuideRoutes } from "./guide-routes";
 import { registerExpertRoutes } from "./expert-routes"; // 전문가 문의 API (2026-07-13, docs/2026-07-13 전문가탭 구현계획.md)
-// ⚠️ 2026-07-15 = routes.ts(1,049줄) 500줄 가드 초과 슬림화 = 순수 이동(로직 변경 없음, §19) = server/*-routes.ts 4개 신설
 import { registerCityPlaceRoutes } from "./city-place-routes";
-// 여정 생성(유료 파이프라인) = 700줄 가드로 city-place-routes 에서 분리(2026-08-09 순수 이동)
 import { registerItineraryGenerateRoute } from "./itinerary-generate-route";
 import { registerItineraryRoutes } from "./itinerary-routes";
 import { registerVideoRoutes } from "./video-routes";
@@ -33,7 +31,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   const httpServer = createServer(app);
 
-  // 서버 시작 시 기본 데이터 자동 시드
   autoSeedDefaultData();
 
   return httpServer;

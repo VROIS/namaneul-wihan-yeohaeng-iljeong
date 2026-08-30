@@ -1,9 +1,4 @@
 // ⚠️ 수정금지(승인필요) 2026-06-02 = 발굴이 놓친 진짜 명소를 이름으로 직접 TS 보강 → upsertPlace
-// = manual-additions.ts 의 이름 → TS searchText(이름, ko, regionCode) → top1 → upsertPlace(priceOverwrite + tag 'ts-pool-{date}')
-// = 가격 = endPrice 상한 / CLOSED_PERMANENTLY = skip / dayZone='outskirt' (= 명소 외곽)
-// 호출:
-//   npx tsx .../12-ts-discover-pool/recover-by-name.ts --city-id=19 [--apply]
-//   (--apply 없으면 = dry-run = TS 결과만, 쓰기 0)
 import fs from "fs";
 import path from "path";
 import { fileURLToPath, pathToFileURL } from "url";
@@ -89,7 +84,6 @@ const hkm = (a: any, b: any) => {
     lng: parseFloat(city?.longitude) || 0,
   };
   // ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유 (= 직독 폐기). 발굴(이름복구) = 도시 있음 + 행 없음(false = 신규 발견).
-  // = 출입증(키이름·도시id·날짜·행없음) 검문 통과해야만 키 발급. 미달 = throw = 외부호출 불가.
   const { issueApiKey } = await import(
     pathToFileURL(path.join(ROOT, "server/services/shared/issue-api-key.ts"))
       .href
@@ -136,8 +130,6 @@ const hkm = (a: any, b: any) => {
       continue;
     }
     // ⚠️ 수정금지(승인필요) 2026-08-19 사장님 승인(§19) = price(현지통화→EUR 오독) 완전삭제.
-    //   Google priceRange 는 현지통화인데 환산 없이 그대로 읽어 EUR로 오인하던 근본버그
-    //   (서울 청계천 €80,400 실사고, ts-client.ts 와 동일 원인) = 가격은 Gemini만(§20).
     const dist = p.location
       ? Math.round(
           hkm(cityCenter, {

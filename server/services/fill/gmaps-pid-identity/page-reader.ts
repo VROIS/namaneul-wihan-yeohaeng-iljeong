@@ -1,5 +1,4 @@
 // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 승인 = §0 700줄 가드 = 폴더 분리(로직 무변경)
-// = gmaps-pid-identity 의 페이지 읽기 1벌 = Playwright 로 구글맵 공개 페이지(place_id 링크) 1장을 열어 동의창 해제 → h1·주소·카테고리·URL 좌표·리뷰수·별점·영업상태 추출. 관문·쓰기·보고 = gates.ts / apply.ts / report.ts.
 import type { Page } from "playwright";
 
 // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 지시 = 리뷰수 언어별 패턴. 실측 서울 hl=ko = 라벨이 "리뷰 46,716개"(숫자 뒤 단어 없음) 라 단어 없는 숫자 대체 로직이 별점 4.6 → 46 으로 오독(169행) = 그 대체 로직 폐기 = 2026-08-28. 숫자 = 정수(천 단위 구분 허용)만 = "4.6" 은 리뷰수 후보에서 제외.
@@ -9,11 +8,9 @@ const RC_AFTER_NUM_RE = new RegExp(
   "iu",
 );
 const RC_BEFORE_NUM_RE = new RegExp(`리뷰\\s*${RC_NUM}\\s*개`, "u");
-// 별점 = 라벨 맨 앞 소수 1자리("4.6 stars"/"4,6 estrellas") 또는 "별점 4.6"/"4.6점" 계열.
 const RATING_LEAD_RE = /^\s*(\d+[.,]\d)(?:\s|$)/;
 const RATING_WORD_RE =
   /(?:별점|평점|星|评分|評分|Bewertung|Note|Valoración|Calificación|Nota|Rating)\s*:?\s*(\d+[.,]\d)|(\d+[.,]\d)\s*점/i;
-// 별점 최종 대체 = 리뷰수 라벨이 아닌 라벨 안의 단독 소수 1자리(1.0~5.0, 앞뒤에 숫자·구분자 없음). 실측 서울 hl=ko DRY = 별점 라벨이 위 두 패턴에 안 잡혀 rating=null = 오독 거부(round(별점×10)) 가 무력화되므로 추가.
 const RATING_ANY_RE = /(?<![\d.,])([1-5][.,]\d)(?![\d.,])/;
 function parseRcNum(s: string): number | null {
   const n = Number(s.replace(/[^\d]/g, ""));
@@ -21,7 +18,6 @@ function parseRcNum(s: string): number | null {
 }
 const CONSENT_TITLE_RE =
   /Antes de ir|계속 이용하기 전에|Before you continue|Avant d'accéder|Bevor Sie|Prima di continuare|続行するには|继续|Sebelum/i;
-// 동의창 "모두 수락" 계열(hl 언어별) → 없으면 동의 form 첫 버튼(거부도 지도 진입은 됨 = 어느 쪽이든 인터스티셜 해제).
 const CONSENT_ACCEPT_SEL = [
   'button:has-text("Aceptar todo")',
   'button:has-text("Accepta-ho tot")',
@@ -76,7 +72,6 @@ async function dismissConsent(page: Page): Promise<boolean> {
   return !/consent\.google/.test(page.url());
 }
 
-// div.F7nice(별점 블록) 안 aria-label = "4.3 stars"(소수 1자리 = 별점) / "14,572 reviews"·"리뷰 46,716개"(정수 + 언어별 단어 = 리뷰수). 리뷰수 대체 = 블록 텍스트의 "(N)"(출처 text = 호출부에서 100 미만 거부). hasBox=false = 별점 블록 자체가 없음(리뷰 0 등).
 // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 지시 = 리뷰수는 단어 패턴(RC_AFTER_NUM_RE/RC_BEFORE_NUM_RE) 이 맞은 라벨에서만 = 별점 라벨은 리뷰수 후보에서 제외(서울 169행 4.6→46 오독 수리).
 async function readRatingBlock(page: Page): Promise<{
   hasBox: boolean;
@@ -110,7 +105,6 @@ async function readRatingBlock(page: Page): Promise<{
   let reviewCount: number | null = null;
   let rcSource: "aria" | "text" | null = null;
   for (const l of raw.labels) {
-    // 리뷰수 = 언어별 단어 패턴이 맞은 라벨만(정수). 별점 라벨("4.6 stars"/"별점 4.6")은 별점으로만.
     const rc = l.match(RC_AFTER_NUM_RE) || l.match(RC_BEFORE_NUM_RE);
     if (rc && reviewCount == null) {
       const n = parseRcNum(rc[1]);
@@ -131,7 +125,6 @@ async function readRatingBlock(page: Page): Promise<{
     }
   }
   if (reviewCount == null) {
-    // 대체 = 블록 본문 "(N)" = 정수만(소수 = 별점 = 제외). 출처 text = 호출부에서 100 미만 거부.
     const m = raw.text.match(/\((\d{1,3}(?:[.,\s\u00a0]\d{3})+|\d+)\)/u);
     if (m) {
       const n = parseRcNum(m[1]);
@@ -144,7 +137,6 @@ async function readRatingBlock(page: Page): Promise<{
   return { hasBox: true, rating, ratingNum, reviewCount, rcSource };
 }
 
-// 페이지 1장 = 동의 해제 → h1 대기(≤15s) → 1.5s 안정 → h1·주소·카테고리·리뷰수·별점·영업상태 추출. wantCoords = URL 에 @lat,lng 뜰 때까지 ≤8s 추가 대기(현지어 페이지만).
 export async function readPlacePage(
   page: Page,
   pid: string,
@@ -190,7 +182,6 @@ export async function readPlacePage(
     .getAttribute("aria-label", { timeout: 3000 })
     .catch(() => null);
   if (aria) {
-    // aria-label = "주소: ..." / "Dirección: ..." / "Address: ..." = 라벨 접두(첫 콜론까지) 제거
     const a = aria
       .replace(/^[^:]{1,24}:\s*/, "")
       .replace(/\s+/g, " ")
@@ -217,7 +208,6 @@ export async function readPlacePage(
   }
   let rb = await readRatingBlock(page);
   if (rb.hasBox && rb.reviewCount == null) {
-    // 별점 블록은 있는데 리뷰수 span 이 없음 = 동의 직후 첫 페이지의 축약 렌더(실측) = 1회 reload 로 정상 헤더 복구.
     await page.reload({ waitUntil: "domcontentloaded" }).catch(() => {});
     await page.waitForSelector("h1", { timeout: 15000 }).catch(() => {});
     await page.waitForTimeout(1500);
@@ -227,7 +217,6 @@ export async function readPlacePage(
   out.ratingNum = rb.ratingNum;
   out.reviewCount = rb.reviewCount;
   out.rcSource = rb.rcSource;
-  // 영업상태 = 장소 패널(div[role="main"]) 본문 문구. 패널 못 찾으면 body.
   const mainText =
     (await page
       .locator('div[role="main"]')

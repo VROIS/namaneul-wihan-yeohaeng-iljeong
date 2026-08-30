@@ -1,16 +1,4 @@
 // ⚠️ 수정금지(승인필요) = #45 = 식당+6cat 결손 완비 워크플로우 (사장님 SSOT 재작성 2026-06-16 = (가) 방식)
-// = 원칙(사장님 SSOT 2026-06-16): AI 는 시스템을 만들 일에 소설 쓰지 않는다 = 검증된 컴포넌트만 호출하는 얇은 진입점.
-//
-//   [1 추출]   그 시점 PSR 에서 SQL 로 대상 = 우리 id 목록 (= 라이브 재계산 X, 저장된 rank 그대로).
-//        풀 = 6cat TOP20(rank<=20) + 식당 가격대 30/90/30(band 내 rank 오름순), BTS 제외.
-//        결손 = 12요소 중 하나라도 빔 (이미지는 place-images 아니면 결손 = WK·인스타 교체 대상).
-//   [2 카피]   geminiCurate() (#07) = 최신 prompt.txt import = id 양방향 보존 = name_ko/summary_ko/editorial/price. 카테고리 안 줌.
-//   [3 이미지] relinkStorageImages() (= 결제된 고아 Storage 무료 재링크 = PM 누수 차단) → 남은 결손만 tsSearch+tsPhoto(관문) PM.
-//   [4 저장]   upsertPlace() (= DB 문지기 단일 진입점 = 7단계 매칭). 직접 SQL X. raw 2곳 저장 = 관문 자동(save-raw).
-//
-// 호출: npx tsx fillcity/repair.ts --city-id=19 [--only-id=N] [--apply]
-//   --apply 없으면 DRY (= 추출 + 결손분포 + PM 예상 출력, DB·Storage·외부호출 0).
-//   --only-id=N = 단일 행 격리 실증 (사장님 승인 2026-06-16). 미지정 시 전체 풀(기존 불변).
 //   #45 = 항상 band 30/90/30(=150) 단일. (사장님 SSOT "원복" 2026-06-21 §19·§16)
 import fs from "fs";
 import path from "path";
@@ -38,7 +26,6 @@ const cityId = Number(argv["city-id"] || 19);
 const apply = argv["apply"] === "true";
 // ⚠️ 수정금지(승인필요) = --only-id=N = 단일 행 격리 실증용 (사장님 승인 2026-06-16). 미지정 시 전체 풀(기존 동작 불변).
 // ⚠️ 수정금지(승인필요) 2026-08-18 사장님 승인(정규화) = --ids=a,b,c 정밀 타격 모드 = 노출 상위 구멍만 지정 수리
-//   (표준풀 안에서 id 목록으로 한정 = 외부호출 최소단위 단계실행). --only-id 는 --ids 1개짜리와 동일 처리로 흡수.
 const onlyIds: number[] | null = argv["ids"]
   ? String(argv["ids"])
       .split(",")
@@ -60,8 +47,6 @@ const SIXCAT_ALL = [
   "shopping",
 ];
 // ⚠️ 수정금지(승인필요) 2026-08-18 사장님 승인(스킬 조정 = 180규격·단계실행) = --cats=a,b 카테고리 선택 +
-//   --skip-restaurant 식당 제외. 미지정 = 기존 전체(불변). 사유 = 외부호출을 단계별 최소단위로 나눠
-//   전<>후 비교하며 실행(일괄 금지, 사장님 지시) + "식당 제외" 처방 도시(LA·토론토) 지원.
 const SIXCAT = argv["cats"]
   ? String(argv["cats"])
       .split(",")
@@ -96,12 +81,10 @@ const ANCHOR_M = 10; // ⚠️ 수정금지(승인필요) 2026-06-23 사장님 S
     console.error(`X city ${cityId} 미존재`);
     process.exit(1);
   }
-  // ⚠️ 2026-08-06 = 사진 저장 = R2(r2-client 단일 진입점). 옛 Supabase storageKey/supaPublicUrl 폐기 = Cloudflare 이전계획 1단계 §19.
   const { isR2Configured } = await import(
     pathToFileURL(path.join(ROOT, "server/services/shared/r2-client.ts")).href
   );
 
-  // [1 추출] = 그 시점 PSR SQL = 우리 id 목록 (= 12요소 결손 행). 풀 = 6cat TOP20 + 식당 30/90/30. BTS 제외.
   //   사장님 SSOT 2026-06-16 = 저장된 rank 그대로 추출(라이브 ROW_NUMBER 재계산 X = #45 가 RC 덮어써 풀 흔드는 옛 결함 차단).
   const rows = (
     await c.query(
@@ -206,8 +189,6 @@ const ANCHOR_M = 10; // ⚠️ 수정금지(승인필요) 2026-06-23 사장님 S
     return;
   }
 
-  // [2 Gemini 1차 덮어쓰기] = 결손 전부 = geminiCurate 1콜(배치) -> name_ko·summary·editorial·price.
-  //   사장님 SSOT = Gemini 먼저 = 다음 TS 검색 힌트 정확도 상승. id 양방향 보존(prompt.txt). 카테고리 안 줌(shopping null = 우리 저장단계).
   // ⚠️ 수정금지(승인필요) 2026-06-19 = Gemini 키 = 출입증 직독(채움 hasRow=true) = TS·PM 과 동일 방식 = process.env 우회 0.
   // 항상 순수 geminiCurate 외부호출. (사장님 SSOT "원복" 2026-06-21 §19)
   const geminiKey = await issueApiKey(
@@ -245,11 +226,8 @@ const ANCHOR_M = 10; // ⚠️ 수정금지(승인필요) 2026-06-23 사장님 S
     }
     const priceEur =
       r.seed_category === "shopping" ? null : (g.priceEur ?? null);
-    // ⚠️ 사장님 SSOT 2026-06-16 = 우리 id 직행 UPDATE (= 매칭 X). id=탄생 고유이름=불변 목적지 = 매칭(upsertPlace)이 다른 행으로 빗나감 방지. 신규 INSERT 없음.
     // ⚠️ 수정금지(승인필요) 2026-06-20 사장님 SSOT = 선별 금지 = Gemini 응답 전 필드 → 대응 컬럼 새 우선(COALESCE 새값,기존) 순서대로 덮어쓰기.
-    //   = Gemini만 주는 요소(name_local·distance·price)가 여기서 채워짐 / name_en 은 1차(뒤 TS displayName 이 최종 덮음). §14 새우선.
     // ⚠️ 수정금지(승인필요) 2026-08-17 사장님 승인 = try/catch 추가(아래 TS단계·374줄과 동일 패턴 재사용, §16) = 이 직행 UPDATE도
-    //   트리거([중복차단], 예: 다른 도시의 동명 장소와 불변5 충돌) 예외를 못 잡아 1행 문제로 전체 배치(218곳)가 죽던 결함 수정(2026-08-17 토론토 실행 실측).
     try {
       const u = await c.query(
         `UPDATE place_seed_raw SET
@@ -290,12 +268,9 @@ const ANCHOR_M = 10; // ⚠️ 수정금지(승인필요) 2026-06-23 사장님 S
     }
   }
 
-  // [3 TS] = 결손 전부 = tsSearch -> 9요소 검증·갱신(pid·uri·rc·좌표·주소·name_local·photoName).
-  //   사장님 SSOT = Gemini 갱신값 힌트로 TS 호출 = 정확 PID. TS 가 다른 PID 주면 = 우리 원 PID 오류 = upsertPlace(matcher PID veto 제거)가 교정.
   const { tsSearch, tsPhoto } = await import(
     pathToFileURL(path.join(ROOT, "server/services/shared/ts-client.ts")).href
   );
-  // (issueApiKey = 상단에서 1회 import = 출입증 단일 진입점 = Gemini·TS·PM 3단계 공유)
   let tsDone = 0;
   const tsByOurId = new Map<number, any>();
   // ⚠️ 수정금지(승인필요) 2026-06-19 사장님 SSOT = TS 산출물 = 06 형태 모음(건건 X 보여줌) = results 배열 1파일. photo_name 1개(photos[0]), 정제 9요소만.
@@ -368,13 +343,7 @@ const ANCHOR_M = 10; // ⚠️ 수정금지(승인필요) 2026-06-23 사장님 S
           business_status: t1.businessStatus,
         },
       });
-      // ⚠️ 사장님 SSOT 2026-06-16·2026-07-09 = 우리 id 직행 UPDATE = TS 전 응답값(PID 포함) 그대로 이 행에 덮음. PID 바뀌어도 id 불변 = 무조건 여기다. 매칭·중복재판별 X = 빗나감 X.
-      //   = dupOwner 선조회 폐기 2026-07-09 §19(사장님 SSOT "어디로 갈지 아는 id 에서 결손만 찾아 그 행으로 직행", ag3 와 통일): 추출[1]에서 이미 결손 행의 id 확정 → 여기선 그 id 에 결손만 직행으로 채움.
-      //     TS 가 준 PID 가 타도시 기존 행과 충돌하면(같은 장소가 이미 다른 도시에 있음) = 트리거(도시무관 불변1/2/4)가 EXCEPTION → 아래 바깥 try/catch(그 행만 스킵). 그 원행이 정답 = 이 결손행은 07-merge 병합 대상(§20).
       // ⚠️ 수정금지(승인필요) 2026-08-19 사장님 승인(엔진결함 근원수정) = 가격은 이 단계에서 절대 안 건드림.
-      //   = 가격의 유일한 정답 = 제미니 하나(§20 SSOT, 2026-08-10 5곳 통일에 이 파일이 빠져있던 구멍을
-      //     TsPlace.priceEur 필드 완전삭제로 원천봉쇄 = ts-client.ts 참조). TS 응답 전 필드 새우선 원칙(§14)은
-      //     price_eur 를 제외한 나머지 필드에 그대로 적용.
       const u = await c.query(
         `UPDATE place_seed_raw SET
         -- ⚠️ 수정금지(승인필요) — TS displayName→name_en (2026-06-17 사장님 SSOT) = name_local은 Gemini전용 (= TS displayName(영어)을 name_en 칸으로 직행 UPDATE)
@@ -417,7 +386,6 @@ const ANCHOR_M = 10; // ⚠️ 수정금지(승인필요) 2026-06-23 사장님 S
   }
 
   // ⚠️ 수정금지(승인필요) 2026-06-19 사장님 SSOT = TS 산출물 모음 1파일(06 형태로 통일) = 이 시점 시행된 모든 장소를 results 배열로(건건 X = 보여줌).
-  //   파일명 = 우리 표준(raw-filename.ts) = {날짜}_ts-defect-repair_candidates.json. 버전순번(versionedName) = 같은날 내용동일=덮어쓰기 / 다르면 _N.
   const { rawName, versionedName, rawHash } = await import(
     pathToFileURL(path.join(ROOT, "server/services/shared/raw-filename.ts"))
       .href
@@ -456,7 +424,6 @@ const ANCHOR_M = 10; // ⚠️ 수정금지(승인필요) 2026-06-23 사장님 S
     `[TS 산출물 모음] ${tsResults.length}곳 = ${tsOutPath} (= 06 형태 1파일, photo 1개)`,
   );
 
-  // [4 이미지 최종] = 무료 재링크(결제분 재활용=누수차단) -> 남은 결손만 PM(TS 가 준 photoName).
   const { relinkStorageImages } = await import(
     pathToFileURL(
       path.join(ROOT, "server/services/fill/storage-image-relink.ts"),

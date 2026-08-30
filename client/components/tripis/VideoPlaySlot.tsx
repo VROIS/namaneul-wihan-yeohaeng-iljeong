@@ -1,8 +1,4 @@
-// 🎬 숏폼 영상 본문 슬롯 = 앱 안에서 영상 재생·생성을 담당하는 **유일한 1벌**.
 //   옛 전용 화면(client/screens/video/) = 이 슬롯으로 본문이 옮겨온 뒤 호출자 0 = 완전삭제 2026-08-03 §19 사장님 승인.
-// = TripisModal(껍데기)에 끼워지는 콘텐츠: 3분기 = succeeded(재생 + 글라스 카드) / processing(진행률 % 3초 폴링) / 미생성(만들기).
-// = 생성 요청 함수는 껍데기(TripisModal) 소유 = 상단 버튼과 본문 버튼이 같은 함수 1벌(§0) → onGenerate 로 받는다.
-// = 폴링 결과는 onVideoByDay 로 껍데기 상태에 반영 = 칩·우측 버튼이 같은 데이터 1벌로 동기화.
 import React, { useState, useEffect, useRef } from "react";
 import {
   View,
@@ -17,7 +13,6 @@ import { apiRequest } from "@/lib/query-client";
 import { Icon } from "@/components/Icon";
 import { Brand, Fonts } from "@/constants/theme";
 
-// 일별 영상 상태 = GET /api/itineraries/:id/video 의 videoByDay 값 1건
 export interface DayVideo {
   status: "processing" | "succeeded" | "failed";
   url: string | null;
@@ -54,14 +49,12 @@ export default function VideoPlaySlot({
   const [pollTick, setPollTick] = useState(0); // 폴링 재가동 신호 = 네트워크 1회 오류에도 다음 폴링 이어감(§22 react-best)
   const pollRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // 언마운트(모달 닫힘·날짜 전환) = 폴링 완전 정리
   useEffect(() => {
     return () => {
       if (pollRef.current) clearTimeout(pollRef.current);
     };
   }, []);
 
-  // 생성중 = 3초 폴링 (진행률 %). pollTick = 응답 성공/실패와 무관하게 다음 폴링 예약(영구정지 방지)
   useEffect(() => {
     if (dayVideo?.status !== "processing") return;
     pollRef.current = setTimeout(async () => {
@@ -84,7 +77,6 @@ export default function VideoPlaySlot({
 
   // 기기 저장 기능 = 완전삭제 = 2026-08-01 사장님 §19 (이미 저장된 것을 보는 화면 = 더 저장할 곳 없음).
 
-  // 재생 위치 → 현재 씬 인덱스 (씬 길이 = 전체길이/씬수 = 동적, 글라스 카드 전환)
   const handlePlaybackStatus = (status: any) => {
     const scenes = dayVideo?.scenes;
     if (!status?.isLoaded || !scenes?.length || !status.durationMillis) return;
@@ -168,10 +160,8 @@ export default function VideoPlaySlot({
           </Text>
         </View>
       ) : canGenerate ? (
-        // 🎬 미생성(또는 실패) = 생성 버튼. 버튼 문구 = "영상 만들기"(§23) / 소요 시간은 안내문에.
         //   문구 = 2026-08-03 사장님 교체('지브리' 폐기 §19) + 60크레딧·4~5분·나가도 됨 = **크게** 표시.
         //   ⚠️ 만들 수 있는 자리에서만 그린다(2026-08-03 사장님) = 감상(도시 대표카드·프로필)에서는
-        //     남의 여정이라 만들 수 없다. 일별 영상 = 60크레딧이므로 헛 버튼을 보여주면 안 된다.
         <View style={styles.center}>
           <Icon name="film" size={56} color={Brand.primary} />
           <Text style={styles.introTitle}>
@@ -206,7 +196,6 @@ export default function VideoPlaySlot({
           </Pressable>
         </View>
       ) : (
-        // 감상 자리인데 그 날짜 영상이 아직 없음 = 만들 수 없으니 안내만(버튼 없음).
         <View style={styles.center}>
           <Icon name="film" size={56} color={Brand.primary} />
           <Text style={styles.introTitle}>
@@ -221,7 +210,6 @@ export default function VideoPlaySlot({
 const styles = StyleSheet.create({
   body: { flex: 1 },
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10 },
-  // 프레임(껍데기 9:16)이 크기·라운드·클리핑 담당 = 슬롯은 꽉 채우기만
   playerBox: { flex: 1 },
   player: { width: "100%", height: "100%" },
   // 글라스 카드(2026-07-23 사장님 v2) = 완전투명 유리 + 상단 배치. top 104 = 위 오버레이 칩줄 아래 자리

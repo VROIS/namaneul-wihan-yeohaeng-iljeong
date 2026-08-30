@@ -1,4 +1,3 @@
-// 한글 인코딩 깨진 데이터 수정 스크립트
 const fs = require("fs");
 const path = require("path");
 const { Pool } = require("pg");
@@ -19,7 +18,6 @@ async function fixEncodingWithSQL() {
   try {
     console.log("📦 exports 파일에서 데이터 로드 중...");
 
-    // YouTube 채널 데이터 로드
     const youtubeData = JSON.parse(
       fs.readFileSync(
         path.join(process.cwd(), "exports/youtube_channels.json"),
@@ -27,7 +25,6 @@ async function fixEncodingWithSQL() {
       ),
     );
 
-    // 블로그 소스 데이터 로드
     const blogData = JSON.parse(
       fs.readFileSync(
         path.join(process.cwd(), "exports/blog_sources.json"),
@@ -38,14 +35,12 @@ async function fixEncodingWithSQL() {
     console.log(`✅ YouTube 채널: ${youtubeData.length}개`);
     console.log(`✅ 블로그 소스: ${blogData.length}개`);
 
-    // 기존 데이터 삭제 후 재삽입
     console.log("\n🗑️ 기존 깨진 데이터 삭제 중...");
     await pool.query("DELETE FROM youtube_channels");
     await pool.query("DELETE FROM blog_sources");
 
     console.log("\n📝 올바른 한글 데이터 삽입 중...");
 
-    // YouTube 채널 삽입
     for (const channel of youtubeData) {
       await pool.query(
         `
@@ -77,7 +72,6 @@ async function fixEncodingWithSQL() {
     }
     console.log(`  ✅ YouTube 채널 ${youtubeData.length}개 삽입 완료`);
 
-    // 블로그 소스 삽입
     for (const blog of blogData) {
       await pool.query(
         `
@@ -106,7 +100,6 @@ async function fixEncodingWithSQL() {
     }
     console.log(`  ✅ 블로그 소스 ${blogData.length}개 삽입 완료`);
 
-    // 시퀀스 재설정
     const maxYoutubeId = Math.max(...youtubeData.map((c) => c.id));
     const maxBlogId = Math.max(...blogData.map((b) => b.id));
 

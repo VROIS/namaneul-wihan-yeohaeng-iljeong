@@ -1,16 +1,7 @@
-// 대중교통·우버X·우버블랙 요금 계산 = transport-pricing-service 분리(2026-07-16 §0 슬림화, 순수 이동)
-
 import { PARIS_TRANSIT_FARES, UBER_PARIS_FARES } from "./constants";
 import type { UberBlackComparison } from "./constants";
 import { round2 } from "./guide-pricing";
 
-// ===================================================================
-// 대중교통 비용 계산
-// ===================================================================
-
-/**
- * 대중교통 1인 1일 비용 (최적 패스 자동 선택)
- */
 export function calculateTransitPerPersonPerDay(
   dayCount: number,
   tripCount: number,
@@ -52,9 +43,6 @@ export function calculateTransitPerPersonPerDay(
   return { perPersonPerDay, method, details };
 }
 
-/**
- * UberX 1인 1일 비용 (Moderate에서 대중교통과 혼합)
- */
 export function calculateUberXDailyPerPerson(
   tripCount: number,
   companionCount: number,
@@ -71,7 +59,6 @@ export function calculateUberXDailyPerPerson(
   farePerTrip = Math.max(farePerTrip, fare.min_fare);
   farePerTrip = round2(farePerTrip);
 
-  // 우버는 차량 1대에 같이 탑승 → 총 요금을 인원으로 나눔
   const dailyTotal = round2(farePerTrip * tripCount);
   const perPersonPerDay = round2(dailyTotal / companionCount);
 
@@ -82,26 +69,6 @@ export function calculateUberXDailyPerPerson(
   };
 }
 
-// ===================================================================
-// 우버 블랙 시간제 비교 계산 (가이드와 동일 조건 비교)
-// ===================================================================
-
-/**
- * 우버블랙 시간제 요금 계산 (가이드와 공정 비교용)
- *
- * 💡 핵심 원칙:
- *   - 가이드처럼 하루 종일 사용 (가용시간 풀, 대기 포함)
- *   - 구간별 호출이 아니라, 시간제 대절 개념
- *   - 전체 가용시간(예: 09~21시=12시간) 동안:
- *     · 실제 이동 시간(driving) → 주행 요금 (km + min)
- *     · 대기 시간(waiting) → 대기 요금 (min 단위)
- *   - 센트 단위 정밀도 (€168.75)
- *   - 도시별 요금 적용 (현재: 파리, 향후 DB 확장)
- *
- * @param availableHours 사용자 가용시간 (startTime~endTime, 기본 8시간)
- * @param segments 실제 경로 데이터 (이동 거리/시간)
- * @param companionCount 인원수
- */
 export function calculateUberBlackHourly(
   availableHours: number,
   segments: { distanceKm: number; durationMin: number }[],
@@ -109,7 +76,6 @@ export function calculateUberBlackHourly(
 ): UberBlackComparison {
   const fare = UBER_PARIS_FARES.black;
 
-  // 실제 이동 거리/시간 합산
   let totalDrivingKm = 0;
   let totalDrivingMin = 0;
   for (const seg of segments) {
@@ -117,25 +83,15 @@ export function calculateUberBlackHourly(
     totalDrivingMin += seg.durationMin;
   }
 
-  // 전체 가용시간 (분)
   const totalAvailableMin = availableHours * 60;
 
-  // 대기 시간 = 가용시간 - 실제 이동시간 (가이드처럼 기다리는 시간도 요금에 포함)
   const waitingMin = Math.max(0, totalAvailableMin - totalDrivingMin);
 
-  // 우버블랙 시간제 요금:
-  // = 기본료 (1회만)
-  // + 주행 거리 요금 (실제 이동 km)
-  // + 주행 시간 요금 (실제 이동 min)
-  // + 대기 시간 요금 (대기 min × per-min 요금)
-  //
-  // ⚠️ 우버블랙은 대기시간도 분당 과금됨 (택시와 동일 원리)
   const drivingFare =
     totalDrivingKm * fare.perKm + totalDrivingMin * fare.perMin;
   const waitingFare = waitingMin * fare.perMin; // 대기 중에도 분당 과금
   const totalFare = round2(fare.base + drivingFare + waitingFare);
 
-  // 최소 요금 적용
   const finalFare = Math.max(totalFare, fare.min_fare);
   const perPersonPerDay = round2(finalFare / companionCount);
 
@@ -148,13 +104,9 @@ export function calculateUberBlackHourly(
   };
 }
 
-/**
- * @deprecated 구간별 합산 방식 → calculateUberBlackHourly 사용
- */
 export function calculateUberBlackForRoutes(
   segments: { distanceKm: number; durationMin: number }[],
   companionCount: number,
 ): UberBlackComparison {
-  // 기본 8시간으로 시간제 계산에 위임
   return calculateUberBlackHourly(8, segments, companionCount);
 }

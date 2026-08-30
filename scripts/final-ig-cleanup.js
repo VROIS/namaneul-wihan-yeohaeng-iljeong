@@ -1,7 +1,3 @@
-/**
- * Instagram hashtags 최종 정리
- */
-
 const { Client } = require("pg");
 require("dotenv").config();
 
@@ -12,7 +8,6 @@ async function cleanupIG() {
     await client.connect();
     console.log("DB connected\n");
 
-    // 중복 제거
     console.log("=== Remove duplicates ===");
     const dupResult = await client.query(`
       DELETE FROM instagram_hashtags
@@ -22,7 +17,6 @@ async function cleanupIG() {
     `);
     console.log("Removed " + dupResult.rowCount + " duplicates");
 
-    // 최종 확인
     console.log("\n=== Final instagram_hashtags ===");
     const all = await client.query(
       "SELECT id, hashtag, category FROM instagram_hashtags ORDER BY hashtag",

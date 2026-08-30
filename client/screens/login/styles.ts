@@ -1,4 +1,3 @@
-// 로그인 화면 스타일 = LoginScreen 분리(2026-07-15 §0 슬림화, 순수 이동)
 import { StyleSheet, Platform } from "react-native";
 import { Spacing, BorderRadius, Brand, Fonts } from "@/constants/theme";
 
@@ -7,21 +6,16 @@ export const styles = StyleSheet.create({
   flex: { flex: 1 },
   content: { paddingHorizontal: Spacing.xl },
 
-  /* ── 2026-07-25(세션2) 로그인 = 상단 센터 모달 ── */
-  // 오버레이 = 화면 전체, 카드를 상단(flex-start)에 = 키보드(하단)와 최대 이격.
   loginOverlay: {
     flex: 1,
     justifyContent: "flex-start",
     alignItems: "center",
   },
-  // dim = 뒤 여정 흐리게(맥락 유지) + 탭하면 닫기. 카드 뒤 전체.
   loginBackdrop: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: "rgba(0,0,0,0.4)",
   },
-  // 카드 = 상단에 뜨는 로그인 박스. marginTop은 컴포넌트에서 safe-area+여백 주입.
   // ⚠️ 사장님 SSOT 2026-07-25 = 상단 고정 + 슬로건 제거 = 콘텐츠(로고글자+생년월일+소셜3)가 스크롤 없이 이메일까지 다 보이되(maxHeight 60%),
-  //   키보드(하단 ~40%)와는 안 겹침(카드 하단이 키보드 위 = 아이폰12 기준 60%≈506pt ≤ 키보드위 508pt). 넘치는 소형기기만 내부 ScrollView.
   loginCard: {
     width: "92%",
     maxWidth: 480,
@@ -40,7 +34,6 @@ export const styles = StyleSheet.create({
     }),
   },
   // ⚠️ 수정금지(승인필요) 2026-08-19 사장님 승인 = zIndex 없어서 뒤에 그려지는 로그인폼 ScrollView가
-  //   이 버튼 영역의 터치를 가로채던 문제(형제요소 그리기순서, 로직버그 아님) 수정.
   loginCloseBtn: {
     position: "absolute",
     right: Spacing.md,
@@ -51,18 +44,15 @@ export const styles = StyleSheet.create({
     alignItems: "center",
     zIndex: 10,
   },
-  // 헤더 삭제(§23) = 본문이 카드 최상단부터. paddingTop md = X 버튼(우상단 절대위치)과 Tripis 글자 안 겹치는 최소 여백.
   loginCardBody: {
     paddingHorizontal: Spacing.xl,
     paddingTop: Spacing.md,
     paddingBottom: Spacing.md,
   },
-  // 브랜드존 = 최소화(로고 이미지 제거, Tripis 글자만). 상단 고정 카드라 여백 최소 = 삼성폰 키보드 위로 이격(사장님 SSOT).
   loginBrand: {
     alignItems: "center",
     paddingBottom: Spacing.xs,
   },
-  // LoginSheet 브랜드 = Tripis 글자행. tripisTitleRow(marginBottom 28)는 LoginScreen 전용이라 여기선 작은 간격으로 오버라이드(§0 화면별 분리).
   loginBrandTitleRow: {
     flexDirection: "row",
     alignItems: "baseline",
@@ -77,7 +67,6 @@ export const styles = StyleSheet.create({
     color: Brand.primary,
     lineHeight: 28,
   },
-  /* ── TRIPIS 통합 헤더 = 시안 tripia-onboarding.jsx:35-45 ── */
   tripisHeader: {
     alignItems: "center",
     paddingVertical: Spacing.xl,
@@ -115,14 +104,12 @@ export const styles = StyleSheet.create({
     color: "#1A1A1A",
   },
 
-  /* ── 구분선 ── */
   divider: {
     height: 1,
     marginBottom: Spacing.md,
     marginHorizontal: Spacing.xl,
   },
 
-  /* ── 폼 ── */
   formSection: { marginBottom: Spacing.sm },
   label: {
     fontSize: 13,
@@ -130,7 +117,6 @@ export const styles = StyleSheet.create({
     marginBottom: Spacing.xs,
     marginLeft: Spacing.xs,
   },
-  // 라벨 + "(필수 입력)" 한 줄 = baseline 정렬 행(LoginSheet 생년월일 전용, LoginScreen 무영향).
   labelRow: {
     flexDirection: "row",
     alignItems: "baseline",
@@ -178,7 +164,6 @@ export const styles = StyleSheet.create({
     width: "auto",
   },
   // ⚠️ 사장님 SSOT 2026-07-25 = 삼성폰(안드) TextInput 글자 위쪽 쏠림·잘림 버그 수정 = 세로중앙 강제.
-  //   textAlignVertical:center(안드 세로중앙) + paddingVertical:0(안드 기본 상하패딩 제거) + includeFontPadding:false(안드 폰트 위 여백 제거) = 40px 칸에서 "DD/MM/YYYY" 온전 표시. iOS는 원래 중앙이라 무해.
   dateInput: {
     fontSize: 18,
     fontFamily: Fonts.semiBold,
@@ -204,9 +189,7 @@ export const styles = StyleSheet.create({
     marginLeft: Spacing.xs,
   },
 
-  /* ── 소셜 버튼 ── */
   socialSection: { gap: Spacing.sm, paddingBottom: Spacing.sm },
-  // 개발단계 이메일 로그인(2026-07-14)
   emailLoginBox: { gap: Spacing.xs, marginTop: Spacing.sm },
   emailLoginLabel: {
     fontSize: 12,
@@ -275,8 +258,6 @@ export const styles = StyleSheet.create({
   googleIconText: { color: "#FFFFFF", fontSize: 14, fontFamily: Fonts.bold },
   googleButtonText: { fontSize: 16, fontFamily: Fonts.bold },
   // ⚠️ 수정금지(승인필요) 2026-07-31 사장님 지시 = 애플 로그인 버튼(아이폰 전용).
-  //   색·글자 = 애플이 정한 규격 그대로(검정 바탕 + 흰 글자). 애플은 자기 버튼 모양을 바꾸면
-  //   앱 심사에서 되돌려보낸다 = 임의로 색을 바꾸지 말 것.
   appleButton: { backgroundColor: "#000000" },
   appleIcon: {
     width: 24,
@@ -294,7 +275,6 @@ export const styles = StyleSheet.create({
     lineHeight: 18,
   },
 
-  /* ── 언어 모달 ── */
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
@@ -330,7 +310,6 @@ export const styles = StyleSheet.create({
   languageName: { fontSize: 16, fontWeight: "600" },
   languageSubname: { fontSize: 13, marginTop: 2 },
 
-  /* ── WhatsApp OTP 모달 ── */
   whatsappModalBody: {
     paddingHorizontal: Spacing.xl,
     paddingBottom: Spacing.xl,
@@ -351,10 +330,6 @@ export const styles = StyleSheet.create({
     justifyContent: "center",
   },
   // ⚠️ 사장님 SSOT 2026-07-27(AOS 실기기) = 로그인 처리 1초 동안 화면이 그대로라
-  //   "버그인가? 잘못 눌렀나" 하고 다시 누르는 오조작 유발 → 진행 중임을 **카드 안 한 줄**로 보여줌.
-  //   옛 덮개(오버레이) 방식 완전삭제 §19 = 배경색을 직접 칠하다 **밝은 모드에서 글자가 안 보였고**
-  //   (사장님 실기기, 우리 앱엔 다크모드 설정 자체가 없고 대부분 밝은 모드를 씀), 카드 높이까지 흔들었음.
-  //   여기선 배경을 안 칠하고 카드 위에 그대로 얹으므로 밝은/어두운 모드 양쪽 다 자동으로 읽힘.
   loginBusyRow: {
     flexDirection: "row",
     alignItems: "center",

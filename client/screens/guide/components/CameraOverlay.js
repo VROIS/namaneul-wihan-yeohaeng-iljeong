@@ -1,5 +1,4 @@
 // ⚠️ 수정금지(승인필요): 2026-04-03 네이티브 카메라 오버레이 — 삼성 Galaxy A35 하단 버튼 해결
-// WebView 위에 표시, 네이티브 TouchableOpacity로 버튼 렌더링 (WebView 이벤트 버그 우회)
 import React, { useRef, useState, useCallback } from 'react';
 import {
   View, StyleSheet, TouchableOpacity, Text, ActivityIndicator,
@@ -111,7 +110,6 @@ export default function CameraOverlay({ lang = 'ko', onCapture, onVoice, onUploa
     onArchive();
   }, 300);
 
-  // 카메라 권한 요청
   if (!permission?.granted) {
     return (
       <View style={[styles.container, styles.center]}>

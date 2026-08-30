@@ -21,7 +21,6 @@ export default function ShinyPillBanner() {
 
   const shimmerAnim = useRef(new Animated.Value(0)).current;
 
-  // ♾️ 1회에 멈추지 않고 멈춤 없이 100% 무한 지속 반복되는 빛줄기 시퀀스
   useEffect(() => {
     let active = true;
 

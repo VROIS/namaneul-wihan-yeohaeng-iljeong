@@ -1,12 +1,4 @@
 // ⚠️ 수정금지(승인필요) 2026-08-17 사장님 승인 = 05-restaurant-lean 실행 진입점 (= 3 호출 분할, 03/04 대칭 축소판)
-// = 호출 1 ECONOMIC(10) / 2 REASONABLE(30) / 3 PREMIUM_LUXURY(20) = 합계 60 (= 옛 03+04 합계 180 대비 대폭 축소)
-// = 도심·외곽 구분 없음(통합 50km 반경) = 03(도심전용)/04(외곽전용) 은 완전 보존, 극단 상황(대도시·식당결손) 전용.
-//
-// 호출:
-//   npx tsx fillcity/prompts/05-restaurant-lean/run.ts --city-id=19 [--year=2026]
-//
-// 산출물:
-//   docs/raw/{city_id}/{YYYY-MM-DD}_05-restaurant-lean_{tier}.json (= 날짜앞 표준, raw-filename.ts)
 import fs from "fs";
 import path from "path";
 import { fileURLToPath, pathToFileURL } from "url";

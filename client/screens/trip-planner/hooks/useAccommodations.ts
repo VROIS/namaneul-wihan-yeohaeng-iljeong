@@ -1,4 +1,3 @@
-// Day별 숙소 설정 + 동선 재최적화 = TripPlannerScreen 분리(2026-07-15 §0 슬림화, 순수 이동)
 import { useState } from "react";
 import { Alert } from "react-native";
 import { Itinerary, TripFormData, DayAccommodation } from "@/types/trip";
@@ -16,35 +15,23 @@ export function useAccommodations({
   formData: TripFormData;
   t: (key: string, opts?: any) => string;
 }) {
-  // 🏨 Day별 숙소 설정 상태
   const [dayAccommodations, setDayAccommodations] = useState<
     DayAccommodation[]
   >([]);
   const [hotelModalDay, setHotelModalDay] = useState<number | null>(null); // 🏨 숙소 설정 구글 위젯이 인라인으로 펼쳐진 Day (= 모달 폐기 §19, 토글 상태 재활용)
   const [isReoptimizing, setIsReoptimizing] = useState(false);
 
-  // 🏨 Day별 숙소 설정 → 동선 재최적화
   const handleSetDayAccommodation = async (
     day: number,
     place: PlaceSelection,
   ) => {
     // ⚠️ 2026-08-01 사장님 지시 = 마지막 슬롯이 고정된 여정(BTS 공연장)은 숙소 변경 금지.
-    //   사유(실측): 아래 재최적화(regenerate-day)는 **고정 슬롯을 모른다** → 그 날을 통째로 다시 짜면서
-    //   마지막에 있어야 할 공연장이 1번 자리에 20:00 으로 박혔다(스크린샷).
-    //   여기가 **판단 1벌의 원천**(§16) = 화면(DaySection 버튼 숨김)도 같은 값을 받아 쓴다.
-    //   ⚠️ 참고(결함 아님): 저장 여정을 프로필에서 복원하면 finalPlaceId 가 formData 에 안 실려 여기가 안 걸린다.
-    //     저장·복원이 어디서나 되는 것은 **정합**(인증 사용자 여정 = 어디서나 저장·열람, 사장님 SSOT).
-    //     남는 것은 그때 숙소를 바꾸면 재최적화가 고정 슬롯을 모른다는 점 하나뿐이고,
-    //     근본 해결 = regenerate-day 가 고정 슬롯을 알게 하는 것(이 커밋 범위 밖).
-    //     현재는 BTS 여정 저장(D10) 자체가 미배선이라 실제로 발생하지 않는다.
     if (formData.finalPlaceId) return;
     // 🏨 2026-08-13 사장님 확정 = 숙소변경은 **변경한 그날만** 적용(깃발·슬롯 동선 재정렬도 그날만, 다른 날 = 기존/도시중심 그대로).
-    //   옛 이후-Day 전파(A안) 폐기 = 2026-08-13 §19 (로컬호스트 실증: Day2 변경 시 Day3까지 재편성되던 결함).
     const targetDays = (itinerary?.days || [])
       .map((d) => d.day)
       .filter((dNum) => dNum === day);
 
-    // Day별 숙소 배열 = 변경한 그날만 새 숙소로 교체, 나머지 날은 그대로
     setDayAccommodations((prev) => {
       const kept = prev.filter((a) => a.day !== day);
       const applied: DayAccommodation[] = targetDays.map((dNum) => ({
@@ -57,7 +44,6 @@ export function useAccommodations({
       return [...kept, ...applied];
     });
 
-    // 서버에 동선 재최적화 요청 = 변경한 그날 1회(출발점 새숙소로 = 실시간 여정 갱신)
     if (itinerary && place.coords.lat && place.coords.lng) {
       setIsReoptimizing(true);
       try {
@@ -72,7 +58,6 @@ export function useAccommodations({
               accommodationCoords: place.coords,
               places: targetDay.places,
               // ⚠️ 수정금지(승인필요) 2026-08-14 사장님 SSOT = 이미 만든 여정의 값은 그 여정이 갖고 있다.
-              //   홈 폼(formData)은 신규 생성 전용 = 여기 보내지 않는다(복원하면 값이 어긋남).
               formData: {
                 travelStyle: itinerary.travelStyle,
                 mobilityStyle: itinerary.mobilityStyle,
@@ -92,7 +77,6 @@ export function useAccommodations({
             coords: place.coords,
             placeId: place.placeId,
           };
-          // itinerary의 해당 Day 업데이트 (각 Day 결과 즉시 반영 = 실시간)
           setItinerary((prev) => {
             if (!prev) return prev;
             const updatedDays = prev.days.map((d) =>

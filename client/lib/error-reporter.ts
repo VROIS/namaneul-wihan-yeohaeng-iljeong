@@ -1,6 +1,4 @@
 // ⚠️ 수정금지(승인필요) — 앱 에러 원격 리포터
-// 앱에서 발생하는 에러를 서버로 전송 → 서버가 파일로 저장 → AI가 읽어서 확인
-// 외부 서비스(Sentry 등) 없이 자체 구현
 
 const ERROR_ENDPOINT = __DEV__
   ? "http://192.168.1.23:8082/api/app-errors"
@@ -37,10 +35,8 @@ export function reportError(
 
   errorQueue.push(entry);
 
-  // 콘솔에도 출력
   console.error(`[AppError] ${entry.message}`, entry.component || "");
 
-  // 1초 디바운스 후 전송
   if (!flushTimer) {
     flushTimer = setTimeout(flushErrors, 1000);
   }
@@ -59,21 +55,17 @@ async function flushErrors() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ errors: batch }),
     });
-  } catch {
-    // 서버 연결 실패 시 무시 (로컬 콘솔에는 이미 출력됨)
-  }
+  } catch {}
 }
 
-// ⚠️ 수정금지(승인필요) — 글로벌 에러 핸들러 설치
+// ⚠️ 수정금지(승인필요) 2026-08-30 재확인 = 글로벌 에러 핸들러 설치
 export function installGlobalErrorHandler() {
-  // JS 에러
   const originalHandler = ErrorUtils?.getGlobalHandler?.();
   ErrorUtils?.setGlobalHandler?.((error: Error, isFatal?: boolean) => {
     reportError(error, { component: isFatal ? "FATAL" : "global" });
     originalHandler?.(error, isFatal);
   });
 
-  // Promise rejection
   const originalRejection = (globalThis as any)
     .__promiseRejectionTrackingOptions?.onUnhandled;
   if (typeof globalThis !== "undefined") {

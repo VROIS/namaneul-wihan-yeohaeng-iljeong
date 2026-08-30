@@ -1,8 +1,3 @@
-/**
- * DB에 누락된 컬럼 추가 스크립트
- * birth_date 등 schema.ts에 정의되어 있지만 실제 DB에 없는 컬럼 추가
- */
-
 import pg from "pg";
 
 const pool = new pg.Pool({
@@ -17,7 +12,6 @@ async function addMissingColumns() {
   try {
     console.log("🔧 누락된 컬럼 추가 시작...\n");
 
-    // users 테이블에 birth_date 컬럼 추가
     const columnsToAdd = [
       { table: "users", column: "birth_date", type: "TEXT" },
       {

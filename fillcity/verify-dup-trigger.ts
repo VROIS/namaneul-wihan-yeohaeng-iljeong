@@ -1,10 +1,4 @@
 // ⚠️ 수정금지(승인필요) 2026-06-24 사장님 SSOT = A 트리거(BEFORE INSERT OR UPDATE) 동작 검증 (직접접속 §16).
-//   = 전 테스트 = 트랜잭션 ROLLBACK = DB 무변경(비파괴). 4종:
-//     T1 정상 자기행 UPDATE(자기 PID 그대로) = EXCEPTION 안 남 = 통과해야 정상.
-//     T2 자기행 무관 컬럼 UPDATE(updated_at) = 통과.
-//     T3 기존 PID 로 다른 새 행 INSERT = EXCEPTION = 차단돼야 정상.
-//     T4 어떤 행에 '다른 행이 가진 PID' 직행 UPDATE = EXCEPTION = 차단돼야 정상(= B 가 막아야 할 경우).
-//   호출: npx tsx fillcity/verify-dup-trigger.ts --city-id=39
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -39,7 +33,6 @@ const cityId = Number(argv["city-id"] || 39);
     `=== A 트리거 검증 (city ${cityId}, 전부 ROLLBACK = DB 무변경) ===\n`,
   );
 
-  // 검증용 행 선정 = PID 있는 행 + 같은 PID 가진 중복쌍 1개
   const single = (
     await c.query(
       `SELECT id, google_place_id AS pid, name_en FROM place_seed_raw WHERE city_id=$1 AND google_place_id IS NOT NULL AND google_place_id<>'' ORDER BY id LIMIT 1`,
@@ -79,7 +72,6 @@ const cityId = Number(argv["city-id"] || 39);
   }
 
   const r: boolean[] = [];
-  // T1 = 정상 자기행 UPDATE = 자기 PID 그대로 재설정 = 자기행 제외로 통과해야 함
   r.push(
     await tx(
       `T1 정상 자기행 PID 재설정 id=${single.id}`,
@@ -92,7 +84,6 @@ const cityId = Number(argv["city-id"] || 39);
       false,
     ),
   );
-  // T2 = 무관 컬럼만 UPDATE = 통과
   r.push(
     await tx(
       `T2 자기행 updated_at UPDATE id=${single.id}`,
@@ -105,7 +96,6 @@ const cityId = Number(argv["city-id"] || 39);
       false,
     ),
   );
-  // T3 = 기존 PID 로 새 행 INSERT = 차단
   r.push(
     await tx(
       `T3 기존 PID 로 새 행 INSERT (pid=${single.pid})`,
@@ -118,7 +108,6 @@ const cityId = Number(argv["city-id"] || 39);
       true,
     ),
   );
-  // T4 = 다른 행이 가진 PID 를 어떤 행에 직행 UPDATE = 차단 (= B 가 선검사로 막아야 할 케이스)
   if (dupPair) {
     r.push(
       await tx(

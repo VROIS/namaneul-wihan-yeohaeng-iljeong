@@ -1,19 +1,11 @@
 // ⚠️ 수정금지(승인필요) — 2026-05-06 BTS Screen 4 카트 캐러셀 → 인앱 지도 (Web 직접 div + Native WebView)
-// 사용자 SSOT: docs/BTS_MASTERPLAN_v3.md Step 4
-// HERO 궤도 + 상세 섹션 = 절대 유지. 이 컴포넌트 = 카트 자리만 채움.
-// venue 마커 = 항상 표시 + 첫 카드 떼면 "BTS" 라벨 활성 (= 사용자 명시)
-// web 환경 = iframe X (= about:srcdoc/blob 둘 다 Google Maps tile 거부) → div + window.google 직접
-// native 환경 = react-native-webview
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, View, Platform } from "react-native";
 import { useTranslation } from "react-i18next";
 import { BTS_MAP_HTML, type BTSMapPlace } from "./bts-map-html";
 import type { BTSPlace } from "@/contexts/BTSContext";
 
-// ============================================================
 // ⚠️ 수정금지(승인필요) 2026-05-19 = COLORS + LUCIDE = 단일 SSOT bts-marker-svg.ts 로 분리
-// = 메인앱 placeholder + BTSPlaceMap 양쪽 import (= bundle-barrel-imports 가드)
-// ============================================================
 import { COLORS, LUCIDE } from "./bts-marker-svg";
 
 type Props = {
@@ -128,7 +120,6 @@ const MAP_STYLES = [
   },
 ];
 
-// Google Maps SDK 로드 = 페이지당 1 회 (= 모듈 레벨 promise)
 let sdkPromise: Promise<any> | null = null;
 function loadGoogleMaps(apiKey: string): Promise<any> {
   if (typeof window === "undefined") return Promise.reject("ssr");
@@ -155,9 +146,6 @@ function loadGoogleMaps(apiKey: string): Promise<any> {
   return sdkPromise;
 }
 
-// ============================================================
-// Web 분기 = 직접 div + Google Maps SDK (= iframe 미사용)
-// ============================================================
 function BTSPlaceMapWeb({
   selectedIds,
   apiKey,
@@ -175,9 +163,7 @@ function BTSPlaceMapWeb({
   const obsRef = useRef<{ io?: IntersectionObserver; ro?: ResizeObserver }>({});
   const [mapReady, setMapReady] = useState(false);
 
-  // SDK 로드 + map 인스턴스 생성 (= apiKey 변경 시 재생성)
   // ⚠️ 수정금지(승인필요) — 2026-05-06: ScrollView 안 mapSection 이 viewport 밖일 때 = init 시 container 0x0 = tile load X.
-  // → IntersectionObserver 으로 visible 진입 시 = google.maps.event.trigger(map, 'resize') 호출.
   useEffect(() => {
     if (!apiKey || !mapDivRef.current) return;
     let cancelled = false;
@@ -195,7 +181,6 @@ function BTSPlaceMapWeb({
         });
         setMapReady(true);
 
-        // viewport 진입 시 1 회 trigger resize → 그 후 disconnect (= 중복 발화 방지)
         try {
           const io = new IntersectionObserver(
             (entries) => {
@@ -212,7 +197,6 @@ function BTSPlaceMapWeb({
           );
           io.observe(mapDivRef.current as any);
           obsRef.current.io = io;
-          // ResizeObserver = container size 변경 (rAF 으로 debounce)
           let raf = 0;
           const ro = new ResizeObserver(() => {
             if (raf) cancelAnimationFrame(raf);
@@ -234,7 +218,6 @@ function BTSPlaceMapWeb({
     };
   }, [apiKey]);
 
-  // venue 마커 렌더 = 항상 표시. active = selectedIds.length >= 1 = "BTS" 라벨
   useEffect(() => {
     if (!mapReady || !mapRef.current) return;
     const w = window as any;
@@ -263,7 +246,6 @@ function BTSPlaceMapWeb({
     }
   }, [mapReady, venue, selectedIds.length, onMarkerPress]);
 
-  // 일반 마커 동기화 (= 카트에 담긴 카드 id 만 마커 노출)
   useEffect(() => {
     if (!mapReady || !mapRef.current) return;
     const w = window as any;
@@ -272,7 +254,6 @@ function BTSPlaceMapWeb({
     const want = new Set(selectedIds);
     const placesById: Record<number, BTSMapPlace> = {};
     for (const p of validPlaces) placesById[p.id] = p;
-    // 제거
     for (const idStr of Object.keys(markersRef.current)) {
       const id = Number(idStr);
       if (!want.has(id)) {
@@ -280,12 +261,10 @@ function BTSPlaceMapWeb({
         delete markersRef.current[id];
       }
     }
-    // 추가
     for (const id of selectedIds) {
       if (markersRef.current[id]) continue;
       const p = placesById[id];
       if (!p || p.latitude == null || p.longitude == null) continue;
-      // venue = 별도 처리 = 일반 마커 X
       if (venue && p.id === venue.id) continue;
       const m = new google.maps.Marker({
         position: { lat: Number(p.latitude), lng: Number(p.longitude) },
@@ -296,7 +275,6 @@ function BTSPlaceMapWeb({
       m.addListener("click", () => onMarkerPress(p.id));
       markersRef.current[id] = m;
     }
-    // fitBounds = venue + 마커들
     const ks = Object.keys(markersRef.current);
     let count = 0;
     const b = new google.maps.LatLngBounds();
@@ -317,7 +295,6 @@ function BTSPlaceMapWeb({
     }
   }, [mapReady, validPlaces, venue, selectedIds, onMarkerPress]);
 
-  // 도시 변경 (= venue 자체 변경) 시 = 모든 일반 마커 reset
   useEffect(() => {
     return () => {
       for (const idStr of Object.keys(markersRef.current)) {
@@ -347,9 +324,6 @@ function BTSPlaceMapWeb({
   );
 }
 
-// ============================================================
-// Native 분기 = react-native-webview
-// ============================================================
 function BTSPlaceMapNative(props: InternalProps) {
   const { WebView } =
     require("react-native-webview") as typeof import("react-native-webview");
@@ -372,7 +346,6 @@ function BTSPlaceMapNative(props: InternalProps) {
     [apiKey, i18n.language],
   );
 
-  // ⚠️ syncPlaces 가 syncMarkers 내장 호출 = 중복 inject 방지 위해 단일 effect.
   useEffect(() => {
     if (!mapReady) return;
     const payload = { places: validPlaces, venue, selectedIds };
@@ -425,9 +398,6 @@ function BTSPlaceMapNative(props: InternalProps) {
   );
 }
 
-// ============================================================
-// 메인 export = 플랫폼 분기 + validPlaces/venue 1 회 계산 (web/native 중복 제거)
-// ============================================================
 type InternalProps = Props & {
   mapPlaces: BTSMapPlace[];
   mapVenue: BTSMapPlace | null;

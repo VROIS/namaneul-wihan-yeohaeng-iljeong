@@ -1,6 +1,3 @@
-/**
- * itineraries 테이블에 video 관련 컬럼 추가
- */
 require("dotenv").config();
 const { Pool } = require("pg");
 
@@ -14,7 +11,6 @@ async function addVideoColumns() {
   try {
     console.log("🔗 Supabase 연결 성공");
 
-    // 컬럼 존재 여부 확인
     const checkResult = await client.query(`
       SELECT column_name 
       FROM information_schema.columns 
@@ -28,7 +24,6 @@ async function addVideoColumns() {
       existingColumns.length > 0 ? existingColumns.join(", ") : "없음",
     );
 
-    // 없는 컬럼만 추가
     if (!existingColumns.includes("video_task_id")) {
       await client.query(
         "ALTER TABLE itineraries ADD COLUMN video_task_id TEXT",

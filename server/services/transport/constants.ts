@@ -1,6 +1,3 @@
-// 교통비 타입·요금표·인터페이스 = transport-pricing-service 분리(2026-07-16 §0 슬림화, 순수 이동)
-
-// === 타입 정의 ===
 export type TransportType = "sedan" | "van" | "minibus" | "guide_only";
 export type MobilityStyle = "WalkMore" | "Moderate" | "Minimal";
 export type TravelStyle = "Luxury" | "Premium" | "Reasonable" | "Economic";
@@ -11,7 +8,6 @@ export type CompanionType =
   | "ExtendedFamily"
   | "Group";
 
-// === 파리 대중교통 실제 요금 (2026년 기준) ===
 export const PARIS_TRANSIT_FARES = {
   metro: {
     single: 2.15, // t+ 티켓 1장
@@ -27,7 +23,6 @@ export const PARIS_TRANSIT_FARES = {
   daily_trips_moderate: 6,
 };
 
-// === 우버 파리 요금 (2026년 기준) ===
 export const UBER_PARIS_FARES = {
   uberx: {
     base: 2.5,
@@ -52,7 +47,6 @@ export const UBER_PARIS_FARES = {
   avg_trip_min: 18,
 };
 
-// === 인원별 차량 타입 매핑 ===
 export const COMPANION_TO_TRANSPORT: Record<
   CompanionType,
   {
@@ -68,8 +62,6 @@ export const COMPANION_TO_TRANSPORT: Record<
   Group: { transportType: "minibus", maxCount: 20, defaultCount: 10 },
 };
 
-// === 기본 가이드 가격 (DB 조회 실패시 fallback) ===
-// basePrice4h = 기본 4시간 포함 가격, pricePerHour = 추가 시간당
 export const DEFAULT_PRICES: Record<
   TransportType,
   { basePrice4h: number; pricePerHour: number }
@@ -80,7 +72,6 @@ export const DEFAULT_PRICES: Record<
   guide_only: { basePrice4h: 0, pricePerHour: 50 },
 };
 
-// === 인터페이스 ===
 export interface TransportPriceInput {
   companionType: CompanionType;
   companionCount: number;
@@ -91,7 +82,6 @@ export interface TransportPriceInput {
   isRegionalTravel?: boolean; // 지방/도시간 이동 → +50% 할증
 }
 
-// 카테고리 A: 가이드 결과
 export interface GuidePriceResult {
   category: "guide";
   perPersonPerDay: number; // ⭐ 1인 1일 가격 (메인 표시)
@@ -107,7 +97,6 @@ export interface GuidePriceResult {
   notes: string[];
 }
 
-// 카테고리 B: 대중교통 결과
 export interface TransitPriceResult {
   category: "transit";
   perPersonPerDay: number; // ⭐ 1인 1일 가격 (메인 표시)
@@ -115,7 +104,6 @@ export interface TransitPriceResult {
   details: string; // 상세 설명
   dayCount: number;
   companionCount: number;
-  // 업셀: 가이드 이용시 가격
   guideUpsell: {
     perPersonPerDay: number;
     vehicleDescription: string;
@@ -124,7 +112,6 @@ export interface TransitPriceResult {
   notes: string[];
 }
 
-// 우버 블랙 비교 결과 (시간제 대절 기준)
 export interface UberBlackComparison {
   totalFare: number; // 하루 전체 우버블랙 요금 (센트 정밀도)
   perPersonPerDay: number; // 1인 1일 (메인 비교)
@@ -133,5 +120,4 @@ export interface UberBlackComparison {
   totalDurationMin: number; // 전체 가용시간 (이동+대기 포함)
 }
 
-// 통합 결과
 export type TransportPricingResult = GuidePriceResult | TransitPriceResult;

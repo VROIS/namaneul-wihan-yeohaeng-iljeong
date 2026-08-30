@@ -1,5 +1,3 @@
-// 문의 상세(ExpertInquiryDetailScreen 로직 인라인 §16) = 뒤로가기 = setView(home) / 여정 전체보기 = onOpenItinerary
-// ExpertSheet.tsx 분리(2026-07-15 §0 슬림화, 순수 이동, 리팩토링 금지).
 import React, { useState, useCallback, useRef, useEffect } from "react";
 import {
   View,
@@ -23,7 +21,6 @@ import {
 import { statusStyle } from "../statusStyle";
 import { styles } from "../styles";
 
-// 상세 말풍선 날짜 포맷(ExpertInquiryDetailScreen 그대로).
 function fmt(iso?: string | null): string {
   if (!iso) return "";
   const d = new Date(iso);

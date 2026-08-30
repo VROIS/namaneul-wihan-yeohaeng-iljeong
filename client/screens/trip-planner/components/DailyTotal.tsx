@@ -1,4 +1,3 @@
-// 일별 합계(입장료·식비·교통비) 섹션 = TripPlannerScreen 분리(2026-07-15 §0 슬림화, 순수 이동)
 // ⚠️ 수정금지(승인필요) 2026-07-24 사장님 승인 = 하단 2버튼(일별 동선 바로가기 + 바로 예약하기) = 드라이빙 가이드 여정 전용(핵심 비즈니스).
 import React, { useState } from "react";
 import {
@@ -22,7 +21,6 @@ import {
   type DayRouteEnd,
 } from "@/lib/openPlaceInMaps";
 
-// 이동 과다 경고 기준 = 당일 운전 6시간 초과(시뮬 실증: 좌표불량 일정 = 13~26시간으로 즉시 적발됨)
 const DAY_DRIVE_WARN_SEC = 6 * 3600;
 
 export default function DailyTotal({
@@ -33,7 +31,6 @@ export default function DailyTotal({
   planner: PlannerApi;
 }) {
   const { theme, t, itinerary, dayAccommodations, requestExpert } = planner;
-  // 백엔드 dailyCost에서 직접 읽기
   const dc = (currentDay as any)?.dailyCost;
   const td = (currentDay as any)?.transportDisplay;
   const entranceEur = dc?.breakdown?.entranceEur || 0;
@@ -42,7 +39,6 @@ export default function DailyTotal({
   const totalEur = dc?.perPersonEur || entranceEur + mealEur + transportEur;
 
   // ⚠️ 2026-07-24 사장님 SSOT = 버튼 노출 = 드라이빙 가이드 여정만. 판별 = metadata.transportCategory 단일 소스(§0 폴백 금지)
-  //   = 모든 파이프라인(DB-only ag4·MIX v3) 공통 방출 = DB 실측(i87~i107) 전 여정 존재. day 레벨 transportDisplay 는 db-only 미방출 = 판별 부적합(실측).
   const isGuide = (itinerary as any)?.metadata?.transportCategory === "guide";
 
   const [routeLoading, setRouteLoading] = useState(false);
@@ -52,10 +48,6 @@ export default function DailyTotal({
   } | null>(null);
 
   // [바로가기] = day-live 선처리 후 딥링크 노출(사장님 SSOT 2026-07-24).
-  //   ⚠️ 출발지+경유지+도착지 = 왕복(사장님 SSOT). 출발/도착(origin=destination):
-  //     - 숙소 변경시 = 숙소명+좌표+placeId.
-  //     - 미설정 = 도시명 텍스트(itinerary.destination) = 구글맵이 알아서 도시중심(좌표조회 불필요·견고).
-  //   경유지(waypoints) = 그날 슬롯(클릭 시점 순서). day-live 로 PID+이름 보충. 재정렬 안 함.
   const onOpenRoute = async () => {
     if (routeLoading) return;
     const accom =
@@ -72,7 +64,6 @@ export default function DailyTotal({
         googlePlaceId: (p as any).googlePlaceId,
       }));
     if (placeStops.length < 1) return;
-    // 출발/도착 = 숙소(변경시 좌표+placeId) ?? 도시명 텍스트(구글이 도시중심). 왕복 = origin==destination.
     const end: DayRouteEnd = accom?.coords
       ? {
           name: accom.name,
@@ -82,7 +73,6 @@ export default function DailyTotal({
         }
       : { name: cityName };
     if (!end.name?.trim() && typeof end.lat !== "number") return; // 도시명·숙소 둘 다 없음
-    // 숙소 변경시 = day-live 실소요 왕복 기준(좌표). 없으면 백엔드가 cityName 주소로.
     const accomBody = accom?.coords
       ? {
           lat: accom.coords.lat,
@@ -92,7 +82,6 @@ export default function DailyTotal({
         }
       : null;
     setRouteLoading(true);
-    // 웹 = 팝업차단 회피: 제스처 동기 시점 창 먼저 → 선처리 후 URL 주입
     const pre =
       Platform.OS === "web" && typeof window !== "undefined"
         ? window.open("", "_blank")
@@ -114,7 +103,6 @@ export default function DailyTotal({
       if (res.ok) {
         const data = await res.json();
         if (data.durationSec != null) setEta(data);
-        // 백엔드가 슬롯 PID+이름 보충 → 경유지 딥링크(주소 대신 장소명). 라벨은 place_id 있으면 구글 공식명(기기 언어).
         if (Array.isArray(data.stops) && data.stops.length >= 1) {
           const wps: DayRouteStop[] = data.stops.map((s: any) => ({
             name: s.nameEn || s.nameLocal || s.nameKo || null, // ⚠️ 2026-08-22 사장님 원칙 = nameEn 1순위
@@ -126,7 +114,6 @@ export default function DailyTotal({
         }
       }
     } catch {
-      // 선처리 실패 = 폴백 URL 로 오픈(기능 불중단)
     } finally {
       if (pre) pre.location.href = url || "about:blank";
       else if (url) openMapsUrl(url);

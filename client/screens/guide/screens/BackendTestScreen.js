@@ -1,6 +1,4 @@
 // ⚠️ 수정금지(승인필요): 백엔드 자율검증 화면
-// 앱 실행 시 자동으로 Gemma 4 백엔드 전체 검증
-// 검증 완료 후 제거 예정
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, StyleSheet, ActivityIndicator } from 'react-native';
 import * as Speech from 'expo-speech';
@@ -43,7 +41,6 @@ export default function BackendTestScreen() {
   }, []);
 
   async function runAllTests() {
-    // 1. 모델 URL 접근 확인
     updateTest('url', STATUS.RUNNING, '');
     try {
       const response = await fetch(CONFIG.MODEL.DOWNLOAD_URL, { method: 'HEAD' });
@@ -56,7 +53,6 @@ export default function BackendTestScreen() {
       updateTest('url', STATUS.FAIL, e.message);
     }
 
-    // 2. 모델 다운로드 상태
     updateTest('download', STATUS.RUNNING, '');
     try {
       const downloaded = await isModelDownloaded();
@@ -70,7 +66,6 @@ export default function BackendTestScreen() {
       updateTest('download', STATUS.FAIL, e.message);
     }
 
-    // 3. 네이티브 모듈 로딩
     updateTest('native', STATUS.RUNNING, '');
     try {
       const selfTest = await runSelfTest();
@@ -85,7 +80,6 @@ export default function BackendTestScreen() {
       updateTest('native', STATUS.FAIL, e.message);
     }
 
-    // 4. 엔진 초기화
     updateTest('engine', STATUS.RUNNING, '');
     try {
       const result = await initEngine(CONFIG.PROMPTS.GUIDE);
@@ -98,7 +92,6 @@ export default function BackendTestScreen() {
       updateTest('engine', STATUS.FAIL, e.message);
     }
 
-    // 5. 텍스트 추론
     updateTest('inference', STATUS.RUNNING, '');
     try {
       if (isEngineReady()) {
@@ -110,7 +103,6 @@ export default function BackendTestScreen() {
             onComplete: (fullText) => { response = fullText; resolve(); },
             onError: (error) => { reject(new Error(error)); },
           });
-          // 타임아웃 10초
           setTimeout(() => resolve(), 10000);
         });
         if (response) {
@@ -125,7 +117,6 @@ export default function BackendTestScreen() {
       updateTest('inference', STATUS.FAIL, e.message);
     }
 
-    // 6. TTS 음성 출력
     updateTest('tts', STATUS.RUNNING, '');
     try {
       await Speech.speak('자율 검증 완료', {

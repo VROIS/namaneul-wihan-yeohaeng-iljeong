@@ -1,10 +1,4 @@
 // ⚠️ 수정금지(승인필요) 2026-05-20 = 04-outskirt-restaurant 후처리 + DB INSERT
-// = docs/raw/{city_id}/{date}_04-outskirt-restaurant_{low,mid}.json 읽음 → upsertPlace() INSERT
-//
-// 호출:
-//   npx tsx fillcity/prompts/04-outskirt-restaurant/post-process.ts --city-id=19 [--dry]
-//
-// 정책 = §14 upsertPlace 단일 진입점 + 가격 COALESCE 새우선(최신최우선) + day_zone 강제 'outskirt'
 import fs from "fs";
 import path from "path";
 import { fileURLToPath, pathToFileURL } from "url";
@@ -90,7 +84,6 @@ if (!cityId) {
     `city_id = ${cityId}, low = ${low.length}, mid = ${mid.length}, 합계 = ${all.length}`,
   );
 
-  // 검증 = 외곽 강제 + 중복 방지
   const failed = all.filter(
     (p) =>
       !(p.distance_km_from_center > 10 && p.distance_km_from_center <= 100),
@@ -109,7 +102,6 @@ if (!cityId) {
     process.exit(0);
   }
 
-  // upsertPlace INSERT
   const { upsertPlace } = await import(
     pathToFileURL(path.join(ROOT, "server/services/place-upsert.ts")).href
   ); // ⚠️ 2026-06-08 = Windows ESM file:// 변환 (ERR_UNSUPPORTED_ESM_URL_SCHEME 수정, 01-discover/post 와 동일)
@@ -142,7 +134,6 @@ if (!cityId) {
         address: p.address || null,
         latitude: null, // = 본 prompt 응답 X
         longitude: null,
-        // ⚠️ 2026-06-12 카피 필드명 통폐합 = 응답 키 summary_ko/editorial_summary (= DB 컬럼명) 우선, 옛 raw fallback = 손실 0
         selectionReasonKo: p.summary_ko ?? p.selection_reason_ko ?? null,
         shortformKo: p.editorial_summary ?? p.shortform_ko ?? null,
         priceEur: p.price_eur ?? null, // COALESCE 새우선(최신최우선) 정책 (= §14)

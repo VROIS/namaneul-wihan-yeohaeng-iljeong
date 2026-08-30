@@ -1,13 +1,4 @@
-/**
- * ⚠️ 수정금지(승인필요) 2026-05-17 = 파리 DB-only 전환 3 단계 표준화 CLI
- *
- * 사용:
- *   npx tsx scripts/enrich-paris.ts                          # dry-run, batch=40, offset=0
- *   npx tsx scripts/enrich-paris.ts --batch=30 --offset=40   # 다음 batch
- *   npx tsx scripts/enrich-paris.ts --apply                  # DB UPDATE 진행 (= 사용자 명시 후만)
- *
- * = 헌법 §16 = 영구 컴포넌트 (= 다른 도시도 --city=N 으로 동일 호출 보장)
- */
+/** ⚠️ 수정금지(승인필요) 2026-05-17 = 파리 DB-only 전환 3 단계 표준화 CLI */
 
 import "dotenv/config";
 import * as fs from "fs";
@@ -32,7 +23,6 @@ function parseArgs(argv: string[]): CliArgs {
     else if (a.startsWith("--offset=")) args.offset = Number(a.slice(9));
     else if (a.startsWith("--output=")) args.output = a.slice(9);
   }
-  // 기본 출력 파일 = tmp/paris-enrich-batch-<offset>.json (= 사용자 IDE 열기용)
   if (!args.output) args.output = `tmp/paris-enrich-batch-${args.offset}.json`;
   return args;
 }
@@ -48,7 +38,6 @@ function parseArgs(argv: string[]): CliArgs {
   );
   console.log("═════════════════════════════════════════════════════════════");
 
-  // = 사용자 SSOT (= 2026-05-17) = "모든 키 = db api_keys 에 다 있음"
   const keysLoaded = await loadApiKeysFromDb();
   console.log(
     `[api_keys] loaded=${keysLoaded.loaded} skipped=${keysLoaded.skipped}`,
@@ -89,7 +78,6 @@ function parseArgs(argv: string[]): CliArgs {
     console.log("");
   }
 
-  // 파일 저장 (= 사용자 IDE 직접 열기용 = console tail 잘림 방지)
   if (args.output) {
     const outDir = path.dirname(args.output);
     if (outDir && !fs.existsSync(outDir))

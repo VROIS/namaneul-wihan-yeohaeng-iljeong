@@ -1,6 +1,3 @@
-// 개인정보 처리방침 = SettingsMenu.tsx 분리(2026-08-14, §0 슬림화 = 로직 0·순수 데이터만).
-//   한/영 2벌 구조 이유 = utils.ts Bi 타입 주석 참조(로케일 JSON 7벌 방식은 번들 용량만 늘고 절감 효과 없음).
-//   {email} = 렌더 시 SUPPORT_EMAIL 로 치환하는 리터럴 플레이스홀더(코드 아님, 문자열 그대로).
 import type { Bi } from "./utils";
 
 export const PRIVACY: Record<string, Bi> = {

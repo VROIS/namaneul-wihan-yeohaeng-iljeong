@@ -1,15 +1,3 @@
-/**
- * Credit Service
- *
- * 크레딧 관리 서비스:
- * - 잔액 조회
- * - 크레딧 충전 (구매)
- * - 크레딧 차감 (사용)
- * - 거래 내역 조회
- *
- * @created 2025-11-26
- */
-
 import { db } from "./db";
 import { users, creditTransactions } from "@shared/schema";
 import { eq, desc, sql, and, like } from "drizzle-orm";
@@ -17,10 +5,6 @@ import { notificationService } from "./notificationService";
 
 export const CREDIT_CONFIG = {
   // 🎁 2026-08-05 사장님 SSOT = 신규 가입 **50** 크레딧.
-  //   사유(사장님): 영상 생성 원가를 감당 못 한다. 보너스가 60 이상이면 신규 가입자가
-  //   **일별 영상(60크레딧 = 최대 10씬 × $0.35 ≈ $3.5)을 공짜로** 만들 수 있다.
-  //   50 = 영상은 충전해야만 가능 / 여정생성·AI의견·해설(각 5)·전문가검증(10)은 맛볼 수 있는 선.
-  //   옛 140 → 100 → 50 (앞의 두 값 폐기 §19).
   SIGNUP_BONUS: 50,
   PURCHASE_CREDITS: 140,
   PURCHASE_BONUS: 40,
@@ -49,8 +33,6 @@ export class CreditService {
   }
 
   // ⚠️ 수정금지(승인필요) 2026-07-30 = 장부 줄과 잔액을 **한 덩어리로** 처리한다.
-  //   왜: 둘이 따로 돌면 장부만 적힌 채 서버가 끊길 수 있고, 그러면 결제는 됐는데 잔액은 그대로인 상태가 굳는다
-  //   (재시도해도 같은 결제번호가 막혀 복구가 안 됨). 내손앱도 같은 이유로 한 덩어리였다 = 이식 때 빠뜨린 것 복원.
   async addCredits(
     userId: string,
     amount: number,
@@ -124,7 +106,6 @@ export class CreditService {
       return await this.getBalance(userId);
     }
 
-    // 🎁 2026-01-07: 프로모션 메시지 (기존: 10 크레딧)
     return await this.addCredits(
       userId,
       CREDIT_CONFIG.SIGNUP_BONUS,
@@ -132,8 +113,6 @@ export class CreditService {
       `신규 가입 보너스 ${CREDIT_CONFIG.SIGNUP_BONUS} 크레딧 🎁`,
     );
   }
-
-  // grantPromoBonus(기존가입자 프로모션 140) 삭제 = 호출부 0 + 옛 금액 하드코딩 = 2026-08-05 §19
 
   async grantQrCopyReward(userId: string): Promise<number> {
     const newBalance = await this.addCredits(
@@ -210,15 +189,11 @@ export class CreditService {
       .orderBy(desc(creditTransactions.createdAt))
       .limit(limit);
 
-    // 현재 잔액에서 역순으로 balance 계산
     const currentBalance = await this.getBalance(userId);
     let runningBalance = currentBalance;
 
-    // 최신순으로 정렬되어 있으므로, 최신 거래의 balance는 currentBalance
-    // 그 이전 거래의 balance는 해당 거래 amount를 빼서 계산
     const transactionsWithBalance = transactions.map((tx, index) => {
       const balance = runningBalance;
-      // 다음 (더 오래된) 거래의 balance 계산을 위해 현재 거래 amount 차감
       runningBalance = runningBalance - tx.amount;
       return { ...tx, balance };
     });

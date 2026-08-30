@@ -27,7 +27,6 @@ export default function GlassLightStickAuth({
 }: {
   onLoginComplete: () => void;
 }) {
-  // 인증창 단계: 0(초기 30% 밝기) -> 0.5(생년월일 완료, 50% 밝기) -> 1.0(로그인 클릭, 전체 100% 밝기)
   const progress = useSharedValue(0);
   const panelY = useSharedValue(height);
   const scale = useSharedValue(1);
@@ -35,13 +34,11 @@ export default function GlassLightStickAuth({
 
   const [dob, setDob] = useState("");
 
-  // 1단계: 암전 상태에서 아미봉 패널이 스르륵 밀려 올라옴
   useEffect(() => {
     panelY.value = withSpring(0, { damping: 16, stiffness: 90 });
   }, []);
 
   const handleDobChange = (text: string) => {
-    // DD/MM/YYYY 포맷 변환 로직
     let cleaned = text.replace(/[^0-9]/g, "");
     let formatted = "";
     if (cleaned.length > 0) formatted += cleaned.substring(0, 2);
@@ -50,7 +47,6 @@ export default function GlassLightStickAuth({
 
     setDob(formatted);
 
-    // 2단계: 생년월일(10자리) 완벽히 타이핑되면 50% 밝기로 예열 및 약한 Haptic 피드백 추가
     if (formatted.length === 10 && progress.value < 0.5) {
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       progress.value = withSpring(0.5, { damping: 12 });
@@ -66,14 +62,12 @@ export default function GlassLightStickAuth({
     }
     Keyboard.dismiss();
 
-    // 3단계: 소셜 로긴 누를 시 100% 점등, 터지는 듯한 느낌과 함께 화이트아웃
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     progress.value = withTiming(1.0, {
       duration: 450,
       easing: Easing.out(Easing.exp),
     });
 
-    // 4단계: 짧게 발광 후, 부드럽게 기존 SelectScreen 맵 및 홈으로 포커스 넘김
     setTimeout(() => {
       scale.value = withSpring(1.5, { damping: 14 });
       authOpacity.value = withTiming(0, { duration: 400 }, (finished) => {
@@ -85,8 +79,6 @@ export default function GlassLightStickAuth({
   };
 
   const animatedBackdrop = useAnimatedStyle(() => {
-    // 배경: progress에 따라 코발트 블루 -> 화이트아웃으로 변경
-    // A안과 동일한 색상 사용: #0B1026 (코발트 딥)
     const brightness = progress.value;
     return {
       backgroundColor: progress.value === 1.0 ? "#FFFFFF" : "#0B1026", // 코발트 블루 배경
@@ -95,7 +87,6 @@ export default function GlassLightStickAuth({
   });
 
   const animatedStick = useAnimatedStyle(() => {
-    // 아미봉의 글로우(Glow) 효과를 그리기 위한 쉐도우 컨트롤
     const shadowRad = 15 + progress.value * 80;
     const shadowOp = 0.1 + progress.value * 0.9;
 

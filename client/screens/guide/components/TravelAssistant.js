@@ -1,6 +1,4 @@
 // ⚠️ 수정금지(승인필요): 여행비서 UI — 통역/환율/SOS/메뉴판/위치
-// 버튼 클릭 → 음성 인사: "무엇을 도와드릴까요?"
-// 현지 비서 페르소나 — Gemma 4 Tool Calling으로 자동 기능 호출
 import React from 'react';
 import { View, TouchableOpacity, Text, StyleSheet, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';

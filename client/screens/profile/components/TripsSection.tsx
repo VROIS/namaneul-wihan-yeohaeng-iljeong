@@ -1,4 +1,3 @@
-// 나의 여정 섹션 (아이폰 12 화면 가득 채우는 풍성한 3D 카드 - 입체감 & 칼라)
 import React from "react";
 import {
   View,
@@ -12,10 +11,8 @@ import Icon from "@/components/Icon";
 import ThemedText from "@/components/ThemedText";
 import { styles, getResponsiveFullTripCardWidth } from "../styles";
 import { shortDateCard, summaryLineCard } from "../utils";
-// 도시명 표시 규칙 1벌(§16) = destinationEn(cities.name_en) 우선 → destination 폴백
 import { displayCityName } from "@/lib/display-city-name";
 import type { ProfileApi } from "../hooks/useProfile";
-// 숨김 이름표(종류:id) = 공용 1벌(§16). 목록·저장은 useProfile 이 1번만 부른다.
 import { cardKey } from "../hooks/useHiddenCards";
 
 export default function TripsSection({ profile }: { profile: ProfileApi }) {
@@ -25,22 +22,17 @@ export default function TripsSection({ profile }: { profile: ProfileApi }) {
     navigation,
     savedTrips,
     isLoadingTrips,
-    // 🏆 2026-08-02 = 대표 올리기(관리자 전용). 판정·호출은 useProfile 1벌, 여기는 그리기만.
     isAdmin,
     promotingTripId,
     handleSetRepresentative,
   } = profile;
 
   // ⚠️ 수정금지(승인필요) 2026-08-08 사장님 SSOT = X 는 **화면에서만 감춘다. DB 는 무조건 남는다.**
-  //   옛 handleDeleteTrip(DELETE /api/itineraries/:id = DB 영구삭제) 완전삭제 §19.
-  //   ⚠️ 훅을 여기서 직접 부르지 않는다(§22 판단검증) = useProfile 이 1번만 부른 것을 받아 쓴다.
-  //     각자 부르면 같은 저장소 열쇠를 서로 덮어써 여정 X → 영상 X 순서에서 앞의 숨김이 사라진다.
   const { hiddenKeys, hiddenReady, hideCard } = profile;
   const visibleTrips = savedTrips.filter(
     (tr) => !hiddenKeys.includes(cardKey("trip", String(tr.id))),
   );
 
-  // 아이폰 12 (390pt) 화면을 가득 채우는 넉넉하고 읽기 쉬운 카드 폭 (약 250pt)
   const fullCardWidth = getResponsiveFullTripCardWidth();
 
   return (
@@ -117,7 +109,6 @@ export default function TripsSection({ profile }: { profile: ProfileApi }) {
                   style={styles.cardRepBtnRich}
                   hitSlop={8}
                   disabled={promotingTripId === trip.id}
-                  // 아이콘뿐인 버튼 = 스크린리더용 이름 필수(2026-08-03 §22 판단검증)
                   accessibilityRole="button"
                   accessibilityLabel={
                     trip.status === "representative"

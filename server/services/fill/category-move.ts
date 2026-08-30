@@ -1,9 +1,3 @@
-// ⚠️ 영구 컴포넌트 2026-06-12 = 사용자 SSOT = 오분류 장소 = 맞는 카테고리로 이동 (= DELETE 절대 금지 = TS 유료자산 보존, [[feedback_never_discard_ts_data]])
-// = audit 으로 확정된 명시 이동만 (= 자동 휴리스틱 스캔 X = false-positive 로 멀쩡한 행 이동 위험, google_primary_type 은 393/408 NULL = 판별 불가)
-// = seed_category UPDATE + 이동처 rank = MAX(rank)+1 (= 데이터 보존 + 끝자리 배치 = RC 오면 rc-rerank 가 회복) + phase_tag 'recat-2026-06-12' 기록
-// = (city_id, seed_category, rank) UNIQUE 충돌 회피 = 이동처 MAX+1 = 안전. BTS 3종 = 제외(보존).
-// 호출: npx tsx server/services/fill/category-move.ts --city-id=37 [--apply]
-//   --apply 없으면 = DRY = 이동 예정 행 + 이동처 rank 미리보기, 쓰기 0.  외부호출 0 (로컬→DB).
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -33,9 +27,6 @@ if (!cityId) {
   process.exit(1);
 }
 
-// ⚠️ 명시 이동 목록 = audit(2026-06-12) 으로 확정된 오분류만. name_en 정확일치 매칭.
-//   = Movistar Arena(공연장 = restaurant rank2 오분류 = RC68K·가격NULL) → attraction
-//   = La Chinata(올리브 기념품점 = restaurant rank262 = PID없음·RC없음·가격없음) → shopping
 const MOVES: Record<number, { name: string; to: string }[]> = {
   37: [
     { name: "Movistar Arena", to: "attraction" },

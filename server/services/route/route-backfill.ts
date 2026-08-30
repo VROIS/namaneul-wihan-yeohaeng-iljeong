@@ -1,19 +1,9 @@
 // ⚠️ 수정금지(승인필요) 2026-05-26 = 사용자 SSOT = Gemini 응답값만 사용 = TS+PM 우회 백필 (= background)
-// = 헌법 §14 = upsertPlace() 단일 진입점 강제 (= 직접 INSERT 금지)
-// = 사용자 SSOT 2026-05-26: 백필 = background fire-and-forget = FE 응답 후
-// = 신규 식당 (= place_id="auto-*") = upsertPlace × N = 5 단계 매칭 자동
-// = 좌표 NULL 보정 = Gemini 응답 좌표 = upsertPlace UPDATE
-// = 시나리오 카피 (= subtitle_ko / narration_ko) 사용 제거 (= 동선 전용 = 본 필드 없음)
 
 import { upsertPlace } from "../place-upsert";
 import type { PlaceResult } from "../agents/types";
 import type { RouteResponse, RouteBackfillResult } from "./route-types";
 
-/**
- * Gemini 응답 → place_seed_raw 백필 (= background fire-and-forget)
- * = "auto-*" place_id = 신규 식당 = upsertPlace INSERT (= 매칭 0 시) / UPDATE (= 매칭 시)
- * = 활동 (= 입력 id) = Gemini 응답 좌표 = 옛 좌표 NULL 보정 (= upsertPlace UPDATE)
- */
 export async function backfillFromRoute(
   response: RouteResponse,
   cityId: number,
@@ -29,10 +19,8 @@ export async function backfillFromRoute(
 
   if (!response.days || response.days.length === 0) return summary;
 
-  // 입력 활동 lookup (= 좌표 보정 시 name_en 필요 + .has() 로 식별)
   const inputById = new Map(inputPlaces.map((p) => [p.id, p]));
 
-  // 일자 = 동일 = 1 회 계산 = 루프 hoist
   const phaseTagDate = `auto-route-${new Date().toISOString().slice(0, 10)}`;
 
   for (const day of response.days) {
@@ -42,7 +30,6 @@ export async function backfillFromRoute(
       const isInputActivity =
         !isAutoRestaurant && inputById.has(scene.place_id);
 
-      // 좌표 유효성 (= 0,0 무효 차단)
       const validCoord =
         scene.lat &&
         scene.lng &&
@@ -54,10 +41,6 @@ export async function backfillFromRoute(
         scene.lng <= 180;
 
       if (isAutoRestaurant) {
-        // ⚠️ 2026-05-26 = 사용자 SSOT = Gemini 응답 전체 그대로 입력 = 우리 조건 강제 X
-        // = name_en = 보조 이름 (= 추후 영어권 도시 자동 생성) = 강제 X
-        // = upsertPlace nameEn 자리 = name_en || name_local fallback (= 5 단계 매칭 자동 통과)
-        // = address + 좌표 (= 매칭 핵심) 만 강제
         const sceneName = scene.name_en || scene.name_local;
         if (!sceneName || !scene.address || !validCoord) {
           summary.skipped++;
@@ -78,7 +61,6 @@ export async function backfillFromRoute(
             latitude: scene.lat,
             longitude: scene.lng,
             priceEur: scene.price_eur ?? null,
-            // ⚠️ 2026-05-26 = 사용자 SSOT = PSR 컬럼 채움 (= 09-main-app-itinerary 표준 매핑)
             selectionReasonKo: scene.selection_reason_ko || null,
             shortformKo: scene.shortform_ko || null,
             categoryTags: ["restaurant"],
@@ -97,7 +79,6 @@ export async function backfillFromRoute(
           );
         }
       } else if (isInputActivity && validCoord) {
-        // 활동 = 옛 좌표 NULL/0 보정 (= Gemini grounding 좌표 = upsertPlace UPDATE)
         const inputPlace = inputById.get(scene.place_id);
         if (!inputPlace) continue;
         const oldInvalid =
@@ -133,7 +114,6 @@ export async function backfillFromRoute(
   console.log(
     `[Route-Backfill] ✅ ${summary.total}건 처리 = ${summary.inserted} INSERT / ${summary.updated} UPDATE / ${summary.skipped} skip`,
   );
-  // ⚠️ 2026-05-26 = errors 항상 출력 (= 디버깅 = 옛 5 제한 폐기)
   if (summary.errors.length > 0) {
     summary.errors
       .slice(0, 5)

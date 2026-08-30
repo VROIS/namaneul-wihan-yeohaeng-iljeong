@@ -1,11 +1,8 @@
 // ⚠️ 수정금지(승인필요): 프롬프트 서비스 — 기존 geminiService.js의 fetchPromptFromServer 클론
-// 서버에서 언어별/타입별 페르소나 프롬프트를 가져와 캐시
-// 관리자 대시보드에서 설정한 14개 프롬프트 (7언어 × 2타입)가 자동 반영됨
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 import { CONFIG } from "../config/constants";
 // ⚠️ 수정금지(승인필요) 2026-08-14 사장님 dev 실증 = 앱 공용 i18n 'zh' vs 이 파일 원래 'zh-CN' 키 불일치가
-//   중국어 TTS 음성이 엉뚱한 목소리(en-US 폴백)로 나오던 원인이었음. 정규화 함수 1벌 재사용(§16, translations.js 와 공용).
 import { normalizeLang } from "../i18n/translations";
 const BASE_URL = CONFIG.API.SERVER_URL;
 const CACHE_PREFIX = "prompt_";
@@ -15,31 +12,25 @@ const SUPPORTED_LANGS = ["ko", "en", "zh-CN", "ja", "fr", "de", "es"];
 const memoryCache = {};
 
 // ⚠️ 수정금지(승인필요): 서버에서 프롬프트 가져오기 + 캐시
-// 기존 geminiService.js:75-100 fetchPromptFromServer 클론
 export async function fetchPrompt(language, type) {
   const normalized = normalizeLang(language);
   const lang = SUPPORTED_LANGS.includes(normalized) ? normalized : "en";
   const cacheKey = `${lang}_${type}`;
 
-  // 1. 메모리 캐시 (앱 실행 중 즉시 반환)
   if (memoryCache[cacheKey]) {
     return memoryCache[cacheKey];
   }
 
-  // 2. AsyncStorage 캐시 (오프라인 대비)
   try {
     const stored = await AsyncStorage.getItem(CACHE_PREFIX + cacheKey);
     if (stored) {
       memoryCache[cacheKey] = stored;
-      // 백그라운드에서 서버 업데이트 (stale-while-revalidate)
       refreshFromServer(lang, type, cacheKey);
       return stored;
     }
   } catch {
-    /* 캐시 없으면 서버에서 */
   }
 
-  // 3. 서버에서 가져오기
   return await refreshFromServer(lang, type, cacheKey);
 }
 
@@ -66,10 +57,8 @@ async function refreshFromServer(language, type, cacheKey) {
 }
 
 // ⚠️ 수정금지(승인필요): 앱 시작 시 현재 언어의 프롬프트 미리 로딩
-// 기존 geminiService.js:225-231 preloadPrompts 클론
 export async function preloadPrompts(language) {
   // ⚠️ 수정금지(승인필요) 2026-08-14 사장님 승인 = 판단3종 적발(§22) = 이 함수만 정규화 누락 →
-  //   중국어('zh')가 'en'으로 프리로드되고 바로 뒤 fetchPrompt('zh')는 정규화돼 'zh-CN'으로 또 호출 = 캐시 낭비.
   const normalized = normalizeLang(language);
   const lang = SUPPORTED_LANGS.includes(normalized) ? normalized : "en";
   await Promise.all([fetchPrompt(lang, "image"), fetchPrompt(lang, "text")]);

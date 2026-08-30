@@ -20,7 +20,6 @@ async function main() {
 
   console.log("Parsing SQL file...");
 
-  // Collect all COPY statements
   const tables = [];
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];

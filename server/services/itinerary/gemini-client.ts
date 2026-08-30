@@ -1,7 +1,5 @@
-// Gemini AI 클라이언트 lazy 초기화 = itinerary-generator 분리(2026-07-15 §0 슬림화, 순수 이동)
 import { GoogleGenAI } from "@google/genai";
 
-// Lazy initialization - DB에서 API 키 로드 후 사용
 let ai: GoogleGenAI | null = null;
 
 export function getGeminiApiKey(): string {

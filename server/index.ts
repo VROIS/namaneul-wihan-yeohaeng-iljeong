@@ -9,7 +9,6 @@ import { db, isDatabaseConnected } from "./db";
 import { apiKeys } from "../shared/schema";
 import { isR2Configured } from "./services/shared/r2-client"; // 2026-08-07 사장님 승인 = 부팅 시 창고 열쇠 검사
 
-// 서버 크래시 방지: MCP/백그라운드 작업의 unhandled 에러가 프로세스를 죽이지 않도록
 process.on("uncaughtException", (err) => {
   console.error("[FATAL] uncaughtException (서버 유지):", err?.message || err);
 });
@@ -48,10 +47,8 @@ function setupCors(app: express.Application) {
   });
 }
 
-// JSON 응답에 UTF-8 charset 설정
 function setupCharset(app: express.Application) {
   app.use((req, res, next) => {
-    // JSON 응답시 charset=utf-8 자동 추가
     const originalJson = res.json.bind(res);
     res.json = (body) => {
       res.setHeader("Content-Type", "application/json; charset=utf-8");
@@ -64,7 +61,6 @@ function setupCharset(app: express.Application) {
 function setupBodyParsing(app: express.Application) {
   app.use(
     express.json({
-      // ⚠️ 2026-07-20 §12 = 가이드 미니앱 POST /api/gemini 가 카메라 사진 base64(수 MB) POST = 기본 100KB 초과 → 10mb 로 상향.
       limit: "10mb",
       verify: (req, _res, buf) => {
         req.rawBody = buf;
@@ -97,7 +93,6 @@ function setupAppErrorReporter(app: express.Application) {
     res.json({ ok: true, received: errors.length });
   });
 
-  // 에러 로그 읽기 (AI가 확인용)
   app.get("/api/app-errors", (_req: Request, res: Response) => {
     try {
       const content = fs.existsSync(errorLogPath)
@@ -109,7 +104,6 @@ function setupAppErrorReporter(app: express.Application) {
     }
   });
 
-  // 에러 로그 클리어
   app.delete("/api/app-errors", (_req: Request, res: Response) => {
     try {
       fs.writeFileSync(errorLogPath, "", "utf-8");
@@ -165,7 +159,6 @@ function getAppName(): string {
 }
 
 // ⚠️ 수정금지(승인필요) — Replit에서 expo.sisko.replit.dev 도메인이 port 5000(Express)으로 라우팅됨.
-// Expo Go 요청(expo-platform 헤더, .bundle 경로, HMR WebSocket)을 Metro(port 8081)로 프록시.
 const metroProxy = createProxyMiddleware({
   target: "http://localhost:8081",
   changeOrigin: false,
@@ -184,7 +177,6 @@ const metroProxy = createProxyMiddleware({
 
 function configureExpoAndLanding(app: express.Application) {
   // ⚠️ 수정금지(승인필요) — Expo Go 네이티브 요청을 Metro(8081)로 프록시
-  // expo-platform 헤더가 있는 요청 = Expo Go 네이티브 앱
   app.use((req: Request, res: Response, next: NextFunction) => {
     if (req.path.startsWith("/api")) return next();
     const platform = req.header("expo-platform");
@@ -209,18 +201,15 @@ function configureExpoAndLanding(app: express.Application) {
     next();
   });
 
-  // public 폴더 서빙 (robots.txt 등 정적 파일 — dist 재빌드에 영향받지 않음)
   const publicPath = path.resolve(process.cwd(), "public");
   if (fs.existsSync(publicPath)) {
     app.use(express.static(publicPath));
   }
 
-  // Expo 웹 빌드 서빙 (dist 폴더)
   // ⚠️ 수정금지(승인필요) — 웹 빌드 전용, 네이티브 앱과 무관
   const distPath = path.resolve(process.cwd(), "dist");
   if (fs.existsSync(distPath)) {
     app.use(express.static(distPath));
-    // SPA 라우팅: 모든 경로에서 index.html 반환 (단, /admin, /api 제외)
     app.get("*", (req, res, next) => {
       if (req.path.startsWith("/api")) return next();
       if (req.path.startsWith("/admin")) return next();
@@ -234,7 +223,6 @@ function configureExpoAndLanding(app: express.Application) {
     log("✅ Serving Expo web build from /dist");
   } else {
     // ⚠️ 수정금지(승인필요) — dev fallback: /dist 없으면 Metro(8081)로 프록시하여 dev bundle + 에셋 서빙
-    // API(/api, /admin)만 제외. /assets 는 Metro가 ?unstable_path 쿼리로 처리하므로 프록시 포함. 2026-04-17 추가
     app.use((req: Request, res: Response, next: NextFunction) => {
       if (req.path.startsWith("/api")) return next();
       if (req.path.startsWith("/admin")) return next();
@@ -309,7 +297,6 @@ function setupErrorHandler(app: express.Application) {
     log(`express server serving on port ${port}`);
 
     // ⚠️ 2026-08-07 사장님 승인 = R2 창고 열쇠 부팅 검사 = 미등록 배포가 조용히 지나가는 것 원천 차단
-    //   (런던 121 사고 = Replit Secrets 누락 배포 → 유료 6씬 생성 후 저장 단계 사망. 이 배너가 그 침묵을 깬다.)
     if (isR2Configured()) {
       log("✅ R2 창고 연결 확인 (열쇠 5종 등록됨)");
     } else {
@@ -320,7 +307,6 @@ function setupErrorHandler(app: express.Application) {
       );
     }
 
-    // DB 마이그레이션 (mcp_phases 등 누락 컬럼 자동 추가)
     try {
       const { runStartupMigrations } = await import("./run-startup-migrations");
       await runStartupMigrations();
@@ -328,18 +314,14 @@ function setupErrorHandler(app: express.Application) {
       log("[Server] Startup migration skip:", (e as Error).message);
     }
 
-    // DB에서 API 키 로드
     try {
       if (isDatabaseConnected() && db) {
         const keys = await db.select().from(apiKeys);
         let loadedCount = 0;
         for (const key of keys) {
           if (key.keyValue && key.keyValue.trim() !== "" && key.isActive) {
-            // ⚠️ 2026-07-27 §16 = 붙여넣기 때 딸려오는 줄바꿈·공백을 **여기서 한 번만** 깎는다.
-            //   아래 모든 대입이 이 값을 쓰므로 열쇠 종류에 상관없이 다 걸린다(카카오 KOE101 사고 근본).
             const value = key.keyValue.trim();
             process.env[key.keyName] = value;
-            // 추가 매핑 (서비스별 env 변수명)
             if (key.keyName === "GEMINI_API_KEY") {
               process.env.AI_INTEGRATIONS_GEMINI_API_KEY = value;
             }
@@ -385,16 +367,11 @@ function setupErrorHandler(app: express.Application) {
     }
 
     try {
-      // ✅ [2026-02-08] 스케줄러 복구 - 비용 보호 적용 완료:
-      // - place_seed_sync만 차단 (Google Places API 폭탄 주범)
-      // - Gemini Google Search 일일 160건 제한 (무료 범위 유지)
-      // - 나머지 13개 크롤러는 안전하게 운영
       const { dataScheduler } = await import("./services/data-scheduler");
       await dataScheduler.initialize();
       log("[Server] ✅ Data scheduler initialized");
 
       // 💳 2026-08-12 사장님 승인 = 결제 자가치유(웹훅 구독 보증 + 원장 대조 회수) = 부팅마다 1회.
-      //   api_keys 로드 뒤(STRIPE 키 준비 후)라야 함 = 이 자리. 실패해도 서버는 뜬다(함수 안에서 삼킴).
       const { initPaymentSelfHeal } = await import("./payment-routes");
       void initPaymentSelfHeal();
     } catch (error) {

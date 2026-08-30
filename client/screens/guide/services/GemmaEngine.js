@@ -1,6 +1,4 @@
 // ⚠️ 수정금지(승인필요): Gemma 4 E2B 온디바이스 AI 엔진
-// LiteRT-LM Kotlin Native Module 브릿지를 통해 온디바이스 추론
-// API 키 불필요 — 폰에서 직접 구동
 import { Platform } from 'react-native';
 import { CONFIG } from '../config/constants';
 import { isModelDownloaded, getModelPath } from './ModelDownloader';
@@ -8,7 +6,6 @@ import { isModelDownloaded, getModelPath } from './ModelDownloader';
 // ⚠️ 수정금지(승인필요): 네이티브 모듈 import (litert-bridge 패키지)
 let LitertBridge = null;
 try {
-  // expo-modules-api로 생성된 네이티브 모듈
   LitertBridge = require('../../litert-bridge/src').default;
 } catch (e) {
   console.warn('[GemmaEngine] 네이티브 모듈 로딩 실패:', e.message);
@@ -64,13 +61,11 @@ export async function initEngine(systemPrompt) {
 }
 
 // ⚠️ 수정금지(승인필요): 텍스트 + 이미지 멀티모달 추론 (async generator)
-// useAI.js에서 for await (const token of sendMessage(...)) 형태로 호출
 export async function* sendMessage({ text, imageBase64, systemPrompt }) {
   if (!LitertBridge || !isEngineReady()) {
     throw new Error('FALLBACK_TO_ONLINE');
   }
 
-  // Promise + 이벤트 기반 → async generator 변환
   const tokens = [];
   let done = false;
   let error = null;
@@ -79,19 +74,15 @@ export async function* sendMessage({ text, imageBase64, systemPrompt }) {
   onCompleteCallback = () => { done = true; };
   onErrorCallback = (err) => { error = err; done = true; };
 
-  // 네이티브 모듈에 전송 시작 (비동기 — 토큰은 이벤트로 수신)
   LitertBridge.sendMessage(text || '', imageBase64 || '');
 
-  // 토큰이 올 때까지 대기하며 yield
   while (!done) {
     if (tokens.length > 0) {
       yield tokens.shift();
     } else {
-      // 10ms 대기 후 다시 확인
       await new Promise(r => setTimeout(r, 10));
     }
   }
-  // 남은 토큰 모두 yield
   while (tokens.length > 0) {
     yield tokens.shift();
   }

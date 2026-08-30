@@ -10,7 +10,6 @@ import {
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
-// 📱 아이폰 12 (390pt) 화면을 가득 채우는 풍성한 가로 스크롤 카드 폭 계산 (250pt)
 export const getResponsiveFullTripCardWidth = () => {
   return Math.min(270, Math.max(220, Math.floor(SCREEN_WIDTH * 0.65)));
 };
@@ -20,7 +19,6 @@ export const getResponsiveFullVideoCardWidth = () => {
 };
 
 export const styles = StyleSheet.create({
-  // 👤 3D 입체 프로필 헤더 카드 (슬림 초슬림 컴팩트 1섹션)
   profileCard: {
     alignItems: "center",
     marginBottom: 10,
@@ -72,7 +70,6 @@ export const styles = StyleSheet.create({
     color: "#64748B",
     marginTop: 1,
   },
-  // 💳 초슬림 3D 1줄 크레딧 카드 (높이 34px)
   creditCardCompact: {
     width: "100%",
     paddingHorizontal: 12,
@@ -134,7 +131,6 @@ export const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: Fonts.bold,
   },
-  // 🏷️ 섹션 영역 (아이폰 12 가득 채움)
   section: {
     marginBottom: 24,
     width: "100%",
@@ -167,7 +163,6 @@ export const styles = StyleSheet.create({
     paddingVertical: 3,
     borderRadius: BorderRadius.full,
   },
-  // 🗂️ 나의 여정 풍성한 3D 입체 카드 (아이폰 12 가득 채움)
   loadingContainer: {
     flexDirection: "row",
     alignItems: "center",
@@ -220,7 +215,6 @@ export const styles = StyleSheet.create({
     alignItems: "center",
     zIndex: 10,
   },
-  // 🏆 2026-08-02 = 대표 올리기 별(관리자에게만 렌더). 크기·알약은 cardDeleteBtnRich 값 그대로(새 모양 안 만듦).
   //   ⚠️ 2026-08-12 사장님 확정 = 별을 **왼쪽 상단**으로 = X(오른쪽 상단)와 붙어 있어 오터치가 났다(옛 right:40 폐기 §19).
   cardRepBtnRich: {
     position: "absolute",
@@ -269,7 +263,6 @@ export const styles = StyleSheet.create({
     color: "#475569",
     lineHeight: 17,
   },
-  // 🎬 나의 숏폼 영상 입체 3D 카드
   videoCardRich: {
     aspectRatio: 9 / 16,
     borderRadius: 20,
@@ -319,7 +312,6 @@ export const styles = StyleSheet.create({
     fontFamily: Fonts.medium,
     color: "rgba(255, 255, 255, 0.8)",
   },
-  // 🔧 설정 아코디언 카드 (아이폰 12 가득 채움)
   accordionCard: {
     width: "100%",
     borderRadius: 26,
@@ -363,20 +355,16 @@ export const styles = StyleSheet.create({
   },
   accordionText: {
     fontSize: 13,
-    // ⚠️ 2026-07-29 = Fonts 에 'regular' 키가 없어 타입 오류였다(있는 키 = sans·medium·semiBold·bold). 본문용 = sans.
     fontFamily: Fonts.sans,
     color: "#475569",
     lineHeight: 19,
     marginBottom: 6,
   },
-  // ❔ 도움말 FAQ 질문 줄 = 작은 아이콘 + 질문(2026-08-03). accordionItemLeft(gap14·36px원용)보다 좁은 줄 전용.
   faqQRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
   },
-  // ⚠️ 2026-07-29 복원 = PersonaSection.tsx 가 쓰는 5개 키. 이 파일을 다시 쓸 때 빠져 그 섹션이 스타일 없이 렌더되고
-  //   타입 오류 9건을 내던 것 = main 정의 그대로 복원(§19 = 최신이 아니라 **동작하는 것**이 정본).
   personaContainer: {
     flexDirection: "row",
     gap: Spacing.md,
@@ -421,7 +409,6 @@ export const styles = StyleSheet.create({
     fontSize: 12,
     fontFamily: Fonts.bold,
   },
-  // 🚪 독립 분리형 개별 로그아웃 카드 (가득 채움)
   logoutSeparateCard: {
     width: "100%",
     marginTop: 16,

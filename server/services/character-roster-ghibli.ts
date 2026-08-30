@@ -1,17 +1,5 @@
 import { estimateFamilyAges } from "./protagonist-generator";
 
-/**
- * 🎨 지브리 애니메이션 스타일 18인 고정 캐릭터 & 3종 차량 림 (Character Roster Ghibli)
- *
- * 🎯 핵심 정밀 명세 (사장님 SSOT):
- * 1. 세련된 한국인 여행자 16명 (20대~60대+ 남/여, 아동, 청소년)
- * 2. 40대 파리 현지 거주 한국인 가이드 2명 (40대 한국인 남성 가이드 "민우", 40대 한국인 여성 가이드 "지은")
- * 3. 3종 드라이빙 가이드 차량 매트릭스 (동행 인원수 companionCount 기준 자동 결정 = 구현·README 기준 1벌):
- *    - 인원 1~4명: 고급 승용차 (Luxury Sedan - 벤츠 S/E클래스)
- *    - 인원 5~8명: 8인승 프리미엄 밴 (8-Seater Van - 벤츠 V클래스)
- *    - 인원 9명 이상: 벤츠 스프린터급 18인승 버스 (Mercedes Sprinter 18-Seater Bus)
- */
-
 export interface GhibliCharacter {
   id: string;
   name: string;
@@ -29,9 +17,7 @@ export interface VehicleConfig {
   ghibliVehiclePrompt: string;
 }
 
-// 18인 고정 캐릭터 마스터 림 (40대 파리 현지 거주 한국인 가이드 반영)
 export const GHIBLI_CHARACTER_ROSTER_18: Record<string, GhibliCharacter> = {
-  // 1. 20대
   m_20s: {
     id: "m_20s",
     name: "민준",
@@ -53,7 +39,6 @@ export const GHIBLI_CHARACTER_ROSTER_18: Record<string, GhibliCharacter> = {
       "20s elegant Korean female traveler with beret and beige coat, Studio Ghibli anime style",
   },
 
-  // 2. 30대
   m_30s: {
     id: "m_30s",
     name: "도현",
@@ -75,7 +60,6 @@ export const GHIBLI_CHARACTER_ROSTER_18: Record<string, GhibliCharacter> = {
       "30s sophisticated Korean female in stylish trench coat, Studio Ghibli anime style",
   },
 
-  // 3. 40대
   m_40s: {
     id: "m_40s",
     name: "정우",
@@ -97,7 +81,6 @@ export const GHIBLI_CHARACTER_ROSTER_18: Record<string, GhibliCharacter> = {
       "40s graceful Korean female traveler with silk scarf, Studio Ghibli anime style",
   },
 
-  // 4. 50대
   m_50s: {
     id: "m_50s",
     name: "성호",
@@ -119,7 +102,6 @@ export const GHIBLI_CHARACTER_ROSTER_18: Record<string, GhibliCharacter> = {
       "50s warm elegant Korean female traveler, Studio Ghibli anime style",
   },
 
-  // 5. 60대+
   m_60s: {
     id: "m_60s",
     name: "종인",
@@ -141,7 +123,6 @@ export const GHIBLI_CHARACTER_ROSTER_18: Record<string, GhibliCharacter> = {
       "60s kind Korean grandmother traveler with cardigan, Studio Ghibli style",
   },
 
-  // 6. 아동 (Kids)
   m_kids: {
     id: "m_kids",
     name: "하준",
@@ -163,7 +144,6 @@ export const GHIBLI_CHARACTER_ROSTER_18: Record<string, GhibliCharacter> = {
       "6-year-old adorable Korean girl with hair ribbons, Studio Ghibli anime style",
   },
 
-  // 7. 청소년 (Teens)
   m_teen: {
     id: "m_teen",
     name: "시우",
@@ -185,7 +165,6 @@ export const GHIBLI_CHARACTER_ROSTER_18: Record<string, GhibliCharacter> = {
       "Teenage Korean girl with smartphone, Studio Ghibli anime style",
   },
 
-  // 8. 추가 20/30대 프렌즈
   m_20s_sub: {
     id: "m_20s_sub",
     name: "태양",
@@ -206,7 +185,6 @@ export const GHIBLI_CHARACTER_ROSTER_18: Record<string, GhibliCharacter> = {
       "20s artistic Korean female traveler, Studio Ghibli style",
   },
 
-  // 9. 🎯 40대 파리 현지 거주 한국인 가이드 2명 (남/여 각 1명)
   guide_korean_m_40s: {
     id: "guide_korean_m_40s",
     name: "민우 (40대 파리 현지 거주 한국인 드라이빙 가이드)",
@@ -229,12 +207,6 @@ export const GHIBLI_CHARACTER_ROSTER_18: Record<string, GhibliCharacter> = {
   },
 };
 
-/**
- * 🎯 동행 인원수(companionCount) 기준 3종 드라이빙 가이드 차량 매트릭스 자동 결정 (현재 앱 SSOT 규격)
- * - 1~4명: 고급 승용차 (Luxury Sedan)
- * - 5~8명: 8인승 프리미엄 밴 (8-Seater Van)
- * - 9명 이상: 벤츠 스프린터급 18인승 버스 (Mercedes Sprinter 18-Seater Bus)
- */
 export function getVehicleConfigByCompanionCount(
   companionCount: number = 2,
 ): VehicleConfig {
@@ -267,7 +239,6 @@ export function getVehicleConfigByCompanionCount(
   };
 }
 
-// 나이·성별 → 로스터 캐릭터 1명 (경계 = 앱 공통: 13미만 아이 / 20미만 청소년 / 이후 10년 단위)
 function characterByAge(
   age: number,
   gender: "male" | "female",
@@ -285,21 +256,13 @@ function characterByAge(
 }
 
 export interface GhibliCast {
-  /** 일행 캐릭터(본인 포함). 레퍼런스 이미지 첨부 대상 = 최대 4명(+가이드+차량 = Omni 6장 한도) */
   travelers: GhibliCharacter[];
-  /** 실제 일행 수 = 여정 companionCount (차량·교통비 산정과 동일 소스) */
   totalTravelerCount: number;
   koreanGuide: GhibliCharacter;
   vehicle: VehicleConfig;
 }
 
-/**
- * ⚠️ 수정금지(승인필요) 2026-07-22 사장님 SSOT = 출연진 동적 구성기
- * = 등장인물 수·구성 = 여정 플래너 '누구랑'(companionType + companionCount)이 정답 (차량·교통비와 동일 소스).
- * = 나이 = users.birth_date 실계산(필수 요소). 없으면 40대 가정(가족 여행 기준).
- * = 가족 구성 추정 = protagonist-generator SSOT 재사용(자녀 = 본인-30 / 부모 = 본인+25, companionAges 입력 우선).
- * = 옛 "주인공 1명만" 선택 = 폐기 2026-07-22 (가족 여정에 여성1+가이드만 나오는 오류의 근본).
- */
+/** ⚠️ 수정금지(승인필요) 2026-07-22 사장님 SSOT = 출연진 동적 구성기 */
 export function selectGhibliCast(opts: {
   companionType?: string | null;
   companionCount?: number | null;
@@ -312,7 +275,6 @@ export function selectGhibliCast(opts: {
     opts.userGender === "female" ? "female" : "male";
   const spouseGender: "male" | "female" = gender === "male" ? "female" : "male";
   const age = opts.userAge || 40; // 생년월일 = 로그인 필수 입력값. 미연결 계정(인증 정식화 전) = 40대 폴백
-  // 동반 나이 추정 = protagonist-generator 매트릭스 함수 그대로 호출(자녀 = 본인-30 / 부모 = 본인+25 = 1벌 SSOT)
   const est = estimateFamilyAges(age);
   const childAge = Math.max(5, est.estimatedChildAge); // 영상용 최소 5살
   const parentAge = est.estimatedParentAge;
@@ -331,7 +293,6 @@ export function selectGhibliCast(opts: {
       travelers.push(characterByAge(age, spouseGender));
       break;
     case "Family": {
-      // 본인 + 배우자 + 나머지 동반: companionAges 입력 나이 우선(아이든 부모님이든 나이가 캐릭터를 결정), 없으면 자녀 추정(-30)
       travelers.push(characterByAge(age, spouseGender));
       const restCount = Math.max(1, count - 2);
       for (let i = 0; i < restCount; i++) {
@@ -343,7 +304,6 @@ export function selectGhibliCast(opts: {
       break;
     }
     case "ExtendedFamily": {
-      // 본인 부부 + 부모(+25) + 남는 인원 = 자녀
       travelers.push(characterByAge(age, spouseGender));
       travelers.push(characterByAge(parentAge, "male"));
       travelers.push(characterByAge(parentAge, "female"));
@@ -355,7 +315,6 @@ export function selectGhibliCast(opts: {
     }
     case "Group":
     default: {
-      // 친구들 = 본인 나이대 혼성 N명
       for (let i = 1; i < count; i++) {
         travelers.push(
           characterByAge(age, i % 2 === 1 ? spouseGender : gender),

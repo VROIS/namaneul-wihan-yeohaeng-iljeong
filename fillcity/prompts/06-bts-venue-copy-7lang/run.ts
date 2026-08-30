@@ -1,17 +1,5 @@
 // ⚠️ 수정금지(승인필요) 2026-08-26 사장님 지시 = 06-bts-venue-copy-7lang 실행 진입점
-// = BTS 미래공연 공연장(bts_venue) 제미니 텍스트 요소(name_ko·name_local·요약·후킹 7개국어) 1콜 채움.
-// = 대상 = cities.bts_concert_dates 에 오늘 이후 날짜가 있는 도시의 bts_venue 행(공연 지난 도시 제외 = 사장님 지시).
 // = 기본 = 호출 + raw 보관(saveRaw §18)만 = DB 쓰기 0 → 사장님이 raw 검증 → --apply 로 DB 반영.
-//
-// 호출:
-//   npx tsx fillcity/prompts/06-bts-venue-copy-7lang/run.ts --dry            (치환 프롬프트 전문 출력, 외부호출 0)
-//   npx tsx fillcity/prompts/06-bts-venue-copy-7lang/run.ts                  (🔴 제미니 1콜 + raw 보관)
-//   npx tsx fillcity/prompts/06-bts-venue-copy-7lang/run.ts --apply          (🔴 1콜 + raw + DB 반영)
-//   npx tsx fillcity/prompts/06-bts-venue-copy-7lang/run.ts --apply --from-raw=<docs/raw/runtime/파일명>  (재호출 0 = 보관 raw 로 DB 반영)
-//
-// 쓰기(--apply): ko 요약·카피·name_ko·name_local → PSR 그 행(upsertPlace targetRowId 직행 + followTriggerDup =
-//   공연장·아미존·굿즈샵 0m 동일좌표 사유, image-backfill mirrorWikiVenueImages 와 동일 근거) /
-//   en·ja·fr·zh·es·de → place_translations (place_id,language) UPSERT = 원어 카피가 기계번역 캐시보다 우선(§14 새것우선).
 import fs from "fs";
 import path from "path";
 import { fileURLToPath, pathToFileURL } from "url";
@@ -50,7 +38,6 @@ const LANGS = ["ko", "en", "ja", "fr", "zh", "es", "de"] as const;
   await c.connect();
   const today = new Date().toISOString().slice(0, 10);
 
-  // 1. 대상 = 미래공연 도시의 bts_venue (공연 지난 도시 제외)
   // ⚠️ 수정금지(승인필요) 2026-08-28 = venues 명시적 any[] = 타입 미표기 시 tsc 가 {} 로 오추론(런타임 무관, §22 통과용).
   const venues: any[] = (
     await c.query(
@@ -75,7 +62,6 @@ const LANGS = ["ko", "en", "ja", "fr", "zh", "es", "de"] as const;
   for (const v of venues)
     console.log(`  #${v.id} [${v.city}] ${v.name_en} (${v.dates.join(",")})`);
 
-  // 2. prompt 치환
   const venuesJson = JSON.stringify(
     venues.map((v: any) => ({
       id: v.id,
@@ -107,7 +93,6 @@ const LANGS = ["ko", "en", "ja", "fr", "zh", "es", "de"] as const;
     process.exit(0);
   }
 
-  // 3. 응답 확보 = 재호출 0(--from-raw) 또는 🔴 제미니 1콜
   let parsed: any;
   if (fromRaw) {
     const file = JSON.parse(
@@ -122,7 +107,6 @@ const LANGS = ["ko", "en", "ja", "fr", "zh", "es", "de"] as const;
       pathToFileURL(path.join(ROOT, "server/services/shared/issue-api-key.ts"))
         .href
     );
-    // 출입증 = 대표 도시 = 첫 공연장 도시(다도시 1콜)
     const GEMINI_KEY = await issueApiKey(
       c,
       "GEMINI_API_KEY",
@@ -189,12 +173,10 @@ const LANGS = ["ko", "en", "ja", "fr", "zh", "es", "de"] as const;
     return;
   }
 
-  // 4. DB 반영
   const { upsertPlace } = await import(
     pathToFileURL(path.join(ROOT, "server/services/place-upsert.ts")).href
   );
   // ⚠️ 수정금지(승인필요) 2026-08-28 = 튜플 반환 타입 명시 = 안 하면 new Map() 값 타입이 {} 로 잘못 추론되어
-  //   아래 v.id/v.city_id/v.name_en/v.city 전부 tsc 오류(런타임 동작엔 영향 없음, §22 기계검증 통과용 타입 수정).
   const byId = new Map(venues.map((v: any): [number, any] => [v.id, v]));
   let okKo = 0,
     okI18n = 0;

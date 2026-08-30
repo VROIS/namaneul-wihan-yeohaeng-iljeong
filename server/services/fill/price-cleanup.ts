@@ -1,12 +1,3 @@
-// ⚠️ 영구 컴포넌트 2026-06-12 = 사용자 SSOT = price_eur 단일 컬럼 정제 (= 입장료/식비/체험비 = price_eur 1칸 강제, 다른 가격필드 없음)
-// = ⚠️ 사용자 SSOT 2026-06-12 = "항상 top20 안 행만 보라. 다른 랭킹은 신경쓰지 마." = rank ≤ TOP_N 가드 강제 (= 여정 노출 행만 = 오염 하위 garbage 자동 제외)
-// = 두 정제 (= 사용자 명시 범위):
-//   (A) 비식당 입장료 카테고리(heritage/attraction/hotspot/healing/adventure) rank≤20 price_eur NULL → 0 (= 무료 = 화면 'free', 매트릭스 폴백 차단)
-//       ⚠️ shopping = 입장료 개념 자체 없음 = NULL 유지(화면 가격 미표시). restaurant = 실값없으면 매트릭스 폴백이 정당 = 손대지 않음. (= 사용자 SSOT 2026-06-12)
-//   (B) 비식당인데 요약이 명백히 식비(타파스/맛볼/식사)인 오염 행 = 보고만 (= --fix-food 로 명시 정정). 입장료칸에 Gemini 식비 오입력.
-// = BTS 3종 제외. 0 ≠ NULL 의미 구분 유지(0=확정무료, NULL=미상). DELETE 0.
-// 호출: npx tsx server/services/fill/price-cleanup.ts --city-id=37 [--apply]   (--apply = (A) NULL→0 적용)
-//       npx tsx server/services/fill/price-cleanup.ts --city-id=37 --fix-food [--apply]   (= (B) 식비오염 정정도 함께)
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -37,7 +28,6 @@ if (!cityId) {
   process.exit(1);
 }
 
-// 입장료 개념이 있는 비식당 카테고리 (= NULL→0 무료 처리 대상). shopping/restaurant 제외(사용자 SSOT).
 const ENTRANCE_CATS = [
   "heritage",
   "attraction",
@@ -45,7 +35,6 @@ const ENTRANCE_CATS = [
   "healing",
   "adventure",
 ];
-// ⚠️ 사용자 SSOT 2026-06-12 = top20 안 행만 정제 (= 여정 노출 한계 = 3일×6활동 ≤ 18 < 20. 하위 rank = 오염 garbage = 무시)
 const TOP_N = 20;
 
 (async () => {
@@ -67,7 +56,6 @@ const TOP_N = 20;
     `═══ price-cleanup (city ${cityId} ${city.name_en}) ${apply ? "[APPLY]" : "[DRY]"} ═══`,
   );
 
-  // (A) 비식당 입장료 카테고리 rank≤TOP_N NULL → 0
   const nullRows = (
     await c.query(
       `SELECT seed_category, count(*)::int n FROM place_seed_raw
@@ -85,7 +73,6 @@ const TOP_N = 20;
     `  (제외: shopping=입장료 개념 없음 / restaurant=매트릭스 폴백 정당 / rank>${TOP_N}=여정 미노출)`,
   );
 
-  // (B) 비식당 식비 오염 (요약에 음식 언급 + price>0, rank≤TOP_N) = 보고
   const foodRows = (
     await c.query(
       `SELECT id, name_en, seed_category, rank, price_eur, summary_ko FROM place_seed_raw

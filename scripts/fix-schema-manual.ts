@@ -8,7 +8,6 @@ async function run() {
   );
 
   try {
-    // missing columns 추가 (있더라도 오류 안 나도록 IF NOT EXISTS는 PG 9.6 이상 지원이나, column_exists 체크로 우회)
     await db.execute(sql`
       DO $$ 
       BEGIN

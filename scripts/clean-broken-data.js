@@ -1,12 +1,3 @@
-/**
- * 깨진 한글 데이터 전체 정리
- *
- * 전략:
- * 1. 깨진 데이터 삭제 (복구 불가능)
- * 2. 중복 데이터 삭제
- * 3. 빈 테이블은 정상 (사용시 생성됨)
- */
-
 const { Client } = require("pg");
 require("dotenv").config();
 
@@ -27,7 +18,6 @@ async function cleanAllBrokenData() {
     console.log("깨진 한글 데이터 전체 정리");
     console.log("=".repeat(70));
 
-    // 1. data_collection_schedule - 깨진 description 정리
     console.log("\n[1] data_collection_schedule");
     const schedDescriptions = {
       youtube_sync: "YouTube 채널 및 비디오 동기화",
@@ -48,14 +38,12 @@ async function cleanAllBrokenData() {
         [desc, taskName],
       );
     }
-    // 중복 삭제
     await client.query(`
       DELETE FROM data_collection_schedule
       WHERE id NOT IN (SELECT MIN(id) FROM data_collection_schedule GROUP BY task_name)
     `);
     console.log("  ✅ 정상 한글로 수정 완료");
 
-    // 2. tripadvisor_data - 깨진 데이터 삭제
     console.log("\n[2] tripadvisor_data");
     const tripDel = await client.query(`
       DELETE FROM tripadvisor_data
@@ -64,14 +52,12 @@ async function cleanAllBrokenData() {
          OR tripadvisor_category LIKE '%Ã%'
          OR tripadvisor_category LIKE '%ì%'
     `);
-    // 중복 삭제
     await client.query(`
       DELETE FROM tripadvisor_data
       WHERE id NOT IN (SELECT MIN(id) FROM tripadvisor_data GROUP BY tripadvisor_url)
     `);
     console.log("  ✅ " + tripDel.rowCount + "개 깨진 행 삭제");
 
-    // 3. youtube_place_mentions - 깨진 데이터 삭제
     console.log("\n[3] youtube_place_mentions");
     const ytMentDel = await client.query(`
       DELETE FROM youtube_place_mentions
@@ -82,14 +68,12 @@ async function cleanAllBrokenData() {
          OR summary LIKE '%Ã%'
          OR summary LIKE '%ì%'
     `);
-    // 중복 삭제
     await client.query(`
       DELETE FROM youtube_place_mentions
       WHERE id NOT IN (SELECT MIN(id) FROM youtube_place_mentions GROUP BY video_id, place_name)
     `);
     console.log("  ✅ " + ytMentDel.rowCount + "개 깨진 행 삭제");
 
-    // 4. youtube_videos - 깨진 데이터 삭제
     console.log("\n[4] youtube_videos");
     const ytVidDel = await client.query(`
       DELETE FROM youtube_videos
@@ -98,14 +82,12 @@ async function cleanAllBrokenData() {
          OR description LIKE '%Ã%'
          OR description LIKE '%ì%'
     `);
-    // 중복 삭제
     await client.query(`
       DELETE FROM youtube_videos
       WHERE id NOT IN (SELECT MIN(id) FROM youtube_videos GROUP BY video_id)
     `);
     console.log("  ✅ " + ytVidDel.rowCount + "개 깨진 행 삭제");
 
-    // 5. naver_blog_posts - 깨진 데이터 삭제
     console.log("\n[5] naver_blog_posts");
     const naverDel = await client.query(`
       DELETE FROM naver_blog_posts
@@ -114,28 +96,24 @@ async function cleanAllBrokenData() {
          OR blogger_name LIKE '%Ã%'
          OR blogger_name LIKE '%ì%'
     `);
-    // 중복 삭제
     await client.query(`
       DELETE FROM naver_blog_posts
       WHERE id NOT IN (SELECT MIN(id) FROM naver_blog_posts GROUP BY post_url)
     `);
     console.log("  ✅ " + naverDel.rowCount + "개 깨진 행 삭제");
 
-    // 6. place_prices - 깨진 데이터 삭제
     console.log("\n[6] place_prices");
     const priceDel = await client.query(`
       DELETE FROM place_prices
       WHERE price_label LIKE '%Ã%' 
          OR price_label LIKE '%ì%'
     `);
-    // 중복 삭제
     await client.query(`
       DELETE FROM place_prices
       WHERE id NOT IN (SELECT MIN(id) FROM place_prices GROUP BY place_id, price_type)
     `);
     console.log("  ✅ " + priceDel.rowCount + "개 깨진 행 삭제");
 
-    // 7. gemini_web_search_cache - 깨진 데이터 삭제
     console.log("\n[7] gemini_web_search_cache");
     const geminiDel = await client.query(`
       DELETE FROM gemini_web_search_cache
@@ -144,9 +122,6 @@ async function cleanAllBrokenData() {
     `);
     console.log("  ✅ " + geminiDel.rowCount + "개 깨진 행 삭제");
 
-    // ========================================
-    // 최종 현황
-    // ========================================
     console.log("\n" + "=".repeat(70));
     console.log("최종 테이블 현황");
     console.log("=".repeat(70));

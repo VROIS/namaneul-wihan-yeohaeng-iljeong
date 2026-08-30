@@ -1,22 +1,9 @@
 // ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 = 여정 생성 로딩화면 "숨은 기능 소개" 캐러셀.
-//   MIX(느린 생성)일 때만 3초 뒤 부모(LoadingStep.tsx)가 마운트한다(§구현방식-2 "경주" 메커니즘).
-//   언마운트 = 정지 원칙 = 이 컴포넌트가 내려가면 아래 타이머는 React useEffect cleanup으로 스스로 정리된다.
-//   새 npm 의존성 0개 = 이미 설치된 react-native-reanimated만으로 구현(§16 재사용).
-//
 //   ⚠️ 연출 컨셉(사장님 확정 2026-08-16) = "카드 = 작은 모바일 폰"처럼 보이게:
-//     - 색상(그라데이션) 영역 = 폰 "화면" = 아이콘 + 제목/본문을 타자기 애니메이션으로 노출
-//     - 카드 하단 어두운 띠 = 실제 앱 탭바를 흉내낸 "미니 탭바"(6개, 카드 순서 그대로) =
-//       기존 점(dot) 인디케이터를 대체. 지금 보이는 카드의 아이콘만 확대/강조돼 "눌린 듯" 보이고,
-//       카드가 넘어갈 때마다 강조가 다음 아이콘으로 옮겨간다.
-//     - 카드 1장만 노출(peek 없음), 최대한 크게(상단 진행영역을 1줄로 압축해 확보한 여유를 카드에 몰아줌).
-//   ⚠️ 카드 크기 = 고정 아님. `BTSCharacterSelectScreen.tsx`의 `useRingLayout`과 같은 원리로
-//     실제 남는 화면 공간(onLayout 실측)에 맞춰 9:16 비율을 유지한 채 통째로 줄인다 = 어떤 화면에서도
 //     하단 탭바(55+insets.bottom)와 안 겹친다(사장님 지적 2026-08-16, 320×720 실측 확인).
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, StyleSheet, AccessibilityInfo } from "react-native";
 // ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 = 카드 3D(입체) 효과 = 대각선 그라데이션.
-//   InputStep.tsx 기존 사용처(§16 재사용, start(0,0)→end(1,1) 대각선)와 동일 방향 = 좌상단이 밝고
-//   우하단이 어두워 빛이 위에서 비치는 듯한 입체감. slide.gradient[1](2번째 색)이 이제 실제로 쓰임.
 import { LinearGradient } from "expo-linear-gradient";
 import Animated, {
   useSharedValue,
@@ -31,9 +18,6 @@ import Icon from "@/components/Icon";
 import { Colors, Spacing, BorderRadius, Fonts } from "@/constants/theme";
 
 const SLIDE_DURATION_MS = 5000; // 사장님 확정(2026-08-16) = 5초 자동전환, 터치 시 정지
-// ⚠️ 290×516 = 실측(onLayout) 전 첫 페인트에서만 쓰는 잠깐의 기본값(320×720 기준). 상한선이 아니다.
-//   실측 후에는 화면이 클수록(예: 아이폰12 390×844) 카드도 그만큼 비례해서 커진다(사장님 확정
-//   2026-08-16 = "화면 클수록 카드도 비례해서 커지게", 390×844 실측 시 상하 여백 과다 지적 반영).
 const IDEAL_CARD_W = 290;
 const IDEAL_CARD_H = Math.round((IDEAL_CARD_W * 16) / 9); // 9:16 = 516
 const MINI_TABBAR_H = 52; // 실제 앱 탭바(55px)를 축소 재현한 높이
@@ -42,12 +26,6 @@ const TYPE_CHAR_MS = 26; // 타자기 = 1글자당 지연(본문 40~90자 기준
 type Theme = (typeof Colors)["light"];
 
 // 순서(사장님 확정 2026-08-16) = TRIPIS → 오디오가이드 → AI의견상담 → 전문가검증 → 일별영상생성 → 곧만나요
-// 아이콘 = 전부 기존 앱 사용처 그대로(MainTabNavigator.tsx·PlaceSlotCard.tsx 확인, 새 아이콘 0개)
-// 색상 = CityCardScreen.tsx BADGE_COLORS 그대로 재사용(video/guide/course) + 배지색 없는 3개만 같은 톤 확장
-// 문구 = 사장님 원문 그대로(재작성 없음, "다시 짤 수 있어요" 등 없는 기능 표현 넣지 않음)
-// navLabelKey = 미니탭바용 초단축 라벨의 i18n 키(고정 텍스트 금지, §23 축약 정합).
-//   Tripis/AI의견/전문가/공유는 기존 tab.*·common.share 그대로 재사용(§16, 번역 중복 생성 금지),
-//   오디오가이드·영상만 미니탭 전용 신규 단축키(loadingCarousel.navGuide/navVideo, 7개국어 신규 번역).
 const SLIDES = [
   {
     icon: "camera",
@@ -94,7 +72,6 @@ const SLIDES = [
 ] as const;
 
 // ⚠️ 타자기 애니메이션 = "화면(색상 영역)에 사람이 입력하는 것처럼" 본문을 한 글자씩 노출(사장님 지시 2026-08-16).
-//   활성 카드일 때만 진행, 비활성/언마운트 시 정리(카드 전환마다 새로 시작).
 function SlideScreen({
   icon,
   title,
@@ -135,7 +112,6 @@ function SlideScreen({
 }
 
 // ⚠️ 미니 탭바 = 실제 앱 하단 5단탭을 흉내낸 6단(카드 순서 그대로) = 기존 점 인디케이터 대체(사장님 지시 2026-08-16).
-//   현재 카드에 해당하는 아이콘만 확대·강조돼 "눌린 것처럼" 보이고, 카드가 넘어가면 강조가 옮겨간다.
 function MiniTabBar({ activeIndex }: { activeIndex: number }) {
   const { t } = useTranslation();
   return (
@@ -181,8 +157,6 @@ export default function LoadingCarousel({ theme }: { theme: Theme }) {
   const scrollRef = useRef<Animated.ScrollView>(null);
   const entrance = useSharedValue(0);
 
-  // ⚠️ 카드 치수 = useRingLayout(BTSCharacterSelectScreen.tsx)과 같은 원리 = 실측 가용공간에
-  //   9:16 비율을 유지한 채 맞춘다. 290×516은 "여유 있는 화면에서의 최대치"일 뿐, 고정값이 아니다.
   const { cardW, cardH } = useMemo(() => {
     if (!box) return { cardW: IDEAL_CARD_W, cardH: IDEAL_CARD_H };
     let h = Math.floor(box.h * 0.98);
@@ -195,16 +169,12 @@ export default function LoadingCarousel({ theme }: { theme: Theme }) {
   }, [box]);
 
   // ⚠️ 수정금지(승인필요) 2026-08-16 사장님 실측 발견 = 리사이즈로 cardW가 바뀌었는데 스크롤 위치는
-  //   옛 폭 기준 그대로 남아있어(브라우저가 자동 재정렬 안 함) 카드가 어긋나 보이던 버그(320×560 실측).
-  //   cardW가 바뀔 때마다 현재 index 기준으로 스크롤 위치를 애니메이션 없이 즉시 재정렬한다.
   useEffect(() => {
     if (!box) return;
     scrollRef.current?.scrollTo({ x: index * cardW, animated: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cardW, box]);
 
-  // ⚠️ 접근성(WCAG 2.2.2) = reduce-motion 선호 시 자동전환·진입애니 비활성화.
-  //   정직한 한계: 네이티브(iOS/Android)에서만 의미 있음, 웹 에뮬레이션엔 안 반영됨(§21).
   useEffect(() => {
     let mounted = true;
     AccessibilityInfo.isReduceMotionEnabled().then((v) => {
@@ -222,7 +192,6 @@ export default function LoadingCarousel({ theme }: { theme: Theme }) {
     });
   }, [reduceMotion, entrance]);
 
-  // 자동전환 = paused/reduceMotion이면 예약 안 함. 마지막 슬라이드에서 멈춤(루프 없음).
   useEffect(() => {
     if (paused || reduceMotion) return;
     if (index >= SLIDES.length - 1) return;
@@ -316,7 +285,6 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: "rgba(255,255,255,0.4)",
   },
-  // "화면" = 카드 상단 대부분(미니탭바 제외 나머지 전부)
   screenArea: {
     flex: 1,
     alignItems: "center",
@@ -348,7 +316,6 @@ const styles = StyleSheet.create({
     lineHeight: 19,
     textAlign: "center",
   },
-  // "미니 탭바" = 실제 앱 하단탭을 흉내낸 카드 하단 띠(기존 점 인디케이터 대체)
   miniTabBar: {
     height: MINI_TABBAR_H,
     flexDirection: "row",

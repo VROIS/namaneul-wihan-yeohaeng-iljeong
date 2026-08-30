@@ -1,4 +1,3 @@
-// BTS 장소 카트 스타일 = BTSPlaceCartScreen 분리(2026-07-16 §0 슬림화, 순수 이동)
 import { StyleSheet } from "react-native";
 import { CARD_W, CARD_H } from "../utils";
 
@@ -89,7 +88,6 @@ export const styles = StyleSheet.create({
     alignItems: "center",
   },
 
-  // 중앙 캐릭터 카드
   // ⚠️ 수정금지(승인필요) — 2026-04-22 Part C: zIndex 20 → 1 (카드 z:10 뒤로 이동). 캐릭터는 DIM 뒷장으로 존재감만, 8장 카드가 시각 주인공
   heroCard: {
     borderRadius: 20,
@@ -106,7 +104,6 @@ export const styles = StyleSheet.create({
     height: "100%",
   },
 
-  // 장소 카드 (절대 배치)
   cardAbsolute: {
     position: "absolute",
     width: CARD_W,
@@ -251,8 +248,6 @@ export const styles = StyleSheet.create({
     overflow: "hidden",
   },
   // ⚠️ 수정금지(승인필요) 2026-08-08 판단3종 지적 — 채움은 **폭을 늘리지 않고 눌러 늘린다**(scaleX).
-  //   폭(%)을 움직이면 매 프레임 자리계산이 다시 돈다. 눌러 늘리기는 그림만 바꾼다.
-  //   왼쪽에 붙여 늘어나야 하므로 기준점을 왼쪽으로 둔다.
   gaugeFill: {
     width: "100%",
     height: "100%",

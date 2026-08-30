@@ -1,6 +1,3 @@
-// 2026-06-28 = 여정 결과화면 지도 고정섹션 (BTSPlaceMap 패턴 일반화 = 웹 div+SDK / 앱 WebView+SDK)
-// = 전 슬롯 마커 항상 표시 + 마커 클릭 → onMarkerPress(슬롯 스크롤) + 출발 깃발(도시중심/숙소)
-// = 동선 polyline 폐기(사용자 SSOT) / 웹·앱 동일 / API키 = /api/bts/map-config 재사용
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, View, Platform } from "react-native";
 import { apiRequest } from "@/lib/query-client";
@@ -11,7 +8,6 @@ import {
   type ItinMapPlace,
   type ItinMapStart,
 } from "./itinerary-map-html";
-// 마커 색/아이콘 단일 SSOT (= 카드 placeholder 와 동일) — start·culture 만 보강
 import {
   COLORS as SSOT_COLORS,
   LUCIDE as SSOT_LUCIDE,
@@ -21,18 +17,13 @@ type Props = {
   places: ItinMapPlace[];
   start: ItinMapStart | null;
   onMarkerPress: (id: string) => void;
-  // 🗺️ 2026-06-28 = 슬롯 본문 터치 → 그 마커 포커스(panTo+확대+강조) = 양방향 연동
   selectedSlotId?: string | null;
   height?: number;
   tint?: string;
   // ⚠️ 수정금지(승인필요) 2026-08-13 사장님 승인 = 지도 배경(구글 SDK 자체 도로명·지명) 다국어 대응.
-  //   PlaceAutocompleteWidget(같은 화면 숙소검색)과 같은 패턴 재사용(§16). 미지정 = "ko"(하위호환).
   language?: string;
 };
 
-// SDK 로드 = 페이지당 1 회 (= 모듈 레벨 promise, 웹).
-//   ⚠️ 구글 SDK 특성상 language 는 최초 로드 시 1 회만 고정(SDK 자체가 세션 중 재로드 미지원) = 기존 싱글턴 그대로,
-//   language 인자만 최초 로드 URL에 반영(앱 진입 시 이미 결정된 언어라 실사용에서 충분 = Phase E 기기귀속 설계와 정합).
 let sdkPromise: Promise<any> | null = null;
 function loadGoogleMaps(apiKey: string, language: string): Promise<any> {
   if (typeof window === "undefined") return Promise.reject("ssr");
@@ -90,8 +81,6 @@ const MAP_STYLES = [
   },
 ];
 
-// ⚠️ 2026-06-28 = 마커 색/아이콘 = bts-marker-svg.ts(SSOT) 재사용 (= 카드 placeholder ↔ 지도 마커 시각 일치, §16 재발명X).
-//   start(깃발)·culture 는 SSOT 미정의라 여기서 보강. HTML 템플릿(itinerary-map-html)도 같은 값 인라인(import 불가).
 const COLORS: Record<string, string> = {
   ...SSOT_COLORS,
   start: "#2563eb",
@@ -113,7 +102,6 @@ function makeWebIcon(
 ) {
   const color = COLORS[cat] || "#666";
   const path = LUCIDE[cat] || '<circle cx="12" cy="12" r="6"/>';
-  // 🗺️ 2026-06-28 = 선택된 슬롯 마커 = 크게(확대 강조)
   const size = isStart ? 50 : isSelected ? 54 : 40;
   const iconSize = isStart ? 26 : isSelected ? 28 : 20;
   const off = (size - iconSize) / 2;
@@ -168,9 +156,6 @@ function makeWebIcon(
   };
 }
 
-// ============================================================
-// Web 분기 = 직접 div + Google Maps SDK
-// ============================================================
 function ItineraryMapWeb({
   places,
   start,
@@ -185,9 +170,7 @@ function ItineraryMapWeb({
   const mapRef = useRef<any>(null);
   const startMarkerRef = useRef<any>(null);
   const markersRef = useRef<Record<string, any>>({});
-  // 🗺️ 2026-06-28 = 이전 선택 마커 id (= 선택 해제 시 기본 아이콘 복원용)
   const prevSelectedRef = useRef<string | null>(null);
-  // 마커별 메타(cat·slot) 보관 = 선택/해제 시 makeWebIcon 재계산 (= 마커 재생성 없이 setIcon)
   const markerMetaRef = useRef<
     Record<string, { cat: string; slot: number | null }>
   >({});
@@ -215,19 +198,14 @@ function ItineraryMapWeb({
       cancelled = true;
     };
     // ⚠️ 수정금지(승인필요) 2026-08-13 사장님 승인 = language 는 deps 에서 의도적으로 제외.
-    //   구글 SDK 는 이미 로드된 뒤 언어만 바꿔 재로드하는 것을 지원 안 해서, language 를 deps 에 넣으면
-    //   이 effect 가 재실행돼 마커 없는 새 지도 인스턴스만 덮어씌우는 회귀가 생긴다(§22 판단검증이 잡음).
-    //   지도 언어 = "그 페이지가 처음 로드되는 순간의 언어"로 고정(재접속 시 새 언어로 재고정) = 사장님 확정 기준.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiKey]);
 
-  // 출발 깃발 + 전 슬롯 마커 동기화
   useEffect(() => {
     if (!mapReady || !mapRef.current) return;
     const google = (window as any).google;
     if (!google) return;
 
-    // 출발 깃발
     if (startMarkerRef.current) {
       startMarkerRef.current.setMap(null);
       startMarkerRef.current = null;
@@ -242,7 +220,6 @@ function ItineraryMapWeb({
       });
     }
 
-    // 슬롯 마커 = 전부 제거 후 재생성
     for (const id of Object.keys(markersRef.current)) {
       markersRef.current[id]?.setMap(null);
       delete markersRef.current[id];
@@ -262,7 +239,6 @@ function ItineraryMapWeb({
       markerMetaRef.current[p.id] = { cat, slot: p.slot };
     }
 
-    // fitBounds
     const b = new google.maps.LatLngBounds();
     let count = 0;
     if (startMarkerRef.current) {
@@ -281,12 +257,10 @@ function ItineraryMapWeb({
     }
   }, [mapReady, places, start, onMarkerPress]);
 
-  // 🗺️ 2026-06-28 = 선택 슬롯 강조 전담(마커 재생성 분리 = 깜빡임 방지): 이전선택 복원 → 새선택 panTo+확대+setIcon
   useEffect(() => {
     if (!mapReady || !mapRef.current) return;
     const google = (window as any).google;
     if (!google) return;
-    // 이전 선택 마커 = 기본 아이콘 복원
     const prevId = prevSelectedRef.current;
     if (prevId && prevId !== selectedSlotId && markersRef.current[prevId]) {
       const meta = markerMetaRef.current[prevId];
@@ -295,7 +269,6 @@ function ItineraryMapWeb({
           makeWebIcon(google, meta.cat, false, meta.slot, false),
         );
     }
-    // 새 선택 마커 = 강조 아이콘 + panTo + 확대
     if (selectedSlotId && markersRef.current[selectedSlotId]) {
       const meta = markerMetaRef.current[selectedSlotId];
       const m = markersRef.current[selectedSlotId];
@@ -319,9 +292,6 @@ function ItineraryMapWeb({
   );
 }
 
-// ============================================================
-// Native 분기 = react-native-webview
-// ============================================================
 function ItineraryMapNative({
   places,
   start,
@@ -349,7 +319,6 @@ function ItineraryMapNative({
     );
   }, [mapReady, places, start]);
 
-  // 🗺️ 2026-06-28 = 슬롯 본문 터치 → 그 마커 포커스(panTo+확대+강조) = WebView window.focusSlot 호출
   useEffect(() => {
     if (!mapReady) return;
     webRef.current?.injectJavaScript(
@@ -392,17 +361,11 @@ function ItineraryMapNative({
   );
 }
 
-// ============================================================
-// 메인 export = API키 fetch(/api/bts/map-config 재사용) + 플랫폼 분기
-// ============================================================
 export default function ItineraryMap(props: Props) {
   const [apiKey, setApiKey] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    // 🗺️ 2026-06-29 = map-config fetch 재시도(backoff). 아이폰 첫 로드 시 서버가 아직 응답 준비 전이라 fetch가
-    //   일시 실패(transient) → 옛: catch에서 setApiKey 안 함 → apiKey 영구 null → 무한 스피너. 재시도로 해소(새로고침하면 정상이던 증상).
-    //   응답 = { googleMapsApiKey } (BTSPlaceCart 정합). data.key(X) = 영구 null 버그.
     (async () => {
       const delays = [0, 800, 1600, 3200, 5000]; // 콜드스타트 503은 수 초 내 200 전환
       for (let i = 0; i < delays.length; i++) {

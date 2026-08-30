@@ -1,26 +1,8 @@
-/**
- * 🔗 Agent Protocol v1.0 - 통합 도시 검색 (City Resolver)
- *
- * 모든 에이전트가 이 함수를 통해 도시를 찾습니다.
- * "Paris", "파리", "巴黎" → 모두 같은 cityId를 반환
- *
- * 매칭 우선순위:
- * 1. nameEn 정확 매칭 (대소문자 무시)
- * 2. name 정확 매칭 (한국어)
- * 3. nameLocal 매칭
- * 4. aliases 배열 검색
- * 5. 좌표 기반 최근접 (fallback)
- */
-
 import { db } from "../db";
-// ⚠️ 2026-05-23 = places import 제거 (= 사용자 SSOT = PSR 단일 = findPlaceByName + addPlaceAlias 폐기)
 import { cities } from "@shared/schema";
 import { eq, ilike, sql } from "drizzle-orm";
 
-// ===== 도시 영한 매핑 테이블 (하드코드 fallback) =====
-// DB에 nameEn이 아직 없을 때도 매칭 가능하도록
 const CITY_NAME_MAP: Record<string, string> = {
-  // 영어 → 한국어
   paris: "파리",
   nice: "니스",
   marseille: "마르세유",
@@ -51,7 +33,6 @@ const CITY_NAME_MAP: Record<string, string> = {
   lisbon: "리스본",
   athens: "아테네",
   dubrovnik: "두브로브니크",
-  // 아시아
   seoul: "서울",
   tokyo: "도쿄",
   osaka: "오사카",
@@ -62,18 +43,15 @@ const CITY_NAME_MAP: Record<string, string> = {
   danang: "다낭",
   "da nang": "다낭",
   hanoi: "하노이",
-  // 미국
   "new york": "뉴욕",
   newyork: "뉴욕",
 };
 
-// 한국어 → 영어 역매핑
 const CITY_NAME_MAP_REVERSE: Record<string, string> = {};
 for (const [en, ko] of Object.entries(CITY_NAME_MAP)) {
   CITY_NAME_MAP_REVERSE[ko] = en;
 }
 
-// 30개 유럽 도시 + 아시아 도시의 영어/현지어 매핑
 const CITY_EN_LOCAL_MAP: Record<string, { nameEn: string; nameLocal: string }> =
   {
     파리: { nameEn: "Paris", nameLocal: "Paris" },
@@ -127,20 +105,13 @@ export interface CityResolveResult {
   longitude: number;
 }
 
-/**
- * 통합 도시 검색 - 모든 에이전트가 이 함수 하나만 사용
- *
- * @param input - "Paris", "파리", "巴黎" 등 어떤 언어든 OK
- * @param coords - ⚠️ 사장님 SSOT 2026-07-08 = 도시중심좌표(불변키). 있으면 좌표 10m 매칭이 최우선(이름 무관 = 중복도시·재발굴 원천차단).
- * @returns CityResolveResult 또는 null
- */
+/** @param coords - ⚠️ 사장님 SSOT 2026-07-08 = 도시중심좌표(불변키). 있으면 좌표 10m 매칭이 최우선(이름 무관 = 중복도시·재발굴 원천차단). */
 export async function findCityUnified(
   input: string,
   coords?: { lat: number; lng: number } | null,
 ): Promise<CityResolveResult | null> {
   if (!db || !input) return null;
 
-  // ===== 전처리: "파리, 프랑스" → "파리", "Paris, France" → "Paris" =====
   let cleaned = input.trim();
   if (cleaned.includes(",")) {
     cleaned = cleaned.split(",")[0].trim();
@@ -151,8 +122,6 @@ export async function findCityUnified(
 
   try {
     // ⚠️ 수정금지(승인필요) 2026-07-08 사장님 SSOT = 0단계 = 도시중심좌표(불변키) 10m 매칭 최우선.
-    //   = 도시 동일성은 언어/철자(가변)가 아니라 좌표(불변)로 판정("본느"≠"본" 이름실패로 중복 city 생성+21건 재발굴 사고 근본).
-    //   = 좌표 10m(0.0001, place 매칭 불변4와 동일 임계) 이내면 같은 도시 확정 = 즉시 재활용 = 이름 무관.
     if (coords && coords.lat != null && coords.lng != null) {
       const near = await db
         .select()
@@ -183,7 +152,6 @@ export async function findCityUnified(
       }
     }
 
-    // ===== 1단계: DB에서 직접 검색 (nameEn, name, nameLocal) =====
     const dbResults = await db
       .select()
       .from(cities)
@@ -214,7 +182,6 @@ export async function findCityUnified(
       };
     }
 
-    // ===== 2단계: aliases 배열 검색 =====
     const aliasResults = await db
       .select()
       .from(cities)
@@ -241,7 +208,6 @@ export async function findCityUnified(
       };
     }
 
-    // ===== 3단계: 하드코드 매핑으로 한국어 변환 후 재검색 =====
     const koreanName = CITY_NAME_MAP[inputLower];
     if (koreanName) {
       const mapped = await db
@@ -257,7 +223,6 @@ export async function findCityUnified(
           nameLocal: input,
         };
 
-        // DB에 nameEn 업데이트 (자동 학습)
         try {
           await db
             .update(cities)
@@ -270,9 +235,7 @@ export async function findCityUnified(
           console.log(
             `[CityResolver] 🔄 DB 자동 보강: ${city.name} → nameEn="${enLocal.nameEn}"`,
           );
-        } catch (e) {
-          // 업데이트 실패해도 매칭은 성공
-        }
+        } catch (e) {}
 
         console.log(
           `[CityResolver] ✅ 매핑 매칭: "${input}" → ${koreanName} (ID: ${city.id})`,
@@ -289,11 +252,9 @@ export async function findCityUnified(
       }
     }
 
-    // 역방향: 한국어 입력 → 영어명 확인
     const englishName =
       CITY_NAME_MAP_REVERSE[inputLower] || CITY_NAME_MAP_REVERSE[input];
     if (englishName) {
-      // 이미 1단계에서 한국어 직접 매칭 시도했으므로, ilike으로 재시도
       const mapped = await db
         .select()
         .from(cities)
@@ -321,10 +282,7 @@ export async function findCityUnified(
       }
     }
 
-    // ===== 4단계: 유사어 부분 매칭 (양방향 ilike) =====
     // ⚠️ 수정금지(승인필요) 2026-07-08 사장님 SSOT = 한국 초행여행자가 정확명칭 모름("본느" vs "본") = 유사어 검색.
-    //   = 양방향: 입력⊂DB명(옛) + DB명⊂입력(신규) 둘 다 = "본느" LIKE '%본%' 로 "본" 잡음. 좌표(0단계) 없을 때 보조.
-    //   = LENGTH>=2 가드 = 1글자 오매칭 방지. 좌표매칭이 최우선이라 이 단계 오매칭 위험은 좌표 없는 경우로 한정.
     const partialResults =
       inputLower.length >= 2
         ? await db
@@ -359,8 +317,6 @@ export async function findCityUnified(
     }
 
     // ⚠️ 수정금지(승인필요) 2026-05-23 = 사용자 SSOT = 5 단계 = 신규 도시 자동 INSERT
-    // = 4 단계 모두 실패 = Gemini 메타 호출 → cities INSERT (= cities_id_seq 자동 발급)
-    // = 결과 = 다음 사용자 = 1단계 직접 매칭 = 외부 호출 0 = 영구 재활용
     console.log(
       `[CityResolver] 🆕 4 단계 매칭 실패 = 신규 도시 자동 백필 시도: "${input}"`,
     );
@@ -376,9 +332,6 @@ export async function findCityUnified(
     }
 
     // ⚠️ 수정금지(승인필요) 2026-07-11 사장님 SSOT = 백필 재조회 = INSERT 전 기존 도시 확인(중복 발급 원천차단).
-    //   = 몽셀미셀 사고(2026-07-10, 몽생미셸 75↔137 중복 발급) 근본수정: 오타 입력은 1~4단계 이름검색을 다 빠져나가지만
-    //     Gemini 메타가 정답(이름 3종 + 중심좌표)을 주므로, 그 정답으로 재조회 = 이름 정확일치 OR 좌표 1km(사장님 확정 반경).
-    //   = 발견 시 = INSERT 대신 입력어를 그 도시 aliases 에 등록 → 다음부터 2단계 유사어 매칭 = Gemini 호출 0 = 영구 재활용.
     const existing = await findExistingCityByMeta(meta);
     if (existing) {
       await db
@@ -437,13 +390,7 @@ export async function findCityUnified(
   }
 }
 
-// ⚠️ 2026-05-23 = 사용자 SSOT = PSR 단일 = 장소 매칭 = upsertPlace() 의 5 단계 매칭 사용
-
 // ⚠️ 수정금지(승인필요) 2026-07-11 사장님 SSOT = 백필 전용 기존 도시 재조회 (5단계에서만 사용).
-//   = 매칭 기준 2가지: ①이름 3종(한/영/현지) 정확일치 + 국가코드 일치 필수(동명이도시 오흡수 차단 = 독일 Bonn→프랑스 Beaune '본' 리뷰 실증)
-//     ②중심좌표 1km 이내(공용 haversineKm = §16 단일 SSOT 재사용, 좌표=국가 무관 불변키).
-//   = 반경 1km 근거: 실측상 별개 이웃도시 최소 간격 5.2km(모나코↔에즈) = 1km 는 오흡수 0 + 진짜 중복(몽생미셸 0.0km) 100% 포착.
-//   = cities 전량 읽기(~140행 소형 테이블 + 백필은 4단계 전실패 시에만 발동 = 무해). 동수 매칭 시 큰 id(최신) 우선 = §14 새것우선.
 export async function findExistingCityByMeta(meta: {
   nameKo: string;
   nameEn: string;
@@ -484,17 +431,11 @@ export async function findExistingCityByMeta(meta: {
   return hits[0] ?? null;
 }
 
-/**
- * 영어 → 한국어 도시명 변환 (표시용)
- */
 export function getKoreanCityName(input: string): string {
   const lower = input.trim().toLowerCase();
   return CITY_NAME_MAP[lower] || input;
 }
 
-/**
- * 한국어 → 영어 도시명 변환 (API 검색용)
- */
 export function getEnglishCityName(input: string): string {
   return CITY_NAME_MAP_REVERSE[input] || input;
 }

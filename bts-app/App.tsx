@@ -47,7 +47,6 @@ const VIBE_CARDS = [
   "🏰 역사",
 ];
 
-// --- SCREEN 1 & 2: Main Select & Expand --- //
 const BubbleAvatar = ({ member, selectedId, onPress }) => {
   const isSelected = selectedId === member.id;
   const isHidden = selectedId !== null && selectedId !== member.id;
@@ -248,7 +247,6 @@ const SelectScreen = ({
   );
 };
 
-// --- SCREEN 3: Loading --- //
 const LoadingScreen = ({ onFinish }) => {
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -268,10 +266,7 @@ const LoadingScreen = ({ onFinish }) => {
   );
 };
 
-// --- SCREEN 4: Result Dashboard --- //
-// 여기서 선택한 장바구니 데이터를 받아서 동기화합니다!
 const DashboardScreen = ({ onReset, selectedVibes }) => {
-  // 가짜 데이터를 바이브 카드에 맞춰 생성 (예술->미술관, 핫플->성지 등)
   const getDynamicContent = (vibe) => {
     if (vibe.includes("핫플"))
       return { time: "09:00 AM", title: "방탄 성지 투어 코스", tag: vibe };
@@ -381,12 +376,10 @@ const DashboardScreen = ({ onReset, selectedVibes }) => {
   );
 };
 
-// --- ROUTER (App) --- //
 export default function App() {
   const [currentScreen, setCurrentScreen] = useState("Auth");
   const [selectedCharId, setSelectedCharId] = useState(null);
 
-  // 최상단으로 끌어올린 장바구니(카트) 상태!
   const [cart, setCart] = useState([]);
 
   const goToLoading = () => setCurrentScreen("Loading");
@@ -428,7 +421,6 @@ const styles = StyleSheet.create({
   fullScreen: { flex: 1, position: "relative" },
   centerScreen: { flex: 1, justifyContent: "center", alignItems: "center" },
 
-  // Select Screen
   headerTitle: {
     fontSize: 26,
     fontWeight: "900",
@@ -456,7 +448,6 @@ const styles = StyleSheet.create({
   },
   bubbleText: { fontSize: 20, fontWeight: "800", color: "#222" },
 
-  // Vibe Cards
   vibeCard: {
     position: "absolute",
     width: 75,
@@ -473,7 +464,6 @@ const styles = StyleSheet.create({
   },
   cardText: { fontSize: 13 },
 
-  // Energy Gauge (Cart)
   gaugeContainer: {
     position: "absolute",
     bottom: 120,
@@ -496,7 +486,6 @@ const styles = StyleSheet.create({
   },
   gaugeFill: { height: "100%", backgroundColor: "#8B5CF6", borderRadius: 6 },
 
-  // Bottom Buttons
   bottomBtnContainer: {
     position: "absolute",
     bottom: 50,
@@ -519,7 +508,6 @@ const styles = StyleSheet.create({
   },
   startBtnText: { color: "#FFF", fontSize: 16, fontWeight: "bold" },
 
-  // Loading Screen
   loadingRing: {
     width: 70,
     height: 70,
@@ -532,7 +520,6 @@ const styles = StyleSheet.create({
   loadingTitle: { fontSize: 22, fontWeight: "bold", color: "#333" },
   loadingSub: { fontSize: 14, color: "#888", marginTop: 10 },
 
-  // Dashboard Screen
   dashHeader: { padding: 20, alignItems: "center" },
   videoBox: {
     width: "90%",

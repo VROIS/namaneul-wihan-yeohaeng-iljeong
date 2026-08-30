@@ -1,5 +1,4 @@
 // ⚠️ 수정금지(승인필요): 카메라 라이브뷰 컴포넌트
-// reference-LiveCameraView.kt 구조: 전체 화면 카메라 + 프레임 캡처
 import React from 'react';
 import { CameraView as ExpoCameraView } from 'expo-camera';
 import { theme } from '../styles/theme';

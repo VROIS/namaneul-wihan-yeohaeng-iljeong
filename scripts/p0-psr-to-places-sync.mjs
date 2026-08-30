@@ -1,31 +1,4 @@
 // ⚠️ 수정금지(승인필요) — place_seed_raw → places 동기화 파이프라인 (사용자 2026-04-25 승인)
-//
-// 목적: BTS 미니앱에서 Wikipedia 로 수집한 place_seed_raw 데이터를 메인앱 places 테이블로 동기화
-//       → 이미지 공유 (psr.image_url → places.photo_urls[0])
-//       → 장소 풀 확장 (psr-only 장소를 places 에 신규 INSERT)
-//
-// 처리 순서 (도시별):
-//   Step 1. psr ↔ places 매칭 (이름 LOWER 정확 + 좌표 500m 이내)
-//   Step 2. 이미지 주입: 공통 rows.places.photo_urls 배열 맨 앞에 psr.image_url prepend (중복 방지)
-//   Step 3. 신규 INSERT: psr 에만 존재하는 장소를 places 에 생성
-//   Step 4. 검증 쿼리: places rows + with_photo 카운트
-//
-// type 매핑 (places.type USER-DEFINED enum: attraction/cafe/restaurant/landmark/hotel):
-//   restaurant → 'restaurant'
-//   heritage/shopping/healing/hotspot/adventure/attraction → 'attraction' (기존 places 패턴 준수)
-//
-// 모드:
-//   --dry-run        : 트랜잭션 롤백, 시뮬레이션만
-//   --verify-only    : 읽기 전용, 현재 상태 조회
-//   --city-id=<n>    : 특정 도시만 처리 (예: 107 = Foxborough)
-//   --all-cities     : BTS 34 도시 전체 (bts_rank IS NOT NULL, bts_archived=false)
-//   (기본)            : COMMIT (실제 반영)
-//
-// 실행 예시:
-//   node scripts/p0-psr-to-places-sync.mjs --dry-run --city-id=107
-//   node scripts/p0-psr-to-places-sync.mjs --city-id=107
-//   node scripts/p0-psr-to-places-sync.mjs --all-cities --dry-run
-//   node scripts/p0-psr-to-places-sync.mjs --all-cities
 
 import pg from "pg";
 
@@ -40,7 +13,6 @@ const CITY_ID = CITY_ID_ARG ? parseInt(CITY_ID_ARG.split("=")[1], 10) : null;
 
 const COORD_THRESHOLD_KM = 0.5;
 
-// seed_category → places.type (기존 places 데이터 패턴 준수)
 const CATEGORY_TO_TYPE = {
   restaurant: "restaurant",
   heritage: "attraction",
@@ -51,7 +23,6 @@ const CATEGORY_TO_TYPE = {
   attraction: "attraction",
 };
 
-// Haversine 거리 (km)
 function haversineKm(lat1, lng1, lat2, lng2) {
   const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -105,7 +76,6 @@ async function processCity(db, city) {
   );
   console.log(`  psr: ${psrRes.rows.length} / places: ${plRes.rows.length}`);
 
-  // 매칭: 이름 lower + 좌표 500m 이내
   const matched = new Map();
   for (const psr of psrRes.rows) {
     for (const pl of plRes.rows) {
@@ -130,7 +100,6 @@ async function processCity(db, city) {
   }
   console.log(`  🔗 매칭: ${matched.size}`);
 
-  // 이미지 주입 (matched rows)
   let imageInjected = 0,
     imageSkipped = 0;
   for (const [psrId, placeId] of matched.entries()) {
@@ -156,7 +125,6 @@ async function processCity(db, city) {
     `  📷 이미지 주입: ${imageInjected} (중복/URL없음 skip: ${imageSkipped})`,
   );
 
-  // 신규 INSERT (psr only)
   let inserted = 0,
     coordSkipped = 0;
   for (const psr of psrRes.rows) {
@@ -216,7 +184,6 @@ async function verify(db, cities) {
   }
   console.table(rows);
 
-  // 샘플 첫 photo_url HEAD 체크용 출력 (최대 5개)
   if (cities.length <= 3) {
     for (const city of cities) {
       const r = await db.query(

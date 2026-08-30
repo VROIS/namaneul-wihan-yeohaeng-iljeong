@@ -1,4 +1,3 @@
-// 프로필 언어선택 모달 스타일 = ProfileScreen 분리(2026-07-15 §0 슬림화, 순수 이동)
 import { StyleSheet } from "react-native";
 import { Spacing, BorderRadius } from "@/constants/theme";
 

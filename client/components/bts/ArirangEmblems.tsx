@@ -25,7 +25,6 @@ interface EmblemProps {
   glowColor?: string;
 }
 
-// ◉ 첫째 엠블럼 (ㅇ) — 속이 찬 원 + 내부 점, 한국 도장 모티프
 export function EmblemIeung({ size = 48, color = ARIRANG_RED }: EmblemProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 48 48">
@@ -54,7 +53,6 @@ export function EmblemIeung({ size = 48, color = ARIRANG_RED }: EmblemProps) {
   );
 }
 
-// ☰ 둘째 엠블럼 (ㄹ) — 수평 2줄, 태극기 건괘 연상
 export function EmblemRieul1({ size = 48, color = ARIRANG_RED }: EmblemProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 48 48">
@@ -84,7 +82,6 @@ export function EmblemRieul1({ size = 48, color = ARIRANG_RED }: EmblemProps) {
   );
 }
 
-// ⊞ 셋째 엠블럼 (ㄹ) — 격자 십자, 태극기 곤괘 연상
 export function EmblemRieul2({ size = 48, color = ARIRANG_RED }: EmblemProps) {
   return (
     <Svg width={size} height={size} viewBox="0 0 48 48">
@@ -127,7 +124,6 @@ export function ArirangEmblemsRow({
   color = ARIRANG_RED,
   delay = 0,
 }: ArirangEmblemsRowProps) {
-  // 각 엠블럼 스케일 + 글로우
   const scale1 = useSharedValue(0);
   const scale2 = useSharedValue(0);
   const scale3 = useSharedValue(0);
@@ -136,7 +132,6 @@ export function ArirangEmblemsRow({
   const glow3 = useSharedValue(0);
 
   useEffect(() => {
-    // 순차 등장 (0.3초 간격, spring)
     scale1.value = withDelay(
       delay,
       withSpring(1, { damping: 15, stiffness: 150 }),
@@ -150,7 +145,6 @@ export function ArirangEmblemsRow({
       withSpring(1, { damping: 15, stiffness: 150 }),
     );
 
-    // 글로우 펄스 (등장 후 한번 빛나고 은은하게 유지)
     glow1.value = withDelay(
       delay + 200,
       withSequence(

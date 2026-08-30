@@ -1,5 +1,4 @@
 // ⚠️ 수정금지(승인필요) — 2026-04-30 사용자 SSOT: haversine 좌표 매칭 (Gemini AI 폐기).
-// 점심 = slot 4 ↔ slot 6 segment 거리 최소 식당, 저녁 = venue 인근 (점심 식당 제외).
 
 export interface GeoPoint {
   id: number;
@@ -32,7 +31,6 @@ export function haversineKm(a: GeoPoint, b: GeoPoint): number {
   return 2 * R_KM * Math.asin(Math.min(1, Math.sqrt(h)));
 }
 
-// 점 P 가 선분 AB 에 가까운 정도 (km). 평면 근사 — 도시 규모면 충분.
 function perpendicularKm(p: GeoPoint, a: GeoPoint, b: GeoPoint): number {
   if (
     p.latitude == null ||
@@ -92,5 +90,3 @@ export function pickRestaurantBySegment<T extends GeoPoint>(
     perpendicularKm(p, anchorA, anchorB),
   );
 }
-
-// pickRestaurantNearVenue(8번=저녁 식당 선정) 폐기 = 2026-08-15 §19(bts-routes.ts 참고, 호출부 소멸).

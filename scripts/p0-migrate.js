@@ -1,4 +1,3 @@
-// P0-2/P0-3: Supabase DB 마이그레이션 — 가이드 통합 + bts_event_info
 const { Client } = require("pg");
 
 async function run() {
@@ -252,7 +251,6 @@ async function run() {
     }
   }
 
-  // 검증: 테이블 수 확인
   const res = await client.query(`
     SELECT count(*) as cnt FROM information_schema.tables
     WHERE table_schema = 'public' AND table_type = 'BASE TABLE'

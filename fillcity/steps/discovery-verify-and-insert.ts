@@ -94,11 +94,15 @@ function codeOf(
   return bestRankCode(copies.map((c) => c.lang));
 }
 
+// ⚠️ 수정금지(승인필요) 2026-08-30 판단3종 적발 = 같은 폴더의 b1-extracted.json(추출본)이 알파벳순으로
+//   b1-discovery-diff.json(최종본)보다 뒤에 와서 잘못 선택됨(항상 크래시) → 추출본 파일명 제외
 function findReportPath(): string {
   if (argv["report"]) return path.resolve(String(argv["report"]));
   const dir = path.join(ROOT, "docs", "b1-reports", String(cityId));
   const files = fs.existsSync(dir)
-    ? fs.readdirSync(dir).filter((f) => f.endsWith(".json"))
+    ? fs
+        .readdirSync(dir)
+        .filter((f) => f.endsWith(".json") && !f.includes("extracted"))
     : [];
   if (!files.length) {
     console.error(

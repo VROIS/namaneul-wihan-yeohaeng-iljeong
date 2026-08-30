@@ -1,12 +1,4 @@
 // ⚠️ 수정금지(승인필요) 2026-05-20 = 04-outskirt-restaurant 실행 진입점 (= 2 호출 분할)
-// = 호출 1 = 30 LOW (= ≤€30) / 호출 2 = 30 MID (= €30-80) + EXCLUDE_LIST 안 호출 1 응답 명시
-//
-// 호출:
-//   npx tsx fillcity/prompts/04-outskirt-restaurant/run.ts --city-id=19 --hints="Versailles / Disneyland Paris / ..." [--year=2026]
-//
-// 산출물: (= 날짜앞 표준, raw-filename.ts)
-//   docs/raw/{city_id}/{YYYY-MM-DD}_04-outskirt-restaurant_low.json
-//   docs/raw/{city_id}/{YYYY-MM-DD}_04-outskirt-restaurant_mid.json
 import fs from "fs";
 import path from "path";
 import { fileURLToPath, pathToFileURL } from "url";
@@ -43,7 +35,6 @@ if (!cityId) {
 }
 
 (async () => {
-  // 1. 도시 + Gemini key
   const pg = await import("pg");
   const c = new pg.default.Client({
     connectionString: process.env.SUPA_URL || process.env.DATABASE_URL,
@@ -62,7 +53,6 @@ if (!cityId) {
     process.exit(1);
   }
   // ⚠️ 2026-06-18 사장님 SSOT = 출입증 관문 issue_api_key() 경유. 외곽식당 발굴(04-outskirt) = 도시 있음 + 행 없음(false = 신규 발견).
-  // = 출입증(키이름·도시id·날짜·행없음) 검문 통과해야만 키 발급. 미달 = throw = 외부호출 불가.
   const today = new Date().toISOString().slice(0, 10);
   const { issueApiKey } = await import(
     pathToFileURL(path.join(ROOT, "server/services/shared/issue-api-key.ts"))
@@ -91,7 +81,6 @@ if (!cityId) {
     `city_id = ${cityId} (${city.name_en}), hints = ${hints.slice(0, 60)}...`,
   );
 
-  // 2. prompt 템플릿
   const promptTpl =
     fs
       .readFileSync(path.join(__dirname, "prompt.txt"), "utf-8")
@@ -163,7 +152,6 @@ if (!cityId) {
     }
   }
 
-  // ⚠️ 2026-06-15 = 파일명 단일 표준(raw-filename.ts) = {date}_04-outskirt-restaurant_{tier}.json (날짜앞)
   // ⚠️ 수정금지(승인필요) — raw 버전순번(2026-06-16 SSOT) = low/mid 파일별 versionedName(외부응답 raw_text만 해싱)
   const { rawName, rawHash, versionedName } = await import(
     pathToFileURL(path.join(ROOT, "server/services/shared/raw-filename.ts"))
@@ -178,7 +166,6 @@ if (!cityId) {
     }
   };
 
-  // 3. 호출 1 = LOW
   console.log("\n--- 호출 1 = 30 LOW ---");
   const t1 = Date.now();
   const r1 = await callGemini(build("low", ""));
@@ -213,7 +200,6 @@ if (!cityId) {
   const lowList = parseTier(r1.text, "low") || [];
   console.log(`✓ low 저장 = ${lowList.length} 곳`);
 
-  // 4. 호출 2 = MID + EXCLUDE_LIST
   console.log("\n--- 호출 2 = 30 MID + EXCLUDE_LIST ---");
   const excludeStr = lowList.length
     ? "\n  이미 추천된 LOW 30 곳 (= 아래) 와 중복 X:\n" +

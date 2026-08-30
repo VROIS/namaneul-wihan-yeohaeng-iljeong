@@ -16,7 +16,6 @@ async function check() {
 
     console.log("\n[1] place_seed_raw 컬럼 목록:");
     console.table(res.rows);
-    // ⚠️ 2026-06-11 = unified_id 진단 블록 제거 (= DROP된 헛바퀴)
   } catch (e) {
     console.error("\n❌ 진단 중 오류 발생:", e);
   }

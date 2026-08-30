@@ -1,5 +1,3 @@
-// 여정 플래너 핵심 훅 = 상태·효과·복원 + 서브훅 조립 = TripPlannerScreen 분리(2026-07-15 §0 슬림화, 순수 이동)
-// (옛 미사용 state activeDay = 사용처 0 = §19 완전삭제)
 import React, {
   useState,
   useEffect,
@@ -27,26 +25,18 @@ import { useAiOpinionOverlay } from "./useAiOpinionOverlay";
 import { useSaveItinerary } from "./useSaveItinerary";
 import { useShareCalendar } from "./useShareCalendar";
 import { useGenerateItinerary } from "./useGenerateItinerary";
-// "도심 기준" 표식 판별 1벌(§16) = 실제 숙소가 아니므로 복원 시 숙소 목록에서 제외
 import { isCityCenterName } from "@/lib/display-city-name";
 
 type ScreenState = "Input" | "Loading" | "Result";
 
 // ⚠️ 2026-07-31 사장님 승인(BTS D단계 FE-4) = initialRequest = BTS 가 조립한 폼(공연도시·핀·공연장 기점).
-//   있으면 폼 초기값으로 쓰고 마운트 시 자동 생성 1회. 없으면 = 기존과 완전 동일(메인앱 영향 0).
 export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
   const colorScheme = useColorScheme();
   const theme = Colors[colorScheme ?? "light"];
   const insets = useSafeAreaInsets();
   const navigation =
     useNavigation<NativeStackNavigationProp<RootStackParamList>>();
-  // 🗂️ 2026-07-03 = 저장여정 복원용 route param(itineraryId). 프로필 나의여정 카드 탭 시 전달됨.
   // ⚠️ 수정금지(승인필요) 2026-07-31 = **화면 밖에서 열려도 안 터지게** 한 것.
-  //   사고: 이 화면을 BTS 위에 창(모달)으로 띄우면 "지금 어느 화면이냐"를 물어볼 곳이 없어
-  //   `useRoute()` 가 그 자리에서 앱을 죽였다("Couldn't find a route object", 2026-07-30 실측).
-  //   여기서 쓰는 값은 **저장여정 복원 번호 하나뿐**이고, 창으로 열 때는 그 번호가 애초에 없다.
-  //   그래서 물어볼 곳이 없으면 조용히 **없음**으로 두고 화면은 정상 동작하게 한다.
-  //   (탭에서 평소처럼 열 때는 옛날 그대로 번호를 받는다 = 저장여정 복원 기능 손상 0)
   let restoreItineraryId: number | undefined;
   try {
     const route = useRoute<RouteProp<MainTabParamList, "Home">>();
@@ -57,25 +47,19 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
   const [screen, setScreen] = useState<ScreenState>("Input");
   const [loadingStep, setLoadingStep] = useState(0);
   // ⚠️ 수정금지(승인필요) 2026-08-15 사장님 승인 = 로딩화면 기능소개 캐러셀 오픈 게이트.
-  //   3초 지연 후에만 열림(useGenerateItinerary가 제어) = DB-only(2초)는 안 열리고 MIX(느림)만 열림.
   const [carouselOpen, setCarouselOpen] = useState(false);
   const [itinerary, setItinerary] = useState<Itinerary | null>(null);
-  // ⚠️ 2026-07-03 = 지도는 항상 고정 표시(showMap 미사용). setCurrentItinerary만 사용 = 하단탭 "AI 의견" 버튼 활성화·검증대상 전달.
   const {
     setCurrentItinerary,
-    // ⚠️ 2026-07-31 = FE-5 잠금용 = 전역 "현재 여정"(이 화면이 2벌 돌 때 신호 주인 판별).
     currentItinerary: globalCurrentItinerary,
     aiOpinionRequestedAt,
     clearAiOpinionRequest,
     requestAiOpinion,
-    // ⚠️ 2026-07-25 = requestExpert만 사용(일별 바로예약 버튼=DailyTotal). expert 오버레이 열림/신호수신은 전역 ExpertOverlay(App)로 이관(§19).
     requestExpert,
     authUser,
-    // ⚠️ 2026-07-31 = BTS 자동생성(FE-4)의 로그인 대기용(§22 검증 = 비로그인 잠금 소진 방지).
     isAuthed,
     // 🔒 2026-08-05 사장님 SSOT = 여정 슬롯 [해설 듣기] 관문용(PlaceSlotCard 로 내려보냄).
     requestLogin,
-    // ⚠️ 2026-08-19 = 하단탭 "Plan" = 홈버튼 신호(MainTabNavigator tabPress → 여기서 Input으로 초기화).
     homeRequestedAt,
     clearHomeRequest,
   } = useMapToggle();
@@ -91,27 +75,18 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
     [t],
   );
   // ⚠️ 2026-07-03 사장님 SSOT = 재저장 판별용 여정 DB id. 복원(프로필 카드 탭)/저장 성공 시 세팅 = 이 화면 재저장 시 같은 행 덮어쓰기(PUT).
-  //   null = 신규 여정 = 저장 시 새 행(POST). (버튼 잠금 아님 = justSaved 와 별개.)
   const [currentItineraryId, setCurrentItineraryId] = useState<number | null>(
     null,
   );
-  // 🔗 2026-07-21 = 공유 링크(/shared/itinerary/:id)로 들어온 열람인지 표시. true면 restoreItineraryById가 currentItineraryId를 null로 유지(원본 보호).
   const [sharedEntry, setSharedEntry] = useState(false);
   // 🎬 2026-07-22 사장님 SSOT = 영상 버튼은 "프로필 카드로 복원한 저장 여정"에서만 저장버튼 자리에 노출.
-  //   신규 생성 여정 = 저장버튼 원래 기능 유지(저장 후에도 안 바뀜). 복원 = "이 여정을 영상으로 봐야지" 내비게이션.
   const [restoredTrip, setRestoredTrip] = useState(false);
-  // 🗺️ 2026-06-28 = 지도 마커 클릭 → 해당 슬롯 스크롤 (= ScrollView ref + 슬롯별 y좌표 기록)
   const resultScrollRef = useRef<ScrollView | null>(null);
   const slotLayoutsRef = useRef<Record<string, number>>({});
-  // 🗺️ 2026-06-28 = 지도 = 스크롤 따라 보이는 Day 자동 전환 (= Day별 시작 y 기록 + onScroll 감지 → 그 Day 슬롯+숙소깃발)
   const dayLayoutsRef = useRef<Record<number, number>>({});
   const placesListOffsetRef = useRef<Record<number, number>>({});
   const [currentMapDay, setCurrentMapDay] = useState(1);
-  // 🗺️ 2026-06-28 사용자 SSOT = 슬롯(이미지外) 터치 → 지도 그 마커 포커스 (= 양방향 연동, 썸네일터치=외부구글맵 분리)
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
-  // 🎯 로그인된 사용자 정보 (birthDate 포함)
-  // ⚠️ 2026-07-27 = 로그인 사용자 = 전역 1곳(authUser)만 읽음. 마운트 때 1회만 읽던 자기 사본 폐기 §19
-  //   (인앱 로그인 후에도 옛 값이 남아 여정 요청의 사용자 id 가 갈리던 문제).
   const currentUser: UserData | null = authUser;
 
   const [formData, setFormData] = useState<TripFormData>({
@@ -130,11 +105,9 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
     travelStyle: "Reasonable", // 기본값
     travelPace: "Relaxed",
     mobilityStyle: "WalkMore",
-    // ⚠️ 2026-07-31 = BTS 폼(initialRequest) 있으면 그 값이 기본값을 덮음(마운트 1회) = FE-4.
     ...(initialRequest ?? {}),
   });
 
-  // ── 서브훅 조립(분리 전과 동일 상태·핸들러, 파일만 분리 §0) ──
   const {
     aiOpinionVisible,
     setAiOpinionVisible,
@@ -172,7 +145,6 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
     i18n,
   });
 
-  // 🔗📅 2026-07-21 = 여정 공유(시스템 공유시트)·캘린더 저장(.ics) 서브훅 조립(§16 = useSaveItinerary 바로 다음).
   const { sharingAction, handleShareItinerary, handleSaveCalendar } =
     useShareCalendar({
       itinerary,
@@ -199,16 +171,12 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
   const pickers = usePickers({ formData, setFormData });
 
   // ⚠️ 2026-07-31 사장님 지시(BTS 문제점1) = 결과화면 ← = BTS 로 열렸으면(폼 실림) **직전 카드 화면으로 복귀**.
-  //   옛것(무조건 입력화면)은 BTS 안에서 메인 입력폼이 떠버려 카드 화면으로 돌아갈 길이 없었다(이탈 갇힘).
-  //   카드 선택은 BTSContext 에 살아 있음 = 재조정 후 다시 "같이 떠나요" = 재생성(무료).
   const handleExitResult = useCallback(() => {
     if (initialRequest && navigation.canGoBack()) {
       navigation.goBack();
       return;
     }
     // ⚠️ 수정금지(승인필요) 2026-08-19 사장님 승인 = "출발지로 귀환" = 프로필 카드로 열람한 여정은
-    //   뒤로가기 시 프로필 화면으로 복귀(기존엔 무조건 홈으로 가던 것 = 정합 위반).
-    //   restoredTrip(326줄에서 이미 세팅되는 기존 state)만 재사용 = 새 장치 발명 없음(§16).
     if (restoredTrip) {
       (
         navigation as unknown as {
@@ -218,8 +186,6 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
       return;
     }
     // ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 = "1회 생성 = 미션 종료" 안전장치 ②(Input 재진입 시).
-    //   ①(useGenerateItinerary 생성 성공 직후)과 별개 시점 = 충돌 아니라 이중 안전장치.
-    //   restoreItineraryById 는 setScreen("Result")로 끝나 이 분기를 타지 않으므로 "다시보기"는 안 건드림.
     setFormData((prev) => ({
       ...prev,
       accommodationCoords: undefined,
@@ -231,21 +197,14 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
   }, [initialRequest, navigation, restoredTrip]);
 
   // ⚠️ 수정금지(승인필요) 2026-08-19 사장님 승인 = 하단탭 "Plan" = 홈버튼 신호 수신.
-  //   MainTabNavigator가 물리 탭터치 시에만 발신(requestHome) → 여기서 handleExitResult의 기본 초기화(숙소 플래그 정리+Input 전환)와 동일 로직 실행(§16 재사용).
   //   ⚠️ 수정금지(승인필요) 2026-08-19 사장님 승인(판단3종 회귀 지적 반영) = Loading 중엔 무시.
-  //   여정생성(executeGenerate)·저장여정복원(restoreItineraryById) 모두 Loading 동안 비동기 응답을 기다리는데,
-  //   그 사이 홈으로 나가 Input을 다시 건드리면 늦게 온 응답이 그 내용을 덮어씀(경합) — 원래(이 기능 추가 전)도
-  //   Home 탭에 리스너가 없어 Loading 중엔 나갈 방법 자체가 없었다 = 그 원래 동작을 그대로 복원.
-  //   전문가·Tripis 탭은 TripPlannerScreen 상태를 안 건드리는 독립 오버레이라 이 가드와 무관(그대로 계속 작동).
   useEffect(() => {
     if (!homeRequestedAt) return;
     if (screen === "Loading") {
-      // 로딩 중 눌림 = 무시하고 신호도 즉시 비움(그대로 두면 로딩 끝난 순간 뒤늦게 재발동해 Result를 다시 Input으로 덮어씀).
       clearHomeRequest();
       return;
     }
     // ⚠️ 수정금지(승인필요) 2026-08-19 사장님 승인 = 홈(Input)은 항상 새 여정을 만들 수 있는 빈 상태가 기본.
-    //   프로필에서 열어본 여정 꼬리표(restoredTrip)가 남아있으면 안 됨 — 여기서 같이 청소.
     setRestoredTrip(false);
     setFormData((prev) => ({
       ...prev,
@@ -259,8 +218,6 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
   }, [homeRequestedAt, clearHomeRequest, screen]);
 
   // ⚠️ 2026-07-31 사장님 승인(BTS D단계 FE-4) = 폼을 실어 열렸으면(같이 떠나요) 입력화면 건너뛰고 즉시 생성 1회.
-  //   ref 잠금 = 1회만. **로그인 확인 후에만 잠금**(§22 검증) — 비로그인 상태에서 잠가버리면
-  //   로그인해도 재발사가 없어 사용자가 입력화면에 방치됐다. 로그인되면(isAuthed) 그때 1회 발사.
   const autoGeneratedRef = useRef(false);
   useEffect(() => {
     if (!initialRequest || autoGeneratedRef.current || !isAuthed) return;
@@ -269,13 +226,6 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
   }, [initialRequest, isAuthed, handleGenerate]);
 
   // ⚠️ 2026-07-03 사장님 SSOT = "이 화면에 지도 섹션(필수 요소)이 있는가"로 판단 = screen==="Result"일 때만 활성.
-  //   지도(ItineraryMap)도 ResultStep 안에서 screen==="Result"일 때만 그려짐 = 동일 조건 재사용.
-  //   itinerary 유무만으로는 안 됨(결과화면 뒤로가기 후 Input에서도 itinerary가 남아있어 오작동).
-  // ⚠️ 2026-07-31 = **내가 올린 여정만 내린다**(BTS D단계 = 이 화면이 2벌 돌게 되며 §22 검증이 잡음).
-  //   옛것(무조건 null 덮기)은 = BTS 결과가 떠 있는데 [일정] 창을 열면 새 벌이 마운트되자마자
-  //   전역 여정을 null 로 밟아 [AI의견]·[전문가]가 회색으로 죽었다 → 남의 여정은 안 밟는다.
-  //   전역값은 **ref 로만 읽음**(의존성 아님) = 두 벌이 동시에 결과화면이어도 서로의 도장에
-  //   반응해 무한 교대 갱신(핑퐁)하는 경로 자체가 없음(§22 검증 지적) = 마지막에 결과 도달한 벌이 주인.
   const globalItineraryRef = useRef(globalCurrentItinerary);
   useEffect(() => {
     globalItineraryRef.current = globalCurrentItinerary;
@@ -291,8 +241,6 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
     }
   }, [screen, itinerary, currentItineraryId, setCurrentItinerary]);
 
-  // 언마운트 = 전역이 아직 내 여정을 가리키면 내림(창 닫힘 뒤 죽은 여정이 전역에 남아
-  //   AI의견 버튼이 살아 보이는데 응답할 화면이 없는 먹통 방지 = §22 검증 시나리오 B).
   const unmountGuardRef = useRef({
     mine: null as Itinerary | null,
     global: null as Itinerary | null,
@@ -310,8 +258,6 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
     };
   }, []);
 
-  // 🎯 로그인 사용자의 생년월일을 입력폼에 반영. 전역 판정(authUser)이 바뀌면 따라감
-  //   (마운트 때 저장소를 1회만 읽던 옛 방식 폐기 §19 = 인앱 로그인 후에도 옛 값이 남던 원인).
   useEffect(() => {
     if (!authUser) return;
     setFormData((prev) => ({
@@ -320,18 +266,10 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
     }));
   }, [authUser]);
 
-  // 🗂️ 2026-07-03 사용자 SSOT = 저장여정 복원 = 단일 함수(§16). 프로필 "나의 여정" 카드 탭·전문가 답변함 문의 탭·공유링크 열람 공용.
-  //   itineraryId → GET raw_data → 여정 결과화면(ResultStep) 재현. setItinerary + 숙소깃발 + 요약헤더 formData 스칼라 + Result 전환.
-  //   ⚠️ 2026-07-21 = opts.shared=true(공유링크 열람) 시 setCurrentItineraryId를 null로 유지 = 열람자가 저장 눌러도
-  //   PUT(원본 덮어쓰기)이 아니라 POST(내 여정 새 행)로 감 = 타인 원본 보호. 기본(opts 없음=프로필 카드 복원)은 종전과 동일하게 targetId 세팅.
   const restoreItineraryById = useCallback(
     async (targetId: number, opts?: { shared?: boolean }) => {
       // ⚠️ 수정금지(승인필요) 2026-08-19 사장님 승인 = GET 응답 오기 전 잠깐 Input 화면이 그대로 보이던 문제
-      //   (탭 전환은 즉시인데 setScreen("Result")는 요청 완료 후라 그 사이 Input이 스침) 수정.
-      //   기존 3states(Input/Loading/Result) 중 Loading 재사용 = 새 상태 발명 없음(§16).
       //   ⚠️ 수정금지(승인필요) 2026-08-19 사장님 승인(판단3종 지적) = loadingStep도 0으로 리셋.
-      //   안 하면 직전 생성에서 남은 단계값이 그대로 남아 "마지막으로 꼼꼼히 확인 중" 같은
-      //   엉뚱한 문구가 단순 조회(복원)인데도 보임(useGenerateItinerary와 동일 관례 맞춤).
       setLoadingStep(0);
       setScreen("Loading");
       try {
@@ -355,8 +293,6 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
         setAiOpinionData((raw as any).verification?.result ?? null);
         // ⚠️ 수정금지(승인필요) 2026-08-13 = 이름 없는 것(서버 깃발용 좌표)은 실제 숙소가 아니므로 제외.
         // ⚠️ 수정금지(승인필요) 2026-08-21 사장님 승인 = 서버가 저장해 둔 "{도시} 도심"·"도심 기준" 은
-        //   실제 숙소가 아니라 도심기준 표식이므로 여기서 제외한다(§19). 안 그러면 복원 시 실제 숙소로
-        //   오인돼 출발바가 그 한국어를 그대로 쓰고, 앱 언어를 바꿔도 "Lima 도심" 이 남는다(실기기 실측).
         const accoms: DayAccommodation[] = (raw.days || [])
           .filter(
             (d: any) =>
@@ -373,7 +309,6 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
           }));
         setDayAccommodations(accoms);
         // ⚠️ 수정금지(승인필요) 2026-08-13 사장님 SSOT = 입력화면 = 앱의 홈 = 항상 디폴트 상태.
-        //   travelStyle/travelPace/mobilityStyle 은 넣지 마라(DB값이 선택지 id 와 달라 버튼이 전부 풀림 → 생성 500).
         setFormData((prev) => ({
           ...prev,
           destination: raw.destination || prev.destination,
@@ -398,29 +333,18 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
   );
 
   // ⚠️ 2026-08-03 사장님 지적 실증 = **같은 여정을 다시 열면 먹통**(도시카드 [코스] 1회는 뜨고 2회째 무반응,
-  //   파리·마드리드·뮌헨 동일). 레이턴시가 아니라 구조 문제였다: 이 복원은 **번호가 바뀔 때만** 돈다.
-  //   같은 도시를 다시 누르면 번호가 그대로라 바뀐 것이 없어 아무 일도 안 일어났다
-  //   (실증: 같은 도시 = 무반응 / 다른 도시로 바꾸면 = 정상 동작).
-  //   → 복원한 뒤 번호를 **비운다**. 그러면 다음에 같은 번호가 와도 "없음 → 번호" 로 바뀌어 확실히 돈다.
-  //   보내는 쪽 4곳(도시카드·프로필 여정카드·전문가 답변함·전문가 오버레이)은 손대지 않는다 = 받는 쪽 1벌만(§0).
   useEffect(() => {
     if (!restoreItineraryId) return;
     restoreItineraryById(restoreItineraryId);
     try {
       navigation.setParams({ itineraryId: undefined } as never);
-    } catch {
-      // 창(모달)으로 열린 경우 = 비울 route 자체가 없음 = 위 useRoute 와 같은 방어
-    }
+    } catch {}
   }, [restoreItineraryId, restoreItineraryById, navigation]);
 
-  // 새 여정 생성 시작(Loading) = 복원 상태 해제 = 신규 여정 화면은 저장버튼 원래 기능으로 복귀
   useEffect(() => {
     if (screen === "Loading") setRestoredTrip(false);
   }, [screen]);
 
-  // 🔗 2026-07-21 = 웹 공유링크 진입(/shared/itinerary/:id) = 서버는 이미 SPA 폴백이 이 경로에 index.html 서빙(server/index.ts:223-232, 신규 라우트 0)
-  //   + GET /api/itineraries/:id 인증 0(개발 전체공개 = 게이트 추가 금지). 마운트 시 pathname 1회 파싱(useLogin.ts:130-143 패턴 준용) → shared:true로 복원.
-  //   1회 실행 가드(ref) = 로그인 왕복 후 pathname이 남아있어도(§ useLogin replaceState) 재실행돼 반복 재진입하는 것 방지.
   const sharedDeepLinkHandled = useRef(false);
   useEffect(() => {
     if (Platform.OS !== "web" || typeof window === "undefined") return;
@@ -441,7 +365,6 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
   };
 
   return {
-    // 컨텍스트·테마
     theme,
     insets,
     navigation,
@@ -450,47 +373,34 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
     // 🔒 2026-08-05 사장님 SSOT = 슬롯 [해설 듣기] 관문에 필요(판정은 전역 1곳 MapToggleContext, 여기선 전달만).
     isAuthed,
     requestLogin,
-    // BTS 문제점1 = 결과화면 ← 의 단일 출구(카드 복귀 vs 입력화면)
     handleExitResult,
     // ⚠️ 2026-08-01 사장님 지시 = **마지막 슬롯이 고정된 여정**이면 [숙소 변경]을 숨긴다.
-    //   사유(실측): 숙소를 바꾸면 그 날을 통째로 다시 짜는데(regenerate-day) 그 경로는
-    //   **고정 슬롯(공연장)을 모른다** → 마지막에 있어야 할 공연장이 1번 자리에 20:00 으로 박혔다.
-    //   BTS 는 출발지가 공연장으로 고정(사장님 결정3)이라 애초에 바꿀 이유도 없다.
-    //   ⚠️ 판단 기준 = `finalPlaceId` **1벌**(§16). 옛 `!!initialRequest`(= 폼이 밖에서 왔나) 폐기 §19 —
-    //     그건 "누가 만들었나"라 데이터 성질과 갈라졌다: 공연장 행이 없는 도시면 initialRequest 는 있는데
-    //     finalPlaceId 는 없어 **버튼만 사라지고 차단은 안 걸리는** 상태가 됐다(§22 검증 2종이 잡음).
     hasFixedFinalPlace: !!formData.finalPlaceId,
-    // 화면 상태
     screen,
     setScreen,
     loadingStep,
     LOADING_MESSAGES,
     carouselOpen,
-    // 여정·폼
     itinerary,
     formData,
     setFormData,
     toggleVibe,
     restoreItineraryById,
-    // 생성·저장
     handleGenerate,
     isSaving,
     justSaved,
     handleSaveItinerary,
     currentItineraryId, // 🎬 영상 슬롯이 쓰는 여정 id
     restoredTrip, // 🎬 프로필 카드 복원 여정 = 헤더 저장버튼 → 영상 버튼 전환(2026-07-22 사장님 SSOT, 신규 여정은 저장버튼 유지)
-    // 🔗📅 공유·캘린더(2026-07-21 신규, ResultStep footer 버튼 2개가 이 이름 그대로 참조 = D와 인터페이스 계약)
     sharingAction, // "share" | "calendar" | null = 눌린 버튼만 선택색+스피너 (2026-07-22 사장님 실기기 피드백)
     handleShareItinerary,
     handleSaveCalendar,
     sharedEntry,
-    // 숙소
     dayAccommodations,
     hotelModalDay,
     setHotelModalDay,
     isReoptimizing,
     handleSetDayAccommodation,
-    // AI 의견·전문가 오버레이
     aiOpinionVisible,
     setAiOpinionVisible,
     aiOpinionLoading,
@@ -498,7 +408,6 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
     aiOpinionError,
     requestAiOpinion,
     requestExpert,
-    // 지도·스크롤 연동
     resultScrollRef,
     slotLayoutsRef,
     dayLayoutsRef,
@@ -507,7 +416,6 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
     setCurrentMapDay,
     selectedSlotId,
     setSelectedSlotId,
-    // 픽커
     ...pickers,
   };
 }

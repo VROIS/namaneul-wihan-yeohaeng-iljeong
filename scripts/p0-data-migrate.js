@@ -1,4 +1,3 @@
-// P0: Neon DB (내손안에 가이드) → Supabase (통합 DB) 데이터 이전
 const { Client } = require("pg");
 
 const NEON_URL =
@@ -44,9 +43,7 @@ async function run() {
   await neon.connect();
   await supa.connect();
 
-  // 1. users (가이드 컬럼 매핑)
   await migrate(neon, supa, "users", "SELECT * FROM users", async (db, r) => {
-    // Supabase users는 username/password 필수 → 가이드 user를 nubi 포맷으로 변환
     await db.query(
       `
         INSERT INTO users (id, username, password, display_name, preferred_language,
@@ -84,7 +81,6 @@ async function run() {
     );
   });
 
-  // 2. guides
   await migrate(neon, supa, "guides", "SELECT * FROM guides", async (db, r) => {
     await db.query(
       `
@@ -116,7 +112,6 @@ async function run() {
     );
   });
 
-  // 3. shared_html_pages
   await migrate(
     neon,
     supa,
@@ -154,7 +149,6 @@ async function run() {
     },
   );
 
-  // 4. credit_transactions
   await migrate(
     neon,
     supa,
@@ -180,7 +174,6 @@ async function run() {
     },
   );
 
-  // 5. voice_configs
   await migrate(
     neon,
     supa,
@@ -206,7 +199,6 @@ async function run() {
     },
   );
 
-  // 6. prompts
   await migrate(
     neon,
     supa,
@@ -233,7 +225,6 @@ async function run() {
     },
   );
 
-  // 7. notifications
   await migrate(
     neon,
     supa,
@@ -261,7 +252,6 @@ async function run() {
     },
   );
 
-  // 8. user_activity_logs
   await migrate(
     neon,
     supa,
@@ -289,7 +279,6 @@ async function run() {
     },
   );
 
-  // 9. push_subscriptions
   await migrate(
     neon,
     supa,
@@ -315,7 +304,6 @@ async function run() {
     },
   );
 
-  // 검증
   const verify = await supa.query(`
     SELECT 'users' as t, count(*) as c FROM users
     UNION ALL SELECT 'guides', count(*) FROM guides

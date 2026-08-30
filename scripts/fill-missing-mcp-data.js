@@ -1,10 +1,6 @@
 const { Client } = require("pg");
 require("dotenv").config();
 
-// MCP 수집 서비스 로직을 직접 구현하거나 모듈을 호출해야 함.
-// 여기서는 간단하게 DB에서 누락된 대상을 찾아 리스트업하고,
-// 필요시 실제 수집 함수를 호출하는 구조로 작성합니다.
-
 async function enrichMissingData() {
   const client = new Client({ connectionString: process.env.DATABASE_URL });
 
@@ -12,7 +8,6 @@ async function enrichMissingData() {
     await client.connect();
     console.log("✅ DB 연결 성공");
 
-    // 1. 가격이나 이미지가 누락된 시티/카테고리 조합 찾기
     const res = await client.query(`
       SELECT city_id, seed_category, COUNT(*) as missing_count
       FROM place_seed_raw
@@ -30,16 +25,10 @@ async function enrichMissingData() {
       `📊 총 ${res.rows.length}개의 시티/카테고리 조합에서 누락 발견.`,
     );
 
-    // 2. 누락된 대상에 대해 1단계 재수집 권장 (또는 직접 호출 로직 추가 가능)
-    // 실제 서비스 코드가 TS이므로, 여기서 직접 호출하기보다는
-    // 어떤 대상을 다시 돌려야 하는지 명확히 리포트하거나
-    // npx tsx를 통해 특정 옵션으로 runMcpRawStage1을 호출하도록 가이드합니다.
-
     for (const row of res.rows) {
       console.log(
         `📌 [도시 ID: ${row.city_id}, 카테고리: ${row.seed_category}] - 누락 건수: ${row.missing_count}`,
       );
-      // 실제 자동 보완을 원할 경우 여기서 해당 시티/카테고리에 대해 Stage 1 재요청 로직 수행
     }
 
     console.log(

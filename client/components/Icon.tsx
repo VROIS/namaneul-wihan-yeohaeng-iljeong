@@ -1,5 +1,4 @@
 // ⚠️ 수정금지(승인필요) — 아이콘 컴포넌트 (36개 명시 import, 번들 크기 축소)
-// import * 사용 금지 — 600개+ 아이콘이 전부 번들에 포함되어 15MB 초과됨
 import React from "react";
 import type { LucideProps } from "lucide-react-native";
 import {

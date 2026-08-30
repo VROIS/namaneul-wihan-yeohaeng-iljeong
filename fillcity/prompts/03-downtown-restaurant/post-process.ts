@@ -1,8 +1,4 @@
 // ⚠️ 수정금지(승인필요) 2026-05-20 = 03-downtown-restaurant 후처리 + DB INSERT
-// = docs/raw/{city_id}/{date}_03-downtown-restaurant_{tier}.json 4 tier 읽음 → upsertPlace() INSERT
-//
-// 호출:
-//   npx tsx fillcity/prompts/03-downtown-restaurant/post-process.ts --city-id=19 --date=2026-05-20 [--dry]
 import fs from "fs";
 import path from "path";
 import { fileURLToPath, pathToFileURL } from "url";
@@ -81,7 +77,6 @@ if (!cityId) {
   console.log(`═══ 03-downtown-restaurant post-process ═══`);
   console.log(`city_id = ${cityId}, date = ${date}, 합계 = ${all.length}`);
 
-  // 검증
   const failed = all.filter((x) => !(x.place.distance_km_from_center <= 10));
   if (failed.length) {
     console.error(`✗ distance_km_from_center > 10 위반 = ${failed.length} 행`);
@@ -123,7 +118,6 @@ if (!cityId) {
         address: p.address || null,
         latitude: null,
         longitude: null,
-        // ⚠️ 2026-06-12 카피 필드명 통폐합 = 응답 키 summary_ko/editorial_summary (= DB 컬럼명) 우선, 옛 raw fallback = 손실 0
         selectionReasonKo: p.summary_ko ?? p.selection_reason_ko ?? null,
         shortformKo: p.editorial_summary ?? p.shortform_ko ?? null,
         priceEur: p.price_eur ?? null, // COALESCE 새우선(최신최우선) 정책

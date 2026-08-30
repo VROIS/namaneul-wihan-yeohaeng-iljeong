@@ -1,15 +1,8 @@
-/**
- * Seedance API 키 DB 저장 스크립트
- *
- * 실행: npx tsx scripts/add-seedance-api-key.ts
- */
-
 import * as dotenv from "dotenv";
 import { drizzle } from "drizzle-orm/node-postgres";
 import pg from "pg";
 import { apiKeys } from "../shared/schema";
 
-// 'eq' 함수 import 필요
 import { eq } from "drizzle-orm";
 
 dotenv.config(); // .env 파일 로드
@@ -24,17 +17,14 @@ async function addSeedanceApiKey() {
     process.exit(1);
   }
 
-  // 직접 DB 연결 생성
   const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
-    // Supabase 연결 옵션 (필요시)
     connectionTimeoutMillis: 10000,
   });
 
   const db = drizzle(pool, { schema: { apiKeys } });
 
   try {
-    // Seedance API 키 정보
     const seedanceKeys = [
       {
         keyName: "SEEDANCE_API_KEY",
@@ -54,14 +44,12 @@ async function addSeedanceApiKey() {
     ];
 
     for (const key of seedanceKeys) {
-      // 기존 키 확인
       const existing = await db.query.apiKeys.findFirst({
         where: (apiKeys, { eq }) => eq(apiKeys.keyName, key.keyName),
       });
 
       if (existing) {
         console.log(`${key.keyName} already exists, updating...`);
-        // 업데이트
         await db
           .update(apiKeys)
           .set({ keyValue: key.keyValue })
@@ -77,7 +65,6 @@ async function addSeedanceApiKey() {
     console.error("Error adding Seedance API key:", error);
     throw error;
   } finally {
-    // 연결 종료
     await pool.end();
   }
 }

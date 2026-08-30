@@ -10,7 +10,6 @@ async function main() {
     await client.connect();
     console.log("Connected to Supabase");
 
-    // Create api_keys table
     await client.query(`
       CREATE TABLE IF NOT EXISTS api_keys (
         id SERIAL PRIMARY KEY,
@@ -27,7 +26,6 @@ async function main() {
     `);
     console.log("✅ api_keys table created");
 
-    // Insert default API key entries (with empty values)
     const defaultKeys = [
       {
         keyName: "GEMINI_API_KEY",
@@ -78,7 +76,6 @@ async function main() {
     }
     console.log("✅ Default API key entries created");
 
-    // Verify
     const result = await client.query(
       "SELECT key_name, display_name FROM api_keys ORDER BY id",
     );

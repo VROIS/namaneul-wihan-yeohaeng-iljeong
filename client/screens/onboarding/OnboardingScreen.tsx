@@ -1,4 +1,3 @@
-// 온보딩 화면 = client/screens/OnboardingScreen.tsx 분리(2026-07-16 §0 슬림화, 순수 이동, trip-planner/ 폴더 패턴 동일)
 import React, { useState, useRef, useMemo } from "react";
 import {
   View,

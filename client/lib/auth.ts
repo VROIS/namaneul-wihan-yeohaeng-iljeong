@@ -1,7 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getApiUrl } from "./query-client";
 // ⚠️ 수정금지(승인필요) 2026-08-15 사장님 승인 = 이 파일은 React 컴포넌트가 아니라(useTranslation 훅 불가)
-//   전역 i18n 싱글턴을 직접 불러 t() 대신 i18n.t() 로 결과 문자열을 번역한다(§16 = 기존 i18n 1벌 재사용).
 import i18n from "./i18n";
 
 const AUTH_KEY = "@vibetrip_auth";
@@ -23,29 +22,18 @@ export interface UserData {
   createdAt?: string;
 }
 
-// ⚠️ 옛 isAuthenticated(@vibetrip_auth 토큰 유무) 완전삭제 = 2026-07-27 §19.
-//   사유: 로그인 판정이 두 벌(토큰 유무 / 사용자 정보)로 갈려 화면마다 결과가 달랐음.
-//   현재 판정은 MapToggleContext(getUserData 기반) 1벌뿐.
-
 export async function getUserData(): Promise<UserData | null> {
-  // ⚠️ 저장된 실계정(@vibetrip_user)만 반환. 비로그인 = null.
-  //   guest_browse 거르기는 게스트 기능 폐지로 불필요해졌으나, 옛 기기에 남은 가짜 계정이
-  //   로그인으로 잡히지 않게 그대로 둔다(2026-07-27 §19 = 기능은 삭제, 옛 저장값 방어만 유지).
   try {
     const data = await AsyncStorage.getItem(USER_KEY);
     if (data) {
       const parsed = JSON.parse(data);
       if (parsed && parsed.id && parsed.id !== "guest_browse") return parsed;
     }
-  } catch {
-    // 저장 조회 실패 = 비로그인 취급
-  }
+  } catch {}
   return null;
 }
 
 // ⚠️ 수정금지(승인필요) — 사장님 SSOT 2026-07-27 = **저장소에 인증을 쓰면 자동으로 알린다**(§19·§22 "글 아닌 기계").
-//   옛 방식 폐기 §19 = 부르는 쪽이 따로 신호를 보내야 했고, 한 곳(관리자 로그인)이 빠뜨려
-//   "로그인했는데 앱은 비로그인"이 재발했음(§22 검증이 잡음). 이제 잊을 수가 없다.
 const authListeners = new Set<() => void>();
 export function subscribeAuthChanged(fn: () => void): () => void {
   authListeners.add(fn);
@@ -77,9 +65,6 @@ export async function clearAuth(): Promise<void> {
 }
 
 // ⚠️ 수정금지(승인필요) 사장님 SSOT 2026-08-08 = **이메일창 = 가입이 아니라 "이미 있는 내 계정 찾기"**.
-//   신규 가입은 소셜 3종(구글·카카오·애플)만 = 오타가 새 계정이 되던 통로를 원천 차단.
-//   관문 2개 = 메일 + 생년월일이 **둘 다** 그 계정과 맞아야 한다("생년월일은 비번처럼").
-//   서버가 주는 사유 = account_not_found / birthdate_mismatch / birthdate_required (화면이 그대로 보여준다).
 export async function emailLogin(data: {
   email: string;
   birthDate?: string; // 2026-08-24 = 생년월일 선택 정책(shared/birthdate-policy)
@@ -109,15 +94,10 @@ export async function emailLogin(data: {
 }
 
 // ⚠️ 수정금지(승인필요) — 옛 socialLogin(/api/auth/social-login) 완전삭제 = 2026-07-26 §0·§19.
-//   사유: 진짜 외부인증 없이 로그인시키던 우회로. 소셜 로그인 = 아래 2개(구글·카카오)가 유일.
 
 type LoginResult = { success: boolean; user?: UserData; error?: string };
 
-/**
- * ⚠️ 수정금지(승인필요) — 소셜 인증 결과를 우리 서버로 보내 로그인하는 **단 하나의 함수** (2026-07-26 §16).
- *   보낼 것(id_token / accessToken / code)만 다르고 나머지(보내기 → 성공이면 저장 → 실패문구)는 전부 같음.
- *   같은 처리 3벌 공존 폐기 = 2026-07-26 §0·§16 (§22 검증 지적).
- */
+/** ⚠️ 수정금지(승인필요) — 소셜 인증 결과를 우리 서버로 보내 로그인하는 **단 하나의 함수** (2026-07-26 §16). */
 async function postSocialLogin(
   path: string,
   data: Record<string, string>,
@@ -142,7 +122,6 @@ async function postSocialLogin(
   }
 }
 
-/** Google OAuth 성공 후 id_token으로 로그인 */
 export function socialLoginWithGoogle(data: {
   idToken: string;
   birthDate: string;
@@ -152,7 +131,6 @@ export function socialLoginWithGoogle(data: {
   return postSocialLogin("/api/auth/google", data, i18n.t("login.loginFailed"));
 }
 
-/** 카카오 OAuth 성공 후 accessToken으로 로그인 (웹 = 브라우저가 교환한 토큰) */
 export function socialLoginWithKakao(data: {
   accessToken: string;
   birthDate: string;
@@ -163,9 +141,6 @@ export function socialLoginWithKakao(data: {
 }
 
 // ⚠️ 수정금지(승인필요) 2026-07-31 사장님 지시 = 애플 로그인(아이폰 전용).
-//   애플이 주는 신분증(identityToken)을 우리 서버로 보낸다 = 구글과 **완전히 같은 형식**.
-//   이름은 애플이 **맨 처음 로그인할 때 딱 한 번만** 준다(두 번째부터는 안 줌).
-//   그래서 받은 그 순간 함께 보내 저장한다 = 나중에는 두 번 다시 받을 수 없다.
 export function socialLoginWithApple(data: {
   identityToken: string;
   birthDate: string;
@@ -176,7 +151,6 @@ export function socialLoginWithApple(data: {
   return postSocialLogin("/api/auth/apple", data, i18n.t("login.loginFailed"));
 }
 
-/** WhatsApp OTP 발송 */
 export async function whatsappOtpSend(
   phoneNumber: string,
 ): Promise<{ success: boolean; error?: string }> {
@@ -198,7 +172,6 @@ export async function whatsappOtpSend(
   }
 }
 
-/** WhatsApp OTP 검증 후 로그인 */
 export async function whatsappOtpVerify(data: {
   phoneNumber: string;
   otp: string;

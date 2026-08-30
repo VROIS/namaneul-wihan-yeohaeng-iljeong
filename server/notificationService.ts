@@ -1,21 +1,9 @@
-/**
- * Notification Service
- *
- * 알림 생성 및 푸시 발송 서비스:
- * - 인앱 알림 생성
- * - 웹 푸시 알림 발송
- * - 전체 공지 발송 (관리자용)
- *
- * @created 2025-12-06
- */
-
 import { db } from "./db";
 import { notifications, pushSubscriptions } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 import webpush from "web-push";
 
 // ⚠️ 수정금지(승인필요) 2026-07-13 사장님 SSOT = VAPID 가드 = 키 있으면 웹푸시 활성, 없으면 푸시만 스킵(인앱 알림 DB저장은 정상 = 1차 릴리스).
-//   2차에서 원서버(Replit Secrets) VAPID 키쌍 회수해 env 넣으면 푸시 자동 활성. 키쌍은 FE 하드코딩 공개키와 쌍 유지 필수(다르면 기존 구독 전부 무효).
 const VAPID_PUBLIC = process.env.VAPID_PUBLIC_KEY;
 const VAPID_PRIVATE = process.env.VAPID_PRIVATE_KEY;
 const pushEnabled = !!(VAPID_PUBLIC && VAPID_PRIVATE);
@@ -47,9 +35,6 @@ export interface PushPayload {
 }
 
 export class NotificationService {
-  /**
-   * 알림 생성 (DB에 저장)
-   */
   async createNotification(payload: NotificationPayload): Promise<string> {
     const result = await db
       .insert(notifications)
@@ -66,9 +51,6 @@ export class NotificationService {
     return result[0].id;
   }
 
-  /**
-   * 특정 유저에게 푸시 알림 발송
-   */
   async sendPushToUser(
     userId: string,
     payload: PushPayload,
@@ -109,7 +91,6 @@ export class NotificationService {
         console.error(`푸시 발송 실패 (${sub.endpoint}):`, error.message);
         failed++;
 
-        // 410 Gone 또는 404 Not Found = 구독 만료, 삭제
         if (error.statusCode === 410 || error.statusCode === 404) {
           await db
             .delete(pushSubscriptions)
@@ -122,9 +103,6 @@ export class NotificationService {
     return { success: sent > 0, sent, failed };
   }
 
-  /**
-   * 모든 유저에게 푸시 알림 발송 (전체 공지)
-   */
   async sendPushToAll(
     payload: PushPayload,
   ): Promise<{ sent: number; failed: number }> {
@@ -172,17 +150,12 @@ export class NotificationService {
     return { sent, failed };
   }
 
-  /**
-   * 알림 생성 + 푸시 발송 (통합)
-   */
   async createAndSendNotification(payload: NotificationPayload): Promise<{
     notificationId: string;
     pushResult?: { sent: number; failed: number };
   }> {
-    // 1. 알림 생성
     const notificationId = await this.createNotification(payload);
 
-    // 2. 푸시 발송
     let pushResult;
     const pushPayload: PushPayload = {
       title: payload.title,
@@ -194,19 +167,14 @@ export class NotificationService {
     };
 
     if (payload.userId) {
-      // 특정 유저에게 발송
       pushResult = await this.sendPushToUser(payload.userId, pushPayload);
     } else {
-      // 전체 공지
       pushResult = await this.sendPushToAll(pushPayload);
     }
 
     return { notificationId, pushResult };
   }
 
-  /**
-   * 리워드 알림 생성 + 푸시 발송
-   */
   async sendRewardNotification(
     userId: string,
     title: string,
@@ -223,9 +191,6 @@ export class NotificationService {
     });
   }
 
-  /**
-   * 알림 유형별 아이콘 반환
-   */
   private getIconForType(type: string): string {
     switch (type) {
       case "reward":

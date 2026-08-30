@@ -1,29 +1,4 @@
 // ⚠️ 수정금지(승인필요) — BTS psr 매칭율 낮은 이미지 제거 (사용자 2026-04-25 승인)
-//
-// 목적: place_seed_raw 의 장소명 vs image_url 파일명 토큰 매칭율 < threshold rows 의
-//       image_url 을 NULL 로 비움. row 자체는 살림 (후속 다른 소스로 보강 가능).
-//
-// 근거:
-//   - 사용자 통찰 (2026-04-25): Wikimedia URL 파일명 = 장소명 포함 구조 → URL = 검증 도구
-//   - 업계 검증 (Yelp Engineering 2015): 캡션 텍스트 마이닝 = 동일 패턴 (precision 94%)
-//   - <25% 매칭 샘플: "World's fair" → 박람회, "Vienna" → 도시명, "Lattice tower" → Tokyo Sky Tree
-//     = 명백 오매칭 (Wikipedia fallback 으로 동음이의 페이지 반환)
-//
-// 처리:
-//   1. 모든 BTS psr (collection_phase='bts2026', non-archived) row scan
-//   2. name_en + image_url 파일명 토큰 매칭율 계산
-//   3. < threshold rows 의 image_url 만 NULL 로 UPDATE
-//   4. row 자체는 보존 (후속 OpenTripMap/TripAdvisor/Yelp 보강 가능)
-//
-// 모드:
-//   --dry-run         : 시뮬레이션, DB 변경 없음
-//   --threshold=0.25  : 매칭율 임계값 (기본 0.25)
-//   (기본)             : COMMIT
-//
-// 실행:
-//   node scripts/p0-bts-clear-bad-images.mjs --dry-run
-//   node scripts/p0-bts-clear-bad-images.mjs --dry-run --threshold=0.5
-//   node scripts/p0-bts-clear-bad-images.mjs
 
 import pg from "pg";
 
@@ -126,7 +101,6 @@ const targets = rows.rows.filter(
 );
 console.log(`<${THRESHOLD * 100}% 매칭 (drop 대상): ${targets.length} rows`);
 
-// 도시 × 카테고리 영향 매트릭스
 const cityRes = await db.query(
   `SELECT id, name_en, bts_rank FROM cities WHERE bts_rank IS NOT NULL ORDER BY bts_rank`,
 );
@@ -146,7 +120,6 @@ const matrixRows = Object.values(matrix).sort((a, b) => a.rank - b.rank);
 console.log("\n=== 도시별 image_url NULL 처리 영향 ===");
 console.table(matrixRows);
 
-// 카테고리 합계
 const catTotal = {};
 for (const r of targets)
   catTotal[r.seed_category] = (catTotal[r.seed_category] || 0) + 1;
@@ -159,7 +132,6 @@ if (DRY_RUN) {
   process.exit(0);
 }
 
-// 실제 UPDATE
 console.log(`\n⚙️  실제 UPDATE 시작 (${targets.length} rows)...`);
 let done = 0;
 const BATCH = 100;
@@ -174,7 +146,6 @@ for (let i = 0; i < targets.length; i += BATCH) {
     console.log(`  ${done}/${targets.length}`);
 }
 
-// 검증
 const verify = await db.query(`
   SELECT
     COUNT(*) AS total,

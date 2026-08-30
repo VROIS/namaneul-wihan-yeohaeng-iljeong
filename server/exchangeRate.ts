@@ -1,15 +1,3 @@
-/**
- * Exchange Rate Service
- *
- * Frankfurter API를 사용한 EUR → 다중 통화 실시간 환율 조회
- * - 무료 API, 키 불필요
- * - European Central Bank 데이터 기반
- * - 지원 통화: KRW, USD, CNY, JPY
- *
- * @created 2025-11-26
- * @updated 2025-12-01 다중 통화 지원 추가
- */
-
 interface MultiCurrencyRates {
   KRW: number;
   USD: number;
@@ -25,7 +13,6 @@ interface ExchangeRateCache {
 let cache: ExchangeRateCache | null = null;
 const CACHE_DURATION = 60 * 60 * 1000; // 1시간 캐시
 
-// 기본 환율 (API 실패 시 사용)
 const DEFAULT_RATES: MultiCurrencyRates = {
   KRW: 1500,
   USD: 1.05,

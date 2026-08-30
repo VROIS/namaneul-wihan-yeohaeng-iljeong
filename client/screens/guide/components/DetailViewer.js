@@ -1,11 +1,5 @@
 // ⚠️ 수정금지(승인필요): 네이티브 DetailViewer = 운영앱(내손안에 가이드) 상세페이지 완전 클론
 // = 2026-07-20 사장님 SSOT: 운영앱(my-handyguide1) 6개월 실증본이 정답. 코드+운영 페이지 DevTools 실측으로 클론.
-//   · 낭독 = 첫 문장 등장 즉시 시작(운영 실측 = 텍스트와 +19ms 동시) + 스트리밍 문장 이어 낭독
-//   · 속도 = CONFIG.VOICE.TTS_RATE 1.0 (진입 음성안내와 동일 = 사장님 확정 최적)
-//   · 일시정지 = 읽던 문장 기억 → 그 문장부터 재개 (운영 네이티브 패턴 = 문장 스킵 방지)
-//   · 텍스트 토글 = 표시만 토글(운영 = classList.toggle 1줄) = 음성 계속 + 하이라이트 연동 유지
-//   · 자동 스크롤 = 낭독 문장 따라 (운영 scrollIntoView center 클론 = 글자수 비례 근사) + 스크롤바
-//   · 글자 = 운영 실측 20px/행간 32.5 + 폰 글자확대 무시(allowFontScaling=false = WebView와 동일)
 //   · 모든 버튼 = 완전 투명 + 아이콘만 (2026-07-20 사장님 실기기 지시 = 컴포넌트 전체 통일)
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
@@ -17,11 +11,8 @@ import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SvgXml } from 'react-native-svg';
 import { CONFIG } from '../config/constants';
-// 아이콘 = 운영 SVG 경로 직접 렌더(GuideIcons) = iOS Expo Go 에서 Ionicons 미표시 근본 해결(2026-07-20 실기기 SSOT).
 import GuideIcon from './GuideIcons';
-// 사진 없을 때 대신 띄우는 원형 마커 = 여정 슬롯 카드가 쓰는 그 1벌 그대로(§16 재발명 금지).
 import { placeholderMarkerSvg } from '@/components/bts/bts-marker-svg';
-
 
 // ⚠️ 수정금지(승인필요): i18n 7개 언어 사전 주입. alreadySaved = 중복 저장 시 안내(2026-07-21 사장님).
 const I18N = {
@@ -59,12 +50,9 @@ export default function DetailViewer({
   const [isPaused, setIsPaused] = useState(false);
   const [currentSentence, setCurrentSentence] = useState(-1);
   const [textVisible, setTextVisible] = useState(true);
-  // 저장 상태 = 운영 saveBtn 클론: 'idle'(북마크) → 'saving'(스피너) → 'success'(체크마크 1.5초) → 'idle' 복원.
   const [saveState, setSaveState] = useState('idle');
   const saveTimerRef = useRef(null);
-  // ⚠️ 이 해설의 DB 저장 완료 여부 = 중복저장 방지(2026-07-21 사장님 지시). 한 번 저장되면 재클릭해도 DB 재기록 안 함(안내음성만).
   //   ⚠️ 2026-08-03 사장님 지시 = **한 사용자 = 한 장소 = 해설 1행**. 이미 담아둔 장소면(창고 응답 mine)
-  //     화면을 다시 열어도 처음부터 켠 상태로 시작한다(= 첫 클릭도 "이미 저장되었습니다"). 저장 흐름 자체는 그대로.
   const savedRef = useRef(alreadySaved);
   useEffect(() => { savedRef.current = alreadySaved; }, [alreadySaved]);
   const textOpacity = useRef(new Animated.Value(1)).current;
@@ -78,15 +66,11 @@ export default function DetailViewer({
 
   const isVoiceMode = mode === 'voice';
   // ⚠️ 수정금지(승인필요) 2026-08-03 사장님 지시 = 검정은 여행앱 금기색.
-  //   밝은 바탕 여부 = 음성 모드 + **사진이 없는 장소**. 이 판단 1벌이 배경·글씨색·로딩색을 함께 정한다(§0 = 분기 1벌).
   const onLightBg = isVoiceMode || !imageUri;
-  // 사진이 없을 때 배경에 띄울 분류 아이콘(없는 분류면 null → 기본 위치 아이콘).
   const noImageSvg = placeholderMarkerSvg(placeholderCategory);
   sentencesRef.current = sentences;
   doneRef.current = done;
 
-  // ⚠️ 문장별 순차 낭독 + 하이라이트 = 운영 speakNext 클론.
-  //   큐 소진 + 스트림 미완 = waiting(도착 시 이어 낭독) / 스트림 완료 = 종료 처리.
   const speakSentence = useCallback((index) => {
     if (index >= sentencesRef.current.length) {
       if (doneRef.current) {
@@ -115,9 +99,6 @@ export default function DetailViewer({
       },
       onError: () => {
         // ⚠️ 2026-08-03 사장님 지적("저장 후 1단락만 읽고 끝남") 실측 원인:
-        //   [저장]·[일시정지] 가 부르는 Speech.stop() 이 읽던 문장을 error:interrupted 로 끝낸다.
-        //   이건 진짜 오류가 아니라 **우리가 일부러 멈춘 것**인데, 여기서 사슬(advanceRef)을 끊어
-        //   재개 후 한 문장만 읽고 멈췄다. onDone 이 쓰는 것과 **같은 가드 1벌**로 걸러낸다(§16).
         if (pausedRef.current) return;
         advanceRef.current = false;
         setIsPlaying(false);
@@ -126,7 +107,6 @@ export default function DetailViewer({
     });
   }, [lang]);
 
-  // ⚠️ 자동재생 = 운영 실측 클론: 첫 문장 등장 즉시 시작(+19ms), 이후 도착 문장 이어 낭독.
   useEffect(() => {
     if (!sentences.length) return;
     if (!startedRef.current) {
@@ -140,7 +120,6 @@ export default function DetailViewer({
     }
   }, [sentences.length, speakSentence]);
 
-  // 스트림 완료 시 대기 중이면 마무리 흐름 진입(남은 문장 없으면 종료 처리).
   useEffect(() => {
     if (done && waitingRef.current && advanceRef.current && !pausedRef.current) {
       waitingRef.current = false;
@@ -148,11 +127,8 @@ export default function DetailViewer({
     }
   }, [done, speakSentence]);
 
-  // 언마운트 = 낭독 정지.
   useEffect(() => () => { Speech.stop(); }, []);
 
-  // ⚠️ 낭독 완전 정지 = 운영 index.js:3057 resetSpeechState 클론(단일 진입점, §0·§16 재발명 금지).
-  //   저장 안내음성·닫기·재질문 3곳이 각자 인라인으로 정지하던 것을 이 함수 1벌로 통일.
   const stopTTS = useCallback(() => {
     advanceRef.current = false;
     pausedRef.current = false;
@@ -164,7 +140,6 @@ export default function DetailViewer({
     setCurrentSentence(-1);
   }, []);
 
-  // ⚠️ 자동 스크롤 = 운영 scrollIntoView(center) 클론 — 문장 글자수 비례 위치로 부드럽게.
   useEffect(() => {
     if (currentSentence < 0 || !scrollRef.current || !contentHRef.current) return;
     const arr = sentencesRef.current;
@@ -174,14 +149,12 @@ export default function DetailViewer({
     scrollRef.current.scrollTo({ y, animated: true });
   }, [currentSentence]);
 
-  // ⚠️ 일시정지 = 읽던 문장 기억(운영 onAudioBtnClick pause 경로). 저장·토글 공용(§16 재발명 금지).
   const pauseTTS = useCallback(() => {
     pausedRef.current = true;
     setIsPaused(true);
     Speech.stop();
   }, []);
 
-  // ⚠️ 재개 = 멈춘 문장부터(운영 resume 경로). 저장·토글 공용.
   const resumeTTS = useCallback(() => {
     pausedRef.current = false;
     setIsPaused(false);
@@ -189,8 +162,6 @@ export default function DetailViewer({
     speakSentence(Math.max(currentIdxRef.current, 0));
   }, [speakSentence]);
 
-  // ⚠️ 재생⇄일시정지 = 운영 onAudioBtnClick 네이티브 패턴 클론:
-  //   재생 중 → 정지 + 읽던 문장 기억 / 일시정지 중 → 그 문장부터 재개 / 종료 후 → 처음부터.
   const handleAudioToggle = useCallback(() => {
     if (isPlaying && !isPaused) { pauseTTS(); return; }
     if (isPlaying && isPaused) { resumeTTS(); return; }
@@ -201,7 +172,6 @@ export default function DetailViewer({
     speakSentence(0);
   }, [isPlaying, isPaused, pauseTTS, resumeTTS, speakSentence]);
 
-  // ⚠️ 텍스트 토글 = 운영 1줄 클론(표시만 토글) — 음성·하이라이트 상태는 건드리지 않음.
   const handleTextToggle = useCallback(() => {
     const next = !textVisible;
     setTextVisible(next);
@@ -209,8 +179,6 @@ export default function DetailViewer({
   }, [textVisible, textOpacity]);
 
   // ⚠️ 저장 안내음성 = 사장님 설계(2026-07-21): 일시정지 → 안내음성 → 자동 일시정지 해제(낭독 지속).
-  //   ⚠️ 재개 판단 = React state(isPlaying/isPaused = 비동기)가 아니라 ref(currentIdxRef = 즉시반영)로 =
-  //     연속 저장 시 state 리렌더 지연으로 재개가 꺼지던 버그 근본(2026-07-21). 낭독 미완료(문장 남음)면 항상 재개.
   const announce = useCallback((message) => {
     const resumeIdx = currentIdxRef.current;
     const wasReading = resumeIdx >= 0 && resumeIdx < sentencesRef.current.length;
@@ -229,11 +197,9 @@ export default function DetailViewer({
   }, [pauseTTS, resumeTTS, lang]);
 
   // ⚠️ 저장 클릭 = ①DB 저장은 최초 1회만(중복 방지, 2026-07-21 사장님) ②안내음성+낭독 이어가기는 매번 동일.
-  //   운영 handleSaveClick(index.js:3051~) = 스피너 → 체크마크 1.5초 → 북마크 복원.
   const handleSave = useCallback(async () => {
     if (saveState !== 'idle' || !onSave) return;
 
-    // 이미 저장된 해설 = DB 재기록 없이 "이미 저장되었습니다" 안내음성만(중복 저장 차단).
     if (savedRef.current) {
       setSaveState('success');
       announce(t.alreadySaved);
@@ -258,10 +224,8 @@ export default function DetailViewer({
     }
   }, [saveState, onSave, announce, t.saved, t.alreadySaved]);
 
-  // 언마운트 시 저장 복원 타이머 정리.
   useEffect(() => () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); }, []);
 
-  // ⚠️ 리턴 (낭독 정지 + 닫기) = stopTTS 단일 진입점 사용(§0·§16 재발명 금지, 인라인 중복 삭제)
   const handleClose = useCallback(() => {
     stopTTS();
     onClose();
@@ -324,7 +288,6 @@ export default function DetailViewer({
           style={[
             styles.textArea,
             { top: insets.top + ((locationName || voiceQuery) ? 124 : 72), opacity: textOpacity },
-            // ⚠️ AOS = footer(insets+12 올림, 높이 100) 위로 텍스트존 하단을 동적 확보 = 겹침 방지, 2026-07-20 3차 실기기
             Platform.OS === 'android' && { bottom: insets.bottom + 120 },
           ]}
           pointerEvents={textVisible ? 'auto' : 'none'}
@@ -342,7 +305,6 @@ export default function DetailViewer({
                   key={i}
                   allowFontScaling={false}
                   style={[
-                    // 밝은 바탕(음성 모드·사진 없는 장소) = 어두운 글씨 1벌 재사용(§16)
                     onLightBg ? styles.sentenceDark : styles.sentence,
                     i === currentSentence && styles.sentenceHighlight,
                   ]}
@@ -411,13 +373,10 @@ export default function DetailViewer({
 const styles = StyleSheet.create({
   container: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: 200 },
   // ⚠️ 수정금지(승인필요) 2026-08-03 사장님 = 어두운 바탕은 **사진이 깔릴 때만**(사진 로딩 중 여백용).
-  //   사진 없는 장소에는 깔지 않는다 = 검정 = 여행앱 금기색.
   containerPhoto: { backgroundColor: '#000' },
   // ⚠️ 2026-08-01 사장님 "풀로 차게" = 앱 시작 때 화면크기 1회 고정(Dimensions) 버릇 제거 → 어느 크기에서든 부모 꽉 채움
   bg: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 },
-  // 밝은 바탕 1벌 = 음성 모드 + 사진 없는 장소 공용(§16 재사용). 아이콘은 이 안에서 가운데.
   lightBg: { backgroundColor: '#FFFEFA', alignItems: 'center', justifyContent: 'center' },
-  // 사진 없는 장소의 분류 아이콘 = 부모(화면) 폭의 80% 정사각 + 옅게 = 글이 먼저 읽히는 장식.
   noImageIcon: { width: '80%', aspectRatio: 1, opacity: 0.15 },
   backBtn: {
     position: 'absolute', right: 16, width: 48, height: 48, borderRadius: 24,
@@ -437,7 +396,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     textShadowColor: 'rgba(0,0,0,0.95)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 8,
   },
-  // 밝은 바탕용 로딩 문구 = 해설 문장(sentenceDark)과 같은 글씨색 + 그림자 끔(§16 값 재사용 = 새 색 없음)
   loadingTextDark: { color: '#000', textShadowColor: 'transparent' },
   textArea: { position: 'absolute', bottom: 108, left: 0, right: 0 },
   textContent: { paddingHorizontal: 24, paddingVertical: 32 },

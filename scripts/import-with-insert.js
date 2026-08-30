@@ -18,7 +18,6 @@ function escapeValue(val) {
   if (val === "\\N") return "NULL";
   if (val === "t") return "TRUE";
   if (val === "f") return "FALSE";
-  // Escape single quotes
   const escaped = val.replace(/'/g, "''");
   return `'${escaped}'`;
 }
@@ -36,7 +35,6 @@ async function main() {
 
   console.log("Parsing SQL file...");
 
-  // Collect all COPY statements
   const tables = [];
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -67,7 +65,6 @@ async function main() {
         continue;
       }
 
-      // Process in batches
       const batchSize = 100;
       let inserted = 0;
 
@@ -84,16 +81,13 @@ async function main() {
           await client.query(sql);
           inserted += batch.length;
         } catch (err) {
-          // Try one by one
           for (const line of batch) {
             const fields = line.split("\t").map(escapeValue);
             const singleSql = `INSERT INTO ${table.tableName} (${table.columns.join(", ")}) VALUES (${fields.join(", ")}) ON CONFLICT DO NOTHING`;
             try {
               await client.query(singleSql);
               inserted++;
-            } catch (e) {
-              // Skip this row
-            }
+            } catch (e) {}
           }
         }
       }

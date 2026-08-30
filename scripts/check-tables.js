@@ -22,7 +22,6 @@ async function checkTables() {
     console.log(`\nFound ${result.rows.length} tables:`);
     result.rows.forEach((row) => console.log(`  - ${row.table_name}`));
 
-    // Check row counts for key tables
     const counts = await client.query(`
       SELECT 
         (SELECT COUNT(*) FROM places) as places,

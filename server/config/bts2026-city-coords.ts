@@ -1,7 +1,3 @@
-/**
- * BTS 2026-2027 ARIRANG 월드투어 도시 좌표 (시드용)
- * nameEn을 키로 사용
- */
 export const BTS2026_CITY_COORDS: Record<
   string,
   {

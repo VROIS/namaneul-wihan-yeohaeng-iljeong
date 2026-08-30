@@ -6,7 +6,6 @@ async function addEuropeCities() {
   await client.connect();
   console.log("DB connected\n");
 
-  // 유럽 30개 대표 도시 (영문 + 한글)
   const europeCities = [
     {
       name: "파리",
@@ -254,7 +253,6 @@ async function addEuropeCities() {
 
   let added = 0;
   for (const city of europeCities) {
-    // 이미 존재하는지 확인
     const existing = await client.query(
       "SELECT id FROM cities WHERE name = $1 AND country = $2",
       [city.name, city.country],
@@ -274,7 +272,6 @@ async function addEuropeCities() {
 
   console.log("\nAdded " + added + " new cities");
 
-  // 최종 확인
   const finalCount = await client.query("SELECT COUNT(*) as cnt FROM cities");
   console.log("Total cities: " + finalCount.rows[0].cnt);
 

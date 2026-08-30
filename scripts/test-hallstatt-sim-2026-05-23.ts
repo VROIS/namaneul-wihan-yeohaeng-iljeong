@@ -1,7 +1,3 @@
-// ⚠️ 2026-05-23 = 사용자 명시 시뮬 = 신규 도시 = Hallstatt (= 오스트리아)
-// 조건: 한국인 가족 / 모험 최우선 / 핫스팟 우선 / 빡빡 / 합리적 / 많이 걷기
-// = 검증: cities INSERT + PSR INSERT + 응답 JSON 정상
-
 import fs from "fs";
 import pg from "pg";
 
@@ -31,7 +27,6 @@ async function main() {
     `✅ API keys 주입: ${keys.rows.map((r: any) => r.key_name).join(", ")}`,
   );
 
-  // BEFORE 스냅샷
   const before = await c.query(
     `SELECT COUNT(*)::int n FROM cities WHERE LOWER(name_en) = 'hallstatt'`,
   );
@@ -41,7 +36,6 @@ async function main() {
     "../server/services/agents/pipeline-v3.js"
   );
 
-  // 사용자 조건 (= 가족 / Adventure + Hotspot 두 vibe / Packed / Reasonable / Walking)
   const formData = {
     destination: "Hallstatt",
     destinationCoords: { lat: 47.5622, lng: 13.6493 }, // 할슈타트 좌표 (= AG2-DB cityId 매칭 후 자동 = 미사용)
@@ -93,11 +87,9 @@ async function main() {
     console.error(`❌ 파이프라인 실패:`, e?.message || e);
   }
 
-  // 백그라운드 saveNewPlacesToDB 완료 대기 (= TS+PM+Storage+INSERT)
   console.log(`\n⏳ 백그라운드 saveNewPlacesToDB 완료 대기 (90초)...`);
   await new Promise((r) => setTimeout(r, 90000));
 
-  // AFTER 스냅샷
   const after = await c.query(
     `SELECT id, name, name_en, name_local, latitude, longitude FROM cities WHERE LOWER(name_en) = 'hallstatt'`,
   );

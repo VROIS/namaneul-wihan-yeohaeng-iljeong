@@ -1,22 +1,3 @@
-/**
- * 주인공 문장 생성기 (Protagonist Generator)
- *
- * 🎯 목적: Gemini 프롬프트 가중치 1순위로 사용될 "주인공 문장" 생성
- *
- * 조합 요소:
- * 1. curationFocus (Kids, Parents, Everyone, Self) - 누구를 위한 여행?
- * 2. companionType (Single, Couple, Family, ExtendedFamily, Group) - 누구랑?
- * 3. companionAges - 동반자 나이 (특히 아이, 부모님)
- * 4. vibes - 여행 취향 (Shopping, Foodie, Adventure 등)
- * 5. destination - 목적지
- *
- * 출력 예시:
- * - "5살 아이를 동반한 한국인 가족의 힐링+미식 파리 여행 (아이 중심)"
- * - "60대 부모님을 모시고 가는 로맨틱 파리 여행 (부모님 체력 고려)"
- * - "한국인 커플의 로맨틱+핫스팟 파리 여행"
- * - "혼자 떠나는 모험+문화 파리 여행"
- */
-
 type CurationFocus = "Kids" | "Parents" | "Everyone" | "Self";
 type CompanionType =
   | "Single"
@@ -48,7 +29,6 @@ interface ProtagonistOutput {
   priorityNotes: string[]; // 일정 생성시 우선 고려사항
 }
 
-// 한국어 라벨 매핑
 const COMPANION_LABELS: Record<CompanionType, string> = {
   Single: "혼자",
   Couple: "커플",
@@ -73,9 +53,6 @@ const FOCUS_LABELS: Record<CurationFocus, string> = {
   Self: "나 중심",
 };
 
-/**
- * 생년월일 → 현재 나이 계산
- */
 export function calculateAge(birthDate?: string): number | null {
   if (!birthDate) return null;
 
@@ -93,11 +70,6 @@ export function calculateAge(birthDate?: string): number | null {
   return age;
 }
 
-/**
- * 🎯 사용자 연령 기반 가족 구성 추정
- * - 자녀 나이 = 사용자 나이 - 30
- * - 조부모 나이 = 사용자 나이 + 25
- */
 interface FamilyAgeEstimate {
   userAge: number;
   userAgeGroup: string; // "30대", "40대" 등
@@ -108,16 +80,12 @@ interface FamilyAgeEstimate {
 }
 
 export function estimateFamilyAges(userAge: number): FamilyAgeEstimate {
-  // 자녀 나이 = 사용자 - 30 (최소 0세)
   const estimatedChildAge = Math.max(0, userAge - 30);
 
-  // 부모님 나이 = 사용자 + 25
   const estimatedParentAge = userAge + 25;
 
-  // 사용자 연령대
   const userAgeGroup = `${Math.floor(userAge / 10) * 10}대`;
 
-  // 자녀 연령 그룹
   let childAgeGroup: string;
   if (estimatedChildAge < 1) {
     childAgeGroup = "아직 미출생 (또는 영아)";
@@ -131,7 +99,6 @@ export function estimateFamilyAges(userAge: number): FamilyAgeEstimate {
     childAgeGroup = "성인 자녀";
   }
 
-  // 부모님 연령 그룹
   const parentAgeGroup = `${Math.floor(estimatedParentAge / 10) * 10}대`;
 
   return {
@@ -144,9 +111,6 @@ export function estimateFamilyAges(userAge: number): FamilyAgeEstimate {
   };
 }
 
-/**
- * 나이 분석 - 아이/부모님 나이 파싱 (입력된 나이 또는 추정 나이 사용)
- */
 function parseAges(
   agesString?: string,
   userBirthDate?: string,
@@ -162,7 +126,6 @@ function parseAges(
   const userAge = calculateAge(userBirthDate);
   const familyEstimate = userAge ? estimateFamilyAges(userAge) : null;
 
-  // 명시적으로 입력된 나이가 있으면 사용
   if (agesString) {
     const ages = agesString
       .split(",")
@@ -181,9 +144,7 @@ function parseAges(
     };
   }
 
-  // 입력된 나이 없으면 사용자 연령 기반 추정
   if (familyEstimate) {
-    // curationFocus에 따라 추정 나이 반환
     if (curationFocus === "Kids") {
       return {
         ages: [familyEstimate.estimatedChildAge],
@@ -203,7 +164,6 @@ function parseAges(
         familyEstimate,
       };
     } else if (curationFocus === "Everyone") {
-      // 전 가족 추정
       return {
         ages: [
           familyEstimate.estimatedChildAge,
@@ -229,9 +189,6 @@ function parseAges(
   };
 }
 
-/**
- * 주인공 문장 생성
- */
 export function generateProtagonistSentence(
   input: ProtagonistInput,
 ): ProtagonistOutput {
@@ -245,13 +202,11 @@ export function generateProtagonistSentence(
     birthDate,
   } = input;
 
-  // 🎯 사용자 연령 기반 가족 추정 포함
   const ageInfo = parseAges(companionAges, birthDate, curationFocus);
   const vibeLabels = vibes.map((v) => VIBE_LABELS[v]).join("+");
   const companionLabel = COMPANION_LABELS[companionType];
   const focusLabel = FOCUS_LABELS[curationFocus];
 
-  // 사용자 본인 연령 정보
   const userAge = calculateAge(birthDate);
   const userAgeGroup = userAge ? `${Math.floor(userAge / 10) * 10}대` : null;
 
@@ -259,18 +214,14 @@ export function generateProtagonistSentence(
   let promptContext = "";
   const priorityNotes: string[] = [];
 
-  // 🎯 사용자 본인 연령 정보 추가 (있으면)
   if (userAge && userAgeGroup) {
     promptContext = `【여행자 본인 정보】 ${userAgeGroup} 한국인 (만 ${userAge}세)\n\n`;
   }
 
-  // 사용자 본인 정보 prefix (유지할 것)
   const userInfoPrefix = promptContext;
 
-  // 🎯 주인공 문장 생성 로직
   switch (curationFocus) {
     case "Kids":
-      // 아이 중심 여행 (사용자 연령 기반 추정 or 입력된 나이)
       const childAge =
         ageInfo.youngest ?? ageInfo.familyEstimate?.estimatedChildAge;
       const childAgeGroup = ageInfo.familyEstimate?.childAgeGroup;
@@ -304,7 +255,6 @@ export function generateProtagonistSentence(
       break;
 
     case "Parents":
-      // 부모님 중심 여행 (사용자 연령 기반 추정 or 입력된 나이)
       const parentAge =
         ageInfo.oldest ?? ageInfo.familyEstimate?.estimatedParentAge;
       const parentAgeGroup = ageInfo.familyEstimate?.parentAgeGroup;
@@ -340,7 +290,6 @@ export function generateProtagonistSentence(
       break;
 
     case "Self":
-      // 나 중심 여행 (본인 연령 활용)
       if (companionType === "Single") {
         sentence = `${userAgeGroup ? userAgeGroup + " 한국인이 " : ""}혼자 떠나는 ${vibeLabels} ${destination} 여행`;
         promptContext = userInfoPrefix;
@@ -364,12 +313,10 @@ export function generateProtagonistSentence(
 
     case "Everyone":
     default:
-      // 모두 함께 (사용자 연령 기반 전 가족 추정)
       const estChild = ageInfo.familyEstimate?.estimatedChildAge;
       const estParent = ageInfo.familyEstimate?.estimatedParentAge;
 
       if (companionType === "Family" || companionType === "ExtendedFamily") {
-        // 추정값 or 입력값 사용
         const familyYoungest = ageInfo.youngest ?? estChild;
         const familyOldest = ageInfo.oldest ?? estParent;
         const hasKidsCalc =
@@ -433,7 +380,6 @@ export function generateProtagonistSentence(
       break;
   }
 
-  // Vibe별 추가 노트
   if (vibes.includes("Foodie")) {
     priorityNotes.push("미식 장소 - 한국인 입맛 고려");
   }
@@ -454,10 +400,6 @@ export function generateProtagonistSentence(
   };
 }
 
-/**
- * Gemini 프롬프트용 전체 컨텍스트 생성
- * 가중치 1순위: 주인공 설정
- */
 export function generatePromptContext(input: ProtagonistInput): string {
   const protagonist = generateProtagonistSentence(input);
 

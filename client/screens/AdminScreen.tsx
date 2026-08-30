@@ -34,7 +34,6 @@ export default function AdminScreen() {
   const adminUrl = `${getApiUrl()}/admin`;
 
   // ⚠️ 수정금지(승인필요) 2026-07-13 = 비번을 서버(/api/admin/login)에서 검증(§19 클라 비번상수 폐기) → 성공 시 관리자 세션 저장.
-  //   이래야 전문가 탭이 관리자로 인식해 문의답변 프리패스 + 대시보드 열림.
   const handleLogin = useCallback(async () => {
     if (!password || isLoading) return;
     setIsLoading(true);
@@ -48,8 +47,6 @@ export default function AdminScreen() {
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.success && data.token) {
         // ⚠️ 사장님 SSOT 2026-07-15 = 서버 toClientUser 응답을 그대로 저장(§0.3 = 손매핑 2벌 폐기 §19).
-        //   옛 손매핑은 role 을 안 넘겨 비번 관리자 세션의 role 이 undefined 였음(= 전문가 답변함 분기 실패 위험).
-        // saveAuth 가 전역 판정에 자동으로 알림(client/lib/auth.ts) = 여기서 따로 부를 것 없음
         await saveAuth({ ...data.user, token: data.token });
         setIsAuthenticated(true);
         setPassword("");
@@ -57,7 +54,6 @@ export default function AdminScreen() {
         setError("비밀번호가 틀렸습니다");
         setPassword("");
       } else {
-        // 리뷰 2026-07-13 = 500(관리자계정 없음 등)을 "비번 틀림"으로 오표시하던 것 분리 = 원인 오인 방지.
         setError("관리자 로그인 오류입니다 (서버 설정 확인)");
         setPassword("");
       }
@@ -78,7 +74,6 @@ export default function AdminScreen() {
     }
   }, [navigation]);
 
-  // 비밀번호 인증 화면
   if (!isAuthenticated) {
     return (
       <View
@@ -165,7 +160,6 @@ export default function AdminScreen() {
     );
   }
 
-  // 인증 완료 후: 관리자 대시보드 (웹에서는 iframe 사용)
   if (Platform.OS === "web") {
     return (
       <View

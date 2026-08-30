@@ -1,14 +1,10 @@
-// 슬롯(장소) 카드 + 이동구간 = TripPlannerScreen 분리(2026-07-15 §0 슬림화, 순수 이동)
 import React from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
 // ⚠️ 수정금지(승인필요) 2026-05-12 = BTS 1주일 디버깅 SSOT 완전 적용 (= 단순 expo-image 부족)
-// = client/lib/wikimedia-image.ts = Wikimedia 버킷 변환 + User-Agent 헤더 + Platform 분기
-// = AOS Samsung A36 5G Wikimedia 5/8 실패 → 8/8 3초 (= BTS 검증)
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { resolveImageSource } from "@/lib/wikimedia-image";
 // ⚠️ 수정금지(승인필요) 2026-05-19 = 이미지 NULL placeholder = BTS 맵 마커 동일 SVG (= 사용자 SSOT)
-// = bts-marker-svg.ts 직접 import (= BTSPlaceMap 우회 = webview/Google Maps SDK 코드 번들 제외)
 import { SvgXml } from "react-native-svg";
 import {
   COLORS as BTS_MARKER_COLORS,
@@ -26,7 +22,6 @@ import { resultStyles as styles } from "../styles/result";
 import type { PlannerApi } from "../hooks/useTripPlanner";
 
 // ⚠️ 수정금지(승인필요) 2026-05-19 = 7 카테고리 SVG 모듈 레벨 사전 빌드 (= rendering-hoist-jsx + js-cache-function-results)
-// 매 슬롯 렌더마다 SVG 문자열 재생성 비용 0 = static lookup
 const BTS_PLACEHOLDER_SVG_BY_CAT: Record<string, string> = Object.fromEntries(
   Object.keys(BTS_MARKER_LUCIDE).map((cat) => [
     cat,
@@ -35,16 +30,9 @@ const BTS_PLACEHOLDER_SVG_BY_CAT: Record<string, string> = Object.fromEntries(
 );
 
 // ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 = [점심]/[저녁] 텍스트 프리픽스 폐기(식당명 노출공간
-//   확보) 대신 = 식사 슬롯 번호원 안에 옅게 깔리는 워터마크. 아이콘 = 지도 마커와 같은 소스(§16
-//   재발명 금지, BTS_MARKER_LUCIDE.restaurant = 위 BTS_PLACEHOLDER_SVG_BY_CAT과 동일 원본).
 const MEAL_WATERMARK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${BTS_MARKER_LUCIDE.restaurant}</svg>`;
 
 // 🎙️ 2026-08-03 사장님 지시 = 썸네일(위) + [해설 듣기](칸 맨 아래) 를 담는 세로칸.
-//   · alignSelf "stretch" = 이 칸이 슬롯 줄 높이만큼 늘어난다 → justifyContent "space-between" 이
-//     배지를 **칸 맨 아래**로 민다 = 썸네일과 최대한 벌어져 오터치가 나지 않는다.
-//   · 폭 고정 없음 = 배지가 도시 카드와 **같은 원래 크기** 1벌이라, 칸이 그 배지 폭에 맞춰 자연스럽게 넓어진다.
-//     썸네일(56)은 그대로 왼쪽 정렬이고, 오른쪽 본문(placeInfo, flex:1)이 그만큼 줄어든다
-//     = 타임라인 세로선·이동구간 줄은 이 칸 바깥이라 흐트러지지 않는다.
 const slotStyles = StyleSheet.create({
   thumbColumn: {
     alignSelf: "stretch",
@@ -83,14 +71,9 @@ export default function PlaceSlotCard({
   } = planner;
 
   // 🎙️ 2026-08-02 사장님 지시 = 이 슬롯의 우리 장소번호.
-  //   슬롯 id 는 여정 생성기가 `db-${place_seed_raw.id}` 로 넣는다(ag2-gemini-recommender / ag4-db-finalize 1벌).
-  //   번호가 안 읽히는 옛 여정 슬롯은 배지를 그리지 않는다(헛클릭 방지).
   const guidePlaceIdMatch = /^db-(\d+)$/.exec(String(place.id ?? ""));
   const guidePlaceId = guidePlaceIdMatch ? Number(guidePlaceIdMatch[1]) : null;
 
-  // [해설 듣기] = 해설 화면 열기 1벌(openGuideForPlace §16 = 도시 카드와 같은 통로).
-  //   2026-08-03 §22 수정 = 300ms 이중탭 잠금 + 앱 언어 전달이 그 1벌 안에 있다.
-  //   그 화면이 창고에 있으면 그대로 보여주고(유료호출 0), 없으면 만들어 담는다. 사진은 서버가 넣는다.
   const openGuide = () => {
     if (guidePlaceId !== null)
       openGuideForPlace(navigation, guidePlaceId, { isAuthed, requestLogin });
@@ -98,10 +81,8 @@ export default function PlaceSlotCard({
 
   // ⚠️ 수정금지(승인필요) 2026-05-09 = 별점(vibeScore) 폐기 = userRatingCount(rc) 만 사용 (= 사용자 SSOT)
 
-  // 🍽️ 식사 슬롯 여부 (백엔드에서 isMealSlot 제공 - 1순위)
   const isMealSlot = place.isMealSlot === true;
 
-  // 식사 여부 (isMealSlot 또는 이름으로 판단)
   const isMeal =
     isMealSlot ||
     place.isMeal ||
@@ -112,21 +93,17 @@ export default function PlaceSlotCard({
     place.name?.includes("카페") ||
     place.name?.includes("레스토랑");
 
-  // 이동 구간 정보 (백엔드에서 제공)
   const dayTransits = currentDay?.transit?.transits || [];
   const transitInfo = dayTransits[index]; // index번째 장소에서 다음 장소로의 이동
   const hasTransit = index < places.length - 1;
 
-  // 인원수 (itinerary에서 가져오기)
   const companionCount = itinerary.companionCount || 1;
 
-  // 가격 정보
   const entranceFee = place.entranceFee || 0;
   const entranceFeeTotal =
     place.entranceFeeTotal || entranceFee * companionCount;
   return (
     <View
-      // 🗺️ 2026-06-28 = 지도 마커 클릭 → 이 슬롯으로 스크롤 (= ScrollView 기준 절대 y 기록)
       onLayout={(e) => {
         const dayY = dayLayoutsRef.current[currentDay.day] ?? 0;
         const listY = placesListOffsetRef.current[currentDay.day] ?? 0;
@@ -386,9 +363,7 @@ export default function PlaceSlotCard({
             <Text style={[styles.transitText, { color: theme.textSecondary }]}>
               {(() => {
                 // ⚠️ 2026-07-04 사장님 SSOT = 교통수단 구분 = 3가지(도보 / 대중교통 / 드라이빙 가이드).
-                //   백엔드 mode(walk / metro / private_guide) 3종을 그대로 3분기 라벨로. 세부수단(bus/RER)은 대중교통에 흡수.
                 const rawMode = transitInfo.mode || transitInfo.modeLabel || "";
-                // 3분기 = 중첩 삼항 회피(헌법) = if로 label 결정. 드라이빙 가이드(전용차) → 도보 → 그 외 대중교통.
                 let label = t("trip.transitPublic");
                 if (rawMode === "guide" || rawMode === "private_guide") {
                   label = t("trip.drivingGuide");
@@ -396,7 +371,6 @@ export default function PlaceSlotCard({
                   label = t("trip.walking");
                 }
                 // ⚠️ 수정금지(승인필요) 2026-08-13 사장님 승인 = 서버 durationText("15분")는 한국어 고정이라
-                //   화면 표시엔 안 씀. 언어중립 숫자(duration)만 받아 t()로 노출시점 번역(§16 = trip.durationM 재사용).
                 const dur = t("trip.durationM", {
                   m: transitInfo.duration || 0,
                 });

@@ -1,6 +1,3 @@
-// 기본 도시 시드 데이터(도시 테이블 비었을 때 1회 입력용) = routes.ts 분리(2026-07-15 §0 슬림화, 순수 이동)
-// 아시아/미주 13개 + 이탈리아 4개 + 프랑스 30개 (part 1/2, 나머지는 default-cities-seed-2.ts)
-
 export interface DefaultCitySeed {
   name: string;
   country: string;
@@ -12,7 +9,6 @@ export interface DefaultCitySeed {
 }
 
 export const DEFAULT_CITIES_PART1: DefaultCitySeed[] = [
-  // ===== 기존 아시아/미주 13개 =====
   {
     name: "서울",
     country: "대한민국",
@@ -131,8 +127,6 @@ export const DEFAULT_CITIES_PART1: DefaultCitySeed[] = [
     primaryLanguage: "vi",
   },
 
-  // ===== 유럽 30개 도시 (1차 목표) =====
-  // 이탈리아
   {
     name: "밀라노",
     country: "이탈리아",
@@ -169,7 +163,6 @@ export const DEFAULT_CITIES_PART1: DefaultCitySeed[] = [
     timezone: "Europe/Rome",
     primaryLanguage: "it",
   },
-  // 프랑스 (30개 관광도시 - 1차 목표)
   {
     name: "니스",
     country: "프랑스",

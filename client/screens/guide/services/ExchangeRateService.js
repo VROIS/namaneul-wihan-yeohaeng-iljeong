@@ -6,9 +6,7 @@ const CACHE_KEY = 'exchange_rates';
 const CACHE_TIMESTAMP_KEY = 'exchange_rates_timestamp';
 
 // ⚠️ 수정금지(승인필요): 환율 조회 (캐시 우선)
-// baseCurrency: 'USD', targetCurrency: 'KRW'
 export async function getExchangeRate(baseCurrency = 'USD', targetCurrency = 'KRW') {
-  // 캐시 확인
   const cached = await getCachedRates(baseCurrency);
   if (cached && cached[targetCurrency]) {
     return {
@@ -20,14 +18,12 @@ export async function getExchangeRate(baseCurrency = 'USD', targetCurrency = 'KR
     };
   }
 
-  // API 호출 (온라인)
   try {
     const url = `${CONFIG.API.EXCHANGE_RATE_URL}/${baseCurrency}`;
     const response = await fetch(url);
     const data = await response.json();
 
     if (data.rates) {
-      // 캐시 저장
       await AsyncStorage.setItem(CACHE_KEY, JSON.stringify({ base: baseCurrency, rates: data.rates }));
       await AsyncStorage.setItem(CACHE_TIMESTAMP_KEY, new Date().toISOString());
 
@@ -47,10 +43,8 @@ export async function getExchangeRate(baseCurrency = 'USD', targetCurrency = 'KR
 
 // ⚠️ 수정금지(승인필요): 금액 환산
 export async function convertCurrency(amount, fromCurrency, toCurrency) {
-  // 같은 통화
   if (fromCurrency === toCurrency) return amount;
 
-  // USD 기준으로 변환
   const fromRate = fromCurrency === 'USD' ? 1 : (await getExchangeRate('USD', fromCurrency)).rate;
   const toRate = toCurrency === 'USD' ? 1 : (await getExchangeRate('USD', toCurrency)).rate;
 

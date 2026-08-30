@@ -1,10 +1,5 @@
 #!/usr/bin/env node
 // ⚠️ 수정금지(승인필요) 2026-07-04 사장님 SSOT = git 히스토리 재작성 물리 차단 (= 글 아닌 기계).
-// = AI 가 rebase/reset --hard 를 함부로 써서 Replit 저장소를 꼬이게 만든 사고(2026-07-04) 재발 방지.
-// = pre-rebase 훅이 이 스크립트를 호출 = 허가 토큰(.history-rewrite-approved)이 있고 + 5분 이내일 때만 통과.
-//   토큰 없음/만료 = exit 1 = rebase 거부.
-// = 토큰 = 사장님이 "리베이스 해도 돼" 같이 명시 지시 시에만 AI 가 stamp 로 생성 = 1회용.
-// = 목적: AI 의 무심결 rebase/reset (특히 Replit 관리 저장소) 물리 차단. 문서/메모리는 논문일 뿐 = 기계로 막음.
 import { readFileSync, writeFileSync, existsSync, unlinkSync } from "node:fs";
 
 const TOKEN = ".history-rewrite-approved";
@@ -19,7 +14,6 @@ function nowStamp() {
 const mode = process.argv[2]; // 'check' | 'consume' | 'stamp'
 
 if (mode === "stamp") {
-  // 사장님이 rebase/reset 을 명시 허가 시에만 AI 가 이 명령으로 토큰 생성
   writeFileSync(TOKEN, nowStamp() + "\n", "utf8");
   console.log(
     `✅ 히스토리 재작성 허가 토큰 발급: ${nowStamp()} (유효 5분, 1회용)`,
@@ -36,7 +30,6 @@ if (mode === "consume") {
   process.exit(0);
 }
 
-// 기본 = check (pre-rebase)
 if (!existsSync(TOKEN)) {
   console.error(
     "\n⛔⛔ REBASE 차단 = 사장님 허가 토큰(.history-rewrite-approved) 없음.",
@@ -69,5 +62,4 @@ if (diff < 0 || diff > VALID_MS) {
   process.exit(1);
 }
 
-// 통과 (토큰 소멸은 post 단계에서 = 실패 시 재시도 가능)
 process.exit(0);

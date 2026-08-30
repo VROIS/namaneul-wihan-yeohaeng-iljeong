@@ -1,12 +1,3 @@
-/**
- * place_seed_raw = 43 데드 컬럼 DROP
- * = 트랜잭션 + 사전 검증 + COMMIT/ROLLBACK
- * = 메모리 SSOT feedback_transaction_atomicity.md 정책
- *
- * 사용:
- *   DRY: node scripts/migrate-drop-43-dead-cols.mjs --dry
- *   실행: node scripts/migrate-drop-43-dead-cols.mjs --apply
- */
 import "dotenv/config";
 import pg from "pg";
 
@@ -25,7 +16,6 @@ console.log(
   `Mode: ${DRY ? "DRY RUN" : "🔴 APPLY"} ${FORCE ? "(FORCE = 백업 후 강제)" : ""}\n`,
 );
 
-// 백업 파일 존재 확인 = --force 시
 if (FORCE && !DRY) {
   const fs = await import("fs");
   const today = new Date().toISOString().slice(0, 10);
@@ -44,7 +34,6 @@ if (FORCE && !DRY) {
 }
 
 const DEAD_COLS = [
-  // A. Atmosphere SKU 폭탄 (27)
   "delivery",
   "dine_in",
   "takeout",
@@ -73,7 +62,6 @@ const DEAD_COLS = [
   "instagram_photo_urls",
   "instagram_hashtags",
   "instagram_post_count",
-  // B. 옛 기획 미구현 (10)
   "celeb_mention",
   "names_i18n",
   "type",
@@ -84,7 +72,6 @@ const DEAD_COLS = [
   "aliases",
   "price_fetched_at",
   "last_data_sync",
-  // C. 운영 미사용 (5)
   "price_level",
   "business_status",
   "website_uri",
@@ -100,7 +87,6 @@ const c = new pg.Client({
 });
 await c.connect();
 
-// 사전 검증
 console.log("\n[사전 검증]");
 const before = await c.query(`SELECT COUNT(*) as n FROM place_seed_raw`);
 const colsBefore = await c.query(
@@ -109,7 +95,6 @@ const colsBefore = await c.query(
 console.log(`  row 수: ${before.rows[0].n}`);
 console.log(`  컬럼 수: ${colsBefore.rows[0].n}`);
 
-// 데드 확인 (= 각 컬럼 정말 0% 인지 마지막 검증)
 console.log("\n[데드 검증 = 정말 0 % 채움?]");
 let allDead = true;
 for (const col of DEAD_COLS) {
@@ -151,7 +136,6 @@ if (DRY) {
   process.exit(0);
 }
 
-// 실행
 console.log("\n[실행 = 트랜잭션 BEGIN]");
 try {
   await c.query("BEGIN");
@@ -161,7 +145,6 @@ try {
     console.log(`  ✅ DROP ${col}`);
   }
 
-  // 검증 = row 수 동일
   const after = await c.query(`SELECT COUNT(*) as n FROM place_seed_raw`);
   if (after.rows[0].n !== before.rows[0].n) {
     throw new Error(`row 수 변화: ${before.rows[0].n} → ${after.rows[0].n}`);

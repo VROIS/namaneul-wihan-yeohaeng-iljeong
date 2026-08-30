@@ -13,7 +13,6 @@ import LoginScreen from "@/screens/login/LoginScreen";
 import ExpertInquiryDetailScreen from "@/screens/expert/ExpertInquiryDetailScreen"; // 전문가 문의 상세(2026-07-13) = 옛 VerificationRequestScreen 대체 §19
 import ExpertProfileEditScreen from "@/screens/expert/ExpertProfileEditScreen"; // 현지전문가 본인 프로필 편집(2026-07-13)
 import AdminScreen from "@/screens/AdminScreen";
-// ⚠️ 2026-07-31 = 옛 BTS 이벤트 화면(BTSConcertPlanner) 완전삭제 §19 = 삭제된 /api/bts/generate 의 마지막 호출자였음.
 import BTSStackNavigator from "@/navigation/BTSStackNavigator";
 import GuideStackNavigator from "@/navigation/GuideStackNavigator"; // 가이드 미니앱(§12 1단계) = BTS 패턴 독립 스택
 import { BTSLandingScreen } from "@/screens/BTSLandingScreen";
@@ -48,7 +47,6 @@ export default function RootStackNavigator() {
   const isDark = colorScheme === "dark";
   const theme = Colors[colorScheme ?? "light"];
 
-  // ⚠️ 2026-07-27 = 로그인 판정은 전역 1곳(MapToggleContext)만. 직접 저장소를 읽던 옛 방식 폐기 §19.
   const { authReady: authChecked } = useMapToggle();
 
   if (!authChecked) {
@@ -180,11 +178,6 @@ export default function RootStackNavigator() {
         component={BTSStackNavigator}
         options={{
           // ⚠️ 수정금지(승인필요) 2026-07-31 = **일반 화면(card)** 으로 되돌림. 옛 `transparentModal` 삭제 §19.
-          //   사유(§22 검증이 잡음): 속이 비치는 모달은 **밑의 메인앱을 살려둔다.**
-          //   그런데 이제 메인앱은 위에 창(MainAppOverlay)으로 뜨므로, 밑에도 하나가 살아 있으면
-          //   **여정 화면이 두 벌** 돌아 서로 전역 여정 슬롯을 지운다
-          //   → 하단 [AI의견]·[전문가] 가 갑자기 회색이 되고, 안 보이는 화면에서 크레딧이 빠질 수 있었다.
-          //   지금은 밑을 안 남긴다 = 한 벌만 존재 = 다툼 자체가 없다.
           presentation: "card",
           headerShown: false,
           animation: "slide_from_bottom",

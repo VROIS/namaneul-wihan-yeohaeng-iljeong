@@ -1,11 +1,6 @@
 import fs from "fs";
 import path from "path";
 
-/**
- * MCP.RAW.DATA_final
- * - 최종 확정 도시는 MCP 자동화 결과 파일에서 읽는다.
- * - 파일이 없거나 형식이 잘못되면 임시(draft) 목록을 사용한다.
- */
 export interface McpFinalCity {
   nameKo: string;
   nameEn: string;
@@ -27,7 +22,6 @@ const RUNTIME_CITY_FILE_PATH =
 const DEFAULT_RANK_BASIS = "euromonitor_un_tourism_2024_2025";
 const BTS2026_BASIS = "bts_arirang_world_tour_2026_2027";
 
-// BTS 2026-2027 ARIRANG 월드투어 공연 일정표 순 (34개)
 const DRAFT_BTS2026: McpRankedCity[] = [
   {
     phase: "bts2026",
@@ -810,7 +804,6 @@ function loadRuntimeRankedCitiesFromFile(): McpRankedCity[] | null {
     const parsed = JSON.parse(raw);
 
     if (Array.isArray(parsed)) {
-      // 하위호환: [{nameKo,nameEn}] 형태는 france30으로 간주
       const normalized = parsed.filter(isValidCity).map((c, idx) => ({
         phase: "france30" as const,
         rank: idx + 1,
@@ -875,19 +868,16 @@ function buildAppExecutionOrder(all: McpRankedCity[]): McpRankedCity[] {
     out.push(city);
   };
 
-  // 1) BTS 2026 공연 도시 순 (고양→도쿄→…→마닐라)
   const bts = all
     .filter((c) => c.phase === "bts2026")
     .sort((a, b) => a.rank - b.rank);
   for (const c of bts) pushUnique(c);
 
-  // 2) 프랑스30 (중복 제외)
   const france = all
     .filter((c) => c.phase === "france30")
     .sort((a, b) => a.rank - b.rank);
   for (const c of france) pushUnique(c);
 
-  // 3) 유럽30 (중복 제외)
   const europe = all
     .filter((c) => c.phase === "europe30")
     .sort((a, b) => a.rank - b.rank);

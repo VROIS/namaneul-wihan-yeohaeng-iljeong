@@ -1,8 +1,4 @@
 // ⚠️ 수정금지(승인필요): RN 메인 입력 페이지 — WebView 메인 완전 대체
-// 카메라 라이브뷰(후방 고정) + 5개 버튼
-// 촬영/업로드/음성 → 크레딧 체크 + 캡처 + GPS + WebView 전달
-// 보관함 → WebView showArchivePage 전달
-// 라이브/여행비서 → 준비 중 음성 안내
 import React, { useState, useCallback } from "react";
 import {
   View,
@@ -17,13 +13,11 @@ import {
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 // ⚠️ 수정금지(승인필요) 2026-08-08 = 이 화면이 **지금 보이는 화면인지** 판단용.
-//   해설 화면으로 넘어가도 이 화면은 스택에 살아 있다(GuideStackNavigator = native-stack, :615-616).
 import { useIsFocused } from "@react-navigation/native";
 import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
 import * as Speech from "expo-speech";
 import * as Location from "expo-location";
-// expo-speech-recognition = 네이티브 전용 (Expo Go 미지원) → 안전 로드
 let ExpoSpeechRecognitionModule = {
   stop: () => {},
   start: () => {},
@@ -37,7 +31,6 @@ try {
   if (sr?.useSpeechRecognitionEvent)
     useSpeechRecognitionEvent = sr.useSpeechRecognitionEvent;
 } catch (_) {
-  // Expo Go: 네이티브 모듈 없음 — 스텁으로 동작
 }
 
 import CameraView from "../components/CameraView";
@@ -49,7 +42,6 @@ import { theme } from "../styles/theme";
 import { t } from "../i18n/translations";
 import { CONFIG } from "../config/constants";
 import { getTTSLanguage } from "../services/PromptService";
-// 관리자 판정 = 저장된 계정 1벌. 도시 카드 [해설 만들기](CityCardScreen.tsx) 와 완전히 같은 방식(§16 재발명 금지).
 import { getUserData } from "@/lib/auth";
 import { Icon } from "@/components/Icon";
 import {
@@ -81,8 +73,6 @@ export default function MainCameraScreen({
   const language = useStore((s) => s.language) || "ko";
 
   // ⚠️ 수정금지(승인필요) 2026-08-08 판단3종 지적 = 힌트 물결은 **이 화면이 보일 때만** 산다.
-  //   해설 화면으로 넘어가도 이 화면은 언마운트되지 않아(native-stack), 이 조건이 없으면
-  //   보이지도 않는 글자 애니메이션이 해설을 읽는 내내 매 프레임 돈다(= 카메라 프리뷰 위에서 낭비).
   const isFocused = useIsFocused();
 
   // ⚠️ 수정금지(승인필요): App.js에서 전달받은 언어를 store에 동기화
@@ -94,14 +84,10 @@ export default function MainCameraScreen({
   const [isListening, setIsListening] = useState(false);
 
   // ⚠️ 2026-08-02 사장님 지시 = [업로드] 는 **관리자에게만** 갈림길을 띄운다.
-  //   일반 사용자는 종전 그대로 곧장 갤러리가 열린다 = 이 화면의 다른 동작은 하나도 바뀌지 않는다.
   const [isAdmin, setIsAdmin] = useState(false);
-  // 창 단계 = null(안 뜸) | 'pick'(무엇으로) | 'number'(장소번호 입력).
-  //   창은 **하나**만 쓴다 = iOS 는 창을 겹쳐 띄우면 뒤 창이 안 뜬다(§8·§11 공식 동작).
   const [sourceStep, setSourceStep] = useState(null);
   const [placeIdText, setPlaceIdText] = useState("");
 
-  // 관리자 여부 = 저장된 계정의 role 1벌. 아이디 문자열·is_admin 으로 판단하지 않는다(§9 표7).
   React.useEffect(() => {
     let alive = true;
     getUserData()
@@ -138,7 +124,6 @@ export default function MainCameraScreen({
   );
 
   // ⚠️ 수정금지(승인필요): 크레딧 체크 — 프로모션 기간 return true (CLAUDE.md 제9조)
-  // 프로모션 종료 후: backendApi.checkCredits(userId) 전환
   const checkUsageLimit = useCallback(async () => {
     return true;
   }, []);
@@ -146,7 +131,6 @@ export default function MainCameraScreen({
   // ⚠️ 수정금지(승인필요): GPS → WebView window.currentGPS 전달
   const sendGPSToWebView = useCallback(() => {
     if (onInjectJS) {
-      // 백그라운드 — 기다리지 않음 (기존 requestBrowserLocation과 동일)
       (async () => {
         try {
           const { status } = await Location.requestForegroundPermissionsAsync();
@@ -169,14 +153,9 @@ export default function MainCameraScreen({
     }
   }, [onInjectJS]);
 
-  // ═══════════════════════════════════════════════
-  // 촬영 버튼 (#1~4)
-  // 기존: capturePhoto → checkUsageLimit → canvas.drawImage → requestBrowserLocation → processImage
-  // ═══════════════════════════════════════════════
   const handleCapture = useCallback(async () => {
     if (isProcessing) return;
 
-    // #1 크레딧 체크
     const canProceed = await checkUsageLimit();
     if (!canProceed) {
       speak(t("creditShort", language));
@@ -187,17 +166,14 @@ export default function MainCameraScreen({
     setActiveFeature("capture");
 
     try {
-      // #2 카메라 프레임 캡처 → base64
       const photo = await takePicture();
       if (!photo?.base64) {
         speak(t("captureFailed", language));
         return;
       }
 
-      // #3 GPS 위치 요청 (백그라운드 — 기다리지 않음)
       sendGPSToWebView();
 
-      // #4 WebView 전환 + processImageFromNative 호출
       if (onNavigateToWebView) {
         onNavigateToWebView("detail", { imageBase64: photo.base64 });
       }
@@ -218,15 +194,10 @@ export default function MainCameraScreen({
     setActiveFeature,
   ]);
 
-  // ═══════════════════════════════════════════════
-  // 업로드 버튼 (#15~18)
-  // 기존: uploadInput.click → handleFileSelect → checkUsageLimit → exifr.gps → processImage
-  // ═══════════════════════════════════════════════
   const handleUpload = useCallback(async () => {
     if (isProcessing) return;
 
     try {
-      // #15 기기 갤러리 열기
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ["images"],
         quality: 1,
@@ -234,7 +205,6 @@ export default function MainCameraScreen({
       if (result.canceled || !result.assets?.[0]?.uri) return;
 
       // #15-1 다이얼 = CONFIG.IMAGE 1벌(2026-08-01 사장님 선택 800px/0.7).
-      //   옛날엔 리사이즈 없이 갤러리 원본을 통째로 저장 = 장당 수백 KB 들어가던 근본 원인.
       const optimized = await ImageManipulator.manipulateAsync(
         result.assets[0].uri,
         [{ resize: { width: CONFIG.IMAGE.MAX_PX } }],
@@ -246,7 +216,6 @@ export default function MainCameraScreen({
       );
       if (!optimized.base64) return;
 
-      // #16 크레딧 체크
       const canProceed = await checkUsageLimit();
       if (!canProceed) {
         speak(t("creditShort", language));
@@ -256,10 +225,8 @@ export default function MainCameraScreen({
       setIsProcessing(true);
       setActiveFeature("upload");
 
-      // #17 GPS — 현재 위치 직접 사용 (RN에서 EXIF 추출 불필요)
       sendGPSToWebView();
 
-      // #18 WebView 전달 → processImageFromNative → 이후 촬영과 동일
       if (onNavigateToWebView) {
         onNavigateToWebView("detail", { imageBase64: optimized.base64 });
       }
@@ -279,12 +246,7 @@ export default function MainCameraScreen({
     setActiveFeature,
   ]);
 
-  // ═══════════════════════════════════════════════
   // 장소번호로 만들기 — 관리자 전용 (2026-08-02 사장님 지시)
-  // 우리 DB 장소번호(place_seed_raw.id)만 넘긴다 = 그 뒤 흐름(창고 조회 → 없으면 생성 → 자동 저장)은
-  // 해설 화면의 완성된 1벌이 그대로 한다(§16). 사진·GPS·랜드마크는 이 경로에 아예 없다.
-  // 크레딧은 이 화면에서 재지 않는다 = 차감은 서버 chargeFeature 1벌(§9). 화면이 또 재면 두 벌이 된다.
-  // ═══════════════════════════════════════════════
   const placeIdValue = /^[0-9]+$/.test(placeIdText) ? Number(placeIdText) : 0;
 
   const handlePlaceIdConfirm = useCallback(() => {
@@ -296,7 +258,6 @@ export default function MainCameraScreen({
     }
   }, [placeIdValue, onNavigateToWebView]);
 
-  // [업로드] 입구 = 관리자면 갈림길, 아니면 종전 handleUpload 를 **그대로** 부른다(코드 이동 없음 = 회귀 0).
   const handleUploadPress = useCallback(() => {
     if (isProcessing) return;
     if (isAdmin) {
@@ -314,17 +275,11 @@ export default function MainCameraScreen({
     };
   }, []);
 
-  // ═══════════════════════════════════════════════
-  // 음성 버튼 (#19~24) — 라이브 버튼으로 대체 예정, 현재는 기존 음성 로직
-  // 기존: synth.cancel → checkUsageLimit → recognition.start → 10초 타임아웃 → processTextQuery
-  // ═══════════════════════════════════════════════
   const micTimeoutRef = React.useRef(null);
 
-  // #22~23 STT 결과 수신 + 타임아웃
   useSpeechRecognitionEvent("result", (event) => {
     const text = event.results?.[0]?.transcript || "";
     if (text) {
-      // 타임아웃 해제
       if (micTimeoutRef.current) {
         clearTimeout(micTimeoutRef.current);
         micTimeoutRef.current = null;
@@ -332,7 +287,6 @@ export default function MainCameraScreen({
       setIsListening(false);
       setActiveFeature(null);
 
-      // #24 WebView 전달 → processTextQuery
       if (onNavigateToWebView) {
         onNavigateToWebView("voice", { text });
       }
@@ -352,22 +306,18 @@ export default function MainCameraScreen({
   const handleVoice = useCallback(async () => {
     if (isProcessing || isListening) return;
 
-    // #19 TTS 재생 중이면 즉시 중지
     Speech.stop();
 
-    // #20 크레딧 체크
     const canProceed = await checkUsageLimit();
     if (!canProceed) {
       speak(t("creditShort", language));
       return;
     }
 
-    // #21 마이크 리스닝 상태 (프론트엔드 — store로 전달)
     setIsListening(true);
     setActiveFeature("live");
 
     try {
-      // #22 네이티브 STT 시작
       const { granted } =
         await ExpoSpeechRecognitionModule.requestPermissionsAsync();
       if (!granted) {
@@ -385,7 +335,6 @@ export default function MainCameraScreen({
         requiresOnDeviceRecognition: false,
       });
 
-      // #23 10초 타임아웃
       micTimeoutRef.current = setTimeout(() => {
         stopAllAudio();
         speak(t("voiceNotHeard", language));
@@ -405,22 +354,13 @@ export default function MainCameraScreen({
     setActiveFeature,
   ]);
 
-  // ═══════════════════════════════════════════════
-  // 보관함 버튼 (#27~31)
-  // 기존: pauseCamera → synth.cancel → recognition.stop → toggleSelectionMode → showArchivePage
-  // ═══════════════════════════════════════════════
   const handleArchive = useCallback(() => {
-    // #27~29 카메라/TTS/마이크 일괄 중지
     stopAllAudio();
-    // #30~34 WebView showArchivePage → 내부에서 전부 처리
     if (onNavigateToWebView) {
       onNavigateToWebView("archive");
     }
   }, [stopAllAudio, onNavigateToWebView]);
 
-  // ═══════════════════════════════════════════════
-  // 라이브 / 여행비서 — 준비 중 (이후 단계)
-  // ═══════════════════════════════════════════════
   const handleLive = useCallback(() => {
     speak(t("liveComingSoon", language));
   }, [speak, language]);
@@ -597,9 +537,6 @@ export default function MainCameraScreen({
   );
 }
 
-// ⚠️ 2026-08-02 = 관리자 전용 갈림길 창 스타일. 앱 톤(글라스 미니멀리즘 = 둥근 모서리 + 낮은 대비 그림자) 그대로.
-//   색·둥글기·간격 = 전부 @/constants/theme 토큰 = 새 색을 만들지 않는다(사장님 톤앤매너 유지).
-//   카메라(어두움) 위에 뜨므로 배경은 반투명 어둡게 + 카드만 밝게 = 미니앱 다른 창과 충돌 없음.
 const pickerStyles = StyleSheet.create({
   backdrop: {
     flex: 1,

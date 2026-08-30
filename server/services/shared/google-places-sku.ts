@@ -1,16 +1,5 @@
 // ⚠️ 수정금지(승인필요) — Google Places API SKU 등급표 + 차단 필터
-// = docs/SEED_SSOT_2026-05-02.md §16 잠금 명령
-// = 사용자님 제공 등급표 그대로 + Google 공식 (2026-05-15)
-//
-// 정책 요약:
-//   - Essentials / Pro / Enterprise = 허용
-//   - Enterprise + Atmosphere (33 필드) = 차단 (= throw)
-//   - 모든 TS 호출 = validateFieldMask() 통과 강제
-//
-// 실측 단가 (= GCP 청구서, 2026-05-01 ~ 05-14):
-//   - TS Enterprise = 무료 1K/월 초과 후 과금(단가 1벌 = external-call-log.UNIT_COST_EUR.ts)
 
-/** Text Search (New) Essentials ID Only SKU 트리거 필드 */
 export const TS_ESSENTIALS_FIELDS = new Set<string>([
   "places.attributions",
   "places.id",
@@ -20,7 +9,6 @@ export const TS_ESSENTIALS_FIELDS = new Set<string>([
   "places.movedPlaceId",
 ]);
 
-/** Text Search (New) Pro SKU 트리거 필드 */
 export const TS_PRO_FIELDS = new Set<string>([
   "places.accessibilityOptions",
   "places.addressComponents",
@@ -51,7 +39,6 @@ export const TS_PRO_FIELDS = new Set<string>([
   "places.viewport",
 ]);
 
-/** Text Search (New) Enterprise SKU 트리거 필드 = 허용 (= 시스템 SSOT 필수) */
 export const TS_ENTERPRISE_FIELDS = new Set<string>([
   "places.currentOpeningHours",
   "places.currentSecondaryOpeningHours",
@@ -66,7 +53,6 @@ export const TS_ENTERPRISE_FIELDS = new Set<string>([
   "places.websiteUri",
 ]);
 
-/** Text Search (New) Enterprise + Atmosphere SKU 트리거 필드 = ❌ 차단 대상 */
 export const TS_ATMOSPHERE_FIELDS = new Set<string>([
   "places.allowsDogs",
   "places.curbsidePickup",
@@ -105,10 +91,6 @@ export const TS_ATMOSPHERE_FIELDS = new Set<string>([
 ]);
 
 // ⚠️ 수정금지(승인필요) 2026-06-02 = 전 앱 TS 호출 단일 표준 FieldMask (= §16 단일 진입점 = 사용자 SSOT)
-// = 9 필드 = Enterprise SKU 고정 ($35/1K, 무료 1K/월) = Atmosphere 0 = 파산 폭탄 없음
-// = PSR 실기록 8 컬럼 (id / name_ko / address / 좌표 / 리뷰수 / 가격 / 이미지 / mapsUri)
-//   + businessStatus (= 폐업·rename 판정 = Pro 등급 = SKU 안 올림)
-// = 변경 시 = 모든 호출처 동시 반영 + GCP 비용 영향 = 사용자 명시 승인 필수
 export const STANDARD_TS_FIELD_MASK =
   "places.id,places.displayName,places.formattedAddress,places.location,places.userRatingCount,places.priceRange,places.photos,places.googleMapsUri,places.businessStatus";
 
@@ -119,7 +101,6 @@ export type SkuTier =
   | "atmosphere"
   | "unknown";
 
-/** FieldMask 문자열을 받아 트리거되는 최고 SKU 반환 */
 export function getFieldMaskTier(fieldMask: string): {
   tier: SkuTier;
   atmosphereFields: string[];
@@ -134,7 +115,6 @@ export function getFieldMaskTier(fieldMask: string): {
   const unknownFields: string[] = [];
 
   for (const field of fields) {
-    // FieldMask 는 도트 경로 (places.photos.name) 형태 가능 → 첫 2 단계만 비교
     const parts = field.split(".");
     const root = parts.length >= 2 ? `${parts[0]}.${parts[1]}` : field;
 
@@ -152,7 +132,6 @@ export function getFieldMaskTier(fieldMask: string): {
       TS_ESSENTIALS_FIELDS.has(root) ||
       TS_ESSENTIALS_FIELDS.has(field)
     ) {
-      // essentials 유지
     } else {
       unknownFields.push(field);
     }
@@ -161,10 +140,6 @@ export function getFieldMaskTier(fieldMask: string): {
   return { tier, atmosphereFields, unknownFields };
 }
 
-/**
- * FieldMask 검증 = Atmosphere 필드 발견 시 즉시 throw
- * @throws Error  Enterprise+Atmosphere SKU 트리거 필드 감지 시
- */
 export function validateFieldMask(fieldMask: string): void {
   const { tier, atmosphereFields } = getFieldMaskTier(fieldMask);
   if (tier === "atmosphere") {

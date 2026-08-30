@@ -1,7 +1,3 @@
-/**
- * 데이터 복구 스크립트 v2
- */
-
 const { Client } = require("pg");
 require("dotenv").config();
 
@@ -12,7 +8,6 @@ async function restoreData() {
     await client.connect();
     console.log("DB connected\n");
 
-    // 1. Places 재생성
     console.log("=== Step 1: Restore places ===\n");
 
     const seoulId = 16;
@@ -20,7 +15,6 @@ async function restoreData() {
     const parisId = 19;
 
     const places = [
-      // Seoul
       {
         name: "Gyeongbokgung Palace",
         cityId: seoulId,
@@ -91,7 +85,6 @@ async function restoreData() {
         lng: 126.9858,
         type: "attraction",
       },
-      // Tokyo
       {
         name: "Senso-ji Temple",
         cityId: tokyoId,
@@ -127,7 +120,6 @@ async function restoreData() {
         lng: 139.7707,
         type: "restaurant",
       },
-      // Paris
       {
         name: "Eiffel Tower",
         cityId: parisId,
@@ -182,7 +174,6 @@ async function restoreData() {
     }
     console.log("Total places added: " + placesAdded);
 
-    // 2. Instagram hashtags
     console.log("\n=== Step 2: Restore instagram_hashtags ===\n");
 
     const hashtags = [
@@ -229,7 +220,6 @@ async function restoreData() {
     }
     console.log("Hashtags added: " + hashtagsAdded);
 
-    // 3. 최종 확인
     console.log("\n=== Final Status ===\n");
 
     const tables = [
