@@ -11,6 +11,9 @@
       "environment": "development",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_DOMAIN": "https://my-guide.replit.app"
       }
     },
     "preview": {
@@ -18,13 +21,17 @@
       "channel": "main",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_DOMAIN": "https://my-guide.replit.app"
       }
     },
     "production": {
       "channel": "main",
       "environment": "development",
       "env": {
-        "EXPO_IMAGE_UTILS_NO_SHARP": "1"
+        "EXPO_IMAGE_UTILS_NO_SHARP": "1",
+        "EXPO_PUBLIC_DOMAIN": "https://my-guide.replit.app"
       },
       "ios": {
         "credentialsSource": "local"

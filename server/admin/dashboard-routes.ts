@@ -139,7 +139,7 @@ export function registerDashboardRoutes(app: Express) {
   app.get("/api/admin/activity-summary", async (_req, res) => {
     if (!db) return res.json({ dbConnected: false });
     try {
-      // ⚠️ 수정금지(승인필요) 2026-08-31 사장님 확정 = 증감 = R2 심장박동 기록의 최근 2틱 비교 (정본 B4)
+      // ⚠️ 수정금지(승인필요) 2026-09-03 사장님 결정 = 증감 = R2 심장박동 최근 30초 비교, 변화 0 이면 오늘 하루 누적 증가분
       const { latest, delta } = await recentDelta();
       const [
         [userTotal],

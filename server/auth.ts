@@ -323,8 +323,9 @@ export function registerAuthRoutes(app: Express) {
   // ⚠️ 수정금지(승인필요) 2026-07-13 = 관리자 로그인 = 비번 서버검증 → 관리자 세션 토큰 발급(§16 = 기존 Bearer 인증 재사용).
   app.post("/api/admin/login", async (req, res) => {
     try {
-      const { password } = req.body;
-      const expected = process.env.ADMIN_PASSWORD || "nubi2026";
+      // ⚠️ 수정금지(승인필요) 2026-09-03 사장님 결정 = 비밀번호만 맞으면 누구든 들어간다 = 앞뒤 공백은 떼고 비교(키보드·자동완성이 붙이는 공백 때문에 401 나던 원인)
+      const password = String(req.body?.password ?? "").trim();
+      const expected = (process.env.ADMIN_PASSWORD || "nubi2026").trim();
       if (!password || password !== expected) {
         return res
           .status(401)

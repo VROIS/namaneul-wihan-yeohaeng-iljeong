@@ -42,7 +42,7 @@ export default function AdminScreen() {
       const res = await fetch(`${getApiUrl()}/api/admin/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ password: password.trim() }),
       });
       const data = await res.json().catch(() => ({}));
       if (res.ok && data.success && data.token) {
@@ -119,6 +119,10 @@ export default function AdminScreen() {
               placeholder="비밀번호 입력"
               placeholderTextColor={theme.textTertiary}
               secureTextEntry
+              // ⚠️ 수정금지(승인필요) 2026-09-03 사장님 결정 = 키보드·자동완성이 값을 바꾸지 못하게(자동 대문자·자동수정 끔) = 안드로이드·PC 에서 401 나던 원인
+              autoCapitalize="none"
+              autoCorrect={false}
+              textContentType="password"
               value={password}
               onChangeText={(text) => {
                 setPassword(text);

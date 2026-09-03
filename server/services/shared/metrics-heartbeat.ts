@@ -75,7 +75,7 @@ export async function appendTick(): Promise<MetricPoint | null> {
   return now;
 }
 
-/** 최근 두 줄 비교 = 최근 한 틱(30초) 증감. 기록이 1줄뿐이면 전부 0. */
+/** ⚠️ 수정금지(승인필요) 2026-09-03 사장님 결정 = 증감 = 최근 30초 비교, 그 창에 변화가 없으면 오늘 하루 누적 증가분(늘어난 순간이 지나도 플러스가 남게). 기록이 1줄뿐이면 전부 0. */
 export async function recentDelta(): Promise<{
   latest: MetricPoint | null;
   delta: MetricDelta;
@@ -99,15 +99,21 @@ export async function recentDelta(): Promise<{
   if (rows.length < 2) return { latest: rows[0] ?? null, delta: zero };
   const a = rows[rows.length - 2];
   const b = rows[rows.length - 1];
+  // ⚠️ 수정금지(승인필요) 2026-09-03 사장님 결정 = 실시간 증감(최근 30초)이 0이면 오늘 하루 누적 증가분을 보여준다 = 늘어난 순간이 지나도 플러스가 남는다
+  const today = rows[0];
+  const pick = (k: keyof MetricDelta) => {
+    const live = (b[k] as number) - (a[k] as number);
+    return live !== 0 ? live : (b[k] as number) - (today[k] as number);
+  };
   return {
     latest: b,
     delta: {
-      users: b.users - a.users,
-      routes: b.routes - a.routes,
-      aiOpinion: b.aiOpinion - a.aiOpinion,
-      expertVerify: b.expertVerify - a.expertVerify,
-      guides: b.guides - a.guides,
-      videos: b.videos - a.videos,
+      users: pick("users"),
+      routes: pick("routes"),
+      aiOpinion: pick("aiOpinion"),
+      expertVerify: pick("expertVerify"),
+      guides: pick("guides"),
+      videos: pick("videos"),
     },
   };
 }
