@@ -430,18 +430,10 @@ function staleAdjacentChecks(path, staged, diff) {
     const i = n - 1;
     if (i < 0 || i >= lines.length) continue;
     if (info[i].isComment || !lines[i].trim()) continue;
-    for (
-      let k = Math.max(0, i - 3);
-      k <= Math.min(lines.length - 1, i + 3);
-      k++
-    ) {
-      if (
-        !info[k].isComment ||
-        info[k].directive ||
-        added.has(k + 1) ||
-        flagged.has(k)
-      )
-        continue;
+    // ⚠️ 수정금지(승인필요) 2026-09-01 사장님 승인 = 바로 위에 붙은 주석 블록만 검사(옛 위아래 3줄 폐기 §19)
+    //   = 주석은 바로 다음 줄을 설명한다. 아래·옆 주석까지 보면 import 한 줄만 고쳐도 남의 승인줄이 딸려 걸린다.
+    for (let k = i - 1; k >= 0 && info[k].isComment; k--) {
+      if (info[k].directive || added.has(k + 1) || flagged.has(k)) continue;
       flagged.add(k);
       out.push({
         path,

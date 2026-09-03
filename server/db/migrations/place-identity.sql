@@ -108,6 +108,7 @@ CREATE OR REPLACE FUNCTION public.place_seed_raw_prevent_dup()
 AS $function$
 DECLARE
   matched_id integer;
+  v_near_cnt integer := 0;
   v_addr text;
   v_local text := LOWER(TRIM(COALESCE(NEW.name_local, '')));
   v_en text := LOWER(TRIM(COALESCE(NEW.name_en, '')));
@@ -164,12 +165,22 @@ BEGIN
   -- 4) 좌표 10m (자기행 제외)
   -- ⚠️ 2026-07-09 = 위도 BETWEEN(sargable) = idx_psr_latitude 인덱스로 후보 좁힘(경도는 ABS 필터). ABS(위도) 는 non-sargable=풀스캔(실측 1983ms→0.09ms).
   --   = BETWEEN x±0.0001 ≡ ABS(x)<0.0001 논리 동일. 결과 무변경, 성능만 개선.
+  -- ⚠️ 수정금지(승인필요) 2026-09-03 사장님 결정 = 좌표는 같은 건물까지만 = PID 가 있고 서로 다르면 다른 장소(제외) · 10m 안에 후보가 여럿(동점)이면 현지어 이름(name_local)이 맞는 행에만 붙이고 없으면 통과(새 행) (정본 B4)
   IF NEW.latitude IS NOT NULL AND NEW.longitude IS NOT NULL THEN
-    SELECT c.id INTO matched_id FROM place_seed_raw c
+    SELECT COUNT(*), MIN(c.id) INTO v_near_cnt, matched_id FROM place_seed_raw c
     WHERE c.latitude BETWEEN NEW.latitude - 0.0001 AND NEW.latitude + 0.0001 AND c.longitude IS NOT NULL AND c.id <> COALESCE(NEW.id, -1)
       AND ABS(c.longitude - NEW.longitude) < 0.0001
       AND NOT (c.google_maps_uri IS NOT NULL AND c.google_maps_uri<>'' AND NEW.google_maps_uri IS NOT NULL AND NEW.google_maps_uri<>'' AND c.google_maps_uri<>NEW.google_maps_uri)
-    LIMIT 1;
+      AND NOT (c.google_place_id IS NOT NULL AND c.google_place_id<>'' AND NEW.google_place_id IS NOT NULL AND NEW.google_place_id<>'' AND c.google_place_id<>NEW.google_place_id);
+    IF v_near_cnt > 1 THEN
+      SELECT c.id INTO matched_id FROM place_seed_raw c
+      WHERE c.latitude BETWEEN NEW.latitude - 0.0001 AND NEW.latitude + 0.0001 AND c.longitude IS NOT NULL AND c.id <> COALESCE(NEW.id, -1)
+        AND ABS(c.longitude - NEW.longitude) < 0.0001
+        AND NOT (c.google_maps_uri IS NOT NULL AND c.google_maps_uri<>'' AND NEW.google_maps_uri IS NOT NULL AND NEW.google_maps_uri<>'' AND c.google_maps_uri<>NEW.google_maps_uri)
+        AND NOT (c.google_place_id IS NOT NULL AND c.google_place_id<>'' AND NEW.google_place_id IS NOT NULL AND NEW.google_place_id<>'' AND c.google_place_id<>NEW.google_place_id)
+        AND v_local <> '' AND v_local = LOWER(TRIM(COALESCE(c.name_local,'')))
+      LIMIT 1;
+    END IF;
     IF matched_id IS NOT NULL THEN RAISE EXCEPTION '[중복차단] 불변4 좌표10m 일치 id=%', matched_id; END IF;
   END IF;
 

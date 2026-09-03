@@ -13,8 +13,9 @@ import {
   users,
   creditTransactions,
 } from "../../shared/schema";
-import { sql, count, eq, and, gte, isNotNull } from "drizzle-orm";
+import { sql, count, eq, and, isNotNull } from "drizzle-orm";
 import { CREDIT_CONFIG } from "../creditService";
+import { recentDelta } from "../services/shared/metrics-heartbeat";
 
 const DEFAULT_DASHBOARD_DATA = {
   overview: {
@@ -135,16 +136,11 @@ export function registerDashboardRoutes(app: Express) {
     }
   });
 
-  let activitySummaryLastViewedAt: Date | null = null;
-
-  app.get("/api/admin/activity-summary", async (req, res) => {
+  app.get("/api/admin/activity-summary", async (_req, res) => {
     if (!db) return res.json({ dbConnected: false });
     try {
-      const since = activitySummaryLastViewedAt;
-      const markViewed = req.query.markViewed === "1";
-
-      const isMixItinerary = sql`${itineraries.rawData}->'metadata'->>'_pipelineVersion' = 'v3-2step'`;
-
+      // ⚠️ 수정금지(승인필요) 2026-08-31 사장님 확정 = 증감 = R2 심장박동 기록의 최근 2틱 비교 (정본 B4)
+      const { latest, delta } = await recentDelta();
       const [
         [userTotal],
         [routeTotal],
@@ -179,68 +175,14 @@ export function registerDashboardRoutes(app: Express) {
           .where(isNotNull(guides.placeId)),
         db.select({ count: count() }).from(savedVideos),
       ]);
-
-      let userNew = 0,
-        userWithdrawn = 0,
-        routeNew = 0,
-        aiOpinionNew = 0,
-        expertVerifyNew = 0,
-        guideNew = 0,
-        videoNew = 0;
-      if (since) {
-        const [[uN], [uW], [rN], [aN], [eN], [gN], [vN]] = await Promise.all([
-          db
-            .select({ count: count() })
-            .from(users)
-            .where(gte(users.createdAt, since)),
-          db
-            .select({ count: count() })
-            .from(users)
-            .where(gte(users.deletedAt, since)),
-          db
-            .select({ count: count() })
-            .from(itineraries)
-            .where(and(gte(itineraries.createdAt, since), isMixItinerary)),
-          db
-            .select({ count: count() })
-            .from(creditTransactions)
-            .where(
-              and(
-                eq(creditTransactions.type, "usage"),
-                eq(creditTransactions.description, "AI 의견"),
-                gte(creditTransactions.createdAt, since),
-              ),
-            ),
-          db
-            .select({ count: count() })
-            .from(creditTransactions)
-            .where(
-              and(
-                eq(creditTransactions.type, "usage"),
-                eq(creditTransactions.description, "전문가 검증"),
-                gte(creditTransactions.createdAt, since),
-              ),
-            ),
-          db
-            .select({ count: count() })
-            .from(guides)
-            .where(
-              and(isNotNull(guides.placeId), gte(guides.createdAt, since)),
-            ),
-          db
-            .select({ count: count() })
-            .from(savedVideos)
-            .where(gte(savedVideos.createdAt, since)),
-        ]);
-        userNew = uN?.count || 0;
-        userWithdrawn = uW?.count || 0;
-        routeNew = rN?.count || 0;
-        aiOpinionNew = aN?.count || 0;
-        expertVerifyNew = eN?.count || 0;
-        guideNew = gN?.count || 0;
-        videoNew = vN?.count || 0;
-      }
-      if (markViewed) activitySummaryLastViewedAt = new Date();
+      const userNew = delta.users;
+      const userWithdrawn = 0;
+      const routeNew = delta.routes;
+      const aiOpinionNew = delta.aiOpinion;
+      const expertVerifyNew = delta.expertVerify;
+      const guideNew = delta.guides;
+      const videoNew = delta.videos;
+      void latest;
 
       const loginBreakdown = await db
         .select({ provider: users.provider, count: count() })

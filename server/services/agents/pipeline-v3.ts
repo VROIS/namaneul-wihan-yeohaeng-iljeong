@@ -45,10 +45,13 @@ export async function runPipelineV3(formData: TripFormData): Promise<any> {
   console.log(
     `\n[V3] city='${cityCheck.cityName}' ready=false (${cityCheck.count} rows) → MIX 경로`,
   );
-  return runPipelineMix(formData);
+  return runPipelineMix(formData, cityCheck.cityId ?? null);
 }
 
-async function runPipelineMix(formData: TripFormData): Promise<any> {
+async function runPipelineMix(
+  formData: TripFormData,
+  cityId: number | null,
+): Promise<any> {
   const _t0 = Date.now();
   const _timings: Record<string, number> = {};
   const _mark = (label: string) => {
@@ -113,7 +116,13 @@ async function runPipelineMix(formData: TripFormData): Promise<any> {
   console.log(`[V3] Step1(Gemini) + DB사전로드 병렬 시작...`);
 
   const [geminiDays, preloaded] = await Promise.all([
-    step1_geminiItinerary(formData, dayCount, daySlotsConfig, vibeWeights),
+    step1_geminiItinerary(
+      formData,
+      dayCount,
+      daySlotsConfig,
+      vibeWeights,
+      cityId,
+    ),
     // ⚠️ 2026-07-08 사장님 SSOT = destinationCoords(도시중심좌표=불변키) 전달 = 좌표10m 매칭 = 중복도시·재발굴 차단.
     preloadCityData(formData.destination, formData.destinationCoords),
   ]);

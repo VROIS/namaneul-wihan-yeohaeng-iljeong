@@ -69,6 +69,7 @@ export interface GeminiPlace {
   distance_km_from_center?: number;
   startTime: string;
   endTime: string;
+  stayMin?: number;
   selection_reason_ko?: string; // ⚠️ 2026-05-14 v3 신규 = 인스타/FOMO = → summary_ko
   shortform_ko?: string; // ⚠️ 2026-05-14 v3 신규 = 코믹/위트 = → editorial_summary
   transitNote?: string; // 이전 장소에서 이 장소까지 이동 방법 (Gemini 생성)

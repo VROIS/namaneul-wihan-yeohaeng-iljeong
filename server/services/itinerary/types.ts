@@ -13,26 +13,6 @@ export type TravelPace = "Packed" | "Normal" | "Relaxed";
 export type MobilityStyle = "WalkMore" | "Moderate" | "Minimal";
 export type CurationFocus = "Kids" | "Parents" | "Everyone" | "Self";
 
-export interface PaceConfig {
-  slotDurationMinutes: number; // 슬롯 당 소요시간 (이동시간 포함)
-  maxSlotsPerDay: number; // 하루 최대 슬롯 수 (풀타임 12시간 기준)
-}
-
-export const PACE_CONFIG: Record<TravelPace, PaceConfig> = {
-  Packed: {
-    slotDurationMinutes: 90, // 1시간 30분
-    maxSlotsPerDay: 8, // 12h ÷ 1.5h = 8곳
-  },
-  Normal: {
-    slotDurationMinutes: 120, // 2시간
-    maxSlotsPerDay: 6, // 12h ÷ 2h = 6곳
-  },
-  Relaxed: {
-    slotDurationMinutes: 150, // 2시간 30분
-    maxSlotsPerDay: 4, // 12h ÷ 2.5h ≈ 4곳
-  },
-};
-
 export interface MealSlotConfig {
   type: "lunch" | "dinner";
   startHour: number;

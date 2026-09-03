@@ -286,13 +286,13 @@ export default function PlaceSlotCard({
                 ) : null;
               })()}
 
-              {/* ③ 시간 */}
+              {/* ⚠️ 수정금지(승인필요) 2026-09-02 사장님 확정 = 시작 시각만 노출(종료는 감춤) = 사람이 스스로 조정 (정본 B4 v23) */}
               <View style={styles.placeTimeRow}>
                 <Icon name="clock" size={12} color={theme.textSecondary} />
                 <Text
                   style={[styles.placeTimeText, { color: theme.textSecondary }]}
                 >
-                  {place.startTime} - {place.endTime}
+                  {place.startTime}
                 </Text>
               </View>
 

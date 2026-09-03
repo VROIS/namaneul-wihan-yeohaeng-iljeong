@@ -1,5 +1,4 @@
 import {
-  PACE_CONFIG,
   PSR_TIER_OFFSET,
   RANK_FALLBACK,
   type PlaceResult,
@@ -82,26 +81,6 @@ export function hashCode(str: string): number {
     hash |= 0;
   }
   return hash;
-}
-
-export function calculateSlotsForDay(
-  startTime: string,
-  endTime: string,
-  pace: TravelPace,
-): number {
-  const config = PACE_CONFIG[pace];
-
-  const [startH, startM] = startTime.split(":").map(Number);
-  const [endH, endM] = endTime.split(":").map(Number);
-
-  const startMinutes = startH * 60 + startM;
-  const endMinutes = endH * 60 + endM;
-  const availableMinutes = endMinutes - startMinutes;
-
-  if (availableMinutes <= 0) return 0;
-
-  const slots = Math.floor(availableMinutes / config.slotDurationMinutes);
-  return Math.min(slots, config.maxSlotsPerDay);
 }
 
 export function minutesToTime(minutes: number): string {

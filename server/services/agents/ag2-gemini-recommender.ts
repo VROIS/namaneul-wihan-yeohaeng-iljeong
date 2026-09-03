@@ -16,6 +16,7 @@ import {
   getPoolContext,
   recalcCrossCityZone,
   servingGateSql,
+  distanceKmFromCoords,
 } from "../shared/pool-radius";
 import { VIBE_PRIMARY_CATEGORY } from "@shared/vibe-category";
 
@@ -57,8 +58,7 @@ export async function isCityReady(
     };
   }
 
-  // ⚠️ 수정금지(승인필요) 2026-05-21 = 사용자 SSOT = collection_phase 완전 폐기 (= 같은 장소 = 다른 phase = 같은 데이터)
-  // 🧠 2026-07-05 사장님 SSOT = 전체 행수 COUNT (= 후보군 포함). 옛 rank 1-20 제한(2026-05-07) 폐기(§19) = 도시특성이 전체 발굴량에 반영됨.
+  // ⚠️ 수정금지(승인필요) 2026-07-05 사장님 SSOT = 전체 행수 COUNT(후보군 포함) = 도시특성이 전체 발굴량에 반영
   const countRows = await db
     .select({
       count: sql<number>`COUNT(*)::int`,
@@ -188,13 +188,13 @@ async function fetchFromPlaceSeedRaw(
     editorialSummary: placeSeedRaw.editorialSummary,
     seedCategory: placeSeedRaw.seedCategory,
     rank: placeSeedRaw.rank,
+    bestRank: placeSeedRaw.bestRank,
     googleReviewCount: placeSeedRaw.googleReviewCount,
     priceEur: placeSeedRaw.priceEur,
     dayZone: placeSeedRaw.dayZone,
   };
 
-  // ⚠️ 수정금지(승인필요) 2026-08-18 사장님 승인(실측 버그수정, §systemic) = core:outskirt 고정 2:3 비율 삭제.
-  // ⚠️ 수정금지(승인필요) 2026-08-27 사장님 승인 = 정렬 = 전 카테고리(식당 포함) 공통 rank ASC NULLS LAST → 동순위 google_review_count DESC 1벌.
+  // ⚠️ 수정금지(승인필요) 2026-08-27 사장님 승인 = 정렬 = 전 카테고리 공통 rank ASC NULLS LAST → 동순위 RC DESC 1벌(core:outskirt 고정비율 없음)
   const selectByDayZone = async (cat: string, slots: number) => {
     const isRestaurant = cat === "restaurant";
     // ⚠️ 수정금지(승인필요) 2026-08-18 사장님 승인 = 검증(PID) 게이트 = 미검증(TS 한 번도 안 거친) 행은 손님상 서빙 금지.
@@ -275,9 +275,23 @@ async function fetchFromPlaceSeedRaw(
     );
   }
 
-  // ⚠️ 수정금지(승인필요) 2026-08-18 사장님 승인 = 카테고리 공급부족 시 다른 카테고리에서 보충(도시 무관 보편 규칙).
-  if (!pinIds.length && allRows.length < totalSlots) {
-    const deficit = totalSlots - allRows.length;
+  // ⚠️ 수정금지(승인필요) 2026-09-03 사장님 결정 = 공급부족 보충 = 25km 안 취향 후보가 자리보다 적으면 다른 카테고리도 25km 안부터 rank 순으로 채운다 (정본 B4 v26)
+  const NEAR_KM = 25;
+  const kmOf = (r: any) =>
+    center && Number(r.latitude) && Number(r.longitude)
+      ? distanceKmFromCoords(
+          center.lat,
+          center.lng,
+          Number(r.latitude),
+          Number(r.longitude),
+        )
+      : Infinity;
+  const nearNonRest = allRows.filter(
+    (r: any) => r.seedCategory !== "restaurant" && kmOf(r) <= NEAR_KM,
+  ).length;
+  const nonRestSlots = totalSlots - (catSlots.restaurant ?? 0);
+  if (!pinIds.length && nearNonRest < nonRestSlots) {
+    const deficit = nonRestSlots - nearNonRest;
     const pickedIds = new Set(allRows.map((r: any) => r.id));
     const FILL_CATS = [
       "heritage",
@@ -302,7 +316,7 @@ async function fetchFromPlaceSeedRaw(
     for (const r of extra) recalcCrossCityZone(r, cid, center);
     const rcOf = (r: any) => r.googleReviewCount ?? -1;
     const topUp = extra
-      .filter((r) => !pickedIds.has(r.id))
+      .filter((r) => !pickedIds.has(r.id) && kmOf(r) <= NEAR_KM)
       .sort(
         (a, b) =>
           (a.rank ?? Number.MAX_SAFE_INTEGER) -
@@ -342,6 +356,7 @@ async function fetchFromPlaceSeedRaw(
       image: pickPlaceImage(r, imagePidMap),
       priceEstimate: r.priceEur ? `€${r.priceEur}` : "",
       estimatedPriceEur: r.priceEur ?? undefined,
+      bestRank: r.bestRank ?? null,
       seedCategory: r.seedCategory as SeedCategory,
       placeTypes: isFood ? ["restaurant"] : [],
       recommendedTime: "afternoon",

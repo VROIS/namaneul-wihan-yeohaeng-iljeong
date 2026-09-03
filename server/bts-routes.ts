@@ -4,6 +4,8 @@ import { cities, placeSeedRaw } from "../shared/schema";
 import { isNotNull, asc, desc, eq, and, sql } from "drizzle-orm";
 // ⚠️ 2026-07-31 사장님 승인(BTS D단계) = 옛 자체 생성기(/api/bts/generate + bts-gemini) 완전삭제 §19·§16.
 import { pickRestaurantBySegment } from "./services/route-matcher";
+import { servingGateSql } from "./services/shared/pool-radius";
+import { readCachedPlaceTranslations } from "./services/shared/place-translation";
 import {
   CHARACTER_PRIMARY_CATEGORY,
   COMPANION_VIBE_CATEGORIES,
@@ -23,6 +25,7 @@ const PLACE_COLS = {
   latitude: placeSeedRaw.latitude,
   longitude: placeSeedRaw.longitude,
   googleReviewCount: placeSeedRaw.googleReviewCount,
+  bestRank: placeSeedRaw.bestRank,
   editorialSummary: placeSeedRaw.editorialSummary,
   openingHours: placeSeedRaw.openingHours,
 } as const;
@@ -218,6 +221,8 @@ export function registerBtsRoutes(app: Express): void {
         return res.status(503).json({ error: "Database not configured" });
       const cityId = parseInt(req.query.cityId as string, 10);
       const memberId = (req.query.memberId as string) || "challenger";
+      // ⚠️ 수정금지(승인필요) 2026-09-02 사장님 확정 = 화면 언어(?lang=)로 카드 해설도 번역캐시에서(메인앱과 1벌)
+      const lang = String(req.query.lang || "ko");
       if (!cityId || isNaN(cityId)) {
         return res.status(400).json({ error: "cityId required" });
       }
@@ -226,11 +231,12 @@ export function registerBtsRoutes(app: Express): void {
       const cityFilter = eq(placeSeedRaw.cityId, cityId);
       const imageNotNull = sql`${placeSeedRaw.imageUrl} IS NOT NULL`;
       const dbi = db;
-      // ⚠️ 수정금지(승인필요) — 2026-05-07 사용자 SSOT: vibe 슬롯 = "순수 vibe" row만.
+      // ⚠️ 수정금지(승인필요) 2026-09-02 사장님 확정 = 캐릭터 = 메인앱 바이브 버튼 = 같은 게이트·같은 정렬(베스트→rank)
       const byCategoryTag = (tag: string, limit: number) => {
         const conditions = [
           cityFilter,
-          sql`${placeSeedRaw.categoryTags} && ARRAY[${tag}]::text[]`,
+          servingGateSql(),
+          sql`(${placeSeedRaw.seedCategory} = ${tag} OR ${placeSeedRaw.categoryTags} && ARRAY[${tag}]::text[])`,
           imageNotNull,
         ];
         if (tag !== "restaurant") {
@@ -238,19 +244,17 @@ export function registerBtsRoutes(app: Express): void {
             sql`NOT (${placeSeedRaw.categoryTags} && ARRAY['restaurant']::text[])`,
           );
         }
-        return (
-          dbi
-            .select(PLACE_COLS)
-            .from(placeSeedRaw)
-            .where(and(...conditions))
-            // ⚠️ 2026-07-31 사장님 지시(BTS 문제점2) = **주 카테고리 일치 우선** → rank ASC.
-            .orderBy(
-              sql`(${placeSeedRaw.seedCategory} = ${tag}) DESC`,
-              asc(placeSeedRaw.rank),
-              desc(placeSeedRaw.googleReviewCount),
-            )
-            .limit(limit)
-        );
+        return dbi
+          .select(PLACE_COLS)
+          .from(placeSeedRaw)
+          .where(and(...conditions))
+          .orderBy(
+            sql`(${placeSeedRaw.seedCategory} = ${tag}) DESC`,
+            sql`length(replace(COALESCE(${placeSeedRaw.bestRank}::text, ''), '0', '')) DESC`,
+            asc(placeSeedRaw.rank),
+            desc(placeSeedRaw.googleReviewCount),
+          )
+          .limit(limit);
       };
 
       const venueQuery = dbi
@@ -325,11 +329,18 @@ export function registerBtsRoutes(app: Express): void {
         vibeSlots[5], // 8
       ];
 
-      // ⚠️ 수정금지(승인필요) — 카드 노출 필드 7 개 + 좌표 2 개 (= 지도 마커용, 2026-05-06 Screen 4 카트→지도)
-      // ⚠️ 수정금지(승인필요) — 2026-05-07 사용자 SSOT: 이미지 URL 단일 정규화.
+      // ⚠️ 수정금지(승인필요) 2026-05-07 사용자 SSOT = 카드 노출 필드 7개 + 좌표 2개(지도 마커) · 이미지 URL 단일 정규화
+      const trMap =
+        lang === "ko"
+          ? new Map()
+          : await readCachedPlaceTranslations(
+              slotPlaces.filter((p): p is PlaceRow => !!p).map((p) => p.id),
+              lang,
+            );
       const slots = slotPlaces.map((p, i) => {
         if (!p) return { slot: i + 1, id: null };
         const rawUrl = p.imageUrl || null;
+        const tr = trMap.get(p.id);
         return {
           slot: i + 1,
           id: p.id,
@@ -338,7 +349,7 @@ export function registerBtsRoutes(app: Express): void {
           seedCategory: p.seedCategory,
           imageUrl: normalizeImageUrl(rawUrl, 1280),
           priceEur: p.priceEur,
-          summaryKo: p.summaryKo,
+          summaryKo: tr?.summary ?? p.summaryKo,
           latitude: p.latitude != null ? Number(p.latitude) : null,
           longitude: p.longitude != null ? Number(p.longitude) : null,
         };

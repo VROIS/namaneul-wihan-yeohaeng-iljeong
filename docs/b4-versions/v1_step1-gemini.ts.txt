@@ -219,7 +219,7 @@ OUTPUT (strict JSON, no markdown fences):
       );
     }
 
-    // ⚠️ 수정금지(승인필요) 2026-09-03 사장님 결정 = 제미니가 계산한 시각(ts)·체류(m)를 그대로 받아 슬롯에 표현한다 (정본 B4 v26 세트)
+    // ⚠️ 수정금지(승인필요) 2026-07-11 사장님 SSOT = 슬림 프롬프트 축약키 → 원명 복원 = 수신부 단일 지점(하류 GeminiPlace·DB 컬럼 불변).
     const SLIM_KEYS: Record<string, string> = {
       n: "name",
       k: "nameKo",
@@ -231,8 +231,6 @@ OUTPUT (strict JSON, no markdown fences):
       x: "longitude",
       p: "price_eur",
       d: "distance_km_from_center",
-      ts: "startTime",
-      m: "stayMin",
       r: "selection_reason_ko",
       s: "shortform_ko",
     };

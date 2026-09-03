@@ -20,7 +20,7 @@ import {
   type GeminiPlace,
   type GeminiDay,
 } from "./pipeline-v3-types";
-import { isValidCoord, computeSlotStartMins } from "./pipeline-v3-helpers";
+import { isValidCoord } from "./pipeline-v3-helpers";
 
 export interface DayBuilderDeps {
   formData: TripFormData;
@@ -73,13 +73,27 @@ export async function buildDayResult(
   const mealDur = paceConfig.mealDurationMinutes;
   const mealAt = (i: number) =>
     ["lunch", "dinner"].includes(dayScheduleItems[i]?.gPlace.type as string);
-  const slotStartMins = computeSlotStartMins(
-    dayScheduleItems.length,
-    dh * 60 + dm,
-    slotDur,
-    mealDur,
-    mealAt,
-  );
+  // ⚠️ 수정금지(승인필요) 2026-09-03 사장님 결정 = 슬롯 시각·체류 = 제미니가 계산해 준 ts·m 그대로(인간의 여정), 슬롯 수도 제미니가 준 만큼 (정본 B4 v26 세트)
+  const toMin = (t: string) => {
+    const [h, m] = t.split(":").map(Number);
+    return h * 60 + m;
+  };
+  const slotStartMins: number[] = [];
+  const slotDurMins: number[] = [];
+  let acc = dh * 60 + dm;
+  dayScheduleItems.forEach((s, i) => {
+    const ts = s.gPlace.startTime;
+    const start = /^\d{1,2}:\d{2}$/.test(ts || "") ? toMin(ts) : acc;
+    const dur =
+      Number.isFinite(s.gPlace.stayMin) && (s.gPlace.stayMin as number) > 0
+        ? Math.round(s.gPlace.stayMin as number)
+        : mealAt(i)
+          ? mealDur
+          : slotDur;
+    slotStartMins.push(start);
+    slotDurMins.push(dur);
+    acc = start + dur;
+  });
   const dayPlaces = dayScheduleItems.map((s, slotIdx) => {
     const enrichedPlace = finalPlaceMap.get(s.placeId)!;
     const isMeal = mealAt(slotIdx);
@@ -95,9 +109,7 @@ export async function buildDayResult(
       ...(finalScore ? { finalScore } : {}),
       ...(buzzScore ? { buzzScore } : {}),
       startTime: minutesToTime(slotStartMins[slotIdx]),
-      endTime: minutesToTime(
-        slotStartMins[slotIdx] + (isMeal ? mealDur : slotDur),
-      ),
+      endTime: minutesToTime(slotStartMins[slotIdx] + slotDurMins[slotIdx]),
       type: isMeal ? ("restaurant" as const) : ("activity" as const), // FE 슬롯 = DB-only 동형(§16)
       nameEn: ep.nameEn || enrichedPlace.name,
       isMealSlot: isMeal,

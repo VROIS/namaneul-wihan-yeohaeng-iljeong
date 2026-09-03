@@ -11,6 +11,7 @@ export interface UpsertPayload {
   targetRowId?: number | null;
   // ⚠️ 수정금지(승인필요) 2026-07-17 사장님 SSOT = targetRowId 직행이 트리거 '[중복차단] id=N' 판정을 받으면 그 원행(N)으로 병합(회수)할지 opt-in.
   followTriggerDup?: boolean;
+  dupCheckOnWrite?: boolean;
   // 🗑️ 2026-07-07 개정헌법(사장님) = rank 필드 삭제 §19 = upsertPlace 는 랭킹을 받지도·넣지도 않음. 랭킹은 DB autorank 트리거(RC순)가 전담.
   googlePlaceId?: string | null;
   address?: string | null;
@@ -208,12 +209,43 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
     };
   }
 
-  // ⚠️ 수정금지(승인필요) 2026-07-06 사장님 SSOT = targetRowId 직행 UPDATE(#45 repair.ts WHERE id=$1 방식).
+  // ⚠️ 수정금지(승인필요) 2026-09-03 사장님 결정 = PID 를 처음 받는 행(제미니 단계 신규·PID 결손행)에 TS PID 를 쓸 때는 문지기 면제 없이 불변1(PID 일치)을 돌리고, 막히면 그 원행으로 흡수 + 자기 행은 merged(삭제 0) · 이미 PID 있는 확정행 직행은 면제 그대로
   if (p.targetRowId != null) {
     try {
-      // ⚠️ 수정금지(승인필요) 2026-07-18 사장님 SSOT = 우리 id 확정행 직행 = prevent_dup 만 외과적 면제하고 그 행에 TS 요소 바로 씀(중복검사 불필요 = 이미 우리 id).
       let res;
-      if (p.followTriggerDup) {
+      if (p.dupCheckOnWrite) {
+        try {
+          res = await db.execute(buildDirectUpdateSql(p, p.targetRowId));
+        } catch (e: any) {
+          const dup = /\[중복차단\][^]*?id=(\d+)/.exec(e?.message || "");
+          const dupId = dup ? Number(dup[1]) : null;
+          if (!dupId || dupId === p.targetRowId) throw e;
+          const absorbed = await upsertPlace({
+            ...p,
+            targetRowId: dupId,
+            followTriggerDup: true,
+            dupCheckOnWrite: false,
+          });
+          await db.transaction(async (tx) => {
+            await tx.execute(
+              sql`SELECT set_config('app.skip_dup_check', 'on', true)`,
+            );
+            await tx.execute(
+              sql`UPDATE place_seed_raw SET status = 'merged', merged_into = ${dupId}, updated_at = NOW() WHERE id = ${p.targetRowId}`,
+            );
+          });
+          console.log(
+            `[UPSERT] 🧲 PID 쌍둥이 흡수 = 새 행 #${p.targetRowId} → 원행 #${dupId} (merged, 삭제 0)`,
+          );
+          return {
+            ...absorbed,
+            action: "updated",
+            rowId: dupId,
+            matchedBy: "pid",
+            reason: "pid_twin_absorbed",
+          };
+        }
+      } else if (p.followTriggerDup) {
         res = await db.transaction(async (tx) => {
           await tx.execute(
             sql`SELECT set_config('app.skip_dup_check', 'on', true)`,

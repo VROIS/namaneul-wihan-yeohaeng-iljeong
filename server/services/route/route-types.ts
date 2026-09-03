@@ -55,6 +55,7 @@ export interface RouteScene {
   distance_from_prev_km: number;
   transit_mode: "walk" | "metro" | "RER" | "bus" | "private_guide";
   transit_min: number;
+  slot_min: number;
   selection_reason_ko?: string;
   shortform_ko?: string;
   image?: string;

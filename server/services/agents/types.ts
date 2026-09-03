@@ -124,6 +124,8 @@ export interface PlaceResult {
   userRatingCount?: number; // = PSR.googleReviewCount (= 식당 정렬 보조)
   selectionReasons?: string[];
   confidenceLevel?: "high" | "medium" | "low" | "minimal";
+  // ⚠️ 수정금지(승인필요) 2026-09-01 사장님 확정 = 베스트 언어코드 = 카테고리 안 우선순위 (정본 B4)
+  bestRank?: number | null; // = PSR.best_rank(언어코드) = 베스트 우선 정렬용
   // ⚠️ 수정금지(승인필요) 2026-06-11 = nubiReason 폐기 (= 헛바퀴) → summary_ko 흡수통합. 타입 제거로 컴파일러가 잔존 사용처 강제 노출.
   dayZone?: "core" | "outskirt" | null; // PSR.day_zone (= 일자 zone 매칭)
   // ⚠️ 수정금지(승인필요) 2026-05-28 = 사용자 SSOT = 결함 5 해소 = ag4 활동 매핑 꼭 필요한 5 필드만
@@ -134,21 +136,21 @@ export interface PlaceResult {
   editorialSummary?: string | null; // = PSR.editorial_summary (= ag4 활동 shortformKo 매핑)
 }
 
-// ⚠️ 2026-07-21 사장님 SSOT = 활동간격(밀도별) + 식사간격(밀도별, 활동보다 짧음). maxSlotsPerDay = 안전 상한(가용시간이 실제 슬롯수 결정).
+// ⚠️ 수정금지(승인필요) 2026-08-31 사장님 결정 = 활동간격 = 식사간격 동일(식사 보장). maxSlotsPerDay = 안전 상한 (정본 B4)
 export const PACE_CONFIG: Record<TravelPace, PaceConfig> = {
   Packed: {
     slotDurationMinutes: PACE_SLOT_MINUTES.Packed,
-    mealDurationMinutes: 60,
+    mealDurationMinutes: PACE_SLOT_MINUTES.Packed,
     maxSlotsPerDay: 12,
   },
   Normal: {
     slotDurationMinutes: PACE_SLOT_MINUTES.Normal,
-    mealDurationMinutes: 90,
+    mealDurationMinutes: PACE_SLOT_MINUTES.Normal,
     maxSlotsPerDay: 10,
   },
   Relaxed: {
     slotDurationMinutes: PACE_SLOT_MINUTES.Relaxed,
-    mealDurationMinutes: 120,
+    mealDurationMinutes: PACE_SLOT_MINUTES.Relaxed,
     maxSlotsPerDay: 8,
   },
 };

@@ -353,12 +353,22 @@ export async function saveNewPlacesToDB(
               ? zoneForDistanceKm((place as any).distanceKmFromCenter)
               : null,
         };
-        // ⚠️ 수정금지(승인필요) 2026-07-09 사장님 SSOT = 신규·흡수 통일 = 전부 자기 rowId 직행(targetRowId=rowId) = 재매칭·중복재판별 절대 안 함.
-        // ⚠️ 수정금지(승인필요) 2026-07-17 사장님 SSOT = followTriggerDup=true = 트리거(최종 매처)가 '[중복차단] id=N' 판정 시
-        const job2 = { targetRowId: rowId, followTriggerDup: true, ...jobBase }; // 전부 자기 id 직행(§14 재매칭 실패 불가)
+        // ⚠️ 수정금지(승인필요) 2026-09-03 사장님 결정 = PID 를 처음 받는 행(신규·PID 결손)은 TS PID 쓰기에 불변1 을 돌려 같은 PID 원행이 있으면 그리로 흡수, 슬롯도 원행 번호로
+        const job2 = {
+          targetRowId: rowId,
+          followTriggerDup: true,
+          dupCheckOnWrite: true,
+          ...jobBase,
+        };
         const doUpdate = async () => {
           try {
-            await upsertPlace(job2 as any);
+            const u = await upsertPlace(job2 as any);
+            if (u.rowId != null && u.rowId !== rowId) {
+              (place as any).psrRowId = u.rowId;
+              console.log(
+                `[AG3-SAVE] 🧲 "${place.name}" = 같은 PID 원행 #${u.rowId} 로 흡수(새 행 #${rowId} merged)`,
+              );
+            }
           } catch (e) {
             console.log(
               `[AG3-SAVE] ⚠️ "${place.name}" 직행 실패(${(e as Error).message}) = 그 행 스킵`,

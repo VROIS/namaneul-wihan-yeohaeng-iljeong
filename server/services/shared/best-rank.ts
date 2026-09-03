@@ -48,6 +48,14 @@ export async function writeBestRankUnion(
   return { cur, result };
 }
 
+/** best_rank 언어코드의 0 아닌 자릿수(= 뷑힌 언어 수). JS 정렬용 1벌(§16). */
+export function bestRankLangCount(code: number | null | undefined): number {
+  if (!code) return 0;
+  return String(code)
+    .split("")
+    .filter((c) => c !== "0").length;
+}
+
 export const bestRankLangCountSql = "length(replace(best_rank::text, '0', ''))";
 
 function langDigit(lang?: string): number | undefined {

@@ -314,6 +314,16 @@ function setupErrorHandler(app: express.Application) {
       log("[Server] Startup migration skip:", (e as Error).message);
     }
 
+    // ⚠️ 수정금지(승인필요) 2026-08-31 사장님 확정 = 관제탑 지표 기록 = 대시보드를 안 열어도 30초마다 R2 에 남긴다 (정본 B4)
+    try {
+      const { startMetricsHeartbeat } = await import(
+        "./services/shared/metrics-heartbeat"
+      );
+      startMetricsHeartbeat();
+    } catch (e) {
+      log("[Server] metrics heartbeat skip:", (e as Error).message);
+    }
+
     try {
       if (isDatabaseConnected() && db) {
         const keys = await db.select().from(apiKeys);
