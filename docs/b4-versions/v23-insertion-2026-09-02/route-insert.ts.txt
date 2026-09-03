@@ -1,0 +1,84 @@
+import type { PlaceResult } from "../agents/types";
+
+type LatLng = { lat: number; lng: number };
+
+const hasCoord = (p: { lat?: number | null; lng?: number | null }): boolean =>
+  p.lat != null && p.lng != null && p.lat !== 0 && p.lng !== 0;
+
+export interface InsertionParams {
+  candidates: PlaceResult[];
+  center: LatLng;
+  days: { startMin: number; endMin: number }[];
+  mealDuration: number;
+  hasMeals: boolean;
+  stayMin: (p: PlaceResult) => number;
+  isPaid: (p: PlaceResult) => boolean;
+  paidLastStartMin: number;
+  lunchFrom: number;
+  longStayMin: number;
+  worth: (p: PlaceResult) => number;
+  legMin: (a: LatLng, b: LatLng) => number;
+  sameSpot: (a: PlaceResult, b: PlaceResult) => boolean;
+}
+
+// ⚠️ 수정금지(승인필요) 2026-09-02 사장님 결정 = v23 한 루프 = 바이브 버킷 전체를 후보로, 값어치²÷(늦어짐+1)이 가장 큰 것을 맞는 날·자리에 하나씩 넣는다 · 베스트가 항상 먼저 · 안 맞으면 안 넣는다(밀기 없음) · 늦어짐의 거리 = 사장님 위임으로 고를 때만 이동시간 공식 사용 (정본 B4 v23)
+export function buildDaysByInsertion(P: InsertionParams): PlaceResult[][] {
+  const routes: PlaceResult[][] = P.days.map(() => []);
+  const un = new Set(P.candidates.filter(hasCoord));
+  const placed: PlaceResult[] = [];
+
+  const fits = (seq: PlaceResult[], d: number): boolean => {
+    let acc = P.days[d].startMin;
+    let lunchDone = !P.hasMeals;
+    for (const a of seq) {
+      if (!lunchDone && acc >= P.lunchFrom) {
+        acc = Math.max(acc, P.lunchFrom) + P.mealDuration;
+        lunchDone = true;
+      }
+      if (P.isPaid(a) && acc >= P.paidLastStartMin) return false;
+      const s = P.stayMin(a);
+      acc += s;
+      if (!lunchDone && s >= P.longStayMin) lunchDone = true;
+    }
+    if (!lunchDone) acc = Math.max(acc, P.lunchFrom) + P.mealDuration;
+    const dinner = P.hasMeals ? P.mealDuration : 0;
+    return acc + dinner <= P.days[d].endMin;
+  };
+
+  const shift = (seq: PlaceResult[], k: number, j: PlaceResult): number => {
+    const prev: LatLng = k > 0 ? seq[k - 1] : P.center;
+    const next: LatLng = k < seq.length ? seq[k] : P.center;
+    return Math.max(
+      0,
+      P.stayMin(j) +
+        P.legMin(prev, j) +
+        P.legMin(j, next) -
+        P.legMin(prev, next),
+    );
+  };
+
+  for (;;) {
+    let best: { j: PlaceResult; d: number; k: number; v: number } | null = null;
+    for (const j of un) {
+      if (placed.some((q) => P.sameSpot(q, j))) {
+        un.delete(j);
+        continue;
+      }
+      for (let d = 0; d < routes.length; d++) {
+        const r = routes[d];
+        for (let k = 0; k <= r.length; k++) {
+          const seq = [...r.slice(0, k), j, ...r.slice(k)];
+          if (!fits(seq, d)) continue;
+          const w = P.worth(j);
+          const v = (w * w) / (shift(r, k, j) + 1);
+          if (!best || v > best.v) best = { j, d, k, v };
+        }
+      }
+    }
+    if (!best) break;
+    routes[best.d].splice(best.k, 0, best.j);
+    placed.push(best.j);
+    un.delete(best.j);
+  }
+  return routes;
+}

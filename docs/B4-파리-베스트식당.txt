@@ -1,0 +1,89 @@
+파리 제미니 베스트 식당 (raw 16파일, 고유 332곳 중 4개국어 이상 87곳)
+
+  10개국어  EUR60       1.5km  Café Marly
+  10개국어  EUR50       3.5km  Le Moulin de la Galette
+  10개국어  EUR30       1.8km  Les Antiquaires
+  10개국어  EUR12       0.6km  L'As du Fallafel
+  10개국어  EUR75       2.1km  Café de la Paix
+  10개국어  EUR55       2.8km  Café de l'Esplanade
+   9개국어  EUR255      4.1km  Jules Verne
+   9개국어  EUR35       2.9km  Pink Mamma
+   9개국어  EUR22       0.6km  Les Deux Palais
+   9개국어  EUR30       2.8km  Le Relais de l'Entrecôte
+   9개국어  EUR22       3.4km  Le Consulat
+   9개국어  EUR45       1.1km  La Table de Colette
+   9개국어  EUR40       2.8km  Le Petit Sommelier
+   8개국어  EUR25       3.4km  Le Petit Cler
+   8개국어  EUR55       3.7km  Les Cocottes
+   8개국어  EUR65       4.8km  Le Drugstore
+   8개국어  EUR40      17.5km  La Flottille
+   8개국어  EUR30       1.3km  Bread and Roses
+   8개국어  EUR65      17.0km  Ore
+   7개국어  EUR450      1.0km  Guy Savoy
+   7개국어  EUR28       0.6km  Auberge de la Reine Blanche
+   7개국어  EUR85       3.4km  La Mère Catherine
+   7개국어  EUR180      1.0km  Lapérouse
+   7개국어  EUR480      1.1km  L'Ambroisie
+   7개국어  EUR20       1.8km  Bouillon Chartier Grands Boulevards
+   7개국어  EUR35      32.5km  Annette's Diner
+   7개국어  EUR55      32.0km  Captain Jack's
+   7개국어  EUR35       1.1km  Les Deux Magots
+   7개국어  EUR60       1.1km  Le Grand Colbert
+   7개국어  EUR38       4.5km  Le Hide
+   6개국어  EUR12       1.8km  Happy Caffé
+   6개국어  EUR95       0.3km  Benoit Paris
+   6개국어  EUR45       3.5km  La Maison Rose
+   6개국어  EUR450      2.8km  Le Pavillon Ledoyen
+   6개국어  EUR22       2.9km  Bouillon Pigalle
+   6개국어  EUR50       1.4km  Les Papilles
+   6개국어  EUR45       1.8km  Le Café de la Paix
+   6개국어  EUR80       1.1km  La Méditerranée
+   6개국어  EUR75       0.4km  Georges
+   6개국어  EUR90       2.1km  Auberge Bressane
+   6개국어  EUR180      3.8km  L'Atelier de Joël Robuchon
+   6개국어  EUR55       4.5km  César
+   6개국어  EUR40       3.5km  La Boîte aux Lettres
+   6개국어  EUR35      17.0km  Le Sept
+   5개국어  EUR45       0.5km  Le Saint-Régis
+   5개국어  EUR18       5.1km  L'Atelier Artisan Crêpier
+   5개국어  EUR420      2.6km  L'Arpège
+   5개국어  EUR55       1.3km  Le Procope
+   5개국어  EUR160      1.0km  Alliance
+   5개국어  EUR25       3.1km  Le Recrutement
+   5개국어  EUR60       2.2km  La Coupole
+   5개국어  EUR360      0.9km  Tour d'Argent
+   5개국어  EUR38       0.8km  Le Caveau du Palais
+   5개국어  EUR35       0.3km  Le Trumilou
+   5개국어  EUR45       0.8km  Le Comptoir du Relais
+   5개국어  EUR110      0.3km  Benoit
+   5개국어  EUR45       0.5km  Le Petit Châtelet
+   5개국어  EUR10       0.9km  Crêperie Genia
+   5개국어  EUR140     17.8km  La Table du 11
+   5개국어  EUR30       2.7km  L'Opportun
+   5개국어  EUR30       2.5km  L'Entracte
+   5개국어  EUR28       1.3km  Flottes
+   5개국어  EUR30       4.4km  L'Etoile 1903
+   5개국어  EUR35       3.7km  Café de l'Alma
+   5개국어  EUR30       1.6km  Le Comptoir des Saints-Pères
+   5개국어  EUR40       1.6km  Café de Flore
+   4개국어  EUR220      5.0km  L'Oiseau Blanc
+   4개국어  EUR55       1.1km  Le Comptoir de la Gastronomie
+   4개국어  EUR25       2.4km  Lafayette Gourmet
+   4개국어  EUR15       3.2km  Crêperie Brocéliande
+   4개국어  EUR95       3.3km  La Bonne Franquette
+   4개국어  EUR85       1.5km  Drouant
+   4개국어  EUR250      3.2km  David Toutain
+   4개국어  EUR110      1.9km  L'Opéra Restaurant
+   4개국어  EUR490      1.0km  Restaurant Guy Savoy
+   4개국어  EUR12       1.2km  Happy Caffe
+   4개국어  EUR95      32.1km  Auberge de Cendrillon
+   4개국어  EUR35       1.3km  Café de la Nouvelle Mairie
+   4개국어  EUR25       3.3km  Hardware Société
+   4개국어  EUR20       3.2km  Le Relais Gascon
+   4개국어  EUR20       1.1km  Sanukiya
+   4개국어  EUR120      2.5km  Maxim's de Paris
+   4개국어  EUR55       1.0km  Ma Bourgogne
+   4개국어  EUR40       0.6km  La Rose de France
+   4개국어  EUR35       0.4km  Pain Vin Fromage
+   4개국어  EUR30       1.2km  Le Comptoir du Panthéon
+   4개국어  EUR45       3.0km  Daguerre Marée

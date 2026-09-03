@@ -1,0 +1,164 @@
+════════════════════════════════════════════════════════════════════════════
+  MIX(제미니) vs DB-only   전체 여정 원문 + 시간 배치
+  조건 = 파리 3일 · 밀도 Packed(빡빡) · 예산 Economic(저예산) · Culture 100%
+         Family 4인 · 09:00~21:00   ← 양쪽 완전 동일
+  파리 저예산 구간 = €1~25 (도시별 분포 30/50/20)
+  제미니 raw = docs/raw/19/2026-08-31_90-mix-gemini_step1_3.json
+════════════════════════════════════════════════════════════════════════════
+
+
+╔════════════════════════════════════════════════════════════════════════╗
+║  ① MIX = 제미니가 짠 여정 (시각·체류시간을 제미니가 직접 계산)          ║
+╚════════════════════════════════════════════════════════════════════════╝
+
+━━━━━━━━ Day 1  「파리 핵심 랜드마크 정복」 ━━━━━━━━
+  09:00~12:00   180분          루브르 박물관                       €    22  중심   1.2km  이동  1.15km
+              Louvre Museum                               75001 Paris, France
+              세계 3대 박물관 필수 코스  /  모나리자 실물 영접 타임
+  12:15~12:55    40분          튈르리 정원                        €     0  중심   2.0km  이동  0.81km
+              Tuileries Garden                            Pl. de la Concorde, 75001 Paris, France
+              파리에서 가장 예쁜 정원  /  초록 의자 쟁탈전 시작
+  13:00~14:20    80분  🍽점심  안젤리나 파리                       €    25  중심   2.0km  이동  0.18km
+              Angelina Paris                              226 Rue de Rivoli, 75001 Paris, France
+              코코 샤넬이 사랑한 핫초코  /  당 충전하고 다시 걷자
+  14:30~15:00    30분          콩코르드 광장                       €     0  중심   2.5km  이동  0.52km
+              Place de la Concorde                        75008 Paris, France
+              프랑스 혁명의 역사적 장소  /  오벨리스크 앞 인증샷
+  15:10~16:10    60분          프티 팔레                         €     0  중심   2.9km  이동  0.48km
+              Petit Palais                                Av. Winston Churchill, 75008 Paris, France
+              무료지만 화려한 미술관  /  정원 카페가 진짜 숨은 꿀
+  16:20~16:50    30분          알렉상드르 3세 다리                   €     0  중심   2.9km  이동  0.25km
+              Pont Alexandre III                          Pont Alexandre III, 75008 Paris, France
+              파리에서 가장 화려한 다리  /  웨딩 촬영 명당 인정
+  17:10~19:10   120분  🍽저녁  레 좀브르                         €    25  중심   4.0km  이동  1.21km
+              Les Ombres                                  27 Quai Jacques Chirac, 75007 Paris, France
+              에펠탑 뷰 맛집 레스토랑  /  뷰가 다했다 진짜
+  → 슬롯 7개 · 하루이동 4.6km · 종료 19:10
+
+━━━━━━━━ Day 2  「예술가들의 발자취와 낭만」 ━━━━━━━━
+  09:00~10:00    60분          사크레쾨르 대성당                     €     0  중심   3.4km  이동  3.41km
+              Sacré-Cœur                                  35 Rue du Chevalier de la Barre, 75018 Paris
+              몽마르트르 언덕 위 하얀 성당  /  파리 시내 한눈에 슥
+  10:10~10:50    40분          테르트르 광장                       €     0  중심   3.4km  이동  0.17km
+              Place du Tertre                             Pl. du Tertre, 75018 Paris, France
+              화가들의 낭만이 가득한 곳  /  초상화 호객 주의보
+  11:00~12:30    90분  🍽점심  르 콩슐라                         €    22  중심   3.4km  이동  0.05km
+              Le Consulat                                 18 Rue Norvins, 75018 Paris, France
+              몽마르트르 상징 빨간 카페  /  인스타 사진 100장 가능
+  13:00~14:30    90분          팔레 가르니에                       €    15  중심   2.3km  이동  1.72km
+              Palais Garnier                              Pl. de l'Opéra, 75009 Paris, France
+              오페라의 유령 배경지  /  베르사유 안 부러운 화려함
+  14:45~16:45   120분          갤러리 라파예트                      €     0  중심   2.4km  이동  0.15km
+              Galeries Lafayette Haussmann                40 Bd Haussmann, 75009 Paris, France
+              화려한 돔 천장이 있는 백화점  /  쇼핑 안 해도 돔은 봐야지
+  17:15~19:45   150분          오르세 미술관                       €    16  중심   1.9km  이동  1.53km
+              Musée d'Orsay                               1 Rue de la Légion d'Honneur, 75007 Paris
+              기차역을 개조한 인상주의 성지  /  시계탑 뒤에서 실루엣 샷
+  20:00~21:30    90분  🍽저녁  르 를레 드 랑트르코트                  €    25  중심   2.9km  이동  2.28km
+              Le Relais de l'Entrecôte                    20 Rue du Commandant René Mouchotte, 75014 Par
+              줄 서서 먹는 갈비살 스테이크  /  소스 비법 좀 알려주세요
+  → 슬롯 7개 · 하루이동 9.3km · 종료 21:30  ⚠️ 21시 초과
+
+━━━━━━━━ Day 3  「파리 근교와 고딕 양식의 정수」 ━━━━━━━━
+  09:00~13:00   240분          베르사유 궁전                       €    21  중심  17.9km  이동 17.92km
+              Palace of Versailles                        Place d'Armes, 78000 Versailles, France
+              절대왕정의 상징 화려함의 끝  /  거울의 방에서 공주 빙의
+  13:30~15:00    90분  🍽점심  르 셉탕트 되                       €    20  중심  17.2km  이동  0.70km
+              Le Septante-Deux                            72 Rue de la Paroisse, 78000 Versailles
+              베르사유 근처 현지인 맛집  /  궁전 밖 가성비 한 끼
+  16:00~17:00    60분          생트 샤펠                         €    13  중심   0.5km  이동 16.69km
+              Sainte-Chapelle                             10 Bd du Palais, 75001 Paris, France
+              황홀한 스테인드글라스의 정수  /  빛이 들어올 때 가야 제맛
+  17:15~18:00    45분          노트르담 대성당                      €     0  중심   0.4km  이동  0.45km
+              Cathédrale Notre-Dame de Paris              6 Parvis Notre-Dame, 75004 Paris
+              파리의 심장 고딕의 걸작  /  복원된 모습 드디어 영접
+  18:15~19:00    45분          셰익스피어 앤 컴퍼니                   €     0  중심   0.6km  이동  0.21km
+              Shakespeare and Company                     37 Rue de la Bûcherie, 75005 Paris
+              비포 선셋 촬영지 고서점  /  에코백 하나는 사야지
+  19:30~21:00    90분  🍽저녁  부용 라신                         €    25  중심   1.1km  이동  0.52km
+              Bouillon Racine                             3 Rue Racine, 75006 Paris, France
+              아르누보 양식의 가성비 식당  /  분위기는 미쉐린급
+  → 슬롯 6개 · 하루이동 36.5km · 종료 21:00
+
+
+╔════════════════════════════════════════════════════════════════════════╗
+║  ② DB-only = 우리 엔진 (같은 조건)                                      ║
+╚════════════════════════════════════════════════════════════════════════╝
+
+━━━━━━━━ Day 1 ━━━━━━━━
+  09:00~11:00   120분          ★7 베르사유 궁전                     €    21  중심  17.9km  이동 17.92km
+              Palace of Versailles                        Place d'Armes, 78000 Versailles, France
+              절대왕정의 상징 화려함의 끝
+  12:00~13:00    60분  🍽         아줄리                         €    19  중심  17.8km  이동  0.28km
+              AZULI                                       6 Rue de la Chancellerie, 78000 Versailles
+              지중해풍 건강식 델리
+  13:00~14:30    90분          ★7 에투알 개선문                     €    16  중심   4.6km  이동 14.84km
+              Arc de Triomphe                             Pl. Charles de Gaulle, 75008 Paris, France
+              샹젤리제 거리의 상징
+  14:30~16:00    90분          ★7 팔레 가르니에                     €    15  중심   2.3km  이동  2.68km
+              Palais Garnier                              Pl. de l'Opéra, 75009 Paris, France
+              오페라의 유령 배경지
+  16:00~18:00   120분          ★7 루브르 박물관                     €    22  중심   1.2km  이동  1.34km
+              Louvre Museum                               75001 Paris, France
+              세계 3대 박물관 필수 코스
+  18:00~19:30    90분          ★7 오르세 미술관                     €    16  중심   1.9km  이동  0.81km
+              Musée d'Orsay                               1 Rue de la Légion d'Honneur, 75007 Paris
+              기차역을 개조한 인상주의 성지
+  19:30~20:30    60분  🍽      ★4 부이용 피갈                      €    22  중심   3.1km  이동  2.64km
+              Bouillon Pigalle                            22 Bd de Clichy, 75018 Paris
+              파리 최고의 가성비 코스 요리
+  → 활동 5곳 · 식사 2회 · 하루이동 40.5km · 종료 20:30
+
+━━━━━━━━ Day 2 ━━━━━━━━
+  09:00~11:00   120분             그랑 팔레                       €    20  중심   3.1km  이동  3.09km
+              Grand Palais                                75008 Paris
+              파리 하늘을 담은 유리 지붕
+  11:00~12:00    60분             프티 팔레                       €     0  중심   2.9km  이동  0.16km
+              Petit Palais                                Av. Winston Churchill, 75008 Paris, France
+              무료지만 화려한 미술관
+  12:00~13:00    60분  🍽         라뒤레                         €    25  중심   2.5km  이동  0.71km
+              Ladurée                                     16 Rue Royale, 75008 Paris
+              마카롱의 원조, 민트색 감성 카페
+  13:00~14:30    90분             앵발리드                        €    15  중심   2.9km  이동  1.55km
+              Hôtel des Invalides                         75007 Paris, France
+              나폴레옹의 안식처
+  14:30~16:00    90분          ★7 앵발리드                        €    15  중심   2.9km  이동  0.04km
+              Hôtel des Invalides                         75007 Paris
+              나폴레옹의 무덤이 있는 군사 박물관이자 황금빛 돔이 인상적인 건축물
+  16:00~17:30    90분             파리 군사 박물관                   €    15  중심   2.9km  이동  0.04km
+              Musée de l'Armée                            129 Rue de Grenelle, 75007 Paris
+              프랑스 전쟁사의 모든 것
+  17:30~18:30    60분             보쥬 광장                       €     0  중심   1.0km  이동  3.87km
+              Place des Vosges                            Pl. des Vosges, 75004 Paris, France
+              마레 지구의 가장 오래된 광장
+  18:30~19:30    60분          ★5 페르 라셰즈 묘지                   €     0  중심   3.1km  이동  2.15km
+              Cimetière du Père-Lachaise                  75020 Paris
+              유명인들이 잠든 숲 같은 묘지
+  19:30~20:30    60분  🍽      ★7 라스 뒤 팔라펠                    €    13  중심   0.5km  이동  2.55km
+              L'As du Fallafel                            34 Rue des Rosiers, 75004 Paris
+              마레 지구에서 가장 유명한 유대인 스타일 팔라펠 샌드위치
+  → 활동 7곳 · 식사 2회 · 하루이동 14.2km · 종료 20:30
+
+━━━━━━━━ Day 3 ━━━━━━━━
+  09:49~11:19    90분             퐁텐블로 궁전                     €    14  중심  56.6km  이동 56.62km
+              퐁텐블로 궁전                                     77300 Fontainebleau
+              프랑스 왕들의 진짜 안식처
+  12:00~13:00    60분  🍽         데메 이탈리안 레스토랑                €    25  중심  56.6km  이동  0.24km
+              Démé - Restaurant italien, pizzeria.        41 Bd Magenta, 77300 Fontainebleau
+              퐁텐블로 현지인 피자 맛집
+  13:47~16:17   150분          ★7 파리 카타콤                      €    29  중심   2.9km  이동 55.01km
+              Catacombs of Paris                          1 Av. du Colonel Henri Rol-Tanguy, 75014 Paris
+              지하 깊숙한 곳에 수백만 구의 유골이 안치된 미스터리한 지하 묘지
+  16:20~17:20    60분          ★7 팡테옹                         €    13  중심   1.2km  이동  1.72km
+              Panthéon                                    Pl. du Panthéon, 75005 Paris
+              빅토르 위고, 퀴리 부인 등 프랑스의 위인들이 잠들어 있는 국립 묘지
+  17:22~18:22    60분          ★7 노트르담 대성당                    €     0  중심   0.4km  이동  0.80km
+              Cathédrale Notre-Dame de Paris              6 Parvis Notre-Dame, 75004 Paris
+              파리의 심장 고딕의 걸작
+  18:23~19:23    60분          ★7 생트 샤펠                       €    13  중심   0.5km  이동  0.45km
+              Sainte-Chapelle                             10 Bd du Palais, 75001 Paris, France
+              황홀한 스테인드글라스의 정수
+  19:24~20:24    60분  🍽         LE PARIS HALLES CAFÉ        €    25  중심   0.6km  이동  0.74km
+              LE PARIS HALLES CAFÉ                        41 Bd de Sébastopol, 75001 Paris
+              샤틀레 레 알 쇼핑몰 인근의 대형 카페로 접근성이 좋고 가벼운 식사와 디저트를 즐기기 좋습니다.
+  → 활동 5곳 · 식사 2회 · 하루이동 115.6km · 종료 20:24

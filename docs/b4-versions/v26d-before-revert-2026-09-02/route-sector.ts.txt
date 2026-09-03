@@ -1,0 +1,196 @@
+import type { PlaceResult } from "../agents/types";
+import { haversineKm } from "../agents/transit-haversine";
+
+type LatLng = { lat: number; lng: number };
+
+const hasCoord = (p: { lat?: number | null; lng?: number | null }): boolean =>
+  p.lat != null && p.lng != null && p.lat !== 0 && p.lng !== 0;
+
+const dist = (a: LatLng, b: LatLng) => haversineKm(a.lat, a.lng, b.lat, b.lng);
+
+// ⚠️ 수정금지(승인필요) 2026-09-02 사장님 확정 = 구역(걸어서 1.5km) · 방향 한 바퀴를 시간 균등으로 나눔 · 매일 가장 먼 곳 출발 → 도심 귀소 (정본 B4 v26)
+const ZONE_LINK_KM = 1.5;
+// 2026-09-02 v26 시뮬 보정(사장님 실증 판정 전) = 당일치기(도심 15km 밖)는 하루 하나 · 하루는 부채꼴 max(90°, 360°/N) 안
+export const DAYTRIP_KM = 15;
+const MIN_SPAN_DEG = 90;
+
+/** 당일치기(도심 15km 밖) 묶음 수. 서로 붙은 먼 곳(거리 ≤ 도심거리의 절반)은 한 묶음. */
+export function tripCount(
+  items: { lat: number; lng: number }[],
+  center: LatLng,
+): number {
+  const farPts = items.filter((p) => dist(center, p) > DAYTRIP_KM);
+  const seen: LatLng[] = [];
+  let n = 0;
+  for (const p of farPts) {
+    if (
+      !seen.some(
+        (q) => dist(q, p) <= 0.5 * Math.min(dist(center, q), dist(center, p)),
+      )
+    )
+      n++;
+    seen.push(p);
+  }
+  return n;
+}
+
+/** 하루 경로 = 도심에서 가장 먼 곳 출발 → 최근접으로 잇고 → 도심 귀환(끝점 고정) → 2-opt 로 교차 제거. */
+export function homePath(items: PlaceResult[], center: LatLng): PlaceResult[] {
+  const pts = items.filter(hasCoord);
+  if (pts.length <= 1) return [...pts];
+  const start = pts.reduce((a, b) =>
+    dist(center, b) > dist(center, a) ? b : a,
+  );
+  const rem = pts.filter((p) => p !== start);
+  const nodes: LatLng[] = [start];
+  let cur: LatLng = start;
+  while (rem.length) {
+    let bi = 0;
+    let bd = Infinity;
+    rem.forEach((p, i) => {
+      const d = dist(cur, p);
+      if (d < bd) {
+        bd = d;
+        bi = i;
+      }
+    });
+    cur = rem[bi];
+    nodes.push(rem.splice(bi, 1)[0]);
+  }
+  nodes.push(center);
+  const n = nodes.length;
+  let improved = true;
+  while (improved) {
+    improved = false;
+    for (let i = 1; i <= n - 3; i++) {
+      for (let j = i + 1; j <= n - 2; j++) {
+        const delta =
+          dist(nodes[i - 1], nodes[j]) +
+          dist(nodes[i], nodes[j + 1]) -
+          dist(nodes[i - 1], nodes[i]) -
+          dist(nodes[j], nodes[j + 1]);
+        if (delta < -1e-9) {
+          nodes.splice(i, j - i + 1, ...nodes.slice(i, j + 1).reverse());
+          improved = true;
+        }
+      }
+    }
+  }
+  return nodes.slice(0, -1) as PlaceResult[];
+}
+
+/** 경로 길이 = 도심 → 첫 곳 → … → 마지막 곳 → 도심. */
+export function pathKm(order: PlaceResult[], center: LatLng): number {
+  if (!order.length) return 0;
+  let km = dist(center, order[0]);
+  for (let i = 1; i < order.length; i++) km += dist(order[i - 1], order[i]);
+  return km + dist(order[order.length - 1], center);
+}
+
+/** 캷오프 통과분을 구역으로 묶고 방향 순으로 한 바퀴 돌며 N일로 시간 균등하게 나눈다(구역은 통째, 하루보다 크면 경로 순서로 쪼겜). 반환 = 날별 후보(순서는 homePath 로). */
+export function buildZoneDays(
+  items: PlaceResult[],
+  center: LatLng,
+  dayCapMin: number[],
+  stayMin: (p: PlaceResult) => number,
+): PlaceResult[][] {
+  const N = dayCapMin.length;
+  const empty = () => Array.from({ length: N }, () => [] as PlaceResult[]);
+  if (!N) return [];
+  const pts = items.filter(hasCoord);
+  if (!pts.length) return empty();
+  const load = (xs: PlaceResult[]) => xs.reduce((s, p) => s + stayMin(p), 0);
+
+  // A 구역 = 1.5km 안에서 이어지는 묶음
+  const par = pts.map((_, i) => i);
+  const find = (i: number): number =>
+    par[i] === i ? i : (par[i] = find(par[i]));
+  for (let i = 0; i < pts.length; i++)
+    for (let j = i + 1; j < pts.length; j++)
+      if (dist(pts[i], pts[j]) <= ZONE_LINK_KM) par[find(i)] = find(j);
+  const byRoot = new Map<number, PlaceResult[]>();
+  pts.forEach((p, i) => {
+    const r = find(i);
+    if (!byRoot.has(r)) byRoot.set(r, []);
+    byRoot.get(r)!.push(p);
+  });
+  type Cluster = { items: PlaceResult[]; c: LatLng };
+  const centroid = (xs: PlaceResult[]): LatLng => ({
+    lat: xs.reduce((s, p) => s + p.lat, 0) / xs.length,
+    lng: xs.reduce((s, p) => s + p.lng, 0) / xs.length,
+  });
+  const cap1 = Math.min(...dayCapMin);
+  const clusters: Cluster[] = [];
+  for (const zone of byRoot.values()) {
+    if (load(zone) <= cap1) {
+      clusters.push({ items: zone, c: centroid(zone) });
+      continue;
+    }
+    let chunk: PlaceResult[] = [];
+    for (const p of homePath(zone, center)) {
+      if (chunk.length && load(chunk) + stayMin(p) > cap1) {
+        clusters.push({ items: chunk, c: centroid(chunk) });
+        chunk = [];
+      }
+      chunk.push(p);
+    }
+    if (chunk.length) clusters.push({ items: chunk, c: centroid(chunk) });
+  }
+
+  // B 방향 한 바퀴 → N일 시간 균등(구역 통째). 당일치기 하루 하나 · 부채꼴 안. 시작점은 전부 시험해 가장 균형 좋은 것.
+  const ang = (pt: LatLng) =>
+    ((Math.atan2(
+      pt.lat - center.lat,
+      (pt.lng - center.lng) * Math.cos((center.lat * Math.PI) / 180),
+    ) *
+      180) /
+      Math.PI +
+      360) %
+    360;
+  const far = (c: Cluster) => dist(center, c.c) > DAYTRIP_KM;
+  const sameTrip = (a: Cluster, b: Cluster) =>
+    dist(a.c, b.c) <= 0.5 * Math.min(dist(center, a.c), dist(center, b.c));
+  const spanDeg = Math.max(MIN_SPAN_DEG, Math.ceil(360 / N));
+  const byAng = [...clusters].sort((a, b) => ang(a.c) - ang(b.c));
+  const K = byAng.length;
+  const cap = Math.ceil(load(pts) / N);
+  let best: { days: PlaceResult[][]; score: number } | null = null;
+  for (let o = 0; o < K; o++) {
+    const seq = [...byAng.slice(o), ...byAng.slice(0, o)];
+    const days: Cluster[][] = [[]];
+    let violations = 0;
+    for (const c of seq) {
+      const cur = days[days.length - 1];
+      const curLoad = load(cur.flatMap((x) => x.items));
+      const otherTrips = cur.filter(far).filter((x) => !sameTrip(x, c)).length;
+      const newTrip = far(c) && otherTrips > 0;
+      const span = cur.length ? (ang(c.c) - ang(cur[0].c) + 360) % 360 : 0;
+      const wouldViolate = newTrip || span > spanDeg;
+      const overCap = cur.length > 0 && curLoad + load(c.items) > cap;
+      if (cur.length && (overCap || wouldViolate) && days.length < N) {
+        days.push([c]);
+      } else {
+        if (cur.length && wouldViolate) violations++;
+        cur.push(c);
+      }
+    }
+    while (days.length < N) days.push([]);
+    const loads = days.map((d) => load(d.flatMap((x) => x.items)));
+    const score = violations * 1e6 + (Math.max(...loads) - Math.min(...loads));
+    if (!best || score < best.score)
+      best = { days: days.map((d) => d.flatMap((x) => x.items)), score };
+  }
+  const days = best ? best.days : empty();
+  // 빈 날이 생기면 가장 무거운 날을 경로 순서로 반 나눠 채운다(N일 모두 채움).
+  for (;;) {
+    const ei = days.findIndex((d) => d.length === 0);
+    if (ei < 0) break;
+    const hi = days.reduce((m, d, i) => (d.length > days[m].length ? i : m), 0);
+    if (days[hi].length < 2) break;
+    const ord = homePath(days[hi], center);
+    const half = Math.ceil(ord.length / 2);
+    days[hi] = ord.slice(0, half);
+    days[ei] = ord.slice(half);
+  }
+  return days;
+}

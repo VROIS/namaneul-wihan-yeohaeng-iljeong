@@ -1,4 +1,5 @@
-// ⚠️ 수정금지(승인필요) 2026-09-01 사장님 확정 = 여정 풀 반경·손님상 게이트 단일 진입점(자기도시도 100km 물리검사 · 베스트는 RC 면제)
+// ⚠️ 수정금지(승인필요) 2026-07-17 사장님 확정 SSOT = 여정 풀 반경 단일 진입점 (§16 재발명 차단)
+//   ⚠️ 2026-08-18 사장님 승인 = 좌표 있는 자기도시 행도 100km 물리 검사(옛 무조건 포함 = 폐기 §19, 오염소속 세계일주 실사고 근본).
 
 import { sql, eq, type SQL } from "drizzle-orm";
 import { db } from "../../db";
@@ -62,12 +63,12 @@ export function poolWhereSql(
   )))`;
 }
 
-/** ⚠️ 수정금지(승인필요) 2026-09-01 사장님 확정 = 손님상 게이트 1벌 = 베스트는 RC 면제(7개국어가 뽑은 것이 더 강한 증거). */
+/** ⚠️ 수정금지(승인필요) 2026-08-24 사장님 승인 = **손님상(서빙) 전용** 게이트 1벌. */
 export function servingGateSql(): SQL {
-  return sql`(${placeSeedRaw.status} = 'active' AND (COALESCE(${placeSeedRaw.googleReviewCount}, 0) > 0 OR ${placeSeedRaw.bestRank} IS NOT NULL))`;
+  return sql`(${placeSeedRaw.status} = 'active' AND COALESCE(${placeSeedRaw.googleReviewCount}, 0) > 0)`;
 }
 
-/** ⚠️ 수정금지(승인필요) 2026-09-01 사장님 확정 = 기점 = 동적 출발점(숙소>도심) 100km 물리검사 · 손님상 게이트와 한 진입점 */
+/** ⚠️ 2026-07-17 사장님 SSOT = 기점 = 동적 출발점(숙소>도심). startCoords 주면 그 기점 100km(숙소가 중간인 이중도시 = 그 기점 공유), */
 export async function getPoolContext(
   cityId: number,
   startCoords?: { lat: number; lng: number } | null,

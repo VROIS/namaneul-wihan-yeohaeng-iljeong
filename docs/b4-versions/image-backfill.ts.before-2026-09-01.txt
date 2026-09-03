@@ -1,4 +1,5 @@
-// ⚠️ 수정금지(승인필요) 2026-09-03 사장님 결정 = 사진 단일 진입점 = 재링크 → PID 구글맵 공개페이지 무료(API 호출 0, 영업상태도 기입) → 유료(raw→PM·TS)는 사장님 명시 승인 플래그(--allow-pm / --allow-ts)에서만
+// ⚠️ 수정금지(승인필요) 2026-07-11 사장님 SSOT = 사진 사후 일괄 보강 단일 진입점 (= 사진 분리 수술의 짝).
+// = ⚠️ 2026-08-24 사장님 승인 = 무료잔량 게이트(gateBatch) = TS만 적용(초과면 중단, --force-quota 는 사장님 승인 시만). PM = 막지 않음(곧 사용자 기능 = 제한 금지, 기록·판정만).
 import fs from "fs";
 import path from "path";
 import { fileURLToPath, pathToFileURL } from "url";
@@ -62,17 +63,14 @@ export async function backfillImages(opts: {
   apply: boolean;
   forceQuota?: boolean; // 2026-08-23 = 무료잔량 초과 시에도 진행(사장님 승인 플래그 --force-quota)
   allowTs?: boolean;
-  allowPm?: boolean;
   limit?: number;
   client: any;
 }): Promise<{
   targets: number;
   relinked: number;
   pmFromRaw: number;
-  freeGmaps: number;
   needTs: number;
   pmDone: number;
-  gmapsDone: number;
   tsDone: number;
 }> {
   const { cityId, apply, client: c } = opts;
@@ -80,7 +78,8 @@ export async function backfillImages(opts: {
 
   const relink = await relinkStorageImages({ cityId, apply, client: c });
 
-  // ⚠️ 수정금지(승인필요) 2026-08-26 사장님 승인 = 위키 미러 파일(`-wiki.`)은 구글 사진이 아니므로 결손으로 본다
+  // ⚠️ 수정금지(승인필요) 2026-08-17 사장님 승인 = 영구폐업 제외 조건 삭제(옛 2026-07-08 "폐업=PM 스킵" 폐기 §19).
+  //   2026-08-26 사장님 승인 = 위키 미러 파일(`-wiki.` = mirrorWikiVenueImages 가 만든 임시 자리)은 구글 사진이 아니므로
   const rows = (
     await c.query(
       `
@@ -97,53 +96,50 @@ export async function backfillImages(opts: {
 
   const rawMap = collectPhotoNamesFromRaw(cityId);
   const live = rows;
-  // ⚠️ 수정금지(승인필요) 2026-09-03 사장님 결정 = PID 행은 전부 구글맵 공개페이지 무료 먼저, 사진 못 받은 행만 raw photoName 으로 PM (정본 §⑦)
-  const freeGmaps = live.filter((r: any) => r.pid);
-  const withRaw = freeGmaps.filter((r: any) => rawMap.get(r.pid)?.photoName);
-  // ⚠️ 수정금지(승인필요) 2026-09-03 사장님 결정 = TS 계획치 = 무료·PM 이 모두 실패했을 때의 최대값(실제 대상 tsTargets 는 무료 시도 뒤 확정, 잔량 게이트도 그때 호출)
-  const tsMax = freeGmaps.length;
+  const withRaw = live.filter((r: any) => rawMap.get(r.pid)?.photoName);
+  const needTs = live.filter((r: any) => !rawMap.get(r.pid)?.photoName);
   console.log(`═══ image-backfill (city ${cityId}) ═══`);
-  // ⚠️ 수정금지(승인필요) 2026-09-03 사장님 결정 = 유료(PM·TS) 잔량·계획은 표시만, 실제 호출은 --allow-pm/--allow-ts 승인 시에만
+  // 2026-08-23 사장님 = 실행 전 시뮬 = 이달 잔량 + 진행 시 추가과금(€). 외부호출 0.
   const { simulateCost, gateBatch } = await import(
     "../shared/external-call-log"
   );
   const simPm = await simulateCost(
     "pm",
-    withRaw.length + (opts.allowTs ? tsMax : 0),
+    withRaw.length + (opts.allowTs ? needTs.length : 0),
   );
-  const simTs = await simulateCost("ts", opts.allowTs ? tsMax : 0);
+  const simTs = await simulateCost("ts", opts.allowTs ? needTs.length : 0);
   console.log(
     `[시뮬] PM 이달 ${simPm.used}/${simPm.cap} 잔량 ${simPm.remaining} · 계획 ${simPm.planned} → 추가과금 €${simPm.extraEur} | TS 이달 ${simTs.used}/${simTs.cap} 잔량 ${simTs.remaining} · 계획 ${simTs.planned} → 추가과금 €${simTs.extraEur}`,
   );
   console.log(
-    `대상(이미지결손) ${rows.length} | 무료재링크 ${apply ? relink.relinked : relink.relinkable}(${apply ? "완료" : "가능"}) | 구글맵 무료 ${freeGmaps.length}건(전 PID 행) | 무료 실패 시 raw→PM 가능 ${withRaw.length}건 | TS = 무료·PM 둘 다 실패분만(--allow-ts 승인 시)`,
+    `대상(PID보유·이미지결손) ${rows.length} | 무료재링크 ${apply ? relink.relinked : relink.relinkable}(${apply ? "완료" : "가능"}) | raw재활용 PM ${withRaw.length}건 | TS필요 ${needTs.length}건(TS+PM)`,
   );
   if (!apply) {
     for (const r of live.slice(0, 30))
       console.log(
-        `  [${r.pid ? "구글맵무료" : "TS필요"}${rawMap.get(r.pid)?.photoName ? "(실패시 raw→PM)" : ""}] #${r.id} ${r.name_local || r.name_en}`,
+        `  [${rawMap.get(r.pid)?.photoName ? "raw→PM" : "TS필요"}] #${r.id} ${r.name_local || r.name_en}`,
       );
-    if (tsMax)
+    if (needTs.length)
       console.log(
         `💡 운영(배포서버) 생성 raw 는 Storage(raw-responses)에 있음 = raw-storage-recall pull 선행 시 "TS필요"가 raw재활용으로 줄 수 있음(재과금 0).`,
       );
     console.log(
-      `=== DRY (외부호출 0·쓰기 0) = --apply 로 실행${tsMax ? ", TS는 --allow-ts 필요" : ""} ===`,
+      `=== DRY (외부호출 0·쓰기 0) = --apply 로 실행${needTs.length ? ", TS는 --allow-ts 필요" : ""} ===`,
     );
     return {
       targets: rows.length,
       relinked: relink.relinkable,
       pmFromRaw: withRaw.length,
-      freeGmaps: freeGmaps.length,
-      needTs: tsMax,
+      needTs: needTs.length,
       pmDone: 0,
-      gmapsDone: 0,
       tsDone: 0,
     };
   }
 
   // ⚠️ 2026-08-24 사장님 승인 = PM = 막지 않음(곧 사용자 기능 생김 = 제한 금지). BE가 잔량을 알 수 있게
-  //   = TS 잔량 게이트는 실제 대상(tsTargets)이 확정되는 무료·PM 단계 뒤에서 호출(2026-09-03).
+  const tsPlanned = opts.allowTs ? needTs.length : 0;
+  if (tsPlanned) await gateBatch("ts", tsPlanned, { force: !!opts.forceQuota });
+
   const { tsPhoto, tsSearch } = await import(
     pathToFileURL(path.join(ROOT, "server/services/shared/ts-client.ts")).href
   );
@@ -173,8 +169,6 @@ export async function backfillImages(opts: {
       "image-backfill: R2 환경변수 미비 = 이미지 업로드 불가(무성실패 차단)",
     );
 
-  let gmapsDone = 0,
-    gmapsFail = 0;
   let pmDone = 0,
     tsDone = 0,
     pmFail = 0;
@@ -203,130 +197,16 @@ export async function backfillImages(opts: {
     });
     pmDone++;
   };
-  // ⚠️ 수정금지(승인필요) 2026-09-03 사장님 결정 = PID 행 = 구글맵 공개페이지 사진(API 호출 0) 먼저, 못 받은 행만 raw→PM (정본 §⑦)
-  const gmapsFailed: any[] = [];
-  if (freeGmaps.length) {
-    const { chromium } = await import("playwright");
-    const { readPlacePage, BROWSER_UA } = await import(
-      pathToFileURL(
-        path.join(
-          ROOT,
-          "server/services/fill/gmaps-pid-identity/page-reader.ts",
-        ),
-      ).href
-    );
-    const { uploadToR2 } = await import(
-      pathToFileURL(path.join(ROOT, "server/services/shared/r2-client.ts")).href
-    );
-    const { PHOTO_MAX_WIDTH_PX } = await import(
-      pathToFileURL(path.join(ROOT, "server/services/shared/ts-client.ts")).href
-    );
-    const browser = await chromium.launch({ headless: true });
-    const ctx = await browser.newContext({
-      viewport: { width: 1280, height: 900 },
-      userAgent: BROWSER_UA,
-    });
-    const page = await ctx.newPage();
+  for (const r of withRaw) {
     try {
-      for (const r of freeGmaps) {
-        try {
-          const d = await readPlacePage(
-            page,
-            r.pid,
-            "ko",
-            false,
-            PHOTO_MAX_WIDTH_PX,
-          );
-          if (d.status !== "OPERATIONAL") {
-            await upsertPlace({
-              targetRowId: r.id,
-              followTriggerDup: true,
-              cityId,
-              seedCategory: r.cat,
-              nameEn: r.name_en,
-              googlePlaceId: r.pid,
-              businessStatus: d.status,
-            });
-            console.log(
-              `  ℹ️ 영업상태 기입 #${r.id} ${r.name_en} = ${d.status}`,
-            );
-          }
-          if (!d.photoUrl) {
-            gmapsFail++;
-            gmapsFailed.push(r);
-            console.warn(`  ⚠️ 사진 없음 #${r.id} ${r.name_en}`);
-            continue;
-          }
-          const res = await fetch(d.photoUrl, {
-            signal: AbortSignal.timeout(30000),
-          });
-          if (!res.ok) {
-            gmapsFail++;
-            gmapsFailed.push(r);
-            continue;
-          }
-          const buf = Buffer.from(await res.arrayBuffer());
-          const up = await uploadToR2(
-            `place-images/${cityId}/${r.cat}/${r.pid}.jpg`,
-            buf,
-            "image/jpeg",
-          );
-          await upsertPlace({
-            targetRowId: r.id,
-            followTriggerDup: true,
-            cityId,
-            seedCategory: r.cat,
-            nameEn: r.name_en,
-            googlePlaceId: r.pid,
-            imageUrl: up.publicUrl,
-            businessStatus: d.status,
-          });
-          gmapsDone++;
-          console.log(
-            `  ✅ 구글맵무료 #${r.id} ${r.name_en} (${buf.length} bytes)`,
-          );
-        } catch (e) {
-          gmapsFail++;
-          gmapsFailed.push(r);
-          console.warn(`  ⚠️ 실패 #${r.id}:`, (e as Error).message);
-        }
-      }
-    } finally {
-      await browser.close().catch(() => {});
+      await runPm(r, rawMap.get(r.pid)!.photoName!);
+    } catch (e) {
+      pmFail++;
+      console.warn(`  ⚠️ PM 실패 #${r.id}:`, (e as Error).message);
     }
-  }
-  const pmCandidates = gmapsFailed.filter(
-    (r: any) => rawMap.get(r.pid)?.photoName,
-  );
-  const pmFixed = new Set<number>();
-  if (opts.allowPm) {
-    for (const r of pmCandidates) {
-      const before = pmDone;
-      try {
-        await runPm(r, rawMap.get(r.pid)!.photoName!);
-        if (pmDone > before) pmFixed.add(r.id);
-      } catch (e) {
-        pmFail++;
-        console.warn(`  ⚠️ PM 실패 #${r.id}:`, (e as Error).message);
-      }
-    }
-  } else if (pmCandidates.length) {
-    console.log(
-      `⏸ 무료 실패 ${gmapsFailed.length}건 중 raw→PM 가능 ${pmCandidates.length}건 = 보류(유료 = --allow-pm 승인 시에만): ${pmCandidates.map((r: any) => `#${r.id}`).join(" ")}`,
-    );
-  }
-  if (!opts.allowTs && gmapsFailed.length)
-    console.log(
-      `⏸ 무료 실패 ${gmapsFailed.length}건 = TS 보류(유료 = --allow-ts 승인 시에만)`,
-    );
-
-  // ⚠️ 수정금지(승인필요) 2026-09-03 사장님 결정 = TS 는 마지막 수단 = 무료(구글맵)·PM 둘 다 실패해 아직 이미지가 없는 행만, --allow-ts 승인 시에만
-  const tsTargets = gmapsFailed.filter((r: any) => !pmFixed.has(r.id));
-  if (opts.allowTs && tsTargets.length) {
-    await gateBatch("ts", tsTargets.length, { force: !!opts.forceQuota });
   }
   if (opts.allowTs) {
-    for (const r of tsTargets) {
+    for (const r of needTs) {
       try {
         const tsArr = await tsSearch({
           apiKey: GOOGLE_KEY,
@@ -367,15 +247,13 @@ export async function backfillImages(opts: {
     }
   }
   console.log(
-    `✅ 완료: PM ${pmDone}건 저장${pmFail ? ` · PM 실패 ${pmFail}건` : ""} · 구글맵무료 ${gmapsDone}건${gmapsFail ? ` · 무료 실패 ${gmapsFail}건` : ""} · TS ${tsDone}콜${!opts.allowTs && tsTargets.length ? ` · TS필요 ${tsTargets.length}건 보류(--allow-ts)` : ""}`,
+    `✅ 완료: PM ${pmDone}건 저장${pmFail ? ` · PM 실패 ${pmFail}건` : ""} · TS ${tsDone}콜${!opts.allowTs && needTs.length ? ` · TS필요 ${needTs.length}건 보류(--allow-ts)` : ""}`,
   );
   return {
     targets: rows.length,
     relinked: relink.relinked,
-    freeGmaps: freeGmaps.length,
-    gmapsDone,
     pmFromRaw: withRaw.length,
-    needTs: tsTargets.length,
+    needTs: needTs.length,
     pmDone,
     tsDone,
   };
@@ -527,7 +405,7 @@ if (
     const mirrorWiki = argv["mirror-wiki"] === "true"; // 2026-08-26 = 공연장 위키→R2 미러 모드(도시 지정 없이 미래공연 전체)
     if (!cityId && !mirrorWiki) {
       console.error(
-        "Usage: --city-id=<N> [--apply] [--allow-pm] [--allow-ts] [--limit=50] [--force-quota] | --mirror-wiki [--city-id=<N>] [--apply]",
+        "Usage: --city-id=<N> [--apply] [--allow-ts] [--limit=50] [--force-quota] | --mirror-wiki [--city-id=<N>] [--apply]",
       );
       process.exit(1);
     }
@@ -550,7 +428,6 @@ if (
         apply: argv["apply"] === "true",
         forceQuota: argv["force-quota"] === "true",
         allowTs: argv["allow-ts"] === "true",
-        allowPm: argv["allow-pm"] === "true",
         limit: argv["limit"] ? Number(argv["limit"]) : undefined,
         client: c,
       });

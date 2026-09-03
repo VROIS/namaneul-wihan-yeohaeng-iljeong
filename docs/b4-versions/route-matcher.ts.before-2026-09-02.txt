@@ -4,7 +4,6 @@ export interface GeoPoint {
   id: number;
   latitude: number | null;
   longitude: number | null;
-  bestRank?: number | null; // 7자리 언어코드(1 ko·2 en·3 ja·4 fr·5 zh·6 es·7 de)
 }
 
 const R_KM = 6371;
@@ -80,9 +79,6 @@ function eligible<T extends GeoPoint>(pool: T[], excludeIds: number[]): T[] {
   );
 }
 
-// ⚠️ 수정금지(승인필요) 2026-09-02 사장님 확정 = 동선 위 식당 = 베스트 먼저(같은 근처면 만장일치 우선) (정본 B4)
-//   = 거리만 보면 0.3km 에 ★7 이 있는데 ★5 가 뽑힌다(보고타 우사켄 실측).
-const NEAR_KM = 1.5;
 export function pickRestaurantBySegment<T extends GeoPoint>(
   pool: T[],
   anchorA: T | null | undefined,
@@ -90,22 +86,7 @@ export function pickRestaurantBySegment<T extends GeoPoint>(
   excludeIds: number[] = [],
 ): T | null {
   if (!anchorA || !anchorB) return null;
-  const items = eligible(pool, excludeIds);
-  if (!items.length) return null;
-  const langs = (b?: number | null) =>
-    b
-      ? String(b)
-          .split("")
-          .filter((c) => c !== "0").length
-      : 0;
-  const dist = new Map<number, number>(
-    items.map((p) => [p.id, perpendicularKm(p, anchorA, anchorB)]),
+  return pickMin(eligible(pool, excludeIds), (p) =>
+    perpendicularKm(p, anchorA, anchorB),
   );
-  const nearest = Math.min(...items.map((p) => dist.get(p.id)!));
-  // 최근접에서 NEAR_KM 안 = 사실상 같은 자리 = 그 안에서 베스트 언어수로 고른다.
-  const near = items.filter((p) => dist.get(p.id)! <= nearest + NEAR_KM);
-  const bestLangs = Math.max(...near.map((p) => langs(p.bestRank)));
-  const pickFrom =
-    bestLangs > 0 ? near.filter((p) => langs(p.bestRank) === bestLangs) : near;
-  return pickMin(pickFrom, (p) => dist.get(p.id)!);
 }

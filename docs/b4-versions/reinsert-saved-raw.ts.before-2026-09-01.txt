@@ -69,10 +69,9 @@ type Job = {
   photoName?: string;
   distC?: number;
   imageUrl?: string;
-  bizStatus?: string;
 };
 
-// ⚠️ 수정금지(승인필요) 2026-09-01 사장님 확정 = 입력 순서 = Gemini → TS 그대로, TS raw 의 영업상태도 PSR 로 (정본 §⑦)
+// 🧠 2026-07-05 사장님 SSOT = 입력순서 절대 = Gemini → TS (실제 순서). Gemini("무엇을" name_local·nameKo·seed_category·요약·거리) 먼저 새덮어쓰기 → TS(검증 name_en·좌표·PID·RC) 다음 덮음.
 const collectGeminiRuntime = (cityNameArg: string): Job[] => {
   const jobs: Job[] = [];
   const rdir = path.join(ROOT, "docs", "raw", "runtime");
@@ -151,8 +150,8 @@ const collect = (): Job[] => {
           pid: tp.id,
           mapsUri: tp.googleMapsUri,
           rc: num(tp.userRatingCount),
-          // ⚠️ 수정금지(승인필요) 2026-09-01 사장님 확정 = TS raw 의 영업상태도 PSR 로 · 가격 칸의 주인은 제미니 하나(TS 가격은 §18 raw 에만) (정본 §⑦)
-          bizStatus: tp.businessStatus,
+          // ⚠️ 수정금지(승인필요) 2026-08-10 사장님 확정 = **가격 칸의 주인은 제미니 하나**(SSOT:583).
+          //   버리는 게 아니다 = TS 가격은 §18 raw 에 그대로 남아 언제든 다시 볼 수 있다.
           priceEur: null,
           photoName: tp.photos?.[0]?.name,
           distC: undefined, // main 에서 좌표로 haversine
@@ -199,7 +198,6 @@ const collect = (): Job[] => {
           pid: p.place_id || p.google_place_id,
           mapsUri: p.google_maps_uri || p.googleMapsUri,
           rc: num(p.review_count ?? p.userRatingCount ?? p.google_review_count),
-          bizStatus: p.business_status ?? p.businessStatus,
           priceEur: price(p),
           summaryKo: p.summary_ko || p.selection_reason_ko,
           shortformKo: p.editorial_summary || p.shortform_ko,
@@ -402,7 +400,6 @@ const collect = (): Job[] => {
           shortformKo: j.shortformKo,
           distanceKmFromCenter: j.distC,
           imageUrl: j.imageUrl,
-          businessStatus: j.bizStatus ?? null,
         });
         action[r?.action || "done"] = (action[r?.action || "done"] || 0) + 1;
         if (r?.action === "inserted")

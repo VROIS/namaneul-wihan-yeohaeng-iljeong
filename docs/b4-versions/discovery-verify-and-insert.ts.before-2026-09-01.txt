@@ -268,6 +268,7 @@ function findReportPath(): string {
     absorbedOther: 0,
     insertedNew: 0,
     tsCalls: 0,
+    pmCalls: 0,
     noMatch: 0,
     closed: 0,
     skipped: 0,
@@ -287,7 +288,7 @@ function findReportPath(): string {
     );
     if (!GOOGLE_KEY)
       throw new Error("GOOGLE_MAPS_API_KEY 발급 실패 = 신규행 처리 불가");
-    const { tsSearch } = await import(
+    const { tsSearch, tsPhoto } = await import(
       pathToFileURL(path.join(ROOT, "server/services/shared/ts-client.ts")).href
     );
 
@@ -303,11 +304,8 @@ function findReportPath(): string {
           cityId,
           rawTag: `b2-discover-${n.name}`,
           nameLocal: n.nameLocal || n.name,
-          // ⚠️ 수정금지(승인필요) 2026-09-01 사장님 확정 = 좌표 앵커 1000m(ag3 와 1벌) = 동명 타도시 차단 (정본 §B2)
+          // ⚠️ 수정금지(승인필요) 2026-08-29 사장님 결정 = TS 좌표 참고값 안 넘김(옛 10m 앵커 폐기 §19)
           address: n.address || undefined,
-          latitude: n.lat ?? null,
-          longitude: n.lng ?? null,
-          anchorRadiusM: n.lat != null && n.lng != null ? 1000 : undefined,
           maxResults: 1,
         })
       )?.[0];
@@ -333,8 +331,6 @@ function findReportPath(): string {
         googlePlaceId: ts.googlePlaceId,
         googleMapsUri: ts.googleMapsUri,
         googleReviewCount: ts.googleReviewCount,
-        // ⚠️ 수정금지(승인필요) 2026-09-01 사장님 확정 = TS 가 준 영업상태도 PSR 로(옛 = 폐업판정에만 쓰고 버림) (정본 §⑥)
-        businessStatus: ts.businessStatus ?? null,
         priceEur: n.avgPrice ?? null,
         selectionReasonKo: ko?.summary || null,
         shortformKo: ko?.editorial || null,
@@ -365,9 +361,29 @@ function findReportPath(): string {
         await upsertTranslations(rowId, n.copies);
         return r;
       });
-      // ⚠️ 수정금지(승인필요) 2026-09-01 사장님 확정 = 이 단계에서 PM 안 함 = 이미지는 ⑦ image-backfill 단독 (정본 §B2)
+      const hasImage = !!res.enriched?.imageUrl;
+      let pm = "PM 생략(이미지 있음)";
+      if (!hasImage && ts.photoName) {
+        stat.pmCalls++;
+        const url = await tsPhoto({
+          apiKey: GOOGLE_KEY,
+          photoName: ts.photoName,
+          pathKey: `${cityId}/${n.cat}/${ts.googlePlaceId}`,
+        });
+        if (url)
+          await upsertPlace({
+            targetRowId: rowId,
+            followTriggerDup: true,
+            cityId,
+            seedCategory: n.cat,
+            nameEn: ts.nameEn || n.name,
+            googlePlaceId: ts.googlePlaceId,
+            imageUrl: url,
+          });
+        pm = url ? "PM 1장" : "PM 실패";
+      } else if (!hasImage) pm = "PM 생략(TS 사진 없음)";
       console.log(
-        `  ✅ #${rowId} ${ts.nameEn} (${res.action}${res.reason ? `/${res.reason}` : ""}, ${outcome}${n.psrHint ? ` · 힌트 PSR#${n.psrHint.psrId} ${n.psrHint.psrName} [${n.psrHint.by}]` : ""}, langs=${n.langs}, best_rank ${br.cur} ∪ ${code} → ${br.result})`,
+        `  ✅ #${rowId} ${ts.nameEn} (${res.action}${res.reason ? `/${res.reason}` : ""}, ${outcome}${n.psrHint ? ` · 힌트 PSR#${n.psrHint.psrId} ${n.psrHint.psrName} [${n.psrHint.by}]` : ""}, langs=${n.langs}, best_rank ${br.cur} ∪ ${code} → ${br.result}, ${pm})`,
       );
     }
 
@@ -376,6 +392,6 @@ function findReportPath(): string {
 
   await c.end();
   console.log(
-    `\n═══ 완료: merge ${mergedOk}/${allMerge.length} · TS 대상 ${tsItems.length}곳(confirm ${mergeOnly && !confirmFlag ? 0 : allConfirm.length} + new ${mergeOnly ? 0 : allNew.length}) = 힌트행 흡수 ${stat.absorbedHint} / 다른 행 흡수 ${stat.absorbedOther} / 신규행 ${stat.insertedNew} · no_match ${stat.noMatch} · 폐업 ${stat.closed} · skip ${stat.skipped} · TS 호출 ${stat.tsCalls} ═══`,
+    `\n═══ 완료: merge ${mergedOk}/${allMerge.length} · TS 대상 ${tsItems.length}곳(confirm ${mergeOnly && !confirmFlag ? 0 : allConfirm.length} + new ${mergeOnly ? 0 : allNew.length}) = 힌트행 흡수 ${stat.absorbedHint} / 다른 행 흡수 ${stat.absorbedOther} / 신규행 ${stat.insertedNew} · no_match ${stat.noMatch} · 폐업 ${stat.closed} · skip ${stat.skipped} · TS 호출 ${stat.tsCalls} · PM 호출 ${stat.pmCalls} ═══`,
   );
 })();

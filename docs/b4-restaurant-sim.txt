@@ -1,0 +1,50 @@
+════ 파리 식당 합집합 182곳 = 창고 대조 (외부호출 0) ════
+
+ 하한 |  합집합 | 창고有(서빙가능) | 창고有(PID없음) | 창고無=신규 | TS필요 = PID없음+신규
+  ★4+ |     44 |              19 |              8 |         17 |     25콜
+  ★3+ |     55 |              25 |             11 |         19 |     30콜
+  ★2+ |     81 |              33 |             15 |         32 |     47콜
+  ★1+ |    182 |              63 |             33 |         83 |    116콜
+
+※ TS 단가 €0.0424/콜 (2026-08-28 실측)
+  ★4+ TS  25콜 = €1.06
+  ★3+ TS  30콜 = €1.27
+  ★2+ TS  47콜 = €1.99
+  ★1+ TS 116콜 = €4.92
+
+【현행 ★4+ 44곳이 실제로 어떻게 됐나】
+  창고에 있고 서빙가능 : 19
+  창고에 있는데 best_rank 붙음 : 17
+  창고에 있는데 best_rank 없음 : 10
+  창고에 아예 없음 : 17
+
+【★4+ 인데 best_rank 안 붙은 것 = B2 미반영 의심】
+  ★5 € 47  Café de l'Alma                   id=72470 status=candidate pid=false
+  ★4 € 26  Hardware Société                 id=72380 status=candidate pid=false
+  ★4 € 34  Le Saint-Régis                   id=76322 status=active pid=true
+  ★4 € 44  Flottes                          id=72912 status=candidate pid=false
+  ★4 € 30  L'Entracte                       id=72597 status=candidate pid=false
+  ★5 € 36  Le Trumilou                      id=72519 status=candidate pid=false
+  ★5 € 33  Le Consulat                      id=72096 status=active pid=true
+  ★4 € 35  Pain Vin Fromage                 id=76352 status=active pid=true
+  ★5 € 71  Le Café de la Paix               id=76049 status=candidate pid=false
+  ★4 € 15  Happy Caffé                      id=72912 status=candidate pid=false
+
+【★4+ 인데 창고에 아예 없는 것 = 신규】
+  ★5 € 27  Le Petit Cler                    29 Rue Cler, 75007 Paris
+  ★7 € 40  Le Hide                          10 Rue du Général Lanrezac, 75017 Paris
+  ★5 € 32  L'Etoile 1903                    4 Av. de Wagram, 75008 Paris
+  ★6 € 51  César                            12 Av. de Wagram, 75008 Paris
+  ★6 € 39  La Boîte aux Lettres             108 Rue Lepic, 75018 Paris
+  ★5 € 41  Auberge de la Reine Blanche      30 Rue Saint-Louis en l'Île, 75004 Paris
+  ★5 € 35  Le Comptoir des Saints-Pères     29 Rue des Saints-Pères, 75006 Paris
+  ★5 € 33  Les Deux Palais                  3 Boulevard du Palais, 75004 Paris
+  ★4 € 29  Le Comptoir du Panthéon          5 Rue Soufflot, 75005 Paris
+  ★6 € 63  La Table de Colette              17 Rue Laplace, 75005 Paris
+  ★6 € 48  Le Moulin de la Galette          83 Rue Lepic, 75018 Paris
+  ★4 € 33  Bread and Roses                  62 Rue de Madame, 75006 Paris
+  ★6 € 49  Le Petit Sommelier               49 Av. du Maine, 75014 Paris
+  ★4 € 40  L'Opportun                       62 Bd Edgar Quinet, 75014 Paris
+  ★4 € 43  Daguerre Marée                   9 Rue Daguerre, 75014 Paris
+  ★7 € 59  Café de l'Esplanade              52 Rue de Fabert, 75007 Paris
+  ★5 € 57  Auberge Bressane                 16 Avenue de la Motte-Picquet, 75007 Paris
