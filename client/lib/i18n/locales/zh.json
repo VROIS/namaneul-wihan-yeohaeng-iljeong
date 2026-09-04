@@ -104,7 +104,8 @@
     "checkoutOpenFailed": "无法打开结算页面。请稍后重试。",
     "sheetPrepareFailed": "支付尚未准备好。请稍后重试。",
     "sheetStartFailed": "无法开始支付。请稍后重试。",
-    "topupDone": "充值已完成。",
+    "topupDone": "感谢您的充值。",
+    "topupDoneTitle": "充值完成",
     "topupError": "充值过程中出现错误。",
     "returnSuccessMsg": "已收到您的付款。\n\n请返回应用。"
   },

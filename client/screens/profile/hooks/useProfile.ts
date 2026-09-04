@@ -163,7 +163,8 @@ export function useProfile() {
         if (!mountedRef.current) return;
         refetchCredits();
         if (confirmed.ok) {
-          alert(t("credit.topupDone"));
+          // ⚠️ 수정금지(승인필요) 2026-09-04 사장님 결정 = 충전 성공은 경고창이 아니다("Alert" 제목 제거). 실패 알림은 그대로.
+          Alert.alert(t("credit.topupDoneTitle"), t("credit.topupDone"));
         } else {
           let left = 5;
           const id = setInterval(() => {

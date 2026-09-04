@@ -104,7 +104,8 @@
     "checkoutOpenFailed": "결제창을 열지 못했습니다. 잠시 후 다시 시도해 주세요.",
     "sheetPrepareFailed": "결제 준비가 안 되었습니다. 잠시 후 다시 시도해 주세요.",
     "sheetStartFailed": "결제를 시작하지 못했습니다. 잠시 후 다시 시도해 주세요.",
-    "topupDone": "충전이 완료되었습니다.",
+    "topupDone": "충전해 주셔서 감사합니다.",
+    "topupDoneTitle": "충전 완료",
     "topupError": "충전 중 오류가 발생했습니다.",
     "returnSuccessMsg": "결제가 접수되었습니다.\n\n앱으로 돌아가 주세요."
   },

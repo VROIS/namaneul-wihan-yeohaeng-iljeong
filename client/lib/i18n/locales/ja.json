@@ -104,7 +104,8 @@
     "checkoutOpenFailed": "決済画面を開けませんでした。しばらくしてからもう一度お試しください。",
     "sheetPrepareFailed": "決済の準備ができていません。しばらくしてからもう一度お試しください。",
     "sheetStartFailed": "決済を開始できませんでした。しばらくしてからもう一度お試しください。",
-    "topupDone": "チャージが完了しました。",
+    "topupDone": "ありがとうございます。",
+    "topupDoneTitle": "チャージ完了",
     "topupError": "チャージ中にエラーが発生しました。",
     "returnSuccessMsg": "お支払いを受け付けました。\n\nアプリにお戻りください。"
   },

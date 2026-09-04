@@ -10,7 +10,6 @@ export const meta = {
 //   여기서 또 돌리면 3중 중복 = 시간·토큰 낭비(사장님 지적 2026-08-03 "기계검증은 통과했으니 판단 3종만").
 //   확정 순서 = 수정 → 기계검증(로컬 스크립트) → 크롬 실증 → 미비 시 재수정 반복 → 커밋 직전 = 이 워크플로.
 // = 하나라도 실패 = 커밋 불가 = Ralph-loop 로 통과까지 보완.
-// = args.tsxChanged(선택,bool) = TSX 변경 여부(react-best 스킵 판정용).
 // ⚠️ 에이전트 3개 = 이 PC 동시 한도 4 안(2026-07-27 실측 = 한도를 넘기면 줄 서서 시간 2배).
 
 const RESULT_SCHEMA = {
@@ -117,19 +116,17 @@ const JUDGE = [
       " 실제 버그·회귀만 blockers 에 넣어라(스타일은 제외). check='review'." +
       JUDGE_RULES,
   },
-];
-
-// ⚠️ 반드시 위에서 푼 A 를 쓸 것(원본 args 를 읽으면 글자 뭉치로 올 때 이 설정이 무시된다 = §22 검증 지적).
-const tsxChanged = A.tsxChanged !== false; // 기본 = 검사(명시적 false 일 때만 스킵)
-if (tsxChanged) {
-  JUDGE.push({
+  {
+    // ⚠️ 수정금지(승인필요) 2026-09-04 사장님 결정 = RN 앱이므로 react-best 는 항상 돌린다(스킵·TSX 한정 폐기).
     key: "react-best",
     prompt:
-      `이 저장소의 변경(${DIFF}) 중 TSX 에 대해 vercel:react-best-practices 관점(React 패턴·성능·접근성)으로 검토하라.` +
-      " 실제 문제만 blockers 에 넣어라. check='react-best'." +
+      `이 저장소의 변경(${DIFF})을 vercel:react-best-practices 관점(React 패턴·성능·접근성)으로 검토하라.` +
+      " 이 저장소는 React Native 앱이다. TSX 뿐 아니라 화면 동작을 좌우하는 .ts 훅·컴포넌트 로직·i18n 문구까지 대상이다." +
+      " 대상 파일이 없다는 이유로 blockers 를 채우지 마라 — 실제 결함만 넣고, 결함이 없으면 pass 로 판정하라." +
+      " check='react-best'." +
       JUDGE_RULES,
-  });
-}
+  },
+];
 
 log(`판단 검증 ${JUDGE.length}개 병렬 실행 (기계 4종 = 로컬 스크립트·커밋 훅 담당)`);
 

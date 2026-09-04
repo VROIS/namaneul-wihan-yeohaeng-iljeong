@@ -104,7 +104,8 @@
     "checkoutOpenFailed": "Kasse konnte nicht geöffnet werden. Bitte versuchen Sie es in Kürze erneut.",
     "sheetPrepareFailed": "Zahlung ist noch nicht bereit. Bitte versuchen Sie es in Kürze erneut.",
     "sheetStartFailed": "Zahlung konnte nicht gestartet werden. Bitte versuchen Sie es in Kürze erneut.",
-    "topupDone": "Aufladung abgeschlossen!",
+    "topupDone": "Danke für Ihre Aufladung!",
+    "topupDoneTitle": "Aufgeladen",
     "topupError": "Beim Aufladen ist ein Fehler aufgetreten.",
     "returnSuccessMsg": "Ihre Zahlung ist eingegangen.\n\nBitte kehren Sie zur App zurück."
   },

@@ -104,7 +104,8 @@
     "checkoutOpenFailed": "Impossible d'ouvrir le paiement. Veuillez réessayer sous peu.",
     "sheetPrepareFailed": "Le paiement n'est pas encore prêt. Veuillez réessayer sous peu.",
     "sheetStartFailed": "Impossible de démarrer le paiement. Veuillez réessayer sous peu.",
-    "topupDone": "Recharge terminée !",
+    "topupDone": "Merci pour votre recharge !",
+    "topupDoneTitle": "Rechargé OK",
     "topupError": "Une erreur est survenue lors de la recharge.",
     "returnSuccessMsg": "Votre paiement a été reçu.\n\nVeuillez retourner à l'application."
   },

@@ -104,7 +104,8 @@
     "checkoutOpenFailed": "No se pudo abrir el pago. Inténtalo de nuevo en un momento.",
     "sheetPrepareFailed": "El pago aún no está listo. Inténtalo de nuevo en un momento.",
     "sheetStartFailed": "No se pudo iniciar el pago. Inténtalo de nuevo en un momento.",
-    "topupDone": "¡Recarga completada!",
+    "topupDone": "¡Gracias por tu recarga!",
+    "topupDoneTitle": "Recarga hecha",
     "topupError": "Ocurrió un error durante la recarga.",
     "returnSuccessMsg": "Se recibió tu pago.\n\nVuelve a la aplicación."
   },

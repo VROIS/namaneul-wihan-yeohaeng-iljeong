@@ -104,7 +104,8 @@
     "checkoutOpenFailed": "Couldn't open checkout. Please try again shortly.",
     "sheetPrepareFailed": "Payment isn't ready yet. Please try again shortly.",
     "sheetStartFailed": "Couldn't start payment. Please try again shortly.",
-    "topupDone": "Top-up complete!",
+    "topupDone": "Thank you for your top-up.",
+    "topupDoneTitle": "Top-up complete",
     "topupError": "Something went wrong during top-up.",
     "returnSuccessMsg": "Your payment was received.\n\nPlease return to the app."
   },
