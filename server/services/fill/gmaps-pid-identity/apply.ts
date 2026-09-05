@@ -17,12 +17,10 @@ export const pageWasRead = (r: Result): boolean =>
   r.gate !== "consent-blocked" &&
   r.gate !== "h1-empty" &&
   (!!r.name_local || !!r.page_name_en || !!r.address || r.page_lat != null);
+// ⚠️ 수정금지(승인필요) 2026-09-05 사장님 확정 = name_en 에 넣을 이름은 **영어 h1(page_name_en)뿐**. 현지어 h1(name_local)을 폴백으로 두면 --lang=fr 처럼 다른 언어로 연 순간 "Tour Eiffel" 이 name_en 을 덮는다(hl=en 으로 열면 page_name_en 에 같은 값이 들어오므로 손실 없음).
 export function pickPageName(r: Result): string | null {
-  for (const cand of [r.name_local, r.page_name_en]) {
-    const s = (cand || "").trim();
-    if (s && !LOOKS_LIKE_ADDRESS(s)) return s;
-  }
-  return null;
+  const s = (r.page_name_en || "").trim();
+  return s && !LOOKS_LIKE_ADDRESS(s) ? s : null;
 }
 
 type UpsertFn = (
@@ -53,7 +51,8 @@ export async function writeRow(
   r: Result,
 ): Promise<void> {
   try {
-    // ⚠️ 수정금지(승인필요) 2026-09-04 사장님 결정 = 페이지 1회 방문으로 검증+사진 = 사진은 관문 통과·사진 없는 행만(정본 §"페이지를 한 번만 연다")
+    const read = pageWasRead(r);
+    // ⚠️ 수정금지(승인필요) 2026-09-04 사장님 결정 = 페이지 1회 방문으로 검증+사진 = 사진은 사진 없는 행만(정본 §"페이지를 한 번만 연다")
     let imageUrl: string | undefined;
     if (r.photo_url && !row.has_image) {
       try {
@@ -79,17 +78,15 @@ export async function writeRow(
       cityId,
       seedCategory: row.seed_category,
       imageUrl,
-      // ⚠️ 수정금지(승인필요) 2026-09-04 사장님 확정 = PID 가 정답 = 이름이 다르면 페이지 이름으로 갈아끼운다. 단 **우편번호가 든 문자열은 주소이지 이름이 아니다**(지역·거리는 구글이 h1 에 "75010 Paris" 같은 주소를 내보낸다) = 그때는 이름을 그대로 두고 주소만 받는다.
-      //   현지어명·한국어명은 제미니 영역 = 여기서 안 건드린다 = 2026-09-04 §19.
+      // ⚠️ 수정금지(승인필요) 2026-09-04 사장님 확정 = PID 가 정답이나 **페이지를 실제로 읽었을 때만**(read) 값을 넘긴다. 못 읽은 행의 기본값을 넘기면 기존 값을 덮는다(business_status 기본 'OPERATIONAL' 이 폐업 기록을 지움). null = COALESCE 가 기존값 보존.
+      //   이름 = 우편번호 든 문자열은 주소이지 이름이 아니다(pickPageName). 현지어명·한국어명은 제미니 영역 = 안 건드린다. page-coord-invalid = 좌표만 / rc_flag = RC 만 제외.
       nameEn: pickPageName(r) ?? row.name_en,
-      address: r.address,
-      // 2026-08-28 사장님 지시 = page-coord-invalid 행 = 좌표 안 넘김(null = COALESCE 뼈대 보존) / rc_flag 행 = RC 안 넘김.
-      latitude: r.gate === "page-coord-invalid" ? null : r.page_lat,
-      longitude: r.gate === "page-coord-invalid" ? null : r.page_lng,
-      googleReviewCount: r.rc_flag == null ? r.rc_page : null,
-      businessStatus: r.status,
-      // ⚠️ 수정금지(승인필요) 2026-09-04 사장님 확정 = PID 페이지를 **실제로 읽었을 때만** verify_source·verified_at 을 찍는다. 못 읽은 행(타임아웃·동의차단·h1없음)에 찍으면 "검증 완료"가 거짓이 되고 다음 대상(verified_at IS NULL)에서도 빠져 재시도조차 안 된다.
-      verifySource: pageWasRead(r) ? "gmaps-pid-page" : null,
+      address: read ? r.address : null,
+      latitude: !read || r.gate === "page-coord-invalid" ? null : r.page_lat,
+      longitude: !read || r.gate === "page-coord-invalid" ? null : r.page_lng,
+      googleReviewCount: read && r.rc_flag == null ? r.rc_page : null,
+      businessStatus: read ? r.status : null,
+      verifySource: read ? "gmaps-pid-page" : null,
       phaseTags: [PHASE_TAG],
     });
     r.upsert =

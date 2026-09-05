@@ -87,7 +87,9 @@ const TAG = `city-moved-${new Date().toISOString().slice(0, 10)}`;
                   p.latitude::float8 AS lat, p.longitude::float8 AS lng,
                   NULL::float8 AS dist_col
            FROM place_seed_raw p JOIN cities ci ON ci.id = p.city_id
-           WHERE p.id = ANY($1::bigint[])`,
+           WHERE p.id = ANY($1::bigint[])
+             AND p.latitude IS NOT NULL AND p.longitude IS NOT NULL
+             AND p.latitude <> 0 AND p.longitude <> 0`,
           [manualIds],
         )
       ).rows.map((r: any) => {

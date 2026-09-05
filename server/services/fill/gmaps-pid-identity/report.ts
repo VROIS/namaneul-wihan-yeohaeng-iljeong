@@ -16,11 +16,10 @@ export function printAndSaveReport(opts: {
   elapsed: number;
   apply: boolean;
   cityId: number;
-  verify: boolean;
   lang: string;
   ROOT: string;
 }): void {
-  const { results, elapsed, apply, cityId, verify, lang, ROOT } = opts;
+  const { results, elapsed, apply, cityId, lang, ROOT } = opts;
   console.table(
     results.map((r) => ({
       id: r.id,
@@ -29,7 +28,6 @@ export function printAndSaveReport(opts: {
       page_name_en: (r.page_name_en || "").slice(0, 28),
       name_match: r.name_match || "",
       address: (r.address || "").slice(0, 36),
-      name_ko: r.name_ko || "",
       rc_ours: r.rc_ours ?? "",
       rc_page: r.rc_page ?? "",
       rc_flag: r.rc_flag || "",
@@ -162,7 +160,7 @@ export function printAndSaveReport(opts: {
   const payload = {
     cityId,
     generatedAt: today,
-    mode: verify ? "verify" : "fill",
+    mode: "verify",
     lang,
     apply,
     coordGateKm: COORD_GATE_KM,

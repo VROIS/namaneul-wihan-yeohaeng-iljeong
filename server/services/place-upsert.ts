@@ -23,7 +23,7 @@ export interface UpsertPayload {
   selectionReasonKo?: string | null; // → summary_ko
   shortformKo?: string | null; // → editorial_summary
   googleReviewCount?: number | null;
-  // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 확정 = 영업상태(OPERATIONAL | CLOSED_PERMANENTLY | CLOSED_TEMPORARILY) → business_status. gmaps-pid-identity(--verify) 가 구글맵 페이지에서 읽어 채움 = 서빙 관문이 폐업행을 제외할 근거.
+  // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 확정 = 영업상태(OPERATIONAL | CLOSED_PERMANENTLY | CLOSED_TEMPORARILY) → business_status. gmaps-pid-identity 가 구글맵 페이지에서 읽어 채움 = 서빙 관문이 폐업행을 제외할 근거.
   businessStatus?: string | null;
   // ⚠️ 수정금지(승인필요) 2026-09-04 사장님 확정 = 무엇으로 확인했는지(예: 'gmaps-pid-page'). 넘기면 verified_at 이 그 시각으로 찍힌다 = 태그 대신 포렌식 근거.
   verifySource?: string | null;

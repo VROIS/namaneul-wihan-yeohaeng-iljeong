@@ -80,7 +80,6 @@ const only = (name: string) => !onlyArg || onlyArg.includes(name);
     // ⚠️ 수정금지(승인필요) 2026-09-04 사장님 확정 = PID 페이지는 hl=en 으로 연다. 실측 = 페이지는 상호를 번역하지 않고 카테고리·국가명만 번역하므로 도시 언어로 열면 name_en 칸에 비영어가 들어간다.
     run("① PID 재확인·최신화", "server/services/fill/gmaps-pid-identity.ts", [
       `--city-id=${cityId}`,
-      "--verify",
       "--lang=en",
       ...(apply ? ["--apply"] : []),
     ]);

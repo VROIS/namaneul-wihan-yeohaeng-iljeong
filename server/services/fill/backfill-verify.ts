@@ -88,7 +88,7 @@ export async function backfillImages(opts: {
   const rows = (
     await c.query(
       `
-    SELECT id, seed_category AS cat, name_en, name_local, name_ko, address,
+    SELECT id, seed_category AS cat, name_en, name_local, address,
            latitude::float8 AS latitude, longitude::float8 AS longitude,
            google_place_id AS pid, google_review_count AS rc, business_status,
            image_url, verified_at,
@@ -283,13 +283,11 @@ export async function backfillImages(opts: {
             rc: r.rc ?? null,
             has_image: !!r.has_image,
           });
-          gr.name_ko = r.name_ko ?? null;
           await evaluateRow(
             {
               page,
               // ⚠️ 수정금지(승인필요) 2026-09-04 사장님 확정 = name_en 은 국제 공통 = 영어 = 7개국어가 다 맞는 기준. 페이지도 hl=en 으로 연다.
               lang: "en",
-              verify: true,
               photoWidth: PHOTO_MAX_WIDTH_PX,
               cityLat,
               cityLng,
@@ -319,7 +317,7 @@ export async function backfillImages(opts: {
             const pageName = pickPageName(gr);
             if (!pageName) {
               console.warn(
-                `  📍 이름 유지 #${r.id} ${r.name_en} = ${gr.gate} (페이지가 장소명 대신 주소를 줌 = 주소·좌표·RC·상태만 갱신)`,
+                `  📍 이름 유지 #${r.id} ${r.name_en} = ${gr.gate} (페이지가 장소명을 안 줌 = 읽어낸 값만 갱신, 못 읽었으면 기존값 보존)`,
               );
             } else {
               gr.gate = "ok(name-realigned)";
@@ -328,9 +326,9 @@ export async function backfillImages(opts: {
               );
             }
           }
-          // ⚠️ 수정금지(승인필요) 2026-09-04 사장님 확정 = 유료(PM·TS) 대상은 **사진을 못 채운 행만**. 관문 판정이 아니라 사진 유무로 가른다.
-          //   무료로 채운 사진을 유료 PM 이 덮어쓰던 회귀 차단(§9). 이름 일치화까지 끝난 행을 옛 이름으로 되돌리는 것도 함께 막힌다.
-          if (!gr.photo_url) {
+          // ⚠️ 수정금지(승인필요) 2026-09-04 사장님 확정 = 유료(PM·TS) 대상은 **우리 행에 사진이 없는 행만**(r.has_image).
+          //   페이지에 사진이 없다(gr.photo_url)는 것만 보면, 사진은 멀쩡한데 검증만 안 된 행(verified_at NULL)이 유료 경로로 들어가 기존 R2 사진을 덮어쓴다(§9 유료호출 낭비).
+          if (!gr.photo_url && !r.has_image) {
             gmapsFail++;
             gmapsFailed.push(r);
             console.warn(`  ⚠️ 사진 없음 #${r.id} ${r.name_en}`);
@@ -358,7 +356,8 @@ export async function backfillImages(opts: {
           }
         } catch (e) {
           gmapsFail++;
-          gmapsFailed.push(r);
+          // 예외로 끝난 행도 **우리 행에 사진이 없을 때만** 유료 대상 = 위와 같은 기준 1벌.
+          if (!r.has_image) gmapsFailed.push(r);
           console.warn(`  ⚠️ 실패 #${r.id}:`, (e as Error).message);
         }
       }
@@ -449,6 +448,7 @@ export async function backfillImages(opts: {
         `SELECT p.id FROM place_seed_raw p JOIN cities ci ON ci.id = p.city_id
           WHERE p.id = ANY($1::bigint[])
             AND p.latitude IS NOT NULL AND p.longitude IS NOT NULL
+            AND p.latitude <> 0 AND p.longitude <> 0
             AND ci.latitude IS NOT NULL AND ci.longitude IS NOT NULL
             AND sqrt(power((p.latitude::float - ci.latitude::float) * 111320, 2)
                    + power((p.longitude::float - ci.longitude::float) * 111320

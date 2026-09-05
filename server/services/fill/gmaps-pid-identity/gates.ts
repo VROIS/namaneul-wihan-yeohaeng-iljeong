@@ -108,7 +108,6 @@ export type Result = {
   pid: string;
   name_local: string | null;
   address: string | null;
-  name_ko: string | null;
   page_name_en: string | null; // hl=en h1 (name_en 빈 행 = 채움값 / 그 외 = 기록만)
   name_match: NameMatch | null; // 이름 일치 강도(strong|weak|none) / null = 대조 불가(name_en 빈 행·h1 없음). coord-corrected = strong 만.
   category: string | null;
@@ -145,7 +144,6 @@ export function initResult(row: Row): Result {
     pid: row.pid,
     name_local: null,
     address: null,
-    name_ko: null,
     page_name_en: null,
     name_match: null,
     category: null,
@@ -170,7 +168,6 @@ export function initResult(row: Row): Result {
 export type GateContext = {
   page: Page;
   lang: string;
-  verify: boolean;
   // ⚠️ 수정금지(승인필요) 2026-09-04 사장님 결정 = 페이지를 한 번만 연다 = 검증(이름·좌표·리뷰수)과 사진을 같은 방문에서 함께 취득.
   photoWidth?: number;
   cityLat: number | null;
@@ -188,15 +185,7 @@ export async function evaluateRow(
   row: Row,
   r: Result,
 ): Promise<void> {
-  const {
-    page,
-    lang,
-    verify,
-    cityLat,
-    cityLng,
-    cityStop,
-    distanceKmFromCoords,
-  } = ctx;
+  const { page, lang, cityLat, cityLng, cityStop, distanceKmFromCoords } = ctx;
   const local = await readPlacePage(page, row.pid, lang, true, ctx.photoWidth);
   r.photo_url = local.photoUrl;
   r.name_local = local.h1;
@@ -311,8 +300,4 @@ export async function evaluateRow(
       gate = "address-empty-ambiguous";
   }
   r.gate = gate;
-  if (!verify && isWritable(r.gate)) {
-    const ko = await readPlacePage(page, row.pid, "ko", false);
-    r.name_ko = ko.h1 && HANGUL_RE.test(ko.h1) ? ko.h1 : null;
-  }
 }

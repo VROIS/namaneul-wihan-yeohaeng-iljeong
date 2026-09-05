@@ -1,4 +1,4 @@
-// ⚠️ 수정금지(승인필요) 2026-09-04 사장님 확정 = 창고 상태 백필 + 같은 PID 쌍둥이 병합(keep 흡수·태그/언어코드 합집합·번역행 복사·포인터 이동) 후 그 loser 만 DELETE = 포인터(guides·override_hero·override_highlight) 이동을 거친 행만 지운다. 폐업(CLOSED_*)은 컬럼값 우선, 태그만 있으면 CLOSED_PERMANENTLY 기록.
+// ⚠️ 수정금지(승인필요) 2026-09-05 사장님 확정 = 창고 상태 백필 + 쌍둥이 병합(keep 흡수·태그/언어코드 합집합·번역행 복사·포인터 이동). DELETE 는 **같은 PID 로 확정된 loser 만**(deletableLosers) = PID 없는 짝은 흡수만 하고 행 보존. 폐업(CLOSED_*)은 컬럼값 우선, 태그만 있으면 CLOSED_PERMANENTLY 기록.
 import * as fs from "node:fs";
 import * as path from "node:path";
 // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 승인 = best_rank 쓰기 트랜잭션(SELECT FOR UPDATE→합집합→조건부 UPDATE) 1벌
@@ -67,7 +67,7 @@ const NUMERIC_COLS = new Set([
   "distance_km_from_center",
 ]);
 const ABSORB_TAG = "pid-twin-absorbed";
-// ③ closed 판정용 business_status 값(gmaps-pid-identity.ts --verify 가 쓰는 3값 중 폐업·휴업 2개). 2026-08-28 사장님 확정.
+// ③ closed 판정용 business_status 값(gmaps-pid-identity.ts 가 쓰는 3값 중 폐업·휴업 2개). 2026-08-28 사장님 확정.
 const CLOSED_BIZ = new Set(["CLOSED_PERMANENTLY", "CLOSED_TEMPORARILY"]);
 
 function isEmpty(v: any): boolean {
@@ -190,6 +190,10 @@ async function planTwinGroup(
     pointerRefs,
   };
 }
+
+// ⚠️ 수정금지(승인필요) 2026-09-05 사장님 확정 = 삭제해도 되는 loser = **같은 PID 로 확정된 행만** 1벌 판정. PID 없는 짝은 트리거 불변7·8(이름 문자열 = 가변·의심 메모)로 붙은 것이라 다른 장소일 수 있다 = 흡수만 하고 행은 남긴다.
+const deletableLosers = (p: TwinPlan): any[] =>
+  p.losers.filter((l: any) => l.google_place_id === p.pid);
 
 function printTwinPlan(p: TwinPlan) {
   const rowStr = (r: any) =>
@@ -390,7 +394,7 @@ async function main() {
     } else if (quarSet.has(r.id) || tags.includes("wrong-city-suspect"))
       status = "quarantined";
     else if (tags.includes("영구폐업") || CLOSED_BIZ.has(r.business_status)) {
-      // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 확정 = ③ closed = 영구폐업 태그 ∪ business_status 현재값 CLOSED_*(gmaps-pid-identity --verify 기록).
+      // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 확정 = ③ closed = 영구폐업 태그 ∪ business_status 현재값 CLOSED_*(gmaps-pid-identity 기록).
       status = "closed";
       if (!CLOSED_BIZ.has(r.business_status)) biz = "CLOSED_PERMANENTLY";
     } else if (holdSet.has(r.id)) status = "hold";
@@ -416,7 +420,7 @@ async function main() {
     } else s.ch[finalStatus] = (s.ch[finalStatus] || 0) + 1;
   }
   console.log(
-    `═══ status-backfill city ${cityId} = ${rows.length}행 | 변경 ${plan.length}행 | PID 그룹 ${twinPlans.length}개 | 삭제예정 ${twinPlans.reduce((n: number, p: TwinPlan) => n + p.losers.length, 0)}행`,
+    `═══ status-backfill city ${cityId} = ${rows.length}행 | 변경 ${plan.length}행 | PID 그룹 ${twinPlans.length}개 | 삭제예정 ${twinPlans.reduce((n: number, p: TwinPlan) => n + deletableLosers(p).length, 0)}행`,
   );
   for (const [c, s] of [...cats.entries()].sort(
     (a, b) => b[1].pool - a[1].pool,
@@ -430,7 +434,7 @@ async function main() {
     );
   if (twinPlans.length) {
     console.log(
-      `── ① 같은 PID 그룹 ${twinPlans.length}개 = keep 흡수 후 loser 삭제 = ${twinPlans.flatMap((p: TwinPlan) => p.losers.map((l: any) => "#" + l.id)).join(" ")} ──`,
+      `── ① 같은 PID 그룹 ${twinPlans.length}개 = keep 흡수 · 삭제대상(같은 PID) = ${twinPlans.flatMap((p: TwinPlan) => deletableLosers(p).map((l: any) => "#" + l.id)).join(" ") || "없음"} ──`,
     );
     for (const p of twinPlans) printTwinPlan(p);
   }
@@ -464,11 +468,12 @@ async function main() {
       );
       n++;
     }
-    // ⚠️ 수정금지(승인필요) 2026-09-04 사장님 확정 = 흡수가 끝난 loser 만 삭제한다(격리·보존 폐기 §19).
-    //   **absorbTwinGroup 을 실제로 거친 이번 실행 loser 로만 한정** = 그 함수만 guides.place_id·cities.override_hero_place_id·override_highlight_place_ids 포인터를 keep 으로 옮긴다.
-    //   옛 실행이 남긴 status='merged' 행은 포인터가 안 옮겨져 있어 지우면 사장님이 지정한 도시 얼굴이 끊긴다 = 삭제 대상에서 제외.
+    // ⚠️ 수정금지(승인필요) 2026-09-05 사장님 확정 = 삭제 대상 = **이번 실행에서 absorbTwinGroup 을 거친 loser 중 같은 PID 로 확정된 행만**(deletableLosers).
+    //   그 함수만 guides·override_hero·override_highlight 포인터를 keep 으로 옮기므로 옛 merged 행을 지우면 사장님이 지정한 도시 얼굴이 끊긴다. PID 없는 짝은 이름 문자열(가변·의심)로 붙은 것이라 다른 장소일 수 있다 = 흡수만.
     const absorbed = new Set(
-      twinPlans.flatMap((p: TwinPlan) => p.losers.map((l: any) => l.id)),
+      twinPlans.flatMap((p: TwinPlan) =>
+        deletableLosers(p).map((l: any) => l.id),
+      ),
     );
     const losers = plan
       .filter((p: any) => p.status === "merged" && p.into && absorbed.has(p.id))
