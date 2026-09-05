@@ -1,6 +1,5 @@
-// ⚠️ 수정금지(승인필요) 2026-08-30 사장님 결정 = 신규 8단계 시드발굴 WF, fill-city.ts(옛 6단계)와 완전분리 1벌
+// ⚠️ 수정금지(승인필요) 2026-09-04 사장님 확정 = 시드발굴 WF 1벌 = 제미니 힌트 → B1 문지기 → TS=PID 확정 → 같은 PID 병합 → PID 페이지 1회 방문(사진·대조·최신화). 옛 6단계 WF·A등급 직행 merge 삭제 §19.
 //   (정본 = docs/2026-08-25 Tripis v1 안정화.md §"신규 시드발굴 정규 WF 설계안" 75~98행)
-//   ⚠️ 옛 fill-city.ts 는 보전(발굴부터 도시 실증 전까지 삭제 금지) = 이 파일은 그것을 참조·재사용하지 않는다(완전분리).
 import { spawnSync } from "child_process";
 import fs from "fs";
 import path from "path";
@@ -46,7 +45,7 @@ const langs = argv["langs"]
 
 if (!cityId) {
   console.error(
-    "Usage: --city-id=<N> [--apply] [--discover=true] [--confirm=true] [--only=pid,status,discover,merge-diff,merge,confirm,dedup-recheck,image,verify] [--langs=ko,en,...]",
+    "Usage: --city-id=<N> [--apply] [--discover=true] [--confirm=true] [--only=pid,move,status,discover,merge-diff,confirm,dedup-recheck,image,verify] [--langs=ko,en,...]",
   );
   process.exit(1);
 }
@@ -78,9 +77,18 @@ const only = (name: string) => !onlyArg || onlyArg.includes(name);
 
   // ①② 창고 정제(0원, 구글맵 공개페이지)
   if (only("pid")) {
+    // ⚠️ 수정금지(승인필요) 2026-09-04 사장님 확정 = PID 페이지는 hl=en 으로 연다. 실측 = 페이지는 상호를 번역하지 않고 카테고리·국가명만 번역하므로 도시 언어로 열면 name_en 칸에 비영어가 들어간다.
     run("① PID 재확인·최신화", "server/services/fill/gmaps-pid-identity.ts", [
       `--city-id=${cityId}`,
       "--verify",
+      "--lang=en",
+      ...(apply ? ["--apply"] : []),
+    ]);
+  }
+  // ⚠️ 수정금지(승인필요) 2026-09-04 사장님 확정 = 좌표가 절대값 = 소속오염 행은 500km 안 가장 가까운 도시로 이동, 없으면 삭제. PID 최신화(①) 뒤 = 교정된 좌표로 판정.
+  if (only("move")) {
+    run("②-1 소속오염 이동", "server/services/fill/wrongcity-quarantine.ts", [
+      `--city-id=${cityId}`,
       ...(apply ? ["--apply"] : []),
     ]);
   }
@@ -118,54 +126,36 @@ const only = (name: string) => !onlyArg || onlyArg.includes(name);
     ]);
   }
 
-  // ⑤ 병합(0원, 기존 행에만 반영)
-  if (only("merge")) {
-    run(
-      "⑤ 병합(B2 merge-only)",
-      "fillcity/steps/discovery-verify-and-insert.ts",
-      [
-        `--city-id=${cityId}`,
-        "--merge-only=true",
-        ...(apply ? ["--apply=true"] : []),
-      ],
-    );
-  }
-
-  // ⑥ PID 확정(🔴 유료 = TS n콜/도시, 명시 승인 없으면 건너뜀)
+  // ⑤ TS→PID 확정(🔴 유료 = TS n콜/도시, 명시 승인 없으면 건너뜀)
   if (only("confirm")) {
     if (runConfirm) {
       // ⚠️ 수정금지(승인필요) 2026-08-30 판단3종 적발 = 유료 호출(TS)은 재시도 0(§9·§18 이중과금 방지).
       run(
-        "⑥ PID 확정(B2 confirm)",
+        "⑤ TS→PID 확정(B2)",
         "fillcity/steps/discovery-verify-and-insert.ts",
-        [
-          `--city-id=${cityId}`,
-          "--confirm=true",
-          ...(apply ? ["--apply=true"] : []),
-        ],
+        [`--city-id=${cityId}`, ...(apply ? ["--apply=true"] : [])],
         0,
       );
     } else {
       console.log(
-        "\n━━━━━━ ⑥ PID 확정 ━━━━━━\n⏭️ 건너뜀(🔴 유료 = TS n콜/도시) — 실행하려면 --confirm=true 명시",
+        "\n━━━━━━ ⑤ TS→PID 확정 ━━━━━━\n⏭️ 건너뜀(🔴 유료 = TS n콜/도시) — 실행하려면 --confirm=true 명시",
       );
     }
   }
 
-  // ⑥-5 사후 중복 재검사(B5, 0원, ②와 같은 도구를 입력 완료 후 한 번 더 호출 — 새 코드 없음)
+  // ⑥ 같은 PID 쌍둥이 병합(0원, ②와 같은 도구)
   if (only("dedup-recheck")) {
-    run(
-      "⑥-5 사후 중복 재검사(같은 PID 쌍둥이)",
-      "server/services/fill/status-backfill.ts",
-      [`--city-id=${cityId}`, ...(apply ? ["--apply"] : [])],
-    );
+    run("⑥ 같은 PID 쌍둥이 병합", "server/services/fill/status-backfill.ts", [
+      `--city-id=${cityId}`,
+      ...(apply ? ["--apply"] : []),
+    ]);
   }
 
-  // ⑦ 이미지 일괄(PM = 결손행만)
+  // ⑦ 백필+검증 = 사진 없으면 채우고, 있으면 PID 페이지로 6요소 대조(verified_at 기록)
   if (only("image")) {
     run(
-      "⑦ 이미지 일괄(image-backfill)",
-      "server/services/fill/image-backfill.ts",
+      "⑦ 백필+검증(backfill-verify)",
+      "server/services/fill/backfill-verify.ts",
       [`--city-id=${cityId}`, ...(apply ? ["--apply"] : [])],
     );
   }

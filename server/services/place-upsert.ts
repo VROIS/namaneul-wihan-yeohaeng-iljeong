@@ -25,6 +25,8 @@ export interface UpsertPayload {
   googleReviewCount?: number | null;
   // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 확정 = 영업상태(OPERATIONAL | CLOSED_PERMANENTLY | CLOSED_TEMPORARILY) → business_status. gmaps-pid-identity(--verify) 가 구글맵 페이지에서 읽어 채움 = 서빙 관문이 폐업행을 제외할 근거.
   businessStatus?: string | null;
+  // ⚠️ 수정금지(승인필요) 2026-09-04 사장님 확정 = 무엇으로 확인했는지(예: 'gmaps-pid-page'). 넘기면 verified_at 이 그 시각으로 찍힌다 = 태그 대신 포렌식 근거.
+  verifySource?: string | null;
   googlePrimaryType?: string | null;
   googleMapsUri?: string | null; // 2026-05-15 = 13번째 SSOT = 최후의 보루
   priceEur?: number | null;
@@ -89,7 +91,11 @@ function buildDirectUpdateSql(p: UpsertPayload, targetId: number) {
         distance_km_from_center = COALESCE(${p.distanceKmFromCenter ?? null}::real, distance_km_from_center),
         category_tags     = (SELECT ARRAY(SELECT DISTINCT unnest(COALESCE(category_tags, ARRAY[]::text[]) || ${sql.raw(`ARRAY[${catTags.map((s) => `'${s.replace(/'/g, "''")}'`).join(",")}]::text[]`)}))),
         phase_tags        = (SELECT ARRAY(SELECT DISTINCT unnest(COALESCE(phase_tags, ARRAY[]::text[]) || ${sql.raw(`ARRAY[${phTags.length === 0 ? "" : phTags.map((s) => `'${s.replace(/'/g, "''")}'`).join(",")}]::text[]`)}))),
-        image_updated_at  = CASE WHEN ${p.imageUrl || null}::text IS NOT NULL THEN NOW() ELSE image_updated_at END,
+        -- ⚠️ 수정금지(승인필요) 2026-09-04 사장님 확정 = 사진 시각은 **사진이 실제로 바뀔 때만** 찍는다. 같은 URL 을 다시 넘겨도 갱신하면 "언제 받은 사진인지"가 거짓이 된다(재링크가 기존 URL 을 재전달하는 경우).
+        image_updated_at  = CASE WHEN ${p.imageUrl || null}::text IS NOT NULL AND ${p.imageUrl || null}::text IS DISTINCT FROM image_url THEN NOW() ELSE image_updated_at END,
+        -- ⚠️ 수정금지(승인필요) 2026-09-04 사장님 확정 = 검증 이력은 태그가 아니라 이 두 칸 = 언제(초 단위) 무엇으로 확인했는지. 태그는 날짜뿐이고 날짜별로 쌓여 최신 판별이 안 된다.
+        verify_source     = COALESCE(${p.verifySource ?? null}, verify_source),
+        verified_at       = CASE WHEN ${p.verifySource ?? null}::text IS NOT NULL THEN NOW() ELSE verified_at END,
         updated_at        = NOW()
       WHERE id = ${targetId}
       -- ⚠️ 2026-07-18 = 흡수(트리거 dup)·직행 UPDATE 후 그 행의 재활용 데이터 반환 = 매칭 폐기 후 place 재활용(§16 매칭 대체).
@@ -312,6 +318,8 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
         googleMapsUri: p.googleMapsUri ?? null,
         googleReviewCount: p.googleReviewCount ?? null,
         businessStatus: p.businessStatus ?? null,
+        verifySource: p.verifySource ?? null,
+        verifiedAt: p.verifySource ? new Date() : null,
         googlePrimaryType: p.googlePrimaryType ?? null,
         imageUrl: p.imageUrl ?? null,
         imageAttribution: p.imageAttribution ?? null,

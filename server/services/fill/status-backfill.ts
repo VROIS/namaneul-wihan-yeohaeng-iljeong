@@ -1,6 +1,4 @@
-// ⚠️ 영구 컴포넌트 2026-08-24 사장님 승인 · 2026-08-28 A안 확정 = 창고 상태 백필 + 같은 PID 쌍둥이 소프트 병합(keep 흡수·태그/언어코드 합집합·번역행 복사·포인터 이동, 행 삭제 0).
-//   ⚠️ 수정금지(승인필요) 2026-08-28 사장님 확정 = A안 = keep 이 그룹 내용을 흡수한다(absorbTwinGroup, 행 DELETE 없음) =
-//      (2026-08-28 사장님 확정 = 컬럼이 이미 CLOSED_* 면 그 값 유지, 태그만 있으면 business_status=CLOSED_PERMANENTLY 기록. 뮌헨 #67813 Olympiaturm CLOSED_TEMPORARILY 가 rank 6 으로 서빙되던 구멍 봉합)
+// ⚠️ 수정금지(승인필요) 2026-09-04 사장님 확정 = 창고 상태 백필 + 같은 PID 쌍둥이 병합(keep 흡수·태그/언어코드 합집합·번역행 복사·포인터 이동) 후 그 loser 만 DELETE = 포인터(guides·override_hero·override_highlight) 이동을 거친 행만 지운다. 폐업(CLOSED_*)은 컬럼값 우선, 태그만 있으면 CLOSED_PERMANENTLY 기록.
 import * as fs from "node:fs";
 import * as path from "node:path";
 // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 승인 = best_rank 쓰기 트랜잭션(SELECT FOR UPDATE→합집합→조건부 UPDATE) 1벌
@@ -324,12 +322,33 @@ async function main() {
     if (!byPid.has(r.google_place_id)) byPid.set(r.google_place_id, []);
     byPid.get(r.google_place_id)!.push(r);
   }
+  // ⚠️ 수정금지(승인필요) 2026-09-04 사장님 확정 = 판정은 트리거(의심대상-N), 집행은 이 도구. 여기서 자체 매칭을 재발명하지 않는다(§16).
+  //   PID 있는 행이 최종 = PID 없는 짝은 그 그룹에 넣어 흡수 후 삭제한다.
+  const byId = new Map<number, any>(rows.map((r: any) => [r.id, r]));
+  for (const r of rows) {
+    if (r.google_place_id) continue;
+    const targets = (r.phase_tags || [])
+      .filter((t: string) => t.startsWith("의심대상-"))
+      .map((t: string) => Number(t.replace("의심대상-", "")));
+    let host = targets
+      .map((id: number) => byId.get(id))
+      .find((h: any) => h?.google_place_id);
+    if (!host)
+      host = rows.find(
+        (h: any) =>
+          h.google_place_id &&
+          (h.phase_tags || []).includes(`의심대상-${r.id}`),
+      );
+    if (host) byPid.get(host.google_place_id)!.push(r);
+  }
   const mergedInto = new Map<number, number>();
   const twinPlans: TwinPlan[] = [];
   const keepTags = new Map<number, string[]>(); // keep 의 흡수 후 phase_tags(②③ 판정용)
   for (const grp of byPid.values()) {
     if (grp.length < 2) continue;
-    const keep = grp.reduce((a, b) =>
+    // ⚠️ 수정금지(승인필요) 2026-09-04 사장님 확정 = PID 있는 쪽이 최종 = keep 후보는 PID 보유 행에서만 고른다.
+    const cands = grp.filter((g: any) => g.google_place_id);
+    const keep = (cands.length ? cands : grp).reduce((a: any, b: any) =>
       (b.google_review_count ?? 0) > (a.google_review_count ?? 0) ||
       ((b.google_review_count ?? 0) === (a.google_review_count ?? 0) &&
         b.id > a.id)
@@ -397,7 +416,7 @@ async function main() {
     } else s.ch[finalStatus] = (s.ch[finalStatus] || 0) + 1;
   }
   console.log(
-    `═══ status-backfill city ${cityId} = ${rows.length}행 | 변경 ${plan.length}행 | PID 그룹 ${twinPlans.length}개 (삭제 0)`,
+    `═══ status-backfill city ${cityId} = ${rows.length}행 | 변경 ${plan.length}행 | PID 그룹 ${twinPlans.length}개 | 삭제예정 ${twinPlans.reduce((n: number, p: TwinPlan) => n + p.losers.length, 0)}행`,
   );
   for (const [c, s] of [...cats.entries()].sort(
     (a, b) => b[1].pool - a[1].pool,
@@ -411,7 +430,7 @@ async function main() {
     );
   if (twinPlans.length) {
     console.log(
-      `── ① 같은 PID 그룹 ${twinPlans.length}개 = keep 흡수 + 소프트 병합(행 삭제 0) ──`,
+      `── ① 같은 PID 그룹 ${twinPlans.length}개 = keep 흡수 후 loser 삭제 = ${twinPlans.flatMap((p: TwinPlan) => p.losers.map((l: any) => "#" + l.id)).join(" ")} ──`,
     );
     for (const p of twinPlans) printTwinPlan(p);
   }
@@ -430,6 +449,8 @@ async function main() {
     }
   }
   let n = 0;
+  let deleted = 0;
+  let tagsCleared = 0;
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -443,6 +464,43 @@ async function main() {
       );
       n++;
     }
+    // ⚠️ 수정금지(승인필요) 2026-09-04 사장님 확정 = 흡수가 끝난 loser 만 삭제한다(격리·보존 폐기 §19).
+    //   **absorbTwinGroup 을 실제로 거친 이번 실행 loser 로만 한정** = 그 함수만 guides.place_id·cities.override_hero_place_id·override_highlight_place_ids 포인터를 keep 으로 옮긴다.
+    //   옛 실행이 남긴 status='merged' 행은 포인터가 안 옮겨져 있어 지우면 사장님이 지정한 도시 얼굴이 끊긴다 = 삭제 대상에서 제외.
+    const absorbed = new Set(
+      twinPlans.flatMap((p: TwinPlan) => p.losers.map((l: any) => l.id)),
+    );
+    const losers = plan
+      .filter((p: any) => p.status === "merged" && p.into && absorbed.has(p.id))
+      .map((p: any) => p.id);
+    if (losers.length) {
+      await client.query(
+        `DELETE FROM place_translations WHERE place_id = ANY($1::int[])`,
+        [losers],
+      );
+      const d = await client.query(
+        `DELETE FROM place_seed_raw WHERE id = ANY($1::int[]) RETURNING id`,
+        [losers],
+      );
+      deleted = d.rowCount ?? 0;
+    }
+    // ⚠️ 수정금지(승인필요) 2026-09-04 사장님 확정 = 처리가 끝난 표시는 뗀다 = 짝이 사라진 의심대상-N·중복의심, 병합 완료 이력(pid-twin-absorbed). 남기면 다음에 또 끌려나온다.
+    const cl = await client.query(
+      `UPDATE place_seed_raw p
+          SET phase_tags = (SELECT ARRAY(SELECT t FROM unnest(COALESCE(p.phase_tags, ARRAY[]::text[])) t
+                WHERE t <> 'pid-twin-absorbed'
+                  AND NOT (t LIKE '의심대상-%' AND (replace(t,'의심대상-','')::int = p.id
+                       OR NOT EXISTS (SELECT 1 FROM place_seed_raw q WHERE q.id = replace(t,'의심대상-','')::int)))
+                  AND NOT (t = '중복의심' AND NOT EXISTS (SELECT 1 FROM unnest(COALESCE(p.phase_tags, ARRAY[]::text[])) u
+                             WHERE u LIKE '의심대상-%' AND replace(u,'의심대상-','')::int <> p.id
+                               AND EXISTS (SELECT 1 FROM place_seed_raw q WHERE q.id = replace(u,'의심대상-','')::int)))))
+        WHERE p.city_id = $1
+          AND ('pid-twin-absorbed' = ANY(p.phase_tags) OR '중복의심' = ANY(p.phase_tags)
+               OR EXISTS (SELECT 1 FROM unnest(p.phase_tags) t WHERE t LIKE '의심대상-%'))
+        RETURNING p.id`,
+      [cityId],
+    );
+    tagsCleared = cl.rowCount ?? 0;
     await client.query("COMMIT");
   } catch (e) {
     await client.query("ROLLBACK");
@@ -451,7 +509,7 @@ async function main() {
     client.release();
   }
   console.log(
-    `✅ 반영 ${n}행 (원복 = UPDATE place_seed_raw SET status='active', merged_into=NULL WHERE city_id=${cityId})`,
+    `✅ 반영 ${n}행 · 흡수 후 삭제 ${deleted}행 · 낡은 표시 정리 ${tagsCleared}행`,
   );
   await pool.end();
 }

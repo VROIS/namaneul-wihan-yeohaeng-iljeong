@@ -34,13 +34,10 @@ const argv = Object.fromEntries(
 const cityId = Number(argv["city-id"] || 0);
 const apply = argv["apply"] === "true";
 const forceQuota = argv["force-quota"] === "true";
-// ⚠️ 수정금지(승인필요) 2026-08-27 사장님 지시 = 병합(외부호출 0)은 9/1 을 기다릴 이유가 없음 = B0 실제
-const mergeOnly = argv["merge-only"] === "true";
-// ⚠️ 수정금지(승인필요) 2026-08-27 사장님 확정 = --confirm = B1 confirm(B등급 후보) 목록을 신규행 경로로 처리(TS 1콜/곳 → PID 판정).
-const confirmFlag = argv["confirm"] === "true";
+// ⚠️ 수정금지(승인필요) 2026-09-04 사장님 확정 = 모든 기준 = PID = B1 이 걸러준 confirm·new 전부 TS 1콜 → PID 로 판정(A등급 직행 merge 삭제 §19).
 if (!cityId) {
   console.error(
-    "Usage: --city-id=<N> [--apply] [--force-quota] [--merge-only] [--confirm] [--report=<path>]",
+    "Usage: --city-id=<N> [--apply] [--force-quota] [--report=<path>]",
   );
   process.exit(1);
 }
@@ -49,17 +46,6 @@ interface CopyEntry {
   lang: string;
   summary?: string;
   editorial?: string;
-}
-interface MergeEntry {
-  name: string;
-  langs: number;
-  cat: string;
-  avgPrice: number | null;
-  avgRank: number | null;
-  copies: CopyEntry[];
-  psrId: number;
-  psrName: string;
-  psrCat: string;
 }
 interface NewEntry {
   name: string;
@@ -129,17 +115,40 @@ function findReportPath(): string {
     );
     process.exit(1);
   }
-  const allMerge: MergeEntry[] = sections.flatMap((s) => s.merge);
+  // ⚠️ 수정금지(승인필요) 2026-09-04 사장님 결정 = 낡은 B1 산출표 기계 차단.
+  //   B1 은 창고를 실시간으로 읽지만 B2 는 그 산출표 파일을 읽는다 = 그 사이 창고가 바뀌면
+  //   이미 들어온 행(에펠탑·산타모니카 피어)을 신규로 오판해 TS 를 또 친다(실측 파리 36→11·LA 64→31).
+  {
+    const pg0 = await import("pg");
+    const c0 = new (pg0 as any).default.Client({
+      connectionString: process.env.SUPA_URL || process.env.DATABASE_URL,
+      ssl: { rejectUnauthorized: false },
+    });
+    await c0.connect();
+    const nowCount = Number(
+      (
+        await c0.query(
+          "SELECT count(*)::int AS n FROM place_seed_raw WHERE city_id=$1",
+          [cityId],
+        )
+      ).rows[0].n,
+    );
+    await c0.end();
+    const then = Number(report.psrCountBefore ?? -1);
+    if (then !== nowCount) {
+      console.error(
+        `✗ B1 산출표가 낡음 = 창고 ${then}행 시점 판정인데 지금 ${nowCount}행 → discovery-merge-diff.ts 재실행 필요(무료·DB 쓰기 0).`,
+      );
+      process.exit(1);
+    }
+  }
+
   const allConfirm: NewEntry[] = sections.flatMap((s) => s.confirm);
   const allNew: NewEntry[] = sections.flatMap((s) => s.new);
-  const tsItems: NewEntry[] = mergeOnly
-    ? confirmFlag
-      ? allConfirm
-      : []
-    : [...allConfirm, ...allNew];
+  const tsItems: NewEntry[] = [...allConfirm, ...allNew];
 
   console.log(
-    `대상 = merge(외부호출 0) ${allMerge.length}곳 · confirm(🔴 TS 1콜/곳) ${allConfirm.length}곳 · new(🔴 TS 1콜/곳) ${allNew.length}곳 → 이번 실행 TS 대상 ${tsItems.length}곳`,
+    `대상 = confirm(🔴 TS 1콜/곳) ${allConfirm.length}곳 · new(🔴 TS 1콜/곳) ${allNew.length}곳 → 이번 실행 TS 대상 ${tsItems.length}곳`,
   );
 
   const { simulateCost } = await import(
@@ -151,11 +160,6 @@ function findReportPath(): string {
   );
 
   if (!apply) {
-    console.log(`\n--- merge 대상(best_rank + 원어 카피 UPDATE 예정) ---`);
-    for (const m of allMerge)
-      console.log(
-        `  [${m.langs}] ${m.name} → PSR#${m.psrId} best_rank=${codeOf(m.name, m.langs, m.copies)}`,
-      );
     console.log(
       `\n--- confirm 대상(TS → PID 판정 후 upsertPlace 예정, 후보 = psrHint) ---`,
     );
@@ -169,7 +173,7 @@ function findReportPath(): string {
         `  [${n.langs}] ${n.name} (${n.cat}, best_rank=${codeOf(n.name, n.langs, n.copies)}, avg€${n.avgPrice ?? "-"})`,
       );
     console.log(
-      `\n=== DRY (외부호출 0·쓰기 0) = --apply [--merge-only [--confirm]] [--force-quota] 로 실행 ===`,
+      `\n=== DRY (외부호출 0·쓰기 0) = --apply [--force-quota] 로 실행 ===`,
     );
     return;
   }
@@ -179,10 +183,6 @@ function findReportPath(): string {
       "../../server/services/shared/external-call-log"
     );
     await gateBatch("ts", tsItems.length, { force: forceQuota });
-  } else {
-    console.log(
-      `[--merge-only] confirm ${allConfirm.length}·new ${allNew.length} 구간 완전히 건너뜀 = 외부호출 0`,
-    );
   }
 
   const pg = await import("pg");
@@ -233,34 +233,6 @@ function findReportPath(): string {
         [placeId, t.lang, t.summary || null, t.editorial || null],
       );
     }
-  }
-
-  let mergedOk = 0;
-  for (const m of allMerge) {
-    const ko = koCopyOf(m.copies);
-    await upsertPlace({
-      targetRowId: m.psrId,
-      followTriggerDup: true, // 랜드마크 밀집지역 0m 인접행 대비(2026-08-26 BTS 실측 근거 재사용)
-      cityId,
-      seedCategory: m.psrCat,
-      nameEn: m.psrName,
-      selectionReasonKo: ko?.summary || null,
-      shortformKo: ko?.editorial || null,
-      // ⚠️ 수정금지(승인필요) 2026-08-27 사장님 확정 = 같은 주소/같은 PID = 같은 장소 → 한 행에 카테고리 태그를
-      categoryTags: [m.cat],
-      phaseTags: [PROVENANCE_TAG],
-    });
-    const code = codeOf(m.name, m.langs, m.copies);
-    // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 승인 = best_rank = 현재값 ∪ 그룹코드(writeBestRankUnion() SSOT,
-    const br = await inTxn(async () => {
-      const r = await writeBestRankUnion(c, m.psrId, code);
-      await upsertTranslations(m.psrId, m.copies);
-      return r;
-    });
-    mergedOk++;
-    console.log(
-      `  ✅ 병합 #${m.psrId} ${m.psrName} (langs=${m.langs}, best_rank ${br.cur} ∪ ${code} → ${br.result})`,
-    );
   }
 
   const stat = {
@@ -365,7 +337,7 @@ function findReportPath(): string {
         await upsertTranslations(rowId, n.copies);
         return r;
       });
-      // ⚠️ 수정금지(승인필요) 2026-09-01 사장님 확정 = 이 단계에서 PM 안 함 = 이미지는 ⑦ image-backfill 단독 (정본 §B2)
+      // ⚠️ 수정금지(승인필요) 2026-09-01 사장님 확정 = 이 단계에서 PM 안 함 = 이미지는 ⑦ backfill-verify 단독 (정본 §B2)
       console.log(
         `  ✅ #${rowId} ${ts.nameEn} (${res.action}${res.reason ? `/${res.reason}` : ""}, ${outcome}${n.psrHint ? ` · 힌트 PSR#${n.psrHint.psrId} ${n.psrHint.psrName} [${n.psrHint.by}]` : ""}, langs=${n.langs}, best_rank ${br.cur} ∪ ${code} → ${br.result})`,
       );
@@ -376,6 +348,7 @@ function findReportPath(): string {
 
   await c.end();
   console.log(
-    `\n═══ 완료: merge ${mergedOk}/${allMerge.length} · TS 대상 ${tsItems.length}곳(confirm ${mergeOnly && !confirmFlag ? 0 : allConfirm.length} + new ${mergeOnly ? 0 : allNew.length}) = 힌트행 흡수 ${stat.absorbedHint} / 다른 행 흡수 ${stat.absorbedOther} / 신규행 ${stat.insertedNew} · no_match ${stat.noMatch} · 폐업 ${stat.closed} · skip ${stat.skipped} · TS 호출 ${stat.tsCalls} ═══`,
+    `
+═══ 완료: TS 대상 ${tsItems.length}곳(confirm ${allConfirm.length} + new ${allNew.length}) = 힌트행 흡수 ${stat.absorbedHint} / 다른 행 흡수 ${stat.absorbedOther} / 신규행 ${stat.insertedNew} · no_match ${stat.noMatch} · 폐업 ${stat.closed} · skip ${stat.skipped} · TS 호출 ${stat.tsCalls} ═══`,
   );
 })();

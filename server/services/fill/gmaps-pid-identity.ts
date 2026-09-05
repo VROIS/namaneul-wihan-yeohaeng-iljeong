@@ -14,12 +14,15 @@ import { BROWSER_UA } from "./gmaps-pid-identity/page-reader";
 import {
   evaluateRow,
   initResult,
-  isWritable,
   nameTokens,
   type Result,
   type Row,
 } from "./gmaps-pid-identity/gates";
-import { writeRow } from "./gmaps-pid-identity/apply";
+import {
+  clearSuspectTags,
+  pageWasRead,
+  writeRow,
+} from "./gmaps-pid-identity/apply";
 import { printAndSaveReport } from "./gmaps-pid-identity/report";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -65,6 +68,10 @@ if (!cityId) {
   const { distanceKmFromCoords } = await import(
     pathToFileURL(path.join(ROOT, "server/services/shared/pool-radius.ts")).href
   );
+  // ⚠️ 수정금지(승인필요) 2026-09-04 = 사진 폭 상수는 ts-client 1벌을 쓴다(§16 재발명 금지).
+  const { PHOTO_MAX_WIDTH_PX } = await import(
+    pathToFileURL(path.join(ROOT, "server/services/shared/ts-client.ts")).href
+  );
   const pg = await import("pg");
   const c = new (pg as any).default.Client({
     connectionString: process.env.SUPA_URL || process.env.DATABASE_URL,
@@ -105,7 +112,8 @@ if (!cityId) {
     await c.query(
       `SELECT id, seed_category, name_en, google_place_id AS pid,
               latitude::float8 AS lat, longitude::float8 AS lng,
-              google_review_count AS rc
+              google_review_count AS rc,
+              (image_url IS NOT NULL) AS has_image
          FROM place_seed_raw WHERE ${where} ORDER BY id`,
       params,
     )
@@ -132,6 +140,8 @@ if (!cityId) {
             page,
             lang,
             verify,
+            // ⚠️ 수정금지(승인필요) 2026-09-04 사장님 결정 = 사진 폭 = backfill-verify 와 같은 1벌(§16).
+            photoWidth: PHOTO_MAX_WIDTH_PX,
             cityLat,
             cityLng,
             cityStop,
@@ -144,8 +154,12 @@ if (!cityId) {
         r.gate = `error:${String(e?.message || e).slice(0, 80)}`;
       }
 
-      if (apply && isWritable(r.gate))
+      // ⚠️ 수정금지(승인필요) 2026-09-04 사장님 확정 = 관문이 막아도 PID 가 진실 = 전 행을 PID 값으로 갈아끼운다(관문은 참고 표시). 단 **페이지를 못 읽은 행**(타임아웃·동의차단·h1없음)은 의심 표시를 떼지 않는다 = 떼면 쌍둥이 묶기에서 영영 빠진다.
+      if (apply) {
         await writeRow(upsertPlace, cityId, row, r);
+        if (pageWasRead(r) && !String(r.upsert || "").startsWith("error"))
+          await clearSuspectTags(c, row.id);
+      }
       results.push(r);
       console.log(JSON.stringify(r));
     }

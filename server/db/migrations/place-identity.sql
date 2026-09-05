@@ -158,6 +158,7 @@ BEGIN
     WHERE c.address IS NOT NULL AND c.id <> COALESCE(NEW.id, -1)
       AND TRIM(REGEXP_REPLACE(REGEXP_REPLACE(LOWER(c.address), '[.,;:!?''"()\[\]{}]', ' ', 'g'), '\s+', ' ', 'g')) = v_addr
       AND NOT (c.google_maps_uri IS NOT NULL AND c.google_maps_uri<>'' AND NEW.google_maps_uri IS NOT NULL AND NEW.google_maps_uri<>'' AND c.google_maps_uri<>NEW.google_maps_uri)
+      AND NOT (c.google_place_id IS NOT NULL AND c.google_place_id<>'' AND NEW.google_place_id IS NOT NULL AND NEW.google_place_id<>'' AND c.google_place_id<>NEW.google_place_id)
     LIMIT 1;
     IF matched_id IS NOT NULL THEN RAISE EXCEPTION '[중복차단] 불변3 풀주소 일치 id=%', matched_id; END IF;
   END IF;
@@ -185,6 +186,8 @@ BEGIN
   END IF;
 
   -- 5) 로컬이름 (자기행 제외)
+  -- ⚠️ 수정금지(승인필요) 2026-09-04 사장님 확정 = PID 가 서로 다르면 다른 장소 = 절대 기준(veto) = 불변3·4·6 과 동형으로 5·7·8 에도 적용.
+  --   사유 = 넓은 장소는 본관과 내부 시설이 이름·주소를 공유한다(시카고 Griffin 박물관 ↔ 그 안 Coal Mine, 파리 박물관 동일). 이름만으로 묶으면 다른 장소가 합쳐진다.
   -- ⚠️ 수정금지(승인필요) 2026-08-17 사장님 승인 = 같은도시 OR 100km 상한 추가(불변6·7·8 과 동형 §16/§19).
   --   사유: "City Market" 같은 흔한 이름이 대륙이 달라도 문자열만 같으면 무제한(도시무관) 매칭돼
   --   나이로비 여정이 멕시코시티 행(city_id=102)에 잘못 병합되는 실사고 발생(2026-08-17 실측, id=61563:
@@ -198,6 +201,7 @@ BEGIN
                  AND sqrt( power((c.latitude::float - NEW.latitude::float)*111320, 2)
                          + power((c.longitude::float - NEW.longitude::float)*111320*cos(radians((c.latitude::float + NEW.latitude::float)/2)), 2) ) <= 100000 ) )
       AND NOT (c.google_maps_uri IS NOT NULL AND c.google_maps_uri<>'' AND NEW.google_maps_uri IS NOT NULL AND NEW.google_maps_uri<>'' AND c.google_maps_uri<>NEW.google_maps_uri)
+      AND NOT (c.google_place_id IS NOT NULL AND c.google_place_id<>'' AND NEW.google_place_id IS NOT NULL AND NEW.google_place_id<>'' AND c.google_place_id<>NEW.google_place_id)
       AND v_local IN (LOWER(TRIM(COALESCE(c.name_en,''))), LOWER(TRIM(COALESCE(c.name_local,''))), LOWER(TRIM(COALESCE(c.name_ko,''))))
     LIMIT 1;
     IF matched_id IS NOT NULL THEN RAISE EXCEPTION '[중복차단] 불변5 로컬이름 일치 id=%', matched_id; END IF;
@@ -250,6 +254,7 @@ BEGIN
                  AND sqrt( power((c.latitude::float - NEW.latitude::float)*111320, 2)
                          + power((c.longitude::float - NEW.longitude::float)*111320*cos(radians((c.latitude::float + NEW.latitude::float)/2)), 2) ) <= 100000 ) )
       AND NOT (c.google_maps_uri IS NOT NULL AND c.google_maps_uri<>'' AND NEW.google_maps_uri IS NOT NULL AND NEW.google_maps_uri<>'' AND c.google_maps_uri<>NEW.google_maps_uri)
+      AND NOT (c.google_place_id IS NOT NULL AND c.google_place_id<>'' AND NEW.google_place_id IS NOT NULL AND NEW.google_place_id<>'' AND c.google_place_id<>NEW.google_place_id)
       AND v_en IN (LOWER(TRIM(COALESCE(c.name_en,''))), LOWER(TRIM(COALESCE(c.name_local,''))), LOWER(TRIM(COALESCE(c.name_ko,''))))
     LIMIT 1;
   END IF;
@@ -263,6 +268,7 @@ BEGIN
                  AND sqrt( power((c.latitude::float - NEW.latitude::float)*111320, 2)
                          + power((c.longitude::float - NEW.longitude::float)*111320*cos(radians((c.latitude::float + NEW.latitude::float)/2)), 2) ) <= 100000 ) )
       AND NOT (c.google_maps_uri IS NOT NULL AND c.google_maps_uri<>'' AND NEW.google_maps_uri IS NOT NULL AND NEW.google_maps_uri<>'' AND c.google_maps_uri<>NEW.google_maps_uri)
+      AND NOT (c.google_place_id IS NOT NULL AND c.google_place_id<>'' AND NEW.google_place_id IS NOT NULL AND NEW.google_place_id<>'' AND c.google_place_id<>NEW.google_place_id)
       AND v_ko IN (LOWER(TRIM(COALESCE(c.name_en,''))), LOWER(TRIM(COALESCE(c.name_local,''))), LOWER(TRIM(COALESCE(c.name_ko,''))))
     LIMIT 1;
   END IF;

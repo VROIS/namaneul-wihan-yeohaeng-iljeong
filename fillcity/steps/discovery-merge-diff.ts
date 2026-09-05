@@ -1,4 +1,4 @@
-//   예외 1벌 = 문지기 판정 뒤·산출표 앞의 등급조정(regrade) v3 후처리(2026-08-29 사장님 결정, discovery-regrade.ts).
+// ⚠️ 수정금지(승인필요) 2026-09-04 사장님 확정 = 모든 기준 = PID. B1 = 창고에 이미 있나만 거르는 0원 문지기(트리거 드라이런). A등급 직행 merge·자체 등급조정(regrade R1~R6) 삭제 §19 = 기존 행에 걸리면 전부 confirm(B2 TS→PID 판정), 아니면 new.
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -9,13 +9,33 @@ import {
 } from "../../server/services/shared/raw-filename";
 // ⚠️ 수정금지(승인필요) 2026-08-29 사장님 승인 = 7개 언어 목록·순서 1벌(§16)
 import { LANGS } from "../../server/services/shared/language-instruction";
-import {
-  PSR_COLS,
-  regradeStaged,
-  type Bucket,
-  type PsrRow,
-  type Staged,
-} from "./discovery-regrade";
+export type Bucket = "confirm" | "new";
+export interface PsrRow {
+  id: number;
+  name_en: string | null;
+  name_local: string | null;
+  name_ko: string | null;
+  seed_category: string;
+  status: string;
+  merged_into: number | null;
+  city_id: number;
+  lat: number | null;
+  lng: number | null;
+  pid: boolean;
+}
+export const PSR_COLS = `id, name_en, name_local, name_ko, seed_category, status, merged_into, city_id, latitude::float AS lat, longitude::float AS lng, google_place_id IS NOT NULL AS pid`;
+interface Staged {
+  g: Group;
+  name: string | null | undefined;
+  nameLocal: string | null;
+  nameKo: string | null;
+  lat: number | null;
+  lng: number | null;
+  orig: Bucket;
+  bucket: Bucket;
+  psr: PsrRow | null;
+  by: string;
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "../..");
@@ -184,7 +204,11 @@ function deserializeGroup(g: any): Group {
       `═══ B1 등급조정 재실행 — city ${cityId} — 저장된 선별표 재사용(원본 재열람 0, 창고 대조 생략) ═══`,
     );
     const saved = JSON.parse(fs.readFileSync(fromExtractedPath, "utf-8"));
-    staged = saved.staged.map((s: any) => ({ ...s, g: deserializeGroup(s.g) }));
+    staged = saved.staged.map((s: any) => ({
+      ...s,
+      g: deserializeGroup(s.g),
+      bucket: s.orig === "new" ? "new" : "confirm",
+    }));
     cityRows = saved.cityRows;
     countBefore = saved.countBefore;
     countAfter = saved.countAfter;
@@ -463,8 +487,6 @@ function deserializeGroup(g: any): Group {
       )
     ).rows;
 
-    // ⚠️ 수정금지(승인필요) 2026-08-29 사장님 확정 = A등급 tier = 불변5·6, 그 외는 B등급
-    const GRADE_A_TIERS = new Set(["불변5", "불변6"]);
     staged = [];
     for (const g of groups.values()) {
       if (g.type === "restaurants" && g.langs.size < RESTAURANT_MIN_LANGS)
@@ -476,8 +498,6 @@ function deserializeGroup(g: any): Group {
         nameKo: [...g.kos][0] || null,
         lat: avg(g.lats),
         lng: avg(g.lngs),
-        regrade: null,
-        absorbed: false,
       };
       if (g.anchor.kind === "psr") {
         const r = psrInfo.get(g.anchor.id);
@@ -491,13 +511,10 @@ function deserializeGroup(g: any): Group {
           continue;
         }
         const tiers = [...new Set(g.members.map((m) => m.tier))];
-        const bucket: Bucket = tiers.some((t) => GRADE_A_TIERS.has(t))
-          ? "merge"
-          : "confirm";
         staged.push({
           ...side,
-          orig: bucket,
-          bucket,
+          orig: "confirm",
+          bucket: "confirm",
           psr: r,
           by: tiers.join("+"),
         });
@@ -542,16 +559,12 @@ function deserializeGroup(g: any): Group {
     );
   }
 
-  const regradeCounts = await regradeStaged(c, staged, cityRows);
-
   const emptySection = () => ({
-    merge: [] as any[],
     confirm: [] as any[],
     new: [] as any[],
   });
   const report = { landmarks: emptySection(), restaurants: emptySection() };
   for (const s of staged) {
-    if (s.absorbed) continue;
     const g = s.g;
     const base = {
       name: [...g.names][0],
@@ -563,7 +576,6 @@ function deserializeGroup(g: any): Group {
       copies: g.copies, // 원어 카피(B2 = place_translations 선충전 원천, 외부호출 0)
       mixed: isMixedGroup(g.members),
       members: g.members,
-      regrade: s.regrade,
     };
     const newShape = {
       ...base,
@@ -574,19 +586,7 @@ function deserializeGroup(g: any): Group {
       address: [...g.addresses][0] || null,
       by: s.by,
     };
-    if (s.bucket === "merge") {
-      const r = s.psr!;
-      report[g.type].merge.push({
-        ...base,
-        psrId: r.id,
-        psrName: r.name_en,
-        psrCat: r.seed_category,
-        psrStatus: r.status,
-        psrHasPid: r.pid,
-        psrCityId: r.city_id,
-        by: s.by,
-      });
-    } else if (s.bucket === "confirm") {
+    if (s.bucket === "confirm") {
       const r = s.psr!;
       report[g.type].confirm.push({
         ...newShape,
@@ -604,29 +604,22 @@ function deserializeGroup(g: any): Group {
   await c.end();
 
   const sizeOf = (o: ReturnType<typeof emptySection>) =>
-    o.merge.length + o.confirm.length + o.new.length;
+    o.confirm.length + o.new.length;
   console.log(
     `\n① 선병합: 그룹 ${groupCount.landmarks + groupCount.restaurants} = 랜드마크 ${groupCount.landmarks}(합집합 채택) / 식당 ${groupCount.restaurants} 중 ${RESTAURANT_MIN_LANGS}개국어+ = ${sizeOf(report.restaurants)} 채택 · 오류 ${errors.length}`,
   );
   console.log(`tier 히스토그램(항목 단위): ${JSON.stringify(tierHistogram)}`);
 
   console.log(
-    `\n② 기존 PSR 대조 결과(문지기 판정 그대로 → A등급=merge / B등급=confirm):`,
+    `\n② 기존 PSR 대조 결과(문지기 판정 그대로 → 기존 행에 걸림=confirm / 없음=new):`,
   );
   for (const label of ["landmarks", "restaurants"] as const) {
     const o = report[label];
     console.log(
-      `\n[${label}] 총 ${sizeOf(o)}곳 = merge ${o.merge.length} / confirm ${o.confirm.length} / new ${o.new.length}`,
+      `\n[${label}] 총 ${sizeOf(o)}곳 = confirm ${o.confirm.length} / new ${o.new.length}`,
     );
     console.log(
-      `  --- merge(A등급 = 불변5·6, 기존 행 직행 UPDATE, B2 외부호출 0) ---`,
-    );
-    for (const m of o.merge)
-      console.log(
-        `  [${m.langs}] ${m.name} → PSR#${m.psrId} ${m.psrName}(${m.psrCat},${m.psrStatus},PID${m.psrHasPid ? "有" : "無"}${m.psrCityId !== cityId ? `,city${m.psrCityId}` : ""}) [${m.by}]${m.mixed ? " ⚠mixed" : ""}`,
-      );
-    console.log(
-      `  --- confirm(B등급 = 불변3·의심 = 후보일 뿐, B2 --confirm = TS 1콜 → PID 로 진짜 행 판정) ---`,
+      `  --- confirm(기존 행에 걸림 = 후보일 뿐, B2 = TS 1콜 → PID 로 진짜 행 판정) ---`,
     );
     for (const x of o.confirm)
       console.log(
@@ -649,16 +642,14 @@ function deserializeGroup(g: any): Group {
   const totalNew = report.landmarks.new.length + report.restaurants.new.length;
   const totalConfirm =
     report.landmarks.confirm.length + report.restaurants.confirm.length;
-  const totalMerge =
-    report.landmarks.merge.length + report.restaurants.merge.length;
   const allItems = (["landmarks", "restaurants"] as const).flatMap((k) => [
-    ...report[k].merge,
     ...report[k].confirm,
     ...report[k].new,
   ]);
   const mixedCount = allItems.filter((x) => x.mixed).length;
   console.log(
-    `\n═══ 요약: ${elapsed.toFixed(1)}s · 총 ${totalMerge + totalConfirm + totalNew}곳 = merge ${totalMerge}(외부호출 0) / confirm ${totalConfirm}(🔴 TS ${totalConfirm}콜) / new ${totalNew}(🔴 TS ${totalNew}콜) · mixed ${mixedCount} · 오류 ${errors.length} · 등급조정 R1 ${regradeCounts.R1} / R2 ${regradeCounts.R2} / R3 ${regradeCounts.R3}(PID無 hint ${regradeCounts.hintOnly}) / R4 ${regradeCounts.R4} / R5 ${regradeCounts.R5} / R6 ${regradeCounts.R6} ═══`,
+    `
+═══ 요약: ${elapsed.toFixed(1)}s · 총 ${totalConfirm + totalNew}곳 = confirm ${totalConfirm}(🔴 TS ${totalConfirm}콜) / new ${totalNew}(🔴 TS ${totalNew}콜) · mixed ${mixedCount} · 오류 ${errors.length} ═══`,
   );
 
   const payload = {
@@ -670,7 +661,6 @@ function deserializeGroup(g: any): Group {
     psrCountBefore: countBefore,
     psrCountAfter: countAfter,
     tierHistogram,
-    regradeCounts,
     errors,
     report,
   };

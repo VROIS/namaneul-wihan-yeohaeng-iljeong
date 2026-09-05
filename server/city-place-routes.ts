@@ -14,12 +14,10 @@ import { eq, sql, desc, and, or, inArray } from "drizzle-orm";
 import { READY_THRESHOLD } from "./services/agents/ag2-gemini-recommender";
 import {
   cityRepresentativeWhere,
+  cityHighlightWhere,
   cityRepresentativeOrder,
-  HIGHLIGHT_CATEGORIES,
   pickDisplayName,
 } from "./services/shared/city-representative-place";
-// best_rank 언어코드 정렬 1벌(§16, 2026-08-27 사장님 확정) = 화면 언어를 아는 자리라 언어 인지 정렬.
-import { bestRankOrder } from "./services/shared/best-rank";
 import {
   computeDayRouteLive,
   enrichStopsWithPsr,
@@ -70,37 +68,8 @@ export function registerCityPlaceRoutes(app: Express): void {
       }
       const lang = String(req.query.lang || "ko");
 
-      //   ⚠️ 수정금지(승인필요) 2026-08-21 사장님 승인 = 이 조회는 ①②와 서로 의존하지 않으므로 **아래
-      const catOrder = sql.raw(
-        HIGHLIGHT_CATEGORIES.map((cat, i) => `WHEN '${cat}' THEN ${i}`).join(
-          " ",
-        ),
-      );
-      const ranked = db
-        .select({
-          nameEn: placeSeedRaw.nameEn,
-          nameLocal: placeSeedRaw.nameLocal,
-          nameKo: placeSeedRaw.nameKo,
-          // ⚠️ 수정금지(승인필요) 2026-08-27 사장님 승인 = best_rank = 7자리 언어코드(정의·정렬 1벌 = shared/best-rank.ts).
-          rn: sql<number>`ROW_NUMBER() OVER (PARTITION BY ${placeSeedRaw.seedCategory} ORDER BY ${bestRankOrder(lang)}, ${placeSeedRaw.googleReviewCount} DESC, ${placeSeedRaw.id} DESC)`.as(
-            "rn",
-          ),
-          catRank:
-            sql<number>`CASE ${placeSeedRaw.seedCategory} ${catOrder} ELSE 99 END`.as(
-              "cat_rank",
-            ),
-        })
-        .from(placeSeedRaw)
-        .where(
-          and(
-            cityRepresentativeWhere(cityId),
-            inArray(placeSeedRaw.seedCategory, [...HIGHLIGHT_CATEGORIES]),
-          ),
-        )
-        .as("ranked");
-
-      //   ②·③ 을 나눈 이유(2026-08-21 사장님 승인) = 얼굴(사진)과 하이라이트의 **기준이 서로 다르다**.
-      const [[row], repRows, highlightRows] = await Promise.all([
+      // ⚠️ 수정금지(승인필요) 2026-09-04 사장님 결정 = 얼굴(heritage 고정)과 하이라이트(식당·쇼핑만 제외)는 기준이 다르므로 따로 조회한다.
+      const [[row], repRows, highlightPool] = await Promise.all([
         db
           .select({
             nameKo: cities.name,
@@ -156,18 +125,21 @@ export function registerCityPlaceRoutes(app: Express): void {
           .from(placeSeedRaw)
           // ⚠️ 수정금지(승인필요) 2026-08-05 = 조건·정렬은 **city-representative-place 1벌**을 가져다 쓴다(§16).
           .where(cityRepresentativeWhere(cityId))
-          .orderBy(...cityRepresentativeOrder)
+          .orderBy(...cityRepresentativeOrder(lang))
           .limit(1),
+        // ⚠️ 수정금지(승인필요) 2026-09-04 사장님 결정 = 하이라이트 = 얼굴과 같은 줄에서 얼굴만 빼고 위에서 3개
+        //   (= 얼굴을 바꾸면 그 자리가 메워지고 옛 얼굴이 내려온다 = 벽돌 쌓기). 얼굴 몫 1개 여유로 4개를 받는다.
         db
           .select({
-            nameEn: ranked.nameEn,
-            nameLocal: ranked.nameLocal,
-            nameKo: ranked.nameKo,
+            id: placeSeedRaw.id,
+            nameEn: placeSeedRaw.nameEn,
+            nameLocal: placeSeedRaw.nameLocal,
+            nameKo: placeSeedRaw.nameKo,
           })
-          .from(ranked)
-          .where(eq(ranked.rn, 1))
-          .orderBy(ranked.catRank)
-          .limit(3),
+          .from(placeSeedRaw)
+          .where(cityHighlightWhere(cityId))
+          .orderBy(...cityRepresentativeOrder(lang))
+          .limit(4),
       ]);
       if (!row) return res.status(404).json({ error: "City not found" });
 
@@ -187,11 +159,12 @@ export function registerCityPlaceRoutes(app: Express): void {
         if (overrideHero) heroPlace = overrideHero;
       }
 
+      // ⚠️ 수정금지(승인필요) 2026-09-04 사장님 결정 = 얼굴로 정해진 곳만 빼고 위에서 3개 = 얼굴을 바꾸면 자동으로 한 칸씩 밀린다.
       let highlightPlaces: {
         nameEn: string | null;
         nameLocal: string | null;
         nameKo: string | null;
-      }[] = highlightRows;
+      }[] = highlightPool.filter((p) => p.id !== heroPlace?.id).slice(0, 3);
       const overrideHighlightIds = (row.overrideHighlightPlaceIds || []).filter(
         (id): id is number => id != null,
       );

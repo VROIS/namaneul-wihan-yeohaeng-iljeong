@@ -197,10 +197,10 @@ export async function saveNewPlacesToDB(
     ...absorbedRows.map((r: any) => ({ ...r, mode: "absorbed" as const })),
   ];
   console.log(
-    `[AG3-SAVE] ② TS 대상 = 신규 ${newRows.length} + 흡수(PID 결손) ${absorbedRows.length} = ${tsTargets.length}곳 (PID 완비 매칭행 ${updatedRows.length - absorbedRows.length}곳 = 유료호출 0, 이미지 결손행은 fill/image-backfill 사후 대상)`,
+    `[AG3-SAVE] ② TS 대상 = 신규 ${newRows.length} + 흡수(PID 결손) ${absorbedRows.length} = ${tsTargets.length}곳 (PID 완비 매칭행 ${updatedRows.length - absorbedRows.length}곳 = 유료호출 0, 이미지 결손행은 fill/backfill-verify 사후 대상)`,
   );
 
-  // ⚠️ 수정금지(승인필요) 2026-07-06 사장님 SSOT = TS raw 모음 1파일(#45 repair.ts:167 방식) = 건건 로컬skip + 끝에 06형태 results 배열 1파일(§18).
+  // ⚠️ 수정금지(승인필요) 2026-07-06 사장님 SSOT = TS raw 모음 1파일 = 건건 로컬skip + 끝에 results 배열 1파일(§18).
   const tsResults: any[] = [];
   const job2Promises: Promise<void>[] = []; // defer 모드 rowId 직행 UPDATE = 함수 끝에서 await Promise.allSettled 로 응답 전 완료(증발 0)
   const results = await Promise.all(
