@@ -168,12 +168,6 @@ if (mode === "hook-check") {
   } else {
     console.log("[hook] 문서 전용 커밋 = 실증·판단 마커 면제");
   }
-  // ③ 빌드필요 체크(사장님 확정 순서 = 승인 후·커밋 직전, 정보 표시 = 비차단)
-  try {
-    sh("node scripts/needs-rebuild.mjs", { stdio: "inherit" });
-  } catch {
-    /* 정보성 = 커밋은 막지 않음 */
-  }
   process.exit(0);
 }
 
