@@ -912,3 +912,5 @@ grep -rEn "\bapp\.(get|post|put|patch|delete|all)\s*\(" server --include=*.ts | 
 <!-- 4차 -->
 
 <!-- 5차 -->
+
+<!-- cwd 방식 확인 -->
