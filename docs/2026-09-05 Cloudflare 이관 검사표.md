@@ -902,3 +902,5 @@ grep -rEn "\bapp\.(get|post|put|patch|delete|all)\s*\(" server --include=*.ts | 
 - 1인 여행인데 이동수단이 전부 `private_guide` = 3일 교통비 €2,299
 - 1·3일차 첫 장소가 외곽(공항 쇼핑몰 19km / 티에 11km)
 = 둘 다 Worker 이관과 무관한 기존 동작. §1 에 따라 보고만 하고 수정하지 않음.
+
+<!-- 자동배포 연결 확인 2026-09-06 -->
