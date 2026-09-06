@@ -920,3 +920,5 @@ grep -rEn "\bapp\.(get|post|put|patch|delete|all)\s*\(" server --include=*.ts | 
 <!-- tripis1 자동배포 연결 확인 2026-09-06 -->
 
 <!-- 빌드변수 2개 반영 확인 2026-09-06 -->
+
+<!-- 카카오 REST 키 반영 2026-09-06 -->
