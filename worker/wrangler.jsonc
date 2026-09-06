@@ -102,9 +102,11 @@
   // 🔴 경로는 **명령을 실행한 폴더 기준**이다(설정 파일 기준이 아니다, 2026-09-06 실측).
   //    그래서 postgres 를 **루트 package.json 에도** 넣어 루트 node_modules 에 깔리게 했다.
   //    = 내 PC(worker 폴더에서 실행)든 Workers Builds(저장소 맨 위에서 실행)든 같은 경로가 맞는다.
-  "alias": {
-    "postgres": "./node_modules/postgres/cf/src/index.js"
-  },
+  // ⚠️ 수정금지(승인필요) 2026-09-06 사장님 결정 = postgres alias 제거 = 패키지 자체 조건에 맡김
+  // 근거: node_modules/postgres/package.json 의 exports 에 "workerd": "./cf/src/index.js" 가 이미 있다.
+  //       = Workers 로 번들하면 패키지가 스스로 cf 빌드를 고른다. alias 로 파일경로를 박을 필요가 없다.
+  // 🔴 옛 alias 는 상대경로("./node_modules/...")라 실행 위치에 따라 깨졌다
+  //    (Workers Builds 는 저장소 맨 위에서 실행 = "Cannot find module" 2026-09-06 실측 3회).
   "routes": [
     { "pattern": "test.tripis.app", "custom_domain": true },
     { "pattern": "tripis.app", "custom_domain": true },
