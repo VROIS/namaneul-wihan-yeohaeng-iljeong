@@ -96,6 +96,12 @@
     }
   ],
 
+  // ⚠️ 수정금지(승인필요) 2026-09-06 사장님 결정 = postgres 를 Cloudflare 전용 빌드로 바꿔치기
+  // 근거: postgres 패키지는 Node 전용 소켓을 쓰는 기본 빌드와, Workers 용 cf/ 빌드를 함께 담고 있다.
+  //       기본 빌드를 그대로 쓰면 workerd 에서 연결이 안 된다.
+  // 🔴 경로는 **명령을 실행한 폴더 기준**이다(설정 파일 기준이 아니다, 2026-09-06 실측).
+  //    그래서 postgres 를 **루트 package.json 에도** 넣어 루트 node_modules 에 깔리게 했다.
+  //    = 내 PC(worker 폴더에서 실행)든 Workers Builds(저장소 맨 위에서 실행)든 같은 경로가 맞는다.
   "alias": {
     "postgres": "./node_modules/postgres/cf/src/index.js"
   },
