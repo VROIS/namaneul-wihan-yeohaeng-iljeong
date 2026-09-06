@@ -904,3 +904,5 @@ grep -rEn "\bapp\.(get|post|put|patch|delete|all)\s*\(" server --include=*.ts | 
 = 둘 다 Worker 이관과 무관한 기존 동작. §1 에 따라 보고만 하고 수정하지 않음.
 
 <!-- 자동배포 연결 확인 2026-09-06 -->
+
+<!-- 연결확인 2 -->
