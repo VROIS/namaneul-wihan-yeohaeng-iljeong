@@ -906,3 +906,5 @@ grep -rEn "\bapp\.(get|post|put|patch|delete|all)\s*\(" server --include=*.ts | 
 <!-- 자동배포 연결 확인 2026-09-06 -->
 
 <!-- 연결확인 2 -->
+
+<!-- 연결확인 3 -->
