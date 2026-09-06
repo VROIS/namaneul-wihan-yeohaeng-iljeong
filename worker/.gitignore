@@ -1,2 +1,10 @@
 node_modules/
 .wrangler/
+# ⚠️ 수정금지(승인필요) 2026-09-06 사장님 결정 = worker lock 은 깃에 올리지 않는다
+#   이유: worker 가 레포 루트의 하위 폴더라, npm 이 lock 을 만들 때마다 루트를 가리키는
+#   자기참조 의존성("nubi-app": "file:..")을 자동으로 넣는다(막을 수 없음, 3회 실측).
+#   그 링크는 worker/node_modules/nubi-app -> 레포 루트 = 무한 중첩이 되고,
+#   lock 에 루트 의존성 125줄이 복제돼 루트 package.json 과 두 벌로 갈라진다(§0·§19).
+#   lock 없이 npm install 만으로 올바른 버전이 깔리는 것을 실측 확인했다
+#   (express 5.2.1 · body-parser 2.3.0 · iconv-lite 0.7.3, 번들 바이트 일치).
+package-lock.json
