@@ -221,8 +221,8 @@ grep -rEn "\bapp\.(get|post|put|patch|delete|all)\s*\(" server --include=*.ts | 
 > **실측 정정(2026-09-06)** = 여정 생성 사슬(`itinerary-generator` → `itinerary/{regenerate-day,route-optimizer,helpers,types}`)에 **외부호출이 0건**이다. 전수 grep 결과 제미니·TS·`fetch` 없음 = **DB-only 설계**([[feedback_dbonly_output_is_intended_design]] 정합).
 > `server/services/itinerary/gemini-client.ts`(`@google/genai` 사용)는 **import 하는 곳이 0건 = 죽은 코드** → §19 삭제 후보(사장님 승인 필요). 이관 부담 아님.
 
-- [x] **A→코드완료·배포대기** `POST /api/routes/generate` — 여정생성(5크레딧). `worker/routes-itinerary-generate-db.ts:1527`(1,748줄). **DB-only 경로만 이관, MIX 는 501 로 거절**(외부호출 = 사장님 몫). 순수계산(ag1·route-local·transit-haversine)은 원본 그대로 재사용 §16, DB 닿는 함수만 `openDb()` 기준 이식. 차감 = 응답 전 precheck + 완성 후 charge(§9). 🔴 **`wrangler.jsonc` 에 DATABASE_URL 넣으면 즉시 깨짐**(route-local 이 server/db.ts 를 끌고 옴 = 전역 Pool) = 그 파일에 경고 못박음
-- [x] **A→코드완료·배포대기** `POST /api/routes/day-live` — `worker/routes-itinerary-generate.ts:259`. 구글 Routes 1콜 + 생 SQL 1개. 차감 없음(원본에도 없음 = §9 5지점 아님). 외부호출 전 `closeOnce()` = Hyperdrive "외부호출 중 연결 붙잡지 마라"
+- [x] **A→배포·실증(9-06 tripis.app 200·1.6초)**  `POST /api/routes/generate` — 여정생성(5크레딧). `worker/routes-itinerary-generate-db.ts:1527`(1,748줄). **DB-only 경로만 이관, MIX 는 501 로 거절**(외부호출 = 사장님 몫). 순수계산(ag1·route-local·transit-haversine)은 원본 그대로 재사용 §16, DB 닿는 함수만 `openDb()` 기준 이식. 차감 = 응답 전 precheck + 완성 후 charge(§9). 🔴 **`wrangler.jsonc` 에 DATABASE_URL 넣으면 즉시 깨짐**(route-local 이 server/db.ts 를 끌고 옴 = 전역 Pool) = 그 파일에 경고 못박음
+- [x] **A→배포완료(실호출 미검증)** `POST /api/routes/day-live` — `worker/routes-itinerary-generate.ts:259`. 구글 Routes 1콜 + 생 SQL 1개. 차감 없음(원본에도 없음 = §9 5지점 아님). 외부호출 전 `closeOnce()` = Hyperdrive "외부호출 중 연결 붙잡지 마라"
 - [x] **A** `POST /api/routes/regenerate-day` — **✅ 2026-09-06 실증. Replit 과 400 동일(원본과 같은 응답)**
 - [x] **A** `POST /api/itineraries` — **✅ 2026-09-06 배포·실증. Replit 과 라우트 등록 확인**
 - [x] **A** `GET /api/itineraries/:id` — **✅ 2026-09-06 배포·실증. Replit 과 라우트 등록 확인**
@@ -238,11 +238,11 @@ grep -rEn "\bapp\.(get|post|put|patch|delete|all)\s*\(" server --include=*.ts | 
 - [x] **B** `POST /api/payments/checkout` — **✅ 2026-09-06 배포·실증. Replit 과 401 동일** ⚠️ 실제 결제 관통 테스트 필요
 - [x] **B** `POST /api/payments/confirm` — **✅ 2026-09-06 배포·실증. Replit 과 401 동일** ⚠️ 실제 결제 관통 테스트 필요
 - [x] **B** `POST /api/payments/sheet-intent` — **✅ 2026-09-06 배포·실증. Replit 과 401 동일** ⚠️ 실제 결제 관통 테스트 필요
-- [x] **B→해제·코드완료·배포대기** `POST /api/payments/webhook` — **2026-09-06 해제조건 충족.** `registerPaymentWebhookRoute()` 를 `express.json()` **6줄 앞**에 `express.raw()` 로 등록(`src.ts:71`) + `constructEventAsync`+`createSubtleCryptoProvider`+`createFetchHttpClient`(근거 = Cloudflare 공식 blog "Announcing Stripe support in Workers"). **실측 대조**(express 5.1+stripe 22.3.2 실행): 우리 배선 `200 isBuf:true ok:true` / 대조군(json 먼저) `400 No signatures found` = 예측한 조용한 실패 재현. ⚠️ **배포 후 Stripe 대시보드 엔드포인트를 `test.tripis.app` 로 바꾸고 테스트 웹훅 1건 필요.** 그 전까지 Replit 수신 = 충전 정상.
+- [x] **B→해제·배포완료(실호출 미검증)** `POST /api/payments/webhook` — **2026-09-06 해제조건 충족.** `registerPaymentWebhookRoute()` 를 `express.json()` **6줄 앞**에 `express.raw()` 로 등록(`src.ts:71`) + `constructEventAsync`+`createSubtleCryptoProvider`+`createFetchHttpClient`(근거 = Cloudflare 공식 blog "Announcing Stripe support in Workers"). **실측 대조**(express 5.1+stripe 22.3.2 실행): 우리 배선 `200 isBuf:true ok:true` / 대조군(json 먼저) `400 No signatures found` = 예측한 조용한 실패 재현. ⚠️ **배포 후 Stripe 대시보드 엔드포인트를 `test.tripis.app` 로 바꾸고 테스트 웹훅 1건 필요.** 그 전까지 Replit 수신 = 충전 정상.
 
 ### 6-6. 가이드 (10)
 - [x] **A** `GET /api/guides` — **✅ 2026-09-06 실증. Replit 과 401 동일(로그인 필요 = 원본과 같음)**
-- [x] **B→코드완료·배선완료·배포대기** `POST /api/guides/batch` — `worker/routes-rest.ts:138`. R2 = 네이티브 바인딩(`env.RAW_BUCKET.put`, base64→`atob`→`Uint8Array`). 공개 URL = `wrangler.jsonc` 의 `vars.R2_PUBLIC_URL` 로 해결(**DB 쓰기 0**). 근거 = 공식 "환경 변수" 문서: R2 공개주소는 비밀이 아니므로 `vars` 가 맞고, compat date 2026-09-05 ≥ 2025-04-01 이라 `nodejs_compat_populate_process_env` 기본 켜짐 = `process.env.R2_PUBLIC_URL` 로 자동 노출(`routes-rest.ts:115` 가 읽는 그 이름)
+- [x] **B→배포완료(실호출 미검증)** `POST /api/guides/batch` — `worker/routes-rest.ts:138`. R2 = 네이티브 바인딩(`env.RAW_BUCKET.put`, base64→`atob`→`Uint8Array`). 공개 URL = `wrangler.jsonc` 의 `vars.R2_PUBLIC_URL` 로 해결(**DB 쓰기 0**). 근거 = 공식 "환경 변수" 문서: R2 공개주소는 비밀이 아니므로 `vars` 가 맞고, compat date 2026-09-05 ≥ 2025-04-01 이라 `nodejs_compat_populate_process_env` 기본 켜짐 = `process.env.R2_PUBLIC_URL` 로 자동 노출(`routes-rest.ts:115` 가 읽는 그 이름)
 - [x] **A** `DELETE /api/guides/:id` — **✅ 2026-09-06 배포·실증. Replit 과 라우트 등록 확인(로그인 필요)**
 - [x] **A** `GET /api/guide/health` — **✅ 실증 2026-09-06. Replit 과 51바이트 완전일치**
 - [x] **B** `GET /api/guide/landmark` — **✅ 2026-09-06 배포·실증. Replit 과 400 동일** ⚠️ 실제 유료호출 관통 테스트 필요
@@ -262,8 +262,8 @@ grep -rEn "\bapp\.(get|post|put|patch|delete|all)\s*\(" server --include=*.ts | 
 - [x] **A** `POST /api/videos/save` — **✅ 2026-09-06 배포·실증. Replit 과 라우트 등록 확인(로그인 필요)**
 - [x] **A** `GET /api/videos/saved` — **✅ 2026-09-06 배포·실증. Replit 과 28b 일치**
 - [x] **A** `POST /api/videos/seen` — **✅ 2026-09-06 배포·실증. Replit 과 라우트 등록 확인(로그인 필요)**
-- [x] **C→A 전환·코드완료·배포대기** `GET /api/admin/video-config` — 모듈 변수 → **기존 표 `api_service_status`**(0행 = 미사용, 새 표 안 만듦 §16). `service_name='admin_video_option_mode'`, 값 칸 = `display_name`(이 표를 쓰는 유일 코드 `exchange-rate.ts:28` 이 안 건드리는 칸 = 오염 0). 표 없음·읽기 실패 = **200 + 기본값 `optionB`**(관리자 화면 안 깨짐)
-- [x] **C→A 전환·코드완료·배포대기** `POST /api/admin/video-config` — 〃 upsert. 저장 실패 = 500(성공 위장 금지). 응답 필드·400 문구 원본 동일. ⚠️ **읽는 쪽 2곳(`video-routes.ts:161`·`:411`)은 아직 모듈 변수** = 그 라우트 이관 때 같은 표를 읽어야 설정이 실제로 먹는다
+- [x] **C→A 전환·배포·실증(9-06 200 optionB)** `GET /api/admin/video-config` — 모듈 변수 → **기존 표 `api_service_status`**(0행 = 미사용, 새 표 안 만듦 §16). `service_name='admin_video_option_mode'`, 값 칸 = `display_name`(이 표를 쓰는 유일 코드 `exchange-rate.ts:28` 이 안 건드리는 칸 = 오염 0). 표 없음·읽기 실패 = **200 + 기본값 `optionB`**(관리자 화면 안 깨짐)
+- [x] **C→A 전환·배포완료(실호출 미검증)** `POST /api/admin/video-config` — 〃 upsert. 저장 실패 = 500(성공 위장 금지). 응답 필드·400 문구 원본 동일. ⚠️ **읽는 쪽 2곳(`video-routes.ts:161`·`:411`)은 아직 모듈 변수** = 그 라우트 이관 때 같은 표를 읽어야 설정이 실제로 먹는다
 
 ### 6-8. 전문가 (9) — 전건 **A**(SQL + 크레딧). 외부호출 0
 
@@ -301,10 +301,10 @@ grep -rEn "\bapp\.(get|post|put|patch|delete|all)\s*\(" server --include=*.ts | 
 - [x] **A** `POST /api/admin/account-cleanup` — **✅ 2026-09-06 배포·실증. Replit 과 401 동일**
 - [x] **B** `POST /api/admin/payments/reconcile` — **✅ 2026-09-06 배포·실증. Replit 과 401 동일** ⚠️ 실제 결제 관통 테스트 필요
 - [x] **A** `GET /api/admin/api-keys` — **✅ 2026-09-06 배포·실증. Replit 과 200 동일**
-- [x] **A→코드완료·배포대기** `POST /api/admin/api-keys` — `worker/routes-admin-keys.ts:23`. 배선 = `src.ts` `registerAdminKeysRoutes`. tsc 0 · lint 0 · dry-run 통과. **아직 배포 안 함 = 실증 미완**
-- [x] **A→코드완료·배포대기** `PUT /api/admin/api-keys/:keyName` — `worker/routes-admin-keys.ts:72`. 〃
-- [x] **A→코드완료·배포대기** `DELETE /api/admin/api-keys/:keyName` — `worker/routes-admin-keys.ts:116`. 〃 원본의 `process.env` 직접 갱신 대신 `keys.ts` 판형 무효화(30초 TTL) = isolate 여러 벌 대응
-- [x] **B→코드완료·배포대기** `POST /api/admin/api-keys/:keyName/test` — `worker/routes-admin-keytest.ts:132`. 열쇠 값은 **DB 직독**(캐시 아님 = 방금 저장한 그 값을 시험해야 하므로). 외부호출 **전에** 연결 반납 후 결과 기록 때 재연결(Hyperdrive "외부호출 중 연결 붙잡지 마라"). `@google/genai/web` 정적 import(기본 진입점은 node: builtin 11개 = Worker 에서 깨짐). ⚠️ **외부 4곳(제미니·유튜브·구글맵·오픈웨더) 실호출 미검증 = 승인 없는 유료호출 금지 준수.** 배포 후 실증 필요
+- [x] **A→배포완료(실호출 미검증)** `POST /api/admin/api-keys` — `worker/routes-admin-keys.ts:23`. 배선 = `src.ts` `registerAdminKeysRoutes`. tsc 0 · lint 0 · dry-run 통과. **아직 배포 안 함 = 실증 미완**
+- [x] **A→배포완료(실호출 미검증)** `PUT /api/admin/api-keys/:keyName` — `worker/routes-admin-keys.ts:72`. 〃
+- [x] **A→배포완료(실호출 미검증)** `DELETE /api/admin/api-keys/:keyName` — `worker/routes-admin-keys.ts:116`. 〃 원본의 `process.env` 직접 갱신 대신 `keys.ts` 판형 무효화(30초 TTL) = isolate 여러 벌 대응
+- [x] **B→배포·실증(9-06 유튜브 채널조회 성공)** `POST /api/admin/api-keys/:keyName/test` — `worker/routes-admin-keytest.ts:132`. 열쇠 값은 **DB 직독**(캐시 아님 = 방금 저장한 그 값을 시험해야 하므로). 외부호출 **전에** 연결 반납 후 결과 기록 때 재연결(Hyperdrive "외부호출 중 연결 붙잡지 마라"). `@google/genai/web` 정적 import(기본 진입점은 node: builtin 11개 = Worker 에서 깨짐). ⚠️ **외부 4곳(제미니·유튜브·구글맵·오픈웨더) 실호출 미검증 = 승인 없는 유료호출 금지 준수.** 배포 후 실증 필요
 - [x] **A** `GET /api/admin/guide-prices` — **✅ 2026-09-06 배포·실증. Replit 과 200 동일**
 - [x] **A** `POST /api/admin/guide-prices` — **✅ 2026-09-06 배포·실증. Replit 과 라우트 등록 확인**
 - [x] **A** `PUT /api/admin/guide-prices/:id` — **✅ 2026-09-06 배포·실증. Replit 과 라우트 등록 확인**
@@ -317,9 +317,9 @@ grep -rEn "\bapp\.(get|post|put|patch|delete|all)\s*\(" server --include=*.ts | 
 - [x] **B** `POST /api/map/html` — **✅ 2026-09-06 배포·실증. Replit 과 200 동일**
 - [x] **A** `GET /api/users/:userId/itineraries` — **✅ 2026-09-06 배포·실증. Replit 과 200 동일**
 - [x] **A** `PATCH /api/users/:userId/preferred-language` — **✅ 2026-09-06 배포·실증. Replit 과 400 동일**
-- [x] **C→A 전환·코드완료·배포대기** `POST /api/app-errors` — 파일쓰기(`index.ts:91`)를 **DB 표로 치환** = `worker/routes-app-errors.ts`. 🔴 **선행조치 미완 = `app_error_logs` 표가 실 DB 에 없음**(2026-09-06 SELECT 확인). 표 생기기 전엔 500 `{ok:false}` 반환하나 앱은 응답을 안 봄(`error-reporter.ts:150` 빈 catch) = **앱 지장 없음**
-- [x] **C→A 전환·코드완료·배포대기** `GET /api/app-errors` — 파일읽기 → SELECT. 표 없으면 `(읽기 실패)` = 원본 실패갈래와 동일
-- [x] **C→A 전환·코드완료·배포대기** `DELETE /api/app-errors` — 파일비움 → DELETE ALL. 표 없으면 200 `{ok:false}` = 원본과 동일
+- [x] **C→A 전환·배포완료(실호출 미검증)** `POST /api/app-errors` — 파일쓰기(`index.ts:91`)를 **DB 표로 치환** = `worker/routes-app-errors.ts`. 🔴 **선행조치 미완 = `app_error_logs` 표가 실 DB 에 없음**(2026-09-06 SELECT 확인). 표 생기기 전엔 500 `{ok:false}` 반환하나 앱은 응답을 안 봄(`error-reporter.ts:150` 빈 catch) = **앱 지장 없음**
+- [x] **C→A 전환·배포·실증(9-06 200)** `GET /api/app-errors` — 파일읽기 → SELECT. 표 없으면 `(읽기 실패)` = 원본 실패갈래와 동일
+- [x] **C→A 전환·배포완료(실호출 미검증)** `DELETE /api/app-errors` — 파일비움 → DELETE ALL. 표 없으면 200 `{ok:false}` = 원본과 동일
 - [x] **C→완료** `GET *` — **✅ 2026-09-06 실증. `/` `/profile` 둘 다 200.** `not_found_handling: single-page-application`
 - [x] **C→완료** `/assets` — **✅ 2026-09-06 실증. 폰트 1,576,660b · 파비콘 14,510b 정상.** `public-dist/` 머지 조립
 
