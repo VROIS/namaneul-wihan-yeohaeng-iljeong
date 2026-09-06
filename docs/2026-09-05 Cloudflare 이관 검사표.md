@@ -916,3 +916,5 @@ grep -rEn "\bapp\.(get|post|put|patch|delete|all)\s*\(" server --include=*.ts | 
 <!-- cwd 방식 확인 -->
 
 <!-- worker install 방식 -->
+
+<!-- tripis1 자동배포 연결 확인 2026-09-06 -->
