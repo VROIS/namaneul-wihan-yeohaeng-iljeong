@@ -9,7 +9,6 @@ import {
   Platform,
   Image,
 } from "react-native";
-import { MaterialCommunityIcons } from "@expo/vector-icons";
 
 import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
@@ -17,10 +16,8 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Spacing, Brand } from "@/constants/theme";
 import Icon from "@/components/Icon";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
-import { isWhatsAppOtpConfigured } from "@/lib/auth-oauth";
 import { useLogin } from "./hooks/useLogin";
 import LanguageModal from "./components/LanguageModal";
-import WhatsAppModal from "./components/WhatsAppModal";
 import { styles } from "./styles";
 
 export default function LoginScreen() {
@@ -51,7 +48,6 @@ export default function LoginScreen() {
     validateAndSetMonth,
     validateAndSetYear,
     handleGooglePress,
-    handleWhatsAppPress,
     handleKakaoPress,
     emailInput,
     setEmailInput,
@@ -325,30 +321,6 @@ export default function LoginScreen() {
             {/* 게스트 둘러보기 버튼 삭제 = 2026-07-27 사장님 기능 폐지 §19 */}
             {/* BTS 투어 바로가기 버튼 삭제 = 2026-07-31 = 옛 BTSConcertPlanner 화면 완전삭제 §19 */}
 
-            {/* WhatsApp (출시 전 비활성화: 터치 불가) */}
-            <Pressable
-              style={({ pressed }) => [
-                styles.socialButton,
-                styles.whatsappButton,
-                pressed && isWhatsAppOtpConfigured() && styles.buttonPressed,
-                (oauthLoading || !isWhatsAppOtpConfigured()) &&
-                  styles.buttonDisabled,
-                !isWhatsAppOtpConfigured() && { opacity: 0.5 },
-              ]}
-              onPress={handleWhatsAppPress}
-              disabled={oauthLoading || !isWhatsAppOtpConfigured()}
-              pointerEvents={isWhatsAppOtpConfigured() ? "auto" : "none"}
-            >
-              <MaterialCommunityIcons
-                name="whatsapp"
-                size={24}
-                color="#FFFFFF"
-              />
-              <Text style={styles.whatsappButtonText}>
-                {t("login.whatsappStart")}
-              </Text>
-            </Pressable>
-
             <Text style={[styles.disclaimer, { color: theme.textTertiary }]}>
               {t("login.termsAgree")}
             </Text>
@@ -358,9 +330,6 @@ export default function LoginScreen() {
 
       {/* ── 언어 선택 모달 ── */}
       <LanguageModal login={login} />
-
-      {/* ── WhatsApp OTP 모달 ── */}
-      <WhatsAppModal login={login} />
     </LinearGradient>
   );
 }

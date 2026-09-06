@@ -91,17 +91,6 @@ async function loginWithKakaoAccessToken(params: {
   };
 }
 
-const WHATSAPP_OTP_ENABLED = process.env.WHATSAPP_OTP_ENABLED === "true";
-const otpStore = new Map<string, { otp: string; expiresAt: number }>();
-const OTP_EXPIRY_MS = 5 * 60 * 1000; // 5분
-
-function normalizePhone(phone: string): string {
-  const digits = phone.replace(/\D/g, "");
-  if (digits.startsWith("82")) return "+" + digits;
-  if (digits.startsWith("0")) return "+82" + digits.slice(1);
-  return "+82" + digits;
-}
-
 export function registerAuthRoutes(app: Express) {
   app.post("/api/auth/google", async (req, res) => {
     try {
@@ -229,76 +218,6 @@ export function registerAuthRoutes(app: Express) {
       res
         .status(500)
         .json({ success: false, error: "Failed to process Apple login" });
-    }
-  });
-
-  app.post("/api/auth/whatsapp/send-otp", async (req, res) => {
-    try {
-      if (!WHATSAPP_OTP_ENABLED) {
-        return res.status(503).json({
-          success: false,
-          error: "WhatsApp OTP is temporarily disabled",
-        });
-      }
-      const { phoneNumber } = req.body;
-      if (!phoneNumber || typeof phoneNumber !== "string") {
-        return res
-          .status(400)
-          .json({ success: false, error: "phoneNumber is required" });
-      }
-      const phone = normalizePhone(phoneNumber);
-      const otp = String(Math.floor(100000 + Math.random() * 900000));
-      otpStore.set(phone, { otp, expiresAt: Date.now() + OTP_EXPIRY_MS });
-      console.log("[Auth] WhatsApp OTP sent (dev):", phone, "->", otp);
-      res.json({ success: true, message: "OTP sent" });
-    } catch (e: any) {
-      console.error("[Auth] WhatsApp send-otp Error:", e);
-      res.status(500).json({ success: false, error: "Failed to send OTP" });
-    }
-  });
-
-  app.post("/api/auth/whatsapp/verify", async (req, res) => {
-    try {
-      if (!WHATSAPP_OTP_ENABLED) {
-        return res.status(503).json({
-          success: false,
-          error: "WhatsApp OTP is temporarily disabled",
-        });
-      }
-      const { phoneNumber, otp, birthDate, language, deviceType } = req.body;
-      if (!phoneNumber || !otp || !birthDate) {
-        return res.status(400).json({
-          success: false,
-          error: "phoneNumber, otp and birthDate are required",
-        });
-      }
-      const phone = normalizePhone(phoneNumber);
-      const stored = otpStore.get(phone);
-      if (!stored || stored.expiresAt < Date.now()) {
-        return res
-          .status(401)
-          .json({ success: false, error: "Invalid or expired OTP" });
-      }
-      if (stored.otp !== String(otp)) {
-        return res.status(401).json({ success: false, error: "Invalid OTP" });
-      }
-      otpStore.delete(phone);
-      const user = await findOrCreateUser({
-        provider: "whatsapp",
-        providerId: phone,
-        birthDate,
-        displayName: "WhatsApp User",
-        language,
-        deviceType,
-      });
-      res.json({
-        success: true,
-        user: toClientUser(user),
-        token: "simple_auth_token_v1_" + user.id,
-      });
-    } catch (e: any) {
-      console.error("[Auth] WhatsApp verify Error:", e);
-      res.status(500).json({ success: false, error: "Failed to verify OTP" });
     }
   });
 

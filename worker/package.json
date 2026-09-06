@@ -1,0 +1,13 @@
+{
+  "name": "tripis-worker",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "body-parser": "^2.3.0",
+    "express": "^5.1.0",
+    "postgres": "^3.4.9"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}

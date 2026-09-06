@@ -206,11 +206,11 @@ function configureExpoAndLanding(app: express.Application) {
     app.use(express.static(publicPath));
   }
 
-  // ⚠️ 수정금지(승인필요) — 웹 빌드 전용, 네이티브 앱과 무관
+  // ⚠️ 수정금지(승인필요) 2026-09-05 사장님 결정 = 웹 빌드 서빙 경로를 정규식으로 = Express 4·5 양쪽 동작 (검사표 §5 E4)
   const distPath = path.resolve(process.cwd(), "dist");
   if (fs.existsSync(distPath)) {
     app.use(express.static(distPath));
-    app.get("*", (req, res, next) => {
+    app.get(/.*/, (req, res, next) => {
       if (req.path.startsWith("/api")) return next();
       if (req.path.startsWith("/admin")) return next();
       if (req.path === "/test-video") return next();

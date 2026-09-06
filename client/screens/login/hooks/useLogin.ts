@@ -14,14 +14,9 @@ import {
   getAgeGroup,
   socialLoginWithGoogle,
   socialLoginWithKakao,
-  whatsappOtpSend,
-  whatsappOtpVerify,
   emailLogin,
 } from "@/lib/auth";
-import {
-  isWhatsAppOtpConfigured,
-  getIdTokenFromGoogleResponse,
-} from "@/lib/auth-oauth";
+import { getIdTokenFromGoogleResponse } from "@/lib/auth-oauth";
 import { useGoogleAuthRequest } from "@/lib/auth-google";
 import {
   startKakaoLoginWeb,
@@ -62,11 +57,6 @@ export function useLogin({ onDone }: { onDone: () => void }) {
 
   const [, googleResponse, googlePromptAsync] = useGoogleAuthRequest();
   const processedGoogleRef = useRef<typeof googleResponse>(null);
-  const [showWhatsAppModal, setShowWhatsAppModal] = useState(false);
-  const [whatsappPhone, setWhatsappPhone] = useState("");
-  const [whatsappOtp, setWhatsappOtp] = useState("");
-  const [whatsappStep, setWhatsappStep] = useState<"phone" | "otp">("phone");
-
   const birthDate = useMemo(() => {
     if (day.length === 2 && month.length === 2 && year.length === 4) {
       const d = parseInt(day, 10);
@@ -287,59 +277,6 @@ export function useLogin({ onDone }: { onDone: () => void }) {
     await startNativeSocial("google");
   };
 
-  const handleWhatsAppPress = async () => {
-    if (!requireBirthDateAndAdult()) return;
-    setShowWhatsAppModal(true);
-    setWhatsappStep("phone");
-    setWhatsappPhone("");
-    setWhatsappOtp("");
-  };
-
-  const handleWhatsAppSendOtp = async () => {
-    const phone = whatsappPhone.replace(/\D/g, "");
-    if (phone.length < 10) {
-      Alert.alert(t("login.alert"), t("login.phoneHint"));
-      return;
-    }
-    setOauthLoading(true);
-    const result = await whatsappOtpSend(whatsappPhone);
-    setOauthLoading(false);
-    if (result.success) {
-      setWhatsappStep("otp");
-      setWhatsappOtp("");
-    } else {
-      Alert.alert(t("login.loginFailed"), result.error || t("common.retry"));
-    }
-  };
-
-  const handleWhatsAppVerify = async () => {
-    if (!whatsappOtp || whatsappOtp.length < 4) {
-      Alert.alert(
-        t("login.alert"),
-        t("login.otpHint", { phone: whatsappPhone }),
-      );
-      return;
-    }
-    setOauthLoading(true);
-    const result = await whatsappOtpVerify({
-      phoneNumber: whatsappPhone,
-      otp: whatsappOtp,
-      birthDate: birthDateStr!,
-      language: i18n.language, // ⚠️ 2026-07-14 = 선언 안 된 selectedLanguage.code 참조 버그 수정(§19). i18n.language 단일 소스.
-      deviceType: Platform.OS === "web" ? "web" : "mobile",
-    });
-    setOauthLoading(false);
-    if (result.success) {
-      setShowWhatsAppModal(false);
-      onDone(); // 성공 = 호출자 결정. §0 단일경로.
-    } else {
-      Alert.alert(
-        t("login.loginFailed"),
-        result.error || t("login.loginFailed"),
-      );
-    }
-  };
-
   const handleKakaoPress = async () => {
     if (!requireBirthDateAndAdult()) return;
     if (!isSocialConfigured("kakao")) {
@@ -420,14 +357,6 @@ export function useLogin({ onDone }: { onDone: () => void }) {
     dayRef,
     monthRef,
     yearRef,
-    showWhatsAppModal,
-    setShowWhatsAppModal,
-    whatsappPhone,
-    setWhatsappPhone,
-    whatsappOtp,
-    setWhatsappOtp,
-    whatsappStep,
-    setWhatsappStep,
     age,
     ageGroup,
     isAdult,
@@ -436,9 +365,6 @@ export function useLogin({ onDone }: { onDone: () => void }) {
     validateAndSetMonth,
     validateAndSetYear,
     handleGooglePress,
-    handleWhatsAppPress,
-    handleWhatsAppSendOtp,
-    handleWhatsAppVerify,
     handleKakaoPress,
     handleApplePress,
     isAppleAvailable: isAppleAuthAvailable(),

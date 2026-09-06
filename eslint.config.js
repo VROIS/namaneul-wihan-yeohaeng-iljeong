@@ -19,6 +19,9 @@ module.exports = defineConfig([
     files: [
       "scripts/**/*.{ts,js,mjs,cjs}",
       "server/**/*.{ts,js}",
+      // ⚠️ 2026-09-06 = worker/container = 컨테이너(Linux VM) 안에서 도는 **진짜 Node** 파일
+      //   = Workers 런타임이 아니므로 Buffer·process·require 전역이 정상(no-undef 오탐 제거).
+      "worker/container/**/*.{js,mjs}",
       "fillcity/**/*.ts",
       "plugins/**/*.js",
       "*.js",
@@ -49,6 +52,11 @@ module.exports = defineConfig([
       "dist-server/**",
       "server_dist/**",
       "node_modules/**",
+      // ⚠️ 수정금지(승인필요) 2026-09-06 사장님 결정 = Worker 빌드산출물·자동생성 타입은 lint 대상 아님
+      //   .wrangler/tmp = wrangler 가 만드는 임시 번들(우리가 쓴 코드 아님)
+      //   worker-configuration.d.ts = `wrangler types` 자동생성(5만 줄) = 손으로 고치는 파일 아님
+      "worker/.wrangler/**",
+      "worker/worker-configuration.d.ts",
       ".history/**", // VS Code Local History 자동백업(gitignore됨=커밋X) = 옛 스냅샷 오류 근원
       "dev/**", // 개발용 임시
       "web/**", // 빌드 웹 산출물
@@ -83,6 +91,13 @@ module.exports = defineConfig([
   {
     // ⚠️ 2026-07-19 §22 = server = Node 서버 전용(@google-cloud/storage 등 서버패키지) = 클라 resolver 가 못 찾는 오탐 완화.
     files: ["server/**/*.ts"],
+    rules: {
+      "import/no-unresolved": "off",
+    },
+  },
+  {
+    // ⚠️ 수정금지(승인필요) 2026-09-06 사장님 결정 = worker = Cloudflare 런타임 전용 모듈(cloudflare:node·cloudflare:workers) = resolver 오탐 완화
+    files: ["worker/**/*.ts"],
     rules: {
       "import/no-unresolved": "off",
     },

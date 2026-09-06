@@ -111,7 +111,7 @@ export function registerVideoRoutes(app: Express): void {
     "/api/itineraries/:id/video/generate",
     async (req: Request, res: Response) => {
       try {
-        const id = parseInt(req.params.id);
+        const id = parseInt(String(req.params.id));
         const day = parseInt(req.body?.day);
         // 2026-08-22 사장님 승인 = 영상 다국어 = FE가 보낸 앱 언어(미전달·미지원 = ko = 동작 무변경)
         const lang = normalizeVideoLang(req.body?.language);
@@ -398,7 +398,7 @@ export function registerVideoRoutes(app: Express): void {
 
   app.get("/api/itineraries/:id/video", async (req: Request, res: Response) => {
     try {
-      const id = parseInt(req.params.id);
+      const id = parseInt(String(req.params.id));
       if (isNaN(id)) return res.status(400).json({ error: "잘못된 id" });
       const itin = await storage.getItinerary(id);
       if (!itin) return res.status(404).json({ error: "여정 없음" });

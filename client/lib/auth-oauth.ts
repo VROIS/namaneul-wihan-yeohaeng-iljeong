@@ -1,5 +1,3 @@
-import { WHATSAPP_OTP_ENABLED } from "./app-keys";
-
 export type GoogleAuthResponse = {
   type: string;
   params?: { id_token?: string };
@@ -11,10 +9,6 @@ export type GoogleAuthRequestTuple = [
   GoogleAuthResponse,
   () => Promise<unknown>,
 ];
-
-export function isWhatsAppOtpConfigured(): boolean {
-  return WHATSAPP_OTP_ENABLED;
-}
 
 export function getIdTokenFromGoogleResponse(
   response: GoogleAuthResponse,

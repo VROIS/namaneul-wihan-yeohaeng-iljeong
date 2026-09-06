@@ -240,12 +240,6 @@ export const styles = StyleSheet.create({
   },
   kakaoIconText: { color: "#FEE500", fontSize: 14, fontFamily: Fonts.bold },
   kakaoButtonText: { color: "#000000", fontSize: 16, fontFamily: Fonts.bold },
-  whatsappButton: { backgroundColor: "#25D366" },
-  whatsappButtonText: {
-    color: "#FFFFFF",
-    fontSize: 16,
-    fontFamily: Fonts.bold,
-  },
   googleButton: { backgroundColor: "#FFFFFF", borderWidth: 1 },
   googleIcon: {
     width: 24,
@@ -310,25 +304,6 @@ export const styles = StyleSheet.create({
   languageName: { fontSize: 16, fontWeight: "600" },
   languageSubname: { fontSize: 13, marginTop: 2 },
 
-  whatsappModalBody: {
-    paddingHorizontal: Spacing.xl,
-    paddingBottom: Spacing.xl,
-  },
-  whatsappModalHint: { fontSize: 13, marginBottom: Spacing.md },
-  whatsappInput: {
-    borderWidth: 1,
-    borderRadius: BorderRadius.lg,
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    fontSize: 16,
-    marginBottom: Spacing.md,
-  },
-  whatsappSubmit: {
-    paddingVertical: Spacing.lg,
-    borderRadius: BorderRadius.xl,
-    alignItems: "center",
-    justifyContent: "center",
-  },
   // ⚠️ 사장님 SSOT 2026-07-27(AOS 실기기) = 로그인 처리 1초 동안 화면이 그대로라
   loginBusyRow: {
     flexDirection: "row",

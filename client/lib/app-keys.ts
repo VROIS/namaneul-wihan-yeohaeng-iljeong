@@ -18,5 +18,3 @@ export const KAKAO_REST_KEY = clean(process.env.EXPO_PUBLIC_KAKAO_REST_API_KEY);
 export const KAKAO_NATIVE_APP_KEY = clean(
   process.env.EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY,
 );
-export const WHATSAPP_OTP_ENABLED =
-  clean(process.env.EXPO_PUBLIC_WHATSAPP_OTP_ENABLED) === "true";

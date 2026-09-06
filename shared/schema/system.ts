@@ -8,6 +8,8 @@ import {
   real,
   boolean,
   jsonb,
+  numeric,
+  index,
 } from "drizzle-orm/pg-core";
 import { cities } from "./cities";
 
@@ -154,3 +156,44 @@ export const apiKeys = pgTable("api_keys", {
 });
 
 export type ApiKey = typeof apiKeys.$inferSelect;
+
+// ⚠️ 수정금지(승인필요) 2026-09-06 사장님 결정 = external_calls drizzle 정의 = 실 DB 그대로(§16)
+export const externalCalls = pgTable(
+  "external_calls",
+  {
+    id: serial("id").primaryKey(),
+    provider: text("provider").notNull(),
+    sku: text("sku"),
+    cityId: integer("city_id"),
+    units: numeric("units").notNull().default("1"),
+    tag: text("tag"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .default(sql`now()`)
+      .notNull(),
+    responseTimeMs: integer("response_time_ms"),
+    success: boolean("success"),
+    errorMessage: text("error_message"),
+  },
+  (t) => [
+    index("external_calls_provider_created_idx").on(t.provider, t.createdAt),
+  ],
+);
+
+export type ExternalCallRow = typeof externalCalls.$inferSelect;
+
+// ⚠️ 수정금지(승인필요) 2026-09-06 사장님 결정 = api_logs drizzle 정의 = 실 DB 그대로(§16)
+export const apiLogs = pgTable("api_logs", {
+  id: serial("id").primaryKey(),
+  type: text("type"),
+  userId: integer("user_id"),
+  responseTime: integer("response_time"),
+  tokensUsed: integer("tokens_used"),
+  estimatedCost: real("estimated_cost"),
+  statusCode: integer("status_code"),
+  errorMessage: text("error_message"),
+  createdAt: timestamp("created_at")
+    .default(sql`CURRENT_TIMESTAMP`)
+    .notNull(),
+});
+
+export type ApiLogRow = typeof apiLogs.$inferSelect;

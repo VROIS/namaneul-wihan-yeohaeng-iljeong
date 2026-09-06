@@ -11,7 +11,7 @@ export interface UserData {
   email?: string;
   name?: string;
   displayName?: string;
-  provider: "kakao" | "google" | "apple" | "whatsapp";
+  provider: "kakao" | "google" | "apple";
   language: string;
   birthDate: string;
   ageGroup?: string;
@@ -149,56 +149,6 @@ export function socialLoginWithApple(data: {
   fullName?: string;
 }): Promise<LoginResult> {
   return postSocialLogin("/api/auth/apple", data, i18n.t("login.loginFailed"));
-}
-
-export async function whatsappOtpSend(
-  phoneNumber: string,
-): Promise<{ success: boolean; error?: string }> {
-  try {
-    const response = await fetch(`${getApiUrl()}/api/auth/whatsapp/send-otp`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ phoneNumber }),
-    });
-    const result = await response.json();
-    if (response.ok && result.success) return { success: true };
-    return {
-      success: false,
-      error: result.error || i18n.t("login.otpSendFailed"),
-    };
-  } catch (error) {
-    console.error("WhatsApp OTP send error:", error);
-    return { success: false, error: i18n.t("login.serverConnectFailed") };
-  }
-}
-
-export async function whatsappOtpVerify(data: {
-  phoneNumber: string;
-  otp: string;
-  birthDate: string;
-  language: string;
-  deviceType: string;
-}): Promise<{ success: boolean; user?: UserData; error?: string }> {
-  try {
-    const response = await fetch(`${getApiUrl()}/api/auth/whatsapp/verify`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    const result = await response.json();
-    if (response.ok && result.success) {
-      const userData: UserData = { ...result.user, token: result.token };
-      await saveAuth(userData);
-      return { success: true, user: userData };
-    }
-    return {
-      success: false,
-      error: result.error || i18n.t("login.whatsappLoginFailed"),
-    };
-  } catch (error) {
-    console.error("WhatsApp OTP verify error:", error);
-    return { success: false, error: i18n.t("login.serverConnectFailed") };
-  }
 }
 
 export function calculateAge(birthDate: Date): number {

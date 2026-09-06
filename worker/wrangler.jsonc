@@ -1,0 +1,132 @@
+{
+  "name": "tripis-api",
+  "main": "src.ts",
+  "compatibility_date": "2026-09-05",
+  "compatibility_flags": ["nodejs_compat"],
+
+  // ⚠️ 수정금지(승인필요) 2026-09-06 사장님 결정 = 가이드 사진 공개주소 = vars 1벌 (검사표 6-6)
+  // 근거: developers.cloudflare.com/workers/configuration/environment-variables/
+  //   ① "Do not use plaintext environment variables to store sensitive information" =
+  //      R2 공개 URL 은 누구나 브라우저로 여는 주소 = 비밀이 아니므로 vars 가 맞다(secret 아님).
+  //   ② nodejs_compat + nodejs_compat_populate_process_env(2025-04-01 이후 compat date 기본 켜짐)
+  //      = vars 가 process.env 로 자동 노출. 위 compatibility_date=2026-09-05 라 해당됨.
+  //      → worker/routes-rest.ts:115 의 process.env.R2_PUBLIC_URL 이 그대로 읽는다.
+  //   값 = 원본 .env 와 동일. 이게 없으면 사진은 R2 에 올라가도 imageUrl 이 null 로 떨어진다.
+  // 🔴🔴 여기에 DATABASE_URL · SUPABASE_DATABASE_URL 을 절대 넣지 마라(넣는 순간 운영 정지).
+  //   이유: routes-itinerary-generate-db.ts 가 route-local.ts(동선 두뇌 = 보호블록)를 원본 그대로
+  //   재사용하는데(§16 재발명 금지), 그 파일이 server/db.ts 를 번들에 끌고 들어온다.
+  //   server/db.ts:39 는 **모듈 최상단**에서 new Pool() 을 만든다 = Worker 금지 패턴.
+  //   지금 안 터지는 유일한 이유 = 그 두 변수가 없어서 db.ts:31 분기가 참 → Pool 을 아예 안 만듦.
+  //   근거: Hyperdrive 공식 문제해결 = "Cannot perform I/O on behalf of a different request …
+  //         Create a new database client on every request instead of caching it in a global variable."
+  //   DB 접속은 오직 HYPERDRIVE 바인딩 + openDb() 1벌로만 한다.
+  "vars": {
+    "R2_PUBLIC_URL": "https://pub-ec584e1b28fc458f85bca053e0fe6b02.r2.dev"
+  },
+  "observability": { "enabled": true },
+  "hyperdrive": [
+    { "binding": "HYPERDRIVE", "id": "a3b29ca269884582ad73f15f1bc50a84" }
+  ],
+  // ⚠️ 수정금지(승인필요) 2026-09-06 사장님 결정 = §18 외부호출 raw 저장을 Worker 에서도 하기 위한 R2 바인딩 (정본 §18)
+  // 근거: r2/configuration.md:6-15 = wrangler.jsonc 의 "r2_buckets" 는 배열이고 각 원소는 {binding, bucket_name} 2키.
+  //       rules.md:172-190 "Use bindings for Cloudflare services, not REST APIs"
+  //       = Worker 안에서는 @aws-sdk/client-s3(REST/S3) 대신 네이티브 바인딩을 쓴다.
+  "r2_buckets": [
+    {
+      // 근거: r2/configuration.md:20 "interface Env { MY_BUCKET: R2Bucket; }" = binding 값이 곧 env 의 키 이름(대문자 관례).
+      //       우리 용도 = §18 raw(raw-responses/ 프리픽스) 전용 창고 = RAW_BUCKET.
+      //       (버킷 자체는 영상과 공유하나 프리픽스로 분리 = server/services/shared/save-raw.ts:10 PREFIX 와 동일 규칙)
+      "binding": "RAW_BUCKET",
+
+      // 근거: .env:56 "R2_BUCKET_NAME=tripis-videos" = 운영에서 이미 쓰는 실제 버킷명.
+      //       server/services/shared/r2-client.ts:28 이 이 환경변수로 같은 버킷을 가리킨다 = 서버·Worker 동일 창고(§18 2곳 동형).
+      "bucket_name": "tripis-videos"
+    }
+  ],
+
+  // ⚠️ 수정금지(승인필요) 2026-09-06 사장님 결정 = 영상 합성(ffmpeg) 전담 컨테이너 3블록
+  // 근거: developers.cloudflare.com/containers/get-started/ = containers · durable_objects ·
+  //       migrations 3블록이 한 벌로 있어야 컨테이너가 뜬다(공식 예시 형식 그대로).
+  // 왜 필요한가: server/services/video-stitcher.ts:3-8 이 fs·os·path·child_process·
+  //       ffmpeg-static 을 쓴다 = Workers 런타임에는 파일시스템도 프로세스 실행도 없어
+  //       원리적으로 못 돈다. 컨테이너(Linux VM)가 유일한 길.
+  // 🔴 Containers = Workers **Paid 플랜** 필요(공식 pricing = "$5/month Workers Paid plan").
+  "containers": [
+    {
+      // 근거: get-started 공식 예시 "class_name": "MyContainer"
+      //   = 아래 durable_objects.bindings[].class_name 및 migrations 의 이름과 **셋 다 같아야** 한다.
+      //   실체 = worker/routes-video-generate.ts 의 `export class VideoStitchContainer extends Container`.
+      "class_name": "VideoStitchContainer",
+
+      // 근거: get-started "The `image` field ... points to a Dockerfile, to a directory
+      //   containing a Dockerfile, or to a fully qualified image reference".
+      //   worker/ 기준 상대경로.
+      "image": "./container/Dockerfile",
+
+      // 근거: get-started 공식 예시의 max_instances. 동시에 뜰 수 있는 인스턴스 상한.
+      //   일별 영상은 하루 ~5편(Veo Tier2 한도)이라 5면 충분하고, 상한을 낮게 두면
+      //   실수로 인스턴스가 번지는 것도 막는다(과금 = 도는 동안만).
+      "max_instances": 5,
+
+      // 근거: containers/platform/limits/ 인스턴스표 = basic(1/4 vCPU, 1GiB, 4GB disk).
+      //   ffmpeg `-c copy`(= 재인코딩 없이 이어붙이기, video-stitcher.ts:43-44)는
+      //   CPU 를 거의 안 쓰고 디스크만 필요하다. 씬 10개 + 결과물이라 4GB 로 충분.
+      "instance_type": "basic"
+    }
+  ],
+
+  // 근거: get-started = 컨테이너는 Durable Object 가 관리한다. 이 바인딩 이름이
+  //   Worker 코드의 env 키(= env.VIDEO_STITCH_CONTAINER)가 된다.
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "VIDEO_STITCH_CONTAINER",
+        "class_name": "VideoStitchContainer"
+      }
+    ]
+  },
+
+  // 근거: get-started = 새 DO 클래스는 migrations 로 한 번 등록해야 한다.
+  //   컨테이너용 DO 는 **new_sqlite_classes** (공식 예시 그대로). tag 는 첫 등록이라 v1.
+  //   🔴 이미 배포된 tag 를 고치지 말 것(이력이라 되돌릴 수 없다). 다음 변경은 v2 를 새로 추가.
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["VideoStitchContainer"]
+    }
+  ],
+
+  "alias": {
+    "postgres": "./node_modules/postgres/cf/src/index.js"
+  },
+  "routes": [
+    { "pattern": "test.tripis.app", "custom_domain": true },
+    { "pattern": "tripis.app", "custom_domain": true },
+    { "pattern": "www.tripis.app", "custom_domain": true }
+  ],
+
+  // Workers Assets = C등급 3건(웹화면 GET * / /assets / GET /admin) 을 정적파일로 해결.
+  // 조립 = `node scripts/build-worker-assets.mjs` (dist + assets + admin html -> public-dist)
+  "assets": {
+    // 근거: configuration.md:36 "directory (string, required): Path to assets folder"
+    //   worker/ 기준 상대경로이므로 레포 루트의 public-dist 를 가리키려면 ../ 가 필요하다.
+    "directory": "../public-dist",
+
+    // 근거: configuration.md:37 / api.md "ASSETS Binding ... Default: ASSETS"
+    //   Worker 코드에서 env.ASSETS 로 정적파일을 직접 읽을 필요가 지금은 없으나,
+    //   명시해 두면 타입(worker-configuration.d.ts)에 잡혀 나중에 폴백을 쓸 때 재발명이 없다.
+    "binding": "ASSETS",
+
+    // 근거: configuration.md:39 및 공식문서 예시 "not_found_handling": "single-page-application"
+    //   원본 server/index.ts:214-222 = dist 에 없는 경로면 index.html 을 sendFile = 그대로 SPA 동작.
+    "not_found_handling": "single-page-application",
+
+    // 🔴 반드시 배열. true 로 두면 전 요청이 Worker 로 먼저 가는데, 우리 Worker 에는
+    //    GET * 핸들러가 없어 웹화면이 전부 404 가 된다.
+    //    근거: gotchas.md:3-22 "Use Selective Worker-First Routing" (true 대신 배열 패턴)
+    //          configuration.md:66-106 (배열 문법 + 부정 패턴), 공식문서 예시도 배열.
+    //    패턴 산정 = worker/src.ts + routes-*.ts 를 전수 grep 한 결과
+    //    등록된 라우트 35개가 **전부** "/api/..." 이고 non-/api 라우트는 0건이므로 "/api/*" 1개면 충분하다.
+    "run_worker_first": ["/api/*"]
+  }
+}
