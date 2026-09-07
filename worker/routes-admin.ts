@@ -1,13 +1,9 @@
-// Cloudflare Worker 이관 = 관리자 라우트 (2026-09-06)
-// 원본 = server/auth.ts:324 · server/admin/dashboard-routes.ts · server/admin/api-keys-routes.ts ·
-//        server/admin/guide-prices-routes.ts.
-// 응답·상태코드·에러문구·정렬은 원본과 동일하게 옮겼다.
-// server/db.ts 를 딸려오는 모듈(storage·creditService·external-call-log·metrics-heartbeat)은
-// Worker 번들이 불가하므로, 그 안의 상수·쿼리만 여기서 openDb() 로 같은 형태로 실행한다(로직·정렬 동일).
+// ⚠️ 수정금지(승인필요) 2026-09-06 사장님 결정 = 관리자 라우트 Worker 이관본 = 원본(server/admin/*)과 응답·정렬 동일, DB 접근만 openDb() 1벌
 import type { Express, Request, Response } from "express";
 import type { drizzle } from "drizzle-orm/postgres-js";
 import { and, count, eq, isNotNull, ne, sql } from "drizzle-orm";
 import * as schema from "../shared/schema";
+import { accessSummary } from "./routes-admin-access";
 
 const {
   apiKeys,
@@ -369,6 +365,9 @@ export function registerAdminRoutes(app: Express, openDb: OpenDb): void {
           .from(users)
           .groupBy(users.provider);
 
+        // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 접속 현황 자료 = routes-admin-access.ts 1벌
+        const accessData = await accessSummary(db);
+
         const [purchaseCount] = await db
           .select({ count: count() })
           .from(creditTransactions)
@@ -432,6 +431,7 @@ export function registerAdminRoutes(app: Express, openDb: OpenDb): void {
             provider: r.provider || "unknown",
             count: r.count,
           })),
+          ...accessData,
           revenue: {
             totalEur: totalRevenueEur,
             aiCostEur: Math.round(aiCostEur * 100) / 100,

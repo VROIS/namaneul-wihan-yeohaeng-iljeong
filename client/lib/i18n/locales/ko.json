@@ -48,8 +48,6 @@
     "loginFailed": "로그인 실패",
     "alert": "알림",
     "birthRequiredAlert": "서비스 이용을 위해 생년월일 입력이 필요합니다.",
-    "emailAccountNotFound": "그 메일로 만든 계정이 없습니다. 구글·카카오·애플로 시작해 주세요.",
-    "emailBirthMismatch": "생년월일이 그 계정과 다릅니다.",
     "appleStart": "Apple로 시작하기",
     "serverConnectFailed": "서버 연결에 실패했습니다.",
     "ageGroup10s": "10대",

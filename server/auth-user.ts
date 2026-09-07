@@ -40,6 +40,7 @@ async function applyLogin(
     emailVerified?: boolean; // ⚠️ 인증된 메일일 때만 저장(미인증 메일이 남의 메일을 선점하는 것 차단)
     provider?: string;
     providerId?: string;
+    entry?: string; // 유입 경로(main | bts) = shared/login-entry
   },
 ): Promise<User> {
   // ⚠️ 수정금지(승인필요) — 2026-07-27 §22 지적 반영: ① 기존 이름이 있으면 절대 안 덮음(데이터 훼손 방지)
@@ -77,6 +78,8 @@ async function applyLogin(
     deviceType: opts.deviceType,
     preferredLanguage: opts.language || user.preferredLanguage,
     birthDate: opts.birthDate || user.birthDate,
+    // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 유입 경로 = 들어올 때마다 갱신(기존 가입자도 어디로 들어왔는지 보이게)
+    referredBy: opts.entry || user.referredBy,
     ...(incomingIsRealName && nameIsPlaceholder
       ? { displayName: opts.displayName }
       : {}),
@@ -93,6 +96,7 @@ async function findOrCreateUser(params: {
   displayName: string;
   language?: string;
   deviceType?: string;
+  entry?: string; // 유입 경로(main | bts) = shared/login-entry
 }): Promise<User> {
   const {
     provider,
@@ -103,6 +107,7 @@ async function findOrCreateUser(params: {
     displayName,
     language,
     deviceType,
+    entry,
   } = params;
 
   const user = await storage.getUserByProvider(provider, providerId);
@@ -116,6 +121,7 @@ async function findOrCreateUser(params: {
       emailVerified,
       provider, // 이미 연결돼 있으면 linkProvider 가 조용히 무시(ON CONFLICT DO NOTHING)
       providerId,
+      entry,
     });
 
   // ⚠️ 수정금지(승인필요) — 사장님 SSOT 2026-07-27 = **메일 1개 = 그 사람의 신원**(지메일·일반메일 구분 없음).
@@ -131,6 +137,7 @@ async function findOrCreateUser(params: {
         emailVerified,
         provider,
         providerId,
+        entry,
       });
   }
 
@@ -146,6 +153,8 @@ async function findOrCreateUser(params: {
     birthDate,
     preferredLanguage: language || "ko",
     deviceType,
+    // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 인증창 두 곳 구분 = 신규 가입 때 유입 경로를 남긴다
+    referredBy: entry,
     loginCount: 1,
     lastLoginAt: new Date(),
     isPaid: false,

@@ -188,6 +188,7 @@ type LoginOpts = {
   emailVerified?: boolean;
   provider?: string;
   providerId?: string;
+  entry?: string;
 };
 
 /** 원본 server/auth-user.ts:32 applyLogin = 로그인 성공 시 기존 계정 반영 1벌. */
@@ -232,6 +233,8 @@ async function applyLogin(db: Db, user: User, opts: LoginOpts): Promise<User> {
       deviceType: opts.deviceType,
       preferredLanguage: opts.language || user.preferredLanguage,
       birthDate: opts.birthDate || user.birthDate,
+      // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 유입 경로 = 들어올 때마다 갱신(기존 가입자도 어디로 들어왔는지 보이게)
+      referredBy: opts.entry || user.referredBy,
       ...(incomingIsRealName && nameIsPlaceholder
         ? { displayName: opts.displayName }
         : {}),
@@ -241,8 +244,8 @@ async function applyLogin(db: Db, user: User, opts: LoginOpts): Promise<User> {
   return updated;
 }
 
-/** 원본 server/auth-user.ts:88 findOrCreateUser = provider+providerId(소셜 인증 신원)로만 매칭. */
-async function findOrCreateUser(
+/** ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 계정 조회·생성 1벌 = 소셜 3종과 이메일이 같이 쓴다(§16 재발명 금지). */
+export async function findOrCreateUser(
   db: Db,
   params: {
     provider: string;
@@ -253,6 +256,7 @@ async function findOrCreateUser(
     displayName: string;
     language?: string;
     deviceType?: string;
+    entry?: string; // 유입 경로(main | bts) = shared/login-entry
   },
 ): Promise<User> {
   const {
@@ -264,6 +268,7 @@ async function findOrCreateUser(
     displayName,
     language,
     deviceType,
+    entry,
   } = params;
 
   const user = await getUserByProvider(db, provider, providerId);
@@ -277,6 +282,7 @@ async function findOrCreateUser(
       emailVerified,
       provider,
       providerId,
+      entry,
     });
 
   // ⚠️ 수정금지(승인필요) — 사장님 SSOT 2026-07-27 = **메일 1개 = 그 사람의 신원**.
@@ -292,6 +298,7 @@ async function findOrCreateUser(
         emailVerified,
         provider,
         providerId,
+        entry,
       });
   }
 
@@ -311,6 +318,8 @@ async function findOrCreateUser(
       birthDate,
       preferredLanguage: language || "ko",
       deviceType,
+      // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 인증창 두 곳 구분 = 신규 가입 때 유입 경로를 남긴다
+      referredBy: entry,
       loginCount: 1,
       lastLoginAt: new Date(),
       isPaid: false,
@@ -377,6 +386,7 @@ async function loginWithKakaoAccessToken(
     birthDate?: string;
     language?: string;
     deviceType?: string;
+    entry?: string;
   },
 ) {
   // ⚠️ 수정금지(승인필요) — 받은 출입증이 **우리 카카오 앱에서 발급된 것인지** 먼저 확인 (2026-07-27 사장님 승인).
@@ -426,6 +436,7 @@ async function loginWithKakaoAccessToken(
     displayName,
     language: params.language,
     deviceType: params.deviceType,
+    entry: params.entry,
   });
   return {
     success: true as const,
@@ -450,7 +461,8 @@ export function registerSocialAuthRoutes(app: Express, openDb: OpenDb): void {
   app.post("/api/auth/google", async (req: Request, res: Response) => {
     const { db, close } = openDb();
     try {
-      const { idToken, birthDate, language, deviceType } = req.body || {};
+      const { idToken, birthDate, language, deviceType, entry } =
+        req.body || {};
       // ⚠️ 사장님 SSOT 2026-07-26(세션2-D) = 외부인증에서 생년월일 분리 = idToken(인증 신원)만 필수.
       if (!idToken) {
         return res.status(400).json({
@@ -490,6 +502,7 @@ export function registerSocialAuthRoutes(app: Express, openDb: OpenDb): void {
         displayName,
         language,
         deviceType,
+        entry,
       });
       res.json({
         success: true,
@@ -510,7 +523,8 @@ export function registerSocialAuthRoutes(app: Express, openDb: OpenDb): void {
   app.post("/api/auth/kakao", async (req: Request, res: Response) => {
     const { db, close } = openDb();
     try {
-      const { accessToken, birthDate, language, deviceType } = req.body || {};
+      const { accessToken, birthDate, language, deviceType, entry } =
+        req.body || {};
       // ⚠️ 사장님 SSOT 2026-07-26(세션2-D) = 외부인증에서 생년월일 분리 = accessToken(인증 신원)만 필수. 생년월일은 findOrCreateUser 가 저장/갱신(신규 생성 / 기존 통과).
       if (!accessToken) {
         return res.status(400).json({
@@ -524,6 +538,7 @@ export function registerSocialAuthRoutes(app: Express, openDb: OpenDb): void {
         birthDate,
         language,
         deviceType,
+        entry,
       });
       if (!result) {
         return res

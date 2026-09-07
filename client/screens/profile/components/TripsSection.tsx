@@ -29,9 +29,11 @@ export default function TripsSection({ profile }: { profile: ProfileApi }) {
 
   // ⚠️ 수정금지(승인필요) 2026-08-08 사장님 SSOT = X 는 **화면에서만 감춘다. DB 는 무조건 남는다.**
   const { hiddenKeys, hiddenReady, hideCard } = profile;
-  const visibleTrips = savedTrips.filter(
+  // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 관리자 계정은 전 사용자 것이 다 올라와 휴대폰이 버티지 못한다 = 최신 20건만 그린다(그 밖은 관리자 대시보드에서 번호로 연다). 일반 사용자는 제한 없음.
+  const keptTrips = savedTrips.filter(
     (tr) => !hiddenKeys.includes(cardKey("trip", String(tr.id))),
   );
+  const visibleTrips = isAdmin ? keptTrips.slice(0, 20) : keptTrips;
 
   const fullCardWidth = getResponsiveFullTripCardWidth();
 

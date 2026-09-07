@@ -18,7 +18,7 @@ export function isSocialConfigured(provider: SocialProvider): boolean {
 
 export async function runNativeSocial(
   provider: SocialProvider,
-  ctx: { birthDate: string; language: string },
+  ctx: { birthDate?: string; language: string; entry?: string },
 ): Promise<{ success: boolean; error?: string } | null> {
   const common = { ...ctx, deviceType: "mobile" };
 

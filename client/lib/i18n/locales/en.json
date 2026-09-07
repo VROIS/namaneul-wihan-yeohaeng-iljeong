@@ -48,8 +48,6 @@
     "loginFailed": "Login failed",
     "alert": "Alert",
     "birthRequiredAlert": "Date of birth is required to use the service.",
-    "emailAccountNotFound": "No account exists for that email. Please start with Google, Kakao, or Apple.",
-    "emailBirthMismatch": "The date of birth does not match that account.",
     "appleStart": "Start with Apple",
     "serverConnectFailed": "Server connection failed.",
     "ageGroup10s": "10s",

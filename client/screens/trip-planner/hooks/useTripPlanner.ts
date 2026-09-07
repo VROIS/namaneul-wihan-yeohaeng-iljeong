@@ -26,6 +26,10 @@ import { useSaveItinerary } from "./useSaveItinerary";
 import { useShareCalendar } from "./useShareCalendar";
 import { useGenerateItinerary } from "./useGenerateItinerary";
 import { isCityCenterName } from "@/lib/display-city-name";
+import {
+  peekItineraryFromUrl,
+  clearItineraryFromUrl,
+} from "@/lib/openItineraryFromUrl";
 
 type ScreenState = "Input" | "Loading" | "Result";
 
@@ -44,6 +48,9 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
   } catch {
     restoreItineraryId = undefined; // 창으로 열린 경우 = 복원할 여정이 없음
   }
+  // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 관리자 대시보드가 새 탭으로 부르는 `?itineraryId=` = 카드 터치와 같은 복원 경로로 합류(§16 = 복원 로직 1벌).
+  if (restoreItineraryId == null)
+    restoreItineraryId = peekItineraryFromUrl() ?? undefined;
   const [screen, setScreen] = useState<ScreenState>("Input");
   const [loadingStep, setLoadingStep] = useState(0);
   // ⚠️ 수정금지(승인필요) 2026-08-15 사장님 승인 = 로딩화면 기능소개 캐러셀 오픈 게이트.
@@ -336,6 +343,8 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
   useEffect(() => {
     if (!restoreItineraryId) return;
     restoreItineraryById(restoreItineraryId);
+    // 주소로 들어온 값도 한 번 쓰고 비운다(화면을 다시 열어도 그 여정으로 되돌아가지 않게).
+    clearItineraryFromUrl();
     try {
       navigation.setParams({ itineraryId: undefined } as never);
     } catch {}

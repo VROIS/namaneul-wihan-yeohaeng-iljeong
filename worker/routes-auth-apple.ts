@@ -183,6 +183,7 @@ type LoginOpts = {
   emailVerified?: boolean;
   provider?: string;
   providerId?: string;
+  entry?: string;
 };
 
 /** 원본 server/auth-user.ts:32 applyLogin = 로그인 성공 시 기존 계정 반영 1벌. */
@@ -227,6 +228,8 @@ async function applyLogin(db: Db, user: User, opts: LoginOpts): Promise<User> {
       deviceType: opts.deviceType,
       preferredLanguage: opts.language || user.preferredLanguage,
       birthDate: opts.birthDate || user.birthDate,
+      // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 유입 경로 = 들어올 때마다 갱신(기존 가입자도 어디로 들어왔는지 보이게)
+      referredBy: opts.entry || user.referredBy,
       ...(incomingIsRealName && nameIsPlaceholder
         ? { displayName: opts.displayName }
         : {}),
@@ -248,6 +251,7 @@ async function findOrCreateUser(
     displayName: string;
     language?: string;
     deviceType?: string;
+    entry?: string; // 유입 경로(main | bts) = shared/login-entry
   },
 ): Promise<User> {
   const {
@@ -259,6 +263,7 @@ async function findOrCreateUser(
     displayName,
     language,
     deviceType,
+    entry,
   } = params;
 
   const user = await getUserByProvider(db, provider, providerId);
@@ -272,6 +277,7 @@ async function findOrCreateUser(
       emailVerified,
       provider,
       providerId,
+      entry,
     });
 
   // ⚠️ 수정금지(승인필요) — 사장님 SSOT 2026-07-27 = **메일 1개 = 그 사람의 신원**.
@@ -287,6 +293,7 @@ async function findOrCreateUser(
         emailVerified,
         provider,
         providerId,
+        entry,
       });
   }
 
@@ -306,6 +313,8 @@ async function findOrCreateUser(
       birthDate,
       preferredLanguage: language || "ko",
       deviceType,
+      // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 인증창 두 곳 구분 = 신규 가입 때 유입 경로를 남긴다
+      referredBy: entry,
       loginCount: 1,
       lastLoginAt: new Date(),
       isPaid: false,
@@ -357,8 +366,14 @@ export function registerAppleAuthRoutes(app: Express, openDb: OpenDb): void {
   app.post("/api/auth/apple", async (req: Request, res: Response) => {
     const { db, close } = openDb();
     try {
-      const { identityToken, birthDate, language, deviceType, fullName } =
-        req.body || {};
+      const {
+        identityToken,
+        birthDate,
+        language,
+        deviceType,
+        fullName,
+        entry,
+      } = req.body || {};
       // 사장님 SSOT 2026-07-26(세션2-D) = 외부인증에서 생년월일 분리 = 신분증만 필수.
       if (!identityToken) {
         return res
@@ -384,6 +399,7 @@ export function registerAppleAuthRoutes(app: Express, openDb: OpenDb): void {
         displayName,
         language,
         deviceType,
+        entry,
       });
       res.json({
         success: true,

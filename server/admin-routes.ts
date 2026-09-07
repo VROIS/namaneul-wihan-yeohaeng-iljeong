@@ -4,10 +4,12 @@ import { registerDashboardRoutes } from "./admin/dashboard-routes";
 import { registerGuidePricesRoutes } from "./admin/guide-prices-routes";
 import { registerApiKeysRoutes } from "./admin/api-keys-routes";
 import { registerMiscAdminRoutes } from "./admin/misc-routes";
+import { registerAdminLookupRoutes } from "./admin/lookup-routes";
 
 export function registerAdminRoutes(app: Express) {
   registerDashboardRoutes(app);
   registerGuidePricesRoutes(app);
   registerApiKeysRoutes(app);
   registerMiscAdminRoutes(app);
+  registerAdminLookupRoutes(app);
 }

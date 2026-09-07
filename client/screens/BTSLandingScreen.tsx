@@ -40,6 +40,7 @@ import {
   type SocialProvider,
 } from "@/lib/auth-social";
 import { getApiUrl } from "@/lib/query-client";
+import { LOGIN_ENTRY_BTS } from "@shared/login-entry";
 import { useMapToggle } from "@/contexts/MapToggleContext";
 import {
   styles,
@@ -149,6 +150,7 @@ export function BTSLandingScreen() {
       birthDate: birthDateStr,
       language: i18n.language, // 옛 "ko" 고정 삭제 §19
       deviceType: Platform.OS === "web" ? "web" : "mobile",
+      entry: LOGIN_ENTRY_BTS,
     })
       .then((result) => {
         if (result.success) {
@@ -268,6 +270,7 @@ export function BTSLandingScreen() {
         const result = await runNativeSocial(provider, {
           birthDate: birthDateStr,
           language: i18n.language, // 옛 "ko" 고정 삭제 §19 = 메인 인증창과 같은 값
+          entry: LOGIN_ENTRY_BTS,
         });
         if (!result) return; // 사용자가 로그인 창을 닫음 = 취소 = 조용히 끝
         if (result.success) goToWorldMap();

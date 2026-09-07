@@ -5,6 +5,8 @@ import type { Express, Request, Response } from "express";
 import type { drizzle } from "drizzle-orm/postgres-js";
 import { desc, eq, sql } from "drizzle-orm";
 import * as schema from "../shared/schema";
+import { findOrCreateUser } from "./routes-social-auth";
+import { BIRTHDATE_REQUIRED } from "../shared/birthdate-policy";
 
 const { creditTransactions, users, userProviders } = schema;
 
@@ -21,13 +23,6 @@ function getUserIdFromReq(req: Request): string | null {
   );
   return m ? m[1] : null;
 }
-
-// 원본 shared/birthdate-policy.ts:5 의 BIRTHDATE_POLICY = 'optional' → BIRTHDATE_REQUIRED = false.
-// ⚠️ 드리프트 주의 = shared/birthdate-policy.ts 의 토글을 'required' 로 바꾸면 **여기도 함께 바꿔야 한다.**
-//   그 파일을 import 하지 않는 이유 = 토글이 상수라 TS 가 비교식을 TS2367 로 잡는다(본 프로젝트 tsc 에도
-//   이미 뜨는 기존 오류). Worker tsc 를 오류 0 으로 유지하려고 값만 옮긴다.
-const BIRTHDATE_REQUIRED = false;
-
 // ── 원본 헬퍼의 쿼리 이식 (server/db.ts 미탑재분) ───────────────────────────
 
 /** 원본 server/auth-user.ts:24 = 소셜별 닉네임 기본문구. */
@@ -90,6 +85,7 @@ type LoginOpts = {
   emailVerified?: boolean;
   provider?: string;
   providerId?: string;
+  entry?: string;
 };
 
 /** 원본 server/auth-user.ts:32 applyLogin = 로그인 성공 시 기존 계정 반영 1벌. */
@@ -134,6 +130,8 @@ async function applyLogin(db: Db, user: User, opts: LoginOpts): Promise<User> {
       deviceType: opts.deviceType,
       preferredLanguage: opts.language || user.preferredLanguage,
       birthDate: opts.birthDate || user.birthDate,
+      // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 유입 경로 = 들어올 때마다 갱신(기존 가입자도 어디로 들어왔는지 보이게)
+      referredBy: opts.entry || user.referredBy,
       ...(incomingIsRealName && nameIsPlaceholder
         ? { displayName: opts.displayName }
         : {}),
@@ -198,14 +196,14 @@ async function getTransactionHistory(
 // ── 라우트 ────────────────────────────────────────────────────────────────
 
 export function registerAuthCreditsRoutes(app: Express, openDb: OpenDb): void {
-  // ⚠️ 수정금지(승인필요) 2026-08-08 사장님 확정 = **이메일창은 "가입"이 아니라 "이미 있는 내 계정 찾기"다.**
+  // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 이메일창 = 네 번째 로그인 수단(신규 가입 + 기존 본인확인 2역할)
   // 원본 server/auth.ts:369
   app.post("/api/auth/email-login", async (req: Request, res: Response) => {
     const { db, close } = openDb();
     try {
       const raw = req.body?.email;
       const email = typeof raw === "string" ? raw.trim().toLowerCase() : "";
-      const { birthDate, language, deviceType } = req.body || {};
+      const { birthDate, language, deviceType, entry } = req.body || {};
       if (!email || !email.includes("@")) {
         return res
           .status(400)
@@ -217,23 +215,34 @@ export function registerAuthCreditsRoutes(app: Express, openDb: OpenDb): void {
           .json({ success: false, error: "birthdate_required" });
       }
 
+      // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 이메일 = 네 번째 로그인 수단 = 소셜 3종과 동일하게 신규 가입도 된다
       const found = await getUserByEmail(db, email);
       if (!found) {
-        return res
-          .status(404)
-          .json({ success: false, error: "account_not_found" });
-      }
-      if (birthDate && (!found.birthDate || found.birthDate !== birthDate)) {
-        return res
-          .status(401)
-          .json({ success: false, error: "birthdate_mismatch" });
+        const user = await findOrCreateUser(db, {
+          provider: "email",
+          providerId: email,
+          birthDate,
+          email,
+          emailVerified: true,
+          displayName: email.split("@")[0],
+          language,
+          deviceType,
+          entry,
+        });
+        return res.json({
+          success: true,
+          user: toClientUser(user),
+          token: "simple_auth_token_v1_" + user.id,
+        });
       }
 
       const user = await applyLogin(db, found, {
+        birthDate,
         language,
         deviceType,
         provider: "email",
         providerId: email,
+        entry,
       });
       res.json({
         success: true,

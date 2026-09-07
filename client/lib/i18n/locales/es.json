@@ -48,8 +48,6 @@
     "loginFailed": "Error al iniciar sesión",
     "alert": "Alerta",
     "birthRequiredAlert": "Se requiere la fecha de nacimiento para usar el servicio.",
-    "emailAccountNotFound": "No existe una cuenta con ese correo. Empieza con Google, Kakao o Apple.",
-    "emailBirthMismatch": "La fecha de nacimiento no coincide con esa cuenta.",
     "appleStart": "Empezar con Apple",
     "serverConnectFailed": "Error de conexión con el servidor.",
     "ageGroup10s": "10 años",

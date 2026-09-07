@@ -48,8 +48,6 @@
     "loginFailed": "ログインに失敗しました",
     "alert": "お知らせ",
     "birthRequiredAlert": "サービスをご利用いただくには生年月日が必要です。",
-    "emailAccountNotFound": "そのメールで作成されたアカウントがありません。Google・Kakao・Appleで始めてください。",
-    "emailBirthMismatch": "生年月日がそのアカウントと一致しません。",
     "appleStart": "Appleで始める",
     "serverConnectFailed": "サーバー接続に失敗しました。",
     "ageGroup10s": "10代",

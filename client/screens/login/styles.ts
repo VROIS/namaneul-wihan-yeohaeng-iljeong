@@ -127,12 +127,6 @@ export const styles = StyleSheet.create({
     fontFamily: Fonts.medium,
     marginLeft: Spacing.xs,
   },
-  birthDateHint: {
-    fontSize: 11,
-    fontFamily: Fonts.sans,
-    marginBottom: Spacing.xs,
-    marginLeft: Spacing.xs,
-  },
   selector: {
     flexDirection: "row",
     alignItems: "center",

@@ -36,10 +36,7 @@ function LoginSheetForm({ onClose }: { onClose: () => void }) {
     dayRef,
     monthRef,
     yearRef,
-    age,
     ageGroup,
-    isAdult,
-    isDateComplete,
     validateAndSetDay,
     validateAndSetMonth,
     validateAndSetYear,
@@ -53,8 +50,8 @@ function LoginSheetForm({ onClose }: { onClose: () => void }) {
     handleEmailLogin,
   } = login;
 
-  // ⚠️ 수정금지(승인필요) 2026-08-24 사장님 승인 = 이메일 입력칸 사용 가능 조건 = 생년월일 정책 토글 1벌.
-  const canUseEmail = !BIRTHDATE_REQUIRED || (isAdult && !!ageGroup);
+  // ⚠️ 수정금지(승인필요) 2026-09-06 사장님 결정 = 이메일 입력칸 사용 조건 = 생년월일 정책 토글 1벌, 성인 확인 없음
+  const canUseEmail = !BIRTHDATE_REQUIRED || !!ageGroup;
   const busy = oauthLoading || emailLoading;
   const emailBtnDisabled = busy || !canUseEmail || !emailInput.trim();
   // ⚠️ 사장님 SSOT 2026-07-27(AOS 실기기) = 로그인 요청~응답 약 1초 동안 화면이 그대로라
@@ -74,16 +71,13 @@ function LoginSheetForm({ onClose }: { onClose: () => void }) {
         </View>
       </View>
 
-      {/* ── 생년월일 ── 사장님 SSOT = 팝업 노출 = 로고글자+생년월일+구글+카톡+이메일.
-          필수 여부 = shared/birthdate-policy 토글(2026-08-24 = 'optional'). */}
+      {/* ⚠️ 수정금지(승인필요) 2026-09-06 사장님 결정 = 생년월일 필수/선택 마커 = 토글(shared/birthdate-policy) 1벌 */}
       <View style={styles.formSection}>
         {/* ⚠️ 사장님 SSOT 2026-07-25 = 힌트("실제 생년월일…") 설명문 제거(§23) + "(필수 입력)"을 라벨 같은 줄에 작게 = 사용자가 필수임을 즉시 인식(설명 아닌 마커). 행(baseline)+간격 style = RN 크로스플랫폼 정석(공백 하드코딩 아님). */}
         <View style={styles.labelRow}>
           <Text style={[styles.label, { color: theme.textSecondary }]}>
             {t("login.birthDate")}
           </Text>
-          {/* ⚠️ 2026-08-24 사장님 승인 = 필수/선택 마커 1벌 = 정책 토글(shared/birthdate-policy) 표기.
-              선택 정책 = "(선택)" 마커만. 설명문 금지(§23) = 선택이면 조용히 선택. */}
           <Text style={[styles.labelRequired, { color: theme.textTertiary }]}>
             {t(BIRTHDATE_REQUIRED ? "login.required" : "login.optional")}
           </Text>
@@ -174,17 +168,13 @@ function LoginSheetForm({ onClose }: { onClose: () => void }) {
               })}
             />
           </View>
-          {isAdult && ageGroup ? (
+          {ageGroup ? (
             <View style={styles.ageBadge}>
               <Text style={styles.ageBadgeText}>{ageGroup}</Text>
             </View>
           ) : null}
         </View>
-        {dateError ? (
-          <Text style={styles.errorText}>{dateError}</Text>
-        ) : isDateComplete && !isAdult && age !== null ? (
-          <Text style={styles.errorText}>{t("login.adultOnly")}</Text>
-        ) : null}
+        {dateError ? <Text style={styles.errorText}>{dateError}</Text> : null}
       </View>
 
       {/* ⚠️ 사장님 SSOT 2026-07-27(AOS 실기기) = 로그인 요청~응답 약 1초 동안 화면이 그대로라

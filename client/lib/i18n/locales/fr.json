@@ -48,8 +48,6 @@
     "loginFailed": "Échec de la connexion",
     "alert": "Alerte",
     "birthRequiredAlert": "La date de naissance est requise pour utiliser le service.",
-    "emailAccountNotFound": "Aucun compte n'existe pour cet e-mail. Commencez avec Google, Kakao ou Apple.",
-    "emailBirthMismatch": "La date de naissance ne correspond pas à ce compte.",
     "appleStart": "Commencer avec Apple",
     "serverConnectFailed": "Échec de la connexion au serveur.",
     "ageGroup10s": "10 ans",

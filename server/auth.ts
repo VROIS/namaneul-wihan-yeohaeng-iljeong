@@ -35,6 +35,7 @@ async function loginWithKakaoAccessToken(params: {
   birthDate?: string;
   language?: string;
   deviceType?: string;
+  entry?: string;
 }) {
   // ⚠️ 수정금지(승인필요) — 받은 출입증이 **우리 카카오 앱에서 발급된 것인지** 먼저 확인 (2026-07-27 사장님 승인).
   const ourAppId = (process.env.KAKAO_APP_ID || "").trim();
@@ -83,6 +84,7 @@ async function loginWithKakaoAccessToken(params: {
     displayName,
     language: params.language,
     deviceType: params.deviceType,
+    entry: params.entry,
   });
   return {
     success: true as const,
@@ -94,7 +96,7 @@ async function loginWithKakaoAccessToken(params: {
 export function registerAuthRoutes(app: Express) {
   app.post("/api/auth/google", async (req, res) => {
     try {
-      const { idToken, birthDate, language, deviceType } = req.body;
+      const { idToken, birthDate, language, deviceType, entry } = req.body;
       // ⚠️ 사장님 SSOT 2026-07-26(세션2-D) = 외부인증에서 생년월일 분리 = idToken(인증 신원)만 필수.
       if (!idToken) {
         return res.status(400).json({
@@ -133,6 +135,7 @@ export function registerAuthRoutes(app: Express) {
         displayName,
         language,
         deviceType,
+        entry,
       });
       res.json({
         success: true,
@@ -149,7 +152,7 @@ export function registerAuthRoutes(app: Express) {
 
   app.post("/api/auth/kakao", async (req, res) => {
     try {
-      const { accessToken, birthDate, language, deviceType } = req.body;
+      const { accessToken, birthDate, language, deviceType, entry } = req.body;
       // ⚠️ 사장님 SSOT 2026-07-26(세션2-D) = 외부인증에서 생년월일 분리 = accessToken(인증 신원)만 필수. 생년월일은 findOrCreateUser 가 저장/갱신(신규 생성 / 기존 통과).
       if (!accessToken) {
         return res.status(400).json({
@@ -162,6 +165,7 @@ export function registerAuthRoutes(app: Express) {
         birthDate,
         language,
         deviceType,
+        entry,
       });
       if (!result) {
         return res
@@ -180,8 +184,14 @@ export function registerAuthRoutes(app: Express) {
   // ⚠️ 수정금지(승인필요) 2026-07-31 사장님 지시 — 애플 로그인(아이폰 전용).
   app.post("/api/auth/apple", async (req, res) => {
     try {
-      const { identityToken, birthDate, language, deviceType, fullName } =
-        req.body;
+      const {
+        identityToken,
+        birthDate,
+        language,
+        deviceType,
+        fullName,
+        entry,
+      } = req.body;
       // 사장님 SSOT 2026-07-26(세션2-D) = 외부인증에서 생년월일 분리 = 신분증만 필수.
       if (!identityToken) {
         return res
@@ -207,6 +217,7 @@ export function registerAuthRoutes(app: Express) {
         displayName,
         language,
         deviceType,
+        entry,
       });
       res.json({
         success: true,
@@ -283,13 +294,12 @@ export function registerAuthRoutes(app: Express) {
     }
   });
 
-  // ⚠️ 수정금지(승인필요) 2026-08-08 사장님 확정 = **이메일창은 "가입"이 아니라 "이미 있는 내 계정 찾기"다.**
-  //     'optional'(현재, 2026-08-24 사장님 승인 = 애플 5.1.1(v) 대응) = **메일 하나로 들어간다.**
+  // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 이메일창 = 네 번째 로그인 수단(신규 가입 + 기존 본인확인 2역할)
   app.post("/api/auth/email-login", async (req, res) => {
     try {
       const raw = req.body?.email;
       const email = typeof raw === "string" ? raw.trim().toLowerCase() : "";
-      const { birthDate, language, deviceType } = req.body;
+      const { birthDate, language, deviceType, entry } = req.body;
       if (!email || !email.includes("@")) {
         return res
           .status(400)
@@ -301,23 +311,34 @@ export function registerAuthRoutes(app: Express) {
           .json({ success: false, error: "birthdate_required" });
       }
 
+      // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 이메일 = 네 번째 로그인 수단 = 소셜 3종과 동일하게 신규 가입도 된다
       const found = await storage.getUserByEmail(email);
       if (!found) {
-        return res
-          .status(404)
-          .json({ success: false, error: "account_not_found" });
-      }
-      if (birthDate && (!found.birthDate || found.birthDate !== birthDate)) {
-        return res
-          .status(401)
-          .json({ success: false, error: "birthdate_mismatch" });
+        const user = await findOrCreateUser({
+          provider: "email",
+          providerId: email,
+          birthDate,
+          email,
+          emailVerified: true,
+          displayName: email.split("@")[0],
+          language,
+          deviceType,
+          entry,
+        });
+        return res.json({
+          success: true,
+          user: toClientUser(user),
+          token: "simple_auth_token_v1_" + user.id,
+        });
       }
 
       const user = await applyLogin(found, {
+        birthDate,
         language,
         deviceType,
         provider: "email",
         providerId: email,
+        entry,
       });
       res.json({
         success: true,

@@ -70,6 +70,7 @@ export async function emailLogin(data: {
   birthDate?: string; // 2026-08-24 = 생년월일 선택 정책(shared/birthdate-policy)
   language: string;
   deviceType: string;
+  entry?: string; // 유입 경로(main | bts) = shared/login-entry
 }): Promise<{ success: boolean; user?: UserData; error?: string }> {
   try {
     const response = await fetch(`${getApiUrl()}/api/auth/email-login`, {
@@ -124,18 +125,20 @@ async function postSocialLogin(
 
 export function socialLoginWithGoogle(data: {
   idToken: string;
-  birthDate: string;
+  birthDate?: string;
   language: string;
   deviceType: string;
+  entry?: string; // 유입 경로(main | bts) = shared/login-entry
 }): Promise<LoginResult> {
   return postSocialLogin("/api/auth/google", data, i18n.t("login.loginFailed"));
 }
 
 export function socialLoginWithKakao(data: {
   accessToken: string;
-  birthDate: string;
+  birthDate?: string;
   language: string;
   deviceType: string;
+  entry?: string; // 유입 경로(main | bts) = shared/login-entry
 }): Promise<LoginResult> {
   return postSocialLogin("/api/auth/kakao", data, i18n.t("login.loginFailed"));
 }
@@ -143,9 +146,10 @@ export function socialLoginWithKakao(data: {
 // ⚠️ 수정금지(승인필요) 2026-07-31 사장님 지시 = 애플 로그인(아이폰 전용).
 export function socialLoginWithApple(data: {
   identityToken: string;
-  birthDate: string;
+  birthDate?: string;
   language: string;
   deviceType: string;
+  entry?: string; // 유입 경로(main | bts) = shared/login-entry
   fullName?: string;
 }): Promise<LoginResult> {
   return postSocialLogin("/api/auth/apple", data, i18n.t("login.loginFailed"));

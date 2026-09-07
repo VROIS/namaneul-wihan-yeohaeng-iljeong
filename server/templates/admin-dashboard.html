@@ -427,8 +427,9 @@
           </div>
         </div>
 
+        <!-- ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 접속 현황을 이 칸 1개에 함께 = 새 칸 만들지 않음 -->
         <div class="card">
-          <h2>로그인 방식별 사용자</h2>
+          <h2>로그인 방식 · 접속 현황</h2>
           <div id="login-method-breakdown" class="service-list">
             <div class="loading"><div class="spinner"></div>로딩 중...</div>
           </div>
@@ -613,6 +614,38 @@
         <div style="margin-top: 16px;">
           <button class="btn btn-primary" id="content-apply-override-btn" onclick="applyContentOverride()">적용</button>
         </div>
+      </div>
+
+      <!-- ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 번호로 찾아 열기(열람 전용) = 프로필은 최신 20건만 보이므로 그 밖의 건은 여기서 번호로 연다 -->
+      <div class="card" style="margin-top: 16px;">
+        <h2>번호로 찾아 열기</h2>
+        <p style="color: #9ca3af; font-size: 14px; margin-bottom: 16px;">프로필에는 최신 20건만 보입니다. 그 밖의 건은 여기에 번호를 넣어 확인합니다. 보기 전용이라 여기서는 고치거나 지우지 않습니다.</p>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px;">
+          <div>
+            <label style="font-size: 11px; color: #9ca3af; display: block; margin-bottom: 4px;">여정 번호</label>
+            <div style="display: flex; gap: 8px;">
+              <input type="number" id="lookup-itinerary-id" class="form-input" placeholder="itineraries.id">
+              <button class="btn btn-primary" onclick="lookupOpen('itinerary')">열기</button>
+            </div>
+          </div>
+          <div>
+            <label style="font-size: 11px; color: #9ca3af; display: block; margin-bottom: 4px;">해설 번호</label>
+            <div style="display: flex; gap: 8px;">
+              <input type="text" id="lookup-guide-id" class="form-input" placeholder="guides.id">
+              <button class="btn btn-primary" onclick="lookupOpen('guide')">보기</button>
+            </div>
+          </div>
+          <div>
+            <label style="font-size: 11px; color: #9ca3af; display: block; margin-bottom: 4px;">영상 번호</label>
+            <div style="display: flex; gap: 8px;">
+              <input type="number" id="lookup-video-id" class="form-input" placeholder="saved_videos.id">
+              <button class="btn btn-primary" onclick="lookupOpen('video')">보기</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="lookup-result" style="margin-top: 16px;"></div>
       </div>
 
       <!-- 💰 시간당 가격 계산기 (핵심 마케팅 도구) -->
@@ -1039,14 +1072,44 @@
 
         document.getElementById('activity-kpi-time').textContent = '업데이트: ' + new Date(d.updatedAt).toLocaleTimeString('ko-KR');
 
+        // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 이 칸 1개에 = 로그인 방식 · 유입 경로 · 접속 숫자 · 최근 20명
         const loginEl = document.getElementById('login-method-breakdown');
         const PROVIDER_LABEL = { google: 'Google', kakao: 'Kakao', whatsapp: 'WhatsApp', email: 'Email', apple: 'Apple', unknown: '미확인' };
-        loginEl.innerHTML = (d.loginBreakdown || []).map(r => `
+        const ENTRY_LABEL = { main: '메인 앱', bts: 'BTS 배너', unknown: '기록 없음' };
+        const sub = (t) => `<div style="margin:14px 0 6px;font-size:12px;color:rgba(255,255,255,0.45);">${t}</div>`;
+        const row = (name, val) => `
           <div class="service-item">
-            <span class="service-name">${PROVIDER_LABEL[r.provider] || r.provider}</span>
-            <span>${fmtNum(r.count)}명</span>
-          </div>
-        `).join('') || '<div class="empty-state">데이터 없음</div>';
+            <span class="service-name">${name}</span>
+            <span>${val}</span>
+          </div>`;
+
+        const a = d.access || {};
+        const recent = d.recentUsers || [];
+        const when = (v) => {
+          if (!v) return '기록 없음';
+          const dt = new Date(v);
+          return `${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')} ${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`;
+        };
+
+        loginEl.innerHTML =
+          sub('로그인 방식') +
+          ((d.loginBreakdown || []).map(r => row(PROVIDER_LABEL[r.provider] || r.provider, fmtNum(r.count) + '명')).join('')
+            || '<div class="empty-state">데이터 없음</div>') +
+          sub('유입 경로') +
+          ((d.entryBreakdown || []).map(r => row(ENTRY_LABEL[r.entry] || r.entry, fmtNum(r.count) + '명')).join('')
+            || '<div class="empty-state">데이터 없음</div>') +
+          sub('접속') +
+          row('오늘 로그인', fmtNum(a.today || 0) + '명') +
+          row('오늘 신규', fmtNum(a.todayNew || 0) + '명') +
+          row('이번 주 로그인', fmtNum(a.week || 0) + '명') +
+          row('30일 이상 미접속', fmtNum(a.dormant || 0) + '명') +
+          sub('최근 접속 20명') +
+          (recent.length
+            ? recent.map(u => row(
+                `${u.name} <span style="opacity:.5;font-size:11px;">${PROVIDER_LABEL[u.provider] || u.provider} · ${ENTRY_LABEL[u.entry] || u.entry}</span>`,
+                `${when(u.lastLoginAt)} <span style="opacity:.5;">(${fmtNum(u.loginCount)}회)</span>`,
+              )).join('')
+            : '<div class="empty-state">데이터 없음</div>');
 
         document.getElementById('stat-revenue-total').textContent = `€${fmtNum(d.revenue.totalEur)}`;
         document.getElementById('stat-revenue-ai-cost').textContent = `€${fmtNum(d.revenue.aiCostEur)}`;
@@ -1479,6 +1542,64 @@
         btn.dataset.cityId = cityId;
       } catch (err) {
         console.error('콘텐츠 미리보기 로드 오류:', err);
+      }
+    }
+
+    // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 번호로 찾아 열기 = 보기 전용(여기서 고치거나 지우지 않는다)
+    async function lookupOpen(kind) {
+      const box = document.getElementById('lookup-result');
+      const id = document.getElementById(`lookup-${kind}-id`).value.trim();
+      if (!id) { alert('번호를 넣어주세요'); return; }
+
+      box.innerHTML = '<div class="loading"><div class="spinner"></div>불러오는 중...</div>';
+      try {
+        const res = await fetch(`${API_BASE}/lookup/${kind}/${encodeURIComponent(id)}`);
+        if (!res.ok) {
+          box.innerHTML = `<div class="empty-state">${res.status === 404 ? '그 번호의 자료가 없습니다' : '불러오지 못했습니다'}</div>`;
+          return;
+        }
+        const { item } = await res.json();
+
+        if (kind === 'itinerary') {
+          window.open(`/?itineraryId=${item.id}`, '_blank');
+          box.innerHTML = `<div class="service-item"><span class="service-name">여정 ${item.id} · ${item.cityName || item.city || '-'}</span><span>새 탭으로 열었습니다</span></div>`;
+          return;
+        }
+
+        if (kind === 'guide') {
+          box.innerHTML = `
+            <div style="display: grid; grid-template-columns: 220px 1fr; gap: 20px; align-items: start;">
+              <div style="background: rgba(255,255,255,0.05); border-radius: 12px; aspect-ratio: 1/1; background-size: cover; background-position: center; ${item.imageUrl ? `background-image: url('${item.imageUrl}')` : 'display:flex;align-items:center;justify-content:center;color:#6b7280;font-size:13px;'}">${item.imageUrl ? '' : '사진 없음'}</div>
+              <div>
+                <div style="font-weight: 600; margin-bottom: 4px;">${item.title || '-'}</div>
+                <div style="font-size: 13px; color: #9ca3af; margin-bottom: 12px;">${item.locationName || '-'} · ${(item.createdAt || '').slice(0, 10)}</div>
+                <div style="font-size: 13px; line-height: 1.7; white-space: pre-wrap; max-height: 320px; overflow-y: auto;">${(item.description || '해설 내용이 없습니다').replace(/</g, '&lt;')}</div>
+              </div>
+            </div>`;
+          return;
+        }
+
+        if (kind === 'video') {
+          // 영상 주소 = 기존 조회 1벌 재사용(§16) = TripisModal 이 쓰는 그 경로.
+          const vr = await fetch(`/api/itineraries/${item.itineraryId}/video`);
+          const day = (await vr.json()).videoByDay?.[item.day];
+          if (!day?.url) {
+            box.innerHTML = `<div class="empty-state">영상 ${item.id} (여정 ${item.itineraryId} ${item.day}일차) = 아직 만들어진 영상이 없습니다</div>`;
+            return;
+          }
+          box.innerHTML = `
+            <div style="display: grid; grid-template-columns: 320px 1fr; gap: 20px; align-items: start;">
+              <video src="${day.url}" controls playsinline style="width: 100%; border-radius: 12px; background: #000;"></video>
+              <div>
+                <div style="font-weight: 600; margin-bottom: 4px;">영상 ${item.id} · 여정 ${item.itineraryId} ${item.day}일차</div>
+                <div style="font-size: 13px; color: #9ca3af; margin-bottom: 12px;">${(item.createdAt || '').slice(0, 10)}</div>
+                <div style="font-size: 13px; line-height: 1.8;">${(day.scenes || []).map(s => `<div>· ${(s.placeName || '').replace(/</g, '&lt;')}</div>`).join('') || '장면 정보 없음'}</div>
+              </div>
+            </div>`;
+          return;
+        }
+      } catch (e) {
+        box.innerHTML = '<div class="empty-state">불러오지 못했습니다</div>';
       }
     }
 

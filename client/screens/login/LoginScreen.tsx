@@ -19,6 +19,7 @@ import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { useLogin } from "./hooks/useLogin";
 import LanguageModal from "./components/LanguageModal";
 import { styles } from "./styles";
+import { BIRTHDATE_REQUIRED } from "@shared/birthdate-policy";
 
 export default function LoginScreen() {
   const navigation =
@@ -40,10 +41,7 @@ export default function LoginScreen() {
     dayRef,
     monthRef,
     yearRef,
-    age,
     ageGroup,
-    isAdult,
-    isDateComplete,
     validateAndSetDay,
     validateAndSetMonth,
     validateAndSetYear,
@@ -114,18 +112,17 @@ export default function LoginScreen() {
               <Icon name="chevron-down" size={20} color={theme.textTertiary} />
             </Pressable>
 
-            {/* ── 생년월일 ── */}
-            <Text
-              style={[
-                styles.label,
-                { color: theme.textSecondary, marginTop: Spacing.xl },
-              ]}
-            >
-              {t("login.birthDate")}
-            </Text>
-            <Text style={[styles.birthDateHint, { color: theme.textTertiary }]}>
-              {t("login.birthDateHint")}
-            </Text>
+            {/* ⚠️ 수정금지(승인필요) 2026-09-06 사장님 결정 = 생년월일 필수/선택 마커 = 토글(shared/birthdate-policy) 1벌(LoginSheet 와 동일) */}
+            <View style={[styles.labelRow, { marginTop: Spacing.xl }]}>
+              <Text style={[styles.label, { color: theme.textSecondary }]}>
+                {t("login.birthDate")}
+              </Text>
+              <Text
+                style={[styles.labelRequired, { color: theme.textTertiary }]}
+              >
+                {t(BIRTHDATE_REQUIRED ? "login.required" : "login.optional")}
+              </Text>
+            </View>
             <View style={styles.dateInputRow}>
               <View
                 style={[
@@ -216,7 +213,7 @@ export default function LoginScreen() {
                   })}
                 />
               </View>
-              {isAdult && ageGroup ? (
+              {ageGroup ? (
                 <View style={styles.ageBadge}>
                   <Text style={styles.ageBadgeText}>{ageGroup}</Text>
                 </View>
@@ -224,8 +221,6 @@ export default function LoginScreen() {
             </View>
             {dateError ? (
               <Text style={styles.errorText}>{dateError}</Text>
-            ) : isDateComplete && !isAdult && age !== null ? (
-              <Text style={styles.errorText}>{t("login.adultOnly")}</Text>
             ) : null}
           </View>
 

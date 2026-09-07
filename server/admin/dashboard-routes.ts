@@ -16,6 +16,7 @@ import {
 import { sql, count, eq, and, isNotNull } from "drizzle-orm";
 import { CREDIT_CONFIG } from "../creditService";
 import { recentDelta } from "../services/shared/metrics-heartbeat";
+import { accessSummary } from "../../shared/admin-access-summary";
 
 const DEFAULT_DASHBOARD_DATA = {
   overview: {
@@ -189,6 +190,9 @@ export function registerDashboardRoutes(app: Express) {
         .from(users)
         .groupBy(users.provider);
 
+      // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 접속 현황 자료 = shared/admin-access-summary 1벌(서버·Worker 공용)
+      const accessData = await accessSummary(db);
+
       const [purchaseCount] = await db
         .select({ count: count() })
         .from(creditTransactions)
@@ -257,6 +261,7 @@ export function registerDashboardRoutes(app: Express) {
           provider: r.provider || "unknown",
           count: r.count,
         })),
+        ...accessData,
         revenue: {
           totalEur: totalRevenueEur,
           aiCostEur: Math.round(aiCostEur * 100) / 100,

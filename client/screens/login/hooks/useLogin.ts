@@ -21,9 +21,14 @@ import { useGoogleAuthRequest } from "@/lib/auth-google";
 import {
   startKakaoLoginWeb,
   exchangeKakaoCodeForToken,
-  getKakaoCallbackData,
+  getKakaoCallbackLanguage,
   isKakaoOAuthConfigured,
 } from "@/lib/auth-kakao";
+import {
+  stashBirthDate,
+  readBirthDate,
+  clearBirthDate,
+} from "@/lib/birthdate-store";
 import { isAppleAuthAvailable } from "@/lib/auth-apple";
 import {
   runNativeSocial,
@@ -33,6 +38,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { SUPPORTED_LANGS, changeLanguageAndPersist } from "@/lib/i18n";
 import { BIRTHDATE_REQUIRED } from "@shared/birthdate-policy";
+import { LOGIN_ENTRY_MAIN } from "@shared/login-entry";
 
 // ⚠️ 사장님 SSOT 2026-07-25 = 로그인 성공 시 "다음 동작"을 호출자가 결정(§0 단일경로·분기금지). onDone:
 export function useLogin({ onDone }: { onDone: () => void }) {
@@ -57,6 +63,7 @@ export function useLogin({ onDone }: { onDone: () => void }) {
 
   const [, googleResponse, googlePromptAsync] = useGoogleAuthRequest();
   const processedGoogleRef = useRef<typeof googleResponse>(null);
+  const processedKakaoCodeRef = useRef<string | null>(null);
   const birthDate = useMemo(() => {
     if (day.length === 2 && month.length === 2 && year.length === 4) {
       const d = parseInt(day, 10);
@@ -82,9 +89,6 @@ export function useLogin({ onDone }: { onDone: () => void }) {
     () => (age !== null ? getAgeGroup(age) : null),
     [age],
   );
-  const isAdult = age !== null && age >= 18;
-  const isDateComplete =
-    day.length === 2 && month.length === 2 && year.length === 4;
   // ⚠️ 수정금지(승인필요) — 생년월일 = 사용자가 친 년·월·일 칸을 그대로 조립 = 시간대 변환 0 = 어느 나라에서든 입력값 = 저장값.
   const birthDateStr = birthDate ? `${year}-${month}-${day}` : null;
 
@@ -95,9 +99,9 @@ export function useLogin({ onDone }: { onDone: () => void }) {
     } else Alert.alert(msg);
   };
 
+  // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 외부 인증은 신원만 처리 = 생년월일은 우리가 맡아둔 값을 실어 보낸다
   useEffect(() => {
-    if (!googleResponse || googleResponse.type !== "success" || !birthDateStr)
-      return;
+    if (!googleResponse || googleResponse.type !== "success") return;
     if (processedGoogleRef.current === googleResponse) return;
     processedGoogleRef.current = googleResponse;
     const idToken = getIdTokenFromGoogleResponse(googleResponse);
@@ -105,11 +109,13 @@ export function useLogin({ onDone }: { onDone: () => void }) {
     setOauthLoading(true);
     socialLoginWithGoogle({
       idToken,
-      birthDate: birthDateStr,
+      birthDate: readBirthDate(),
       language: i18n.language,
       deviceType: Platform.OS === "web" ? "web" : "mobile",
+      entry: LOGIN_ENTRY_MAIN,
     })
       .then((result) => {
+        clearBirthDate();
         if (result.success) {
           onDone(); // 성공 = 호출자 결정(화면 리셋 or 팝업 닫기). §0 단일경로.
         } else {
@@ -121,7 +127,7 @@ export function useLogin({ onDone }: { onDone: () => void }) {
         notify(t("login.loginFailed"));
       })
       .finally(() => setOauthLoading(false));
-  }, [googleResponse, birthDateStr, i18n.language, onDone]);
+  }, [googleResponse, i18n.language, onDone]);
 
   useEffect(() => {
     if (Platform.OS !== "web" || !isKakaoOAuthConfigured()) return;
@@ -129,29 +135,26 @@ export function useLogin({ onDone }: { onDone: () => void }) {
     const params = new URLSearchParams(url);
     const code = params.get("code");
     if (!code) return;
+    // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 카카오 인증번호는 한 번만 쓴다(구글 processedGoogleRef 와 같은 방식). 두 번 쓰면 카카오가 거절해 "로그인 실패" 경고가 뜬다.
+    if (processedKakaoCodeRef.current === code) return;
+    processedKakaoCodeRef.current = code;
 
-    const callbackData = getKakaoCallbackData();
-    const birthDate = callbackData?.birthDate;
-    const language = callbackData?.language || i18n.language;
-    if (!birthDate) {
-      notify(t("login.loginFailed"));
-      if (typeof window !== "undefined" && window.history) {
-        window.history.replaceState({}, "", window.location.pathname);
-      }
-      return;
-    }
+    // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 외부 인증은 신원만 처리 = 생년월일은 우리가 맡아둔 값을 실어 보낸다
+    const language = getKakaoCallbackLanguage() || i18n.language;
 
     setOauthLoading(true);
     exchangeKakaoCodeForToken(code)
       .then((accessToken) =>
         socialLoginWithKakao({
           accessToken,
-          birthDate,
+          birthDate: readBirthDate(),
           language,
           deviceType: "web",
+          entry: LOGIN_ENTRY_MAIN,
         }),
       )
       .then((result) => {
+        clearBirthDate();
         if (typeof window !== "undefined" && window.history) {
           window.history.replaceState({}, "", window.location.pathname);
         }
@@ -215,20 +218,15 @@ export function useLogin({ onDone }: { onDone: () => void }) {
     }
   };
 
-  const requireBirthDateAndAdult = (): boolean => {
-    // ⚠️ 수정금지(승인필요) 2026-08-24 사장님 승인 = 생년월일 입력부 필수↔선택 전환 1줄
-    if (!BIRTHDATE_REQUIRED) return true;
-    if (!isDateComplete) {
+  // ⚠️ 수정금지(승인필요) 2026-09-06 사장님 결정 = 생년월일 필수/선택 = 토글(shared/birthdate-policy) 1벌, 성인 확인 없음
+  const requireBirthDate = (): boolean => {
+    if (BIRTHDATE_REQUIRED && !birthDate) {
       setDateError(t("login.birthRequired"));
-      Alert.alert(t("login.alert"), t("login.birthRequiredAlert"));
+      notify(t("login.birthRequiredAlert"));
       dayRef.current?.focus();
       return false;
     }
-    if (!birthDate || !isAdult) {
-      setDateError(t("login.adultOnly"));
-      Alert.alert(t("login.alert"), t("login.adultOnly"));
-      return false;
-    }
+    stashBirthDate(birthDateStr); // 외부 창을 열기 전에 우리가 맡아둔다
     return true;
   };
 
@@ -258,13 +256,14 @@ export function useLogin({ onDone }: { onDone: () => void }) {
   const startNativeSocial = (provider: SocialProvider) =>
     runNativeSocialLogin(() =>
       runNativeSocial(provider, {
-        birthDate: birthDateStr!,
+        birthDate: readBirthDate(),
         language: i18n.language,
+        entry: LOGIN_ENTRY_MAIN,
       }),
     );
 
   const handleGooglePress = async () => {
-    if (!requireBirthDateAndAdult()) return;
+    if (!requireBirthDate()) return;
     if (!isSocialConfigured("google")) {
       console.error("[Auth] 구글 클라이언트 ID 미주입 = 로그인 불가");
       notify(t("login.loginFailed"));
@@ -278,7 +277,7 @@ export function useLogin({ onDone }: { onDone: () => void }) {
   };
 
   const handleKakaoPress = async () => {
-    if (!requireBirthDateAndAdult()) return;
+    if (!requireBirthDate()) return;
     if (!isSocialConfigured("kakao")) {
       console.error("[Auth] 카카오 앱 키 미주입 = 로그인 불가");
       notify(t("login.loginFailed"));
@@ -287,7 +286,7 @@ export function useLogin({ onDone }: { onDone: () => void }) {
     if (Platform.OS === "web") {
       setOauthLoading(true);
       try {
-        await startKakaoLoginWeb(birthDateStr!, i18n.language); // 리다이렉트
+        await startKakaoLoginWeb(i18n.language); // 리다이렉트
       } catch (err) {
         console.error("[Auth] 카카오 웹 로그인 시작 실패:", err);
         notify(t("login.loginFailed"));
@@ -300,7 +299,7 @@ export function useLogin({ onDone }: { onDone: () => void }) {
 
   // ⚠️ 수정금지(승인필요) 2026-07-31 사장님 지시 = 애플 로그인(아이폰 전용).
   const handleApplePress = async () => {
-    if (!requireBirthDateAndAdult()) return;
+    if (!requireBirthDate()) return;
     await startNativeSocial("apple");
   };
 
@@ -313,7 +312,7 @@ export function useLogin({ onDone }: { onDone: () => void }) {
       notify(t("login.emailInvalid"));
       return;
     }
-    if (!requireBirthDateAndAdult()) return;
+    if (!requireBirthDate()) return;
     setEmailLoading(true);
     try {
       const r = await emailLogin({
@@ -321,17 +320,13 @@ export function useLogin({ onDone }: { onDone: () => void }) {
         birthDate: birthDateStr ?? undefined,
         language: i18n.language,
         deviceType: Platform.OS === "web" ? "web" : "mobile",
+        entry: LOGIN_ENTRY_MAIN,
       });
       if (r.success) {
         onDone(); // 성공 = 팝업 닫기 및 로그인 상태 반영
         return;
       }
-      // 서버가 준 사유를 뭉개지 않는다(2026-07-31 사장님 지시). 사용자가 다음에 뭘 할지 알 수 있게.
-      if (r.error === "account_not_found")
-        notify(t("login.emailAccountNotFound"));
-      else if (r.error === "birthdate_mismatch")
-        notify(t("login.emailBirthMismatch"));
-      else notify(t("login.emailLoginFailed"));
+      notify(t("login.emailLoginFailed"));
     } catch (e) {
       notify(t("login.emailLoginFailed"));
     } finally {
@@ -357,10 +352,7 @@ export function useLogin({ onDone }: { onDone: () => void }) {
     dayRef,
     monthRef,
     yearRef,
-    age,
     ageGroup,
-    isAdult,
-    isDateComplete,
     validateAndSetDay,
     validateAndSetMonth,
     validateAndSetYear,

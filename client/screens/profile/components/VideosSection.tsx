@@ -100,7 +100,7 @@ export default function VideosSection({ profile }: { profile: ProfileApi }) {
 
   // ⚠️ 수정금지(승인필요) 2026-08-01 사장님 = 가짜 샘플 카드 완전삭제 §19.
   const seenVideoIds = new Set<string>();
-  const displayVideos = savedVideos
+  const keptVideos = savedVideos
     .filter((v) => {
       const id = `${v.itineraryId}:${v.day}`;
       if (seenVideoIds.has(id)) return false;
@@ -117,9 +117,18 @@ export default function VideosSection({ profile }: { profile: ProfileApi }) {
       date: v.startDate?.split("T")[0] || "",
     }));
 
-  const displayGuides = guides.filter(
+  const keptGuides = guides.filter(
     (g) => !hiddenKeys.includes(cardKey("guide", g.id)),
   );
+
+  // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 관리자 계정은 전 사용자 것이 다 올라와 휴대폰이 버티지 못한다 = 최신 10개만 그린다(그 밖은 관리자 대시보드에서 번호로 연다). 일반 사용자는 제한 없음.
+  const ADMIN_MAX = 10;
+  const displayVideos = profile.isAdmin
+    ? keptVideos.slice(0, ADMIN_MAX)
+    : keptVideos;
+  const displayGuides = profile.isAdmin
+    ? keptGuides.slice(0, ADMIN_MAX)
+    : keptGuides;
 
   if (!hiddenReady) return null;
 
