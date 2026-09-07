@@ -26,7 +26,7 @@ export const users = pgTable("users", {
 
   birthDate: text("birth_date"),
 
-  provider: text("provider"), // "kakao" | "google" | "apple"
+  provider: text("provider"), // "kakao" | "google" | "whatsapp"
   providerId: text("provider_id"), // 소셜 계정 고유 ID (추후 실제 OAuth용)
 
   isPaid: boolean("is_paid").default(false),
