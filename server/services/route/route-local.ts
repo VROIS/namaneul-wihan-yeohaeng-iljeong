@@ -42,6 +42,8 @@ export function buildRouteLocal(
   restaurantPool?: PlaceResult[],
   hourlyRate?: number | null,
   mealTiers?: CityMealTiers | null,
+  // ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = 베스트 여정 분기 스위치 = 이동시간 더하기·점심창 11시·식당 등급 우선·배치 등급 순서가 전부 이 하나로 갈린다(옛 이름 addTransitTime = 역할과 어긋나 폐기 §19). 안 넘기면(기존 여정) 지금까지와 동일.
+  bestMode?: boolean,
 ): RouteHandlerResult {
   const t0 = Date.now();
   const { formData, daySlotsConfig, paceConfig, companionCount } = skeleton;
@@ -92,11 +94,13 @@ export function buildRouteLocal(
   ).filter(hasCoord);
 
   const usedRest = new Set<string>();
-  // ⚠️ 수정금지(승인필요) 2026-09-02 사장님 결정 = 식당 = 전체 후보를 거리순으로, 예산 띠 안 첫 곳 → 없으면 상한 이하 첫 곳 → 없으면 최근접(같은 거리면 베스트>RC) · 점심 = 직전 활동 · 저녁 = 마지막 활동 · km 상수 없음 (정본 B4 v23)
+  // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 식당 = 넓힌 풀 전체에서 그 슬롯에 가장 가까운 순(거리 상한 없음) · 예산 띠 안 첫 곳 → 상한 이하 첫 곳 → 최근접(같은 거리면 베스트>RC) · 점심 = 직전 활동 · 저녁 = 마지막 활동.
   const pickMealPriority = (
     anchors: LatLng[],
     priceMin: number,
     priceCap: number,
+    // 미리보기 = 후보만 보고 쓰지는 않는다(소비하면 근처 식당이 헛되이 사라져 먼 곳만 남는다).
+    peekOnly = false,
   ): PlaceResult | null => {
     const refs = anchors.filter((a) => a && a.lat != null && a.lat !== 0);
     const useRefs = refs.length ? refs : [center];
@@ -115,7 +119,7 @@ export function buildRouteLocal(
       .sort((a, b) => a.d - b.d)
       .find((x) => pinnedRestIds.has(x.r.id));
     if (pinnedPick) {
-      usedRest.add(pinnedPick.r.id);
+      if (!peekOnly) usedRest.add(pinnedPick.r.id);
       return pinnedPick.r;
     }
 
@@ -131,9 +135,17 @@ export function buildRouteLocal(
     const underCap = (x: (typeof scored)[0]) =>
       x.r.estimatedPriceEur != null && x.r.estimatedPriceEur <= priceCap;
 
+    // ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정(베스트 분기 전용) = 식당 = 걸어갈 거리(1km) 안에 있는 것 중 **베스트 등급 높은 순**을 먼저(랜드마크 옆 베스트 식당 3~6곳이 이미 창고에 있음). 1km 안에 없으면 아래 기존 규칙(가까운 순·예산 띠).
+    if (bestMode) {
+      const near = scored.filter((x) => x.d <= 1.0).sort(byBestRc);
+      if (near.length && bestRankLangCount(near[0].r.bestRank) > 0) {
+        if (!peekOnly) usedRest.add(near[0].r.id);
+        return near[0].r;
+      }
+    }
     const byDist = [...scored].sort((a, b) => a.d - b.d || byBestRc(a, b));
     const hit = byDist.find(inBudget) ?? byDist.find(underCap) ?? byDist[0];
-    usedRest.add(hit.r.id);
+    if (!peekOnly) usedRest.add(hit.r.id);
     return hit.r;
   };
 
@@ -166,7 +178,9 @@ export function buildRouteLocal(
   // ⚠️ 수정금지(승인필요) 2026-09-01 사장님 확정 = 유료 입장지는 18:00 이후 시작 불가(대부분 폐관) (정본 B4)
   const PAID_LAST_START_MIN = 18 * 60;
   const inRange = activities.filter((p) => kmFromCenter(p) <= OUTSKIRT_MAX_KM);
-  const LUNCH_FROM = 12 * 60;
+  const LUNCH_FROM = bestMode ? 11 * 60 : 12 * 60;
+  // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 점심은 11:00~14:00 안에 먹는다(베스트 분기 전용). 창을 놓치면 도착 직후.
+  const LUNCH_BY = 14 * 60;
   const LONG_STAY_MIN = 360;
   const DINNER_FROM = 19 * 60;
   const hasRest = restaurants.length > 0;
@@ -231,6 +245,16 @@ export function buildRouteLocal(
     let acc = toMin(dc.startTime);
     let cursor: LatLng | null = null;
     let lunchDone = !hasRest;
+    // 지금 자리에서 그 곳까지 실제 이동에 걸리는 분(옵션 꺼져 있으면 0 = 기존 동작).
+    //   30km 넘으면 기차 = 순수 이동에 표·역접근·대기·환승 45분을 얹는다(직선거리라 실제와 맞춤).
+    const moveMin = (p: PlaceResult): number => {
+      if (!bestMode) return 0;
+      const from = cursor ?? center;
+      const km = haversineKm(from.lat, from.lng, p.lat, p.lng);
+      if (km <= 1.0) return Math.round((km / 5) * 60);
+      if (km <= 30) return Math.round((km / 25) * 60 + 10);
+      return Math.round((km / 75) * 60 + 45);
+    };
     const place = (p: PlaceResult, rest: boolean, dur: number, at: number) => {
       seq.push({ p, rest });
       slotStartMins.push(at);
@@ -238,16 +262,32 @@ export function buildRouteLocal(
       acc = at + dur;
       if (!rest) cursor = { lat: p.lat, lng: p.lng };
     };
+    // ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = 넣을 수 있는지(마감) 먼저 보고 그때만 식당을 소비한다 = 점심이 안 들어가는 짧은 날에 가장 가까운 식당이 헛되이 쓰여 저녁이 그 다음 식당을 받던 것 교정(옛 = 고른 뒤 마감 검사 §19).
     const takeLunch = () => {
       lunchDone = true;
-      const at = Math.max(acc, LUNCH_FROM);
-      if (at + mealDuration > actDeadline) return;
+      const peek = pickMealPriority(
+        [cursor ?? center],
+        band.min,
+        band.cap,
+        true,
+      );
+      if (!peek) return;
+      if (
+        Math.max(acc + moveMin(peek), LUNCH_FROM) + mealDuration >
+        actDeadline
+      )
+        return;
       const lunch = pickMealPriority([cursor ?? center], band.min, band.cap);
       if (!lunch) return;
-      place(lunch, true, mealDuration, at);
+      place(
+        lunch,
+        true,
+        mealDuration,
+        Math.max(acc + moveMin(lunch), LUNCH_FROM),
+      );
     };
     const fitsNow = (p: PlaceResult): boolean => {
-      let t = acc;
+      let t = acc + moveMin(p);
       let ld = lunchDone || LUNCH_FROM + mealDuration > endMin;
       if (!ld && t >= LUNCH_FROM) {
         t = Math.max(t, LUNCH_FROM) + mealDuration;
@@ -258,13 +298,30 @@ export function buildRouteLocal(
       t += s;
       if (!ld && s >= LONG_STAY_MIN) ld = true;
       if (!ld) t = Math.max(t, LUNCH_FROM) + mealDuration;
-      return t <= endMin;
+      // 저녁 자리를 미리 비운다 = 볼거리가 하루 끝까지 채우면 저녁이 22시로 밀린다(베스트 분기 전용).
+      return t <= (bestMode && hasRest ? endMin - mealDuration : endMin);
     };
     for (;;) {
-      const nearLeft = remaining.some((p) => kmFromCenter(p) <= NEAR_KM);
-      const pool = remaining.filter(
-        (p) => (!nearLeft || kmFromCenter(p) <= NEAR_KM) && fitsNow(p),
-      );
+      let pool: PlaceResult[];
+      if (bestMode) {
+        // ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정(베스트 분기 전용) = 배치도 등급을 본다 = 남은 곳 중 **가장 높은 동의 등급부터** 앉힌다(7 전부 → 6 → 5 → 4 → 3 → 리뷰수 채움). 같은 등급 안에서는 25km 안 먼저. 1·2일차는 25km 안만, 3일차부터 밖(당일치기) 허용. 리마·보고타·브뤼셀 3도시 시뮬 = 만장일치 탈락 0.
+        const farOk = di >= 2;
+        const cands = remaining.filter(
+          (p) => (farOk || kmFromCenter(p) <= NEAR_KM) && fitsNow(p),
+        );
+        const top = cands.reduce(
+          (m, p) => Math.max(m, bestRankLangCount(p.bestRank)),
+          -1,
+        );
+        pool = cands.filter((p) => bestRankLangCount(p.bestRank) === top);
+        const nearIn = pool.filter((p) => kmFromCenter(p) <= NEAR_KM);
+        if (nearIn.length) pool = nearIn;
+      } else {
+        const nearLeft = remaining.some((p) => kmFromCenter(p) <= NEAR_KM);
+        pool = remaining.filter(
+          (p) => (!nearLeft || kmFromCenter(p) <= NEAR_KM) && fitsNow(p),
+        );
+      }
       if (!pool.length) break;
       const from = cursor;
       const pick = from
@@ -277,17 +334,47 @@ export function buildRouteLocal(
         : pool.sort(
             (a, b) => kmFromCenter(b) - kmFromCenter(a) || worth(b) - worth(a),
           )[0];
-      if (!lunchDone && acc >= LUNCH_FROM) takeLunch();
+      // 점심 = 식당에 도착하는 시각이 창(11:00~14:00) 안이면 지금 먹는다.
+      //   긴 볼거리가 창을 통째로 삼켜 점심이 2시 넘게 밀리던 것을 막는다(베스트 분기 전용).
+      if (!lunchDone && bestMode) {
+        const cand = pickMealPriority(
+          [cursor ?? center],
+          band.min,
+          band.cap,
+          true,
+        );
+        if (cand) {
+          const eatAt = acc + moveMin(cand);
+          if (eatAt >= LUNCH_FROM && eatAt <= LUNCH_BY) takeLunch();
+        }
+      }
+      if (!lunchDone && !bestMode && acc >= LUNCH_FROM) takeLunch();
       const dur = stayMin(pick);
-      place(pick, false, dur, acc);
+      // 이동한 만큼 늦게 도착한다(옵션 꺼져 있으면 0 = 기존과 동일).
+      const arriveAt = acc + moveMin(pick);
+      place(pick, false, dur, arriveAt);
+      // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 그 곳이 점심창(11:00~14:00)을 통째로 덮으면 거기서 먹은 것으로 보고 점심을 따로 넣지 않는다(사람은 그 시간 전에도 넘겨서도 잘 안 먹는다).
+      if (
+        !lunchDone &&
+        bestMode &&
+        arriveAt <= LUNCH_FROM &&
+        arriveAt + dur >= LUNCH_BY
+      )
+        lunchDone = true;
       if (!lunchDone && dur >= LONG_STAY_MIN) lunchDone = true;
       remaining.splice(remaining.indexOf(pick), 1);
     }
     if (!lunchDone) takeLunch();
     if (hasRest) {
       const dinner = pickMealPriority([cursor ?? center], band.min, band.cap);
-      // ⚠️ 수정금지(승인필요) 2026-09-03 사장님 결정 = 저녁 자리를 미리 비우지 않는다(활동은 종료시각까지) · 저녁 = 무조건 마지막 슬롯, 19:00 전이면 19:00, 손님 종료시각과 무관하게 남겨 둔다 · 먹을지는 손님 판단 (정본 B4 v26)
-      if (dinner) place(dinner, true, mealDuration, Math.max(acc, DINNER_FROM));
+      // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 저녁 = 무조건 마지막 슬롯(19:00 전이면 19:00), 손님 종료시각과 무관하게 남겨 둔다 · 이동시간은 켜졌을 때만 더한다.
+      if (dinner)
+        place(
+          dinner,
+          true,
+          mealDuration,
+          Math.max(acc + moveMin(dinner), DINNER_FROM),
+        );
     }
     let prev: LatLng = center;
     let dayKm = 0;

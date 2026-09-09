@@ -300,6 +300,8 @@ async function absorbTwinGroup(
       `UPDATE place_seed_raw SET merged_into = $1 WHERE merged_into = ANY($2::int[]) AND id <> $1`,
       [keepId, loserIds],
     );
+    // ⚠️ 수정금지(승인필요) 2026-09-08 사장님 확정 = 통과증(skip_dup_check)은 쓰고 나서 반드시 손으로 반납(RESET) = 풀 백엔드에 켜진 채 남아 검문 전체가 꺼졌던 사고.
+    await c.query("RESET app.skip_dup_check");
     await c.query("COMMIT");
     return { cur, result };
   } catch (e) {
@@ -398,7 +400,12 @@ async function main() {
       status = "closed";
       if (!CLOSED_BIZ.has(r.business_status)) biz = "CLOSED_PERMANENTLY";
     } else if (holdSet.has(r.id)) status = "hold";
-    else if (!r.google_place_id) status = "candidate";
+    // ⚠️ 수정금지(승인필요) 2026-09-08 사장님 확정 = 확인의 기준 = cid(google_maps_uri). PID 는 있어도 없어도 그만. 옛 "PID 없으면 candidate" 폐기 §19.
+    else if (
+      !/cid=/.test(String(r.google_maps_uri || "")) &&
+      !r.google_place_id
+    )
+      status = "candidate";
     if (status !== r.status || (into ?? null) !== (r.merged_into ?? null))
       plan.push({ id: r.id, cat: r.seed_category, status, into, biz });
   }
@@ -475,9 +482,16 @@ async function main() {
         deletableLosers(p).map((l: any) => l.id),
       ),
     );
-    const losers = plan
-      .filter((p: any) => p.status === "merged" && p.into && absorbed.has(p.id))
-      .map((p: any) => p.id);
+    // ⚠️ 수정금지(승인필요) 2026-09-08 사장님 확정 = 흡수가 끝난 loser 는 이번 실행에서 상태가 바뀌었든(plan) 이미 merged 였든 똑같이 치운다.
+    //   옛 merged 행이 남아 UPDATE 를 막던 문제(리마 5행 실측) 해소 = 옛 "plan 안에서만 고름" 폐기 §19.
+    const planned = new Map(plan.map((p: any) => [p.id, p]));
+    const rowById = new Map(rows.map((r: any) => [r.id, r]));
+    const losers = [...absorbed].filter((id: number) => {
+      const p = planned.get(id);
+      if (p) return p.status === "merged" && !!p.into;
+      const row = rowById.get(id);
+      return !!row && row.status === "merged" && !!row.merged_into;
+    });
     if (losers.length) {
       await client.query(
         `DELETE FROM place_translations WHERE place_id = ANY($1::int[])`,
@@ -506,6 +520,8 @@ async function main() {
       [cityId],
     );
     tagsCleared = cl.rowCount ?? 0;
+    // ⚠️ 수정금지(승인필요) 2026-09-08 사장님 확정 = 통과증(skip_dup_check)은 쓰고 나서 반드시 손으로 반납(RESET) = 풀 백엔드에 켜진 채 남아 검문 전체가 꺼졌던 사고.
+    await client.query("RESET app.skip_dup_check");
     await client.query("COMMIT");
   } catch (e) {
     await client.query("ROLLBACK");

@@ -9,7 +9,7 @@ import { pickPlaceImage, loadImagePidMap } from "../shared/place-image";
 // ⚠️ 수정금지(승인필요) 2026-05-06 = 사용자 의도 = AG2 데이터 출처 = place_seed_raw 우선
 import { db } from "../../db";
 import { placeSeedRaw } from "@shared/schema";
-import { eq, and, between, sql, inArray, isNotNull } from "drizzle-orm";
+import { eq, and, between, sql, inArray } from "drizzle-orm";
 import { findCityUnified } from "../city-resolver";
 // ⚠️ 2026-07-17 사장님 확정 = 슬롯 풀 = (city_id=요청도시) ∪ (중심 100km) 합집합 = shared/pool-radius 단일 SSOT(§16)
 import {
@@ -18,7 +18,7 @@ import {
   servingGateSql,
   distanceKmFromCoords,
 } from "../shared/pool-radius";
-import { VIBE_PRIMARY_CATEGORY } from "@shared/vibe-category";
+import { VIBE_PRIMARY_CATEGORY, SIGHT_CATEGORIES } from "@shared/vibe-category";
 
 // ⚠️ 수정금지(승인필요) 2026-08-17 사장님 승인 = 도시 입력 시점 분기(백엔드만), 임계값 200(발굴 도시 행수≥200 → DB-only, 미만 → Gemini+Google fallback), 상세 경위는 정본문서
 export const READY_THRESHOLD = 200;
@@ -201,8 +201,7 @@ async function fetchFromPlaceSeedRaw(
     const baseWhere = [
       poolWhere,
       eq(placeSeedRaw.seedCategory, cat),
-      isNotNull(placeSeedRaw.googlePlaceId),
-      // ⚠️ 2026-08-24 사장님 육안검수 반영 = 손님상 게이트 1벌(status='active' + RC 증거).
+      // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 손님상 게이트 1벌(PID 조건 흡수 = 여기서 따로 안 건다).
       servingGateSql(),
     ];
     if (isRestaurant)
@@ -293,23 +292,14 @@ async function fetchFromPlaceSeedRaw(
   if (!pinIds.length && nearNonRest < nonRestSlots) {
     const deficit = nonRestSlots - nearNonRest;
     const pickedIds = new Set(allRows.map((r: any) => r.id));
-    const FILL_CATS = [
-      "heritage",
-      "hotspot",
-      "attraction",
-      "adventure",
-      "healing",
-      "shopping",
-    ];
     const extra: any[] = await db!
       .select(SELECT_COLS)
       .from(placeSeedRaw)
       .where(
         and(
           poolWhere,
-          inArray(placeSeedRaw.seedCategory, FILL_CATS),
-          isNotNull(placeSeedRaw.googlePlaceId),
-          // ⚠️ 2026-08-24 사장님 육안검수 2라운드 = 보충 경로에도 같은 손님상 게이트(본 선정과 1벌).
+          inArray(placeSeedRaw.seedCategory, [...SIGHT_CATEGORIES]),
+          // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 보충 경로도 같은 게이트 1벌.
           servingGateSql(),
         ),
       );
@@ -336,49 +326,58 @@ async function fetchFromPlaceSeedRaw(
     ...allRows.map((r: any) => r.cityId),
   ]);
 
-  const places: PlaceResult[] = allRows.map((r: any, i: number) => {
-    const isFood = r.seedCategory === "restaurant";
-    return {
-      id: `db-${r.id}`,
-      name: r.nameEn || "",
-      geminiPlaceId: r.googlePlaceId || "",
-      geminiAddress: r.address || "",
-      description: r.summaryKo || r.editorialSummary || "",
-      lat: parseFloat(String(r.latitude)) || 0,
-      lng: parseFloat(String(r.longitude)) || 0,
-      // ⚠️ 수정금지(승인필요) 2026-05-24 = PSR.rank 단일 SSOT
-      rank: r.rank,
-      sourceType: "DB Direct (Place Seed Raw)",
-      personaFitReason: r.summaryKo || "",
-      tags: isFood ? ["restaurant", "food"] : [],
-      vibeTags: isFood ? ["Foodie" as const] : [],
-      // ⚠️ 수정금지(승인필요) 2026-05-20 = pickPlaceImage 단일 SSOT (= Google 1 > 2026-08-18 PID공유 폴백)
-      image: pickPlaceImage(r, imagePidMap),
-      priceEstimate: r.priceEur ? `€${r.priceEur}` : "",
-      estimatedPriceEur: r.priceEur ?? undefined,
-      bestRank: r.bestRank ?? null,
-      seedCategory: r.seedCategory as SeedCategory,
-      placeTypes: isFood ? ["restaurant"] : [],
-      recommendedTime: "afternoon",
-      city: formData.destination,
-      region: "",
-      // ⚠️ 수정금지(승인필요) 2026-05-20 = DB google_maps_uri (= cid URL) 직접 사용 (= 100% 정확)
-      googleMapsUrl: r.googleMapsUri || "",
-      googleMapsUri: r.googleMapsUri || "",
-      userRatingCount: r.googleReviewCount || 0,
-      // ⚠️ 수정금지(승인필요) 2026-05-21 = Phase E = dayZone 매핑
-      dayZone: r.dayZone ?? null,
-      nameKo: r.nameKo ?? null,
-      nameLocal: r.nameLocal ?? null,
-      address: r.address ?? null,
-      summaryKo: r.summaryKo ?? null,
-      editorialSummary: r.editorialSummary ?? null,
-    } as any;
-  });
+  const places: PlaceResult[] = allRows.map((r: any) =>
+    dbRowToPlace(r, imagePidMap, formData.destination),
+  );
   console.log(
     `[AG2-DB] ✅ DB 직접 = ${places.length}곳 (${Date.now() - _t0}ms, Gemini X, Google X)`,
   );
   return places;
+}
+
+// ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = DB 행 → 화면이 아는 장소 모양 변환 1벌(§16) = DB-only·베스트 두 길이 같은 함수를 쓴다(옛 pipeline-best 자체 변환 폐기 §19 = description·지도링크·rank 가 빠져 있었다).
+export function dbRowToPlace(
+  r: any,
+  imagePidMap: Map<string, string>,
+  destination: string,
+): PlaceResult {
+  const isFood = r.seedCategory === "restaurant";
+  return {
+    id: `db-${r.id}`,
+    name: r.nameEn || "",
+    geminiPlaceId: r.googlePlaceId || "",
+    geminiAddress: r.address || "",
+    description: r.summaryKo || r.editorialSummary || "",
+    lat: parseFloat(String(r.latitude)) || 0,
+    lng: parseFloat(String(r.longitude)) || 0,
+    // ⚠️ 수정금지(승인필요) 2026-05-24 = PSR.rank 단일 SSOT
+    rank: r.rank,
+    sourceType: "DB Direct (Place Seed Raw)",
+    personaFitReason: r.summaryKo || "",
+    tags: isFood ? ["restaurant", "food"] : [],
+    vibeTags: isFood ? ["Foodie" as const] : [],
+    // ⚠️ 수정금지(승인필요) 2026-05-20 = pickPlaceImage 단일 SSOT (= Google 1 > 2026-08-18 PID공유 폴백)
+    image: pickPlaceImage(r, imagePidMap),
+    priceEstimate: r.priceEur ? `€${r.priceEur}` : "",
+    estimatedPriceEur: r.priceEur ?? undefined,
+    bestRank: r.bestRank ?? null,
+    seedCategory: r.seedCategory as SeedCategory,
+    placeTypes: isFood ? ["restaurant"] : [],
+    recommendedTime: "afternoon",
+    city: destination,
+    region: "",
+    // ⚠️ 수정금지(승인필요) 2026-05-20 = DB google_maps_uri (= cid URL) 직접 사용 (= 100% 정확)
+    googleMapsUrl: r.googleMapsUri || "",
+    googleMapsUri: r.googleMapsUri || "",
+    userRatingCount: r.googleReviewCount || 0,
+    // ⚠️ 수정금지(승인필요) 2026-05-21 = Phase E = dayZone 매핑
+    dayZone: r.dayZone ?? null,
+    nameKo: r.nameKo ?? null,
+    nameLocal: r.nameLocal ?? null,
+    address: r.address ?? null,
+    summaryKo: r.summaryKo ?? null,
+    editorialSummary: r.editorialSummary ?? null,
+  } as any;
 }
 
 /** ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = AG2 메인 = DB-only 단일 분기 */

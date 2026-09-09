@@ -122,7 +122,10 @@ import {
   type TransportType,
   type TravelStyle,
 } from "../server/services/transport/constants";
-import { VIBE_PRIMARY_CATEGORY } from "../shared/vibe-category";
+import {
+  VIBE_PRIMARY_CATEGORY,
+  SIGHT_CATEGORIES,
+} from "../shared/vibe-category";
 // AG1 뼈대 = 순수(외부·DB 0) = 원본 그대로(§16).
 import { buildSkeleton } from "../server/services/agents/ag1-skeleton-builder";
 // 동선 두뇌 = 순수 = 원본 그대로(§16). 이 파일을 옮겨쓰면 보호블록 재작성이 된다.
@@ -194,7 +197,7 @@ function poolWhereSql(
 
 /** 원본 server/services/shared/pool-radius.ts:66 servingGateSql = 손님상 게이트. */
 function servingGateSql(): SQL {
-  return sql`(${placeSeedRaw.status} = 'active' AND (COALESCE(${placeSeedRaw.googleReviewCount}, 0) > 0 OR ${placeSeedRaw.bestRank} IS NOT NULL))`;
+  return sql`(${placeSeedRaw.status} = 'active' AND (COALESCE(${placeSeedRaw.googleReviewCount}, 0) > 0 OR ${placeSeedRaw.bestRank} IS NOT NULL) AND (${placeSeedRaw.googlePlaceId} IS NOT NULL OR ${placeSeedRaw.verifySource} LIKE 'gmaps%') AND (${placeSeedRaw.businessStatus} IS NULL OR ${placeSeedRaw.businessStatus} NOT IN ('CLOSED_PERMANENTLY', 'CLOSED_TEMPORARILY')))`;
 }
 
 /** 원본 server/services/shared/pool-radius.ts:80 recalcCrossCityZone */
@@ -696,7 +699,6 @@ async function fetchFromPlaceSeedRaw(
     const baseWhere = [
       poolWhere,
       eq(placeSeedRaw.seedCategory, cat),
-      isNotNull(placeSeedRaw.googlePlaceId),
       servingGateSql(),
     ];
     if (isRestaurant)
@@ -762,22 +764,13 @@ async function fetchFromPlaceSeedRaw(
   if (!pinIds.length && nearNonRest < nonRestSlots) {
     const deficit = nonRestSlots - nearNonRest;
     const pickedIds = new Set(allRows.map((r: any) => r.id));
-    const FILL_CATS = [
-      "heritage",
-      "hotspot",
-      "attraction",
-      "adventure",
-      "healing",
-      "shopping",
-    ];
     const extra: any[] = await db
       .select(AG2_SELECT_COLS)
       .from(placeSeedRaw)
       .where(
         and(
           poolWhere,
-          inArray(placeSeedRaw.seedCategory, FILL_CATS),
-          isNotNull(placeSeedRaw.googlePlaceId),
+          inArray(placeSeedRaw.seedCategory, [...SIGHT_CATEGORIES]),
           servingGateSql(),
         ),
       );
@@ -995,7 +988,6 @@ async function finalizeDbOnlyItinerary(
         poolWhere,
         eq(placeSeedRaw.seedCategory, "restaurant"),
         servingGateSql(),
-        sql`(${placeSeedRaw.googlePlaceId} IS NOT NULL OR (${pinCond}))`,
         sql`(${placeSeedRaw.priceEur} IS NOT NULL OR (${pinCond}))`,
         sql`((${placeSeedRaw.imageUrl} IS NOT NULL AND ${placeSeedRaw.imageUrl} <> '') OR (${pinCond}))`,
       ),

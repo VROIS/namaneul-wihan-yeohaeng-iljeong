@@ -35,6 +35,7 @@ export function registerItineraryGenerateRoute(app: Express): void {
               displayName: users.displayName,
               preferredVibes: users.preferredVibes,
               preferredLanguage: users.preferredLanguage,
+              role: users.role,
             })
             .from(users)
             .where(eq(users.id, formData.userId));
@@ -45,6 +46,8 @@ export function registerItineraryGenerateRoute(app: Express): void {
               birthDate: user.birthDate, // 🎯 핵심: 가족 연령 추정용
               userDisplayName: user.displayName,
               language: formData.language || user.preferredLanguage || "ko",
+              // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 관리자면 베스트 분기로 보낸다(화면 버튼 글자도 함께 바뀐다).
+              bestOnly: user.role === "admin",
             };
 
             console.log(

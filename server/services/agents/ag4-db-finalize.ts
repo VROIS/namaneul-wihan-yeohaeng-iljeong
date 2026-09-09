@@ -54,6 +54,9 @@ export interface AG4DbInput {
   cityCoords?: { lat: number; lng: number };
   skeleton: AG1Output;
   inputPlaces: PlaceResult[];
+  // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 베스트 분기가 식당을 직접 넘길 때만 채워진다. 안 넘기면(기존 여정) 아래에서 지금까지처럼 스스로 뽑는다.
+  restaurantPool?: PlaceResult[];
+  bestMode?: boolean;
 }
 
 export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
@@ -68,14 +71,15 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
     cityCoords,
     skeleton,
     inputPlaces,
+    bestMode,
   } = input;
 
   const eurToKrw = await getEurToKrwRate("[AG4-DB]");
 
-  // ⚠️ 수정금지(승인필요) 2026-06-13 사용자 SSOT = DB-only 식당풀 = 가격대 구간별 RC TOP 만 (= eco20/reason40/premium20, zone 구분 없이 도시 전체)
-  let restaurantPool: PlaceResult[] = [];
+  // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 식당풀 = 넘겨받은 것이 있으면 그것만 쓰고, 없으면 아래에서 스스로 뽑는다.
+  let restaurantPool: PlaceResult[] = input.restaurantPool ?? [];
   let imagePidMap: Map<string, string> = new Map();
-  if (cityId && db) {
+  if (cityId && db && !input.restaurantPool) {
     // ⚠️ 2026-07-17 사장님 확정 = 풀 = (city_id=요청도시) ∪ (좌표 유효 100km 이내) 합집합(§16 pool-radius)
     const { where: poolWhere } = await getPoolContext(cityId, cityCoords); // 2026-07-17 = 기점 = 동적 출발점(cityCoords = 숙소>도심, day-builder 우선순위 반영값)
     // ⚠️ 2026-07-31 사장님 승인(BTS D단계 BE-3) = 핀 식당 = **같은 쿼리 1벌 안에서** 무조건 포함(§16).
@@ -98,7 +102,6 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
              (${pinCond}) AS pinned
       FROM place_seed_raw
       WHERE (${poolWhere}) AND seed_category = 'restaurant' AND (${servingGateSql()})
-        AND (google_place_id IS NOT NULL OR (${pinCond}))
         AND (price_eur IS NOT NULL OR (${pinCond}))
         AND ((image_url IS NOT NULL AND image_url <> '') OR (${pinCond}))
       ORDER BY ${sql.raw(bestRankOrderSql())}, "googleReviewCount" DESC NULLS LAST
@@ -141,6 +144,7 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
     restaurantPool,
     hourlyRate,
     mealTiers,
+    bestMode,
   );
   console.log(
     `[AG4-DB] ✅ 동선 = 로컬 NN+Haversine (${routeResult.elapsedMs}ms, Gemini 0)`,

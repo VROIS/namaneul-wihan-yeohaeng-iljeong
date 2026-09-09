@@ -3,6 +3,7 @@
 import { sql, eq, type SQL } from "drizzle-orm";
 import { db } from "../../db";
 import { cities, placeSeedRaw } from "@shared/schema";
+import { distanceKmFromCoords } from "./geo-distance";
 
 export const POOL_RADIUS_M = 100_000;
 export const CORE_KM = 10;
@@ -22,17 +23,8 @@ export async function getCityCenter(
     : null;
 }
 
-export function distanceKmFromCoords(
-  latA: number,
-  lngA: number,
-  latB: number,
-  lngB: number,
-): number {
-  const dLat = (latA - latB) * 111320;
-  const dLng =
-    (lngA - lngB) * 111320 * Math.cos((((latA + latB) / 2) * Math.PI) / 180);
-  return Math.sqrt(dLat * dLat + dLng * dLng) / 1000;
-}
+// 거리 계산 = geo-distance.ts 1벌(§16). 여기서는 기존 부르던 곳들을 위해 그대로 다시 내보낸다.
+export { distanceKmFromCoords };
 
 /** ⚠️ 수정금지(승인필요) 2026-08-18 사장님 승인 = 100km 상한 추가(옛 무상한 = 폐기 §19). */
 export function zoneForDistanceKm(distKm: number): "core" | "outskirt" | null {
@@ -62,9 +54,12 @@ export function poolWhereSql(
   )))`;
 }
 
-/** ⚠️ 수정금지(승인필요) 2026-09-01 사장님 확정 = 손님상 게이트 1벌 = 베스트는 RC 면제(7개국어가 뽑은 것이 더 강한 증거). */
+// ⚠️ 수정금지(승인필요) 2026-09-08 사장님 결정 = 손님상 게이트 1벌 = active + (RC 또는 best_rank) + 확인된 곳(PID 또는 구글맵 검증) + 폐업·임시휴업 제외(창고엔 남기고 풀리면 저절로 복귀. NULL 은 통과 = 1,310행 보존).
 export function servingGateSql(): SQL {
-  return sql`(${placeSeedRaw.status} = 'active' AND (COALESCE(${placeSeedRaw.googleReviewCount}, 0) > 0 OR ${placeSeedRaw.bestRank} IS NOT NULL))`;
+  return sql`(${placeSeedRaw.status} = 'active'
+    AND (COALESCE(${placeSeedRaw.googleReviewCount}, 0) > 0 OR ${placeSeedRaw.bestRank} IS NOT NULL)
+    AND (${placeSeedRaw.googlePlaceId} IS NOT NULL OR ${placeSeedRaw.verifySource} LIKE 'gmaps%')
+    AND (${placeSeedRaw.businessStatus} IS NULL OR ${placeSeedRaw.businessStatus} NOT IN ('CLOSED_PERMANENTLY', 'CLOSED_TEMPORARILY')))`;
 }
 
 /** ⚠️ 수정금지(승인필요) 2026-09-01 사장님 확정 = 기점 = 동적 출발점(숙소>도심) 100km 물리검사 · 손님상 게이트와 한 진입점 */

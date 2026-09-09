@@ -38,6 +38,16 @@ export async function runPipelineV3(formData: TripFormData): Promise<any> {
     const { runPipelineDbOnly } = await import("./pipeline-db-only");
     return runPipelineDbOnly(formData, cityCheck);
   }
+  // ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = 베스트 여정 = 행수(ready 200)와 무관하게 **항상 DB-only** = 도시가 있으면 베스트 분기, 없으면 유료 MIX 로 흘리지 않고 막는다(핀 분기와 동형). 옛 `ready &&` 조건(9-07) 폐기 §19 = 200행 미만 도시에서 베스트가 제미니 유료로 빠지던 구멍(리마 실측).
+  if (formData.bestOnly) {
+    if (!cityCheck.cityId) {
+      throw new Error(
+        `베스트 요청인데 도시 미발견: '${formData.destination}' = DB-only 전제 = 유료 경로로 흘리지 않는다`,
+      );
+    }
+    const { runPipelineBest } = await import("./pipeline-best");
+    return runPipelineBest(formData, cityCheck);
+  }
   if (cityCheck.ready) {
     const { runPipelineDbOnly } = await import("./pipeline-db-only");
     return runPipelineDbOnly(formData, cityCheck);

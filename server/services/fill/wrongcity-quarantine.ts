@@ -174,6 +174,8 @@ const TAG = `city-moved-${new Date().toISOString().slice(0, 10)}`;
           await c.query("BEGIN");
           await c.query("SELECT set_config('app.skip_dup_check','on',true)");
           await c.query(upd, [r.id]);
+          // ⚠️ 수정금지(승인필요) 2026-09-08 사장님 확정 = 통과증(skip_dup_check)은 쓰고 나서 반드시 손으로 반납(RESET) = 풀 백엔드에 켜진 채 남아 검문 전체가 꺼졌던 사고.
+          await c.query("RESET app.skip_dup_check");
           await c.query("COMMIT");
           done++;
           viaSkip++;

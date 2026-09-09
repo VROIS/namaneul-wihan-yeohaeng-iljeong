@@ -161,8 +161,6 @@ export default function CityCardScreen({
                 return countryName ? `${name} (${countryName})` : name;
               })()}
             </Text>
-            {/* 한 줄 카피 = 비어 있으면(그 도시에 요약이 없음) 줄 자체를 안 그린다 = 빈 줄 방지(2026-08-02) */}
-            {!!rep.tagline && <Text style={styles.tagline}>{rep.tagline}</Text>}
           </View>
         </View>
 
@@ -252,12 +250,6 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 22,
     fontFamily: Fonts.bold,
-  },
-  tagline: {
-    color: "rgba(255, 255, 255, 0.85)",
-    fontSize: 12.5,
-    fontFamily: Fonts.medium,
-    marginTop: 2,
   },
   bodyContent: {
     padding: 18,

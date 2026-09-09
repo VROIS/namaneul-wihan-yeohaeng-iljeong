@@ -42,6 +42,13 @@ export type BusinessStatus =
   | "OPERATIONAL"
   | "CLOSED_PERMANENTLY"
   | "CLOSED_TEMPORARILY";
+// ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = 주소창 ftid(0x…:0x…) → cid 변환 1벌 · 목록 페이지 제목 판정 1벌(§16 = 세 곳·두 곳에 흩어져 있던 것 합침).
+const LIST_HEADING_RE = /^(Results|검색결과|Ergebnisse|Résultats)$/i;
+const cidOf = (m: RegExpMatchArray | null) =>
+  m ? BigInt(m[1].split(":")[1]).toString() : null;
+const cidFromUrl = (url: string) =>
+  cidOf(url.match(/[?&#!]\d*m\d+!1s(0x[0-9a-f]+:0x[0-9a-f]+)/i));
+
 const CLOSED_PERM_RE =
   /Permanently closed|Cerrado permanentemente|Cerrado definitivamente|Définitivement fermé|Fermé définitivement|Dauerhaft geschlossen|Chiuso definitivamente|Fechado permanentemente|Fechado definitivamente|Permanent gesloten|Tancat permanentment|폐업|閉業|永久停业|永久停業|Đã đóng cửa vĩnh viễn|Tutup permanen|ปิดถาวร|Imefungwa kabisa/i;
 const CLOSED_TEMP_RE =
@@ -60,6 +67,8 @@ export type PageData = {
   status: BusinessStatus;
   consentBlocked: boolean;
   photoUrl: string | null; // 대표 사진(구글맵 공개 페이지, 유료 API 0)
+  // ⚠️ 수정금지(승인필요) 2026-09-08 사장님 확정 = 주소창 ftid 뒷자리 → cid = TS 가 주던 google_maps_uri 와 같은 값(실측 3/3 일치). 유료 TS 없이 불변2 재료 확보.
+  mapsUri: string | null;
 };
 
 async function dismissConsent(page: Page): Promise<boolean> {
@@ -155,6 +164,8 @@ async function readPhotoUrl(page: Page, w: number): Promise<string | null> {
   return src.replace(/=w\d+-h\d+/, `=w${w}-h${Math.round(w * 0.75)}`);
 }
 
+// ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 여는 방법 2갈래 = PID(우리 열쇠) 또는 이름+주소(사람이 구글맵 쓰는 방식). 뒤 처리는 완전히 같다.
+//   = PID 가 틀려도(TS 오배송) 이름+주소로는 맞는 페이지가 열린다 = 유료 TS 없이 6요소 확보.
 export async function readPlacePage(
   page: Page,
   pid: string,
@@ -175,9 +186,13 @@ export async function readPlacePage(
     status: "OPERATIONAL",
     consentBlocked: false,
     photoUrl: null,
+    mapsUri: null,
   };
+  // ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = 여는 방법 2갈래 = PID · cid("cid:숫자" = 후보 목록에서 고른 것을 정확히 연다). 옛 "이름+주소 검색" 갈래 = 부르는 곳 0 = 폐기 §19(발굴은 listCandidates→cid 로 굳었다, 정본 ⑥·⑧).
   await page.goto(
-    `https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(pid)}&hl=${hl}`,
+    pid.startsWith("cid:")
+      ? `https://maps.google.com/?cid=${encodeURIComponent(pid.slice(4))}&hl=${hl}`
+      : `https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(pid)}&hl=${hl}`,
     { waitUntil: "domcontentloaded", timeout: 30000 },
   );
   if (!(await dismissConsent(page))) {
@@ -250,5 +265,91 @@ export async function readPlacePage(
       .catch(() => ""));
   if (CLOSED_PERM_RE.test(mainText)) out.status = "CLOSED_PERMANENTLY";
   else if (CLOSED_TEMP_RE.test(mainText)) out.status = "CLOSED_TEMPORARILY";
+  const cid = cidFromUrl(page.url());
+  if (cid) out.mapsUri = `https://maps.google.com/?cid=${cid}`;
   return out;
+}
+
+// ⚠️ 수정금지(승인필요) 2026-09-08 사장님 확정 = 검색하면 구글이 추천 목록을 준다. 첫 번째를 집지 않고 후보 전부(이름·cid·리뷰수·주소 조각)를 돌려준다 = 호출자가 리뷰수·주소로 고른다.
+export type Candidate = {
+  label: string;
+  cid: string | null;
+  reviewCount: number | null;
+  snippet: string;
+  lat: number | null;
+  lng: number | null;
+};
+export async function listCandidates(
+  page: Page,
+  query: string,
+  hl: string,
+): Promise<{ single: boolean; candidates: Candidate[] }> {
+  await page.goto(
+    `https://www.google.com/maps/search/${encodeURIComponent(query)}?hl=${hl}`,
+    { waitUntil: "domcontentloaded", timeout: 30000 },
+  );
+  if (!(await dismissConsent(page))) return { single: false, candidates: [] };
+  await page.waitForSelector("h1", { timeout: 15000 }).catch(() => {});
+  await page.waitForTimeout(2500);
+  const h1 = (
+    await page
+      .locator("h1")
+      .first()
+      .innerText()
+      .catch(() => "")
+  ).trim();
+  const isList = LIST_HEADING_RE.test(h1);
+  if (!isList && h1) {
+    // ⚠️ 수정금지(승인필요) 2026-09-08 사장님 확정 = 단일결과는 2.5초 시점엔 주소창이 아직 검색 URL(실측) = readPlacePage 와 같은 URL 대기 후 ftid·좌표를 읽는다(안 기다리면 cid null = El Chinito 류 "일치없음" 원인).
+    await page
+      .waitForURL(/!1s0x|@-?\d+\.\d+,-?\d+\.\d+/, { timeout: 8000 })
+      .catch(() => {});
+    const ft = page.url().match(/!1s(0x[0-9a-f]+:0x[0-9a-f]+)/i);
+    const at = page.url().match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+    return {
+      single: true,
+      candidates: [
+        {
+          label: h1,
+          cid: cidOf(ft),
+          reviewCount: null,
+          snippet: "",
+          lat: at ? Number(at[1]) : null,
+          lng: at ? Number(at[2]) : null,
+        },
+      ],
+    };
+  }
+  const raw: { label: string; href: string; text: string }[] = await page
+    .evaluate(() =>
+      Array.from(document.querySelectorAll('a[href*="/maps/place/"]'))
+        .filter((a) => !(a as HTMLAnchorElement).href.includes("aclk"))
+        .map((a) => {
+          const card = a.closest("div[jsaction]") || a.parentElement;
+          return {
+            label: a.getAttribute("aria-label") || "",
+            href: (a as HTMLAnchorElement).href,
+            text: ((card as HTMLElement | null)?.innerText || "")
+              .replace(/\s+/g, " ")
+              .slice(0, 200),
+          };
+        })
+        .filter((x) => x.label),
+    )
+    .catch(() => []);
+  const candidates: Candidate[] = raw.slice(0, 10).map((x) => {
+    const ft = x.href.match(/!1s(0x[0-9a-f]+:0x[0-9a-f]+)/i);
+    const rc = x.text.match(/\d[.,]\d\((\d{1,3}(?:[.,]\d{3})*|\d+)\)/);
+    // ⚠️ 수정금지(승인필요) 2026-09-08 사장님 확정 = 후보 링크의 !3d/!4d = 그 후보의 좌표(실측 6/6) = 호출자가 "가까운 것 먼저" 고르는 재료.
+    const xy = x.href.match(/!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)/);
+    return {
+      label: x.label,
+      cid: cidOf(ft),
+      reviewCount: rc ? Number(rc[1].replace(/[^\d]/g, "")) : null,
+      snippet: x.text,
+      lat: xy ? Number(xy[1]) : null,
+      lng: xy ? Number(xy[2]) : null,
+    };
+  });
+  return { single: false, candidates };
 }

@@ -52,9 +52,9 @@ export async function writeRow(
 ): Promise<void> {
   try {
     const read = pageWasRead(r);
-    // ⚠️ 수정금지(승인필요) 2026-09-04 사장님 결정 = 페이지 1회 방문으로 검증+사진 = 사진은 사진 없는 행만(정본 §"페이지를 한 번만 연다")
+    // ⚠️ 수정금지(승인필요) 2026-09-08 사장님 확정 = 어떤 경로로 열든 6요소(이름·주소·좌표·리뷰수·영업상태·사진 400px)+cid 는 무조건 그 행에 쓴다. 사진 = 있는 행도 덮는다(옛 "없는 행만" 폐기 §19).
     let imageUrl: string | undefined;
-    if (r.photo_url && !row.has_image) {
+    if (r.photo_url) {
       try {
         const res = await fetch(r.photo_url, {
           signal: AbortSignal.timeout(30000),
@@ -85,6 +85,7 @@ export async function writeRow(
       latitude: !read || r.gate === "page-coord-invalid" ? null : r.page_lat,
       longitude: !read || r.gate === "page-coord-invalid" ? null : r.page_lng,
       googleReviewCount: read && r.rc_flag == null ? r.rc_page : null,
+      googleMapsUri: read ? r.maps_uri : null,
       businessStatus: read ? r.status : null,
       verifySource: read ? "gmaps-pid-page" : null,
       phaseTags: [PHASE_TAG],

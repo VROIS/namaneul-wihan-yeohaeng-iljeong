@@ -23,7 +23,14 @@ CREATE UNIQUE INDEX IF NOT EXISTS uniq_psr_global_city_name
 --   ⚠️ 2026-07-09 = 도시무관화(city_id 조건 제거)로 PID/URI/좌표 조회가 Seq Scan(전체행) 됨 → btree 인덱스로 Index Scan 전환(실측 입증).
 --   = 등가검색 PID/URI 는 결정적 개선. 좌표는 위도 btree 로 후보 좁힘(경도 필터). NULL 다수라 부분인덱스.
 CREATE INDEX IF NOT EXISTS idx_psr_google_place_id ON public.place_seed_raw (google_place_id) WHERE google_place_id IS NOT NULL;
+-- ⚠️ 수정금지(승인필요) 2026-09-08 사장님 확정 = 기준은 cid 순수값이다 = 뒤에 무엇이 붙든(&g_mp=... 3종+) 무시하고 숫자만 보고 판정한다.
+--   사유 = 창고 5,504행의 꼬리표가 TS 창구별로 제각각 = 통째 글자비교는 같은 곳을 다른 곳으로 봐 중복을 몸통과시켰다(실측 6쌍).
+CREATE OR REPLACE FUNCTION public.psr_cid(uri text) RETURNS text
+LANGUAGE sql IMMUTABLE PARALLEL SAFE AS $$
+  SELECT NULLIF(substring(COALESCE(uri,'') from 'cid=([0-9]+)'), '')
+$$;
 CREATE INDEX IF NOT EXISTS idx_psr_google_maps_uri ON public.place_seed_raw (google_maps_uri) WHERE google_maps_uri IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_psr_cid ON public.place_seed_raw (public.psr_cid(google_maps_uri)) WHERE google_maps_uri IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_psr_latitude ON public.place_seed_raw (latitude) WHERE latitude IS NOT NULL;
 
 -- ── 1-c) 트리거 검사식 표현식 인덱스 4종 (2026-07-10 라이브 적용분과 동기화 §19) ──
@@ -139,14 +146,14 @@ BEGIN
 
   -- 2) URI (자기행 제외, 도시무관)
   IF NEW.google_maps_uri IS NOT NULL AND NEW.google_maps_uri <> '' THEN
-    SELECT id INTO matched_id FROM place_seed_raw WHERE google_maps_uri = NEW.google_maps_uri AND id <> COALESCE(NEW.id, -1) LIMIT 1;
+    SELECT id INTO matched_id FROM place_seed_raw WHERE public.psr_cid(google_maps_uri) IS NOT NULL AND public.psr_cid(google_maps_uri) = public.psr_cid(NEW.google_maps_uri) AND id <> COALESCE(NEW.id, -1) LIMIT 1;
     IF matched_id IS NOT NULL THEN RAISE EXCEPTION '[중복차단] 불변2 URI 일치 id=%', matched_id; END IF;
   END IF;
 
-  -- 3) 풀주소 (자기행 제외, URI veto 만 유지)
-  -- ⚠️ 수정금지(승인필요) 2026-07-18 사장님 SSOT = 로컬이름 AND 결합 완전삭제 §19 = 불변요소는 각각 독립(OR)이어야 함.
-  --   근본: 불변요소를 AND 로 묶으면 하나만 어긋나도 전체 무력화 = 룩셈부르크 초콜릿하우스 중복 근본(주소 동일한데 이름 "Chocolate House"↔"Chocolathouse" LIKE 실패 → 통과 → 중복 INSERT).
-  --   = 풀주소(20자+) 정규화 일치 = 그것만으로 같은 장소 = 독립 차단. URI veto(확정 다른 장소)만 예외 유지.
+  -- 3) 풀주소 (자기행 제외, URI·PID·먹는곳 veto)
+  -- ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 주소가 같아도 한쪽만 식당이면 다른 장소(큰 건물·몰·기념관은 주소를 공유한다).
+  --   발굴 시점에는 PID·URI 가 없어 그 두 veto 가 안 걸린다 = 몰의 표를 몰 안 식당이 가져가는 오염의 근본(다하우 카페테리아·이튼센터 실증).
+  --   풀주소(20자+, 번지+우편번호) 정규화 일치 = 그것만으로 같은 장소 = 독립 차단. 식당끼리·명소끼리는 종전과 동일.
   v_addr := TRIM(REGEXP_REPLACE(REGEXP_REPLACE(LOWER(COALESCE(NEW.address,'')), '[.,;:!?''"()\[\]{}]', ' ', 'g'), '\s+', ' ', 'g'));
   -- ⚠️ 수정금지(승인필요) 2026-08-10 사장님 승인 = 주소 판정은 **번지+우편번호가 있을 때만**(§14 원문 전제 그대로 집행).
   --   사유 = 번지·우편번호가 없는 나라(케냐 등)는 주소가 '길 이름'뿐이라 같은 길의 다른 곳까지 한 곳으로 합쳐졌다.
@@ -157,8 +164,9 @@ BEGIN
     SELECT c.id INTO matched_id FROM place_seed_raw c
     WHERE c.address IS NOT NULL AND c.id <> COALESCE(NEW.id, -1)
       AND TRIM(REGEXP_REPLACE(REGEXP_REPLACE(LOWER(c.address), '[.,;:!?''"()\[\]{}]', ' ', 'g'), '\s+', ' ', 'g')) = v_addr
-      AND NOT (c.google_maps_uri IS NOT NULL AND c.google_maps_uri<>'' AND NEW.google_maps_uri IS NOT NULL AND NEW.google_maps_uri<>'' AND c.google_maps_uri<>NEW.google_maps_uri)
+      AND NOT (public.psr_cid(c.google_maps_uri) IS NOT NULL AND public.psr_cid(NEW.google_maps_uri) IS NOT NULL AND public.psr_cid(c.google_maps_uri)<>public.psr_cid(NEW.google_maps_uri))
       AND NOT (c.google_place_id IS NOT NULL AND c.google_place_id<>'' AND NEW.google_place_id IS NOT NULL AND NEW.google_place_id<>'' AND c.google_place_id<>NEW.google_place_id)
+      AND c.seed_category = NEW.seed_category
     LIMIT 1;
     IF matched_id IS NOT NULL THEN RAISE EXCEPTION '[중복차단] 불변3 풀주소 일치 id=%', matched_id; END IF;
   END IF;
@@ -171,14 +179,17 @@ BEGIN
     SELECT COUNT(*), MIN(c.id) INTO v_near_cnt, matched_id FROM place_seed_raw c
     WHERE c.latitude BETWEEN NEW.latitude - 0.0001 AND NEW.latitude + 0.0001 AND c.longitude IS NOT NULL AND c.id <> COALESCE(NEW.id, -1)
       AND ABS(c.longitude - NEW.longitude) < 0.0001
-      AND NOT (c.google_maps_uri IS NOT NULL AND c.google_maps_uri<>'' AND NEW.google_maps_uri IS NOT NULL AND NEW.google_maps_uri<>'' AND c.google_maps_uri<>NEW.google_maps_uri)
-      AND NOT (c.google_place_id IS NOT NULL AND c.google_place_id<>'' AND NEW.google_place_id IS NOT NULL AND NEW.google_place_id<>'' AND c.google_place_id<>NEW.google_place_id);
+      AND NOT (public.psr_cid(c.google_maps_uri) IS NOT NULL AND public.psr_cid(NEW.google_maps_uri) IS NOT NULL AND public.psr_cid(c.google_maps_uri)<>public.psr_cid(NEW.google_maps_uri))
+      AND NOT (c.google_place_id IS NOT NULL AND c.google_place_id<>'' AND NEW.google_place_id IS NOT NULL AND NEW.google_place_id<>'' AND c.google_place_id<>NEW.google_place_id)
+      -- ⚠️ 수정금지(승인필요) 2026-09-08 사장님 확정 = 분류가 다르면 다른 곳(불변3·4·5·6 동형 1줄).
+      AND c.seed_category = NEW.seed_category;
     IF v_near_cnt > 1 THEN
       SELECT c.id INTO matched_id FROM place_seed_raw c
       WHERE c.latitude BETWEEN NEW.latitude - 0.0001 AND NEW.latitude + 0.0001 AND c.longitude IS NOT NULL AND c.id <> COALESCE(NEW.id, -1)
         AND ABS(c.longitude - NEW.longitude) < 0.0001
-        AND NOT (c.google_maps_uri IS NOT NULL AND c.google_maps_uri<>'' AND NEW.google_maps_uri IS NOT NULL AND NEW.google_maps_uri<>'' AND c.google_maps_uri<>NEW.google_maps_uri)
+        AND NOT (public.psr_cid(c.google_maps_uri) IS NOT NULL AND public.psr_cid(NEW.google_maps_uri) IS NOT NULL AND public.psr_cid(c.google_maps_uri)<>public.psr_cid(NEW.google_maps_uri))
         AND NOT (c.google_place_id IS NOT NULL AND c.google_place_id<>'' AND NEW.google_place_id IS NOT NULL AND NEW.google_place_id<>'' AND c.google_place_id<>NEW.google_place_id)
+        AND c.seed_category = NEW.seed_category
         AND v_local <> '' AND v_local = LOWER(TRIM(COALESCE(c.name_local,'')))
       LIMIT 1;
     END IF;
@@ -200,9 +211,11 @@ BEGIN
                  AND c.latitude IS NOT NULL AND c.latitude <> 0 AND c.longitude IS NOT NULL AND c.longitude <> 0
                  AND sqrt( power((c.latitude::float - NEW.latitude::float)*111320, 2)
                          + power((c.longitude::float - NEW.longitude::float)*111320*cos(radians((c.latitude::float + NEW.latitude::float)/2)), 2) ) <= 100000 ) )
-      AND NOT (c.google_maps_uri IS NOT NULL AND c.google_maps_uri<>'' AND NEW.google_maps_uri IS NOT NULL AND NEW.google_maps_uri<>'' AND c.google_maps_uri<>NEW.google_maps_uri)
+      AND NOT (public.psr_cid(c.google_maps_uri) IS NOT NULL AND public.psr_cid(NEW.google_maps_uri) IS NOT NULL AND public.psr_cid(c.google_maps_uri)<>public.psr_cid(NEW.google_maps_uri))
       AND NOT (c.google_place_id IS NOT NULL AND c.google_place_id<>'' AND NEW.google_place_id IS NOT NULL AND NEW.google_place_id<>'' AND c.google_place_id<>NEW.google_place_id)
       AND v_local IN (LOWER(TRIM(COALESCE(c.name_en,''))), LOWER(TRIM(COALESCE(c.name_local,''))), LOWER(TRIM(COALESCE(c.name_ko,''))))
+      -- ⚠️ 수정금지(승인필요) 2026-09-08 사장님 확정 = 분류가 다르면 다른 곳(불변3·4·5·6 동형 1줄). 옛 "식당 ↔ 비식당만" 폐기 §19.
+      AND c.seed_category = NEW.seed_category
     LIMIT 1;
     IF matched_id IS NOT NULL THEN RAISE EXCEPTION '[중복차단] 불변5 로컬이름 일치 id=%', matched_id; END IF;
   END IF;
@@ -224,9 +237,9 @@ BEGIN
                    AND c.latitude IS NOT NULL AND c.latitude <> 0 AND c.longitude IS NOT NULL AND c.longitude <> 0
                    AND sqrt( power((c.latitude::float - NEW.latitude::float)*111320, 2)
                            + power((c.longitude::float - NEW.longitude::float)*111320*cos(radians((c.latitude::float + NEW.latitude::float)/2)), 2) ) <= 100000 ) )
-        AND NOT (c.google_place_id IS NOT NULL AND c.google_place_id<>'' AND NEW.google_place_id IS NOT NULL AND NEW.google_place_id<>''
-                 AND (c.google_place_id<>NEW.google_place_id
-                      OR (c.google_maps_uri IS NOT NULL AND c.google_maps_uri<>'' AND NEW.google_maps_uri IS NOT NULL AND NEW.google_maps_uri<>'' AND c.google_maps_uri<>NEW.google_maps_uri)))
+        -- ⚠️ 수정금지(승인필요) 2026-09-08 사장님 확정 = cid 가 다르면 다른 곳(PID 와 같은 대우) = 다른 불변과 같은 모양의 독립 veto. 옛 "PID 양쪽 있을 때만" 폐기 §19 = 구글맵으로만 만든 행(PID 없음)이 이름 같다고 흡수되던 구멍.
+        AND NOT (public.psr_cid(c.google_maps_uri) IS NOT NULL AND public.psr_cid(NEW.google_maps_uri) IS NOT NULL AND public.psr_cid(c.google_maps_uri)<>public.psr_cid(NEW.google_maps_uri))
+        AND NOT (c.google_place_id IS NOT NULL AND c.google_place_id<>'' AND NEW.google_place_id IS NOT NULL AND NEW.google_place_id<>'' AND c.google_place_id<>NEW.google_place_id)
         -- ⚠️ 2026-08-22 사장님 승인(시뮬 검증) = 일반명사 꼬리 상이 veto = "같은 머리+다른 꼬리"(National Park↔National Museum, Central Park↔Central Market) = 다른 장소(통과).
         --   양쪽 다 제거 일반명사가 있고 서로 다를 때만 발동 = 꼬리 동일(Palais de↔du Tau)·한쪽 결여(Musée du Louvre↔Louvre)는 기존 병합 유지.
         AND NOT ( public.psr_removed_generics(COALESCE(NULLIF(NEW.name_local,''), NEW.name_en)) <> ''
@@ -235,6 +248,8 @@ BEGIN
                       <> public.psr_removed_generics(COALESCE(NULLIF(c.name_local,''), c.name_en)) )
         AND ARRAY(SELECT k FROM unnest(ARRAY[k_en,k_local]) k WHERE length(k)>=3)
             && ARRAY(SELECT k FROM unnest(ARRAY[public.psr_proper_key(c.name_en),public.psr_proper_key(c.name_local)]) k WHERE length(k)>=3)
+        -- ⚠️ 수정금지(승인필요) 2026-09-08 사장님 확정 = 분류가 다르면 다른 곳(불변3·4·5·6 동형 1줄). 옛 "식당 ↔ 비식당만" 폐기 §19.
+        AND c.seed_category = NEW.seed_category
       LIMIT 1;
       IF matched_id IS NOT NULL THEN RAISE EXCEPTION '[중복차단] 불변6 고유명사 일치 id=%', matched_id; END IF;
     END IF;
@@ -253,7 +268,7 @@ BEGIN
                  AND c.latitude IS NOT NULL AND c.latitude <> 0 AND c.longitude IS NOT NULL AND c.longitude <> 0
                  AND sqrt( power((c.latitude::float - NEW.latitude::float)*111320, 2)
                          + power((c.longitude::float - NEW.longitude::float)*111320*cos(radians((c.latitude::float + NEW.latitude::float)/2)), 2) ) <= 100000 ) )
-      AND NOT (c.google_maps_uri IS NOT NULL AND c.google_maps_uri<>'' AND NEW.google_maps_uri IS NOT NULL AND NEW.google_maps_uri<>'' AND c.google_maps_uri<>NEW.google_maps_uri)
+      AND NOT (public.psr_cid(c.google_maps_uri) IS NOT NULL AND public.psr_cid(NEW.google_maps_uri) IS NOT NULL AND public.psr_cid(c.google_maps_uri)<>public.psr_cid(NEW.google_maps_uri))
       AND NOT (c.google_place_id IS NOT NULL AND c.google_place_id<>'' AND NEW.google_place_id IS NOT NULL AND NEW.google_place_id<>'' AND c.google_place_id<>NEW.google_place_id)
       AND v_en IN (LOWER(TRIM(COALESCE(c.name_en,''))), LOWER(TRIM(COALESCE(c.name_local,''))), LOWER(TRIM(COALESCE(c.name_ko,''))))
     LIMIT 1;
@@ -267,7 +282,7 @@ BEGIN
                  AND c.latitude IS NOT NULL AND c.latitude <> 0 AND c.longitude IS NOT NULL AND c.longitude <> 0
                  AND sqrt( power((c.latitude::float - NEW.latitude::float)*111320, 2)
                          + power((c.longitude::float - NEW.longitude::float)*111320*cos(radians((c.latitude::float + NEW.latitude::float)/2)), 2) ) <= 100000 ) )
-      AND NOT (c.google_maps_uri IS NOT NULL AND c.google_maps_uri<>'' AND NEW.google_maps_uri IS NOT NULL AND NEW.google_maps_uri<>'' AND c.google_maps_uri<>NEW.google_maps_uri)
+      AND NOT (public.psr_cid(c.google_maps_uri) IS NOT NULL AND public.psr_cid(NEW.google_maps_uri) IS NOT NULL AND public.psr_cid(c.google_maps_uri)<>public.psr_cid(NEW.google_maps_uri))
       AND NOT (c.google_place_id IS NOT NULL AND c.google_place_id<>'' AND NEW.google_place_id IS NOT NULL AND NEW.google_place_id<>'' AND c.google_place_id<>NEW.google_place_id)
       AND v_ko IN (LOWER(TRIM(COALESCE(c.name_en,''))), LOWER(TRIM(COALESCE(c.name_local,''))), LOWER(TRIM(COALESCE(c.name_ko,''))))
     LIMIT 1;

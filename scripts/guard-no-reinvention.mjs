@@ -65,6 +65,8 @@ const CAPABILITIES = [
     owners: [
       "server/services/fill/status-backfill.ts",
       "server/services/fill/wrongcity-quarantine.ts",
+      // ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = MIX 쌍둥이 흡수 시 껍데기(자기 행) 즉시 삭제 = place-upsert 가 그 능력의 owner
+      "server/services/place-upsert.ts",
     ],
     triggers: [
       /DELETE\s+FROM\s+place_seed_raw/i,

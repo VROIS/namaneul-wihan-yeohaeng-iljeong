@@ -38,6 +38,10 @@ export interface UpsertPayload {
   phaseTags?: string[];
   // ⚠️ 수정금지(승인필요) 2026-07-11 사장님 SSOT = 좌표 쓰기 보호 = true 면 기존 행 좌표(NULL·0 제외)를 유지하고 빈칸·0만 채움.
   preserveExistingCoords?: boolean;
+  // ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = 흡수(있는 행 직행) 때 원행의 이름·요약은 지키고 빈 칸만 채운다 = 뒤에 온 제미니 표기가 원행 이름을 갈아치워 다음 판 알아보기가 깨지던 병(매직 워터·아르마스 광장 실측).
+  preserveExistingNames?: boolean;
+  // ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = 이번 호출이 방금 만든 행인가 = PID 쌍둥이 흡수 때 지워도 되는지(껍데기) / 남겨야 하는지(원래 있던 행)의 유일한 기준.
+  rowIsNew?: boolean;
 }
 
 export type { MatchedBy };
@@ -71,9 +75,9 @@ function buildDirectUpdateSql(p: UpsertPayload, targetId: number) {
   const phTags = p.phaseTags || [];
   return sql`
       UPDATE place_seed_raw SET
-        name_en       = COALESCE(${p.nameEn ?? null}, name_en),
-        name_ko       = COALESCE(${p.nameKo ?? null}, name_ko),
-        name_local    = COALESCE(${p.nameLocal ?? null}, name_local),
+        name_en       = ${p.preserveExistingNames ? sql`COALESCE(NULLIF(name_en, ''), ${p.nameEn ?? null}, name_en)` : sql`COALESCE(${p.nameEn ?? null}, name_en)`},
+        name_ko       = ${p.preserveExistingNames ? sql`COALESCE(NULLIF(name_ko, ''), ${p.nameKo ?? null}, name_ko)` : sql`COALESCE(${p.nameKo ?? null}, name_ko)`},
+        name_local    = ${p.preserveExistingNames ? sql`COALESCE(NULLIF(name_local, ''), ${p.nameLocal ?? null}, name_local)` : sql`COALESCE(${p.nameLocal ?? null}, name_local)`},
         latitude      = ${p.preserveExistingCoords ? sql`COALESCE(NULLIF(latitude, 0), ${p.latitude ?? null}::real, latitude)` : sql`COALESCE(${p.latitude ?? null}::real, latitude)`},
         longitude     = ${p.preserveExistingCoords ? sql`COALESCE(NULLIF(longitude, 0), ${p.longitude ?? null}::real, longitude)` : sql`COALESCE(${p.longitude ?? null}::real, longitude)`},
         address       = COALESCE(${p.address ?? null}, address),
@@ -85,8 +89,8 @@ function buildDirectUpdateSql(p: UpsertPayload, targetId: number) {
         image_url     = COALESCE(${p.imageUrl ?? null}, image_url),
         image_attribution = COALESCE(${p.imageAttribution ?? null}, image_attribution),
         price_eur     = COALESCE(${p.priceEur ?? null}::real, price_eur),
-        editorial_summary = COALESCE(${p.shortformKo ?? null}, editorial_summary),
-        summary_ko        = COALESCE(${p.selectionReasonKo ?? null}, summary_ko),
+        editorial_summary = ${p.preserveExistingNames ? sql`COALESCE(NULLIF(editorial_summary, ''), ${p.shortformKo ?? null}, editorial_summary)` : sql`COALESCE(${p.shortformKo ?? null}, editorial_summary)`},
+        summary_ko        = ${p.preserveExistingNames ? sql`COALESCE(NULLIF(summary_ko, ''), ${p.selectionReasonKo ?? null}, summary_ko)` : sql`COALESCE(${p.selectionReasonKo ?? null}, summary_ko)`},
         day_zone          = COALESCE(${p.dayZone ?? null}, day_zone),
         distance_km_from_center = COALESCE(${p.distanceKmFromCenter ?? null}::real, distance_km_from_center),
         category_tags     = (SELECT ARRAY(SELECT DISTINCT unnest(COALESCE(category_tags, ARRAY[]::text[]) || ${sql.raw(`ARRAY[${catTags.map((s) => `'${s.replace(/'/g, "''")}'`).join(",")}]::text[]`)}))),
@@ -197,6 +201,93 @@ async function recoverTriggerDup(
   }
 }
 
+// ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = 지우기 전에 그 행이 가진 것(번역·동의 등급·가리키는 곳)을 남는 행으로 먼저 옮긴다(status-backfill 과 같은 순서) = 값이 든 행이 그냥 사라지지 않게.
+//   ⚠️ 전부 **한 트랜잭션 + 통과증(app.skip_dup_check)** 안에서 한다. 통과증 없이 하면 keep 행 UPDATE 가 문지기 불변1(PID 일치)에 걸려 EXCEPTION → 흡수가 통째로 실패하고 그 행이 삭제된다(2026-09-09 실측 = 중복 PID 3그룹 3/3 전부 "[중복차단] 불변1 PID 일치"). 한 트랜잭션인 이유 = 중간에 끊기면 소유물이 절반만 옮겨진다.
+async function moveBelongingsTo(keepId: number, loserId: number) {
+  if (!db) return;
+  const { bestRankUnion } = await import("./shared/best-rank");
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT set_config('app.skip_dup_check', 'on', true)`);
+    await tx.execute(
+      sql`INSERT INTO place_translations (place_id, language, summary, editorial_summary)
+        SELECT ${keepId}, language, summary, editorial_summary
+          FROM place_translations WHERE place_id = ${loserId}
+        ON CONFLICT (place_id, language) DO NOTHING`,
+    );
+    const lose: any = (
+      await tx.execute(
+        sql`SELECT best_rank FROM place_seed_raw WHERE id = ${loserId}`,
+      )
+    ).rows?.[0];
+    if (lose?.best_rank != null) {
+      const keep: any = (
+        await tx.execute(
+          sql`SELECT best_rank FROM place_seed_raw WHERE id = ${keepId}`,
+        )
+      ).rows?.[0];
+      const cur = keep?.best_rank == null ? null : Number(keep.best_rank);
+      const merged = bestRankUnion(cur, Number(lose.best_rank));
+      if (merged !== cur)
+        await tx.execute(
+          sql`UPDATE place_seed_raw SET best_rank = ${merged} WHERE id = ${keepId}`,
+        );
+    }
+    await tx.execute(
+      sql`UPDATE guides SET place_id = ${keepId} WHERE place_id = ${loserId}`,
+    );
+    await tx.execute(
+      sql`UPDATE cities SET override_hero_place_id = ${keepId} WHERE override_hero_place_id = ${loserId}`,
+    );
+    await tx.execute(
+      sql`UPDATE cities SET override_highlight_place_ids = array_replace(override_highlight_place_ids, ${loserId}, ${keepId}) WHERE ${loserId} = ANY(override_highlight_place_ids)`,
+    );
+    await tx.execute(
+      sql`UPDATE place_seed_raw SET merged_into = ${keepId} WHERE merged_into = ${loserId} AND id <> ${keepId}`,
+    );
+    await tx.execute(sql`RESET app.skip_dup_check`);
+  });
+}
+
+// ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = 신분(PID·리뷰) 못 갖춘 새 행은 창고에 남기지 않는다 = 삭제 1벌(번역·R2 사진 포함). MIX 가 TS 오배송·빈 페이지·좌표이탈로 못 채운 행에 쓴다.
+export async function deletePlaceRow(
+  rowId: number,
+  opts?: { keepImageUrl?: string | null; alsoDeleteUrl?: string | null },
+): Promise<void> {
+  if (!db) return;
+  const r: any = (
+    await db.execute(
+      sql`SELECT image_url FROM place_seed_raw WHERE id = ${rowId}`,
+    )
+  ).rows?.[0];
+  await db.transaction(async (tx) => {
+    await tx.execute(
+      sql`DELETE FROM place_translations WHERE place_id = ${rowId}`,
+    );
+    await tx.execute(sql`DELETE FROM place_seed_raw WHERE id = ${rowId}`);
+  });
+  // 행에 쓰여 있던 사진 + (있으면) 행에 못 쓰고 올라간 고아 사진. 흡수한 원행이 물려받은 사진은 빼고 지운다.
+  await deleteR2Photos([r?.image_url, opts?.alsoDeleteUrl], opts?.keepImageUrl);
+}
+
+// ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = 주소 → R2 키 되돌리기 1벌(§16) = getR2PublicUrl 이 `${base}/${key}` 로 인코딩 없이 붙이므로 되돌릴 때도 그냥 자른다(디코딩하면 Café 같은 키가 어긋나 삭제가 조용히 빗나감).
+async function deleteR2Photos(
+  urls: (string | null | undefined)[],
+  keepUrl?: string | null,
+): Promise<void> {
+  const r2pub = (process.env.R2_PUBLIC_URL || "").replace(/\/$/, "");
+  if (!r2pub) return;
+  const keys = new Set(
+    urls
+      .map((u) => (u == null ? "" : String(u)))
+      .filter((u) => u && u !== keepUrl && u.startsWith(r2pub))
+      // 자리수로 자르지 않고 접두어만 떼고 남은 슬래시를 지운다(R2_PUBLIC_URL 끝에 슬래시가 있어도 키가 안 어긋난다).
+      .map((u) => u.slice(r2pub.length).replace(/^\/+/, "")),
+  );
+  if (!keys.size) return;
+  const { deleteFromR2 } = await import("./shared/r2-client");
+  for (const k of keys) await deleteFromR2(k).catch(() => {});
+}
+
 export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
   if (!db) {
     return {
@@ -215,7 +306,7 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
     };
   }
 
-  // ⚠️ 수정금지(승인필요) 2026-09-03 사장님 결정 = PID 를 처음 받는 행(제미니 단계 신규·PID 결손행)에 TS PID 를 쓸 때는 문지기 면제 없이 불변1(PID 일치)을 돌리고, 막히면 그 원행으로 흡수 + 자기 행은 merged(삭제 0) · 이미 PID 있는 확정행 직행은 면제 그대로
+  // ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = PID 를 처음 받는 행에 TS PID 를 쓸 때 불변1(PID 일치)에 막히면 그 원행으로 흡수하고 **자기 행(껍데기)은 삭제**한다. 옛 "merged 로 남김(삭제 0)" 폐기 §19 = 껍데기가 남아 다음 매칭을 가로채 오염(2026-09-09 리마 MIX 11행 실측). 이미 PID 있는 확정행 직행은 면제 그대로.
   if (p.targetRowId != null) {
     try {
       let res;
@@ -232,16 +323,25 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
             followTriggerDup: true,
             dupCheckOnWrite: false,
           });
-          await db.transaction(async (tx) => {
-            await tx.execute(
-              sql`SELECT set_config('app.skip_dup_check', 'on', true)`,
-            );
-            await tx.execute(
-              sql`UPDATE place_seed_raw SET status = 'merged', merged_into = ${dupId}, updated_at = NOW() WHERE id = ${p.targetRowId}`,
-            );
-          });
+          // ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = 지우는 것은 **이번에 만든 껍데기**뿐이다(rowIsNew). 원래 창고에 있던 행은 값(번역·동의 등급)을 옮긴 뒤 merged 표시로 남긴다 = 옛 "무조건 삭제" 폐기 §19.
+          await moveBelongingsTo(dupId, p.targetRowId);
+          if (p.rowIsNew) {
+            await deletePlaceRow(p.targetRowId, {
+              keepImageUrl: absorbed.enriched?.imageUrl ?? null,
+            });
+          } else {
+            await db.transaction(async (tx) => {
+              await tx.execute(
+                sql`SELECT set_config('app.skip_dup_check', 'on', true)`,
+              );
+              await tx.execute(
+                sql`UPDATE place_seed_raw SET status = 'merged', merged_into = ${dupId}, updated_at = NOW() WHERE id = ${p.targetRowId}`,
+              );
+              await tx.execute(sql`RESET app.skip_dup_check`);
+            });
+          }
           console.log(
-            `[UPSERT] 🧲 PID 쌍둥이 흡수 = 새 행 #${p.targetRowId} → 원행 #${dupId} (merged, 삭제 0)`,
+            `[UPSERT] 🧲 PID 쌍둥이 흡수 = #${p.targetRowId} → 원행 #${dupId} (${p.rowIsNew ? "껍데기 삭제" : "merged 표시·삭제 0"})`,
           );
           return {
             ...absorbed,
@@ -256,7 +356,10 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
           await tx.execute(
             sql`SELECT set_config('app.skip_dup_check', 'on', true)`,
           ); // true=트랜잭션 한정 = prevent_dup 만 스킵(자동 복원)
-          return tx.execute(buildDirectUpdateSql(p, p.targetRowId!));
+          const r = await tx.execute(buildDirectUpdateSql(p, p.targetRowId!));
+          // ⚠️ 수정금지(승인필요) 2026-09-08 사장님 확정 = 통과증(skip_dup_check)은 쓰고 나서 반드시 손으로 반납(RESET) = 풀 백엔드에 켜진 채 남아 검문 전체가 꺼졌던 사고.
+          await tx.execute(sql`RESET app.skip_dup_check`);
+          return r;
         });
       } else {
         res = await db.execute(buildDirectUpdateSql(p, p.targetRowId));

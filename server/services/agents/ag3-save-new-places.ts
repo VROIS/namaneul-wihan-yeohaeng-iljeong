@@ -8,6 +8,12 @@ import { tsSearch, tsPhoto } from "../shared/ts-client";
 import { zoneForDistanceKm } from "../shared/pool-radius";
 // ⚠️ 수정금지(승인필요) 2026-07-06 사장님 SSOT = TS raw 모음 1파일(#45 방식) 저장 = 도시id 폴더 로컬+Storage 2곳(§18).
 import { saveCollectedRaw } from "../shared/save-collected-raw";
+import {
+  recognizePlace,
+  namesAgree,
+  recognizeRowsQuery,
+  type RecognizeRow,
+} from "../shared/recognize-place";
 
 export async function saveNewPlacesToDB(
   newPlaces: PlaceResult[],
@@ -69,10 +75,22 @@ export async function saveNewPlacesToDB(
   // 🗑️ 2026-07-07 개정헌법(사장님) = rank(랭킹) 사전계산 블록 완전삭제 §19. 코드는 랭킹 한 자도 안 넣음 = 받은 응답만 저장 = 랭킹은 이후 DB autorank 트리거(RC순)가 알아서.
   const today = new Date().toISOString().slice(0, 10);
 
-  // ⚠️ 수정금지(승인필요) 2026-07-08 사장님 SSOT = 순서 = ① Gemini 전체 upsert → ② TS 대상 = 신규(inserted) + PID 없는 매칭행(updated) → ③ TS(+PM) → 저장. (PM = ③과 같은 병렬로 재통합 2026-08-16)
-  const { upsertPlace } = await import("../place-upsert");
+  // ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = 순서 = ① 알아보는 문 → 있으면 그 행 직행(이름 보존) / 없으면 새 행 → ② TS 대상 = 새 행 + PID 없는 매칭행 → ③ TS 이름 불일치·빈 페이지·좌표이탈이면 새 행 삭제, 아니면 저장(+PM).
+  const { upsertPlace, deletePlaceRow } = await import("../place-upsert");
+  // ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = 행 삭제 = 슬롯이 든 그 행 번호도 같이 뗀다(안 떼면 화면 [해설 듣기]가 없는 행을 불러 404).
+  const dropRow = async (
+    rowId: number,
+    place: any,
+    orphanImageUrl?: string,
+  ) => {
+    // 행에 아직 안 쓰인 채 올라간 사진도 같이 치운다(삭제 규칙 = place-upsert 1벌).
+    await deletePlaceRow(rowId, { alsoDeleteUrl: orphanImageUrl ?? null });
+    delete place.psrRowId;
+  };
 
-  // ⚠️ 수정금지(승인필요) 2026-07-18 사장님 SSOT = 매칭 폐기(트리거 단일) 후 = 곳마다 독립(공유 후보명단 없음) = Promise.all 병렬(옛 순차 for+await=곳당 90ms×N 직렬 폐기 §0/§19).
+  // ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = 알아보는 문(recognizePlace) = 제미니 값만으로 창고에 있는 행을 먼저 찾고, 있으면 그 행으로 직행(새 행·껍데기 0, TS 0). 시드 ③ 과 같은 1벌(§16). 곳마다 독립 = Promise.all 병렬 유지.
+  const recogRes: any = await db.execute(recognizeRowsQuery(cityId));
+  const recogRows: RecognizeRow[] = recogRes.rows ?? recogRes;
   const stage1 = await Promise.all(
     toSave.map(async (place: any) => {
       const seedCategory: string =
@@ -118,9 +136,28 @@ export async function saveNewPlacesToDB(
             : null,
         // ⚠️ 수정금지(승인필요) 2026-07-11 사장님 SSOT = ① Gemini 쓰기 = 좌표 보호 플래그 = 행에 검증좌표 있으면 유지(빈칸·0만 채움).
         preserveExistingCoords: true,
+        preserveExistingNames: true,
       };
       try {
-        const r = await upsertPlace({ ...job } as any);
+        const door = recognizePlace(
+          {
+            name: place.name,
+            nameLocal: (place as any).nameLocal,
+            nameKo: (place as any).nameKo,
+            lat: gLat,
+            lng: gLng,
+            isRestaurant: seedCategory === "restaurant",
+          },
+          recogRows,
+        );
+        if (door)
+          console.log(
+            `[AG3-SAVE] 문: "${place.name}" → #${door.row.id} ${door.row.name_en} (${door.why})`,
+          );
+        const r = await upsertPlace({
+          ...job,
+          ...(door ? { targetRowId: door.row.id, followTriggerDup: true } : {}),
+        } as any);
         // ⚠️ 수정금지(승인필요) 2026-07-18 사장님 SSOT = 트리거 흡수 시 원행 재활용데이터(RETURNING)를 place 에 입힘 = 옛 matchCandidate "매칭행→place" 재활용 대체. §14 새것우선: place 빈칸만 폴백.
         const en = r.enriched;
         if (en) {
@@ -191,7 +228,7 @@ export async function saveNewPlacesToDB(
     const missById = new Map(chk.map((r: any) => [r.id, !r.googlePlaceId])); // 결손 = PID 없음만(이미지 무관)
     absorbedRows = updatedRows.filter((r: any) => missById.get(r.rowId));
   }
-  // mode = raw 산출물(tsResults, §18) 에 실리는 신규/흡수 구분 라벨 전용(사장님 눈검수용). 처리 로직은 신규·흡수 동일(자기 rowId 직행) = 분기 안 함.
+  // ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = mode = raw 산출물(tsResults, §18) 라벨 + **이번 판에 만든 행인가의 기준**. 신규일 때만 못 채운 행을 지우고(dropRow) PID 쌍둥이 흡수 시 껍데기를 지운다(rowIsNew). 흡수(원래 창고에 있던 행)는 어느 경우도 안 지운다. 옛 "라벨 전용 = 분기 안 함" 폐기 §19.
   const tsTargets = [
     ...newRows.map((r: any) => ({ ...r, mode: "new" as const })),
     ...absorbedRows.map((r: any) => ({ ...r, mode: "absorbed" as const })),
@@ -278,7 +315,24 @@ export async function saveNewPlacesToDB(
           console.log(
             `[AG3-SAVE] 🚫 "${place.name}" = 영구 폐업(TS) = 행·슬롯 유지, PM도 시도(폐업 전 사진)`,
           );
-        if (!result) return { enrichedByApi: 0 }; // TS 미검색 = ① Gemini 저장분 유지
+        if (!result) {
+          // ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = 신분 못 갖춘 새 행은 남기지 않는다 = 지운 행 번호를 슬롯이 들고 가면 [해설 듣기]가 404 로 뜬다 = 같이 뗀다.
+          if (mode === "new") await dropRow(rowId, place);
+          return { enrichedByApi: 0 };
+        }
+        // ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = TS 오배송 거부 = 돌려준 이름이 제미니 이름과 전혀 다르면 붙이지 않는다(MATE→Pedro de Osma·El Chinito→EL CHINO 실측). 리뷰수 없는 빈 페이지(지명·구역)도 새 행이면 안 넣는다(7요소 부족).
+        const tsNameOk = namesAgree(result.nameEn, [nameLocal, place.name]);
+        const tsHollow = result.googleReviewCount == null;
+        if (!tsNameOk || (tsHollow && mode === "new")) {
+          console.log(
+            `[AG3-SAVE] 🚫 "${place.name}" = TS ${!tsNameOk ? `오배송("${result.nameEn}")` : "빈 페이지(리뷰수 없음)"} = 붙이지 않음${mode === "new" ? " · 새 행 삭제" : ""}`,
+          );
+          tsResults[tsResults.length - 1].status = !tsNameOk
+            ? "ts_name_mismatch"
+            : "ts_hollow";
+          if (mode === "new") await dropRow(rowId, place);
+          return { enrichedByApi: 0 };
+        }
 
         const lat =
           result.latitude && result.latitude !== 0
@@ -339,8 +393,9 @@ export async function saveNewPlacesToDB(
           shortformKo: place.description ?? null,
           selectionReasonKo:
             place.personaFitReason ?? place.description ?? null,
-          googleReviewCount: result.googleReviewCount ?? 0,
+          googleReviewCount: result.googleReviewCount ?? null,
           priceEur: newPriceEur,
+          preserveExistingNames: true,
           categoryTags: [seedCategory],
           // 폐업 = TS 응답 사실을 phase_tags 로 보존(응답요소 안 버림 §18/§20)
           phaseTags: isClosedPermanently
@@ -358,6 +413,8 @@ export async function saveNewPlacesToDB(
           targetRowId: rowId,
           followTriggerDup: true,
           dupCheckOnWrite: true,
+          // 이번 판에서 만든 행만 지워도 된다(흡수한 기존 창고 행은 남긴다).
+          rowIsNew: mode === "new",
           ...jobBase,
         };
         const doUpdate = async () => {
@@ -371,8 +428,12 @@ export async function saveNewPlacesToDB(
             }
           } catch (e) {
             console.log(
-              `[AG3-SAVE] ⚠️ "${place.name}" 직행 실패(${(e as Error).message}) = 그 행 스킵`,
+              `[AG3-SAVE] ⚠️ "${place.name}" 직행 실패(${(e as Error).message}) = ${mode === "new" ? "새 행 삭제" : "그 행 스킵"}`,
             );
+            if (mode === "new")
+              await dropRow(rowId, place, (job2 as any).imageUrl).catch(
+                () => {},
+              );
           }
         };
         if (opts?.deferPersist) job2Promises.push(doUpdate());

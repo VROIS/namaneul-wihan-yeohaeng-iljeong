@@ -374,6 +374,8 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
   };
 
   return {
+    // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 관리자가 만들면 베스트 여정 = 버튼 글자도 함께 바뀐다.
+    isAdmin: authUser?.role === "admin",
     theme,
     insets,
     navigation,

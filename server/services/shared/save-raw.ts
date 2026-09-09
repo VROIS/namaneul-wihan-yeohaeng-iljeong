@@ -10,7 +10,8 @@ import { uploadToR2, isR2Configured } from "./r2-client";
 const PREFIX = "raw-responses"; // R2 프리픽스 (옛 Supabase 버킷명과 동일 = 로컬·원격 키 대조 불변)
 
 export interface SaveRawOpts {
-  source: "ts" | "gemini" | "routes"; // routes = Google Routes API(일별 바로가기 선처리) = 2026-07-24 사장님 승인 추가
+  // ⚠️ 수정금지(승인필요) 2026-09-08 사장님 승인 = gmaps 추가 = 구글맵 공개페이지로 받은 6요소+cid+사진(TS 자리를 대신하는 형제). 도시별 1파일 = 나중에 한 방에 재입력·조회·근거.
+  source: "ts" | "gemini" | "routes" | "gmaps"; // routes = Google Routes API(일별 바로가기 선처리) = 2026-07-24 사장님 승인 추가
 
   contextId?: string | number | null; // cityId(발굴) 또는 'runtime'(동선·메인앱 등 cityId 없는 호출)
   tag?: string | null; // 호출 맥락 식별(파일명) — 미지정 시 'call'

@@ -78,8 +78,6 @@ export function registerCityPlaceRoutes(app: Express): void {
             // ⚠️ 수정금지(승인필요) 2026-08-20 사장님 승인 = 도시대표카드 국가명 영어통일용.
             countryCode: cities.countryCode,
             itineraryId: itineraries.id, // 대표여정 없으면 null = 그대로 "없음" 신호
-            title: itineraries.title,
-            protagonistSentence: itineraries.protagonistSentence,
             rawData: itineraries.rawData,
             videoByDay: itineraries.videoByDay,
             overrideHeroPlaceId: cities.overrideHeroPlaceId,
@@ -197,12 +195,9 @@ export function registerCityPlaceRoutes(app: Express): void {
               )
               .limit(1);
 
-      // ⚠️ 수정금지(승인필요) 2026-08-21 사장님 승인 = 태그라인 = 대표여정 유무와 무관하게 공식 1벌(§0·§19).
-      const tagline =
-        (row.itineraryId !== null && row.protagonistSentence) ||
-        heroPlace?.summaryKo ||
-        (row.itineraryId !== null && row.title) ||
-        "";
+      // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 대표사진의 요약 1벌(관리자 대시보드 열람 전용).
+      //   앱 화면에는 그리지 않는다 = 한국어라 다국어와 안 맞는다(옛 여정 갈래 2개 삭제 §19).
+      const tagline = heroPlace?.summaryKo || "";
 
       const card = {
         itineraryId: row.itineraryId,

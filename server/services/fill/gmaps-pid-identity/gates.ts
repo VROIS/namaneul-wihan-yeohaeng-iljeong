@@ -124,6 +124,8 @@ export type Result = {
   rc_source: "aria" | "text" | null; // 리뷰수 출처(검수용)
   rating: string | null; // 기록만(컬럼 없음)
   photo_url: string | null; // ⚠️ 2026-09-04 사장님 결정 = 같은 방문에서 딴 대표사진(관문 통과 행만 씀 = 오염 차단)
+  // ⚠️ 수정금지(승인필요) 2026-09-08 사장님 확정 = 어떤 경로로 열든 cid 를 버리지 않는다 = 페이지 주소창 ftid→cid = google_maps_uri 에 쓴다.
+  maps_uri: string | null;
   status: BusinessStatus | null;
   gate: "ok" | string; // ok | ok(no-address) | ok(coord-unverified) | coord-corrected | page-coord-invalid | consent-blocked | h1-empty | address-empty-ambiguous | name-mismatch | coord-mismatch | error:<msg> (2026-08-28 사장님 지시 = address-empty 폐기 → address-empty-ambiguous·ok(no-address) 로 분리)
   upsert?: string; // --apply 결과(action 또는 오류)
@@ -160,6 +162,7 @@ export function initResult(row: Row): Result {
     rc_source: null,
     rating: null,
     photo_url: null,
+    maps_uri: null,
     status: null,
     gate: "ok",
   };
@@ -170,6 +173,7 @@ export type GateContext = {
   lang: string;
   // ⚠️ 수정금지(승인필요) 2026-09-04 사장님 결정 = 페이지를 한 번만 연다 = 검증(이름·좌표·리뷰수)과 사진을 같은 방문에서 함께 취득.
   photoWidth?: number;
+  // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 넘기면 PID 대신 이름+주소로 찾아 연다(뒤 처리 동일).
   cityLat: number | null;
   cityLng: number | null;
   cityStop: Set<string>;
@@ -188,6 +192,7 @@ export async function evaluateRow(
   const { page, lang, cityLat, cityLng, cityStop, distanceKmFromCoords } = ctx;
   const local = await readPlacePage(page, row.pid, lang, true, ctx.photoWidth);
   r.photo_url = local.photoUrl;
+  r.maps_uri = local.mapsUri;
   r.name_local = local.h1;
   r.address = local.address;
   r.category = local.category;

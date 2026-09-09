@@ -49,6 +49,7 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
     toggleVibe,
     openPicker,
     handleGenerate,
+    isAdmin,
   } = planner;
 
   const [repCard, setRepCard] = useState<RepCard | null>(null);
@@ -655,14 +656,16 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
           </View>
         </View>
 
-        {/* 11. 메인 CTA 버튼 ('여정 생성') */}
+        {/* ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 관리자면 글자가 "베스트 여정" 으로 바뀐다(뒤에서 실제로 베스트만 뽑는다 = 한 짝). 한국어 전용 = 사장님만 보는 표시. */}
         <Pressable style={styles.generateButton} onPress={handleGenerate}>
           <LinearGradient
             colors={[Brand.primary, Brand.secondary]}
             style={styles.generateGradient}
           >
             <Icon name="navigation" size={20} color="#FFFFFF" />
-            <Text style={styles.generateText}>{t("trip.generate")}</Text>
+            <Text style={styles.generateText}>
+              {isAdmin ? "베스트 여정" : t("trip.generate")}
+            </Text>
           </LinearGradient>
         </Pressable>
       </ScrollView>

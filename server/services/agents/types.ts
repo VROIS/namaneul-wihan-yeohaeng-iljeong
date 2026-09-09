@@ -95,6 +95,8 @@ export interface TripFormData {
   /** ⚠️ 2026-07-31 사장님 지시(BTS 문제점4) = 마지막 슬롯에 고정 부착할 장소(= 공연장) + 그 시각(= 공연 시작). */
   finalPlaceId?: number;
   finalPlaceTime?: string;
+  /** ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 켜지면 베스트 분기(pipeline-best)로 간다. 엔진 안에서 조건으로 쓰지 않는다. */
+  bestOnly?: boolean;
 }
 
 // ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = 점수 시스템 + MIX path 완전 폐기

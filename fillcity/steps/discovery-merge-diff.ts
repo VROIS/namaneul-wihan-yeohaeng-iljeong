@@ -9,6 +9,11 @@ import {
 } from "../../server/services/shared/raw-filename";
 // ⚠️ 수정금지(승인필요) 2026-08-29 사장님 승인 = 7개 언어 목록·순서 1벌(§16)
 import { LANGS } from "../../server/services/shared/language-instruction";
+import {
+  recognizePlace,
+  RECOGNIZE_ROWS_SQL,
+  type RecognizeRow,
+} from "../../server/services/shared/recognize-place";
 export type Bucket = "confirm" | "new";
 export interface PsrRow {
   id: number;
@@ -60,7 +65,7 @@ const argv = Object.fromEntries(
 const cityId = Number(argv["city-id"] || 0);
 if (!cityId) {
   console.error(
-    "Usage: npx tsx fillcity/steps/discovery-merge-diff.ts --city-id=<N> [--from-extracted=<path>]   (DRY 전용, DB 쓰기 0)",
+    "Usage: npx tsx fillcity/steps/discovery-merge-diff.ts --city-id=<N> [--from-extracted=<path>] [--restaurant-min-langs=N] [--landmark-min-langs=N]   (DRY 전용, DB 쓰기 0)",
   );
   process.exit(1);
 }
@@ -69,7 +74,9 @@ const fromExtractedPath = argv["from-extracted"]
   ? path.resolve(String(argv["from-extracted"]))
   : null;
 
-const RESTAURANT_MIN_LANGS = 4; // 사장님 확정 2026-08-26 = 7개국어 중 과반(4+)
+// ⚠️ 수정금지(승인필요) 2026-09-08 사장님 승인 = 동의 문턱을 밖에서 정한다(안 주면 지금과 동일 = 기존 동작 무변경).
+const RESTAURANT_MIN_LANGS = Number(argv["restaurant-min-langs"] ?? 4); // 사장님 확정 2026-08-26 = 7개국어 중 과반(4+)
+const LANDMARK_MIN_LANGS = Number(argv["landmark-min-langs"] ?? 1); // 1 = 제한없음
 // ⚠️ 수정금지(승인필요) 2026-08-30 재확인(원결정 2026-08-28 = 180→240 상향, 브뤼셀 560항목 컷오프 실측)
 const MAX_TX_SECONDS = 240;
 
@@ -356,6 +363,10 @@ function deserializeGroup(g: any): Group {
     const elapsedSec = () => (Date.now() - t0) / 1000;
     let abortedAt = -1;
 
+    // ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = 알아보는 문(recognizePlace) 을 문지기 드라이런 앞에 세운다 = 제미니 값만으로 이미 있는 행을 먼저 찾고, 못 찾을 때만 트리거 드라이런. MIX 1단계와 같은 1벌(§16).
+    const recogRows: RecognizeRow[] = (
+      await c.query(RECOGNIZE_ROWS_SQL, [cityId])
+    ).rows;
     await c.query("BEGIN");
     await c.query(`SET LOCAL statement_timeout = '60s'`);
     try {
@@ -372,6 +383,21 @@ function deserializeGroup(g: any): Group {
             name_en: p.name_en,
             error: "name_en/c 없음",
           });
+          continue;
+        }
+        const door = recognizePlace(
+          {
+            name: p.name_en,
+            nameLocal: p.name_local,
+            nameKo: p.name_ko,
+            lat: p.lat,
+            lng: p.lng,
+            isRestaurant: p.c === "restaurant",
+          },
+          recogRows,
+        );
+        if (door) {
+          joinTarget(door.row.id, p, `문:${door.why}`);
           continue;
         }
         await c.query("SAVEPOINT s");
@@ -491,6 +517,7 @@ function deserializeGroup(g: any): Group {
     for (const g of groups.values()) {
       if (g.type === "restaurants" && g.langs.size < RESTAURANT_MIN_LANGS)
         continue;
+      if (g.type === "landmarks" && g.langs.size < LANDMARK_MIN_LANGS) continue;
       const side = {
         g,
         name: [...g.names][0],
@@ -541,6 +568,7 @@ function deserializeGroup(g: any): Group {
       cityId,
       generatedAt: today,
       restaurantMinLangs: RESTAURANT_MIN_LANGS,
+      landmarkMinLangs: LANDMARK_MIN_LANGS,
       countBefore,
       countAfter,
       tierHistogram,
@@ -649,7 +677,7 @@ function deserializeGroup(g: any): Group {
   const mixedCount = allItems.filter((x) => x.mixed).length;
   console.log(
     `
-═══ 요약: ${elapsed.toFixed(1)}s · 총 ${totalConfirm + totalNew}곳 = confirm ${totalConfirm}(🔴 TS ${totalConfirm}콜) / new ${totalNew}(🔴 TS ${totalNew}콜) · mixed ${mixedCount} · 오류 ${errors.length} ═══`,
+═══ 요약: ${elapsed.toFixed(1)}s · 총 ${totalConfirm + totalNew}곳 = 있음 ${totalConfirm}(창고에 이미 있음) / 신규 ${totalNew}(구글맵으로 만들 곳) · mixed ${mixedCount} · 오류 ${errors.length} ═══`,
   );
 
   const payload = {
@@ -658,6 +686,7 @@ function deserializeGroup(g: any): Group {
     dupFilter:
       "place_seed_raw_prevent_dup (transaction ROLLBACK, coords/PID/URI NULL)",
     restaurantMinLangs: RESTAURANT_MIN_LANGS,
+    landmarkMinLangs: LANDMARK_MIN_LANGS,
     psrCountBefore: countBefore,
     psrCountAfter: countAfter,
     tierHistogram,

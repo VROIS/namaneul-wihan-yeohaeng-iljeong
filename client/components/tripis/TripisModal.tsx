@@ -41,7 +41,6 @@ export interface RepCard {
   nameEn: string;
   country: string | null;
   countryCode: string | null; // ⚠️ 수정금지(승인필요) 2026-08-20 = 국가명 영어변환용 ISO코드
-  tagline: string;
   highlights: string[];
   dayCount: number;
   imageUrl: string | null;
