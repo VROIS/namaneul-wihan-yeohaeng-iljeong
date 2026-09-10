@@ -175,6 +175,15 @@ export function buildRouteLocal(
       hourlyRate ?? null,
       p.seedCategory,
     );
+  // ⚠️ 수정금지(승인필요) 2026-09-10 사장님 확정 = 채울 곳은 앞 역 1km 안부터 본다. 그 안이 비면 차례로 넓힌다.
+  const FILL_RADIUS_KM = [1, 2, 4, 8];
+  // 두 곳 사이 이동 분 = 하루 배치와 줄 토막내기가 같은 식을 쓴다(계산 2벌 금지).
+  // ⚠️ 수정금지(승인필요) 2026-09-10 사장님 확정 = 이동시간 = 직선거리 시간 x 2. 실제 길은 직선이 아니므로 두 배로 본다. 옛 +10분·+45분 얹기 폐기 = 2026-09-10 §19.
+  const moveMinKm = (km: number): number => {
+    const straight =
+      km <= 1.0 ? (km / 5) * 60 : km <= 30 ? (km / 25) * 60 : (km / 75) * 60;
+    return Math.round(straight * 2);
+  };
   // ⚠️ 수정금지(승인필요) 2026-09-01 사장님 확정 = 유료 입장지는 18:00 이후 시작 불가(대부분 폐관) (정본 B4)
   const PAID_LAST_START_MIN = 18 * 60;
   const inRange = activities.filter((p) => kmFromCenter(p) <= OUTSKIRT_MAX_KM);
@@ -216,6 +225,15 @@ export function buildRouteLocal(
   );
   const remaining: PlaceResult[] = [];
   let usedMin = 0;
+  // ⚠️ 수정금지(승인필요) 2026-09-10 사장님 확정(베스트 분기 전용) = 7동의 = 큰 역 = 거리·시간 한도와 무관하게 **먼저 전부** 담는다.
+  //   줄이 순서를 정하므로 7동의에는 25km 안팎 구분을 쓰지 않는다(보고타 과타비타 44km·시파키라 35km 가 잘려 1일차가 통째로 빈 것 교정).
+  if (bestMode)
+    for (const p of inRange) {
+      if (bestRankLangCount(p.bestRank) !== 7) continue;
+      if (remaining.some((q) => sameSpot(q, p))) continue;
+      usedMin += stayMin(p);
+      remaining.push(p);
+    }
   for (const p of [...inRange].sort(
     (a, b) =>
       nearTier(a) - nearTier(b) ||
@@ -235,6 +253,78 @@ export function buildRouteLocal(
   let grandKm = 0;
   let grandSec = 0;
 
+  // ⚠️ 수정금지(승인필요) 2026-09-10 사장님 확정(베스트 분기 전용) = 7동의는 전부 간다 = 먼저 한 줄(전철 노선)로 세워 둔다.
+  //   출발역 = 도심 중심, 종착역 = 가장 먼 곳. 그 사이는 가까운 것으로 이어 붙인다 = 되돌아가지 않는다.
+  const bestLine: PlaceResult[] = [];
+  if (bestMode) {
+    const s7 = places.filter((p) => bestRankLangCount(p.bestRank) === 7);
+    if (s7.length) {
+      // 출발역 = 도심 중심에서 가장 가까운 7동의. 중요한 유적이 도심에 모여 있으므로 거기서 시작해
+      //   안에서 밖으로 뻗는다 = 종착역은 자연히 가장 먼 7동의가 된다.
+      let cur = s7.reduce(
+        (m, p) => (kmFromCenter(p) < kmFromCenter(m) ? p : m),
+        s7[0],
+      );
+      const left: PlaceResult[] = s7.filter((p) => p !== cur);
+      bestLine.push(cur);
+      while (left.length) {
+        let bi = 0;
+        for (let i = 1; i < left.length; i++)
+          if (
+            haversineKm(cur.lat, cur.lng, left[i].lat, left[i].lng) <
+            haversineKm(cur.lat, cur.lng, left[bi].lat, left[bi].lng)
+          )
+            bi = i;
+        cur = left[bi];
+        bestLine.push(cur);
+        left.splice(bi, 1);
+      }
+    }
+  }
+
+  // ⚠️ 수정금지(승인필요) 2026-09-10 사장님 확정(베스트 분기 전용) = 세운 줄을 날 수만큼 토막낸다 = 앞날이 배부를 때까지 담으면 뒷날이 빈다(파리 5일 4·5일차 7동의 0곳 실측).
+  //   토막은 줄 순서를 끊지 않는다. 각 토막의 (머묾 + 줄 따라 이동) 합이 가장 고르게 되는 자리로 자른다.
+  const dayLine: PlaceResult[][] = [];
+  if (bestMode && bestLine.length) {
+    const nd = daySlotsConfig.length;
+    const cost = bestLine.map(
+      (p, i) =>
+        stayMin(p) +
+        (i
+          ? moveMinKm(
+              haversineKm(
+                bestLine[i - 1].lat,
+                bestLine[i - 1].lng,
+                p.lat,
+                p.lng,
+              ),
+            )
+          : 0),
+    );
+    const cuts: number[] = [];
+    let lo = 0;
+    for (let d = 0; d < nd - 1; d++) {
+      const restDays = nd - d;
+      let sum = 0;
+      for (let i = lo; i < cost.length; i++) sum += cost[i];
+      const target = sum / restDays;
+      let acc = 0;
+      let hi = lo;
+      while (hi < cost.length - (restDays - 1) && acc + cost[hi] <= target) {
+        acc += cost[hi];
+        hi++;
+      }
+      if (hi === lo) hi = lo + 1;
+      cuts.push(hi);
+      lo = hi;
+    }
+    let from = 0;
+    for (const cut of [...cuts, bestLine.length]) {
+      dayLine.push(bestLine.slice(from, cut));
+      from = cut;
+    }
+  }
+
   for (let di = 0; di < daySlotsConfig.length; di++) {
     const dc = daySlotsConfig[di];
     const endMin = toMin(dc.endTime);
@@ -250,10 +340,7 @@ export function buildRouteLocal(
     const moveMin = (p: PlaceResult): number => {
       if (!bestMode) return 0;
       const from = cursor ?? center;
-      const km = haversineKm(from.lat, from.lng, p.lat, p.lng);
-      if (km <= 1.0) return Math.round((km / 5) * 60);
-      if (km <= 30) return Math.round((km / 25) * 60 + 10);
-      return Math.round((km / 75) * 60 + 45);
+      return moveMinKm(haversineKm(from.lat, from.lng, p.lat, p.lng));
     };
     const place = (p: PlaceResult, rest: boolean, dur: number, at: number) => {
       seq.push({ p, rest });
@@ -293,7 +380,8 @@ export function buildRouteLocal(
         t = Math.max(t, LUNCH_FROM) + mealDuration;
         ld = true;
       }
-      if (isPaidPlace(p) && t >= PAID_LAST_START_MIN) return false;
+      // ⚠️ 수정금지(승인필요) 2026-09-10 사장님 확정 = 베스트는 대부분이 유료 입장지 = 유료 마감(18:00)을 풀지 않으면 그것이 7동의를 걸러낸다(파리 개선문). 하루 끝·저녁 자리는 아래 줄이 따로 지킨다.
+      if (!bestMode && isPaidPlace(p) && t >= PAID_LAST_START_MIN) return false;
       const s = stayMin(p);
       t += s;
       if (!ld && s >= LONG_STAY_MIN) ld = true;
@@ -304,18 +392,29 @@ export function buildRouteLocal(
     for (;;) {
       let pool: PlaceResult[];
       if (bestMode) {
-        // ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정(베스트 분기 전용) = 배치도 등급을 본다 = 남은 곳 중 **가장 높은 동의 등급부터** 앉힌다(7 전부 → 6 → 5 → 4 → 3 → 리뷰수 채움). 같은 등급 안에서는 25km 안 먼저. 1·2일차는 25km 안만, 3일차부터 밖(당일치기) 허용. 리마·보고타·브뤼셀 3도시 시뮬 = 만장일치 탈락 0.
-        const farOk = di >= 2;
-        const cands = remaining.filter(
-          (p) => (farOk || kmFromCenter(p) <= NEAR_KM) && fitsNow(p),
+        // ⚠️ 수정금지(승인필요) 2026-09-10 사장님 확정(베스트 분기 전용) = 줄의 다음 역(7동의)이 지금 들어가면 그것을 앉힌다. 안 들어가면 그 사이를 낮은 등급(6·5·4…)에서 **지금 자리에 가장 가까운 것**으로 채운다 = 아코디언.
+        const todays = dayLine[di] ?? bestLine;
+        const nextStop: PlaceResult | undefined = todays.find((p) =>
+          remaining.includes(p),
         );
-        const top = cands.reduce(
-          (m, p) => Math.max(m, bestRankLangCount(p.bestRank)),
-          -1,
-        );
-        pool = cands.filter((p) => bestRankLangCount(p.bestRank) === top);
-        const nearIn = pool.filter((p) => kmFromCenter(p) <= NEAR_KM);
-        if (nearIn.length) pool = nearIn;
+        if (nextStop && fitsNow(nextStop)) {
+          pool = [nextStop];
+        } else {
+          // ⚠️ 수정금지(승인필요) 2026-09-10 사장님 확정 = 7동의 말고는 등급 차이 없다 = 앞 역 1km 안에서 고른다(그 안에서 고르는 순서는 아래 가까운 순).
+          //   1km 안이 비면 반경을 넓힌다. 등급으로 거르던 것 폐기 = 2026-09-10 §19.
+          const rest = remaining.filter(
+            (p) => bestRankLangCount(p.bestRank) !== 7 && fitsNow(p),
+          );
+          const near: LatLng = cursor ?? center;
+          pool = [];
+          for (const km of FILL_RADIUS_KM) {
+            pool = rest.filter(
+              (p) => haversineKm(near.lat, near.lng, p.lat, p.lng) <= km,
+            );
+            if (pool.length) break;
+          }
+          if (!pool.length) pool = rest;
+        }
       } else {
         const nearLeft = remaining.some((p) => kmFromCenter(p) <= NEAR_KM);
         pool = remaining.filter(
