@@ -257,7 +257,17 @@ grep -rEn "\bapp\.(get|post|put|patch|delete|all)\s*\(" server --include=*.ts | 
 > **실측 정정(2026-09-06)** = 영상 8개가 전부 C 가 아니다. **진짜 C 는 3개**(생성 1 + config 2)뿐이고, **읽기·저장 5개는 순수 SQL = A**. 즉 **영상 탭의 조회 기능은 먼저 옮길 수 있다.**
 
 - [x] **A** `GET /api/itineraries/:id/video` — **✅ 2026-09-06 배포·실증. Replit 과 404 동일**
-- [x] **C→코드·배선 완료·도커빌드 대기** `POST /api/itineraries/:id/video/generate` — 60크레딧. `worker/routes-video-generate.ts` + `worker/container/{Dockerfile,server.mjs}` + `wrangler.jsonc` 3블록(containers·durable_objects·migrations). **ffmpeg = Containers(Linux VM)** 로 이관 — Workers 는 fs·child_process 가 없어 원리적 불가. `void (async…)` → `waitUntil` + 무거운 일은 컨테이너(Worker CPU 한도 무관). R2 = 읽기 공개URL / 쓰기 바인딩(컨테이너에 열쇠 안 퍼뜨림). 차감 = 202 **전** precheck + 완성 시 charge(§9). 영상옵션은 `readOptionMode` 1벌 재사용. ⚠️ **씬 생성(제미니·Veo)은 미배선 = 유료 외부호출 = 사장님 몫.** 이 라우트는 R2 에 **이미 있는 씬**을 이어붙인다. 🔴 **실합성 미검증**(도커 빌드 금지 준수) — `wrangler deploy` 시 wrangler 가 이미지 빌드·푸시. **Workers Paid 플랜 필요** + `video-stitcher.ts:3,8,20` `fs`·`ffmpeg-static`·`mkdtempSync(os.tmpdir())`. **Workflows + Containers 필요** *(`video-routes.ts:110` = 여러 줄 등록 = "67" 집계 누락 3건 중 1)*
+- [x] **C→씬 생성까지 배선 완료·커밋 대기(2026-09-12 갱신)** `POST /api/itineraries/:id/video/generate` — 60크레딧.
+  - **구성** = `worker/routes-video-generate.ts`(접수만) + `worker/container/generate.ts`(생성 전부) + `worker/container/lib/**` 18벌 + `worker/container/{container-image,package.json}` + `wrangler.jsonc` 3블록.
+  - **2026-09-12 이전과 달라진 점 3가지**
+    1. **씬 생성이 배선됐다.** 옛 벌은 "R2 에 이미 있는 씬 잇기"만 해서 버튼을 눌러도 `모든 씬 생성 실패 = 완성할 클립 없음` 으로 끝났다. 이제 컨테이너가 스토리보드→나노바나나 스틸→Veo→R2→ffmpeg→차감→게시 전부 한다.
+    2. **TRIPIS 독립.** 처음엔 컨테이너가 Replit `server/` 18개를 import 해서 매달려 있었다(사장님 지적). Replit 은 폐기 예정이라 같이 죽는다 → 18개를 `worker/container/lib/` 로 **`cp` 복사**(17개 byte 동일 / `services/shared/save-raw.ts` 1개만 승인주석 2블록을 §6 형식으로 정리 = 실행 코드 무변경), import 를 `./lib/` 로 교체. **번들 의존 그래프에 Replit `server/` 0개** 실측.
+    3. **도커 명칭 제거** = `Dockerfile` → `container-image`(사장님 = "도커 안 쓰는데 왜 그 이름이냐"). wrangler 는 파일이 존재하면 이름을 안 따짐(`isDockerfile()` 코드 실측 + dry-run 인식 확인).
+  - **실패 사유** = 씬이 죽으면 `video_by_day.scenes[].error` 에 남긴다(컨테이너 로그는 Cloudflare 미해결 이슈로 밖에 안 나옴 = DB 가 유일 통로). 문구는 기술용어 없이 영어 1줄(`Daily video limit reached` 등).
+  - **시간 기준 2벌을 한 기준으로** = 컨테이너 `sleepAfter` 35m ↔ 워커 `STALE_PROCESSING_MS` **40m**. 옛 15m 이면 정상 작업(최대 30m) 중에 재접수돼 같은 컨테이너 이중 실행 = **60크레딧 2회 차감**(판단3종 지적).
+  - **DB** = 워커 Hyperdrive / 컨테이너 Supabase 직접. Hyperdrive 주소는 `…hyperdrive.local` = 워커 런타임 전용이라 컨테이너에서 `ENOTFOUND`(실측).
+  - **이미지** = 106MB → 19MB(번들 후 소스 지우고 실행 중 읽는 것만). 메모리 basic(1GiB) 충분 = 8/22 뮌헨 실측(씬 9개 27.5MB·완성본 27.4MB) 기준 최악 200MB 안쪽.
+  - 🔴 **아직 못 한 것** = 이미지 빌드·워커→컨테이너 접수 1칸. **윈도우는 wrangler 가 컨테이너를 로컬로 못 띄운다**("not supported on Windows, use WSL") = Cloudflare 에 올려야 처음 확인된다. 로컬 8787 은 워커 쪽(400/404/401/200)까지만 실증.
 - [x] **A** `GET /api/videos/badge` — **✅ 2026-09-06 배포·실증. Replit 과 11b 일치**
 - [x] **A** `POST /api/videos/save` — **✅ 2026-09-06 배포·실증. Replit 과 라우트 등록 확인(로그인 필요)**
 - [x] **A** `GET /api/videos/saved` — **✅ 2026-09-06 배포·실증. Replit 과 28b 일치**
