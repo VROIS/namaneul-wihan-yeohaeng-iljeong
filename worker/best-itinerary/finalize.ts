@@ -23,25 +23,28 @@ import {
   type PlaceResult,
   type TravelPace,
   type TripFormData,
-} from "../../server/services/agents/types";
+} from "../lib/services/agents/types";
 import {
   normalizeTravelStyle,
   sanitizePriceEur,
-} from "../../server/services/agents/pipeline-v3-types";
+} from "../lib/services/agents/pipeline-v3-types";
 import {
   haversineKm,
   pickTransitMode,
   estimateTransitCost,
-} from "../../server/services/agents/transit-haversine";
-import { bestRankOrderSql } from "../../server/services/shared/best-rank";
-import { type CompanionType } from "../../server/services/transport/constants";
-import { buildRouteLocal } from "../../server/services/route/route-local";
+} from "../lib/services/agents/transit-haversine";
+import { bestRankOrderSql } from "../lib/services/shared/best-rank";
+import { type CompanionType } from "../lib/services/transport/constants";
+import { buildRouteLocal } from "../lib/services/route/route-local";
 
 const { cities, placeSeedRaw } = schema;
 
 type Db = PostgresJsDatabase<typeof schema>;
 
-import { pickPlaceImage } from "./places";
+import {
+  loadImagePidMap,
+  pickPlaceImage,
+} from "../lib/services/shared/place-image";
 import { addMinutes, guideCostForDay, shouldApplyGuidePrice } from "./pricing";
 
 // ── AG4 = 완성 (원본 server/services/agents/ag4-db-finalize.ts:59) ───────────
@@ -218,6 +221,11 @@ export async function finalizeDbOnlyItinerary(
       sql`${placeSeedRaw.googleReviewCount} DESC NULLS LAST`,
     );
 
+  // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 원본 ag4:81·:109 = 식당풀을 스스로 뽑을 때만 PID공유 폴백 목록을 읽는다
+  const imagePidMap: Map<string, string> = input.restaurantPool
+    ? new Map()
+    : await loadImagePidMap([cityId, ...poolRows.map((r) => r.cityId)]);
+
   // 원본 :110 = 좌표 0/NULL 제외 후 슬롯 모양으로.
   const restaurantPool =
     input.restaurantPool ??
@@ -234,7 +242,7 @@ export async function finalizeDbOnlyItinerary(
         estimatedPriceEur: r.priceEur != null ? Number(r.priceEur) : undefined,
         summaryKo: r.summaryKo,
         editorialSummary: r.editorialSummary,
-        image: pickPlaceImage(r),
+        image: pickPlaceImage(r, imagePidMap),
         seedCategory: "restaurant",
         userRatingCount: r.googleReviewCount || 0,
         bestRank: r.bestRank ?? null,
@@ -463,7 +471,7 @@ export async function finalizeDbOnlyItinerary(
         estimatedPriceEur: null,
         mealPrice: undefined,
         mealPriceLabel: undefined,
-        image: pickPlaceImage(f) || null,
+        image: pickPlaceImage(f, imagePidMap) || null,
         userRatingCount: f.googleReviewCount || 0,
         summaryKo: f.summaryKo,
         editorialSummary: f.editorialSummary,

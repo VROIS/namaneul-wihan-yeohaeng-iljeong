@@ -2,8 +2,8 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-// ⚠️ 수정금지(승인필요) 2026-08-28 사장님 승인 = 흡수 후보 컬럼 목록 1벌(§16 SSOT) = server/services/fill/status-backfill.ts
-import { FILL_COLS } from "../server/services/shared/place-fill-columns";
+// ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 흡수 후보 컬럼 목록 1벌(§16) = worker/lib/services/shared/place-fill-columns.ts (정본 §)
+import { FILL_COLS } from "../worker/lib/services/shared/place-fill-columns";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 process.chdir(ROOT);

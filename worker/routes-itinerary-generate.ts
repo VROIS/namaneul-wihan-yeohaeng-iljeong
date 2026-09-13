@@ -3,56 +3,6 @@
 // 이 파일이 옮긴 것 = POST /api/routes/day-live 1벌.
 //   원본 = server/city-place-routes.ts:349 (라우트) + server/services/shared/routes-client.ts (구현 2함수).
 //   응답 모양·상태코드·에러문구는 원본과 같게 유지한다.
-//
-// ────────────────────────────────────────────────────────────────────────────
-// ⚠️ POST /api/routes/generate 는 **옮기지 않았다**. 실측 근거는 아래 3가지다.
-//   (건드린 파일 = 이 파일 1벌뿐. server/** 는 읽기만 했다.)
-//
-// ① 이식 규모 = 64파일 / 10,091줄 = §16 재발명 금지에 정면으로 걸린다.
-//    실측 = server/services/itinerary-generator.ts · server/itinerary-save.ts ·
-//    server/services/shared/place-translation.ts 3개를 뿌리로 상대경로 import 를
-//    전이 추적한 결과(스크립트 1회용, 남기지 않음) = 파일 64 / 줄 10,091.
-//    핵심 대상만 꼽아도 ag2(417) · ag4(493) · pipeline-v3-day-builder(477) ·
-//    ag3-save-new-places(439) · city-resolver(442) · pipeline-v3-step2-build(413) ·
-//    place-upsert(350) · route-local(352) 이다.
-//    이 중 상당수가 `// ⚠️ 수정금지(승인필요)` 보호 블록이라 재배선 = 보호코드 재작성이 된다.
-//
-// ② DB 연결 모델이 서로 맞지 않는다(= ①보다 더 근본적인 차단 사유).
-//    Worker 의 계약 = src.ts:113 `openDb()` 가 요청마다 연결 1벌을 열고 반드시 `close()`.
-//    (src.ts:110-112 주석 = "안 닫으면 요청마다 연결이 쌓여 간헐적으로 응답이 멈춘다
-//     = 2026-09-06 실측: 6회 중 2회 정지".)
-//    그런데 이 그래프의 13벌이 `server/db.ts` 의 **모듈 최상단 싱글턴 db** 를 직접 물고 있다:
-//      ag2-gemini-recommender · ag3-seed-loader · ag3-save-new-places · ag4-db-finalize ·
-//      city-resolver · exchange-rate · place-upsert · pool-radius · slot-duration ·
-//      meal-budget-tiers · place-translation · transport/guide-pricing · city-match.
-//    server/db.ts:23-27 은 모듈 최상단에서 `process.env.SUPABASE_DATABASE_URL` 을 읽고
-//    :41 에서 pg Pool 을 만든다 = Worker 금지사항 2개(모듈 최상단 process.env 읽기,
-//    요청 밖 I/O)에 동시에 걸린다. 13벌 전부를 openDb 주입식으로 고쳐야 하는데,
-//    그건 원본 파일 13벌을 수정한다는 뜻이라 이 작업의 범위(worker/ 신규 1파일)를 벗어난다.
-//
-// ③ 시간·연결 한도가 위험하다(= 옮겨도 지금 형태로는 못 돈다).
-//    · Hyperdrive gotchas.md "Worker connections | 6 | 6 | Max concurrent connections
-//      per Worker invocation" = 요청 1건당 동시 연결 6개 상한.
-//      DB-only 경로만 세어도 `await db` 지점이 ag2 4 · ag4 2 · seed-loader 1 ·
-//      city-resolver 10 · pool-radius 1 · slot-duration 1 · meal-budget-tiers 1 ·
-//      exchange-rate 8 · place-translation 2 = 30건이다. 싱글턴이면 전부 한 연결을
-//      돌려쓰지만, openDb 로 옮기면 "누가 열고 누가 닫는가"를 30곳에서 새로 정해야 한다.
-//    · Hyperdrive gotchas.md "Query duration max | 60s" + Workers gotchas.md
-//      "CPU time (Paid) | 30s default / 5min max".
-//      MIX 경로(③ ready=false)는 pipeline-v3.ts:118 에서 제미니 1콜과 DB 사전로드를
-//      병렬로 돌린 뒤 step2 에서 미매칭 장소마다 TS(Google Places)를 추가 호출한다
-//      (ag3-save-new-places.ts:236 `tsSearch`, 루프 안). 대기시간 자체는 CPU 시간에
-//      안 잡히지만, 그 대기 동안 DB 연결을 쥐고 있으면 Hyperdrive gotchas.md
-//      "don't hold connections during external calls" 에 정면으로 걸린다.
-//      = 옮기려면 파이프라인의 "언제 DB 를 잡고 언제 놓는가"를 전면 재설계해야 한다.
-//
-// ⇒ 결론 = /api/routes/generate 는 이 관문(라우트 단순 이관)으로 옮길 대상이 아니다.
-//    옮기려면 두 가지 선행작업이 먼저다:
-//      (a) server/** 13벌의 db 싱글턴을 주입식으로 바꾸는 별도 승인 작업,
-//      (b) MIX 경로(제미니+TS 다중호출)를 Cloudflare Workflows 로 빼는 설계.
-//    Workflows 는 단계마다 상태를 저장하고 재개하므로 요청 1건의 시간·연결 한도에
-//    묶이지 않는다(cloudflare/references/workflows). 지금은 Replit 원본이 계속 담당한다.
-// ────────────────────────────────────────────────────────────────────────────
 
 import type { Express, Request, Response } from "express";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";

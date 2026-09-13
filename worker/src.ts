@@ -13,7 +13,7 @@ import { httpServerHandler } from "cloudflare:node";
 import {
   generateItineraryICS,
   type ItineraryForICS,
-} from "../server/itinerary-ics";
+} from "./lib/itinerary-ics";
 import {
   COMPANION_TO_TRANSPORT,
   DEFAULT_PRICES,
@@ -28,17 +28,16 @@ import {
   type TransportType,
   type TravelStyle,
   type UberBlackComparison,
-} from "../server/services/transport/constants";
+} from "./lib/services/transport/constants";
 import {
   calcTransitHaversine,
   estimateTransitCost,
   haversineKm,
   pickTransitMode,
-} from "../server/services/agents/transit-haversine";
-import { optimizeDayRoute } from "../server/services/itinerary/route-optimizer";
-// 바인딩(Hyperdrive) 접근 = 공식 방식. 타입은 `wrangler types` 가 만든 Env 를 쓴다(손으로 안 씀).
-// https://developers.cloudflare.com/workers/runtime-apis/bindings/#how-to-access-bindings
-import { env } from "cloudflare:workers";
+} from "./lib/services/agents/transit-haversine";
+import { optimizeDayRoute } from "./lib/services/itinerary/route-optimizer";
+// ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 바인딩(env)·응답 뒤 약속(waitUntil) = cloudflare:workers 공식 진입점 1벌. 타입은 `wrangler types` 가 만든 Env (정본 §)
+import { env, waitUntil } from "cloudflare:workers";
 import { ensureKeys } from "./keys";
 // 라우트 묶음 = 파일별 분리(§0 슬림). 등록 순서는 아래 배선 지점 주석 참조.
 import { registerPlaceRoutes } from "./routes-places";
@@ -63,7 +62,7 @@ import { registerAdminKeyTestRoutes } from "./routes-admin-keytest";
 import { registerRestRoutes } from "./routes-rest";
 import { registerVideoConfigRoutes } from "./routes-video-config";
 import { registerItineraryGenerateDbRoutes } from "./routes-itinerary-generate-db";
-import { registerDebugRoutes } from "./routes-debug";
+import { registerDebugRoutes, withGmapsQueue } from "./routes-debug";
 // 근거: containers/get-started = 컨테이너를 관리하는 Durable Object 클래스는
 //   **엔트리 파일에서 export** 되어야 런타임이 찾는다(안 하면 기동 자체가 실패).
 import {
@@ -131,7 +130,7 @@ function openDb() {
   return {
     db: drizzle(client, { schema }),
     close: () => {
-      void client.end({ timeout: 5 });
+      waitUntil(client.end({ timeout: 5 })); // ⚠️ 수정금지(승인필요) 2026-09-13 = 응답 뒤 끊기는 약속을 waitUntil 로 살려 실제로 닫는다(안 닫혀 풀러 15칸이 새던 사고 = 4차 호출 저장 실패)
     },
   };
 }
@@ -146,7 +145,7 @@ async function withKeys<T>(run: () => Promise<T> | T): Promise<T> {
   try {
     await ensureKeys(db);
   } finally {
-    void db.end({ timeout: 5 });
+    waitUntil(db.end({ timeout: 5 })); // 응답 뒤 끊기는 약속을 살려 실제로 닫는다(openDb 와 같은 수리 = 풀러 칸 누수)
   }
   return run();
 }
@@ -160,10 +159,10 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
-// [검사표 6-2] GET /api/cities — 원본 server/city-place-routes.ts 와 동일 응답(도시 전체 배열)
+// ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = GET /api/cities(검사표 6-2 = 원본 city-place-routes.ts 동일 응답) = 연결은 try 밖에서 열고 finally 에서 닫는다(닫기 누락 수정, 아래 4개 라우트 동일)
 app.get("/api/cities", async (_req, res) => {
+  const { db, close } = openDb();
   try {
-    const { db, close } = openDb();
     // 정렬 = 원본 storage.getCities()(server/storage.ts:181) 와 동일한 name 순.
     const rows = await db
       .select()
@@ -182,8 +181,8 @@ app.get("/api/cities", async (_req, res) => {
 // READY_THRESHOLD = 원본 server/services/agents/ag2-gemini-recommender.ts:24 (=200) 과 같은 값.
 const READY_THRESHOLD = 200;
 app.get("/api/cities/ready", async (_req, res) => {
+  const { db, close } = openDb();
   try {
-    const { db, close } = openDb();
     const rows = await db
       .select({
         id: schema.cities.id,
@@ -230,16 +229,16 @@ registerAppErrorRoutes(app, openDb);
 registerAdminKeyTestRoutes(app, openDb);
 registerRestRoutes(app, openDb);
 registerVideoConfigRoutes(app, openDb);
-registerItineraryGenerateDbRoutes(app, openDb);
+registerItineraryGenerateDbRoutes(app, openDb, sql);
 registerDebugRoutes(app, openDb);
 registerVideoGenerateRoutes(app, openDb);
 
 app.get("/api/cities/:id", async (req, res) => {
+  const { db, close } = openDb();
   try {
     const id = parseInt(String(req.params.id));
     if (Number.isNaN(id))
       return res.status(404).json({ error: "City not found" });
-    const { db, close } = openDb();
     const rows = await db
       .select()
       .from(schema.cities)
@@ -296,13 +295,13 @@ app.get("/api/credits/pricing", async (_req, res) => {
 // [검사표 6-6] GET /api/itineraries/:id/calendar.ics — 원본 server/itinerary-routes.ts:88
 // 본문(ICS 생성) = server/itinerary-ics.ts 를 그대로 import = 재발명 0(§16).
 app.get("/api/itineraries/:id/calendar.ics", async (req, res) => {
+  const { db, close } = openDb();
   try {
     const idNum = parseInt(String(req.params.id));
     if (Number.isNaN(idNum)) {
       return res.status(404).json({ error: "Itinerary not found" });
     }
     // 원본 storage.getItinerary(id) = itineraries 단일 행 조회(server/storage.ts:258).
-    const { db, close } = openDb();
     const [itinerary] = await db
       .select()
       .from(schema.itineraries)
@@ -1017,4 +1016,4 @@ app.post("/api/routes/regenerate-day", async (req, res) => {
 });
 
 app.listen(8080);
-export default httpServerHandler({ port: 8080 });
+export default withGmapsQueue(httpServerHandler({ port: 8080 })); // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = HTTP 는 그대로, 큐(gmaps-post) 소비자만 덧붙임 = 후처리가 백엔드에서 스스로 돈다 (정본 §)

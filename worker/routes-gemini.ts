@@ -32,15 +32,15 @@ import { env, waitUntil } from "cloudflare:workers";
 import * as schema from "../shared/schema";
 import { saveRawToR2 } from "./raw-store";
 import { recordExternalCall } from "./call-log";
-import { buildPlaceHintHeader } from "../server/services/shared/place-hint-header";
+import { buildPlaceHintHeader } from "./lib/services/shared/place-hint-header";
 import {
   generateAiOpinionPrompt,
   type AiOpinionInput,
-} from "../server/services/verify/ai-opinion-prompt";
+} from "./lib/services/verify/ai-opinion-prompt";
 import {
   STANDARD_TS_FIELD_MASK,
   validateFieldMask,
-} from "../server/services/shared/google-places-sku";
+} from "./lib/services/shared/google-places-sku";
 
 type Db = PostgresJsDatabase<typeof schema>;
 export type OpenDb = () => { db: Db; close: () => void };

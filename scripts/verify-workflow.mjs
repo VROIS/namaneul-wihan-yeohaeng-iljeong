@@ -47,7 +47,12 @@ const RANGE_OK = /^[\w][\w.\-/^~]*(\.\.\.?[\w][\w.\-/^~]*)?$/;
 if (A.range && !RANGE_OK.test(A.range)) {
   throw new Error(`range 형식이 잘못됨: ${A.range}`);
 }
-const DIFF = A.range ? `git diff ${A.range}` : "git diff HEAD";
+// ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 미커밋이 클 때(165개) 묶음별로 돌린다 = args.paths(경로 목록)를 주면 그 경로만 검사(git pathspec). 글자는 경로 문자만 허용.
+const PATH_OK = /^[\w][\w.\-/]*$/;
+const PATHS = Array.isArray(A.paths) ? A.paths.filter((p) => PATH_OK.test(String(p))) : [];
+const SCOPE = PATHS.length ? ` -- ${PATHS.join(" ")}` : "";
+const DIFF = (A.range ? `git diff ${A.range}` : "git diff HEAD") + SCOPE;
+const STATUS = `git status --short${SCOPE}`;
 log(`검사 대상 = ${DIFF}`);
 
 // ── 판단 검증 = 사람 눈으로 볼 것만. 기계가 하는 일을 다시 하지 않는다 ──
@@ -60,12 +65,12 @@ const JUDGE_RULES =
   `\n- 먼저 \`${DIFF} --stat\` 로 바뀐 파일 목록을 보고, **네 담당에 해당하는 파일만** 읽어라.` +
   `\n- diff 는 반드시 \`${DIFF} -w\`(공백 무시)로 봐라. 들여쓰기만 바뀐 수백 줄을 읽느라 시간을 버리지 마라.` +
   "\n- 파일 전체 읽기보다 diff + 필요한 부분만 읽기를 우선하라. 근거가 충분해지면 **더 파지 말고 바로 결론을 내라**." +
-  // ⚠️ 2026-07-28 = **빈 통과 차단**(§22 검증이 실제로 잡은 사고). 검사할 게 없는데 초록불이 나면
-  //   "검증했다"는 보고 자체가 거짓이 된다. 실제로 그 상태로 4/4 통과 보고가 나간 적이 있다.
-  `\n\n⚠️ **맨 먼저** \`${DIFF} --stat\` 과 \`git status --short\` 를 **둘 다** 실행하라.` +
-  // ⚠️ 2026-07-28 = `git diff` 는 **새로 만든 파일(추적 전)을 못 본다**(§22 검증이 잡음).
-  //   새 파일이 통째로 검토를 빠져나가면 "전부 통과" 가 또 거짓이 된다.
-  " `git status --short` 에 `??` 로 뜬 **새 파일도 검사 대상에 포함**해 직접 읽어라(diff 에는 안 나온다)." +
+  // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 빈 통과 차단 + 새 파일 포함 + 묶음 범위 제한(paths) = 검사 대상을 먼저 세고 범위 밖은 안 본다
+  `\n\n⚠️ **맨 먼저** \`${DIFF} --stat\` 과 \`${STATUS}\` 를 **둘 다** 실행하라.` +
+  (PATHS.length
+    ? `\n⚠️ **이번 검사 범위 = 위 경로 안의 파일만.** 그 밖의 파일(다른 묶음)은 읽지도 지적하지도 마라 — 다른 회차에서 따로 검사한다.`
+    : "") +
+  ` \`${STATUS}\` 에 \`??\`/\`A\` 로 뜬 **새 파일도 검사 대상에 포함**해 직접 읽어라(diff 에는 안 나올 수 있다).` +
   " **둘 다 합쳐 0건이면 검토하지 말고 즉시 pass=false** 로 하고, blockers 에" +
   " \"검사 대상 0건 — 대상을 만들거나 range 를 지정할 것\" 을 넣어라." +
   " summary 첫 줄에는 **항상 '검사 대상 = 바뀐 N개 + 새 파일 M개'** 를 적어라(무엇을 봤는지 사장님이 확인하실 수 있게)." +
@@ -103,6 +108,17 @@ const JUDGE_RULES =
 
 const JUDGE = [
   {
+    // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 워커 이전에서 제일 중요한 판단 = 운영 앱(Replit, server/**)과 **기능·동작이 같은가**를 제3자 관점으로. 승인된 차이(정본 문서 2026-09-13 절)만 허용, 그 밖의 동작 차이 = blocker.
+    key: "parity",
+    prompt:
+      `이 저장소의 변경(${DIFF})을 **제3자 검수관** 관점으로 검토하라. 질문은 하나다 = "워커(worker/**, Cloudflare tripis.app)가 운영 앱(server/**, Replit)과 기능·동작이 같은가?"` +
+      "\n- worker/lib/services/** 의 파일은 server/services/** 의 같은 이름 파일을 복사한 것이다. 바뀐 워커 파일마다 원본(server/ 같은 경로)과 `git diff --no-index -w` 로 대조하고, 주석·경로 상수 외의 **동작 차이**를 전부 적어라." +
+      "\n- worker/routes-*.ts 는 server/*routes*.ts 의 같은 엔드포인트를 옮긴 것이다. 응답 필드·상태코드·순서·차감 지점이 같은지 코드로 확인하라." +
+      "\n- 허용되는 차이 = docs/2026-09-03 공식 업데이트 후 수정.md 의 2026-09-13 절과 docs/2026-09-12 인수인계.md 6절에 **사장님 결정으로 적힌 것**(알아보는 문·언어 주입·장부·raw 순번·검문 통과·흡수 삭제·손님상 먼저·CID 규칙·큐 후처리·DB 연결 shim·R2 바인딩·Express5). 그 목록에 없는 동작 차이는 blockers 에 '파일:줄 = 운영은 X, 워커는 Y' 형식으로 넣어라." +
+      "\n- 운영 원본이 없는 새 파일(큐·후처리 엔진 등)은 이 검사의 대상이 아니다(다른 검수관 몫). check='parity'." +
+      JUDGE_RULES,
+  },
+  {
     key: "simplify",
     prompt:
       `이 저장소의 변경(${DIFF})에 대해 /simplify 관점(재사용·품질·효율)으로 검토하라.` +
@@ -128,10 +144,12 @@ const JUDGE = [
   },
 ];
 
-log(`판단 검증 ${JUDGE.length}개 병렬 실행 (기계 4종 = 로컬 스크립트·커밋 훅 담당)`);
+// args.only = 검수관 이름 목록(예 ["parity"]) = 이미 끝난 회차에 검수관 하나만 덧붙일 때(같은 것 다시 돌려 토큰 낭비 금지)
+const RUN = Array.isArray(A.only) ? JUDGE.filter((j) => A.only.includes(j.key)) : JUDGE;
+log(`판단 검증 ${RUN.length}개 병렬 실행 (기계 4종 = 로컬 스크립트·커밋 훅 담당)`);
 
 const results = await parallel(
-  JUDGE.map(
+  RUN.map(
     (c) => () =>
       agent(c.prompt, {
         label: `verify:${c.key}`,
@@ -145,9 +163,9 @@ const clean = results.filter(Boolean);
 const failed = clean.filter((r) => r && r.pass === false);
 
 return {
-  total: JUDGE.length,
+  total: RUN.length,
   passed: clean.filter((r) => r.pass).length,
   failedChecks: failed.map((r) => ({ check: r.check, summary: r.summary, blockers: r.blockers || [] })),
-  allPassed: failed.length === 0 && clean.length === JUDGE.length,
+  allPassed: failed.length === 0 && clean.length === RUN.length,
   results: clean,
 };

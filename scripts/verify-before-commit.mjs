@@ -95,6 +95,36 @@ const CHECKS = {
       };
     },
   },
+  // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 기계 5번째 = MIX 저장단계 스모크 = 실호출 전에 실제 DB·R2 경로(알아보는 문 SQL·저장 SQL·drizzle·raw 순번)를 밟아 본다(쓰기 0·유료 0) = 확률 게임 종료
+  // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 기계 6번째 = 워커 번들(wrangler dry-run) = 후처리 큐·Browser Run 배선이 실제로 묶이는지(alias 껍데기 포함) 배포 없이 확인
+  workerBundle: {
+    name: "워커 번들(wrangler dry-run)",
+    cmd: "npx",
+    // 산출물은 저장소 밖(임시 폴더)에 = 가드·git 에 번들이 섞이지 않는다
+    args: () => [
+      "wrangler",
+      "deploy",
+      "--dry-run",
+      "--outdir",
+      `${process.env.TEMP || process.env.TMPDIR || "/tmp"}/tripis-wrangler-dry`,
+      "--containers-rollout=none",
+      "--config",
+      "worker/wrangler.jsonc",
+    ],
+    judge: (code, out) => ({
+      pass: code === 0 && /dry-run|Total Upload/i.test(out),
+      detail: code === 0 ? "OK" : "번들 실패",
+    }),
+  },
+  mixSmoke: {
+    name: "MIX 저장단계 스모크",
+    cmd: "npx",
+    args: ["tsx", "worker/lib/services/agents/mix-save-smoke.ts"],
+    judge: (code, out) => ({
+      pass: code === 0 && /스모크 통과/.test(out),
+      detail: code === 0 ? "OK(실DB·R2, 쓰기0)" : "스모크 실패",
+    }),
+  },
 };
 
 // 실행 대상 선택

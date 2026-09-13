@@ -86,8 +86,9 @@ const dryRun = argv["dry"] === "true";
   }
 
   const { issueApiKey } = await import(
-    pathToFileURL(path.join(ROOT, "server/services/shared/issue-api-key.ts"))
-      .href
+    pathToFileURL(
+      path.join(ROOT, "worker/lib/services/shared/issue-api-key.ts"),
+    ).href
   );
   const GEMINI_KEY = await issueApiKey(
     c,
@@ -157,7 +158,8 @@ const dryRun = argv["dry"] === "true";
   );
 
   const { saveRaw } = await import(
-    pathToFileURL(path.join(ROOT, "server/services/shared/save-raw.ts")).href
+    pathToFileURL(path.join(ROOT, "worker/lib/services/shared/save-raw.ts"))
+      .href
   );
   await saveRaw({
     source: "gemini",

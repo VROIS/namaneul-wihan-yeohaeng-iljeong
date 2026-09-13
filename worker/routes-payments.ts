@@ -16,6 +16,7 @@ import express, { type Express, type Request, type Response } from "express";
 import type { drizzle } from "drizzle-orm/postgres-js";
 import { eq, sql } from "drizzle-orm";
 import Stripe from "stripe";
+import { waitUntil } from "cloudflare:workers";
 import type { Sql } from "postgres";
 import * as schema from "../shared/schema";
 import { ensureKeys } from "./keys";
@@ -78,7 +79,8 @@ async function stripeWithKeys(openSql: OpenSql): Promise<Stripe> {
   try {
     await ensureKeys(client);
   } finally {
-    void client.end({ timeout: 5 });
+    // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 응답 뒤 끊기는 약속을 waitUntil 로 살려 실제로 닫는다(src.ts·generate-db 와 같은 수리 = 풀러 칸 누수)
+    waitUntil(client.end({ timeout: 5 }));
   }
   return makeStripe();
 }

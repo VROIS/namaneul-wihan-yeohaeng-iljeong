@@ -3,8 +3,8 @@
 //   기존 여정(DB-only·MIX)은 이 파일을 거치지 않으므로 영향 0. 도시별 적정 일수는 사장님이 화면에서 보고 정한다(기계값 ≠ 화면).
 
 import { and, eq, sql } from "drizzle-orm";
-import type { TripFormData } from "../server/services/agents/types";
-import { buildSkeleton } from "../server/services/agents/ag1-skeleton-builder";
+import type { TripFormData } from "./lib/services/agents/types";
+import { buildSkeleton } from "./lib/services/agents/ag1-skeleton-builder";
 import {
   type Db,
   poolWhereSql,
@@ -18,9 +18,10 @@ import {
   finalizeDbOnlyItinerary,
 } from "./best-itinerary/finalize";
 import { AG2_SELECT_COLS, dbRowToPlace } from "./best-itinerary/places";
+import { loadImagePidMap } from "./lib/services/shared/place-image";
 import type { CityReadyResult } from "./best-itinerary/city-resolver";
 import { placeSeedRaw } from "../shared/schema";
-import { bestRankLangCount } from "../server/services/shared/best-rank";
+import { bestRankLangCount } from "./lib/services/shared/best-rank";
 
 // ⚠️ 수정금지(승인필요) 2026-08-31 사장님 결정 = 입장료 기반 슬롯시간 단일 진입점 (정본 B4)
 //   원본 server/services/shared/slot-duration.ts:43 그대로. 그 파일은 최상단에서 db 를 부르므로(Cloudflare 금지) 이 순수 함수만 옮긴다.
@@ -157,6 +158,12 @@ export async function runPipelineBest(
     selectBest(db, cityId, cityCoords, false),
     selectBest(db, cityId, cityCoords, true),
   ]);
+  // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 원본 pipeline-best.ts:159 = PID공유 폴백 목록(사진)
+  const imagePidMap = await loadImagePidMap([
+    cityId,
+    ...sightRows.map((r) => r.cityId),
+    ...restRows.map((r) => r.cityId),
+  ]);
 
   // 머무는 시간 = 엔진과 같은 계산(입장료 기반) 1벌.
   const hourlyRate = await cityHourlyRate(db, cityId);
@@ -178,10 +185,10 @@ export async function runPipelineBest(
   );
   const bucket = fillBuckets(sightRows, needMinutes, stayOf);
   const sights = bucket.picked.map((r) =>
-    dbRowToPlace(r, formData.destination),
+    dbRowToPlace(r, imagePidMap, formData.destination),
   );
   const restaurants = restRows.map((r) =>
-    dbRowToPlace(r, formData.destination),
+    dbRowToPlace(r, imagePidMap, formData.destination),
   );
 
   const restAgreed = restRows.filter((r) => agreeOf(r) > 0).length;

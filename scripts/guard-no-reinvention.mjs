@@ -1,35 +1,29 @@
 #!/usr/bin/env node
-// ⚠️ 수정금지(승인필요) 2026-07-11 사장님 SSOT = §16 재발명 가드 = 기존 도구를 후임이 다시 만드는 것을 "글 아닌 기계"로 차단.
-// = 근본: 등재(WORKLOG·SSOT)만 하면 안 읽고 재발명함(사장님 실증). CLAUDE.md 도 안 지켜 §19 를 기계화한 것과 동형.
-// = server/services/fill/ 은 그 자체가 "결손별 단독 도구 카탈로그"(각 파일 헤더 1줄 = 책임). 이 가드가 그 카탈로그를 자동 유지 + 재발명 신호 감지.
-// = 진입점:
-//     --catalog       : fill/ 폴더를 스캔해 각 도구의 책임 1줄 카탈로그를 stdout 출력(사람·AI 열람용, 항상 최신).
-//     --staged        : git pre-commit = staged diff 가 기존 도구 책임을 재발명하는 신호면 exit 1 + 기존 도구 안내.
-//     --file <경로>   : Edit/Write 직후 hook = 그 파일이 재발명 신호면 경고.
-// = 위반 판정 = "새/추가 코드가 아래 CAPABILITIES 의 트리거 키워드를 담았는데, 그 능력의 기존 도구 파일이 아닌 곳에서" = 재발명 의심.
+// ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = §16 재발명 가드 = 도구 카탈로그 = worker/lib/services/fill(워커 정본, server/ 는 Replit 전용). 진입점 = --catalog(책임 1줄 목록) · --staged(pre-commit) · --file(Edit 직후). 위반 = 아래 CAPABILITIES 트리거를 owner 아닌 곳에서 새로 짬 (정본 §16)
 import { execSync } from "node:child_process";
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, basename } from "node:path";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-const FILL_DIR = join(ROOT, "server", "services", "fill");
+// ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 카탈로그가 읽는 자리 = 워커 정본(worker/lib/services/fill). server/ 는 Replit 앱 전용이라 여기를 가리키면 후임에게 옛 경로를 정본으로 안내한다.
+const FILL_DIR = join(ROOT, "worker", "lib", "services", "fill");
 
 // ── 능력 카탈로그 = "이 결손이면 이 도구" (= 재발명 트리거) ──
 // owner = 유일 정본 파일(들). triggers = 이 능력을 새로 짜려 할 때 diff 에 나타나는 신호(정규식).
 // 새 도구 추가 시 여기 1줄 등재 = 카탈로그 = 후임 AI 가 --catalog 로 즉시 봄.
 const CAPABILITIES = [
-  // ⚠️ 수정금지(승인필요) 2026-09-04 사장님 확정 = 창고 채움은 4단계 1벌(제미니 힌트→TS=PID 확정→입힘→PID 페이지 1회 방문=사진·대조·최신화) = 여기 owners 가 그 전부. 옛 도구 32개 삭제(§19). 도구가 바뀌면 이 표를 그 턴에 다시 쓴다.
+  // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 도구 정본 = worker/lib 판(운영 server/ 는 Replit 앱 전용, 워커·필시티는 안 봄) · 창고 채움은 4단계 1벌(제미니 힌트→TS=PID 확정→입힘→PID 페이지 1회 방문=사진·대조·최신화) = 여기 owners 가 그 전부. 옛 도구 32개 삭제(§19). 도구가 바뀌면 이 표를 그 턴에 다시 쓴다.
   {
     id: "image-fill",
     ko: "이미지 결손 채우기(PID 페이지 무료 우선 → PM 은 결손행만)",
     owners: [
-      "server/services/fill/backfill-verify.ts",
-      "server/services/fill/storage-image-relink.ts",
-      "server/services/shared/ts-client.ts",
-      "server/services/agents/ag3-data-matcher.ts",
-      "server/services/agents/ag3-save-new-places.ts",
-      "fillcity/steps/discovery-verify-and-insert.ts",
+      "worker/lib/services/fill/backfill-verify.ts",
+      "worker/lib/services/fill/storage-image-relink.ts",
+      "worker/lib/services/shared/ts-client.ts",
+      "worker/lib/services/agents/ag3-data-matcher.ts",
+      "worker/lib/services/agents/ag3-save-new-places.ts",
+      "worker/lib/services/fill/gmaps-post.ts",
     ],
     triggers: [/tsPhoto\s*\(/, /PhotoMedia\/media/i, /place-images.*x-upsert/i],
     hint: "이미지 채우기 = backfill-verify.ts(무료재링크→PID 페이지→PM) / relink = storage-image-relink.ts / 사진관문 = ts-client tsPhoto. 새 다운로더·업로더 만들지 말 것(§16).",
@@ -37,7 +31,7 @@ const CAPABILITIES = [
   {
     id: "r2-storage",
     ko: "R2 창고 접근(단일 진입점)",
-    owners: ["server/services/shared/r2-client.ts"],
+    owners: ["worker/lib/services/shared/r2-client.ts"],
     triggers: [
       /storage\.objects[\s\S]{0,200}uploadToR2/i,
       /supabase\.co\/storage\/v1/i,
@@ -48,9 +42,9 @@ const CAPABILITIES = [
     id: "identity-fill",
     ko: "PID 페이지 1회 방문 = 이름·주소·RC·영업상태·좌표·사진 6요소 대조·최신화(유료 API 0)",
     owners: [
-      "server/services/fill/gmaps-pid-identity.ts",
-      "server/services/fill/gmaps-pid-identity/",
-      "server/services/fill/backfill-verify.ts",
+      "worker/lib/services/fill/gmaps-pid-identity.ts",
+      "worker/lib/services/fill/gmaps-pid-identity/",
+      "worker/lib/services/fill/backfill-verify.ts",
     ],
     triggers: [
       /maps\/place\/\?q=place_id:/,
@@ -63,10 +57,10 @@ const CAPABILITIES = [
     id: "pid-twin-merge",
     ko: "같은 PID 쌍둥이 병합 + 붙을 도시 없는 행 삭제",
     owners: [
-      "server/services/fill/status-backfill.ts",
-      "server/services/fill/wrongcity-quarantine.ts",
-      // ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = MIX 쌍둥이 흡수 시 껍데기(자기 행) 즉시 삭제 = place-upsert 가 그 능력의 owner
-      "server/services/place-upsert.ts",
+      "worker/lib/services/fill/status-backfill.ts",
+      "worker/lib/services/fill/wrongcity-quarantine.ts",
+      // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = MIX 쌍둥이 흡수 시 껍데기(자기 행) 즉시 삭제 = worker/lib 판 place-upsert 가 그 능력의 owner
+      "worker/lib/services/place-upsert.ts",
     ],
     triggers: [
       /DELETE\s+FROM\s+place_seed_raw/i,
@@ -79,7 +73,7 @@ const CAPABILITIES = [
 // ── --catalog : fill/ 실제 파일 헤더 1줄 + 능력표를 출력 (항상 최신 = 카탈로그가 코드에서 자동 생성) ──
 function buildCatalog() {
   const lines = [
-    "# server/services/fill/ 결손별 단독 도구 카탈로그 (= §16 재발명 금지 = 기존 것 재사용)",
+    "# worker/lib/services/fill/ 결손별 단독 도구 카탈로그 (= §16 재발명 금지 = 기존 것 재사용)",
     "",
   ];
   if (existsSync(FILL_DIR)) {
@@ -96,7 +90,9 @@ function buildCatalog() {
           "",
         )
         .trim();
-      lines.push(`- server/services/fill/${f} = ${resp || "(헤더 1줄 없음)"}`);
+      lines.push(
+        `- worker/lib/services/fill/${f} = ${resp || "(헤더 1줄 없음)"}`,
+      );
     }
   }
   lines.push(

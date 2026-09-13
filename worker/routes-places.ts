@@ -11,7 +11,7 @@ import {
   cityHighlightWhere,
   cityRepresentativeOrder,
   pickDisplayName,
-} from "../server/services/shared/city-representative-place";
+} from "./lib/services/shared/city-representative-place";
 
 const { cities, placeSeedRaw, itineraries, guides, savedVideos } = schema;
 

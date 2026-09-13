@@ -6,14 +6,14 @@ import { fileURLToPath } from "url";
 import {
   rawDate,
   saveVersionedReport,
-} from "../../server/services/shared/raw-filename";
-// ⚠️ 수정금지(승인필요) 2026-08-29 사장님 승인 = 7개 언어 목록·순서 1벌(§16)
-import { LANGS } from "../../server/services/shared/language-instruction";
+} from "../../worker/lib/services/shared/raw-filename";
+// ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 7개 언어 목록·순서 1벌 = worker/lib 판(§16)
+import { LANGS } from "../../worker/lib/services/shared/language-instruction";
 import {
   recognizePlace,
   RECOGNIZE_ROWS_SQL,
   type RecognizeRow,
-} from "../../server/services/shared/recognize-place";
+} from "../../worker/lib/services/shared/recognize-place";
 export type Bucket = "confirm" | "new";
 export interface PsrRow {
   id: number;
@@ -363,7 +363,7 @@ function deserializeGroup(g: any): Group {
     const elapsedSec = () => (Date.now() - t0) / 1000;
     let abortedAt = -1;
 
-    // ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = 알아보는 문(recognizePlace) 을 문지기 드라이런 앞에 세운다 = 제미니 값만으로 이미 있는 행을 먼저 찾고, 못 찾을 때만 트리거 드라이런. MIX 1단계와 같은 1벌(§16).
+    // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 알아보는 문 = 워커판 1등 판정식(주소·도시이름 포함)을 문지기 드라이런 앞에 세운다 = MIX 와 필시티가 같은 1벌 (정본 §)
     const recogRows: RecognizeRow[] = (
       await c.query(RECOGNIZE_ROWS_SQL, [cityId])
     ).rows;
@@ -390,6 +390,7 @@ function deserializeGroup(g: any): Group {
             name: p.name_en,
             nameLocal: p.name_local,
             nameKo: p.name_ko,
+            address: p.address ?? null,
             lat: p.lat,
             lng: p.lng,
             isRestaurant: p.c === "restaurant",

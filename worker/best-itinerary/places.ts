@@ -18,8 +18,12 @@ import {
   type AG1Output,
   type PlaceResult,
   type SeedCategory,
-} from "../../server/services/agents/types";
-import { normalizeTravelStyle } from "../../server/services/agents/pipeline-v3-types";
+} from "../lib/services/agents/types";
+import { normalizeTravelStyle } from "../lib/services/agents/pipeline-v3-types";
+import {
+  loadImagePidMap,
+  pickPlaceImage,
+} from "../lib/services/shared/place-image";
 import {
   VIBE_PRIMARY_CATEGORY,
   SIGHT_CATEGORIES,
@@ -29,12 +33,7 @@ const { cities, placeSeedRaw } = schema;
 
 type Db = PostgresJsDatabase<typeof schema>;
 
-// ── 사진 ────────────────────────────────────────────────────────────────────
-
-/** 행에 사진 주소가 있으면 그것, 없으면 빈 값. */
-export function pickPlaceImage(seed: { imageUrl?: string | null }): string {
-  return seed.imageUrl || "";
-}
+// ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 사진 = 원본 place-image.ts 1벌(PID공유 폴백 포함) = ../lib/services/shared/place-image.ts
 
 // ── AG1 뼈대 (원본 server/services/agents/ag1-skeleton-builder.ts) ───────────
 
@@ -231,11 +230,21 @@ export async function fetchFromPlaceSeedRaw(
     allRows.push(...topUp);
   }
 
-  return allRows.map((r: any) => dbRowToPlace(r, formData.destination));
+  // 원본 :324 = PID공유 폴백용 R2 실존목록 = 행 확정 **후** 등장한 도시 전부 로드
+  const imagePidMap = await loadImagePidMap([
+    cid,
+    ...allRows.map((r: any) => r.cityId),
+  ]);
+  return allRows.map((r: any) =>
+    dbRowToPlace(r, imagePidMap, formData.destination),
+  );
 }
 
-/** 창고 행 → 슬롯 객체 1벌(원본 ag2-gemini-recommender.ts:339). DB-only·베스트 분기가 같은 것을 쓴다(§16). */
-export function dbRowToPlace(r: any, destination: string): PlaceResult {
+export function dbRowToPlace(
+  r: any,
+  imagePidMap: Map<string, string>,
+  destination: string,
+): PlaceResult {
   const isFood = r.seedCategory === "restaurant";
   return {
     id: `db-${r.id}`,
@@ -250,7 +259,7 @@ export function dbRowToPlace(r: any, destination: string): PlaceResult {
     personaFitReason: r.summaryKo || "",
     tags: isFood ? ["restaurant", "food"] : [],
     vibeTags: isFood ? ["Foodie" as const] : [],
-    image: pickPlaceImage(r),
+    image: pickPlaceImage(r, imagePidMap),
     priceEstimate: r.priceEur ? `€${r.priceEur}` : "",
     estimatedPriceEur: r.priceEur ?? undefined,
     bestRank: r.bestRank ?? null,

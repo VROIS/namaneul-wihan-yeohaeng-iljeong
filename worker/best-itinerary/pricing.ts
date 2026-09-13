@@ -13,7 +13,7 @@ import {
   type MobilityStyle,
   type TransportType,
   type TravelStyle,
-} from "../../server/services/transport/constants";
+} from "../lib/services/transport/constants";
 
 type Db = PostgresJsDatabase<typeof schema>;
 

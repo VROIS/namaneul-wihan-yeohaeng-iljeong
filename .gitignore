@@ -213,3 +213,7 @@ docs/_비공개/
 
 # Cloudflare Workers Assets 조립 산출물(2026-09-06) = dist+assets+admin 머지본, 재생성 가능
 public-dist/
+
+# wrangler deploy --dry-run 산출물(기계검증 6번째) = 저장소에 남기지 않는다
+.wrangler-dry/
+**/.wrangler-dry/

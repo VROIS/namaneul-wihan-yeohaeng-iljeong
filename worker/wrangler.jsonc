@@ -12,18 +12,34 @@
   //      = vars 가 process.env 로 자동 노출. 위 compatibility_date=2026-09-05 라 해당됨.
   //      → worker/routes-rest.ts:115 의 process.env.R2_PUBLIC_URL 이 그대로 읽는다.
   //   값 = 원본 .env 와 동일. 이게 없으면 사진은 R2 에 올라가도 imageUrl 이 null 로 떨어진다.
-  // 🔴🔴 여기에 DATABASE_URL · SUPABASE_DATABASE_URL 을 절대 넣지 마라(넣는 순간 운영 정지).
-  //   이유: routes-itinerary-generate-db.ts 가 route-local.ts(동선 두뇌 = 보호블록)를 원본 그대로
-  //   재사용하는데(§16 재발명 금지), 그 파일이 server/db.ts 를 번들에 끌고 들어온다.
-  //   server/db.ts:39 는 **모듈 최상단**에서 new Pool() 을 만든다 = Worker 금지 패턴.
-  //   지금 안 터지는 유일한 이유 = 그 두 변수가 없어서 db.ts:31 분기가 참 → Pool 을 아예 안 만듦.
-  //   근거: Hyperdrive 공식 문제해결 = "Cannot perform I/O on behalf of a different request …
-  //         Create a new database client on every request instead of caching it in a global variable."
-  //   DB 접속은 오직 HYPERDRIVE 바인딩 + openDb() 1벌로만 한다.
+  // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = DB 접속 = HYPERDRIVE 바인딩만(라우트 openDb() · 엔진 lib/db.ts withEngineDb() = 둘 다 요청별 연결). DATABASE_URL 류 vars 불필요 (정본 §)
   "vars": {
     "R2_PUBLIC_URL": "https://pub-ec584e1b28fc458f85bca053e0fe6b02.r2.dev"
   },
   "observability": { "enabled": true },
+  // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 운영 엔진(lib/) 복사본이 부르는 "@google/genai" 를 Worker 용 진입점(/web)으로 = 엔진 파일 무변경 (정본 §)
+  "alias": {
+    "@google/genai": "@google/genai/web",
+    "@aws-sdk/client-s3": "./lib/stubs/aws-s3-stub.ts",
+    "playwright": "./lib/stubs/playwright-stub.ts"
+  },
+  // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 후처리 자동화 2벌 = Browser Run(구글맵 페이지 열기, @cloudflare/playwright = 기존 page-reader 그대로) + 큐(gmaps-post = MIX 응답 뒤 "도시 N" 한 줄, 소비자 = 같은 워커, 한 번에 한 도시, 재시도 2회 뒤 dead-letter). 배포 전 1회 = `npx wrangler queues create gmaps-post` · `npx wrangler queues create gmaps-post-dlq` (정본 §)
+  "browser": { "binding": "BROWSER" },
+  "queues": {
+    "producers": [{ "binding": "GMAPS_POST_QUEUE", "queue": "gmaps-post" }],
+    "consumers": [
+      {
+        "queue": "gmaps-post",
+        "max_batch_size": 1,
+        "max_batch_timeout": 1,
+        "max_retries": 2,
+        "max_concurrency": 1,
+        "dead_letter_queue": "gmaps-post-dlq"
+      }
+    ]
+  },
+  // ⚠️ 수정금지(승인필요) 2026-09-12 사장님 결정 = 로컬(wrangler dev)은 컨테이너 없이 기동 = 이 PC 8787 실증용 (배포에는 영향 없음)
+  "dev": { "enable_containers": false },
   "hyperdrive": [
     { "binding": "HYPERDRIVE", "id": "a3b29ca269884582ad73f15f1bc50a84" }
   ],
@@ -40,7 +56,10 @@
 
       // 근거: .env:56 "R2_BUCKET_NAME=tripis-videos" = 운영에서 이미 쓰는 실제 버킷명.
       //       server/services/shared/r2-client.ts:28 이 이 환경변수로 같은 버킷을 가리킨다 = 서버·Worker 동일 창고(§18 2곳 동형).
-      "bucket_name": "tripis-videos"
+      "bucket_name": "tripis-videos",
+
+      // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 로컬(wrangler dev)도 실제 버킷에 쓰고 읽는다 = 모의 창고에 raw·사진이 갇혀 돈 날리는 일 금지 (공식: r2/get-started/workers-api "remote": true)
+      "remote": true
     }
   ],
 
@@ -61,16 +80,20 @@
       // 근거: get-started "The `image` field ... points to a Dockerfile, to a directory
       //   containing a Dockerfile, or to a fully qualified image reference".
       //   worker/ 기준 상대경로.
-      "image": "./container/Dockerfile",
+      // ⚠️ 수정금지(승인필요) 2026-09-12 사장님 결정 = 컨테이너 조립 설명서 이름 = container-image (도커 잔재 명칭 제거. wrangler 는 "존재하는 파일 경로"면 이름 무관 = isDockerfile 판정 실측) (정본 §)
+      "image": "./container/container-image",
+
+      // ⚠️ 수정금지(승인필요) 2026-09-12 사장님 결정 = 빌드 문맥 = 레포 루트 (Dockerfile 이 server/·shared/·assets/ 를 그대로 COPY) (정본 §)
+      "image_build_context": "../",
 
       // 근거: get-started 공식 예시의 max_instances. 동시에 뜰 수 있는 인스턴스 상한.
       //   일별 영상은 하루 ~5편(Veo Tier2 한도)이라 5면 충분하고, 상한을 낮게 두면
       //   실수로 인스턴스가 번지는 것도 막는다(과금 = 도는 동안만).
       "max_instances": 5,
 
-      // 근거: containers/platform/limits/ 인스턴스표 = basic(1/4 vCPU, 1GiB, 4GB disk).
-      //   ffmpeg `-c copy`(= 재인코딩 없이 이어붙이기, video-stitcher.ts:43-44)는
-      //   CPU 를 거의 안 쓰고 디스크만 필요하다. 씬 10개 + 결과물이라 4GB 로 충분.
+      // ⚠️ 수정금지(승인필요) 2026-09-12 사장님 결정 = basic(1/4 vCPU·1GiB·4GB) 유지 근거 = 실측(8/22 뮌헨 9씬)
+      //   씬 클립 9개 합계 27.5MB(최대 1개 4.7MB) + 완성본 27.4MB. 최악 10씬이어도 메모리 200MB 안쪽.
+      //   일은 대부분 외부 응답 대기(제미니·Veo 폴링)라 CPU 도 거의 안 쓴다.
       "instance_type": "basic"
     }
   ],

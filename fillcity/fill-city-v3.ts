@@ -1,6 +1,4 @@
-// ⚠️ 수정금지(승인필요) 2026-09-08 사장님 확정 = 시드발굴 WF v3 = 밖에서 다 확인하고 넣는다.
-//   v2 대비 = ① PID 재확인 삭제(⑦ 과 같은 페이지 2회) · ⑤ TS 삭제(유료인데 오배송) · ⑥ 같은 PID 병합 삭제(밖에서 확인 후 넣어 쌍둥이가 안 생김) · ⑦ 백필 삭제(③ 에서 사진까지 받음).
-//   유료는 ② 제미니 하나뿐. v2 는 확정 전까지 그대로 둔다(§19 삭제는 v3 채택 뒤).
+// ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 시드발굴 WF = v3 1벌(v2 삭제 §19). ① 정제(소속오염 이동·상태 백필·병합 행 삭제) → ② 제미니(유료, 유일) → ③ 알아보는 문 → ④ 산출표를 워커 큐에 = 구글맵 확정·입력·후처리·병합 행 정리는 클라우드플레어 워커 엔진(MIX 와 같은 1벌)이 돈다 → ⑤ 검수 (정본 §)
 import { spawnSync } from "child_process";
 import fs from "fs";
 import path from "path";
@@ -74,11 +72,16 @@ const only = (name: string) => !onlyArg || onlyArg.includes(name);
 
   // ① 창고 정제(0원) = 소속오염 이동 + 상태규칙 백필
   if (only("clean")) {
-    run("① 소속오염 이동", "server/services/fill/wrongcity-quarantine.ts", [
+    run("① 소속오염 이동", "worker/lib/services/fill/wrongcity-quarantine.ts", [
       `--city-id=${cityId}`,
       ...(apply ? ["--apply"] : []),
     ]);
-    run("① 상태규칙 백필", "server/services/fill/status-backfill.ts", [
+    run("① 상태규칙 백필", "worker/lib/services/fill/status-backfill.ts", [
+      `--city-id=${cityId}`,
+      ...(apply ? ["--apply"] : []),
+    ]);
+    // 백필이 정한 진 행(merged)은 가진 것을 원행으로 옮기고 삭제 = 유령 0 (엔진 purgeMergedRows 1벌)
+    run("① 병합 행 정리", "worker/lib/services/fill/purge-merged-rows.ts", [
       `--city-id=${cityId}`,
       ...(apply ? ["--apply"] : []),
     ]);
@@ -110,12 +113,13 @@ const only = (name: string) => !onlyArg || onlyArg.includes(name);
     ]);
   }
 
-  // ④ 구글맵 확정·입력(0원) = 밖에서 6요소+URI 확보 후 INSERT
+  // ④ 구글맵 확정·입력(0원) = 산출표를 워커 큐에 → 워커가 Browser Run 으로 7요소 갖춰 넣고 후처리·병합 행 정리까지
   if (only("insert")) {
-    run("④ 구글맵 확정·입력", "fillcity/steps/discovery-gmaps-insert.ts", [
-      `--city-id=${cityId}`,
-      ...(apply ? ["--apply"] : []),
-    ]);
+    run(
+      "④ 구글맵 확정·입력(워커 큐)",
+      "fillcity/steps/discovery-gmaps-insert.ts",
+      [`--city-id=${cityId}`, ...(apply ? ["--apply"] : [])],
+    );
   }
 
   // ⑤ 검수(0원)

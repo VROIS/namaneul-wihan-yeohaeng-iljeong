@@ -1,17 +1,21 @@
 // ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = 구글맵으로 창고를 채우는 방법 1벌(§16·§19) = ④ 신규 입력과 재확인·최신화가 같은 이 파일을 쓴다. 옛 refresh 자체 검색(이름+주소 붙여 첫 결과 = Cordano 오염 원인) 폐기 §19.
-import path from "path";
-import { pathToFileURL } from "url";
-import { LANGS } from "../../server/services/shared/language-instruction";
-import type { Candidate } from "../../server/services/fill/gmaps-pid-identity/page-reader";
+// ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 이 파일은 worker/lib 정본(필시티·후처리 큐 소비자가 같은 1벌을 부른다). 브라우저는 밖에서 받는다(Node = playwright, Worker = Browser Run) (정본 §)
+import { LANGS } from "../shared/language-instruction";
+import {
+  BROWSER_UA,
+  listCandidates,
+  readPlacePage,
+  type Candidate,
+} from "./gmaps-pid-identity/page-reader";
 import {
   categoriesOfLabel,
   resolveCategory,
-} from "../../server/services/shared/place-category-map";
-import {
-  bestRankCode,
-  writeBestRankUnion,
-} from "../../server/services/shared/best-rank";
-import { distanceMetersFromCoords } from "../../server/services/shared/geo-distance";
+} from "../shared/place-category-map";
+import { bestRankCode, writeBestRankUnion } from "../shared/best-rank";
+import { upsertTranslationWith } from "../place-upsert";
+import { distanceMetersFromCoords } from "../shared/geo-distance";
+import { PHOTO_MAX_WIDTH_PX } from "../shared/ts-client";
+import { uploadToR2 } from "../shared/r2-client";
 
 export interface CopyEntry {
   lang: string;
@@ -99,21 +103,20 @@ export async function inTxn<T>(c: any, fn: () => Promise<T>): Promise<T> {
   }
 }
 
+// 번역행 갱신 SQL = place-upsert 1벌(upsertTranslationWith). 실행기 = 지금 열린 트랜잭션의 클라이언트
 export async function upsertTranslations(
   c: any,
   placeId: number,
   copies: CopyEntry[],
 ) {
-  for (const t of otherCopiesOf(copies)) {
-    if (!t.summary && !t.editorial) continue;
-    await c.query(
-      `INSERT INTO place_translations (place_id, language, summary, editorial_summary)
-         VALUES ($1, $2, $3, $4)
-         ON CONFLICT (place_id, language) DO UPDATE
-           SET summary = EXCLUDED.summary, editorial_summary = EXCLUDED.editorial_summary`,
-      [placeId, t.lang, t.summary || null, t.editorial || null],
+  for (const t of otherCopiesOf(copies))
+    await upsertTranslationWith(
+      (text, params) => c.query(text, params),
+      placeId,
+      t.lang,
+      t.summary,
+      t.editorial,
     );
-  }
 }
 
 // ⚠️ 수정금지(승인필요) 2026-08-27 사장님 지적 = 출처표식은 병합·신규 양쪽 다 phase_tags 에 반드시 남긴다
@@ -322,9 +325,13 @@ export async function writeRead(
   }
   const ko = koCopyOf(n.copies);
   const res = await upsertPlace({
-    // ⚠️ 수정금지(승인필요) 2026-09-08 사장님 확정 = 재확인은 그 창고 행에 쓴다(새 행을 만들지 않는다 = 프랑스 가게 4행 사고). ④ 신규는 targetRowId 없이 새로 넣는다.
+    // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 그 행에 새 CID 를 쓸 때는 검문(트리거)을 통과시킨다 = 같은 CID 행이 있으면 그 원행으로 흡수하고 진 행은 삭제 = 쌍둥이 원천 차단 ③ (정본 §)
     ...(opts.targetRowId != null
-      ? { targetRowId: opts.targetRowId, followTriggerDup: true }
+      ? {
+          targetRowId: opts.targetRowId,
+          followTriggerDup: true,
+          dupCheckOnWrite: true,
+        }
       : {}),
     cityId: opts.cityId,
     seedCategory: cat ?? n.cat,
@@ -379,26 +386,14 @@ export async function writeRead(
 }
 
 // ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = 구글맵 도구(브라우저·페이지 읽기·사진 올리기) 여는 길 1벌.
-export async function openGmapsTools(ROOT: string) {
+export const pageTools = () => ({
+  readPlacePage,
+  listCandidates,
+  photoMaxWidthPx: PHOTO_MAX_WIDTH_PX as number,
+  uploadToR2,
+});
+export async function openGmapsTools(_root?: string) {
   const { chromium } = await import("playwright");
-  const { BROWSER_UA, readPlacePage, listCandidates } = await import(
-    pathToFileURL(
-      path.join(ROOT, "server/services/fill/gmaps-pid-identity/page-reader.ts"),
-    ).href
-  );
-  const { PHOTO_MAX_WIDTH_PX } = await import(
-    pathToFileURL(path.join(ROOT, "server/services/shared/ts-client.ts")).href
-  );
-  const { uploadToR2 } = await import(
-    pathToFileURL(path.join(ROOT, "server/services/shared/r2-client.ts")).href
-  );
   const browser = await chromium.launch({ headless: true });
-  return {
-    browser,
-    browserUa: BROWSER_UA as string,
-    readPlacePage,
-    listCandidates,
-    photoMaxWidthPx: PHOTO_MAX_WIDTH_PX as number,
-    uploadToR2,
-  };
+  return { browser, browserUa: BROWSER_UA as string, ...pageTools() };
 }

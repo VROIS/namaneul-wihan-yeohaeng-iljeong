@@ -1,9 +1,5 @@
 // Cloudflare Worker 이관 = 지도 HTML 1벌. 원본 = server/misc-routes.ts:64 (2026-09-06)
 
-// 옮기지 않은 2벌 = 외부 유료호출이 있어 이 관문 대상이 아니다.
-//   POST /api/routes/generate = server/services/agents/pipeline-v3-step1-gemini.ts:161 제미니 호출
-//   POST /api/routes/day-live = server/services/shared/routes-client.ts:5 구글 Routes 호출
-
 import type { Express, Request, Response } from "express";
 import type { drizzle } from "drizzle-orm/postgres-js";
 import { eq } from "drizzle-orm";

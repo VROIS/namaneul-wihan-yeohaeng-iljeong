@@ -19,7 +19,7 @@ import {
   type SQL,
 } from "drizzle-orm";
 import * as schema from "../shared/schema";
-import { pickRestaurantBySegment } from "../server/services/route-matcher";
+import { pickRestaurantBySegment } from "./lib/services/route-matcher";
 import {
   CHARACTER_PRIMARY_CATEGORY,
   COMPANION_VIBE_CATEGORIES,
