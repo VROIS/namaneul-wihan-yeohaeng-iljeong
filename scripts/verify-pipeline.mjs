@@ -1,16 +1,5 @@
 #!/usr/bin/env node
-// ⚠️ 수정금지(승인필요) 2026-08-06 사장님 SSOT = §22 확정 순서의 **기계 오케스트레이터 1벌** (글 아닌 기계).
-// = 사장님 확정 순서: 수정 → 기계검증4 → 크롬DEV 실증(사용자 관점) → 무한루프 → 판단3종 → 표 → 문서 업뎁 → 대기
-//   → 커밋 승인(스탬프) → 빌드필요 체크 → 커밋·푸시.
-// = 핵심: 각 단계 통과 시 **그 시점 코드 지문(diff 해시)** 을 마커(.verify-state.json)에 기록.
-//   커밋 훅은 재실행 대신 지문 대조 = **중복 검증 제거**(사장님 지적: 기계검증 4회 중복). 코드가 바뀌면 지문 불일치 = 그 단계 재요구.
-// = 모드:
-//   machine        = 가드3(§19박제·§16재발명·§0 500줄) + 기계4(tsc·서버빌드·웹빌드·lint) 실행 → 통과 시 machine 마커
-//   evidence "메모" = 크롬DEV/실호출 실증 완료 기록(AI 가 실증 근거 1줄과 함께 호출) → evidence 마커
-//   judge-pass     = 판단3종(verify-workflow) allPassed 후에만 호출 → judge 마커
-//   status         = 단계별 상태 표(사장님용)
-//   hook-check     = pre-commit 전용: 지문 대조(기계 불일치 = 그 자리 1회 재실행 / 판단·실증 불일치 = 커밋 차단) + 빌드필요 표시
-// = 솔직 한계: 마커도 AI 가 허위 호출 가능(스탬프와 동일). 실효 = 무심결 생략의 기계 차단 + 시각·지문 감사 흔적.
+// ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = §22 기계 오케스트레이터 1벌 + 묶음(부분) 커밋 지원(`--staged` = 지문을 스테이지 기준으로 = 훅과 같은 기준, 없으면 전체). 모드 = machine·evidence "메모"·judge-pass·status·hook-check (정본 §22)
 import { execSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
@@ -70,10 +59,13 @@ function runMachine() {
 }
 
 const mode = process.argv[2] || "status";
+// --staged = 묶음 커밋 = 지문을 지금 스테이지된 것 기준으로(훅과 같은 기준). 없으면 전체 기준.
+const STAGED_ONLY = process.argv.includes("--staged");
+const markFp = () => fingerprint(!STAGED_ONLY);
 const state = readState();
 
 if (mode === "machine") {
-  const fp = fingerprint();
+  const fp = markFp();
   runMachine(); // 실패 = throw = exit 1
   state.machine = { fp, at: now() };
   writeState(state);
@@ -84,21 +76,22 @@ if (mode === "machine") {
 }
 
 if (mode === "evidence") {
-  const note = process.argv[3] || "";
+  // 실증 메모 = 깃발이 아닌 첫 인자(순서 무관). 깃발이 메모 자리에 들어와 근거 없이 기록되는 것을 막는다.
+  const note = process.argv.slice(3).find((a) => !a.startsWith("--")) || "";
   if (!note) {
     console.error(
       '⛔ 실증 메모 필수: verify-pipeline.mjs evidence "무엇을 어떻게 입증했는지 1줄"',
     );
     process.exit(1);
   }
-  state.evidence = { fp: fingerprint(), at: now(), note };
+  state.evidence = { fp: markFp(), at: now(), note };
   writeState(state);
   console.log(`✅ [evidence] 실증 마커 기록: ${note}`);
   process.exit(0);
 }
 
 if (mode === "judge-pass") {
-  state.judge = { fp: fingerprint(), at: now() };
+  state.judge = { fp: markFp(), at: now() };
   writeState(state);
   console.log(
     "✅ [judge] 판단3종 통과 마커 기록 (verify-workflow allPassed 후에만 호출할 것)",
@@ -107,7 +100,7 @@ if (mode === "judge-pass") {
 }
 
 if (mode === "status") {
-  const fp = fingerprint(false);
+  const fp = fingerprint(false); // 상태표·훅 = 늘 스테이지 기준(묶음 커밋이면 그 묶음)
   const row = (k, need = true) => {
     const m = state[k];
     if (!m) return need ? "🔴 미실행" : "⚪ 없음";
@@ -172,6 +165,6 @@ if (mode === "hook-check") {
 }
 
 console.error(
-  `알 수 없는 모드: ${mode} (machine|evidence|judge-pass|status|hook-check)`,
+  `알 수 없는 모드: ${mode} (machine|evidence|judge-pass|status|hook-check) [--staged = 묶음 커밋]`,
 );
 process.exit(1);

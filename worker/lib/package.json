@@ -1,0 +1,4 @@
+{
+  "_": "⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = worker/lib 는 Worker 번들(esbuild)과 필시티 CLI(tsx, Node) 가 함께 쓰는 코드장 = Node 에서는 운영 server/ 와 같은 CommonJS 로 읽는다(@shared 이름 export 유지). 번들에는 영향 없음 (정본 §)",
+  "type": "commonjs"
+}
