@@ -21,6 +21,8 @@ export interface DayVideo {
   totalScenes: number;
   scenes?: { placeName: string; summary?: string }[]; // 글라스 카드(Scene n/N·장소명·요약)용 씬 메타
   error?: string; // 실패 사유(서버 예외 문구 그대로 = 뭉개기 금지 SSOT, 2026-08-06)
+  // ⚠️ 수정금지(승인필요) 2026-09-14 사장님 결정 = 완성본인데 씬이 빠진 경우 = 숫자와 사유표만(문장은 여기서 번역) (정본 §)
+  partial?: { skipped: number; total: number; reason: string };
 }
 
 interface Props {
@@ -120,24 +122,41 @@ export default function VideoPlaySlot({
             isLooping
             onPlaybackStatusUpdate={handlePlaybackStatus}
           />
-          {sceneCard && (
-            <View style={styles.sceneCard} pointerEvents="none">
-              <View style={styles.sceneCardRow}>
-                <Icon name="map-pin" size={14} color="#93c5fd" />
-                <Text style={styles.sceneCardIndex}>
-                  Scene {sceneCard.index + 1}/{sceneCard.total}
+          {/* ⚠️ 수정금지(승인필요) 2026-09-14 사장님 결정 = 씬카드와 "빠진 씬 안내"를 한 세로묶음에 둔다 = 안내가 카드 아래로 흐르므로 글이 길어져도 안 겹치고, 하단은 재생 조작막대 자리로 비워둔다 (정본 §) */}
+          <View style={styles.overlayTop} pointerEvents="none">
+            {sceneCard && (
+              <View style={styles.sceneCard}>
+                <View style={styles.sceneCardRow}>
+                  <Icon name="map-pin" size={14} color="#93c5fd" />
+                  <Text style={styles.sceneCardIndex}>
+                    Scene {sceneCard.index + 1}/{sceneCard.total}
+                  </Text>
+                </View>
+                <Text style={styles.sceneCardTitle} numberOfLines={1}>
+                  {sceneCard.placeName}
+                </Text>
+                {!!sceneCard.summary && (
+                  <Text style={styles.sceneCardSummary} numberOfLines={2}>
+                    {sceneCard.summary}
+                  </Text>
+                )}
+              </View>
+            )}
+            {!!dayVideo.partial && (
+              <View style={styles.partialNote}>
+                <Icon name="alert-circle" size={13} color="#fcd34d" />
+                <Text style={styles.partialNoteText} numberOfLines={2}>
+                  {t("tripisVideo.partialWithReason", {
+                    skipped: dayVideo.partial.skipped,
+                    total: dayVideo.partial.total,
+                    reason: t(
+                      `tripisVideo.partialReason.${dayVideo.partial.reason}`,
+                    ),
+                  })}
                 </Text>
               </View>
-              <Text style={styles.sceneCardTitle} numberOfLines={1}>
-                {sceneCard.placeName}
-              </Text>
-              {!!sceneCard.summary && (
-                <Text style={styles.sceneCardSummary} numberOfLines={2}>
-                  {sceneCard.summary}
-                </Text>
-              )}
-            </View>
-          )}
+            )}
+          </View>
         </View>
       ) : dayVideo?.status === "processing" ? (
         // ⏳ 생성중 = 진행률. 문구 = 2026-08-03 사장님 교체('지브리' 폐기 §19) + 나가도 됨 안내(백그라운드 진행).
@@ -212,12 +231,15 @@ const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10 },
   playerBox: { flex: 1 },
   player: { width: "100%", height: "100%" },
-  // 글라스 카드(2026-07-23 사장님 v2) = 완전투명 유리 + 상단 배치. top 104 = 위 오버레이 칩줄 아래 자리
-  sceneCard: {
+  // ⚠️ 수정금지(승인필요) 2026-09-14 사장님 결정 = 위쪽 겹침판(top 104 = 오버레이 칩줄 아래) = 글라스 씬카드 + 빠진 씬 안내가 이 안에서 위아래로 흐른다(하단 조작막대 자리 침범 없음) (정본 §)
+  overlayTop: {
     position: "absolute",
     left: 14,
     right: 14,
     top: 104,
+    gap: 8,
+  },
+  sceneCard: {
     backgroundColor: "rgba(255,255,255,0.08)",
     borderRadius: 20,
     paddingHorizontal: 18,
@@ -250,6 +272,21 @@ const styles = StyleSheet.create({
     textShadowColor: "rgba(0,0,0,0.6)",
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 4,
+  },
+  partialNote: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 7,
+    paddingHorizontal: 10,
+    borderRadius: 10,
+    backgroundColor: "rgba(0,0,0,0.55)",
+  },
+  partialNoteText: {
+    flex: 1,
+    color: "#fde68a",
+    fontSize: 12,
+    lineHeight: 17,
   },
   progressText: {
     color: "#FFFFFF",

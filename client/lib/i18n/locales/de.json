@@ -497,7 +497,15 @@
     "genNotice": "Dauert ca. 4–5 Minuten — Sie können die Seite während der Erstellung verlassen.\nSobald fertig, erscheint es auf der TRIPIS-Schaltfläche unten.",
     "failWithReason": "Erstellung fehlgeschlagen: {{reason}}",
     "failGeneric": "Die letzte Erstellung ist fehlgeschlagen. Bitte versuchen Sie es erneut.",
-    "notYet": "Noch kein Video für Tag {{d}}"
+    "notYet": "Noch kein Video für Tag {{d}}",
+    "partialWithReason": "{{skipped}} von {{total}} Szenen übersprungen: {{reason}}",
+    "partialReason": {
+      "quota": "Tageslimit erreicht",
+      "timeout": "Zeit überschritten",
+      "storage": "Speichern fehlgeschlagen",
+      "image": "Szene nicht gezeichnet",
+      "scene": "Szene nicht erstellt"
+    }
   },
   "errorFallback": {
     "title": "In TRIPIS ist ein Problem aufgetreten",

@@ -1,0 +1,33 @@
+# ⚠️ 수정금지(승인필요) 2026-09-12 사장님 결정 = TRIPIS 독립 = Replit(server/**) 안 씀. 컨테이너 코드는 worker/container/ 1벌 (정본 §)
+# 빌드 문맥 = 레포 루트 (wrangler.jsonc containers[].image_build_context = "../")
+
+FROM node:22-slim
+
+WORKDIR /app
+
+# 런타임 npm 패키지 8개 + 번들러 = worker/container/package.json 1벌
+COPY worker/container/package.json ./package.json
+RUN npm install --no-audit --no-fund
+
+# 번들 재료 = TRIPIS 것만. shared/ 는 워커도 쓰는 공용(DB 표 정의).
+COPY shared ./shared
+COPY worker/container ./worker/container
+
+# 번들 = 레포 파일 30개(worker 19 + shared 11) → 1파일. npm 패키지는 node_modules 에서 그대로 읽는다(--packages=external).
+RUN npx esbuild worker/container/generate.ts --bundle --platform=node --format=cjs \
+      --packages=external --alias:@shared=./shared --outfile=dist/server.cjs \
+    && npm prune --omit=dev \
+    && rm -rf shared worker
+
+# 실행 중 읽는 파일만 남긴다. 경로는 process.cwd()=/app 기준.
+#   character-roster-ghibli.ts assetPath = assets/characters/*.jpg
+#   ghibli-travel-storyboard.ts = assets/vehicles/vehicle_*.jpg, docs/storyboards-manual/i{id}-d{day}.json
+COPY assets/characters ./assets/characters
+COPY assets/vehicles ./assets/vehicles
+COPY docs/storyboards-manual ./docs/storyboards-manual
+
+# 🔴 worker/routes-video-generate.ts 의 defaultPort 와 반드시 같은 값(8080).
+ENV PORT=8080
+EXPOSE 8080
+
+CMD ["node", "dist/server.cjs"]

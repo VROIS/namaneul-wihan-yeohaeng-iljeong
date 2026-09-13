@@ -21,10 +21,12 @@ export interface DayVideo {
   taskId: string;
   scenesDone: number;
   totalScenes: number;
-  /** 씬 메타(2026-07-23 사장님 목업) = 재생 화면 글라스 카드(Scene n/N·장소명·요약)용. 재생 타이밍에 맞춰 전환 */
-  scenes?: { placeName: string; summary?: string }[];
+  /** ⚠️ 수정금지(승인필요) 2026-09-12 사장님 결정 = 씬 메타(재생 카드) + error = 그 씬이 죽은 사유(구글한도/우리시스템/런타임 구분) */
+  scenes?: { placeName: string; summary?: string; error?: string }[];
   /** 실패 사유(2026-08-06 사장님 승인 = 서버 예외 문구 그대로 기록 = 화면 표시·포렌식용, 뭉개기 금지 SSOT) */
   error?: string;
+  /** ⚠️ 수정금지(승인필요) 2026-09-14 사장님 결정 = 완성본인데 씬이 빠진 경우 = 숫자와 사유표만. 문장은 화면이 7개 로케일로 만든다 (정본 §) */
+  partial?: { skipped: number; total: number; reason: string };
 }
 
 // ⚠️ 수정금지(승인필요) 2026-08-03 §22 검수(사장님 승인) = **외래키를 걸지 않는다** = 라이브 DB 와 동일(§19-4).

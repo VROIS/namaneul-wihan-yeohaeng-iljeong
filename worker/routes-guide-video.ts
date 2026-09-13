@@ -6,6 +6,7 @@ import type { drizzle } from "drizzle-orm/postgres-js";
 import * as schema from "../shared/schema";
 import type { DayVideo } from "../shared/schema";
 import { DEFAULT_OPTION_MODE, readOptionMode } from "./routes-video-config";
+import { isStaleProcessing } from "./video-stale";
 
 type Db = ReturnType<typeof drizzle<typeof schema>>;
 export type OpenDb = () => { db: Db; close: () => void };
@@ -25,14 +26,6 @@ async function getRoleFromDb(db: Db, userId: string): Promise<string> {
     .from(schema.users)
     .where(eq(schema.users.id, userId));
   return u?.role || "user";
-}
-
-// 원본 server/video-routes.ts:38 · :62
-const STALE_PROCESSING_MS = 15 * 60 * 1000;
-function isStaleProcessing(v: DayVideo | undefined): boolean {
-  if (v?.status !== "processing") return false;
-  const ts = Number(v.taskId?.split("_").pop());
-  return !ts || Date.now() - ts > STALE_PROCESSING_MS;
 }
 
 export function registerGuideVideoRoutes(app: Express, openDb: OpenDb): void {

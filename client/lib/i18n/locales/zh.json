@@ -497,7 +497,15 @@
     "genNotice": "约需4-5分钟 — 制作过程中可以离开此页面。\n完成后将显示在下方的TRIPIS按钮上。",
     "failWithReason": "生成失败：{{reason}}",
     "failGeneric": "上次生成失败了，请重试。",
-    "notYet": "第{{d}}天暂无视频"
+    "notYet": "第{{d}}天暂无视频",
+    "partialWithReason": "{{total}}个场景中{{skipped}}个被跳过：{{reason}}",
+    "partialReason": {
+      "quota": "已达每日上限",
+      "timeout": "超时",
+      "storage": "无法保存",
+      "image": "无法绘制场景",
+      "scene": "无法生成场景"
+    }
   },
   "errorFallback": {
     "title": "TRIPIS出现了问题",

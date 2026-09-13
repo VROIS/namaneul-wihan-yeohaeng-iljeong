@@ -497,7 +497,15 @@
     "genNotice": "Environ 4 à 5 min — vous pouvez quitter pendant la création.\nUne fois terminée, elle apparaîtra sur le bouton TRIPIS ci-dessous.",
     "failWithReason": "Échec de la génération : {{reason}}",
     "failGeneric": "La génération précédente a échoué. Veuillez réessayer.",
-    "notYet": "Pas encore de vidéo pour le jour {{d}}"
+    "notYet": "Pas encore de vidéo pour le jour {{d}}",
+    "partialWithReason": "{{skipped}} scène(s) sur {{total}} ignorée(s) : {{reason}}",
+    "partialReason": {
+      "quota": "Limite quotidienne atteinte",
+      "timeout": "Délai dépassé",
+      "storage": "Échec de l'enregistrement",
+      "image": "Scène non dessinée",
+      "scene": "Scène non créée"
+    }
   },
   "errorFallback": {
     "title": "Un problème est survenu dans TRIPIS",

@@ -497,7 +497,15 @@
     "genNotice": "約4〜5分かかります — 作成中は画面を離れても大丈夫です。\n完成すると下部のTRIPISボタンに表示されます。",
     "failWithReason": "生成に失敗しました: {{reason}}",
     "failGeneric": "前回の生成に失敗しました。もう一度お試しください。",
-    "notYet": "{{d}}日目の動画はまだありません"
+    "notYet": "{{d}}日目の動画はまだありません",
+    "partialWithReason": "{{total}}件中{{skipped}}件のシーンが省略されました: {{reason}}",
+    "partialReason": {
+      "quota": "1日の上限に到達",
+      "timeout": "時間切れ",
+      "storage": "保存できません",
+      "image": "シーンを描けません",
+      "scene": "シーンを作成できません"
+    }
   },
   "errorFallback": {
     "title": "TRIPISで問題が発生しました",

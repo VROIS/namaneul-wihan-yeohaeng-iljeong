@@ -1,0 +1,239 @@
+import { db } from "./db";
+import { users, creditTransactions } from "@shared/schema";
+import { eq, desc, sql, and, like } from "drizzle-orm";
+import { notificationService } from "./notificationService";
+
+export const CREDIT_CONFIG = {
+  // 🎁 2026-08-05 사장님 SSOT = 신규 가입 **50** 크레딧.
+  SIGNUP_BONUS: 50,
+  PURCHASE_CREDITS: 140,
+  PURCHASE_BONUS: 40,
+  DETAIL_PAGE_COST: 2,
+  SHARE_PAGE_COST: 5,
+  REFERRAL_BONUS: 10,
+  RECHARGE_BONUS: 20,
+  CASHBACK_THRESHOLD: 1000,
+  CASHBACK_AMOUNT: 200,
+  PRICE_EUR: 10,
+  QR_COPY_REWARD: 2,
+};
+
+export class CreditService {
+  async getBalance(userId: string): Promise<number> {
+    const [user] = await db
+      .select({ credits: users.credits })
+      .from(users)
+      .where(eq(users.id, userId));
+    return user?.credits ?? 0;
+  }
+
+  async getUserProfile(userId: string) {
+    const [user] = await db.select().from(users).where(eq(users.id, userId));
+    return user;
+  }
+
+  // ⚠️ 수정금지(승인필요) 2026-07-30 = 장부 줄과 잔액을 **한 덩어리로** 처리한다.
+  async addCredits(
+    userId: string,
+    amount: number,
+    type: string,
+    description: string,
+    referenceId?: string,
+  ): Promise<number> {
+    return await db.transaction(async (tx) => {
+      await tx.insert(creditTransactions).values({
+        userId,
+        type,
+        amount,
+        description,
+        referenceId,
+      });
+
+      const [updated] = await tx
+        .update(users)
+        .set({
+          credits: sql`COALESCE(${users.credits}, 0) + ${amount}`,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, userId))
+        .returning({ credits: users.credits });
+
+      return updated?.credits ?? 0;
+    });
+  }
+
+  async useCredits(
+    userId: string,
+    amount: number,
+    description: string,
+    referenceId?: string,
+  ): Promise<{ success: boolean; balance: number; message?: string }> {
+    const balance = await this.getBalance(userId);
+
+    if (balance < amount) {
+      return {
+        success: false,
+        balance,
+        message: `크레딧이 부족합니다. (필요: ${amount}, 잔액: ${balance})`,
+      };
+    }
+
+    const newBalance = await this.addCredits(
+      userId,
+      -amount,
+      "usage",
+      description,
+      referenceId,
+    );
+
+    return { success: true, balance: newBalance };
+  }
+
+  async grantSignupBonus(userId: string): Promise<number> {
+    const [existingBonus] = await db
+      .select()
+      .from(creditTransactions)
+      .where(
+        and(
+          eq(creditTransactions.userId, userId),
+          eq(creditTransactions.type, "signup_bonus"),
+        ),
+      )
+      .limit(1);
+
+    if (existingBonus) {
+      console.log(`User ${userId} already received signup bonus`);
+      return await this.getBalance(userId);
+    }
+
+    return await this.addCredits(
+      userId,
+      CREDIT_CONFIG.SIGNUP_BONUS,
+      "signup_bonus",
+      `신규 가입 보너스 ${CREDIT_CONFIG.SIGNUP_BONUS} 크레딧 🎁`,
+    );
+  }
+
+  async grantQrCopyReward(userId: string): Promise<number> {
+    const newBalance = await this.addCredits(
+      userId,
+      CREDIT_CONFIG.QR_COPY_REWARD,
+      "qr_copy_reward",
+      "QR 복사 리워드 2 크레딧",
+    );
+
+    await notificationService.sendRewardNotification(
+      userId,
+      "🎁 QR 리워드 적립!",
+      `QR 복사 리워드 ${CREDIT_CONFIG.QR_COPY_REWARD} 크레딧이 적립되었습니다.`,
+      "/profile",
+    );
+
+    return newBalance;
+  }
+
+  async processPurchase(
+    userId: string,
+    stripePaymentId: string,
+  ): Promise<number> {
+    const totalCredits = CREDIT_CONFIG.PURCHASE_CREDITS;
+
+    const newBalance = await this.addCredits(
+      userId,
+      totalCredits,
+      "purchase",
+      `크레딧 충전 ${totalCredits} (100 기본 + 40 보너스)`,
+      stripePaymentId,
+    );
+
+    await notificationService.sendRewardNotification(
+      userId,
+      "💎 크레딧 충전 완료!",
+      `${totalCredits} 크레딧이 충전되었습니다. (100 기본 + 40 보너스)`,
+      "/profile",
+    );
+
+    return newBalance;
+  }
+
+  async processReferralBonus(
+    referrerId: string,
+    newUserId: string,
+  ): Promise<number> {
+    const newBalance = await this.addCredits(
+      referrerId,
+      CREDIT_CONFIG.REFERRAL_BONUS,
+      "referral_bonus",
+      "친구 추천 보너스 10 크레딧",
+      newUserId,
+    );
+
+    await notificationService.sendRewardNotification(
+      referrerId,
+      "🎉 친구 추천 보너스!",
+      `친구가 가입하여 ${CREDIT_CONFIG.REFERRAL_BONUS} 크레딧이 적립되었습니다.`,
+      "/profile",
+    );
+
+    return newBalance;
+  }
+
+  async getTransactionHistory(
+    userId: string,
+    limit: number = 20,
+  ): Promise<any[]> {
+    const transactions = await db
+      .select()
+      .from(creditTransactions)
+      .where(eq(creditTransactions.userId, userId))
+      .orderBy(desc(creditTransactions.createdAt))
+      .limit(limit);
+
+    const currentBalance = await this.getBalance(userId);
+    let runningBalance = currentBalance;
+
+    const transactionsWithBalance = transactions.map((tx, index) => {
+      const balance = runningBalance;
+      runningBalance = runningBalance - tx.amount;
+      return { ...tx, balance };
+    });
+
+    return transactionsWithBalance;
+  }
+
+  async getUsageStats(
+    userId: string,
+  ): Promise<{ detailPages: number; sharePages: number }> {
+    const detailResult = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(creditTransactions)
+      .where(
+        and(
+          eq(creditTransactions.userId, userId),
+          like(creditTransactions.description, "%상세페이지%"),
+        ),
+      );
+
+    const shareResult = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(creditTransactions)
+      .where(
+        and(
+          eq(creditTransactions.userId, userId),
+          like(creditTransactions.description, "%공유페이지%"),
+        ),
+      );
+
+    return {
+      detailPages: Number(detailResult[0]?.count || 0),
+      sharePages: Number(shareResult[0]?.count || 0),
+    };
+  }
+
+  async canRequestCashback(userId: string): Promise<boolean> {
+    const balance = await this.getBalance(userId);
+    return balance >= CREDIT_CONFIG.CASHBACK_THRESHOLD;
+  }
+}
+
+export const creditService = new CreditService();

@@ -497,7 +497,15 @@
     "genNotice": "Takes about 4–5 min — you can leave while it's being created.\nWhen it's done, it will appear on the TRIPIS button below.",
     "failWithReason": "Generation failed: {{reason}}",
     "failGeneric": "The previous generation failed. Please try again.",
-    "notYet": "No video yet for Day {{d}}"
+    "notYet": "No video yet for Day {{d}}",
+    "partialWithReason": "{{skipped}} of {{total}} scenes skipped: {{reason}}",
+    "partialReason": {
+      "quota": "Daily video limit reached",
+      "timeout": "Took too long",
+      "storage": "Could not save",
+      "image": "Could not draw the scene",
+      "scene": "Could not create the scene"
+    }
   },
   "errorFallback": {
     "title": "Something went wrong in TRIPIS",

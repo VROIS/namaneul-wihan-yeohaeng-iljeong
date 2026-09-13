@@ -9,3 +9,17 @@ server_dist
 *.log
 .expo
 .cache
+public-dist
+worker/node_modules
+worker/.wrangler
+.wrangler
+assets/test-screenshots
+docs/raw
+client
+android
+ios
+dev
+scripts
+*.aab
+*.apk
+*.mp4

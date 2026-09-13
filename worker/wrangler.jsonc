@@ -77,13 +77,13 @@
       //   실체 = worker/routes-video-generate.ts 의 `export class VideoStitchContainer extends Container`.
       "class_name": "VideoStitchContainer",
 
-      // 근거: get-started "The `image` field ... points to a Dockerfile, to a directory
-      //   containing a Dockerfile, or to a fully qualified image reference".
-      //   worker/ 기준 상대경로.
-      // ⚠️ 수정금지(승인필요) 2026-09-12 사장님 결정 = 컨테이너 조립 설명서 이름 = container-image (도커 잔재 명칭 제거. wrangler 는 "존재하는 파일 경로"면 이름 무관 = isDockerfile 판정 실측) (정본 §)
+      // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 이미지 = 조립 설명서 경로 1벌(worker/container/container-image) = 배포할 때 그 자리에서 굽는다.
+      //   굽는 자리 = GitHub Actions 실행기(도커 내장). 이 PC 에는 도커를 깔지 않는다.
+      //   레지스트리 주소로 가리키면 안 되는 이유 = 거기 올라간 옛 이미지는 POST /stitch 만 받고,
+      //   지금 워커는 POST /generate(4단계 전부)를 부른다 = 사용자가 60크레딧 내고 즉시 실패한다. (정본 §)
       "image": "./container/container-image",
 
-      // ⚠️ 수정금지(승인필요) 2026-09-12 사장님 결정 = 빌드 문맥 = 레포 루트 (Dockerfile 이 server/·shared/·assets/ 를 그대로 COPY) (정본 §)
+      // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 빌드 문맥 = 레포 루트 (설명서가 shared/·worker/container/·assets/·docs/ 를 그대로 COPY) (정본 §)
       "image_build_context": "../",
 
       // 근거: get-started 공식 예시의 max_instances. 동시에 뜰 수 있는 인스턴스 상한.
