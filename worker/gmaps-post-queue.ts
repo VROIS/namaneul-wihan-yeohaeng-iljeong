@@ -4,6 +4,7 @@ import { launch } from "@cloudflare/playwright";
 import { pool, withEngineDb } from "./lib/db";
 import { upsertPlace } from "./lib/services/place-upsert";
 import { runGmapsPost, r2PrefixOf } from "./lib/services/fill/gmaps-post";
+import { appendTick } from "./lib/services/shared/metrics-heartbeat";
 
 // reportKey = 시드발굴 v3 ③ 산출표(R2 키) = 있으면 먼저 ④(신규 입력)를 돌리고 이어서 후처리
 export type GmapsPostMessage = {
@@ -27,11 +28,24 @@ export async function enqueueGmapsPost(
   );
 }
 
-// 워커 진입점(src.ts)은 700줄 초과 파일이라 한 줄만 바꾼다 = HTTP 핸들러에 queue 만 덧붙여 돌려준다
+// 워커 진입점(src.ts)은 700줄 초과 파일이라 건드리지 않는다 = HTTP 핸들러에 큐·심장박동을 덧붙여 돌려준다
 export const withGmapsQueue = <T extends object>(httpHandler: T) => ({
   ...httpHandler,
   queue: consumeGmapsPost,
+  scheduled: metricsTick,
 });
+
+// ⚠️ 수정금지(승인필요) 2026-09-15 사장님 결정 = 관제탑 심장박동 = 운영(server/index.ts:322 startMetricsHeartbeat)과 같은 일을 Worker 에서는 Cron 으로 한다 (정본 B4)
+export async function metricsTick(): Promise<void> {
+  try {
+    await withEngineDb(async () => {
+      const point = await appendTick();
+      if (point) console.log(`[metrics] 틱 기록 users=${point.users}`);
+    });
+  } catch (e) {
+    console.warn("[metrics] 틱 기록 실패:", (e as Error).message);
+  }
+}
 
 export async function consumeGmapsPost(
   batch: MessageBatch<GmapsPostMessage>,

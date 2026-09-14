@@ -17,6 +17,9 @@
     "R2_PUBLIC_URL": "https://pub-ec584e1b28fc458f85bca053e0fe6b02.r2.dev"
   },
   "observability": { "enabled": true },
+  // ⚠️ 수정금지(승인필요) 2026-09-15 사장님 결정 = 관제탑 심장박동 = 1분마다(Workers 최소 주기) (정본 B4)
+  "triggers": { "crons": ["* * * * *"] },
+
   // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 운영 엔진(lib/) 복사본이 부르는 "@google/genai" 를 Worker 용 진입점(/web)으로 = 엔진 파일 무변경 (정본 §)
   "alias": {
     "@google/genai": "@google/genai/web",

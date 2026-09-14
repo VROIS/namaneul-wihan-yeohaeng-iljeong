@@ -4,6 +4,7 @@ import type { drizzle } from "drizzle-orm/postgres-js";
 import { and, count, eq, isNotNull, ne, sql } from "drizzle-orm";
 import * as schema from "../shared/schema";
 import { accessSummary } from "./routes-admin-access";
+import { recentDelta } from "./lib/services/shared/metrics-heartbeat";
 
 const {
   apiKeys,
@@ -309,15 +310,9 @@ export function registerAdminRoutes(app: Express, openDb: OpenDb): void {
     async (_req: Request, res: Response) => {
       const { db, close } = openDb();
       try {
-        // ⚠️ 수정금지(승인필요) 2026-09-06 사장님 결정 = Worker 는 R2 심장박동(server/services/shared/metrics-heartbeat.ts)이 없어 증감 6종 = 0
-        const delta = {
-          users: 0,
-          routes: 0,
-          aiOpinion: 0,
-          expertVerify: 0,
-          guides: 0,
-          videos: 0,
-        };
+        // ⚠️ 수정금지(승인필요) 2026-09-15 사장님 결정 = 증감 = R2 심장박동 최근 30초 비교, 변화 0 이면 오늘 하루 누적 증가분 (정본 B4)
+        const { latest, delta } = await recentDelta();
+        void latest;
         const [
           [userTotal],
           [routeTotal],
