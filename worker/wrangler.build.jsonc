@@ -77,14 +77,11 @@
       //   실체 = worker/routes-video-generate.ts 의 `export class VideoStitchContainer extends Container`.
       "class_name": "VideoStitchContainer",
 
-      // ⚠️ 수정금지(승인필요) 2026-09-14 사장님 결정 = 이미지 = **이미 구워 올린 것을 주소로 가리킨다** = 이 PC 에서 도커·깃허브 없이 바로 배포한다.
-      //   근거(공식) = containers/guides/deploy "If image is a registry reference … you do not need Docker at deploy time."
-      //   왜 = 깃허브가 멈추면 업데이트가 통째로 막힌다(2026-09-14 실측 = 문서 2줄 커밋도 배포 실패). 그 의존을 끊는다.
-      //   이 주소 = 2026-09-14 12:30 갱신분 = 그 이미지로 12:42 영상 5/5 성공(여정 695) = 검증된 판.
-      //   🔴 컨테이너 코드를 고치면 = 새로 구워 올린 뒤 이 줄의 digest 를 바꾼다(굽기는 도커가 있는 자리에서).
-      //      되돌아오는 길(굽는 방식) = worker/wrangler.build.jsonc 로 배포하면 된다.
-      //   🔴 이미지 말고 다른 칸(vars·r2_buckets·routes 등)을 고치면 wrangler.build.jsonc 에도 같이 옮긴다 = 두 파일은 이미지 지정만 다르고 나머지는 같아야 한다. (정본 §)
-      "image": "registry.cloudflare.com/51bcbc629c76db55d6a9aac934b2195f/tripis-api-videostitchcontainer@sha256:a348a125de246d8e93486fbaed712ba176896c52ff2ba28f00d5d98d9da17818",
+      // ⚠️ 수정금지(승인필요) 2026-09-14 사장님 결정 = 되돌아오는 길 = 조립 설명서로 **그 자리에서 굽는다**(도커가 있는 자리에서만). 평소 배포는 worker/wrangler.jsonc (정본 §)
+      //   언제 쓰나 = 컨테이너 코드를 고쳐 이미지를 새로 구울 때, 또는 주소 방식이 막혔을 때.
+      //   🔴 이미지 말고 다른 칸(vars·r2_buckets·routes 등)을 고치면 worker/wrangler.jsonc 에도 같이 옮긴다 = 두 파일은 이미지 지정만 다르고 나머지는 같아야 한다.
+      "image": "./container/container-image",
+      "image_build_context": "../",
 
       // 근거: get-started 공식 예시의 max_instances. 동시에 뜰 수 있는 인스턴스 상한.
       //   일별 영상은 하루 ~5편(Veo Tier2 한도)이라 5면 충분하고, 상한을 낮게 두면

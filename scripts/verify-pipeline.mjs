@@ -52,6 +52,8 @@ function runGuards() {
   sh("node scripts/guard-no-old-artifacts.mjs --staged", { stdio: "inherit" });
   sh("node scripts/guard-no-reinvention.mjs --staged", { stdio: "inherit" });
   sh("node scripts/guard-max-file-lines.mjs --staged", { stdio: "inherit" });
+  // ⚠️ 수정금지(승인필요) 2026-09-14 사장님 결정 = 배포 설정 2벌 동일성도 기계검증 표에서 본다 = 커밋 직전에야 알게 되던 것을 앞당김 (정본 §24)
+  sh("node scripts/guard-wrangler-twins.mjs", { stdio: "inherit" });
 }
 function runMachine() {
   runGuards();
