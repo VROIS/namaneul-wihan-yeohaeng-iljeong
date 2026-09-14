@@ -475,6 +475,7 @@ export function registerSocialAuthRoutes(app: Express, openDb: OpenDb): void {
         `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(String(idToken))}`,
       );
       if (!tokenRes.ok) {
+        console.error("[Auth] 구글 토큰조회 실패 | HTTP=", tokenRes.status);
         return res
           .status(401)
           .json({ success: false, error: "Invalid Google token" });
@@ -484,6 +485,19 @@ export function registerSocialAuthRoutes(app: Express, openDb: OpenDb): void {
         !isValidGoogleAudience(tokenData.aud) &&
         !isValidGoogleAudience(tokenData.azp)
       ) {
+        // ⚠️ 수정금지(승인필요) 2026-09-14 사장님 결정 = 거부 사유를 로그로 남긴다 = 추측 금지, 배포 로그로 원인 확정 (정본 §22)
+        console.error(
+          "[Auth] 구글 거부 | 토큰 aud=",
+          tokenData.aud,
+          "| 토큰 azp=",
+          tokenData.azp,
+          "| 서버 웹ID=",
+          process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID ||
+            process.env.GOOGLE_CLIENT_ID ||
+            "(빔)",
+          "| 서버 안드ID=",
+          process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || "(빔)",
+        );
         return res
           .status(401)
           .json({ success: false, error: "Token audience mismatch" });
