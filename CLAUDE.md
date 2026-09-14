@@ -766,7 +766,28 @@ server/services/
 ② 커밋 → 푸시                                                             (기록 + 예비 경로)
 ③ npx wrangler deploy --config worker/wrangler.jsonc --message "<한 줄>"   (즉시 반영)
 ④ 확인 4종을 AI 가 직접 = 배포 버전 · 운영 응답 · 컨테이너 · (영상이면) DB·R2
+⑤ node scripts/worker-logs.mjs                                           (배포 로그 = 이 단계 생략 금지)
 ```
+
+### 🔴 로그는 반드시 본다 = `scripts/worker-logs.mjs` 1벌 (2026-09-14 사장님 확정)
+
+> 배포하고 로그를 안 봐서 원인을 추측으로 때우는 일이 반복됐다(2026-09-14 구글 로그인 = 앱·콘솔을 뒤지다 하루를 썼고,
+> 로그 한 줄을 보니 그 자리에서 원인이 나왔다). **로그를 보는 것은 선택이 아니라 순서의 한 칸이다.**
+
+**확정 순서 = 커밋 → 푸시 → 배포 → 결과 → 빌드 로그 → 배포 로그.**
+
+| 보고 싶은 것 | 명령 |
+|---|---|
+| 최근 30분 전부 | `node scripts/worker-logs.mjs` |
+| 더 거슬러 | `node scripts/worker-logs.mjs --min 120` |
+| 오류만 | `node scripts/worker-logs.mjs --errors` |
+| 그 주소만 | `node scripts/worker-logs.mjs --path /api/auth` |
+| 그 글자가 든 줄만 | `node scripts/worker-logs.mjs --find 로그인` |
+
+- **지나간 것도 보인다** = `wrangler.jsonc` 의 `observability.enabled` 로 자동 저장(무료 3일·유료 7일).
+  옆에서 지켜볼 필요 없다. **임시 스크립트를 새로 짜는 것 = §16 위반.**
+- 실시간으로 봐야 할 때만 `npx wrangler tail --config worker/wrangler.jsonc`.
+- 빌드 로그(굽기)는 `gh run view <id> --log-failed`, 배포 버전은 `wrangler versions list`.
 
 ### 🔴 규칙 = 바꾼 것은 반드시 커밋한다. 그리고 이어서 직접 배포한다.
 
@@ -802,6 +823,8 @@ server/services/
 | 2 | 배포 확인을 GitHub 빨간불로 판단 | 실제 배포자는 Cloudflare. **Cloudflare 를 먼저 본다**(2026-09-13 오진 5건의 근본) |
 | 3 | 새 배포 경로를 또 만듦 | 2026-09-13 에 그렇게 만든 GitHub Actions 가 중복 충돌을 냈다 §19 |
 | 4 | `--message` 없이 배포 | 후임·사장님이 콘솔만 봐서는 무엇을 왜 올렸는지 모른다 |
+| 5 | **배포하고 로그를 안 봄** | 원인을 추측으로 때우게 된다(2026-09-14 하루 낭비) |
+| 6 | **로그 보려고 임시 스크립트를 새로 짬** | `scripts/worker-logs.mjs` 1벌이 있다 = §16 위반 |
 
 ### 이 조항이 §12 와 다른 이유
 

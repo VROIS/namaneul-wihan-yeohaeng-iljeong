@@ -29,6 +29,8 @@ jobs:
 
       # ⚠️ 수정금지(승인필요) 2026-09-14 사장님 결정 = 신원 가드 = build-android-aab.yml 의 것과 같은 1벌(§16).
       #   왜 = app.json 이 다른 판으로 돌아간 채 돌아도 라이브 앱과 다른 신원으로 서명된 빌드가 나가는 것을 막는다.
+      #   ⚠️ buildNumber 하한을 특정 숫자로 박지 않는다 = version 이 오르면 build 는 1 부터 다시 센다(애플 규칙).
+      #   그 숫자는 굽기 전 ASC 실측으로 정한다(정본 = 버전 이력 원장).
       - name: 신원 가드 (번들ID·buildNumber 확인)
         run: |
           node -e '
@@ -39,11 +41,11 @@ jobs:
               console.error("❌ 번들ID 불일치 = " + id + " (기대값: com.sonanie.guide) = 빌드 중단");
               process.exit(1);
             }
-            if (!bn || !/^[0-9]+$/.test(String(bn)) || Number(bn) < 11) {
-              console.error("❌ buildNumber 이상 = " + bn + " (App Store 1.0.3 최고치 10보다 커야 함, 최소 11) = 빌드 중단");
+            if (!bn || !/^[0-9]+$/.test(String(bn)) || Number(bn) < 1) {
+              console.error("❌ buildNumber 이상 = " + bn + " (1 이상의 숫자여야 함) = 빌드 중단");
               process.exit(1);
             }
-            console.log("✅ 신원 확인: " + id + " / buildNumber " + bn);
+            console.log("✅ 신원 확인: " + id + " / version " + a.version + " / buildNumber " + bn);
           '
 
       # 열쇠가 없으면 폰에서 로그인 버튼이 죽는다 = 크게 실패시킨다(조용한 실패 금지 §0)

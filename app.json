@@ -2,7 +2,7 @@
   "expo": {
     "name": "TRIPIS",
     "slug": "vibetrip",
-    "version": "1.0.3",
+    "version": "1.0.4",
     "orientation": "portrait",
     "icon": "./assets/images/tripis-app-icon.png",
     "scheme": "vibetrip",
@@ -17,7 +17,7 @@
         "NSMicrophoneUsageDescription": "Allow $(PRODUCT_NAME) to use the microphone.",
         "ITSAppUsesNonExemptEncryption": false
       },
-      "buildNumber": "11"
+      "buildNumber": "1"
     },
     "android": {
       "adaptiveIcon": {
