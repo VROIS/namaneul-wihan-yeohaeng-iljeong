@@ -436,7 +436,7 @@ server/services/
 - **가드 = `scripts/guard-no-reinvention.mjs`** = `server/services/fill/` = 결손별 단독 도구 카탈로그. 후임이 기존 도구의 능력(이미지 채우기·PID 페이지 검증·PID 쌍둥이 병합·소속오염 이동·R2 접근)을 **owner 파일이 아닌 곳에서 새로 짜면** 정규식 자동 감지 → 커밋 차단(exit 1) + 기존 도구 안내.
 - **카탈로그 열람** = `node scripts/guard-no-reinvention.mjs --catalog` = fill/ 파일 헤더 1줄을 코드에서 실시간 생성 = 항상 최신(문서 드리프트 0).
 - **배선** = git pre-commit(`--staged` = 신규 추가줄만 검사). 새 능력의 도구가 정말 필요하면(기존과 능력이 다르면) = 가드 CAPABILITIES 에 1줄 등재 후 커밋. **도구를 지우거나 바꾸면 그 턴에 카탈로그를 다시 쓴다**(안 하면 옛 도구가 정본으로 남아 후임이 또 쓴다 = 2026-09-04 33벌 정리의 근본 원인).
-- = ⚠️ 수정금지(승인필요) 2026-09-04 사장님 확정 = 창고 채움 = **4단계 1벌** = 제미니 힌트(`prompts/02-discover-best20-perlang` → B1 `steps/discovery-merge-diff`) → TS=PID 확정(`steps/discovery-verify-and-insert`) → 입힘(`place-upsert`) → PID 페이지 1회 방문(`fill/gmaps-pid-identity` + `fill/backfill-verify`) + 같은 PID 병합(`fill/status-backfill`) + 소속오염 이동(`fill/wrongcity-quarantine`). WF = `fillcity/fill-city-v2.ts` 1벌. 그 밖의 옛 도구 33벌 삭제 §19. **모든 기준 = PID**(판정 = DB 트리거, 집행 = 도구).
+- = ⚠️ 수정금지(승인필요) 2026-09-13 사장님 확정 = 창고 채움 = **v3 1벌** = ① 정제(`fill/wrongcity-quarantine` · `fill/status-backfill` · `fill/purge-merged-rows`) → ② 제미니 힌트(`prompts/02-discover-best20-perlang`, 유료는 이것뿐) → ③ 알아보는 문(`steps/discovery-merge-diff` = `shared/recognize-place` 1등 판정식) → ④ 산출표를 워커 큐에(`steps/discovery-gmaps-insert`) = 구글맵 확정·입력·후처리·병합 행 정리는 클라우드플레어 워커 엔진(`fill/gmaps-post` + `worker/gmaps-post-queue`, MIX 후처리와 같은 1벌)이 Browser Run 으로 돈다. WF = `fillcity/fill-city-v3.ts` 1벌(v2·TS 확정 단계 삭제 §19). **모든 기준 = CID**(PID 는 지름길, 판정 = DB 트리거 + 알아보는 문, 집행 = 엔진).
 
 ### 세션 간 인수인계 = 메모리 + 정본문서 (2026-08-25 갱신, 옛 WORKLOG 체제 폐기)
 

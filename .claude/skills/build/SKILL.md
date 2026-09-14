@@ -24,7 +24,7 @@ description: 앱을 굽는다(아이폰 TestFlight + 안드로이드 APK). 사�
 | 화면·글자·로직 | `eas update` (무선) | 앱 껐다 켜기 / **APK 는 2번** |
 | **새 부품·네이티브 설정** | **다시 굽기**(IPA/APK) | TF 업데이트 설치 / APK 설치 |
 
-= 판단은 `node scripts/needs-rebuild.mjs` 한 줄. **감으로 정하지 마라.**
+= 판단은 **이 표 한 벌**로. 바뀐 파일을 `git diff --name-only` 로 보고 대조한다. **감으로 정하지 마라.**
 = 무선 업데이트는 **사장님이 시키실 때만** 보낸다(자동 발송 금지).
 
 
@@ -50,14 +50,12 @@ description: 앱을 굽는다(아이폰 TestFlight + 안드로이드 APK). 사�
 > 사장님 지시: *"이것 할 때마다 빌드를 해야 하냐? 정말 귀찮은데"*
 > 이 스킬은 **부르면 무조건 굽는다.** 그래서 안 구워도 될 때 30분을 낭비했다.
 
-```bash
-node scripts/needs-rebuild.mjs
-```
+판단 기준 = **위 표 한 벌**(화면·글자·로직만 바뀌었나 / 새 부품·네이티브 설정이 바뀌었나).
+바뀐 파일을 `git diff --name-only` 로 보고 표에 대조한다.
 
-- 출력 = **IPA(아이폰 TF)·APK(삼성) 각각** 판정(2026-08-06 개선 = 옛 뭉뚱그린 "예/아니오" 폐기 §19).
-- **둘 다 🟢 불필요** = 굽지 마라. `npx eas update --branch main --message "<한 줄>"` 로 끝
+- **화면·글자·로직만** = 굽지 마라. `npx eas update --branch main --message "<한 줄>"` 로 끝
   (TF·APK 둘 다 받음. 사장님은 앱 껐다 켜기 / APK 는 2번).
-- **🔥 표시된 쪽만** 아래 절차로 굽는다(IPA만·APK만·둘 다 = 출력이 명시).
+- **app.json·package.json(네이티브 부품)·plugins·권한** 이 바뀌었으면 = 아래 절차로 굽는다.
 - 사장님이 **"그래도 구워라"** 하시면 = 구운다(사장님 결정이 우선 §1).
 
 ⚠️ `eas update` 가 `bare workflow ... runtime version policies` 오류를 내면
