@@ -26,9 +26,14 @@ import { useGoogleAuthRequest } from "@/lib/auth-google";
 import {
   startKakaoLoginWeb,
   exchangeKakaoCodeForToken,
-  getKakaoCallbackData,
+  getKakaoCallbackLanguage,
   isKakaoOAuthConfigured,
 } from "@/lib/auth-kakao";
+import {
+  stashBirthDate,
+  readBirthDate,
+  clearBirthDate,
+} from "@/lib/birthdate-store";
 import { isAppleAuthAvailable } from "@/lib/auth-apple";
 import {
   runNativeSocial,
@@ -105,9 +110,9 @@ export function useLogin({ onDone }: { onDone: () => void }) {
     } else Alert.alert(msg);
   };
 
+  // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 외부 인증은 신원만 처리 = 생년월일은 우리가 맡아둔 값을 실어 보낸다
   useEffect(() => {
-    if (!googleResponse || googleResponse.type !== "success" || !birthDateStr)
-      return;
+    if (!googleResponse || googleResponse.type !== "success") return;
     if (processedGoogleRef.current === googleResponse) return;
     processedGoogleRef.current = googleResponse;
     const idToken = getIdTokenFromGoogleResponse(googleResponse);
@@ -115,11 +120,12 @@ export function useLogin({ onDone }: { onDone: () => void }) {
     setOauthLoading(true);
     socialLoginWithGoogle({
       idToken,
-      birthDate: birthDateStr,
+      birthDate: readBirthDate(),
       language: i18n.language,
       deviceType: Platform.OS === "web" ? "web" : "mobile",
     })
       .then((result) => {
+        clearBirthDate();
         if (result.success) {
           onDone(); // 성공 = 호출자 결정(화면 리셋 or 팝업 닫기). §0 단일경로.
         } else {
@@ -131,7 +137,7 @@ export function useLogin({ onDone }: { onDone: () => void }) {
         notify(t("login.loginFailed"));
       })
       .finally(() => setOauthLoading(false));
-  }, [googleResponse, birthDateStr, i18n.language, onDone]);
+  }, [googleResponse, i18n.language, onDone]);
 
   useEffect(() => {
     if (Platform.OS !== "web" || !isKakaoOAuthConfigured()) return;
@@ -139,32 +145,26 @@ export function useLogin({ onDone }: { onDone: () => void }) {
     const params = new URLSearchParams(url);
     const code = params.get("code");
     if (!code) return;
-
-    const callbackData = getKakaoCallbackData();
-    const birthDate = callbackData?.birthDate;
-    const language = callbackData?.language || i18n.language;
-    if (!birthDate) {
-      notify(t("login.loginFailed"));
-      if (typeof window !== "undefined" && window.history) {
-        window.history.replaceState({}, "", window.location.pathname);
-      }
-      return;
+    // ⚠️ 수정금지(승인필요) 2026-09-15 사장님 결정 = 인증번호를 집은 즉시 주소에서 지운다 = 운영 앱과 같은 1벌 (정본 §19)
+    if (typeof window !== "undefined" && window.history) {
+      window.history.replaceState({}, "", window.location.pathname);
     }
+
+    // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 외부 인증은 신원만 처리 = 생년월일은 우리가 맡아둔 값을 실어 보낸다
+    const language = getKakaoCallbackLanguage() || i18n.language;
 
     setOauthLoading(true);
     exchangeKakaoCodeForToken(code)
       .then((accessToken) =>
         socialLoginWithKakao({
           accessToken,
-          birthDate,
+          birthDate: readBirthDate(),
           language,
           deviceType: "web",
         }),
       )
       .then((result) => {
-        if (typeof window !== "undefined" && window.history) {
-          window.history.replaceState({}, "", window.location.pathname);
-        }
+        clearBirthDate();
         if (result.success) {
           onDone(); // 성공 = 호출자 결정. §0 단일경로.
         } else {
@@ -173,9 +173,6 @@ export function useLogin({ onDone }: { onDone: () => void }) {
       })
       .catch((err) => {
         console.error("[Auth] 웹 카카오 로그인 실패:", err);
-        if (typeof window !== "undefined" && window.history) {
-          window.history.replaceState({}, "", window.location.pathname);
-        }
         notify(t("login.loginFailed"));
       })
       .finally(() => setOauthLoading(false));
@@ -226,8 +223,11 @@ export function useLogin({ onDone }: { onDone: () => void }) {
   };
 
   const requireBirthDateAndAdult = (): boolean => {
-    // ⚠️ 수정금지(승인필요) 2026-08-24 사장님 승인 = 생년월일 입력부 필수↔선택 전환 1줄
-    if (!BIRTHDATE_REQUIRED) return true;
+    // ⚠️ 수정금지(승인필요) 2026-09-15 사장님 결정 = 외부 창을 열기 전에 생년월일을 우리가 맡아둔다(정본 §19)
+    if (!BIRTHDATE_REQUIRED) {
+      stashBirthDate(birthDateStr); // 외부 창을 열기 전에 우리가 맡아둔다
+      return true;
+    }
     if (!isDateComplete) {
       setDateError(t("login.birthRequired"));
       Alert.alert(t("login.alert"), t("login.birthRequiredAlert"));
@@ -239,6 +239,7 @@ export function useLogin({ onDone }: { onDone: () => void }) {
       Alert.alert(t("login.alert"), t("login.adultOnly"));
       return false;
     }
+    stashBirthDate(birthDateStr); // 외부 창을 열기 전에 우리가 맡아둔다
     return true;
   };
 
@@ -268,7 +269,7 @@ export function useLogin({ onDone }: { onDone: () => void }) {
   const startNativeSocial = (provider: SocialProvider) =>
     runNativeSocialLogin(() =>
       runNativeSocial(provider, {
-        birthDate: birthDateStr!,
+        birthDate: readBirthDate(),
         language: i18n.language,
       }),
     );
@@ -350,7 +351,7 @@ export function useLogin({ onDone }: { onDone: () => void }) {
     if (Platform.OS === "web") {
       setOauthLoading(true);
       try {
-        await startKakaoLoginWeb(birthDateStr!, i18n.language); // 리다이렉트
+        await startKakaoLoginWeb(i18n.language); // 리다이렉트
       } catch (err) {
         console.error("[Auth] 카카오 웹 로그인 시작 실패:", err);
         notify(t("login.loginFailed"));

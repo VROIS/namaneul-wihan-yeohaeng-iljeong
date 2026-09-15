@@ -8,7 +8,7 @@ import {
 import { getApiUrl } from "./query-client";
 import { KAKAO_JS_KEY, KAKAO_REST_KEY, KAKAO_NATIVE_APP_KEY } from "./app-keys";
 
-const KAKAO_CALLBACK_STORAGE_KEY = "@nubi_kakao_birthDate";
+const KAKAO_CALLBACK_STORAGE_KEY = "@nubi_kakao_language";
 
 export function isKakaoOAuthConfigured(): boolean {
   return Platform.OS === "web"
@@ -84,10 +84,8 @@ export async function loginKakaoApp(): Promise<string> {
   }
 }
 
-export async function startKakaoLoginWeb(
-  birthDate: string,
-  language: string,
-): Promise<void> {
+// ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 외부 인증은 신원만 = 생년월일 안 받는다(birthdate-store 담당)
+export async function startKakaoLoginWeb(language: string): Promise<void> {
   if (Platform.OS !== "web") {
     throw new Error("카카오 웹 로그인은 웹 환경에서만 지원됩니다.");
   }
@@ -96,10 +94,7 @@ export async function startKakaoLoginWeb(
 
   const redirectUri = getKakaoRedirectUri();
   if (typeof sessionStorage !== "undefined") {
-    sessionStorage.setItem(
-      KAKAO_CALLBACK_STORAGE_KEY,
-      JSON.stringify({ birthDate, language }),
-    );
+    sessionStorage.setItem(KAKAO_CALLBACK_STORAGE_KEY, language);
   }
 
   const Kakao = (
@@ -131,17 +126,14 @@ export async function exchangeKakaoCodeForToken(code: string): Promise<string> {
   return result.accessToken;
 }
 
-export function getKakaoCallbackData(): {
-  birthDate: string;
-  language: string;
-} | null {
+/** 카카오 창을 열 때 쓰던 화면 언어를 돌려준다(생년월일은 birthdate-store 담당). */
+export function getKakaoCallbackLanguage(): string | null {
   if (typeof sessionStorage === "undefined") return null;
   try {
-    const raw = sessionStorage.getItem(KAKAO_CALLBACK_STORAGE_KEY);
-    if (!raw) return null;
-    const data = JSON.parse(raw) as { birthDate: string; language: string };
+    const lang = sessionStorage.getItem(KAKAO_CALLBACK_STORAGE_KEY);
+    if (!lang) return null;
     sessionStorage.removeItem(KAKAO_CALLBACK_STORAGE_KEY);
-    return data;
+    return lang;
   } catch {
     return null;
   }
