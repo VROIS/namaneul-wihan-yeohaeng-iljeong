@@ -2,9 +2,10 @@
 // 원본 = server/auth.ts:106(구글) · server/auth.ts:161(카카오) · server/auth.ts:32(카카오 본문)
 //        · server/auth-user.ts · server/storage.ts · server/creditService.ts.
 import type { Express, Request, Response } from "express";
-import { waitUntil } from "cloudflare:workers";
 import type { drizzle } from "drizzle-orm/postgres-js";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
+import { and, eq, inArray, ne, sql } from "drizzle-orm";
+import { createLocalJWKSet, jwtVerify } from "jose";
 import * as schema from "../shared/schema";
 
 const { apiKeys, creditTransactions, users, userProviders } = schema;
@@ -25,6 +26,9 @@ const SOCIAL_KEY_NAMES = [
   "GOOGLE_CLIENT_ID",
   "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID",
   "KAKAO_APP_ID",
+  "KAKAO_REST_API_KEY",
+  "KAKAO_NATIVE_APP_KEY",
+  "KAKAO_JWKS",
 ];
 
 async function loadSocialKeys(db: Db): Promise<void> {
@@ -379,37 +383,87 @@ type KakaoMe = {
   properties?: { nickname?: string | null };
 };
 
-// ⚠️ 수정금지(승인필요) 2026-09-25 사장님 결정 = 측정 전용(로그인 동작 무변경) = 폰 ID 토큰 도착·aud 앞6·kid + 공개키 주소 속도만 기록, 확인 후 삭제 (정본 9-25)
-function measureKakaoIdToken(idToken: unknown): void {
+// ⚠️ 수정금지(승인필요) 2026-09-25 사장님 결정 = 카카오 공개 열쇠 = 금고(KAKAO_JWKS) 1벌, 관제탑이 매일 갱신하고 금고에 없는 열쇠 번호일 때만 로그인 중 1회 갱신 (정본 9-25)
+export async function refreshKakaoJwks(
+  db: PgDatabase<PgQueryResultHKT, typeof schema>,
+): Promise<string> {
+  const res = await fetch("https://kauth.kakao.com/.well-known/jwks.json");
+  const text = await res.text();
+  const keys = res.ok ? (JSON.parse(text) as { keys?: unknown[] }).keys : null;
+  if (!Array.isArray(keys) || keys.length === 0)
+    throw new Error(`카카오 공개 열쇠 받기 실패: ${res.status}`);
+  await db
+    .update(apiKeys)
+    .set({ keyValue: text, updatedAt: sql`now()` })
+    .where(and(eq(apiKeys.keyName, "KAKAO_JWKS"), ne(apiKeys.keyValue, text)));
+  process.env.KAKAO_JWKS = text;
+  return text;
+}
+
+type KakaoIdClaims = { sub: string; nickname?: string };
+
+// ⚠️ 수정금지(승인필요) 2026-09-25 사장님 결정 = 카카오 ID 토큰을 우리 서버가 직접 확인 = 카카오 호출 0번(발급처·받는 앱·만료·서명), 신원 = 카카오 회원번호(sub) (정본 9-25)
+async function verifyKakaoIdToken(
+  db: Db,
+  idToken: string,
+): Promise<KakaoIdClaims> {
+  const audience = [
+    process.env.KAKAO_REST_API_KEY,
+    process.env.KAKAO_NATIVE_APP_KEY,
+  ]
+    .map((v) => (v || "").trim())
+    .filter(Boolean);
+  const verify = async (jwks: string) =>
+    (
+      await jwtVerify(idToken, createLocalJWKSet(JSON.parse(jwks)), {
+        issuer: "https://kauth.kakao.com",
+        audience,
+        requiredClaims: ["sub", "exp"],
+      })
+    ).payload as KakaoIdClaims;
+  const stored = process.env.KAKAO_JWKS;
   try {
-    if (typeof idToken !== "string" || !idToken) {
-      console.log("[카카오 측정] idToken=없음");
-      return;
-    }
-    const part = (s: string) =>
-      JSON.parse(atob(s.replace(/-/g, "+").replace(/_/g, "/")));
-    const [h, p] = idToken.split(".");
-    const head = part(h);
-    const body = part(p);
-    console.log(
-      `[카카오 측정] idToken=있음 aud=${String(body.aud).slice(0, 6)} kid=${head.kid} iss=${body.iss}`,
-    );
-    waitUntil(
-      (async () => {
-        const t0 = Date.now();
-        const r = await fetch("https://kauth.kakao.com/.well-known/jwks.json");
-        const keys =
-          ((await r.json()) as { keys?: { kid?: string }[] }).keys || [];
-        console.log(
-          `[카카오 측정] 공개키 주소 ${r.status} ${Date.now() - t0}ms kid일치=${keys.some((k) => k.kid === head.kid)}`,
-        );
-      })().catch((e) =>
-        console.warn("[카카오 측정] 공개키 주소 실패:", (e as Error).message),
-      ),
-    );
+    if (stored) return await verify(stored);
   } catch (e) {
-    console.warn("[카카오 측정] 해석 실패:", (e as Error).message);
+    if ((e as { code?: string }).code !== "ERR_JWKS_NO_MATCHING_KEY") throw e;
   }
+  return verify(await refreshKakaoJwks(db));
+}
+
+async function loginWithKakaoIdToken(
+  db: Db,
+  params: {
+    idToken: string;
+    birthDate?: string;
+    language?: string;
+    deviceType?: string;
+    entry?: string;
+  },
+) {
+  let claims: KakaoIdClaims;
+  try {
+    claims = await verifyKakaoIdToken(db, params.idToken);
+  } catch (e) {
+    console.error(
+      "[Auth] 카카오 ID 토큰 거부:",
+      (e as { code?: string }).code || (e as Error).message,
+    );
+    return null;
+  }
+  const user = await findOrCreateUser(db, {
+    provider: "kakao",
+    providerId: claims.sub,
+    birthDate: params.birthDate,
+    displayName: claims.nickname || KAKAO_DEFAULT_NAME,
+    language: params.language,
+    deviceType: params.deviceType,
+    entry: params.entry,
+  });
+  return {
+    success: true as const,
+    user: toClientUser(user),
+    token: "simple_auth_token_v1_" + user.id,
+  };
 }
 
 // ⚠️ 수정금지(승인필요) — 카카오 accessToken → 우리 로그인 = 이 함수 1벌만 (2026-07-26 §16).
@@ -559,22 +613,24 @@ export function registerSocialAuthRoutes(app: Express, openDb: OpenDb): void {
     try {
       const { accessToken, idToken, birthDate, language, deviceType, entry } =
         req.body || {};
-      measureKakaoIdToken(idToken);
-      // ⚠️ 사장님 SSOT 2026-07-26(세션2-D) = 외부인증에서 생년월일 분리 = accessToken(인증 신원)만 필수. 생년월일은 findOrCreateUser 가 저장/갱신(신규 생성 / 기존 통과).
-      if (!accessToken) {
+      // ⚠️ 수정금지(승인필요) 2026-09-25 사장님 결정 = 신원 = ID 토큰(카카오 호출 0번) 또는 accessToken(스토어 아이폰 1.0.4 출시 뒤 삭제), 생년월일은 외부인증과 분리 (정본 9-25)
+      if (!accessToken && !idToken) {
         return res.status(400).json({
           success: false,
           error: "accessToken is required",
         });
       }
       await loadSocialKeys(db);
-      const result = await loginWithKakaoAccessToken(db, {
-        accessToken: String(accessToken),
-        birthDate,
-        language,
-        deviceType,
-        entry,
-      });
+      const common = { birthDate, language, deviceType, entry };
+      const result = idToken
+        ? await loginWithKakaoIdToken(db, {
+            idToken: String(idToken),
+            ...common,
+          })
+        : await loginWithKakaoAccessToken(db, {
+            accessToken: String(accessToken),
+            ...common,
+          });
       if (!result) {
         return res
           .status(401)

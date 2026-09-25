@@ -119,7 +119,10 @@ export async function startKakaoLoginWeb(language: string): Promise<void> {
   Kakao.Auth.authorize({ redirectUri, throughTalk: false });
 }
 
-export async function exchangeKakaoCodeForToken(code: string): Promise<string> {
+// ⚠️ 수정금지(승인필요) 2026-09-25 사장님 결정 = 웹도 카카오 ID 토큰을 함께 넘김 (정본 9-25)
+export async function exchangeKakaoCodeForToken(
+  code: string,
+): Promise<{ accessToken: string; idToken?: string }> {
   const ok = await ensureKakaoSDKInitialized();
   if (!ok) throw new Error("카카오 SDK 초기화 실패");
 
@@ -128,7 +131,7 @@ export async function exchangeKakaoCodeForToken(code: string): Promise<string> {
     code,
     redirectUri,
   });
-  return result.accessToken;
+  return { accessToken: result.accessToken, idToken: result.idToken };
 }
 
 /** 카카오 창을 열 때 쓰던 화면 언어를 돌려준다(생년월일은 birthdate-store 담당). */

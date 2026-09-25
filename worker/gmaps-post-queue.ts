@@ -1,10 +1,14 @@
 // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 후처리 자동화 = MIX 응답 직후 큐에 "도시 N" 한 줄 → 큐 소비자(이 파일)가 Browser Run 으로 구글맵 페이지를 열어 창고를 채운다 = 손 0. 엔진은 lib/services/fill/gmaps-post 1벌(필시티 CLI 와 동일). 한 번에 한 도시, 실패는 큐 재시도(최대 2회) 뒤 dead-letter (정본 §)
 import { env } from "cloudflare:workers";
 import { launch } from "@cloudflare/playwright";
-import { pool, withEngineDb } from "./lib/db";
+import { db, pool, withEngineDb } from "./lib/db";
 import { upsertPlace } from "./lib/services/place-upsert";
 import { runGmapsPost, r2PrefixOf } from "./lib/services/fill/gmaps-post";
 import { appendTick } from "./lib/services/shared/metrics-heartbeat";
+import { refreshKakaoJwks } from "./routes-social-auth";
+
+// wrangler.jsonc · wrangler.build.jsonc 의 triggers.crons 와 같은 글자
+const KAKAO_JWKS_CRON = "0 3 * * *";
 
 // reportKey = 시드발굴 v3 ③ 산출표(R2 키) = 있으면 먼저 ④(신규 입력)를 돌리고 이어서 후처리
 export type GmapsPostMessage = {
@@ -32,8 +36,19 @@ export async function enqueueGmapsPost(
 export const withGmapsQueue = <T extends object>(httpHandler: T) => ({
   ...httpHandler,
   queue: consumeGmapsPost,
-  scheduled: metricsTick,
+  scheduled: (controller: ScheduledController) =>
+    controller.cron === KAKAO_JWKS_CRON ? kakaoJwksTick() : metricsTick(),
 });
+
+// ⚠️ 수정금지(승인필요) 2026-09-25 사장님 결정 = 관제탑이 매일 카카오 공개 열쇠를 금고에 갱신 = 로그인 중에는 카카오를 부르지 않는다, 실패하면 금고의 기존 열쇠 유지 (정본 9-25)
+async function kakaoJwksTick(): Promise<void> {
+  try {
+    await withEngineDb(() => refreshKakaoJwks(db!));
+    console.log("[카카오] 공개 열쇠 갱신 확인");
+  } catch (e) {
+    console.warn("[카카오] 공개 열쇠 갱신 실패:", (e as Error).message);
+  }
+}
 
 // ⚠️ 수정금지(승인필요) 2026-09-15 사장님 결정 = 관제탑 심장박동 = 운영(server/index.ts:322 startMetricsHeartbeat)과 같은 일을 Worker 에서는 Cron 으로 한다 (정본 B4)
 export async function metricsTick(): Promise<void> {
