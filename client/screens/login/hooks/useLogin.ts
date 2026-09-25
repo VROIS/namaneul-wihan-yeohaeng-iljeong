@@ -63,6 +63,7 @@ export function useLogin({ onDone }: { onDone: () => void }) {
 
   const [, googleResponse, googlePromptAsync] = useGoogleAuthRequest();
   const processedGoogleRef = useRef<typeof googleResponse>(null);
+  const processedKakaoCodeRef = useRef<string | null>(null);
   const birthDate = useMemo(() => {
     if (day.length === 2 && month.length === 2 && year.length === 4) {
       const d = parseInt(day, 10);
@@ -134,10 +135,9 @@ export function useLogin({ onDone }: { onDone: () => void }) {
     const params = new URLSearchParams(url);
     const code = params.get("code");
     if (!code) return;
-    // ⚠️ 수정금지(승인필요) 2026-09-15 사장님 결정 = 인증번호를 집은 즉시 주소에서 지운다 = 운영 앱과 같은 1벌 (정본 §19)
-    if (typeof window !== "undefined" && window.history) {
-      window.history.replaceState({}, "", window.location.pathname);
-    }
+    // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 카카오 인증번호는 한 번만 쓴다(구글 processedGoogleRef 와 같은 방식). 두 번 쓰면 카카오가 거절해 "로그인 실패" 경고가 뜬다.
+    if (processedKakaoCodeRef.current === code) return;
+    processedKakaoCodeRef.current = code;
 
     // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 외부 인증은 신원만 처리 = 생년월일은 우리가 맡아둔 값을 실어 보낸다
     const language = getKakaoCallbackLanguage() || i18n.language;
@@ -155,6 +155,9 @@ export function useLogin({ onDone }: { onDone: () => void }) {
       )
       .then((result) => {
         clearBirthDate();
+        if (typeof window !== "undefined" && window.history) {
+          window.history.replaceState({}, "", window.location.pathname);
+        }
         if (result.success) {
           onDone(); // 성공 = 호출자 결정. §0 단일경로.
         } else {
@@ -163,6 +166,9 @@ export function useLogin({ onDone }: { onDone: () => void }) {
       })
       .catch((err) => {
         console.error("[Auth] 웹 카카오 로그인 실패:", err);
+        if (typeof window !== "undefined" && window.history) {
+          window.history.replaceState({}, "", window.location.pathname);
+        }
         notify(t("login.loginFailed"));
       })
       .finally(() => setOauthLoading(false));

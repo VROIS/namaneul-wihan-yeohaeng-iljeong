@@ -28,6 +28,7 @@
       "predictiveBackGestureEnabled": false,
       "package": "com.sonanie.guide",
       "versionCode": 28,
+      "runtimeVersion": "1.0.3",
       "blockedPermissions": [
         "android.permission.READ_MEDIA_IMAGES",
         "android.permission.READ_MEDIA_VIDEO"
