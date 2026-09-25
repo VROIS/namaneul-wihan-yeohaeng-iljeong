@@ -2,6 +2,7 @@
 // 원본 = server/auth.ts:106(구글) · server/auth.ts:161(카카오) · server/auth.ts:32(카카오 본문)
 //        · server/auth-user.ts · server/storage.ts · server/creditService.ts.
 import type { Express, Request, Response } from "express";
+import { waitUntil } from "cloudflare:workers";
 import type { drizzle } from "drizzle-orm/postgres-js";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import * as schema from "../shared/schema";
@@ -378,6 +379,39 @@ type KakaoMe = {
   properties?: { nickname?: string | null };
 };
 
+// ⚠️ 수정금지(승인필요) 2026-09-25 사장님 결정 = 측정 전용(로그인 동작 무변경) = 폰 ID 토큰 도착·aud 앞6·kid + 공개키 주소 속도만 기록, 확인 후 삭제 (정본 9-25)
+function measureKakaoIdToken(idToken: unknown): void {
+  try {
+    if (typeof idToken !== "string" || !idToken) {
+      console.log("[카카오 측정] idToken=없음");
+      return;
+    }
+    const part = (s: string) =>
+      JSON.parse(atob(s.replace(/-/g, "+").replace(/_/g, "/")));
+    const [h, p] = idToken.split(".");
+    const head = part(h);
+    const body = part(p);
+    console.log(
+      `[카카오 측정] idToken=있음 aud=${String(body.aud).slice(0, 6)} kid=${head.kid} iss=${body.iss}`,
+    );
+    waitUntil(
+      (async () => {
+        const t0 = Date.now();
+        const r = await fetch("https://kauth.kakao.com/.well-known/jwks.json");
+        const keys =
+          ((await r.json()) as { keys?: { kid?: string }[] }).keys || [];
+        console.log(
+          `[카카오 측정] 공개키 주소 ${r.status} ${Date.now() - t0}ms kid일치=${keys.some((k) => k.kid === head.kid)}`,
+        );
+      })().catch((e) =>
+        console.warn("[카카오 측정] 공개키 주소 실패:", (e as Error).message),
+      ),
+    );
+  } catch (e) {
+    console.warn("[카카오 측정] 해석 실패:", (e as Error).message);
+  }
+}
+
 // ⚠️ 수정금지(승인필요) — 카카오 accessToken → 우리 로그인 = 이 함수 1벌만 (2026-07-26 §16).
 async function loginWithKakaoAccessToken(
   db: Db,
@@ -523,8 +557,9 @@ export function registerSocialAuthRoutes(app: Express, openDb: OpenDb): void {
   app.post("/api/auth/kakao", async (req: Request, res: Response) => {
     const { db, close } = openDb();
     try {
-      const { accessToken, birthDate, language, deviceType, entry } =
+      const { accessToken, idToken, birthDate, language, deviceType, entry } =
         req.body || {};
+      measureKakaoIdToken(idToken);
       // ⚠️ 사장님 SSOT 2026-07-26(세션2-D) = 외부인증에서 생년월일 분리 = accessToken(인증 신원)만 필수. 생년월일은 findOrCreateUser 가 저장/갱신(신규 생성 / 기존 통과).
       if (!accessToken) {
         return res.status(400).json({
