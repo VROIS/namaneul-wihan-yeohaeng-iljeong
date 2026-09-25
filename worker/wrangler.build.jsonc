@@ -16,7 +16,8 @@
   "vars": {
     "R2_PUBLIC_URL": "https://pub-ec584e1b28fc458f85bca053e0fe6b02.r2.dev"
   },
-  "observability": { "enabled": true },
+  // ⚠️ 수정금지(승인필요) 2026-09-25 사장님 결정 = 추적 켬 = 카카오 로그인 지연 원인 확인용, 확인 후 끔 (정본 9-25)
+  "observability": { "enabled": true, "traces": { "enabled": true } },
   // ⚠️ 수정금지(승인필요) 2026-09-15 사장님 결정 = 관제탑 심장박동 = 1분마다(Workers 최소 주기) (정본 B4)
   "triggers": { "crons": ["* * * * *"] },
 
