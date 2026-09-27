@@ -1,0 +1,90 @@
+# ⚠️ 수정금지(승인필요) 2026-09-27 사장님 결정 = 앱 OTA = tripis1 푸시 때 자동 발행(EAS 채널 main, 앱 로그인 열쇠 = GitHub 금고), 수동 실행도 됨 (정본 9-27)
+
+name: EAS Update on push to tripis1
+
+on:
+  push:
+    branches: [tripis1]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+      - ".github/**"
+      - "scripts/**" # ⚠️ 수정금지(승인필요) — 2026-04-27 사용자 승인. 백엔드 cron/시드 스크립트 = 앱 JS 번들 무관 = 불필요한 EAS Update 트리거 차단
+  # 2026-04-21 추가: 수동 실행 지원 (지난 실패 복구용)
+  workflow_dispatch:
+
+jobs:
+  update:
+    name: Publish JS update to EAS
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for EXPO_TOKEN
+        run: |
+          if [ -z "${{ secrets.EXPO_TOKEN }}" ]; then
+            echo "⚠️  EXPO_TOKEN secret is missing. Add it in repo Settings → Secrets → Actions"
+            exit 1
+          fi
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ⚠️ 2026-07-26 신설 — 소셜로그인 열쇠 사전 검사(APK 워크플로와 동일 가드).
+      # OTA 는 이미 설치된 폰에 JS 를 내려보내는 경로 = 열쇠가 비면 "조용히" 빈 키가 배포됨.
+      # 그래서 여기서도 크게 실패시킴(§0 = 조용한 실패 금지).
+      - name: 소셜로그인 열쇠 확인 (없으면 중단)
+        env:
+          G: ${{ secrets.EXPO_PUBLIC_GOOGLE_CLIENT_ID }}
+          K: ${{ secrets.EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY }}
+        run: |
+          # eas update 는 iOS·Android 번들만 만듦 = 앱이 실제로 쓰는 열쇠만 검사.
+          # 카카오 = 앱도 네이티브 앱 키를 번들에서 읽는다(2026-07-27 §19) → 여기서도 검사.
+          # (카카오 JS키·REST키는 웹 전용이라 여기서 요구하지 않음 = OTA 가 통째로 막히는 것 방지.)
+          # APK 워크플로와 검사 목록 동일하게 통일.
+          MISSING=""
+          [ -z "$G" ] && MISSING="$MISSING EXPO_PUBLIC_GOOGLE_CLIENT_ID"
+          [ -z "$K" ] && MISSING="$MISSING EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY"
+          if [ -n "$MISSING" ]; then
+            echo "❌ GitHub Secrets 에 없는 열쇠:$MISSING"
+            echo "   등록 위치 = repo Settings > Secrets and variables > Actions"
+            exit 1
+          fi
+          echo "✅ 앱 로그인 열쇠 확인"
+
+      # ⚠️ 2026-08-24 = eas-cli(latest)가 Node 22+ 요구로 바뀌어 Node 20 설치 실패 → 22.
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci --no-audit --prefer-offline
+
+      - name: Setup Expo and EAS CLI
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      # 2026-04-21 수정: 커밋 메시지 특수문자(→, ?, " 등)로 shell arg 깨짐 방지
+      # 환경변수로 전달 + 첫 줄만 추출 + 따옴표 제거
+      # workflow_dispatch는 head_commit.message 없음 → SHA 기반 fallback
+      - name: Publish EAS Update
+        env:
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+          EXPO_PUBLIC_DOMAIN: ${{ secrets.EXPO_PUBLIC_DOMAIN }}
+          # ⚠️ 2026-07-26 §22 승인 추가 — 소셜로그인 열쇠. OTA 번들도 빌드타임 인라인이라
+          #   여기서 안 넘기면 폰에 내려가는 JS 에 키가 빈칸으로 박힘(= 로그인 불가).
+          EXPO_PUBLIC_GOOGLE_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_CLIENT_ID }}
+          EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID }}
+          # 2026-08-11 신설 = 안드로이드 전용 구글 클라이언트(My-handyguide 프로젝트, JS 전용이라 OTA 로도 반영됨)
+          EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID }}
+          EXPO_PUBLIC_KAKAO_JAVASCRIPT_KEY: ${{ secrets.EXPO_PUBLIC_KAKAO_JAVASCRIPT_KEY }}
+          # 앱 카카오 로그인(네이티브 SDK) 전용 = 없으면 앱에서 카카오 로그인 불가
+          EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY: ${{ secrets.EXPO_PUBLIC_KAKAO_NATIVE_APP_KEY }}
+        run: |
+          SAFE_MSG=$(printf '%s' "$COMMIT_MSG" | head -n 1 | tr -d '"')
+          if [ -z "$SAFE_MSG" ]; then
+            SAFE_MSG="manual update ${GITHUB_SHA:0:7}"
+          fi
+          eas update --branch main --message "$SAFE_MSG" --non-interactive
