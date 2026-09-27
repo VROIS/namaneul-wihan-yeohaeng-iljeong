@@ -1,16 +1,10 @@
-// GET /api/debug/generate-test = Worker 이관본 (2026-09-06)
-// 원본 = server/city-place-routes.ts:395 (가드 :396 / steps :401 / 응답 :454 / catch :489)
-//
-// 이 라우트는 여정 생성 파이프라인이 실제로 도는지 보는 **자가진단**이다.
-// 고정 테스트값이 destination="Paris"(원본 :419) 이고 파리는 창고가 차 있어
-// isCityReady().ready 가 참 → 원본 pipeline-v3.ts:41 이 runPipelineDbOnly 로 직행한다
-// = 외부 유료호출 0건. 그래서 Worker 로 옮길 수 있다.
-//
-// 파이프라인은 **다시 짜지 않는다**(§16). routes-itinerary-generate-db.ts 가 이미 옮겨둔
-// runPipelineDbOnlyWorker / isCityReady / READY_THRESHOLD 1벌을 그대로 부른다.
+// GET /api/debug/generate-test = 여정 생성 파이프라인이 실제로 도는지 보는 **자가진단** (Worker 이관 2026-09-06)
+// 고정 테스트값 destination="Paris" = 창고가 차 있어 isCityReady().ready 가 참 → DB-only 로 직행 = 외부 유료호출 0건.
+// 파이프라인은 다시 짜지 않는다(§16) = routes-itinerary-generate-db.ts 의 runPipelineDbOnlyWorker / isCityReady / READY_THRESHOLD 1벌을 부른다.
 import type { Express, Request, Response } from "express";
-import { eq, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import * as schema from "../shared/schema";
+import { getRoleFromDb, getUserIdFromReq } from "./auth-user";
 import {
   isCityReady,
   runPipelineDbOnlyWorker,
@@ -18,17 +12,9 @@ import {
   type OpenDb,
 } from "./routes-itinerary-generate-db";
 
-const { cities, users } = schema;
+const { cities } = schema;
 // 후처리 큐 스위치(이 파일)와 큐 소비자는 한 묶음 = 진입점(src.ts, 700줄 초과)이 import 한 줄로 받도록 여기서 내보낸다
 export { withGmapsQueue } from "./gmaps-post-queue";
-
-/** 원본 server/auth-user.ts:8 getUserIdFromReq = 헤더 정규식만(DB 무관). */
-function getUserIdFromReq(req: Request): string | null {
-  const m = (req.headers.authorization || "").match(
-    /^Bearer\s+simple_auth_token_v1_(.+)$/,
-  );
-  return m ? m[1] : null;
-}
 
 interface PlaceSample {
   name: unknown;
@@ -42,10 +28,8 @@ export function registerDebugRoutes(app: Express, openDb: OpenDb): void {
     const { db, close } = openDb();
     try {
       const userId = getUserIdFromReq(req);
-      const [user] = userId
-        ? await db.select().from(users).where(eq(users.id, userId))
-        : [undefined];
-      if (user?.role !== "admin")
+      const role = userId ? await getRoleFromDb(db, userId) : "user";
+      if (role !== "admin")
         return res.status(403).json({ error: "관리자 전용" });
       const cityId = Number(req.query.cityId || req.body?.cityId || 0);
       const { pendingByCity, r2PrefixOf } = await import(
@@ -116,11 +100,8 @@ export function registerDebugRoutes(app: Express, openDb: OpenDb): void {
     const { db, close } = openDb();
     try {
       const userId = getUserIdFromReq(req);
-      // 원본 :397 storage.getUser(server/storage.ts:61).
-      const [user] = userId
-        ? await db.select().from(users).where(eq(users.id, userId))
-        : [undefined];
-      if (user?.role !== "admin") {
+      const role = userId ? await getRoleFromDb(db, userId) : "user";
+      if (role !== "admin") {
         return res.status(403).json({ error: "관리자 전용 진단 엔드포인트" });
       }
       const steps: string[] = [];
@@ -128,7 +109,7 @@ export function registerDebugRoutes(app: Express, openDb: OpenDb): void {
       try {
         steps.push(`[${Date.now() - start}ms] Start`);
 
-        // 원본 :406 = 제미니 열쇠 유무를 steps 에 적을 뿐, 막지는 않는다.
+        // 제미니 열쇠 유무를 steps 에 적을 뿐, 막지는 않는다.
         //   Worker 는 모듈 최상단 process.env 를 읽지 않으므로 요청 시점의 env 에서 읽는다.
         //   DB-only 경로는 제미니를 부르지 않는다 = 없어도 그대로 진행(원본과 동일).
         const geminiKey =
@@ -138,7 +119,6 @@ export function registerDebugRoutes(app: Express, openDb: OpenDb): void {
           `[${Date.now() - start}ms] Gemini key: ${geminiKey ? "present (" + geminiKey.substring(0, 8) + "...)" : "MISSING"}`,
         );
 
-        // 원본 :411
         const cityCheck0 = await db
           .select({ count: sql<number>`count(*)` })
           .from(cities);
@@ -146,7 +126,7 @@ export function registerDebugRoutes(app: Express, openDb: OpenDb): void {
           `[${Date.now() - start}ms] DB OK - cities: ${cityCheck0[0]?.count}`,
         );
 
-        // 원본 :418 = 고정 테스트값(한 글자도 바꾸지 않는다).
+        // 고정 테스트값(한 글자도 바꾸지 않는다).
         const testFormData = {
           destination: "Paris",
           startDate: "2026-03-01",
@@ -169,8 +149,8 @@ export function registerDebugRoutes(app: Express, openDb: OpenDb): void {
           `[${Date.now() - start}ms] Calling generateItinerary (4+1 Agent Pipeline)...`,
         );
 
-        // 원본 :439 itineraryGenerator.generate → pipeline-v3.ts:24 runPipelineV3 의 분기를
-        //   그대로 밟는다. 파리는 ready 라 :41 db-only 로 간다(외부호출 0).
+        // itineraryGenerator.generate → pipeline-v3.ts:24 runPipelineV3 의 분기를
+        //   그대로 밟는다. 파리는 ready 라 db-only 로 간다(외부호출 0).
         const cityCheck = await isCityReady(
           db,
           testFormData.destination,
@@ -204,7 +184,7 @@ export function registerDebugRoutes(app: Express, openDb: OpenDb): void {
           result?.metadata?._timings || {};
         const pipelineTotal = result?.metadata?._totalMs || totalMs;
 
-        // 원본 :454 = 응답 형식·필드명 그대로.
+        // 응답 형식·필드명 그대로.
         res.json({
           status: "ok",
           steps,
@@ -247,7 +227,7 @@ export function registerDebugRoutes(app: Express, openDb: OpenDb): void {
           },
         });
       } catch (error) {
-        // 원본 :489 = 실패해도 200 + status:"error"(진단용이라 그대로).
+        // 실패해도 200 + status:"error"(진단용이라 그대로).
         const err = error as { message?: string; stack?: string };
         steps.push(`[${Date.now() - start}ms] ERROR: ${err?.message}`);
         steps.push(

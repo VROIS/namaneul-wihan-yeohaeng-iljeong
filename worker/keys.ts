@@ -1,15 +1,11 @@
 // ⚠️ 수정금지(승인필요) 2026-09-06 사장님 결정 = Worker 열쇠 공급 = DB api_keys → process.env + MAX(updated_at) 판형 무효화 (정본 B1)
 import type { Sql } from "postgres";
+import { eq } from "drizzle-orm";
+import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
+import { apiKeys } from "../shared/schema";
 
-/**
- * 캐시 상태 3개만 모듈 전역에 둔다.
- * 이유: Cloudflare Worker 는 isolate 를 여러 요청이 재사용하지만, 그 isolate 가
- * 어떤 사용자의 요청을 받을지는 알 수 없다. 요청에서 나온 데이터를 전역에 두면
- * 다른 사용자의 요청으로 새어나간다. 반면 이 값들은 "이 isolate 의 process.env 를
- * 언제·어느 판형으로 채웠는가" 라는 isolate 자신의 상태일 뿐, 요청·사용자별 데이터가
- * 아니므로 안전하다. process.env 에 담기는 열쇠도 전 요청 공통 값(사용자 데이터 아님)이다.
- * 모듈 전역은 isolate 가 죽으면 사라지지만, 이건 캐시일 뿐 정본이 아니므로 다시 읽으면 그만이다.
- */
+/** 캐시 상태 3개만 모듈 전역에 둔다 = isolate 자신의 상태(언제·어느 판형으로 process.env 를 채웠나)일 뿐 요청·사용자별 데이터가 아니라 안전하다.
+ *  process.env 에 담기는 열쇠도 전 요청 공통 값이다. isolate 가 죽으면 사라지지만 캐시일 뿐 정본이 아니라 다시 읽으면 그만이다. */
 let keysLoaded = false;
 
 /** 마지막으로 채운 판형 = api_keys 의 MAX(updated_at) + 행수. 이게 바뀌면 다시 읽는다. */
@@ -44,10 +40,6 @@ interface StampRow {
   stamp: string;
 }
 
-/**
- * server/index.ts:334~347 의 별칭 파생을 그대로 재현한다.
- * 원본이 바뀌면 이 함수도 같이 바꾼다(§19 = 1벌만 존재해야 하나, 런타임이 달라 물리적으로 분리됨).
- */
 function applyKey(keyName: string, value: string): void {
   process.env[keyName] = value;
   if (keyName === "GEMINI_API_KEY") {
@@ -104,7 +96,7 @@ async function readStamp(db: Sql): Promise<string> {
 }
 
 async function loadKeys(db: Sql): Promise<void> {
-  // 필터 = server/index.ts:332 와 동일 = is_active 참 + key_value 가 공백 아님.
+  // 필터 = is_active 참 + key_value 가 공백 아님.
   const rows = await db<ApiKeyRow[]>`
     SELECT key_name, key_value
     FROM api_keys
@@ -181,3 +173,34 @@ export function invalidateKeys(): void {
   loadedStamp = "";
   stampCheckedAt = 0;
 }
+
+// ⚠️ 수정금지(승인필요) 2026-09-27 사장님 결정 = 열쇠 1개 읽기 = readKey 1벌(채워진 값 먼저 → 없으면 api_keys 1행 → 별칭은 applyKey), 지도·제미니는 이름만 다르게 부른다 (정본 9-27)
+type Db = PgDatabase<PgQueryResultHKT, any>;
+
+async function readKey(
+  db: Db,
+  keyName: string,
+  lookup: string[],
+): Promise<string> {
+  for (const n of lookup) if (process.env[n]) return process.env[n] as string;
+  const [row] = await db
+    .select({ v: apiKeys.keyValue })
+    .from(apiKeys)
+    .where(eq(apiKeys.keyName, keyName));
+  const v = row?.v?.trim();
+  if (!v) return "";
+  applyKey(keyName, v);
+  return v;
+}
+
+export const readMapsKey = (db: Db) =>
+  readKey(db, "GOOGLE_MAPS_API_KEY", [
+    "GOOGLE_MAPS_API_KEY",
+    "Google_maps_api_key",
+  ]);
+
+export const readGeminiKey = (db: Db) =>
+  readKey(db, "GEMINI_API_KEY", [
+    "AI_INTEGRATIONS_GEMINI_API_KEY",
+    "GEMINI_API_KEY",
+  ]);

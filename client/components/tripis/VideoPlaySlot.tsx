@@ -19,7 +19,8 @@ export interface DayVideo {
   taskId: string;
   scenesDone: number;
   totalScenes: number;
-  scenes?: { placeName: string; summary?: string }[]; // 글라스 카드(Scene n/N·장소명·요약)용 씬 메타
+  // ⚠️ 수정금지(승인필요) 2026-09-27 사장님 결정 = 장면 카드 = 장소명만(요약 줄 없음) (정본 §)
+  scenes?: { placeName: string }[];
   error?: string; // 실패 사유(서버 예외 문구 그대로 = 뭉개기 금지 SSOT, 2026-08-06)
   // ⚠️ 수정금지(승인필요) 2026-09-14 사장님 결정 = 완성본인데 씬이 빠진 경우 = 숫자와 사유표만(문장은 여기서 번역) (정본 §)
   partial?: { skipped: number; total: number; reason: string };
@@ -96,16 +97,13 @@ export default function VideoPlaySlot({
         placeName:
           dayVideo.scenes[Math.min(sceneIdx, dayVideo.scenes.length - 1)]
             .placeName,
-        summary:
-          dayVideo.scenes[Math.min(sceneIdx, dayVideo.scenes.length - 1)]
-            .summary,
       }
     : null;
 
   return (
     <View style={styles.body}>
       {dayVideo?.status === "succeeded" && dayVideo.url ? (
-        // ✅ 완료 = 전체 재생 + 상단 글라스 카드(Scene n/N·장소명·요약 = 2026-07-23 사장님 v2 = 인물이 하단이라 상단 배치)
+        // ⚠️ 수정금지(승인필요) 2026-09-27 사장님 결정 = 완료 = 전체 재생 + 상단 장면 카드(Scene n/N·장소명, 인물이 하단이라 상단 배치) (정본 §)
         <View style={styles.playerBox}>
           {/* 화면 풀 채움 + 터치 시 재생·정지 컨트롤 = useNativeControls(이전 영상보기 그대로).
               videoStyle = 웹에서 contain 강제(2026-08-01 사장님 "잘림" 실측 = 웹이 cover 로 그려 위아래가 잘렸음.
@@ -127,7 +125,7 @@ export default function VideoPlaySlot({
             {sceneCard && (
               <View style={styles.sceneCard}>
                 <View style={styles.sceneCardRow}>
-                  <Icon name="map-pin" size={14} color="#93c5fd" />
+                  <Icon name="map-pin" size={14} color={Brand.primary} />
                   <Text style={styles.sceneCardIndex}>
                     Scene {sceneCard.index + 1}/{sceneCard.total}
                   </Text>
@@ -135,11 +133,6 @@ export default function VideoPlaySlot({
                 <Text style={styles.sceneCardTitle} numberOfLines={1}>
                   {sceneCard.placeName}
                 </Text>
-                {!!sceneCard.summary && (
-                  <Text style={styles.sceneCardSummary} numberOfLines={2}>
-                    {sceneCard.summary}
-                  </Text>
-                )}
               </View>
             )}
             {!!dayVideo.partial && (
@@ -239,7 +232,10 @@ const styles = StyleSheet.create({
     top: 104,
     gap: 8,
   },
+  // ⚠️ 수정금지(승인필요) 2026-09-27 사장님 결정 = 장면 카드 = 제미니 블루 글자·그림자 없음(수채화 위 번짐 방지)·카드 폭 글자에 맞춤 (정본 §)
   sceneCard: {
+    alignSelf: "flex-start",
+    maxWidth: "100%",
     backgroundColor: "rgba(255,255,255,0.08)",
     borderRadius: 20,
     paddingHorizontal: 18,
@@ -250,28 +246,14 @@ const styles = StyleSheet.create({
   },
   sceneCardRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   sceneCardIndex: {
-    color: "#bfdbfe",
+    color: Brand.primary,
     fontSize: 12,
     fontFamily: Fonts?.medium || undefined,
-    textShadowColor: "rgba(0,0,0,0.6)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
   },
   sceneCardTitle: {
-    color: "#FFFFFF",
+    color: Brand.primary,
     fontSize: 21,
     fontFamily: Fonts?.bold || undefined,
-    textShadowColor: "rgba(0,0,0,0.65)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 5,
-  },
-  sceneCardSummary: {
-    color: "rgba(255,255,255,0.95)",
-    fontSize: 13,
-    lineHeight: 19,
-    textShadowColor: "rgba(0,0,0,0.6)",
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
   },
   partialNote: {
     flexDirection: "row",

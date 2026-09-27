@@ -69,7 +69,7 @@ export async function geminiJson<T = any>(
   const startedAt = Date.now();
   let response: any;
   try {
-    // ⚠️ 2026-08-06 = 429 재시도(1→2→4→8초) = 여정생성 직후 스토리보드 연속 호출 같은 스파이크 흡수(사장님 승인).
+    // ⚠️ 2026-08-06 = 429 재시도(1→2→4→8초) = 연속 호출 스파이크 흡수(사장님 승인).
     response = await withQuotaRetry(
       () =>
         getAI(opts?.apiKey).models.generateContent({

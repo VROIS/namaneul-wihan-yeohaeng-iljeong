@@ -1,4 +1,4 @@
-// ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = 여정 행 저장 = 원본 server/itinerary-save.ts + server/storage.ts
+// ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = 여정 행 저장
 //   1,777줄 한 덩어리에서 그대로 잘라낸 것(§0) = 계산·규칙 한 글자도 안 바꿈.
 
 import type { Express, Request, Response } from "express";
@@ -10,9 +10,8 @@ const { cities } = schema;
 
 type Db = PostgresJsDatabase<typeof schema>;
 
-// ── 여정 행 저장 (원본 server/itinerary-save.ts + server/storage.ts) ─────────
+// ── 여정 행 저장 ─────────
 
-/** 원본 server/itinerary-save.ts:25 styleToPersonaType. */
 export const STYLE_TO_PERSONA: Record<string, string> = {
   Luxury: "luxury",
   Premium: "comfort",
@@ -24,7 +23,6 @@ export const STYLE_TO_PERSONA: Record<string, string> = {
   economic: "comfort",
 };
 
-/** 원본 server/city-match.ts:8 matchCityIdByName. */
 export async function matchCityIdByName(
   db: Db,
   destination: string | null | undefined,

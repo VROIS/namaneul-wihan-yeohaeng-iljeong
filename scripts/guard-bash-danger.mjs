@@ -32,8 +32,8 @@ const hit = DANGEROUS_PATTERNS.find((re) => re.test(command));
 if (hit) {
   console.error(
     `\n⛔⛔ 위험한 git 명령 차단 = "${command}"\n` +
-      `   = 2026-07-04 사고(AI가 rebase 실행 → Replit 저장소 꼬임 → EAS 배포 마비 → $20+ 손실) 재발 방지.\n` +
-      `   = 원격이 앞서면 git pull(merge)만 사용. 정말 필요하면 사장님께 직접 여쭤보고 Replit Git pane에서 처리.\n`,
+      `   = 2026-07-04 사고(AI가 rebase 실행 → 저장소 꼬임 → EAS 배포 마비 → $20+ 손실) 재발 방지.\n` +
+      `   = 원격이 앞서면 git pull(merge)만 사용. 정말 필요하면 사장님께 직접 여쭤본다.\n`,
   );
   process.exit(2); // PreToolUse 차단 신호
 }

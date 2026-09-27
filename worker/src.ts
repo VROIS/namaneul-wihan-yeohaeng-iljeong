@@ -1,5 +1,4 @@
 // Cloudflare Worker 진입점 (2026-09-05)
-// Replit(server/index.ts, Express4) 은 손대지 않는다. 여기만 Express5.
 // 이관은 검사표(docs/2026-09-05 Cloudflare 이관 검사표.md) 순서대로 한 줄씩.
 // 여기 있는 라우트 = 실제로 배포·실증까지 끝난 것만. 그 외는 추가하지 않는다.
 import express from "express";
@@ -7,9 +6,14 @@ import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { desc, eq, sql as dsql } from "drizzle-orm";
 import * as schema from "../shared/schema";
+import {
+  CREDIT_COSTS,
+  PRICE_EUR,
+  PURCHASE_CREDITS,
+  SIGNUP_BONUS,
+} from "../shared/credits";
 import { httpServerHandler } from "cloudflare:node";
-// 아래 4벌 = 서버(server/**)의 순수 계산 모듈 그대로 재사용(§16 재발명 금지).
-//   server/db.ts(pg 드라이버)를 딸려오지 않는 것만 고른다 = Worker 번들 가능.
+// 아래 4벌 = 순수 계산 모듈 재사용(§16 재발명 금지).
 import {
   generateItineraryICS,
   type ItineraryForICS,
@@ -60,7 +64,6 @@ import { registerItineraryGenerateRoutes } from "./routes-itinerary-generate";
 import { registerAppErrorRoutes } from "./routes-app-errors";
 import { registerAdminKeyTestRoutes } from "./routes-admin-keytest";
 import { registerRestRoutes } from "./routes-rest";
-import { registerVideoConfigRoutes } from "./routes-video-config";
 import { registerItineraryGenerateDbRoutes } from "./routes-itinerary-generate-db";
 import { registerDebugRoutes, withGmapsQueue } from "./routes-debug";
 // 근거: containers/get-started = 컨테이너를 관리하는 Durable Object 클래스는
@@ -120,9 +123,7 @@ const sql = () =>
     prepare: true,
   });
 
-// drizzle = Replit(server/db.ts) 과 같은 스키마·같은 camelCase 응답을 내기 위함.
-// 생 SQL 은 snake_case 로 나와 앱이 기대하는 nameEn 등과 달라진다(2026-09-06 실측).
-//
+// drizzle = 앱이 기대하는 camelCase 응답(생 SQL 은 snake_case = 2026-09-06 실측).
 // ⚠️ 수정금지(승인필요) 2026-09-06 사장님 결정 = 요청 1건 = 연결 1벌 = 반드시 닫는다.
 // 안 닫으면 요청마다 연결이 쌓여 간헐적으로 응답이 멈춘다(2026-09-06 실측: 6회 중 2회 정지).
 function openDb() {
@@ -136,10 +137,8 @@ function openDb() {
 }
 
 // ⚠️ 수정금지(승인필요) 2026-09-06 사장님 결정 = 열쇠 게이트 (정본 B1)
-// Replit 은 부팅 시 DB api_keys → process.env 를 채우지만, Worker 는 요청 밖 I/O 가
-// 금지되므로 "첫 요청"에서 채운다. isolate 당 1회만 실제 조회된다(keys.ts).
-// 열쇠가 실제로 필요한 라우트에서만 부른다(전역 게이트는 모든 요청에 DB 연결을
-// 하나씩 더 열어 Hyperdrive 연결을 고갈시킨다 = 2026-09-06 실측, 응답 불규칙 정지).
+// Worker 는 요청 밖 I/O 가 금지 = DB api_keys → process.env 를 "첫 요청"에서 채운다(isolate 당 1회, keys.ts). 열쇠가 필요한 라우트에서만 부른다
+// = 전역 게이트는 요청마다 DB 연결을 하나씩 더 열어 Hyperdrive 연결을 고갈시킨다(2026-09-06 실측, 응답 불규칙 정지).
 async function withKeys<T>(run: () => Promise<T> | T): Promise<T> {
   const db = sql();
   try {
@@ -163,7 +162,7 @@ app.get("/api/health", (_req, res) => {
 app.get("/api/cities", async (_req, res) => {
   const { db, close } = openDb();
   try {
-    // 정렬 = 원본 storage.getCities()(server/storage.ts:181) 와 동일한 name 순.
+    // 정렬 = 원본 storage.getCities() 와 동일한 name 순.
     const rows = await db
       .select()
       .from(schema.cities)
@@ -177,8 +176,7 @@ app.get("/api/cities", async (_req, res) => {
   }
 });
 
-// [검사표 6-5] GET /api/cities/ready — 원본 server/city-place-routes.ts:39
-// READY_THRESHOLD = 원본 server/services/agents/ag2-gemini-recommender.ts:24 (=200) 과 같은 값.
+// [검사표 6-5] GET /api/cities/ready
 const READY_THRESHOLD = 200;
 app.get("/api/cities/ready", async (_req, res) => {
   const { db, close } = openDb();
@@ -207,7 +205,7 @@ app.get("/api/cities/ready", async (_req, res) => {
   }
 });
 
-// [검사표 6-2] GET /api/cities/:id — 원본 city-place-routes.ts:310
+// [검사표 6-2] GET /api/cities/:id
 // ⚠️ 수정금지(승인필요) 2026-09-06 사장님 결정 = 이 배선은 반드시 `/api/cities/:id` **앞**.
 // 뒤에 두면 `/api/cities/:id/representative` 를 `:id` 가 먼저 잡아 404 가 난다(2026-09-06 실측).
 registerPlaceRoutes(app, openDb);
@@ -228,7 +226,6 @@ registerItineraryGenerateRoutes(app, openDb);
 registerAppErrorRoutes(app, openDb);
 registerAdminKeyTestRoutes(app, openDb);
 registerRestRoutes(app, openDb);
-registerVideoConfigRoutes(app, openDb);
 registerItineraryGenerateDbRoutes(app, openDb, sql);
 registerDebugRoutes(app, openDb);
 registerVideoGenerateRoutes(app, openDb);
@@ -254,24 +251,12 @@ app.get("/api/cities/:id", async (req, res) => {
   }
 });
 
-// [검사표 6-3] GET /api/guide/health — 원본 server/guide-routes.ts:44
+// [검사표 6-3] GET /api/guide/health
 app.get("/api/guide/health", (_req, res) => {
   res.json({ status: "ok", service: "guide", version: "2.0.0" });
 });
 
-// ── 크레딧 상수 = 원본 server/credit-charge.ts:6(CREDIT_COSTS) · server/creditService.ts:6(CREDIT_CONFIG) 과 같은 값 1벌.
-const CREDIT_COSTS = {
-  route_generate: 5,
-  ai_opinion: 5,
-  guide_explain: 5,
-  expert_verify: 10,
-  day_video: 60,
-} as const;
-const SIGNUP_BONUS = 50;
-const PURCHASE_CREDITS = 140;
-const PRICE_EUR = 10;
-
-// [검사표 6-4] GET /api/credits/pricing — 원본 server/payment-routes.ts:210
+// [검사표 6-4] GET /api/credits/pricing
 app.get("/api/credits/pricing", async (_req, res) => {
   try {
     // 이 라우트만 열쇠(STRIPE_PUBLISHABLE_KEY)가 필요하다.
@@ -292,8 +277,8 @@ app.get("/api/credits/pricing", async (_req, res) => {
   }
 });
 
-// [검사표 6-6] GET /api/itineraries/:id/calendar.ics — 원본 server/itinerary-routes.ts:88
-// 본문(ICS 생성) = server/itinerary-ics.ts 를 그대로 import = 재발명 0(§16).
+// [검사표 6-6] GET /api/itineraries/:id/calendar.ics
+// 본문(ICS 생성) = worker/lib/itinerary-ics.ts 를 import = 재발명 0(§16).
 app.get("/api/itineraries/:id/calendar.ics", async (req, res) => {
   const { db, close } = openDb();
   try {
@@ -301,7 +286,7 @@ app.get("/api/itineraries/:id/calendar.ics", async (req, res) => {
     if (Number.isNaN(idNum)) {
       return res.status(404).json({ error: "Itinerary not found" });
     }
-    // 원본 storage.getItinerary(id) = itineraries 단일 행 조회(server/storage.ts:258).
+    // 원본 storage.getItinerary(id) = itineraries 단일 행 조회.
     const [itinerary] = await db
       .select()
       .from(schema.itineraries)
@@ -332,9 +317,7 @@ app.get("/api/itineraries/:id/calendar.ics", async (req, res) => {
   }
 });
 
-// ── 교통비 계산 = 원본 server/services/transport/** 와 같은 식.
-//   원본은 server/db.ts(pg 드라이버)를 물고 있어 Worker 번들이 안 된다 = DB 읽는 1함수만 Hyperdrive drizzle 로 다시 배선하고,
-//   나머지 순수 계산(상수·하버사인·2-opt)은 원본 모듈을 그대로 import 해 쓴다(§16).
+// ── 교통비 계산 = DB 읽는 1함수만 Hyperdrive drizzle, 나머지 순수 계산(상수·하버사인·2-opt)은 모듈을 그대로 import(§16).
 function round2(num: number): number {
   return Math.round(num * 100) / 100;
 }
@@ -350,7 +333,7 @@ function shouldApplyGuidePrice(
   );
 }
 
-// 원본 server/services/transport/guide-pricing.ts:28 getGuidePriceFromDB 와 같은 조회.
+// getGuidePriceFromDB 와 같은 조회.
 async function getGuidePriceFromDB(serviceType: TransportType): Promise<{
   basePrice4h: number;
   pricePerHour: number;
@@ -426,7 +409,6 @@ async function getGuidePerPersonPerDay(
   };
 }
 
-// 원본 server/services/transport/transit-pricing.ts:5
 function calculateTransitPerPersonPerDay(
   dayCount: number,
   tripCount: number,
@@ -469,7 +451,6 @@ function calculateTransitPerPersonPerDay(
   };
 }
 
-// 원본 server/services/transport/transit-pricing.ts:46
 function calculateUberXDailyPerPerson(
   tripCount: number,
   companionCount: number,
@@ -488,7 +469,6 @@ function calculateUberXDailyPerPerson(
   };
 }
 
-// 원본 server/services/transport/transit-pricing.ts:71
 function calculateUberBlackHourly(
   availableHours: number,
   segments: { distanceKm: number; durationMin: number }[],
@@ -517,7 +497,6 @@ function calculateUberBlackHourly(
   };
 }
 
-// 원본 server/services/transport-pricing-service.ts:53
 async function calculateTransportPrice(
   input: TransportPriceInput,
 ): Promise<TransportPricingResult> {
@@ -631,7 +610,6 @@ async function calculateTransportPrice(
   } as TransitPriceResult;
 }
 
-// 원본 server/services/transport/day-config.ts:40
 function buildDayConfig(
   day: number,
   dayCount: number,
@@ -646,7 +624,6 @@ function buildDayConfig(
   return { startTime: defaultStart, endTime: defaultEnd };
 }
 
-// 원본 server/services/transport/day-config.ts:56
 async function guideCostForDay(args: {
   dayConfig: { startTime: string; endTime: string };
   companionType: CompanionType;
@@ -676,7 +653,6 @@ async function guideCostForDay(args: {
   return priceResult.category === "guide" ? priceResult.perPersonPerDay : 0;
 }
 
-// 원본 server/services/itinerary/helpers.ts:10
 function getCompanionCount(companionType: string): number {
   const mapping: Record<string, number> = {
     Single: 1,
@@ -688,7 +664,6 @@ function getCompanionCount(companionType: string): number {
   return mapping[companionType] || 1;
 }
 
-// 원본 server/services/itinerary/helpers.ts:193 (콘솔 로그 3줄은 Worker 에서 뺌 = 응답 동일)
 function calculateDayCount(startDate: string, endDate: string): number {
   const start = new Date(startDate);
   const end = new Date(endDate);
@@ -696,7 +671,6 @@ function calculateDayCount(startDate: string, endDate: string): number {
   return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
 }
 
-// 원본 server/services/itinerary/types.ts:32
 const DEFAULT_START_TIME = "09:00";
 const DEFAULT_END_TIME = "21:00";
 
@@ -730,7 +704,6 @@ type RegenFormData = {
   endTime?: string;
 };
 
-// 원본 server/services/itinerary/regenerate-day.ts:22 = 본문 그대로.
 async function regenerateDay(params: {
   day: number;
   accommodationCoords?: { lat: number; lng: number };
@@ -991,7 +964,7 @@ async function regenerateDay(params: {
   };
 }
 
-// [검사표 6-7] POST /api/routes/regenerate-day — 원본 server/city-place-routes.ts:500
+// [검사표 6-7] POST /api/routes/regenerate-day
 app.post("/api/routes/regenerate-day", async (req, res) => {
   try {
     const { day, accommodationCoords, places, formData } = req.body;

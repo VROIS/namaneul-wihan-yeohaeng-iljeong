@@ -142,7 +142,7 @@ async function runPipelineMix(
   );
 
   // 🧠 2026-07-06 사장님 SSOT = MIX Gemini raw 저장(§18) = 도시id 폴더 + {meta,rawResponse,parsedPlaces}(사장님 예시형식).
-  //   ⚠️ 2026-07-06 근본수정 = 옛 fire-and-forget(void..catch) = 배포서버(Replit)서 응답 후 PUT 완료전 잘림 = raw 미저장(비용증발 §18) 근본.
+  //   ⚠️ 2026-07-06 근본수정 = 옛 fire-and-forget(void..catch) = 배포서버서 응답 후 PUT 완료전 잘림 = raw 미저장(비용증발 §18) 근본.
   //     → step2 와 병렬 await 로 전환(§18 자산보장). raw 저장(수백ms) ⊂ step2(수십초) = FE 응답 지연 0(속도 유지) + 배포서버서 안 잘림.
   const geminiRawSave = (async () => {
     if (!preloaded.cityId) return;
@@ -193,7 +193,7 @@ async function runPipelineMix(
 
   _mark("step2_enrich");
 
-  // ⚠️ 수정금지(승인필요) 2026-05-14 = 사용자 SSOT = 추적 메타 강화 (= Replit 서버 콘솔 접근 X 우회)
+  // ⚠️ 수정금지(승인필요) 2026-05-14 = 사용자 SSOT = 추적 메타 강화
   const totalPlaces = (result.metadata as any)?.totalPlaces || 0;
   const matchedCount = (result.metadata as any)?._matched || 0;
   const unmatchedCount = (result.metadata as any)?._unmatched || 0;

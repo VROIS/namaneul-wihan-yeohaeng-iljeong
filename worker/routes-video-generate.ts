@@ -1,4 +1,4 @@
-// ⚠️ 수정금지(승인필요) 2026-09-12 사장님 결정 = 일별 영상 = Worker 접수(원본 :114-170) + 컨테이너 생성(원본 :172-391 복붙 = container/generate.ts) (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-09-12 사장님 결정 = 일별 영상 = Worker 접수 + 컨테이너 생성(container/generate.ts) (정본 §)
 
 import type { Express, Request, Response } from "express";
 import type { drizzle } from "drizzle-orm/postgres-js";
@@ -7,14 +7,15 @@ import { Container, getContainer } from "@cloudflare/containers";
 import { env, waitUntil } from "cloudflare:workers";
 import type { DurableObject } from "cloudflare:workers";
 import * as schema from "../shared/schema";
+import { getUserIdFromReq } from "./auth-user";
+import { precheckFeature } from "../shared/credits";
 import type { DayVideo } from "../shared/schema";
-import { readOptionMode } from "./routes-video-config";
 import { isStaleProcessing } from "./video-stale";
 
 type Db = ReturnType<typeof drizzle<typeof schema>>;
 type OpenDb = () => { db: Db; close: () => void };
 
-const { itineraries, users } = schema;
+const { itineraries } = schema;
 
 type ContainerSecrets = {
   CONTAINER_DATABASE_URL?: string;
@@ -49,19 +50,6 @@ export class VideoStitchContainer extends Container<Env> {
 }
 
 const MAX_SCENES = 10;
-const SCENE_SECONDS = 6;
-
-const COST_PER_SECOND_USD = 0.101;
-const B_COST_PER_SCENE_USD = 0.35;
-
-const DAY_VIDEO_COST = 60;
-
-function getUserIdFromReq(req: Request): string | null {
-  const m = (req.headers.authorization || "").match(
-    /^Bearer\s+simple_auth_token_v1_(.+)$/,
-  );
-  return m ? m[1] : null;
-}
 
 async function setDayVideo(
   db: Db,
@@ -76,30 +64,6 @@ async function setDayVideo(
       updatedAt: sql`NOW()`,
     })
     .where(eq(itineraries.id, itineraryId));
-}
-
-async function precheckDayVideo(
-  db: Db,
-  res: Response,
-  userId: string | null,
-): Promise<boolean> {
-  if (!userId) return true;
-  const [user] = await db
-    .select({ role: users.role, credits: users.credits })
-    .from(users)
-    .where(eq(users.id, userId));
-  if (!user || user.role === "admin") return true;
-  const balance = user.credits ?? 0;
-  if (balance < DAY_VIDEO_COST) {
-    res.status(402).json({
-      error: "insufficient_credits",
-      message: `크레딧이 부족합니다. (필요: ${DAY_VIDEO_COST}, 잔액: ${balance})`,
-      balance,
-      required: DAY_VIDEO_COST,
-    });
-    return false;
-  }
-  return true;
 }
 
 export function registerVideoGenerateRoutes(
@@ -154,7 +118,8 @@ export function registerVideoGenerateRoutes(
         if (!requesterUserId)
           return res.status(401).json({ error: "로그인 필요" });
 
-        if (!(await precheckDayVideo(db, res, requesterUserId))) return;
+        if (!(await precheckFeature(db, res, requesterUserId, "day_video")))
+          return;
 
         const sceneSlots = slots.slice(0, MAX_SCENES);
         const totalScenes = sceneSlots.length;
@@ -166,17 +131,7 @@ export function registerVideoGenerateRoutes(
           totalScenes,
         });
 
-        const useOptionB = (await readOptionMode(db)) === "optionB";
-
-        res.status(202).json({
-          taskId,
-          day,
-          totalScenes,
-          estimatedCostUsd: (useOptionB
-            ? totalScenes * B_COST_PER_SCENE_USD
-            : totalScenes * SCENE_SECONDS * COST_PER_SECOND_USD
-          ).toFixed(2),
-        });
+        res.status(202).json({ taskId, day, totalScenes });
 
         closeOnce();
 
@@ -186,7 +141,6 @@ export function registerVideoGenerateRoutes(
             day,
             taskId,
             lang,
-            useOptionB,
             requesterUserId,
             totalScenes,
           }),
@@ -209,7 +163,6 @@ async function startGenerate(
     day: number;
     taskId: string;
     lang: string;
-    useOptionB: boolean;
     requesterUserId: string;
     totalScenes: number;
   },
@@ -228,7 +181,6 @@ async function startGenerate(
           day,
           taskId,
           lang: job.lang,
-          useOptionB: job.useOptionB,
           requesterUserId: job.requesterUserId,
         }),
       }),

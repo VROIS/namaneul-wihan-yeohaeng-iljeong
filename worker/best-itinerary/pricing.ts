@@ -17,14 +17,13 @@ import {
 
 type Db = PostgresJsDatabase<typeof schema>;
 
-// ── 교통비 (원본 server/services/transport/guide-pricing.ts · day-config.ts) ──
+// ── 교통비 ──
 
-/** 원본 server/services/transport/guide-pricing.ts:12 round2 */
 export function round2(num: number): number {
   return Math.round(num * 100) / 100;
 }
 
-/** 원본 server/services/transport/guide-pricing.ts:17 shouldApplyGuidePrice — 순수. */
+/** shouldApplyGuidePrice — 순수. */
 export function shouldApplyGuidePrice(
   mobilityStyle: MobilityStyle,
   travelStyle: TravelStyle,
@@ -78,7 +77,7 @@ export async function guideCostForDay(
   const [endH, endM] = (args.dayConfig.endTime || "21:00")
     .split(":")
     .map(Number);
-  // 원본 day-config.ts:64 = 최소 4시간.
+  // day-config.ts = 최소 4시간.
   const availableHours = Math.max(
     4,
     round2((endH * 60 + endM - (startH * 60 + startM)) / 60),
@@ -86,7 +85,7 @@ export async function guideCostForDay(
   const transportType =
     COMPANION_TO_TRANSPORT[args.companionType]?.transportType ?? "sedan";
   const priceConfig = await guidePriceConfig(db, transportType);
-  // 원본 guide-pricing.ts:64 calculateGuideDailyPrice.
+  // guide-pricing.ts calculateGuideDailyPrice.
   const effectiveHours = Math.max(availableHours, 4);
   const additionalHours = Math.max(0, effectiveHours - 4);
   let dailyVehiclePrice = round2(
@@ -94,11 +93,10 @@ export async function guideCostForDay(
   );
   if (args.isRegionalTravel)
     dailyVehiclePrice = round2(dailyVehiclePrice * 1.5);
-  // 원본 transport-pricing-service.ts:76 = 1인 하루치.
+  // transport-pricing-service.ts = 1인 하루치.
   return round2(dailyVehiclePrice / Math.max(1, args.companionCount));
 }
 
-/** 원본 server/services/agents/ag4-db-finalize.ts:38 addMinutes */
 export function addMinutes(time: string, minutes: number): string {
   const [h, m] = time.split(":").map(Number);
   const total = h * 60 + m + minutes;

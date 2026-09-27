@@ -30,7 +30,7 @@ import {
   type InquiryStatus,
   type ExpertProfile,
 } from "./expertApi";
-import { getUserData } from "@/lib/auth"; // 문의 전 로그인 확인(비로그인=로그인 안내)
+import { getUserData, hasSessionToken } from "@/lib/auth"; // 문의 전 로그인 확인(비로그인=로그인 안내)
 import DetailView from "./components/DetailView";
 import ProfileEditView from "./components/ProfileEditView";
 import InquiryListView from "./components/InquiryListView"; // 목록(칩+카드) 1벌 = 전문가·사용자 공용(2026-08-07 §0)
@@ -207,11 +207,7 @@ export default function ExpertSheet({
     if (!message.trim() || submitting) return;
     // ⚠️ 사장님 SSOT 2026-07-14 = 문의 전 로그인 확인 = 비로그인(또는 게스트)이면 서버 400 대신 즉시 로그인 안내(§19).
     const user = await getUserData();
-    if (
-      !user ||
-      !user.token ||
-      !user.token.startsWith("simple_auth_token_v1_")
-    ) {
+    if (!hasSessionToken(user)) {
       goLoginPrompt();
       return;
     }

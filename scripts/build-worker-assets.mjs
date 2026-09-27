@@ -82,12 +82,18 @@ const repoAssetsRel = listRel(SRC_ASSETS);
 const collisions = repoAssetsRel.filter((r) => distAssetsRel.has(r));
 
 console.log("── 충돌 검사: dist/assets/  vs  assets/ ──");
-console.log(`  dist/assets 파일 ${distAssetsRel.size}개 / assets 파일 ${repoAssetsRel.length}개 (제외규칙 적용 후)`);
+console.log(
+  `  dist/assets 파일 ${distAssetsRel.size}개 / assets 파일 ${repoAssetsRel.length}개 (제외규칙 적용 후)`,
+);
 if (collisions.length > 0) {
-  console.warn(`  ⚠ 경고: 같은 경로 파일 ${collisions.length}개 = assets/ 가 dist/assets/ 를 덮어씁니다.`);
+  console.warn(
+    `  ⚠ 경고: 같은 경로 파일 ${collisions.length}개 = assets/ 가 dist/assets/ 를 덮어씁니다.`,
+  );
   for (const c of collisions) console.warn(`     - assets/${c}`);
 } else {
-  console.log("  ✅ 충돌 0건 (dist 쪽은 내용해시 파일명, 레포 쪽은 원본 파일명이라 경로가 겹치지 않음)");
+  console.log(
+    "  ✅ 충돌 0건 (dist 쪽은 내용해시 파일명, 레포 쪽은 원본 파일명이라 경로가 겹치지 않음)",
+  );
 }
 console.log("");
 
@@ -102,7 +108,7 @@ fs.mkdirSync(outAssets, { recursive: true });
 const nAssets = copyDir(SRC_ASSETS, outAssets).length;
 console.log(`2) assets/ -> public-dist/assets/ (머지)        ${nAssets}개`);
 
-// ⚠️ 수정금지(승인필요) 2026-09-25 사장님 결정 = 관리자 화면 = worker/admin 1벌, 리플릿 폴더에서 가져오지 않음 (정본 9-25)
+// ⚠️ 수정금지(승인필요) 2026-09-25 사장님 결정 = 관리자 화면 = worker/admin 1벌 (정본 9-25)
 const outAdmin = path.join(OUT, "admin");
 fs.mkdirSync(outAdmin, { recursive: true });
 fs.copyFileSync(SRC_ADMIN, path.join(outAdmin, "index.html"));

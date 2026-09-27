@@ -33,7 +33,7 @@ export const guides = pgTable(
     latitude: decimal("latitude", { precision: 10, scale: 8 }),
     longitude: decimal("longitude", { precision: 11, scale: 8 }),
     locationName: text("location_name"),
-    // 🏙️ 2026-08-02 사장님 승인 = TRIPIS 도 도시와 잇는다(저장 시 좌표 → 최근접 도시 = server/city-match.ts).
+    // 🏙️ 2026-08-02 사장님 승인 = TRIPIS 도 도시와 잇는다(저장 시 좌표 → 최근접 도시).
     cityId: integer("city_id").references(() => cities.id),
     // 🏷️ 2026-08-02 사장님 승인 = **해설 창고 열쇠** = 그 해설이 어느 장소(place_seed_raw.id)의 것인지.
     placeId: integer("place_id"),

@@ -6,9 +6,11 @@ import { upsertPlace } from "./lib/services/place-upsert";
 import { runGmapsPost, r2PrefixOf } from "./lib/services/fill/gmaps-post";
 import { appendTick } from "./lib/services/shared/metrics-heartbeat";
 import { refreshKakaoJwks } from "./routes-social-auth";
+import { cleanupDeletedAccounts } from "./lib/services/account-cleanup";
 
 // wrangler.jsonc · wrangler.build.jsonc 의 triggers.crons 와 같은 글자
 const KAKAO_JWKS_CRON = "0 3 * * *";
+const ACCOUNT_CLEANUP_CRON = "30 4 * * *";
 
 // reportKey = 시드발굴 v3 ③ 산출표(R2 키) = 있으면 먼저 ④(신규 입력)를 돌리고 이어서 후처리
 export type GmapsPostMessage = {
@@ -37,7 +39,11 @@ export const withGmapsQueue = <T extends object>(httpHandler: T) => ({
   ...httpHandler,
   queue: consumeGmapsPost,
   scheduled: (controller: ScheduledController) =>
-    controller.cron === KAKAO_JWKS_CRON ? kakaoJwksTick() : metricsTick(),
+    controller.cron === KAKAO_JWKS_CRON
+      ? kakaoJwksTick()
+      : controller.cron === ACCOUNT_CLEANUP_CRON
+        ? accountCleanupTick()
+        : metricsTick(),
 });
 
 // ⚠️ 수정금지(승인필요) 2026-09-25 사장님 결정 = 관제탑이 매일 카카오 공개 열쇠를 금고에 갱신 = 로그인 중에는 카카오를 부르지 않는다, 실패하면 금고의 기존 열쇠 유지 (정본 9-25)
@@ -50,7 +56,19 @@ async function kakaoJwksTick(): Promise<void> {
   }
 }
 
-// ⚠️ 수정금지(승인필요) 2026-09-15 사장님 결정 = 관제탑 심장박동 = 운영(server/index.ts:322 startMetricsHeartbeat)과 같은 일을 Worker 에서는 Cron 으로 한다 (정본 B4)
+// ⚠️ 수정금지(승인필요) 2026-09-27 사장님 결정 = 탈퇴 6개월 정리 = 관제탑이 매일 04:30(UTC) 정리 함수 1벌을 부른다(관리자 버튼과 같은 함수) (정본 9-27)
+async function accountCleanupTick(): Promise<void> {
+  try {
+    const r = await withEngineDb(() => cleanupDeletedAccounts());
+    console.log(
+      `[정리] 탈퇴 계정 정리 = 대상 ${r.대상계정} / 완료 ${r.정리완료} / 보류 ${r.보류} (사진 삭제 ${r.삭제한사진}장, 실패 ${r.실패한사진}장)`,
+    );
+  } catch (e) {
+    console.warn("[정리] 탈퇴 계정 정리 실패:", (e as Error).message);
+  }
+}
+
+// ⚠️ 수정금지(승인필요) 2026-09-15 사장님 결정 = 관제탑 심장박동 = Worker 에서 Cron 으로 한다 (정본 B4)
 export async function metricsTick(): Promise<void> {
   try {
     await withEngineDb(async () => {

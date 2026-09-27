@@ -4,7 +4,7 @@ import Stripe from "stripe";
 
 const args = process.argv.slice(2);
 const base =
-  args.find((a) => a.startsWith("--to="))?.slice(5) || "http://localhost:5000";
+  args.find((a) => a.startsWith("--to="))?.slice(5) || "http://localhost:8787";
 const ids = args.filter((a) => a.startsWith("evt_"));
 const findMissing = args.includes("--missing");
 

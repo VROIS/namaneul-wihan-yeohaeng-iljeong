@@ -1,19 +1,19 @@
 #!/usr/bin/env node
-// ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = §16 재발명 가드 = 도구 카탈로그 = worker/lib/services/fill(워커 정본, server/ 는 Replit 전용). 진입점 = --catalog(책임 1줄 목록) · --staged(pre-commit) · --file(Edit 직후). 위반 = 아래 CAPABILITIES 트리거를 owner 아닌 곳에서 새로 짬 (정본 §16)
+// ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = §16 재발명 가드 = 도구 카탈로그 = worker/lib/services/fill(워커 정본). 진입점 = --catalog(책임 1줄 목록) · --staged(pre-commit) · --file(Edit 직후). 위반 = 아래 CAPABILITIES 트리거를 owner 아닌 곳에서 새로 짬 (정본 §16)
 import { execSync } from "node:child_process";
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join, basename } from "node:path";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
-// ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 카탈로그가 읽는 자리 = 워커 정본(worker/lib/services/fill). server/ 는 Replit 앱 전용이라 여기를 가리키면 후임에게 옛 경로를 정본으로 안내한다.
+// ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 카탈로그가 읽는 자리 = 워커 정본(worker/lib/services/fill).
 const FILL_DIR = join(ROOT, "worker", "lib", "services", "fill");
 
 // ── 능력 카탈로그 = "이 결손이면 이 도구" (= 재발명 트리거) ──
 // owner = 유일 정본 파일(들). triggers = 이 능력을 새로 짜려 할 때 diff 에 나타나는 신호(정규식).
 // 새 도구 추가 시 여기 1줄 등재 = 카탈로그 = 후임 AI 가 --catalog 로 즉시 봄.
 const CAPABILITIES = [
-  // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 도구 정본 = worker/lib 판(운영 server/ 는 Replit 앱 전용, 워커·필시티는 안 봄) · 창고 채움은 4단계 1벌(제미니 힌트→TS=PID 확정→입힘→PID 페이지 1회 방문=사진·대조·최신화) = 여기 owners 가 그 전부. 옛 도구 32개 삭제(§19). 도구가 바뀌면 이 표를 그 턴에 다시 쓴다.
+  // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 도구 정본 = worker/lib 판 · 창고 채움은 4단계 1벌(제미니 힌트→TS=PID 확정→입힘→PID 페이지 1회 방문=사진·대조·최신화) = 여기 owners 가 그 전부. 옛 도구 32개 삭제(§19). 도구가 바뀌면 이 표를 그 턴에 다시 쓴다.
   {
     id: "image-fill",
     ko: "이미지 결손 채우기(PID 페이지 무료 우선 → PM 은 결손행만)",
@@ -130,7 +130,7 @@ function scanAddedLines(file, addedLines) {
 }
 
 const SKIP =
-  /(node_modules|server_dist|dist[\/\\]|_archive|\.json$|guard-no-reinvention\.mjs$)/;
+  /(node_modules|dist[\/\\]|_archive|\.json$|guard-no-reinvention\.mjs$)/;
 const SCAN_EXT = /\.(ts|tsx|js|mjs|cjs)$/;
 
 function scanStaged() {

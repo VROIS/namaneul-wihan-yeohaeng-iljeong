@@ -22,7 +22,8 @@ if (has("--help")) {
   node scripts/worker-logs.mjs                     최근 30분 전부
   node scripts/worker-logs.mjs --min 120           최근 2시간
   node scripts/worker-logs.mjs --find 로그인        그 글자가 든 줄만
-  node scripts/worker-logs.mjs --path /api/auth    그 주소 요청만
+  node scripts/worker-logs.mjs --path /api/auth    그 주소 요청만(클라우드플레어에서 먼저 거름)
+  node scripts/worker-logs.mjs --from "09-25 14:30" --to "09-25 15:00"   그 기간(세계 표준시, --to 없으면 지금까지)
   node scripts/worker-logs.mjs --errors            오류(4xx·5xx·console.error)만
 
 열쇠 = .env 의 CLOUDFLARE_API_TOKEN (배포에 쓰는 것과 같은 것).
@@ -47,21 +48,59 @@ const FIND = val("--find", "");
 const PATH_F = val("--path", "").replace(/^.*?\/Git(?=\/)/, "");
 const ERRORS_ONLY = has("--errors");
 
+// ⚠️ 수정금지(승인필요) 2026-09-27 사장님 결정 = 로그 도구 보강 = 날짜 지정(--from·--to, 세계 표준시) + 주소 조건은 클라우드플레어에서 먼저 거른다(최근 500건에 묻히지 않게) (정본 §24)
+const FROM = val("--from", "");
+const TO = val("--to", "");
+if (TO && !FROM) {
+  console.error(
+    '⛔ --to 는 --from 과 함께 쓴다(예: --from "09-25 10:00" --to "09-25 12:00", 세계 표준시)',
+  );
+  process.exit(1);
+}
+function utc(s) {
+  const m = s.match(/^([0-9]{2})-([0-9]{2}) ([0-9]{2}):([0-9]{2})$/);
+  if (!m) {
+    console.error(`⛔ 시각 형식 = "MM-DD HH:MM"(세계 표준시): ${s}`);
+    process.exit(1);
+  }
+  return Date.UTC(new Date().getUTCFullYear(), +m[1] - 1, +m[2], +m[3], +m[4]);
+}
+
 const now = Date.now();
+const from = FROM ? utc(FROM) : now - MIN * 60 * 1000;
+const to = TO ? utc(TO) : now;
 const res = await fetch(
   `https://api.cloudflare.com/client/v4/accounts/${ACCOUNT_ID}/workers/observability/telemetry/query`,
   {
     method: "POST",
-    headers: { Authorization: "Bearer " + token(), "content-type": "application/json" },
+    headers: {
+      Authorization: "Bearer " + token(),
+      "content-type": "application/json",
+    },
     body: JSON.stringify({
       queryId: "worker-logs",
       limit: 500,
-      timeframe: { from: now - MIN * 60 * 1000, to: now },
+      timeframe: { from, to },
       view: "events",
       parameters: {
         datasets: ["cloudflare-workers"],
         filters: [
-          { key: "$workers.scriptName", operation: "eq", value: SCRIPT_NAME, type: "string" },
+          {
+            key: "$workers.scriptName",
+            operation: "eq",
+            value: SCRIPT_NAME,
+            type: "string",
+          },
+          ...(PATH_F
+            ? [
+                {
+                  key: "$workers.event.request.url",
+                  operation: "includes",
+                  value: PATH_F,
+                  type: "string",
+                },
+              ]
+            : []),
         ],
       },
     }),
@@ -70,7 +109,10 @@ const res = await fetch(
 
 const json = await res.json();
 if (!json.success) {
-  console.error("⛔ 조회 실패:", JSON.stringify(json.errors || json).slice(0, 300));
+  console.error(
+    "⛔ 조회 실패:",
+    JSON.stringify(json.errors || json).slice(0, 300),
+  );
   process.exit(1);
 }
 
@@ -82,19 +124,28 @@ for (const e of events) {
   const status = e.source?.$workers?.event?.response?.status;
   const level = e.source?.level || "";
   const ms = Number(e.timestamp || 0);
-  const at = new Date(ms).toISOString().slice(11, 19);
-  const text = msg || (url ? `${url.replace(`https://${SCRIPT_NAME}`, "")}${status ? `  HTTP ${status}` : ""}` : "");
+  const at = new Date(ms).toISOString().slice(5, 19).replace("T", " ");
+  const text =
+    msg ||
+    (url
+      ? `${url.replace(`https://${SCRIPT_NAME}`, "")}${status ? `  HTTP ${status}` : ""}`
+      : "");
   if (!text) continue;
   if (FIND && !text.includes(FIND)) continue;
-  if (PATH_F && !url.includes(PATH_F) && !text.includes(PATH_F)) continue;
-  if (ERRORS_ONLY && !(level === "error" || (status && status >= 400))) continue;
+  if (ERRORS_ONLY && !(level === "error" || (status && status >= 400)))
+    continue;
   rows.push({ ms, at, level, text });
 }
 
 rows.sort((a, b) => a.ms - b.ms);
-console.log(`=== 최근 ${MIN}분 = 전체 ${events.length}건 / 조건에 맞는 ${rows.length}건 (UTC 시각) ===\n`);
+console.log(
+  `=== ${FROM ? `${FROM} ~ ${TO || "지금"}` : `최근 ${MIN}분`} = 전체 ${events.length}건 / 조건에 맞는 ${rows.length}건 (UTC 시각) ===\n`,
+);
 if (!rows.length) {
   console.log("  (없음)");
 } else {
-  for (const r of rows) console.log(`[${r.at}] ${r.level === "error" ? "🔴" : "  "} ${r.text.slice(0, 500)}`);
+  for (const r of rows)
+    console.log(
+      `[${r.at}] ${r.level === "error" ? "🔴" : "  "} ${r.text.slice(0, 500)}`,
+    );
 }

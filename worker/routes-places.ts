@@ -1,6 +1,6 @@
 // Cloudflare Worker 이관 = 도시·장소 라우트 4벌 (2026-09-06)
-// 원본 = server/city-place-routes.ts. 응답·상태코드·에러문구는 원본과 동일하게 옮겼다.
-// 조건·정렬은 원본이 쓰는 server/services/shared/** 를 그대로 import 한다(§16 재발명 금지).
+// 응답·상태코드·에러문구는 원본과 동일하게 옮겼다.
+// 조건·정렬 모듈은 그대로 import 한다(§16 재발명 금지).
 import type { Express, Request, Response } from "express";
 import type { drizzle } from "drizzle-orm/postgres-js";
 import { eq, sql, desc, and, or, inArray } from "drizzle-orm";
@@ -19,7 +19,7 @@ const { cities, placeSeedRaw, itineraries, guides, savedVideos } = schema;
 type Db = ReturnType<typeof drizzle<typeof schema>>;
 type OpenDb = () => { db: Db; close: () => void };
 
-// 원본 storage.getPlace(server/storage.ts:205) = PSR 행 + name/type/photoUrl 별칭 3개.
+// 원본 storage.getPlace = PSR 행 + name/type/photoUrl 별칭 3개.
 type PsrRow = typeof placeSeedRaw.$inferSelect;
 function toPlace(psr: PsrRow) {
   return {
@@ -38,7 +38,6 @@ type HighlightName = {
 
 export function registerPlaceRoutes(app: Express, openDb: OpenDb): void {
   // ⚠️ 수정금지(승인필요) 🏙️ B2 도시 카드 데이터 = 카드는 **항상** 뜬다(2026-08-02 사장님 지시로 갱신 §19).
-  // 원본 server/city-place-routes.ts:62
   // 구체 경로(/representative)를 /api/cities/:id 보다 먼저 등록한다.
   app.get(
     "/api/cities/:id/representative",
@@ -253,7 +252,6 @@ export function registerPlaceRoutes(app: Express, openDb: OpenDb): void {
     },
   );
 
-  // 원본 server/city-place-routes.ts:271
   app.post(
     "/api/admin/cities/:id/content-override",
     async (req: Request, res: Response) => {
@@ -298,7 +296,6 @@ export function registerPlaceRoutes(app: Express, openDb: OpenDb): void {
     },
   );
 
-  // 원본 server/city-place-routes.ts:323 (storage.createCity = server/storage.ts:200)
   app.post("/api/cities", async (req: Request, res: Response) => {
     const { db, close } = openDb();
     try {
@@ -312,7 +309,6 @@ export function registerPlaceRoutes(app: Express, openDb: OpenDb): void {
     }
   });
 
-  // 원본 server/city-place-routes.ts:333 (storage.getPlace = server/storage.ts:205)
   app.get("/api/places/:id", async (req: Request, res: Response, next) => {
     const id = parseInt(String(req.params.id));
     if (Number.isNaN(id)) return next();

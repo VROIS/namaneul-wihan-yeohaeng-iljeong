@@ -24,7 +24,6 @@ import { placeSeedRaw } from "../shared/schema";
 import { bestRankLangCount } from "./lib/services/shared/best-rank";
 
 // ⚠️ 수정금지(승인필요) 2026-08-31 사장님 결정 = 입장료 기반 슬롯시간 단일 진입점 (정본 B4)
-//   원본 server/services/shared/slot-duration.ts:43 그대로. 그 파일은 최상단에서 db 를 부르므로(Cloudflare 금지) 이 순수 함수만 옮긴다.
 const SLOT_STEP_MIN = 30;
 /** 장소 1곳 슬롯 소요분 = 유료는 입장료÷시간당요금(30분 반올림), 그 외는 밀도 기본값. */
 function slotMinutesFor(
@@ -158,7 +157,7 @@ export async function runPipelineBest(
     selectBest(db, cityId, cityCoords, false),
     selectBest(db, cityId, cityCoords, true),
   ]);
-  // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 원본 pipeline-best.ts:159 = PID공유 폴백 목록(사진)
+  // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = pipeline-best.ts 와 같은 PID공유 폴백 목록(사진)
   const imagePidMap = await loadImagePidMap([
     cityId,
     ...sightRows.map((r) => r.cityId),

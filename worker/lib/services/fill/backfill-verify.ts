@@ -568,8 +568,7 @@ export async function mirrorWikiVenueImages(opts: {
           async () => {
             const resp = await fetch(u, {
               headers: {
-                "User-Agent":
-                  "TripisImageMirror/1.0 (https://my-guide.replit.app)",
+                "User-Agent": "TripisImageMirror/1.0 (https://tripis.app)",
               },
               signal: AbortSignal.timeout(30000),
             });

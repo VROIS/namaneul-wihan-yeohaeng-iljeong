@@ -45,14 +45,15 @@ export const UNIT_COST_LEDGER: Record<CallProvider, UnitCostLedgerEntry> = {
     source: "https://ai.google.dev/gemini-api/docs/pricing",
     verifiedAt: "2026-08-25",
   },
+  // ⚠️ 수정금지(승인필요) 2026-09-26 사장님 결정 = 옴니 단가 = 360p 실측 토큰 · 콘솔 환산(1달러 ≈ €0.858) · 세금 20% (정본 §)
   omni: {
-    eur: 0.121,
-    publicPriceUsd: 0.1,
-    surchargePct: 21,
-    unit: "초당(gemini-omni-flash-preview)",
+    eur: 0.0383,
+    publicPriceUsd: 0.03716,
+    surchargePct: 3,
+    unit: "초당(360p, gemini-omni-1.1-flash, 입력·글 토큰 포함)",
     source: "https://ai.google.dev/gemini-api/docs/pricing",
-    verifiedAt: "2026-08-25",
-    note: "구글이 초당단가를 직접 안 주고 출력토큰단가($17.50/1M)로만 표기 = 구글 자체 환산치(720p 기준 초당 5,792토큰)를 그대로 씀. 장면이 복잡하면 토큰이 더 들어 실제 단가가 더 높을 수 있음.",
+    verifiedAt: "2026-09-27",
+    note: "360p 10초 조각 실측 토큰(영상 19,310·그림 입력 약 8천·글 입력 약 800·글 출력 생각 포함 약 2,270) = $0.3716 = 초당 $0.03716. 콘솔 환산 €0.858 × 세금 1.2 = 공개단가의 약 1.03배. 2026-09-27 콘솔 청구(9-26 옴니 13건)와 토큰 수 일치 확인.",
   },
   nano: {
     eur: 0.0472,

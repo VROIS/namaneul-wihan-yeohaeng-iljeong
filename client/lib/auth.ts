@@ -33,6 +33,13 @@ export async function getUserData(): Promise<UserData | null> {
   return null;
 }
 
+/** 서버가 받는 로그인 토큰을 가졌나(게스트·옛 형식 제외) = 토큰 모양 확인 1벌. */
+export function hasSessionToken(
+  user: UserData | null,
+): user is UserData & { token: string } {
+  return !!user?.token && user.token.startsWith("simple_auth_token_v1_");
+}
+
 // ⚠️ 수정금지(승인필요) — 사장님 SSOT 2026-07-27 = **저장소에 인증을 쓰면 자동으로 알린다**(§19·§22 "글 아닌 기계").
 const authListeners = new Set<() => void>();
 export function subscribeAuthChanged(fn: () => void): () => void {

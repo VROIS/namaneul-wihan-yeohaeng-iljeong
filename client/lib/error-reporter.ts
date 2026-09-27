@@ -1,8 +1,7 @@
-// ⚠️ 수정금지(승인필요) — 앱 에러 원격 리포터
+// ⚠️ 수정금지(승인필요) 2026-09-27 사장님 결정 = 앱 에러 원격 리포터 = 서버 주소 1벌(getApiUrl)로 보낸다 (정본 9-27)
+import { getApiUrl } from "./query-client";
 
-const ERROR_ENDPOINT = __DEV__
-  ? "http://192.168.1.23:8082/api/app-errors"
-  : "/api/app-errors";
+const ERROR_ENDPOINT = "/api/app-errors";
 
 interface AppError {
   message: string;
@@ -50,7 +49,7 @@ async function flushErrors() {
   errorQueue.length = 0;
 
   try {
-    await fetch(ERROR_ENDPOINT, {
+    await fetch(new URL(ERROR_ENDPOINT, getApiUrl()).toString(), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ errors: batch }),

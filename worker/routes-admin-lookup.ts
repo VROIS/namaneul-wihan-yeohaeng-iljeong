@@ -1,4 +1,4 @@
-// ⚠️ 수정금지(승인필요) 2026-09-25 사장님 결정 = 관리자 "번호로 찾아 열기" = 트리피스 1벌(원본 server/admin/lookup-routes.ts 그대로, DB 연결만 openDb) (정본 9-25)
+// ⚠️ 수정금지(승인필요) 2026-09-25 사장님 결정 = 관리자 "번호로 찾아 열기" = 트리피스 1벌(DB 연결 = openDb) (정본 9-25)
 import type { Express } from "express";
 import type { drizzle } from "drizzle-orm/postgres-js";
 import { eq } from "drizzle-orm";

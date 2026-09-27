@@ -12,11 +12,9 @@ export interface GhibliCharacter {
 
 export interface VehicleConfig {
   type: "sedan" | "van" | "sprinter_bus";
-  name: string; // "고급 승용차", "8인승 밴", "벤츠 스프린터급 18인승 버스"
-  description: string;
-  ghibliVehiclePrompt: string;
 }
 
+// ⚠️ 수정금지(승인필요) 2026-09-25 사장님 결정 = 캐릭터 설명 = 배경 뺀 실제 그림과 일치 · 파리 문구 삭제 (정본 §)
 export const GHIBLI_CHARACTER_ROSTER_18: Record<string, GhibliCharacter> = {
   m_20s: {
     id: "m_20s",
@@ -25,8 +23,7 @@ export const GHIBLI_CHARACTER_ROSTER_18: Record<string, GhibliCharacter> = {
     gender: "male",
     role: "traveler",
     assetPath: "assets/characters/m_20s.jpg",
-    ghibliStylePrompt:
-      "20s stylish Korean male traveler with navy jacket, Studio Ghibli anime style, warm lighting",
+    ghibliStylePrompt: "Korean man in his 20s, short black hair, navy hoodie",
   },
   f_20s: {
     id: "f_20s",
@@ -36,7 +33,7 @@ export const GHIBLI_CHARACTER_ROSTER_18: Record<string, GhibliCharacter> = {
     role: "traveler",
     assetPath: "assets/characters/f_20s.jpg",
     ghibliStylePrompt:
-      "20s elegant Korean female traveler with beret and beige coat, Studio Ghibli anime style",
+      "Korean woman in her 20s, long wavy dark hair, navy beret with a daisy pin, pink-and-cream striped cardigan, cream crossbody bag",
   },
 
   m_30s: {
@@ -47,7 +44,7 @@ export const GHIBLI_CHARACTER_ROSTER_18: Record<string, GhibliCharacter> = {
     role: "traveler",
     assetPath: "assets/characters/m_30s.jpg",
     ghibliStylePrompt:
-      "30s handsome urban Korean male traveler recording travel vlogs with a sleek modern smartphone, Studio Ghibli anime style",
+      "Korean man in his 30s, short black hair, olive green jacket over a navy shirt, backpack, lanyard badge",
   },
   f_30s: {
     id: "f_30s",
@@ -57,7 +54,7 @@ export const GHIBLI_CHARACTER_ROSTER_18: Record<string, GhibliCharacter> = {
     role: "traveler",
     assetPath: "assets/characters/f_30s.jpg",
     ghibliStylePrompt:
-      "30s sophisticated Korean female in stylish trench coat, Studio Ghibli anime style",
+      "Korean woman in her 30s, short brown bob, olive green coat, cream scarf, rust sweater, camera around her neck",
   },
 
   m_40s: {
@@ -68,7 +65,7 @@ export const GHIBLI_CHARACTER_ROSTER_18: Record<string, GhibliCharacter> = {
     role: "traveler",
     assetPath: "assets/characters/m_40s.jpg",
     ghibliStylePrompt:
-      "40s refined Korean male traveler in casual blazer, Studio Ghibli anime style",
+      "Korean man in his 40s, short dark hair, navy polo shirt",
   },
   f_40s: {
     id: "f_40s",
@@ -78,7 +75,7 @@ export const GHIBLI_CHARACTER_ROSTER_18: Record<string, GhibliCharacter> = {
     role: "traveler",
     assetPath: "assets/characters/f_40s.jpg",
     ghibliStylePrompt:
-      "40s graceful Korean female traveler with silk scarf, Studio Ghibli anime style",
+      "Korean woman in her 40s, dark hair in a low bun, sage green cardigan, floral silk scarf",
   },
 
   m_50s: {
@@ -89,7 +86,7 @@ export const GHIBLI_CHARACTER_ROSTER_18: Record<string, GhibliCharacter> = {
     role: "traveler",
     assetPath: "assets/characters/m_50s.jpg",
     ghibliStylePrompt:
-      "50s distinguished Korean male traveler, Studio Ghibli anime style",
+      "Korean man in his 50s, short grey-black hair, round glasses, dark green knit cardigan over a plaid scarf",
   },
   f_50s: {
     id: "f_50s",
@@ -99,7 +96,7 @@ export const GHIBLI_CHARACTER_ROSTER_18: Record<string, GhibliCharacter> = {
     role: "traveler",
     assetPath: "assets/characters/f_50s.jpg",
     ghibliStylePrompt:
-      "50s warm elegant Korean female traveler, Studio Ghibli anime style",
+      "Korean woman in her 50s, straw sun hat, floral blue scarf, cream sweater",
   },
 
   m_60s: {
@@ -110,7 +107,7 @@ export const GHIBLI_CHARACTER_ROSTER_18: Record<string, GhibliCharacter> = {
     role: "traveler",
     assetPath: "assets/characters/m_60s.jpg",
     ghibliStylePrompt:
-      "60s gentle Korean grandfather traveler with hat, Studio Ghibli style",
+      "Korean man in his 60s, white hair, round glasses, dark knit vest over a cream cardigan",
   },
   f_60s: {
     id: "f_60s",
@@ -120,7 +117,7 @@ export const GHIBLI_CHARACTER_ROSTER_18: Record<string, GhibliCharacter> = {
     role: "traveler",
     assetPath: "assets/characters/f_60s.jpg",
     ghibliStylePrompt:
-      "60s kind Korean grandmother traveler with cardigan, Studio Ghibli style",
+      "Korean woman in her 60s, white hair in a bun, dark patterned shawl over a rust-orange top",
   },
 
   m_kids: {
@@ -131,7 +128,7 @@ export const GHIBLI_CHARACTER_ROSTER_18: Record<string, GhibliCharacter> = {
     role: "traveler",
     assetPath: "assets/characters/m_10s_kid.jpg",
     ghibliStylePrompt:
-      "7-year-old cute Korean boy with yellow backpack, Studio Ghibli anime style",
+      "Korean boy about 8, yellow cap, grey hooded jacket over a navy striped shirt, navy backpack with yellow straps",
   },
   f_kids: {
     id: "f_kids",
@@ -141,7 +138,7 @@ export const GHIBLI_CHARACTER_ROSTER_18: Record<string, GhibliCharacter> = {
     role: "traveler",
     assetPath: "assets/characters/f_10s_kid.jpg",
     ghibliStylePrompt:
-      "6-year-old adorable Korean girl with hair ribbons, Studio Ghibli anime style",
+      "Korean girl about 7, long dark pigtails with pink ribbons, cream knit cardigan over a striped shirt",
   },
 
   m_teen: {
@@ -152,7 +149,7 @@ export const GHIBLI_CHARACTER_ROSTER_18: Record<string, GhibliCharacter> = {
     role: "traveler",
     assetPath: "assets/characters/m_10s_teen.jpg",
     ghibliStylePrompt:
-      "Teenage Korean boy with headphones, Studio Ghibli anime style",
+      "Korean teenage boy, messy black hair, navy hoodie, headphones around his neck",
   },
   f_teen: {
     id: "f_teen",
@@ -162,7 +159,7 @@ export const GHIBLI_CHARACTER_ROSTER_18: Record<string, GhibliCharacter> = {
     role: "traveler",
     assetPath: "assets/characters/f_10s_teen.jpg",
     ghibliStylePrompt:
-      "Teenage Korean girl with smartphone, Studio Ghibli anime style",
+      "Korean teenage girl, short wavy brown hair with a star clip, pastel striped sweater, navy backpack",
   },
 
   m_20s_sub: {
@@ -172,7 +169,7 @@ export const GHIBLI_CHARACTER_ROSTER_18: Record<string, GhibliCharacter> = {
     gender: "male",
     role: "traveler",
     assetPath: "assets/characters/m_couple_20s.jpg",
-    ghibliStylePrompt: "20s cheerful Korean male traveler, Studio Ghibli style",
+    ghibliStylePrompt: "Korean man in his 20s, wavy brown hair, white shirt",
   },
   f_20s_sub: {
     id: "f_20s_sub",
@@ -182,61 +179,44 @@ export const GHIBLI_CHARACTER_ROSTER_18: Record<string, GhibliCharacter> = {
     role: "traveler",
     assetPath: "assets/characters/f_couple_20s.jpg",
     ghibliStylePrompt:
-      "20s artistic Korean female traveler, Studio Ghibli style",
+      "Korean woman in her 20s, long wavy brown hair with a small flower clip, cream floral blouse",
   },
 
   guide_korean_m_40s: {
     id: "guide_korean_m_40s",
-    name: "민우 (40대 파리 현지 거주 한국인 드라이빙 가이드)",
+    name: "민우 (40대 현지 거주 한국인 드라이빙 가이드)",
     ageGroup: "guide",
     gender: "male",
     role: "guide",
     assetPath: "assets/characters/guide_korean_m_40s.jpg",
     ghibliStylePrompt:
-      "40s refined Paris-resident Korean male driving guide in navy jacket, Studio Ghibli anime style, warm welcoming smile",
+      "Korean driving guide in his 40s, short black hair, round glasses, navy blazer over a light blue shirt (his reference shows him seated at the wheel; in scenes he stands on foot with his hands free)",
   },
   guide_korean_f_40s: {
     id: "guide_korean_f_40s",
-    name: "지은 (40대 파리 현지 거주 한국인 VIP 가이드)",
+    name: "지은 (40대 현지 거주 한국인 VIP 가이드)",
     ageGroup: "guide",
     gender: "female",
     role: "guide",
     assetPath: "assets/characters/guide_korean_f_40s.jpg",
     ghibliStylePrompt:
-      "40s elegant Paris-resident Korean female guide with silk scarf, Studio Ghibli anime style, professional friendly demeanor",
+      "Korean guide in her 40s, shoulder-length wavy dark hair, beige trench coat, patterned silk scarf",
   },
 };
 
+// ⚠️ 수정금지(승인필요) 2026-09-27 사장님 결정 = 차량 = 종류(type)만 = 안 쓰는 이름·설명·지시문 칸 삭제 (정본 §)
 export function getVehicleConfigByCompanionCount(
   companionCount: number = 2,
 ): VehicleConfig {
   if (companionCount <= 4) {
-    return {
-      type: "sedan",
-      name: "고급 승용차 (Luxury Sedan)",
-      description: "1~4인 프라이빗 전용 벤츠 S/E 클래스 고급 승용차",
-      ghibliVehiclePrompt:
-        "luxury dark Mercedes sedan driving through Paris streets, Studio Ghibli anime style",
-    };
+    return { type: "sedan" };
   }
 
   if (companionCount <= 8) {
-    return {
-      type: "van",
-      name: "8인승 프리미엄 밴 (8-Seater Van)",
-      description: "5~8인 대가족/친구들 전용 8인승 벤츠 V클래스 프리미엄 밴",
-      ghibliVehiclePrompt:
-        "premium 8-seater dark Mercedes V-class van in Paris, Studio Ghibli anime style",
-    };
+    return { type: "van" };
   }
 
-  return {
-    type: "sprinter_bus",
-    name: "벤츠 스프린터급 18인승 버스 (Mercedes Sprinter 18-Seater Bus)",
-    description: "9인 이상 대가족/단체 전용 벤츠 스프린터급 18인승 리무진 버스",
-    ghibliVehiclePrompt:
-      "luxurious dark Mercedes Sprinter 18-seater minibus cruising along Seine River, Studio Ghibli anime style",
-  };
+  return { type: "sprinter_bus" };
 }
 
 function characterByAge(
@@ -325,7 +305,7 @@ export function selectGhibliCast(opts: {
   }
 
   return {
-    travelers: travelers.slice(0, 4), // 이미지 첨부 상한(+가이드+차량 = 6장). 초과 인원 = 스토리보드 텍스트로 전달
+    travelers: travelers.slice(0, 4),
     totalTravelerCount: count,
     koreanGuide: GHIBLI_CHARACTER_ROSTER_18.guide_korean_m_40s,
     vehicle: getVehicleConfigByCompanionCount(count),

@@ -533,7 +533,7 @@ export async function saveNewPlacesToDB(
   }
 
   // 🧠 2026-07-06 사장님 SSOT = TS raw 06형태 모음 1파일 = 도시id 폴더 로컬+Storage 2곳(§18).
-  //   ⚠️ 2026-07-06 근본수정 = 옛 fire-and-forget(void..catch) = 배포서버(Replit)서 응답 후 PUT 완료전 잘림 = TS raw 미저장(비용증발 §18) 근본.
+  //   ⚠️ 2026-07-06 근본수정 = 옛 fire-and-forget(void..catch) = 배포서버서 응답 후 PUT 완료전 잘림 = TS raw 미저장(비용증발 §18) 근본.
   //     → await 로 전환(§18 자산보장). 이 함수는 상위(pipeline-v3)서 이미 await 호출 = FE 노출은 TS fetch 완료로 이미 보장 = raw 저장(수백ms)은 그 뒤 미미.
   if (tsResults.length) {
     await saveCollectedRaw({

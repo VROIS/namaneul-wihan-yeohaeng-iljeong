@@ -1,21 +1,18 @@
-// ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = 응답 번역 = 원본 shared/place-translation.ts:75
+// ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = 응답 번역
 //   1,777줄 한 덩어리에서 그대로 잘라낸 것(§0) = 계산·규칙 한 글자도 안 바꿈.
 
-import type { Express, Request, Response } from "express";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import { and, eq, inArray } from "drizzle-orm";
 import * as schema from "../../shared/schema";
+import { LANGS } from "../lib/services/shared/language-instruction";
 
 const { placeTranslations } = schema;
 
 type Db = PostgresJsDatabase<typeof schema>;
 
-// ── 응답 번역 (원본 server/services/shared/place-translation.ts:75) ──────────
+// ── 응답 번역 ──────────
 
-/** 원본 server/services/shared/language-instruction.ts:? LANGS. */
-export const LANGS = ["ko", "en", "ja", "zh", "fr", "es", "de"] as const;
-
-/** 원본 place-translation.ts:53 readCachedPlaceTranslations = 캐시 읽기만(외부호출 0). */
+/** readCachedPlaceTranslations = 캐시 읽기만(외부호출 0). */
 export async function readCachedPlaceTranslations(
   db: Db,
   ids: number[],
@@ -45,7 +42,7 @@ export async function readCachedPlaceTranslations(
   return result;
 }
 
-/** 원본 place-translation.ts:75 applyItineraryTranslations = 제미니 호출 없음(사장님 2026-08-27 = 끔). */
+/** applyItineraryTranslations = 제미니 호출 없음(사장님 2026-08-27 = 끔). */
 export async function applyItineraryTranslations<T extends Record<string, any>>(
   db: Db,
   itinerary: T,

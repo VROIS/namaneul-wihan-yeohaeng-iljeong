@@ -1,4 +1,4 @@
-// ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = 여정 완성 = 원본 agents/ag4-db-finalize.ts:59
+// ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = 여정 완성 = agents/ag4-db-finalize.ts
 //   1,777줄 한 덩어리에서 그대로 잘라낸 것(§0) = 계산·규칙 한 글자도 안 바꿈.
 
 import type { Express, Request, Response } from "express";
@@ -37,19 +37,19 @@ import { bestRankOrderSql } from "../lib/services/shared/best-rank";
 import { type CompanionType } from "../lib/services/transport/constants";
 import { buildRouteLocal } from "../lib/services/route/route-local";
 
-const { cities, placeSeedRaw } = schema;
-
-type Db = PostgresJsDatabase<typeof schema>;
-
 import {
   loadImagePidMap,
   pickPlaceImage,
 } from "../lib/services/shared/place-image";
 import { addMinutes, guideCostForDay, shouldApplyGuidePrice } from "./pricing";
 
-// ── AG4 = 완성 (원본 server/services/agents/ag4-db-finalize.ts:59) ───────────
+const { cities, placeSeedRaw } = schema;
 
-/** 원본 server/services/exchange-rate.ts:190 getEurToKrwRate — DB 읽기만(외부호출 없음). */
+type Db = PostgresJsDatabase<typeof schema>;
+
+// ── AG4 = 완성 ───────────
+
+/** getEurToKrwRate — DB 읽기만(외부호출 없음). */
 export async function getEurToKrwRate(db: Db): Promise<number> {
   try {
     const [rate] = await db
@@ -69,7 +69,7 @@ export async function getEurToKrwRate(db: Db): Promise<number> {
       (e as Error)?.message,
     );
   }
-  return 1500; // 원본 :192 기본값
+  return 1500; // 기본값
 }
 
 /** 그 도시 유료 입장지 평균 ÷ 2 = 시간당요금(EUR). 표본 0 이면 null. */
@@ -97,7 +97,7 @@ export async function cityHourlyRate(
   return avg / HOURS_PER_AVERAGE_PLACE;
 }
 
-/** 원본 server/services/shared/meal-budget-tiers.ts:13 cityMealTiers (같은 이유로 질의빌더). */
+/** cityMealTiers (같은 이유로 질의빌더). */
 export async function cityMealTiers(
   db: Db,
   cityId: number,
@@ -141,7 +141,6 @@ export interface AG4DbInput {
   bestMode?: boolean;
 }
 
-/** 원본 server/services/agents/ag4-db-finalize.ts:59 finalizeDbOnlyItinerary. */
 export async function finalizeDbOnlyItinerary(
   db: Db,
   input: AG4DbInput,
@@ -161,12 +160,12 @@ export async function finalizeDbOnlyItinerary(
 
   const eurToKrw = await getEurToKrwRate(db);
 
-  // 원본 :78 식당풀 = 손님상 가능한 전체(가격대 쿼터 없음, 정본 B4).
+  // 식당풀 = 손님상 가능한 전체(가격대 쿼터 없음, 정본 B4).
   //   원본은 생 SQL 이지만 .rows 를 읽으므로(헤더 ④) 같은 조건을 질의빌더로 세운다.
   const pinIdsForMeals = (formData.pinnedPlaceIds ?? []).filter((n: number) =>
     Number.isFinite(n),
   );
-  // 원본 ag4-db-finalize.ts:85 = `sql.raw("id IN (...)")` + 숫자만 통과한 값(주석 "숫자만 통과한 값 = 안전").
+  // ag4-db-finalize.ts = `sql.raw("id IN (...)")` + 숫자만 통과한 값(주석 "숫자만 통과한 값 = 안전").
   //   같은 식을 그대로 쓴다. Number.isFinite 를 통과한 값만 들어가므로 문자열이 낄 수 없다.
   //   (drizzle 의 sql`... IN ${배열}` 은 배열을 매개변수 1개로 묶어 넣어 SQL 이 깨진다 = 쓰지 않는다.)
   const pinCond = pinIdsForMeals.length
@@ -221,12 +220,12 @@ export async function finalizeDbOnlyItinerary(
       sql`${placeSeedRaw.googleReviewCount} DESC NULLS LAST`,
     );
 
-  // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 원본 ag4:81·:109 = 식당풀을 스스로 뽑을 때만 PID공유 폴백 목록을 읽는다
+  // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = ag4-db-finalize.ts 와 같이 식당풀을 스스로 뽑을 때만 PID공유 폴백 목록을 읽는다
   const imagePidMap: Map<string, string> = input.restaurantPool
     ? new Map()
     : await loadImagePidMap([cityId, ...poolRows.map((r) => r.cityId)]);
 
-  // 원본 :110 = 좌표 0/NULL 제외 후 슬롯 모양으로.
+  // 좌표 0/NULL 제외 후 슬롯 모양으로.
   const restaurantPool =
     input.restaurantPool ??
     (poolRows
@@ -248,7 +247,7 @@ export async function finalizeDbOnlyItinerary(
         bestRank: r.bestRank ?? null,
       })) as unknown as PlaceResult[]);
 
-  // 원본 :133 = 도시 시간당요금·예산 경계선 런타임 산출(정본 B4).
+  // 도시 시간당요금·예산 경계선 런타임 산출(정본 B4).
   const hourlyRate = await cityHourlyRate(db, cityId);
   const mealTiers = await cityMealTiers(db, cityId);
 
@@ -268,7 +267,7 @@ export async function finalizeDbOnlyItinerary(
   }
   const routeResponse = routeResult.response;
 
-  // 창고 되채움(backfill)은 여기서 안 한다 = 읽기 전용 관문. 그 일은 Replit 이 맡는다.
+  // 창고 되채움(backfill)은 여기서 안 한다 = 읽기 전용 관문.
 
   const inputById = new Map(
     [...inputPlaces, ...(restaurantPool ?? [])].map((p) => [p.id, p]),
@@ -424,7 +423,7 @@ export async function finalizeDbOnlyItinerary(
     });
   }
 
-  // 원본 :370 = 마지막 슬롯 = 공연장 카드(BTS). 같은 이유로 질의빌더.
+  // 마지막 슬롯 = 공연장 카드(BTS). 같은 이유로 질의빌더.
   if (formData.finalPlaceId && days.length) {
     const [f] = await db
       .select({

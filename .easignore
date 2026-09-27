@@ -17,11 +17,9 @@
 .expo/**
 node_modules/
 dist/
-server_dist/
 .git/
 docs/
 scripts/
-server/
 migrations/
 attached_assets/
 *.log

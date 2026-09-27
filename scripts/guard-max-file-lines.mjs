@@ -28,7 +28,7 @@ const EXCEPTIONS = [
 // ── 검사 대상 = RN·서버 코드. 레거시 웹 자산(public/=§3 보호)·빌드산출물·문서는 제외. ──
 const SCAN_EXT = /\.(ts|tsx|js|mjs|cjs)$/;
 const SKIP =
-  /(node_modules|server_dist|[\/\\]dist[\/\\]|^dist[\/\\]|_archive|^public[\/\\]|^docs[\/\\]|^assets[\/\\]|\.expo|android[\/\\]|ios[\/\\])/;
+  /(node_modules|[\/\\]dist[\/\\]|^dist[\/\\]|_archive|^public[\/\\]|^docs[\/\\]|^assets[\/\\]|\.expo|android[\/\\]|ios[\/\\])/;
 
 const norm = (p) => p.replace(/\\/g, "/");
 const isException = (file) => EXCEPTIONS.some((e) => norm(file).endsWith(e));
@@ -39,7 +39,7 @@ const countLines = (content) => {
 };
 
 // ── --catalog : 700줄 초과 전수 목록(진행상황 추적 = 목표: 예외 제외 0건) ──
-// = git 추적 파일만(= .gitignore 의 빌드산출물 dist-server/ 등 자동 제외).
+// = git 추적 파일만(= .gitignore 의 빌드산출물 등 자동 제외).
 function catalog() {
   const out = [];
   const tracked = execSync("git ls-files", {

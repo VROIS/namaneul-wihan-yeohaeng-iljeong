@@ -1,10 +1,6 @@
 // Cloudflare Worker 이관 = 전문가 문의 8벌 + BTS 4벌 (2026-09-06)
-// 원본 = server/expert-routes.ts · server/bts-routes.ts.
 // 응답·상태코드·에러문구·정렬은 원본과 동일하게 옮겼다.
-// 순수 계산 모듈(server/services/route-matcher, shared/**)은 그대로 import 한다(§16 재발명 금지).
-// server/db.ts 를 딸려오는 모듈(storage·creditService·notificationService·pool-radius·
-// place-translation·itinerary-city-name)은 Worker 번들이 불가하므로, 그 안의 쿼리만
-// 여기서 openDb() 로 같은 형태로 실행한다(로직·정렬 동일).
+// 순수 계산 모듈은 그대로 import 한다(§16 재발명 금지).
 import type { Express, Request, Response } from "express";
 import type { drizzle } from "drizzle-orm/postgres-js";
 import {
@@ -19,128 +15,25 @@ import {
   type SQL,
 } from "drizzle-orm";
 import * as schema from "../shared/schema";
+import { getRoleFromDb, getUserIdFromReq } from "./auth-user";
+import { chargeOnSuccess, precheckFeature } from "../shared/credits";
+import { readMapsKey } from "./keys";
+import { readCachedPlaceTranslations } from "./best-itinerary/translate";
 import { pickRestaurantBySegment } from "./lib/services/route-matcher";
 import {
   CHARACTER_PRIMARY_CATEGORY,
   COMPANION_VIBE_CATEGORIES,
 } from "../shared/bts-character-mapping";
 import { normalizeImageUrl } from "../shared/lib/normalize-image-url";
-// 원본 server/auth-user.ts:8 getUserIdFromReq = 헤더 정규식만(DB 무관).
-// 그 파일을 import 하면 server/db.ts(pg 드라이버)가 딸려와 Worker 번들이 안 되므로
-// 같은 정규식 1벌을 여기 둔다(다른 라우트 파일과 동일한 방식).
-function getUserIdFromReq(req: Request): string | null {
-  const m = (req.headers.authorization || "").match(
-    /^Bearer\s+simple_auth_token_v1_(.+)$/,
-  );
-  return m ? m[1] : null;
-}
 
-const {
-  cities,
-  creditTransactions,
-  expertInquiries,
-  itineraries,
-  placeSeedRaw,
-  placeTranslations,
-  users,
-} = schema;
+const { cities, expertInquiries, itineraries, placeSeedRaw, users } = schema;
 
 // src.ts 의 openDb() 를 그대로 받는다(연결 1벌 = 반드시 close).
 type Db = ReturnType<typeof drizzle<typeof schema>>;
 type OpenDb = () => { db: Db; close: () => void };
 
-// ── 원본 헬퍼의 쿼리 이식 (server/db.ts 미탑재분) ───────────────────────────
-
-/** 원본 server/auth-user.ts:16 getRoleFromDb = creditService.getUserProfile().role */
-async function getRole(db: Db, userId: string): Promise<string> {
-  const [u] = await db
-    .select({ role: users.role })
-    .from(users)
-    .where(eq(users.id, userId));
-  return u?.role || "user";
-}
-
-/** 원본 server/credit-charge.ts:6 CREDIT_COSTS — 전문가 검증 단가만 사용(§9 단가표 1벌). */
-const EXPERT_VERIFY_COST = 10;
-const EXPERT_VERIFY_LABEL = "전문가 검증";
-
-/**
- * 원본 server/credit-charge.ts:83 precheckFeature(feature='expert_verify').
- * 비로그인·관리자 = 면제(§9). 잔액부족 = 402 + 원본과 같은 본문.
- */
-async function precheckExpertVerify(
-  db: Db,
-  res: Response,
-  userId: string | null,
-): Promise<boolean> {
-  if (!userId) return true;
-  const [user] = await db
-    .select({ role: users.role, credits: users.credits })
-    .from(users)
-    .where(eq(users.id, userId));
-  if (!user || user.role === "admin") return true;
-  const balance = user.credits ?? 0;
-  if (balance < EXPERT_VERIFY_COST) {
-    res.status(402).json({
-      error: "insufficient_credits",
-      message: `크레딧이 부족합니다. (필요: ${EXPERT_VERIFY_COST}, 잔액: ${balance})`,
-      balance,
-      required: EXPERT_VERIFY_COST,
-    });
-    return false;
-  }
-  return true;
-}
-
-/**
- * 원본 server/credit-charge.ts:62 chargeOnSuccess → chargeFeature → creditService.useCredits.
- * 장부 줄 + 잔액을 한 트랜잭션으로(원본 creditService.addCredits:43). 실패해도 완성물은 보존.
- */
-async function chargeExpertVerifyOnSuccess(
-  db: Db,
-  userId: string | null,
-  referenceId?: string,
-): Promise<void> {
-  if (!userId) return;
-  try {
-    const [user] = await db
-      .select({ role: users.role, credits: users.credits })
-      .from(users)
-      .where(eq(users.id, userId));
-    if (!user || user.role === "admin") return;
-    if ((user.credits ?? 0) < EXPERT_VERIFY_COST) {
-      console.error(
-        `[credits] ${EXPERT_VERIFY_LABEL} 완성했으나 차감 실패(잔액 소진) = 무료 처리 기록`,
-      );
-      return;
-    }
-    await db.transaction(async (tx) => {
-      await tx.insert(creditTransactions).values({
-        userId,
-        type: "usage",
-        amount: -EXPERT_VERIFY_COST,
-        description: EXPERT_VERIFY_LABEL,
-        referenceId,
-      });
-      await tx
-        .update(users)
-        .set({
-          credits: sql`COALESCE(${users.credits}, 0) + ${-EXPERT_VERIFY_COST}`,
-          updatedAt: new Date(),
-        })
-        .where(eq(users.id, userId));
-    });
-  } catch (e) {
-    console.error(
-      `[credits] ${EXPERT_VERIFY_LABEL} 차감 예외(완성물은 그대로 보존):`,
-      (e as Error)?.message,
-    );
-  }
-}
-
 type InquiryRow = typeof expertInquiries.$inferSelect;
 
-/** 원본 server/services/shared/itinerary-city-name.ts:14 attachInquiryCityNameEn. */
 async function attachInquiryCityNameEn<T extends InquiryRow>(
   db: Db,
   rows: T[],
@@ -174,11 +67,10 @@ async function attachInquiryCityNameEn<T extends InquiryRow>(
   });
 }
 
-// ── 전문가 문의 (원본 server/expert-routes.ts) ─────────────────────────────
+// ── 전문가 문의 ─────────────────────────────
 
 export function registerExpertBtsRoutes(app: Express, openDb: OpenDb): void {
   //   kind = 'booking'(일별 바로 예약하기, 2026-07-24 사장님 승인) 만 인정, 그 외 전부 'expert'(기존 검증 문의).
-  // 원본 server/expert-routes.ts:20
   app.post("/api/verification/request", async (req: Request, res: Response) => {
     const { db, close } = openDb();
     try {
@@ -192,8 +84,8 @@ export function registerExpertBtsRoutes(app: Express, openDb: OpenDb): void {
       if (!userMessage) {
         return res.status(400).json({ error: "userMessage is required" });
       }
-      //   ⚠️ 수정금지(승인필요) 2026-08-09 사장님 최우선 SSOT = **차감은 완성 시점에만**(유료 5지점 공통 1벌).
-      if (!(await precheckExpertVerify(db, res, uid))) return;
+      //   ⚠️ 수정금지(승인필요) 2026-09-27 사장님 결정 = 차감은 완성 시점에만(유료 5지점 공통) = 잔액 확인·차감 = 공용 크레딧 1벌 (정본 9-27)
+      if (!(await precheckFeature(db, res, uid, "expert_verify"))) return;
 
       const [row] = await db
         .insert(expertInquiries)
@@ -207,9 +99,10 @@ export function registerExpertBtsRoutes(app: Express, openDb: OpenDb): void {
         })
         .returning({ id: expertInquiries.id });
 
-      await chargeExpertVerifyOnSuccess(
+      await chargeOnSuccess(
         db,
         uid,
+        "expert_verify",
         itineraryId ? String(itineraryId) : undefined,
       );
 
@@ -230,7 +123,7 @@ export function registerExpertBtsRoutes(app: Express, openDb: OpenDb): void {
   });
 
   //   ⚠️ 2026-08-03 사장님 지시 = 배지 숫자 하나 얻으려고 화면 이동마다 문의 **목록 전체**를 내려받던 낭비
-  // 원본 server/expert-routes.ts:149 — 구체 경로를 /:id 보다 먼저 등록한다.
+  // 구체 경로를 /:id 보다 먼저 등록한다.
   app.get(
     "/api/verification/unread-count",
     async (req: Request, res: Response) => {
@@ -239,7 +132,7 @@ export function registerExpertBtsRoutes(app: Express, openDb: OpenDb): void {
         const authId = getUserIdFromReq(req);
         const uid = authId || (req.query.userId as string) || undefined;
         if (!uid) return res.json({ count: 0 }); // 미로그인 = 배지 없음(에러 아님)
-        const role = await getRole(db, uid);
+        const role = await getRoleFromDb(db, uid);
         const isExpert = role === "expert" || role === "admin";
         const where = isExpert
           ? and(
@@ -274,7 +167,6 @@ export function registerExpertBtsRoutes(app: Express, openDb: OpenDb): void {
     },
   );
 
-  // 원본 server/expert-routes.ts:66
   app.get("/api/verification/requests", async (req: Request, res: Response) => {
     const { db, close } = openDb();
     try {
@@ -284,7 +176,7 @@ export function registerExpertBtsRoutes(app: Express, openDb: OpenDb): void {
       const uid = authId || qUserId;
       if (!uid) return res.status(401).json({ error: "login_required" });
 
-      const role = await getRole(db, uid);
+      const role = await getRoleFromDb(db, uid);
       const isExpert = role === "expert" || role === "admin";
       const conds: SQL[] = [];
       if (!isExpert) {
@@ -311,7 +203,6 @@ export function registerExpertBtsRoutes(app: Express, openDb: OpenDb): void {
     }
   });
 
-  // 원본 server/expert-routes.ts:186
   app.get(
     "/api/verification/requests/:id",
     async (req: Request, res: Response) => {
@@ -324,7 +215,7 @@ export function registerExpertBtsRoutes(app: Express, openDb: OpenDb): void {
           .from(expertInquiries)
           .where(eq(expertInquiries.id, String(req.params.id)));
         if (!row) return res.status(404).json({ error: "Inquiry not found" });
-        const role = uid ? await getRole(db, uid) : "user";
+        const role = uid ? await getRoleFromDb(db, uid) : "user";
         const isExpert = role === "expert" || role === "admin";
         if (!isExpert && row.userId !== uid)
           return res.status(403).json({ error: "forbidden" });
@@ -349,7 +240,6 @@ export function registerExpertBtsRoutes(app: Express, openDb: OpenDb): void {
     },
   );
 
-  // 원본 server/expert-routes.ts:217
   // ⚠️ 원본의 답변 완료 시 web-push 알림(notificationService.createAndSendNotification)은
   //    옮기지 않았다 = web-push 의 Worker 호환 미확인(2026-09-06).
   app.patch(
@@ -359,7 +249,7 @@ export function registerExpertBtsRoutes(app: Express, openDb: OpenDb): void {
       try {
         const authId = getUserIdFromReq(req);
         if (!authId) return res.status(401).json({ error: "login_required" });
-        const role = await getRole(db, authId);
+        const role = await getRoleFromDb(db, authId);
         if (role !== "expert" && role !== "admin")
           return res.status(403).json({ error: "expert_only" });
 
@@ -413,7 +303,6 @@ export function registerExpertBtsRoutes(app: Express, openDb: OpenDb): void {
     },
   );
 
-  // 원본 server/expert-routes.ts:280
   app.delete(
     "/api/verification/requests/:id",
     async (req: Request, res: Response) => {
@@ -428,7 +317,7 @@ export function registerExpertBtsRoutes(app: Express, openDb: OpenDb): void {
           .where(eq(expertInquiries.id, String(req.params.id)));
         if (!row) return res.status(404).json({ error: "Inquiry not found" });
 
-        const role = await getRole(db, authId);
+        const role = await getRoleFromDb(db, authId);
         const isExpert = role === "expert" || role === "admin";
 
         if (!isExpert && row.userId !== authId) {
@@ -458,13 +347,13 @@ export function registerExpertBtsRoutes(app: Express, openDb: OpenDb): void {
     },
   );
 
-  // 원본 server/expert-routes.ts:338 — 구체 경로(/me)를 /api/expert/profile 보다 먼저 등록한다.
+  // 구체 경로(/me)를 /api/expert/profile 보다 먼저 등록한다.
   app.get("/api/expert/profile/me", async (req: Request, res: Response) => {
     const { db, close } = openDb();
     try {
       const authId = getUserIdFromReq(req);
       if (!authId) return res.status(401).json({ error: "login_required" });
-      const role = await getRole(db, authId);
+      const role = await getRoleFromDb(db, authId);
       if (role !== "expert" && role !== "admin")
         return res.status(403).json({ error: "expert_only" });
       const [u] = await db
@@ -485,7 +374,6 @@ export function registerExpertBtsRoutes(app: Express, openDb: OpenDb): void {
     }
   });
 
-  // 원본 server/expert-routes.ts:318
   app.get("/api/expert/profile", async (_req: Request, res: Response) => {
     const { db, close } = openDb();
     try {
@@ -512,10 +400,9 @@ export function registerExpertBtsRoutes(app: Express, openDb: OpenDb): void {
   registerBtsRoutes(app, openDb);
 }
 
-// ── BTS (원본 server/bts-routes.ts) ────────────────────────────────────────
+// ── BTS ────────────────────────────────────────
 
 // ⚠️ 수정금지(승인필요) — /api/bts/top-places 가 SELECT 하는 컬럼. 슬롯 4 곳 동일 형상 보장용.
-// 원본 server/bts-routes.ts:16
 const PLACE_COLS = {
   id: placeSeedRaw.id,
   nameKo: placeSeedRaw.nameKo,
@@ -535,41 +422,16 @@ const PLACE_COLS = {
 
 type PlaceRow = Pick<typeof placeSeedRaw.$inferSelect, keyof typeof PLACE_COLS>;
 
-/** 원본 server/services/shared/pool-radius.ts:66 servingGateSql = 손님상 게이트. */
+/** servingGateSql = 손님상 게이트. */
 function servingGateSql() {
   return sql`(${placeSeedRaw.status} = 'active' AND (COALESCE(${placeSeedRaw.googleReviewCount}, 0) > 0 OR ${placeSeedRaw.bestRank} IS NOT NULL) AND (${placeSeedRaw.googlePlaceId} IS NOT NULL OR ${placeSeedRaw.verifySource} LIKE 'gmaps%') AND (${placeSeedRaw.businessStatus} IS NULL OR ${placeSeedRaw.businessStatus} NOT IN ('CLOSED_PERMANENTLY', 'CLOSED_TEMPORARILY')))`;
 }
 
-/** 원본 server/services/shared/place-translation.ts:54 readCachedPlaceTranslations = 캐시 읽기만(외부호출 0). */
-async function readCachedPlaceTranslations(
-  db: Db,
-  ids: number[],
-  language: string,
-): Promise<Map<number, { summary: string | null }>> {
-  const result = new Map<number, { summary: string | null }>();
-  if (ids.length === 0) return result;
-  const cached = await db
-    .select()
-    .from(placeTranslations)
-    .where(
-      and(
-        inArray(placeTranslations.placeId, ids),
-        eq(placeTranslations.language, language),
-      ),
-    );
-  for (const c of cached) {
-    result.set(c.placeId, { summary: c.summary });
-  }
-  return result;
-}
-
-// 원본 server/bts-routes.ts:68
 function effectiveImage(p: PlaceRow | null | undefined): string | null {
   if (!p) return null;
   return normalizeImageUrl(p.imageUrl || null, 1280);
 }
 
-// 원본 server/bts-routes.ts:73 pickAliveFrom.
 // ⚠️ 원본의 isImageAlive(HEAD 외부 fetch, bts-routes.ts:51)는 옮기지 않았다 = 이관 범위상 외부호출 제외(2026-09-06).
 //    원본도 이 함수 안에서는 effectiveImage 유무만 보고 HEAD 를 부르지 않으므로 결과는 같다.
 function pickAliveFrom<T extends PlaceRow>(
@@ -583,7 +445,6 @@ function pickAliveFrom<T extends PlaceRow>(
 }
 
 // ⚠️ 수정금지(승인필요) 2026-07-30 = **D-Day 계산 = 이 함수 1벌.**
-// 원본 server/bts-routes.ts:84
 function calcDDay(concertDate: string, today: string): number {
   return Math.ceil(
     (new Date(concertDate + "T00:00:00Z").getTime() -
@@ -593,7 +454,6 @@ function calcDDay(concertDate: string, today: string): number {
 }
 
 function registerBtsRoutes(app: Express, openDb: OpenDb): void {
-  // 원본 server/bts-routes.ts:93
   app.get("/api/bts/next-concert", async (_req: Request, res: Response) => {
     const { db, close } = openDb();
     try {
@@ -661,7 +521,6 @@ function registerBtsRoutes(app: Express, openDb: OpenDb): void {
   });
 
   // ⚠️ 수정금지(승인필요) — 공연 임박 순 5개 필터링용 nextConcertDate 추가 (2026-04-17)
-  // 원본 server/bts-routes.ts:159
   app.get("/api/bts/cities", async (_req: Request, res: Response) => {
     const { db, close } = openDb();
     try {
@@ -722,7 +581,6 @@ function registerBtsRoutes(app: Express, openDb: OpenDb): void {
   });
 
   // ⚠️ 수정금지(승인필요) — 2026-08-15 사장님 승인: 8 슬롯 고정 순서 v2
-  // 원본 server/bts-routes.ts:218
   app.get("/api/bts/top-places", async (req: Request, res: Response) => {
     const { db, close } = openDb();
     try {
@@ -869,29 +727,17 @@ function registerBtsRoutes(app: Express, openDb: OpenDb): void {
     }
   });
 
-  // ⚠️ 수정금지(승인필요) — 2026-05-06 Screen 4 카트→지도 = WebView 안 Google Maps API key 노출
-  // 원본 server/bts-routes.ts:364 — 키를 응답에 넣기만 한다(외부호출 없음). DB 도 안 쓴다.
+  // ⚠️ 수정금지(승인필요) 2026-09-27 사장님 결정 = Screen 4 카트→지도 = WebView 에 구글 지도 열쇠를 응답으로 준다(외부호출 없음), 열쇠 읽기 = keys.ts readMapsKey 1벌 (정본 9-27)
   app.get("/api/bts/map-config", async (_req: Request, res: Response) => {
-    // 이 라우트는 열쇠가 필요하다. Worker 는 부팅 시 process.env 가 비어 있으므로
-    // DB api_keys 를 먼저 채운다(isolate 당 1회, keys.ts).
     const { db, close } = openDb();
+    let key = "";
     try {
-      const rows = await db
-        .select({ v: schema.apiKeys.keyValue })
-        .from(schema.apiKeys)
-        .where(eq(schema.apiKeys.keyName, "GOOGLE_MAPS_API_KEY"));
-      const v = rows[0]?.v?.trim();
-      if (v) {
-        process.env.GOOGLE_MAPS_API_KEY = v;
-        process.env.Google_maps_api_key = v;
-      }
+      key = await readMapsKey(db);
     } catch (e) {
       console.error("[bts/map-config] 열쇠 조회 실패:", e);
     } finally {
       close();
     }
-    const key =
-      process.env.GOOGLE_MAPS_API_KEY || process.env.Google_maps_api_key || "";
     if (!key)
       return res.status(503).json({ error: "Google Maps API key missing" });
     res.json({ googleMapsApiKey: key });

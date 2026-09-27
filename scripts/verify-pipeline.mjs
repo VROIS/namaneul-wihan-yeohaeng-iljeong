@@ -47,7 +47,7 @@ const stagedCodeChanged = () =>
     .split(/\r?\n/)
     .some((f) => f.trim() && isCodePath(f.trim()));
 
-// 가드 3종·기계 4종 = 기존 검증기 그대로 호출(재발명 0). runGuards = machine·hook-check 공용 1벌(§16)
+// 가드 3종·기계 6종 = 기존 검증기 그대로 호출(재발명 0). runGuards = machine·hook-check 공용 1벌(§16)
 function runGuards() {
   sh("node scripts/guard-no-old-artifacts.mjs --staged", { stdio: "inherit" });
   sh("node scripts/guard-no-reinvention.mjs --staged", { stdio: "inherit" });
@@ -72,7 +72,7 @@ if (mode === "machine") {
   state.machine = { fp, at: now() };
   writeState(state);
   console.log(
-    `✅ [machine] 가드3+기계4 통과 = 마커 기록 (지문 ${fp.slice(0, 8)})`,
+    `✅ [machine] 가드3+기계6 통과 = 마커 기록 (지문 ${fp.slice(0, 8)})`,
   );
   process.exit(0);
 }
@@ -111,7 +111,7 @@ if (mode === "status") {
       : `🟡 낡음(코드 변경됨, ${m.at})`;
   };
   console.log("┌─ §22 파이프라인 상태 (지문 " + fp.slice(0, 8) + ") ─");
-  console.log("│ 기계검증(가드3+기계4): " + row("machine"));
+  console.log("│ 기계검증(가드3+기계6): " + row("machine"));
   console.log("│ 크롬DEV/실호출 실증:   " + row("evidence"));
   console.log("│ 판단 3종:              " + row("judge"));
   console.log(
@@ -128,7 +128,7 @@ if (mode === "hook-check") {
   const fp = fingerprint(false); // 훅 시점 = 이미 staged
   // ⓪ 가드3 = **항상** 실행(수 초, staged 전체 = 문서 포함 §19 박제·§16 재발명·§0 500줄 검사 = 코드 한정 지문의 구멍 보완)
   runGuards();
-  // ① 기계4 = 코드 지문 불일치·없음이면 그 자리 1회 재실행(중복 방지의 예외 = 최후 안전망) 후 마커 갱신
+  // ① 기계6 = 코드 지문 불일치·없음이면 그 자리 1회 재실행(중복 방지의 예외 = 최후 안전망) 후 마커 갱신
   if (state.machine?.fp !== fp) {
     console.log("[hook] 기계검증 마커 불일치/없음 = 이 자리에서 1회 실행...");
     sh("node scripts/verify-before-commit.mjs", { stdio: "inherit" });

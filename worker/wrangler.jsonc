@@ -18,8 +18,8 @@
   },
   // ⚠️ 수정금지(승인필요) 2026-09-25 사장님 결정 = 추적 상시 켬 = 카카오 로그인 등 언제든 확인 (정본 9-25)
   "observability": { "enabled": true, "traces": { "enabled": true } },
-  // ⚠️ 수정금지(승인필요) 2026-09-25 사장님 결정 = 관제탑 = 1분마다 심장박동 + 매일 03:00(UTC) 카카오 공개 열쇠 갱신 (정본 9-25)
-  "triggers": { "crons": ["* * * * *", "0 3 * * *"] },
+  // ⚠️ 수정금지(승인필요) 2026-09-27 사장님 결정 = 관제탑 = 1분마다 심장박동 + 매일 03:00(UTC) 카카오 공개 열쇠 갱신 + 매일 04:30(UTC) 탈퇴 6개월 정리 (정본 9-27)
+  "triggers": { "crons": ["* * * * *", "0 3 * * *", "30 4 * * *"] },
 
   // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 운영 엔진(lib/) 복사본이 부르는 "@google/genai" 를 Worker 용 진입점(/web)으로 = 엔진 파일 무변경 (정본 §)
   "alias": {
@@ -55,11 +55,11 @@
     {
       // 근거: r2/configuration.md:20 "interface Env { MY_BUCKET: R2Bucket; }" = binding 값이 곧 env 의 키 이름(대문자 관례).
       //       우리 용도 = §18 raw(raw-responses/ 프리픽스) 전용 창고 = RAW_BUCKET.
-      //       (버킷 자체는 영상과 공유하나 프리픽스로 분리 = server/services/shared/save-raw.ts:10 PREFIX 와 동일 규칙)
+      //       (버킷 자체는 영상과 공유하나 프리픽스로 분리)
       "binding": "RAW_BUCKET",
 
       // 근거: .env:56 "R2_BUCKET_NAME=tripis-videos" = 운영에서 이미 쓰는 실제 버킷명.
-      //       server/services/shared/r2-client.ts:28 이 이 환경변수로 같은 버킷을 가리킨다 = 서버·Worker 동일 창고(§18 2곳 동형).
+      //       worker/container/lib/services/shared/r2-client.ts 가 이 환경변수로 같은 버킷을 가리킨다 = 컨테이너·Worker 동일 창고(§18 2곳 동형).
       "bucket_name": "tripis-videos",
 
       // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 로컬(wrangler dev)도 실제 버킷에 쓰고 읽는다 = 모의 창고에 raw·사진이 갇혀 돈 날리는 일 금지 (공식: r2/get-started/workers-api "remote": true)
@@ -70,7 +70,7 @@
   // ⚠️ 수정금지(승인필요) 2026-09-06 사장님 결정 = 영상 합성(ffmpeg) 전담 컨테이너 3블록
   // 근거: developers.cloudflare.com/containers/get-started/ = containers · durable_objects ·
   //       migrations 3블록이 한 벌로 있어야 컨테이너가 뜬다(공식 예시 형식 그대로).
-  // 왜 필요한가: server/services/video-stitcher.ts:3-8 이 fs·os·path·child_process·
+  // 왜 필요한가: worker/container/lib/services/video-stitcher.ts 가 fs·os·path·child_process·
   //       ffmpeg-static 을 쓴다 = Workers 런타임에는 파일시스템도 프로세스 실행도 없어
   //       원리적으로 못 돈다. 컨테이너(Linux VM)가 유일한 길.
   // 🔴 Containers = Workers **Paid 플랜** 필요(공식 pricing = "$5/month Workers Paid plan").
@@ -81,23 +81,14 @@
       //   실체 = worker/routes-video-generate.ts 의 `export class VideoStitchContainer extends Container`.
       "class_name": "VideoStitchContainer",
 
-      // ⚠️ 수정금지(승인필요) 2026-09-14 사장님 결정 = 이미지 = **이미 구워 올린 것을 주소로 가리킨다** = 이 PC 에서 도커·깃허브 없이 바로 배포한다.
-      //   근거(공식) = containers/guides/deploy "If image is a registry reference … you do not need Docker at deploy time."
-      //   왜 = 깃허브가 멈추면 업데이트가 통째로 막힌다(2026-09-14 실측 = 문서 2줄 커밋도 배포 실패). 그 의존을 끊는다.
-      //   이 주소 = 2026-09-14 12:30 갱신분 = 그 이미지로 12:42 영상 5/5 성공(여정 695) = 검증된 판.
-      //   🔴 컨테이너 코드를 고치면 = 새로 구워 올린 뒤 이 줄의 digest 를 바꾼다(굽기는 도커가 있는 자리에서).
-      //      되돌아오는 길(굽는 방식) = worker/wrangler.build.jsonc 로 배포하면 된다.
-      //   🔴 이미지 말고 다른 칸(vars·r2_buckets·routes 등)을 고치면 wrangler.build.jsonc 에도 같이 옮긴다 = 두 파일은 이미지 지정만 다르고 나머지는 같아야 한다. (정본 §)
-      "image": "registry.cloudflare.com/51bcbc629c76db55d6a9aac934b2195f/tripis-api-videostitchcontainer@sha256:a348a125de246d8e93486fbaed712ba176896c52ff2ba28f00d5d98d9da17818",
+      // ⚠️ 수정금지(승인필요) 2026-09-27 사장님 결정 = 옴니 전환 = 컨테이너 새 프로그램은 푸시 때 Workers Builds 가 조립 설명서로 굽는다 → 구운 뒤 새 digest 주소로 다시 고정(§24) (정본 §)
+      "image": "./container/container-image",
+      "image_build_context": "../",
 
       // 근거: get-started 공식 예시의 max_instances. 동시에 뜰 수 있는 인스턴스 상한.
-      //   일별 영상은 하루 ~5편(Veo Tier2 한도)이라 5면 충분하고, 상한을 낮게 두면
-      //   실수로 인스턴스가 번지는 것도 막는다(과금 = 도는 동안만).
       "max_instances": 5,
 
       // ⚠️ 수정금지(승인필요) 2026-09-12 사장님 결정 = basic(1/4 vCPU·1GiB·4GB) 유지 근거 = 실측(8/22 뮌헨 9씬)
-      //   씬 클립 9개 합계 27.5MB(최대 1개 4.7MB) + 완성본 27.4MB. 최악 10씬이어도 메모리 200MB 안쪽.
-      //   일은 대부분 외부 응답 대기(제미니·Veo 폴링)라 CPU 도 거의 안 쓴다.
       "instance_type": "basic"
     }
   ],
@@ -153,7 +144,6 @@
     "binding": "ASSETS",
 
     // 근거: configuration.md:39 및 공식문서 예시 "not_found_handling": "single-page-application"
-    //   원본 server/index.ts:214-222 = dist 에 없는 경로면 index.html 을 sendFile = 그대로 SPA 동작.
     "not_found_handling": "single-page-application",
 
     // 🔴 반드시 배열. true 로 두면 전 요청이 Worker 로 먼저 가는데, 우리 Worker 에는

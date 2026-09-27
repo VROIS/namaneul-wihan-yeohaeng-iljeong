@@ -3,11 +3,6 @@
 # = 확정 순서: 수정 → 기계검증4 → 크롬DEV 실증 → 무한루프 → 판단3종 → 표 → 문서 업뎁 → 대기 → 커밋 승인(스탬프) → 빌드필요 체크 → 커밋·푸시.
 # = 옛 훅(기계4를 훅에서 무조건 재실행 = 중복) 폐기 = 2026-08-06 §19. 이제 지문 마커 대조(verify-pipeline.mjs) = 1회 검증 원칙.
 
-# ── Replit 배포 환경 = 자동 커밋/푸시(사람 개입 X) = 전부 스킵 = 배포 마비 방지(2026-07-25 사장님 SSOT) ──
-if [ -n "$REPL_ID" ] || [ -n "$REPLIT_DEPLOYMENT" ] || [ -n "$REPLIT_DB_URL" ] || [ -n "$REPLIT_DEV_DOMAIN" ]; then
-  exit 0
-fi
-
 # ── ① 사장님 허가 토큰(1회용·5분) = 맨 앞(§10) = 토큰 없으면 헛검증 없이 즉시 차단 + 검증 중 만료 함정 제거(§22 판단검증 지적 반영) ──
 node scripts/guard-commit-approval.mjs check || exit 1
 

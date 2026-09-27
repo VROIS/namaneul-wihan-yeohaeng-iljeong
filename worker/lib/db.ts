@@ -1,4 +1,4 @@
-// ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 엔진·필시티가 같은 db.ts 1벌을 쓴다. Worker 안 = 요청마다 Hyperdrive Pool(max 5, 끝에 닫음) / Node(필시티 CLI) = 운영 server/db.ts 와 같은 고정 Pool 1개(SUPA_URL). 엔진 파일은 그대로, 이 파일 1개만 바꿔 낀다 (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 엔진·필시티가 같은 db.ts 1벌을 쓴다. Worker 안 = 요청마다 Hyperdrive Pool(max 5, 끝에 닫음) / Node(필시티 CLI) = 고정 Pool 1개(SUPA_URL). 엔진 파일은 그대로, 이 파일 1개만 바꿔 낀다 (정본 §)
 import { AsyncLocalStorage } from "node:async_hooks";
 import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
 import pg from "pg";

@@ -96,7 +96,7 @@ export function getCharacterById(id: string): BTSCharacter | undefined {
   return BTS_CHARACTERS.find((c) => c.id === id);
 }
 
-// ⚠️ 수정금지(승인필요) — 1 캐릭터 ↔ 1 카테고리 SSOT 는 shared/ 단일 정의 (server/client 양쪽 import).
+// ⚠️ 수정금지(승인필요) — 1 캐릭터 ↔ 1 카테고리 SSOT 는 shared/ 단일 정의.
 export {
   CHARACTER_PRIMARY_CATEGORY,
   COMPANION_VIBE_CATEGORIES,

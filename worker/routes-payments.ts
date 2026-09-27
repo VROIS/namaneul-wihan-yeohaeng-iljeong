@@ -1,27 +1,22 @@
 // Cloudflare Worker 이관 = 결제(Stripe) 5벌 (2026-09-06)
-// 원본 = server/payment-routes.ts.  응답·상태코드·에러문구는 원본과 동일하게 옮겼다.
-//
-// Worker 전용 필수 수정 2가지(검사표 2026-09-05 :240-243, :416):
-//   1) Stripe 클라이언트 = httpClient: Stripe.createFetchHttpClient()
-//      근거 = https://blog.cloudflare.com/announcing-stripe-support-in-workers/
-//             "httpClient: Stripe.createFetchHttpClient(), // ensure we use a Fetch client"
-//             Workers 의 V8 런타임에는 Node 의 http 모듈이 없어 Fetch 기반 클라이언트가 필요하다.
-//   2) 웹훅 서명검증 = constructEventAsync + createSubtleCryptoProvider (동기 constructEvent 불가)
-//      근거 = 같은 글 "export const webCrypto = Stripe.createSubtleCryptoProvider();" +
-//             "await stripe.webhooks.constructEventAsync(body, sig, env.STRIPE_ENDPOINT_SECRET, undefined, webCrypto)".
-//
-// server/db.ts 를 딸려오는 모듈(creditService·notificationService·auth-user)은 Worker 번들이
-// 불가하므로, 그 안의 쿼리만 여기서 openDb() 로 같은 형태로 실행한다(로직 동일, §16 재발명 금지).
+// Worker 필수 2가지 = ① Stripe 클라이언트 httpClient = Stripe.createFetchHttpClient(Workers 에는 Node http 모듈이 없다) ② 웹훅 서명검증 = constructEventAsync + createSubtleCryptoProvider(동기 constructEvent 불가)
+// 근거 = https://blog.cloudflare.com/announcing-stripe-support-in-workers/
 import express, { type Express, type Request, type Response } from "express";
 import type { drizzle } from "drizzle-orm/postgres-js";
-import { eq, sql } from "drizzle-orm";
 import Stripe from "stripe";
 import { waitUntil } from "cloudflare:workers";
 import type { Sql } from "postgres";
 import * as schema from "../shared/schema";
+import { getRoleFromDb, getUserIdFromReq } from "./auth-user";
+import { getUser } from "../shared/users";
+import {
+  PRICE_EUR,
+  PURCHASE_BONUS,
+  PURCHASE_CREDITS,
+  addCredits,
+  getBalance,
+} from "../shared/credits";
 import { ensureKeys } from "./keys";
-
-const { creditTransactions, users } = schema;
 
 // src.ts 의 openDb() 를 그대로 받는다(연결 1벌 = 반드시 close).
 type Db = ReturnType<typeof drizzle<typeof schema>>;
@@ -30,36 +25,13 @@ type OpenDb = () => { db: Db; close: () => void };
 // 않으므로 같은 방식(연결 1벌 → ensureKeys → 반드시 닫기)을 여기서 쓴다.
 type OpenSql = () => Sql;
 
-// 원본 server/auth-user.ts:8 getUserIdFromReq = 헤더 정규식만(DB 무관).
-// 그 파일을 import 하면 server/db.ts(pg 드라이버)가 딸려와 Worker 번들이 안 되므로
-// 같은 정규식 1벌을 여기 둔다(다른 라우트 파일과 동일한 방식).
-function getUserIdFromReq(req: Request): string | null {
-  const m = (req.headers.authorization || "").match(
-    /^Bearer\s+simple_auth_token_v1_(.+)$/,
-  );
-  return m ? m[1] : null;
-}
-
-// 원본 server/payment-routes.ts:9
 const STRIPE_API_VERSION = "2026-06-24.dahlia";
 
-// 원본 server/creditService.ts:6 CREDIT_CONFIG 중 결제가 쓰는 값만(§9 단가표 1벌).
-const PURCHASE_CREDITS = 140;
-const PURCHASE_BONUS = 40;
-const PRICE_EUR = 10;
-
 // ⚠️ 우리 앱이 만든 결제라는 표식. 내손앱과 같은 Stripe 계정을 쓰기 때문에 필요하다(사장님 결정 2026-07-29).
-// 원본 server/payment-routes.ts:63
 const APP_TAG = "tripis";
 
-/**
- * Stripe 클라이언트 1벌.
- * 원본(server/payment-routes.ts:11)은 모듈 전역 캐시를 쓰지만, Worker 는 isolate 를 여러 요청이
- * 재사용하므로 요청 데이터를 전역에 두지 않는다(rules.md "Do not store request-scoped state in
- * global scope"). Stripe 클라이언트 생성은 순수 계산(네트워크 없음)이라 요청마다 만들어도 싸다.
- *
- * httpClient = Stripe.createFetchHttpClient() 가 Worker 필수(위 파일 머리말 근거 참조).
- */
+/** Stripe 클라이언트 1벌 = 요청마다 만든다(워커 isolate 는 여러 요청이 재사용 = 요청 데이터를 전역에 두지 않는다. 생성은 네트워크 없는 계산이라 싸다).
+ *  httpClient = Stripe.createFetchHttpClient() 가 Worker 필수(파일 머리말 근거). */
 function makeStripe(): Stripe {
   const key = process.env.STRIPE_SECRET_KEY;
   if (!key) throw new Error("stripe_key_missing");
@@ -86,7 +58,7 @@ async function stripeWithKeys(openSql: OpenSql): Promise<Stripe> {
 }
 
 // ⚠️ 수정금지(승인필요) 2026-08-14 사장님 승인 = Stripe 결제창 다국어.
-// 원본 server/payment-routes.ts:25 checkoutText — 문구 그대로.
+// checkoutText — 문구 그대로.
 function checkoutText(lang: string): { name: string; desc: string } {
   const base = PURCHASE_CREDITS - PURCHASE_BONUS;
   const bonus = PURCHASE_BONUS;
@@ -123,76 +95,22 @@ function checkoutText(lang: string): { name: string; desc: string } {
   return texts[lang] || texts.ko;
 }
 
-// ── 원본 헬퍼의 쿼리 이식 (server/db.ts 미탑재분) ───────────────────────────
-
-type UserRow = typeof users.$inferSelect;
-
-/** 원본 server/creditService.ts:29 getUserProfile = users 행 1개. */
-async function getUserProfile(
-  db: Db,
-  userId: string,
-): Promise<UserRow | undefined> {
-  const [user] = await db.select().from(users).where(eq(users.id, userId));
-  return user || undefined;
-}
-
-/** 원본 server/creditService.ts:22 getBalance. */
-async function getBalance(db: Db, userId: string): Promise<number> {
-  const [user] = await db
-    .select({ credits: users.credits })
-    .from(users)
-    .where(eq(users.id, userId));
-  return user?.credits ?? 0;
-}
-
-/** 원본 server/auth-user.ts:16 getRoleFromDb = creditService.getUserProfile().role */
-async function getRole(db: Db, userId: string): Promise<string> {
-  const [u] = await db
-    .select({ role: users.role })
-    .from(users)
-    .where(eq(users.id, userId));
-  return u?.role || "user";
-}
-
-/**
- * 원본 server/creditService.ts:126 processPurchase → addCredits(:36).
- * 장부 줄 + 잔액을 한 트랜잭션으로. 문구·금액은 원본 그대로.
- *
- * ⚠️ 이중충전 차단은 여기 코드가 아니라 **DB 규칙**이 한다(§9):
- *   부분 유니크 인덱스 credit_transactions_purchase_ref_uniq
- *   (shared/schema/credits.ts:100, WHERE type='purchase' AND reference_id IS NOT NULL).
- *   같은 refId 가 두 번 오면 INSERT 가 23505 로 튕기고 트랜잭션이 통째로 롤백된다.
- *   = DB 에 있는 규칙이므로 Replit·Worker 어느 쪽이 실행해도 그대로 살아 있다(옮길 것 없음).
- *
- * ⚠️ 원본의 알림(notificationService.sendRewardNotification)은 옮기지 않았다
- *    = web-push 의 Worker 호환 미확인(routes-expert-bts.ts:353 과 같은 판단, 2026-09-06).
- *    충전(돈) 자체에는 영향이 없다.
- */
+/** 충전 = 장부 1벌(addCredits)에 type 'purchase' 로 쓴다. ⚠️ 이중충전 차단은 코드가 아니라 **DB 규칙**(§9) = 부분 유니크 인덱스 credit_transactions_purchase_ref_uniq
+ *  (shared/schema/credits.ts, WHERE type='purchase' AND reference_id IS NOT NULL) = 같은 refId 가 두 번 오면 INSERT 가 23505 로 튕기고 트랜잭션이 통째로 롤백된다.
+ *  충전 알림(web-push)은 워커에 없다 = 충전(돈) 자체에는 영향 없음. */
 async function processPurchase(
   db: Db,
   userId: string,
   stripePaymentId: string,
 ): Promise<number> {
-  return await db.transaction(async (tx) => {
-    await tx.insert(creditTransactions).values({
-      userId,
-      type: "purchase",
-      amount: PURCHASE_CREDITS,
-      description: `크레딧 충전 ${PURCHASE_CREDITS} (100 기본 + 40 보너스)`,
-      referenceId: stripePaymentId,
-    });
-
-    const [updated] = await tx
-      .update(users)
-      .set({
-        credits: sql`COALESCE(${users.credits}, 0) + ${PURCHASE_CREDITS}`,
-        updatedAt: new Date(),
-      })
-      .where(eq(users.id, userId))
-      .returning({ credits: users.credits });
-
-    return updated?.credits ?? 0;
-  });
+  return await addCredits(
+    db,
+    userId,
+    PURCHASE_CREDITS,
+    "purchase",
+    `크레딧 충전 ${PURCHASE_CREDITS} (100 기본 + 40 보너스)`,
+    stripePaymentId,
+  );
 }
 
 type FulfillResult =
@@ -202,7 +120,7 @@ type FulfillResult =
   | { outcome: "no_user" };
 
 // ⚠️ 수정금지(승인필요) 2026-08-12 사장님 승인 = **충전 집행 1벌** = 어느 진입 신호로 오든
-// 원본 server/payment-routes.ts:66 fulfillFromStripeRecord — 분기·판정 그대로.
+// fulfillFromStripeRecord — 분기·판정 그대로.
 async function fulfillFromStripeRecord(
   db: Db,
   refId: string,
@@ -226,7 +144,7 @@ async function fulfillFromStripeRecord(
 }
 
 // ⚠️ 수정금지(승인필요) 2026-08-12 사장님 승인 = **원장 대조 회수** = 최근 N일의 성공 결제(tripis 표식)를
-// 원본 server/payment-routes.ts:91 reconcilePayments — 조회 범위·판정 그대로.
+// reconcilePayments — 조회 범위·판정 그대로.
 async function reconcilePayments(
   db: Db,
   stripe: Stripe,
@@ -266,7 +184,7 @@ async function reconcilePayments(
 }
 
 // ⚠️ 수정금지(승인필요) 2026-08-05 = 결제 끝나고 **돌아올 주소**를 고르는 곳 1벌.
-// 원본 server/payment-routes.ts:170 pickReturnBase — 판정 그대로.
+// pickReturnBase — 판정 그대로.
 function pickReturnBase(origin: string, selfBase: string): string {
   try {
     const o = new URL(origin);
@@ -281,12 +199,10 @@ function pickReturnBase(origin: string, selfBase: string): string {
   }
 }
 
-/** 원본 server/payment-routes.ts:236 = 크레딧 0 고정 테스트 계정 판별. */
+/** 크레딧 0 고정 테스트 계정 판별. */
 function isNoTopupTestAccount(email: string | null | undefined): boolean {
   return !!email && /^c0@.+\.test$/i.test(email);
 }
-
-// ── 웹훅 (원본 server/payment-routes.ts:317) ───────────────────────────────
 
 /**
  * ⚠️ 수정금지(승인필요) 2026-09-06 사장님 결정 = 충전 유일 경로(§9) = **express.json() 보다 먼저** 등록한다.
@@ -302,9 +218,6 @@ function isNoTopupTestAccount(email: string | null | undefined): boolean {
  *   been used") 원본 바이트가 사라진다. req.body 를 JSON.stringify 로 되돌리면 공백·키순서가
  *   달라져 서명이 반드시 어긋난다 = 모든 충전이 조용히 실패.
  *   그래서 이 1개 라우트만 express.raw({type:"application/json"}) 로 Buffer 를 받는다.
- *
- * 원본(server/index.ts:62-68)은 express.json({verify}) 로 req.rawBody 에 Buffer 를 심는 방식이지만,
- * 그건 전역 파서가 있는 Replit 쪽 배선이다. Worker 는 공식 문서의 "웹훅 라우트를 앞에" 방식 1벌만 쓴다(§19).
  */
 export function registerPaymentWebhookRoute(
   app: Express,
@@ -400,7 +313,7 @@ export function registerPaymentWebhookRoute(
   );
 }
 
-// ── 라우트 (원본 server/payment-routes.ts) ─────────────────────────────────
+// ── 라우트 ─────────────────────────────────
 
 export function registerPaymentRoutes(
   app: Express,
@@ -408,14 +321,14 @@ export function registerPaymentRoutes(
   openSql: OpenSql,
 ): void {
   // ── 결제창 만들기 = POST /api/payments/checkout = ⚠️ 웹 전용
-  //    (2026-08-12 사장님 승인 = 폰은 아래 결제 시트로 전환). 원본 server/payment-routes.ts:223
+  //    (2026-08-12 사장님 승인 = 폰은 아래 결제 시트로 전환).
   app.post("/api/payments/checkout", async (req: Request, res: Response) => {
     const { db, close } = openDb();
     try {
       const userId = getUserIdFromReq(req);
       if (!userId) return res.status(401).json({ error: "login_required" });
 
-      const user = await getUserProfile(db, userId);
+      const user = await getUser(db, userId);
 
       // ⚠️ 수정금지(승인필요) 2026-08-08 사장님 확정 = **크레딧 0 고정 계정은 충전을 막는다.**
       if (isNoTopupTestAccount(user?.email)) {
@@ -478,7 +391,6 @@ export function registerPaymentRoutes(
   });
 
   // ── 폰 결제 시트용 결제 생성 = POST /api/payments/sheet-intent (2026-08-12 사장님 승인)
-  //    원본 server/payment-routes.ts:287
   app.post(
     "/api/payments/sheet-intent",
     async (req: Request, res: Response) => {
@@ -487,7 +399,7 @@ export function registerPaymentRoutes(
         const userId = getUserIdFromReq(req);
         if (!userId) return res.status(401).json({ error: "login_required" });
 
-        const user = await getUserProfile(db, userId);
+        const user = await getUser(db, userId);
         if (isNoTopupTestAccount(user?.email)) {
           return res.status(403).json({ error: "test_account_no_topup" });
         }
@@ -514,11 +426,9 @@ export function registerPaymentRoutes(
     },
   );
 
-  // ── 폰 결제 즉시 확인 = POST /api/payments/confirm. 원본 server/payment-routes.ts:377
-  //    ⚠️ 이것은 §9 가 금지하는 "클라이언트가 부르는 충전"이 아니다:
-  //       금액·대상은 클라이언트가 못 정하고, **Stripe 에 실제로 결제됐는지 다시 물어**
-  //       (paymentIntents.retrieve) 성공한 결제만 집행한다. 소유자 확인(metadata.userId)도 한다.
-  //       중복은 DB 규칙(credit_transactions_purchase_ref_uniq)이 막는다.
+  // ⚠️ POST /api/payments/confirm = §9 가 금지하는 "클라이언트가 부르는 충전"이 아니다: 금액·대상은 클라이언트가 못 정하고,
+  //    Stripe 에 실제로 결제됐는지 다시 물어(paymentIntents.retrieve) 성공한 결제만 집행한다. 소유자 확인(metadata.userId)도 한다.
+  //    중복은 DB 규칙(credit_transactions_purchase_ref_uniq)이 막는다.
   app.post("/api/payments/confirm", async (req: Request, res: Response) => {
     const { db, close } = openDb();
     try {
@@ -554,7 +464,7 @@ export function registerPaymentRoutes(
     }
   });
 
-  // ── 수동 원장 대조 = POST /api/admin/payments/reconcile. 원본 server/payment-routes.ts:408
+  // ── 수동 원장 대조 = POST /api/admin/payments/reconcile.
   app.post(
     "/api/admin/payments/reconcile",
     async (req: Request, res: Response) => {
@@ -562,7 +472,7 @@ export function registerPaymentRoutes(
       try {
         const uid = getUserIdFromReq(req);
         if (!uid) return res.status(401).json({ error: "login_required" });
-        if ((await getRole(db, uid)) !== "admin")
+        if ((await getRoleFromDb(db, uid)) !== "admin")
           return res.status(403).json({ error: "admin_only" });
         const stripe = await stripeWithKeys(openSql);
         res.json({

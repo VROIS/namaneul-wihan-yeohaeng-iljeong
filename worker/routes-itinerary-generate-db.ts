@@ -1,4 +1,4 @@
-// ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 갈래 = 원본 pipeline-v3.ts:24 그대로(핀·베스트·DB-only·MIX). 베스트·DB-only = 이 워커 판(사장님 튜닝), MIX = lib/services/agents/pipeline-v3.ts 원본 복사본 + withEngineDb 연결 (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 갈래 = pipeline-v3.ts 그대로(핀·베스트·DB-only·MIX). 베스트·DB-only = 이 워커 판(사장님 튜닝), MIX = lib/services/agents/pipeline-v3.ts 원본 복사본 + withEngineDb 연결 (정본 §)
 
 import type { Express, Request, Response } from "express";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
@@ -51,15 +51,12 @@ import { withEngineDb } from "./lib/db";
 import { runPipelineV3 } from "./lib/services/agents/pipeline-v3";
 import type { Sql } from "postgres";
 import { ensureKeys } from "./keys";
-import { getUserIdFromReq } from "./best-itinerary/auth";
+import { getUserIdFromReq } from "./auth-user";
 import {
   type CityReadyResult,
   isCityReady,
 } from "./best-itinerary/city-resolver";
-import {
-  precheckRouteGenerate,
-  chargeRouteGenerateOnSuccess,
-} from "./best-itinerary/credits";
+import { chargeOnSuccess, precheckFeature } from "../shared/credits";
 import { fetchFromPlaceSeedRaw } from "./best-itinerary/places";
 import { finalizeDbOnlyItinerary } from "./best-itinerary/finalize";
 import { applyItineraryTranslations } from "./best-itinerary/translate";
@@ -91,13 +88,10 @@ async function loadAllKeys(openSql: OpenSql): Promise<void> {
   }
 }
 
-// ── 원본 상수·순수함수의 이식 (server/db.ts 를 딸려오는 파일에서만 떼어온다) ──────
+// ── 원본 상수·순수함수의 이식 ──────
 
-/** 원본 server/services/shared/pool-radius.ts:8 */
 const POOL_RADIUS_M = 100_000;
-/** 원본 server/services/shared/pool-radius.ts:9 */
 const CORE_KM = 10;
-/** 원본 server/services/shared/pool-radius.ts:44 */
 const POOL_LAT_DEG = 0.9;
 
 /** 두 좌표 사이 거리(km). */
@@ -113,7 +107,6 @@ export function distanceKmFromCoords(
   return Math.sqrt(dLat * dLat + dLng * dLng) / 1000;
 }
 
-/** 원본 server/services/shared/pool-radius.ts:38 zoneForDistanceKm */
 function zoneForDistanceKm(distKm: number): "core" | "outskirt" | null {
   if (!(distKm >= 0) || distKm > POOL_RADIUS_M / 1000) return null;
   return distKm <= CORE_KM ? "core" : "outskirt";
@@ -178,7 +171,7 @@ export const PRICED_STAY_CATEGORIES: ReadonlySet<string> = new Set([
   "healing",
 ]);
 
-// slotMinutesFor(원본 slot-duration.ts:44) · tierRange(원본 meal-budget-tiers.ts:33) 는
+// slotMinutesFor(slot-duration.ts) · tierRange(meal-budget-tiers.ts) 는
 // 여기서 옮기지 않는다 = buildRouteLocal 이 그 두 함수를 자기 안에서 직접 쓰고(route-local.ts:17·24),
 // 이 라우트는 산출값(hourlyRate·mealTiers)만 넘긴다.
 
@@ -192,11 +185,8 @@ export const READY_THRESHOLD = 200;
 
 // ── 파이프라인 (라우트와 자가진단이 함께 쓰는 1벌) ───────────────────────────
 
-/**
- * 원본 server/services/agents/pipeline-db-only.ts:13 runPipelineDbOnly 순서 그대로.
- * ⚠️ 아래 /api/routes/generate 의 본문에서 그대로 떼어낸 1벌이다(문장·순서 무변경).
- *    worker/routes-debug.ts 의 자가진단이 같은 1벌을 부른다(§16 = 재발명 0).
- */
+/** runPipelineDbOnly 순서 그대로 = /api/routes/generate 본문에서 떼어낸 1벌(문장·순서 무변경).
+ *  worker/routes-debug.ts 자가진단이 같은 1벌을 부른다(§16 = 재발명 0). */
 export async function runPipelineDbOnlyWorker(
   db: Db,
   enrichedFormData: Record<string, any>,
@@ -209,7 +199,7 @@ export async function runPipelineDbOnlyWorker(
     cityId: cityCheck.cityId!,
     name: cityCheck.cityName,
   });
-  // 원본 pipeline-db-only.ts:37 = isCityReady 가 이미 조회한 도시중심좌표 그대로 전달.
+  // isCityReady 가 이미 조회한 도시중심좌표 그대로 전달.
   const cityCoords =
     cityCheck.latitude != null && cityCheck.longitude != null
       ? { lat: cityCheck.latitude, lng: cityCheck.longitude }
@@ -225,7 +215,7 @@ export async function runPipelineDbOnlyWorker(
     skeleton,
     inputPlaces: placesArr,
   });
-  // 원본 pipeline-db-only.ts:61 = 메타 표식.
+  // 메타 표식.
   itinerary.metadata = {
     ...itinerary.metadata,
     _pipelineVersion: "db-only-v2-scene-direct",
@@ -245,20 +235,19 @@ export function registerItineraryGenerateDbRoutes(
   openDb: OpenDb,
   openSql: OpenSql,
 ): void {
-  // 원본 server/itinerary-generate-route.ts:15
   app.post("/api/routes/generate", async (req: Request, res: Response) => {
     const { db, close } = openDb();
     try {
       const formData = req.body;
 
-      // 원본 :19 = 필수값 검사(문구·상태코드 그대로).
+      // 필수값 검사(문구·상태코드 그대로).
       if (!formData.destination || !formData.startDate || !formData.endDate) {
         return res.status(400).json({
           error: "destination, startDate, endDate are required",
         });
       }
 
-      // 원본 :25 = 언어 기본 ko + 로그인 사용자 정보 얹기.
+      // 언어 기본 ko + 로그인 사용자 정보 얹기.
       let enrichedFormData: Record<string, any> = {
         ...formData,
         language: formData.language || "ko",
@@ -293,8 +282,8 @@ export function registerItineraryGenerateDbRoutes(
         }
       }
 
-      // ── 분기 판정 = 원본 pipeline-v3.ts:24 runPipelineV3 과 같은 순서 ──
-      //    핀이 있으면 도시만 찾으면 db-only(:32) / 없으면 ready 여야 db-only(:41).
+      // ── 분기 판정 = pipeline-v3.ts runPipelineV3 과 같은 순서 ──
+      //    핀이 있으면 도시만 찾으면 db-only / 없으면 ready 여야 db-only.
       const isPinnedDbOnly = !!(
         Array.isArray(formData.pinnedPlaceIds) && formData.pinnedPlaceIds.length
       );
@@ -305,8 +294,8 @@ export function registerItineraryGenerateDbRoutes(
       );
 
       if (isPinnedDbOnly && !cityCheck.cityId) {
-        // 원본 pipeline-v3.ts:34 = 핀 요청인데 도시 미발견 = 유료 경로로 흘리지 않는다(throw).
-        //   원본은 throw → 라우트 :160 catch → 500. 같은 결과를 그대로 낸다.
+        // 핀 요청인데 도시 미발견 = 유료 경로로 흘리지 않는다(throw).
+        //   원본은 throw → 라우트 catch → 500. 같은 결과를 그대로 낸다.
         return res.status(500).json({
           error: "일정 생성 실패",
           detail: `핀 요청인데 도시 미발견: '${enrichedFormData.destination}' = 무료(db-only) 전제 = 유료 경로로 흘리지 않는다`,
@@ -322,17 +311,20 @@ export function registerItineraryGenerateDbRoutes(
         });
       }
 
-      // 원본 pipeline-v3.ts:51-58 = 창고 200행 미만(핀·베스트 아님) = MIX 엔진.
+      // 창고 200행 미만(핀·베스트 아님) = MIX 엔진.
       const isMix = !isPinnedDbOnly && !isBest && !cityCheck.ready;
 
-      // ── §9 크레딧 = 원본 :62 와 같은 자리·같은 규칙 ──
-      //   차감 기준 신원은 **로그인 토큰에서만** 읽는다(원본 :63 주석).
-      //   핀(BTS) 요청은 원본 :66 대로 사전확인·차감 둘 다 건너뛴다.
+      // ── §9 크레딧 ──
+      //   차감 기준 신원은 **로그인 토큰에서만** 읽는다.
+      //   핀(BTS) 요청은 사전확인·차감 둘 다 건너뛴다.
       const payerId = getUserIdFromReq(req);
-      if (!isPinnedDbOnly && !(await precheckRouteGenerate(db, res, payerId)))
+      if (
+        !isPinnedDbOnly &&
+        !(await precheckFeature(db, res, payerId, "route_generate"))
+      )
         return; // 402 는 위에서 이미 보냈다(§9 금지 4번 = 헤더 나가기 전).
 
-      // 원본 :72 = 만드는 순간 '만드는 중' 한 줄을 남긴다.
+      // 만드는 순간 '만드는 중' 한 줄을 남긴다.
       let draftId: number | null = null;
       if (payerId) {
         try {
@@ -355,7 +347,7 @@ export function registerItineraryGenerateDbRoutes(
         }
       }
 
-      // ── 파이프라인 = 원본 pipeline-db-only.ts:13 runPipelineDbOnly 순서 그대로 ──
+      // ── 파이프라인 = pipeline-db-only.ts runPipelineDbOnly 순서 그대로 ──
       let itinerary: any;
       try {
         itinerary = isBest
@@ -387,7 +379,7 @@ export function registerItineraryGenerateDbRoutes(
         0,
       );
 
-      // 원본 :127 = 다 만든 여정을 그 자리(위에서 만든 행)에 채운다.
+      // 다 만든 여정을 그 자리(위에서 만든 행)에 채운다.
       if (draftId) {
         try {
           const data = await buildItineraryData(db, {
@@ -412,11 +404,12 @@ export function registerItineraryGenerateDbRoutes(
         }
       }
 
-      // 원본 :151 = 차감은 **완성 시점에만**(장소가 실제로 담겼을 때만).
+      // 차감은 **완성 시점에만**(장소가 실제로 담겼을 때만).
       if (!isPinnedDbOnly && totalPlacesInDays > 0)
-        await chargeRouteGenerateOnSuccess(
+        await chargeOnSuccess(
           db,
           payerId,
+          "route_generate",
           draftId ? String(draftId) : undefined,
         );
 
@@ -426,7 +419,6 @@ export function registerItineraryGenerateDbRoutes(
           console.error("[gmaps-post] 큐 등록 실패:", (e as Error)?.message),
         );
 
-      // 원본 :157
       res.json(
         await applyItineraryTranslations(
           db,
@@ -436,7 +428,7 @@ export function registerItineraryGenerateDbRoutes(
       );
     } catch (error: any) {
       console.error("Error generating itinerary:", error?.message || error);
-      // 원본 :165 = API/키 오류면 503, 그 외 500(문구·필드 그대로).
+      // API/키 오류면 503, 그 외 500(문구·필드 그대로).
       if (error?.message?.includes("API") || error?.message?.includes("키")) {
         res.status(503).json({
           error: "AI 서비스 연결 오류",

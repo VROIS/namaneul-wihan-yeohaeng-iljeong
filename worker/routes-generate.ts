@@ -1,15 +1,14 @@
-// Cloudflare Worker 이관 = 지도 HTML 1벌. 원본 = server/misc-routes.ts:64 (2026-09-06)
+// Cloudflare Worker 이관 = 지도 HTML 1벌 (2026-09-06)
 
 import type { Express, Request, Response } from "express";
 import type { drizzle } from "drizzle-orm/postgres-js";
-import { eq } from "drizzle-orm";
 import * as schema from "../shared/schema";
+import { readMapsKey } from "./keys";
 
 // worker/src.ts 가 넘겨주는 연결 1벌 = 반드시 close.
 type Db = ReturnType<typeof drizzle<typeof schema>>;
 type OpenDb = () => { db: Db; close: () => void };
 
-// 원본 server/misc-routes.ts:3
 const BRAND_PRIMARY = "#6366F1";
 
 interface MapPlace {
@@ -19,12 +18,12 @@ interface MapPlace {
   rank?: number | null;
 }
 
-/** 원본 server/misc-routes.ts:5 getEmptyMapHtml — 문자열 그대로. */
+/** getEmptyMapHtml — 문자열 그대로. */
 function getEmptyMapHtml(): string {
   return `<!DOCTYPE html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{margin:0;display:flex;align-items:center;justify-content:center;height:100vh;font-family:-apple-system,sans-serif;background:#f5f5f5}.msg{color:#666;font-size:14px}</style></head><body><div class="msg">장소 좌표 없음</div></body></html>`;
 }
 
-/** 원본 server/misc-routes.ts:9 generateMapHtml — 문자열 그대로(키는 응답 HTML 안에만 들어간다). */
+/** generateMapHtml — 문자열 그대로(키는 응답 HTML 안에만 들어간다). */
 function generateMapHtml(places: MapPlace[], apiKey: string): string {
   const center = {
     lat: places.reduce((sum, p) => sum + (p.lat || 0), 0) / places.length,
@@ -80,29 +79,18 @@ init();
 }
 
 export function registerGenerateRoutes(app: Express, openDb: OpenDb): void {
-  // 원본 server/misc-routes.ts:64 POST /api/map/html — 키를 응답 HTML 에 넣기만 한다(서버 외부호출 없음).
-  // 열쇠 = worker/routes-expert-bts.ts 의 /api/bts/map-config 와 같은 방식으로 DB 에서 채운다.
+  // POST /api/map/html — 키를 응답 HTML 에 넣기만 한다(서버 외부호출 없음).
+  // 열쇠 = keys.ts readMapsKey 1벌(/api/bts/map-config 와 같음).
   app.post("/api/map/html", async (req: Request, res: Response) => {
     const { db, close } = openDb();
+    let apiKey = "";
     try {
-      const rows = await db
-        .select({ v: schema.apiKeys.keyValue })
-        .from(schema.apiKeys)
-        .where(eq(schema.apiKeys.keyName, "GOOGLE_MAPS_API_KEY"));
-      const v = rows[0]?.v?.trim();
-      if (v) {
-        process.env.GOOGLE_MAPS_API_KEY = v;
-        process.env.Google_maps_api_key = v;
-      }
+      apiKey = await readMapsKey(db);
     } catch (e) {
       console.error("[map/html] 열쇠 조회 실패:", e);
     } finally {
       close();
     }
-
-    // 원본과 같은 순서(Google_maps_api_key 우선).
-    const apiKey =
-      process.env.Google_maps_api_key || process.env.GOOGLE_MAPS_API_KEY || "";
 
     if (!apiKey) {
       return res

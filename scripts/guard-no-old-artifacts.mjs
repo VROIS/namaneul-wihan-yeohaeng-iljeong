@@ -22,7 +22,7 @@ const DELETE_MARK =
 const DATE_OR_SEC = /(20\d\d-\d\d-\d\d|§\s?\d)/;
 // CLAUDE.md = 헌법 자체 = 금지 패턴을 글로 설명해야 함 = 스캔 제외(가드가 자기 규칙 설명문을 잡으면 안 됨).
 const SKIP_PATH =
-  /(server[\/\\]data[\/\\]|\.json$|node_modules|server_dist|dist[\/\\]|bts-app[\/\\]node_modules|_archive|CLAUDE\.md$|guard-no-old-artifacts\.mjs$)/;
+  /(\.json$|node_modules|dist[\/\\]|bts-app[\/\\]node_modules|_archive|CLAUDE\.md$|guard-no-old-artifacts\.mjs$)/;
 const SCAN_EXT = /\.(ts|tsx|js|mjs|cjs|md|sql)$/;
 
 const isDeletionReason = (l) => DELETE_MARK.test(l) && DATE_OR_SEC.test(l);
@@ -171,7 +171,7 @@ function scanAll() {
 
 // ⚠️ 수정금지(승인필요) 2026-08-29 사장님 결정 = 코드 파일 주석 검사 3종(양 상한·인접 미갱신·유령 참조) + --dry/--fix (§6)
 const CMT_EXT = /\.(ts|tsx|mjs|js)$/;
-const CMT_SKIP = /(node_modules|legacy|worktrees|dist[\/\\]|server_dist)/;
+const CMT_SKIP = /(node_modules|legacy|worktrees|dist[\/\\])/;
 const APPROVAL_WORD = /(수정금지|사장님)/;
 const DATE_RE = /20\d\d-\d\d-\d\d/g;
 const FILE_REF_RE =

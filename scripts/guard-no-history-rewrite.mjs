@@ -35,10 +35,10 @@ if (!existsSync(TOKEN)) {
     "\n⛔⛔ REBASE 차단 = 사장님 허가 토큰(.history-rewrite-approved) 없음.",
   );
   console.error(
-    "   = 2026-07-04 사고(AI 무심결 rebase → Replit 저장소 꼬임 → EAS 배포 마비 → $20+ 손실) 재발 방지.",
+    "   = 2026-07-04 사고(AI 무심결 rebase → 저장소 꼬임 → EAS 배포 마비 → $20+ 손실) 재발 방지.",
   );
   console.error(
-    "   = Replit 관리 저장소에서 rebase/reset 금지. 원격이 앞서면 git pull(merge) 또는 Replit Git pane 사용.",
+    "   = 이 저장소에서 rebase/reset 금지. 원격이 앞서면 git pull(merge) 사용.",
   );
   console.error(
     "   = 정말 필요하면 사장님 명시 허가 후: node scripts/guard-no-history-rewrite.mjs stamp\n",

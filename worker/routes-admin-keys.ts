@@ -1,10 +1,5 @@
 // ⚠️ 수정금지(승인필요) 2026-09-06 사장님 결정 = 열쇠 쓰기 3건(POST·PUT·DELETE) Worker 이관 (정본 B1)
-// 원본 = server/admin/api-keys-routes.ts:30(POST) · :76(PUT) · :125(DELETE).
-// 응답·상태코드·에러문구는 원본과 100% 동일하게 옮겼다.
-//
-// 원본은 DB 쓰기와 동시에 자기 프로세스의 process.env 를 갱신한다(원본 :59,:105,:133).
-// Worker 는 isolate 가 여러 벌이라 그 방식만으로는 쓰기를 처리한 isolate 만 새 열쇠를 쓴다.
-// 그래서 여기서는 자기 isolate 를 invalidateKeys() 로 즉시 무효화하고,
+// Worker 는 isolate 가 여러 벌 = 쓰기를 처리한 isolate 는 invalidateKeys() 로 즉시 무효화하고,
 // 다른 isolate 는 keys.ts 의 판형 확인(MAX(updated_at)+행수, 최대 30초)이 따라잡는다.
 import type { Express, Request, Response } from "express";
 import type { drizzle } from "drizzle-orm/postgres-js";
@@ -22,7 +17,6 @@ type OpenDb = () => { db: Db; close: () => void };
 export function registerAdminKeysRoutes(app: Express, openDb: OpenDb): void {
   // ⚠️ 수정금지(승인필요) 2026-09-25 사장님 결정 = 관리자 번호로 찾기 등록 = src.ts·routes-admin.ts 가 700줄 초과라 여기서 함께 등록 (정본 9-25)
   registerAdminLookupRoutes(app, openDb);
-  // 원본 server/admin/api-keys-routes.ts:30
   app.post("/api/admin/api-keys", async (req: Request, res: Response) => {
     const { db, close } = openDb();
     try {
@@ -71,7 +65,6 @@ export function registerAdminKeysRoutes(app: Express, openDb: OpenDb): void {
     }
   });
 
-  // 원본 server/admin/api-keys-routes.ts:76
   app.put(
     "/api/admin/api-keys/:keyName",
     async (req: Request, res: Response) => {
@@ -115,7 +108,7 @@ export function registerAdminKeysRoutes(app: Express, openDb: OpenDb): void {
     },
   );
 
-  // 원본 server/admin/api-keys-routes.ts:125 = 소프트삭제(isActive=false + 값 비움).
+  // 소프트삭제(isActive=false + 값 비움).
   app.delete(
     "/api/admin/api-keys/:keyName",
     async (req: Request, res: Response) => {

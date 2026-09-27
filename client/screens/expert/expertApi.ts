@@ -1,6 +1,6 @@
-// ⚠️ 수정금지(승인필요) 2026-07-13 사장님 SSOT = 전문가 기능 자체 API 헬퍼 (다른 파일과 안 섞기 원칙).
-import { getApiUrl } from "@/lib/query-client";
-import { getUserData } from "@/lib/auth";
+// ⚠️ 수정금지(승인필요) 2026-09-27 사장님 결정 = 전문가 기능 자체 API 헬퍼(다른 파일과 안 섞기) = 서버 주소·로그인 머리말·토큰 확인은 앱 공용 1벌을 쓴다 (정본 9-27)
+import { getApiUrl, getAuthHeader } from "@/lib/query-client";
+import { getUserData, hasSessionToken } from "@/lib/auth";
 import { parseCreditShortfall, type CreditShortfall } from "@/lib/creditError";
 
 export type InquiryStatus = "pending" | "in_review" | "answered" | "rejected";
@@ -26,12 +26,8 @@ async function req(
   path: string,
   body?: unknown,
 ): Promise<Response> {
-  const user = await getUserData();
-  const headers: Record<string, string> = {};
+  const headers: Record<string, string> = { ...(await getAuthHeader()) };
   if (body) headers["Content-Type"] = "application/json; charset=utf-8";
-  if (user?.token && user.token.startsWith("simple_auth_token_v1_")) {
-    headers["Authorization"] = `Bearer ${user.token}`;
-  }
   return fetch(new URL(path, getApiUrl()).toString(), {
     method,
     headers,
@@ -179,7 +175,7 @@ export function tabBadgeCount(): Promise<number> {
 async function fetchBadgeCount(): Promise<number> {
   // ⚠️ 사장님 승인 2026-07-14 = 비로그인(실형식 토큰 없음)이면 배지 API 자체를 안 부름 → 401 로그·불필요 서버호출 제거.
   const user = await getUserData();
-  if (!user?.token || !user.token.startsWith("simple_auth_token_v1_")) return 0;
+  if (!hasSessionToken(user)) return 0;
   // ⚠️ 2026-08-03 사장님 지시 = 숫자 하나 얻으려고 문의 **목록 전체**를 내려받아 세던 방식 폐기 §19.
   const res = await req("GET", "/api/verification/unread-count");
   if (!res.ok) return 0;

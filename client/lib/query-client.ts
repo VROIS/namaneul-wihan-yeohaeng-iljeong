@@ -2,18 +2,10 @@ import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
 export function getApiUrl(): string {
   if (typeof window !== "undefined" && window.location) {
-    const origin = window.location.origin;
-    if (
-      origin.includes(":19006") ||
-      origin.includes(":8081") ||
-      origin.includes(":8082")
-    ) {
-      return origin.replace(/:(19006|8081|8082)/, ":5000");
-    }
-    return origin;
+    return window.location.origin;
   }
 
-  // ⚠️ 수정금지(승인필요) — Metro 번들러가 빌드 시 인라인 주입
+  // ⚠️ 수정금지(승인필요) 2026-09-27 사장님 결정 = 서버 주소 = 빌드 때 넣은 EXPO_PUBLIC_DOMAIN 1벌, 비면 옛 PC 주소로 가지 않고 바로 오류 (정본 9-27)
   const host = process.env.EXPO_PUBLIC_DOMAIN;
   if (host) {
     if (host.startsWith("http://") || host.startsWith("https://")) {
@@ -22,7 +14,7 @@ export function getApiUrl(): string {
     return `http://${host}`;
   }
 
-  return "http://192.168.1.23:8082";
+  throw new Error("EXPO_PUBLIC_DOMAIN 이 비어 있다");
 }
 
 async function throwIfResNotOk(res: Response) {
@@ -32,12 +24,12 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
-// ⚠️ 수정금지(승인필요) 2026-07-29 §22 = 로그인 토큰을 **반드시** 붙인다.
-async function authHeader(): Promise<Record<string, string>> {
+// ⚠️ 수정금지(승인필요) 2026-09-27 사장님 결정 = 로그인 토큰을 반드시 붙인다 = 요청 머리말 1벌(앱 전체가 이것만 쓴다) (정본 9-27)
+export async function getAuthHeader(): Promise<Record<string, string>> {
   try {
-    const { getUserData } = await import("./auth");
+    const { getUserData, hasSessionToken } = await import("./auth");
     const user = await getUserData();
-    if (user?.token && user.token.startsWith("simple_auth_token_v1_")) {
+    if (hasSessionToken(user)) {
       return { Authorization: `Bearer ${user.token}` };
     }
   } catch {}
@@ -56,7 +48,7 @@ export async function apiRequest(
     method,
     headers: {
       ...(data ? { "Content-Type": "application/json" } : {}),
-      ...(await authHeader()),
+      ...(await getAuthHeader()),
     },
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
@@ -83,7 +75,7 @@ export const getQueryFn: <T>(options: {
     // ⚠️ 수정금지(승인필요) 2026-07-30 = 여기도 토큰을 붙인다. apiRequest 만 고치면 useQuery 경로가
     const res = await fetch(url, {
       credentials: "include",
-      headers: await authHeader(),
+      headers: await getAuthHeader(),
     });
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {

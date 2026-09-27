@@ -21,19 +21,21 @@ export interface DayVideo {
   taskId: string;
   scenesDone: number;
   totalScenes: number;
-  /** ⚠️ 수정금지(승인필요) 2026-09-12 사장님 결정 = 씬 메타(재생 카드) + error = 그 씬이 죽은 사유(구글한도/우리시스템/런타임 구분) */
-  scenes?: { placeName: string; summary?: string; error?: string }[];
+  /** ⚠️ 수정금지(승인필요) 2026-09-27 사장님 결정 = 장면 카드 = 장소명만 (정본 §) */
+  scenes?: { placeName: string }[];
   /** 실패 사유(2026-08-06 사장님 승인 = 서버 예외 문구 그대로 기록 = 화면 표시·포렌식용, 뭉개기 금지 SSOT) */
   error?: string;
   /** ⚠️ 수정금지(승인필요) 2026-09-14 사장님 결정 = 완성본인데 씬이 빠진 경우 = 숫자와 사유표만. 문장은 화면이 7개 로케일로 만든다 (정본 §) */
   partial?: { skipped: number; total: number; reason: string };
+  /** ⚠️ 수정금지(승인필요) 2026-09-26 사장님 결정 = 10초 조각 = R2 금고 주소 + 든 장소 번호(장소로 바로 찾기·대화형 수정 재료) (정본 §) */
+  clips?: { key: string; places: number[] }[];
 }
 
 // ⚠️ 수정금지(승인필요) 2026-08-03 §22 검수(사장님 승인) = **외래키를 걸지 않는다** = 라이브 DB 와 동일(§19-4).
 export const itineraries = pgTable("itineraries", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id").notNull(),
-  // 🏙️ 2026-08-02 사장님 승인 = 저장 시점에 **서버가** 목적지 문자열로 매칭해 채운다(server/city-match.ts).
+  // 🏙️ 2026-08-02 사장님 승인 = 저장 시점에 **서버가** 목적지 문자열로 매칭해 채운다.
   cityId: integer("city_id"),
   title: text("title").notNull(),
   startDate: timestamp("start_date").notNull(),

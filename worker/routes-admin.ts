@@ -1,8 +1,10 @@
-// ⚠️ 수정금지(승인필요) 2026-09-06 사장님 결정 = 관리자 라우트 Worker 이관본 = 원본(server/admin/*)과 응답·정렬 동일, DB 접근만 openDb() 1벌
+// ⚠️ 수정금지(승인필요) 2026-09-06 사장님 결정 = 관리자 라우트 = DB 접근 openDb() 1벌
 import type { Express, Request, Response } from "express";
 import type { drizzle } from "drizzle-orm/postgres-js";
 import { and, count, eq, isNotNull, ne, sql } from "drizzle-orm";
 import * as schema from "../shared/schema";
+import { PRICE_EUR } from "../shared/credits";
+import { getFirstAdmin, loginResponse } from "./auth-user";
 import { accessSummary } from "./routes-admin-access";
 import { recentDelta } from "./lib/services/shared/metrics-heartbeat";
 
@@ -24,9 +26,6 @@ const {
 type Db = ReturnType<typeof drizzle<typeof schema>>;
 type OpenDb = () => { db: Db; close: () => void };
 
-// ── 원본 상수의 이식 (server/db.ts 미탑재분) ────────────────────────────────
-
-/** 원본 server/admin/dashboard-routes.ts:21 DEFAULT_DASHBOARD_DATA */
 const DEFAULT_DASHBOARD_DATA = {
   overview: {
     cities: 0,
@@ -40,47 +39,24 @@ const DEFAULT_DASHBOARD_DATA = {
   dbConnected: false,
 };
 
-/** 원본 server/admin/dashboard-routes.ts:110 GATED_PROVIDERS */
 const GATED_PROVIDERS = ["ts", "pm", "veo", "omni", "nano"];
 
-/** 원본 server/services/shared/external-call-log.ts:8 FREE_CAPS */
 const FREE_CAPS: Record<string, number | undefined> = { ts: 1000, pm: 1000 };
 
-/** 원본 server/services/shared/external-call-log.ts:24 UNIT_COST_LEDGER 의 eur 만(= UNIT_COST_EUR). */
+/** UNIT_COST_LEDGER 의 eur 만(= UNIT_COST_EUR). */
 const UNIT_COST_EUR: Record<string, number> = {
   ts: 0.0424,
   pm: 0.0085,
   veo: 0.0605,
-  omni: 0.121,
+  omni: 0.0383, // ⚠️ 수정금지(승인필요) 2026-09-26 사장님 결정 = 옴니 단가 = 360p 실측 토큰 · 콘솔 환산(1달러 ≈ €0.858) · 세금 20% (정본 §)
   nano: 0.0472,
   gemini: 0,
 };
 
-/** 원본 server/services/shared/external-call-log.ts:250 providers 목록(순서 그대로). */
+/** providers 목록(순서 그대로). */
 const USAGE_PROVIDERS = ["ts", "pm", "veo", "omni", "nano", "gemini"];
 
-/** 원본 server/creditService.ts:17 CREDIT_CONFIG.PRICE_EUR */
-const CREDIT_PRICE_EUR = 10;
-
-/** 원본 server/auth-user.ts:166 toClientUser */
-type UserRow = typeof users.$inferSelect;
-function toClientUser(user: UserRow) {
-  return {
-    id: user.id,
-    name: user.displayName,
-    email: user.email,
-    username: user.username,
-    displayName: user.displayName,
-    provider: user.provider,
-    birthDate: user.birthDate,
-    language: user.preferredLanguage,
-    isPaid: user.isPaid,
-    planType: user.planType,
-    role: user.role,
-  };
-}
-
-/** 원본 server/services/shared/external-call-log.ts:224 monthlyUsage. external_calls 는 drizzle 스키마에 없어 원본 SQL 그대로. */
+/** monthlyUsage. external_calls 는 drizzle 스키마에 없어 원본 SQL 그대로. */
 async function monthlyUsage(
   db: Db,
   provider: string,
@@ -93,7 +69,6 @@ async function monthlyUsage(
   return { count: rows[0]?.count ?? 0, units: rows[0]?.units ?? 0 };
 }
 
-/** 원본 server/services/shared/external-call-log.ts:249 usageSummary */
 interface UsageRow {
   provider: string;
   count: number;
@@ -117,7 +92,6 @@ async function usageSummary(db: Db): Promise<UsageRow[]> {
   return out;
 }
 
-/** 원본 server/services/shared/external-call-log.ts:97 simulateCost */
 async function simulateCost(db: Db, provider: string, planned: number) {
   const cap = FREE_CAPS[provider] ?? null;
   const { count: used } = await monthlyUsage(db, provider);
@@ -135,7 +109,6 @@ async function simulateCost(db: Db, provider: string, planned: number) {
   };
 }
 
-/** 원본 server/services/shared/external-call-log.ts:170 geminiPerformance */
 async function geminiPerformance(db: Db): Promise<{
   sampleSize: number;
   avgResponseTimeMs: number | null;
@@ -170,7 +143,6 @@ async function geminiPerformance(db: Db): Promise<{
 
 export function registerAdminRoutes(app: Express, openDb: OpenDb): void {
   // ⚠️ 수정금지(승인필요) 2026-07-13 = 관리자 로그인 = 비번 서버검증 → 관리자 세션 토큰 발급(§16 = 기존 Bearer 인증 재사용).
-  // 원본 server/auth.ts:324
   app.post("/api/admin/login", async (req: Request, res: Response) => {
     const { db, close } = openDb();
     try {
@@ -182,24 +154,14 @@ export function registerAdminRoutes(app: Express, openDb: OpenDb): void {
           .status(401)
           .json({ success: false, error: "invalid_password" });
       }
-      // ⚠️ 수정금지(승인필요) 2026-08-08 사장님 확정 = 관리자 계정을 **아이디로 박지 않는다** §19.
-      // 원본 storage.getAdminUser()(server/storage.ts:92) 와 같은 조건·정렬.
-      const [admin] = await db
-        .select()
-        .from(users)
-        .where(eq(users.role, "admin"))
-        .orderBy(users.createdAt)
-        .limit(1);
+      // ⚠️ 수정금지(승인필요) 2026-09-27 사장님 결정 = 관리자 계정을 아이디로 박지 않는다 = 가장 먼저 만든 관리자(getFirstAdmin 1벌) (정본 9-27)
+      const admin = await getFirstAdmin(db);
       if (!admin) {
         return res
           .status(500)
           .json({ success: false, error: "admin_account_missing" });
       }
-      res.json({
-        success: true,
-        user: toClientUser(admin),
-        token: "simple_auth_token_v1_" + admin.id,
-      });
+      res.json(loginResponse(admin));
     } catch {
       res.status(500).json({ success: false, error: "server_error" });
     } finally {
@@ -207,7 +169,6 @@ export function registerAdminRoutes(app: Express, openDb: OpenDb): void {
     }
   });
 
-  // 원본 server/admin/dashboard-routes.ts:54
   app.get("/api/admin/dashboard", async (_req: Request, res: Response) => {
     const { db, close } = openDb();
     try {
@@ -264,7 +225,6 @@ export function registerAdminRoutes(app: Express, openDb: OpenDb): void {
   });
 
   // ⚠️ 2026-08-23 사장님 승인 = 관제탑 계기판 씨앗 = 외부 유료호출 이달 사용량·무료잔량(공급자별) = external_calls 1벌
-  // 원본 server/admin/dashboard-routes.ts:106
   app.get(
     "/api/admin/external-calls/summary",
     async (_req: Request, res: Response) => {
@@ -283,7 +243,6 @@ export function registerAdminRoutes(app: Express, openDb: OpenDb): void {
   );
 
   // 2026-08-23 사장님 = 실행 전 시뮬 API = "이 공급자로 N건 진행하면 무료잔량 안인가, 얼마 더 과금인가"(외부호출 0)
-  // 원본 server/admin/dashboard-routes.ts:122
   app.get(
     "/api/admin/external-calls/simulate",
     async (req: Request, res: Response) => {
@@ -304,7 +263,6 @@ export function registerAdminRoutes(app: Express, openDb: OpenDb): void {
     },
   );
 
-  // 원본 server/admin/dashboard-routes.ts:139
   app.get(
     "/api/admin/activity-summary",
     async (_req: Request, res: Response) => {
@@ -399,7 +357,7 @@ export function registerAdminRoutes(app: Express, openDb: OpenDb): void {
           return sum + billable * (UNIT_COST_EUR[u.provider] || 0);
         }, 0);
 
-        const totalRevenueEur = (purchaseCount?.count || 0) * CREDIT_PRICE_EUR;
+        const totalRevenueEur = (purchaseCount?.count || 0) * PRICE_EUR;
         const arpuEur =
           (userTotal?.count || 0) > 0
             ? totalRevenueEur / (userTotal?.count || 1)
@@ -455,7 +413,6 @@ export function registerAdminRoutes(app: Express, openDb: OpenDb): void {
   );
 
   // ⚠️ 2026-08-25 사장님 지시로 수정 = 삭제(DELETE, 아래)는 소프트삭제(isActive=false)라 이 목록이 필터
-  // 원본 server/admin/api-keys-routes.ts:8
   app.get("/api/admin/api-keys", async (_req: Request, res: Response) => {
     const { db, close } = openDb();
     try {
@@ -480,7 +437,6 @@ export function registerAdminRoutes(app: Express, openDb: OpenDb): void {
     }
   });
 
-  // 원본 server/admin/guide-prices-routes.ts:6
   app.get("/api/admin/guide-prices", async (_req: Request, res: Response) => {
     const { db, close } = openDb();
     try {
@@ -494,7 +450,6 @@ export function registerAdminRoutes(app: Express, openDb: OpenDb): void {
   });
 
   // 구체 경로(/hourly)를 /api/admin/guide-prices/:id 보다 먼저 등록한다.
-  // 원본 server/admin/guide-prices-routes.ts:180
   app.get(
     "/api/admin/guide-prices/hourly",
     async (_req: Request, res: Response) => {
@@ -559,7 +514,6 @@ export function registerAdminRoutes(app: Express, openDb: OpenDb): void {
     },
   );
 
-  // 원본 server/admin/guide-prices-routes.ts:236
   app.post(
     "/api/admin/guide-prices/hourly",
     async (req: Request, res: Response) => {
@@ -649,7 +603,6 @@ export function registerAdminRoutes(app: Express, openDb: OpenDb): void {
     },
   );
 
-  // 원본 server/admin/guide-prices-routes.ts:105
   app.post(
     "/api/admin/guide-prices/seed",
     async (_req: Request, res: Response) => {
@@ -729,7 +682,6 @@ export function registerAdminRoutes(app: Express, openDb: OpenDb): void {
     },
   );
 
-  // 원본 server/admin/guide-prices-routes.ts:45
   app.post("/api/admin/guide-prices", async (req: Request, res: Response) => {
     const { db, close } = openDb();
     try {
@@ -773,7 +725,6 @@ export function registerAdminRoutes(app: Express, openDb: OpenDb): void {
     }
   });
 
-  // 원본 server/admin/guide-prices-routes.ts:17
   app.put(
     "/api/admin/guide-prices/:id",
     async (req: Request, res: Response) => {
@@ -806,7 +757,6 @@ export function registerAdminRoutes(app: Express, openDb: OpenDb): void {
     },
   );
 
-  // 원본 server/admin/guide-prices-routes.ts:87
   app.delete(
     "/api/admin/guide-prices/:id",
     async (req: Request, res: Response) => {

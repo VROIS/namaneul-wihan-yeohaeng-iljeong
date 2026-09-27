@@ -378,7 +378,7 @@
     
     <div id="tab-overview" class="tab-content">
       <!-- 🎯 활동 지표 = "+" 신규(외부호출분만) 배지 공통규칙 4종(2026-08-25 사장님 확정 스펙 v2).
-           BE 배선 완료 = GET /api/admin/activity-summary(server/admin/dashboard-routes.ts) 재사용, 새로 만들지 말 것(§16). -->
+           BE 배선 완료 = GET /api/admin/activity-summary 재사용, 새로 만들지 말 것(§16). -->
       <div id="activity-kpi" class="card" style="margin-bottom: 20px; background: linear-gradient(135deg, rgba(99,102,241,0.15), rgba(167,139,250,0.1)); border: 1px solid rgba(167,139,250,0.3);">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
           <h2 style="color: #a78bfa; margin: 0;">🎯 활동 지표</h2>
@@ -464,19 +464,6 @@
         </div>
         <div id="recent-payments" style="overflow-x: auto; margin-top: 8px;">
           <div class="loading"><div class="spinner"></div>로딩 중...</div>
-        </div>
-      </div>
-
-      <!-- 🎬 여정 미리보기 영상 생성 방식 A/B 전환 (2026-07-23 사장님 SSOT = 현황 밑 신규. 정본 = docs/여정 미리보기 영상 구현.md) -->
-      <div class="card" style="margin-top: 16px;">
-        <h2>여정 미리보기 영상 생성 방식</h2>
-        <div style="display: flex; align-items: center; gap: 16px; padding: 12px 0;">
-          <div style="font-size: 15px;">현재: <span id="video-mode-label" style="font-weight: 700; color: #a78bfa;">-</span></div>
-          <button class="btn btn-primary btn-sm" onclick="toggleVideoMode()">전환</button>
-        </div>
-        <div style="font-size: 12px; color: #9ca3af;">
-          A = 지브리풍 애니 (Omni, 씬당 $0.61) · B = 실사 포토무비 (나노바나나+Veo Lite, 씬당 $0.35)<br />
-          디폴트 = B (원가 절감, 2026-07-23 사장님 확정) · 서버 재배포 시 B로 초기화됩니다.
         </div>
       </div>
     </div>
@@ -1005,31 +992,8 @@
     // ⚠️ 2026-07-16 = data-freshness/collection-stats/data-quality/celebrity-evidence/api-services-health/scheduler/itinerary-stats/route-cache/popularity/korean-sentiment
     //   완전삭제(§19) = 서버에 없는 옛 크롤러 대시보드 엔드포인트(admin-routes 2026-05-23 재작성으로 이미 폐기됨). dashboard 엔드포인트만 사용.
     //   ⚠️ 2026-08-25 확정 스펙 v2 = 죽은 4필드(오늘동기화·성공률·API연결·캐시데이터, BE가 안 주던 값) 카드 완전삭제 §19 = control-tower/summary 호출 제거.
-    // 🎬 여정 미리보기 영상 A/B 전환 (2026-07-23) = GET/POST /api/admin/video-config
-    let currentVideoMode = 'optionA';
-    async function loadVideoMode() {
-      try {
-        const r = await fetch(`${API_BASE}/video-config`);
-        const d = await r.json();
-        currentVideoMode = d.currentOptionMode || 'optionA';
-        const label = document.getElementById('video-mode-label');
-        if (label) label.textContent = currentVideoMode === 'optionB' ? 'B · 실사 포토무비' : 'A · 지브리풍 애니';
-      } catch (e) { console.error('video-config 조회 실패', e); }
-    }
-    async function toggleVideoMode() {
-      const next = currentVideoMode === 'optionB' ? 'optionA' : 'optionB';
-      try {
-        await fetch(`${API_BASE}/video-config`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ optionMode: next })
-        });
-      } catch (e) { console.error('video-config 전환 실패', e); }
-      loadVideoMode();
-    }
-
     // ⚠️ 2026-08-25 확정 스펙 v2 = 활동지표(가입자·여정건수·AI의견·전문가검증)·Audioguide·영상·수익·로그인방식별·AI 성능 전부 배선.
-    //   서버 = GET /api/admin/activity-summary(server/admin/dashboard-routes.ts) 1콜로 전부 조립해서 줌.
+    //   서버 = GET /api/admin/activity-summary 1콜로 전부 조립해서 줌.
     //   AI 성능 = external_calls 계측 3컬럼(response_time_ms·success·error_message, 2026-08-25 추가) 기준
     //   최근 gemini 호출 100건 실시간 집계(geminiPerformance(), external-call-log.ts). 계측 이전 옛 행은 자동 제외.
     function fmtNum(n) { return typeof n === 'number' ? n.toLocaleString('ko-KR') : '-'; }
@@ -1203,7 +1167,6 @@
     }
 
     async function loadDashboard() {
-      loadVideoMode();
       loadActivitySummary();
       loadQuotaGauges();
       loadSystemStatus();

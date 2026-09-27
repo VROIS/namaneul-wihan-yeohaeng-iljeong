@@ -28,7 +28,8 @@ import {
   fetchPrompt,
   getTTSLanguage,
 } from "@/screens/guide/services/PromptService";
-import { getUserData } from "@/lib/auth";
+import { getUserData, hasSessionToken } from "@/lib/auth";
+import { getAuthHeader } from "@/lib/query-client";
 // ⚠️ 수정금지(승인필요) 2026-08-14 사장님 승인 = 카메라 경로 앱 언어 배선 = openGuide.ts 와 같은 패턴(§16).
 import i18n from "@/lib/i18n";
 // ⚠️ 수정금지(승인필요) 2026-08-14 사장님 지시 = 이 화면(가이드 미니앱)의 안내문구·에러문구 다국어 = 이 화면
@@ -93,7 +94,6 @@ function splitSentences(text: string): { sentences: string[]; rest: string } {
 }
 
 async function postGuideBatch(args: {
-  token?: string | null;
   warehouse?: boolean;
   lang: string;
   placeId?: number | null;
@@ -109,7 +109,7 @@ async function postGuideBatch(args: {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      ...(args.token ? { Authorization: `Bearer ${args.token}` } : {}),
+      ...(args.warehouse ? {} : await getAuthHeader()),
     },
     body: JSON.stringify({
       language: args.lang,
@@ -292,12 +292,7 @@ function GuideResultHost({
       // ⚠️ 수정금지(승인필요) 2026-08-05 사장님 SSOT = 크레딧부족이면 해설칸 텍스트 대신 공용 Alert+충전이동(§16).
       let creditShortfall: CreditShortfall | null = null;
       try {
-        const guideUser = await getUserData();
-        const authHeader: Record<string, string> = guideUser?.token?.startsWith(
-          "simple_auth_token_v1_",
-        )
-          ? { Authorization: `Bearer ${guideUser.token}` }
-          : {};
+        const authHeader = await getAuthHeader();
 
         // ⓪ ⚠️ 2026-08-02 사장님 확정 = 우리 DB 장소는 **창고를 먼저 본다**.
         if (placeId) {
@@ -477,7 +472,7 @@ function GuideResultHost({
   // ③ 저장 = 운영 handleSaveClick 페이로드 그대로. 로그인한 경우만(사장님 확정 2026-07-20).
   const handleSave = useCallback(async (): Promise<boolean> => {
     const user = await getUserData();
-    if (!user?.token || !user.token.startsWith("simple_auth_token_v1_")) {
+    if (!hasSessionToken(user)) {
       Alert.alert(
         guideT("loginRequiredTitle", lang),
         guideT("loginRequiredBody", lang),
@@ -487,7 +482,6 @@ function GuideResultHost({
     if (!fullTextRef.current) return false;
     try {
       const ok = await postGuideBatch({
-        token: user.token,
         lang,
         placeId: placeId ?? null,
         text: fullTextRef.current,
