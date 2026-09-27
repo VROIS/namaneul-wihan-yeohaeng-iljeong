@@ -21,6 +21,7 @@ import { useMapToggle } from "@/contexts/MapToggleContext";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 // ⚠️ 수정금지(승인필요) 2026-08-05 사장님 지적 = 결제하고 돌아왔으면 **처음부터 프로필(충전소)** 로 뜬다.
 import { readPaymentReturn } from "@/lib/paymentReturn";
+import { readProfileLink } from "@/lib/profileLink";
 
 export type MainTabParamList = {
   Home: { itineraryId?: number } | undefined;
@@ -173,8 +174,12 @@ export default function MainTabNavigator() {
   return (
     <>
       <Tab.Navigator
-        // ⚠️ 수정금지(승인필요) 2026-08-06 사장님 SSOT = **첫 화면(부모)** 을 여기서 정한다.
-        initialRouteName={readPaymentReturn() && isAuthed ? "Profile" : "Home"}
+        // ⚠️ 수정금지(승인필요) 2026-09-27 사장님 결정 = 첫 화면(부모)을 여기서 정한다 = 결제 복귀(로그인)·웹 안내 주소(/privacy·/delete-account·/support)면 프로필 (정본 9-27)
+        initialRouteName={
+          (readPaymentReturn() && isAuthed) || readProfileLink()
+            ? "Profile"
+            : "Home"
+        }
         screenOptions={({ route }) => ({
           tabBarIcon: ({ color, focused }) =>
             getTabBarIcon(route.name, color, focused),

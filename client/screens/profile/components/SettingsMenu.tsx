@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { View, Text, Pressable, Linking } from "react-native";
 import { Brand, Fonts } from "@/constants/theme";
 import Icon from "@/components/Icon";
@@ -8,6 +8,11 @@ import { shortDateCard, pickBi } from "../utils"; // 날짜 서식 = 여정 카�
 import { HELP_FAQ, FAQ_HEADING } from "../helpFaq";
 import { PRIVACY } from "../privacyContent";
 import type { ProfileApi } from "../hooks/useProfile";
+import {
+  PROFILE_ANCHOR,
+  clearProfileLink,
+  readProfileLink,
+} from "@/lib/profileLink";
 
 // ⚠️ 수정금지(승인필요) 2026-08-08 사장님 지시 = 고객센터 대표 메일 = 이 상수 1벌.
 const SUPPORT_EMAIL = "vrois75015@gmail.com";
@@ -49,7 +54,16 @@ export default function SettingsMenu({ profile }: { profile: ProfileApi }) {
   // 🌐 2026-08-14 사장님 승인 = 개인정보방침·FAQ 한/영 2벌 선택 기준(privacyContent.ts·helpFaq.ts 참조)
   const isKo = currentLang.code === "ko";
 
-  const [expandedKey, setExpandedKey] = useState<string | null>(null);
+  // ⚠️ 수정금지(승인필요) 2026-09-27 사장님 결정 = 웹 안내 주소로 들어오면 그 아코디언을 펼치고 그 자리(탈퇴 안내 등)로 바로 내려간다 (정본 9-27)
+  const [expandedKey, setExpandedKey] = useState<string | null>(
+    readProfileLink()?.section ?? null,
+  );
+  useEffect(() => {
+    const anchor = readProfileLink()?.anchor;
+    if (anchor)
+      document.getElementById(anchor)?.scrollIntoView({ block: "start" });
+    clearProfileLink();
+  }, []);
   const [isLangDropdownOpen, setIsLangDropdownOpen] = useState<boolean>(false);
   const [showReceipts, setShowReceipts] = useState<boolean>(false);
 
@@ -302,6 +316,7 @@ export default function SettingsMenu({ profile }: { profile: ProfileApi }) {
 
         {/* 3. 개인정보 보호 아코디언 */}
         <Pressable
+          nativeID={PROFILE_ANCHOR.privacy}
           style={[
             styles.accordionItemHeader,
             { borderTopWidth: 1, borderTopColor: "#F1F5F9" },
@@ -430,6 +445,7 @@ export default function SettingsMenu({ profile }: { profile: ProfileApi }) {
             </Text>
 
             <Text
+              nativeID={PROFILE_ANCHOR.deleteAccount}
               style={[
                 styles.accordionText,
                 { fontWeight: "bold", color: "#0F172A", marginTop: 4 },
@@ -508,6 +524,7 @@ export default function SettingsMenu({ profile }: { profile: ProfileApi }) {
 
         {/* 4. 도움말 및 고객센터 아코디언 */}
         <Pressable
+          nativeID={PROFILE_ANCHOR.help}
           style={[
             styles.accordionItemHeader,
             { borderTopWidth: 1, borderTopColor: "#F1F5F9" },
