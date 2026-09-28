@@ -68,6 +68,18 @@ const CAPABILITIES = [
     ],
     hint: "같은 PID 쌍둥이 = status-backfill.ts(keep 흡수·best_rank 합집합·번역행 복사). 소속오염 행 = wrongcity-quarantine.ts(500km 안 가장 가까운 도시로 이동, 없으면 삭제). 새 중복 청소·이동 스크립트 만들지 말 것(§16).",
   },
+  // ⚠️ 수정금지(승인필요) 2026-09-28 사장님 결정 = 올리기 = scripts/release.mjs 1벌, 다른 배포 스크립트·임시 배포 명령 금지 (정본 §24)
+  {
+    id: "deploy",
+    ko: "트리피스 올리기(커밋 → 직접 배포 → 확인 → GitHub 푸시 맨 뒤)",
+    owners: ["scripts/release.mjs", "scripts/verify-before-commit.mjs"],
+    triggers: [
+      /wrangler(\.js)?["'`]?\s+deploy\b(?!.*--dry-run)/,
+      /^\s*["'`]deploy["'`]\s*,?\s*$/,
+      /["'`]deploy["'`]\s*,\s*["'`]--(config|cwd)/,
+    ],
+    hint: "올리기 = node scripts/release.mjs <커밋메시지파일> 1벌(§24). verify-before-commit 는 조립 시험(--dry-run)만. 새 배포 스크립트·임시 배포 명령 만들지 말 것(§16).",
+  },
 ];
 
 // ── --catalog : fill/ 실제 파일 헤더 1줄 + 능력표를 출력 (항상 최신 = 카탈로그가 코드에서 자동 생성) ──
