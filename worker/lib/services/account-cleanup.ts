@@ -2,6 +2,7 @@
 import { db } from "../db";
 import { sql } from "drizzle-orm";
 import { deleteFromR2, isR2Configured } from "./shared/r2-client";
+import { userGuidesDir } from "../../../shared/r2-paths";
 
 const GRACE_MONTHS = 6;
 
@@ -46,7 +47,7 @@ export async function cleanupDeletedAccounts(): Promise<CleanupResult> {
   let done = 0;
   let held = 0;
 
-  const guidesPrefix = `${(process.env.R2_PUBLIC_URL || "").replace(/\/+$/, "")}/guides/`;
+  const guidesPrefix = `${(process.env.R2_PUBLIC_URL || "").replace(/\/+$/, "")}/${userGuidesDir}/`;
 
   for (const userId of ids) {
     //    ⚠️ 수정금지(승인필요) 2026-08-08 §22 판단검증(4차) = 옛 장소번호 기반 판정 폐기 = 2026-08-08 §19.

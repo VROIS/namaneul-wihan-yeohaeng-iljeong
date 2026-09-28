@@ -2,6 +2,7 @@ import crypto from "crypto"; // ⚠️ 수정금지(승인필요) — raw 버전
 import fs from "fs"; // ⚠️ 수정금지(승인필요) — raw 버전순번 헬퍼(2026-06-16 사장님 SSOT) = 디렉토리 동기 스캔용
 import path from "path"; // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 승인 = saveVersionedReport() 경로 조합용
 import { listR2, getFromR2 } from "./r2-client";
+import { fileStamp } from "../../../../shared/r2-paths";
 
 // ⚠️ 수정금지(승인필요) 2026-06-15 사장님 SSOT = docs/raw 산출물 파일명 단일 표준 (= 장독 형식 정비).
 //   = 옛 {NN-단계명}-{내용}-{YYYY-MM-DD}.json 폐기 (= 날짜 끝 = 정렬 시 날짜 안 보임 = 찾기 난잡, 사장님 지적 2026-06-15).
@@ -9,15 +10,15 @@ import { listR2, getFromR2 } from "./r2-client";
 export const rawDate = (d?: string): string =>
   d || new Date().toISOString().slice(0, 10);
 
+// ⚠️ 수정금지(승인필요) 2026-09-28 사장님 결정 = 이름 맨 앞 = 시각 초까지 (정본 K3)
 export function rawName(
   stepNum: number,
   stepName: string,
   content?: string,
-  date?: string,
 ): string {
   const nn = String(stepNum).padStart(2, "0");
   const tail = content && content.trim() ? `_${content.trim()}` : "";
-  return `${rawDate(date)}_${nn}-${stepName}${tail}.json`;
+  return `${fileStamp()}_${nn}-${stepName}${tail}.json`;
 }
 
 // ⚠️ 수정금지(승인필요) — raw 버전순번 헬퍼(2026-06-16 사장님 SSOT)
@@ -110,14 +111,14 @@ export function latestVersioned(dir: string, stemFile: string): string | null {
   return best;
 }
 
-// ⚠️ 수정금지(승인필요) 2026-08-28 사장님 승인 = 산출표 저장 절차(mkdir + versionedName + 파일쓰기) 1벌(§16 SSOT) =
-/** (중복 0) / 상이 = _N 버전 순번 분리 보존(= versionedName 규칙 그대로, §18). */
+// ⚠️ 수정금지(승인필요) 2026-09-28 사장님 결정 = 산출표 저장 절차 1벌, 이름 맨 앞 = 시각 초까지 (정본 K3)
 export function saveVersionedReport(
   dir: string,
-  stemFile: string,
+  name: string,
   payload: unknown,
 ): string {
   fs.mkdirSync(dir, { recursive: true });
+  const stemFile = `${fileStamp()}_${name}`;
   const finalName = versionedName(dir, stemFile, rawHash(payload), (p) => {
     try {
       return rawHash(JSON.parse(fs.readFileSync(p, "utf-8")));

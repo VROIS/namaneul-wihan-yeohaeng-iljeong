@@ -8,6 +8,7 @@ import { issueApiKey } from "../worker/container/lib/services/shared/issue-api-k
 import { generateSceneClip } from "../worker/container/lib/services/shared/video-gen-client";
 import { concatClips } from "../worker/container/lib/services/video-stitcher";
 import { uploadToR2 } from "../worker/container/lib/services/shared/r2-client";
+import { fileStamp } from "../shared/r2-paths";
 import {
   MAX_SCENES,
   normalizeVideoLang,
@@ -76,13 +77,13 @@ async function main() {
   });
   if (dry) return;
 
-  const now = new Date().toISOString();
-  const vault = `${city.folder}/tests-${now.slice(0, 16).replace(/[:T]/g, "-")}`;
+  const stamp = fileStamp();
+  const vault = `${city.folder}/tests`;
   const apiKey = await issueApiKey(
     pool,
     "GEMINI_API_KEY",
     null,
-    now.slice(0, 10),
+    stamp.slice(0, 10),
     true,
   );
   const start = Date.now();
@@ -99,7 +100,7 @@ async function main() {
           rawTag: `omni-preview-i${id}-d${day}-c${clip.index}-${lang}`,
         });
         fs.writeFileSync(path.join(outDir, `${name}.mp4`), buf);
-        const key = clipKey(vault, id, day, clip, lang);
+        const key = clipKey(vault, day, stamp, clip, lang);
         await uploadToR2(key, buf, "video/mp4");
         console.log(
           `조각 ${clip.index} 완료: ${Math.round((Date.now() - t0) / 1000)}초 → R2 ${key}`,

@@ -16,6 +16,7 @@ import { upsertTranslationWith } from "../place-upsert";
 import { distanceMetersFromCoords } from "../shared/geo-distance";
 import { PHOTO_MAX_WIDTH_PX } from "../shared/ts-client";
 import { uploadToR2 } from "../shared/r2-client";
+import { placeImageKey } from "../../../../shared/r2-paths";
 
 export interface CopyEntry {
   lang: string;
@@ -211,7 +212,11 @@ export async function readOne(
       if (pres.ok) {
         const cid = String(d.mapsUri || "").match(/cid=(\d+)/)?.[1];
         const up = await t.uploadToR2(
-          `place-images/${t.cityId}/${cat}/${cid || encodeURIComponent(n.name)}.jpg`,
+          placeImageKey(
+            t.cityId,
+            cat,
+            `${cid || encodeURIComponent(n.name)}.jpg`,
+          ),
           Buffer.from(await pres.arrayBuffer()),
           "image/jpeg",
         );

@@ -24,6 +24,7 @@ import { GoogleGenAI } from "@google/genai/web";
 import { env, waitUntil } from "cloudflare:workers";
 import * as schema from "../shared/schema";
 import { saveRawToR2 } from "./raw-store";
+import { guideContext, itineraryContext } from "../shared/r2-paths";
 import { recordExternalCall } from "./call-log";
 import { buildPlaceHintHeader } from "./lib/services/shared/place-hint-header";
 import {
@@ -44,9 +45,6 @@ export type OpenDb = () => { db: Db; close: () => void };
 
 const { cities, guides, placeSeedRaw } = schema;
 
-// ── §18 raw 저장 + 유료호출 기록 (원본 geminiClient.ts 가 부르던 두 관문) ────
-
-/** 제미니 호출 1건이 남기는 기록거리. 호출부(라우트)가 sku·tag 를 얹어 recordGeminiCall 로 넘긴다. */
 interface GeminiCallRecord {
   responseTimeMs: number;
   success: boolean;
@@ -55,19 +53,16 @@ interface GeminiCallRecord {
   raw?: { request: unknown; raw: unknown };
 }
 
-/** 제미니 호출 1건의 기록 = saveRaw(§18 raw) + recordExternalCall(유료호출 기록)을 이 함수 1벌로 묶는다 = **제미니 호출이 끝난 뒤** DB 연결을 새로 연다(외부호출 대기 중에는 연결을 쥐지 않는다).
- *  기록 실패는 절대 본 기능을 막지 않는다(§18 raw 저장은 best-effort). */
+// ⚠️ 수정금지(승인필요) 2026-09-28 사장님 결정 = 해설 raw = 도시 번호(없으면 user-{번호}), AI 의견 raw = 여정의 도시 번호(없으면 itinerary-{번호}) (정본 K3)
 async function recordGeminiCall(
   openDb: OpenDb,
-  p: GeminiCallRecord & { sku: string; tag: string },
+  p: GeminiCallRecord & { sku: string; tag: string; ctx: string | null },
 ): Promise<void> {
   try {
-    // geminiClient.ts 와 같은 saveRaw = source "gemini" / contextId 는 호출부가 준 값
-    // (해설·AI 의견 둘 다 "runtime") / tag = rawTag.
     if (p.raw) {
       await saveRawToR2(env.RAW_BUCKET, {
         source: "gemini",
-        contextId: "runtime",
+        contextId: p.ctx,
         tag: p.tag,
         request: p.raw.request,
         raw: p.raw.raw,
@@ -294,6 +289,7 @@ export function registerGeminiRoutes(app: Express, openDb: OpenDb): void {
         base64Image?: string;
         prompt?: string;
         systemInstruction?: string;
+        cityId?: unknown;
       };
       const { base64Image, prompt, systemInstruction } = body;
       const isPromptEmpty = !prompt || String(prompt).trim() === "";
@@ -349,6 +345,7 @@ export function registerGeminiRoutes(app: Express, openDb: OpenDb): void {
             recordGeminiCall(openDb, {
               sku: MODEL_ID,
               tag: "guide-gemini",
+              ctx: guideContext(body.cityId, requesterId),
               ...p,
             }),
           );
@@ -403,14 +400,16 @@ export function registerGeminiRoutes(app: Express, openDb: OpenDb): void {
         const fp = `${computeItineraryFingerprint(itinerary)}:${language || "ko"}`;
 
         let existingRawData: Record<string, unknown> | null = null;
+        let aiContext: string | null = null;
         const idNum = itineraryId ? parseInt(String(itineraryId)) : NaN;
         if (!Number.isNaN(idNum)) {
           const [row] = await db
-            .select({ rawData: schema.itineraries.rawData })
+            .select()
             .from(schema.itineraries)
             .where(eq(schema.itineraries.id, idNum))
             .limit(1);
           existingRawData = (row?.rawData as Record<string, unknown>) ?? null;
+          aiContext = itineraryContext(row?.cityId, idNum);
           const cached = existingRawData?.verification as
             | { fp?: string; result?: unknown }
             | undefined;
@@ -490,6 +489,7 @@ export function registerGeminiRoutes(app: Express, openDb: OpenDb): void {
               recordGeminiCall(openDb, {
                 sku: MODEL_ID,
                 tag: "ai-opinion",
+                ctx: aiContext,
                 ...p,
               }),
             );

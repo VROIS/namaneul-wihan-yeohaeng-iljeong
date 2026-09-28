@@ -145,37 +145,22 @@ export function omniSceneCards(
   ]);
 }
 
-// ⚠️ 수정금지(승인필요) 2026-09-26 사장님 결정 = R2 금고 = 도시별 폴더(도시 번호-영어 도시명), 조각 이름에 장소 번호·언어 (정본 §)
-export function videoFolder(
-  cityId: number | null | undefined,
-  cityNameEn?: string | null,
-): string {
-  const slug = String(cityNameEn || "")
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return cityId
-    ? `videos/${cityId}${slug ? `-${slug}` : ""}`
-    : "videos/0-unknown";
-}
-
+// ⚠️ 수정금지(승인필요) 2026-09-28 사장님 결정 = 영상 폴더 = shared/r2-paths videoDir(도시 번호/videos/여정), 이름 맨 앞 = 만든 시각 초까지(다시 만들어도 덮지 않음), 조각 이름에 장소 번호·언어 (정본 K3)
 export const dayVideoKey = (
   folder: string,
-  itineraryId: number,
   day: number,
-): string => `${folder}/${itineraryId}/day${day}.mp4`;
+  stamp: string,
+): string => `${folder}/${stamp}_day${day}.mp4`;
 
 export function clipKey(
   folder: string,
-  itineraryId: number,
   day: number,
+  stamp: string,
   clip: OmniClip,
   lang: string,
 ): string {
   const places = clip.slots.map((s) => `p${slotPlaceId(s)}`).join("-");
-  return `${folder}/${itineraryId}/day${day}/clip${clip.index}-${places}${clip.ending ? "-end" : ""}-${lang}.mp4`;
+  return `${folder}/${stamp}_day${day}/clip${clip.index}-${places}${clip.ending ? "-end" : ""}-${lang}.mp4`;
 }
 
 export function placeLine(

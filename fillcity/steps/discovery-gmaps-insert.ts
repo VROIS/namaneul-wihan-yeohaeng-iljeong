@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { latestVersioned } from "../../worker/lib/services/shared/raw-filename";
+import { cityReportKey } from "../../shared/r2-paths";
 import {
   codeOf,
   type NewEntry,
@@ -92,7 +93,7 @@ function findReportPath(): string {
   const { uploadToR2 } = await import(
     "../../worker/lib/services/shared/r2-client"
   );
-  const reportKey = `b1-reports/${cityId}/${path.basename(reportPath)}`;
+  const reportKey = cityReportKey(cityId, path.basename(reportPath));
   await uploadToR2(
     reportKey,
     Buffer.from(fs.readFileSync(reportPath)),

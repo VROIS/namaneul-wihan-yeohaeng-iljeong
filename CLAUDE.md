@@ -486,17 +486,19 @@ fillcity/                             ← 창고 채움 WF(fill-city-v3.ts) · �
 - 모든 외부 클라이언트(`ts-client.ts` / `geminiClient.ts`)가 응답 직후 이 함수로 저장 강제.
 - 직접 `fetch().then(저장 안 함)` = 관문 우회 = **금지** (= raw 누락 = 비용 증발 = 은폐 위험).
 
-### ✅ 파일 규칙 (= save-raw.ts 36줄 = 절대 변경 금지)
+### ✅ 파일 규칙 (2026-09-28 사장님 결정 = 모든 파일 이름 맨 앞 = 시각 초까지. 다시 만들어도, 동시에 만들어도 덮지 않는다)
 
 ```
-{cityId}/{YYYY-MM-DD}_{source}-{tag}.json
+R2 {cityId}/raw/{YYYY-MM-DD_HHMMSS}_{source}-{tag}.json   (자리·시각 = shared/r2-paths.ts rawPlace·fileStamp 1벌)
 ```
+
+- 사진·영상·보고서·사용자 사진도 같다 = `{시각}_{원래 이름}` (예 `19/videos/101/2026-09-28_002502_day1.mp4`). 예외 = 관리 통계 하루 장부(`system/admin-metrics/{날짜}.jsonl`, 30초마다 이어 씀).
 
 | 요소 | 값 | 비고 |
 |---|---|---|
-| **위치** | 로컬 `docs/raw/{cityId}/` + Storage `raw-responses/{cityId}/` | **2 곳 동형** (= 비용 보호 + 재활용) |
-| **cityId** | 발굴 = 도시 id / cityId 없는 호출(동선·메인앱) = `runtime` | |
-| **날짜** | `YYYY-MM-DD` (= 앞) | 같은 날 같은 tag + **같은 raw 내용** = 덮어쓰기 = 중복0. **raw 내용 다르면** = `_1`/`_2` 버전 순번 분리 보존(손실0) |
+| **위치** | 로컬 `docs/raw/{cityId}/` + R2 `{cityId}/raw/` | **2 곳 동형** (= 비용 보호 + 재활용) |
+| **cityId** | 도시 번호 / 도시 없는 여정 = `itinerary-{번호}` → R2 `system/itineraries/{번호}/raw/` / 장소 없는 사진 해설 = `user-{번호}` → R2 `users/raw/`(파일 끝 `_{사용자 번호}`) / 맥락 없음 → R2 `system/runtime/raw/` | 해설·AI 의견·동선·영상도 도시 번호를 넘긴다 |
+| **시각** | `YYYY-MM-DD_HHMMSS` 세계 표준시 (= 맨 앞) | 같은 초 같은 tag + **같은 raw 내용** = 1개. **내용 다르면** = `_1`/`_2` 분리 보존(손실0) |
 | **source** | `ts` \| `gemini` | |
 | **tag** | 호출 맥락 식별(영숫자, `-` 치환, 48자) | 미지정 = `call` |
 
@@ -517,7 +519,7 @@ fillcity/                             ← 창고 채움 WF(fill-city-v3.ts) · �
 
 ### ✅ 버전 순번 (2026-06-16 사장님 SSOT)
 
-- 같은 날 같은 tag 재호출 시 = 로컬 `docs/raw` 기준 `md5(raw)` 비교.
+- 같은 초 같은 tag 가 또 오면 = R2 에 있는 같은 이름 파일과 `md5(raw)` 비교.
   - **동일** = 1 개 파일 덮어쓰기 (= 중복0).
   - **상이** = `_N`(= `_1`/`_2`...) 버전 순번 분리 보존 (= raw 손실0 = 다른 결과는 비가역 자산).
 - 규칙 SSOT = `worker/lib/services/shared/raw-filename.ts` 의 `rawHash` / `versionedName` (= `storage-raw-restructure` 로직 흡수 = 재발명0).
@@ -529,7 +531,7 @@ fillcity/                             ← 창고 채움 WF(fill-city-v3.ts) · �
 |---|---|---|
 | 1 | minified(한 줄) 저장 | 사장님 원본 검수 불가 = 은폐 (= 선임 구속사유) |
 | 2 | 로컬 1 곳만 / Storage 1 곳만 | 2 곳 동형 깨짐 = 재활용·비용보호 무효 |
-| 3 | 파일명에 시각(HH-mm-ss) 추가 | 같은 호출이 매번 새 파일 = 중복 누적 (단, 내용이 실제 다를 때의 `_N` 버전 순번은 허용 = 위 버전 순번 소절) |
+| 3 | 파일 이름에서 시각(초)을 빼거나 같은 이름으로 덮어쓰기 | 다시 만든 영상·원본이 옛것을 지움 = 외부에서 들어온 자산 손실 |
 | 4 | `saveRaw()` 우회 = 직접 외부 fetch 후 미저장 | raw 누락 = 유료 결과 증발 |
 | 5 | `request`/`raw` 구조 임의 변경·필드 누락 | 대조·재현 불가 |
 

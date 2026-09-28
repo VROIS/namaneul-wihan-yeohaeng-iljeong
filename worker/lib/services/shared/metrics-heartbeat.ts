@@ -3,6 +3,7 @@
 import { db } from "../../db";
 import { sql } from "drizzle-orm";
 import { getFromR2, uploadToR2, isR2Configured } from "./r2-client";
+import { adminMetricsKey } from "../../../../shared/r2-paths";
 
 export const TICK_MS = 30_000;
 
@@ -18,8 +19,7 @@ export type MetricPoint = {
 
 export type MetricDelta = Record<keyof Omit<MetricPoint, "t">, number>;
 
-const keyOf = (d = new Date()) =>
-  `admin-metrics/${d.toISOString().slice(0, 10)}.jsonl`;
+const keyOf = (d = new Date()) => adminMetricsKey(d.toISOString().slice(0, 10));
 
 /** 지금 시점 지표 1벌. 여정은 MIX·DB-only 구분 없이 전체(2026-08-31 사장님 확정). */
 export async function readMetrics(): Promise<MetricPoint> {

@@ -3,10 +3,14 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath, pathToFileURL } from "url";
 import { listR2, getR2PublicUrl } from "../shared/r2-client";
+import {
+  laterKey,
+  placeImagesDir,
+  stampedName,
+} from "../../../../shared/r2-paths";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "../../../..");
-const PREFIX = "place-images"; // R2 키 = place-images/{cityId}/{cat}/{pid}.{ext} (옛 SP 버킷명 = R2 프리픽스 1:1)
 
 export async function relinkStorageImages(opts: {
   cityId: number;
@@ -34,22 +38,23 @@ export async function relinkStorageImages(opts: {
     )
   ).rows;
 
-  const objects = await listR2(`${PREFIX}/${cityId}/`);
+  const objects = await listR2(`${placeImagesDir(cityId)}/`);
   const byPid = new Map<string, string[]>();
   for (const o of objects) {
-    const m = o.key.match(/^place-images\/\d+\/[^/]+\/(.+)\.[^.]+$/);
-    if (!m) continue;
-    const arr = byPid.get(m[1]) || [];
+    const pid = stampedName(o.key.slice(o.key.lastIndexOf("/") + 1));
+    if (!pid) continue;
+    const arr = byPid.get(pid) || [];
     arr.push(o.key);
-    byPid.set(m[1], arr);
+    byPid.set(pid, arr);
   }
+  // ⚠️ 수정금지(승인필요) 2026-09-28 사장님 결정 = 같은 PID 여러 벌 = 같은 분류 폴더의 최신 시각, 없으면 전체 최신 = laterKey 1벌 (정본 K3)
   const findObj = (pid: string, cat: string): string | null => {
     const keys = byPid.get(pid);
     if (!keys?.length) return null;
-    return (
-      keys.find((k) => k.startsWith(`${PREFIX}/${cityId}/${cat}/`)) ||
-      [...keys].sort()[0]
+    const inCat = keys.filter((k) =>
+      k.startsWith(`${placeImagesDir(cityId)}/${cat}/`),
     );
+    return (inCat.length ? inCat : keys).reduce(laterKey);
   };
 
   // ⚠️ 수정금지(승인필요) 2026-06-14 사용자 SSOT = "구글이미지(창고 PID) 있으면 무조건 교체" (= PM 비용 절감 핵심).

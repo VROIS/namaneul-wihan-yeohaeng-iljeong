@@ -185,7 +185,7 @@ export function printAndSaveReport(opts: {
   const outDir = path.join(ROOT, "docs", "b1-reports", String(cityId));
   const outPath = saveVersionedReport(
     outDir,
-    `${today}_gmaps-pid-identity.json`,
+    "gmaps-pid-identity.json",
     payload,
   );
   console.log(`✓ 산출표 저장 = ${outPath}`);

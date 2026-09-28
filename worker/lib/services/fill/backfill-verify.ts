@@ -3,6 +3,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath, pathToFileURL } from "url";
 import { relinkStorageImages } from "./storage-image-relink";
+import { placeImageKey } from "../../../../shared/r2-paths";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "../../../..");
@@ -84,7 +85,7 @@ export async function backfillImages(opts: {
 
   // ⚠️ 수정금지(승인필요) 2026-09-04 사장님 확정 = 이 단계 = 백필 + 검증(backfill-verify). PID 를 단 행이 대상이고, 사진이 없으면 채우고(백필) 있으면 6요소가 맞는지 대조한다(검증).
   //   검증 여부 = verified_at(NULL = 아직 PID 페이지로 대조 안 함). 위키 미러(`-wiki.`)는 구글 사진이 아니므로 결손으로 본다.
-  //   사진 판별 = R2 키가 `place-images/{city}/{cat}/{PID}.jpg` 라 파일명이 곧 PID = 그 PID 로 받은 사진이면 다시 받지 않는다.
+  //   사진 판별 = R2 키가 `{city}/images/{cat}/{시각}_{PID}.jpg` 라 파일명에 PID 가 들어 있다 = 그 PID 로 받은 사진이면 다시 받지 않는다.
   const rows = (
     await c.query(
       `
@@ -92,12 +93,12 @@ export async function backfillImages(opts: {
            latitude::float8 AS latitude, longitude::float8 AS longitude,
            google_place_id AS pid, google_review_count AS rc, business_status,
            image_url, verified_at,
-           (image_url IS NOT NULL AND image_url LIKE '%place-images%'
+           (image_url IS NOT NULL AND image_url ~ '/[0-9]+/images/'
             AND image_url NOT LIKE '%-wiki.%'
             AND position(google_place_id IN image_url) > 0) AS has_image
     FROM place_seed_raw
     WHERE city_id = $1 AND google_place_id IS NOT NULL
-      AND (image_url IS NULL OR image_url = '' OR image_url NOT LIKE '%place-images%'
+      AND (image_url IS NULL OR image_url = '' OR image_url !~ '/[0-9]+/images/'
            OR image_url LIKE '%-wiki.%'
            OR position(google_place_id IN image_url) = 0
            OR verified_at IS NULL)
@@ -139,7 +140,7 @@ export async function backfillImages(opts: {
       );
     if (tsMax)
       console.log(
-        `💡 운영(배포서버) 생성 raw 는 Storage(raw-responses)에 있음 = raw-storage-recall pull 선행 시 "TS필요"가 raw재활용으로 줄 수 있음(재과금 0).`,
+        `💡 운영(배포서버) 생성 raw 는 R2 {도시}/raw 에 있음 = raw-storage-recall pull 선행 시 "TS필요"가 raw재활용으로 줄 수 있음(재과금 0).`,
       );
     console.log(
       `=== DRY (외부호출 0·쓰기 0) = --apply 로 실행${tsMax ? ", TS는 --allow-ts 필요" : ""} ===`,
@@ -199,8 +200,8 @@ export async function backfillImages(opts: {
     const url = await tsPhoto({
       apiKey: GOOGLE_KEY,
       photoName,
-      pathKey: `${cityId}/${r.cat}/${r.pid}`,
-    }); // 저장 = R2 place-images/ (2026-08-06)
+      pathKey: placeImageKey(cityId, r.cat, r.pid),
+    });
     if (!url) {
       pmFail++;
       console.warn(
@@ -598,7 +599,11 @@ export async function mirrorWikiVenueImages(opts: {
     }
     const isPng = r.image_url.toLowerCase().endsWith(".png");
     const up = await uploadToR2(
-      `place-images/${r.city_id}/bts_venue/psr-${r.id}-wiki.${isPng ? "png" : "jpg"}`,
+      placeImageKey(
+        r.city_id,
+        "bts_venue",
+        `psr-${r.id}-wiki.${isPng ? "png" : "jpg"}`,
+      ),
       buf,
       isPng ? "image/png" : "image/jpeg",
     );

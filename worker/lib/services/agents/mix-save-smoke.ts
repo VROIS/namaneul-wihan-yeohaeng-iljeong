@@ -2,6 +2,7 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath, pathToFileURL } from "url";
+import { rawPlace } from "../../../../shared/r2-paths";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "../../../..");
 for (const line of fs
@@ -111,16 +112,15 @@ const fail = (msg: string): never => {
 
   // ④ R2 = 목록 + raw 순번 판정(읽기만)
   if (!isR2Configured()) fail("④ R2 설정 없음");
-  const objs = await listR2(`raw-responses/${cityId}/`);
+  const rawDir = rawPlace(cityId).dir;
+  const objs = await listR2(`${rawDir}/`);
   const name = await versionedNameR2(
-    `raw-responses/${cityId}`,
+    rawDir,
     `__smoke__.json`,
     rawHash({ smoke: 1 }),
     () => null,
   );
-  console.log(
-    `✅ ④ R2 = raw-responses/${cityId}/ ${objs.length}개 · 순번 판정 → ${name}`,
-  );
+  console.log(`✅ ④ R2 = ${rawDir}/ ${objs.length}개 · 순번 판정 → ${name}`);
 
   // ⑤ 후처리 엔진 = 모듈 적재 + 대기 행 SQL(읽기만) = 큐 소비자가 부르는 것과 같은 함수
   const { pendingByCity, r2PrefixOf } = await import(

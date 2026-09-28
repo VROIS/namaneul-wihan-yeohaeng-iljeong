@@ -8,6 +8,7 @@ import { and, eq, sql as dsql } from "drizzle-orm";
 import { env } from "cloudflare:workers";
 import * as schema from "../shared/schema";
 import { getFirstAdmin, getUserIdFromReq } from "./auth-user";
+import { userGuideImageKey } from "../shared/r2-paths";
 
 const { cities, guides } = schema;
 
@@ -173,7 +174,7 @@ export function registerRestRoutes(app: Express, openDb: OpenDb): void {
           const deviceUrl = g.imageDataUrl
             ? await uploadDataUriToR2(
                 env.RAW_BUCKET,
-                `guides/${id}`,
+                userGuideImageKey(id, owner),
                 String(g.imageDataUrl),
               )
             : null;

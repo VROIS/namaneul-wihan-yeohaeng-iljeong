@@ -16,6 +16,7 @@ import {
   videoCity,
 } from "../worker/container/day-scenes";
 import { uploadToR2 } from "../worker/container/lib/services/shared/r2-client";
+import { fileStamp } from "../shared/r2-paths";
 
 async function main() {
   const args = process.argv.slice(2);
@@ -36,7 +37,7 @@ async function main() {
   const city = await videoCity(itin);
   const scenes = omniSceneCards(omniClips(daySlots, cast), city.name);
   const buf = fs.readFileSync(file);
-  const key = dayVideoKey(city.folder, id, day);
+  const key = dayVideoKey(city.folder, day, fileStamp());
 
   console.log(
     `여정 ${id} ${day}일차 | 영상 ${(buf.length / 1e6).toFixed(1)}MB → ${key} | 게시 계정 ${itin.userId}`,

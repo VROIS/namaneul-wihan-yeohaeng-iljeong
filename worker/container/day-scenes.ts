@@ -3,10 +3,10 @@ import type { GhibliCast } from "./lib/services/character-roster-ghibli";
 import { db, pool } from "./lib/db";
 import { getUser } from "../../shared/users";
 import type { DayVideo } from "../../shared/schema";
+import { videoDir } from "../../shared/r2-paths";
 import {
   castForItinerary,
   slotPlaceId,
-  videoFolder,
   type PlaceTranslation,
 } from "./lib/services/omni-day-clips";
 
@@ -58,21 +58,19 @@ export async function placeTranslations(
   return map;
 }
 
-// ⚠️ 수정금지(승인필요) 2026-09-26 사장님 결정 = 영상 도시 = 도시 표 영어 이름(지시문·배웅 카드·R2 폴더), 도시 번호 없는 여정만 목적지 글자 (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-09-28 사장님 결정 = 영상 도시 = 도시 표 영어 이름(지시문·배웅 카드), 도시 번호 없는 여정만 목적지 글자, R2 폴더 = 번호만 (정본 K3)
 export async function videoCity(
   itin: Record<string, any>,
 ): Promise<{ name: string; folder: string }> {
   const destination = String((itin.rawData as any)?.destination || "");
   const cityId: number | null = itin.cityId ?? null;
-  if (!cityId || !pool) return { name: destination, folder: videoFolder(null) };
+  const folder = videoDir(cityId, itin.id);
+  if (!cityId || !pool) return { name: destination, folder };
   const r = await pool.query("SELECT name_en FROM cities WHERE id = $1", [
     cityId,
   ]);
   const nameEn: string | null = r.rows[0]?.name_en || null;
-  return {
-    name: nameEn || destination,
-    folder: videoFolder(cityId, nameEn),
-  };
+  return { name: nameEn || destination, folder };
 }
 
 export async function tripInputs(itin: Record<string, any>) {

@@ -5,7 +5,7 @@ interface __BaseEnv_Env {
 	RAW_BUCKET: R2Bucket;
 	HYPERDRIVE: Hyperdrive;
 	ASSETS: Fetcher;
-	R2_PUBLIC_URL: "https://pub-ec584e1b28fc458f85bca053e0fe6b02.r2.dev";
+	R2_PUBLIC_URL: "https://media.tripis.app";
 	VIDEO_STITCH_CONTAINER: DurableObjectNamespace<import("./src").VideoStitchContainer>;
 }
 declare namespace Cloudflare {

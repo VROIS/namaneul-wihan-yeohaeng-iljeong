@@ -1,5 +1,6 @@
 // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 승인 = §0 700줄 가드 = 폴더 분리(로직 무변경)
 import { rawDate } from "../../shared/raw-filename";
+import { placeImageKey } from "../../../../../shared/r2-paths";
 import { type Result, type Row } from "./gates";
 
 // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 확정 = 두 모드 공통 태그 1벌 = gmaps-pid-verify-<오늘>.
@@ -62,7 +63,11 @@ export async function writeRow(
         if (res.ok) {
           const { uploadToR2 } = await import("../../shared/r2-client");
           const up = await uploadToR2(
-            `place-images/${cityId}/${row.seed_category}/${String(row.pid).replace(/[^A-Za-z0-9_-]/g, "-")}.jpg`,
+            placeImageKey(
+              cityId,
+              row.seed_category,
+              `${String(row.pid).replace(/[^A-Za-z0-9_-]/g, "-")}.jpg`,
+            ),
             Buffer.from(await res.arrayBuffer()),
             "image/jpeg",
           );

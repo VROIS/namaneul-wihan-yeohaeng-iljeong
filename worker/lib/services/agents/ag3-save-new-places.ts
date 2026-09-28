@@ -9,6 +9,7 @@ import { tsSearch, tsPhoto } from "../shared/ts-client";
 import { zoneForDistanceKm } from "../shared/pool-radius";
 // ⚠️ 수정금지(승인필요) 2026-07-06 사장님 SSOT = TS raw 모음 1파일(#45 방식) 저장 = 도시id 폴더 로컬+Storage 2곳(§18).
 import { saveCollectedRaw } from "../shared/save-collected-raw";
+import { placeImageKey } from "../../../../shared/r2-paths";
 import {
   recognizePlace,
   namesAgree,
@@ -414,7 +415,11 @@ export async function saveNewPlacesToDB(
           photoUrl = await tsPhoto({
             apiKey: GOOGLE_KEY,
             photoName: result.photoName,
-            pathKey: `${cityId}/${seedCategory}/${placeId || rowId}`,
+            pathKey: placeImageKey(
+              cityId,
+              seedCategory,
+              String(placeId || rowId),
+            ),
           });
         }
 

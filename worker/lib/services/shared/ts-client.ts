@@ -221,14 +221,11 @@ export async function tsSearch(req: TsSearchReq): Promise<TsPlace[]> {
 export interface TsPhotoReq {
   apiKey: string;
   photoName: string; // TsPlace.photoName
-  pathKey: string; // 저장 경로 (예 `${cityId}/${cat}/${pid}`) — .jpg 자동 부착
+  pathKey: string; // 저장 경로 = shared/r2-paths placeImageKey — .jpg 자동 부착
   maxWidthPx?: number;
   // ⚠️ 수정금지(승인필요) 2026-06-16 사장님 SSOT = 관문(issueApiKey) 통과 증표 (= tsSearch 와 동일 원리).
   gated?: boolean;
 }
-
-// ⚠️ 수정금지(승인필요) 2026-08-06 사장님 SSOT = 사진 저장 = R2 place-images/ 프리픽스 1곳(옛 Supabase 버킷·storageKey/supaPublicUrl 인자 폐기 = 2026-08-06 Cloudflare 이전계획 1단계 §19).
-const PHOTO_PREFIX = "place-images";
 
 export async function tsPhoto(req: TsPhotoReq): Promise<string | null> {
   if (!req.apiKey || !req.photoName || !isR2Configured()) return null;
@@ -247,11 +244,8 @@ export async function tsPhoto(req: TsPhotoReq): Promise<string | null> {
       tag: req.pathKey,
     });
     const buf = Buffer.from(await pr.arrayBuffer());
-    const up = await uploadToR2(
-      `${PHOTO_PREFIX}/${req.pathKey}.jpg`,
-      buf,
-      "image/jpeg",
-    );
+    // ⚠️ 수정금지(승인필요) 2026-09-28 사장님 결정 = 사진 저장 = R2 {도시}/images/ 1곳 (정본 K3)
+    const up = await uploadToR2(`${req.pathKey}.jpg`, buf, "image/jpeg");
     return up.publicUrl;
   } catch {
     return null;

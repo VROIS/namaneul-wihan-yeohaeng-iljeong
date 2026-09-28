@@ -580,7 +580,7 @@ function deserializeGroup(g: any): Group {
     };
     const extractedPath = saveVersionedReport(
       outDir,
-      `${today}_b1-extracted.json`,
+      "b1-extracted.json",
       extractedPayload,
     );
     console.log(
@@ -694,7 +694,7 @@ function deserializeGroup(g: any): Group {
     errors,
     report,
   };
-  const stemFile = `${today}_b1-discovery-diff.json`;
+  const stemFile = "b1-discovery-diff.json";
   const outPath = saveVersionedReport(outDir, stemFile, payload);
   console.log(`\n✓ 산출표 저장 = ${outPath} (DB 쓰기 0)`);
 })();

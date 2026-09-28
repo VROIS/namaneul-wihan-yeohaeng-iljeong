@@ -1,14 +1,12 @@
-// ⚠️ 수정금지(승인필요) 2026-09-06 사장님 결정 = §18 외부호출 raw 저장의 Worker 판 = R2 네이티브 바인딩 1벌 (정본 §18)
+// ⚠️ 수정금지(승인필요) 2026-09-28 사장님 결정 = §18 외부호출 raw 저장의 Worker 판 = R2 네이티브 바인딩 1벌, 자리 = shared/r2-paths rawPlace (정본 K3)
 
 import { createHash } from "node:crypto";
-
-// 근거: save-raw.ts 와 같은 `const PREFIX = "raw-responses"` = 같은 프리픽스여야 같은 창고에서 대조된다.
-const PREFIX = "raw-responses";
+import { fileStamp, rawPlace } from "../shared/r2-paths";
 
 export interface SaveRawToR2Params {
   // 근거: save-raw.ts SaveRawOpts.source = "ts" | "gemini" | "routes"
   source: "ts" | "gemini" | "routes";
-  // 근거: save-raw.ts = cityId(발굴) 또는 'runtime'(cityId 없는 호출)
+  // 근거: save-raw.ts = 도시 번호 · itinerary-{번호} · user-{번호}
   contextId?: string | number | null;
   // 근거: save-raw.ts = 호출 맥락 식별(파일명), 미지정 시 'call'
   tag?: string | null;
@@ -58,17 +56,17 @@ export async function saveRawToR2(
         .replace(/[^0-9a-z]+/gi, "-")
         .slice(0, 48) || "call";
 
-    // 근거: save-raw.ts = 날짜가 앞(YYYY-MM-DD), stem = `{date}_{source}-{tag}.json`
-    const date = new Date().toISOString().slice(0, 10);
-    const stemFileName = `${date}_${params.source}-${tag}.json`;
+    // 근거: save-raw.ts = 시각이 앞(YYYY-MM-DD_HHMMSS), stem = `{시각}_{source}-{tag}.json`
+    const place = rawPlace(ctx);
+    const stemFileName = `${fileStamp()}_${params.source}-${tag}${place.suffix}.json`;
 
-    // 근거: save-raw.ts = `${ctx}/${stemFileName}` 이 기본(무순번) 경로
-    let filePath = `${ctx}/${stemFileName}`;
+    // 근거: save-raw.ts = `${place.dir}/${stemFileName}` 이 기본(무순번) 경로
+    let fileName = stemFileName;
 
     // ── 버전 순번(_N) 판정 = save-raw.ts · raw-filename.ts versionedName 과 같은 알고리즘(계열 일치 판정·해시 동일 시 그 이름 재사용·아니면 maxN+1) ──
-    // Worker 에는 파일시스템이 없어 같은 판정을 R2 로 한다 = 목록 → bucket.list({ prefix }), 기존 파일 raw md5 → bucket.get(key).json().
+    // ⚠️ 수정금지(승인필요) 2026-09-28 사장님 결정 = R2 로 판정하되 같은 이름 앞부분(base)까지만 훑는다(raw-filename.ts versionedNameR2 와 같음) (정본 K3)
     try {
-      const prefix = `${PREFIX}/${ctx}/`;
+      const prefix = `${place.dir}/`;
       const newHash = rawHash(params.raw);
       const base = stemFileName.replace(/\.json$/, "");
 
@@ -76,7 +74,10 @@ export async function saveRawToR2(
       const siblings: string[] = [];
       let cursor: string | undefined = undefined;
       for (;;) {
-        const listed: R2Objects = await bucket.list({ prefix, cursor });
+        const listed: R2Objects = await bucket.list({
+          prefix: `${prefix}${base}`,
+          cursor,
+        });
         for (const o of listed.objects)
           siblings.push(o.key.slice(prefix.length));
         if (!listed.truncated) break;
@@ -108,9 +109,8 @@ export async function saveRawToR2(
         if (p.n > maxN) maxN = p.n;
       }
 
-      const versioned =
+      fileName =
         matchedName ?? (maxN < 0 ? `${base}.json` : `${base}_${maxN + 1}.json`);
-      filePath = `${ctx}/${versioned}`;
     } catch {
       // 순번 판정 실패는 저장 자체를 막지 않는다 (= save-raw.ts 의 빈 catch 와 동치).
     }
@@ -133,12 +133,12 @@ export async function saveRawToR2(
     //   공식 workers-api-reference put(key, value, options) = value 에 string 허용 · httpMetadata.contentType = "application/json"(save-raw.ts 와 같음).
     //   길이 모르는 스트림 금지 규칙은 string 이라 해당 없음.
     try {
-      await bucket.put(`${PREFIX}/${filePath}`, body, {
+      await bucket.put(`${place.dir}/${fileName}`, body, {
         httpMetadata: { contentType: "application/json" },
       });
     } catch (e) {
       console.error(
-        `[saveRawToR2] ❌ R2 PUT 실패 = ${PREFIX}/${filePath} = ${String(
+        `[saveRawToR2] ❌ R2 PUT 실패 = ${place.dir}/${fileName} = ${String(
           (e as { message?: string })?.message || e,
         ).slice(0, 200)}`,
       );

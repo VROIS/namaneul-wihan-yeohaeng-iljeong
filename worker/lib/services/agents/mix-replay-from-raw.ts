@@ -25,7 +25,7 @@ const rawKey = String(argv["raw"] || "");
 const apply = argv["apply"] === "true";
 if (!cityId || !itineraryId || !rawKey) {
   console.error(
-    "Usage: --city-id=<N> --itinerary-id=<N> --raw=<raw-responses/…/2026-09-13_90-mix-gemini_step1_1.json> [--apply]",
+    "Usage: --city-id=<N> --itinerary-id=<N> --raw=<{도시}/raw/2026-09-13_90-mix-gemini_step1_1.json> [--apply]",
   );
   process.exit(1);
 }
@@ -238,7 +238,7 @@ if (!cityId || !itineraryId || !rawKey) {
   const outDir = path.join(ROOT, "docs", "b1-reports", String(cityId));
   const saved = saveVersionedReport(
     outDir,
-    `${rawDate()}_mix-replay_${itineraryId}.json`,
+    `mix-replay_${itineraryId}.json`,
     report,
   );
   console.log("   산출표 =", saved);

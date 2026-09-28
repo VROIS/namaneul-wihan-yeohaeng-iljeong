@@ -48,7 +48,7 @@ if (!cityId) {
       COUNT(*) FILTER (WHERE latitude IS NOT NULL) AS coord,
       COUNT(*) FILTER (WHERE google_review_count IS NOT NULL) AS rc,
       COUNT(*) FILTER (WHERE price_eur IS NOT NULL) AS price,
-      COUNT(*) FILTER (WHERE image_url LIKE '%place-images%') AS img,
+      COUNT(*) FILTER (WHERE image_url ~ '/[0-9]+/images/') AS img,
       COUNT(*) FILTER (WHERE summary_ko IS NOT NULL AND summary_ko<>'') AS sumko
     FROM place_seed_raw WHERE city_id=$1 AND seed_category NOT LIKE 'bts%'
     GROUP BY seed_category ORDER BY seed_category`,
@@ -102,7 +102,7 @@ if (!cityId) {
     await c.query(
       `
     SELECT COUNT(*) FILTER (WHERE google_place_id IS NULL) AS no_pid,
-           COUNT(*) FILTER (WHERE image_url IS NULL OR image_url NOT LIKE '%place-images%') AS no_img,
+           COUNT(*) FILTER (WHERE image_url IS NULL OR image_url !~ '/[0-9]+/images/') AS no_img,
            COUNT(*) FILTER (WHERE google_review_count IS NULL) AS no_rc,
            COUNT(*) FILTER (WHERE price_eur IS NULL) AS no_price
     FROM place_seed_raw WHERE city_id=$1 AND seed_category NOT LIKE 'bts%'`,

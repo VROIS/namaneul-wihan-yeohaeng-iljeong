@@ -383,6 +383,7 @@ function GuideResultHost({
                 ? "이 장소를 생생하게 설명해주세요."
                 : "Describe this place vividly.",
             systemInstruction,
+            cityId: cityIdRef.current,
           }),
         });
         if (resp.status === 402) {

@@ -13,8 +13,9 @@
   //      → worker/routes-rest.ts:115 의 process.env.R2_PUBLIC_URL 이 그대로 읽는다.
   //   값 = 원본 .env 와 동일. 이게 없으면 사진은 R2 에 올라가도 imageUrl 이 null 로 떨어진다.
   // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = DB 접속 = HYPERDRIVE 바인딩만(라우트 openDb() · 엔진 lib/db.ts withEngineDb() = 둘 다 요청별 연결). DATABASE_URL 류 vars 불필요 (정본 §)
+  // ⚠️ 수정금지(승인필요) 2026-09-28 사장님 결정 = 창고 공개 주소 = media.tripis.app (r2.dev = 개발용·초당 요청 제한) (정본 K3)
   "vars": {
-    "R2_PUBLIC_URL": "https://pub-ec584e1b28fc458f85bca053e0fe6b02.r2.dev"
+    "R2_PUBLIC_URL": "https://media.tripis.app"
   },
   // ⚠️ 수정금지(승인필요) 2026-09-25 사장님 결정 = 추적 상시 켬 = 카카오 로그인 등 언제든 확인 (정본 9-25)
   "observability": { "enabled": true, "traces": { "enabled": true } },
@@ -54,8 +55,7 @@
   "r2_buckets": [
     {
       // 근거: r2/configuration.md:20 "interface Env { MY_BUCKET: R2Bucket; }" = binding 값이 곧 env 의 키 이름(대문자 관례).
-      //       우리 용도 = §18 raw(raw-responses/ 프리픽스) 전용 창고 = RAW_BUCKET.
-      //       (버킷 자체는 영상과 공유하나 프리픽스로 분리)
+      //       우리 용도 = 원창고 1벌 = RAW_BUCKET (도시 번호 폴더에 사진·원본·영상, 자리 = shared/r2-paths.ts).
       "binding": "RAW_BUCKET",
 
       // 근거: .env:56 "R2_BUCKET_NAME=tripis-videos" = 운영에서 이미 쓰는 실제 버킷명.

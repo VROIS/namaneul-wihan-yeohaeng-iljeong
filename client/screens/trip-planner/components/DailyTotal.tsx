@@ -30,7 +30,14 @@ export default function DailyTotal({
   currentDay: DayPlan;
   planner: PlannerApi;
 }) {
-  const { theme, t, itinerary, dayAccommodations, requestExpert } = planner;
+  const {
+    theme,
+    t,
+    itinerary,
+    dayAccommodations,
+    requestExpert,
+    currentItineraryId,
+  } = planner;
   const dc = (currentDay as any)?.dailyCost;
   const td = (currentDay as any)?.transportDisplay;
   const entranceEur = dc?.breakdown?.entranceEur || 0;
@@ -97,6 +104,7 @@ export default function DailyTotal({
             slots: placeStops.map((s) => ({ lat: s.lat, lng: s.lng })),
             accommodation: accomBody, // 숙소 변경시 = 실소요 왕복 기준
             cityName, // 미설정 시 = 도시명 주소로 왕복
+            itineraryId: currentItineraryId,
           }),
         },
       );

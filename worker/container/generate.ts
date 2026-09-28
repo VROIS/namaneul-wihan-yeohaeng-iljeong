@@ -27,6 +27,7 @@ import {
 import { stitchAndUpload } from "./lib/services/video-stitcher";
 import { uploadToR2, isR2Configured } from "./lib/services/shared/r2-client";
 import { chargeOnSuccess } from "@shared/credits";
+import { fileStamp, itineraryContext } from "../../shared/r2-paths";
 
 // ⚠️ 수정금지(승인필요) 2026-09-14 사장님 결정 = **씬 1개가 죽은 사유표(키)** 전용 = 화면이 tripisVideo.partialReason.<키> 로 번역한다. 여정 전체 실패 사유는 이걸 쓰지 않고 예외 문장 원문을 쓴다(운영 동일) (정본 §)
 function userReason(e: unknown): string {
@@ -78,6 +79,7 @@ export async function runDayVideo(job: DayVideoJob): Promise<void> {
     const cast = await castFor(itin);
     const { meta } = await tripInputs(itin);
     const city = await videoCity(itin);
+    const stamp = fileStamp();
     const translations = await placeTranslations(daySlots, lang);
     const clips = omniClips(daySlots, cast);
     const reasons: (string | null)[] = clips.map(() => null);
@@ -98,10 +100,10 @@ export async function runDayVideo(job: DayVideoJob): Promise<void> {
             referenceImages: req.images,
             aspectRatio: "9:16",
             seconds: clip.seconds,
-            contextId: null,
+            contextId: itineraryContext(itin.cityId, id),
             rawTag: `omni-i${id}-d${day}-c${clip.index}-${lang}`,
           });
-          const key = clipKey(city.folder, id, day, clip, lang);
+          const key = clipKey(city.folder, day, stamp, clip, lang);
           const kept = await uploadToR2(key, buf, "video/mp4").then(
             () => true,
             (e) => {
@@ -139,7 +141,7 @@ export async function runDayVideo(job: DayVideoJob): Promise<void> {
     );
     const url = await stitchAndUpload(
       ok.map((m) => m.buf),
-      dayVideoKey(city.folder, id, day),
+      dayVideoKey(city.folder, day, stamp),
       ok.reduce((n, m) => n + m.clip.seconds, 0),
     );
     const scenes = omniSceneCards(

@@ -5,11 +5,12 @@
 
 import type { Express, Request, Response } from "express";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 // 바인딩(R2) 접근 + waitUntil = routes-gemini.ts:31 과 같은 방식(그 파일 주석의 근거 그대로).
 import { env, waitUntil } from "cloudflare:workers";
 import * as schema from "../shared/schema";
 import { saveRawToR2 } from "./raw-store";
+import { itineraryContext } from "../shared/r2-paths";
 import { readMapsKey } from "./keys";
 
 type Db = PostgresJsDatabase<typeof schema>;
@@ -154,6 +155,7 @@ interface DayLiveBody {
   slots?: unknown;
   accommodation?: { lat?: unknown; lng?: unknown } | null;
   cityName?: unknown;
+  itineraryId?: unknown;
 }
 
 export function registerItineraryGenerateRoutes(
@@ -199,12 +201,24 @@ export function registerItineraryGenerateRoutes(
         `[day-live] 슬롯 ${slots.length} | 출발/도착 기준=${startSrc}${cityName ? `(${cityName})` : ""}`,
       );
 
-      // DB 로 하는 일은 여기서 전부 끝낸다(열쇠 + PSR 조회).
-      // ⚠️ Hyperdrive gotchas.md "Failed to acquire a connection (Pool exhausted) …
-      //    don't hold connections during external calls" = Google Routes 응답을
-      //    기다리는 동안 DB 연결을 쥐고 있으면 안 된다.
+      // DB 로 하는 일은 여기서 전부 끝낸다(열쇠 + PSR + 여정 도시) = Google Routes 응답을
+      //    기다리는 동안 DB 연결을 쥐고 있으면 안 된다(Hyperdrive 연결 고갈).
       const enriched = await enrichStopsWithPsr(db, slots);
       const apiKey = endpoint ? await readMapsKey(db) : "";
+      // ⚠️ 수정금지(승인필요) 2026-09-28 사장님 결정 = 동선 raw = 여정의 도시 번호 폴더(도시 없으면 itinerary-{번호}) (정본 K3)
+      const itineraryId = Number(body.itineraryId);
+      const hasItinerary = Number.isInteger(itineraryId) && itineraryId > 0;
+      const [itin] = hasItinerary
+        ? await db
+            .select({ cityId: schema.itineraries.cityId })
+            .from(schema.itineraries)
+            .where(eq(schema.itineraries.id, itineraryId))
+            .limit(1)
+        : [];
+      const rawContext = itineraryContext(
+        itin?.cityId,
+        hasItinerary ? itineraryId : null,
+      );
       closeOnce();
 
       let live: DayLiveResult | null = null;
@@ -216,7 +230,7 @@ export function registerItineraryGenerateRoutes(
             waitUntil(
               saveRawToR2(env.RAW_BUCKET, {
                 source: "routes",
-                contextId: "runtime",
+                contextId: rawContext,
                 tag: "day-live",
                 request: p.request,
                 raw: p.raw,
