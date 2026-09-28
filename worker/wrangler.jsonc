@@ -81,9 +81,8 @@
       //   실체 = worker/routes-video-generate.ts 의 `export class VideoStitchContainer extends Container`.
       "class_name": "VideoStitchContainer",
 
-      // ⚠️ 수정금지(승인필요) 2026-09-28 사장님 결정 = R2 도시 번호 폴더·시각 이름 = 컨테이너 새 프로그램은 푸시 때 Workers Builds 가 조립 설명서로 굽는다 → 구운 뒤 새 digest 주소로 다시 고정(§24) (정본 K3)
-      "image": "./container/container-image",
-      "image_build_context": "../",
+      // ⚠️ 수정금지(승인필요) 2026-09-28 사장님 결정 = 이미지 = 구워 올린 것을 digest 주소로 가리킨다(이 PC 에서 도커 없이 배포 §24) = R2 도시 번호 폴더·시각 이름판(Workers Builds 5eae29cd, 커밋 d13c2c7) (정본 K3)
+      "image": "registry.cloudflare.com/51bcbc629c76db55d6a9aac934b2195f/tripis-api-videostitchcontainer@sha256:6fe39fba259c666773f3cf93a796d522ee37105cb509c7ecc513db295a8a80ce",
 
       // 근거: get-started 공식 예시의 max_instances. 동시에 뜰 수 있는 인스턴스 상한.
       "max_instances": 5,
