@@ -25,7 +25,7 @@ const CAPABILITIES = [
       "worker/lib/services/agents/ag3-save-new-places.ts",
       "worker/lib/services/fill/gmaps-post.ts",
     ],
-    triggers: [/tsPhoto\s*\(/, /PhotoMedia\/media/i, /place-images.*x-upsert/i],
+    triggers: [/tsPhoto\s*\(/, /PhotoMedia\/media/i],
     hint: "이미지 채우기 = backfill-verify.ts(무료재링크→PID 페이지→PM) / relink = storage-image-relink.ts / 사진관문 = ts-client tsPhoto. 새 다운로더·업로더 만들지 말 것(§16).",
   },
   {

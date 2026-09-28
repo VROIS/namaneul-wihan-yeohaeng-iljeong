@@ -225,12 +225,16 @@ export default function VideosSection({ profile }: { profile: ProfileApi }) {
                 </View>
               </LinearGradient>
 
-              {/* 하단 텍스트 오버레이 = 제목 + n일차·시작일 */}
+              {/* ⚠️ 수정금지(승인필요) 2026-09-28 사장님 결정 = 아래 띠 = 제목 + n일차·시작일, 날짜 줄 한 줄 고정(넘치면 글자를 줄여 맞춤) = 모든 카드 띠 높이 같게 (정본 9-28) */}
               <View style={styles.videoInfoOverlay}>
                 <Text style={styles.videoCardTitle} numberOfLines={1}>
                   {localizeVideoTitle(video.title, t, video.cityNameEn)}
                 </Text>
-                <Text style={styles.videoCardDate}>
+                <Text
+                  style={styles.videoCardDate}
+                  numberOfLines={1}
+                  adjustsFontSizeToFit
+                >
                   {t("common.dayCount", { count: video.day })} · {video.date}
                 </Text>
               </View>
