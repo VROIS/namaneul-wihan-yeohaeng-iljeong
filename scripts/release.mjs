@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// ⚠️ 수정금지(승인필요) 2026-09-28 사장님 결정 = 트리피스 올리기 = 성공한 직접 배포(9-28 02:03) 순서·명령 그대로 (정본 §24)
+// ⚠️ 수정금지(승인필요) 2026-09-28 사장님 결정 = 트리피스 올리기 = 커밋(이 PC) → 직접 배포 → 확인 → GitHub 푸시는 맨 뒤(GitHub 을 기다리지 않는다) (정본 §24)
 import { execSync } from "node:child_process";
 
 const msg = process.argv[2];
@@ -20,11 +20,6 @@ if (
 
 sh("node scripts/build-worker-assets.mjs");
 sh(`git commit -F "${msg}"`);
-try {
-  sh("git push origin tripis1");
-} catch {
-  console.log("⛔ 푸시 실패 = 직접 배포는 계속");
-}
 const subject = execSync("git log -1 --format=%s")
   .toString()
   .trim()
@@ -32,3 +27,4 @@ const subject = execSync("git log -1 --format=%s")
 sh(`npx wrangler deploy --config worker/wrangler.jsonc --message "${subject}"`);
 sh("npx wrangler versions list --config worker/wrangler.jsonc");
 sh("node scripts/worker-logs.mjs --min 15 --errors");
+sh("git push origin tripis1");
