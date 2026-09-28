@@ -1,4 +1,4 @@
-// Cloudflare Worker 이관 = 지도 HTML 1벌 (2026-09-06)
+// 지도 HTML 1벌.
 
 import type { Express, Request, Response } from "express";
 import type { drizzle } from "drizzle-orm/postgres-js";

@@ -1,5 +1,4 @@
-// 계정(메일 로그인·내 정보·탈퇴) + 크레딧(잔액·내역) 라우트 = Worker 이관본.
-// 응답·상태코드·에러문구는 원본과 같게 유지한다.
+// 계정(메일 로그인·내 정보·탈퇴) + 크레딧(잔액·내역) 라우트.
 import type { Express, Request, Response } from "express";
 import type { drizzle } from "drizzle-orm/postgres-js";
 import { desc, eq } from "drizzle-orm";
@@ -29,7 +28,7 @@ async function markAccountDeleted(db: Db, userId: string): Promise<void> {
 }
 
 /**
- * 정렬 = created_at 내림차순, 그 뒤 현재 잔액에서 거꾸로 빼며 줄별 balance 를 붙인다(원본과 동일).
+ * 정렬 = created_at 내림차순, 그 뒤 현재 잔액에서 거꾸로 빼며 줄별 balance 를 붙인다.
  */
 async function getTransactionHistory(
   db: Db,

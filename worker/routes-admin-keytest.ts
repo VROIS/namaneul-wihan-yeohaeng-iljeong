@@ -1,4 +1,4 @@
-// ⚠️ 수정금지(승인필요) 2026-09-06 사장님 결정 = 열쇠 동작확인(POST .../test) Worker 이관 (정본 B1)
+// ⚠️ 수정금지(승인필요) 2026-09-28 사장님 결정 = 열쇠 동작확인(POST .../test) (정본 B1)
 // 열쇠 = DB api_keys 행을 바로 읽는다(방금 저장한 값을 봐야 해서 캐시 금지) · 외부호출 중에는 DB 연결을 쥐지 않는다(읽고 바로 닫고, 끝나면 새로 열어 결과 UPDATE).
 // §18 raw 저장 없음(원래 없던 것 = 만들면 §19 위반).
 import type { Express, Request, Response } from "express";
@@ -26,7 +26,6 @@ function errMessage(e: unknown): string {
 }
 
 // ── 열쇠별 실제 확인 ────────────────────────────────────────────────────────
-// 아래 4벌은 case 4개를 문구·분기까지 1:1로 옮긴 것이다.
 
 async function testGemini(apiKey: string): Promise<TestResult> {
   try {
@@ -124,7 +123,7 @@ export function registerAdminKeyTestRoutes(app: Express, openDb: OpenDb): void {
       try {
         const keyName = String(req.params.keyName);
 
-        // 행이 없거나 값이 비면 400. (isActive 는 원본도 안 본다.)
+        // 행이 없거나 값이 비면 400. isActive 는 보지 않는다.
         const [keyRecord] = await first.db
           .select()
           .from(apiKeys)

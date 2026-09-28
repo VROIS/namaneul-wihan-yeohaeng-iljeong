@@ -1,4 +1,4 @@
-// Cloudflare Worker 이관 = 나머지 미이관분 (2026-09-06) = POST /api/guides/batch 1건.
+// POST /api/guides/batch 1건.
 // (GET /api/guides · DELETE /api/guides/:id 는 worker/routes-guide-video.ts 에 있다 = 중복 배선 금지.)
 import type { Express, Request, Response } from "express";
 import type { drizzle } from "drizzle-orm/postgres-js";
@@ -16,9 +16,6 @@ const { cities, guides } = schema;
 type Db = ReturnType<typeof drizzle<typeof schema>>;
 type OpenDb = () => { db: Db; close: () => void };
 
-/**
- * nearestCityIdByCoords. 거리식·정렬·limit 은 원본과 1:1.
- */
 async function nearestCityIdByCoords(
   db: Db,
   latitude: unknown,
@@ -46,36 +43,23 @@ const EXT_BY_MIME: Record<string, string> = {
   "image/webp": "webp",
 };
 
-/**
- * 원본은 @aws-sdk/client-s3(S3 REST) 로 올린다. Worker 에서는 네이티브 바인딩을 쓴다
- *   근거 = workers-best-practices/rules.md:172-190 "Use bindings for Cloudflare services, not REST APIs"
- *   근거 = cloudflare/references/r2/api.md:3-20 put(key, value, { httpMetadata })
- *          value 타입에 ArrayBuffer 허용 = base64 를 푼 바이트를 그대로 넘긴다.
- *   선례 = worker/raw-store.ts:50 saveRawToR2(bucket, ...) 가 같은 바인딩을 이미 쓴다.
- *
- * 정규식·확장자표·빈 값 처리는 원본과 1:1. 다른 점은 "올린 뒤 무엇을 돌려주는가" 뿐 —
- * 원본은 getR2PublicUrl(= process.env.R2_PUBLIC_URL) 로 공개 URL 을 만든다.
- * 🔴 Worker 에는 그 값이 없다(2026-09-06 확인: wrangler.jsonc 에 vars 없음 / api_keys 19행에도 없음).
- *    그래서 값이 있을 때만 원본과 같은 URL 을 만들고, 없으면 null 을 돌려준다(= 아래 호출부 주석).
- */
+/** 기기 사진(data URI) → R2 바인딩 put. 공개 주소(R2_PUBLIC_URL)가 비었거나 data URI·base64 가 깨지면 null. */
 async function uploadDataUriToR2(
   bucket: R2Bucket,
   keyBase: string,
   dataUri: string,
 ): Promise<string | null> {
-  // 근거: r2-client.ts 와 같은 정규식(s 플래그 포함).
   const m = /^data:(image\/[a-z+]+);base64,(.+)$/s.exec(dataUri || "");
   if (!m) return null;
 
-  // Buffer.from(b64, "base64"). Worker 에서는 atob → 바이트 배열
-  // (nodejs_compat 이 있어 Buffer 도 되지만, 표준 API 로 두어 런타임 의존을 줄인다).
+  // base64 → 바이트 배열 = atob(nodejs_compat 이라 Buffer 도 되지만 표준 API 로 두어 런타임 의존을 줄인다).
   let bytes: Uint8Array;
   try {
     const bin = atob(m[2]);
     bytes = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
   } catch {
-    return null; // 깨진 base64 = 원본의 "빈 버퍼" 갈래와 같은 취급
+    return null; // 깨진 base64
   }
   if (!bytes.length) return null;
 
@@ -168,9 +152,7 @@ export function registerRestRoutes(app: Express, openDb: OpenDb): void {
         targets.map(async (g) => {
           // ⚠️ 수정금지(승인필요) 2026-09-27 사장님 결정 = 기기 사진(base64)은 DB 에 안 넣는다(Cloudflare 이전 1단계) (정본 9-27)
           const id = crypto.randomUUID();
-          // imageDataUrl 이 있을 때만 R2 로 올린다.
-          // R2_PUBLIC_URL 이 없으면 uploadDataUriToR2 가 null 을 준다 = 아래 `deviceUrl || g.imageUrl || null`
-          // 이 원본과 같은 순서로 다음 후보를 고른다(= 사진 자체는 R2 에 올라가 보존됨).
+          // imageDataUrl 이 있을 때만 R2 로 올린다. 못 올리면(null) 아래 `deviceUrl || g.imageUrl || null` 순서로 고른다.
           const deviceUrl = g.imageDataUrl
             ? await uploadDataUriToR2(
                 env.RAW_BUCKET,

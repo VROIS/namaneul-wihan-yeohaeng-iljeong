@@ -1,5 +1,5 @@
-// Cloudflare Worker 이관 = 앱 에러 리포트 3건 (2026-09-06)
-// 파일시스템이 없어 로그 파일 대신 표 api_logs(type='app_error')에 쓴다 = 덧붙이기 → INSERT · 읽기 → SELECT(같은 문자열 조립) · 비우기 → DELETE(type='app_error' 만).
+// 앱 에러 리포트 3건.
+// 표 api_logs(type='app_error')에 쓴다 = 받기 → INSERT · 읽기 → SELECT · 비우기 → DELETE(type='app_error' 만).
 import type { Express, Request, Response } from "express";
 import type { drizzle } from "drizzle-orm/postgres-js";
 import { asc, eq } from "drizzle-orm";
@@ -34,7 +34,6 @@ function formatLine(e: AppErrorItem): string {
   const stack = str(e.stack);
   const head = `[${str(e.timestamp)}] ${str(e.component) || "?"} | ${str(e.message)}`;
   if (!stack) return head;
-  // e.stack.split("\n").slice(0, 3).join("\n  ") 앞에 "\n  " 을 붙인다.
   return head + "\n  " + stack.split("\n").slice(0, 3).join("\n  ");
 }
 
@@ -52,8 +51,6 @@ export function registerAppErrorRoutes(app: Express, openDb: OpenDb): void {
 
     const { db, close } = openDb();
     try {
-      // appendFileSync = 뒤에 덧붙이기. 표에서는 INSERT.
-      // (원본이 붙이던 "\n---\n" 구분자는 GET 조립 때 다시 만든다 = 아래 GET 주석)
       if (lines.length > 0) {
         await db.insert(apiLogs).values(
           lines.map((line) => ({
@@ -66,10 +63,8 @@ export function registerAppErrorRoutes(app: Express, openDb: OpenDb): void {
       console.error(
         `[APP-ERROR] ${errors.length}건 수신:\n${lines.join("\n")}`,
       );
-      // { ok: true, received: n }
       res.json({ ok: true, received: errors.length });
     } catch (e) {
-      // 원본에는 없는 갈래다. 원본 appendFileSync 는 실패 시 express 기본 500 으로 갔다.
       // 앱은 응답을 안 보므로(error-reporter.ts:150 빈 catch) 에러 리포트가 앱 동작을 막지 않는다.
       console.error(
         "[APP-ERROR] 저장 실패:",
@@ -89,17 +84,15 @@ export function registerAppErrorRoutes(app: Express, openDb: OpenDb): void {
         .select({ errorMessage: apiLogs.errorMessage })
         .from(apiLogs)
         .where(eq(apiLogs.type, APP_ERROR_TYPE))
-        // 원본은 파일이라 append 순서 = 받은 순서. 표에서는 들어온 순서(id) 로 같게 만든다.
+        // 받은 순서 = 들어온 순서(id).
         .orderBy(asc(apiLogs.id));
 
       // 행이 없으면 "(에러 없음)". 행마다 `\n---\n` 구분자를 붙인다(error-reporter.ts 는 1초 큐라 대개 1건씩 온다).
-      // ⚠️ 한 번에 2건 이상 보낸 묶음은 구분자 위치가 파일 시절과 다를 수 있다.
       const content =
         rows.length === 0
           ? "(에러 없음)"
           : rows.map((r) => (r.errorMessage ?? "") + "\n---\n").join("");
 
-      // res.type("text/plain").send(content)
       res.type("text/plain").send(content);
     } catch {
       // 읽기 실패 시 같은 text/plain 으로 "(읽기 실패)".
@@ -113,13 +106,11 @@ export function registerAppErrorRoutes(app: Express, openDb: OpenDb): void {
   app.delete("/api/app-errors", async (_req: Request, res: Response) => {
     const { db, close } = openDb();
     try {
-      // writeFileSync(path, "") = 파일 비우기.
-      // 표에서는 app_error 행만 삭제한다(다른 type 행 = 유료 호출 원장 = 절대 안 건드림).
+      // app_error 행만 삭제한다(다른 type 행 = 유료 호출 원장 = 절대 안 건드림).
       await db.delete(apiLogs).where(eq(apiLogs.type, APP_ERROR_TYPE));
-      // { ok: true, cleared: true }
       res.json({ ok: true, cleared: true });
     } catch {
-      // { ok: false } (상태코드 200 그대로 = 원본과 동일)
+      // { ok: false } (상태코드 200 그대로)
       res.json({ ok: false });
     } finally {
       close();

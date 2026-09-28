@@ -141,7 +141,6 @@ export function socialLoginWithGoogle(data: {
 }
 
 export function socialLoginWithKakao(data: {
-  accessToken: string;
   idToken?: string;
   birthDate?: string;
   language: string;

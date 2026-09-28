@@ -1,4 +1,4 @@
-// 애플 로그인 라우트 = Worker 이관본. 응답·상태코드·에러문구는 원본과 같게 유지한다.
+// 애플 로그인 라우트.
 import type { Express, Request, Response } from "express";
 import type { drizzle } from "drizzle-orm/postgres-js";
 import { createRemoteJWKSet, jwtVerify } from "jose";
@@ -14,7 +14,6 @@ type OpenDb = () => { db: Db; close: () => void };
 
 // ── 애플 신분증 확인 ────────────────────────────
 
-// app.json 에서 읽던 값. Worker 는 파일이 없어 상수로 고정(2026-09-06).
 // ⚠️ 드리프트 주의 = app.json 의 expo.ios.bundleIdentifier 가 바뀌면 **여기도 함께 바꿔야 한다.**
 //   (Worker 에는 파일시스템도 process.cwd() 도 없어 app.json 을 읽을 수 없다.)
 const APPLE_BUNDLE_ID = "com.sonanie.guide";
@@ -25,7 +24,6 @@ const appleKeys = createRemoteJWKSet(
   new URL("https://appleid.apple.com/auth/keys"),
 );
 
-// getAppleAudiences 와 동일(열쇠 게이트가 채운 process.env 를 읽는다).
 function getAppleAudiences(): string[] {
   const fromEnv = (process.env.APPLE_CLIENT_ID || "").trim();
   return fromEnv && fromEnv !== APPLE_BUNDLE_ID
@@ -39,7 +37,6 @@ type AppleIdentity = {
   emailVerified: boolean;
 };
 
-/** verifyAppleIdentityToken 과 동일. */
 async function verifyAppleIdentityToken(
   identityToken: string,
 ): Promise<AppleIdentity | null> {

@@ -1,5 +1,3 @@
-// Cloudflare Worker 이관 = 미이관 A등급 2건 (2026-09-06)
-// 응답·상태코드·에러문구는 원본과 동일하게 옮겼다.
 import type { Express, Request, Response } from "express";
 import type { drizzle } from "drizzle-orm/postgres-js";
 import { eq } from "drizzle-orm";

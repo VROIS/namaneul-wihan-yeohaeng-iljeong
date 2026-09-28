@@ -3,7 +3,7 @@ import { and, desc, eq, inArray, notInArray } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import * as schema from "../shared/schema";
 import { getRoleFromDb, getUserIdFromReq } from "./auth-user";
-import { matchCityIdByName } from "./best-itinerary/save";
+import { buildItineraryData, matchCityIdByName } from "./best-itinerary/save";
 import { applyItineraryTranslations } from "./best-itinerary/translate";
 import { LANGS } from "./lib/services/shared/language-instruction";
 import { computeItineraryFingerprint } from "./itinerary-fingerprint";
@@ -54,21 +54,8 @@ async function attachCityNameEn<T extends WithCityId>(
 }
 
 type ItineraryBody = Record<string, unknown>;
-// ── buildItineraryData = 여정을 DB 행으로 만드는 변환기. 로직 그대로.
-
-const STYLE_TO_PERSONA_TYPE: Record<string, string> = {
-  Luxury: "luxury",
-  Premium: "comfort",
-  Reasonable: "comfort",
-  Economic: "comfort",
-  luxury: "luxury",
-  comfort: "comfort",
-  reasonable: "comfort",
-  economic: "comfort",
-};
-
-async function buildItineraryData(db: WorkerDb, body: ItineraryBody) {
-  // 🧠 AI 의견 결과 박제. FE 가 rawData.verificationResult(본문+언어)를 실으면 fp 와 함께 rawData.verification 에 굳힌다.
+// ⚠️ 수정금지(승인필요) 2026-09-28 사장님 결정 = 여정 행 변환 = best-itinerary/save.ts buildItineraryData 1벌, AI 의견 결과 박제만 이 라우트가 먼저 한다 (정본 9-28)
+function withVerification(body: ItineraryBody): ItineraryBody {
   const { verificationResult: vr, ...rawData } = (body.rawData ||
     {}) as ItineraryBody & {
     verificationResult?: { result?: unknown; language?: string };
@@ -81,44 +68,7 @@ async function buildItineraryData(db: WorkerDb, body: ItineraryBody) {
       generatedAt: new Date().toISOString(),
     };
   }
-  // 🏙️ 도시 id 는 서버가 목적지 문자열로 매칭해 채운다.
-  const { cityId: _fromClient, ...bodyRest } = body || {};
-  const matchedCityId = await matchCityIdByName(
-    db,
-    rawData?.destination as string | null | undefined,
-  );
-  // ⚠️ total_cost 칸 = 1인 유로(€).
-  const perPersonEur = (rawData?.totalCost as { perPersonEur?: unknown } | null)
-    ?.perPersonEur;
-  const totalCostEur =
-    typeof perPersonEur === "number" && isFinite(perPersonEur)
-      ? perPersonEur
-      : undefined;
-  // ⚠️ 인원·바이브·밀도·초점 컬럼 = body 직접값 ?? rawData(생성 산출물=진실).
-  const truthCols = Object.fromEntries(
-    [
-      "companionType",
-      "companionCount",
-      "companionAges",
-      "curationFocus",
-      "vibes",
-      "travelPace",
-    ]
-      .map((k) => [k, body[k] ?? rawData[k]])
-      .filter(([, v]) => v != null),
-  );
-  return {
-    ...bodyRest,
-    ...truthCols,
-    ...(matchedCityId != null ? { cityId: matchedCityId } : {}),
-    ...(totalCostEur != null ? { totalCost: totalCostEur } : {}),
-    userId: (body.userId as string) || "admin",
-    startDate: body.startDate ? new Date(body.startDate as string) : new Date(),
-    endDate: body.endDate ? new Date(body.endDate as string) : new Date(),
-    personaType: STYLE_TO_PERSONA_TYPE[body.travelStyle as string] || "comfort",
-    travelStyle: STYLE_TO_PERSONA_TYPE[body.travelStyle as string] || "comfort",
-    rawData,
-  } as typeof schema.itineraries.$inferInsert;
+  return { ...body, rawData };
 }
 
 // ⚠️ 화면 목록에서 빼는 상태 1벌(두 목록이 같은 기준).
@@ -227,7 +177,10 @@ export function registerItineraryRoutes(app: Express, openDb: OpenDb): void {
   app.post("/api/itineraries", async (req, res) => {
     const { db, close } = openDb();
     try {
-      const itineraryData = await buildItineraryData(db, req.body);
+      const itineraryData = await buildItineraryData(
+        db,
+        withVerification(req.body),
+      );
       console.log(
         `[Itinerary] Creating itinerary for user=${itineraryData.userId}...`,
       );
@@ -254,7 +207,10 @@ export function registerItineraryRoutes(app: Express, openDb: OpenDb): void {
     const { db, close } = openDb();
     try {
       const id = parseInt(String(req.params.id));
-      const itineraryData = await buildItineraryData(db, req.body);
+      const itineraryData = await buildItineraryData(
+        db,
+        withVerification(req.body),
+      );
 
       console.log(`[Itinerary] Updating id=${id} (재저장 덮어쓰기)...`);
       const [updated] = await db

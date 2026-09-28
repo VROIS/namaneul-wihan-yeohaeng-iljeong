@@ -144,9 +144,8 @@ export function useLogin({ onDone }: { onDone: () => void }) {
 
     setOauthLoading(true);
     exchangeKakaoCodeForToken(code)
-      .then(({ accessToken, idToken }) =>
+      .then((idToken) =>
         socialLoginWithKakao({
-          accessToken,
           idToken,
           birthDate: readBirthDate(),
           language,

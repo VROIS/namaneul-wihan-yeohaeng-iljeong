@@ -64,26 +64,6 @@ export async function uploadToR2(
   return { key, size: body.length, publicUrl: getR2PublicUrl(key) };
 }
 
-const EXT_BY_MIME: Record<string, string> = {
-  "image/jpeg": "jpg",
-  "image/jpg": "jpg",
-  "image/png": "png",
-  "image/webp": "webp",
-};
-
-export async function uploadDataUriToR2(
-  keyBase: string,
-  dataUri: string,
-): Promise<string | null> {
-  const m = /^data:(image\/[a-z+]+);base64,(.+)$/s.exec(dataUri || "");
-  if (!m) return null;
-  const buf = Buffer.from(m[2], "base64");
-  if (!buf.length) return null;
-  const ext = EXT_BY_MIME[m[1]] || "jpg";
-  const up = await uploadToR2(`${keyBase}.${ext}`, buf, m[1]);
-  return up.publicUrl;
-}
-
 export async function getFromR2(key: string): Promise<Buffer | null> {
   const client = getClient();
   const bucket = getBucketName();

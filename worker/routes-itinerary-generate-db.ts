@@ -88,7 +88,7 @@ async function loadAllKeys(openSql: OpenSql): Promise<void> {
   }
 }
 
-// ── 원본 상수·순수함수의 이식 ──────
+// ── 상수·순수함수 ──────
 
 const POOL_RADIUS_M = 100_000;
 const CORE_KM = 10;
@@ -171,9 +171,7 @@ export const PRICED_STAY_CATEGORIES: ReadonlySet<string> = new Set([
   "healing",
 ]);
 
-// slotMinutesFor(slot-duration.ts) · tierRange(meal-budget-tiers.ts) 는
-// 여기서 옮기지 않는다 = buildRouteLocal 이 그 두 함수를 자기 안에서 직접 쓰고(route-local.ts:17·24),
-// 이 라우트는 산출값(hourlyRate·mealTiers)만 넘긴다.
+// slotMinutesFor · tierRange 는 buildRouteLocal 이 직접 쓴다 = 이 라우트는 산출값(hourlyRate·mealTiers)만 넘긴다.
 
 /** 그 도시 식사 예산 아래·위 경계. */
 export type CityMealTiers = { lo: number; hi: number };
@@ -295,7 +293,6 @@ export function registerItineraryGenerateDbRoutes(
 
       if (isPinnedDbOnly && !cityCheck.cityId) {
         // 핀 요청인데 도시 미발견 = 유료 경로로 흘리지 않는다(throw).
-        //   원본은 throw → 라우트 catch → 500. 같은 결과를 그대로 낸다.
         return res.status(500).json({
           error: "일정 생성 실패",
           detail: `핀 요청인데 도시 미발견: '${enrichedFormData.destination}' = 무료(db-only) 전제 = 유료 경로로 흘리지 않는다`,

@@ -65,18 +65,15 @@ export async function ensureKakaoSDKInitialized(): Promise<boolean> {
   }
 }
 
-// ⚠️ 수정금지(승인필요) 2026-09-25 사장님 결정 = 네이티브 SDK 고정 + 카카오톡 실패 시 카카오계정으로 이어감(공식 흐름, 폴백 아님) + ID 토큰도 함께 넘김 (정본 9-25)
-export async function loginKakaoApp(): Promise<{
-  accessToken: string;
-  idToken?: string;
-}> {
+// ⚠️ 수정금지(승인필요) 2026-09-28 사장님 결정 = 네이티브 SDK 고정 + 카카오톡 실패 시 카카오계정으로 이어감(공식 흐름, 폴백 아님) + ID 토큰만 넘김 (정본 9-28)
+export async function loginKakaoApp(): Promise<string | undefined> {
   if (!sdkInitialized) {
     await initializeKakaoSDK(KAKAO_NATIVE_APP_KEY);
     sdkInitialized = true;
   }
   try {
     const t = await kakaoNativeLogin();
-    return { accessToken: t.accessToken, idToken: t.idToken };
+    return t.idToken;
   } catch (talkErr) {
     const viaKakaoTalk = await isKakaoTalkLoginAvailable().catch(() => false);
     if (!viaKakaoTalk) throw talkErr;
@@ -85,7 +82,7 @@ export async function loginKakaoApp(): Promise<{
       talkErr,
     );
     const t = await kakaoNativeLogin({ useKakaoAccountLogin: true });
-    return { accessToken: t.accessToken, idToken: t.idToken };
+    return t.idToken;
   }
 }
 
@@ -119,10 +116,10 @@ export async function startKakaoLoginWeb(language: string): Promise<void> {
   Kakao.Auth.authorize({ redirectUri, throughTalk: false });
 }
 
-// ⚠️ 수정금지(승인필요) 2026-09-25 사장님 결정 = 웹도 카카오 ID 토큰을 함께 넘김 (정본 9-25)
+// ⚠️ 수정금지(승인필요) 2026-09-28 사장님 결정 = 웹도 카카오 ID 토큰만 넘김 (정본 9-28)
 export async function exchangeKakaoCodeForToken(
   code: string,
-): Promise<{ accessToken: string; idToken?: string }> {
+): Promise<string | undefined> {
   const ok = await ensureKakaoSDKInitialized();
   if (!ok) throw new Error("카카오 SDK 초기화 실패");
 
@@ -131,7 +128,7 @@ export async function exchangeKakaoCodeForToken(
     code,
     redirectUri,
   });
-  return { accessToken: result.accessToken, idToken: result.idToken };
+  return result.idToken;
 }
 
 /** 카카오 창을 열 때 쓰던 화면 언어를 돌려준다(생년월일은 birthdate-store 담당). */

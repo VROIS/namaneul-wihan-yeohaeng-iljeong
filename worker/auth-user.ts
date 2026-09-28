@@ -63,7 +63,7 @@ async function getUserByProvider(
       );
     if (row) return row.user;
   } catch {
-    /* user_providers 조회 실패 = 아래 users 열 조회로 계속(원본과 동일) */
+    /* user_providers 조회 실패 = 아래 users 열 조회로 계속 */
   }
   const [user] = await db
     .select()

@@ -1,8 +1,8 @@
-// 구글·카카오 로그인 라우트 = Worker 이관본. 응답·상태코드·에러문구는 원본과 같게 유지한다.
+// 구글·카카오 로그인 라우트.
 import type { Express, Request, Response } from "express";
 import type { drizzle } from "drizzle-orm/postgres-js";
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
-import { and, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { createLocalJWKSet, jwtVerify } from "jose";
 import * as schema from "../shared/schema";
 import {
@@ -11,55 +11,15 @@ import {
   findOrCreateUser,
   loginResponse,
 } from "./auth-user";
+import { readSocialKeys } from "./keys";
 
 const { apiKeys } = schema;
 
 type Db = ReturnType<typeof drizzle<typeof schema>>;
 type OpenDb = () => { db: Db; close: () => void };
 
-// ── 열쇠 공급 ──────────────────────────────────────────────────────────────
-const SOCIAL_KEY_NAMES = [
-  "EXPO_PUBLIC_GOOGLE_CLIENT_ID",
-  "GOOGLE_OAUTH_CLIENT_ID",
-  "GOOGLE_CLIENT_ID",
-  "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID",
-  "KAKAO_APP_ID",
-  "KAKAO_REST_API_KEY",
-  "KAKAO_NATIVE_APP_KEY",
-  "KAKAO_JWKS",
-];
-
-async function loadSocialKeys(db: Db): Promise<void> {
-  try {
-    const rows = await db
-      .select({ keyName: apiKeys.keyName, keyValue: apiKeys.keyValue })
-      .from(apiKeys)
-      .where(
-        and(
-          inArray(apiKeys.keyName, SOCIAL_KEY_NAMES),
-          eq(apiKeys.isActive, true),
-        ),
-      );
-    for (const row of rows) {
-      const value = (row.keyValue || "").trim();
-      if (!value) continue;
-      process.env[row.keyName] = value;
-      // 이 두 이름은 서로의 별칭으로도 채운다.
-      if (
-        row.keyName === "GOOGLE_OAUTH_CLIENT_ID" ||
-        row.keyName === "EXPO_PUBLIC_GOOGLE_CLIENT_ID"
-      ) {
-        process.env.GOOGLE_CLIENT_ID = value;
-        process.env.EXPO_PUBLIC_GOOGLE_CLIENT_ID = value;
-      }
-    }
-  } catch (e) {
-    console.error("[Auth] 소셜 열쇠 조회 실패:", (e as Error)?.message);
-  }
-}
-
 // ── 구글 신분증 확인 ────────────────────────────
-// 워커는 부팅 시점에 process.env 가 비어 있어, 모듈 최상단에서 읽으면 빈 문자열로 굳는다 = 같은 식을 **함수 안**으로 옮겼다.
+// 워커는 부팅 시점에 process.env 가 비어 있어, 모듈 최상단에서 읽으면 빈 문자열로 굳는다 = 함수 안에서 읽는다.
 function isValidGoogleAudience(v: string | undefined): boolean {
   if (!v) return false;
   const googleClientId = (
@@ -77,19 +37,6 @@ function isValidGoogleAudience(v: string | undefined): boolean {
 }
 
 // ── 카카오 본문 ──────────
-
-type KakaoTokenInfo = { app_id?: number | string };
-
-type KakaoMe = {
-  id?: number | string;
-  kakao_account?: {
-    id?: number | string;
-    email?: string | null;
-    is_email_verified?: boolean;
-    profile?: { nickname?: string | null; name?: string | null };
-  };
-  properties?: { nickname?: string | null };
-};
 
 // ⚠️ 수정금지(승인필요) 2026-09-25 사장님 결정 = 카카오 공개 열쇠 = 금고(KAKAO_JWKS) 1벌, 관제탑이 매일 갱신하고 금고에 없는 열쇠 번호일 때만 로그인 중 1회 갱신 (정본 9-25)
 export async function refreshKakaoJwks(
@@ -170,69 +117,6 @@ async function loginWithKakaoIdToken(
   return loginResponse(user);
 }
 
-// ⚠️ 수정금지(승인필요) — 카카오 accessToken → 우리 로그인 = 이 함수 1벌만 (2026-07-26 §16).
-async function loginWithKakaoAccessToken(
-  db: Db,
-  params: {
-    accessToken: string;
-    birthDate?: string;
-    language?: string;
-    deviceType?: string;
-    entry?: string;
-  },
-) {
-  // ⚠️ 수정금지(승인필요) — 받은 출입증이 **우리 카카오 앱에서 발급된 것인지** 먼저 확인 (2026-07-27 사장님 승인).
-  const ourAppId = (process.env.KAKAO_APP_ID || "").trim();
-  if (!ourAppId) {
-    console.error(
-      "[Auth] KAKAO_APP_ID 없음 = 카카오 로그인 차단(api_keys 확인 필요)",
-    );
-    return null;
-  }
-  const infoRes = await fetch(
-    "https://kapi.kakao.com/v1/user/access_token_info",
-    { headers: { Authorization: `Bearer ${params.accessToken}` } },
-  );
-  if (!infoRes.ok) {
-    console.error("[Auth] Kakao access_token_info 실패:", await infoRes.text());
-    return null;
-  }
-  const info = (await infoRes.json()) as KakaoTokenInfo;
-  if (String(info.app_id) !== ourAppId) {
-    console.error(
-      `[Auth] 다른 앱의 카카오 출입증 거부: app_id=${info.app_id} (우리=${ourAppId})`,
-    );
-    return null;
-  }
-
-  const meRes = await fetch("https://kapi.kakao.com/v2/user/me", {
-    headers: { Authorization: `Bearer ${params.accessToken}` },
-  });
-  if (!meRes.ok) {
-    console.error("[Auth] Kakao /v2/user/me failed:", await meRes.text());
-    return null;
-  }
-  const meData = (await meRes.json()) as KakaoMe;
-  const providerId = String(meData.id ?? meData.kakao_account?.id);
-  const displayName =
-    meData.kakao_account?.profile?.nickname ||
-    meData.kakao_account?.profile?.name ||
-    meData.properties?.nickname ||
-    KAKAO_DEFAULT_NAME;
-  const user = await findOrCreateUser(db, {
-    provider: "kakao",
-    providerId,
-    email: meData.kakao_account?.email || undefined,
-    emailVerified: meData.kakao_account?.is_email_verified === true,
-    birthDate: params.birthDate,
-    displayName,
-    language: params.language,
-    deviceType: params.deviceType,
-    entry: params.entry,
-  });
-  return loginResponse(user);
-}
-
 // ── 라우트 ────────────────────────────────────────────────────────────────
 
 type GoogleTokenInfo = {
@@ -257,7 +141,7 @@ export function registerSocialAuthRoutes(app: Express, openDb: OpenDb): void {
           error: "idToken is required",
         });
       }
-      await loadSocialKeys(db);
+      await readSocialKeys(db);
       const tokenRes = await fetch(
         `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(String(idToken))}`,
       );
@@ -305,26 +189,23 @@ export function registerSocialAuthRoutes(app: Express, openDb: OpenDb): void {
   app.post("/api/auth/kakao", async (req: Request, res: Response) => {
     const { db, close } = openDb();
     try {
-      const { accessToken, idToken, birthDate, language, deviceType, entry } =
+      const { idToken, birthDate, language, deviceType, entry } =
         req.body || {};
-      // ⚠️ 수정금지(승인필요) 2026-09-25 사장님 결정 = 신원 = ID 토큰(카카오 호출 0번) 또는 accessToken(스토어 아이폰 1.0.4 출시 뒤 삭제), 생년월일은 외부인증과 분리 (정본 9-25)
-      if (!accessToken && !idToken) {
+      // ⚠️ 수정금지(승인필요) 2026-09-28 사장님 결정 = 신원 = 카카오 ID 토큰 1벌(카카오 호출 0번), 생년월일은 외부인증과 분리 (정본 9-28)
+      if (!idToken) {
         return res.status(400).json({
           success: false,
-          error: "accessToken is required",
+          error: "idToken is required",
         });
       }
-      await loadSocialKeys(db);
-      const common = { birthDate, language, deviceType, entry };
-      const result = idToken
-        ? await loginWithKakaoIdToken(db, {
-            idToken: String(idToken),
-            ...common,
-          })
-        : await loginWithKakaoAccessToken(db, {
-            accessToken: String(accessToken),
-            ...common,
-          });
+      await readSocialKeys(db);
+      const result = await loginWithKakaoIdToken(db, {
+        idToken: String(idToken),
+        birthDate,
+        language,
+        deviceType,
+        entry,
+      });
       if (!result) {
         return res
           .status(401)

@@ -1,7 +1,4 @@
-// 여정 관련 라우트 = Worker 이관본 (2026-09-06)
-//
-// 이 파일이 옮긴 것 = POST /api/routes/day-live 1벌.
-//   응답 모양·상태코드·에러문구는 원본과 같게 유지한다.
+// POST /api/routes/day-live 1벌.
 
 import type { Express, Request, Response } from "express";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
@@ -99,9 +96,9 @@ async function computeDayRouteLive(
   record: (p: { request: unknown; raw: unknown }) => void,
 ): Promise<DayLiveResult> {
   if (!Array.isArray(slots) || slots.length < 1) {
-    throw new Error("[routes-client] 경유지 1개 이상 필요");
+    throw new Error("경유지 1개 이상 필요");
   }
-  if (!apiKey) throw new Error("[routes-client] GOOGLE_MAPS_API_KEY 없음");
+  if (!apiKey) throw new Error("GOOGLE_MAPS_API_KEY 없음");
 
   const toWp = (s: DayLiveStop) => ({
     location: { latLng: { latitude: s.lat, longitude: s.lng } },
@@ -139,7 +136,7 @@ async function computeDayRouteLive(
 
   if (!res.ok) {
     throw new Error(
-      `[routes-client] HTTP ${res.status} = ${JSON.stringify(raw)?.slice(0, 180)}`,
+      `HTTP ${res.status} = ${JSON.stringify(raw)?.slice(0, 180)}`,
     );
   }
   const r = raw?.routes?.[0];
@@ -164,7 +161,7 @@ export function registerItineraryGenerateRoutes(
 ): void {
   // POST /api/routes/day-live.
   //   ⚠️ 2026-07-24 사장님 승인 = 일별 [바로가기] = 출발지+경유지+도착지 왕복.
-  //   크레딧 차감 없음 = 원본에도 precheck/charge 가 없다(§9 5지점에 포함되지 않는 호출).
+  //   크레딧 차감 없음(§9 5지점에 포함되지 않는 호출).
   app.post("/api/routes/day-live", async (req: Request, res: Response) => {
     const { db, close } = openDb();
     let closed = false;
@@ -259,11 +256,3 @@ export function registerItineraryGenerateRoutes(
     }
   });
 }
-
-// ⚠️ 원본과 다를 수 있는 지점
-//  ① §18 raw 는 R2 1곳에만 남는다(Worker 에 파일시스템 없음).
-//     원본도 이 호출만은 localSkip:true 라 로컬을 안 쓴다 = 사실상 동일하다.
-//  ② 원본 enrichStopsWithPsr 은 `pool` 이 없으면 조회를 건너뛰고 빈 값을 돌려준다.
-//     Worker 는 openDb() 가 항상 연결을 주므로 그 분기가 없다(연결 실패는 catch → 502).
-//  ③ 원본은 `pool.query` 로 결과를 `r.rows` 배열로 받는다. postgres.js 의 결과는
-//     배열형 객체라 `Array.from` 으로 배열로 확정한 뒤 원본과 같은 idx 되짚기를 한다.

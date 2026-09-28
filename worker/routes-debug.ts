@@ -1,4 +1,4 @@
-// GET /api/debug/generate-test = 여정 생성 파이프라인이 실제로 도는지 보는 **자가진단** (Worker 이관 2026-09-06)
+// GET /api/debug/generate-test = 여정 생성 파이프라인이 실제로 도는지 보는 **자가진단**
 // 고정 테스트값 destination="Paris" = 창고가 차 있어 isCityReady().ready 가 참 → DB-only 로 직행 = 외부 유료호출 0건.
 // 파이프라인은 다시 짜지 않는다(§16) = routes-itinerary-generate-db.ts 의 runPipelineDbOnlyWorker / isCityReady / READY_THRESHOLD 1벌을 부른다.
 import type { Express, Request, Response } from "express";
@@ -111,7 +111,7 @@ export function registerDebugRoutes(app: Express, openDb: OpenDb): void {
 
         // 제미니 열쇠 유무를 steps 에 적을 뿐, 막지는 않는다.
         //   Worker 는 모듈 최상단 process.env 를 읽지 않으므로 요청 시점의 env 에서 읽는다.
-        //   DB-only 경로는 제미니를 부르지 않는다 = 없어도 그대로 진행(원본과 동일).
+        //   DB-only 경로는 제미니를 부르지 않는다 = 없어도 그대로 진행.
         const geminiKey =
           (globalThis as { process?: { env?: Record<string, string> } }).process
             ?.env?.GEMINI_API_KEY || "";

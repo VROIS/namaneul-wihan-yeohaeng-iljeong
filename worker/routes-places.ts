@@ -1,5 +1,4 @@
-// Cloudflare Worker 이관 = 도시·장소 라우트 4벌 (2026-09-06)
-// 응답·상태코드·에러문구는 원본과 동일하게 옮겼다.
+// 도시·장소 라우트 4벌.
 // 조건·정렬 모듈은 그대로 import 한다(§16 재발명 금지).
 import type { Express, Request, Response } from "express";
 import type { drizzle } from "drizzle-orm/postgres-js";
@@ -19,7 +18,7 @@ const { cities, placeSeedRaw, itineraries, guides, savedVideos } = schema;
 type Db = ReturnType<typeof drizzle<typeof schema>>;
 type OpenDb = () => { db: Db; close: () => void };
 
-// 원본 storage.getPlace = PSR 행 + name/type/photoUrl 별칭 3개.
+// 장소 = PSR 행 + name/type/photoUrl 별칭 3개.
 type PsrRow = typeof placeSeedRaw.$inferSelect;
 function toPlace(psr: PsrRow) {
   return {

@@ -174,7 +174,7 @@ export function invalidateKeys(): void {
   stampCheckedAt = 0;
 }
 
-// ⚠️ 수정금지(승인필요) 2026-09-27 사장님 결정 = 열쇠 1개 읽기 = readKey 1벌(채워진 값 먼저 → 없으면 api_keys 1행 → 별칭은 applyKey), 지도·제미니는 이름만 다르게 부른다 (정본 9-27)
+// ⚠️ 수정금지(승인필요) 2026-09-28 사장님 결정 = 열쇠 1개 읽기 = readKey 1벌(채워진 값 먼저 → 없으면 api_keys 1행 → 별칭은 applyKey), 지도·제미니·소셜 로그인은 이름만 다르게 부른다 (정본 9-28)
 type Db = PgDatabase<PgQueryResultHKT, any>;
 
 async function readKey(
@@ -204,3 +204,17 @@ export const readGeminiKey = (db: Db) =>
     "AI_INTEGRATIONS_GEMINI_API_KEY",
     "GEMINI_API_KEY",
   ]);
+
+export async function readSocialKeys(db: Db): Promise<void> {
+  await readKey(db, "GOOGLE_CLIENT_ID", [
+    "EXPO_PUBLIC_GOOGLE_CLIENT_ID",
+    "GOOGLE_CLIENT_ID",
+  ]);
+  for (const n of [
+    "EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID",
+    "KAKAO_REST_API_KEY",
+    "KAKAO_NATIVE_APP_KEY",
+    "KAKAO_JWKS",
+  ])
+    await readKey(db, n, [n]);
+}

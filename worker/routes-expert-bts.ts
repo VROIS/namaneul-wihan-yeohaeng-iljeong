@@ -1,5 +1,4 @@
-// Cloudflare Worker 이관 = 전문가 문의 8벌 + BTS 4벌 (2026-09-06)
-// 응답·상태코드·에러문구·정렬은 원본과 동일하게 옮겼다.
+// 전문가 문의 8벌 + BTS 4벌.
 // 순수 계산 모듈은 그대로 import 한다(§16 재발명 금지).
 import type { Express, Request, Response } from "express";
 import type { drizzle } from "drizzle-orm/postgres-js";
@@ -187,8 +186,6 @@ export function registerExpertBtsRoutes(app: Express, openDb: OpenDb): void {
         conds.push(eq(expertInquiries.isDeletedByExpert, false));
       }
       if (status) conds.push(eq(expertInquiries.status, status));
-      // 원본의 DB 실패 시 하드코딩 demo 2건 반환 분기(expert-routes.ts:92-140)는 옮기지 않는다
-      // = 가짜 데이터가 200 으로 나가 오진을 부른다(2026-09-06 이관 판단).
       const rows = await db
         .select()
         .from(expertInquiries)
@@ -240,8 +237,6 @@ export function registerExpertBtsRoutes(app: Express, openDb: OpenDb): void {
     },
   );
 
-  // ⚠️ 원본의 답변 완료 시 web-push 알림(notificationService.createAndSendNotification)은
-  //    옮기지 않았다 = web-push 의 Worker 호환 미확인(2026-09-06).
   app.patch(
     "/api/verification/requests/:id",
     async (req: Request, res: Response) => {
@@ -432,8 +427,6 @@ function effectiveImage(p: PlaceRow | null | undefined): string | null {
   return normalizeImageUrl(p.imageUrl || null, 1280);
 }
 
-// ⚠️ 원본의 isImageAlive(HEAD 외부 fetch, bts-routes.ts:51)는 옮기지 않았다 = 이관 범위상 외부호출 제외(2026-09-06).
-//    원본도 이 함수 안에서는 effectiveImage 유무만 보고 HEAD 를 부르지 않으므로 결과는 같다.
 function pickAliveFrom<T extends PlaceRow>(
   candidates: T[],
   used: Set<number>,

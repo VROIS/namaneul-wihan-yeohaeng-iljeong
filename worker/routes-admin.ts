@@ -56,7 +56,7 @@ const UNIT_COST_EUR: Record<string, number> = {
 /** providers 목록(순서 그대로). */
 const USAGE_PROVIDERS = ["ts", "pm", "veo", "omni", "nano", "gemini"];
 
-/** monthlyUsage. external_calls 는 drizzle 스키마에 없어 원본 SQL 그대로. */
+/** monthlyUsage. external_calls 는 drizzle 스키마에 없어 SQL 로 읽는다. */
 async function monthlyUsage(
   db: Db,
   provider: string,

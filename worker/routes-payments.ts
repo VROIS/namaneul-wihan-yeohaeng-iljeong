@@ -1,4 +1,4 @@
-// Cloudflare Worker 이관 = 결제(Stripe) 5벌 (2026-09-06)
+// 결제(Stripe) 5벌.
 // Worker 필수 2가지 = ① Stripe 클라이언트 httpClient = Stripe.createFetchHttpClient(Workers 에는 Node http 모듈이 없다) ② 웹훅 서명검증 = constructEventAsync + createSubtleCryptoProvider(동기 constructEvent 불가)
 // 근거 = https://blog.cloudflare.com/announcing-stripe-support-in-workers/
 import express, { type Express, type Request, type Response } from "express";

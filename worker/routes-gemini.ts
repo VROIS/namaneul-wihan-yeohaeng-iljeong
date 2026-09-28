@@ -1,10 +1,4 @@
-// 제미니(AI) 호출 라우트 = Worker 이관본 (2026-09-06)
-// 응답 모양·상태코드·에러문구는 원본과 같게 유지한다.
-//
-// 순수 계산 모듈은 원본을 그대로 import 한다(§16 재발명 금지) = 아래 3벌.
-//   - place-hint-header.ts   (import 0건 = 순수)
-//   - ai-opinion-prompt.ts   (→ language-instruction.ts, 둘 다 순수)
-//   - google-places-sku.ts   (import 0건 = 순수, FieldMask 1벌 §15)
+// 제미니(AI) 호출 라우트. 순수 계산 모듈(place-hint-header · ai-opinion-prompt · google-places-sku)은 엔진 것을 그대로 import 한다(§16 재발명 금지).
 import type { Express, Request, Response } from "express";
 import { and, desc, eq, sql } from "drizzle-orm";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
@@ -551,7 +545,7 @@ export function registerGeminiRoutes(app: Express, openDb: OpenDb): void {
   );
 
   // ③ GET /api/guide/landmark.
-  //   ⚠️ 원본 주석 = 이 호출이 준 좌표도 같이 돌려준다(name 만 돌려주고 버리던 것 폐기 §19).
+  //   이 호출이 준 좌표도 같이 돌려준다.
   app.get("/api/guide/landmark", async (req: Request, res: Response) => {
     const { db, close } = openDb();
     let closed = false;
@@ -642,8 +636,7 @@ export function registerGeminiRoutes(app: Express, openDb: OpenDb): void {
           address: row.address,
           category: row.seedCategory,
           reviewCount: row.googleReviewCount,
-          // price_eur = numeric 컬럼이라 postgres.js 가 문자열로 준다(원본은 pg 드라이버라 number).
-          // 머리글이 `€${priceEur}` 로 찍으므로 숫자로 되돌려 원본과 같은 글자를 낸다.
+          // price_eur = numeric 컬럼이라 postgres 드라이버가 문자열로 준다 = 머리글이 `€${priceEur}` 로 찍으므로 숫자로 되돌린다.
           priceEur: toNum(row.priceEur),
           summaryKo: row.summaryKo,
           editorialSummary: row.editorialSummary,

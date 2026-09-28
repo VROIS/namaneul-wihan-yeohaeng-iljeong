@@ -29,8 +29,8 @@ export async function runNativeSocial(
   }
 
   if (provider === "kakao") {
-    const { accessToken, idToken } = await loginKakaoApp();
-    return socialLoginWithKakao({ accessToken, idToken, ...common });
+    const idToken = await loginKakaoApp();
+    return socialLoginWithKakao({ idToken, ...common });
   }
 
   const apple = await signInWithApple();

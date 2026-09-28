@@ -1,6 +1,4 @@
 // Cloudflare Worker 진입점 (2026-09-05)
-// 이관은 검사표(docs/2026-09-05 Cloudflare 이관 검사표.md) 순서대로 한 줄씩.
-// 여기 있는 라우트 = 실제로 배포·실증까지 끝난 것만. 그 외는 추가하지 않는다.
 import express from "express";
 import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
@@ -149,7 +147,7 @@ async function withKeys<T>(run: () => Promise<T> | T): Promise<T> {
   return run();
 }
 
-// [검사표 6-1] GET /api/health
+// GET /api/health
 app.get("/api/health", (_req, res) => {
   res.json({
     ok: true,
@@ -158,11 +156,11 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
-// ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = GET /api/cities(검사표 6-2 = 원본 city-place-routes.ts 동일 응답) = 연결은 try 밖에서 열고 finally 에서 닫는다(닫기 누락 수정, 아래 4개 라우트 동일)
+// ⚠️ 수정금지(승인필요) 2026-09-28 사장님 결정 = GET /api/cities = 연결은 try 밖에서 열고 finally 에서 닫는다(아래 4개 라우트 동일) (정본 9-28)
 app.get("/api/cities", async (_req, res) => {
   const { db, close } = openDb();
   try {
-    // 정렬 = 원본 storage.getCities() 와 동일한 name 순.
+    // 정렬 = name 순.
     const rows = await db
       .select()
       .from(schema.cities)
@@ -176,7 +174,7 @@ app.get("/api/cities", async (_req, res) => {
   }
 });
 
-// [검사표 6-5] GET /api/cities/ready
+// GET /api/cities/ready
 const READY_THRESHOLD = 200;
 app.get("/api/cities/ready", async (_req, res) => {
   const { db, close } = openDb();
@@ -205,7 +203,7 @@ app.get("/api/cities/ready", async (_req, res) => {
   }
 });
 
-// [검사표 6-2] GET /api/cities/:id
+// GET /api/cities/:id
 // ⚠️ 수정금지(승인필요) 2026-09-06 사장님 결정 = 이 배선은 반드시 `/api/cities/:id` **앞**.
 // 뒤에 두면 `/api/cities/:id/representative` 를 `:id` 가 먼저 잡아 404 가 난다(2026-09-06 실측).
 registerPlaceRoutes(app, openDb);
@@ -251,12 +249,12 @@ app.get("/api/cities/:id", async (req, res) => {
   }
 });
 
-// [검사표 6-3] GET /api/guide/health
+// GET /api/guide/health
 app.get("/api/guide/health", (_req, res) => {
   res.json({ status: "ok", service: "guide", version: "2.0.0" });
 });
 
-// [검사표 6-4] GET /api/credits/pricing
+// GET /api/credits/pricing
 app.get("/api/credits/pricing", async (_req, res) => {
   try {
     // 이 라우트만 열쇠(STRIPE_PUBLISHABLE_KEY)가 필요하다.
@@ -277,7 +275,7 @@ app.get("/api/credits/pricing", async (_req, res) => {
   }
 });
 
-// [검사표 6-6] GET /api/itineraries/:id/calendar.ics
+// GET /api/itineraries/:id/calendar.ics
 // 본문(ICS 생성) = worker/lib/itinerary-ics.ts 를 import = 재발명 0(§16).
 app.get("/api/itineraries/:id/calendar.ics", async (req, res) => {
   const { db, close } = openDb();
@@ -286,7 +284,6 @@ app.get("/api/itineraries/:id/calendar.ics", async (req, res) => {
     if (Number.isNaN(idNum)) {
       return res.status(404).json({ error: "Itinerary not found" });
     }
-    // 원본 storage.getItinerary(id) = itineraries 단일 행 조회.
     const [itinerary] = await db
       .select()
       .from(schema.itineraries)
@@ -717,8 +714,6 @@ async function regenerateDay(params: {
   }
 
   const nonMealPlaces = places.filter((p) => !p.isMealSlot);
-  const mealPlaces = places.filter((p) => p.isMealSlot);
-  void mealPlaces; // 원본과 동일하게 선언만 하고 쓰지 않음(재정렬은 아래 원본 순회로 처리)
 
   let optimized = nonMealPlaces;
   if (nonMealPlaces.length > 2 && accommodationCoords) {
@@ -964,7 +959,7 @@ async function regenerateDay(params: {
   };
 }
 
-// [검사표 6-7] POST /api/routes/regenerate-day
+// POST /api/routes/regenerate-day
 app.post("/api/routes/regenerate-day", async (req, res) => {
   try {
     const { day, accommodationCoords, places, formData } = req.body;

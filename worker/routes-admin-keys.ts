@@ -1,4 +1,4 @@
-// ⚠️ 수정금지(승인필요) 2026-09-06 사장님 결정 = 열쇠 쓰기 3건(POST·PUT·DELETE) Worker 이관 (정본 B1)
+// ⚠️ 수정금지(승인필요) 2026-09-28 사장님 결정 = 열쇠 쓰기 3건(POST·PUT·DELETE) (정본 B1)
 // Worker 는 isolate 가 여러 벌 = 쓰기를 처리한 isolate 는 invalidateKeys() 로 즉시 무효화하고,
 // 다른 isolate 는 keys.ts 의 판형 확인(MAX(updated_at)+행수, 최대 30초)이 따라잡는다.
 import type { Express, Request, Response } from "express";
