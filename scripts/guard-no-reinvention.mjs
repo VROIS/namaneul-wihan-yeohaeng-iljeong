@@ -68,6 +68,78 @@ const CAPABILITIES = [
     ],
     hint: "같은 PID 쌍둥이 = status-backfill.ts(keep 흡수·best_rank 합집합·번역행 복사). 소속오염 행 = wrongcity-quarantine.ts(500km 안 가장 가까운 도시로 이동, 없으면 삭제). 새 중복 청소·이동 스크립트 만들지 말 것(§16).",
   },
+  // ⚠️ 수정금지(승인필요) 2026-09-30 사장님 결정 = 식당 가격 = 페이지 열 때 머리줄 가격(9요소, page-reader) → 유로 환산 1벌(shared/price-eur, 상한 규칙) → 남은 것만 ⑤ 후처리 제미니 몰아 묻기(price-gemini, #07 prompt.txt) · 어사이드 답 넣기도 price-gemini
+  {
+    id: "price-fill",
+    ko: "식당 가격(페이지 머리줄 → 유로 상한 규칙 → 남은 것 제미니 120곳/콜 · 어사이드 답 넣기)",
+    owners: [
+      "worker/lib/services/fill/price-gemini.ts",
+      "worker/lib/services/shared/price-eur.ts",
+      "worker/lib/services/shared/gemini-curate.ts",
+      "worker/lib/services/fill/gmaps-pid-identity/page-reader.ts",
+    ],
+    triggers: [
+      /Price per person/i,
+      /\bfunction\s+(cardPrice|priceText|toEur|headerPrice)\s*\(/,
+      /02-enrich-place\/prompt\.txt/,
+    ],
+    hint: "가격 = page-reader headerPrice(페이지) + price-eur toEur(환산) + price-gemini(--gemini=true 몰아 묻기 · --apply-json 어사이드). 새 가격 긁개·환산기·보강 지시문 만들지 말 것(§16).",
+  },
+  // ⚠️ 수정금지(승인필요) 2026-09-30 사장님 결정 = 제미니 응답 저장 = gemini-apply.ts 1벌(구글맵 로그에 값이 있는 칸은 덮지 않음)
+  {
+    id: "gemini-apply",
+    ko: "제미니 응답 저장(구글맵 로그 값 칸은 지키고, 구글이 못 준 칸과 제미니 전용 칸만 씀)",
+    owners: [
+      "worker/lib/services/fill/gemini-apply.ts",
+      "worker/lib/services/shared/gemini-curate.ts",
+      "worker/lib/services/fill/price-gemini.ts",
+    ],
+    triggers: [/geminiCurate\s*\(/, /gemini-enrich-/],
+    hint: "제미니 응답 저장 = gemini-apply.ts(--raw=<원본> · 시험이 기본, --apply 로 씀) 1벌. 응답을 행에 곧바로 덮어쓰는 새 코드 만들지 말 것(§16).",
+  },
+  // ⚠️ 수정금지(승인필요) 2026-09-30 사장님 결정 = 환율표 = exchange-rates.ts 1벌(open.er-api.com 무료)
+  {
+    id: "exchange-rates",
+    ko: "환율표 갱신(open.er-api.com, base KRW)",
+    owners: ["worker/lib/services/fill/exchange-rates.ts"],
+    triggers: [/open\.er-api\.com/, /frankfurter\.app/, /exchangerate/i],
+    hint: "환율 = exchange-rates.ts(--apply) 1벌. 다른 환율 API·표 만들지 말 것(§16).",
+  },
+  // ⚠️ 수정금지(승인필요) 2026-09-30 사장님 결정 = 분류 확정 = finalCategory 1벌(place-category-map) · DB 만 도는 정렬 = category-align.ts
+  {
+    id: "category-align",
+    ko: "분류 정렬(구글 분류 최우선 · 장소 아님 삭제 · 핫스팟은 태그로 · 새 글자 보고)",
+    owners: [
+      "worker/lib/services/fill/category-align.ts",
+      "worker/lib/services/shared/place-category-map.ts",
+    ],
+    triggers: [/\bfunction\s+(finalCategory|categoriesOfLabel|resolveCategory)\s*\(/, /NOT_PLACE/],
+    hint: "분류 = place-category-map finalCategory 1벌, 기존 행 정렬 = category-align.ts. 새 대응표·판정식 만들지 말 것(§16).",
+  },
+  // ⚠️ 수정금지(승인필요) 2026-10-01 사장님 결정 = 필시티 읽은 뒤 단계 = fillcity/steps 의 탐지·에이전트 명단·같은 장소 병합·제미니 호출 대상·손님상 검수 1벌 (정본 §)
+  {
+    id: "post-read-steps",
+    ko: "필시티 읽은 뒤 단계(탐지 → 에이전트 명단·판정 적용·같은 장소 병합 → 제미니 호출 대상 → 손님상 검수)",
+    owners: [
+      "fillcity/steps/common.ts",
+      "fillcity/steps/post-read-scan.ts",
+      "fillcity/steps/agent-export.ts",
+      "fillcity/steps/agent-run.ts",
+      "fillcity/steps/dup-merge.ts",
+      "fillcity/steps/gemini-targets.ts",
+      "fillcity/steps/serving-report.ts",
+    ],
+    triggers: [/_scan\.json/, /_agent-input/, /gemini-before/, /\bfunction\s+(isLodgingPage|roomRateEur)\s*\(/],
+    hint: "읽은 뒤 단계 = fillcity/steps/{post-read-scan,agent-export,agent-run,dup-merge,gemini-targets,serving-report}.ts 1벌(v3 --only=scan,agent,gtarget,report · 에이전트 동시 실행 = agent-run.ts). 호텔 판정은 에이전트 지시문(prompts/04-classify-agent) 안에 있다. 호텔 판별·객실 요금 읽기·같은 장소 병합·제미니 호출 후보 뽑기·손님상 검수 새 스크립트 만들지 말 것(§16).",
+  },
+  // ⚠️ 수정금지(승인필요) 2026-09-30 사장님 결정 = LLM 삭제 = llm-review.ts(명단 내보내기·판정 적용) + 에이전트 판단(CRITERIA)
+  {
+    id: "llm-review",
+    ko: "LLM 검토 삭제(명단 --export → 에이전트 판정 → --apply=<판정> 삭제, 껍데기 0)",
+    owners: ["fillcity/steps/llm-review.ts"],
+    triggers: [/llm-review-input/, /CRITERIA\s*=/],
+    hint: "LLM 삭제 = fillcity/steps/llm-review.ts 1벌. 판정 기준은 그 파일 CRITERIA. 새 검토 스크립트 만들지 말 것(§16).",
+  },
   // ⚠️ 수정금지(승인필요) 2026-09-28 사장님 결정 = 올리기 = scripts/release.mjs 1벌, 다른 배포 스크립트·임시 배포 명령 금지 (정본 §24)
   {
     id: "deploy",

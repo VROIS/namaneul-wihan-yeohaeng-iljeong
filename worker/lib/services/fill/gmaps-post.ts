@@ -5,6 +5,9 @@ import { BROWSER_UA } from "./gmaps-pid-identity/page-reader";
 import type { Result, Row } from "./gmaps-pid-identity/gates";
 import { PID_ROWS_SELECT, verifyPidRows } from "./gmaps-pid-identity/run";
 import {
+  absorbInto,
+  LIMITED_WHY,
+  loadPriceCtx,
   newStat,
   pageTools,
   provenanceTag,
@@ -14,7 +17,11 @@ import {
   type Stat,
 } from "./gmaps-shared";
 
-// ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 시드발굴 v3 ④(구글맵 확정·입력)도 이 엔진에서 돈다 = B1 산출표(R2)의 "신규"만 구글맵으로 7요소 갖춰 넣고, 발굴 한 판 raw 1파일(§18). 이 PC 도구는 산출표만 올리고 큐에 넣는다 (정본 §)
+// 장소 아님 = 삭제(껍데기 0). 엔진 1벌(place-upsert)을 늦게 불러 순환 참조를 피한다.
+const deleteRow = async (id: number) =>
+  (await import("../place-upsert")).deletePlaceRow(id);
+
+// ⚠️ 수정금지(승인필요) 2026-09-29 사장님 결정 = 시드발굴 v3 ④(구글맵 확정·입력)도 이 엔진에서 돈다 = B1 산출표(R2)의 "있음"은 구글맵을 안 열고 그 행에 흡수(베스트·번역·제미니 몫), "신규"만 구글맵으로 7요소 갖춰 넣고, 발굴 한 판 raw 1파일(§18) (정본 §)
 export async function insertSeedEntries(o: {
   client: Client;
   browser: any;
@@ -44,24 +51,33 @@ export async function insertSeedEntries(o: {
   const 있음: NewEntry[] = sections.flatMap((s) => s.confirm);
   const 신규: NewEntry[] = sections.flatMap((s) => s.new);
   log(
-    `▶ v3 ④ city ${cityId}: 있음 ${있음.length}(안 엶) · 신규 ${신규.length} → 구글맵 열기 (유료 0)`,
+    `▶ v3 ④ city ${cityId}: 있음 ${있음.length}(안 엶 = 그 행에 흡수) · 신규 ${신규.length} → 구글맵 열기 (유료 0)`,
   );
   const stat = newStat();
+  const tag = provenanceTag(new Date().toISOString().slice(0, 10));
+  for (const n of 있음)
+    await absorbInto(c, o.upsertPlace, n, { cityId, provenanceTag: tag }, stat);
   if (!신규.length) return stat;
   const city = (
     await c.query("SELECT name_en FROM cities WHERE id=$1", [cityId])
   ).rows[0];
   const rawRows: any[] = [];
+  const priceCtx = await loadPriceCtx(c, cityId);
   const reads = await readAll(
     o.browser,
     BROWSER_UA,
     신규,
-    { ...pageTools(), cityId, cityNameEn: city?.name_en, rawRows },
+    { ...pageTools(), cityId, cityNameEn: city?.name_en, rawRows, priceCtx },
     stat,
   );
-  const tag = provenanceTag(new Date().toISOString().slice(0, 10));
   for (const r of reads)
-    await writeRead(c, o.upsertPlace, r, { cityId, provenanceTag: tag }, stat);
+    await writeRead(
+      c,
+      o.upsertPlace,
+      r,
+      { cityId, provenanceTag: tag, priceCtx },
+      stat,
+    );
   const { saveRaw } = await import("../shared/save-raw");
   await saveRaw({
     source: "gmaps",
@@ -77,8 +93,12 @@ export async function insertSeedEntries(o: {
     raw: { summary: stat, report: report.report, rows: rawRows },
   } as any);
   log(
-    `   ④ 완료: 신규 ${신규.length} → 확인·입력 ${stat.insertedNew + stat.absorbedHint + stat.absorbedOther}(신규행 ${stat.insertedNew} / 흡수 ${stat.absorbedHint + stat.absorbedOther}) · 못 갖춤 ${stat.noMatch} · 폐업 ${stat.closed} · 쓰기이상 ${stat.skipped} · 페이지 ${stat.pageOpens}`,
+    `   ④ 완료: 신규 ${신규.length} → 확인·입력 ${stat.insertedNew + stat.absorbedHint + stat.absorbedOther}(신규행 ${stat.insertedNew} / 흡수 ${stat.absorbedHint + stat.absorbedOther}) · 못 갖춤 ${stat.noMatch} · 폐업 ${stat.closed} · 쓰기이상 ${stat.skipped} · 페이지 ${stat.pageOpens} · 제한보기 ${stat.limited}`,
   );
+  if (stat.blocked)
+    throw new Error(
+      `${LIMITED_WHY}: 구글맵 제한 보기 연속 = 채널 막힘 = 남은 신규는 다음 판에`,
+    );
   return stat;
 }
 
@@ -102,6 +122,27 @@ export type PostSummary = {
 
 export const r2PrefixOf = (r2PublicUrl: string | undefined) =>
   (r2PublicUrl || "").replace(/\/+$/, "") + "/";
+
+// 창고 행 → 구글맵 이름·주소 검색 항목 1벌 = 후처리와 사전 정제가 같이 쓴다(__rowId = 그 행에 쓴다)
+export const ROW_COLS = `id, name_en, name_local, name_ko, address, latitude::float AS lat, longitude::float AS lng, seed_category, price_eur, summary_ko, editorial_summary, (google_place_id IS NOT NULL OR google_maps_uri LIKE '%cid=%') AS direct, (best_rank IS NOT NULL) AS best`;
+export const entryOfRow = (r: any): NewEntry =>
+  ({
+    name: r.name_en,
+    nameLocal: r.name_local,
+    nameKo: r.name_ko,
+    langs: 1,
+    cat: r.seed_category,
+    avgPrice: r.price_eur,
+    avgRank: null,
+    copies: [
+      { lang: "ko", summary: r.summary_ko, editorial: r.editorial_summary },
+    ],
+    lat: r.lat,
+    lng: r.lng,
+    address: r.address,
+    isBest: !!r.best,
+    __rowId: r.id,
+  }) as any;
 
 export async function pendingByCity(
   c: Client,
@@ -137,7 +178,7 @@ export async function runGmapsPost(o: {
   if (!city) throw new Error(`city ${cityId} 미존재`);
   const rows = (
     await c.query(
-      `SELECT id, name_en, name_local, name_ko, address, latitude::float AS lat, longitude::float AS lng, seed_category, price_eur, summary_ko, editorial_summary, (google_place_id IS NOT NULL OR google_maps_uri LIKE '%cid=%') AS direct FROM place_seed_raw WHERE city_id = $2 AND ${PENDING_WHERE} ORDER BY id ${o.limit ? "LIMIT " + o.limit : ""}`,
+      `SELECT ${ROW_COLS} FROM place_seed_raw WHERE city_id = $2 AND ${PENDING_WHERE} ORDER BY id ${o.limit ? "LIMIT " + o.limit : ""}`,
       [r2Prefix, cityId],
     )
   ).rows;
@@ -150,6 +191,7 @@ export async function runGmapsPost(o: {
 
   // ① PID/CID 행 = 페이지 직행(창 5개)
   let pidResults: Result[] = [];
+  const priceCtx = await loadPriceCtx(c, cityId);
   if (directIds.length) {
     const pidRows: Row[] = (
       await c.query(
@@ -168,6 +210,7 @@ export async function runGmapsPost(o: {
       client: c,
       cityId,
       apply: true,
+      writeCtx: { ...priceCtx, deleteRow },
       onResult: (r) =>
         log(
           `   ${r.gate} #${r.id} ${r.name_en} rc=${r.rc_page ?? "-"} ${r.upsert || ""}`,
@@ -187,40 +230,35 @@ export async function runGmapsPost(o: {
   const stat = newStat();
   if (search.length) {
     log(`▶ city ${cityId} 이름·주소 검색 ${search.length}행`);
-    const entries = search.map((r: any) => ({
-      name: r.name_en,
-      nameLocal: r.name_local,
-      nameKo: r.name_ko,
-      langs: 1,
-      cat: r.seed_category,
-      avgPrice: r.price_eur,
-      avgRank: null,
-      copies: [
-        { lang: "ko", summary: r.summary_ko, editorial: r.editorial_summary },
-      ],
-      lat: r.lat,
-      lng: r.lng,
-      address: r.address,
-      __rowId: r.id,
-    }));
     const reads = await readAll(
       o.browser,
       BROWSER_UA,
-      entries as any,
-      { ...pageTools(), cityId, cityNameEn: city.name_en, rawRows: [] },
+      search.map(entryOfRow),
+      {
+        ...pageTools(),
+        cityId,
+        cityNameEn: city.name_en,
+        rawRows: [],
+        priceCtx,
+      },
       stat,
     );
     for (const rd of reads) {
       const targetRowId = (rd.n as any).__rowId;
+      if (rd.why?.startsWith("장소아님")) {
+        await deleteRow(targetRowId);
+        log(`   🗑 #${targetRowId} ${rd.n.name} 삭제(${rd.why})`);
+        continue;
+      }
       await writeRead(
         c,
         o.upsertPlace,
         rd,
-        { cityId, provenanceTag: "gmaps-post", targetRowId },
+        { cityId, provenanceTag: "gmaps-post", targetRowId, priceCtx },
         stat,
       );
-      // 검색으로도 못 찾은 행 = 그 사실을 스탬프로 남긴다(안 남기면 매 회 같은 검색을 반복) = 행이 바뀌면(updated_at) 다시 대상이 된다
-      if (rd.why)
+      // 검색으로도 못 찾은 행 = 그 사실을 스탬프로 남긴다(안 남기면 매 회 같은 검색을 반복) = 행이 바뀌면(updated_at) 다시 대상이 된다. 제한 보기는 못 찾은 것이 아니다 = 스탬프 없이 다음 판에
+      if (rd.why && rd.why !== LIMITED_WHY)
         await o.upsertPlace({
           targetRowId,
           cityId,

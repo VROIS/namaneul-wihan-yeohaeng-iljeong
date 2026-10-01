@@ -14,6 +14,14 @@ import {
   RECOGNIZE_ROWS_SQL,
   type RecognizeRow,
 } from "../../worker/lib/services/shared/recognize-place";
+
+import {
+  avg,
+  isMixedGroup,
+  majorityCat,
+  mid,
+  refineGroups,
+} from "./discovery-refine";
 export type Bucket = "confirm" | "new";
 export interface PsrRow {
   id: number;
@@ -27,8 +35,9 @@ export interface PsrRow {
   lat: number | null;
   lng: number | null;
   pid: boolean;
+  category_tags: string[] | null;
 }
-export const PSR_COLS = `id, name_en, name_local, name_ko, seed_category, status, merged_into, city_id, latitude::float AS lat, longitude::float AS lng, google_place_id IS NOT NULL AS pid`;
+export const PSR_COLS = `id, name_en, name_local, name_ko, seed_category, status, merged_into, city_id, latitude::float AS lat, longitude::float AS lng, google_place_id IS NOT NULL AS pid, category_tags`;
 interface Staged {
   g: Group;
   name: string | null | undefined;
@@ -106,6 +115,7 @@ interface GroupMember {
   lat?: number;
   lng?: number;
   address?: string;
+  raw?: RawPlace;
   tier: string; // 불변3 | 불변5 | 불변6 | 의심(영어명/한국어명) | 의심(영어명·유니크색인) | new
 }
 
@@ -126,42 +136,6 @@ export interface Group {
   ranks: number[];
   copies: { lang: string; summary?: string; editorial?: string }[];
   members: GroupMember[];
-}
-
-function norm(s?: string | null): string {
-  if (!s) return "";
-  return (
-    s
-      .toLowerCase()
-      .normalize("NFD")
-      .replace(/[̀-ͯ]/g, "")
-      // ⚠️ 수정금지(승인필요) 2026-08-27 사장님 지시 = 결합기호 제거 후 NFC 재조합 = 한글 음절이 아래 허용범위(가-힯)에 남는다.
-      .normalize("NFC")
-      .replace(/[^a-z0-9一-鿿぀-ヿ가-힯 ]/g, " ")
-      .replace(/\b(the|el|la|los|las|de|del|of|museo|museum)\b/g, " ")
-      .replace(/\s+/g, " ")
-      .trim()
-  );
-}
-// ⚠️ 수정금지(승인필요) 2026-08-27 사장님 지시 = 과병합 의심 판정(감사 플래그, 병합 판정에 영향 0).
-function isMixedGroup(members: GroupMember[]): boolean {
-  const distinct = [
-    ...new Set(members.map((m) => norm(m.name_en)).filter(Boolean)),
-  ];
-  if (distinct.length <= 1) return false;
-  const sets = distinct.map((n) => new Set(n.split(" ")));
-  const largest = sets.reduce((a, b) => (b.size > a.size ? b : a));
-  return !sets.every((s) => [...s].every((t) => largest.has(t)));
-}
-
-function majorityCat(cats: string[]): string {
-  const cnt: Record<string, number> = {};
-  for (const c of cats) cnt[c] = (cnt[c] || 0) + 1;
-  return Object.entries(cnt).sort((a, b) => b[1] - a[1])[0]?.[0] || "unknown";
-}
-
-function avg(xs: number[]): number | null {
-  return xs.length ? xs.reduce((s, x) => s + x, 0) / xs.length : null;
 }
 
 // ⚠️ 수정금지(승인필요) 2026-08-30 사장님 지시 = 선별표 저장/재사용 1벌 = Set 필드(langs/names/locals/kos/addresses)를
@@ -319,17 +293,23 @@ function deserializeGroup(g: any): Group {
       return groups.get(key)!;
     }
     function addMember(g: Group, p: RawPlace, tier: string) {
-      g.members.push({
-        lang: p.lang,
-        type: p.type,
-        name_en: p.name_en,
-        name_local: p.name_local,
-        name_ko: p.name_ko,
-        lat: p.lat,
-        lng: p.lng,
-        address: p.address,
-        tier,
-      });
+      g.members.push(
+        Object.defineProperty(
+          {
+            lang: p.lang,
+            type: p.type,
+            name_en: p.name_en,
+            name_local: p.name_local,
+            name_ko: p.name_ko,
+            lat: p.lat,
+            lng: p.lng,
+            address: p.address,
+            tier,
+          },
+          "raw",
+          { value: p },
+        ),
+      );
       g.langs.add(p.lang);
       g.names.add(p.name_en || "");
       if (p.name_local) g.locals.add(p.name_local);
@@ -514,6 +494,9 @@ function deserializeGroup(g: any): Group {
       )
     ).rows;
 
+    const hist = { ...tierHistogram };
+    refineGroups(groups, psrInfo, all, newGroup, addMember);
+    tierHistogram = hist;
     staged = [];
     for (const g of groups.values()) {
       if (g.type === "restaurants" && g.langs.size < RESTAURANT_MIN_LANGS)
@@ -524,8 +507,8 @@ function deserializeGroup(g: any): Group {
         name: [...g.names][0],
         nameLocal: [...g.locals][0] || null,
         nameKo: [...g.kos][0] || null,
-        lat: avg(g.lats),
-        lng: avg(g.lngs),
+        lat: mid(g.lats),
+        lng: mid(g.lngs),
       };
       if (g.anchor.kind === "psr") {
         const r = psrInfo.get(g.anchor.id);
@@ -610,9 +593,10 @@ function deserializeGroup(g: any): Group {
       ...base,
       nameLocal: [...g.locals][0] || null,
       nameKo: [...g.kos][0] || null,
-      lat: avg(g.lats),
-      lng: avg(g.lngs),
+      lat: mid(g.lats),
+      lng: mid(g.lngs),
       address: [...g.addresses][0] || null,
+      aliases: [...g.names, ...g.locals],
       by: s.by,
     };
     if (s.bucket === "confirm") {
@@ -623,6 +607,7 @@ function deserializeGroup(g: any): Group {
           psrId: r.id,
           psrName: r.name_en,
           psrCat: r.seed_category,
+          psrTags: r.category_tags,
           by: s.by,
         },
       });

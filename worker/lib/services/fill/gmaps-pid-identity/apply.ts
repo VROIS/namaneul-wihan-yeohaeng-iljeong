@@ -1,7 +1,16 @@
 // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 승인 = §0 700줄 가드 = 폴더 분리(로직 무변경)
 import { rawDate } from "../../shared/raw-filename";
 import { placeImageKey } from "../../../../../shared/r2-paths";
+import { categoryTagsOf, finalCategory } from "../../shared/place-category-map";
+import { keepsExisting, toEur, type EurPer } from "../../shared/price-eur";
 import { type Result, type Row } from "./gates";
+
+// ⚠️ 수정금지(승인필요) 2026-09-30 사장님 결정 = 페이지 값으로 가격·분류까지 확정(9요소) = 환율·나라·삭제 함수는 부르는 쪽이 넘긴다 (정본 §)
+export type WriteCtx = {
+  eurPer?: EurPer;
+  countryCode?: string | null;
+  deleteRow?: (rowId: number) => Promise<void>;
+};
 
 // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 확정 = 두 모드 공통 태그 1벌 = gmaps-pid-verify-<오늘>.
 export const PHASE_TAG = `gmaps-pid-verify-${rawDate()}`;
@@ -17,6 +26,7 @@ export const pageWasRead = (r: Result): boolean =>
   !String(r.gate || "").startsWith("error") &&
   r.gate !== "consent-blocked" &&
   r.gate !== "h1-empty" &&
+  r.gate !== "limited-view" &&
   (!!r.name_local || !!r.page_name_en || !!r.address || r.page_lat != null);
 // ⚠️ 수정금지(승인필요) 2026-09-05 사장님 확정 = name_en 에 넣을 이름은 **영어 h1(page_name_en)뿐**. 현지어 h1(name_local)을 폴백으로 두면 --lang=fr 처럼 다른 언어로 연 순간 "Tour Eiffel" 이 name_en 을 덮는다(hl=en 으로 열면 page_name_en 에 같은 값이 들어오므로 손실 없음).
 export function pickPageName(r: Result): string | null {
@@ -50,9 +60,30 @@ export async function writeRow(
   cityId: number,
   row: Row,
   r: Result,
+  ctx: WriteCtx = {},
 ): Promise<void> {
   try {
     const read = pageWasRead(r);
+    const fc = read
+      ? finalCategory(row.seed_category, r.category, {
+          reviewCount: r.rc_page ?? row.rc,
+          best: row.best,
+        })
+      : null;
+    if (fc?.notPlace && ctx.deleteRow) {
+      await ctx.deleteRow(row.id);
+      r.upsert = `deleted(not-place:${r.category})`;
+      return;
+    }
+    let pagePrice: number | null = null;
+    // ⚠️ 수정금지(승인필요) 2026-09-30 사장님 결정 = 가격 = 식당은 머리줄 → 본문 1인당 평균, 입장지는 입장권 공식 사이트 정가 (정본 §)
+    const pageCardPrice =
+      fc?.cat === "restaurant" ? (r.price ?? r.perPerson) : r.admission;
+    if (pageCardPrice && ctx.eurPer) {
+      const e = toEur(pageCardPrice, ctx.countryCode, ctx.eurPer);
+      if (e.eur != null && !keepsExisting(row.price ?? null, e))
+        pagePrice = e.eur;
+    }
     // ⚠️ 수정금지(승인필요) 2026-09-08 사장님 확정 = 어떤 경로로 열든 6요소(이름·주소·좌표·리뷰수·영업상태·사진 400px)+cid 는 무조건 그 행에 쓴다. 사진 = 있는 행도 덮는다(옛 "없는 행만" 폐기 §19).
     let imageUrl: string | undefined;
     if (r.photo_url) {
@@ -83,7 +114,9 @@ export async function writeRow(
       followTriggerDup: true,
       dupCheckOnWrite: true,
       cityId,
-      seedCategory: row.seed_category,
+      seedCategory: fc?.cat ?? row.seed_category,
+      overwriteSeedCategory: !!fc?.changed,
+      priceEur: pagePrice,
       imageUrl,
       // ⚠️ 수정금지(승인필요) 2026-09-04 사장님 확정 = PID 가 정답이나 **페이지를 실제로 읽었을 때만**(read) 값을 넘긴다. 못 읽은 행의 기본값을 넘기면 기존 값을 덮는다(business_status 기본 'OPERATIONAL' 이 폐업 기록을 지움). null = COALESCE 가 기존값 보존.
       //   이름 = 우편번호 든 문자열은 주소이지 이름이 아니다(pickPageName). 현지어명·한국어명은 제미니 영역 = 안 건드린다. page-coord-invalid = 좌표만 / rc_flag = RC 만 제외.
@@ -94,8 +127,15 @@ export async function writeRow(
       googleReviewCount: read && r.rc_flag == null ? r.rc_page : null,
       googleMapsUri: read ? r.maps_uri : null,
       businessStatus: read ? r.status : null,
-      // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 페이지 분류도 저장(검색 경로와 1벌) = seed_category 는 유지, category_tags 는 합집합 = 덮어쓰기 0
+      // ⚠️ 수정금지(승인필요) 2026-09-29 사장님 결정 = 페이지 분류도 저장(검색 경로와 1벌) = seed_category 는 유지, category_tags 는 우리 분류 ∪ 구글 분류를 표로 펼친 것(합집합) = 덮어쓰기 0 (정본 §)
       googlePrimaryType: read ? r.category : null,
+      categoryTags:
+        read && fc
+          ? [
+              ...categoryTagsOf(fc.cat, r.category),
+              ...(fc.hotspotTag ? ["hotspot"] : []),
+            ]
+          : undefined,
       verifySource: read ? "gmaps-pid-page" : null,
       phaseTags: [PHASE_TAG],
     });

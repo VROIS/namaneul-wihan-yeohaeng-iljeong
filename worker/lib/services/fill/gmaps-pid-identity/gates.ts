@@ -1,6 +1,10 @@
 // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 승인 = §0 700줄 가드 = 폴더 분리(로직 무변경)
 import type { Page } from "playwright";
-import { readPlacePage, type BusinessStatus } from "./page-reader";
+import {
+  readPlacePage,
+  type BusinessStatus,
+  type CardPrice,
+} from "./page-reader";
 
 // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 지시 = 좌표 관문 2km = 이름 강일치(strong) 행은 초과 시 우리 좌표 오염으로 보고 페이지 좌표로 교정(coord-corrected) / 이름 약일치(weak)·실패 행은 초과 시 딴 장소(coord-mismatch = 안 씀).
 export const COORD_GATE_KM = 2;
@@ -90,6 +94,78 @@ export function nameMatch(
   if (a && b && (a.includes(b) || b.includes(a))) return "strong";
   return "weak";
 }
+// ⚠️ 수정금지(승인필요) 2026-09-29 사장님 결정 = 같은 이름 판정 1벌(③ 묶음 나누기·흡수 관문 · ④ 페이지 관문이 같이 씀) = 이름 목록 중 하나라도 강일치 또는 고유 단어가 양쪽 똑같음 또는 띄어쓰기만 다름(나이로비 Chop House ↔ Chophouse 실측) · 구글 페이지 관문만 = 우리 고유 단어가 전부 페이지 이름에 있으면 같은 곳(coversName, 브뤼셀 Coudenberg Palace ↔ "Coudenberg, Former Palace of Brussels" 실측 · ③ 묶음 나누기엔 안 씀 = 한 단어 이름끼리 사슬로 이어져 리마 Mateo 묶음에 딴 가게가 섞임). 강일치 중 한쪽 이름이 다른 쪽에 들어 있기만 한 것(LA Franklin & Company ↔ 집 봐주는 업체 "Franklin" 실측)과 똑같은 이름(exactName)을 따로 볼 수 있게 나눔. 도시·나라 이름(제미니 주소 끝 조각)과 산·성당·탑·궁전 일반어는 빼고 고유 이름만 본다(보고타 Mount Guadalupe ↔ Guadalupe Hill 실측). 호수·해변·다리·시장·정원·교회·castillo 는 빼지 않는다 = 과이타비타 마을 ↔ 호수, Castillo Forestal 식당 ↔ Parque Forestal 공원이 합쳐지지 않게 (정본 §)
+const GENERIC_PLACE_WORDS = [
+  "hill",
+  "mount",
+  "mountain",
+  "cerro",
+  "monte",
+  "cathedral",
+  "catedral",
+  "basilica",
+  "tower",
+  "torre",
+  "palace",
+  "palacio",
+];
+export function placeStop(
+  cityName: string | null | undefined,
+  addresses: (string | null | undefined)[],
+): Set<string> {
+  const stop = nameTokens(cityName ?? null, new Set());
+  for (const w of GENERIC_PLACE_WORDS) stop.add(w);
+  for (const a of addresses)
+    for (const t of nameTokens((a || "").split(",").pop() || "", new Set()))
+      stop.add(t);
+  return stop;
+}
+function namePairs(
+  ours: (string | null | undefined)[],
+  theirs: (string | null | undefined)[],
+  hit: (x: string, y: string) => boolean,
+): boolean {
+  return ours.some((x) => !!x && theirs.some((y) => !!y && hit(x, y)));
+}
+export function exactName(
+  ours: (string | null | undefined)[],
+  theirs: (string | null | undefined)[],
+  stop: Set<string>,
+): boolean {
+  return namePairs(ours, theirs, (x, y) => {
+    const tx = nameTokens(x, stop);
+    const ty = nameTokens(y, stop);
+    return (
+      normName(x) === normName(y) ||
+      normName(x).replace(/ /g, "") === normName(y).replace(/ /g, "") ||
+      (tx.size > 0 && tx.size === ty.size && [...tx].every((t) => ty.has(t)))
+    );
+  });
+}
+export function sameName(
+  ours: (string | null | undefined)[],
+  theirs: (string | null | undefined)[],
+  stop: Set<string>,
+): boolean {
+  return (
+    exactName(ours, theirs, stop) ||
+    namePairs(ours, theirs, (x, y) => {
+      const tx = nameTokens(x, stop);
+      return tx.size > 0 && nameMatch(x, tx, y, stop) === "strong";
+    })
+  );
+}
+export function coversName(
+  ours: (string | null | undefined)[],
+  theirs: (string | null | undefined)[],
+  stop: Set<string>,
+): boolean {
+  return namePairs(ours, theirs, (x, y) => {
+    const tx = nameTokens(x, stop);
+    const ty = nameTokens(y, stop);
+    return tx.size > 0 && [...tx].every((t) => ty.has(t));
+  });
+}
 const HANGUL_RE = /[가-힣]/;
 
 export type Row = {
@@ -100,7 +176,9 @@ export type Row = {
   lat: number | null;
   lng: number | null;
   rc: number | null;
+  best?: boolean; // 베스트 순위가 붙은 행 = 리뷰 수와 상관없이 장소 아님 삭제 면제
   has_image: boolean; // ⚠️ 2026-09-04 = 사진 없는 행만 같은 방문에서 채운다(있으면 안 덮음).
+  price?: number | null; // 우리 가격(페이지 "X 이상" 증거와 대조용)
 };
 export type Result = {
   id: number;
@@ -127,8 +205,14 @@ export type Result = {
   // ⚠️ 수정금지(승인필요) 2026-09-08 사장님 확정 = 어떤 경로로 열든 cid 를 버리지 않는다 = 페이지 주소창 ftid→cid = google_maps_uri 에 쓴다.
   maps_uri: string | null;
   status: BusinessStatus | null;
-  gate: "ok" | string; // ok | ok(no-address) | ok(coord-unverified) | coord-corrected | page-coord-invalid | consent-blocked | h1-empty | address-empty-ambiguous | name-mismatch | coord-mismatch | error:<msg> (2026-08-28 사장님 지시 = address-empty 폐기 → address-empty-ambiguous·ok(no-address) 로 분리)
+  gate: "ok" | string; // ok | ok(no-address) | ok(coord-unverified) | coord-corrected | page-coord-invalid | consent-blocked | h1-empty | address-empty-ambiguous | name-mismatch | coord-mismatch | limited-view | error:<msg> (2026-08-28 사장님 지시 = address-empty 폐기 → address-empty-ambiguous·ok(no-address) 로 분리)
   upsert?: string; // --apply 결과(action 또는 오류)
+  price: CardPrice | null; // 페이지 머리줄 가격(9요소, 2026-09-30)
+  limited: boolean; // 구글 제한 보기 = 채널 막힘(빈 등록 아님)
+  // ⚠️ 수정금지(승인필요) 2026-09-30 사장님 결정 = 입장권 공식 사이트 가격 · 1인당 평균 가격 · 페이지 원본 글자 = 도시 폴더 원본 로그 (정본 §)
+  admission: CardPrice | null;
+  perPerson: CardPrice | null;
+  rawText: string | null;
 };
 // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 지시 = 쓰기 대상 = ok 계열 + coord-corrected(페이지 좌표가 진실 = 우리 좌표 오염 교정) + page-coord-invalid(좌표만 빼고 나머지 컬럼 씀).
 export const isWritable = (gate: string) =>
@@ -165,6 +249,11 @@ export function initResult(row: Row): Result {
     maps_uri: null,
     status: null,
     gate: "ok",
+    price: null,
+    limited: false,
+    admission: null,
+    perPerson: null,
+    rawText: null,
   };
 }
 
@@ -201,6 +290,11 @@ export async function evaluateRow(
   r.rating = local.rating;
   r.rc_source = local.rcSource;
   r.status = local.consentBlocked ? null : local.status;
+  r.price = local.price;
+  r.limited = local.limited;
+  r.admission = local.admission;
+  r.perPerson = local.perPerson;
+  r.rawText = local.rawText;
   // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 지시 = 리뷰수 거부 규칙(서울 169행 4.6→46 오독 재발 방지) = 페이지 RC 가 round(별점×10)/round(별점×100) 과 같음 · 우리 RC≥100 인데 5 미만 · 본문 "(N)" 대체 출처인데 100 미만 = rc_unparsed(rc_page=null, 안 씀).
   {
     const rc = local.reviewCount;
@@ -284,7 +378,8 @@ export async function evaluateRow(
   // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 지시(시카고 #60631 사고 수리) = 약일치(weak = 공통 토큰 1개뿐)·대조 불가(name_en 빈 행) + 2km 초과 = coord-mismatch(안 씀, "이름 약일치"/"이름 대조 불가"). 2km 이내 = weak 도 통과(같은 장소의 번역 변형).
   // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 지시 = 주소 없음(address-empty) 은 더 이상 자동 차단이 아님 = 광장·거리·구역(예 "Place de la Concorde"·"Le Marais")은 구글이 번지주소를 안 줘도 이름·좌표 관문은 통과하는 실제 장소(전 Paris 사례 dist_km 0~0.6). 이름/좌표 관문을 먼저 그대로 판정한 뒤, 주소 없음은 그 판정이 이미 실패(name-mismatch/coord-mismatch/coord-corrected)일 때만 "대조 재료 부족" 의미로 얹어 address-empty-ambiguous(쓰기 안 함)로 바꾸고, 통과(ok 계열)면 ok(no-address)(쓰기 함, address 컬럼은 null 그대로 넘겨 upsertPlace COALESCE 가 기존값 보존)로 확정한다.
   let gate: string;
-  if (local.consentBlocked) gate = "consent-blocked";
+  if (local.limited) gate = "limited-view";
+  else if (local.consentBlocked) gate = "consent-blocked";
   else if (!local.h1) gate = "h1-empty";
   else if (!nameOk) gate = coordFar ? "coord-mismatch" : "name-mismatch";
   else if (pageCoordInvalid) gate = "page-coord-invalid";

@@ -12,6 +12,8 @@ import {
   verifyPidRows,
 } from "./gmaps-pid-identity/run";
 import { printAndSaveReport } from "./gmaps-pid-identity/report";
+import { launchBrowser } from "./gmaps-pid-identity/page-reader";
+import { loadPriceCtx } from "./gmaps-shared";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "../../../..");
@@ -100,7 +102,9 @@ if (!cityId) {
   );
 
   let results: Result[] = [];
-  const browser = await chromium.launch({ headless: true });
+  const browser = await launchBrowser(chromium);
+  const priceCtx = await loadPriceCtx(c, cityId);
+  const { deletePlaceRow } = await import("../place-upsert");
   const t0 = Date.now();
   try {
     results = await verifyPidRows({
@@ -111,6 +115,7 @@ if (!cityId) {
       photoWidth: PHOTO_MAX_WIDTH_PX,
       distanceKmFromCoords,
       upsertPlace,
+      writeCtx: { ...priceCtx, deleteRow: (id: number) => deletePlaceRow(id) },
       client: c,
       cityId,
       apply,

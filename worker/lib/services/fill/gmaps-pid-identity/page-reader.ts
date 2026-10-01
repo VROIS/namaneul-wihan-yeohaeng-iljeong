@@ -37,6 +37,41 @@ const CONSENT_ACCEPT_SEL = [
 // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 확정 = 브라우저 UA = 일반 크롬. 실측(보고타 3 PID): Playwright 기본 headless UA 면 구글맵이 별점만 있는 축약 헤더를 내려 리뷰수 span 이 영영 안 뜸 / 일반 UA 면 리뷰수("50,729 reviews") 가 뜸. 동의 직후 첫 페이지만 축약 렌더 = readPlacePage 가 1회 reload 로 복구.
 export const BROWSER_UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36";
+// ⚠️ 수정금지(승인필요) 2026-09-30 사장님 결정 = 구글맵 읽기 브라우저 = GMAPS_CDP(주소)가 있으면 사장님이 로그인해 둔 전용 크롬에 붙는다(로그인 상태 = 제한 보기 없음), 없으면 새 크롬 (정본 §)
+export const launchBrowser = (chromium: any) =>
+  process.env.GMAPS_CDP
+    ? chromium.connectOverCDP(process.env.GMAPS_CDP)
+    : chromium.launch({ channel: "chrome", headless: true });
+// ⚠️ 수정금지(승인필요) 2026-10-01 사장님 결정 = 구글맵을 여는 시각에 사람 같은 편차(0.3~3초, 이 PC 전용 크롬 GMAPS_CDP 일 때만)를 준다 = 같은 박자로 도는 기계 패턴이 사람 인증을 부른다는 가설 (정본 §)
+const humanPause = (page: Page) =>
+  process.env.GMAPS_CDP
+    ? page.waitForTimeout(300 + Math.floor(Math.random() * 2700))
+    : Promise.resolve();
+export async function openWindow(
+  browser: any,
+  base: string = BROWSER_UA,
+  locale?: string,
+): Promise<{ page: Page; close: () => Promise<unknown> }> {
+  if (process.env.GMAPS_CDP) {
+    const page = await browser.contexts()[0].newPage();
+    return { page, close: () => page.close().catch(() => {}) };
+  }
+  const ctx = await browser.newContext({
+    viewport: { width: 1280, height: 900 },
+    userAgent: uaFor(browser, base),
+    ...(locale ? { locale } : {}),
+  });
+  return {
+    page: await ctx.newPage(),
+    close: () => ctx.close().catch(() => {}),
+  };
+}
+// ⚠️ 수정금지(승인필요) 2026-09-30 사장님 결정 = UA 의 크롬 버전 = 실제 브라우저 버전에 맞춘다(고정 128 이면 구글이 자동 프로그램으로 보고 제한 보기를 준다, 실측) (정본 §)
+export const uaFor = (
+  browser: { version(): string },
+  base: string = BROWSER_UA,
+): string =>
+  base.replace(/Chrome\/\d+\./, `Chrome/${browser.version().split(".")[0]}.`);
 // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 확정 = 영업상태 = 페이지 본문(현지어) 문구로 판정. 영어 + 주요 현지어 동의어. 둘 다 없으면 OPERATIONAL.
 export type BusinessStatus =
   | "OPERATIONAL"
@@ -48,6 +83,38 @@ const cidOf = (m: RegExpMatchArray | null) =>
   m ? BigInt(m[1].split(":")[1]).toString() : null;
 const cidFromUrl = (url: string) =>
   cidOf(url.match(/[?&#!]\d*m\d+!1s(0x[0-9a-f]+:0x[0-9a-f]+)/i));
+
+// ⚠️ 수정금지(승인필요) 2026-09-29 사장님 결정 = 좌표 = 주소창 @위도,경도 · 없으면(한국 구글맵은 좌표를 안 줌) 주소창 플러스코드(!20s…)를 풀어서(경복궁·우래옥 실측 = 창고 좌표와 일치)
+const OLC = "23456789CFGHJMPQRVWX";
+const PLUS_IN_URL_RE = new RegExp(
+  `!20s([${OLC}]{8})(?:%2B|\\+)([${OLC}]{2,7})`,
+);
+function plusCodeLatLng(code: string): [number, number] {
+  let lat = -90,
+    lng = -180,
+    res = 20;
+  for (let i = 0; i < 10; i += 2) {
+    lat += OLC.indexOf(code[i]) * res;
+    lng += OLC.indexOf(code[i + 1]) * res;
+    if (i < 8) res /= 20;
+  }
+  let hLat = res,
+    hLng = res;
+  for (const ch of code.slice(10)) {
+    hLat /= 5;
+    hLng /= 4;
+    const d = OLC.indexOf(ch);
+    lat += Math.floor(d / 4) * hLat;
+    lng += (d % 4) * hLng;
+  }
+  return [lat + hLat / 2, lng + hLng / 2];
+}
+export function coordsFromUrl(url: string): [number, number] | null {
+  const m = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+  if (m) return [Number(m[1]), Number(m[2])];
+  const p = url.match(PLUS_IN_URL_RE);
+  return p ? plusCodeLatLng(p[1] + p[2]) : null;
+}
 
 const CLOSED_PERM_RE =
   /Permanently closed|Cerrado permanentemente|Cerrado definitivamente|Définitivement fermé|Fermé définitivement|Dauerhaft geschlossen|Chiuso definitivamente|Fechado permanentemente|Fechado definitivamente|Permanent gesloten|Tancat permanentment|폐업|閉業|永久停业|永久停業|Đã đóng cửa vĩnh viễn|Tutup permanen|ปิดถาวร|Imefungwa kabisa/i;
@@ -69,7 +136,76 @@ export type PageData = {
   photoUrl: string | null; // 대표 사진(구글맵 공개 페이지, 유료 API 0)
   // ⚠️ 수정금지(승인필요) 2026-09-08 사장님 확정 = 주소창 ftid 뒷자리 → cid = TS 가 주던 google_maps_uri 와 같은 값(실측 3/3 일치). 유료 TS 없이 불변2 재료 확보.
   mapsUri: string | null;
+  // ⚠️ 수정금지(승인필요) 2026-09-30 사장님 결정 = 페이지를 열 때 9요소 = 7요소 + 가격(머리줄 "4.4 (229) · KES 5,000+ · Italian") + 분류. 제한 보기("limited view") 는 빈 등록이 아니라 채널 막힘 (정본 §)
+  price: CardPrice | null;
+  limited: boolean;
+  // ⚠️ 수정금지(승인필요) 2026-09-30 사장님 결정 = 구글맵 페이지 원본 글자 전부 + 입장권 공식 사이트 가격 + 1인당 평균 가격(스크롤 뒤) = 도시 폴더에 원본으로 남긴다 (정본 §)
+  rawText: string | null;
+  admission: CardPrice | null;
+  perPerson: CardPrice | null;
 };
+// ⚠️ 수정금지(승인필요) 2026-09-30 사장님 결정 = 채널 막힘 = 제한 보기 + "로봇이 아닌지 확인" 인증 페이지(unusual traffic) = 둘 다 빈 등록이 아니므로 지우지 않고 멈춘다 (정본 §)
+export const LIMITED_VIEW_RE =
+  /limited view of Google Maps|unusual traffic from your computer network/i;
+/** 머리줄(별점·리뷰수·가격·분류) 조각에서 가격만. 분류 글자 앞까지만 본다(아래 본문 호텔 숙박비 등 오독 방지). */
+export function headerPrice(
+  mainText: string,
+  category: string | null,
+): CardPrice | null {
+  const t = mainText.replace(/\s+/g, " ").slice(0, 400);
+  const cut = category ? t.indexOf(category) : -1;
+  const head = cut > 0 ? t.slice(0, cut) : t.slice(0, 160);
+  const m = head.match(
+    /·\s*((?:[A-Z]{3}\s?|R\$|[$€£¥₩₹])\d[\d,]*(?:\s?[–~-]\s?\d[\d,]*)?\+?)/,
+  );
+  return m ? priceText(m[1]) : null;
+}
+
+const PRICE_ANY =
+  /(?:[A-Z]{3}\s?|R\$|[$€£¥₩₹])\d[\d,]*(?:\.\d+)?(?:\s?[–~-]\s?\d[\d,]*(?:\.\d+)?)?\+?/;
+const OFFICIAL_RE = new RegExp(
+  /(?:Official site|공식 사이트)\s*\n?\s*/.source +
+    "(" +
+    PRICE_ANY.source +
+    ")",
+  "i",
+);
+const OFFICIAL_FREE_RE =
+  /(?:Official site|공식 사이트)\s*\n?\s*(?:Free|무료)(?![A-Za-z])/i;
+const PER_PERSON_LINE_RE = /[^\n]*(?:per person|1인당)[^\n]*/i;
+/** 입장권 구역 "Official site / 공식 사이트" 바로 뒤 첫 가격 = 정가(입장지). */
+export function admissionPrice(text: string): CardPrice | null {
+  if (OFFICIAL_FREE_RE.test(text)) return { cur: "€", lo: 0, hi: 0 };
+  const m = text.match(OFFICIAL_RE);
+  return exactPrice(m ? priceText(m[1]) : null);
+}
+// 공식 정가·손님 평균은 딱 떨어진 값 = "X 이상"(위가 열린 값)이 아니므로 위아래를 같게 둔다
+const exactPrice = (p: CardPrice | null): CardPrice | null =>
+  p && p.hi == null ? { ...p, hi: p.lo } : p;
+/** 본문 "€20–30 per person / 1인당 €20~30" 줄 = 손님 평균 가격(식당). */
+export function perPersonPrice(text: string): CardPrice | null {
+  const line = text.match(PER_PERSON_LINE_RE)?.[0];
+  return exactPrice(line ? priceText(line) : null);
+}
+/** 패널을 아래로 내려 늦게 뜨는 구역(입장권·1인당)을 불러온다. */
+async function scrollPanel(page: Page): Promise<void> {
+  for (let i = 0; i < 3; i++) {
+    await page
+      .evaluate(() => {
+        const main = document.querySelector('div[role="main"]');
+        if (!main) return;
+        const el =
+          Array.from(main.querySelectorAll("*")).find(
+            (e) =>
+              e.scrollHeight > e.clientHeight + 50 &&
+              getComputedStyle(e).overflowY !== "visible",
+          ) || main;
+        el.scrollBy(0, 1200);
+      })
+      .catch(() => {});
+    await page.waitForTimeout(500);
+  }
+}
 
 async function dismissConsent(page: Page): Promise<boolean> {
   const title = await page.title().catch(() => "");
@@ -187,8 +323,14 @@ export async function readPlacePage(
     consentBlocked: false,
     photoUrl: null,
     mapsUri: null,
+    price: null,
+    limited: false,
+    rawText: null,
+    admission: null,
+    perPerson: null,
   };
-  // ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = 여는 방법 2갈래 = PID · cid("cid:숫자" = 후보 목록에서 고른 것을 정확히 연다). 옛 "이름+주소 검색" 갈래 = 부르는 곳 0 = 폐기 §19(발굴은 listCandidates→cid 로 굳었다, 정본 ⑥·⑧).
+  // ⚠️ 수정금지(승인필요) 2026-10-01 사장님 결정 = 구글맵 여는 방법 2갈래 = PID · cid + 열기 전 사람 같은 편차(전용 크롬일 때만) (정본 §)
+  await humanPause(page);
   await page.goto(
     pid.startsWith("cid:")
       ? `https://maps.google.com/?cid=${encodeURIComponent(pid.slice(4))}&hl=${hl}`
@@ -234,13 +376,12 @@ export async function readPlacePage(
     ).trim() || null;
   if (wantCoords) {
     await page
-      .waitForURL(/@-?\d+\.\d+,-?\d+\.\d+/, { timeout: 8000 })
+      .waitForURL((u) => coordsFromUrl(u.toString()) != null, {
+        timeout: 8000,
+      })
       .catch(() => {});
-    const m = page.url().match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
-    if (m) {
-      out.urlLat = Number(m[1]);
-      out.urlLng = Number(m[2]);
-    }
+    const xy = coordsFromUrl(page.url());
+    if (xy) [out.urlLat, out.urlLng] = xy;
   }
   let rb = await readRatingBlock(page);
   if (rb.hasBox && rb.reviewCount == null) {
@@ -253,6 +394,7 @@ export async function readPlacePage(
   out.ratingNum = rb.ratingNum;
   out.reviewCount = rb.reviewCount;
   out.rcSource = rb.rcSource;
+  await scrollPanel(page);
   const mainText =
     (await page
       .locator('div[role="main"]')
@@ -265,6 +407,11 @@ export async function readPlacePage(
       .catch(() => ""));
   if (CLOSED_PERM_RE.test(mainText)) out.status = "CLOSED_PERMANENTLY";
   else if (CLOSED_TEMP_RE.test(mainText)) out.status = "CLOSED_TEMPORARILY";
+  out.limited = LIMITED_VIEW_RE.test(mainText);
+  out.price = headerPrice(mainText, out.category);
+  out.rawText = mainText || null;
+  out.admission = admissionPrice(mainText);
+  out.perPerson = perPersonPrice(mainText);
   const cid = cidFromUrl(page.url());
   if (cid) out.mapsUri = `https://maps.google.com/?cid=${cid}`;
   return out;
@@ -278,19 +425,45 @@ export type Candidate = {
   snippet: string;
   lat: number | null;
   lng: number | null;
+  price: CardPrice | null; // 목록 카드의 1인당 가격대(있을 때만)
 };
+// ⚠️ 수정금지(승인필요) 2026-09-29 사장님 결정 = 목록 카드의 1인당 가격대("KES 5,000+" · "PEN 20–40" · "$15,000–35,000") = 가격 확인 도구가 쓴다(돈 표기는 그 나라 것 그대로)
+export type CardPrice = { cur: string; lo: number; hi: number | null };
+export function priceText(s: string): CardPrice | null {
+  const m = s.match(
+    /(?:([A-Z]{3})\s?|(R\$|[$€£¥₩₹]))(\d[\d,]*(?:\.\d+)?)(?:\s?[–~-]\s?(\d[\d,]*(?:\.\d+)?))?/,
+  );
+  if (!m) return null;
+  const num = (x: string) => Number(x.replace(/,/g, ""));
+  return { cur: m[1] || m[2], lo: num(m[3]), hi: m[4] ? num(m[4]) : null };
+}
+export function cardPrice(snippet: string): CardPrice | null {
+  const seg = snippet.match(/\d[.,]\d\s*(?:\([\d.,]+\))?\s*·\s*([^·]+)/)?.[1];
+  return seg ? priceText(seg) : null;
+}
+// ⚠️ 수정금지(승인필요) 2026-09-29 사장님 결정 = 좌표를 알면 그 근처에서 찾는다(/@위도,경도,줌) = 같은 이름 다른 도시 가게를 집지 않는다 (정본 §)
 export async function listCandidates(
   page: Page,
   query: string,
   hl: string,
-): Promise<{ single: boolean; candidates: Candidate[] }> {
+  near?: { lat: number; lng: number } | null,
+): Promise<{ single: boolean; candidates: Candidate[]; limited?: boolean }> {
+  const at = near ? `/@${near.lat},${near.lng},15z` : "";
+  await humanPause(page);
   await page.goto(
-    `https://www.google.com/maps/search/${encodeURIComponent(query)}?hl=${hl}`,
+    `https://www.google.com/maps/search/${encodeURIComponent(query)}${at}?hl=${hl}`,
     { waitUntil: "domcontentloaded", timeout: 30000 },
   );
   if (!(await dismissConsent(page))) return { single: false, candidates: [] };
   await page.waitForSelector("h1", { timeout: 15000 }).catch(() => {});
   await page.waitForTimeout(2500);
+  const limited = LIMITED_VIEW_RE.test(
+    await page
+      .locator("body")
+      .innerText({ timeout: 2000 })
+      .catch(() => ""),
+  );
+  if (limited) return { single: false, candidates: [], limited: true };
   const h1 = (
     await page
       .locator("h1")
@@ -300,12 +473,14 @@ export async function listCandidates(
   ).trim();
   const isList = LIST_HEADING_RE.test(h1);
   if (!isList && h1) {
-    // ⚠️ 수정금지(승인필요) 2026-09-08 사장님 확정 = 단일결과는 2.5초 시점엔 주소창이 아직 검색 URL(실측) = readPlacePage 와 같은 URL 대기 후 ftid·좌표를 읽는다(안 기다리면 cid null = El Chinito 류 "일치없음" 원인).
+    // ⚠️ 수정금지(승인필요) 2026-09-29 사장님 결정 = 단일결과는 2.5초 시점엔 주소창이 아직 검색 URL(실측) = readPlacePage 와 같은 URL 대기 후 ftid·좌표를 읽는다(안 기다리면 cid null = El Chinito 류 "일치없음" 원인). 좌표를 붙여 찾았으면 검색 주소에 이미 좌표가 있으니 ftid 만 기다린다 (정본 §)
     await page
-      .waitForURL(/!1s0x|@-?\d+\.\d+,-?\d+\.\d+/, { timeout: 8000 })
+      .waitForURL(near ? /!1s0x/ : /!1s0x|@-?\d+\.\d+,-?\d+\.\d+/, {
+        timeout: 8000,
+      })
       .catch(() => {});
     const ft = page.url().match(/!1s(0x[0-9a-f]+:0x[0-9a-f]+)/i);
-    const at = page.url().match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+    const at = coordsFromUrl(page.url());
     return {
       single: true,
       candidates: [
@@ -314,8 +489,9 @@ export async function listCandidates(
           cid: cidOf(ft),
           reviewCount: null,
           snippet: "",
-          lat: at ? Number(at[1]) : null,
-          lng: at ? Number(at[2]) : null,
+          lat: at ? at[0] : null,
+          lng: at ? at[1] : null,
+          price: null,
         },
       ],
     };
@@ -349,6 +525,7 @@ export async function listCandidates(
       snippet: x.text,
       lat: xy ? Number(xy[1]) : null,
       lng: xy ? Number(xy[2]) : null,
+      price: cardPrice(x.text),
     };
   });
   return { single: false, candidates };

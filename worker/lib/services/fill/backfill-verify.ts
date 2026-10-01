@@ -232,7 +232,7 @@ export async function backfillImages(opts: {
   }[] = [];
   if (freeGmaps.length) {
     const { chromium } = await import("playwright");
-    const { BROWSER_UA } = await import(
+    const { uaFor } = await import(
       pathToFileURL(
         path.join(
           ROOT,
@@ -269,10 +269,13 @@ export async function backfillImages(opts: {
     const cityLat: number | null = cityRow?.lat ?? null;
     const cityLng: number | null = cityRow?.lng ?? null;
     const cityStop: Set<string> = nameTokens(cityRow?.name_en, new Set());
-    const browser = await chromium.launch({ headless: true });
+    const browser = await chromium.launch({
+      channel: "chrome",
+      headless: true,
+    });
     const ctx = await browser.newContext({
       viewport: { width: 1280, height: 900 },
-      userAgent: BROWSER_UA,
+      userAgent: uaFor(browser),
     });
     const page = await ctx.newPage();
     try {
