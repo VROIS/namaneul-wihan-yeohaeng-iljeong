@@ -8,15 +8,14 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   KeyboardAvoidingView,
-  Alert,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { WebView } from "react-native-webview";
 import { useNavigation } from "@react-navigation/native";
-import Icon from "@/components/Icon";
+import { Icon } from "@/components/Icon";
 
 import { Colors, Spacing, Brand } from "@/constants/theme";
-import ThemedText from "@/components/ThemedText";
+import { ThemedText } from "@/components/ThemedText";
 import { getApiUrl } from "@/lib/query-client";
 import { saveAuth } from "@/lib/auth"; // ⚠️ 관리자 로그인 성공 시 세션 저장 → 전문가 탭이 관리자 인식 = 문의답변 프리패스(2026-07-13)
 

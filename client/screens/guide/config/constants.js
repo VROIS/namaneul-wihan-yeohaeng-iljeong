@@ -38,8 +38,6 @@ export const CONFIG = {
     // ⚠️ 2026-08-01 사장님 승인(§12 서버주소 1줄) = 메인앱 유일 주소함수 getApiUrl() 1벌로 통일(§0·§16).
     SERVER_URL: getApiUrl(),
     GEMINI_MODEL: 'gemini-3-flash-preview',
-    EXCHANGE_RATE_URL: 'https://api.exchangerate-api.com/v4/latest',
-    EXCHANGE_RATE_CACHE_HOURS: 24, // 1일 1회 캐시
   },
 
   PROMPTS: {

@@ -275,8 +275,7 @@
     "showMap": "Afficher la carte de ce lieu",
     "hideMap": "Masquer la carte",
     "mapLoading": "Chargement de la carte...",
-    "searchLoadFailed": "Échec du chargement de la recherche de lieux",
-    "hotelCitySearchPlaceholderFallback": "Saisissez un nom d'hôtel ou de ville"
+    "searchLoadFailed": "Échec du chargement de la recherche de lieux"
   },
   "profile": {
     "defaultUserName": "Utilisateur",

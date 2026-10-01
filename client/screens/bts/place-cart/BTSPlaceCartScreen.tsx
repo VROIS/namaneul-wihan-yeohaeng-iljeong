@@ -40,7 +40,7 @@ import {
 } from "@/contexts/BTSContext";
 import { getApiUrl } from "@/lib/query-client";
 import type { BTSStackParamList } from "@/navigation/BTSStackNavigator";
-import LiquidButton from "@/components/ui/LiquidButton";
+import { LiquidButton } from "@/components/ui/LiquidButton";
 import { changeLanguageAndPersist } from "@/lib/i18n";
 // ⚠️ 수정금지(승인필요) — 2026-05-06 BTS Screen 4 카트 캐러셀 → WebView 지도 (인앱)
 import BTSPlaceMap from "@/components/bts/BTSPlaceMap";

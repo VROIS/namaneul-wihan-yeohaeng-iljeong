@@ -1,6 +1,6 @@
 import React from "react";
 import { View, Text, Pressable, Modal, ScrollView } from "react-native";
-import Icon from "@/components/Icon";
+import { Icon } from "@/components/Icon";
 import { Brand, Colors } from "@/constants/theme";
 import { useTranslation } from "react-i18next";
 import { SUPPORTED_LANGS, changeLanguageAndPersist } from "@/lib/i18n";

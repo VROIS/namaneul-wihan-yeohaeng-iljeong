@@ -9,7 +9,7 @@ import {
   Platform,
 } from "react-native";
 import { Colors, Brand, Spacing, Fonts } from "@/constants/theme";
-import Icon from "@/components/Icon";
+import { Icon } from "@/components/Icon";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useMapToggle } from "@/contexts/MapToggleContext";
 import {

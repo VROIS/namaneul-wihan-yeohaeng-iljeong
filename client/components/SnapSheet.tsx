@@ -23,7 +23,7 @@ import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 import { Colors, Spacing, BorderRadius, Fonts } from "@/constants/theme";
-import Icon from "@/components/Icon";
+import { Icon } from "@/components/Icon";
 
 const SPRING = { damping: 20, stiffness: 220, mass: 0.6 };
 
@@ -59,7 +59,6 @@ export default function SnapSheet({
   const HALF_Y = Math.round(winH * 0.5); // 화면 절반부터 시트 = 상단 절반은 배경 여정(지도 등).
   const PEEK_Y = winH - peekHeight; // 하단에 peekHeight 만 시트.
   const CLOSED_Y = winH; // 완전 숨김.
-  const sheetH = winH; // 최대 높이(top 으로 잘라서 실제 노출량 결정).
 
   const translateY = useSharedValue(CLOSED_Y);
   const startY = useSharedValue(0);

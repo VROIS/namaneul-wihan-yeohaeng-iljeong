@@ -2,7 +2,7 @@
 import React from "react";
 import { View, Text, Pressable } from "react-native";
 
-import Icon from "@/components/Icon";
+import { Icon } from "@/components/Icon";
 import { Brand } from "@/constants/theme";
 import type { Inquiry } from "../expertApi";
 import { statusStyle } from "../statusStyle";

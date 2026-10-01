@@ -1,7 +1,7 @@
 import React from "react";
 import { View, Text, Pressable, Platform } from "react-native";
 import { Brand } from "@/constants/theme";
-import Icon from "@/components/Icon";
+import { Icon } from "@/components/Icon";
 import { Itinerary, DayPlan } from "@/types/trip";
 import PlaceAutocompleteWidget, {
   type PlaceAutoSelection as PlaceSelection,

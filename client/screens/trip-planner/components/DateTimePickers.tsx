@@ -8,7 +8,7 @@ import {
   Platform,
 } from "react-native";
 import { Brand, Fonts } from "@/constants/theme";
-import Icon from "@/components/Icon";
+import { Icon } from "@/components/Icon";
 import { inputStyles as styles } from "../styles/input";
 import type { PlannerApi } from "../hooks/useTripPlanner";
 

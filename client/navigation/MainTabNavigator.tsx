@@ -7,7 +7,7 @@ import { useNavigation } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
-import Icon from "@/components/Icon";
+import { Icon } from "@/components/Icon";
 import TabBarLabel from "@/components/TabBarLabel";
 
 import { Brand, Colors } from "@/constants/theme";
@@ -337,27 +337,3 @@ export default function MainTabNavigator() {
     </>
   );
 }
-
-const styles = StyleSheet.create({
-  fabContainer: {
-    position: "absolute",
-    alignSelf: "center",
-    zIndex: 100,
-  },
-  fab: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    overflow: "hidden",
-  },
-  fabPressed: {
-    transform: [{ scale: 0.95 }],
-    opacity: 0.9,
-  },
-  fabGradient: {
-    width: 56,
-    height: 56,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-});

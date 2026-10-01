@@ -14,7 +14,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 
-import Icon from "@/components/Icon";
+import { Icon } from "@/components/Icon";
 import { Colors, Brand } from "@/constants/theme";
 import { useMapToggle } from "@/contexts/MapToggleContext";
 import { useLogin } from "./hooks/useLogin";

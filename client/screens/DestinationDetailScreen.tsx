@@ -14,7 +14,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Image } from "expo-image";
 import { BlurView } from "expo-blur";
-import Icon from "@/components/Icon";
+import { Icon } from "@/components/Icon";
 import { LinearGradient } from "expo-linear-gradient";
 import {
   Typography,
@@ -25,7 +25,7 @@ import {
   Shadows,
   getVibeScoreGradient,
 } from "@/constants/theme";
-import ThemedText from "@/components/ThemedText";
+import { ThemedText } from "@/components/ThemedText";
 import type { RootStackParamList } from "@/navigation/RootStackNavigator";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
@@ -43,7 +43,7 @@ export default function DestinationDetailScreen() {
   const route = useRoute<RouteParams>();
   const { placeId } = route.params;
 
-  const { data: place, isLoading } = useQuery<any>({
+  const { data: place } = useQuery<any>({
     queryKey: ["/api/places", placeId],
   });
 

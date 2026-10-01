@@ -2,7 +2,7 @@
 import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Icon from "@/components/Icon";
+import { Icon } from "@/components/Icon";
 
 export default function GuidePlaceholderScreen() {
   const insets = useSafeAreaInsets();

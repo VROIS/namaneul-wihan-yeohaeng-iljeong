@@ -11,8 +11,8 @@ import {
 import { LinearGradient } from "expo-linear-gradient";
 import { useFocusEffect } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
-import Icon from "@/components/Icon";
-import ThemedText from "@/components/ThemedText";
+import { Icon } from "@/components/Icon";
+import { ThemedText } from "@/components/ThemedText";
 import { apiRequest } from "@/lib/query-client";
 import TripisModal, {
   type GuideRow,

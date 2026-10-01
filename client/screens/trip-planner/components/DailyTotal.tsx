@@ -11,7 +11,7 @@ import { Brand, Fonts } from "@/constants/theme";
 import { resultStyles as styles } from "../styles/result";
 import { DayPlan } from "@/types/trip";
 import type { PlannerApi } from "../hooks/useTripPlanner";
-import Icon from "@/components/Icon";
+import { Icon } from "@/components/Icon";
 import { getApiUrl } from "@/lib/query-client";
 import { fitTextPropsSingleLine } from "../utils";
 import {

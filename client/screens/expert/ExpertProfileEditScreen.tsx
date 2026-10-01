@@ -13,7 +13,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 import { Colors, Spacing, BorderRadius, Brand, Fonts } from "@/constants/theme";
-import Icon from "@/components/Icon";
+import { Icon } from "@/components/Icon";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { getMyExpertProfile, saveExpertProfile } from "./expertApi";
 

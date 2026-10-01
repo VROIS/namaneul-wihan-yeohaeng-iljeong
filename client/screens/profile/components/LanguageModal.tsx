@@ -1,7 +1,7 @@
 import React from "react";
 import { View, Text, Pressable, Modal, ScrollView } from "react-native";
 import { Brand } from "@/constants/theme";
-import Icon from "@/components/Icon";
+import { Icon } from "@/components/Icon";
 import { SUPPORTED_LANGS } from "@/lib/i18n";
 import { langModalStyles } from "../langModalStyles";
 import type { ProfileApi } from "../hooks/useProfile";

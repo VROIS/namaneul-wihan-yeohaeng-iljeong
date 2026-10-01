@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, Pressable, Linking } from "react-native";
 import { Brand, Fonts } from "@/constants/theme";
-import Icon from "@/components/Icon";
-import ThemedText from "@/components/ThemedText";
+import { Icon } from "@/components/Icon";
+import { ThemedText } from "@/components/ThemedText";
 import { styles } from "../styles";
 import { shortDateCard, pickBi } from "../utils"; // 날짜 서식 = 여정 카드와 같은 1벌(§16)
 import { HELP_FAQ, FAQ_HEADING } from "../helpFaq";
@@ -40,7 +40,6 @@ export default function SettingsMenu({ profile }: { profile: ProfileApi }) {
     t,
     navigation,
     isAuth,
-    setShowLanguageModal,
     handleLogout,
     currentLang,
     handleLanguageChange,

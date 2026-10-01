@@ -275,8 +275,7 @@
     "showMap": "Mostrar mapa de este lugar",
     "hideMap": "Ocultar mapa",
     "mapLoading": "Cargando mapa...",
-    "searchLoadFailed": "Error al cargar la búsqueda de lugares",
-    "hotelCitySearchPlaceholderFallback": "Introduce el nombre de un hotel o ciudad"
+    "searchLoadFailed": "Error al cargar la búsqueda de lugares"
   },
   "profile": {
     "defaultUserName": "Usuario",

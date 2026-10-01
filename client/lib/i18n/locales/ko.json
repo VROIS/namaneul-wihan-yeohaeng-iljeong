@@ -358,8 +358,7 @@
     "showMap": "이 장소 지도 보기",
     "hideMap": "지도 닫기",
     "mapLoading": "지도 로딩 중...",
-    "searchLoadFailed": "장소 검색 로드 실패",
-    "hotelCitySearchPlaceholderFallback": "숙소명이나 도시명을 한글이나 원어로 입력해주세요"
+    "searchLoadFailed": "장소 검색 로드 실패"
   },
   "profile": {
     "defaultUserName": "사용자",

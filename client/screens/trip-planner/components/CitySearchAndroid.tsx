@@ -2,7 +2,7 @@
 import React, { useState } from "react";
 import { View, Text, Pressable, Modal } from "react-native";
 import { useTranslation } from "react-i18next";
-import Icon from "@/components/Icon";
+import { Icon } from "@/components/Icon";
 import { Brand, Fonts } from "@/constants/theme";
 import PlaceAutocompleteWidget, {
   type PlaceAutoSelection as PlaceSelection,

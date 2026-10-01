@@ -2,7 +2,7 @@ import React from "react";
 import { View, StyleSheet, Text, useColorScheme } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Typography, Spacing, Brand, Colors } from "@/constants/theme";
-import Icon from "@/components/Icon";
+import { Icon } from "@/components/Icon";
 
 export default function MapScreen() {
   const colorScheme = useColorScheme();

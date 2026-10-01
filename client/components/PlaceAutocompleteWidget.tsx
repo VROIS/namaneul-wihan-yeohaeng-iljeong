@@ -1,12 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import {
-  ActivityIndicator,
-  StyleSheet,
-  View,
-  Platform,
-  TextInput,
-} from "react-native";
-import { useTranslation } from "react-i18next";
+import { ActivityIndicator, StyleSheet, View, Platform } from "react-native";
 import { apiRequest } from "@/lib/query-client";
 import {
   PLACE_AUTOCOMPLETE_HTML,
@@ -216,8 +209,6 @@ function PlaceAutocompleteNative({
 
 export default function PlaceAutocompleteWidget(props: Props) {
   const [apiKey, setApiKey] = useState<string | null>(null);
-  const [localInput, setLocalInput] = useState<string>("");
-  const { t } = useTranslation();
 
   useEffect(() => {
     let cancelled = false;
@@ -234,7 +225,7 @@ export default function PlaceAutocompleteWidget(props: Props) {
             setApiKey(data.googleMapsApiKey);
             return;
           }
-        } catch (e) {}
+        } catch {}
       }
     })();
     return () => {
@@ -242,49 +233,10 @@ export default function PlaceAutocompleteWidget(props: Props) {
     };
   }, []);
 
-  if (!apiKey) {
+  if (!apiKey)
     return (
-      <View
-        style={[
-          styles.container,
-          {
-            minHeight: props.height || 48,
-            backgroundColor: "#F8FAFC",
-            borderRadius: 14,
-            borderWidth: 1,
-            borderColor: "#E2E8F0",
-            paddingHorizontal: 12,
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 8,
-          },
-        ]}
-      >
-        <TextInput
-          style={{
-            flex: 1,
-            fontSize: 13,
-            fontFamily: "Pretendard-Medium",
-            color: "#0F172A",
-            paddingVertical: 8,
-          }}
-          value={localInput}
-          onChangeText={(text) => {
-            setLocalInput(text);
-            props.onSelect({
-              placeId: "manual_" + Date.now(),
-              name: text,
-              address: text,
-            });
-          }}
-          placeholder={
-            props.placeholder || t("place.hotelCitySearchPlaceholderFallback")
-          }
-          placeholderTextColor="#94A3B8"
-        />
-      </View>
+      <View style={[styles.container, { minHeight: props.height || 48 }]} />
     );
-  }
 
   if (Platform.OS === "web")
     return <PlaceAutocompleteWeb {...props} apiKey={apiKey} />;

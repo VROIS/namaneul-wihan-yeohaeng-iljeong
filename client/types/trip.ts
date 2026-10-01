@@ -79,12 +79,6 @@ export interface Place {
   vibeTags?: Vibe[];
   city?: string;
   region?: string;
-  realityCheck: {
-    weather: "Sunny" | "Cloudy" | "Rainy";
-    crowd: "Low" | "Medium" | "High";
-    status: "Open" | "Closed" | "Alert";
-    penaltyNote?: string;
-  };
   image: string;
   priceEstimate: string;
   entranceFee?: number; // 1인당 입장료 (EUR)
@@ -128,6 +122,12 @@ export interface DayPlan {
   accommodation?: DayAccommodation;
   departureTransit?: TransitInfo; // 숙소 → 첫 관광지
   returnTransit?: TransitInfo; // 마지막 관광지 → 숙소
+  transit?: {
+    transits: (Partial<TransitInfo> & { distance?: number })[]; // 장소 → 다음 장소 (서버 DB 올리 여정)
+    totalDuration?: number;
+    totalCost?: number;
+    totalDistanceKm?: number;
+  };
 }
 
 export interface VibeWeight {

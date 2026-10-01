@@ -13,7 +13,7 @@ import { useNavigation } from "@react-navigation/native";
 import { useTranslation } from "react-i18next";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 
-import Icon from "@/components/Icon";
+import { Icon } from "@/components/Icon";
 import TabBarLabel from "@/components/TabBarLabel";
 import { Brand, Colors } from "@/constants/theme";
 import { tabBadgeCount } from "@/screens/expert/expertApi";

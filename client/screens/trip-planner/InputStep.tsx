@@ -8,7 +8,7 @@ import {
   BorderRadius,
   Fonts,
 } from "@/constants/theme";
-import Icon from "@/components/Icon";
+import { Icon } from "@/components/Icon";
 import {
   VIBE_OPTIONS,
   COMPANION_OPTIONS,

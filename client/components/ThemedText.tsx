@@ -58,5 +58,3 @@ export function ThemedText({
     <Text style={[{ color: getColor() }, getTypeStyle(), style]} {...rest} />
   );
 }
-
-export default ThemedText;

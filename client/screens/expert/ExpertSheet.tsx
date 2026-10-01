@@ -14,7 +14,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTranslation } from "react-i18next";
 import { Colors, Spacing, Brand } from "@/constants/theme";
-import Icon from "@/components/Icon";
+import { Icon } from "@/components/Icon";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useMapToggle } from "@/contexts/MapToggleContext";
 // ⚠️ 수정금지(승인필요) 2026-08-05 사장님 SSOT = 크레딧부족 공용 헬퍼(§16 5곳 공용).
@@ -252,7 +252,7 @@ export default function ExpertSheet({
       } else {
         notify(t("common.error"), t("expert.sendError"));
       }
-    } catch (e) {
+    } catch {
       notify(t("common.error"), t("expert.sendError"));
     } finally {
       setSubmitting(false);

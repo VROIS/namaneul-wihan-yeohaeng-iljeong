@@ -182,5 +182,3 @@ export function Icon({ name, color, size = 24, ...rest }: IconProps) {
   const iconColor = color || theme.text;
   return <LucideIcon color={iconColor} size={size} {...rest} />;
 }
-
-export default Icon;

@@ -275,8 +275,7 @@
     "showMap": "この場所の地図を表示",
     "hideMap": "地図を非表示",
     "mapLoading": "地図を読み込み中...",
-    "searchLoadFailed": "場所検索の読み込みに失敗しました",
-    "hotelCitySearchPlaceholderFallback": "宿泊施設名または都市名を入力してください"
+    "searchLoadFailed": "場所検索の読み込みに失敗しました"
   },
   "profile": {
     "defaultUserName": "ユーザー",

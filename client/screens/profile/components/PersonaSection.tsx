@@ -1,8 +1,8 @@
 import React from "react";
 import { View, Text, Pressable } from "react-native";
 import { Brand } from "@/constants/theme";
-import Icon from "@/components/Icon";
-import ThemedText from "@/components/ThemedText";
+import { Icon } from "@/components/Icon";
+import { ThemedText } from "@/components/ThemedText";
 import { styles } from "../styles";
 import type { ProfileApi } from "../hooks/useProfile";
 

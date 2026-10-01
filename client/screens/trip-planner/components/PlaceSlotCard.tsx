@@ -11,7 +11,7 @@ import {
   LUCIDE as BTS_MARKER_LUCIDE,
 } from "@/components/bts/bts-marker-svg";
 import { Brand, Spacing } from "@/constants/theme";
-import Icon from "@/components/Icon";
+import { Icon } from "@/components/Icon";
 // 🎙️ 2026-08-02 사장님 지시 = 슬롯마다 [해설 듣기]. 부품·색 모두 **도시 카드 해설 배지와 같은 1벌**(§16 재발명 금지).
 import CityBadge, { GLOSS_COLORS } from "@/components/tripis/CityBadge";
 import { BADGE_COLORS } from "@/components/tripis/CityCardScreen";
@@ -97,11 +97,7 @@ export default function PlaceSlotCard({
   const transitInfo = dayTransits[index]; // index번째 장소에서 다음 장소로의 이동
   const hasTransit = index < places.length - 1;
 
-  const companionCount = itinerary.companionCount || 1;
-
   const entranceFee = place.entranceFee || 0;
-  const entranceFeeTotal =
-    place.entranceFeeTotal || entranceFee * companionCount;
   return (
     <View
       onLayout={(e) => {

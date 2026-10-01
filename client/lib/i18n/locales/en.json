@@ -275,8 +275,7 @@
     "showMap": "Show map for this place",
     "hideMap": "Hide map",
     "mapLoading": "Loading map...",
-    "searchLoadFailed": "Failed to load place search",
-    "hotelCitySearchPlaceholderFallback": "Enter a hotel or city name"
+    "searchLoadFailed": "Failed to load place search"
   },
   "profile": {
     "defaultUserName": "User",

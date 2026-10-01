@@ -14,7 +14,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Spacing, Brand } from "@/constants/theme";
-import Icon from "@/components/Icon";
+import { Icon } from "@/components/Icon";
 import { RootStackParamList } from "@/navigation/RootStackNavigator";
 import { useLogin } from "./hooks/useLogin";
 import LanguageModal from "./components/LanguageModal";
@@ -144,7 +144,7 @@ export default function LoginScreen() {
                   maxLength={2}
                   textAlign="center"
                   {...(Platform.OS === "web" && {
-                    // @ts-expect-error 웹: type="number"는 선행 0 제거·숫자 변형(03→02 등) 유발. text+inputMode로 정확한 입력 보장
+                    // 웹: type="number"는 선행 0 제거·숫자 변형(03→02 등) 유발. text+inputMode로 정확한 입력 보장
                     type: "text",
                     inputMode: "numeric",
                   })}
@@ -175,7 +175,7 @@ export default function LoginScreen() {
                   maxLength={2}
                   textAlign="center"
                   {...(Platform.OS === "web" && {
-                    // @ts-expect-error 웹: type="number"는 선행 0 제거·숫자 변형 유발
+                    // 웹: type="number"는 선행 0 제거·숫자 변형 유발
                     type: "text",
                     inputMode: "numeric",
                   })}
@@ -207,7 +207,7 @@ export default function LoginScreen() {
                   maxLength={4}
                   textAlign="center"
                   {...(Platform.OS === "web" && {
-                    // @ts-expect-error 웹: type="number"는 선행 0 제거·숫자 변형 유발
+                    // 웹: type="number"는 선행 0 제거·숫자 변형 유발
                     type: "text",
                     inputMode: "numeric",
                   })}

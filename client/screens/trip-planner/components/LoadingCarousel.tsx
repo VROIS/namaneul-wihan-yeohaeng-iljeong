@@ -14,7 +14,7 @@ import Animated, {
   runOnJS,
 } from "react-native-reanimated";
 import { useTranslation } from "react-i18next";
-import Icon from "@/components/Icon";
+import { Icon } from "@/components/Icon";
 import { Colors, Spacing, BorderRadius, Fonts } from "@/constants/theme";
 
 const SLIDE_DURATION_MS = 5000; // 사장님 확정(2026-08-16) = 5초 자동전환, 터치 시 정지

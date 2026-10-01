@@ -10,8 +10,8 @@ import {
   useColorScheme,
 } from "react-native";
 import { useTranslation } from "react-i18next";
-import Icon from "@/components/Icon";
-import { Spacing, BorderRadius, Fonts, Colors } from "@/constants/theme";
+import { Icon } from "@/components/Icon";
+import { Spacing, BorderRadius, Colors } from "@/constants/theme";
 
 export type ErrorFallbackProps = {
   error: Error;

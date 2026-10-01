@@ -10,7 +10,7 @@ import {
   Image,
 } from "react-native";
 import { Colors, Brand, Spacing } from "@/constants/theme";
-import Icon from "@/components/Icon";
+import { Icon } from "@/components/Icon";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { getMyExpertProfile, saveExpertProfile } from "../expertApi";
 import { styles } from "../styles";
@@ -34,7 +34,6 @@ export default function ProfileEditView({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const mounted = useRef(true);
-  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(
     () => () => {

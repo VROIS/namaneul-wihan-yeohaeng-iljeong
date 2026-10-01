@@ -3,7 +3,7 @@ import { View, Text, Pressable, StyleSheet, Switch } from "react-native";
 import { BlurView } from "expo-blur";
 
 import type { BTSCity } from "@/contexts/BTSContext";
-import LiquidButton from "@/components/ui/LiquidButton";
+import { LiquidButton } from "@/components/ui/LiquidButton";
 import { localizedName } from "../utils";
 import { styles } from "../styles";
 

@@ -7,8 +7,8 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { Brand } from "@/constants/theme";
-import Icon from "@/components/Icon";
-import ThemedText from "@/components/ThemedText";
+import { Icon } from "@/components/Icon";
+import { ThemedText } from "@/components/ThemedText";
 import { styles, getResponsiveFullTripCardWidth } from "../styles";
 import { shortDateCard, summaryLineCard } from "../utils";
 import { displayCityName } from "@/lib/display-city-name";

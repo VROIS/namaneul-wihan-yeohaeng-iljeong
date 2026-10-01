@@ -275,8 +275,7 @@
     "showMap": "显示此地点地图",
     "hideMap": "隐藏地图",
     "mapLoading": "地图加载中...",
-    "searchLoadFailed": "地点搜索加载失败",
-    "hotelCitySearchPlaceholderFallback": "请输入酒店名或城市名"
+    "searchLoadFailed": "地点搜索加载失败"
   },
   "profile": {
     "defaultUserName": "用户",

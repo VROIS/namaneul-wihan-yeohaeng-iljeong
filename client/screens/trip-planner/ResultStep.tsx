@@ -10,7 +10,7 @@ import {
   Dimensions,
 } from "react-native";
 import { Brand, Spacing, Fonts } from "@/constants/theme";
-import Icon from "@/components/Icon";
+import { Icon } from "@/components/Icon";
 import { getVibeLabel } from "@/utils/vibeCalculator";
 import ItineraryMap from "@/components/ItineraryMap";
 import PlaceAutocompleteWidget, {
@@ -35,7 +35,6 @@ export default function ResultStep({ planner }: { planner: PlannerApi }) {
     t,
     i18n,
     itinerary,
-    setScreen,
     isSaving,
     justSaved,
     handleSaveItinerary,
