@@ -6,6 +6,8 @@
 > - **인라인 프롬프트**(코드 안 템플릿) = verbatim 그대로 수록 (1글자도 안 바꿈). 검증 = `file:line` 대조.
 > - **외부 잠긴 프롬프트**(`prompt.txt` / `STANDARD_PROMPT*.md`) = 원본 파일이 진본 = **링크로 가리킴**(중복 truth 방지). 클릭해 직접 열람.
 > - 삭제/중복 정리 = 사용자 직접 (이 파일은 추출 카탈로그).
+> - **판 날짜** = 지시문을 바꾸면 그 지시문 파일 머리말과 이 카탈로그 해당 # 에 `YYYY-MM-DD 판` 을 찍는다. 코드 안 지시문과 이 카탈로그 블록은 두 벌이며 글자가 동일해야 한다. 워커가 카탈로그를 불러 쓰는 길은 없다(2026-09-30 사장님).
+> - **최근 갱신** = 2026-09-30 = #02 믹스 여정 1단계 2026-09-29 판 = 코드 인라인 + 이 카탈로그 두 벌 글자 동일(유형 ③).
 
 ---
 
@@ -16,10 +18,10 @@
 |---|---|
 | **단일관문(`geminiClient.geminiJson`) 통과** | 큐레이션·도시메타·동선·seed enrich **4곳만** / **22곳 우회** (server/gemini.ts 8·bts-gemini·스킬 raw fetch·scripts) |
 | **모델** | `gemini-3-flash-preview`(주력) / `gemini-2.5-flash`(admin 테스트) / `gemini-2.5-flash-preview-tts`(TTS) / `gemini-2.0-flash`(BTS 동선) / `gemini-1.5-flash`(test-crisis) |
-| **grounding(googleSearch)** | ON = 큐레이션·도시메타·동선·01·02·05·13·seed·seed-gemini / OFF = MIX step1 여정(`STEP1_USE_GROUNDING=false`)·드림스튜디오·BTS·테스트 |
-| **temperature** | 0.2(관문기본·스킬) / 0.3(MIX step1·동선 override) / 미설정(드림·BTS·테스트) |
+| **grounding(googleSearch)** | ON = MIX step1 여정(#02)·큐레이션·도시메타·동선·01·02·05·13·seed·seed-gemini / OFF = 드림스튜디오·BTS·테스트 |
+| **temperature** | 0.2(관문기본·스킬·MIX step1) / 0.3(동선 override) / 미설정(드림·BTS·테스트) |
 | **JSON 강제** | responseMimeType(관문·step1) / responseSchema 객체(드림스튜디오) / grounding 시 mime 제거 / 평문(공유설명·스크립트최적화) |
-| **maxOutputTokens** | 50000(관문·스킬·동선) / 8192(MIX step1) / 4000(vibetrip 원본) / 미설정(드림·BTS) |
+| **maxOutputTokens** | 50000(관문·스킬·동선·MIX step1) / 4000(vibetrip 원본) / 미설정(드림·BTS) |
 | **thinkingBudget** | 0(거의 전부) / 1500(vibetrip 원본만) |
 
 ### TS (18곳) 차이 축
@@ -79,7 +81,7 @@ places.id,places.displayName,places.formattedAddress,places.location,places.user
 | # | 이름 | 엔진 | 모델/방식 | 상태 | 원본(클릭) |
 |---|---|---|---|---|---|
 | **#01** | geminiJson() 단일 게이트웨이 | Gemini | gemini-3-flash-preview | live | [geminiClient.ts:52](../server/services/shared/geminiClient.ts) |
-| **#02** | MIX step1 여정 생성 (미발굴 도시, 슬림 12필드 2026-07-11) | Gemini | gemini-3-flash-preview / grounding OFF | live | [pipeline-v3.ts:375](../server/services/agents/pipeline-v3.ts) |
+| **#02** | MIX step1 여정 생성 (창고 모자란 도시) = **2026-09-29 판** | Gemini | gemini-3-flash-preview / grounding ON | live | [pipeline-v3-step1-gemini.ts](../worker/lib/services/agents/pipeline-v3-step1-gemini.ts) 인라인 = 이 카탈로그 #02 블록과 글자 동일 |
 | **#03** | 동선 최적화 handleRouteRequest | Gemini | gemini-3-flash-preview / grounding ON | live | [route-prompt.ts](../server/services/route/route-prompt.ts) |
 | **#04** | 도시 메타 백필 fetchCityMetaFromGemini | Gemini | gemini-3-flash-preview / grounding ON | live | [gemini-city-meta.ts:22](../server/services/shared/gemini-city-meta.ts) |
 | **#05** | 숏폼 시나리오 통합 (11) | Gemini | gemini-3-flash-preview | ⚠️봉쇄(호출0) | [11/STANDARD_PROMPT](../fillcity/prompts/11-main-app-scenario/STANDARD_PROMPT_2026-05-25.md) |
@@ -127,6 +129,7 @@ places.id,places.displayName,places.formattedAddress,places.location,places.user
 | **#47** | 02 7개국어 베스트20 발굴 (신규 시드발굴 정규 WF ③, 언어당 1콜×7) | Gemini | gemini-3-flash-preview / grounding ON / temp 0.2 / thinking 0 | live(1순위 10도시+보고타 실행완료 2026-08-28) · 승인해시 `92d59965d33a2127`(본문 sha256 앞16, 줄바꿈 정규화) | [02-discover-best20-perlang/prompt.txt](../fillcity/prompts/02-discover-best20-perlang/prompt.txt) · [run.ts](../fillcity/prompts/02-discover-best20-perlang/run.ts) |
 | **#48** | 06 BTS 공연장 텍스트 요소 7개국어 (미래공연 도시 bts_venue, 1콜) | Gemini | gemini-3-flash-preview / grounding ON | live · 승인해시 `b2e294b09b2fdedf` | [06-bts-venue-copy-7lang/prompt.txt](../fillcity/prompts/06-bts-venue-copy-7lang/prompt.txt) |
 | **#49** | 90 도시 완성 검수 벤치마크 베스트20 (사후 성적표, DB 쓰기 0) | Gemini | gemini-3-flash-preview / grounding ON | tool · 승인해시 `88585fe9276f293e` | [90-benchmark-best20/prompt.txt](../fillcity/prompts/90-benchmark-best20/prompt.txt) |
+| **#50** | 03 구글맵 확정 뒤 제미니 보강 (#07 에서 입력 칸만 바꾼 판) | Gemini | gemini-3-flash-preview / grounding ON / temp 0.2 / maxOutputTokens 50000 / thinking 0 | live · 승인해시 `12ba7eef399fe133`(본문 sha256 앞16, 줄바꿈 정규화) | [03-enrich-after-google/prompt.txt](../fillcity/prompts/03-enrich-after-google/prompt.txt) · [gemini-apply.ts](../worker/lib/services/fill/gemini-apply.ts) · [gemini-curate.ts](../worker/lib/services/shared/gemini-curate.ts) |
 
 > **2026-08-29 사장님 결정(E)** = 외부호출 프롬프트는 이 카탈로그에 **등재 → 골라 조립**. 진본은 링크된 `prompt.txt`(코드 `run.ts` 가 파일을 그대로 읽어 변수만 치환, 사람·AI 재작성 0). **승인해시** = 그 시점 사장님 승인본의 지문 — raw 파일에도 같은 해시를 저장하고 B1 이 현재 prompt.txt 해시와 다른 raw 를 거부하는 관문(정규 WF 구현 시 배선). 해시가 바뀌면 = 프롬프트가 바뀐 것 = 재승인 후 이 칸 갱신.
 
@@ -141,13 +144,13 @@ places.id,places.displayName,places.formattedAddress,places.location,places.user
 |---|---|---|
 | **① 코드 인라인** (코드 파일 = 유일 진본) | 그 코드 파일의 해당 라인 | #04·#11~#18·#19·#20·#21·#22·#23·#24·#25·#44(SPARQL) |
 | **② 외부 prompt.txt** (.txt = 진본, 코드는 `readFileSync` split) | 스킬 `prompts/<폴더>/prompt.txt` | #06·#07·#08·#09·#43 |  <!-- #10 삭제(2026-06-23) -->
-| **③ 코드 인라인 + SSOT .md 미러** (⚠️ 양쪽 1:1 동기 = 둘 다 갱신) | 코드(=실행) + `STANDARD_PROMPT*.md`(=원본보관) | #02(↔09.md)·#03(↔10.md) |
+| **③ 코드 인라인 + SSOT .md 미러** (⚠️ 양쪽 1:1 동기 = 둘 다 갱신) | 코드(=실행) + `STANDARD_PROMPT*.md`(=원본보관) | #02(↔이 카탈로그 #02 블록)·#03(↔10.md) |
 | **④ SSOT .md 만** (라이브 코드 없음 = 봉쇄) | `11-main-app-scenario/STANDARD_PROMPT_2026-05-25.md` | #05 |
 | **⑤ raw fetch / 설정만** (LLM 프롬프트 텍스트 없음 = FieldMask·textQuery 조립) | 해당 코드 파일 | #01(게이트웨이)·#26~#42 |
 
 **유형별 핵심 메모**:
 - **②가 진본 패턴 = 가장 안전**: #06~#09 = 코드가 .txt를 읽음 → **.txt 1글자만 바꾸면 반영**(코드 무수정). #07(02-enrich)은 CLI(run.ts) + 라이브(gemini-curate.ts) **둘 다** 같은 .txt를 읽음 = 1곳 수정 = 양쪽 적용. (#10=13 삭제 2026-06-23)
-- **③은 위험 = 2곳 동기 필수**: #02·#03은 프롬프트가 코드에 인라인이고 .md는 "원본 보관용 복사본". 코드를 고치면 .md도 같이 고쳐야 1:1 유지(헌법 §3). ⚠️ #03은 모델까지 코드≠.md 불일치 상태(본문 #03 참조).
+- **③은 위험 = 2곳 동기 필수**: #03은 프롬프트가 코드에 인라인이고 .md는 "원본 보관용 복사본". 코드를 고치면 .md도 같이 고쳐야 1:1 유지(헌법 §3). ⚠️ #03은 모델까지 코드≠.md 불일치 상태(본문 #03 참조). #02 는 코드 인라인 + 이 카탈로그 #02 블록 두 벌 = 글자 동일(2026-09-30 사장님).
 - **①은 코드가 곧 프롬프트**: #11~#25 = 그 함수 안 템플릿 문자열이 전부 = 그 파일만 편집.
 - **⑤는 프롬프트가 없음**: TS 호출(#26~#42)·SPARQL(#44) = 자연어 프롬프트 아님 = FieldMask/검색방식/조건 = 코드 편집.
 
@@ -169,13 +172,14 @@ places.id,places.displayName,places.formattedAddress,places.location,places.user
 
 ## Gemini 메인앱 라이브 — 여정/동선 (#02~#05)
 
-### #02 · MIX step1 여정 생성 (ready=false 경로) — 슬림본 2026-07-11
-- **파일**: `server/services/agents/pipeline-v3.ts:375-432` · **상태**: live · **모델**: `gemini-3-flash-preview`
-- **프롬프트 원본**: 인라인 lines 375-432 (SSOT 원본 = [`09-main-app-itinerary/STANDARD_PROMPT_2026-05-24.md`](../.claude/skills/raw-db-verify-and-complete/prompts/09-main-app-itinerary/STANDARD_PROMPT_2026-05-24.md), 코드·표준md·본 카탈로그 3곳 동기 강제)
-- **설정 (verbatim)**: temperature=0.3 / maxOutputTokens=8192 / thinkingBudget=0 / responseMimeType="application/json"(JSON 강제, tools 없음 = **grounding OFF** — 문구 지시만, 환각 안전망 = saveNewPlacesToDB TS 재검증). 파싱 = parts(text && !thought) → ```json fence 제거 → `/\{[\s\S]*\}/` → JSON.parse, 실패 시 repairTruncatedJSON → **SLIM_KEYS 원명 복원**(n→name … s→shortform_ko, 수신부 단일 지점 = 하류 불변).
-- **조건**: `runPipelineV3` → `isCityReady(destination).ready=false`(미발굴 도시) → runPipelineMix. 입력 = TripFormData → AG1 평문화(koreanTravelerStyle/seasonNote/dayRequirements/categoryMatrix). ready=true 면 호출 안 됨(pipeline-db-only).
-- **슬림 실증 (2026-07-11 A/B 실호출)**: 응답 12,637→9,483자(25% 감축) = 시간 22.3→16.5초(26% 단축) + 12필드 결손 0 + 꾸밈글 18자 상한 준수.
-- **verbatim 프롬프트**:
+### #02 · MIX step1 여정 생성 (창고 모자란 도시) — 2026-09-29 판
+- **파일**: [`worker/lib/services/agents/pipeline-v3-step1-gemini.ts`](../worker/lib/services/agents/pipeline-v3-step1-gemini.ts) 인라인 `const prompt = \`…\`` = 아래 verbatim 블록과 글자 동일(두 벌, 고칠 때 둘 다 = 유형 ③).
+- **자리표**: `${nowYear}` `${formData.destination}` `${outLangLine}` `${koreanTravelerStyle}` `${seasonNote}` `${focusDesc}` `${dayRequirements}` `${categoryMatrix}` `${startPoint}`
+- **설정 (verbatim)**: `model = "gemini-3-flash-preview"` / `temperature: 0.2` / `maxOutputTokens: 50000` / `thinkingConfig: { thinkingBudget: 0 }` / `tools: [{ googleSearch: {} }]` (= grounding ON, responseMimeType 없음). 파싱 = parts(text && !thought) → ```json fence 제거 → `/\{[\s\S]*\}/` → JSON.parse, 실패 시 repairTruncatedJSON → 축약키 원명 복원(수신부 1곳).
+- **조건**: 여정 입구가 "DB 올리 전환 기준(손님상 120곳 + 베스트) 미달"로 판정한 도시 = MIX. 출입증 머리(`${API_PASS}`) 없음 = 손님이 버튼을 눌러야만 도는 운영 호출(사장님 결정 2026-09-29). 호출마다 관리자 장부(`external_calls`) 1건.
+- **판 기록**: 2026-07-11 슬림본(축약키 12필드 + 꾸밈글 18자) → 2026-07-18 grounding ON · temperature 0.2 · maxOutputTokens 50000 → 2026-09-13 출력 언어 줄(`OUTPUT_LANGUAGE`) → **2026-09-29** 식사 줄 = "CITY 물가 기준 하·중·상 중 손님 스타일 등급(Economic = 하 / Reasonable = 중 / Premium·Luxury = 상)" · 식당 줄 = "직전 방문지(바로 앞 슬롯의 장소)에서 걸어갈 수 있는 곳(약 1km·15분 안)" → **2026-09-30** 사장님 결정 = 워커에서 카탈로그를 불러 쓰지 않는다. 코드 인라인 + 카탈로그 두 벌, 글자 동일.
+- **2026-09-29 판 시험** = 5일 극한 시험 3회(하노이 문화+핫스팟 합리 · 보고타 즐길거리+쇼핑 럭셔리 · 파리 모험+힐링 경제) + 파리 경제 강화판 1회 = 파리 경제 식당 가운데 €35 → €30(우리 분포 "하" €28 근처), 직전 방문지 1km 안 9/10. 원본 = `docs/raw/30`·`125`·`19` `…_gemini-mix-prompt-test*`.
+- **verbatim 프롬프트** (= 코드 인라인과 글자 동일):
 ```
 You are a travel data assistant for KOREAN TRAVELERS (${nowYear}년 기준 최신 정보).
 Return STRICT machine-parseable JSON only (no prose, no markdown wrappers).
@@ -185,11 +189,15 @@ Return STRICT machine-parseable JSON only (no prose, no markdown wrappers).
 - No hallucinations. No made-up coordinates. No fabricated addresses.
 - If you cannot verify a fact via Google Search, SKIP that place — do NOT guess.
 
-TASK: Fill the provided slot matrix (categories + counts) and sort places within each day by minimum travel distance to generate the itinerary.
+TASK: Build a REALISTIC, ACTUALLY-DOABLE itinerary (= 이동시간과 각 장소의 실제 소요시간을 계산해, 하루 안에 진짜로 다 돌 수 있는 여정).
+- The slot matrix below is a TARGET, not a quota. 시간이 모자라면 슬롯을 비워라. 억지로 채워서 못 도는 일정을 만들지 마라.
+- 각 장소의 실제 관람 소요시간(대형 미술관·궁전 = 2-3시간, 테마파크 = 반나절~하루)과 슬롯 간 이동시간을 더해 하루 가용시간 안에 들어가는지 반드시 확인하라.
+- Order places within each day to minimize travel time.
 
 CITY: ${formData.destination}
 RADIUS_KM: 100
 TARGET_AUDIENCE: Korean travelers (= 한국 인스타/블로그/유튜브 트렌드 기준)
+${outLangLine}
 
 [USER CONTEXT — AG1 보강]
 ${koreanTravelerStyle}
@@ -198,28 +206,31 @@ ${koreanTravelerStyle}
 [SLOT MATRIX — AG1 결정]
 ${dayRequirements}
 
-[CATEGORY MATRIX — 전체 여정 카테고리별 곳수 (= 사용자 vibe 반영, 반드시 이 비율로 선정)]
+[CATEGORY MATRIX — 전체 여정 카테고리별 곳수 (= 사용자 vibe 반영, 이 비율을 목표로 하되 시간이 부족하면 곳수를 줄인다)]
 ${categoryMatrix}
 - 각 place 의 c(카테고리)는 위 카테고리 중 하나로 정확히 지정 (heritage=문화/유산, healing=힐링/자연, hotspot=핫플, adventure=모험/액티비티, shopping=쇼핑, attraction=즐길거리/체험, restaurant=식당).
 - 식사(lunch/dinner) = c="restaurant".
 
 [동선 원칙]
 - ⚠️ NO DUPLICATE PLACES: Each place must appear AT MOST ONCE across the ENTIRE itinerary (all days). 같은 장소(같은 건물·같은 구글맵 위치)를 여러 슬롯/여러 날에 중복 추천 금지 = 이름·주소를 다르게 써도 실제 같은 곳이면 한 번만. 슬롯이 남으면 다른 장소로 채운다.
-- 매일 ${formData.destination} 도시 중심부에서 출발·귀환, 같은 날 = 같은 구역 묶기
+- 매일 ${startPoint}에서 출발·귀환, 같은 날 = 같은 구역 묶기
 - Array order within each day = visit order (= sorted by minimum travel distance from start)
 - DAILY MEAL RULE (= AG1 has already assigned these slots — DO NOT modify count or position):
     * Each day MUST contain exactly 1 lunch (t="lunch") somewhere in the middle of the day.
     * The FINAL slot of each day MUST be dinner (t="dinner").
-- 3 일+ 일정 시 = Day 2+ 한 날 = outskirt (= 도심에서 10-100km 외곽) day-trip 1-2 곳 포함 가능 (= 한국 여행객이 자주 찾는 외곽 명소/아울렛)
+- 식당(lunch/dinner) = 직전 방문지(바로 앞 슬롯의 장소)에서 걸어갈 수 있는 곳(약 1km·15분 안)
+- 3 일+ 일정 시 = Day 2+ 한 날 = outskirt (= 출발점에서 10-100km 외곽) day-trip 1-2 곳 포함 가능 (= 한국 여행객이 자주 찾는 외곽 명소/아울렛)
 
 [가격 원칙]
 - p = ${nowYear}년 실제 입장료 (1인, EUR). 무료=0
-- 점심 1인 ~€${mealBudget.lunch}, 저녁 1인 ~€${mealBudget.dinner}
-- 활동(activity) = 1인 입장료 / 식당(lunch/dinner) = 1인당 평균. 확실하지 않으면 0
+- 식사 1인 EUR = CITY 물가 기준 하·중·상 중 손님 스타일 등급(Economic = 하 / Reasonable = 중 / Premium·Luxury = 상)
+- 활동(activity) = 1인 입장료 EUR / 식당(lunch/dinner) = 1인당 평균 EUR. 확실하지 않으면 0
+- ⚠️ CURRENCY = **ALWAYS EUR**, never local currency. 비유로권 도시(도쿄·방콕·서울 등)도 **반드시 EUR 로 환산**해서 답하라.
+  (예: 서울 식당 1인 20,000원 → p:13 / 도쿄 1인 3,000엔 → p:18 / 방콕 1인 400바트 → p:11)
 
 For each place include (= ALL fields verified via Google Search grounding, 키는 아래 축약형 그대로 사용):
 - n (English official name on Google Maps)
-- k (한국어 = 한국 여행자가 부르는 이름)
+- k (OUTPUT_LANGUAGE 장소명 = 그 언어 여행자가 부르는 이름) [= ko 면 PSR name_ko 공유컬럼. 그 외 언어는 컬럼에 안 씀]
 - l (local language name = 예: 파리=Tour Eiffel) [= REQUIRED for ALL places INCLUDING restaurants (식당도 반드시). If the restaurant's official name is already in the local language (예: "Le Comptoir du Marché"), copy that same name into l — never leave l empty. = Text Search forwarding + matching key, final DB column]
 - a (FULL street address with NUMBER + street + postal code + city) [= REQUIRED for Text Search forwarding + matching key, final DB column — verify via Google Search]
 - t ("activity" | "lunch" | "dinner")
@@ -227,14 +238,16 @@ For each place include (= ALL fields verified via Google Search grounding, 키�
 - y (latitude = decimal 6 digits, e.g. 48.858370) [= REQUIRED for Text Search forwarding + matching key, final DB column — verify via Google Search, NO hallucination]
 - x (longitude = decimal 6 digits, e.g. 2.294481) [= 위 y 와 동일 요건]
 - p (1 인 EUR)
-- d (= 도심 중심으로부터 직선거리 km = haversine = 소수 1 자리 = 동선 최적화 기본 필수)
-- r (한국어 한 줄 = 최대 18자 = 선정 이유 = 한국 여행객 트렌드 = 인스타 성지/한국 vlog 등 사회적 검증)
-- s (한국어 한 줄 = 최대 18자 = 장소에 대한 코믹/위트 = Claude 톤. 단순 정보 X = "프사각", "본전 뽑음" 같은 한국 슬랭)
+- d (= 출발점(위 동선 원칙 기준)으로부터 직선거리 km = haversine = 소수 1 자리 = 동선 최적화 기본 필수)
+- ts (= 이 슬롯 시작 시각 "HH:MM" = 앞 슬롯 종료시각 + 앞 슬롯에서 여기까지 이동시간. Day 첫 슬롯은 출발시각부터.)
+- m (= 이 장소 체류 분 = 네가 판단한 실제 소요시간. 이동시간은 빼고 머무는 시간만.)
+- r (OUTPUT_LANGUAGE 한 줄 = 최대 18자 = 선정 이유 = 한국 여행객 트렌드 = 인스타 성지/한국 vlog 등 사회적 검증) [= ko 면 PSR summary_ko 공유컬럼, 그 외 언어는 place_translations.summary]
+- s (OUTPUT_LANGUAGE 한 줄 = 최대 18자 = 장소에 대한 코믹/위트 = Claude 톤. 단순 정보 X = "프사각", "본전 뽑음" 같은 그 언어 슬랭) [= ko 면 PSR editorial_summary 공유컬럼, 그 외 언어는 place_translations.editorial_summary]
 
 OUTPUT (strict JSON, no markdown fences):
 {"days":[{"day":1,"theme":"테마","places":[
-  {"n":"Eiffel Tower","k":"에펠탑","l":"Tour Eiffel","a":"Champ de Mars, 5 Av. Anatole France, 75007 Paris","t":"activity","c":"attraction","y":48.858370,"x":2.294481,"p":29.4,"d":2.4,"r":"파리 인증샷 1순위 성지","s":"나 파리다 국룰"},
-  {"n":"Le Comptoir du Marché","k":"르 콩투아 뒤 마르쉐","l":"Le Comptoir du Marché","a":"8 Rue de la Loge, 06300 Nice, France","t":"lunch","c":"restaurant","y":43.697415,"x":7.276451,"p":35,"d":0.8,"r":"시장 근처 가성비 미쉐린","s":"예약 없으면 자리 없음"}
+  {"n":"Eiffel Tower","k":"에펠탑","l":"Tour Eiffel","a":"Champ de Mars, 5 Av. Anatole France, 75007 Paris","t":"activity","c":"attraction","y":48.858370,"x":2.294481,"p":29.4,"d":2.4,"ts":"09:00","m":90,"r":"파리 인증샷 1순위 성지","s":"나 파리다 국룰"},
+  {"n":"Le Comptoir du Marché","k":"르 콩투아 뒤 마르쉐","l":"Le Comptoir du Marché","a":"8 Rue de la Loge, 06300 Nice, France","t":"lunch","c":"restaurant","y":43.697415,"x":7.276451,"p":35,"d":0.8,"ts":"12:20","m":90,"r":"시장 근처 가성비 미쉐린","s":"예약 없으면 자리 없음"}
 ]}]}
 ```
 
@@ -599,6 +612,64 @@ ${JSON_INPUT}
 - **호출**: `geminiCurate(cityName, cityId, 전체행, { apiKey })` = 위와 같은 함수·같은 prompt.txt. 배치 = FALLBACK `[120,60,40,20,10]` = 도시당 1~2콜(120/콜). TS·PM 0(= Gemini 만).
 - **구현체**: [`fillcity/cleanse.ts`](../fillcity/cleanse.ts) (전체행 SELECT → geminiCurate → id 직행 전필드 새덮어쓰기). fill-city `--only=cleanse`.
 - **실증(2026-06-23)**: 런던 28·브뤼셀 16·뮌헨 17곳 정정. 최대 €504,210(뮌헨 박물관)→€175. 비식당 price>200 오염 = 0. = PRD §3-A 1단계.
+
+### #50 · 03 구글맵 확정 뒤 제미니 보강 (#07 에서 입력 칸만 바꾼 판) — 2026-09-30 판
+- **파일(진본)**: [`03-enrich-after-google/prompt.txt`](../fillcity/prompts/03-enrich-after-google/prompt.txt) (split(/═{30,}/)[2] / 치환 ${API_PASS} ${CITY_NAME} ${CITY_ID} ${YEAR} ${MONTH} ${BATCH_LEN} ${JSON_INPUT}) · **호출**: `geminiCurate()` = [gemini-curate.ts](../worker/lib/services/shared/gemini-curate.ts) · **저장**: [gemini-apply.ts](../worker/lib/services/fill/gemini-apply.ts) · **모델**: `gemini-3-flash-preview`
+- **설정 (verbatim)**: #07 과 같은 호출 관문 = `geminiJson(prompt, { googleSearch:true, apiKey })` = grounding ON / temperature 0.2 / maxOutputTokens 50000 / thinkingBudget 0 / JSON mime 제거(그라운딩과 동시 불가). 배치 = FALLBACK `[120,60,40,20,10]`(120 시작 · 응답 비거나 빠진 행 5 초과면 축소). 출입증 = `issueApiKey(c,'GEMINI_API_KEY',cityId,날짜,true)` + 본문 최상단 `${API_PASS}`.
+- **#07 과의 차이 = 입력 칸 + 이름 두 칸 정의**(2026-10-01 판): 이름 두 칸(name_local·name_ko) 설명과 규칙 2 는 #02 여정 생성 지시문의 l·k 정의 글자 그대로(한국 사람들이 부르는 이름·현지어 이름 식당 포함 필수). 입력에서 `name_local`·`name_ko`·`google_place_id` 를 빼고 `google_cid` 를 넣음. 입력 `name_en`·`address`·`latitude`·`longitude` 는 **구글맵 페이지에서 읽은 값**. 응답 11칸·규칙 8개·자리표는 #07 글자 그대로(사장님 2026-09-30 = 응답은 줄이지 않고 전부 받아 원본 저장 = 구글맵이 안 열리는 곳의 최후 안전장치).
+- **응답 저장 규칙 = gemini-apply.ts 1벌**: 구글맵 읽기 로그(도시 폴더 `*_gmaps-page-read-N.json`)에 값이 있는 칸(영어 이름·주소·좌표·가격)은 덮지 않고(가격은 로그 값을 다시 써서 고정), 구글이 못 준 칸과 제미니 전용 칸(원어 이름·요약·한 줄 카피)만 쓴다. 한국어 이름 칸은 쓰지 않는다.
+- **조건**: 신규 도시 워크플로 = LLM 삭제 → 구글맵 읽기(로그 저장) → 분류·일치 검사 → 이 호출(빈 칸·불일치 행만 120곳/콜) → 저장. 번역 테이블(place_translations)은 이 호출이 채우지 않는다(한국어만).
+- **verbatim 프롬프트** (= prompt.txt 본문과 글자 동일):
+```
+${API_PASS}
+
+역할: 너는 한국인 여행자를 위한 [CITY_NAME] 장소 정보 보강 전문가야.
+
+⚠️ 응답 근거 = Google Search 그라운딩 기반 = ${YEAR}년 ${MONTH}월 현재 시점의 최신/검증된 사실 (= 가격/주소/한국어 호칭) 만 사용 = 추정/환각 금지.
+
+목적: [CITY_NAME] (city_id=${CITY_ID}) 의 기존 장소 ${BATCH_LEN} 곳 = 누락 정보를 채우고 + 한국 관점 큐레이션을 작성한다.
+
+입력 = 각 장소 = JSON (= id 는 우리 place_seed_raw.id = 응답 매칭 키)
+  - id: number (= place_seed_raw.id = 응답에 정확히 매칭 필수)
+  - name_en: string | null
+  - address: string | null
+  - latitude: number | null
+  - longitude: number | null
+  - google_cid: string | null
+
+응답 (= JSON 배열, 설명 텍스트 X):
+{
+  "places": [
+    {
+      "id": <입력 id 그대로 = place_seed_raw.id>,
+      "name_local": "<l (local language name = 예: 파리=Tour Eiffel) [= REQUIRED for ALL places INCLUDING restaurants (식당도 반드시). If the restaurant's official name is already in the local language (예: "Le Comptoir du Marché"), copy that same name into l — never leave l empty. = Text Search forwarding + matching key, final DB column]>",
+      "name_en": "<영어명 = 예 'Eiffel Tower' / 입력 있으면 검증 / 없으면 채움>",
+      "name_ko": "<k (OUTPUT_LANGUAGE 장소명 = 그 언어 여행자가 부르는 이름) [= ko 면 PSR name_ko 공유컬럼. 그 외 언어는 컬럼에 안 씀] = 예 '에펠탑'>",
+      "address": "<번지 + 거리 + 우편번호 + 도시 + 국가 = 예 '5 Avenue Anatole France, 75007 Paris, France'>",
+      "latitude": <위도 6 자리 = 예 48.858370>,
+      "longitude": <경도 6 자리 = 예 2.294481>,
+      "summary_ko": "<한 줄 숏폼 대사 = 인스타/FOMO 사회적 검증 = 한국어 25 자 이내>",
+      "editorial_summary": "<한 줄 한국인 관점 선정 이유 = 코믹/위트 후킹 카피 = 한국어 35 자 이내>",
+      "price_eur": <식당=1인 식대 / 그 외=실제 입장료 EUR 숫자 = 무료·입장료 없는 곳(광장·핫스팟 등) = 0>,
+      "distance_km_from_center": <도심 중심으로부터 직선거리 km = haversine = 소수 1 자리 = 예 2.4>
+    }
+  ]
+}
+
+규칙:
+1. 모든 입력 id = 응답에 정확히 포함 (= 누락 0) ← id = 우리 place_seed_raw.id = 매칭 키
+2. name_local = l (local language name = 예: 파리=Tour Eiffel) [= REQUIRED for ALL places INCLUDING restaurants (식당도 반드시). If the restaurant's official name is already in the local language (예: "Le Comptoir du Marché"), copy that same name into l — never leave l empty. = Text Search forwarding + matching key, final DB column] / name_ko = k (OUTPUT_LANGUAGE 장소명 = 그 언어 여행자가 부르는 이름) [= ko 면 PSR name_ko 공유컬럼. 그 외 언어는 컬럼에 안 씀] = 예 '에펠탑' / name_en = Google 기준 정확히 검증·보강 (= 추정 X)
+3. 좌표 = 6 자리 소수 (= 예 48.858370, 2.294481)
+4. address = 번지부터 국가까지 완전 (= 부분 주소 X)
+5. summary_ko / editorial_summary = 한국어만 (= 영어 단어 혼용 X)
+6. price_eur = 식당이면 1인 식대, 그 외 장소는 실제 입장료 = EUR 정수 (= 추정 생성 X). 무료·입장료 없는 장소(광장·거리·핫스팟 등) = 0.
+   ⚠️ CURRENCY = **ALWAYS EUR**, never local currency. 비유로권 도시(도쿄·방콕·서울 등)도 **반드시 EUR 로 환산**해서 답하라.
+7. distance_km_from_center = 도심 중심으로부터 직선거리 km (= haversine, 소수 1 자리, 필수)
+8. 응답 = 위 JSON 만 (= 설명/주석/마크다운 X)
+
+입력 ${BATCH_LEN} 장소:
+${JSON_INPUT}
+```
 
 ### #08 · 05 식당 재검증 (restaurant-reverify)
 - **파일**: `.claude/skills/.../05-restaurant-reverify/run.ts:59-92` · **상태**: live · **모델**: `gemini-3-flash-preview`
