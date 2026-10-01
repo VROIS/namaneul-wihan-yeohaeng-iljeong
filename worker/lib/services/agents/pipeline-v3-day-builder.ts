@@ -1,5 +1,5 @@
 import type { TripFormData, PlaceResult, DaySlotConfig } from "./types";
-import { MEAL_BUDGET, minutesToTime } from "./types";
+import { minutesToTime } from "./types";
 import {
   haversineKm,
   calcTransitHaversine,
@@ -15,7 +15,6 @@ import {
   type TransitPriceResult,
 } from "../transport-pricing-service";
 import {
-  normalizeTravelStyle,
   sanitizePriceEur,
   type GeminiPlace,
   type GeminiDay,
@@ -37,10 +36,8 @@ export interface DayBuilderDeps {
   companionCount: number;
   dayCount: number;
   isGuideCategory: boolean;
-  eurToKrw: number;
   transportPrice: TransportPricingResult | null;
   availableHours: number;
-  realityCheck: any;
 }
 
 export async function buildDayResult(
@@ -58,12 +55,9 @@ export async function buildDayResult(
     companionCount,
     dayCount,
     isGuideCategory,
-    eurToKrw,
     transportPrice,
     availableHours,
-    realityCheck,
   } = deps;
-  const mealBudget = MEAL_BUDGET[normalizeTravelStyle(formData.travelStyle)];
 
   const dayConfig = daySlotsConfig.find((c) => c.day === d)!;
 
@@ -122,11 +116,11 @@ export async function buildDayResult(
       mealPrice: isMeal
         ? (enrichedPlace.estimatedPriceEur ?? undefined)
         : undefined,
-      mealPriceLabel: isMeal
-        ? s.gPlace.type === "lunch"
-          ? mealBudget.lunchLabel
-          : mealBudget.dinnerLabel
-        : undefined,
+      // ⚠️ 수정금지(승인필요) 2026-09-29 사장님 결정 = 식사 가격 글자 = 제미니 가격 그대로 (정본 §)
+      mealPriceLabel:
+        isMeal && enrichedPlace.estimatedPriceEur
+          ? `€${enrichedPlace.estimatedPriceEur}`
+          : undefined,
       nameKo: ep.nameKo || s.gPlace.nameKo,
       nameLocal: ep.nameLocal || s.gPlace.nameLocal || null,
       userRatingCount: ep.userRatingCount,
@@ -137,7 +131,6 @@ export async function buildDayResult(
       transitNote: s.gPlace.transitNote || null,
       selectionReasons: enrichedPlace.selectionReasons || [],
       confidenceLevel: enrichedPlace.confidenceLevel || "medium",
-      realityCheck,
     };
   });
 
@@ -311,13 +304,9 @@ export async function buildDayResult(
     transportDisplay = {
       category: "guide" as const,
       perPersonPerDay: guidePP,
-      perPersonPerDayKrw: Math.round(guidePP * eurToKrw),
       uberBlackComparison: uberBlackComp
         ? {
             perPersonPerDay: uberBlackComp.perPersonPerDay,
-            perPersonPerDayKrw: Math.round(
-              uberBlackComp.perPersonPerDay * eurToKrw,
-            ),
             totalDistanceKm: uberBlackComp.totalDistanceKm,
             totalDurationMin: uberBlackComp.totalDurationMin,
           }
@@ -350,7 +339,6 @@ export async function buildDayResult(
     transportDisplay = {
       category: "transit" as const,
       perPersonPerDay: transitPP,
-      perPersonPerDayKrw: Math.round(transitPP * eurToKrw),
       method:
         transportPrice?.category === "transit"
           ? (transportPrice as TransitPriceResult).method
@@ -362,9 +350,6 @@ export async function buildDayResult(
       guideUpsell: guideUpsell
         ? {
             perPersonPerDay: guideUpsell.perPersonPerDay,
-            perPersonPerDayKrw: Math.round(
-              guideUpsell.perPersonPerDay * eurToKrw,
-            ),
             vehicleDescription: guideUpsell.vehicleDescription,
             clickable: true,
           }
@@ -394,7 +379,6 @@ export async function buildDayResult(
   const dailyPerPersonEur = round2(
     mealPerPerson + entrancePerPerson + transportPerPersonPerDay,
   );
-  const dailyPerPersonKrw = Math.round(dailyPerPersonEur * eurToKrw);
 
   const invalidCoords = dayPlaces.filter(
     (p: any) => !isValidCoord(p.lat, p.lng),
@@ -462,7 +446,6 @@ export async function buildDayResult(
       },
       dailyCost: {
         perPersonEur: dailyPerPersonEur,
-        perPersonKrw: dailyPerPersonKrw,
         breakdown: {
           mealEur: mealPerPerson,
           entranceEur: entrancePerPerson,

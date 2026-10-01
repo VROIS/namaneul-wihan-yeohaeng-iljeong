@@ -20,9 +20,9 @@ export interface SaveRawOpts {
   localSkip?: boolean;
 }
 
-export async function saveRaw(opts: SaveRawOpts): Promise<void> {
+export async function saveRaw(opts: SaveRawOpts): Promise<string | null> {
   try {
-    if (!isR2Configured()) return; // R2 설정 없으면 조용히 skip (best-effort, 옛 Supabase 키 검사 대체 2026-08-06)
+    if (!isR2Configured()) return null; // R2 설정 없으면 조용히 skip (best-effort, 옛 Supabase 키 검사 대체 2026-08-06)
 
     const ctx =
       opts.contextId != null && String(opts.contextId).trim() !== ""
@@ -68,6 +68,7 @@ export async function saveRaw(opts: SaveRawOpts): Promise<void> {
       2,
     );
 
+    let stored = true;
     // ⚠️ 2026-07-07 무성실패 제거(사장님 승인) 원칙 유지 = R2 업로드 실패도 반드시 로그(raw 증발 로그0 재발방지). S3 SDK 는 실패 시 throw.
     try {
       await uploadToR2(
@@ -76,6 +77,7 @@ export async function saveRaw(opts: SaveRawOpts): Promise<void> {
         "application/json",
       );
     } catch (e: any) {
+      stored = false;
       console.error(
         `[saveRaw] ❌ R2 PUT 실패 = ${place.dir}/${fileName} = ${String(e?.message || e).slice(0, 200)}`,
       );
@@ -88,5 +90,8 @@ export async function saveRaw(opts: SaveRawOpts): Promise<void> {
         fs.mkdirSync(path.dirname(localPath), { recursive: true });
         fs.writeFileSync(localPath, body);
       } catch {}
-  } catch {}
+    return stored ? `${place.dir}/${fileName}` : null;
+  } catch {
+    return null;
+  }
 }

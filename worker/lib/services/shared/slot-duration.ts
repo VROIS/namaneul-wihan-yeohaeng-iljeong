@@ -1,8 +1,8 @@
-// ⚠️ 수정금지(승인필요) 2026-08-31 사장님 결정 = 입장료 기반 슬롯시간 단일 진입점 (정본 B4)
+// ⚠️ 수정금지(승인필요) 2026-09-29 사장님 결정 = 입장료 기반 슬롯시간 1벌(워커·엔진 공용, 계산식·값 그대로, DB 연결은 부르는 쪽이 넘긴다) (정본 B4)
 
-import { sql } from "drizzle-orm";
-import { db } from "../../db";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { placeSeedRaw } from "@shared/schema";
+import type { SelectDb } from "./pool-radius";
 
 /** 이 값 이하 = 국가 기부 개념·무료로 보고 계산 대상에서 제외 = 원 여행밀도 */
 export const FREE_THRESHOLD_EUR = 3;
@@ -20,21 +20,25 @@ export const PRICED_STAY_CATEGORIES: ReadonlySet<string> = new Set([
   "healing",
 ]);
 
-/** 그 도시 유료 입장지 평균 ÷ 2 = 시간당요금(EUR). 표본 0 이면 null. */
-export async function cityHourlyRate(cityId: number): Promise<number | null> {
-  if (!db) return null;
-  const rows = await db.execute(sql`
-    SELECT avg(${placeSeedRaw.priceEur})::float AS avg_price
-    FROM ${placeSeedRaw}
-    WHERE ${placeSeedRaw.cityId} = ${cityId}
-      AND ${placeSeedRaw.status} = 'active'
-      AND ${placeSeedRaw.priceEur} > ${FREE_THRESHOLD_EUR}
-      AND ${placeSeedRaw.seedCategory} = ANY(${sql.raw("ARRAY[" + [...PRICED_STAY_CATEGORIES].map((c) => `'${c}'`).join(",") + "]::text[]")})
-      AND NOT (COALESCE(${placeSeedRaw.categoryTags}, '{}') && ARRAY['restaurant','hotel']::text[])
-  `);
-  const avg = Number(
-    (rows as any).rows?.[0]?.avg_price ?? (rows as any)[0]?.avg_price,
-  );
+export async function cityHourlyRate(
+  db: SelectDb,
+  cityId: number,
+): Promise<number | null> {
+  const rows = await db
+    .select({
+      avgPrice: sql<number | null>`avg(${placeSeedRaw.priceEur})::float`,
+    })
+    .from(placeSeedRaw)
+    .where(
+      and(
+        eq(placeSeedRaw.cityId, cityId),
+        eq(placeSeedRaw.status, "active"),
+        sql`${placeSeedRaw.priceEur} > ${FREE_THRESHOLD_EUR}`,
+        inArray(placeSeedRaw.seedCategory, [...PRICED_STAY_CATEGORIES]),
+        sql`NOT (COALESCE(${placeSeedRaw.categoryTags}, '{}') && ARRAY['restaurant','hotel']::text[])`,
+      ),
+    );
+  const avg = Number(rows[0]?.avgPrice);
   if (!Number.isFinite(avg) || avg <= 0) return null;
   return avg / HOURS_PER_AVERAGE_PLACE;
 }

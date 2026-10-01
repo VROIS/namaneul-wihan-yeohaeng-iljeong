@@ -19,6 +19,12 @@ export const placeImageKey = (
   name: string,
 ): string => `${placeImagesDir(cityId)}/${category}/${fileStamp()}_${name}`;
 
+// ⚠️ 수정금지(승인필요) 2026-09-29 사장님 결정 = 장소가 다른 도시로 가면 사진도 그 도시 폴더로 = 파일 이름은 그대로, 도시 번호만 바꾼다 (정본 §)
+export const placeImageKeyInCity = (key: string, cityId: Id): string | null => {
+  const m = key.match(/^\d+\/images\/(.+)$/);
+  return m ? `${placeImagesDir(cityId)}/${m[1]}` : null;
+};
+
 export const itineraryContext = (
   cityId: Id | null | undefined,
   itineraryId: Id | null | undefined,

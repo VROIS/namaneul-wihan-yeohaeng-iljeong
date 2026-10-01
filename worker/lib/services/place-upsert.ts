@@ -7,6 +7,8 @@ import { type MatchedBy, properKeys } from "./shared/place-enrich";
 export interface UpsertPayload {
   cityId: number;
   seedCategory: string; // 'restaurant' | 'attraction' | 'heritage' | ...
+  // ⚠️ 수정금지(승인필요) 2026-09-30 사장님 결정 = 구글 페이지로 확정한 분류는 옛 seed_category 를 덮는다(구글 분류 최우선 = 헌법 §14). 페이지 확정·분류 정렬만 켠다 (정본 §)
+  overwriteSeedCategory?: boolean;
   // ⚠️ 수정금지(승인필요) 2026-07-06 사장님 SSOT = rowId 직행 UPDATE(WHERE id=$1 방식).
   targetRowId?: number | null;
   // ⚠️ 수정금지(승인필요) 2026-07-17 사장님 SSOT = targetRowId 직행이 트리거 '[중복차단] id=N' 판정을 받으면 그 원행(N)으로 병합(회수)할지 opt-in.
@@ -35,6 +37,8 @@ export interface UpsertPayload {
   dayZone?: string | null;
   distanceKmFromCenter?: number | null;
   categoryTags?: string[];
+  // ⚠️ 수정금지(승인필요) 2026-10-01 사장님 결정 = 태그 빼기 입력 = 판정에서 거짓으로 확인된 옛 태그를 걷어낸다 (정본 §)
+  removeCategoryTags?: string[];
   phaseTags?: string[];
   // ⚠️ 수정금지(승인필요) 2026-07-11 사장님 SSOT = 좌표 쓰기 보호 = true 면 기존 행 좌표(NULL·0 제외)를 유지하고 빈칸·0만 채움.
   preserveExistingCoords?: boolean;
@@ -66,15 +70,23 @@ export interface UpsertResult {
   };
 }
 
-// ⚠️ 수정금지(승인필요) 2026-07-17 사장님 SSOT = 직행 UPDATE SQL 1벌(§16) = targetRowId 직행·회수 병합 공용.
+// ⚠️ 수정금지(승인필요) 2026-10-01 사장님 결정 = 직행 UPDATE SQL 1벌(§16)에 태그 빼기 추가 (정본 §)
 function buildDirectUpdateSql(p: UpsertPayload, targetId: number) {
   const catTags =
     p.categoryTags && p.categoryTags.length > 0
       ? p.categoryTags
       : [p.seedCategory];
+  const rmTags = (p.removeCategoryTags ?? []).filter(
+    (t) => t !== p.seedCategory,
+  );
+  const rmSql = sql.raw(
+    `ARRAY[${rmTags.map((s) => `'${s.replace(/'/g, "''")}'`).join(",")}]::text[]`,
+  );
   const phTags = p.phaseTags || [];
   return sql`
       UPDATE place_seed_raw SET
+        seed_category = ${p.overwriteSeedCategory ? sql`${p.seedCategory}` : sql`seed_category`},
+        rank          = ${p.overwriteSeedCategory ? sql`NULL` : sql`rank`},
         name_en       = ${p.preserveExistingNames ? sql`COALESCE(NULLIF(name_en, ''), ${p.nameEn ?? null}, name_en)` : sql`COALESCE(${p.nameEn ?? null}, name_en)`},
         name_ko       = ${p.preserveExistingNames ? sql`COALESCE(NULLIF(name_ko, ''), ${p.nameKo ?? null}, name_ko)` : sql`COALESCE(${p.nameKo ?? null}, name_ko)`},
         name_local    = ${p.preserveExistingNames ? sql`COALESCE(NULLIF(name_local, ''), ${p.nameLocal ?? null}, name_local)` : sql`COALESCE(${p.nameLocal ?? null}, name_local)`},
@@ -93,7 +105,7 @@ function buildDirectUpdateSql(p: UpsertPayload, targetId: number) {
         summary_ko        = ${p.preserveExistingNames ? sql`COALESCE(NULLIF(summary_ko, ''), ${p.selectionReasonKo ?? null}, summary_ko)` : sql`COALESCE(${p.selectionReasonKo ?? null}, summary_ko)`},
         day_zone          = COALESCE(${p.dayZone ?? null}, day_zone),
         distance_km_from_center = COALESCE(${p.distanceKmFromCenter ?? null}::real, distance_km_from_center),
-        category_tags     = (SELECT ARRAY(SELECT DISTINCT unnest(COALESCE(category_tags, ARRAY[]::text[]) || ${sql.raw(`ARRAY[${catTags.map((s) => `'${s.replace(/'/g, "''")}'`).join(",")}]::text[]`)}))),
+        category_tags     = (SELECT ARRAY(SELECT u.t FROM (SELECT DISTINCT unnest(COALESCE(category_tags, ARRAY[]::text[]) || ${sql.raw(`ARRAY[${catTags.map((s) => `'${s.replace(/'/g, "''")}'`).join(",")}]::text[]`)}) AS t) u WHERE u.t <> ALL(${rmSql}))),
         phase_tags        = (SELECT ARRAY(SELECT DISTINCT unnest(COALESCE(phase_tags, ARRAY[]::text[]) || ${sql.raw(`ARRAY[${phTags.length === 0 ? "" : phTags.map((s) => `'${s.replace(/'/g, "''")}'`).join(",")}]::text[]`)}))),
         -- ⚠️ 수정금지(승인필요) 2026-09-04 사장님 확정 = 사진 시각은 **사진이 실제로 바뀔 때만** 찍는다. 같은 URL 을 다시 넘겨도 갱신하면 "언제 받은 사진인지"가 거짓이 된다(재링크가 기존 URL 을 재전달하는 경우).
         image_updated_at  = CASE WHEN ${p.imageUrl || null}::text IS NOT NULL AND ${p.imageUrl || null}::text IS DISTINCT FROM image_url THEN NOW() ELSE image_updated_at END,

@@ -1,6 +1,6 @@
 // ⚠️ 수정금지(승인필요) 2026-06-06 = DB-only 결정적 동선 빌더 v2 = handleRouteRequest(Gemini) 동형 대체 (= 사용자 SSOT)
 import type { AG1Output, PlaceResult } from "../agents/types";
-import { minutesToTime, MEAL_BUDGET } from "../agents/types";
+import { minutesToTime } from "../agents/types";
 import { normalizeTravelStyle } from "../agents/pipeline-v3-types";
 import {
   haversineKm,
@@ -49,14 +49,11 @@ export function buildRouteLocal(
   const { formData, daySlotsConfig, paceConfig, companionCount } = skeleton;
   const slotDuration = paceConfig.slotDurationMinutes; // 활동 1곳 시간
   const mealDuration = paceConfig.mealDurationMinutes; // 식사 1회 시간(밀도별, 활동보다 짧음)
-  // ⚠️ 수정금지(승인필요) 2026-08-31 사장님 확정 = 예산 구간 = 그 도시 분포 경계선(30/50/20) (정본 B4)
-  //   = 전 도시 고정 유로(점심 상한 €16 등)는 물가를 못 담아 근처 후보를 전부 떨어뜨림 = 폐기 §19.
-  //   = 표본 부족 도시만 MEAL_BUDGET 고정값으로 되돌린다.
+  // ⚠️ 수정금지(승인필요) 2026-09-29 사장님 결정 = 예산 구간 = 그 도시 가격 분포 1벌, 분포가 없으면 가격으로 자르지 않음 (정본 B4)
   const style = normalizeTravelStyle(formData.travelStyle);
-  const fixed = MEAL_BUDGET[style];
   const band = mealTiers
     ? tierRange(style, mealTiers)
-    : { min: fixed.min, cap: fixed.max };
+    : { min: 0, cap: Number.POSITIVE_INFINITY };
   // ⚠️ 수정금지(승인필요) 2026-07-31 사장님 승인(BTS D단계 BE-3) = 핀 식당 id 집합(풀 id 형식 = "db-<번호>").
   const pinnedRestIds = new Set(
     (formData.pinnedPlaceIds ?? []).map((n) => `db-${n}`),

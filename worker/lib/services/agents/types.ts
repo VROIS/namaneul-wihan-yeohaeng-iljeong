@@ -45,12 +45,6 @@ export interface PaceConfig {
   maxSlotsPerDay: number; // (레거시 상한, 이제 가용시간이 슬롯수 결정 = 실질 미사용이나 안전 상한 유지)
 }
 
-export interface MealSlotConfig {
-  type: "lunch" | "dinner";
-  startHour: number;
-  endHour: number;
-}
-
 export interface VibeWeight {
   vibe: Vibe;
   weight: number;
@@ -154,67 +148,6 @@ export const PACE_CONFIG: Record<TravelPace, PaceConfig> = {
     slotDurationMinutes: PACE_SLOT_MINUTES.Relaxed,
     mealDurationMinutes: PACE_SLOT_MINUTES.Relaxed,
     maxSlotsPerDay: 8,
-  },
-};
-
-export const MEAL_SLOTS: MealSlotConfig[] = [
-  { type: "lunch", startHour: 12, endHour: 14 },
-  { type: "dinner", startHour: 18, endHour: 20 },
-];
-
-export const MEAL_BUDGET: Record<
-  TravelStyle,
-  {
-    dailyTotal: number;
-    lunch: number;
-    dinner: number;
-    lunchLabel: string;
-    dinnerLabel: string;
-    label: string;
-    min: number;
-    max: number;
-  }
-> = {
-  // ⚠️ 수정금지(승인필요) 사용자 SSOT 2026-05-19 = 4:6 split (= 점심 40% / 저녁 60%)
-  Economic: {
-    dailyTotal: 40,
-    lunch: 16,
-    dinner: 24,
-    lunchLabel: "€16 이내",
-    dinnerLabel: "€24 이내",
-    label: "€40/일",
-    min: 0,
-    max: 24,
-  },
-  Reasonable: {
-    dailyTotal: 100,
-    lunch: 40,
-    dinner: 60,
-    lunchLabel: "€40 이내",
-    dinnerLabel: "€60 이내",
-    label: "€100/일",
-    min: 25,
-    max: 60,
-  },
-  Premium: {
-    dailyTotal: 300,
-    lunch: 120,
-    dinner: 180,
-    lunchLabel: "€120 이내",
-    dinnerLabel: "€180 이내",
-    label: "€300/일",
-    min: 61,
-    max: 180,
-  },
-  Luxury: {
-    dailyTotal: 300,
-    lunch: 120,
-    dinner: 180,
-    lunchLabel: "€120 이내",
-    dinnerLabel: "€180 이내",
-    label: "€300+/일",
-    min: 181,
-    max: 9999,
   },
 };
 

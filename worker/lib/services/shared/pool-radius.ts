@@ -62,6 +62,15 @@ export function servingGateSql(): SQL {
     AND (${placeSeedRaw.businessStatus} IS NULL OR ${placeSeedRaw.businessStatus} NOT IN ('CLOSED_PERMANENTLY', 'CLOSED_TEMPORARILY')))`;
 }
 
+// ⚠️ 수정금지(승인필요) 2026-09-29 사장님 결정 = DB 올리 전환 기준 = 손님상 120곳 이상 + 베스트 있음(V3 입구·워커 분기·도시 카드가 이 1벌) (정본 §)
+export const READY_MIN_SERVABLE = 120;
+/** 워커·엔진 어느 DB 연결이든 받는 조회 모양(DB 연결은 부르는 쪽이 넘긴다). */
+export type SelectDb = { select: (...args: any[]) => any };
+/** 손님상 관문을 통과한 행을 셀 때 붙이는 전환 기준식. */
+export function readySql(): SQL {
+  return sql`(COUNT(*) >= ${READY_MIN_SERVABLE} AND COUNT(${placeSeedRaw.bestRank}) > 0)`;
+}
+
 /** ⚠️ 수정금지(승인필요) 2026-09-01 사장님 확정 = 기점 = 동적 출발점(숙소>도심) 100km 물리검사 · 손님상 게이트와 한 진입점 */
 export async function getPoolContext(
   cityId: number,

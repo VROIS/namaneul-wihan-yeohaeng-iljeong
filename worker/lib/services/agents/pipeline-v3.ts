@@ -37,7 +37,7 @@ export async function runPipelineV3(formData: TripFormData): Promise<any> {
     const { runPipelineDbOnly } = await import("./pipeline-db-only");
     return runPipelineDbOnly(formData, cityCheck);
   }
-  // ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = 베스트 여정 = 행수(ready 200)와 무관하게 **항상 DB-only** = 도시가 있으면 베스트 분기, 없으면 유료 MIX 로 흘리지 않고 막는다(핀 분기와 동형). 옛 `ready &&` 조건(9-07) 폐기 §19 = 200행 미만 도시에서 베스트가 제미니 유료로 빠지던 구멍(리마 실측).
+  // ⚠️ 수정금지(승인필요) 2026-09-29 사장님 결정 = 베스트 여정 = DB 올리 전환 기준과 무관하게 **항상 DB-only** = 도시가 있으면 베스트 분기, 없으면 유료 MIX 로 흘리지 않고 막는다(핀 분기와 동형) (정본 §)
   if (formData.bestOnly) {
     if (!cityCheck.cityId) {
       throw new Error(
@@ -52,7 +52,7 @@ export async function runPipelineV3(formData: TripFormData): Promise<any> {
     return runPipelineDbOnly(formData, cityCheck);
   }
   console.log(
-    `\n[V3] city='${cityCheck.cityName}' ready=false (${cityCheck.count} rows) → MIX 경로`,
+    `\n[V3] city='${cityCheck.cityName}' ready=false (손님상 ${cityCheck.count}곳) → MIX 경로`,
   );
   return runPipelineMix(formData, cityCheck.cityId ?? null);
 }

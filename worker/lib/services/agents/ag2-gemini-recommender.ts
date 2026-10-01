@@ -1,7 +1,6 @@
 /** ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = AG2 = DB-only 단일 진입점 */
 
 import type { AG1Output, PlaceResult, SeedCategory } from "./types";
-import { MEAL_BUDGET } from "./types";
 // ⚠️ 수정금지(승인필요) 2026-08-17 사장님 승인(실측 버그수정) = MIX(pipeline-v3) 3개 파일과 동일하게 정규화 필수.
 import { normalizeTravelStyle } from "./pipeline-v3-types";
 // ⚠️ 수정금지(승인필요) 2026-05-20 = 이미지 폴백 단일 SSOT (= Google 1 > WK 2)
@@ -9,7 +8,8 @@ import { pickPlaceImage, loadImagePidMap } from "../shared/place-image";
 // ⚠️ 수정금지(승인필요) 2026-05-06 = 사용자 의도 = AG2 데이터 출처 = place_seed_raw 우선
 import { db } from "../../db";
 import { placeSeedRaw } from "@shared/schema";
-import { eq, and, between, sql, inArray } from "drizzle-orm";
+import { eq, and, between, gte, sql, inArray } from "drizzle-orm";
+import { cityMealTiers, tierRange } from "../shared/meal-budget-tiers";
 import { findCityUnified } from "../city-resolver";
 // ⚠️ 2026-07-17 사장님 확정 = 슬롯 풀 = (city_id=요청도시) ∪ (중심 100km) 합집합 = shared/pool-radius 단일 SSOT(§16)
 import {
@@ -17,12 +17,12 @@ import {
   recalcCrossCityZone,
   servingGateSql,
   distanceKmFromCoords,
+  READY_MIN_SERVABLE,
+  readySql,
 } from "../shared/pool-radius";
 import { VIBE_PRIMARY_CATEGORY, SIGHT_CATEGORIES } from "@shared/vibe-category";
 
-// ⚠️ 수정금지(승인필요) 2026-08-17 사장님 승인 = 도시 입력 시점 분기(백엔드만), 임계값 200(발굴 도시 행수≥200 → DB-only, 미만 → Gemini+Google fallback), 상세 경위는 정본문서
-export const READY_THRESHOLD = 200;
-
+// ⚠️ 수정금지(승인필요) 2026-09-29 사장님 결정 = 도시 입력 시점 분기 = 손님상 120곳 이상 + 베스트면 DB-only, 미달이면 MIX(기준 = pool-radius 1벌) (정본 §)
 export async function isCityReady(
   destination: string,
   // ⚠️ 수정금지(승인필요) 2026-07-08 사장님 SSOT = 도시중심좌표(불변키) = ready 판정(DB-only vs MIX 라우팅)도 좌표 우선.
@@ -58,17 +58,17 @@ export async function isCityReady(
     };
   }
 
-  // ⚠️ 수정금지(승인필요) 2026-07-05 사장님 SSOT = 전체 행수 COUNT(후보군 포함) = 도시특성이 전체 발굴량에 반영
   const countRows = await db
     .select({
       count: sql<number>`COUNT(*)::int`,
+      ready: sql<boolean>`${readySql()}`,
     })
     .from(placeSeedRaw)
-    .where(eq(placeSeedRaw.cityId, cityId));
+    .where(and(eq(placeSeedRaw.cityId, cityId), servingGateSql()));
   const count = Number(countRows[0]?.count || 0);
   // ⚠️ 수정금지(승인필요) 2026-08-13 = 좌표는 findCityUnified 가 이미 조회한 값(새 조회 0).
   return {
-    ready: count >= READY_THRESHOLD,
+    ready: !!countRows[0]?.ready,
     cityId,
     cityName: cityResult.name,
     count,
@@ -165,11 +165,11 @@ async function fetchFromPlaceSeedRaw(
     catSlots,
   );
 
-  // ⚠️ 수정금지(승인필요) 2026-05-19 = budget 매트릭스 (= 4:6 split)
-  const budgetTier = MEAL_BUDGET[normalizeTravelStyle(formData.travelStyle)];
-  console.log(
-    `[AG2-DB] travelStyle=${formData.travelStyle} = price €${budgetTier.min}-${budgetTier.max} (lunch ≤€${budgetTier.lunch} / dinner ≤€${budgetTier.dinner})`,
-  );
+  // ⚠️ 수정금지(승인필요) 2026-09-29 사장님 결정 = 식당 후보 = 그 도시 가격 분포 구간 1벌(손님 등급), 분포가 없으면 가격으로 자르지 않음 (정본 B4)
+  const tiers = await cityMealTiers(db!, cid);
+  const band = tiers
+    ? tierRange(normalizeTravelStyle(formData.travelStyle), tiers)
+    : null;
 
   const SELECT_COLS = {
     id: placeSeedRaw.id,
@@ -204,9 +204,11 @@ async function fetchFromPlaceSeedRaw(
       // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 손님상 게이트 1벌(PID 조건 흡수 = 여기서 따로 안 건다).
       servingGateSql(),
     ];
-    if (isRestaurant)
+    if (isRestaurant && band)
       baseWhere.push(
-        between(placeSeedRaw.priceEur, budgetTier.min, budgetTier.max),
+        Number.isFinite(band.cap)
+          ? between(placeSeedRaw.priceEur, band.min, band.cap)
+          : gte(placeSeedRaw.priceEur, band.min),
       );
     const rows: any[] = await db!
       .select(SELECT_COLS)
@@ -225,9 +227,10 @@ async function fetchFromPlaceSeedRaw(
     const coreRows = picked.filter((r) => r.dayZone === "core");
     const outskirtRows = picked.filter((r) => r.dayZone === "outskirt");
     const crossCount = picked.filter((r) => r.cityId !== cid).length;
-    const budgetLabel = isRestaurant
-      ? ` (budget €${budgetTier.min}-${budgetTier.max})`
-      : " (rank ASC)";
+    const budgetLabel =
+      isRestaurant && band
+        ? ` (도시 분포 €${Math.round(band.min)}~${Number.isFinite(band.cap) ? Math.round(band.cap) : ""})`
+        : " (rank ASC)";
     console.log(
       `[AG2-DB] ${cat}: 통합 ${picked.length}/${slots}(core ${coreRows.length}+outskirt ${outskirtRows.length})${budgetLabel}${crossCount ? ` [크로스도시 ${crossCount}곳 포함]` : ""}`,
     );
@@ -390,13 +393,13 @@ export async function generateRecommendations(
     skeleton.formData.destinationCoords,
   );
 
-  // ⚠️ 2026-07-31 사장님 승인(BTS D단계 결정5) = 핀 있으면 행수 미달이어도 db-only 진행(pipeline-v3 직행과 같은 규칙 1벌).
+  // ⚠️ 2026-07-31 사장님 승인(BTS D단계 결정5) = 핀 있으면 전환 기준 미달이어도 db-only 진행(pipeline-v3 직행과 같은 규칙 1벌).
   const hasPins = !!(
     cityCheck.cityId && skeleton.formData.pinnedPlaceIds?.length
   );
   if (!cityCheck.ready && !hasPins) {
     console.error(
-      `[AG2] ❌ city='${cityCheck.cityName}' MIX 모드 = ag2 처리 X (= ${cityCheck.count} rows < ${READY_THRESHOLD}) = MIX path = pipeline-v3.ts step1_geminiItinerary 표준 prompt 사용`,
+      `[AG2] ❌ city='${cityCheck.cityName}' MIX 모드 = ag2 처리 X (= 손님상 ${cityCheck.count}곳, 기준 ${READY_MIN_SERVABLE}곳 이상 + 베스트 미달) = MIX path = pipeline-v3.ts step1_geminiItinerary 표준 prompt 사용`,
     );
     throw new Error(
       `MIX_MODE_DISABLED: '${cityCheck.cityName}' 미발굴 도시 = ag2 처리 X (= 사용자 SSOT 2026-05-24)`,
@@ -404,7 +407,7 @@ export async function generateRecommendations(
   }
 
   console.log(
-    `[AG2] ✅ city='${cityCheck.cityName}' (id=${cityCheck.cityId}) ready=true (${cityCheck.count} rows ≥ ${READY_THRESHOLD}) → DB-only`,
+    `[AG2] ✅ city='${cityCheck.cityName}' (id=${cityCheck.cityId}) ready=true (손님상 ${cityCheck.count}곳 + 베스트) → DB-only`,
   );
   // ⚠️ 수정금지(승인필요) 2026-05-24 = isCityReady 결과 전달 = findCityUnified 2 회 호출 회피
   const dbResults = await fetchFromPlaceSeedRaw(skeleton, {

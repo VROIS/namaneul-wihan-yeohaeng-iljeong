@@ -162,8 +162,7 @@ export async function runPipelineBest(
     ...restRows.map((r) => r.cityId),
   ]);
 
-  // 머무는 시간 = 엔진과 같은 계산(입장료 기반) 1벌.
-  const hourlyRate = await cityHourlyRate(cityId);
+  const hourlyRate = await cityHourlyRate(db!, cityId);
   const paceMin = skeleton.paceConfig.slotDurationMinutes;
   const stayOf = (r: any) =>
     slotMinutesFor(

@@ -21,7 +21,7 @@ export async function runPipelineDbOnly(
   };
 
   console.log(
-    `\n[DB-Only] ===== city=${cityCheck.cityName} ready=true (${cityCheck.count} rows) =====`,
+    `\n[DB-Only] ===== city=${cityCheck.cityName} ready=true (손님상 ${cityCheck.count}곳) =====`,
   );
 
   const skeleton = await buildSkeleton(formData);

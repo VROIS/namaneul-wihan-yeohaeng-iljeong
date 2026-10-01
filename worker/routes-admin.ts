@@ -13,7 +13,6 @@ const {
   apiServiceStatus,
   cities,
   creditTransactions,
-  exchangeRates,
   guidePrices,
   guides,
   itineraries,
@@ -174,9 +173,6 @@ export function registerAdminRoutes(app: Express, openDb: OpenDb): void {
     try {
       const [cityRow] = await db.select({ count: count() }).from(cities);
       const [psrRow] = await db.select({ count: count() }).from(placeSeedRaw);
-      const [exchangeRow] = await db
-        .select({ count: count() })
-        .from(exchangeRates);
 
       const fillRows = (await db.execute(
         sql`SELECT
@@ -210,7 +206,6 @@ export function registerAdminRoutes(app: Express, openDb: OpenDb): void {
           pid: filled.pid || 0,
           total: psrRow?.count || 0,
         },
-        exchangeRates: exchangeRow?.count || 0,
         apiServices: apiServicesList,
         recentSyncs: [],
         dbConnected: true,

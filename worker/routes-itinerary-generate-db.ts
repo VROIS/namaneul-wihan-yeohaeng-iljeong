@@ -2,51 +2,13 @@
 
 import type { Express, Request, Response } from "express";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
-import {
-  and,
-  between,
-  eq,
-  inArray,
-  isNotNull,
-  sql,
-  type SQL,
-} from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import * as schema from "../shared/schema";
 
-import {
-  MEAL_BUDGET,
-  type AG1Output,
-  type DaySlotConfig,
-  type PlaceResult,
-  type SeedCategory,
-  type TravelPace,
-  type TripFormData,
-} from "./lib/services/agents/types";
-import {
-  normalizeTravelStyle,
-  sanitizePriceEur,
-} from "./lib/services/agents/pipeline-v3-types";
-import {
-  haversineKm,
-  pickTransitMode,
-  estimateTransitCost,
-} from "./lib/services/agents/transit-haversine";
-import { bestRankOrderSql } from "./lib/services/shared/best-rank";
-import {
-  COMPANION_TO_TRANSPORT,
-  DEFAULT_PRICES,
-  type CompanionType,
-  type MobilityStyle,
-  type TransportType,
-  type TravelStyle,
-} from "./lib/services/transport/constants";
-import {
-  VIBE_PRIMARY_CATEGORY,
-  SIGHT_CATEGORIES,
-} from "../shared/vibe-category";
+import { type TripFormData } from "./lib/services/agents/types";
 import { buildSkeleton } from "./lib/services/agents/ag1-skeleton-builder";
 import { runPipelineBest } from "./routes-itinerary-best";
-// ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 창고 200행 미만 도시 = 운영 엔진(pipeline-v3 = MIX) 그대로, 연결만 withEngineDb (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-09-29 사장님 결정 = DB 올리 전환 기준 미달 도시 = 운영 엔진(pipeline-v3 = MIX) 그대로, 연결만 withEngineDb (정본 §)
 import { withEngineDb } from "./lib/db";
 import { runPipelineV3 } from "./lib/services/agents/pipeline-v3";
 import type { Sql } from "postgres";
@@ -61,18 +23,10 @@ import { fetchFromPlaceSeedRaw } from "./best-itinerary/places";
 import { finalizeDbOnlyItinerary } from "./best-itinerary/finalize";
 import { applyItineraryTranslations } from "./best-itinerary/translate";
 import { buildItineraryData } from "./best-itinerary/save";
-import { buildRouteLocal } from "./lib/services/route/route-local";
 import { enqueueGmapsPost } from "./gmaps-post-queue";
 import { waitUntil } from "cloudflare:workers";
 
-const {
-  cities,
-  creditTransactions,
-  itineraries,
-  placeSeedRaw,
-  placeTranslations,
-  users,
-} = schema;
+const { itineraries, users } = schema;
 
 export type Db = PostgresJsDatabase<typeof schema>;
 export type OpenDb = () => { db: Db; close: () => void };
@@ -88,104 +42,10 @@ async function loadAllKeys(openSql: OpenSql): Promise<void> {
   }
 }
 
-// ── 상수·순수함수 ──────
+// ── 파이프라인 ───────────────────────────────────────────────────────────────
 
-const POOL_RADIUS_M = 100_000;
-const CORE_KM = 10;
-const POOL_LAT_DEG = 0.9;
-
-/** 두 좌표 사이 거리(km). */
-export function distanceKmFromCoords(
-  latA: number,
-  lngA: number,
-  latB: number,
-  lngB: number,
-): number {
-  const dLat = (latA - latB) * 111320;
-  const dLng =
-    (lngA - lngB) * 111320 * Math.cos((((latA + latB) / 2) * Math.PI) / 180);
-  return Math.sqrt(dLat * dLat + dLng * dLng) / 1000;
-}
-
-function zoneForDistanceKm(distKm: number): "core" | "outskirt" | null {
-  if (!(distKm >= 0) || distKm > POOL_RADIUS_M / 1000) return null;
-  return distKm <= CORE_KM ? "core" : "outskirt";
-}
-
-/** 그 도시 여정에 쓸 수 있는 범위(도시 안 + 100km) 걸러내는 조건. */
-export function poolWhereSql(
-  cityId: number,
-  center: { lat: number; lng: number } | null,
-): SQL {
-  if (!center) return sql`${placeSeedRaw.cityId} = ${cityId}`;
-  const lngDeg =
-    POOL_LAT_DEG / Math.max(Math.cos((center.lat * Math.PI) / 180), 0.15);
-  return sql`((
-    ${placeSeedRaw.latitude} IS NOT NULL AND ${placeSeedRaw.longitude} IS NOT NULL
-    AND ${placeSeedRaw.latitude} <> 0 AND ${placeSeedRaw.longitude} <> 0
-    AND ${placeSeedRaw.latitude} BETWEEN ${center.lat - POOL_LAT_DEG} AND ${center.lat + POOL_LAT_DEG}
-    AND ${placeSeedRaw.longitude} BETWEEN ${center.lng - lngDeg} AND ${center.lng + lngDeg}
-    AND sqrt( power((${center.lat} - ${placeSeedRaw.latitude}) * 111320, 2)
-            + power((${center.lng} - ${placeSeedRaw.longitude}) * 111320 * cos(radians((${center.lat} + ${placeSeedRaw.latitude}) / 2)), 2) ) <= ${POOL_RADIUS_M}
-  ) OR (${placeSeedRaw.cityId} = ${cityId} AND (
-    ${placeSeedRaw.latitude} IS NULL OR ${placeSeedRaw.longitude} IS NULL
-    OR ${placeSeedRaw.latitude} = 0 OR ${placeSeedRaw.longitude} = 0
-  )))`;
-}
-
-/** 손님상에 올릴 수 있는 곳만 = 살아있고·확인됐고·폐업 아닌 것. */
-export function servingGateSql(): SQL {
-  return sql`(${placeSeedRaw.status} = 'active' AND (COALESCE(${placeSeedRaw.googleReviewCount}, 0) > 0 OR ${placeSeedRaw.bestRank} IS NOT NULL) AND (${placeSeedRaw.googlePlaceId} IS NOT NULL OR ${placeSeedRaw.verifySource} LIKE 'gmaps%') AND (${placeSeedRaw.businessStatus} IS NULL OR ${placeSeedRaw.businessStatus} NOT IN ('CLOSED_PERMANENTLY', 'CLOSED_TEMPORARILY')))`;
-}
-
-/** 도심에서 얼마나 먼지 다시 계산해 그 행에 적어둔다. */
-export function recalcCrossCityZone(
-  row: {
-    cityId: number;
-    latitude: any;
-    longitude: any;
-    dayZone?: any;
-    distanceKmFromCenter?: any;
-  },
-  requestCityId: number,
-  center: { lat: number; lng: number } | null,
-): void {
-  if (!center || row.cityId === requestCityId) return;
-  const lat = Number(row.latitude);
-  const lng = Number(row.longitude);
-  if (!lat || !lng) return;
-  const distKm = distanceKmFromCoords(center.lat, center.lng, lat, lng);
-  row.distanceKmFromCenter = Math.round(distKm * 10) / 10;
-  row.dayZone = zoneForDistanceKm(distKm);
-}
-
-/** 이 값 이하 = 무료로 보고 체류시간 계산에서 뺀다. */
-export const FREE_THRESHOLD_EUR = 3;
-/** 입장료 있는 곳의 표준 체류 = 2시간. */
-export const HOURS_PER_AVERAGE_PLACE = 2;
-/** 입장료가 체류시간을 대변하는 분류. */
-export const PRICED_STAY_CATEGORIES: ReadonlySet<string> = new Set([
-  "heritage",
-  "attraction",
-  "adventure",
-  "healing",
-]);
-
-// slotMinutesFor · tierRange 는 buildRouteLocal 이 직접 쓴다 = 이 라우트는 산출값(hourlyRate·mealTiers)만 넘긴다.
-
-/** 그 도시 식사 예산 아래·위 경계. */
-export type CityMealTiers = { lo: number; hi: number };
-/** 식사 예산을 정하려면 최소 이만큼 표본이 있어야 한다. */
-export const MEAL_TIERS_MIN_SAMPLE = 5;
-
-/** 창고에 이만큼 쌓이면 그 도시는 DB 만으로 여정을 만든다. */
-export const READY_THRESHOLD = 200;
-
-// ── 파이프라인 (라우트와 자가진단이 함께 쓰는 1벌) ───────────────────────────
-
-/** runPipelineDbOnly 순서 그대로 = /api/routes/generate 본문에서 떼어낸 1벌(문장·순서 무변경).
- *  worker/routes-debug.ts 자가진단이 같은 1벌을 부른다(§16 = 재발명 0). */
-export async function runPipelineDbOnlyWorker(
+/** runPipelineDbOnly 순서 그대로 = /api/routes/generate 본문에서 떼어낸 1벌(문장·순서 무변경). */
+async function runPipelineDbOnlyWorker(
   db: Db,
   enrichedFormData: Record<string, any>,
   cityCheck: CityReadyResult,
@@ -222,9 +82,6 @@ export async function runPipelineDbOnlyWorker(
   };
   return itinerary;
 }
-
-/** 자가진단 화면이 쓰는 재수출. */
-export { isCityReady };
 
 // ── 라우트 ──────────────────────────────────────────────────────────────────
 
@@ -299,7 +156,7 @@ export function registerItineraryGenerateDbRoutes(
         });
       }
 
-      // ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = 베스트 여정 = 행수(ready 200)와 무관하게 **항상 DB-only** = 도시가 있으면 베스트 분기, 없으면 유료 MIX 로 흘리지 않고 막는다(핀 분기와 동형).
+      // ⚠️ 수정금지(승인필요) 2026-09-29 사장님 결정 = 베스트 여정 = DB 올리 전환 기준과 무관하게 **항상 DB-only** = 도시가 있으면 베스트 분기, 없으면 유료 MIX 로 흘리지 않고 막는다(핀 분기와 동형) (정본 §)
       const isBest = !!enrichedFormData.bestOnly;
       if (isBest && !cityCheck.cityId) {
         return res.status(500).json({
@@ -308,7 +165,7 @@ export function registerItineraryGenerateDbRoutes(
         });
       }
 
-      // 창고 200행 미만(핀·베스트 아님) = MIX 엔진.
+      // DB 올리 전환 기준 미달(핀·베스트 아님) = MIX 엔진.
       const isMix = !isPinnedDbOnly && !isBest && !cityCheck.ready;
 
       // ── §9 크레딧 ──

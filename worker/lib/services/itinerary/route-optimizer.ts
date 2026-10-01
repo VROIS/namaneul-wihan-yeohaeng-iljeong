@@ -1,5 +1,5 @@
 import { haversineKm } from "../agents/transit-haversine";
-import type { PlaceResult } from "./types";
+import type { PlaceResult } from "../agents/types";
 
 // ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = 동선 = "출발지 + N waypoint + 도착지"
 

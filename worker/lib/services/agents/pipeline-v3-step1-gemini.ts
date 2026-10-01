@@ -1,13 +1,6 @@
 import type { TripFormData, DaySlotConfig, VibeWeight } from "./types";
-import { MEAL_BUDGET } from "./types"; // SEED_CATEGORIES 삭제 §19 = 미사용(호출 0)
-import { cityMealTiers, tierRange } from "../shared/meal-budget-tiers";
 import { computeCatSlots } from "./ag2-gemini-recommender";
-import {
-  getAI,
-  normalizeTravelStyle,
-  type GeminiPlace,
-  type GeminiDay,
-} from "./pipeline-v3-types";
+import { getAI, type GeminiDay } from "./pipeline-v3-types";
 import {
   getLanguageInstruction,
   LANGS,
@@ -26,14 +19,6 @@ export async function step1_geminiItinerary(
   cityId?: number | null,
 ): Promise<GeminiDay[]> {
   const _t0 = Date.now();
-  // ⚠️ 수정금지(승인필요) 2026-08-31 사장님 확정 = 식사 예산 = 그 도시 분포 경계선(30/50/20) = DB-only 와 동일 (정본 B4)
-  const style = normalizeTravelStyle(formData.travelStyle);
-  const fixed = MEAL_BUDGET[style];
-  const tiers = cityId ? await cityMealTiers(cityId) : null;
-  const band = tiers
-    ? tierRange(style, tiers)
-    : { min: fixed.min, cap: fixed.max };
-  const capText = Number.isFinite(band.cap) ? `€${band.cap}` : "상한 없음";
 
   let ageDesc = "";
   if (formData.birthDate) {
@@ -86,7 +71,7 @@ export async function step1_geminiItinerary(
           ? "가을 시즌"
           : "겨울 시즌 (비수기, 일부 시설 단축운영)";
 
-  // ⚠️ 수정금지(승인필요) 2026-07-11 = 메인앱 표준 prompt 사장님 SSOT = 슬림본(축약키 12필드 + 꾸밈글 18자 상한, A/B 실호출 실증 = 26% 단축·결손 0)
+  // ⚠️ 수정금지(승인필요) 2026-09-30 사장님 결정 = 지시문 = 코드 하드코딩 + 종합 카탈로그 #02 두 벌, 글자 동일(워커에서 불러 쓰지 않음) (정본 §)
   const koreanTravelerStyle = `${companionDesc} ${headcount}명 / vibe=${(formData.vibes || []).join("+")} / 페이스=${formData.travelPace || "Normal"} / 스타일=${formData.travelStyle || "Reasonable"}${ageDesc ? ` / 나이=${ageDesc}` : ""}`;
   // ⚠️ 2026-07-17 사장님 SSOT = 출발점 = 동적(숙소 입력 시 그 좌표, 미입력 시 도시 중심부). 도심 고정 폐기 §19.
   const startPoint =
@@ -130,11 +115,12 @@ ${categoryMatrix}
 - DAILY MEAL RULE (= AG1 has already assigned these slots — DO NOT modify count or position):
     * Each day MUST contain exactly 1 lunch (t="lunch") somewhere in the middle of the day.
     * The FINAL slot of each day MUST be dinner (t="dinner").
+- 식당(lunch/dinner) = 직전 방문지(바로 앞 슬롯의 장소)에서 걸어갈 수 있는 곳(약 1km·15분 안)
 - 3 일+ 일정 시 = Day 2+ 한 날 = outskirt (= 출발점에서 10-100km 외곽) day-trip 1-2 곳 포함 가능 (= 한국 여행객이 자주 찾는 외곽 명소/아울렛)
 
 [가격 원칙]
 - p = ${nowYear}년 실제 입장료 (1인, EUR). 무료=0
-- 식사 1인 EUR = €${band.min} ~ ${capText} (= 이 도시 실제 식당 가격 분포에서 손님이 고른 등급 구간. 이 범위 안에서 고르되, 상한을 정답처럼 쓰지 말고 그 근처의 좋은 곳을 골라라)
+- 식사 1인 EUR = CITY 물가 기준 하·중·상 중 손님 스타일 등급(Economic = 하 / Reasonable = 중 / Premium·Luxury = 상)
 - 활동(activity) = 1인 입장료 EUR / 식당(lunch/dinner) = 1인당 평균 EUR. 확실하지 않으면 0
 - ⚠️ CURRENCY = **ALWAYS EUR**, never local currency. 비유로권 도시(도쿄·방콕·서울 등)도 **반드시 EUR 로 환산**해서 답하라.
   (예: 서울 식당 1인 20,000원 → p:13 / 도쿄 1인 3,000엔 → p:18 / 방콕 1인 400바트 → p:11)

@@ -16,15 +16,12 @@ import {
   type GuidePriceResult,
   type TransitPriceResult,
 } from "../transport-pricing-service";
-import { getEurToKrwRate } from "../exchange-rate";
 import {
   sanitizePriceEur,
   resolvePrice,
-  normalizeTravelStyle,
   type GeminiPlace,
   type GeminiDay,
 } from "./pipeline-v3-types";
-import { getEnrichmentFunctions } from "./pipeline-v3-helpers";
 import { buildDayResult } from "./pipeline-v3-day-builder";
 
 export async function step2_enrichAndBuild(
@@ -131,27 +128,20 @@ export async function step2_enrichAndBuild(
     `[V3-Step2] 📍 교통 카테고리: ${isGuideCategory ? "A (드라이빙 가이드)" : "B (대중교통)"}`,
   );
 
-  const enrichFns = await getEnrichmentFunctions(); // = getRealityCheckForCity 만 사용
-  const [eurToKrw, realityCheck, transportPrice] = await Promise.all([
-    getEurToKrwRate("[V3]"),
-    enrichFns.getRealityCheckForCity(formData.destination),
-    calculateTransportPrice({
-      companionType: (formData.companionType || "Couple") as any,
-      companionCount,
-      mobilityStyle: (formData.mobilityStyle || "Moderate") as any,
-      travelStyle: (formData.travelStyle || "Reasonable") as any,
-      availableHours,
-      dayCount,
-      isRegionalTravel: false,
-    }).catch((err) => {
-      console.warn("[V3] 교통비 산정 실패, 기본값 사용:", err);
-      return null;
-    }),
-  ]);
+  const transportPrice = await calculateTransportPrice({
+    companionType: (formData.companionType || "Couple") as any,
+    companionCount,
+    mobilityStyle: (formData.mobilityStyle || "Moderate") as any,
+    travelStyle: (formData.travelStyle || "Reasonable") as any,
+    availableHours,
+    dayCount,
+    isRegionalTravel: false,
+  }).catch((err) => {
+    console.warn("[V3] 교통비 산정 실패, 기본값 사용:", err);
+    return null;
+  });
 
-  console.log(
-    `[V3-Step2] 환율 + 날씨 + 교통비 병렬 완료 (${Date.now() - _t0}ms)`,
-  );
+  console.log(`[V3-Step2] 교통비 완료 (${Date.now() - _t0}ms)`);
   if (transportPrice) {
     console.log(
       `[V3-Step2] 💰 교통비: 카테고리 ${transportPrice.category} | 1인/일 €${transportPrice.perPersonPerDay}`,
@@ -165,24 +155,9 @@ export async function step2_enrichAndBuild(
         : "";
       const seedData = preloaded.seedRawMap?.get(seedNameEn);
 
-      // ⚠️ 수정금지(승인필요) 2026-05-20 = price_eur 단일 SSOT = place_seed_raw.priceEur 만 (= ta enrichment 폐기)
+      // ⚠️ 수정금지(승인필요) 2026-09-29 사장님 결정 = price_eur = resolvePrice 1벌(제미니 > 창고 > 0) (정본 §)
       const geminiPrice = p.estimatedPriceEur ?? 0;
-      const isMealSlot =
-        (p as any).type === "lunch" || (p as any).type === "dinner";
-      const mealTypeForPrice: "lunch" | "dinner" | undefined =
-        (p as any).type === "lunch"
-          ? "lunch"
-          : (p as any).type === "dinner"
-            ? "dinner"
-            : undefined;
-      const styleForPrice = normalizeTravelStyle(formData.travelStyle);
-      const resolvedPrice = resolvePrice(
-        geminiPrice,
-        isMealSlot,
-        seedData?.priceEur ?? 0,
-        mealTypeForPrice,
-        styleForPrice,
-      );
+      const resolvedPrice = resolvePrice(geminiPrice, seedData?.priceEur ?? 0);
 
       const merged = {
         ...p,
@@ -236,24 +211,19 @@ export async function step2_enrichAndBuild(
       companionCount,
       dayCount,
       isGuideCategory,
-      eurToKrw,
       transportPrice,
       availableHours,
-      realityCheck,
     });
     totalTripCostEur += dailyPerPersonEur;
     days.push(dayResult);
   }
 
   const totalPerPersonEur = round2(totalTripCostEur);
-  const totalPerPersonKrw = Math.round(totalPerPersonEur * eurToKrw);
   const perPersonPerDay =
     dayCount > 0 ? round2(totalPerPersonEur / dayCount) : 0;
 
   console.log(`[V3-Step2] ✅ 완료 (${Date.now() - _t0}ms): ${days.length}일`);
-  console.log(
-    `[V3-Step2] 💰 1인 총 비용: €${totalPerPersonEur} / ₩${totalPerPersonKrw.toLocaleString()}`,
-  );
+  console.log(`[V3-Step2] 💰 1인 총 비용: €${totalPerPersonEur}`);
   console.log(`[V3-Step2] 💰 1인 1일 평균: €${perPersonPerDay}`);
 
   // ⚠️ 2026-07-08 사장님 SSOT = 개수보존 3자대조(발각 전용, 보정·삭제 없음) = Gemini 원본 곳수 = scheduleMap = FE days 총합.
@@ -305,9 +275,7 @@ export async function step2_enrichAndBuild(
           return {
             category: "guide" as const,
             perPersonPerDay: transportAvgPerDay, // 날짜별 요금 평균(대표값)
-            perPersonPerDayKrw: Math.round(transportAvgPerDay * eurToKrw),
             perPersonTotal: transportTotalEur, // 일별 합(정확)
-            perPersonTotalKrw: Math.round(transportTotalEur * eurToKrw),
             vehicleDescription: gp.vehicleDescription,
             availableHours: gp.availableHours,
             includes200km: gp.includes200km,
@@ -319,16 +287,11 @@ export async function step2_enrichAndBuild(
           return {
             category: "transit" as const,
             perPersonPerDay: transportAvgPerDay,
-            perPersonPerDayKrw: Math.round(transportAvgPerDay * eurToKrw),
             perPersonTotal: transportTotalEur,
-            perPersonTotalKrw: Math.round(transportTotalEur * eurToKrw),
             method: tp.method,
             details: tp.details,
             guideUpsell: {
               perPersonPerDay: tp.guideUpsell.perPersonPerDay,
-              perPersonPerDayKrw: Math.round(
-                tp.guideUpsell.perPersonPerDay * eurToKrw,
-              ),
               vehicleDescription: tp.guideUpsell.vehicleDescription,
               clickable: true,
             },
@@ -353,10 +316,7 @@ export async function step2_enrichAndBuild(
     mobilityStyle: formData.mobilityStyle,
     totalCost: {
       perPersonEur: totalPerPersonEur,
-      perPersonKrw: totalPerPersonKrw,
       perPersonPerDay: perPersonPerDay,
-      perPersonPerDayKrw: Math.round(perPersonPerDay * eurToKrw),
-      eurToKrwRate: eurToKrw,
       currency: "EUR",
     },
     budget: {
@@ -364,7 +324,6 @@ export async function step2_enrichAndBuild(
       dailyBreakdowns: days.map((day: any) => ({
         day: day.day,
         perPersonEur: day.dailyCost?.perPersonEur || 0,
-        perPersonKrw: day.dailyCost?.perPersonKrw || 0,
         breakdown: day.dailyCost?.breakdown || {},
       })),
       totals: {
@@ -387,7 +346,6 @@ export async function step2_enrichAndBuild(
       },
     },
     transportSummary,
-    realityCheck,
     metadata: {
       travelStyle: formData.travelStyle,
       travelPace,

@@ -12,26 +12,20 @@ import { cleanupDeletedAccounts } from "./lib/services/account-cleanup";
 const KAKAO_JWKS_CRON = "0 3 * * *";
 const ACCOUNT_CLEANUP_CRON = "30 4 * * *";
 
-// reportKey = 시드발굴 v3 ③ 산출표(R2 키) = 있으면 먼저 ④(신규 입력)를 돌리고 이어서 후처리
 export type GmapsPostMessage = {
   cityId: number;
   reason: string;
-  reportKey?: string;
 };
 
 export async function enqueueGmapsPost(
   cityId: number,
   reason: string,
-  reportKey?: string,
 ): Promise<void> {
   await (env as any).GMAPS_POST_QUEUE.send({
     cityId,
     reason,
-    ...(reportKey ? { reportKey } : {}),
   } satisfies GmapsPostMessage);
-  console.log(
-    `[gmaps-post] 큐 등록 city ${cityId} (${reason}${reportKey ? ", 산출표 " + reportKey : ""})`,
-  );
+  console.log(`[gmaps-post] 큐 등록 city ${cityId} (${reason})`);
 }
 
 // 워커 진입점(src.ts)은 700줄 초과 파일이라 건드리지 않는다 = HTTP 핸들러에 큐·심장박동을 덧붙여 돌려준다
@@ -84,7 +78,7 @@ export async function consumeGmapsPost(
   batch: MessageBatch<GmapsPostMessage>,
 ): Promise<void> {
   for (const msg of batch.messages) {
-    const { cityId, reason, reportKey } = msg.body || ({} as GmapsPostMessage);
+    const { cityId, reason } = msg.body || ({} as GmapsPostMessage);
     if (!cityId) {
       msg.ack();
       continue;
@@ -98,32 +92,6 @@ export async function consumeGmapsPost(
         try {
           const browser = await launch((env as any).BROWSER);
           try {
-            // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = ④(산출표 입력)는 **첫 시도에만**. 재시도면 건너뛰고 후처리만 돈다.
-            //   ④ 가 이미 행을 넣은 뒤 후처리에서 실패하면, 재시도 때 그 행들 때문에 "B1 산출표가 낡음"으로 매번 죽어
-            //   남은 후처리가 통째로 dead-letter 로 버려진다(판단검증 적발). 후처리는 몇 번을 돌려도 같은 결과다.
-            if (reportKey && msg.attempts <= 1) {
-              const { getFromR2 } = await import(
-                "./lib/services/shared/r2-client"
-              );
-              const { insertSeedEntries } = await import(
-                "./lib/services/fill/gmaps-post"
-              );
-              const buf = await getFromR2(reportKey);
-              if (!buf) throw new Error("산출표 없음: " + reportKey);
-              await insertSeedEntries({
-                client,
-                browser,
-                cityId,
-                report: JSON.parse(buf.toString("utf8")),
-                reportKey,
-                upsertPlace,
-                log: (l) => console.log("[gmaps-post] " + l),
-              });
-            } else if (reportKey) {
-              console.log(
-                `[gmaps-post] 재시도(${msg.attempts}회) = ④ 산출표 입력은 이미 끝났으므로 건너뛰고 후처리만`,
-              );
-            }
             await runGmapsPost({
               client,
               browser,

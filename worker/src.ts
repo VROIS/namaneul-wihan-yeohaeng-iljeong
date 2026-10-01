@@ -2,7 +2,7 @@
 import express from "express";
 import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
-import { desc, eq, sql as dsql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import * as schema from "../shared/schema";
 import {
   CREDIT_COSTS,
@@ -63,6 +63,7 @@ import { registerAppErrorRoutes } from "./routes-app-errors";
 import { registerAdminKeyTestRoutes } from "./routes-admin-keytest";
 import { registerRestRoutes } from "./routes-rest";
 import { registerItineraryGenerateDbRoutes } from "./routes-itinerary-generate-db";
+import { readyCities } from "./best-itinerary/city-resolver";
 import { registerDebugRoutes, withGmapsQueue } from "./routes-debug";
 // 근거: containers/get-started = 컨테이너를 관리하는 Durable Object 클래스는
 //   **엔트리 파일에서 export** 되어야 런타임이 찾는다(안 하면 기동 자체가 실패).
@@ -175,26 +176,11 @@ app.get("/api/cities", async (_req, res) => {
 });
 
 // GET /api/cities/ready
-const READY_THRESHOLD = 200;
+// ⚠️ 수정금지(승인필요) 2026-09-29 사장님 결정 = 도시 카드 = DB 올리 전환 기준 1벌(city-resolver readyCities) (정본 §)
 app.get("/api/cities/ready", async (_req, res) => {
   const { db, close } = openDb();
   try {
-    const rows = await db
-      .select({
-        id: schema.cities.id,
-        nameKo: schema.cities.name,
-        nameEn: schema.cities.nameEn,
-        rows: dsql<number>`COUNT(*)::int`,
-      })
-      .from(schema.cities)
-      .innerJoin(
-        schema.placeSeedRaw,
-        eq(schema.placeSeedRaw.cityId, schema.cities.id),
-      )
-      .groupBy(schema.cities.id, schema.cities.name, schema.cities.nameEn)
-      .having(dsql`COUNT(*) >= ${READY_THRESHOLD}`)
-      .orderBy(desc(dsql`COUNT(*)`));
-    res.json(rows);
+    res.json(await readyCities(db));
   } catch (error) {
     console.error("[cities/ready] 완비도시 조회 실패:", error);
     res.status(500).json({ error: "failed_to_fetch_ready_cities" });

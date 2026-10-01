@@ -1,28 +1,34 @@
-// ⚠️ 수정금지(승인필요) 2026-08-31 사장님 확정 = 식당 예산 저·중·고 = 그 도시 분포 경계선(30/50/20) (정본 B4)
+// ⚠️ 수정금지(승인필요) 2026-09-29 사장님 결정 = 식당 상·중·하 = 그 도시 가격 분포 1벌(= 물가지수, 아래 30%·가운데 50%·위 20% 경계) · 표본 = CID 있고 가격 있는 식당 · 모든 값 유로 · 고정 유로 없음(표본이 모자라면 가격으로 자르지 않는다) · DB 올리 전용(DB 연결은 부르는 쪽이 넘긴다) (정본 B4)
 
-import { sql } from "drizzle-orm";
-import { db } from "../../db";
+import { and, eq, gt, like, sql } from "drizzle-orm";
+import { placeSeedRaw } from "@shared/schema";
 import type { TravelStyle } from "../agents/types";
+import type { SelectDb } from "./pool-radius";
 
-/** 저예산 = €1~lo · 중급 = lo~hi · 고급 = hi 초과(상한 없음) */
+/** 하 = €1~lo · 중 = lo~hi · 상 = hi 초과(상한 없음) */
 export type CityMealTiers = { lo: number; hi: number };
 
-const MIN_SAMPLE = 5; // 이보다 적으면 분포 자체가 안 나옴 = 고정값으로 되돌림
+const MIN_SAMPLE = 5; // 이보다 적으면 분포 자체가 안 나옴 = 가격으로 자르지 않음
 
-/** 그 도시 손님상 가능 식당 가격 분포로 경계선 2개를 구한다. 표본 부족이면 null. */
+/** 그 도시 식당 가격 분포로 경계선 2개를 구한다. 표본 부족이면 null. */
 export async function cityMealTiers(
+  db: SelectDb,
   cityId: number,
 ): Promise<CityMealTiers | null> {
-  if (!db) return null;
-  const r = (await db.execute(sql`
-    SELECT price_eur::float AS p FROM place_seed_raw
-    WHERE city_id = ${cityId} AND seed_category = 'restaurant' AND status = 'active'
-      AND google_review_count > 0 AND google_place_id IS NOT NULL
-      AND price_eur IS NOT NULL AND price_eur > 0
-      AND image_url IS NOT NULL AND image_url <> ''
-    ORDER BY price_eur
-  `)) as any;
-  const ps: number[] = (r.rows ?? r).map((x: any) => Number(x.p));
+  const rows = await db
+    .select({ p: sql<number>`${placeSeedRaw.priceEur}::float` })
+    .from(placeSeedRaw)
+    .where(
+      and(
+        eq(placeSeedRaw.cityId, cityId),
+        eq(placeSeedRaw.seedCategory, "restaurant"),
+        eq(placeSeedRaw.status, "active"),
+        like(placeSeedRaw.googleMapsUri, "%cid=%"),
+        gt(placeSeedRaw.priceEur, 0),
+      ),
+    )
+    .orderBy(placeSeedRaw.priceEur);
+  const ps: number[] = rows.map((x: { p: number }) => Number(x.p));
   if (ps.length < MIN_SAMPLE) return null;
   const at = (f: number) =>
     ps[Math.min(ps.length - 1, Math.floor(ps.length * f))];
@@ -36,5 +42,17 @@ export function tierRange(
 ): { min: number; cap: number } {
   if (style === "Economic") return { min: 1, cap: t.lo };
   if (style === "Reasonable") return { min: t.lo, cap: t.hi };
-  return { min: t.hi, cap: Number.POSITIVE_INFINITY }; // Premium·Luxury = 고급 1벌
+  return { min: t.hi, cap: Number.POSITIVE_INFINITY }; // Premium·Luxury = 상 1벌
+}
+
+/** 가격 모르는 식사 = 그 등급 구간의 글자("€12 이내" / "€20 이상")와 추정값(구간 가운데, 상은 하한) */
+export function tierLabel(style: TravelStyle, t: CityMealTiers): string {
+  const r = tierRange(style, t);
+  return Number.isFinite(r.cap)
+    ? `€${Math.round(r.cap)} 이내`
+    : `€${Math.round(r.min)} 이상`;
+}
+export function tierEstimate(style: TravelStyle, t: CityMealTiers): number {
+  const r = tierRange(style, t);
+  return Math.round(Number.isFinite(r.cap) ? (r.min + r.cap) / 2 : r.min);
 }

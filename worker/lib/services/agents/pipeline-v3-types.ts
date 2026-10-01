@@ -1,6 +1,5 @@
 import { GoogleGenAI } from "@google/genai";
 import type { TravelStyle } from "./types";
-import { MEAL_BUDGET } from "./types";
 
 export function sanitizePriceEur(raw: any): number {
   if (raw == null) return 0;
@@ -11,20 +10,13 @@ export function sanitizePriceEur(raw: any): number {
   return Math.round(n * 100) / 100;
 }
 
-/** ⚠️ 수정금지(승인필요) = price_eur 단일 SSOT = 최신최우선(Gemini > seed_raw > 매트릭스폴백) §14 */
+/** ⚠️ 수정금지(승인필요) 2026-09-29 사장님 결정 = price_eur = 제미니 > 창고 > 0 (정본 §) */
 export function resolvePrice(
   geminiPrice: number,
-  isMeal: boolean = false,
   seedPriceEur: number = 0,
-  mealType?: "lunch" | "dinner",
-  travelStyle: TravelStyle = "Reasonable",
 ): number {
-  const resolved = geminiPrice > 0 ? geminiPrice : seedPriceEur;
-  if (resolved > 0) return resolved;
-  if (isMeal && mealType) {
-    return MEAL_BUDGET[travelStyle]?.[mealType] ?? 0;
-  }
-  return 0;
+  if (geminiPrice > 0) return geminiPrice;
+  return seedPriceEur > 0 ? seedPriceEur : 0;
 }
 
 export function normalizeTravelStyle(style?: string): TravelStyle {

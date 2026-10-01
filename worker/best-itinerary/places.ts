@@ -1,9 +1,7 @@
-// ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = 사진·뼈대·창고에서 고르기 = 원본 place-image.ts · ag1-skeleton-builder.ts · ag2-gemini-recommender.ts
-//   1,777줄 한 덩어리에서 그대로 잘라낸 것(§0) = 계산·규칙 한 글자도 안 바꿈.
+// ⚠️ 수정금지(승인필요) 2026-09-29 사장님 결정 = 사진·뼈대·창고에서 고르기 1벌(워커 DB-only·베스트) = 사진 place-image.ts · 볼거리 슬롯 나누기 ag2 computeCatSlots · 식당 가격 = 그 도시 분포(shared/meal-budget-tiers)
 
-import type { Express, Request, Response } from "express";
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
-import { and, between, eq, inArray } from "drizzle-orm";
+import { and, between, eq, gte, inArray } from "drizzle-orm";
 import * as schema from "../../shared/schema";
 
 import {
@@ -11,10 +9,13 @@ import {
   poolWhereSql,
   recalcCrossCityZone,
   servingGateSql,
-} from "../routes-itinerary-generate-db";
+} from "../lib/services/shared/pool-radius";
+import {
+  cityMealTiers,
+  tierRange,
+} from "../lib/services/shared/meal-budget-tiers";
 
 import {
-  MEAL_BUDGET,
   type AG1Output,
   type PlaceResult,
   type SeedCategory,
@@ -24,10 +25,8 @@ import {
   loadImagePidMap,
   pickPlaceImage,
 } from "../lib/services/shared/place-image";
-import {
-  VIBE_PRIMARY_CATEGORY,
-  SIGHT_CATEGORIES,
-} from "../../shared/vibe-category";
+import { computeCatSlots } from "../lib/services/agents/ag2-gemini-recommender";
+import { SIGHT_CATEGORIES } from "../../shared/vibe-category";
 
 const { cities, placeSeedRaw } = schema;
 
@@ -37,49 +36,7 @@ type Db = PostgresJsDatabase<typeof schema>;
 
 // ── AG1 뼈대 ───────────
 
-// ── AG2 = 창고에서 고르기 (ag2-gemini-recommender.ts fetchFromPlaceSeedRaw) ──
-
-/** computeCatSlots — 순수. */
-export function computeCatSlots(
-  vibeWeights: readonly { vibe: string; weight: number }[],
-  totalSlots: number,
-  dayCount: number,
-): Record<string, number> {
-  const catSlots: Record<string, number> = {};
-  for (const vw of vibeWeights) {
-    const primary = VIBE_PRIMARY_CATEGORY[vw.vibe] || "attraction";
-    catSlots[primary] = (catSlots[primary] || 0) + vw.weight * totalSlots;
-  }
-  const restaurantCap = dayCount * 2;
-  if (!catSlots.restaurant || catSlots.restaurant < dayCount) {
-    catSlots.restaurant = Math.min(restaurantCap, Math.ceil(totalSlots * 0.4));
-  }
-  if (catSlots.restaurant > restaurantCap) {
-    const overflow = catSlots.restaurant - restaurantCap;
-    catSlots.restaurant = restaurantCap;
-    const nr = Object.keys(catSlots).filter((k) => k !== "restaurant");
-    const nrTotal = nr.reduce((s, k) => s + (catSlots[k] || 0), 0) || 1;
-    for (const k of nr)
-      catSlots[k] = (catSlots[k] || 0) + overflow * (catSlots[k] / nrTotal);
-  }
-  const nonRest = Object.keys(catSlots).filter((k) => k !== "restaurant");
-  const nonRestSum = nonRest.reduce((s, k) => s + (catSlots[k] || 0), 0);
-  const targetNonRest = totalSlots - catSlots.restaurant;
-  if (nonRestSum > 0) {
-    for (const k of nonRest)
-      catSlots[k] = Math.round(
-        ((catSlots[k] || 0) / nonRestSum) * targetNonRest,
-      );
-  }
-  for (const k of Object.keys(catSlots))
-    catSlots[k] = Math.max(1, Math.round(catSlots[k]));
-  const sum = Object.values(catSlots).reduce((s, n) => s + n, 0);
-  if (sum !== totalSlots) {
-    const top = Object.entries(catSlots).sort((a, b) => b[1] - a[1])[0][0];
-    catSlots[top] += totalSlots - sum;
-  }
-  return catSlots;
-}
+// ── AG2 = 창고에서 고르기 ──
 
 /** ag2-gemini-recommender.ts SELECT_COLS — 칸 목록 그대로. */
 export const AG2_SELECT_COLS = {
@@ -133,7 +90,11 @@ export async function fetchFromPlaceSeedRaw(
   const totalSlots = requiredPlaceCount;
   const dayCount = skeleton.dayCount || skeleton.daySlotsConfig?.length || 3;
   const catSlots = computeCatSlots(vibeWeights, totalSlots, dayCount);
-  const budgetTier = MEAL_BUDGET[normalizeTravelStyle(formData.travelStyle)];
+  // ⚠️ 수정금지(승인필요) 2026-09-29 사장님 결정 = 식당 후보 가격 = 그 도시 분포 구간 1벌(고정 유로 폐기 §19), 분포가 없으면 가격으로 자르지 않는다 (정본 B4)
+  const tiers = await cityMealTiers(db, cid);
+  const band = tiers
+    ? tierRange(normalizeTravelStyle(formData.travelStyle), tiers)
+    : null;
 
   // selectByDayZone — 정렬·컷 규칙 그대로.
   const selectByDayZone = async (cat: string, slots: number) => {
@@ -143,9 +104,11 @@ export async function fetchFromPlaceSeedRaw(
       eq(placeSeedRaw.seedCategory, cat),
       servingGateSql(),
     ];
-    if (isRestaurant)
+    if (isRestaurant && band)
       baseWhere.push(
-        between(placeSeedRaw.priceEur, budgetTier.min, budgetTier.max),
+        Number.isFinite(band.cap)
+          ? between(placeSeedRaw.priceEur, band.min, band.cap)
+          : gte(placeSeedRaw.priceEur, band.min),
       );
     const rows: any[] = await db
       .select(AG2_SELECT_COLS)

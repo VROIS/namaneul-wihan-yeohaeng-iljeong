@@ -17,10 +17,6 @@ export interface RouteInputJson {
     vibes: { vibe: string; weight: number; priority: number }[];
     transport_mode: "public_transit" | "private_driver_guide";
   };
-  meal_budget_eur_per_person: {
-    daily_total: number; // = MEAL_BUDGET[travelStyle].dailyTotal (= Economic 40 / Reasonable 100 / Premium 300 / Luxury 300+)
-    label: string; // = MEAL_BUDGET[travelStyle].label (= "€100/일")
-  };
   /** ⚠️ 수정금지(승인필요) 2026-05-28 = 사용자 SSOT 3 번 명시 = 4 필수만 (= 5 키 = PLACE_INPUT_KEYS) */
   places: {
     id: string; // = "db-${PSR.id}" = echo 매칭 키

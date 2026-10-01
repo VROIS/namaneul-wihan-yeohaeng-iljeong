@@ -1,8 +1,7 @@
 // ⚠️ 수정금지(승인필요) 2026-05-26 = 사용자 SSOT = DB-only 전용 AG4 = scene 직접 사용
 
 import { db } from "../../db";
-import { eq, sql } from "drizzle-orm";
-import { getEurToKrwRate } from "../exchange-rate";
+import { sql } from "drizzle-orm";
 import type {
   PlaceResult,
   TripFormData,
@@ -10,7 +9,6 @@ import type {
   TravelPace,
   AG1Output,
 } from "./types";
-import { MEAL_BUDGET } from "./types";
 // ⚠️ 수정금지(승인필요) 2026-08-18 사장님 승인(비판검증 확정결함 수정) = ag2 와 동일한 정규화 필수(§16 1벌).
 import { normalizeTravelStyle, sanitizePriceEur } from "./pipeline-v3-types";
 // best_rank 언어코드 정렬 1벌(§16, 2026-08-27 사장님 확정). ag4 는 요청 언어를 모름 = 언어 무관 정렬.
@@ -24,7 +22,11 @@ import {
 // ⚠️ 수정금지(승인필요) 2026-06-06 = DB-only 동선 = 로컬 NN+Haversine (= Stage C) 단일 SSOT
 import { buildRouteLocal } from "../route/route-local";
 import { cityHourlyRate } from "../shared/slot-duration";
-import { cityMealTiers } from "../shared/meal-budget-tiers";
+import {
+  cityMealTiers,
+  tierEstimate,
+  tierLabel,
+} from "../shared/meal-budget-tiers";
 import { backfillFromRoute } from "../route/route-backfill";
 // ⚠️ 2026-07-06 사장님 SSOT = 가이드 하루요금 = guideCostForDay 공용 SSOT(옛 로컬 guideCostPerPersonPerDay 승격, 3경로 공유 §16).
 import {
@@ -73,8 +75,6 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
     inputPlaces,
     bestMode,
   } = input;
-
-  const eurToKrw = await getEurToKrwRate("[AG4-DB]");
 
   // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 식당풀 = 넘겨받은 것이 있으면 그것만 쓰고, 없으면 아래에서 스스로 뽑는다.
   let restaurantPool: PlaceResult[] = input.restaurantPool ?? [];
@@ -133,10 +133,9 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
     );
   }
 
-  // ⚠️ 수정금지(승인필요) 2026-08-31 사장님 결정 = 도시 시간당요금 런타임 산출(정본 B4)
-  const hourlyRate = cityId ? await cityHourlyRate(cityId) : null;
-  // ⚠️ 수정금지(승인필요) 2026-08-31 사장님 확정 = 도시별 예산 경계선 런타임 산출 (정본 B4)
-  const mealTiers = cityId ? await cityMealTiers(cityId) : null;
+  // ⚠️ 수정금지(승인필요) 2026-09-29 사장님 결정 = 도시 시간당요금·식당 분포 = 공용 1벌 런타임 산출 (정본 B4)
+  const hourlyRate = cityId ? await cityHourlyRate(db!, cityId) : null;
+  const mealTiers = cityId ? await cityMealTiers(db!, cityId) : null;
   const routeResult = buildRouteLocal(
     skeleton,
     inputPlaces,
@@ -170,7 +169,7 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
   );
   const slotDuration = skeleton.paceConfig.slotDurationMinutes;
   const mealDuration = skeleton.paceConfig.mealDurationMinutes; // 식사 슬롯 종료시각용(활동보다 짧음, 2026-07-21 §16 route-local 정합)
-  const mealBudget = MEAL_BUDGET[normalizeTravelStyle(formData.travelStyle)];
+  const style = normalizeTravelStyle(formData.travelStyle);
 
   const globalPlaceIdCounts = new Map<string, number>();
   for (const rd of routeResponse.days || []) {
@@ -231,19 +230,20 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
 
       if (isMeal && scene.price_eur == null) {
         console.warn(
-          `[AG4-DB] ⚠️ meal price 매트릭스 폴백 발생 = ${scene.name_local || scene.name_en || scene.place_id} (= PSR price_eur NULL = 식당풀 게이트 누수 점검)`,
+          `[AG4-DB] ⚠️ 가격 없는 식사 = 도시 분포 추정 = ${scene.name_local || scene.name_en || scene.place_id} (= PSR price_eur NULL = 식당풀 게이트 누수 점검)`,
         );
       }
+      // ⚠️ 수정금지(승인필요) 2026-09-29 사장님 결정 = 가격 모르는 식사 = 그 도시 분포 구간의 추정값·글자, 분포가 없으면 비움 (정본 B4)
       const mealPrice = isMeal
         ? (scene.price_eur ??
-          (mealType === "lunch" ? mealBudget.lunch : mealBudget.dinner))
+          (mealTiers ? tierEstimate(style, mealTiers) : undefined))
         : undefined;
       const mealPriceLabel = isMeal
         ? scene.price_eur
           ? `€${scene.price_eur}`
-          : mealType === "lunch"
-            ? mealBudget.lunchLabel
-            : mealBudget.dinnerLabel
+          : mealTiers
+            ? tierLabel(style, mealTiers)
+            : undefined
         : undefined;
 
       const displayName = scene.name_en || scene.name_local;
@@ -332,8 +332,6 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
       100;
     const dailyGroupEur =
       Math.round(dailyPerPersonEur * companionCount * 100) / 100;
-    const dailyPerPersonKrw = Math.round(dailyPerPersonEur * eurToKrw);
-    const dailyGroupKrw = Math.round(dailyGroupEur * eurToKrw);
     totalPerPersonEur += dailyPerPersonEur;
 
     days.push({
@@ -361,11 +359,8 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
         entranceEur: entranceFeesEur,
         transportEur: transportCostEur,
         totalEur: dailyPerPersonEur,
-        totalKrw: dailyGroupKrw,
         perPersonEur: dailyPerPersonEur,
-        perPersonKrw: dailyPerPersonKrw,
         groupEur: dailyGroupEur,
-        groupKrw: dailyGroupKrw,
       },
     });
   }
@@ -429,18 +424,14 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
 
   const totalGroupEur =
     Math.round(totalPerPersonEur * companionCount * 100) / 100;
-  const totalPerPersonKrw = Math.round(totalPerPersonEur * eurToKrw);
-  const totalGroupKrw = Math.round(totalGroupEur * eurToKrw);
   const totalPlaces = days.reduce((s, d) => s + d.places.length, 0);
 
   console.log(
     `[AG4-DB] ✅ 실시간 완성 (${Date.now() - _t0}ms): ${days.length}일, ${totalPlaces}곳 = scene 직접`,
   );
+  console.log(`[AG4-DB] 💰 인당: €${totalPerPersonEur.toFixed(2)}`);
   console.log(
-    `[AG4-DB] 💰 인당: €${totalPerPersonEur.toFixed(2)} / ₩${totalPerPersonKrw.toLocaleString()}`,
-  );
-  console.log(
-    `[AG4-DB] 💰 그룹 ${companionCount}인: €${totalGroupEur.toFixed(2)} / ₩${totalGroupKrw.toLocaleString()}`,
+    `[AG4-DB] 💰 그룹 ${companionCount}인: €${totalGroupEur.toFixed(2)}`,
   );
   console.log(
     `[AG4-DB] 🛣️ route Gemini (${routeResult.elapsedMs}ms): ${routeResponse.days?.length || 0}일 동선 = scene 직접 사용`,
@@ -463,10 +454,7 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
     mobilityStyle: formData.mobilityStyle,
     totalCost: {
       perPersonEur: totalPerPersonEur,
-      perPersonKrw: totalPerPersonKrw,
       groupEur: totalGroupEur,
-      groupKrw: totalGroupKrw,
-      eurToKrwRate: eurToKrw,
       currency: "EUR",
     },
     metadata: {

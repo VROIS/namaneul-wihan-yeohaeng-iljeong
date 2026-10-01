@@ -1,14 +1,34 @@
 // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 원본 3단계(영↔한 매핑표·역매핑·DB 자동보강)까지 그대로 복붙 = 5단계(제미니 신규도시 발급)만 뺌 (정본 §)
 
 import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
-import { eq, ilike, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, sql } from "drizzle-orm";
 import * as schema from "../../shared/schema";
 
-import { READY_THRESHOLD } from "../routes-itinerary-generate-db";
+import { readySql, servingGateSql } from "../lib/services/shared/pool-radius";
 
 const { cities, placeSeedRaw } = schema;
 
 type Db = PostgresJsDatabase<typeof schema>;
+
+// ⚠️ 수정금지(승인필요) 2026-09-29 사장님 결정 = 분기 판정·도시 카드 = pool-radius 전환 기준 1벌 (정본 §)
+/** 도시 카드 = 전환 기준을 넘은 도시(손님상 많은 순). */
+export function readyCities(db: Db) {
+  return db
+    .select({
+      id: cities.id,
+      nameKo: cities.name,
+      nameEn: cities.nameEn,
+      rows: sql<number>`COUNT(*)::int`,
+    })
+    .from(cities)
+    .innerJoin(
+      placeSeedRaw,
+      and(eq(placeSeedRaw.cityId, cities.id), servingGateSql()),
+    )
+    .groupBy(cities.id, cities.name, cities.nameEn)
+    .having(readySql())
+    .orderBy(desc(sql`COUNT(*)`));
+}
 
 const CITY_NAME_MAP: Record<string, string> = {
   paris: "파리",
@@ -243,7 +263,7 @@ export async function findCityInDb(
           console.log(
             `[CityResolver] 🔄 DB 자동 보강: ${city.name} → nameEn="${enLocal.nameEn}"`,
           );
-        } catch (e) {}
+        } catch {}
 
         console.log(
           `[CityResolver] ✅ 매핑 매칭: "${input}" → ${koreanName} (ID: ${city.id})`,
@@ -357,12 +377,15 @@ export async function isCityReady(
     };
   }
   const countRows = await db
-    .select({ count: sql<number>`COUNT(*)::int` })
+    .select({
+      count: sql<number>`COUNT(*)::int`,
+      ready: sql<boolean>`${readySql()}`,
+    })
     .from(placeSeedRaw)
-    .where(eq(placeSeedRaw.cityId, city.cityId));
+    .where(and(eq(placeSeedRaw.cityId, city.cityId), servingGateSql()));
   const count = Number(countRows[0]?.count || 0);
   return {
-    ready: count >= READY_THRESHOLD,
+    ready: !!countRows[0]?.ready,
     cityId: city.cityId,
     cityName: city.name,
     count,

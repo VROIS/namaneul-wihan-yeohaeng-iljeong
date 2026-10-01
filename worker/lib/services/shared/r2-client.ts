@@ -82,6 +82,17 @@ export async function getFromR2(key: string): Promise<Buffer | null> {
   }
 }
 
+// ⚠️ 수정금지(승인필요) 2026-09-29 사장님 결정 = 사진 따라가기 = 옛 자리 파일을 새 자리에 복사(옛 자리는 행을 고친 뒤 부르는 쪽이 지운다) (정본 §)
+export async function copyR2Object(
+  fromKey: string,
+  toKey: string,
+  contentType: string,
+): Promise<string | null> {
+  const body = await getFromR2(fromKey);
+  if (!body) return null;
+  return (await uploadToR2(toKey, body, contentType)).publicUrl;
+}
+
 export async function deleteFromR2(key: string): Promise<void> {
   if (IS_WORKER) {
     await (await bucket()).delete(key);

@@ -5,47 +5,22 @@
 import { and, eq, sql } from "drizzle-orm";
 import type { TripFormData } from "./lib/services/agents/types";
 import { buildSkeleton } from "./lib/services/agents/ag1-skeleton-builder";
+import { type Db } from "./routes-itinerary-generate-db";
 import {
-  type Db,
   poolWhereSql,
-  servingGateSql,
   recalcCrossCityZone,
-  FREE_THRESHOLD_EUR,
-  PRICED_STAY_CATEGORIES,
-} from "./routes-itinerary-generate-db";
+  servingGateSql,
+} from "./lib/services/shared/pool-radius";
 import {
   cityHourlyRate,
-  finalizeDbOnlyItinerary,
-} from "./best-itinerary/finalize";
+  slotMinutesFor,
+} from "./lib/services/shared/slot-duration";
+import { finalizeDbOnlyItinerary } from "./best-itinerary/finalize";
 import { AG2_SELECT_COLS, dbRowToPlace } from "./best-itinerary/places";
 import { loadImagePidMap } from "./lib/services/shared/place-image";
 import type { CityReadyResult } from "./best-itinerary/city-resolver";
 import { placeSeedRaw } from "../shared/schema";
 import { bestRankLangCount } from "./lib/services/shared/best-rank";
-
-// ⚠️ 수정금지(승인필요) 2026-08-31 사장님 결정 = 입장료 기반 슬롯시간 단일 진입점 (정본 B4)
-const SLOT_STEP_MIN = 30;
-/** 장소 1곳 슬롯 소요분 = 유료는 입장료÷시간당요금(30분 반올림), 그 외는 밀도 기본값. */
-function slotMinutesFor(
-  priceEur: number | null | undefined,
-  paceSlotMinutes: number,
-  hourlyRate: number | null,
-  seedCategory?: string | null,
-): number {
-  if (
-    !hourlyRate ||
-    priceEur == null ||
-    !(priceEur > FREE_THRESHOLD_EUR) ||
-    !PRICED_STAY_CATEGORIES.has(seedCategory ?? "")
-  ) {
-    return paceSlotMinutes;
-  }
-  const raw = (priceEur / hourlyRate) * 60;
-  return Math.max(
-    SLOT_STEP_MIN,
-    Math.round(raw / SLOT_STEP_MIN) * SLOT_STEP_MIN,
-  );
-}
 
 /** "09:00" → 540 */
 function toMin(t: string): number {
@@ -157,7 +132,7 @@ export async function runPipelineBest(
     selectBest(db, cityId, cityCoords, false),
     selectBest(db, cityId, cityCoords, true),
   ]);
-  // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = pipeline-best.ts 와 같은 PID공유 폴백 목록(사진)
+  // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = PID공유 폴백 목록(사진)
   const imagePidMap = await loadImagePidMap([
     cityId,
     ...sightRows.map((r) => r.cityId),
