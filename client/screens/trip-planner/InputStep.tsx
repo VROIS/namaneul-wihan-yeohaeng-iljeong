@@ -90,9 +90,15 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
   // 도시 칩 = 그 도시를 목적지로 잡고 **항상** 카드를 띄운다(2026-08-02 사장님 지시 = 옛 "대표여정 없으면 안 띄움" 폐기 §19).
   const handleCityPress = async (city: ReadyCity) => {
     lastCityRef.current = city.id;
+    // ⚠️ 수정금지(승인필요) 2026-10-02 사장님 결정 = 가장 최근 선택이 최우선 = 도시 칩을 누르면 앞서 고른 숙소(좌표·이름·주소·장소 번호·나라 코드)를 지우고 도시 중심으로 (정본 §)
     setFormData((prev) => ({
       ...prev,
       destination: city.nameEn,
+      destinationCountryCode: undefined,
+      accommodationCoords: undefined,
+      accommodationName: undefined,
+      accommodationAddress: undefined,
+      accommodationPlaceId: undefined,
     }));
     try {
       const res = await apiRequest(
