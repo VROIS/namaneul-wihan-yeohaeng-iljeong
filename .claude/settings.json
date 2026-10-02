@@ -9,6 +9,35 @@
             "command": "node \"${CLAUDE_PROJECT_DIR}/scripts/guard-bash-danger.mjs\""
           }
         ]
+      },
+      {
+        "matcher": "Edit|Write|NotebookEdit|Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/scripts/guard-fillcity.mjs\" tool"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/scripts/guard-fillcity.mjs\" prompt"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/scripts/guard-fillcity.mjs\" stop"
+          }
+        ]
       }
     ]
   }

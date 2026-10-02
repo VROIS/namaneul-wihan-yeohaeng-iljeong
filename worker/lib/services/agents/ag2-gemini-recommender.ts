@@ -8,9 +8,9 @@ import { pickPlaceImage, loadImagePidMap } from "../shared/place-image";
 // ⚠️ 수정금지(승인필요) 2026-05-06 = 사용자 의도 = AG2 데이터 출처 = place_seed_raw 우선
 import { db } from "../../db";
 import { placeSeedRaw } from "@shared/schema";
-import { eq, and, between, gte, sql, inArray } from "drizzle-orm";
+import { eq, and, between, gte, inArray } from "drizzle-orm";
 import { cityMealTiers, tierRange } from "../shared/meal-budget-tiers";
-import { findCityUnified } from "../city-resolver";
+import { findHub, hubReadiness } from "../shared/city-hub";
 // ⚠️ 2026-07-17 사장님 확정 = 슬롯 풀 = (city_id=요청도시) ∪ (중심 100km) 합집합 = shared/pool-radius 단일 SSOT(§16)
 import {
   getPoolContext,
@@ -18,15 +18,15 @@ import {
   servingGateSql,
   distanceKmFromCoords,
   READY_MIN_SERVABLE,
-  readySql,
 } from "../shared/pool-radius";
 import { VIBE_PRIMARY_CATEGORY, SIGHT_CATEGORIES } from "@shared/vibe-category";
 
 // ⚠️ 수정금지(승인필요) 2026-09-29 사장님 결정 = 도시 입력 시점 분기 = 손님상 120곳 이상 + 베스트면 DB-only, 미달이면 MIX(기준 = pool-radius 1벌) (정본 §)
 export async function isCityReady(
   destination: string,
-  // ⚠️ 수정금지(승인필요) 2026-07-08 사장님 SSOT = 도시중심좌표(불변키) = ready 판정(DB-only vs MIX 라우팅)도 좌표 우선.
+  // ⚠️ 수정금지(승인필요) 2026-10-02 사장님 결정 = 출발점 좌표(없으면 이름)로 거점 폴더를 찾고 준비됨은 그 출발점 풀 기준 (정본 §)
   destinationCoords?: { lat: number; lng: number } | null,
+  countryCode?: string | null,
 ): Promise<{
   ready: boolean;
   cityId: number | null;
@@ -45,9 +45,13 @@ export async function isCityReady(
       longitude: null,
     };
 
-  const cityResult = await findCityUnified(destination, destinationCoords);
+  const cityResult = await findHub(db, {
+    input: destination,
+    coords: destinationCoords,
+    countryCode,
+  });
   const cityId = cityResult?.cityId;
-  if (!cityId) {
+  if (!cityResult || !cityId) {
     return {
       ready: false,
       cityId: null,
@@ -58,17 +62,14 @@ export async function isCityReady(
     };
   }
 
-  const countRows = await db
-    .select({
-      count: sql<number>`COUNT(*)::int`,
-      ready: sql<boolean>`${readySql()}`,
-    })
-    .from(placeSeedRaw)
-    .where(and(eq(placeSeedRaw.cityId, cityId), servingGateSql()));
-  const count = Number(countRows[0]?.count || 0);
-  // ⚠️ 수정금지(승인필요) 2026-08-13 = 좌표는 findCityUnified 가 이미 조회한 값(새 조회 0).
+  const { ready, count } = await hubReadiness(
+    db,
+    cityResult,
+    destinationCoords,
+  );
+  // ⚠️ 수정금지(승인필요) 2026-10-02 사장님 결정 = 준비됨 판정 = 출발점 반경 100km 풀 기준(소속 도시 무관) = 서빙 풀과 같은 기준 (정본 §)
   return {
-    ready: !!countRows[0]?.ready,
+    ready,
     cityId,
     cityName: cityResult.name,
     count,
@@ -124,7 +125,7 @@ export function computeCatSlots(
 
 async function fetchFromPlaceSeedRaw(
   skeleton: AG1Output,
-  // ⚠️ 수정금지(승인필요) 2026-05-24 = isCityReady 결과 재사용 (= findCityUnified 2 회 호출 회피)
+  // ⚠️ 수정금지(승인필요) 2026-10-02 사장님 결정 = isCityReady 결과 재사용 = 거점 조회 중복 회피 (정본 §)
   preResolvedCity?: { cityId: number; name: string },
 ): Promise<PlaceResult[] | null> {
   const _t0 = Date.now();
@@ -134,11 +135,13 @@ async function fetchFromPlaceSeedRaw(
   let cityId: number | undefined = preResolvedCity?.cityId;
   let cityName: string = preResolvedCity?.name ?? formData.destination;
   if (!cityId) {
-    // ⚠️ 2026-07-08 사장님 SSOT = 좌표(불변키) 전달 = 중복도시·재발굴 차단.
-    const cityResult = await findCityUnified(
-      formData.destination,
-      formData.destinationCoords,
-    );
+    // ⚠️ 수정금지(승인필요) 2026-10-02 사장님 결정 = 출발점 좌표·나라 코드로 거점을 찾는다 = 읽기만 (정본 §)
+    const cityResult = await findHub(db, {
+      input: formData.destination,
+      coords:
+        (formData as any).accommodationCoords ?? formData.destinationCoords,
+      countryCode: (formData as any).destinationCountryCode,
+    });
     cityId = cityResult?.cityId;
     cityName = cityResult?.name ?? formData.destination;
     if (!cityId) {
@@ -390,7 +393,9 @@ export async function generateRecommendations(
   // ⚠️ 2026-07-08 사장님 SSOT = 좌표(불변키) 전달 = DB-only↔MIX 예외없이 모두 좌표 우선.
   const cityCheck = await isCityReady(
     skeleton.formData.destination,
-    skeleton.formData.destinationCoords,
+    (skeleton.formData as any).accommodationCoords ??
+      skeleton.formData.destinationCoords,
+    (skeleton.formData as any).destinationCountryCode,
   );
 
   // ⚠️ 2026-07-31 사장님 승인(BTS D단계 결정5) = 핀 있으면 전환 기준 미달이어도 db-only 진행(pipeline-v3 직행과 같은 규칙 1벌).
@@ -409,7 +414,7 @@ export async function generateRecommendations(
   console.log(
     `[AG2] ✅ city='${cityCheck.cityName}' (id=${cityCheck.cityId}) ready=true (손님상 ${cityCheck.count}곳 + 베스트) → DB-only`,
   );
-  // ⚠️ 수정금지(승인필요) 2026-05-24 = isCityReady 결과 전달 = findCityUnified 2 회 호출 회피
+  // ⚠️ 수정금지(승인필요) 2026-10-02 사장님 결정 = 도시 찾기 결과(거점)를 한 번만 구해 그대로 전달 (정본 §)
   const dbResults = await fetchFromPlaceSeedRaw(skeleton, {
     cityId: cityCheck.cityId!,
     name: cityCheck.cityName,

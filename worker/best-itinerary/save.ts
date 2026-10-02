@@ -52,7 +52,21 @@ export async function matchCityIdByName(
 export async function buildItineraryData(db: Db, body: any) {
   const { verificationResult: _vr, ...rawData } = (body.rawData || {}) as any;
   const { cityId: _fromClient, ...bodyRest } = body || {};
-  const matchedCityId = await matchCityIdByName(db, rawData?.destination);
+  // ⚠️ 수정금지(승인필요) 2026-10-02 사장님 결정 = 일정의 도시 폴더 = 생성 때 정한 거점(rawData.cityId, 실제 있는 도시일 때만), 없으면 이름 일치 (정본 §)
+  const rawCityId = Number(rawData?.cityId);
+  const rawCityOk =
+    Number.isInteger(rawCityId) &&
+    rawCityId > 0 &&
+    (
+      await db
+        .select({ id: cities.id })
+        .from(cities)
+        .where(sql`${cities.id} = ${rawCityId}`)
+        .limit(1)
+    ).length > 0;
+  const matchedCityId = rawCityOk
+    ? rawCityId
+    : await matchCityIdByName(db, rawData?.destination);
   const perPersonEur = (rawData as any)?.totalCost?.perPersonEur;
   const totalCostEur =
     typeof perPersonEur === "number" && isFinite(perPersonEur)

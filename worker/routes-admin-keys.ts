@@ -7,6 +7,7 @@ import { eq } from "drizzle-orm";
 import * as schema from "../shared/schema";
 import { invalidateKeys } from "./keys";
 import { registerAdminLookupRoutes } from "./routes-admin-lookup";
+import { registerAdminItineraryRoutes } from "./routes-admin-itineraries";
 
 const { apiKeys } = schema;
 
@@ -17,6 +18,7 @@ type OpenDb = () => { db: Db; close: () => void };
 export function registerAdminKeysRoutes(app: Express, openDb: OpenDb): void {
   // ⚠️ 수정금지(승인필요) 2026-09-25 사장님 결정 = 관리자 번호로 찾기 등록 = src.ts·routes-admin.ts 가 700줄 초과라 여기서 함께 등록 (정본 9-25)
   registerAdminLookupRoutes(app, openDb);
+  registerAdminItineraryRoutes(app, openDb);
   app.post("/api/admin/api-keys", async (req: Request, res: Response) => {
     const { db, close } = openDb();
     try {

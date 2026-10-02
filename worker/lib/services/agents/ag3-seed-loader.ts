@@ -1,7 +1,7 @@
 import { db } from "../../db";
 import { placeSeedRaw } from "@shared/schema";
 import type { AG3PreOutput } from "./types";
-import { findCityUnified } from "../city-resolver";
+import { findHub } from "../shared/city-hub";
 // ⚠️ 2026-07-17 사장님 확정 = 풀 = city_id ∪ 중심 100km 합집합(순수 확장) = shared/pool-radius 단일 SSOT(§16)
 import { getPoolContext, recalcCrossCityZone } from "../shared/pool-radius";
 
@@ -75,8 +75,9 @@ export async function loadSeedRawMap(
 
 export async function preloadCityData(
   destination: string,
-  // ⚠️ 수정금지(승인필요) 2026-07-08 사장님 SSOT = 도시중심좌표(불변키) 전달 = findCityUnified 좌표10m 매칭 최우선(중복도시·재발굴 차단).
+  // ⚠️ 수정금지(승인필요) 2026-10-02 사장님 결정 = 출발점 좌표(없으면 이름)로 거점 폴더를 찾는다 = 읽기만, 도시를 만들지 않음 (정본 §)
   destinationCoords?: { lat: number; lng: number } | null,
+  countryCode?: string | null,
 ): Promise<AG3PreOutput> {
   const _t0 = Date.now();
 
@@ -86,7 +87,11 @@ export async function preloadCityData(
   }
 
   try {
-    const cityResult = await findCityUnified(destination, destinationCoords);
+    const cityResult = await findHub(db, {
+      input: destination,
+      coords: destinationCoords,
+      countryCode,
+    });
     const cityId: number | null = cityResult?.cityId || null;
     let seedRawMap = new Map<string, any>();
     if (cityId) {

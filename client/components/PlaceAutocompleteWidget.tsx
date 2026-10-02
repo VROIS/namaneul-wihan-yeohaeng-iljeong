@@ -83,18 +83,28 @@ function PlaceAutocompleteWeb({
         (ac as any).style.width = "100%";
         host.innerHTML = "";
         host.appendChild(ac);
+        // ⚠️ 수정금지(승인필요) 2026-10-02 사장님 결정 = 위젯이 나라 코드(ISO-2)를 같이 받아 서버로 보낸다 = 같은 나라 거점 우선 (정본 §)
         ac.addEventListener("gmp-select", async (ev: any) => {
           try {
             const pred = ev.placePrediction;
             const place = pred.toPlace();
             await place.fetchFields({
-              fields: ["displayName", "formattedAddress", "location"],
+              fields: [
+                "displayName",
+                "formattedAddress",
+                "location",
+                "addressComponents",
+              ],
             });
             const loc = place.location;
             onSelectRef.current({
               placeId: place.id || pred.placeId || "",
               name: place.displayName || "",
               address: place.formattedAddress || "",
+              countryCode:
+                (place.addressComponents || []).find((c: any) =>
+                  (c.types || []).includes("country"),
+                )?.shortText || "",
               coords: {
                 lat: typeof loc.lat === "function" ? loc.lat() : loc.lat,
                 lng: typeof loc.lng === "function" ? loc.lng() : loc.lng,
@@ -177,6 +187,7 @@ function PlaceAutocompleteNative({
           placeId: data.placeId,
           name: data.name,
           address: data.address,
+          countryCode: data.countryCode,
           coords: data.coords,
         });
       } else if (data.type === "error")

@@ -1,5 +1,6 @@
 // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 후처리 자동화 = MIX 응답 직후 큐에 "도시 N" 한 줄 → 큐 소비자(이 파일)가 Browser Run 으로 구글맵 페이지를 열어 창고를 채운다 = 손 0. 엔진은 lib/services/fill/gmaps-post 1벌(필시티 CLI 와 동일). 한 번에 한 도시, 실패는 큐 재시도(최대 2회) 뒤 dead-letter (정본 §)
 import { env } from "cloudflare:workers";
+import { sql } from "drizzle-orm";
 import { launch } from "@cloudflare/playwright";
 import { db, pool, withEngineDb } from "./lib/db";
 import { upsertPlace } from "./lib/services/place-upsert";
@@ -68,9 +69,27 @@ export async function metricsTick(): Promise<void> {
     await withEngineDb(async () => {
       const point = await appendTick();
       if (point) console.log(`[metrics] 틱 기록 users=${point.users}`);
+      await failStaleItineraries();
     });
   } catch (e) {
     console.warn("[metrics] 틱 기록 실패:", (e as Error).message);
+  }
+}
+
+// ⚠️ 수정금지(승인필요) 2026-10-02 사장님 결정 = 끊겨서 영영 '만드는 중'인 일정은 10분 뒤 실패로 정리한다(관제탑이 매분) (정본 §)
+async function failStaleItineraries(): Promise<void> {
+  try {
+    const r: any = await db!.execute(sql`
+      UPDATE itineraries
+         SET status = 'failed',
+             raw_data = jsonb_build_object('error', '생성이 끝나지 않고 끊김(10분 경과)'),
+             updated_at = now() AT TIME ZONE 'UTC'
+       WHERE status = 'generating'
+         AND updated_at < (now() AT TIME ZONE 'UTC') - interval '10 minutes'`);
+    const n = Number(r?.rowCount ?? r?.rows?.length ?? 0);
+    if (n > 0) console.log(`[정리] 멈춘 일정 ${n}건 = failed`);
+  } catch (e) {
+    console.warn("[정리] 멈춘 일정 정리 실패:", (e as Error).message);
   }
 }
 

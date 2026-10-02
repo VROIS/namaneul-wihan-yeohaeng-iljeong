@@ -57,6 +57,7 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
 
   // ⌨️ 2026-08-13 사장님 확정 = AOS 숙소·도시 검색 = 독립 전체화면 모달(CitySearchAndroid, ResultStep 숙소 Modal 과 같은 검증 구조).
   const searchPlaceholder = t("trip.searchPlaceholder");
+  // ⚠️ 수정금지(승인필요) 2026-10-02 사장님 결정 = 위젯이 나라 코드(ISO-2)를 같이 받아 서버로 보낸다 = 같은 나라 거점 우선 (정본 §)
   const handlePlaceSelect = (place: PlaceSelection) => {
     setFormData((prev) => ({
       ...prev,
@@ -64,6 +65,7 @@ export default function InputStep({ planner }: { planner: PlannerApi }) {
       accommodationName: place.name,
       accommodationAddress: place.address,
       accommodationCoords: place.coords,
+      destinationCountryCode: place.countryCode || undefined,
       accommodationPlaceId: place.placeId,
     }));
   };

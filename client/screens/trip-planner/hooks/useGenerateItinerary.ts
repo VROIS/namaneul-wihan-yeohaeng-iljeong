@@ -141,6 +141,7 @@ export function useGenerateItinerary({
       setFormData((prev) => ({
         ...prev,
         accommodationCoords: undefined,
+        destinationCountryCode: undefined,
         accommodationName: undefined,
         accommodationAddress: undefined,
         accommodationPlaceId: undefined,

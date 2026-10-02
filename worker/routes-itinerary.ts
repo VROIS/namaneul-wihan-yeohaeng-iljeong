@@ -73,6 +73,8 @@ function withVerification(body: ItineraryBody): ItineraryBody {
 
 // ⚠️ 화면 목록에서 빼는 상태 1벌(두 목록이 같은 기준).
 const HIDDEN_STATUSES = ["inquiry", "generating", "failed"];
+// ⚠️ 수정금지(승인필요) 2026-10-02 사장님 결정 = 관리자에게는 만드는 중·실패 일정도 보인다(누가 어디서 막혔는지) + 목록 100건 상한 (정본 §)
+const ADMIN_HIDDEN_STATUSES = ["inquiry"];
 
 function errMessage(error: unknown): string | undefined {
   return error instanceof Error ? error.message : undefined;
@@ -125,8 +127,9 @@ export function registerItineraryRoutes(app: Express, openDb: OpenDb): void {
         ? await db
             .select()
             .from(schema.itineraries)
-            .where(notInArray(schema.itineraries.status, HIDDEN_STATUSES))
+            .where(notInArray(schema.itineraries.status, ADMIN_HIDDEN_STATUSES))
             .orderBy(desc(schema.itineraries.createdAt))
+            .limit(100)
         : await db
             .select()
             .from(schema.itineraries)

@@ -465,6 +465,11 @@
         <div id="recent-payments" style="overflow-x: auto; margin-top: 8px;">
           <div class="loading"><div class="spinner"></div>로딩 중...</div>
         </div>
+        <!-- ⚠️ 수정금지(승인필요) 2026-10-02 사장님 결정 = 최근 일정 30건(상태 필터 없음) = 누가·어디서·몇 곳·어떤 상태 -->
+        <h2 style="font-size: 13px; margin: 16px 0 0;">최근 일정 30건 (만드는 중·실패 포함)</h2>
+        <div id="recent-itineraries" style="overflow-x: auto; margin-top: 8px;">
+          <div class="loading"><div class="spinner"></div>로딩 중...</div>
+        </div>
       </div>
     </div>
 
@@ -1120,6 +1125,38 @@
             </tbody>
           </table>
         ` : '<div class="empty-state">거래 내역이 없습니다</div>';
+
+        const itinEl = document.getElementById('recent-itineraries');
+        const itinRows = (await (await fetch(`${API_BASE}/recent-itineraries`)).json()).items || [];
+        const ST_COLOR = { generating: '#f59e0b', failed: '#ef4444' };
+        itinEl.innerHTML = itinRows.length ? `
+          <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+            <thead>
+              <tr style="border-bottom: 1px solid rgba(255,255,255,0.1); text-align: left; color: #9ca3af;">
+                <th style="padding: 8px; font-weight: 500;">번호</th>
+                <th style="padding: 8px; font-weight: 500;">시각</th>
+                <th style="padding: 8px; font-weight: 500;">사용자</th>
+                <th style="padding: 8px; font-weight: 500;">도시</th>
+                <th style="padding: 8px; font-weight: 500;">입력 제목</th>
+                <th style="padding: 8px; font-weight: 500; text-align: right;">장소</th>
+                <th style="padding: 8px; font-weight: 500;">상태</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${itinRows.map((i) => `
+                <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                  <td style="padding: 8px; font-family: monospace;">${i.id}</td>
+                  <td style="padding: 8px; color: #9ca3af; white-space: nowrap;">${new Date(i.createdAt).toLocaleString('ko-KR')}</td>
+                  <td style="padding: 8px;">${i.user}</td>
+                  <td style="padding: 8px;">${i.city}</td>
+                  <td style="padding: 8px;">${i.title || ''}</td>
+                  <td style="padding: 8px; text-align: right; color: ${i.places === 0 ? '#ef4444' : 'inherit'};">${i.places}</td>
+                  <td style="padding: 8px; color: ${ST_COLOR[i.status] || 'inherit'};">${i.status}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        ` : '<div class="empty-state">일정이 없습니다</div>';
       } catch (err) {
         console.error('activity-summary 로드 오류:', err);
       }

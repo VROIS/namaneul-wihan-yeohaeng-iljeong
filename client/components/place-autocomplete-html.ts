@@ -6,6 +6,7 @@ export type PlaceAutoSelection = {
   name: string;
   address: string;
   coords: { lat: number; lng: number };
+  countryCode?: string;
 };
 
 type Opts = {
@@ -81,13 +82,14 @@ gmp-place-autocomplete { width: 100%; display: block; }
         try {
           const pred = ev.placePrediction;
           const place = pred.toPlace();
-          await place.fetchFields({ fields: ["displayName", "formattedAddress", "location"] });
+          await place.fetchFields({ fields: ["displayName", "formattedAddress", "location", "addressComponents"] });
           const loc = place.location;
           postRN({
             type: "select",
             placeId: place.id || (pred.placeId || ""),
             name: place.displayName || "",
             address: place.formattedAddress || "",
+            countryCode: ((place.addressComponents || []).find(function(c) { return (c.types || []).indexOf("country") >= 0; }) || {}).shortText || "",
             coords: { lat: typeof loc.lat === "function" ? loc.lat() : loc.lat, lng: typeof loc.lng === "function" ? loc.lng() : loc.lng },
           });
         } catch (e) {

@@ -199,7 +199,7 @@ OUTPUT (strict JSON, no markdown fences):
     if (!jsonMatch) {
       console.error("[V3-Step1] ❌ JSON 블록 없음");
       console.error("[V3-Step1] 원문 앞 200자:", text.substring(0, 200));
-      return [];
+      throw new Error("재민이 일정 응답에 JSON 이 없음");
     }
 
     let result: any;
@@ -220,7 +220,7 @@ OUTPUT (strict JSON, no markdown fences):
       result = repairTruncatedJSON(jsonMatch[0]);
       if (!result) {
         console.error("[V3-Step1] ❌ JSON 복구 실패");
-        return [];
+        throw new Error("재민이 일정 응답 JSON 복구 실패");
       }
       console.log(
         `[V3-Step1] ✅ JSON 복구 성공: ${result.days?.length || 0}일`,
@@ -257,7 +257,7 @@ OUTPUT (strict JSON, no markdown fences):
 
     if (days.length === 0) {
       console.warn("[V3-Step1] ⚠️ Gemini가 0일 반환");
-      return [];
+      throw new Error("재민이가 일정을 0일 반환");
     }
 
     // 🗑️ 2026-07-05 삭제 = DEBUG_PIPELINE_SNAPSHOT 로컬 dump = saveRaw(§18) 이중저장 관문우회 §0/§19
@@ -298,7 +298,8 @@ OUTPUT (strict JSON, no markdown fences):
       success: false,
       errorMessage: error?.message || String(error),
     });
-    return [];
+    // ⚠️ 수정금지(승인필요) 2026-10-02 사장님 결정 = 재민이 실패는 실패로 던진다 = 빈 일정을 성공으로 내보내지 않는다(앱은 실패 알림 + 입력 화면으로 복귀) (정본 §)
+    throw error;
   }
 }
 

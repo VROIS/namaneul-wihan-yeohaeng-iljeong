@@ -41,6 +41,7 @@ export interface TripFormData {
   curationFocus: CurationFocus;
   destination: string;
   destinationCoords?: { lat: number; lng: number };
+  destinationCountryCode?: string; // 위젯이 준 나라 코드(ISO-2) = 같은 나라 거점 우선
   startDate: string;
   startTime: string;
   endDate: string;

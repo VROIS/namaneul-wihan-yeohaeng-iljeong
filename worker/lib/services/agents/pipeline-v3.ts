@@ -13,6 +13,8 @@ import {
   getCompanionCount,
 } from "./types";
 import { preloadCityData } from "./ag3-seed-loader";
+import { db } from "../../db";
+import { createHubAfterSuccess } from "../shared/city-hub";
 // 🧠 2026-07-06 사장님 SSOT = MIX Gemini raw = 도시id 폴더 + {meta,rawResponse,parsedPlaces}(사장님 예시형식) 저장 = saveCollectedRaw 단일 헬퍼(§18 2곳). 옛 saveRaw(runtime 봉투) 폐기 §19.
 import { saveCollectedRaw } from "../shared/save-collected-raw";
 import { buildDayConfig } from "../transport-pricing-service";
@@ -22,10 +24,11 @@ import { step2_enrichAndBuild } from "./pipeline-v3-step2-build";
 // ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT = DB-only / MIX 완전 분기 entry
 export async function runPipelineV3(formData: TripFormData): Promise<any> {
   const { isCityReady } = await import("./ag2-gemini-recommender");
-  // ⚠️ 2026-07-08 사장님 SSOT = destinationCoords(불변키) 전달 = ready 판정 좌표우선 = "본느"도 기존 도시 잡아 DB-only 재활용(재발굴 차단).
+  // ⚠️ 수정금지(승인필요) 2026-10-02 사장님 결정 = 출발점 좌표(없으면 이름)로 거점 폴더를 찾는다 = 읽기만, 도시를 만들지 않음 (정본 §)
   const cityCheck = await isCityReady(
     formData.destination,
-    formData.destinationCoords,
+    (formData as any).accommodationCoords ?? formData.destinationCoords,
+    (formData as any).destinationCountryCode,
   );
   // ⚠️ 수정금지(승인필요) 2026-07-31 사장님 승인(BTS D단계 결정5) = 고른 장소(pinnedPlaceIds) 있으면 db-only 직행.
   if (formData.pinnedPlaceIds?.length) {
@@ -132,9 +135,28 @@ async function runPipelineMix(
       vibeWeights,
       cityId,
     ),
-    // ⚠️ 2026-07-08 사장님 SSOT = destinationCoords(도시중심좌표=불변키) 전달 = 좌표10m 매칭 = 중복도시·재발굴 차단.
-    preloadCityData(formData.destination, formData.destinationCoords),
+    preloadCityData(
+      formData.destination,
+      (formData as any).accommodationCoords ?? formData.destinationCoords,
+      (formData as any).destinationCountryCode,
+    ),
   ]);
+
+  // ⚠️ 수정금지(승인필요) 2026-10-02 사장님 결정 = 100km 안에 거점이 없을 때만 새 거점 = 일정(step1)이 성공한 뒤, 잠금 안에서 한 번 (정본 §)
+  const startCoords =
+    (formData as any).accommodationCoords ?? formData.destinationCoords;
+  if (!preloaded.cityId && startCoords) {
+    const hub = await createHubAfterSuccess(db, {
+      input: formData.destination,
+      coords: startCoords,
+      countryCode: (formData as any).destinationCountryCode,
+    });
+    if (hub) {
+      preloaded.cityId = hub.cityId;
+      preloaded.cityName = hub.nameEn;
+      preloaded.cityCoords = { lat: hub.latitude, lng: hub.longitude };
+    }
+  }
 
   _mark("step1_parallel");
   console.log(
@@ -221,6 +243,8 @@ async function runPipelineMix(
     },
     _geminiModel: "gemini-3-flash-preview",
   };
+
+  (result as any).cityId = preloaded.cityId ?? null;
 
   console.log(`[V3] ===== Pipeline V3 완료 (${Date.now() - _t0}ms) =====`);
   console.log(`[V3]   Step1(Gemini+DB): ${_timings["step1_parallel"]}ms`);

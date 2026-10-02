@@ -142,10 +142,17 @@ export function registerItineraryGenerateDbRoutes(
       const isPinnedDbOnly = !!(
         Array.isArray(formData.pinnedPlaceIds) && formData.pinnedPlaceIds.length
       );
+      // ⚠️ 수정금지(승인필요) 2026-10-02 사장님 결정 = 출발점 좌표(없으면 이름)로 거점 폴더를 찾는다(같은 나라 우선, 100km) = 읽기만 (정본 §)
       const cityCheck = await isCityReady(
         db,
         enrichedFormData.destination,
-        enrichedFormData.destinationCoords,
+        enrichedFormData.accommodationCoords ??
+          enrichedFormData.destinationCoords,
+        enrichedFormData.destinationCountryCode,
+      );
+
+      console.log(
+        `[CityHub] 조회: "${enrichedFormData.destination}" cc=${enrichedFormData.destinationCountryCode ?? "-"} → 거점=${cityCheck.cityId ?? "없음"} 준비=${cityCheck.ready} 풀=${cityCheck.count}`,
       );
 
       if (isPinnedDbOnly && !cityCheck.cityId) {
@@ -189,6 +196,7 @@ export function registerItineraryGenerateDbRoutes(
               title: String(enrichedFormData.destination || "여정"),
               startDate: new Date(enrichedFormData.startDate),
               endDate: new Date(enrichedFormData.endDate),
+              ...(cityCheck.cityId != null ? { cityId: cityCheck.cityId } : {}),
               status: "generating",
             } as any)
             .returning({ id: itineraries.id });
@@ -233,6 +241,36 @@ export function registerItineraryGenerateDbRoutes(
         0,
       );
 
+      // ⚠️ 수정금지(승인필요) 2026-10-02 사장님 결정 = 빈 일정은 절대 내보내지 않는다(장소 0곳, 또는 3시간 이상인 날이 비면 실패 = 앱은 입력 화면으로 복귀·크레딧 차감 없음) (정본 §)
+      const minutesOf = (t: any) => {
+        const m = /^(\d{1,2}):(\d{2})/.exec(String(t || ""));
+        return m ? Number(m[1]) * 60 + Number(m[2]) : null;
+      };
+      const emptyLongDay = (itinerary?.days || []).some((d: any) => {
+        const a = minutesOf(d.startTime);
+        const b = minutesOf(d.endTime);
+        return !d.places?.length && a != null && b != null && b - a >= 180;
+      });
+      if (totalPlacesInDays === 0 || emptyLongDay) {
+        const empty = new Error("일정 생성 실패: 장소가 비어 있는 날이 있음");
+        if (draftId)
+          await db
+            .update(itineraries)
+            .set({
+              status: "failed",
+              rawData: { error: empty.message },
+              updatedAt: new Date(),
+            } as any)
+            .where(eq(itineraries.id, draftId))
+            .catch(() => {});
+        throw empty;
+      }
+
+      // 저장 폴더 = 거점(이름 일치로 사후 추측하지 않는다). MIX 가 새 거점을 만들었으면 그 번호.
+      const hubCityId: number | null =
+        itinerary?.cityId ?? cityCheck.cityId ?? null;
+      if (itinerary && hubCityId != null) itinerary.cityId = hubCityId;
+
       // 다 만든 여정을 그 자리(위에서 만든 행)에 채운다.
       if (draftId) {
         try {
@@ -248,7 +286,12 @@ export function registerItineraryGenerateDbRoutes(
           });
           await db
             .update(itineraries)
-            .set({ ...data, status: "draft", updatedAt: new Date() } as any)
+            .set({
+              ...data,
+              ...(hubCityId != null ? { cityId: hubCityId } : {}),
+              status: "draft",
+              updatedAt: new Date(),
+            } as any)
             .where(eq(itineraries.id, draftId));
         } catch (e) {
           console.error(
@@ -267,9 +310,9 @@ export function registerItineraryGenerateDbRoutes(
           draftId ? String(draftId) : undefined,
         );
 
-      // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = MIX 가 창고를 건드렸으면 응답과 별개로 큐에 "도시 N" 한 줄 = 후처리(구글맵 채움·흡수)가 뒤에서 스스로 돈다. 큐 실패는 응답을 막지 않는다 (정본 §)
-      if (isMix && cityCheck.cityId)
-        await enqueueGmapsPost(cityCheck.cityId, "mix").catch((e) =>
+      // ⚠️ 수정금지(승인필요) 2026-10-02 사장님 결정 = MIX 후처리 큐는 일정이 붙은 거점 도시로 등록한다 (정본 §)
+      if (isMix && hubCityId)
+        await enqueueGmapsPost(hubCityId, "mix").catch((e) =>
           console.error("[gmaps-post] 큐 등록 실패:", (e as Error)?.message),
         );
 
