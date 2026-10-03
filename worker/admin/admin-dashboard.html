@@ -988,7 +988,7 @@
     
     async function loadTabData(tab) {
       switch(tab) {
-        case 'overview': loadDashboard(); break;
+        case 'overview': return loadDashboard();
         case 'api': loadApiKeys(); break;
         case 'guide-prices': loadGuidePrices(); break;
       }
@@ -1010,11 +1010,9 @@
       el.className = 'status-badge ' + (cls || (n < 0 ? 'status-error' : 'status-ok'));
     }
     // ⚠️ 수정금지(승인필요) 2026-08-31 사장님 확정 = 증감 기준 = 서버가 30초마다 R2 에 남기는 기록 (정본 B4)
-    async function loadActivitySummary() {
+    async function renderActivity(d, itin) {
       try {
-        const r = await fetch(`${API_BASE}/activity-summary`);
-        const d = await r.json();
-        if (!d.activity) return;
+        if (!d || !d.activity) return;
 
         document.getElementById('stat-users').textContent = fmtNum(d.activity.users.total);
         deltaBadge(document.getElementById('stat-users-delta'),
@@ -1127,7 +1125,7 @@
         ` : '<div class="empty-state">거래 내역이 없습니다</div>';
 
         const itinEl = document.getElementById('recent-itineraries');
-        const itinRows = (await (await fetch(`${API_BASE}/recent-itineraries`)).json()).items || [];
+        const itinRows = (itin && itin.items) || [];
         const ST_COLOR = { generating: '#f59e0b', failed: '#ef4444' };
         itinEl.innerHTML = itinRows.length ? `
           <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
@@ -1166,9 +1164,14 @@
     const QUOTA_LABEL = { ts: 'TS(장소검색)', pm: 'PM(사진)', veo: 'Veo(영상)', omni: 'Omni(영상)', nano: 'Nano(이미지)', gemini: 'Gemini(텍스트)' };
     async function loadQuotaGauges() {
       try {
-        const r = await fetch(`${API_BASE}/external-calls/summary`);
-        const d = await r.json();
-        const rows = d.providers || [];
+        renderQuota(await (await fetch(`${API_BASE}/external-calls/summary`)).json());
+      } catch (err) {
+        console.error('quota-gauges 로드 오류:', err);
+      }
+    }
+    function renderQuota(d) {
+      try {
+        const rows = (d && d.providers) || [];
 
         const el = document.getElementById('quota-gauges');
         if (el) {
@@ -1203,21 +1206,30 @@
       }
     }
 
+    // ⚠️ 수정금지(승인필요) 2026-10-03 사장님 결정 = 현황 탭은 백엔드가 30초마다 저장해 둔 저장본 하나만 읽는다(DB 직접 호출 0) (정본 §)
+    let snapSavedAt = null;
+    let snapError = null;
     async function loadDashboard() {
-      loadActivitySummary();
-      loadQuotaGauges();
-      loadSystemStatus();
       try {
-        const dashRes = await fetch(`${API_BASE}/dashboard`);
-        const dash = await dashRes.json();
-
-        document.getElementById('stat-cities').textContent = dash.overview.cities;
-        document.getElementById('stat-places').textContent = dash.overview.places;
-
+        const res = await fetch(`${API_BASE}/snapshot`);
+        const snap = await res.json();
+        if (!res.ok || !snap.sections) throw new Error(snap.error || String(res.status));
+        const sec = snap.sections;
+        renderActivity(sec.activity, sec.itineraries);
+        renderQuota(sec.external);
+        if (sec.apiKeys) updateSystemStatus(sec.apiKeys);
+        if (sec.dashboard && sec.dashboard.overview) {
+          document.getElementById('stat-cities').textContent = sec.dashboard.overview.cities;
+          document.getElementById('stat-places').textContent = sec.dashboard.overview.places;
+        }
+        snapSavedAt = new Date(snap.savedAt);
+        snapError = snap.errors && snap.errors.length ? `백엔드 계산 실패: ${snap.errors.join(', ')}` : null;
       } catch (err) {
-        console.error('대시보드 로드 오류:', err);
+        console.error('저장본 읽기 오류:', err);
+        snapError = '연결 오류';
         updateSystemStatus(null);
       }
+      updateRefreshTime();
     }
 
     // ⚠️ 2026-08-25 사장님 지적으로 정정 = "시스템 정상"의 진짜 기준 = 외부호출(API 키 관리 목록)이
@@ -1255,17 +1267,6 @@
       } else {
         statusEl.textContent = '시스템 정상';
         statusEl.className = 'status-badge status-ok';
-      }
-    }
-
-    // 헤더 배지 = 초기 진입 탭(현황)에서도 바로 반영되도록 별도 경량 호출(API 상태 탭은 loadApiKeys 안에서 재사용).
-    async function loadSystemStatus() {
-      try {
-        const res = await fetch(`${API_BASE}/api-keys`);
-        updateSystemStatus(await res.json());
-      } catch (err) {
-        console.error('시스템 상태 로드 오류:', err);
-        updateSystemStatus(null);
       }
     }
 
@@ -1977,41 +1978,36 @@
     //   설명 §0-1 원칙). 시각 숫자만 남김.
     function updateRefreshTime() {
       const el = document.getElementById('last-update');
-      if (el) {
-        el.textContent = lastUpdateTime.toLocaleTimeString('ko-KR');
+      if (!el) return;
+      if (snapSavedAt) {
+        const age = Math.max(0, Math.round((Date.now() - snapSavedAt.getTime()) / 1000));
+        el.textContent = snapSavedAt.toLocaleTimeString('ko-KR') + ` · ${age}초 전` + (snapError ? ` · ${snapError}` : '');
+        el.style.color = snapError || age > 90 ? '#ef4444' : '#6b7280';
+      } else {
+        el.textContent = snapError || lastUpdateTime.toLocaleTimeString('ko-KR');
+        el.style.color = snapError ? '#ef4444' : '#6b7280';
       }
     }
-    
+    setInterval(updateRefreshTime, 1000);
+
     async function refreshAll() {
       const activeTab = document.querySelector('.tab.active')?.dataset.tab || 'overview';
       await loadTabData(activeTab);
       lastUpdateTime = new Date();
       updateRefreshTime();
     }
-    
+
+    // ⚠️ 수정금지(승인필요) 2026-10-03 사장님 결정 = 저장본은 15초마다 읽는다(백엔드는 30초마다 갱신) · 탭이 가려져도 멈추지 않는다 (정본 §)
     function startAutoRefresh() {
       if (autoRefreshInterval) clearInterval(autoRefreshInterval);
-      autoRefreshInterval = setInterval(refreshAll, 30000);
-      console.log('자동 새로고침 시작 (30초 간격)');
+      autoRefreshInterval = setInterval(refreshAll, 15000);
+      console.log('자동 새로고침 시작 (15초 간격)');
     }
-    
-    function stopAutoRefresh() {
-      if (autoRefreshInterval) {
-        clearInterval(autoRefreshInterval);
-        autoRefreshInterval = null;
-        console.log('자동 새로고침 중지');
-      }
-    }
-    
+
     startAutoRefresh();
     
     document.addEventListener('visibilitychange', () => {
-      if (document.hidden) {
-        stopAutoRefresh();
-      } else {
-        refreshAll();
-        startAutoRefresh();
-      }
+      if (!document.hidden) refreshAll();
     });
     
     // ⚠️ 2026-07-16 = 위기 정보 관리(GDELT+Gemini) UI 완전삭제(§19) = /api/admin/crisis-alerts* 서버에 없음(옛 대시보드 잔존, client/bts-app/public 호출자 0).

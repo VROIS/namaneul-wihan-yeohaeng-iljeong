@@ -6,6 +6,7 @@ import { db, pool, withEngineDb } from "./lib/db";
 import { upsertPlace } from "./lib/services/place-upsert";
 import { runGmapsPost, r2PrefixOf } from "./lib/services/fill/gmaps-post";
 import { appendTick } from "./lib/services/shared/metrics-heartbeat";
+import { runSnapshotTick } from "./admin-snapshot";
 import { refreshKakaoJwks } from "./routes-social-auth";
 import { cleanupDeletedAccounts } from "./lib/services/account-cleanup";
 
@@ -73,6 +74,13 @@ export async function metricsTick(): Promise<void> {
     });
   } catch (e) {
     console.warn("[metrics] 틱 기록 실패:", (e as Error).message);
+  }
+  // ⚠️ 수정금지(승인필요) 2026-10-03 사장님 결정 = 관리자 화면 저장본 = 매분 0초·30초 두 번 갱신 (정본 §)
+  for (let i = 0; i < 2; i++) {
+    await runSnapshotTick().catch((e) =>
+      console.warn("[snapshot] 저장 실패:", (e as Error).message),
+    );
+    if (i === 0) await new Promise((r) => setTimeout(r, 30_000));
   }
 }
 

@@ -74,5 +74,8 @@ export const userGuideImageKey = (
 export const adminMetricsKey = (date: string): string =>
   `system/admin-metrics/${date}.jsonl`;
 
+// ⚠️ 수정금지(승인필요) 2026-10-03 사장님 결정 = 관리자 화면 저장본 최신 1개 = 관리 통계 장부와 같은 예외(시각 접두 없이 덮어쓰기) (정본 §)
+export const adminSnapshotKey = "system/admin-metrics/latest.json";
+
 export const cityReportKey = (cityId: Id, fileName: string): string =>
   `${cityId}/reports/${fileName}`;

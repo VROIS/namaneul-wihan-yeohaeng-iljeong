@@ -8,7 +8,7 @@ const { cities, itineraries, users } = schema;
 type Db = ReturnType<typeof drizzle<typeof schema>>;
 type OpenDb = () => { db: Db; close: () => void };
 
-async function recentItinerariesSummary(db: Db) {
+export async function recentItinerariesSummary(db: Db) {
   const rows = await db
     .select({
       id: itineraries.id,

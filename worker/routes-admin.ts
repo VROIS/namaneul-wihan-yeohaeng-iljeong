@@ -1,25 +1,21 @@
 // ⚠️ 수정금지(승인필요) 2026-09-06 사장님 결정 = 관리자 라우트 = DB 접근 openDb() 1벌
 import type { Express, Request, Response } from "express";
 import type { drizzle } from "drizzle-orm/postgres-js";
-import { and, count, eq, isNotNull, ne, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import * as schema from "../shared/schema";
-import { PRICE_EUR } from "../shared/credits";
 import { getFirstAdmin, loginResponse } from "./auth-user";
-import { accessSummary } from "./routes-admin-access";
-import { recentDelta } from "./lib/services/shared/metrics-heartbeat";
+import {
+  FREE_CAPS,
+  UNIT_COST_EUR,
+  activitySummaryData,
+  apiKeysMasked,
+  dashboardData,
+  externalCallsSummaryData,
+  monthlyUsage,
+} from "./admin-data";
+import { registerAdminSnapshot } from "./admin-snapshot";
 
-const {
-  apiKeys,
-  apiServiceStatus,
-  cities,
-  creditTransactions,
-  guidePrices,
-  guides,
-  itineraries,
-  placeSeedRaw,
-  savedVideos,
-  users,
-} = schema;
+const { guidePrices } = schema;
 
 // src.ts 의 openDb() 를 그대로 받는다(연결 1벌 = 반드시 close).
 type Db = ReturnType<typeof drizzle<typeof schema>>;
@@ -40,57 +36,6 @@ const DEFAULT_DASHBOARD_DATA = {
 
 const GATED_PROVIDERS = ["ts", "pm", "veo", "omni", "nano"];
 
-const FREE_CAPS: Record<string, number | undefined> = { ts: 1000, pm: 1000 };
-
-/** UNIT_COST_LEDGER 의 eur 만(= UNIT_COST_EUR). */
-const UNIT_COST_EUR: Record<string, number> = {
-  ts: 0.0424,
-  pm: 0.0085,
-  veo: 0.0605,
-  omni: 0.0383, // ⚠️ 수정금지(승인필요) 2026-09-26 사장님 결정 = 옴니 단가 = 360p 실측 토큰 · 콘솔 환산(1달러 ≈ €0.858) · 세금 20% (정본 §)
-  nano: 0.0472,
-  gemini: 0,
-};
-
-/** providers 목록(순서 그대로). */
-const USAGE_PROVIDERS = ["ts", "pm", "veo", "omni", "nano", "gemini"];
-
-/** monthlyUsage. external_calls 는 drizzle 스키마에 없어 SQL 로 읽는다. */
-async function monthlyUsage(
-  db: Db,
-  provider: string,
-): Promise<{ count: number; units: number }> {
-  const rows = (await db.execute(
-    sql`SELECT count(*)::int AS count, COALESCE(sum(units), 0)::float AS units
-       FROM external_calls
-      WHERE provider = ${provider} AND created_at >= (date_trunc('month', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC')`,
-  )) as unknown as { count: number; units: number }[];
-  return { count: rows[0]?.count ?? 0, units: rows[0]?.units ?? 0 };
-}
-
-interface UsageRow {
-  provider: string;
-  count: number;
-  units: number;
-  cap: number | null;
-  remaining: number | null;
-}
-async function usageSummary(db: Db): Promise<UsageRow[]> {
-  const out: UsageRow[] = [];
-  for (const p of USAGE_PROVIDERS) {
-    const u = await monthlyUsage(db, p);
-    const cap = FREE_CAPS[p] ?? null;
-    out.push({
-      provider: p,
-      count: u.count,
-      units: u.units,
-      cap,
-      remaining: cap == null ? null : Math.max(0, cap - u.count),
-    });
-  }
-  return out;
-}
-
 async function simulateCost(db: Db, provider: string, planned: number) {
   const cap = FREE_CAPS[provider] ?? null;
   const { count: used } = await monthlyUsage(db, provider);
@@ -108,39 +53,8 @@ async function simulateCost(db: Db, provider: string, planned: number) {
   };
 }
 
-async function geminiPerformance(db: Db): Promise<{
-  sampleSize: number;
-  avgResponseTimeMs: number | null;
-  successRate: number | null;
-  errorRate: number | null;
-}> {
-  const rows = (await db.execute(sql`
-    SELECT
-      COUNT(*)::int AS sample_size,
-      ROUND(AVG(response_time_ms)) AS avg_response_time_ms,
-      ROUND(COUNT(*) FILTER (WHERE success = true) * 100.0 / NULLIF(COUNT(*), 0), 1) AS success_rate,
-      ROUND(COUNT(*) FILTER (WHERE success = false) * 100.0 / NULLIF(COUNT(*), 0), 1) AS error_rate
-    FROM (
-      SELECT response_time_ms, success
-        FROM external_calls
-       WHERE provider = 'gemini' AND success IS NOT NULL
-       ORDER BY created_at DESC
-       LIMIT 100
-    ) recent
-  `)) as unknown as Record<string, unknown>[];
-  const row = rows[0] || {};
-  return {
-    sampleSize: (row.sample_size as number) ?? 0,
-    avgResponseTimeMs:
-      row.avg_response_time_ms != null
-        ? Number(row.avg_response_time_ms)
-        : null,
-    successRate: row.success_rate != null ? Number(row.success_rate) : null,
-    errorRate: row.error_rate != null ? Number(row.error_rate) : null,
-  };
-}
-
 export function registerAdminRoutes(app: Express, openDb: OpenDb): void {
+  registerAdminSnapshot(app, openDb);
   // ⚠️ 수정금지(승인필요) 2026-07-13 = 관리자 로그인 = 비번 서버검증 → 관리자 세션 토큰 발급(§16 = 기존 Bearer 인증 재사용).
   app.post("/api/admin/login", async (req: Request, res: Response) => {
     const { db, close } = openDb();
@@ -171,46 +85,7 @@ export function registerAdminRoutes(app: Express, openDb: OpenDb): void {
   app.get("/api/admin/dashboard", async (_req: Request, res: Response) => {
     const { db, close } = openDb();
     try {
-      const [cityRow] = await db.select({ count: count() }).from(cities);
-      const [psrRow] = await db.select({ count: count() }).from(placeSeedRaw);
-
-      const fillRows = (await db.execute(
-        sql`SELECT
-          COUNT(image_url)::int AS img,
-          COUNT(price_eur)::int AS price,
-          COUNT(summary_ko)::int AS sum,
-          COUNT(google_place_id)::int AS pid
-        FROM place_seed_raw`,
-      )) as unknown as {
-        img: number;
-        price: number;
-        sum: number;
-        pid: number;
-      }[];
-      const filled = fillRows[0] || { img: 0, price: 0, sum: 0, pid: 0 };
-
-      const apiServicesList = await db.select().from(apiServiceStatus);
-
-      res.json({
-        overview: {
-          cities: cityRow?.count || 0,
-          places: psrRow?.count || 0, // ← 옛 필드명 보존 (= 실제는 PSR)
-          youtubeChannels: 0,
-          blogSources: 0,
-          freshDataRatio: 0,
-        },
-        psrFillRate: {
-          image: filled.img || 0,
-          price: filled.price || 0,
-          summary: filled.sum || 0,
-          pid: filled.pid || 0,
-          total: psrRow?.count || 0,
-        },
-        apiServices: apiServicesList,
-        recentSyncs: [],
-        dbConnected: true,
-        lastUpdated: new Date().toISOString(),
-      });
+      res.json(await dashboardData(db));
     } catch (error) {
       console.error("Error fetching dashboard:", error);
       res.status(500).json(DEFAULT_DASHBOARD_DATA);
@@ -225,10 +100,7 @@ export function registerAdminRoutes(app: Express, openDb: OpenDb): void {
     async (_req: Request, res: Response) => {
       const { db, close } = openDb();
       try {
-        res.json({
-          month: new Date().toISOString().slice(0, 7),
-          providers: await usageSummary(db),
-        });
+        res.json(await externalCallsSummaryData(db));
       } catch (e) {
         res.status(500).json({ error: (e as Error).message });
       } finally {
@@ -263,141 +135,7 @@ export function registerAdminRoutes(app: Express, openDb: OpenDb): void {
     async (_req: Request, res: Response) => {
       const { db, close } = openDb();
       try {
-        // ⚠️ 수정금지(승인필요) 2026-09-15 사장님 결정 = 증감 = R2 심장박동 최근 30초 비교, 변화 0 이면 오늘 하루 누적 증가분 (정본 B4)
-        const { latest, delta } = await recentDelta();
-        void latest;
-        const [
-          [userTotal],
-          [routeTotal],
-          [aiOpinionTotal],
-          [expertVerifyTotal],
-          [guideTotal],
-          [videoTotal],
-        ] = await Promise.all([
-          db.select({ count: count() }).from(users),
-          db.select({ count: count() }).from(itineraries),
-          db
-            .select({ count: count() })
-            .from(creditTransactions)
-            .where(
-              and(
-                eq(creditTransactions.type, "usage"),
-                eq(creditTransactions.description, "AI 의견"),
-              ),
-            ),
-          db
-            .select({ count: count() })
-            .from(creditTransactions)
-            .where(
-              and(
-                eq(creditTransactions.type, "usage"),
-                eq(creditTransactions.description, "전문가 검증"),
-              ),
-            ),
-          db
-            .select({ count: count() })
-            .from(guides)
-            .where(isNotNull(guides.placeId)),
-          db.select({ count: count() }).from(savedVideos),
-        ]);
-        const userNew = delta.users;
-        const userWithdrawn = 0;
-        const routeNew = delta.routes;
-        const aiOpinionNew = delta.aiOpinion;
-        const expertVerifyNew = delta.expertVerify;
-        const guideNew = delta.guides;
-        const videoNew = delta.videos;
-
-        const loginBreakdown = await db
-          .select({ provider: users.provider, count: count() })
-          .from(users)
-          .groupBy(users.provider);
-
-        // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 접속 현황 자료 = routes-admin-access.ts 1벌
-        const accessData = await accessSummary(db);
-
-        const [purchaseCount] = await db
-          .select({ count: count() })
-          .from(creditTransactions)
-          .where(eq(creditTransactions.type, "purchase"));
-
-        // ⚠️ 2026-08-25 사장님 지시로 수정 = "최근 결제내역"이 충전(+)만 반쪽으로 보여주고 있었다.
-        const [creditSum] = await db
-          .select({
-            total: sql<number>`COALESCE(SUM(${users.credits}), 0)::int`,
-          })
-          .from(users);
-
-        const recentTransactions = await db
-          .select({
-            id: creditTransactions.id,
-            type: creditTransactions.type,
-            description: creditTransactions.description,
-            amount: creditTransactions.amount,
-            createdAt: creditTransactions.createdAt,
-            userEmail: users.email,
-            userDisplayName: users.displayName,
-          })
-          .from(creditTransactions)
-          .leftJoin(users, eq(users.id, creditTransactions.userId))
-          .orderBy(sql`${creditTransactions.createdAt} DESC`)
-          .limit(30);
-
-        const usage = await usageSummary(db);
-        // ⚠️ 2026-08-25 사장님 승인 = AI 성능 카드 = 계측된 최근 gemini 호출 100건 기준 실시간 집계(geminiClient.ts 배선).
-        const aiPerformance = await geminiPerformance(db);
-        const aiCostEur = usage.reduce((sum, u) => {
-          const billable =
-            u.cap == null ? u.units : Math.max(0, u.units - u.cap);
-          return sum + billable * (UNIT_COST_EUR[u.provider] || 0);
-        }, 0);
-
-        const totalRevenueEur = (purchaseCount?.count || 0) * PRICE_EUR;
-        const arpuEur =
-          (userTotal?.count || 0) > 0
-            ? totalRevenueEur / (userTotal?.count || 1)
-            : 0;
-
-        res.json({
-          updatedAt: new Date().toISOString(),
-          activity: {
-            users: {
-              total: userTotal?.count || 0,
-              new: userNew,
-              withdrawn: userWithdrawn,
-            },
-            routes: { total: routeTotal?.count || 0, new: routeNew },
-            aiOpinion: { total: aiOpinionTotal?.count || 0, new: aiOpinionNew },
-            expertVerify: {
-              total: expertVerifyTotal?.count || 0,
-              new: expertVerifyNew,
-            },
-            guides: { total: guideTotal?.count || 0, new: guideNew },
-            videos: { total: videoTotal?.count || 0, new: videoNew },
-          },
-          loginBreakdown: loginBreakdown.map((r) => ({
-            provider: r.provider || "unknown",
-            count: r.count,
-          })),
-          ...accessData,
-          revenue: {
-            totalEur: totalRevenueEur,
-            aiCostEur: Math.round(aiCostEur * 100) / 100,
-            arpuEur: Math.round(arpuEur * 100) / 100,
-            netEur: Math.round((totalRevenueEur - aiCostEur) * 100) / 100,
-          },
-          aiPerformance,
-          // ⚠️ 2026-08-25 사장님 지시로 수정 = 충전(+)만 반쪽으로 보여주던 것 → 전체사용자 카드내역서(엑셀표)로.
-          totalCreditsHeld: creditSum?.total || 0,
-          recentTransactions: recentTransactions.map((t) => ({
-            id: t.id,
-            type: t.type,
-            description: t.description,
-            amount: t.amount,
-            createdAt: t.createdAt,
-            user: t.userEmail || t.userDisplayName || "(탈퇴/미확인)",
-          })),
-        });
+        res.json(await activitySummaryData(db));
       } catch (error) {
         console.error("[activity-summary] 조회 실패:", error);
         res.status(500).json({ error: "activity_summary_failed" });
@@ -411,19 +149,7 @@ export function registerAdminRoutes(app: Express, openDb: OpenDb): void {
   app.get("/api/admin/api-keys", async (_req: Request, res: Response) => {
     const { db, close } = openDb();
     try {
-      const keys = await db
-        .select()
-        .from(apiKeys)
-        .where(ne(apiKeys.isActive, false))
-        .orderBy(apiKeys.id);
-      const maskedKeys = keys.map((key) => ({
-        ...key,
-        keyValue: key.keyValue
-          ? `${key.keyValue.slice(0, 8)}...${key.keyValue.slice(-4)}`
-          : "",
-        hasValue: !!key.keyValue && key.keyValue.length > 0,
-      }));
-      res.json(maskedKeys);
+      res.json(await apiKeysMasked(db));
     } catch (error) {
       console.error("Error fetching API keys:", error);
       res.status(500).json({ error: "Failed to fetch API keys" });
