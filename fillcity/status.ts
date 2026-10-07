@@ -218,7 +218,7 @@ if (!cityId) {
   // ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = 최종 산출표 1벌 = 한눈에 = 분류별 한 줄(활성 · 손님상 · 상위 20 안 · 베스트 · 결손 = 사진·CID·도장·가격·대사·카피 없음) + 식당 상·중·하와 그중 베스트 = 실행 전(베이스라인)·후 상태표에 같은 표가 자동으로 나온다 (정본 §)
   {
     const gate = servingGateCoreSql();
-    const served = sql`(${gate} AND ${placeSeedRaw.priceEur} IS NOT NULL)`;
+    const served = servingGateSql();
     const rows: any[] = await db
       .select({
         cat: placeSeedRaw.seedCategory,

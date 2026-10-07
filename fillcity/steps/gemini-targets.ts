@@ -8,6 +8,7 @@ import {
   nameTokens,
   parseArgs,
   reportDir,
+  retryFailed,
   runTsx,
   stamp,
 } from "./common";
@@ -139,37 +140,40 @@ const isBlank = (x: unknown) => x == null || String(x).trim() === "";
       ),
     );
     const rawDir = path.join(ROOT, "docs", "raw", String(cityId));
-    let stillFailed = 0;
-    for (const [k, code] of codes.entries()) {
-      if (code === 0) continue;
-      // 저장된 응답이 있으면 그것을 적용(돈을 다시 쓰지 않는다) · 없을 때만 그 몫을 다시 부른다
-      const saved = fs
-        .readdirSync(rawDir)
-        .filter(
-          (x) =>
-            x.endsWith(`_gemini-enrich-after-google-${k + 1}.json`) && x >= st,
-        )
-        .sort()
-        .pop();
-      console.error(
-        `⚠️ 제미니 호출 ${k + 1} 실패 = ${saved ? "저장된 응답을 적용" : "그 몫만 다시 호출"}`,
-      );
-      const retry = saved
-        ? await sh([
-            `--raw=${path.join(rawDir, saved)}`,
-            `--part=${k + 1}`,
-            "--apply",
-          ])
-        : await sh([
-            "--call=true",
-            `--ids-file=${files[k]}`,
-            `--part=${k + 1}`,
-            "--apply",
-          ]);
-      if (retry !== 0) stillFailed++;
-    }
-    if (stillFailed) {
-      console.error(`✗ 제미니 호출 ${stillFailed}몫이 끝내 실패 = 멈춤`);
+    // 실패한 몫 = 저장된 응답이 있으면 그것을 적용(돈을 다시 쓰지 않는다) · 없을 때만 그 몫을 다시 부른다
+    const stillFailed = await retryFailed(
+      files.map((_, k) => k),
+      codes,
+      async (k) => {
+        const saved = fs
+          .readdirSync(rawDir)
+          .filter(
+            (x) =>
+              x.endsWith(`_gemini-enrich-after-google-${k + 1}.json`) &&
+              x >= st,
+          )
+          .sort()
+          .pop();
+        console.error(
+          `⚠️ 제미니 호출 ${k + 1} 실패 = ${saved ? "저장된 응답을 적용" : "그 몫만 다시 호출"}`,
+        );
+        const retry = saved
+          ? await sh([
+              `--raw=${path.join(rawDir, saved)}`,
+              `--part=${k + 1}`,
+              "--apply",
+            ])
+          : await sh([
+              "--call=true",
+              `--ids-file=${files[k]}`,
+              `--part=${k + 1}`,
+              "--apply",
+            ]);
+        return retry === 0;
+      },
+    );
+    if (stillFailed.length) {
+      console.error(`✗ 제미니 호출 ${stillFailed.length}몫이 끝내 실패 = 멈춤`);
       process.exit(1);
     }
   }

@@ -116,20 +116,12 @@ async function applyFile(c: any, file: string): Promise<number> {
       console.log(`  ⏭ #${v.id} 이 도시 행 아님/이미 없음`);
       continue;
     }
+    // 고침 = fix 칸 중 하나라도 값이 있으면(배열은 비어 있지 않을 때) = 새 칸을 더해도 이 줄은 안 바뀐다
     if (
-      v.fix?.name_en ||
-      v.fix?.seed_category ||
-      v.fix?.tags?.length ||
-      v.fix?.remove_tags?.length ||
-      v.fix?.clear_price ||
-      v.fix?.price_eur != null ||
-      v.fix?.summary_ko ||
-      v.fix?.editorial_summary ||
-      v.fix?.business_status ||
-      v.fix?.google_maps_uri ||
-      v.fix?.name_local ||
-      v.fix?.name_ko ||
-      v.fix?.address
+      v.fix &&
+      Object.values(v.fix).some((x) =>
+        Array.isArray(x) ? x.length > 0 : x != null && x !== false,
+      )
     ) {
       const cat = (
         await c.query("SELECT seed_category FROM place_seed_raw WHERE id=$1", [
@@ -227,9 +219,11 @@ async function judge(c: any): Promise<string | null> {
   });
   const byId = new Map<number, any>(rows.map((r: any) => [r.id, r]));
   const merged: Verdict[] = [];
+  let found = 0;
   for (const j of ranges) {
     const f = path.join(dir, `verdict-${j.k}.json`);
     if (!fs.existsSync(f)) continue;
+    found++;
     try {
       const arr: Verdict[] = JSON.parse(fs.readFileSync(f, "utf-8"));
       for (const v of Array.isArray(arr) ? arr : []) {
@@ -248,6 +242,11 @@ async function judge(c: any): Promise<string | null> {
       console.log(`  ✘ verdict-${j.k}.json 읽기 실패: ${e?.message || e}`);
     }
   }
+  // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 일꾼 판정 파일이 하나도 없으면 단계 실패(검토 없이 "보존"으로 넘어가지 않는다) (정본 §)
+  if (!found)
+    throw new Error(
+      `일꾼 ${ranges.length}명 판정 파일 0개 = 검토가 안 됐다(${path.relative(ROOT, dir)})`,
+    );
   const out = path.join(dir, "verdict-merged.json");
   fs.writeFileSync(out, JSON.stringify(merged, null, 2));
   const del = merged.filter((v) => !v.fix).length;

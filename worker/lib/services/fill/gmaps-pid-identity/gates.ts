@@ -1,6 +1,6 @@
 // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 승인 = §0 700줄 가드 = 폴더 분리(로직 무변경)
 import type { Page } from "playwright";
-import { foldAccents } from "../../shared/text-fold";
+import { foldAccents, foldName } from "../../shared/text-fold";
 import {
   readPlacePage,
   type BusinessStatus,
@@ -62,9 +62,7 @@ function tokensMatch(a: string, b: string): boolean {
 export type NameMatch = "strong" | "weak" | "none";
 const STRONG_SHARE_RATIO = 0.6;
 function normName(s: string | null): string {
-  return foldAccents((s || "").toLowerCase())
-    .replace(/[^\p{L}\p{N}]+/gu, " ")
-    .trim();
+  return foldName(s || "");
 }
 export function nameMatch(
   ourName: string | null,
@@ -214,11 +212,9 @@ export const isWritable = (gate: string) =>
 
 // ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = PID 짝 맞추기 재료 = 우리 주소가 페이지 주소와 같으면 그곳, 아니면 좌표 500m 안 + 후기 수가 비슷해야 그곳 (정본 §)
 export const PID_PAIR_KM = 0.5;
-// ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 발음기호 떼기는 text-fold 1벌 (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 주소 비교 = 발음기호 떼기(text-fold 1벌) + 글자·숫자만 · 나라 꼬리 목록은 두지 않는다(아래 포함 비교가 한쪽에만 나라가 붙은 경우를 이미 흡수) (정본 §)
 const normAddr = (s: string) =>
-  foldAccents(s.toLowerCase())
-    .replace(/,\s*(france|monaco|italy|italia|spain|españa)\s*$/i, "")
-    .replace(/[^a-z0-9]+/g, "");
+  foldAccents(s.toLowerCase()).replace(/[^a-z0-9]+/g, "");
 export function pidPair(
   row: { address?: string | null; rc: number | null },
   local: { address: string | null; reviewCount: number | null },
@@ -239,7 +235,7 @@ export function pidPair(
     Math.abs(ours - theirs) <= Math.max(50, ours * 0.5);
   return addrSame || (near && rcOk);
 }
-// ⚠️ 수정금지(승인필요) 2026-10-04 사장님 결정 = 리뷰수는 읽은 값 그대로 쓴다(의심 표시 없음) (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 리뷰수는 읽은 값 그대로 쓴다(의심 표시 없음) (정본 §)
 export const rcWritable = (r: Result) =>
   isWritable(r.gate) && r.rc_page != null;
 

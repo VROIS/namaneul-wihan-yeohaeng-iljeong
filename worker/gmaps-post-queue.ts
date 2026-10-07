@@ -56,7 +56,7 @@ async function kakaoJwksTick(): Promise<void> {
   }
 }
 
-// ⚠️ 수정금지(승인필요) 2026-10-03 사장님 결정 = 환율표는 사람 없이 자동 갱신 (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 환율표는 사람 없이 자동 갱신 (정본 §)
 async function ratesTick(): Promise<void> {
   try {
     const n = await withEngineDb(() => refreshRates(pool!));
@@ -89,7 +89,7 @@ export async function metricsTick(): Promise<void> {
   } catch (e) {
     console.warn("[metrics] 틱 기록 실패:", (e as Error).message);
   }
-  // ⚠️ 수정금지(승인필요) 2026-10-03 사장님 결정 = 관리자 화면 저장본 = 매분 0초·30초 두 번 갱신 (정본 §)
+  // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 관리자 화면 저장본 = 매분 0초·30초 두 번 갱신 (정본 §)
   for (let i = 0; i < 2; i++) {
     await runSnapshotTick().catch((e) =>
       console.warn("[snapshot] 저장 실패:", (e as Error).message),
@@ -139,7 +139,7 @@ export async function consumeGmapsPost(
               cityId,
               r2Prefix: r2PrefixOf((env as any).R2_PUBLIC_URL),
               upsertPlace,
-              // ⚠️ 수정금지(승인필요) 2026-10-03 사장님 결정 = 워커 후처리는 브라우저 하나·창 하나로 천천히 돈다 = 속도보다 자동화 (정본 §)
+              // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 워커 후처리는 브라우저 하나·창 하나로 천천히 돈다 = 속도보다 자동화 (정본 §)
               parallel: 1,
               log: (l) => console.log("[gmaps-post] " + l),
             });

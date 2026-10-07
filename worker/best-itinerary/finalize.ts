@@ -248,9 +248,10 @@ export async function finalizeDbOnlyItinerary(
           scene.time,
           scene.slot_min ?? (isMeal ? mealDuration : slotDuration),
         ),
+        // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 베스트 여정도 모르는 가격은 0 이 아니라 비움(MIX 와 같은 규칙 = 화면은 가격 줄을 안 그린다) (정본 §)
         estimatedPriceEur: isMeal
           ? scene.price_eur
-          : (inputPlace?.estimatedPriceEur ?? 0),
+          : (inputPlace?.estimatedPriceEur ?? null),
         mealPrice,
         mealPriceLabel,
         image: inputPlace?.image || (scene as any).image || null,

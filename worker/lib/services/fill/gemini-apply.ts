@@ -36,7 +36,6 @@ const apply = argv["apply"] === "true";
 const part = String(argv["part"] || "");
 
 type Logged = {
-  at: string;
   name: string | null;
   address: string | null;
   lat: number | null;
@@ -63,7 +62,6 @@ function googleLog(city: number): Map<number, Logged> {
     for (const r of rows ?? []) {
       const p = r.parsed ?? {};
       out.set(Number(r.id), {
-        at: f.slice(0, 10),
         name: p.name || null,
         address: p.address || null,
         lat: p.lat ?? null,

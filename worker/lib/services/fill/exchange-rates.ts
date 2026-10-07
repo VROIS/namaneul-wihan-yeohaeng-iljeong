@@ -42,7 +42,7 @@ export async function syncExchangeRates(c: Client): Promise<number> {
   return n;
 }
 
-// ⚠️ 수정금지(승인필요) 2026-10-03 사장님 결정 = 환율표는 사람 없이 자동 갱신 (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 환율표는 사람 없이 자동 갱신 (정본 §)
 export async function refreshRates(pool: {
   connect: () => Promise<any>;
 }): Promise<number> {

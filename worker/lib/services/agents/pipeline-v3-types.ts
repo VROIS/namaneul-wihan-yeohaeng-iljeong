@@ -1,7 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import type { TravelStyle } from "./types";
 
-// ⚠️ 수정금지(승인필요) 2026-10-04 사장님 결정 = 가격은 500 이상도 허용 = 무조건 실제 값 (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 가격은 500 이상도 허용 = 무조건 실제 값 (정본 §)
 export function sanitizePriceEur(raw: any): number {
   if (raw == null) return 0;
   const n =

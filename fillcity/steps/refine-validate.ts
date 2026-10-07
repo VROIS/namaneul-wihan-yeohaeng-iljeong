@@ -1,7 +1,7 @@
 // ⚠️ 수정금지(승인필요) 2026-10-05 사장님 결정 = v3.2 최적화 (정본 §)
 import fs from "fs";
 import path from "path";
-import { foldAccents } from "../../worker/lib/services/shared/text-fold";
+import { foldName } from "../../worker/lib/services/shared/text-fold";
 
 export type RefineItem = { order: number; cid: string; name: string };
 
@@ -14,14 +14,10 @@ const urlHasCid = (url: string, cid: string): boolean => {
     return false;
   }
 };
-// ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 발음기호 떼기는 text-fold 1벌 (정본 §)
-const normName = (s: string): string =>
-  foldAccents(s.toLowerCase())
-    .replace(/[^\p{L}\p{N}]+/gu, " ")
-    .trim();
+// ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 이름 비교 글자 다듬기는 text-fold foldName 1벌(PID 관문과 공용) (정본 §)
 const sameName = (a: string, b: string): boolean => {
-  const x = normName(a);
-  const y = normName(b);
+  const x = foldName(a);
+  const y = foldName(b);
   if (!x || !y) return false;
   if (x.includes(y) || y.includes(x)) return true;
   const tx = new Set(x.split(" ").filter((t) => t.length > 1));

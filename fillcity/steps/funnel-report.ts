@@ -1,13 +1,7 @@
 // ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = 깔때기 숫자 자동 출력 1벌 = 한 판의 보고서·원본 로그(실행 창 안 파일)만 읽어 창고 시작 → ① 삭제 → 구글 목록 → 선별 → 정제 → 제미니 7언어 → 교집합 → ④ 신규 → 장부 → 2차 → 최종 점검 → 페이지 열기 합 → 판정을 표 하나로 찍는다(손으로 세지 않는다, DB 쓰기 0, 다른 도구 파일은 읽기만) (정본 §)
 import fs from "fs";
 import path from "path";
-import {
-  ROOT,
-  loadEnv,
-  parseArgs,
-  reportDir,
-  stampOf as isoStamp,
-} from "./common";
+import { ROOT, loadEnv, parseArgs, reportDir, stampOf } from "./common";
 
 loadEnv();
 const argv = parseArgs();
@@ -18,9 +12,6 @@ if (!cityId) {
   );
   process.exit(1);
 }
-// ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 시각 글자는 common.ts 의 stampOf 1벌(이미 시각 글자면 그대로) (정본 §)
-const stampOf = (s: string) =>
-  /^\d{4}-\d{2}-\d{2}_\d{6}$/.test(s) ? s : isoStamp(new Date(s).toISOString());
 const dir = reportDir(cityId);
 const rawDir = path.join(ROOT, "docs", "raw", String(cityId));
 const files = (d: string) => (fs.existsSync(d) ? fs.readdirSync(d).sort() : []);

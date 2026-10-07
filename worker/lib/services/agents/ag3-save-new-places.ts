@@ -9,8 +9,8 @@ import { tsSearch, tsPhoto } from "../shared/ts-client";
 import { zoneForDistanceKm } from "../shared/pool-radius";
 import {
   decidePrice,
-  FRESH_SQL,
   loadEurPer,
+  loadOldPrices,
   tsPriceDecision,
   type EurPer,
 } from "../shared/price-eur";
@@ -128,6 +128,11 @@ export async function saveNewPlacesToDB(
   // ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = 알아보는 문(recognizePlace) = 제미니 값만으로 창고에 있는 행을 먼저 찾고, 있으면 그 행으로 직행(새 행·껍데기 0, TS 0). 시드 ③ 과 같은 1벌(§16). 곳마다 독립 = Promise.all 병렬 유지.
   const recogRes: any = await db.execute(recognizeRowsQuery(cityId));
   const recogRows: RecognizeRow[] = recogRes.rows ?? recogRes;
+  // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 문이 찾을 수 있는 창고 행의 옛 가격·3개월 신선도는 한 번에 읽어 둔다(행마다 DB 왕복 0, 손님이 기다리는 길) (정본 §)
+  const oldOf = await loadOldPrices(
+    { query: (q, v) => pool!.query(q, v as any[]) },
+    recogRows.map((r) => Number(r.id)),
+  );
   const stage1 = await Promise.all(
     toSave.map(async (place: any) => {
       const seedCategory: string =
@@ -216,12 +221,7 @@ export async function saveNewPlacesToDB(
             place.lat = row.lat;
             place.lng = row.lng;
           }
-          const old = (
-            await pool!.query(
-              `SELECT price_eur::float8 AS price, ${FRESH_SQL} AS fresh FROM place_seed_raw WHERE id=$1`,
-              [row.id],
-            )
-          ).rows[0];
+          const old = oldOf.get(Number(row.id));
           job.priceEur =
             decidePrice({
               geminiPrice: (place as any).estimatedPriceEur ?? null,
@@ -328,19 +328,10 @@ export async function saveNewPlacesToDB(
 
   // ⚠️ 수정금지(승인필요) 2026-07-06 사장님 SSOT = TS raw 모음 1파일 = 건건 로컬skip + 끝에 results 배열 1파일(§18).
   const tsResults: any[] = [];
-  // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 페이지 확인 행의 가격 보호도 가격 결정 1벌(decidePrice = 옛 값 + 3개월 안 페이지 신선도)로 = 흡수·2차와 같은 길 (정본 §)
-  const oldPriceOf = new Map<number, { price: number | null; fresh: boolean }>(
-    tsTargets.length
-      ? (
-          await pool!.query(
-            `SELECT id, price_eur::float8 AS price, ${FRESH_SQL} AS fresh FROM place_seed_raw WHERE id = ANY($1::int[])`,
-            [tsTargets.map((t: any) => t.rowId).filter((x: any) => x != null)],
-          )
-        ).rows.map((r: any) => [
-          Number(r.id),
-          { price: r.price ?? null, fresh: !!r.fresh },
-        ])
-      : [],
+  // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 페이지 확인 행의 가격 보호도 가격 결정 1벌(decidePrice = 옛 값 + 3개월 안 페이지 신선도)로 = 흡수·2차와 같은 길 · 옛 값·신선도 읽기는 loadOldPrices 묶음 조회 1벌 (정본 §)
+  const oldPriceOf = await loadOldPrices(
+    { query: (q, v) => pool!.query(q, v as any[]) },
+    tsTargets.map((t: any) => t.rowId).filter((x: any) => x != null),
   );
   let eurPerOnce: Promise<EurPer> | null = null;
   const eurPerOf = () =>

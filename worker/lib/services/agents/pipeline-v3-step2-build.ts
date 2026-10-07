@@ -57,6 +57,7 @@ export async function step2_enrichAndBuild(
           : null;
       const desc = gPlace.shortform_ko || "";
       const persona = gPlace.selection_reason_ko || "AI 추천 장소";
+      const gPrice = sanitizePriceEur(gPlace.price_eur);
       const place: PlaceResult = {
         id: placeId,
         name: gPlace.name || "Unknown Place",
@@ -72,11 +73,8 @@ export async function step2_enrichAndBuild(
         tags: isMeal ? ["restaurant", "food"] : [],
         vibeTags: isMeal ? ["Foodie" as const] : [],
         image: "",
-        // ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = 제미니 가격이 없거나 0 이면 모름 = 글자 비움(화면은 가격 줄을 안 그린다) · 0 은 창고가 확인한 무료만 (정본 §)
-        priceEstimate:
-          sanitizePriceEur(gPlace.price_eur) > 0
-            ? `€${sanitizePriceEur(gPlace.price_eur)}`
-            : "",
+        // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 제미니 가격이 없거나 0 이면 모름 = 글자 비움(화면은 가격 줄을 안 그린다) · 0 은 창고가 확인한 무료만 · 가격 변환(gPrice)은 한 번만 계산 (정본 §)
+        priceEstimate: gPrice > 0 ? `€${gPrice}` : "",
         placeTypes: isMeal ? ["restaurant"] : ["tourist_attraction"],
         recommendedTime:
           gPlace.startTime < "12:00"
@@ -87,10 +85,7 @@ export async function step2_enrichAndBuild(
         city: formData.destination,
         koreanPopularityScore: 0,
         googleMapsUrl: "",
-        estimatedPriceEur:
-          sanitizePriceEur(gPlace.price_eur) > 0
-            ? sanitizePriceEur(gPlace.price_eur)
-            : undefined,
+        estimatedPriceEur: gPrice > 0 ? gPrice : undefined,
         geminiAddress: gPlace.address || "",
         nameKo: gPlace.nameKo || null,
         nameLocal: gPlace.nameLocal || null,

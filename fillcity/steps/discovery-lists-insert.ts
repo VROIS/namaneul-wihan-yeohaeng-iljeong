@@ -1,7 +1,13 @@
 // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 필시티 v3.2 목록 입력 = 선별한 곳을 CID 행으로 넣고 후처리가 구글 맵 페이지를 열어 9요소를 확정한다 · DB 접속은 common.ts connectDb 1벌 (정본 §)
 import fs from "fs";
 import path from "path";
-import { connectDb, loadEnv, parseArgs, reportDir } from "./common";
+import {
+  EXIT_LIMITED,
+  connectDb,
+  loadEnv,
+  parseArgs,
+  reportDir,
+} from "./common";
 import { GMAPS_WINDOWS } from "../../worker/lib/services/fill/gmaps-pid-identity/page-reader";
 
 loadEnv();
@@ -12,7 +18,6 @@ const runPost = argv["post"] !== "false";
 // ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = 목록 입력 후처리 창 수 = 한 설정(GMAPS_WINDOWS) (정본 §)
 const parallel = Math.max(1, Number(argv["parallel"] || GMAPS_WINDOWS));
 const limit = Number(argv["limit"] || 0);
-const EXIT_LIMITED = 3;
 
 function latestSelect(): string {
   if (argv["report"]) return path.resolve(String(argv["report"]));
@@ -110,46 +115,44 @@ function latestSelect(): string {
       .map(([k, v]) => `${k} ${v}`)
       .join(" · ")}`,
   );
-  if (!runPost) await c.end();
-  if (runPost) {
-    const { chromium } = await import("playwright");
-    const { launchBrowser } = await import(
-      "../../worker/lib/services/fill/gmaps-pid-identity/page-reader"
-    );
-    const { runGmapsPost, r2PrefixOf } = await import(
-      "../../worker/lib/services/fill/gmaps-post"
-    );
-    const browser = await launchBrowser(chromium);
-    let limitedStop = false;
-    try {
-      await runGmapsPost({
-        client: c,
-        browser,
-        cityId,
-        r2Prefix: r2PrefixOf(process.env.R2_PUBLIC_URL),
-        upsertPlace,
-        parallel,
-        fill: true,
-        limit: limit || undefined,
-      });
-    } catch (e: any) {
-      console.error(`⛔ 후처리 중단 = ${e?.message || e}`);
-      limitedStop = /제한보기/.test(String(e?.message));
-      if (!limitedStop) throw e;
-    } finally {
-      await browser.close().catch(() => {});
+  let limitedStop = false;
+  try {
+    if (runPost) {
+      const { chromium } = await import("playwright");
+      const { launchBrowser } = await import(
+        "../../worker/lib/services/fill/gmaps-pid-identity/page-reader"
+      );
+      const { runGmapsPost, r2PrefixOf } = await import(
+        "../../worker/lib/services/fill/gmaps-post"
+      );
+      const browser = await launchBrowser(chromium);
+      try {
+        await runGmapsPost({
+          client: c,
+          browser,
+          cityId,
+          r2Prefix: r2PrefixOf(process.env.R2_PUBLIC_URL),
+          upsertPlace,
+          parallel,
+          fill: true,
+          limit: limit || undefined,
+        });
+      } catch (e: any) {
+        console.error(`⛔ 후처리 중단 = ${e?.message || e}`);
+        limitedStop = /제한보기/.test(String(e?.message));
+        if (!limitedStop) throw e;
+      } finally {
+        await browser.close().catch(() => {});
+      }
+      const purged = await purgeMergedRows(cityId);
+      console.log(`병합 행 정리 ${purged.purged}`);
     }
-    const purged = await purgeMergedRows(cityId);
-    console.log(`병합 행 정리 ${purged.purged}`);
+  } finally {
     await c.end();
-    if (limitedStop) {
-      const { pool } = await import("../../worker/lib/db");
-      await pool!.end();
-      process.exit(EXIT_LIMITED);
-    }
+    const { pool } = await import("../../worker/lib/db");
+    await pool!.end();
   }
-  const { pool } = await import("../../worker/lib/db");
-  await pool!.end();
+  if (limitedStop) process.exit(EXIT_LIMITED);
   console.log(`═══ ④ 끝: 보고서 R2 ${reportKey} ═══`);
 })().catch((e) => {
   console.error("ERR", e?.message || e);

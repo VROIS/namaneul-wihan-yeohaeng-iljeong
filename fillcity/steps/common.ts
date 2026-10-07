@@ -6,6 +6,7 @@ import { createRequire } from "module";
 import os from "os";
 import { spawn } from "child_process";
 import { foldAccents } from "../../worker/lib/services/shared/text-fold";
+import { fileStamp } from "../../shared/r2-paths";
 
 export const ROOT = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -220,10 +221,25 @@ export function notifyHuman(title: string, message: string): void {
   }
 }
 
-// ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 시각 글자(YYYY-MM-DD_HHMMSS, 세계시) 1벌 = 본체·깔때기·단계가 전부 여기 것만 쓴다 (정본 §)
-export const stampOf = (iso: string): string =>
-  iso.slice(0, 19).replace("T", "_").replace(/:/g, "");
-export const stamp = (): string => stampOf(new Date().toISOString());
+// ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 시각 글자(YYYY-MM-DD_HHMMSS, 세계시) = 프로젝트 1벌 shared/r2-paths fileStamp 를 쓴다(본체·깔때기·단계 전부) · 이미 시각 글자인 입력은 그대로 돌려준다(깔때기 기본값 = 파일 이름 앞 17자) (정본 §)
+export const stampOf = (s: string): string =>
+  /^\d{4}-\d{2}-\d{2}_\d{6}$/.test(s) ? s : fileStamp(new Date(s));
+export const stamp = (): string => fileStamp();
+
+// ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 종료 코드 3 = 구글맵 제한 보기(사람 인증) = 지운 것 없이 멈춘다 = 본체가 알림 → 기다림 → 같은 단계 재실행 · 상수는 여기 1벌 (정본 §)
+export const EXIT_LIMITED = 3;
+
+// ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 동시 호출 뒤 실패한 몫 되살리기 1벌(발굴 7언어·2차 4분할) = 몫마다 recover(저장된 응답이 있으면 그것으로, 없으면 그 몫만 한 번 더) → 끝내 실패한 몫 목록 (정본 §)
+export async function retryFailed<K>(
+  items: K[],
+  codes: number[],
+  recover: (k: K) => Promise<boolean>,
+): Promise<K[]> {
+  const still: K[] = [];
+  for (const [i, k] of items.entries())
+    if (codes[i] !== 0 && !(await recover(k))) still.push(k);
+  return still;
+}
 
 // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 단계 스크립트 실행(npx tsx → 종료 코드) 1벌 = 본체·발굴·2차 호출이 같이 쓴다 · onLine 을 주면 출력을 한 줄씩 받고, 없으면 화면에 그대로 (정본 §)
 export function runTsx(

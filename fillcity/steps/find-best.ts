@@ -16,8 +16,17 @@ import {
   type Ledger,
   type LedgerEntry,
 } from "./common";
-import { kindWordOf } from "../../worker/lib/services/fill/gmaps-shared";
+import {
+  codeOf,
+  inTxn,
+  kindWordOf,
+  loadPriceCtx,
+  newStat,
+  upsertTranslations,
+} from "../../worker/lib/services/fill/gmaps-shared";
 import { absorbInto } from "../../worker/lib/services/fill/gmaps-absorb";
+import { decidePrice } from "../../worker/lib/services/shared/price-eur";
+import { upsertPlace } from "../../worker/lib/services/place-upsert";
 
 loadEnv();
 const argv = parseArgs();
@@ -133,10 +142,6 @@ type Found = {
   if (!found.length) process.exit(0);
 
   const c = await connectDb();
-  const { upsertPlace } = await import(
-    "../../worker/lib/services/place-upsert"
-  );
-  const sh = await import("../../worker/lib/services/fill/gmaps-shared");
   const { writeBestRankUnion } = await import(
     "../../worker/lib/services/shared/best-rank"
   );
@@ -145,7 +150,7 @@ type Found = {
     const r = byOrder.get(x.order)!;
     const n = ledger[x.key].entry;
     const uri = `https://maps.google.com/?cid=${r.cid}`;
-    const code = sh.codeOf(n.name, n.langs, n.copies ?? []);
+    const code = codeOf(n.name, n.langs, n.copies ?? []);
     const exist = (
       await c.query(
         `SELECT id, name_en, seed_category, category_tags, status FROM place_seed_raw WHERE city_id=$1 AND google_maps_uri LIKE $2 AND merged_into IS NULL LIMIT 1`,
@@ -154,8 +159,8 @@ type Found = {
     ).rows[0];
     const ko = (n.copies ?? []).find((t: any) => t.lang === "ko");
     if (exist) {
-      // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 창고에 그 CID 행이 있으면 흡수 도구 1벌(gmaps-absorb absorbInto)로 합친다 = 제미니 몫·가격 결정·베스트 언어·번역이 ④ 흡수와 같은 길 (정본 §)
-      const stat = sh.newStat();
+      // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 창고에 그 CID 행이 있으면 흡수 도구 1벌(gmaps-absorb absorbInto)로 합친다 = 제미니 몫·가격 결정·베스트 언어·번역이 ④ 흡수와 같은 길 · gmaps-shared 부품은 정적 import 한 번 (정본 §)
+      const stat = newStat();
       await absorbInto(
         c,
         upsertPlace,
@@ -191,7 +196,11 @@ type Found = {
       longitude: n.lng,
       address: n.address ?? null,
       googleMapsUri: uri,
-      priceEur: n.avgPrice ?? null,
+      // 가격 결정 1벌(제미니 값 그대로, 0 = 무료 · 없으면 비움) = 이 행은 바로 뒤 직행 읽기가 페이지 값으로 다시 정한다
+      priceEur: decidePrice({
+        geminiPrice: n.avgPrice ?? null,
+        pageOpened: false,
+      }).price,
       selectionReasonKo: ko?.summary || null,
       shortformKo: ko?.editorial || null,
       categoryTags: [n.cat],
@@ -203,9 +212,9 @@ type Found = {
       );
       continue;
     }
-    const br = await sh.inTxn(c, async () => {
+    const br = await inTxn(c, async () => {
       const b = await writeBestRankUnion(c, res.rowId!, code);
-      await sh.upsertTranslations(c, res.rowId!, n.copies ?? []);
+      await upsertTranslations(c, res.rowId!, n.copies ?? []);
       return b;
     });
     ledger[x.key] = {
@@ -250,7 +259,7 @@ type Found = {
         [cityId, r2PrefixOf(process.env.R2_PUBLIC_URL), made],
       )
     ).rows;
-    const priceCtx = await sh.loadPriceCtx(c, cityId);
+    const priceCtx = await loadPriceCtx(c, cityId);
     const browser = await launchBrowser(chromium);
     try {
       await verifyPidRows({

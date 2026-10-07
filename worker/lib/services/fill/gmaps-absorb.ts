@@ -1,5 +1,5 @@
-// ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = 흡수(알아보는 문이 "있음"으로 본 곳을 그 행에 합치기) 1벌 = §0 700줄 가드로 gmaps-shared 에서 분리(로직 무변경) (정본 §)
-import { decidePrice, FRESH_SQL } from "../shared/price-eur";
+// ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 흡수(알아보는 문이 "있음"으로 본 곳을 그 행에 합치기) 1벌 = §0 700줄 가드로 gmaps-shared 에서 분리 · 옛 가격·신선도 읽기는 loadOldPrices 1벌 (정본 §)
+import { decidePrice, loadOldPrices } from "../shared/price-eur";
 import { writeBestRankUnion } from "../shared/best-rank";
 import {
   codeOf,
@@ -30,12 +30,7 @@ export async function absorbInto(
     return;
   }
   const ko = koCopyOf(n.copies);
-  const old = (
-    await c.query(
-      `SELECT price_eur::float8 AS price, ${FRESH_SQL} AS fresh FROM place_seed_raw WHERE id=$1`,
-      [hint.psrId],
-    )
-  ).rows[0];
+  const old = (await loadOldPrices(c, [hint.psrId])).get(hint.psrId);
   const pd = decidePrice({
     geminiPrice: n.avgPrice ?? null,
     oldPrice: old?.price ?? null,

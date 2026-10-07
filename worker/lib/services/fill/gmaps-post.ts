@@ -35,8 +35,7 @@ export async function insertSeedEntries(o: {
   reportKey: string;
   upsertPlace: any;
   log?: (line: string) => void;
-  rawRows?: any[]; // 호출자가 주면 열어 본 결과(request·page·verdict)를 여기에도 쌓는다 = ④ 판정 장부 재료
-  onRead?: (r: Read) => Promise<void> | void; // 읽은 결과를 창고에 쓴 직후 호출(넣은 행 번호는 r.rowId)
+  onRead?: (r: Read) => Promise<void> | void; // 읽은 결과를 창고에 쓴 직후 호출(넣은 행 번호는 r.rowId) = ④ 판정 장부 재료
 }): Promise<Stat> {
   const log = o.log ?? ((l: string) => console.log(l));
   const { client: c, cityId, report } = o;
@@ -68,7 +67,7 @@ export async function insertSeedEntries(o: {
   const city = (
     await c.query("SELECT name_en FROM cities WHERE id=$1", [cityId])
   ).rows[0];
-  const rawRows: any[] = o.rawRows ?? [];
+  const rawRows: any[] = [];
   const priceCtx = await loadPriceCtx(c, cityId);
   const reads = await readAll(
     o.browser,
@@ -113,13 +112,13 @@ export async function insertSeedEntries(o: {
 
 // 대기 조건 = 페이지 검증이 없거나, 검증 뒤(10초 이후)에 행이 바뀌었거나, (검색까지 해봤는데 못 찾은 행이 아닌데) 사진이 구글(R2)이 아니거나 직행 페이지가 빈 등록(리뷰수·분류 없음)이었던 행 (bts_* 제외, active 만). $1 = R2 공개주소 접두
 export const HOLLOW = `verify_source = 'gmaps-pid-page' AND COALESCE(google_review_count, 0) = 0 AND google_primary_type IS NULL`;
-export const PENDING_WHERE = `status = 'active' AND seed_category NOT LIKE 'bts_%'
-  AND (verify_source IS NULL OR verify_source NOT LIKE 'gmaps%' OR verified_at IS NULL OR updated_at > verified_at + interval '10 seconds'
+// ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 대기 조건 1벌 = 워커 큐는 "검증 뒤 행이 바뀜(updated_at)" 조건 포함, 필시티 목록 후처리(한 판 안에서 돌고 인증 뒤 같은 단계를 다시 돈다)는 그 조건 없이 구글맵 도장이 없는 행(+사진 없음·빈 등록)만 = 이어 읽기는 남은 행만 (정본 §)
+const pendingWhere = (withUpdated: boolean) =>
+  `status = 'active' AND seed_category NOT LIKE 'bts_%'
+  AND (verify_source IS NULL OR verify_source NOT LIKE 'gmaps%' OR verified_at IS NULL${withUpdated ? " OR updated_at > verified_at + interval '10 seconds'" : ""}
        OR (verify_source <> 'gmaps-search-nomatch' AND (image_url IS NULL OR image_url NOT LIKE ($1 || '%') OR (${HOLLOW}))))`;
-// ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = 필시티 목록 후처리(한 판 안에서 돌고, 인증 뒤 같은 단계를 다시 돈다)는 "검증 뒤 행이 바뀜(updated_at)" 조건을 쓰지 않는다 = 아직 구글맵 도장이 없는 행(+사진 없음·빈 등록)만 연다 → 이어 읽기 = 남은 행만(마르세유 실측 = 흡수·베스트 합치기가 갱신 시각을 바꿔 읽은 151행을 전부 다시 열던 원인) (정본 §)
-export const PENDING_WHERE_FILL = `status = 'active' AND seed_category NOT LIKE 'bts_%'
-  AND (verify_source IS NULL OR verify_source NOT LIKE 'gmaps%' OR verified_at IS NULL
-       OR (verify_source <> 'gmaps-search-nomatch' AND (image_url IS NULL OR image_url NOT LIKE ($1 || '%') OR (${HOLLOW}))))`;
+export const PENDING_WHERE = pendingWhere(true);
+export const PENDING_WHERE_FILL = pendingWhere(false);
 
 type Client = { query: (q: string, v?: unknown[]) => Promise<any> };
 export type PostSummary = {
@@ -233,8 +232,8 @@ export async function runGmapsPost(o: {
           `   ${r.gate} #${r.id} ${r.name_en} rc=${r.rc_page ?? "-"} ${r.upsert || ""}`,
         ),
     });
-    // ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = PID 직행 루프가 사람 인증(제한 보기)으로 멈추면 여기서 바로 위로 던진다 = 부르는 쪽이 종료 코드 3 → 알림 → 3분 → 같은 단계 재실행 = 남은 행부터 이어 읽기, 풀릴 때까지 반복 (정본 §)
-    if (pidResults.some((r) => r.gate === "limited-view"))
+    // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 필시티 한 판 안(fill)에서만 사람 인증(제한 보기)을 위로 던진다(종료 코드 3 → 알림 → 1분 → 같은 단계 재실행 = 남은 행부터) · 워커 후처리 큐는 제한 보기 행을 건너뛰고 검색 경로까지 계속 돈다(도시 전체가 멈추지 않는다) (정본 §)
+    if (o.fill && pidResults.some((r) => r.gate === "limited-view"))
       throw new Error(
         `${LIMITED_WHY}: 구글맵 제한 보기 = 사람 인증 = 남은 ${rows.length - pidResults.length + limitedCount(pidResults)}행은 인증 뒤 이어 읽기`,
       );

@@ -14,7 +14,6 @@ import {
   type WriteCtx,
 } from "./apply";
 
-export const PID_PARALLEL = GMAPS_WINDOWS;
 // ⚠️ 수정금지(승인필요) 2026-09-30 사장님 결정 = 제한 보기가 세트 안에 이만큼이면 채널 막힘 = 남은 행은 열지 않고 멈춘다(빈 등록으로 오인해 지우는 사고 차단) (정본 §)
 export const LIMITED_STOP = 1;
 export const limitedCount = (rs: Result[]) =>
@@ -48,7 +47,7 @@ export async function verifyPidRows(o: VerifyPidOpts): Promise<Result[]> {
   const queue = [...o.rows];
   const windows = Math.max(
     1,
-    Math.min(o.parallel ?? PID_PARALLEL, queue.length),
+    Math.min(o.parallel ?? GMAPS_WINDOWS, queue.length),
   );
   const wins: { page: any; close: () => Promise<unknown> }[] = [];
   let fatal: string | null = null;

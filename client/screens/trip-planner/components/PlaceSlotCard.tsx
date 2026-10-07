@@ -111,7 +111,7 @@ export default function PlaceSlotCard({
     return (
       amount((place as any).estimatedPriceEur) ??
       amount(place.entranceFee) ??
-      (place.priceEstimate ? place.priceEstimate : null)
+      (place.priceEstimate || null)
     );
   })();
   return (

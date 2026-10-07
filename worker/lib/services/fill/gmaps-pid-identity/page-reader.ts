@@ -71,6 +71,7 @@ export async function openWindow(
       newWindow: true,
       background: true,
     });
+    // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 새 창의 페이지는 표식 주소로 찾는다(50ms 폴링) · 'page' 이벤트 방식은 실측(2026-10-07, 3창 동시)에서 이벤트 시점 주소가 표식이 아니라 10초 시간 초과 뒤에야 잡혀 폴링(1초 안)보다 느려 쓰지 않는다 (정본 §)
     let page: Page | undefined;
     for (let i = 0; i < 200 && !page; i++) {
       page = ctx.pages().find((p: Page) => p.url() === mark);
@@ -267,7 +268,7 @@ export async function dismissConsent(page: Page): Promise<boolean> {
   return !/consent\.google/.test(page.url());
 }
 
-// ⚠️ 수정금지(승인필요) 2026-10-04 사장님 결정 = 리뷰수는 단어 패턴이 맞은 라벨에서만 읽어 그 값 그대로 쓴다(의심 표시 없음) · 리뷰 상자가 없으면 0 · 별점은 읽지 않는다 (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 리뷰수는 단어 패턴이 맞은 라벨에서만 읽어 그 값 그대로 쓴다(의심 표시 없음) · 리뷰 상자가 없으면 0 · 별점은 읽지 않는다 (정본 §)
 async function readRatingBlock(page: Page): Promise<{
   hasBox: boolean;
   reviewCount: number | null;

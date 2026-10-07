@@ -251,7 +251,7 @@ async function activeKeeperOf(id: number): Promise<number | null> {
   return cur;
 }
 
-// ⚠️ 수정금지(승인필요) 2026-10-04 사장님 결정 = 지우기 전에 그 행이 가진 것(번역·동의 등급·가리키는 곳·가격)을 남는 행으로 먼저 옮긴다 = 가격은 남는 행이 비었거나 진 행만 구글 페이지를 읽었을 때 옮긴다 (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 지우기 전에 그 행이 가진 것(번역·동의 등급·가리키는 곳·가격)을 남는 행으로 먼저 옮긴다 = 가격은 남는 행이 비었거나 진 행만 구글 페이지를 읽었을 때 옮긴다 (정본 §)
 async function moveBelongingsTo(keepId: number, loserId: number) {
   if (!db) return;
   const { bestRankUnion } = await import("./shared/best-rank");

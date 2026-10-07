@@ -68,7 +68,7 @@ const CAPABILITIES = [
     ],
     hint: "같은 PID 쌍둥이 = status-backfill.ts(keep 흡수·best_rank 합집합·번역행 복사). 소속오염 행 = wrongcity-quarantine.ts(500km 안 가장 가까운 도시로 이동, 없으면 삭제). 새 중복 청소·이동 스크립트 만들지 말 것(§16).",
   },
-  // ⚠️ 수정금지(승인필요) 2026-09-30 사장님 결정 = 식당 가격 = 페이지 열 때 머리줄 가격(9요소, page-reader) → 유로 환산 1벌(shared/price-eur, 상한 규칙) → 남은 것만 ⑤ 후처리 제미니 몰아 묻기(price-gemini, #07 prompt.txt) · 어사이드 답 넣기도 price-gemini
+  // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 식당 가격 = 페이지 열 때 머리줄 가격(9요소, page-reader) → 유로 환산 1벌(shared/price-eur) → 남은 것만 ⑤ 후처리 제미니 몰아 묻기(price-gemini) · 어사이드 답 넣기도 price-gemini · 지운 지시문(02-enrich-place)을 보던 감시 글자는 삭제
   {
     id: "price-fill",
     ko: "식당 가격(페이지 머리줄 → 유로 상한 규칙 → 남은 것 제미니 120곳/콜 · 어사이드 답 넣기)",
@@ -81,7 +81,6 @@ const CAPABILITIES = [
     triggers: [
       /Price per person/i,
       /\bfunction\s+(cardPrice|priceText|toEur|headerPrice)\s*\(/,
-      /02-enrich-place\/prompt\.txt/,
     ],
     hint: "가격 = page-reader headerPrice(페이지) + price-eur toEur(환산) + price-gemini(--gemini=true 몰아 묻기 · --apply-json 어사이드). 새 가격 긁개·환산기·보강 지시문 만들지 말 것(§16).",
   },
@@ -114,7 +113,10 @@ const CAPABILITIES = [
       "worker/lib/services/fill/category-align.ts",
       "worker/lib/services/shared/place-category-map.ts",
     ],
-    triggers: [/\bfunction\s+(finalCategory|categoriesOfLabel|resolveCategory)\s*\(/, /NOT_PLACE/],
+    triggers: [
+      /\bfunction\s+(finalCategory|categoriesOfLabel|resolveCategory)\s*\(/,
+      /NOT_PLACE/,
+    ],
     hint: "분류 = place-category-map finalCategory 1벌, 기존 행 정렬 = category-align.ts. 새 대응표·판정식 만들지 말 것(§16).",
   },
   // ⚠️ 수정금지(승인필요) 2026-10-01 사장님 결정 = 필시티 읽은 뒤 단계 = fillcity/steps 의 탐지·에이전트 명단·같은 장소 병합·제미니 호출 대상·손님상 검수 1벌 (정본 §)
@@ -130,7 +132,12 @@ const CAPABILITIES = [
       "fillcity/steps/gemini-targets.ts",
       "fillcity/steps/serving-report.ts",
     ],
-    triggers: [/_scan\.json/, /_agent-input/, /gemini-before/, /\bfunction\s+(isLodgingPage|roomRateEur)\s*\(/],
+    triggers: [
+      /_scan\.json/,
+      /_agent-input/,
+      /gemini-before/,
+      /\bfunction\s+(isLodgingPage|roomRateEur)\s*\(/,
+    ],
     hint: "읽은 뒤 단계 = fillcity/steps/{post-read-scan,agent-export,agent-run,dup-merge,gemini-targets,serving-report}.ts 1벌(v3 --only=scan,agent,gtarget,report · 에이전트 동시 실행 = agent-run.ts). 호텔 판정은 에이전트 지시문(prompts/04-classify-agent) 안에 있다. 호텔 판별·객실 요금 읽기·같은 장소 병합·제미니 호출 후보 뽑기·손님상 검수 새 스크립트 만들지 말 것(§16).",
   },
   // ⚠️ 수정금지(승인필요) 2026-09-30 사장님 결정 = LLM 삭제 = llm-review.ts(명단 내보내기·판정 적용) + 에이전트 판단(CRITERIA)

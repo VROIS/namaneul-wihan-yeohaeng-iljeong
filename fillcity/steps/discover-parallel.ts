@@ -1,17 +1,17 @@
 // ⚠️ 수정금지(승인필요) 2026-10-05 사장님 결정 = v3.2 최적화 (정본 §)
 import fs from "fs";
 import path from "path";
-import { ROOT, loadEnv, parseArgs, runTsx, stamp } from "./common";
+import { ROOT, loadEnv, parseArgs, retryFailed, runTsx, stamp } from "./common";
+import { LANGS } from "../../worker/lib/services/shared/language-instruction";
 
 loadEnv();
 const argv = parseArgs();
 const cityId = Number(argv["city-id"] || 0);
-const LANGS = ["ko", "en", "ja", "fr", "zh", "es", "de"];
-const langs = argv["langs"]
+const langs: string[] = argv["langs"]
   ? String(argv["langs"])
       .split(",")
       .map((s) => s.trim())
-  : LANGS;
+  : [...LANGS];
 const RUN = path.join(
   ROOT,
   "fillcity/prompts/02-discover-best20-perlang/run.ts",
@@ -39,12 +39,12 @@ const RUN = path.join(
     `🔴 제미니 발굴 ${langs.length}개 언어 동시 (${langs.join(",")})`,
   );
   const codes = await Promise.all(langs.map(callLang));
-  const stillFailed: string[] = [];
-  for (const [i, lang] of langs.entries()) {
-    if (codes[i] === 0 || saved(lang)) continue;
+  // 실패한 언어 = 저장된 응답이 있으면 그대로(돈을 다시 쓰지 않는다), 없을 때만 그 언어만 다시 호출
+  const stillFailed = await retryFailed(langs, codes, async (lang) => {
+    if (saved(lang)) return true;
     console.error(`⚠️ ${lang} 실패 + 저장된 응답 없음 = 그 언어만 다시 호출`);
-    if ((await callLang(lang)) !== 0 && !saved(lang)) stillFailed.push(lang);
-  }
+    return (await callLang(lang)) === 0 || saved(lang);
+  });
   console.log(
     `═══ 제미니 발굴 끝 = ${langs.length - stillFailed.length}/${langs.length}개 언어 저장 · ${Math.round((Date.now() - t0) / 1000)}초 ═══`,
   );

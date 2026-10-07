@@ -125,7 +125,7 @@ export async function writeRow(
       address: read ? r.address : null,
       latitude: !read || r.gate === "page-coord-invalid" ? null : r.page_lat,
       longitude: !read || r.gate === "page-coord-invalid" ? null : r.page_lng,
-      // ⚠️ 수정금지(승인필요) 2026-10-04 사장님 결정 = 리뷰수는 읽은 값 그대로 쓴다(의심 표시 없음) · 별점은 읽지 않는다 (정본 §)
+      // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 리뷰수는 읽은 값 그대로 쓴다(의심 표시 없음) · 별점은 읽지 않는다 (정본 §)
       googleReviewCount: read ? r.rc_page : null,
       googleMapsUri: read ? r.maps_uri : null,
       businessStatus: read ? r.status : null,

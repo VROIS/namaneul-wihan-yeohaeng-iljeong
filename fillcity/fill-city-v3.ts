@@ -2,7 +2,8 @@
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { notifyHuman, runTsx, stampOf } from "./steps/common";
+import { EXIT_LIMITED, notifyHuman, runTsx, stampOf } from "./steps/common";
+import { LANGS } from "../worker/lib/services/shared/language-instruction";
 
 const SKILL = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(SKILL, "..");
@@ -70,14 +71,11 @@ const saveProgress = (finished = false) => {
     ),
   );
 };
-const LANGS = ["ko", "en", "ja", "fr", "zh", "es", "de"];
-const langs = argv["langs"]
+const langs: string[] = argv["langs"]
   ? String(argv["langs"])
       .split(",")
       .map((s) => s.trim())
-  : LANGS;
-// ⚠️ 수정금지(승인필요) 2026-09-30 사장님 결정 = 종료 코드 3 = 구글맵 제한 보기(채널 막힘) = 지운 것 없이 멈춘다 = 다음 채널(클라우드플레어·어사이드)로
-const EXIT_LIMITED = 3;
+  : [...LANGS];
 const WAIT_MIN = Math.max(1, Number(argv["wait-min"] || 1)); // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 인증 대기 1분(사람이 풀어야 하니 더 기다릴 이유가 없다) (정본 §)
 
 if (!cityId) {
@@ -266,7 +264,7 @@ async function trackB() {
     );
   saveProgress();
 
-  // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 한 판 도는 동안 전용 크롬(GMAPS_CDP)에 닻 창 1개를 화면 밖에 열어 둔다 = 사람 인증 창이 유일한 창이라 사장님이 닫으면 크롬 자체가 꺼지던 것(스트라스부르 실측) (정본 §)
+  // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 한 판 도는 동안 전용 크롬(GMAPS_CDP)에 닻 창 1개를 화면 밖에 열어 두고(사람 인증 창이 유일한 창이라 사장님이 닫으면 크롬 자체가 꺼지던 것, 스트라스부르 실측) 판이 끝나면 그 닻 창을 닫는다(판마다 창이 쌓이지 않게) (정본 §)
   let anchor: { close: () => Promise<unknown> } | null = null;
   if (process.env.GMAPS_CDP) {
     const { chromium } = await import("playwright");
@@ -274,11 +272,16 @@ async function trackB() {
       "../worker/lib/services/fill/gmaps-pid-identity/page-reader"
     );
     const browser = await launchBrowser(chromium);
-    await openWindow(browser);
-    anchor = { close: () => browser.close().catch(() => {}) };
+    const win = await openWindow(browser);
+    anchor = {
+      close: async () => {
+        await win.close();
+        await browser.close().catch(() => {});
+      },
+    };
   }
 
-  // ⚠️ 수정금지(승인필요) 2026-10-04 사장님 결정 = 환율표 갱신은 --only 와 상관없이 항상 먼저 돈다 = 하루 한 번 갱신된 표가 따라다닌다 (정본 §)
+  // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 환율표 갱신은 --only 와 상관없이 항상 먼저 돈다 = 하루 한 번 갱신된 표가 따라다닌다 (정본 §)
   await run(
     "⓪ 환율표 갱신(무료 API, 0원)",
     "worker/lib/services/fill/exchange-rates.ts",
@@ -388,7 +391,7 @@ async function trackB() {
       .filter(Boolean);
   let agentStart = Number.MAX_SAFE_INTEGER;
   const verdictFiles = (re: RegExp): string[] => {
-    const base = path.join(ROOT, "docs", "b1-reports", String(cityId));
+    const base = REPORT_DIR;
     if (!fs.existsSync(base)) return [];
     const dir = fs
       .readdirSync(base)
@@ -505,7 +508,8 @@ async function trackB() {
     0,
   );
 
-  saveProgress(failures.length === 0);
+  // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 판이 끝까지 돌면 실패 단계가 있어도 장부는 "끝남" = 다음 /fillcity 는 새 판 · 이어 돌기(남은 단계만)는 판이 죽었을 때만 (정본 §)
+  saveProgress(true);
   await anchor?.close();
   if (failures.length) {
     console.log(`\n⚠️ 실패한 단계(재시도 후) = ${failures.join(", ")}`);

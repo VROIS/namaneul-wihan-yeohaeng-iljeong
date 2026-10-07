@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 승인 = best_rank 쓰기 트랜잭션(SELECT FOR UPDATE→합집합→조건부 UPDATE) 1벌
 import { bestRankUnion, writeBestRankUnion } from "../shared/best-rank";
-// ⚠️ 수정금지(승인필요) 2026-08-28 사장님 승인 = 흡수 후보 컬럼 목록 1벌(§16 SSOT) = fillcity/dups-detail.ts 와 공용.
+// ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 흡수 후보 컬럼 목록 1벌(§16) (정본 §)
 import { FILL_COLS } from "../shared/place-fill-columns";
 
 const envRaw = fs.existsSync(path.join(process.cwd(), ".env"))

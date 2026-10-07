@@ -38,7 +38,7 @@ export interface TsPlace {
   latitude: number | null; // location.latitude
   longitude: number | null; // location.longitude
   googleReviewCount: number | null; // userRatingCount
-  // ⚠️ 수정금지(승인필요) 2026-10-03 사장님 결정 = TS 가격대를 받는다(통화 코드 + 범위) = 가격 순서 페이지 > TS > 제미니 (정본 §)
+  // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = TS 가격대를 받는다(통화 코드 + 범위) = 가격 순서 페이지 > TS > 제미니 (정본 §)
   priceRange: CardPrice | null;
   photoName: string | null; // photos[0].name
   googleMapsUri: string | null;
