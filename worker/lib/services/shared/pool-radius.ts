@@ -54,12 +54,15 @@ export function poolWhereSql(
   )))`;
 }
 
-// ⚠️ 수정금지(승인필요) 2026-09-08 사장님 결정 = 손님상 게이트 1벌 = active + (RC 또는 best_rank) + 확인된 곳(PID 또는 구글맵 검증) + 폐업·임시휴업 제외(창고엔 남기고 풀리면 저절로 복귀. NULL 은 통과 = 1,310행 보존).
-export function servingGateSql(): SQL {
+// ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = 손님상 게이트 1벌 = active + (RC 또는 best_rank) + 확인된 곳(PID 또는 구글맵 검증) + 폐업·임시휴업 제외(창고엔 남기고 풀리면 저절로 복귀) + 가격 있음(NULL = 모름 = 전 분류 손님상 금지, 0 = 확인된 무료) · 가격 조건 앞까지 = servingGateCoreSql(검수가 "가격 없어 못 오른 행"을 세는 데 쓴다) (정본 §)
+export function servingGateCoreSql(): SQL {
   return sql`(${placeSeedRaw.status} = 'active'
     AND (COALESCE(${placeSeedRaw.googleReviewCount}, 0) > 0 OR ${placeSeedRaw.bestRank} IS NOT NULL)
     AND (${placeSeedRaw.googlePlaceId} IS NOT NULL OR ${placeSeedRaw.verifySource} LIKE 'gmaps%')
     AND (${placeSeedRaw.businessStatus} IS NULL OR ${placeSeedRaw.businessStatus} NOT IN ('CLOSED_PERMANENTLY', 'CLOSED_TEMPORARILY')))`;
+}
+export function servingGateSql(): SQL {
+  return sql`(${servingGateCoreSql()} AND ${placeSeedRaw.priceEur} IS NOT NULL)`;
 }
 
 // ⚠️ 수정금지(승인필요) 2026-09-29 사장님 결정 = DB 올리 전환 기준 = 손님상 120곳 이상 + 베스트 있음(V3 입구·워커 분기·도시 카드가 이 1벌) (정본 §)

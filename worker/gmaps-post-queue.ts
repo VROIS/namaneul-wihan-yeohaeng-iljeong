@@ -5,6 +5,7 @@ import { launch } from "@cloudflare/playwright";
 import { db, pool, withEngineDb } from "./lib/db";
 import { upsertPlace } from "./lib/services/place-upsert";
 import { runGmapsPost, r2PrefixOf } from "./lib/services/fill/gmaps-post";
+import { refreshRates } from "./lib/services/fill/exchange-rates";
 import { appendTick } from "./lib/services/shared/metrics-heartbeat";
 import { runSnapshotTick } from "./admin-snapshot";
 import { refreshKakaoJwks } from "./routes-social-auth";
@@ -13,6 +14,7 @@ import { cleanupDeletedAccounts } from "./lib/services/account-cleanup";
 // wrangler.jsonc · wrangler.build.jsonc 의 triggers.crons 와 같은 글자
 const KAKAO_JWKS_CRON = "0 3 * * *";
 const ACCOUNT_CLEANUP_CRON = "30 4 * * *";
+const RATES_CRON = "0 5 * * *";
 
 export type GmapsPostMessage = {
   cityId: number;
@@ -39,7 +41,9 @@ export const withGmapsQueue = <T extends object>(httpHandler: T) => ({
       ? kakaoJwksTick()
       : controller.cron === ACCOUNT_CLEANUP_CRON
         ? accountCleanupTick()
-        : metricsTick(),
+        : controller.cron === RATES_CRON
+          ? ratesTick()
+          : metricsTick(),
 });
 
 // ⚠️ 수정금지(승인필요) 2026-09-25 사장님 결정 = 관제탑이 매일 카카오 공개 열쇠를 금고에 갱신 = 로그인 중에는 카카오를 부르지 않는다, 실패하면 금고의 기존 열쇠 유지 (정본 9-25)
@@ -49,6 +53,16 @@ async function kakaoJwksTick(): Promise<void> {
     console.log("[카카오] 공개 열쇠 갱신 확인");
   } catch (e) {
     console.warn("[카카오] 공개 열쇠 갱신 실패:", (e as Error).message);
+  }
+}
+
+// ⚠️ 수정금지(승인필요) 2026-10-03 사장님 결정 = 환율표는 사람 없이 자동 갱신 (정본 §)
+async function ratesTick(): Promise<void> {
+  try {
+    const n = await withEngineDb(() => refreshRates(pool!));
+    console.log(`[환율] 환율표 갱신 = ${n} 통화`);
+  } catch (e) {
+    console.warn("[환율] 환율표 갱신 실패:", (e as Error).message);
   }
 }
 
@@ -125,6 +139,8 @@ export async function consumeGmapsPost(
               cityId,
               r2Prefix: r2PrefixOf((env as any).R2_PUBLIC_URL),
               upsertPlace,
+              // ⚠️ 수정금지(승인필요) 2026-10-03 사장님 결정 = 워커 후처리는 브라우저 하나·창 하나로 천천히 돈다 = 속도보다 자동화 (정본 §)
+              parallel: 1,
               log: (l) => console.log("[gmaps-post] " + l),
             });
           } finally {

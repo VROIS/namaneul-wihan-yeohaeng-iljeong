@@ -2,8 +2,10 @@
 import { LANGS } from "../shared/language-instruction";
 import {
   BROWSER_UA,
+  GMAPS_WINDOWS,
   launchBrowser,
   openWindow,
+  showWindow,
   coordsFromUrl,
   listCandidates,
   readPlacePage,
@@ -15,13 +17,12 @@ import {
   finalCategory,
   resolveCategory,
 } from "../shared/place-category-map";
-import { toEur, type EurPer } from "../shared/price-eur";
+import { decidePrice, pagePriceEur, type EurPer } from "../shared/price-eur";
 import { bestRankCode, writeBestRankUnion } from "../shared/best-rank";
 import { upsertTranslationWith } from "../place-upsert";
 import {
   distanceKmFromCoords,
   distanceMetersFromCoords,
-  MOVE_MAX_KM,
 } from "../shared/geo-distance";
 import {
   coversName,
@@ -68,6 +69,8 @@ export type Read = {
   imageUrl?: string;
   cat?: string;
   hotspotTag?: boolean; // 핫스팟이 구글 사실 분류로 바뀌며 태그로 남는 경우
+  tier?: "T1" | "T2" | null; // 받은 근거(T1 이름 같음 · T2 이름 달라도 CID·후기·1km·칩 호환)
+  rowId?: number; // 창고에 쓴 행 번호(writeRead 가 채운다)
 };
 export type Stat = {
   absorbedHint: number;
@@ -177,6 +180,19 @@ const CAT_WORD: Record<string, string> = {
   restaurant: "restaurant",
   shopping: "shopping mall",
 };
+// ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = 사람이 찾는 방식 = 영어 이름으로 먼저 찾고, 동네·주소 페이지(후기 0)로 떨어지면 장소 종류 말을 붙여 다시 찾는다 (정본 §)
+const KIND_WORD: Record<string, string> = {
+  restaurant: "restaurant",
+  shopping: "market",
+  heritage: "historical landmark",
+  attraction: "tourist attraction",
+  adventure: "tourist attraction",
+  healing: "park",
+  hotspot: "tourist attraction",
+};
+export const kindWordOf = (cat: string) => KIND_WORD[cat] ?? "";
+export const isLocalityPage = (d: any) =>
+  !!d?.h1 && !(d.reviewCount > 0) && !d.category;
 const distM = (n: NewEntry, x: Candidate) =>
   n.lat != null && n.lng != null && x.lat != null && x.lng != null
     ? distanceMetersFromCoords(n.lat, n.lng, x.lat, x.lng)
@@ -193,9 +209,17 @@ const popRank = (n: NewEntry, x: Candidate) =>
   n.aliases?.length && (n.noXY || distM(n, x) <= 2000)
     ? -(x.reviewCount ?? 0)
     : 0;
-function seedGate(n: NewEntry, d: any, stop: Set<string>): string | null {
-  if (!n.aliases?.length) return null;
-  if (!pageName(n, d.h1, stop)) return `환각의심:이름다름(${d.h1})`;
+// ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = 받기 = T1 이름이 같으면 받음 · T2 이름이 달라도(번역·줄임·음역) 구글이 CID 있는 등록을 주고 후기가 있고 제미니 좌표 1km 안이고 분류칩이 호환이면 그곳이다(사람이 지도 마크로 알아보는 방식, 거부 27건 재생 = 맞는 곳 14 받음) · 베스트(제미니 별칭 있는 시드)는 분류가 달라도 거부하지 않고 구글 분류를 따른다 (정본 §)
+export const T2_MAX_KM = 1;
+export const T1_MAX_KM = 100; // 랜드마크 = 거점 100km(제미니 좌표가 있을 때)
+export const HARD_MAX_KM = 25; // 식당·쇼핑 = 가게는 좌표 가까이(푸켓 실측 = 같은 이름 식당이 106km 밖 다른 도에 있었다)
+const isHard = (cat: string) => cat === "restaurant" || cat === "shopping";
+export function gateVerdict(
+  n: NewEntry,
+  d: any,
+  stop: Set<string>,
+): { why: string | null; tier: "T1" | "T2" | null } {
+  if (!n.aliases?.length) return { why: null, tier: null };
   const km =
     !n.noXY &&
     n.lat != null &&
@@ -203,9 +227,31 @@ function seedGate(n: NewEntry, d: any, stop: Set<string>): string | null {
     d.urlLat != null &&
     d.urlLng != null
       ? distanceKmFromCoords(n.lat, n.lng, d.urlLat, d.urlLng)
-      : 0;
-  if (km > MOVE_MAX_KM) return `환각의심:거리${Math.round(km)}km(${d.h1})`;
-  return null;
+      : null;
+  const far = km != null && km > (isHard(n.cat) ? HARD_MAX_KM : T1_MAX_KM);
+  if (far)
+    return { why: `환각의심:거리${Math.round(km!)}km(${d.h1})`, tier: null };
+  const t1 = isHard(n.cat)
+    ? exactMain(n, d.h1, stop) ||
+      exactName(n.aliases, [d.h1], stop) ||
+      (coversName(n.aliases, [d.h1], stop) && km != null && km <= T2_MAX_KM)
+    : pageName(n, d.h1, stop);
+  if (t1) return { why: null, tier: "T1" };
+  const chipCats = categoriesOfLabel(d.category);
+  const chipCompat =
+    !d.category ||
+    chipCats.includes(n.cat) ||
+    !resolveCategory(d.category, n.cat).mismatch;
+  if (
+    !isHard(n.cat) &&
+    d.mapsUri &&
+    (d.reviewCount ?? 0) > 0 &&
+    km != null &&
+    km <= T2_MAX_KM &&
+    chipCompat
+  )
+    return { why: null, tier: "T2" };
+  return { why: `환각의심:이름다름(${d.h1})`, tier: null };
 }
 // 카드 글자 "4.5(1,234) · Peruvian restaurant ·" / "4.6(35) · $10–20 Restaurant ·" / "4.5 Restaurant ·"(리뷰수 없이) 에서 분류 조각만 읽어 대응표에 댄다. 0 = 맞음/모름, 1 = 다른 분류(식당·쇼핑 확실 불일치).
 const catRank = (n: NewEntry, x: Candidate) => {
@@ -249,35 +295,45 @@ export async function readOne(
   t: PageTools,
 ): Promise<Read> {
   const catWord = CAT_WORD[n.cat] ?? "";
-  const q1 = [n.nameLocal || n.name, catWord, t.cityNameEn]
-    .filter(Boolean)
-    .join(" ");
+  const best = !!n.aliases?.length && !t.preclean;
+  const q1 = [n.name, catWord, t.cityNameEn].filter(Boolean).join(" ");
+  const kind = kindWordOf(n.cat);
+  const q2 =
+    kind && kind !== catWord
+      ? [n.name, kind, t.cityNameEn].filter(Boolean).join(" ")
+      : null;
   let d: any = null;
   let why: string | null = null;
   let q = q1;
   let picked: Candidate | null = null;
+  let tier: "T1" | "T2" | null = null;
   const near =
     n.lat != null && n.lng != null ? { lat: n.lat, lng: n.lng } : null;
   const stop = placeStop(t.cityNameEn, [n.address]);
-  const exact = (h1: string) => exactMain(n, h1, stop);
   const more = [...new Set(n.aliases ?? [])]
-    .filter((a) => a !== (n.nameLocal || n.name))
+    .filter((a) => a !== n.name && a !== n.nameLocal)
     .slice(0, 2);
-  let partial: {
+  type Step = { q: string; near: typeof near; addr?: true };
+  const steps: Step[] = [
+    { q: q1, near },
+    ...(q2 ? [{ q: q2, near }] : []),
+    ...(n.nameLocal && n.nameLocal !== n.name
+      ? [{ q: n.nameLocal, near }]
+      : []),
+    ...more.map((a): Step => ({ q: a, near })),
+    ...(n.address ? [{ q: n.address, near, addr: true } as Step] : []),
+  ];
+  const tried = new Set<string>();
+  let last: {
     d: any;
-    why: string | null;
+    why: string;
     picked: Candidate | null;
     q: string;
   } | null = null;
-  type Step = { q: string; near: typeof near; alias?: true; addr?: true };
-  const steps: Step[] = [
-    { q: q1, near },
-    ...more.map((a): Step => ({ q: a, near, alias: true })),
-    ...(n.address ? [{ q: n.address, near, addr: true } as Step] : []),
-  ];
   try {
     for (const s of steps) {
-      if (s.alias && !partial) continue;
+      if (tried.has(s.q + "@" + JSON.stringify(s.near))) continue;
+      tried.add(s.q + "@" + JSON.stringify(s.near));
       q = s.q;
       const r1 = await t.listCandidates(page, s.q, "en", s.near);
       if (r1.limited) {
@@ -289,10 +345,9 @@ export async function readOne(
       if (xy) steps.push({ q: q1, near: { lat: xy[0], lng: xy[1] } });
       picked = pickFrom(n, r1.candidates);
       if (!picked) {
-        if (!why?.startsWith("환각의심"))
-          why = r1.candidates.length
-            ? `목록:후보${r1.candidates.length}/일치없음`
-            : "없음";
+        why = r1.candidates.length
+          ? `목록:후보${r1.candidates.length}/일치없음`
+          : "없음";
         continue;
       }
       d = await t.readPlacePage(
@@ -301,33 +356,43 @@ export async function readOne(
         "en",
         true,
         t.photoMaxWidthPx,
+        r1.single, // ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = 단일 결과는 이미 그 페이지 = 재이동 없이 읽는다 (정본 §)
       );
       if (d.limited) {
         why = LIMITED_WHY;
         break;
       }
-      if (d.consentBlocked) why = "동의창";
-      else if (!d.h1) why = "빈페이지";
-      else if (!t.preclean && resolveCategory(d.category, n.cat).mismatch)
+      if (d.consentBlocked) {
+        why = "동의창";
+        break;
+      }
+      if (!d.h1) why = "빈페이지";
+      else if (isLocalityPage(d) && n.aliases?.length)
+        why = `동네페이지(${d.h1})`;
+      else if (
+        !t.preclean &&
+        (!best || isHard(n.cat)) &&
+        resolveCategory(d.category, n.cat).mismatch
+      )
         why = `분류불일치:${d.category}`;
-      else why = seedGate(n, d, stop);
-      if (why?.startsWith("환각의심")) continue;
-      if (why || exact(d.h1)) break;
-      partial ??= { d, why, picked, q };
+      else ({ why, tier } = gateVerdict(n, d, stop));
+      if (!why) break;
+      last ??= { d, why, picked, q };
+      d = null;
+      picked = null;
     }
   } catch (e: any) {
     why = `오류:${String(e?.message || e).slice(0, 40)}`;
   }
-  if (partial && (why || !d?.h1 || !exact(d.h1)))
-    ({ d, why, picked, q } = partial);
+  if (why && !d && last && why !== LIMITED_WHY && why !== "동의창")
+    ({ d, why, picked, q } = last);
   // ⚠️ 수정금지(승인필요) 2026-10-02 사장님 결정 = 우리 분류 확정 = finalCategory 1벌(구글 최우선 · 장소 아님 = 안 넣음/삭제 · 베스트는 리뷰 수와 상관없이 면제 · 핫스팟은 태그로) (정본 §)
   const fc = finalCategory(n.cat, d?.category, {
     reviewCount: d?.reviewCount,
-    best: n.isBest || (!!n.aliases?.length && !t.preclean),
+    best: n.isBest || best,
   });
   const cat = fc.cat;
   if (!why && fc.notPlace) why = `장소아님:${d.category}`;
-  const best = !!n.aliases?.length && !t.preclean;
   if (!why) {
     const missing: string[] = [];
     if (!d.h1) missing.push("이름");
@@ -381,6 +446,7 @@ export async function readOne(
       avgPrice: n.avgPrice,
       langs: n.langs,
       searchQuery: q,
+      tier,
       picked: picked
         ? {
             label: picked.label,
@@ -409,7 +475,7 @@ export async function readOne(
       : null,
     verdict: { 확인: !why, 이유: why },
   });
-  return { n, d, why, imageUrl, cat, hotspotTag: fc.hotspotTag };
+  return { n, d, why, imageUrl, cat, hotspotTag: fc.hotspotTag, tier };
 }
 
 // ⚠️ 수정금지(승인필요) 2026-09-08 사장님 확정 = 구글맵 열기 = 창 5개 병렬(실측 곳당 6.2초→4.5초, 10개는 8.8초로 느려짐). 창고 쓰기는 뒤에서 한 줄로(트랜잭션 1연결).
@@ -420,7 +486,7 @@ export async function readAll(
   t: PageTools,
   stat: Stat,
 ): Promise<Read[]> {
-  const PARALLEL = Math.max(1, t.parallel ?? 5);
+  const PARALLEL = Math.max(1, t.parallel ?? GMAPS_WINDOWS);
   const queue = [...items];
   const reads: Read[] = [];
   let limitedRun = 0;
@@ -431,6 +497,7 @@ export async function readAll(
         browserUa,
         "en-US",
       );
+      let keepOpen = false;
       for (;;) {
         const n = queue.shift();
         if (!n) break;
@@ -441,12 +508,14 @@ export async function readAll(
           stat.limited++;
           if (++limitedRun >= LIMITED_STOP && !stat.blocked) {
             stat.blocked = true;
+            keepOpen = true; // ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = 사람 인증이 뜬 창은 닫지 않고 화면 안으로 끌어와 사장님이 바로 푼다 (정본 §)
+            await showWindow(page);
             for (const left of queue.splice(0))
               reads.push({ n: left, d: null, why: LIMITED_WHY });
           }
         } else limitedRun = 0;
       }
-      await closeWin();
+      if (!keepOpen) await closeWin();
     }),
   );
   return reads;
@@ -471,12 +540,31 @@ export async function writeRead(
     console.log(`  ✗ ${why}: ${n.name}`);
     return;
   }
-  // 식당 가격 = 페이지 머리줄 가격(상한 규칙, 유로) > 제미니 값
-  const pagePrice =
-    cat === "restaurant" && d.price && opts.priceCtx
-      ? (toEur(d.price, opts.priceCtx.countryCode, opts.priceCtx.eurPer).eur ??
-        null)
+  // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 가격 = 가격 결정 1벌(decidePrice) = 페이지(pagePriceEur 1벌) > 제미니 > NULL · 페이지를 열었는데 가격이 없고 제미니도 없으면 옛 값은 비운다 (정본 §)
+  const oldPrice: number | null =
+    opts.targetRowId != null
+      ? ((
+          await c.query(
+            "SELECT price_eur::float8 AS price FROM place_seed_raw WHERE id=$1",
+            [opts.targetRowId],
+          )
+        ).rows[0]?.price ?? null)
       : null;
+  const pagePrice = opts.priceCtx
+    ? pagePriceEur(
+        cat,
+        d,
+        opts.priceCtx.countryCode,
+        opts.priceCtx.eurPer,
+        oldPrice,
+      )
+    : null;
+  const pd = decidePrice({
+    pagePrice,
+    geminiPrice: n.avgPrice ?? null,
+    oldPrice,
+    pageOpened: true,
+  });
   if (d.status !== "OPERATIONAL") {
     stat.closed++;
     console.log(`  [${d.status}] ${n.name} = 넣되 손님상 관문이 거른다`);
@@ -509,7 +597,8 @@ export async function writeRead(
     businessStatus: d.status,
     // ⚠️ 수정금지(승인필요) 2026-09-08 사장님 확정 = 페이지를 실제로 열어 확인했으면 그 기록을 남긴다(찍힌 것 = 확인됨 / 안 찍힌 것 = 다음 대상).
     verifySource: "gmaps-search-page",
-    priceEur: pagePrice ?? n.avgPrice ?? null,
+    priceEur: pd.price,
+    clearPriceEur: pd.clear,
     selectionReasonKo: ko?.summary || null,
     shortformKo: ko?.editorial || null,
     categoryTags: [
@@ -519,7 +608,7 @@ export async function writeRead(
         ...(r.hotspotTag ? ["hotspot"] : []),
       ]),
     ],
-    phaseTags: [opts.provenanceTag],
+    phaseTags: [opts.provenanceTag, ...(r.tier === "T2" ? ["accept-t2"] : [])],
   });
   if (res.action !== "inserted" && res.action !== "updated") {
     stat.skipped++;
@@ -529,6 +618,7 @@ export async function writeRead(
     return;
   }
   const rowId = res.rowId!;
+  r.rowId = rowId;
   const outcome =
     res.action === "inserted"
       ? "신규행"
@@ -547,64 +637,6 @@ export async function writeRead(
   });
   console.log(
     `  ✅ #${rowId} ${d.h1} (${res.action}${res.reason ? `/${res.reason}` : ""}, ${outcome}, langs=${n.langs}, best_rank ${br.cur} ∪ ${code} → ${br.result})`,
-  );
-}
-
-// ⚠️ 수정금지(승인필요) 2026-10-02 사장님 결정 = 알아보는 문이 "있음"으로 본 곳 = 구글맵은 안 열고 그 행에 흡수 = 제미니 몫(한국어·현지어 이름·한국어 요약·분류 태그·출처, 가격은 행에 가격이 없을 때만) + 베스트 언어 합치기 + 번역. 구글 페이지 몫(영어 이름·주소·좌표·리뷰수·사진·CID·가격)은 안 건드린다. 식당·비식당이 엇갈리면 흡수 안 함 (정본 §)
-export const crossKind = (n: NewEntry): boolean =>
-  !n.psrHint?.psrTags?.includes(n.cat) &&
-  (n.cat === "restaurant") !== (n.psrHint?.psrCat === "restaurant");
-export async function absorbInto(
-  c: any,
-  upsertPlace: any,
-  n: NewEntry,
-  opts: { cityId: number; provenanceTag: string },
-  stat: Stat,
-): Promise<void> {
-  const hint = n.psrHint!;
-  if (crossKind(n)) {
-    stat.skipped++;
-    console.log(
-      `  ⏭ 식당·비식당 엇갈림 = 흡수 안 함: ${n.name}(${n.cat}) ↛ #${hint.psrId} ${hint.psrName}(${hint.psrCat})`,
-    );
-    return;
-  }
-  const ko = koCopyOf(n.copies);
-  const hasPrice =
-    (
-      await c.query("SELECT price_eur FROM place_seed_raw WHERE id=$1", [
-        hint.psrId,
-      ])
-    ).rows[0]?.price_eur != null;
-  const res = await upsertPlace({
-    targetRowId: hint.psrId,
-    followTriggerDup: true,
-    cityId: opts.cityId,
-    seedCategory: n.cat,
-    nameEn: hint.psrName,
-    nameKo: n.nameKo,
-    nameLocal: n.nameLocal,
-    priceEur: hasPrice ? null : (n.avgPrice ?? null),
-    selectionReasonKo: ko?.summary || null,
-    shortformKo: ko?.editorial || null,
-    phaseTags: [opts.provenanceTag],
-  });
-  if (res.action !== "updated") {
-    stat.skipped++;
-    console.log(
-      `  ⚠️ 흡수 이상(${res.action}${res.reason ? `: ${res.reason}` : ""}): ${n.name} → #${hint.psrId}`,
-    );
-    return;
-  }
-  const code = codeOf(n.name, n.langs, n.copies);
-  const br = await inTxn(c, async () => {
-    const x = await writeBestRankUnion(c, hint.psrId, code);
-    await upsertTranslations(c, hint.psrId, n.copies);
-    return x;
-  });
-  stat.absorbedHint++;
-  console.log(
-    `  🧲 #${hint.psrId} ${hint.psrName} ← ${n.name} (흡수, langs=${n.langs}, best_rank ${br.cur} ∪ ${code} → ${br.result})`,
   );
 }
 

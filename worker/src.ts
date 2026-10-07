@@ -907,13 +907,13 @@ async function regenerateDay(params: {
     (s, p) => s + (p.isMealSlot && p.mealPrice ? p.mealPrice : 0),
     0,
   );
+  // ⚠️ 수정금지(승인필요) 2026-10-04 사장님 결정 = 가격은 500 이상도 허용 = 무조건 실제 값 (정본 §)
   const entranceEur = reordered.reduce(
     (s, p) =>
       s +
       (!p.isMealSlot &&
       typeof p.estimatedPriceEur === "number" &&
-      p.estimatedPriceEur > 0 &&
-      p.estimatedPriceEur < 500
+      p.estimatedPriceEur > 0
         ? p.estimatedPriceEur
         : 0),
     0,

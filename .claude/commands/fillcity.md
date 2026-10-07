@@ -1,5 +1,5 @@
 ---
-description: 필시티 v3.1 한 판 = 도시 번호 하나로 베이스라인 → 채움(--auto, 유료 외부 호출 포함) → 전후 비교
+description: 필시티 v3.2 한 판 = 도시 번호 하나로 베이스라인 → 채움(--auto, 유료 외부 호출 포함) → 전후 비교
 argument-hint: <도시번호>
 disable-model-invocation: true
 ---
@@ -8,6 +8,7 @@ disable-model-invocation: true
 
 `node scripts/fillcity-run.mjs $ARGUMENTS`
 
-- 출력(전후 비교)을 **그대로** 사장님께 보여 주고 멈춘다.
 - 중간에 문제가 나면 **올스톱 → 즉시 보고.** 스스로 고치거나 다시 돌리지 않는다.
 - 사람 인증 요청이 뜨면 사장님께 알리고 기다린다.
+- ⚠️ 2026-10-06 사장님 결정 = 실행이 끝나면 **⑦ AI 최종 검수(의무)** 를 네가 직접 한다 = `fillcity/prompts/09-ai-final-review/instruction.txt` 를 처음부터 끝까지 읽고 그대로(걸린 행마다 구글맵 페이지를 직접 열어 요약·묘사·가격·영업 상태를 맞추고 `llm-review.ts --apply` 로 넣고 `status.ts --judge=true` 통과까지). 이 지시문은 자연어지만 코드와 같다.
+- 그다음에야 보고한다 = 전후 비교 + 깔때기 숫자 + ⑦ 검수 표(종류별 행·옛 요약·옛 묘사·페이지 사실·넣은 값) + 판정 결과. ⑦ 없이 "끝났다"고 하면 거짓 보고다.

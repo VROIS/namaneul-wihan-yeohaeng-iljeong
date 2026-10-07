@@ -3,9 +3,13 @@ import { distanceKmFromCoords } from "../shared/geo-distance";
 import { PHOTO_MAX_WIDTH_PX } from "../shared/ts-client";
 import { BROWSER_UA } from "./gmaps-pid-identity/page-reader";
 import type { Result, Row } from "./gmaps-pid-identity/gates";
-import { PID_ROWS_SELECT, verifyPidRows } from "./gmaps-pid-identity/run";
 import {
-  absorbInto,
+  limitedCount,
+  PID_ROWS_SELECT,
+  verifyPidRows,
+} from "./gmaps-pid-identity/run";
+import { absorbInto } from "./gmaps-absorb";
+import {
   LIMITED_WHY,
   loadPriceCtx,
   newStat,
@@ -14,6 +18,7 @@ import {
   readAll,
   writeRead,
   type NewEntry,
+  type Read,
   type Stat,
 } from "./gmaps-shared";
 
@@ -30,6 +35,8 @@ export async function insertSeedEntries(o: {
   reportKey: string;
   upsertPlace: any;
   log?: (line: string) => void;
+  rawRows?: any[]; // 호출자가 주면 열어 본 결과(request·page·verdict)를 여기에도 쌓는다 = ④ 판정 장부 재료
+  onRead?: (r: Read) => Promise<void> | void; // 읽은 결과를 창고에 쓴 직후 호출(넣은 행 번호는 r.rowId)
 }): Promise<Stat> {
   const log = o.log ?? ((l: string) => console.log(l));
   const { client: c, cityId, report } = o;
@@ -61,7 +68,7 @@ export async function insertSeedEntries(o: {
   const city = (
     await c.query("SELECT name_en FROM cities WHERE id=$1", [cityId])
   ).rows[0];
-  const rawRows: any[] = [];
+  const rawRows: any[] = o.rawRows ?? [];
   const priceCtx = await loadPriceCtx(c, cityId);
   const reads = await readAll(
     o.browser,
@@ -70,7 +77,7 @@ export async function insertSeedEntries(o: {
     { ...pageTools(), cityId, cityNameEn: city?.name_en, rawRows, priceCtx },
     stat,
   );
-  for (const r of reads)
+  for (const r of reads) {
     await writeRead(
       c,
       o.upsertPlace,
@@ -78,6 +85,8 @@ export async function insertSeedEntries(o: {
       { cityId, provenanceTag: tag, priceCtx },
       stat,
     );
+    if (o.onRead) await o.onRead(r);
+  }
   const { saveRaw } = await import("../shared/save-raw");
   await saveRaw({
     source: "gmaps",
@@ -106,6 +115,10 @@ export async function insertSeedEntries(o: {
 export const HOLLOW = `verify_source = 'gmaps-pid-page' AND COALESCE(google_review_count, 0) = 0 AND google_primary_type IS NULL`;
 export const PENDING_WHERE = `status = 'active' AND seed_category NOT LIKE 'bts_%'
   AND (verify_source IS NULL OR verify_source NOT LIKE 'gmaps%' OR verified_at IS NULL OR updated_at > verified_at + interval '10 seconds'
+       OR (verify_source <> 'gmaps-search-nomatch' AND (image_url IS NULL OR image_url NOT LIKE ($1 || '%') OR (${HOLLOW}))))`;
+// ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = 필시티 목록 후처리(한 판 안에서 돌고, 인증 뒤 같은 단계를 다시 돈다)는 "검증 뒤 행이 바뀜(updated_at)" 조건을 쓰지 않는다 = 아직 구글맵 도장이 없는 행(+사진 없음·빈 등록)만 연다 → 이어 읽기 = 남은 행만(마르세유 실측 = 흡수·베스트 합치기가 갱신 시각을 바꿔 읽은 151행을 전부 다시 열던 원인) (정본 §)
+export const PENDING_WHERE_FILL = `status = 'active' AND seed_category NOT LIKE 'bts_%'
+  AND (verify_source IS NULL OR verify_source NOT LIKE 'gmaps%' OR verified_at IS NULL
        OR (verify_source <> 'gmaps-search-nomatch' AND (image_url IS NULL OR image_url NOT LIKE ($1 || '%') OR (${HOLLOW}))))`;
 
 type Client = { query: (q: string, v?: unknown[]) => Promise<any> };
@@ -164,11 +177,14 @@ export async function runGmapsPost(o: {
   r2Prefix: string;
   upsertPlace: any;
   limit?: number;
+  parallel?: number; // 창 수(기본 5) = 큐 소비자는 1로 천천히
+  fill?: boolean; // 필시티 한 판 안(목록 후처리) = PENDING_WHERE_FILL(갱신 시각 조건 없음 = 이어 읽기는 남은 행만)
   log?: (line: string) => void;
 }): Promise<PostSummary> {
   const t0 = Date.now();
   const log = o.log ?? ((l: string) => console.log(l));
   const { client: c, cityId, r2Prefix } = o;
+  const PENDING = o.fill ? PENDING_WHERE_FILL : PENDING_WHERE;
   const city = (
     await c.query(
       "SELECT name_en, latitude::float8 AS lat, longitude::float8 AS lng FROM cities WHERE id=$1",
@@ -178,7 +194,7 @@ export async function runGmapsPost(o: {
   if (!city) throw new Error(`city ${cityId} 미존재`);
   const rows = (
     await c.query(
-      `SELECT ${ROW_COLS} FROM place_seed_raw WHERE city_id = $2 AND ${PENDING_WHERE} ORDER BY id ${o.limit ? "LIMIT " + o.limit : ""}`,
+      `SELECT ${ROW_COLS} FROM place_seed_raw WHERE city_id = $2 AND ${PENDING} ORDER BY id ${o.limit ? "LIMIT " + o.limit : ""}`,
       [r2Prefix, cityId],
     )
   ).rows;
@@ -211,11 +227,17 @@ export async function runGmapsPost(o: {
       cityId,
       apply: true,
       writeCtx: { ...priceCtx, deleteRow },
+      parallel: o.parallel,
       onResult: (r) =>
         log(
           `   ${r.gate} #${r.id} ${r.name_en} rc=${r.rc_page ?? "-"} ${r.upsert || ""}`,
         ),
     });
+    // ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = PID 직행 루프가 사람 인증(제한 보기)으로 멈추면 여기서 바로 위로 던진다 = 부르는 쪽이 종료 코드 3 → 알림 → 3분 → 같은 단계 재실행 = 남은 행부터 이어 읽기, 풀릴 때까지 반복 (정본 §)
+    if (pidResults.some((r) => r.gate === "limited-view"))
+      throw new Error(
+        `${LIMITED_WHY}: 구글맵 제한 보기 = 사람 인증 = 남은 ${rows.length - pidResults.length + limitedCount(pidResults)}행은 인증 뒤 이어 읽기`,
+      );
   }
   // ② 검색 경로 = PID·CID 없는 행 + 직행 페이지가 빈 등록이었던 행 = PID 는 지름길일 뿐, 진짜 등록의 CID 를 이름·주소로 찾는다
   const hollow: number[] = rows.length
@@ -240,6 +262,7 @@ export async function runGmapsPost(o: {
         cityNameEn: city.name_en,
         rawRows: [],
         priceCtx,
+        parallel: o.parallel,
       },
       stat,
     );
@@ -276,7 +299,7 @@ export async function runGmapsPost(o: {
     log(`   병합 행 삭제 ${purged.purged} (${purged.ids.join(",")})`);
   const left = (
     await c.query(
-      `SELECT count(*)::int n FROM place_seed_raw WHERE city_id = $2 AND ${PENDING_WHERE}`,
+      `SELECT count(*)::int n FROM place_seed_raw WHERE city_id = $2 AND ${PENDING}`,
       [r2Prefix, cityId],
     )
   ).rows[0].n;

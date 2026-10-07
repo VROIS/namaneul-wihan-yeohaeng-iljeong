@@ -32,6 +32,9 @@ export interface UpsertPayload {
   googlePrimaryType?: string | null;
   googleMapsUri?: string | null; // 2026-05-15 = 13번째 SSOT = 최후의 보루
   priceEur?: number | null;
+  // ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = 비우기 2칸 = 가격은 모르면 NULL(0 은 확인된 무료만) · 페이지로 이름이 바뀐 행의 옛 요약은 비운다(제미니 2차가 다시 채움) (정본 §)
+  clearPriceEur?: boolean;
+  clearSummaries?: boolean;
   imageUrl?: string | null;
   imageAttribution?: string | null;
   dayZone?: string | null;
@@ -100,9 +103,9 @@ function buildDirectUpdateSql(p: UpsertPayload, targetId: number) {
         google_maps_uri = COALESCE(${p.googleMapsUri ?? null}, google_maps_uri),
         image_url     = COALESCE(${p.imageUrl ?? null}, image_url),
         image_attribution = COALESCE(${p.imageAttribution ?? null}, image_attribution),
-        price_eur     = COALESCE(${p.priceEur ?? null}::real, price_eur),
-        editorial_summary = ${p.preserveExistingNames ? sql`COALESCE(NULLIF(editorial_summary, ''), ${p.shortformKo ?? null}, editorial_summary)` : sql`COALESCE(${p.shortformKo ?? null}, editorial_summary)`},
-        summary_ko        = ${p.preserveExistingNames ? sql`COALESCE(NULLIF(summary_ko, ''), ${p.selectionReasonKo ?? null}, summary_ko)` : sql`COALESCE(${p.selectionReasonKo ?? null}, summary_ko)`},
+        price_eur     = ${p.clearPriceEur ? sql`${p.priceEur ?? null}::real` : sql`COALESCE(${p.priceEur ?? null}::real, price_eur)`},
+        editorial_summary = ${p.clearSummaries ? sql`${p.shortformKo ?? null}` : p.preserveExistingNames ? sql`COALESCE(NULLIF(editorial_summary, ''), ${p.shortformKo ?? null}, editorial_summary)` : sql`COALESCE(${p.shortformKo ?? null}, editorial_summary)`},
+        summary_ko        = ${p.clearSummaries ? sql`${p.selectionReasonKo ?? null}` : p.preserveExistingNames ? sql`COALESCE(NULLIF(summary_ko, ''), ${p.selectionReasonKo ?? null}, summary_ko)` : sql`COALESCE(${p.selectionReasonKo ?? null}, summary_ko)`},
         day_zone          = COALESCE(${p.dayZone ?? null}, day_zone),
         distance_km_from_center = COALESCE(${p.distanceKmFromCenter ?? null}::real, distance_km_from_center),
         category_tags     = (SELECT ARRAY(SELECT u.t FROM (SELECT DISTINCT unnest(COALESCE(category_tags, ARRAY[]::text[]) || ${sql.raw(`ARRAY[${catTags.map((s) => `'${s.replace(/'/g, "''")}'`).join(",")}]::text[]`)}) AS t) u WHERE u.t <> ALL(${rmSql}))),
@@ -248,7 +251,7 @@ async function activeKeeperOf(id: number): Promise<number | null> {
   return cur;
 }
 
-// ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = 지우기 전에 그 행이 가진 것(번역·동의 등급·가리키는 곳)을 남는 행으로 먼저 옮긴다(status-backfill 과 같은 순서) = 값이 든 행이 그냥 사라지지 않게.
+// ⚠️ 수정금지(승인필요) 2026-10-04 사장님 결정 = 지우기 전에 그 행이 가진 것(번역·동의 등급·가리키는 곳·가격)을 남는 행으로 먼저 옮긴다 = 가격은 남는 행이 비었거나 진 행만 구글 페이지를 읽었을 때 옮긴다 (정본 §)
 async function moveBelongingsTo(keepId: number, loserId: number) {
   if (!db) return;
   const { bestRankUnion } = await import("./shared/best-rank");
@@ -278,6 +281,9 @@ async function moveBelongingsTo(keepId: number, loserId: number) {
           sql`UPDATE place_seed_raw SET best_rank = ${merged} WHERE id = ${keepId}`,
         );
     }
+    await tx.execute(
+      sql`UPDATE place_seed_raw k SET price_eur = l.price_eur FROM place_seed_raw l WHERE k.id = ${keepId} AND l.id = ${loserId} AND l.price_eur IS NOT NULL AND (k.price_eur IS NULL OR (l.verified_at IS NOT NULL AND k.verified_at IS NULL))`,
+    );
     await tx.execute(
       sql`UPDATE guides SET place_id = ${keepId} WHERE place_id = ${loserId}`,
     );

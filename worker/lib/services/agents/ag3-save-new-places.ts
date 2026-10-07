@@ -7,6 +7,13 @@ import { LANGS } from "../shared/language-instruction";
 // ⚠️ 수정금지(승인필요) 2026-08-16 사장님 SSOT = 사진 분리 수술(2026-07-11) 재통합 폐기 = 2026-08-16 §19.
 import { tsSearch, tsPhoto } from "../shared/ts-client";
 import { zoneForDistanceKm } from "../shared/pool-radius";
+import {
+  decidePrice,
+  FRESH_SQL,
+  loadEurPer,
+  tsPriceDecision,
+  type EurPer,
+} from "../shared/price-eur";
 // ⚠️ 수정금지(승인필요) 2026-07-06 사장님 SSOT = TS raw 모음 1파일(#45 방식) 저장 = 도시id 폴더 로컬+Storage 2곳(§18).
 import { saveCollectedRaw } from "../shared/save-collected-raw";
 import { placeImageKey } from "../../../../shared/r2-paths";
@@ -153,7 +160,12 @@ export async function saveNewPlacesToDB(
         selectionReasonKo: koCols
           ? (place.personaFitReason ?? place.description ?? null)
           : null, // → summary_ko
-        priceEur: (place as any).estimatedPriceEur || 0,
+        // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 가격 결정 1벌(decidePrice) = 제미니 값 그대로(0 = 무료), 값이 없으면 비워 둔다 · 문이 창고 행을 찾으면 아래에서 그 행의 옛 값·3개월 신선도를 더해 다시 정한다(페이지 확정 가격을 제미니 추정이 덮지 않는다) (정본 §)
+        priceEur:
+          decidePrice({
+            geminiPrice: (place as any).estimatedPriceEur ?? null,
+            pageOpened: false,
+          }).price ?? undefined,
         // ⚠️ 수정금지(승인필요) 2026-07-11 사장님 SSOT = 취향 슬롯 카테고리(slotCategory)도 태그로 축적(UNION §14) = 장소 다면성(앙부아즈=heritage+hotspot).
         categoryTags:
           slotCat && slotCat !== seedCategory
@@ -204,6 +216,19 @@ export async function saveNewPlacesToDB(
             place.lat = row.lat;
             place.lng = row.lng;
           }
+          const old = (
+            await pool!.query(
+              `SELECT price_eur::float8 AS price, ${FRESH_SQL} AS fresh FROM place_seed_raw WHERE id=$1`,
+              [row.id],
+            )
+          ).rows[0];
+          job.priceEur =
+            decidePrice({
+              geminiPrice: (place as any).estimatedPriceEur ?? null,
+              oldPrice: old?.price ?? null,
+              oldFromPage: !!old?.fresh,
+              pageOpened: false,
+            }).price ?? undefined;
         }
         const r = await upsertPlace({
           ...job,
@@ -303,6 +328,25 @@ export async function saveNewPlacesToDB(
 
   // ⚠️ 수정금지(승인필요) 2026-07-06 사장님 SSOT = TS raw 모음 1파일 = 건건 로컬skip + 끝에 results 배열 1파일(§18).
   const tsResults: any[] = [];
+  // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 페이지 확인 행의 가격 보호도 가격 결정 1벌(decidePrice = 옛 값 + 3개월 안 페이지 신선도)로 = 흡수·2차와 같은 길 (정본 §)
+  const oldPriceOf = new Map<number, { price: number | null; fresh: boolean }>(
+    tsTargets.length
+      ? (
+          await pool!.query(
+            `SELECT id, price_eur::float8 AS price, ${FRESH_SQL} AS fresh FROM place_seed_raw WHERE id = ANY($1::int[])`,
+            [tsTargets.map((t: any) => t.rowId).filter((x: any) => x != null)],
+          )
+        ).rows.map((r: any) => [
+          Number(r.id),
+          { price: r.price ?? null, fresh: !!r.fresh },
+        ])
+      : [],
+  );
+  let eurPerOnce: Promise<EurPer> | null = null;
+  const eurPerOf = () =>
+    (eurPerOnce ??= loadEurPer({
+      query: (q, v) => pool!.query(q, v as any[]),
+    }));
   const job2Promises: Promise<void>[] = []; // defer 모드 rowId 직행 UPDATE = 함수 끝에서 await Promise.allSettled 로 응답 전 완료(증발 0)
   const results = await Promise.all(
     tsTargets.map(async ({ place, seedCategory, rowId, mode }: any) => {
@@ -437,9 +481,14 @@ export async function saveNewPlacesToDB(
           `[AG3-SAVE] 📡 ${mode === "absorbed" ? "흡수" : "신규"} "${place.name}" → (${lat}, ${lng}) pid=${placeId ? "TS" : "NONE"} img=${photoUrl ? "OK" : isClosedPermanently ? "스킵(폐업)" : result.photoName ? "실패" : "없음"}`,
         );
 
-        // ⚠️ 수정금지(승인필요) 2026-08-10 사장님 확정 = **가격 컬럼의 주인은 제미니 하나뿐이다.**
-        //   TS 가격은 버리지 않는다 = raw(§18)에 그대로 남아 언제든 다시 볼 수 있다. DB 칸만 제미니 것으로 한다.
-        const newPriceEur = (place as any).estimatedPriceEur || 0;
+        // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 가격 = tsPriceDecision 1벌(3개월 안 페이지 값 > TS 가격대 > 제미니(0 = 무료) > 옛 값), 값이 없으면 비워 둔다 (정본 §)
+        const newPriceEur =
+          tsPriceDecision(
+            result.priceRange,
+            await eurPerOf(),
+            oldPriceOf.get(rowId),
+            (place as any).estimatedPriceEur ?? null,
+          ) ?? undefined;
         const jobBase = {
           cityId,
           seedCategory,
@@ -458,6 +507,7 @@ export async function saveNewPlacesToDB(
           ...(photoUrl ? { imageUrl: photoUrl } : {}),
           googlePlaceId: placeId,
           googleMapsUri: result.googleMapsUri ?? null,
+          businessStatus: result.businessStatus ?? null,
           shortformKo: koCols ? (place.description ?? null) : null,
           selectionReasonKo: koCols
             ? (place.personaFitReason ?? place.description ?? null)

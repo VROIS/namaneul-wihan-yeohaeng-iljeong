@@ -97,7 +97,23 @@ export default function PlaceSlotCard({
   const transitInfo = dayTransits[index]; // index번째 장소에서 다음 장소로의 이동
   const hasTransit = index < places.length - 1;
 
-  const entranceFee = place.entranceFee || 0;
+  // ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = 가격 글자 1벌 = 식사는 mealPrice(없으면 도시 분포 글자 mealPriceLabel), 명소는 estimatedPriceEur → entranceFee → priceEstimate 글자 · 숫자 0 = 무료, 양수 = 금액, 아무것도 없으면 null = 안 보임 (정본 §)
+  const priceLabel: string | null = (() => {
+    const amount = (v: unknown): string | null =>
+      typeof v === "number" && Number.isFinite(v)
+        ? v > 0
+          ? isMeal
+            ? t("trip.mealPrice", { price: v })
+            : `€${v}`
+          : t("common.free")
+        : null;
+    if (isMeal) return amount(place.mealPrice) ?? place.mealPriceLabel ?? null;
+    return (
+      amount((place as any).estimatedPriceEur) ??
+      amount(place.entranceFee) ??
+      (place.priceEstimate ? place.priceEstimate : null)
+    );
+  })();
   return (
     <View
       onLayout={(e) => {
@@ -314,30 +330,21 @@ export default function PlaceSlotCard({
                 </Text>
               )}
 
-              {/* ⑥ 가격 (슬롯마다 필수 = 맨 아래) = 식사비 또는 입장료 */}
-              <View style={styles.placePriceRow}>
-                <Icon
-                  name={isMeal ? "credit-card" : "tag"}
-                  size={12}
-                  color={Brand.primary}
-                />
-                <Text style={[styles.placePriceText, { color: Brand.primary }]}>
-                  {/* ⚠️ 수정금지(승인필요) 2026-08-19 사장님 승인 = 식사슬롯도 비식사슬롯과 동일한 500유로 가드 적용
-                      (= 광장시장 "??" 표시버그 수정 = 0(무료) 오표시 + 가격상한 가드 부재 = 2026-08-19 §19 폐기) */}
-                  {isMeal
-                    ? typeof place.mealPrice === "number" &&
-                      place.mealPrice > 0 &&
-                      place.mealPrice < 500
-                      ? t("trip.mealPrice", { price: place.mealPrice })
-                      : t("common.free")
-                    : (place as any).estimatedPriceEur > 0 &&
-                        (place as any).estimatedPriceEur < 500
-                      ? `€${(place as any).estimatedPriceEur}`
-                      : entranceFee > 0 && entranceFee < 500
-                        ? `€${entranceFee}`
-                        : `${place.priceEstimate || t("common.free")}`}
-                </Text>
-              </View>
+              {/* ⑥ 가격 = 식사비 또는 입장료 · ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = 손님 화면은 "무료" 아니면 금액 두 가지뿐 = 값이 0 이면 무료, 0 보다 크면 금액(500 이상도 실제 값), 모름(NULL)이면 가격 줄을 그리지 않는다 (정본 §) */}
+              {priceLabel != null && (
+                <View style={styles.placePriceRow}>
+                  <Icon
+                    name={isMeal ? "credit-card" : "tag"}
+                    size={12}
+                    color={Brand.primary}
+                  />
+                  <Text
+                    style={[styles.placePriceText, { color: Brand.primary }]}
+                  >
+                    {priceLabel}
+                  </Text>
+                </View>
+              )}
             </Pressable>
           </View>
         </View>

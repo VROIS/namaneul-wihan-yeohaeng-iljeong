@@ -85,7 +85,7 @@ const CAPABILITIES = [
     ],
     hint: "가격 = page-reader headerPrice(페이지) + price-eur toEur(환산) + price-gemini(--gemini=true 몰아 묻기 · --apply-json 어사이드). 새 가격 긁개·환산기·보강 지시문 만들지 말 것(§16).",
   },
-  // ⚠️ 수정금지(승인필요) 2026-09-30 사장님 결정 = 제미니 응답 저장 = gemini-apply.ts 1벌(구글맵 로그에 값이 있는 칸은 덮지 않음)
+  // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 제미니 응답 저장 = gemini-apply.ts 1벌(구글맵 로그에 값이 있는 칸은 덮지 않음) · 필시티 2차 단계(gemini-targets.ts)는 이 도구를 부르는 쪽
   {
     id: "gemini-apply",
     ko: "제미니 응답 저장(구글맵 로그 값 칸은 지키고, 구글이 못 준 칸과 제미니 전용 칸만 씀)",
@@ -93,6 +93,7 @@ const CAPABILITIES = [
       "worker/lib/services/fill/gemini-apply.ts",
       "worker/lib/services/shared/gemini-curate.ts",
       "worker/lib/services/fill/price-gemini.ts",
+      "fillcity/steps/gemini-targets.ts",
     ],
     triggers: [/geminiCurate\s*\(/, /gemini-enrich-/],
     hint: "제미니 응답 저장 = gemini-apply.ts(--raw=<원본> · 시험이 기본, --apply 로 씀) 1벌. 응답을 행에 곧바로 덮어쓰는 새 코드 만들지 말 것(§16).",

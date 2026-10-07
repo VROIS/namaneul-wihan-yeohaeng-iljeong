@@ -8,10 +8,6 @@ const RC_AFTER_NUM_RE = new RegExp(
   "iu",
 );
 const RC_BEFORE_NUM_RE = new RegExp(`리뷰\\s*${RC_NUM}\\s*개`, "u");
-const RATING_LEAD_RE = /^\s*(\d+[.,]\d)(?:\s|$)/;
-const RATING_WORD_RE =
-  /(?:별점|평점|星|评分|評分|Bewertung|Note|Valoración|Calificación|Nota|Rating)\s*:?\s*(\d+[.,]\d)|(\d+[.,]\d)\s*점/i;
-const RATING_ANY_RE = /(?<![\d.,])([1-5][.,]\d)(?![\d.,])/;
 function parseRcNum(s: string): number | null {
   const n = Number(s.replace(/[^\d]/g, ""));
   return Number.isFinite(n) ? n : null;
@@ -42,19 +38,62 @@ export const launchBrowser = (chromium: any) =>
   process.env.GMAPS_CDP
     ? chromium.connectOverCDP(process.env.GMAPS_CDP)
     : chromium.launch({ channel: "chrome", headless: true });
-// ⚠️ 수정금지(승인필요) 2026-10-01 사장님 결정 = 구글맵을 여는 시각에 사람 같은 편차(0.3~3초, 이 PC 전용 크롬 GMAPS_CDP 일 때만)를 준다 = 같은 박자로 도는 기계 패턴이 사람 인증을 부른다는 가설 (정본 §)
-const humanPause = (page: Page) =>
+// ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 구글맵을 여는 시각에 사람 같은 편차(0.3~3초, 이 PC 전용 크롬 GMAPS_CDP 일 때만)를 준다 · 모든 단계가 이 함수(export) 하나를 쓴다 (정본 §)
+export const humanPause = (page: Page) =>
   process.env.GMAPS_CDP
     ? page.waitForTimeout(300 + Math.floor(Math.random() * 2700))
     : Promise.resolve();
+// ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = 전용 크롬(GMAPS_CDP)에서는 창을 화면 밖(-2400px)·백그라운드로 만든다 = 사장님 화면을 가로채지 않는다(실측 2026-10-06: 화면 밖 창도 visibilityState=visible, 읽기 시간 같음) · 사람 인증이 뜨면 showWindow 로 그 창을 화면 안으로 끌어온다 (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = 구글맵 창 수 = 한 설정 5 = 사전 정제·목록 읽기·목록 후처리·④ 검색·못 찾은 베스트·읽기 2차·PID 루프가 전부 이 값 하나를 읽는다 (정본 §)
+export const GMAPS_WINDOWS = 5;
+const OFFSCREEN = { left: -2400, top: 100, width: 1280, height: 900 };
+const ONSCREEN = { left: 120, top: 80, width: 1280, height: 900 };
+const WINDOW_OF = new WeakMap<object, { cdp: any; windowId: number }>();
+export async function showWindow(page: Page): Promise<void> {
+  const w = WINDOW_OF.get(page);
+  if (!w) return;
+  await w.cdp
+    .send("Browser.setWindowBounds", { windowId: w.windowId, bounds: ONSCREEN })
+    .catch(() => {});
+  await page.bringToFront().catch(() => {});
+}
 export async function openWindow(
   browser: any,
   base: string = BROWSER_UA,
   locale?: string,
 ): Promise<{ page: Page; close: () => Promise<unknown> }> {
   if (process.env.GMAPS_CDP) {
-    const page = await browser.contexts()[0].newPage();
-    return { page, close: () => page.close().catch(() => {}) };
+    const ctx = browser.contexts()[0];
+    const cdp = await browser.newBrowserCDPSession();
+    const mark = `data:text/html,<title>tripis-${Date.now()}-${Math.random().toString(36).slice(2, 8)}</title>`;
+    const { targetId } = await cdp.send("Target.createTarget", {
+      url: mark,
+      newWindow: true,
+      background: true,
+    });
+    let page: Page | undefined;
+    for (let i = 0; i < 200 && !page; i++) {
+      page = ctx.pages().find((p: Page) => p.url() === mark);
+      if (!page) await new Promise((r) => setTimeout(r, 50));
+    }
+    if (!page) throw new Error("전용 크롬 새 창 페이지를 못 잡음");
+    const { windowId } = await cdp.send("Browser.getWindowForTarget", {
+      targetId,
+    });
+    await cdp.send("Browser.setWindowBounds", {
+      windowId,
+      bounds: { windowState: "normal" },
+    });
+    await cdp.send("Browser.setWindowBounds", { windowId, bounds: OFFSCREEN });
+    WINDOW_OF.set(page, { cdp, windowId });
+    const p = page;
+    return {
+      page: p,
+      close: async () => {
+        await p.close().catch(() => {});
+        await cdp.detach().catch(() => {});
+      },
+    };
   }
   const ctx = await browser.newContext({
     viewport: { width: 1280, height: 900 },
@@ -128,9 +167,6 @@ export type PageData = {
   urlLat: number | null;
   urlLng: number | null;
   reviewCount: number | null;
-  rcSource: "aria" | "text" | null; // 리뷰수 출처(aria 단어 패턴 / 본문 "(N)" 대체 = 100 미만이면 거부)
-  rating: string | null;
-  ratingNum: number | null; // 별점 숫자(리뷰수 오독 = round(별점×10/×100) 거부용)
   status: BusinessStatus;
   consentBlocked: boolean;
   photoUrl: string | null; // 대표 사진(구글맵 공개 페이지, 유료 API 0)
@@ -147,7 +183,6 @@ export type PageData = {
 // ⚠️ 수정금지(승인필요) 2026-09-30 사장님 결정 = 채널 막힘 = 제한 보기 + "로봇이 아닌지 확인" 인증 페이지(unusual traffic) = 둘 다 빈 등록이 아니므로 지우지 않고 멈춘다 (정본 §)
 export const LIMITED_VIEW_RE =
   /limited view of Google Maps|unusual traffic from your computer network/i;
-/** 머리줄(별점·리뷰수·가격·분류) 조각에서 가격만. 분류 글자 앞까지만 본다(아래 본문 호텔 숙박비 등 오독 방지). */
 export function headerPrice(
   mainText: string,
   category: string | null,
@@ -173,21 +208,35 @@ const OFFICIAL_RE = new RegExp(
 const OFFICIAL_FREE_RE =
   /(?:Official site|공식 사이트)\s*\n?\s*(?:Free|무료)(?![A-Za-z])/i;
 const PER_PERSON_LINE_RE = /[^\n]*(?:per person|1인당)[^\n]*/i;
-/** 입장권 구역 "Official site / 공식 사이트" 바로 뒤 첫 가격 = 정가(입장지). */
 export function admissionPrice(text: string): CardPrice | null {
   if (OFFICIAL_FREE_RE.test(text)) return { cur: "€", lo: 0, hi: 0 };
   const m = text.match(OFFICIAL_RE);
-  return exactPrice(m ? priceText(m[1]) : null);
+  if (!m || m.index == null) return null;
+  const official = exactPrice(priceText(m[1]));
+  // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 공식 가격 바로 다음 줄이 "N more options"면 그 값은 여러 표 중 최저가(주차·어린이) = 입장 칸 전체(공식+판매처, More 줄 전까지) 가격 중 최고를 쓴다(높으면 안전) = 스트라스부르 유로파파크 €10→76·룰란티카 €10→34 실측 (정본 §)
+  const end = m.index + m[0].length;
+  if (!/^[\s\uE000-\uF8FF]*\d+ more options/i.test(text.slice(end, end + 40)))
+    return official;
+  const block = text.slice(m.index, m.index + 700).split(/\n\s*More\s*\n/i)[0];
+  let best = official;
+  for (const s of block.match(new RegExp(PRICE_ANY.source, "g")) ?? []) {
+    const p = exactPrice(priceText(s));
+    if (
+      p &&
+      best &&
+      p.cur === best.cur &&
+      (p.hi ?? p.lo) > (best.hi ?? best.lo)
+    )
+      best = p;
+  }
+  return best;
 }
-// 공식 정가·손님 평균은 딱 떨어진 값 = "X 이상"(위가 열린 값)이 아니므로 위아래를 같게 둔다
 const exactPrice = (p: CardPrice | null): CardPrice | null =>
   p && p.hi == null ? { ...p, hi: p.lo } : p;
-/** 본문 "€20–30 per person / 1인당 €20~30" 줄 = 손님 평균 가격(식당). */
 export function perPersonPrice(text: string): CardPrice | null {
   const line = text.match(PER_PERSON_LINE_RE)?.[0];
   return exactPrice(line ? priceText(line) : null);
 }
-/** 패널을 아래로 내려 늦게 뜨는 구역(입장권·1인당)을 불러온다. */
 async function scrollPanel(page: Page): Promise<void> {
   for (let i = 0; i < 3; i++) {
     await page
@@ -207,7 +256,7 @@ async function scrollPanel(page: Page): Promise<void> {
   }
 }
 
-async function dismissConsent(page: Page): Promise<boolean> {
+export async function dismissConsent(page: Page): Promise<boolean> {
   const title = await page.title().catch(() => "");
   if (!/consent\.google/.test(page.url()) && !CONSENT_TITLE_RE.test(title))
     return true;
@@ -218,13 +267,10 @@ async function dismissConsent(page: Page): Promise<boolean> {
   return !/consent\.google/.test(page.url());
 }
 
-// ⚠️ 수정금지(승인필요) 2026-08-28 사장님 지시 = 리뷰수는 단어 패턴(RC_AFTER_NUM_RE/RC_BEFORE_NUM_RE) 이 맞은 라벨에서만 = 별점 라벨은 리뷰수 후보에서 제외(서울 169행 4.6→46 오독 수리).
+// ⚠️ 수정금지(승인필요) 2026-10-04 사장님 결정 = 리뷰수는 단어 패턴이 맞은 라벨에서만 읽어 그 값 그대로 쓴다(의심 표시 없음) · 리뷰 상자가 없으면 0 · 별점은 읽지 않는다 (정본 §)
 async function readRatingBlock(page: Page): Promise<{
   hasBox: boolean;
-  rating: string | null;
-  ratingNum: number | null;
   reviewCount: number | null;
-  rcSource: "aria" | "text" | null;
 }> {
   const raw = await page
     .evaluate(() => {
@@ -238,49 +284,20 @@ async function readRatingBlock(page: Page): Promise<{
       };
     })
     .catch(() => null);
-  if (!raw)
-    return {
-      hasBox: false,
-      rating: null,
-      ratingNum: null,
-      reviewCount: null,
-      rcSource: null,
-    };
-  let rating: string | null = null;
-  let ratingNum: number | null = null;
+  if (!raw) return { hasBox: false, reviewCount: null };
   let reviewCount: number | null = null;
-  let rcSource: "aria" | "text" | null = null;
   for (const l of raw.labels) {
     const rc = l.match(RC_AFTER_NUM_RE) || l.match(RC_BEFORE_NUM_RE);
     if (rc && reviewCount == null) {
       const n = parseRcNum(rc[1]);
-      if (n != null) {
-        reviewCount = n;
-        rcSource = "aria";
-        continue;
-      }
-    }
-    const rt =
-      l.match(RATING_LEAD_RE) ||
-      l.match(RATING_WORD_RE) ||
-      l.match(RATING_ANY_RE);
-    if (rt && rating == null) {
-      rating = l.trim();
-      ratingNum = Number((rt[1] || rt[2]).replace(",", "."));
-      if (!Number.isFinite(ratingNum)) ratingNum = null;
+      if (n != null) reviewCount = n;
     }
   }
   if (reviewCount == null) {
     const m = raw.text.match(/\((\d{1,3}(?:[.,\s\u00a0]\d{3})+|\d+)\)/u);
-    if (m) {
-      const n = parseRcNum(m[1]);
-      if (n != null) {
-        reviewCount = n;
-        rcSource = "text";
-      }
-    }
+    if (m) reviewCount = parseRcNum(m[1]);
   }
-  return { hasBox: true, rating, ratingNum, reviewCount, rcSource };
+  return { hasBox: true, reviewCount };
 }
 
 // ⚠️ 수정금지(승인필요) 2026-09-01 사장님 확정 = PID 행 사진 = 구글맵 공개 페이지에서 무료 취득(PM 유료콜 0, 실측 400x300·51KB = PM 400x267 동급)
@@ -301,13 +318,13 @@ async function readPhotoUrl(page: Page, w: number): Promise<string | null> {
 }
 
 // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 여는 방법 2갈래 = PID(우리 열쇠) 또는 이름+주소(사람이 구글맵 쓰는 방식). 뒤 처리는 완전히 같다.
-//   = PID 가 틀려도(TS 오배송) 이름+주소로는 맞는 페이지가 열린다 = 유료 TS 없이 6요소 확보.
 export async function readPlacePage(
   page: Page,
   pid: string,
   hl: string,
   wantCoords: boolean,
   photoWidth?: number,
+  alreadyOpen = false,
 ): Promise<PageData> {
   const out: PageData = {
     h1: null,
@@ -316,9 +333,6 @@ export async function readPlacePage(
     urlLat: null,
     urlLng: null,
     reviewCount: null,
-    rcSource: null,
-    rating: null,
-    ratingNum: null,
     status: "OPERATIONAL",
     consentBlocked: false,
     photoUrl: null,
@@ -329,17 +343,19 @@ export async function readPlacePage(
     admission: null,
     perPerson: null,
   };
-  // ⚠️ 수정금지(승인필요) 2026-10-01 사장님 결정 = 구글맵 여는 방법 2갈래 = PID · cid + 열기 전 사람 같은 편차(전용 크롬일 때만) (정본 §)
-  await humanPause(page);
-  await page.goto(
-    pid.startsWith("cid:")
-      ? `https://maps.google.com/?cid=${encodeURIComponent(pid.slice(4))}&hl=${hl}`
-      : `https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(pid)}&hl=${hl}`,
-    { waitUntil: "domcontentloaded", timeout: 30000 },
-  );
-  if (!(await dismissConsent(page))) {
-    out.consentBlocked = true;
-    return out;
+  // ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = 구글맵 여는 방법 2갈래 = PID · cid + 열기 전 사람 같은 편차(전용 크롬일 때만) · 검색이 단일 결과로 이미 그 페이지를 열었으면(alreadyOpen) 다시 이동하지 않고 그 자리에서 읽는다(같은 페이지 2번 열기 = 인증 재촉·시간 낭비) (정본 §)
+  if (!alreadyOpen) {
+    await humanPause(page);
+    await page.goto(
+      pid.startsWith("cid:")
+        ? `https://maps.google.com/?cid=${encodeURIComponent(pid.slice(4))}&hl=${hl}`
+        : `https://www.google.com/maps/place/?q=place_id:${encodeURIComponent(pid)}&hl=${hl}`,
+      { waitUntil: "domcontentloaded", timeout: 30000 },
+    );
+    if (!(await dismissConsent(page))) {
+      out.consentBlocked = true;
+      return out;
+    }
   }
   await page.waitForSelector("h1", { timeout: 15000 }).catch(() => {});
   await page.waitForTimeout(1500);
@@ -390,10 +406,7 @@ export async function readPlacePage(
     await page.waitForTimeout(1500);
     rb = await readRatingBlock(page);
   }
-  out.rating = rb.rating;
-  out.ratingNum = rb.ratingNum;
-  out.reviewCount = rb.reviewCount;
-  out.rcSource = rb.rcSource;
+  out.reviewCount = rb.hasBox ? rb.reviewCount : 0;
   await scrollPanel(page);
   const mainText =
     (await page

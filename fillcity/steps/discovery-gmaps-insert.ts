@@ -4,11 +4,14 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { latestVersioned } from "../../worker/lib/services/shared/raw-filename";
 import { cityReportKey } from "../../shared/r2-paths";
+import { crossKind } from "../../worker/lib/services/fill/gmaps-absorb";
 import {
   codeOf,
-  crossKind,
+  LIMITED_WHY,
   type NewEntry,
+  type Read,
 } from "../../worker/lib/services/fill/gmaps-shared";
+import { ledgerKey, ledgerPath, readLedger, type Ledger } from "./common";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "../..");
@@ -32,8 +35,12 @@ const argv = Object.fromEntries(
 );
 const cityId = Number(argv["city-id"] || 0);
 const apply = argv["apply"] === "true";
+// ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = ④ 판정 장부 = 이 판(--since 뒤)에 넣은 곳은 다시 안 열고, 거부된 곳은 다시 안 열고 일꾼 명단으로, 제한 보기만 다음 판에 다시 연다(푸켓 실측 = 같은 7곳을 재시도마다 또 열어 140번 중 88번이 헛 열기) (정본 §)
+const since = argv["since"] ? Date.parse(String(argv["since"])) : 0;
 if (!cityId) {
-  console.error("Usage: --city-id=<N> [--apply] [--report=<path>]");
+  console.error(
+    "Usage: --city-id=<N> [--apply] [--report=<path>] [--since=<ISO 시각>]",
+  );
   process.exit(1);
 }
 
@@ -71,10 +78,27 @@ function findReportPath(): string {
     process.exit(1);
   }
   const 있음: NewEntry[] = sections.flatMap((s) => s.confirm);
+  const ledger: Ledger = readLedger(cityId);
+  const fresh = (e: Ledger[string]) => Date.parse(e.at) >= since;
+  const done = { inserted: [] as string[], rejected: [] as string[] };
+  for (const s of sections) {
+    s.new = (s.new as NewEntry[]).filter((n) => {
+      const e = ledger[ledgerKey(n)];
+      if (!e || !fresh(e)) return true;
+      if (e.verdict === "inserted")
+        done.inserted.push(`${n.name} → #${e.rowId}`);
+      else if (e.verdict === "rejected")
+        done.rejected.push(`${n.name} (${e.why})`);
+      else return true;
+      return false;
+    });
+  }
   const 신규: NewEntry[] = sections.flatMap((s) => s.new);
   console.log(
-    `대상 = 있음 ${있음.length}곳(안 엶 = 그 행에 흡수) · 신규 ${신규.length}곳 → 구글맵 열어 넣음 (유료 API 0)`,
+    `대상 = 있음 ${있음.length}곳(안 엶 = 그 행에 흡수) · 신규 ${신규.length}곳 → 구글맵 열어 넣음 (유료 API 0) · 장부로 뺀 곳 = 이미 넣음 ${done.inserted.length} · 거부(일꾼 명단) ${done.rejected.length}`,
   );
+  for (const x of done.inserted) console.log(`  [장부 이미 넣음] ${x}`);
+  for (const x of done.rejected) console.log(`  [장부 거부→일꾼] ${x}`);
   console.log(
     `\n--- 있음 ${있음.length}곳 = 창고에 이미 있음 = 안 열고 흡수 ---`,
   );
@@ -120,6 +144,40 @@ function findReportPath(): string {
     "../../worker/lib/services/fill/gmaps-pid-identity/page-reader"
   );
   const browser = await launchBrowser(chromium);
+  const saveLedger = () =>
+    fs.writeFileSync(ledgerPath(cityId), JSON.stringify(ledger, null, 2));
+  const note = (r: Read) => {
+    const cid = String(r.d?.mapsUri || "").match(/cid=(\d+)/)?.[1] ?? null;
+    if (!r.why)
+      ledger[ledgerKey(r.n)] = {
+        name: r.n.name,
+        cat: r.n.cat,
+        langs: r.n.langs,
+        verdict: "inserted",
+        rowId: r.rowId ?? null,
+        cid,
+        tier: r.tier ?? null,
+        at: new Date().toISOString(),
+      };
+    else if (
+      r.why !== LIMITED_WHY &&
+      r.why !== "동의창" &&
+      !r.why.startsWith("오류:")
+    )
+      ledger[ledgerKey(r.n)] = {
+        name: r.n.name,
+        cat: r.n.cat,
+        langs: r.n.langs,
+        verdict: "rejected",
+        why: r.why,
+        pageName: r.d?.h1 ?? null,
+        cid,
+        at: new Date().toISOString(),
+        entry: r.n,
+      };
+    else return;
+    saveLedger();
+  };
   try {
     await insertSeedEntries({
       client: c,
@@ -128,6 +186,7 @@ function findReportPath(): string {
       report,
       reportKey,
       upsertPlace,
+      onRead: note,
     });
   } finally {
     await browser.close().catch(() => {});

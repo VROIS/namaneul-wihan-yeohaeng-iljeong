@@ -1,6 +1,7 @@
 // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 알아보는 문 = 제미니 값(영어명·현지명·한국어명·주소·좌표)만으로 창고 행을 먼저 찾아 유료호출 0. 판정식 = 76회 MIX raw 1,500곳 전수 대입으로 고른 1등 식(적중 1,419 · 놓침 8 · 오판 ≤8). 분류는 식당/비식당 구분만 층별로 쓰고 나머지는 태그로만 (정본 §)
 import { sql } from "drizzle-orm";
 import { distanceMetersFromCoords } from "./geo-distance";
+import { foldAccents } from "./text-fold";
 
 export type RecognizeRow = {
   id: number;
@@ -30,9 +31,7 @@ export type GeminiPlace = {
 
 // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 문이 찾은 행의 손님상 재료(사진·PID·지도주소·리뷰수)를 같은 조회로 가져온다 = 창고 쓰기 성패와 무관하게 슬롯에 먼저 붙이기 위함 (정본 §)
 const RECOGNIZE_ROWS_HEAD = `SELECT p.id, p.name_en, p.name_local, p.name_ko, p.address, p.seed_category, p.latitude::float AS lat, p.longitude::float AS lng, p.image_url, p.google_place_id, p.google_maps_uri, p.google_review_count, (SELECT ARRAY[c.name, c.name_en, c.name_local] || COALESCE((SELECT array_agg(x) FROM jsonb_array_elements_text(CASE WHEN jsonb_typeof(c.aliases) = 'array' THEN c.aliases ELSE '[]'::jsonb END) x), '{}') FROM cities c WHERE c.id = p.city_id) AS city_names FROM place_seed_raw p WHERE p.status = 'active' AND p.city_id = `;
-/** 창고 행 읽는 문장 1벌 = pg 클라이언트용($1 자리표). */
 export const RECOGNIZE_ROWS_SQL = `${RECOGNIZE_ROWS_HEAD}$1`;
-/** 같은 문장 = drizzle 용. 도시 번호는 글자로 붙이지 않고 매개변수로 넘긴다. */
 export const recognizeRowsQuery = (cityId: number) =>
   sql`${sql.raw(RECOGNIZE_ROWS_HEAD)}${sql.param(cityId)}`;
 const RECOGNIZE_CITY_HEAD = `SELECT name, name_en, name_local, aliases FROM cities WHERE id = `;
@@ -61,7 +60,6 @@ export const cityNamesOf = (
     : [];
 
 // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 일반명사 목록 2벌 = 쓰는 곳이 다르다. 섞으면 한쪽 승인이 다른 쪽 동작을 바꾼다(판정식 교체가 TS 오배송 판정까지 바꾼 것을 parity 검수가 잡음).
-//   DOOR_GENERIC = 알아보는 문 판정식 전용(1등 식과 함께 확정). GENERIC = TS 오배송 판정(namesAgree→properKey) 전용 = 운영 recognize-place.ts 와 **같은 65단어 그대로**.
 const DOOR_GENERIC = new Set(
   "restaurant restaurante brasserie bistro bistrot cafe bar hotel auberge taverne taberna pub pizzeria trattoria museum musee museo gallery galerie galeries theatre theater teatro opera cinema cinemas palais palacio chateau castle castillo manor villa domaine maison house casa abbaye abbey couvent monastere monastery basilique basilica cathedrale cathedral catedral eglise church iglesia chapelle chapel capilla temple templo mosquee synagogue parc park parque jardin garden square place plaza forest foret bois bosque tour tower torre pont bridge puente porte gate puerta phare lighthouse faro fontaine fountain fuente statue monument monumento avenue rue street calle boulevard allee chemin route promenade quai magasin store boutique tienda marche market mercado halles centre center centro mall cerro hill mirador viewpoint national nacional trail beach playa lake lago laguna river rio island isla islands islas old town city ville village de del la el los las y the of and a en le les des du au aux da do dos das di della delle dei degli il lo gli un una une e et al st san santa santo saint sainte reserve reserva natural nature shop winery cave caves vignoble vineyard vineyards estate farm resort spa lodge camp tea coffee home main branch champagne sangucheria cevicheria chifa anticucheria criolla peruana wildlife refuge site sanctuary santuario arqueologico fortaleza fortress circuito circuit monumental turismo historico convent convento archaeological anthropology history huaca in distrito district".split(
     /\s+/,
@@ -135,10 +133,7 @@ const GENERIC = new Set([
   "district",
 ]);
 const norm = (s: unknown) =>
-  String(s ?? "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+  foldAccents(String(s ?? "").toLowerCase())
     .replace(/[^a-z0-9가-힣 ]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -313,7 +308,6 @@ function feat(g: GeminiPlace, r: RecognizeRow, cityTok: Set<string>): Feat {
 }
 
 const INF = Number.POSITIVE_INFINITY;
-// 층 = 위에서부터. 처음 후보가 생기는 층에서 멈춘다(이름 점수 높은 순 → 가까운 순).
 const TIERS: {
   why: string;
   ok: (f: Feat) => boolean;
@@ -341,9 +335,10 @@ const TIERS: {
     dist: 3000,
     rest: true,
   },
+  // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 이름 유사 층 문턱 95%(1km) = 5도시 실측에서 낮은 문턱이 단독 결정한 3건 중 2건이 다른 곳(리옹 미술관→인형박물관, 불광산 채식당→불타기념관) (정본 §)
   {
-    why: "이름 유사 83% + 1km",
-    ok: (f) => f.jw >= 0.83,
+    why: "이름 유사 95% + 1km",
+    ok: (f) => f.jw >= 0.95,
     dist: 1000,
     rest: false,
   },
@@ -414,13 +409,9 @@ export function recognizePlace(
   return null;
 }
 
-// ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = TS 가 돌려준 이름이 제미니 이름(현지어·영어)과 전혀 다르면 오배송으로 보고 붙이지 않는다(MATE→Pedro de Osma 실측).
-//   "전혀 다르다" = 일반명사를 뺀 고유명사 조각이 하나도 안 겹칠 때(앞 5글자 같으면 같은 조각으로 봄 = Exposición/Exposition · Reserva/Reserve 표기 차 흡수). 오늘 6판 TS 64건 실측 = 진짜 오배송 2건만 거부.
+// ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = TS 가 돌려준 이름이 제미니 이름(현지어·영어)과 전혀 다르면 오배송으로 보고 붙이지 않는다 · 발음기호 떼기는 text-fold 1벌 (정본 §)
 const latin = (s: unknown) =>
-  String(s ?? "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+  foldAccents(String(s ?? "").toLowerCase())
     .replace(/[^a-z0-9 ]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
@@ -435,7 +426,6 @@ export function namesAgree(
   geminiNames: (string | null | undefined)[],
 ): boolean {
   // ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = 라틴 글자가 아닌 이름(경복궁·東京タワー·Кремль)은 라틴 정규화하면 빈 글자가 된다 = 그 자체로는 판정 불가.
-  //   판정 불가일 때는 거부하지 않는다(거부하면 서울·도쿄 같은 도시의 새 장소가 전멸하고 유료 TS 응답이 통째로 버려진다). 대신 글자 그대로 견줘 같으면 통과.
   const raw = (x: unknown) =>
     String(x ?? "")
       .replace(/\s+/g, "")

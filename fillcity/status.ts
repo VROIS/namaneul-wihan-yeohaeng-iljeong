@@ -32,9 +32,8 @@ if (!cityId) {
   if (!db) throw new Error("DB 연결 없음(SUPA_URL)");
   const { sql } = await import("drizzle-orm");
   const { placeSeedRaw } = await import("../shared/schema");
-  const { READY_MIN_SERVABLE, readySql, servingGateSql } = await import(
-    "../worker/lib/services/shared/pool-radius"
-  );
+  const { READY_MIN_SERVABLE, readySql, servingGateCoreSql, servingGateSql } =
+    await import("../worker/lib/services/shared/pool-radius");
   const { cityMealTiers } = await import(
     "../worker/lib/services/shared/meal-budget-tiers"
   );
@@ -44,6 +43,7 @@ if (!cityId) {
     ssl: { rejectUnauthorized: false },
   });
   await c.connect();
+  let brokenCount = 0;
   const city = (
     await c.query("SELECT name_en FROM cities WHERE id=$1", [cityId])
   ).rows[0];
@@ -166,6 +166,24 @@ if (!cityId) {
   console.log(
     `분류(활성) = 구글 분류 없음(페이지 안 연 행) ${noLabel} · 표에 없는 글자 ${unknown}행/${unknownSet.size}종 · 장소 아님 남음 ${notPlace} · 정렬 안 된 행 ${misaligned}`,
   );
+  // ⚠️ 수정금지(승인필요) 2026-10-05 사장님 결정 = 검수에 한국어 이름 칸 검사 = 한글이 아닌 글자(일본어·한자·아랍·히브리·태국·키릴·그리스)가 섞인 이름을 센다 (정본 §)
+  {
+    const broken = (
+      await c.query(
+        "SELECT id, name_ko FROM place_seed_raw WHERE city_id=$1 AND status='active' AND name_ko IS NOT NULL",
+        [cityId],
+      )
+    ).rows.filter((r: any) => /[぀-ヿ㐀-鿿؀-ۿ֐-׿฀-๿Ѐ-ӿͰ-Ͽ]/u.test(r.name_ko));
+    brokenCount = broken.length;
+    console.log(`한국어 이름 칸 = 한글 아닌 글자가 섞인 행 ${broken.length}`);
+    if (broken.length)
+      console.log(
+        `  깨진 이름 = ${broken
+          .slice(0, 40)
+          .map((r: any) => `#${r.id} ${r.name_ko}`)
+          .join(" | ")}`,
+      );
+  }
   // ⚠️ 수정금지(승인필요) 2026-10-01 사장님 결정 = 구글맵 읽기 로그 대조 = 도시 폴더 로그(행마다 가장 나중 것)와 활성 행을 맞춰 빠진 행·읽기가 막힌 행을 센다(누락 0 확인)
   {
     const dir = path.join(ROOT, "docs", "raw", String(cityId));
@@ -197,6 +215,159 @@ if (!cityId) {
       console.log(`  로그 없는 행 = ${missing.slice(0, 40).join(",")}`);
     if (bad.length) console.log(`  막힌 행 = ${bad.slice(0, 40).join(",")}`);
   }
-  await c.end();
-  process.exit(0);
+  // ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = 최종 산출표 1벌 = 한눈에 = 분류별 한 줄(활성 · 손님상 · 상위 20 안 · 베스트 · 결손 = 사진·CID·도장·가격·대사·카피 없음) + 식당 상·중·하와 그중 베스트 = 실행 전(베이스라인)·후 상태표에 같은 표가 자동으로 나온다 (정본 §)
+  {
+    const gate = servingGateCoreSql();
+    const served = sql`(${gate} AND ${placeSeedRaw.priceEur} IS NOT NULL)`;
+    const rows: any[] = await db
+      .select({
+        cat: placeSeedRaw.seedCategory,
+        n: sql<number>`COUNT(*)::int`,
+        served: sql<number>`COUNT(*) FILTER (WHERE ${served})::int`,
+        best: sql<number>`COUNT(*) FILTER (WHERE ${served} AND ${placeSeedRaw.bestRank} IS NOT NULL)::int`,
+        noImg: sql<number>`COUNT(*) FILTER (WHERE ${placeSeedRaw.imageUrl} IS NULL OR ${placeSeedRaw.imageUrl} !~ '/[0-9]+/images/')::int`,
+        noCid: sql<number>`COUNT(*) FILTER (WHERE ${placeSeedRaw.googleMapsUri} IS NULL OR ${placeSeedRaw.googleMapsUri} NOT LIKE '%cid=%')::int`,
+        noStamp: sql<number>`COUNT(*) FILTER (WHERE ${placeSeedRaw.verifySource} IS NULL OR ${placeSeedRaw.verifySource} NOT LIKE 'gmaps%')::int`,
+        noPrice: sql<number>`COUNT(*) FILTER (WHERE ${gate} AND ${placeSeedRaw.priceEur} IS NULL)::int`,
+        noSum: sql<number>`COUNT(*) FILTER (WHERE COALESCE(${placeSeedRaw.summaryKo}, '') = '')::int`,
+        noCopy: sql<number>`COUNT(*) FILTER (WHERE COALESCE(${placeSeedRaw.editorialSummary}, '') = '')::int`,
+      })
+      .from(placeSeedRaw)
+      .where(
+        sql`${placeSeedRaw.cityId} = ${cityId} AND ${placeSeedRaw.status} = 'active' AND ${placeSeedRaw.seedCategory} NOT LIKE 'bts%'`,
+      )
+      .groupBy(placeSeedRaw.seedCategory)
+      .orderBy(placeSeedRaw.seedCategory);
+    const head = [
+      "분류".padEnd(11),
+      "활성".padStart(5),
+      "손님상".padStart(6),
+      "상위20".padStart(6),
+      "베스트".padStart(6),
+      " | 결손 → 사진 CID 도장 가격 대사 카피",
+    ].join("");
+    console.log(
+      `\n═══ 최종 산출표 — ${city?.name_en || "?"}(${cityId}) ═══\n${head}`,
+    );
+    // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 합계 줄은 한 번 집계한 값으로 찍는다 (정본 §)
+    const tot = {
+      n: 0,
+      served: 0,
+      top: 0,
+      best: 0,
+      noImg: 0,
+      noCid: 0,
+      noStamp: 0,
+      noPrice: 0,
+      noSum: 0,
+      noCopy: 0,
+    };
+    for (const r of rows) {
+      const top = r.cat === "restaurant" ? r.served : Math.min(20, r.served);
+      tot.n += r.n;
+      tot.served += r.served;
+      tot.top += top;
+      tot.best += r.best;
+      tot.noImg += r.noImg;
+      tot.noCid += r.noCid;
+      tot.noStamp += r.noStamp;
+      tot.noPrice += r.noPrice;
+      tot.noSum += r.noSum;
+      tot.noCopy += r.noCopy;
+      console.log(
+        [
+          String(r.cat).padEnd(11),
+          String(r.n).padStart(5),
+          String(r.served).padStart(6),
+          (r.cat === "restaurant" ? "-" : String(top)).padStart(6),
+          String(r.best).padStart(6),
+          ` |        ${String(r.noImg).padStart(4)} ${String(r.noCid).padStart(3)} ${String(r.noStamp).padStart(4)} ${String(r.noPrice).padStart(4)} ${String(r.noSum).padStart(4)} ${String(r.noCopy).padStart(4)}`,
+        ].join(""),
+      );
+    }
+    console.log(
+      [
+        "합계".padEnd(11),
+        String(tot.n).padStart(5),
+        String(tot.served).padStart(6),
+        String(tot.top).padStart(6),
+        String(tot.best).padStart(6),
+        ` |        ${String(tot.noImg).padStart(4)} ${String(tot.noCid).padStart(3)} ${String(tot.noStamp).padStart(4)} ${String(tot.noPrice).padStart(4)} ${String(tot.noSum).padStart(4)} ${String(tot.noCopy).padStart(4)}`,
+      ].join(""),
+    );
+    if (tiers) {
+      const rest: { p: number; best: boolean }[] = (
+        await db
+          .select({
+            p: sql<number>`${placeSeedRaw.priceEur}::float`,
+            best: sql<boolean>`${placeSeedRaw.bestRank} IS NOT NULL`,
+          })
+          .from(placeSeedRaw)
+          .where(
+            sql`${placeSeedRaw.cityId} = ${cityId} AND ${placeSeedRaw.seedCategory} = 'restaurant' AND ${served}`,
+          )
+      ).map((r: any) => ({ p: Number(r.p), best: !!r.best }));
+      const tier = (r: { p: number }) =>
+        r.p <= tiers.lo ? "하" : r.p > tiers.hi ? "상" : "중";
+      const line = ["하", "중", "상"]
+        .map((t) => {
+          const xs = rest.filter((r) => tier(r) === t);
+          return `${t} ${xs.length}(베스트 ${xs.filter((r) => r.best).length})`;
+        })
+        .join(" · ");
+      console.log(
+        `식당 상·중·하 = ${line} · 기준 하 €${Math.round(tiers.lo)} 이하 / 상 €${Math.round(tiers.hi)} 초과 · 베스트 식당 ${rest.filter((r) => r.best).length}/${rest.length}`,
+      );
+    } else console.log("식당 상·중·하 = 분포 없음(가격 있는 식당 5곳 미만)");
+  }
+  // ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = ⑥ 판정식 1벌 = 한 도시의 마침표 = 손님상 120 이상 · 베스트 1 이상 · 가격 없어 상에 못 오른 행 0 · 손님상 행의 1,000€ 초과 0 · 사진 없음 0 · 대사·카피 없음 0 · 한글 아닌 글자 0 (글자 수는 재지 않는다 = 제미니 응답 그대로) = 걸린 행은 명단 파일(docs/b1-reports/{도시}/{시각}_final-todo.json)로 남겨 클로드·사장님이 직접 채운다 · --judge=true 일 때만 불통과 = exit 1(베이스라인 상태표는 늘 0) (정본 §)
+  {
+    const NO_IMG = sql`(${placeSeedRaw.imageUrl} IS NULL OR ${placeSeedRaw.imageUrl} !~ '/[0-9]+/images/')`;
+    const NO_TEXT = sql`(COALESCE(${placeSeedRaw.summaryKo}, '') = '' OR COALESCE(${placeSeedRaw.editorialSummary}, '') = '')`;
+    const hits: { id: number; name: string | null; why: string }[] = await db
+      .select({
+        id: placeSeedRaw.id,
+        name: placeSeedRaw.nameEn,
+        why: sql<string>`concat_ws(' ',
+          CASE WHEN ${placeSeedRaw.priceEur} IS NULL THEN '가격없음' END,
+          CASE WHEN ${placeSeedRaw.priceEur} > 1000 THEN '가격1000초과' END,
+          CASE WHEN ${NO_IMG} THEN '사진없음' END,
+          CASE WHEN ${NO_TEXT} THEN '대사·카피없음' END)`,
+      })
+      .from(placeSeedRaw)
+      .where(
+        sql`${placeSeedRaw.cityId} = ${cityId} AND ${placeSeedRaw.seedCategory} NOT LIKE 'bts%' AND ${placeSeedRaw.seedCategory} <> 'hotel' AND ${servingGateCoreSql()} AND (${placeSeedRaw.priceEur} IS NULL OR ${placeSeedRaw.priceEur} > 1000 OR ${NO_IMG} OR ${NO_TEXT})`,
+      )
+      .orderBy(placeSeedRaw.id);
+    const count = (w: string) => hits.filter((h) => h.why.includes(w)).length;
+    const fails: string[] = [];
+    if (mix.servable < READY_MIN_SERVABLE)
+      fails.push(`손님상 ${mix.servable} < ${READY_MIN_SERVABLE}`);
+    if (!(mix.best >= 1)) fails.push("베스트 0");
+    for (const [w, label] of [
+      ["가격없음", "가격 없어 상에 못 오른 행"],
+      ["가격1000초과", "손님상 행 가격 1,000€ 초과"],
+      ["사진없음", "손님상 행 사진 없음"],
+      ["대사·카피없음", "손님상 행 대사·카피 없음"],
+    ] as const)
+      if (count(w)) fails.push(`${label} ${count(w)}`);
+    if (brokenCount) fails.push(`한글 아닌 글자 ${brokenCount}`);
+    console.log(
+      `\n⑥ 판정 = ${fails.length ? `불통과: ${fails.join(" · ")}` : "통과 = 이 도시는 마침표(다시 창고를 볼 일 없음)"}`,
+    );
+    if (hits.length) {
+      const dir = path.join(ROOT, "docs", "b1-reports", String(cityId));
+      fs.mkdirSync(dir, { recursive: true });
+      const { fileStamp } = await import("../shared/r2-paths");
+      const f = path.join(dir, `${fileStamp()}_final-todo.json`);
+      fs.writeFileSync(f, JSON.stringify({ cityId, hits }, null, 2));
+      console.log(
+        `  걸린 행 ${hits.length} → ${path.relative(ROOT, f)} (클로드·사장님이 직접 채움 → llm-review.ts --apply=<판정 JSON>)`,
+      );
+      for (const h of hits.slice(0, 40))
+        console.log(`  #${h.id} ${h.name} = ${h.why}`);
+    }
+    await c.end();
+    process.exit(argv["judge"] === "true" && fails.length ? 1 : 0);
+  }
 })();

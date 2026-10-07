@@ -1,4 +1,5 @@
-// ⚠️ 수정금지(승인필요) 2026-06-04 = TS(Google Places) 호출 단일 관문 = 사용자 SSOT 헌법
+// ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = TS(Google Places) 호출 단일 관문 · 가격대(priceRange)는 CardPrice 1벌로 받는다 (정본 §)
+import type { CardPrice } from "../fill/gmaps-pid-identity/page-reader";
 import { STANDARD_TS_FIELD_MASK, validateFieldMask } from "./google-places-sku";
 import { saveRaw } from "./save-raw";
 import { recordExternalCall, precheck } from "./external-call-log"; // 2026-08-23 사장님 승인 = 유료호출 카운터
@@ -37,7 +38,8 @@ export interface TsPlace {
   latitude: number | null; // location.latitude
   longitude: number | null; // location.longitude
   googleReviewCount: number | null; // userRatingCount
-  // ⚠️ 수정금지(승인필요) 2026-08-19 사장님 승인 = price_eur 필드 완전삭제(§19, 좌표=절대권위 원칙의 가격 적용).
+  // ⚠️ 수정금지(승인필요) 2026-10-03 사장님 결정 = TS 가격대를 받는다(통화 코드 + 범위) = 가격 순서 페이지 > TS > 제미니 (정본 §)
+  priceRange: CardPrice | null;
   photoName: string | null; // photos[0].name
   googleMapsUri: string | null;
   businessStatus: string | null;
@@ -77,6 +79,18 @@ const rectFromCenter = (lat: number, lng: number, km: number) => {
   };
 };
 
+const mapPriceRange = (pr: any): CardPrice | null => {
+  const amount = (m: any) =>
+    m ? Number(m.units ?? 0) + Number(m.nanos ?? 0) / 1e9 : null;
+  const start = amount(pr?.startPrice);
+  const end = amount(pr?.endPrice);
+  const cur = pr?.endPrice?.currencyCode ?? pr?.startPrice?.currencyCode;
+  if (!cur || (start == null && end == null)) return null;
+  return end == null
+    ? { cur, lo: start as number, hi: null }
+    : { cur, lo: start ?? 0, hi: end };
+};
+
 const mapPlace = (p: any): TsPlace => ({
   googlePlaceId: p.id ?? null,
   // ⚠️ 수정금지(승인필요) — TS displayName→name_en (2026-06-17 사장님 SSOT) = name_local은 Gemini전용
@@ -86,7 +100,7 @@ const mapPlace = (p: any): TsPlace => ({
   latitude: p.location?.latitude ?? null,
   longitude: p.location?.longitude ?? null,
   googleReviewCount: p.userRatingCount ?? null,
-  // ⚠️ 2026-08-19 = priceEur 필드 삭제(§19, 위 interface 주석 참조) = 응답원본(priceRange)은 §18 raw 저장에
+  priceRange: mapPriceRange(p.priceRange),
   photoName: p.photos?.[0]?.name ?? null,
   googleMapsUri: p.googleMapsUri ?? null,
   businessStatus: p.businessStatus ?? null,

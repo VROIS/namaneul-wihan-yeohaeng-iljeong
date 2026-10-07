@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// ⚠️ 수정금지(승인필요) 2026-10-02 사장님 결정 = `/fillcity <도시번호>` = 실행 전 상태표(베이스라인) → 필시티 v3 한 판(--auto) → 실행 후 상태표 → 전후 비교 (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = `/fillcity <도시번호>` = 상태표(베이스라인) → 필시티 한 판(--auto, .claude 폴더에 신호 파일 fillcity-only 가 있으면 그 단계만 한 번) → 실행 후 상태표 → 전후 비교 (정본 §)
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -26,6 +26,9 @@ const stamp = () =>
   new Date().toISOString().slice(0, 19).replace("T", "_").replaceAll(":", "");
 const dir = path.join(ROOT, "docs", "b1-reports", String(city));
 const RUN = path.join(ROOT, ".claude", "fillcity-run.json");
+const ONLY = path.join(ROOT, ".claude", "fillcity-only.txt");
+const only = fs.existsSync(ONLY) ? fs.readFileSync(ONLY, "utf8").trim() : "";
+if (only) fs.unlinkSync(ONLY);
 const write = (o) => fs.writeFileSync(RUN, JSON.stringify(o));
 const status = (file) => {
   const r = spawnSync(
@@ -60,7 +63,13 @@ write({ city, stage: "running", startedAt, baseline: baseFile });
 
 const run = spawnSync(
   "npx",
-  ["tsx", "fillcity/fill-city-v3.ts", `--city-id=${city}`, "--auto=true"],
+  [
+    "tsx",
+    "fillcity/fill-city-v3.ts",
+    `--city-id=${city}`,
+    "--auto=true",
+    ...(only ? [`--only=${only}`] : []),
+  ],
   {
     stdio: "inherit",
     shell: true,
@@ -89,4 +98,8 @@ for (const l of before.split("\n"))
 for (const l of after.split("\n"))
   if (l.trim() && !a.has(l)) console.log(`+ ${l}`);
 console.log(`═══ 실행 후 상태표 저장 = ${afterFile}`);
+// ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = ⑦ AI 최종 검수(의무) = 이 출력을 받은 AI 는 fillcity/prompts/09-ai-final-review/instruction.txt 대로 페이지를 직접 열어 걸린 행을 채우고 판정 통과를 본 뒤에만 사장님께 보고한다 (정본 §)
+console.log(
+  `\n⑦ AI 최종 검수(의무) = fillcity/prompts/09-ai-final-review/instruction.txt 를 읽고 그대로 한 뒤, status.ts --city-id=${city} --judge=true 통과를 확인하고 나서 보고한다. 그 전의 "끝났다"는 거짓 보고다.`,
+);
 process.exit(run.status ?? 1);

@@ -1,4 +1,4 @@
-// ⚠️ 수정금지(승인필요) 2026-09-30 사장님 결정 = ⑤ 후처리 = 정제·발굴·입력이 끝나고도 가격이 없거나 튀는 식당만 우리 번호를 달아 120곳씩 제미니 1콜(#07 prompt.txt = geminiCurate 1벌, 유료 = --gemini=true 명시) · 가격 한 칸만 씀 · 어사이드 답(--apply-json) 넣기는 채널 ③ 몫으로 여기 둔다 · 옛 price-check(구글맵 카드 다시 열기) 폐기 §19 (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 후처리 가격 호출도 입력에 우리 시드 분류(seed_category)를 같이 보낸다 = 2차 보강과 같은 입력 1벌 (정본 §)
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -32,7 +32,6 @@ const cityId = Number(argv["city-id"] || 0);
 const apply = argv["apply"] === "true";
 // ⚠️ 수정금지(승인필요) 2026-08-30 사장님 SSOT = 외부 유료호출은 별도 명시 플래그 없이는 실행 금지.
 const useGemini = argv["gemini"] === "true";
-const SUSPECT_X = 3;
 const CID_PRICED = `city_id=$1 AND status='active' AND seed_category='restaurant' AND google_maps_uri LIKE '%cid=%'`;
 
 (async () => {
@@ -123,10 +122,10 @@ const CID_PRICED = `city_id=$1 AND status='active' AND seed_category='restaurant
         console.log(`  ? #${a.id} = ${r.why ?? "가격 없음"}`);
         continue;
       }
-      if (apply) await write(a.id, row.name, Math.round(r.eur), "price-aside");
+      if (apply) await write(a.id, row.name, r.eur, "price-aside");
       n++;
       console.log(
-        `  ✎ #${a.id} = €${Math.round(r.eur)}${cp ? ` (${priceLabel(cp)})` : fromReviews.length ? ` (리뷰 ${fromReviews.length}건 가운데값)` : ""}`,
+        `  ✎ #${a.id} = €${r.eur}${cp ? ` (${priceLabel(cp)})` : fromReviews.length ? ` (리뷰 ${fromReviews.length}건 가운데값)` : ""}`,
       );
     }
     console.log(
@@ -135,15 +134,6 @@ const CID_PRICED = `city_id=$1 AND status='active' AND seed_category='restaurant
     await finish();
   }
 
-  const median = Number(
-    (
-      await c.query(
-        `SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY price_eur) AS m FROM place_seed_raw WHERE ${CID_PRICED} AND price_eur > 0`,
-        [cityId],
-      )
-    ).rows[0]?.m ?? 0,
-  );
-  const above = median > 0 ? median * SUSPECT_X : Number.POSITIVE_INFINITY;
   const ids = String(argv["ids"] || "")
     .split(",")
     .map(Number)
@@ -158,15 +148,15 @@ const CID_PRICED = `city_id=$1 AND status='active' AND seed_category='restaurant
     price_eur: number | null;
   }[] = (
     await c.query(
-      `SELECT id, name_en, substring(google_maps_uri from 'cid=([0-9]+)') AS cid, address, latitude::float8 AS lat, longitude::float8 AS lng, price_eur::float AS price_eur
+      `SELECT id, name_en, seed_category, substring(google_maps_uri from 'cid=([0-9]+)') AS cid, address, latitude::float8 AS lat, longitude::float8 AS lng, price_eur::float AS price_eur
          FROM place_seed_raw WHERE ${CID_PRICED}
-          AND ${ids.length ? "id = ANY($2::int[])" : "(price_eur IS NULL OR price_eur <= 0 OR price_eur > $2)"}
+          AND ${ids.length ? "id = ANY($2::int[])" : "(price_eur IS NULL OR price_eur <= 0)"}
         ORDER BY id`,
-      ids.length ? [cityId, ids] : [cityId, above],
+      ids.length ? [cityId, ids] : [cityId],
     )
   ).rows;
   console.log(
-    `═══ ⑤ 후처리 가격 city ${cityId} ${city.name_en} = 식당 가운데값 €${median.toFixed(1)} · 의심 기준 €${Number.isFinite(above) ? above.toFixed(0) : "-"} 초과 · 대상 ${targets.length}행 · ${useGemini ? (apply ? "GEMINI APPLY" : "GEMINI DRY(호출 0)") : "명단만(--gemini=true 로 호출)"} ═══`,
+    `═══ ⑤ 후처리 가격 city ${cityId} ${city.name_en} = 가격이 빈 식당 대상 ${targets.length}행 · ${useGemini ? (apply ? "GEMINI APPLY" : "GEMINI DRY(호출 0)") : "명단만(--gemini=true 로 호출)"} ═══`,
   );
   for (const t of targets)
     console.log(`  #${t.id} ${t.name_en} €${t.price_eur ?? "-"}`);
@@ -189,6 +179,7 @@ const CID_PRICED = `city_id=$1 AND status='active' AND seed_category='restaurant
         latitude: t.lat,
         longitude: t.lng,
         googleCid: t.cid,
+        seedCategory: t.seed_category,
       })),
       { apiKey, rawTag: "price-gemini" },
     );
@@ -233,8 +224,6 @@ const CID_PRICED = `city_id=$1 AND status='active' AND seed_category='restaurant
       {
         cityId,
         city: city.name_en,
-        median,
-        suspectAbove: above,
         gemini: useGemini && apply,
         fixed,
         unresolved: left,

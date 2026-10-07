@@ -1,7 +1,6 @@
-// ⚠️ 수정금지(승인필요) 2026-10-01 사장님 결정 = 필시티 제미니 호출 대상 = 뼈대(CID)·기둥(구글맵 로그)에 장식(제미니 칸)이 안 맞는 행만 · 빈 칸·같은 글 중복·원어 이름 불일치 후보·에이전트 보고 어긋남 · hotel 분류·폐업 제외 · 손님상 먼저 120행씩 · 호출 전 값 저장 후 시험→적용 (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-10-05 사장님 결정 = v3.2 최적화 (정본 §)
 import fs from "fs";
 import path from "path";
-import { spawnSync } from "child_process";
 import {
   ROOT,
   connectDb,
@@ -9,6 +8,7 @@ import {
   nameTokens,
   parseArgs,
   reportDir,
+  runTsx,
   stamp,
 } from "./common";
 
@@ -16,7 +16,7 @@ loadEnv();
 const argv = parseArgs();
 const cityId = Number(argv["city-id"] || 0);
 const call = argv["call"] === "true"; // 🔴 유료 = 제미니 호출
-const BATCH = 120;
+const PARTS = 4;
 const isBlank = (x: unknown) => x == null || String(x).trim() === "";
 
 (async () => {
@@ -93,9 +93,9 @@ const isBlank = (x: unknown) => x == null || String(x).trim() === "";
     .sort((a, b) => (byId.get(b).rc || 0) - (byId.get(a).rc || 0)); // 손님상(리뷰 많은 순) 먼저
   const dir = reportDir(cityId);
   const st = stamp();
-  const batches: number[][] = [];
-  for (let k = 0; k < targets.length; k += BATCH)
-    batches.push(targets.slice(k, k + BATCH));
+  const batches: number[][] = Array.from({ length: PARTS }, () => []);
+  targets.forEach((id, i) => batches[i % PARTS].push(id)); // 리뷰 많은 순으로 돌려 담아 몫마다 비슷하게
+  while (batches.length && !batches[batches.length - 1].length) batches.pop();
   const files = batches.map((b, k) => {
     const f = path.join(dir, `${st}_gemini-ids-${k + 1}.json`);
     fs.writeFileSync(f, JSON.stringify(b));
@@ -126,26 +126,51 @@ const isBlank = (x: unknown) => x == null || String(x).trim() === "";
   );
   await c.end();
   if (call) {
-    for (const [k, f] of files.entries()) {
-      console.log(
-        `🔴 제미니 호출 ${k + 1}/${files.length} (${batches[k].length}행)`,
+    // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 2차 호출 실행 = 기존 도구 gemini-apply.ts 를 공용 runTsx 1벌로 부른다 (정본 §)
+    const gemini = path.join(ROOT, "worker/lib/services/fill/gemini-apply.ts");
+    const sh = (args: string[]) =>
+      runTsx(gemini, [`--city-id=${cityId}`, ...args]);
+    console.log(
+      `🔴 제미니 호출 ${files.length}번 동시 (${batches.map((b) => b.length).join("·")}행)`,
+    );
+    const codes = await Promise.all(
+      files.map((f, k) =>
+        sh(["--call=true", `--ids-file=${f}`, `--part=${k + 1}`, "--apply"]),
+      ),
+    );
+    const rawDir = path.join(ROOT, "docs", "raw", String(cityId));
+    let stillFailed = 0;
+    for (const [k, code] of codes.entries()) {
+      if (code === 0) continue;
+      // 저장된 응답이 있으면 그것을 적용(돈을 다시 쓰지 않는다) · 없을 때만 그 몫을 다시 부른다
+      const saved = fs
+        .readdirSync(rawDir)
+        .filter(
+          (x) =>
+            x.endsWith(`_gemini-enrich-after-google-${k + 1}.json`) && x >= st,
+        )
+        .sort()
+        .pop();
+      console.error(
+        `⚠️ 제미니 호출 ${k + 1} 실패 = ${saved ? "저장된 응답을 적용" : "그 몫만 다시 호출"}`,
       );
-      const r = spawnSync(
-        "npx",
-        [
-          "tsx",
-          path.join(ROOT, "worker/lib/services/fill/gemini-apply.ts"),
-          `--city-id=${cityId}`,
-          "--call=true",
-          `--ids-file=${f}`,
-          "--apply",
-        ],
-        { stdio: "inherit", shell: true },
-      );
-      if (r.status !== 0) {
-        console.error(`✗ 제미니 호출 ${k + 1} 실패 = 멈춤(유료 재시도 0)`);
-        process.exit(1);
-      }
+      const retry = saved
+        ? await sh([
+            `--raw=${path.join(rawDir, saved)}`,
+            `--part=${k + 1}`,
+            "--apply",
+          ])
+        : await sh([
+            "--call=true",
+            `--ids-file=${files[k]}`,
+            `--part=${k + 1}`,
+            "--apply",
+          ]);
+      if (retry !== 0) stillFailed++;
+    }
+    if (stillFailed) {
+      console.error(`✗ 제미니 호출 ${stillFailed}몫이 끝내 실패 = 멈춤`);
+      process.exit(1);
     }
   }
   process.exit(0);

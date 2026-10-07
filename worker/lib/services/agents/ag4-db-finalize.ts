@@ -266,9 +266,10 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
           scene.time,
           scene.slot_min ?? (isMeal ? mealDuration : slotDuration),
         ),
+        // ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = 모르는 가격은 0 이 아니라 비움(화면은 가격 줄을 안 그린다) (정본 §)
         estimatedPriceEur: isMeal
           ? scene.price_eur
-          : (inputPlace?.estimatedPriceEur ?? 0),
+          : (inputPlace?.estimatedPriceEur ?? null),
         mealPrice,
         mealPriceLabel,
         image: inputPlace?.image || (scene as any).image || null,
@@ -288,7 +289,7 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
       };
     });
 
-    // ⚠️ 수정금지(승인필요) 2026-08-19 사장님 승인 = FE 카드(PlaceSlotCard.tsx) 와 동일한 500유로 오염값
+    // ⚠️ 수정금지(승인필요) 2026-10-04 사장님 결정 = 가격은 500 이상도 허용 = 무조건 실제 값 (정본 §)
     const mealCostEur = dayPlaces.reduce(
       (sum, p) => sum + (p.isMealSlot ? sanitizePriceEur(p.mealPrice) : 0),
       0,

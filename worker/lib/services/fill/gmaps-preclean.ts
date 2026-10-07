@@ -11,7 +11,11 @@ import {
 } from "../shared/geo-distance";
 import { PHOTO_MAX_WIDTH_PX } from "../shared/ts-client";
 import { isWritable } from "./gmaps-pid-identity/gates";
-import { BROWSER_UA, launchBrowser } from "./gmaps-pid-identity/page-reader";
+import {
+  BROWSER_UA,
+  GMAPS_WINDOWS,
+  launchBrowser,
+} from "./gmaps-pid-identity/page-reader";
 import {
   LIMITED_STOP,
   limitedCount,
@@ -48,7 +52,7 @@ const argv = Object.fromEntries(
 );
 const cityId = Number(argv["city-id"] || 0);
 const apply = argv["apply"] === "true";
-const parallel = Math.max(1, Number(argv["parallel"] || 5)); // 제한 보기가 잦으면 --parallel=1 로 천천히
+const parallel = Math.max(1, Number(argv["parallel"] || GMAPS_WINDOWS));
 const dropIds = String(argv["drop-ids"] || "")
   .split(",")
   .map(Number)
@@ -97,7 +101,15 @@ const passing = (why: string) =>
       [cityId, since],
     )
   ).rows.filter(
-    (r: any) => !dropIds.includes(r.id) && !(logged && logged.has(r.id)),
+    // ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = 제한 보기로 끝난 읽기 로그는 "안 읽은 것" = 다시 읽는다 (정본 §)
+    (r: any) =>
+      !dropIds.includes(r.id) &&
+      !(
+        logged &&
+        logged.has(r.id) &&
+        !logged.get(r.id).limited &&
+        logged.get(r.id).gate !== "limited-view"
+      ),
   );
   const direct = rows.filter((r: any) => r.direct);
   const search = rows.filter((r: any) => !r.direct);
@@ -225,6 +237,10 @@ const passing = (why: string) =>
         else if (passing(rd.why)) {
           later++;
           console.log(`  ⏸ #${id} ${rd.n.name} ${rd.why} = 다음 판에`);
+        } else if (rd.n.isBest && !rd.why.startsWith("장소아님")) {
+          // ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = 베스트 행은 이름이 달라 못 찾아도 지우지 않는다(장소 아님만 삭제) (정본 §)
+          later++;
+          console.log(`  ⏸ #${id} ${rd.n.name} ${rd.why} = 베스트 = 안 지움`);
         } else await drop(id, rd.n.name, rd.why);
       }
     }

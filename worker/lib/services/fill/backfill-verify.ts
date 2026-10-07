@@ -1,4 +1,5 @@
-// ⚠️ 수정금지(승인필요) 2026-09-03 사장님 결정 = 사진 단일 진입점 = 재링크 → PID 구글맵 공개페이지 무료(API 호출 0, 영업상태도 기입) → 유료(raw→PM·TS)는 사장님 명시 승인 플래그(--allow-pm / --allow-ts)에서만
+// ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 사진 단일 진입점 = 재링크 → PID 구글맵 공개페이지 무료(API 호출 0, 영업상태도 기입) → 유료(PM·TS)는 사장님 명시 승인 플래그(--allow-pm / --allow-ts)에서만 · TS 가격은 가격 결정 1벌(decidePrice = 3개월 안 페이지 값 > TS > 옛 값) (정본 §)
+import { FRESH_SQL, loadEurPer, tsPriceDecision } from "../shared/price-eur";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath, pathToFileURL } from "url";
@@ -92,7 +93,7 @@ export async function backfillImages(opts: {
     SELECT id, seed_category AS cat, name_en, name_local, address,
            latitude::float8 AS latitude, longitude::float8 AS longitude,
            google_place_id AS pid, google_review_count AS rc, business_status,
-           image_url, verified_at,
+           image_url, verified_at, price_eur::float8 AS price, ${FRESH_SQL} AS fresh,
            (image_url IS NOT NULL AND image_url ~ '/[0-9]+/images/'
             AND image_url NOT LIKE '%-wiki.%'
             AND position(google_place_id IN image_url) > 0) AS has_image
@@ -405,6 +406,7 @@ export async function backfillImages(opts: {
     await gateBatch("ts", tsTargets.length, { force: !!opts.forceQuota });
   }
   if (opts.allowTs) {
+    const eurPer = await loadEurPer(c);
     for (const r of tsTargets) {
       try {
         const tsArr = await tsSearch({
@@ -434,9 +436,9 @@ export async function backfillImages(opts: {
           longitude: ts.longitude && ts.longitude !== 0 ? ts.longitude : null,
           googleMapsUri: ts.googleMapsUri ?? null,
           googleReviewCount: ts.googleReviewCount ?? null,
-          // ⚠️ 수정금지(승인필요) 2026-08-10 사장님 확정 = **가격 칸의 주인은 제미니 하나**(SSOT:583).
-          //   버리는 게 아니다 = TS 가격은 §18 raw 에 그대로 남는다.
-          priceEur: undefined,
+          // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 가격 = tsPriceDecision 1벌(3개월 안 페이지 값 > TS > 옛 값) = MIX 저장과 같은 함수 (정본 §)
+          priceEur: tsPriceDecision(ts.priceRange, eurPer, r) ?? undefined,
+          businessStatus: ts.businessStatus ?? null,
           phaseTags: closed ? ["영구폐업"] : undefined,
         });
         if (ts.photoName) await runPm(r, ts.photoName);

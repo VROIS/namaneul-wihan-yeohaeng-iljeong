@@ -1,4 +1,4 @@
-// ⚠️ 수정금지(승인필요) 2026-09-30 사장님 결정 = 제미니 보강(#07 prompt.txt) 1벌 복원 = 가격 없는 식당을 우리 번호로 120곳씩 몰아 묻는 ⑤ 후처리가 쓴다 (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 제미니 보강 입력에 우리 시드 분류(seed_category) 1칸을 같이 보낸다 = 제미니가 장소 종류를 상상하지 않게 (정본 §)
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -21,6 +21,7 @@ export interface GeminiCurateInput {
   latitude?: number | null;
   longitude?: number | null;
   googleCid?: string | null;
+  seedCategory?: string | null;
 }
 export interface GeminiCurateOutput {
   id: number;
@@ -79,6 +80,7 @@ export async function geminiCurate(
       latitude: r.latitude ?? null,
       longitude: r.longitude ?? null,
       google_cid: r.googleCid ?? null,
+      seed_category: r.seedCategory ?? null,
     }));
     const apiPass = `[API-PASS] 도시=${cityName}(${cityId}) / 행=있음(채움) / 날짜=${new Date().toISOString().slice(0, 10)}`;
     const prompt = body

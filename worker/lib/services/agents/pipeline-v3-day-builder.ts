@@ -362,7 +362,7 @@ export async function buildDayResult(
     );
   }
 
-  // ⚠️ 수정금지(승인필요) 2026-08-19 사장님 승인 = mealCostEur 에도 entranceFeesEur 와 동일한 500유로
+  // ⚠️ 수정금지(승인필요) 2026-10-04 사장님 결정 = 가격은 500 이상도 허용 = 무조건 실제 값 (정본 §)
   const mealCostEur = dayPlaces.reduce(
     (sum: number, p: any) =>
       p.isMealSlot ? sum + sanitizePriceEur(p.mealPrice) : sum,

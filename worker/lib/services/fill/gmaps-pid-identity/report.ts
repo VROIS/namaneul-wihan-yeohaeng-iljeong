@@ -30,8 +30,6 @@ export function printAndSaveReport(opts: {
       address: (r.address || "").slice(0, 36),
       rc_ours: r.rc_ours ?? "",
       rc_page: r.rc_page ?? "",
-      rc_flag: r.rc_flag || "",
-      rating: r.rating || "",
       status: r.status || "",
       dist_km: r.dist_km ?? "",
       gate: r.gate,
@@ -58,8 +56,6 @@ export function printAndSaveReport(opts: {
   const rcChanged = writableRows.filter(
     (r) => rcWritable(r) && r.rc_page !== r.rc_ours,
   );
-  // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 지시 = 리뷰수 파싱 실패/의심 = RC 안 쓴 행(관문 무관 전 행) 목록.
-  const rcFlagged = results.filter((r) => r.rc_flag != null);
   const pageCoordInvalidRows = results.filter(
     (r) => r.gate === "page-coord-invalid",
   );
@@ -70,7 +66,7 @@ export function printAndSaveReport(opts: {
       )
     : 0;
   console.log(
-    `═══ 요약: ${elapsed.toFixed(1)}s · ${results.length}행 · ok ${nOk} · name-mismatch ${nName} · coord-corrected ${nCorr} · coord-mismatch ${nCoord} · page-coord-invalid ${nPci} · closed ${closedRows.length} · errors ${nErr} · 기타스킵 ${nOther} · RC 갱신 ${rcChanged.length}행(평균 변화 ${rcAvgDelta >= 0 ? "+" : ""}${rcAvgDelta}) · RC 안 씀(파싱실패/의심) ${rcFlagged.length}행 · 관문 ${JSON.stringify(byGate)}${apply ? ` · 채움 ${filled} · 쓰기오류 ${upsertErr}` : " · DRY(--apply 로 실행)"} ═══`,
+    `═══ 요약: ${elapsed.toFixed(1)}s · ${results.length}행 · ok ${nOk} · name-mismatch ${nName} · coord-corrected ${nCorr} · coord-mismatch ${nCoord} · page-coord-invalid ${nPci} · closed ${closedRows.length} · errors ${nErr} · 기타스킵 ${nOther} · RC 갱신 ${rcChanged.length}행(평균 변화 ${rcAvgDelta >= 0 ? "+" : ""}${rcAvgDelta}) · 관문 ${JSON.stringify(byGate)}${apply ? ` · 채움 ${filled} · 쓰기오류 ${upsertErr}` : " · DRY(--apply 로 실행)"} ═══`,
   );
   // ⚠️ 수정금지(승인필요) 2026-08-27 사장님 지시 = 오매칭 의심 목록 = PID 페이지 이름이 우리 이름과 토큰 하나도 안 겹친 행 = 사장님 검수용(DB 안 씀).
   const suspects = results.filter((r) => r.gate === "name-mismatch");
@@ -125,17 +121,6 @@ export function printAndSaveReport(opts: {
       );
     }
   }
-  // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 지시 = 리뷰수 파싱 실패/의심 목록 = rc_unparsed(별점 오독·본문 대체 100 미만 등 = 거부값 표시) / rc_suspicious(우리 RC 의 1/5 미만 급락) = 둘 다 RC 안 씀.
-  if (rcFlagged.length) {
-    console.log(
-      `\n⚠️ 리뷰수 파싱 실패/의심(안 씀) = ${rcFlagged.length}행 = rc_unparsed ${rcFlagged.filter((r) => r.rc_flag === "rc_unparsed").length} · rc_suspicious ${rcFlagged.filter((r) => r.rc_flag === "rc_suspicious").length}`,
-    );
-    for (const r of rcFlagged) {
-      console.log(
-        `  #${r.id} | ${r.name_en || ""} | ${r.rc_flag} | 우리 RC ${r.rc_ours ?? ""} | 페이지 ${r.rc_flag === "rc_unparsed" ? `거부값 ${r.rc_rejected ?? ""}` : (r.rc_page ?? "")} | 별점 ${r.rating || ""} | ${r.gate}`,
-      );
-    }
-  }
   if (closedRows.length) {
     console.log(
       `\n⚠️ 폐업·휴업(business_status) = ${closedRows.length}행 = 쓰기 대상 행이라 상태는 씀(서빙 관문 제외 근거)`,
@@ -173,9 +158,6 @@ export function printAndSaveReport(opts: {
       errors: nErr,
       rcChanged: rcChanged.length,
       rcAvgDelta,
-      rcUnparsed: rcFlagged.filter((r) => r.rc_flag === "rc_unparsed").length,
-      rcSuspicious: rcFlagged.filter((r) => r.rc_flag === "rc_suspicious")
-        .length,
       pageCoordInvalid: nPci,
       filled,
       upsertErr,

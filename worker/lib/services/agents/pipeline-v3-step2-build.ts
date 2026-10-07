@@ -72,10 +72,11 @@ export async function step2_enrichAndBuild(
         tags: isMeal ? ["restaurant", "food"] : [],
         vibeTags: isMeal ? ["Foodie" as const] : [],
         image: "",
+        // ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = 제미니 가격이 없거나 0 이면 모름 = 글자 비움(화면은 가격 줄을 안 그린다) · 0 은 창고가 확인한 무료만 (정본 §)
         priceEstimate:
           sanitizePriceEur(gPlace.price_eur) > 0
             ? `€${sanitizePriceEur(gPlace.price_eur)}`
-            : "무료",
+            : "",
         placeTypes: isMeal ? ["restaurant"] : ["tourist_attraction"],
         recommendedTime:
           gPlace.startTime < "12:00"
@@ -86,7 +87,10 @@ export async function step2_enrichAndBuild(
         city: formData.destination,
         koreanPopularityScore: 0,
         googleMapsUrl: "",
-        estimatedPriceEur: sanitizePriceEur(gPlace.price_eur),
+        estimatedPriceEur:
+          sanitizePriceEur(gPlace.price_eur) > 0
+            ? sanitizePriceEur(gPlace.price_eur)
+            : undefined,
         geminiAddress: gPlace.address || "",
         nameKo: gPlace.nameKo || null,
         nameLocal: gPlace.nameLocal || null,
@@ -155,15 +159,22 @@ export async function step2_enrichAndBuild(
         : "";
       const seedData = preloaded.seedRawMap?.get(seedNameEn);
 
-      // ⚠️ 수정금지(승인필요) 2026-09-29 사장님 결정 = price_eur = resolvePrice 1벌(제미니 > 창고 > 0) (정본 §)
+      // ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = price_eur = resolvePrice 1벌(창고 검증값 > 여정 제미니 추정 > 모름) · 모름 = 값·글자 비움(화면은 가격 줄을 안 그린다) · 0 = 확인된 무료 (정본 §)
       const geminiPrice = p.estimatedPriceEur ?? 0;
-      const resolvedPrice = resolvePrice(geminiPrice, seedData?.priceEur ?? 0);
+      const resolvedPrice = resolvePrice(
+        geminiPrice,
+        seedData?.priceEur ?? null,
+      );
 
       const merged = {
         ...p,
-        estimatedPriceEur: resolvedPrice,
+        estimatedPriceEur: resolvedPrice ?? undefined,
         priceEstimate:
-          resolvedPrice > 0 ? `€${Math.round(resolvedPrice)}` : "무료",
+          resolvedPrice == null
+            ? ""
+            : resolvedPrice > 0
+              ? `€${Math.round(resolvedPrice)}`
+              : "무료",
       };
 
       // ⚠️ 수정금지(승인필요) 2026-06-11 = summary_ko = 후킹 숏폼 한줄요약(앱 차별점) 단일 소스 = seedData.summaryKo 우선 → 구글 리뷰수 폴백.

@@ -2,7 +2,12 @@
   "mcpServers": {
     "agentbrowser": {
       "command": "npx",
-      "args": ["-y", "chrome-devtools-mcp@latest", "--isolated", "--headless"]
+      "args": [
+        "-y",
+        "chrome-devtools-mcp@latest",
+        "--browserUrl",
+        "http://127.0.0.1:9222"
+      ]
     }
   }
 }

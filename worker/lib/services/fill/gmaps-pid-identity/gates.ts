@@ -1,5 +1,6 @@
 // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 승인 = §0 700줄 가드 = 폴더 분리(로직 무변경)
 import type { Page } from "playwright";
+import { foldAccents } from "../../shared/text-fold";
 import {
   readPlacePage,
   type BusinessStatus,
@@ -10,9 +11,6 @@ import {
 export const COORD_GATE_KM = 2;
 // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 지시 = 페이지 좌표 유효 범위 = 도시 중심 150km 이내. 실측 서울 2행 = 페이지 URL @lat,lng 가 지도 기본(세계) 뷰 = 10,192km/10,224km 떨어진 좌표를 "좌표 교정"으로 써 버림 = 그 밖이면 page-coord-invalid(좌표만 안 씀).
 export const PAGE_COORD_MAX_KM = 150;
-// ⚠️ 수정금지(승인필요) 2026-08-28 사장님 지시 = 리뷰수 오독 방지 임계 = 우리 RC≥200 인데 페이지 RC 가 1/5 미만 = 실제 리뷰수는 5배 급락하지 않음 = rc_suspicious(안 씀). 단 우리 RC 가 1000 단위 딱 떨어지는 가짜 시드 패턴이면 페이지값 채택.
-const RC_SUSPECT_MIN_OURS = 200;
-const RC_SUSPECT_RATIO = 0.2;
 // ⚠️ 수정금지(승인필요) 2026-08-27 사장님 지시 = 이름 관문(오매칭 감지) = 우리 name_en 과 페이지 h1 의 토큰 집합에 공통 토큰이 0개면 name-mismatch. 불용어 = 관사·전치사·시설 일반어·도시명(cities.name_en 은 실행 시 추가).
 const NAME_STOP_WORDS = new Set([
   "de",
@@ -43,7 +41,7 @@ export function nameTokens(
 ): Set<string> {
   const out = new Set<string>();
   if (!s) return out;
-  const norm = s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  const norm = foldAccents(s.toLowerCase());
   for (const t of norm.split(/[^\p{L}\p{N}]+/u)) {
     if (t.length >= 3 && !NAME_STOP_WORDS.has(t) && !extraStop.has(t))
       out.add(t);
@@ -64,10 +62,7 @@ function tokensMatch(a: string, b: string): boolean {
 export type NameMatch = "strong" | "weak" | "none";
 const STRONG_SHARE_RATIO = 0.6;
 function normName(s: string | null): string {
-  return (s || "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[̀-ͯ]/g, "")
+  return foldAccents((s || "").toLowerCase())
     .replace(/[^\p{L}\p{N}]+/gu, " ")
     .trim();
 }
@@ -172,6 +167,7 @@ export type Row = {
   id: number;
   seed_category: string;
   name_en: string | null;
+  address?: string | null; // 우리 주소(PID 짝 맞추기 재료)
   pid: string;
   lat: number | null;
   lng: number | null;
@@ -196,11 +192,7 @@ export type Result = {
   dist_km: number | null;
   dist_city_km: number | null; // 페이지 좌표 ↔ 도시 중심 거리(150km 초과 = page-coord-invalid)
   rc_ours: number | null;
-  rc_page: number | null; // rc_unparsed 면 null(거부값 = rc_rejected) / rc_suspicious 면 페이지값 그대로 기록만(안 씀)
-  rc_rejected: number | null; // rc_unparsed 로 거부된 원시 파싱값(검수용)
-  rc_flag: "rc_unparsed" | "rc_suspicious" | null; // 둘 다 RC 안 씀
-  rc_source: "aria" | "text" | null; // 리뷰수 출처(검수용)
-  rating: string | null; // 기록만(컬럼 없음)
+  rc_page: number | null; // 페이지에서 읽은 리뷰수 그대로(리뷰 상자가 없으면 0)
   photo_url: string | null; // ⚠️ 2026-09-04 사장님 결정 = 같은 방문에서 딴 대표사진(관문 통과 행만 씀 = 오염 차단)
   // ⚠️ 수정금지(승인필요) 2026-09-08 사장님 확정 = 어떤 경로로 열든 cid 를 버리지 않는다 = 페이지 주소창 ftid→cid = google_maps_uri 에 쓴다.
   maps_uri: string | null;
@@ -219,9 +211,37 @@ export const isWritable = (gate: string) =>
   gate.startsWith("ok") ||
   gate === "coord-corrected" ||
   gate === "page-coord-invalid";
-// ⚠️ 수정금지(승인필요) 2026-08-28 사장님 지시 = RC 쓰기 = 관문 통과 + rc_flag 없음일 때만.
+
+// ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = PID 짝 맞추기 재료 = 우리 주소가 페이지 주소와 같으면 그곳, 아니면 좌표 500m 안 + 후기 수가 비슷해야 그곳 (정본 §)
+export const PID_PAIR_KM = 0.5;
+// ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 발음기호 떼기는 text-fold 1벌 (정본 §)
+const normAddr = (s: string) =>
+  foldAccents(s.toLowerCase())
+    .replace(/,\s*(france|monaco|italy|italia|spain|españa)\s*$/i, "")
+    .replace(/[^a-z0-9]+/g, "");
+export function pidPair(
+  row: { address?: string | null; rc: number | null },
+  local: { address: string | null; reviewCount: number | null },
+  distKm: number | null,
+): boolean {
+  const a = row.address ? normAddr(row.address) : "";
+  const b = local.address ? normAddr(local.address) : "";
+  const addrSame =
+    a.length >= 8 &&
+    b.length >= 8 &&
+    (a === b || a.includes(b) || b.includes(a));
+  const near = distKm != null && distKm <= PID_PAIR_KM;
+  const ours = row.rc ?? 0;
+  const theirs = local.reviewCount ?? 0;
+  const rcOk =
+    ours === 0 ||
+    theirs === 0 ||
+    Math.abs(ours - theirs) <= Math.max(50, ours * 0.5);
+  return addrSame || (near && rcOk);
+}
+// ⚠️ 수정금지(승인필요) 2026-10-04 사장님 결정 = 리뷰수는 읽은 값 그대로 쓴다(의심 표시 없음) (정본 §)
 export const rcWritable = (r: Result) =>
-  isWritable(r.gate) && r.rc_flag == null && r.rc_page != null;
+  isWritable(r.gate) && r.rc_page != null;
 
 export function initResult(row: Row): Result {
   return {
@@ -241,10 +261,6 @@ export function initResult(row: Row): Result {
     dist_city_km: null,
     rc_ours: row.rc,
     rc_page: null,
-    rc_rejected: null,
-    rc_flag: null,
-    rc_source: null,
-    rating: null,
     photo_url: null,
     maps_uri: null,
     status: null,
@@ -287,41 +303,13 @@ export async function evaluateRow(
   r.category = local.category;
   r.page_lat = local.urlLat;
   r.page_lng = local.urlLng;
-  r.rating = local.rating;
-  r.rc_source = local.rcSource;
   r.status = local.consentBlocked ? null : local.status;
   r.price = local.price;
   r.limited = local.limited;
   r.admission = local.admission;
   r.perPerson = local.perPerson;
   r.rawText = local.rawText;
-  // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 지시 = 리뷰수 거부 규칙(서울 169행 4.6→46 오독 재발 방지) = 페이지 RC 가 round(별점×10)/round(별점×100) 과 같음 · 우리 RC≥100 인데 5 미만 · 본문 "(N)" 대체 출처인데 100 미만 = rc_unparsed(rc_page=null, 안 씀).
-  {
-    const rc = local.reviewCount;
-    const rt = local.ratingNum;
-    const ours = row.rc;
-    const looksLikeRating =
-      rc != null &&
-      rt != null &&
-      (rc === Math.round(rt * 10) || rc === Math.round(rt * 100));
-    const tooSmall = rc != null && rc < 5 && ours != null && ours >= 100;
-    const weakText = rc != null && local.rcSource === "text" && rc < 100;
-    if (rc != null && (looksLikeRating || tooSmall || weakText)) {
-      r.rc_rejected = rc;
-      r.rc_page = null;
-      r.rc_flag = "rc_unparsed";
-    } else {
-      r.rc_page = rc;
-      if (
-        rc != null &&
-        ours != null &&
-        ours >= RC_SUSPECT_MIN_OURS &&
-        rc < ours * RC_SUSPECT_RATIO &&
-        ours % 1000 !== 0
-      )
-        r.rc_flag = "rc_suspicious";
-    }
-  }
+  r.rc_page = local.reviewCount;
   // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 지시 = 페이지 좌표 유효 관문 = 도시 중심 150km 초과 = 지도 기본 뷰 좌표(서울 2행 10,192km/10,224km 사고) = page-coord-invalid = 좌표 안 씀·교정 아님.
   let pageCoordInvalid = false;
   if (
@@ -381,6 +369,9 @@ export async function evaluateRow(
   if (local.limited) gate = "limited-view";
   else if (local.consentBlocked) gate = "consent-blocked";
   else if (!local.h1) gate = "h1-empty";
+  // ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = PID 짝 맞추기 = 이름이 안 겹쳐도 우리 주소·좌표(500m)·후기가 페이지와 맞으면 PID 가 가리키는 그 페이지가 진실 = 페이지 이름·9요소로 쓴다(이름 칸만 위키 제목인 자동 학습 행 살리기) · 안 맞으면 지금처럼 안 씀 (정본 §)
+  else if (!nameOk && !coordFar && pidPair(row, local, r.dist_km))
+    gate = "ok(page-name)";
   else if (!nameOk) gate = coordFar ? "coord-mismatch" : "name-mismatch";
   else if (pageCoordInvalid) gate = "page-coord-invalid";
   else if (coordFar)

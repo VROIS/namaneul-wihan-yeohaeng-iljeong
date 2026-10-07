@@ -2,7 +2,7 @@
 import { rawDate } from "../../shared/raw-filename";
 import { placeImageKey } from "../../../../../shared/r2-paths";
 import { categoryTagsOf, finalCategory } from "../../shared/place-category-map";
-import { keepsExisting, toEur, type EurPer } from "../../shared/price-eur";
+import { decidePrice, pagePriceEur, type EurPer } from "../../shared/price-eur";
 import { type Result, type Row } from "./gates";
 
 // ⚠️ 수정금지(승인필요) 2026-09-30 사장님 결정 = 페이지 값으로 가격·분류까지 확정(9요소) = 환율·나라·삭제 함수는 부르는 쪽이 넘긴다 (정본 §)
@@ -75,15 +75,14 @@ export async function writeRow(
       r.upsert = `deleted(not-place:${r.category})`;
       return;
     }
-    let pagePrice: number | null = null;
-    // ⚠️ 수정금지(승인필요) 2026-09-30 사장님 결정 = 가격 = 식당은 머리줄 → 본문 1인당 평균, 입장지는 입장권 공식 사이트 정가 (정본 §)
-    const pageCardPrice =
-      fc?.cat === "restaurant" ? (r.price ?? r.perPerson) : r.admission;
-    if (pageCardPrice && ctx.eurPer) {
-      const e = toEur(pageCardPrice, ctx.countryCode, ctx.eurPer);
-      if (e.eur != null && !keepsExisting(row.price ?? null, e))
-        pagePrice = e.eur;
-    }
+    const renamed = r.gate === "ok(page-name)";
+    const before = renamed ? null : (row.price ?? null);
+    // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 가격 결정 1벌(decidePrice) = 페이지 가격(pagePriceEur 1벌)이 있으면 그 값, 없으면 행에 있던 값(제미니·TS)을 그대로 둔다(PID 직행은 제미니 값을 따로 받지 않으므로 옛 값이 곧 제미니 값) · 페이지로 이름이 바뀐 행(ok(page-name)) = 다른 장소이므로 옛 가격을 넘기지 않아 비워진다 (정본 §)
+    const pd = decidePrice({
+      pagePrice: pagePriceEur(fc?.cat, r, ctx.countryCode, ctx.eurPer, before),
+      oldPrice: before,
+      pageOpened: false,
+    });
     // ⚠️ 수정금지(승인필요) 2026-09-08 사장님 확정 = 어떤 경로로 열든 6요소(이름·주소·좌표·리뷰수·영업상태·사진 400px)+cid 는 무조건 그 행에 쓴다. 사진 = 있는 행도 덮는다(옛 "없는 행만" 폐기 §19).
     let imageUrl: string | undefined;
     if (r.photo_url) {
@@ -116,15 +115,18 @@ export async function writeRow(
       cityId,
       seedCategory: fc?.cat ?? row.seed_category,
       overwriteSeedCategory: !!fc?.changed,
-      priceEur: pagePrice,
+      priceEur: pd.price,
+      clearPriceEur: pd.clear || (renamed && pd.price == null),
+      clearSummaries: renamed,
       imageUrl,
       // ⚠️ 수정금지(승인필요) 2026-09-04 사장님 확정 = PID 가 정답이나 **페이지를 실제로 읽었을 때만**(read) 값을 넘긴다. 못 읽은 행의 기본값을 넘기면 기존 값을 덮는다(business_status 기본 'OPERATIONAL' 이 폐업 기록을 지움). null = COALESCE 가 기존값 보존.
-      //   이름 = 우편번호 든 문자열은 주소이지 이름이 아니다(pickPageName). 현지어명·한국어명은 제미니 영역 = 안 건드린다. page-coord-invalid = 좌표만 / rc_flag = RC 만 제외.
+      //   이름 = 우편번호 든 문자열은 주소이지 이름이 아니다(pickPageName). 현지어명·한국어명은 제미니 영역 = 안 건드린다. page-coord-invalid = 좌표만 제외.
       nameEn: pickPageName(r) ?? row.name_en,
       address: read ? r.address : null,
       latitude: !read || r.gate === "page-coord-invalid" ? null : r.page_lat,
       longitude: !read || r.gate === "page-coord-invalid" ? null : r.page_lng,
-      googleReviewCount: read && r.rc_flag == null ? r.rc_page : null,
+      // ⚠️ 수정금지(승인필요) 2026-10-04 사장님 결정 = 리뷰수는 읽은 값 그대로 쓴다(의심 표시 없음) · 별점은 읽지 않는다 (정본 §)
+      googleReviewCount: read ? r.rc_page : null,
       googleMapsUri: read ? r.maps_uri : null,
       businessStatus: read ? r.status : null,
       // ⚠️ 수정금지(승인필요) 2026-09-29 사장님 결정 = 페이지 분류도 저장(검색 경로와 1벌) = seed_category 는 유지, category_tags 는 우리 분류 ∪ 구글 분류를 표로 펼친 것(합집합) = 덮어쓰기 0 (정본 §)

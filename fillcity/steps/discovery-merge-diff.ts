@@ -330,9 +330,10 @@ function deserializeGroup(g: any): Group {
         });
       bump(tier);
     }
+    // ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = 창고 행에 붙는 묶음은 랜드마크·식당 응답을 따로 묶는다(한 행에 식당 응답이 섞여 다수결이 식당이 되면 엇갈림으로 거부되던 것) (정본 §)
     function joinTarget(targetId: number, p: RawPlace, tier: string) {
       const tmpKey = tempGroupOf.get(targetId);
-      const key = tmpKey ?? `psr:${targetId}`;
+      const key = tmpKey ?? `psr:${targetId}:${p.type}`;
       const g =
         groups.get(key) ??
         newGroup(key, { kind: "psr", id: targetId }, p, tier);

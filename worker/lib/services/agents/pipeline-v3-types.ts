@@ -1,22 +1,22 @@
 import { GoogleGenAI } from "@google/genai";
 import type { TravelStyle } from "./types";
 
+// ⚠️ 수정금지(승인필요) 2026-10-04 사장님 결정 = 가격은 500 이상도 허용 = 무조건 실제 값 (정본 §)
 export function sanitizePriceEur(raw: any): number {
   if (raw == null) return 0;
   const n =
     typeof raw === "string" ? parseFloat(raw.replace(/,/g, ".")) : Number(raw);
   if (isNaN(n) || n < 0) return 0;
-  if (n > 500) return 0; // 명백한 오류 (팡테옹 19500 등)
   return Math.round(n * 100) / 100;
 }
 
-/** ⚠️ 수정금지(승인필요) 2026-09-29 사장님 결정 = price_eur = 제미니 > 창고 > 0 (정본 §) */
+/** ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = price_eur = 창고 검증값(페이지·TS·2차 제미니가 확정한 값, 0 = 확인된 무료) > 여정 제미니 추정(0 보다 클 때만) > 모름(null) (정본 §) */
 export function resolvePrice(
   geminiPrice: number,
-  seedPriceEur: number = 0,
-): number {
-  if (geminiPrice > 0) return geminiPrice;
-  return seedPriceEur > 0 ? seedPriceEur : 0;
+  seedPriceEur: number | null = null,
+): number | null {
+  if (seedPriceEur != null) return seedPriceEur;
+  return geminiPrice > 0 ? geminiPrice : null;
 }
 
 export function normalizeTravelStyle(style?: string): TravelStyle {

@@ -1,5 +1,5 @@
-// ⚠️ 수정금지(승인필요) 2026-09-30 사장님 결정 = PID·CID 행 페이지 재확인 루프 1벌 = CLI(gmaps-pid-identity)와 후처리 엔진(gmaps-post = 큐 소비자)이 같은 함수를 부른다. 브라우저는 밖에서 받는다(Node = playwright, Worker = Browser Run). 창 5개 병렬 (정본 §)
-import { openWindow } from "./page-reader";
+// ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = PID·CID 행 페이지 재확인 루프 1벌 = CLI(gmaps-pid-identity)와 후처리 엔진(gmaps-post = 큐 소비자)이 같은 함수를 부른다. 브라우저는 밖에서 받는다(Node = playwright, Worker = Browser Run). 창 5개 병렬 · 사람 인증이 뜬 창은 닫지 않고 화면 안으로(showWindow) (정본 §)
+import { GMAPS_WINDOWS, openWindow, showWindow } from "./page-reader";
 import {
   evaluateRow,
   initResult,
@@ -14,7 +14,7 @@ import {
   type WriteCtx,
 } from "./apply";
 
-export const PID_PARALLEL = 5;
+export const PID_PARALLEL = GMAPS_WINDOWS;
 // ⚠️ 수정금지(승인필요) 2026-09-30 사장님 결정 = 제한 보기가 세트 안에 이만큼이면 채널 막힘 = 남은 행은 열지 않고 멈춘다(빈 등록으로 오인해 지우는 사고 차단) (정본 §)
 export const LIMITED_STOP = 1;
 export const limitedCount = (rs: Result[]) =>
@@ -52,6 +52,7 @@ export async function verifyPidRows(o: VerifyPidOpts): Promise<Result[]> {
   );
   const wins: { page: any; close: () => Promise<unknown> }[] = [];
   let fatal: string | null = null;
+  let keep: { page: any } | null = null; // ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = 사람 인증이 뜬 창은 닫지 않고 화면 안으로 끌어와 사장님이 바로 푼다 (정본 §)
   try {
     for (let i = 0; i < windows; i++) wins.push(await openWindow(o.browser));
     for (let n = 1; queue.length; n++) {
@@ -75,11 +76,16 @@ export async function verifyPidRows(o: VerifyPidOpts): Promise<Result[]> {
       if (done.some(isProblem)) {
         if (!done.every((r) => r.gate === "limited-view" || !isProblem(r)))
           fatal = `세트 ${n} 에 오류·동의창 = 여기서 멈춘다`;
+        const li = done.findIndex((r) => r.gate === "limited-view");
+        if (li >= 0) {
+          keep = wins[li];
+          await showWindow(wins[li].page);
+        }
         break;
       }
     }
   } finally {
-    for (const w of wins) await w.close();
+    for (const w of wins) if (w !== keep) await w.close();
   }
   if (fatal) throw new Error(fatal);
   return results;
@@ -166,7 +172,6 @@ async function savePageLog(
           lat: r.page_lat,
           lng: r.page_lng,
           reviewCount: r.rc_page,
-          rating: r.rating,
           status: r.status,
           photoUrl: r.photo_url,
           mapsUri: r.maps_uri,
@@ -185,8 +190,8 @@ async function savePageLog(
   } as any);
 }
 
-// PID·CID 행 조회 SQL 1벌 = 기준은 CID(있으면 CID 로 열고, 없을 때만 PID) · 사진은 구글(R2)만 사진으로 친다
-export const PID_ROWS_SELECT = `SELECT id, seed_category, name_en, COALESCE('cid:' || substring(google_maps_uri from 'cid=([0-9]+)'), NULLIF(google_place_id, '')) AS pid,
+// ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = PID·CID 행 조회 1벌에 우리 주소를 싣는다(PID 짝 맞추기 재료) · 기준은 CID(있으면 CID 로 열고, 없을 때만 PID) · 사진은 구글(R2)만 사진으로 친다 (정본 §)
+export const PID_ROWS_SELECT = `SELECT id, seed_category, name_en, address, COALESCE('cid:' || substring(google_maps_uri from 'cid=([0-9]+)'), NULLIF(google_place_id, '')) AS pid,
               latitude::float8 AS lat, longitude::float8 AS lng,
               google_review_count AS rc, price_eur::float8 AS price, (best_rank IS NOT NULL) AS best,
               (image_url IS NOT NULL AND image_url LIKE ($2 || '%')) AS has_image

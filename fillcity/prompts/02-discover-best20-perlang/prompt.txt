@@ -12,6 +12,7 @@
   "제미니 라벨 안 믿고 숫자로 판단" 원칙과 동일).
 = ⚠️ "인근" = 도보 이동 가능 거리 명시(사장님 정정 2026-08-25, 4차) = 약 1km/도보15분 이내로 구체 수치화,
   대중교통·택시 필요한 곳 배제 명시(동선 최적화용 원재료라 진짜 걸어갈 수 있어야 함).
+= ⚠️ 수정금지(승인필요) 2026-10-04 사장님 결정 = price_eur 줄 = 무료·입장료 없는 곳은 0, 정말 모르면 생략(언어마다 무료 장소에 3·5 를 추측해 평균이 1 이 되는 오염을 원천 차단).
 = ⚠️ 1차 실호출(파리 ko/fr) 실증 후 사장님 발견·수정 2건(2026-08-25):
   ① c(카테고리)에 우리 PSR enum(heritage|hotspot|attraction|adventure|healing|shopping/restaurant)을
      안 줘서 제미니가 "Landmark"/"Museum"/"Cathedral" 같은 자기 임의 분류로 응답 = PSR 삽입 불가 → 90번
@@ -81,7 +82,7 @@ For each place include:
   Example of the WRONG tone (too descriptive/poetic, reject this style): "Take in the breathtaking
   panorama from the Iron Lady." Example of the RIGHT tone (punchy, has a hook/twist): "Waited 2 hours
   in line? Worth it — until you see the selfie queue at the top too.")
-- distance_km_from_center, day_zone(core/outskirt), price_eur(EUR fixed)
+- distance_km_from_center, day_zone(core/outskirt), price_eur (EUR integer: restaurants = typical cost per person; everything else = the actual admission fee; free or no admission = 0; if you truly do not know, omit the field)
 - (restaurants only) near_landmark_rank (1-20, the rank of the landmark this restaurant belongs to)
 
 OUTPUT (strict JSON, no markdown fences):

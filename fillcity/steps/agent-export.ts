@@ -9,7 +9,7 @@ import {
   parseArgs,
   reportDir,
   stamp,
-  AGENT_CHUNK,
+  AGENT_WORKERS,
 } from "./common";
 
 loadEnv();
@@ -93,9 +93,9 @@ const cityId = Number(argv["city-id"] || 0);
       2,
     ),
   );
-  const agents = total ? Math.ceil(total / AGENT_CHUNK) : 0;
+  const agents = Math.min(AGENT_WORKERS, total);
   console.log(
-    `═══ 에이전트 명단 city ${cityId} = 표가 못 정하는 행 ${rows.undecided.length} · 장소 아님 남음 ${rows.nonPlace.length} · 같은 장소 쌍 ${rows.dup.length} · 호텔 페이지 ${rows.hotel.length} = 합 ${total}건 → 에이전트 ${agents}명(${AGENT_CHUNK}건씩) → ${path.relative(ROOT, file)} ═══`,
+    `═══ 에이전트 명단 city ${cityId} = 표가 못 정하는 행 ${rows.undecided.length} · 장소 아님 남음 ${rows.nonPlace.length} · 같은 장소 쌍 ${rows.dup.length} · 호텔 페이지 ${rows.hotel.length} = 합 ${total}건 → 에이전트 ${agents}명(${AGENT_WORKERS}명 고정 균등) → ${path.relative(ROOT, file)} ═══`,
   );
   await c.end();
   process.exit(0);
