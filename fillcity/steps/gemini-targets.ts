@@ -11,6 +11,7 @@ import {
   retryFailed,
   runTsx,
   stamp,
+  stampOf,
 } from "./common";
 
 loadEnv();
@@ -88,10 +89,32 @@ const isBlank = (x: unknown) => x == null || String(x).trim() === "";
     for (const x of JSON.parse(fs.readFileSync(f, "utf-8")))
       add(Number(x.id), "에이전트 보고 어긋남");
 
+  // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 이어 돌기 = --since(이 판 시작 시각) 뒤 제미니가 이미 답한 행은 다시 묻지 않는다(저장된 응답은 다시 적용만, 돈 0) · 어떤 이유로 멈췄다 이어도 외부 호출 이중 0 (정본 §)
+  const rawDir = path.join(ROOT, "docs", "raw", String(cityId));
+  const sinceStamp = argv["since"] ? stampOf(String(argv["since"])) : null;
+  const answered = new Set<number>();
+  const savedRaws: { file: string; part: string }[] = [];
+  if (sinceStamp && fs.existsSync(rawDir))
+    for (const f of fs.readdirSync(rawDir).sort()) {
+      const m = f.match(/_gemini-enrich-after-google-(\d+)\.json$/);
+      if (!m || f < sinceStamp) continue;
+      savedRaws.push({ file: path.join(rawDir, f), part: m[1] });
+      try {
+        const j = JSON.parse(fs.readFileSync(path.join(rawDir, f), "utf-8"));
+        for (const p of j?.raw?.parsed?.places ?? [])
+          answered.add(Number(p.id));
+      } catch {
+        /* 읽지 못한 응답 = 답한 것으로 세지 않는다 */
+      }
+    }
   const byId = new Map<number, any>(rows.map((r: any) => [r.id, r]));
   const targets = [...reason.keys()]
-    .filter((id) => byId.has(id))
+    .filter((id) => byId.has(id) && !answered.has(id))
     .sort((a, b) => (byId.get(b).rc || 0) - (byId.get(a).rc || 0)); // 손님상(리뷰 많은 순) 먼저
+  if (answered.size)
+    console.log(
+      `↪ 이어 돌기 = 이 판에서 제미니가 이미 답한 행 ${answered.size}곳은 다시 묻지 않는다(이중 호출 0)`,
+    );
   const dir = reportDir(cityId);
   const st = stamp();
   const batches: number[][] = Array.from({ length: PARTS }, () => []);
@@ -131,6 +154,9 @@ const isBlank = (x: unknown) => x == null || String(x).trim() === "";
     const gemini = path.join(ROOT, "worker/lib/services/fill/gemini-apply.ts");
     const sh = (args: string[]) =>
       runTsx(gemini, [`--city-id=${cityId}`, ...args]);
+    // 이 판에서 이미 받은 응답은 호출 없이 다시 적용만(같은 값이면 바뀐 칸 0) = 받고 적용 전에 멈춘 경우를 메운다
+    for (const s of savedRaws)
+      await sh([`--raw=${s.file}`, `--part=${s.part}`, "--apply"]);
     console.log(
       `🔴 제미니 호출 ${files.length}번 동시 (${batches.map((b) => b.length).join("·")}행)`,
     );
@@ -139,7 +165,6 @@ const isBlank = (x: unknown) => x == null || String(x).trim() === "";
         sh(["--call=true", `--ids-file=${f}`, `--part=${k + 1}`, "--apply"]),
       ),
     );
-    const rawDir = path.join(ROOT, "docs", "raw", String(cityId));
     // 실패한 몫 = 저장된 응답이 있으면 그것을 적용(돈을 다시 쓰지 않는다) · 없을 때만 그 몫을 다시 부른다
     const stillFailed = await retryFailed(
       files.map((_, k) => k),

@@ -39,8 +39,18 @@ const onlyArg = argv["only"]
       .split(",")
       .map((s) => s.trim())
   : null;
-// ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 이어 돌기 = 판이 죽은 뒤 `/fillcity N` 을 다시 치면 처음부터가 아니라 멈춘 단계부터 = 진행 장부(docs/b1-reports/{도시}/{시작시각}_progress.json)에 끝난 단계만 적고, 안 끝난 장부가 있으면 같은 시작시각으로 남은 단계만 돈다(유료 발굴·읽은 페이지 재호출 0). 인증은 판이 살아 있는 한 그 자리에서 1분마다 이어받는다 (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-10-08 사장님 결정 = 이어 돌기 = 최종 점검표(final-check-*/final-table.json)가 나오면 그 판은 끝 = 그 전에 죽거나 멈춘 판만 진행 장부(…_progress.json)로 남은 단계부터 이어 돌고, 점검표가 나온 뒤 다시 치면 그때 상태에서 처음부터 새로 돈다 (정본 §)
 const REPORT_DIR = path.join(ROOT, "docs", "b1-reports", String(cityId));
+const finalTableSince = (runStart: string) =>
+  fs.existsSync(REPORT_DIR) &&
+  fs
+    .readdirSync(REPORT_DIR)
+    .some(
+      (x) =>
+        x.startsWith("final-check-") &&
+        x.slice("final-check-".length) >= stampOf(runStart) &&
+        fs.existsSync(path.join(REPORT_DIR, x, "final-table.json")),
+    );
 const prevRun = (() => {
   if (argv["since"] || onlyArg || !fs.existsSync(REPORT_DIR)) return null;
   const f = fs
@@ -50,7 +60,7 @@ const prevRun = (() => {
     .pop();
   if (!f) return null;
   const j = JSON.parse(fs.readFileSync(path.join(REPORT_DIR, f), "utf-8"));
-  return j.finished ? null : j;
+  return j.finished || finalTableSince(String(j.runStart)) ? null : j;
 })();
 // ⚠️ 수정금지(승인필요) 2026-10-01 사장님 결정 = 이어 읽기 = --since=시각 을 주면 그 시각 뒤에 읽은 행은 건너뛰고 멈춘 자리부터 이어 읽는다 (정본 §)
 const RUN_START = argv["since"]
@@ -248,7 +258,11 @@ async function trackB() {
     return run(
       "② 7개국어 발굴(동시)",
       "fillcity/steps/discover-parallel.ts",
-      [`--city-id=${cityId}`, `--langs=${langs.join(",")}`],
+      [
+        `--city-id=${cityId}`,
+        `--langs=${langs.join(",")}`,
+        `--since=${RUN_START}`, // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 이어 돌기 = 이 판 시작 뒤 이미 받은 언어는 다시 부르지 않는다 (정본 §)
+      ],
       0, // ⚠️ 유료 호출은 재시도 0(성공 후 저장 실패해도 재호출 = 이중과금, §9·§18)
     );
   });
@@ -449,6 +463,7 @@ async function trackB() {
       "fillcity/steps/gemini-targets.ts",
       [
         `--city-id=${cityId}`,
+        `--since=${RUN_START}`, // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 이어 돌기 = 이 판 시작 뒤 제미니가 이미 답한 행은 다시 묻지 않는다 (정본 §)
         ...(mismatch.length ? [`--mismatch=${mismatch.join(",")}`] : []),
         ...(geminiFill ? ["--call=true"] : []),
       ],
@@ -508,8 +523,8 @@ async function trackB() {
     0,
   );
 
-  // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 판이 끝까지 돌면 실패 단계가 있어도 장부는 "끝남" = 다음 /fillcity 는 새 판 · 이어 돌기(남은 단계만)는 판이 죽었을 때만 (정본 §)
-  saveProgress(true);
+  // ⚠️ 수정금지(승인필요) 2026-10-08 사장님 결정 = 장부 닫기 = 최종 점검표가 나왔거나 최종 점검을 안 묻는 판이면 끝 = 판정 불통과·일꾼 검사 오류는 결과이지 중단이 아니다 (정본 §)
+  saveProgress(!asked("final-check") || finalTableSince(RUN_START));
   await anchor?.close();
   if (failures.length) {
     console.log(`\n⚠️ 실패한 단계(재시도 후) = ${failures.join(", ")}`);
