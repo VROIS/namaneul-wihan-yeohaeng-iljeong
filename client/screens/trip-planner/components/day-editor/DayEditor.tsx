@@ -6,20 +6,22 @@ import {
   ScrollView,
   Platform,
   ActivityIndicator,
+  StyleSheet,
 } from "react-native";
-import { Brand, Spacing } from "@/constants/theme";
+import { Brand, Fonts, Spacing } from "@/constants/theme";
 import { Icon } from "@/components/Icon";
 import PlaceAutocompleteWidget, {
   type PlaceAutoSelection as PlaceSelection,
 } from "@/components/PlaceAutocompleteWidget";
 import { displayCityName } from "@/lib/display-city-name";
+import { haptic } from "@/screens/bts/place-cart/utils";
 import type { DayPlan } from "@/types/trip";
 import { resultStyles } from "../../styles/result";
 import SlotThumbnail from "../SlotThumbnail";
 import type { PlannerApi } from "../../hooks/useTripPlanner";
 import EditBlock from "./EditBlock";
 import FinalBlock from "./FinalBlock";
-import { PX_PER_MIN, STEP_MIN, toHm, toMin } from "./edit-layout";
+import { PX_PER_MIN, STEP_MIN, toHm } from "./edit-layout";
 import { editStyles as es, RULER_W, TRAY_THUMB } from "./editor-styles";
 import { startLabel } from "./start-label";
 import { useDayEdit } from "./useDayEdit";
@@ -28,8 +30,9 @@ import { useDragHandle } from "./useDragHandle";
 const RED = "#EF4444";
 const noTouchScroll: any =
   Platform.OS === "web" ? { touchAction: "none", userSelect: "none" } : null;
+const noSelect: any = Platform.OS === "web" ? { userSelect: "none" } : null;
 
-// ⚠️ 수정금지(승인필요) 2026-10-09 사장님 결정 = 여정 수정 화면 = 위 고정 영역(Day 줄 · 출발 줄 · 삭제한 장소 줄) + 시간표(길이 · 삭제 · 순서 · 출발/끝 시각) (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-10-10 사장님 결정 = 여정 수정 화면 = 위 고정 영역(Day 줄 · 출발 줄 · 삭제한 장소 줄) + 시간표 · 폰 앱 아이콘 방식(길게 누르면 전체 편집 모드 · 스크롤 고정 · 톡 누르면 끝) · 오른쪽 시간 눈금 = 룰렛 바퀴(돌리면 하루 시간대 통째 이동) (정본 §)
 export default function DayEditor({
   planner,
   day,
@@ -50,16 +53,22 @@ export default function DayEditor({
     isReoptimizing,
   } = planner;
   const ed = useDayEdit(planner, day);
-  const [gesture, setGesture] = useState(false);
+  const [editMode, setEditMode] = useState(false);
   const [drag, setDrag] = useState<{ id: string; top: number } | null>(null);
   const dragStart = useRef<{ id: string; top: number } | null>(null);
-  const baseTime = useRef(0);
+  const wheelBase = useRef({ start: 0, end: 0, shift: 0 });
+  const enterEdit = () => {
+    if (editMode) return;
+    haptic("medium");
+    setEditMode(true);
+  };
+  const exitEdit = () => {
+    haptic("light");
+    setEditMode(false);
+  };
 
   const { starts, moves, lastEnd } = ed.layout;
-  const finalLen = ed.final
-    ? toMin(ed.final.endTime) - toMin(ed.final.startTime)
-    : 0;
-  const viewEnd = Math.max(ed.endMin + finalLen, lastEnd) + 30;
+  const viewEnd = Math.max(ed.endMin + ed.finalLen, lastEnd) + 30;
   const yOf = (m: number) => (m - ed.startMin) * PX_PER_MIN;
   const contentH = yOf(viewEnd);
 
@@ -89,27 +98,24 @@ export default function DayEditor({
     setDrag(null);
   };
 
-  const startHandle = useDragHandle({
+  const wheel = useDragHandle({
+    slop: 4,
     onStart: () => {
-      baseTime.current = ed.startMin;
-      setGesture(true);
+      wheelBase.current = { start: ed.startMin, end: ed.endMin, shift: 0 };
     },
-    onMove: (dy) =>
-      ed.setStartMin(
-        baseTime.current + Math.round(dy / PX_PER_MIN / STEP_MIN) * STEP_MIN,
-      ),
-    onEnd: () => setGesture(false),
-  });
-  const endHandle = useDragHandle({
-    onStart: () => {
-      baseTime.current = ed.endMin;
-      setGesture(true);
+    onMove: (dy) => {
+      const base = wheelBase.current;
+      const shift = ed.shiftWindow(
+        base,
+        -Math.round(dy / PX_PER_MIN / STEP_MIN) * STEP_MIN,
+      );
+      if (shift !== base.shift) {
+        base.shift = shift;
+        haptic("light");
+      }
     },
-    onMove: (dy) =>
-      ed.setEndMin(
-        baseTime.current + Math.round(dy / PX_PER_MIN / STEP_MIN) * STEP_MIN,
-      ),
-    onEnd: () => setGesture(false),
+    onEnd: () => haptic("light"),
+    onTap: exitEdit,
   });
 
   const firstHour = Math.ceil(ed.startMin / 60);
@@ -217,7 +223,18 @@ export default function DayEditor({
             </Text>
           </View>
           {ed.removed.length === 0 ? (
-            <Text style={{ fontSize: 11, color: theme.textTertiary, flex: 1 }}>
+            // ⚠️ 수정금지(승인필요) 2026-10-10 사장님 결정 = 지운 장소가 없을 때 띠 = 굵은 사용법 + 짧은 안내(안 들어가면 자동 줄바꿈) (정본 §)
+            <Text style={{ flex: 1, fontSize: 11, color: theme.textTertiary }}>
+              <Text
+                style={{
+                  fontSize: 14,
+                  fontFamily: Fonts.bold,
+                  color: Brand.primary,
+                }}
+              >
+                {t("trip.editHowTo")}
+              </Text>
+              {"  "}
               {t("trip.editTrayEmpty")}
             </Text>
           ) : (
@@ -252,7 +269,7 @@ export default function DayEditor({
 
       <ScrollView
         style={{ flex: 1 }}
-        scrollEnabled={!gesture}
+        scrollEnabled={!editMode}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{
           paddingTop: Spacing.lg,
@@ -263,6 +280,9 @@ export default function DayEditor({
           <ActivityIndicator size="small" color={Brand.primary} />
         )}
         <View style={{ height: contentH }}>
+          {editMode && (
+            <Pressable style={StyleSheet.absoluteFill} onPress={exitEdit} />
+          )}
           {hours.map((h) => (
             <React.Fragment key={h}>
               <View
@@ -324,6 +344,7 @@ export default function DayEditor({
               }
               startText={toHm(starts[i])}
               dragging={!!drag && drag.id === String(s.place.id)}
+              editMode={editMode}
               theme={theme}
               t={t}
               onRemove={ed.removeAt}
@@ -331,7 +352,8 @@ export default function DayEditor({
               onReorderStart={onReorderStart}
               onReorderMove={onReorderMove}
               onReorderEnd={onReorderEnd}
-              onGesture={setGesture}
+              onEnterEdit={enterEdit}
+              onExitEdit={exitEdit}
             />
           ))}
 
@@ -357,15 +379,13 @@ export default function DayEditor({
               <FinalBlock
                 place={ed.final}
                 top={yOf(ed.endMin)}
-                height={
-                  (toMin(ed.final.endTime) - toMin(ed.final.startTime)) *
-                  PX_PER_MIN
-                }
+                height={ed.finalLen * PX_PER_MIN}
                 startText={toHm(ed.endMin)}
-                stay={toMin(ed.final.endTime) - toMin(ed.final.startTime)}
+                stay={ed.finalLen}
                 late={Math.max(0, ed.layout.arrival - ed.endMin)}
                 theme={theme}
                 t={t}
+                onEnterEdit={enterEdit}
               />
             </>
           )}
@@ -377,31 +397,28 @@ export default function DayEditor({
             ]}
           />
           {!ed.final && (
+            <Text
+              style={[es.endText, { top: yOf(ed.endMin) - 15, color: RED }]}
+            >
+              {t("trip.editEnd", { time: toHm(ed.endMin) })}
+            </Text>
+          )}
+          {editMode ? (
             <View
               style={[
-                es.pill,
-                { top: yOf(ed.endMin) - 11, backgroundColor: RED },
+                es.wheel,
+                { backgroundColor: `${Brand.primary}14` },
                 noTouchScroll,
               ]}
-              {...endHandle}
-            >
-              <Text style={es.pillText}>
-                {t("trip.editEnd", { time: toHm(ed.endMin) })} ↕
-              </Text>
-            </View>
+              {...wheel}
+            />
+          ) : (
+            <Pressable
+              style={[es.wheel, noSelect]}
+              onLongPress={enterEdit}
+              delayLongPress={500}
+            />
           )}
-          <View
-            style={[
-              es.pill,
-              { top: -12, backgroundColor: Brand.primary },
-              noTouchScroll,
-            ]}
-            {...startHandle}
-          >
-            <Text style={es.pillText}>
-              {t("trip.editStart", { time: toHm(ed.startMin) })} ↕
-            </Text>
-          </View>
         </View>
       </ScrollView>
     </View>

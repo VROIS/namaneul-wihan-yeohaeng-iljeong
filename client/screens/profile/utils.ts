@@ -44,6 +44,8 @@ export function summaryLineCard(
   trip: SavedItinerary,
   t: (k: string, opts?: Record<string, unknown>) => string,
 ): string {
+  // ⚠️ 수정금지(승인필요) 2026-10-10 사장님 결정 = 베스트 여정 카드 요약 = 문장 없이 짧은 "베스트 여행" 7개 언어 번역 한 줄 (정본 §)
+  if (trip.rawData?.metadata?._sourceMode === "best") return t("trip.bestTrip");
   const companionLabels: Record<string, string> = {
     Single: t("labels.companionSingle"),
     Couple: t("labels.companionCouple"),
@@ -64,9 +66,8 @@ export function summaryLineCard(
   const focus =
     focusLabels[trip.rawData?.curationFocus || trip.curationFocus] ||
     t("labels.curationEveryone");
-  // ⚠️ 수정금지(승인필요) 2026-10-10 사장님 결정 = 결과 화면 요약과 같은 소스(itinerary.vibeWeights) · 베스트 여정이면 취향 자리 = "베스트" (정본 §)
+  // ⚠️ 수정금지(승인필요) 2026-10-10 사장님 결정 = 결과 화면 요약과 같은 소스(itinerary.vibeWeights) (정본 §)
   const vibes = vibesSummary(
-    trip.rawData?.metadata?._sourceMode === "best",
     trip.rawData?.vibeWeights?.length
       ? trip.rawData.vibeWeights.map((v) => v.vibe)
       : ((trip.vibes || []) as Vibe[]),

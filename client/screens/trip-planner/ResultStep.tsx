@@ -204,6 +204,9 @@ export default function ResultStep({ planner }: { planner: PlannerApi }) {
                 numberOfLines={2}
               >
                 {(() => {
+                  // ⚠️ 수정금지(승인필요) 2026-10-10 사장님 결정 = 베스트 여정 요약 = 문장 없이 짧은 "베스트 여행" 7개 언어 번역 한 줄 (정본 §)
+                  if (itinerary.metadata?._sourceMode === "best")
+                    return t("trip.bestTrip");
                   const focusLabels: Record<string, string> = {
                     Kids: t("labels.curationKids"),
                     Parents: t("labels.curationParents"),
@@ -232,9 +235,8 @@ export default function ResultStep({ planner }: { planner: PlannerApi }) {
                     companionLabels[companionType] ||
                     t("labels.companionFamily");
 
-                  // ⚠️ 수정금지(승인필요) 2026-10-10 사장님 결정 = 선택한 vibe 전부 표시(최대 3개) · 베스트 여정이면 취향 자리 = "베스트" (정본 §)
+                  // ⚠️ 수정금지(승인필요) 2026-10-10 사장님 결정 = 선택한 vibe 전부 표시(최대 3개) (정본 §)
                   const vibes = vibesSummary(
-                    itinerary.metadata?._sourceMode === "best",
                     (itinerary.vibeWeights ?? []).map((v) => v.vibe),
                   );
 

@@ -52,9 +52,8 @@ export function getVibeLabel(vibe: Vibe): string {
   return option ? i18n.t(option.labelKey) : vibe;
 }
 
-// ⚠️ 수정금지(승인필요) 2026-10-10 사장님 결정 = 베스트 여정이면 요약 글자의 취향 자리 = "베스트"(한국어 그대로 · 관리자만 쓰는 표시) (정본 §)
-export function vibesSummary(isBest: boolean, vibes: Vibe[]): string {
-  if (isBest) return "베스트";
+// ⚠️ 수정금지(승인필요) 2026-10-10 사장님 결정 = 요약 글자의 취향 자리 = 선택한 vibe 전부(최대 3개) (정본 §)
+export function vibesSummary(vibes: Vibe[]): string {
   return (
     vibes.slice(0, 3).map(getVibeLabel).join(" & ") || i18n.t("options.healing")
   );

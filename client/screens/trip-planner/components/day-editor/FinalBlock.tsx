@@ -1,12 +1,12 @@
 import React from "react";
-import { View, Text } from "react-native";
+import { View, Text, Pressable } from "react-native";
 import { Icon } from "@/components/Icon";
 import { resultStyles } from "../../styles/result";
 import SlotThumbnail from "../SlotThumbnail";
 import type { PlannerApi } from "../../hooks/useTripPlanner";
 import { editStyles as es, LEFT_COL, RULER_W } from "./editor-styles";
 
-// ⚠️ 수정금지(승인필요) 2026-10-09 사장님 결정 = BTS 날의 마지막 슬롯(공연장) = 공연 시작 시각에 고정 · 지우기 · 끌기 · 길이 조절 없음 (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-10-10 사장님 결정 = BTS 날의 마지막 슬롯(공연장) = 공연 시작 시각에 고정 · 지우기 · 끌기 · 길이 조절 없음 · 길게 누르면 전체 편집 모드로 들어간다 (정본 §)
 export default function FinalBlock({
   place,
   top,
@@ -16,6 +16,7 @@ export default function FinalBlock({
   late,
   theme,
   t,
+  onEnterEdit,
 }: {
   place: any;
   top: number;
@@ -25,6 +26,7 @@ export default function FinalBlock({
   late: number;
   theme: PlannerApi["theme"];
   t: PlannerApi["t"];
+  onEnterEdit: () => void;
 }) {
   return (
     <View style={[es.block, { top, height, right: RULER_W }]}>
@@ -38,7 +40,7 @@ export default function FinalBlock({
           <Icon name="lock" size={16} color="#FFFFFF" />
         </View>
       </View>
-      <View
+      <Pressable
         style={[
           es.card,
           {
@@ -47,6 +49,8 @@ export default function FinalBlock({
             paddingLeft: 8,
           },
         ]}
+        onLongPress={onEnterEdit}
+        delayLongPress={500}
       >
         <View style={resultStyles.placeThumbnail}>
           <SlotThumbnail
@@ -74,7 +78,7 @@ export default function FinalBlock({
             </Text>
           )}
         </View>
-      </View>
+      </Pressable>
     </View>
   );
 }

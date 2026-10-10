@@ -4,9 +4,7 @@ import { retimeDay } from "@shared/day-retime";
 export const PX_PER_MIN = 1.9;
 export const STEP_MIN = 30;
 export const MIN_STAY_MIN = 30;
-export const MIN_START_MIN = 6 * 60;
 export const MAX_END_MIN = 24 * 60;
-export const MIN_WINDOW_MIN = 120;
 
 export type EditSlot = { place: any; stay: number };
 export type LatLng = { lat: number; lng: number };

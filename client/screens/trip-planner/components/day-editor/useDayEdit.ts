@@ -5,9 +5,7 @@ import type { DayPlan } from "@/types/trip";
 import type { PlannerApi } from "../../hooks/useTripPlanner";
 import {
   MAX_END_MIN,
-  MIN_START_MIN,
   MIN_STAY_MIN,
-  MIN_WINDOW_MIN,
   layoutDay,
   placesForServer,
   finalOfDay,
@@ -17,7 +15,7 @@ import {
   type EditSlot,
 } from "./edit-layout";
 
-// ⚠️ 수정금지(승인필요) 2026-10-09 사장님 결정 = 여정 수정 = 길이 · 삭제 · 순서 · 출발/끝 시각만, 날마다 따로 (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-10-10 사장님 결정 = 여정 수정 = 길이 · 삭제 · 순서 · 하루 시간대 통째 이동(룰렛)만, 날마다 따로 (정본 §)
 export function useDayEdit(planner: PlannerApi, day: DayPlan) {
   const { itinerary, setItinerary, dayAccommodations, setEditingDay, t } =
     planner;
@@ -76,12 +74,14 @@ export function useDayEdit(planner: PlannerApi, day: DayPlan) {
       a.splice(to, 0, s);
       return a;
     });
-  const setStartMin = (m: number) =>
-    setStartMinRaw(
-      Math.min(Math.max(m, MIN_START_MIN), endMin - MIN_WINDOW_MIN),
-    );
-  const setEndMin = (m: number) =>
-    setEndMinRaw(Math.min(Math.max(m, startMin + MIN_WINDOW_MIN), MAX_END_MIN));
+  const finalLen = final ? toMin(final.endTime) - toMin(final.startTime) : 0;
+  const shiftWindow = (base: { start: number; end: number }, delta: number) => {
+    const latest = Math.max(0, MAX_END_MIN - finalLen - base.end);
+    const d = Math.min(Math.max(delta, -base.start), latest);
+    setStartMinRaw(base.start + d);
+    setEndMinRaw(base.end + d);
+    return d;
+  };
 
   const commit = async () => {
     if (saving || !itinerary) return;
@@ -147,6 +147,7 @@ export function useDayEdit(planner: PlannerApi, day: DayPlan) {
   return {
     slots,
     final,
+    finalLen,
     slotsRef,
     removed,
     startMin,
@@ -157,8 +158,7 @@ export function useDayEdit(planner: PlannerApi, day: DayPlan) {
     removeAt,
     restoreAt,
     moveSlot,
-    setStartMin,
-    setEndMin,
+    shiftWindow,
     commit,
     cancel: () => setEditingDay(null),
   };
