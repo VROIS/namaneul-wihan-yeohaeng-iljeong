@@ -4,6 +4,7 @@ import type { LucideProps } from "lucide-react-native";
 import {
   AlertCircle,
   AlertTriangle,
+  ArrowDown,
   ArrowLeft,
   ArrowRight,
   Award,
@@ -79,6 +80,7 @@ import { Colors } from "@/constants/theme";
 const ICON_MAP: Record<string, React.ComponentType<LucideProps>> = {
   AlertCircle,
   AlertTriangle,
+  ArrowDown, // = 이동 칸 아래 화살표 (2026-10-09 사장님 결정)
   ArrowLeft,
   ArrowRight,
   Award,

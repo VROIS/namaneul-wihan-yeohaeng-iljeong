@@ -38,6 +38,14 @@ import {
   pickTransitMode,
 } from "./lib/services/agents/transit-haversine";
 import { optimizeDayRoute } from "./lib/services/itinerary/route-optimizer";
+import { retimePlaces } from "./lib/services/route/regen-retime";
+import { shouldApplyGuidePrice } from "./lib/services/transport/guide-pricing";
+import {
+  getCompanionCount,
+  calculateDayCount,
+  DEFAULT_START_TIME,
+  DEFAULT_END_TIME,
+} from "./lib/services/agents/types";
 // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 바인딩(env)·응답 뒤 약속(waitUntil) = cloudflare:workers 공식 진입점 1벌. 타입은 `wrangler types` 가 만든 Env (정본 §)
 import { env, waitUntil } from "cloudflare:workers";
 import { ensureKeys } from "./keys";
@@ -303,17 +311,6 @@ app.get("/api/itineraries/:id/calendar.ics", async (req, res) => {
 // ── 교통비 계산 = DB 읽는 1함수만 Hyperdrive drizzle, 나머지 순수 계산(상수·하버사인·2-opt)은 모듈을 그대로 import(§16).
 function round2(num: number): number {
   return Math.round(num * 100) / 100;
-}
-
-function shouldApplyGuidePrice(
-  mobilityStyle: MobilityStyle,
-  travelStyle: TravelStyle,
-): boolean {
-  const ms = (mobilityStyle || "").toLowerCase();
-  const ts = (travelStyle || "").toLowerCase();
-  return (
-    ms === "minimal" || ms === "moderate" || ts === "premium" || ts === "luxury"
-  );
 }
 
 // getGuidePriceFromDB 와 같은 조회.
@@ -593,20 +590,6 @@ async function calculateTransportPrice(
   } as TransitPriceResult;
 }
 
-function buildDayConfig(
-  day: number,
-  dayCount: number,
-  userStart: string,
-  userEnd: string,
-  defaultStart: string,
-  defaultEnd: string,
-): { startTime: string; endTime: string } {
-  if (dayCount === 1) return { startTime: userStart, endTime: userEnd };
-  if (day === 1) return { startTime: userStart, endTime: defaultEnd };
-  if (day === dayCount) return { startTime: defaultStart, endTime: userEnd };
-  return { startTime: defaultStart, endTime: defaultEnd };
-}
-
 async function guideCostForDay(args: {
   dayConfig: { startTime: string; endTime: string };
   companionType: CompanionType;
@@ -635,27 +618,6 @@ async function guideCostForDay(args: {
   });
   return priceResult.category === "guide" ? priceResult.perPersonPerDay : 0;
 }
-
-function getCompanionCount(companionType: string): number {
-  const mapping: Record<string, number> = {
-    Single: 1,
-    Couple: 2,
-    Family: 4,
-    ExtendedFamily: 8,
-    Group: 10,
-  };
-  return mapping[companionType] || 1;
-}
-
-function calculateDayCount(startDate: string, endDate: string): number {
-  const start = new Date(startDate);
-  const end = new Date(endDate);
-  const diffTime = Math.abs(end.getTime() - start.getTime());
-  return Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-}
-
-const DEFAULT_START_TIME = "09:00";
-const DEFAULT_END_TIME = "21:00";
 
 type RegenPlace = {
   name: string;
@@ -692,8 +654,9 @@ async function regenerateDay(params: {
   accommodationCoords?: { lat: number; lng: number };
   places: RegenPlace[];
   formData?: RegenFormData;
+  keepOrder?: boolean;
 }) {
-  const { day, accommodationCoords, places, formData } = params;
+  const { day, accommodationCoords, places, formData, keepOrder } = params;
 
   if (!places || places.length === 0) {
     return { day, places: [] };
@@ -702,7 +665,7 @@ async function regenerateDay(params: {
   const nonMealPlaces = places.filter((p) => !p.isMealSlot);
 
   let optimized = nonMealPlaces;
-  if (nonMealPlaces.length > 2 && accommodationCoords) {
+  if (!keepOrder && nonMealPlaces.length > 2 && accommodationCoords) {
     optimized = optimizeDayRoute(
       nonMealPlaces as never,
       accommodationCoords,
@@ -786,7 +749,9 @@ async function regenerateDay(params: {
   }
 
   const returnTransit =
-    accommodationCoords && reordered.length > 0
+    accommodationCoords &&
+    reordered.length > 0 &&
+    reordered[reordered.length - 1].seedCategory !== "bts_venue"
       ? buildTransit(
           reordered[reordered.length - 1],
           reordered[reordered.length - 1].name,
@@ -805,20 +770,32 @@ async function regenerateDay(params: {
     formData?.startDate && formData?.endDate
       ? calculateDayCount(formData.startDate, formData.endDate)
       : 1;
-  const dc = buildDayConfig(
-    day,
-    dayCount,
-    formData?.startTime || DEFAULT_START_TIME,
-    formData?.endTime || DEFAULT_END_TIME,
-    DEFAULT_START_TIME,
-    DEFAULT_END_TIME,
-  );
+  // ⚠️ 수정금지(승인필요) 2026-10-09 사장님 결정 = 그날의 출발·끝 시각 = 받은 값 그대로(날마다 사용자가 정하고, 안 정하면 기본 09:00~21:00) (정본 §)
+  const dc = {
+    startTime: formData?.startTime || DEFAULT_START_TIME,
+    endTime: formData?.endTime || DEFAULT_END_TIME,
+  };
   const [sh, sm] = dc.startTime.split(":").map(Number);
   const [eh, em] = dc.endTime.split(":").map(Number);
   const availableHours = Math.max(
     4,
     round2((eh * 60 + em - (sh * 60 + sm)) / 60),
   );
+
+  // ⚠️ 수정금지(승인필요) 2026-10-09 사장님 결정 = 조정 뒤 슬롯 시간 = 처음 생성과 같은 계산 1벌로 다시 깐다 · 순서 유지 요청(keepOrder)은 받은 순서 그대로 (정본 §)
+  const timeFit =
+    accommodationCoords && reordered.length
+      ? retimePlaces({
+          places: reordered,
+          anchor: accommodationCoords,
+          startTime: dc.startTime,
+          endTime: dc.endTime,
+          isGuideDay,
+          departure: departureTransit,
+          between: transits,
+          ret: returnTransit,
+        })
+      : undefined;
 
   const priceResult = await calculateTransportPrice({
     companionType: (formData?.companionType || "Couple") as CompanionType,
@@ -925,6 +902,7 @@ async function regenerateDay(params: {
     places: reordered,
     departureTransit,
     returnTransit,
+    timeFit,
     transit: {
       transits,
       totalDuration: transits.reduce((sum, t) => sum + t.duration, 0),
@@ -948,7 +926,7 @@ async function regenerateDay(params: {
 // POST /api/routes/regenerate-day
 app.post("/api/routes/regenerate-day", async (req, res) => {
   try {
-    const { day, accommodationCoords, places, formData } = req.body;
+    const { day, accommodationCoords, places, formData, keepOrder } = req.body;
 
     if (!day || !places || !Array.isArray(places)) {
       return res.status(400).json({ error: "day, places are required" });
@@ -959,6 +937,7 @@ app.post("/api/routes/regenerate-day", async (req, res) => {
       accommodationCoords,
       places,
       formData,
+      keepOrder: keepOrder === true,
     });
 
     res.json(result);

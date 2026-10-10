@@ -9,7 +9,7 @@ import type { BTSPlace } from "@/contexts/BTSContext";
 import { COLORS, LUCIDE } from "./bts-marker-svg";
 
 type Props = {
-  places: BTSPlace[]; // top-places 응답 8 슬롯 (= venue + vibe5 + 식사2)
+  places: BTSPlace[]; // top-places 응답 8 슬롯 (= 공연장 1 + 활동 7)
   selectedIds: number[]; // 카트에 담긴 카드 id (= 마커 등장 트리거)
   venueId: number | null; // slot 1 = bts_venue id (= 항상 표시)
   apiKey: string | null; // /api/bts/map-config 에서 fetch

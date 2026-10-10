@@ -82,13 +82,6 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
   if (cityId && db && !input.restaurantPool) {
     // ⚠️ 2026-07-17 사장님 확정 = 풀 = (city_id=요청도시) ∪ (좌표 유효 100km 이내) 합집합(§16 pool-radius)
     const { where: poolWhere } = await getPoolContext(cityId, cityCoords); // 2026-07-17 = 기점 = 동적 출발점(cityCoords = 숙소>도심, day-builder 우선순위 반영값)
-    // ⚠️ 2026-07-31 사장님 승인(BTS D단계 BE-3) = 핀 식당 = **같은 쿼리 1벌 안에서** 무조건 포함(§16).
-    const pinIdsForMeals = (formData.pinnedPlaceIds ?? []).filter((n: number) =>
-      Number.isFinite(n),
-    );
-    const pinCond = pinIdsForMeals.length
-      ? sql.raw(`id IN (${pinIdsForMeals.join(",")})`) // 숫자만 통과한 값 = 안전
-      : sql.raw("FALSE");
     // ⚠️ 수정금지(승인필요) 2026-08-31 사장님 확정 = 식당 풀 = 가격대 쿼터 없이 손님상 가능한 전체 (정본 B4)
     //   = 손님상 기준 = 구글이미지 + PID(돈이 들어간 결손 없음). 옛 10/30/20=60 쿼터는 시드 발굴 기준이라 폐기 §19.
     //   = 몇 곳을 캘까(발굴)와 있는 걸 어떻게 보여줄까(서빙)는 다른 문제. 좁히기는 여정엔진이 거리·베스트·RC·예산으로 한다.
@@ -98,12 +91,11 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
              editorial_summary AS "editorialSummary", image_url AS "imageUrl",
              google_place_id AS "googlePlaceId",
              google_review_count AS "googleReviewCount",
-             best_rank AS "bestRank",
-             (${pinCond}) AS pinned
+             best_rank AS "bestRank"
       FROM place_seed_raw
       WHERE (${poolWhere}) AND seed_category = 'restaurant' AND (${servingGateSql()})
-        AND (price_eur IS NOT NULL OR (${pinCond}))
-        AND ((image_url IS NOT NULL AND image_url <> '') OR (${pinCond}))
+        AND price_eur IS NOT NULL
+        AND (image_url IS NOT NULL AND image_url <> '')
       ORDER BY ${sql.raw(bestRankOrderSql())}, "googleReviewCount" DESC NULLS LAST
     `)) as unknown as { rows: Record<string, any>[] };
     imagePidMap = await loadImagePidMap([
@@ -214,19 +206,11 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
       );
     }
 
-    const lastMealIdx = scenes.reduce(
-      (acc, s, i) => (s.type === "restaurant" ? i : acc),
-      -1,
-    );
-    const dayPlaces = scenes.map((scene, sceneIdx) => {
+    const dayPlaces = scenes.map((scene) => {
       const isAuto = scene.place_id?.startsWith("auto-");
       const inputPlace = !isAuto ? inputById.get(scene.place_id) : undefined;
       const isMeal = scene.type === "restaurant";
-      const mealType: "lunch" | "dinner" | undefined = isMeal
-        ? sceneIdx === lastMealIdx
-          ? "dinner"
-          : "lunch"
-        : undefined;
+      const mealType = scene.meal_type;
 
       if (isMeal && scene.price_eur == null) {
         console.warn(
@@ -366,7 +350,7 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
     });
   }
 
-  // ⚠️ 2026-07-31 사장님 지시(BTS 문제점4) = **마지막 슬롯 = 공연장 카드**(공연 시작 시각).
+  // ⚠️ 수정금지(승인필요) 2026-10-10 사장님 결정 = 마지막 슬롯 = 공연장 카드(공연 시작 시각) · 이동 분은 시각표 계산이 낸 값 한 벌 (정본 §)
   if (formData.finalPlaceId && db && days.length) {
     const fRes = (await db.execute(sql`
       SELECT id, name_en AS "nameEn", name_ko AS "nameKo", name_local AS "nameLocal", address,
@@ -410,12 +394,8 @@ export async function finalizeDbOnlyItinerary(input: AG4DbInput): Promise<any> {
         editorialSummary: f.editorialSummary,
         distance_from_prev_km: Math.round(km * 10) / 10,
         transit_mode: picked.mode,
-        transit_min: prev
-          ? Math.max(
-              1,
-              Math.round((km / (picked.calc === "WALK" ? 4 : 25)) * 60),
-            )
-          : 0,
+        transit_min: routeResponse.days?.find((rd) => rd.day === lastDay.day)
+          ?.final_move_min,
       });
       console.log(
         `[AG4-DB] 🎤 마지막 슬롯 = 공연장 카드 부착: ${displayName} @ ${finalTime}`,

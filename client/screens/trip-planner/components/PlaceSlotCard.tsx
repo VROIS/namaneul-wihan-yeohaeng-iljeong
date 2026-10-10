@@ -1,15 +1,9 @@
 import React from "react";
 import { View, Text, Pressable, StyleSheet } from "react-native";
-// ⚠️ 수정금지(승인필요) 2026-05-12 = BTS 1주일 디버깅 SSOT 완전 적용 (= 단순 expo-image 부족)
-import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import { resolveImageSource } from "@/lib/wikimedia-image";
 // ⚠️ 수정금지(승인필요) 2026-05-19 = 이미지 NULL placeholder = BTS 맵 마커 동일 SVG (= 사용자 SSOT)
 import { SvgXml } from "react-native-svg";
-import {
-  COLORS as BTS_MARKER_COLORS,
-  LUCIDE as BTS_MARKER_LUCIDE,
-} from "@/components/bts/bts-marker-svg";
+import { LUCIDE as BTS_MARKER_LUCIDE } from "@/components/bts/bts-marker-svg";
 import { Brand, Spacing } from "@/constants/theme";
 import { Icon } from "@/components/Icon";
 // 🎙️ 2026-08-02 사장님 지시 = 슬롯마다 [해설 듣기]. 부품·색 모두 **도시 카드 해설 배지와 같은 1벌**(§16 재발명 금지).
@@ -19,15 +13,9 @@ import { Itinerary, DayPlan } from "@/types/trip";
 import { openPlaceInMaps } from "@/lib/openPlaceInMaps";
 import { openGuideForPlace } from "@/components/tripis/openGuide";
 import { resultStyles as styles } from "../styles/result";
+import TransitPill from "./TransitPill";
+import SlotThumbnail from "./SlotThumbnail";
 import type { PlannerApi } from "../hooks/useTripPlanner";
-
-// ⚠️ 수정금지(승인필요) 2026-05-19 = 7 카테고리 SVG 모듈 레벨 사전 빌드 (= rendering-hoist-jsx + js-cache-function-results)
-const BTS_PLACEHOLDER_SVG_BY_CAT: Record<string, string> = Object.fromEntries(
-  Object.keys(BTS_MARKER_LUCIDE).map((cat) => [
-    cat,
-    `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><circle cx="20" cy="20" r="18" fill="${BTS_MARKER_COLORS[cat] || "#666"}" stroke="white" stroke-width="3"/><g transform="translate(10,10) scale(0.8333)" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${BTS_MARKER_LUCIDE[cat]}</g></svg>`,
-  ]),
-);
 
 // ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 = [점심]/[저녁] 텍스트 프리픽스 폐기(식당명 노출공간
 const MEAL_WATERMARK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${BTS_MARKER_LUCIDE.restaurant}</svg>`;
@@ -187,57 +175,13 @@ export default function PlaceSlotCard({
                 style={styles.placeThumbnail}
                 onPress={() => openPlaceInMaps(place)}
               >
-                {place.image ? (
-                  <Image
-                    source={resolveImageSource(place.image, "card")}
-                    style={styles.placeThumbnailImage}
-                    contentFit="cover"
-                    priority="normal"
-                    cachePolicy="memory-disk"
-                    transition={150}
-                  />
-                ) : (
-                  <View
-                    style={[
-                      styles.placeThumbnailPlaceholder,
-                      {
-                        backgroundColor: isMealSlot
-                          ? "#FFF5F0"
-                          : theme.backgroundSecondary,
-                      },
-                    ]}
-                  >
-                    {/* ⚠️ 수정금지(승인필요) 2026-05-19 = BTS 맵 마커 SVG 동일 사용 (= 사전 빌드 lookup) */}
-                    {/* ⚠️ 수정금지(승인필요) 2026-07-11 사장님 SSOT = 카드 아이콘도 취향 슬롯 카테고리(slotCategory) 우선 = 지도 마커와 동일 소스(§16). */}
-                    {/* ⚠️ 수정금지(승인필요) 2026-07-11 사장님 SSOT = 이미지 없이 아이콘 뜨는 모든 슬롯 = 아이콘 밑 '구글맵 정보' 문구(분기 없음 = MIX 신규는 당연, DB-only 도 누락·오류 대비. 썸네일 터치 = openPlaceInMaps 기존 연동). */}
-                    {(() => {
-                      const cat =
-                        (place as any).slotCategory ||
-                        (place as any).seedCategory ||
-                        (isMealSlot || isMeal ? "restaurant" : null);
-                      const svg = cat ? BTS_PLACEHOLDER_SVG_BY_CAT[cat] : null;
-                      return svg ? (
-                        <SvgXml xml={svg} width={30} height={30} />
-                      ) : (
-                        <Icon
-                          name={isMealSlot || isMeal ? "coffee" : "map-pin"}
-                          size={20}
-                          color={isMealSlot ? "#FF6B35" : theme.textTertiary}
-                        />
-                      );
-                    })()}
-                    <Text
-                      style={{
-                        fontSize: 8,
-                        lineHeight: 10,
-                        marginTop: 1,
-                        color: theme.textTertiary,
-                      }}
-                    >
-                      {t("trip.googleMapsInfo")}
-                    </Text>
-                  </View>
-                )}
+                <SlotThumbnail
+                  place={place}
+                  isMealSlot={isMealSlot}
+                  isMeal={!!isMeal}
+                  theme={theme}
+                  t={t}
+                />
               </Pressable>
 
               {/* 🎙️ [해설 듣기] = 이미지가 떠도 아이콘이 떠도 같은 자리(칸 맨 아래)에 뜬다(식사 슬롯도 동일).
@@ -350,45 +294,8 @@ export default function PlaceSlotCard({
         </View>
       </View>
 
-      {/* 🚇 이동 구간 표시 */}
       {hasTransit && transitInfo && (
-        <View style={styles.transitSection}>
-          <View
-            style={[styles.transitLine, { backgroundColor: theme.border }]}
-          />
-          <View
-            style={[
-              styles.transitCard,
-              { backgroundColor: theme.backgroundSecondary },
-            ]}
-          >
-            <Icon name="navigation" size={14} color={theme.textSecondary} />
-            <Text style={[styles.transitText, { color: theme.textSecondary }]}>
-              {(() => {
-                // ⚠️ 2026-07-04 사장님 SSOT = 교통수단 구분 = 3가지(도보 / 대중교통 / 드라이빙 가이드).
-                const rawMode = transitInfo.mode || transitInfo.modeLabel || "";
-                let label = t("trip.transitPublic");
-                if (rawMode === "guide" || rawMode === "private_guide") {
-                  label = t("trip.drivingGuide");
-                } else if (rawMode === "walk") {
-                  label = t("trip.walking");
-                }
-                // ⚠️ 수정금지(승인필요) 2026-08-13 사장님 승인 = 서버 durationText("15분")는 한국어 고정이라
-                const dur = t("trip.durationM", {
-                  m: transitInfo.duration || 0,
-                });
-                const dist = transitInfo.distance
-                  ? `${(transitInfo.distance / 1000).toFixed(1)}km`
-                  : "";
-                // ⚠️ 2026-07-03 사장님 SSOT = 구간당 균일 예상가로 슬롯 단위 금액 표시 제거(일별합계에만 "(예상)").
-                return `${label} ${dur}${dist ? ` · ${dist}` : ""}`;
-              })()}
-            </Text>
-          </View>
-          <View
-            style={[styles.transitLine, { backgroundColor: theme.border }]}
-          />
-        </View>
+        <TransitPill leg={transitInfo} theme={theme} t={t} />
       )}
     </View>
   );

@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { Alert } from "react-native";
-import { Itinerary, TripFormData, DayAccommodation } from "@/types/trip";
+import { Itinerary, DayAccommodation } from "@/types/trip";
 import { apiRequest } from "@/lib/query-client";
 import { useMapToggle } from "@/contexts/MapToggleContext";
 import { ensureLoggedIn } from "./login-gate";
@@ -9,24 +9,23 @@ export function useSaveItinerary({
   itinerary,
   dayAccommodations,
   aiOpinionData,
-  formData,
   currentItineraryId,
   setCurrentItineraryId,
+  onSaved,
   t,
   i18n,
 }: {
   itinerary: Itinerary | null;
   dayAccommodations: DayAccommodation[];
   aiOpinionData: any;
-  formData: TripFormData;
   currentItineraryId: number | null;
   setCurrentItineraryId: React.Dispatch<React.SetStateAction<number | null>>;
+  onSaved: () => void;
   t: (key: string, opts?: any) => string;
   i18n: { language: string };
 }) {
   const { requestLogin, isAuthed, authUser } = useMapToggle();
   const [isSaving, setIsSaving] = useState(false);
-  // ⚠️ 2026-07-03 사장님 UX SSOT = 저장버튼 = 누르면 영구 잠김(옛) 아님 = 저장 성공 시 녹색 체크(✓) 0.5초(초최단) 보여준 뒤 원래 💾로 복귀 = 다시 저장 가능.
   const [justSaved, setJustSaved] = useState(false);
   const justSavedTimer = useRef<ReturnType<typeof setTimeout> | null>(null); // 언마운트/재저장 시 타이머 정리용
 
@@ -84,20 +83,20 @@ export function useSaveItinerary({
           : {}),
       };
 
-      // ⚠️ 2026-08-02 사장님 지시 = 도시 id 는 화면이 보내지 않는다(하드코딩 1 완전삭제 §19).
+      // ⚠️ 수정금지(승인필요) 2026-10-10 사장님 결정 = DB 칸(스타일 · 동행 · 취향 · 속도 · 이동)은 입력창이 아니라 여정이 가진 값으로 채운다 = 이미 만든 여정의 값은 그 여정이 갖고 있다 (정본 §)
       const saveData = {
         userId: userData.id,
         title: `${itinerary.destination} ${t("profile.trips")}`,
         startDate: itinerary.startDate,
         endDate: itinerary.endDate,
-        travelStyle: (formData.travelStyle || "comfort").toLowerCase(), // DB enum: luxury, comfort
-        curationFocus: formData.curationFocus,
-        companionType: formData.companionType,
-        companionCount: formData.companionCount,
-        companionAges: formData.companionAges,
-        vibes: formData.vibes,
-        travelPace: formData.travelPace,
-        mobilityStyle: formData.mobilityStyle,
+        travelStyle: (itinerary.travelStyle || "comfort").toLowerCase(), // DB enum: luxury, comfort
+        curationFocus: itinerary.metadata?.curationFocus,
+        companionType: itinerary.companionType,
+        companionCount: itinerary.companionCount,
+        companionAges: itinerary.companionAges,
+        vibes: (itinerary.vibeWeights ?? []).map((v) => v.vibe),
+        travelPace: itinerary.metadata?.travelPace,
+        mobilityStyle: itinerary.mobilityStyle,
         status: "saved",
         isSavedByUser: true,
         rawData: rawWithAccom,
@@ -116,7 +115,8 @@ export function useSaveItinerary({
       if (saved.id) {
         const wasOverwrite = !!currentItineraryId;
         setCurrentItineraryId(saved.id);
-        // ⚠️ 2026-07-03 사장님 UX = 저장 성공 → 녹색 체크(✓) 0.5초 노출 후 원래 💾로 자동 복귀(Alert 팝업 없음). 이전 타이머 있으면 정리(재저장 연타).
+        // ⚠️ 수정금지(승인필요) 2026-10-10 사장님 결정 = 저장 성공 → 녹색 체크(✓) 0.5초 뒤 영상 버튼(🎞)으로 (정본 §)
+        onSaved();
         if (justSavedTimer.current) clearTimeout(justSavedTimer.current);
         setJustSaved(true);
         justSavedTimer.current = setTimeout(() => setJustSaved(false), 500);

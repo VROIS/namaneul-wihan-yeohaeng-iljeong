@@ -22,6 +22,8 @@ import {
 import { bestRankLangCount } from "../shared/best-rank";
 import { VIBE_PRIMARY_CATEGORY } from "@shared/vibe-category";
 import { tierRange, type CityMealTiers } from "../shared/meal-budget-tiers";
+import { retimeDay, moveMinKm as sharedMoveMinKm } from "@shared/day-retime";
+import { buildBtsDay } from "./route-bts";
 
 type LatLng = { lat: number; lng: number };
 
@@ -54,10 +56,6 @@ export function buildRouteLocal(
   const band = mealTiers
     ? tierRange(style, mealTiers)
     : { min: 0, cap: Number.POSITIVE_INFINITY };
-  // ⚠️ 수정금지(승인필요) 2026-07-31 사장님 승인(BTS D단계 BE-3) = 핀 식당 id 집합(풀 id 형식 = "db-<번호>").
-  const pinnedRestIds = new Set(
-    (formData.pinnedPlaceIds ?? []).map((n) => `db-${n}`),
-  );
 
   // ⚠️ 2026-07-04 사장님 SSOT = 출발/종료 앵커 = 숙소 좌표 최우선(§14 A안=여행 전체 공통 숙소) → 없으면 도심 중심.
   const firstValid = places.find(hasCoord);
@@ -77,6 +75,9 @@ export function buildRouteLocal(
     shouldApplyGuidePrice(formData.mobilityStyle, formData.travelStyle)
       ? "private_driver_guide"
       : "public_transit";
+
+  const MOVE_MULT = transport === "private_driver_guide" ? 1.5 : 2;
+  const isBts = !!formData.finalPlaceId && !bestMode;
 
   // ⚠️ 수정금지(승인필요) 2026-09-01 사장님 확정 = 곳수 상한 없음 = 선정은 분(minute) 기준이 유일 (정본 B4)
   const candidates = places.filter(
@@ -111,15 +112,6 @@ export function buildRouteLocal(
       }));
     if (!scored.length) return null;
 
-    // ① 핀 식당 = 사용자가 직접 고른 것 = 모든 기준보다 우선(2026-07-31 사장님 승인).
-    const pinnedPick = [...scored]
-      .sort((a, b) => a.d - b.d)
-      .find((x) => pinnedRestIds.has(x.r.id));
-    if (pinnedPick) {
-      if (!peekOnly) usedRest.add(pinnedPick.r.id);
-      return pinnedPick.r;
-    }
-
     const lo = Math.min(priceMin, priceCap);
     const byBestRc = (a: (typeof scored)[0], b: (typeof scored)[0]) =>
       bestRankLangCount(b.r.bestRank) - bestRankLangCount(a.r.bestRank) ||
@@ -141,7 +133,10 @@ export function buildRouteLocal(
       }
     }
     const byDist = [...scored].sort((a, b) => a.d - b.d || byBestRc(a, b));
-    const hit = byDist.find(inBudget) ?? byDist.find(underCap) ?? byDist[0];
+    // ⚠️ 수정금지(승인필요) 2026-10-09 사장님 결정 = 식당 = 가까운 3곳 안에서 예산 띠 → 상한 이하 → 최근접 (일반 여정 · 베스트는 위 1km 규칙 뒤 기존 순서) (정본 §)
+    const nearPool = bestMode ? byDist : byDist.slice(0, 3);
+    const hit =
+      nearPool.find(inBudget) ?? nearPool.find(underCap) ?? nearPool[0];
     if (!peekOnly) usedRest.add(hit.r.id);
     return hit.r;
   };
@@ -174,18 +169,13 @@ export function buildRouteLocal(
     );
   // ⚠️ 수정금지(승인필요) 2026-09-10 사장님 확정 = 채울 곳은 앞 역 1km 안부터 본다. 그 안이 비면 차례로 넓힌다.
   const FILL_RADIUS_KM = [1, 2, 4, 8];
-  // 두 곳 사이 이동 분 = 하루 배치와 줄 토막내기가 같은 식을 쓴다(계산 2벌 금지).
-  // ⚠️ 수정금지(승인필요) 2026-09-10 사장님 확정 = 이동시간 = 직선거리 시간 x 2. 실제 길은 직선이 아니므로 두 배로 본다. 옛 +10분·+45분 얹기 폐기 = 2026-09-10 §19.
-  const moveMinKm = (km: number): number => {
-    const straight =
-      km <= 1.0 ? (km / 5) * 60 : km <= 30 ? (km / 25) * 60 : (km / 75) * 60;
-    return Math.round(straight * 2);
-  };
+  // ⚠️ 수정금지(승인필요) 2026-10-09 사장님 결정 = 이동 분 = 직선 거리 시간 × 2(대중교통·도보) · 가이드 × 1.5 = 모든 여정이 이 한 값 (정본 §)
+  const moveMinKm = (km: number): number => sharedMoveMinKm(km, MOVE_MULT);
   // ⚠️ 수정금지(승인필요) 2026-09-01 사장님 확정 = 유료 입장지는 18:00 이후 시작 불가(대부분 폐관) (정본 B4)
   const PAID_LAST_START_MIN = 18 * 60;
   const inRange = activities.filter((p) => kmFromCenter(p) <= OUTSKIRT_MAX_KM);
-  const LUNCH_FROM = bestMode ? 11 * 60 : 12 * 60;
-  // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 점심은 11:00~14:00 안에 먹는다(베스트 분기 전용). 창을 놓치면 도착 직후.
+  // ⚠️ 수정금지(승인필요) 2026-10-09 사장님 결정 = 점심은 11:00~14:00 안에 먹는다 = 모든 여정 (정본 §)
+  const LUNCH_FROM = 11 * 60;
   const LUNCH_BY = 14 * 60;
   const LONG_STAY_MIN = 360;
   const DINNER_FROM = 19 * 60;
@@ -324,22 +314,35 @@ export function buildRouteLocal(
 
   for (let di = 0; di < daySlotsConfig.length; di++) {
     const dc = daySlotsConfig[di];
-    const endMin = toMin(dc.endTime);
-    const actDeadline = endMin;
+    // ⚠️ 수정금지(승인필요) 2026-10-09 사장님 결정 = 끝 = 사용자 끝 시각(BTS 는 공연 시작) · 저녁 = 마지막 슬롯 · 시작 = 끝 − 밀도 길이(단 19:00 앞으로는 안 감) · 45분을 못 채우면 저녁을 만들지 않는다 (일반 여정 · 베스트는 기존) (정본 §)
+    const endMin = isBts
+      ? toMin(formData.finalPlaceTime || "19:00")
+      : toMin(dc.endTime);
+    let dinnerLen = mealDuration;
+    let skipDinner = false;
+    if (!bestMode) {
+      dinnerLen = endMin - Math.max(endMin - mealDuration, DINNER_FROM);
+      skipDinner = dinnerLen < 45;
+    }
+    const dinnerOn = hasRest && !skipDinner && !isBts;
+    const actDeadline = !bestMode && dinnerOn ? endMin - dinnerLen : endMin;
     const seq: { p: PlaceResult; rest: boolean }[] = [];
     const slotStartMins: number[] = [];
     const slotDurations: number[] = [];
+    const slotMoves: number[] = [];
     let acc = toMin(dc.startTime);
     let cursor: LatLng | null = null;
     let lunchDone = !hasRest;
-    // 지금 자리에서 그 곳까지 실제 이동에 걸리는 분(옵션 꺼져 있으면 0 = 기존 동작).
-    //   30km 넘으면 기차 = 순수 이동에 표·역접근·대기·환승 45분을 얹는다(직선거리라 실제와 맞춤).
+    const dinnerEarly: PlaceResult | null =
+      !bestMode && dinnerOn
+        ? pickMealPriority([center], band.min, band.cap)
+        : null;
     const moveMin = (p: PlaceResult): number => {
-      if (!bestMode) return 0;
       const from = cursor ?? center;
       return moveMinKm(haversineKm(from.lat, from.lng, p.lat, p.lng));
     };
     const place = (p: PlaceResult, rest: boolean, dur: number, at: number) => {
+      slotMoves.push(moveMin(p));
       seq.push({ p, rest });
       slotStartMins.push(at);
       slotDurations.push(dur);
@@ -383,10 +386,52 @@ export function buildRouteLocal(
       t += s;
       if (!ld && s >= LONG_STAY_MIN) ld = true;
       if (!ld) t = Math.max(t, LUNCH_FROM) + mealDuration;
-      // 저녁 자리를 미리 비운다 = 볼거리가 하루 끝까지 채우면 저녁이 22시로 밀린다(베스트 분기 전용).
-      return t <= (bestMode && hasRest ? endMin - mealDuration : endMin);
+      // 저녁 자리를 미리 비운다 = 볼거리가 하루 끝까지 채우면 저녁이 22시로 밀린다.
+      return (
+        t <=
+        (dinnerOn
+          ? endMin -
+            dinnerLen -
+            (dinnerEarly
+              ? moveMinKm(
+                  haversineKm(p.lat, p.lng, dinnerEarly.lat, dinnerEarly.lng),
+                )
+              : 0)
+          : endMin)
+      );
     };
-    for (;;) {
+    let btsBuilt = false;
+    let btsDinner = false;
+    let finalMoveMin: number | undefined;
+    if (isBts) {
+      btsBuilt = true;
+      lunchDone = true;
+      const bts = buildBtsDay({
+        places,
+        pinnedPlaceIds: formData.pinnedPlaceIds ?? [],
+        center,
+        startMin: toMin(dc.startTime),
+        endMin,
+        mult: MOVE_MULT,
+        lunchFrom: LUNCH_FROM,
+        lunchBy: LUNCH_BY,
+        mealDuration,
+        stayMin,
+        hasCoord,
+        markUsed: (id) => usedRest.add(id),
+        peekLunch: (near) => pickMealPriority([near], band.min, band.cap, true),
+        pickDinner: () => pickMealPriority([center], band.min, band.cap),
+      });
+      bts.items.forEach((it, i) => {
+        seq.push(it);
+        slotStartMins.push(bts.starts[i]);
+        slotDurations.push(bts.stays[i]);
+        slotMoves.push(bts.moves[i]);
+      });
+      btsDinner = bts.hasDinner;
+      finalMoveMin = bts.finalMove;
+    }
+    for (; !btsBuilt; ) {
       let pool: PlaceResult[];
       if (bestMode) {
         // ⚠️ 수정금지(승인필요) 2026-09-10 사장님 확정(베스트 분기 전용) = 줄의 다음 역(7동의)이 지금 들어가면 그것을 앉힌다. 안 들어가면 그 사이를 낮은 등급(6·5·4…)에서 **지금 자리에 가장 가까운 것**으로 채운다 = 아코디언.
@@ -419,6 +464,15 @@ export function buildRouteLocal(
         );
       }
       if (!pool.length) break;
+      // ⚠️ 수정금지(승인필요) 2026-10-09 사장님 결정 = 먼 곳부터 시작하되 첫 이동은 45분 안(베스트 언어 5개 이상인 곳은 예외) · 안에 없으면 상한을 풀어 그대로 (일반 여정) (정본 §)
+      if (!cursor && !bestMode) {
+        const capped = pool.filter(
+          (p) =>
+            moveMinKm(haversineKm(center.lat, center.lng, p.lat, p.lng)) <=
+              45 || bestRankLangCount(p.bestRank) >= 5,
+        );
+        if (capped.length) pool = capped;
+      }
       const from = cursor;
       const pick = from
         ? pool.sort(
@@ -430,9 +484,8 @@ export function buildRouteLocal(
         : pool.sort(
             (a, b) => kmFromCenter(b) - kmFromCenter(a) || worth(b) - worth(a),
           )[0];
-      // 점심 = 식당에 도착하는 시각이 창(11:00~14:00) 안이면 지금 먹는다.
-      //   긴 볼거리가 창을 통째로 삼켜 점심이 2시 넘게 밀리던 것을 막는다(베스트 분기 전용).
-      if (!lunchDone && bestMode) {
+      // ⚠️ 수정금지(승인필요) 2026-10-09 사장님 결정 = 점심 = 식당 도착이 11:00~14:00 창 안이면 지금 먹는다 (정본 §)
+      if (!lunchDone) {
         const cand = pickMealPriority(
           [cursor ?? center],
           band.min,
@@ -441,12 +494,12 @@ export function buildRouteLocal(
         );
         if (cand) {
           const eatAt = acc + moveMin(cand);
-          if (eatAt >= LUNCH_FROM && eatAt <= LUNCH_BY) takeLunch();
+          if (eatAt >= LUNCH_FROM && (bestMode ? eatAt <= LUNCH_BY : true))
+            takeLunch();
         }
       }
-      if (!lunchDone && !bestMode && acc >= LUNCH_FROM) takeLunch();
       const dur = stayMin(pick);
-      // 이동한 만큼 늦게 도착한다(옵션 꺼져 있으면 0 = 기존과 동일).
+      // 이동한 만큼 늦게 도착한다.
       const arriveAt = acc + moveMin(pick);
       place(pick, false, dur, arriveAt);
       // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 그 곳이 점심창(11:00~14:00)을 통째로 덮으면 거기서 먹은 것으로 보고 점심을 따로 넣지 않는다(사람은 그 시간 전에도 넘겨서도 잘 안 먹는다).
@@ -461,16 +514,51 @@ export function buildRouteLocal(
       remaining.splice(remaining.indexOf(pick), 1);
     }
     if (!lunchDone) takeLunch();
-    if (hasRest) {
-      const dinner = pickMealPriority([cursor ?? center], band.min, band.cap);
-      // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 저녁 = 무조건 마지막 슬롯(19:00 전이면 19:00), 손님 종료시각과 무관하게 남겨 둔다 · 이동시간은 켜졌을 때만 더한다.
-      if (dinner)
+    let dinnerPlaced = false;
+    if (dinnerOn) {
+      const dinner =
+        dinnerEarly ?? pickMealPriority([cursor ?? center], band.min, band.cap);
+      // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 저녁 = 무조건 마지막 슬롯(19:00 전이면 19:00), 손님 종료시각과 무관하게 남겨 둔다.
+      if (dinner) {
         place(
           dinner,
           true,
-          mealDuration,
-          Math.max(acc + moveMin(dinner), DINNER_FROM),
+          dinnerLen,
+          Math.max(
+            acc + moveMin(dinner),
+            bestMode ? DINNER_FROM : endMin - dinnerLen,
+          ),
         );
+        dinnerPlaced = true;
+      }
+    }
+    // ⚠️ 수정금지(승인필요) 2026-10-09 사장님 결정 = 일반 여정 = 하루 시각표를 계산 1벌(shared/day-retime)로 다시 깐다 = 이동 · 점심 11~14시 · 저녁 끝에 박기 · 활동이 늘고 줄어 끝에 맞춤 (정본 §)
+    if (btsBuilt && btsDinner) dinnerPlaced = true;
+    if (!bestMode && seq.length && !btsBuilt) {
+      const rt = retimeDay({
+        slots: seq.map((it, i) => ({
+          lat: it.p.lat,
+          lng: it.p.lng,
+          base: slotDurations[i],
+          kind:
+            dinnerPlaced && i === seq.length - 1
+              ? "dinner"
+              : it.rest
+                ? "lunch"
+                : "act",
+        })),
+        anchor: center,
+        startMin: toMin(dc.startTime),
+        endMin,
+        mult: MOVE_MULT,
+        lunchFrom: LUNCH_FROM,
+        lunchBy: LUNCH_BY,
+      });
+      for (let i = 0; i < seq.length; i++) {
+        slotStartMins[i] = rt.starts[i];
+        slotDurations[i] = rt.stays[i];
+        slotMoves[i] = rt.moves[i];
+      }
     }
     let prev: LatLng = center;
     let dayKm = 0;
@@ -495,6 +583,11 @@ export function buildRouteLocal(
         slot: i + 1,
         time: minutesToTime(slotStartMins[i]),
         type: it.rest ? "restaurant" : "activity",
+        meal_type: it.rest
+          ? dinnerPlaced && i === seq.length - 1
+            ? "dinner"
+            : "lunch"
+          : undefined,
         place_id: it.p.id,
         name_en: it.p.name || "",
         name_ko: it.p.nameKo || "",
@@ -504,7 +597,7 @@ export function buildRouteLocal(
         lng: it.p.lng,
         distance_from_prev_km: km,
         transit_mode: mode,
-        transit_min: tr.duration,
+        transit_min: bestMode ? tr.duration : slotMoves[i],
         slot_min: slotDurations[i],
       };
       if (it.rest && it.p.estimatedPriceEur != null)
@@ -515,7 +608,12 @@ export function buildRouteLocal(
       return scene;
     });
 
-    days.push({ day: dc.day, total_distance_km: round2(dayKm), scenes });
+    days.push({
+      day: dc.day,
+      total_distance_km: round2(dayKm),
+      scenes,
+      final_move_min: finalMoveMin,
+    });
     grandKm += dayKm;
   }
 

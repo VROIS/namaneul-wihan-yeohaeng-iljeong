@@ -54,6 +54,7 @@ import {
   CARD_W,
   CARD_H,
   MAX_PLACES,
+  MIN_PLACES,
 } from "./utils";
 import PlaceCard from "./components/PlaceCard";
 import CharacterHero from "./components/CharacterHero";
@@ -196,8 +197,7 @@ export default function BTSPlaceCartScreen() {
   }, [selectedCharacter?.id, selectedCity?.id, baseUrl]);
 
   const handleNext = useCallback(() => {
-    // ⚠️ 수정금지(승인필요) — 2026-08-15 v4 SSOT: 카드 ≥ 4 부터 일정 생성.
-    if (selectedPlaceIds.length >= 4) {
+    if (selectedPlaceIds.length >= MIN_PLACES) {
       haptic("success");
       navigation.navigate("BTSTrip");
     }
@@ -239,8 +239,7 @@ export default function BTSPlaceCartScreen() {
   );
 
   const selectedCount = selectedPlaceIds.length;
-  // ⚠️ 수정금지(승인필요) — 2026-08-15 v4 SSOT: 카드 ≥ 4 부터 CTA 활성. 옛 "3부터" 폐기 사유 = handleNext 주석 참고.
-  const canProceed = selectedCount >= 4;
+  const canProceed = selectedCount >= MIN_PLACES;
 
   // ⚠️ 수정금지(승인필요) 2026-08-08 사장님 지시 — 담길 때마다 게이지가 **차오르고** 숫자칸이 톡 튄다.
   const gaugePct = useSharedValue(0);

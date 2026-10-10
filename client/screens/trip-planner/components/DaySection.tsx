@@ -1,15 +1,14 @@
 import React from "react";
-import { View, Text, Pressable, Platform } from "react-native";
-import { Brand } from "@/constants/theme";
+import { View, Text, Pressable } from "react-native";
+import { Brand, Spacing } from "@/constants/theme";
 import { Icon } from "@/components/Icon";
 import { Itinerary, DayPlan } from "@/types/trip";
-import PlaceAutocompleteWidget, {
-  type PlaceAutoSelection as PlaceSelection,
-} from "@/components/PlaceAutocompleteWidget";
 import { resultStyles as styles } from "../styles/result";
 import PlaceSlotCard from "./PlaceSlotCard";
+import TransitPill, { legFromPlace } from "./TransitPill";
 import DailyTotal from "./DailyTotal";
-import { displayCityName, isCityCenterName } from "@/lib/display-city-name";
+import { displayCityName } from "@/lib/display-city-name";
+import { startLabel } from "./day-editor/start-label";
 import type { PlannerApi } from "../hooks/useTripPlanner";
 
 export default function DaySection({
@@ -26,16 +25,13 @@ export default function DaySection({
   const {
     theme,
     t,
-    i18n,
     dayAccommodations,
-    hotelModalDay,
-    setHotelModalDay,
-    handleSetDayAccommodation,
+    startDayEdit,
     dayLayoutsRef,
     placesListOffsetRef,
-    hasFixedFinalPlace,
   } = planner;
   const places = currentDay?.places || [];
+  const firstLeg = currentDay?.departureTransit ?? legFromPlace(places[0]);
   return (
     <View
       onLayout={(e) => {
@@ -54,14 +50,16 @@ export default function DaySection({
         >
           <Text style={styles.dayHeaderBadgeText}>Day {currentDay.day}</Text>
         </View>
-        <View style={{ flex: 1, minWidth: 0 }}>
-          <Text
-            style={[styles.dayHeaderTheme, { color: theme.text }]}
-            numberOfLines={1}
-            ellipsizeMode="tail"
-          >
-            {(currentDay as any).theme || ""}
-          </Text>
+        <View style={{ flexShrink: 1, minWidth: 0 }}>
+          {(currentDay as any).theme ? (
+            <Text
+              style={[styles.dayHeaderTheme, { color: theme.text }]}
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
+              {(currentDay as any).theme}
+            </Text>
+          ) : null}
           {currentDay.city && (
             <Text
               style={[styles.dayHeaderCity, { color: theme.textSecondary }]}
@@ -75,101 +73,44 @@ export default function DaySection({
             </Text>
           )}
         </View>
-        {/* ⚠️ 2026-08-01 사장님 지시 = 마지막 슬롯이 고정된 여정(BTS 공연장)에는 [숙소 변경]을 안 보여준다.
-            사유(실측): 숙소를 바꾸면 그 날을 통째로 다시 짜는데 그 경로는 고정 슬롯을 몰라서
-            마지막에 있어야 할 공연장이 1번 자리에 20:00 으로 박혔다(스크린샷).
-            판단 기준 = 아래 useAccommodations 차단과 **같은 값 1벌**(§16). */}
-        {!hasFixedFinalPlace && (
-          <Pressable
-            style={[
-              styles.accommodationButton,
-              { backgroundColor: Brand.primary },
-            ]}
-            onPress={() => setHotelModalDay(currentDay?.day || 1)}
-          >
-            <Icon name="home" size={12} color="#FFFFFF" />
-            <Text style={styles.accommodationButtonText}>
-              {dayAccommodations.find((a) => a.day === currentDay?.day) ||
-              currentDay?.accommodation
-                ? t("trip.accommodationSet")
-                : t("trip.accommodationSetup")}
-            </Text>
-          </Pressable>
-        )}
-      </View>
-
-      {/* 출발 정보 */}
-      <View
-        style={[
-          styles.accommodationBar,
-          {
-            backgroundColor: `${Brand.primary}06`,
-            borderColor: `${Brand.primary}15`,
-            marginHorizontal: 12,
-            marginBottom: 4,
-            borderRadius: 8,
-          },
-        ]}
-      >
-        <View style={styles.accommodationInfo}>
-          <Icon name="home" size={14} color={Brand.primary} />
+        {/* ⚠️ 수정금지(승인필요) 2026-10-09 사장님 결정 = Day 줄 안에 출발지 칸(도심 출발 · 숙소 이름) · 별도 출발 줄 폐지 · 첫 이동은 이동 칸 (정본 §) */}
+        <View
+          style={[
+            styles.dayHeaderStart,
+            {
+              backgroundColor: theme.backgroundRoot,
+              borderColor: `${Brand.primary}30`,
+            },
+          ]}
+        >
+          <Icon name="home" size={12} color={Brand.primary} />
           <Text
-            style={[
-              styles.accommodationText,
-              { color: theme.textSecondary, fontSize: 12 },
-            ]}
+            style={[styles.dayHeaderStartText, { color: theme.textSecondary }]}
             numberOfLines={1}
+            ellipsizeMode="tail"
           >
-            {(() => {
-              const dayAccom = dayAccommodations.find(
-                (a) => a.day === currentDay?.day,
-              );
-              const generalAccom = currentDay?.accommodation;
-              const cityCenterLabel = t("trip.departureCityCenter", {
-                destination: displayCityName(itinerary),
-              });
-              if (dayAccom && !isCityCenterName(dayAccom.name))
-                return `${t("trip.departure")}: ${dayAccom.name}`;
-              // ⚠️ 수정금지(승인필요) 2026-08-21 사장님 승인 = 서버가 만들어 저장해 둔 "도심" 이름은 무시하고
-              if (generalAccom?.name && !isCityCenterName(generalAccom.name))
-                return `${t("trip.departure")}: ${generalAccom.name}`;
-              return `${t("trip.departure")}: ${cityCenterLabel}`;
-            })()}
+            {startLabel(currentDay, dayAccommodations, t)}
           </Text>
-          {currentDay?.departureTransit && (
-            <Text
-              style={[
-                styles.accommodationTransit,
-                { color: theme.textSecondary },
-              ]}
-            >
-              {/* ⚠️ 수정금지(승인필요) 2026-08-13 사장님 승인 = durationText(서버, 한국어 고정) 대신
-                  언어중립 숫자(duration)를 t()로 노출시점 번역(§16 = trip.durationM 재사용). */}
-              →{" "}
-              {t("trip.durationM", { m: currentDay.departureTransit.duration })}
-            </Text>
-          )}
         </View>
+        <View style={{ flex: 1 }} />
+        {/* ⚠️ 수정금지(승인필요) 2026-10-09 사장님 결정 = 숙소 변경 버튼 → 여정 수정 버튼(눌러서 들어간 수정 화면에 숙소 변경이 있다) · BTS 날도 수정한다(공연장 슬롯은 고정) (정본 §) */}
+        <Pressable
+          style={[
+            styles.accommodationButton,
+            { backgroundColor: Brand.primary },
+          ]}
+          onPress={() => startDayEdit(currentDay?.day || 1)}
+        >
+          <Icon name="edit-3" size={12} color="#FFFFFF" />
+          <Text style={styles.accommodationButtonText}>
+            {t("trip.editItinerary")}
+          </Text>
+        </Pressable>
       </View>
 
-      {/* 🏨 2026-06-29 사용자 SSOT = "숙소 설정" 버튼 누르면 그 자리에 구글 공식 위젯 인라인 표시.
-                    선택 → handleSetDayAccommodation(동선 재최적화 + dayAccommodations) → 출발바에 숙소명 + 지도 깃발 자동.
-                    🎹 2026-08-13 사장님 확정 = 인라인은 **웹 전용**(웹 = 지금도 정상 = 무변경).
-                    iOS(2026-07-02)에 이어 AOS 도 ResultStep 전체화면 Modal 로 이관 = Android 15+ 화면축소 제거 + 웹뷰 소거 결함(A36 실증) §19. */}
-      {Platform.OS === "web" && hotelModalDay === currentDay?.day && (
-        <View style={{ marginHorizontal: 12, marginBottom: 8, zIndex: 50 }}>
-          {/* 🏨 2026-06-29 = includedPrimaryTypes 미지정 = 호텔+주소 전부 검색 (옛 lodging단독=호텔만 버그 폐기). */}
-          <PlaceAutocompleteWidget
-            placeholder={t("trip.hotelSearchPlaceholder")}
-            language={i18n.language || "ko"}
-            cityPrefix={
-              itinerary?.destination ? `${itinerary.destination} ` : undefined
-            }
-            onSelect={(place: PlaceSelection) => {
-              handleSetDayAccommodation(currentDay.day, place);
-              setHotelModalDay(null);
-            }}
-          />
+      {firstLeg && (
+        <View style={{ marginTop: Spacing.sm }}>
+          <TransitPill leg={firstLeg} theme={theme} t={t} />
         </View>
       )}
 

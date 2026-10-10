@@ -112,9 +112,10 @@ export function useGenerateItinerary({
         endDate: result.endDate || formData.endDate,
         vibeWeights: result.vibeWeights || vibeWeights,
         days: result.days || [],
-        // ⚠️ 수정금지(승인필요) 2026-07-10 사장님 SSOT = 응답의 교통·동행 확정값을 셀렉 없이 보존(§20).
+        // ⚠️ 수정금지(승인필요) 2026-10-10 사장님 결정 = 응답의 교통·동행 확정값과 입력한 동행 나이를 여정이 갖는다(저장은 여정 값으로 DB 칸을 채운다) (정본 §)
         companionType: result.companionType,
         companionCount: result.companionCount,
+        companionAges: formData.companionAges,
         travelStyle: result.travelStyle,
         mobilityStyle: result.mobilityStyle,
         metadata: result.metadata,

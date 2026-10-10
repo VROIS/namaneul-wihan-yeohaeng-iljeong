@@ -163,8 +163,8 @@ export function registerItineraryGenerateDbRoutes(
         });
       }
 
-      // ⚠️ 수정금지(승인필요) 2026-09-29 사장님 결정 = 베스트 여정 = DB 올리 전환 기준과 무관하게 **항상 DB-only** = 도시가 있으면 베스트 분기, 없으면 유료 MIX 로 흘리지 않고 막는다(핀 분기와 동형) (정본 §)
-      const isBest = !!enrichedFormData.bestOnly;
+      // ⚠️ 수정금지(승인필요) 2026-10-10 사장님 결정 = 베스트 분기는 메인 앱 전용(관리자 + 핀 없음) · 항상 DB-only(도시 없으면 막음) · 핀이 있는 BTS 요청은 관리자여도 일반 사용자와 같은 핀 분기 (정본 §)
+      const isBest = !!enrichedFormData.bestOnly && !isPinnedDbOnly;
       if (isBest && !cityCheck.cityId) {
         return res.status(500).json({
           error: "일정 생성 실패",

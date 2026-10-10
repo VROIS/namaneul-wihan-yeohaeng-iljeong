@@ -17,16 +17,15 @@ function endTimeBeforeShow(showTime?: string | null): string {
   return `${String(h).padStart(2, "0")}:${m[2]}`;
 }
 
-// ⚠️ 2026-08-15 사장님 승인 = 밀도 역산(근사치) = 가용시간(점심 제외) ÷ 사용자가 고른 활동카드 수
+// ⚠️ 수정금지(승인필요) 2026-10-10 사장님 결정 = 밀도 역산 = 가용시간(점심 40분 제외) ÷ 사용자가 고른 활동 수 · 점심·저녁은 엔진이 자동 (정본 §)
 function deriveTravelPace(
   startTime: string,
   endTime: string,
-  hasLunch: boolean,
   activityCount: number,
 ): "Packed" | "Normal" | "Relaxed" {
   const [sh, sm] = startTime.split(":").map(Number);
   const [eh, em] = endTime.split(":").map(Number);
-  const availableMin = eh * 60 + em - (sh * 60 + sm) - (hasLunch ? 40 : 0);
+  const availableMin = eh * 60 + em - (sh * 60 + sm) - 40;
   const perSlot = availableMin / Math.max(1, activityCount);
   const candidates = (
     Object.entries(PACE_SLOT_MINUTES) as [
@@ -47,21 +46,14 @@ export default function BTSTripScreen() {
   const form = useMemo<Partial<TripFormData> | undefined>(() => {
     if (!selectedCity?.nextConcertDate || !selectedCharacter) return undefined;
     const venue = topPlaces.find((p) => p.seedCategory === "bts_venue");
-    // ⚠️ 2026-08-15 사장님 승인 = 점심 카드 = 공연장처럼 사용자 선택과 무관하게 항상 포함(§0 새 원칙).
-    const lunch = topPlaces.find((p) => p.seedCategory === "restaurant");
     const date = selectedCity.nextConcertDate;
     // ⚠️ 2026-08-15 사장님 시뮬 지시 = 09시로 재변경(옛 08시 시험분 폐기 §19).
     const startTime = "09:00";
     const endTime = endTimeBeforeShow(selectedCity.showTime);
     const activityCount = selectedPlaceIds.filter(
-      (id) => id !== venue?.id && id !== lunch?.id,
+      (id) => id !== venue?.id,
     ).length;
-    const derivedPace = deriveTravelPace(
-      startTime,
-      endTime,
-      !!lunch,
-      activityCount,
-    );
+    const derivedPace = deriveTravelPace(startTime, endTime, activityCount);
     return {
       // ⚠️ 2026-08-22 사장님 원칙 = 도시명 노출 nameEn 1순위(한국어 배제) — 도시해석은 아래 좌표가 우선이라 안전
       destination: selectedCity.nameEn || selectedCity.nameKo,
@@ -91,12 +83,7 @@ export default function BTSTripScreen() {
             },
           }
         : {}),
-      pinnedPlaceIds: Array.from(
-        new Set([
-          ...selectedPlaceIds.filter((id) => id !== venue?.id),
-          ...(lunch ? [lunch.id] : []),
-        ]),
-      ),
+      pinnedPlaceIds: selectedPlaceIds.filter((id) => id !== venue?.id),
       ...(venue
         ? {
             finalPlaceId: venue.id,

@@ -86,13 +86,19 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
     null,
   );
   const [sharedEntry, setSharedEntry] = useState(false);
-  // 🎬 2026-07-22 사장님 SSOT = 영상 버튼은 "프로필 카드로 복원한 저장 여정"에서만 저장버튼 자리에 노출.
   const [restoredTrip, setRestoredTrip] = useState(false);
+  // ⚠️ 수정금지(승인필요) 2026-10-10 사장님 결정 = 헤더 버튼 2단 = 저장(💾→✓) 성공하면 영상(🎞) · 프로필에서 열면 영상 · 여정 수정에 들어가면 다시 저장(💾) (정본 §)
+  const [videoBtn, setVideoBtn] = useState(false);
   const resultScrollRef = useRef<ScrollView | null>(null);
   const slotLayoutsRef = useRef<Record<string, number>>({});
   const dayLayoutsRef = useRef<Record<number, number>>({});
   const placesListOffsetRef = useRef<Record<number, number>>({});
   const [currentMapDay, setCurrentMapDay] = useState(1);
+  const [editingDay, setEditingDay] = useState<number | null>(null);
+  const startDayEdit = (day: number) => {
+    setVideoBtn(false);
+    setEditingDay(day);
+  };
   const [selectedSlotId, setSelectedSlotId] = useState<string | null>(null);
   const currentUser: UserData | null = authUser;
 
@@ -145,9 +151,9 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
     itinerary,
     dayAccommodations,
     aiOpinionData,
-    formData,
     currentItineraryId,
     setCurrentItineraryId,
+    onSaved: () => setVideoBtn(true),
     t,
     i18n,
   });
@@ -331,7 +337,9 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
         }));
         setCurrentItineraryId(opts?.shared ? null : targetId);
         setSharedEntry(!!opts?.shared);
-        setRestoredTrip(!opts?.shared); // 프로필 카드 복원 = 헤더 저장버튼 → 영상 버튼 전환(공유 열람 제외)
+        setRestoredTrip(!opts?.shared);
+        setVideoBtn(!opts?.shared);
+        setEditingDay(null);
         setScreen("Result");
       } catch (e) {
         console.warn("[TripPlanner] 저장여정 복원 오류:", e);
@@ -353,7 +361,15 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
   }, [restoreItineraryId, restoreItineraryById, navigation]);
 
   useEffect(() => {
-    if (screen === "Loading") setRestoredTrip(false);
+    if (screen === "Loading") {
+      setRestoredTrip(false);
+      setVideoBtn(false);
+    }
+  }, [screen]);
+
+  // ⚠️ 수정금지(승인필요) 2026-10-10 사장님 결정 = 여정 수정 화면은 결과 화면을 벗어나거나 다른 여정을 열면 꺼진다 (정본 §)
+  useEffect(() => {
+    if (screen !== "Result") setEditingDay(null);
   }, [screen]);
 
   const sharedDeepLinkHandled = useRef(false);
@@ -387,14 +403,16 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
     isAuthed,
     requestLogin,
     handleExitResult,
-    // ⚠️ 2026-08-01 사장님 지시 = **마지막 슬롯이 고정된 여정**이면 [숙소 변경]을 숨긴다.
-    hasFixedFinalPlace: !!formData.finalPlaceId,
     screen,
     setScreen,
     loadingStep,
     LOADING_MESSAGES,
     carouselOpen,
     itinerary,
+    setItinerary,
+    editingDay,
+    setEditingDay,
+    startDayEdit,
     formData,
     setFormData,
     toggleVibe,
@@ -404,7 +422,7 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
     justSaved,
     handleSaveItinerary,
     currentItineraryId, // 🎬 영상 슬롯이 쓰는 여정 id
-    restoredTrip, // 🎬 프로필 카드 복원 여정 = 헤더 저장버튼 → 영상 버튼 전환(2026-07-22 사장님 SSOT, 신규 여정은 저장버튼 유지)
+    videoBtn,
     sharingAction, // "share" | "calendar" | null = 눌린 버튼만 선택색+스피너 (2026-07-22 사장님 실기기 피드백)
     handleShareItinerary,
     handleSaveCalendar,

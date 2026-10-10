@@ -18,7 +18,6 @@ import { getRoleFromDb, getUserIdFromReq } from "./auth-user";
 import { chargeOnSuccess, precheckFeature } from "../shared/credits";
 import { readMapsKey } from "./keys";
 import { readCachedPlaceTranslations } from "./best-itinerary/translate";
-import { pickRestaurantBySegment } from "./lib/services/route-matcher";
 import {
   CHARACTER_PRIMARY_CATEGORY,
   COMPANION_VIBE_CATEGORIES,
@@ -573,7 +572,7 @@ function registerBtsRoutes(app: Express, openDb: OpenDb): void {
     }
   });
 
-  // ⚠️ 수정금지(승인필요) — 2026-08-15 사장님 승인: 8 슬롯 고정 순서 v2
+  // ⚠️ 수정금지(승인필요) 2026-10-10 사장님 결정 = 카드 8장 = 공연장 1 + 활동 7 · 식당 카드 없음(점심·저녁은 엔진이 자동) (정본 §)
   app.get("/api/bts/top-places", async (req: Request, res: Response) => {
     const { db, close } = openDb();
     try {
@@ -588,29 +587,25 @@ function registerBtsRoutes(app: Express, openDb: OpenDb): void {
       // ⚠️ 수정금지(승인필요) — 2026-05-07 사용자 SSOT: place_seed_raw 단일 테이블. collection_phase = 폐기 (= AI 과도 분류).
       const cityFilter = eq(placeSeedRaw.cityId, cityId);
       const imageNotNull = sql`${placeSeedRaw.imageUrl} IS NOT NULL`;
-      // ⚠️ 수정금지(승인필요) 2026-09-03 사장님 결정 = 카드 = 메인앱 버킷 그대로 노출(로직 동일, 노출만) = 주 카테고리 우선 → rank 1등부터(베스트는 rank 안에서 이미 RC 위 등급 = autorank)
-      const byCategoryTag = (tag: string, limit: number) => {
-        const conditions = [
-          cityFilter,
-          servingGateSql(),
-          sql`(${placeSeedRaw.seedCategory} = ${tag} OR ${placeSeedRaw.categoryTags} && ARRAY[${tag}]::text[])`,
-          imageNotNull,
-        ];
-        if (tag !== "restaurant") {
-          conditions.push(
-            sql`NOT (${placeSeedRaw.categoryTags} && ARRAY['restaurant']::text[])`,
-          );
-        }
-        return db
+      // ⚠️ 수정금지(승인필요) 2026-10-10 사장님 결정 = 카드 = 메인앱 버킷 그대로 노출 · 주 카테고리 우선 → rank 1등부터 · 식당은 카드에 넣지 않는다 (정본 §)
+      const byCategoryTag = (tag: string, limit: number) =>
+        db
           .select(PLACE_COLS)
           .from(placeSeedRaw)
-          .where(and(...conditions))
+          .where(
+            and(
+              cityFilter,
+              servingGateSql(),
+              sql`(${placeSeedRaw.seedCategory} = ${tag} OR ${placeSeedRaw.categoryTags} && ARRAY[${tag}]::text[])`,
+              imageNotNull,
+              sql`NOT (${placeSeedRaw.categoryTags} && ARRAY['restaurant']::text[])`,
+            ),
+          )
           .orderBy(
             sql`(${placeSeedRaw.seedCategory} = ${tag}) DESC`,
             asc(placeSeedRaw.rank),
           )
           .limit(limit);
-      };
 
       const venueQuery = db
         .select(PLACE_COLS)
@@ -618,8 +613,6 @@ function registerBtsRoutes(app: Express, openDb: OpenDb): void {
         .where(and(cityFilter, eq(placeSeedRaw.seedCategory, "bts_venue")))
         .orderBy(desc(placeSeedRaw.googleReviewCount))
         .limit(1);
-      // ⚠️ 수정금지(승인필요) — 2026-05-07 사용자 명시 결정성: limit 확장 (= 5/10 → 15/20)
-      const restaurantQuery = byCategoryTag("restaurant", 20);
 
       const isCompanion = memberId === "companion";
       const vibeQuery: Promise<PlaceRow[]> = isCompanion
@@ -635,10 +628,9 @@ function registerBtsRoutes(app: Express, openDb: OpenDb): void {
             15,
           );
 
-      const [venueRows, vibeRowsAll, restaurantPoolAll] = await Promise.all([
+      const [venueRows, vibeRowsAll] = await Promise.all([
         venueQuery,
         vibeQuery,
-        restaurantQuery,
       ]);
 
       const venue: PlaceRow | null = venueRows[0] ?? null;
@@ -647,42 +639,15 @@ function registerBtsRoutes(app: Express, openDb: OpenDb): void {
       const usedIds = new Set<number>();
       if (venue) usedIds.add(venue.id);
 
-      const vibeSlots: (PlaceRow | null)[] = [
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-      ];
-      for (let vIdx = 0; vIdx < 6; vIdx++) {
+      const vibeSlots: (PlaceRow | null)[] = Array(7).fill(null);
+      for (let vIdx = 0; vIdx < vibeSlots.length; vIdx++) {
         const next = pickAliveFrom(vibeRowsAll, usedIds);
         if (!next) break;
         usedIds.add(next.id);
         vibeSlots[vIdx] = next;
       }
 
-      const restaurantPool = restaurantPoolAll.filter(
-        (r) => !usedIds.has(r.id) && !!effectiveImage(r),
-      );
-
-      const lunch = pickRestaurantBySegment(
-        restaurantPool,
-        vibeSlots[2],
-        vibeSlots[3],
-      );
-      if (lunch) usedIds.add(lunch.id);
-
-      const slotPlaces: (PlaceRow | null)[] = [
-        venue, // 1 공연장
-        vibeSlots[0], // 2
-        vibeSlots[1], // 3
-        vibeSlots[2], // 4
-        lunch, // 5 점심 ★
-        vibeSlots[3], // 6
-        vibeSlots[4], // 7
-        vibeSlots[5], // 8
-      ];
+      const slotPlaces: (PlaceRow | null)[] = [venue, ...vibeSlots];
 
       // ⚠️ 수정금지(승인필요) 2026-05-07 사용자 SSOT = 카드 노출 필드 7개 + 좌표 2개(지도 마커) · 이미지 URL 단일 정규화
       const trMap =

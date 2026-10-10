@@ -1,4 +1,5 @@
-// ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT = Google Routes API 완전 폐기 = 모든 경로
+// ⚠️ 수정금지(승인필요) 2026-10-09 사장님 결정 = 두 점 직선 거리 계산은 shared/geo 1벌을 가져다 쓴다 (정본 §)
+import { haversineKm } from "@shared/geo";
 
 export type TravelMode = "WALK" | "TRANSIT" | "DRIVE";
 
@@ -59,21 +60,7 @@ export interface TransitResult {
   costTotal: number; // = EUR / 그룹 총액 (= cost × companionCount)
 }
 
-export function haversineKm(
-  lat1: number,
-  lng1: number,
-  lat2: number,
-  lng2: number,
-): number {
-  const R = 6371;
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLng = toRad(lng2 - lng1);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
-}
+export { haversineKm };
 
 export function calcTransitHaversine(
   from: { lat: number; lng: number; name?: string },

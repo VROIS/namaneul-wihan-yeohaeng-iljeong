@@ -113,7 +113,23 @@ export const resultStyles = StyleSheet.create({
   },
   dayHeaderBadgeText: { fontSize: 13, fontFamily: Fonts.bold, color: "#fff" },
   dayHeaderTheme: { fontSize: 14, fontFamily: Fonts.bold },
-  dayHeaderCity: { fontSize: 11, marginTop: 1 },
+  dayHeaderCity: { fontSize: 11 },
+  dayHeaderStart: {
+    flexShrink: 1,
+    minWidth: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  dayHeaderStartText: {
+    flexShrink: 1,
+    fontSize: 12,
+    fontFamily: Fonts.semiBold,
+  },
   resultScrollView: { flex: 1 },
   shareFooter: {
     paddingHorizontal: Spacing.lg,
@@ -347,11 +363,6 @@ export const resultStyles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    flex: 1,
-  },
-  accommodationText: {
-    fontSize: 13,
-    fontFamily: Fonts.semiBold,
     flex: 1,
   },
   accommodationTransit: {

@@ -81,15 +81,6 @@ export async function finalizeDbOnlyItinerary(
 
   // 식당풀 = 손님상 가능한 전체(가격대 쿼터 없음, 정본 B4).
   //   원본은 생 SQL 이지만 .rows 를 읽으므로(헤더 ④) 같은 조건을 질의빌더로 세운다.
-  const pinIdsForMeals = (formData.pinnedPlaceIds ?? []).filter((n: number) =>
-    Number.isFinite(n),
-  );
-  // `sql.raw("id IN (...)")` + 숫자만 통과한 값 = 안전.
-  //   같은 식을 그대로 쓴다. Number.isFinite 를 통과한 값만 들어가므로 문자열이 낄 수 없다.
-  //   (drizzle 의 sql`... IN ${배열}` 은 배열을 매개변수 1개로 묶어 넣어 SQL 이 깨진다 = 쓰지 않는다.)
-  const pinCond = pinIdsForMeals.length
-    ? sql.raw(`place_seed_raw.id IN (${pinIdsForMeals.map(Number).join(",")})`)
-    : sql.raw("FALSE");
   let center: { lat: number; lng: number } | null = cityCoords ?? null;
   if (!center) {
     const cr = await db
@@ -122,7 +113,6 @@ export async function finalizeDbOnlyItinerary(
       googlePlaceId: placeSeedRaw.googlePlaceId,
       googleReviewCount: placeSeedRaw.googleReviewCount,
       bestRank: placeSeedRaw.bestRank,
-      pinned: sql<boolean>`(${pinCond})`,
     })
     .from(placeSeedRaw)
     .where(
@@ -130,8 +120,8 @@ export async function finalizeDbOnlyItinerary(
         poolWhere,
         eq(placeSeedRaw.seedCategory, "restaurant"),
         servingGateSql(),
-        sql`(${placeSeedRaw.priceEur} IS NOT NULL OR (${pinCond}))`,
-        sql`((${placeSeedRaw.imageUrl} IS NOT NULL AND ${placeSeedRaw.imageUrl} <> '') OR (${pinCond}))`,
+        sql`${placeSeedRaw.priceEur} IS NOT NULL`,
+        sql`(${placeSeedRaw.imageUrl} IS NOT NULL AND ${placeSeedRaw.imageUrl} <> '')`,
       ),
     )
     .orderBy(
@@ -203,19 +193,11 @@ export async function finalizeDbOnlyItinerary(
     const routeDay = routeResponse.days?.find((rd) => rd.day === d);
     const scenes = routeDay?.scenes || [];
 
-    const lastMealIdx = scenes.reduce(
-      (acc, s, i) => (s.type === "restaurant" ? i : acc),
-      -1,
-    );
-    const dayPlaces = scenes.map((scene, sceneIdx) => {
+    const dayPlaces = scenes.map((scene) => {
       const isAuto = scene.place_id?.startsWith("auto-");
       const inputPlace = !isAuto ? inputById.get(scene.place_id) : undefined;
       const isMeal = scene.type === "restaurant";
-      const mealType: "lunch" | "dinner" | undefined = isMeal
-        ? sceneIdx === lastMealIdx
-          ? "dinner"
-          : "lunch"
-        : undefined;
+      const mealType = scene.meal_type;
       // ⚠️ 수정금지(승인필요) 2026-09-29 사장님 결정 = 가격 모르는 식사 = 그 도시 분포 구간의 추정값·글자(고정 유로 폐기 §19), 분포가 없으면 비움 (정본 B4)
       const mealPrice = isMeal
         ? (scene.price_eur ??
@@ -392,12 +374,8 @@ export async function finalizeDbOnlyItinerary(
         editorialSummary: f.editorialSummary,
         distance_from_prev_km: Math.round(km * 10) / 10,
         transit_mode: picked.mode,
-        transit_min: prev
-          ? Math.max(
-              1,
-              Math.round((km / (picked.calc === "WALK" ? 4 : 25)) * 60),
-            )
-          : 0,
+        transit_min: routeResponse.days?.find((rd) => rd.day === lastDay.day)
+          ?.final_move_min,
       });
     }
   }

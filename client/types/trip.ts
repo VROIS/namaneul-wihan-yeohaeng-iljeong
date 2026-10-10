@@ -91,6 +91,9 @@ export interface Place {
   mealPriceLabel?: string; // "€30 내외" 등
   koreanPopularityScore?: number;
   googleMapsUrl?: string;
+  transit_min?: number; // 앞 슬롯(첫 슬롯은 출발 지점)에서 이 슬롯까지 이동 분
+  distance_from_prev_km?: number; // 같은 구간 거리
+  transit_mode?: TransitInfo["mode"]; // 같은 구간 이동 수단
 }
 
 export interface TransitInfo {
@@ -171,6 +174,7 @@ export interface Itinerary {
   };
   companionType?: string;
   companionCount?: number;
+  companionAges?: string;
   travelStyle?: TravelStyle;
   mobilityStyle?: MobilityStyle;
   // ⚠️ 수정금지(승인필요) 2026-07-10 사장님 SSOT = 생성 응답 metadata 통째 보존(§20 셀렉 금지) = 후속 호출(AI의견 등)이 그대로 사용.

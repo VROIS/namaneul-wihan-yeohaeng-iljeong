@@ -91,3 +91,5 @@ export const CARD_H = 140;
 
 // ⚠️ 수정금지(승인필요) — 2026-04-23 Track 1b-①: 게이팅 제거로 BATCH_SIZE 불필요. 총 장수만 유지.
 export const MAX_PLACES = 8;
+// ⚠️ 수정금지(승인필요) 2026-10-10 사장님 결정 = "같이 떠나요" 켜짐 = 담은 카드 5장부터(공연장 1 + 활동 4) (정본 §)
+export const MIN_PLACES = 5;

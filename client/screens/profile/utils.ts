@@ -1,7 +1,7 @@
-// ⚠️ 수정금지(승인필요) 2026-08-14 사장님 SSOT = 카드 요약 = ResultStep.tsx 요약헤더와 **원천 통일**.
-import { getVibeLabel } from "@/utils/vibeCalculator";
+// ⚠️ 수정금지(승인필요) 2026-10-10 사장님 결정 = 카드 요약 = ResultStep.tsx 요약헤더와 원천 통일 · 취향 자리는 vibesSummary 1벌 (정본 §)
+import { vibesSummary } from "@/utils/vibeCalculator";
 import i18n from "@/lib/i18n";
-import type { VibeWeight } from "@/types/trip";
+import type { Vibe, VibeWeight } from "@/types/trip";
 
 export interface SavedItinerary {
   id: number;
@@ -24,6 +24,7 @@ export interface SavedItinerary {
     companionType?: string;
     companionCount?: number;
     curationFocus?: string;
+    metadata?: { _sourceMode?: string };
   };
 }
 
@@ -63,12 +64,13 @@ export function summaryLineCard(
   const focus =
     focusLabels[trip.rawData?.curationFocus || trip.curationFocus] ||
     t("labels.curationEveryone");
-  // ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 = ResultStep.tsx:210-215 와 같은 소스(itinerary.vibeWeights)로 통일.
-  const vibes =
-    (trip.rawData?.vibeWeights?.length
-      ? trip.rawData.vibeWeights.slice(0, 3).map((v) => getVibeLabel(v.vibe))
-      : (trip.vibes || []).slice(0, 3).map((v) => getVibeLabel(v as any))
-    ).join(" & ") || t("options.healing");
+  // ⚠️ 수정금지(승인필요) 2026-10-10 사장님 결정 = 결과 화면 요약과 같은 소스(itinerary.vibeWeights) · 베스트 여정이면 취향 자리 = "베스트" (정본 §)
+  const vibes = vibesSummary(
+    trip.rawData?.metadata?._sourceMode === "best",
+    trip.rawData?.vibeWeights?.length
+      ? trip.rawData.vibeWeights.map((v) => v.vibe)
+      : ((trip.vibes || []) as Vibe[]),
+  );
   const lastChar = focus.charCodeAt(focus.length - 1);
   const hasFinalConsonant =
     lastChar >= 0xac00 && lastChar <= 0xd7a3 && (lastChar - 0xac00) % 28 !== 0;
