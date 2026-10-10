@@ -10,10 +10,9 @@ import {
   placesForServer,
   finalOfDay,
   slotsOfDay,
-  toHm,
-  toMin,
   type EditSlot,
 } from "./edit-layout";
+import { moveMult, toHm, toMin } from "@shared/day-retime";
 
 // ⚠️ 수정금지(승인필요) 2026-10-10 사장님 결정 = 여정 수정 = 길이 · 삭제 · 순서 · 하루 시간대 통째 이동(룰렛)만, 날마다 따로 (정본 §)
 export function useDayEdit(planner: PlannerApi, day: DayPlan) {
@@ -43,7 +42,7 @@ export function useDayEdit(planner: PlannerApi, day: DayPlan) {
     return c ?? { lat: day.places[0]?.lat ?? 0, lng: day.places[0]?.lng ?? 0 };
   }, [dayAccommodations, day, final]);
 
-  const mult = itinerary?.metadata?.transportCategory === "guide" ? 1.5 : 2;
+  const mult = moveMult(itinerary?.metadata?.transportCategory === "guide");
   const layout = useMemo(
     () => layoutDay(slots, anchor, startMin, endMin, mult, final),
     [slots, anchor, startMin, endMin, mult, final],

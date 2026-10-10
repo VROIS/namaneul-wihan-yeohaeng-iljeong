@@ -42,6 +42,17 @@ export interface RetimeOutput {
   lunchAdjusted: boolean;
 }
 
+/** 이동 시간 배수 = 드라이빙 가이드 1.5 · 그 외(대중교통·도보) 2 */
+export const moveMult = (isGuide: boolean): number => (isGuide ? 1.5 : 2);
+
+export const toMin = (t: string): number => {
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + m;
+};
+
+export const toHm = (x: number): string =>
+  `${String(Math.floor(x / 60)).padStart(2, "0")}:${String(x % 60).padStart(2, "0")}`;
+
 /** 직선 시간(걷기 5 · 시내 25 · 먼 거리 75 km/h)에 배수를 곱한 이동 분 */
 export function moveMinKm(km: number, mult: number): number {
   const straight =

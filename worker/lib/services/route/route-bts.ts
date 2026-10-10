@@ -1,6 +1,6 @@
 // ⚠️ 수정금지(승인필요) 2026-10-10 사장님 결정 = BTS 하루 = 고른 활동을 전부 넣고 점심·저녁은 메인 앱과 같은 식당 고르기로 자동 · 점심은 각 자리에 넣어 시각표를 깔아 본 결과로 고르고 저녁은 공연장 근처 · 이동 ×배수 · 끝 = 공연 시작 (정본 §)
 import type { PlaceResult } from "../agents/types";
-import { haversineKm } from "../agents/transit-haversine";
+import { nearestChain } from "@shared/geo";
 import { retimeDay } from "@shared/day-retime";
 
 type LatLng = { lat: number; lng: number };
@@ -36,21 +36,10 @@ export function buildBtsDay(inp: BtsDayInput): BtsDayOutput {
   const { center, startMin, endMin, mult, lunchFrom, lunchBy, mealDuration } =
     inp;
   const pinSet = new Set(inp.pinnedPlaceIds.map((n) => `db-${n}`));
-  const left = inp.places.filter((p) => pinSet.has(p.id) && inp.hasCoord(p));
-  const actsOrd: PlaceResult[] = [];
-  let pv: LatLng = center;
-  while (left.length) {
-    let bi = 0;
-    for (let i = 1; i < left.length; i++)
-      if (
-        haversineKm(pv.lat, pv.lng, left[i].lat, left[i].lng) <
-        haversineKm(pv.lat, pv.lng, left[bi].lat, left[bi].lng)
-      )
-        bi = i;
-    const [nx] = left.splice(bi, 1);
-    actsOrd.push(nx);
-    pv = nx;
-  }
+  const actsOrd = nearestChain(
+    center,
+    inp.places.filter((p) => pinSet.has(p.id) && inp.hasCoord(p)),
+  );
   const dinnerR = inp.pickDinner();
   const hasDinner = !!dinnerR;
   const actsItems: Item[] = actsOrd.map((p) => ({

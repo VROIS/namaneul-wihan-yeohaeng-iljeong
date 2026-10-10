@@ -15,8 +15,9 @@ export function useDragHandle(cb: DragCallbacks) {
   const ref = useRef(cb);
   ref.current = cb;
   const started = useRef(false);
-  return useRef(
-    PanResponder.create({
+  const pan = useRef<ReturnType<typeof PanResponder.create> | null>(null);
+  if (!pan.current)
+    pan.current = PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderTerminationRequest: () => false,
@@ -41,6 +42,6 @@ export function useDragHandle(cb: DragCallbacks) {
         if (started.current) ref.current.onEnd?.();
         started.current = false;
       },
-    }),
-  ).current.panHandlers;
+    });
+  return pan.current.panHandlers;
 }

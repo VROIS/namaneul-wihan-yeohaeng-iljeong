@@ -15,11 +15,14 @@ import SlotThumbnail from "../SlotThumbnail";
 import type { PlannerApi } from "../../hooks/useTripPlanner";
 import { PX_PER_MIN, STEP_MIN, type EditSlot } from "./edit-layout";
 import { useDragHandle } from "./useDragHandle";
-import { editStyles as es, LEFT_COL, RULER_W } from "./editor-styles";
-
-const noTouchScroll: any =
-  Platform.OS === "web" ? { touchAction: "none", userSelect: "none" } : null;
-const noSelect: any = Platform.OS === "web" ? { userSelect: "none" } : null;
+import {
+  editStyles as es,
+  LEFT_COL,
+  RULER_W,
+  noSelect,
+  noTouch,
+  noTouchScroll,
+} from "./editor-styles";
 
 // ⚠️ 수정금지(승인필요) 2026-10-10 사장님 결정 = 슬롯 = 폰 앱 아이콘 방식(평소 건드려도 안 바뀜 · 카드 어디나 길게 누르면 전체 편집 모드 · 흔들림 + ✕ · 이동 · 늘리기 · 톡 누르면 끝) (정본 §)
 export default function EditBlock({
@@ -121,7 +124,7 @@ export default function EditBlock({
       ]}
     >
       <Animated.View style={[es.blockInner, { transform: [{ rotate }] }]}>
-        <View style={[es.numberCol, { width: LEFT_COL }]}>
+        <View style={[es.numberCol, { width: LEFT_COL }, noTouch]}>
           <View
             style={[
               resultStyles.placeNumber,
@@ -180,6 +183,7 @@ export default function EditBlock({
                   onRemove(index);
                 }}
                 accessibilityRole="button"
+                accessibilityLabel={t("trip.editRemoved")}
               >
                 <View style={es.removeDot}>
                   <Icon name="x" size={14} color="#FFFFFF" />

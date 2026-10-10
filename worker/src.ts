@@ -782,20 +782,18 @@ async function regenerateDay(params: {
     round2((eh * 60 + em - (sh * 60 + sm)) / 60),
   );
 
-  // ⚠️ 수정금지(승인필요) 2026-10-09 사장님 결정 = 조정 뒤 슬롯 시간 = 처음 생성과 같은 계산 1벌로 다시 깐다 · 순서 유지 요청(keepOrder)은 받은 순서 그대로 (정본 §)
-  const timeFit =
-    accommodationCoords && reordered.length
-      ? retimePlaces({
-          places: reordered,
-          anchor: accommodationCoords,
-          startTime: dc.startTime,
-          endTime: dc.endTime,
-          isGuideDay,
-          departure: departureTransit,
-          between: transits,
-          ret: returnTransit,
-        })
-      : undefined;
+  // ⚠️ 수정금지(승인필요) 2026-10-10 사장님 결정 = 조정 뒤 슬롯 시간 = 처음 생성과 같은 계산 1벌로 다시 깐다 · 순서 유지 요청(keepOrder)은 받은 순서 그대로 (정본 §)
+  if (accommodationCoords && reordered.length)
+    retimePlaces({
+      places: reordered,
+      anchor: accommodationCoords,
+      startTime: dc.startTime,
+      endTime: dc.endTime,
+      isGuideDay,
+      departure: departureTransit,
+      between: transits,
+      ret: returnTransit,
+    });
 
   const priceResult = await calculateTransportPrice({
     companionType: (formData?.companionType || "Couple") as CompanionType,
@@ -902,7 +900,6 @@ async function regenerateDay(params: {
     places: reordered,
     departureTransit,
     returnTransit,
-    timeFit,
     transit: {
       transits,
       totalDuration: transits.reduce((sum, t) => sum + t.duration, 0),

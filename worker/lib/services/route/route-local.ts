@@ -22,18 +22,19 @@ import {
 import { bestRankLangCount } from "../shared/best-rank";
 import { VIBE_PRIMARY_CATEGORY } from "@shared/vibe-category";
 import { tierRange, type CityMealTiers } from "../shared/meal-budget-tiers";
-import { retimeDay, moveMinKm as sharedMoveMinKm } from "@shared/day-retime";
+import {
+  retimeDay,
+  moveMinKm as sharedMoveMinKm,
+  moveMult,
+  toMin,
+} from "@shared/day-retime";
+import { nearestChain } from "@shared/geo";
 import { buildBtsDay } from "./route-bts";
 
 type LatLng = { lat: number; lng: number };
 
 const hasCoord = (p: { lat?: number | null; lng?: number | null }): boolean =>
   p.lat != null && p.lng != null && p.lat !== 0 && p.lng !== 0;
-
-const toMin = (t: string): number => {
-  const [h, m] = t.split(":").map(Number);
-  return h * 60 + m;
-};
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -76,7 +77,7 @@ export function buildRouteLocal(
       ? "private_driver_guide"
       : "public_transit";
 
-  const MOVE_MULT = transport === "private_driver_guide" ? 1.5 : 2;
+  const MOVE_MULT = moveMult(transport === "private_driver_guide");
   const isBts = !!formData.finalPlaceId && !bestMode;
 
   // ⚠️ 수정금지(승인필요) 2026-09-01 사장님 확정 = 곳수 상한 없음 = 선정은 분(minute) 기준이 유일 (정본 B4)
@@ -246,26 +247,18 @@ export function buildRouteLocal(
   if (bestMode) {
     const s7 = places.filter((p) => bestRankLangCount(p.bestRank) === 7);
     if (s7.length) {
-      // 출발역 = 도심 중심에서 가장 가까운 7동의. 중요한 유적이 도심에 모여 있으므로 거기서 시작해
-      //   안에서 밖으로 뻗는다 = 종착역은 자연히 가장 먼 7동의가 된다.
-      let cur = s7.reduce(
+      // ⚠️ 수정금지(승인필요) 2026-10-10 사장님 결정 = 베스트 줄 = 도심에 가장 가까운 7동의에서 시작해 가까운 곳으로 이어 붙인다(줄 세우기 한 벌 shared/geo nearestChain) (정본 §)
+      const first = s7.reduce(
         (m, p) => (kmFromCenter(p) < kmFromCenter(m) ? p : m),
         s7[0],
       );
-      const left: PlaceResult[] = s7.filter((p) => p !== cur);
-      bestLine.push(cur);
-      while (left.length) {
-        let bi = 0;
-        for (let i = 1; i < left.length; i++)
-          if (
-            haversineKm(cur.lat, cur.lng, left[i].lat, left[i].lng) <
-            haversineKm(cur.lat, cur.lng, left[bi].lat, left[bi].lng)
-          )
-            bi = i;
-        cur = left[bi];
-        bestLine.push(cur);
-        left.splice(bi, 1);
-      }
+      bestLine.push(
+        first,
+        ...nearestChain(
+          first,
+          s7.filter((p) => p !== first),
+        ),
+      );
     }
   }
 

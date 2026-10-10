@@ -1,10 +1,18 @@
-import { StyleSheet } from "react-native";
+import { Platform, StyleSheet } from "react-native";
 import { BorderRadius, Brand, Fonts, Spacing } from "@/constants/theme";
 
 // 폭 · 크기 = 지금 슬롯 카드와 같다(번호원 칸 38 · 번호원 36 · 썸네일 48 · 카드 둥글기).
 export const LEFT_COL = 38;
 export const RULER_W = 56;
 export const TRAY_THUMB = 56;
+export const RED = "#EF4444";
+
+// 웹에서 끌 때 글자 선택 · 스크롤에 빼앗기지 않게 / 글자 선택 막기 / 눌림을 아래 칸에 넘기기
+export const noTouchScroll: any =
+  Platform.OS === "web" ? { touchAction: "none", userSelect: "none" } : null;
+export const noSelect: any =
+  Platform.OS === "web" ? { userSelect: "none" } : null;
+export const noTouch = { pointerEvents: "none" } as const;
 
 export const editStyles = StyleSheet.create({
   root: { flex: 1 },
@@ -64,8 +72,13 @@ export const editStyles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  block: { position: "absolute", left: 0, flexDirection: "row" },
-  blockInner: { flex: 1, flexDirection: "row" },
+  block: {
+    position: "absolute",
+    left: 0,
+    flexDirection: "row",
+    pointerEvents: "box-none",
+  },
+  blockInner: { flex: 1, flexDirection: "row", pointerEvents: "box-none" },
   blockDragging: {
     zIndex: 20,
     opacity: 0.75,
@@ -107,7 +120,7 @@ export const editStyles = StyleSheet.create({
     width: 26,
     height: 26,
     borderRadius: 13,
-    backgroundColor: "#EF4444",
+    backgroundColor: RED,
     alignItems: "center",
     justifyContent: "center",
   },

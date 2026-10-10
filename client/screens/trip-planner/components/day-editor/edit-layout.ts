@@ -1,5 +1,5 @@
-// ⚠️ 수정금지(승인필요) 2026-10-09 사장님 결정 = 여정 수정 시간표 = 사용자가 정한 순서 · 길이 그대로 이동 시간만 맞춰 채운다(계산 1벌 shared/day-retime, 서버 regenerate-day 와 같은 함수) (정본 §)
-import { retimeDay } from "@shared/day-retime";
+// ⚠️ 수정금지(승인필요) 2026-10-10 사장님 결정 = 여정 수정 시간표 = 사용자가 정한 순서 · 길이 그대로 이동 시간만 맞춰 채운다(계산 1벌 shared/day-retime, 서버 regenerate-day 와 같은 함수) (정본 §)
+import { retimeDay, toHm, toMin } from "@shared/day-retime";
 
 export const PX_PER_MIN = 1.9;
 export const STEP_MIN = 30;
@@ -8,14 +8,6 @@ export const MAX_END_MIN = 24 * 60;
 
 export type EditSlot = { place: any; stay: number };
 export type LatLng = { lat: number; lng: number };
-
-export const toMin = (t: string): number => {
-  const [h, m] = t.split(":").map(Number);
-  return h * 60 + m;
-};
-
-export const toHm = (x: number): string =>
-  `${String(Math.floor(x / 60)).padStart(2, "0")}:${String(x % 60).padStart(2, "0")}`;
 
 // 마지막이 공연장으로 고정된 하루(BTS) = 공연장 슬롯은 수정 대상이 아니다.
 export const isFinalPlace = (p: any): boolean =>

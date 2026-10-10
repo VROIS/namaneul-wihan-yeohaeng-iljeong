@@ -21,16 +21,20 @@ import SlotThumbnail from "../SlotThumbnail";
 import type { PlannerApi } from "../../hooks/useTripPlanner";
 import EditBlock from "./EditBlock";
 import FinalBlock from "./FinalBlock";
-import { PX_PER_MIN, STEP_MIN, toHm } from "./edit-layout";
-import { editStyles as es, RULER_W, TRAY_THUMB } from "./editor-styles";
+import { toHm } from "@shared/day-retime";
+import { PX_PER_MIN, STEP_MIN } from "./edit-layout";
+import {
+  editStyles as es,
+  RED,
+  RULER_W,
+  TRAY_THUMB,
+  noSelect,
+  noTouch,
+  noTouchScroll,
+} from "./editor-styles";
 import { startLabel } from "./start-label";
 import { useDayEdit } from "./useDayEdit";
 import { useDragHandle } from "./useDragHandle";
-
-const RED = "#EF4444";
-const noTouchScroll: any =
-  Platform.OS === "web" ? { touchAction: "none", userSelect: "none" } : null;
-const noSelect: any = Platform.OS === "web" ? { userSelect: "none" } : null;
 
 // ⚠️ 수정금지(승인필요) 2026-10-10 사장님 결정 = 여정 수정 화면 = 위 고정 영역(Day 줄 · 출발 줄 · 삭제한 장소 줄) + 시간표 · 폰 앱 아이콘 방식(길게 누르면 전체 편집 모드 · 스크롤 고정 · 톡 누르면 끝) · 오른쪽 시간 눈금 = 룰렛 바퀴(돌리면 하루 시간대 통째 이동) (정본 §)
 export default function DayEditor({
@@ -321,6 +325,7 @@ export default function DayEditor({
                     right: RULER_W,
                     backgroundColor: theme.backgroundSecondary,
                   },
+                  noTouch,
                 ]}
               >
                 {h >= 16 && (
@@ -368,6 +373,7 @@ export default function DayEditor({
                     right: RULER_W,
                     backgroundColor: theme.backgroundSecondary,
                   },
+                  noTouch,
                 ]}
               >
                 {ed.layout.finalMove * PX_PER_MIN >= 16 && (
@@ -385,7 +391,9 @@ export default function DayEditor({
                 late={Math.max(0, ed.layout.arrival - ed.endMin)}
                 theme={theme}
                 t={t}
+                editMode={editMode}
                 onEnterEdit={enterEdit}
+                onExitEdit={exitEdit}
               />
             </>
           )}
