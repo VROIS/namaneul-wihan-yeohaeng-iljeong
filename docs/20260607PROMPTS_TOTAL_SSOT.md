@@ -126,10 +126,10 @@ places.id,places.displayName,places.formattedAddress,places.location,places.user
 | **#44** | 08 Wikidata 이미지 (SPARQL) | 비-LLM | SPARQL (Gemini 미사용) | live | [08/run.ts:68](../fillcity/prompts/08-wk-image-fill/run.ts) |
 | **#45** | 결손보강·보정 WF (1행 1결손→행 전체 Gemini→TS→PM 보강) | 복합(Gemini+TS+PM) | 추출(6cat TOP20+식당 band 30/90/30 또는 `--all-restaurants`=식당전부)→Gemini 전11필드 새우선→TS 전필드 새우선→PM이미지→2곳저장 | live(실증완료) | [fill45-defect-repair.ts](../fillcity/repair.ts) |
 | **#46** | #1b 정제(cleanse) = 전체 행 재검증 (#07 프롬프트 재사용 = 새 프롬프트 아님) | Gemini | 전체행(BTS제외)→geminiCurate(=02-enrich/prompt.txt)→가격오염·이름환각·칸오입력 교정→id직행 전필드 새덮어쓰기(shopping price=NULL) = TS·PM 0 | live(실증완료) | [fillcity-step1b-fix-pollution.ts](../fillcity/cleanse.ts) · 본문 = **#07** (같은 prompt.txt) |
-| **#47** | 02 7개국어 베스트20 발굴 (신규 시드발굴 정규 WF ③, 언어당 1콜×7) | Gemini | gemini-3-flash-preview / grounding ON / temp 0.2 / thinking 0 | live(1순위 10도시+보고타 실행완료 2026-08-28) · 승인해시 `448ef53bbf000e5e`(10-04 가격 줄 판 = 무료·입장료 없는 곳은 0, 모르면 생략 · 본문 sha256 앞16, 줄바꿈 정규화) | [02-discover-best20-perlang/prompt.txt](../fillcity/prompts/02-discover-best20-perlang/prompt.txt) · [run.ts](../fillcity/prompts/02-discover-best20-perlang/run.ts) |
+| **#47** | 02 7개국어 베스트20 발굴 (신규 시드발굴 정규 WF ③, 언어당 1콜×7) | Gemini | gemini-3-flash-preview / grounding ON / temp 0.2 / thinking 0 | live(1순위 10도시+보고타 실행완료 2026-08-28) · 승인해시 `0cbcf53da5241d9d`(10-04 가격 줄 판 = 무료·입장료 없는 곳은 0, 모르면 생략 · 본문 sha256 앞16, 줄바꿈 정규화) | [02-discover-best20-perlang/prompt.txt](../fillcity/prompts/02-discover-best20-perlang/prompt.txt) · [run.ts](../fillcity/prompts/02-discover-best20-perlang/run.ts) |
 | **#48** | 06 BTS 공연장 텍스트 요소 7개국어 (미래공연 도시 bts_venue, 1콜) | Gemini | gemini-3-flash-preview / grounding ON | live · 승인해시 `b2e294b09b2fdedf` | [06-bts-venue-copy-7lang/prompt.txt](../fillcity/prompts/06-bts-venue-copy-7lang/prompt.txt) |
 | **#49** | 90 도시 완성 검수 벤치마크 베스트20 (사후 성적표, DB 쓰기 0) | Gemini | gemini-3-flash-preview / grounding ON | tool · 승인해시 `88585fe9276f293e` | [90-benchmark-best20/prompt.txt](../fillcity/prompts/90-benchmark-best20/prompt.txt) |
-| **#50** | 03 구글맵 확정 뒤 제미니 보강 (#07 에서 입력 칸만 바꾼 판) | Gemini | gemini-3-flash-preview / grounding ON / temp 0.2 / maxOutputTokens 50000 / thinking 0 | live · 승인해시 `12ba7eef399fe133`(본문 sha256 앞16, 줄바꿈 정규화) | [03-enrich-after-google/prompt.txt](../fillcity/prompts/03-enrich-after-google/prompt.txt) · [gemini-apply.ts](../worker/lib/services/fill/gemini-apply.ts) · [gemini-curate.ts](../worker/lib/services/shared/gemini-curate.ts) |
+| **#50** | 03 구글맵 확정 뒤 제미니 보강 (#07 에서 입력 칸만 바꾼 판) | Gemini | gemini-3-flash-preview / grounding ON / temp 0.2 / maxOutputTokens 50000 / thinking 0 | live · 승인해시 `1566b495bc5dcaa1`(본문 sha256 앞16, 줄바꿈 정규화) | [03-enrich-after-google/prompt.txt](../fillcity/prompts/03-enrich-after-google/prompt.txt) · [gemini-apply.ts](../worker/lib/services/fill/gemini-apply.ts) · [gemini-curate.ts](../worker/lib/services/shared/gemini-curate.ts) |
 
 > **2026-08-29 사장님 결정(E)** = 외부호출 프롬프트는 이 카탈로그에 **등재 → 골라 조립**. 진본은 링크된 `prompt.txt`(코드 `run.ts` 가 파일을 그대로 읽어 변수만 치환, 사람·AI 재작성 0). **승인해시** = 그 시점 사장님 승인본의 지문 — raw 파일에도 같은 해시를 저장하고 B1 이 현재 prompt.txt 해시와 다른 raw 를 거부하는 관문(정규 WF 구현 시 배선). 해시가 바뀌면 = 프롬프트가 바뀐 것 = 재승인 후 이 칸 갱신.
 
@@ -208,7 +208,7 @@ ${dayRequirements}
 
 [CATEGORY MATRIX — 전체 여정 카테고리별 곳수 (= 사용자 vibe 반영, 이 비율을 목표로 하되 시간이 부족하면 곳수를 줄인다)]
 ${categoryMatrix}
-- 각 place 의 c(카테고리)는 위 카테고리 중 하나로 정확히 지정 (heritage=문화/유산, healing=힐링/자연, hotspot=핫플, adventure=모험/액티비티, shopping=쇼핑, attraction=즐길거리/체험, restaurant=식당).
+- 각 place 의 c(카테고리)는 위 카테고리 중 하나로 정확히 지정 (heritage=문화/유산, healing=힐링/자연, photospot=포토스팟(사진 찍기 좋은 곳·전망 좋은 곳), adventure=모험/액티비티, shopping=쇼핑, attraction=즐길거리/체험, restaurant=식당).
 - 식사(lunch/dinner) = c="restaurant".
 
 [동선 원칙]
@@ -234,7 +234,7 @@ For each place include (= ALL fields verified via Google Search grounding, 키�
 - l (local language name = 예: 파리=Tour Eiffel) [= REQUIRED for ALL places INCLUDING restaurants (식당도 반드시). If the restaurant's official name is already in the local language (예: "Le Comptoir du Marché"), copy that same name into l — never leave l empty. = Text Search forwarding + matching key, final DB column]
 - a (FULL street address with NUMBER + street + postal code + city) [= REQUIRED for Text Search forwarding + matching key, final DB column — verify via Google Search]
 - t ("activity" | "lunch" | "dinner")
-- c (= 위 CATEGORY MATRIX 중 하나 = heritage|healing|hotspot|adventure|shopping|attraction|restaurant. 식사=restaurant) [= final DB column, 카테고리 보존 필수]
+- c (= 위 CATEGORY MATRIX 중 하나 = heritage|healing|photospot|adventure|shopping|attraction|restaurant. 식사=restaurant) [= final DB column, 카테고리 보존 필수]
 - y (latitude = decimal 6 digits, e.g. 48.858370) [= REQUIRED for Text Search forwarding + matching key, final DB column — verify via Google Search, NO hallucination]
 - x (longitude = decimal 6 digits, e.g. 2.294481) [= 위 y 와 동일 요건]
 - p (1 인 EUR)
@@ -650,7 +650,7 @@ ${API_PASS}
       "longitude": <경도 6 자리 = 예 2.294481>,
       "summary_ko": "<한 줄 숏폼 대사 = 인스타/FOMO 사회적 검증 = 한국어 25 자 이내>",
       "editorial_summary": "<한 줄 한국인 관점 선정 이유 = 코믹/위트 후킹 카피 = 한국어 35 자 이내>",
-      "price_eur": <식당=1인 식대 / 그 외=실제 입장료 EUR 숫자 = 무료·입장료 없는 곳(광장·핫스팟 등) = 0>,
+      "price_eur": <식당=1인 식대 / 그 외=실제 입장료 EUR 숫자 = 무료·입장료 없는 곳(광장·포토스팟 등) = 0>,
       "distance_km_from_center": <도심 중심으로부터 직선거리 km = haversine = 소수 1 자리 = 예 2.4>
     }
   ]
@@ -662,7 +662,7 @@ ${API_PASS}
 3. 좌표 = 6 자리 소수 (= 예 48.858370, 2.294481)
 4. address = 번지부터 국가까지 완전 (= 부분 주소 X)
 5. summary_ko / editorial_summary = 한국어만 (= 영어 단어 혼용 X)
-6. price_eur = 식당이면 1인 식대, 그 외 장소는 실제 입장료 = EUR 정수 (= 추정 생성 X). 무료·입장료 없는 장소(광장·거리·핫스팟 등) = 0.
+6. price_eur = 식당이면 1인 식대, 그 외 장소는 실제 입장료 = EUR 정수 (= 추정 생성 X). 무료·입장료 없는 장소(광장·거리·포토스팟 등) = 0.
    ⚠️ CURRENCY = **ALWAYS EUR**, never local currency. 비유로권 도시(도쿄·방콕·서울 등)도 **반드시 EUR 로 환산**해서 답하라.
 7. distance_km_from_center = 도심 중심으로부터 직선거리 km (= haversine, 소수 1 자리, 필수)
 8. 응답 = 위 JSON 만 (= 설명/주석/마크다운 X)

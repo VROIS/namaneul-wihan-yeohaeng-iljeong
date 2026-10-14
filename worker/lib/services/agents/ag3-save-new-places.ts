@@ -171,7 +171,7 @@ export async function saveNewPlacesToDB(
             geminiPrice: (place as any).estimatedPriceEur ?? null,
             pageOpened: false,
           }).price ?? undefined,
-        // ⚠️ 수정금지(승인필요) 2026-07-11 사장님 SSOT = 취향 슬롯 카테고리(slotCategory)도 태그로 축적(UNION §14) = 장소 다면성(앙부아즈=heritage+hotspot).
+        // ⚠️ 수정금지(승인필요) 2026-07-11 사장님 SSOT = 취향 슬롯 카테고리(slotCategory)도 태그로 축적(UNION §14) = 장소 다면성(앙부아즈=heritage+photospot).
         categoryTags:
           slotCat && slotCat !== seedCategory
             ? [seedCategory, slotCat]

@@ -11,7 +11,7 @@ const CATS = [
   ["attraction", "어트랙션"],
   ["adventure", "어드벤처"],
   ["healing", "힐링"],
-  ["hotspot", "핫스팟"],
+  ["photospot", "포토스팟"],
   ["shopping", "쇼핑"],
 ];
 const isBlank = (x: unknown) => x == null || String(x).trim() === "";

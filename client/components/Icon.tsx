@@ -141,7 +141,7 @@ const ICON_MAP: Record<string, React.ComponentType<LucideProps>> = {
   Zap,
   ShoppingBag, // = 쇼핑
   Ticket,
-  Camera, // = 핫스팟 (= 마커와 통일)
+  Camera, // = 포토스팟 (= 마커와 통일)
   FerrisWheel, // = 즐길거리 (= 마커와 통일)
   Flower2, // = 힐링 (= 마커와 통일)
   Landmark, // = 문화/예술 (= 마커와 통일)

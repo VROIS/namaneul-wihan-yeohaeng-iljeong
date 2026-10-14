@@ -64,11 +64,17 @@ export async function writeRow(
 ): Promise<void> {
   try {
     const read = pageWasRead(r);
+    // ⚠️ 수정금지(승인필요) 2026-10-12 사장님 결정 = 우리 분류 확정에 행 이름도 넘긴다 = 이름에 식당이 든 와이너리는 식당 유지 (정본 §)
     const fc = read
-      ? finalCategory(row.seed_category, r.category, {
-          reviewCount: r.rc_page ?? row.rc,
-          best: row.best,
-        })
+      ? finalCategory(
+          row.seed_category,
+          r.category,
+          {
+            reviewCount: r.rc_page ?? row.rc,
+            best: row.best,
+          },
+          row.name_en,
+        )
       : null;
     if (fc?.notPlace && ctx.deleteRow) {
       await ctx.deleteRow(row.id);
@@ -135,7 +141,7 @@ export async function writeRow(
         read && fc
           ? [
               ...categoryTagsOf(fc.cat, r.category),
-              ...(fc.hotspotTag ? ["hotspot"] : []),
+              ...(fc.photospotTag ? ["photospot"] : []),
             ]
           : undefined,
       verifySource: read ? "gmaps-pid-page" : null,

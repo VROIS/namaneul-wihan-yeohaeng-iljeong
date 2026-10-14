@@ -14,7 +14,7 @@
   대중교통·택시 필요한 곳 배제 명시(동선 최적화용 원재료라 진짜 걸어갈 수 있어야 함).
 = ⚠️ 수정금지(승인필요) 2026-10-04 사장님 결정 = price_eur 줄 = 무료·입장료 없는 곳은 0, 정말 모르면 생략(언어마다 무료 장소에 3·5 를 추측해 평균이 1 이 되는 오염을 원천 차단).
 = ⚠️ 1차 실호출(파리 ko/fr) 실증 후 사장님 발견·수정 2건(2026-08-25):
-  ① c(카테고리)에 우리 PSR enum(heritage|hotspot|attraction|adventure|healing|shopping/restaurant)을
+  ① c(카테고리)에 우리 PSR enum(heritage|photospot|attraction|adventure|healing|shopping/restaurant)을
      안 줘서 제미니가 "Landmark"/"Museum"/"Cathedral" 같은 자기 임의 분류로 응답 = PSR 삽입 불가 → 90번
      원본의 고정 enum 문구를 그대로 복원.
   ② editorial이 우아한 여행기 문장이지 "후킹하는 짧은 카피"가 아니었음(예: "숨막히는 파노라마를 감상하라"
@@ -69,7 +69,7 @@ SELECTION CRITERIA (representativeness — NOT any single platform's review coun
 
 For each place include:
 - rank
-- c (landmarks = heritage|hotspot|attraction|adventure|healing|shopping / restaurants = restaurant.
+- c (landmarks = heritage|photospot|attraction|adventure|healing|shopping / restaurants = restaurant.
   This is a FIXED enum for our database column — pick the closest match, do NOT invent your own
   category word like "Museum"/"Cathedral"/"Monument".)
 - name_en, name_local, name_ko

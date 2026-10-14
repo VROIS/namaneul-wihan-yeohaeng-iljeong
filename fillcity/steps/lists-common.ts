@@ -1,4 +1,4 @@
-// ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 핫스팟 문장 1개를 "photo spots in {도시}"(도심 확대, 사진관·포토부스 쓰레기)에서 100km 전망·사진 포인트(구글 카메라 마커 = Observation deck·Scenic spot·Viewpoint) 문장으로 교체 = 니스 50·까오슝 52 실측, 프랑스어 point de vue 는 까오슝에서 12개라 영어 문장으로 (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 포토스팟 문장 1개를 "photo spots in {도시}"(도심 확대, 사진관·포토부스 쓰레기)에서 100km 전망·사진 포인트(구글 카메라 마커 = Observation deck·Scenic spot·Viewpoint) 문장으로 교체 = 니스 50·까오슝 52 실측, 프랑스어 point de vue 는 까오슝에서 12개라 영어 문장으로 (정본 §)
 
 import fs from "fs";
 import path from "path";
@@ -51,13 +51,13 @@ export const LIST_QUERIES: {
     key: "photospots",
     q: (n) => `viewpoints and observation decks within 100 km of ${n}`,
     view: true,
-    intended: "hotspot",
+    intended: "photospot",
   },
   {
     key: "instagram",
     q: (n) => `instagrammable places in ${n}`,
     view: false,
-    intended: "hotspot",
+    intended: "photospot",
   },
   {
     key: "historic",

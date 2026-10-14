@@ -68,7 +68,7 @@ export type Read = {
   why: string | null;
   imageUrl?: string;
   cat?: string;
-  hotspotTag?: boolean; // 핫스팟이 구글 사실 분류로 바뀌며 태그로 남는 경우
+  photospotTag?: boolean; // 포토스팟이 구글 사실 분류로 바뀌며 태그로 남는 경우
   tier?: "T1" | "T2" | null; // 받은 근거(T1 이름 같음 · T2 이름 달라도 CID·후기·1km·칩 호환)
   rowId?: number; // 창고에 쓴 행 번호(writeRead 가 채운다)
 };
@@ -188,7 +188,7 @@ const KIND_WORD: Record<string, string> = {
   attraction: "tourist attraction",
   adventure: "tourist attraction",
   healing: "park",
-  hotspot: "tourist attraction",
+  photospot: "tourist attraction",
 };
 export const kindWordOf = (cat: string) => KIND_WORD[cat] ?? "";
 export const isLocalityPage = (d: any) =>
@@ -241,7 +241,7 @@ export function gateVerdict(
   const chipCompat =
     !d.category ||
     chipCats.includes(n.cat) ||
-    !resolveCategory(d.category, n.cat).mismatch;
+    !resolveCategory(d.category, n.cat, n.name).mismatch;
   if (
     !isHard(n.cat) &&
     d.mapsUri &&
@@ -258,7 +258,7 @@ const catRank = (n: NewEntry, x: Candidate) => {
   const seg = x.snippet.match(
     /\d\.\d(?:\(\d[\d.,]*\))?\s*(?:·\s*)?(?:[$€£¥₩][^\s·]*\s+)?([^·]+?)\s*·/,
   )?.[1];
-  return resolveCategory(seg, n.cat).mismatch ? 1 : 0;
+  return resolveCategory(seg, n.cat, n.name).mismatch ? 1 : 0;
 };
 export function pickFrom(n: NewEntry, cands: Candidate[]) {
   const withCid = cands.filter((x) => x.cid);
@@ -372,7 +372,7 @@ export async function readOne(
       else if (
         !t.preclean &&
         (!best || isHard(n.cat)) &&
-        resolveCategory(d.category, n.cat).mismatch
+        resolveCategory(d.category, n.cat, n.name).mismatch
       )
         why = `분류불일치:${d.category}`;
       else ({ why, tier } = gateVerdict(n, d, stop));
@@ -386,11 +386,16 @@ export async function readOne(
   }
   if (why && !d && last && why !== LIMITED_WHY && why !== "동의창")
     ({ d, why, picked, q } = last);
-  // ⚠️ 수정금지(승인필요) 2026-10-02 사장님 결정 = 우리 분류 확정 = finalCategory 1벌(구글 최우선 · 장소 아님 = 안 넣음/삭제 · 베스트는 리뷰 수와 상관없이 면제 · 핫스팟은 태그로) (정본 §)
-  const fc = finalCategory(n.cat, d?.category, {
-    reviewCount: d?.reviewCount,
-    best: n.isBest || best,
-  });
+  // ⚠️ 수정금지(승인필요) 2026-10-12 사장님 결정 = 우리 분류 확정 = finalCategory 1벌(구글 최우선 · 장소 아님 = 안 넣음/삭제 · 베스트는 리뷰 수와 상관없이 면제 · 포토스팟은 태그로 · 이름에 식당이 든 와이너리는 식당 유지) (정본 §)
+  const fc = finalCategory(
+    n.cat,
+    d?.category,
+    {
+      reviewCount: d?.reviewCount,
+      best: n.isBest || best,
+    },
+    n.name,
+  );
   const cat = fc.cat;
   if (!why && fc.notPlace) why = `장소아님:${d.category}`;
   if (!why) {
@@ -475,7 +480,7 @@ export async function readOne(
       : null,
     verdict: { 확인: !why, 이유: why },
   });
-  return { n, d, why, imageUrl, cat, hotspotTag: fc.hotspotTag, tier };
+  return { n, d, why, imageUrl, cat, photospotTag: fc.photospotTag, tier };
 }
 
 // ⚠️ 수정금지(승인필요) 2026-09-08 사장님 확정 = 구글맵 열기 = 창 5개 병렬(실측 곳당 6.2초→4.5초, 10개는 8.8초로 느려짐). 창고 쓰기는 뒤에서 한 줄로(트랜잭션 1연결).
@@ -605,7 +610,7 @@ export async function writeRead(
       ...new Set([
         ...categoryTagsOf(cat ?? n.cat, d.category),
         n.cat,
-        ...(r.hotspotTag ? ["hotspot"] : []),
+        ...(r.photospotTag ? ["photospot"] : []),
       ]),
     ],
     phaseTags: [opts.provenanceTag, ...(r.tier === "T2" ? ["accept-t2"] : [])],

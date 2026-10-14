@@ -108,7 +108,7 @@ const CAPABILITIES = [
   // ⚠️ 수정금지(승인필요) 2026-09-30 사장님 결정 = 분류 확정 = finalCategory 1벌(place-category-map) · DB 만 도는 정렬 = category-align.ts
   {
     id: "category-align",
-    ko: "분류 정렬(구글 분류 최우선 · 장소 아님 삭제 · 핫스팟은 태그로 · 새 글자 보고)",
+    ko: "분류 정렬(구글 분류 최우선 · 장소 아님 삭제 · 포토스팟은 태그로 · 새 글자 보고)",
     owners: [
       "worker/lib/services/fill/category-align.ts",
       "worker/lib/services/shared/place-category-map.ts",

@@ -102,7 +102,7 @@ function latestSelect(): string {
       longitude: p.lng,
       googleMapsUri: `https://maps.google.com/?cid=${p.cid}`,
       googleReviewCount: p.rv,
-      categoryTags: p.hotspotTag ? [p.cat, "hotspot"] : [p.cat],
+      categoryTags: p.photospotTag ? [p.cat, "photospot"] : [p.cat],
       phaseTags: [`lists-${today}`],
       distanceKmFromCenter: p.km,
       dayZone: p.km != null ? zoneForDistanceKm(p.km) : null,

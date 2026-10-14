@@ -18,7 +18,7 @@ const CATEGORY_TO_TYPE = {
   heritage: "attraction",
   shopping: "attraction",
   healing: "attraction",
-  hotspot: "attraction",
+  photospot: "attraction",
   adventure: "attraction",
   attraction: "attraction",
 };

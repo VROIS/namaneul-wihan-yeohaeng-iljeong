@@ -135,14 +135,19 @@ if (!cityId) {
   console.log(
     `결손(활성) = 구글사진없음 ${def.no_img} · CID없음 ${def.no_cid} · 구글맵도장없음 ${def.no_stamp} · 같은CID쌍둥이 ${def.twins}`,
   );
-  // ⚠️ 수정금지(승인필요) 2026-09-30 사장님 결정 = 검수에 가격·분류 칸 = 구글 분류 없음(페이지 안 연 행) · 표에 없는 글자 · 장소 아님 남음 · 식당 가격 없음 (정본 §)
+  // ⚠️ 수정금지(승인필요) 2026-10-12 사장님 결정 = 검수에 가격·분류 칸 = 구글 분류 없음(페이지 안 연 행) · 표에 없는 글자 · 장소 아님 남음 · 식당 가격 없음 · 정렬 판정에 이름도 넘김(이름에 식당이 든 와이너리는 식당 유지) (정본 §)
   const { finalCategory } = await import(
     "../worker/lib/services/shared/place-category-map"
   );
-  const labels: { g: string | null; cat: string; n: number }[] = (
+  const labels: {
+    g: string | null;
+    cat: string;
+    nm: string | null;
+    n: number;
+  }[] = (
     await c.query(
-      `SELECT google_primary_type AS g, seed_category AS cat, COUNT(*)::int AS n FROM place_seed_raw
-        WHERE city_id=$1 AND seed_category NOT LIKE 'bts%' AND status='active' GROUP BY 1,2`,
+      `SELECT google_primary_type AS g, seed_category AS cat, name_en AS nm, 1 AS n FROM place_seed_raw
+        WHERE city_id=$1 AND seed_category NOT LIKE 'bts%' AND status='active'`,
       [cityId],
     )
   ).rows;
@@ -156,7 +161,7 @@ if (!cityId) {
       noLabel += r.n;
       continue;
     }
-    const fc = finalCategory(r.cat, r.g);
+    const fc = finalCategory(r.cat, r.g, undefined, r.nm);
     if (fc.notPlace) notPlace += r.n;
     else if (fc.unknownLabel) {
       unknown += r.n;

@@ -6,7 +6,7 @@ import { PACE_SLOT_MINUTES } from "../../../../shared/pace-duration";
 export type Vibe =
   | "Healing"
   | "Adventure"
-  | "Hotspot"
+  | "Photospot"
   | "Foodie"
   | "Shopping"
   | "Culture"
@@ -17,7 +17,7 @@ export type TravelStyle = "Luxury" | "Premium" | "Reasonable" | "Economic";
 export type SeedCategory =
   | "bts_venue"
   | "heritage"
-  | "hotspot"
+  | "photospot"
   | "attraction"
   | "adventure"
   | "healing"
@@ -27,7 +27,7 @@ export type SeedCategory =
 export const SEED_CATEGORIES: ReadonlySet<string> = new Set([
   "bts_venue",
   "heritage",
-  "hotspot",
+  "photospot",
   "attraction",
   "adventure",
   "healing",

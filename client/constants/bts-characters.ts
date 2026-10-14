@@ -40,7 +40,7 @@ export const BTS_CHARACTERS: BTSCharacter[] = [
     nameEn: "Explorer",
     archetype: "미학적 탐험가",
     archetypeEn: "Aesthetic Explorer",
-    tags: ["#Hotspot", "#Trendy", "#Insta"],
+    tags: ["#Photospot", "#Trendy", "#Insta"],
     pace: "Packed",
     emoji: "📸",
     description: "SNS에서 화제인 핫플을 직접 찾아가 발견하는 트렌드세터",

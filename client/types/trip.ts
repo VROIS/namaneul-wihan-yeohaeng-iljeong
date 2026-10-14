@@ -3,7 +3,7 @@
 export type Vibe =
   | "Healing"
   | "Adventure"
-  | "Hotspot"
+  | "Photospot"
   | "Foodie"
   | "Shopping"
   | "Culture"
@@ -214,9 +214,9 @@ export const VIBE_OPTIONS: {
     baseWeight: 10,
   },
   {
-    id: "Hotspot",
-    label: "핫스팟",
-    labelKey: "options.hotspot",
+    id: "Photospot",
+    label: "포토스팟",
+    labelKey: "options.photospot",
     icon: "camera",
     baseWeight: 15,
   },

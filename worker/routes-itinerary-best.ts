@@ -28,8 +28,8 @@ function toMin(t: string): number {
   return h * 60 + (m || 0);
 }
 
-// ⚠️ 수정금지(승인필요) 2026-09-10 사장님 확정 = 채울 갈래 네 개. 7동의는 이 목록과 무관하게 전부 간다.
-const FILL_CATEGORIES = ["heritage", "hotspot", "healing", "attraction"];
+// ⚠️ 수정금지(승인필요) 2026-10-14 사장님 결정 = 분류 이름을 포토스팟으로 바꿈 (정본 §2026-10-14)
+const FILL_CATEGORIES = ["heritage", "photospot", "healing", "attraction"];
 // 채울 재료를 자리의 몇 배로 줄지 = 1km 안에 고를 것이 남게 하는 여유분.
 const FILL_HEADROOM = 3;
 

@@ -1,4 +1,4 @@
-// ⚠️ 수정금지(승인필요) 2026-09-30 사장님 결정 = 분류 정렬 = 구글 분류 글자(google_primary_type)가 이미 있는 행을 페이지 안 열고(0원) finalCategory 1벌로 확정 = 장소 아님 → 삭제(껍데기 0) · 구글이 이김 · 핫스팟은 태그로 · 표에 없는 글자는 산출표 "새 글자"로 (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-10-12 사장님 결정 = 분류 정렬 = 구글 분류 글자(google_primary_type)가 이미 있는 행을 페이지 안 열고(0원) finalCategory 1벌로 확정 = 장소 아님 → 삭제(껍데기 0) · 구글이 이김 · 포토스팟은 태그로 · 이름에 식당이 든 와이너리는 식당 유지 · 표에 없는 글자는 산출표 "새 글자"로 (정본 §)
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -60,10 +60,15 @@ const TAG = `category-align-${new Date().toISOString().slice(0, 10)}`;
   const deleted: any[] = [];
   const unknown = new Map<string, number>();
   for (const r of rows) {
-    const fc = finalCategory(r.seed_category, r.google_primary_type, {
-      reviewCount: (r as any).rc,
-      best: (r as any).best,
-    });
+    const fc = finalCategory(
+      r.seed_category,
+      r.google_primary_type,
+      {
+        reviewCount: (r as any).rc,
+        best: (r as any).best,
+      },
+      r.name_en,
+    );
     if (fc.notPlace) {
       deleted.push({
         id: r.id,
@@ -87,7 +92,7 @@ const TAG = `category-align-${new Date().toISOString().slice(0, 10)}`;
         label: r.google_primary_type,
         from: r.seed_category,
         to: fc.cat,
-        hotspotTag: fc.hotspotTag,
+        photospotTag: fc.photospotTag,
       });
   }
   console.log(
@@ -97,7 +102,7 @@ const TAG = `category-align-${new Date().toISOString().slice(0, 10)}`;
     console.log(`  🗑 #${d.id} ${d.name} (${d.label}, ${d.was})`);
   for (const x of changed)
     console.log(
-      `  ✎ #${x.id} ${x.name} ${x.from} → ${x.to} (${x.label})${x.hotspotTag ? " +핫스팟 태그" : ""}`,
+      `  ✎ #${x.id} ${x.name} ${x.from} → ${x.to} (${x.label})${x.photospotTag ? " +포토스팟 태그" : ""}`,
     );
   for (const [g, n] of [...unknown].sort((a, b) => b[1] - a[1]))
     console.log(`  ? 표에 없음 ${n}행: ${g}`);
@@ -111,7 +116,7 @@ const TAG = `category-align-${new Date().toISOString().slice(0, 10)}`;
         seedCategory: x.to,
         overwriteSeedCategory: true,
         nameEn: x.name,
-        categoryTags: x.hotspotTag ? ["hotspot"] : undefined,
+        categoryTags: x.photospotTag ? ["photospot"] : undefined,
         phaseTags: [TAG],
       });
       if (r.action !== "updated")

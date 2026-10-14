@@ -14,7 +14,7 @@ export const CHARACTER_PRIMARY_CATEGORY: Record<
   string
 > = {
   collector: "heritage",
-  romanticist: "hotspot",
+  romanticist: "photospot",
   explorer: "attraction",
   challenger: "adventure",
   recharger: "healing",
@@ -23,7 +23,7 @@ export const CHARACTER_PRIMARY_CATEGORY: Record<
 
 export const COMPANION_VIBE_CATEGORIES = [
   "heritage",
-  "hotspot",
+  "photospot",
   "attraction",
   "healing",
   "shopping",

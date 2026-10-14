@@ -16,7 +16,7 @@ const SIGHTS = [
   "attraction",
   "adventure",
   "healing",
-  "hotspot",
+  "photospot",
   "shopping",
 ];
 
@@ -114,7 +114,7 @@ function latestLists(): Map<string, { file: string; json: any }> {
     rv: number;
     label: string | null;
     srcs: string[];
-    hotspotTag: boolean;
+    photospotTag: boolean;
     unknownLabel: boolean;
     km: number | null;
     inWarehouse: boolean;
@@ -131,7 +131,13 @@ function latestLists(): Map<string, { file: string; json: any }> {
     }
     let best: any = null;
     for (const s of it.srcs) {
-      const fc = finalCategory(s.intended, it.label, { reviewCount: it.rv });
+      // ⚠️ 수정금지(승인필요) 2026-10-12 사장님 결정 = 분류 확정에 이름도 넘긴다 = 이름에 식당이 든 와이너리는 식당 유지 (정본 §)
+      const fc = finalCategory(
+        s.intended,
+        it.label,
+        { reviewCount: it.rv },
+        it.name,
+      );
       if (!best || (best.changed && !fc.changed)) best = fc;
     }
     if (best.notPlace) {
@@ -147,7 +153,7 @@ function latestLists(): Map<string, { file: string; json: any }> {
       rv: it.rv ?? 0,
       label: it.label ?? null,
       srcs: it.srcs.map((s: any) => s.key),
-      hotspotTag: !!best.hotspotTag,
+      photospotTag: !!best.photospotTag,
       unknownLabel: !!best.unknownLabel,
       km: km == null ? null : Math.round(km * 10) / 10,
       inWarehouse: whCid.has(it.cid),
@@ -214,7 +220,7 @@ function latestLists(): Map<string, { file: string; json: any }> {
     );
   const unknown = picks.filter((p) => p.unknownLabel);
   console.log(
-    `\n뽑은 ${picks.length}곳 중 표에 없는 라벨(페이지 열 때 판정) ${unknown.length}곳 · 핫스팟 태그 ${picks.filter((p) => p.hotspotTag).length}곳`,
+    `\n뽑은 ${picks.length}곳 중 표에 없는 라벨(페이지 열 때 판정) ${unknown.length}곳 · 포토스팟 태그 ${picks.filter((p) => p.photospotTag).length}곳`,
   );
   console.log(`보고서 = ${out}`);
 })().catch((e) => {

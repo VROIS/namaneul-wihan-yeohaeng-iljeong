@@ -17,7 +17,7 @@ argument-hint: <도시명> <카테고리>
 
 ### 1단계 — 입력 파싱
 - $ARGUMENTS 에서 도시명 (영문) 과 카테고리 추출
-- 카테고리 화이트리스트: `attraction`, `restaurant`, `healing`, `adventure`, `hotspot`, `heritage`, `shopping`
+- 카테고리 화이트리스트: `attraction`, `restaurant`, `healing`, `adventure`, `photospot`, `heritage`, `shopping`
 - 카테고리가 화이트리스트에 없으면 = 즉시 거부 + 사용자에게 알림
 
 ### 2단계 — DB 검증 (Supabase MCP `execute_sql`)
@@ -246,7 +246,7 @@ AI: [7 sub-agent (Sonnet) 동시 호출 = 단일 메시지에 7 Agent tool calls
    - sub-agent 2: restaurant (Google Search 7 쿼리)
    - sub-agent 3: healing (Google Search 7 쿼리)
    - sub-agent 4: adventure (Google Search 7 쿼리)
-   - sub-agent 5: hotspot (Google Search 7 쿼리)
+   - sub-agent 5: photospot (Google Search 7 쿼리)
    - sub-agent 6: heritage (Google Search 7 쿼리)
    - sub-agent 7: shopping (Google Search 7 쿼리)
    소요 약 6 분 (병렬, 순차 42 분 대비 7배)

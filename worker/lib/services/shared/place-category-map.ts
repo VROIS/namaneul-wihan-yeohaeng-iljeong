@@ -16,12 +16,12 @@ export const TYPE_TO_CATEGORIES: Record<string, string[]> = {
   synagogue: ["heritage"],
   archaeological_site: ["heritage"],
   cultural_center: ["heritage"],
-  observation_deck: ["hotspot"],
-  viewpoint: ["hotspot"],
-  scenic_overlook: ["hotspot"],
-  cultural_landmark: ["hotspot"],
-  plaza: ["hotspot"],
-  monument: ["heritage", "hotspot"],
+  observation_deck: ["photospot"],
+  viewpoint: ["photospot"],
+  scenic_overlook: ["photospot"],
+  cultural_landmark: ["photospot"],
+  plaza: ["photospot"],
+  monument: ["heritage", "photospot"],
   tourist_attraction: ["attraction"],
   zoo: ["attraction"],
   aquarium: ["attraction"],
@@ -62,7 +62,7 @@ export const TYPE_TO_CATEGORIES: Record<string, string[]> = {
   food: ["restaurant"],
   meal_takeaway: ["restaurant"],
   meal_delivery: ["restaurant"],
-  // ⚠️ 수정금지(승인필요) 2026-09-30 사장님 결정 = 구글 분류가 최우선 = 창고에 실제로 나온 글자를 표에 더한다(13도시 실측 = 표에 없던 703행). 식당 동의어 · 사진 찍기 좋은 곳(핫스팟) · 공연장·경기장(즐길거리) · 미술관(유적) · 아울렛(쇼핑) (정본 §)
+  // ⚠️ 수정금지(승인필요) 2026-09-30 사장님 결정 = 구글 분류가 최우선 = 창고에 실제로 나온 글자를 표에 더한다(13도시 실측 = 표에 없던 703행). 식당 동의어 · 사진 찍기 좋은 곳(포토스팟) · 공연장·경기장(즐길거리) · 미술관(유적) · 아울렛(쇼핑) (정본 §)
   pub: ["restaurant"],
   irish_pub: ["restaurant"],
   gastropub: ["restaurant"],
@@ -81,17 +81,18 @@ export const TYPE_TO_CATEGORIES: Record<string, string[]> = {
   noodle_shop: ["restaurant"],
   pastry_shop: ["restaurant"],
   frituur: ["restaurant"],
-  winery: ["restaurant"],
+  // ⚠️ 수정금지(승인필요) 2026-10-12 사장님 결정 = 와이너리·샴페인 하우스는 시음·견학 체험이라 즐길거리 · 도심 와인 바는 식당 · 포도밭은 힐링 · 와인 가게는 쇼핑 · 이름에 식당이 든 와이너리는 식당 주분류에 즐길거리 태그 (정본 §2026-10-12)
+  winery: ["attraction"],
   beer_garden: ["restaurant"],
   wine_bar: ["restaurant"],
   cocktail_bar: ["restaurant"],
   tea_house: ["restaurant"],
-  scenic_spot: ["hotspot"],
-  mountain_peak: ["hotspot"],
-  bridge: ["hotspot"],
-  lake: ["hotspot", "healing"],
-  landmark: ["hotspot"],
-  street: ["hotspot"],
+  scenic_spot: ["photospot"],
+  mountain_peak: ["photospot"],
+  bridge: ["photospot"],
+  lake: ["photospot", "healing"],
+  landmark: ["photospot"],
+  street: ["photospot"],
   stadium: ["attraction"],
   arena: ["attraction"],
   event_venue: ["attraction"],
@@ -111,7 +112,7 @@ export const TYPE_TO_CATEGORIES: Record<string, string[]> = {
   grocery_store: ["shopping"],
   butcher_shop: ["shopping"],
   arboretum: ["healing"],
-  fountain: ["hotspot"],
+  fountain: ["photospot"],
   handicraft_fair: ["shopping"],
   vineyard: ["healing"],
   house_of_worship: ["heritage"],
@@ -172,13 +173,11 @@ const NOT_PLACE: ReadonlySet<string> = new Set([
   "convention_center",
   "arts_organization",
 ]);
-// 핫스팟(사진 찍기 좋은 곳)이 그대로 있어도 되는 구글 사실 분류 = 전망대·경치·다리·관광명소·공원·바·카페·쇼핑몰(13도시 핫스팟 행의 구글 분류 실측)
-const HOTSPOT_OK: ReadonlySet<string> = new Set([
-  "hotspot",
+const PHOTOSPOT_OK: ReadonlySet<string> = new Set([
+  "photospot",
   "attraction",
   "healing",
 ]);
-const HOTSPOT_OK_LABELS = ["bar", "cafe", "shopping_mall", "rooftop"];
 
 const KEYS = Object.keys(TYPE_TO_CATEGORIES).sort(
   (a, b) => b.length - a.length,
@@ -206,13 +205,20 @@ const hasWord = (label: string | null | undefined, words: Iterable<string>) => {
 };
 export const isNotPlace = (label: string | null | undefined): boolean =>
   hasWord(label, NOT_PLACE);
+// ⚠️ 수정금지(승인필요) 2026-10-12 사장님 결정 = 이름에 식당이 든 와이너리는 식당 주분류를 유지한다(표는 구글 분류 글자만 보므로 이름을 함께 본다) (정본 §2026-10-12)
+const RESTAURANT_NAME = /restaurant|restaurante|ristorante|레스토랑|식당/i;
+const restaurantWinery = (
+  label: string | null | undefined,
+  name: string | null | undefined,
+): boolean =>
+  hasWord(label, ["winery"]) && !!name && RESTAURANT_NAME.test(name);
 
-// \u26a0\ufe0f \uc218\uc815\uae08\uc9c0(\uc2b9\uc778\ud544\uc694) 2026-09-30 \uc0ac\uc7a5\ub2d8 \uacb0\uc815 = \ud398\uc774\uc9c0\ub97c \uc5f0 \ub4a4 \uc6b0\ub9ac \ubd84\ub958 \ud655\uc815 1\ubc8c = \uc7a5\uc18c \uc544\ub2d8 \u2192 \uc0ad\uc81c \u00b7 \uc2dd\ub2f9\u00b7\uc1fc\ud551 \u2192 \uad6c\uae00\uc774 \uc774\uae40 \u00b7 \uc720\uc801\u00b7\ud790\ub9c1\u00b7\ubaa8\ud5d8\u00b7\uc990\uae38\uac70\ub9ac\ub3c4 \uad6c\uae00\uc774 \uc774\uae40 \u00b7 \ud56b\uc2a4\ud31f(\uc0ac\uc9c4 \ucc0d\uae30 \uc88b\uc740 \uacf3)\uc740 \uad6c\uae00 \uc0ac\uc2e4 \ubd84\ub958\uac00 \uc804\ub9dd\ub300\u00b7\uba85\uc18c\u00b7\uacf5\uc6d0\u00b7\ubc14\u00b7\uce74\ud398\u00b7\uc1fc\ud551\ubab0\uc774\uba74 \uc720\uc9c0, \uc544\ub2c8\uba74 \uc0ac\uc2e4 \ubd84\ub958\ub85c \ubc14\uafb8\uace0 \ud56b\uc2a4\ud31f\uc740 \ud0dc\uadf8\ub85c \u00b7 \ud45c\uc5d0 \uc5c6\ub294 \uae00\uc790 = \uc6b0\ub9ac \ubd84\ub958 \uc720\uc9c0 + "\uc0c8 \uae00\uc790"\ub85c \ubcf4\uace0 (\uc815\ubcf8 \u00a7)
+// ⚠️ 수정금지(승인필요) 2026-10-13 사장님 결정 = 페이지를 연 뒤 우리 분류 확정 1벌 = 장소 아님 → 삭제 · 식당·쇼핑 → 구글이 이김 · 유적·힐링·모험·즐길거리도 구글이 이김 · 포토스팟은 구글 사실 분류가 전망대·명소·공원이면 유지, 바·카페·식당 같은 가게면 식당이 대표이고 포토스팟은 태그로, 그 밖은 사실 분류로 바꾸고 포토스팟은 태그로 · 표에 없는 글자 = 우리 분류 유지 + "새 글자"로 보고 (정본 §2026-10-12)
 export type FinalCategory = {
   cat: string;
   notPlace: boolean;
   unknownLabel: boolean;
-  hotspotTag: boolean;
+  photospotTag: boolean;
   changed: boolean;
 };
 // 장소 아님 글자라도 베스트이거나 리뷰가 이만큼이면 랜드마크다(보고타 Colpatria Tower = "Corporate office", 리뷰 6,971 실측) = 지우지 않고 "확인 필요"로 남긴다
@@ -221,12 +227,13 @@ export function finalCategory(
   ourCat: string,
   pageLabel: string | null | undefined,
   pop?: { reviewCount?: number | null; best?: boolean },
+  name?: string | null,
 ): FinalCategory {
   const base: FinalCategory = {
     cat: ourCat,
     notPlace: false,
     unknownLabel: false,
-    hotspotTag: false,
+    photospotTag: false,
     changed: false,
   };
   if (!pageLabel) return base;
@@ -239,13 +246,10 @@ export function finalCategory(
   const cats = categoriesOfLabel(pageLabel);
   if (!cats.length) return { ...base, unknownLabel: true };
   if (cats.includes(ourCat)) return base;
-  if (ourCat === "hotspot") {
-    if (
-      cats.some((c) => HOTSPOT_OK.has(c)) ||
-      hasWord(pageLabel, HOTSPOT_OK_LABELS)
-    )
-      return base;
-    return { ...base, cat: cats[0], hotspotTag: true, changed: true };
+  if (ourCat === "restaurant" && restaurantWinery(pageLabel, name)) return base;
+  if (ourCat === "photospot") {
+    if (cats.some((c) => PHOTOSPOT_OK.has(c))) return base;
+    return { ...base, cat: cats[0], photospotTag: true, changed: true };
   }
   return { ...base, cat: cats[0], changed: true };
 }
@@ -256,14 +260,17 @@ export const categoryTagsOf = (
   pageLabel: string | null | undefined,
 ): string[] => [...new Set([primary, ...categoriesOfLabel(pageLabel)])];
 
-// ⚠️ 수정금지(승인필요) 2026-09-08 사장님 확정 = 식당·쇼핑은 페이지 분류로 확실히 판별 = 한쪽이 식당/쇼핑인데 서로 다르면 다른 곳(mismatch). 그 밖의 차이는 페이지 분류가 이김(제미니 분류 덮음). 표에 없으면 제미니 분류 그대로.
+// ⚠️ 수정금지(승인필요) 2026-10-12 사장님 결정 = 식당·쇼핑은 페이지 분류로 확실히 판별 = 한쪽이 식당/쇼핑인데 서로 다르면 다른 곳(mismatch), 이름에 식당이 든 와이너리는 식당으로 본다. 그 밖의 차이는 페이지 분류가 이김(제미니 분류 덮음). 표에 없으면 제미니 분류 그대로. (정본 §)
 const HARD = new Set(["restaurant", "shopping"]);
 export function resolveCategory(
   pageLabel: string | null | undefined,
   geminiCat: string,
+  name?: string | null,
 ): { cat: string; mismatch: boolean } {
   const cats = categoriesOfLabel(pageLabel);
   if (!cats.length || cats.includes(geminiCat))
+    return { cat: geminiCat, mismatch: false };
+  if (geminiCat === "restaurant" && restaurantWinery(pageLabel, name))
     return { cat: geminiCat, mismatch: false };
   const pageCat = cats[0];
   if (HARD.has(geminiCat) || HARD.has(pageCat))

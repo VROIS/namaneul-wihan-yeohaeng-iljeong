@@ -44,7 +44,7 @@ export const placeSeedRaw = pgTable("place_seed_raw", {
   cityId: integer("city_id")
     .notNull()
     .references(() => cities.id, { onDelete: "cascade" }),
-  seedCategory: text("seed_category").notNull(), // attraction|restaurant|healing|adventure|hotspot
+  seedCategory: text("seed_category").notNull(), // attraction|restaurant|healing|adventure|photospot
   // ⚠️ 개정헌법 2026-07-07 사장님 = rank nullable §19(DB↔레포 동기화). 코드는 랭킹 안 넣음 = 신규는 rank NULL 로 INSERT → AFTER autorank 트리거가 RC순 확정.
   rank: integer("rank"),
   // ⚠️ 수정금지(승인필요) 2026-06-11 = 헛바퀴 9컬럼 DROP (원재료 소진 = 미사용 = FE 재구성 예정)
@@ -70,10 +70,9 @@ export const placeSeedRaw = pgTable("place_seed_raw", {
   openingHours: jsonb("opening_hours").$type<Record<string, string>>(),
   editorialSummary: text("editorial_summary"),
   nameLocal: text("name_local"),
-  // ⚠️ 수정금지(승인필요) 2026-06-11 = names_i18n(고유명사 번역 무의미) / instagram·tiktok_post_url(인스타 가짜 폐기) DROP = 헛바퀴
-  // ⚠️ 수정금지(승인필요) — 2026-04-30: multi-tag SSOT (1 장소 = N 카테고리)
+  // ⚠️ 수정금지(승인필요) 2026-10-14 사장님 결정 = 분류 이름을 포토스팟으로 바꿈 (정본 §2026-10-14)
   phaseTags: text("phase_tags").array(), // ['bts2026'] 등 수집 phase 태그
-  categoryTags: text("category_tags").array(), // ['heritage','hotspot','attraction'] 등 다중 카테고리 태그
+  categoryTags: text("category_tags").array(), // ['heritage','photospot','attraction'] 등 다중 카테고리 태그
   imageAttribution: text("image_attribution"), // "Photo via Google Places (placeId)"
   imageUpdatedAt: timestamp("image_updated_at"),
   createdAt: timestamp("created_at")

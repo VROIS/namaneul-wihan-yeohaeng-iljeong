@@ -54,8 +54,8 @@ export interface GeminiPlace {
   nameLocal?: string; // 현지 원어명 (예: "Tour Eiffel", "Colosseo")
   address?: string; // ⚠️ 2026-05-14 v3 = AG3 통합 매칭 1 순위 (= 행정주소)
   type: "activity" | "lunch" | "dinner" | "cafe";
-  // 🧠 2026-07-05 사장님 SSOT = Gemini 응답 전체 새덮어쓰기(§20 셀렉금지). 프롬프트가 이미 요구하는 값을 버리지 말고 살림(실호출 4/4 확인).
-  seed_category?: string; // heritage/healing/hotspot/adventure/shopping/attraction/restaurant
+  // ⚠️ 수정금지(승인필요) 2026-10-14 사장님 결정 = 분류 이름을 포토스팟으로 바꿈 (정본 §2026-10-14)
+  seed_category?: string; // heritage/healing/photospot/adventure/shopping/attraction/restaurant
   latitude?: number;
   longitude?: number;
   distance_km_from_center?: number;

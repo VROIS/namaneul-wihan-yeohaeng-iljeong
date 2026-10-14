@@ -189,7 +189,7 @@ export const BTSSizes = {
 export const MemberVibeColors: Record<string, string> = {
   rm: "#0D7377", // 딥 틸 — 문화/예술
   v: "#C74B7A", // 로즈 — 로맨틱
-  jhope: "#E8720C", // 브라이트 오렌지 — 핫스팟
+  jhope: "#E8720C", // 브라이트 오렌지 — 포토스팟
   jungkook: "#2563EB", // 일렉트릭 블루 — 모험
   jimin: "#6B9E78", // 세이지 그린 — 힐링
   jin: "#D97706", // 웜 앰버 — 미식

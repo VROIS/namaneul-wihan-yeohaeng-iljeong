@@ -105,7 +105,7 @@ ${dayRequirements}
 
 [CATEGORY MATRIX — 전체 여정 카테고리별 곳수 (= 사용자 vibe 반영, 이 비율을 목표로 하되 시간이 부족하면 곳수를 줄인다)]
 ${categoryMatrix}
-- 각 place 의 c(카테고리)는 위 카테고리 중 하나로 정확히 지정 (heritage=문화/유산, healing=힐링/자연, hotspot=핫플, adventure=모험/액티비티, shopping=쇼핑, attraction=즐길거리/체험, restaurant=식당).
+- 각 place 의 c(카테고리)는 위 카테고리 중 하나로 정확히 지정 (heritage=문화/유산, healing=힐링/자연, photospot=포토스팟(사진 찍기 좋은 곳·전망 좋은 곳), adventure=모험/액티비티, shopping=쇼핑, attraction=즐길거리/체험, restaurant=식당).
 - 식사(lunch/dinner) = c="restaurant".
 
 [동선 원칙]
@@ -131,7 +131,7 @@ For each place include (= ALL fields verified via Google Search grounding, 키�
 - l (local language name = 예: 파리=Tour Eiffel) [= REQUIRED for ALL places INCLUDING restaurants (식당도 반드시). If the restaurant's official name is already in the local language (예: "Le Comptoir du Marché"), copy that same name into l — never leave l empty. = Text Search forwarding + matching key, final DB column]
 - a (FULL street address with NUMBER + street + postal code + city) [= REQUIRED for Text Search forwarding + matching key, final DB column — verify via Google Search]
 - t ("activity" | "lunch" | "dinner")
-- c (= 위 CATEGORY MATRIX 중 하나 = heritage|healing|hotspot|adventure|shopping|attraction|restaurant. 식사=restaurant) [= final DB column, 카테고리 보존 필수]
+- c (= 위 CATEGORY MATRIX 중 하나 = heritage|healing|photospot|adventure|shopping|attraction|restaurant. 식사=restaurant) [= final DB column, 카테고리 보존 필수]
 - y (latitude = decimal 6 digits, e.g. 48.858370) [= REQUIRED for Text Search forwarding + matching key, final DB column — verify via Google Search, NO hallucination]
 - x (longitude = decimal 6 digits, e.g. 2.294481) [= 위 y 와 동일 요건]
 - p (1 인 EUR)

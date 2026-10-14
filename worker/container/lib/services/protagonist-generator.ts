@@ -8,7 +8,7 @@ type CompanionType =
 type Vibe =
   | "Healing"
   | "Adventure"
-  | "Hotspot"
+  | "Photospot"
   | "Foodie"
   | "Shopping"
   | "Culture";
@@ -40,7 +40,7 @@ const COMPANION_LABELS: Record<CompanionType, string> = {
 const VIBE_LABELS: Record<Vibe, string> = {
   Healing: "힐링",
   Adventure: "모험",
-  Hotspot: "핫스팟",
+  Photospot: "포토스팟",
   Foodie: "미식",
   Shopping: "쇼핑",
   Culture: "문화/예술",

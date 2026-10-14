@@ -18,7 +18,7 @@ const CATEGORY_KO: Record<string, string> = {
   attraction: "즐길거리",
   healing: "휴식·자연",
   adventure: "체험·모험",
-  hotspot: "인기 명소",
+  photospot: "포토스팟",
   shopping: "쇼핑",
   restaurant: "식당",
   bts_venue: "공연장",

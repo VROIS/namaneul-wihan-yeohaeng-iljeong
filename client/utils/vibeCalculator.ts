@@ -4,7 +4,7 @@ import i18n from "@/lib/i18n";
 const BASE_WEIGHTS: Record<Vibe, number> = {
   Healing: 35,
   Foodie: 25,
-  Hotspot: 15,
+  Photospot: 15,
   Culture: 10,
   Adventure: 10,
   Shopping: 5,
@@ -75,7 +75,7 @@ export function getPreferredTimeSlots(
   > = {
     Healing: ["morning", "afternoon"],
     Foodie: ["lunch", "evening"],
-    Hotspot: ["afternoon"],
+    Photospot: ["afternoon"],
     Culture: ["morning", "afternoon"],
     Adventure: ["morning", "afternoon"],
     Shopping: ["afternoon", "evening"],
