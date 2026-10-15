@@ -32,8 +32,8 @@ const INSTRUCTION = path.join(
     process.exit(1);
   }
   const s = JSON.parse(fs.readFileSync(inputFile, "utf-8")).sections;
-  const total =
-    s.undecided.length + s.nonPlace.length + s.dup.length + s.hotel.length;
+  // ⚠️ 수정금지(승인필요) 2026-10-15 사장님 결정 = 명단 구역 = 표가 못 정하는 행·장소 아님 남음·호텔 페이지 3개(같은 장소 쌍 없음 = CID 가 다르면 다른 장소) (정본 §)
+  const total = s.undecided.length + s.nonPlace.length + s.hotel.length;
   if (!total) {
     console.log(`═══ 에이전트 실행 city ${cityId} = 명단 0건 = 건너뜀 ═══`);
     process.exit(0);

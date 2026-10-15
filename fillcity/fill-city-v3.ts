@@ -392,7 +392,7 @@ async function trackB() {
     ]),
   );
 
-  // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = ⑤ 읽은 뒤 = 탐지 → 에이전트(분류·호텔·삭제·병합·제미니 호출 명단, 판정 = 적용) → 제미니 호출(🔴 호출 = --gemini-fill=true 일 때만) · 이어 돌기 장부 단계 (정본 §)
+  // ⚠️ 수정금지(승인필요) 2026-10-15 사장님 결정 = ⑤ 읽은 뒤 = 탐지 → 에이전트(분류·호텔·삭제·제미니 호출 명단, 판정 = 적용 · 같은 장소 병합 없음 = CID 가 다르면 다른 장소) → 제미니 호출(🔴 호출 = --gemini-fill=true 일 때만) · 이어 돌기 장부 단계 (정본 §)
   await step("scan", () =>
     run("⑤ 읽은 뒤 탐지", "fillcity/steps/post-read-scan.ts", [
       `--city-id=${cityId}`,
@@ -445,13 +445,6 @@ async function trackB() {
         (await run(
           "⑤ 에이전트 판정 적용(분류·호텔·삭제)",
           "fillcity/steps/llm-review.ts",
-          [`--city-id=${cityId}`, `--apply=${f}`],
-        )) && ok;
-    for (const f of pick("dup-apply", /-dup\.json$/))
-      ok =
-        (await run(
-          "⑤ 에이전트 판정 적용(같은 장소 병합)",
-          "fillcity/steps/dup-merge.ts",
           [`--city-id=${cityId}`, `--apply=${f}`],
         )) && ok;
     return ok;

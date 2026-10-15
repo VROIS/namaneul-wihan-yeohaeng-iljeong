@@ -1,4 +1,4 @@
-// ⚠️ 수정금지(승인필요) 2026-10-01 사장님 결정 = 필시티 에이전트 명단 내보내기 = 표가 못 정하는 행·장소 아님 남음·같은 장소 쌍·호텔 페이지를 한 파일로 모으고 고정 지시문(04-classify-agent)과 조 나누기·적용 명령을 알려 준다(DB 쓰기 없음) (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-10-15 사장님 결정 = 필시티 에이전트 명단 내보내기 = 표가 못 정하는 행·장소 아님 남음·호텔 페이지를 한 파일로 모으고(CID 가 다르면 다른 장소 = 같은 장소 쌍 없음) 고정 지시문(04-classify-agent)과 조 나누기·적용 명령을 알려 준다(DB 쓰기 없음) (정본 §)
 import fs from "fs";
 import path from "path";
 import {
@@ -31,7 +31,6 @@ const cityId = Number(argv["city-id"] || 0);
   const ids: number[] = [
     ...scan.undecided.map((x: any) => x.id),
     ...scan.notPlace.map((x: any) => x.id),
-    ...scan.dup.flatMap((d: any) => [d.a.id, d.b.id]),
     ...scan.hotelPages.map((x: any) => x.id),
   ];
   const uniq = [...new Set(ids)];
@@ -60,13 +59,6 @@ const cityId = Number(argv["city-id"] || 0);
         .map((x: any) => full(x.id)),
     ),
     nonPlace: numbered(scan.notPlace.map((x: any) => full(x.id))),
-    dup: numbered(
-      scan.dup.map((d: any) => ({
-        meters: d.meters,
-        a: full(d.a.id),
-        b: full(d.b.id),
-      })),
-    ),
     hotel: numbered(
       scan.hotelPages.map((x: any) => ({
         ...full(x.id),
@@ -75,10 +67,7 @@ const cityId = Number(argv["city-id"] || 0);
     ),
   };
   const total =
-    rows.undecided.length +
-    rows.nonPlace.length +
-    rows.dup.length +
-    rows.hotel.length;
+    rows.undecided.length + rows.nonPlace.length + rows.hotel.length;
   const file = path.join(reportDir(cityId), `${stamp()}_agent-input.json`);
   fs.writeFileSync(
     file,
@@ -95,7 +84,7 @@ const cityId = Number(argv["city-id"] || 0);
   );
   const agents = Math.min(AGENT_WORKERS, total);
   console.log(
-    `═══ 에이전트 명단 city ${cityId} = 표가 못 정하는 행 ${rows.undecided.length} · 장소 아님 남음 ${rows.nonPlace.length} · 같은 장소 쌍 ${rows.dup.length} · 호텔 페이지 ${rows.hotel.length} = 합 ${total}건 → 에이전트 ${agents}명(${AGENT_WORKERS}명 고정 균등) → ${path.relative(ROOT, file)} ═══`,
+    `═══ 에이전트 명단 city ${cityId} = 표가 못 정하는 행 ${rows.undecided.length} · 장소 아님 남음 ${rows.nonPlace.length} · 호텔 페이지 ${rows.hotel.length} = 합 ${total}건 → 에이전트 ${agents}명(${AGENT_WORKERS}명 고정 균등) → ${path.relative(ROOT, file)} ═══`,
   );
   await c.end();
   process.exit(0);

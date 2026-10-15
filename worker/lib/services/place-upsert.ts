@@ -251,18 +251,37 @@ async function activeKeeperOf(id: number): Promise<number | null> {
   return cur;
 }
 
-// ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 지우기 전에 그 행이 가진 것(번역·동의 등급·가리키는 곳·가격)을 남는 행으로 먼저 옮긴다 = 가격은 남는 행이 비었거나 진 행만 구글 페이지를 읽었을 때 옮긴다 (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-10-15 사장님 결정 = 합침 허용 판정 1벌 = CID 가 같을 때만 허용(사진은 그 CID 페이지에서 잘라 온 것 = CID 가 다르면 다른 장소) · CID·사진이 없는 껍데기 진 행은 허용 · 원행에 CID 가 없으면 불허 (정본 §)
+export async function absorbAllowed(
+  loserId: number,
+  keepId: number,
+): Promise<{ ok: boolean; why: string }> {
+  if (!db) return { ok: false, why: "db_unavailable" };
+  const rows: any[] =
+    (
+      await db.execute(
+        sql`SELECT id, google_maps_uri, image_url FROM place_seed_raw WHERE id IN (${loserId}, ${keepId})`,
+      )
+    ).rows ?? [];
+  const cidOf = (r: any): string | null =>
+    String(r?.google_maps_uri ?? "").match(/cid=(\d+)/)?.[1] ?? null;
+  const lose = rows.find((r) => Number(r.id) === loserId);
+  const keep = rows.find((r) => Number(r.id) === keepId);
+  const loseCid = cidOf(lose);
+  const keepCid = cidOf(keep);
+  if (!loseCid && !lose?.image_url)
+    return { ok: true, why: "껍데기 = CID·사진 없음" };
+  if (!keepCid) return { ok: false, why: "원행에 CID 없음" };
+  if (loseCid === keepCid) return { ok: true, why: "같은 CID" };
+  return { ok: false, why: "다른 CID = 다른 장소" };
+}
+
+// ⚠️ 수정금지(승인필요) 2026-10-15 사장님 결정 = 지우기 전에 진 행의 동의 등급·가리키는 곳·가격을 남는 행으로 먼저 옮기고 번역은 옮기지 않는다(원행의 사진·요약·묘사·번역이 한 짝) = 가격은 남는 행이 비었거나 진 행만 구글 페이지를 읽었을 때 옮긴다 (정본 §)
 async function moveBelongingsTo(keepId: number, loserId: number) {
   if (!db) return;
   const { bestRankUnion } = await import("./shared/best-rank");
   await db.transaction(async (tx) => {
     await tx.execute(sql`SELECT set_config('app.skip_dup_check', 'on', true)`);
-    await tx.execute(
-      sql`INSERT INTO place_translations (place_id, language, summary, editorial_summary)
-        SELECT ${keepId}, language, summary, editorial_summary
-          FROM place_translations WHERE place_id = ${loserId}
-        ON CONFLICT (place_id, language) DO NOTHING`,
-    );
     const lose: any = (
       await tx.execute(
         sql`SELECT best_rank FROM place_seed_raw WHERE id = ${loserId}`,
@@ -416,13 +435,25 @@ export async function upsertPlace(p: UpsertPayload): Promise<UpsertResult> {
               return r;
             });
           } else {
+            // ⚠️ 수정금지(승인필요) 2026-10-15 사장님 결정 = CID 가 같은 행끼리만 합친다(다르면 다른 장소라 합치지 않고 둘 다 남김) · 합치면 진 행 파일은 지우고 원행 사진 한 장만 남긴다 (정본 §)
+            const gate = await absorbAllowed(p.targetRowId, dupId);
+            if (!gate.ok) {
+              console.log(
+                `[UPSERT] ⏸ 합침 안 함 = #${p.targetRowId} ↔ #${dupId} (${gate.why}) = 둘 다 남김`,
+              );
+              return {
+                action: "skipped",
+                rowId: null,
+                matchedBy: "none",
+                reason: `absorb_refused: ${gate.why}`,
+              };
+            }
             const absorbed = await upsertPlace({
               ...p,
               targetRowId: dupId,
               followTriggerDup: true,
               dupCheckOnWrite: false,
             });
-            // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 흡수되면 진 행은 껍데기든 원래 있던 행이든 가진 것(번역·등급·여정 연결)을 원행으로 옮긴 뒤 **삭제**한다. 옛 "원래 있던 행은 merged 표시로 남김(삭제 0)" 폐기 §19 = 남은 유령이 검문에 지목돼 원행까지 병합되는 오염의 근원.
             await moveBelongingsTo(dupId, p.targetRowId);
             await deletePlaceRow(p.targetRowId, {
               keepImageUrl: absorbed.enriched?.imageUrl ?? null,

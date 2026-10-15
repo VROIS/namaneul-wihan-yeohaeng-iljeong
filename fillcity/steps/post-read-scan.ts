@@ -1,4 +1,4 @@
-// ⚠️ 수정금지(승인필요) 2026-10-01 사장님 결정 = 필시티 읽은 뒤 탐지 = 구글맵 로그와 DB 로 장소 아님 남음·같은 장소 두 행·호텔 페이지·표가 못 정하는 행을 목록으로 뽑는다(DB 쓰기 없음) (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-10-15 사장님 결정 = 필시티 읽은 뒤 탐지 = 구글맵 로그와 DB 로 장소 아님 남음·호텔 페이지·표가 못 정하는 행을 목록으로 뽑는다 · CID 가 다르면 다른 장소라 같은 장소 쌍은 뽑지 않는다(DB 쓰기 없음) (정본 §)
 import fs from "fs";
 import path from "path";
 import { pathToFileURL } from "url";
@@ -8,7 +8,6 @@ import {
   isLodgingPage,
   lastGoogleLogs,
   loadEnv,
-  nameTokens,
   parseArgs,
   reportDir,
   roomRateEur,
@@ -28,10 +27,6 @@ const cityId = Number(argv["city-id"] || 0);
     pathToFileURL(
       path.join(ROOT, "worker/lib/services/shared/place-category-map.ts"),
     ).href
-  );
-  const { distanceKmFromCoords } = await import(
-    pathToFileURL(path.join(ROOT, "worker/lib/services/shared/geo-distance.ts"))
-      .href
   );
   const c = await connectDb();
   const rows = (
@@ -95,40 +90,13 @@ const cityId = Number(argv["city-id"] || 0);
       cat: r.cat,
     }));
 
-  // ④ 같은 장소 두 행(다른 CID) = 이름 낱말이 거의 같고 150m 안, 또는 좌표 20m 안 + 이름 낱말 하나 이상 겹침
-  const dup: any[] = [];
-  const sorted = rows
-    .filter((r: any) => r.lat != null && r.lng != null)
-    .sort((a: any, b: any) => a.lat - b.lat);
-  for (let i = 0; i < sorted.length; i++) {
-    for (let j = i + 1; j < sorted.length; j++) {
-      const a = sorted[i];
-      const b = sorted[j];
-      if ((b.lat - a.lat) * 111.32 > 0.15) break;
-      if (a.cid && b.cid && a.cid === b.cid) continue;
-      const km = distanceKmFromCoords(a.lat, a.lng, b.lat, b.lng);
-      if (km > 0.15) continue;
-      const ta = new Set(nameTokens(a.name_en));
-      const tb = nameTokens(b.name_en);
-      if (!ta.size || !tb.length) continue;
-      const common = tb.filter((w) => ta.has(w)).length;
-      const ratio = common / Math.max(ta.size, tb.length);
-      if (ratio >= 0.6 || (km <= 0.02 && common >= 1))
-        dup.push({
-          a: { id: a.id, name: a.name_en, cat: a.cat },
-          b: { id: b.id, name: b.name_en, cat: b.cat },
-          meters: Math.round(km * 1000),
-        });
-    }
-  }
-
   const file = path.join(reportDir(cityId), `${stamp()}_scan.json`);
   fs.writeFileSync(
     file,
-    JSON.stringify({ cityId, hotelPages, notPlace, undecided, dup }, null, 2),
+    JSON.stringify({ cityId, hotelPages, notPlace, undecided }, null, 2),
   );
   console.log(
-    `═══ 읽은 뒤 탐지 city ${cityId} = 호텔 페이지 ${hotelPages.length} · 장소 아님 남음 ${notPlace.length} · 표가 못 정하는 행 ${undecided.length} · 같은 장소 두 행 ${dup.length}쌍 → ${path.relative(ROOT, file)} ═══`,
+    `═══ 읽은 뒤 탐지 city ${cityId} = 호텔 페이지 ${hotelPages.length} · 장소 아님 남음 ${notPlace.length} · 표가 못 정하는 행 ${undecided.length} → ${path.relative(ROOT, file)} ═══`,
   );
   await c.end();
   process.exit(0);

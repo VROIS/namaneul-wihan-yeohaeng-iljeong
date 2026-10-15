@@ -119,16 +119,15 @@ const CAPABILITIES = [
     ],
     hint: "분류 = place-category-map finalCategory 1벌, 기존 행 정렬 = category-align.ts. 새 대응표·판정식 만들지 말 것(§16).",
   },
-  // ⚠️ 수정금지(승인필요) 2026-10-01 사장님 결정 = 필시티 읽은 뒤 단계 = fillcity/steps 의 탐지·에이전트 명단·같은 장소 병합·제미니 호출 대상·손님상 검수 1벌 (정본 §)
+  // ⚠️ 수정금지(승인필요) 2026-10-15 사장님 결정 = 필시티 읽은 뒤 단계 = fillcity/steps 의 탐지·에이전트 명단·제미니 호출 대상·손님상 검수 1벌 · 같은 장소 병합 없음(CID 가 다르면 다른 장소) (정본 §)
   {
     id: "post-read-steps",
-    ko: "필시티 읽은 뒤 단계(탐지 → 에이전트 명단·판정 적용·같은 장소 병합 → 제미니 호출 대상 → 손님상 검수)",
+    ko: "필시티 읽은 뒤 단계(탐지 → 에이전트 명단·판정 적용 → 제미니 호출 대상 → 손님상 검수)",
     owners: [
       "fillcity/steps/common.ts",
       "fillcity/steps/post-read-scan.ts",
       "fillcity/steps/agent-export.ts",
       "fillcity/steps/agent-run.ts",
-      "fillcity/steps/dup-merge.ts",
       "fillcity/steps/gemini-targets.ts",
       "fillcity/steps/serving-report.ts",
     ],
@@ -138,7 +137,7 @@ const CAPABILITIES = [
       /gemini-before/,
       /\bfunction\s+(isLodgingPage|roomRateEur)\s*\(/,
     ],
-    hint: "읽은 뒤 단계 = fillcity/steps/{post-read-scan,agent-export,agent-run,dup-merge,gemini-targets,serving-report}.ts 1벌(v3 --only=scan,agent,gtarget,report · 에이전트 동시 실행 = agent-run.ts). 호텔 판정은 에이전트 지시문(prompts/04-classify-agent) 안에 있다. 호텔 판별·객실 요금 읽기·같은 장소 병합·제미니 호출 후보 뽑기·손님상 검수 새 스크립트 만들지 말 것(§16).",
+    hint: "읽은 뒤 단계 = fillcity/steps/{post-read-scan,agent-export,agent-run,gemini-targets,serving-report}.ts 1벌(v3 --only=scan,agent,gtarget,report · 에이전트 동시 실행 = agent-run.ts). 호텔 판정은 에이전트 지시문(prompts/04-classify-agent) 안에 있다. CID 가 다르면 다른 장소라 같은 장소 병합 단계는 없다. 호텔 판별·객실 요금 읽기·같은 장소 병합·제미니 호출 후보 뽑기·손님상 검수 새 스크립트 만들지 말 것(§16).",
   },
   // ⚠️ 수정금지(승인필요) 2026-09-30 사장님 결정 = LLM 삭제 = llm-review.ts(명단 내보내기·판정 적용) + 에이전트 판단(CRITERIA)
   {
