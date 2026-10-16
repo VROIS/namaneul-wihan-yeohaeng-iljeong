@@ -1,4 +1,3 @@
-// ⚠️ 수정금지(승인필요) — 2026-05-06 BTS Screen 4 카트→지도 WebView HTML 템플릿
 // ⚠️ 수정금지(승인필요) 2026-08-15 사장님 승인 = 로딩 문구 다국어(ITINERARY_MAP_HTML과 같은 패턴 §16).
 import i18n from "@/lib/i18n";
 

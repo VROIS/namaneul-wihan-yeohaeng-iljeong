@@ -34,7 +34,6 @@ export function useProfile() {
   const theme = Colors[colorScheme ?? "light"];
   const insets = useSafeAreaInsets();
   // ⚠️ 수정금지(승인필요) 2026-07-31 = **화면 밖에서 열려도 안 터지게** 한 것.
-  //   ("Couldn't find the header height", 사장님 실증 2026-07-31).
   let headerHeight = 0;
   try {
     // eslint-disable-next-line react-hooks/rules-of-hooks

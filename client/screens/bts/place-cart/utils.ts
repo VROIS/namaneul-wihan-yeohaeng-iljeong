@@ -18,7 +18,6 @@ export function localizedName(
   return item.nameEn || item.nameKo || "";
 }
 
-// ⚠️ 수정금지(승인필요) — 2026-04-22 카드 9:16 세로 비율 + 꽉찬 느낌으로 확대 (사용자 스샷 피드백). 86x116 → 100x178
 // ⚠️ 수정금지(승인필요) — 2026-05-07 사용자 명시 = 최대한 안 겹치게: 80×140 (= 100×178 대비 면적 -37%)
 export const CARD_W = 80;
 export const CARD_H = 140;

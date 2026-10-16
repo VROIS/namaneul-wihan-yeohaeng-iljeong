@@ -1,5 +1,4 @@
 // ⚠️ 수정금지(승인필요) 2026-09-26 사장님 결정 = 하루 영상 조각 = 옴니 1.1 플래시 1벌(360p 고정), 분당 한도 거절만 1분 뒤 다시 보냄·하루 한도 거절은 바로 실패 (정본 §)
-// = 키 = issueApiKey 출입증(apipass)을 호출자가 인자로 전달. §18 = 응답 메타(영상 바이트 제외) saveRaw 2곳 저장.
 
 import fs from "fs";
 import { recordExternalCall, precheck } from "./external-call-log";

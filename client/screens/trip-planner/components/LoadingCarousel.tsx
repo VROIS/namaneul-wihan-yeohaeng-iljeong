@@ -1,6 +1,4 @@
 // ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 = 여정 생성 로딩화면 "숨은 기능 소개" 캐러셀.
-//   ⚠️ 연출 컨셉(사장님 확정 2026-08-16) = "카드 = 작은 모바일 폰"처럼 보이게:
-//     하단 탭바(55+insets.bottom)와 안 겹친다(사장님 지적 2026-08-16, 320×720 실측 확인).
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, StyleSheet, AccessibilityInfo } from "react-native";
 // ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 = 카드 3D(입체) 효과 = 대각선 그라데이션.

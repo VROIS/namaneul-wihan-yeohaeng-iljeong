@@ -1,5 +1,4 @@
 // ⚠️ 수정금지(승인필요): 가이드 미니앱 공용 SVG 아이콘 = 운영앱(index.html·index.js) SVG 경로 그대로
-// = 2026-07-20 사장님 실기기 SSOT: iOS Expo Go 에서 Ionicons(글꼴 계열)가 렌더 안 됨(터치만 됨).
 import React from 'react';
 import Svg, { Path } from 'react-native-svg';
 

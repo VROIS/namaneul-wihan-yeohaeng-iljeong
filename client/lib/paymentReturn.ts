@@ -1,5 +1,4 @@
 // ⚠️ 수정금지(승인필요) 2026-08-06 사장님 SSOT = **결제하고 돌아왔는지**를 판별하는 곳 1벌(§0·§16).
-// 사장님 지적(2026-08-06):
 import { Platform } from "react-native";
 
 type PaymentReturn = "success" | "cancel" | null;

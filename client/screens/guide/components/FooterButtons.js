@@ -1,5 +1,4 @@
 // ⚠️ 수정금지(승인필요): 5개 버튼 Footer — 기존 WebView index.html:1009-1043 100% 클론
-// ⚠️ 2026-07-20 사장님 SSOT = 실기기 피드백 반영: ①버튼 = 완전 투명 + 아이콘·라벨만(검정 원 배경 삭제)
 import React, { useRef } from 'react';
 import { View, Pressable, Text, StyleSheet, Platform, Animated } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';

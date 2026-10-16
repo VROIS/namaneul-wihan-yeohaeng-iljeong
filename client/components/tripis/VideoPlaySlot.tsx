@@ -172,8 +172,7 @@ export default function VideoPlaySlot({
           </Text>
         </View>
       ) : canGenerate ? (
-        //   문구 = 2026-08-03 사장님 교체('지브리' 폐기 §19) + 60크레딧·4~5분·나가도 됨 = **크게** 표시.
-        //   ⚠️ 만들 수 있는 자리에서만 그린다(2026-08-03 사장님) = 감상(도시 대표카드·프로필)에서는
+        // ⚠️ 수정금지(승인필요) 만들 수 있는 자리에서만 그린다(2026-08-03 사장님) = 감상(도시 대표카드·프로필)에서는
         <View style={styles.center}>
           <Icon name="film" size={56} color={Brand.primary} />
           <Text style={styles.introTitle}>

@@ -1,5 +1,4 @@
 // ⚠️ 수정금지(승인필요) 2026-09-28 사장님 결정 = 열쇠 동작확인(POST .../test) (정본 B1)
-// §18 raw 저장 없음(원래 없던 것 = 만들면 §19 위반).
 import type { Express, Request, Response } from "express";
 import { eq } from "drizzle-orm";
 import { GoogleGenAI } from "@google/genai/web";

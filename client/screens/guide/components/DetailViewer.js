@@ -1,6 +1,4 @@
 // ⚠️ 수정금지(승인필요): 네이티브 DetailViewer = 운영앱(내손안에 가이드) 상세페이지 완전 클론
-// = 2026-07-20 사장님 SSOT: 운영앱(my-handyguide1) 6개월 실증본이 정답. 코드+운영 페이지 DevTools 실측으로 클론.
-//   · 모든 버튼 = 완전 투명 + 아이콘만 (2026-07-20 사장님 실기기 지시 = 컴포넌트 전체 통일)
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
   View, Text, Image, StyleSheet, ScrollView, TouchableOpacity,

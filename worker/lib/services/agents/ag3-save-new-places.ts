@@ -3,7 +3,6 @@ import { placeSeedRaw } from "@shared/schema";
 import { sql, inArray } from "drizzle-orm"; // sql = raw 좌표·rank 쿼리 / inArray = ②-b 매칭행 PID 배치판정
 import type { PlaceResult } from "./types";
 import { LANGS } from "../shared/language-instruction";
-// ⚠️ 수정금지(승인필요) §18·§20 = TS 호출 단일 관문(tsSearch) = raw 2곳 자동저장 + 9요소·SKU 자체강제
 // ⚠️ 수정금지(승인필요) 2026-08-16 사장님 SSOT = 사진 분리 수술(2026-07-11) 재통합 폐기 = 2026-08-16 §19.
 import { tsSearch, tsPhoto } from "../shared/ts-client";
 import { zoneForDistanceKm } from "../shared/pool-radius";

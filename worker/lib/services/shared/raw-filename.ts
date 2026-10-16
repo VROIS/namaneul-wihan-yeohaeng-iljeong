@@ -5,7 +5,6 @@ import { listR2, getFromR2 } from "./r2-client";
 import { fileStamp } from "../../../../shared/r2-paths";
 
 // ⚠️ 수정금지(승인필요) 2026-06-15 사장님 SSOT = docs/raw 산출물 파일명 단일 표준 (= 장독 형식 정비).
-//   = 옛 {NN-단계명}-{내용}-{YYYY-MM-DD}.json 폐기 (= 날짜 끝 = 정렬 시 날짜 안 보임 = 찾기 난잡, 사장님 지적 2026-06-15).
 
 export const rawDate = (d?: string): string =>
   d || new Date().toISOString().slice(0, 10);

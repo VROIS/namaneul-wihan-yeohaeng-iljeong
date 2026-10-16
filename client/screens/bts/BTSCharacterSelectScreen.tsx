@@ -356,7 +356,6 @@ export default function BTSCharacterSelectScreen() {
       rot.value = 0;
       setFront(0);
       // ⚠️ 수정금지(승인필요) 2026-08-08 사장님 승인 = **소리로 읽어주는 기능이 켜져 있으면 안 돈다.**
-      //   ⚠️⚠️ 미검증 = 실기기 확인 필요 (2026-08-08, 판단3종 6차 지적 · 사장님 승인으로 열어둠)
       let alive = true;
       if (!reduceMotion) {
         spinning.value = true;

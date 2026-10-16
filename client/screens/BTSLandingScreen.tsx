@@ -346,7 +346,6 @@ export function BTSLandingScreen() {
     android: { backgroundColor: "rgba(255,255,255,0.1)" },
     default: {},
   });
-  // ⚠️ 수정금지(승인필요) 2026-07-30 사장님 지시 = **웹·앱이 똑같이 동작한다.**
   // ⚠️ 수정금지(승인필요) 2026-07-31 = **로그인이 도는 중에는 버튼을 잠근다.**
   const isDisabled = !dobComplete || oauthLoading;
 

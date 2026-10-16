@@ -1,4 +1,3 @@
-// ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = Romantic 모든 흔적 삭제 + Shopping 1:1 (= PSR shopping 카테고리)
 // ⚠️ 수정금지(승인필요) 2026-06-06 = 미식(Foodie) 버튼 제거 → 즐길거리(Attraction) 추가 (= 식사는 예산으로 반영 = 자동)
 export type Vibe =
   | "Healing"

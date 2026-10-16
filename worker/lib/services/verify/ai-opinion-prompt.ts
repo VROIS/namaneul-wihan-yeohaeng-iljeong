@@ -1,4 +1,3 @@
-// ⚠️ 2026-07-03 사장님 SSOT = "AI 의견" 기능 프롬프트 조립.
 // = route-prompt.ts(#03 동선 최적화, 수정금지 원본)의 buildRouteInputJson() 패턴을 그대로 재현(원본 미수정).
 
 import { getLanguageInstruction } from "../shared/language-instruction";

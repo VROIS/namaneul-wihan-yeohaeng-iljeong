@@ -44,7 +44,6 @@ export const humanPause = (page: Page) =>
     ? page.waitForTimeout(300 + Math.floor(Math.random() * 2700))
     : Promise.resolve();
 // ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = 전용 크롬(GMAPS_CDP)에서는 창을 화면 밖(-2400px)·백그라운드로 만든다 = 사장님 화면을 가로채지 않는다(실측 2026-10-06: 화면 밖 창도 visibilityState=visible, 읽기 시간 같음) · 사람 인증이 뜨면 showWindow 로 그 창을 화면 안으로 끌어온다 (정본 §)
-// ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = 구글맵 창 수 = 한 설정 5 = 사전 정제·목록 읽기·목록 후처리·④ 검색·못 찾은 베스트·읽기 2차·PID 루프가 전부 이 값 하나를 읽는다 (정본 §)
 export const GMAPS_WINDOWS = 5;
 const OFFSCREEN = { left: -2400, top: 100, width: 1280, height: 900 };
 const ONSCREEN = { left: 120, top: 80, width: 1280, height: 900 };

@@ -224,8 +224,7 @@ export const resultStyles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "flex-start",
   },
-  // ⚠️ 수정금지(승인필요) 2026-08-16 사장님 승인 = 56→48 축소(텍스트칸 폭 확보, 위 placeCard 근거 동일).
-  //   ⚠️ 수정금지(승인필요) 2026-08-19 사장님 승인 = marginRight 4→6(실측 4px 확인 후 사장님 재지시, 확정치).
+  // ⚠️ 수정금지(승인필요) 2026-08-19 사장님 승인 = marginRight 4→6(실측 4px 확인 후 사장님 재지시, 확정치).
   placeThumbnail: {
     width: 48,
     height: 48,

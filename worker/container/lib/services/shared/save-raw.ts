@@ -16,7 +16,6 @@ export interface SaveRawOpts {
   request: any; // 호출 입력 (= 비밀 제외, 재현용)
   raw: any; // 외부 응답 원본 (= 진짜 raw)
   // ⚠️ 수정금지(승인필요) 2026-06-19 사장님 SSOT = 건건 raw 로컬 skip(스토리지만) = 로컬 폴더 가독성·공간 낭비 방지.
-  //   = 기본 false(기존대로 로컬+스토리지 2곳). true 시 로컬 쓰기만 건너뜀 = §18 원본보존은 스토리지가 담당.
   localSkip?: boolean;
 }
 
@@ -38,7 +37,6 @@ export async function saveRaw(opts: SaveRawOpts): Promise<void> {
     const stemFileName = `${fileStamp()}_${opts.source}-${tag}${place.suffix}.json`;
     let fileName = stemFileName;
     // ⚠️ 수정금지(승인필요) 2026-06-16 사장님 SSOT = 로컬 docs/raw 루트 = process.cwd() 기준(= CJS 번들 import.meta.url 깨짐 회피, throw 없음).
-    //   = 옛 fileURLToPath(import.meta.url) = esbuild CJS shim 시 throw/엉뚱경로(server_dist 기준) → 외부 try/catch 삼킴 → Storage PUT 도 못 감 = raw 손실(§18 위반). 제거.
     const localRawRoot = path.resolve(process.cwd(), "docs", "raw"); // cwd/docs/raw 절대경로 (= 버전판정·로컬쓰기 동일 기준 통일)
     try {
       const localDir = path.join(localRawRoot, ctx); // docs/raw/{ctx} 절대경로 (= 버전판정 디렉토리)

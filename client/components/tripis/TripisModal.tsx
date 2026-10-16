@@ -127,7 +127,6 @@ function TripisModalInner({
   const loadAll = useCallback(async () => {
     if (itineraryId == null || viewMode !== "itinerary") return;
     try {
-      // ⚠️ 수정금지(승인필요) 2026-08-27 사장님 승인 = 화면 언어를 넘겨 서버가 슬롯 해설을 (place_id, 언어) 캐시로 이어붙임(제미니 호출 0).
       // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 승인 = URL 생성 = itineraryUrl() 공용(§16, useTripPlanner.ts 와 중복 제거).
       const [ir, vr] = await Promise.all([
         apiRequest("GET", itineraryUrl(itineraryId, i18n.language)),

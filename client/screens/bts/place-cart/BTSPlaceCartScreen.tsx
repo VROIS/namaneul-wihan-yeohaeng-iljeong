@@ -99,9 +99,7 @@ export default function BTSPlaceCartScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const cardRefs = useRef<Record<number, View | null>>({});
 
-  // ⚠️ 수정금지(승인필요) — 2026-04-23 Track 1b-①: 캐스케이드 마운트 게이트 제거.
   // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1g: failedIds/타임아웃/폴백 모두 제거. 실제 이미지 완성까지 무조건 대기 (안전장치 0).
-  // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 1g: 내용 기반 키 (참조 비교 시 fetch마다 새 배열 → 불필요 리셋 + 스피너 재노출 방지).
   const topPlacesKey = useMemo(
     () =>
       topPlaces
@@ -255,7 +253,6 @@ export default function BTSPlaceCartScreen() {
   }, [topPlaces]);
 
   // ⚠️ 수정금지(승인필요) 2026-08-08 사장님 확정 — 들어오면 **공연장 카드가 스스로 한 번 담긴다.**
-  // ⚠️ 수정금지(승인필요) 2026-08-08 사장님 지시 — 기준은 **도시 번호가 아니라 실제 장소 8장의 목록**(topPlacesKey).
   const autoDemoedKey = useRef<string | null>(null);
   const [autoPickId, setAutoPickId] = useState<number | null>(null);
   useEffect(() => {

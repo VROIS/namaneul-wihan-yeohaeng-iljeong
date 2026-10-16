@@ -1,4 +1,3 @@
-// ⚠️ 수정금지(승인필요) — BTS 지구본 인트로 = **연출 화면**(누르는 화면 아님)
 // ⚠️ 수정금지(승인필요) 2026-07-30 사장님 SSOT = 이 화면은 **인트로 연출**이다(아미봉 인증창과 같은 성격).
 import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet } from "react-native";

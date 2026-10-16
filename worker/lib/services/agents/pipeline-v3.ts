@@ -147,7 +147,6 @@ async function runPipelineMix(
     const rawText = (geminiDays as any).__rawText || "";
     const finishReason = (geminiDays as any).__finishReason || "unknown";
     // ⚠️ 수정금지(승인필요) 2026-07-11 사장님 SSOT = parsedPlaces = step1 복원 결과(geminiDays = SLIM_KEYS 원명 복원 완료)에서 구성.
-    //   = 복원 지점 1벌(step1 수신부)만 존재 + rawResponse(원문)는 그대로 보존(§18).
     const parsedPlaces: any[] = [];
     for (const dd of geminiDays as any[])
       for (const p of dd.places || [])

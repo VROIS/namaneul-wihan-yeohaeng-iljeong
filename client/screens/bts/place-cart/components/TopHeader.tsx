@@ -7,7 +7,6 @@ import { LiquidButton } from "@/components/ui/LiquidButton";
 import { localizedName } from "../utils";
 import { styles } from "../styles";
 
-// ⚠️ 수정금지(승인필요) — 2026-04-22 Part B: 상단 고정존 (뒤로가기 + 도시 버튼). 여기까지만 고정, 이하 전부 스크롤
 // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 5b: 우측 상단 언어 스위치 (iOS 스타일). back 반대 위치. Screen 4 부터 노출.
 export default function TopHeader({
   insetsTop,

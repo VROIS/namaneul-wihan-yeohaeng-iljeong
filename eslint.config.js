@@ -38,14 +38,10 @@ module.exports = defineConfig([
   },
   {
     // ⚠️ 수정금지(승인필요) 2026-09-27 사장님 결정 = lint 대상 = 진짜 코드(client·worker·shared)만 (정본 §22)
-    // = .claude/skills = 프롬프트·메모리 문서(§18/§20 보호=코드 아님) / migrations = SQL / docs·백업 = 문서.
-    //   이들을 lint 대상에서 제외 = 프롬프트 자동재포맷으로 인한 §18/§20 위반 방지 + 진짜 코드 오류만 검출.
     ignores: [
       "dist/**",
       "node_modules/**",
       // ⚠️ 수정금지(승인필요) 2026-09-06 사장님 결정 = Worker 빌드산출물·자동생성 타입은 lint 대상 아님
-      //   .wrangler/tmp = wrangler 가 만드는 임시 번들(우리가 쓴 코드 아님)
-      //   worker-configuration.d.ts = `wrangler types` 자동생성(5만 줄) = 손으로 고치는 파일 아님
       "worker/.wrangler/**",
       "worker/worker-configuration.d.ts",
       ".history/**", // VS Code Local History 자동백업(gitignore됨=커밋X) = 옛 스냅샷 오류 근원

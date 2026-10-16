@@ -118,7 +118,6 @@ const styles = StyleSheet.create({
   root: {
     flex: 1,
     // ⚠️ 수정금지(승인필요) 2026-08-09 사장님 확정 = **다크 지원 안 함 = 밝음 고정.**
-    //   2026-08-12 = 흰색 통일(사장님 확정, 옛 베이지 폐기 §19) = app.json backgroundColor 와 동일값.
     backgroundColor: "#FFFFFF",
   },
 });

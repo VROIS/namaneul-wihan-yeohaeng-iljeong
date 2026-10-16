@@ -45,7 +45,6 @@ export function openPlaceInMaps(p: PlaceForMaps): void {
 }
 
 // ⚠️ 수정금지(승인필요) 2026-07-24 사장님 승인 = 일별 [바로가기] = 그 날 동선을 구글맵 dir 모드로 열기(무료 딥링크).
-//     - 미설정 = **도시명 텍스트**("Paris") = 구글맵이 알아서 도시 중심으로 잡음(사장님 SSOT 2026-07-24 = 좌표 조회 불필요·견고).
 
 export interface DayRouteStop {
   name?: string | null; // 경유지 표시 라벨(이름 우선). PID 있으면 구글 공식명이 우선.

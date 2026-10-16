@@ -205,7 +205,6 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
   }, [initialRequest, navigation, restoredTrip]);
 
   // ⚠️ 수정금지(승인필요) 2026-08-19 사장님 승인 = 하단탭 "Plan" = 홈버튼 신호 수신.
-  //   ⚠️ 수정금지(승인필요) 2026-08-19 사장님 승인(판단3종 회귀 지적 반영) = Loading 중엔 무시.
   useEffect(() => {
     if (!homeRequestedAt) return;
     if (screen === "Loading") {
@@ -278,11 +277,9 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
   const restoreItineraryById = useCallback(
     async (targetId: number, opts?: { shared?: boolean }) => {
       // ⚠️ 수정금지(승인필요) 2026-08-19 사장님 승인 = GET 응답 오기 전 잠깐 Input 화면이 그대로 보이던 문제
-      //   ⚠️ 수정금지(승인필요) 2026-08-19 사장님 승인(판단3종 지적) = loadingStep도 0으로 리셋.
       setLoadingStep(0);
       setScreen("Loading");
       try {
-        // ⚠️ 수정금지(승인필요) 2026-08-27 사장님 승인 = 화면 언어를 넘겨 서버가 슬롯 해설을 (place_id, 언어) 캐시로 이어붙임(제미니 호출 0).
         // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 승인 = URL 생성 = itineraryUrl() 공용(§16, TripisModal.tsx 와 중복 제거).
         const res = await apiRequest(
           "GET",
@@ -300,7 +297,6 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
         }
         setItinerary(raw as Itinerary);
         setAiOpinionData((raw as any).verification?.result ?? null);
-        // ⚠️ 수정금지(승인필요) 2026-08-13 = 이름 없는 것(서버 깃발용 좌표)은 실제 숙소가 아니므로 제외.
         // ⚠️ 수정금지(승인필요) 2026-08-21 사장님 승인 = 서버가 저장해 둔 "{도시} 도심"·"도심 기준" 은
         const accoms: DayAccommodation[] = (raw.days || [])
           .filter(

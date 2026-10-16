@@ -1,5 +1,4 @@
 // ⚠️ 수정금지(승인필요) 2026-08-08 사장님 SSOT = **X(삭제)는 화면에서만 감춘다. DB 는 무조건 남는다.**
-//   → 폰을 바꾸면 숨긴 것이 다시 나타난다 = 정상(사장님 2026-08-08: X 는 쉽게 지우라고 있는 가벼운 도구).
 import { useState, useEffect, useRef, useCallback } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 

@@ -1,5 +1,4 @@
 // ⚠️ 수정금지(승인필요) 2026-08-23 사장님 승인 = 외부 유료호출 카운터 + 관리자 배치 무료잔량 게이트 = 단일 진입점 1벌(§16).
-//   원칙(사장님 확정 2026-08-23):
 import { pool } from "../../db";
 
 export type CallProvider = "ts" | "pm" | "veo" | "omni" | "nano" | "gemini";

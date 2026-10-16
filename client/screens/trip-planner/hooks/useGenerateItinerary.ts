@@ -153,7 +153,6 @@ export function useGenerateItinerary({
       setCarouselOpen(false);
       console.error("Failed to generate itinerary:", error);
 
-      // ⚠️ 수정금지(승인필요) 2026-07-31 사장님 지시 = **왜 안 됐는지 화면에 그대로 보여준다.**
       // ⚠️ 수정금지(승인필요) 2026-08-05 사장님 SSOT = 크레딧부족 = 공용 헬퍼(충전화면 자동이동, §16 5곳 공용).
       const message = error?.message || "";
       const shortfall = parseCreditShortfall(message);

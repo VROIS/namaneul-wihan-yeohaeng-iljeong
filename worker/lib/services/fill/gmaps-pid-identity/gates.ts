@@ -359,8 +359,6 @@ export async function evaluateRow(
     }
   }
   // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 지시 = 구글 페이지가 진실. 이름 강일치(strong) + 2km 초과 = coord-corrected(우리 좌표 오염 → 페이지 좌표로 덮음, 실측 #60672 "Star Park Altavista" 9.87km) / 이름 실패 + 2km 초과 = coord-mismatch(딴 장소, 안 씀) / 이름 실패 + 2km 이내 = name-mismatch(안 씀).
-  // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 지시(시카고 #60631 사고 수리) = 약일치(weak = 공통 토큰 1개뿐)·대조 불가(name_en 빈 행) + 2km 초과 = coord-mismatch(안 씀, "이름 약일치"/"이름 대조 불가"). 2km 이내 = weak 도 통과(같은 장소의 번역 변형).
-  // ⚠️ 수정금지(승인필요) 2026-08-28 사장님 지시 = 주소 없음(address-empty) 은 더 이상 자동 차단이 아님 = 광장·거리·구역(예 "Place de la Concorde"·"Le Marais")은 구글이 번지주소를 안 줘도 이름·좌표 관문은 통과하는 실제 장소(전 Paris 사례 dist_km 0~0.6). 이름/좌표 관문을 먼저 그대로 판정한 뒤, 주소 없음은 그 판정이 이미 실패(name-mismatch/coord-mismatch/coord-corrected)일 때만 "대조 재료 부족" 의미로 얹어 address-empty-ambiguous(쓰기 안 함)로 바꾸고, 통과(ok 계열)면 ok(no-address)(쓰기 함, address 컬럼은 null 그대로 넘겨 upsertPlace COALESCE 가 기존값 보존)로 확정한다.
   let gate: string;
   if (local.limited) gate = "limited-view";
   else if (local.consentBlocked) gate = "consent-blocked";

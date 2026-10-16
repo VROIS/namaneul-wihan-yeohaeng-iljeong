@@ -38,8 +38,6 @@ export const placeSeedRaw = pgTable("place_seed_raw", {
   googleMapsUri: text("google_maps_uri"),
 
   // ⚠️ 수정금지(승인필요) 2026-06-11 = best_image_url DROP = 이미지 image_url(구글 PM) 1종 통일 (고아·비PM 2순위 폴백 폐기)
-  // ⚠️ 수정금지(승인필요) 2026-06-11 = celeb_mention DROP (= 헛바퀴, ag3 미프로젝션 데드)
-  // ⚠️ 수정금지(승인필요) 2026-06-11 = naver_blog_count DROP (= 네이버 수집 파이프라인 폐기 = 헛바퀴)
   latitude: real("latitude"),
   longitude: real("longitude"),
   googleReviewCount: integer("google_review_count"),

@@ -12,7 +12,6 @@ export const styles = StyleSheet.create({
     paddingTop: 0,
   },
 
-  // ⚠️ 수정금지(승인필요) — 뒤로가기 행
   // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 5b: back(좌) ↔ 언어 스위치(우) space-between 정반대 위치.
   backRow: {
     flexDirection: "row",
@@ -149,7 +148,6 @@ export const styles = StyleSheet.create({
     fontFamily: "Pretendard-Bold",
   },
 
-  // ⚠️ 수정금지(승인필요) — 2026-04-22 게이지+CTA 영역 (스크롤 내부 embed). 하단 고정존 폐기 (사용자 지시). paddingBottom은 scrollContent에서 insets.bottom으로 처리
   // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 4a v2 (사용자 피드백): CTA 는 ScrollView 안 마지막 요소. 스크롤과 함께 움직임.
   bottomArea: {
     paddingHorizontal: 20,
