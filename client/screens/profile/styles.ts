@@ -215,7 +215,7 @@ export const styles = StyleSheet.create({
     alignItems: "center",
     zIndex: 10,
   },
-  //   ⚠️ 2026-08-12 사장님 확정 = 별을 **왼쪽 상단**으로 = X(오른쪽 상단)와 붙어 있어 오터치가 났다(옛 right:40 폐기 §19).
+  //   ⚠️ 2026-08-12 사장님 확정 = 별을 **왼쪽 상단**으로 = X(오른쪽 상단)와 붙어 있어 오터치가 났다
   cardRepBtnRich: {
     position: "absolute",
     top: 10,

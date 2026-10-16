@@ -90,7 +90,7 @@ export default function DetailViewer({
     Speech.speak(sentencesRef.current[index], {
       language: lang === 'zh-CN' ? 'zh-CN' : lang,
       voice,
-      // 운영 정답 = 진입 음성안내 속도(1.0) — 2026-07-20 사장님 확정 (옛 iOS 0.5 늘어짐 폐기)
+      // 운영 정답 = 진입 음성안내 속도(1.0) — 2026-07-20 사장님 확정 
       rate: CONFIG.VOICE.TTS_RATE,
       pitch: CONFIG.VOICE.TTS_PITCH,
       onDone: () => {

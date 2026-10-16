@@ -39,7 +39,7 @@ export default function ExpertInquiryDetailScreen({ route, navigation }: any) {
   const [isExpert, setIsExpert] = useState(false);
   const [reply, setReply] = useState("");
   const [sending, setSending] = useState(false);
-  // ⚠️ 사장님 SSOT 2026-07-14 = 답변완료 문의는 입력창 대신 "답변완료" 표시. [답변 수정]을 눌러야 입력창 열림(옛: 답변완료여도 입력창 항상 표시 = "또 답변함" 혼란 폐기 §19).
+  // ⚠️ 사장님 SSOT 2026-07-14 = 답변완료 문의는 입력창 대신 "답변완료" 표시. [답변 수정]을 눌러야 입력창 열림
   const [editing, setEditing] = useState(false);
   const mounted = useRef(true);
   useEffect(

@@ -54,7 +54,7 @@ export default function DetailView({
   const [isExpert, setIsExpert] = useState(false);
   const [reply, setReply] = useState("");
   const [sending, setSending] = useState(false);
-  // ⚠️ 사장님 SSOT 2026-07-14 = 답변완료 문의는 입력창 대신 "답변완료" 표시. [답변 수정] 눌러야 입력창(옛: 항상 입력창=재답변 혼란 폐기 §19).
+  // ⚠️ 사장님 SSOT 2026-07-14 = 답변완료 문의는 입력창 대신 "답변완료" 표시. [답변 수정] 눌러야 입력창
   const [editing, setEditing] = useState(false);
   const mounted = useRef(true);
   useEffect(

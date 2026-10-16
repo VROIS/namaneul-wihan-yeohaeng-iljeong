@@ -21,7 +21,6 @@ const CAPABILITIES = [
       "worker/lib/services/fill/backfill-verify.ts",
       "worker/lib/services/fill/storage-image-relink.ts",
       "worker/lib/services/shared/ts-client.ts",
-      "worker/lib/services/agents/ag3-data-matcher.ts",
       "worker/lib/services/agents/ag3-save-new-places.ts",
       "worker/lib/services/fill/gmaps-post.ts",
     ],

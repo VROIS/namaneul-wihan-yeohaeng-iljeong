@@ -178,7 +178,7 @@ export function registerPlaceRoutes(app: Express, openDb: OpenDb): void {
                 .limit(1);
 
         // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 대표사진의 요약 1벌(관리자 대시보드 열람 전용).
-        //   앱 화면에는 그리지 않는다 = 한국어라 다국어와 안 맞는다(옛 여정 갈래 2개 삭제 §19).
+        //   앱 화면에는 그리지 않는다 = 한국어라 다국어와 안 맞는다
         const tagline = heroPlace?.summaryKo || "";
 
         const card = {

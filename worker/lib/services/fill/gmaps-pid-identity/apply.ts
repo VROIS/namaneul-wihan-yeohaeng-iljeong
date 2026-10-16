@@ -89,7 +89,7 @@ export async function writeRow(
       oldPrice: before,
       pageOpened: false,
     });
-    // ⚠️ 수정금지(승인필요) 2026-09-08 사장님 확정 = 어떤 경로로 열든 6요소(이름·주소·좌표·리뷰수·영업상태·사진 400px)+cid 는 무조건 그 행에 쓴다. 사진 = 있는 행도 덮는다(옛 "없는 행만" 폐기 §19).
+    // ⚠️ 수정금지(승인필요) 2026-09-08 사장님 확정 = 어떤 경로로 열든 6요소(이름·주소·좌표·리뷰수·영업상태·사진 400px)+cid 는 무조건 그 행에 쓴다. 사진 = 있는 행도 덮는다
     let imageUrl: string | undefined;
     if (r.photo_url) {
       try {

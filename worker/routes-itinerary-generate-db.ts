@@ -44,7 +44,7 @@ async function loadAllKeys(openSql: OpenSql): Promise<void> {
 
 // ── 파이프라인 ───────────────────────────────────────────────────────────────
 
-/** runPipelineDbOnly 순서 그대로 = /api/routes/generate 본문에서 떼어낸 1벌(문장·순서 무변경). */
+/** DB 전용 여정 생성 1벌 = /api/routes/generate 본문에서 떼어낸 것. */
 async function runPipelineDbOnlyWorker(
   db: Db,
   enrichedFormData: Record<string, any>,
@@ -137,7 +137,7 @@ export function registerItineraryGenerateDbRoutes(
         }
       }
 
-      // ── 분기 판정 = pipeline-v3.ts runPipelineV3 과 같은 순서 ──
+      // ── 분기 판정 = 이 라우트가 핀·베스트·MIX 를 먼저 정한다(runPipelineV3 는 MIX 만 받는다) ──
       //    핀이 있으면 도시만 찾으면 db-only / 없으면 ready 여야 db-only.
       const isPinnedDbOnly = !!(
         Array.isArray(formData.pinnedPlaceIds) && formData.pinnedPlaceIds.length
@@ -209,7 +209,7 @@ export function registerItineraryGenerateDbRoutes(
         }
       }
 
-      // ── 파이프라인 = pipeline-db-only.ts runPipelineDbOnly 순서 그대로 ──
+      // ── 파이프라인 = 베스트 / MIX / DB 전용 중 하나 ──
       let itinerary: any;
       try {
         itinerary = isBest

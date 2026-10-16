@@ -47,7 +47,7 @@ export default function BTSTripScreen() {
     if (!selectedCity?.nextConcertDate || !selectedCharacter) return undefined;
     const venue = topPlaces.find((p) => p.seedCategory === "bts_venue");
     const date = selectedCity.nextConcertDate;
-    // ⚠️ 2026-08-15 사장님 시뮬 지시 = 09시로 재변경(옛 08시 시험분 폐기 §19).
+    // ⚠️ 2026-08-15 사장님 시뮬 지시 = 09시로 재변경
     const startTime = "09:00";
     const endTime = endTimeBeforeShow(selectedCity.showTime);
     const activityCount = selectedPlaceIds.filter(

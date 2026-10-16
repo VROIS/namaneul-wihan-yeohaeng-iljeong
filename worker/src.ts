@@ -17,19 +17,11 @@ import {
   type ItineraryForICS,
 } from "./lib/itinerary-ics";
 import {
-  COMPANION_TO_TRANSPORT,
-  DEFAULT_PRICES,
-  PARIS_TRANSIT_FARES,
-  UBER_PARIS_FARES,
   type CompanionType,
   type GuidePriceResult,
   type MobilityStyle,
   type TransitPriceResult,
-  type TransportPriceInput,
-  type TransportPricingResult,
-  type TransportType,
   type TravelStyle,
-  type UberBlackComparison,
 } from "./lib/services/transport/constants";
 import {
   calcTransitHaversine,
@@ -39,7 +31,14 @@ import {
 } from "./lib/services/agents/transit-haversine";
 import { optimizeDayRoute } from "./lib/services/itinerary/route-optimizer";
 import { retimePlaces } from "./lib/services/route/regen-retime";
-import { shouldApplyGuidePrice } from "./lib/services/transport/guide-pricing";
+import {
+  round2,
+  shouldApplyGuidePrice,
+} from "./lib/services/transport/guide-pricing";
+import { calculateUberBlackHourly } from "./lib/services/transport/transit-pricing";
+import { calculateTransportPrice } from "./lib/services/transport-pricing-service";
+import { guideCostForDay } from "./lib/services/transport/day-config";
+import { withEngineDb } from "./lib/db";
 import {
   getCompanionCount,
   calculateDayCount,
@@ -305,317 +304,6 @@ app.get("/api/itineraries/:id/calendar.ics", async (req, res) => {
     close();
   }
 });
-
-// ── 교통비 계산 = DB 읽는 1함수만 Hyperdrive drizzle, 나머지 순수 계산(상수·하버사인·2-opt)은 모듈을 그대로 import(§16).
-function round2(num: number): number {
-  return Math.round(num * 100) / 100;
-}
-
-// getGuidePriceFromDB 와 같은 조회.
-async function getGuidePriceFromDB(serviceType: TransportType): Promise<{
-  basePrice4h: number;
-  pricePerHour: number;
-} | null> {
-  try {
-    const { db, close } = openDb();
-    try {
-      const [priceData] = await db
-        .select()
-        .from(schema.guidePrices)
-        .where(eq(schema.guidePrices.serviceType, serviceType))
-        .limit(1);
-      if (!priceData) return null;
-      return {
-        basePrice4h:
-          priceData.basePrice4h || DEFAULT_PRICES[serviceType].basePrice4h,
-        pricePerHour:
-          priceData.pricePerHour || DEFAULT_PRICES[serviceType].pricePerHour,
-      };
-    } finally {
-      close();
-    }
-  } catch (error) {
-    console.warn(
-      `[Transport] DB 조회 실패, 기본값 사용: ${serviceType}`,
-      error,
-    );
-    return null;
-  }
-}
-
-async function calculateGuideDailyPrice(
-  transportType: TransportType,
-  availableHours = 8,
-  isRegionalTravel = false,
-): Promise<{ dailyVehiclePrice: number }> {
-  const dbPrice = await getGuidePriceFromDB(transportType);
-  const priceConfig = dbPrice || DEFAULT_PRICES[transportType];
-  const effectiveHours = Math.max(availableHours, 4);
-  const additionalHours = Math.max(0, effectiveHours - 4);
-  let dailyVehiclePrice = round2(
-    priceConfig.basePrice4h + additionalHours * priceConfig.pricePerHour,
-  );
-  if (isRegionalTravel) dailyVehiclePrice = round2(dailyVehiclePrice * 1.5);
-  return { dailyVehiclePrice };
-}
-
-function vehicleDescriptionOf(transportType: TransportType): string {
-  return transportType === "sedan"
-    ? "전용 세단 (1-4인)"
-    : transportType === "van"
-      ? "전용 밴 (5-7인)"
-      : transportType === "minibus"
-        ? "전용 미니버스 (8인+)"
-        : "가이드 서비스";
-}
-
-async function getGuidePerPersonPerDay(
-  companionType: CompanionType,
-  companionCount: number,
-  availableHours = 8,
-  isRegionalTravel = false,
-): Promise<{ perPersonPerDay: number; vehicleDescription: string }> {
-  const transportType = COMPANION_TO_TRANSPORT[companionType].transportType;
-  const { dailyVehiclePrice } = await calculateGuideDailyPrice(
-    transportType,
-    availableHours,
-    isRegionalTravel,
-  );
-  return {
-    perPersonPerDay: round2(dailyVehiclePrice / companionCount),
-    vehicleDescription: vehicleDescriptionOf(transportType),
-  };
-}
-
-function calculateTransitPerPersonPerDay(
-  dayCount: number,
-  tripCount: number,
-): { perPersonPerDay: number; method: string; details: string } {
-  const singleFare = PARIS_TRANSIT_FARES.metro.single;
-  const carnetFare = PARIS_TRANSIT_FARES.metro.carnet10 / 10;
-  const navigoDay = PARIS_TRANSIT_FARES.metro.navigo_day;
-  const navigoWeek = PARIS_TRANSIT_FARES.metro.navigo_week;
-  const dailyIndividual = tripCount * singleFare;
-  const dailyCarnet = tripCount * carnetFare;
-
-  if (dayCount >= 5) {
-    const perPersonPerDay = round2(navigoWeek / dayCount);
-    return {
-      perPersonPerDay,
-      method: "Navigo 주간권",
-      details: `€${navigoWeek}/주 ÷ ${dayCount}일 = €${perPersonPerDay}/일/인`,
-    };
-  }
-  if (dailyIndividual > navigoDay) {
-    return {
-      perPersonPerDay: navigoDay,
-      method: "Navigo 일일권",
-      details: `Mobilis Zone 1-5: €${navigoDay}/일/인`,
-    };
-  }
-  if (tripCount >= 5) {
-    const perPersonPerDay = round2(dailyCarnet);
-    return {
-      perPersonPerDay,
-      method: "t+ 카르네",
-      details: `카르네 €1.69/회 × ${tripCount}회 = €${perPersonPerDay}/일/인`,
-    };
-  }
-  const perPersonPerDay = round2(dailyIndividual);
-  return {
-    perPersonPerDay,
-    method: "t+ 개별",
-    details: `€${singleFare}/회 × ${tripCount}회 = €${perPersonPerDay}/일/인`,
-  };
-}
-
-function calculateUberXDailyPerPerson(
-  tripCount: number,
-  companionCount: number,
-): { perPersonPerDay: number; details: string } {
-  const fare = UBER_PARIS_FARES.uberx;
-  let farePerTrip =
-    fare.base +
-    UBER_PARIS_FARES.avg_trip_km * fare.perKm +
-    UBER_PARIS_FARES.avg_trip_min * fare.perMin;
-  farePerTrip = round2(Math.max(farePerTrip, fare.min_fare));
-  const dailyTotal = round2(farePerTrip * tripCount);
-  const perPersonPerDay = round2(dailyTotal / companionCount);
-  return {
-    perPersonPerDay,
-    details: `UberX €${farePerTrip}/회 × ${tripCount}회 ÷ ${companionCount}인 = €${perPersonPerDay}/일/인`,
-  };
-}
-
-function calculateUberBlackHourly(
-  availableHours: number,
-  segments: { distanceKm: number; durationMin: number }[],
-  companionCount: number,
-): UberBlackComparison {
-  const fare = UBER_PARIS_FARES.black;
-  let totalDrivingKm = 0;
-  let totalDrivingMin = 0;
-  for (const seg of segments) {
-    totalDrivingKm += seg.distanceKm;
-    totalDrivingMin += seg.durationMin;
-  }
-  const totalAvailableMin = availableHours * 60;
-  const waitingMin = Math.max(0, totalAvailableMin - totalDrivingMin);
-  const drivingFare =
-    totalDrivingKm * fare.perKm + totalDrivingMin * fare.perMin;
-  const waitingFare = waitingMin * fare.perMin;
-  const totalFare = round2(fare.base + drivingFare + waitingFare);
-  const finalFare = Math.max(totalFare, fare.min_fare);
-  return {
-    totalFare: round2(finalFare),
-    perPersonPerDay: round2(finalFare / companionCount),
-    segmentCount: segments.length,
-    totalDistanceKm: round2(totalDrivingKm),
-    totalDurationMin: Math.round(totalAvailableMin),
-  };
-}
-
-async function calculateTransportPrice(
-  input: TransportPriceInput,
-): Promise<TransportPricingResult> {
-  const {
-    companionType,
-    companionCount,
-    mobilityStyle,
-    travelStyle,
-    availableHours,
-    dayCount,
-    isRegionalTravel,
-  } = input;
-
-  const isGuide = shouldApplyGuidePrice(mobilityStyle, travelStyle);
-  const transportType = COMPANION_TO_TRANSPORT[companionType].transportType;
-
-  if (isGuide) {
-    const { dailyVehiclePrice } = await calculateGuideDailyPrice(
-      transportType,
-      availableHours,
-      isRegionalTravel || false,
-    );
-    const notes: string[] = [];
-    if (
-      mobilityStyle === "Minimal" &&
-      (travelStyle === "Premium" || travelStyle === "Luxury")
-    ) {
-      notes.push("이동 최소화 + 프리미엄/럭셔리");
-    } else if (mobilityStyle === "Minimal") {
-      notes.push("이동 최소화 → 전용 드라이빙 가이드");
-    } else {
-      notes.push(`${travelStyle} → 전용 드라이빙 가이드 포함`);
-    }
-    notes.push(`${availableHours}시간 기준, 200km 포함`);
-    if (isRegionalTravel) notes.push("지방/도시 간 이동 포함 (+50%)");
-
-    return {
-      category: "guide",
-      perPersonPerDay: round2(dailyVehiclePrice / companionCount),
-      vehicleType: transportType,
-      vehicleDescription: vehicleDescriptionOf(transportType),
-      availableHours,
-      includes200km: true,
-      isRegionalSurcharge: isRegionalTravel || false,
-      dailyVehiclePrice,
-      dayCount,
-      companionCount,
-      segmentLabel: "전용차량이동",
-      notes,
-    } as GuidePriceResult;
-  }
-
-  const guideUpsell = await getGuidePerPersonPerDay(
-    companionType,
-    companionCount,
-    availableHours,
-    false,
-  );
-
-  if (mobilityStyle === "WalkMore") {
-    const transit = calculateTransitPerPersonPerDay(
-      dayCount,
-      PARIS_TRANSIT_FARES.daily_trips_walkmore,
-    );
-    return {
-      category: "transit",
-      perPersonPerDay: transit.perPersonPerDay,
-      method: transit.method,
-      details: transit.details,
-      dayCount,
-      companionCount,
-      guideUpsell: {
-        perPersonPerDay: guideUpsell.perPersonPerDay,
-        vehicleDescription: guideUpsell.vehicleDescription,
-        clickable: true as const,
-      },
-      notes: [
-        transit.details,
-        "파리 대중교통 2026년 실제 요금",
-        "메트로/버스/RER Zone 1-5",
-      ],
-    } as TransitPriceResult;
-  }
-
-  const transitTrips =
-    PARIS_TRANSIT_FARES.daily_trips_moderate -
-    UBER_PARIS_FARES.daily_uber_trips;
-  const transit = calculateTransitPerPersonPerDay(dayCount, transitTrips);
-  const uber = calculateUberXDailyPerPerson(
-    UBER_PARIS_FARES.daily_uber_trips,
-    companionCount,
-  );
-
-  return {
-    category: "transit",
-    perPersonPerDay: round2(transit.perPersonPerDay + uber.perPersonPerDay),
-    method: `${transit.method} + UberX`,
-    details: `대중교통 €${transit.perPersonPerDay}/인/일 + UberX €${uber.perPersonPerDay}/인/일`,
-    dayCount,
-    companionCount,
-    guideUpsell: {
-      perPersonPerDay: guideUpsell.perPersonPerDay,
-      vehicleDescription: guideUpsell.vehicleDescription,
-      clickable: true as const,
-    },
-    notes: [
-      `대중교통: ${transit.details}`,
-      `우버: ${uber.details}`,
-      "파리 2026년 실제 요금",
-    ],
-  } as TransitPriceResult;
-}
-
-async function guideCostForDay(args: {
-  dayConfig: { startTime: string; endTime: string };
-  companionType: CompanionType;
-  companionCount: number;
-  mobilityStyle: MobilityStyle;
-  travelStyle: TravelStyle;
-  dayCount: number;
-}): Promise<number> {
-  const [startH, startM] = (args.dayConfig.startTime || "09:00")
-    .split(":")
-    .map(Number);
-  const [endH, endM] = (args.dayConfig.endTime || "21:00")
-    .split(":")
-    .map(Number);
-  const availableHours = Math.max(
-    4,
-    round2((endH * 60 + endM - (startH * 60 + startM)) / 60),
-  );
-  const priceResult = await calculateTransportPrice({
-    companionType: args.companionType,
-    companionCount: args.companionCount,
-    mobilityStyle: args.mobilityStyle,
-    travelStyle: args.travelStyle,
-    availableHours,
-    dayCount: args.dayCount,
-  });
-  return priceResult.category === "guide" ? priceResult.perPersonPerDay : 0;
-}
 
 type RegenPlace = {
   name: string;
@@ -927,20 +615,22 @@ app.post("/api/routes/regenerate-day", async (req, res) => {
       return res.status(400).json({ error: "day, places are required" });
     }
 
-    const result = await regenerateDay({
-      day,
-      accommodationCoords,
-      places,
-      formData,
-      keepOrder: keepOrder === true,
-    });
+    const result = await withEngineDb(() =>
+      regenerateDay({
+        day,
+        accommodationCoords,
+        places,
+        formData,
+        keepOrder: keepOrder === true,
+      }),
+    );
 
     res.json(result);
   } catch (error) {
     console.error("[Regenerate Day] Error:", (error as Error)?.message);
     res.status(500).json({ error: "동선 재최적화 실패" });
   }
-  // 이 라우트는 DB 를 직접 열지 않는다(가이드 요금 조회 함수가 자체적으로 열고 닫는다).
+  // 가이드 요금 조회는 정본(transport-pricing-service)이 withEngineDb 안에서 한다.
 });
 
 app.listen(8080);

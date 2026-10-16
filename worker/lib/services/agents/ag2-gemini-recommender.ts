@@ -341,7 +341,7 @@ async function fetchFromPlaceSeedRaw(
   return places;
 }
 
-// ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = DB 행 → 화면이 아는 장소 모양 변환 1벌(§16) = DB-only·베스트 두 길이 같은 함수를 쓴다(옛 pipeline-best 자체 변환 폐기 §19 = description·지도링크·rank 가 빠져 있었다).
+// ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = DB 행 → 화면이 아는 장소 모양 변환 1벌(§16) = DB-only·베스트 두 길이 같은 함수를 쓴다
 export function dbRowToPlace(
   r: any,
   imagePidMap: Map<string, string>,
