@@ -3,8 +3,9 @@
 
 import { spawn, execSync } from "node:child_process";
 
-// ⚠️ 수정금지(승인필요) 2026-09-27 사장님 결정 = 타입 오류 기준선 = 35(지금 실제 건수) = 새 타입 오류 0건만 통과 (정본 9-27)
-const TSC_BASELINE = 35;
+// ⚠️ 수정금지(승인필요) 2026-10-16 사장님 결정 = 타입 오류 기준선 = 지금 실제 건수(루트 4 · 워커 전용 8) = 새 타입 오류 0건만 통과 (정본 §정리)
+const TSC_BASELINE = 4;
+const WORKER_TSC_BASELINE = 8;
 
 // ⚠️ lint = "변경된(staged/작업트리) 파일만" 검사 (2026-07-19 사장님 SSOT).
 function changedLintTargets() {
@@ -39,6 +40,19 @@ const CHECKS = {
       return {
         pass: n <= TSC_BASELINE,
         detail: `에러 ${n}건 (베이스라인 ${TSC_BASELINE} 이하 = 통과)`,
+      };
+    },
+  },
+  // ⚠️ 수정금지(승인필요) 2026-10-16 사장님 결정 = 기계 7번째 = 워커 전용 타입검사(worker/tsconfig.json) = 루트 tsc 가 안 보는 worker/src.ts 를 본다 (정본 §정리)
+  workerTsc: {
+    name: "워커 타입체크",
+    cmd: "npx",
+    args: ["tsc", "--noEmit", "-p", "worker/tsconfig.json"],
+    judge: (_code, out) => {
+      const n = (out.match(/error TS/g) || []).length;
+      return {
+        pass: n <= WORKER_TSC_BASELINE,
+        detail: `에러 ${n}건 (베이스라인 ${WORKER_TSC_BASELINE} 이하 = 통과)`,
       };
     },
   },

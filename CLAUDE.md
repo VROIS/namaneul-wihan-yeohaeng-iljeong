@@ -267,7 +267,7 @@ fillcity/                             ← 창고 채움 WF(fill-city-v3.ts) · �
 ```
 
 - 집행 = `scripts/verify-pipeline.mjs` 1벌(단계 통과 = 코드 지문 마커, `.verify-state.json`). 같은 검증을 두 번 돌리지 않는다.
-  - `machine` = 가드 3(§19 박제·§16 재발명·§0 줄 수) + 기계 6(tsc 신규 0·**컨테이너 타입검사 0건, 모든 모드**·웹빌드·lint·워커 번들·MIX 스모크).
+  - `machine` = 가드 3(§19 박제·§16 재발명·§0 줄 수) + 기계 7(tsc 신규 0·**워커 전용 tsc 신규 0**·**컨테이너 타입검사 0건, 모든 모드**·웹빌드·lint·워커 번들·MIX 스모크).
   - `evidence "근거 1줄"` = 크롬/실호출 실증 기록(대상 서버를 먼저 확인).
   - `judge-pass` = 판단 3종(`Workflow({scriptPath: "scripts/verify-workflow.mjs"})` = simplify·code-review·react-best 병렬) **`allPassed: true` 가 나온 그 턴에만**.
   - `status` = 단계별 상태 표.

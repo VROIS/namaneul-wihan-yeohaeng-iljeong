@@ -5,7 +5,7 @@ export const meta = {
 };
 
 // ⚠️ 수정금지(승인필요) 2026-08-03 사장님 SSOT = **이 워크플로 = 판단 3종만** (§22 갱신) = 하나라도 실패 = 커밋 불가 = Ralph-loop 로 통과까지 보완.
-//   기계 6종(tsc·컨테이너 타입검사·웹빌드·lint·워커 번들·MIX 스모크)은 이미 2중(로컬 `node scripts/verify-before-commit.mjs` + git pre-commit) = 여기서 또 돌리지 않는다.
+//   기계 7종(tsc·워커 타입검사·컨테이너 타입검사·웹빌드·lint·워커 번들·MIX 스모크)은 이미 2중(로컬 `node scripts/verify-before-commit.mjs` + git pre-commit) = 여기서 또 돌리지 않는다.
 //   ⚠️ 에이전트 3개 = 이 PC 동시 한도 4 안(2026-07-27 실측 = 한도를 넘기면 줄 서서 시간 2배).
 
 const RESULT_SCHEMA = {
