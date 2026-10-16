@@ -295,19 +295,6 @@ export function registerPlaceRoutes(app: Express, openDb: OpenDb): void {
     },
   );
 
-  app.post("/api/cities", async (req: Request, res: Response) => {
-    const { db, close } = openDb();
-    try {
-      const [city] = await db.insert(cities).values(req.body).returning();
-      res.status(201).json(city);
-    } catch (error) {
-      console.error("Error creating city:", error);
-      res.status(500).json({ error: "Failed to create city" });
-    } finally {
-      close();
-    }
-  });
-
   app.get("/api/places/:id", async (req: Request, res: Response, next) => {
     const id = parseInt(String(req.params.id));
     if (Number.isNaN(id)) return next();

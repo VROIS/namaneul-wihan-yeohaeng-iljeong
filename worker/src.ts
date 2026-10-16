@@ -56,7 +56,6 @@ import { registerGuideVideoRoutes } from "./routes-guide-video";
 import { registerExpertBtsRoutes } from "./routes-expert-bts";
 import { registerAppleAuthRoutes } from "./routes-auth-apple";
 import { registerAuthCreditsRoutes } from "./routes-auth-credits";
-import { registerGenerateRoutes } from "./routes-generate";
 import { registerAdminRoutes } from "./routes-admin";
 import { registerSocialAuthRoutes } from "./routes-social-auth";
 import {
@@ -206,7 +205,6 @@ registerGuideVideoRoutes(app, openDb);
 registerExpertBtsRoutes(app, openDb);
 registerAppleAuthRoutes(app, openDb);
 registerAuthCreditsRoutes(app, openDb);
-registerGenerateRoutes(app, openDb);
 registerAdminRoutes(app, openDb);
 registerSocialAuthRoutes(app, openDb);
 // 결제는 Stripe 웹훅 서명검증 등으로 raw postgres 클라이언트도 필요하다.

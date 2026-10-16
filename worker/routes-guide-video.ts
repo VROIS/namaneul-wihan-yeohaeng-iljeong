@@ -44,29 +44,6 @@ export function registerGuideVideoRoutes(app: Express, openDb: OpenDb): void {
     }
   });
 
-  app.get("/api/voice-configs", async (_req, res) => {
-    const { db, close } = openDb();
-    try {
-      const rows = await db
-        .select()
-        .from(schema.voiceConfigs)
-        .where(eq(schema.voiceConfigs.isActive, true));
-      res.json(
-        rows.map((r) => ({
-          langCode: r.langCode,
-          platform: r.platform,
-          voicePriorities: r.voicePriorities,
-          excludeVoices: r.excludeVoices || [],
-        })),
-      );
-    } catch (e) {
-      console.error("[guide/voice-configs]", (e as Error)?.message || e);
-      res.status(500).json({ error: "음성설정 조회 실패" });
-    } finally {
-      close();
-    }
-  });
-
   // ⚠️ 수정금지(승인필요) 2026-08-06 사장님 승인 = 관리자 = 전체 상황판(모든 사용자의 해설).
   app.get("/api/guides", async (req, res) => {
     const { db, close } = openDb();

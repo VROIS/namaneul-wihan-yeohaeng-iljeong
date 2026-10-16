@@ -4,15 +4,7 @@ import type { drizzle } from "drizzle-orm/postgres-js";
 import { eq } from "drizzle-orm";
 import * as schema from "../shared/schema";
 import { getFirstAdmin, loginResponse } from "./auth-user";
-import {
-  FREE_CAPS,
-  UNIT_COST_EUR,
-  activitySummaryData,
-  apiKeysMasked,
-  dashboardData,
-  externalCallsSummaryData,
-  monthlyUsage,
-} from "./admin-data";
+import { apiKeysMasked, externalCallsSummaryData } from "./admin-data";
 import { registerAdminSnapshot } from "./admin-snapshot";
 
 const { guidePrices } = schema;
@@ -20,38 +12,6 @@ const { guidePrices } = schema;
 // src.ts 의 openDb() 를 그대로 받는다(연결 1벌 = 반드시 close).
 type Db = ReturnType<typeof drizzle<typeof schema>>;
 type OpenDb = () => { db: Db; close: () => void };
-
-const DEFAULT_DASHBOARD_DATA = {
-  overview: {
-    cities: 0,
-    places: 0,
-    youtubeChannels: 0,
-    blogSources: 0,
-    freshDataRatio: 0,
-  },
-  apiServices: [] as unknown[],
-  recentSyncs: [] as unknown[],
-  dbConnected: false,
-};
-
-const GATED_PROVIDERS = ["ts", "pm", "veo", "omni", "nano"];
-
-async function simulateCost(db: Db, provider: string, planned: number) {
-  const cap = FREE_CAPS[provider] ?? null;
-  const { count: used } = await monthlyUsage(db, provider);
-  const remaining = cap == null ? null : Math.max(0, cap - used);
-  const overflow =
-    remaining == null ? planned : Math.max(0, planned - remaining);
-  return {
-    provider,
-    cap,
-    used,
-    remaining,
-    planned,
-    overflow,
-    extraEur: +(overflow * UNIT_COST_EUR[provider]).toFixed(3),
-  };
-}
 
 export function registerAdminRoutes(app: Express, openDb: OpenDb): void {
   registerAdminSnapshot(app, openDb);
@@ -82,18 +42,6 @@ export function registerAdminRoutes(app: Express, openDb: OpenDb): void {
     }
   });
 
-  app.get("/api/admin/dashboard", async (_req: Request, res: Response) => {
-    const { db, close } = openDb();
-    try {
-      res.json(await dashboardData(db));
-    } catch (error) {
-      console.error("Error fetching dashboard:", error);
-      res.status(500).json(DEFAULT_DASHBOARD_DATA);
-    } finally {
-      close();
-    }
-  });
-
   // ⚠️ 2026-08-23 사장님 승인 = 관제탑 계기판 씨앗 = 외부 유료호출 이달 사용량·무료잔량(공급자별) = external_calls 1벌
   app.get(
     "/api/admin/external-calls/summary",
@@ -103,42 +51,6 @@ export function registerAdminRoutes(app: Express, openDb: OpenDb): void {
         res.json(await externalCallsSummaryData(db));
       } catch (e) {
         res.status(500).json({ error: (e as Error).message });
-      } finally {
-        close();
-      }
-    },
-  );
-
-  // 2026-08-23 사장님 = 실행 전 시뮬 API = "이 공급자로 N건 진행하면 무료잔량 안인가, 얼마 더 과금인가"(외부호출 0)
-  app.get(
-    "/api/admin/external-calls/simulate",
-    async (req: Request, res: Response) => {
-      const { db, close } = openDb();
-      try {
-        const provider = String(req.query.provider || "");
-        const planned = Number(req.query.planned || 0);
-        if (!GATED_PROVIDERS.includes(provider) || !(planned >= 0))
-          return res
-            .status(400)
-            .json({ error: "provider=ts|pm|veo|omni|nano & planned>=0" });
-        res.json(await simulateCost(db, provider, planned));
-      } catch (e) {
-        res.status(500).json({ error: (e as Error).message });
-      } finally {
-        close();
-      }
-    },
-  );
-
-  app.get(
-    "/api/admin/activity-summary",
-    async (_req: Request, res: Response) => {
-      const { db, close } = openDb();
-      try {
-        res.json(await activitySummaryData(db));
-      } catch (error) {
-        console.error("[activity-summary] 조회 실패:", error);
-        res.status(500).json({ error: "activity_summary_failed" });
       } finally {
         close();
       }
