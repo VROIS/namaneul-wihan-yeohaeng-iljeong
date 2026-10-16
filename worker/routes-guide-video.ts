@@ -1,13 +1,10 @@
 import type { Express } from "express";
 import { and, desc, eq, sql as dsql } from "drizzle-orm";
-import type { drizzle } from "drizzle-orm/postgres-js";
 import * as schema from "../shared/schema";
 import { getRoleFromDb, getUserIdFromReq } from "./auth-user";
 import type { DayVideo } from "../shared/schema";
 import { isStaleProcessing } from "./video-stale";
-
-type Db = ReturnType<typeof drizzle<typeof schema>>;
-export type OpenDb = () => { db: Db; close: () => void };
+import type { OpenDb } from "./db-types";
 
 export function registerGuideVideoRoutes(app: Express, openDb: OpenDb): void {
   // ── 가이드(해설) ──────────────────────────────────────────────────────────

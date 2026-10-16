@@ -1,15 +1,13 @@
 // 앱 에러 리포트 3건.
 // 표 api_logs(type='app_error')에 쓴다 = 받기 → INSERT · 읽기 → SELECT · 비우기 → DELETE(type='app_error' 만).
 import type { Express, Request, Response } from "express";
-import type { drizzle } from "drizzle-orm/postgres-js";
 import { asc, eq } from "drizzle-orm";
 import * as schema from "../shared/schema";
+import type { OpenDb } from "./db-types";
 
 const { apiLogs } = schema;
 
 // src.ts 의 openDb() 를 그대로 받는다(연결 1벌 = 반드시 close).
-type Db = ReturnType<typeof drizzle<typeof schema>>;
-type OpenDb = () => { db: Db; close: () => void };
 
 /** api_logs 안에서 앱 에러 행만 가리키는 표식(기존 행은 전부 type='gemini' 이라 섞이지 않는다). */
 const APP_ERROR_TYPE = "app_error";

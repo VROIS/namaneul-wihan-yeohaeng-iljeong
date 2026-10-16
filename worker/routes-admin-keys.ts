@@ -2,17 +2,15 @@
 // Worker 는 isolate 가 여러 벌 = 쓰기를 처리한 isolate 는 invalidateKeys() 로 즉시 무효화하고,
 // 다른 isolate 는 keys.ts 의 판형 확인(MAX(updated_at)+행수, 최대 30초)이 따라잡는다.
 import type { Express, Request, Response } from "express";
-import type { drizzle } from "drizzle-orm/postgres-js";
 import { eq } from "drizzle-orm";
 import * as schema from "../shared/schema";
 import { invalidateKeys } from "./keys";
 import { registerAdminLookupRoutes } from "./routes-admin-lookup";
+import type { OpenDb } from "./db-types";
 
 const { apiKeys } = schema;
 
 // src.ts 의 openDb() 를 그대로 받는다(연결 1벌 = 반드시 close).
-type Db = ReturnType<typeof drizzle<typeof schema>>;
-type OpenDb = () => { db: Db; close: () => void };
 
 export function registerAdminKeysRoutes(app: Express, openDb: OpenDb): void {
   // ⚠️ 수정금지(승인필요) 2026-09-25 사장님 결정 = 관리자 번호로 찾기 등록 = src.ts·routes-admin.ts 가 700줄 초과라 여기서 함께 등록 (정본 9-25)

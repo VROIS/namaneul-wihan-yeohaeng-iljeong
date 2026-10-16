@@ -1,7 +1,6 @@
 // 전문가 문의 8벌 + BTS 4벌.
 // 순수 계산 모듈은 그대로 import 한다(§16 재발명 금지).
 import type { Express, Request, Response } from "express";
-import type { drizzle } from "drizzle-orm/postgres-js";
 import {
   and,
   asc,
@@ -23,12 +22,11 @@ import {
   COMPANION_VIBE_CATEGORIES,
 } from "../shared/bts-character-mapping";
 import { normalizeImageUrl } from "../shared/lib/normalize-image-url";
+import type { Db, OpenDb } from "./db-types";
 
 const { cities, expertInquiries, itineraries, placeSeedRaw, users } = schema;
 
 // src.ts 의 openDb() 를 그대로 받는다(연결 1벌 = 반드시 close).
-type Db = ReturnType<typeof drizzle<typeof schema>>;
-type OpenDb = () => { db: Db; close: () => void };
 
 type InquiryRow = typeof expertInquiries.$inferSelect;
 

@@ -1,8 +1,6 @@
 // ⚠️ 수정금지(승인필요) 2026-09-06 사장님 결정 = Worker 외부 유료호출 카운터 기록 1벌(§16)
-import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import * as schema from "../shared/schema";
-
-type Db = PostgresJsDatabase<typeof schema>;
+import type { Db } from "./db-types";
 
 export type CallProvider = "ts" | "pm" | "veo" | "omni" | "nano" | "gemini";
 

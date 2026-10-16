@@ -1,15 +1,13 @@
 // ⚠️ 수정금지(승인필요) 2026-10-02 사장님 결정 = 도시 찾기 = 거점 100km 구조 1벌(city-hub.ts) = 읽기만, 도시를 만들지 않음 · 준비됨은 출발점 풀 기준 (정본 §)
 
-import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import { and, desc, eq, sql } from "drizzle-orm";
 import * as schema from "../../shared/schema";
 
 import { readySql, servingGateSql } from "../lib/services/shared/pool-radius";
 import { findHub, hubReadiness } from "../lib/services/shared/city-hub";
+import type { Db } from "../db-types";
 
 const { cities, placeSeedRaw } = schema;
-
-type Db = PostgresJsDatabase<typeof schema>;
 
 /** 도시 카드 = 전환 기준을 넘은 도시(손님상 많은 순). */
 export function readyCities(db: Db) {

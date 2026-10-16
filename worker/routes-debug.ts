@@ -1,6 +1,6 @@
 import type { Express, Request, Response } from "express";
 import { getRoleFromDb, getUserIdFromReq } from "./auth-user";
-import { type OpenDb } from "./routes-itinerary-generate-db";
+import type { OpenDb } from "./db-types";
 
 // 후처리 큐 스위치(이 파일)와 큐 소비자는 한 묶음 = 진입점(src.ts, 700줄 초과)이 import 한 줄로 받도록 여기서 내보낸다
 export { withGmapsQueue } from "./gmaps-post-queue";

@@ -1,7 +1,6 @@
 // 제미니(AI) 호출 라우트. 순수 계산 모듈(place-hint-header · ai-opinion-prompt · google-places-sku)은 엔진 것을 그대로 import 한다(§16 재발명 금지).
 import type { Express, Request, Response } from "express";
 import { and, desc, eq, sql } from "drizzle-orm";
-import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 // ⚠️ 수정금지(승인필요) 2026-09-06 = 반드시 "@google/genai/web" (기본 진입점 금지).
 // 근거(직접 실측, esbuild 번들 산출물 grep):
 //   package.json exports "." 의 "node" 조건 = dist/node/index.mjs
@@ -33,9 +32,7 @@ import { getFirstAdmin, getUserIdFromReq } from "./auth-user";
 import { computeItineraryFingerprint } from "./itinerary-fingerprint";
 import { chargeOnSuccess, precheckFeature } from "../shared/credits";
 import { readGeminiKey, readMapsKey } from "./keys";
-
-type Db = PostgresJsDatabase<typeof schema>;
-export type OpenDb = () => { db: Db; close: () => void };
+import type { OpenDb } from "./db-types";
 
 const { cities, guides, placeSeedRaw } = schema;
 

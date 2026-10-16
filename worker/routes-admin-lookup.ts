@@ -1,13 +1,10 @@
 // ⚠️ 수정금지(승인필요) 2026-09-25 사장님 결정 = 관리자 "번호로 찾아 열기" = 트리피스 1벌(DB 연결 = openDb) (정본 9-25)
 import type { Express } from "express";
-import type { drizzle } from "drizzle-orm/postgres-js";
 import { eq } from "drizzle-orm";
 import * as schema from "../shared/schema";
+import type { OpenDb } from "./db-types";
 
 const { guides, itineraries, savedVideos } = schema;
-
-type Db = ReturnType<typeof drizzle<typeof schema>>;
-type OpenDb = () => { db: Db; close: () => void };
 
 export function registerAdminLookupRoutes(app: Express, openDb: OpenDb) {
   app.get("/api/admin/lookup/:kind/:id", async (req, res) => {

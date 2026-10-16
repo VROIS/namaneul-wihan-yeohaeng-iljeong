@@ -1,17 +1,15 @@
 // ⚠️ 수정금지(승인필요) 2026-09-06 사장님 결정 = 관리자 라우트 = DB 접근 openDb() 1벌
 import type { Express, Request, Response } from "express";
-import type { drizzle } from "drizzle-orm/postgres-js";
 import { eq } from "drizzle-orm";
 import * as schema from "../shared/schema";
 import { getFirstAdmin, loginResponse } from "./auth-user";
 import { apiKeysMasked, externalCallsSummaryData } from "./admin-data";
 import { registerAdminSnapshot } from "./admin-snapshot";
+import type { OpenDb } from "./db-types";
 
 const { guidePrices } = schema;
 
 // src.ts 의 openDb() 를 그대로 받는다(연결 1벌 = 반드시 close).
-type Db = ReturnType<typeof drizzle<typeof schema>>;
-type OpenDb = () => { db: Db; close: () => void };
 
 export function registerAdminRoutes(app: Express, openDb: OpenDb): void {
   registerAdminSnapshot(app, openDb);

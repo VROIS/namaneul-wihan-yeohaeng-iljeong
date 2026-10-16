@@ -6,7 +6,6 @@ import {
   apiKeysMasked,
   dashboardData,
   externalCallsSummaryData,
-  type Db,
 } from "./admin-data";
 import { recentItinerariesSummary } from "./routes-admin-itineraries";
 import {
@@ -14,8 +13,7 @@ import {
   isR2Configured,
   uploadToR2,
 } from "./lib/services/shared/r2-client";
-
-type OpenDb = () => { db: Db; close: () => void };
+import type { Db, OpenDb } from "./db-types";
 
 type Snapshot = {
   savedAt: string;

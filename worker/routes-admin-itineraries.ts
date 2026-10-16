@@ -1,10 +1,9 @@
 // ⚠️ 수정금지(승인필요) 2026-10-02 사장님 결정 = 최근 일정 = 누가·어디서·몇 곳·어떤 상태인지(상태 필터 없음 = 만드는 중·실패 포함) (정본 §)
-import type { drizzle } from "drizzle-orm/postgres-js";
 import { eq, sql } from "drizzle-orm";
 import * as schema from "../shared/schema";
+import type { Db } from "./db-types";
 
 const { cities, itineraries, users } = schema;
-type Db = ReturnType<typeof drizzle<typeof schema>>;
 
 export async function recentItinerariesSummary(db: Db) {
   const rows = await db

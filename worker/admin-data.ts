@@ -1,10 +1,10 @@
 // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 관리자 화면 숫자 계산 1벌 = 옛 길(각 엔드포인트)과 저장본(admin-snapshot) 이 같은 함수를 부른다 (정본 §)
-import type { drizzle } from "drizzle-orm/postgres-js";
 import { and, count, eq, isNotNull, ne, sql } from "drizzle-orm";
 import * as schema from "../shared/schema";
 import { PRICE_EUR } from "../shared/credits";
 import { accessSummary } from "./routes-admin-access";
 import { recentDelta } from "./lib/services/shared/metrics-heartbeat";
+import type { Db } from "./db-types";
 
 const {
   apiKeys,
@@ -17,8 +17,6 @@ const {
   savedVideos,
   users,
 } = schema;
-
-export type Db = ReturnType<typeof drizzle<typeof schema>>;
 
 export const FREE_CAPS: Record<string, number | undefined> = {
   ts: 1000,

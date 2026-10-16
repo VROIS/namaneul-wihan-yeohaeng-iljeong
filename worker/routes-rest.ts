@@ -1,7 +1,6 @@
 // POST /api/guides/batch 1건.
 // (GET /api/guides · DELETE /api/guides/:id 는 worker/routes-guide-video.ts 에 있다 = 중복 배선 금지.)
 import type { Express, Request, Response } from "express";
-import type { drizzle } from "drizzle-orm/postgres-js";
 import { and, eq, sql as dsql } from "drizzle-orm";
 // 바인딩(R2) 접근 = src.ts:41 · routes-gemini.ts:27 과 같은 공식 방식.
 // 타입은 `wrangler types` 산출물(worker-configuration.d.ts:5 RAW_BUCKET: R2Bucket).
@@ -9,12 +8,11 @@ import { env } from "cloudflare:workers";
 import * as schema from "../shared/schema";
 import { getFirstAdmin, getUserIdFromReq } from "./auth-user";
 import { userGuideImageKey } from "../shared/r2-paths";
+import type { Db, OpenDb } from "./db-types";
 
 const { cities, guides } = schema;
 
 // src.ts 의 openDb() 를 그대로 받는다(연결 1벌 = 반드시 close).
-type Db = ReturnType<typeof drizzle<typeof schema>>;
-type OpenDb = () => { db: Db; close: () => void };
 
 async function nearestCityIdByCoords(
   db: Db,

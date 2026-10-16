@@ -1,14 +1,12 @@
 // ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = 응답 번역
 //   1,777줄 한 덩어리에서 그대로 잘라낸 것(§0) = 계산·규칙 한 글자도 안 바꿈.
 
-import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import { and, eq, inArray } from "drizzle-orm";
 import * as schema from "../../shared/schema";
 import { LANGS } from "../lib/services/shared/language-instruction";
+import type { Db } from "../db-types";
 
 const { placeTranslations } = schema;
-
-type Db = PostgresJsDatabase<typeof schema>;
 
 // ── 응답 번역 ──────────
 

@@ -1,6 +1,5 @@
 // ⚠️ 수정금지(승인필요) 2026-09-29 사장님 결정 = 여정 완성(워커 DB-only·베스트) = 식사 추정·글자·시간당 요금·식당 분포 = shared 1벌 (정본 §)
 
-import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import { and, eq, sql } from "drizzle-orm";
 import * as schema from "../../shared/schema";
 
@@ -40,10 +39,9 @@ import {
   pickPlaceImage,
 } from "../lib/services/shared/place-image";
 import { addMinutes, guideCostForDay, shouldApplyGuidePrice } from "./pricing";
+import type { Db } from "../db-types";
 
 const { cities, placeSeedRaw } = schema;
-
-type Db = PostgresJsDatabase<typeof schema>;
 
 // ── AG4 = 완성 ───────────
 

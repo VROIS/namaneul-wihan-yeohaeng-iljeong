@@ -2,13 +2,11 @@
 //   1,777줄 한 덩어리에서 그대로 잘라낸 것(§0) = 계산·규칙 한 글자도 안 바꿈.
 
 import type { Express, Request, Response } from "express";
-import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import { sql } from "drizzle-orm";
 import * as schema from "../../shared/schema";
+import type { Db } from "../db-types";
 
 const { cities } = schema;
-
-type Db = PostgresJsDatabase<typeof schema>;
 
 // ── 여정 행 저장 ─────────
 

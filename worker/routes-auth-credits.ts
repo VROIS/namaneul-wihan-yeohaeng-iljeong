@@ -1,6 +1,5 @@
 // 계정(메일 로그인·내 정보·탈퇴) + 크레딧(잔액·내역) 라우트.
 import type { Express, Request, Response } from "express";
-import type { drizzle } from "drizzle-orm/postgres-js";
 import { desc, eq } from "drizzle-orm";
 import * as schema from "../shared/schema";
 import {
@@ -13,11 +12,9 @@ import {
 import { getUser } from "../shared/users";
 import { getBalance } from "../shared/credits";
 import { BIRTHDATE_REQUIRED } from "../shared/birthdate-policy";
+import type { Db, OpenDb } from "./db-types";
 
 const { creditTransactions, users } = schema;
-
-type Db = ReturnType<typeof drizzle<typeof schema>>;
-export type OpenDb = () => { db: Db; close: () => void };
 
 /** markAccountDeleted = 문패만 내린다(아무것도 지우지 않는다). */
 async function markAccountDeleted(db: Db, userId: string): Promise<void> {

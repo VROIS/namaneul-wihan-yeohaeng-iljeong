@@ -2,18 +2,16 @@
 // 열쇠 = DB api_keys 행을 바로 읽는다(방금 저장한 값을 봐야 해서 캐시 금지) · 외부호출 중에는 DB 연결을 쥐지 않는다(읽고 바로 닫고, 끝나면 새로 열어 결과 UPDATE).
 // §18 raw 저장 없음(원래 없던 것 = 만들면 §19 위반).
 import type { Express, Request, Response } from "express";
-import type { drizzle } from "drizzle-orm/postgres-js";
 import { eq } from "drizzle-orm";
 // ⚠️ 반드시 "@google/genai/web" (기본 진입점 금지) = 기본 진입점은 node: builtin 11개를 끌어와 Worker 에서 깨진다(routes-gemini.ts 에 실측 기록).
 // Worker 번들은 정적 import 로만 진입점(/web)을 고정할 수 있다. 동작(제미니 호출 1회)은 같다.
 import { GoogleGenAI } from "@google/genai/web";
 import * as schema from "../shared/schema";
+import type { OpenDb } from "./db-types";
 
 const { apiKeys } = schema;
 
 // src.ts 의 openDb() 를 그대로 받는다(연결 1벌 = 반드시 close).
-type Db = ReturnType<typeof drizzle<typeof schema>>;
-type OpenDb = () => { db: Db; close: () => void };
 
 interface TestResult {
   success: boolean;

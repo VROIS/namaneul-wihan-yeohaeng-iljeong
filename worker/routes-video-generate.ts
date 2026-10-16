@@ -1,7 +1,6 @@
 // ⚠️ 수정금지(승인필요) 2026-09-12 사장님 결정 = 일별 영상 = Worker 접수 + 컨테이너 생성(container/generate.ts) (정본 §)
 
 import type { Express, Request, Response } from "express";
-import type { drizzle } from "drizzle-orm/postgres-js";
 import { eq, sql } from "drizzle-orm";
 import { Container, getContainer } from "@cloudflare/containers";
 import { env, waitUntil } from "cloudflare:workers";
@@ -11,9 +10,7 @@ import { getUserIdFromReq } from "./auth-user";
 import { precheckFeature } from "../shared/credits";
 import type { DayVideo } from "../shared/schema";
 import { isStaleProcessing } from "./video-stale";
-
-type Db = ReturnType<typeof drizzle<typeof schema>>;
-type OpenDb = () => { db: Db; close: () => void };
+import type { Db, OpenDb } from "./db-types";
 
 const { itineraries } = schema;
 

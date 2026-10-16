@@ -1,6 +1,5 @@
 // ⚠️ 수정금지(승인필요) 2026-09-29 사장님 결정 = 사진·뼈대·창고에서 고르기 1벌(워커 DB-only·베스트) = 사진 place-image.ts · 볼거리 슬롯 나누기 ag2 computeCatSlots · 식당 가격 = 그 도시 분포(shared/meal-budget-tiers)
 
-import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import { and, between, eq, gte, inArray } from "drizzle-orm";
 import * as schema from "../../shared/schema";
 
@@ -27,10 +26,9 @@ import {
 } from "../lib/services/shared/place-image";
 import { computeCatSlots } from "../lib/services/agents/ag2-gemini-recommender";
 import { SIGHT_CATEGORIES } from "../../shared/vibe-category";
+import type { Db } from "../db-types";
 
 const { cities, placeSeedRaw } = schema;
-
-type Db = PostgresJsDatabase<typeof schema>;
 
 // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 사진 = 원본 place-image.ts 1벌(PID공유 폴백 포함) = ../lib/services/shared/place-image.ts
 

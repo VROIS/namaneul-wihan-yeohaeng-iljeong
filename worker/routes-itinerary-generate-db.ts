@@ -1,7 +1,6 @@
 // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 갈래 = pipeline-v3.ts 그대로(핀·베스트·DB-only·MIX). 베스트·DB-only = 이 워커 판(사장님 튜닝), MIX = lib/services/agents/pipeline-v3.ts 원본 복사본 + withEngineDb 연결 (정본 §)
 
 import type { Express, Request, Response } from "express";
-import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import { eq } from "drizzle-orm";
 import * as schema from "../shared/schema";
 
@@ -25,11 +24,10 @@ import { applyItineraryTranslations } from "./best-itinerary/translate";
 import { buildItineraryData } from "./best-itinerary/save";
 import { enqueueGmapsPost } from "./gmaps-post-queue";
 import { waitUntil } from "cloudflare:workers";
+import type { Db, OpenDb } from "./db-types";
 
 const { itineraries, users } = schema;
 
-export type Db = PostgresJsDatabase<typeof schema>;
-export type OpenDb = () => { db: Db; close: () => void };
 type OpenSql = () => Sql;
 
 async function loadAllKeys(openSql: OpenSql): Promise<void> {

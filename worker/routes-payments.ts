@@ -2,11 +2,9 @@
 // Worker 필수 2가지 = ① Stripe 클라이언트 httpClient = Stripe.createFetchHttpClient(Workers 에는 Node http 모듈이 없다) ② 웹훅 서명검증 = constructEventAsync + createSubtleCryptoProvider(동기 constructEvent 불가)
 // 근거 = https://blog.cloudflare.com/announcing-stripe-support-in-workers/
 import express, { type Express, type Request, type Response } from "express";
-import type { drizzle } from "drizzle-orm/postgres-js";
 import Stripe from "stripe";
 import { waitUntil } from "cloudflare:workers";
 import type { Sql } from "postgres";
-import * as schema from "../shared/schema";
 import { getRoleFromDb, getUserIdFromReq } from "./auth-user";
 import { getUser } from "../shared/users";
 import {
@@ -17,10 +15,9 @@ import {
   getBalance,
 } from "../shared/credits";
 import { ensureKeys } from "./keys";
+import type { Db, OpenDb } from "./db-types";
 
 // src.ts 의 openDb() 를 그대로 받는다(연결 1벌 = 반드시 close).
-type Db = ReturnType<typeof drizzle<typeof schema>>;
-type OpenDb = () => { db: Db; close: () => void };
 // 열쇠(STRIPE_SECRET_KEY)는 DB api_keys 에 있다(keys.ts). src.ts 의 withKeys() 는 export 되지
 // 않으므로 같은 방식(연결 1벌 → ensureKeys → 반드시 닫기)을 여기서 쓴다.
 type OpenSql = () => Sql;

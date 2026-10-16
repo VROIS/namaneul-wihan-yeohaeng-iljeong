@@ -1,14 +1,12 @@
 import type { Express, Request, Response } from "express";
-import type { drizzle } from "drizzle-orm/postgres-js";
 import { eq } from "drizzle-orm";
 import * as schema from "../shared/schema";
 import { getRoleFromDb, getUserIdFromReq } from "./auth-user";
+import type { OpenDb } from "./db-types";
 
 const { users } = schema;
 
 // 연결 1벌 = 반드시 close.
-type Db = ReturnType<typeof drizzle<typeof schema>>;
-type OpenDb = () => { db: Db; close: () => void };
 
 export function registerMisc2Routes(app: Express, openDb: OpenDb): void {
   // 같은 경로의 /me 는 GET 뿐이라 메서드가 겹치지 않는다.

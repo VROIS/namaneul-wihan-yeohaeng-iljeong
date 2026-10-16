@@ -1,16 +1,12 @@
 // 애플 로그인 라우트.
 import type { Express, Request, Response } from "express";
-import type { drizzle } from "drizzle-orm/postgres-js";
 import { createRemoteJWKSet, jwtVerify } from "jose";
-import * as schema from "../shared/schema";
 import {
   APPLE_DEFAULT_NAME,
   findOrCreateUser,
   loginResponse,
 } from "./auth-user";
-
-type Db = ReturnType<typeof drizzle<typeof schema>>;
-type OpenDb = () => { db: Db; close: () => void };
+import type { OpenDb } from "./db-types";
 
 // ── 애플 신분증 확인 ────────────────────────────
 

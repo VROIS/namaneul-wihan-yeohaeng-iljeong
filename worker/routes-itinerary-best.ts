@@ -5,7 +5,7 @@
 import { and, eq, sql } from "drizzle-orm";
 import type { TripFormData } from "./lib/services/agents/types";
 import { buildSkeleton } from "./lib/services/agents/ag1-skeleton-builder";
-import { type Db } from "./routes-itinerary-generate-db";
+import type { Db } from "./db-types";
 import {
   poolWhereSql,
   recalcCrossCityZone,

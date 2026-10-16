@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { and, desc, eq, inArray, notInArray } from "drizzle-orm";
-import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
+import type { Db, OpenDb } from "./db-types";
 import * as schema from "../shared/schema";
 import { getRoleFromDb, getUserIdFromReq } from "./auth-user";
 import { buildItineraryData, matchCityIdByName } from "./best-itinerary/save";
@@ -8,13 +8,10 @@ import { applyItineraryTranslations } from "./best-itinerary/translate";
 import { LANGS } from "./lib/services/shared/language-instruction";
 import { computeItineraryFingerprint } from "./itinerary-fingerprint";
 
-export type WorkerDb = PostgresJsDatabase<typeof schema>;
-export type OpenDb = () => { db: WorkerDb; close: () => void };
-
 type WithCityId = Record<string, unknown>;
 
 async function attachCityNameEnMany<T extends WithCityId>(
-  db: WorkerDb,
+  db: Db,
   list: T[],
 ): Promise<T[]> {
   if (!Array.isArray(list) || list.length === 0) return list;
@@ -45,7 +42,7 @@ async function attachCityNameEnMany<T extends WithCityId>(
 }
 
 async function attachCityNameEn<T extends WithCityId>(
-  db: WorkerDb,
+  db: Db,
   itinerary: T | null | undefined,
 ): Promise<T | null | undefined> {
   if (!itinerary) return itinerary;

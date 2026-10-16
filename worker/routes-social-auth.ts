@@ -1,6 +1,5 @@
 // 구글·카카오 로그인 라우트.
 import type { Express, Request, Response } from "express";
-import type { drizzle } from "drizzle-orm/postgres-js";
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import { and, eq, ne, sql } from "drizzle-orm";
 import { createLocalJWKSet, jwtVerify } from "jose";
@@ -12,11 +11,9 @@ import {
   loginResponse,
 } from "./auth-user";
 import { readSocialKeys } from "./keys";
+import type { Db, OpenDb } from "./db-types";
 
 const { apiKeys } = schema;
-
-type Db = ReturnType<typeof drizzle<typeof schema>>;
-type OpenDb = () => { db: Db; close: () => void };
 
 // ── 구글 신분증 확인 ────────────────────────────
 // 워커는 부팅 시점에 process.env 가 비어 있어, 모듈 최상단에서 읽으면 빈 문자열로 굳는다 = 함수 안에서 읽는다.

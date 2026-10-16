@@ -1,7 +1,6 @@
 // POST /api/routes/day-live 1벌.
 
 import type { Express, Request, Response } from "express";
-import type { PostgresJsDatabase } from "drizzle-orm/postgres-js";
 import { eq, sql } from "drizzle-orm";
 // 바인딩(R2) 접근 + waitUntil = routes-gemini.ts:31 과 같은 방식(그 파일 주석의 근거 그대로).
 import { env, waitUntil } from "cloudflare:workers";
@@ -9,9 +8,7 @@ import * as schema from "../shared/schema";
 import { saveRawToR2 } from "./raw-store";
 import { itineraryContext } from "../shared/r2-paths";
 import { readMapsKey } from "./keys";
-
-type Db = PostgresJsDatabase<typeof schema>;
-export type OpenDb = () => { db: Db; close: () => void };
+import type { Db, OpenDb } from "./db-types";
 
 const ROUTES_URL = "https://routes.googleapis.com/directions/v2:computeRoutes";
 
