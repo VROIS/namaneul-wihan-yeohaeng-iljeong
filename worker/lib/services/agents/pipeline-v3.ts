@@ -21,7 +21,6 @@ import { buildDayConfig } from "../transport-pricing-service";
 import { step1_geminiItinerary } from "./pipeline-v3-step1-gemini";
 import { step2_enrichAndBuild } from "./pipeline-v3-step2-build";
 
-// ⚠️ 수정금지(승인필요) 2026-05-20 = 사용자 SSOT = DB-only / MIX 완전 분기 entry
 export async function runPipelineV3(formData: TripFormData): Promise<any> {
   const { isCityReady } = await import("./ag2-gemini-recommender");
   // ⚠️ 수정금지(승인필요) 2026-10-02 사장님 결정 = 출발점 좌표(없으면 이름)로 거점 폴더를 찾는다 = 읽기만, 도시를 만들지 않음 (정본 §)
@@ -30,30 +29,7 @@ export async function runPipelineV3(formData: TripFormData): Promise<any> {
     (formData as any).accommodationCoords ?? formData.destinationCoords,
     (formData as any).destinationCountryCode,
   );
-  // ⚠️ 수정금지(승인필요) 2026-07-31 사장님 승인(BTS D단계 결정5) = 고른 장소(pinnedPlaceIds) 있으면 db-only 직행.
-  if (formData.pinnedPlaceIds?.length) {
-    if (!cityCheck.cityId) {
-      throw new Error(
-        `핀 요청인데 도시 미발견: '${formData.destination}' = 무료(db-only) 전제 = 유료 경로로 흘리지 않는다`,
-      );
-    }
-    const { runPipelineDbOnly } = await import("./pipeline-db-only");
-    return runPipelineDbOnly(formData, cityCheck);
-  }
-  // ⚠️ 수정금지(승인필요) 2026-09-29 사장님 결정 = 베스트 여정 = DB 올리 전환 기준과 무관하게 **항상 DB-only** = 도시가 있으면 베스트 분기, 없으면 유료 MIX 로 흘리지 않고 막는다(핀 분기와 동형) (정본 §)
-  if (formData.bestOnly) {
-    if (!cityCheck.cityId) {
-      throw new Error(
-        `베스트 요청인데 도시 미발견: '${formData.destination}' = DB-only 전제 = 유료 경로로 흘리지 않는다`,
-      );
-    }
-    const { runPipelineBest } = await import("./pipeline-best");
-    return runPipelineBest(formData, cityCheck);
-  }
-  if (cityCheck.ready) {
-    const { runPipelineDbOnly } = await import("./pipeline-db-only");
-    return runPipelineDbOnly(formData, cityCheck);
-  }
+  // ⚠️ 수정금지(승인필요) 2026-10-16 사장님 결정 = 핀·베스트·준비됨 갈림은 라우트(routes-itinerary-generate-db.ts)가 먼저 판정한다 = 이 함수는 MIX 만 받는다 (정본 §)
   console.log(
     `\n[V3] city='${cityCheck.cityName}' ready=false (손님상 ${cityCheck.count}곳) → MIX 경로`,
   );

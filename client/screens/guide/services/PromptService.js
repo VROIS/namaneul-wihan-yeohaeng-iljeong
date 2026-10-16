@@ -56,15 +56,6 @@ async function refreshFromServer(language, type, cacheKey) {
   }
 }
 
-// ⚠️ 수정금지(승인필요): 앱 시작 시 현재 언어의 프롬프트 미리 로딩
-export async function preloadPrompts(language) {
-  // ⚠️ 수정금지(승인필요) 2026-08-14 사장님 승인 = 판단3종 적발(§22) = 이 함수만 정규화 누락 →
-  const normalized = normalizeLang(language);
-  const lang = SUPPORTED_LANGS.includes(normalized) ? normalized : "en";
-  await Promise.all([fetchPrompt(lang, "image"), fetchPrompt(lang, "text")]);
-  console.log(`[PromptService] ${lang} 프롬프트 프리로드 완료`);
-}
-
 // ⚠️ 수정금지(승인필요): 오프라인 폴백 프롬프트 (서버 불가 시)
 function getFallbackPrompt(language, type) {
   if (type === "image") {

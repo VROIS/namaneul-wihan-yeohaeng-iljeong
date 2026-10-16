@@ -28,11 +28,6 @@ export type GuideOption = "None" | "Walking" | "Sedan" | "VIP";
 
 export type CurationFocus = "Kids" | "Parents" | "Everyone" | "Self";
 
-export interface CompanionDetail {
-  count: number;
-  ages: number[];
-}
-
 export interface TripFormData {
   birthDate: string; // 🎯 사용자 본인 생년월일 (로그인 필수 - 가족 연령 추정용)
   companionType: CompanionType;
@@ -463,93 +458,4 @@ export const CURATION_FOCUS_OPTIONS: {
     icon: "users",
   },
   { id: "Self", label: "나", labelKey: "options.self", icon: "user" },
-];
-
-export const MEAL_LEVEL_OPTIONS: {
-  id: MealLevel;
-  label: string;
-  labelKey: string;
-  icon: string;
-  pricePerMeal: number;
-  description: string;
-}[] = [
-  {
-    id: "Michelin",
-    label: "미슐랭급",
-    labelKey: "options.michelin",
-    icon: "star",
-    pricePerMeal: 100,
-    description: "미슐랭 1~3스타",
-  },
-  {
-    id: "Trendy",
-    label: "트렌디",
-    labelKey: "options.trendy",
-    icon: "trending-up",
-    pricePerMeal: 50,
-    description: "인스타 핫플",
-  },
-  {
-    id: "Local",
-    label: "현지맛집",
-    labelKey: "options.local",
-    icon: "map-pin",
-    pricePerMeal: 30,
-    description: "로컬 추천",
-  },
-  {
-    id: "Budget",
-    label: "간편식",
-    labelKey: "options.budget",
-    icon: "coffee",
-    pricePerMeal: 10,
-    description: "스트리트푸드",
-  },
-];
-
-export const GUIDE_OPTION_OPTIONS: {
-  id: GuideOption;
-  label: string;
-  labelKey: string;
-  icon: string;
-  pricePerDay: number;
-  description: string;
-  editable: boolean;
-}[] = [
-  {
-    id: "None",
-    label: "없음 (자유)",
-    labelKey: "options.guideNone",
-    icon: "compass",
-    pricePerDay: 0,
-    description: "직접 이동",
-    editable: false,
-  },
-  {
-    id: "Walking",
-    label: "워킹 가이드",
-    labelKey: "options.guideWalking",
-    icon: "map",
-    pricePerDay: 420,
-    description: "반일 도보 투어",
-    editable: true,
-  },
-  {
-    id: "Sedan",
-    label: "세단 가이드",
-    labelKey: "options.guideSedan",
-    icon: "navigation",
-    pricePerDay: 600,
-    description: "전일 차량+가이드",
-    editable: true,
-  },
-  {
-    id: "VIP",
-    label: "VIP 전담",
-    labelKey: "options.guideVip",
-    icon: "award",
-    pricePerDay: 1015,
-    description: "최상위 VIP 서비스",
-    editable: true,
-  },
 ];

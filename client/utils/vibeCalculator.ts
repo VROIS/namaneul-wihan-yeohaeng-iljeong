@@ -58,28 +58,3 @@ export function vibesSummary(vibes: Vibe[]): string {
     vibes.slice(0, 3).map(getVibeLabel).join(" & ") || i18n.t("options.healing")
   );
 }
-
-export function formatVibeWeightsSummary(weights: VibeWeight[]): string {
-  return weights
-    .sort((a, b) => b.percentage - a.percentage)
-    .map((w) => `${getVibeLabel(w.vibe)} ${w.percentage}%`)
-    .join(" | ");
-}
-
-export function getPreferredTimeSlots(
-  vibe: Vibe,
-): ("morning" | "lunch" | "afternoon" | "evening")[] {
-  const slotMapping: Record<
-    Vibe,
-    ("morning" | "lunch" | "afternoon" | "evening")[]
-  > = {
-    Healing: ["morning", "afternoon"],
-    Foodie: ["lunch", "evening"],
-    Photospot: ["afternoon"],
-    Culture: ["morning", "afternoon"],
-    Adventure: ["morning", "afternoon"],
-    Shopping: ["afternoon", "evening"],
-    Attraction: ["morning", "afternoon"],
-  };
-  return slotMapping[vibe];
-}
