@@ -6,6 +6,3 @@ export * from "./itineraries";
 export * from "./system";
 export * from "./expert";
 export * from "./credits";
-export * from "./relations";
-
-export * from "../models/chat";

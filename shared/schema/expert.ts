@@ -8,8 +8,6 @@ import {
   boolean,
   jsonb,
 } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod";
 import { users } from "./users";
 import { itineraries } from "./itineraries";
 
@@ -42,18 +40,3 @@ export const expertInquiries = pgTable("expert_inquiries", {
     .notNull(),
   answeredAt: timestamp("answered_at"),
 });
-
-export const insertExpertInquirySchema = createInsertSchema(
-  expertInquiries,
-).omit({
-  id: true,
-  status: true,
-  expertId: true,
-  expertReply: true,
-  isReadByUser: true,
-  createdAt: true,
-  answeredAt: true,
-});
-
-export type ExpertInquiry = typeof expertInquiries.$inferSelect;
-export type InsertExpertInquiry = z.infer<typeof insertExpertInquirySchema>;

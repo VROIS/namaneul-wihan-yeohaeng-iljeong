@@ -11,8 +11,6 @@ import {
   boolean,
   unique,
 } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod";
 import { personaTypeEnum } from "./enums";
 
 export interface DayVideo {
@@ -101,11 +99,4 @@ export const savedVideos = pgTable(
   ],
 );
 
-export const insertItinerarySchema = createInsertSchema(itineraries).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
 export type Itinerary = typeof itineraries.$inferSelect;
-export type InsertItinerary = z.infer<typeof insertItinerarySchema>;

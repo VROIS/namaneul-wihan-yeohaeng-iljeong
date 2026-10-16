@@ -87,12 +87,6 @@ export const guidePrices = pgTable("guide_prices", {
     .notNull(),
 });
 
-// ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = Step 4 DB DROP = 폐기된 21 테이블 relations + insert schema + type 모두 삭제
-
-export type ApiServiceStatus = typeof apiServiceStatus.$inferSelect;
-export type ExchangeRate = typeof exchangeRates.$inferSelect;
-export type GuidePrice = typeof guidePrices.$inferSelect;
-
 export const apiKeys = pgTable("api_keys", {
   id: serial("id").primaryKey(),
   keyName: text("key_name").notNull().unique(), // GEMINI_API_KEY, YOUTUBE_API_KEY, etc.
@@ -109,8 +103,6 @@ export const apiKeys = pgTable("api_keys", {
     .default(sql`CURRENT_TIMESTAMP`)
     .notNull(),
 });
-
-export type ApiKey = typeof apiKeys.$inferSelect;
 
 // ⚠️ 수정금지(승인필요) 2026-09-06 사장님 결정 = external_calls drizzle 정의 = 실 DB 그대로(§16)
 export const externalCalls = pgTable(
@@ -134,8 +126,6 @@ export const externalCalls = pgTable(
   ],
 );
 
-export type ExternalCallRow = typeof externalCalls.$inferSelect;
-
 // ⚠️ 수정금지(승인필요) 2026-09-06 사장님 결정 = api_logs drizzle 정의 = 실 DB 그대로(§16)
 export const apiLogs = pgTable("api_logs", {
   id: serial("id").primaryKey(),
@@ -150,5 +140,3 @@ export const apiLogs = pgTable("api_logs", {
     .default(sql`CURRENT_TIMESTAMP`)
     .notNull(),
 });
-
-export type ApiLogRow = typeof apiLogs.$inferSelect;

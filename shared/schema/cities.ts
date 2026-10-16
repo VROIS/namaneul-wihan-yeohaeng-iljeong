@@ -9,8 +9,6 @@ import {
   jsonb,
   integer,
 } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod";
 
 export const cities = pgTable("cities", {
   id: serial("id").primaryKey(),
@@ -54,11 +52,4 @@ export const cities = pgTable("cities", {
     .notNull(),
 });
 
-export const insertCitySchema = createInsertSchema(cities).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-});
-
 export type City = typeof cities.$inferSelect;
-export type InsertCity = z.infer<typeof insertCitySchema>;

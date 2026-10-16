@@ -89,4 +89,3 @@ export const placeTranslations = pgTable(
     ),
   ],
 );
-export type PlaceSeedRaw = typeof placeSeedRaw.$inferSelect;

@@ -38,7 +38,6 @@
     "cobe": "^2.0.1",
     "dotenv": "^16.4.7",
     "drizzle-orm": "^0.39.3",
-    "drizzle-zod": "^0.7.1",
     "esbuild": "^0.24.2",
     "expo": "~54.0.33",
     "expo-apple-authentication": "~8.0.8",
@@ -95,7 +94,6 @@
     "stripe": "22.3.2",
     "tslib": "^2.8.1",
     "tsx": "^4.20.6",
-    "zod": "^3.25.76",
     "zustand": "^5.0.14"
   },
   "devDependencies": {

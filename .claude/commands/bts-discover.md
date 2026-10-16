@@ -257,6 +257,6 @@ AI: [7 sub-agent (Sonnet) 동시 호출 = 단일 메시지에 7 Agent tool calls
 
 ## 향후 확장
 
-- **32 도시 자동 routine** = Claude `schedule` 스킬 매일 KST 03:00 → 다음 도시 (cities.bts_concert_dates ASC) → 7 카테고리 병렬 sub-agent → consolidate → DB → /bts-image-fill 연쇄
+- **32 도시 자동 routine** = Claude `schedule` 스킬 매일 KST 03:00 → 다음 도시 (cities.bts_concert_dates ASC) → 7 카테고리 병렬 sub-agent → consolidate → DB 연쇄
 - 부족분 도시 자동 선택: `/bts-discover-next` (cities 테이블 SELECT → 가장 부족한 도시 + 카테고리 자동)
 - = 사용자 한 줄도 안 누르고 32 도시 × 7 카테고리 = 약 1 달 자동 완료

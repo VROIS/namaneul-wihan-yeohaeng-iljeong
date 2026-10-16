@@ -10,8 +10,6 @@ import {
   jsonb,
   unique,
 } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod";
 import { personaTypeEnum } from "./enums";
 
 export const users = pgTable("users", {
@@ -93,14 +91,4 @@ export const userProviders = pgTable(
     ),
   ],
 );
-
-export const insertUserSchema = createInsertSchema(users).pick({
-  username: true,
-  password: true,
-  displayName: true,
-  persona: true,
-});
-
-export type InsertUser = z.infer<typeof insertUserSchema>;
 export type User = typeof users.$inferSelect;
-export type UserProvider = typeof userProviders.$inferSelect;

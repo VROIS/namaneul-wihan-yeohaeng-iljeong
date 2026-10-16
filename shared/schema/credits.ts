@@ -10,8 +10,6 @@ import {
   uniqueIndex,
   index,
 } from "drizzle-orm/pg-core";
-import { createInsertSchema } from "drizzle-zod";
-import { z } from "zod";
 import { users } from "./users";
 import { cities } from "./cities"; // guides.city_id 참조(2026-08-02 = TRIPIS ↔ 도시 잇기)
 
@@ -120,40 +118,5 @@ export const prompts = pgTable("prompts", {
     .notNull(),
 });
 
-export const insertGuideSchema = createInsertSchema(guides).omit({
-  id: true,
-  userId: true,
-  viewCount: true,
-  createdAt: true,
-  updatedAt: true,
-});
-export const insertCreditTransactionSchema = createInsertSchema(
-  creditTransactions,
-).omit({
-  id: true,
-  createdAt: true,
-});
-export const insertSharedHtmlPageSchema = createInsertSchema(
-  sharedHtmlPages,
-).omit({
-  id: true,
-  userId: true,
-  downloadCount: true,
-  createdAt: true,
-  updatedAt: true,
-});
-export const insertPromptSchema = createInsertSchema(prompts).omit({
-  id: true,
-  createdAt: true,
-});
-
 export type Guide = typeof guides.$inferSelect;
-export type InsertGuide = z.infer<typeof insertGuideSchema>;
 export type CreditTransaction = typeof creditTransactions.$inferSelect;
-export type InsertCreditTransaction = z.infer<
-  typeof insertCreditTransactionSchema
->;
-export type SharedHtmlPage = typeof sharedHtmlPages.$inferSelect;
-export type InsertSharedHtmlPage = z.infer<typeof insertSharedHtmlPageSchema>;
-export type Prompt = typeof prompts.$inferSelect;
-export type InsertPrompt = z.infer<typeof insertPromptSchema>;
