@@ -22,7 +22,6 @@ import { fetchFromPlaceSeedRaw } from "./best-itinerary/places";
 import { finalizeDbOnlyItinerary } from "./best-itinerary/finalize";
 import { applyItineraryTranslations } from "./best-itinerary/translate";
 import { buildItineraryData } from "./best-itinerary/save";
-import { enqueueGmapsPost } from "./gmaps-post-queue";
 import { waitUntil } from "cloudflare:workers";
 import type { Db, OpenDb } from "./db-types";
 
@@ -285,12 +284,6 @@ export function registerItineraryGenerateDbRoutes(
           payerId,
           "route_generate",
           draftId ? String(draftId) : undefined,
-        );
-
-      // ⚠️ 수정금지(승인필요) 2026-10-02 사장님 결정 = MIX 후처리 큐는 일정이 붙은 거점 도시로 등록한다 (정본 §)
-      if (isMix && hubCityId)
-        await enqueueGmapsPost(hubCityId, "mix").catch((e) =>
-          console.error("[gmaps-post] 큐 등록 실패:", (e as Error)?.message),
         );
 
       res.json(

@@ -1,4 +1,4 @@
-// ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 후처리 엔진(gmaps-post 1벌)을 이 PC 에서 돌리는 CLI = 큐 소비자(worker/gmaps-post-queue.ts)와 같은 함수를 부른다. 브라우저 = playwright, DB = pg (정본 §)
+// ⚠️ 수정금지(승인필요) 2026-10-16 사장님 결정 = 후처리 엔진(gmaps-post 1벌)을 이 PC 에서 돌리는 CLI = 브라우저 playwright, DB pg (정본 §정리)
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";

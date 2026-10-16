@@ -1,10 +1,6 @@
-// ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 후처리 자동화 = MIX 응답 직후 큐에 "도시 N" 한 줄 → 큐 소비자(이 파일)가 Browser Run 으로 구글맵 페이지를 열어 창고를 채운다 = 손 0. 엔진은 lib/services/fill/gmaps-post 1벌(필시티 CLI 와 동일). 한 번에 한 도시, 실패는 큐 재시도(최대 2회) 뒤 dead-letter (정본 §)
-import { env } from "cloudflare:workers";
+// ⚠️ 수정금지(승인필요) 2026-10-16 사장님 결정 = 워커 정기 작업(카카오 열쇠·환율·계정 정리·지표·멈춘 여정 청소) 한 곳 = 후처리 큐는 사람 인증이 필요해 영구 삭제 (정본 §정리)
 import { sql } from "drizzle-orm";
-import { launch } from "@cloudflare/playwright";
 import { db, pool, withEngineDb } from "./lib/db";
-import { upsertPlace } from "./lib/services/place-upsert";
-import { runGmapsPost, r2PrefixOf } from "./lib/services/fill/gmaps-post";
 import { refreshRates } from "./lib/services/fill/exchange-rates";
 import { appendTick } from "./lib/services/shared/metrics-heartbeat";
 import { runSnapshotTick } from "./admin-snapshot";
@@ -15,25 +11,8 @@ const KAKAO_JWKS_CRON = "0 3 * * *";
 const ACCOUNT_CLEANUP_CRON = "30 4 * * *";
 const RATES_CRON = "0 5 * * *";
 
-type GmapsPostMessage = {
-  cityId: number;
-  reason: string;
-};
-
-export async function enqueueGmapsPost(
-  cityId: number,
-  reason: string,
-): Promise<void> {
-  await (env as any).GMAPS_POST_QUEUE.send({
-    cityId,
-    reason,
-  } satisfies GmapsPostMessage);
-  console.log(`[gmaps-post] 큐 등록 city ${cityId} (${reason})`);
-}
-
-export const withGmapsQueue = <T extends object>(httpHandler: T) => ({
+export const withScheduled = <T extends object>(httpHandler: T) => ({
   ...httpHandler,
-  queue: consumeGmapsPost,
   scheduled: (controller: ScheduledController) =>
     controller.cron === KAKAO_JWKS_CRON
       ? kakaoJwksTick()
@@ -110,48 +89,5 @@ async function failStaleItineraries(): Promise<void> {
     if (n > 0) console.log(`[정리] 멈춘 일정 ${n}건 = failed`);
   } catch (e) {
     console.warn("[정리] 멈춘 일정 정리 실패:", (e as Error).message);
-  }
-}
-
-async function consumeGmapsPost(
-  batch: MessageBatch<GmapsPostMessage>,
-): Promise<void> {
-  for (const msg of batch.messages) {
-    const { cityId, reason } = msg.body || ({} as GmapsPostMessage);
-    if (!cityId) {
-      msg.ack();
-      continue;
-    }
-    console.log(
-      `[gmaps-post] 시작 city ${cityId} (${reason}, 시도 ${msg.attempts})`,
-    );
-    try {
-      await withEngineDb(async () => {
-        const client = await pool!.connect();
-        try {
-          const browser = await launch((env as any).BROWSER);
-          try {
-            await runGmapsPost({
-              client,
-              browser,
-              cityId,
-              r2Prefix: r2PrefixOf((env as any).R2_PUBLIC_URL),
-              upsertPlace,
-              // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 워커 후처리는 브라우저 하나·창 하나로 천천히 돈다 = 속도보다 자동화 (정본 §)
-              parallel: 1,
-              log: (l) => console.log("[gmaps-post] " + l),
-            });
-          } finally {
-            await browser.close().catch(() => {});
-          }
-        } finally {
-          client.release();
-        }
-      });
-      msg.ack();
-    } catch (e: any) {
-      console.error(`[gmaps-post] 실패 city ${cityId}: ${e?.message || e}`);
-      msg.retry({ delaySeconds: 60 });
-    }
   }
 }

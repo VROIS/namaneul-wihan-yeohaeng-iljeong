@@ -30,21 +30,6 @@
     "@aws-sdk/client-s3": "./lib/stubs/aws-s3-stub.ts",
     "playwright": "./lib/stubs/playwright-stub.ts"
   },
-  // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 후처리 자동화 2벌 = Browser Run(구글맵 페이지 열기, @cloudflare/playwright = 기존 page-reader 그대로) + 큐(gmaps-post = MIX 응답 뒤 "도시 N" 한 줄, 소비자 = 같은 워커, 한 번에 한 도시, 재시도 2회 뒤 dead-letter). 배포 전 1회 = `npx wrangler queues create gmaps-post` · `npx wrangler queues create gmaps-post-dlq` (정본 §)
-  "browser": { "binding": "BROWSER" },
-  "queues": {
-    "producers": [{ "binding": "GMAPS_POST_QUEUE", "queue": "gmaps-post" }],
-    "consumers": [
-      {
-        "queue": "gmaps-post",
-        "max_batch_size": 1,
-        "max_batch_timeout": 1,
-        "max_retries": 2,
-        "max_concurrency": 1,
-        "dead_letter_queue": "gmaps-post-dlq"
-      }
-    ]
-  },
   // ⚠️ 수정금지(승인필요) 2026-09-12 사장님 결정 = 로컬(wrangler dev)은 컨테이너 없이 기동 = 이 PC 8787 실증용 (배포에는 영향 없음)
   "dev": { "enable_containers": false },
   "hyperdrive": [

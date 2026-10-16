@@ -67,7 +67,7 @@ import { registerAdminKeyTestRoutes } from "./routes-admin-keytest";
 import { registerRestRoutes } from "./routes-rest";
 import { registerItineraryGenerateDbRoutes } from "./routes-itinerary-generate-db";
 import { readyCities } from "./best-itinerary/city-resolver";
-import { registerDebugRoutes, withGmapsQueue } from "./routes-debug";
+import { withScheduled } from "./scheduled";
 import {
   registerVideoGenerateRoutes,
   VideoStitchContainer,
@@ -185,7 +185,6 @@ registerAppErrorRoutes(app, openDb);
 registerAdminKeyTestRoutes(app, openDb);
 registerRestRoutes(app, openDb);
 registerItineraryGenerateDbRoutes(app, openDb, sql);
-registerDebugRoutes(app, openDb);
 registerVideoGenerateRoutes(app, openDb);
 
 app.get("/api/cities/:id", async (req, res) => {
@@ -595,4 +594,4 @@ app.post("/api/routes/regenerate-day", async (req, res) => {
 });
 
 app.listen(8080);
-export default withGmapsQueue(httpServerHandler({ port: 8080 })); // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = HTTP 는 그대로, 큐(gmaps-post) 소비자만 덧붙임 = 후처리가 백엔드에서 스스로 돈다 (정본 §)
+export default withScheduled(httpServerHandler({ port: 8080 })); // ⚠️ 수정금지(승인필요) 2026-10-16 사장님 결정 = HTTP 는 그대로, 정기 작업(scheduled)만 덧붙임 (정본 §정리)

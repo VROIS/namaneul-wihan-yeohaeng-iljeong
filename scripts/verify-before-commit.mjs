@@ -3,9 +3,9 @@
 
 import { spawn, execSync } from "node:child_process";
 
-// ⚠️ 수정금지(승인필요) 2026-10-16 사장님 결정 = 타입 오류 기준선 = 지금 실제 건수(루트 4 · 워커 전용 8) = 새 타입 오류 0건만 통과 (정본 §정리)
+// ⚠️ 수정금지(승인필요) 2026-10-16 사장님 결정 = 타입 오류 기준선 = 지금 실제 건수(루트 4 · 워커 전용 6) = 새 타입 오류 0건만 통과 (정본 §정리)
 const TSC_BASELINE = 4;
-const WORKER_TSC_BASELINE = 8;
+const WORKER_TSC_BASELINE = 6;
 
 // ⚠️ lint = "변경된(staged/작업트리) 파일만" 검사 (2026-07-19 사장님 SSOT).
 function changedLintTargets() {
@@ -96,8 +96,7 @@ const CHECKS = {
       };
     },
   },
-  // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 기계 5번째 = MIX 저장단계 스모크 = 실호출 전에 실제 DB·R2 경로(알아보는 문 SQL·저장 SQL·drizzle·raw 순번)를 밟아 본다(쓰기 0·유료 0) = 확률 게임 종료
-  // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 기계 6번째 = 워커 번들(wrangler dry-run) = 후처리 큐·Browser Run 배선이 실제로 묶이는지(alias 껍데기 포함) 배포 없이 확인
+  // ⚠️ 수정금지(승인필요) 2026-10-16 사장님 결정 = 기계 6번째 = 워커 번들(wrangler dry-run) = 배포 없이 워커가 실제로 묶이는지 확인 (정본 §정리)
   workerBundle: {
     name: "워커 번들(wrangler dry-run)",
     cmd: "npx",
