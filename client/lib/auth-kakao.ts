@@ -131,7 +131,6 @@ export async function exchangeKakaoCodeForToken(
   return result.idToken;
 }
 
-/** 카카오 창을 열 때 쓰던 화면 언어를 돌려준다(생년월일은 birthdate-store 담당). */
 export function getKakaoCallbackLanguage(): string | null {
   if (typeof sessionStorage === "undefined") return null;
   try {

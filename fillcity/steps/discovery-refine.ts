@@ -13,7 +13,6 @@ const agree = (a: Named, b: Named, stop: Set<string>) =>
   sameName(namesOf(a), namesOf(b), stop) ||
   sameName(namesOf(b), namesOf(a), stop);
 
-// 이름이 같은 구성원끼리 한 무리(서로 이어지면 같은 무리)
 function clusters<M extends Named>(members: M[], stop: Set<string>): M[][] {
   const root = members.map((_, i) => i);
   const find = (i: number): number =>

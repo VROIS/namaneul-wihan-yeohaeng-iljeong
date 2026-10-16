@@ -43,7 +43,6 @@ const cityId = Number(argv["city-id"] || 0);
   ).rows;
   const logs = lastGoogleLogs(cityId);
 
-  // ① 호텔 페이지 = 숙박 위젯 + 숙소 분류 글자 · 로그 글 맨 위 객실 요금과 저장 가격 · 제미니 묘사 유무
   const hotelPages = rows
     .filter((r: any) => r.cat !== "hotel")
     .map((r: any) => ({ r, raw: String(logs.get(r.id)?.rawText || "") }))
@@ -62,7 +61,6 @@ const cityId = Number(argv["city-id"] || 0);
       ),
     }));
 
-  // ② 장소 아님이 남은 행 = 표가 장소 아님으로 보는 글자(인기라 안 지워진 것 포함)
   const notPlace = rows
     .filter(
       (r: any) =>
@@ -76,7 +74,6 @@ const cityId = Number(argv["city-id"] || 0);
       rc: r.rc,
     }));
 
-  // ③ 표가 못 정하는 행 = 구글 분류 글자가 없거나 표에 없는 글자(에이전트가 읽을 몫)
   const undecided = rows
     .filter(
       (r: any) =>

@@ -129,7 +129,6 @@ async function recoverTriggerDup(
 ): Promise<UpsertResult | null> {
   const dup = /\[중복차단\][^]*?id=(\d+)/.exec(e?.message || "");
   if (!dup) return null;
-  // 2026-09-13 = 지목된 행이 병합된 행이면 살아 있는 원행으로(위 dupCheckOnWrite 경로와 동형)
   const dupId = (await activeKeeperOf(Number(dup[1]))) ?? Number(dup[1]);
   try {
     // ⚠️ 수정금지(승인필요) 2026-08-17 사장님 승인 = 흡수 안전장치(창고문틀 교정) = 매칭 판정·흡수 동작은 그대로,
@@ -234,7 +233,6 @@ export async function upsertTranslationWith(
   );
 }
 
-// 검문이 지목한 행 → 살아 있는 원행(merged_into 사슬 끝, 최대 5단). 병합된 행은 흡수 대상이 아니다.
 async function activeKeeperOf(id: number): Promise<number | null> {
   if (!db) return id;
   let cur = id;

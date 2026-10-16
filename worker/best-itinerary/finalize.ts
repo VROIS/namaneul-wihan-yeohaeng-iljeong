@@ -44,8 +44,6 @@ import type { Db } from "../db-types";
 
 const { cities, placeSeedRaw } = schema;
 
-// ── AG4 = 완성 ───────────
-
 export interface AG4DbInput {
   daySlotsConfig: DaySlotConfig[];
   travelPace: TravelPace;
@@ -78,8 +76,6 @@ export async function finalizeDbOnlyItinerary(
     inputPlaces,
   } = input;
 
-  // 식당풀 = 손님상 가능한 전체(가격대 쿼터 없음, 정본 B4).
-  //   원본은 생 SQL 이지만 .rows 를 읽으므로(헤더 ④) 같은 조건을 질의빌더로 세운다.
   let center: { lat: number; lng: number } | null = cityCoords ?? null;
   if (!center) {
     const cr = await db
@@ -133,7 +129,6 @@ export async function finalizeDbOnlyItinerary(
     ? new Map()
     : await loadImagePidMap([cityId, ...poolRows.map((r) => r.cityId)]);
 
-  // 좌표 0/NULL 제외 후 슬롯 모양으로.
   const restaurantPool =
     input.restaurantPool ??
     (poolRows
@@ -155,7 +150,6 @@ export async function finalizeDbOnlyItinerary(
         bestRank: r.bestRank ?? null,
       })) as unknown as PlaceResult[]);
 
-  // 도시 시간당요금·예산 경계선 런타임 산출(정본 B4).
   const hourlyRate = await cityHourlyRate(db, cityId);
   const mealTiers = await cityMealTiers(db, cityId);
 
@@ -174,8 +168,6 @@ export async function finalizeDbOnlyItinerary(
     );
   }
   const routeResponse = routeResult.response;
-
-  // 창고 되채움(backfill)은 여기서 안 한다 = 읽기 전용 관문.
 
   const inputById = new Map(
     [...inputPlaces, ...(restaurantPool ?? [])].map((p) => [p.id, p]),
@@ -320,7 +312,6 @@ export async function finalizeDbOnlyItinerary(
     });
   }
 
-  // 마지막 슬롯 = 공연장 카드(BTS). 같은 이유로 질의빌더.
   if (formData.finalPlaceId && days.length) {
     const [f] = await db
       .select({
@@ -420,7 +411,6 @@ export async function finalizeDbOnlyItinerary(
         elapsedMs: routeResult.elapsedMs,
         totalDistanceKm: routeResponse.total_distance_km,
         totalDurationSec: routeResponse.total_duration_sec,
-        // ⚠️ 원본과의 의도된 차이 = Worker 는 백필을 띄우지 않는다(위 :? 주석).
         backfill: "skipped (worker db-only = read only)",
       },
     },

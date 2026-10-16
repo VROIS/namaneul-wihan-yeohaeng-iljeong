@@ -219,7 +219,6 @@ export default function OnboardingScreen() {
                   maxLength={2}
                   textAlign="center"
                   {...(Platform.OS === "web" && {
-                    // 웹: type="number"는 선행 0 제거·숫자 변형 유발
                     type: "text",
                     inputMode: "numeric",
                   })}
@@ -277,7 +276,6 @@ export default function OnboardingScreen() {
                   maxLength={4}
                   textAlign="center"
                   {...(Platform.OS === "web" && {
-                    // 웹: type="number"는 선행 0 제거·숫자 변형 유발
                     type: "text",
                     inputMode: "numeric",
                   })}

@@ -156,7 +156,6 @@ if (!cityId || !itineraryId || !rawKey) {
     }
   }
 
-  // 여정 슬롯 연결 = 행 번호·사진·PID·맵 주소
   const it = (
     await c.query("SELECT raw_data d FROM itineraries WHERE id=$1", [
       itineraryId,

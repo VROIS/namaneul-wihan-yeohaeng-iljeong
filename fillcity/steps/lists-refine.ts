@@ -27,7 +27,6 @@ type Pick = {
   rv: number;
 };
 
-/** 도시 폴더의 목록 원본에서 CID 별 카드 글(가장 나중 것). */
 function cardLines(): Map<string, string> {
   const out = new Map<string, string>();
   for (const { json } of readListRaws(cityId))
@@ -42,7 +41,6 @@ function cardLines(): Map<string, string> {
   return out;
 }
 
-/** 가장 나중 선별 보고서 중 정제를 거치지 않은 원본(정제본은 refined 칸이 있다). */
 function originalSelect(): string | null {
   const base = reportDir(cityId);
   for (const f of fs
@@ -56,7 +54,6 @@ function originalSelect(): string | null {
   return null;
 }
 
-/** 같은 선별 보고서의 정제 폴더가 있으면 그 폴더에서 이어 쓰고, 없으면 새로 만든다. */
 function refineDir(selectName: string): string {
   const base = reportDir(cityId);
   const prev = fs
@@ -142,7 +139,6 @@ function refineDir(selectName: string): string {
     `═══ 목록 정제 city ${cityId} = 선별 ${picks.length}곳 → 표가 바로 정함 ${decided.size}곳(숙박 ${[...decided.values()].filter((d) => !d.keep).length}) · 판정 일꾼에게 갈 애매한 곳 ${ambiguous.length}곳 → ${path.relative(ROOT, dir)} ═══`,
   );
 
-  // ── 1단계 = 판정 일꾼 4명(목록 글만). 항목마다 한 파일(judged/ · todo/)이라 끊겨도 있는 곳은 건너뛰고 없는 곳부터 이어 한다 ──
   const pendingJudge = ambiguous
     .filter(
       (x) =>
@@ -177,7 +173,6 @@ function refineDir(selectName: string): string {
     });
   }
 
-  // ── 2단계 = 의심 항목을 4등분해 같은 4명이 직접 구글맵을 열어 판정(done/ 이 없는 의심만) ──
   const todo = fs
     .readdirSync(path.join(dir, "todo"))
     .filter((x) => x.endsWith(".json"))
@@ -210,7 +205,6 @@ function refineDir(selectName: string): string {
     });
   }
 
-  // ── 검사 → 판정표. 판정이 끝난 곳까지 입력으로 넘기고, 못 끝낸 곳은 다음에 이어서 한다 ──
   const v = validateRefine(
     ambiguous.map((x, order) => ({ order, cid: x.cid, name: x.name })),
     dir,
@@ -241,7 +235,6 @@ function refineDir(selectName: string): string {
     ),
   );
   if (apply) {
-    // 입력 단계가 읽는 "가장 나중 선별 보고서" = 업체와 판정 못 끝낸 곳을 뺀 새 보고서
     const refined = {
       ...report,
       generatedAt: new Date().toISOString(),

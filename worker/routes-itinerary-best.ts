@@ -1,6 +1,4 @@
 // ⚠️ 수정금지(승인필요) 2026-09-08 사장님 확정 = 베스트 여정 v1(오늘 확정본) = DB-only 에서 갈라진 별도 분기(관리자 쇼윈도용).
-//   엔진(뼈대·조립·동선)은 그대로 쓰고, 이 분기 안에서만 다르다 = 풀(언어 동의 7→3) · 식당(직접 골라 넘김) · 이동시간(더함) · 점심창 11~14.
-//   기존 여정(DB-only·MIX)은 이 파일을 거치지 않으므로 영향 0. 도시별 적정 일수는 사장님이 화면에서 보고 정한다(기계값 ≠ 화면).
 
 import { and, eq, sql } from "drizzle-orm";
 import type { TripFormData } from "./lib/services/agents/types";
@@ -22,7 +20,6 @@ import type { CityReadyResult } from "./best-itinerary/city-resolver";
 import { placeSeedRaw } from "../shared/schema";
 import { bestRankLangCount } from "./lib/services/shared/best-rank";
 
-/** "09:00" → 540 */
 function toMin(t: string): number {
   const [h, m] = String(t).split(":").map(Number);
   return h * 60 + (m || 0);
@@ -30,10 +27,8 @@ function toMin(t: string): number {
 
 // ⚠️ 수정금지(승인필요) 2026-10-14 사장님 결정 = 분류 이름을 포토스팟으로 바꿈 (정본 §2026-10-14)
 const FILL_CATEGORIES = ["heritage", "photospot", "healing", "attraction"];
-// 채울 재료를 자리의 몇 배로 줄지 = 1km 안에 고를 것이 남게 하는 여유분.
 const FILL_HEADROOM = 3;
 
-/** 그 곳을 고른 언어 수(= best_rank 세는 함수 1벌 §16). */
 const agreeOf = (r: { bestRank?: number | null }) =>
   bestRankLangCount(r.bestRank);
 
@@ -55,12 +50,10 @@ async function selectBest(
         isRestaurant
           ? eq(placeSeedRaw.seedCategory, "restaurant")
           : sql`${placeSeedRaw.seedCategory} <> 'restaurant'`,
-        // 볼거리·식당 모두 현관문 통과 전부 = 동의 순으로 먼저 쓰고, 바닥나면 리뷰수 순으로 이어 붙인다(하한 없음).
         servingGateSql(),
       ),
     );
   for (const r of rows) recalcCrossCityZone(r, cityId, center);
-  // 많은 언어가 동의한 순 → 같으면 리뷰수 순(= 동의 없는 식당은 자연히 뒤에서 RC 순).
   rows.sort(
     (a, b) =>
       agreeOf(b) - agreeOf(a) ||
@@ -69,15 +62,12 @@ async function selectBest(
   return rows;
 }
 
-/** 버킷 = 7동의부터 담고 자리(분)가 안 차면 6·5·4 순으로 내려간다(넉넉한 도시는 낮은 등급을 안 씀). */
 function fillBuckets(
   rows: any[],
   needMinutes: number,
   stayOf: (r: any) => number,
 ) {
   // ⚠️ 수정금지(승인필요) 2026-09-10 사장님 확정 = 7동의만 특별대우(카테고리 무관 = 고정 기차역, 전부 간다).
-  //   나머지는 등급 차이 없음 = 채울 네 갈래(유적·명소·힐링·attraction) 안에서 리뷰수 순으로 넉넉히 넘긴다.
-  //   앞 역 1km 안에서 고르는 일은 동선 엔진이 한다 = 여기서는 그 재료를 모자라지 않게 준다. 옛 동의 버킷 7→3 폐기 = 2026-09-10 §19.
   const out: any[] = [];
   let sum = 0;
   const usedByLevel: number[] = [];
@@ -96,7 +86,6 @@ function fillBuckets(
         FILL_CATEGORIES.includes(String(r.seedCategory ?? "")),
     )
     .sort((a, b) => (b.googleReviewCount ?? -1) - (a.googleReviewCount ?? -1));
-  // 자리보다 넉넉히 줘야 1km 안에 고를 것이 남는다(딱 맞게 주면 노선 옆이 비어 멀리서 끌어온다).
   const want = needMinutes * FILL_HEADROOM;
   let n = 0;
   for (const r of fill) {
@@ -139,7 +128,6 @@ export async function runPipelineBest(
     ...restRows.map((r) => r.cityId),
   ]);
 
-  // 머무는 시간 = 엔진과 같은 계산(입장료 기반) 1벌.
   const hourlyRate = await cityHourlyRate(db, cityId);
   const paceMin = skeleton.paceConfig.slotDurationMinutes;
   const stayOf = (r: any) =>
@@ -150,7 +138,6 @@ export async function runPipelineBest(
       r.seedCategory,
     );
 
-  // 자리 = 곳수가 아니라 분(minute). 하루 = 활동시간에서 식사 2회를 뺀 만큼.
   const mealMin = skeleton.paceConfig.mealDurationMinutes;
   const needMinutes = skeleton.daySlotsConfig.reduce(
     (sum, dc) =>
@@ -184,9 +171,7 @@ export async function runPipelineBest(
     cityCoords,
     skeleton,
     inputPlaces: sights,
-    // 식당을 직접 넘긴다 = 엔진이 자기 식당풀을 새로 뽑지 않는다(베스트 아닌 식당 유입 차단).
     restaurantPool: restaurants,
-    // 이 분기에서만 켠다(기존 여정은 안 넘기므로 그대로).
     bestMode: true,
   });
 

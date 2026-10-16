@@ -116,7 +116,6 @@ async function applyFile(c: any, file: string): Promise<number> {
       console.log(`  ⏭ #${v.id} 이 도시 행 아님/이미 없음`);
       continue;
     }
-    // 고침 = fix 칸 중 하나라도 값이 있으면(배열은 비어 있지 않을 때) = 새 칸을 더해도 이 줄은 안 바뀐다
     if (
       v.fix &&
       Object.values(v.fix).some((x) =>

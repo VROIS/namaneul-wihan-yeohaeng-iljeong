@@ -6,10 +6,7 @@ import type { OpenDb } from "./db-types";
 
 const { users } = schema;
 
-// 연결 1벌 = 반드시 close.
-
 export function registerMisc2Routes(app: Express, openDb: OpenDb): void {
-  // 같은 경로의 /me 는 GET 뿐이라 메서드가 겹치지 않는다.
   app.patch("/api/expert/profile", async (req: Request, res: Response) => {
     const { db, close } = openDb();
     try {

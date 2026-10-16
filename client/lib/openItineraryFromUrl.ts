@@ -11,12 +11,10 @@ function readOnce(): number | null {
 
 let pending: number | null = readOnce();
 
-/** 렌더 중에 읽기만 한다(지우지 않는다). 지우는 것은 복원이 끝난 뒤 clearItineraryFromUrl() 이 한다. */
 export function peekItineraryFromUrl(): number | null {
   return pending;
 }
 
-/** 복원을 마쳤을 때 비운다 = 화면을 다시 열어도 그 여정으로 되돌아가지 않는다. */
 export function clearItineraryFromUrl(): void {
   pending = null;
 }

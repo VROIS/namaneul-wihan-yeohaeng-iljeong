@@ -329,7 +329,6 @@ async function main() {
     byPid.get(r.google_place_id)!.push(r);
   }
   // ⚠️ 수정금지(승인필요) 2026-09-04 사장님 확정 = 판정은 트리거(의심대상-N), 집행은 이 도구. 여기서 자체 매칭을 재발명하지 않는다(§16).
-  //   PID 있는 행이 최종 = PID 없는 짝은 그 그룹에 넣어 흡수 후 삭제한다.
   const byId = new Map<number, any>(rows.map((r: any) => [r.id, r]));
   for (const r of rows) {
     if (r.google_place_id) continue;
@@ -476,14 +475,12 @@ async function main() {
       n++;
     }
     // ⚠️ 수정금지(승인필요) 2026-09-05 사장님 확정 = 삭제 대상 = **이번 실행에서 absorbTwinGroup 을 거친 loser 중 같은 PID 로 확정된 행만**(deletableLosers).
-    //   그 함수만 guides·override_hero·override_highlight 포인터를 keep 으로 옮기므로 옛 merged 행을 지우면 사장님이 지정한 도시 얼굴이 끊긴다. PID 없는 짝은 이름 문자열(가변·의심)로 붙은 것이라 다른 장소일 수 있다 = 흡수만.
     const absorbed = new Set(
       twinPlans.flatMap((p: TwinPlan) =>
         deletableLosers(p).map((l: any) => l.id),
       ),
     );
     // ⚠️ 수정금지(승인필요) 2026-09-08 사장님 확정 = 흡수가 끝난 loser 는 이번 실행에서 상태가 바뀌었든(plan) 이미 merged 였든 똑같이 치운다.
-    //   옛 merged 행이 남아 UPDATE 를 막던 문제(리마 5행 실측) 해소 = 옛 "plan 안에서만 고름" 폐기 §19.
     const planned = new Map(plan.map((p: any) => [p.id, p]));
     const rowById = new Map(rows.map((r: any) => [r.id, r]));
     const losers = [...absorbed].filter((id: number) => {

@@ -1,4 +1,3 @@
-// 애플 로그인 라우트.
 import type { Express, Request, Response } from "express";
 import { createRemoteJWKSet, jwtVerify } from "jose";
 import {
@@ -8,10 +7,6 @@ import {
 } from "./auth-user";
 import type { OpenDb } from "./db-types";
 
-// ── 애플 신분증 확인 ────────────────────────────
-
-// ⚠️ 드리프트 주의 = app.json 의 expo.ios.bundleIdentifier 가 바뀌면 **여기도 함께 바꿔야 한다.**
-//   (Worker 에는 파일시스템도 process.cwd() 도 없어 app.json 을 읽을 수 없다.)
 const APPLE_BUNDLE_ID = "com.sonanie.guide";
 
 const APPLE_ISSUER = "https://appleid.apple.com";
@@ -61,8 +56,6 @@ async function verifyAppleIdentityToken(
     return null;
   }
 }
-
-// ── 라우트 ────────────────────────────────────────────────────────────────
 
 export function registerAppleAuthRoutes(app: Express, openDb: OpenDb): void {
   // ⚠️ 수정금지(승인필요) 2026-07-31 사장님 지시 — 애플 로그인(아이폰 전용).

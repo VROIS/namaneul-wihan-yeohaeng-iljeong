@@ -68,7 +68,6 @@ function withVerification(body: ItineraryBody): ItineraryBody {
   return { ...body, rawData };
 }
 
-// ⚠️ 화면 목록에서 빼는 상태 1벌(두 목록이 같은 기준).
 const HIDDEN_STATUSES = ["inquiry", "generating", "failed"];
 // ⚠️ 수정금지(승인필요) 2026-10-02 사장님 결정 = 관리자에게는 만드는 중·실패 일정도 보인다(누가 어디서 막혔는지) + 목록 100건 상한 (정본 §)
 const ADMIN_HIDDEN_STATUSES = ["inquiry"];
@@ -78,7 +77,6 @@ function errMessage(error: unknown): string | undefined {
 }
 
 export function registerItineraryRoutes(app: Express, openDb: OpenDb): void {
-  // PATCH /api/users/:userId/preferred-language
   app.patch("/api/users/:userId/preferred-language", async (req, res) => {
     const { db, close } = openDb();
     try {
@@ -111,8 +109,6 @@ export function registerItineraryRoutes(app: Express, openDb: OpenDb): void {
     }
   });
 
-  // GET /api/users/:userId/itineraries
-  //   ⚠️ 관리자(Bearer 토큰 role) = 전체 상황판 = 전 사용자 저장 여정.
   app.get("/api/users/:userId/itineraries", async (req, res) => {
     const { db, close } = openDb();
     try {
@@ -146,7 +142,6 @@ export function registerItineraryRoutes(app: Express, openDb: OpenDb): void {
     }
   });
 
-  // GET /api/itineraries/:id
   app.get("/api/itineraries/:id", async (req, res) => {
     const { db, close } = openDb();
     try {
@@ -158,7 +153,6 @@ export function registerItineraryRoutes(app: Express, openDb: OpenDb): void {
         return res.status(404).json({ error: "Itinerary not found" });
       }
       const out = await attachCityNameEn(db, itinerary);
-      // ⚠️ 화면 언어(?lang=)로 슬롯 해설을 place_translations 캐시에서 이어붙임.
       const lang = String(req.query.lang || "ko");
       const rawData = out?.rawData as Record<string, unknown> | undefined;
       if (rawData?.days && out) {
@@ -173,7 +167,6 @@ export function registerItineraryRoutes(app: Express, openDb: OpenDb): void {
     }
   });
 
-  // POST /api/itineraries
   app.post("/api/itineraries", async (req, res) => {
     const { db, close } = openDb();
     try {
@@ -202,7 +195,6 @@ export function registerItineraryRoutes(app: Express, openDb: OpenDb): void {
     }
   });
 
-  // PUT /api/itineraries/:id
   app.put("/api/itineraries/:id", async (req, res) => {
     const { db, close } = openDb();
     try {
@@ -234,7 +226,6 @@ export function registerItineraryRoutes(app: Express, openDb: OpenDb): void {
     }
   });
 
-  // POST /api/itineraries/:id/representative
   app.post("/api/itineraries/:id/representative", async (req, res) => {
     const { db, close } = openDb();
     try {

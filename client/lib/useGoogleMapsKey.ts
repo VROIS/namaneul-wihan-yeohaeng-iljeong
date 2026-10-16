@@ -2,7 +2,6 @@
 import { useEffect, useState } from "react";
 import { apiRequest } from "@/lib/query-client";
 
-/** 구글 지도 열쇠를 서버에서 받는다. delays = 시도 전 기다림(ms) 목록, 콜드스타트 503 이면 다시 시도. */
 export function useGoogleMapsKey(delays: number[] = [0]): string | null {
   const [apiKey, setApiKey] = useState<string | null>(null);
 

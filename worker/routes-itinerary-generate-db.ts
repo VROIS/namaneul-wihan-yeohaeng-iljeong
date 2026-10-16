@@ -40,9 +40,6 @@ async function loadAllKeys(openSql: OpenSql): Promise<void> {
   }
 }
 
-// ── 파이프라인 ───────────────────────────────────────────────────────────────
-
-/** DB 전용 여정 생성 1벌 = /api/routes/generate 본문에서 떼어낸 것. */
 async function runPipelineDbOnlyWorker(
   db: Db,
   enrichedFormData: Record<string, any>,
@@ -55,7 +52,6 @@ async function runPipelineDbOnlyWorker(
     cityId: cityCheck.cityId!,
     name: cityCheck.cityName,
   });
-  // isCityReady 가 이미 조회한 도시중심좌표 그대로 전달.
   const cityCoords =
     cityCheck.latitude != null && cityCheck.longitude != null
       ? { lat: cityCheck.latitude, lng: cityCheck.longitude }
@@ -71,7 +67,6 @@ async function runPipelineDbOnlyWorker(
     skeleton,
     inputPlaces: placesArr,
   });
-  // 메타 표식.
   itinerary.metadata = {
     ...itinerary.metadata,
     _pipelineVersion: "db-only-v2-scene-direct",
@@ -80,8 +75,6 @@ async function runPipelineDbOnlyWorker(
   };
   return itinerary;
 }
-
-// ── 라우트 ──────────────────────────────────────────────────────────────────
 
 export function registerItineraryGenerateDbRoutes(
   app: Express,
@@ -93,14 +86,12 @@ export function registerItineraryGenerateDbRoutes(
     try {
       const formData = req.body;
 
-      // 필수값 검사(문구·상태코드 그대로).
       if (!formData.destination || !formData.startDate || !formData.endDate) {
         return res.status(400).json({
           error: "destination, startDate, endDate are required",
         });
       }
 
-      // 언어 기본 ko + 로그인 사용자 정보 얹기.
       let enrichedFormData: Record<string, any> = {
         ...formData,
         language: formData.language || "ko",
@@ -135,8 +126,6 @@ export function registerItineraryGenerateDbRoutes(
         }
       }
 
-      // ── 분기 판정 = 이 라우트가 핀·베스트·MIX 를 먼저 정한다(runPipelineV3 는 MIX 만 받는다) ──
-      //    핀이 있으면 도시만 찾으면 db-only / 없으면 ready 여야 db-only.
       const isPinnedDbOnly = !!(
         Array.isArray(formData.pinnedPlaceIds) && formData.pinnedPlaceIds.length
       );
@@ -154,7 +143,6 @@ export function registerItineraryGenerateDbRoutes(
       );
 
       if (isPinnedDbOnly && !cityCheck.cityId) {
-        // 핀 요청인데 도시 미발견 = 유료 경로로 흘리지 않는다(throw).
         return res.status(500).json({
           error: "일정 생성 실패",
           detail: `핀 요청인데 도시 미발견: '${enrichedFormData.destination}' = 무료(db-only) 전제 = 유료 경로로 흘리지 않는다`,
@@ -170,12 +158,8 @@ export function registerItineraryGenerateDbRoutes(
         });
       }
 
-      // DB 올리 전환 기준 미달(핀·베스트 아님) = MIX 엔진.
       const isMix = !isPinnedDbOnly && !isBest && !cityCheck.ready;
 
-      // ── §9 크레딧 ──
-      //   차감 기준 신원은 **로그인 토큰에서만** 읽는다.
-      //   핀(BTS) 요청은 사전확인·차감 둘 다 건너뛴다.
       const payerId = getUserIdFromReq(req);
       if (
         !isPinnedDbOnly &&
@@ -183,7 +167,6 @@ export function registerItineraryGenerateDbRoutes(
       )
         return; // 402 는 위에서 이미 보냈다(§9 금지 4번 = 헤더 나가기 전).
 
-      // 만드는 순간 '만드는 중' 한 줄을 남긴다.
       let draftId: number | null = null;
       if (payerId) {
         try {
@@ -207,7 +190,6 @@ export function registerItineraryGenerateDbRoutes(
         }
       }
 
-      // ── 파이프라인 = 베스트 / MIX / DB 전용 중 하나 ──
       let itinerary: any;
       try {
         itinerary = isBest
@@ -264,12 +246,10 @@ export function registerItineraryGenerateDbRoutes(
         throw empty;
       }
 
-      // 저장 폴더 = 거점(이름 일치로 사후 추측하지 않는다). MIX 가 새 거점을 만들었으면 그 번호.
       const hubCityId: number | null =
         itinerary?.cityId ?? cityCheck.cityId ?? null;
       if (itinerary && hubCityId != null) itinerary.cityId = hubCityId;
 
-      // 다 만든 여정을 그 자리(위에서 만든 행)에 채운다.
       if (draftId) {
         try {
           const data = await buildItineraryData(db, {
@@ -299,7 +279,6 @@ export function registerItineraryGenerateDbRoutes(
         }
       }
 
-      // 차감은 **완성 시점에만**(장소가 실제로 담겼을 때만).
       if (!isPinnedDbOnly && totalPlacesInDays > 0)
         await chargeOnSuccess(
           db,
@@ -323,7 +302,6 @@ export function registerItineraryGenerateDbRoutes(
       );
     } catch (error: any) {
       console.error("Error generating itinerary:", error?.message || error);
-      // API/키 오류면 503, 그 외 500(문구·필드 그대로).
       if (error?.message?.includes("API") || error?.message?.includes("키")) {
         res.status(503).json({
           error: "AI 서비스 연결 오류",

@@ -63,7 +63,6 @@ export async function withEngineDb<T>(run: () => Promise<T>): Promise<T> {
   try {
     return await store.run({ pool: p, db: dbInstance }, run);
   } finally {
-    // 장부(external_calls) 등 던져 놓은 쿼리가 대기열에 남아 있으면 pool.end() 가 버린다 → 대기열이 빌 때까지(최대 10초) 기다린 뒤 닫는다
     const until = Date.now() + 10_000;
     while (p.waitingCount > 0 && Date.now() < until)
       await new Promise((r) => setTimeout(r, 25));

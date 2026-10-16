@@ -1,4 +1,3 @@
-// 구글·카카오 로그인 라우트.
 import type { Express, Request, Response } from "express";
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import { and, eq, ne, sql } from "drizzle-orm";
@@ -15,8 +14,6 @@ import type { Db, OpenDb } from "./db-types";
 
 const { apiKeys } = schema;
 
-// ── 구글 신분증 확인 ────────────────────────────
-// 워커는 부팅 시점에 process.env 가 비어 있어, 모듈 최상단에서 읽으면 빈 문자열로 굳는다 = 함수 안에서 읽는다.
 function isValidGoogleAudience(v: string | undefined): boolean {
   if (!v) return false;
   const googleClientId = (
@@ -32,8 +29,6 @@ function isValidGoogleAudience(v: string | undefined): boolean {
     (!!googleClientIdAndroid && v === googleClientIdAndroid)
   );
 }
-
-// ── 카카오 본문 ──────────
 
 // ⚠️ 수정금지(승인필요) 2026-09-25 사장님 결정 = 카카오 공개 열쇠 = 금고(KAKAO_JWKS) 1벌, 관제탑이 매일 갱신하고 금고에 없는 열쇠 번호일 때만 로그인 중 1회 갱신 (정본 9-25)
 export async function refreshKakaoJwks(
@@ -113,8 +108,6 @@ async function loginWithKakaoIdToken(
   });
   return loginResponse(user);
 }
-
-// ── 라우트 ────────────────────────────────────────────────────────────────
 
 type GoogleTokenInfo = {
   aud?: string;

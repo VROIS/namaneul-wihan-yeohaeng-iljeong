@@ -22,7 +22,6 @@ export async function getRoleFromDb(db: Db, userId: string): Promise<string> {
   return u?.role || "user";
 }
 
-/** 소셜별 닉네임 기본문구. */
 export const KAKAO_DEFAULT_NAME = "카카오 사용자";
 export const GOOGLE_DEFAULT_NAME = "Google User";
 export const APPLE_DEFAULT_NAME = "Apple User";
@@ -32,7 +31,6 @@ const SOCIAL_DEFAULT_NAMES = new Set([
   APPLE_DEFAULT_NAME,
 ]);
 
-/** getUserByEmail = DB 단 대소문자 무시(lower 비교). */
 export async function getUserByEmail(
   db: Db,
   email: string,
@@ -44,7 +42,6 @@ export async function getUserByEmail(
   return user || undefined;
 }
 
-/** getUserByProvider = user_providers 우선, 없으면 users 열 조회. */
 async function getUserByProvider(
   db: Db,
   provider: string,
@@ -62,9 +59,7 @@ async function getUserByProvider(
         ),
       );
     if (row) return row.user;
-  } catch {
-    /* user_providers 조회 실패 = 아래 users 열 조회로 계속 */
-  }
+  } catch {}
   const [user] = await db
     .select()
     .from(users)
@@ -98,7 +93,6 @@ type LoginOpts = {
   entry?: string;
 };
 
-/** applyLogin = 로그인 성공 시 기존 계정 반영 1벌. */
 export async function applyLogin(
   db: Db,
   user: User,
@@ -133,7 +127,6 @@ export async function applyLogin(
   // ⚠️ 수정금지(승인필요) 2026-08-08 = **탈퇴 유예 중 다시 로그인하면 되살린다.**
   const wasDeleted = user.accountStatus === "deleted";
 
-  // updateUserLogin = updatedAt 은 넘기지 않는다.
   const [updated] = await db
     .update(users)
     .set({
@@ -216,7 +209,6 @@ export async function findOrCreateUser(
   const username = `${provider}_${providerId.substring(0, 12)}_${Math.random().toString(36).substring(2, 6)}`;
   const emailFree = email ? !(await getUserByEmail(db, email)) : false;
 
-  // createUser = insert 후 linkProvider(실패해도 무시).
   const [created] = await db
     .insert(users)
     .values({
@@ -240,9 +232,7 @@ export async function findOrCreateUser(
 
   try {
     await linkProvider(db, created.id, provider, providerId);
-  } catch {
-    /* 조용히 무시 */
-  }
+  } catch {}
 
   // ⚠️ 수정금지(승인필요) — 가입 보너스 50 크레딧(2026-08-05 조정 = CLAUDE.md §9).
   try {
@@ -257,7 +247,6 @@ export async function findOrCreateUser(
   return created;
 }
 
-/** toClientUser = 모든 로그인 응답의 user 객체 1벌. */
 function toClientUser(user: User) {
   return {
     id: user.id,
@@ -274,7 +263,6 @@ function toClientUser(user: User) {
   };
 }
 
-/** 창고 주인 = 가장 먼저 만들어진 관리자 계정(관리자 로그인·창고 해설 주인). */
 export async function getFirstAdmin(db: Db): Promise<User | undefined> {
   const [admin] = await db
     .select()
@@ -285,7 +273,6 @@ export async function getFirstAdmin(db: Db): Promise<User | undefined> {
   return admin || undefined;
 }
 
-/** 모든 로그인 응답 1벌 = 사용자 정보 + 토큰. */
 export function loginResponse(user: User) {
   return {
     success: true as const,

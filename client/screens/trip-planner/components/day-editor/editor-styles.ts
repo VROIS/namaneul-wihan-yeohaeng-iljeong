@@ -1,13 +1,11 @@
 import { Platform, StyleSheet } from "react-native";
 import { BorderRadius, Brand, Fonts, Spacing } from "@/constants/theme";
 
-// 폭 · 크기 = 지금 슬롯 카드와 같다(번호원 칸 38 · 번호원 36 · 썸네일 48 · 카드 둥글기).
 export const LEFT_COL = 38;
 export const RULER_W = 56;
 export const TRAY_THUMB = 56;
 export const RED = "#EF4444";
 
-// 웹에서 끌 때 글자 선택 · 스크롤에 빼앗기지 않게 / 글자 선택 막기 / 눌림을 아래 칸에 넘기기
 export const noTouchScroll: any =
   Platform.OS === "web" ? { touchAction: "none", userSelect: "none" } : null;
 export const noSelect: any =

@@ -1,6 +1,3 @@
-// 결제(Stripe) 5벌.
-// Worker 필수 2가지 = ① Stripe 클라이언트 httpClient = Stripe.createFetchHttpClient(Workers 에는 Node http 모듈이 없다) ② 웹훅 서명검증 = constructEventAsync + createSubtleCryptoProvider(동기 constructEvent 불가)
-// 근거 = https://blog.cloudflare.com/announcing-stripe-support-in-workers/
 import express, { type Express, type Request, type Response } from "express";
 import Stripe from "stripe";
 import { waitUntil } from "cloudflare:workers";
@@ -17,9 +14,6 @@ import {
 import { ensureKeys } from "./keys";
 import type { Db, OpenDb } from "./db-types";
 
-// src.ts 의 openDb() 를 그대로 받는다(연결 1벌 = 반드시 close).
-// 열쇠(STRIPE_SECRET_KEY)는 DB api_keys 에 있다(keys.ts). src.ts 의 withKeys() 는 export 되지
-// 않으므로 같은 방식(연결 1벌 → ensureKeys → 반드시 닫기)을 여기서 쓴다.
 type OpenSql = () => Sql;
 
 const STRIPE_API_VERSION = "2026-06-24.dahlia";
@@ -27,8 +21,6 @@ const STRIPE_API_VERSION = "2026-06-24.dahlia";
 // ⚠️ 우리 앱이 만든 결제라는 표식. 내손앱과 같은 Stripe 계정을 쓰기 때문에 필요하다(사장님 결정 2026-07-29).
 const APP_TAG = "tripis";
 
-/** Stripe 클라이언트 1벌 = 요청마다 만든다(워커 isolate 는 여러 요청이 재사용 = 요청 데이터를 전역에 두지 않는다. 생성은 네트워크 없는 계산이라 싸다).
- *  httpClient = Stripe.createFetchHttpClient() 가 Worker 필수(파일 머리말 근거). */
 function makeStripe(): Stripe {
   const key = process.env.STRIPE_SECRET_KEY;
   if (!key) throw new Error("stripe_key_missing");
@@ -38,11 +30,6 @@ function makeStripe(): Stripe {
   });
 }
 
-/**
- * 열쇠를 채운 뒤 Stripe 클라이언트를 만든다.
- * Worker 는 요청 밖 I/O 가 금지되므로 첫 요청에서 DB api_keys → process.env 를 채운다(keys.ts).
- * src.ts:105 withKeys() 와 같은 형태 = 연결 1벌 → ensureKeys → finally 로 반드시 닫기.
- */
 async function stripeWithKeys(openSql: OpenSql): Promise<Stripe> {
   const client = openSql();
   try {
@@ -55,7 +42,6 @@ async function stripeWithKeys(openSql: OpenSql): Promise<Stripe> {
 }
 
 // ⚠️ 수정금지(승인필요) 2026-08-14 사장님 승인 = Stripe 결제창 다국어.
-// checkoutText — 문구 그대로.
 function checkoutText(lang: string): { name: string; desc: string } {
   const base = PURCHASE_CREDITS - PURCHASE_BONUS;
   const bonus = PURCHASE_BONUS;
@@ -92,9 +78,6 @@ function checkoutText(lang: string): { name: string; desc: string } {
   return texts[lang] || texts.ko;
 }
 
-/** 충전 = 장부 1벌(addCredits)에 type 'purchase' 로 쓴다. ⚠️ 이중충전 차단은 코드가 아니라 **DB 규칙**(§9) = 부분 유니크 인덱스 credit_transactions_purchase_ref_uniq
- *  (shared/schema/credits.ts, WHERE type='purchase' AND reference_id IS NOT NULL) = 같은 refId 가 두 번 오면 INSERT 가 23505 로 튕기고 트랜잭션이 통째로 롤백된다.
- *  충전 알림(web-push)은 워커에 없다 = 충전(돈) 자체에는 영향 없음. */
 async function processPurchase(
   db: Db,
   userId: string,
@@ -117,7 +100,6 @@ type FulfillResult =
   | { outcome: "no_user" };
 
 // ⚠️ 수정금지(승인필요) 2026-08-12 사장님 승인 = **충전 집행 1벌** = 어느 진입 신호로 오든
-// fulfillFromStripeRecord — 분기·판정 그대로.
 async function fulfillFromStripeRecord(
   db: Db,
   refId: string,
@@ -133,7 +115,6 @@ async function fulfillFromStripeRecord(
     );
     return { outcome: "credited", balance };
   } catch (e) {
-    // 23505 = 부분 유니크 인덱스 위반 = 이미 충전된 결제(§9 이중충전 차단).
     if ((e as { code?: string })?.code === "23505")
       return { outcome: "duplicate" };
     throw e;
@@ -141,7 +122,6 @@ async function fulfillFromStripeRecord(
 }
 
 // ⚠️ 수정금지(승인필요) 2026-08-12 사장님 승인 = **원장 대조 회수** = 최근 N일의 성공 결제(tripis 표식)를
-// reconcilePayments — 조회 범위·판정 그대로.
 async function reconcilePayments(
   db: Db,
   stripe: Stripe,
@@ -181,7 +161,6 @@ async function reconcilePayments(
 }
 
 // ⚠️ 수정금지(승인필요) 2026-08-05 = 결제 끝나고 **돌아올 주소**를 고르는 곳 1벌.
-// pickReturnBase — 판정 그대로.
 function pickReturnBase(origin: string, selfBase: string): string {
   try {
     const o = new URL(origin);
@@ -196,26 +175,11 @@ function pickReturnBase(origin: string, selfBase: string): string {
   }
 }
 
-/** 크레딧 0 고정 테스트 계정 판별. */
 function isNoTopupTestAccount(email: string | null | undefined): boolean {
   return !!email && /^c0@.+\.test$/i.test(email);
 }
 
-/**
- * ⚠️ 수정금지(승인필요) 2026-09-06 사장님 결정 = 충전 유일 경로(§9) = **express.json() 보다 먼저** 등록한다.
- *
- * 왜 따로 떼어 놨나:
- *   Stripe 서명검증은 **가공 안 된 원본 바이트**로만 된다.
- *   공식 docs.stripe.com/webhooks/signature = "Si vous utilisez la bibliothèque stripe-node avec
- *   Express, assurez-vous que `app.use(express.json())` est placée *après* l'acheminement du webhook.
- *   Dans Express, l'ordre de configuration du middleware est important." + 그 예시
- *     app.post('/webhook', ...);   // Webhook route in its original request form
- *     app.use(express.json());     // Parse the request body in JSON for other routes
- *   전역 express.json() 이 먼저 걸리면 본문 스트림이 이미 소비되어(gotchas.md:15 "Body has already
- *   been used") 원본 바이트가 사라진다. req.body 를 JSON.stringify 로 되돌리면 공백·키순서가
- *   달라져 서명이 반드시 어긋난다 = 모든 충전이 조용히 실패.
- *   그래서 이 1개 라우트만 express.raw({type:"application/json"}) 로 Buffer 를 받는다.
- */
+/** ⚠️ 수정금지(승인필요) 2026-09-06 사장님 결정 = 충전 유일 경로(§9) = **express.json() 보다 먼저** 등록한다. */
 export function registerPaymentWebhookRoute(
   app: Express,
   openDb: OpenDb,
@@ -228,8 +192,6 @@ export function registerPaymentWebhookRoute(
       const signature = req.headers["stripe-signature"];
       const rawBody: unknown = req.body;
 
-      // 열쇠(STRIPE_WEBHOOK_SECRET·STRIPE_SECRET_KEY)는 DB api_keys 에 있다(keys.ts).
-      // Worker 는 요청 밖 I/O 가 금지되므로 여기서 채운 **뒤에** process.env 를 읽는다.
       let stripe: Stripe;
       let secret: string | undefined;
       try {
@@ -252,7 +214,6 @@ export function registerPaymentWebhookRoute(
 
       let event: Stripe.Event;
       try {
-        // Worker 는 동기 constructEvent 불가(Node crypto 없음) = 비동기 + SubtleCrypto (파일 머리말 근거).
         event = await stripe.webhooks.constructEventAsync(
           rawBody,
           signature as string,
@@ -310,14 +271,11 @@ export function registerPaymentWebhookRoute(
   );
 }
 
-// ── 라우트 ─────────────────────────────────
-
 export function registerPaymentRoutes(
   app: Express,
   openDb: OpenDb,
   openSql: OpenSql,
 ): void {
-  // ── 결제창 만들기 = POST /api/payments/checkout = ⚠️ 웹 전용
   //    (2026-08-12 사장님 승인 = 폰은 아래 결제 시트로 전환).
   app.post("/api/payments/checkout", async (req: Request, res: Response) => {
     const { db, close } = openDb();
@@ -423,9 +381,6 @@ export function registerPaymentRoutes(
     },
   );
 
-  // ⚠️ POST /api/payments/confirm = §9 가 금지하는 "클라이언트가 부르는 충전"이 아니다: 금액·대상은 클라이언트가 못 정하고,
-  //    Stripe 에 실제로 결제됐는지 다시 물어(paymentIntents.retrieve) 성공한 결제만 집행한다. 소유자 확인(metadata.userId)도 한다.
-  //    중복은 DB 규칙(credit_transactions_purchase_ref_uniq)이 막는다.
   app.post("/api/payments/confirm", async (req: Request, res: Response) => {
     const { db, close } = openDb();
     try {
@@ -461,7 +416,6 @@ export function registerPaymentRoutes(
     }
   });
 
-  // ── 수동 원장 대조 = POST /api/admin/payments/reconcile.
   app.post(
     "/api/admin/payments/reconcile",
     async (req: Request, res: Response) => {

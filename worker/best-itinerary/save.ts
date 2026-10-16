@@ -1,5 +1,4 @@
 // ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = 여정 행 저장
-//   1,777줄 한 덩어리에서 그대로 잘라낸 것(§0) = 계산·규칙 한 글자도 안 바꿈.
 
 import type { Express, Request, Response } from "express";
 import { sql } from "drizzle-orm";
@@ -7,8 +6,6 @@ import * as schema from "../../shared/schema";
 import type { Db } from "../db-types";
 
 const { cities } = schema;
-
-// ── 여정 행 저장 ─────────
 
 export const STYLE_TO_PERSONA: Record<string, string> = {
   Luxury: "luxury",
@@ -46,7 +43,6 @@ export async function matchCityIdByName(
   return rows[0]?.id ?? null;
 }
 
-/** 여정 한 건을 저장할 모양으로 만든다. */
 export async function buildItineraryData(db: Db, body: any) {
   const { verificationResult: _vr, ...rawData } = (body.rawData || {}) as any;
   const { cityId: _fromClient, ...bodyRest } = body || {};

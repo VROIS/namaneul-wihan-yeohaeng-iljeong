@@ -7,7 +7,6 @@ import type { PlannerApi } from "../hooks/useTripPlanner";
 
 export type TransitLeg = Partial<TransitInfo> & { distance?: number };
 
-// 첫 슬롯이 가진 "출발 지점 → 첫 슬롯" 이동 값을 이동 칸 모양으로 옮긴다.
 export function legFromPlace(place?: Place): TransitLeg | undefined {
   if (!place?.transit_min || place.transit_min <= 0) return undefined;
   return {

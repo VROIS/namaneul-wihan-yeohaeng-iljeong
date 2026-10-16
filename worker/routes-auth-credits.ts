@@ -1,4 +1,3 @@
-// 계정(메일 로그인·내 정보·탈퇴) + 크레딧(잔액·내역) 라우트.
 import type { Express, Request, Response } from "express";
 import { desc, eq } from "drizzle-orm";
 import * as schema from "../shared/schema";
@@ -16,7 +15,6 @@ import type { Db, OpenDb } from "./db-types";
 
 const { creditTransactions, users } = schema;
 
-/** markAccountDeleted = 문패만 내린다(아무것도 지우지 않는다). */
 async function markAccountDeleted(db: Db, userId: string): Promise<void> {
   await db
     .update(users)
@@ -24,9 +22,6 @@ async function markAccountDeleted(db: Db, userId: string): Promise<void> {
     .where(eq(users.id, userId));
 }
 
-/**
- * 정렬 = created_at 내림차순, 그 뒤 현재 잔액에서 거꾸로 빼며 줄별 balance 를 붙인다.
- */
 async function getTransactionHistory(
   db: Db,
   userId: string,
@@ -48,8 +43,6 @@ async function getTransactionHistory(
     return { ...tx, balance };
   });
 }
-
-// ── 라우트 ────────────────────────────────────────────────────────────────
 
 export function registerAuthCreditsRoutes(app: Express, openDb: OpenDb): void {
   // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 이메일창 = 네 번째 로그인 수단(신규 가입 + 기존 본인확인 2역할)
@@ -104,7 +97,6 @@ export function registerAuthCreditsRoutes(app: Express, openDb: OpenDb): void {
     }
   });
 
-  // 내 정보. 응답 = users 행 통째(toClientUser 아님).
   app.get("/api/auth/me", async (req: Request, res: Response) => {
     const { db, close } = openDb();
     try {
@@ -145,7 +137,6 @@ export function registerAuthCreditsRoutes(app: Express, openDb: OpenDb): void {
     }
   });
 
-  // 크레딧 잔액.
   app.get("/api/credits/balance", async (req: Request, res: Response) => {
     const { db, close } = openDb();
     try {
@@ -160,7 +151,6 @@ export function registerAuthCreditsRoutes(app: Express, openDb: OpenDb): void {
     }
   });
 
-  // 크레딧 내역(limit 1~100, 기본 20).
   app.get("/api/credits/transactions", async (req: Request, res: Response) => {
     const { db, close } = openDb();
     try {

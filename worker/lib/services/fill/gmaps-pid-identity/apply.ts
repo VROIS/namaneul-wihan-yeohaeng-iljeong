@@ -109,9 +109,7 @@ export async function writeRow(
           );
           imageUrl = up.publicUrl;
         }
-      } catch {
-        /* 사진 실패는 검증 쓰기를 막지 않는다 */
-      }
+      } catch {}
     }
     // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 페이지가 준 CID 를 쓸 때는 검문(트리거)을 통과시킨다 = 같은 CID·PID 행이 있으면 그 원행으로 흡수하고 진 행은 삭제 = 쌍둥이 원천 차단 ③ (정본 §)
     const u = await upsertPlace({
@@ -126,7 +124,6 @@ export async function writeRow(
       clearSummaries: renamed,
       imageUrl,
       // ⚠️ 수정금지(승인필요) 2026-09-04 사장님 확정 = PID 가 정답이나 **페이지를 실제로 읽었을 때만**(read) 값을 넘긴다. 못 읽은 행의 기본값을 넘기면 기존 값을 덮는다(business_status 기본 'OPERATIONAL' 이 폐업 기록을 지움). null = COALESCE 가 기존값 보존.
-      //   이름 = 우편번호 든 문자열은 주소이지 이름이 아니다(pickPageName). 현지어명·한국어명은 제미니 영역 = 안 건드린다. page-coord-invalid = 좌표만 제외.
       nameEn: pickPageName(r) ?? row.name_en,
       address: read ? r.address : null,
       latitude: !read || r.gate === "page-coord-invalid" ? null : r.page_lat,

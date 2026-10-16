@@ -50,7 +50,6 @@ const isBlank = (x: unknown) => x == null || String(x).trim() === "";
     )
       add(r.id, "빈 칸");
 
-  // 같은 요약·카피가 다른 행에도 있음(전 도시 대상)
   const dupTexts = new Set<string>(
     (
       await c.query(
@@ -69,7 +68,6 @@ const isBlank = (x: unknown) => x == null || String(x).trim() === "";
     )
       add(r.id, "같은 글 중복");
 
-  // 원어 이름이 구글 이름과 낱말이 하나도 안 겹침(영어·원어 표기 차이는 가짜 의심 = 호출로 정리됨)
   for (const r of rows) {
     if (!r.name_local) continue;
     const a = new Set(nameTokens(r.name_en));
@@ -81,7 +79,6 @@ const isBlank = (x: unknown) => x == null || String(x).trim() === "";
     if (hit === 0) add(r.id, "이름 불일치 후보");
   }
 
-  // 에이전트 보고 어긋남
   for (const f of String(argv["mismatch"] || "")
     .split(",")
     .map((s) => s.trim())
@@ -103,9 +100,7 @@ const isBlank = (x: unknown) => x == null || String(x).trim() === "";
         const j = JSON.parse(fs.readFileSync(path.join(rawDir, f), "utf-8"));
         for (const p of j?.raw?.parsed?.places ?? [])
           answered.add(Number(p.id));
-      } catch {
-        /* 읽지 못한 응답 = 답한 것으로 세지 않는다 */
-      }
+      } catch {}
     }
   const byId = new Map<number, any>(rows.map((r: any) => [r.id, r]));
   const targets = [...reason.keys()]
@@ -154,7 +149,6 @@ const isBlank = (x: unknown) => x == null || String(x).trim() === "";
     const gemini = path.join(ROOT, "worker/lib/services/fill/gemini-apply.ts");
     const sh = (args: string[]) =>
       runTsx(gemini, [`--city-id=${cityId}`, ...args]);
-    // 이 판에서 이미 받은 응답은 호출 없이 다시 적용만(같은 값이면 바뀐 칸 0) = 받고 적용 전에 멈춘 경우를 메운다
     for (const s of savedRaws)
       await sh([`--raw=${s.file}`, `--part=${s.part}`, "--apply"]);
     console.log(
@@ -165,7 +159,6 @@ const isBlank = (x: unknown) => x == null || String(x).trim() === "";
         sh(["--call=true", `--ids-file=${f}`, `--part=${k + 1}`, "--apply"]),
       ),
     );
-    // 실패한 몫 = 저장된 응답이 있으면 그것을 적용(돈을 다시 쓰지 않는다) · 없을 때만 그 몫을 다시 부른다
     const stillFailed = await retryFailed(
       files.map((_, k) => k),
       codes,

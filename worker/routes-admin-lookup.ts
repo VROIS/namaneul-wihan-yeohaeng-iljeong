@@ -9,7 +9,6 @@ const { guides, itineraries, savedVideos } = schema;
 export function registerAdminLookupRoutes(app: Express, openDb: OpenDb) {
   app.get("/api/admin/lookup/:kind/:id", async (req, res) => {
     const { kind, id } = req.params;
-    // 숫자 번호를 쓰는 종류는 숫자가 아니면 여기서 끊는다(질의로 내려보내지 않는다).
     if (kind !== "guide" && !Number.isFinite(Number(id)))
       return res.status(400).json({ error: "invalid_id" });
     const { db, close } = openDb();

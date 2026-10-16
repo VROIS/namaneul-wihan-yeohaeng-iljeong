@@ -33,7 +33,6 @@ export async function getUserData(): Promise<UserData | null> {
   return null;
 }
 
-/** 서버가 받는 로그인 토큰을 가졌나(게스트·옛 형식 제외) = 토큰 모양 확인 1벌. */
 export function hasSessionToken(
   user: UserData | null,
 ): user is UserData & { token: string } {

@@ -23,7 +23,6 @@ export async function getCityCenter(
     : null;
 }
 
-// 거리 계산 = geo-distance.ts 1벌(§16). 여기서는 기존 부르던 곳들을 위해 그대로 다시 내보낸다.
 export { distanceKmFromCoords };
 
 /** ⚠️ 수정금지(승인필요) 2026-08-18 사장님 승인 = 100km 상한 추가(옛 무상한 = 폐기 §19). */
@@ -67,9 +66,7 @@ export function servingGateSql(): SQL {
 
 // ⚠️ 수정금지(승인필요) 2026-09-29 사장님 결정 = DB 올리 전환 기준 = 손님상 120곳 이상 + 베스트 있음(V3 입구·워커 분기·도시 카드가 이 1벌) (정본 §)
 export const READY_MIN_SERVABLE = 120;
-/** 워커·엔진 어느 DB 연결이든 받는 조회 모양(DB 연결은 부르는 쪽이 넘긴다). */
 export type SelectDb = { select: (...args: any[]) => any };
-/** 손님상 관문을 통과한 행을 셀 때 붙이는 전환 기준식. */
 export function readySql(): SQL {
   return sql`(COUNT(*) >= ${READY_MIN_SERVABLE} AND COUNT(${placeSeedRaw.bestRank}) > 0)`;
 }

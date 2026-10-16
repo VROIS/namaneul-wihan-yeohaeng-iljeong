@@ -11,7 +11,6 @@ import { runSnapshotTick } from "./admin-snapshot";
 import { refreshKakaoJwks } from "./routes-social-auth";
 import { cleanupDeletedAccounts } from "./lib/services/account-cleanup";
 
-// wrangler.jsonc · wrangler.build.jsonc 의 triggers.crons 와 같은 글자
 const KAKAO_JWKS_CRON = "0 3 * * *";
 const ACCOUNT_CLEANUP_CRON = "30 4 * * *";
 const RATES_CRON = "0 5 * * *";
@@ -32,7 +31,6 @@ export async function enqueueGmapsPost(
   console.log(`[gmaps-post] 큐 등록 city ${cityId} (${reason})`);
 }
 
-// 워커 진입점(src.ts)은 700줄 초과 파일이라 건드리지 않는다 = HTTP 핸들러에 큐·심장박동을 덧붙여 돌려준다
 export const withGmapsQueue = <T extends object>(httpHandler: T) => ({
   ...httpHandler,
   queue: consumeGmapsPost,

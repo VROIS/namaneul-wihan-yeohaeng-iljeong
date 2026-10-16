@@ -1,5 +1,3 @@
-// 도시·장소 라우트 4벌.
-// 조건·정렬 모듈은 그대로 import 한다(§16 재발명 금지).
 import type { Express, Request, Response } from "express";
 import { eq, sql, desc, and, or, inArray } from "drizzle-orm";
 import * as schema from "../shared/schema";
@@ -14,9 +12,6 @@ import type { OpenDb } from "./db-types";
 
 const { cities, placeSeedRaw, itineraries, guides, savedVideos } = schema;
 
-// src.ts 의 openDb() 를 그대로 받는다(연결 1벌 = 반드시 close).
-
-// 장소 = PSR 행 + name/type/photoUrl 별칭 3개.
 type PsrRow = typeof placeSeedRaw.$inferSelect;
 function toPlace(psr: PsrRow) {
   return {
@@ -35,7 +30,6 @@ type HighlightName = {
 
 export function registerPlaceRoutes(app: Express, openDb: OpenDb): void {
   // ⚠️ 수정금지(승인필요) 🏙️ B2 도시 카드 데이터 = 카드는 **항상** 뜬다(2026-08-02 사장님 지시로 갱신 §19).
-  // 구체 경로(/representative)를 /api/cities/:id 보다 먼저 등록한다.
   app.get(
     "/api/cities/:id/representative",
     async (req: Request, res: Response) => {
@@ -105,7 +99,6 @@ export function registerPlaceRoutes(app: Express, openDb: OpenDb): void {
             .orderBy(...cityRepresentativeOrder(lang))
             .limit(1),
           // ⚠️ 수정금지(승인필요) 2026-09-04 사장님 결정 = 하이라이트 = 얼굴과 같은 줄에서 얼굴만 빼고 위에서 3개
-          //   (= 얼굴을 바꾸면 그 자리가 메워지고 옛 얼굴이 내려온다 = 벽돌 쌓기). 얼굴 몫 1개 여유로 4개를 받는다.
           db
             .select({
               id: placeSeedRaw.id,
@@ -176,7 +169,6 @@ export function registerPlaceRoutes(app: Express, openDb: OpenDb): void {
                 .limit(1);
 
         // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 대표사진의 요약 1벌(관리자 대시보드 열람 전용).
-        //   앱 화면에는 그리지 않는다 = 한국어라 다국어와 안 맞는다
         const tagline = heroPlace?.summaryKo || "";
 
         const card = {

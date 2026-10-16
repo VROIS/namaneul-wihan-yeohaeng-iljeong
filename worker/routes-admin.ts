@@ -9,8 +9,6 @@ import type { OpenDb } from "./db-types";
 
 const { guidePrices } = schema;
 
-// src.ts 의 openDb() 를 그대로 받는다(연결 1벌 = 반드시 close).
-
 export function registerAdminRoutes(app: Express, openDb: OpenDb): void {
   registerAdminSnapshot(app, openDb);
   // ⚠️ 수정금지(승인필요) 2026-07-13 = 관리자 로그인 = 비번 서버검증 → 관리자 세션 토큰 발급(§16 = 기존 Bearer 인증 재사용).
@@ -80,7 +78,6 @@ export function registerAdminRoutes(app: Express, openDb: OpenDb): void {
     }
   });
 
-  // 구체 경로(/hourly)를 /api/admin/guide-prices/:id 보다 먼저 등록한다.
   app.get(
     "/api/admin/guide-prices/hourly",
     async (_req: Request, res: Response) => {

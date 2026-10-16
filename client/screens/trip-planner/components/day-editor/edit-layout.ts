@@ -9,7 +9,6 @@ export const MAX_END_MIN = 24 * 60;
 export type EditSlot = { place: any; stay: number };
 export type LatLng = { lat: number; lng: number };
 
-// 마지막이 공연장으로 고정된 하루(BTS) = 공연장 슬롯은 수정 대상이 아니다.
 export const isFinalPlace = (p: any): boolean =>
   p?.seedCategory === "bts_venue";
 export const finalOfDay = (places: any[]): any | null =>
@@ -60,7 +59,6 @@ export function layoutDay(
   };
 }
 
-// 서버에 보낼 하루 = 화면과 같은 시각(시작 · 끝)을 슬롯에 담는다. 서버가 같은 함수로 다시 계산해 돌려준다.
 export function placesForServer(
   slots: EditSlot[],
   starts: number[],

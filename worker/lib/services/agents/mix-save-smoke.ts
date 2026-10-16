@@ -42,7 +42,6 @@ const fail = (msg: string): never => {
     pathToFileURL(path.join(ROOT, "node_modules/drizzle-orm/index.js")).href
   );
 
-  // ① 알아보는 문 SQL + 판정식 (실제 창고 행)
   const rows = (await pool!.query(RECOGNIZE_ROWS_SQL, [cityId])).rows;
   if (!rows.length) fail(`알아보는 문 SQL: city ${cityId} 행 0`);
   const r0 = rows[0];
@@ -66,7 +65,6 @@ const fail = (msg: string): never => {
     `✅ ① 알아보는 문 = ${rows.length}행 · 자기 자신 인식 #${r0.id} (${door.why})`,
   );
 
-  // ② 저장·장부·번역 SQL 형태 검사 = 트랜잭션 안에서 실행 후 ROLLBACK (쓰기 0)
   const c = await pool!.connect();
   try {
     await c.query("BEGIN");
@@ -102,7 +100,6 @@ const fail = (msg: string): never => {
     c.release();
   }
 
-  // ③ drizzle 경로(엔진이 쓰는 db.execute)
   const chk = await db!.execute(
     sql`SELECT count(*)::int AS n FROM place_seed_raw WHERE city_id = ${cityId}`,
   );
@@ -110,7 +107,6 @@ const fail = (msg: string): never => {
   if (!(n > 0)) fail("③ drizzle db.execute 결과 없음");
   console.log(`✅ ③ drizzle 경로 = city ${cityId} ${n}행`);
 
-  // ④ R2 = 목록 + raw 순번 판정(읽기만)
   if (!isR2Configured()) fail("④ R2 설정 없음");
   const rawDir = rawPlace(cityId).dir;
   const objs = await listR2(`${rawDir}/`);
@@ -122,7 +118,6 @@ const fail = (msg: string): never => {
   );
   console.log(`✅ ④ R2 = ${rawDir}/ ${objs.length}개 · 순번 판정 → ${name}`);
 
-  // ⑤ 후처리 엔진 = 모듈 적재 + 대기 행 SQL(읽기만) = 큐 소비자가 부르는 것과 같은 함수
   const { pendingByCity, r2PrefixOf } = await import(
     pathToFileURL(path.join(ROOT, "worker/lib/services/fill/gmaps-post.ts"))
       .href

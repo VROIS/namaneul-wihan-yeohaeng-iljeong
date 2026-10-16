@@ -144,7 +144,6 @@ export default function LoginScreen() {
                   maxLength={2}
                   textAlign="center"
                   {...(Platform.OS === "web" && {
-                    // 웹: type="number"는 선행 0 제거·숫자 변형(03→02 등) 유발. text+inputMode로 정확한 입력 보장
                     type: "text",
                     inputMode: "numeric",
                   })}
@@ -175,7 +174,6 @@ export default function LoginScreen() {
                   maxLength={2}
                   textAlign="center"
                   {...(Platform.OS === "web" && {
-                    // 웹: type="number"는 선행 0 제거·숫자 변형 유발
                     type: "text",
                     inputMode: "numeric",
                   })}
@@ -207,7 +205,6 @@ export default function LoginScreen() {
                   maxLength={4}
                   textAlign="center"
                   {...(Platform.OS === "web" && {
-                    // 웹: type="number"는 선행 0 제거·숫자 변형 유발
                     type: "text",
                     inputMode: "numeric",
                   })}

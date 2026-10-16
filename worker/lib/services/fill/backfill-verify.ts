@@ -85,8 +85,6 @@ export async function backfillImages(opts: {
   const relink = await relinkStorageImages({ cityId, apply, client: c });
 
   // ⚠️ 수정금지(승인필요) 2026-09-04 사장님 확정 = 이 단계 = 백필 + 검증(backfill-verify). PID 를 단 행이 대상이고, 사진이 없으면 채우고(백필) 있으면 6요소가 맞는지 대조한다(검증).
-  //   검증 여부 = verified_at(NULL = 아직 PID 페이지로 대조 안 함). 위키 미러(`-wiki.`)는 구글 사진이 아니므로 결손으로 본다.
-  //   사진 판별 = R2 키가 `{city}/images/{cat}/{시각}_{PID}.jpg` 라 파일명에 PID 가 들어 있다 = 그 PID 로 받은 사진이면 다시 받지 않는다.
   const rows = (
     await c.query(
       `
@@ -159,7 +157,6 @@ export async function backfillImages(opts: {
   }
 
   // ⚠️ 2026-08-24 사장님 승인 = PM = 막지 않음(곧 사용자 기능 생김 = 제한 금지). BE가 잔량을 알 수 있게
-  //   = TS 잔량 게이트는 실제 대상(tsTargets)이 확정되는 무료·PM 단계 뒤에서 호출(2026-09-03).
   const { tsPhoto, tsSearch } = await import(
     pathToFileURL(path.join(ROOT, "worker/lib/services/shared/ts-client.ts"))
       .href
@@ -337,7 +334,6 @@ export async function backfillImages(opts: {
             }
           }
           // ⚠️ 수정금지(승인필요) 2026-09-04 사장님 확정 = 유료(PM·TS) 대상은 **우리 행에 사진이 없는 행만**(r.has_image).
-          //   페이지에 사진이 없다(gr.photo_url)는 것만 보면, 사진은 멀쩡한데 검증만 안 된 행(verified_at NULL)이 유료 경로로 들어가 기존 R2 사진을 덮어쓴다(§9 유료호출 낭비).
           if (!gr.photo_url && !r.has_image) {
             gmapsFail++;
             gmapsFailed.push(r);
@@ -366,7 +362,6 @@ export async function backfillImages(opts: {
           }
         } catch (e) {
           gmapsFail++;
-          // 예외로 끝난 행도 **우리 행에 사진이 없을 때만** 유료 대상 = 위와 같은 기준 1벌.
           if (!r.has_image) gmapsFailed.push(r);
           console.warn(`  ⚠️ 실패 #${r.id}:`, (e as Error).message);
         }
@@ -452,7 +447,6 @@ export async function backfillImages(opts: {
   );
 
   // ⚠️ 수정금지(승인필요) 2026-09-04 사장님 확정 = PID 가 정답 = 페이지 좌표가 **자기 도시에서 100km 밖**인 행만 이동 대상(버리지 않고 맞춰 놓는다).
-  //   처리한 행 전부를 --ids 로 넘기면 그 경로가 거리 필터를 건너뛰어(수동지정) 근교 위성도시(몽생미셸↔노르망디 등)로 멀쩡한 행까지 옮겨진다 = 2026-09-04 브뤼헤→릴 사고.
   if (apply && rows.length) {
     const far = (
       await c.query(
@@ -485,7 +479,6 @@ export async function backfillImages(opts: {
     }
   }
   // ⚠️ 수정금지(승인필요) 2026-09-04 사장님 결정 = 관문 탈락 = 우리 행과 PID 가 다른 장소 = 사장님이 눈으로 볼 수 있게 목록으로 낸다.
-  //   사진 붙임 여부는 관문이 아니라 실제 결과(photo_url)로 표기 = "안 붙임"이라 적고 붙이던 거짓 보고 제거 §19.
   if (gateFailed.length) {
     console.log(`\n🔴 PID 오염 의심 ${gateFailed.length}건:`);
     for (const g of gateFailed)

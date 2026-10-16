@@ -200,6 +200,5 @@ function findReportPath(): string {
   );
 })().catch((e) => {
   console.error("ERR", e?.message || e);
-  // 종료 코드 3 = 구글맵 제한 보기(채널 막힘) = 워크플로가 이 도시를 멈춘다 (gmaps-preclean EXIT_LIMITED 와 같은 값)
   process.exit(String(e?.message || "").startsWith("제한보기") ? 3 : 1);
 });

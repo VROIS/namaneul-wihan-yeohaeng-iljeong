@@ -4,7 +4,6 @@ import { placeSeedRaw } from "@shared/schema";
 import { bestRankOrder } from "./best-rank";
 
 // ⚠️ 수정금지(승인필요) 2026-09-04 사장님 결정 = 얼굴은 heritage 하나만. 사진·격리·도심으로 거르지 않는다
-//   (사진 없음 = 사장님께 "채워라" 신호 / 베스트로 뽑혔으면 도심 밖이어도 그 도시 것).
 export function cityRepresentativeWhere(cityId: number) {
   return and(
     eq(placeSeedRaw.cityId, cityId),

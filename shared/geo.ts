@@ -15,7 +15,6 @@ export function haversineKm(
   return 2 * R * Math.asin(Math.min(1, Math.sqrt(a)));
 }
 
-/** 출발점에서 가장 가까운 곳 → 그 곳에서 가장 가까운 곳 … 순서로 한 줄 세운다(되돌아가지 않는 기차 줄) */
 export function nearestChain<T extends { lat: number; lng: number }>(
   from: { lat: number; lng: number },
   items: T[],

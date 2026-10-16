@@ -9,8 +9,6 @@ type DragCallbacks = {
   slop?: number;
 };
 
-// 손가락(마우스) 하나로 위아래로 끄는 손잡이 = 끄는 동안 스크롤에 빼앗기지 않는다.
-//   slop 을 주면 그만큼 움직이기 전까지는 끌기가 아니라 "톡 누름"(onTap)이다.
 export function useDragHandle(cb: DragCallbacks) {
   const ref = useRef(cb);
   ref.current = cb;

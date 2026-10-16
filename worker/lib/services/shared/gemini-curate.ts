@@ -68,7 +68,6 @@ export async function geminiCurate(
   const month = String(new Date().getMonth() + 1);
   const out: GeminiCurateOutput[] = [];
 
-  // 한 번에 전부 = 몫(일꾼) 하나가 한 번 부른다 · 줄여 다시 묻기(60·40·20·10)·쪼개기 없음
   const input = valid.map((r) => ({
     id: r.id,
     name_en: r.nameEn,

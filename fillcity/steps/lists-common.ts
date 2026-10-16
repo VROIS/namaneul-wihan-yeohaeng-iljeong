@@ -4,7 +4,6 @@ import fs from "fs";
 import path from "path";
 import { ROOT } from "./common";
 
-// 문장 = 도시 이름(영어)만 바꿔 끼운다. view = 도시 중심 확대 9단계로 열기(100km 안팎이 보이는 크기), intended = 문장이 묻는 분류(선별 단계가 라벨로 다시 판정).
 export const LIST_QUERIES: {
   key: string;
   q: (n: string) => string;
@@ -134,7 +133,6 @@ export function readListRaws(cityId: number): { file: string; json: any }[] {
     }));
 }
 
-/** 목록 한 줄 글에서 분류 글자(별점 괄호 뒤 첫 칸). 구글이 끼우는 사설 문자는 영문자 묶음이 끊긴다. */
 export function labelOfLine(line: string): string | null {
   const m = String(line || "").match(
     /(?:\)|No reviews)[^|]*\|\s*([A-Za-z0-9][A-Za-z0-9 ,'&\-/]*[A-Za-z])/,

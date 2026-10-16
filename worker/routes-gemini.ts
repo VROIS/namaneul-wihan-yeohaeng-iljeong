@@ -1,19 +1,7 @@
-// 제미니(AI) 호출 라우트. 순수 계산 모듈(place-hint-header · ai-opinion-prompt · google-places-sku)은 엔진 것을 그대로 import 한다(§16 재발명 금지).
 import type { Express, Request, Response } from "express";
 import { and, desc, eq, sql } from "drizzle-orm";
 // ⚠️ 수정금지(승인필요) 2026-09-06 = 반드시 "@google/genai/web" (기본 진입점 금지).
-// 근거(직접 실측, esbuild 번들 산출물 grep):
-//   package.json exports "." 의 "node" 조건 = dist/node/index.mjs
-//     → platform=node 로 번들 시 node:fs · node:net · node:http · node:https · node:zlib ·
-//       node:stream 등 **11개** builtin 을 끌어온다. nodejs_compat 은 node:net/node:fs 의
-//       실제 소켓·파일시스템을 주지 않으므로 런타임에서 깨진다.
-//   exports "./web" = dist/web/index.mjs → **node: builtin 0개**(platform 무관).
-//   (dist/web/index.mjs 안의 유일한 "node:" 문자열은 에러 메시지 본문 = import 아님.)
 import { GoogleGenAI } from "@google/genai/web";
-// 바인딩(R2) 접근 = src.ts:41 과 같은 공식 방식. 타입은 `wrangler types` 산출물(worker-configuration.d.ts:5 RAW_BUCKET: R2Bucket).
-// waitUntil = 같은 모듈에서 직접 import 하는 형태(ctx 불필요). 공식 changelog 2025-08-08
-// "Directly import `waitUntil` in Workers" = "extend execution ... without requiring the request context".
-// httpServerHandler(Express) 경로에는 ctx 가 없으므로 이 형태가 유일한 배선이다.
 import { env, waitUntil } from "cloudflare:workers";
 import * as schema from "../shared/schema";
 import { saveRawToR2 } from "./raw-store";
@@ -41,7 +29,6 @@ interface GeminiCallRecord {
   responseTimeMs: number;
   success: boolean;
   errorMessage?: string;
-  /** 실패 호출은 geminiClient.ts 도 raw 를 저장하지 않는다 = undefined. */
   raw?: { request: unknown; raw: unknown };
 }
 
@@ -62,7 +49,6 @@ async function recordGeminiCall(
     }
     const { db, close } = openDb();
     try {
-      // geminiClient.ts 와 같은 기록 = provider "gemini" / sku = 모델 / tag = rawTag / 소요시간 / 성공여부.
       await recordExternalCall(db, {
         provider: "gemini",
         sku: p.sku,
@@ -82,9 +68,6 @@ async function recordGeminiCall(
   }
 }
 
-// ── 제미니 호출 ─
-
-// geminiClient.ts 와 같은 값.
 const MODEL_ID = "gemini-3-flash-preview";
 const AI_OPINION_TEMPERATURE = 0.2;
 const AI_OPINION_MAX_OUTPUT_TOKENS = 50000;
@@ -94,8 +77,7 @@ interface GeminiPart {
   inlineData?: { mimeType: string; data: string };
 }
 
-/** 사진 해설 스트림. §18 = 실패(시작/도중)는 기록(success:false)만·raw 저장 없음·그대로 throw / 성공은 기록(success:true) 후 raw = { parsed: null, text: fullText, finishReason }(이미지는 용량상 제외) · request = { prompt, systemInstruction, model, hasImage }.
- *  기록은 `record` 콜백으로 밖에 넘긴다 = 이 제너레이터는 DB·R2 를 직접 만지지 않는다(스트리밍 라우트가 응답을 끝낸 뒤 기록한다). */
+/** 사진 해설 스트림. §18 = 실패(시작/도중)는 기록(success:false)만·raw 저장 없음·그대로 throw / 성공은 기록(success:true) 후 raw = { parsed: null, text: fullText, finishReason }(이미지는 용량상 제외) · request = { prompt, systemInstruction, model, hasImage }. */
 async function* geminiVisionStream(
   apiKey: string,
   base64Image: string | null,
@@ -113,12 +95,10 @@ async function* geminiVisionStream(
 
   const ai = new GoogleGenAI({ apiKey });
 
-  // 시작시각 · 조립버퍼 · finishReason 기본값.
   const startedAt = Date.now();
   let fullText = "";
   let finishReason = "stream-end";
   try {
-    // config = geminiClient.ts 와 같은 값 1벌.
     const responseStream = await withQuotaRetry(
       () =>
         ai.models.generateContentStream({
@@ -136,7 +116,6 @@ async function* geminiVisionStream(
       { label: "gemini-vision:guide-gemini" },
     );
 
-    // 청크마다 finishReason 을 갱신하고 텍스트를 누적하며 흘려보낸다.
     for await (const chunk of responseStream) {
       const fr = chunk.candidates?.[0]?.finishReason;
       if (fr) finishReason = fr;
@@ -170,8 +149,7 @@ async function* geminiVisionStream(
   });
 }
 
-/** JSON 응답 1회 호출(googleSearch 포함). §18 = 실패는 기록(success:false)만·raw 저장 없음·그대로 throw / 성공은 **파싱을 끝낸 뒤** raw 저장(parsed 포함) → 기록(success:true), tag = 호출부가 준 rawTag("ai-opinion").
- *  기록은 `record` 콜백으로 밖에 넘긴다 = 라우트가 외부호출이 끝난 뒤(연결을 새로 연 시점)에 부른다. */
+/** JSON 응답 1회 호출(googleSearch 포함). §18 = 실패는 기록(success:false)만·raw 저장 없음·그대로 throw / 성공은 **파싱을 끝낸 뒤** raw 저장(parsed 포함) → 기록(success:true), tag = 호출부가 준 rawTag("ai-opinion"). */
 async function geminiJson<T>(
   apiKey: string,
   prompt: string,
@@ -179,11 +157,9 @@ async function geminiJson<T>(
 ): Promise<{ data: T | null; finishReason: string; parseError?: string }> {
   const ai = new GoogleGenAI({ apiKey });
 
-  // 시작시각. 실패해도 기록 후 그대로 throw(기존 에러 처리 불변).
   const startedAt = Date.now();
   let response;
   try {
-    // googleSearch 켜면 responseMimeType 을 뺀다(Gemini API 제약).
     response = await withQuotaRetry(
       () =>
         ai.models.generateContent({
@@ -210,7 +186,6 @@ async function geminiJson<T>(
   const raw = response.text || "";
   const finishReason = response.candidates?.[0]?.finishReason || "unknown";
 
-  // geminiClient.ts 와 같은 추출식(첫 { 부터 마지막 } 까지).
   let data: T | null = null;
   let parseError: string | undefined;
   try {
@@ -227,7 +202,6 @@ async function geminiJson<T>(
     raw: {
       // prompt 원본 통째 + model + googleSearch 여부(§18 = 사장님 byte 검수).
       request: { prompt, model: MODEL_ID, googleSearch: true },
-      // parsed(객체)도 같이 저장해야 pretty 들여쓰기로 눈 검수가 된다.
       raw: { parsed: data ?? null, text: raw, finishReason },
     },
   });
@@ -235,12 +209,8 @@ async function geminiJson<T>(
   return { data, finishReason, parseError };
 }
 
-// ── 라우트 ─────────────────────────────────────────────────────────────────
-
 export function registerGeminiRoutes(app: Express, openDb: OpenDb): void {
   // ⚠️ 수정금지(승인필요) 2026-09-06 = `res.setHeader("Transfer-Encoding","chunked")` 를 넣지 않는다 = 워커 런타임이 청크를 알아서 나눠 보낸다(hop-by-hop 헤더는 런타임이 관리).
-  //    근거 = workerd 소스 직접 확인(github.com/cloudflare/workerd, src/node 의 http 서버 구현) = 헤더 전송 뒤 res.write() 는 곧장 스트림으로 들어가 점진 전달된다.
-  //    응답은 ReadableStream 으로 나간다 = 128MB 버퍼링 없음.
   app.post("/api/gemini", async (req: Request, res: Response) => {
     const { db, close } = openDb();
     let closed = false;
@@ -266,12 +236,9 @@ export function registerGeminiRoutes(app: Express, openDb: OpenDb): void {
         });
       }
 
-      // 🔒 해설 새로 만들기 = 로그인 필수.
       const requesterId = getUserIdFromReq(req);
       if (!requesterId) return res.status(401).json({ error: "로그인 필요" });
 
-      // ⚠️ 차감은 완성 시점에만. 여기서는 잔액만 본다.
-      //    § 9 금지 4번 = 첫 write 전에 끝내야 402 를 보낼 수 있다.
       if (!(await precheckFeature(db, res, requesterId, "guide_explain")))
         return;
 
@@ -280,16 +247,10 @@ export function registerGeminiRoutes(app: Express, openDb: OpenDb): void {
         return res.status(503).json({ error: "해설 생성 실패" });
       }
 
-      // ⚠️ Hyperdrive gotchas.md:15 "Failed to acquire a connection (Pool exhausted) …
-      //    don't hold connections during external calls" = 제미니 응답을 기다리는 동안
-      //    DB 연결을 쥐고 있으면 안 된다. 그래서 여기서 먼저 닫고, 차감할 때 새로 연다.
       closeOnce();
 
       res.setHeader("Content-Type", "text/plain; charset=utf-8");
 
-      // ⚠️ 기록 시점 = **응답을 다 흘려보낸 뒤** waitUntil 로 넘긴다 = 기록은 응답을 늦출 일이 아니고, 그냥 던져두면 R2 PUT·DB INSERT 가 중간에 끊길 수 있다.
-      //   제너레이터가 준 기록거리를 여기 담아 두고 스트림이 끝난 뒤 한 번에 넘긴다
-      //   (제너레이터 안에서 곧장 넘기면 마지막 청크가 나가기도 전에 DB 연결을 하나 더 열게 된다).
       const pending: GeminiCallRecord[] = [];
 
       let produced = 0; // 실제로 내보낸 글자 수 = 완성 판정 근거
@@ -339,7 +300,6 @@ export function registerGeminiRoutes(app: Express, openDb: OpenDb): void {
     }
   });
 
-  // ② AI 의견 = POST /api/itineraries/ai-opinion (5크레딧).
   app.post(
     "/api/itineraries/ai-opinion",
     async (req: Request, res: Response) => {
@@ -362,7 +322,6 @@ export function registerGeminiRoutes(app: Express, openDb: OpenDb): void {
           return res.status(400).json({ error: "itinerary(days[]) required" });
         }
 
-        // 언어가 다르면 캐시도 다시 만들어야 하므로 fp 에 언어를 포함한다.
         const fp = `${computeItineraryFingerprint(itinerary)}:${language || "ko"}`;
 
         let existingRawData: Record<string, unknown> | null = null;
@@ -390,7 +349,6 @@ export function registerGeminiRoutes(app: Express, openDb: OpenDb): void {
           }
         }
 
-        // Gemini 로 넘길 입력 조립. 필드·순서 그대로.
         const meta = (itinerary.metadata || {}) as Record<string, unknown>;
         const transportCategory =
           meta.transportCategory === "guide" ||
@@ -421,11 +379,9 @@ export function registerGeminiRoutes(app: Express, openDb: OpenDb): void {
               priceEur: p.entranceFee ?? p.mealPrice,
             })),
           })),
-          // 앱 현재 언어로 Gemini 가 직접 작문(번역기 아님).
           language: language || "ko",
         } as AiOpinionInput;
 
-        // ⚠️ 차감은 완성 시점에만. 여기서는 잔액만 본다.
         const opinionPayerId = getUserIdFromReq(req);
         if (!(await precheckFeature(db, res, opinionPayerId, "ai_opinion")))
           return;
@@ -438,14 +394,10 @@ export function registerGeminiRoutes(app: Express, openDb: OpenDb): void {
           });
         }
 
-        // 프롬프트 조립(§16).
         const prompt = generateAiOpinionPrompt(opinionInput);
 
-        // ⚠️ 외부호출 대기 중 DB 연결을 쥐지 않는다(Hyperdrive 연결 고갈 방지).
         closeOnce();
 
-        // ⚠️ 기록 = 호출 직후 waitUntil 로 넘긴다(응답을 늦추지 않고, 파싱 실패 502 도 기록이 남게. 던져두면 R2 PUT·DB INSERT 가 끊길 수 있다).
-        //   recordGeminiCall 이 DB 연결을 스스로 열고 닫는다 = 외부호출 대기 중에는 연결이 없다.
         const t0 = Date.now();
         const result = await geminiJson<AiOpinionResponse>(
           apiKey,
@@ -463,7 +415,6 @@ export function registerGeminiRoutes(app: Express, openDb: OpenDb): void {
         );
         const elapsedMs = Date.now() - t0;
 
-        // 파싱 실패 시 502.
         if (!result.data) {
           console.warn(
             `[AiOpinion] ⚠️ Gemini 응답 파싱 실패 (${elapsedMs}ms): ${result.parseError}`,
@@ -477,7 +428,6 @@ export function registerGeminiRoutes(app: Express, openDb: OpenDb): void {
           `[AiOpinion] ✅ Gemini 응답 (${elapsedMs}ms): verdict=${result.data.feasibility?.verdict}`,
         );
 
-        // 차감 + 캐시 저장 = 외부호출이 끝난 뒤 연결을 새로 연다.
         const after = openDb();
         try {
           await chargeOnSuccess(
@@ -487,7 +437,6 @@ export function registerGeminiRoutes(app: Express, openDb: OpenDb): void {
             itineraryId ? String(itineraryId) : undefined,
           );
 
-          // 결과를 rawData.verification 에 굳힌다.
           if (!Number.isNaN(idNum) && existingRawData) {
             const rawData = {
               ...existingRawData,
@@ -516,8 +465,6 @@ export function registerGeminiRoutes(app: Express, openDb: OpenDb): void {
     },
   );
 
-  // ③ GET /api/guide/landmark.
-  //   이 호출이 준 좌표도 같이 돌려준다.
   app.get("/api/guide/landmark", async (req: Request, res: Response) => {
     const { db, close } = openDb();
     let closed = false;
@@ -536,7 +483,6 @@ export function registerGeminiRoutes(app: Express, openDb: OpenDb): void {
       const apiKey = await readMapsKey(db);
       if (!apiKey) return res.status(503).json({ error: "maps key missing" });
 
-      // ⚠️ 외부호출 대기 중 DB 연결을 쥐지 않는다(Hyperdrive 연결 고갈 방지).
       closeOnce();
 
       const places = await tsSearchNearby(apiKey, lat, lng);
@@ -554,7 +500,6 @@ export function registerGeminiRoutes(app: Express, openDb: OpenDb): void {
     }
   });
 
-  // ④ GET /api/guide/place-image.
   //   ⚠️ 수정금지(승인필요) = 우리 DB 장소를 TRIPIS 해설 재료로 넘기는 입구. 외부호출 0건.
   app.get("/api/guide/place-image", async (req: Request, res: Response) => {
     const { db, close } = openDb();
@@ -608,7 +553,6 @@ export function registerGeminiRoutes(app: Express, openDb: OpenDb): void {
           address: row.address,
           category: row.seedCategory,
           reviewCount: row.googleReviewCount,
-          // price_eur = numeric 컬럼이라 postgres 드라이버가 문자열로 준다 = 머리글이 `€${priceEur}` 로 찍으므로 숫자로 되돌린다.
           priceEur: toNum(row.priceEur),
           summaryKo: row.summaryKo,
           editorialSummary: row.editorialSummary,
@@ -635,8 +579,6 @@ export function registerGeminiRoutes(app: Express, openDb: OpenDb): void {
     }
   });
 
-  // ⑤ GET /api/guide/place-guide = 해설 창고 찾기(장소 + 언어).
-  //   외부호출 0건이지만 **차감(guide_explain 5)** 이 있어 이 파일에 함께 둔다.
   app.get("/api/guide/place-guide", async (req: Request, res: Response) => {
     const { db, close } = openDb();
     try {
@@ -646,7 +588,6 @@ export function registerGeminiRoutes(app: Express, openDb: OpenDb): void {
       }
       const lang = String(req.query.lang || "ko");
 
-      // 🔒 창고 주인(가장 먼저 만들어진 관리자 = getFirstAdmin) 의 해설을 정본으로 먼저 본다.
       const warehouseOwner = (await getFirstAdmin(db))?.id || null;
 
       const rows = await db
@@ -678,7 +619,6 @@ export function registerGeminiRoutes(app: Express, openDb: OpenDb): void {
       const row = rows[0];
       if (!row) return res.status(204).end(); // 창고에 없음 = 화면이 새로 만든다
 
-      // 🔖 한 사용자 = 한 장소 = 해설 1행 + 면제 기준 1벌.
       const requester = getUserIdFromReq(req);
       let mine = false;
       if (requester) {
@@ -700,8 +640,6 @@ export function registerGeminiRoutes(app: Express, openDb: OpenDb): void {
       }
 
       // ⚠️ 수정금지(승인필요) 2026-08-21 사장님 SSOT = 무료/차감은 "출발화면"이 정한다.
-      // 순서 = 잔액 확인(precheckFeature) → 즉시 차감(chargeOnSuccess). 먼저 확인해
-      // 잔액부족이면 402 를 내고 멈춘다(응답 본문 전이므로 §9 금지 4번에 걸리지 않는다).
       const fromCityCard = String(req.query.from || "") === "card";
       const deliverable = (row.content || row.description || "").trim();
       if (deliverable && !mine && requester && !fromCityCard) {
@@ -733,9 +671,6 @@ export function registerGeminiRoutes(app: Express, openDb: OpenDb): void {
   });
 }
 
-// ── 보조 ───────────────────────────────────────────────────────────────────
-
-/** numeric 컬럼(postgres.js = 문자열) → number. 값이 없으면 null. */
 function toNum(v: unknown): number | null {
   if (v == null) return null;
   const n = typeof v === "number" ? v : Number(v);
@@ -790,8 +725,6 @@ interface TsPlaceLite {
   longitude: number | null;
 }
 
-/** /api/guide/landmark 가 쓰는 TS searchNearby 경로 1벌(같은 요청·같은 FieldMask).
- *  FieldMask = STANDARD_TS_FIELD_MASK 를 그대로 import · validateFieldMask 호출 = §15 Atmosphere 금지 보장. */
 async function tsSearchNearby(
   apiKey: string,
   latitude: number,
@@ -799,9 +732,6 @@ async function tsSearchNearby(
 ): Promise<TsPlaceLite[]> {
   validateFieldMask(STANDARD_TS_FIELD_MASK); // §15 = Atmosphere 필드 감지 시 throw
 
-  // 요청 본문
-  // (circleRadiusM:100 → locationRestriction 원, maxResults:5, includedTypes 7종).
-  // rankPreference:"POPULARITY" = ts-client.ts 와 같다.
   const resp = await fetch(
     "https://places.googleapis.com/v1/places:searchNearby",
     {
@@ -843,7 +773,6 @@ async function tsSearchNearby(
       `[tsSearch] ${resp.status} ${j?.error?.message || JSON.stringify(j?.error || {})}`,
     );
   }
-  // ts-client.ts mapPlace 중 이 라우트가 읽는 3개 필드만.
   return (j.places || []).map((p) => ({
     nameEn: p.displayName?.text ?? null,
     latitude: p.location?.latitude ?? null,
@@ -852,6 +781,3 @@ async function tsSearchNearby(
 }
 
 // ⚠️ 원본과 다를 수 있는 지점 = §18 raw 는 **R2 1곳**에만 남는다.
-//   원본 save-raw.ts 는 로컬 docs/raw + Storage 2곳에 쓰지만, Worker 에는 파일시스템이 없다.
-//   재활용·비용보호의 실체는 R2 쪽이고 로컬은 사장님 열람용 사본이므로, 로컬 사본은
-//   `raw-storage-recall` 스킬(pull)로 언제든 내려받는다 = 2곳 동형은 그 경로로 유지된다.

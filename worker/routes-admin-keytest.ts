@@ -1,29 +1,21 @@
 // ⚠️ 수정금지(승인필요) 2026-09-28 사장님 결정 = 열쇠 동작확인(POST .../test) (정본 B1)
-// 열쇠 = DB api_keys 행을 바로 읽는다(방금 저장한 값을 봐야 해서 캐시 금지) · 외부호출 중에는 DB 연결을 쥐지 않는다(읽고 바로 닫고, 끝나면 새로 열어 결과 UPDATE).
 // §18 raw 저장 없음(원래 없던 것 = 만들면 §19 위반).
 import type { Express, Request, Response } from "express";
 import { eq } from "drizzle-orm";
-// ⚠️ 반드시 "@google/genai/web" (기본 진입점 금지) = 기본 진입점은 node: builtin 11개를 끌어와 Worker 에서 깨진다(routes-gemini.ts 에 실측 기록).
-// Worker 번들은 정적 import 로만 진입점(/web)을 고정할 수 있다. 동작(제미니 호출 1회)은 같다.
 import { GoogleGenAI } from "@google/genai/web";
 import * as schema from "../shared/schema";
 import type { OpenDb } from "./db-types";
 
 const { apiKeys } = schema;
 
-// src.ts 의 openDb() 를 그대로 받는다(연결 1벌 = 반드시 close).
-
 interface TestResult {
   success: boolean;
   message: string;
 }
 
-// `e?.message || String(e)` 를 any 없이 그대로 재현한다.
 function errMessage(e: unknown): string {
   return (e as { message?: string })?.message || String(e);
 }
-
-// ── 열쇠별 실제 확인 ────────────────────────────────────────────────────────
 
 async function testGemini(apiKey: string): Promise<TestResult> {
   try {
@@ -111,7 +103,6 @@ export function registerAdminKeyTestRoutes(app: Express, openDb: OpenDb): void {
     async (req: Request, res: Response) => {
       const first = openDb();
       let closed = false;
-      // 선례 = routes-itinerary-generate.ts:262 closeOnce = finally 와 중복 호출돼도 1회만 닫는다.
       const closeOnce = () => {
         if (!closed) {
           closed = true;
@@ -121,7 +112,6 @@ export function registerAdminKeyTestRoutes(app: Express, openDb: OpenDb): void {
       try {
         const keyName = String(req.params.keyName);
 
-        // 행이 없거나 값이 비면 400. isActive 는 보지 않는다.
         const [keyRecord] = await first.db
           .select()
           .from(apiKeys)
@@ -132,10 +122,8 @@ export function registerAdminKeyTestRoutes(app: Express, openDb: OpenDb): void {
         }
         const apiKey = keyRecord.keyValue;
 
-        // ⚠️ 외부호출 전에 연결을 놓는다(위 주석 ② = Hyperdrive 연결 6개 상한).
         closeOnce();
 
-        // switch = 4벌 + default. 문구·성공여부까지 동일.
         let testResult: TestResult;
         switch (keyName) {
           case "GEMINI_API_KEY":
@@ -154,7 +142,6 @@ export function registerAdminKeyTestRoutes(app: Express, openDb: OpenDb): void {
             testResult = { success: true, message: "테스트 불가 (저장됨)" };
         }
 
-        // 확인 결과를 행에 기록. 외부호출이 끝난 뒤라 연결을 새로 연다.
         const second = openDb();
         try {
           await second.db

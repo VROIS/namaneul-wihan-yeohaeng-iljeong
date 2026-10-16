@@ -26,7 +26,6 @@ const YEN: Record<string, string> = { JP: "JPY", CN: "CNY" };
 export type EurPer = Record<string, number>;
 export type EurResult = { eur?: number; open?: boolean; why?: string };
 
-/** 창고 환율표(base KRW) → 통화 1단위당 유로. --fx 로 사람이 준 값이 이긴다. */
 export async function loadEurPer(
   c: { query: (q: string, v?: unknown[]) => Promise<any> },
   fx?: string,
@@ -108,7 +107,6 @@ export const tsPriceDecision = (
     pageOpened: false,
   }).price;
 
-/** 위가 열린 "X 이상" 증거 = 우리 값이 X 이상이면 어긋나지 않으니 그대로 둔다 */
 export const keepsExisting = (before: number | null, r: EurResult) =>
   !!r.open && before != null && r.eur != null && before >= r.eur;
 
@@ -136,9 +134,7 @@ export const priceLabel = (cp: CardPrice) =>
 
 // ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = 가격 결정 1벌 = 최신이 최고, 권위 = 구글 페이지 > TS 가격대 > 제미니(0 = 무료, 그대로 받는다) > 옛 값 · 페이지를 열었는데 가격이 없고 제미니도 없으면 옛 값은 버린다(NULL = 모름) · 종류를 보고 값을 바꾸는 판단은 없다 · 모든 길(PID 직행·검색·MIX·2차·LLM 검토)이 이 함수를 부른다 (정본 §)
 export const PAGE_PRICE_FRESH_DAYS = 90;
-/** "3개월 안에 구글 페이지를 읽은 행" SQL 조건 1벌(MIX 저장·흡수·2차·사진 보충이 같이 쓴다). */
 export const FRESH_SQL = `(verify_source LIKE 'gmaps%' AND verified_at > now() - make_interval(days => ${PAGE_PRICE_FRESH_DAYS}))`;
-/** 행 묶음의 옛 가격 + 신선도를 한 번에 읽는다(MIX 저장 1·2단계가 쓴다 = 행마다 왕복 0). */
 export async function loadOldPrices(
   c: { query: (q: string, v?: unknown[]) => Promise<any> },
   ids: number[],

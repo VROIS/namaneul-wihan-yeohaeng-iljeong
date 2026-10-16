@@ -21,7 +21,6 @@ type Snapshot = {
   sections: Record<string, unknown>;
 };
 
-// 등록 때 받은 openDb 를 크론도 쓴다(같은 isolate 모듈 1벌, DB 연결 여는 코드를 또 만들지 않는다)
 let openDbRef: OpenDb | null = null;
 
 const SECTIONS: [string, (db: Db) => Promise<unknown>][] = [
@@ -45,7 +44,6 @@ async function readSnapshot(): Promise<Snapshot | null> {
   }
 }
 
-/** 한 번 계산해 저장 = 칸마다 1회 재시도, 끝내 실패한 칸은 직전 저장본 값을 그대로 둔다. */
 export async function runSnapshotTick(): Promise<void> {
   if (!openDbRef || !isR2Configured()) return;
   const prev = await readSnapshot().catch(() => null);

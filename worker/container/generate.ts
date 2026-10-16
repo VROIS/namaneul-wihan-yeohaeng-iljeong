@@ -53,14 +53,12 @@ interface MadeClip {
   key: string | null;
 }
 
-/** 202 응답 뒤 뒷일 전부 = Worker 가 접수를 끝내고 여기로 넘긴다. */
 // ⚠️ 수정금지(승인필요) 2026-09-26 사장님 결정 = 하루 영상 = 옴니 조각 전부 동시 생성 → 조각마다 R2 금고(도시 폴더) → 성공 조각만 이어 붙여 게시 (정본 §)
 export async function runDayVideo(job: DayVideoJob): Promise<void> {
   const { id, day, taskId, requesterUserId } = job;
   const lang = normalizeVideoLang(job.lang);
   let totalScenes = 0;
   try {
-    // 슬롯은 DB 에서 다시 읽는다(Worker 와 같은 자리).
     const itin = await storage.getItinerary(id);
     const slots: any[] | undefined = (itin?.rawData as any)?.days?.[day - 1]
       ?.places;
@@ -204,7 +202,6 @@ export async function runDayVideo(job: DayVideoJob): Promise<void> {
   }
 }
 
-// ── HTTP 접수 = Worker(routes-video-generate.ts) 가 부른다 ──────────────────
 const PORT = Number(process.env.PORT) || 8080;
 
 function readJsonBody(req: http.IncomingMessage): Promise<any> {
@@ -256,7 +253,6 @@ const server = http.createServer((req, res) => {
     if (!job.taskId) throw new Error("[generate] taskId 필요");
     if (!job.requesterUserId)
       throw new Error("[generate] requesterUserId 필요");
-    // 접수 즉시 202, 뒷일은 응답 뒤에 돈다.
     res.writeHead(202, { "Content-Type": "application/json" });
     res.end(JSON.stringify({ taskId: job.taskId }));
     void runDayVideo(job);

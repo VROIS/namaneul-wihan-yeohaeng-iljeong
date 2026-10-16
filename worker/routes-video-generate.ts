@@ -187,9 +187,7 @@ async function startGenerate(
       let msg = detail;
       try {
         msg = (JSON.parse(detail) as { error?: string }).error || detail;
-      } catch {
-        // JSON 이 아니면 본문 그대로 쓴다
-      }
+      } catch {}
       throw new Error(msg || `컨테이너 접수 실패(HTTP ${containerRes.status})`);
     }
     console.log(`[video] ${taskId} 컨테이너 접수 완료`);

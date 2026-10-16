@@ -2,7 +2,6 @@ import type { Express, Request, Response } from "express";
 import { getRoleFromDb, getUserIdFromReq } from "./auth-user";
 import type { OpenDb } from "./db-types";
 
-// 후처리 큐 스위치(이 파일)와 큐 소비자는 한 묶음 = 진입점(src.ts, 700줄 초과)이 import 한 줄로 받도록 여기서 내보낸다
 export { withGmapsQueue } from "./gmaps-post-queue";
 
 export function registerDebugRoutes(app: Express, openDb: OpenDb): void {
@@ -27,7 +26,6 @@ export function registerDebugRoutes(app: Express, openDb: OpenDb): void {
         const { enqueueGmapsPost } = await import("./gmaps-post-queue");
         await enqueueGmapsPost(cityId, "manual");
       }
-      // probe=<cid 숫자|PID> = Browser Run 으로 그 페이지 1장을 읽어 7요소를 돌려준다(쓰기 0) = 워커 안 브라우저 실증
       let probe: unknown = null;
       const key = String(req.query.probe || "");
       if (key) {

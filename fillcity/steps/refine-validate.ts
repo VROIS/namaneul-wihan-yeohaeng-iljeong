@@ -64,7 +64,6 @@ function checkOne(
     errs.push(`${id}: 증거 문구(seen) 10자 미만`);
 }
 
-/** 판정 파일(verdict-K.json · judged/<cid>.json · done/<cid>.json)을 합쳐 검사한다. 반환 = 판정 표 + 오류. */
 export function validateRefine(
   items: RefineItem[],
   dir: string,
@@ -96,7 +95,6 @@ export function validateRefine(
     }
     arr.forEach((v, i) => put(v, `${f}#${i + 1} cid=${v?.cid}`));
   }
-  // 항목마다 한 파일 = judged/<cid>.json(목록 글로 확실한 판정) · done/<cid>.json(직접 열어 본 판정)
   for (const sub of ["judged", "done"]) {
     const subDir = path.join(dir, sub);
     if (!fs.existsSync(subDir)) continue;

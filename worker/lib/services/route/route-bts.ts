@@ -76,8 +76,6 @@ export function buildBtsDay(inp: BtsDayInput): BtsDayOutput {
       : [];
   let items: Item[] = [...actsItems, ...dinnerItem];
   let lunchPick: PlaceResult | null = null;
-  // 점심 자리 = 각 자리에 넣고(그 자리 직전 활동 가까운 식당) 시각표를 실제로 깔아 본 결과로 고른다
-  //  = 점심 시작이 한도 안 → 활동 머묾 중 가장 짧은 것이 긴 쪽 → 이동 합이 짧은 쪽 → 12:30 에 가까운 쪽.
   let bestKey: number[] | null = null;
   for (let j = 0; j <= actsItems.length; j++) {
     const lunchR = inp.peekLunch(j === 0 ? center : actsItems[j - 1].p);

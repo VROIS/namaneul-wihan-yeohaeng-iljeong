@@ -27,7 +27,6 @@ if (!cityId) {
 }
 
 (async () => {
-  // 환경(.env)을 읽은 뒤에 엔진 DB·관문을 불러온다
   const { db } = await import("../worker/lib/db");
   if (!db) throw new Error("DB 연결 없음(SUPA_URL)");
   const { sql } = await import("drizzle-orm");

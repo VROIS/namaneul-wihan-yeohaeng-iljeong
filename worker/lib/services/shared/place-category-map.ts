@@ -221,7 +221,6 @@ export type FinalCategory = {
   photospotTag: boolean;
   changed: boolean;
 };
-// 장소 아님 글자라도 베스트이거나 리뷰가 이만큼이면 랜드마크다(보고타 Colpatria Tower = "Corporate office", 리뷰 6,971 실측) = 지우지 않고 "확인 필요"로 남긴다
 export const NOT_PLACE_KEEP_RC = 1000;
 export function finalCategory(
   ourCat: string,

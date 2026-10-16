@@ -44,7 +44,6 @@ const COLS = {
   longitude: cities.longitude,
 };
 
-/** 좌표 100km 안 거점 = 같은 나라 우선, 그 안에서 가장 가까운 곳. 위·경도 사각형으로 먼저 거르고(날짜변경선·극지 처리) 거리 계산. */
 export async function findNearestHub(
   db: any,
   pt: Coords,
@@ -78,7 +77,6 @@ export async function findNearestHub(
   return rows[0] ? toHub(rows[0]) : null;
 }
 
-/** 좌표 없는 입력(도시 칩·BTS) = 이름·별칭 정확 일치만. 일치가 없으면 도시를 만들지 않고 없음. */
 async function findHubByName(db: any, input: string): Promise<HubCity | null> {
   const key = String(input || "")
     .split(",")[0]
@@ -99,7 +97,6 @@ async function findHubByName(db: any, input: string): Promise<HubCity | null> {
   return rows[0] ? toHub(rows[0]) : null;
 }
 
-/** 사용자 입력 → 저장 폴더(거점). 좌표가 있으면 좌표로만, 없으면 이름으로만. 여기서는 읽기만 하고 도시를 만들지 않는다. */
 export async function findHub(
   db: any,
   a: { input: string; coords?: Coords | null; countryCode?: string | null },
@@ -108,7 +105,6 @@ export async function findHub(
   return findHubByName(db, a.input);
 }
 
-/** 준비됨 판정 = 출발점(없으면 거점 중심) 반경 100km 풀 기준 손님상 120곳 이상 + 베스트(소속 도시 무관, 서빙 풀과 같은 기준). */
 export async function hubReadiness(
   db: any,
   hub: HubCity,
@@ -140,7 +136,6 @@ const distKm = (a: Coords, b: Coords) => {
   return 12742 * Math.asin(Math.min(1, Math.sqrt(h)));
 };
 
-/** 새 거점 = 100km 안에 없을 때만 · 일정 성공 후 · 잠금 안 재확인(설명 = 정본 ④-4). */
 export async function createHubAfterSuccess(
   db: any,
   a: { input: string; coords: Coords; countryCode?: string | null },

@@ -73,7 +73,6 @@ const CID_PRICED = `city_id=$1 AND status='active' AND seed_category='restaurant
     process.exit(code);
   };
 
-  // 채널 ③ 어사이드 답 넣기 = [{ id, price: 카드·페이지 머리 글자 } | { id, prices: 리뷰 "1인당 가격" 여러 건 } | { id, priceEur }]
   if (argv["apply-json"]) {
     const answers: {
       id: number;

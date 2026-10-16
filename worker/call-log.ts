@@ -15,8 +15,6 @@ export interface ExternalCallInput {
   errorMessage?: string | null;
 }
 
-// db 를 인자로 받는다 = 호출부가 이미 연 연결을 재사용(Hyperdrive 요청당 연결 6개 상한).
-// 기록 실패는 삼킨다 = 본 기능(유료호출)을 막지 않는다. 절대 throw 하지 않는다.
 export async function recordExternalCall(
   db: Db,
   e: ExternalCallInput,

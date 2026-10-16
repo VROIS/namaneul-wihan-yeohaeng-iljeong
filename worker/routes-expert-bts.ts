@@ -1,5 +1,3 @@
-// 전문가 문의 8벌 + BTS 4벌.
-// 순수 계산 모듈은 그대로 import 한다(§16 재발명 금지).
 import type { Express, Request, Response } from "express";
 import {
   and,
@@ -25,8 +23,6 @@ import { normalizeImageUrl } from "../shared/lib/normalize-image-url";
 import type { Db, OpenDb } from "./db-types";
 
 const { cities, expertInquiries, itineraries, placeSeedRaw, users } = schema;
-
-// src.ts 의 openDb() 를 그대로 받는다(연결 1벌 = 반드시 close).
 
 type InquiryRow = typeof expertInquiries.$inferSelect;
 
@@ -62,8 +58,6 @@ async function attachInquiryCityNameEn<T extends InquiryRow>(
     };
   });
 }
-
-// ── 전문가 문의 ─────────────────────────────
 
 export function registerExpertBtsRoutes(app: Express, openDb: OpenDb): void {
   //   kind = 'booking'(일별 바로 예약하기, 2026-07-24 사장님 승인) 만 인정, 그 외 전부 'expert'(기존 검증 문의).
@@ -119,7 +113,6 @@ export function registerExpertBtsRoutes(app: Express, openDb: OpenDb): void {
   });
 
   //   ⚠️ 2026-08-03 사장님 지시 = 배지 숫자 하나 얻으려고 화면 이동마다 문의 **목록 전체**를 내려받던 낭비
-  // 구체 경로를 /:id 보다 먼저 등록한다.
   app.get(
     "/api/verification/unread-count",
     async (req: Request, res: Response) => {
@@ -339,7 +332,6 @@ export function registerExpertBtsRoutes(app: Express, openDb: OpenDb): void {
     },
   );
 
-  // 구체 경로(/me)를 /api/expert/profile 보다 먼저 등록한다.
   app.get("/api/expert/profile/me", async (req: Request, res: Response) => {
     const { db, close } = openDb();
     try {
@@ -392,8 +384,6 @@ export function registerExpertBtsRoutes(app: Express, openDb: OpenDb): void {
   registerBtsRoutes(app, openDb);
 }
 
-// ── BTS ────────────────────────────────────────
-
 // ⚠️ 수정금지(승인필요) — /api/bts/top-places 가 SELECT 하는 컬럼. 슬롯 4 곳 동일 형상 보장용.
 const PLACE_COLS = {
   id: placeSeedRaw.id,
@@ -414,7 +404,6 @@ const PLACE_COLS = {
 
 type PlaceRow = Pick<typeof placeSeedRaw.$inferSelect, keyof typeof PLACE_COLS>;
 
-/** servingGateSql = 손님상 게이트. */
 function servingGateSql() {
   return sql`(${placeSeedRaw.status} = 'active' AND (COALESCE(${placeSeedRaw.googleReviewCount}, 0) > 0 OR ${placeSeedRaw.bestRank} IS NOT NULL) AND (${placeSeedRaw.googlePlaceId} IS NOT NULL OR ${placeSeedRaw.verifySource} LIKE 'gmaps%') AND (${placeSeedRaw.businessStatus} IS NULL OR ${placeSeedRaw.businessStatus} NOT IN ('CLOSED_PERMANENTLY', 'CLOSED_TEMPORARILY')))`;
 }

@@ -1,4 +1,3 @@
-// https://docs.expo.dev/guides/using-eslint/
 const { defineConfig } = require("eslint/config");
 const expoConfig = require("eslint-config-expo/flat");
 const eslintPluginPrettierRecommended = require("eslint-plugin-prettier/recommended");
@@ -7,15 +6,11 @@ module.exports = defineConfig([
   expoConfig,
   eslintPluginPrettierRecommended,
   {
-    // ⚠️ 2026-07-19 §22 = 프로젝트 전역 규칙 조정 = 오탐·비버그 스타일 규칙 완화(진짜 버그만 error).
-    // JSX 텍스트 안 따옴표(') = 웹 HTML 엔티티 규칙 = React Native 엔 무의미(네이티브 렌더) = off.
-    // (unused-vars 는 expo config 기본이 이미 warn = 커밋 차단 안 함 = 별도 조정 불필요.)
     rules: {
       "react/no-unescaped-entities": "off",
     },
   },
   {
-    // ⚠️ 2026-07-19 §22 = scripts = Node 실행환경 = __dirname·Buffer·process·require 전역 인정(no-undef 오탐 제거).
     files: [
       "scripts/**/*.{ts,js,mjs,cjs}",
       // ⚠️ 2026-09-06 = worker/container = 컨테이너(Linux VM) 안에서 도는 **진짜 Node** 파일
@@ -46,7 +41,6 @@ module.exports = defineConfig([
     // = .claude/skills = 프롬프트·메모리 문서(§18/§20 보호=코드 아님) / migrations = SQL / docs·백업 = 문서.
     //   이들을 lint 대상에서 제외 = 프롬프트 자동재포맷으로 인한 §18/§20 위반 방지 + 진짜 코드 오류만 검출.
     ignores: [
-      // 빌드산출물·의존성·백업 = lint 대상 아님 (expo lint 가 이들을 검사해 prettier 오류 수천개 나온 근원)
       "dist/**",
       "node_modules/**",
       // ⚠️ 수정금지(승인필요) 2026-09-06 사장님 결정 = Worker 빌드산출물·자동생성 타입은 lint 대상 아님

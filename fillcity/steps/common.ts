@@ -45,7 +45,6 @@ export async function connectDb() {
   return c;
 }
 
-/** 도시 폴더의 구글맵 읽기 로그 = 행마다 가장 나중 것만(구글 값의 유일한 증거). */
 export function lastGoogleLogs(cityId: number): Map<number, any> {
   const dir = path.join(ROOT, "docs", "raw", String(cityId));
   const out = new Map<number, any>();
@@ -62,7 +61,6 @@ export function lastGoogleLogs(cityId: number): Map<number, any> {
   return out;
 }
 
-/** 구글 페이지 글 맨 앞의 분류 글자(별점 괄호 뒤 첫 가운뎃점 사이). */
 export function pageLabel(raw: string): string {
   const t = raw.slice(0, 500).split(/\s+/).join(" ");
   const i = t.indexOf("·");
@@ -76,7 +74,6 @@ const HOTEL_WIDGET =
 const LODGING_LABEL =
   /hotel|hostel|lodge|resort|bed & breakfast|\binn\b|guest ?house|motel|residence|villa|apart/i;
 
-/** 숙박 위젯이 붙었고 분류 글자도 숙소류면 호텔 페이지(식당 글자에 숙박 위젯만 붙은 곳은 아님). */
 export function isLodgingPage(raw: string): boolean {
   if (!HOTEL_WIDGET.test(raw.slice(0, 3000))) return false;
   const head = raw.slice(0, 500);
@@ -85,7 +82,6 @@ export function isLodgingPage(raw: string): boolean {
   );
 }
 
-/** 호텔 페이지 로그 글 맨 위의 객실 요금(€) = 파서 가격 칸에는 없다. */
 export function roomRateEur(raw: string): number | null {
   const m = raw.slice(0, 700).match(/€\s?([0-9][0-9,.]*)/);
   return m ? Number(m[1].replace(/,/g, "")) : null;
@@ -94,7 +90,6 @@ export function roomRateEur(raw: string): number | null {
 // ⚠️ 수정금지(승인필요) 2026-10-05 사장님 결정 = v3.2 최적화 (정본 §)
 export const AGENT_WORKERS = 4;
 
-/** 순서 0..total-1 을 workers 명이 똑같이 나눈 [from, to](끝 포함) 목록. 빈 몫은 만들지 않는다. */
 export function shareRanges(
   total: number,
   workers = AGENT_WORKERS,
@@ -107,19 +102,16 @@ export function shareRanges(
   })).filter((j) => j.from <= j.to);
 }
 
-/** 동료 에이전트 1명을 `claude -p` 로 띄운다 = 각자 격리된 브라우저(browser-mcp.json) · 출력은 outFile 에 저장. */
 export function runClaudeAgent(
   prompt: string,
   outFile: string,
   readDb = false,
 ): Promise<number> {
   return new Promise((resolve) => {
-    // 읽기 전용 DB = 실행할 때만 저장소 밖(임시 폴더)에 설정을 만들고 끝나면 지운다(비밀번호가 저장소에 남지 않는다)
     let mcpConfig = path.join(
       ROOT,
       "fillcity/prompts/04-classify-agent/browser-mcp.json",
     );
-    // 일꾼은 프로젝트 폴더가 아닌 빈 폴더에서 띄운다(프로젝트 CLAUDE.md 가 일꾼에게 딸려 들어가지 않게) · 프로젝트 폴더는 --add-dir 로 연다
     const workCwd = path.join(os.tmpdir(), "fillcity-agent-cwd");
     fs.mkdirSync(workCwd, { recursive: true });
     if (readDb) {
@@ -312,7 +304,6 @@ export function latestReport(cityId: number, suffix: string): string | null {
   return f ? path.join(dir, f) : null;
 }
 
-/** 장소명을 비교용 낱말로(악센트·기호 제거, 흔한 말 제외). */
 export function nameTokens(s: string | null | undefined): string[] {
   return foldAccents(String(s || ""))
     .toLowerCase()

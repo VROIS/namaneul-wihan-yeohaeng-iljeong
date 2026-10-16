@@ -196,7 +196,6 @@ type Found = {
       longitude: n.lng,
       address: n.address ?? null,
       googleMapsUri: uri,
-      // 가격 결정 1벌(제미니 값 그대로, 0 = 무료 · 없으면 비움) = 이 행은 바로 뒤 직행 읽기가 페이지 값으로 다시 정한다
       priceEur: decidePrice({
         geminiPrice: n.avgPrice ?? null,
         pageOpened: false,

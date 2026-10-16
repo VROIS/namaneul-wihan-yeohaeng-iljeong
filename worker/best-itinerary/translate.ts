@@ -1,5 +1,4 @@
 // ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = 응답 번역
-//   1,777줄 한 덩어리에서 그대로 잘라낸 것(§0) = 계산·규칙 한 글자도 안 바꿈.
 
 import { and, eq, inArray } from "drizzle-orm";
 import * as schema from "../../shared/schema";
@@ -8,9 +7,6 @@ import type { Db } from "../db-types";
 
 const { placeTranslations } = schema;
 
-// ── 응답 번역 ──────────
-
-/** readCachedPlaceTranslations = 캐시 읽기만(외부호출 0). */
 export async function readCachedPlaceTranslations(
   db: Db,
   ids: number[],

@@ -28,7 +28,6 @@ const INSTRUCTION = path.join(
     process.exit(1);
   }
   const c = await connectDb();
-  // 명단 = 점검할 행의 id · cid · 이름만(행 내용은 에이전트가 읽기 전용 DB 조회로 직접 읽는다)
   const items: any[] = (
     await c.query(
       `SELECT id, substring(google_maps_uri from 'cid=([0-9]+)') AS cid, name_en, seed_category, price_eur::float8 AS price_eur

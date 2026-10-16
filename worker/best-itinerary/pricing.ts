@@ -1,5 +1,4 @@
 // ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = 교통비 = 원본 transport/guide-pricing.ts · day-config.ts
-//   1,777줄 한 덩어리에서 그대로 잘라낸 것(§0) = 계산·규칙 한 글자도 안 바꿈.
 
 import { eq } from "drizzle-orm";
 import * as schema from "../../shared/schema";
@@ -13,9 +12,6 @@ import {
 import { round2 } from "../lib/services/transport/guide-pricing";
 import type { Db } from "../db-types";
 
-// ── 교통비 ──
-
-/** 교통수단별 가이드 요금 = DB 값, 없으면 기본표. */
 export async function guidePriceConfig(
   db: Db,
   transportType: TransportType,
@@ -41,7 +37,6 @@ export async function guidePriceConfig(
   }
 }
 
-/** 그 날 가이드 비용 = 가이드를 쓰는 날에만 부른다. */
 export async function guideCostForDay(
   db: Db,
   args: {
@@ -57,7 +52,6 @@ export async function guideCostForDay(
   const [endH, endM] = (args.dayConfig.endTime || "21:00")
     .split(":")
     .map(Number);
-  // day-config.ts = 최소 4시간.
   const availableHours = Math.max(
     4,
     round2((endH * 60 + endM - (startH * 60 + startM)) / 60),
@@ -65,7 +59,6 @@ export async function guideCostForDay(
   const transportType =
     COMPANION_TO_TRANSPORT[args.companionType]?.transportType ?? "sedan";
   const priceConfig = await guidePriceConfig(db, transportType);
-  // guide-pricing.ts calculateGuideDailyPrice.
   const effectiveHours = Math.max(availableHours, 4);
   const additionalHours = Math.max(0, effectiveHours - 4);
   let dailyVehiclePrice = round2(
@@ -73,7 +66,6 @@ export async function guideCostForDay(
   );
   if (args.isRegionalTravel)
     dailyVehiclePrice = round2(dailyVehiclePrice * 1.5);
-  // transport-pricing-service.ts = 1인 하루치.
   return round2(dailyVehiclePrice / Math.max(1, args.companionCount));
 }
 

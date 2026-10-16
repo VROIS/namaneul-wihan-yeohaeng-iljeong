@@ -20,7 +20,6 @@ const SIGHTS = [
   "shopping",
 ];
 
-/** 도시 폴더에서 목록 문장마다 가장 나중에 읽은 원본 1개. */
 function latestLists(): Map<string, { file: string; json: any }> {
   const out = new Map<string, { file: string; json: any }>();
   for (const x of readListRaws(cityId)) out.set(String(x.json.request?.key), x);
@@ -68,7 +67,6 @@ function latestLists(): Map<string, { file: string; json: any }> {
     if (m) whCid.set(m[1], w);
   }
 
-  // ── 1. CID 로 합치기 + 걸러내기 ──
   const drop = {
     sponsored: 0,
     noCid: 0,
@@ -90,7 +88,6 @@ function latestLists(): Map<string, { file: string; json: any }> {
       }
       const label = labelOfLine(e.line);
       const known = categoriesOfLabel(label).length > 0;
-      // 표에 없는 라벨이라도 목록 줄에 가격대("MAD 50–200")가 있으면 먹고 마시는 곳 = 식당(요리 이름만 적힌 식당·카페)
       const foodByPrice =
         !known && !!cardPrice(String(e.line).replace(/[-]/g, ""));
       const intended = foodByPrice ? "restaurant" : json.request.intended;
@@ -104,7 +101,6 @@ function latestLists(): Map<string, { file: string; json: any }> {
       items.set(e.cid, it);
     }
   }
-  // ── 2. 분류 ──
   type Pick = {
     cat: string;
     name: string;
@@ -160,7 +156,6 @@ function latestLists(): Map<string, { file: string; json: any }> {
     });
   }
 
-  // ── 3. 분류마다 모자란 만큼만 뽑기(창고에 이미 있는 곳은 채운 것) ──
   const haveBy = (cat: string) =>
     wh.filter((w) => w.seed_category === cat && w.status === "active").length;
   const picks: Pick[] = [];

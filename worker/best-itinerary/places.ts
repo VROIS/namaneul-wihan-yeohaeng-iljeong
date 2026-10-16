@@ -32,11 +32,6 @@ const { cities, placeSeedRaw } = schema;
 
 // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 사진 = 원본 place-image.ts 1벌(PID공유 폴백 포함) = ../lib/services/shared/place-image.ts
 
-// ── AG1 뼈대 ───────────
-
-// ── AG2 = 창고에서 고르기 ──
-
-/** ag2-gemini-recommender.ts SELECT_COLS — 칸 목록 그대로. */
 export const AG2_SELECT_COLS = {
   id: placeSeedRaw.id,
   cityId: placeSeedRaw.cityId,
@@ -67,8 +62,6 @@ export async function fetchFromPlaceSeedRaw(
   const { formData, vibeWeights, requiredPlaceCount } = skeleton;
   const cid = preResolvedCity.cityId;
 
-  // 풀 컨텍스트(중심좌표 + 합집합 WHERE) 1회 확보.
-  // pool-radius.ts getPoolContext = 기점 = 숙소좌표 ?? 도시중심.
   const startCoords = (formData as any).accommodationCoords ?? null;
   let center: { lat: number; lng: number } | null = startCoords;
   if (!center) {
@@ -94,7 +87,6 @@ export async function fetchFromPlaceSeedRaw(
     ? tierRange(normalizeTravelStyle(formData.travelStyle), tiers)
     : null;
 
-  // selectByDayZone — 정렬·컷 규칙 그대로.
   const selectByDayZone = async (cat: string, slots: number) => {
     const isRestaurant = cat === "restaurant";
     const baseWhere = [
@@ -134,7 +126,6 @@ export async function fetchFromPlaceSeedRaw(
     for (const rows of results) allRows.push(...rows);
   }
 
-  // 핀 주입(rank -1 = 활동 컷 무조건 통과).
   if (pinIds.length) {
     const pinRows: any[] = await db
       .select(AG2_SELECT_COLS)
@@ -149,7 +140,6 @@ export async function fetchFromPlaceSeedRaw(
     }
   }
 
-  // 공급부족 보충(25km 안 다른 카테고리 rank 순).
   const NEAR_KM = 25;
   const kmOf = (r: any) =>
     center && Number(r.latitude) && Number(r.longitude)
@@ -190,7 +180,6 @@ export async function fetchFromPlaceSeedRaw(
     allRows.push(...topUp);
   }
 
-  // PID공유 폴백용 R2 실존목록 = 행 확정 **후** 등장한 도시 전부 로드
   const imagePidMap = await loadImagePidMap([
     cid,
     ...allRows.map((r: any) => r.cityId),

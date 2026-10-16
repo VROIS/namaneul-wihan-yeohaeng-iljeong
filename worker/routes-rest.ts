@@ -1,9 +1,5 @@
-// POST /api/guides/batch 1건.
-// (GET /api/guides · DELETE /api/guides/:id 는 worker/routes-guide-video.ts 에 있다 = 중복 배선 금지.)
 import type { Express, Request, Response } from "express";
 import { and, eq, sql as dsql } from "drizzle-orm";
-// 바인딩(R2) 접근 = src.ts:41 · routes-gemini.ts:27 과 같은 공식 방식.
-// 타입은 `wrangler types` 산출물(worker-configuration.d.ts:5 RAW_BUCKET: R2Bucket).
 import { env } from "cloudflare:workers";
 import * as schema from "../shared/schema";
 import { getFirstAdmin, getUserIdFromReq } from "./auth-user";
@@ -11,8 +7,6 @@ import { userGuideImageKey } from "../shared/r2-paths";
 import type { Db, OpenDb } from "./db-types";
 
 const { cities, guides } = schema;
-
-// src.ts 의 openDb() 를 그대로 받는다(연결 1벌 = 반드시 close).
 
 async function nearestCityIdByCoords(
   db: Db,
@@ -41,7 +35,6 @@ const EXT_BY_MIME: Record<string, string> = {
   "image/webp": "webp",
 };
 
-/** 기기 사진(data URI) → R2 바인딩 put. 공개 주소(R2_PUBLIC_URL)가 비었거나 data URI·base64 가 깨지면 null. */
 async function uploadDataUriToR2(
   bucket: R2Bucket,
   keyBase: string,
@@ -50,7 +43,6 @@ async function uploadDataUriToR2(
   const m = /^data:(image\/[a-z+]+);base64,(.+)$/s.exec(dataUri || "");
   if (!m) return null;
 
-  // base64 → 바이트 배열 = atob(nodejs_compat 이라 Buffer 도 되지만 표준 API 로 두어 런타임 의존을 줄인다).
   let bytes: Uint8Array;
   try {
     const bin = atob(m[2]);
@@ -69,13 +61,11 @@ async function uploadDataUriToR2(
     httpMetadata: { contentType },
   });
 
-  // r2-client.ts getR2PublicUrl = `${R2_PUBLIC_URL}/${key}`.
   const base = process.env.R2_PUBLIC_URL;
   if (!base) return null;
   return `${base.replace(/\/+$/, "")}/${key}`;
 }
 
-/** 앱이 보내는 1건의 모양 = client/navigation/GuideStackNavigator.tsx:118 body.guides[] */
 interface GuideItem {
   localId?: unknown;
   title?: unknown;
@@ -94,7 +84,6 @@ interface GuideItem {
 }
 
 export function registerRestRoutes(app: Express, openDb: OpenDb): void {
-  // ── POST /api/guides/batch ───────────────
   //   🏷️ 2026-08-02 사장님 확정 = 같은 입구가 **창고 자동 저장**도 받는다(warehouse:true) = 저장 경로 1벌(§0).
   app.post("/api/guides/batch", async (req: Request, res: Response) => {
     const { db, close } = openDb();
@@ -112,7 +101,6 @@ export function registerRestRoutes(app: Express, openDb: OpenDb): void {
       if (!Array.isArray(items) || !items.length)
         return res.status(400).json({ error: "guides required" });
 
-      // 창고 저장이면 주인 = 관리자, 아니면 인증 우선 → 바디 userId.
       const isWarehouse = body.warehouse === true;
       let owner: string | null;
       if (isWarehouse) {
@@ -126,7 +114,6 @@ export function registerRestRoutes(app: Express, openDb: OpenDb): void {
         if (!owner) return res.status(401).json({ error: "userId required" });
       }
 
-      // 창고 저장은 (placeId, language) 가 이미 있으면 건너뛴다.
       let targets = items as GuideItem[];
       if (isWarehouse) {
         const kept: GuideItem[] = [];
@@ -142,7 +129,6 @@ export function registerRestRoutes(app: Express, openDb: OpenDb): void {
           if (!dup.length) kept.push(g);
         }
         targets = kept;
-        // 이미 창고에 있음 = 정상(할 일 없음)
         if (!targets.length) return res.json({ guideIds: [] });
       }
 
@@ -150,7 +136,6 @@ export function registerRestRoutes(app: Express, openDb: OpenDb): void {
         targets.map(async (g) => {
           // ⚠️ 수정금지(승인필요) 2026-09-27 사장님 결정 = 기기 사진(base64)은 DB 에 안 넣는다(Cloudflare 이전 1단계) (정본 9-27)
           const id = crypto.randomUUID();
-          // imageDataUrl 이 있을 때만 R2 로 올린다. 못 올리면(null) 아래 `deviceUrl || g.imageUrl || null` 순서로 고른다.
           const deviceUrl = g.imageDataUrl
             ? await uploadDataUriToR2(
                 env.RAW_BUCKET,
@@ -166,11 +151,9 @@ export function registerRestRoutes(app: Express, openDb: OpenDb): void {
             description: (g.description as string) || null,
             imageUrl: deviceUrl || (g.imageUrl as string) || null,
             aiGeneratedContent: (g.aiGeneratedContent as string) || null,
-            // ?? null (0 도 살린다)
             latitude: (g.latitude as string) ?? null,
             longitude: (g.longitude as string) ?? null,
             locationName: (g.locationName as string) || null,
-            // 앱이 준 cityId 우선, 없으면 좌표 → 최근접 도시.
             cityId:
               (g.cityId as number) ??
               (await nearestCityIdByCoords(db, g.latitude, g.longitude)),

@@ -353,7 +353,6 @@ export function useTripPlanner(initialRequest?: Partial<TripFormData>) {
   useEffect(() => {
     if (!restoreItineraryId) return;
     restoreItineraryById(restoreItineraryId);
-    // 주소로 들어온 값도 한 번 쓰고 비운다(화면을 다시 열어도 그 여정으로 되돌아가지 않게).
     clearItineraryFromUrl();
     try {
       navigation.setParams({ itineraryId: undefined } as never);

@@ -45,7 +45,6 @@ type Logged = {
   pp: CardPrice | null;
 };
 
-// 구글맵 읽기 로그 = 도시 폴더의 *_gmaps-page-read-N.json 전부를 시각순으로 읽어 행마다 가장 나중 것만 남긴다(구글 값의 유일한 증거) · 3개월(PAGE_PRICE_FRESH_DAYS)보다 오래된 로그는 증거가 아니다
 function googleLog(city: number): Map<number, Logged> {
   const dir = path.join(ROOT, "docs", "raw", String(city));
   const out = new Map<number, Logged>();
@@ -106,7 +105,6 @@ function placesOf(file: string): any[] {
   ).rows[0]?.country_code;
   let places: any[];
   if (call) {
-    // 🔴 유료 = 제미니 1콜(120곳 배치) · 응답 원본은 호출 관문이 도시 폴더에 자동 저장한다
     const ids: number[] = JSON.parse(
       fs.readFileSync(String(argv["ids-file"]), "utf-8"),
     ).map((x: any) => Number(x?.id ?? x));
@@ -190,7 +188,6 @@ function placesOf(file: string): any[] {
       nameEn: cur.name_en,
       phaseTags: [tag],
     };
-    // 구글 값 칸 = 구글 페이지를 읽은(스탬프) 행이면 지키고, 아니면 제미니 값으로 채운다
     const fill = (label: string, guarded: boolean, apply: () => void) =>
       guarded ? keep.push(label) : (apply(), put.push(label));
     if (g.name_en)
@@ -233,14 +230,12 @@ function placesOf(file: string): any[] {
       fill("도심거리", cur.dist != null, () => {
         job.distanceKmFromCenter = g.distance_km_from_center;
       });
-    // 제미니 전용 칸 = 구글이 원래 안 주는 칸
     if (g.name_local) ((job.nameLocal = g.name_local), put.push("원어이름"));
     if (g.name_ko) ((job.nameKo = g.name_ko), put.push("한국어이름"));
     if (g.summary_ko)
       ((job.selectionReasonKo = g.summary_ko), put.push("요약"));
     if (g.editorial_summary)
       ((job.shortformKo = g.editorial_summary), put.push("한줄카피"));
-    // 변화 = 쓰려는 값이 지금 행 값과 실제로 다른 칸 / 막음 = 제미니 값이 구글 값과 달라서 막은 칸(막지 않았다면 오염)
     const short = (v: unknown) => String(v ?? "없음").slice(0, 24);
     const pairs: [string, unknown, unknown, boolean][] = [
       ["영어이름", cur.name_en, g.name_en, cur.stamped],

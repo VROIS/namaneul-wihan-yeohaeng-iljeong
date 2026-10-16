@@ -61,7 +61,6 @@ async function readDay(key: string): Promise<MetricPoint[]> {
     .filter((x): x is MetricPoint => x != null);
 }
 
-/** 한 틱 기록 = 지금 값을 그날 파일 끝에 이어 붙인다. */
 export async function appendTick(): Promise<MetricPoint | null> {
   if (!db || !isR2Configured()) return null;
   const now = await readMetrics();
@@ -91,7 +90,6 @@ export async function recentDelta(): Promise<{
   if (!isR2Configured()) return { latest: null, delta: zero };
   let rows = await readDay(keyOf());
   if (rows.length < 2) {
-    // 자정 직후 = 전날 마지막 줄을 앞 기준으로 쓴다.
     const y = new Date(Date.now() - 86_400_000);
     const yr = await readDay(keyOf(y));
     rows = [...yr.slice(-1), ...rows];
@@ -120,7 +118,6 @@ export async function recentDelta(): Promise<{
 
 let timer: ReturnType<typeof setInterval> | null = null;
 
-/** 서버 기동 시 1회 호출 = 대시보드를 안 열어도 계속 기록된다. */
 export function startMetricsHeartbeat(): void {
   if (timer || !isR2Configured()) return;
   const tick = () =>

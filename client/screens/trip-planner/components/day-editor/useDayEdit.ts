@@ -29,7 +29,6 @@ export function useDayEdit(planner: PlannerApi, day: DayPlan) {
   const slotsRef = useRef(slots);
   slotsRef.current = slots;
 
-  // 숙소를 바꾸면(기존 흐름이 이 날 슬롯을 새로 돌려준다) 그 날 값으로 다시 시작한다.
   useEffect(() => {
     setSlots(slotsOfDay(day.places));
     setRemoved([]);

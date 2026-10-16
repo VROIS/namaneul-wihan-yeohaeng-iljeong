@@ -23,7 +23,6 @@ export const FREE_CAPS: Record<string, number | undefined> = {
   pm: 1000,
 };
 
-/** UNIT_COST_LEDGER 의 eur 만(= UNIT_COST_EUR). */
 export const UNIT_COST_EUR: Record<string, number> = {
   ts: 0.0424,
   pm: 0.0085,
@@ -33,10 +32,8 @@ export const UNIT_COST_EUR: Record<string, number> = {
   gemini: 0,
 };
 
-/** providers 목록(순서 그대로). */
 export const USAGE_PROVIDERS = ["ts", "pm", "veo", "omni", "nano", "gemini"];
 
-/** monthlyUsage. external_calls 는 drizzle 스키마에 없어 SQL 로 읽는다. */
 export async function monthlyUsage(
   db: Db,
   provider: string,

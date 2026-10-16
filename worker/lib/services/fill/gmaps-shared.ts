@@ -98,7 +98,6 @@ export const newStat = (): Stat => ({
 export const LIMITED_WHY = "제한보기";
 export const LIMITED_STOP = 3;
 export type PriceCtx = { eurPer: EurPer; countryCode: string | null };
-/** 환율표 + 그 도시 나라 코드 = 페이지 가격을 유로로 바꾸는 재료 1벌 */
 export async function loadPriceCtx(
   c: { query: (q: string, v?: unknown[]) => Promise<any> },
   cityId: number,
@@ -155,7 +154,6 @@ export async function inTxn<T>(c: any, fn: () => Promise<T>): Promise<T> {
   }
 }
 
-// 번역행 갱신 SQL = place-upsert 1벌(upsertTranslationWith). 실행기 = 지금 열린 트랜잭션의 클라이언트
 export async function upsertTranslations(
   c: any,
   placeId: number,
@@ -175,7 +173,6 @@ export async function upsertTranslations(
 export const provenanceTag = (today: string) => `discover-perlang-${today}`;
 
 // ⚠️ 수정금지(승인필요) 2026-09-08 사장님 확정 = 검색 = 이름 한 번(+부류 단어 식당 restaurant · 쇼핑 shopping mall + 도시), 못 찾으면 주소 한 번. 둘을 붙이지 않는다(제미니 주소는 번지를 지어낸다).
-//   후보가 여럿이면 = **분류가 맞는 것 먼저**(카드의 분류 글자 → 대응표, 식당·쇼핑은 확실) → 제미니 좌표에 가까운 것 → 리뷰수. 고른 후보는 cid 로 정확히 연다.
 const CAT_WORD: Record<string, string> = {
   restaurant: "restaurant",
   shopping: "shopping mall",
@@ -253,7 +250,6 @@ export function gateVerdict(
     return { why: null, tier: "T2" };
   return { why: `환각의심:이름다름(${d.h1})`, tier: null };
 }
-// 카드 글자 "4.5(1,234) · Peruvian restaurant ·" / "4.6(35) · $10–20 Restaurant ·" / "4.5 Restaurant ·"(리뷰수 없이) 에서 분류 조각만 읽어 대응표에 댄다. 0 = 맞음/모름, 1 = 다른 분류(식당·쇼핑 확실 불일치).
 const catRank = (n: NewEntry, x: Candidate) => {
   const seg = x.snippet.match(
     /\d\.\d(?:\(\d[\d.,]*\))?\s*(?:·\s*)?(?:[$€£¥₩][^\s·]*\s+)?([^·]+?)\s*·/,
@@ -434,9 +430,7 @@ export async function readOne(
         );
         imageUrl = up.publicUrl;
       }
-    } catch {
-      /* 사진 받기 실패 = 바로 아래 일시 오류로 잡힌다 */
-    }
+    } catch {}
     if (!imageUrl) why = "오류:사진받기";
   }
   t.rawRows.push({

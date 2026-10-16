@@ -36,7 +36,6 @@ const last = (d: string, re: RegExp) =>
 const n = (v: unknown) => (v == null ? "-" : String(v));
 const rows: [string, string][] = [];
 
-// 창고 시작 · ① LLM 검토
 const base = first(dir, /_baseline-status\.txt$/);
 if (base) {
   const t = fs.readFileSync(path.join(dir, base), "utf-8").split("\n");
@@ -57,7 +56,6 @@ if (del) {
     `삭제 ${arr.filter((x) => !x.fixed).length} · 고침 ${arr.filter((x) => x.fixed).length}`,
   ]);
 }
-// ② 구글 목록 → 선별 → 정제
 const sels = files(dir).filter(
   (f) => f.endsWith("_lists-select.json") && inWin(f),
 );
@@ -82,7 +80,6 @@ if (sels.length) {
       `업체 제외 ${(r.refined.removed || []).length} → 입력 ${(r.picks || []).length}곳`,
     ]);
 }
-// 제미니 7언어 → 교집합
 const b1 = last(dir, /_b1-discovery-diff\.json$/);
 if (b1) {
   const b = J(path.join(dir, b1));
@@ -96,7 +93,6 @@ if (b1) {
     `채택 ${있음 + 신규}(랜드마크 ${cnt("landmarks", "confirm") + cnt("landmarks", "new")} · 식당 ${cnt("restaurants", "confirm") + cnt("restaurants", "new")}) → 창고에 이미 있음 ${있음}(${있음 + 신규 ? Math.round((100 * 있음) / (있음 + 신규)) : 0}%) · 신규 ${신규} · mixed ${mixed}`,
   ]);
 }
-// ④ 흡수·신규
 const ins = last(rawDir, /_gmaps-discovery-insert\.json$/);
 let insOpens = 0;
 if (ins) {
@@ -121,7 +117,6 @@ if (fs.existsSync(ledger)) {
       .join(" · ") || "-",
   ]);
 }
-// ⑤ 2차 · 최종 점검
 const ids = files(dir).filter(
   (f) => /_gemini-ids-\d+\.json$/.test(f) && inWin(f),
 );
@@ -142,7 +137,6 @@ if (fc && fs.existsSync(path.join(dir, fc, "final-table.json"))) {
     `${t.total}행 · 짝 안 맞음 ${(t.mismatch || []).length}`,
   ]);
 }
-// 페이지 열기 합
 const reads = files(rawDir).filter(
   (f) => /_gmaps-page-read-\d+\.json$/.test(f) && inWin(f),
 );
@@ -157,7 +151,6 @@ rows.push([
   "구글맵 열기 합(코드)",
   `${readRows + insOpens + lists} = 직행·후처리·2차 ${readRows} + ④ ${insOpens} + 목록 ${lists}`,
 ]);
-// 판정
 const after = last(dir, /_after-status\.txt$/);
 if (after) {
   const t = fs.readFileSync(path.join(dir, after), "utf-8");

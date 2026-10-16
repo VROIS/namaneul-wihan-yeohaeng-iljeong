@@ -4,15 +4,12 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { placeSeedRaw } from "@shared/schema";
 import type { SelectDb } from "./pool-radius";
 
-/** 이 값 이하 = 국가 기부 개념·무료로 보고 계산 대상에서 제외 = 원 여행밀도 */
 export const FREE_THRESHOLD_EUR = 3;
 
-/** 입장료 있는 곳의 표준 체류 = 2시간 → 도시 평균 입장료가 곧 2시간치 요금 */
 const HOURS_PER_AVERAGE_PLACE = 2;
 
 const SLOT_STEP_MIN = 30;
 
-/** 입장료가 체류시간을 대변하는 카테고리 1벌 (평균 표본·슬롯 계산 동일 적용) */
 export const PRICED_STAY_CATEGORIES: ReadonlySet<string> = new Set([
   "heritage",
   "attraction",
@@ -43,7 +40,6 @@ export async function cityHourlyRate(
   return avg / HOURS_PER_AVERAGE_PLACE;
 }
 
-/** 장소 1곳 슬롯 소요분 = 유료는 입장료÷시간당요금(30분 반올림), 그 외는 밀도 기본값. */
 export function slotMinutesFor(
   priceEur: number | null | undefined,
   paceSlotMinutes: number,

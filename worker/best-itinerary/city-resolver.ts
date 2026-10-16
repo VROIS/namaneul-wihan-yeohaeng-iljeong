@@ -9,7 +9,6 @@ import type { Db } from "../db-types";
 
 const { cities, placeSeedRaw } = schema;
 
-/** 도시 카드 = 전환 기준을 넘은 도시(손님상 많은 순). */
 export function readyCities(db: Db) {
   return db
     .select({

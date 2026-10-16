@@ -7,8 +7,6 @@ import { isStaleProcessing } from "./video-stale";
 import type { OpenDb } from "./db-types";
 
 export function registerGuideVideoRoutes(app: Express, openDb: OpenDb): void {
-  // ── 가이드(해설) ──────────────────────────────────────────────────────────
-
   app.get("/api/prompts/:language/:type", async (req, res) => {
     const { db, close } = openDb();
     try {
@@ -89,9 +87,6 @@ export function registerGuideVideoRoutes(app: Express, openDb: OpenDb): void {
     }
   });
 
-  // ── 영상 ─────────────────────────────────────────────────────────────────
-
-  // 구체 경로가 :param 보다 먼저.
   app.get("/api/videos/badge", async (req, res) => {
     const { db, close } = openDb();
     try {

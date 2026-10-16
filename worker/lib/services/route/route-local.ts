@@ -98,7 +98,6 @@ export function buildRouteLocal(
     anchors: LatLng[],
     priceMin: number,
     priceCap: number,
-    // 미리보기 = 후보만 보고 쓰지는 않는다(소비하면 근처 식당이 헛되이 사라져 먼 곳만 남는다).
     peekOnly = false,
   ): PlaceResult | null => {
     const refs = anchors.filter((a) => a && a.lat != null && a.lat !== 0);
@@ -143,8 +142,6 @@ export function buildRouteLocal(
   };
 
   const SAME_SPOT_KM = 0.5;
-  // 같은 장소가 창고에 여러 행으로 있을 때(앵발리드 45m 실측)만 걸러낸다.
-  // 거리만 보면 78m 떨어진 생트샤펠·콩시에르쥬리처럼 서로 다른 명소가 같이 잘린다.
   const keyOf = (p: PlaceResult) =>
     String(p.nameKo || p.name || "")
       .toLowerCase()
@@ -159,8 +156,6 @@ export function buildRouteLocal(
     haversineKm(center.lat, center.lng, p.lat, p.lng);
 
   // ⚠️ 수정금지(승인필요) 2026-08-31 사장님 확정 = ① 여행 전체에서 뽑을 곳을 먼저 확정(베스트 전부 → 카테고리별 RC) (정본 B4)
-  //   = 날짜별로 그때그때 고르면 앞날이 자리를 다 써 뒤에 남은 만장일치가 통째 탈락함(파리 ★7 3곳 실측).
-  // 자리 = 곳수가 아니라 분(minute) = 입장료 슬롯이 밀도값보다 길어 곳수로 세면 뒤쪽이 통째 탈락함.
   const stayMin = (p: PlaceResult) =>
     slotMinutesFor(
       p.estimatedPriceEur,
@@ -214,7 +209,6 @@ export function buildRouteLocal(
   const remaining: PlaceResult[] = [];
   let usedMin = 0;
   // ⚠️ 수정금지(승인필요) 2026-09-10 사장님 확정(베스트 분기 전용) = 7동의 = 큰 역 = 거리·시간 한도와 무관하게 **먼저 전부** 담는다.
-  //   줄이 순서를 정하므로 7동의에는 25km 안팎 구분을 쓰지 않는다(보고타 과타비타 44km·시파키라 35km 가 잘려 1일차가 통째로 빈 것 교정).
   if (bestMode)
     for (const p of inRange) {
       if (bestRankLangCount(p.bestRank) !== 7) continue;
@@ -242,7 +236,6 @@ export function buildRouteLocal(
   let grandSec = 0;
 
   // ⚠️ 수정금지(승인필요) 2026-09-10 사장님 확정(베스트 분기 전용) = 7동의는 전부 간다 = 먼저 한 줄(전철 노선)로 세워 둔다.
-  //   출발역 = 도심 중심, 종착역 = 가장 먼 곳. 그 사이는 가까운 것으로 이어 붙인다 = 되돌아가지 않는다.
   const bestLine: PlaceResult[] = [];
   if (bestMode) {
     const s7 = places.filter((p) => bestRankLangCount(p.bestRank) === 7);
@@ -263,7 +256,6 @@ export function buildRouteLocal(
   }
 
   // ⚠️ 수정금지(승인필요) 2026-09-10 사장님 확정(베스트 분기 전용) = 세운 줄을 날 수만큼 토막낸다 = 앞날이 배부를 때까지 담으면 뒷날이 빈다(파리 5일 4·5일차 7동의 0곳 실측).
-  //   토막은 줄 순서를 끊지 않는다. 각 토막의 (머묾 + 줄 따라 이동) 합이 가장 고르게 되는 자리로 자른다.
   const dayLine: PlaceResult[][] = [];
   if (bestMode && bestLine.length) {
     const nd = daySlotsConfig.length;
@@ -379,7 +371,6 @@ export function buildRouteLocal(
       t += s;
       if (!ld && s >= LONG_STAY_MIN) ld = true;
       if (!ld) t = Math.max(t, LUNCH_FROM) + mealDuration;
-      // 저녁 자리를 미리 비운다 = 볼거리가 하루 끝까지 채우면 저녁이 22시로 밀린다.
       return (
         t <=
         (dinnerOn
@@ -436,7 +427,6 @@ export function buildRouteLocal(
           pool = [nextStop];
         } else {
           // ⚠️ 수정금지(승인필요) 2026-09-10 사장님 확정 = 7동의 말고는 등급 차이 없다 = 앞 역 1km 안에서 고른다(그 안에서 고르는 순서는 아래 가까운 순).
-          //   1km 안이 비면 반경을 넓힌다. 등급으로 거르던 것 폐기 = 2026-09-10 §19.
           const rest = remaining.filter(
             (p) => bestRankLangCount(p.bestRank) !== 7 && fitsNow(p),
           );
@@ -492,7 +482,6 @@ export function buildRouteLocal(
         }
       }
       const dur = stayMin(pick);
-      // 이동한 만큼 늦게 도착한다.
       const arriveAt = acc + moveMin(pick);
       place(pick, false, dur, arriveAt);
       // ⚠️ 수정금지(승인필요) 2026-09-07 사장님 결정 = 그 곳이 점심창(11:00~14:00)을 통째로 덮으면 거기서 먹은 것으로 보고 점심을 따로 넣지 않는다(사람은 그 시간 전에도 넘겨서도 잘 안 먹는다).

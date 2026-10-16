@@ -130,7 +130,6 @@ async function applyOne(o: VerifyPidOpts, row: Row, r: Result): Promise<void> {
     await clearSuspectTags(o.client, row.id);
 }
 
-// 9요소 = 이름·주소·좌표·리뷰수·영업상태·사진·CID·분류·가격 (세트마다 몇 행에 있었는지)
 function coverage(done: Result[]): string {
   const has = (f: (r: Result) => unknown) =>
     done.filter((r) => f(r) != null && f(r) !== "").length;

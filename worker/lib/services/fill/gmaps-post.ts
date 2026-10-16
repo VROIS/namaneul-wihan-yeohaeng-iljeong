@@ -22,7 +22,6 @@ import {
   type Stat,
 } from "./gmaps-shared";
 
-// 장소 아님 = 삭제(껍데기 0). 엔진 1벌(place-upsert)을 늦게 불러 순환 참조를 피한다.
 const deleteRow = async (id: number) =>
   (await import("../place-upsert")).deletePlaceRow(id);
 
@@ -110,7 +109,6 @@ export async function insertSeedEntries(o: {
   return stat;
 }
 
-// 대기 조건 = 페이지 검증이 없거나, 검증 뒤(10초 이후)에 행이 바뀌었거나, (검색까지 해봤는데 못 찾은 행이 아닌데) 사진이 구글(R2)이 아니거나 직행 페이지가 빈 등록(리뷰수·분류 없음)이었던 행 (bts_* 제외, active 만). $1 = R2 공개주소 접두
 export const HOLLOW = `verify_source = 'gmaps-pid-page' AND COALESCE(google_review_count, 0) = 0 AND google_primary_type IS NULL`;
 // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 대기 조건 1벌 = 워커 큐는 "검증 뒤 행이 바뀜(updated_at)" 조건 포함, 필시티 목록 후처리(한 판 안에서 돌고 인증 뒤 같은 단계를 다시 돈다)는 그 조건 없이 구글맵 도장이 없는 행(+사진 없음·빈 등록)만 = 이어 읽기는 남은 행만 (정본 §)
 const pendingWhere = (withUpdated: boolean) =>
@@ -135,7 +133,6 @@ export type PostSummary = {
 export const r2PrefixOf = (r2PublicUrl: string | undefined) =>
   (r2PublicUrl || "").replace(/\/+$/, "") + "/";
 
-// 창고 행 → 구글맵 이름·주소 검색 항목 1벌 = 후처리와 사전 정제가 같이 쓴다(__rowId = 그 행에 쓴다)
 export const ROW_COLS = `id, name_en, name_local, name_ko, address, latitude::float AS lat, longitude::float AS lng, seed_category, price_eur, summary_ko, editorial_summary, (google_place_id IS NOT NULL OR google_maps_uri LIKE '%cid=%') AS direct, (best_rank IS NOT NULL) AS best`;
 export const entryOfRow = (r: any): NewEntry =>
   ({
@@ -204,7 +201,6 @@ export async function runGmapsPost(o: {
     `▶ city ${cityId} ${city.name_en}: 대기 ${rows.length}행 (직행 ${directIds.length} · 검색 ${rows.length - directIds.length})`,
   );
 
-  // ① PID/CID 행 = 페이지 직행(창 5개)
   let pidResults: Result[] = [];
   const priceCtx = await loadPriceCtx(c, cityId);
   if (directIds.length) {
@@ -238,7 +234,6 @@ export async function runGmapsPost(o: {
         `${LIMITED_WHY}: 구글맵 제한 보기 = 사람 인증 = 남은 ${rows.length - pidResults.length + limitedCount(pidResults)}행은 인증 뒤 이어 읽기`,
       );
   }
-  // ② 검색 경로 = PID·CID 없는 행 + 직행 페이지가 빈 등록이었던 행 = PID 는 지름길일 뿐, 진짜 등록의 CID 를 이름·주소로 찾는다
   const hollow: number[] = rows.length
     ? (
         await c.query(
@@ -279,7 +274,6 @@ export async function runGmapsPost(o: {
         { cityId, provenanceTag: "gmaps-post", targetRowId, priceCtx },
         stat,
       );
-      // 검색으로도 못 찾은 행 = 그 사실을 스탬프로 남긴다(안 남기면 매 회 같은 검색을 반복) = 행이 바뀌면(updated_at) 다시 대상이 된다. 제한 보기는 못 찾은 것이 아니다 = 스탬프 없이 다음 판에
       if (rd.why && rd.why !== LIMITED_WHY)
         await o.upsertPlace({
           targetRowId,
@@ -291,7 +285,6 @@ export async function runGmapsPost(o: {
     }
     log(`   ${JSON.stringify(stat)}`);
   }
-  // ③ 병합 행 정리 = 흡수로 남은 merged 행은 원행으로 옮기고 삭제(유령 0)
   const { purgeMergedRows } = await import("../place-upsert");
   const purged = await purgeMergedRows(cityId);
   if (purged.purged)
