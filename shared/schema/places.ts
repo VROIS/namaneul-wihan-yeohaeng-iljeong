@@ -6,31 +6,10 @@ import {
   serial,
   timestamp,
   real,
-  boolean,
   jsonb,
   unique,
 } from "drizzle-orm/pg-core";
-import { dataSourceEnum } from "./enums";
 import { cities } from "./cities";
-
-export const reviews = pgTable("reviews", {
-  id: serial("id").primaryKey(),
-  // ⚠️ 수정금지(승인필요) 2026-05-24 = Step 4 DB DROP = places FK 제거 (= places 테이블 폐기 = 컬럼만 유지)
-  placeId: integer("place_id").notNull(),
-  source: dataSourceEnum("source").notNull(),
-  sourceReviewId: text("source_review_id"),
-  language: text("language"),
-  rating: real("rating"),
-  text: text("text"),
-  authorCountry: text("author_country"),
-  isOriginatorLanguage: boolean("is_originator_language").default(false),
-  sentimentScore: real("sentiment_score"),
-  authenticityKeywords: jsonb("authenticity_keywords").$type<string[]>(),
-  reviewDate: timestamp("review_date"),
-  fetchedAt: timestamp("fetched_at")
-    .default(sql`CURRENT_TIMESTAMP`)
-    .notNull(),
-});
 
 export const placeSeedRaw = pgTable("place_seed_raw", {
   id: serial("id").primaryKey(),
@@ -61,12 +40,10 @@ export const placeSeedRaw = pgTable("place_seed_raw", {
   // ⚠️ 수정금지(승인필요) 2026-06-11 = best_image_url DROP = 이미지 image_url(구글 PM) 1종 통일 (고아·비PM 2순위 폴백 폐기)
   // ⚠️ 수정금지(승인필요) 2026-06-11 = celeb_mention DROP (= 헛바퀴, ag3 미프로젝션 데드)
   // ⚠️ 수정금지(승인필요) 2026-06-11 = naver_blog_count DROP (= 네이버 수집 파이프라인 폐기 = 헛바퀴)
-  vibeKeywords: jsonb("vibe_keywords").$type<string[]>(), // 분위기 키워드 배열
   latitude: real("latitude"),
   longitude: real("longitude"),
-  // ⚠️ 수정금지(승인필요) 2026-06-11 = google_rating DROP (= 별점 비노출 정책 = 헛바퀴)
   googleReviewCount: integer("google_review_count"),
-  // ⚠️ 수정금지(승인필요) 2026-06-11 = photo_urls DROP = 이미지 image_url(구글 PM) 1종 통일 (고아·버그 폐기)
+  // ⚠️ 수정금지(승인필요) 2026-10-16 사장님 결정 = 안 쓰는 칸 정리: 영업시간(opening_hours)·이미지 갱신 시각(image_updated_at)만 남긴다 (정본 §정리)
   openingHours: jsonb("opening_hours").$type<Record<string, string>>(),
   editorialSummary: text("editorial_summary"),
   nameLocal: text("name_local"),
@@ -112,6 +89,4 @@ export const placeTranslations = pgTable(
     ),
   ],
 );
-
-export type Review = typeof reviews.$inferSelect;
 export type PlaceSeedRaw = typeof placeSeedRaw.$inferSelect;

@@ -11,7 +11,6 @@ import {
   numeric,
   index,
 } from "drizzle-orm/pg-core";
-import { cities } from "./cities";
 
 export const apiServiceStatus = pgTable("api_service_status", {
   id: serial("id").primaryKey(),
@@ -42,49 +41,6 @@ export const exchangeRates = pgTable("exchange_rates", {
   targetCurrency: text("target_currency").notNull(),
   rate: real("rate").notNull(),
   fetchedAt: timestamp("fetched_at")
-    .default(sql`CURRENT_TIMESTAMP`)
-    .notNull(),
-});
-
-export const crisisAlerts = pgTable("crisis_alerts", {
-  id: serial("id").primaryKey(),
-  cityId: integer("city_id").references(() => cities.id, {
-    onDelete: "cascade",
-  }),
-
-  city: text("city").notNull().default("Paris"), // Paris, London, Rome 등
-  countryCode: text("country_code"),
-
-  type: text("type").notNull().default("strike"),
-  alertType: text("alert_type"), // 하위호환 (deprecated)
-
-  title: text("title").notNull(),
-  titleKo: text("title_ko"), // 한글 제목
-  description: text("description"),
-
-  date: text("date").notNull(), // YYYY-MM-DD (발생일)
-  endDate: text("end_date"), // YYYY-MM-DD (종료일)
-  startDate: timestamp("start_date"), // 하위호환
-
-  affected: jsonb("affected").$type<string[]>().default([]), // ["metro", "RER", "bus"]
-  affectedAreas: jsonb("affected_areas").$type<string[]>().default([]), // 하위호환
-  severity: integer("severity").notNull().default(5), // 1-10 (10이 가장 심각)
-  impactScore: real("impact_score"), // 하위호환
-
-  recommendation: text("recommendation"), // 영문 조언
-  recommendationKo: text("recommendation_ko"), // 한글 조언
-
-  source: text("source").default("GDELT + Gemini"), // 수집 소스
-  sourceName: text("source_name"), // 하위호환
-  sourceUrl: text("source_url"),
-  geminiAnalysis: text("gemini_analysis"),
-
-  isActive: boolean("is_active").default(true),
-
-  fetchedAt: timestamp("fetched_at")
-    .default(sql`CURRENT_TIMESTAMP`)
-    .notNull(),
-  createdAt: timestamp("created_at")
     .default(sql`CURRENT_TIMESTAMP`)
     .notNull(),
 });
@@ -135,7 +91,6 @@ export const guidePrices = pgTable("guide_prices", {
 
 export type ApiServiceStatus = typeof apiServiceStatus.$inferSelect;
 export type ExchangeRate = typeof exchangeRates.$inferSelect;
-export type CrisisAlert = typeof crisisAlerts.$inferSelect;
 export type GuidePrice = typeof guidePrices.$inferSelect;
 
 export const apiKeys = pgTable("api_keys", {

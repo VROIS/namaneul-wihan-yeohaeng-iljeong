@@ -42,11 +42,7 @@ const HANDLED_ELSEWHERE = new Set([
   "category_tags",
 ]);
 const DIRECT_COL_TYPE: Record<string, "jsonb" | "real"> = {
-  google_rating: "real",
   opening_hours: "jsonb",
-  vibe_keywords: "jsonb",
-  names_i18n: "jsonb",
-  photo_urls: "jsonb",
 };
 const FIELD_NAME_OVERRIDES: Record<string, string> = {
   editorial_summary: "shortformKo",
