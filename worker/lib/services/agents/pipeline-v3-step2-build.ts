@@ -9,13 +9,12 @@ import { SEED_CATEGORIES, DEFAULT_START_TIME, DEFAULT_END_TIME } from "./types";
 import { matchPlacesWithDB } from "./ag3-match-core";
 import { saveNewPlacesToDB } from "./ag3-save-new-places";
 import { preloadCityData } from "./ag3-seed-loader";
-import {
-  calculateTransportPrice,
-  shouldApplyGuidePrice,
-  round2,
-  type GuidePriceResult,
-  type TransitPriceResult,
-} from "../transport-pricing-service";
+import { calculateTransportPrice } from "../transport-pricing-service";
+import { shouldApplyGuidePrice, round2 } from "../transport/guide-pricing";
+import type {
+  GuidePriceResult,
+  TransitPriceResult,
+} from "../transport/constants";
 import {
   sanitizePriceEur,
   resolvePrice,

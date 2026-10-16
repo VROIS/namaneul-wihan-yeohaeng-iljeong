@@ -1,14 +1,14 @@
 // ⚠️ 수정금지(승인필요) 2026-07-30 사장님 지시 = **지구본 인트로 = 웹·앱 1벌.**
 import COBE_SRC from "./cobe-inline";
 
-export type GlobeMarker = {
+type GlobeMarker = {
   lat: number;
   lng: number;
   title: string;
   subtitle: string;
 };
 
-export type GlobeOptions = {
+type GlobeOptions = {
   target: GlobeMarker;
   rotateMs: number;
   globeZoom: number;

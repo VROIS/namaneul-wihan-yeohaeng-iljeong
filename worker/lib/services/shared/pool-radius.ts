@@ -5,10 +5,10 @@ import { db } from "../../db";
 import { cities, placeSeedRaw } from "@shared/schema";
 import { distanceKmFromCoords } from "./geo-distance";
 
-export const POOL_RADIUS_M = 100_000;
-export const CORE_KM = 10;
+const POOL_RADIUS_M = 100_000;
+const CORE_KM = 10;
 
-export async function getCityCenter(
+async function getCityCenter(
   cityId: number,
 ): Promise<{ lat: number; lng: number } | null> {
   if (!db) return null;

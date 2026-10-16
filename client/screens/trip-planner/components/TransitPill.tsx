@@ -5,7 +5,7 @@ import type { Place, TransitInfo } from "@/types/trip";
 import { resultStyles as styles } from "../styles/result";
 import type { PlannerApi } from "../hooks/useTripPlanner";
 
-export type TransitLeg = Partial<TransitInfo> & { distance?: number };
+type TransitLeg = Partial<TransitInfo> & { distance?: number };
 
 export function legFromPlace(place?: Place): TransitLeg | undefined {
   if (!place?.transit_min || place.transit_min <= 0) return undefined;

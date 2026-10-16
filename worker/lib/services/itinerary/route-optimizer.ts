@@ -3,7 +3,7 @@ import type { PlaceResult } from "../agents/types";
 
 // ⚠️ 수정금지(승인필요) 2026-05-24 = 사용자 SSOT = 동선 = "출발지 + N waypoint + 도착지"
 
-export function _hasValidCoord(p: { lat: number; lng: number }): boolean {
+function _hasValidCoord(p: { lat: number; lng: number }): boolean {
   return p.lat !== 0 && p.lng !== 0 && !isNaN(p.lat) && !isNaN(p.lng);
 }
 

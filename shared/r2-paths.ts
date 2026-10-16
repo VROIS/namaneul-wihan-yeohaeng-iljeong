@@ -31,7 +31,7 @@ export const itineraryContext = (
 ): string | null =>
   cityId ? String(cityId) : itineraryId ? `itinerary-${itineraryId}` : null;
 
-export const userContext = (userId: Id): string => `user-${userId}`;
+const userContext = (userId: Id): string => `user-${userId}`;
 
 export const guideContext = (cityId: unknown, userId: Id): string =>
   Number.isInteger(Number(cityId)) && Number(cityId) > 0

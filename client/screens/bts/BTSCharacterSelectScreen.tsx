@@ -9,7 +9,7 @@ import {
   useWindowDimensions,
   StatusBar,
 } from "react-native";
-// ⚠️ 수정금지(승인필요) — 2026-04-21 expo-image로 교체: react-native Image는 newArchEnabled + Android Fresco 조합에서 일부 URL 로드 실패. DestinationDetailScreen 이 검증된 루트
+// ⚠️ 수정금지(승인필요) — 2026-04-21 expo-image로 교체: react-native Image는 newArchEnabled + Android Fresco 조합에서 일부 URL 로드 실패.
 import { Image } from "expo-image";
 import Animated, {
   Extrapolation,

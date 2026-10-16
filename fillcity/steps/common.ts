@@ -102,7 +102,7 @@ export function shareRanges(
   })).filter((j) => j.from <= j.to);
 }
 
-export function runClaudeAgent(
+function runClaudeAgent(
   prompt: string,
   outFile: string,
   readDb = false,
@@ -257,8 +257,8 @@ export function runTsx(
   });
 }
 
-// ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 일꾼 띄우기 1벌 = 몫마다 동시에, 결과 파일이 없으면 한 번 더(최대 2번) · 검토·정제·분류·찾기·최종 점검 다섯 단계가 전부 이것을 부른다 (정본 §)
-export type AgentRange = { k: number; from: number; to: number };
+// ⚠️ 수정금지(승인필요) 2026-10-16 사장님 결정 = 일꾼 띄우기 1벌 = 몫마다 동시에, 결과 파일이 없으면 한 번 더(최대 2번) · 검토·정제·분류·찾기·최종 점검 다섯 단계가 전부 이것을 부른다 (정본 §)
+type AgentRange = { k: number; from: number; to: number };
 export async function runAgents(a: {
   label: string;
   instruction: string;

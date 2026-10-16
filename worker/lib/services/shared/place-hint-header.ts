@@ -1,6 +1,6 @@
 // ⚠️ 수정금지(승인필요) 2026-08-02 사장님 SSOT = **장소 힌트 헤더 단일 관문**(§16 재발명 금지).
 
-export interface PlaceHint {
+interface PlaceHint {
   placeName: string; // 유일한 필수값(장소명은 100% 있음)
   nameLocal?: string | null; // 현지어 이름 = 간판에 적힌 그 글자 = 힌트로 가장 강력
   cityName?: string | null;

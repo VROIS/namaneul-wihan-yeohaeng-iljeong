@@ -1,14 +1,6 @@
 import { useState, useRef, useMemo, useEffect } from "react";
-import {
-  TextInput,
-  useColorScheme,
-  Platform,
-  Alert,
-  Keyboard,
-} from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { TextInput, Platform, Alert, Keyboard } from "react-native";
 
-import { Colors } from "@/constants/theme";
 import {
   calculateAge,
   getAgeGroup,
@@ -36,20 +28,12 @@ import {
   type SocialProvider,
 } from "@/lib/auth-social";
 import { useTranslation } from "react-i18next";
-import { SUPPORTED_LANGS, changeLanguageAndPersist } from "@/lib/i18n";
 import { BIRTHDATE_REQUIRED } from "@shared/birthdate-policy";
 import { LOGIN_ENTRY_MAIN } from "@shared/login-entry";
 
 // ⚠️ 사장님 SSOT 2026-07-25 = 로그인 성공 시 "다음 동작"을 호출자가 결정(§0 단일경로·분기금지). onDone:
 export function useLogin({ onDone }: { onDone: () => void }) {
   const { t, i18n } = useTranslation();
-  const colorScheme = useColorScheme();
-  const theme = Colors[colorScheme ?? "light"];
-  const insets = useSafeAreaInsets();
-
-  const currentLang =
-    SUPPORTED_LANGS.find((l) => l.code === i18n.language) ?? SUPPORTED_LANGS[0];
-  const [showLanguageModal, setShowLanguageModal] = useState(false);
 
   const [day, setDay] = useState("");
   const [month, setMonth] = useState("");
@@ -327,7 +311,7 @@ export function useLogin({ onDone }: { onDone: () => void }) {
         return;
       }
       notify(t("login.emailLoginFailed"));
-    } catch (e) {
+    } catch {
       notify(t("login.emailLoginFailed"));
     } finally {
       setEmailLoading(false);
@@ -338,12 +322,6 @@ export function useLogin({ onDone }: { onDone: () => void }) {
 
   return {
     t,
-    i18n,
-    theme,
-    insets,
-    currentLang,
-    showLanguageModal,
-    setShowLanguageModal,
     day,
     month,
     year,
@@ -366,5 +344,3 @@ export function useLogin({ onDone }: { onDone: () => void }) {
     handleEmailLogin,
   };
 }
-
-export type LoginApi = ReturnType<typeof useLogin>;

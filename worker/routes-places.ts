@@ -12,16 +12,6 @@ import type { OpenDb } from "./db-types";
 
 const { cities, placeSeedRaw, itineraries, guides, savedVideos } = schema;
 
-type PsrRow = typeof placeSeedRaw.$inferSelect;
-function toPlace(psr: PsrRow) {
-  return {
-    ...psr,
-    name: psr.nameEn || psr.nameKo || "",
-    type: psr.seedCategory,
-    photoUrl: psr.imageUrl,
-  };
-}
-
 type HighlightName = {
   nameEn: string | null;
   nameLocal: string | null;
@@ -284,25 +274,4 @@ export function registerPlaceRoutes(app: Express, openDb: OpenDb): void {
       }
     },
   );
-
-  app.get("/api/places/:id", async (req: Request, res: Response, next) => {
-    const id = parseInt(String(req.params.id));
-    if (Number.isNaN(id)) return next();
-    const { db, close } = openDb();
-    try {
-      const [psr] = await db
-        .select()
-        .from(placeSeedRaw)
-        .where(eq(placeSeedRaw.id, id));
-      if (!psr) {
-        return res.status(404).json({ error: "Place not found" });
-      }
-      res.json(toPlace(psr));
-    } catch (error) {
-      console.error("Error fetching place:", error);
-      res.status(500).json({ error: "Failed to fetch place" });
-    } finally {
-      close();
-    }
-  });
 }

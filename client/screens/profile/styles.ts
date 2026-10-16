@@ -365,33 +365,6 @@ export const styles = StyleSheet.create({
     alignItems: "center",
     gap: 6,
   },
-  personaContainer: {
-    flexDirection: "row",
-    gap: Spacing.md,
-  },
-  personaCard: {
-    flex: 1,
-    padding: Spacing.lg,
-    borderRadius: BorderRadius.md,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "transparent",
-  },
-  personaIcon: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: Spacing.md,
-  },
-  personaTitle: {
-    ...Typography.h3,
-    marginBottom: Spacing.xs,
-  },
-  personaDesc: {
-    ...Typography.caption,
-  },
   chipContainer: {
     flexDirection: "row",
     flexWrap: "wrap",

@@ -3,7 +3,7 @@ import { haversineKm } from "./geo";
 
 export type RetimeKind = "act" | "lunch" | "dinner" | "final";
 
-export interface RetimeSlot {
+interface RetimeSlot {
   lat: number;
   lng: number;
   base: number;
@@ -11,7 +11,7 @@ export interface RetimeSlot {
   lock?: number | null;
 }
 
-export interface RetimeInput {
+interface RetimeInput {
   slots: RetimeSlot[];
   anchor: { lat: number; lng: number };
   startMin: number;
@@ -22,7 +22,7 @@ export interface RetimeInput {
   mealsScale?: boolean;
 }
 
-export interface RetimeOutput {
+interface RetimeOutput {
   starts: number[];
   stays: number[];
   moves: number[];

@@ -4,9 +4,7 @@ import i18n from "@/lib/i18n";
 
 let lastOpenAt = 0;
 
-export type GuideGate =
-  | { isAuthed: boolean; requestLogin: () => void }
-  | "sample";
+type GuideGate = { isAuthed: boolean; requestLogin: () => void } | "sample";
 
 export function openGuideForPlace(
   navigation: any,

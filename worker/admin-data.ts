@@ -32,7 +32,7 @@ export const UNIT_COST_EUR: Record<string, number> = {
   gemini: 0,
 };
 
-export const USAGE_PROVIDERS = ["ts", "pm", "veo", "omni", "nano", "gemini"];
+const USAGE_PROVIDERS = ["ts", "pm", "veo", "omni", "nano", "gemini"];
 
 export async function monthlyUsage(
   db: Db,

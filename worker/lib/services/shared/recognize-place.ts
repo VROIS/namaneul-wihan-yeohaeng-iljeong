@@ -34,30 +34,6 @@ const RECOGNIZE_ROWS_HEAD = `SELECT p.id, p.name_en, p.name_local, p.name_ko, p.
 export const RECOGNIZE_ROWS_SQL = `${RECOGNIZE_ROWS_HEAD}$1`;
 export const recognizeRowsQuery = (cityId: number) =>
   sql`${sql.raw(RECOGNIZE_ROWS_HEAD)}${sql.param(cityId)}`;
-const RECOGNIZE_CITY_HEAD = `SELECT name, name_en, name_local, aliases FROM cities WHERE id = `;
-export const recognizeCityQuery = (cityId: number) =>
-  sql`${sql.raw(RECOGNIZE_CITY_HEAD)}${sql.param(cityId)}`;
-export const cityNamesOf = (
-  c:
-    | {
-        name?: unknown;
-        name_en?: unknown;
-        name_local?: unknown;
-        aliases?: unknown;
-      }
-    | null
-    | undefined,
-): string[] =>
-  c
-    ? [
-        c.name,
-        c.name_en,
-        c.name_local,
-        ...(Array.isArray(c.aliases) ? c.aliases : []),
-      ]
-        .map((x) => String(x ?? ""))
-        .filter(Boolean)
-    : [];
 
 // ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 일반명사 목록 2벌 = 쓰는 곳이 다르다. 섞으면 한쪽 승인이 다른 쪽 동작을 바꾼다(판정식 교체가 TS 오배송 판정까지 바꾼 것을 parity 검수가 잡음).
 const DOOR_GENERIC = new Set(
@@ -150,11 +126,6 @@ const toks = (s: unknown, cityTok: Set<string>) =>
           !cityTok.has(t),
       ),
   );
-const addrNorm = (s: unknown) =>
-  norm(s)
-    .replace(/\b\d{5,}\b/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
 const houseNo = (s: unknown) => {
   const m = /\b(\d{1,5})\b/.exec(norm(s));
   return m ? m[1] : null;

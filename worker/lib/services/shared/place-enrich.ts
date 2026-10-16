@@ -9,16 +9,6 @@ export type MatchedBy =
   | "name_en"
   | "name_ko"
   | "none";
-export type MatchTier = "confirmed" | "suspect" | "none";
-const INVARIANT_MATCH: MatchedBy[] = [
-  "pid",
-  "uri",
-  "address",
-  "coords",
-  "name_local",
-];
-export const tierOf = (m: MatchedBy): MatchTier =>
-  m === "none" ? "none" : INVARIANT_MATCH.includes(m) ? "confirmed" : "suspect";
 
 export const normAddr = (s: string | null | undefined): string =>
   (s || "")
@@ -29,15 +19,6 @@ export const normAddr = (s: string | null | undefined): string =>
 
 export const normName = (s: string | null | undefined): string =>
   (s || "").trim().toLowerCase();
-
-export const nameKeys = (x: {
-  nameEn?: string | null;
-  nameLocal?: string | null;
-  nameKo?: string | null;
-}): string[] =>
-  [normName(x.nameEn), normName(x.nameLocal), normName(x.nameKo)].filter(
-    Boolean,
-  );
 
 // ⚠️ 수정금지(승인필요) 2026-07-12 사장님 SSOT = 고유명사 키 = "첫 글자 대문자=고유명사"(라틴권 공통) + 업종/시설어 최소사전 제거.
 const GENERIC_FACILITY = new Set([
@@ -132,7 +113,7 @@ const GENERIC_FACILITY = new Set([
   "winery",
   "distillerie",
 ]);
-export const properNameKey = (s: string | null | undefined): string => {
+const properNameKey = (s: string | null | undefined): string => {
   const raw = (s || "").trim();
   if (!raw) return "";
   const allSame = raw === raw.toUpperCase() || raw === raw.toLowerCase(); // 전부대/소문자 = 대소문자 정보 없음

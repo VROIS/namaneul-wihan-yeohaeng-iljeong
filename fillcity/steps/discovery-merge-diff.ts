@@ -23,7 +23,7 @@ import {
   refineGroups,
 } from "./discovery-refine";
 export type Bucket = "confirm" | "new";
-export interface PsrRow {
+interface PsrRow {
   id: number;
   name_en: string | null;
   name_local: string | null;
@@ -37,7 +37,7 @@ export interface PsrRow {
   pid: boolean;
   category_tags: string[] | null;
 }
-export const PSR_COLS = `id, name_en, name_local, name_ko, seed_category, status, merged_into, city_id, latitude::float AS lat, longitude::float AS lng, google_place_id IS NOT NULL AS pid, category_tags`;
+const PSR_COLS = `id, name_en, name_local, name_ko, seed_category, status, merged_into, city_id, latitude::float AS lat, longitude::float AS lng, google_place_id IS NOT NULL AS pid, category_tags`;
 interface Staged {
   g: Group;
   name: string | null | undefined;

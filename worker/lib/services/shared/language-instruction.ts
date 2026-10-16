@@ -4,7 +4,7 @@
 export const LANGS = ["ko", "en", "ja", "fr", "zh", "es", "de"] as const;
 export type Lang = (typeof LANGS)[number];
 
-export const LANG_INSTRUCTION: Record<Lang, string> = {
+const LANG_INSTRUCTION: Record<Lang, string> = {
   ko: "반드시 한국어로만 답하세요.",
   en: "Answer entirely in English.",
   ja: "必ず日本語で答えてください。",

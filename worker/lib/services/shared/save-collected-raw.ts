@@ -5,7 +5,7 @@ import { rawName, versionedNameR2, rawHash } from "./raw-filename";
 import { uploadToR2, isR2Configured } from "./r2-client";
 import { rawPlace } from "../../../../shared/r2-paths";
 
-export interface SaveCollectedRawOpts {
+interface SaveCollectedRawOpts {
   cityId: number; // = 도시 폴더(R2 {cityId}/raw/ + docs/raw/{cityId}/)
   stepNum: number; // = rawName NN (예: Gemini MIX=90, TS 모음=6)
   stepName: string; // = 'mix-gemini' / 'ts-pm-enrich'

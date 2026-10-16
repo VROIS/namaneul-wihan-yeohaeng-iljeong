@@ -7,7 +7,7 @@ export const PROFILE_ANCHOR = {
   help: "profile-help",
 } as const;
 
-export type ProfileLink = {
+type ProfileLink = {
   section: "privacy" | "help";
   anchor: (typeof PROFILE_ANCHOR)[keyof typeof PROFILE_ANCHOR];
 };

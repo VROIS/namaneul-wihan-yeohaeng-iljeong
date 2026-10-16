@@ -7,10 +7,9 @@ export const MIN_STAY_MIN = 30;
 export const MAX_END_MIN = 24 * 60;
 
 export type EditSlot = { place: any; stay: number };
-export type LatLng = { lat: number; lng: number };
+type LatLng = { lat: number; lng: number };
 
-export const isFinalPlace = (p: any): boolean =>
-  p?.seedCategory === "bts_venue";
+const isFinalPlace = (p: any): boolean => p?.seedCategory === "bts_venue";
 export const finalOfDay = (places: any[]): any | null =>
   places.find(isFinalPlace) ?? null;
 

@@ -12,8 +12,8 @@ import type {
   RouteScene,
   RouteHandlerResult,
 } from "./route-types";
-// ⚠️ 2026-07-04 사장님 SSOT = 드라이빙 가이드 판별 단일 SSOT(Gemini·MIX 경로와 동일 함수 = 3경로 정합, §16 재발명 금지).
-import { shouldApplyGuidePrice } from "../transport-pricing-service";
+// ⚠️ 2026-10-16 사장님 SSOT = 드라이빙 가이드 판별 단일 SSOT(Gemini·MIX 경로와 동일 함수 = 3경로 정합, §16 재발명 금지).
+import { shouldApplyGuidePrice } from "../transport/guide-pricing";
 import {
   slotMinutesFor,
   FREE_THRESHOLD_EUR,

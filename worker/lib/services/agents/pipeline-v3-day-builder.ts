@@ -6,14 +6,14 @@ import {
   pickTransitMode,
   estimateTransitCost,
 } from "./transit-haversine";
-import {
-  calculateUberBlackHourly,
-  guideCostForDay,
-  round2,
-  type TransportPricingResult,
-  type GuidePriceResult,
-  type TransitPriceResult,
-} from "../transport-pricing-service";
+import { calculateUberBlackHourly } from "../transport/transit-pricing";
+import { guideCostForDay } from "../transport/day-config";
+import { round2 } from "../transport/guide-pricing";
+import type {
+  TransportPricingResult,
+  GuidePriceResult,
+  TransitPriceResult,
+} from "../transport/constants";
 import {
   sanitizePriceEur,
   type GeminiPlace,
@@ -21,7 +21,7 @@ import {
 } from "./pipeline-v3-types";
 import { isValidCoord } from "./pipeline-v3-helpers";
 
-export interface DayBuilderDeps {
+interface DayBuilderDeps {
   formData: TripFormData;
   preloaded: { cityCoords?: { lat: number; lng: number }; cityName?: string };
   geminiDays: GeminiDay[];

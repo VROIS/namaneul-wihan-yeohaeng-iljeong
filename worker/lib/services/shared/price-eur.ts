@@ -24,7 +24,7 @@ const DOLLAR: Record<string, string> = {
 const YEN: Record<string, string> = { JP: "JPY", CN: "CNY" };
 
 export type EurPer = Record<string, number>;
-export type EurResult = { eur?: number; open?: boolean; why?: string };
+type EurResult = { eur?: number; open?: boolean; why?: string };
 
 export async function loadEurPer(
   c: { query: (q: string, v?: unknown[]) => Promise<any> },
@@ -49,7 +49,7 @@ export async function loadEurPer(
   return eurPer;
 }
 
-export function currencyOf(
+function currencyOf(
   cp: CardPrice,
   countryCode: string | null | undefined,
 ): string | undefined {
@@ -62,8 +62,8 @@ export function currencyOf(
         : SYMBOL[cp.cur];
 }
 
-// ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 페이지 가격 읽기 1벌 = 식당은 머리줄 → 본문 1인당, 그 밖은 입장권 (정본 §)
-export const pageCardPriceOf = (
+// ⚠️ 수정금지(승인필요) 2026-10-16 사장님 결정 = 페이지 가격 읽기 1벌 = 식당은 머리줄 → 본문 1인당, 그 밖은 입장권 (정본 §)
+const pageCardPriceOf = (
   cat: string | null | undefined,
   r: {
     price?: CardPrice | null;
@@ -151,7 +151,7 @@ export async function loadOldPrices(
     ]),
   );
 }
-export type PriceDecision = {
+type PriceDecision = {
   price: number | null;
   clear: boolean;
   source: "page" | "old-page" | "ts" | "gemini" | "old" | "none";

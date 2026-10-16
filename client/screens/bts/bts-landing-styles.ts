@@ -8,7 +8,7 @@ export const STAGE_COLORS = ["#001a4d", "#050930", "#9333ea"];
 export const PRIMARY = "#8bacff";
 export const SECONDARY = "#b486ff";
 
-export const GLOBE_SIZE = Math.min(SW * 0.62, 320);
+const GLOBE_SIZE = Math.min(SW * 0.62, 320);
 const HANDLE_W = 50;
 const HANDLE_H = Math.min(SW * 0.35, 140);
 const BTN_AREA_W = Math.min(SW * 0.72, 360);

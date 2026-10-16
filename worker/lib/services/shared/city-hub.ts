@@ -4,9 +4,9 @@ import { cities, placeSeedRaw } from "@shared/schema";
 import { poolWhereSql, readySql, servingGateSql } from "./pool-radius";
 import { fetchCityMetaFromGemini } from "./gemini-city-meta";
 
-export const HUB_RADIUS_KM = 100;
+const HUB_RADIUS_KM = 100;
 
-export interface HubCity {
+interface HubCity {
   cityId: number;
   name: string;
   nameEn: string;
@@ -15,9 +15,9 @@ export interface HubCity {
   latitude: number;
   longitude: number;
 }
-export type Coords = { lat: number; lng: number };
+type Coords = { lat: number; lng: number };
 
-export const validCoords = (c: any): c is Coords =>
+const validCoords = (c: any): c is Coords =>
   !!c &&
   Number.isFinite(c.lat) &&
   Number.isFinite(c.lng) &&
@@ -44,7 +44,7 @@ const COLS = {
   longitude: cities.longitude,
 };
 
-export async function findNearestHub(
+async function findNearestHub(
   db: any,
   pt: Coords,
   countryCode?: string | null,

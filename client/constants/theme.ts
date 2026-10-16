@@ -148,9 +148,3 @@ export const Fonts = {
   semiBold: "Pretendard-SemiBold",
   bold: "Pretendard-Bold",
 };
-
-export function getVibeScoreGradient(score: number): string[] {
-  if (score >= 8.0) return ["#8B5CF6", "#A78BFA"]; // 보라색 그라데이션 - Excellent
-  if (score >= 5.0) return ["#F97316", "#FB923C"]; // 주황색 그라데이션 - Good
-  return ["#6B7280", "#9CA3AF"]; // 회색 그라데이션 - Average
-}

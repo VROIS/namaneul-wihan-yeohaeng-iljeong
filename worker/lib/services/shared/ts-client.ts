@@ -29,7 +29,7 @@ const REQUIRED_9 = [
   validateFieldMask(STANDARD_TS_FIELD_MASK); // Atmosphere 차단 재확인 (= §15)
 }
 
-export interface TsPlace {
+interface TsPlace {
   googlePlaceId: string | null; // id
   // ⚠️ 수정금지(승인필요) — TS displayName→name_en (2026-06-17 사장님 SSOT) = name_local은 Gemini전용
   nameEn: string | null; // displayName.text (= languageCode 미지정=영어 → name_en 컬럼)
@@ -45,7 +45,7 @@ export interface TsPlace {
   businessStatus: string | null;
 }
 
-export interface TsSearchReq {
+interface TsSearchReq {
   apiKey: string;
   method: "searchText" | "searchNearby";
   regionCode?: string;
@@ -232,7 +232,7 @@ export async function tsSearch(req: TsSearchReq): Promise<TsPlace[]> {
   return (j.places || []).map(mapPlace);
 }
 
-export interface TsPhotoReq {
+interface TsPhotoReq {
   apiKey: string;
   photoName: string; // TsPlace.photoName
   pathKey: string; // 저장 경로 = shared/r2-paths placeImageKey — .jpg 자동 부착

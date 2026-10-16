@@ -7,11 +7,6 @@ import {
 } from "react-native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import MainTabNavigator from "@/navigation/MainTabNavigator";
-import DestinationDetailScreen from "@/screens/DestinationDetailScreen";
-import OnboardingScreen from "@/screens/onboarding/OnboardingScreen";
-import LoginScreen from "@/screens/login/LoginScreen";
-import ExpertInquiryDetailScreen from "@/screens/expert/ExpertInquiryDetailScreen"; // 전문가 문의 상세(2026-07-13) = 옛 VerificationRequestScreen 대체 §19
-import ExpertProfileEditScreen from "@/screens/expert/ExpertProfileEditScreen"; // 현지전문가 본인 프로필 편집(2026-07-13)
 import AdminScreen from "@/screens/AdminScreen";
 import BTSStackNavigator from "@/navigation/BTSStackNavigator";
 import GuideStackNavigator from "@/navigation/GuideStackNavigator"; // 가이드 미니앱(§12 1단계) = BTS 패턴 독립 스택
@@ -22,11 +17,6 @@ import { useMapToggle } from "@/contexts/MapToggleContext";
 
 export type RootStackParamList = {
   Main: undefined;
-  Onboarding: undefined;
-  Login: undefined;
-  DestinationDetail: { placeId: number };
-  ExpertInquiryDetail: { id: string }; // 전문가 문의 상세(2026-07-13) = 옛 VerificationRequest 대체 §19
-  ExpertProfileEdit: undefined; // 현지전문가 본인 프로필 편집(2026-07-13)
   AdminModal: undefined;
   BTSMiniApp: undefined;
   GuideMiniApp: undefined; // 가이드 미니앱(§12 1단계) = 설정탭에서 진입, 풀스크린 모달
@@ -106,49 +96,9 @@ export default function RootStackNavigator() {
         }}
       />
       <Stack.Screen
-        name="Login"
-        component={LoginScreen}
-        options={{
-          headerShown: false,
-          presentation: "card",
-        }}
-      />
-      <Stack.Screen
         name="Main"
         component={MainTabNavigator}
         options={{ headerShown: false }}
-      />
-      <Stack.Screen
-        name="Onboarding"
-        component={OnboardingScreen}
-        options={{
-          headerShown: false,
-          presentation: "card",
-        }}
-      />
-      <Stack.Screen
-        name="DestinationDetail"
-        component={DestinationDetailScreen}
-        options={{
-          presentation: "modal",
-          headerShown: false,
-        }}
-      />
-      <Stack.Screen
-        name="ExpertInquiryDetail"
-        component={ExpertInquiryDetailScreen}
-        options={{
-          presentation: "card",
-          headerShown: false,
-        }}
-      />
-      <Stack.Screen
-        name="ExpertProfileEdit"
-        component={ExpertProfileEditScreen}
-        options={{
-          presentation: "card",
-          headerShown: false,
-        }}
       />
       {/* 관리자 대시보드 (전체화면 모달) */}
       <Stack.Screen

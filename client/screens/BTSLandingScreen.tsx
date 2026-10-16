@@ -6,7 +6,6 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Dimensions,
   StatusBar,
   Platform,
   Keyboard,
@@ -48,7 +47,6 @@ import {
   STAGE_COLORS,
   PRIMARY,
   SECONDARY,
-  GLOBE_SIZE,
 } from "./bts/bts-landing-styles";
 
 // ⚠️ 수정금지(승인필요) 2026-07-30 = 아미봉 구체 안 글자에 **똑같이** 적용하는 값 1벌(§0).
@@ -100,9 +98,8 @@ export function BTSLandingScreen() {
   // ⚠️ 수정금지(승인필요) 2026-07-31 사장님 지시 = **이미 로그인했으면 이 창을 건너뛴다.**
   const { isAuthed } = useMapToggle();
 
-  // ⚠️ 수정금지(승인필요) — Google OAuth hook (기존 LoginScreen 패턴 그대로)
-  const [googleRequest, googleResponse, googlePromptAsync] =
-    useGoogleAuthRequest();
+  // ⚠️ 수정금지(승인필요) — Google OAuth hook (로그인 팝업과 같은 방식)
+  const [, googleResponse, googlePromptAsync] = useGoogleAuthRequest();
   const processedGoogleRef = useRef<typeof googleResponse>(null);
 
   const entrance = useSharedValue(0);
@@ -127,7 +124,7 @@ export function BTSLandingScreen() {
     return { birthDateStr: str, isAdult: calculateAge(date) >= 18 };
   })();
 
-  // ⚠️ 수정금지(승인필요) — Google OAuth 응답 처리 (기존 LoginScreen 패턴)
+  // ⚠️ 수정금지(승인필요) — Google OAuth 응답 처리
   useEffect(() => {
     if (!googleResponse || googleResponse.type !== "success") return;
     if (!birthDateStr || !isAdult) return;

@@ -1,10 +1,10 @@
 // ⚠️ 수정금지(승인필요) 2026-07-05 사용자 SSOT(헌법 제14조) = place_seed_raw INSERT/UPDATE 유일 진입점, 7단계 매칭(1~5순위 자동병합/6·7순위 의심메모), UPDATE는 새값 우선+tags UNION — 상세 경위는 정본문서
 import { db } from "../db";
 import { placeSeedRaw } from "@shared/schema";
-import { eq, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 import { type MatchedBy, properKeys } from "./shared/place-enrich";
 
-export interface UpsertPayload {
+interface UpsertPayload {
   cityId: number;
   seedCategory: string; // 'restaurant' | 'attraction' | 'heritage' | ...
   // ⚠️ 수정금지(승인필요) 2026-09-30 사장님 결정 = 구글 페이지로 확정한 분류는 옛 seed_category 를 덮는다(구글 분류 최우선 = 헌법 §14). 페이지 확정·분류 정렬만 켠다 (정본 §)
@@ -53,7 +53,7 @@ export interface UpsertPayload {
 
 export type { MatchedBy };
 
-export interface UpsertResult {
+interface UpsertResult {
   action: "inserted" | "updated" | "skipped";
   rowId: number | null;
   matchedBy: MatchedBy;
@@ -249,8 +249,8 @@ async function activeKeeperOf(id: number): Promise<number | null> {
   return cur;
 }
 
-// ⚠️ 수정금지(승인필요) 2026-10-15 사장님 결정 = 합침 허용 판정 1벌 = CID 가 같을 때만 허용(사진은 그 CID 페이지에서 잘라 온 것 = CID 가 다르면 다른 장소) · CID·사진이 없는 껍데기 진 행은 허용 · 원행에 CID 가 없으면 불허 (정본 §)
-export async function absorbAllowed(
+// ⚠️ 수정금지(승인필요) 2026-10-16 사장님 결정 = 합침 허용 판정 1벌 = CID 가 같을 때만 허용(사진은 그 CID 페이지에서 잘라 온 것 = CID 가 다르면 다른 장소) · CID·사진이 없는 껍데기 진 행은 허용 · 원행에 CID 가 없으면 불허 (정본 §)
+async function absorbAllowed(
   loserId: number,
   keepId: number,
 ): Promise<{ ok: boolean; why: string }> {
@@ -318,8 +318,8 @@ async function moveBelongingsTo(keepId: number, loserId: number) {
   });
 }
 
-// ⚠️ 수정금지(승인필요) 2026-09-13 사장님 결정 = 여정 슬롯이 가리키는 행 번호(psrRowId · id "db-N")도 남는 행으로 바꾼다 = 진 행은 지워도 손님상 연결이 끊기지 않는다. jsonb 글자는 콜론 뒤 공백이 있어 \s* 로 맞춘다
-export async function relinkItineraries(
+// ⚠️ 수정금지(승인필요) 2026-10-16 사장님 결정 = 여정 슬롯이 가리키는 행 번호(psrRowId · id "db-N")도 남는 행으로 바꾼다 = 진 행은 지워도 손님상 연결이 끊기지 않는다. jsonb 글자는 콜론 뒤 공백이 있어 \s* 로 맞춘다
+async function relinkItineraries(
   tx: { execute: (q: any) => Promise<any> },
   keepId: number,
   loserId: number,

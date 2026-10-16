@@ -13,7 +13,7 @@ const PROMPT_PATH = path.join(
   "fillcity/prompts/03-enrich-after-google/prompt.txt",
 );
 
-export interface GeminiCurateInput {
+interface GeminiCurateInput {
   id: number;
   nameEn: string;
   address?: string | null;
@@ -22,7 +22,7 @@ export interface GeminiCurateInput {
   googleCid?: string | null;
   seedCategory?: string | null;
 }
-export interface GeminiCurateOutput {
+interface GeminiCurateOutput {
   id: number;
   nameLocal: string | null;
   nameEn: string | null;

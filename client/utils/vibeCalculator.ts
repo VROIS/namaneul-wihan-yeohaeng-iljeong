@@ -46,8 +46,8 @@ export function calculateVibeWeights(
   }));
 }
 
-// ⚠️ 수정금지(승인필요) 2026-08-13 사장님 승인 = 이미 있던 번역키(VIBE_OPTIONS[].labelKey, options.* 7개국어
-export function getVibeLabel(vibe: Vibe): string {
+// ⚠️ 수정금지(승인필요) 2026-10-16 사장님 승인 = 이미 있던 번역키(VIBE_OPTIONS[].labelKey, options.* 7개국어
+function getVibeLabel(vibe: Vibe): string {
   const option = VIBE_OPTIONS.find((v) => v.id === vibe);
   return option ? i18n.t(option.labelKey) : vibe;
 }

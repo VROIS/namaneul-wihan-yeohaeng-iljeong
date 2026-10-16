@@ -4,7 +4,7 @@ import type { Db } from "./db-types";
 
 export type CallProvider = "ts" | "pm" | "veo" | "omni" | "nano" | "gemini";
 
-export interface ExternalCallInput {
+interface ExternalCallInput {
   provider: CallProvider;
   sku?: string | null;
   cityId?: number | null;

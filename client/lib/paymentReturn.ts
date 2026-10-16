@@ -2,7 +2,7 @@
 // 사장님 지적(2026-08-06):
 import { Platform } from "react-native";
 
-export type PaymentReturn = "success" | "cancel" | null;
+type PaymentReturn = "success" | "cancel" | null;
 
 function readOnce(): PaymentReturn {
   if (Platform.OS !== "web") return null;

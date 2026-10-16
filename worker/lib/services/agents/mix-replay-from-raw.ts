@@ -184,7 +184,6 @@ if (!cityId || !itineraryId || !rawKey) {
     ).rows.map((r: any) => [r.id, r]),
   );
   let linked = 0,
-    withImg = 0,
     total = 0;
   for (const day of d.days || [])
     for (const s of day.places || []) {
@@ -196,7 +195,6 @@ if (!cityId || !itineraryId || !rawKey) {
       s.psrRowId = row.id;
       if (fr.image_url) {
         s.image = fr.image_url;
-        withImg++;
       }
       if (fr.google_place_id) s.googlePlaceId = fr.google_place_id;
       if (fr.google_maps_uri) {

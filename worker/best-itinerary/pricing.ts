@@ -12,7 +12,7 @@ import {
 import { round2 } from "../lib/services/transport/guide-pricing";
 import type { Db } from "../db-types";
 
-export async function guidePriceConfig(
+async function guidePriceConfig(
   db: Db,
   transportType: TransportType,
 ): Promise<{ basePrice4h: number; pricePerHour: number }> {

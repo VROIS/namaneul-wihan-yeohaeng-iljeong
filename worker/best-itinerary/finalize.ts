@@ -44,7 +44,7 @@ import type { Db } from "../db-types";
 
 const { cities, placeSeedRaw } = schema;
 
-export interface AG4DbInput {
+interface AG4DbInput {
   daySlotsConfig: DaySlotConfig[];
   travelPace: TravelPace;
   formData: TripFormData;

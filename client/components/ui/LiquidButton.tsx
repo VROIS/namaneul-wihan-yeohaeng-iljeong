@@ -17,10 +17,10 @@ import Animated, {
 } from "react-native-reanimated";
 import { BlurView } from "expo-blur";
 
-export type LiquidButtonSize = "sm" | "md" | "lg";
-export type LiquidButtonVariant = "default" | "selected";
+type LiquidButtonSize = "sm" | "md" | "lg";
+type LiquidButtonVariant = "default" | "selected";
 
-export interface LiquidButtonProps {
+interface LiquidButtonProps {
   label: string;
   onPress?: () => void;
   variant?: LiquidButtonVariant;

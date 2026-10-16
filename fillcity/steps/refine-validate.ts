@@ -3,7 +3,7 @@ import fs from "fs";
 import path from "path";
 import { foldName } from "../../worker/lib/services/shared/text-fold";
 
-export type RefineItem = { order: number; cid: string; name: string };
+type RefineItem = { order: number; cid: string; name: string };
 
 const urlHasCid = (url: string, cid: string): boolean => {
   const u = url.toLowerCase();

@@ -5,9 +5,7 @@ import { sql } from "drizzle-orm";
 import { getFromR2, uploadToR2, isR2Configured } from "./r2-client";
 import { adminMetricsKey } from "../../../../shared/r2-paths";
 
-export const TICK_MS = 30_000;
-
-export type MetricPoint = {
+type MetricPoint = {
   t: string; // ISO
   users: number;
   routes: number;
@@ -17,12 +15,11 @@ export type MetricPoint = {
   videos: number;
 };
 
-export type MetricDelta = Record<keyof Omit<MetricPoint, "t">, number>;
+type MetricDelta = Record<keyof Omit<MetricPoint, "t">, number>;
 
 const keyOf = (d = new Date()) => adminMetricsKey(d.toISOString().slice(0, 10));
 
-/** 지금 시점 지표 1벌. 여정은 MIX·DB-only 구분 없이 전체(2026-08-31 사장님 확정). */
-export async function readMetrics(): Promise<MetricPoint> {
+async function readMetrics(): Promise<MetricPoint> {
   const r = (await db!.execute(sql`
     SELECT
       (SELECT count(*) FROM users)::int AS users,
@@ -114,19 +111,4 @@ export async function recentDelta(): Promise<{
       videos: pick("videos"),
     },
   };
-}
-
-let timer: ReturnType<typeof setInterval> | null = null;
-
-export function startMetricsHeartbeat(): void {
-  if (timer || !isR2Configured()) return;
-  const tick = () =>
-    appendTick().catch((e) =>
-      console.warn("[metrics] 틱 기록 실패:", (e as Error).message),
-    );
-  tick();
-  const h = setInterval(tick, TICK_MS);
-  (h as unknown as { unref?: () => void }).unref?.();
-  timer = h;
-  console.log(`[metrics] 관제탑 심장박동 시작 = ${TICK_MS / 1000}초 주기 → R2`);
 }

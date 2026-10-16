@@ -29,7 +29,7 @@ function getAI(apiKey?: string): GoogleGenAI {
   return ai;
 }
 
-export interface GeminiJsonOptions {
+interface GeminiJsonOptions {
   model?: string;
   temperature?: number;
   maxOutputTokens?: number;
@@ -42,7 +42,7 @@ export interface GeminiJsonOptions {
   extraParts?: any[];
 }
 
-export interface GeminiJsonResult<T = any> {
+interface GeminiJsonResult<T = any> {
   raw: string;
   data: T | null;
   finishReason: string;
@@ -135,7 +135,7 @@ export async function geminiJson<T = any>(
 
 // ⚠️ 수정금지(승인필요) 2026-07-20 사장님 SSOT (§12) = Gemini Vision(이미지 해설) 스트리밍.
 
-export interface GeminiVisionStreamOptions {
+interface GeminiVisionStreamOptions {
   systemInstruction?: string;
   contextId?: string | number | null;
   rawTag?: string | null;

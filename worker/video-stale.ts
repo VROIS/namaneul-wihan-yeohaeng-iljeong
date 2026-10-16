@@ -2,7 +2,7 @@
 
 import type { DayVideo } from "../shared/schema";
 
-export const STALE_PROCESSING_MS = 40 * 60 * 1000;
+const STALE_PROCESSING_MS = 40 * 60 * 1000;
 
 export function isStaleProcessing(v: DayVideo | undefined): boolean {
   if (v?.status !== "processing") return false;

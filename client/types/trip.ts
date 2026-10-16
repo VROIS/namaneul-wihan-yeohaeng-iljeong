@@ -9,11 +9,11 @@ export type Vibe =
   | "Culture"
   | "Attraction";
 
-export type TravelStyle = "Luxury" | "Premium" | "Reasonable" | "Economic";
+type TravelStyle = "Luxury" | "Premium" | "Reasonable" | "Economic";
 
-export type TravelPace = "Packed" | "Normal" | "Relaxed";
+type TravelPace = "Packed" | "Normal" | "Relaxed";
 
-export type MobilityStyle = "WalkMore" | "Moderate" | "Minimal";
+type MobilityStyle = "WalkMore" | "Moderate" | "Minimal";
 
 export type CompanionType =
   | "Single"
@@ -22,9 +22,9 @@ export type CompanionType =
   | "ExtendedFamily"
   | "Group";
 
-export type MealLevel = "Michelin" | "Trendy" | "Local" | "Budget";
+type MealLevel = "Michelin" | "Trendy" | "Local" | "Budget";
 
-export type GuideOption = "None" | "Walking" | "Sedan" | "VIP";
+type GuideOption = "None" | "Walking" | "Sedan" | "VIP";
 
 export type CurationFocus = "Kids" | "Parents" | "Everyone" | "Self";
 
@@ -135,7 +135,7 @@ export interface VibeWeight {
   percentage: number;
 }
 
-export interface DailyBudgetBreakdown {
+interface DailyBudgetBreakdown {
   day: number;
   transport: number;
   meals: number;
@@ -144,7 +144,7 @@ export interface DailyBudgetBreakdown {
   perPerson: number;
 }
 
-export interface BudgetTotals {
+interface BudgetTotals {
   transport: number;
   meals: number;
   entranceFees: number;

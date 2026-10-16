@@ -3,11 +3,11 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 
-export const RATE_API = "https://open.er-api.com/v6/latest/KRW";
+const RATE_API = "https://open.er-api.com/v6/latest/KRW";
 
 type Client = { query: (q: string, v?: unknown[]) => Promise<any> };
 
-export async function syncExchangeRates(c: Client): Promise<number> {
+async function syncExchangeRates(c: Client): Promise<number> {
   const res = await fetch(RATE_API, { signal: AbortSignal.timeout(30000) });
   if (!res.ok) throw new Error(`환율 API ${res.status}`);
   const j = (await res.json()) as {

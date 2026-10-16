@@ -1,13 +1,12 @@
 // ⚠️ 수정금지(승인필요) 2026-09-09 사장님 확정 = 여정 행 저장
 
-import type { Express, Request, Response } from "express";
 import { sql } from "drizzle-orm";
 import * as schema from "../../shared/schema";
 import type { Db } from "../db-types";
 
 const { cities } = schema;
 
-export const STYLE_TO_PERSONA: Record<string, string> = {
+const STYLE_TO_PERSONA: Record<string, string> = {
   Luxury: "luxury",
   Premium: "comfort",
   Reasonable: "comfort",

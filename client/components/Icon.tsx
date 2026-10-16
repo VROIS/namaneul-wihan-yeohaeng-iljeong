@@ -157,7 +157,7 @@ const toPascalCase = (str: string) =>
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join("");
 
-export interface IconProps extends Omit<LucideProps, "color"> {
+interface IconProps extends Omit<LucideProps, "color"> {
   name: string;
   color?: string;
   size?: number;

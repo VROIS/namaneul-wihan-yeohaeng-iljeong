@@ -3,7 +3,6 @@ import { Spacing, BorderRadius, Brand, Fonts } from "@/constants/theme";
 
 export const styles = StyleSheet.create({
   container: { flex: 1 },
-  flex: { flex: 1 },
   content: { paddingHorizontal: Spacing.xl },
 
   loginOverlay: {
@@ -59,49 +58,13 @@ export const styles = StyleSheet.create({
     gap: 6,
     marginBottom: 2,
   },
-  // ⚠️ 사장님 SSOT 2026-07-25 = LoginSheet 전용 Tripis 글자 = 38→26 축소(삼성폰 키보드 회피 = 상단 콤팩트). LoginScreen 보관은 tripisTitle(38) 그대로.
+  // ⚠️ 사장님 SSOT 2026-07-25 = LoginSheet 전용 Tripis 글자 = 38→26 축소(삼성폰 키보드 회피 = 상단 콤팩트).
   loginBrandTitle: {
     fontSize: 26,
     fontWeight: "700",
     letterSpacing: -0.8,
     color: Brand.primary,
     lineHeight: 28,
-  },
-  tripisHeader: {
-    alignItems: "center",
-    paddingVertical: Spacing.xl,
-    marginBottom: Spacing.md,
-  },
-  tripisMark: {
-    height: 120,
-    width: 120,
-    marginBottom: 24,
-  },
-  tripisTitleRow: {
-    flexDirection: "row",
-    alignItems: "baseline",
-    gap: 8,
-    marginBottom: 28,
-  },
-  tripisTitle: {
-    fontSize: 38,
-    fontWeight: "700",
-    letterSpacing: -1.2,
-    color: Brand.primary,
-    lineHeight: 38,
-  },
-  tripisTitleKo: {
-    fontSize: 14,
-    color: "#6B6459",
-    letterSpacing: 1,
-  },
-  tripisSubtitle: {
-    fontSize: 30,
-    lineHeight: 38,
-    fontWeight: "700",
-    letterSpacing: -0.6,
-    textAlign: "center",
-    color: "#1A1A1A",
   },
 
   divider: {
@@ -127,17 +90,6 @@ export const styles = StyleSheet.create({
     fontFamily: Fonts.medium,
     marginLeft: Spacing.xs,
   },
-  selector: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md + 4,
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
-    gap: Spacing.md,
-  },
-  flagText: { fontSize: 24 },
-  selectorText: { flex: 1, fontSize: 16, fontFamily: Fonts.medium },
   dateInputRow: { flexDirection: "row", alignItems: "center", gap: Spacing.sm },
   dateInputBox: {
     borderRadius: BorderRadius.lg,
@@ -146,8 +98,7 @@ export const styles = StyleSheet.create({
     height: 52,
     justifyContent: "center",
   },
-  yearBox: { width: 80 },
-  // ⚠️ 사장님 SSOT 2026-07-25 = LoginSheet 전용 = 칸을 옆으로 최대한 늘리고(flex:1 = 카드 폭 꽉 채움) 높이 축소(52→40) = 세로 콤팩트(삼성폰 키보드 회피) + 넓어진 폭으로 "MM"/"YYYY" 잘림 해소. LoginScreen(보관)은 원본(width 56/52) 그대로 = §2 미파손. width:"auto"로 원본 고정폭 무효화.
+  // ⚠️ 사장님 SSOT 2026-07-25 = LoginSheet 전용 = 칸을 옆으로 최대한 늘리고(flex:1 = 카드 폭 꽉 채움) 높이 축소(52→40) = 세로 콤팩트(삼성폰 키보드 회피) + 넓어진 폭으로 "MM"/"YYYY" 잘림 해소. width:"auto"로 원본 고정폭 무효화.
   sheetDateBox: {
     flex: 1,
     width: "auto",
@@ -185,11 +136,6 @@ export const styles = StyleSheet.create({
 
   socialSection: { gap: Spacing.sm, paddingBottom: Spacing.sm },
   emailLoginBox: { gap: Spacing.xs, marginTop: Spacing.sm },
-  emailLoginLabel: {
-    fontSize: 12,
-    fontFamily: Fonts.medium,
-    textAlign: "center",
-  },
   emailLoginRow: { flexDirection: "row", gap: Spacing.sm },
   emailInput: {
     flex: 1,
@@ -212,7 +158,7 @@ export const styles = StyleSheet.create({
     justifyContent: "center",
   },
   emailLoginBtnText: { color: "#FFF", fontSize: 14, fontFamily: Fonts.bold },
-  // ⚠️ 사장님 SSOT 2026-07-25 = 삼성폰 키보드 회피 = 버튼 높이 최대한 축소(고정 40 = 세로 콤팩트). 나머지 화면(LoginScreen 보관)은 자체 스타일이라 무영향.
+  // ⚠️ 사장님 SSOT 2026-07-25 = 삼성폰 키보드 회피 = 버튼 높이 최대한 축소(고정 40 = 세로 콤팩트).
   socialButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -255,25 +201,11 @@ export const styles = StyleSheet.create({
   },
   appleIconText: { color: "#FFFFFF", fontSize: 18, fontFamily: Fonts.bold },
   appleButtonText: { color: "#FFFFFF", fontSize: 16, fontFamily: Fonts.bold },
-  disclaimer: {
-    fontSize: 12,
-    fontFamily: Fonts.sans,
-    textAlign: "center",
-    marginTop: Spacing.md,
-    lineHeight: 18,
-  },
 
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "flex-end",
-  },
-  modalContent: {
-    borderTopLeftRadius: BorderRadius["2xl"],
-    borderTopRightRadius: BorderRadius["2xl"],
-    paddingTop: Spacing.lg,
-    paddingBottom: Spacing["3xl"],
-    maxHeight: "70%",
   },
   modalHeader: {
     flexDirection: "row",
@@ -283,20 +215,6 @@ export const styles = StyleSheet.create({
     paddingBottom: Spacing.lg,
   },
   modalTitle: { fontSize: 20, fontWeight: "700" },
-  languageList: { paddingHorizontal: Spacing.xl },
-  languageItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: Spacing.lg,
-    paddingHorizontal: Spacing.lg,
-    borderRadius: BorderRadius.lg,
-    marginBottom: Spacing.sm,
-    gap: Spacing.md,
-  },
-  languageItemSelected: { backgroundColor: "rgba(66, 133, 244, 0.08)" },
-  languageTextContainer: { flex: 1 },
-  languageName: { fontSize: 16, fontWeight: "600" },
-  languageSubname: { fontSize: 13, marginTop: 2 },
 
   // ⚠️ 사장님 SSOT 2026-07-27(AOS 실기기) = 로그인 처리 1초 동안 화면이 그대로라
   loginBusyRow: {

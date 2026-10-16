@@ -257,7 +257,6 @@ export function generateProtagonistSentence(
     case "Parents":
       const parentAge =
         ageInfo.oldest ?? ageInfo.familyEstimate?.estimatedParentAge;
-      const parentAgeGroup = ageInfo.familyEstimate?.parentAgeGroup;
 
       if (parentAge !== null && parentAge !== undefined && parentAge >= 55) {
         const displayParentAge = Math.floor(parentAge / 10) * 10;

@@ -9,17 +9,17 @@ import type { Db, OpenDb } from "./db-types";
 
 const ROUTES_URL = "https://routes.googleapis.com/directions/v2:computeRoutes";
 
-export interface DayLiveStop {
+interface DayLiveStop {
   lat: number;
   lng: number;
 }
 
-export interface DayLiveResult {
+interface DayLiveResult {
   durationSec: number; // 당일 총 이동 실소요(초)
   distanceKm: number; // 당일 총 이동거리(km)
 }
 
-export interface EnrichedStop {
+interface EnrichedStop {
   lat: number;
   lng: number;
   placeId: string | null;
@@ -34,7 +34,7 @@ interface EnrichRow extends Record<string, unknown> {
   name_local: string | null;
 }
 
-export async function enrichStopsWithPsr(
+async function enrichStopsWithPsr(
   db: Db,
   stops: DayLiveStop[],
 ): Promise<EnrichedStop[]> {
@@ -73,7 +73,7 @@ export async function enrichStopsWithPsr(
   });
 }
 
-export type RouteEndpoint = { lat: number; lng: number } | { address: string };
+type RouteEndpoint = { lat: number; lng: number } | { address: string };
 
 /** §18 raw 저장은 `record` 콜백으로 밖에 넘긴다 = 이 함수는 R2 를 직접 만지지 않는다(라우트가 외부호출이 끝난 뒤 waitUntil 로 넘긴다). */
 async function computeDayRouteLive(

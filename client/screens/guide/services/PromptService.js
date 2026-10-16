@@ -64,8 +64,7 @@ function getFallbackPrompt(language, type) {
   return `You are a local travel assistant. Help with translation, currency, transport, and emergencies. Respond in ${language}. Be practical and friendly.`;
 }
 
-// ⚠️ 수정금지(승인필요): TTS 언어 코드 매핑 (store.language → Speech.speak language)
-export const TTS_LANGUAGE_MAP = {
+const TTS_LANGUAGE_MAP = {
   ko: "ko-KR",
   en: "en-US",
   ja: "ja-JP",

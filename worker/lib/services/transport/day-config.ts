@@ -1,40 +1,6 @@
-import type {
-  TransportType,
-  CompanionType,
-  MobilityStyle,
-  TravelStyle,
-} from "./constants";
+import type { CompanionType, MobilityStyle, TravelStyle } from "./constants";
 import { round2 } from "./guide-pricing";
 import { calculateTransportPrice } from "../transport-pricing-service";
-
-export function getAirportTransferPrice(transportType: TransportType): {
-  priceLow: number;
-  priceHigh: number;
-  description: string;
-} {
-  const airportPrices: Record<
-    TransportType,
-    { priceLow: number; priceHigh: number; description: string }
-  > = {
-    sedan: {
-      priceLow: 117,
-      priceHigh: 152,
-      description: "비즈니스 세단 (E-Class) - CDG 공항 픽업",
-    },
-    van: {
-      priceLow: 117,
-      priceHigh: 149,
-      description: "프라이빗 밴 (4-7인) - CDG 공항 픽업",
-    },
-    minibus: {
-      priceLow: 200,
-      priceHigh: 300,
-      description: "미니버스 - CDG 공항 픽업 (별도 견적)",
-    },
-    guide_only: { priceLow: 0, priceHigh: 0, description: "공항 픽업 없음" },
-  };
-  return airportPrices[transportType] || airportPrices.sedan;
-}
 
 // 날짜별 dayConfig + 가이드 하루요금 = 단일 SSOT (2026-07-06 사장님)
 

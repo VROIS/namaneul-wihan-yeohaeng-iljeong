@@ -1,6 +1,6 @@
 // ⚠️ 수정금지(승인필요) — Google Places API SKU 등급표 + 차단 필터
 
-export const TS_ESSENTIALS_FIELDS = new Set<string>([
+const TS_ESSENTIALS_FIELDS = new Set<string>([
   "places.attributions",
   "places.id",
   "places.name", // 리소스 이름 (places/PLACE_ID)
@@ -9,7 +9,7 @@ export const TS_ESSENTIALS_FIELDS = new Set<string>([
   "places.movedPlaceId",
 ]);
 
-export const TS_PRO_FIELDS = new Set<string>([
+const TS_PRO_FIELDS = new Set<string>([
   "places.accessibilityOptions",
   "places.addressComponents",
   "places.addressDescriptor",
@@ -39,7 +39,7 @@ export const TS_PRO_FIELDS = new Set<string>([
   "places.viewport",
 ]);
 
-export const TS_ENTERPRISE_FIELDS = new Set<string>([
+const TS_ENTERPRISE_FIELDS = new Set<string>([
   "places.currentOpeningHours",
   "places.currentSecondaryOpeningHours",
   "places.internationalPhoneNumber",
@@ -53,7 +53,7 @@ export const TS_ENTERPRISE_FIELDS = new Set<string>([
   "places.websiteUri",
 ]);
 
-export const TS_ATMOSPHERE_FIELDS = new Set<string>([
+const TS_ATMOSPHERE_FIELDS = new Set<string>([
   "places.allowsDogs",
   "places.curbsidePickup",
   "places.delivery",
@@ -94,14 +94,9 @@ export const TS_ATMOSPHERE_FIELDS = new Set<string>([
 export const STANDARD_TS_FIELD_MASK =
   "places.id,places.displayName,places.formattedAddress,places.location,places.userRatingCount,places.priceRange,places.photos,places.googleMapsUri,places.businessStatus";
 
-export type SkuTier =
-  | "essentials"
-  | "pro"
-  | "enterprise"
-  | "atmosphere"
-  | "unknown";
+type SkuTier = "essentials" | "pro" | "enterprise" | "atmosphere" | "unknown";
 
-export function getFieldMaskTier(fieldMask: string): {
+function getFieldMaskTier(fieldMask: string): {
   tier: SkuTier;
   atmosphereFields: string[];
   unknownFields: string[];

@@ -6,7 +6,7 @@ import { retimeDay } from "@shared/day-retime";
 type LatLng = { lat: number; lng: number };
 type Item = { p: PlaceResult; rest: boolean; base: number };
 
-export interface BtsDayInput {
+interface BtsDayInput {
   places: PlaceResult[];
   pinnedPlaceIds: number[];
   center: LatLng;
@@ -23,7 +23,7 @@ export interface BtsDayInput {
   pickDinner: () => PlaceResult | null;
 }
 
-export interface BtsDayOutput {
+interface BtsDayOutput {
   items: { p: PlaceResult; rest: boolean }[];
   starts: number[];
   stays: number[];

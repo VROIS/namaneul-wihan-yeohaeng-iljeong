@@ -21,8 +21,8 @@ export type BTSCity = {
   showTime?: string | null;
 };
 
-// ⚠️ 수정금지(승인필요) 2026-07-30 사장님 SSOT = **공연 임박 5개 도시를 고르는 규칙 = 이 함수 1벌.**
-export const IMMINENT_CITY_COUNT = 5;
+// ⚠️ 수정금지(승인필요) 2026-10-16 사장님 SSOT = **공연 임박 5개 도시를 고르는 규칙 = 이 함수 1벌.**
+const IMMINENT_CITY_COUNT = 5;
 export function pickImminentCities(cities: BTSCity[]): BTSCity[] {
   return [...cities]
     .filter((c) => c.nextConcertDate)

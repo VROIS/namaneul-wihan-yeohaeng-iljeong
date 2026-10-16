@@ -58,13 +58,13 @@ function tokensMatch(a: string, b: string): boolean {
   while (i < n && a[i] === b[i]) i++;
   return i >= TOKEN_PREFIX_MIN;
 }
-// ⚠️ 수정금지(승인필요) 2026-08-28 사장님 지시 = 이름 일치 강도. 실측 시카고 #60631 우리 "Washington Park" ↔ 페이지 "Washington Square Mall"(16.7km) = 공통 토큰 "washington" 1개만으로 이름 관문을 통과해 coord-corrected 로 좌표가 덮인 사고(수동 원복).
-export type NameMatch = "strong" | "weak" | "none";
+// ⚠️ 수정금지(승인필요) 2026-10-16 사장님 지시 = 이름 일치 강도. 실측 시카고 #60631 우리 "Washington Park" ↔ 페이지 "Washington Square Mall"(16.7km) = 공통 토큰 "washington" 1개만으로 이름 관문을 통과해 coord-corrected 로 좌표가 덮인 사고(수동 원복).
+type NameMatch = "strong" | "weak" | "none";
 const STRONG_SHARE_RATIO = 0.6;
 function normName(s: string | null): string {
   return foldName(s || "");
 }
-export function nameMatch(
+function nameMatch(
   ourName: string | null,
   ours: Set<string>,
   pageName: string | null,
@@ -210,12 +210,12 @@ export const isWritable = (gate: string) =>
   gate === "coord-corrected" ||
   gate === "page-coord-invalid";
 
-// ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = PID 짝 맞추기 재료 = 우리 주소가 페이지 주소와 같으면 그곳, 아니면 좌표 500m 안 + 후기 수가 비슷해야 그곳 (정본 §)
-export const PID_PAIR_KM = 0.5;
+// ⚠️ 수정금지(승인필요) 2026-10-16 사장님 결정 = PID 짝 맞추기 재료 = 우리 주소가 페이지 주소와 같으면 그곳, 아니면 좌표 500m 안 + 후기 수가 비슷해야 그곳 (정본 §)
+const PID_PAIR_KM = 0.5;
 // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 주소 비교 = 발음기호 떼기(text-fold 1벌) + 글자·숫자만 · 나라 꼬리 목록은 두지 않는다(아래 포함 비교가 한쪽에만 나라가 붙은 경우를 이미 흡수) (정본 §)
 const normAddr = (s: string) =>
   foldAccents(s.toLowerCase()).replace(/[^a-z0-9]+/g, "");
-export function pidPair(
+function pidPair(
   row: { address?: string | null; rc: number | null },
   local: { address: string | null; reviewCount: number | null },
   distKm: number | null,
@@ -269,7 +269,7 @@ export function initResult(row: Row): Result {
   };
 }
 
-export type GateContext = {
+type GateContext = {
   page: Page;
   lang: string;
   // ⚠️ 수정금지(승인필요) 2026-09-04 사장님 결정 = 페이지를 한 번만 연다 = 검증(이름·좌표·리뷰수)과 사진을 같은 방문에서 함께 취득.

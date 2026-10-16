@@ -109,17 +109,17 @@ export async function insertSeedEntries(o: {
   return stat;
 }
 
-export const HOLLOW = `verify_source = 'gmaps-pid-page' AND COALESCE(google_review_count, 0) = 0 AND google_primary_type IS NULL`;
+const HOLLOW = `verify_source = 'gmaps-pid-page' AND COALESCE(google_review_count, 0) = 0 AND google_primary_type IS NULL`;
 // ⚠️ 수정금지(승인필요) 2026-10-07 사장님 결정 = 대기 조건 1벌 = 워커 큐는 "검증 뒤 행이 바뀜(updated_at)" 조건 포함, 필시티 목록 후처리(한 판 안에서 돌고 인증 뒤 같은 단계를 다시 돈다)는 그 조건 없이 구글맵 도장이 없는 행(+사진 없음·빈 등록)만 = 이어 읽기는 남은 행만 (정본 §)
 const pendingWhere = (withUpdated: boolean) =>
   `status = 'active' AND seed_category NOT LIKE 'bts_%'
   AND (verify_source IS NULL OR verify_source NOT LIKE 'gmaps%' OR verified_at IS NULL${withUpdated ? " OR updated_at > verified_at + interval '10 seconds'" : ""}
        OR (verify_source <> 'gmaps-search-nomatch' AND (image_url IS NULL OR image_url NOT LIKE ($1 || '%') OR (${HOLLOW}))))`;
-export const PENDING_WHERE = pendingWhere(true);
-export const PENDING_WHERE_FILL = pendingWhere(false);
+const PENDING_WHERE = pendingWhere(true);
+const PENDING_WHERE_FILL = pendingWhere(false);
 
 type Client = { query: (q: string, v?: unknown[]) => Promise<any> };
-export type PostSummary = {
+type PostSummary = {
   cityId: number;
   pending: number;
   direct: number;

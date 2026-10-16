@@ -15,7 +15,7 @@ export const CREDIT_COSTS = {
   day_video: 60, // 일별 여행영상 (하루치)
 } as const;
 
-export type CreditFeature = keyof typeof CREDIT_COSTS;
+type CreditFeature = keyof typeof CREDIT_COSTS;
 
 const CREDIT_LABELS: Record<CreditFeature, string> = {
   route_generate: "여정 생성",

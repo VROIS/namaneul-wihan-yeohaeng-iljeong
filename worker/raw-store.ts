@@ -3,7 +3,7 @@
 import { createHash } from "node:crypto";
 import { fileStamp, rawPlace } from "../shared/r2-paths";
 
-export interface SaveRawToR2Params {
+interface SaveRawToR2Params {
   source: "ts" | "gemini" | "routes";
   contextId?: string | number | null;
   tag?: string | null;

@@ -4,7 +4,7 @@ import { Linking } from "react-native";
 
 const GOOGLE_PLACE_ID_PREFIX = "ChIJ";
 
-export interface PlaceForMaps {
+interface PlaceForMaps {
   // ⚠️ 수정금지(승인필요) 2026-05-20 = 0 순위 = google_maps_uri (= cid URL = 100% 정확)
   googleMapsUri?: string | null;
   googlePlaceId?: string | null;

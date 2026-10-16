@@ -9,9 +9,8 @@ import { placeImageKey } from "../../../../shared/r2-paths";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, "../../../..");
 
-// ── raw 재활용 = docs/raw/{cityId} 전 json 에서 pid→photoName 수집 (§18 자산 = 재과금 0 의 근거) ──
-//   ⚠️ 수정금지(승인필요) 2026-07-11 사장님 SSOT = 최신 파일 우선(§14 새것우선) = 파일명(YYYY-MM-DD_..._N) 역순 순회 + 무조건 덮어쓰기.
-export function collectPhotoNamesFromRaw(
+//   ⚠️ 수정금지(승인필요) 2026-10-16 사장님 SSOT = 최신 파일 우선(§14 새것우선) = 파일명(YYYY-MM-DD_..._N) 역순 순회 + 무조건 덮어쓰기.
+function collectPhotoNamesFromRaw(
   cityId: number,
 ): Map<string, { photoName?: string; status?: string }> {
   const map = new Map<string, { photoName?: string; status?: string }>();
@@ -59,7 +58,7 @@ export function collectPhotoNamesFromRaw(
   return map;
 }
 
-export async function backfillImages(opts: {
+async function backfillImages(opts: {
   cityId: number;
   apply: boolean;
   forceQuota?: boolean; // 2026-08-23 = 무료잔량 초과 시에도 진행(사장님 승인 플래그 --force-quota)
@@ -498,10 +497,8 @@ export async function backfillImages(opts: {
   };
 }
 
-// ── 🚨 공연장 위키 직링크 → R2 미러 (2026-08-26 사장님 승인 = 공식업뎃 응급) ──
-// ⚠️ 수정금지(승인필요) 2026-08-26 사장님 승인 = 미래공연 도시의 bts_venue 위키 이미지를 R2 로 1회 복사 후
-//   해설·카드 이미지 먹통(2026-08-26 실측 4중2 429, 파리 공연장=R2 주소라 유일 정상). 공연 지난 도시 제외(사장님 지시).
-export async function mirrorWikiVenueImages(opts: {
+// ⚠️ 수정금지(승인필요) 2026-10-16 사장님 승인 = 미래공연 도시의 bts_venue 위키 이미지를 R2 로 복사 (정본 §정리)
+async function mirrorWikiVenueImages(opts: {
   apply: boolean;
   client: any;
   cityId?: number;

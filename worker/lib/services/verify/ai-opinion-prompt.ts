@@ -3,19 +3,19 @@
 
 import { getLanguageInstruction } from "../shared/language-instruction";
 
-export interface AiOpinionPlace {
+interface AiOpinionPlace {
   name: string;
   startTime?: string;
   endTime?: string;
   priceEur?: number;
 }
 
-export interface AiOpinionDay {
+interface AiOpinionDay {
   day: number;
   places: AiOpinionPlace[];
 }
 
-export interface AiOpinionVibeWeight {
+interface AiOpinionVibeWeight {
   vibe: string;
   weight: number;
   percentage?: number;

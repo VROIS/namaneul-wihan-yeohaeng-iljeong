@@ -6,7 +6,7 @@ import { userGuidesDir } from "../../../shared/r2-paths";
 
 const GRACE_MONTHS = 6;
 
-export type CleanupResult = {
+type CleanupResult = {
   대상계정: number;
   정리완료: number;
   보류: number; // 사진을 못 지워 다음 실행으로 미룬 계정 (로그에 숨지 않게 분리 = §22 판단검증 4차)

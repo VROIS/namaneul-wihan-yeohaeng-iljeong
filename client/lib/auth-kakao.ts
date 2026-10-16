@@ -16,7 +16,7 @@ export function isKakaoOAuthConfigured(): boolean {
     : !!KAKAO_NATIVE_APP_KEY;
 }
 
-export function getKakaoRedirectUri(): string {
+function getKakaoRedirectUri(): string {
   if (typeof window !== "undefined" && window.location?.origin) {
     return window.location.origin;
   }
@@ -46,7 +46,7 @@ function loadKakaoScript(): Promise<void> {
   });
 }
 
-export async function ensureKakaoSDKInitialized(): Promise<boolean> {
+async function ensureKakaoSDKInitialized(): Promise<boolean> {
   if (!isKakaoOAuthConfigured() || Platform.OS !== "web") return false;
   if (sdkInitialized) return true;
   try {

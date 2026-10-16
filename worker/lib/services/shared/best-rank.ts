@@ -53,7 +53,7 @@ export function bestRankLangCount(code: number | null | undefined): number {
     .filter((c) => c !== "0").length;
 }
 
-export const bestRankLangCountSql = "length(replace(best_rank::text, '0', ''))";
+const bestRankLangCountSql = "length(replace(best_rank::text, '0', ''))";
 
 function langDigit(lang?: string): number | undefined {
   const i = (LANGS as readonly string[]).indexOf(lang || "");

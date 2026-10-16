@@ -84,7 +84,7 @@ export default function InquiryCard({
           {dest}
         </Text>
         {dayCount > 0 ? (
-          // ⚠️ 수정금지(승인필요) 2026-08-14 사장님 승인 = i18n(§22 판단검증 적발) = ExpertInquiryDetailScreen.tsx
+          // ⚠️ 수정금지(승인필요) 2026-08-14 사장님 승인 = i18n(§22 판단검증 적발)
           <Text style={{ fontSize: 12, color: theme.textTertiary }}>
             {dayCount}
             {t("expert.daysPlaces", { places: totalPlaces })}

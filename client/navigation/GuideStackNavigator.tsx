@@ -45,7 +45,7 @@ const GuideIcon = GuideIconJs as unknown as React.ComponentType<
   Record<string, unknown>
 >;
 
-export type GuideStackParamList = {
+type GuideStackParamList = {
   GuideCamera: undefined;
   // ⚠️ 수정금지(승인필요) 2026-08-21 사장님 승인 = from = **출발화면**(무료/차감 판정 기준, §9).
   GuideResult: {

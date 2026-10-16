@@ -65,8 +65,6 @@ export function installGlobalErrorHandler() {
     originalHandler?.(error, isFatal);
   });
 
-  const originalRejection = (globalThis as any)
-    .__promiseRejectionTrackingOptions?.onUnhandled;
   if (typeof globalThis !== "undefined") {
     (globalThis as any).onunhandledrejection = (event: any) => {
       reportError(event?.reason?.message || "Unhandled promise rejection", {

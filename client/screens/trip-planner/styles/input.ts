@@ -1,5 +1,5 @@
 import { StyleSheet, Dimensions } from "react-native";
-import { Brand, Spacing, BorderRadius, Fonts } from "@/constants/theme";
+import { Spacing, BorderRadius, Fonts } from "@/constants/theme";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -24,14 +24,6 @@ export const inputStyles = StyleSheet.create({
   sectionHeader: { marginBottom: Spacing.sm },
   sectionTitle: { fontSize: 16, fontFamily: Fonts.bold, marginBottom: 2 },
   sectionSubtitle: { fontSize: 12, fontFamily: Fonts.medium },
-  inputBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    padding: Spacing.md,
-    borderRadius: BorderRadius.md,
-    gap: Spacing.sm,
-  },
-  textInput: { flex: 1, fontSize: 16, fontFamily: Fonts.semiBold, padding: 0 },
   dateBox: {
     flexDirection: "row",
     alignItems: "center",

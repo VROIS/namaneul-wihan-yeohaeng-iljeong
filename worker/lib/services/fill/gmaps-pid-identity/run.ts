@@ -19,7 +19,7 @@ export const LIMITED_STOP = 1;
 export const limitedCount = (rs: Result[]) =>
   rs.filter((r) => r.gate === "limited-view").length;
 
-export type VerifyPidOpts = {
+type VerifyPidOpts = {
   browser: any;
   rows: Row[];
   city: { name_en: string | null; lat: number | null; lng: number | null };

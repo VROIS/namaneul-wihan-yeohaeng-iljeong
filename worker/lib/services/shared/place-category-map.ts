@@ -1,5 +1,5 @@
-// ⚠️ 수정금지(승인필요) 2026-09-08 사장님 확정 = 구글 분류 → 우리 카테고리 대응표 1벌 = 2026-04-30 로우데이타 최적화 문서 §3.1 TYPE_TO_CATEGORIES 그대로(사장님 정정 3건 포함). 표에 없는 분류 = 제미니 분류 그대로.
-export const TYPE_TO_CATEGORIES: Record<string, string[]> = {
+// ⚠️ 수정금지(승인필요) 2026-10-16 사장님 확정 = 구글 분류 → 우리 카테고리 대응표 1벌 = 2026-04-30 로우데이타 최적화 문서 §3.1 TYPE_TO_CATEGORIES 그대로(사장님 정정 3건 포함). 표에 없는 분류 = 제미니 분류 그대로.
+const TYPE_TO_CATEGORIES: Record<string, string[]> = {
   museum: ["heritage"],
   art_museum: ["heritage"],
   science_museum: ["heritage"],
@@ -183,7 +183,7 @@ const KEYS = Object.keys(TYPE_TO_CATEGORIES).sort(
   (a, b) => b.length - a.length,
 );
 
-export const normLabel = (label: string | null | undefined): string =>
+const normLabel = (label: string | null | undefined): string =>
   String(label ?? "")
     .toLowerCase()
     .normalize("NFD")
@@ -203,7 +203,7 @@ const hasWord = (label: string | null | undefined, words: Iterable<string>) => {
   for (const w of words) if (padded.includes(`_${w}_`)) return true;
   return false;
 };
-export const isNotPlace = (label: string | null | undefined): boolean =>
+const isNotPlace = (label: string | null | undefined): boolean =>
   hasWord(label, NOT_PLACE);
 // ⚠️ 수정금지(승인필요) 2026-10-12 사장님 결정 = 이름에 식당이 든 와이너리는 식당 주분류를 유지한다(표는 구글 분류 글자만 보므로 이름을 함께 본다) (정본 §2026-10-12)
 const RESTAURANT_NAME = /restaurant|restaurante|ristorante|레스토랑|식당/i;
@@ -213,15 +213,15 @@ const restaurantWinery = (
 ): boolean =>
   hasWord(label, ["winery"]) && !!name && RESTAURANT_NAME.test(name);
 
-// ⚠️ 수정금지(승인필요) 2026-10-13 사장님 결정 = 페이지를 연 뒤 우리 분류 확정 1벌 = 장소 아님 → 삭제 · 식당·쇼핑 → 구글이 이김 · 유적·힐링·모험·즐길거리도 구글이 이김 · 포토스팟은 구글 사실 분류가 전망대·명소·공원이면 유지, 바·카페·식당 같은 가게면 식당이 대표이고 포토스팟은 태그로, 그 밖은 사실 분류로 바꾸고 포토스팟은 태그로 · 표에 없는 글자 = 우리 분류 유지 + "새 글자"로 보고 (정본 §2026-10-12)
-export type FinalCategory = {
+// ⚠️ 수정금지(승인필요) 2026-10-16 사장님 결정 = 페이지를 연 뒤 우리 분류 확정 1벌 = 장소 아님 → 삭제 · 식당·쇼핑 → 구글이 이김 · 유적·힐링·모험·즐길거리도 구글이 이김 · 포토스팟은 구글 사실 분류가 전망대·명소·공원이면 유지, 바·카페·식당 같은 가게면 식당이 대표이고 포토스팟은 태그로, 그 밖은 사실 분류로 바꾸고 포토스팟은 태그로 · 표에 없는 글자 = 우리 분류 유지 + "새 글자"로 보고 (정본 §2026-10-12)
+type FinalCategory = {
   cat: string;
   notPlace: boolean;
   unknownLabel: boolean;
   photospotTag: boolean;
   changed: boolean;
 };
-export const NOT_PLACE_KEEP_RC = 1000;
+const NOT_PLACE_KEEP_RC = 1000;
 export function finalCategory(
   ourCat: string,
   pageLabel: string | null | undefined,

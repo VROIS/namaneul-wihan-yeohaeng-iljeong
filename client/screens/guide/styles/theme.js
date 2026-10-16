@@ -104,63 +104,6 @@ export const theme = StyleSheet.create({
     zIndex: 50,
   },
 
-  previewOverlay: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: '#000',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  previewImage: {
-    width: '100%',
-    height: '70%',
-  },
-
-  permissionContainer: {
-    flex: 1,
-    backgroundColor: '#000',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  permissionText: {
-    color: '#fff',
-    fontSize: 18,
-    marginBottom: 20,
-  },
-  permissionBtn: {
-    backgroundColor: CONFIG.GEMINI_BLUE,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  permissionBtnText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-
-  downloadBar: {
-    position: 'absolute',
-    bottom: CONFIG.FOOTER_HEIGHT + 10,
-    left: 20,
-    right: 20,
-    height: 4,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 2,
-  },
-  downloadProgress: {
-    height: 4,
-    backgroundColor: CONFIG.GEMINI_BLUE,
-    borderRadius: 2,
-  },
-  downloadText: {
-    position: 'absolute',
-    bottom: CONFIG.FOOTER_HEIGHT + 18,
-    alignSelf: 'center',
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: 12,
-  },
-
   // ⚠️ 수정금지(승인필요) 2026-08-09 사장님 지시 — 라이브뷰 첫 화면 사용법 1줄.
   hintWrap: {
     position: 'absolute',

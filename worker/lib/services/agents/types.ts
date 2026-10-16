@@ -38,7 +38,7 @@ export type TravelPace = "Packed" | "Normal" | "Relaxed";
 export type MobilityStyle = "WalkMore" | "Moderate" | "Minimal";
 export type CurationFocus = "Kids" | "Parents" | "Everyone" | "Self";
 
-export interface PaceConfig {
+interface PaceConfig {
   slotDurationMinutes: number; // 활동 1곳 체류+이동 시간(밀도별)
   // ⚠️ 2026-07-21 사장님 SSOT = 식사 슬롯 시간을 활동과 분리(밀도별) = 활동3 의무 + 저녁이 실제 저녁시각(영업시간)에 오게 함.
   mealDurationMinutes: number; // 식사 1회 시간(밀도별, 활동보다 짧음)
@@ -171,24 +171,6 @@ export interface AG3PreOutput {
   cityName: string;
   cityCoords?: { lat: number; lng: number };
   seedRawMap?: Map<string, any>;
-}
-
-export interface ScheduleSlot {
-  day: number;
-  slot: string;
-  place: PlaceResult;
-  startTime: string;
-  endTime: string;
-  isMealSlot: boolean;
-  mealType?: "lunch" | "dinner";
-}
-
-export interface AG3Output {
-  schedule: ScheduleSlot[];
-  scoredPlaces: PlaceResult[];
-  daySlotsConfig: DaySlotConfig[];
-  travelPace: TravelPace;
-  vibes: Vibe[];
 }
 
 export function getCompanionCount(companionType: string): number {

@@ -303,9 +303,7 @@ OUTPUT (strict JSON, no markdown fences):
   }
 }
 
-export function repairTruncatedJSON(
-  broken: string,
-): { days: GeminiDay[] } | null {
+function repairTruncatedJSON(broken: string): { days: GeminiDay[] } | null {
   const start = broken.indexOf("{");
   if (start < 0) return null;
   try {

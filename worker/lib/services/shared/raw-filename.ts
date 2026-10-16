@@ -130,15 +130,3 @@ export function saveVersionedReport(
   fs.writeFileSync(outPath, JSON.stringify(payload, null, 2), "utf-8");
   return outPath;
 }
-
-// ⚠️ 수정금지(승인필요) — raw 버전순번 헬퍼(2026-06-16 사장님 SSOT)
-export function latestVersionedByBase(files: string[]): string[] {
-  const bestByBase = new Map<string, { name: string; n: number }>(); // base → 최대순번 name
-  for (const name of files) {
-    const p = parseRawName(name) ?? { base: name, n: 0 }; // .json 아닌 입력 = 옛 동작 보존(base=원본, n=0) = 회귀0
-    const prev = bestByBase.get(p.base);
-    if (!prev || p.n > prev.n) bestByBase.set(p.base, { name, n: p.n }); // base 별 최대 n 유지
-  }
-  const keep = new Set([...bestByBase.values()].map((v) => v.name));
-  return [...files].sort().filter((name) => keep.has(name));
-}

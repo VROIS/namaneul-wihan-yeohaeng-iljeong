@@ -161,7 +161,7 @@ const CLOSED_PERM_RE =
 const CLOSED_TEMP_RE =
   /Temporarily closed|Cerrado temporalmente|Temporairement fermé|Fermé temporairement|Vorübergehend geschlossen|Chiuso temporaneamente|Fechado temporariamente|Tijdelijk gesloten|Tancat temporalment|임시 휴업|臨時休業|暂时关闭|暫時關閉|Tạm thời đóng cửa|Tutup sementara|ปิดชั่วคราว|Imefungwa kwa muda/i;
 
-export type PageData = {
+type PageData = {
   h1: string | null;
   address: string | null;
   category: string | null;
@@ -209,7 +209,7 @@ const OFFICIAL_RE = new RegExp(
 const OFFICIAL_FREE_RE =
   /(?:Official site|공식 사이트)\s*\n?\s*(?:Free|무료)(?![A-Za-z])/i;
 const PER_PERSON_LINE_RE = /[^\n]*(?:per person|1인당)[^\n]*/i;
-export function admissionPrice(text: string): CardPrice | null {
+function admissionPrice(text: string): CardPrice | null {
   if (OFFICIAL_FREE_RE.test(text)) return { cur: "€", lo: 0, hi: 0 };
   const m = text.match(OFFICIAL_RE);
   if (!m || m.index == null) return null;
@@ -234,7 +234,7 @@ export function admissionPrice(text: string): CardPrice | null {
 }
 const exactPrice = (p: CardPrice | null): CardPrice | null =>
   p && p.hi == null ? { ...p, hi: p.lo } : p;
-export function perPersonPrice(text: string): CardPrice | null {
+function perPersonPrice(text: string): CardPrice | null {
   const line = text.match(PER_PERSON_LINE_RE)?.[0];
   return exactPrice(line ? priceText(line) : null);
 }

@@ -17,7 +17,7 @@ import { db } from "../../db";
 import { createHubAfterSuccess } from "../shared/city-hub";
 // 🧠 2026-07-06 사장님 SSOT = MIX Gemini raw = 도시id 폴더 + {meta,rawResponse,parsedPlaces}(사장님 예시형식) 저장 = saveCollectedRaw 단일 헬퍼(§18 2곳). 옛 saveRaw(runtime 봉투) 폐기 §19.
 import { saveCollectedRaw } from "../shared/save-collected-raw";
-import { buildDayConfig } from "../transport-pricing-service";
+import { buildDayConfig } from "../transport/day-config";
 import { step1_geminiItinerary } from "./pipeline-v3-step1-gemini";
 import { step2_enrichAndBuild } from "./pipeline-v3-step2-build";
 

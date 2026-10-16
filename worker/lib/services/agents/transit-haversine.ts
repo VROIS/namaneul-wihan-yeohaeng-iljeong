@@ -1,7 +1,7 @@
 // ⚠️ 수정금지(승인필요) 2026-10-09 사장님 결정 = 두 점 직선 거리 계산은 shared/geo 1벌을 가져다 쓴다 (정본 §)
 import { haversineKm } from "@shared/geo";
 
-export type TravelMode = "WALK" | "TRANSIT" | "DRIVE";
+type TravelMode = "WALK" | "TRANSIT" | "DRIVE";
 
 /** = DRIVE = 도심반경 10km 이내 30km/h · 밖 70km/h (2026-07-04 사장님 SSOT, TomTom/Sanef 실측 기반 리서치 확정). */
 const AVG_SPEED_KMH: Record<Exclude<TravelMode, "DRIVE">, number> = {
@@ -48,7 +48,7 @@ export function pickTransitMode(
   return { mode: "metro", calc: "TRANSIT" };
 }
 
-export interface TransitResult {
+interface TransitResult {
   from: string;
   to: string;
   mode: "walk" | "transit" | "drive";

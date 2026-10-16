@@ -156,13 +156,6 @@ export const styles = StyleSheet.create({
     paddingTop: 16,
     gap: 10,
   },
-
-  // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 4a: 카트 섹션 (가로 캐러셀). 2026-05-06 폐기 = mapSection 으로 교체. (스타일은 잔존 = 향후 참조용)
-  cartSection: {
-    paddingTop: 8,
-    paddingBottom: 12,
-    gap: 8,
-  },
   // ⚠️ 수정금지(승인필요) — 2026-05-06 BTS Screen 4 v3 SSOT: 카트 캐러셀 → WebView 인앱 지도. cartSection 패턴 그대로.
   mapSection: {
     paddingTop: 8,
@@ -177,28 +170,6 @@ export const styles = StyleSheet.create({
     fontWeight: "800",
     letterSpacing: 0.3,
     paddingHorizontal: 20,
-  },
-  cartCarousel: {
-    paddingHorizontal: 20,
-    gap: 10,
-  },
-  cartCard: {
-    width: 76,
-    gap: 6,
-  },
-  cartCardImage: {
-    width: 76,
-    height: 100,
-    borderRadius: 10,
-    backgroundColor: "#EFEFEF",
-  },
-  cartCardLabel: {
-    fontSize: 11,
-    fontFamily: "Pretendard-Bold",
-    fontWeight: "700",
-    letterSpacing: 0.2,
-    color: "#1A1A1A",
-    textAlign: "center",
   },
 
   // ⚠️ 수정금지(승인필요) — 2026-04-24 Track 4a: 상세 섹션 (큰 이미지 + 장소명 + 제거 버튼 LiquidButton).

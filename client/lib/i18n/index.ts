@@ -15,8 +15,6 @@ export const SUPPORTED_LANGS = [
   { code: "de", flag: "🇩🇪", name: "German", nativeName: "Deutsch" },
 ] as const;
 
-export type SupportedLangCode = (typeof SUPPORTED_LANGS)[number]["code"];
-
 async function getStoredLanguage(): Promise<string | null> {
   try {
     return await AsyncStorage.getItem(STORAGE_KEY);
@@ -25,7 +23,7 @@ async function getStoredLanguage(): Promise<string | null> {
   }
 }
 
-export async function setStoredLanguage(code: string): Promise<void> {
+async function setStoredLanguage(code: string): Promise<void> {
   try {
     await AsyncStorage.setItem(STORAGE_KEY, code);
   } catch (e) {

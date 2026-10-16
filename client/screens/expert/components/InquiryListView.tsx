@@ -1,6 +1,6 @@
 // ⚠️ 수정금지(승인필요) 2026-08-07 사장님 SSOT = 문의 목록(상태 필터칩 + 카드) **1벌** = 전문가 답변함·사용자 문의함 공용.
 import React from "react";
-import { View, Text, Pressable, ScrollView } from "react-native";
+import { Text, Pressable, ScrollView } from "react-native";
 
 import { Brand, Spacing } from "@/constants/theme";
 import type { Inquiry, InquiryStatus } from "../expertApi";

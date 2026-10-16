@@ -103,10 +103,3 @@ export function calculateUberBlackHourly(
     totalDurationMin: Math.round(totalAvailableMin), // 전체 가용시간 표시
   };
 }
-
-export function calculateUberBlackForRoutes(
-  segments: { distanceKm: number; durationMin: number }[],
-  companionCount: number,
-): UberBlackComparison {
-  return calculateUberBlackHourly(8, segments, companionCount);
-}

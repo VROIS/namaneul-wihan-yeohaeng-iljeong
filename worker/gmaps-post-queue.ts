@@ -15,7 +15,7 @@ const KAKAO_JWKS_CRON = "0 3 * * *";
 const ACCOUNT_CLEANUP_CRON = "30 4 * * *";
 const RATES_CRON = "0 5 * * *";
 
-export type GmapsPostMessage = {
+type GmapsPostMessage = {
   cityId: number;
   reason: string;
 };
@@ -76,8 +76,8 @@ async function accountCleanupTick(): Promise<void> {
   }
 }
 
-// ⚠️ 수정금지(승인필요) 2026-09-15 사장님 결정 = 관제탑 심장박동 = Worker 에서 Cron 으로 한다 (정본 B4)
-export async function metricsTick(): Promise<void> {
+// ⚠️ 수정금지(승인필요) 2026-10-16 사장님 결정 = 관제탑 심장박동 = Worker 에서 Cron 으로 한다 (정본 B4)
+async function metricsTick(): Promise<void> {
   try {
     await withEngineDb(async () => {
       const point = await appendTick();
@@ -113,7 +113,7 @@ async function failStaleItineraries(): Promise<void> {
   }
 }
 
-export async function consumeGmapsPost(
+async function consumeGmapsPost(
   batch: MessageBatch<GmapsPostMessage>,
 ): Promise<void> {
   for (const msg of batch.messages) {

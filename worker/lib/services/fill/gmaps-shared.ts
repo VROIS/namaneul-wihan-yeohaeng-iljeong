@@ -34,7 +34,7 @@ import { PHOTO_MAX_WIDTH_PX } from "../shared/ts-client";
 import { uploadToR2 } from "../shared/r2-client";
 import { placeImageKey } from "../../../../shared/r2-paths";
 
-export interface CopyEntry {
+interface CopyEntry {
   lang: string;
   summary?: string;
   editorial?: string;
@@ -97,7 +97,7 @@ export const newStat = (): Stat => ({
 // ⚠️ 수정금지(승인필요) 2026-09-30 사장님 결정 = 제한 보기 = 채널 막힘(빈 등록 아님) = 그 행은 "다음 판에", 연속 3행이면 남은 행을 열지 않는다 (정본 §)
 export const LIMITED_WHY = "제한보기";
 export const LIMITED_STOP = 3;
-export type PriceCtx = { eurPer: EurPer; countryCode: string | null };
+type PriceCtx = { eurPer: EurPer; countryCode: string | null };
 export async function loadPriceCtx(
   c: { query: (q: string, v?: unknown[]) => Promise<any> },
   cityId: number,
@@ -133,7 +133,7 @@ export function codeOf(
 
 export const koCopyOf = (copies: CopyEntry[]) =>
   copies.find((x) => x.lang === "ko");
-export const otherCopiesOf = (copies: CopyEntry[]) =>
+const otherCopiesOf = (copies: CopyEntry[]) =>
   copies.filter(
     (x) => x.lang !== "ko" && (LANGS as readonly string[]).includes(x.lang),
   );
@@ -188,7 +188,7 @@ const KIND_WORD: Record<string, string> = {
   photospot: "tourist attraction",
 };
 export const kindWordOf = (cat: string) => KIND_WORD[cat] ?? "";
-export const isLocalityPage = (d: any) =>
+const isLocalityPage = (d: any) =>
   !!d?.h1 && !(d.reviewCount > 0) && !d.category;
 const distM = (n: NewEntry, x: Candidate) =>
   n.lat != null && n.lng != null && x.lat != null && x.lng != null
@@ -206,12 +206,12 @@ const popRank = (n: NewEntry, x: Candidate) =>
   n.aliases?.length && (n.noXY || distM(n, x) <= 2000)
     ? -(x.reviewCount ?? 0)
     : 0;
-// ⚠️ 수정금지(승인필요) 2026-10-06 사장님 결정 = 받기 = T1 이름이 같으면 받음 · T2 이름이 달라도(번역·줄임·음역) 구글이 CID 있는 등록을 주고 후기가 있고 제미니 좌표 1km 안이고 분류칩이 호환이면 그곳이다(사람이 지도 마크로 알아보는 방식, 거부 27건 재생 = 맞는 곳 14 받음) · 베스트(제미니 별칭 있는 시드)는 분류가 달라도 거부하지 않고 구글 분류를 따른다 (정본 §)
-export const T2_MAX_KM = 1;
-export const T1_MAX_KM = 100; // 랜드마크 = 거점 100km(제미니 좌표가 있을 때)
-export const HARD_MAX_KM = 25; // 식당·쇼핑 = 가게는 좌표 가까이(푸켓 실측 = 같은 이름 식당이 106km 밖 다른 도에 있었다)
+// ⚠️ 수정금지(승인필요) 2026-10-16 사장님 결정 = 받기 = T1 이름이 같으면 받음 · T2 이름이 달라도(번역·줄임·음역) 구글이 CID 있는 등록을 주고 후기가 있고 제미니 좌표 1km 안이고 분류칩이 호환이면 그곳이다(사람이 지도 마크로 알아보는 방식, 거부 27건 재생 = 맞는 곳 14 받음) · 베스트(제미니 별칭 있는 시드)는 분류가 달라도 거부하지 않고 구글 분류를 따른다 (정본 §)
+const T2_MAX_KM = 1;
+const T1_MAX_KM = 100; // 랜드마크 = 거점 100km(제미니 좌표가 있을 때)
+const HARD_MAX_KM = 25; // 식당·쇼핑 = 가게는 좌표 가까이(푸켓 실측 = 같은 이름 식당이 106km 밖 다른 도에 있었다)
 const isHard = (cat: string) => cat === "restaurant" || cat === "shopping";
-export function gateVerdict(
+function gateVerdict(
   n: NewEntry,
   d: any,
   stop: Set<string>,
@@ -256,7 +256,7 @@ const catRank = (n: NewEntry, x: Candidate) => {
   )?.[1];
   return resolveCategory(seg, n.cat, n.name).mismatch ? 1 : 0;
 };
-export function pickFrom(n: NewEntry, cands: Candidate[]) {
+function pickFrom(n: NewEntry, cands: Candidate[]) {
   const withCid = cands.filter((x) => x.cid);
   if (!withCid.length) return null;
   const stop = placeStop(null, [n.address]);
@@ -270,7 +270,7 @@ export function pickFrom(n: NewEntry, cands: Candidate[]) {
   )[0];
 }
 
-export type PageTools = {
+type PageTools = {
   readPlacePage: any;
   listCandidates: any;
   photoMaxWidthPx: number;

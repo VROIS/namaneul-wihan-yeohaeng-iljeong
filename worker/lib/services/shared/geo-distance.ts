@@ -14,7 +14,7 @@ export function distanceKmFromCoords(
 // ⚠️ 수정금지(승인필요) 2026-09-29 사장님 결정 = 좌표가 절대값 = 행·사진이 붙을 도시 1벌(옮기기 도구·구글맵 사진이 같이 씀) = 지금 도시 중심 100km 안이면 그 도시 · 넘으면 500km 안 가장 가까운 도시 · 없으면 null(삭제) (정본 §)
 export const OWN_CITY_KM = 100;
 export const MOVE_MAX_KM = 500;
-export type CityPoint = { id: number; name?: string; lat: number; lng: number };
+type CityPoint = { id: number; name?: string; lat: number; lng: number };
 
 export function nearestCity(
   cities: CityPoint[],

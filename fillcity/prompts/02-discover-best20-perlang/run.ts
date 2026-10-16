@@ -134,7 +134,7 @@ const dryRun = argv["dry"] === "true";
     if (start < 0) return null;
     try {
       return JSON.parse(t.slice(start, t.lastIndexOf("}") + 1));
-    } catch (e) {}
+    } catch {}
     for (let endIdx = t.length - 1; endIdx > start; endIdx--) {
       if (t[endIdx] !== "}") continue;
       const trimmed = t.slice(start, endIdx + 1);
@@ -142,7 +142,7 @@ const dryRun = argv["dry"] === "true";
         try {
           const p = JSON.parse(trimmed + suffix);
           if (p.results) return p;
-        } catch (e) {}
+        } catch {}
       }
     }
     return null;

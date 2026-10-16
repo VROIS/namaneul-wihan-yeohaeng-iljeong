@@ -2,7 +2,7 @@
 
 import { geminiJson } from "./geminiClient";
 
-export interface CityMeta {
+interface CityMeta {
   nameKo: string;
   nameEn: string;
   nameLocal: string;

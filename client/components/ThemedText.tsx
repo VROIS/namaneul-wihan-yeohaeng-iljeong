@@ -2,7 +2,7 @@ import { Text, type TextProps, useColorScheme } from "react-native";
 
 import { Typography, Colors } from "@/constants/theme";
 
-export type ThemedTextProps = TextProps & {
+type ThemedTextProps = TextProps & {
   lightColor?: string;
   darkColor?: string;
   type?: "h1" | "h2" | "h3" | "body" | "small" | "link";
